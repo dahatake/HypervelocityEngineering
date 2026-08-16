@@ -63,6 +63,13 @@ def _pct(value: float | None) -> str:
     return NO_DATA if value is None else f"{value * 100:.1f}%"
 
 
+def _token_reduction_text(snapshot: DashboardSnapshot) -> str:
+    """遅延公開が一度も発火していないときは削減率として出さない（FR-TS-10）。"""
+    if not snapshot.token_reduction_valid:
+        return "無効（遅延公開が発火していない）"
+    return _pct(snapshot.token_reduction)
+
+
 def _bar(value: float | None, *, width: int) -> str:
     if value is None or width <= 0:
         return ""
@@ -184,7 +191,7 @@ def render_text(snapshot: DashboardSnapshot, *, width: int = DEFAULT_WIDTH) -> s
             [
                 ("全定義前置き (baseline)", _num(snapshot.baseline_tokens, suffix=" tokens")),
                 ("実公開 (exposed)", _num(snapshot.exposed_tokens, suffix=" tokens")),
-                ("トークン削減", _pct(snapshot.token_reduction)),
+                ("トークン削減", _token_reduction_text(snapshot)),
             ],
             width,
         ),
@@ -316,7 +323,7 @@ def render_html(snapshot: DashboardSnapshot) -> str:
             ("検索回数", str(snapshot.queries)),
             ("ヒット率", _pct(snapshot.hit_rate)),
             ("採用率", _pct(snapshot.adoption_rate)),
-            ("トークン削減", _pct(snapshot.token_reduction)),
+            ("トークン削減", _token_reduction_text(snapshot)),
             ("レイテンシ p95", _num(snapshot.latency_p95_ms, suffix=" ms")),
             ("カタログ", str(catalog.total) if catalog.total else NO_DATA),
         )
@@ -392,7 +399,7 @@ def render_html(snapshot: DashboardSnapshot) -> str:
 <table><thead><tr><th>項目</th><th>推定トークン</th></tr></thead><tbody>
 <tr><td>全定義前置き (baseline)</td><td class="num">{_e(_num(snapshot.baseline_tokens))}</td></tr>
 <tr><td>実公開 (exposed)</td><td class="num">{_e(_num(snapshot.exposed_tokens))}</td></tr>
-<tr><td>削減率</td><td class="num">{_e(_pct(snapshot.token_reduction))}</td></tr>
+<tr><td>削減率</td><td class="num">{_e(_token_reduction_text(snapshot))}</td></tr>
 </tbody></table>
 
 <h2>レイテンシ</h2>

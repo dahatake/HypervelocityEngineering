@@ -335,23 +335,23 @@ class TestRenderTemplate:
         )
         assert "`all`" in body
 
-    def test_aqod_placeholders(self):
-        """AQOD テンプレートの固有プレースホルダが展開されること。"""
-        wf = get_workflow("aqod")
+    def test_adi_questionnaire_placeholders(self):
+        """ADI Step 1.1 の質問票固有プレースホルダが展開されること。"""
+        wf = get_workflow("adi")
         body = render_template(
-            "templates/aqod/step-1.md",
+            "templates/adi/step-1.1.md",
             root_issue_num=70,
             params={
-                "target_scope": "original-docs/",
+                "target_scope": "docs-original/",
                 "depth": "lightweight",
                 "focus_areas": "データ整合性",
             },
             wf=wf,
         )
-        assert "{aqod_target_scope}" not in body
-        assert "{aqod_depth}" not in body
-        assert "{aqod_focus_areas}" not in body
-        assert "`original-docs/`" in body
+        assert "{adi_target_scope}" not in body
+        assert "{adi_depth}" not in body
+        assert "{adi_focus_areas}" not in body
+        assert "`docs-original/`" in body
         assert "`lightweight`" in body
         assert "`データ整合性`" in body
 
@@ -696,6 +696,8 @@ class TestWorkflowNameMappings:
         assert _WORKFLOW_DISPLAY_NAMES["asdw-web"] == "Web App Dev & Deploy"
         assert _WORKFLOW_DISPLAY_NAMES["aag"] == "AI Agent Design"
         assert _WORKFLOW_DISPLAY_NAMES["aagd"] == "AI Agent Dev & Deploy"
+        assert _WORKFLOW_DISPLAY_NAMES["adi"] == "Auto Design-doc Ingestion"
+        assert "aq" + "od" not in _WORKFLOW_DISPLAY_NAMES
         assert _WORKFLOW_DISPLAY_NAMES["aad"] == "Web App Design"
         assert _WORKFLOW_DISPLAY_NAMES["asdw"] == "Web App Dev & Deploy"
 
@@ -748,9 +750,9 @@ class TestExistingArtifactPolicyIntegration:
         "adfdv",
         "aag",
         "aagd",
+        "adi",
         "akm",
         "adoc",
-        "aqod",
     ]
 
     def test_target_templates_have_existing_artifact_policy_placeholder(self):
@@ -774,9 +776,9 @@ class TestExistingArtifactPolicyIntegration:
             ("adfdv", "templates/adfdv/step-1.1.md"),
             ("aag", "templates/aag/step-1.md"),
             ("aagd", "templates/aagd/step-1.md"),
+            ("adi", "templates/adi/step-1.1.md"),
             ("akm", "templates/akm/step-1.md"),
             ("adoc", "templates/adoc/step-1.md"),
-            ("aqod", "templates/aqod/step-1.md"),
         ]
         for wf_id, template_path in samples:
             wf = get_workflow(wf_id)

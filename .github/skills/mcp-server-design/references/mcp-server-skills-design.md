@@ -8,7 +8,7 @@ applyTo: ".github/.mcp.json, .github/skills/**"
 | Server名 | パッケージ | 用途 |
 |---|---|---|
 | `azure` | `@azure/mcp@latest` | Azure リソース操作（hve でも同一実装を共有） |
-| `context7` | `@upstash/context7-mcp@latest` | コンテキスト管理 |
+| `microsoft-learn` | `https://learn.microsoft.com/api/mcp` | Microsoft 公式ドキュメント参照 |
 
 ## Skills での MCP Server 実装方針
 
@@ -30,7 +30,7 @@ applyTo: ".github/.mcp.json, .github/skills/**"
 | Skill 名 | 内容 |
 |---|---|
 | `mcp-azure` | Azure MCP Server の呼び出しパターン・利用可能なツール一覧・エラーハンドリング |
-| `mcp-context7` | Context7 MCP Server の呼び出しパターン・検索クエリ設計 |
+| `mcp-microsoft-learn` | Microsoft Learn MCP Server の呼び出しパターン・検索クエリ設計 |
 
 ### hve との共有
 - `hve` は Python の `GitHub Copilot CLI SDK` として実装中

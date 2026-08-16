@@ -2,212 +2,294 @@
 
 ← [03-app-design-microservice-azure.md](./03-app-design-microservice-azure.md) | [06-app-dev-dataflow-azure.md](./06-app-dev-dataflow-azure.md) →
 
----
-
-## 目次
-
-- [対象読者](#対象読者)
-- [前提](#前提)
-- [次のステップ](#次のステップ)
-- [概要](#概要)
-- [Agent チェーン図 ASDW-WEB](#agent-チェーン図-asdw-web)
-- [ツール](#ツール)
-- [ステップ概要](#ステップ概要)
-- [TDD 原則](#tdd-原則)
-- [手動実行ガイド](#手動実行ガイド)
-- [自動実行ガイド ワークフロー](#自動実行ガイド-ワークフロー)
-- [動作確認手順](#動作確認手順)
-
----
+> [!IMPORTANT]
+> 本文の Step ID・依存・入出力は、2026-08-07 時点の
+> [`hve/workflow_registry.py`](../hve/workflow_registry.py) に登録された **CLI / GUI 共通の ASDW-WEB** を正本とします。
+>
+> - GitHub Actions Cloud 起動は FR-CLOUD-06 により停止中です。
+> - full run の DataDeploy Step 1.3 は `APP-009` 単一スコープだけをサポートします。
+> - APP-009 の既存 `docs/azure/azure-services-compute.md` は Azure Container Apps / Container Apps Jobs を選定していますが、
+>   current Step 3.3 / 3.4 は Azure Functions 固定です。選定済み Compute を実装する汎用経路ではありません。
+> - Step 4.3 が必須入力とする `.github/workflows/azure-static-web-apps-app009.yml` は、現リポジトリの HEAD に存在しません。
+>   また、Step 4.3 の scoped I/O contract が required とする `knowledge/D15-非機能-運用-監視-DR-仕様書.md` も存在しません。
+>   したがって **現状の full run は Compute 契約不整合を解消できず、遅くとも Step 4.3 の workflow pre-flight で fail-closed** します。
+>   エンドツーエンド完了可能とは扱いません。
+>   本ガイドは local checkpoint と実装済み Step の実行・検証方法、およびこのブロッカーを正直に記載します。
 
 ## 対象読者
 
-- AAS + AAD-WEB 完了後に Web アプリ実装〜デプロイを自動化したい人
-- HVE CLI / GUI Orchestrator で `asdw-web` ワークフローを運用する人
+- [AAD-WEB](./03-app-design-microservice-azure.md) の設計成果物から Web アプリを実装する開発者
+- Data / Compute / UI の RED → GREEN → Deploy → Post-deploy を運用する担当者
+- ASDW-WEB の Step、Prompt、テンプレート、I/O 契約、Skill、テストを保守する開発者
 
-## 前提
+<a id="asdw-web-start-conditions"></a>
 
-- 設計成果物が存在すること（`docs/catalog/service-catalog-matrix.md`、`docs/services/`、`docs/screen/` など）
-- `COPILOT_PAT`、`AZURE_CLIENT_ID`、`AZURE_TENANT_ID`、`AZURE_SUBSCRIPTION_ID` が設定済みであること
-- `AZURE_STATIC_WEB_APPS_API_TOKEN` は手動設定不要（OIDC + `az staticwebapp secrets list` で deploy token を動的取得する運用）
-- セットアップ手順は [hve-cloud-getting-started.md](./hve-cloud-getting-started.md) / [hve-cli-getting-started.md](./hve-cli-getting-started.md) / [hve-gui-getting-started.md](./hve-gui-getting-started.md) を参照
+## AAD-WEB からの前提
 
-## 次のステップ
+ASDW-WEB は AAS、ARD／既存要件、AAD-WEB の成果物を再生成せず、入力として使用します。
 
-- AI Agent 実装が必要な場合は [08-ai-agent.md](./08-ai-agent.md)（AAG / AAGD）へ進む
+| 分類 | 必須成果物 |
+|---|---|
+| AAS カタログ | `docs/catalog/app-arch-catalog.md`, `docs/catalog/app-catalog.md`, `docs/catalog/domain-analytics.md`, `docs/catalog/service-catalog.md`, `docs/catalog/data-model.md`, `docs/catalog/service-catalog-matrix.md`, `docs/catalog/test-strategy.md` |
+| ARD／既存要件 | `docs/catalog/use-case-catalog.md` |
+| AAD-WEB 画面 | `docs/catalog/screen-catalog-APP-*.md`, `docs/screen/*-description.md` |
+| AAD-WEB サービス | `docs/services/*-description.md` |
+| AAD-WEB TDD 仕様 | `docs/test-specs/{serviceId}-test-spec.md`, `docs/test-specs/{screenId}-test-spec.md` |
+| データ件数契約 | `src/data/sample-data.json` |
+| Agentic Retrieval を有効にする場合 | `docs/services/{serviceId}-agentic-retrieval-spec.md` |
 
----
+前提不足時は、成果物の生成元に応じて次の完了確認へ戻ってください。
 
-## 概要
+| 不足している成果物 | 復旧先 |
+|---|---|
+| AAS カタログ、データ件数契約 | [AAS の完了確認](./02-app-architecture-design.md#completion-next-aas) |
+| ARD／既存要件 | [ARD の完了条件](./01-business-requirement.md#完了条件) |
+| AAD-WEB 画面、サービス、TDD 仕様、Agentic Retrieval 仕様 | [AAD-WEB の完了確認](./03-app-design-microservice-azure.md#aad-web-completion) |
 
-ASDW-WEB（Web App Dev & Deploy）は、AAS + AAD-WEB で作成した設計成果物を入力として、
-Step.1〜Step.4 を順次（Step.4 のみ並列）実行するワークフローです。
+## 実行経路と現在状態
 
-> **⛔ Cloud 起動は停止中です（FR-CLOUD-06）**
->
-> `auto-app-dev-microservice-web-reusable.yml` は `hve/workflow_registry.py` の ASDW-WEB Step 体系と非同期（冒頭に `OUT-OF-SYNC NOTICE` を自己申告）のため、`auto-orchestrator-dispatcher.yml` からの起動を停止しています。
-> `auto-app-dev-microservice-web` ラベル付き Issue を作成しても Sub-Issue は生成されず、dispatcher が CLI / GUI への誘導コメントを投稿します。
-> ASDW-WEB は **CLI 経路 / GUI 経路が supported** です。
+| 経路 | 状態 | 実装 |
+|---|---|---|
+| CLI | **現行 registry を実行可能** | `python -m hve orchestrate --workflow asdw-web` |
+| GUI | **現行 registry を実行可能** | `python -m hve`。Step 一覧は registry から動的取得 |
+| GitHub Actions Cloud | **停止中** | dispatcher は ASDW-WEB を `target=none`, `mode=skip` にし、CLI / GUI 誘導コメントだけを投稿 |
+| SDK Cloud Session | CLI / GUI 内の任意のセッション配置 | GitHub Actions Cloud Orchestrator とは別機能。詳細は [cloud-session.md](./cloud-session.md) |
 
-- 実行（CLI）: `python -m hve orchestrate --workflow asdw-web ...`（[hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md)）
-- 実行（GUI）: `python -m hve` を起動し、Wizard で `asdw-web` を選択（[hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md)）
-- `knowledge/` の活用方法は [km-guide.md](./km-guide.md) を参照
+停止中の Cloud 参照面は
+[`web-app-dev.yml`](../.github/ISSUE_TEMPLATE/web-app-dev.yml) と
+[`auto-app-dev-microservice-web-reusable.yml`](../.github/workflows/auto-app-dev-microservice-web-reusable.yml) です。
+reusable は冒頭で `OUT-OF-SYNC NOTICE` を宣言し、
+[`auto-orchestrator-dispatcher.yml`](../.github/workflows/auto-orchestrator-dispatcher.yml) から呼ばれません。
+`auto-app-dev-microservice-web` ラベル付き Issue を作成しても Sub-Issue は生成されません。
 
-## Agent チェーン図 ASDW-WEB
+## 実行方法
 
-![ASDW-WEB: Dev-Microservice-Azure-DataDesign から QA-AzureDependencyReview までの実行チェーン](./images/chain-asdw.svg)
+### full run の計画確認
 
-### アーキテクチャ図
+現行 DataDeploy 契約が対応する `APP-009` で dry-run します。
 
-![ASDW-WEB アーキテクチャ: 入力ファイル → auto-app-dev-microservice-web Workflow → Prompt チェーン → 成果物](./images/infographic-asdw.svg)
-
-### データフロー図（ASDW-WEB）
-
-![ASDW-WEB データフロー: 入力ファイル → Prompt（タスク）→ 出力ファイル](./images/orchestration-task-data-flow-asdw.svg)
-
----
-
-## ツール
-
-- GitHub Copilot cloud agent / GitHub Copilot for Azure
-- HVE CLI / GUI Orchestrator（`python -m hve`）
-- MCP Server（Microsoft Learn / Azure）
-
----
-
-## ステップ概要
-
-### 依存グラフ
-
-```text
-Step.1.1 → Step.1.2 → Step.1.3 → Step.2.1 → Step.2.2 → Step.2.3 → Step.2.3TC → Step.2.4 → Step.2.5
-                                                          ↓
-                                                       Step.3.0TC → Step.3.1 → Step.3.2 → Step.3.3
-                                                                                ├─► Step.4.1
-                                                                                └─► Step.4.2
+```bash
+python -m hve orchestrate --workflow asdw-web --app-ids APP-009 --resource-group <RESOURCE_GROUP> --dry-run
 ```
 
-### 各ステップの入出力
+dry-run は必須パラメータ、APP フィルタ、fan-out、DAG の計画表示までで終了し、
+後段の runtime 入力成果物チェック、必須 Skill チェック、Prompt 実行は行いません。
+Azure live 操作も行いません。通常実行時の hard pre-check を警告へ降格させない場合は `--strict` を使用します。
+ルート Step の `consumed_artifacts` 不足も停止対象にする場合は、別設定 `HVE_REQUIRE_INPUT_ARTIFACTS=true` が必要です。
 
-| Step ID | タイトル | Prompt | 入力 | 出力 | 依存 |
+### local checkpoint まで
+
+Azure live 操作前に、設計・テスト・API/UI 実装を生成できます。
+
+```bash
+python -m hve orchestrate --workflow asdw-web --app-ids APP-009 --resource-group <RESOURCE_GROUP> --steps 1.1,1.2,2.1,2.3,2.5,3.1,3.2,3.3,4.1,4.2 --strict
+```
+
+Step 4.2 完了が local generation checkpoint です。Agentic Retrieval を使わない場合は
+`--enable-agentic-retrieval no` を追加でき、Step 2.5 / 2.6 は設定に従って無効化されます。
+
+> [!WARNING]
+> Step 2.1 の template / scoped I/O contract は `docs/azure/azure-services-compute.md` を必須入力としますが、
+> current DAG でこのファイルを生成するのは後段の Step 3.1 です。本リポジトリの HEAD には既存ファイルがあるため
+> 現在の APP-009 実行では参照できますが、AAD-WEB 成果物だけの clean な入力からは自己完結しません。
+> registry / template / I/O contract が同期するまでは、この compute design を Step 2.1 の明示的な既存前提として扱い、
+> 欠落時に追加サービス選定を完全実行できたと報告しないでください。
+
+さらに、その既存 compute design の第一候補は Azure Container Apps / Container Apps Jobs です。
+一方、Step 3.3 と Step 3.4 の Agent は `*-AzureFunctions` で固定されています。
+この drift を解消するまでは、Step 3.3 / 3.4 を「compute design を実装した」と判定しないでください。
+
+### full run
+
+```bash
+python -m hve orchestrate --workflow asdw-web --app-ids APP-009 --resource-group <RESOURCE_GROUP> --strict
+```
+
+> [!CAUTION]
+> 現在は required static input `.github/workflows/azure-static-web-apps-app009.yml` が欠落しているため、
+> Step 4.3 の workflow pre-flight で停止するのが正しい結果です。
+> このファイルを Step 4.3 自身に生成させたり、missing secret を無視して GREEN 扱いしたりしないでください。
+
+GUI は `python -m hve` から **Web App Dev & Deploy (ASDW-WEB)**、APP-ID、Resource Group、Step を選びます。
+full run では APP-ID を `APP-009` 1件にしてください。Step 1.3 は runner の pre-session gate で他 APP-ID を拒否します。
+
+## local-first / live-last DAG
+
+ASDW-WEB は `max_parallel=1` です。DAG 上で同時に ready になる Step があっても、
+初期実装は同一 worktree の競合を避けるため逐次実行します。
+
+### local phase
+
+```text
+1.1 -> 1.2
+1.1 -> 2.1 -> 2.3 -> 3.1 -> 3.2 -> 3.3 -> 4.1
+2.1 -> 2.5
+1.2 + 2.5 + 4.1 -> 4.2 checkpoint
+```
+
+local Step は `1.1, 1.2, 2.1, 2.3, 2.5, 3.1, 3.2, 3.3, 4.1, 4.2` です。
+
+### live phase
+
+```text
+1.2 + 4.2 ─► 1.3
+1.3 + 2.1 -> 2.2
+2.2 + 2.3 -> 2.4
+2.2 + 2.5 -> 2.6（設定で無効化可）
+2.4 + 3.3 -> 3.4 -> 3.5
+3.5 + 4.2 -> 4.3 -> 4.4
+4.4 -> 5.1
+4.4 -> 5.2
+```
+
+live Step は `1.3, 2.2, 2.4, 2.6, 3.4, 3.5, 4.3, 4.4, 5.1, 5.2` です。
+live Step だけが失敗した PR-enabled run では、HVE は local checkpoint 成果物を保持し、
+auto-merge 対象外の draft PR として残せます。
+
+## 現行 Step と成果物
+
+| Phase | Step | Prompt | 主入力 | 主出力 / 完了判定 | 依存 |
 |---|---|---|---|---|---|
-| step-1.1 | Azure データストア選定 | `Dev-Microservice-Azure-DataDesign` | `docs/catalog/data-model.md`, `docs/catalog/service-catalog.md`, `docs/catalog/domain-analytics.md`, `docs/catalog/app-catalog.md` | `docs/azure/azure-services-data.md` | なし |
-| step-1.2 | データストア検証テスト生成 (TDD RED) | `Dev-Microservice-Azure-DataTestCoding` | `docs/azure/azure-services-data.md`, `docs/catalog/app-catalog.md`, `src/data/sample-data.json` | `src/infra/azure/verify-data-resources.sh` | step-1.1 |
-| step-1.3 | Azure データサービス Deploy (TDD GREEN) | `Dev-Microservice-Azure-DataDeploy` | `docs/azure/azure-services-data.md`, `docs/catalog/service-catalog-matrix.md`, `src/data/sample-data.json`, `src/infra/azure/verify-data-resources.sh`, `docs/catalog/app-catalog.md` | `src/infra/azure/create-azure-data-resources-prep.sh`, `src/infra/azure/create-azure-data-resources.sh`, `src/data/azure/data-registration-script.sh`, `docs/azure/service-catalog.md` 更新 | step-1.2 |
-| step-2.1 | Azure コンピュート選定 | `Dev-Microservice-Azure-ComputeDesign` | `docs/catalog/service-catalog.md`, `docs/catalog/use-case-catalog.md`, `docs/catalog/data-model.md`, `docs/catalog/service-catalog-matrix.md`, `docs/catalog/app-catalog.md` | `docs/azure/azure-services-compute.md` | step-1.3 |
-| step-2.2 | 追加 Azure サービス選定 | `Dev-Microservice-Azure-AddServiceDesign` | `docs/catalog/use-case-catalog.md`, `docs/catalog/service-catalog.md`, `docs/services/`, `docs/azure/azure-services-compute.md`, `docs/catalog/app-catalog.md` | `docs/azure/azure-services-additional.md` | step-2.1 |
-| step-2.3 | 追加 Azure サービス Deploy | `Dev-Microservice-Azure-AddServiceDeploy` | `docs/azure/azure-services-additional.md`, `docs/catalog/app-catalog.md` | `src/infra/azure/create-azure-additional-resources*`, `src/infra/azure/verify-additional-resources.sh` | step-2.2 |
-| step-2.3TC | サービス テストコード生成 (TDD RED) | `Dev-Microservice-Azure-ServiceTestCoding` | `docs/test-specs/{serviceId}-test-spec.md` (AAD-WEB Step.2.3 生成物), `docs/services/`, `docs/catalog/service-catalog-matrix.md`, `docs/catalog/app-catalog.md` | `src/test/api/{ServiceName}.Tests/` | step-2.3 |
-| step-2.4 | サービスコード実装 (TDD GREEN) | `Dev-Microservice-Azure-ServiceCoding-AzureFunctions` | サービス定義書, RED テストコード, テスト仕様書, `docs/catalog/app-catalog.md` | `src/api/{serviceId}-{serviceName}/` | step-2.3TC |
-| step-2.5 | Azure Compute Deploy | `Dev-Microservice-Azure-ComputeDeploy-AzureFunctions` | `docs/catalog/service-catalog.md`, `docs/catalog/service-catalog-matrix.md`, `src/api/`, `docs/catalog/app-catalog.md` | `src/infra/azure/create-azure-api-resources-prep.sh`, `src/infra/azure/verify-api-resources.sh`, `.github/workflows/` | step-2.4 |
-| step-3.0TC | UI テストコード生成 (TDD RED) | `Dev-Microservice-Azure-UITestCoding` | `docs/test-specs/{screenId}-test-spec.md` (AAD-WEB Step.2.4 生成物), `docs/screen/`, `docs/catalog/service-catalog-matrix.md`, `docs/catalog/app-catalog.md` | `src/test/ui/` | step-2.5 |
-| step-3.1 | UI 実装 (TDD GREEN) | `Dev-Microservice-Azure-UICoding` | 画面定義書, サービスカタログ, RED テストコード, テスト仕様書, `docs/catalog/app-catalog.md` | `src/app/` | step-3.0TC |
-| step-3.2 | Web アプリ Deploy (Azure SWA) | `Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps` | `src/app/`, リソースグループ名, `docs/catalog/app-catalog.md` | `src/infra/azure/create-azure-webui-resources-prep.sh`, `src/infra/azure/create-azure-webui-resources.sh`, `src/infra/azure/verify-webui-resources.sh`, `docs/test-specs/deploy-step3-swa-test-spec.md`, `docs/catalog/service-catalog-matrix.md` 更新, `.github/workflows/azure-static-web-apps-*.yml`（`AZURE_STATIC_WEB_APPS_API_TOKEN` 参照） | step-3.1 |
-| step-3.3 | UI E2E テスト (Playwright) | `E2ETesting-Playwright` | `src/app/`, `docs/catalog/service-catalog-matrix.md`, `docs/test-specs/`, `docs/catalog/app-catalog.md` | E2E 実行結果（artifact） | step-3.2 |
-| step-4.1 | WAF アーキテクチャレビュー | `QA-AzureArchitectureReview` | `docs/catalog/use-case-catalog.md`, `docs/catalog/service-catalog-matrix.md`, `docs/catalog/app-catalog.md`, リソースグループ名 | `docs/azure/azure-architecture-review-report.md` | step-3.3 |
-| step-4.2 | 整合性チェック | `QA-AzureDependencyReview` | `docs/catalog/service-catalog-matrix.md`, `src/`, `infra/`, `docs/catalog/app-catalog.md` | `docs/azure/dependency-review-report.md` | step-3.3 |
+| local / Data | 1.1 データストア選定 | `Dev-Microservice-Azure-DataDesign` | AAS data / service / domain / app catalog | `docs/azure/azure-services-data.md` | なし |
+| local / Data RED | 1.2 verifier 生成 | `Dev-Microservice-Azure-DataTestCoding` | data design、app catalog、任意 sample data | `verify-data-resources.sh` + RED report + static log | 1.1 |
+| live / Data GREEN | 1.3 DataDeploy | `Dev-Microservice-Azure-DataDeploy` | design、matrix、sample data、verifier | HVE-owned `prep → create → registration → verify`、AC-1 GREEN | 1.2, 4.2 |
+| local / Additional | 2.1 追加サービス選定 | `Dev-Microservice-Azure-AddServiceDesign` | use case / service / data design、既存 compute design（既知 drift） | `docs/azure/azure-services-additional.md` | 1.1 |
+| live / Additional | 2.2 追加サービス Deploy | `Dev-Microservice-Azure-AddServiceDeploy` | additional design、app catalog | prep/create scripts、reality AC | 1.3, 2.1 |
+| local / Additional RED | 2.3 テスト生成 | `Dev-Microservice-Azure-AddServiceTestCoding` | additional design、app catalog | `src/test/integration/add-service/` | 2.1 |
+| live / Additional GREEN | 2.4 テスト実施 | `Dev-Microservice-Azure-AddServiceTesting` | deployed service + integration tests | 実 integration test 結果 | 2.2, 2.3 |
+| local / Retrieval | 2.5 Azure 実装設計 | `Dev-Microservice-Azure-AgenticRetrievalDesign` | AAD retrieval spec / additional design | `docs/azure/agentic-retrieval/{serviceId}-design.md` | 2.1、設定で無効化可 |
+| live / Retrieval | 2.6 Deploy | `Dev-Microservice-Azure-AgenticRetrievalDeploy` | retrieval design | KB / KS deploy scripts、AC4B reality gate | 2.2, 2.5、設定で無効化可 |
+| local / Compute | 3.1 コンピュート選定 | `Dev-Microservice-Azure-ComputeDesign` | planned data design + AAS catalogs | `docs/azure/azure-services-compute.md` | 2.3 |
+| local / API RED | 3.2 サービステスト生成 | `Dev-Microservice-Azure-ServiceTestCoding` | AAD service test spec / service definition | `src/test/api/{serviceId}.Tests/` + RED report | 3.1、サービス fan-out |
+| local / API GREEN | 3.3 Azure Functions 実装 | `Dev-Microservice-Azure-ServiceCoding-AzureFunctions` | RED tests + service spec | `src/api/{serviceId}-{serviceNameSlug}/` + GREEN report。compute design の Container Apps 選定とは不一致 | 3.2、サービス fan-out |
+| live / Compute | 3.4 Azure Functions Deploy | `Dev-Microservice-Azure-ComputeDeploy-AzureFunctions` | service code / catalogs | API deploy scripts + Step 専用 remote CI/CD。選定済み Compute を動的実装する経路ではない | 2.4, 3.3 |
+| live / Compute verify | 3.5 Post-deploy | `Dev-Microservice-Azure-ComputePostDeployTest` | deployed endpoint / API tests | 実 endpoint smoke log、任意 `src/test/post-deploy/` | 3.4 |
+| local / UI RED | 4.1 UI テスト生成 | `Dev-Microservice-Azure-UITestCoding` | AAD screen test spec / screen definition | `src/test/ui/{screenId}/` + RED report | 3.3、画面 fan-out |
+| local / UI GREEN | 4.2 UI 実装 | `Dev-Microservice-Azure-UICoding` | RED UI tests / screen catalogs | `src/app/` + GREEN report | 1.2, 2.5, 4.1。checkpoint |
+| live / UI | 4.3 SWA Deploy | `Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps` | `src/app/package.json`、既存 SWA workflow | create/verify/switch/rollback、AC-1/6/8 | 3.5, 4.2 |
+| live / UI verify | 4.4 Playwright E2E | `E2ETesting-Playwright` | SWA URL / screen test specs | Playwright log、失敗時 HTML / trace | 4.3 |
+| live / Review | 5.1 WAF review | `QA-AzureArchitectureReview` | Azure design + deployed resources | `docs/azure/azure-architecture-review-report.md` | 4.4 |
+| live / Review | 5.2 dependency review | `QA-AzureDependencyReview` | catalogs + `src/api`, `src/app` | `docs/azure/dependency-review-report.md` | 4.4 |
 
----
+Step 3.5 のテンプレートには「Agent は最小スタブ」という古い注記が残っていますが、
+現行 [`Dev-Microservice-Azure-ComputePostDeployTest.prompt.md`](../.github/prompts/Dev-Microservice-Azure-ComputePostDeployTest.prompt.md)
+には実環境 smoke 契約が実装されています。Category 属性が Step 3.2 のテストに無い場合は、
+Prompt 契約どおり Step 3.5 を blocked とし、モックテストを実環境 PASS と偽りません。
 
-## TDD 原則
+## TDD RED / GREEN 契約
 
-ASDW-WEB は TDD を前提とし、次を順守します。
+### 共通証跡
 
-1. テスト仕様書生成（`*T`）
-2. テストコード生成（`*TC`）
-3. RED 確認
-4. GREEN まで実装反復
+TDD Step は実行ごとに次へ記録します。
 
-`web-app-dev.yml` の `tdd_max_retries` で GREEN の最大再試行回数を設定できます。
+`tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 
----
+- `Workflow`, `Step`, `Agent`, `Target-Key`, `Phase`, `Evidence-Status`, `TDD-Judgement`,
+   `Secret-Redaction`, `Test-Files-Changed` を固定ラベル形式で記録します。
+- RED の `TDD-Judgement: PASS` は「テストが通った」ではなく、**期待した RED を実出力で証明できた**ことを表します。
+- GREEN は RED と同じ検証を緩めず再実行します。テスト側 / 共有設定側の確定ブロッカーだけ
+   `BLOCKED` を許容し、自 Step の実装未達は `FAIL` です。
+- GREEN Step は原則テストコードを変更せず、実装だけで GREEN 化します。
+- 秘密情報、接続文字列、SAS、Function Key、Bearer token をテスト・README・ログへ記録しません。
 
-## 手動実行ガイド
+固定スキーマの正本は
+[`tdd-red-green-reality`](../.github/skills/testing/tdd-red-green-reality/SKILL.md)、
+gate は [`hve/runner.py`](../hve/runner.py)、契約テストは
+[`test_runner_tdd_report_gate.py`](../hve/tests/test_runner_tdd_report_gate.py) です。
 
-### Step.1 データ
+### Data Step 1.2 / 1.3
 
-- Step.1.1: `Dev-Microservice-Azure-DataDesign`
-- Step.1.2: `Dev-Microservice-Azure-DataTestCoding`（TDD RED — データストア検証スクリプト生成）
-- Step.1.3: `Dev-Microservice-Azure-DataDeploy`（TDD GREEN — デプロイ + 検証スクリプト PASS）
+- Step 1.2 は Azure live 操作を行わず、読み取り専用 verifier を生成します。
+- RED report は `Artifact-Contract-Status`, `Live-RED-Status`, `Focused-Regression-Status` を分離します。
+   controlled / offline 生成では `Live-RED-Status: NOT_RUN` が正しく、static PASS を live RED と偽りません。
+- `static-verification.log` の実在と `Raw-Log-Path` 一致が gate されます。
+- Step 1.3 は HVE-owned fixed pipeline `prep → create → registration → verify` だけを使い、
+   Agent が producer を手修正・直接実行しません。
+- GREEN 未達は `ac-verification.md` の AC-1 `❌` と `TDD-Judgement: BLOCKED` を残し、
+   reality gate が Step を fail にします。
 
-### Step.2 マイクロサービス
+### API / UI
 
-- Step.2.1: `Dev-Microservice-Azure-ComputeDesign`
-- Step.2.2: `Dev-Microservice-Azure-AddServiceDesign`
-- Step.2.3: `Dev-Microservice-Azure-AddServiceDeploy`
-- Step.2.3TC: `Dev-Microservice-Azure-ServiceTestCoding`
-- Step.2.4: `Dev-Microservice-Azure-ServiceCoding-AzureFunctions`
-- Step.2.5: `Dev-Microservice-Azure-ComputeDeploy-AzureFunctions`
+- Step 3.2 → 3.3: ローカル xUnit の RED → Azure Functions 最小実装 → 同じ `dotnet test` の GREEN。
+- Step 4.1 → 4.2: Jest/jsdom 等の canonical UI tests → 最小 UI 実装 → 同じテストの GREEN。
+   再実行時に実装が既存なら canonical suite が最初から PASS し得るため、RED 専用の捏造テストを追加しません。
+- Step 3.4 / 3.5 と Step 4.3 / 4.4 は外部環境検証です。endpoint / base URL / 認証が未設定なら
+   環境ブロッカーであり、未実行を PASS にしません。
 
-### Step.3 UI
+## Azure Functions / Static Web Apps / OIDC
 
-- Step.3.0TC: `Dev-Microservice-Azure-UITestCoding`
-- Step.3.1: `Dev-Microservice-Azure-UICoding`
-- Step.3.2: `Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps`
-- Step.3.3: `E2ETesting-Playwright`
+- GitHub Actions の Azure OIDC ログインには `permissions: id-token: write` と `azure/login` が必要です。
+   `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` は資格情報そのものではありませんが、
+   GitHub の secrets / variables と federated credential の subject を一致させます。
+- Azure Functions の CD は、OIDC ログイン後に `Azure/functions-action` で package を deploy する構成が公式例です。
+- Static Web Apps の `Azure/static-web-apps-deploy` は deployment token を受け取ります。
+   HVE の Step 4.3 契約は、OIDC で Azure にログインし、`az staticwebapp secrets list` で token を実行時取得し、
+   action へ渡す方式です。**OIDC が deployment token 自体を不要にするわけではありません。**
+- deployment token をリポジトリ、ログ、手動固定 Secret に保存しません。
+- OIDC trust は repository / branch / environment 等の claim 条件で絞ります。2026-07-15 以降に作成、rename、transfer された
+   repository は immutable subject claim を使用し得るため、実際の claim と Azure federated credential を照合します。
 
-### Step.4 レビュー（並列）
+## 失敗時の対応
 
-- Step.4.1: `QA-AzureArchitectureReview`
-- Step.4.2: `QA-AzureDependencyReview`
+| 症状 | 原因 / 判定 | 対応 |
+|---|---|---|
+| Step 1.3 が session 前に停止 | APP-ID が `APP-009` 単一スコープでない | full run は `APP-009` 1件で実行。他 APP 汎用化済みとみなさない |
+| dry-run で parameter blocked | Step 1.3 required parameter 不足 | dry-run の最初の不足 parameter を解消。runtime input / Skill の検査結果とはみなさない |
+| 通常実行の pre-check が blocked | required input / required Skill 不足 | `--strict` 付き通常実行の最初の欠損を解消。未設定を推測しない |
+| Step 2.1 で compute design がない | producer の Step 3.1 が後段にある既知 contract drift | `docs/azure/azure-services-compute.md` を既存前提として確認。欠落時は完全実行を主張せず、registry / template / I/O contract の同期を別変更で行う |
+| Step 3.3 / 3.4 が compute design と不一致 | design は Container Apps、Agent 経路は Azure Functions 固定 | Functions を選定済み Compute と偽らない。Container Apps 実装経路または設計との整合を別変更で実装・検証する |
+| TDD Step が fail | report 欠落、固定ラベル不正、GREEN が FAIL、Step 1.2 三状態不一致 | 対応 target の report と raw log を修正し、focused contract test を再実行 |
+| live Step だけ失敗 | Azure / GitHub / endpoint reality 未達 | local checkpoint を保持し、draft PR の failure evidence から再開。auto-merge しない |
+| Step 3.5 blocked | endpoint / auth 不明、または API tests に post-deploy 用 Category がない | Step 3.4 の実 endpoint 根拠を補う。Category 不足は Step 3.2 契約側へフィードバック |
+| Step 4.3 が pre-flight / contract 失敗 | SWA workflow が default branch にない、または required D15 がない | deploy へ進まない。repository-managed workflow と D15 契約を別の許可された変更で実装・検証後に再実行 |
+| Step 4.4 が blocked | `E2E_BASE_URL` も catalog URL も取得不能 | SWA URL の根拠を補い、秘密情報を除いた Playwright artifact で再試行 |
+| Cloud Issue から起動できない | FR-CLOUD-06 の正常動作 | CLI / GUI を使用。停止中 reusable を手動 dispatch しない |
 
----
+<a id="asdw-web-completion"></a>
 
-## 自動実行ガイド ワークフロー
+## 完了確認
 
-### 関連ファイル
+### local checkpoint
 
-- Issue Template: `.github/ISSUE_TEMPLATE/web-app-dev.yml`（パラメータの参照用。Cloud 起動は停止中）
-- Workflow: `.github/workflows/auto-app-dev-microservice-web-reusable.yml`（**FR-CLOUD-06 により dispatcher からは起動されません**）
-- Registry: `hve/workflow_registry.py`（CLI / GUI が参照する ASDW-WEB Step 体系の SSOT）
+- Agentic Retrieval 有効時は local Step 10件、無効時は Step 2.5 を除く9件が完了し、`src/api/`, `src/app/`, `src/test/` の成果物が存在する。
+- Step 1.2 / 3.2 / 3.3 / 4.1 / 4.2 の target 別 TDD report が gate を通る。
+- local Step が live Step の成果物を必須入力にしていない。
 
-### 状態ラベル
+### full completion
 
-| ラベル | 説明 |
-|---|---|
-| `auto-app-dev-microservice-web` | トリガーラベル（Issue Template で自動付与） |
-| `asdw-web:initialized` | Bootstrap 完了 |
-| `asdw-web:ready` | 実行可能 |
-| `asdw-web:running` | 実行中 |
-| `asdw-web:done` | 完了 |
-| `asdw-web:blocked` | ブロック |
+- Step 3.1 の compute design と Step 3.3 / 3.4 の実装・デプロイ先が一致する。
+- Data / Additional / Retrieval（有効時）/ Compute / UI の reality AC が GREEN。
+- Post-deploy と Playwright が実 endpoint で PASS。
+- `docs/azure/azure-architecture-review-report.md` と `docs/azure/dependency-review-report.md` が存在する。
+- CLI 終了コードが 0、failed / blocked Step が 0。
 
-### フォーム入力（主要）
+現状は Compute 選定・実装 drift、SWA workflow 欠落、Step 4.3 required D15 欠落により
+full completion 条件を満たせません。これらを無視した完了報告は禁止です。
 
-`web-app-dev.yml` の主要入力:
+## HVE カスタマイズ正本
 
-- `app_ids`
-- `branch`
-- `runner_type`
-- `resource_group`
-- `steps`
-- `tdd_max_retries`
-- `model` / `review_model` / `qa_model`
+| 変更したい内容 | 正本 | 同時に確認するもの |
+|---|---|---|
+| Step、DAG、local/live、fan-out、必須 parameter、reality AC | [`hve/workflow_registry.py`](../hve/workflow_registry.py) の `ASDW_WEB` | `hve/tests/test_workflow_registry.py`, `test_orchestrator_local_checkpoint_retention.py`, `test_asdw_web_production_path.py` |
+| Step 本文 | [`.github/scripts/templates/asdw-web/`](../.github/scripts/templates/asdw-web/) | [`hve/template_engine.py`](../hve/template_engine.py), template dependency tests |
+| Agent 行動、禁止、DoD | [`.github/prompts/`](../.github/prompts/) の `Dev-Microservice-Azure-*`, `E2ETesting-Playwright`, `QA-Azure*` | [`hve/prompt_loader.py`](../hve/prompt_loader.py), `hve/tests/test_prompt_loader.py` |
+| 座標別 input / output / producer | [`.github/io-contracts/`](../.github/io-contracts/) の `*--asdw-web--<step>.yaml` | `.github/scripts/validate-io-contract.py`, `hve/tests/test_tdd_report_io_contract.py` |
+| TDD report / reality gate | [`tdd-red-green-reality`](../.github/skills/testing/tdd-red-green-reality/SKILL.md), [`hve/runner.py`](../hve/runner.py), [`hve/artifact_validation.py`](../hve/artifact_validation.py) | `hve/tests/test_runner_tdd_report_gate.py`, deploy gate tests |
+| Required / optional Skill | [`hve/skill_manifest.json`](../hve/skill_manifest.json) と Step の `required_skills` | [`hve/skill_resolver.py`](../hve/skill_resolver.py), `hve/tests/test_skill_resolver.py` |
+| Step 単位 remote CI/CD | [`hve/orchestrator.py`](../hve/orchestrator.py), [`github-actions-cicd`](../.github/skills/cicd/github-actions-cicd/SKILL.md) | `hve/tests/test_asdw_web_step_scoped_cicd_contract.py` |
+| Cloud 停止境界 | [`auto-orchestrator-dispatcher.yml`](../.github/workflows/auto-orchestrator-dispatcher.yml), [`auto-app-dev-microservice-web-reusable.yml`](../.github/workflows/auto-app-dev-microservice-web-reusable.yml) | `hve/tests/test_cloud_dispatcher_asdw_stop.py` |
 
-### 実行手順
+Runtime では [`hve/runner.py`](../hve/runner.py) が Step Prompt の先頭へ Agent Prompt を注入し、
+manifest と Step 宣言から Skill を解決します。registry / template / Prompt / I/O contract / Skill / test の
+どれか1面だけを変更しないでください。
 
-ASDW-WEB の Cloud 起動は停止中のため、CLI または GUI から実行します。
+## 公式出典
 
-1. CLI: `python -m hve orchestrate --workflow asdw-web --app-ids <APP-ID> --resource-group <RG> ...`
-2. GUI: `python -m hve` を起動し、Wizard で `asdw-web` を選択してパラメータを入力
-
-> `auto-app-dev-microservice-web` ラベル付き Issue を作成した場合、dispatcher は reusable workflow を起動せず、CLI / GUI への誘導コメントを Issue に投稿します（FR-CLOUD-06）。
-
-### HITL エスカレーション
-
-`asdw-web:blocked` が付与された場合は以下を使用します。
-
-- `.github/workflows/auto-blocked-to-human-required.yml`
-- `.github/workflows/auto-human-resolved-to-ready.yml`
-
----
-
-## 動作確認手順
-
-1. `hve/workflow_registry.py` に `asdw-web` ワークフローが登録されていることを確認
-2. `python -m hve orchestrate --workflow asdw-web --help` がエラーなく表示されることを確認
-3. GUI の Wizard で `asdw-web` が選択肢に表示されることを確認
-4. `auto-app-dev-microservice-web` ラベル付き Issue を作成した場合に、Sub-Issue が生成されず CLI / GUI 誘導コメントが投稿されることを確認（FR-CLOUD-06）
-5. Step が `1.1 → 1.2 → 1.3 → 2.1 → 2.2 → 2.3 → 2.3TC → 2.4 → 2.5 → 3.0TC → 3.1 → 3.2 → 3.3` と進むことを確認
-6. `step-4.1` と `step-4.2` が並列起動することを確認
-7. 最終的に Root Issue に `asdw-web:done` が付与されることを確認
+| Title | URL | 本ガイドで確認した主張 |
+|---|---|---|
+| Deploy to Azure Functions by using GitHub Actions | <https://learn.microsoft.com/azure/azure-functions/functions-how-to-github-actions> | user-assigned managed identity + federated credential、`id-token: write`、`azure/login`、`Azure/functions-action` |
+| Build configuration for Azure Static Web Apps | <https://learn.microsoft.com/azure/static-web-apps/build-configuration> | `.github/workflows` の build/deploy 設定、`Azure/static-web-apps-deploy` と deployment token |
+| Deploy a static web app with Azure Static Web Apps CLI | <https://learn.microsoft.com/azure/static-web-apps/static-web-apps-cli-deploy> | `az staticwebapp secrets list` による token 取得、token を公開リポジトリへ保存しないこと |
+| Configuring OpenID Connect in Azure | <https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-azure> | Azure OIDC の trust、`id-token: write`、`azure/login` |
+| OpenID Connect reference | <https://docs.github.com/en/actions/reference/security/oidc> | `aud` / `sub` 条件、reusable workflow claim、immutable subject claim |
+| Reuse workflows | <https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows> | reusable workflow は `on.workflow_call` で定義し、job の `uses` から呼ぶこと |

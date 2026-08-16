@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import html
 import os
 import sys
 from pathlib import Path
@@ -24,6 +25,11 @@ from hve.gui import i18n, settings_store
 
 
 _I18N_DIR = Path(i18n.__file__).resolve().parent
+
+
+def _escape(text: str) -> str:
+    """`.ts` へ書き出されるのと同じ XML エスケープを施す。"""
+    return html.escape(text, quote=False)
 
 
 # ---------------------------------------------------------------------------
@@ -133,6 +139,104 @@ class TestAssets:
         content = (_I18N_DIR / "hve_gui_en_US.ts").read_text(encoding="utf-8")
         assert '<context>\n    <name>CqIndexSection</name>' in content
         assert "<source>インデックス管理</source>" in content
+
+    def test_gh_login_dialog_is_translated(self) -> None:
+        """FR-GUI-09: GitHub CLI ログイン案内の文言が翻訳カタログに載っていること。"""
+        sources = (_I18N_DIR / "translations.pro").read_text(encoding="utf-8")
+        assert "../gh_login_dialog.py" in sources
+
+        content = (_I18N_DIR / "hve_gui_en_US.ts").read_text(encoding="utf-8")
+        assert '<context>\n    <name>GhLoginDialog</name>' in content
+        context = content.split("<name>GhLoginDialog</name>", 1)[1].split("</context>", 1)[0]
+        assert 'type="unfinished"' not in context
+
+    def test_copilot_chat_panel_is_translated(self) -> None:
+        """FR-GUI-10 / FR-GUI-12: Copilot パネルの新 UI 文言が翻訳済みであること。"""
+        sources = (_I18N_DIR / "translations.pro").read_text(encoding="utf-8")
+        assert "../copilot_chat_panel.py" in sources
+
+        content = (_I18N_DIR / "hve_gui_en_US.ts").read_text(encoding="utf-8")
+        assert '<context>\n    <name>CopilotChatPanel</name>' in content
+        context = content.split("<name>CopilotChatPanel</name>", 1)[1].split("</context>", 1)[0]
+        assert "<source>実行ジョブ</source>" in context
+        assert "<source>会話をクリア</source>" in context
+        assert "<source>前の送信メッセージへ</source>" in context
+        assert "<source>次の送信メッセージへ</source>" in context
+        assert 'type="unfinished"' not in context
+
+    def test_job_chat_widgets_are_translated(self) -> None:
+        """FR-GUI-18: 会話ビュー / 入力ボックスの文言が翻訳済みであること。"""
+        sources = (_I18N_DIR / "translations.pro").read_text(encoding="utf-8")
+        assert "../widgets/chat_transcript.py" in sources
+        assert "../widgets/chat_input_box.py" in sources
+
+        content = (_I18N_DIR / "hve_gui_en_US.ts").read_text(encoding="utf-8")
+        for name in ("ChatTranscriptView", "ChatInputBox"):
+            assert f"<context>\n    <name>{name}</name>" in content, name
+            context = content.split(f"<name>{name}</name>", 1)[1].split("</context>", 1)[0]
+            assert 'type="unfinished"' not in context, name
+
+        input_context = content.split("<name>ChatInputBox</name>", 1)[1].split("</context>", 1)[0]
+        assert "<source>中断して送信</source>" in input_context
+
+    def test_toolsearch_settings_section_is_translated(self) -> None:
+        """FR-GUI-07: Tool-Search セクションの文言が翻訳カタログに載っていること。"""
+        sources = (_I18N_DIR / "translations.pro").read_text(encoding="utf-8")
+        assert "../toolsearch_settings_section.py" in sources
+
+        content = (_I18N_DIR / "hve_gui_en_US.ts").read_text(encoding="utf-8")
+        for name in ("ToolSearchSection", "_KeyValueTable"):
+            assert f"<context>\n    <name>{name}</name>" in content, name
+            context = content.split(f"<name>{name}</name>", 1)[1].split("</context>", 1)[0]
+            assert 'type="unfinished"' not in context, name
+
+    def test_toolsearch_policy_hints_are_translated(self) -> None:
+        """FR-GUI-07: ポリシー編集項目の説明が英語でも表示できること。"""
+        from hve.gui import help_content as hc
+
+        content = (_I18N_DIR / "hve_gui_en_US.ts").read_text(encoding="utf-8")
+        context = content.split("<name>help_content</name>", 1)[1].split("</context>", 1)[0]
+        for field in hc._TOOLSEARCH_POLICY_HELP:
+            source = hc._TOOLSEARCH_POLICY_HELP[field].short
+            block = context.split(f"<source>{_escape(source)}</source>", 1)
+            assert len(block) == 2, field
+            assert 'type="unfinished"' not in block[1].split("</message>", 1)[0], field
+
+    def test_adi_section_is_translated_without_removed_workflow_residue(self) -> None:
+        """ADI 統合後の C17 文言が完訳され、廃止workflow文脈を含まないこと。"""
+        content = (_I18N_DIR / "hve_gui_en_US.ts").read_text(encoding="utf-8")
+        context = content.split("<name>_C17ADI</name>", 1)[1].split("</context>", 1)[0]
+        assert "<source>対象設計書フォルダを選択</source>" in context
+        assert "<source>分析の深さ</source>" in context
+        assert "<source>分析の観点</source>" in context
+        assert 'type="unfinished"' not in context
+        removed_workflow = "AQ" + "OD"
+        assert f"_C12{removed_workflow}" not in content
+        assert removed_workflow not in content
+
+    def test_compiled_catalog_is_not_stale(self) -> None:
+        """`.ts` だけ更新して `.qm` を再生成し忘れると英語 UI に反映されない。"""
+        from PySide6.QtWidgets import QApplication
+
+        from hve.gui import help_content as hc
+
+        qm_path = _I18N_DIR / "hve_gui_en_US.qm"
+        if not qm_path.exists():
+            pytest.skip(".qm not built; run setup-hve to compile")
+        app = QApplication.instance() or QApplication(sys.argv[:1])
+        try:
+            assert i18n.install_translator(app, "en_US") is True
+            assert app.translate("ToolSearchSection", "保存") == "Save"
+            assert app.translate("_KeyValueTable", "行を追加") == "Add row"
+            assert (
+                app.translate("_C17ADI", "対象設計書フォルダを選択")
+                == "Select design document folder"
+            )
+            assert app.translate("_C17ADI", "分析の深さ") == "Analysis depth"
+            hint = hc._TOOLSEARCH_POLICY_HELP["limit"].short
+            assert app.translate("help_content", hint) != hint
+        finally:
+            i18n.install_translator(app, "ja_JP")
 
 
 class TestAvailableLanguages:

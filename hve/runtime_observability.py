@@ -122,6 +122,70 @@ def format_stats_line(payload: Dict[str, Any]) -> str:
     return STATS_PREFIX + json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
 
+def _attr(data: Any, *names: str) -> Any:
+    """SDK data オブジェクトから snake_case / camelCase 属性を安全に取得する。"""
+    if data is None:
+        return None
+    for name in names:
+        value = getattr(data, name, None)
+        if value is not None:
+            return value
+    return None
+
+
+def extract_usage_credit_fields(data: Any) -> Optional[Dict[str, Any]]:
+    """SDK ``assistant.usage`` データから ``usage_credit`` イベント用の値を抽出する。
+
+    FR-MAINT-07: 通常 Step 実行（`hve/runner.py`）と SDK Fleet mode
+    （`hve/fleet_mode.py`）の双方から呼ばれる単一実装。
+
+    SDK 1.0.x では ``copilot_usage`` が Internal 属性へ改名されており getattr では
+    取得できないため、公開シリアライズ契約 ``to_dict()`` の camelCase キーから読む。
+
+    Returns:
+        ``api_call_id`` / ``model`` / ``multiplier_cost`` / ``nano_aiu`` /
+        ``unavailable_reason`` の dict。いずれの課金値も取得できない場合は ``None``。
+        FR-RTO-04 の allowlist に従い、本文系フィールドは一切含めない。
+    """
+    if data is None:
+        return None
+
+    usage_dict: Dict[str, Any] = {}
+    to_dict = getattr(data, "to_dict", None)
+    if callable(to_dict):
+        try:
+            serialized = to_dict()
+        except Exception:
+            serialized = None
+        if isinstance(serialized, dict):
+            usage_dict = serialized
+
+    copilot_usage = usage_dict.get("copilotUsage")
+    if not isinstance(copilot_usage, dict):
+        copilot_usage = None
+
+    api_call_id = _attr(data, "api_call_id", "apiCallId")
+    multiplier_cost = _attr(data, "cost")
+    nano_aiu = copilot_usage.get("totalNanoAiu") if copilot_usage is not None else None
+    unavailable_reason = (
+        None
+        if copilot_usage is not None
+        else "SDK assistant.usage provided no copilotUsage (totalNanoAiu unavailable)"
+    )
+
+    if api_call_id is None and multiplier_cost is None and nano_aiu is None and unavailable_reason is None:
+        return None
+
+    model = _attr(data, "model")
+    return {
+        "api_call_id": str(api_call_id) if api_call_id is not None else None,
+        "model": str(model) if model is not None else None,
+        "multiplier_cost": _as_float(multiplier_cost),
+        "nano_aiu": _as_float(nano_aiu),
+        "unavailable_reason": unavailable_reason,
+    }
+
+
 def parse_stats_line(line: str) -> Optional[Dict[str, Any]]:
     """`[hve:stats] {...}` 行を payload dict へ解析する。副作用なし。"""
     match = _STATS_LINE_RE.match(line)

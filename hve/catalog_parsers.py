@@ -14,6 +14,7 @@
 - "service_catalog"    : docs/catalog/service-catalog.md
 - "dataflow_catalog"  : docs/catalog/app-catalog.md（AAS の共通カタログを SoT として参照）
 - "agent_catalog"      : docs/agent/agent-architecture.md（Step 2 の Agent Inventory）
+- "design_doc_inventory" : docs/catalog/design-doc-inventory.md（ADI Step 1 の原本目録）
 
 == 設計方針 ==
 - カタログは必ず Markdown テーブルまたは見出し ``## {ID}`` 形式で ID を列挙する想定。
@@ -115,6 +116,8 @@ _AGENT_ID_PATTERN = r"(?:AGT|AG)-[A-Za-z0-9_\-]+"
 # Sub-9 (D-2 / ADR-0003): ARD fan-out 用 ID パターン
 _BIZ_ID_PATTERN = r"BIZ-\d{2,3}"
 _UC_ID_PATTERN = r"UC-[A-Za-z0-9_\-]+"
+# ADI fan-out 用 ID パターン（FR-WF-ADI-08）
+_DOC_ID_PATTERN = r"DOC-\d{4}"
 
 
 def parse_app_catalog(repo_root: Path) -> List[str]:
@@ -363,6 +366,21 @@ def parse_use_case_skeleton(repo_root: Path) -> List[str]:
     return ids
 
 
+def parse_design_doc_inventory(repo_root: Path) -> List[str]:
+    """docs/catalog/design-doc-inventory.md から ``DOC-NNNN`` 形式の ID を抽出する。
+
+    ADI Step 2 / Step 5 の fan-out 用。Step 1（原本インベントリ）の出力を parse する。
+    ファイル不在時は空リストを返し、呼び出し側で K-1 (fanout-empty) skip にフォールバック可能。
+    """
+    text = _read_text(repo_root, "docs/catalog/design-doc-inventory.md")
+    if text is None:
+        return []
+    ids = _extract_ids_from_table(text, id_pattern=_DOC_ID_PATTERN)
+    if not ids:
+        ids = _extract_ids_from_headings(text, id_pattern=_DOC_ID_PATTERN)
+    return ids
+
+
 # ---------------------------------------------------------------------------
 # レジストリ
 # ---------------------------------------------------------------------------
@@ -376,6 +394,8 @@ _PARSERS: Dict[str, Callable[[Path], List[str]]] = {
     # Sub-9 (D-2 / ADR-0003): ARD fan-out 用
     "business_candidate": parse_business_candidate,
     "use_case_skeleton": parse_use_case_skeleton,
+    # ADI fan-out 用
+    "design_doc_inventory": parse_design_doc_inventory,
 }
 
 # Parser 名 → 主入力ファイルパス（リポジトリルートからの相対パス）の SSOT。
@@ -394,6 +414,7 @@ _PARSER_INPUT_PATHS: Dict[str, str] = {
     "agent_catalog": "docs/agent/agent-architecture.md",
     "business_candidate": "docs/company-business-recommendation.md",
     "use_case_skeleton": "docs/catalog/use-case-skeleton.md",
+    "design_doc_inventory": "docs/catalog/design-doc-inventory.md",
 }
 
 KNOWN_PARSERS: FrozenSet[str] = frozenset(_PARSERS.keys())

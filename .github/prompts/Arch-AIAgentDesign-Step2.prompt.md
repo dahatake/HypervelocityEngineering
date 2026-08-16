@@ -14,7 +14,7 @@
 - **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
 - **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
 - **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
 - **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
 - **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 
@@ -47,18 +47,17 @@
 | 7 | `docs/services/SVC-*.md` | 各サービスの詳細仕様（API I/O、バリデーション、イベント、権限）。Tool の入出力スキーマ・失敗分類の根拠 | Tool I/O Schema, Error Handling, Permission Model |
 | 8 | `docs/azure/azure-services-data.md` | Azure データストア構成。Knowledge Source / RAG の具体設計根拠 | Knowledge Source, RAG 設計 |
 | 9 | `docs/azure/azure-services-additional.md` | 追加 Azure サービス構成（AI Search, OpenAI 等）。LLM バックエンド・検索インデックスの設計根拠 | Tool Catalog（AI系）, LLM 選定 |
-| 10 | `users-guide/08-ai-agent.md` | ガイドライン（Step 1〜3 の Prompt 定義）。設計プロセスの手順書 | 設計プロセス全体 |
-| 11 | `docs/catalog/app-catalog.md` | アプリケーション一覧（APP-ID）。Agent と APP の対応付けおよびスコープ確認根拠 | Scope, Boundary Matrix, Non-Goals |
+| 10 | `docs/catalog/app-catalog.md` | アプリケーション一覧（APP-ID）。Agent と APP の対応付けおよびスコープ確認根拠 | Scope, Boundary Matrix, Non-Goals |
 | — | `docs/agent/agent-application-definition.md` | **Step 1 成果物（必須前提）**。粒度設計の入力 | Step 2 全体 |
 
 ### 推奨ファイル（存在すれば参照。なくても設計は進められる）
 
 | # | ファイル | 用途 |
 |---|---------|------|
-| 12 | `docs/catalog/screen-catalog-APP-*.md` | 画面一覧（APP ごと）。Agent が UI 内で動作する場合の Conversation Design 根拠 |
-| 13 | `docs/screen/{screenId}-*.md` | 画面詳細定義。Output format / トーン / 対話チャネル設計の根拠 |
-| 14 | `src/data/sample-data.json` | サンプルデータ。System Prompt の Examples（Few-shot）作成用 |
-| 15 | `.github/skills/agent-common-preamble/references/agent-playbook.md` | 社内テンプレ/語彙/表現ルール（存在する場合のみ） |
+| 11 | `docs/catalog/screen-catalog-APP-*.md` | 画面一覧（APP ごと）。Agent が UI 内で動作する場合の Conversation Design 根拠 |
+| 12 | `docs/screen/{screenId}-*.md` | 画面詳細定義。Output format / トーン / 対話チャネル設計の根拠 |
+| 13 | `src/data/sample-data.json` | サンプルデータ。System Prompt の Examples（Few-shot）作成用 |
+| 14 | `.github/skills/agent-common-preamble/references/agent-playbook.md` | 社内テンプレ/語彙/表現ルール（存在する場合のみ） |
 
 ### 入力参照ルール
 - **必読ファイルが存在しない場合**: `TBD（ファイル未検出: {パス}）` と明記し、該当セクションは仮定ベースで記述する。推測で埋めない。
@@ -122,14 +121,14 @@
 ※ `{WORK}` の構成や、追加で `plan.md` / `README.md` が必要かは `Skill work-artifacts-layout` に従う。
 
 ## 5) 品質原則（必ず守る）
-- `users-guide/08-ai-agent.md` の各 Step の Prompt を **ガイドラインとして参照** し、その指示に従って設計書を作成する。Prompt の内容をコピー＆ペーストで成果物に混ぜない。
+- 本ファイルの §3 出力フォーマットを出力仕様の Single Source of Truth とする。外部ガイドを読みに行かないこと。また、本 Prompt の指示文をコピー＆ペーストで成果物に混ぜない。
 - 推測で AI Agent の機能・数・境界を断定しない。入力に根拠がない事項は「要確認/TBD」とする。
 - ツールは **必要なときだけ** 使う（無目的な全探索は禁止）。
 
 ## 4) 実行手順（順序固定）
 
 ### 5.1 Step 2: Agent 粒度設計とアーキテクチャ骨格
-- `users-guide/08-ai-agent.md` の **Step 2** セクションの Prompt ガイドラインに従い、以下を実施する：
+- 本ファイル §3 の出力フォーマットに従い、以下を実施する：
   - Step 1 の成果物を入力として、Agent の粒度を設計する
   - Single/Multi の判断を Decision Rules に従って実施する
   - Agent Catalog（一覧）と AGC（コンポーネント）分解を行う
@@ -149,7 +148,9 @@
   - `YYYY-MM-DD: 何をした / 何が決まった / 次アクション`
 
 ## 6) TIME-BOX / MODE SWITCH（分割ルール）
-- Step 5.1 は、`users-guide/08-ai-agent.md` 内の Step 2 Prompt に定義された TIME-BOX / MODE SWITCH ルールに従う。
+- Step 5.1 をこの 1 回の応答で完走できない（分量・複雑さ・制約により）と判断したら、直ちに分割モードへ切り替える。
+  - 分割モードでは `docs/agent/agent-architecture.md` を出力しない。
+  - 代わりに、分割実行用の Prompt を作成し、追記順序（1/3, 2/3 …）と推奨分割単位（目安 2,000〜4,000 字）を明記する。
 - Step 全体として Skill task-dag-planning の粒度/コンテキスト分割判定を適用する（詳細は Skill `task-dag-planning` を参照）。
   - 分割時は各 Sub Issue に `## Custom Agent` セクションに `Arch-AIAgentDesign-Step2` を含める
 

@@ -17,6 +17,7 @@
 - [インストール](#インストール)
 - [起動](#起動)
 - [2 ステップ操作ガイド](#2-ステップ操作ガイド)
+- [Copilot パネル（対話と実行ジョブ連携）](#copilot-パネル対話と実行ジョブ連携)
 - [Plugin / MCP Server 認証](#plugin-mcp-server-認証)
 - [データフロー](#データフロー)
 - [複数セッションの同時起動](#複数セッションの同時起動)
@@ -28,6 +29,7 @@
 - [セキュリティ・SSO・関連リンク](#セキュリティsso関連リンク)
 - [トラブルシューティング](#トラブルシューティング)
 - [多言語表示（日本語 / English）](#多言語表示日本語-english)
+- [GUI を拡張する（開発者向け）](#gui-を拡張する開発者向け)
 - [関連ドキュメント](#関連ドキュメント)
 
 ---
@@ -67,23 +69,24 @@ CLI 互換のスクリプト実行・CI 連携・Workbench 操作詳細が必要
 
 ```bash
 # 1. 依存パッケージをインストール（GUI extras 込み）
-pip install -e ".[gui]"
+#    Windows: hve\setup-hve.cmd   /   macOS ・ Linux: ./hve/setup-hve.sh
+./hve/setup-hve.sh
 
 # 2. GitHub CLI で認証（初回のみ）
 gh auth login
 
 # 3. GUI を起動
-python -m hve
+./hve.sh gui
 ```
 
 **Windows 初心者向け（ダブルクリックで完結）**:
 
 ```text
 hve\setup-hve.cmd   ← 初回 1 回だけダブルクリック（.venv + GUI extras + markitdown 一括）
-hve-gui.bat          ← 以降はこれをダブルクリックで GUI 起動
+hve.cmd gui         ← 以降はこれで GUI 起動
 ```
 
-**macOS / Linux**: `./hve/setup-hve.sh` で一括セットアップ後、`./hve-gui.sh` で起動。
+**macOS / Linux**: `./hve/setup-hve.sh` で一括セットアップ後、`./hve.sh gui` で起動。
 
 ウィザードが開いたら **Step 1（ワークフロー選択＋オプション設定）→ Step 2（実行）** の順に進めます（Step 1 は左ペインで選択、右ペインでオプション設定）。詳細は [2 ステップ操作ガイド](#2-ステップ操作ガイド) を参照してください。
 
@@ -94,8 +97,8 @@ hve-gui.bat          ← 以降はこれをダブルクリックで GUI 起動
 | 要件 | 必須 / オプション | 備考 |
 |---|---|---|
 | Python 3.11+ | **必須** | HVE 基本要件 |
-| `pip install -e ".[gui]"` | **必須** | PySide6 を含む GUI 依存 |
-| `pip install -e ".[gui,gui-docconvert]"`（`hve/setup-hve.ps1` / `hve/setup-hve.sh` をオプション無しで実行すれば既定で導入） | オプション | ARD ワークフローで `.docx` / `.pdf` / `.xlsx` / `.xls` / `.pptx` / `.html` をドラッグ&ドロップする場合（変換エンジンは [microsoft/markitdown](https://github.com/microsoft/markitdown)） |
+| `hve\setup-hve.cmd`（Windows）/ `./hve/setup-hve.sh`（macOS ・ Linux） | **必須** | PySide6 を含む GUI 依存、埋め込み端末用 PTY backend（`pywinpty` / `ptyprocess`）、`gh` を一括で導入・検証する |
+| 添付変換（markitdown） | オプション | ARD ワークフローで `.docx` / `.pdf` / `.xlsx` / `.xls` / `.pptx` / `.html` をドラッグ&ドロップする場合（変換エンジンは [microsoft/markitdown](https://github.com/microsoft/markitdown)。上記 setup をオプション無しで実行すれば既定で導入） |
 | GitHub Copilot CLI（外部 `copilot` コマンド） | HVE CLI 共通 | Prompt 実行に必要 |
 
 > その他の前提条件（Git / GitHub アカウント / Copilot ライセンス等）は [hve-gui-getting-started.md](./hve-gui-getting-started.md) を参照してください。
@@ -104,7 +107,7 @@ hve-gui.bat          ← 以降はこれをダブルクリックで GUI 起動
 
 ## インストール
 
-**Windows 初心者向け（最短）**: エクスプローラーから **`hve\setup-hve.cmd`** をダブルクリックすると、`.venv` 作成 + `github-copilot-sdk` + 全 extras（test / mdq-watch / mdq-ja / semantic / **gui** / gui-pty / gui-docconvert）を一括インストールします。PowerShell の実行ポリシー設定は不要です。完了後は後述の **`hve-gui.bat`** をダブルクリックで GUI を起動できます。
+**Windows 初心者向け（最短）**: エクスプローラーから **`hve\setup-hve.cmd`** をダブルクリックすると、`.venv` 作成 + `github-copilot-sdk` + 全 extras（test / mdq-watch / mdq-ja / semantic / **gui** / gui-pty / gui-docconvert）を一括インストールします。PowerShell の実行ポリシー設定は不要です。完了後は **`hve.cmd gui`** で GUI を起動できます。
 
 ```bash
 # リポジトリをクローン後、セットアップスクリプトで GUI + 添付変換（markitdown）を一括インストールするのが推奨（v0.1.x 以降、GUI extras は既定 ON）:
@@ -116,11 +119,9 @@ pwsh -NoProfile -File hve\setup-hve.ps1
 ./hve/setup-hve.sh
 
 # CLI 専用にしたい場合は --no-gui / -NoGui を付与。
-# 手動インストールだけで進める場合:
-pip install -e ".[gui]"
-# ARD 添付ファイル D&D で PDF / DOCX / XLSX / XLS / PPTX / HTML を変換する場合は追加で
-pip install -e ".[gui,gui-docconvert]"   # 内部依存は markitdown[all] のみ
 ```
+
+> **手動インストールは補助手段**: `pip install -e ".[gui,gui-pty,gui-docconvert]"` でも Python 依存は入りますが、`gh` の導入と PTY backend の利用可否検証は行われません。GUI の「GitHub CLI でログイン」を含む完全構成の復旧には、OS 別の通常 setup を使ってください。
 
 > **`.cmd` vs `.ps1`**: `.cmd` は `.ps1` を呼ぶ薄ラッパとなり、同一のオプション（`-CheckOnly` / `-NoGui` / `-Minimal` / `-Force` / `-SkipNltkDownload` / `-WithSkills` / `-Yes` / `-NoInstallPython` / `-NoInstallTools`）をサポートします。既定では不足している OS ツール（Git / gh / Node.js / Azure CLI / ShellCheck / 外部 Copilot CLI、Linux では Qt system lib）も自動導入します。詳細は [hve-cli-orchestrator-guide.md - セットアップスクリプト](./hve-cli-orchestrator-guide.md#セットアップスクリプトを使った環境構築windows--macos--linux) を参照。
 
@@ -132,61 +133,48 @@ pip install -e ".[gui,gui-docconvert]"   # 内部依存は markitdown[all] の�
 
 ### 方法 A: ランチャスクリプト起動（推奨）
 
-#### Windows — `hve-gui.bat`
+#### Windows — `hve.cmd`
 
-リポジトリ直下の **`hve-gui.bat`** をエクスプローラからダブルクリックするだけで起動します。コマンドを覚える必要はありません。
+リポジトリ直下の **`hve.cmd`** を使います。エクスプローラからダブルクリックすると引数なしで実行され、GUI が起動します（コマンドプロンプトから明示する場合は `hve.cmd gui`）。
 
-> **役割の違い**: `hve\setup-hve.cmd` は **初回セットアップ専用**（venv + 依存関係の導入、通常 1 度だけ実行）。`hve-gui.bat` は **GUI 起動専用**（セットアップ完了後、毎回これをダブルクリック）。
+> **役割の違い**: `hve\setup-hve.cmd` は **初回セットアップ専用**（venv + 依存関係の導入、通常 1 度だけ実行）。`hve.cmd` は **起動専用**（セットアップ完了後、毎回これを使う）。
 
 ```text
 RoyalytyService2ndGen\
 ├── hve\setup-hve.cmd   ← 初回 1 回だけダブルクリック（セットアップ）
-└── hve-gui.bat          ← 毎回ダブルクリック（GUI 起動）
+└── hve.cmd             ← 毎回ダブルクリック（GUI 起動）
 ```
 
-内部で `.venv\Scripts\python.exe -m hve gui` を実行します。
+内部で `.venv\Scripts\python.exe -m hve` を実行します。
 
 | 状況 | 動作 |
 |---|---|
 | `.venv` が未作成 | エラー表示 → `hve\setup-hve.cmd` または `hve\setup-hve.ps1` の実行を案内 → 停止 |
-| PySide6 未インストール（exit code 2） | エラー表示 → `pip install -e ".[gui]"` を案内 → 停止 |
+| GUI 依存が未導入（exit code 2） | エラー表示 → `hve\setup-hve.cmd` の実行と `hve.cmd gui` での再起動を案内 → 停止 |
 | 正常起動 | GUI ウィンドウが開く（裏でコマンドプロンプトが残ります） |
 
-> **デスクトップから起動したい場合**: `hve-gui.bat` を右クリック → 「ショートカットの作成」 → `.lnk` をデスクトップに移動。
+> **デスクトップから起動したい場合**: `hve.cmd` を右クリック → 「ショートカットの作成」 → `.lnk` をデスクトップに移動。
 
-#### macOS / Linux — `hve-gui.sh`
+#### macOS / Linux — `hve.sh`
 
-リポジトリ直下の **`hve-gui.sh`** を使います。
+リポジトリ直下の **`hve.sh`** を使います。
 
 ```text
 RoyalytyService2ndGen/
-└── hve-gui.sh   ← ターミナルから実行 or macOS Finder でダブルクリック
+└── hve.sh   ← ターミナルから実行（引数なしで GUI 起動）
 ```
-
-**ターミナルから実行**（初回のみ実行権限を付与）:
 
 ```bash
-chmod +x hve-gui.sh
-./hve-gui.sh
+./hve.sh gui
 ```
 
-**macOS Finder からダブルクリック**（`.command` 方式）:
-
-```bash
-# 初回セットアップ（1回だけ）
-cp hve-gui.sh hve-gui.command
-chmod +x hve-gui.command
-# → Finder で hve-gui.command をダブルクリック
-# 初回は右クリック → 「開く」でセキュリティ警告を回避
-```
-
-内部で `.venv/bin/python -m hve gui` を実行します。
+内部で `.venv/bin/python -m hve` を実行します。
 
 | 状況 | 動作 |
 |---|---|
-| `.venv` が未作成 | エラー表示 → `python3 -m venv .venv` コマンドを案内 → 停止 |
-| PySide6 未インストール（exit code 2） | エラー表示 → `pip install -e ".[gui]"` を案内 → 停止 |
-| ターミナルから実行時にエラー | 端末が開いているため `Press Enter to exit...` で停止 |
+| `.venv` が未作成 | エラー表示 → `./hve/setup-hve.sh` の実行を案内 → 停止 |
+| GUI 依存が未導入（exit code 2） | エラー表示 → `./hve/setup-hve.sh` の実行と `./hve.sh gui` での再起動を案内 → 停止 |
+| 正常起動 | GUI ウィンドウが開く |
 
 ### 方法 B: コマンドライン起動（クロスプラットフォーム）
 
@@ -235,8 +223,9 @@ chmod +x hve-gui.command
 | `adfdv` | Dataflow Dev |
 | `aag` | AI Agent Design |
 | `aagd` | AI Agent Dev & Deploy |
+| `aar` | Agentic Retrieval Add-on |
+| `adi` | Auto Design-doc Ingestion |
 | `akm` | Knowledge Management |
-| `aqod` | Original Docs Review |
 | `adoc` | Source Code → Documentation |
 | `ard` | Auto Requirement Definition |
 
@@ -255,7 +244,7 @@ chmod +x hve-gui.command
 |---|---|
 | C1 基本設定 | `--model` / `--review-model` / `--qa-model` |
 | C2 並列実行 | `--max-parallel` |
-| C3 自動プロンプト | `--auto-qa` / `--auto-contents-review` / `--auto-coding-agent-review` / **QA 回答モード**（下記参照） |
+| C3 共通設定 | `--auto-qa`（**必須選択** / 下記参照）/ `--qa-akm-background-merge`（下記参照）/ `--auto-contents-review` / `--auto-coding-agent-review` / **QA (質問票) 回答モード**（下記参照）。設定画面では `QA (質問票)` / `レビュー` / `Knowledge Management` / `自己改善 (Self Improve)` の 4 ノードへ分かれています |
 | C4 **Work IQ**（GUI / CLI 両対応） | `--workiq` 系 10 オプション（M365 メール・チャット・会議・ファイル参照。`@microsoft/workiq` プラグインのインストールが必要）。GUI では本カテゴリ（`hve/gui/page_workiq.py` の Work IQ 設定 UI）で設定し、値は `OrchestrateArgs` 経由で `--workiq*` 引数として CLI に渡る。 |
 | C5 Issue / PR 作成 | `--create-issues` / `--create-pr` / `--repo` |
 | C6 出力制御 | `--verbose` / `--quiet` / `--verbosity` / `--log-level` 他 |
@@ -263,14 +252,16 @@ chmod +x hve-gui.command
 | C8 タイムアウト | `--timeout` / `--review-timeout` |
 | C9 ブランチ / ステップ | `--branch` / `--steps` |
 | C10 アプリ ID 系 | `--app-id` / `--app-ids` / `--resource-group` / `--app-id` / `--usecase-id` |
-| C11 AKM 固有 | `--sources` / `--target-files` / `--force-refresh` 他 |
-| C12 AQOD 固有 | `--target-scope` / `--depth` / `--focus-areas` |
+| C11 Knowledge Management 固有 | `--sources` / `--target-files` / `--force-refresh` 他 |
 | C13 ADOC 固有 | `--target-dirs` / `--exclude-patterns` / `--doc-purpose` 他 |
 | C14 ARD 固有 | `--company-name` / `--target-business` / 添付資料 D&D（下記参照） |
 | C15 追加プロンプト | `--additional-prompt` / `--additional-comment` |
 | C16 実行制御 / 拡張機能 | `--dry-run` / `--self-improve` 他（mdq 系は [skills] → [Markdown-Query] へ移設） |
+| C17 ADI 固有 | `--purpose` / `--target-scope` / `--depth` / `--focus-areas` |
 
-選択ワークフローに応じて C10〜C14 の表示/有効化が自動制御されます。
+選択ワークフローに応じて C10 / C11 / C13 / C14 / C17 の表示・有効化が自動制御されます。
+
+> C12は廃止済みカテゴリの番号で、設定互換性のため欠番のままです。ADOCはC13、ADIはC17であり、番号を繰り上げません。
 
 #### C10 対象アプリケーション (APP-ID) の絞り込み
 
@@ -309,19 +300,62 @@ chmod +x hve-gui.command
 
 > **設計上の注意**: 起点ファイルは `docs/business-requirement.md` ではなく `docs/attached/business-requirement-input.md` という別名で保存されます。ARD ワークフロー Step 2 が `docs/business-requirement.md` を自動上書きする可能性があるためです。詳細は [hve-technical-architecture.md §5](./hve-technical-architecture.md#5-hve-gui-orchestrator) を参照してください。
 
-#### C3 自動プロンプト: QA 回答モード
+#### 共通設定: QA (質問票) 自動投入（必須選択）
 
-「QA 自動投入」を有効化したとき、回答収集の挙動を 2 つから選択できます（既定: Autopilot）。
+ワークフローを選択すると、右ペイン最上部の「共通設定  *必須」枠に「QA (質問票) 自動投入」が常時表示されます。全ワークフロー共通で、実行前に必ず選択してください。
+
+| 選択肢 | 動作 |
+|---|---|
+| **未選択**（既定） | 実行できません。「実行 ▶」を押すと入力エラーとして選択を促されます |
+| **有効にする** | 実行前 QA 質問票を自動投入し、回答済み QA を保存・検証してからメインタスクを開始します |
+| **無効にする** | 実行前 QA を行いません |
+
+> 既定値による暗黙の決定を避けるため、未選択は `False` として保存されません。
+> 回答を `knowledge/` へ取り込むかどうかは、次の「Knowledge Management へのバックグラウンドマージ」で別途選択します。
+
+#### 共通設定: Knowledge Management へのバックグラウンドマージ
+
+「QA (質問票) を Knowledge Management へバックグラウンドでマージする」にチェックを入れると、回答済み QA を `knowledge/` へ取り込む Knowledge Management がバックグラウンドで起動します（メインタスクは完了を待ちません）。
+
+| 項目 | 既定 | 内容 |
+|---|---|---|
+| **QA (質問票) を Knowledge Management へバックグラウンドでマージする** | 無効（チェックなし） | 有効にすると、検証済み QA ファイル 1 件ごとに Knowledge Management の差分更新を起動します |
+
+- 「QA (質問票) 自動投入」が「有効にする」のときだけ選択できます。
+- 右ペインの「共通設定」枠と、設定画面の「一般 > Knowledge Management」の双方から編集できます。
+- ワークフローとして **Knowledge Management を直接選んだ実行には適用されません**。
+
+> **以前の挙動からの変更**: 従来は「QA 自動投入」を有効にするだけで Knowledge Management が常に起動していました。共有資産である `knowledge/` への自動書込みを利用者が選べるようにするため、本チェックボックス（既定無効）で制御する方式へ変更しました。従来と同じ挙動にするには本チェックボックスを有効にしてください。
+
+#### 共通設定: QA (質問票) 回答モード
+
+「QA (質問票) 自動投入」を「有効にする」にしたとき、回答収集の挙動を 2 つから選択できます（既定: Autopilot）。
 
 | モード | 動作 |
 |---|---|
 | **Autopilot (全自動)** | AI が質問と既定回答を作成し、既定回答を全て自動採用してメインタスクへ適用します。ユーザー操作は不要です。 |
 | **ユーザー回答** | AI が質問と既定回答を作成した後、GUI に **QA 回答ダイアログ** が表示されます。全質問への回答を入力して [Submit] を押すとメインタスクへ適用されます。[全て既定値で進める] / [キャンセル] も選択可能です。 |
 
-- 「QA 自動投入」が無効のときは本設定は無視されます（既定挙動）。
+- 「QA (質問票) 自動投入」が「無効にする」または未選択のときは本設定は無視されます（入力欄も無効化されます）。
 - ユーザー回答モードは、GUI ↔ CLI 間で `.hve/qa-ipc/<uuid>/` 配下のファイルベース IPC を用います（タイムアウト: 既定 1 時間）。タイムアウト時は既定値を全採用してメインタスクを継続します。
 - [キャンセル] を押すと、subprocess を停止して orchestrate 全体を中断します（途中状態を破棄）。
 - 自由記述質問（選択肢がない質問）は現行 CLI の仕様により既定値が採用されます（GUI 上では入力欄が無効化されます）。
+
+#### 共通設定: Knowledge Management 用モデル / コンテキスト階層
+
+上記のバックグラウンドマージを有効にすると、その Knowledge Management 子実行だけにメインタスクとは別の実行品質を指定できます。
+
+| 項目 | 既定 | 内容 |
+|---|---|---|
+| **Knowledge Management 用モデル** | （「使用するモデル」を継承） | 子実行だけに使うモデル。同じ行の **Effort** で reasoning effort も選べます（モデルが対応する場合のみ有効） |
+| **Knowledge Management 用コンテキスト階層** | （「コンテキスト階層」を継承） | `default` / `long_context` |
+
+- 3 項目とも右ペインの「共通設定」枠と、設定画面の「一般 > Knowledge Management」の双方から編集できます。
+- 未指定（継承）の項目は、設定画面の「基本設定」で選んだメインの値をそのまま使います（従来と同じ振る舞い）。
+- バックグラウンドマージが無効のときは 3 項目とも無効化され、実行時にも使われません。
+- ワークフローとして **Knowledge Management を直接選んだ実行には適用されません**（従来どおり「使用するモデル」に従います）。
+
+> **使いどころ**: メインの設計タスクは高品質モデルで実行しつつ、定型作業に近い差分同期だけを安価なモデルへ逃がすことで、品質を下げずにコストを押さえられます。
 
 ---
 
@@ -349,6 +383,122 @@ chmod +x hve-gui.command
 - **スクロール**: OS ネイティブのマウスホイール / スクロールバーが利用可能。
 - **テキスト選択**: `Ctrl+A`（全選択）・ドラッグ選択・`Ctrl+C` で部分コピー可能。
 - **停止**: 「■ 停止」ボタンで `subprocess.Popen.terminate()` を送信（Windows ではハードキル相当）。
+
+---
+
+<a id="copilot-パネル対話と実行ジョブ連携"></a>
+
+## Copilot パネル（対話と実行ジョブ連携）
+
+ヘッダー右上の **[Copilot]** ボタンで右側のドックを開閉します。ドックは 2 つのタブを持ちます。
+
+| タブ | 用途 |
+|---|---|
+| **Copilot CLI** | GitHub Copilot CLI の対話セッションをそのまま埋め込んで表示・操作する |
+| **実行ジョブ** | 実行中ワークフローへのメッセージ送信と、実行ログ・完了結果の参照 |
+
+### Copilot CLI タブ
+
+[セッション開始] を押すと、リポジトリルートを作業ディレクトリとして `copilot` の対話セッションを
+1 プロセス起動します。以降のやり取りは同じセッションで継続するため、会話の文脈が失われません。
+
+- **利用できる機能は Copilot CLI が提供するものそのものです。** `/model`・`/agent`・`/plan`・
+  `/autopilot`・`/context`・`/compact`・`/fork`・`/resume`・`/diff`・`/review`・`/mcp`・`/plugin`・
+  `/skills`・`/permissions` などのコマンドは、CLI と同じように入力できます。利用可能な一覧は
+  `/help` で確認してください。
+- **権限は CLI の確認プロンプトに従います。** HVE は `--allow-all-tools` や `--yolo` を
+  自動付与しません。ツール実行の可否はセッション内で都度確認され、方針を変えたい場合は
+  `/permissions` を使います。
+- **セッションと履歴の保存先は Copilot CLI 側です。** HVE はチャット内容を別途保存しません。
+
+> `copilot` コマンドまたは OS 別 PTY backend が見つからない場合は、セッションを開始せずに
+> セットアップ手順を案内します（Windows は `hve\setup-hve.cmd`、macOS / Linux は `./hve/setup-hve.sh`）。
+
+### 実行ジョブタブ
+
+画面の並びは Visual Studio Code の [チャット] と同じです。
+
+| 位置 | 要素 | 役割 |
+|---|---|---|
+| 上段 | **[対象ジョブ]** / **[更新]** / **[⋯]** | 宛先の選択と補助操作 || 上段下 | **ターンナビゲーション** | 送信メッセージの現在位置と前後移動（送信が 1 件以上のときだけ表示） || 中央 | **会話ビュー** | 送信したメッセージ・受理結果・実行ログを時系列で表示 |
+| 中央下 | **送信待ちキュー** | 未処理のメッセージがあるときだけ表示 |
+| 下段 | **入力ボックス** | 添付チップ・複数行入力・送信方法・送信ボタン |
+| 最下段 | **状態行** | 宛先の状態・対話チャネルの可否・送信待ち件数 |
+
+**[対象ジョブ]** で、実行中のワークフロー／ステップを明示的に選びます。並列実行中でも
+一覧にはすべての実行中ステップが並ぶため、宛先を取り違えずに送信できます。
+
+送信方法は 3 種類です。
+
+| 送信方法 | 動作 | 使いどころ |
+|---|---|---|
+| **キューに追加** | 現在の応答が終わってから順に処理される | 進行を止めずに次の指示を積む |
+| **いま割り込む** | 現在の応答へ即時に割り込む | 方向がずれてきたので軌道修正する |
+| **中断して送信** | 実行中のターンを中断し、送った指示を新しいターンとして実行する | 現在の作業をやめて別の指示に切り替える |
+
+- 「中断して送信」で送った指示の応答が、そのステップの結果として扱われます。
+- 送信結果は送信メッセージの右側に **受理 / 失敗** として表示されます。送信内容そのものはログや統計へ複製されません。
+- 選択したジョブの実行ログは同じ会話ビューに表示され、実行の進行に合わせて追記されます。
+  実行ログは **加工せずそのまま** 表示します。HVE がログ行を解析して発話者やターンの区切りを推測することはありません。
+
+#### 入力のしかた
+
+- `Enter` で送信し、`Shift+Enter` で改行します。入力量に応じて入力欄が広がり、一定の高さで止まってスクロールします。
+- **[+]** でファイルを選ぶと、入力欄の上に添付チップが並びます。チップの `×` で個別に外せます。
+- 添付されるのは **パスだけ** です。ファイルの中身は送信されないため、Copilot 側が必要な範囲を読み取ります。
+- 添付を含めた本文が送信上限（8 KiB）を超える場合は送信されず、会話ビューに理由が表示されます。
+
+#### 送信したメッセージを行き来する
+
+送信メッセージが 1 件以上あるとき、会話ビューの上に現在位置が出ます。
+
+- 表示は `現在番号/総数` です（例: `3/3`）。左側には現在のメッセージ本文が 1 行で出ます。長い本文や複数行の本文は末尾を省略します。
+- **[▲] / [▼]** で前後のメッセージへ移動します。移動先が会話ビューの先頭へ来るようスクロールします。
+- 先頭では [▲]、末尾では [▼] が選べなくなります。端から反対側へは回り込みません。
+- 会話ビューを直接スクロールすると、いま見ている位置に合わせて番号が変わります。
+- 新しく送信すると、そのメッセージが現在位置になります。
+
+#### 送信待ちのメッセージを操作する
+
+未処理の送信要求があるときだけ、会話ビューの下に送信待ちキューが現れます。
+
+- **[↑] / [↓]**: 処理される順番を入れ替えます。
+- **[×]**: まだ処理されていない要求を取り消します。
+- 実行側が処理を始めた要求は一覧から消え、取り消し・並べ替えの対象になりません。
+
+#### [⋯] メニュー
+
+| 項目 | 動作 |
+|---|---|
+| **会話をクリア** | 画面の表示だけを消します。送信済みの要求・実行中のジョブには影響しません |
+| **会話をコピー** | 会話ビューの全文をクリップボードへコピーします |
+| **結果を Copilot で開く** | 下記「完了したジョブの結果を相談する」を実行します |
+
+### 完了したジョブの結果を相談する
+
+ジョブが完了したあとも、対象ジョブを選んだまま **[⋯] → [結果を Copilot で開く]** を選ぶと、
+そのジョブの実行ディレクトリ・コンソールログ・完了レポート・生成ファイルの **パスだけ** を
+初期メッセージに含めた新しい Copilot CLI セッションを開始します。
+
+- ファイルの中身はプロンプトへ埋め込まれません。必要な範囲を Copilot 自身が読み取ります。
+- 対話セッションが実行中の場合は、終了してよいか確認してから切り替えます。
+- **セッション作業フォルダーのクリーンアップ設定が `purge` の場合、GUI 終了後は参照先が残りません。**
+  実行後に相談する運用では `keep`（既定）または `archive` を選んでください。
+
+### この機能で提供しないもの
+
+HVE GUI は Visual Studio Code 自体の再実装ではありません。エディタのインライン補完・
+インラインチャット・ソース管理／デバッガ／テスト UI・拡張機能ホスト・統合ブラウザーなど、
+VS Code 固有の実行面は対象外です。Copilot CLI が提供する範囲の機能を、HVE の実行ジョブと
+結び付けて使えるようにすることが本パネルの役割です。
+
+実行ジョブタブでは、次の VS Code チャットの要素も提供しません。
+
+| 提供しない要素 | 理由 |
+|---|---|
+| モデル / reasoning effort の切り替え | 実行中ジョブのモデルは `hve orchestrate` の起動時に決まり、途中で変更する経路がありません |
+| 応答の停止ボタン | 「実行中の応答だけを取り消す」送信方法はありません。ジョブ全体の停止は [作業状況] 画面の停止操作です |
+| 音声入力 | Copilot CLI / HVE のどちらもこの経路を持ちません |
 
 ---
 
@@ -452,6 +602,10 @@ python -m hve &
 
 GitHub Copilot CLI SDK の複数デバイス間セッション管理が不十分なため、CLI / GUI の Session State（Resume）機能は **v1.1 で全廃** しました。GUI の「■ 停止」ボタンは `subprocess.terminate()`（Windows ではハードキル相当）を送信してワークフローを停止しますが、保存付き中断・再開（Resume）は提供されません。
 
+> **Copilot CLI の `/resume` とは別概念です。** Copilot パネルの対話タブで使える `/resume` は
+> **Copilot CLI 自身のチャットセッション**を選び直す機能です。HVE のワークフロー（DAG 実行）を
+> 途中から再開するものではありません。ワークフローを分割実行したい場合は `--steps` で範囲を絞ってください。
+
 ---
 
 ## コマンドリファレンス
@@ -465,7 +619,7 @@ GUI Orchestrator は最終的に `python -m hve orchestrate ...` コマンドを
 
 ## ワークフロー一覧
 
-選択可能な 11 ワークフロー（`aas` / `aad-web` / `asdw-web` / `adfd` / `adfdv` / `aag` / `aagd` / `akm` / `aqod` / `adoc` / `ard`）の正式名称は [Step 1: ワークフロー選択](#step-1-ワークフロー選択) に記載しています。
+選択可能な12ワークフロー（`ard` / `aas` / `aad-web` / `asdw-web` / `adfd` / `adfdv` / `aag` / `aagd` / `aar` / `akm` / `adi` / `adoc`）の正式名称は [Step 1: ワークフロー選択](#step-1-ワークフロー選択) に記載しています。
 
 - **各ワークフローの DAG・成果物・依存関係**: [workflow-reference.md](./workflow-reference.md) を参照。
 - **フェーズ別ガイド**: [README — フェーズ別ガイド](../README.md#フェーズ別ガイド) を参照。
@@ -476,7 +630,7 @@ GUI Orchestrator は最終的に `python -m hve orchestrate ...` コマンドを
 
 ## Fork-on-Retry / DAG 並列実行・Post-step 自動プロンプト
 
-DAG 並列実行（`--max-parallel`）と Post-step 自動プロンプト（`--auto-qa` / `--auto-contents-review` / `--auto-coding-agent-review`）は GUI の Step 2 C2・C3 から設定可能で、Fork-on-Retry も CLI と共通の挙動です。詳細は次を参照してください。
+DAG 並列実行（`--max-parallel`）と Post-step 自動プロンプト（`--auto-qa` / `--auto-contents-review` / `--auto-coding-agent-review`）は、GUI では Step 1 右ペインの「共通設定」枠と設定画面の「基本設定」/「QA (質問票)」/「レビュー」から設定でき、Fork-on-Retry も CLI と共通の挙動です。詳細は次を参照してください。
 
 - [hve-cli-orchestrator-guide.md — 付録C: DAG 並列実行と Post-step 自動プロンプト](./hve-cli-orchestrator-guide.md#付録c-dag-並列実行と-post-step-自動プロンプト)
 - [hve-cli-orchestrator-guide.md — フォーク機能 Fork-on-Retry](./hve-cli-orchestrator-guide.md#フォーク機能-fork-on-retry)
@@ -495,14 +649,14 @@ DAG 並列実行（`--max-parallel`）と Post-step 自動プロンプト（`--a
 
 | 症状 | 原因 | 対処 |
 |---|---|---|
-| `hve-gui.bat` をダブルクリックすると `.venv が見つかりません` と表示される | 仮想環境未作成 | バッチが案内する通り `pwsh -NoProfile -File hve\setup-hve.ps1` を実行 |
-| `hve-gui.bat` 実行中に exit code 2 で `pause` | PySide6 未インストール | バッチが案内する通り `.venv\Scripts\python.exe -m pip install -e ".[gui]"` を実行 |
+| `hve.cmd` をダブルクリックすると `.venv Python not found` と表示される | 仮想環境未作成 | ランチャが案内する通り `hve\setup-hve.cmd` または `pwsh -NoProfile -File hve\setup-hve.ps1` を実行 |
+| `hve.cmd` / `hve.sh` が exit code 2 で停止する | GUI 依存（PySide6 等）未インストール | 表示される通り `hve\setup-hve.cmd` / `./hve/setup-hve.sh` を実行してから `hve.cmd gui` / `./hve.sh gui` で再起動 |
 | GUI 終了後もコマンドプロンプトが残る（Windows） | エラー時のメッセージ保持のための仕様 | 正常終了時は黒画面を任意で閉じて OK |
-| `hve-gui.sh` が `Permission denied` | 実行権限なし | `chmod +x hve-gui.sh` を実行してから再試行 |
-| `hve-gui.sh` `.venv が見つかりません` と表示される | 仮想環境未作成 | スクリプトが案内する通り `python3 -m venv .venv && .venv/bin/pip install -e ".[gui]"` を実行 |
-| macOS Finder で `hve-gui.command` が「開発元を確認できない」 | Gatekeeper のブロック | 右クリック → 「開く」で初回警告を回避。以後ダブルクリックで起動可能 |
-| `python -m hve` / `python -m hve gui` でエラー | `PySide6` 未インストール | `pip install -e ".[gui]"` を実行（引数なし起動は CLI に自動フォールバック） |
-| D&D で `.docx` / `.pdf` / `.xlsx` / `.pptx` / `.html` が変換されない | `gui-docconvert`（markitdown）未インストール | `hve/setup-hve.ps1` / `hve/setup-hve.sh` をオプション無しで再実行、または `pip install -e ".[gui,gui-docconvert]"` |
+| `./hve.sh` が `Permission denied` | 実行権限なし | `chmod +x hve.sh` を実行してから再試行 |
+| `./hve.sh` で `.venv の Python が見つからない` と表示される | 仮想環境未作成 | スクリプトが案内する通り `./hve/setup-hve.sh` を実行 |
+| GUI の「GitHub CLI でログイン」で案内文が出て端末が開かない | `gh` 不在、または PTY backend（`pywinpty` / `ptyprocess`）不在 | `hve\setup-hve.cmd` / `./hve/setup-hve.sh` を実行して再セットアップ。詳細は [troubleshooting.md](./troubleshooting.md) |
+| `python -m hve` / `python -m hve gui` でエラー | GUI 依存未インストール | `hve\setup-hve.cmd` / `./hve/setup-hve.sh` を実行（引数なし起動は CLI に自動フォールバック） |
+| D&D で `.docx` / `.pdf` / `.xlsx` / `.pptx` / `.html` が変換されない | `gui-docconvert`（markitdown）未インストール | `hve\setup-hve.cmd` / `./hve/setup-hve.sh` をオプション無しで再実行 |
 | GUI が起動しない（X11 / Wayland エラー） | ディスプレイサーバー未接続 | SSH ポートフォワードや X11 転送を設定するか、CLI Orchestrator を使用 |
 | ウィンドウが複数起動しない | PySide6 バージョン不足 | `PySide6>=6.6` を確認 |
 
@@ -552,16 +706,75 @@ HVE_GUI_LANG=en_US python -m hve gui
 
 ---
 
+## GUI を拡張する（開発者向け）
+
+GUI 自体を変更する場合の正本、変更手順、回帰検証、互換性の観点をまとめます。
+
+### 設定・実装の正本
+
+| 変更したいもの | 正本 |
+|---|---|
+| ウィンドウ構成・Dock・監視ルートの適用 | `hve/gui/main_window.py` |
+| Step 1 / Step 2 のページ | `hve/gui/page_workflow_select.py` / `hve/gui/page_options.py` / `hve/gui/page_workbench.py` |
+| 設定項目と既定値・永続化（`hve/.settings.txt`） | `hve/gui/settings_store.py` |
+| 設定ウィンドウの UI | `hve/gui/settings_window.py` |
+| ヘルプ本文 | `hve/gui/help_content.py` |
+| CLI 引数への変換 | `hve/gui/orchestrate_args.py` |
+| セッション作業ディレクトリと env 伝播 | `hve/gui/session_workdir.py` |
+| Step 1 スナップショットとマスキング | `hve/gui/step1_args_snapshot.py` |
+| エクスプローラー監視ルートの解決 | `hve/gui/explorer_roots.py` |
+| 翻訳 | `hve/gui/i18n/`（[README](../hve/gui/i18n/README.md)） |
+| GUI 依存パッケージ（extras） | `pyproject.toml` の `gui` / `gui-pty` / `gui-docconvert` |
+
+### 変更手順
+
+1. **設定項目を追加する**: `hve/gui/settings_store.py` の既定値に追加し、`hve/gui/settings_window.py` に UI を追加する。CLI へ渡す必要がある項目は `hve/gui/orchestrate_args.py` の変換も更新する。
+2. **ページを追加・変更する**: `hve/gui/page_*.py` を変更する。Step 構成を変える場合は Step 1 → Step 2 の受け渡し（`OrchestrateArgs`）を壊さないことを確認する。
+3. **ヘルプ文言を変更する**: `hve/gui/help_content.py` を変更する。本ガイドと文言が対応するため、同じ変更でドキュメント側も更新する。
+4. **翻訳を追加する**: 日本語をソースとし、`hve/gui/i18n/hve_gui_en_US.ts` を更新して `.qm` をコンパイルする。
+
+### 回帰検証
+
+```bash
+# GUI ヘルプ本文の契約
+python -m pytest hve/tests/test_gui_help_content.py
+
+# ページ・設定・インポート
+python -m pytest hve/tests/test_gui_pages.py hve/tests/test_gui_settings_store.py hve/tests/test_gui_imports.py
+
+# 作業ディレクトリ（work/run/<run-id>）の契約
+python -m pytest hve/tests/test_run_unified_workdir.py
+```
+
+GUI テストはヘッドレス環境では実行環境（Qt プラットフォームプラグイン）に依存します。実行できない場合は理由を記録し、CLI 側の契約テストで代替してください。
+
+### 互換性・安全性
+
+- `hve/.settings.txt` は既存ユーザーの設定ファイルです。キー名の変更・削除は互換性を壊すため、既定値の追加を優先してください。
+- Step 1 スナップショットはマスキング済みですが、`work/run/<session_run_id>/` は使い捨ての作業領域です。コミット対象に含めないでください。
+- GUI が子プロセスへ注入する `GH_TOKEN` のコピーはセッション限りで、GUI 終了で破棄されます。一方で `gh auth login` 自体はトークンをシステム資格情報ストアへ保存し、利用できない場合は平文ファイルへフォールバックするため、保存先の取り扱いを変更する場合は影響を評価してください。
+
+---
+
 ## 関連ドキュメント
 
 | ドキュメント | 内容 |
 |---|---|
 | [hve-gui-getting-started.md](./hve-gui-getting-started.md) | 初期セットアップ全体（GUI） |
 | [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md) | CLI Orchestrator ガイド・詳細オプション |
+| [cloud-session.md](./cloud-session.md) | Copilot SDK Cloud Sessions（Step 実行先の振り分け） |
 | [web-ui-guide.md](./web-ui-guide.md) | Cloud Agent Orchestrator（GitHub Issue/PR） |
 | [workflow-reference.md](./workflow-reference.md) | ワークフロー一覧・Prompt 一覧 |
 | [hve-technical-architecture.md](./hve-technical-architecture.md) | GUI / CLI / Cloud の技術アーキテクチャ詳細（開発者向け） |
 | [hve/gui/i18n/README.md](../hve/gui/i18n/README.md) | GUI 翻訳ファイル管理（開発者向け） |
+
+---
+
+## 公式出典
+
+- Qt for Python（PySide6）— <https://doc.qt.io/qtforpython-6/>
+- MarkItDown（microsoft/markitdown） — <https://github.com/microsoft/markitdown>
+- GitHub CLI マニュアル（`gh auth login`） — <https://cli.github.com/manual/gh_auth_login>
 
 
 ---
@@ -573,14 +786,14 @@ Step 1「ワークフロー選択」画面で [次へ] を押し、事前チェ�
 ### 保存先
 
 ```
-<repo>/work/gui-runs/<session_run_id>/step1-precheck/
+<repo>/work/run/<session_run_id>/step1-precheck/
 ├── <UTC timestamp>__iter1/        # 1 回目の precheck 通過時
 ├── <UTC timestamp>__iter2/        # ギャップ適用→再 precheck 通過時
 ├── ...
 └── latest-accepted/               # 「このプランで実行」承認時のコピー
 ```
 
-- `session_run_id` は GUI 1 セッション = 1 ID（`gui-<timestamp>-<random>`）。
+- `session_run_id` は GUI 1 セッション = 1 ID。`hve/config.py` の `generate_run_id()` が採番し、`20260413T143022-a1b2c3` 形式（既定タイムゾーンは `Asia/Tokyo`、`HVE_RUN_ID_TZ` で変更可）になります。GUI 起源であることは環境変数 `HVE_GUI_SESSION_ID` で識別します（正本: `hve/gui/session_workdir.py`）。
 - 反復ごとに `<UTC timestamp>__iter<n>/` ディレクトリが新規作成される（同名ディレクトリは削除→新規作成）。
 - 最終承認時のみ `latest-accepted/` へコピーされる（毎回上書き）。
 
@@ -613,8 +826,8 @@ Step 1「ワークフロー選択」画面で [次へ] を押し、事前チェ�
 ### 動作・運用
 
 - スナップショット保存の失敗は GUI 主処理を止めません（WARNING ログのみ出力）。
-- `work/gui-runs/` は `.gitignore` で除外されています（コミット対象外）。
-- セッション終了時の挙動は `GuiSessionWorkdir.cleanup_policy`（既定 `keep`）に従い、`archive` / `purge` を指定するとスナップショットも対象になります。
+- `work/run/<session_run_id>/` は使い捨ての作業成果物です。`.gitignore` による一括除外はされていないため、コミット対象に含めないよう `git status` で確認してください（`.gitignore` が除外するのは `work/**/artifacts/` 配下の `*.env` / `*.log` / `*.key` / `*.pem` 等の秘密になり得るファイルです）。
+- セッション終了時の挙動は `GuiSessionWorkdir.cleanup_policy`（既定 `keep`）に従い、`archive`（`work/archive/<session_run_id>.zip` へ zip 化して元ディレクトリを削除）/ `purge`（削除）を指定するとスナップショットも対象になります。`archive` で作成した ZIP は `.gitignore` の秘密ファイル除外規則の対象外で、元ディレクトリ内の `*.env` / `*.key` などが含まれる場合があるため、コミット前に ZIP も必ず確認・除外してください。
 - スキーマは `metadata.json.schema_version` でバージョニング（現行 `1`）。
 
 ### 用途

@@ -52,3 +52,58 @@ def test_functions_deploy_requires_ac2_ac3_green() -> None:
     assert "✅" in text
     assert "NEEDS-VERIFICATION" in text
     assert "success" in text or "成功" in text
+
+
+# ---------------------------------------------------------------------------
+# 実装言語の契約（FR-WF-ADFDV-03）
+# ---------------------------------------------------------------------------
+
+_SERVICE_CODING = _PROMPTS / "Dev-Dataflow-ServiceCoding.prompt.md"
+_TEST_CODING = _PROMPTS / "Dev-Dataflow-TestCoding.prompt.md"
+_TEMPLATES = _REPO_ROOT / ".github" / "scripts" / "templates" / "adfdv"
+
+# 言語契約を持つファイル。Prompt・body テンプレートに加え、Cloud reusable workflow の
+# inline Issue body も対象にする（どこかに .NET 記述が残ると Agent へ矛盾した指示が渡るため）。
+_LANGUAGE_CONTRACT_FILES = [
+    _SERVICE_CODING,
+    _TEST_CODING,
+    _FUNCTIONS_DEPLOY,
+    _TEMPLATES / "step-2.1.md",
+    _TEMPLATES / "step-2.2.md",
+    _REPO_ROOT / ".github" / "workflows" / "auto-dataflow-dev-reusable.yml",
+]
+
+# .NET 固有トークン。1 つでも残っていれば Python 化が不完全。
+_DOTNET_TOKENS = ("dotnet ", "xUnit", ".csproj", "C#", "NuGet")
+
+
+def test_dataflow_default_language_is_python() -> None:
+    text = _read(_SERVICE_CODING)
+
+    assert "Python" in text
+    assert "pytest" in text
+
+
+def test_dataflow_test_coding_uses_pytest() -> None:
+    text = _read(_TEST_CODING)
+
+    assert "pytest" in text
+    assert "requirements" in text or "pyproject" in text
+
+
+def test_dataflow_language_rationale_names_target_platforms() -> None:
+    """Python を選ぶ根拠（実行プラットフォームの選択肢）を Prompt に明示する。"""
+    text = _read(_SERVICE_CODING)
+
+    for platform in ("Spark", "Microsoft Fabric", "Databricks"):
+        assert platform in text, f"実行プラットフォーム {platform} の記載がない"
+
+
+def test_no_dotnet_tokens_remain_in_dataflow_contracts() -> None:
+    remaining: list[str] = []
+    for path in _LANGUAGE_CONTRACT_FILES:
+        text = _read(path)
+        for token in _DOTNET_TOKENS:
+            if token in text:
+                remaining.append(f"{path.name}: {token!r}")
+    assert remaining == [], f".NET 固有の記述が残っています: {remaining}"

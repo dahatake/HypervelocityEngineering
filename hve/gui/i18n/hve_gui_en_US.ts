@@ -32,188 +32,470 @@
 <context>
     <name>AttachmentPane</name>
     <message>
-        <location filename="../page_options_ard.py" line="226"/>
+        <location filename="../page_options_ard.py" line="223"/>
         <source>── 添付資料（ドラッグ&amp;ドロップ可） ──</source>
         <translation>── Attachments (drag &amp; drop supported) ──</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="232"/>
+        <location filename="../page_options_ard.py" line="229"/>
         <source>ファイルを選択...</source>
         <translation>Choose files...</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="241"/>
+        <location filename="../page_options_ard.py" line="238"/>
         <source>取り込み済みファイル:</source>
         <translation>Imported files:</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="249"/>
+        <location filename="../page_options_ard.py" line="246"/>
         <source>取り込みリストをコピー</source>
         <translation>Copy imported list</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="252"/>
+        <location filename="../page_options_ard.py" line="249"/>
         <source>起点を変更...</source>
         <translation>Change source...</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="255"/>
+        <location filename="../page_options_ard.py" line="252"/>
         <source>取消</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="265"/>
+        <location filename="../page_options_ard.py" line="262"/>
         <source>★ = business_requirement-input.md の起点として採用</source>
         <translation>★ = adopted as source for business_requirement-input.md</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="272"/>
+        <location filename="../page_options_ard.py" line="270"/>
         <source>要求定義書を生成</source>
-        <translation type="unfinished"></translation>
+        <translation>Generate requirements document</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="277"/>
+        <location filename="../page_options_ard.py" line="275"/>
         <source>取り込み済みファイルから docs/business-requirement.md を生成または更新します。既存ファイルがある場合は章単位でマージします。</source>
-        <translation type="unfinished"></translation>
+        <translation>Generates or updates docs/business-requirement.md from the imported files. When the file already exists, it is merged section by section.</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="360"/>
+        <location filename="../page_options_ard.py" line="359"/>
         <source>変換失敗</source>
         <translation>Conversion failed</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="376"/>
+        <location filename="../page_options_ard.py" line="375"/>
         <source>起点変更</source>
         <translation>Change source</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="376"/>
+        <location filename="../page_options_ard.py" line="375"/>
         <source>対象ファイルがありません。</source>
         <translation>No target files.</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="387"/>
+        <location filename="../page_options_ard.py" line="386"/>
         <source>確認</source>
         <translation>Confirm</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="388"/>
+        <location filename="../page_options_ard.py" line="387"/>
         <source>取り込んだファイルのリストを全て削除しますか？
 （既に docs/attached/ に保存されたファイルは削除しません）</source>
         <translation>Clear the imported file list?
 (Files already saved under docs/attached/ will not be removed.)</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="500"/>
+        <location filename="../page_options_ard.py" line="499"/>
         <source>要求定義書 生成</source>
-        <translation type="unfinished"></translation>
+        <translation>Requirements document generation</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="501"/>
+        <location filename="../page_options_ard.py" line="500"/>
         <source>取り込み済みのファイルがありません。先に添付資料を取り込んでください。</source>
-        <translation type="unfinished"></translation>
+        <translation>No files have been imported. Import the attachments first.</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="511"/>
+        <location filename="../page_options_ard.py" line="510"/>
         <source>既存ファイルを更新</source>
-        <translation type="unfinished"></translation>
+        <translation>Update the existing file</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="513"/>
+        <location filename="../page_options_ard.py" line="512"/>
         <source>既存の {path} を章単位でマージ・更新します。
 既存記述は保持し、添付資料からの追加情報のみマージされます。
 実行してよろしいですか？</source>
-        <translation type="unfinished"></translation>
+        <translation>Merges and updates the existing {path} section by section.
+Existing descriptions are kept and only the additional information from the attachments is merged.
+Do you want to continue?</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="539"/>
+        <location filename="../page_options_ard.py" line="538"/>
         <source>要求定義書を生成中... (0/{total} 章完了)</source>
-        <translation type="unfinished"></translation>
+        <translation>Generating the requirements document... (0/{total} sections done)</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="546"/>
+        <location filename="../page_options_ard.py" line="545"/>
         <source>要求定義書を生成中... ({completed}/{total} 章完了, 直近: {heading})</source>
-        <translation type="unfinished"></translation>
+        <translation>Generating the requirements document... ({completed}/{total} sections done, latest: {heading})</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="560"/>
+        <location filename="../page_options_ard.py" line="559"/>
         <source>✓ {path} を生成しました</source>
-        <translation type="unfinished"></translation>
+        <translation>✓ Generated {path}</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="568"/>
+        <location filename="../page_options_ard.py" line="567"/>
         <source>△ {path} を生成しました（{failed} 章で失敗。詳細を確認してください）</source>
-        <translation type="unfinished"></translation>
+        <translation>△ Generated {path} ({failed} sections failed; check the details)</translation>
+    </message>
+    <message>
+        <location filename="../page_options_ard.py" line="573"/>
+        <source>要求定義書 生成（一部失敗）</source>
+        <translation>Requirements document generation (partially failed)</translation>
     </message>
     <message>
         <location filename="../page_options_ard.py" line="574"/>
-        <source>要求定義書 生成（一部失敗）</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../page_options_ard.py" line="575"/>
         <source>一部の章で生成に失敗しました。</source>
-        <translation type="unfinished"></translation>
+        <translation>Generation failed for some sections.</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="578"/>
+        <location filename="../page_options_ard.py" line="577"/>
         <source>✗ 要求定義書の生成に失敗しました</source>
-        <translation type="unfinished"></translation>
+        <translation>✗ Failed to generate the requirements document</translation>
+    </message>
+    <message>
+        <location filename="../page_options_ard.py" line="580"/>
+        <source>要求定義書 生成 失敗</source>
+        <translation>Requirements document generation failed</translation>
     </message>
     <message>
         <location filename="../page_options_ard.py" line="581"/>
-        <source>要求定義書 生成 失敗</source>
-        <translation type="unfinished"></translation>
+        <source>生成に失敗しました。</source>
+        <translation>Generation failed.</translation>
+    </message>
+</context>
+<context>
+    <name>ChatInputBox</name>
+    <message>
+        <location filename="../widgets/chat_input_box.py" line="94"/>
+        <source>添付を外す</source>
+        <translation>Remove attachment</translation>
     </message>
     <message>
-        <location filename="../page_options_ard.py" line="582"/>
-        <source>生成に失敗しました。</source>
-        <translation type="unfinished"></translation>
+        <location filename="../widgets/chat_input_box.py" line="109"/>
+        <source>実行中ジョブへ送るメッセージ</source>
+        <translation>Message to send to the running job</translation>
+    </message>
+    <message>
+        <location filename="../widgets/chat_input_box.py" line="110"/>
+        <source>実行中のステップへ送るメッセージを入力...</source>
+        <translation>Type a message for the running step...</translation>
+    </message>
+    <message>
+        <location filename="../widgets/chat_input_box.py" line="122"/>
+        <location filename="../widgets/chat_input_box.py" line="123"/>
+        <source>コンテキストを添付</source>
+        <translation>Attach context</translation>
+    </message>
+    <message>
+        <location filename="../widgets/chat_input_box.py" line="129"/>
+        <source>送信方法</source>
+        <translation>Delivery mode</translation>
+    </message>
+    <message>
+        <location filename="../widgets/chat_input_box.py" line="130"/>
+        <source>キューに追加</source>
+        <translation>Add to queue</translation>
+    </message>
+    <message>
+        <location filename="../widgets/chat_input_box.py" line="131"/>
+        <source>いま割り込む</source>
+        <translation>Steer now</translation>
+    </message>
+    <message>
+        <location filename="../widgets/chat_input_box.py" line="132"/>
+        <source>中断して送信</source>
+        <translation>Stop and send</translation>
+    </message>
+    <message>
+        <location filename="../widgets/chat_input_box.py" line="136"/>
+        <source>送信</source>
+        <translation>Send</translation>
+    </message>
+    <message>
+        <location filename="../widgets/chat_input_box.py" line="137"/>
+        <source>実行中ジョブへ送信</source>
+        <translation>Send to the running job</translation>
+    </message>
+</context>
+<context>
+    <name>ChatTranscriptView</name>
+    <message>
+        <location filename="../widgets/chat_transcript.py" line="119"/>
+        <source>実行ジョブの会話</source>
+        <translation>Running job conversation</translation>
+    </message>
+    <message>
+        <location filename="../widgets/chat_transcript.py" line="120"/>
+        <source>選択したジョブの実行ログ</source>
+        <translation>Execution log of the selected job</translation>
     </message>
 </context>
 <context>
     <name>CopilotChatPanel</name>
     <message>
-        <location filename="../copilot_chat_panel.py" line="125"/>
-        <source>メッセージ:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../copilot_chat_panel.py" line="128"/>
         <source>メッセージを入力して Enter で送信...</source>
-        <translation>Type a message and press Enter to send...</translation>
+        <translation type="vanished">Type a message and press Enter to send...</translation>
     </message>
     <message>
-        <location filename="../copilot_chat_panel.py" line="130"/>
-        <source>送信</source>
-        <translation>Send</translation>
+        <location filename="../copilot_chat_panel.py" line="105"/>
+        <source>Copilot CLI</source>
+        <translation>Copilot CLI</translation>
     </message>
     <message>
-        <location filename="../copilot_chat_panel.py" line="132"/>
-        <source>停止</source>
-        <translation>Stop</translation>
+        <location filename="../copilot_chat_panel.py" line="106"/>
+        <source>実行ジョブ</source>
+        <translation>Running job</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="135"/>
+        <source>Copilot CLI セッションの状態</source>
+        <translation>Copilot CLI session status</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="144"/>
+        <source>セッション開始</source>
+        <translation>Start session</translation>
     </message>
     <message>
         <location filename="../copilot_chat_panel.py" line="145"/>
-        <source>実行中ワークフローへ割り込む (Steering)</source>
-        <translation type="unfinished"></translation>
+        <source>Copilot CLI セッションを開始</source>
+        <translation>Start the Copilot CLI session</translation>
     </message>
     <message>
-        <location filename="../copilot_chat_panel.py" line="149"/>
-        <location filename="../copilot_chat_panel.py" line="217"/>
-        <source>単一ステップ実行中のワークフローが無いため利用できません。</source>
-        <translation type="unfinished"></translation>
+        <location filename="../copilot_chat_panel.py" line="147"/>
+        <source>セッション停止</source>
+        <translation>Stop session</translation>
     </message>
     <message>
-        <location filename="../copilot_chat_panel.py" line="221"/>
-        <source>ON: 送信内容は実行中ステップ ({step}) への割り込みメッセージとして送信されます。</source>
-        <translation type="unfinished"></translation>
+        <location filename="../copilot_chat_panel.py" line="148"/>
+        <source>Copilot CLI セッションを停止</source>
+        <translation>Stop the Copilot CLI session</translation>
     </message>
     <message>
-        <location filename="../copilot_chat_panel.py" line="257"/>
+        <location filename="../copilot_chat_panel.py" line="189"/>
+        <source>選択したジョブの状態</source>
+        <translation>Status of the selected job</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="238"/>
+        <source>現在の送信メッセージ</source>
+        <translation>Current sent message</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="240"/>
+        <source>送信メッセージの位置</source>
+        <translation>Position among sent messages</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="243"/>
+        <location filename="../copilot_chat_panel.py" line="244"/>
+        <source>前の送信メッセージへ</source>
+        <translation>Go to the previous sent message</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="248"/>
+        <location filename="../copilot_chat_panel.py" line="249"/>
+        <source>次の送信メッセージへ</source>
+        <translation>Go to the next sent message</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="195"/>
+        <source>対象ジョブ:</source>
+        <translation>Target job:</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="197"/>
+        <source>対話対象の実行ジョブ</source>
+        <translation>Running job to interact with</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="200"/>
+        <source>更新</source>
+        <translation>Refresh</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="201"/>
+        <source>実行ジョブ一覧を更新</source>
+        <translation>Refresh the running job list</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="205"/>
+        <source>会話をクリア</source>
+        <translation>Clear conversation</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="206"/>
+        <source>会話をコピー</source>
+        <translation>Copy conversation</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="215"/>
+        <location filename="../copilot_chat_panel.py" line="216"/>
+        <source>その他の操作</source>
+        <translation>More actions</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="269"/>
+        <source>送信待ちのメッセージ</source>
+        <translation>Queued messages</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="277"/>
+        <source>送信待ちを上へ</source>
+        <translation>Move the queued message up</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="281"/>
+        <source>送信待ちを下へ</source>
+        <translation>Move the queued message down</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="285"/>
+        <source>送信待ちを取り消す</source>
+        <translation>Cancel the queued message</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="753"/>
+        <source>対象ジョブが選択されていません。</source>
+        <translation>No target job is selected.</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="756"/>
+        <source>対話チャネル: 利用できます</source>
+        <translation>Interaction channel: available</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="758"/>
+        <source>対話チャネル: 利用できません</source>
+        <translation>Interaction channel: unavailable</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="761"/>
+        <source>状態: {status} / {channel} / 送信待ち: {count} 件</source>
+        <translation>Status: {status} / {channel} / Queued: {count}</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="779"/>
+        <source>コンテキストを添付</source>
+        <translation>Attach context</translation>
+    </message>
+    <message>
+        <source>選択したジョブの実行ログ</source>
+        <translation type="vanished">Execution log of the selected job</translation>
+    </message>
+    <message>
+        <source>送信方法</source>
+        <translation type="vanished">Delivery mode</translation>
+    </message>
+    <message>
+        <source>キューに追加</source>
+        <translation type="vanished">Add to queue</translation>
+    </message>
+    <message>
+        <source>いま割り込む</source>
+        <translation type="vanished">Steer now</translation>
+    </message>
+    <message>
+        <source>中断して送信</source>
+        <translation type="vanished">Stop and send</translation>
+    </message>
+    <message>
+        <source>実行中ジョブへ送るメッセージ</source>
+        <translation type="vanished">Message to send to the running job</translation>
+    </message>
+    <message>
+        <source>実行中のステップへ送るメッセージを入力...</source>
+        <translation type="vanished">Type a message for the running step...</translation>
+    </message>
+    <message>
+        <source>送信</source>
+        <translation type="vanished">Send</translation>
+    </message>
+    <message>
+        <source>実行中ジョブへ送信</source>
+        <translation type="vanished">Send to the running job</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="208"/>
+        <source>結果を Copilot で開く</source>
+        <translation>Open results in Copilot</translation>
+    </message>
+    <message>
+        <source>選択したジョブの結果を Copilot CLI で開く</source>
+        <translation type="vanished">Open the selected job results in the Copilot CLI</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="383"/>
+        <source>端末ビューを初期化できませんでした: {err}</source>
+        <translation>Failed to initialize the terminal view: {err}</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="408"/>
+        <source>Copilot CLI 対話セッション実行中 / 作業ディレクトリ: {repo}</source>
+        <translation>Copilot CLI interactive session running / working directory: {repo}</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="414"/>
+        <source>Copilot CLI 対話セッションは停止中です。[セッション開始] で起動します（作業ディレクトリ: {repo}）。</source>
+        <translation>The Copilot CLI interactive session is stopped. Select [Start session] to launch it (working directory: {repo}).</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="488"/>
+        <source>入力が長すぎます（上限 {n} バイト）。</source>
+        <translation>Input is too long (limit {n} bytes).</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="497"/>
+        <source>この宛先へは送信できません。実行中のステップと対話チャネルが必要です。</source>
+        <translation>This target cannot receive messages. A running step and an interaction channel are required.</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="514"/>
+        <source>送信に失敗しました: {err}</source>
+        <translation>Failed to send: {err}</translation>
+    </message>
+    <message>
+        <source>[{action}] 送信しました: {text}</source>
+        <translation type="vanished">[{action}] Sent: {text}</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="548"/>
+        <source>→ {action}: {status}</source>
+        <translation>→ {action}: {status}</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="578"/>
+        <source>参照できる実行ディレクトリがまだありません。</source>
+        <translation>There is no run directory available yet.</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="598"/>
+        <source>Copilot セッションの再起動</source>
+        <translation>Restart the Copilot session</translation>
+    </message>
+    <message>
+        <location filename="../copilot_chat_panel.py" line="600"/>
+        <source>実行中の Copilot 対話セッションを終了して、ジョブ結果を新しいセッションで開きますか?</source>
+        <translation>Stop the running Copilot interactive session and open the job results in a new session?</translation>
+    </message>
+    <message>
+        <source>停止</source>
+        <translation type="vanished">Stop</translation>
+    </message>
+    <message>
         <source>⚠️ `copilot` コマンドが見つかりません。
 インストール: https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli</source>
-        <translation>⚠️ `copilot` command not found.
+        <translation type="vanished">⚠️ `copilot` command not found.
 Install: https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli</translation>
     </message>
 </context>
@@ -327,11 +609,13 @@ Install: https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli</
     </message>
     <message>
         <location filename="../../../cq/gui/settings_section.py" line="267"/>
+        <location filename="../../../cq/gui/settings_section.py" line="292"/>
         <source>Files</source>
         <translation>Files</translation>
     </message>
     <message>
         <location filename="../../../cq/gui/settings_section.py" line="268"/>
+        <location filename="../../../cq/gui/settings_section.py" line="292"/>
         <source>Symbols</source>
         <translation>Symbols</translation>
     </message>
@@ -341,57 +625,57 @@ Install: https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli</
         <translation>Last updated</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="284"/>
+        <location filename="../../../cq/gui/settings_section.py" line="311"/>
         <source>&lt;b&gt;リアルタイム更新&lt;/b&gt;</source>
         <translation>&lt;b&gt;Real-time updates&lt;/b&gt;</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="287"/>
+        <location filename="../../../cq/gui/settings_section.py" line="314"/>
         <source>cq リアルタイム更新</source>
         <translation>cq real-time update</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="289"/>
+        <location filename="../../../cq/gui/settings_section.py" line="316"/>
         <source>ソースファイルの追加/更新/削除を OS イベントで検知し索引を逐次更新します。watchdog 未導入時は自動で無効化されます。</source>
         <translation>Detects added, changed and removed source files through OS events and updates the index incrementally. Disabled automatically when watchdog is not installed.</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="298"/>
+        <location filename="../../../cq/gui/settings_section.py" line="325"/>
         <source>（既定 {ms}ms を使用）</source>
         <translation>(uses the default of {ms} ms)</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="303"/>
+        <location filename="../../../cq/gui/settings_section.py" line="330"/>
         <source>cq watcher デバウンス間隔 (ms)</source>
         <translation>cq watcher debounce interval (ms)</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="304"/>
+        <location filename="../../../cq/gui/settings_section.py" line="331"/>
         <source>0 のとき cq 既定値を使用します。</source>
         <translation>0 uses the cq default.</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="309"/>
+        <location filename="../../../cq/gui/settings_section.py" line="336"/>
         <source>&lt;b&gt;試し検索&lt;/b&gt;</source>
         <translation>&lt;b&gt;Test search&lt;/b&gt;</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="311"/>
+        <location filename="../../../cq/gui/settings_section.py" line="338"/>
         <source>検索語またはシンボル名</source>
         <translation>Query or symbol name</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="320"/>
+        <location filename="../../../cq/gui/settings_section.py" line="347"/>
         <source>検索</source>
         <translation>Search</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="338"/>
+        <location filename="../../../cq/gui/settings_section.py" line="365"/>
         <source>&lt;b&gt;検索品質ベンチマーク&lt;/b&gt;</source>
         <translation>&lt;b&gt;Search quality benchmark&lt;/b&gt;</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="340"/>
+        <location filename="../../../cq/gui/settings_section.py" line="367"/>
         <source>対象リポジトリに cq/golden-queries.json があり、profile が hve または app の場合に、cq.benchmark を子プロセスとして実行します。</source>
         <translation>Runs cq.benchmark as a child process when the target repository has cq/golden-queries.json and the profile is hve or app.</translation>
     </message>
@@ -400,37 +684,37 @@ Install: https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli</
         <translation type="vanished">Measures top-1 / top-k accuracy, response tokens and cold / warm latency over the golden query set, together with the line-oriented grep and whole-file control groups. The measurement runs cq.benchmark as a child process, so the results are identical to running it from the CLI.</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="348"/>
+        <location filename="../../../cq/gui/settings_section.py" line="375"/>
         <source>ベンチマークを実行</source>
         <translation>Run benchmark</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="376"/>
+        <location filename="../../../cq/gui/settings_section.py" line="403"/>
         <source>設定ファイル: {path}</source>
         <translation>Configuration file: {path}</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="383"/>
+        <location filename="../../../cq/gui/settings_section.py" line="410"/>
         <source>⚠ cq の設定が読み込めないため索引操作を無効化しています。リポジトリルートに {candidates} のいずれかを作成し、[profiles.&lt;名前&gt;] と roots を宣言してください。詳細: {error}</source>
         <translation>⚠ Index operations are disabled because the cq configuration cannot be read. Create one of {candidates} in the repository root and declare [profiles.&lt;name&gt;] with roots. Details: {error}</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="398"/>
+        <location filename="../../../cq/gui/settings_section.py" line="425"/>
         <source>最大ファイルサイズ: {bytes:,} bytes（これを超えるファイルは索引しません）</source>
         <translation>Maximum file size: {bytes:,} bytes (larger files are not indexed)</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="457"/>
+        <location filename="../../../cq/gui/settings_section.py" line="484"/>
         <source>profile が未解決です。</source>
         <translation>No profile has been resolved.</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="464"/>
+        <location filename="../../../cq/gui/settings_section.py" line="513"/>
         <source>統計を取得できません: {error}</source>
         <translation>Cannot read statistics: {error}</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="469"/>
+        <location filename="../../../cq/gui/settings_section.py" line="518"/>
         <source>索引 未作成
 DB: {db}
 「差分更新」でビルドしてください。</source>
@@ -439,7 +723,7 @@ Database: {db}
 Use &quot;Incremental update&quot; to build it.</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="478"/>
+        <location filename="../../../cq/gui/settings_section.py" line="527"/>
         <source>パーサ内訳: {parser}
 スキーマ v{version}
 最終更新: {mtime}
@@ -450,97 +734,97 @@ Last updated: {mtime}
 Database: {db}</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="518"/>
+        <location filename="../../../cq/gui/settings_section.py" line="567"/>
         <source>{profile} を索引中...</source>
         <translation>Indexing {profile}...</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="534"/>
+        <location filename="../../../cq/gui/settings_section.py" line="583"/>
         <source>完了: indexed={indexed} skipped={skipped} pruned={pruned} degraded={degraded} errors={errors} symbols={symbols} chunks={chunks} ({elapsed_ms} ms)</source>
         <translation>Done: indexed={indexed} skipped={skipped} pruned={pruned} degraded={degraded} errors={errors} symbols={symbols} chunks={chunks} ({elapsed_ms} ms)</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="541"/>
+        <location filename="../../../cq/gui/settings_section.py" line="590"/>
         <source>失敗: {message}</source>
         <translation>Failed: {message}</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="559"/>
+        <location filename="../../../cq/gui/settings_section.py" line="608"/>
         <source>索引 DB の削除</source>
         <translation>Delete the index database</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="560"/>
+        <location filename="../../../cq/gui/settings_section.py" line="609"/>
         <source>profile &apos;{profile}&apos; の索引 DB を削除しますか？</source>
         <translation>Delete the index database of profile &apos;{profile}&apos;?</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="572"/>
+        <location filename="../../../cq/gui/settings_section.py" line="621"/>
         <source>削除に失敗しました: {error}</source>
         <translation>Deletion failed: {error}</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="576"/>
+        <location filename="../../../cq/gui/settings_section.py" line="625"/>
         <source>{count} 件のファイルを削除しました。</source>
         <translation>Deleted {count} file(s).</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="580"/>
+        <location filename="../../../cq/gui/settings_section.py" line="629"/>
         <source>削除対象の索引 DB はありませんでした。</source>
         <translation>There was no index database to delete.</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="599"/>
+        <location filename="../../../cq/gui/settings_section.py" line="648"/>
         <source>対象 Profile が選択されていません。</source>
         <translation>No profile is selected.</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="616"/>
+        <location filename="../../../cq/gui/settings_section.py" line="665"/>
         <source>一括ビルド {done}/{total}: {profile}</source>
         <translation>Bulk build {done}/{total}: {profile}</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="638"/>
+        <location filename="../../../cq/gui/settings_section.py" line="687"/>
         <source>一括ビルド終了（{failed}/{total} 失敗）: {detail}</source>
         <translation>Bulk build finished ({failed}/{total} failed): {detail}</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="642"/>
+        <location filename="../../../cq/gui/settings_section.py" line="691"/>
         <source>一括ビルド完了（{total} Profile）</source>
         <translation>Bulk build completed ({total} profiles)</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="650"/>
+        <location filename="../../../cq/gui/settings_section.py" line="699"/>
         <source>検索中...</source>
         <translation>Searching...</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="668"/>
+        <location filename="../../../cq/gui/settings_section.py" line="717"/>
         <source>ヒットなし</source>
         <translation>No hits</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="684"/>
+        <location filename="../../../cq/gui/settings_section.py" line="733"/>
         <source>⚠ 索引が古い可能性があります: {info}</source>
         <translation>⚠ The index may be stale: {info}</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="690"/>
+        <location filename="../../../cq/gui/settings_section.py" line="739"/>
         <source>検索に失敗しました: {message}</source>
         <translation>Search failed: {message}</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="713"/>
+        <location filename="../../../cq/gui/settings_section.py" line="762"/>
         <source>このリポジトリ/profile には対応するゴールデンクエリがないため、ベンチマークは利用できません。索引管理と試し検索は利用できます。</source>
         <translation>The benchmark is unavailable because this repository/profile has no matching golden query set. Index management and search preview remain available.</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="728"/>
+        <location filename="../../../cq/gui/settings_section.py" line="777"/>
         <source>実行中: {command}</source>
         <translation>Running: {command}</translation>
     </message>
     <message>
-        <location filename="../../../cq/gui/settings_section.py" line="738"/>
+        <location filename="../../../cq/gui/settings_section.py" line="787"/>
         <source>ベンチマークに失敗しました:
 {message}</source>
         <translation>Benchmark failed:
@@ -577,22 +861,22 @@ Database: {db}</translation>
     <message>
         <location filename="../file_explorer/file_tree_panel.py" line="110"/>
         <source>エクスプローラー</source>
-        <translation type="unfinished"></translation>
+        <translation>Explorer</translation>
     </message>
     <message>
         <location filename="../file_explorer/file_tree_panel.py" line="144"/>
         <source>ファイル名で検索...</source>
-        <translation type="unfinished"></translation>
+        <translation>Search by file name...</translation>
     </message>
     <message>
         <location filename="../file_explorer/file_tree_panel.py" line="319"/>
         <source>パスをコピー</source>
-        <translation type="unfinished"></translation>
+        <translation>Copy path</translation>
     </message>
     <message>
         <location filename="../file_explorer/file_tree_panel.py" line="320"/>
         <source>エクスプローラで開く</source>
-        <translation type="unfinished"></translation>
+        <translation>Reveal in File Explorer</translation>
     </message>
 </context>
 <context>
@@ -606,20 +890,64 @@ Database: {db}</translation>
         <translation type="vanished">Show a snapshot of the current statistics in a popup.</translation>
     </message>
     <message>
-        <location filename="../workbench_widgets.py" line="120"/>
+        <location filename="../workbench_widgets.py" line="121"/>
         <source>📊 統計情報</source>
-        <translation type="unfinished"></translation>
+        <translation>📊 Statistics</translation>
     </message>
     <message>
-        <location filename="../workbench_widgets.py" line="122"/>
+        <location filename="../workbench_widgets.py" line="123"/>
         <source>現在の統計スナップショットと「今回の実行履歴」をタブで表示します。</source>
-        <translation type="unfinished"></translation>
+        <translation>Shows the current statistics snapshot and &quot;This run&apos;s history&quot; as tabs.</translation>
+    </message>
+</context>
+<context>
+    <name>GhLoginDialog</name>
+    <message>
+        <location filename="../gh_login_dialog.py" line="48"/>
+        <source>GitHub CLI でログイン</source>
+        <translation>Sign in with GitHub CLI</translation>
+    </message>
+    <message>
+        <location filename="../gh_login_dialog.py" line="85"/>
+        <source>GitHub CLI (gh) が見つかりません。推奨: {setup} を実行してGUI依存を再セットアップしてください。手動インストール: https://cli.github.com/</source>
+        <translation>GitHub CLI (gh) was not found. Recommended: run {setup} to reinstall the GUI dependencies. Manual install: https://cli.github.com/</translation>
+    </message>
+    <message>
+        <location filename="../gh_login_dialog.py" line="100"/>
+        <source>埋め込み端末でのログインは利用できません。以下の案内に従ってください。</source>
+        <translation>Sign-in through the embedded terminal is unavailable. Follow the guidance below.</translation>
+    </message>
+    <message>
+        <location filename="../gh_login_dialog.py" line="112"/>
+        <location filename="../gh_login_dialog.py" line="127"/>
+        <source>閉じる</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <location filename="../gh_login_dialog.py" line="123"/>
+        <source>`gh auth login` を実行中です。端末の指示に従ってください。</source>
+        <translation>Running `gh auth login`. Follow the instructions in the terminal.</translation>
+    </message>
+    <message>
+        <location filename="../gh_login_dialog.py" line="135"/>
+        <source>端末の起動に失敗しました: {err}</source>
+        <translation>Failed to start the terminal: {err}</translation>
+    </message>
+    <message>
+        <location filename="../gh_login_dialog.py" line="155"/>
+        <source>ログインプロセスが終了しました（正常終了）。[閉じる] を押してください。</source>
+        <translation>The sign-in process finished successfully. Press [Close].</translation>
+    </message>
+    <message>
+        <location filename="../gh_login_dialog.py" line="159"/>
+        <source>ログインプロセスが終了しました（exit={code}）。</source>
+        <translation>The sign-in process finished (exit={code}).</translation>
     </message>
 </context>
 <context>
     <name>HelpPopupButton</name>
     <message>
-        <location filename="../help_popup.py" line="105"/>
+        <location filename="../help_popup.py" line="99"/>
         <source>クリックで詳しい説明を表示</source>
         <translation>Click to show detailed description</translation>
     </message>
@@ -635,12 +963,12 @@ Database: {db}</translation>
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../main_window.py" line="557"/>
+        <location filename="../main_window.py" line="569"/>
         <source>← 戻る</source>
         <translation>← Back</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="559"/>
+        <location filename="../main_window.py" line="571"/>
         <source>次へ →</source>
         <translation>Next →</translation>
     </message>
@@ -649,7 +977,7 @@ Database: {db}</translation>
         <translation type="vanished">Run ▶</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="569"/>
+        <location filename="../main_window.py" line="581"/>
         <source>■ 停止</source>
         <translation>■ Stop</translation>
     </message>
@@ -662,19 +990,19 @@ Database: {db}</translation>
         <translation type="vanished">Step 3: Running</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1234"/>
-        <location filename="../main_window.py" line="1517"/>
-        <location filename="../main_window.py" line="1527"/>
+        <location filename="../main_window.py" line="1251"/>
+        <location filename="../main_window.py" line="1534"/>
+        <location filename="../main_window.py" line="1544"/>
         <source>入力エラー</source>
         <translation>Input error</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1527"/>
+        <location filename="../main_window.py" line="1544"/>
         <source>ワークフローが選択されていません。</source>
         <translation>No workflow selected.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1540"/>
+        <location filename="../main_window.py" line="1557"/>
         <source>依存関係エラー</source>
         <translation>Dependency error</translation>
     </message>
@@ -717,7 +1045,7 @@ Missing files:
 {detail}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1587"/>
+        <location filename="../main_window.py" line="1604"/>
         <source>エラー</source>
         <translation>Error</translation>
     </message>
@@ -726,275 +1054,292 @@ Missing files:
         <translation type="vanished">Step 3: Done (all workflows succeeded)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2948"/>
+        <location filename="../main_window.py" line="2992"/>
         <source>全てのタスクが終わりました</source>
-        <translation type="unfinished"></translation>
+        <translation>All tasks have finished</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2955"/>
+        <location filename="../main_window.py" line="2999"/>
         <source>全てのタスクが終わりました（一部失敗あり）
 returncode={rc}</source>
-        <translation type="unfinished"></translation>
+        <translation>All tasks have finished (some failed)
+returncode={rc}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2970"/>
+        <location filename="../main_window.py" line="3014"/>
         <source>完了</source>
-        <translation type="unfinished"></translation>
+        <translation>Done</translation>
     </message>
     <message>
         <source>Step 3: 致命的エラーで停止しました</source>
         <translation type="vanished">Step 3: Stopped due to fatal error</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="722"/>
+        <location filename="../main_window.py" line="734"/>
         <source>作業フォルダー</source>
-        <translation type="unfinished"></translation>
+        <translation>Working folder</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="892"/>
+        <location filename="../main_window.py" line="908"/>
         <source>使用するモデル</source>
-        <translation type="unfinished">Model to use</translation>
+        <translation>Model to use</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="893"/>
+        <location filename="../main_window.py" line="909"/>
         <source>Effort</source>
-        <translation type="unfinished"></translation>
+        <translation>Effort</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="903"/>
+        <location filename="../main_window.py" line="919"/>
         <source>「HVE 設定」の「基本設定」にある「使用するモデル」と同じ値です。ここで変更すると即座に反映されます。</source>
-        <translation type="unfinished"></translation>
+        <translation>Same value as &quot;Model to use&quot; under &quot;Basic settings&quot; in &quot;HVE Settings&quot;. Changes made here take effect immediately.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1097"/>
+        <location filename="../main_window.py" line="1114"/>
         <source>（未選択）</source>
-        <translation type="unfinished"></translation>
+        <translation>(Not selected)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1101"/>
+        <location filename="../main_window.py" line="1118"/>
         <source>ワークフローの選択: {wf}</source>
-        <translation type="unfinished"></translation>
+        <translation>Select workflow: {wf}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1115"/>
+        <location filename="../main_window.py" line="1132"/>
         <source>実行中</source>
-        <translation type="unfinished">Running</translation>
+        <translation>Running</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1280"/>
+        <location filename="../main_window.py" line="1297"/>
         <source>APP-ID 未選択</source>
-        <translation type="unfinished"></translation>
+        <translation>No APP-ID selected</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1282"/>
+        <location filename="../main_window.py" line="1299"/>
         <source>downstream workflow ({wf}) の実行には APP-ID を 1 件以上選択してください。
 
 Step 1 右側「対象アプリケーション (APP-ID)」のチェックリストから 対象を選択してから再度「次へ」を押してください。</source>
-        <translation type="unfinished"></translation>
+        <translation>Select at least one APP-ID to run the downstream workflow ({wf}).
+
+Choose the targets from the &quot;Target applications (APP-ID)&quot; checklist on the right side of Step 1, then press &quot;Next&quot; again.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1318"/>
+        <location filename="../main_window.py" line="1335"/>
         <source>Cloud Session: Mission Control URL を取得しました</source>
-        <translation type="unfinished"></translation>
+        <translation>Cloud Session: retrieved the Mission Control URL</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1674"/>
+        <location filename="../main_window.py" line="1691"/>
         <source>Step 1: プランレビュー上限到達</source>
-        <translation type="unfinished"></translation>
+        <translation>Step 1: plan review limit reached</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1676"/>
+        <location filename="../main_window.py" line="1693"/>
         <source>ギャップ提案の適用ループが {n} 回を超えました。手動でワークフロー / ステップを調整してから再度お試しください。</source>
-        <translation type="unfinished"></translation>
+        <translation>The gap-suggestion loop ran more than {n} times. Adjust the workflow / steps manually and try again.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1748"/>
+        <location filename="../main_window.py" line="1765"/>
         <source>Step 1: 事前検証で {n} 件の不足を検出しました。解決後 [次へ] を押してください。</source>
-        <translation type="unfinished"></translation>
+        <translation>Step 1: the precheck found {n} missing items. Resolve them and press [Next].</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1816"/>
+        <location filename="../main_window.py" line="1833"/>
         <source>Step 1: {n} 件のギャップ提案を適用しました。再検証中...</source>
-        <translation type="unfinished"></translation>
+        <translation>Step 1: applied {n} gap suggestions. Re-validating...</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1897"/>
+        <location filename="../main_window.py" line="1914"/>
         <source>Autopilot 開始確認</source>
-        <translation type="unfinished"></translation>
+        <translation>Confirm Autopilot start</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1899"/>
+        <location filename="../main_window.py" line="1916"/>
         <source>以下の設定で Autopilot を開始します。
 
 Workflow: {wf}
 並列上限: {mp}
 
 実行中はエラー以外で停止しません。続行しますか？</source>
-        <translation type="unfinished"></translation>
+        <translation>Autopilot will start with the following settings.
+
+Workflow: {wf}
+Parallel limit: {mp}
+
+It does not stop during the run except on errors. Continue?</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2043"/>
+        <location filename="../main_window.py" line="2060"/>
         <source>Autopilot エラー</source>
-        <translation type="unfinished"></translation>
+        <translation>Autopilot error</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2044"/>
+        <location filename="../main_window.py" line="2061"/>
         <source>指定したカタログファイルが存在しません:
 {path}</source>
-        <translation type="unfinished"></translation>
+        <translation>The specified catalog file does not exist:
+{path}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2108"/>
+        <location filename="../main_window.py" line="2125"/>
         <source>実行対象 APP が 0 件です。
 Application Architecture Catalog ({catalog}) のアーキテクチャと、「ワークフローの選択」で有効化した workflow の組み合わせを確認してください。</source>
-        <translation type="unfinished"></translation>
+        <translation>There are 0 target APPs.
+Check the architectures in the Application Architecture Catalog ({catalog}) against the workflows enabled in &quot;Select workflow&quot;.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2113"/>
+        <location filename="../main_window.py" line="2130"/>
         <source>除外された APP:
 {detail}</source>
-        <translation type="unfinished"></translation>
+        <translation>Excluded APPs:
+{detail}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2114"/>
-        <location filename="../main_window.py" line="2554"/>
-        <location filename="../main_window.py" line="2596"/>
-        <location filename="../main_window.py" line="2678"/>
+        <location filename="../main_window.py" line="2131"/>
+        <location filename="../main_window.py" line="2595"/>
+        <location filename="../main_window.py" line="2637"/>
+        <location filename="../main_window.py" line="2719"/>
         <source>Autopilot 警告</source>
-        <translation type="unfinished"></translation>
+        <translation>Autopilot warning</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2156"/>
+        <location filename="../main_window.py" line="2176"/>
         <source>Autopilot 実行中: 0/{total} (並列上限 {mp})</source>
-        <translation type="unfinished"></translation>
+        <translation>Autopilot running: 0/{total} (parallel limit {mp})</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2508"/>
-        <location filename="../main_window.py" line="2524"/>
-        <location filename="../main_window.py" line="2587"/>
+        <location filename="../main_window.py" line="2549"/>
+        <location filename="../main_window.py" line="2565"/>
+        <location filename="../main_window.py" line="2628"/>
         <source>Autopilot: 完了</source>
-        <translation type="unfinished"></translation>
+        <translation>Autopilot: finished</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2529"/>
+        <location filename="../main_window.py" line="2570"/>
         <source>Autopilot: downstream 継続確認</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../main_window.py" line="2531"/>
-        <source>ARD/AAS の事前位相が完了しました。
-Application Architecture Catalog から downstream ワークフロー
-(Web/Dataflow Design/Deploy 等) を続けて実行しますか？</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../main_window.py" line="2541"/>
-        <source>Autopilot: 事前位相完了（downstream スキップ）</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../main_window.py" line="2556"/>
-        <location filename="../main_window.py" line="2598"/>
-        <source>Application Architecture Catalog の生成が確認できませんでした。
-{path}
-ARD/AAS の出力ログを確認のうえ、手動で再実行してください。</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../main_window.py" line="2569"/>
-        <source>Autopilot 実行中 (downstream): {done}/{total} (並列上限 {mp})</source>
-        <translation type="unfinished"></translation>
+        <translation>Autopilot: confirm downstream continuation</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="2572"/>
-        <source>downstream 実行対象 APP が 0 件です。
-Application Architecture Catalog ({path}) を確認してください。</source>
-        <translation type="unfinished"></translation>
+        <source>ARD/AAS の事前位相が完了しました。
+Application Architecture Catalog から downstream ワークフロー
+(Web/Dataflow Design/Deploy 等) を続けて実行しますか？</source>
+        <translation>The ARD/AAS preliminary phase has finished.
+Do you want to continue with the downstream workflows
+(Web / Dataflow Design / Deploy, etc.) from the Application Architecture Catalog?</translation>
+    </message>
+    <message>
+        <location filename="../main_window.py" line="2582"/>
+        <source>Autopilot: 事前位相完了（downstream スキップ）</source>
+        <translation>Autopilot: preliminary phase finished (downstream skipped)</translation>
+    </message>
+    <message>
+        <location filename="../main_window.py" line="2597"/>
+        <location filename="../main_window.py" line="2639"/>
+        <source>Application Architecture Catalog の生成が確認できませんでした。
+{path}
+ARD/AAS の出力ログを確認のうえ、手動で再実行してください。</source>
+        <translation>Could not confirm that the Application Architecture Catalog was generated.
+{path}
+Check the ARD/AAS output log and re-run manually.</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="2610"/>
-        <source>Autopilot 実行中 (app_chains): {done}/{total} (並列上限 {mp})</source>
-        <translation type="unfinished"></translation>
+        <source>Autopilot 実行中 (downstream): {done}/{total} (並列上限 {mp})</source>
+        <translation>Autopilot running (downstream): {done}/{total} (parallel limit {mp})</translation>
     </message>
     <message>
         <location filename="../main_window.py" line="2613"/>
+        <source>downstream 実行対象 APP が 0 件です。
+Application Architecture Catalog ({path}) を確認してください。</source>
+        <translation>There are 0 downstream target APPs.
+Check the Application Architecture Catalog ({path}).</translation>
+    </message>
+    <message>
+        <location filename="../main_window.py" line="2651"/>
+        <source>Autopilot 実行中 (app_chains): {done}/{total} (並列上限 {mp})</source>
+        <translation>Autopilot running (app_chains): {done}/{total} (parallel limit {mp})</translation>
+    </message>
+    <message>
+        <location filename="../main_window.py" line="2654"/>
         <source>app_chains 実行対象 APP が 0 件です。
 Application Architecture Catalog ({path}) を確認してください。</source>
-        <translation type="unfinished"></translation>
+        <translation>There are 0 app_chains target APPs.
+Check the Application Architecture Catalog ({path}).</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2655"/>
+        <location filename="../main_window.py" line="2696"/>
         <source>Autopilot: downstream スキップ</source>
-        <translation type="unfinished"></translation>
+        <translation>Autopilot: downstream skipped</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2663"/>
+        <location filename="../main_window.py" line="2704"/>
         <source>Autopilot: APP-ID 未選択のため downstream スキップ</source>
-        <translation type="unfinished"></translation>
+        <translation>Autopilot: downstream skipped because no APP-ID is selected</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2738"/>
+        <location filename="../main_window.py" line="2782"/>
         <source>Autopilot 実行: {wf} — Session #{idx}</source>
-        <translation type="unfinished"></translation>
+        <translation>Autopilot run: {wf} — Session #{idx}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2739"/>
+        <location filename="../main_window.py" line="2783"/>
         <source>Autopilot: 実行中 ({wf})</source>
-        <translation type="unfinished"></translation>
+        <translation>Autopilot: running ({wf})</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2765"/>
+        <location filename="../main_window.py" line="2809"/>
         <source>Autopilot: 失敗 ({wf}, exit code={code})</source>
-        <translation type="unfinished"></translation>
+        <translation>Autopilot: failed ({wf}, exit code={code})</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2767"/>
+        <location filename="../main_window.py" line="2811"/>
         <source>ワークフロー失敗</source>
-        <translation type="unfinished"></translation>
+        <translation>Workflow failed</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2769"/>
+        <location filename="../main_window.py" line="2813"/>
         <source>{wf} が exit code={code} で失敗しました。Autopilot を中止します。</source>
-        <translation type="unfinished"></translation>
+        <translation>{wf} failed with exit code={code}. Autopilot will be aborted.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2787"/>
+        <location filename="../main_window.py" line="2831"/>
         <source>Autopilot 実行中: {done}/{total} (並列上限 {mp})</source>
-        <translation type="unfinished"></translation>
+        <translation>Autopilot running: {done}/{total} (parallel limit {mp})</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2865"/>
+        <location filename="../main_window.py" line="2909"/>
         <source>Autopilot: 全 APP 完了</source>
-        <translation type="unfinished"></translation>
+        <translation>Autopilot: all APPs finished</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2912"/>
-        <location filename="../main_window.py" line="2924"/>
+        <location filename="../main_window.py" line="2956"/>
+        <location filename="../main_window.py" line="2968"/>
         <source>停止されました（全タスク）</source>
-        <translation type="unfinished"></translation>
+        <translation>Stopped (all tasks)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2928"/>
+        <location filename="../main_window.py" line="2972"/>
         <source>停止されました</source>
-        <translation type="unfinished"></translation>
+        <translation>Stopped</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2936"/>
+        <location filename="../main_window.py" line="2980"/>
         <source>Step 2: 致命的エラーで停止しました</source>
-        <translation type="unfinished"></translation>
+        <translation>Step 2: stopped due to a fatal error</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2946"/>
+        <location filename="../main_window.py" line="2990"/>
         <source>Step 2: 完了 (all workflows succeeded)</source>
-        <translation type="unfinished"></translation>
+        <translation>Step 2: finished (all workflows succeeded)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2989"/>
+        <location filename="../main_window.py" line="3033"/>
         <source>致命的エラー</source>
         <translation>Fatal Error</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2992"/>
+        <location filename="../main_window.py" line="3036"/>
         <source>ワークフロー実行中に致命的エラーが発生しました。
 後続ワークフローの実行を停止しました。
 
@@ -1007,22 +1352,22 @@ Error type: {exc_type}
 Message: {msg}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="3042"/>
+        <location filename="../main_window.py" line="3086"/>
         <source>新規セッション</source>
         <translation>New Session</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="3043"/>
+        <location filename="../main_window.py" line="3087"/>
         <source>新規セッション起動コールバックが設定されていません。（プログラム的に起動する場合は MainWindow(on_new_session=...) を渡してください。）</source>
         <translation>No new-session callback is set. (When launching programmatically, pass MainWindow(on_new_session=...).)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="3086"/>
+        <location filename="../main_window.py" line="3130"/>
         <source>確認</source>
         <translation>Confirm</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="3087"/>
+        <location filename="../main_window.py" line="3131"/>
         <source>実行中のセッションがあります。終了しますか？</source>
         <translation>A session is running. Quit anyway?</translation>
     </message>
@@ -1039,7 +1384,7 @@ Message: {msg}</translation>
         <translation type="vanished">🔄 Checking authentication status...</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="866"/>
+        <location filename="../main_window.py" line="882"/>
         <source>利用できるモデルの取得</source>
         <translation>Fetch available models</translation>
     </message>
@@ -1050,7 +1395,7 @@ Message: {msg}</translation>
 Use [Authenticate Plugins / MCP Servers] first.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="870"/>
+        <location filename="../main_window.py" line="886"/>
         <source>利用できるモデル一覧を取得しキャッシュへ保存します。</source>
         <translation>Fetch the list of available models and cache it.</translation>
     </message>
@@ -1083,23 +1428,23 @@ Use [Authenticate Plugins / MCP Servers] first.</translation>
         <translation type="vanished">GitHub authentication is not complete. Use [Authenticate Plugins / MCP Servers].</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="972"/>
+        <location filename="../main_window.py" line="988"/>
         <source>モデル一覧を取得中...</source>
         <translation>Fetching model list...</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1007"/>
-        <location filename="../main_window.py" line="1010"/>
+        <location filename="../main_window.py" line="1023"/>
+        <location filename="../main_window.py" line="1026"/>
         <source>モデル取得失敗</source>
         <translation>Failed to fetch models</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1008"/>
+        <location filename="../main_window.py" line="1024"/>
         <source>モデル一覧の取得に失敗しました: {err}</source>
         <translation>Failed to fetch model list: {err}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1019"/>
+        <location filename="../main_window.py" line="1035"/>
         <source>モデル一覧を取得しました ({n} 件)</source>
         <translation>Fetched {n} model(s).</translation>
     </message>
@@ -1131,29 +1476,29 @@ The workflow has been stopped. Please re-authenticate.</translation>
 <context>
     <name>MarkdownPreviewPanel</name>
     <message>
-        <location filename="../markdown_preview/preview_panel.py" line="48"/>
+        <location filename="../markdown_preview/preview_panel.py" line="49"/>
         <source>プレビュー</source>
-        <translation type="unfinished"></translation>
+        <translation>Preview</translation>
     </message>
     <message>
-        <location filename="../markdown_preview/preview_panel.py" line="72"/>
+        <location filename="../markdown_preview/preview_panel.py" line="73"/>
         <source>（ファイル未選択）</source>
-        <translation type="unfinished"></translation>
+        <translation>(No file selected)</translation>
     </message>
     <message>
-        <location filename="../markdown_preview/preview_panel.py" line="78"/>
+        <location filename="../markdown_preview/preview_panel.py" line="80"/>
         <source>コピー</source>
-        <translation type="unfinished"></translation>
+        <translation>Copy</translation>
     </message>
     <message>
-        <location filename="../markdown_preview/preview_panel.py" line="79"/>
+        <location filename="../markdown_preview/preview_panel.py" line="81"/>
         <source>現在のファイルパスをクリップボードへコピー</source>
-        <translation type="unfinished"></translation>
+        <translation>Copy the current file path to the clipboard</translation>
     </message>
     <message>
-        <location filename="../markdown_preview/preview_panel.py" line="88"/>
+        <location filename="../markdown_preview/preview_panel.py" line="90"/>
         <source>（初回表示時にプレビューを初期化します）</source>
-        <translation type="unfinished"></translation>
+        <translation>(The preview is initialized the first time it is shown)</translation>
     </message>
 </context>
 <context>
@@ -1163,7 +1508,7 @@ The workflow has been stopped. Please re-authenticate.</translation>
         <translation type="vanished">Step 2: Options</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="3433"/>
+        <location filename="../page_options.py" line="3776"/>
         <source>このセクションについて:</source>
         <translation>About this section:</translation>
     </message>
@@ -1184,50 +1529,67 @@ The workflow has been stopped. Please re-authenticate.</translation>
         <translation type="vanished">Click &quot;Refresh preview&quot; to see the command based on the current inputs.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="3502"/>
         <source>追加プロンプト</source>
-        <translation type="unfinished">Additional prompt</translation>
+        <translation type="obsolete">Additional prompt</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="3178"/>
+        <location filename="../page_options.py" line="3497"/>
+        <source>「{0}」を選択してください。実行前 QA を行うかどうかは回答の AKM 同期有無を左右するため、明示的な選択が必要です。</source>
+        <translation>Select “{0}”. An explicit choice is required because running pre-execution QA determines whether the answers are synced to AKM.</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="3511"/>
         <source>github.com で CI/CD を実行するには GitHub CLI 認証が必要です。表示された「GitHub CLI でログイン」を実行してから再度開始してください。</source>
         <translation>GitHub CLI authentication is required to run CI/CD on github.com. Use the displayed “Sign in with GitHub CLI” button, then start again.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="3893"/>
+        <location filename="../page_options.py" line="3864"/>
+        <source>共通設定  *必須</source>
+        <translation>Common settings  *Required</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="4256"/>
         <source>オプションは、[設定] メニューで行ってください。</source>
         <translation>Configure options from the [Settings] menu.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="3896"/>
+        <location filename="../page_options.py" line="4259"/>
         <source>設定を開く</source>
         <translation>Open Settings</translation>
     </message>
 </context>
 <context>
+    <name>RequiredChoiceCombo</name>
+    <message>
+        <location filename="../page_options.py" line="506"/>
+        <source>未選択</source>
+        <translation>Not selected</translation>
+    </message>
+</context>
+<context>
     <name>SettingsWindow</name>
     <message>
-        <location filename="../settings_window.py" line="426"/>
+        <location filename="../settings_window.py" line="434"/>
         <source>HVE 設定</source>
         <translation>HVE Settings</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="441"/>
+        <location filename="../settings_window.py" line="449"/>
         <source>設定を検索...</source>
         <translation>Search settings...</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="502"/>
+        <location filename="../settings_window.py" line="517"/>
         <source>検索:</source>
-        <translation type="unfinished"></translation>
+        <translation>Search:</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="510"/>
+        <location filename="../settings_window.py" line="525"/>
         <source>変更は自動的に保存されます</source>
         <translation>Changes are saved automatically</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="592"/>
+        <location filename="../settings_window.py" line="617"/>
         <source>✅ 自動保存しました</source>
         <translation>✅ Auto-saved</translation>
     </message>
@@ -1235,23 +1597,23 @@ The workflow has been stopped. Please re-authenticate.</translation>
 <context>
     <name>StatsDetailPopup</name>
     <message>
-        <location filename="../stats_detail_popup.py" line="380"/>
+        <location filename="../stats_detail_popup.py" line="381"/>
         <source>統計情報</source>
-        <translation type="unfinished">Statistics</translation>
+        <translation>Statistics</translation>
     </message>
     <message>
-        <location filename="../stats_detail_popup.py" line="426"/>
-        <location filename="../stats_detail_popup.py" line="470"/>
+        <location filename="../stats_detail_popup.py" line="422"/>
+        <location filename="../stats_detail_popup.py" line="466"/>
         <source>スナップショット</source>
-        <translation type="unfinished"></translation>
+        <translation>Snapshot</translation>
     </message>
     <message>
-        <location filename="../stats_detail_popup.py" line="476"/>
+        <location filename="../stats_detail_popup.py" line="472"/>
         <source>今回の実行履歴</source>
-        <translation type="unfinished"></translation>
+        <translation>This run&apos;s history</translation>
     </message>
     <message>
-        <location filename="../stats_detail_popup.py" line="497"/>
+        <location filename="../stats_detail_popup.py" line="493"/>
         <source>コンテキスト ウィンドウ</source>
         <translation>Context window</translation>
     </message>
@@ -1282,17 +1644,17 @@ The workflow has been stopped. Please re-authenticate.</translation>
 <context>
     <name>StepIntroBanner</name>
     <message>
-        <location filename="../page_intro.py" line="36"/>
+        <location filename="../page_intro.py" line="30"/>
         <source>ℹ️  ① ワークフロー選択</source>
         <translation>ℹ️  ① Select Workflow</translation>
     </message>
     <message>
-        <location filename="../page_intro.py" line="37"/>
+        <location filename="../page_intro.py" line="31"/>
         <source>ℹ️  ② 実行</source>
         <translation>ℹ️  ② Run</translation>
     </message>
     <message>
-        <location filename="../page_intro.py" line="61"/>
+        <location filename="../page_intro.py" line="55"/>
         <source>📖 詳しいガイド: users-guide/{path}</source>
         <translation>📖 Detailed guide: users-guide/{path}</translation>
     </message>
@@ -1305,19 +1667,333 @@ The workflow has been stopped. Please re-authenticate.</translation>
     </message>
 </context>
 <context>
+    <name>ToolSearchSection</name>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="215"/>
+        <source>SDK のツール定義遅延ロードを有効にする</source>
+        <translation>Enable the SDK&apos;s deferred loading of tool definitions</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="218"/>
+        <source>SDK 組み込みのまま</source>
+        <translation>Keep the SDK built-in implementation</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="219"/>
+        <source>HVE 実装へ差し替え</source>
+        <translation>Replace with the HVE implementation</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="246"/>
+        <location filename="../toolsearch_settings_section.py" line="249"/>
+        <source>ツール ID / ワイルドカード</source>
+        <translation>Tool ID / wildcard</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="246"/>
+        <location filename="../toolsearch_settings_section.py" line="252"/>
+        <source>モード</source>
+        <translation>Mode</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="249"/>
+        <source>検索専用の語（空白区切り）</source>
+        <translation>Search-only terms (space separated)</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="252"/>
+        <source>ワークフロー ID:Step ID</source>
+        <translation>Workflow ID:Step ID</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="279"/>
+        <source>基本</source>
+        <translation>Basic</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="280"/>
+        <source>Skill Layer</source>
+        <translation>Skill Layer</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="281"/>
+        <source>ポリシー</source>
+        <translation>Policy</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="283"/>
+        <source>統計情報</source>
+        <translation>Statistics</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="285"/>
+        <source>コンテキスト内訳</source>
+        <translation>Context breakdown</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="307"/>
+        <source>ツール定義の遅延ロード (tool_search)</source>
+        <translation>Deferred loading of tool definitions (tool_search)</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="309"/>
+        <source>ON（既定）にすると Copilot SDK の tool_search を有効化します。 SDK 仕様では、ツール定義を先読みせず必要になってから読み込ませる設定です。 OFF にすると当該引数を渡さず SDK 既定挙動に戻ります。 ただし現行 CLI では遅延公開が発火しません（下の実測を参照）。</source>
+        <translation>When ON (the default), the Copilot SDK&apos;s tool_search is enabled. Per the SDK specification this makes tool definitions load on demand instead of up front. When OFF the argument is not passed and the SDK default behaviour applies. Note that deferral does not fire on the current CLI (see the measurement below).</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="317"/>
+        <source>ランキング実装 (tool_search_ranking)</source>
+        <translation>Ranking implementation (tool_search_ranking)</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="319"/>
+        <source>上の遅延ロードを有効にしたときの検索実装を選びます。「HVE 実装へ差し替え」は日本語対応の BM25、pin ポリシー、 Skill のカタログ合流、および統計収集を使います。 上の設定が OFF のときはこの設定は何もしません。 生成する AI Agent 向けの Foundry Toolbox 設定（Step 1 右ペイン）とは別物です。</source>
+        <translation>Selects the search implementation used when deferred loading above is enabled. &quot;Replace with the HVE implementation&quot; uses Japanese-aware BM25, the pin policy, the merged Skill catalog and statistics collection. This setting does nothing while the setting above is OFF. It is unrelated to the Foundry Toolbox settings for generated AI Agents (Step 1 right pane).</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="329"/>
+        <source>実測 (2026-08-13 / Copilot CLI 1.0.79 / SDK 1.0.7): この CLI では遅延公開が発火しません。 同一構成で比較すると、無効時と defer_threshold=1 指定時のツール定義トークンは 52,756 で完全に一致し、 全ツールの defer_loading は null、tool_search_tool もツール一覧に現れませんでした。 したがって上の設定を ON にしてもコンテキストは減りません。
+「HVE 実装へ差し替え」は Skill をツールとして登録するため、遅延公開が効かない現状では ツール定義が 12,160 tokens 増えます（実測 47,115 → 59,275）。既定の「SDK 組み込みのまま」を推奨します。
+コンテキストを減らす目的では、公開する MCP サーバー自体を絞ってください。 現在の層別内訳は「コンテキスト内訳」タブで実測できます。
+統計は上の設定が ON かつランキングが「HVE 実装へ差し替え」のときにだけ収集されます。 Cloud Session 経路では差し替えも収集も行いません。 各指標の意味は users-guide/tool-search-dashboard.md を参照してください。</source>
+        <translation>Measured (2026-08-13 / Copilot CLI 1.0.79 / SDK 1.0.7): deferral does not fire on this CLI. With an identical configuration, the tool definition tokens were exactly 52,756 both when disabled and when defer_threshold=1 was specified; defer_loading was null for every tool and tool_search_tool never appeared in the tool list. Turning the setting above ON therefore does not reduce context.
+&quot;Replace with the HVE implementation&quot; registers Skills as tools, so while deferral does not work it adds 12,160 tokens of tool definitions (measured 47,115 to 59,275). The default &quot;Keep the SDK built-in implementation&quot; is recommended.
+To reduce context, narrow the set of MCP servers you expose instead. The current per-layer breakdown can be measured on the &quot;Context breakdown&quot; tab.
+Statistics are collected only when the setting above is ON and the ranking is &quot;Replace with the HVE implementation&quot;. Neither replacement nor collection happens on the Cloud Session path. See users-guide/tool-search-dashboard.md for what each metric means.</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="351"/>
+        <source>&lt;b&gt;Skill Layer（読み取り専用）&lt;/b&gt;</source>
+        <translation>&lt;b&gt;Skill Layer (read-only)&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="353"/>
+        <source>workflow_defaults / required_skills / optional_skills は Step ごとの読み取り専用要約です。 実際の強制は runner.py と skill_resolver.py が行い、この画面では表示のみを担います。 Core / Extend は policy.json 上の分類であり、Extend が実際に遅延公開されるかは CLI 側の deferral 実装に依存します（実測では現行 CLI で発火していません）。</source>
+        <translation>workflow_defaults / required_skills / optional_skills are a read-only per-Step summary. The actual enforcement is done by runner.py and skill_resolver.py; this screen only displays them. Core / Extend is a classification in policy.json, and whether Extend is really deferred depends on the CLI&apos;s deferral implementation (measurements show it does not fire on the current CLI).</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="362"/>
+        <source>再読み込み</source>
+        <translation>Reload</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="376"/>
+        <source>&lt;b&gt;検索ポリシー&lt;/b&gt;</source>
+        <translation>&lt;b&gt;Search policy&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="378"/>
+        <source>pin・検索専用語彙・フィールド重み・Step 別モードの単一の情報源は policy.json です。 ここでの編集は下の「保存」を押すまでファイルへ書き込みません（この画面の他の設定と違い自動保存されません）。 保存した内容は次に開始する Step 実行から反映されます。 各項目名の右にある「?」で意味と増減の影響を確認できます。</source>
+        <translation>policy.json is the single source of truth for pins, search-only terms, field weights and per-Step modes. Edits here are not written to the file until you press &quot;Save&quot; below (unlike the other settings on this screen, they are not saved automatically). Saved values take effect from the next Step run. Use the &quot;?&quot; next to each item name to see what it means and what raising or lowering it does.</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="387"/>
+        <source>凡例: pins の always = 常時公開（検索させない）/ auto = 検索で発見させる / never = 検索結果へ返さない（索引から消すのは excluded_tools だけ）。 limit = 1 回の検索で返す上限件数。tau = トップスコアに対する打ち切り比率（score &gt;= tau * top_score だけを返す）。field_weights = BM25 のフィールド重み。 詳細は users-guide/tool-search.md を参照してください。</source>
+        <translation>Legend: in pins, always = always exposed (never searched) / auto = discovered through search / never = never returned by search (only excluded_tools removes an entry from the index). limit = the maximum number of entries returned by one search. tau = the cut-off ratio against the top score (only score &gt;= tau * top_score is returned). field_weights = the BM25 field weights. See users-guide/tool-search.md for details.</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="424"/>
+        <source>保存</source>
+        <translation>Save</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="426"/>
+        <source>再読み込み（編集を破棄）</source>
+        <translation>Reload (discard edits)</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="447"/>
+        <source>&lt;b&gt;Tool Search 利用統計&lt;/b&gt;</source>
+        <translation>&lt;b&gt;Tool Search usage statistics&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="449"/>
+        <source>検索が実際に呼ばれているか、返した結果が使われているかを測定します。 算出できない指標は 0 で埋めず「データ不足」と表示します。 各指標の定義は users-guide/tool-search-dashboard.md を参照。</source>
+        <translation>Measures whether search is actually invoked and whether the returned results are used. Metrics that cannot be computed are shown as &quot;insufficient data&quot; rather than filled with 0. See users-guide/tool-search-dashboard.md for the definition of each metric.</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="459"/>
+        <source>再集計</source>
+        <translation>Recompute</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="461"/>
+        <source>HTML で書き出す</source>
+        <translation>Export as HTML</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="463"/>
+        <source>収集済みイベントを削除</source>
+        <translation>Delete collected events</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="479"/>
+        <source>&lt;b&gt;コンテキスト内訳の実測&lt;/b&gt;</source>
+        <translation>&lt;b&gt;Measured context breakdown&lt;/b&gt;</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="481"/>
+        <source>Step 実行と同じ経路でセッションを張り、システムプロンプト・組み込みツール定義・MCP サーバーごとの実トークン数を取得します。プロンプトは送らないためモデル推論は発生しません。推定値は使いません。 ボタンを押したときだけ実行します（MCP 接続待ちで数秒かかります）。</source>
+        <translation>Opens a session through the same path as a Step run and reads the real token counts for the system prompt, the built-in tool definitions and each MCP server. No prompt is sent, so no model inference occurs, and no estimates are used. It runs only when you press the button (it takes a few seconds while MCP servers connect).</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="489"/>
+        <source>実測対象の MCP サーバーは「各サービス連携 &gt; MCP / CLI 接続」で設定します。</source>
+        <translation>The MCP servers to measure are configured under &quot;Service integrations &gt; MCP / CLI connection&quot;.</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="495"/>
+        <source>実測する</source>
+        <translation>Measure</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="517"/>
+        <source>Skill Layer を読み込めません: </source>
+        <translation>Cannot load the Skill Layer: </translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="524"/>
+        <source>参照元 / 保存先: </source>
+        <translation>Source / save target: </translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="532"/>
+        <source>policy.json を読み込めません。
+
+対象: </source>
+        <translation>Cannot read policy.json.
+
+Target: </translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="558"/>
+        <source>policy.json を読み込めていないため保存しません。既存の内容を空値で上書きしないよう、ファイルを直接修正してから再読み込みしてください。</source>
+        <translation>policy.json could not be read, so nothing will be saved. Fix the file directly and reload, so that the existing content is not overwritten with empty values.</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="580"/>
+        <source>保存しませんでした（ファイルは変更していません）: </source>
+        <translation>Not saved (the file was left unchanged): </translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="584"/>
+        <source>保存に失敗しました: </source>
+        <translation>Failed to save: </translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="587"/>
+        <source>保存しました: </source>
+        <translation>Saved: </translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="589"/>
+        <source>次に開始する Step 実行から反映されます（実行中のセッションは変わりません）。</source>
+        <translation>This takes effect from the next Step run (sessions already running are unaffected).</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="608"/>
+        <source>統計を読み込めません: </source>
+        <translation>Cannot load the statistics: </translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="623"/>
+        <source>「ツール定義の遅延ロード」が OFF</source>
+        <translation>&quot;Deferred loading of tool definitions&quot; is OFF</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="625"/>
+        <source>「ランキング実装」が「SDK 組み込みのまま」</source>
+        <translation>&quot;Ranking implementation&quot; is &quot;Keep the SDK built-in implementation&quot;</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="628"/>
+        <source>収集済みイベントは 0 件です。未充足の収集条件: </source>
+        <translation>No events have been collected. Unmet collection conditions: </translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="632"/>
+        <source>収集済みイベントは 0 件です。設定側の収集条件は満たしています。 残る条件は CLI がモデルへ tool_search_tool を公開していることですが、 これはこの画面からは確認できません。</source>
+        <translation>No events have been collected. The conditions that depend on these settings are met. The remaining condition is that the CLI exposes tool_search_tool to the model, which cannot be verified from this screen.</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="645"/>
+        <source>イベント: </source>
+        <translation>Events: </translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="647"/>
+        <source>利用履歴: </source>
+        <translation>Usage history: </translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="681"/>
+        <source>実測中…</source>
+        <translation>Measuring...</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="702"/>
+        <source>理由を取得できませんでした。</source>
+        <translation>Could not obtain the reason.</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="703"/>
+        <source>実測に失敗しました: </source>
+        <translation>Measurement failed: </translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="719"/>
+        <source>ダッシュボードを HTML として保存</source>
+        <translation>Save the dashboard as HTML</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="728"/>
+        <source>書き出しに失敗しました: </source>
+        <translation>Export failed: </translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="730"/>
+        <source>書き出しました: </source>
+        <translation>Exported: </translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="736"/>
+        <source>収集済みイベントの削除</source>
+        <translation>Delete collected events</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="737"/>
+        <source>次のファイルを削除します。元に戻せません。
+
+</source>
+        <translation>The following file will be deleted. This cannot be undone.
+
+</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="746"/>
+        <source>削除に失敗しました: </source>
+        <translation>Failed to delete: </translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="748"/>
+        <source>収集済みイベントを削除しました。</source>
+        <translation>Deleted the collected events.</translation>
+    </message>
+</context>
+<context>
     <name>TriStateCombo</name>
     <message>
-        <location filename="../page_options.py" line="471"/>
+        <location filename="../page_options.py" line="472"/>
         <source>継承（未指定）</source>
         <translation>Inherit (unspecified)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="472"/>
+        <location filename="../page_options.py" line="473"/>
         <source>明示 ON</source>
         <translation>Explicit ON</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="473"/>
+        <location filename="../page_options.py" line="474"/>
         <source>明示 OFF</source>
         <translation>Explicit OFF</translation>
     </message>
@@ -1332,52 +2008,52 @@ The workflow has been stopped. Please re-authenticate.</translation>
 <context>
     <name>WorkbenchPage</name>
     <message>
-        <location filename="../page_workbench.py" line="2304"/>
+        <location filename="../page_workbench.py" line="2483"/>
         <source>☁ Mission Control: &lt;a href=&quot;{url}&quot;&gt;{url}&lt;/a&gt;</source>
-        <translation type="unfinished"></translation>
+        <translation>☁ Mission Control: &lt;a href=&quot;{url}&quot;&gt;{url}&lt;/a&gt;</translation>
     </message>
 </context>
 <context>
     <name>WorkbenchWindow</name>
     <message>
-        <location filename="../workbench_window.py" line="251"/>
+        <location filename="../workbench_window.py" line="259"/>
         <source>起動コマンドをコピー</source>
         <translation>Copy launch command</translation>
     </message>
     <message>
-        <location filename="../workbench_window.py" line="257"/>
+        <location filename="../workbench_window.py" line="265"/>
         <source>セッションを停止</source>
         <translation>Stop session</translation>
     </message>
     <message>
-        <location filename="../workbench_window.py" line="264"/>
+        <location filename="../workbench_window.py" line="272"/>
         <source>起動中...</source>
         <translation>Starting...</translation>
     </message>
     <message>
-        <location filename="../workbench_window.py" line="296"/>
+        <location filename="../workbench_window.py" line="304"/>
         <source>☁ Mission Control: &lt;a href=&quot;{url}&quot;&gt;{url}&lt;/a&gt;</source>
-        <translation type="unfinished"></translation>
+        <translation>☁ Mission Control: &lt;a href=&quot;{url}&quot;&gt;{url}&lt;/a&gt;</translation>
     </message>
     <message>
-        <location filename="../workbench_window.py" line="299"/>
+        <location filename="../workbench_window.py" line="307"/>
         <source>Cloud Session: Mission Control URL を取得しました</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../workbench_window.py" line="334"/>
-        <source>Autopilot: 次段起動 — %s</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../workbench_window.py" line="341"/>
-        <source>[完了] Autopilot チェーン全段成功</source>
-        <translation type="unfinished"></translation>
+        <translation>Cloud Session: retrieved the Mission Control URL</translation>
     </message>
     <message>
         <location filename="../workbench_window.py" line="346"/>
+        <source>Autopilot: 次段起動 — %s</source>
+        <translation>Autopilot: starting the next stage — %s</translation>
+    </message>
+    <message>
+        <location filename="../workbench_window.py" line="353"/>
+        <source>[完了] Autopilot チェーン全段成功</source>
+        <translation>[Done] Every stage of the Autopilot chain succeeded</translation>
+    </message>
+    <message>
+        <location filename="../workbench_window.py" line="358"/>
         <source>[中断] Autopilot チェーン (exit code=%d)</source>
-        <translation type="unfinished"></translation>
+        <translation>[Aborted] Autopilot chain (exit code=%d)</translation>
     </message>
 </context>
 <context>
@@ -1394,14 +2070,14 @@ The workflow has been stopped. Please re-authenticate.</translation>
         <translation type="vanished">Step 1: Select Workflow</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="410"/>
+        <location filename="../page_workflow_select.py" line="411"/>
         <source>実行するワークフローを 1 つ以上選択してください。選択後、実行するステップをチェックボックスで調整できます。</source>
         <translation>Select one or more workflows to run. After selection, you can fine-tune which steps to run via checkboxes.</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="440"/>
+        <location filename="../page_workflow_select.py" line="442"/>
         <source>その他</source>
-        <translation type="unfinished"></translation>
+        <translation>Other</translation>
     </message>
     <message>
         <location filename="../page_workflow_select.py" line="479"/>
@@ -1409,29 +2085,29 @@ The workflow has been stopped. Please re-authenticate.</translation>
         <translation>(Steps will appear after a workflow is selected)</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="489"/>
+        <location filename="../page_workflow_select.py" line="490"/>
         <source>実行ステップ（チェック ON のみ実行対象）</source>
         <translation>Run steps (only checked steps are executed)</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="528"/>
+        <location filename="../page_workflow_select.py" line="529"/>
         <source>（オプションページ未指定）</source>
-        <translation type="unfinished"></translation>
+        <translation>(Options page not specified)</translation>
     </message>
     <message>
         <location filename="../page_workflow_select.py" line="593"/>
         <source>🤖 Autopilot — Application Architecture Catalog から実行ワークフローを自動判定する</source>
-        <translation type="unfinished"></translation>
+        <translation>🤖 Autopilot — determine the workflows to run automatically from the Application Architecture Catalog</translation>
     </message>
     <message>
         <location filename="../page_workflow_select.py" line="600"/>
         <source>ON にすると `推薦アーキテクチャ` に応じて `aad-web → asdw-web` または `adfd → adfdv` を APP ごとに自動実行します。下のワークフロー/ステップ選択は無効化されます。</source>
-        <translation type="unfinished"></translation>
+        <translation>When ON, `aad-web → asdw-web` or `adfd → adfdv` runs automatically per APP according to the `推薦アーキテクチャ` column. The workflow / step selection below is disabled.</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="610"/>
+        <location filename="../page_workflow_select.py" line="611"/>
         <source>カタログパス:</source>
-        <translation type="unfinished"></translation>
+        <translation>Catalog path:</translation>
     </message>
 </context>
 <context>
@@ -1453,29 +2129,29 @@ The workflow has been stopped. Please re-authenticate.</translation>
         <translation type="vanished">App ID (used by ASDW/ADFDV, etc.). Kept for backward compatibility. For multiple values, use &quot;Target Applications (APP-ID)&quot; below.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2490"/>
+        <location filename="../page_options.py" line="2801"/>
         <source>例: AAD-WEB-001,AAD-WEB-002</source>
         <translation>e.g. AAD-WEB-001,AAD-WEB-002</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2492"/>
+        <location filename="../page_options.py" line="2803"/>
         <source>対象アプリケーション (APP-ID)</source>
         <translation>Target Applications (APP-ID)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2494"/>
+        <location filename="../page_options.py" line="2805"/>
         <source>対象アプリケーション (APP-ID) — カンマ区切りで複数指定可。AAD-WEB/ASDW-WEB は Web フロントエンド + クラウド、ADFD/ADFDV はデータデータフロー処理の APP-ID のみ採用します。downstream workflow（AAD-WEB/ASDW-WEB/ADFD/ADFDV）選択時はチェックリスト表示され、選択した APP-ID のみが Autopilot ON/OFF いずれの経路でも実行対象となります。未指定時は docs/catalog/app-arch-catalog.md から自動選択します。</source>
-        <translation type="unfinished"></translation>
+        <translation>Target applications (APP-ID) — comma-separated, multiple allowed. AAD-WEB/ASDW-WEB accept only APP-IDs for web frontend + cloud, and ADFD/ADFDV only those for dataflow processing. When a downstream workflow (AAD-WEB/ASDW-WEB/ADFD/ADFDV) is selected, a checklist is shown and only the selected APP-IDs are run, whether Autopilot is ON or OFF. When left unset, they are selected automatically from docs/catalog/app-arch-catalog.md.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2512"/>
+        <location filename="../page_options.py" line="2823"/>
         <source>有効化</source>
-        <translation type="unfinished">Enable</translation>
+        <translation>Enable</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2516"/>
+        <location filename="../page_options.py" line="2827"/>
         <source>ON にすると、ワークフローをローカルで実行し、Deploy（Azure デプロイ）Step のうち remote CI/CD が必要な Step だけ、Step 専用の一時ブランチを作成して github.com の GitHub Actions (OIDC) に委譲します。Issue Template は使いません。成果物の commit / push / PR 作成 / 自動 Approve &amp; merge / base branch 復帰まで Step 単位で実行します（失敗 Step がある場合は PR を作成せず、一時ブランチはデバッグ用に残します）。OFF の場合はローカルで成果物を生成するのみで、リポジトリ操作は手動です。事前に github.com 側で次の設定が必要です: Azure OIDC Secrets（AZURE_CLIENT_ID・AZURE_TENANT_ID・AZURE_SUBSCRIPTION_ID）/ Workflow permissions = Read and write / GH_TOKEN（PR 作成・ラベル付与用）。</source>
-        <translation type="unfinished"></translation>
+        <translation>When ON, the workflow runs locally and only the Deploy (Azure deployment) Steps that require remote CI/CD are delegated to GitHub Actions (OIDC) on github.com using a temporary branch created per Step. Issue Templates are not used. Committing, pushing, creating the PR, auto Approve &amp; merge, and returning to the base branch are all performed per Step (when a Step fails, no PR is created and the temporary branch is kept for debugging). When OFF, artifacts are only generated locally and repository operations are manual. The following must be configured on github.com beforehand: Azure OIDC Secrets (AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID) / Workflow permissions = Read and write / GH_TOKEN (for creating PRs and labels).</translation>
     </message>
     <message>
         <source>ON にすると、ワークフローをローカルで実行し、Deploy（Azure デプロイ）Step のうち remote CI/CD が必要な Step だけ、Step 専用の一時ブランチを作成して github.com の GitHub Actions (OIDC) に委譲します。Issue Template は使いません。成果物の commit / push / PR 作成 / 自動 Approve &amp; Auto-merge / base branch 復帰まで Step 単位で実行します（失敗 Step がある場合は PR を作成せず、一時ブランチはデバッグ用に残します）。OFF の場合はローカルで成果物を生成するのみで、リポジトリ操作は手動です。事前に github.com 側で次の設定が必要です: Azure OIDC Secrets（AZURE_CLIENT_ID・AZURE_TENANT_ID・AZURE_SUBSCRIPTION_ID）/ Workflow permissions = Read and write / GH_TOKEN（PR 作成・ラベル付与用）。</source>
@@ -1506,12 +2182,12 @@ The workflow has been stopped. Please re-authenticate.</translation>
         <translation type="vanished">Batch Job ID (used by ADFDV, etc.; comma-separated supported). Runs in the context of the target Batch APP after APP-ID filtering.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2505"/>
+        <location filename="../page_options.py" line="2816"/>
         <source>ユースケース ID</source>
         <translation>Use Case ID</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2506"/>
+        <location filename="../page_options.py" line="2817"/>
         <source>ユースケース ID（ASDW 等で使用）。</source>
         <translation>Use Case ID (used by ASDW, etc.).</translation>
     </message>
@@ -1519,77 +2195,77 @@ The workflow has been stopped. Please re-authenticate.</translation>
 <context>
     <name>_C11AKM</name>
     <message>
-        <location filename="../page_options.py" line="2554"/>
+        <location filename="../page_options.py" line="2865"/>
         <source>qa（質問票回答）</source>
         <translation>qa (questionnaire answers)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2555"/>
+        <location filename="../page_options.py" line="2866"/>
         <source>original-docs（オリジナルドキュメント）</source>
         <translation>original-docs (original documents)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2556"/>
+        <location filename="../page_options.py" line="2867"/>
         <source>workiq（Work IQ 経由の M365 データ）</source>
         <translation>workiq (M365 data via Work IQ)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2564"/>
+        <location filename="../page_options.py" line="2875"/>
         <source>取り込みソース</source>
         <translation>Ingest source</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2566"/>
+        <location filename="../page_options.py" line="2877"/>
         <source>AKM の取り込みソース（複数選択可）。qa / original-docs / workiq から 1 つ以上を選択（既定: qa + original-docs）。</source>
         <translation>AKM ingest source (multi-select). Pick one or more from qa / original-docs / workiq (default: qa + original-docs).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2575"/>
+        <location filename="../page_options.py" line="2886"/>
         <source>対象ファイルを選択</source>
         <translation>Select target files</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2577"/>
+        <location filename="../page_options.py" line="2888"/>
         <source>複数選択可（スペース区切りで追加）</source>
         <translation>Multi-select supported (space-separated to add)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2579"/>
+        <location filename="../page_options.py" line="2890"/>
         <source>対象ファイル</source>
         <translation>Target files</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2580"/>
+        <location filename="../page_options.py" line="2891"/>
         <source>対象ファイルパス（省略時: 上で選択した取り込みソース配下の全件）。</source>
         <translation>Target file paths (if omitted: all files under the selected ingest source above).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2586"/>
+        <location filename="../page_options.py" line="2897"/>
         <source>既存Knowledgeファイルの再生成</source>
         <translation>Regenerate existing knowledge files</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2588"/>
+        <location filename="../page_options.py" line="2899"/>
         <source>既存 knowledge/ 出力を完全に再生成します（明示 ON で有効化、既定: 無効）。</source>
         <translation>Fully regenerate existing knowledge/ output (enabled with explicit ON; default: disabled).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2596"/>
+        <location filename="../page_options.py" line="2907"/>
         <source>追加ファイルのフォルダを選択</source>
         <translation>Select folder of additional files</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2598"/>
+        <location filename="../page_options.py" line="2909"/>
         <source>複数指定はスペース区切り</source>
         <translation>Space-separated for multiple values</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2600"/>
+        <location filename="../page_options.py" line="2911"/>
         <source>追加ファイル</source>
         <translation>Additional files</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2601"/>
+        <location filename="../page_options.py" line="2912"/>
         <source>追加で取り込むファイル/フォルダ（複数指定可、スペース区切り）。</source>
         <translation>Additional files/folders to ingest (multiple supported, space-separated).</translation>
     </message>
@@ -1607,122 +2283,64 @@ The workflow has been stopped. Please re-authenticate.</translation>
     </message>
 </context>
 <context>
-    <name>_C12AQOD</name>
-    <message>
-        <location filename="../page_options.py" line="2633"/>
-        <source>チェック対象ファイルのフォルダを選択</source>
-        <translation>Select folder of files to check</translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="2635"/>
-        <source>（空欄=original-docs/）</source>
-        <translation>(blank = original-docs/)</translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="2637"/>
-        <source>チェック対象ファイルのフォルダパス</source>
-        <translation>Folder path of files to check</translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="2638"/>
-        <source>チェック対象ファイルのフォルダパス（省略時: original-docs/）。</source>
-        <translation>Folder path of files to check (if omitted: original-docs/).</translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="2644"/>
-        <source>（未指定）</source>
-        <translation>(unspecified)</translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="2645"/>
-        <source>標準（standard）</source>
-        <translation>Standard</translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="2646"/>
-        <source>軽量（lightweight）</source>
-        <translation>Lightweight</translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="2650"/>
-        <source>分析の深さ</source>
-        <translation>Analysis depth</translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="2651"/>
-        <source>standard（標準）または lightweight（軽量）から選択（既定: standard）。</source>
-        <translation>Choose standard or lightweight (default: standard).</translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="2657"/>
-        <source>分析の観点</source>
-        <translation>Analysis focus</translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="2658"/>
-        <source>分析の重点観点を自由記述（任意）。</source>
-        <translation>Free-form analysis focus areas (optional).</translation>
-    </message>
-</context>
-<context>
     <name>_C13ADOC</name>
     <message>
-        <location filename="../page_options.py" line="2677"/>
+        <location filename="../page_options.py" line="3004"/>
         <source>ドキュメント対象フォルダを選択</source>
         <translation>Select documentation target folder</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2679"/>
+        <location filename="../page_options.py" line="3006"/>
         <source>カンマ区切り（空欄=全体）</source>
         <translation>Comma-separated (blank = entire workspace)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2681"/>
+        <location filename="../page_options.py" line="3008"/>
         <source>ドキュメント生成対象ディレクトリ</source>
         <translation>Documentation target directories</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2682"/>
+        <location filename="../page_options.py" line="3009"/>
         <source>カンマ区切り（省略時: 全体）。</source>
         <translation>Comma-separated (if omitted: entire workspace).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2688"/>
+        <location filename="../page_options.py" line="3015"/>
         <source>例: node_modules/,vendor/,dist/,*.lock,__pycache__/</source>
         <translation>e.g. node_modules/,vendor/,dist/,*.lock,__pycache__/</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2691"/>
+        <location filename="../page_options.py" line="3018"/>
         <source>除外パターン</source>
         <translation>Exclude patterns</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2693"/>
+        <location filename="../page_options.py" line="3020"/>
         <source>カンマ区切り（既定: node_modules/, vendor/, dist/, *.lock, __pycache__/）。</source>
         <translation>Comma-separated (default: node_modules/, vendor/, dist/, *.lock, __pycache__/).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2700"/>
+        <location filename="../page_options.py" line="3027"/>
         <source>（未指定）</source>
         <translation>(unspecified)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2706"/>
+        <location filename="../page_options.py" line="3033"/>
         <source>ドキュメントの主目的</source>
         <translation>Documentation primary purpose</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2708"/>
+        <location filename="../page_options.py" line="3035"/>
         <source>all（全目的）/ onboarding（新規参画支援）/ refactoring（リファクタ）/ migration（移行）から選択（既定: all）。</source>
         <translation>Choose all / onboarding / refactoring / migration (default: all).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2719"/>
+        <location filename="../page_options.py" line="3046"/>
         <source>大規模ファイル分割閾値（行数）</source>
         <translation>Large file split threshold (lines)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2720"/>
+        <location filename="../page_options.py" line="3047"/>
         <source>行数で指定。0 のとき既定 500 行を使用。</source>
         <translation>Specify in lines. When 0, the default of 500 lines is used.</translation>
     </message>
@@ -1730,117 +2348,117 @@ The workflow has been stopped. Please re-authenticate.</translation>
 <context>
     <name>_C14ARD</name>
     <message>
-        <location filename="../page_options.py" line="2750"/>
+        <location filename="../page_options.py" line="3077"/>
         <source>対象企業名</source>
         <translation>Target company name</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2751"/>
+        <location filename="../page_options.py" line="3078"/>
         <source>Step 1 (Untargeted) を実行する場合は必須。</source>
         <translation>Required when running Step 1 (Untargeted).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2757"/>
+        <location filename="../page_options.py" line="3084"/>
         <source>事業分析基準ファイルを選択</source>
         <translation>Select business analysis base file</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2758"/>
+        <location filename="../page_options.py" line="3085"/>
         <source>Markdown (*.md *.txt);;すべてのファイル (*)</source>
         <translation>Markdown (*.md *.txt);;All files (*)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2761"/>
+        <location filename="../page_options.py" line="3088"/>
         <source>業務エリア</source>
         <translation>Business area</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2763"/>
-        <source>対象業務名（または基準ファイル）。省略時は Step 1 → 2 → 3、指定時は Step 2 直行。文章のほか、フォルダパスまたは複数ファイルパス（カンマ区切り）も指定可能。</source>
-        <translation>Target business name (or base file). If omitted, runs Step 1 → 2 → 3; if specified, jumps directly to Step 2. Supports free text, a folder path, or multiple file paths (comma-separated).</translation>
+        <location filename="../page_options.py" line="3090"/>
+        <source>対象業務名（または基準ファイル）。ステップ 1 を併せて選択する場合は省略可（Step 1.2 の戦略提言から自動生成）。ステップ 2 を単独で実行する場合は必須。文章のほか、フォルダパスまたは複数ファイルパス（カンマ区切り）も指定可能。</source>
+        <translation>Target business name (or base file). Optional when step 1 is also selected (generated from the Strategic Recommendations of Step 1.2). Required when running step 2 on its own. Supports free text, a folder path, or multiple file paths (comma-separated).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2770"/>
+        <location filename="../page_options.py" line="3097"/>
         <source>YYYY-MM-DD（空欄=実行日）</source>
         <translation>YYYY-MM-DD (blank = run date)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2772"/>
+        <location filename="../page_options.py" line="3099"/>
         <source>調査基準日 (YYYY-MM-DD)</source>
         <translation>Survey base date (YYYY-MM-DD)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2773"/>
+        <location filename="../page_options.py" line="3100"/>
         <source>省略時は実行日。</source>
         <translation>If omitted, the run date is used.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2782"/>
+        <location filename="../page_options.py" line="3109"/>
         <source>調査期間年数</source>
         <translation>Survey period (years)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2783"/>
+        <location filename="../page_options.py" line="3110"/>
         <source>0 のとき既定 30 年を使用。</source>
         <translation>When 0, the default of 30 years is used.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2788"/>
+        <location filename="../page_options.py" line="3115"/>
         <source>例: 日本 / 北米</source>
         <translation>e.g. Japan / North America</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2790"/>
+        <location filename="../page_options.py" line="3117"/>
         <source>対象地域</source>
         <translation>Target region</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2791"/>
+        <location filename="../page_options.py" line="3118"/>
         <source>省略時は『グローバル全体』。</source>
         <translation>If omitted: &apos;Global&apos;.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2796"/>
+        <location filename="../page_options.py" line="3123"/>
         <source>例: 中長期成長戦略の立案</source>
         <translation>e.g. Long-term growth strategy planning</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2798"/>
+        <location filename="../page_options.py" line="3125"/>
         <source>分析目的</source>
         <translation>Analysis purpose</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2799"/>
+        <location filename="../page_options.py" line="3126"/>
         <source>省略時は『中長期成長戦略の立案』。</source>
         <translation>If omitted: &apos;Long-term growth strategy planning&apos;.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2804"/>
+        <location filename="../page_options.py" line="3131"/>
         <source>例: SR-1</source>
         <translation>e.g. SR-1</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2806"/>
+        <location filename="../page_options.py" line="3133"/>
         <source>採用 Strategic Recommendation ID</source>
         <translation>Adopted Strategic Recommendation ID</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2808"/>
+        <location filename="../page_options.py" line="3135"/>
         <source>Step 1 完了後に採用する Strategic Recommendation の ID（例: SR-1）。指定時は対話モードでもこの ID を優先して採用。省略時は非対話モードでは最初の SR、対話モードではメニュー選択（既定: 先頭）を使用。</source>
         <translation>ID of the Strategic Recommendation to adopt after Step 1 (e.g. SR-1). When specified, this ID is prioritized even in interactive mode. If omitted: first SR in non-interactive mode, menu selection (default: first) in interactive mode.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2816"/>
+        <location filename="../page_options.py" line="3143"/>
         <source>カンマ区切り（添付 D&amp;D 領域から自動入力）</source>
         <translation>Comma-separated (auto-filled from the attachment drop area)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2818"/>
+        <location filename="../page_options.py" line="3145"/>
         <source>添付資料パス</source>
         <translation>Attachment paths</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2819"/>
+        <location filename="../page_options.py" line="3146"/>
         <source>カンマ区切り。下の添付 D&amp;D 領域からの選択で上書きされます。</source>
         <translation>Comma-separated. Overridden by selection from the attachment drop area below.</translation>
     </message>
@@ -1924,179 +2542,281 @@ The workflow has been stopped. Please re-authenticate.</translation>
     </message>
 </context>
 <context>
+    <name>_C17ADI</name>
+    <message>
+        <location filename="../page_options.py" line="2948"/>
+        <source>例: EC 倉庫の取り置き算出バッチを再構築する</source>
+        <translation>e.g. Rebuild the EC warehouse reservation calculation batch</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2951"/>
+        <source>選別の目的</source>
+        <translation>Triage purpose</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2953"/>
+        <source>設計書を選別する目的（任意）。空のときは目的非依存モードとなり must を付与しません。</source>
+        <translation>Purpose used to triage design documents (optional). When empty, ADI runs in purpose-agnostic mode and marks no document as must.</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2960"/>
+        <source>対象設計書フォルダを選択</source>
+        <translation>Select design document folder</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2962"/>
+        <source>（空欄=docs-original/）</source>
+        <translation>(blank = docs-original/)</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2964"/>
+        <source>チェック対象ファイルのフォルダパス</source>
+        <translation>Design document folder path</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2965"/>
+        <source>対象設計書のフォルダパス（省略時: docs-original/）。</source>
+        <translation>Folder path containing the target design documents (if omitted: docs-original/).</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2971"/>
+        <source>（未指定）</source>
+        <translation>(unspecified)</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2972"/>
+        <source>標準（standard）</source>
+        <translation>Standard</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2973"/>
+        <source>軽量（lightweight）</source>
+        <translation>Lightweight</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2976"/>
+        <source>分析の深さ</source>
+        <translation>Analysis depth</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2977"/>
+        <source>standard（標準）または lightweight（軽量）から選択（既定: standard）。</source>
+        <translation>Choose standard or lightweight (default: standard).</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2983"/>
+        <source>分析の観点</source>
+        <translation>Analysis focus</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2984"/>
+        <source>設計書選別時の重点観点を自由記述（任意）。</source>
+        <translation>Free-form focus areas for design-document triage (optional).</translation>
+    </message>
+</context>
+<context>
     <name>_C1Basic</name>
     <message>
-        <location filename="../page_options.py" line="528"/>
+        <location filename="../page_options.py" line="783"/>
         <source>利用できるモデルの取得</source>
         <translation>Fetch available models</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="530"/>
+        <location filename="../page_options.py" line="785"/>
         <source>利用できるモデル一覧を取得しキャッシュへ保存します。</source>
         <translation>Fetch the list of available models and cache it.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="548"/>
+        <location filename="../page_options.py" line="803"/>
         <source>使用するモデル</source>
         <translation>Model to use</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="550"/>
+        <location filename="../page_options.py" line="805"/>
         <source>使用するモデル名（既定: Auto）。「Auto」を指定すると GitHub が最適モデルを自動選択します。</source>
         <translation>Model name to use (default: Auto). When &quot;Auto&quot; is specified, GitHub picks the optimal model automatically.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="569"/>
+        <location filename="../page_options.py" line="824"/>
         <source>コンテキスト階層 (context_tier)</source>
-        <translation type="unfinished"></translation>
+        <translation>Context tier (context_tier)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="571"/>
+        <location filename="../page_options.py" line="826"/>
         <source>モデルのコンテキスト階層を選択します。long_context は対応モデルでロングコンテキストを有効化します（既定: long_context）。</source>
-        <translation type="unfinished"></translation>
+        <translation>Selects the context tier of the model. long_context enables long context on supported models (default: long_context).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="644"/>
+        <location filename="../page_options.py" line="836"/>
+        <source>自動判定に従う</source>
+        <translation>Follow automatic detection</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="837"/>
+        <source>使用する</source>
+        <translation>Use</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="838"/>
+        <source>使用しない</source>
+        <translation>Do not use</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="840"/>
+        <source>Foundry Toolbox: tool search</source>
+        <translation>Foundry Toolbox: tool search</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="842"/>
+        <source>Tool 定義を毎ターン全件渡さず、モデルに検索させます。Tool が 15 を超えるとトークンと選択精度の両方が劣化するため、既定の「自動判定に従う」では総数 15 超で有効化します。</source>
+        <translation>Lets the model search tool definitions instead of passing all of them every turn. Because more than 15 tools degrade both token usage and selection accuracy, the default &quot;Follow automatic detection&quot; enables it when the total exceeds 15.</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="919"/>
         <source>run-id タイムゾーン</source>
-        <translation type="unfinished"></translation>
+        <translation>run-id time zone</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="646"/>
+        <location filename="../page_options.py" line="921"/>
         <source>`work/run/&lt;run-id&gt;/` の &lt;run-id&gt; 内タイムスタンプに使うタイムゾーン（既定: Asia/Tokyo / JST）。 環境変数 HVE_RUN_ID_TZ が設定されていればそちらが優先されます。</source>
-        <translation type="unfinished"></translation>
+        <translation>Time zone used for the timestamp inside &lt;run-id&gt; of `work/run/&lt;run-id&gt;/` (default: Asia/Tokyo / JST). The HVE_RUN_ID_TZ environment variable takes precedence when it is set.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="657"/>
+        <location filename="../page_options.py" line="932"/>
         <source>並列実行上限</source>
-        <translation type="unfinished">Max parallelism</translation>
+        <translation>Parallel execution limit</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="658"/>
+        <location filename="../page_options.py" line="933"/>
         <source>同時に実行する Custom Agent の上限数（既定: 15）。</source>
-        <translation type="unfinished">Maximum number of Custom Agents to run concurrently (default: 15).</translation>
+        <translation>Maximum number of Custom Agents to run concurrently (default: 15).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="668"/>
+        <location filename="../page_options.py" line="943"/>
         <source>idle タイムアウト（秒）</source>
-        <translation type="unfinished">Idle timeout (seconds)</translation>
+        <translation>Idle timeout (seconds)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="669"/>
+        <location filename="../page_options.py" line="944"/>
         <source>アイドル状態からのタイムアウト秒数（既定: 21600 = 6 時間）。</source>
-        <translation type="unfinished">Timeout in seconds from idle state (default: 21600 = 6 hours).</translation>
+        <translation>Timeout in seconds from an idle state (default: 21600 = 6 hours).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="678"/>
+        <location filename="../page_options.py" line="953"/>
         <source>Code Review Agent 完了待ちタイムアウト（秒）</source>
-        <translation type="unfinished">Code Review Agent completion timeout (seconds)</translation>
+        <translation>Code Review Agent completion timeout (seconds)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="679"/>
+        <location filename="../page_options.py" line="954"/>
         <source>Code Review Agent レビュー完了待ちタイムアウト秒数（既定: 7200 = 2 時間）。</source>
-        <translation type="unfinished">Timeout in seconds waiting for the Code Review Agent to complete (default: 7200 = 2 hours).</translation>
+        <translation>Timeout in seconds waiting for the Code Review Agent to finish (default: 7200 = 2 hours).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="686"/>
+        <location filename="../page_options.py" line="961"/>
         <source>ダーク</source>
-        <translation type="unfinished">Dark</translation>
+        <translation>Dark</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="687"/>
+        <location filename="../page_options.py" line="962"/>
         <source>ライト</source>
-        <translation type="unfinished">Light</translation>
+        <translation>Light</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="690"/>
+        <location filename="../page_options.py" line="965"/>
         <source>表示テーマ</source>
-        <translation type="unfinished"></translation>
+        <translation>Display theme</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="692"/>
+        <location filename="../page_options.py" line="967"/>
         <source>GUI 全画面の配色を選択します（ダーク / ライト、既定: ライト）。設定変更は即時、すべてのウィンドウに反映されます。</source>
-        <translation type="unfinished"></translation>
+        <translation>Selects the color scheme of the whole GUI (dark / light, default: light). Changes are applied to every window immediately.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="701"/>
+        <location filename="../page_options.py" line="976"/>
         <source>（未指定）</source>
-        <translation type="unfinished">(unspecified)</translation>
+        <translation>(Unspecified)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="707"/>
+        <location filename="../page_options.py" line="982"/>
         <source>コンソール出力レベル</source>
-        <translation type="unfinished">Console output level</translation>
+        <translation>Console output level</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="709"/>
+        <location filename="../page_options.py" line="984"/>
         <source>quiet (エラーのみ) / compact (重要イベントのみ、CLI 既定) / normal (compact + intent/subagent) / verbose (全詳細)。</source>
-        <translation type="unfinished"></translation>
+        <translation>quiet (errors only) / compact (important events only, CLI default) / normal (compact + intent/subagent) / verbose (full detail).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="717"/>
+        <location filename="../page_options.py" line="992"/>
         <source>残す (keep, 既定)</source>
-        <translation type="unfinished"></translation>
+        <translation>Keep (keep, default)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="718"/>
+        <location filename="../page_options.py" line="993"/>
         <source>ZIP 化して退避 (archive)</source>
-        <translation type="unfinished"></translation>
+        <translation>Archive as ZIP (archive)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="719"/>
+        <location filename="../page_options.py" line="994"/>
         <source>削除 (purge)</source>
-        <translation type="unfinished"></translation>
+        <translation>Delete (purge)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="721"/>
+        <location filename="../page_options.py" line="996"/>
         <source>GUI セッション作業ディレクトリの後処理</source>
-        <translation type="unfinished"></translation>
+        <translation>Post-processing of the GUI session working directory</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="723"/>
+        <location filename="../page_options.py" line="998"/>
         <source>GUI 終了時に work/run/&lt;session_run_id&gt;/ をどう扱うかを選択します。 keep: そのまま残す（デバッグ用、既定）。 archive: work/archive/&lt;id&gt;.zip に圧縮して元 dir を削除。 purge: 元 dir を削除。 設定変更は次回 GUI 起動時から適用されます。</source>
-        <translation type="unfinished"></translation>
+        <translation>Selects how work/run/&lt;session_run_id&gt;/ is handled when the GUI exits. keep: leave it as is (for debugging, default). archive: compress it into work/archive/&lt;id&gt;.zip and delete the original directory. purge: delete the original directory. The change applies from the next GUI start.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="760"/>
-        <source>モデルがサポートする reasoning effort 値（SDK から取得）。Auto モデルおよび reasoning effort 非対応モデルでは選択できません。</source>
-        <translation type="unfinished"></translation>
+        <location filename="../page_options.py" line="1010"/>
+        <source>全 Custom Agent prompt の末尾に追記</source>
+        <translation>Appended to the end of every Custom Agent prompt</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="768"/>
-        <source>Effort</source>
-        <translation type="unfinished"></translation>
+        <location filename="../page_options.py" line="1012"/>
+        <source>追加プロンプト</source>
+        <translation>Additional prompt</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="779"/>
-        <source>GitHub Copilot API の token_prices より計算した USD/1M tokens 単価。In=入力 / Out=出力 / Cache=キャッシュ。モデル単位で Effort 依存せず。</source>
-        <translation type="unfinished"></translation>
+        <location filename="../page_options.py" line="1013"/>
+        <source>全 Custom Agent prompt の末尾に追記する文字列（省略可）。</source>
+        <translation>Text appended to the end of every Custom Agent prompt (optional).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="813"/>
+        <location filename="../page_options.py" line="1022"/>
+        <source>コンテキスト最大文字数</source>
+        <translation>Max context characters</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1024"/>
+        <source>各フェーズで注入するコンテキストの最大文字数。0 のとき SDKConfig 既定値 20,000 を使用。</source>
+        <translation>Maximum number of characters of context injected in each phase. 0 uses the SDKConfig default of 20,000.</translation>
+    </message>
+    <message>
         <source>（上の「使用するモデル」を継承）</source>
-        <translation>(Inherit &quot;Model to use&quot; above)</translation>
+        <translation type="vanished">(Inherit &quot;Model to use&quot; above)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="851"/>
-        <source>（モデル設定を継承）</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="587"/>
+        <location filename="../page_options.py" line="862"/>
         <source>レビュー用モデル</source>
         <translation>Review model</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="589"/>
+        <location filename="../page_options.py" line="864"/>
         <source>敵対的レビュー（レビュー自動投入）および Code Review Agent（ローカルでコードレビュー実行）で使用するモデル。未指定時は上の「使用するモデル」と同じになります。</source>
         <translation>Model used for adversarial review (auto-injected review) and the Code Review Agent (local code review). If unspecified, falls back to &quot;Model to use&quot; above.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="608"/>
+        <location filename="../page_options.py" line="883"/>
         <source>QA 用モデル</source>
         <translation>QA model</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="610"/>
+        <location filename="../page_options.py" line="885"/>
         <source>QA 質問票生成（QA 自動投入）で使用するモデル。未指定時は上の「使用するモデル」と同じになります。</source>
         <translation>Model used for QA questionnaire generation (auto-injected QA). If unspecified, falls back to &quot;Model to use&quot; above.</translation>
     </message>
@@ -2115,44 +2835,58 @@ The workflow has been stopped. Please re-authenticate.</translation>
 <context>
     <name>_C3AutoPrompt</name>
     <message>
-        <location filename="../page_options.py" line="981"/>
-        <location filename="../page_options.py" line="1014"/>
-        <location filename="../page_options.py" line="1021"/>
-        <location filename="../page_options.py" line="1032"/>
         <source>有効化</source>
-        <translation>Enable</translation>
+        <translation type="vanished">Enable</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="983"/>
         <source>QA 自動投入</source>
-        <translation>QA auto-injection</translation>
+        <translation type="vanished">QA auto-injection</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="984"/>
+        <source>AKM 用モデル</source>
+        <translation type="vanished">AKM model</translation>
+    </message>
+    <message>
+        <source>AKM 用コンテキスト階層</source>
+        <translation type="vanished">AKM context tier</translation>
+    </message>
+    <message>
+        <source>（「使用するモデル」を継承）</source>
+        <translation type="vanished">(Inherit from &quot;Model to use&quot;)</translation>
+    </message>
+    <message>
+        <source>（「コンテキスト階層」を継承）</source>
+        <translation type="vanished">(Inherit from &quot;Context tier&quot;)</translation>
+    </message>
+    <message>
+        <source>QA 回答を knowledge/ へ同期する AKM のバックグラウンド実行で使用するモデル。未指定時は設定画面の「使用するモデル」を継承します。「QA 自動投入」が無効のときは使用されません。</source>
+        <translation type="vanished">Model used by the background AKM run that syncs QA answers into knowledge/. When left unset, it inherits &quot;Model to use&quot; from the settings window. It is unused while &quot;QA auto-injection&quot; is disabled.</translation>
+    </message>
+    <message>
+        <source>AKM のバックグラウンド実行で使用するコンテキスト階層。未指定時は設定画面の「コンテキスト階層 (context_tier)」を継承します。</source>
+        <translation type="vanished">Context tier used by the background AKM run. When left unset, it inherits &quot;Context tier (context_tier)&quot; from the settings window.</translation>
+    </message>
+    <message>
         <source>QA 質問票を自動的に投入します（既定: 無効）。</source>
-        <translation>Automatically inject QA questionnaires (default: disabled).</translation>
+        <translation type="vanished">Automatically inject QA questionnaires (default: disabled).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="992"/>
         <source>Autopilot (全自動)</source>
-        <translation>Autopilot (fully automatic)</translation>
+        <translation type="vanished">Autopilot (fully automatic)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="993"/>
         <source>ユーザー回答</source>
-        <translation>User answer</translation>
+        <translation type="vanished">User answer</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="996"/>
         <source>QA 回答モード</source>
-        <translation>QA answer mode</translation>
+        <translation type="vanished">QA answer mode</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="999"/>
         <source>Autopilot: AI が作成した既定回答を全て自動採用してメインタスクへ適用します。
 ユーザー回答: AI が作成した質問と既定回答を GUI ダイアログに表示し、ユーザーが回答を入力してから Submit するとメインタスクへ適用します。
 「QA 自動投入」が無効のときは設定値は無視されます（既定: Autopilot）。</source>
-        <translation>Autopilot: Automatically adopt all AI-generated default answers and apply them to the main task.
+        <translation type="vanished">Autopilot: Automatically adopt all AI-generated default answers and apply them to the main task.
 User answer: Show AI-generated questions and default answers in a GUI dialog; answers are applied to the main task after the user fills them in and clicks Submit.
 Ignored when &quot;QA auto-injection&quot; is disabled (default: Autopilot).</translation>
     </message>
@@ -2161,79 +2895,36 @@ Ignored when &quot;QA auto-injection&quot; is disabled (default: Autopilot).</tr
         <translation type="obsolete">Enable self-improvement loop</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1042"/>
-        <source>自己改善ループ</source>
-        <translation type="unfinished"></translation>
+        <source>有効にする</source>
+        <translation type="vanished">Enable</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1044"/>
-        <source>継承時はAAG/AAGDで既定ON、その他は既定設定を使用します。明示OFFは --no-self-improve として既定ONや環境変数より優先します。</source>
-        <translation type="unfinished"></translation>
+        <source>無効にする</source>
+        <translation type="vanished">Disable</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1055"/>
-        <source>自己改善 最大繰り返し回数</source>
-        <translation type="unfinished"></translation>
+        <source>実行前 QA 質問票を自動投入します。有効にすると、回答済み QA を保存・検証した後、Knowledge Management 以外のワークフローでは AKM への差分同期をバックグラウンドで起動します（メインタスクは完了を待ちません）。</source>
+        <translation type="vanished">Automatically injects the pre-execution QA questionnaire. When enabled, the answered QA is saved and verified, and workflows other than Knowledge Management then start an incremental AKM sync in the background (the main task does not wait for it).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1056"/>
-        <source>スキャン→改善→検証を繰り返す最大回数（既定: 3）。</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="1061"/>
-        <source>例: src/  hve/  空=リポジトリ全体</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="1063"/>
-        <source>自己改善 対象パス</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="1064"/>
-        <source>対象パス（空=リポジトリ全体）。</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="1070"/>
-        <source>例: テスト失敗を 0 件にし lint エラーを解消する</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="1072"/>
-        <source>自己改善 ゴール説明</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="1073"/>
-        <source>ゴール説明（省略可 → ワークフロー種別から自動設定）。</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../page_options.py" line="1089"/>
         <source>全 Custom Agent prompt の末尾に追記</source>
-        <translation type="unfinished">Append to the end of every Custom Agent prompt</translation>
+        <translation type="obsolete">Append to the end of every Custom Agent prompt</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1091"/>
         <source>追加プロンプト</source>
-        <translation type="unfinished">Additional prompt</translation>
+        <translation type="obsolete">Additional prompt</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1092"/>
         <source>全 Custom Agent prompt の末尾に追記する文字列（省略可）。</source>
-        <translation type="unfinished">String appended to the end of every Custom Agent prompt (optional).</translation>
+        <translation type="obsolete">String appended to the end of every Custom Agent prompt (optional).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1101"/>
         <source>コンテキスト最大文字数</source>
-        <translation type="unfinished">Context max characters</translation>
+        <translation type="obsolete">Context max characters</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1103"/>
         <source>各フェーズで注入するコンテキストの最大文字数。0 のとき SDKConfig 既定値 20,000 を使用。</source>
-        <translation type="unfinished">Maximum number of characters injected as context per phase. When 0, the SDKConfig default of 20,000 is used.</translation>
+        <translation type="obsolete">Maximum number of characters injected as context per phase. When 0, the SDKConfig default of 20,000 is used.</translation>
     </message>
     <message>
         <source>TTY 判定をバイパスして対話モード強制</source>
@@ -2244,195 +2935,189 @@ Ignored when &quot;QA auto-injection&quot; is disabled (default: Autopilot).</tr
         <translation type="vanished">Bypass the TTY check for QA answer input and force interactive mode. Use when stdin is treated as non-TTY (e.g. in IDE terminals) (default: disabled).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1016"/>
         <source>レビュー自動投入</source>
-        <translation>Review auto-injection</translation>
+        <translation type="vanished">Review auto-injection</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1017"/>
         <source>Review を自動的に投入します（既定: 無効）。</source>
-        <translation>Automatically inject Review (default: disabled).</translation>
+        <translation type="vanished">Automatically inject Review (default: disabled).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1023"/>
         <source>ローカルでコードレビュー実行</source>
-        <translation>Run code review locally</translation>
+        <translation type="vanished">Run code review locally</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1025"/>
         <source>Copilot CLI SDK でローカルにコードレビューを実行します。git diff を使用して差分を取得し、ローカルセッションでレビュー。GH_TOKEN / リポジトリ指定は不要（既定: 無効）。</source>
-        <translation>Run code review locally via the Copilot CLI SDK. Uses git diff to obtain changes and runs the review in a local session. GH_TOKEN / repository specification is not required (default: disabled).</translation>
+        <translation type="vanished">Run code review locally via the Copilot CLI SDK. Uses git diff to obtain changes and runs the review in a local session. GH_TOKEN / repository specification is not required (default: disabled).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1034"/>
         <source>コードレビュー修正プランを自動承認</source>
-        <translation>Auto-approve code review fix plans</translation>
+        <translation type="vanished">Auto-approve code review fix plans</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1035"/>
         <source>Code Review Agent の修正プランを全て自動承認します（既定: 無効）。</source>
-        <translation>Auto-approve all fix plans from the Code Review Agent (default: disabled).</translation>
+        <translation type="vanished">Auto-approve all fix plans from the Code Review Agent (default: disabled).</translation>
     </message>
 </context>
 <context>
     <name>_C4WorkIQ</name>
     <message>
-        <location filename="../page_options.py" line="1171"/>
+        <location filename="../page_options.py" line="1522"/>
         <source>Work IQ 経由の M365 データ参照設定。</source>
         <translation>Work IQ M365 data reference settings.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1179"/>
+        <location filename="../page_options.py" line="1531"/>
         <source>Work IQ 認証確認</source>
-        <translation type="unfinished"></translation>
+        <translation>Check Work IQ authentication</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1181"/>
+        <location filename="../page_options.py" line="1533"/>
         <source>EULA 承認と Microsoft 365 認証を確認します。</source>
-        <translation type="unfinished"></translation>
+        <translation>Checks EULA acceptance and Microsoft 365 authentication.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1184"/>
+        <location filename="../page_options.py" line="1536"/>
         <source>未確認</source>
-        <translation type="unfinished"></translation>
+        <translation>Unverified</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1190"/>
-        <location filename="../page_options.py" line="1232"/>
+        <location filename="../page_options.py" line="1543"/>
+        <location filename="../page_options.py" line="1585"/>
         <source>有効化</source>
         <translation>Enable</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1192"/>
+        <location filename="../page_options.py" line="1545"/>
         <source>Work IQ を有効化</source>
         <translation>Enable Work IQ</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1194"/>
+        <location filename="../page_options.py" line="1547"/>
         <source>Work IQ 経由の M365 データ（メール・チャット・会議・ファイル）参照を有効にします。QA フェーズと、AKM 実行後レビューの後方互換トリガーとしても扱われます（既定: 無効、@microsoft/workiq インストール必須）。</source>
         <translation>Enable references to M365 data (mail / chat / meetings / files) via Work IQ. Also acts as a backward-compatible trigger for the QA phase and the post-AKM review (default: disabled; @microsoft/workiq must be installed).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1203"/>
+        <location filename="../page_options.py" line="1556"/>
         <source>AKM 実行後レビューで Work IQ 検証</source>
         <translation>Use Work IQ verification in post-AKM review</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1205"/>
+        <location filename="../page_options.py" line="1558"/>
         <source>AKM 実行後レビューで Work IQ 検証を有効/無効化します。未指定時は上の「Work IQ を有効化」または WORKIQ_ENABLED 環境変数を継承。</source>
         <translation>Enable/disable Work IQ verification in the post-AKM review. If unspecified, inherits from &quot;Enable Work IQ&quot; above or the WORKIQ_ENABLED environment variable.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1213"/>
+        <location filename="../page_options.py" line="1566"/>
         <source>AKM 入力ソースとして Work IQ</source>
         <translation>Work IQ as AKM input source</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1215"/>
+        <location filename="../page_options.py" line="1568"/>
         <source>AKM の入力ソースとして Work IQ を有効/無効化します。未指定時は取り込みソースに &apos;workiq&apos; が含まれるかで自動判定。</source>
         <translation>Enable/disable Work IQ as an AKM input source. If unspecified, decided automatically by whether the ingest source list contains &apos;workiq&apos;.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1222"/>
+        <location filename="../page_options.py" line="1575"/>
         <source>例: D01,D04</source>
         <translation>e.g. D01,D04</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1224"/>
+        <location filename="../page_options.py" line="1577"/>
         <source>Work IQ 取り込み対象 Dxx</source>
         <translation>Work IQ ingest targets (Dxx)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1226"/>
+        <location filename="../page_options.py" line="1579"/>
         <source>AKM Work IQ 取り込み対象 Dxx をカンマ区切りで指定（例: D01,D04）。省略時は全 D01〜D21 を対象。</source>
         <translation>Specify AKM Work IQ ingest targets (Dxx) as a comma-separated list (e.g. D01,D04). If omitted: all of D01–D21.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1234"/>
+        <location filename="../page_options.py" line="1587"/>
         <source>Work IQ 回答ドラフト作成</source>
         <translation>Create Work IQ answer drafts</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1235"/>
+        <location filename="../page_options.py" line="1588"/>
         <source>QA フェーズで質問ごとに Work IQ 回答ドラフトを生成します（既定: 無効）。</source>
         <translation>Generate a Work IQ answer draft per question during the QA phase (default: disabled).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1240"/>
+        <location filename="../page_options.py" line="1593"/>
         <source>QA ドラフト出力フォルダを選択</source>
         <translation>Select QA draft output folder</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1242"/>
+        <location filename="../page_options.py" line="1595"/>
         <source>例: qa</source>
         <translation>e.g. qa</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1244"/>
+        <location filename="../page_options.py" line="1597"/>
         <source>Work IQ 補助レポート出力先</source>
         <translation>Work IQ auxiliary report output directory</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1246"/>
+        <location filename="../page_options.py" line="1599"/>
         <source>Work IQ 補助レポートの出力先ディレクトリ。未指定時: 設定/環境変数、最終既定値は &apos;qa&apos;。</source>
         <translation>Output directory for Work IQ auxiliary reports. If unspecified: settings / environment variable; the final default is &apos;qa&apos;.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1277"/>
+        <location filename="../page_options.py" line="1630"/>
         <source>Original Docs レビュー用プロンプト上書き（互換用）</source>
-        <translation type="unfinished"></translation>
+        <translation>Override the Original Docs review prompt (compatibility)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1292"/>
+        <location filename="../page_options.py" line="1645"/>
         <source>Work IQ: QA 質問ごとのクエリタイムアウト秒数（数値のみ）。未入力または 0 のとき環境変数/設定（既定 1200 秒 = 20 分）を使用。</source>
-        <translation type="unfinished"></translation>
+        <translation>Work IQ: query timeout in seconds per QA question (numbers only). When empty or 0, the environment variable / setting is used (default 1200 seconds = 20 minutes).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1303"/>
+        <location filename="../page_options.py" line="1656"/>
         <source>（既定 300 秒 = 5 分を使用）</source>
-        <translation type="unfinished"></translation>
+        <translation>(Uses the default of 300 seconds = 5 minutes)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1306"/>
+        <location filename="../page_options.py" line="1659"/>
         <source>Work IQ Request Timeout（秒）</source>
-        <translation type="unfinished"></translation>
+        <translation>Work IQ Request Timeout (seconds)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1308"/>
+        <location filename="../page_options.py" line="1661"/>
         <source>Work IQ MCP サーバーへのツール呼び出し 1 回あたりのタイムアウト秒数（数値のみ）。Copilot SDK の MCP クライアントが発行する -32001 (Request timed out) を防ぐための設定。未入力または 0 のとき環境変数 WORKIQ_REQUEST_TIMEOUT / 設定（既定 300 秒 = 5 分）を使用。</source>
-        <translation type="unfinished"></translation>
+        <translation>Timeout in seconds for a single tool call to the Work IQ MCP server (numbers only). It prevents -32001 (Request timed out) raised by the MCP client of the Copilot SDK. When empty or 0, the WORKIQ_REQUEST_TIMEOUT environment variable / setting is used (default 300 seconds = 5 minutes).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1342"/>
+        <location filename="../page_options.py" line="1695"/>
         <source>確認中...</source>
-        <translation type="unfinished"></translation>
+        <translation>Checking...</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1371"/>
-        <location filename="../page_options.py" line="1383"/>
+        <location filename="../page_options.py" line="1724"/>
+        <location filename="../page_options.py" line="1736"/>
         <source>失敗</source>
-        <translation type="unfinished">Failed</translation>
+        <translation>Failed</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1374"/>
-        <location filename="../page_options.py" line="1386"/>
+        <location filename="../page_options.py" line="1727"/>
+        <location filename="../page_options.py" line="1739"/>
         <source>Work IQ 認証確認失敗</source>
-        <translation type="unfinished"></translation>
+        <translation>Work IQ authentication check failed</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1375"/>
+        <location filename="../page_options.py" line="1728"/>
         <source>Work IQ 認証確認に失敗しました: {err}</source>
-        <translation type="unfinished"></translation>
+        <translation>Work IQ authentication check failed: {err}</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1381"/>
+        <location filename="../page_options.py" line="1734"/>
         <source>確認済み</source>
-        <translation type="unfinished"></translation>
+        <translation>Verified</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1387"/>
+        <location filename="../page_options.py" line="1740"/>
         <source>Work IQ 認証確認に失敗しました。`python -m hve workiq-doctor` で診断してください。</source>
-        <translation type="unfinished"></translation>
+        <translation>The Work IQ authentication check failed. Diagnose it with `python -m hve workiq-doctor`.</translation>
     </message>
     <message>
         <source>Entra テナント ID</source>
@@ -2443,22 +3128,22 @@ Ignored when &quot;QA auto-injection&quot; is disabled (default: Autopilot).</tr
         <translation type="vanished">Entra tenant ID for Work IQ (if omitted: common).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1258"/>
+        <location filename="../page_options.py" line="1611"/>
         <source>QA 用プロンプト上書き</source>
         <translation>Override QA prompt</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1260"/>
+        <location filename="../page_options.py" line="1613"/>
         <source>Work IQ の QA 用プロンプトを上書きします（{target_content} プレースホルダ使用可。省略時はデフォルトプロンプト）。</source>
         <translation>Override the Work IQ QA prompt (the {target_content} placeholder is supported; default prompt is used if omitted).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1269"/>
+        <location filename="../page_options.py" line="1622"/>
         <source>KM 用プロンプト上書き</source>
         <translation>Override KM prompt</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1270"/>
+        <location filename="../page_options.py" line="1623"/>
         <source>Work IQ の KM 用プロンプトを上書きします（AKM 実行後レビューで使用）。</source>
         <translation>Override the Work IQ KM prompt (used by the post-AKM review).</translation>
     </message>
@@ -2467,17 +3152,17 @@ Ignored when &quot;QA auto-injection&quot; is disabled (default: Autopilot).</tr
         <translation type="vanished">Override review prompt (compatibility)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1278"/>
+        <location filename="../page_options.py" line="1631"/>
         <source>Work IQ の Original Docs レビュー用プロンプトを上書きします（互換用）。</source>
         <translation>Override the Work IQ Original Docs review prompt (compatibility).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1287"/>
+        <location filename="../page_options.py" line="1640"/>
         <source>（既定 1200 秒 = 20 分を使用）</source>
-        <translation type="unfinished"></translation>
+        <translation>(Uses the default of 1200 seconds = 20 minutes)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1290"/>
+        <location filename="../page_options.py" line="1643"/>
         <source>QA 質問ごとのタイムアウト（秒）</source>
         <translation>Timeout per QA question (seconds)</translation>
     </message>
@@ -2497,284 +3182,284 @@ Ignored when &quot;QA auto-injection&quot; is disabled (default: Autopilot).</tr
         <translation type="vanished">After detecting merge completion (auto-approve-and-merge) on github.com, deletes the local work branch created in this run (default: enabled). Works only when PR Auto Approve &amp; Auto-merge is enabled.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1528"/>
-        <location filename="../page_options.py" line="1538"/>
-        <location filename="../page_options.py" line="1626"/>
+        <location filename="../page_options.py" line="1882"/>
+        <location filename="../page_options.py" line="1892"/>
+        <location filename="../page_options.py" line="1982"/>
         <source>有効化</source>
         <translation>Enable</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1530"/>
+        <location filename="../page_options.py" line="1884"/>
         <source>GitHub Issue を作成</source>
         <translation>Create GitHub Issue</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1532"/>
+        <location filename="../page_options.py" line="1886"/>
         <source>GitHub Issue を作成します。新規ブランチと PR が自動的に作成されます（リポジトリ指定と GH_TOKEN が必要、既定: 作成しない）。</source>
         <translation>Create a GitHub Issue. A new branch and PR are created automatically (requires repository and GH_TOKEN; default: do not create).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1540"/>
+        <location filename="../page_options.py" line="1894"/>
         <source>GitHub Pull Request を作成</source>
         <translation>Create GitHub Pull Request</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1542"/>
+        <location filename="../page_options.py" line="1896"/>
         <source>ローカル実行後に GitHub PR を作成します。ベースブランチから新ブランチを作成して作業し、完了後に PR をリクエスト。⚠ PR 作成のみで自動マージは行いません（既定: 作成しない）。</source>
         <translation>Create a GitHub PR after the local run. Creates a new branch from the base branch, performs the work, and requests a PR on completion. ⚠ Only the PR is created; auto-merge is not performed (default: do not create).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1550"/>
+        <location filename="../page_options.py" line="1904"/>
         <source>例: docs/ legacy/</source>
         <translation>e.g. docs/ legacy/</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1552"/>
+        <location filename="../page_options.py" line="1906"/>
         <source>git add 除外パス</source>
         <translation>git add exclude paths</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1554"/>
+        <location filename="../page_options.py" line="1908"/>
         <source>git add 時に除外するパス（スペース区切りで複数指定可）。未指定時は config のデフォルト値を使用。</source>
         <translation>Paths to exclude during git add (space-separated for multiple values). If unspecified, the default from config is used.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1565"/>
+        <location filename="../page_options.py" line="1919"/>
         <source>リポジトリ (owner/repo)</source>
         <translation>Repository (owner/repo)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1566"/>
+        <location filename="../page_options.py" line="1920"/>
         <source>リポジトリ（owner/repo 形式）。REPO 環境変数からも取得可能。</source>
         <translation>Repository (owner/repo format). Can also be supplied via the REPO environment variable.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1570"/>
+        <location filename="../page_options.py" line="1924"/>
         <source>リポジトリ取得</source>
-        <translation type="unfinished"></translation>
+        <translation>Fetch repository</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1572"/>
+        <location filename="../page_options.py" line="1926"/>
         <source>ログイン済み GitHub アカウントと現在の git remote から owner/repo を取得・検証します。</source>
-        <translation type="unfinished"></translation>
+        <translation>Retrieves and verifies owner/repo from the signed-in GitHub account and the current git remote.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1586"/>
+        <location filename="../page_options.py" line="1941"/>
         <source>Issue タイトル（上書き）</source>
         <translation>Issue title (override)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1588"/>
+        <location filename="../page_options.py" line="1943"/>
         <source>Issue 作成時の Root Issue タイトルを上書きします（省略可）。未指定時は &apos;[PREFIX] ワークフロー名&apos; を使用。</source>
         <translation>Override the Root Issue title at creation (optional). If unspecified, &apos;[PREFIX] workflow-name&apos; is used.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1641"/>
+        <location filename="../page_options.py" line="1997"/>
         <source>Fleet mode</source>
-        <translation type="unfinished"></translation>
+        <translation>Fleet mode</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1643"/>
+        <location filename="../page_options.py" line="1999"/>
         <source>ON にすると複数 Step の DAG wave を Copilot SDK Fleet mode に委譲します（既定: OFF）。 SPLIT_REQUIRED / subissues.md ではなく workflow-level fan-out が対象です。 未指定の場合は環境変数/CLI 設定を継承します。</source>
-        <translation type="unfinished"></translation>
+        <translation>When ON, DAG waves spanning multiple Steps are delegated to Copilot SDK Fleet mode (default: OFF). The target is workflow-level fan-out, not SPLIT_REQUIRED / subissues.md. When unspecified, the environment variable / CLI setting is inherited.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1651"/>
+        <location filename="../page_options.py" line="2007"/>
         <source>Cloud Session を使用する</source>
-        <translation type="unfinished"></translation>
+        <translation>Use Cloud Session</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1653"/>
+        <location filename="../page_options.py" line="2009"/>
         <source>Cloud Session</source>
-        <translation type="unfinished"></translation>
+        <translation>Cloud Session</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1664"/>
+        <location filename="../page_options.py" line="2020"/>
         <source>Cloud repository branch</source>
-        <translation type="unfinished"></translation>
+        <translation>Cloud repository branch</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1665"/>
+        <location filename="../page_options.py" line="2021"/>
         <source>Cloud Session の repository.branch。空欄時はベースブランチを使用します。</source>
-        <translation type="unfinished"></translation>
+        <translation>repository.branch of the Cloud Session. When empty, the base branch is used.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1673"/>
+        <location filename="../page_options.py" line="2029"/>
         <source>Cloud Session 同時実行上限</source>
-        <translation type="unfinished"></translation>
+        <translation>Cloud Session concurrency limit</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1675"/>
+        <location filename="../page_options.py" line="2031"/>
         <source>1 プロセス内で同時に実行する Cloud Session の上限（既定: 5）。 ローカル orchestration の並列実行上限とは別に適用されます。</source>
-        <translation type="unfinished"></translation>
+        <translation>Maximum number of Cloud Sessions running concurrently in one process (default: 5). It is applied separately from the parallel execution limit of local orchestration.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1683"/>
+        <location filename="../page_options.py" line="2039"/>
         <source>Cloud integration ID</source>
-        <translation type="unfinished"></translation>
+        <translation>Cloud integration ID</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1684"/>
+        <location filename="../page_options.py" line="2040"/>
         <source>GITHUB_COPILOT_INTEGRATION_ID に渡す識別子。トークンや秘密情報は入力しないでください。</source>
-        <translation type="unfinished"></translation>
+        <translation>Identifier passed to GITHUB_COPILOT_INTEGRATION_ID. Do not enter tokens or secrets.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1690"/>
+        <location filename="../page_options.py" line="2046"/>
         <source>Mission Control base URL</source>
-        <translation type="unfinished"></translation>
+        <translation>Mission Control base URL</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1692"/>
+        <location filename="../page_options.py" line="2048"/>
         <source>COPILOT_MC_BASE_URL に渡す URL（GHES 用）。通常は空欄のままにします。 token、Basic 認証情報、署名付き query、API key は含めないでください。</source>
-        <translation type="unfinished"></translation>
+        <translation>URL passed to COPILOT_MC_BASE_URL (for GHES). Normally leave it empty. Do not include tokens, Basic authentication credentials, signed queries, or API keys.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1701"/>
-        <location filename="../page_options.py" line="1938"/>
+        <location filename="../page_options.py" line="2057"/>
+        <location filename="../page_options.py" line="2294"/>
         <source>Cloud Step 上書き JSON</source>
-        <translation type="unfinished"></translation>
+        <translation>Cloud Step override JSON</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1703"/>
+        <location filename="../page_options.py" line="2059"/>
         <source>Step ID を key、true/false を値にした JSON object。 true は Cloud Session 使用、false は使用しない、空欄は全体設定を継承します。 秘密情報は入力しないでください。通常は Step 選択画面から設定します。</source>
-        <translation type="unfinished"></translation>
+        <translation>A JSON object with Step IDs as keys and true/false as values. true uses Cloud Session, false does not, and an empty value inherits the global setting. Do not enter secrets. Normally configure it from the Step selection screen.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1713"/>
-        <location filename="../page_options.py" line="1942"/>
+        <location filename="../page_options.py" line="2069"/>
+        <location filename="../page_options.py" line="2298"/>
         <source>Cloud サブタスク上書き JSON</source>
-        <translation type="unfinished"></translation>
+        <translation>Cloud subtask override JSON</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1715"/>
+        <location filename="../page_options.py" line="2071"/>
         <source>pre_qa / review / sub_session などを key、true/false を値にした JSON object。 サブタスク上書きは Step 上書きより優先されます。秘密情報は入力しないでください。</source>
-        <translation type="unfinished"></translation>
+        <translation>A JSON object with keys such as pre_qa / review / sub_session and true/false as values. Subtask overrides take precedence over Step overrides. Do not enter secrets.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1729"/>
+        <location filename="../page_options.py" line="2085"/>
         <source>ログイン済みアカウントからリポジトリ情報を取得中...</source>
-        <translation type="unfinished"></translation>
+        <translation>Retrieving repository information from the signed-in account...</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1731"/>
+        <location filename="../page_options.py" line="2087"/>
         <source>リポジトリ情報を取得中...</source>
-        <translation type="unfinished"></translation>
+        <translation>Retrieving repository information...</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1791"/>
-        <location filename="../page_options.py" line="1808"/>
+        <location filename="../page_options.py" line="2147"/>
+        <location filename="../page_options.py" line="2164"/>
         <source>⚠ リポジトリ情報を取得できませんでした</source>
-        <translation type="unfinished"></translation>
+        <translation>⚠ Could not retrieve repository information</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1798"/>
+        <location filename="../page_options.py" line="2154"/>
         <source>⚠ 候補が複数あります。owner/repo を入力してください（候補: {n} 件）</source>
-        <translation type="unfinished"></translation>
+        <translation>⚠ There are multiple candidates. Enter owner/repo ({n} candidates)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1801"/>
+        <location filename="../page_options.py" line="2157"/>
         <source>⚠ リポジトリ候補を自動選択できませんでした</source>
-        <translation type="unfinished"></translation>
+        <translation>⚠ Could not select a repository candidate automatically</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1803"/>
+        <location filename="../page_options.py" line="2159"/>
         <source>⚠ 利用可能なリポジトリ候補が見つかりませんでした</source>
-        <translation type="unfinished"></translation>
+        <translation>⚠ No available repository candidate was found</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1822"/>
+        <location filename="../page_options.py" line="2178"/>
         <source>リポジトリ</source>
-        <translation type="unfinished"></translation>
+        <translation>Repository</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1825"/>
+        <location filename="../page_options.py" line="2181"/>
         <source>⚠ {repo} はアーカイブされています（権限: {perm}）</source>
-        <translation type="unfinished"></translation>
+        <translation>⚠ {repo} is archived (permission: {perm})</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1830"/>
+        <location filename="../page_options.py" line="2186"/>
         <source>⚠ {repo}: Issues が無効です（権限: {perm}）</source>
-        <translation type="unfinished"></translation>
+        <translation>⚠ {repo}: Issues are disabled (permission: {perm})</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1834"/>
+        <location filename="../page_options.py" line="2190"/>
         <source>✓ {repo} を取得しました（Issues: 有効 / 権限: {perm}）</source>
-        <translation type="unfinished"></translation>
+        <translation>✓ Retrieved {repo} (Issues: enabled / permission: {perm})</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1848"/>
+        <location filename="../page_options.py" line="2204"/>
         <source>⚠ リポジトリ (owner/repo) を入力してください</source>
-        <translation type="unfinished"></translation>
+        <translation>⚠ Enter a repository (owner/repo)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1852"/>
+        <location filename="../page_options.py" line="2208"/>
         <source>ブランチを取得中...</source>
-        <translation type="unfinished"></translation>
+        <translation>Retrieving branches...</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1787"/>
-        <location filename="../page_options.py" line="1881"/>
+        <location filename="../page_options.py" line="2143"/>
+        <location filename="../page_options.py" line="2237"/>
         <source>⚠ 取得失敗: {err}</source>
-        <translation type="unfinished"></translation>
+        <translation>⚠ Retrieval failed: {err}</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1655"/>
+        <location filename="../page_options.py" line="2011"/>
         <source>ON にすると Copilot SDK Cloud Sessions を使用します（既定: OFF）。 repository owner/name はリポジトリ (owner/repo) から補完します。 優先順位は サブタスク上書き &gt; Step 上書き &gt; この全体設定 です。</source>
-        <translation type="unfinished"></translation>
+        <translation>When ON, Copilot SDK Cloud Sessions are used (default: OFF). The repository owner/name is completed from the repository (owner/repo). The precedence is subtask override &gt; Step override &gt; this global setting.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1886"/>
+        <location filename="../page_options.py" line="2242"/>
         <source>ブランチが見つかりませんでした</source>
-        <translation type="unfinished"></translation>
+        <translation>No branch was found</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1890"/>
+        <location filename="../page_options.py" line="2246"/>
         <source>✓ {n} 件のブランチを取得</source>
-        <translation type="unfinished"></translation>
+        <translation>✓ Retrieved {n} branches</translation>
     </message>
     <message>
         <source>認証</source>
         <translation type="vanished">Authentication</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1527"/>
+        <location filename="../page_options.py" line="1881"/>
         <source>ソースコード管理</source>
         <translation>Source Code Management</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1561"/>
+        <location filename="../page_options.py" line="1915"/>
         <source>リポジトリ / Issue 設定</source>
         <translation>Repository / Issue Settings</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1599"/>
-        <location filename="../page_options.py" line="1604"/>
+        <location filename="../page_options.py" line="1954"/>
+        <location filename="../page_options.py" line="1959"/>
         <source>ベースブランチ</source>
         <translation>Base branch</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1606"/>
+        <location filename="../page_options.py" line="1961"/>
         <source>ベースブランチ（既定: main）。「ブランチ取得」でリポジトリのブランチを取得して候補表示します（GH_TOKEN が必要）。</source>
-        <translation type="unfinished"></translation>
+        <translation>Base branch (default: main). &quot;Fetch branches&quot; retrieves the repository branches and shows them as candidates (GH_TOKEN is required).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1613"/>
+        <location filename="../page_options.py" line="1968"/>
         <source>ブランチ取得</source>
-        <translation type="unfinished"></translation>
+        <translation>Fetch branches</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1625"/>
-        <location filename="../page_options.py" line="1628"/>
+        <location filename="../page_options.py" line="1981"/>
+        <location filename="../page_options.py" line="1984"/>
         <source>PR 自動 Approve &amp; Auto-merge</source>
         <translation>PR Auto Approve &amp; Auto-merge</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1629"/>
+        <location filename="../page_options.py" line="1985"/>
         <source>GitHub / Cloud 実行時に PR の自動 Approve &amp; Auto-merge を有効化します（既定: 無効）。</source>
         <translation>Enable PR auto Approve &amp; Auto-merge for GitHub / Cloud runs (default: disabled).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1637"/>
+        <location filename="../page_options.py" line="1993"/>
         <source>GitHub Copilot SDK 連携</source>
         <translation>GitHub Copilot SDK Integration</translation>
     </message>
@@ -2782,32 +3467,32 @@ Ignored when &quot;QA auto-injection&quot; is disabled (default: Autopilot).</tr
 <context>
     <name>_C6Output</name>
     <message>
-        <location filename="../page_options.py" line="1976"/>
-        <location filename="../page_options.py" line="1986"/>
-        <location filename="../page_options.py" line="1996"/>
-        <location filename="../page_options.py" line="2014"/>
-        <location filename="../page_options.py" line="2033"/>
-        <location filename="../page_options.py" line="2051"/>
+        <location filename="../page_options.py" line="2332"/>
+        <location filename="../page_options.py" line="2342"/>
+        <location filename="../page_options.py" line="2352"/>
+        <location filename="../page_options.py" line="2370"/>
+        <location filename="../page_options.py" line="2389"/>
+        <location filename="../page_options.py" line="2407"/>
         <source>有効化</source>
         <translation>Enable</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1978"/>
+        <location filename="../page_options.py" line="2334"/>
         <source>詳細出力</source>
         <translation>Verbose output</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1980"/>
+        <location filename="../page_options.py" line="2336"/>
         <source>詳細出力（下の「コンソール出力レベル」が verbose のときと同等。レベルが指定された場合はそちらが優先）。</source>
         <translation>Verbose output (equivalent to &quot;Console output level&quot; = verbose below; if a level is specified, the level wins).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1988"/>
+        <location filename="../page_options.py" line="2344"/>
         <source>出力抑制</source>
         <translation>Quiet output</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1990"/>
+        <location filename="../page_options.py" line="2346"/>
         <source>出力抑制（下の「コンソール出力レベル」が quiet のときと同等。レベルが指定された場合はそちらが優先）。</source>
         <translation>Quiet output (equivalent to &quot;Console output level&quot; = quiet below; if a level is specified, the level wins).</translation>
     </message>
@@ -2824,72 +3509,72 @@ Ignored when &quot;QA auto-injection&quot; is disabled (default: Autopilot).</tr
         <translation type="vanished">quiet (errors only) / compact (key events only; CLI default) / normal (compact + intent/subagent) / verbose (full details). This setting takes precedence. If unspecified, falls back to &quot;Verbose output&quot; / &quot;Quiet output&quot; above.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1998"/>
+        <location filename="../page_options.py" line="2354"/>
         <source>モデル応答ストリーム表示</source>
         <translation>Show model response stream</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1999"/>
+        <location filename="../page_options.py" line="2355"/>
         <source>モデル応答のトークンストリーム表示を有効化します（既定: 無効）。</source>
         <translation>Enable token-stream display for model responses (default: disabled).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2009"/>
+        <location filename="../page_options.py" line="2365"/>
         <source>Copilot CLI ログレベル</source>
         <translation>Copilot CLI log level</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2010"/>
+        <location filename="../page_options.py" line="2366"/>
         <source>Copilot CLI のログレベル: none / error / warning / info / debug / all（既定: error）。</source>
         <translation>Copilot CLI log level: none / error / warning / info / debug / all (default: error).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2016"/>
+        <location filename="../page_options.py" line="2372"/>
         <source>ANSI カラー出力を無効化</source>
         <translation>Disable ANSI color output</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2018"/>
+        <location filename="../page_options.py" line="2374"/>
         <source>ANSI カラー出力を無効化します（既定: 無効）。NO_COLOR 環境変数（no-color.org 規格）でも制御可能。</source>
         <translation>Disable ANSI color output (default: disabled). Can also be controlled via the NO_COLOR environment variable (no-color.org convention).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2026"/>
+        <location filename="../page_options.py" line="2382"/>
         <source>起動時バナー表示</source>
         <translation>Startup banner display</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2028"/>
+        <location filename="../page_options.py" line="2384"/>
         <source>起動時バナー表示を制御します（明示 ON: 表示、明示 OFF: 抑止、未指定: 既存の自動判定）。</source>
         <translation>Controls the startup banner (explicit ON: show, explicit OFF: suppress, unspecified: existing auto-detection).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2035"/>
+        <location filename="../page_options.py" line="2391"/>
         <source>スクリーンリーダー対応モード</source>
         <translation>Screen reader mode</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2036"/>
+        <location filename="../page_options.py" line="2392"/>
         <source>絵文字を日本語ラベルに置換し、スピナーを無効化します（既定: 無効）。</source>
         <translation>Replace emoji with Japanese labels and disable spinners (default: disabled).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2046"/>
+        <location filename="../page_options.py" line="2402"/>
         <source>タイムスタンプ表示位置</source>
         <translation>Timestamp position</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2047"/>
+        <location filename="../page_options.py" line="2403"/>
         <source>prefix=行頭（既定）/ suffix=行末（DIM）/ off=非表示。</source>
         <translation>prefix=line start (default) / suffix=line end (dimmed) / off=hidden.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2053"/>
+        <location filename="../page_options.py" line="2409"/>
         <source>DAG 完了サマリのみ出力</source>
         <translation>Output only the DAG completion summary</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2055"/>
+        <location filename="../page_options.py" line="2411"/>
         <source>DAG 完了時のサマリと各ステップの最終応答のみを出力します（CI/スクリプト連携用、既定: 無効）。</source>
         <translation>Output only the DAG completion summary and each step&apos;s final response (for CI / script integration; default: disabled).</translation>
     </message>
@@ -2933,67 +3618,67 @@ Ignored when &quot;QA auto-injection&quot; is disabled (default: Autopilot).</tr
         <translation type="vanished">MCP Server config JSON file path.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2086"/>
+        <location filename="../page_options.py" line="2442"/>
         <source>Copilot CLI 実行ファイルを選択</source>
         <translation>Select Copilot CLI executable</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2096"/>
+        <location filename="../page_options.py" line="2452"/>
         <source>MCP Server / Plugin を再列挙</source>
-        <translation type="unfinished"></translation>
+        <translation>Re-enumerate MCP Servers / Plugins</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2098"/>
+        <location filename="../page_options.py" line="2454"/>
         <source>`copilot mcp list --json` と `copilot plugin list` を実行して一覧を再取得します。</source>
-        <translation type="unfinished"></translation>
+        <translation>Runs `copilot mcp list --json` and `copilot plugin list` to re-fetch the lists.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2112"/>
+        <location filename="../page_options.py" line="2469"/>
         <source>登録済み MCP Server 一覧（実行で使用する場合は --mcp-config を指定）</source>
-        <translation type="unfinished"></translation>
+        <translation>Registered MCP Servers (specify --mcp-config to use them in a run)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2132"/>
+        <location filename="../page_options.py" line="2490"/>
         <source>Plugin 一覧（`copilot plugin list`）— Plugin は OAuth 認証不要（インストール時の GitHub 認証を利用）</source>
-        <translation type="unfinished"></translation>
+        <translation>Plugin list (`copilot plugin list`) — Plugins require no OAuth authentication (they use the GitHub authentication from installation)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2168"/>
+        <location filename="../page_options.py" line="2527"/>
         <source>MCP Server が登録されていません（`copilot mcp add` 後に「再列挙」ボタンを押してください）。</source>
-        <translation type="unfinished"></translation>
+        <translation>No MCP Server is registered (press the &quot;Re-enumerate&quot; button after `copilot mcp add`).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2183"/>
+        <location filename="../page_options.py" line="2543"/>
         <source>認証手順...</source>
-        <translation type="unfinished"></translation>
+        <translation>Authentication steps...</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2185"/>
+        <location filename="../page_options.py" line="2545"/>
         <source>OAuth を使う Remote MCP Server の再認証手順を表示します（ローカル stdio サーバーは認証不要）。</source>
-        <translation type="unfinished"></translation>
+        <translation>Shows the re-authentication steps for Remote MCP Servers that use OAuth (local stdio servers require no authentication).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2211"/>
+        <location filename="../page_options.py" line="2571"/>
         <source>Plugin が登録されていません（`copilot plugin install &lt;name&gt;` 後に再列挙してください）。</source>
-        <translation type="unfinished"></translation>
+        <translation>No Plugin is registered (re-enumerate after `copilot plugin install &lt;name&gt;`).</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2231"/>
+        <location filename="../page_options.py" line="2592"/>
         <source>列挙中...</source>
-        <translation type="unfinished"></translation>
+        <translation>Enumerating...</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2238"/>
+        <location filename="../page_options.py" line="2599"/>
         <source>完了</source>
-        <translation type="unfinished"></translation>
+        <translation>Done</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2253"/>
+        <location filename="../page_options.py" line="2614"/>
         <source>MCP Server 認証手順</source>
-        <translation type="unfinished"></translation>
+        <translation>MCP Server authentication steps</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2257"/>
+        <location filename="../page_options.py" line="2618"/>
         <source>MCP Server &apos;{name}&apos; の OAuth 再認証を行うには、ターミナルで以下を実行してください:
 
   1. `copilot` を起動（インタラクティブモード）
@@ -3004,7 +3689,16 @@ Ignored when &quot;QA auto-injection&quot; is disabled (default: Autopilot).</tr
 
 出典: GitHub Copilot CLI 公式リファレンス
 https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference#oauth-re-authentication</source>
-        <translation type="unfinished"></translation>
+        <translation>To re-authenticate MCP Server &apos;{name}&apos; with OAuth, run the following in a terminal:
+
+  1. Start `copilot` (interactive mode)
+  2. Type `/mcp auth {name}` at the prompt and send it
+  3. Sign in with your GitHub account when the browser opens
+     (Headless OAuth: the browser does not open for client_credentials configurations)
+  4. The server reconnects automatically once it is done
+
+Source: GitHub Copilot CLI official reference
+https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference#oauth-re-authentication</translation>
     </message>
     <message>
         <source>Copilot CLI 実行ファイルパス</source>
@@ -3070,117 +3764,442 @@ https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-r
     </message>
 </context>
 <context>
+    <name>_CAgenticRetrieval</name>
+    <message>
+        <location filename="../page_options.py" line="2687"/>
+        <source>自動判定に従う</source>
+        <translation>Follow automatic detection</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2688"/>
+        <source>使用する</source>
+        <translation>Use</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2689"/>
+        <source>使用しない</source>
+        <translation>Do not use</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2691"/>
+        <source>Agentic Retrieval</source>
+        <translation>Agentic Retrieval</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2693"/>
+        <source>Foundry IQ / Azure AI Search の Agentic Retrieval Step を有効化します。「使用しない」を選ぶと AAD-WEB Step.2.6 / ASDW-WEB Step.2.5・2.6 を実行対象から外します（既定: 自動判定に従う）。</source>
+        <translation>Enables the Agentic Retrieval Step of Foundry IQ / Azure AI Search. Choosing &quot;Do not use&quot; removes AAD-WEB Step.2.6 and ASDW-WEB Step.2.5 / 2.6 from the run (default: follow automatic detection).</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2704"/>
+        <location filename="../page_options.py" line="2718"/>
+        <location filename="../page_options.py" line="2744"/>
+        <location filename="../page_options.py" line="2757"/>
+        <source>既定に従う</source>
+        <translation>Follow the default</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2705"/>
+        <source>Indexer (Pull)</source>
+        <translation>Indexer (Pull)</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2706"/>
+        <source>Push API</source>
+        <translation>Push API</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2708"/>
+        <source>Indexer + Push</source>
+        <translation>Indexer + Push</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2711"/>
+        <source>Agentic Retrieval: データ投入方式</source>
+        <translation>Agentic Retrieval: data ingestion method</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2712"/>
+        <source>Knowledge Source へのデータ投入方式（既定: Indexer）。</source>
+        <translation>Method used to ingest data into the Knowledge Source (default: Indexer).</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2719"/>
+        <source>連携する</source>
+        <translation>Integrate</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2720"/>
+        <source>連携しない</source>
+        <translation>Do not integrate</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2722"/>
+        <source>Agentic Retrieval: Foundry 連携</source>
+        <translation>Agentic Retrieval: Foundry integration</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2724"/>
+        <source>Knowledge Base を Remote MCP Server として Microsoft Foundry へ公開します（既定: 連携する）。</source>
+        <translation>Publishes the Knowledge Base to Microsoft Foundry as a Remote MCP Server (default: integrate).</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2732"/>
+        <source>例: 社内規程 PDF (Blob), 商品マスタ (Azure SQL)</source>
+        <translation>e.g. internal policy PDFs (Blob), product master (Azure SQL)</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2735"/>
+        <source>Agentic Retrieval: データソースのヒント</source>
+        <translation>Agentic Retrieval: data source hints</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2737"/>
+        <source>想定するデータソースを自由記述で伝えます。Knowledge Source 選定の根拠になります。</source>
+        <translation>Describes the expected data sources in free text. It becomes the basis for selecting the Knowledge Source.</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2745"/>
+        <source>差分更新のみ</source>
+        <translation>Incremental update only</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2746"/>
+        <source>全体を再生成</source>
+        <translation>Regenerate everything</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2748"/>
+        <source>Agentic Retrieval: 既存設計の扱い</source>
+        <translation>Agentic Retrieval: handling of the existing design</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2750"/>
+        <source>既存の Agentic Retrieval 設計があるときの更新方針（既定: 全体を再生成）。</source>
+        <translation>Update policy when an Agentic Retrieval design already exists (default: regenerate everything).</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2759"/>
+        <source>Standard 許容</source>
+        <translation>Allow Standard</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2762"/>
+        <source>Global 必須（Standard 拒否）</source>
+        <translation>Require Global (reject Standard)</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2765"/>
+        <source>Agentic Retrieval: Foundry SKU 方針</source>
+        <translation>Agentic Retrieval: Foundry SKU policy</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="2767"/>
+        <source>希望モデルが Global Standard で入手できないときのフォールバック方針（既定: Standard 許容）。</source>
+        <translation>Fallback policy for when the desired model is not available on Global Standard (default: allow Standard).</translation>
+    </message>
+</context>
+<context>
     <name>_CAutopilotSection</name>
     <message>
-        <location filename="../settings_window.py" line="148"/>
-        <source>並列上限 (autopilot_max_parallel)</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location filename="../settings_window.py" line="150"/>
+        <source>並列上限 (autopilot_max_parallel)</source>
+        <translation>Parallel limit (autopilot_max_parallel)</translation>
+    </message>
+    <message>
+        <location filename="../settings_window.py" line="152"/>
         <source>Autopilot モードで同時に起動する子 GUI プロセスの最大数。 範囲 1〜16、既定 4。 Copilot CLI のレート制限を考慮して安全側を選んでください。</source>
-        <translation type="unfinished"></translation>
+        <translation>Maximum number of child GUI processes started concurrently in Autopilot mode. Range 1–16, default 4. Choose a conservative value considering the rate limit of the Copilot CLI.</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="159"/>
+        <location filename="../settings_window.py" line="161"/>
         <source>プランレビュー Dialog を常に表示する</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../settings_window.py" line="162"/>
-        <source>プランレビュー表示 (step1_show_plan_review_always)</source>
-        <translation type="unfinished"></translation>
+        <translation>Always show the plan review dialog</translation>
     </message>
     <message>
         <location filename="../settings_window.py" line="164"/>
+        <source>プランレビュー表示 (step1_show_plan_review_always)</source>
+        <translation>Plan review display (step1_show_plan_review_always)</translation>
+    </message>
+    <message>
+        <location filename="../settings_window.py" line="166"/>
         <source>ON にすると、Step 1 [次へ] 押下時にギャップ提案が 0 件のときも 実行プランの入出力一覧を確認する Dialog を表示します。 OFF（既定）はギャップ 0 件のとき自動的に Dialog を skip します。 Autopilot ON/OFF のいずれでも適用されます。</source>
-        <translation type="unfinished"></translation>
+        <translation>When ON, the dialog that shows the input / output list of the execution plan is displayed when [Next] is pressed on Step 1, even when there are no gap suggestions. OFF (default) skips the dialog automatically when there are no gaps. It applies whether Autopilot is ON or OFF.</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="174"/>
+        <location filename="../settings_window.py" line="176"/>
         <source>SDK 自動コンテキスト圧縮を有効にする</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../settings_window.py" line="177"/>
-        <source>自動コンテキスト圧縮 (auto_compaction)</source>
-        <translation type="unfinished"></translation>
+        <translation>Enable SDK automatic context compaction</translation>
     </message>
     <message>
         <location filename="../settings_window.py" line="179"/>
+        <source>自動コンテキスト圧縮 (auto_compaction)</source>
+        <translation>Automatic context compaction (auto_compaction)</translation>
+    </message>
+    <message>
+        <location filename="../settings_window.py" line="181"/>
         <source>ON にすると、サブステップ実行時に Copilot SDK の infinite_sessions （バックグラウンド compaction）を有効化し、Context Window 使用量を SDK 側で自動圧縮します。OFF（既定）は SDK 既定挙動。</source>
-        <translation type="unfinished"></translation>
+        <translation>When ON, infinite_sessions of the Copilot SDK (background compaction) is enabled while substeps run, and Context Window usage is compacted automatically by the SDK. OFF (default) uses the SDK default behavior.</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="188"/>
+        <location filename="../settings_window.py" line="192"/>
         <source>APP-ID 選択画面の表示</source>
-        <translation type="unfinished"></translation>
+        <translation>Show the APP-ID selection screen</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="191"/>
+        <location filename="../settings_window.py" line="195"/>
         <source>APP-ID 選択画面 (autopilot_show_app_id_picker)</source>
-        <translation type="unfinished"></translation>
+        <translation>APP-ID selection screen (autopilot_show_app_id_picker)</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="193"/>
+        <location filename="../settings_window.py" line="197"/>
         <source>ON（既定）にすると、AAS 完了後 / downstream 起動前に APP-ID 選択 ダイアログを表示します。ユーザーは downstream（Web/Dataflow 等） の実行対象 APP-ID を絞り込めます。 OFF の場合は Application Architecture Catalog 全件を downstream に 流します（旧挙動）。</source>
-        <translation type="unfinished"></translation>
+        <translation>When ON (default), the APP-ID selection dialog is shown after AAS finishes and before downstream starts. You can narrow down the APP-IDs to run downstream (Web / Dataflow, etc.). When OFF, every entry of the Application Architecture Catalog is passed downstream (legacy behavior).</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="206"/>
+        <location filename="../settings_window.py" line="210"/>
         <source> 秒</source>
-        <translation type="unfinished"></translation>
+        <translation> sec</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="209"/>
+        <location filename="../settings_window.py" line="213"/>
         <source>APP-ID 選択タイムアウト (autopilot_app_id_picker_timeout_sec)</source>
-        <translation type="unfinished"></translation>
+        <translation>APP-ID selection timeout (autopilot_app_id_picker_timeout_sec)</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="212"/>
+        <location filename="../settings_window.py" line="216"/>
         <source>APP-ID 選択ダイアログのタイムアウト秒数（既定 300 秒 = 5 分）。 タイムアウト経過時はその時点のチェック状態で自動 OK となり、 選択中の APP-ID で downstream が実行されます。 範囲 30〜3600 秒。 上記「APP-ID 選択画面の表示」が OFF のときは無効。</source>
-        <translation type="unfinished"></translation>
+        <translation>Timeout in seconds for the APP-ID selection dialog (default 300 seconds = 5 minutes). When it times out, the check state at that moment is accepted automatically and downstream runs with the selected APP-IDs. Range 30–3600 seconds. It is disabled when &quot;Show the APP-ID selection screen&quot; above is OFF.</translation>
     </message>
 </context>
 <context>
     <name>_CAzure</name>
     <message>
-        <location filename="../page_options.py" line="2425"/>
+        <location filename="../page_options.py" line="2665"/>
         <source>Azure リソースグループ名</source>
-        <translation type="unfinished">Azure resource group name</translation>
+        <translation>Azure resource group name</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="2426"/>
+        <location filename="../page_options.py" line="2666"/>
         <source>Azure リソースグループ名。</source>
-        <translation type="unfinished">Azure resource group name.</translation>
+        <translation>Azure resource group name.</translation>
     </message>
 </context>
 <context>
     <name>_CExplorerSection</name>
     <message>
-        <location filename="../settings_window.py" line="254"/>
+        <location filename="../settings_window.py" line="258"/>
         <source>エクスプローラー監視フォルダー</source>
-        <translation type="unfinished"></translation>
+        <translation>Explorer watch folders</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="260"/>
+        <location filename="../settings_window.py" line="264"/>
         <source>左サイドバーのエクスプローラーに表示するフォルダーを設定します。 未存在のフォルダーは保存時と GUI 起動時に自動作成されます。 リポジトリ相対パス（例: docs）と絶対パスの両方が使えます。</source>
-        <translation type="unfinished"></translation>
+        <translation>Configures the folders shown in the Explorer of the left sidebar. Folders that do not exist are created automatically when saving and when the GUI starts. Both repository-relative paths (e.g. docs) and absolute paths can be used.</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="274"/>
+        <location filename="../settings_window.py" line="278"/>
         <source>追加…</source>
-        <translation type="unfinished"></translation>
+        <translation>Add…</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="275"/>
+        <location filename="../settings_window.py" line="279"/>
         <source>削除</source>
-        <translation type="unfinished"></translation>
+        <translation>Remove</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="321"/>
+        <location filename="../settings_window.py" line="325"/>
         <source>フォルダーを選択</source>
-        <translation type="unfinished"></translation>
+        <translation>Select a folder</translation>
+    </message>
+</context>
+<context>
+    <name>_CKnowledgeManagement</name>
+    <message>
+        <location filename="../page_options.py" line="516"/>
+        <source>QA (質問票) を Knowledge Management へバックグラウンドでマージする</source>
+        <translation>Merge QA (questionnaire) answers into Knowledge Management in the background</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="520"/>
+        <source>Knowledge Management 用モデル</source>
+        <translation>Knowledge Management model</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="523"/>
+        <source>Knowledge Management 用コンテキスト階層</source>
+        <translation>Knowledge Management context tier</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1261"/>
+        <source>有効化</source>
+        <translation>Enable</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1265"/>
+        <source>回答済み QA を knowledge/ へ取り込む Knowledge Management をバックグラウンドで起動します（メインタスクは完了を待ちません）。「QA (質問票) 自動投入」が有効のときだけ選択できます（既定: 無効）。</source>
+        <translation>Starts Knowledge Management in the background to ingest the answered QA into knowledge/ (the main task does not wait for it). Selectable only while &quot;QA (questionnaire) auto-injection&quot; is enabled (default: disabled).</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1279"/>
+        <location filename="../page_options.py" line="1354"/>
+        <source>（「使用するモデル」を継承）</source>
+        <translation>(Inherit &quot;Model to use&quot;)</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1289"/>
+        <source>QA 回答を knowledge/ へ同期する Knowledge Management のバックグラウンド実行で使用するモデル。未指定時は設定画面の「使用するモデル」を継承します。上のマージ設定が無効のときは使用されません。</source>
+        <translation>Model used by the background Knowledge Management run that syncs QA answers into knowledge/. When left unset, it inherits &quot;Model to use&quot; from the settings window. It is unused while the merge setting above is disabled.</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1302"/>
+        <source>（「コンテキスト階層」を継承）</source>
+        <translation>(Inherit &quot;Context tier&quot;)</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1309"/>
+        <source>Knowledge Management のバックグラウンド実行で使用するコンテキスト階層。未指定時は設定画面の「コンテキスト階層 (context_tier)」を継承します。</source>
+        <translation>Context tier used by the background Knowledge Management run. When left unset, it inherits &quot;Context tier (context_tier)&quot; from the settings window.</translation>
+    </message>
+</context>
+<context>
+    <name>_CQaPrompt</name>
+    <message>
+        <location filename="../page_options.py" line="514"/>
+        <source>QA (質問票) 自動投入</source>
+        <translation>QA (questionnaire) auto-injection</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="515"/>
+        <source>QA (質問票) 回答モード</source>
+        <translation>QA (questionnaire) answer mode</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1129"/>
+        <source>有効にする</source>
+        <translation>Enable</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1130"/>
+        <source>無効にする</source>
+        <translation>Disable</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1135"/>
+        <source>実行前 QA 質問票を自動投入します。有効にすると、回答済み QA を保存・検証してからメインタスクを開始します。回答を knowledge/ へ取り込むかどうかは「Knowledge Management」の設定で別途選択します。</source>
+        <translation>Automatically injects the pre-execution QA questionnaire. When enabled, the answered QA is saved and verified before the main task starts. Whether the answers are ingested into knowledge/ is chosen separately under &quot;Knowledge Management&quot;.</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1147"/>
+        <source>Autopilot (全自動)</source>
+        <translation>Autopilot (fully automatic)</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1148"/>
+        <source>ユーザー回答</source>
+        <translation>User answers</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1154"/>
+        <source>Autopilot: AI が作成した既定回答を全て自動採用してメインタスクへ適用します。
+ユーザー回答: AI が作成した質問と既定回答を GUI ダイアログに表示し、ユーザーが回答を入力してから Submit するとメインタスクへ適用します。
+「QA (質問票) 自動投入」が無効のときは設定値は無視されます（既定: Autopilot）。</source>
+        <translation>Autopilot: automatically adopts all AI-generated default answers and applies them to the main task.
+User answers: shows the AI-generated questions and default answers in a GUI dialog; the answers are applied to the main task after you submit them.
+The value is ignored while &quot;QA (questionnaire) auto-injection&quot; is disabled (default: Autopilot).</translation>
+    </message>
+</context>
+<context>
+    <name>_CReviewPrompt</name>
+    <message>
+        <location filename="../page_options.py" line="1209"/>
+        <location filename="../page_options.py" line="1216"/>
+        <location filename="../page_options.py" line="1227"/>
+        <source>有効化</source>
+        <translation>Enable</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1211"/>
+        <source>レビュー自動投入</source>
+        <translation>Review auto-injection</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1212"/>
+        <source>Review を自動的に投入します（既定: 無効）。</source>
+        <translation>Automatically injects Review (default: disabled).</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1218"/>
+        <source>ローカルでコードレビュー実行</source>
+        <translation>Run code review locally</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1220"/>
+        <source>Copilot CLI SDK でローカルにコードレビューを実行します。git diff を使用して差分を取得し、ローカルセッションでレビュー。GH_TOKEN / リポジトリ指定は不要（既定: 無効）。</source>
+        <translation>Runs the code review locally with the Copilot CLI SDK. It collects the diff with git diff and reviews it in a local session. GH_TOKEN and a repository are not required (default: disabled).</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1229"/>
+        <source>コードレビュー修正プランを自動承認</source>
+        <translation>Auto-approve code review fix plans</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1230"/>
+        <source>Code Review Agent の修正プランを全て自動承認します（既定: 無効）。</source>
+        <translation>Automatically approves every fix plan from the Code Review Agent (default: disabled).</translation>
+    </message>
+</context>
+<context>
+    <name>_CSelfImprove</name>
+    <message>
+        <location filename="../page_options.py" line="1388"/>
+        <source>自己改善ループ</source>
+        <translation>Self-improvement loop</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1390"/>
+        <source>継承時はAAG/AAGDで既定ON、その他は既定設定を使用します。明示OFFは --no-self-improve として既定ONや環境変数より優先します。</source>
+        <translation>When inherited, it defaults to ON for AAG/AAGD and uses the default setting otherwise. An explicit OFF is passed as --no-self-improve and takes precedence over the ON default and environment variables.</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1401"/>
+        <source>自己改善 最大繰り返し回数</source>
+        <translation>Self-improvement max iterations</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1402"/>
+        <source>スキャン→改善→検証を繰り返す最大回数（既定: 3）。</source>
+        <translation>Maximum number of scan / improve / verify iterations (default: 3).</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1407"/>
+        <source>例: src/  hve/  空=リポジトリ全体</source>
+        <translation>e.g. src/  hve/  empty = whole repository</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1409"/>
+        <source>自己改善 対象パス</source>
+        <translation>Self-improvement target paths</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1410"/>
+        <source>対象パス（空=リポジトリ全体）。</source>
+        <translation>Target paths (empty = whole repository).</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1416"/>
+        <source>例: テスト失敗を 0 件にし lint エラーを解消する</source>
+        <translation>e.g. reduce test failures to zero and clear lint errors</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1418"/>
+        <source>自己改善 ゴール説明</source>
+        <translation>Self-improvement goal</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="1419"/>
+        <source>ゴール説明（省略可 → ワークフロー種別から自動設定）。</source>
+        <translation>Goal description (optional; derived from the workflow type when omitted).</translation>
     </message>
 </context>
 <context>
@@ -3204,7 +4223,7 @@ https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-r
 <context>
     <name>_DropZone</name>
     <message>
-        <location filename="../page_options_ard.py" line="150"/>
+        <location filename="../page_options_ard.py" line="147"/>
         <source>📥 ここにファイルをドロップ
 （.md / .txt / .csv / .html / .docx / .pdf / .xlsx）</source>
         <translation>📥 Drop files here
@@ -3214,14 +4233,14 @@ https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-r
 <context>
     <name>_EnhancedUserActionsPane</name>
     <message>
-        <location filename="../page_workbench.py" line="258"/>
-        <location filename="../page_workbench.py" line="285"/>
-        <location filename="../page_workbench.py" line="287"/>
+        <location filename="../page_workbench.py" line="278"/>
+        <location filename="../page_workbench.py" line="307"/>
+        <location filename="../page_workbench.py" line="309"/>
         <source>実行中の課題</source>
         <translation>In-progress issues</translation>
     </message>
     <message>
-        <location filename="../page_workbench.py" line="268"/>
+        <location filename="../page_workbench.py" line="290"/>
         <source>アクション履歴をクリップボードにコピー</source>
         <translation>Copy action history to clipboard</translation>
     </message>
@@ -3229,57 +4248,70 @@ https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-r
 <context>
     <name>_GitHubCliLoginGroup</name>
     <message>
-        <location filename="../page_options.py" line="1426"/>
+        <location filename="../page_options.py" line="1779"/>
         <source>認証</source>
         <translation>Authentication</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1435"/>
+        <location filename="../page_options.py" line="1788"/>
         <source>GitHub CLI でログイン</source>
         <translation>Sign in with GitHub CLI</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1438"/>
+        <location filename="../page_options.py" line="1791"/>
         <source>埋め込み端末で `gh auth login` を実行し、取得したトークンを GH_TOKEN へ設定します（このセッション限り）。ブランチ取得・Issue/PR 作成が有効化されます。</source>
         <translation>Runs `gh auth login` in the embedded terminal and sets the captured token to GH_TOKEN for this session. This enables branch fetching and Issue/PR creation.</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1459"/>
+        <location filename="../page_options.py" line="1813"/>
         <source>✓ 認証済み（環境変数トークンあり）</source>
         <translation>✓ Authenticated (environment token present)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1460"/>
+        <location filename="../page_options.py" line="1814"/>
         <source>未ログイン</source>
         <translation>Not signed in</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1488"/>
+        <location filename="../page_options.py" line="1842"/>
         <source>✓ ログイン済み（GH_TOKEN を設定しました）</source>
         <translation>✓ Signed in (GH_TOKEN has been set)</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1493"/>
+        <location filename="../page_options.py" line="1847"/>
         <source>⚠ トークンを取得できませんでした（gh 未ログインの可能性）</source>
         <translation>⚠ Could not retrieve a token (gh may not be signed in)</translation>
     </message>
 </context>
 <context>
+    <name>_KeyValueTable</name>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="148"/>
+        <source>行を追加</source>
+        <translation>Add row</translation>
+    </message>
+    <message>
+        <location filename="../toolsearch_settings_section.py" line="150"/>
+        <source>選択行を削除</source>
+        <translation>Delete selected rows</translation>
+    </message>
+</context>
+<context>
     <name>_LanguageSection</name>
     <message>
-        <location filename="../settings_window.py" line="95"/>
+        <location filename="../settings_window.py" line="97"/>
         <source>変更はアプリの再起動後に反映されます。
 Changes take effect after the app restarts.</source>
         <translation>Changes take effect after the app restarts.
 Changes take effect after the app restarts.</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="115"/>
+        <location filename="../settings_window.py" line="117"/>
         <source>再起動が必要です / Restart required</source>
         <translation>Restart required</translation>
     </message>
     <message>
-        <location filename="../settings_window.py" line="116"/>
+        <location filename="../settings_window.py" line="118"/>
         <source>言語の変更を反映するには HVE GUI を再起動してください。
 Please restart HVE GUI to apply the language change.</source>
         <translation>Please restart HVE GUI to apply the language change.
@@ -3289,8 +4321,8 @@ Please restart HVE GUI to apply the language change.</translation>
 <context>
     <name>_LogPane</name>
     <message>
-        <location filename="../page_workbench.py" line="178"/>
-        <location filename="../workbench_window.py" line="81"/>
+        <location filename="../page_workbench.py" line="186"/>
+        <location filename="../workbench_window.py" line="86"/>
         <source>ログ全文をクリップボードにコピー</source>
         <translation>Copy full log to clipboard</translation>
     </message>
@@ -3426,37 +4458,39 @@ Please restart HVE GUI to apply the language change.</translation>
 <context>
     <name>_SessionArtifactPickerDialog</name>
     <message>
-        <location filename="../main_window.py" line="146"/>
+        <location filename="../main_window.py" line="158"/>
         <source>前回セッションの生成ファイルを添付に取り込み</source>
-        <translation type="unfinished"></translation>
+        <translation>Import files generated in the previous session as attachments</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="151"/>
+        <location filename="../main_window.py" line="163"/>
         <source>前回の実行で {n} 件のファイルが生成・更新されました。
 添付資料として取り込むファイルを選択してください。
 （添付ペインへ追加すると Markdown 変換され docs/attached/ に保存されます）</source>
-        <translation type="unfinished"></translation>
+        <translation>{n} files were generated or updated in the previous run.
+Select the files to import as attachments.
+(When added to the attachment pane they are converted to Markdown and saved under docs/attached/)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="166"/>
+        <location filename="../main_window.py" line="178"/>
         <source>全選択</source>
-        <translation type="unfinished">Select All</translation>
+        <translation>Select all</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="168"/>
+        <location filename="../main_window.py" line="180"/>
         <source>全解除</source>
-        <translation type="unfinished"></translation>
+        <translation>Deselect all</translation>
     </message>
 </context>
 <context>
     <name>_UserActionsPane</name>
     <message>
-        <location filename="../workbench_window.py" line="113"/>
+        <location filename="../workbench_window.py" line="118"/>
         <source>ユーザーアクション</source>
         <translation>User action</translation>
     </message>
     <message>
-        <location filename="../workbench_window.py" line="123"/>
+        <location filename="../workbench_window.py" line="128"/>
         <source>アクション履歴をクリップボードにコピー</source>
         <translation>Copy action history to clipboard</translation>
     </message>
@@ -3472,11 +4506,11 @@ Please restart HVE GUI to apply the language change.</translation>
 <context>
     <name>_WorkflowStepsGroup</name>
     <message>
-        <location filename="../page_workflow_select.py" line="177"/>
+        <location filename="../page_workflow_select.py" line="179"/>
         <source>ℹ️ ARD は 4 グループ構成です。各グループは内部で複数の実 Step を順次実行します。
 Step 2（要求定義書作成）は Step 1 の出力があれば参考にしますが、無くても実行できます。</source>
-        <translation type="unfinished">ℹ️ ARD has a 4-group structure. Each group runs multiple internal Steps sequentially.
-Step 2 (Requirement Document) uses Step 1&apos;s output if available, but can also run without it.</translation>
+        <translation>ℹ️ ARD consists of 4 groups. Each group runs several actual Steps in sequence internally.
+Step 2 (requirements document) refers to the output of Step 1 when it exists, but it can run without it.</translation>
     </message>
     <message>
         <location filename="../page_workflow_select.py" line="188"/>
@@ -3484,24 +4518,24 @@ Step 2 (Requirement Document) uses Step 1&apos;s output if available, but can al
         <translation>(Step information could not be retrieved)</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="208"/>
-        <source>☁ 継承</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location filename="../page_workflow_select.py" line="209"/>
-        <source>☁ ON</source>
-        <translation type="unfinished"></translation>
+        <source>☁ 継承</source>
+        <translation>☁ Inherit</translation>
     </message>
     <message>
         <location filename="../page_workflow_select.py" line="210"/>
-        <source>☁ OFF</source>
-        <translation type="unfinished"></translation>
+        <source>☁ ON</source>
+        <translation>☁ ON</translation>
     </message>
     <message>
         <location filename="../page_workflow_select.py" line="211"/>
+        <source>☁ OFF</source>
+        <translation>☁ OFF</translation>
+    </message>
+    <message>
+        <location filename="../page_workflow_select.py" line="212"/>
         <source>この Step の Cloud Session 使用を上書きします。未指定時は基本設定を継承します。</source>
-        <translation type="unfinished"></translation>
+        <translation>Overrides Cloud Session usage for this Step. When unspecified, the basic settings are inherited.</translation>
     </message>
 </context>
 <context>
@@ -3536,7 +4570,7 @@ Use the [Stop] button to interrupt execution.</translation>
     <message>
         <location filename="../help_content.py" line="109"/>
         <source>事業分析〜要件定義（4 グループ）。Step 1: 企業の事業分析 / Step 2: 要求定義書作成 / Step 3: KPI/OKR 定義 / Step 4: ユースケース作成。既定で Step 2/3/4 が ON（Step 1 は明示的に有効化）。</source>
-        <translation type="unfinished">Business analysis → requirements definition (4 groups). Step 1: Corporate business analysis / Step 2: Requirements document / Step 3: KPI/OKR definition / Step 4: Use case creation. Step 2/3/4 are ON by default (Step 1 is opt-in).</translation>
+        <translation>Business analysis through requirements definition (4 groups). Step 1: corporate business analysis / Step 2: requirements document / Step 3: KPI/OKR definition / Step 4: use case creation. Steps 2/3/4 are ON by default (Step 1 must be enabled explicitly).</translation>
     </message>
     <message>
         <location filename="../help_content.py" line="110"/>
@@ -3576,11 +4610,6 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation>Generates and updates knowledge/ D01–D21 with 21-way parallelism.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="116"/>
-        <source>original-docs/ の質問票生成・横断レビューを実施します。</source>
-        <translation>Generates questionnaires and runs cross-cutting review for original-docs/.</translation>
-    </message>
-    <message>
         <location filename="../help_content.py" line="117"/>
         <source>ソースコードからレイヤー別ドキュメントを自動生成します。</source>
         <translation>Auto-generates layered documentation from source code.</translation>
@@ -3601,51 +4630,61 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation>Model used for QA questionnaire generation (--auto-qa) (defaults to --model if omitted).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="161"/>
+        <source>QA 回答から起動する AKM 差分同期で使用するモデル（省略時は --model と同じ）。</source>
+        <translation type="vanished">Model used by the AKM incremental sync started from QA answers (defaults to --model if omitted).</translation>
+    </message>
+    <message>
+        <source>QA 起点 AKM 用モデルの reasoning effort（省略時は --reasoning-effort を継承）。</source>
+        <translation type="vanished">Reasoning effort for the QA-triggered AKM model (inherits --reasoning-effort if omitted).</translation>
+    </message>
+    <message>
+        <source>QA 起点 AKM のコンテキスト階層（省略時は --context-tier を継承）。</source>
+        <translation type="vanished">Context tier for the QA-triggered AKM run (inherits --context-tier if omitted).</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="165"/>
         <source>並列実行上限 (デフォルト: 15)。</source>
         <translation>Max parallelism (default: 15).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="162"/>
         <source>QA 自動投入を有効化 (デフォルト: 無効)。</source>
-        <translation>Enable QA auto-injection (default: disabled).</translation>
+        <translation type="vanished">Enable QA auto-injection (default: disabled).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="163"/>
         <source>QA 回答モード。Autopilot=AI が作成した既定回答を全て自動採用 / ユーザー回答=GUIダイアログで回答入力。QA 自動投入が無効のときは無視されます。</source>
-        <translation type="unfinished"></translation>
+        <translation type="vanished">QA answer mode. Autopilot = automatically adopt all AI-generated default answers / User answer = enter the answers in a GUI dialog. Ignored when QA auto-injection is disabled.</translation>
     </message>
     <message>
         <source>QA 回答入力の TTY 判定をバイパスしてインタラクティブモードを強制する。</source>
         <translation type="vanished">Bypass the TTY check for QA answer input and force interactive mode.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="164"/>
+        <location filename="../help_content.py" line="168"/>
         <source>Review 自動投入を有効化 (デフォルト: 無効)。</source>
         <translation>Enable Review auto-injection (default: disabled).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="165"/>
+        <location filename="../help_content.py" line="169"/>
         <source>Copilot CLI SDK でローカルにコードレビューを実行する (デフォルト: 無効)。</source>
         <translation>Run code review locally via the Copilot CLI SDK (default: disabled).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="166"/>
+        <location filename="../help_content.py" line="170"/>
         <source>Code Review Agent の修正プランを全て自動承認 (デフォルト: 無効)。</source>
         <translation>Auto-approve all fix plans from the Code Review Agent (default: disabled).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="167"/>
+        <location filename="../help_content.py" line="171"/>
         <source>Work IQ 経由の M365 データ参照を有効化する (@microsoft/workiq のインストールが必要)。</source>
         <translation>Enable references to M365 data via Work IQ (requires @microsoft/workiq).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="168"/>
+        <location filename="../help_content.py" line="172"/>
         <source>AKM Work IQ 取り込み対象 Dxx をカンマ区切りで指定（例: D01,D04）。</source>
         <translation>Specify AKM Work IQ ingest targets (Dxx) as a comma-separated list (e.g. D01,D04).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="169"/>
+        <location filename="../help_content.py" line="173"/>
         <source>QA フェーズで質問ごとに Work IQ 回答ドラフトを生成する。</source>
         <translation>Generate a Work IQ answer draft per question during the QA phase.</translation>
     </message>
@@ -3654,97 +4693,96 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation type="vanished">Entra tenant ID for Work IQ (if omitted: common).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="170"/>
+        <location filename="../help_content.py" line="174"/>
         <source>Work IQ の QA 用プロンプトを上書きする。</source>
         <translation>Override the Work IQ QA prompt.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="171"/>
+        <location filename="../help_content.py" line="175"/>
         <source>Work IQ の KM 用プロンプトを上書きする。</source>
         <translation>Override the Work IQ KM prompt.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="172"/>
         <source>Work IQ の Original Docs レビュー用プロンプトを上書きする。</source>
-        <translation>Override the Work IQ Original Docs review prompt.</translation>
+        <translation type="vanished">Override the Work IQ Original Docs review prompt.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="173"/>
+        <location filename="../help_content.py" line="177"/>
         <source>Work IQ: QA 質問ごとのクエリタイムアウト秒数。</source>
         <translation>Work IQ: per-question query timeout in seconds.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="175"/>
+        <location filename="../help_content.py" line="179"/>
         <source>GitHub Issue を作成する。新規ブランチと PR が自動的に作成されます（--repo と GH_TOKEN が必要）。</source>
         <translation>Create a GitHub Issue. A new branch and PR are created automatically (requires --repo and GH_TOKEN).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="176"/>
+        <location filename="../help_content.py" line="180"/>
         <source>ローカル実行後に GitHub PR を作成する（--repo と GH_TOKEN が必要）。</source>
         <translation>Create a GitHub PR after the local run (requires --repo and GH_TOKEN).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="177"/>
+        <location filename="../help_content.py" line="181"/>
         <source>git add 時に除外するパス (スペース区切りで複数指定可)。</source>
         <translation>Paths to exclude during git add (space-separated for multiple values).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="178"/>
+        <location filename="../help_content.py" line="182"/>
         <source>リポジトリ (owner/repo 形式)。REPO 環境変数からも取得可能。</source>
         <translation>Repository (owner/repo format). Can also be supplied via the REPO environment variable.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="179"/>
+        <location filename="../help_content.py" line="183"/>
         <source>Issue 作成時の Root Issue タイトルを上書きする。</source>
         <translation>Override the Root Issue title at creation.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="180"/>
+        <location filename="../help_content.py" line="184"/>
         <source>詳細出力 (--verbosity verbose と同等)。</source>
         <translation>Verbose output (equivalent to --verbosity verbose).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="181"/>
+        <location filename="../help_content.py" line="185"/>
         <source>出力抑制 (--verbosity quiet と同等)。</source>
         <translation>Quiet output (equivalent to --verbosity quiet).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="182"/>
+        <location filename="../help_content.py" line="186"/>
         <source>コンソール出力レベル: quiet / compact / normal / verbose。</source>
         <translation>Console output level: quiet / compact / normal / verbose.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="183"/>
+        <location filename="../help_content.py" line="187"/>
         <source>モデル応答のトークンストリーム表示を有効化。</source>
         <translation>Enable token-stream display for model responses.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="184"/>
+        <location filename="../help_content.py" line="188"/>
         <source>Copilot CLI のログレベル: none/error/warning/info/debug/all。</source>
         <translation>Copilot CLI log level: none/error/warning/info/debug/all.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="185"/>
+        <location filename="../help_content.py" line="189"/>
         <source>ANSI カラー出力を無効化する。</source>
         <translation>Disable ANSI color output.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="186"/>
+        <location filename="../help_content.py" line="190"/>
         <source>起動時バナー表示を制御する。</source>
         <translation>Control the startup banner display.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="187"/>
+        <location filename="../help_content.py" line="191"/>
         <source>スクリーンリーダー対応モード: 絵文字を日本語ラベルに置換し、スピナーを無効化。</source>
         <translation>Screen reader mode: replace emoji with Japanese labels and disable spinners.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="188"/>
+        <location filename="../help_content.py" line="192"/>
         <source>タイムスタンプ表示位置: prefix / suffix / off。</source>
         <translation>Timestamp position: prefix / suffix / off.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="189"/>
+        <location filename="../help_content.py" line="193"/>
         <source>DAG 完了時のサマリと各ステップの最終応答のみを出力する。</source>
         <translation>Output only the DAG completion summary and each step&apos;s final response.</translation>
     </message>
@@ -3753,37 +4791,37 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation type="vanished">MCP Server config JSON file path.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="190"/>
+        <location filename="../help_content.py" line="194"/>
         <source>Copilot CLI 実行ファイルパス (省略時: PATH から自動検出)。</source>
         <translation>Copilot CLI executable path (if omitted: auto-detected from PATH).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="191"/>
+        <location filename="../help_content.py" line="195"/>
         <source>外部 CLI サーバー URL (例: localhost:4321)。</source>
         <translation>External CLI server URL (e.g. localhost:4321).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="192"/>
+        <location filename="../help_content.py" line="196"/>
         <source>idle タイムアウト秒数 (デフォルト: 21600 = 6時間)。</source>
         <translation>Idle timeout in seconds (default: 21600 = 6 hours).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="193"/>
+        <location filename="../help_content.py" line="197"/>
         <source>Code Review Agent レビュー完了待ちタイムアウト秒数 (デフォルト: 7200 = 2時間)。</source>
         <translation>Timeout in seconds waiting for the Code Review Agent (default: 7200 = 2 hours).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="194"/>
+        <location filename="../help_content.py" line="198"/>
         <source>ベースブランチ (デフォルト: main)。</source>
         <translation>Base branch (default: main).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="195"/>
+        <location filename="../help_content.py" line="199"/>
         <source>実行ステップをカンマ区切りで指定 (省略時: 全ステップ)。</source>
         <translation>Specify steps to run as a comma-separated list (if omitted: all steps).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="196"/>
+        <location filename="../help_content.py" line="200"/>
         <source>アプリ ID (ASDW/ADFDV 等で使用)。後方互換のため残されています。</source>
         <translation>App ID (used by ASDW/ADFDV, etc.). Kept for backward compatibility.</translation>
     </message>
@@ -3792,7 +4830,7 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation type="vanished">Target Applications (APP-ID) — comma-separated for multiple values.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="198"/>
+        <location filename="../help_content.py" line="202"/>
         <source>Azure リソースグループ名。</source>
         <translation>Azure resource group name.</translation>
     </message>
@@ -3803,224 +4841,322 @@ Use the [Stop] button to interrupt execution.</translation>
     <message>
         <location filename="../help_content.py" line="114"/>
         <source>データフローアプリの実装と Azure デプロイを実施します。</source>
-        <translation type="unfinished"></translation>
+        <translation>Implements the dataflow application and deploys it to Azure.</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="116"/>
+        <source>docs-original/ の設計書を目録化し、質問票生成・横断整理・目的に応じた選別をまとめて実施します。</source>
+        <translation>Inventories design documents under docs-original/, generates questionnaires, consolidates cross-document findings, and triages documents by purpose.</translation>
     </message>
     <message>
         <location filename="../help_content.py" line="126"/>
         <source>Application Architecture Catalog の `推薦アーキテクチャ` 列から、APP ごとに `aad-web → asdw-web` または `adfd → adfdv` を自動判定して実行します。 ON にすると Step 1 の下部に Workflow ごとの入力統合パネルが表示され、 [次へ] 押下時に必須ファイル/設定/認証の事前検証 (precheck) を実行し、 不足があれば Step 1 に留まります。不足なしで確認 OK すると「Step 2: 実行中」で 並列実行を開始します（無人実行）。 実行中はエラー発生 lane のみ停止し、他 lane は継続します。</source>
-        <translation type="unfinished"></translation>
+        <translation>Determines and runs `aad-web → asdw-web` or `adfd → adfdv` per APP from the `推薦アーキテクチャ` column of the Application Architecture Catalog. When ON, an integrated input panel per Workflow appears at the bottom of Step 1, a precheck of the required files / settings / authentication runs when [Next] is pressed, and you stay on Step 1 if anything is missing. Once nothing is missing and you confirm, parallel execution starts under &quot;Step 2: running&quot; (unattended). During the run only the lane that hit an error stops, and the other lanes continue.</translation>
     </message>
     <message>
         <location filename="../help_content.py" line="136"/>
         <source>Application Architecture Catalog のパス。空欄のとき `docs/catalog/app-arch-catalog.md` を使用します。 カスタムパスを指定した場合、そのファイルが存在しないときはエラーになります。</source>
-        <translation type="unfinished"></translation>
+        <translation>Path to the Application Architecture Catalog. When empty, `docs/catalog/app-arch-catalog.md` is used. When a custom path is specified and that file does not exist, it is an error.</translation>
     </message>
     <message>
         <location filename="../help_content.py" line="142"/>
         <source>Autopilot モードで同時に起動する子 GUI プロセスの最大数。 範囲 1〜16、既定 4。設定ウィンドウの「Autopilot」セクションで変更できます。</source>
-        <translation type="unfinished"></translation>
+        <translation>Maximum number of child GUI processes started concurrently in Autopilot mode. Range 1–16, default 4. It can be changed in the &quot;Autopilot&quot; section of the settings window.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="174"/>
+        <location filename="../help_content.py" line="161"/>
+        <source>QA 回答から起動する Knowledge Management 差分同期で使用するモデル（省略時は --model と同じ）。</source>
+        <translation>Model used by the Knowledge Management incremental sync started from QA answers (same as --model when omitted).</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="162"/>
+        <source>QA 起点 Knowledge Management 用モデルの reasoning effort（省略時は --reasoning-effort を継承）。</source>
+        <translation>Reasoning effort of the QA-triggered Knowledge Management model (inherits --reasoning-effort when omitted).</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="163"/>
+        <source>QA 起点 Knowledge Management のコンテキスト階層（省略時は --context-tier を継承）。</source>
+        <translation>Context tier of the QA-triggered Knowledge Management run (inherits --context-tier when omitted).</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="164"/>
+        <source>QA (質問票) の回答を knowledge/ へ取り込む Knowledge Management をバックグラウンドで起動する (デフォルト: 無効)。</source>
+        <translation>Start Knowledge Management in the background to ingest QA (questionnaire) answers into knowledge/ (default: disabled).</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="166"/>
+        <source>QA (質問票) 自動投入を有効化 (デフォルト: 無効)。</source>
+        <translation>Enable QA (questionnaire) auto-injection (default: disabled).</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="167"/>
+        <source>QA (質問票) 回答モード。Autopilot=AI が作成した既定回答を全て自動採用 / ユーザー回答=GUIダイアログで回答入力。QA (質問票) 自動投入が無効のときは無視されます。</source>
+        <translation>QA (questionnaire) answer mode. Autopilot = automatically adopt all AI-generated default answers / User answers = enter answers in a GUI dialog. Ignored while QA (questionnaire) auto-injection is disabled.</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="176"/>
+        <source>Work IQ の文書レビュー用プロンプトを上書きする。</source>
+        <translation>Override the Work IQ document review prompt.</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="178"/>
         <source>Work IQ MCP サーバーへのツール呼び出し 1 回あたりのタイムアウト秒数（既定 5 分）。Copilot SDK の MCP クライアントが発行する -32001 (Request timed out) を防ぐための設定。</source>
-        <translation type="unfinished"></translation>
+        <translation>Timeout in seconds for a single tool call to the Work IQ MCP server (default 5 minutes). It prevents -32001 (Request timed out) raised by the MCP client of the Copilot SDK.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="197"/>
+        <location filename="../help_content.py" line="201"/>
         <source>対象アプリケーション (APP-ID) — カンマ区切りで複数指定可。AAD-WEB/ASDW-WEB/ADFD/ADFDV で共通使用。</source>
-        <translation type="unfinished"></translation>
+        <translation>Target applications (APP-ID) — comma-separated, multiple allowed. Shared by AAD-WEB/ASDW-WEB/ADFD/ADFDV.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="199"/>
+        <location filename="../help_content.py" line="203"/>
         <source>ユースケース ID (ASDW 等で使用)。</source>
         <translation>Use Case ID (used by ASDW, etc.).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="200"/>
+        <location filename="../help_content.py" line="204"/>
         <source>AKM: 取り込みソース。qa / original-docs / workiq / both のカンマ区切り組合せ。</source>
         <translation>AKM: ingest source. Comma-separated combination of qa / original-docs / workiq / both.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="201"/>
+        <location filename="../help_content.py" line="205"/>
         <source>AKM: 対象ファイルパス (省略時: --sources で選択したソース配下の全件)。</source>
         <translation>AKM: target file paths (if omitted: all files under the source selected via --sources).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="202"/>
+        <location filename="../help_content.py" line="206"/>
         <source>AKM: 既存 knowledge/ 出力を完全に再生成する。</source>
         <translation>AKM: fully regenerate existing knowledge/ output.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="203"/>
+        <location filename="../help_content.py" line="207"/>
         <source>AKM: custom_source_dir 追加入力（複数指定可）。</source>
         <translation>AKM: custom_source_dir additional inputs (multiple supported).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="204"/>
+        <location filename="../help_content.py" line="208"/>
         <source>ASDW-WEB の remote CI/CD 対象 Step では Step 専用ブランチを作成し、push / PR 作成 / 自動 Approve &amp; Auto-merge / base branch 復帰を Step 単位で行う。その他の PR 作成経路では従来どおり PR の自動 Approve &amp; Auto-merge を有効にする。</source>
         <translation>For ASDW-WEB remote CI/CD target Steps, create a Step-specific branch and perform push / PR creation / auto Approve &amp; Auto-merge / base branch return per Step. For other PR creation paths, enable the existing PR auto Approve &amp; Auto-merge behavior.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="205"/>
-        <source>FR-CLI-34: PR マージ完了（auto-approve-and-merge）を検知後、今回作成したローカル作業ブランチを削除する（既定: 有効）。PR 自動 Approve &amp; Auto-merge が有効な場合のみ動作する。</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../help_content.py" line="206"/>
-        <source>AQOD: チェック対象スコープ（省略時: original-docs/）。</source>
-        <translation>AQOD: check scope (if omitted: original-docs/).</translation>
-    </message>
-    <message>
-        <location filename="../help_content.py" line="207"/>
-        <source>AQOD: 分析の深さ（standard / lightweight）。</source>
-        <translation>AQOD: analysis depth (standard / lightweight).</translation>
-    </message>
-    <message>
-        <location filename="../help_content.py" line="208"/>
-        <source>AQOD: 重点観点（任意）。</source>
-        <translation>AQOD: focus areas (optional).</translation>
-    </message>
-    <message>
         <location filename="../help_content.py" line="209"/>
+        <source>FR-CLI-34: PR マージ完了（auto-approve-and-merge）を検知後、今回作成したローカル作業ブランチを削除する（既定: 有効）。PR 自動 Approve &amp; Auto-merge が有効な場合のみ動作する。</source>
+        <translation>FR-CLI-34: after detecting that the PR merge (auto-approve-and-merge) has finished, delete the local working branch created this time (default: enabled). It works only when PR auto Approve &amp; Auto-merge is enabled.</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="213"/>
+        <source>ADI: 設計書選別の目的（任意）。空のときは must を付与しません。</source>
+        <translation>ADI: purpose for design-document triage (optional). When empty, no document is marked as must.</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="210"/>
+        <source>ADI: 対象設計書フォルダ（省略時: docs-original/）。</source>
+        <translation>ADI: target design document folder (if omitted: docs-original/).</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="211"/>
+        <source>ADI: 分析の深さ（standard / lightweight）。</source>
+        <translation>ADI: analysis depth (standard / lightweight).</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="212"/>
+        <source>ADI: 重点観点（任意）。</source>
+        <translation>ADI: focus areas (optional).</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="214"/>
         <source>ADOC: ドキュメント生成対象ディレクトリ（カンマ区切り。省略 = 全体）。</source>
         <translation>ADOC: documentation target directories (comma-separated; if omitted: entire workspace).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="210"/>
+        <location filename="../help_content.py" line="215"/>
         <source>ADOC: 除外パターン（カンマ区切り）。</source>
         <translation>ADOC: exclude patterns (comma-separated).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="211"/>
+        <location filename="../help_content.py" line="216"/>
         <source>ADOC: ドキュメントの主目的（all / onboarding / refactoring / migration）。</source>
         <translation>ADOC: documentation primary purpose (all / onboarding / refactoring / migration).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="212"/>
+        <location filename="../help_content.py" line="217"/>
         <source>ADOC: 大規模ファイル分割閾値（行数。デフォルト: 500）。</source>
         <translation>ADOC: large file split threshold (lines; default: 500).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="213"/>
+        <location filename="../help_content.py" line="218"/>
         <source>ARD: 対象企業名（Step 1『企業の事業分析』を実行する場合は必須）。</source>
         <translation>ARD: target company name (required when running Step 1 &apos;Corporate business analysis&apos;).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="214"/>
+        <location filename="../help_content.py" line="219"/>
         <source>ARD: 対象業務名（Step 2 で利用。Step 1 を実行する場合は省略可で、Step 1 の出力から自動生成）。</source>
         <translation>ARD: target business name (used by Step 2. May be omitted when Step 1 is run; auto-generated from Step 1 output in that case).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="215"/>
+        <location filename="../help_content.py" line="220"/>
         <source>ARD: 調査基準日（省略時は実行日）。</source>
         <translation>ARD: survey base date (if omitted: the run date).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="216"/>
+        <location filename="../help_content.py" line="221"/>
         <source>ARD: 調査期間年数（省略時は 30）。</source>
         <translation>ARD: survey period in years (if omitted: 30).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="217"/>
+        <location filename="../help_content.py" line="222"/>
         <source>ARD: 対象地域（省略時は『グローバル全体』）。</source>
         <translation>ARD: target region (if omitted: &apos;Global&apos;).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="218"/>
+        <location filename="../help_content.py" line="223"/>
         <source>ARD: 分析目的（省略時は『中長期成長戦略の立案』）。</source>
         <translation>ARD: analysis purpose (if omitted: &apos;Long-term growth strategy planning&apos;).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="219"/>
+        <location filename="../help_content.py" line="224"/>
         <source>ARD: Step 1（企業の事業分析）完了後に採用する Strategic Recommendation の ID（例: SR-1）。</source>
         <translation>ARD: ID of the Strategic Recommendation to adopt after Step 1 &apos;Corporate business analysis&apos; (e.g. SR-1).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="220"/>
+        <location filename="../help_content.py" line="225"/>
         <source>ARD: 添付資料パス（カンマ区切り・省略可）。</source>
         <translation>ARD: attachment paths (comma-separated, optional).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="221"/>
+        <location filename="../help_content.py" line="226"/>
         <source>全 Custom Agent の prompt 末尾に追記する文字列 (省略可)。</source>
         <translation>String appended to the end of every Custom Agent prompt (optional).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="222"/>
+        <location filename="../help_content.py" line="227"/>
         <source>各フェーズで注入するコンテキストの最大文字数（既定 20,000）。</source>
         <translation>Maximum number of characters injected as context per phase (default 20,000).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="223"/>
+        <location filename="../help_content.py" line="228"/>
         <source>ドライラン（実際の SDK 呼び出しをしない）。</source>
         <translation>Dry run (does not perform actual SDK calls).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="224"/>
+        <location filename="../help_content.py" line="229"/>
         <source>自己改善ループ（Phase 4）を有効化する。</source>
         <translation>Enable the self-improvement loop (Phase 4).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="225"/>
+        <location filename="../help_content.py" line="230"/>
         <source>自己改善ループ（Phase 4）を無効化する。</source>
         <translation>Disable the self-improvement loop (Phase 4).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="226"/>
+        <location filename="../help_content.py" line="231"/>
         <source>Markdown ファイルの追加/更新/削除を OS イベントで検知し索引を逐次更新する（既定 ON）。</source>
         <translation>Detect Markdown file add/update/delete events from the OS and incrementally update the index (default: ON).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="227"/>
+        <location filename="../help_content.py" line="232"/>
         <source>mdq watcher のデバウンス間隔（ms、既定 500）。</source>
         <translation>mdq watcher debounce interval (ms; default 500).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="228"/>
+        <location filename="../help_content.py" line="233"/>
         <source>ソースファイルの追加/更新/削除を OS イベントで検知し cq 索引を逐次更新する（既定 ON）。cq 設定不在時は自動で無効化される。</source>
         <translation>Detects added, changed and removed source files through OS events and updates the cq index incrementally (on by default). Disabled automatically when the cq configuration is missing.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="229"/>
+        <location filename="../help_content.py" line="234"/>
         <source>cq watcher のデバウンス間隔（ms）。0 のとき cq の既定値を使う。</source>
         <translation>Debounce interval of the cq watcher in milliseconds. 0 uses the cq default.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="279"/>
-        <source>使用するモデル名を選択します。Auto を選ぶと GitHub が最適モデルを自動選択します。レビュー用 / QA 用は省略時メインモデルを継承します。コンソール出力レベルもここで設定します。</source>
-        <translation type="unfinished"></translation>
+        <location filename="../help_content.py" line="285"/>
+        <source>使用するモデル名を選択します。Auto を選ぶと GitHub が最適モデルを自動選択します。レビュー用 / QA (質問票) 用は省略時メインモデルを継承します。コンソール出力レベル、追加プロンプト、コンテキスト最大文字数もここで設定します。</source>
+        <translation>Selects the model name to use. Choosing Auto lets GitHub pick the best model automatically. The review and QA (questionnaire) models inherit the main model when omitted. The console output level, additional prompt, and max context characters are also set here.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="295"/>
+        <location filename="../help_content.py" line="289"/>
+        <source>QA (質問票) の自動投入と回答モード、回答を Knowledge Management へバックグラウンドでマージするかどうか、その実行品質、および全 Custom Agent への追加プロンプトを設定します。レビューと自己改善は設定画面で編集します。</source>
+        <translation>Configures QA (questionnaire) auto-injection and answer mode, whether the answers are merged into Knowledge Management in the background, the execution quality of that run, and the additional prompt for every Custom Agent. Review and self-improvement are edited in the settings window.</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="297"/>
         <source>GitHub Issue / PR の自動作成・ベースブランチ・PR 自動 Approve &amp; Auto-merge に加え、Fleet mode / Cloud Session（GitHub Copilot SDK）を設定します。Issue / PR 作成には --repo と GH_TOKEN が必要です。「ブランチ取得」でリポジトリのブランチ一覧を取得し、ベースブランチ欄に候補表示できます。</source>
-        <translation type="unfinished"></translation>
+        <translation>Configures automatic GitHub Issue / PR creation, the base branch, and PR auto Approve &amp; Auto-merge, plus Fleet mode / Cloud Session (GitHub Copilot SDK). Issue / PR creation requires --repo and GH_TOKEN. &quot;Fetch branches&quot; retrieves the repository branch list and shows the candidates in the base branch field.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="299"/>
+        <location filename="../help_content.py" line="301"/>
         <source>詳細出力 / 出力抑制 / モデル応答ストリーム表示 / Copilot CLI ログレベル / ANSI カラー無効化 / 起動時バナー表示等の出力制御を設定します。</source>
-        <translation type="unfinished"></translation>
+        <translation>Configures output control such as verbose output, output suppression, model response streaming, the Copilot CLI log level, disabling ANSI colors, and the startup banner.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="315"/>
+        <location filename="../help_content.py" line="309"/>
         <source>APP-ID / リソースグループ / データフローアプリ ID / ユースケース ID 等、ワークフロー固有の対象を指定します。</source>
-        <translation type="unfinished"></translation>
+        <translation>Specifies workflow-specific targets such as APP-ID, resource group, dataflow application ID, and use case ID.</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="313"/>
+        <source>Knowledge Management ワークフロー固有: 取り込みソース・対象ファイル・強制再生成・追加入力ディレクトリ等を設定します。</source>
+        <translation>Knowledge Management workflow specific: configures the ingest sources, target files, forced regeneration, additional input directories, and so on.</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="325"/>
+        <source>ADI ワークフロー固有: 選別の目的・対象設計書フォルダ・分析の深さ・重点観点を設定します。</source>
+        <translation>ADI-specific: configure the triage purpose, target design document folder, analysis depth, and focus areas.</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="384"/>
+        <source>policy.json の書式そのもののバージョンです。設定値ではないため編集できません。HVE 側が書式を変えたときだけ上がります。現在は 1 です。</source>
+        <translation>The version of the policy.json format itself. It is not a setting, so it cannot be edited. It only increases when HVE changes the format. It is currently 1.</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="392"/>
+        <source>AI が 1 回ツールを検索したときに、候補として返すツールの既定件数です（既定: 5）。増やすと目的のツールを取りこぼしにくくなりますが、そのぶん候補の説明文がコンテキストを占有し、AI が選び間違える余地も増えます。減らすとコンテキストは軽くなりますが、必要なツールが候補から漏れやすくなります。AI 自身が件数を指定してきた場合でも「上限件数」を超えることはありません。</source>
+        <translation>The default number of tools returned as candidates when the AI runs one tool search (default: 5). Raising it makes it less likely that the tool you want is missed, but the candidate descriptions take up more context and give the AI more room to pick the wrong one. Lowering it keeps context small, but the tool you need is more likely to be left out. Even when the AI asks for a specific count, it never exceeds the maximum count.</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="403"/>
+        <source>AI が自分で件数を指定してきたときに、それでも超えさせない上限です（既定: 10）。「既定件数」以上の値である必要があり、小さいほど 1 回の検索で返る量が確実に抑えられます。既定件数より小さい値は保存できません。</source>
+        <translation>The hard ceiling applied even when the AI asks for a specific number of results (default: 10). It must be at least the default count; the smaller it is, the more firmly the amount returned by a single search is capped. A value below the default count cannot be saved.</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="412"/>
+        <source>スコアが低い候補を打ち切る比率です（0.0〜1.0、既定: 0.4）。最上位候補のスコアを 1 としたとき、この比率に満たない候補は件数に余裕があっても返しません。1.0 に近づけるほど「明らかに一致したものだけ」に絞られ、0.0 に近づけるほど関連が薄い候補まで件数いっぱいまで返ります。</source>
+        <translation>The ratio at which low-scoring candidates are cut off (0.0 to 1.0, default: 0.4). Treating the top candidate&apos;s score as 1, candidates below this ratio are not returned even when there is room left in the result count. The closer to 1.0, the more it narrows down to clear matches only; the closer to 0.0, the more loosely related candidates are returned until the count is filled.</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="422"/>
+        <source>検索スコアを計算するとき、ツールのどの部分の一致を重く見るかの重みです。name はツール名、description はツールの説明文、additional_search_text は下の「検索専用語彙」で足した語、arg_terms はツールの引数名と引数説明です。値を大きくするとその部分が一致したツールが上位に来ます。既定は name=3.0 / additional_search_text=2.5 / description=2.0 / arg_terms=1.0 で、ツール名の一致を最も重視しています。</source>
+        <translation>The weights that decide which part of a tool counts most when the search score is computed. name is the tool name, description is the tool&apos;s description text, additional_search_text is the wording added under &quot;Search-only terms&quot; below, and arg_terms is the tool&apos;s argument names and argument descriptions. Raising a value pushes tools that match that part higher up. The defaults are name=3.0 / additional_search_text=2.5 / description=2.0 / arg_terms=1.0, which weighs a tool-name match the most.</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="435"/>
+        <source>ツールを検索させるか、常に見せておくかの指定です。always は検索を経ずに常時 AI へ公開します（よく使う中核ツール向け）。auto は検索で見つけさせ、利用実績が溜まれば自動的に常時公開へ昇格します。never は検索でだけ見つかる状態に固定し、自動昇格させません。いずれも「呼び出しの禁止」ではありません。キーは `{種別}:{サーバー}:{ツール名}` 形式（種別は mcp / native / skill）で、`mcp:azure:*` のようにサーバー単位のワイルドカードも書けます。ツール名だけのキーは、別サーバーの同名ツールへ誤って効くため保存時に拒否されます。</source>
+        <translation>Decides whether a tool is found through search or is always visible. always exposes it to the AI at all times without search (for frequently used core tools). auto makes it discoverable through search and promotes it to always once enough usage builds up. never keeps it discoverable through search only and never auto-promotes it. None of these forbid a call. Keys use the form `{kind}:{server}:{tool name}` (kind is mcp / native / skill), and a per-server wildcard such as `mcp:azure:*` is also allowed. A key that is only a tool name is rejected on save, because it would wrongly apply to a same-named tool on a different server.</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="449"/>
+        <source>そのツールを見つけやすくするための検索専用の語です。実装として正しい説明文が、利用者が使う言葉と一致するとは限りません。例えば「クエリを実行します」としか書かれていないツールは『ダッシュボード用のデータが欲しい』では見つかりません。ここに『分析 ダッシュボード SQL レポート』のように空白区切りで足すと検索で当たるようになります。ここへ書いた語は検索の索引にだけ入り、AI へ渡すツール定義は 1 トークンも増えません。キーの形式は上の pin 設定と同じです。</source>
+        <translation>Search-only wording that makes a tool easier to find. A description that is technically correct does not necessarily match the words users type. For example, a tool described only as &quot;runs a query&quot; is not found by &quot;I want data for a dashboard&quot;. Adding space-separated wording such as &quot;analytics dashboard SQL report&quot; here makes it match. Wording added here goes only into the search index; it adds not one token to the tool definitions passed to the AI. The key format is the same as the pin setting above.</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="462"/>
+        <source>特定のワークフロー Step だけ検索の挙動を変える指定です。キーは `{ワークフロー ID}:{Step ID}` 形式（例: `asdw-web:1.2`）です。search は通常どおり検索させます。pin_only は検索結果を返さず、常時公開（always）のツールだけを見せます。使ってよいツールを限定したい Step に使います。</source>
+        <translation>Changes the search behaviour for specific workflow Steps only. Keys use the form `{workflow ID}:{Step ID}` (for example `asdw-web:1.2`). search behaves normally. pin_only returns no search results and shows only the always-exposed tools. Use it for Steps where the usable tool set must be restricted.</translation>
     </message>
     <message>
         <source>使用するモデル名を選択します。Auto を選ぶと GitHub が最適モデルを自動選択します。レビュー用 / QA 用は省略時メインモデルを継承します。</source>
         <translation type="vanished">Pick the model to use. When Auto is selected, GitHub picks the optimal model automatically. Review / QA models fall back to the main model if unspecified.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="283"/>
         <source>同時に起動するサブタスクの並列上限を設定します（既定: 15）。多くすると速くなりますが Copilot のレート制限に当たりやすくなります。</source>
-        <translation>Set the maximum number of concurrent subtasks (default: 15). Higher values run faster but may hit Copilot rate limits.</translation>
+        <translation type="vanished">Set the maximum number of concurrent subtasks (default: 15). Higher values run faster but may hit Copilot rate limits.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="287"/>
         <source>QA フェーズ・敵対的レビュー・Code Review Agent の自動投入を制御します。すべて既定では無効です。</source>
-        <translation>Control auto-injection for the QA phase, adversarial review, and the Code Review Agent. All disabled by default.</translation>
+        <translation type="vanished">Control auto-injection for the QA phase, adversarial review, and the Code Review Agent. All disabled by default.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="291"/>
+        <location filename="../help_content.py" line="293"/>
         <source>Work IQ (Microsoft 365 データ参照) の有効化と詳細設定を行います。@microsoft/workiq のインストールが必要です。</source>
         <translation>Enable and configure Work IQ (Microsoft 365 data references). Requires @microsoft/workiq to be installed.</translation>
     </message>
@@ -4033,92 +5169,110 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation type="vanished">Control console output level, log level, color, timestamps, and other display settings.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="303"/>
+        <location filename="../help_content.py" line="305"/>
         <source>MCP Server 設定ファイル・Copilot CLI 実行ファイルパス・外部 CLI サーバー URL を設定します。</source>
         <translation>Configure the MCP Server config file, Copilot CLI executable path, and external CLI server URL.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="307"/>
         <source>idle タイムアウトとレビュー完了待ちタイムアウトの秒数を設定します（既定: 21600 / 7200 秒）。</source>
-        <translation>Configure the idle timeout and review-completion timeout in seconds (default: 21600 / 7200 seconds).</translation>
+        <translation type="vanished">Configure the idle timeout and review-completion timeout in seconds (default: 21600 / 7200 seconds).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="311"/>
         <source>ベースブランチと実行ステップ（カンマ区切り）を設定します。</source>
-        <translation>Configure the base branch and run steps (comma-separated).</translation>
+        <translation type="vanished">Configure the base branch and run steps (comma-separated).</translation>
     </message>
     <message>
         <source>APP-ID / リソースグループ / バッチジョブ ID / ユースケース ID 等、ワークフロー固有の対象を指定します。</source>
         <translation type="vanished">Specify workflow-specific targets such as APP-ID, resource group, batch job ID, and use case ID.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="319"/>
         <source>AKM ワークフロー固有: 取り込みソース・対象ファイル・強制再生成・追加入力ディレクトリ等を設定します。</source>
-        <translation>AKM-specific: configure ingest source, target files, force-regenerate, and additional input directories.</translation>
+        <translation type="vanished">AKM-specific: configure ingest source, target files, force-regenerate, and additional input directories.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="323"/>
-        <source>AQOD ワークフロー固有: チェック対象スコープ・分析の深さ・重点観点を設定します。</source>
-        <translation>AQOD-specific: configure the check scope, analysis depth, and focus areas.</translation>
-    </message>
-    <message>
-        <location filename="../help_content.py" line="327"/>
+        <location filename="../help_content.py" line="317"/>
         <source>ADOC ワークフロー固有: 対象ディレクトリ・除外パターン・ドキュメントの主目的・大規模ファイル分割閾値を設定します。</source>
         <translation>ADOC-specific: configure target directories, exclude patterns, documentation primary purpose, and large file split threshold.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="331"/>
+        <location filename="../help_content.py" line="321"/>
         <source>ARD ワークフロー固有: 対象企業名・対象業務・調査基準日・調査期間・対象地域・分析目的・添付資料を設定します。</source>
         <translation>ARD-specific: configure target company name, target business, survey base date, survey period, target region, analysis purpose, and attachments.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="335"/>
         <source>全 Custom Agent の prompt 末尾に追記する文字列、コンテキスト最大文字数を設定します。</source>
-        <translation>Configure the string appended to the end of every Custom Agent prompt and the context character limit.</translation>
+        <translation type="vanished">Configure the string appended to the end of every Custom Agent prompt and the context character limit.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="339"/>
         <source>ドライラン・Self-Improve（自己改善ループ）等の実行制御を設定します。</source>
-        <translation>Configure execution controls such as dry run and Self-Improve (self-improvement loop).</translation>
+        <translation type="vanished">Configure execution controls such as dry run and Self-Improve (self-improvement loop).</translation>
     </message>
     <message>
         <source>ドライラン・Self-Improve（自己改善ループ）・mdq リアルタイム索引更新等の実行制御を設定します。</source>
         <translation type="vanished">Configure execution controls such as dry run, Self-Improve (self-improvement loop), and mdq realtime index update.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="358"/>
+        <location filename="../help_content.py" line="344"/>
         <source>アプリ名・選択ワークフロー・実行番号を表示します。</source>
         <translation>Show the app name, selected workflow, and run number.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="362"/>
+        <location filename="../help_content.py" line="348"/>
         <source>各ステップの状態を絵文字で表示します: ⚪=未着手 / 🔄=実行中 / ✅=完了 / ❌=失敗 / ⏭️=スキップ。</source>
         <translation>Show step status with emojis: ⚪=pending / 🔄=running / ✅=done / ❌=failed / ⏭️=skipped.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="366"/>
+        <location filename="../help_content.py" line="352"/>
         <source>ワークフロー実行中のログをリアルタイム表示します。右上のコピーボタンで全文をコピー可能。</source>
         <translation>Show workflow logs in real time. Use the top-right copy button to copy the full text.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="370"/>
+        <location filename="../help_content.py" line="356"/>
         <source>セッションのサブタスク階層を表示します。Cloud Agent Orchestrator 実行時に各 Sub-issue が枝として現れます。</source>
         <translation>Show the session&apos;s subtask hierarchy. Each Sub-issue appears as a branch when the Cloud Agent Orchestrator runs.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="374"/>
+        <location filename="../help_content.py" line="360"/>
         <source>実行中にユーザー操作が必要な事項（QA 入力待ち等）を表示します。</source>
         <translation>Show items that require user action during execution (e.g. waiting for QA input).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="378"/>
+        <location filename="../help_content.py" line="364"/>
         <source>コンテキスト消費量・選択モデル・経過時間を表示します。</source>
         <translation>Show context consumption, selected model, and elapsed time.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="382"/>
+        <location filename="../help_content.py" line="368"/>
         <source>実行中のオーケストレーターをグレースフルに停止します（SIGTERM 相当）。</source>
         <translation>Gracefully stop the running orchestrator (SIGTERM-equivalent).</translation>
+    </message>
+</context>
+<context>
+    <name>owner</name>
+    <message>
+        <location filename="../page_options.py" line="559"/>
+        <source>モデルがサポートする reasoning effort 値（SDK から取得）。Auto モデルおよび reasoning effort 非対応モデルでは選択できません。</source>
+        <translation>Reasoning effort values supported by the model (retrieved from the SDK). They cannot be selected for the Auto model or for models without reasoning effort support.</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="567"/>
+        <source>Effort</source>
+        <translation>Effort</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="580"/>
+        <source>GitHub Copilot API の token_prices より計算した USD/1M tokens 単価。In=入力 / Out=出力 / Cache=キャッシュ。モデル単位で Effort 依存せず。</source>
+        <translation>USD per 1M tokens calculated from token_prices of the GitHub Copilot API. In=input / Out=output / Cache=cache. Per model, independent of Effort.</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="622"/>
+        <source>（上の「使用するモデル」を継承）</source>
+        <translation>(Inherit &quot;Model to use&quot; above)</translation>
+    </message>
+    <message>
+        <location filename="../page_options.py" line="662"/>
+        <source>（モデル設定を継承）</source>
+        <translation>(Inherit the model setting)</translation>
     </message>
 </context>
 <context>
@@ -4142,14 +5296,14 @@ Use the [Stop] button to interrupt execution.</translation>
 <context>
     <name>widget</name>
     <message>
-        <location filename="../page_options.py" line="1401"/>
+        <location filename="../page_options.py" line="1754"/>
         <source>有効化</source>
-        <translation type="unfinished">Enable</translation>
+        <translation>Enable</translation>
     </message>
     <message>
-        <location filename="../page_options.py" line="1406"/>
+        <location filename="../page_options.py" line="1759"/>
         <source>github.com 側のマージ（auto-approve-and-merge）完了を検知後、今回作成したローカル作業ブランチを削除します（既定: 有効）。「PR 自動 Approve &amp; Auto-merge」が有効な場合のみ動作します。</source>
-        <translation type="unfinished">After detecting merge completion (auto-approve-and-merge) on github.com, deletes the local work branch created in this run (default: enabled). Works only when PR Auto Approve &amp; Auto-merge is enabled.</translation>
+        <translation>Deletes the local working branch created this time after detecting that the merge on github.com (auto-approve-and-merge) has finished (default: enabled). It works only when &quot;PR auto Approve &amp; Auto-merge&quot; is enabled.</translation>
     </message>
 </context>
 </TS>

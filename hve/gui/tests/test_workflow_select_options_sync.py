@@ -38,7 +38,7 @@ def test_options_page_updates_on_set_workflows_ard(qapp) -> None:
     options.set_workflows(["ard"], {"ard": "ARD"})
     assert "ard" in options._workflow_group_boxes
     # 他のワークフロー枠は作られない
-    for other in ("aad-web", "asdw-web", "adfd", "adfdv", "akm", "aqod", "adoc"):
+    for other in ("aad-web", "asdw-web", "adfd", "adfdv", "akm", "adi", "adoc"):
         assert other not in options._workflow_group_boxes
 
 
@@ -59,10 +59,10 @@ def test_options_page_clears_when_workflow_unset(qapp) -> None:
 
 
 def test_options_page_category_groups_always_hidden(qapp) -> None:
-    """旧カテゴリ枠 (C4 / C10〜C14) は workflow 選択に関係なく常時非表示。"""
+    """旧カテゴリ枠は workflow 選択に関係なく常時非表示。"""
     options = OptionsPage()
     options.set_workflows(["ard", "aad-web"], {"ard": "ARD", "aad-web": "AAD Web"})
-    for key in ("C4", "C10", "C11", "C12", "C13", "C14"):
+    for key in ("C4", "C10", "C11", "C13", "C14", "C17"):
         g = options._category_groups.get(key)
         assert g is not None
         assert g.isHidden(), f"{key} should be hidden"
@@ -81,3 +81,13 @@ def test_options_page_no_per_section_api(qapp) -> None:
     options = OptionsPage()
     assert not hasattr(options, "create_per_workflow_section")
     assert not hasattr(options, "build_args_for_workflow_using_section")
+
+
+def test_adi_owns_all_original_document_options(qapp) -> None:
+    from hve.gui import page_options
+
+    options = OptionsPage()
+    assert not hasattr(page_options, "_C12" + "AQ" + "OD")
+    assert not hasattr(options, "c12")
+    for field in ("purpose", "target_scope", "analysis_depth", "focus_areas"):
+        assert hasattr(options.c17, field), field

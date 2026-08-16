@@ -1,8 +1,7 @@
-"""artifact_validation.py — AQOD 成果物検証モジュール
+"""artifact_validation.py — 原本質問票成果物検証モジュール
 
-AQOD 本体成果物（qa/QA-DocConsistency-*.md）の検証を行う。
-HVE 実行補助 QA の execution-qa-merged.md は AQOD 本体成果物ではないため、
-このモジュールの検証対象ではない。
+原本質問票成果物（`qa/D01`〜`D21` / 横断 join / 単独 Agent fallback）の
+検証を行う。HVE 実行補助 QA の `execution-qa-merged.md` は対象外とする。
 """
 
 from __future__ import annotations
@@ -18,17 +17,21 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 
-# AQOD 成果物として認められるファイル名パターン
-_AQOD_FILENAME_PATTERNS = [
+# 原本質問票成果物として認められるファイル名パターン
+_ORIGINAL_DOCS_QUESTIONNAIRE_FILENAME_PATTERNS = [
+    re.compile(r"D(?:0[1-9]|1\d|2[0-1])-original-docs-questionnaire\.md$"),
+    re.compile(r"original-docs-cross-questionnaire\.md$"),
     re.compile(r"QA-DocConsistency-Issue-\d+\.md$"),
     re.compile(r"QA-DocConsistency-\d{8}-\d{6}\.md$"),
     re.compile(r"QA-DocConsistency-.+\.md$"),
 ]
 
-# AQOD 成果物の必須本文マーカー
+# 原本質問票成果物の必須本文マーカー
 _REQUIRED_HEADER = "# Original ドキュメント質問票"
-_REQUIRED_SCOPE = "対象スコープ: original-docs/"
+_REQUIRED_SCOPE = "対象スコープ: docs-original/"
 _REQUIRED_SUMMARY_SECTION = "## サマリー"
+_ZERO_QUESTION_SUMMARY_PATTERN = re.compile(r"総質問数\s*:\s*0\b")
+_ZERO_QUESTION_MARKER = "質問なし"
 
 # 各質問の必須項目
 _REQUIRED_QUESTION_FIELDS = [
@@ -51,21 +54,213 @@ _CONTENT_CATEGORIES = [
 ]
 
 
-def is_aqod_artifact_filename(path: "Path | str") -> bool:
-    """ファイル名が AQOD 本体成果物の命名規則に合致するか判定する。"""
+def is_original_docs_questionnaire_filename(path: "Path | str") -> bool:
+    """ファイル名が原本質問票成果物の命名規則に合致するか判定する。"""
     name = Path(path).name
-    return any(p.search(name) for p in _AQOD_FILENAME_PATTERNS)
+    return any(p.search(name) for p in _ORIGINAL_DOCS_QUESTIONNAIRE_FILENAME_PATTERNS)
 
 
 def _looks_like_auto_qa_helper_content(content: str) -> bool:
-    """AQOD 本体ではなく Auto-QA 補助質問票（[Q01]形式）らしい本文か判定する。"""
+    """本体ではなく Auto-QA 補助質問票（[Q01]形式）らしい本文か判定する。"""
     has_bracket_q = re.search(r"^\[Q\d+\]\s*$", content, re.MULTILINE) is not None
     has_body_q = re.search(r"^### Q\d+", content, re.MULTILINE) is not None
     return has_bracket_q and not has_body_q
 
 
-def validate_aqod_artifact(path: "Path | str") -> Dict[str, object]:
-    """AQOD 本体成果物の検証を行い、結果 dict を返す。
+def _has_explicit_zero_questions(summary_section: str | None) -> bool:
+    """質問 0 件を summary 内で明示しているか判定する。"""
+    if not summary_section:
+        return False
+    return bool(
+        _ZERO_QUESTION_SUMMARY_PATTERN.search(summary_section)
+        and _ZERO_QUESTION_MARKER in summary_section
+    )
+
+
+# ---------------------------------------------------------------------------
+# ADI（Auto Design-doc Ingestion）成果物の検証
+# ---------------------------------------------------------------------------
+
+# Doc Card の front matter 必須キー（FR-WF-ADI-09）
+_DESIGN_DOC_CARD_REQUIRED_KEYS = (
+    "doc_id",
+    "source_path",
+    "source_sha256",
+    "d_classes",
+    "confidence",
+)
+_DESIGN_DOC_CONFIDENCE_VALUES = frozenset({"high", "medium", "low"})
+
+
+def _parse_front_matter(text: str) -> "Dict[str, str] | None":
+    """先頭の ``---`` 区切り YAML front matter を ``key: value`` の辞書として返す。
+
+    ネストや複数行値は扱わない（Doc Card はフラットな key-value のみを持つ）。
+    front matter が無い場合は None。
+    """
+    if not text.startswith("---"):
+        return None
+    lines = text.splitlines()
+    try:
+        end = next(i for i, line in enumerate(lines[1:], start=1) if line.strip() == "---")
+    except StopIteration:
+        return None
+    result: Dict[str, str] = {}
+    for line in lines[1:end]:
+        if ":" not in line or line.lstrip().startswith("#"):
+            continue
+        key, _, value = line.partition(":")
+        result[key.strip()] = value.strip()
+    return result
+
+
+def _section_body(text: str, heading_marker: str) -> "str | None":
+    """``## …<heading_marker>…`` 見出しの本文を返す。見つからない場合は None。
+
+    marker には `must` / `out` のような一意な英字ラベルを渡すこと。
+    和文の部分一致（例: 「採用」）は「準採用」にも当たるため使わない。
+    """
+    lines = text.splitlines()
+    start = None
+    for i, line in enumerate(lines):
+        if line.startswith("## ") and heading_marker in line:
+            start = i + 1
+            break
+    if start is None:
+        return None
+    end = len(lines)
+    for i in range(start, len(lines)):
+        if lines[i].startswith("## "):
+            end = i
+            break
+    return "\n".join(lines[start:end])
+
+
+def _table_rows(section: str) -> List[List[str]]:
+    """Markdown テーブルのデータ行（ヘッダ・区切り行を除く）をセル配列で返す。"""
+    rows: List[List[str]] = []
+    seen_header = False
+    for line in section.splitlines():
+        s = line.strip()
+        if not s.startswith("|"):
+            continue
+        if re.match(r"^\|\s*[-:\s|]+\s*\|?$", s):
+            seen_header = True
+            continue
+        if not seen_header:
+            continue
+        rows.append([c.strip() for c in s.strip("|").split("|")])
+    return rows
+
+
+def validate_design_doc_card(path: "Path | str") -> List[str]:
+    """ADI Step 2 が生成する Doc Card を検証する（FR-WF-ADI-09）。"""
+    p = Path(path)
+    if not p.is_file():
+        return [f"Doc Card が存在しません: {p}"]
+
+    text = p.read_text(encoding="utf-8")
+    front_matter = _parse_front_matter(text)
+    if front_matter is None:
+        return [f"{p}: YAML front matter が見つかりません"]
+
+    errors: List[str] = []
+    for key in _DESIGN_DOC_CARD_REQUIRED_KEYS:
+        if key not in front_matter:
+            errors.append(f"{p}: front matter に必須キー '{key}' がありません")
+
+    confidence = front_matter.get("confidence")
+    if confidence is not None and confidence not in _DESIGN_DOC_CONFIDENCE_VALUES:
+        errors.append(
+            f"{p}: confidence の値が不正です: '{confidence}'（high / medium / low のいずれか）"
+        )
+
+    if _section_body(text, "文脈") is None:
+        errors.append(f"{p}: '## 文脈' セクションがありません")
+
+    return errors
+
+
+def validate_design_doc_catalog(path: "Path | str") -> List[str]:
+    """ADI Step 3 が生成するトリアージカタログを検証する。
+
+    - `out` 判定の各行に除外理由があること（FR-WF-ADI-10）
+    - `purpose` が空のとき `must` を付与していないこと（FR-WF-ADI-11）
+    """
+    p = Path(path)
+    if not p.is_file():
+        return [f"設計書カタログが存在しません: {p}"]
+
+    text = p.read_text(encoding="utf-8")
+    errors: List[str] = []
+
+    # `\s*` は改行も食うため、値の抽出は水平空白のみに限定する（空値を空行の次行と誤認しない）。
+    purpose_match = re.search(r"^-[ \t]*purpose:[ \t]*(.*)$", text, re.MULTILINE)
+    purpose = (purpose_match.group(1).strip() if purpose_match else "")
+
+    must_section = _section_body(text, "must")
+    must_rows = _table_rows(must_section) if must_section else []
+    if not purpose and must_rows:
+        errors.append(
+            f"{p}: purpose が空のため must を付与できません"
+            f"（{len(must_rows)} 行。should / may / out のいずれかへ変更してください）"
+        )
+
+    out_section = _section_body(text, "out")
+    if out_section is None:
+        errors.append(f"{p}: '## 対象外（out）' セクションがありません")
+    else:
+        for row in _table_rows(out_section):
+            if not row:
+                continue
+            if not row[-1]:
+                errors.append(f"{p}: out 判定 '{row[0]}' に除外理由がありません")
+
+    return errors
+
+
+# 下流成果物へ ADI が追記する候補セクションの見出しマーカー。
+# `_section_body` は一意な ASCII ラベルでの一致を前提とするため "ADI" を使う。
+_SEED_SECTION_MARKER = "ADI"
+_SEED_DOC_ID_PATTERN = re.compile(r"^DOC-\d{4}$")
+# 下流ワークフローが採番する識別子。ADI がこれらを振ってはならない。
+_DOWNSTREAM_ID_PATTERN = re.compile(r"\b(?:APP|UC|SVC|SCR|JOB)-\d+", re.IGNORECASE)
+
+
+def validate_downstream_seed_section(path: "Path | str") -> List[str]:
+    """ADI Step 5.x が下流成果物へ追記する候補セクションを検証する。
+
+    - 候補行に `DOC-NNNN` 形式の出典があること（FR-WF-ADI-14）
+    - 候補列に下流の採番 ID が含まれないこと（FR-WF-ADI-15）
+
+    候補セクションが無いファイル、および候補 0 件の「なし」記載は正常とみなす。
+    """
+    p = Path(path)
+    if not p.is_file():
+        return [f"下流成果物が存在しません: {p}"]
+
+    section = _section_body(p.read_text(encoding="utf-8"), _SEED_SECTION_MARKER)
+    if section is None:
+        return []
+
+    errors: List[str] = []
+    for row in _table_rows(section):
+        if not row or not any(row):
+            continue
+        candidate = row[0]
+        doc_ids = [c for c in row if _SEED_DOC_ID_PATTERN.match(c)]
+        if not doc_ids:
+            errors.append(f"{p}: 候補 '{candidate}' に出典 doc_id（DOC-NNNN）がありません")
+        if _DOWNSTREAM_ID_PATTERN.search(candidate):
+            errors.append(
+                f"{p}: 候補 '{candidate}' に採番済み ID が含まれます"
+                "（ID の採番は下流ワークフローの責務）"
+            )
+    return errors
+
+
+def validate_original_docs_questionnaire_artifact(path: "Path | str") -> Dict[str, object]:
+    """原本質問票成果物の検証を行い、結果 dict を返す。
 
     Returns:
         {
@@ -87,9 +282,9 @@ def validate_aqod_artifact(path: "Path | str") -> Dict[str, object]:
     errors: List[str] = []
 
     # ファイル名チェック
-    if not is_aqod_artifact_filename(path):
+    if not is_original_docs_questionnaire_filename(path):
         errors.append(
-            f"ファイル名 '{path.name}' は AQOD 本体成果物の命名規則（QA-DocConsistency-*.md）に合致しません。"
+            f"ファイル名 '{path.name}' は原本質問票成果物の命名規則に合致しません。"
         )
 
     # ファイル読み込み
@@ -112,7 +307,7 @@ def validate_aqod_artifact(path: "Path | str") -> Dict[str, object]:
 
     if not errors and _looks_like_auto_qa_helper_content(content):
         warnings.append(
-            "AQOD Auto-QA 補助質問票（[Qxx]形式）のため、AQOD 本体成果物検証をスキップします。"
+            "Auto-QA 補助質問票（[Qxx]形式）のため、原本質問票本体の検証をスキップします。"
         )
         result["passed"] = True
         result["skipped"] = True
@@ -124,14 +319,14 @@ def validate_aqod_artifact(path: "Path | str") -> Dict[str, object]:
     if _REQUIRED_HEADER not in content:
         errors.append(
             f"必須ヘッダー '{_REQUIRED_HEADER}' が見つかりません。"
-            " AQOD 本体成果物ではない可能性があります。"
+            " 原本質問票本体ではない可能性があります。"
         )
 
     # 対象スコープチェック
     if _REQUIRED_SCOPE not in content:
         warnings.append(
             f"'{_REQUIRED_SCOPE}' が見つかりません。"
-            " AQOD 分析対象が original-docs/ であることの明示が推奨されます。"
+            " 原本分析対象が docs-original/ であることの明示が推奨されます。"
         )
 
     # サマリーセクションチェック
@@ -139,14 +334,17 @@ def validate_aqod_artifact(path: "Path | str") -> Dict[str, object]:
         warnings.append(
             f"'{_REQUIRED_SUMMARY_SECTION}' セクションが見つかりません。"
         )
+    summary_section = _section_body(content, "サマリー")
+    has_explicit_zero_questions = _has_explicit_zero_questions(summary_section)
 
     # 質問件数チェック（### Q パターン）
     question_blocks = re.findall(r"^### Q\d+", content, re.MULTILINE)
     if not question_blocks:
-        errors.append(
-            "質問ブロック（### Q01 等）が1件も見つかりません。"
-            " AQOD 本体成果物ではない可能性があります。"
-        )
+        if not has_explicit_zero_questions:
+            errors.append(
+                "質問ブロック（### Q01 等）が1件も見つかりません。"
+                " 質問 0 件の場合はサマリーに『総質問数: 0』と『質問なし』の両方を明記してください。"
+            )
     else:
         # 必須項目チェック
         for field in _REQUIRED_QUESTION_FIELDS:
@@ -154,13 +352,13 @@ def validate_aqod_artifact(path: "Path | str") -> Dict[str, object]:
                 errors.append(
                     f"必須項目 '{field}' が本文に含まれていません。"
                 )
-    # 内容系カテゴリチェック
-    found_categories = [cat for cat in _CONTENT_CATEGORIES if cat in content]
-    if not found_categories:
-        errors.append(
-            "内容系カテゴリ（矛盾/不明瞭/重大な欠落/一貫性欠落/データ整合性/ベストプラクティス逸脱/運用設計未定義）が"
-            "1件も含まれていません。"
-        )
+        # 内容系カテゴリチェック
+        found_categories = [cat for cat in _CONTENT_CATEGORIES if cat in content]
+        if not found_categories:
+            errors.append(
+                "内容系カテゴリ（矛盾/不明瞭/重大な欠落/一貫性欠落/データ整合性/ベストプラクティス逸脱/運用設計未定義）が"
+                "1件も含まれていません。"
+            )
 
     result["passed"] = len(errors) == 0
     result["warnings"] = warnings
@@ -168,25 +366,25 @@ def validate_aqod_artifact(path: "Path | str") -> Dict[str, object]:
     return result
 
 
-def _find_aqod_artifact_candidates(qa_dir: "Path | str" = "qa") -> List[Path]:
-    """qa/ ディレクトリ内の QA-DocConsistency-* 候補ファイルを検索する。"""
+def _find_original_docs_questionnaire_candidates(qa_dir: "Path | str" = "qa") -> List[Path]:
+    """qa/ ディレクトリ内の原本質問票候補ファイルを検索する。"""
     qa_path = Path(qa_dir)
     if not qa_path.is_dir():
         return []
     return sorted(
         f for f in qa_path.iterdir()
-        if f.is_file() and is_aqod_artifact_filename(f)
+        if f.is_file() and is_original_docs_questionnaire_filename(f)
     )
 
 
-def validate_aqod_run(
+def validate_original_docs_questionnaire_run(
     qa_dir: "Path | str" = "qa",
     run_id: Optional[str] = None,
 ) -> Dict[str, object]:
-    """AQOD 実行後の成果物検証を行い、サマリー dict を返す。
+    """原本質問票実行後の成果物検証を行い、サマリー dict を返す。
 
-    AQOD 本体成果物（QA-DocConsistency-*.md）を対象とする。
-    execution-qa-merged.md は HVE 実行補助 QA であり、AQOD 本体成果物ではない。
+    D01〜D21 fan-out、横断 join、単独 Agent fallback を対象とする。
+    execution-qa-merged.md は HVE 実行補助 QA であり、本体成果物ではない。
 
     Args:
         qa_dir: qa/ ディレクトリのパス
@@ -199,11 +397,11 @@ def validate_aqod_run(
             "failed": int,
             "validation_results": list[dict],
             "overall": "PASS" | "WARN" | "FAIL",
-            "aqod_validation": bool,  # True = 少なくとも1件の有効な成果物あり
+            "original_docs_questionnaire_validation": bool,
         }
     """
-    artifacts = _find_aqod_artifact_candidates(qa_dir)
-    validation_results = [validate_aqod_artifact(a) for a in artifacts]
+    artifacts = _find_original_docs_questionnaire_candidates(qa_dir)
+    validation_results = [validate_original_docs_questionnaire_artifact(a) for a in artifacts]
     evaluated_results = [r for r in validation_results if not r.get("skipped")]
     skipped = len(validation_results) - len(evaluated_results)
 
@@ -212,13 +410,13 @@ def validate_aqod_run(
 
     if not evaluated_results:
         overall = "FAIL"
-        aqod_validation = False
+        original_docs_questionnaire_validation = False
     elif passed > 0:
         overall = "PASS" if failed == 0 else "WARN"
-        aqod_validation = True
+        original_docs_questionnaire_validation = True
     else:
         overall = "FAIL"
-        aqod_validation = False
+        original_docs_questionnaire_validation = False
 
     return {
         "artifacts_found": len(evaluated_results),
@@ -228,7 +426,7 @@ def validate_aqod_run(
         "failed": failed,
         "validation_results": validation_results,
         "overall": overall,
-        "aqod_validation": aqod_validation,
+        "original_docs_questionnaire_validation": original_docs_questionnaire_validation,
     }
 
 # ---------------------------------------------------------------------------
@@ -10242,7 +10440,36 @@ _AGENTIC_RETRIEVAL_OUTPUT_MODES = {"extractivedata", "answersynthesis"}
 # Learn: minimal は KB あたり最大 10 Knowledge Source。low / medium も tier 依存で同値のため
 # 設計時の上限として 10 を用い、実行時に再確認する運用とする。
 _AGENTIC_RETRIEVAL_MAX_KNOWLEDGE_SOURCES = 10
+# FR-WF-AAG-04: 1 件の Knowledge Source だけの Knowledge Base は
+# クラシックな単一クエリ検索と等価で、横断検索の前提を満たさない。
+_AGENTIC_RETRIEVAL_MIN_KNOWLEDGE_SOURCES = 2
 _AGENTIC_RETRIEVAL_ALLOWED_MCP_TOOL = "knowledge_base_retrieve"
+# FR-WF-AAG-03: 生成 AI Agent の Agentic Retrieval 方針。3 値以外は推測で丸めない。
+_AGENTIC_RETRIEVAL_POLICIES = ("auto", "yes", "no")
+# Agent Skills 仕様（<https://agentskills.io/specification>、2026-08-16 確認）の frontmatter 長さ制約。
+_AGENT_SKILL_MAX_NAME_LENGTH = 64
+_AGENT_SKILL_MAX_DESCRIPTION_LENGTH = 1024
+# Agent Plugins Specification 1.0.0（<https://github.com/agentplugins/agent-plugins-spec>、2026-08-16 確認）。
+_AGENT_PLUGIN_MANIFEST_FILE = "plugin.json"
+_AGENT_PLUGIN_SCHEMA = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
+# 仕様 §5.2 が許容する top-level フィールド（closed schema）。
+_AGENT_PLUGIN_ALLOWED_FIELDS = frozenset(
+    {
+        "$schema",
+        "name",
+        "version",
+        "description",
+        "author",
+        "homepage",
+        "repository",
+        "license",
+        "keywords",
+        "extensions",
+    }
+)
+# 仕様 §5.5 の name 制約（plugin.schema.json の pattern と同じ）。
+_AGENT_PLUGIN_NAME = re.compile(r"^(?!.*(?:--|\.\.))[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$")
+_AGENT_PLUGIN_MAX_NAME_LENGTH = 64
 # Skill `foundry-toolbox-contract` の TB-CAP-01〜05。
 # Tool 総数が閾値を超えた場合だけ必須になる。
 _TOOLBOX_CONTRACT_HEADINGS = {
@@ -11234,6 +11461,7 @@ def _validate_agentic_retrieval_knowledge_base(
         "Query planning LLM",
         "Effort rationale",
         "Retrieval instructions",
+        "Index semantic configuration",
         "Decision source",
     ):
         if not _is_meaningful_ai_agent_value(_ai_agent_field(section, label)):
@@ -11309,6 +11537,12 @@ def _validate_agentic_retrieval_sources(
         errors.append(
             f"[{contract_id}] a knowledge base allows at most "
             f"{_AGENTIC_RETRIEVAL_MAX_KNOWLEDGE_SOURCES} knowledge sources, found {len(rows)}"
+        )
+    if len(rows) < _AGENTIC_RETRIEVAL_MIN_KNOWLEDGE_SOURCES:
+        errors.append(
+            f"[{contract_id}] agentic retrieval needs at least "
+            f"{_AGENTIC_RETRIEVAL_MIN_KNOWLEDGE_SOURCES} knowledge sources to search "
+            f"across sources in one request, found {len(rows)}"
         )
 
     names: List[str] = []
@@ -11465,6 +11699,38 @@ def _validate_agentic_retrieval_mcp(
     return errors
 
 
+def _validate_agentic_retrieval_policy(
+    policy: str,
+    routes: List[Dict[str, str]],
+    selected: bool,
+) -> List[str]:
+    """FR-WF-AAG-04: 方針値と AG-CAP-03 の経路選択の整合を検証する。"""
+    normalized = str(policy).strip().casefold()
+    if normalized not in _AGENTIC_RETRIEVAL_POLICIES:
+        return [
+            f"[AR-CAP-01] unknown agentic retrieval policy {policy!r}; "
+            "expected auto, yes, or no"
+        ]
+    if normalized == "yes" and not selected:
+        request_class_key = _normalize_ai_agent_label("Request class")
+        needs_agentic = any(
+            _normalize_ai_agent_label(row.get(request_class_key, ""))
+            == "enterpriseunstructured"
+            for row in routes
+        )
+        if needs_agentic:
+            return [
+                "[AR-CAP-01] agentic retrieval policy yes requires a Foundry IQ or "
+                "Azure AI Search agentic retrieval route for enterprise-unstructured"
+            ]
+    if normalized == "no" and selected:
+        return [
+            "[AR-CAP-01] agentic retrieval policy no forbids the Foundry IQ or "
+            "Azure AI Search agentic retrieval route"
+        ]
+    return []
+
+
 def _validate_agentic_retrieval_contracts(
     visible: str,
     metadata: Dict[str, Any],
@@ -11584,7 +11850,9 @@ def _validate_agentic_retrieval_implementation(
 
 
 def _parse_ai_agent_design(
-    path: Path, tool_search_policy: str = "auto"
+    path: Path,
+    tool_search_policy: str = "auto",
+    agentic_retrieval_policy: str = "auto",
 ) -> tuple[List[str], Dict[str, Any]]:
     metadata: Dict[str, Any] = {"agent_key": ""}
     if not path.is_file():
@@ -11634,6 +11902,16 @@ def _parse_ai_agent_design(
 
     if _agentic_retrieval_route_selected(metadata.get("routes", [])):
         errors.extend(_validate_agentic_retrieval_contracts(visible, metadata))
+        agentic_selected = True
+    else:
+        agentic_selected = False
+    errors.extend(
+        _validate_agentic_retrieval_policy(
+            agentic_retrieval_policy,
+            metadata.get("routes", []),
+            agentic_selected,
+        )
+    )
 
     errors.extend(_validate_toolbox_contracts(visible, metadata, tool_search_policy))
 
@@ -11652,10 +11930,14 @@ def _parse_ai_agent_design(
 
 
 def validate_ai_agent_design_artifact(
-    path: "Path | str", tool_search_policy: str = "auto"
+    path: "Path | str",
+    tool_search_policy: str = "auto",
+    agentic_retrieval_policy: str = "auto",
 ) -> List[str]:
     """AAG Step 3のAG-CAP-01〜06設計成果物を決定的に検証する。"""
-    errors, _ = _parse_ai_agent_design(Path(path), tool_search_policy)
+    errors, _ = _parse_ai_agent_design(
+        Path(path), tool_search_policy, agentic_retrieval_policy
+    )
     return errors
 
 
@@ -11996,8 +12278,18 @@ def _validate_ai_agent_skill_artifacts(
         description_match = re.search(r"^description:\s*(.+)$", header, re.MULTILINE)
         if not name_match or name_match.group(1).strip() != name:
             errors.append("[AG-CAP-06] SKILL.md frontmatter name must match the design")
+        elif len(name_match.group(1).strip()) > _AGENT_SKILL_MAX_NAME_LENGTH:
+            errors.append(
+                f"[AG-CAP-06] SKILL.md name must be at most "
+                f"{_AGENT_SKILL_MAX_NAME_LENGTH} characters"
+            )
         if not description_match or not _is_meaningful_ai_agent_value(description_match.group(1)):
             errors.append("[AG-CAP-06] SKILL.md requires a meaningful description")
+        elif len(description_match.group(1).strip()) > _AGENT_SKILL_MAX_DESCRIPTION_LENGTH:
+            errors.append(
+                f"[AG-CAP-06] SKILL.md description must be at most "
+                f"{_AGENT_SKILL_MAX_DESCRIPTION_LENGTH} characters"
+            )
     for heading in ("Procedure", "Input", "Output", "Errors", "Completion"):
         if not re.search(rf"^#{{1,6}}\s+{heading}\s*$", text, re.MULTILINE):
             errors.append(f"[AG-CAP-06] SKILL.md missing heading: {heading}")
@@ -12014,16 +12306,68 @@ def _validate_ai_agent_skill_artifacts(
     return errors
 
 
+def validate_agent_plugin_manifest(
+    agent_dir: "Path | str", agent_key: str
+) -> List[str]:
+    """AAGD Step 2.3 の Agent Plugins マニフェストを検証する（FR-WF-AAGD-06）。"""
+    path = Path(agent_dir) / _AGENT_PLUGIN_MANIFEST_FILE
+    if not path.is_file():
+        return [f"[AGENT-PLUGIN] manifest not found: {path}"]
+    # 仕様 §4.1: plugin root 外へ解決されるパッケージパスは拒否する。
+    if path.is_symlink():
+        return [f"[AGENT-PLUGIN] manifest must not be a symlink: {path}"]
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return [f"[AGENT-PLUGIN] manifest read error ({path}): {exc}"]
+    try:
+        manifest = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        return [f"[AGENT-PLUGIN] manifest is not valid JSON ({path}): {exc}"]
+    if not isinstance(manifest, dict):
+        return [f"[AGENT-PLUGIN] manifest must be a JSON object: {path}"]
+
+    errors: List[str] = []
+    unknown = sorted(set(manifest) - _AGENT_PLUGIN_ALLOWED_FIELDS)
+    if unknown:
+        errors.append(
+            "[AGENT-PLUGIN] manifest has fields outside the Agent Plugins 1.0.0 "
+            "schema: " + ", ".join(unknown)
+        )
+    if manifest.get("$schema") != _AGENT_PLUGIN_SCHEMA:
+        errors.append(f"[AGENT-PLUGIN] $schema must be {_AGENT_PLUGIN_SCHEMA}")
+
+    expected_name = str(agent_key).strip().casefold()
+    name = manifest.get("name")
+    if not isinstance(name, str) or name != expected_name:
+        errors.append(
+            f"[AGENT-PLUGIN] name must be the lowercased fan-out key {expected_name!r}"
+        )
+    elif len(name) > _AGENT_PLUGIN_MAX_NAME_LENGTH or not _AGENT_PLUGIN_NAME.fullmatch(name):
+        errors.append(
+            f"[AGENT-PLUGIN] name {name!r} violates the Agent Plugins name constraints"
+        )
+
+    for field in ("description", "version"):
+        value = manifest.get(field)
+        if not isinstance(value, str) or not value.strip():
+            errors.append(f"[AGENT-PLUGIN] {field} must be a non-empty string")
+    return errors
+
+
 def validate_ai_agent_implementation_artifacts(
     design_path: "Path | str",
     agent_dir: "Path | str",
     test_spec_path: "Path | str | None" = None,
     tool_search_policy: str = "auto",
+    agentic_retrieval_policy: str = "auto",
 ) -> List[str]:
     """AAGD Step 2.3の設計・code・config・test traceを相互検証する。"""
     detail_path = Path(design_path)
     root = Path(agent_dir)
-    design_errors, metadata = _parse_ai_agent_design(detail_path, tool_search_policy)
+    design_errors, metadata = _parse_ai_agent_design(
+        detail_path, tool_search_policy, agentic_retrieval_policy
+    )
     errors = [f"AAGD design prerequisite: {error}" for error in design_errors]
 
     if test_spec_path is None:
@@ -12042,6 +12386,7 @@ def validate_ai_agent_implementation_artifacts(
     key = str(metadata.get("agent_key", ""))
     if key and root.name != key:
         errors.append(f"AAGD agent directory key mismatch: expected {key}, actual {root.name}")
+    errors.extend(validate_agent_plugin_manifest(root, key))
 
     files, file_errors = _collect_ai_agent_files(root)
     errors.extend(file_errors)
@@ -12222,6 +12567,39 @@ def _read_deploy_script(path: Path) -> "str | None":
         return None
 
 
+def _validate_agentic_retrieval_deploy(
+    contract: Mapping[str, Any], infra_dir: Path
+) -> List[str]:
+    """AR-CAP-01 / 02 の設計値が deploy スクリプトから追跡できるかを照合する。
+
+    Azure へは接続しない。実リソースとの一致確認は Prompt 側の AC 検証が担う。
+    """
+    if not infra_dir.is_dir() or infra_dir.is_symlink():
+        return [f"[AR-CAP-01] Azure infrastructure directory not found: {infra_dir}"]
+
+    scripts = "\n".join(
+        text
+        for path in sorted(infra_dir.rglob("*"))
+        if (text := _read_deploy_script(path)) is not None
+    )
+
+    errors: List[str] = []
+    knowledge_base_name = str(contract.get("knowledge_base_name") or "").strip()
+    if knowledge_base_name and knowledge_base_name not in scripts:
+        errors.append(
+            "[AR-CAP-01] knowledge base name is not referenced by any deploy script "
+            f"under {infra_dir.name}: {knowledge_base_name}"
+        )
+    for name in contract.get("knowledge_sources") or []:
+        cleaned = str(name).strip()
+        if cleaned and cleaned not in scripts:
+            errors.append(
+                "[AR-CAP-02] knowledge source is not referenced by any deploy script "
+                f"under {infra_dir.name}: {cleaned}"
+            )
+    return errors
+
+
 def _validate_toolbox_deploy_scripts(
     toolbox: Mapping[str, Any], infra_dir: Path
 ) -> List[str]:
@@ -12289,16 +12667,24 @@ def validate_ai_agent_deploy_artifacts(
     design_path: "Path | str",
     infra_dir: "Path | str",
     tool_search_policy: str = "auto",
+    agentic_retrieval_policy: str = "auto",
 ) -> List[str]:
-    """AAGD Step 3のdeploy/verify scriptを設計TB-CAPと照合する。"""
+    """AAGD Step 3のdeploy/verify scriptを設計TB-CAP / AR-CAPと照合する。"""
     detail_path = Path(design_path)
-    design_errors, metadata = _parse_ai_agent_design(detail_path, tool_search_policy)
+    design_errors, metadata = _parse_ai_agent_design(
+        detail_path, tool_search_policy, agentic_retrieval_policy
+    )
     errors = [f"AAGD design prerequisite: {error}" for error in design_errors]
+    root = Path(infra_dir)
+
+    agentic_retrieval = metadata.get("agentic_retrieval") or {}
+    if agentic_retrieval.get("selected"):
+        errors.extend(_validate_agentic_retrieval_deploy(agentic_retrieval, root))
+
     toolbox = metadata.get("toolbox") or {}
     if not toolbox.get("selected"):
         return errors
 
-    root = Path(infra_dir)
     if not root.is_dir() or root.is_symlink():
         errors.append(f"[TB-CAP-02] Azure infrastructure directory not found: {root}")
         return errors
@@ -12450,11 +12836,14 @@ def validate_ai_agent_capability_artifacts(
     agent_dir: "Path | str | None" = None,
     test_spec_path: "Path | str | None" = None,
     tool_search_policy: str = "auto",
+    agentic_retrieval_policy: str = "auto",
 ) -> List[str]:
     """AAG/AAGDだけをallowlistし、他workflowではno-opにするdispatcher。"""
     workflow = (workflow_id or "").strip().casefold()
     if workflow == "aag":
-        return validate_ai_agent_design_artifact(design_path, tool_search_policy)
+        return validate_ai_agent_design_artifact(
+            design_path, tool_search_policy, agentic_retrieval_policy
+        )
     if workflow == "aagd":
         if agent_dir is None:
             return ["AAGD agent directory is required for capability validation"]
@@ -12463,5 +12852,6 @@ def validate_ai_agent_capability_artifacts(
             agent_dir,
             test_spec_path,
             tool_search_policy,
+            agentic_retrieval_policy,
         )
     return []

@@ -15,10 +15,10 @@ TDD テスト仕様書を根拠に、データフローアプリの失敗する�
 - `docs/dataflow/dataflow-monitoring-design.md`（監視設計書）
 
 ## 出力
-- `src/test/dataflow/{jobId}-{jobNameSlug}.Tests/` 配下のテストコード（xUnit / C#）
+- `src/test/dataflow/{jobId}-{jobNameSlug}.Tests/` 配下のテストコード（pytest / Python）
 
 ## 生成テストの実行環境
-- 生成する xUnit テストはローカル端末 / CI で `dotnet build` と `dotnet test` が実行可能であること。
+- 生成する pytest テストはローカル端末 / CI で `pytest` が実行可能であること。
 - RED フェーズでは Azure データサービスへ実接続しない。外部 I/O はテスト仕様書のテストダブル設計に従い Azurite / Testcontainers / Mock / Stub に切り分ける。
 - 構成済み外部サービスを使う Integration テストが必要な場合は Unit テストと分離し、接続先・認証・Resource 名を環境変数またはテスト設定ファイルで注入する。未設定を PASS 扱いしない。
 - 接続文字列・アカウントキー・SAS・Bearer token 等の秘密情報をテストコード、README、ログにハードコードしない。
@@ -32,7 +32,7 @@ TDD テスト仕様書を根拠に、データフローアプリの失敗する�
 - {dep}
 
 ## 完了条件
-- テストコードが作成され、`dotnet test` で失敗（TDD RED）が確認されている
+- テストコードが作成され、`pytest` で失敗（TDD RED）が確認されている
 ## TDD テスト結果レポート（必須）
 - 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - 必須ラベル: `Schema-Version`, `Evidence-Status`, `TDD-Judgement`, `Secret-Redaction`, `Test-Files-Changed`

@@ -9,13 +9,13 @@
 `Arch-ARD-BusinessAnalysis-Untargeted`
 
 ## 入力
-- 対象企業名: `{company_name}`（任意）
+- 対象企業名: `{company_name}`（必須）
 - 調査基準日: `{survey_base_date}`（任意）
 - 調査期間: `{survey_period_years}` 年
 - 対象地域: `{target_region}`
 - 分析目的: `{analysis_purpose}`
 - 添付資料: `{attached_docs}`（**提供がある場合は一次情報として最優先で参照する**。記載のある事実は公開情報より優先し、ファイル名を推測せず与えられたパスをそのまま読むこと。`添付なし` の場合は公開情報のみで分析）
-- `original-docs/*`（任意 / 読み取り専用）
+- `docs-original/*`（任意 / 読み取り専用）
 
 ## 出力
 - `docs/company-business-recommendation.md`（事業候補表 + `BIZ-NN` 付き）

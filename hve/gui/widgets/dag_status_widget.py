@@ -289,7 +289,7 @@ class _StepNodeItem(QGraphicsRectItem):
         # finished_at が固定値のため値は変わらない）
         elapsed_text = "--:--:--"
         if self.started_at is not None:
-            end = self.finished_at if self.finished_at is not None else time.monotonic()
+            end = self.finished_at if self.finished_at is not None else self._widget._now()
             elapsed_text = _fmt_elapsed(max(0.0, end - self.started_at))
         self._lbl_elapsed.setText(f"⏱ {elapsed_text}")
 
@@ -373,7 +373,7 @@ class _FanoutChildNodeItem(QGraphicsRectItem):
     def _elapsed_text(self) -> str:
         if self.started_at is None:
             return "--:--:--"
-        end = self.finished_at if self.finished_at is not None else time.monotonic()
+        end = self.finished_at if self.finished_at is not None else self._widget._now()
         return _fmt_elapsed(max(0.0, end - self.started_at))
 
     # -------------------------------- 描画 --------------------------------
@@ -461,7 +461,7 @@ class _WorkflowHeaderItem(QGraphicsRectItem):
         glyph = _STATUS_GLYPH.get(self.status, "?")
         elapsed_text = "--:--:--"
         if self.started_at is not None:
-            end = self.finished_at if self.finished_at is not None else time.monotonic()
+            end = self.finished_at if self.finished_at is not None else self._widget._now()
             elapsed_text = _fmt_elapsed(max(0.0, end - self.started_at))
         text = (
             f"{arrow}  {glyph} {self.label}    "
@@ -602,16 +602,23 @@ class DagStatusWidget(QWidget):
         self._tick_timer.stop()
 
     def freeze_elapsed(self) -> None:
-        """作業状況サマリーの経過時間を現在時刻で固定する。
+        """作業状況の経過時間を現在時刻で固定する（FR-GUI-19）。
 
-        ジョブが正常終了・エラー終了・ユーザー停止した時点で呼び出す。描画更新用の
-        ``QTimer`` 自体は継続するため、画面の再描画や次回実行への影響を与えずに
-        経過時間表示だけを停止できる。複数回呼んでも最初の終了時刻を保持する。
+        ジョブが正常終了・エラー終了・ユーザー停止した時点で呼び出す。固定後は
+        ``_now()`` が終了時刻を返すため、サマリー行・Workflow ノード・Step ノード・
+        fan-out 子ノードのすべてが停止する。描画更新用の ``QTimer`` 自体は継続する。
+        複数回呼んでも最初の終了時刻を保持する。
         """
         if self._global_started_at is None or self._global_finished_at is not None:
             return
         self._global_finished_at = time.monotonic()
         self._update_summary_label()
+
+    def _now(self) -> float:
+        """経過時間の終端値として使う現在時刻。停止後は終了時刻で固定される。"""
+        if self._global_finished_at is not None:
+            return self._global_finished_at
+        return time.monotonic()
 
     def set_theme(self, theme: str) -> None:
         if theme not in _THEMES or theme == self._theme:
@@ -1064,12 +1071,7 @@ class DagStatusWidget(QWidget):
         if self._global_started_at is None:
             elapsed = 0.0
         else:
-            end = (
-                self._global_finished_at
-                if self._global_finished_at is not None
-                else time.monotonic()
-            )
-            elapsed = max(0.0, end - self._global_started_at)
+            elapsed = max(0.0, self._now() - self._global_started_at)
         self._summary_label.setText(
             self.tr("ワークフロー: %d/%d   ステップ: %d/%d   [%s]")
             % (

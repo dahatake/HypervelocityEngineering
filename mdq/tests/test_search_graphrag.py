@@ -31,6 +31,7 @@ pytest.importorskip("numpy")
 pytest.importorskip("lightrag")
 
 from mdq import cli
+from mdq import indexer
 
 
 def _run_cli(monkeypatch, tmp_path: Path, argv: list[str],
@@ -84,6 +85,136 @@ def test_cli_index_graphrag_writes_storage_and_summary(
     assert sqlite_files == [], (
         f"graphrag must not create SQLite indexes; found: {sqlite_files}"
     )
+
+
+def test_marker_files_match_what_lightrag_writes(
+    monkeypatch, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+) -> None:
+    """索引の存在判定に使うマーカーが実際に書き出されること。
+
+    LightRAG が出力ファイル名を変えると ``has_lightrag_index`` が構築済みの
+    索引を「未作成」と誤判定するため、実生成物と定義を突き合わせる。
+    """
+    _make_corpus(tmp_path)
+    working_dir = tmp_path / "gr-store"
+    rc, _out, _err = _run_cli(monkeypatch, tmp_path, [
+        "index",
+        "--strategy", "graphrag",
+        "--root", "users-guide",
+        "--graphrag-llm-provider", "mock",
+        "--graphrag-embed-provider", "mock",
+        "--graphrag-working-dir", str(working_dir),
+        "--rebuild",
+    ], capsys)
+    assert rc == 0, f"index failed: rc={rc}"
+
+    produced = {p.name for p in working_dir.iterdir() if p.is_file()}
+    stale = sorted(set(indexer._LIGHTRAG_MARKERS) - produced)
+    assert not stale, (
+        f"これらのマーカーは LightRAG が生成しない: {stale}。"
+        f"マーカー定義を実際の出力へ合わせること。生成物: {sorted(produced)}"
+    )
+    assert indexer.has_lightrag_index(working_dir) is True
+
+
+def test_rebuild_in_the_same_process_keeps_the_index(tmp_path: Path) -> None:
+    """同一プロセスでの完全再ビルドが索引を破壊しないこと。
+
+    LightRAG はプロセス単位の共有ストレージを持つため、1 度ビルドした
+    プロセスで再ビルドすると、初期化済みの storage が新しい作業ディレクトリへ
+    書き戻されず、成功報告のまま索引がほぼ空になる。GUI は 1 プロセスで
+    「完全再ビルド」を繰り返すため、この経路が実運用のパターンになる。
+    """
+    from mdq import strategies_graphrag as gs
+
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "a.md").write_text("# 会員\n\n会員は問い合わせる。\n", encoding="utf-8")
+    working_dir = tmp_path / "gr-store"
+
+    gs.set_runtime_config(
+        gs.GraphRAGConfig(
+            llm_provider="mock", embed_provider="mock", embed_mock_dim=64
+        )
+    )
+    try:
+        indexer.build_graphrag_index(tmp_path, ["docs"], working_dir)
+        after_first = {p.name for p in working_dir.iterdir() if p.is_file()}
+        assert after_first
+
+        indexer.build_graphrag_index(
+            tmp_path, ["docs"], working_dir, rebuild=True
+        )
+        after_rebuild = {p.name for p in working_dir.iterdir() if p.is_file()}
+    finally:
+        gs.clear_runtime_config()
+
+    missing = sorted(after_first - after_rebuild)
+    assert not missing, (
+        f"完全再ビルドで索引ファイルが失われた: {missing}"
+    )
+
+
+def test_doc_status_counts_report_failed_extractions(tmp_path: Path) -> None:
+    """LightRAG が失敗と記録した文書を成功として数えないこと。
+
+    ``rag.ainsert()`` は文書単位の抽出失敗を内部で捕捉して送出しないため、
+    呼び出しが返ったことをもって成功と見なすと、抽出が落ちた文書まで
+    ``files_ok`` に含まれてしまう。実際の状態は LightRAG が
+    ``kv_store_doc_status.json`` へ記録する。
+    """
+    working = tmp_path / "wd"
+    working.mkdir()
+    (working / "kv_store_doc_status.json").write_text(
+        json.dumps({
+            "doc-1": {"file_path": "a.md", "status": "processed"},
+            "doc-2": {"file_path": "b.md", "status": "failed",
+                      "error_msg": "timed out"},
+            "doc-3": {"file_path": "c.md", "status": "pending"},
+        }),
+        encoding="utf-8",
+    )
+
+    counts = indexer.read_doc_status_counts(working)
+
+    assert counts["processed"] == 1
+    assert counts["failed"] == 1
+    assert counts["pending"] == 1
+
+
+def test_doc_status_counts_are_empty_without_an_index(tmp_path: Path) -> None:
+    """索引が無い作業ディレクトリでも例外にせず空を返すこと。"""
+    assert indexer.read_doc_status_counts(tmp_path / "missing") == {}
+
+
+def test_graphrag_summary_carries_doc_status(
+    monkeypatch, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+) -> None:
+    """ビルド結果に LightRAG 側の文書状態が含まれること。"""
+    _make_corpus(tmp_path)
+    working_dir = tmp_path / "gr-store"
+    rc, out, _err = _run_cli(monkeypatch, tmp_path, [
+        "index",
+        "--strategy", "graphrag",
+        "--root", "users-guide",
+        "--graphrag-llm-provider", "mock",
+        "--graphrag-embed-provider", "mock",
+        "--graphrag-working-dir", str(working_dir),
+        "--rebuild",
+    ], capsys)
+    assert rc == 0
+    summary = json.loads(out.strip().splitlines()[-1])
+    assert summary["documents_failed"] == 0
+    assert summary["documents_processed"] == 2
+
+
+def test_cli_timeout_default_matches_the_runtime_config(monkeypatch) -> None:
+    """CLI 既定値と ``GraphRAGConfig`` 既定値が乖離しないこと。"""
+    from mdq import strategies_graphrag as gs
+
+    parser = cli.build_parser()
+    args = parser.parse_args(["index", "--strategy", "graphrag"])
+    assert args.graphrag_timeout == gs.GraphRAGConfig().llm_timeout
 
 
 def test_cli_search_graphrag_jsonl_format(

@@ -337,7 +337,10 @@ class TestRunWorkflowDryRun(unittest.TestCase):
     def test_dry_run_all_valid_workflows(self) -> None:
         """全ての有効なワークフロー ID で dry_run が正常に動作することを確認。"""
         cfg = self._make_config()
-        valid_ids = ["ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv", "aag", "aagd", "akm", "aqod", "adoc"]
+        valid_ids = [
+            "ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv",
+            "aag", "aagd", "aar", "akm", "adi", "adoc",
+        ]
         for wf_id in valid_ids:
             with self.subTest(workflow_id=wf_id):
                 result = _run(run_workflow(
@@ -352,8 +355,8 @@ class TestRunWorkflowDryRun(unittest.TestCase):
                 self.assertEqual(result["workflow_id"], wf_id, f"{wf_id} の workflow_id が不正")
                 self.assertNotIn("error", result, f"{wf_id} でエラーが発生: {result.get('error')}")
 
-    def test_workiq_prefetch_is_not_called_for_aqod_or_akm(self) -> None:
-        """通常経路では AQOD/AKM ともに Work IQ 事前フェッチを実行しない。"""
+    def test_workiq_prefetch_is_not_called_for_adi_or_akm(self) -> None:
+        """通常経路では ADI/AKM ともに Work IQ 事前フェッチを実行しない。"""
         cfg = SDKConfig(dry_run=False, quiet=True, workiq_enabled=True)
         mock_prefetch = unittest.mock.AsyncMock()
 
@@ -373,7 +376,7 @@ class TestRunWorkflowDryRun(unittest.TestCase):
              patch("orchestrator._run_akm_workiq_verification", new=unittest.mock.AsyncMock()), \
              patch("orchestrator.DAGExecutor", side_effect=lambda *a, **k: FakeDAGExecutor()) as mock_dag_executor:
             _run(run_workflow(
-                workflow_id="aqod",
+                workflow_id="adi",
                 params={"branch": "main", "selected_steps": []},
                 config=cfg,
             ))
@@ -386,7 +389,7 @@ class TestRunWorkflowDryRun(unittest.TestCase):
 
             mock_prefetch.assert_not_awaited()
             self.assertEqual(mock_dag_executor.call_count, 2)
-            self.assertEqual(mock_dag_executor.call_args_list[0].kwargs["workflow"].id, "aqod")
+            self.assertEqual(mock_dag_executor.call_args_list[0].kwargs["workflow"].id, "adi")
             self.assertEqual(mock_dag_executor.call_args_list[1].kwargs["workflow"].id, "akm")
             self.assertIsNotNone(mock_dag_executor.call_args_list[0].kwargs["dag_plan"])
             self.assertIsNotNone(mock_dag_executor.call_args_list[1].kwargs["dag_plan"])
@@ -411,7 +414,7 @@ class TestRunWorkflowDryRun(unittest.TestCase):
         cfg = SDKConfig(dry_run=False, quiet=True, fleet_mode_enabled=True)
         with patch("orchestrator.DAGExecutor", side_effect=lambda *a, **k: FakeDAGExecutor(*a, **k)):
             _run(run_workflow(
-                workflow_id="aqod",
+                workflow_id="adi",
                 params={"branch": "main", "selected_steps": []},
                 config=cfg,
             ))
@@ -438,7 +441,7 @@ class TestRunWorkflowDryRun(unittest.TestCase):
         cfg = SDKConfig(dry_run=False, quiet=True, fleet_mode_enabled=False)
         with patch("orchestrator.DAGExecutor", side_effect=lambda *a, **k: FakeDAGExecutor(*a, **k)):
             _run(run_workflow(
-                workflow_id="aqod",
+                workflow_id="adi",
                 params={"branch": "main", "selected_steps": []},
                 config=cfg,
             ))
@@ -488,7 +491,7 @@ class TestRunWorkflowDryRun(unittest.TestCase):
                     side_effect=lambda *a, **k: FakeDAGExecutor(*a, **k),
                 ):
                     _run(run_workflow(
-                        workflow_id="aqod",
+                        workflow_id="adi",
                         params={"branch": "main", "selected_steps": []},
                         config=cfg,
                     ))
@@ -563,7 +566,7 @@ class TestRunWorkflowDryRun(unittest.TestCase):
                     side_effect=lambda *a, **k: FakeDAGExecutor(*a, **k),
                 ):
                     _run(run_workflow(
-                        workflow_id="aqod",
+                        workflow_id="adi",
                         params={"branch": "main", "selected_steps": []},
                         config=cfg,
                     ))
@@ -669,7 +672,7 @@ class TestRunWorkflowDryRun(unittest.TestCase):
                     side_effect=lambda *a, **k: FakeDAGExecutor(*a, **k),
                 ):
                     _run(run_workflow(
-                        workflow_id="aqod",
+                        workflow_id="adi",
                         params={"branch": "main", "selected_steps": []},
                         config=cfg,
                     ))
@@ -718,6 +721,147 @@ class TestRunWorkflowDryRun(unittest.TestCase):
         # dry_run なので Code Review Agent 関連処理はスキップされ、通常の dry_run 結果が返る
         self.assertTrue(result.get("dry_run"))
         self.assertEqual(result.get("failed", []), [])
+
+
+class TestAdiQuestionnairePostDag(unittest.TestCase):
+    class _FakeDAGExecutor:
+        def __init__(self, *args, **kwargs):
+            self.completed = set()
+            self.failed = set()
+            self.skipped = set()
+
+        def compute_waves(self):
+            return []
+
+        async def execute(self):
+            return {}
+
+    @staticmethod
+    def _validation_result() -> dict:
+        return {
+            "artifacts_found": 2,
+            "passed": 2,
+            "failed": 0,
+            "validation_results": [],
+            "overall": "PASS",
+            "original_docs_questionnaire_validation": True,
+        }
+
+    def _config(self, **kwargs) -> SDKConfig:
+        return SDKConfig(
+            dry_run=False,
+            quiet=True,
+            no_workbench=True,
+            mdq_watch=False,
+            cq_watch=False,
+            run_id="adi-questionnaire-post-dag",
+            **kwargs,
+        )
+
+    def test_questionnaire_steps_run_post_dag_validation(self) -> None:
+        validator_result = self._validation_result()
+        validator = unittest.mock.MagicMock(return_value=validator_result)
+
+        with tempfile.TemporaryDirectory() as td:
+            previous = os.getcwd()
+            os.chdir(td)
+            try:
+                with patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
+                     patch(
+                         "orchestrator.DAGExecutor",
+                         side_effect=lambda *a, **k: self._FakeDAGExecutor(*a, **k),
+                     ), \
+                     patch(
+                         "artifact_validation.validate_original_docs_questionnaire_run",
+                         new=validator,
+                     ):
+                    result = _run(run_workflow(
+                        workflow_id="adi",
+                        params={"branch": "main", "selected_steps": ["1.1"]},
+                        config=self._config(),
+                    ))
+            finally:
+                os.chdir(previous)
+
+        validator.assert_called_once_with(
+            qa_dir="qa",
+            run_id="adi-questionnaire-post-dag",
+        )
+        self.assertIs(
+            result["original_docs_questionnaire_validation"],
+            validator_result,
+        )
+
+    def test_non_questionnaire_step_skips_post_dag_validation(self) -> None:
+        validator = unittest.mock.MagicMock(return_value=self._validation_result())
+
+        with tempfile.TemporaryDirectory() as td:
+            previous = os.getcwd()
+            os.chdir(td)
+            try:
+                with patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
+                     patch(
+                         "orchestrator.DAGExecutor",
+                         side_effect=lambda *a, **k: self._FakeDAGExecutor(*a, **k),
+                     ), \
+                     patch(
+                         "artifact_validation.validate_original_docs_questionnaire_run",
+                         new=validator,
+                     ):
+                    result = _run(run_workflow(
+                        workflow_id="adi",
+                        params={"branch": "main", "selected_steps": ["3"]},
+                        config=self._config(),
+                    ))
+            finally:
+                os.chdir(previous)
+
+        validator.assert_not_called()
+        self.assertIsNone(result["original_docs_questionnaire_validation"])
+
+    def test_questionnaire_main_outputs_are_explicit_commit_includes(self) -> None:
+        git_commit = unittest.mock.MagicMock(return_value=False)
+
+        with tempfile.TemporaryDirectory() as td:
+            previous = os.getcwd()
+            os.chdir(td)
+            try:
+                qa_dir = Path("qa")
+                qa_dir.mkdir()
+                (qa_dir / "D01-original-docs-questionnaire.md").write_text(
+                    "# Original ドキュメント質問票\n",
+                    encoding="utf-8",
+                )
+                (qa_dir / "original-docs-cross-questionnaire.md").write_text(
+                    "# Original ドキュメント質問票\n",
+                    encoding="utf-8",
+                )
+                with patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
+                     patch(
+                         "orchestrator.DAGExecutor",
+                         side_effect=lambda *a, **k: self._FakeDAGExecutor(*a, **k),
+                     ), \
+                     patch("orchestrator._git_checkout_new_branch", return_value=True), \
+                     patch("orchestrator._git_add_commit_push", new=git_commit), \
+                     patch(
+                         "artifact_validation.validate_original_docs_questionnaire_run",
+                         return_value=self._validation_result(),
+                     ):
+                    _run(run_workflow(
+                        workflow_id="adi",
+                        params={
+                            "branch": "main",
+                            "selected_steps": ["1.1", "1.2"],
+                        },
+                        config=self._config(create_pr=True),
+                    ))
+            finally:
+                os.chdir(previous)
+
+        include_paths = git_commit.call_args.kwargs["include_paths"]
+        self.assertIn("qa/D01-original-docs-questionnaire.md", include_paths)
+        self.assertIn("qa/original-docs-cross-questionnaire.md", include_paths)
+        self.assertIn("qa", git_commit.call_args.kwargs["ignore_paths"])
 
 
 class TestRunWorkflowFanout(unittest.TestCase):
@@ -2527,7 +2671,7 @@ class TestDoneLabeling(unittest.TestCase):
             return 45
 
         wf = MagicMock()
-        wf.id = "aqod"
+        wf.id = "adi"
 
         with _patch("orchestrator.create_pull_request", side_effect=fake_create_pull_request), \
              _patch("orchestrator._glob.glob", side_effect=[
@@ -2541,7 +2685,7 @@ class TestDoneLabeling(unittest.TestCase):
              ]):
             pr_num = _create_pr_if_needed(
                 wf=wf,
-                head_branch="copilot-sdk/aqod-abc12345",
+                head_branch="copilot-sdk/adi-abc12345",
                 base_branch="main",
                 config=cfg,
                 console=console,
@@ -4206,20 +4350,21 @@ class TestRunWorkflowSelfImproveScope(unittest.TestCase):
         self.assertTrue(params["force_refresh"])
 
 
-class TestCollectParamsNonInteractiveAqodDefaults(unittest.TestCase):
-    """_collect_params_non_interactive() の AQOD デフォルト適用テスト。"""
+class TestCollectParamsNonInteractiveAdiDefaults(unittest.TestCase):
+    """_collect_params_non_interactive() の ADI デフォルト適用テスト。"""
 
     def _make_wf(self):
         from unittest.mock import MagicMock
         wf = MagicMock()
-        wf.id = "aqod"
+        wf.id = "adi"
         return wf
 
-    def test_defaults_applied_when_aqod_params_not_specified(self) -> None:
+    def test_defaults_applied_when_adi_params_not_specified(self) -> None:
         from orchestrator import _collect_params_non_interactive
         wf = self._make_wf()
         params = _collect_params_non_interactive(wf, {"branch": "main"})
-        self.assertEqual(params["target_scope"], "original-docs/")
+        self.assertEqual(params["purpose"], "")
+        self.assertEqual(params["target_scope"], "docs-original/")
         self.assertEqual(params["depth"], "standard")
         self.assertEqual(params["focus_areas"], "")
 
@@ -4230,14 +4375,57 @@ class TestCollectParamsNonInteractiveAqodDefaults(unittest.TestCase):
             wf,
             {
                 "branch": "main",
-                "target_scope": "original-docs/sub/",
+                "purpose": "冪等性確認",
+                "target_scope": "docs-original/sub/",
                 "depth": "lightweight",
                 "focus_areas": "冪等性",
             },
         )
-        self.assertEqual(params["target_scope"], "original-docs/sub/")
+        self.assertEqual(params["purpose"], "冪等性確認")
+        self.assertEqual(params["target_scope"], "docs-original/sub/")
         self.assertEqual(params["depth"], "lightweight")
         self.assertEqual(params["focus_areas"], "冪等性")
+
+
+class TestNormalizeAdiTargetScope(unittest.TestCase):
+    def test_defaults_and_normalizes_windows_separator(self) -> None:
+        from orchestrator import _normalize_adi_target_scope
+
+        self.assertEqual(_normalize_adi_target_scope(""), "docs-original/")
+        self.assertEqual(
+            _normalize_adi_target_scope(r".\docs-original\specs"),
+            "docs-original/specs/",
+        )
+
+    def test_rejects_outside_absolute_parent_and_prefix_collision(self) -> None:
+        from orchestrator import _normalize_adi_target_scope
+
+        for invalid in (
+            "src/",
+            "../docs-original/",
+            "docs-original/../src/",
+            "/docs-original/",
+            r"C:\docs-original",
+            "docs-original-copy/",
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                _normalize_adi_target_scope(invalid)
+
+    def test_run_workflow_rejects_invalid_scope_before_dag(self) -> None:
+        cfg = SDKConfig(dry_run=True, quiet=True)
+        with patch("orchestrator.DAGExecutor") as dag:
+            result = _run(run_workflow(
+                workflow_id="adi",
+                params={
+                    "branch": "main",
+                    "selected_steps": ["1.1"],
+                    "target_scope": "src/",
+                },
+                config=cfg,
+            ))
+
+        self.assertIn("docs-original/", result["error"])
+        dag.assert_not_called()
 
 
 class TestAppArchFilterInOrchestrator(unittest.TestCase):
@@ -4776,6 +4964,548 @@ class TestPrefetchWorkIQDetailed(unittest.TestCase):
         self.assertEqual(result.content, llm_text)
         # 上位処理では safe_to_inject=False なのでプロンプト注入しない。
         console.warning.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# FR-QA-03: QA 保存後の非待機 AKM バックグラウンド連携 (RED)
+# 対象モジュール hve.qa_akm_dispatch は未実装。全テストが ModuleNotFoundError
+# で RED となることを期待する。
+# ---------------------------------------------------------------------------
+
+
+class TestQaAkmBackgroundCoordinator(unittest.TestCase):
+    """FR-QA-03: QaAkmCoordinator / RepositoryAkmLock の RED テスト。"""
+
+    def _import(self):
+        from qa_akm_dispatch import QaAkmCoordinator, RepositoryAkmLock
+        return QaAkmCoordinator, RepositoryAkmLock
+
+    def _make_config(self, **overrides):
+        defaults = dict(
+            model="gpt-5.4",
+            reasoning_effort="high",
+            context_tier="long_context",
+            timeout_seconds=7200.0,
+            step_timeout_seconds=3600.0,
+        )
+        defaults.update(overrides)
+        return SDKConfig(dry_run=True, quiet=True, **defaults)
+
+    @staticmethod
+    def _make_repo_with_files(*relative_paths: str) -> Path:
+        repo = Path(tempfile.mkdtemp())
+        for relative in relative_paths:
+            path = repo / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("# 回答済み QA\n", encoding="utf-8")
+        return repo
+
+    @staticmethod
+    def _make_fake_process(finish_event=None, returncode=0, pid=9999):
+        """threading.Event ベースの fake Popen。real sleep 不使用。"""
+        import threading as _th
+
+        if finish_event is None:
+            finish_event = _th.Event()
+            finish_event.set()
+
+        class _FakeProcess:
+            def __init__(self):
+                self.pid = pid
+                self._finish = finish_event
+                self._returncode = returncode
+                self._terminated = False
+
+            def wait(self, timeout=None):
+                self._finish.wait(timeout=timeout)
+                return self._returncode
+
+            @property
+            def returncode(self):
+                if self._finish.is_set():
+                    return self._returncode
+                return None
+
+            def terminate(self):
+                self._terminated = True
+                self._finish.set()
+
+            def kill(self):
+                self._terminated = True
+                self._finish.set()
+
+        return _FakeProcess()
+
+    # -- submit は child の wait 中でも即 return -------------------------
+
+    def test_submit_returns_immediately_while_child_blocks(self):
+        import threading
+        QaAkmCoordinator, _ = self._import()
+
+        blocker = threading.Event()
+        proc = self._make_fake_process(finish_event=blocker, pid=1001)
+
+        def popen_factory(*args, **kwargs):
+            return proc
+
+        cfg = self._make_config()
+        repo = self._make_repo_with_files(
+            "qa/Issue-1-questionnaire-answered-abc12345.md",
+        )
+        coord = QaAkmCoordinator(
+            cfg, repo_root=repo, popen_factory=popen_factory,
+        )
+
+        returned = threading.Event()
+
+        def do_submit():
+            coord.submit(Path("qa/Issue-1-questionnaire-answered-abc12345.md"))
+            returned.set()
+
+        t = threading.Thread(target=do_submit, daemon=True)
+        t.start()
+        self.assertTrue(returned.wait(timeout=2), "submit must return without blocking")
+        blocker.set()
+        coord.drain()
+        t.join(timeout=2)
+
+    # -- FIFO 直列: 同時 Popen しない ------------------------------------
+
+    def test_multiple_submits_fifo_no_concurrent_popen(self):
+        import threading
+        QaAkmCoordinator, _ = self._import()
+
+        finish_events = [threading.Event() for _ in range(3)]
+        started_events = [threading.Event() for _ in range(3)]
+        call_idx = [0]
+        max_concurrent = [0]
+        current_concurrent = [0]
+        lock = threading.Lock()
+
+        def popen_factory(*args, **kwargs):
+            idx = call_idx[0]
+            call_idx[0] += 1
+            with lock:
+                current_concurrent[0] += 1
+                max_concurrent[0] = max(max_concurrent[0], current_concurrent[0])
+            started_events[idx].set()
+            proc = self._make_fake_process(
+                finish_event=finish_events[idx], pid=2000 + idx,
+            )
+            orig_wait = proc.wait
+
+            def _wait(timeout=None):
+                r = orig_wait(timeout=timeout)
+                with lock:
+                    current_concurrent[0] -= 1
+                return r
+
+            proc.wait = _wait
+            return proc
+
+        cfg = self._make_config()
+        repo = self._make_repo_with_files(*[
+            f"qa/Issue-1-q-{i:04d}.md" for i in range(3)
+        ])
+        coord = QaAkmCoordinator(
+            cfg, repo_root=repo, popen_factory=popen_factory,
+        )
+        for i in range(3):
+            coord.submit(Path(f"qa/Issue-1-q-{i:04d}.md"))
+
+        for i in range(3):
+            self.assertTrue(started_events[i].wait(timeout=2))
+            finish_events[i].set()
+
+        coord.drain()
+        self.assertLessEqual(
+            max_concurrent[0], 1, "concurrent Popen detected; must be sequential",
+        )
+
+    # -- argv 必須フラグ --------------------------------------------------
+
+    def test_argv_contains_required_akm_flags(self):
+        QaAkmCoordinator, _ = self._import()
+
+        captured_args: list = []
+
+        def popen_factory(*args, **kwargs):
+            captured_args.append(args[0] if args else kwargs.get("args"))
+            return self._make_fake_process()
+
+        cfg = self._make_config()
+        repo = self._make_repo_with_files(
+            "qa/Issue-42-questionnaire-answered-deadbeef.md",
+        )
+        coord = QaAkmCoordinator(
+            cfg, repo_root=repo, popen_factory=popen_factory,
+        )
+        target = Path("qa/Issue-42-questionnaire-answered-deadbeef.md")
+        coord.submit(target)
+        coord.drain()
+
+        self.assertEqual(len(captured_args), 1)
+        argv = [str(a) for a in captured_args[0]]
+        for required in (
+            "--workflow", "akm", "--sources", "qa",
+            "--target-files", "--no-force-refresh", "--workbench", "off",
+        ):
+            self.assertIn(required, argv, f"missing required: {required}")
+        idx = argv.index("--target-files")
+        self.assertEqual(argv[idx + 1], str(target))
+
+    # -- argv 禁止フラグ --------------------------------------------------
+
+    def test_argv_excludes_forbidden_flags(self):
+        QaAkmCoordinator, _ = self._import()
+
+        captured_args: list = []
+
+        def popen_factory(*args, **kwargs):
+            captured_args.append(args[0] if args else kwargs.get("args"))
+            return self._make_fake_process()
+
+        cfg = self._make_config()
+        repo = self._make_repo_with_files("qa/file.md")
+        coord = QaAkmCoordinator(
+            cfg, repo_root=repo, popen_factory=popen_factory,
+        )
+        coord.submit(Path("qa/file.md"))
+        coord.drain()
+
+        argv_str = " ".join(str(a) for a in captured_args[0])
+        for forbidden in (
+            "--auto-qa", "--create-pr", "--create-issues", "--self-improve",
+        ):
+            self.assertNotIn(forbidden, argv_str, f"forbidden: {forbidden}")
+
+    # -- config allowlist 継承 -------------------------------------------
+
+    def test_config_allowlist_inherited(self):
+        QaAkmCoordinator, _ = self._import()
+
+        captured_args: list = []
+
+        def popen_factory(*args, **kwargs):
+            captured_args.append(args[0] if args else kwargs.get("args"))
+            return self._make_fake_process()
+
+        cfg = self._make_config(
+            model="gpt-5.4",
+            reasoning_effort="high",
+            context_tier="long_context",
+            timeout_seconds=9999.0,
+        )
+        repo = self._make_repo_with_files("qa/file.md")
+        coord = QaAkmCoordinator(cfg, repo_root=repo, popen_factory=popen_factory)
+        coord.submit(Path("qa/file.md"))
+        coord.drain()
+
+        argv = [str(a) for a in captured_args[0]]
+        self.assertIn("--model", argv)
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.4")
+        self.assertIn("--reasoning-effort", argv)
+        self.assertEqual(argv[argv.index("--reasoning-effort") + 1], "high")
+        self.assertIn("--context-tier", argv)
+        self.assertEqual(argv[argv.index("--context-tier") + 1], "long_context")
+        self.assertIn("--timeout", argv)
+        self.assertEqual(argv[argv.index("--timeout") + 1], "9999.0")
+
+    # -- child env: 固有 HVE_RUN_ID / HVE_WORK_ROOT ---------------------
+
+    def test_child_env_has_unique_run_id_and_work_root(self):
+        QaAkmCoordinator, _ = self._import()
+
+        captured_env: list = []
+
+        def popen_factory(*args, **kwargs):
+            captured_env.append(dict(kwargs.get("env", {})))
+            return self._make_fake_process()
+
+        cfg = self._make_config()
+        repo = self._make_repo_with_files("qa/a.md", "qa/b.md")
+        coord = QaAkmCoordinator(
+            cfg, repo_root=repo, popen_factory=popen_factory,
+        )
+        coord.submit(Path("qa/a.md"))
+        coord.submit(Path("qa/b.md"))
+        coord.drain()
+
+        self.assertEqual(len(captured_env), 2)
+        run_ids = [e.get("HVE_RUN_ID") for e in captured_env]
+        self.assertTrue(all(run_ids), "HVE_RUN_ID must be set")
+        self.assertNotEqual(run_ids[0], run_ids[1], "each child needs unique HVE_RUN_ID")
+        for env in captured_env:
+            self.assertIn("HVE_WORK_ROOT", env)
+
+    # -- child env: GUI / stats 除外 ------------------------------------
+
+    def test_child_env_excludes_gui_session_and_stats(self):
+        QaAkmCoordinator, _ = self._import()
+
+        captured_env: list = []
+
+        def popen_factory(*args, **kwargs):
+            captured_env.append(dict(kwargs.get("env", {})))
+            return self._make_fake_process()
+
+        cfg = self._make_config()
+        repo = self._make_repo_with_files("qa/a.md")
+        with patch.dict(os.environ, {
+            "HVE_GUI_SESSION_ID": "gui-sess-xyz",
+            "HVE_STATS_STREAM": "/tmp/stats",
+        }):
+            coord = QaAkmCoordinator(
+                cfg, repo_root=repo, popen_factory=popen_factory,
+            )
+            coord.submit(Path("qa/a.md"))
+            coord.drain()
+
+        env = captured_env[0]
+        self.assertNotIn("HVE_GUI_SESSION_ID", env)
+        self.assertNotIn("HVE_STATS_STREAM", env)
+
+    # -- drain: 全 child 完了待ち ----------------------------------------
+
+    def test_drain_waits_for_all_children(self):
+        import threading
+        QaAkmCoordinator, _ = self._import()
+
+        finish = [threading.Event(), threading.Event()]
+        call_idx = [0]
+
+        def popen_factory(*args, **kwargs):
+            idx = call_idx[0]
+            call_idx[0] += 1
+            return self._make_fake_process(finish_event=finish[idx], pid=3000 + idx)
+
+        cfg = self._make_config()
+        repo = self._make_repo_with_files("qa/f1.md", "qa/f2.md")
+        coord = QaAkmCoordinator(
+            cfg, repo_root=repo, popen_factory=popen_factory,
+        )
+        for p in (Path("qa/f1.md"), Path("qa/f2.md")):
+            coord.submit(p)
+
+        drained = threading.Event()
+        results: list = []
+
+        def do_drain():
+            results.extend(coord.drain())
+            drained.set()
+
+        t = threading.Thread(target=do_drain, daemon=True)
+        t.start()
+        self.assertFalse(drained.wait(timeout=0.1), "drain must block until children finish")
+        finish[0].set()
+        self.assertFalse(drained.wait(timeout=0.1), "drain must wait for ALL children")
+        finish[1].set()
+        self.assertTrue(drained.wait(timeout=2), "drain must return after all children")
+        t.join(timeout=2)
+        self.assertEqual(len(results), 2)
+        for result in results:
+            self.assertIn("returncode", result)
+            self.assertIn("file", result)
+
+    # -- cancel: running child terminate ---------------------------------
+
+    def test_cancel_terminates_running_child(self):
+        import threading
+        QaAkmCoordinator, _ = self._import()
+
+        blocker = threading.Event()
+        started = threading.Event()
+        proc = self._make_fake_process(finish_event=blocker, pid=4001)
+
+        def popen_factory(*args, **kwargs):
+            started.set()
+            return proc
+
+        cfg = self._make_config()
+        repo = self._make_repo_with_files("qa/long-running.md")
+        coord = QaAkmCoordinator(
+            cfg, repo_root=repo, popen_factory=popen_factory,
+        )
+        coord.submit(Path("qa/long-running.md"))
+        self.assertTrue(started.wait(timeout=2), "child must start before cancel")
+        coord.cancel()
+        self.assertTrue(proc._terminated, "cancel must terminate running child")
+        coord.cancel()  # idempotent
+
+    def test_submit_rejects_missing_and_traversal_paths(self):
+        QaAkmCoordinator, _ = self._import()
+        repo = Path(tempfile.mkdtemp())
+        coord = QaAkmCoordinator(self._make_config(), repo_root=repo)
+        with self.assertRaises(ValueError):
+            coord.submit(Path("qa/missing.md"))
+        with self.assertRaises(ValueError):
+            coord.submit(Path("qa/../qa/missing.md"))
+        coord.cancel()
+
+    def test_worker_records_unexpected_error_and_continues(self):
+        QaAkmCoordinator, _ = self._import()
+        repo = Path(tempfile.mkdtemp())
+        (repo / "qa").mkdir()
+        first = repo / "qa" / "first.md"
+        second = repo / "qa" / "second.md"
+        first.write_text("first", encoding="utf-8")
+        second.write_text("second", encoding="utf-8")
+        calls = [0]
+
+        def popen_factory(*args, **kwargs):
+            calls[0] += 1
+            if calls[0] == 1:
+                raise RuntimeError("boom")
+            return self._make_fake_process()
+
+        coord = QaAkmCoordinator(
+            self._make_config(), repo_root=repo, popen_factory=popen_factory,
+        )
+        coord.submit(first)
+        coord.submit(second)
+        results = coord.drain()
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0]["returncode"], -1)
+        self.assertEqual(results[1]["returncode"], 0)
+        coord.cancel()
+
+    # -- RepositoryAkmLock: 同一プロセス直列化 ---------------------------
+
+    def test_repository_lock_serializes_same_process(self):
+        import threading
+        _, RepositoryAkmLock = self._import()
+
+        repo = Path(tempfile.mkdtemp())
+        acquired_order: list = []
+        hold = threading.Event()
+        first_acquired = threading.Event()
+
+        def first_acquirer():
+            with RepositoryAkmLock(repo):
+                acquired_order.append("first")
+                first_acquired.set()
+                hold.wait(timeout=5)
+
+        def second_acquirer():
+            first_acquired.wait(timeout=5)
+            with RepositoryAkmLock(repo):
+                acquired_order.append("second")
+
+        t1 = threading.Thread(target=first_acquirer, daemon=True)
+        t2 = threading.Thread(target=second_acquirer, daemon=True)
+        t1.start()
+        t2.start()
+        first_acquired.wait(timeout=5)
+        hold.set()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+        self.assertEqual(acquired_order, ["first", "second"])
+
+    def test_repository_lock_context_manager(self):
+        _, RepositoryAkmLock = self._import()
+        repo = Path(tempfile.mkdtemp())
+        with RepositoryAkmLock(repo):
+            pass
+
+    def test_repository_lock_blocks_cross_process(self):
+        """同じリポジトリの明示 AKM と別プロセスでも排他される。"""
+        import subprocess
+
+        _, RepositoryAkmLock = self._import()
+        repo = Path(tempfile.mkdtemp())
+        marker = repo / "child-acquired"
+        code = (
+            "from pathlib import Path\n"
+            "from hve.qa_akm_dispatch import RepositoryAkmLock\n"
+            f"repo = Path({str(repo)!r})\n"
+            f"marker = Path({str(marker)!r})\n"
+            "with RepositoryAkmLock(repo):\n"
+            "    marker.write_text('acquired', encoding='utf-8')\n"
+        )
+        with RepositoryAkmLock(repo):
+            child = subprocess.Popen([sys.executable, "-c", code], cwd=str(Path(__file__).resolve().parents[2]))
+            with self.assertRaises(subprocess.TimeoutExpired):
+                child.wait(timeout=0.25)
+            self.assertFalse(marker.exists())
+        child.wait(timeout=5)
+        self.assertEqual(child.returncode, 0)
+        self.assertTrue(marker.exists())
+
+
+class TestQaAkmRunWorkflowWiring(unittest.TestCase):
+    """FR-QA-03: run_workflow の非待機登録と安全境界の配線。"""
+
+    def test_coordinator_is_lazy_and_injected_into_step_runner(self):
+        source = inspect.getsource(run_workflow)
+        self.assertIn("QaAkmCoordinator", source)
+        self.assertIn("qa_akm_dispatcher=", source)
+        self.assertIn("_should_enable_qa_akm_dispatch(", source)
+
+    def test_coordinator_enablement_condition(self):
+        from orchestrator import _should_enable_qa_akm_dispatch
+
+        self.assertTrue(_should_enable_qa_akm_dispatch(
+            auto_qa=True, workflow_id="aas", dry_run=False,
+            qa_akm_background_merge=True,
+        ))
+        self.assertFalse(_should_enable_qa_akm_dispatch(
+            auto_qa=False, workflow_id="aas", dry_run=False,
+            qa_akm_background_merge=True,
+        ))
+        self.assertFalse(_should_enable_qa_akm_dispatch(
+            auto_qa=True, workflow_id="akm", dry_run=False,
+            qa_akm_background_merge=True,
+        ))
+        self.assertFalse(_should_enable_qa_akm_dispatch(
+            auto_qa=True, workflow_id="aas", dry_run=True,
+            qa_akm_background_merge=True,
+        ))
+        # FR-QA-05: 利用者がマージを選んでいないときは起動しない。
+        self.assertFalse(_should_enable_qa_akm_dispatch(
+            auto_qa=True, workflow_id="aas", dry_run=False,
+            qa_akm_background_merge=False,
+        ))
+
+    def test_drain_is_after_dag_and_before_git_post_processing(self):
+        source = inspect.getsource(run_workflow)
+        execute_pos = source.index("results = await executor.execute()")
+        drain_pos = source.index('_drain_qa_akm("DAG 完了後")', execute_pos)
+        git_pos = source.index("_git_add_commit_push(", drain_pos)
+        self.assertLess(execute_pos, drain_pos)
+        self.assertLess(drain_pos, git_pos)
+
+    def test_exception_path_cancels_coordinator(self):
+        source = inspect.getsource(run_workflow)
+        execute_pos = source.index("results = await executor.execute()")
+        finally_pos = source.index("finally:", execute_pos)
+        final_block = source[finally_pos:finally_pos + 5000]
+        self.assertIn("qa_akm_coordinator.cancel()", final_block)
+
+    def test_validated_qa_include_paths_rejects_escape_and_non_qa(self):
+        from orchestrator import _validated_qa_include_paths
+
+        self.assertEqual(
+            _validated_qa_include_paths(["qa/run-1-pre-execution-qa.md"]),
+            ["qa/run-1-pre-execution-qa.md"],
+        )
+        for invalid in (
+            "qa/../docs/secret.md",
+            "docs/not-qa.md",
+            "qa/not-markdown.txt",
+            "C:/outside.md",
+        ):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    _validated_qa_include_paths([invalid])
+
+    def test_git_helper_has_explicit_include_paths_stage(self):
+        from orchestrator import _git_add_commit_push
+
+        signature = inspect.signature(_git_add_commit_push)
+        self.assertIn("include_paths", signature.parameters)
+        source = inspect.getsource(_git_add_commit_push)
+        self.assertIn('_validated_qa_include_paths', source)
+        self.assertIn('["git", "add", "--"', source)
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@
 ## 注意
 - 全APPの入力ファイルが揃っていなくても実行可能です
 - 存在する入力ファイルのみ処理され、存在しないAPPは「未処理」として記録されます
-- ユーザーが `docs/architectural-requirements-app-xx.md` を作成する手順は users-guide/02-app-architecture-design.md の Step 2 を参照してください
+- `docs/architectural-requirements-app-xx.md` はユーザーが用意する入力ファイルです。本 Step では作成しません
 
 ## Custom Agent
 `Arch-ArchitectureCandidateAnalyzer`

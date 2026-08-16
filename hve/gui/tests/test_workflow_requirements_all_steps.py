@@ -3,8 +3,9 @@
 検証項目:
   1. Precheck が選択中ワークフローの **全 active step** を評価すること
   2. 必須入力キーが `StepDef.required_params`（FR-DAG-07）から導出されること
-  3. GUI の監視対象ウィジェット表が `INPUT_FIELD_KEYS` を網羅すること
-  4. バナー（代表 1 件表示）の従来挙動を壊さないこと
+  3. そのうち `default_params` を持つキーは GUI の可視対象から除外されること
+  4. GUI の監視対象ウィジェット表が `INPUT_FIELD_KEYS` を網羅すること
+  5. バナー（代表 1 件表示）の従来挙動を壊さないこと
 
 根拠: hve-dev/requirement-definition.md §6.4 FR-GUI-01 / FR-GUI-02
 """
@@ -14,6 +15,7 @@ from __future__ import annotations
 import os
 import unittest
 from pathlib import Path
+from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -21,6 +23,7 @@ from hve.gui.workflow_step_requirements import (
     INPUT_FIELD_KEYS,
     REQUIREMENT_TABLE,
     WORKFLOW_PRIORITY,
+    gui_visible_required_params,
     registry_required_param_keys,
     summarize_all_requirements_for_selection,
     summarize_requirements_for_selection,
@@ -34,16 +37,32 @@ def _get_app():
     return QApplication.instance() or QApplication([])
 
 
-ASDW_STEP_1_3_PARAMS = tuple(get_workflow("asdw-web").get_step("1.3").required_params)
+_ASDW_STEP_1_3 = get_workflow("asdw-web").get_step("1.3")
+ASDW_STEP_1_3_PARAMS = tuple(_ASDW_STEP_1_3.required_params)
+ASDW_STEP_1_3_DEFAULTED_PARAMS = tuple(
+    key for key in ASDW_STEP_1_3_PARAMS if key in _ASDW_STEP_1_3.default_params
+)
 
 
 class TestRegistryRequiredParamKeys(unittest.TestCase):
-    """FR-GUI-02: 必須キーはレジストリ宣言から導出する。"""
+    """FR-GUI-02: 必須キーはレジストリ宣言から導出し、既定値付きキーは除外する。"""
 
-    def test_includes_asdw_step_1_3_params(self) -> None:
+    def test_step_1_3_exposes_only_keys_without_defaults(self) -> None:
+        self.assertEqual(
+            gui_visible_required_params(_ASDW_STEP_1_3), ("resource_group",)
+        )
+
+    def test_includes_asdw_step_1_3_keys_without_defaults(self) -> None:
         keys = registry_required_param_keys()
-        for key in ASDW_STEP_1_3_PARAMS:
-            self.assertIn(key, keys)
+        self.assertIn("resource_group", keys)
+
+    def test_defaulted_params_are_excluded(self) -> None:
+        """既定値を持つキーは入力欄を持たないため可視キーに含めない。"""
+        self.assertTrue(ASDW_STEP_1_3_DEFAULTED_PARAMS)
+        keys = registry_required_param_keys()
+        for key in ASDW_STEP_1_3_DEFAULTED_PARAMS:
+            self.assertNotIn(key, keys)
+            self.assertNotIn(key, INPUT_FIELD_KEYS)
 
     def test_input_field_keys_include_registry_keys(self) -> None:
         for key in registry_required_param_keys():
@@ -55,6 +74,20 @@ class TestRegistryRequiredParamKeys(unittest.TestCase):
 
     def test_input_field_keys_are_unique(self) -> None:
         self.assertEqual(len(INPUT_FIELD_KEYS), len(set(INPUT_FIELD_KEYS)))
+
+    def test_precheck_and_field_derivation_share_one_helper(self) -> None:
+        """FR-MAINT-07: precheck 側と入力欄導出側で判定を二重実装しない。"""
+        import hve.gui.workflow_step_requirements as wsr
+
+        with mock.patch.object(
+            wsr, "gui_visible_required_params", return_value=("data_location",)
+        ):
+            self.assertEqual(wsr.registry_required_param_keys(), ("data_location",))
+            summary = wsr._summarize_step_required_params(
+                "asdw-web", "1.3", {"resource_group": "rg-prod"}
+            )
+            self.assertIsNotNone(summary)
+            self.assertEqual([item.label for item in summary.items], ["data_location"])
 
 
 class TestSummarizeAllRequirements(unittest.TestCase):
@@ -201,6 +234,62 @@ class TestSummarizeAllRequirements(unittest.TestCase):
         self.assertIn("resource_group", labels)
 
 
+class TestArdGroup1RelaxesTargetBusiness(unittest.TestCase):
+    """ARD グループ 1 併用時、グループ 2 の `target_business` は入力必須にしない。
+
+    根拠: `hve/orchestrator.py` の bridge mode（`_ard_force_serial`）と
+    `hve/__main__.py` の `_collect_ard_wizard_params` は、グループ 1 を併せて
+    実行する場合 `target_business` を Step 1.2 の Strategic Recommendation から
+    生成する前提で必須にしていない。GUI だけが必須化すると当該経路へ到達できない。
+    """
+
+    @staticmethod
+    def _exists_all(_path: str) -> bool:
+        return True
+
+    def test_group1_with_group2_does_not_warn_on_empty_target_business(self) -> None:
+        summaries = summarize_all_requirements_for_selection(
+            [("ard", ["1", "2"])],
+            input_values={"company_name": "Acme", "target_business": ""},
+            file_exists=self._exists_all,
+        )
+        warned = {
+            item.label
+            for s in summaries
+            for item in s.items
+            if item.status == "warn"
+        }
+        self.assertNotIn("target_business", warned)
+
+    def test_group2_without_group1_still_requires_target_business(self) -> None:
+        summaries = summarize_all_requirements_for_selection(
+            [("ard", ["2", "4"])],
+            input_values={"target_business": ""},
+            file_exists=self._exists_all,
+        )
+        warned = {
+            item.label
+            for s in summaries
+            for item in s.items
+            if item.status == "warn"
+        }
+        self.assertIn("target_business", warned)
+
+    def test_group1_with_group2_still_requires_company_name(self) -> None:
+        summaries = summarize_all_requirements_for_selection(
+            [("ard", ["1", "2"])],
+            input_values={"company_name": "", "target_business": ""},
+            file_exists=self._exists_all,
+        )
+        warned = {
+            item.label
+            for s in summaries
+            for item in s.items
+            if item.status == "warn"
+        }
+        self.assertIn("company_name", warned)
+
+
 class TestBannerInputWidgetCoverage(unittest.TestCase):
     """FR-GUI-02: 監視対象ウィジェット表が INPUT_FIELD_KEYS を網羅する。"""
 
@@ -222,10 +311,12 @@ class TestBannerInputWidgetCoverage(unittest.TestCase):
         _get_app()
         page = OptionsPage()
         try:
-            page.c_azure.data_resource_suffix.setText("app009")
+            page.c_azure.resource_group.setText("rg-app009")
             values = page._collect_banner_input_values()
-            self.assertEqual(values.get("data_resource_suffix"), "app009")
+            self.assertEqual(values.get("resource_group"), "rg-app009")
             self.assertNotIn("data_verify_aci_image", values)
+            for key in ASDW_STEP_1_3_DEFAULTED_PARAMS:
+                self.assertNotIn(key, values)
         finally:
             page.deleteLater()
 

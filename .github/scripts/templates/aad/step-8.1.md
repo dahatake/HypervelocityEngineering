@@ -11,7 +11,6 @@
 - `docs/catalog/service-catalog.md`
 - `docs/services/SVC-*.md`（関連サービスのみ）
 - `docs/catalog/app-catalog.md`（アプリケーション一覧）
-- `users-guide/08-ai-agent.md`（設計ガイドライン Step 1）
 
 ## 出力
 - `docs/agent/agent-application-definition.md`

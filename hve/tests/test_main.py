@@ -31,7 +31,7 @@ _run_workiq_auth_preflight = _main_mod._run_workiq_auth_preflight
 _run_azure_auth_preflight = _main_mod._run_azure_auth_preflight
 _resolve_model = _main_mod._resolve_model
 _prompt_valid_doc_purpose = _main_mod._prompt_valid_doc_purpose
-_prompt_valid_aqod_depth = _main_mod._prompt_valid_aqod_depth
+_prompt_valid_adi_depth = _main_mod._prompt_valid_adi_depth
 _prompt_valid_max_file_lines = _main_mod._prompt_valid_max_file_lines
 _prompt_akm_params = _main_mod._prompt_akm_params
 _collect_generic_workflow_params = _main_mod._collect_generic_workflow_params
@@ -289,16 +289,16 @@ class TestParserBasic(unittest.TestCase):
         args = _parse(["orchestrate", "-w", "adoc", "--max-file-lines", "1000"])
         self.assertEqual(args.max_file_lines, 1000)
 
-    def test_aqod_target_scope_option(self) -> None:
-        args = _parse(["orchestrate", "-w", "aqod", "--target-scope", "original-docs/"])
-        self.assertEqual(args.target_scope, "original-docs/")
+    def test_adi_target_scope_option(self) -> None:
+        args = _parse(["orchestrate", "-w", "adi", "--target-scope", "docs-original/"])
+        self.assertEqual(args.target_scope, "docs-original/")
 
-    def test_aqod_depth_option(self) -> None:
-        args = _parse(["orchestrate", "-w", "aqod", "--depth", "lightweight"])
+    def test_adi_depth_option(self) -> None:
+        args = _parse(["orchestrate", "-w", "adi", "--depth", "lightweight"])
         self.assertEqual(args.depth, "lightweight")
 
-    def test_aqod_focus_areas_option(self) -> None:
-        args = _parse(["orchestrate", "-w", "aqod", "--focus-areas", "データ整合性"])
+    def test_adi_focus_areas_option(self) -> None:
+        args = _parse(["orchestrate", "-w", "adi", "--focus-areas", "データ整合性"])
         self.assertEqual(args.focus_areas, "データ整合性")
 
 
@@ -507,10 +507,10 @@ class TestBuildParams(unittest.TestCase):
         self.assertEqual(params["target_files"], "")
 
     def test_akm_target_files_default_original_docs_when_sources_original_docs(self) -> None:
-        """AKM target_files は sources=original-docs で 'original-docs/*' を既定にする。"""
+        """AKM target_files は sources=original-docs で 'docs-original/*' を既定にする。"""
         args = _parse(["orchestrate", "-w", "akm", "--sources", "original-docs"])
         params = _build_params(args)
-        self.assertEqual(params["target_files"], "original-docs/*")
+        self.assertEqual(params["target_files"], "docs-original/*")
 
     def test_akm_target_files_default_empty_when_sources_both(self) -> None:
         """AKM target_files は sources=both で未指定（空）を既定にする。"""
@@ -522,10 +522,10 @@ class TestBuildParams(unittest.TestCase):
         """AKM --target-files 指定時は指定値（スペース区切り）が優先されることを確認。"""
         args = _parse([
             "orchestrate", "-w", "akm", "--sources", "both",
-            "--target-files", "original-docs/f1.md", "original-docs/f2.md",
+            "--target-files", "docs-original/f1.md", "docs-original/f2.md",
         ])
         params = _build_params(args)
-        self.assertEqual(params["target_files"], "original-docs/f1.md original-docs/f2.md")
+        self.assertEqual(params["target_files"], "docs-original/f1.md docs-original/f2.md")
 
     def test_non_akm_sources_not_set_when_not_specified(self) -> None:
         """非 AKM ワークフローで --sources 未指定時は params に sources が含まれないことを確認。"""
@@ -567,22 +567,25 @@ class TestBuildParams(unittest.TestCase):
         self.assertEqual(params["doc_purpose"], "refactoring")
         self.assertEqual(params["max_file_lines"], 300)
 
-    def test_aqod_params_defaults(self) -> None:
-        args = _parse(["orchestrate", "-w", "aqod"])
+    def test_adi_params_defaults(self) -> None:
+        args = _parse(["orchestrate", "-w", "adi"])
         params = _build_params(args)
-        self.assertEqual(params["target_scope"], "original-docs/")
+        self.assertEqual(params["purpose"], "")
+        self.assertEqual(params["target_scope"], "docs-original/")
         self.assertEqual(params["depth"], "standard")
         self.assertEqual(params["focus_areas"], "")
 
-    def test_aqod_params_custom_values(self) -> None:
+    def test_adi_params_custom_values(self) -> None:
         args = _parse([
-            "orchestrate", "-w", "aqod",
-            "--target-scope", "original-docs/subdir/",
+            "orchestrate", "-w", "adi",
+            "--purpose", "在庫算出の再構築",
+            "--target-scope", "docs-original/subdir/",
             "--depth", "lightweight",
             "--focus-areas", "データ整合性",
         ])
         params = _build_params(args)
-        self.assertEqual(params["target_scope"], "original-docs/subdir/")
+        self.assertEqual(params["purpose"], "在庫算出の再構築")
+        self.assertEqual(params["target_scope"], "docs-original/subdir/")
         self.assertEqual(params["depth"], "lightweight")
         self.assertEqual(params["focus_areas"], "データ整合性")
 
@@ -964,6 +967,324 @@ class TestReviewModelCLI(unittest.TestCase):
         self.assertEqual(display, "Auto")
 
 
+class TestAkmExecutionQualityCliArgs(unittest.TestCase):
+    """FR-QA-04: QA 起点 AKM 専用の実行品質オプションを CLI から受け取る。"""
+
+    def test_akm_model_parsed(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas", "--akm-model", "claude-opus-4.6"])
+        self.assertEqual(args.akm_model, "claude-opus-4.6")
+
+    def test_akm_reasoning_effort_parsed(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas", "--akm-reasoning-effort", "medium"])
+        self.assertEqual(args.akm_reasoning_effort, "medium")
+
+    def test_akm_context_tier_parsed(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas", "--akm-context-tier", "default"])
+        self.assertEqual(args.akm_context_tier, "default")
+
+    def test_akm_context_tier_accepts_long_context(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas", "--akm-context-tier", "long_context"])
+        self.assertEqual(args.akm_context_tier, "long_context")
+
+    def test_akm_context_tier_rejects_unknown_value(self) -> None:
+        # 先に正常値が受理されることを確かめ、「引数自体が未知」による偽陽性 PASS を防ぐ。
+        self.assertEqual(
+            _parse(["orchestrate", "-w", "aas", "--akm-context-tier", "default"]).akm_context_tier,
+            "default",
+        )
+        with self.assertRaises(SystemExit):
+            _parse(["orchestrate", "-w", "aas", "--akm-context-tier", "huge"])
+
+    def test_defaults_are_none(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas"])
+        self.assertIsNone(args.akm_model)
+        self.assertIsNone(args.akm_reasoning_effort)
+        self.assertIsNone(args.akm_context_tier)
+
+    def test_values_reach_config(self) -> None:
+        args = _parse([
+            "orchestrate", "-w", "aas",
+            "--akm-model", "claude-opus-4.6",
+            "--akm-reasoning-effort", "medium",
+            "--akm-context-tier", "default",
+        ])
+        config = _build_config(args)
+        self.assertEqual(config.akm_model, "claude-opus-4.6")
+        self.assertEqual(config.akm_reasoning_effort, "medium")
+        self.assertEqual(config.akm_context_tier, "default")
+
+    def test_config_defaults_stay_none(self) -> None:
+        config = _build_config(_parse(["orchestrate", "-w", "aas"]))
+        self.assertIsNone(config.akm_model)
+        self.assertIsNone(config.akm_reasoning_effort)
+        self.assertIsNone(config.akm_context_tier)
+
+    def test_akm_model_auto_kept_in_config(self) -> None:
+        config = _build_config(_parse(["orchestrate", "-w", "aas", "--akm-model", "Auto"]))
+        self.assertEqual(config.akm_model, "Auto")
+
+    def test_no_akm_environment_variable_path(self) -> None:
+        """`reasoning_effort` / `context_tier` に環境変数経路が無いため新設しない。"""
+        env_backup = os.environ.copy()
+        try:
+            os.environ["AKM_MODEL"] = "claude-opus-4.6"
+            os.environ["AKM_REASONING_EFFORT"] = "medium"
+            os.environ["AKM_CONTEXT_TIER"] = "default"
+            config = _build_config(_parse(["orchestrate", "-w", "aas"]))
+            self.assertIsNone(config.akm_model)
+            self.assertIsNone(config.akm_reasoning_effort)
+            self.assertIsNone(config.akm_context_tier)
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
+
+    def test_explicit_akm_workflow_run_is_out_of_scope(self) -> None:
+        """`-w akm` の明示実行では QA 起点 AKM の子起動自体が発生しない。"""
+        from orchestrator import _should_enable_qa_akm_dispatch
+
+        self.assertFalse(_should_enable_qa_akm_dispatch(
+            auto_qa=True, workflow_id="akm", dry_run=False,
+            qa_akm_background_merge=True,
+        ))
+        self.assertTrue(_should_enable_qa_akm_dispatch(
+            auto_qa=True, workflow_id="aas", dry_run=False,
+            qa_akm_background_merge=True,
+        ))
+
+
+class _WizardHarness:
+    """ラベル駆動でウィザードを走らせ、尋ねられた質問を記録する。
+
+    `side_effect` の順序依存を避けるため、ラベル文字列で回答を決める。
+    """
+
+    def __init__(
+        self,
+        workflow_id: str,
+        *,
+        auto_qa: bool,
+        akm_quality: bool,
+        qa_akm_merge: bool = False,
+    ) -> None:
+        self.workflow_id = workflow_id
+        self.auto_qa = auto_qa
+        self.akm_quality = akm_quality
+        self.qa_akm_merge = qa_akm_merge
+        # メインモデルは index 0 ("Auto") なので、AKM は別値となる index 1 を選ぶ。
+        self.akm_model_index = 1
+        self.akm_context_tier_index = 1
+        self.yes_no_labels: list = []
+        self.menu_labels: list = []
+        self.input_labels: list = []
+        self.config = None
+
+    def _yes_no(self, label, *args, **kwargs) -> bool:
+        self.yes_no_labels.append(str(label))
+        text = str(label)
+        if "この設定で実行しますか" in text or "ワークベンチ" in text:
+            return True
+        if "Knowledge Management" in text and "マージ" in text:
+            return self.qa_akm_merge
+        if "QA" in text and ("自動投入" in text or "質問票生成・回答" in text):
+            return self.auto_qa
+        if "AKM" in text and "実行品質" in text:
+            return self.akm_quality
+        return False
+
+    def _menu_select(self, label, options, *args, **kwargs) -> int:
+        self.menu_labels.append(str(label))
+        text = str(label)
+        # index 0 は「クイック全自動」で auto_qa が False へ強制上書きされるため「手動」を選ぶ。
+        if "実行モード" in text:
+            return 2
+        if "AKM 用モデル" in text:
+            return self.akm_model_index
+        if "AKM 用 context tier" in text:
+            return self.akm_context_tier_index
+        return 0
+
+    def _prompt_input(self, label, *args, **kwargs) -> str:
+        self.input_labels.append(str(label))
+        return ""
+
+    def run(self) -> None:
+        captured = {}
+
+        async def _fake_run_workflow(workflow_id, params, config, **kwargs):
+            captured["cfg"] = config
+            return {"completed": [], "failed": [], "skipped": []}
+
+        steps = [
+            mock.MagicMock(id="1", title="Step1", is_container=False, depends_on=[], params=[]),
+            mock.MagicMock(id="2", title="Step2", is_container=False, depends_on=["1"], params=[]),
+        ]
+        mock_wf = mock.MagicMock(id=self.workflow_id, steps=steps, params=[])
+
+        MockConsole = mock.MagicMock()
+        con = MockConsole.return_value
+        con.s = mock.MagicMock(CYAN="", RESET="", DIM="", GREEN="", YELLOW="")
+        con.prompt_yes_no.side_effect = self._yes_no
+        con.menu_select.side_effect = self._menu_select
+        con.prompt_input.side_effect = self._prompt_input
+        con.prompt_multi_select.return_value = []
+
+        mock_console_mod = mock.MagicMock()
+        mock_console_mod.Console = MockConsole
+        mock_config_mod = mock.MagicMock()
+        from config import SDKConfig  # type: ignore[import-untyped]
+        mock_config_mod.SDKConfig = SDKConfig
+        mock_wr_mod = mock.MagicMock()
+        mock_wr_mod.list_workflows = mock.MagicMock(return_value=[mock_wf])
+        mock_wr_mod.get_workflow = mock.MagicMock(return_value=mock_wf)
+        mock_te_mod = mock.MagicMock()
+        mock_te_mod._WORKFLOW_DISPLAY_NAMES = {self.workflow_id: self.workflow_id.upper()}
+        mock_orch_mod = mock.MagicMock()
+        mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
+        mock_workiq_mod = mock.MagicMock()
+        mock_workiq_mod.is_workiq_available = mock.MagicMock(return_value=False)
+        mock_workiq_mod.workiq_login = mock.MagicMock(return_value=False)
+
+        with mock.patch.dict("sys.modules", {
+            "console": mock_console_mod,
+            "config": mock_config_mod,
+            "workflow_registry": mock_wr_mod,
+            "template_engine": mock_te_mod,
+            "orchestrator": mock_orch_mod,
+            "workiq": mock_workiq_mod,
+        }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
+                mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
+                mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=True):
+            _main_mod._cmd_run_interactive()
+
+        self.config = captured.get("cfg")
+
+    def asked(self, needle: str) -> bool:
+        haystack = self.yes_no_labels + self.menu_labels + self.input_labels
+        return any(needle in label for label in haystack)
+
+
+class TestAkmExecutionQualityWizard(unittest.TestCase):
+    """FR-QA-04 / FR-QA-05: wizard は auto_qa 有効かつマージ有効の非 AKM 時だけ 3 項目を尋ねる。"""
+
+    _NEEDLES = ("AKM 用モデル", "AKM 用 reasoning effort", "AKM 用 context tier")
+
+    def test_harness_reaches_manual_mode(self) -> None:
+        """ハーネスが手動モードの対話フローへ到達していることを固定する。
+
+        クイック全自動を選んでしまうと auto_qa が False へ強制上書きされ、
+        以下の全テストが無意味になるため、ガードとして検証する。
+        """
+        harness = _WizardHarness("aas", auto_qa=True, akm_quality=True)
+        harness.run()
+        self.assertIsNotNone(harness.config)
+        self.assertTrue(harness.config.auto_qa, "手動モードの QA 自動投入に到達していない")
+        self.assertTrue(harness.asked("QA 自動投入を有効にする"))
+
+    def test_asks_three_items_when_auto_qa_enabled(self) -> None:
+        harness = _WizardHarness(
+            "aas", auto_qa=True, akm_quality=True, qa_akm_merge=True,
+        )
+        harness.run()
+        for needle in self._NEEDLES:
+            with self.subTest(needle=needle):
+                self.assertTrue(harness.asked(needle), f"未質問: {needle}")
+
+    def test_does_not_ask_when_auto_qa_disabled(self) -> None:
+        harness = _WizardHarness(
+            "aas", auto_qa=False, akm_quality=True, qa_akm_merge=True,
+        )
+        harness.run()
+        self.assertIsNotNone(harness.config)
+        self.assertFalse(harness.config.auto_qa)
+        for needle in self._NEEDLES:
+            with self.subTest(needle=needle):
+                self.assertFalse(harness.asked(needle), f"誤って質問: {needle}")
+
+    def test_does_not_ask_for_explicit_akm_workflow(self) -> None:
+        harness = _WizardHarness(
+            "akm", auto_qa=True, akm_quality=True, qa_akm_merge=True,
+        )
+        harness.run()
+        self.assertIsNotNone(harness.config)
+        self.assertTrue(harness.config.auto_qa, "AKM の QA 質問に到達していない")
+        for needle in self._NEEDLES:
+            with self.subTest(needle=needle):
+                self.assertFalse(harness.asked(needle), f"誤って質問: {needle}")
+
+    def test_does_not_ask_when_background_merge_declined(self) -> None:
+        """FR-QA-05: マージが無効なら AKM 子実行自体が起きないため尋ねない。"""
+        harness = _WizardHarness(
+            "aas", auto_qa=True, akm_quality=True, qa_akm_merge=False,
+        )
+        harness.run()
+        for needle in self._NEEDLES:
+            with self.subTest(needle=needle):
+                self.assertFalse(harness.asked(needle), f"誤って質問: {needle}")
+
+    def test_selected_values_reach_config(self) -> None:
+        harness = _WizardHarness(
+            "aas", auto_qa=True, akm_quality=True, qa_akm_merge=True,
+        )
+        harness.run()
+        self.assertIsNotNone(harness.config)
+        self.assertIsNotNone(harness.config.akm_model)
+        self.assertIsNotNone(harness.config.akm_context_tier)
+
+    def test_gate_declined_keeps_inheritance(self) -> None:
+        harness = _WizardHarness(
+            "aas", auto_qa=True, akm_quality=False, qa_akm_merge=True,
+        )
+        harness.run()
+        self.assertIsNotNone(harness.config)
+        self.assertIsNone(harness.config.akm_model)
+        self.assertIsNone(harness.config.akm_reasoning_effort)
+        self.assertIsNone(harness.config.akm_context_tier)
+        for needle in self._NEEDLES:
+            with self.subTest(needle=needle):
+                self.assertFalse(harness.asked(needle), f"誤って質問: {needle}")
+
+
+class TestQaAkmBackgroundMergeWizard(unittest.TestCase):
+    """FR-QA-05: wizard のマージ可否質問と既定値。"""
+
+    _NEEDLE = "Knowledge Management へバックグラウンド"
+
+    def test_asks_when_auto_qa_enabled_on_non_akm_workflow(self) -> None:
+        harness = _WizardHarness("aas", auto_qa=True, akm_quality=False)
+        harness.run()
+        self.assertTrue(harness.asked(self._NEEDLE), "マージ可否を尋ねていない")
+
+    def test_default_is_disabled(self) -> None:
+        harness = _WizardHarness("aas", auto_qa=True, akm_quality=False)
+        harness.run()
+        self.assertIsNotNone(harness.config)
+        self.assertFalse(harness.config.qa_akm_background_merge)
+
+    def test_accepting_enables_the_setting(self) -> None:
+        harness = _WizardHarness(
+            "aas", auto_qa=True, akm_quality=False, qa_akm_merge=True,
+        )
+        harness.run()
+        self.assertIsNotNone(harness.config)
+        self.assertTrue(harness.config.qa_akm_background_merge)
+
+    def test_does_not_ask_when_auto_qa_disabled(self) -> None:
+        harness = _WizardHarness("aas", auto_qa=False, akm_quality=False)
+        harness.run()
+        self.assertIsNotNone(harness.config)
+        self.assertFalse(harness.config.qa_akm_background_merge)
+        self.assertFalse(harness.asked(self._NEEDLE), "誤ってマージ可否を尋ねている")
+
+    def test_does_not_ask_for_explicit_akm_workflow(self) -> None:
+        harness = _WizardHarness(
+            "akm", auto_qa=True, akm_quality=False, qa_akm_merge=True,
+        )
+        harness.run()
+        self.assertIsNotNone(harness.config)
+        self.assertFalse(harness.config.qa_akm_background_merge)
+        self.assertFalse(harness.asked(self._NEEDLE), "誤ってマージ可否を尋ねている")
+
+
 class TestEmitPromptCommand(unittest.TestCase):
     """emit-prompt サブコマンドのテスト。"""
 
@@ -1127,7 +1448,10 @@ class TestMainDryRun(unittest.TestCase):
                 "--resource-group", "test-resource-group",
             ],
         }
-        for wf_id in ["aas", "aad-web", "asdw-web", "adfd", "adfdv", "aag", "aagd", "akm", "aqod", "adoc"]:
+        for wf_id in [
+            "ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv",
+            "aag", "aagd", "aar", "akm", "adi", "adoc",
+        ]:
             with self.subTest(workflow_id=wf_id):
                 exit_code = main([
                     "orchestrate",
@@ -1187,6 +1511,21 @@ class TestBuildConfigReviewTimeout(unittest.TestCase):
         args = _parse(["orchestrate", "-w", "aas"])
         config = _build_config(args)
         self.assertEqual(config.review_timeout_seconds, 7200.0)
+
+
+class TestAkmRepositoryLockWiring(unittest.TestCase):
+    """FR-QA-03: 明示 AKM も QA 起点 AKM と同じ排他へ参加する。"""
+
+    def test_cmd_orchestrate_locks_akm_around_run_workflow(self) -> None:
+        import inspect
+
+        source = inspect.getsource(_main_mod._cmd_orchestrate)
+        lock_pos = source.index("RepositoryAkmLock")
+        run_pos = source.index("asyncio.run(", lock_pos)
+        close_pos = source.index(".close()", run_pos)
+        self.assertLess(lock_pos, run_pos)
+        self.assertLess(run_pos, close_pos)
+        self.assertIn('args.workflow == "akm"', source)
 
 
 class TestBuildConfigLogLevel(unittest.TestCase):
@@ -1630,19 +1969,21 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         # prompt_yes_no の回答順序（Phase E 再編後）:
         # 1. auto_qa (Phase E-1)
         # 2. (auto_qa=True 時のみ) use_different_qa_model (Phase E-1 内)
-        # 3. auto_review (Phase E-2)
-        # 4. Code Review Agent → code_review (Phase E-4)
-        # 5. (code_review=True 時のみ) 自動承認 → auto_approval (Phase E-4 内)
-        # 6. (auto_review or code_review 時のみ) use_different_review_model (Phase E-5)
-        # 7. 自己改善 → False (Phase E-6)
-        # 8. Issue 作成 → create_issues (Phase F)
-        # 9. PR 作成 → create_pr (create_issues=False 時のみ呼ばれる) (Phase F)
-        # 10. ドライラン → False (Phase G)
-        # 11. ワークベンチ起動 → enable_workbench (Phase H、既定 True)
-        # 12. 実行確認 → True
+        # 3. (auto_qa=True 時のみ) AKM 実行品質を別にするか (FR-QA-04, Phase E-1 内)
+        # 4. auto_review (Phase E-2)
+        # 5. Code Review Agent → code_review (Phase E-4)
+        # 6. (code_review=True 時のみ) 自動承認 → auto_approval (Phase E-4 内)
+        # 7. (auto_review or code_review 時のみ) use_different_review_model (Phase E-5)
+        # 8. 自己改善 → False (Phase E-6)
+        # 9. Issue 作成 → create_issues (Phase F)
+        # 10. PR 作成 → create_pr (create_issues=False 時のみ呼ばれる) (Phase F)
+        # 11. ドライラン → False (Phase G)
+        # 12. ワークベンチ起動 → enable_workbench (Phase H、既定 True)
+        # 13. 実行確認 → True
         yes_no_answers = [auto_qa]
         if auto_qa:
             yes_no_answers.append(use_different_qa_model)
+            yes_no_answers.append(False)  # AKM 専用実行品質は使わない（継承）
         yes_no_answers.append(auto_review)
         yes_no_answers.append(code_review)
         if code_review:
@@ -2036,10 +2377,11 @@ class TestInteractiveModeQaAutoDefaults(unittest.TestCase):
         con.menu_select.side_effect = [0, 2, 0, 1]  # workflow, exec_mode(手動), model, verbosity
         # Phase 再編後の yes_no 順:
         #   Phase E: auto_qa=True, (auto_qa=Trueなので) use_different_qa_model=False,
+        #            AKM 専用実行品質=False(FR-QA-04),
         #            auto_review=False, code_review=False, self_improve=False
         #   Phase F: create_issues=False, create_pr=False
         #   Phase G: dry_run=False / Phase H: enable_workbench=True / 実行確認=True
-        con.prompt_yes_no.side_effect = [True, False, False, False, False, False, False, False, True, True]
+        con.prompt_yes_no.side_effect = [True, False, False, False, False, False, False, False, False, True, True]
         # Phase 再編後の input 順: addl_prompt, timeout, branch, parallel, session_name (Phase 4)
         con.prompt_input.side_effect = ["", "21600", "main", "15", ""]
         con.prompt_multi_select.return_value = []
@@ -2082,7 +2424,7 @@ class TestInteractiveModeQaAutoDefaults(unittest.TestCase):
         con.prompt_answer_mode.assert_not_called()
 
 
-class TestInteractiveModeAqodQaFlow(unittest.TestCase):
+class TestInteractiveModeAkmQaFlow(unittest.TestCase):
     def test_manual_mode_akm_without_auto_qa_keeps_workiq_disabled(self) -> None:
         """AKM は QA と実行後レビュー Work IQ を別々に表示し、拒否すれば無効のまま。"""
         import unittest.mock as mock
@@ -2161,98 +2503,6 @@ class TestInteractiveModeAqodQaFlow(unittest.TestCase):
         prompts = [c.args[0] for c in con.prompt_yes_no.call_args_list if c.args]
         self.assertTrue(any("AKM 実行前に QA" in str(p) for p in prompts))
         self.assertTrue(any("Work IQ" in str(p) and "knowledge/" in str(p) for p in prompts))
-
-    def test_manual_mode_aqod_auto_qa_enables_workiq_draft_mode(self) -> None:
-        # T-D: 本テストは _cmd_run_interactive の prompt_yes_no 順序に実装が
-        # 追い付いておらず、cfg.auto_qa=False で不一致となる。2026-05-11 時点で
-        # 詳細調査未完了のため一時スキップし、別 Issue で追跡する。
-        import unittest as _ut
-        raise _ut.SkipTest(
-            "T-D: prompt_yes_no の順序と実装の逐一致調査が未完了。別 Issue でトリアージ訪問順を見直し予定。"
-        )
-        import unittest.mock as mock
-
-        captured = {}
-
-        async def _fake_run_workflow(workflow_id, params, config, **kwargs):
-            captured["cfg"] = config
-            return {"completed": [], "failed": [], "skipped": []}
-
-        mock_step = mock.MagicMock(
-            id="1", title="Step1", is_container=False, depends_on=[], params=[],
-        )
-        mock_wf = mock.MagicMock(id="aqod", steps=[mock_step], params=[])
-        mock_display_names = {"aqod": "AQOD"}
-
-        MockConsole = mock.MagicMock()
-        con = MockConsole.return_value
-        con.s = mock.MagicMock(CYAN="", RESET="", DIM="", GREEN="", YELLOW="")
-        # workflow(aqod), model, exec_mode(手動), verbosity, aqod depth(default)
-        con.menu_select.side_effect = [0, 0, 2, 1, -1]
-        # prompt_yes_no の順序:
-        # 1) AQOD後QA実施 2) Work IQ利用 3) Issue作成 4) PR作成
-        # 5) Code Review有効化 6) dry_run 7) auto_self_improve 8) 実行確認
-        # （AQOD + auto_qa=True のため Work IQドラフト確認プロンプトは表示されない）
-        # side_effect = [QA, WorkIQ, Issue, PR, CodeReview, dry_run, auto_self_improve, confirm]
-        con.prompt_yes_no.side_effect = [True, True, False, False, False, False, False, True]
-        con.prompt_input.side_effect = [
-            "main",               # branch
-            "21600",              # timeout
-            "社内略語は使わない",  # workiq_additional_prompt
-            "1200",               # workiq_per_question_timeout（20 分）
-            "original-docs/",     # target_scope
-            "",                   # focus_areas
-            "",                   # additional_prompt
-            "",                   # Phase 4: セッション名（既定値を使用）
-        ]
-        con.prompt_multi_select.return_value = []
-
-        mock_console_mod = mock.MagicMock()
-        mock_console_mod.Console = MockConsole
-        mock_config_mod = mock.MagicMock()
-        from config import SDKConfig  # type: ignore[import-untyped]
-        mock_config_mod.SDKConfig = SDKConfig
-        mock_wr_mod = mock.MagicMock()
-        mock_wr_mod.list_workflows = mock.MagicMock(return_value=[mock_wf])
-        mock_wr_mod.get_workflow = mock.MagicMock(return_value=mock_wf)
-        mock_te_mod = mock.MagicMock()
-        mock_te_mod._WORKFLOW_DISPLAY_NAMES = mock_display_names
-        mock_orch_mod = mock.MagicMock()
-        mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
-        mock_workiq_mod = mock.MagicMock()
-        mock_workiq_mod.is_workiq_available = mock.MagicMock(return_value=True)
-        mock_workiq_mod.workiq_login = mock.MagicMock(return_value=True)
-        mock_workiq_mod.get_workiq_prompt_template = mock.MagicMock(side_effect=lambda mode: f"default-{mode}")
-
-        with mock.patch.dict("sys.modules", {
-            "console": mock_console_mod,
-            "config": mock_config_mod,
-            "workflow_registry": mock_wr_mod,
-            "template_engine": mock_te_mod,
-            "orchestrator": mock_orch_mod,
-            "workiq": mock_workiq_mod,
-           }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
-               mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
-               mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=True):
-            _main_mod._cmd_run_interactive()
-
-        cfg = captured.get("cfg")
-        self.assertIsNotNone(cfg)
-        self.assertTrue(cfg.auto_qa)
-        self.assertTrue(cfg.workiq_enabled)
-        self.assertEqual(cfg.qa_answer_mode, "all")
-        self.assertTrue(cfg.workiq_draft_mode)
-        self.assertEqual(cfg.workiq_prompt_qa, "default-qa\n\n社内略語は使わない")
-        self.assertEqual(cfg.workiq_prompt_km, "default-km\n\n社内略語は使わない")
-        self.assertEqual(cfg.workiq_prompt_review, "default-review\n\n社内略語は使わない")
-        prompts = [c.args[0] for c in con.prompt_yes_no.call_args_list if c.args]
-        self.assertNotIn("Work IQ で回答ドラフトを自動生成する？", prompts)
-        input_prompts = [c.args[0] for c in con.prompt_input.call_args_list if c.args]
-        self.assertIn("Work IQ (Microsoft 365 Copilot) の末尾に追加するプロンプト（省略可）", input_prompts)
-        self.assertIn("全てのステップでの Prompt の末尾に追加するプロンプト（省略可）", input_prompts)
-        panel_lines = con.panel.call_args.args[1]
-        self.assertTrue(any(str(line).startswith("Work IQ Prompt: ") for line in panel_lines))
-        self.assertTrue(any("社内略語は使わない" in str(line) for line in panel_lines))
 
 
 class TestInteractiveAdocParamsValidation(unittest.TestCase):
@@ -2574,21 +2824,21 @@ class TestDocPurposePrompt(unittest.TestCase):
         self.assertEqual(val, "all")
 
 
-class TestAqodDepthPrompt(unittest.TestCase):
-    """AQOD depth メニュー選択のバリデーション。"""
+class TestAdiDepthPrompt(unittest.TestCase):
+    """ADI depth メニュー選択のバリデーション。"""
 
     def test_select_lightweight(self) -> None:
         con = mock.MagicMock()
         con.s = mock.MagicMock(DIM="", RESET="")
         con.menu_select.return_value = 1
-        depth = _prompt_valid_aqod_depth(con)
+        depth = _prompt_valid_adi_depth(con)
         self.assertEqual(depth, "lightweight")
 
     def test_default_standard_on_empty(self) -> None:
         con = mock.MagicMock()
         con.s = mock.MagicMock(DIM="", RESET="")
         con.menu_select.return_value = -1
-        depth = _prompt_valid_aqod_depth(con)
+        depth = _prompt_valid_adi_depth(con)
         self.assertEqual(depth, "standard")
 
 

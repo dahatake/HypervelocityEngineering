@@ -73,7 +73,7 @@ HVE の AAG / AAGD で設計・実装するアプリケーション AI Agent が
 | MCP接続を使う | client設定、認証、承認、timeout、失敗時縮退 |
 | 同じ手順連鎖が3回以上現れる、または明確な再利用要件がある | Agent別Skillと必要なresources |
 
-「3回」は `users-guide/08-ai-agent.md` の既存HVEルールであり、Anthropic仕様上の必須値ではない。Anthropic型Skillのbundled resourcesが任意であることを前提に、Skill乱造を防ぐためのHVE固有の選択閾値として使う。
+「3回」は HVE 固有の既存ルールであり、Anthropic仕様上の必須値ではない。Anthropic型Skillのbundled resourcesが任意であることを前提に、Skill乱造を防ぐためのHVE固有の選択閾値として使う。
 
 業務状態の永続変更有無は AAG Step 1 で、ユースケースの主要フロー・例外・権限から判定する。判定結果を `Mutation Intent: required | none | TBD` として Goal Contract に記録し、AAG Step 3 の AG-CAP-04 はその値と根拠を参照する。`TBD` のまま変更Toolを実装してはならない。
 

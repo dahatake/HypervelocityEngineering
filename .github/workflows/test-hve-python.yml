@@ -76,6 +76,58 @@ jobs:
       - name: Run all HVE tests
         run: pytest hve/tests/ -v --ignore=hve/tests/test_dag_parity.py
 
+  gui-pty-tests:
+    name: GUI PTY backend (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # GUI の「GitHub CLI でログイン」は OS 別 PTY backend を必要とする。
+      # PySide6 は不要（hve.gui.pty_backend は stdlib のみに依存）。
+      - name: Install package with [gui-pty] extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[gui-pty]"
+          pip install pytest
+
+      # backend が無いと実 PTY テストは黙って skip されるため、ここで fail-closed にする。
+      - name: Verify the platform PTY backend is available
+        run: |
+          python -c "from hve.gui.pty_backend import is_pty_available, missing_dependency_hint; assert is_pty_available(), missing_dependency_hint()"
+
+      # 対話 CLI の smoke は解決済み `copilot` を必要とする。SDK が pin するランタイムを
+      # 先読みし、解決できない場合はここで fail-closed にする（skip で隠さない）。
+      - name: Provision the pinned Copilot CLI runtime
+        run: |
+          python -m copilot download-runtime
+          python -c "from hve.gui.copilot_cli_bridge import CopilotCliBridge; assert CopilotCliBridge.find_binary(), 'Copilot CLI is not resolvable'"
+
+      - name: Run PTY backend tests without skips
+        run: |
+          set -euo pipefail
+          python -m pytest hve/tests/test_pty_backend.py hve/tests/test_copilot_cli_pty_smoke.py -v --junitxml=pty-results.xml
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          suite = ET.parse("pty-results.xml").getroot().find("testsuite")
+          skipped = int(suite.get("skipped", "0"))
+          assert skipped == 0, f"PTY backend tests were skipped: {skipped}"
+          print("PTY backend tests ran without skips:", suite.get("tests"))
+          PY
+
   cq-python-tests:
     name: cq Python Tests
     runs-on: ubuntu-latest
@@ -92,9 +144,9 @@ jobs:
       - name: Install package with [code] extras
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[code,code-sql]"
           # repomap の予算テストは tiktoken の計数を前提にする（未導入だと chars/4 近似になり dropped 数が変わる）。
-          pip install pytest tiktoken
+          # tiktoken / watchdog は cq 自身の extras から入れる（mdq の extras へ相乗りしない）。
+          pip install -e ".[code,code-sql,code-watch,code-tokenizer,test]"
 
       # tree-sitter が無いと言語契約テストは黙って skip されるため、ここで fail-closed にする。
       - name: Verify optional grammars are importable

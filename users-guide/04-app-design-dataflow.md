@@ -1,428 +1,335 @@
-# アプリケーション設計 - Batch Data Processing
+# アプリケーション設計 - Dataflow Design（ADFD）
 
-← [README](../README.md)
-
-> ⚠️ **移行ノート（AAS 共通化対応）**: 本ワークフローは AAS（Application Architecture Selection）の共通カタログを SoT として参照する構成に再設計されました。
-> - 旧 Step.1.1〜5（バッチドメイン分析・データソース分析・データモデル・ジョブカタログ・サービスカタログ・テスト戦略）は AAS Step.3.1〜7 に統合されました（プロンプトおよび `docs/catalog/*` 出力に冪等性・チェックポイント・データソース統合等のバッチ補強注記を追加）。
-> - 現行 ADFD は Step.1（per-job 詳細仕様）・Step.2（監視・運用設計）・Step.3（TDD テスト仕様）の 3 ステップのみです。入力は `docs/catalog/*`（AAS 出力）に切り替わっています。
-> - **「概要」「前提条件」「Agent チェーン図」（3 SVG: `chain-adfd.svg` / `infographic-adfd.svg` / `orchestration-task-data-flow-adfd.svg`）「ステップ概要」のステップ表は現行 3 ステップ構成（`docs/catalog/*` 入力）に更新済みです。** 「手動実行ガイド」「自動実行ガイド」配下の Step.1.1〜5 説明セクションは、旧 9 ステップ構成の参考情報として `[旧]` を明記のうえ残置しています（現行 ADFD では実行されません）。
-> - 旧 `docs/dataflow/dataflow-*.md` 系の生成は廃止されました。ADFDV（dataflow dev）ワークフローは旧 dataflow-*.md を必須依存としていますが、現状は AAS 共通カタログ＋ per-job 詳細を参照する形へ追従修正が必要です（[CHANGELOG](../CHANGELOG.md) の Known Issues 参照）。
-
----
+> **確認日: 2026-08-07**
+> 現行 ADFD の実行契約は
+> [`hve/workflow_registry.py`](../hve/workflow_registry.py) の `ADFD` 定義です。
+> 完全な 7 Step を実行する場合は **HVE CLI / GUI のローカル実行経路**を使用してください。
+> GitHub Issue Form から始まる Cloud 経路は、現時点では 3 Step のままです。
 
 ## 目次
 
 - [概要](#概要)
-- [Agent チェーン図（ADFD）](#agent-チェーン図adfd)
-- [ツール](#ツール)
-- [ステップ概要](#ステップ概要)
-- [手動実行ガイド](#手動実行ガイド)
-- [自動実行ガイド（ワークフロー）](#自動実行ガイドワークフロー)
-- [データフロー処理固有の設計ポイント](#データフロー処理固有の設計ポイント)
-- [動作確認手順](#動作確認手順)
-
----
-バッチデータ処理設計に必要なドキュメント群を、カスタムエージェントを使って順番に作成します。
-ユースケースを入力として、ドメイン分析・データモデル・ジョブ設計・監視設計・TDDテスト仕様書まで
-一貫して生成できます。
-
----
+- [前提条件](#前提条件)
+- [現行 7 Step](#現行-7-step)
+- [開始方法](#開始方法)
+- [完了確認](#完了確認)
+- [後続 ADFDV への引き渡し](#後続-adfdv-への引き渡し)
+- [カスタマイズ](#カスタマイズ)
+- [検証](#検証)
+- [既知の制約](#既知の制約)
+- [非現行仕様](#非現行仕様)
+- [正本と関連テスト](#正本と関連テスト)
 
 ## 概要
 
-### フローの目的・スコープ
+ADFD は、AAS（Application Architecture Selection）が生成した共通カタログを入力に、
+データフロー処理のデータモデル、ジョブカタログ、サービスカタログ、テスト戦略、
+APP-ID 単位の詳細仕様、監視・運用設計、TDD テスト仕様を作成するワークフローです。
 
-Issue Form から親 Issue を作成するだけで、Step.1〜Step.3 のデータフロー処理設計タスクが
-Sub-issue として自動生成され、Copilot が依存関係に従って順次・並列実行するワークフローです。
+現行構成は次の **7 Step** です。
 
-本ワークフローはバッチ／データフロー処理に特化しており、AAS が生成した共通カタログ（`docs/catalog/*`）を入力に、以下の 3 つの設計成果物を自動生成します:
-- ジョブ詳細仕様書（per-job・fanout。`docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md`）
-- 監視・運用設計書（`docs/dataflow/dataflow-monitoring-design.md`）
-- TDD テスト仕様書（per-job・fanout。`docs/test-specs/{jobId}-test-spec.md`）
-
-> 旧 9 ステップ構成のバッチドメイン分析・データソース分析・データモデル・ジョブ設計書・サービスカタログ・テスト戦略書は AAS の共通カタログ（`docs/catalog/*`）に統合され、ADFD 単独では生成されません。
-
-### 前提条件
-
-- `docs/catalog/app-catalog.md` / `docs/catalog/data-model.md` / `docs/catalog/service-catalog-matrix.md` / `docs/catalog/test-strategy.md` が存在すること（Step.1〜3 の主入力。いずれも AAS 出力）
-- `docs/catalog/app-arch-catalog.md` が存在すること（APP-ID フィルタリングの正本）
-- Architecture Design（AAS）ワークフローが完了していること
-- セットアップ・トラブルシューティングは → [Cloud](./hve-cloud-getting-started.md) / [CLI](./hve-cli-getting-started.md) / [GUI](./hve-gui-getting-started.md)
-
-> 💡 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21: 事業意図・スコープ・業務プロセス・ユースケース・データモデル・セキュリティ等）が存在する場合、各ステップで業務コンテキストとして自動参照されます。設計精度を高めるため、事前に [km-guide.md](./km-guide.md) のワークフローを実行して `knowledge/` を充実させることを推奨します。
-
-
-## Agent チェーン図（ADFD）
-
-以下の図は、このワークフローで使用される Prompt がファイルの入出力を介してどのように連鎖するかを示します。
-
-
-![ADFD: ジョブ詳細仕様書(Arch-Dataflow-AppSpec) と 監視・運用設計(Arch-Dataflow-MonitoringDesign) を並列実行し、TDDテスト仕様書(Arch-Dataflow-TDD-TestSpec) へ AND 合流する 3 ステップチェーン](./images/chain-adfd.svg)
-
-
-### アーキテクチャ図
-
-![ADFD アーキテクチャ: 入力ファイル → auto-dataflow-design Workflow → Prompt チェーン → 成果物](./images/infographic-adfd.svg)
-
-### データフロー図（ADFD）
-
-以下の図は、各ステップで Prompt が読み書きするファイルのデータフローを示します。
-
-![ADFD データフロー: 各 Prompt の入出力ファイル](./images/orchestration-task-data-flow-adfd.svg)
-
----
-
-## ツール
-
-GitHub Copilot cloud agent を使用します。ツールの詳細は [README.md](../README.md) を参照してください。
-
----
-
-## ステップ概要
-
-### 依存グラフ
-
-```
-step-1 ──┐
-          ├──► step-3
-step-2 ──┘
+```mermaid
+flowchart LR
+    S01["Step 0.1<br>データモデル"] --> S02["Step 0.2<br>アプリカタログ"]
+    S02 --> S4["Step 4<br>サービスカタログ"]
+    S4 --> S5["Step 5<br>テスト戦略"]
+    S5 --> S1["Step 1<br>詳細仕様<br>APP-ID fan-out"]
+    S5 --> S2["Step 2<br>監視・運用設計"]
+    S1 --> S3["Step 3<br>TDD テスト仕様<br>APP-ID fan-out"]
+    S2 --> S3
 ```
 
-**重要な依存関係（現行 ADFD = 3 ステップ）:**
-- `step-1`（ジョブ詳細仕様書）と `step-2`（監視・運用設計書）は ADFD 起動時に**並列開始**されます
-- `step-3`（TDDテスト仕様書）は `step-1` **AND** `step-2` の**両方が完了した後**に開始されます（AND依存）
+Step ID が数値順でないのは、既存の Step 1 / 2 / 3 と下流契約を維持しながら、
+不足していた producer Step を上流へ追加したためです。表示順ではなく、
+`depends_on` で定義された DAG を参照してください。
 
-> **NOTE**: 旧ステップ体系 (step-1.1〜5: バッチドメイン分析・データソース分析・データモデル・ジョブ設計書・サービスカタログ・テスト戦略書) は AAS の共通カタログ (`docs/catalog/*`) に統合され、ADFD 単独では実行されません。
+## 前提条件
 
-### 各ステップの入出力
+### 必須成果物
 
-| Step ID   | タイトル                                    | Prompt                         | 入力                                                                                         | 出力                                                    | 依存                      |
-|-----------|---------------------------------------------|-------------------------------|----------------------------------------------------------------------------------------------|---------------------------------------------------------|---------------------------|
-| step-1  | Step.1 データフローアプリ詳細仕様書             | Arch-Dataflow-AppSpec             | docs/catalog/app-catalog.md, docs/catalog/data-model.md, docs/catalog/service-catalog-matrix.md | docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md     | なし（root）              |
-| step-2  | Step.2 監視・運用設計書                   | Arch-Dataflow-MonitoringDesign    | docs/catalog/app-catalog.md, docs/catalog/service-catalog-matrix.md                        | docs/dataflow/dataflow-monitoring-design.md                   | なし（root）              |
-| step-3  | Step.3 TDDテスト仕様書                    | Arch-Dataflow-TDD-TestSpec        | docs/catalog/test-strategy.md, docs/catalog/service-catalog-matrix.md, docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md, docs/dataflow/dataflow-monitoring-design.md | docs/test-specs/{jobId}-test-spec.md           | step-1 AND step-2     |
+先に AAS を完了し、次の共通カタログを用意します。
 
----
-
-## 手動実行ガイド
-
-> [!TIP]
-> Step.1.1 と Step.1.2 は並列で実行できます。いずれも主な入力は `docs/catalog/use-case-catalog.md` であり、Step.1.2 では必要に応じて `docs/catalog/data-model.md` も併用できるため、同時に依頼しても構いません。
-> Step.2 以降は前段ステップの成果物を入力とするため、順番通りに進めてください。
-
-### [旧仕様・AAS統合済み] Step.1. データフロー処理ドメイン分析とデータソース分析
-
-ユースケースの情報をもとに、データフロー処理に特化したドメイン分析とデータソース/デスティネーション分析を行います。
-これらは独立しているため、**並列**で実行できます。
-
-#### [旧] Step.1.1. ドメイン分析
-
-- 使用するカスタムエージェント
-  - Arch-Dataflow-DomainAnalytics
-
-```text
-# タスク
-ユースケース文書を根拠に、データフロー処理の DDD 観点でのドメイン分析（Bounded Context / 冪等性 / チェックポイント / ジョブライフサイクルイベント / トランザクション境界）を整理し、docs/dataflow/dataflow-domain-analytics.md を作成する。
-
-# 入力
-- ユースケース文書: `docs/catalog/use-case-catalog.md`
-
-# 出力（必須）
-- `docs/dataflow/dataflow-domain-analytics.md`
-```
-
-#### [旧] Step.1.2. データソース/デスティネーション分析
-
-- 使用するカスタムエージェント
-  - Arch-Dataflow-DataSourceAnalysis
-
-```text
-# タスク
-ユースケース文書を根拠に、データソースとデスティネーションの分析（スキーマ概要・データ量見積・変換ルール・SLA/SLO）を行い、docs/dataflow/dataflow-data-source-analysis.md を作成する。
-
-# 入力
-- `docs/catalog/use-case-catalog.md`
-- `docs/catalog/data-model.md`（存在する場合のみ。任意）
-
-# 出力（必須）
-- `docs/dataflow/dataflow-data-source-analysis.md`
-```
-
----
-
-### [旧仕様・AAS統合済み] Step.2. バッチデータモデル作成
-
-- 使用するカスタムエージェント
-  - Arch-Dataflow-DataModel
-
-```text
-# タスク
-ドメイン分析結果とデータソース分析結果を根拠に、データフロー処理用の4層データモデル（入力/ステージング/中間/出力）・冪等性キー・パーティション戦略・ER 図（Mermaid）を設計し、docs/dataflow/dataflow-data-model.md を作成する。
-
-# 入力
-- `docs/dataflow/dataflow-domain-analytics.md`
-- `docs/dataflow/dataflow-data-source-analysis.md`
+- `docs/catalog/app-arch-catalog.md`
+  - 対象 APP-ID の自動選択とアーキテクチャ種別フィルタに使用します。
+- `docs/catalog/app-catalog.md`
 - `docs/catalog/data-model.md`
+- `docs/catalog/service-catalog-matrix.md`
+- `docs/catalog/test-strategy.md`
 
-# 出力（必須）
-- `docs/dataflow/dataflow-data-model.md`
+不足ファイルがある場合は ADFD で補完せず、AAS を完了または再実行してください。
+
+### 実行環境
+
+- CLI の準備: [HVE CLI Orchestrator はじめかた](./hve-cli-getting-started.md)
+- GUI の準備: [HVE GUI Orchestrator はじめかた](./hve-gui-getting-started.md)
+- 詳細な CLI オプション: [HVE CLI Orchestrator ユーザーガイド](./hve-cli-orchestrator-guide.md)
+- 詳細な GUI 操作: [HVE GUI Orchestrator ガイド](./hve-gui-orchestrator-guide.md)
+
+`knowledge/` に確定済みの業務要件がある場合、各 Prompt は関連する D01〜D21 を
+任意入力として参照します。整備方法は [Knowledge Management ガイド](./km-guide.md) を参照してください。
+
+## 現行 7 Step
+
+### Step 一覧
+
+| Step | Prompt | 必須入力 | 主成果物 | 依存 |
+|---|---|---|---|---|
+| `0.1` | [`Arch-Dataflow-DataModel`](../.github/prompts/Arch-Dataflow-DataModel.prompt.md) | `docs/catalog/app-catalog.md`<br>`docs/catalog/data-model.md` | `docs/dataflow/dataflow-data-model.md` | なし（DAG root） |
+| `0.2` | [`Arch-Dataflow-AppCatalog`](../.github/prompts/Arch-Dataflow-AppCatalog.prompt.md) | `docs/catalog/app-catalog.md`<br>`docs/catalog/service-catalog-matrix.md`<br>`docs/dataflow/dataflow-data-model.md` | `docs/dataflow/dataflow-app-catalog.md` | `0.1` |
+| `4` | [`Arch-Dataflow-ServiceCatalog`](../.github/prompts/Arch-Dataflow-ServiceCatalog.prompt.md) | `docs/catalog/service-catalog-matrix.md`<br>`docs/dataflow/dataflow-app-catalog.md` | `docs/dataflow/dataflow-service-catalog.md` | `0.2` |
+| `5` | [`Arch-Dataflow-TestStrategy`](../.github/prompts/Arch-Dataflow-TestStrategy.prompt.md) | `docs/catalog/test-strategy.md`<br>`docs/dataflow/dataflow-app-catalog.md`<br>`docs/dataflow/dataflow-service-catalog.md` | `docs/dataflow/dataflow-test-strategy.md` | `4` |
+| `1` | [`Arch-Dataflow-AppSpec`](../.github/prompts/Arch-Dataflow-AppSpec.prompt.md) | `docs/catalog/app-catalog.md`<br>`docs/catalog/data-model.md`<br>`docs/catalog/service-catalog-matrix.md` | `docs/dataflow/apps/{APP-ID}-spec.md` | `5`、APP-ID fan-out |
+| `2` | [`Arch-Dataflow-MonitoringDesign`](../.github/prompts/Arch-Dataflow-MonitoringDesign.prompt.md) | `docs/catalog/app-catalog.md`<br>`docs/catalog/service-catalog-matrix.md` | `docs/dataflow/dataflow-monitoring-design.md` | `5` |
+| `3` | [`Arch-Dataflow-TDD-TestSpec`](../.github/prompts/Arch-Dataflow-TDD-TestSpec.prompt.md) | `docs/catalog/test-strategy.md`<br>`docs/catalog/service-catalog-matrix.md`<br>`docs/dataflow/apps/{APP-ID}-spec.md`<br>`docs/dataflow/dataflow-monitoring-design.md` | `docs/test-specs/{APP-ID}-test-spec.md` | `1` **AND** `2`、APP-ID fan-out |
+
+> [!NOTE]
+> **ADI を先に実行している場合**、`docs/dataflow/dataflow-app-catalog.md` に `## 設計書由来の候補（ADI）` セクションがあります。既存設計書（`batch-job-spec`）から抽出されたジョブ候補で、原本に記載されていた Job-ID は `根拠` 列に記録されています。Step `0.2` がこのセクションを読んでジョブ一覧表へ統合します。詳細は [00-design-doc-ingestion.md](./00-design-doc-ingestion.md#adi-と設計ワークフローard--aas--adfdの関係) を参照してください。
+
+### 依存関係
+
+- `0.1 → 0.2 → 4 → 5` は直列です。
+- Step `5` の完了後、Step `1` と Step `2` を並列実行できます。
+- Step `3` は Step `1` と Step `2` の両方が成功した後に実行されます。
+- Step `1` と Step `3` の fan-out キーは、現行 `dataflow_catalog` parser が返す APP-ID です。
+- 実行順と成果物パスは registry、成果物の章立て・品質条件は各 Prompt、
+  Step 本文は [ADFD templates](../.github/scripts/templates/adfd/) が担当します。
+
+## 開始方法
+
+### CLI（完全な 7 Step を実行可能）
+
+リポジトリルートで実行します。初回は `--steps` を省略し、全 Step を実行してください。
+
+```powershell
+$appId = Read-Host "対象 APP-ID"
+python -m hve orchestrate --workflow adfd --strict --app-ids $appId
 ```
 
----
+- `--app-ids` はカンマ区切りで複数指定できます。
+- `--app-ids` を省略すると、`docs/catalog/app-arch-catalog.md` から ADFD 対象が選択されます。
+- `--strict` は必須入力や Skill の pre-check 失敗時に停止させる推奨指定です。
+- 全 Agent に追加制約を渡す場合は `--additional-prompt "..."` を使用できます。
+- `--steps` による部分実行は、選択 Step の全上流成果物がすでに有効な場合だけ使用してください。
 
-### [旧仕様・AAS統合済み] Step.3. ジョブ設計書の作成
+### GUI（CLI と同じ 7 Step registry を使用）
 
-- 使用するカスタムエージェント
-  - Arch-Dataflow-AppCatalog
+1. Windows は `hve.cmd gui`、macOS / Linux は `./hve.sh gui` で起動します。
+2. Step 1 で **Dataflow Design (`adfd`)** を選択します。
+3. 対象 APP-ID を選択し、初回は全 Step を選択します。
+4. Step 2 で実行を開始します。
 
-```text
-# タスク
-ドメイン分析・データソース分析・データモデルを根拠に、データフローアプリの設計（ジョブ一覧・依存DAG・スケジュール・リトライ戦略）を行い、docs/dataflow/dataflow-app-catalog.md を作成する。
+GUI は選択内容を `python -m hve orchestrate --workflow adfd ...` の引数へ変換して
+子プロセスを起動するため、DAG・Prompt・成果物ゲートは CLI と共通です。
 
-# 入力
+### Cloud（現時点では完全な 7 Step を実行不可）
+
+Cloud の経路は次のファイルで構成されます。
+
+1. [`dataflow-design.yml`](../.github/ISSUE_TEMPLATE/dataflow-design.yml) から Root Issue を作成
+2. [`auto-orchestrator-dispatcher.yml`](../.github/workflows/auto-orchestrator-dispatcher.yml) が ADFD を判定
+3. [`auto-dataflow-design-reusable.yml`](../.github/workflows/auto-dataflow-design-reusable.yml) が Step Issue を生成・状態遷移
+
+ただし、Issue Form と reusable workflow は現在も Step `1` / `2` / `3` のみを生成します。
+Step `0.1` / `0.2` / `4` / `5` を生成しないため、**Cloud の `adfd:done` は
+現行 registry の 7 Step 完了を意味しません**。完全な ADFD の開始・完了判定には
+CLI または GUI を使用してください。
+
+## 完了確認
+
+### 機械的な完了条件
+
+CLI は次の場合に終了コード `1` を返します。
+
+- `blocked`、`error`、`failed` のいずれかが記録された
+- Code Review Agent が失敗した
+- CLI / GUI の output-path gate で宣言済み成果物の欠落を検出した
+
+したがって、まず **プロセスの終了コード `0`** を確認します。そのうえで、選択した APP-ID ごとに
+次の成果物が存在し、空でないことを確認してください。
+
+- [ ] `docs/dataflow/dataflow-data-model.md`
+- [ ] `docs/dataflow/dataflow-app-catalog.md`
+- [ ] `docs/dataflow/dataflow-service-catalog.md`
+- [ ] `docs/dataflow/dataflow-test-strategy.md`
+- [ ] `docs/dataflow/apps/{APP-ID}-spec.md`
+- [ ] `docs/dataflow/dataflow-monitoring-design.md`
+- [ ] `docs/test-specs/{APP-ID}-test-spec.md`
+
+### 内容契約の確認
+
+output-path gate はファイルの存在を確認しますが、内容の完全性までは保証しません。
+最低限、次を確認します。
+
+- `dataflow-app-catalog.md` に `## 1. ジョブ一覧表` がある
+- `dataflow-service-catalog.md` に `## 2. ジョブ → Azure サービスマッピング表` がある
+- `dataflow-test-strategy.md` に `## 4. テストダブル戦略` があり、
+  Azurite / Testcontainers の利用有無が明記されている
+- Step `1` の対象 APP-ID と仕様書の件数が一致する
+- Step `3` の対象 APP-ID とテスト仕様書の件数が一致する
+- 各成果物の未確定事項が推測で補完されず、`TBD` または `不明（要確認）` として残されている
+
+> Cloud の Root Issue に `adfd:done` が付いていても、この 7 成果物を満たさない限り、
+> 本ガイドでは現行 ADFD 完了と判定しません。
+
+## 後続 ADFDV への引き渡し
+
+現行 ADFD の Step `0.1` / `0.2` / `4` / `5` は、ADFDV が必要とする producer 不在を
+解消するために追加されています。ADFDV が使用する主な対応は次のとおりです。
+
+| ADFD 成果物 | 主な ADFDV 利用 Step |
+|---|---|
+| `dataflow-data-model.md` | `2.1`、`2.2` |
+| `dataflow-app-catalog.md` | `1.1`、`1.2`、`2.2`、`3` |
+| `dataflow-service-catalog.md` | `1.1`、`1.2`、`2.1`、`2.2`、`3` |
+| `dataflow-test-strategy.md` | `2.1` |
+| `apps/{APP-ID}-spec.md` | `1.1`、`1.2`、`2.1`、`2.2`、`3` |
+| `dataflow-monitoring-design.md` | `1.1`、`1.2`、`2.2`、`3` |
+| `{APP-ID}-test-spec.md` | `2.1`、`2.2` |
+
+7 Step の完了確認後、同じ APP-ID を指定して ADFDV を開始します。
+
+```powershell
+$appId = Read-Host "対象 APP-ID"
+$resourceGroup = Read-Host "Azure リソースグループ名"
+python -m hve orchestrate --workflow adfdv --strict --app-ids $appId --resource-group $resourceGroup
+```
+
+詳細は [Dataflow Dev（ADFDV）ガイド](./06-app-dev-dataflow-azure.md) を参照してください。
+
+> **参照時の注意**: 上記 ADFDV ガイドの冒頭移行ノートと必須ドキュメント表は、
+> producer 4 Step 復活前の記述です。ADFD の前提・成果物は本ガイドと
+> [`hve/workflow_registry.py`](../hve/workflow_registry.py) を優先し、ADFDV ガイドは
+> 下流 7 Step の操作概要として参照してください。
+
+旧 `docs/dataflow/dataflow-domain-analytics.md` と
+`docs/dataflow/dataflow-data-source-analysis.md` は、現行 ADFDV の `required_input_paths` ではありません。
+ADFDV の準備として新規作成しないでください。
+
+## カスタマイズ
+
+### 実行時だけ追加指示を与える
+
+永続契約を変更せず、全 ADFD Agent に制約を追加する場合は CLI の
+`--additional-prompt` を使用します。成果物パスや依存関係は上書きせず、業務上の補足だけを渡してください。
+
+### 永続契約を変更する
+
+変更箇所は責務別に分かれています。
+
+| 変更対象 | 正本 |
+|---|---|
+| Step ID、依存、Agent、fan-out、成果物パス | [`hve/workflow_registry.py`](../hve/workflow_registry.py) |
+| Step Issue / 実行本文 | [`.github/scripts/templates/adfd/`](../.github/scripts/templates/adfd/) |
+| 成果物の内容・章立て・品質条件 | [`.github/prompts/Arch-Dataflow-*.prompt.md`](../.github/prompts/) |
+| 入出力 producer / consumer 契約 | [`.github/io-contracts/`](../.github/io-contracts/) の `Arch-Dataflow-*--adfd--*.yaml` |
+| データフロー設計テンプレート | [`dataflow-design-guide`](../.github/skills/dataflow-design-guide/SKILL.md) |
+| APP-ID fan-out の追加指示 | [`hve/prompt/fanout/adfd/_common.md`](../hve/prompt/fanout/adfd/_common.md) |
+| Cloud のフォームと状態遷移 | [`dataflow-design.yml`](../.github/ISSUE_TEMPLATE/dataflow-design.yml) と [`auto-dataflow-design-reusable.yml`](../.github/workflows/auto-dataflow-design-reusable.yml) |
+
+registry の変更は Cloud reusable workflow へ自動同期されません。Cloud 対応を変更する場合は、
+Issue Form、reusable workflow、Step template、Prompt、io-contract、関連テストを同じ変更で同期してください。
+
+## 検証
+
+ADFD 契約を変更した場合は、少なくとも次を実行します。
+
+```powershell
+python -m pytest hve/tests/test_adfd_dataflow_design_agents.py hve/tests/test_workflow_registry.py hve/tests/test_runner_split_required_guard.py -q
+python -m pytest hve/tests/test_fanout.py -q
+```
+
+確認対象は次のとおりです。
+
+- registry の Step 数・Agent・依存・出力が 7 Step 契約と一致する
+- 追加された 4 producer Step の Prompt、Step template、io-contract が存在し、
+  その出力契約が registry と一致する
+- Step `0.1` が唯一の DAG root である
+- Step `1` / `2` が Step `5` に依存し、Step `3` が Step `1` **AND** Step `2` に依存する
+- CLI / GUI の output-path gate が欠落成果物を失敗として扱う
+- `dataflow_catalog` fan-out が APP-ID を使用する
+- 変更した YAML が parse できる
+- Markdown のローカルリンクが実在し、Markdown lint と `git diff --check` が通る
+
+`test_fanout.py` には旧 Step `6.1` / `6.3` のコメントと条件付き assertion が残るため、
+現行 Step 数・依存・Prompt 契約の正本テストには
+`test_adfd_dataflow_design_agents.py` と `test_workflow_registry.py` を使用してください。
+
+## 既知の制約
+
+### Cloud とローカル registry の非同期
+
+- [`dataflow-design.yml`](../.github/ISSUE_TEMPLATE/dataflow-design.yml) は 3 Step のみを表示します。
+- [`auto-dataflow-design-reusable.yml`](../.github/workflows/auto-dataflow-design-reusable.yml) は
+  Step `1` / `2` / `3` のみを生成し、Step `0.1` / `0.2` / `4` / `5` を生成しません。
+- Cloud の `adfd:done` は 3 Step の状態遷移完了であり、ローカル registry の 7 Step 完了ではありません。
+
+### APP-ID / Job-ID と Prompt 表記のドリフト
+
+- registry と fan-out parser の実行キーは APP-ID です。
+- Step `1` template には `{jobId}-{jobNameSlug}` 表記、Step `3` template には
+  `{jobId}` 表記が残りますが、対応する Prompt と registry の実行時成果物は
+  APP-ID キーの `{APP-ID}-spec.md` / `{APP-ID}-test-spec.md` です。
+- `Arch-Dataflow-TDD-TestSpec` Prompt と fan-out 共通指示には旧 Step `4.5` / `5.1` / `5.2` /
+  `6.1` / `6.2` / `6.3` 表記が残ります。実行順は registry の `1` / `2` / `3` を正とします。
+- ADFDV Step `2.1` / `2.2` の `{jobId}-{jobNameSlug}` を含む出力宣言は、
+  APP-ID しか返さない parser では解決できず、output-path gate から fail-closed で除外されます。
+  ADFDV 実行時は該当するテスト／実装ディレクトリを別途確認してください。
+
+### 3 Step 画像
+
+次の既存 SVG は 3 Step 構成を表すため、現行 DAG の説明には使用していません。
+
+- `users-guide/images/chain-adfd.svg`
+- `users-guide/images/infographic-adfd.svg`
+- `users-guide/images/orchestration-task-data-flow-adfd.svg`
+
+## 非現行仕様
+
+[`CHANGELOG.md`](../CHANGELOG.md) に記録された経緯として、ADFD は一度、
+独立カタログを生成する旧 9 Step から AAS 共通カタログを直接参照する
+3 Step へ縮小されました。その後、ADFDV に必要な producer 不在を解消するため、
+Step `0.1` / `0.2` / `4` / `5` が追加され、現在の 7 Step になっています。
+
+次は非現行であり、実行手順として使用しません。
+
+- `Arch-Dataflow-DomainAnalytics` / 旧 Step `1.1`
+- `Arch-Dataflow-DataSourceAnalysis` / 旧 Step `1.2`
 - `docs/dataflow/dataflow-domain-analytics.md`
 - `docs/dataflow/dataflow-data-source-analysis.md`
-- `docs/dataflow/dataflow-data-model.md`
+- 3 Step だけを「現行 ADFD 全体」とする説明
+- 旧 Step `6.1` / `6.2` / `6.3` の番号
 
-# 出力（必須）
+一方、次の4成果物は一度廃止された後に producer が復活した **現行の必須成果物**です。
+旧成果物として削除・省略しないでください。
+
+- `docs/dataflow/dataflow-data-model.md`
 - `docs/dataflow/dataflow-app-catalog.md`
-```
-
----
-
-### [旧仕様・AAS統合済み] Step.4. サービスカタログ表の作成
-
-- 使用するカスタムエージェント
-  - Arch-Dataflow-ServiceCatalog
-
-```text
-# タスク
-ジョブ設計カタログ・データモデル・ドメイン分析を統合してデータフローアプリ版のサービスカタログを作成し、docs/dataflow/dataflow-service-catalog.md を出力する（推測禁止、出典必須）。
-
-# 入力（優先順位順）
-- `docs/dataflow/dataflow-app-catalog.md`
-- `docs/dataflow/dataflow-data-model.md`
-- `docs/dataflow/dataflow-domain-analytics.md`
-
-# 出力（必須）
 - `docs/dataflow/dataflow-service-catalog.md`
-```
-
----
-
-### [旧仕様・AAS統合済み] Step.5. テスト戦略書の作成
-
-- 使用するカスタムエージェント
-  - Arch-Dataflow-TestStrategy
-
-```text
-# タスク
-バッチサービスカタログとデータモデルを根拠に、データフロー処理固有のテスト戦略書（冪等性テスト・データ品質テスト・大量データテスト・障害注入テスト・パフォーマンステスト）を策定し、docs/dataflow/dataflow-test-strategy.md を作成する。
-
-# 入力（必読）
-- `docs/dataflow/dataflow-service-catalog.md`
-- `docs/dataflow/dataflow-data-model.md`
-
-# 出力（必須）
 - `docs/dataflow/dataflow-test-strategy.md`
-```
 
----
+## 正本と関連テスト
 
-### ADFD 全ステップ（Step.1〜Step.3）
+### 実装正本
 
-ADFD ワークフロー起動時、Step.1 と Step.2 は**並列**で実行されます。
-Step.3 は Step.1 と Step.2 の**両方が完了してから**実行されます（AND依存）。
+- Step / DAG / 成果物: [`hve/workflow_registry.py`](../hve/workflow_registry.py)
+- CLI 入口と終了コード: [`hve/__main__.py`](../hve/__main__.py)
+- ローカル成果物ゲート: [`hve/runner.py`](../hve/runner.py)
+- GUI の引数生成と起動: [`hve/gui/main_window.py`](../hve/gui/main_window.py)、
+  [`hve/gui/state_bridge.py`](../hve/gui/state_bridge.py)
+- Step template: [`.github/scripts/templates/adfd/`](../.github/scripts/templates/adfd/)
+- Prompt: [`.github/prompts/`](../.github/prompts/)
+- io-contract: [`.github/io-contracts/`](../.github/io-contracts/)
+- Cloud dispatcher: [`auto-orchestrator-dispatcher.yml`](../.github/workflows/auto-orchestrator-dispatcher.yml)
+- Cloud reusable workflow: [`auto-dataflow-design-reusable.yml`](../.github/workflows/auto-dataflow-design-reusable.yml)
+- 変更履歴: [`CHANGELOG.md`](../CHANGELOG.md)
 
-#### Step.1. ジョブ詳細仕様書
+### 回帰テスト
 
-- 使用するカスタムエージェント
-  - Arch-Dataflow-AppSpec
-
-```text
-# タスク
-サービスカタログとジョブ設計に基づき、ジョブ毎の詳細仕様書を作成し、docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md を出力する。
-
-# 入力
-- `docs/dataflow/dataflow-service-catalog.md`
-- `docs/dataflow/dataflow-app-catalog.md`
-- `docs/dataflow/dataflow-data-model.md`
-
-# 出力（必須）
-- `docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md`（ジョブごとに1ファイル）
-```
-
-#### Step.2. 監視・運用設計書
-
-- 使用するカスタムエージェント
-  - Arch-Dataflow-MonitoringDesign
-
-```text
-# タスク
-サービスカタログとジョブ設計に基づき、監視・運用設計書を作成し、docs/dataflow/dataflow-monitoring-design.md を出力する。
-
-# 入力
-- `docs/dataflow/dataflow-service-catalog.md`
-- `docs/dataflow/dataflow-app-catalog.md`
-
-# 出力（必須）
-- `docs/dataflow/dataflow-monitoring-design.md`
-```
-
-#### Step.3. TDDテスト仕様書
-
-- 使用するカスタムエージェント
-  - Arch-Dataflow-TDD-TestSpec
-
-```text
-# タスク
-テスト戦略書の方針に基づき、対象データフローアプリのTDD用テスト仕様書をジョブ詳細仕様書・監視運用設計書から導出して作成する（推測禁止、出典必須）。
-
-# 入力（必読）
-- `docs/dataflow/dataflow-test-strategy.md`
-- `docs/dataflow/apps/*-spec.md`（全ジョブ分）
-- `docs/dataflow/dataflow-monitoring-design.md`
-
-# 出力（必須）
-- `docs/test-specs/{jobId}-test-spec.md`（ジョブごとに1ファイル）
-```
-
----
-
-## 自動実行ガイド（ワークフロー）
-
-### ラベル体系
-
-| ラベル | 意味 |
-|-------|------|
-| `auto-dataflow-design` | このワークフローのトリガーラベル（Issue Template で自動付与） |
-| `adfd:initialized` | Bootstrap ワークフロー実行済み（二重実行防止） |
-| `adfd:ready` | 依存 Step が完了し、Copilot assign 可能な状態 |
-| `adfd:running` | Copilot assign 完了（実行中） |
-| `adfd:done` | Step 完了（状態遷移のトリガー） |
-| `adfd:blocked` | 依存関係の問題等でブロック状態 |
-
-### 冪等性
-
-- Bootstrap ワークフローは `<!-- root-issue: #N -->` と `<!-- branch: ... -->` の HTML コメントタグで既存 Step Issue を検索します（既存 Orchestrator と同形式）
-- 既に存在する Step Issue は再作成されません
-- `auto-dataflow-design` ラベルを再付与しても安全に再実行できます
-
-### 使い方（Issue 作成手順）
-
-1. リポジトリの **Issues** タブ → **New Issue**
-2. テンプレート **"Dataflow Design"** を選択
-3. 以下を入力:
-
-| フィールド | 入力内容 | 例 |
-|---|---|---|
-| 対象アプリケーション (APP-ID) | 対象 APP-ID をカンマ区切り（任意） | `APP-02, APP-03` |
-| 対象ブランチ | 設計ドキュメントをコミットするブランチ | `main` |
-| 実行 Runner | GitHub Hosted または Self-hosted (ACA) | `GitHub Hosted` |
-| 実行するステップ | 実行したい Step にチェック（全未選択 = 全実行） | （全選択推奨） |
-| 使用するモデル | Copilot が使用する LLM モデル（任意） | `Auto` |
-| レビュー用モデル | セルフレビュー用モデル（任意） | `Auto` |
-| QA 用モデル | 実行前 QA 用モデル（任意） | `Auto` |
-| レビュー設定 | セルフレビュー（auto-context-review）有効化（任意） | チェックなし（デフォルト） |
-| 質問票設定 | 実行前 QA 質問票の有効化（任意） | チェックなし（デフォルト） |
-| 自己改善ループ設定 | 全 Step 完了後の自動改善有効化（任意） | チェックなし（デフォルト） |
-| 自己改善 最大イテレーション数 | 自己改善ループの最大繰り返し回数（任意） | `3` |
-| 自己改善 品質スコア目標値 | 改善完了とみなす品質スコア（任意） | `80（標準）` |
-| PR 完全自動化設定 | Approve & Auto-merge 有効化（任意・注意要） | チェックなし（デフォルト） |
-| 追加コメント | 補足・制約・注意事項（任意） | データソース・スケジュール等 |
-
-4. Issue を Submit → `auto-dataflow-design` ラベルが自動付与される
-
-### 方式設定
-
-**方式A: 一括作成 + 状態遷移管理（デフォルト）**
-
-Bootstrap ワークフローが全 Step Issue を一括作成し、最初に実行可能な Step（`step-1.1` と `step-1.2`）にのみ `adfd:ready` + `adfd:running` を付与します。Step close / `adfd:done` ラベル付与時に状態遷移ワークフローが依存関係を確認して次 Step を起動します。
-
-**メリット**: 全 Step が親 Issue の Sub-issue として最初から見える  
-**デメリット**: 開始前から多数の Issue が表示される
-
-### セットアップ・トラブルシューティング
-
-共通のセットアップ手順とトラブルシューティングは → [Cloud](./hve-cloud-getting-started.md) / [CLI](./hve-cli-getting-started.md) / [GUI](./hve-gui-getting-started.md)
-
-**ADFD 固有のトラブルシューティング:**
-
-- **step-2 が step-1.1 または step-1.2 完了後に起動しない**: `step-2` は `step-1.1` **AND** `step-1.2` の**両方が完了**するまで起動しません（AND依存の仕様）
-
----
-
-## データフロー処理固有の設計ポイント
-
-### 冪等性設計
-
-ジョブの再実行が安全であることを保証するための設計方針です。
-
-- **冪等性キー**: 各レコードに一意のキー（バッチID + レコードID など）を付与し、重複処理を防ぐ
-- **冪等チェック**: 処理前に出力先の存在確認を行い、既処理済みレコードをスキップする
-- **再実行戦略**: 全件再処理（フルリロード）か差分処理（増分）かを設計段階で明確にする
-- **マーカーテーブル**: 処理済みバッチのIDや処理日時を記録するマーカーテーブルを設ける
-
-### チェックポイント/リスタート
-
-障害発生時に途中から再開できる仕組みを設計します。
-
-- **チェックポイント間隔**: 処理レコード数やパーティション単位でチェックポイントを設ける
-- **ステート管理**: Azure Blob Storage や Cosmos DB にチェックポイント状態を永続化する
-- **リスタートロジック**: 前回のチェックポイントから処理を再開する仕組みを実装する
-- **Durable Functions**: Azure Functions Durable Functions のオーケストレーション機能を活用し、チェックポイント/リスタートを実現する
-
-### データ品質
-
-入力データのバリデーションと変換後のデータ品質チェックを行います。
-
-- **入力バリデーション**: スキーマチェック・NULL チェック・範囲チェックを処理前に実施する
-- **変換品質**: 変換後のレコード数・集計値の正確性を確認する
-- **データ品質ルール**: 業務固有のデータ品質ルール（重複排除・参照整合性など）を定義する
-- **品質メトリクス**: 処理件数・スキップ件数・エラー件数を計測・記録する
-
-### 監視・アラート
-
-ジョブの実行状態を継続的に監視し、異常を早期検知します。
-
-- **実行時間監視**: ジョブの実行時間が SLA を超過した場合にアラートを発報する
-- **処理レコード数監視**: 想定範囲外のレコード数が処理された場合にアラートを発報する
-- **エラー率監視**: エラー率が閾値を超えた場合にアラートを発報する
-- **Azure Monitor**: Application Insights + Azure Monitor Alerts を活用して監視基盤を構築する
-
-### スケジューリング
-
-cron 式によるスケジュール定義とジョブ間の時間的依存を管理します。
-
-- **cron 式**: Azure Functions Timer Trigger の cron 式（例: `0 0 2 * * *` = 毎日 2:00 AM）でスケジュールを定義する
-- **ジョブ間依存**: 前段ジョブの完了を確認してから後段ジョブを起動する（Durable Functions のオーケストレーションを推奨）
-- **タイムゾーン**: UTC/JST の混在に注意し、スケジュール設計時に明示する
-- **遅延実行**: 前段ジョブの遅延が後段ジョブに影響しないよう、十分なバッファ時間を設ける
-
----
-
-## 動作確認手順
-
-### フォーム表示の確認
-
-1. `.github/ISSUE_TEMPLATE/dataflow-design.yml` がリポジトリに存在することを確認する
-2. Issues タブ → New Issue → **Dataflow Design** テンプレートが表示されることを確認する
-3. テンプレートのフォームフィールド（APP-ID・ブランチ・Runner・ステップ選択・モデル設定・レビュー設定・質問票設定・自己改善設定・自己改善 最大イテレーション数・自己改善 品質スコア目標値・PR 自動化設定・追加コメント）が正しく表示されることを確認する
-
-### 自動実行の確認チェックリスト
-
-1. リポジトリで Actions の Workflow permissions を **Read and write** に設定する
-2. `.github/workflows/auto-orchestrator-dispatcher.yml` がリポジトリに存在することを確認する
-3. 対象ブランチに `main` を入力し、Step.1.1 と Step.1.2 のみチェックして Issue を作成する
-4. Actions タブで `auto-orchestrator-dispatcher.yml` の Bootstrap ジョブが起動したことを確認する
-5. Bootstrap 完了後、Step.1.1 と Step.1.2 の Issue が**両方とも** `adfd:running` ラベル付きで作成されたことを確認する（並列開始）
-6. 親 Issue にサマリコメントと Step Issue 一覧が投稿されたことを確認する
-7. step-1.1 の Issue を close し、`auto-orchestrator-dispatcher.yml` の状態遷移ジョブが起動することを確認する
-8. step-1.2 がまだ完了していないため、step-2 が起動しないことを確認する（AND依存の確認）
-9. step-1.2 の Issue を close し、step-2 に `adfd:ready` + `adfd:running` が付与され Copilot が assign されることを確認する（AND依存解消）
-10. Step.1.1/1.2/2〜6 すべてを選択して Issue を作成し直し、全 Step Issue が生成されることを確認する
-11. Step.4 を close して step-5 が起動することを確認する
-12. Step.5 を close して step-1 と step-2 が**並列で**開始されることを確認する
-13. step-1 を close して step-3 がまだ起動しないことを確認する（step-2 が未完了のため）
-14. step-2 を close して step-3 が自動起動することを確認する（AND依存）
-15. step-3 を close して Root Issue に完了通知コメントが投稿されることを確認する
+- 追加 4 producer Step の Prompt / template / io-contract と ADFD 7 Step registry:
+  [`hve/tests/test_adfd_dataflow_design_agents.py`](../hve/tests/test_adfd_dataflow_design_agents.py)
+- workflow Step 数・registry 基本契約:
+  [`hve/tests/test_workflow_registry.py`](../hve/tests/test_workflow_registry.py)
+- APP-ID fan-out:
+  [`hve/tests/test_fanout.py`](../hve/tests/test_fanout.py)
+- output-path gate:
+  [`hve/tests/test_runner_split_required_guard.py`](../hve/tests/test_runner_split_required_guard.py)

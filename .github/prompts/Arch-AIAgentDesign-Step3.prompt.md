@@ -14,7 +14,7 @@
 - **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
 - **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
 - **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
 - **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
 - **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 
@@ -49,8 +49,7 @@
 | 7 | `docs/services/SVC-*.md` | 各サービスの詳細仕様（API I/O、バリデーション、イベント、権限）。Tool の入出力スキーマ・失敗分類の根拠 | Tool I/O Schema, Error Handling, Permission Model |
 | 8 | `docs/azure/azure-services-data.md` | Azure データストア構成。Knowledge Source / RAG の具体設計根拠 | Knowledge Source, RAG 設計 |
 | 9 | `docs/azure/azure-services-additional.md` | 追加 Azure サービス構成（AI Search, OpenAI 等）。LLM バックエンド・検索インデックスの設計根拠 | Tool Catalog（AI系）, LLM 選定 |
-| 10 | `users-guide/08-ai-agent.md` | ガイドライン（Step 1〜3 の Prompt 定義）。設計プロセスの手順書 | 設計プロセス全体 |
-| 11 | `docs/catalog/app-catalog.md` | アプリケーション一覧（APP-ID）。Agent と APP の対応付けおよびスコープ確認根拠 | Scope, Boundary Matrix, Non-Goals |
+| 10 | `docs/catalog/app-catalog.md` | アプリケーション一覧（APP-ID）。Agent と APP の対応付けおよびスコープ確認根拠 | Scope, Boundary Matrix, Non-Goals |
 | — | `docs/agent/agent-application-definition.md` | **Step 1 成果物（必須前提）** | Step 3 参照用 |
 | — | `docs/agent/agent-architecture.md` | **Step 2 成果物（必須前提）**。Agent Catalog の入力 | Step 3 全体 |
 
@@ -58,10 +57,10 @@
 
 | # | ファイル | 用途 |
 |---|---------|------|
-| 12 | `docs/catalog/screen-catalog-APP-*.md` | 画面一覧（APP ごと）。Agent が UI 内で動作する場合の Conversation Design 根拠 |
-| 13 | `docs/screen/{screenId}-*.md` | 画面詳細定義。Output format / トーン / 対話チャネル設計の根拠 |
-| 14 | `src/data/sample-data.json` | サンプルデータ。System Prompt の Examples（Few-shot）作成用 |
-| 15 | `.github/skills/agent-common-preamble/references/agent-playbook.md` | 社内テンプレ/語彙/表現ルール（存在する場合のみ） |
+| 11 | `docs/catalog/screen-catalog-APP-*.md` | 画面一覧（APP ごと）。Agent が UI 内で動作する場合の Conversation Design 根拠 |
+| 12 | `docs/screen/{screenId}-*.md` | 画面詳細定義。Output format / トーン / 対話チャネル設計の根拠 |
+| 13 | `src/data/sample-data.json` | サンプルデータ。System Prompt の Examples（Few-shot）作成用 |
+| 14 | `.github/skills/agent-common-preamble/references/agent-playbook.md` | 社内テンプレ/語彙/表現ルール（存在する場合のみ） |
 
 ### 入力参照ルール
 - **必読ファイルが存在しない場合**: `TBD（ファイル未検出: {パス}）` と明記し、該当セクションは仮定ベースで記述する。推測で埋めない。
@@ -92,23 +91,29 @@
 ※ `{WORK}` の構成や、追加で `plan.md` / `README.md` が必要かは `Skill work-artifacts-layout` に従う。
 
 ## 5) 品質原則（必ず守る）
-- `users-guide/08-ai-agent.md` の各 Step の Prompt を **ガイドラインとして参照** し、その指示に従って設計書を作成する。Prompt の内容をコピー＆ペーストで成果物に混ぜない。
+- 本ファイルの §3 出力フォーマットと §5.1 の完成判定チェックを出力仕様の Single Source of Truth とする。外部ガイドを読みに行かないこと。また、本 Prompt の指示文をコピー＆ペーストで成果物に混ぜない。
 - 推測で AI Agent の機能・数・境界を断定しない。入力に根拠がない事項は「要確認/TBD」とする。
 - ツールは **必要なときだけ** 使う（無目的な全探索は禁止）。
 
 ## 4) 実行手順（順序固定）
 
 ### 5.1 Step 3: Agent 詳細設計
-- `users-guide/08-ai-agent.md` の **Step 3** セクションの Prompt ガイドラインに従い、以下を実施する：
+- 本ファイル §3 の出力フォーマットに従い、以下を実施する：
   - Step 2 の Agent Catalog の **各 Agent** について詳細設計書を作成する
   - 出力形式テンプレ（12セクション: Agent Overview〜System Prompt Instruction Format）に厳密に従う
   - Section 2.1 `Goal Contract` に Mission / Mutation Intent / Criterion / Evaluator / Evidence / Failure・Partial・Handoff を確定する
   - Section 6.1 `Runtime Goal Loop` に有限のPLAN / ACT / OBSERVE / EVALUATE / REPLAN、反復上限、deadline、budget、停止条件を確定する
   - Section 7.0 `Knowledge & Structured Data Routing` にRequest class、Preferred / Fallback / Blocked、runtime probe、permission、citationを確定する
+  - **Agentic Retrieval 方針（`auto` / `yes` / `no`）に従う**。方針は Prompt 冒頭に注入される。注入が無ければ `auto` とし、**3 値以外は推測で丸めず blocked とする**
+    - `auto`: 経路選択は下記の決定表に委ねる（強制しない）
+    - `yes`: `enterprise-unstructured` の Request class を持つ場合、Preferred route に **Foundry IQ / Azure AI Search Agentic Retrieval** を選ぶ
+    - `no`: Foundry IQ / Azure AI Search Agentic Retrieval を選ばない。AR-CAP-01〜05 も追加しない
   - Section 7.0 のPreferredまたはFallbackに **Foundry IQ / Azure AI Search Agentic Retrieval** を選んだ場合は、Skill `agentic-retrieval-contract` に従い次の見出しを Section 7.0 の直後へ追加する。選ばなかった場合は追加しない。**12セクションの番号・順序は変えない**
     - `7.0.1 Knowledge Base Contract (AR-CAP-01)` / `7.0.2 Knowledge Source Matrix (AR-CAP-02)` / `7.0.3 Retrieval Budget (AR-CAP-03)` / `7.0.4 Evidence & Observability (AR-CAP-04)` / `7.0.5 MCP Exposure (AR-CAP-05)`
     - **見出しレベルは Section 7.0 と同じレベルにする**（子レベルにしない）。子レベルにすると Section 7.0 の範囲が後続ブロックを取り込み、AG-CAP-03 の判定が壊れる
-    - 同 Skill の整合ルール R1〜R12 を自己検査する。`Retrieval reasoning effort` の正本は AR-CAP-01 だけとし、AR-CAP-03 へ重複記載しない
+    - 同 Skill の整合ルール R1〜R15 を自己検査する。`Retrieval reasoning effort` の正本は AR-CAP-01 だけとし、AR-CAP-03 へ重複記載しない
+    - **AR-CAP-02 の Knowledge Source は 2 件以上 10 件以下**にする（R14）。1 件だけならファンアウト先が 1 つしかなく、クラシックな単一クエリ検索と等価になる。横断が不要なら Agentic Retrieval を選ばず Section 7.0 で別経路にする
+    - **AR-CAP-01 に `Index semantic configuration` を記載する**（R15）。各サブクエリは semantic rerank を通るため索引側の構成が検索品質の上限を決める。確定できない場合も確認予定と確認手段を書き、単語だけの `TBD` にしない
     - SKU / API version / model / region / tier 上限は本文へ確定値として埋めず、`Design status` と `Checked at` を記録する
   - Section 7.1 `REST CRUD Matrix` にC/R/U/D、REST method/path、HITL、RBAC、冪等性、error、auditを確定する。C/U/Dのprimary経路はREST Function Toolだけにする
   - Section 7.3 `MCP Integration Plan` にclient利用、Tool allowlist、auth、failure behavior、Remote adapter ownerを確定し、REST mutationを迂回させない
@@ -128,10 +133,26 @@
     - SDK シンボル名はプレビューで変動するため本文へ確定値を埋めず、`Checked at` と SDK パッケージ名を記録する
   - 各AG-CAPが非該当の場合は Contract ID / 理由 / Decision source / 再判定条件を持つN/Aとし、単語だけのN/Aを禁止する
   - Step 1 / 2から引き継いだMutation Intent、Required flag、Request class、owner、MCP、SkillのTBDを解消する。provider固有値を確認できない場合は`Design status: unknown`、確認日、確認した公式根拠、runtime probe、Blocked条件を確定し、値自体は推測しない
-  - 完成判定チェック（15項目）を実施する
+  - 完成判定チェック（15項目・後述）を実施する
   - `docs/agent/agent-detail-{key}.md`（`{key}` = `AG-*`、Agent 名はファイル名に含めない）を作成する
 - **量が多い場合の分割**: Agent 数が多い場合は Skill task-dag-planning の分割ルールに従い、Agent ごとに Sub Issue に分割する
-- **完了判定**: 全 Agent の詳細設計書がある / 各設計書が12セクション全て埋まっている / `users-guide/08-ai-agent.md` の完成判定15項目を全てパスしている / AG-CAP-01〜06が確定または理由付きN/Aである / Foundry IQ経路を選んだAgentはAR-CAP-01〜05が揃っている / Tool Search 方針に応じて TB-CAP-01〜05 が揃っている（`auto` は Tool 総数 15 超のとき、`yes` は常時、`no` は TB-CAP-01/02 と理由付き N/A の TB-CAP-03〜05） / Step 1・2由来TBDが残っていない
+- **完成判定チェック（15項目・出力前に必ず実施）**:
+  1. Missionが1文
+  2. Doneが検証可能
+  3. 8境界が埋まっている
+  4. I/Oスキーマがある
+  5. 状態遷移が図で定義
+  6. Tool入出力・失敗時が定義
+  7. Write/外部送信に承認・監査
+  8. 例外/縮退/エスカレーションが決定
+  9. 評価（最終＋遷移判断）が定義
+  10. Goal Contractのrequired criteriaが決定的に評価可能
+  11. Runtime Goal Loopが有限で停止条件を持つ
+  12. 検索routeにPreferred / Fallback / Blocked / citationがある
+  13. C/U/DがREST Function Toolだけをprimary経路にする
+  14. MCP client / Remote adapterの責務が分離される
+  15. Agent別Skillのrequired / not-required / TBDが根拠付きで決定される
+- **完了判定**: 全 Agent の詳細設計書がある / 各設計書が12セクション全て埋まっている / 上記の完成判定15項目を全てパスしている / AG-CAP-01〜06が確定または理由付きN/Aである / Foundry IQ経路を選んだAgentはAR-CAP-01〜05が揃っている / Tool Search 方針に応じて TB-CAP-01〜05 が揃っている（`auto` は Tool 総数 15 超のとき、`yes` は常時、`no` は TB-CAP-01/02 と理由付き N/A の TB-CAP-03〜05） / Step 1・2由来TBDが残っていない
 
 ### 5.2 Agent 一覧の出力
 - Step 2 と Step 3 の成果物を元に、`docs/ai-agent-catalog.md` を作成/更新する。
@@ -155,7 +176,7 @@
 （Mermaid図をここに転記）
 
 ## 補足
-- 設計ガイドライン: users-guide/08-ai-agent.md
+- 設計ガイドライン: .github/prompts/Arch-AIAgentDesign-Step3.prompt.md
 - アプリケーション定義: docs/agent/agent-application-definition.md
 - アーキテクチャ設計: docs/agent/agent-architecture.md
 ```
@@ -165,7 +186,10 @@
   - `YYYY-MM-DD: 何をした / 何が決まった / 次アクション`
 
 ## 6) TIME-BOX / MODE SWITCH（分割ルール）
-- Step 5.1 は、`users-guide/08-ai-agent.md` 内の Step 3 Prompt に定義された TIME-BOX / MODE SWITCH ルールに従う。
+- Step 5.1 を 1 回の応答で全章を高品質に書き切れない場合は、次のいずれかで分割する：
+  - A) 章単位で分割して順に出力する（今回の応答では「章1〜章6」など範囲を明示）
+  - B) 先に分割実行用 Prompt を複数作る
+- 分割時も、各 Prompt は「どの入力を読むか・どの章を出すか・出力先ファイル」を明示し、単体で実行可能にする。
 - Step 全体として Skill task-dag-planning の粒度/コンテキスト分割判定を適用する（詳細は Skill `task-dag-planning` を参照）。
   - 分割時は各 Sub Issue に `## Custom Agent` セクションに `Arch-AIAgentDesign-Step3` を含める
 

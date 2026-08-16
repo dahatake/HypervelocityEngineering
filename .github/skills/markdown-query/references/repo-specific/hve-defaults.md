@@ -14,7 +14,7 @@
 4. `template/`
 5. `knowledge/`
 6. `qa/`
-7. `original-docs/`
+7. `docs-original/`
 8. `sample/`
 9. `hve-dev/`
 

@@ -43,7 +43,6 @@ _ROOT_CLOUD_REVIEW_PRODUCERS = tuple(
         "auto-app-dev-microservice-web-reusable.yml",
         "auto-app-documentation-reusable.yml",
         "auto-app-selection-reusable.yml",
-        "auto-aqod.yml",
         "auto-dataflow-design-reusable.yml",
         "auto-dataflow-dev-reusable.yml",
         "auto-knowledge-management-reusable.yml",
@@ -69,7 +68,6 @@ _REVIEW_ISSUE_TEMPLATES = tuple(
         "dataflow-design.yml",
         "dataflow-dev.yml",
         "knowledge-management.yml",
-        "original-docs-review.yml",
         "sourcecode-to-documentation.yml",
         "web-app-design.yml",
         "web-app-dev.yml",
@@ -268,11 +266,10 @@ def test_each_root_cloud_producer_emits_dedicated_review_contract(path: Path) ->
         r'add_label\s+"\$\{(?:ROOT_ISSUE|ISSUE_NUMBER)\}"\s+"adversarial-review"',
         text,
     ), path
-    issue_var = "ISSUE_NUMBER" if path.name == "auto-aqod.yml" else "ROOT_ISSUE"
     reconciliation = re.compile(
         rf'if \[\[ "\$\{{ADVERSARIAL_REVIEW\}}" == "true" \]\]; then\s+'
-        rf'add_label "\$\{{{issue_var}\}}" "adversarial-review".*?\s+else\s+'
-        rf'gh issue edit "\$\{{{issue_var}\}}" --repo "\$\{{REPO\}}" '
+        rf'add_label "\$\{{ROOT_ISSUE\}}" "adversarial-review".*?\s+else\s+'
+        rf'gh issue edit "\$\{{ROOT_ISSUE\}}" --repo "\$\{{REPO\}}" '
         r'--remove-label "adversarial-review"',
         re.DOTALL,
     )
@@ -670,7 +667,7 @@ def test_adoc_initialization_shell_is_syntactically_valid() -> None:
 
 def test_dataflow_embedded_parser_separates_app_and_job_ids() -> None:
     script = _workflow_step_script(
-        _ROOT_CLOUD_REVIEW_PRODUCERS[8],
+        _REPO_ROOT / ".github" / "workflows" / "auto-dataflow-dev-reusable.yml",
         "orchestrate",
         "Issue 初期化とStep Issue 生成",
     )

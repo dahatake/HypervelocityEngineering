@@ -2,7 +2,7 @@ inputs:
 - path: qa/*.md
   required: true
   kind: static
-- path: original-docs/*
+- path: docs-original/*
   required: true
   kind: static
 - path: knowledge/Dxx-*.md

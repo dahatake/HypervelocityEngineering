@@ -1,10 +1,30 @@
-# Foundry Toolbox / Tool Search 利用ガイド
+# Foundry Toolbox / Tool Search 利用ガイド（生成する AI Agent 向け）
 
 生成する AI Agent に Microsoft Foundry の **Toolbox** と **tool search**（ツール定義の遅延ロード）を
 適用するための手引き。
 
-> **注意**: 本ガイドの「tool search」は、生成される AI Agent 側の設定を指す。
-> HVE 自身の Copilot SDK セッション設定（`--tool-search`）とは**別物**。
+> **最終更新: 2026-08-13**
+
+> **名前が似た 3 ファイルがある。最初にここで行き先を確定すること。**
+>
+> | ファイル | 対象 | 実体 | 設定名 |
+> |---|---|---|---|
+> | **本ガイド** | HVE が**生成する AI Agent** のツール表面 | Microsoft Foundry Toolbox | `--enable-tool-search` |
+> | [tool-search.md](tool-search.md) | **HVE 自身**が動くときのツール表面 | `hve/toolsearch/`（HVE 実装） | `--tool-search` / `--tool-search-ranking` |
+> | [tool-search-dashboard.md](tool-search-dashboard.md) | 上の実行時統計の見方 | `hve toolsearch dashboard` | — |
+>
+> 本ガイドの tool search は **Foundry 側の機能**で、HVE ランタイムの仕組みとは別物である。
+
+## 0. 利用手順の要約
+
+| 軸 | 内容 |
+|---|---|
+| **前提** | `aagd` ワークフローを実行できること（CLI / GUI / Cloud のいずれか）。Agent の Tool 総数を §3 の数え方で把握していること |
+| **操作** | §4 の CLI / GUI / Cloud いずれかの経路で `auto` / `yes` / `no` を選び、`aagd` を実行する |
+| **入力** | 設計対象の Agent 定義（AG-CAP-03 / 04 / 05）と `--enable-tool-search` の指定値 |
+| **出力** | `docs/agent/agent-detail-{key}.md` の TB-CAP-01〜05（§5）と、`docs/agent/tool-search-eval/{key}-eval-report.md`（§7、`no` 以外） |
+| **完了確認** | まず TB-CAP-01〜05 の 5 見出しがそろっていること。そのうえで指定値により分岐する。<br>・`auto` / `yes`: `Step.4` の評価レポート（`docs/agent/tool-search-eval/{key}-eval-report.md`）が生成されていること<br>・`no`: Step.4 は `hve/workflow_registry.py` の `disabled_when_config={"enable_tool_search": ["no"]}` により実行されず、レポートも生成されない。TB-CAP-02 に不採用理由が書かれていることを確認する |
+| **失敗時対応** | 検証 FAIL の典型は §5「よくある失敗」。ゲートの取りこぼしは §7 の注記（`docs/agent/` 直下に置かない）を確認する |
 
 ---
 
@@ -45,6 +65,26 @@ description が不揃いなカタログでは、検索が正しい Tool を返�
 
 「行数」で数えると過大になる。
 
+### 3.1 有効化判断の全体像
+
+```mermaid
+flowchart TD
+    S["aagd を実行する"] --> V{"--enable-tool-search<br/>の指定値"}
+    V -- "yes" --> Y["Tool 数に関係なく有効"]
+    V -- "no" --> N["無効。全 Tool を毎ターン渡す"]
+    V -- "auto（既定）" --> C{"§3 の数え方で得た<br/>Tool 総数が 16 以上か"}
+    C -- "はい" --> Y
+    C -- "いいえ" --> N2["無効。TB-CAP-02 に理由を記載"]
+
+    Y --> D["設計書に TB-CAP-01〜05 を出力（§5）"]
+    N2 --> D
+    N --> D0["設計書に TB-CAP-01〜05 を出力。<br/>TB-CAP-02 に不採用理由が必須"]
+
+    D --> E["Step.4 QA-ToolSearchEval が<br/>on / off を同一クエリ集合で比較（§7）"]
+    D0 --> SK["Step.4 は disabled_when_config で<br/>実行されず、レポートも生成されない"]
+    E --> R["docs/agent/tool-search-eval/{key}-eval-report.md"]
+```
+
 ## 4. 使い方
 
 ### CLI
@@ -70,15 +110,20 @@ hve orchestrate --workflow aagd --enable-tool-search auto
 
 ## 5. 設計書に何が書かれるか
 
-`docs/agent/agent-detail-{key}.md` の Section 7.5 に、以下が固定契約として出力される。
+`docs/agent/agent-detail-{key}.md` に、以下が固定契約として出力される。
 
-| 見出し | 契約 | 内容 |
-|---|---|---|
-| 7.5.1 | TB-CAP-01 | Tool Inventory — 経路別の内訳と総数 |
-| 7.5.2 | TB-CAP-02 | Toolbox Decision — 有効化するか、しないなら理由 |
-| 7.5.3 | TB-CAP-03 | Pinning Policy — 常時公開する Tool |
-| 7.5.4 | TB-CAP-04 | Search Metadata — `additional_search_text` |
-| 7.5.5 | TB-CAP-05 | Discovery Budget — `limit`（1〜10） |
+| 見出し（Skill の例では 7.5.x） | 契約 | 内容 | 必須キー行（Skill `foundry-toolbox-contract`） |
+|---|---|---|---|
+| 7.5.1 | TB-CAP-01 | Tool Inventory — 経路別の内訳と総数 | `Total tools` / `REST tools` / `MCP allowlist tools` / `Distinct search routes` / `Counting source` / `Checked at` |
+| 7.5.2 | TB-CAP-02 | Toolbox Decision — 有効化するか、しないなら理由 | `Tool search` / `Connection topology`（無効かつ 16 Tool 以上なら `Reason` も） |
+| 7.5.3 | TB-CAP-03 | Pinning Policy — 常時公開する Tool | `Pinned tools` / `Wildcard pin` |
+| 7.5.4 | TB-CAP-04 | Search Metadata — `additional_search_text` | Tool ごとの `Tool ID` / `Pinned` / `Additional search text` |
+| 7.5.5 | TB-CAP-05 | Discovery Budget — `limit`（1〜10） | `limit` / `Expected tool_search calls per turn` / `Overflow behavior` |
+
+> **`7.5` という番号そのものは固定ではない。** validator（`hve/artifact_validation.py` の
+> `_TOOLBOX_CONTRACT_HEADINGS`）は契約 ID と見出し名で照合しており、章番号は見ていない。
+> `7.5.x` は Skill `foundry-toolbox-contract` が挙げている**良い例**。
+> 固定契約なのは 5 見出しがそろっていることと、次の「見出しレベル」の規約。
 
 ### よくある失敗
 
@@ -98,6 +143,23 @@ hve orchestrate --workflow aagd --enable-tool-search auto
 2. `verify-agent-resources.sh` で `tools/list` を叩き、期待どおりの公開状態かを確認する
 
 Toolbox が Agent より後だと、Agent が空の Toolbox を参照した状態で登録されてしまう。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant D as AgentDeploy Step
+    participant AZ as Azure / Foundry
+    participant V as verify-agent-resources.sh
+
+    Note over D,AZ: 順序が逆になると Agent が空の Toolbox を持つ
+    D->>AZ: create-azure-agent-resources.sh（1）Toolbox を作成
+    AZ-->>D: Toolbox ID
+    D->>AZ: （2）Toolbox ID を参照して Agent を登録
+    D->>V: verify-agent-resources.sh
+    V->>AZ: tools/list
+    AZ-->>V: 公開中の Tool 一覧
+    V-->>D: pin / allowlist が設計書と一致するかを判定
+```
 
 ## 7. 実測（AAGD Step.4）
 
@@ -158,6 +220,39 @@ Knowledge Base への接続には 2 つの位相がある。AR-CAP と TB-CAP �
 
 詳細は [agentic-retrieval-guide.md](agentic-retrieval-guide.md) を参照。
 
-## 10. 参照
+## 10. HVE 側のカスタマイズ
+
+| 変えたいもの | 設定の正本（ここだけを編集する） | 拡張手順 | 回帰検証 |
+|---|---|---|---|
+| 有効化の閾値（既定 15 超） | `hve/artifact_validation.py` の `_TOOLBOX_TOOL_COUNT_THRESHOLD` | 定数を変更する。本ガイド §2 の「16 個以上」表記も同時に更新する（テストが両者の一致を固定している） | `python -m pytest hve/tests/test_tool_search_guide_contract.py -q` |
+| `limit` の上限（既定 10） | `hve/artifact_validation.py` の `_TOOLBOX_MAX_SEARCH_LIMIT` | 公式の上限（10）を超える値にしない | 同上 |
+| 接続トポロジの語彙 | `hve/artifact_validation.py` の `_TOOLBOX_TOPOLOGIES` | 追加時は本ガイド §9 と `agentic-retrieval-guide.md` の両方へ反映する | 同上 |
+| TB-CAP の見出し名・必須キー行 | `hve/artifact_validation.py` の `_TOOLBOX_CONTRACT_HEADINGS` と Skill `.github/skills/foundry-toolbox-contract/SKILL.md` | 契約 ID を増減させる場合は Skill と Prompt の両方を更新する | `python -m pytest hve/tests/test_tool_search_guide_contract.py hve/tests/test_cloud_reusable_workflow_parity.py -q` |
+| CLI / GUI の 3 値 | `hve/__main__.py` の `--enable-tool-search` | `auto` / `yes` / `no` 以外を足す場合は Cloud 側の判定も揃える | `python -m pytest hve/tests/test_tool_search_guide_contract.py -q` |
+| Step 採番・評価レポートの出力先 | `hve/workflow_registry.py`（CLI/GUI）と `.github/scripts/bash/lib/workflow-registry.sh`（Cloud） | 両方を同時に更新する。片方だけの変更は parity テストで落ちる | `python -m pytest hve/tests/test_cloud_reusable_workflow_parity.py -q` |
+
+**互換性・安全性で壊してはならない境界**
+
+- 閾値・`limit` 上限・トポロジ語彙は**本ガイドと実装の一致**が契約テストで固定されている。実装だけ変えると CI が落ちる。
+- `aagd` の Step ID `1 / 2.1 / 2.2 / 2.3 / 3 / 4` は CLI/GUI と Cloud の両 SSoT で一致していなければならない。
+- 評価レポートは `docs/agent/tool-search-eval/` 配下に置く。`docs/agent/` 直下に置くとメタ依存ゲートが誤って通る（§7）。
+- `additional_search_text` はモデルへ返すスキーマに含めない（検索索引専用）。公式仕様どおりの扱いを維持する。
+
+## 11. 公式出典
+
+| # | タイトル | URL | 本ガイドで根拠にしている記述 |
+|---|---|---|---|
+| 1 | Enable tool search in a toolbox - Microsoft Foundry | https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/tool-search | 検討の目安が 10〜15 Tool（§2）/ `limit` の既定 5・上限 10（§5）/ `pin` と `additional_search_text` の意味（§5）/ 自動 pin（§5） |
+| 2 | Create and manage a toolbox in Foundry - Microsoft Foundry | https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/toolbox | Toolbox を Agent とは別のリソースとして作成・版管理する前提（§6） |
+| 3 | Tool search: Finding the right tool at the right time（Microsoft Command Line） | https://commandline.microsoft.com/tool-search-toolboxes-foundry/ | ToolRet（44,000+ tools / 7,000 queries）での計測、50 Tool で 60 パーセント超・1,000 Tool で 97 パーセント超の削減（§2）/ prompt caching をベースラインでも有効にする理由（§7）/ 語彙整備で検索精度が改善する話（§5・§7） |
+| 4 | ToolRet: A Benchmark for Tool Retrieval（arXiv:2503.01763） | https://arxiv.org/abs/2503.01763 | ベンチマークそのものの規模と性格（§2） |
+
+> 出典 3 のトークン削減率はベンチマーク環境の値であり、本リポジトリの Agent での実測値ではない。
+> 自分の Agent での値は §7 の `Step.4` で測る。
+
+## 12. 参照
 
 - Skill: `.github/skills/foundry-toolbox-contract/SKILL.md`
+  - 参考: `references/pinning-and-search-metadata.md` / `references/toolbox-implementation.md`
+- 関連ガイド: [agentic-retrieval-guide.md](agentic-retrieval-guide.md)（Knowledge Base 側）/
+  [tool-search.md](tool-search.md)・[tool-search-dashboard.md](tool-search-dashboard.md)（HVE runtime 側）

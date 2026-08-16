@@ -47,7 +47,6 @@ jobs:
             "aag:qa-ready" "aag:qa-drafting"
             "aagd:qa-ready" "aagd:qa-drafting"
             "akm:qa-ready" "akm:qa-drafting"
-            "aqod:qa-ready" "aqod:qa-drafting"
             "adoc:qa-ready" "adoc:qa-drafting"
           )
 

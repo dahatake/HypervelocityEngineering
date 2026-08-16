@@ -99,7 +99,7 @@ class TestDefaultAkmTargetFiles(unittest.TestCase):
         self.assertEqual(_default_akm_target_files("qa"), "qa/*.md")
 
     def test_original_docs_only(self) -> None:
-        self.assertEqual(_default_akm_target_files("original-docs"), "original-docs/*")
+        self.assertEqual(_default_akm_target_files("original-docs"), "docs-original/*")
 
     def test_workiq_only_returns_empty(self) -> None:
         """``workiq`` のみは単一パターン既定なし。"""
@@ -118,7 +118,7 @@ class TestDefaultAkmTargetFiles(unittest.TestCase):
         self.assertEqual(_default_akm_target_files("qa,workiq"), "qa/*.md")
 
     def test_workiq_plus_original_docs(self) -> None:
-        self.assertEqual(_default_akm_target_files("workiq,original-docs"), "original-docs/*")
+        self.assertEqual(_default_akm_target_files("workiq,original-docs"), "docs-original/*")
 
     def test_list_input(self) -> None:
         """list 入力も受理する。"""

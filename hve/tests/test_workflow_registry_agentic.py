@@ -124,6 +124,35 @@ class TestAsdwWebAgenticRetrievalSteps:
 
 
 # ---------------------------------------------------------------------------
+# AAGD: Agentic Retrieval 契約 Skill の公開範囲（FR-WF-AAGD-05）
+# ---------------------------------------------------------------------------
+
+
+class TestAagdAgenticRetrievalSkillPublication:
+    """TDD Step でも AR-CAP の検証観点へ到達できること。"""
+
+    def test_tdd_steps_require_contract_skill(self):
+        """2.1（テスト仕様）/ 2.2（テストコード）が AR-CAP 契約 Skill を required 宣言すること。"""
+        for step_id in ("2.1", "2.2"):
+            step = get_step("aagd", step_id)
+            assert step is not None
+            assert "agentic-retrieval-contract" in step.required_skills, step_id
+
+    def test_implementation_and_deploy_steps_keep_the_contract_skill(self):
+        """既存の 2.3 / 3 の宣言を壊していないこと。"""
+        for step_id in ("2.3", "3"):
+            step = get_step("aagd", step_id)
+            assert step is not None
+            assert "agentic-retrieval-contract" in step.required_skills, step_id
+
+    def test_tool_search_eval_step_does_not_require_the_contract_skill(self):
+        """Step 4 は tool search 専用評価であり AR-CAP を扱わない。"""
+        step = get_step("aagd", "4")
+        assert step is not None
+        assert "agentic-retrieval-contract" not in step.required_skills
+
+
+# ---------------------------------------------------------------------------
 # AAD-WEB: 既存 Step の順序・依存整合性
 # ---------------------------------------------------------------------------
 
@@ -504,28 +533,30 @@ class TestIssueQaReadyTransitionWorkflow:
     _WORKFLOW = "auto-issue-qa-ready-transition.yml"
 
     def test_excludes_pre_qa_marker_from_answer_candidates(self):
-        inject_step = _get_workflow_step(
+        save_step = _get_workflow_step(
             self._WORKFLOW,
-            job_name="transition",
-            step_name="QA 回答コンテキストを Issue body に注入（冪等性マーカー付き）",
+            job_name="save-qa-answer",
+            step_name="Materialize, save, and read back answered QA",
         )
-        run_script = inject_step.get("run", "")
+        run_script = save_step.get("run", "")
+        assert "! printf '%s' \"${answer_body}\" | grep -qF '<!-- copilot-auto-pre-qa-posted -->'" in run_script
         assert re.search(
             r'contains\("<!-- copilot-auto-pre-qa-posted -->"\)\)\s*\|\s*not',
             run_script,
         )
-        assert not re.search(
-            r'or\s*\(?\s*\(\(\.body\s*//\s*""\)\s*\|\s*contains\("<!-- copilot-auto-pre-qa-posted -->"\)\)',
-            run_script,
-        )
 
     def test_uses_human_copilot_mentions_for_manual_answers(self):
-        content = _read_workflow_text(self._WORKFLOW)
-        assert 'contains("@copilot")' in content
-        assert '(.author_association // "") == "OWNER"' in content
-        assert '(.author_association // "") == "MEMBER"' in content
-        assert '(.author_association // "") == "COLLABORATOR"' in content
-        assert '(.user.type // "") != "Bot"' in content
+        save_step = _get_workflow_step(
+            self._WORKFLOW,
+            job_name="save-qa-answer",
+            step_name="Materialize, save, and read back answered QA",
+        )
+        run_script = save_step.get("run", "")
+        assert "grep -qi '@copilot'" in run_script
+        assert 'answer_author_assoc}" == "OWNER"' in run_script
+        assert 'answer_author_assoc}" == "MEMBER"' in run_script
+        assert 'answer_author_assoc}" == "COLLABORATOR"' in run_script
+        assert 'answer_author_type}" != "Bot"' in run_script
 
     def test_logs_missing_answers_without_injecting_issue_body(self):
         content = _read_workflow_text(self._WORKFLOW)
@@ -542,11 +573,42 @@ class TestIssueQaReadyTransitionWorkflow:
 
     def test_detect_step_accepts_qa_drafting_label(self):
         content = _read_workflow_text(self._WORKFLOW)
-        assert "l.endswith(':qa-ready') or l.endswith(':qa-drafting')" in content
+        assert 'endswith(":qa-ready") or endswith(":qa-drafting")' in content
 
     def test_ready_transition_maps_qa_drafting_to_ready(self):
         content = _read_workflow_text(self._WORKFLOW)
         assert 'READY_LABEL="${READY_LABEL/:qa-drafting/:ready}"' in content
+
+    def test_answer_transition_assigns_before_removing_qa_state(self):
+        step = _get_workflow_step(
+            self._WORKFLOW,
+            job_name="transition",
+            step_name="qa-ready → ready 遷移（ラベル入替え + Copilot アサイン）",
+        )
+        script = step.get("run", "")
+        assert script.index("assign_copilot") < script.index("gh api -X DELETE")
+        assert script.index('labels[]=${READY_LABEL}') < script.index("gh api -X DELETE")
+        assert "遷移失敗のため ready/running をロールバック" in script
+        assert "final_labels_json" in script
+        assert "Copilot アサインに失敗したため QA 状態を維持します" in script
+        assert "exit 1" in script
+
+    def test_multiple_qa_state_labels_fail_closed(self):
+        save_step = _get_workflow_step(
+            self._WORKFLOW,
+            job_name="save-qa-answer",
+            step_name="Materialize, save, and read back answered QA",
+        )
+        detect_step = _get_workflow_step(
+            self._WORKFLOW,
+            job_name="transition",
+            step_name="Issue の *:qa-ready / *:qa-drafting ラベル確認",
+        )
+        for step in (save_step, detect_step):
+            script = step.get("run", "")
+            assert "qa_label_count" in script
+            assert "複数の QA 状態ラベル" in script
+            assert "exit 1" in script
 
     def test_transition_workflow_exports_copilot_pat(self):
         content = _read_workflow_text(self._WORKFLOW)
@@ -558,8 +620,43 @@ class TestIssueQaReadyTransitionWorkflow:
         inputs = on_section.get("workflow_dispatch", {}).get("inputs", {})
         assert "target_issue" in inputs
         assert "target_pr" in inputs
+        assert "target_comment_id" in inputs
         assert "dry_run" in inputs
         assert "simulate_label" in inputs
+
+    def test_answer_and_questionnaire_are_paired_by_comment_identity_and_time(self):
+        save_step = _get_workflow_step(
+            self._WORKFLOW,
+            job_name="save-qa-answer",
+            step_name="Materialize, save, and read back answered QA",
+        )
+        run_script = save_step.get("run", "")
+        assert "/issues/comments/${ANSWER_COMMENT_ID}" in run_script
+        assert "answer_created_at" in run_script
+        assert "--argjson answer_comment_id" in run_script
+        assert ".id != $answer_comment_id" in run_script
+        assert ".created_at == $answer_created_at and .id < $answer_comment_id" in run_script
+        assert "answer_comment_id=${ANSWER_COMMENT_ID}" in run_script
+
+    def test_transition_reuses_saved_branch_and_exact_answer_comment(self):
+        transition = _load_workflow_yaml(self._WORKFLOW)["jobs"]["transition"]
+        env = transition.get("env", {})
+        assert env.get("SAVED_BRANCH") == "${{ needs.save-qa-answer.outputs.branch }}"
+        assert env.get("ANSWER_COMMENT_ID") == (
+            "${{ needs.save-qa-answer.outputs.answer_comment_id }}"
+        )
+        inject_step = _get_workflow_step(
+            self._WORKFLOW,
+            job_name="transition",
+            step_name="QA 回答コンテキストを Issue body に注入（冪等性マーカー付き）",
+        )
+        assert "/issues/comments/${ANSWER_COMMENT_ID}" in inject_step.get("run", "")
+        transition_step = _get_workflow_step(
+            self._WORKFLOW,
+            job_name="transition",
+            step_name="qa-ready → ready 遷移（ラベル入替え + Copilot アサイン）",
+        )
+        assert 'BRANCH="${SAVED_BRANCH}"' in transition_step.get("run", "")
 
     def test_transition_workflow_contains_dry_run_guard(self):
         content = _read_workflow_text(self._WORKFLOW)
@@ -604,7 +701,19 @@ class TestLabelStateMachineFixWorkflows(unittest.TestCase):
         self.assertIn("Copilot", content)
         self.assertIn("<!-- hve-qa-context-injected -->", content)
         self.assertIn("transition-pr-opened", content)
-        self.assertIn("steps.inject-qa-context-pr.outputs.qa_comment_found == 'true'", content)
+        self.assertIn("steps.detect-questionnaire.outputs.questionnaire_found == 'true'", content)
+
+    def test_pr_opened_only_moves_qa_drafting_to_qa_ready(self):
+        steps = _load_workflow_yaml("auto-issue-qa-ready-transition.yml")["jobs"]["transition-pr-opened"]["steps"]
+        transition = next(
+            s for s in steps
+            if s.get("name") == "質問票作成完了として qa-drafting → qa-ready 遷移"
+        )
+        script = transition.get("run", "")
+        self.assertIn('QA_READY_LABEL="${QA_DRAFTING_LABEL/:qa-drafting/:qa-ready}"', script)
+        self.assertNotIn("RUNNING_LABEL", script)
+        self.assertNotIn("assign_copilot", script)
+        self.assertNotIn('/:qa-drafting/:ready', script)
 
     def test_state_transition_on_pr_merge_workflow_contract(self):
         workflow = "state-transition-on-pr-merge.yml"
@@ -625,7 +734,7 @@ class TestLabelStateMachineFixWorkflows(unittest.TestCase):
         content = _read_workflow_text(workflow)
         for prefix in [
             "aas", "aad", "aad-web", "asdw", "asdw-web", "adfd",
-            "adfdv", "aag", "aagd", "akm", "adoc", "aqod",
+            "adfdv", "aag", "aagd", "akm", "adoc",
         ]:
             self.assertIn(prefix, content)
         self.assertIn("<!-- state-transition-on-pr-merge-done -->", content)
@@ -779,6 +888,272 @@ class TestCopilotAutoFeedbackWorkflow:
         assert "dry_run_guard()" in content
         assert "[DRY RUN] would execute:" in content
         assert "[DRY RUN] would execute: $*" not in content
+
+
+# ---------------------------------------------------------------------------
+# FR-CLOUD-24: QA 回答保存後の非待機 AKM 直列調整 — 契約テスト
+# ---------------------------------------------------------------------------
+
+
+class TestQaAnsweredAkmCloudWorkflow:
+    """auto-akm-after-qa.yml の静的契約を検証する（FR-CLOUD-24）。
+
+    このファイルは未実装のため、全テストは RED（FileNotFoundError/AssertionError）で失敗する。
+    """
+
+    _WORKFLOW = "auto-akm-after-qa.yml"
+
+    def test_workflow_file_exists(self):
+        """auto-akm-after-qa.yml がリポジトリに存在すること。"""
+        assert (_WORKFLOWS_DIR / self._WORKFLOW).exists(), \
+            f"{self._WORKFLOW} が .github/workflows/ に存在しません"
+
+    def test_has_workflow_dispatch_trigger(self):
+        """workflow_dispatch トリガーを持つこと。"""
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        on_section = yaml_data.get(True, {}) or yaml_data.get("on", {})
+        assert "workflow_dispatch" in on_section
+
+    def test_workflow_dispatch_has_required_inputs(self):
+        """workflow_dispatch に source_issue, qa_sha, qa_path, branch, auto_merge 入力を持つこと。"""
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        on_section = yaml_data.get(True, {}) or yaml_data.get("on", {})
+        inputs = on_section.get("workflow_dispatch", {}).get("inputs", {})
+        for name in ("source_issue", "qa_sha", "qa_path", "branch", "auto_merge"):
+            assert name in inputs, f"workflow_dispatch に '{name}' 入力がありません"
+
+    def test_qa_sha_input_description_mentions_64hex(self):
+        """qa_sha 入力の description が 64 文字 hex であることを示すこと。"""
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        on_section = yaml_data.get(True, {}) or yaml_data.get("on", {})
+        qa_sha = on_section["workflow_dispatch"]["inputs"]["qa_sha"]
+        description = qa_sha.get("description", "").lower()
+        assert "64" in description and "hex" in description
+
+    def test_has_repository_level_concurrency(self):
+        """リポジトリ単位の concurrency を持つこと（Issue 単位ではない）。"""
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        jobs = yaml_data.get("jobs", {})
+        job = jobs.get("coordinate-akm", {})
+        assert job, "coordinate-akm job がありません"
+        conc = job.get("concurrency", {})
+        group = conc.get("group", "") if isinstance(conc, dict) else ""
+        assert group == "akm-knowledge-write-${{ github.repository }}"
+
+    def test_job_timeout_is_360_minutes(self):
+        """主要 job の timeout-minutes が 360 であること。"""
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        jobs = yaml_data.get("jobs", {})
+        timeouts = [j.get("timeout-minutes") for j in jobs.values() if j.get("timeout-minutes")]
+        assert 360 in timeouts, f"timeout-minutes=360 の job がありません: {timeouts}"
+
+    def test_permissions_include_issues_write(self):
+        """issues: write 権限を持つこと。"""
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        # top-level or job-level permissions
+        perms = yaml_data.get("permissions", {})
+        jobs = yaml_data.get("jobs", {})
+        all_perms = dict(perms)
+        for j in jobs.values():
+            all_perms.update(j.get("permissions", {}))
+        assert all_perms.get("issues") == "write"
+
+    def test_permissions_include_pull_requests_read(self):
+        """pull-requests: read 権限を持つこと。"""
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        perms = yaml_data.get("permissions", {})
+        jobs = yaml_data.get("jobs", {})
+        all_perms = dict(perms)
+        for j in jobs.values():
+            all_perms.update(j.get("permissions", {}))
+        assert all_perms.get("pull-requests") == "read"
+
+    def test_permissions_include_contents_read(self):
+        """contents: read 権限を持つこと。"""
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        perms = yaml_data.get("permissions", {})
+        jobs = yaml_data.get("jobs", {})
+        all_perms = dict(perms)
+        for j in jobs.values():
+            all_perms.update(j.get("permissions", {}))
+        assert all_perms.get("contents") == "read"
+
+    def test_idempotency_marker_scan_in_open_and_closed_labeled_issues(self):
+        """検索索引に依存せず qa-akm-sync ラベル対象の本文を厳密照合すること。"""
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        steps = yaml_data["jobs"]["coordinate-akm"]["steps"]
+        guard = next(step for step in steps if "Find existing" in step.get("name", ""))
+        script = guard.get("run", "")
+        assert "qa-akm-sync" in script
+        assert "branch=${BRANCH}" in script
+        assert "state=all" in script
+        assert "labels=qa-akm-sync" in script
+        assert "--paginate" in script
+        assert "--search" not in script
+        assert "issue_number=" in script and "GITHUB_OUTPUT" in script
+
+    def test_creates_independent_akm_root_issue(self):
+        """独立した AKM Root Issue を作成する記述があること。"""
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        steps = yaml_data.get("jobs", {}).get("coordinate-akm", {}).get("steps", [])
+        names = [step.get("name", "") for step in steps]
+        create_idx = next(i for i, name in enumerate(names) if "AKM Root Issue" in name)
+        label_idx = next(i for i, name in enumerate(names) if "knowledge-management" in name)
+        assert create_idx < label_idx
+        create = steps[create_idx]
+        assert create.get("if") == "steps.guard.outputs.issue_number == ''"
+        assert "gh issue create" in create.get("run", "")
+        assert "issue_number=" in create.get("run", "")
+        label = steps[label_idx]
+        assert label.get("if") == "steps.guard.outputs.issue_number == ''"
+        assert "steps.create.outputs.issue_number" in str(label.get("env", {}))
+
+    def test_existing_issue_skips_create(self):
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        steps = yaml_data["jobs"]["coordinate-akm"]["steps"]
+        create = next(step for step in steps if "Create independent" in step.get("name", ""))
+        resolve = next(step for step in steps if "Resolve AKM Root" in step.get("name", ""))
+        assert create.get("if") == "steps.guard.outputs.issue_number == ''"
+        assert "steps.guard.outputs.issue_number" in str(resolve.get("env", {}))
+
+    def test_create_applies_routing_label_atomically_and_finds_legacy_orphans(self):
+        steps = _load_workflow_yaml(self._WORKFLOW)["jobs"]["coordinate-akm"]["steps"]
+        ensure_idx = next(i for i, s in enumerate(steps) if "Ensure QA sync routing label" in s.get("name", ""))
+        create_idx = next(i for i, s in enumerate(steps) if "Create independent" in s.get("name", ""))
+        assert ensure_idx < create_idx
+        create_script = steps[create_idx].get("run", "")
+        assert 'gh issue create' in create_script
+        assert '--label "qa-akm-sync"' in create_script
+        guard = next(s for s in steps if "Find existing" in s.get("name", ""))
+        assert "fallback" in guard.get("run", "").lower()
+        assert 'issues?state=all&per_page=100' in guard.get("run", "")
+
+    def test_existing_nonterminal_issue_reconciles_labels_before_poll(self):
+        steps = _load_workflow_yaml(self._WORKFLOW)["jobs"]["coordinate-akm"]["steps"]
+        reconcile_idx = next(i for i, s in enumerate(steps) if "Reconcile AKM Root" in s.get("name", ""))
+        poll_idx = next(i for i, s in enumerate(steps) if "Poll AKM terminal" in s.get("name", ""))
+        assert reconcile_idx < poll_idx
+        script = steps[reconcile_idx].get("run", "")
+        assert 'akm:done' in script and 'akm:blocked' in script and 'closed' in script
+        assert '--add-label "qa-akm-sync"' in script
+        assert '--add-label "knowledge-management"' in script
+
+    def test_polls_terminal_states(self):
+        """akm:done / akm:blocked / closed を低頻度 poll する記述があること。"""
+        content = _read_workflow_text(self._WORKFLOW)
+        assert "akm:done" in content
+        assert "akm:blocked" in content
+        assert 'state' in content and 'closed' in content
+        assert "POLL_INTERVAL_SECONDS" in content
+
+    def test_timeout_marks_issue_as_blocked(self):
+        """タイムアウト時に akm:blocked を付与する記述があること。"""
+        content = _read_workflow_text(self._WORKFLOW)
+        assert "akm:blocked" in content
+        assert 'TIMEOUT_MINUTES: "350"' in content
+        assert "MAX_POLLS * POLL_INTERVAL_SECONDS / 60" in content
+
+    def test_timeout_rechecks_terminal_state_before_marking_blocked(self):
+        steps = _load_workflow_yaml(self._WORKFLOW)["jobs"]["coordinate-akm"]["steps"]
+        poll = next(s for s in steps if "Poll AKM terminal" in s.get("name", ""))
+        script = poll.get("run", "")
+        assert "poll < MAX_POLLS" in script
+        assert "final_issue_json=" in script
+        assert script.index("final_issue_json=") < script.index('--add-label "akm:blocked"')
+
+
+class TestQaReadyTransitionSaveAndDispatchPermissions:
+    """auto-issue-qa-ready-transition.yml の FR-CLOUD-24 更新契約を検証する。
+
+    回答保存 job は contents:write、dispatch job は actions:write を持つこと。
+    """
+
+    _WORKFLOW = "auto-issue-qa-ready-transition.yml"
+
+    def test_save_job_has_contents_write_permission(self):
+        """回答保存 job が contents: write 権限を持つこと。"""
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        jobs = yaml_data.get("jobs", {})
+        save_job = jobs.get("save-qa-answer", {})
+        assert save_job, "save-qa-answer job がありません"
+        perms = save_job.get("permissions", {})
+        assert perms.get("contents") == "write", \
+            "save-qa-answer job に contents: write がありません"
+
+    def test_dispatch_job_has_actions_write_permission(self):
+        """dispatch job が actions: write 権限を持つこと。"""
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        jobs = yaml_data.get("jobs", {})
+        dispatch_job = jobs.get("dispatch-akm", {})
+        assert dispatch_job, "dispatch-akm job がありません"
+        perms = dispatch_job.get("permissions", {})
+        assert perms.get("actions") == "write", \
+            "dispatch-akm job に actions: write がありません"
+
+    def test_branch_existence_check_before_save(self):
+        """branch 実在確認を save 前に行う記述があること。"""
+        content = _read_workflow_text(self._WORKFLOW)
+        assert "refs/heads/" in content or "branch" in content.lower()
+
+    def test_fixed_qa_path_pattern(self):
+        r"""保存先が qa/ 固定パスパターンに一致すること。"""
+        content = _read_workflow_text(self._WORKFLOW)
+        assert "Issue-${ISSUE_NUMBER}-questionnaire-answered-${QA_SHA:0:8}.md" in content
+        assert ".." in content and "拒否" in content
+
+    def test_contents_api_readback_and_sha_verification(self):
+        """Contents API の read-back と SHA 照合記述があること。"""
+        content = _read_workflow_text(self._WORKFLOW)
+        assert "/contents/${QA_PATH}?ref=${BRANCH}" in content
+        assert "sha256" in content.lower()
+
+    def test_dispatch_success_then_source_assignment(self):
+        """dispatch API 成功後に source assignment へ進む記述があること。"""
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        jobs = yaml_data.get("jobs", {})
+        dispatch = jobs.get("dispatch-akm", {})
+        assert "gh workflow run auto-akm-after-qa.yml" in "\n".join(
+            step.get("run", "") for step in dispatch.get("steps", [])
+        )
+        transition_needs = jobs.get("transition", {}).get("needs", [])
+        if isinstance(transition_needs, str):
+            transition_needs = [transition_needs]
+        assert "dispatch-akm" in transition_needs
+
+    def test_source_workflow_does_not_wait_for_akm_completion(self):
+        """source workflow が AKM 完了を待機しない（非同期 dispatch）こと。
+
+        workflow_dispatch API 呼び出し後に sleep/poll/wait するロジックがないことを検証。
+        """
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        jobs = yaml_data.get("jobs", {})
+        for job_name in ("save-qa-answer", "dispatch-akm", "transition"):
+            job = jobs.get(job_name, {})
+            for step in job.get("steps", []):
+                run_script = step.get("run", "")
+                assert "akm:done" not in run_script
+                assert "akm:blocked" not in run_script
+
+
+class TestQaAkmChildConcurrencyRouting:
+    """QA同期AKM子フローがcoordinatorの大域lockと自己デッドロックしない契約。"""
+
+    _WORKFLOW = "auto-knowledge-management-reusable.yml"
+
+    def test_qa_sync_uses_separate_group_while_normal_akm_keeps_global_group(self):
+        yaml_data = _load_workflow_yaml(self._WORKFLOW)
+        concurrency = yaml_data["jobs"]["orchestrate"]["concurrency"]
+        group = concurrency.get("group", "")
+        assert "qa-akm-sync" in group
+        assert "akm-qa-sync-child-" in group
+        assert "akm-knowledge-write-" in group
+        assert concurrency.get("cancel-in-progress") is False
+
+    def test_qa_sync_label_is_propagated_to_step_issues(self):
+        content = _read_workflow_text(self._WORKFLOW)
+        assert 'index("qa-akm-sync")' in content
+        assert 'STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c' in content
+        assert '["qa-akm-sync"]' in content
 
 
 class TestAutoQaTimeoutWatcherWorkflow:

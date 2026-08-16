@@ -61,7 +61,7 @@ def _has_fanout(step) -> bool:
     """fan-out の有無。
 
     fan-out は parser 経由（`fanout_parser`）だけでなく、固定キー集合
-    （`fanout_static_keys`。AKM / AQOD の D01〜D21 など）でも成立する。
+    （`fanout_static_keys`。AKM / ADI の D01〜D21 など）でも成立する。
     どちらかを持てばキー別名を代入できる。
     """
     return bool(
@@ -159,6 +159,7 @@ def test_service_test_project_paths_do_not_use_the_name_slug() -> None:
 # （AAD-WEB 2.1 / 2.2、ASDW-WEB 3.3、AKM 1）。ここに残るのは prefix 化しても
 # 検証できない Step だけである。
 _EMPTY_GATE_ALLOWLIST: dict[tuple[str, str], str] = {
+    ("adi", "2"): "Doc Cardの出力先slugはsource_path由来で、design_doc_inventory parserのDOC-IDだけから決定的に復元できない（FR-WF-ADI-09）",
     ("adfdv", "2.1"): "{jobId} が dataflow_catalog の返す APP-ID と不一致でキーが代入されず、prefix 化もできない（FR-WF-ADFDV-01/02）",
     ("adfdv", "2.2"): "{jobId} が dataflow_catalog の返す APP-ID と不一致でキーが代入されず、prefix 化もできない（FR-WF-ADFDV-01/02）",
     ("asdw-web", "4.2"): "src/app/ 配下は全 fan-out 子で同一の固定パスで per-key 成果物でない（規則 1）",

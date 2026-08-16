@@ -385,6 +385,13 @@ class QAMerger:
                     collecting_choices = False
                     continue
 
+                val = _match_field(stripped, "既定値候補")
+                if val is not None:
+                    if not q.default_answer:
+                        q.default_answer = val
+                    collecting_choices = False
+                    continue
+
                 val = _match_field(stripped, "既定値候補の理由")
                 if val is not None:
                     q.reason = val
@@ -536,6 +543,8 @@ class QAMerger:
             (k, merged.status if k == "状態" else v)
             for k, v in merged.header_fields
         ]
+        if not any(k == "状態" for k, _ in merged.header_fields):
+            merged.header_fields.insert(0, ("状態", merged.status))
 
         return merged
 
@@ -665,7 +674,10 @@ class QAMerger:
             for q in doc.questions:
                 # セルの | をエスケープ
                 def esc(s: str) -> str:
-                    return s.replace("|", "&#124;")
+                    # Markdown table 内では `<br>` / entity を canonical な永続表現とする。
+                    # parse 時に逆変換すると、入力に元から含まれる同じ文字列と区別できない。
+                    normalized = s.replace("\r\n", "\n").replace("\r", "\n")
+                    return normalized.replace("|", "&#124;").replace("\n", "<br>")
 
                 no = str(q.no)
                 question = esc(q.question)
@@ -779,6 +791,57 @@ class QAMerger:
                     except OSError:
                         pass
         return False
+
+    # ------------------------------------------------------------------
+    # 回答済みファイル検証 (FR-QA-03)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def validate_answered_file(
+        path: Path,
+        expected_content: Optional[str] = None,
+        expected_questions: Optional[int] = None,
+    ) -> List[str]:
+        """保存済み回答ファイルを UTF-8 で再読込し整合性を検証する。
+
+        Returns:
+            エラーメッセージのリスト。空リスト = 検証成功。
+        """
+        errors: List[str] = []
+        path = Path(path)
+        try:
+            if not path.exists():
+                return [f"ファイルが存在しません: {path}"]
+            content = path.read_text(encoding="utf-8")
+        except Exception as exc:
+            return [f"ファイル読込に失敗しました: {exc}"]
+
+        if expected_content is not None and content != expected_content:
+            errors.append("ファイル内容が期待値と一致しません")
+
+        try:
+            doc = QAMerger.parse_qa_content(content)
+        except Exception as exc:
+            errors.append(f"パースに失敗しました: {exc}")
+            return errors
+
+        if expected_questions is not None and len(doc.questions) != expected_questions:
+            errors.append(
+                f"質問数が不一致です（期待: {expected_questions}, 実際: {len(doc.questions)}）"
+            )
+        if not doc.questions:
+            errors.append("質問が見つかりません")
+
+        _VALID_STATUSES = {"回答済み", "推論補完済み"}
+        if doc.status not in _VALID_STATUSES:
+            errors.append(f"状態が無効です: {doc.status}")
+
+        for q in doc.questions:
+            answer = (q.user_answer or "").strip()
+            if not answer:
+                errors.append(f"質問 {q.no} の回答が空です")
+
+        return errors
 
     # ------------------------------------------------------------------
     # ユーティリティ

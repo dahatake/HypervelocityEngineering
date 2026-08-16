@@ -15,7 +15,7 @@
 - **Azure OpenAI Service の直接利用禁止**: AI/LLM カテゴリでチャットボット / Prompt 処理 / AI Agent 要件が検出された場合、Azure OpenAI を独立した第一候補・代替案として記載してはならない（§3.1 ルール）。Foundry resource 経由のモデル参照のみ許容。
 - **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
 - **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
 - **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
 - **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 

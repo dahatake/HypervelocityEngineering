@@ -46,16 +46,20 @@ class OrchestrateArgs:
     model: Optional[str] = None
     review_model: Optional[str] = None
     qa_model: Optional[str] = None
+    # QA 起点 AKM 子実行専用の実行品質（FR-QA-04）。None はメイン設定の継承。
+    akm_model: Optional[str] = None
 
     # reasoning_effort: SDK が返す `supported_reasoning_efforts` から選択された値。
     # None は「未指定（モデル既定 / orchestrator 側のフォールバック値）」を意味する。
     reasoning_effort: Optional[str] = None
     review_reasoning_effort: Optional[str] = None
     qa_reasoning_effort: Optional[str] = None
+    akm_reasoning_effort: Optional[str] = None
 
     # context_tier: SDK の create_session(context_tier=...) へ渡す値。
     # "default" | "long_context"。GUI 既定は long_context（設定画面の既定要件）。
     context_tier: Optional[str] = "long_context"
+    akm_context_tier: Optional[str] = None
 
     # Agentic Retrieval Step（AAD-WEB 2.6 / ASDW-WEB 2.5・2.6）の有効化。
     # "auto" | "yes" | "no"。None は CLI へ渡さない（hve 既定の auto に委ねる）。
@@ -78,9 +82,11 @@ class OrchestrateArgs:
     max_parallel: int = 15
 
     # ------------------------------------------------------------------
-    # C3: 自動プロンプト (L711-L747)
+    # C3: QA (質問票) / Knowledge Management / レビュー (L711-L747)
     # ------------------------------------------------------------------
     auto_qa: bool = False
+    # QA 回答を knowledge/ へバックグラウンドでマージするか（FR-QA-05、既定: 無効）。
+    qa_akm_background_merge: bool = False
     auto_contents_review: bool = False
     auto_coding_agent_review: bool = False
     auto_coding_agent_review_auto_approval: bool = False
@@ -179,11 +185,6 @@ class OrchestrateArgs:
     app_id: Optional[str] = None
     app_ids: Optional[str] = None
     resource_group: Optional[str] = None
-    data_location: Optional[str] = None
-    data_resource_suffix: Optional[str] = None
-    data_vnet_cidr: Optional[str] = None
-    data_private_endpoint_subnet_cidr: Optional[str] = None
-    data_aci_subnet_cidr: Optional[str] = None
     usecase_id: Optional[str] = None
 
     # ------------------------------------------------------------------
@@ -202,11 +203,16 @@ class OrchestrateArgs:
     delete_local_merged_branch: bool = True
 
     # ------------------------------------------------------------------
-    # C12: AQOD 固有 (L1058-L1075)
+    # 原本入力 / ADI 固有（既存フラグ互換）
     # ------------------------------------------------------------------
     target_scope: Optional[str] = None
     depth: Optional[str] = None  # standard/lightweight
     focus_areas: Optional[str] = None
+
+    # ------------------------------------------------------------------
+    # ADI 固有
+    # ------------------------------------------------------------------
+    purpose: Optional[str] = None
 
     # ------------------------------------------------------------------
     # C13: ADOC 固有 (L1076-L1099)
@@ -285,14 +291,20 @@ class OrchestrateArgs:
             argv += ["--review-model", self.review_model]
         if self.qa_model:
             argv += ["--qa-model", self.qa_model]
+        if self.akm_model:
+            argv += ["--akm-model", self.akm_model]
         if self.reasoning_effort:
             argv += ["--reasoning-effort", self.reasoning_effort]
         if self.review_reasoning_effort:
             argv += ["--review-reasoning-effort", self.review_reasoning_effort]
         if self.qa_reasoning_effort:
             argv += ["--qa-reasoning-effort", self.qa_reasoning_effort]
+        if self.akm_reasoning_effort:
+            argv += ["--akm-reasoning-effort", self.akm_reasoning_effort]
         if self.context_tier:
             argv += ["--context-tier", self.context_tier]
+        if self.akm_context_tier:
+            argv += ["--akm-context-tier", self.akm_context_tier]
         if self.enable_agentic_retrieval:
             argv += ["--enable-agentic-retrieval", self.enable_agentic_retrieval]
         if self.agentic_data_source_modes:
@@ -323,6 +335,8 @@ class OrchestrateArgs:
         # --- C3 ---
         if self.auto_qa:
             argv.append("--auto-qa")
+        if self.qa_akm_background_merge:
+            argv.append("--qa-akm-background-merge")
         if self.auto_contents_review:
             argv.append("--auto-contents-review")
         if self.auto_coding_agent_review:
@@ -447,18 +461,6 @@ class OrchestrateArgs:
             argv += ["--app-ids", self.app_ids]
         if self.resource_group:
             argv += ["--resource-group", self.resource_group]
-        for flag, value in (
-            ("--data-location", self.data_location),
-            ("--data-resource-suffix", self.data_resource_suffix),
-            ("--data-vnet-cidr", self.data_vnet_cidr),
-            (
-                "--data-private-endpoint-subnet-cidr",
-                self.data_private_endpoint_subnet_cidr,
-            ),
-            ("--data-aci-subnet-cidr", self.data_aci_subnet_cidr),
-        ):
-            if value:
-                argv += [flag, value]
         if self.usecase_id:
             argv += ["--usecase-id", self.usecase_id]
 
@@ -477,13 +479,17 @@ class OrchestrateArgs:
         if not self.delete_local_merged_branch:
             argv.append("--no-delete-local-merged-branch")
 
-        # --- C12: AQOD ---
+        # --- ADI 原本入力 ---
         if self.target_scope:
             argv += ["--target-scope", self.target_scope]
         if self.depth:
             argv += ["--depth", self.depth]
         if self.focus_areas:
             argv += ["--focus-areas", self.focus_areas]
+
+        # --- ADI ---
+        if self.purpose:
+            argv += ["--purpose", self.purpose]
 
         # --- C13: ADOC ---
         if self.target_dirs:

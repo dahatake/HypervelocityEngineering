@@ -2,23 +2,20 @@
 name: code-query
 description: >
   Answer questions about source code by retrieving definitions and small
-  snippets instead of whole files. Local-only (no cloud API, no grammar
-  downloads).
-  USE FOR: find where a function or class is defined, locate an implementation,
-  search source code, find callers, find references, trace a requirement ID or
-  test ID to code, regex search over code, symbol lookup, code Q&A, understand
-  an unfamiliar module, get a token-budgeted overview of a codebase.
-  PREFER OVER read_file, cat, grep_search, and ripgrep when targets are source
-  files (.py, .cs, .js, .ts, .sh, .ps1) and you need relevance-ranked
-  hits across multiple files, even when paths are not yet known. Try this skill
-  first; fall back to grep only if hits are empty or unrelated.
-  DO NOT USE FOR: editing or generating code, markdown or docs lookup (use
-  markdown-query), cloud embedding search, running or debugging code.
-  WHEN: a question about how the code works, where something lives, or what
-  calls what; multi-file code lookup; context window must be minimized.
+  snippets instead of whole files. Local-only.
+  USE FOR: find where a function or class is defined, find callers or
+  references, trace a requirement or test ID to code, regex or symbol search
+  over source, code Q&A.
+  PREFER OVER read_file, grep_search, and ripgrep for source files
+  (.py, .cs, .js, .ts, .sh, .ps1); fall back to grep only if hits are empty
+  or unrelated.
+  DO NOT USE FOR: editing code, markdown lookup (use markdown-query),
+  cloud embedding search.
+  WHEN: where something lives or what calls what; multi-file code lookup;
+  context window must be minimized.
 metadata:
   origin: user
-  version: 0.2.0
+  version: 0.4.1
 category: planning
 ---
 
@@ -90,7 +87,27 @@ python -m cq trace --profile <profile> --id <TRACE-ID>         # トレース ID
 python -m cq trace --profile <profile> --by-path <file>        # コード → 設計文書のパスとアンカー
 python -m cq map   --profile <profile> --paths "<dir>/*" --max-tokens 1200   # 俯瞰マップ
 python -m cq watch --profile <profile>                         # 保存を即座に索引へ反映
+python -m cq search --profile <profile> --q "<自然文>" --semantic --explain  # 意味検索 + 実行内訳
+python -m cq search --profile <profile> --q "<問い>" --return-unit symbol      # 本文なし、名前と署名だけ
 ```
+
+### intent ごとの使い分け（golden 56 問の実測）
+
+**正解に到達できる問いはすべて 1 経路で到達できる**（複数経路の統合が必須になった問いは 56 問中 0 問）。
+
+| 問いの形 | 推奨 | 根拠 |
+|---|---|---|
+| 識別子・トレース ID・リテラル文字列・正規表現 | そのまま投げる。`--top-k 1` で十分 | 36 問中 k=1 で損失 0 問 |
+| 英語の自然文 | そのまま。届かなければ `--semantic` | `bm25` 4/6、`semantic` 4/6（hve） |
+| **日本語の自然文** | **`--semantic` が唯一の到達手段** | 語彙 4 経路はすべて 0 件 |
+| 「どこに何があるか」だけ知りたい | `--return-unit symbol` | トークン 159 → 110、名前付き 31/80 → 62/80 |
+
+**`--semantic` は遅い**: 実 CLI で **3,285 ms**（非 semantic は 338 ms）。その 95.5% は埋め込み
+モデルのロードで、CLI は 1 プロセス 1 クエリなので避けられない。語彙経路で届く問いには付けないこと。
+**cosine には閾値が無いので `--semantic` は 0 件を返さない**。ヒットしたことを関連の根拠にしない。
+
+意味検索は `pip install -e ".[code-semantic]"` と `python -m cq index --embed` が先に必要で、**既定は OFF**。
+ベクトルが無い・別モデル・ファイルが変わった場合は無言で語彙経路だけに降格する。
 
 `cq trace` は設計文書の**本文を返さない**。本文が必要なら返ってきたパスとアンカーを `markdown-query` の
 `python -m mdq get` へ渡す。これがコード ↔ 設計書の標準的な連携経路。
@@ -103,9 +120,12 @@ python -m cq watch --profile <profile>                         # 保存を即座
 
 - コードの編集 / 生成。
 - Markdown・ドキュメントの検索（`.md` は索引対象外）。→ `markdown-query` を使う。
-- クラウド埋め込み / リモート検索。
-- 日本語の自然文から英語識別子への橋渡し（意味的な言い換えは行わない）。日本語で聞くときはコード中に現れる
-  英語の語（関数名・クラス名の一部）を混ぜること。
+- クラウド埋め込み / リモート検索。意味検索（`--semantic`）はあるが、モデルもベクトルもローカルに閉じる。
+- 日本語の自然文から英語識別子への確実な橋渡し。`--semantic` で一部は届くが、**実測では日本語
+  golden 10 問中 2 問の到達**にとどまる。日本語で聞くときは、コード中に現れる英語の語
+  （関数名・クラス名の一部）を混ぜる方が確実。
+- LLM によるサブクエリ生成・回答生成・cross-encoder リランク。`cq` は grounding data を返すツールで、
+  生成は呼び出し側 Agent の責務。
 - 文法を実行時にネットワーク取得する実装（`tree-sitter-language-pack`）の採用。ローカル完結の前提を破る。
   公式の**言語別 tree-sitter 文法**は wheel に文法を同梱しており、ネットワーク遮断下での import と parse を
   実測した上で任意依存（`pip install -e .[code]`）として採用している。
@@ -118,11 +138,11 @@ python -m cq watch --profile <profile>                         # 保存を即座
 | Java / Go / Rust / C / C++ | tree-sitter 公式文法（`tree-sitter`、`ERROR` ノードから回復した場合は `tree-sitter-partial`） | 定義・親スコープ・行範囲・ doc・修飾子・参照・ import、構造チャンク |
 | Scala | 同上（`tree-sitter` / `tree-sitter-partial`） | object / class / trait / enum / type / def（Scala 2 と 3 の両方）・クラス/トレイト/オブジェクト直下の `val` / `var` / `given`（`variable`）・クラスパラメータ（`property`）・呼び出し・ import。`def` 本体内のローカル `val`/`var` は対象外（索引雑音を避けるため） |
 | shell（bash / sh） | 同上（`tree-sitter` / `tree-sitter-partial`） | 関数定義の行範囲・シグネチャ・ doc・コマンド呼び出し、構造チャンク |
-| PowerShell | 同上（`tree-sitter` / `tree-sitter-partial`） | function / filter / class / enum / メソッド（`script:Name` のようなスコープ付き名を切らない）・コマンド呼び出し |
+| PowerShell | 同上（`tree-sitter` / `tree-sitter-partial`） | function / filter / class / enum / メソッド（`script:Name` のようなスコープ付き名を切らない）・Pester ブロック（`Describe` / `Context` / `It` のラベル。`is_test`）・コマンド呼び出し |
 | Windows batch | 同上（`tree-sitter` / `tree-sitter-partial`） | ラベル定義と `call` の参照のみ（この文法に関数の概念は無い） |
 | SQL | sqlglot 主・必要時のみ sqlfluff（`sql`） | `CREATE` する table / view / procedure / function / schema と、参照するテーブル。文単位の構造チャンク |
 | C# | tree-sitter 公式文法（`tree-sitter` / `tree-sitter-partial`）。未導入なら brace 深度追跡へ降格（`regex`） | 型（class / interface / struct / enum / record）・メソッド・コンストラクタ・参照・ using、構造チャンク（tree-sitter のみ） |
-| JavaScript | 同上（`tree-sitter` / `tree-sitter-partial` / `regex`） | class・function・メソッド・代入関数（`const x = () => {}` 等）・参照・ import（`require(...)` は regex のみ）、構造チャンク（tree-sitter のみ） |
+| JavaScript | 同上（`tree-sitter` / `tree-sitter-partial` / `regex`） | class・function・メソッド・代入関数（`const x = () => {}` 等）・テストブロック（`describe` / `it` / `test` のラベル。`is_test`）・参照・ import（`require(...)` は regex のみ）、構造チャンク（tree-sitter のみ） |
 | TypeScript / `.tsx`（別言語 `tsx` として登録） | 同上 | JavaScript に加え interface / type / enum / abstract class / 戻り型付きメソッド。`.tsx` は `tree-sitter-typescript` の `language_tsx()` を使う |
 | 未登録の言語・解析失敗 | `lite`（正規表現） | 定義行のみ |
 
@@ -149,7 +169,10 @@ Python は標準ライブラリ `ast` が主で、常に最優先で試す。`as
 
 tree-sitter 文法と SQL エンジンは**任意依存**であり、未導入の環境では当該言語だけが `lite` へ降格する。
 降格は索引全体を失敗させない。`sqlfluff` は `code-sql` extra として `code` から分離している（`click` の
-依存 pin が `semantic` extra と衝突するため）。
+依存 pin が `semantic` extra と衝突するため）。文法は `code-python` / `code-csharp` のような言語別 extra で
+個別に導入できる（一覧は [pyproject.toml](../../../pyproject.toml) の `[project.optional-dependencies]`）。
+`watchdog`（`cq watch`）と `tiktoken`（正確なトークン計上）は `code-watch` / `code-tokenizer` として `cq` 側に
+宣言されており、`mdq` の extra を借りない。
 
 解析に失敗したファイルも `lite` へ自動降格し、索引からは落とさない。降格したことは応答の `parser`
 フィールドに必ず現れるので、**フィデリティが落ちた結果を全文と誤認しないこと**。tree-sitter 系言語

@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from .policy import PolicyDecision, ToolSearchPolicy, apply_policy
 from .ranking import ToolRanker
-from .types import TOOL_SEARCH_TOOL_NAME, ToolCard, ToolEntry, build_catalog
+from .types import TOOL_SEARCH_TOOL_NAME, PinMode, ToolCard, ToolEntry, build_catalog
 
 TOOL_SEARCH_DESCRIPTION = (
     "Find tools by capability. Describe in natural language what you need to do "
@@ -62,7 +62,7 @@ class ToolSearchContext:
 
     policy: ToolSearchPolicy
     skill_entries: tuple[ToolEntry, ...] = ()
-    manifest_pins: Mapping[str, str] = field(default_factory=dict)
+    manifest_pins: Mapping[str, PinMode] = field(default_factory=dict)
     auto_pins: tuple[str, ...] = ()
     excluded_tools: tuple[str, ...] = ()
     workflow_id: str | None = None

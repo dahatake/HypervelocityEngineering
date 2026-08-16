@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple
 
@@ -80,6 +81,17 @@ _STEP_WORKFLOW = 0
 _STEP_WORKBENCH = 1
 _GIT_STATUS_REFRESH_INTERVAL_MS = 5000
 _GIT_STATUS_COMMAND_TIMEOUT_SECONDS = 1
+
+# 設定画面 autosave の反映時に、Step 1 右ペインを SSOT として保護するキー。
+# Settings dialog の各セクションは独立インスタンスのため、閉じるだけでも発火する
+# autosave の stale 値で右ペインの選択を上書きしてしまう。
+# QA.auto_qa は実行ごとの明示選択を必須とするため、起動時の復元も行わない。
+_SETTINGS_APPLY_SKIP_KEYS = frozenset(
+    {
+        ("C10", "app_ids"),
+        ("QA", "auto_qa"),
+    }
+)
 
 
 def _resolve_local_git_branch(repo_root: Path) -> Optional[str]:
@@ -762,7 +774,11 @@ class MainWindow(QMainWindow):
             settings_apply.apply_to_widgets(
                 {
                     "C1": self._page_options.c1,
-                    "C3": self._page_options.c3,
+                    # 設定画面の 4 ノードは、右ペインでは 1 つの合成ウィジェットが属性を公開する。
+                    "QA": self._page_options.c3,
+                    "REVIEW": self._page_options.c3,
+                    "KM": self._page_options.c3,
+                    "SELFIMPROVE": self._page_options.c3,
                     "C4": self._page_options.c4,
                     "C5": self._page_options.c5,
                     "C6": self._page_options.c6,
@@ -770,8 +786,8 @@ class MainWindow(QMainWindow):
                     "AZURE": self._page_options.c_azure,
                     "C10": self._page_options.c10,
                     "C11": self._page_options.c11,
-                    "C12": self._page_options.c12,
                     "C13": self._page_options.c13,
+                    "C17": self._page_options.c17,
                     # C14 は設定画面のカテゴリツリーに無く collect_from_widgets が
                     # 空値を書き戻さないため、復元のみを行う（値の出所は FR-GUI-06
                     # による Step 1 右ペインの自己保存）。
@@ -785,7 +801,7 @@ class MainWindow(QMainWindow):
                 # ここで OptionsPage の APP-ID 欄が空文字で上書きされ、
                 # downstream workflow で全 APP-ID 並列実行されるバグの
                 # 引き金となっていた。
-                skip_keys={("C10", "app_ids")},
+                skip_keys=_SETTINGS_APPLY_SKIP_KEYS,
             )
         except Exception:
             pass
@@ -1022,6 +1038,7 @@ class MainWindow(QMainWindow):
         if models:
             try:
                 self._page_options.c1.reload_models()
+                self._page_options.c3.reload_models()
             except Exception:
                 pass
             if (
@@ -2129,6 +2146,9 @@ class MainWindow(QMainWindow):
             )
             args.steps = args_steps_csv
             self._apply_cloud_step_overrides(args, workflow_id)
+            args.steering_ipc_dir = self._allocate_job_channel(
+                f"{workflow_id}#{app_id}"
+            )
             return args.to_argv()
 
         self._autopilot_controller = AutopilotController(
@@ -2158,6 +2178,25 @@ class MainWindow(QMainWindow):
             ),
         )
 
+    def _allocate_job_channel(self, instance_id: str) -> Optional[str]:
+        """FR-GUI-13: workflow instance ごとの対話 IPC チャネルを発行して登録する。
+
+        並列 lane が同一ディレクトリを共有すると、あるジョブ宛の割り込みが別ジョブへ
+        届きうるため、instance ごとに独立したディレクトリを割り当てる。作成に失敗した
+        場合は対話機能のみ無効化し（``None``）、ワークフロー実行は継続する。
+        """
+        try:
+            base = Path(self._repo_root) / ".hve" / "steering-ipc"
+            base.mkdir(parents=True, exist_ok=True)
+            channel = tempfile.mkdtemp(prefix="gui-", dir=str(base))
+        except OSError:
+            return None
+        try:
+            self._page_workbench.register_job_channel(instance_id, channel)
+        except (AttributeError, RuntimeError):
+            pass
+        return channel
+
     def _create_autopilot_phase_window(
         self,
         workflow_id: str,
@@ -2166,9 +2205,7 @@ class MainWindow(QMainWindow):
         status_running_template: str,
         on_finished,
     ):
-        """Autopilot 経路（prephase / main_workflow）共通のウィンドウ生成。
-
-        Autopilot 経路（prephase / main_workflow）共通のサブプロセス起動。
+        """Autopilot 経路（prephase / main_workflow）共通のサブプロセス起動。
 
         T3.3 (gui-unified-workbench Wave 3): 旧 ChainLogWindow 生成を廃止し、
         受信したログ行は WorkbenchPage.append_log へ一本化して配信する。
@@ -2185,7 +2222,11 @@ class MainWindow(QMainWindow):
         args_steps_csv, _ = self._resolve_steps_for_workflow(workflow_id, None)
         result.steps = args_steps_csv
         result.cloud_session_step_overrides = self._merged_cloud_step_overrides_json(workflow_id, None)
-        argv = result.to_orchestrate_argv()
+        argv = list(result.to_orchestrate_argv())
+        # FR-GUI-13: prephase / main_workflow 経路も workflow 単位の対話チャネルを持つ。
+        job_channel = self._allocate_job_channel(workflow_id)
+        if job_channel:
+            argv += ["--steering-ipc-dir", job_channel]
         # title はログ表示用 (同一シグネチャ保持のため計算のみ残置)
         _ = title_template.format(
             wf=workflow_id.upper(),
@@ -2691,6 +2732,9 @@ class MainWindow(QMainWindow):
                 workflow_id, args.steps
             )
             args.steps = args_steps_csv
+            args.steering_ipc_dir = self._allocate_job_channel(
+                f"{workflow_id}#{app_id}"
+            )
             return args.to_argv()
 
         self._autopilot_controller = AutopilotController(

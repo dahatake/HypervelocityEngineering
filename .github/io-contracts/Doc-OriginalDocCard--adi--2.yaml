@@ -1,0 +1,20 @@
+inputs:
+- path: docs/catalog/design-doc-inventory.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-OriginalInventory--adi--1
+- path: docs/original-design-doc-ingest/index.json
+  required: true
+  kind: agent_artifact
+  producer: Doc-OriginalInventory--adi--1
+- path: qa/original-docs-cross-questionnaire.md
+  required: true
+  kind: agent_artifact
+  producer: QA-DocConsistency--adi--1.2
+- path: work/run/<run-id>/kpi/fork-kpi.jsonl
+  required: true
+  kind: external
+outputs:
+- path: docs/original-design-doc-ingest/*/card.md
+  required: true
+  mode: create

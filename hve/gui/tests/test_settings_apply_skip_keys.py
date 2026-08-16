@@ -25,12 +25,70 @@ pytest.importorskip("PySide6")
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from hve.gui import settings_apply  # noqa: E402
-from hve.gui.page_options import _C10AppId, _C11AKM  # noqa: E402
+from hve.gui.page_options import _C10AppId, _C11AKM, _C3AutoPrompt  # noqa: E402
 
 
 @pytest.fixture(scope="module")
 def qapp():
     return QApplication.instance() or QApplication([])
+
+
+class TestSettingsChangedSkipKeysCoverC3Qa:
+    """設定画面の close 時 autosave が右ペインの必須 QA 選択を巻き戻さないこと。
+
+    `SettingsWindow` は独立した `_CQaPrompt` 等を持ち、閉じるだけでも
+    `collect_from_widgets` → save → `settings_changed` が走る。右ペインで
+    選択した `auto_qa` がその stale 値で上書きされると、必須選択が未選択へ
+    戻って実行不能になる（または意図しない on/off に化ける）。
+    """
+
+    def test_main_window_skip_keys_protect_c3_qa_fields(self) -> None:
+        from hve.gui.main_window import _SETTINGS_APPLY_SKIP_KEYS
+
+        assert ("QA", "auto_qa") in _SETTINGS_APPLY_SKIP_KEYS
+        assert ("C10", "app_ids") in _SETTINGS_APPLY_SKIP_KEYS
+        # 必須ではない qa_answer_mode は起動時に保存値を復元させる。
+        assert ("QA", "qa_answer_mode") not in _SETTINGS_APPLY_SKIP_KEYS
+
+    def test_auto_qa_selection_survives_settings_apply(self, qapp) -> None:
+        from hve.gui.main_window import _SETTINGS_APPLY_SKIP_KEYS
+
+        widget = _C3AutoPrompt()
+        widget.auto_qa.set_tristate(True)
+
+        settings_apply.apply_to_widgets(
+            {"QA": widget},
+            {"options": {"auto_qa": "", "qa_answer_mode": "autopilot"}},
+            skip_keys=_SETTINGS_APPLY_SKIP_KEYS,
+        )
+
+        assert widget.auto_qa.get_tristate() is True
+
+    def test_qa_answer_mode_is_restored_from_settings(self, qapp) -> None:
+        from hve.gui.main_window import _SETTINGS_APPLY_SKIP_KEYS
+
+        widget = _C3AutoPrompt()
+
+        settings_apply.apply_to_widgets(
+            {"QA": widget},
+            {"options": {"auto_qa": "", "qa_answer_mode": "user"}},
+            skip_keys=_SETTINGS_APPLY_SKIP_KEYS,
+        )
+
+        assert widget.qa_answer_mode.currentData() == "user"
+
+    def test_other_c3_fields_are_still_applied(self, qapp) -> None:
+        from hve.gui.main_window import _SETTINGS_APPLY_SKIP_KEYS
+
+        widget = _C3AutoPrompt()
+
+        settings_apply.apply_to_widgets(
+            {"REVIEW": widget},
+            {"options": {"auto_qa": "", "auto_contents_review": True}},
+            skip_keys=_SETTINGS_APPLY_SKIP_KEYS,
+        )
+
+        assert widget.auto_contents_review.isChecked() is True
 
 
 class TestApplyToWidgetsSkipKeys:

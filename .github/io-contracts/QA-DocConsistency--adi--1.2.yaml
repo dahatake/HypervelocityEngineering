@@ -1,0 +1,12 @@
+inputs:
+- path: qa/{key}-original-docs-questionnaire.md
+  required: true
+  kind: agent_artifact
+  producer: QA-DocConsistency--adi--1.1
+- path: work/run/<run-id>/kpi/fork-kpi.jsonl
+  required: true
+  kind: external
+outputs:
+- path: qa/original-docs-cross-questionnaire.md
+  required: true
+  mode: create

@@ -145,3 +145,131 @@ def test_start_autopilot_takes_app_chains_branch_when_no_pre_phases(
     mw._launch_autopilot_main_workflow_queue.assert_not_called()
     # 連結経路フラグは未セット（未参照の getattr で False 扱い）
     assert getattr(mw, "_autopilot_chain_continuation_pending", False) is False
+
+
+# ---------------------------------------------------------------------------
+# FR-GUI-13: workflow instance ごとの実行ジョブ対話チャネル配線
+# ---------------------------------------------------------------------------
+
+
+def _prepare_channel_capable_window(mw, tmp_path: Path) -> None:
+    """`_start_autopilot` の app_chains 経路を実 argv で走らせるための最小注入。"""
+    from hve.gui.orchestrate_args import OrchestrateArgs
+
+    mw._page_workbench = MagicMock()
+    mw._page_options.build_args_for_workflow.side_effect = (
+        lambda workflow_id, repo_root=None: OrchestrateArgs(workflow=workflow_id)
+    )
+    mw._resolve_steps_for_workflow = MagicMock(return_value=(None, set()))
+    mw._apply_cloud_step_overrides = MagicMock()
+    mw._prepopulate_workbench_with_seeds = MagicMock()
+    mw._build_autopilot_workflow_seeds = MagicMock(return_value=[])
+    mw._setup_autopilot_log_routing = MagicMock()
+    mw._stack = MagicMock()
+    mw._refresh_navigation = MagicMock()
+    mw._update_title = MagicMock()
+    mw._status_label = MagicMock()
+
+
+def _app_chains_plan(tmp_path: Path) -> AutopilotPlan:
+    return AutopilotPlan(
+        catalog_path=tmp_path / "catalog.md",
+        catalog_exists=True,
+        requires_aas=False,
+        app_chains=[
+            AppChain(app_id="APP-001", architecture="web-cloud", workflows=["aad-web"]),
+            AppChain(app_id="APP-002", architecture="web-cloud", workflows=["aad-web"]),
+        ],
+        skipped=[],
+        max_parallel=4,
+        pre_phases=[],
+        main_workflows=[],
+        ignored_workflows=[],
+        pre_phase_only=False,
+    )
+
+
+def test_app_chains_argv_factory_allocates_a_distinct_channel_per_lane(
+    qapp, tmp_path: Path
+) -> None:
+    """FR-GUI-13: 並列 lane が同一 IPC ディレクトリを共有しない。"""
+    mw = _make_mock_main_window(tmp_path)
+    mw._page_workflow.selected_workflow_ids.return_value = ["aad-web"]
+    _prepare_channel_capable_window(mw, tmp_path)
+
+    with patch("hve.gui.autopilot.build_plan", return_value=_app_chains_plan(tmp_path)), \
+         patch("hve.gui.autopilot.child_launcher.AutopilotController") as mock_ctrl, \
+         patch("hve.gui.settings_store.get_option", return_value=4):
+        mw._start_autopilot()
+
+    argv_factory = mock_ctrl.call_args.kwargs["argv_factory"]
+    argv_1 = argv_factory("APP-001", "aad-web")
+    argv_2 = argv_factory("APP-002", "aad-web")
+
+    assert "--steering-ipc-dir" in argv_1
+    assert "--steering-ipc-dir" in argv_2
+    dir_1 = argv_1[argv_1.index("--steering-ipc-dir") + 1]
+    dir_2 = argv_2[argv_2.index("--steering-ipc-dir") + 1]
+    assert dir_1 != dir_2
+    assert Path(dir_1).is_dir() and Path(dir_2).is_dir()
+
+    registered = {
+        call.args[0]: call.args[1]
+        for call in mw._page_workbench.register_job_channel.call_args_list
+    }
+    assert registered["aad-web#APP-001"] == dir_1
+    assert registered["aad-web#APP-002"] == dir_2
+
+
+def test_app_chains_relaunch_updates_the_channel_for_the_same_lane(
+    qapp, tmp_path: Path
+) -> None:
+    """同一 lane の次の stage 起動ではチャネルを新規発行して登録し直す。"""
+    mw = _make_mock_main_window(tmp_path)
+    mw._page_workflow.selected_workflow_ids.return_value = ["aad-web"]
+    _prepare_channel_capable_window(mw, tmp_path)
+
+    with patch("hve.gui.autopilot.build_plan", return_value=_app_chains_plan(tmp_path)), \
+         patch("hve.gui.autopilot.child_launcher.AutopilotController") as mock_ctrl, \
+         patch("hve.gui.settings_store.get_option", return_value=4):
+        mw._start_autopilot()
+
+    argv_factory = mock_ctrl.call_args.kwargs["argv_factory"]
+    first = argv_factory("APP-001", "aad-web")
+    second = argv_factory("APP-001", "aad-web")
+    dir_1 = first[first.index("--steering-ipc-dir") + 1]
+    dir_2 = second[second.index("--steering-ipc-dir") + 1]
+    assert dir_1 != dir_2
+    last = mw._page_workbench.register_job_channel.call_args_list[-1]
+    assert last.args == ("aad-web#APP-001", dir_2)
+
+
+def test_prephase_window_allocates_a_channel_for_the_workflow(qapp, tmp_path: Path) -> None:
+    """FR-GUI-13: prephase / main_workflow 経路もチャネルを登録する。"""
+    mw = _make_mock_main_window(tmp_path)
+    mw._page_workbench = MagicMock()
+    mw._session_index = 1
+    mw._resolve_steps_for_workflow = MagicMock(return_value=(None, set()))
+    mw._merged_cloud_step_overrides_json = MagicMock(return_value=None)
+
+    captured: dict = {}
+
+    def _fake_launch(argv, *, env_overrides=None):
+        captured["argv"] = list(argv)
+        return MagicMock()
+
+    with patch("hve.gui.state_bridge.launch_orchestrator", side_effect=_fake_launch), \
+         patch("hve.gui.state_bridge.SubprocessReader") as mock_reader:
+        mock_reader.return_value = MagicMock()
+        mw._create_autopilot_phase_window(
+            "ard",
+            title_template="{wf} #{idx}",
+            status_running_template="{wf} running",
+            on_finished=lambda *a, **k: None,
+        )
+
+    argv = captured["argv"]
+    assert "--steering-ipc-dir" in argv
+    channel = argv[argv.index("--steering-ipc-dir") + 1]
+    assert Path(channel).is_dir()
+    mw._page_workbench.register_job_channel.assert_called_once_with("ard", channel)

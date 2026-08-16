@@ -241,6 +241,11 @@ class DashboardSnapshot:
     autopin_progress: tuple[AutoPinProgress, ...] = ()
     warnings: tuple[tuple[str, int], ...] = ()
 
+    @property
+    def token_reduction_valid(self) -> bool:
+        """遅延公開が一度も発火していないとき、削減率は成立しない。"""
+        return self.deferral_inactive_rate is None or self.deferral_inactive_rate < 1.0
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "generated_at": self.generated_at,
@@ -261,6 +266,7 @@ class DashboardSnapshot:
             "baseline_tokens": self.baseline_tokens,
             "exposed_tokens": self.exposed_tokens,
             "token_reduction": self.token_reduction,
+            "token_reduction_valid": self.token_reduction_valid,
             "adoption_rate": self.adoption_rate,
             "never_hit_tools": list(self.never_hit_tools),
             "top_queries": [list(item) for item in self.top_queries],

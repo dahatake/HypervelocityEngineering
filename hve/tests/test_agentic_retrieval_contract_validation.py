@@ -82,8 +82,14 @@ def _ar_cap_01(
     ks_count: str = "2",
     region_line: str = "",
     checked_at: str = "2026-08-04",
+    index_config: "str | None" = "policy-semantic-config on the policy-docs index",
 ) -> str:
     region = f"- Region availability: {region_line}\n" if region_line else ""
+    index = (
+        f"- Index semantic configuration: {index_config}\n"
+        if index_config is not None
+        else ""
+    )
     return f"""#### 7.0.1 Knowledge Base Contract（AR-CAP-01）
 - Status: selected
 - Knowledge base name: policy-kb
@@ -94,7 +100,7 @@ def _ar_cap_01(
 - Output mode: {output_mode}
 - Retrieval instructions: Prefer internal policy sources and skip web unless a publication date is requested.
 - Knowledge source count: {ks_count}
-{region}- Design status: preview
+{index}{region}- Design status: preview
 - Checked at: {checked_at}
 - Decision source: docs/agent/agent-architecture.md#Knowledge-Boundary
 """
@@ -184,11 +190,13 @@ def _design(
     return _HEAD + "\n" + routing + "\n" + ar_blocks + "\n" + _CRUD_NA + "\n" + _MCP_NA + "\n" + _SKILL_NOT_REQUIRED
 
 
-def _validate(text: str) -> list:
+def _validate(text: str, *, agentic_retrieval_policy: str = "auto") -> list:
     with TemporaryDirectory() as temp_dir:
         path = Path(temp_dir) / "agent-detail-AG-01.md"
         path.write_text(text, encoding="utf-8")
-        return validate_ai_agent_design_artifact(path)
+        return validate_ai_agent_design_artifact(
+            path, agentic_retrieval_policy=agentic_retrieval_policy
+        )
 
 
 def _ar_errors(errors: list) -> list:
@@ -532,6 +540,92 @@ class TestAgenticRetrievalImplementationGate(unittest.TestCase):
             )
             _, metadata = _parse_ai_agent_design(path)
         self.assertIsNone(metadata.get("agentic_retrieval"))
+
+
+class TestKnowledgeSourceLowerBound(unittest.TestCase):
+    """FR-WF-AAG-04: 1 行の Knowledge Base は横断検索の前提を満たさない。"""
+
+    def test_two_knowledge_sources_pass(self) -> None:
+        self.assertEqual(_ar_errors(_validate(_design())), [])
+
+    def test_single_knowledge_source_is_rejected(self) -> None:
+        blocks = (
+            _ar_cap_01(ks_count="1") + "\n" + _ar_cap_02(rows=_KS_ROW_BLOB)
+            + "\n" + _ar_cap_03() + "\n" + _ar_cap_04() + "\n" + _ar_cap_05()
+        )
+        errors = _ar_errors(_validate(_design(ar_blocks=blocks)))
+        self.assertTrue(
+            any("AR-CAP-02" in error and "at least" in error.lower() for error in errors),
+            errors,
+        )
+
+
+class TestIndexSemanticConfiguration(unittest.TestCase):
+    """FR-WF-AAG-04: 索引側の semantic configuration が検索品質の上限を決める。"""
+
+    def test_missing_index_configuration_is_rejected(self) -> None:
+        blocks = (
+            _ar_cap_01(index_config=None) + "\n" + _ar_cap_02()
+            + "\n" + _ar_cap_03() + "\n" + _ar_cap_04() + "\n" + _ar_cap_05()
+        )
+        errors = _ar_errors(_validate(_design(ar_blocks=blocks)))
+        self.assertTrue(
+            any("Index semantic configuration" in error for error in errors), errors
+        )
+
+    def test_bare_tbd_index_configuration_is_rejected(self) -> None:
+        blocks = (
+            _ar_cap_01(index_config="TBD") + "\n" + _ar_cap_02()
+            + "\n" + _ar_cap_03() + "\n" + _ar_cap_04() + "\n" + _ar_cap_05()
+        )
+        errors = _ar_errors(_validate(_design(ar_blocks=blocks)))
+        self.assertTrue(
+            any("Index semantic configuration" in error for error in errors), errors
+        )
+
+
+class TestAgenticRetrievalPolicyGating(unittest.TestCase):
+    """FR-WF-AAG-04: 方針 `yes` / `no` を設計成果物側で検証する。"""
+
+    def test_auto_does_not_force_a_route(self) -> None:
+        design = _design(routing=_ROUTING_WITHOUT_FOUNDRY_IQ, ar_blocks="")
+        self.assertEqual(
+            _ar_errors(_validate(design, agentic_retrieval_policy="auto")), []
+        )
+
+    def test_yes_requires_foundry_iq_for_enterprise_unstructured(self) -> None:
+        routing = _ROUTING_WITH_FOUNDRY_IQ.replace(
+            "Foundry IQ knowledge base", "internal-policy-search"
+        )
+        errors = _validate(
+            _design(routing=routing, ar_blocks=""), agentic_retrieval_policy="yes"
+        )
+        self.assertTrue(
+            any("AR-CAP" in error and "yes" in error for error in errors), errors
+        )
+
+    def test_yes_without_enterprise_unstructured_is_not_forced(self) -> None:
+        design = _design(routing=_ROUTING_WITHOUT_FOUNDRY_IQ, ar_blocks="")
+        self.assertEqual(
+            _ar_errors(_validate(design, agentic_retrieval_policy="yes")), []
+        )
+
+    def test_yes_with_the_selected_route_passes(self) -> None:
+        self.assertEqual(
+            _ar_errors(_validate(_design(), agentic_retrieval_policy="yes")), []
+        )
+
+    def test_no_forbids_the_foundry_iq_route(self) -> None:
+        errors = _validate(_design(), agentic_retrieval_policy="no")
+        self.assertTrue(
+            any("AR-CAP" in error and "no" in error for error in errors), errors
+        )
+
+    def test_unknown_policy_is_fail_closed(self) -> None:
+        errors = _validate(_design(), agentic_retrieval_policy="ON")
+        self.assertTrue(
+            any("agentic retrieval policy" in error.lower() for error in errors), errors
+        )
 
 
 if __name__ == "__main__":

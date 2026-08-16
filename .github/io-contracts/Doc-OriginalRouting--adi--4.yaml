@@ -1,0 +1,16 @@
+inputs:
+- path: docs/catalog/design-doc-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-OriginalTriage--adi--3
+- path: docs/original-design-doc-ingest/*/card.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-OriginalDocCard--adi--2
+- path: work/run/<run-id>/kpi/fork-kpi.jsonl
+  required: true
+  kind: external
+outputs:
+- path: docs/catalog/design-doc-routing.md
+  required: true
+  mode: create

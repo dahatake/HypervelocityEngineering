@@ -32,6 +32,7 @@ import os
 import sys
 import time
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 __all__ = [
@@ -39,6 +40,7 @@ __all__ = [
     "PtySession",
     "is_pty_available",
     "missing_dependency_hint",
+    "setup_command",
     "spawn",
 ]
 
@@ -80,15 +82,29 @@ def is_pty_available() -> bool:
     return True
 
 
+def setup_command() -> str:
+    """OS 別の通常セットアップ入口を、そのまま実行できる形で返す。
+
+    GUI はリポジトリ外の作業ディレクトリからも起動されるため、相対パスではなく
+    パッケージ配置から解決した実パスを優先する。非 editable install などで setup
+    スクリプトが同居しない場合は、リポジトリルート基準の相対表記へ退避する。
+    """
+    is_windows = sys.platform.startswith("win")
+    script = "setup-hve.cmd" if is_windows else "setup-hve.sh"
+    fallback = r"hve\setup-hve.cmd" if is_windows else "./hve/setup-hve.sh"
+    candidate = Path(__file__).resolve().parents[1] / script
+    if not candidate.is_file():
+        return fallback
+    text = str(candidate) if is_windows else candidate.as_posix()
+    return f'"{text}"' if " " in text else text
+
+
 def missing_dependency_hint() -> str:
     """未インストール時にユーザーへ案内する文字列を返す。"""
     pkg = "pywinpty" if sys.platform.startswith("win") else "ptyprocess"
-    setup_command = (
-        r"hve\setup-hve.cmd" if sys.platform.startswith("win") else "./hve/setup-hve.sh"
-    )
     return (
         f"PTY バックエンド '{pkg}' が見つかりません。"
-        f"推奨: {setup_command} を実行してGUI依存を再セットアップしてください。"
+        f"推奨: {setup_command()} を実行してGUI依存を再セットアップしてください。"
         "手動: pip install -e .[gui,gui-pty]"
     )
 

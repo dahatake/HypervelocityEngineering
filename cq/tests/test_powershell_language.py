@@ -10,7 +10,7 @@ from collections import Counter
 
 import pytest
 
-from cq import languages
+from cq import chunking, languages
 from cq.languages import powershell, treesitter as ts
 
 needs_pwsh = pytest.mark.skipif(
@@ -219,4 +219,71 @@ class TestOfficialParserEscalation:
     def test_clean_source_is_not_reported_as_partial(self) -> None:
         _symbols, parser = powershell.extract_ex(SOURCE)
         assert parser == "tree-sitter"
+
+
+PESTER = """\
+Describe 'Get-Royalty' {
+    Context 'when the member exists' {
+        It 'returns the balance' {
+            $true | Should -Be $true
+        }
+    }
+}
+
+Write-Host 'not a test block'
+"""
+
+# チャンク境界は「上限を超えたノードだけ子へ再帰する」（FR-CQ-05）ため、ラベルが
+# チャンク名になるのは分割が起きる大きさから。実ファイル（429 行）と同じ形になる
+# よう、本体を持つ `It` を並べたソースで検証する。
+_PESTER_BODY = "\n".join(f"            $result{i} | Should -Be $true" for i in range(8))
+PESTER_FILE = f"""\
+Describe 'Get-Royalty' {{
+    Context 'when the member exists' {{
+        It 'returns the balance' {{
+{_PESTER_BODY}
+        }}
+
+        It 'returns the tier' {{
+{_PESTER_BODY}
+        }}
+    }}
+}}
+"""
+
+
+class TestPesterBlocks:
+    """Pester の `Describe` / `Context` / `It` はブロック名で引けなければならない（FR-CQ-04）。
+
+    実測: PowerShell 29 ファイル中 17 がシンボル 0 で、そのうち 6 ファイル・118 個が
+    この形の Pester ブロックだった。`function` 宣言ではないため 1 件も拾えていない。
+    `has_error` は False なので公式パーサへのエスカレーションは起きず、tree-sitter
+    経路だけで足りる。
+    """
+
+    def _symbols(self):
+        return {s.name: s for s in powershell.extract(PESTER)}
+
+    @pytest.mark.parametrize(
+        "name", ["Get-Royalty", "when the member exists", "returns the balance"]
+    )
+    def test_pester_blocks_are_extracted_by_their_label(self, name: str) -> None:
+        assert name in self._symbols()
+
+    def test_pester_blocks_are_flagged_as_tests(self) -> None:
+        assert self._symbols()["returns the balance"].is_test
+
+    def test_ordinary_commands_are_not_symbols(self) -> None:
+        """`pipeline` を丸ごと拾うと全コマンド行がシンボルになってしまう。"""
+        assert "not a test block" not in self._symbols()
+        assert "Write-Host" not in self._symbols()
+
+    def test_the_block_chunk_carries_the_label(self) -> None:
+        """チャンクの `name` は BM25 の最大重み（10.0）列なので、空だと順位が付かない。"""
+        chunks = chunking.chunk_source(PESTER_FILE, "powershell", max_chars=600)
+        assert {"returns the balance", "returns the tier"} <= {c.name for c in chunks}
+
+    def test_the_signature_stops_before_the_script_block(self) -> None:
+        """本体まで signature に流し込むとブロック全体が 200 字の署名になる。"""
+        assert self._symbols()["Get-Royalty"].signature == "Describe 'Get-Royalty'"
 

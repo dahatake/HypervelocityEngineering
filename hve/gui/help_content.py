@@ -101,7 +101,7 @@ WORKFLOW_GUIDE_MAP: Dict[str, str] = {
     "adfd": "04-app-design-dataflow.md",
     "adfdv": "06-app-dev-dataflow-azure.md",
     "akm": "km-guide.md",
-    "aqod": "original-docs-review.md",
+    "adi": "00-design-doc-ingestion.md",
     "adoc": "sourcecode-documentation.md",
 }
 
@@ -113,7 +113,7 @@ _WORKFLOW_SHORT: Dict[str, str] = {
     "adfd": QT_TRANSLATE_NOOP("help_content", "バッチドメイン分析・ジョブ設計を実施します。"),
     "adfdv": QT_TRANSLATE_NOOP("help_content", "データフローアプリの実装と Azure デプロイを実施します。"),
     "akm": QT_TRANSLATE_NOOP("help_content", "knowledge/ D01〜D21 を 21 並列で生成・更新します。"),
-    "aqod": QT_TRANSLATE_NOOP("help_content", "original-docs/ の質問票生成・横断レビューを実施します。"),
+    "adi": QT_TRANSLATE_NOOP("help_content", "docs-original/ の設計書を目録化し、質問票生成・横断整理・目的に応じた選別をまとめて実施します。"),
     "adoc": QT_TRANSLATE_NOOP("help_content", "ソースコードからレイヤー別ドキュメントを自動生成します。"),
 }
 
@@ -158,9 +158,13 @@ _OPTIONS_FALLBACK: Dict[str, str] = {
     "model": QT_TRANSLATE_NOOP("help_content", "使用するモデル名 (デフォルト: Auto)。Auto を指定すると GitHub が最適モデルを自動選択します。"),
     "review_model": QT_TRANSLATE_NOOP("help_content", "敵対的レビューおよび Code Review Agent で使用するモデル（省略時は --model と同じ）。"),
     "qa_model": QT_TRANSLATE_NOOP("help_content", "QA 質問票生成（--auto-qa）で使用するモデル（省略時は --model と同じ）。"),
+    "akm_model": QT_TRANSLATE_NOOP("help_content", "QA 回答から起動する Knowledge Management 差分同期で使用するモデル（省略時は --model と同じ）。"),
+    "akm_reasoning_effort": QT_TRANSLATE_NOOP("help_content", "QA 起点 Knowledge Management 用モデルの reasoning effort（省略時は --reasoning-effort を継承）。"),
+    "akm_context_tier": QT_TRANSLATE_NOOP("help_content", "QA 起点 Knowledge Management のコンテキスト階層（省略時は --context-tier を継承）。"),
+    "qa_akm_background_merge": QT_TRANSLATE_NOOP("help_content", "QA (質問票) の回答を knowledge/ へ取り込む Knowledge Management をバックグラウンドで起動する (デフォルト: 無効)。"),
     "max_parallel": QT_TRANSLATE_NOOP("help_content", "並列実行上限 (デフォルト: 15)。"),
-    "auto_qa": QT_TRANSLATE_NOOP("help_content", "QA 自動投入を有効化 (デフォルト: 無効)。"),
-    "qa_answer_mode": QT_TRANSLATE_NOOP("help_content", "QA 回答モード。Autopilot=AI が作成した既定回答を全て自動採用 / ユーザー回答=GUIダイアログで回答入力。QA 自動投入が無効のときは無視されます。"),
+    "auto_qa": QT_TRANSLATE_NOOP("help_content", "QA (質問票) 自動投入を有効化 (デフォルト: 無効)。"),
+    "qa_answer_mode": QT_TRANSLATE_NOOP("help_content", "QA (質問票) 回答モード。Autopilot=AI が作成した既定回答を全て自動採用 / ユーザー回答=GUIダイアログで回答入力。QA (質問票) 自動投入が無効のときは無視されます。"),
     "auto_contents_review": QT_TRANSLATE_NOOP("help_content", "Review 自動投入を有効化 (デフォルト: 無効)。"),
     "auto_coding_agent_review": QT_TRANSLATE_NOOP("help_content", "Copilot CLI SDK でローカルにコードレビューを実行する (デフォルト: 無効)。"),
     "auto_coding_agent_review_auto_approval": QT_TRANSLATE_NOOP("help_content", "Code Review Agent の修正プランを全て自動承認 (デフォルト: 無効)。"),
@@ -169,7 +173,7 @@ _OPTIONS_FALLBACK: Dict[str, str] = {
     "workiq_draft": QT_TRANSLATE_NOOP("help_content", "QA フェーズで質問ごとに Work IQ 回答ドラフトを生成する。"),
     "workiq_prompt_qa": QT_TRANSLATE_NOOP("help_content", "Work IQ の QA 用プロンプトを上書きする。"),
     "workiq_prompt_km": QT_TRANSLATE_NOOP("help_content", "Work IQ の KM 用プロンプトを上書きする。"),
-    "workiq_prompt_review": QT_TRANSLATE_NOOP("help_content", "Work IQ の Original Docs レビュー用プロンプトを上書きする。"),
+    "workiq_prompt_review": QT_TRANSLATE_NOOP("help_content", "Work IQ の文書レビュー用プロンプトを上書きする。"),
     "workiq_per_question_timeout": QT_TRANSLATE_NOOP("help_content", "Work IQ: QA 質問ごとのクエリタイムアウト秒数。"),
     "workiq_request_timeout": QT_TRANSLATE_NOOP("help_content", "Work IQ MCP サーバーへのツール呼び出し 1 回あたりのタイムアウト秒数（既定 5 分）。Copilot SDK の MCP クライアントが発行する -32001 (Request timed out) を防ぐための設定。"),
     "create_issues": QT_TRANSLATE_NOOP("help_content", "GitHub Issue を作成する。新規ブランチと PR が自動的に作成されます（--repo と GH_TOKEN が必要）。"),
@@ -203,9 +207,10 @@ _OPTIONS_FALLBACK: Dict[str, str] = {
     "custom_source_dir": QT_TRANSLATE_NOOP("help_content", "AKM: custom_source_dir 追加入力（複数指定可）。"),
     "enable_auto_merge": QT_TRANSLATE_NOOP("help_content", "ASDW-WEB の remote CI/CD 対象 Step では Step 専用ブランチを作成し、push / PR 作成 / 自動 Approve & Auto-merge / base branch 復帰を Step 単位で行う。その他の PR 作成経路では従来どおり PR の自動 Approve & Auto-merge を有効にする。"),
     "delete_local_merged_branch": QT_TRANSLATE_NOOP("help_content", "FR-CLI-34: PR マージ完了（auto-approve-and-merge）を検知後、今回作成したローカル作業ブランチを削除する（既定: 有効）。PR 自動 Approve & Auto-merge が有効な場合のみ動作する。"),
-    "target_scope": QT_TRANSLATE_NOOP("help_content", "AQOD: チェック対象スコープ（省略時: original-docs/）。"),
-    "depth": QT_TRANSLATE_NOOP("help_content", "AQOD: 分析の深さ（standard / lightweight）。"),
-    "focus_areas": QT_TRANSLATE_NOOP("help_content", "AQOD: 重点観点（任意）。"),
+    "target_scope": QT_TRANSLATE_NOOP("help_content", "ADI: 対象設計書フォルダ（省略時: docs-original/）。"),
+    "depth": QT_TRANSLATE_NOOP("help_content", "ADI: 分析の深さ（standard / lightweight）。"),
+    "focus_areas": QT_TRANSLATE_NOOP("help_content", "ADI: 重点観点（任意）。"),
+    "purpose": QT_TRANSLATE_NOOP("help_content", "ADI: 設計書選別の目的（任意）。空のときは must を付与しません。"),
     "target_dirs": QT_TRANSLATE_NOOP("help_content", "ADOC: ドキュメント生成対象ディレクトリ（カンマ区切り。省略 = 全体）。"),
     "exclude_patterns": QT_TRANSLATE_NOOP("help_content", "ADOC: 除外パターン（カンマ区切り）。"),
     "doc_purpose": QT_TRANSLATE_NOOP("help_content", "ADOC: ドキュメントの主目的（all / onboarding / refactoring / migration）。"),
@@ -244,9 +249,10 @@ _OPTIONS_GUIDE_HINT: Dict[str, str] = {
     "target_files": "km-guide.md",
     "force_refresh": "km-guide.md",
     "custom_source_dir": "km-guide.md",
-    "target_scope": "original-docs-review.md",
-    "depth": "original-docs-review.md",
-    "focus_areas": "original-docs-review.md",
+    "target_scope": "00-design-doc-ingestion.md",
+    "depth": "00-design-doc-ingestion.md",
+    "focus_areas": "00-design-doc-ingestion.md",
+    "purpose": "00-design-doc-ingestion.md",
     "target_dirs": "sourcecode-documentation.md",
     "exclude_patterns": "sourcecode-documentation.md",
     "doc_purpose": "sourcecode-documentation.md",
@@ -276,15 +282,11 @@ _DEFAULT_OPTIONS_GUIDE = "hve-gui-orchestrator-guide.md"
 
 _CATEGORY_HELP: Dict[str, HelpEntry] = {
     "C1": HelpEntry(
-        short=QT_TRANSLATE_NOOP("help_content", "使用するモデル名を選択します。Auto を選ぶと GitHub が最適モデルを自動選択します。レビュー用 / QA 用は省略時メインモデルを継承します。コンソール出力レベルもここで設定します。"),
-        guide_path="hve-gui-orchestrator-guide.md",
-    ),
-    "C2": HelpEntry(
-        short=QT_TRANSLATE_NOOP("help_content", "同時に起動するサブタスクの並列上限を設定します（既定: 15）。多くすると速くなりますが Copilot のレート制限に当たりやすくなります。"),
+        short=QT_TRANSLATE_NOOP("help_content", "使用するモデル名を選択します。Auto を選ぶと GitHub が最適モデルを自動選択します。レビュー用 / QA (質問票) 用は省略時メインモデルを継承します。コンソール出力レベル、追加プロンプト、コンテキスト最大文字数もここで設定します。"),
         guide_path="hve-gui-orchestrator-guide.md",
     ),
     "C3": HelpEntry(
-        short=QT_TRANSLATE_NOOP("help_content", "QA フェーズ・敵対的レビュー・Code Review Agent の自動投入を制御します。すべて既定では無効です。"),
+        short=QT_TRANSLATE_NOOP("help_content", "QA (質問票) の自動投入と回答モード、回答を Knowledge Management へバックグラウンドでマージするかどうか、その実行品質、および全 Custom Agent への追加プロンプトを設定します。レビューと自己改善は設定画面で編集します。"),
         guide_path="hve-gui-orchestrator-guide.md",
     ),
     "C4": HelpEntry(
@@ -303,25 +305,13 @@ _CATEGORY_HELP: Dict[str, HelpEntry] = {
         short=QT_TRANSLATE_NOOP("help_content", "MCP Server 設定ファイル・Copilot CLI 実行ファイルパス・外部 CLI サーバー URL を設定します。"),
         guide_path="hve-cli-orchestrator-guide.md",
     ),
-    "C8": HelpEntry(
-        short=QT_TRANSLATE_NOOP("help_content", "idle タイムアウトとレビュー完了待ちタイムアウトの秒数を設定します（既定: 21600 / 7200 秒）。"),
-        guide_path="hve-gui-orchestrator-guide.md",
-    ),
-    "C9": HelpEntry(
-        short=QT_TRANSLATE_NOOP("help_content", "ベースブランチと実行ステップ（カンマ区切り）を設定します。"),
-        guide_path="hve-gui-orchestrator-guide.md",
-    ),
     "C10": HelpEntry(
         short=QT_TRANSLATE_NOOP("help_content", "APP-ID / リソースグループ / データフローアプリ ID / ユースケース ID 等、ワークフロー固有の対象を指定します。"),
         guide_path="02-app-architecture-design.md",
     ),
     "C11": HelpEntry(
-        short=QT_TRANSLATE_NOOP("help_content", "AKM ワークフロー固有: 取り込みソース・対象ファイル・強制再生成・追加入力ディレクトリ等を設定します。"),
+        short=QT_TRANSLATE_NOOP("help_content", "Knowledge Management ワークフロー固有: 取り込みソース・対象ファイル・強制再生成・追加入力ディレクトリ等を設定します。"),
         guide_path="km-guide.md",
-    ),
-    "C12": HelpEntry(
-        short=QT_TRANSLATE_NOOP("help_content", "AQOD ワークフロー固有: チェック対象スコープ・分析の深さ・重点観点を設定します。"),
-        guide_path="original-docs-review.md",
     ),
     "C13": HelpEntry(
         short=QT_TRANSLATE_NOOP("help_content", "ADOC ワークフロー固有: 対象ディレクトリ・除外パターン・ドキュメントの主目的・大規模ファイル分割閾値を設定します。"),
@@ -331,13 +321,9 @@ _CATEGORY_HELP: Dict[str, HelpEntry] = {
         short=QT_TRANSLATE_NOOP("help_content", "ARD ワークフロー固有: 対象企業名・対象業務・調査基準日・調査期間・対象地域・分析目的・添付資料を設定します。"),
         guide_path="01-business-requirement.md",
     ),
-    "C15": HelpEntry(
-        short=QT_TRANSLATE_NOOP("help_content", "全 Custom Agent の prompt 末尾に追記する文字列、コンテキスト最大文字数を設定します。"),
-        guide_path="hve-gui-orchestrator-guide.md",
-    ),
-    "C16": HelpEntry(
-        short=QT_TRANSLATE_NOOP("help_content", "ドライラン・Self-Improve（自己改善ループ）等の実行制御を設定します。"),
-        guide_path="hve-gui-orchestrator-guide.md",
+    "C17": HelpEntry(
+        short=QT_TRANSLATE_NOOP("help_content", "ADI ワークフロー固有: 選別の目的・対象設計書フォルダ・分析の深さ・重点観点を設定します。"),
+        guide_path="00-design-doc-ingestion.md",
     ),
 }
 
@@ -383,6 +369,115 @@ _WORKBENCH_HELP: Dict[str, HelpEntry] = {
         guide_path="hve-gui-orchestrator-guide.md",
     ),
 }
+
+
+# ----------------------------------------------------------------------
+# 設定画面: Tool Search ポリシー（hve/toolsearch/policy.json）
+#
+# 根拠: users-guide/tool-search.md §6 と hve/toolsearch/policy.py の検証規則。
+# 初めて触る利用者が「値の意味」「増減すると何が起きるか」「既定値」を
+# 判断できる粒度で書く。
+# ----------------------------------------------------------------------
+
+_TOOLSEARCH_POLICY_HELP: Dict[str, HelpEntry] = {
+    "version": HelpEntry(
+        short=QT_TRANSLATE_NOOP(
+            "help_content",
+            "policy.json の書式そのもののバージョンです。設定値ではないため編集できません。"
+            "HVE 側が書式を変えたときだけ上がります。現在は 1 です。",
+        ),
+        guide_path="tool-search.md",
+    ),
+    "limit": HelpEntry(
+        short=QT_TRANSLATE_NOOP(
+            "help_content",
+            "AI が 1 回ツールを検索したときに、候補として返すツールの既定件数です（既定: 5）。"
+            "増やすと目的のツールを取りこぼしにくくなりますが、"
+            "そのぶん候補の説明文がコンテキストを占有し、AI が選び間違える余地も増えます。"
+            "減らすとコンテキストは軽くなりますが、必要なツールが候補から漏れやすくなります。"
+            "AI 自身が件数を指定してきた場合でも「上限件数」を超えることはありません。",
+        ),
+        guide_path="tool-search.md",
+    ),
+    "max_limit": HelpEntry(
+        short=QT_TRANSLATE_NOOP(
+            "help_content",
+            "AI が自分で件数を指定してきたときに、それでも超えさせない上限です（既定: 10）。"
+            "「既定件数」以上の値である必要があり、小さいほど 1 回の検索で返る量が確実に抑えられます。"
+            "既定件数より小さい値は保存できません。",
+        ),
+        guide_path="tool-search.md",
+    ),
+    "tau": HelpEntry(
+        short=QT_TRANSLATE_NOOP(
+            "help_content",
+            "スコアが低い候補を打ち切る比率です（0.0〜1.0、既定: 0.4）。"
+            "最上位候補のスコアを 1 としたとき、この比率に満たない候補は件数に余裕があっても返しません。"
+            "1.0 に近づけるほど「明らかに一致したものだけ」に絞られ、"
+            "0.0 に近づけるほど関連が薄い候補まで件数いっぱいまで返ります。",
+        ),
+        guide_path="tool-search.md",
+    ),
+    "field_weights": HelpEntry(
+        short=QT_TRANSLATE_NOOP(
+            "help_content",
+            "検索スコアを計算するとき、ツールのどの部分の一致を重く見るかの重みです。"
+            "name はツール名、description はツールの説明文、"
+            "additional_search_text は下の「検索専用語彙」で足した語、"
+            "arg_terms はツールの引数名と引数説明です。"
+            "値を大きくするとその部分が一致したツールが上位に来ます。"
+            "既定は name=3.0 / additional_search_text=2.5 / description=2.0 / arg_terms=1.0 で、"
+            "ツール名の一致を最も重視しています。",
+        ),
+        guide_path="tool-search.md",
+    ),
+    "pins": HelpEntry(
+        short=QT_TRANSLATE_NOOP(
+            "help_content",
+            "ツールを検索させるか、常に見せておくかの指定です。"
+            "always は検索を経ずに常時 AI へ公開します（よく使う中核ツール向け）。"
+            "auto は検索で見つけさせ、利用実績が溜まれば自動的に常時公開へ昇格します。"
+            "never は検索でだけ見つかる状態に固定し、自動昇格させません。"
+            "いずれも「呼び出しの禁止」ではありません。"
+            "キーは `{種別}:{サーバー}:{ツール名}` 形式（種別は mcp / native / skill）で、"
+            "`mcp:azure:*` のようにサーバー単位のワイルドカードも書けます。"
+            "ツール名だけのキーは、別サーバーの同名ツールへ誤って効くため保存時に拒否されます。",
+        ),
+        guide_path="tool-search.md",
+    ),
+    "additional_search_text": HelpEntry(
+        short=QT_TRANSLATE_NOOP(
+            "help_content",
+            "そのツールを見つけやすくするための検索専用の語です。"
+            "実装として正しい説明文が、利用者が使う言葉と一致するとは限りません。"
+            "例えば「クエリを実行します」としか書かれていないツールは"
+            "『ダッシュボード用のデータが欲しい』では見つかりません。"
+            "ここに『分析 ダッシュボード SQL レポート』のように空白区切りで足すと検索で当たるようになります。"
+            "ここへ書いた語は検索の索引にだけ入り、AI へ渡すツール定義は 1 トークンも増えません。"
+            "キーの形式は上の pin 設定と同じです。",
+        ),
+        guide_path="tool-search.md",
+    ),
+    "step_overrides": HelpEntry(
+        short=QT_TRANSLATE_NOOP(
+            "help_content",
+            "特定のワークフロー Step だけ検索の挙動を変える指定です。"
+            "キーは `{ワークフロー ID}:{Step ID}` 形式（例: `asdw-web:1.2`）です。"
+            "search は通常どおり検索させます。"
+            "pin_only は検索結果を返さず、常時公開（always）のツールだけを見せます。"
+            "使ってよいツールを限定したい Step に使います。",
+        ),
+        guide_path="tool-search.md",
+    ),
+}
+
+
+def toolsearch_policy_help(field: str) -> HelpEntry:
+    """`policy.json` の 1 項目に対する説明を返す。未知のキーは空エントリ。"""
+    entry = _TOOLSEARCH_POLICY_HELP.get(field)
+    if entry is None:
+        return HelpEntry(short="")
+    return HelpEntry(short=_tr(entry.short), guide_path=entry.guide_path, guide_anchor=entry.guide_anchor)
 
 
 # ----------------------------------------------------------------------

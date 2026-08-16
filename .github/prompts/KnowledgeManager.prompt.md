@@ -1,4 +1,4 @@
-﻿> qa/ または original-docs/（または両方）から knowledge/ ドキュメント（D01〜D21）を生成・更新し、knowledge/business-requirement-document-status.md を管理する。
+﻿> qa/ または docs-original/（または両方）から knowledge/ ドキュメント（D01〜D21）を生成・更新し、knowledge/business-requirement-document-status.md を管理する。
 
 > **WORK**: `work/run/<run-id>/KnowledgeManager/Issue-<識別子>/`
 
@@ -8,20 +8,20 @@
 ## Agent 固有の Skills 依存
 
 - `agent-common-preamble` — Agent 共通行動規約・禁止事項の継承
-- `input-file-validation` — `qa/` および `original-docs/` 配下の入力ファイル存在確認
+- `input-file-validation` — `qa/` および `docs-original/` 配下の入力ファイル存在確認
 - `work-artifacts-layout` — `work/run/<run-id>/KnowledgeManager/Issue-<識別子>/` 配下および `knowledge/` の「削除→新規作成」ルールに準拠
 - `knowledge-management` — `knowledge/` 配下 D01〜D21 の分類・命名・更新手順を権威ソースとして適用
 - `knowledge-lookup` — 既存 D01〜D21 の参照・差分判定
 - `markdown-query` — `mdq search` による横断検索で既存知識との重複・矛盾を検出
 
 ## §1 目的
-- `qa/` または `original-docs/` または両方から knowledge/ D01〜D21 を生成・更新する
+- `qa/` または `docs-original/` または両方から knowledge/ D01〜D21 を生成・更新する
 - ソース種別に応じて取り込み手法（質問票抽出 / セクション分割）を自動選択する
 
 ## §2 入力
 - 必須（sources に応じる）
   - `sources=qa`: `qa/*.md`
-  - `sources=original-docs`: `original-docs/*`（`.md`/`.txt`/`.csv`）
+  - `sources=original-docs`: `docs-original/*`（`.md`/`.txt`/`.csv`）
   - `sources=both`: 上記両方
   - `sources` は hve CLI でカンマ区切りのマルチ値（`qa,original-docs,workiq`）も受理する。`workiq` が含まれる場合、AKM メイン DAG の **前段** で Work IQ 取り込みフェーズが走り、`knowledge/Dxx-*.md` が生成・更新済みとなる可能性がある。その場合、本 Agent は Work IQ で生成された演繹・出典を **保護** し、qa / original-docs を差分マージする。
   - ただし `qa/*-workiq-*.md` は Work IQ 補助レポートのため除外する
@@ -59,7 +59,7 @@
 - パス判定（優先）
   - `qa/*.md` → (A) 質問票抽出
   - `qa/*-workiq-*.md` → 除外（質問票ではなく Work IQ 補助レポート）
-  - `original-docs/*` → (B) セクション分割
+  - `docs-original/*` → (B) セクション分割
 - 内容判定（フォールバック）
   - `|---|` + `質問ID`/`質問` 列 → (A)
   - `## A.`〜`## Z.` + `PASS/FAIL/N/A` → (A)
@@ -74,7 +74,7 @@
 - 推論は `TBD（推論: ...）` で明示
 
 ## §7 制約
-- 読み取り専用: `qa/`, `docs/`, `template/`, `original-docs/`
+- 読み取り専用: `qa/`, `docs/`, `template/`, `docs-original/`
 - 無視: `hve/`, `images/`, `infra/`, `src/`, `test/`, `.github/`, `knowledge/`
 - custom_source_dir バリデーション:
   - 絶対パス(`/`開始), `..`, `~` を拒否

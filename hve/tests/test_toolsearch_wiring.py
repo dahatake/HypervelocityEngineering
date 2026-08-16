@@ -6,13 +6,17 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
 from hve.config import SDKConfig
+from hve.toolsearch.policy import ToolSearchPolicy
 from hve.toolsearch.session import (
     RANKING_HVE,
     RANKING_SDK,
@@ -267,6 +271,72 @@ class TestBuildSessionToolset(unittest.TestCase):
         )
         self.assertEqual([t.name for t in tools], ["tool_search_tool"])
         self.assertIsNotNone(context)
+
+    def test_repo_local_policy_override_is_used_at_runtime(self) -> None:
+        """FR-TS-03: 実行時だけ `.toolsearch/policy.json` を無視すると、GUI の表示・保存先と食い違う。"""
+        with TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            local = repo / ".toolsearch" / "policy.json"
+            local.parent.mkdir(parents=True)
+            raw = json.loads(
+                ToolSearchPolicy.default_path().read_text(encoding="utf-8")
+            )
+            raw["limit"] = 2
+            raw["tau"] = 0.9
+            local.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
+
+            _, context = build_session_toolset(
+                self._config(),
+                repo_root=repo,
+                skill_roots=[Path("no-such-dir-xyz")],
+                usage_path=repo / "usage.jsonl",
+            )
+        assert context is not None
+        self.assertEqual(context.policy.limit, 2)
+        self.assertEqual(context.policy.tau, 0.9)
+
+    def test_packaged_policy_is_used_when_the_repo_has_no_override(self) -> None:
+        packaged = ToolSearchPolicy.load()
+        with TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            _, context = build_session_toolset(
+                self._config(),
+                repo_root=repo,
+                skill_roots=[Path("no-such-dir-xyz")],
+                usage_path=repo / "usage.jsonl",
+            )
+        assert context is not None
+        self.assertEqual(context.policy, packaged)
+
+
+class TestToolSearchSkillsLayerUi(unittest.TestCase):
+    def test_skill_layer_tab_exists(self) -> None:
+        from PySide6.QtWidgets import QApplication
+        from hve.gui.toolsearch_settings_section import ToolSearchSection
+
+        app = QApplication.instance() or QApplication([])
+        section = ToolSearchSection(repo_root=_REPO_ROOT)
+        self.assertIn("Skill Layer", section.tab_labels())
+        section.deleteLater()
+        _ = app
+
+
+class TestStandaloneEntryPoint(unittest.TestCase):
+    """別リポジトリを対象に単独起動できること（GUI は起動しない範囲で検証）。"""
+
+    def test_rejects_a_non_directory_repo_root(self) -> None:
+        from hve.gui.toolsearch_standalone import main
+
+        with TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "no-such-repo"
+            self.assertEqual(main([str(missing)]), 2)
+
+    def test_version_flag_exits_cleanly(self) -> None:
+        from hve.gui.toolsearch_standalone import main
+
+        with self.assertRaises(SystemExit) as ctx:
+            main(["--version"])
+        self.assertEqual(ctx.exception.code, 0)
 
 
 class TestSupportHelpers(unittest.TestCase):

@@ -51,7 +51,7 @@ body:
       description: "選択ソース内のサブセットを 1 行 1 ファイルで指定"
       placeholder: |
         qa/AAS-Step1-context-review.md
-        original-docs/requirements.md
+        docs-original/requirements.md
     validations:
       required: false
 

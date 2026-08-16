@@ -42,9 +42,9 @@ def test_implicit_constants_preserved() -> None:
     ]
     assert _ARD_STEP_TO_GROUP["1.1"] == "1"
     assert _ARD_STEP_TO_GROUP["3.2"] == "4"
-    # canonical order に必須 11 workflow が含まれる
+    # canonical order に現行 workflow が含まれる
     for wf in ["ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv",
-               "aag", "aagd", "akm", "aqod", "adoc"]:
+             "aag", "aagd", "akm", "adi", "adoc"]:
         assert wf in _WORKFLOW_CANONICAL_ORDER
 
 

@@ -205,5 +205,39 @@ class TestOrchestratorARD(unittest.TestCase):
         annotate_mock.assert_not_called()
 
 
+class TestArdBridgeBindsToStep12(unittest.TestCase):
+    """SR 抽出ブリッジは Step 1.2 完了後に成立する契約。
+
+    SR の抽出元 `docs/company-business-requirement.md` の producer は Step 1.2 で
+    あり、Step 1 完了時点では存在しない。フックと DAG 依存の両方を 1.2 に
+    合わせないと、Step 2 が `target_business` 空のまま実行される。
+    """
+
+    @staticmethod
+    def _orchestrator_source() -> str:
+        path = Path(__file__).resolve().parents[1] / "orchestrator.py"
+        return path.read_text(encoding="utf-8")
+
+    def test_hook_fires_after_step_1_2(self):
+        src = self._orchestrator_source()
+        self.assertIn('workflow_id == "ard" and step_id == "1.2" and success', src)
+        self.assertNotIn('workflow_id == "ard" and step_id == "1" and success', src)
+
+    def test_bridge_serializes_step_2_after_step_1_2(self):
+        cfg = SDKConfig(dry_run=True, quiet=True)
+        result = _run(
+            run_workflow(
+                workflow_id="ard",
+                params={
+                    "branch": "main",
+                    "selected_steps": ["1", "2"],
+                    "target_business": "",
+                },
+                config=cfg,
+            )
+        )
+        self.assertGreaterEqual(result.get("dag_plan_waves", 0), 4)
+
+
 if __name__ == "__main__":
     unittest.main()

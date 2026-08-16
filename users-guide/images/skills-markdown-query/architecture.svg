@@ -188,7 +188,7 @@
 
   <rect x="40" y="710" width="690" height="46" rx="4" class="box b-store"/>
   <text x="385" y="731" text-anchor="middle" class="lbl">db_path_for(lang, strategy) → 物理ファイル分離 (lang × strategy ごとに独立 DB)</text>
-  <text x="385" y="748" text-anchor="middle" class="lbl-sm">既定 11 ディレクトリ走査 (DEFAULT_ROOTS): docs, docs-generated, users-guide, template, knowledge, qa, original-docs, work, sample, session-state, hve-dev</text>
+  <text x="385" y="748" text-anchor="middle" class="lbl-sm">既定 11 ディレクトリ走査 (DEFAULT_ROOTS): docs, docs-generated, users-guide, template, knowledge, qa, docs-original, work, sample, session-state, hve-dev</text>
 
   <!-- =================== Logging layer =================== -->
   <rect x="770" y="610" width="310" height="160" rx="8" class="grp grp-store"/>

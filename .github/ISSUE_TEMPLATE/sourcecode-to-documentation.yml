@@ -154,6 +154,33 @@ body:
     validations:
       required: false
 
+  - type: dropdown
+    id: akm_model
+    attributes:
+      label: "AKM 用モデル（任意）"
+      description: |
+        QA 回答を `knowledge/` へ同期する Knowledge Management (AKM) 実行で使用するモデル（hve CLI `--akm-model` 相当）。
+        実行前 QA が有効なときだけ使われます。`Auto` を選ぶと Copilot が最適モデルを自動選択します。
+      options:
+        - "Auto"
+        - "claude-opus-4.7"
+        - "claude-opus-4.6"
+        - "gpt-5.5"
+        - "gpt-5.4"
+      default: 0
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: enable_qa_akm_merge
+    attributes:
+      label: "Knowledge Management マージ設定"
+      description: |
+        チェックを入れると、実行前 QA の回答を `knowledge/` へ取り込む Knowledge Management (AKM) をバックグラウンドで自動実行します（hve CLI `--qa-akm-background-merge` 相当）。
+        デフォルト（チェックなし）ではマージしません。実行前 QA が有効なときだけ使われます。
+      options:
+        - label: "QA (質問票) を Knowledge Management へバックグラウンドでマージする"
+
   - type: checkboxes
     id: enable_review
     attributes:

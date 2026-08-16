@@ -88,7 +88,7 @@ jobs:
           qa_ready_labels = {
               'aas:qa-ready', 'aad:qa-ready', 'asdw:qa-ready',
               'adfd:qa-ready', 'adfdv:qa-ready', 'aag:qa-ready',
-              'aagd:qa-ready', 'akm:qa-ready', 'aqod:qa-ready', 'adoc:qa-ready',
+              'aagd:qa-ready', 'akm:qa-ready', 'adoc:qa-ready',
               'aad-web:qa-ready', 'asdw-web:qa-ready',
           }
           closed_prefix_map = [
@@ -178,9 +178,6 @@ jobs:
               if 'setup-labels' in labels:
                 target = 'SETUP_LABELS'
                 mode = 'initialize'
-              elif 'original-docs-review' in labels:
-                target = 'AQOD'
-                mode = 'initialize'
               else:
                 for label, cand in trigger_map:
                   if label in labels:
@@ -190,9 +187,6 @@ jobs:
           elif action == 'labeled':
             if label_name == 'setup-labels':
               target = 'SETUP_LABELS'
-              mode = 'initialize'
-            elif label_name == 'original-docs-review':
-              target = 'AQOD'
               mode = 'initialize'
             elif label_name in qa_ready_labels:
               # qa-ready ラベルは auto-issue-qa-ready-transition.yml が処理するため明示的にスキップ
@@ -410,19 +404,6 @@ jobs:
     with:
       trigger_source: issues
       issue_number: ${{ needs.detect.outputs.issue_number }}
-    secrets: inherit
-
-  aqod:
-    needs: detect
-    if: needs.detect.outputs.target == 'AQOD'
-    uses: ./.github/workflows/auto-aqod.yml
-    with:
-      mode: ${{ needs.detect.outputs.mode }}
-      issue_number: ${{ needs.detect.outputs.issue_number }}
-      event_action: ${{ needs.detect.outputs.event_action }}
-      label_name: ${{ needs.detect.outputs.label_name }}
-      issue_labels: ${{ needs.detect.outputs.issue_labels }}
-      runner_type: ${{ needs.detect.outputs.runner_type }}
     secrets: inherit
 
   suggest-next:

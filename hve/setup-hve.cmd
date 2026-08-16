@@ -20,6 +20,7 @@ REM Usage (all PowerShell flags are forwarded as-is):
 REM   hve\setup-hve.cmd                       # full install (CLI + GUI)
 REM   hve\setup-hve.cmd -CheckOnly
 REM   hve\setup-hve.cmd -NoGui
+REM   hve\setup-hve.cmd -CodeLanguages python,csharp   # code-query の文法を言語で絞る
 REM   hve\setup-hve.cmd -Minimal
 REM   hve\setup-hve.cmd -Force
 REM   hve\setup-hve.cmd -SkipNltkDownload

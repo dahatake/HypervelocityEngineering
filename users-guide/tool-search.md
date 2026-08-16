@@ -12,13 +12,79 @@ HVE 自身の Copilot SDK セッションに対して、**ツール定義を毎�
 > | [tool-search-guide.md](tool-search-guide.md) | HVE が**生成する AI Agent** のツール表面 | Microsoft Foundry Toolbox の設定 |
 >
 > 両者は別物。本ガイドの Tool Search は Foundry を使わない。
-
-> **実装状況（2026-08-04 時点）**
 >
-> `hve/toolsearch/` のモジュールと単体テスト（219 件）、CLI / GUI / runner への配線まで完了している。
+> また、HVE の native ツール `search_markdown` / `search_code`（[hve/repository_query_tools.py](../hve/repository_query_tools.py)）は
+> **リポジトリ本文を検索する**ツールであり、「ツールを探すツール」である本ガイドの Tool Search とは別物。
+
+> **実装状況（2026-08-13 時点）**
+>
+> `hve/toolsearch/` のモジュールと単体テスト、CLI / GUI / runner への配線まで完了している。
+> Tool Search 関連の単体テストは本リポジトリで **346 件**を収集する（2026-08-13 実測。件数はテスト追加で増えるため、常に下記コマンドで再確認すること）。
+>
+> ```sh
+> python -m pytest hve/tests -k toolsearch --collect-only -q
+> ```
+>
+> （`hve/tests/test_toolsearch_*.py` のような glob は **PowerShell では展開されず失敗する**。`-k` を使うこと。
+> `-k toolsearch` は専用モジュール `test_toolsearch_*.py`（320 件）に加えて、他モジュール内の
+> Tool Search 関連テストも拾うため件数が多くなる）
+>
 > 遅延ロード（`--tool-search`）は**既定で有効**だが、**ランキングの HVE 実装への差し替えは既定で無効**で、
 > `--tool-search-ranking hve` を指定したときにだけ動く（§8）。
 > Cloud Session 経路は G4（カスタム `tools` の可否）が未実測のため、当面差し替えを行わない。
+
+> ## ⚠ 現行 CLI ではこの機能を有効化しないこと（2026-08-13 実測、Copilot CLI 1.0.79 / SDK 1.0.7）
+>
+> `session.metadata.contextInfo` で計測した結果、**この CLI では遅延公開（deferral）が一切発火しない**。
+>
+> | 条件 | toolDefinitionsTokens |
+> |---|---|
+> | `tool_search` 無効 | 52,756 |
+> | `tool_search` 有効 | 52,756 |
+> | `tool_search` 有効 + `defer_threshold=1` | 52,756 |
+>
+> 3 条件が完全一致し、全 183 ツールの `defer_loading` は `null`、`tool_search_tool` もツール一覧に現れない。
+> `toolDefinitionsTokens` は SDK 定義上 "excludes deferred tools" であるため、この一致は
+> 「遅延化されたツールが 0 件」であることを意味する。
+>
+> さらに `--tool-search-ranking hve` を有効にすると、`hve/toolsearch/` が Skill 73 件をツールとして
+> 登録するのに deferral が働かないため、ツール定義が **47,115 → 59,275 tokens（+12,160）** に増えた。
+>
+> ### このページの読み方（実測を反映した運用方針）
+>
+> | 目的 | すべきこと |
+> |---|---|
+> | **本番ワークフローを回す** | `tool_search_ranking` を **`sdk`（既定）のまま**にする。何も設定しない。本ページの §8 以降は読まなくてよい |
+> | **コンテキストを削る** | 本機能ではなく、公開する MCP サーバ自体を絞る（FR-CLI-76: Step 実行セッションは `.github/.mcp.json` の宣言分のみを公開する） |
+> | **実装を保守 / 将来の SDK で再評価する** | §8 の手順で `--tool-search-ranking hve` を有効化し、[tool-search-dashboard.md](tool-search-dashboard.md) で `deferral_inactive_rate` を見る。**1.0 のままなら本実測と同じ状態**で、削減効果は得られない |
+>
+> なお **明示指定する MCP サーバ設定には `tools` キーが必須**で、欠けているとそのサーバは起動されず
+> ツールが 1 件も公開されない（実測で確認）。
+
+## 0. この文書の読み方
+
+| 項目 | 内容 |
+|---|---|
+| 対象読者 | HVE 自身の実行時ツール表面を運用・調整する Software Engineer と、`hve/toolsearch/` を拡張する開発者 |
+| スコープ | HVE runtime（Copilot SDK セッション）の Tool Search。有効化・ポリシー・ランキング・評価・拡張 |
+| 非対象 | HVE が**生成する** AI Agent の Foundry Toolbox 設定（[tool-search-guide.md](tool-search-guide.md)）、実行時統計の指標定義（[tool-search-dashboard.md](tool-search-dashboard.md)） |
+| 前提 | Python 3.11 以上、リポジトリルートで `python -m hve` が起動できること。`pydantic` が導入済みであること |
+| 次のステップ | §1〜§7 で仕組みを理解 →（**検証目的の場合のみ**）§8 で有効化 → [tool-search-dashboard.md](tool-search-dashboard.md) で観測 → §9 で評価・調整 |
+
+### 最短の利用手順（検証目的）
+
+> **この手順は本番運用向けではない。** 上の実測のとおり、現行 CLI では差し替えを有効化すると
+> ツール定義トークンが**増える**。実装の動作確認や、SDK 更新後の再評価のときだけ使うこと。
+
+| 段階 | 内容 |
+|---|---|
+| 前提 | 上表の前提を満たし、Cloud Session を使わない経路で実行すること（Cloud では差し替えが行われない。§8「未実測の事項」G4） |
+| 操作 | `python -m hve orchestrate --workflow <id> --tool-search-ranking hve` |
+| 入力 | `hve/toolsearch/policy.json`（ポリシー）、`.github/skills/**/SKILL.md`（Skill カタログ）、`hve/skill_manifest.json`（存在する場合の manifest pin） |
+| 出力 | モデルへ返る検索結果（可読サマリ + `tool_references`）、`＜repo-root＞/.toolsearch/events.jsonl`、`＜repo-root＞/.toolsearch/usage.jsonl` |
+| 完了確認 | `python -m hve toolsearch dashboard` で「検索回数」が 1 以上になること |
+| 失敗時対応 | 検索回数が 0 のままなら [tool-search-dashboard.md §4](tool-search-dashboard.md#4-検索回数が-0-のままの切り分け) の切り分けフローへ。`policy.json` が不正な場合は差し替えを行わず SDK 既定へフォールバックする（Step は落ちない。§8） |
+| 終了後 | 検証が終わったら `--tool-search-ranking` を外して既定の `sdk` へ戻す |
 
 ---
 
@@ -31,11 +97,15 @@ HVE 自身の Copilot SDK セッションに対して、**ツール定義を毎�
 
 HVE では実測でこうなっている。
 
-| 事実 | 値 | 出典 |
-|---|---|---|
-| 登録ツール数とその定義トークン量 | **171 ツール / 54,865 tokens** | `hve-dev/requirement-definition.md` FR-MODEL-04 |
-| うち実際に使われた分 | **10 種 / 9,108 tokens** | 同上 |
-| リポジトリ内 Skill | 35 件（`.github/skills/**/SKILL.md`） | 本リポジトリ実測 |
+| 事実 | 値 | 取得時点 | 出典 |
+|---|---|---|---|
+| 登録ツール数とその定義トークン量 | **171 ツール / 54,865 tokens** | FR-MODEL-04 記録時 | `hve-dev/requirement-definition.md` FR-MODEL-04 |
+| うち実際に使われた分 | **10 種 / 9,108 tokens** | 同上 | 同上 |
+| 登録ツール数とその定義トークン量（再測） | **183 ツール / 52,756 tokens** | 2026-08-13 | 冲頭バナー（Copilot CLI 1.0.79 / SDK 1.0.7） |
+| リポジトリ内 Skill | **35 件** | 2026-08-13 | `.github/skills/**/SKILL.md` の実測（`*/SKILL.md` だけだと 20 件。`**` でサブディレクトリも数える） |
+
+> ツール総数は接続する MCP サーバの顔ぶれで変わるため、**日付の違う値が並ぶのは正常**である。
+> 自環境の値は `python -m hve toolsearch context` で取る（§9）。
 
 つまり **9 割近くが「読まれるだけで使われない」**。Tool Search はこの差を埋める。
 
@@ -78,6 +148,33 @@ GitHub Copilot SDK（実測 1.0.7）は、遅延ロードの土台を**すでに
 2. Skill をカタログへ合流させること（SDK の `available_tools` に Skill は現れない）
 3. pin ポリシー（Core を常時公開、long-tail を検索へ）
 4. 評価（Recall@k とトークン削減率）
+
+### 2.1 CLI 組み込み実装との対比
+
+`tool_search_tool` の既定実装は **Copilot CLI ランタイム側**にあり、SDK は設定を wire へ転送するだけである
+（`copilot/client.py` の `_tool_search_to_wire` が送るのは `enabled` と `deferThreshold` の 2 キーのみ）。
+したがって CLI 組み込みと HVE 実装は競合する 2 つの機能ではなく、**同じ 1 つの拡張ポイントを誰が実装するか**の違いになる。
+
+| 観点 | CLI 組み込み | HVE 差し替え（`--tool-search-ranking hve`） |
+|---|---|---|
+| 実装の所在 | CLI ランタイム内 | `hve/toolsearch/`（リポジトリ内 Python） |
+| クライアントから調整できるもの | `enabled` / `defer_threshold` の **2 つだけ** | `policy.json` の全項目 + `ranking.py` |
+| ランキングアルゴリズム | **本リポジトリからは確認できない** | フィールド重み付き BM25（§7.1） |
+| 日本語クエリでの挙動 | **未確認** | CJK 隣接バイグラム + 識別子分解（§7.2） |
+| 検索対象 | `available_tools` = MCP + 外部ツール。**Skill は含まれない** | 上記 + Skill（§7.5） |
+| 引数スキーマの索引 | 未確認 | ネスト 3 階層まで平坦化（`MAX_ARG_SCHEMA_DEPTH`） |
+| 検索専用語彙 | 無し | `additional_search_text`（索引のみ / モデルへ返らない。§6.4） |
+| pin | 無し | `policy.json` / `skill_manifest.json` / 利用履歴の自動 pin（§6.3 / §7.6） |
+| 返却件数の制御 | 未確認 | `limit` 5（最大 10）+ `tau` による適応的打ち切り（§7.4） |
+| モデルへの案内文 | system message の `tool_instructions`（`customize` モード）で調整 | 差し替え実装の `TOOL_SEARCH_DESCRIPTION` |
+| 実行時ログ | 無し | `.toolsearch/events.jsonl` / `usage.jsonl`（[tool-search-dashboard.md](tool-search-dashboard.md)） |
+| 検索品質の評価 | 無し | golden クエリで Recall@k / MRR（§9） |
+| 遅延化の発火判定 | **CLI 側**が持つ | 同左。差し替えても変わらない（§7.7） |
+| 呼び出し禁止の強制 | `excluded_tools` / MCP の `tools` allowlist | 同左。ランカーは安全境界ではない（§6.3） |
+
+> **「未確認」は「無い」という意味ではない。** CLI 組み込み実装は SDK 側から読み取れないため、
+> 本リポジトリで検証できた範囲だけを記載している。冒頭バナーの実測のとおり、現行 CLI では
+> そもそも `tool_search_tool` がツール一覧に現れないため、組み込み実装の挙動自体を観測できていない。
 
 ---
 
@@ -213,8 +310,9 @@ classDiagram
 
 > 図中の `eval_module` は `hve/toolsearch/eval.py`、`mdq_tokenize` / `mdq_search` は
 > `mdq.tokenize` / `mdq.search`。Mermaid の識別子制約のため別名にしている。
+> `session.py` / `stats.py` / `dashboard.py` / `context_report.py` は検索本体のクラス協調に関与しないためこの図には現れない。全 11 モジュールの一覧は下表を見ること。
 
-各モジュールの責務。
+各モジュールの責務（`hve/toolsearch/` 配下の全モジュール。`__init__.py` を除く）。
 
 | モジュール | 責務 | 対応要件 |
 |---|---|---|
@@ -228,6 +326,7 @@ classDiagram
 | `session.py` | `SDKConfig` からの組立と有効化判定、runner への注入口 | FR-TS-01 |
 | `stats.py` | 実行時イベントの収集と集約 | FR-TS-09 |
 | `dashboard.py` | テキスト / JSON / HTML 描画とライブ更新 | FR-TS-10 |
+| `context_report.py` | `hve toolsearch context` の実体。実運用セッションのコンテキスト内訳を実測する（§9） | — |
 
 ---
 
@@ -280,6 +379,15 @@ sequenceDiagram
 
 ## 6. カスタマイズ — `hve/toolsearch/policy.json`
 
+> **どのファイルが読まれるか。** リポジトリルート直下に `.toolsearch/policy.json` があればそれを、
+> 無ければ同梱の [hve/toolsearch/policy.json](../hve/toolsearch/policy.json) を使う。
+> この解決は [hve/toolsearch/policy.py](../hve/toolsearch/policy.py) `ToolSearchPolicy.default_path()` が
+> 単一実装として所有し、**実行時・GUI の表示・GUI からの保存のすべてが同じ規則に従う**。
+
+> **以下は構造を示すための抜粋である。** `pins` / `additional_search_text` / `step_overrides` の
+> エントリは実ファイルの方が多い。現在値は [hve/toolsearch/policy.json](../hve/toolsearch/policy.json) を
+> 直接見るか、GUI の「ポリシー」タブで確認すること（同タブから編集もできる。§6.5）。
+
 ```jsonc
 {
   "version": 1,
@@ -294,17 +402,17 @@ sequenceDiagram
     "arg_terms": 1.0
   },
 
-  "pins": {
+  "pins": {              // 抜粋。実ファイルは Core Skill 3 件 + MCP 2 サーバを含む
     "native:hve:*": "always",
     "skill:skills:skill_work-artifacts-layout": "always",
     "mcp:azure:*": "auto"
   },
 
-  "additional_search_text": {
+  "additional_search_text": {   // 抜粋。実ファイルは native 4 件 + skill 5 件 + MCP 1 件
     "native:hve:search_markdown": "仕様 要件 ドキュメント 設計書 横断検索 根拠"
   },
 
-  "step_overrides": {
+  "step_overrides": {           // 抜粋。実ファイルは asdw-web:1.2 と 1.3
     "asdw-web:1.2": { "mode": "pin_only" }
   }
 }
@@ -366,7 +474,34 @@ flowchart TB
 索引にだけ載り、**モデルへ渡るツール定義は 1 トークンも増えない**。
 
 本リポジトリでの実測: この外挿だけで golden の miss が **1 → 0**、MRR が **0.846 → 0.907** に改善した。
-トークン削減率は 78.6% のまま変わらない（設計どおり）。
+トークン削減率は 78.6% のまま変わらない（設計どおり）。取得条件は §9「取得条件」と同じ。
+
+### 6.5 GUI から編集する
+
+JSON を直接編集する代わりに、**設定画面 → skills → Tool-Search → 「ポリシー」タブ**から
+同じファイルを編集できる。各項目名の右にある `?` を押すと、値の意味・増減したときの影響・
+既定値の説明が出る（説明文の実体は [hve/gui/help_content.py](../hve/gui/help_content.py)）。
+
+| 項目 | 画面での編集方法 |
+|---|---|
+| `version` | 書式のバージョンなので**表示のみ**。編集できない |
+| `limit` / `max_limit` / `tau` | 数値入力 |
+| `field_weights` | 4 フィールドそれぞれの数値入力 |
+| `pins` / `additional_search_text` / `step_overrides` | 表形式。「行を追加」「選択行を削除」で増減する |
+
+編集時の約束は次のとおり。
+
+| 事項 | 挙動 |
+|---|---|
+| 保存先 | 画面上部に出ている「参照元 / 保存先」のパスと同一。`.toolsearch/policy.json` がある場合はそちら、無ければ同梱の `hve/toolsearch/policy.json`（§6 冒頭のパス解決と同じ）。実行時もこの解決規則で読むため、表示・保存・実行時の 3 者が一致する |
+| 保存のタイミング | 設定画面の他の項目と違い**自動保存されない**。「保存」ボタンを押したときだけ書き込む |
+| 検証 | 書き込み前に `ToolSearchPolicy.from_dict()` と同じ検証を通す。キー形式違反・`limit > max_limit` などがあると**ファイルを 1 バイトも変更せず**、理由を画面下部に表示する |
+| `_comment` | JSON 内の未知のトップレベルキーは保存後も残る |
+| 反映 | **次に開始する Step 実行から**反映される。実行中のセッションのツール表面は変わらない |
+| 読み込み失敗時 | 推測した既定値を表示せず、失敗理由と対象パスだけを出す。この状態からは保存できない（既存の内容を空値で上書きしないため） |
+
+> **保存すると JSON 内の空行は失われる。** JSON に空行を表現する構文が無いためで、値は変わらない。
+> 空行を含む整形を保ちたい場合はファイルを直接編集すること。
 
 ---
 
@@ -473,6 +608,10 @@ HVE のセッションは step ごとに役割が固定されているため、s
 
 ## 8. 有効化のしかた
 
+> **本番運用ではこの節を適用しないこと。** 冲頭バナーの実測（2026-08-13）のとおり、
+> 現行 CLI では差し替えを有効化するとツール定義トークンが **増える**。
+> 以下は **実装の動作確認と、SDK 更新後の再評価** のための手順である。
+
 **ランキングの差し替えは既定で無効**。遅延ロード自体は既定有効なため、差し替えには `--tool-search-ranking hve` を追加する。
 
 ```bash
@@ -484,7 +623,7 @@ python -m hve orchestrate --workflow ard \
 |---|---|
 | CLI | `--tool-search-ranking {sdk,hve}`（遅延ロードを切る場合は `--no-tool-search`） |
 | 環境変数 | `HVE_TOOL_SEARCH_RANKING=hve`（遅延ロードを切る場合は `HVE_TOOL_SEARCH=0`） |
-| GUI | 設定画面 → skills → **Tool-Search** → 基本（ポリシーの確認と統計も同じセクション） |
+| GUI | 設定画面 → skills → **Tool-Search** → 基本（ポリシーの編集と統計も同じセクション） |
 
 ### 似た名前の設定 3 種の違い
 
@@ -531,6 +670,31 @@ Step 終了時には `StepRunner._record_toolsearch_usage()` が呼ばれ、
 | G3 | `defer="auto"` の custom tool が実際に deferred 化されるか、ツール数上限に当たらないか | 未検証 |
 | G4 | Cloud Session でカスタム `tools` が有効か | **未検証のため Cloud 経路では差し替えを行わない** |
 
+### カスタマイズの正本・拡張手順・回帰検証・互換性
+
+| 変えたいもの | 設定の正本（ここだけを編集する） | 拡張手順 | 回帰検証 |
+|---|---|---|---|
+| pin / 検索語彙 / `limit` / `tau` / フィールド重み / Step 別モード | `hve/toolsearch/policy.json` | §6 のキー形式に従って編集。GUI の「ポリシー」タブからも編集できる（§6.5） | `python -m pytest hve/tests/test_toolsearch_policy.py hve/tests/test_toolsearch_eval.py -q` |
+| ランキングアルゴリズム | `hve/toolsearch/ranking.py`（`ToolRanker` / `rank_tools`） | `engine` を追加する場合は `resolve_bm25_engine()` を拡張する | `python -m pytest hve/tests/test_toolsearch_ranking.py -q` と Recall@10 の再計測 |
+| カタログ正規化・引数語彙の平坦化 | `hve/toolsearch/types.py`（`build_catalog` / `flatten_schema_terms`） | `MAX_ARG_SCHEMA_DEPTH` を変える場合は索引サイズへの影響を評価する | `python -m pytest hve/tests/test_toolsearch_contract.py hve/tests/test_toolsearch_policy.py -q` |
+| Skill の収集範囲 | `hve/toolsearch/session.py` の `default_skill_roots()` | 追加ルートを返すよう変更するか、`build_session_toolset(skill_roots=...)` へ渡す | `python -m pytest hve/tests/test_toolsearch_skillcatalog.py hve/tests/test_toolsearch_wiring.py -q` |
+| Step 固定の必須 Skill | `hve/skill_manifest.json`（`workflow_defaults` / `required_skills`） | `optional_skills` は long-tail 扱いで pin にならない | `python -m pytest hve/tests/test_toolsearch_wiring.py -q` |
+| 自動 pin の学習パラメータ | `hve/toolsearch/usage.py`（`DEFAULT_WARMUP_SESSIONS` / `DEFAULT_TOP_N` / `DEFAULT_WINDOW_SESSIONS`） | 定数を変更する。履歴の保存先は `HVE_TOOLSEARCH_USAGE` で差し替える | `python -m pytest hve/tests/test_toolsearch_autopin.py -q` |
+| 評価クエリ | `hve/toolsearch/golden-tool-queries.json` | §9 の形式で追加する | `python -m pytest hve/tests/test_toolsearch_eval.py -q` |
+
+まとめて確認する場合は `python -m pytest hve/tests -k toolsearch -q`。
+**`hve/tests/test_toolsearch_*.py` のような glob は PowerShell では展開されず失敗する**ので、`-k` を使うこと。
+`PySide6` / `copilot` SDK が未導入の環境では GUI と SDK 配線のテストが `ModuleNotFoundError` で失敗するため、
+その 2 つは導入済み環境で確認すること。
+
+**互換性・安全性で壊してはならない境界**
+
+- ランカーは安全境界ではない。呼び出し禁止は `excluded_tools` と MCP サーバー設定の `tools` allowlist が担う（§6.3）。
+- `policy.json` のキーは `{kind}:{server}:{name}` 形式のみ。ツール名だけのキーを許す変更を入れない（§6.1）。
+- `additional_search_text` は `ToolCard` に持たない。モデルへ返す経路へ足さない（§5）。
+- `ToolSearchPolicy.load()` の失敗時は差し替えを行わず SDK 既定へフォールバックする。Step を落とす変更を入れない。
+- 同点は `ToolEntry.id` 昇順で解決する決定論を維持する（§7.4）。順序が揺れると prompt cache の prefix が壊れる。
+
 ---
 
 ## 9. 評価とチューニング
@@ -545,9 +709,17 @@ python -m pytest hve/tests/test_toolsearch_eval.py -q
 { "query": "敵対的レビューをしたい", "expected": ["skill_adversarial-review"] }
 ```
 
-### 計測結果（2026-08-04）
+### 計測結果
 
-対象カタログ = `.github/skills` の Skill 35 件 + native 4 ツール = **39 件**、golden **42 クエリ**。
+#### 取得条件（再現に必要な前提）
+
+| 項目 | 値 |
+|---|---|
+| 取得日 | 2026-08-04（Recall / MRR / miss / カタログ件数は 2026-08-07 に再取得して同値を確認） |
+| 対象カタログ | `.github/skills` の Skill 35 件 + native 4 ツール = **39 件**（MCP ツールは接続しないと列挙できないため含まない） |
+| golden | `hve/toolsearch/golden-tool-queries.json` の **42 クエリ** |
+| ポリシー | `hve/toolsearch/policy.json`（`field_weights` をそのまま使用、`limit=10`） |
+| トークン推定 | `tiktoken`（`cl100k_base`）が導入されている環境の値。未導入環境では `文字数 // 4` の概算にフォールバックするため、絶対値は一致しない |
 
 | 指標 | 値 | 受入基準 |
 |---|---|---|
@@ -559,6 +731,37 @@ python -m pytest hve/tests/test_toolsearch_eval.py -q
 
 > **削減率は下限値。** 計測対象に MCP ツールを含んでいない（接続しないと列挙できないため）。
 > 実運用の規模は FR-MODEL-04 の実測（171 ツール / 54,865 tokens）を参照。
+>
+> **絶対値は環境依存。** `tiktoken` が無い環境で同じ手順を実行すると、
+> 2026-08-07 の再取得では 3,204 → 704（削減 78.0%）となった。削減**率**はほぼ変わらないが、
+> トークン数そのものを他環境の値と直接比較しないこと。
+> 受入基準（Recall@10 ≥ 0.85）は `hve/tests/test_toolsearch_eval.py` が固定している。
+
+### 実運用のコンテキスト内訳を実測する（`hve toolsearch context`）
+
+上の評価値はローカルのカタログとトークン推定に基づく**目安**であり、実運用のセッションで
+実際に何にトークンが使われているかは示さない。実測にはこちらを使う。
+
+```bash
+python -m hve toolsearch context          # テキスト
+python -m hve toolsearch context --json   # 機械可読
+```
+
+| 項目 | 内容 |
+|---|---|
+| 取得元 | Copilot SDK の `contextInfo` / `getContextAttribution` / `getCurrentMetadata` |
+| 出力 | モデル名・上限・システムプロンプト・ツール定義（うち MCP）・レイヤー別のツール数とトークン |
+| レイヤー | MCP サーバー名ごと + `組み込みツール定義 (builtin)` |
+| プロンプト送信 | **しない**（`send` を呼ばないためモデル推論も quota 消費も発生しない） |
+| 推定値 | **使わない**。`hve/toolsearch/eval.py` の推定トークンは参照しない |
+| MCP 接続待ち | 宣言済みサーバーの接続を最大 60 秒待ち、時間内に接続しなかったものは「未接続」として列挙する（0 トークンとして混ぜない） |
+| 失敗時 | 理由を表示して非 0 終了する。数値を推定で埋めない |
+
+Step 実行と同じセッション生成経路（`_create_session_with_auto_reasoning_fallback`）を使うため、
+表示される内訳は Step が実際に消費するコンテキストと同じ構成になる。
+
+GUI からは 「設定 > Tool-Search > コンテキスト内訳」 タブの実測ボタンで同じ内容を表示できる
+（GUI は CLI の出力をそのまま描画し、再集計しない）。
 
 ### チューニングの順序
 
@@ -581,7 +784,7 @@ python -m pytest hve/tests/test_toolsearch_eval.py -q
 | C3 | `ToolEntry.id` に MCP の raw name ではなく model-facing name を使う | `tool_references` へ返す値と一致させるため |
 | C4 | トークン削減率の計測に MCP を含まない | 下限値として扱う |
 | C5 | 検索は BM25（スパース）のみ。ベクトル検索・再ランカーは持たない | Foundry の公開比較では、BM25 ベースの検索が GPU 再ランカー（BGE-reranker-v2-gemma）と Web / Code カテゴリで同等の Recall@10 を示している |
-| C6 | Step ごとに 76 件の `SKILL.md` を全文読み直す | キャッシュしていない。実測でボトルネックになったら対応する |
+| C6 | Step ごとに Skill ルート配下の `SKILL.md` を全文読み直す | キャッシュしていない。件数はリポジトリと外部 Skill ルートの構成で変わる（本リポジトリ内の `.github/skills/**/SKILL.md` は 2026-08-07 時点で 35 件）。実測でボトルネックになったら対応する |
 | C7 | 履歴（`usage.jsonl`）は `--tool-search-ranking hve` のときだけ書かれる | 差し替えを使っていないのに履歴だけ貯めても意味がないため |
 
 ---

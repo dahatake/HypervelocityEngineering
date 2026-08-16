@@ -9,6 +9,10 @@
 # 既定で導入する extras (pyproject.toml と一致):
 #   test, mdq-watch, mdq-ja, semantic, gui, gui-pty, gui-docconvert, code
 #
+# opt-in の extras (既定では導入しない):
+#   graphrag (--graphrag 指定時のみ)。pandas を 2.4 未満へダウングレードし、
+#   別途 Ollama の導入と起動、モデル取得が必要なため既定では入れない。
+#
 # 既定で導入する OS ツール (未導入時のみ。--no-install-tools で抑止):
 #   git / gh / node (npm,npx) / az / shellcheck / @github/copilot (npm -g)
 #
@@ -29,8 +33,11 @@
 #
 # Usage:
 #   ./hve/setup-hve.sh                既定: 全機能セットアップ
-#   ./hve/setup-hve.sh --check-only   状態確認のみ
+#   ./hve/setup-hve.sh --check-only   状態確認のみ (gh / PTY 不足は警告。非ゼロ終了なし)
 #   ./hve/setup-hve.sh --no-gui       GUI extras をスキップ
+#   ./hve/setup-hve.sh --graphrag     graphrag extras を追加 (別途 Ollama が必要)
+#   ./hve/setup-hve.sh --code-languages python,csharp
+#                                     code-query の tree-sitter 文法を指定言語だけに絞る
 #   ./hve/setup-hve.sh --minimal      base のみ
 #   ./hve/setup-hve.sh --force        .venv を再構築
 #   ./hve/setup-hve.sh --skip-nltk-download
@@ -44,6 +51,8 @@ set -u
 
 CHECK_ONLY=false
 NO_GUI=false
+GRAPHRAG=false
+CODE_LANGUAGES=""
 MINIMAL=false
 FORCE=false
 SKIP_NLTK=false
@@ -56,7 +65,7 @@ NO_GLOBAL_CLEANUP=false
 WARN=0
 
 usage() {
-  sed -n '2,41p' "$0"
+  sed -n '2,49p' "$0"
   exit 0
 }
 
@@ -64,6 +73,12 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --check-only) CHECK_ONLY=true ;;
     --no-gui)     NO_GUI=true ;;
+    --graphrag)   GRAPHRAG=true ;;
+    --code-languages)
+      if [[ $# -lt 2 || -z "${2:-}" ]]; then
+        echo "--code-languages requires a value (e.g. python,csharp)" >&2; exit 2
+      fi
+      CODE_LANGUAGES="$2"; shift ;;
     --minimal)    MINIMAL=true ;;
     --force)      FORCE=true ;;
     --skip-nltk-download) SKIP_NLTK=true ;;
@@ -176,7 +191,7 @@ INSTALL_GUI=true
 
 OS="$(uname -s)"
 echo "HVE setup ($OS)"
-echo "  check-only=$CHECK_ONLY no-gui=$NO_GUI minimal=$MINIMAL force=$FORCE no-install-tools=$NO_INSTALL_TOOLS no-global-cleanup=$NO_GLOBAL_CLEANUP upgrade-sdk=$UPGRADE_SDK"
+echo "  check-only=$CHECK_ONLY no-gui=$NO_GUI graphrag=$GRAPHRAG minimal=$MINIMAL force=$FORCE no-install-tools=$NO_INSTALL_TOOLS no-global-cleanup=$NO_GLOBAL_CLEANUP upgrade-sdk=$UPGRADE_SDK"
 echo "  repoRoot=$REPO_ROOT"
 
 # ---------- グローバル Python 環境の遮断 ----------
@@ -502,8 +517,13 @@ install_os_tool az   'Azure CLI'   'Azure workflows (asdw-* / ADFD)' \
 install_os_tool shellcheck 'ShellCheck' 'ASDW Step 1.2 static verification' \
   'see https://github.com/koalaman/shellcheck#installing' || true
 
-if [[ "$INSTALL_GUI" == true && "$CHECK_ONLY" != true ]] && ! command -v gh >/dev/null 2>&1; then
-  die 'GitHub CLI (gh) is required for the GUI "GitHub CLI でログイン" feature. Re-run this setup without --no-install-tools, or install GitHub CLI and re-run this setup.'
+if [[ "$INSTALL_GUI" == true ]] && ! command -v gh >/dev/null 2>&1; then
+  if [[ "$CHECK_ONLY" == true ]]; then
+    # --check-only は変更を行わない診断モード。通常実行の fail-closed 契約とは分離し、警告のみで続行する。
+    warn 'GitHub CLI (gh) is unavailable. The GUI "GitHub CLI でログイン" feature will not work. Re-run this setup without --check-only to install it.'
+  else
+    die 'GitHub CLI (gh) is required for the GUI "GitHub CLI でログイン" feature. Re-run this setup without --no-install-tools, or install GitHub CLI and re-run this setup.'
+  fi
 fi
 
 # ---------- グローバル hve の除去 ----------
@@ -611,7 +631,16 @@ if [[ ! -x "$VENV_PY" && "$CHECK_ONLY" != true ]]; then
 fi
 
 if [[ "$CHECK_ONLY" == true ]]; then
-  [[ -x "$VENV_PY" ]] || warn ".venv does not exist. Run without --check-only."
+  if [[ ! -x "$VENV_PY" ]]; then
+    warn ".venv does not exist. Run without --check-only."
+  elif [[ "$INSTALL_GUI" == true ]]; then
+    step 'Auditing embedded GitHub CLI terminal prerequisites'
+    if "$VENV_PY" -c 'from hve.gui.pty_backend import is_pty_available; raise SystemExit(0 if is_pty_available() else 1)'; then
+      ok 'PTY backend for the embedded GitHub CLI terminal'
+    else
+      warn 'The PTY backend required by the GUI "GitHub CLI でログイン" feature is unavailable. Re-run this setup without --check-only to install it.'
+    fi
+  fi
   printf '\nCheck-only completed with %s warning(s).\n' "$WARN"
   exit 0
 fi
@@ -623,14 +652,22 @@ run "$VENV_PY" -m pip install --upgrade pip setuptools wheel
 # ---------- editable install with extras ----------
 if [[ "$MINIMAL" == true ]]; then
   step 'Installing HVE (base only, no extras)'
+  [[ "$GRAPHRAG" == true ]] && warn '--graphrag is ignored because --minimal installs no extras.'
+  [[ -n "$CODE_LANGUAGES" ]] && warn '--code-languages is ignored because --minimal installs no code-query grammars.'
   run "$VENV_PY" -m pip install -e .
 else
-  extras="test,mdq-watch,mdq-ja,semantic"
+  extras="test,mdq-watch,mdq-ja,semantic,code-watch,code-tokenizer,code-semantic"
   if [[ "$INSTALL_GUI" == true ]]; then
     extras="$extras,gui,gui-pty,gui-docconvert"
   fi
+  if [[ "$GRAPHRAG" == true ]]; then
+    extras="$extras,graphrag"
+  fi
   step "Installing HVE with extras: [$extras]"
   run "$VENV_PY" -m pip install -e ".[$extras]"
+  if [[ "$GRAPHRAG" == true ]]; then
+    warn 'graphrag extras installed. It also needs Ollama running on http://127.0.0.1:11434 with the qwen2.5:7b and nomic-embed-text models: see https://ollama.com/download, then ollama pull qwen2.5:7b; ollama pull nomic-embed-text'
+  fi
 fi
 
 if [[ "$INSTALL_GUI" == true ]]; then
@@ -641,14 +678,39 @@ if [[ "$INSTALL_GUI" == true ]]; then
   ok 'PTY backend for the embedded GitHub CLI terminal'
 fi
 
-# ---------- code-query 用文法 (extras: code) ----------
+# ---------- code-query 用文法 (extras: code / code-<言語>) ----------
 # tree-sitter 文法は platform ごとに wheel 有無が異なるため、本体インストールとは
 # 分離して警告止まりにする。未導入時は code-query が regex (lite) へ降格するだけ。
 # NOTE: code-sql (sqlfluff) は click pin が semantic extras と衝突するため導入しない。
+# 利用者が打つ言語名 → pyproject.toml の extras 名。`sql` だけは sqlfluff 用の
+# 既存 `code-sql` と衝突するため `code-sqlglot` へ写す。
+CODE_LANGUAGE_NAMES="python csharp javascript typescript java go rust c cpp scala shell powershell batch sql"
+
+code_extra_for() {
+  case "$1" in
+    sql) printf 'code-sqlglot' ;;
+    *)   printf 'code-%s' "$1" ;;
+  esac
+}
+
 if [[ "$MINIMAL" != true ]]; then
-  step 'Installing code-query grammars (extras: code)'
-  if try_run "$VENV_PY" -m pip install -e ".[code]"; then
-    ok 'code extras installed (tree-sitter grammars + sqlglot)'
+  code_extras=""
+  if [[ -n "$CODE_LANGUAGES" ]]; then
+    IFS=',' read -r -a requested_langs <<< "$CODE_LANGUAGES"
+    for lang in "${requested_langs[@]}"; do
+      lang="$(printf '%s' "$lang" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+      [[ -z "$lang" ]] && continue
+      if [[ " $CODE_LANGUAGE_NAMES " != *" $lang "* ]]; then
+        die "--code-languages contains an unknown language: $lang (available: $CODE_LANGUAGE_NAMES)"
+      fi
+      extra="$(code_extra_for "$lang")"
+      [[ ",$code_extras," == *",$extra,"* ]] || code_extras="${code_extras:+$code_extras,}$extra"
+    done
+  fi
+  [[ -z "$code_extras" ]] && code_extras="code"
+  step "Installing code-query grammars (extras: $code_extras)"
+  if try_run "$VENV_PY" -m pip install -e ".[$code_extras]"; then
+    ok "code-query grammars installed: $code_extras"
   else
     warn 'code extras install failed. code-query falls back to regex (lite) parsing.'
   fi

@@ -1,0 +1,16 @@
+inputs:
+- path: docs/catalog/design-doc-routing.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-OriginalRouting--adi--4
+- path: docs/original-design-doc-ingest/*/card.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-OriginalDocCard--adi--2
+- path: work/run/<run-id>/kpi/fork-kpi.jsonl
+  required: true
+  kind: external
+outputs:
+- path: docs/dataflow/dataflow-app-catalog.md
+  required: true
+  mode: upsert

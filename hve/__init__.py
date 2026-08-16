@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-__version__ = "0.4.0"
+__version__ = "0.8.8"
 
 # 公開属性 -> 実体を持つサブモジュール名。
 # 遅延解決にすることで `import hve` 自体が重い依存 (cq / copilot SDK / PySide6 等)

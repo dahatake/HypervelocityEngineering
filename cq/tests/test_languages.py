@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from cq import config, discovery, indexer, languages, store
+from cq import config, chunking, discovery, indexer, languages, store
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LANGUAGES_DIR = REPO_ROOT / "cq" / "languages"
@@ -165,6 +165,65 @@ class TestJavaScript:
 
     def test_import_statements_are_not_symbols(self) -> None:
         assert "helper" not in self._symbols()
+
+
+JAVASCRIPT_TESTS = """\
+import { render } from './portal.js';
+
+describe('tab navigation', () => {
+  it('moves focus to the next tab', () => {
+    expect(render()).toBeTruthy();
+  });
+
+  test('wraps around at the end', async () => {
+    expect(true).toBe(true);
+  });
+
+  it.skip('is temporarily disabled', () => {});
+});
+
+notATest('should not be indexed', () => {});
+"""
+
+
+class TestJavaScriptTestBlocks:
+    """`describe` / `it` / `test` はブロック名で引けなければならない（FR-CQ-04）。
+
+    実測: src/ の JS 76 ファイル中 46 がシンボル 0 で、そのうち 42 ファイル・
+    120 個がこの形のテストブロックだった。宣言構文ではないため 1 件も拾えていなかった。
+    """
+
+    def _symbols(self):
+        return {s.name: s for s in languages.extractor_for("javascript")(JAVASCRIPT_TESTS)}
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "tab navigation",
+            "moves focus to the next tab",
+            "wraps around at the end",
+            "is temporarily disabled",
+        ],
+    )
+    def test_test_blocks_are_extracted_by_their_label(self, name: str) -> None:
+        assert name in self._symbols()
+
+    def test_test_blocks_are_flagged_as_tests(self) -> None:
+        assert self._symbols()["moves focus to the next tab"].is_test
+
+    def test_ordinary_calls_are_not_symbols(self) -> None:
+        """`call_expression` を丸ごと拾うと索引が雑音で埋まる。"""
+        symbols = self._symbols()
+        assert "should not be indexed" not in symbols
+        assert "render" not in symbols
+
+    def test_the_block_chunk_carries_the_label(self) -> None:
+        """チャンクの `name` は BM25 の最大重み（10.0）列なので、空だと順位が付かない。
+
+        シンボルだけ増やしてもチャンクが無名のままでは検索順位は改善しない。
+        """
+        chunks = chunking.chunk_source(JAVASCRIPT_TESTS, "javascript", max_chars=1200)
+        assert "tab navigation" in {c.name for c in chunks}
 
 
 class TestDegradation:

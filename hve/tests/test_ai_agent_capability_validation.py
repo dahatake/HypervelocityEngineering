@@ -307,6 +307,17 @@ def _write_implementation(
     }
     config_name = "appsettings.json" if language == "csharp" else "agent-config.json"
     (agent_dir / config_name).write_text(json.dumps(config), encoding="utf-8")
+    (agent_dir / "plugin.json").write_text(
+        json.dumps(
+            {
+                "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                "name": "ag-01",
+                "description": "Order resolution agent packaged as an Agent Plugin.",
+                "version": "0.1.0",
+            }
+        ),
+        encoding="utf-8",
+    )
     if language == "csharp":
         (agent_dir / "GoalLoop.cs").write_text(_csharp_source(), encoding="utf-8")
     else:
@@ -560,6 +571,84 @@ def test_required_skill_resources_and_explicit_loading_are_enforced(tmp_path: Pa
     ) == []
 
 
+# ---------------------------------------------------------------------------
+# FR-WF-AAGD-07: Agent Skills 仕様の frontmatter 長さ制約
+# ---------------------------------------------------------------------------
+
+_SKILL_BODY = """# Procedure
+Validate the transition.
+## Input
+Normalized order and target state.
+## Output
+A deterministic validation result.
+## Errors
+Return a classified validation error.
+## Completion
+Complete only after all rules pass.
+"""
+
+
+def _write_skill_case(
+    root: Path,
+    *,
+    skill_name: str = "order-state-validation",
+    description: str = "Validate order transitions when an order mutation is requested.",
+) -> tuple[Path, Path, Path]:
+    detail = _write_design(root, skill_required=True)
+    agent_dir, test_spec = _write_implementation(root, skill_required=True)
+
+    if skill_name != "order-state-validation":
+        for path in (detail, agent_dir / "agent.py"):
+            path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    "order-state-validation", skill_name
+                ),
+                encoding="utf-8",
+            )
+        (agent_dir / "skills" / "order-state-validation").rename(
+            agent_dir / "skills" / skill_name
+        )
+
+    (agent_dir / "skills" / skill_name / "SKILL.md").write_text(
+        f"---\nname: {skill_name}\ndescription: {description}\n---\n{_SKILL_BODY}",
+        encoding="utf-8",
+    )
+    return detail, agent_dir, test_spec
+
+
+def _skill_errors(errors: list) -> list:
+    return [error for error in errors if "AG-CAP-06" in error]
+
+
+def test_skill_name_at_the_length_limit_passes(tmp_path: Path) -> None:
+    detail, agent_dir, test_spec = _write_skill_case(tmp_path, skill_name="a" * 64)
+    errors = validate_ai_agent_implementation_artifacts(detail, agent_dir, test_spec)
+    assert _skill_errors(errors) == [], errors
+
+
+def test_skill_name_longer_than_64_characters_fails(tmp_path: Path) -> None:
+    detail, agent_dir, test_spec = _write_skill_case(tmp_path, skill_name="a" * 65)
+    errors = _skill_errors(
+        validate_ai_agent_implementation_artifacts(detail, agent_dir, test_spec)
+    )
+    assert any("64" in error for error in errors), errors
+
+
+def test_skill_description_at_the_length_limit_passes(tmp_path: Path) -> None:
+    detail, agent_dir, test_spec = _write_skill_case(tmp_path, description="d" * 1024)
+    errors = validate_ai_agent_implementation_artifacts(detail, agent_dir, test_spec)
+    assert _skill_errors(errors) == [], errors
+
+
+def test_skill_description_longer_than_1024_characters_fails(tmp_path: Path) -> None:
+    detail, agent_dir, test_spec = _write_skill_case(tmp_path, description="d" * 1025)
+    errors = _skill_errors(
+        validate_ai_agent_implementation_artifacts(detail, agent_dir, test_spec)
+    )
+    assert any("1024" in error for error in errors), errors
+
+
+
 def test_not_required_skill_rejects_unapproved_skill_artifact(tmp_path: Path) -> None:
     detail = _write_design(tmp_path)
     agent_dir, test_spec = _write_implementation(tmp_path)
@@ -604,6 +693,17 @@ def test_reasoned_na_implementation_has_no_unselected_artifacts(tmp_path: Path) 
     prompt_path = agent_dir / "prompts" / "system-prompt.md"
     prompt_path.parent.mkdir(parents=True)
     prompt_path.write_text(_system_prompt(), encoding="utf-8")
+    (agent_dir / "plugin.json").write_text(
+        json.dumps(
+            {
+                "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                "name": "ag-01",
+                "description": "Local transformation agent packaged as an Agent Plugin.",
+                "version": "0.1.0",
+            }
+        ),
+        encoding="utf-8",
+    )
     (agent_dir / "agent-config.json").write_text(
         json.dumps(
             {

@@ -49,7 +49,7 @@ _WORKFLOW_DESCRIPTIONS = {
     "adfd": "Dataflow Design — バッチドメイン分析・ジョブ設計",
     "adfdv": "Dataflow Dev — データフローアプリ実装と Azure デプロイ",
     "akm": "Knowledge Management — knowledge/ D01〜D21 を 21 並列で生成",
-    "aqod": "Original Docs Review — original-docs/ 質問票生成・横断レビュー",
+    "adi": "Auto Design-doc Ingestion — docs-original/ の設計書を目録化し、質問票生成と下流選別をまとめて扱う",
     "adoc": "Source Codeからのドキュメント作成 — レイヤー別ドキュメント自動生成",
     "ard": "Auto Requirement Definition — 事業分析〜要件定義（4 グループ: 企業の事業分析 / 要求定義書作成 / KPI/OKR 定義（任意）/ ユースケース作成）",
 }
@@ -64,7 +64,9 @@ _WORKFLOW_CATEGORIES: List[Tuple[str, List[str]]] = [
     ("Business Engineering (要求定義)", ["ard"]),
     ("Architecture Design",             ["aas"]),
     ("Software Engineering",            ["aad-web", "asdw-web", "adfd", "adfdv"]),
-    ("Knowledge Management",            ["akm", "aqod", "adoc"]),
+    # ADI は knowledge 化の前段（原本の取り込み）なので独立カテゴリに置く。
+    ("既存ドキュメントのインポート",       ["adi"]),
+    ("Knowledge Management",            ["akm", "adoc"]),
 ]
 
 
@@ -86,7 +88,7 @@ def _load_workflow_choices() -> List[Tuple[str, str]]:
             ("adfd", "Dataflow Design"),
             ("adfdv", "Dataflow Dev"),
             ("akm", "Knowledge Management"),
-            ("aqod", "Original Docs Review"),
+            ("adi", "Auto Design-doc Ingestion"),
             ("adoc", "Source Codeからのドキュメント作成"),
             ("ard", "Auto Requirement Definition"),
         ]

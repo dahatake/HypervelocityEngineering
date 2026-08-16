@@ -40,7 +40,7 @@ MCP Server の設計指針と、Skills との役割分担を定義する。
 | Server名 | パッケージ | 用途 |
 |---|---|---|
 | `azure` | `@azure/mcp@latest` | Azure リソース操作 |
-| `context7` | `@upstash/context7-mcp@latest` | コンテキスト管理 |
+| `microsoft-learn` | `https://learn.microsoft.com/api/mcp` | Microsoft 公式ドキュメント参照 |
 
 ## Related Skills
 

@@ -33,7 +33,10 @@ from hve.gui.page_options import (  # noqa: E402
     _LabeledField,
     _STEP2_FIELDS_BY_WORKFLOW,
 )
-from hve.gui.workflow_step_requirements import REQUIREMENT_TABLE  # noqa: E402
+from hve.gui.workflow_step_requirements import (  # noqa: E402
+    REQUIREMENT_TABLE,
+    gui_visible_required_params,
+)
 from hve.workflow_registry import get_workflow, list_workflows  # noqa: E402
 
 
@@ -51,8 +54,10 @@ def _required_keys_by_workflow() -> Dict[str, Set[str]]:
     """レジストリ宣言から (workflow_id -> 必須入力キー集合) を組み立てる。
 
     FR-GUI-01 が評価する 2 系統（`REQUIREMENT_TABLE` の `required_info_keys` と
-    `StepDef.required_params`）の和集合。registry に存在しない仮想ワークフロー
-    （autopilot）は GUI のワークフロー選択対象外のため除外する。
+    `StepDef.required_params`）の和集合。`required_params` 側は FR-GUI-02 に従い
+    `default_params` を持たないキーに限る（既定値付きキーは入力欄を持たない）。
+    registry に存在しない仮想ワークフロー（autopilot）は GUI のワークフロー選択対象外の
+    ため除外する。
     """
     out: Dict[str, Set[str]] = {}
     for (wf_id, _step_id), req in REQUIREMENT_TABLE.items():
@@ -62,7 +67,7 @@ def _required_keys_by_workflow() -> Dict[str, Set[str]]:
             out.setdefault(wf_id, set()).update(req.required_info_keys)
     for wf in list_workflows():
         for step in wf.steps:
-            for key in getattr(step, "required_params", ()) or ():
+            for key in gui_visible_required_params(step):
                 out.setdefault(wf.id, set()).add(key)
     return out
 
@@ -133,3 +138,15 @@ class TestRequiredInputFieldsInWorkflowBox(unittest.TestCase):
         page = self.page
         page.set_workflows(["aagd"], {"aagd": "AAGD"})
         self.assertIn("aagd", page._workflow_group_boxes)
+
+    def test_defaulted_params_have_no_input_field(self) -> None:
+        """既定値を持つ ASDW-WEB Step 1.3 の 5 件に入力欄を設けない（FR-WF-ASDW-02）。"""
+        step = get_workflow("asdw-web").get_step("1.3")
+        defaulted = [k for k in step.required_params if k in step.default_params]
+        self.assertTrue(defaulted)
+
+        page = self.page
+        widgets = page._banner_input_widgets()
+        for key in defaulted:
+            self.assertNotIn(key, widgets, f"{key} の入力欄が残っている")
+            self.assertIsNone(getattr(page.c_azure, key, None), f"{key} ウィジェットが残っている")

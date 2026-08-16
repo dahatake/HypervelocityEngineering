@@ -9,7 +9,7 @@
 - [対象読者・前提・次のステップ](#対象読者前提次のステップ)
 - [実行方法（実装準拠）](#実行方法実装準拠)
 - [AAG / AAGD / ASDW 連携チェーン図（参照先）](#aag--aagd--asdw-連携チェーン図参照先)
-- [ツール](#ツール)
+- [ガイドの範囲](#ガイドの範囲)
 - [Step 1. AI Agentのリストアップ](#step-1-ai-agentのリストアップ)
 - [Step 2. AI Agentの関連性の図式化](#step-2-ai-agentの関連性の図式化)
 - [Step 3. System Promptの作成](#step-3-system-promptの作成)
@@ -40,18 +40,15 @@
 
 チェーン図の実体は [08-ai-agent.md](./08-ai-agent.md#aag--aagd--asdw-連携チェーン図) に集約しています。
 
-## ツール
+## ガイドの範囲
 
-AI Agentの実装は、Microsoft 365 CopilotのChatでの、Agent Builderや、Microsoft Copilot Studio。あるいは、Microsoft Foundryでなどがお勧めです。
+このガイドは、AAG により **候補整理・関係図・System Prompt 草案**を作る Quick ガイドです。生成物を実行可能な AI Agent、Azure リソース、テスト、またはデプロイ済みサービスとみなしてはいけません。
 
-Promptは、**Microsoft 365 Copilot Chat**で入力をしてください。
+- HVE 自動化の正本: Issue Template または `hve orchestrate -w aag`、`hve/workflow_registry.py` の `aag` 定義、対応する `Arch-AIAgentDesign-Step1`〜`Step3` Prompt。
+- 完了確認: `docs/agent/agent-application-definition.md`、`docs/agent/agent-architecture.md`、`docs/ai-agent-catalog.md` と Agent ごとの `docs/agent/agent-detail-{key}.md` が揃うこと。
+- 実装・テスト・Deploy: AAGD（`hve orchestrate -w aagd`）の範囲です。[08-ai-agent.md](./08-ai-agent.md) の AAG / AAGD 境界と能力契約に進んでください。
 
-- モデルはGPT-5.2 Thinkingがおススメです。
-- このStepは1つのチャットの中での一連の会話で行うことをお勧めします。
-
-Microsoft 365 Copilot Chat:
-
-  https://m365.cloud.microsoft/chat
+手動で下記 Prompt を検討に使う場合も、このガイドの完了条件は満たしません。HVE の設定変更は、Issue Template の入力項目を使い、Prompt の複製や本文改変ではなく AAG / AAGD の契約と回帰テストを確認して行ってください。
 
 ## Step 1. AI Agentのリストアップ
 

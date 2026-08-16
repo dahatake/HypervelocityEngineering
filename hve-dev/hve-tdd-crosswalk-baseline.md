@@ -1,6 +1,6 @@
 # HVE TDD ベースライン突合サマリー
 
-- 生成日時 (UTC): `2026-08-07T09:25:23Z`
+- 生成日時 (UTC): `2026-08-16T13:16:04Z`
 - 対象: `hve` アプリケーションのみ（HVE CLI / GUI / Cloud Agent Orchestrator 関連）。他アプリ開発には適用しない。
 - 捏造防止: テスト仕様欄は docstring / 関数名 / assert・raises・Pester `Should` / shell `pass` ラベル等、実在コードから機械抽出した。
 
@@ -17,51 +17,51 @@
 
 ## テスト棚卸し件数
 
-- 抽出行数: **10843**
-- 対象ファイル数: **528**
+- 抽出行数: **11754**
+- 対象ファイル数: **562**
 
 | 分類 | ファイル数 | 行数 |
 |---|---:|---:|
-| core-python | 305 | 7958 |
-| cq-support-python | 32 | 603 |
+| core-python | 320 | 8331 |
+| cq-support-python | 38 | 696 |
 | github-script-powershell | 5 | 79 |
-| github-script-python | 3 | 58 |
+| github-script-python | 4 | 81 |
 | github-script-shell | 7 | 94 |
-| gui-python | 140 | 1687 |
-| markdown-query-gui-support-python | 6 | 40 |
-| mdq-support-python | 30 | 324 |
+| gui-python | 150 | 2060 |
+| markdown-query-gui-support-python | 8 | 75 |
+| mdq-support-python | 30 | 338 |
 
 | 種別 | 行数 |
 |---|---:|
-| fixture | 188 |
-| helper | 2047 |
+| fixture | 206 |
+| helper | 2277 |
 | pester-it | 88 |
-| python-file | 8 |
+| python-file | 7 |
 | script | 1 |
-| setup-teardown | 130 |
+| setup-teardown | 126 |
 | shell-case | 36 |
 | shell-helper | 5 |
-| test | 8340 |
+| test | 9008 |
 
 ## 機能一覧件数
 
-- 抽出行数: **330**
+- 抽出行数: **386**
 
 | 種別 | 行数 |
 |---|---:|
 | C | 4 |
-| FR | 165 |
+| FR | 212 |
 | GATE | 5 |
-| NFR | 30 |
+| NFR | 32 |
 | UC | 6 |
 | WORKFLOW | 12 |
-| WORKFLOW_STEP | 108 |
+| WORKFLOW_STEP | 115 |
 
 ## 要求定義 ↔ 既存マッピング文書の突合
 
-- `hve-dev/requirement-definition.md` 側 ID 数（FR/NFR/GATE/C/UC）: **210**
-- `hve-dev/requirement-test-mapping.md` 側 ID 数: **230**
-- 要求定義にあるがマッピング見出しが未確認の ID: **2**
+- `hve-dev/requirement-definition.md` 側 ID 数（FR/NFR/GATE/C/UC）: **259**
+- `hve-dev/requirement-test-mapping.md` 側 ID 数: **262**
+- 要求定義にあるがマッピング見出しが未確認の ID: **20**
 - マッピングにあるが要求定義の抽出対象に無い ID: **2**
 - 要求定義上で廃止/削除表記を含む ID: **7**
 
@@ -69,6 +69,24 @@
 
 - `FR-WF-ADFDV-01`
 - `FR-WF-ADFDV-02`
+- `FR-WF-ADI-02`
+- `FR-WF-ADI-03`
+- `FR-WF-ADI-04`
+- `FR-WF-ADI-05`
+- `FR-WF-ADI-06`
+- `FR-WF-ADI-07`
+- `FR-WF-ADI-08`
+- `FR-WF-ADI-09`
+- `FR-WF-ADI-10`
+- `FR-WF-ADI-11`
+- `FR-WF-ADI-12`
+- `FR-WF-ADI-13`
+- `FR-WF-ADI-14`
+- `FR-WF-ADI-15`
+- `FR-WF-ADI-16`
+- `FR-WF-ADI-17`
+- `FR-WF-ADI-18`
+- `NFR-SEC-ADI-02`
 
 ### マッピングにあるが要求定義の抽出対象に無い ID
 

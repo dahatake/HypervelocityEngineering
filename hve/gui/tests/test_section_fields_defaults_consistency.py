@@ -166,25 +166,32 @@ def test_c5_enable_auto_merge_bool_roundtrip_false(tmp_settings: Path, qapp) -> 
 # ため、以下のキーが保存・復元されない隠れバグがあった。
 #   - workiq_draft_output_dir (C4)
 #   - target_files / custom_source_dir (C11)
-#   - target_scope (C12)
+#   - target_scope (C17)
 #   - target_dirs (C13)
 #   - target_business (C14)
 
 @pytest.mark.parametrize(
-    "section_key,widget_factory_name,option_key",
+    "section_key,widget_factory_name,option_key,expected",
     [
-        ("C4", "_C4WorkIQ", "workiq_draft_output_dir"),
-        ("C11", "_C11AKM", "target_files"),
-        ("C11", "_C11AKM", "custom_source_dir"),
-        ("C12", "_C12AQOD", "target_scope"),
-        ("C13", "_C13ADOC", "target_dirs"),
-        ("C14", "_C14ARD", "target_business"),
+        ("C4", "_C4WorkIQ", "workiq_draft_output_dir", "some/test/path/workiq"),
+        ("C11", "_C11AKM", "target_files", "some/test/path/targets"),
+        ("C11", "_C11AKM", "custom_source_dir", "some/test/path/custom"),
+        ("C17", "_C17ADI", "target_scope", "docs-original/specs"),
+        ("C17", "_C17ADI", "depth", "lightweight"),
+        ("C17", "_C17ADI", "focus_areas", "データ整合性"),
+        ("C13", "_C13ADOC", "target_dirs", "some/test/path/docs"),
+        ("C14", "_C14ARD", "target_business", "some/test/path/business"),
     ],
 )
 def test_filepicker_widgets_roundtrip(
-    tmp_settings: Path, qapp, section_key: str, widget_factory_name: str, option_key: str
+    tmp_settings: Path,
+    qapp,
+    section_key: str,
+    widget_factory_name: str,
+    option_key: str,
+    expected: str,
 ) -> None:
-    """_FilePickerWidget ベースの全キーが save→load で文字列値を保持する。
+    """Workflow固有ウィジェットが型に合う値を save→load で保持する。
 
     敵対的レビュー No.1 (Critical) 回帰防止: isinstance(QLineEdit) で誤判定し
     値が None で保存されていた。
@@ -192,7 +199,6 @@ def test_filepicker_widgets_roundtrip(
     from hve.gui import page_options
 
     widget_factory = getattr(page_options, widget_factory_name)
-    expected = f"some/test/path/{option_key}"
     collected = _save_then_reload_via_widget(
         section_key,
         widget_factory,

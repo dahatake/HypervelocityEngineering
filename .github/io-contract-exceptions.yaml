@@ -8,8 +8,6 @@
 
 # Static/repo-bundled paths (no producer needed)
 static_paths:
-  - "users-guide/01-business-requirement.md"
-  - "users-guide/08-ai-agent.md"
   - "template/atdd-template.md"
   - "data/sample-data.json"
   - "src/data/sample-data.json"

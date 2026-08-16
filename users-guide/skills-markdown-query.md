@@ -1,11 +1,17 @@
 # skills: markdown-query 技術リファレンス & 利用統計ガイド
 
 > **本ページは HVE リポジトリ固有の技術リファレンスです。汎用 Skill 仕様は [.github/skills/markdown-query/SKILL.md](../.github/skills/markdown-query/SKILL.md) を参照してください。**
+>
+> **最終更新: 2026-08-13** — 定数・既定値・モジュール構成は同日の `mdq/` 実装と突合済み。数値を伴う主張には節ごとに取得条件を併記する。実装と食い違う場合は常に実装（`mdq/` と `mdq/tests/`）が正である。
 
 このページは以下 2 つの目的を持つ:
 
-1. **markdown-query Skill (mdq パッケージ) の技術アーキテクチャ詳細** — Skill をフォーク／カスタマイズする予定の開発者向けに、構成要素・メッセージフロー・Chunking Strategy・索引データファイルと更新頻度を SVG 図と共に解説する（§ 1〜§ 4）。
-2. **利用統計 GUI / レポートの指標定義** — HVE GUI 設定画面 → `skills` → `Markdown-Query` セクションで表示される 15 指標の定義・算出式・解釈ガイド（§ 5 以降）。
+1. **markdown-query Skill (mdq パッケージ) の技術アーキテクチャ詳細** — Skill をフォーク／カスタマイズする予定の開発者向けに、構成要素・メッセージフロー・Chunking Strategy・索引データファイルと更新頻度を SVG 図と共に解説する（§1〜§4）。
+2. **利用統計 GUI / レポートの指標定義** — HVE GUI 設定画面 → `skills` → `Markdown-Query` セクションで表示される 15 指標の定義・算出式・解釈ガイド（§10 以降）。
+
+> **対象は `.md` と表形式インベントリだけ。** ソースコード（`.py` / `.cs` / `.ts` / `.sh` / `.ps1` 等）は姉妹 Skill の
+> [code-query（`cq`）](skills-code-query.md) が担当する。両者は**別パッケージ・別 DB**で、同一コーパスに混ぜない
+> （IDF が汚染されるため）。棲み分けの一覧表は [skills-code-query.md §8](skills-code-query.md#8-mdq-との棲み分けと連携) にある。
 
 ## 目次
 
@@ -15,11 +21,30 @@
 | 2 | [メッセージフロー (3 シーケンス)](#2-メッセージフロー-3-シーケンス) | 同上 |
 | 3 | [Chunking Strategy 詳説](#3-chunking-strategy-詳説) | 同上 + 検索品質チューニング担当 |
 | 4 | [索引データファイルと更新頻度](#4-索引データファイルと更新頻度) | 運用担当 |
-| 5 | [独立 GUI ランチャー](#独立-gui-ランチャー他リポジトリでも利用可能) | 別リポジトリ移植担当 |
-| 6 | [Tokenize 言語と Chunking Strategy (CLI)](#tokenize-言語と-chunking-strategy) | CLI 利用者 |
-| 7 | [GUI: 複数 Strategy 一括ビルド](#gui-複数-strategy-の一括ビルドと-strategy-別統計) | GUI 利用者 |
-| 8 | [対象フォルダ (target_folders)](#対象フォルダ-target_folders) | Orchestrator 連携担当 |
-| 9 | [統計レポート構造と 15 指標](#統計レポートの構造) | 運用 / 品質管理 |
+| 5 | [独立 GUI ランチャー](#5-独立-gui-ランチャー他リポジトリでも利用可能) | 別リポジトリ移植担当 |
+| 6 | [Tokenize 言語と Chunking Strategy (CLI)](#6-tokenize-言語と-chunking-strategy) | CLI 利用者 |
+| 7 | [GUI: 複数 Strategy 一括ビルド](#7-gui-複数-strategy-の一括ビルドと-strategy-別統計) | GUI 利用者 |
+| 8 | [利用統計の追加指標 (v2.0)](#8-利用統計の追加指標-v20-schema_version2) | 運用 / 品質管理 |
+| 9 | [対象フォルダ (target_folders)](#9-対象フォルダ-target_folders) | Orchestrator 連携担当 |
+| 10 | [統計レポートの構造](#10-統計レポートの構造) | 運用 / 品質管理 |
+| 11 | [v1 採用 15 指標](#11-v1-採用-15-指標) | 同上 |
+| 12 | [v2 以降の対応予定指標](#12-v2-以降の対応予定指標) | 同上 |
+| 13 | [D3 / G4 (v1.1 追加実装)](#13-d3--g4v11-追加実装) | 同上 |
+| 14 | [保留中の運用判断](#14-保留中の運用判断) | 同上 |
+| 15 | [他リポジトリへの移植](#15-他リポジトリへの移植採用率を上げるための導入チェックリスト) | 別リポジトリ移植担当 |
+| 16 | [レポートファイル](#16-レポートファイル) | 運用 |
+| 17 | [関連ファイル](#17-関連ファイル) | 全利用者 |
+
+### 用語
+
+| 用語 | 意味 |
+|---|---|
+| **chunk** | 検索とスニペット生成の最小単位。Markdown を Chunking Strategy で分割した断片（`chunks` テーブルの 1 行） |
+| **Chunking Strategy** | チャンク境界の決め方。`heading` / `heading_recursive` / `fixed_window` / `semantic_paragraph` / `pageindex` の 5 種（§3） |
+| **lang** | FTS5 トークナイザの選択（`ja-jp` = trigram / `en-us` = unicode61）。索引 DB はこれと Strategy の組で分かれる |
+| **rule / route** | `--strategy auto` のとき `query_router` がクエリを分類する 7 ルール（§2.2）。結果は `reason` と `rule_id` で記録される |
+| **fallback** | 選定した Strategy の DB が存在しないとき、`_FALLBACK_ORDER` で利用可能な次の Strategy へ切り替えること |
+| **contextualize** | `semantic_paragraph` でチャンク本文の先頭に `[Context] {path} > {heading_path}` を付与する処理（§3.3） |
 
 ---
 
@@ -28,8 +53,10 @@
 markdown-query Skill の実体は HVE リポジトリ同梱の `mdq/` Python パッケージである。
 **ローカル完結**（外部 API 呼び出しなし、`.mdq/` 配下に SQLite で永続化）であり、CLI・GUI・HVE Orchestrator のいずれからも `python -m mdq` サブプロセスとして起動される。
 
-![technical architecture](images/skills-markdown-query/architecture.svg)
+![mdq の層構成図。呼び出し元（Agent / CLI / GUI / Orchestrator）から CLI 層、Indexing 層、Search 層、Watcher 層、Storage / Logging 層への依存方向を示す](images/skills-markdown-query/architecture.svg)
 
+> **図の保守について**: 本節以降の 5 点の SVG は手書きで、Mermaid のような自動生成元を持たない。`mdq/` のモジュール構成を変更したときは、この SVG も同じ PR で更新すること（テキスト差分に現れないため、レビューで見落とされやすい）。図の内容と本文の表が食い違う場合は表を正とする。
+>
 > 図中の色分けは以下の WCAG AA 準拠パレット (背景白に対しコントラスト比 ≥ 4.5:1)。Microsoft Azure Well-Architected の design-diagrams ガイダンス (凡例・方向性矢印・color+pattern 併用) に従う。
 >
 > - 青系 `#0066CC` = 呼び出し元 / CLI 層
@@ -48,30 +75,47 @@ markdown-query Skill の実体は HVE リポジトリ同梱の `mdq/` Python パ
 | ③ Indexing | `indexer.py`, `strategies.py`, `strategies_semantic.py`, `strategies_pageindex.py`, `embeddings.py`, `sentence_splitter.py`, `tokenize.py` | Markdown を Chunking Strategy ごとに分割し、永続化用 row を生成 | `cmd_index` / `cmd_watch` |
 | ④ Search | `query_router.py`, `search.py` | クエリを 7 ルールで分類して strategy 選定 → BM25 検索 → snippet 生成 | `cmd_search` / `cmd_get` |
 | ⑤ Watcher | `watcher.py` (watchdog) | ファイル変更を daemon thread で監視し増分索引 | `cmd_watch` または HVE CLI Orchestrator から組み込み起動 |
-| ⑦ Storage | `store.py` + `.mdq/index-<lang>-<strategy>.sqlite` | スキーマ管理 (SCHEMA v7) + マイグレーション + CRUD | `open_store()` 経由 |
+| ⑥ Storage | `store.py` + `.mdq/index-<lang>-<strategy>.sqlite` | スキーマ管理 (SCHEMA v7) + マイグレーション + CRUD | `open_store()` 経由 |
 | ⑦ Logging | `usage_log.py` + `usage_stats.py` + `.mdq/usage.jsonl` | 全 CLI 呼び出しを append-only JSONL に記録 → 15 指標集計 | 全サブコマンド完了時 |
+| ⑧ GraphRAG (任意・別系統) | `strategies_graphrag.py`, `graphrag_runtime.py` | LightRAG をバックエンドにした LLM 必須の別経路。SQLite 索引を使わない（§3.4）。**上の図には現れない** | `--strategy graphrag` を明示したときのみ |
+
+> ①〜⑦ の番号は上の SVG 図のグループ番号と一致する。
 
 ### 1.2 設計上の重要な前提
 
 - **物理ファイル分離**: 索引 DB は `(lang, strategy)` の組み合わせごとに独立した SQLite ファイル `.mdq/index-<lang>-<strategy>.sqlite` を持つ (`store.db_path_for`)。これにより、検索時に Strategy だけを切り替えれば適切な DB が選択される。
-- **既定 10 ディレクトリ走査** (`mdq/cli.py:DEFAULT_ROOTS`): `docs, docs-generated, users-guide, template, knowledge, qa, original-docs, work, sample, hve-dev`。GUI `target_folders` 設定で上書き可能。
+- **索引対象 roots は 3 段の優先順で決まる**（`mdq/config.py:resolve_roots`）。**「既定で 10 ディレクトリを走査する」わけではない**ので注意する。
+
+  | 優先 | 由来 | 本リポジトリでの値 |
+  |---|---|---|
+  | 1 | CLI の `--root` フラグ | 指定時のみ |
+  | 2 | `<repo-root>/mdq.toml` の `[index].roots`（無ければ `.mdq/config.toml`） | **9 件**: `docs, docs-generated, users-guide, template, knowledge, qa, docs-original, sample, hve-dev` |
+  | 3 | パッケージ既定 `mdq/config.py:GENERIC_DEFAULT_ROOTS`（= `mdq/cli.py:DEFAULT_ROOTS`） | **2 件**: `docs, users-guide` |
+
+  **`work/` は意図的に索引対象外**。使い捨ての run 成果物が設計文書を言い直すため、索引すると劣後コピーが正本を上回る（理由は [mdq.toml](../mdq.toml) のコメントに記載）。GUI の `target_folders` を 1 件以上設定した場合は、この解決結果をさらに上書きする（§9）。
 - **任意拡張**: `watchdog` (Watcher)、`rank_bm25` (検索スコア)、`fastembed + nltk + numpy` (semantic_paragraph) は任意依存。未導入時は `_MiniBM25` / regex sentence splitter / `heading_recursive` フォールバックで動作する。
 - **Cloud Agent 制約**: HVE Cloud Agent Orchestrator (GitHub Issue 起点) では Watcher daemon thread は起動しない。手動 `mdq index` または GUI 索引化で索引を更新する。
 
 ### 1.3 SoT (Source of Truth) ファイル一覧
 
+> **行番号は載せない。** 行番号はリファクタのたびに黙って腐り、読者を別の場所へ誘導する。位置を知りたいときは
+> `python -m cq def --profile hve --symbol <シンボル名>` で現在の定義位置を引くこと（[code-query](skills-code-query.md#cq-def) が
+> このリポジトリのソースコードを索引している）。
+
 | 機能 | SoT ファイル | 主要シンボル |
 |---|---|---|
-| サブコマンド振り分け | `mdq/cli.py` | `cmd_index` (L90), `cmd_search` (L149), `cmd_get` (L276), `cmd_list` (L306), `cmd_stats` (L334), `cmd_watch` (L353) |
-| 索引ビルド | `mdq/indexer.py` | `build_index` (L643), `index_one_file`, `delete_one_file`, `_sha1_bytes` |
-| Strategy 分岐 | `mdq/strategies.py` | `ALL_STRATEGIES`, `scan_file_for_strategy`, `_scan_fixed_window` |
-| Semantic 分割 | `mdq/strategies_semantic.py` | `SEMANTIC_*` 定数, `scan_file_semantic_paragraph`, `_RUNTIME_CONFIG` |
-| PageIndex 分割 | `mdq/strategies_pageindex.py` | `PAGEINDEX_*` 定数, `scan_file_pageindex`, `_RUNTIME_CONFIG` |
-| クエリ分類 | `mdq/query_router.py` | `classify_query` (L200), `discover_available_strategies` (L317), `_FALLBACK_ORDER` |
-| 検索 | `mdq/search.py` | `Hit`, `_MiniBM25`, `_make_snippet` |
-| ストレージ | `mdq/store.py` | `SCHEMA`, `_migrate` (v1→v7), `open_store`, `db_path_for` |
-| Watcher | `mdq/watcher.py` | `MdqWatcher`, `_flush_once`, `_fallback_reindex`, `_note_event` |
-| 利用ログ | `mdq/usage_log.py` | `append_record`, JSONL スキーマ |
+| 索引 roots の解決 | [mdq/config.py](../mdq/config.py) | `GENERIC_DEFAULT_ROOTS`, `find_config`, `resolve_roots`, `resolve_tabular_globs` |
+| サブコマンド振り分け | [mdq/cli.py](../mdq/cli.py) | `DEFAULT_ROOTS`, `cmd_index`, `cmd_search`, `cmd_get`, `cmd_list`, `cmd_stats`, `cmd_watch` |
+| 索引ビルド | [mdq/indexer.py](../mdq/indexer.py) | `build_index`, `index_one_file`, `delete_one_file`, `_sha1_bytes`, `Chunk.chunk_id` |
+| Strategy 分岐と全戦略の定数 | [mdq/strategies.py](../mdq/strategies.py) | `ALL_STRATEGIES`, `scan_file_for_strategy`, `_scan_fixed_window`, `HEADING_RECURSIVE_MAX_CHARS`, `FIXED_WINDOW_CHARS` / `FIXED_WINDOW_OVERLAP`, **`PAGEINDEX_SUMMARY_CHARS` / `PAGEINDEX_SUMMARY_MODE`** |
+| Semantic 分割 | [mdq/strategies_semantic.py](../mdq/strategies_semantic.py) | `SEMANTIC_*` 定数, `_CTX_TEMPLATE`, `scan_file_semantic_paragraph`, `set_runtime_config` |
+| PageIndex 分割 | [mdq/strategies_pageindex.py](../mdq/strategies_pageindex.py) | `scan_file_pageindex`, `set_runtime_config`, `_summarize`（**定数は `mdq/strategies.py` 側にある**） |
+| クエリ分類 | [mdq/query_router.py](../mdq/query_router.py) | `classify_query`, `discover_available_strategies`, `_FALLBACK_ORDER`, `RouterDecision` |
+| 検索 | [mdq/search.py](../mdq/search.py) | `Hit`, `_MiniBM25`, `_make_snippet` |
+| ストレージ | [mdq/store.py](../mdq/store.py) | `SCHEMA`, `SCHEMA_VERSION` (現在 **7**), `_migrate` (v1→v7), `open_store`, `db_path_for` |
+| Watcher | [mdq/watcher.py](../mdq/watcher.py) | `MdqWatcher`, `DEFAULT_DEBOUNCE_MS` / `DEFAULT_BURST_THRESHOLD` / `DEFAULT_BURST_WINDOW_S`, `_flush_once`, `_fallback_reindex` |
+| 利用ログ | [mdq/usage_log.py](../mdq/usage_log.py) | `append_record`, JSONL スキーマ |
+| GraphRAG (任意) | [mdq/strategies_graphrag.py](../mdq/strategies_graphrag.py), [mdq/graphrag_runtime.py](../mdq/graphrag_runtime.py) | adapter と LLM / embed callable factory（§3.4） |
 
 ---
 
@@ -81,12 +125,12 @@ markdown-query Skill の実体は HVE リポジトリ同梱の `mdq/` Python パ
 
 `build_index` は roots 配下を走査し、ファイル単位で SHA1 比較 → 変更があれば Chunking Strategy で分割 → SQLite へ upsert する。`prune=True` 既定で、ストア上に残るが disk から消えたファイルを削除する。
 
-![index sequence](images/skills-markdown-query/seq-index.svg)
+![索引化シーケンス図。CLI から build_index を呼び、roots 走査 → ファイル単位の SHA1 比較 → Chunking Strategy で分割 → SQLite へ upsert → prune → usage.jsonl 追記までの順序を示す](images/skills-markdown-query/seq-index.svg)
 
 主要ポイント:
 
-- **増分判定**: `index_one_file` は `(stored_sha1, current_sha1)` 一致時に `{"action":"skipped"}` を返す (`mdq/indexer.py` L550)。SHA1 は `_sha1_bytes(raw_bytes)`、mtime は `Path.stat().st_mtime`。
-- **chunk_id 安定性**: SHA1(path \0 heading_path \0 part_index \0 text_first_64) で生成 (L352)。行番号変動に強い。
+- **増分判定**: `index_one_file` は `(stored_sha1, current_sha1)` 一致時に `{"action":"skipped"}` を返す。SHA1 は `_sha1_bytes(raw_bytes)`、mtime は `Path.stat().st_mtime`。
+- **chunk_id 安定性**: `Chunk.chunk_id` プロパティが SHA1(path \0 heading_path \0 part_index \0 text_first_64) で生成する。行番号変動に強い。
 - **semantic_paragraph 専用処理**: 埋め込み生成 → Kamradt 二分探索で意味境界決定 → `strategies_semantic._CTX_TEMPLATE` で `[Context] {path} > {heading_path}\n\n{body}` を本文に prepend。原文は `chunks.text_raw`、埋め込み (任意) は `chunks.chunk_embedding` 列に保存。
 - **書き込み完了後**: `usage_log.append_record` が `.mdq/usage.jsonl` に 1 行 JSON を append (`command="index"`, args, elapsed_ms, result, exit_code)。
 
@@ -94,7 +138,7 @@ markdown-query Skill の実体は HVE リポジトリ同梱の `mdq/` Python パ
 
 `--strategy auto` 時は `query_router.classify_query` がクエリを 7 ルールで分類し、選定 strategy の DB が存在しなければ fallback chain でフォールバックする。
 
-![search sequence](images/skills-markdown-query/seq-search.svg)
+![検索シーケンス図。CLI から classify_query で 7 ルール分類 → DB 不在時は fallback chain で切り替え → BM25 検索 → snippet 生成 → parent 展開の順序を示す](images/skills-markdown-query/seq-search.svg)
 
 7 ルールの優先順 (上から評価、最初に該当したものを採用):
 
@@ -120,11 +164,28 @@ markdown-query Skill の実体は HVE リポジトリ同梱の `mdq/` Python パ
 - **Parent expansion**: `--include-parent` (深さ 1) / `--with-parent-depth N` 指定時に `chunks.parent_chunk_id` を再帰取得して `expansion.parent` に含める。SCHEMA v4 で導入。
 - **Late fusion (任意)**: semantic_paragraph + `--late-chunking` 索引時の `chunk_embedding` 列がある場合、`--fusion-alpha α` で BM25 と embedding 類似度を線形加重で統合する。
 
+**成功時の出力形式**（これが見えたら検索は成立している）:
+
+```sh
+python -m mdq search --q "Chunking Strategy" --top-k 2
+```
+
+```text
+1. users-guide/skills-markdown-query.md  (score 12.34)
+   3. Chunking Strategy 詳説 > 3.1 戦略別パラメータ一覧
+   L153-162  chunk_id=6f1a…
+   > `mdq.strategies.ALL_STRATEGIES` に 5 種の戦略が定義されている。…
+```
+
+上記は形式を示す例であり、score や行番号は索引の状態で変わる。**0 件のときは何も出力されない**（エラーにはならない）ので、まず `python -m mdq stats` で索引が存在するかを確かめる。検索経路の内訳（`effective_strategy` / `router_reason` / `fallback_used`）は `.mdq/usage.jsonl` に残る（§4.3）。
+
+> `chunk_id` を控えておけば `python -m mdq get --chunk-id <id>` でチャンク本文を全文取得できる。
+
 ### 2.3 Watcher シーケンス — `python -m mdq watch`
 
 `MdqWatcher` は watchdog の `Observer` を daemon thread で起動し、`.md` ファイル変更を `pending` dict に enqueue → debounce 500ms ごとに `_flush_once` で増分索引する。バースト時は全 root 再走査にフォールバックする。
 
-![watch sequence](images/skills-markdown-query/seq-watch.svg)
+![Watcher シーケンス図。watchdog のイベントを pending へ enqueue し、debounce 500ms ごとの _flush_once で増分索引し、バースト時は全 root 再走査へフォールバックする流れを示す](images/skills-markdown-query/seq-watch.svg)
 
 主要パラメータ (CLI フラグ / GUI 設定で上書き可):
 
@@ -137,7 +198,7 @@ markdown-query Skill の実体は HVE リポジトリ同梱の `mdq/` Python パ
 
 **競合処理**:
 
-- create → 直後 delete の race は `index_one_file` が `{"action":"missing"}` を返した時点で `delete_one_file` で掃除 (`mdq/watcher.py` L266-272)。
+- create → 直後 delete の race は `index_one_file` が `{"action":"missing"}` を返した時点で `delete_one_file` で掃除する（`MdqWatcher._flush_once`）。
 - worker 専用 SQLite 接続を flush ごとに開き直す (Windows のロック競合回避)。
 
 **Cloud Agent では起動しない**: HVE Cloud Agent (GitHub Issue 起点) は短命プロセスで I/O 完了次第終了するため Watcher daemon thread を立てない。CLI Orchestrator では起動する。
@@ -148,7 +209,7 @@ markdown-query Skill の実体は HVE リポジトリ同梱の `mdq/` Python パ
 
 `mdq.strategies.ALL_STRATEGIES` に 5 種の戦略が定義されている。同一 Markdown 入力に対する境界の違いは以下（図は `heading` / `heading_recursive` / `fixed_window` / `semantic_paragraph` の 4 種を表示。`pageindex` は `heading` と同じ境界で + ノードごとの `summary` カラムを付与するため、独立のレーンは割り当てていない。詳細は §3.1 を参照）:
 
-![chunking strategies](images/skills-markdown-query/chunking-strategies.svg)
+![Chunking Strategy 比較図。同一の Markdown 入力に対して heading / heading_recursive / fixed_window / semantic_paragraph の 4 レーンでチャンク境界の違いを並べて示す](images/skills-markdown-query/chunking-strategies.svg)
 
 ### 3.1 戦略別パラメータ一覧 (コード定数)
 
@@ -265,7 +326,7 @@ C1〜C3 (Context 削減率)、H1 (Strategy 分布)、H2 (parent 展開率) な�
 
 ---
 
-## 独立 GUI ランチャー（他リポジトリでも利用可能）
+## 5. 独立 GUI ランチャー（他リポジトリでも利用可能）
 
 他リポジトリへ持ち出す場合は **[tools/for-other-repo/](../tools/for-other-repo/README.md) の
 コピー script を使う**（版マニフェストと OS ブートストラップ付き。FR-KIT-06）。
@@ -284,8 +345,8 @@ pwsh -NoLogo -NoProfile -File D:\other-repo\tools\kits\markdown-query\launch-gui
 `tools/skills/markdown_query/` をフォルダごと手でコピーしても同じ設定画面は起動するが、
 版の追跡と旧ファイルの削除は行われない。詳細は以下を参照:
 
-- セットアップ手順: `tools/skills/markdown_query/README.md`<!-- TBD: SETUP.md は不在、README.md にセットアップスクリプトと使い方が集約されている -->
-- 画面の使い方: [tools/skills/markdown_query/USAGE.md](../tools/skills/markdown_query/USAGE.md)
+- 他リポジトリへ配布する場合のセットアップ: [tools/for-other-repo/markdown-query/GETTING-STARTED.md](../tools/for-other-repo/markdown-query/GETTING-STARTED.md)
+- このリポジトリ同梱キットのセットアップ: [`setup.ps1`](../tools/skills/markdown_query/setup.ps1) / [`setup.sh`](../tools/skills/markdown_query/setup.sh)。GUI の操作は [tools/skills/markdown_query/USAGE.md](../tools/skills/markdown_query/USAGE.md) を参照。
 - 画面の実体: [`MdqIndexSection`](../mdq/gui/settings_section.py)
   — HVE GUI と独立ランチャーの両方が同じクラスを参照する単一 SoT。
 
@@ -297,7 +358,7 @@ pwsh -NoLogo -NoProfile -File D:\other-repo\tools\kits\markdown-query\launch-gui
 配下に保存される。GUI 起動時に最新生成が 24 時間以上前であれば自動再生成される（設定画面の
 「利用統計レポートの再生成」ボタンでも手動再生成可能）。
 
-## Tokenize 言語と Chunking Strategy
+## 6. Tokenize 言語と Chunking Strategy
 
 GUI 設定画面（および `hve-mdq` CLI の `--lang` / `--strategy`）で **言語** と
 **Chunking Strategy** を選択できる。索引 DB は組み合わせごとに別ファイルとして
@@ -363,7 +424,7 @@ python -m mdq search --lang en-us --q "design pattern overview" --with-parent-de
 
 `--db` を明示すると `--lang/--strategy` から導出されるパスを上書きできる。
 
-## GUI: 複数 Strategy の一括ビルドと Strategy 別統計
+## 7. GUI: 複数 Strategy の一括ビルドと Strategy 別統計
 
 設定画面の [基本] タブと [インデックス管理] タブで、複数の Chunking Strategy
 を並行管理できる。検索時は `mdq search --strategy auto`（`search` サブコマンドの
@@ -423,7 +484,7 @@ python -m mdq search --lang en-us --q "design pattern overview" --with-parent-de
 - **設定キー** (`[mdq] build_strategies`): `";"` 区切りの Strategy 名。
   空文字列 = 全 Strategy 選択扱い（= 既定）。未知の Strategy 名は黙って除外される。
 
-## 利用統計の追加指標（v2.0 / schema_version=2）
+## 8. 利用統計の追加指標 v2.0 (schema_version=2)
 
 `mdq.usage_stats.aggregate_usage_stats()` に以下の 2 指標が追加された:
 
@@ -436,7 +497,7 @@ python -m mdq search --lang en-us --q "design pattern overview" --with-parent-de
 [.github/skills/markdown-query/references/query-routing.md](../.github/skills/markdown-query/references/query-routing.md)
 を参照。
 
-## 対象フォルダ (target_folders)
+## 9. 対象フォルダ (target_folders)
 
 GUI 設定画面 → `skills` → `Markdown-Query` の「**対象フォルダ**」セクションで、Markdown-Query Skill の動作対象フォルダを **複数指定** できる。設定は `hve/.settings.txt` の `[mdq] target_folders` キーに、リポジトリ相対 POSIX パスを `;` 区切りで保存される。
 
@@ -452,11 +513,11 @@ GUI 設定画面 → `skills` → `Markdown-Query` の「**対象フォルダ**�
 `target_folders` を **1 件以上設定**したときの挙動:
 
 1. **mdq インデックス対象の上書き**
-   `python -m mdq index`（GUI の「インデックスの手動更新」含む）が、`mdq/cli.py::DEFAULT_ROOTS` ではなく `target_folders` を索引対象として使用する。索引と検索範囲を一致させるため。
+   `python -m mdq index`（GUI の「インデックスの手動更新」含む）が、§1.2 の 3 段の優先順（`--root` > `mdq.toml` > パッケージ既定）で解決した roots ではなく `target_folders` を索引対象として使用する。索引と検索範囲を一致させるため。
 2. **Agent への Markdown-Query Skill 利用強制**
    HVE Cloud Agent Orchestrator / CLI Orchestrator が Agent を起動する際、`additional_prompt` の先頭に強制ブロックが自動注入される。Agent は対象フォルダ配下の `.md` を参照する際に `read_file` / `grep_search` より先に `python -m mdq search` を最優先で使用するよう指示される。
 
-`target_folders` が **未設定（空）** の場合は、いずれの動作も発生せず既存の挙動（`DEFAULT_ROOTS` を使用、強制プロンプト無し）を維持する。
+`target_folders` が **未設定（空）** の場合は、いずれの動作も発生せず既存の挙動（§1.2 の優先順で roots を解決、強制プロンプト無し）を維持する。
 
 ### 設定例
 
@@ -471,7 +532,7 @@ GUI 設定画面 → `skills` → `Markdown-Query` の「**対象フォルダ**�
 - `target_folders` を変更しても **索引の再構築は自動実行されない**。GUI 上で「インデックスの手動更新」を実行するか、`python -m mdq index --rebuild` を実行すること。
 - 強制プロンプトは Agent への「指示」であり、LLM の応答に依存する。順守率の確認には GUI の利用統計レポート（`A1` / `A2`）が利用できる。
 
-## 統計レポートの構造
+## 10. 統計レポートの構造
 
 レポートには大きく以下 2 つのセクションが表示される。
 
@@ -483,7 +544,7 @@ GUI 設定画面 → `skills` → `Markdown-Query` の「**対象フォルダ**�
    現在選択中の `.mdq/index-<lang>-<strategy>.sqlite` から集計される。直近 7 日間がデフォルトの集計ウィンドウ。
    なお JSONL には lang/strategy が記録されないため、集計値は全組み合わせ横断となる（レポートメタ表示は「表示中の DB」ラベルに過ぎない）。
 
-## v1 採用 15 指標
+## 11. v1 採用 15 指標
 
 各指標の **値の出方** と **解釈の指針**を併記する。
 値が `（データ不足）` と表示される場合、その指標を算出するためのサンプルが集まっていないことを意味する（捏造値で 0 などを表示しない）。
@@ -494,9 +555,9 @@ GUI 設定画面 → `skills` → `Markdown-Query` の「**対象フォルダ**�
 
 - 算出: `mdq stats` の `files` / `chunks`。
 - 解釈: 索引対象のファイル数とチャンク数。極端に少ない場合は索引未生成、
-  または対象ディレクトリ（既定 `docs/`, `docs-generated/`, `users-guide/`, `template/`,
-  `knowledge/`, `qa/`, `original-docs/`, `work/`, `sample/`, `hve-dev/`）が
-  存在しない可能性がある。
+  または実効 roots のディレクトリが存在しない可能性がある。
+  実効 roots は §1.2 の 3 段の優先順で決まる（本リポジトリでは [mdq.toml](../mdq.toml) の
+  9 件。`work/` は含まれない）。
 
 #### E2 索引鮮度（age_seconds）
 
@@ -598,7 +659,7 @@ GUI 設定画面 → `skills` → `Markdown-Query` の「**対象フォルダ**�
 
 - **廃止**: 算出に必要だった `session-state/runs/<run_id>/state.json` が Session State（Resume）機能の全廃に伴い削除されたため、本指標（`G1_step_completion_rate_diff`）は `aggregate_usage_stats` の出力から除外された。
 
-## v2 以降の対応予定指標
+## 12. v2 以降の対応予定指標
 
 以下の指標は v1 では算出していない。理由を併記する。
 
@@ -609,7 +670,7 @@ GUI 設定画面 → `skills` → `Markdown-Query` の「**対象フォルダ**�
 - **G2 成果物トレーサビリティ含有率**: 対象ファイル種別の定義が必要。
 - **G3 Step トークン消費 before/after**: 導入前対照データが必要。
 
-## D3 / G4（v1.1 追加実装）
+## 13. D3 / G4（v1.1 追加実装）
 
 ### D3 典型クエリ出現率（全 workflow 横断）
 
@@ -624,7 +685,7 @@ GUI 設定画面 → `skills` → `Markdown-Query` の「**対象フォルダ**�
 
 - **廃止**: 算出に必要だった `session-state/runs/<run_id>/state.json` の `step_states.*.retry_count` が Session State（Resume）機能の全廃に伴い削除されたため、本指標（`G4_step_retry_count_diff`）は `aggregate_usage_stats` の出力から除外された。
 
-## 保留中の運用判断
+## 14. 保留中の運用判断
 
 ### C2 推奨閾値
 
@@ -643,7 +704,7 @@ GUI 設定画面 → `skills` → `Markdown-Query` の「**対象フォルダ**�
   5. **D2 編集前検索率**（Markdown 編集タイミング判定機構が前提）
   6. **A3 mdq → read_file フォールバック率**（LLM tool call 観測ハーネスが前提、最も大規模）
 
-## 他リポジトリへの移植（採用率を上げるための導入チェックリスト）
+## 15. 他リポジトリへの移植（採用率を上げるための導入チェックリスト）
 
 > 本セクションは、`markdown-query` Skill を別リポジトリへ持ち込む際に「**Agent が実際に呼んでくれる状態**」へ仕上げるための手順をまとめたものです。本リポジトリ（HVE）内での実測（[tools/skills/markdown_query/results/bench-20260518T022346Z.md](../tools/skills/markdown_query/results/bench-20260518T022346Z.md)）では、全 `.md` を直接読む場合と比べて **平均 99.81% のトークン削減**（mdq_bm25, 5 クエリ平均 480.8 tokens / baseline 250,823 tokens、fallback トークナイザ近似）を観測しています。同等効果を新リポジトリで得るには **配置だけでは不十分** で、下記 5 項目を併せて整備してください。
 
@@ -729,7 +790,7 @@ markdown (.md) and you need relevance-ranked hits across multiple files.
 - 上記 5 項目の効果は、本リポジトリ単体での観測（採用 0 件の主因分析）に基づくものであり、他ホスト（Claude Code / Codex CLI 等）での挙動は別途検証が必要。
 - `mdq_grep` モード（mdq 内部の grep 検索）は本リポジトリ実測では `mdq_bm25` より高速だが、フレーズ完全一致のためクエリによっては 0 ヒットになる。BM25 → grep のフォールバック順は用途依存。
 
-## レポートファイル
+## 16. レポートファイル
 
 - `<repo>/.mdq/usage-report/YYYY-MM-DD.json` — 機械可読
 - `<repo>/.mdq/usage-report/YYYY-MM-DD.md` — 人間可読
@@ -739,7 +800,7 @@ markdown (.md) and you need relevance-ranked hits across multiple files.
 
 レポート保存先の詳細は [tools/skills/markdown_query/usage-report/README.md](../tools/skills/markdown_query/usage-report/README.md) を参照。
 
-## 関連ファイル
+## 17. 関連ファイル
 
 - 利用ログ: `.mdq/usage.jsonl`（mdq CLI が自動追記、`.gitignore` 対象）
   - **機微情報注意**: `args.q`（検索クエリ）はそのまま記録されるため、ユーザが

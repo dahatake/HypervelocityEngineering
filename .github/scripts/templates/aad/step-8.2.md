@@ -9,7 +9,6 @@ Step.8.1 のアプリケーション定義を入力として、AI Agent の粒�
 - `docs/catalog/domain-analytics.md`
 - `docs/catalog/data-model.md`
 - `docs/catalog/app-catalog.md`（アプリケーション一覧）
-- `users-guide/08-ai-agent.md`（設計ガイドライン Step 2）
 
 ## 出力
 - `docs/agent/agent-architecture.md`

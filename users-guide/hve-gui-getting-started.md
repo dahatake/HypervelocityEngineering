@@ -15,6 +15,7 @@
 - [前提条件](#前提条件)
 - [セットアップ手順](#セットアップ手順)
 - [クイックスタート（サンプルで動かしてみる）](#クイックスタートサンプルで動かしてみる)
+- [完了確認と失敗時対応](#完了確認と失敗時対応)
 - [次のステップ](#次のステップ)
 
 ---
@@ -26,7 +27,8 @@
 | Python 3.11+ | 必須 | `py -3.11 --version` または `python3 --version` で確認 |
 | PySide6 >= 6.6 | 必須 | セットアップスクリプトで自動インストール |
 | Git | 必須 | リポジトリ取得 |
-| GitHub CLI (`gh`) | 必須 | `gh auth login` で認証 |
+| GitHub CLI (`gh`) | 必須 | セットアップスクリプトが自動導入。認証は `gh auth login` または GUI の「GitHub CLI でログイン」 |
+| PTY バックエンド（`pywinpty` / `ptyprocess`） | 必須 | GUI の「GitHub CLI でログイン」の埋め込み端末用。セットアップスクリプトが導入し、完了前に利用可否を検証 |
 | GitHub Copilot ライセンス | 必須 | Copilot SDK の利用に必要 |
 
 詳細は [hve-gui-orchestrator-guide.md の「前提条件」](./hve-gui-orchestrator-guide.md#前提条件) を参照してください。
@@ -69,14 +71,16 @@ GitHub Copilot SDK へのログインは、上記のとおり CLI（`python -m h
 > Issue / PR 作成（GitHub REST を使う機能）が有効化されます。
 >
 > - 前提: `gh` がインストール済みで、PTY バックエンド（`pywinpty` / `ptyprocess`）が利用可能なこと。
->   いずれかが無い場合はボタン押下時に案内文が表示されるので、端末で `gh auth login` を実行してください。
+>   いずれかが無い場合はボタン押下時に案内文が表示されます。復旧は **Windows: `hve\setup-hve.cmd` /
+>   macOS ・ Linux: `./hve/setup-hve.sh`** の再実行です（既存の `.venv` が正常なら `-Force` / `--force` は不要）。
+>   復旧するまでは端末で `gh auth login` を実行してください。
 > - トークンはディスクに保存されません（GUI 終了で破棄）。次回起動時は再度ログインするか、
 >   `gh auth token` を環境変数へ橋渡しして GUI を起動してください。
 > - `gh auth token` のスコープが不足する場合、Issue / PR 作成等が失敗することがあります。
 
 ### 3. `.venv` 作成 + GUI 依存をインストール
 
-セットアップスクリプトに **GUI extras を含める** オプションを付けて実行します。
+オプションなしでセットアップスクリプトを実行すれば、GUI に必要な依存が全て入ります。
 
 #### Windows
 
@@ -94,6 +98,14 @@ hve\setup-hve.cmd
 
 > `./hve/setup-hve.sh` も GUI extras（PySide6, markitdown, pywinpty/ptyprocess 等）を**既定で導入**します。CLI のみで良い場合は `--no-gui` を付けてください。
 
+**成功確認**: 通常構成では、セットアップが終端する前に GUI の「GitHub CLI でログイン」が必要とする前提を検証します。
+
+- 出力に `[OK] PTY backend for the embedded GitHub CLI terminal` が出て、終了コードが 0 であれば成功です。
+- `gh` を解決できない場合、または PTY バックエンドが利用できない場合は、エラーを表示して非ゼロで終了します。
+- 現状確認だけしたい場合は `-CheckOnly` / `--check-only` を付けます。このモードは何も変更せず、不足している `gh` / PTY バックエンドを警告として報告します（非ゼロ終了はしません）。
+
+**`-Force` / `--force` は通常不要**: 既存の `.venv` が Python 3.11+ でグローバル site-packages を継承していなければ、再実行で不足依存だけが追加・修復されます。`.venv` を作り直したいときだけ `-Force` / `--force` を使ってください。
+
 スクリプトの詳細・オプションは [hve-gui-orchestrator-guide.md の「インストール」](./hve-gui-orchestrator-guide.md#インストール) を参照してください。
 
 > **Python 自動インストールと管理者権限について**
@@ -102,11 +114,17 @@ hve\setup-hve.cmd
 
 ### 4. GUI を起動して動作確認
 
-```bash
-python -m hve
+```cmd
+REM Windows
+hve.cmd gui
 ```
 
-引数なしの `python -m hve` は GUI ウィザードを起動します（PySide6 未導入時は CLI に自動フォールバック）。ウィンドウが開けばセットアップ完了です。
+```bash
+# macOS / Linux
+./hve.sh gui
+```
+
+`hve.cmd` / `hve.sh` は `.venv` の Python で `python -m hve` を実行するランチャーです（activate 不要）。引数なしでも GUI が起動します。ウィンドウが開けばセットアップ完了です。
 
 ---
 
@@ -138,14 +156,14 @@ cp sample/business-requirement.md docs/business-requirement.md
 
 ### 2. GUI を起動
 
-```bash
-python -m hve
+```cmd
+REM Windows
+hve.cmd gui
 ```
 
-または明示的に:
-
 ```bash
-python -m hve gui
+# macOS / Linux
+./hve.sh gui
 ```
 
 ### 3. ウィザードで ARD を選択して実行
@@ -181,6 +199,35 @@ ARD のチェックボックスを ON にすると、選択状態が反映され
 
 ---
 
+## 完了確認と失敗時対応
+
+### 完了確認
+
+| 段階 | 確認方法 | 期待結果 |
+|---|---|---|
+| 環境構築 | セットアップスクリプトの終了コード | `0`、かつ `[OK] PTY backend for the embedded GitHub CLI terminal` が出力される |
+| GUI 起動 | `hve.cmd gui` / `./hve.sh gui` | ウィンドウが開く |
+| SDK 認証 | ステータスバーの「利用できるモデルの取得」 | モデル一覧が取得できる |
+| 実行 | Step 2 の進行表示と作業状況ツリー | 全 Step が完了として表示される |
+| 成果物 | ファイルツリーパネル、または `docs/` を直接確認 | 上記 3 つの成果物が生成・更新されている |
+
+Step 1 で [次へ] を押した時点のパラメータは `work/run/<session_run_id>/step1-precheck/` に保存されます。実行内容を後から確認する場合はこのスナップショットを参照してください（詳細は [hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md#step-1-事前チェックスナップショットargsパラメータ保存)）。
+
+### 失敗時対応
+
+| 症状 | 最初に確認すること | 対応 |
+|---|---|---|
+| GUI が起動しない | PySide6 の導入状況 | GUI extras をスキップせずにセットアップスクリプトを再実行する（`setup-hve.ps1 -NoGui` / `setup-hve.sh --no-gui` / `-Minimal` を付けない） |
+| 「GitHub CLI でログイン」が使えない | `gh` と PTY バックエンドの有無 | セットアップスクリプトを再実行する。復旧するまでは端末で `gh auth login` を実行する |
+| モデル一覧が取得できない | Copilot SDK の認証状態 | 端末で `python -m hve login` を実行する。状態確認は `python -m hve login --status` |
+| Issue / PR 作成が失敗する | `gh auth token` のスコープ | 必要な権限を持つアカウントで再ログインする |
+| ツリーの更新が反映されない | ファイル監視の取りこぼし | 「既知の制約」を参照。フォルダーを開き直すか GUI を再起動する |
+| プレビューが真っ白 / 図が出ない | Mermaid・KaTeX アセットの配置 | 未配置でも通常の Markdown は表示される。配置手順は下記の注記を参照 |
+
+その他の事例は [troubleshooting.md](./troubleshooting.md) と [hve-gui-orchestrator-guide.md のトラブルシューティング](./hve-gui-orchestrator-guide.md#トラブルシューティング) を参照してください。
+
+---
+
 ## ファイルツリー / Markdown プレビュー（左右パネル）
 
 ステップ 2（実行画面）には、VS Code エクスプローラー風の **ファイルツリーパネル**（左）と **Markdown プレビューパネル**（右）が組み込まれています。Orchestrator 実行中に成果物の作成・更新を確認したいときに使います。
@@ -196,13 +243,12 @@ ARD のチェックボックスを ON にすると、選択状態が反映され
 
 ### ファイルツリーパネル
 
-以下のフォルダーがルートとして並びます（存在しないものは非表示）。
+以下のフォルダーがルートとして並びます。
 
-- `work/gui-runs/<セッションID>/` — このセッションが生成する全成果物
-- `docs/` — 業務要件・設計成果物
-- `knowledge/` — ドメイン知識・ADR
-- `qa/` — 質問票・回答
-- `docs-generated/` — 自動生成ドキュメント
+- `work/run/<セッションID>/` — このセッションが生成する全成果物（GUI が自動で先頭に追加）
+- `docs/` / `docs-generated/` / `knowledge/` / `docs-original/` / `qa/` / `users-guide/` — 設定 `explorer_roots` の既定値（正本: `hve/gui/settings_store.py`）
+
+監視ルートは「HVE 設定」の `explorer_roots`（`;` 区切り）で変更できます。未存在のディレクトリは解決時に自動作成されます（正本: `hve/gui/explorer_roots.py`）。
 
 **リアルタイム更新マーカー**: Orchestrator がファイルを新規作成・更新すると、ツリーの該当行の右端に小さな丸が約 5 秒間表示されます。
 - 緑 ●: 新規作成

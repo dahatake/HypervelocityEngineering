@@ -7,6 +7,8 @@
 > **次のステップ**: セットアップ完了後はこのガイドの「[クイックスタート（サンプルで動かしてみる）](#クイックスタートサンプルで動かしてみる)」に進み、その後 [web-ui-guide.md](./web-ui-guide.md) の利用手順へ進んでください
 >
 > **別の方式を試したい場合**: [hve-cli-getting-started.md](./hve-cli-getting-started.md)（CLI）/ [hve-gui-getting-started.md](./hve-gui-getting-started.md)（GUI）
+>
+> **「Cloud」の呼び分け**: 本ガイドの HVE Cloud Agent Orchestrator は、Issue Template → GitHub Actions → GitHub Copilot Cloud Agent の経路です。ローカルの CLI / GUI から Step セッションを Copilot SDK の Cloud Sessions へ送る機能は別物で、[cloud-session.md](./cloud-session.md) が正典です。両者は設定場所も前提も異なります。
 
 ---
 
@@ -45,7 +47,7 @@
 | Git | **必須** | リポジトリのクローン |
 | Web ブラウザ | **必須** | GitHub.com の操作（Web UI 方式） |
 | Python 3.11+ | HVE CLI / GUI Orchestrator のみ | HVE ローカル実行 |
-| PySide6>=6.6 | HVE GUI Orchestrator のみ | GUI ウィザード起動（`pip install -e ".[gui]"` で自動インストール） |
+| PySide6>=6.6 | HVE GUI Orchestrator のみ | GUI ウィザード起動（`hve\setup-hve.cmd` / `./hve/setup-hve.sh` で自動インストール） |
 | GitHub Copilot CLI（外部 `copilot` コマンド） | オプション | SDK 同梱ではなく外部 CLI を明示利用する場合 |
 | Node.js（npm/npx） | オプション | MCP Server（filesystem 等）/ Work IQ / npm 方式の外部 Copilot CLI 使用時 |
 | Microsoft Work IQ（`@microsoft/workiq`） | オプション | HVE CLI Orchestrator で M365 補助情報を参照する場合（[詳細](./hve-cli-orchestrator-guide.md#work-iq-mcp-連携オプション)） |
@@ -179,15 +181,15 @@ HVE CLI Orchestrator または HVE GUI Orchestrator を **Windows で初めて�
     - mdq extras（`[mdq-watch,mdq-ja]`）
     - **GUI extras（`[gui,gui-docconvert]`、PySide6 + markitdown）** — `.cmd` は既定で GUI extras を含めます
 3. 完了後の動線:
-   - GUI を使う場合 → `hve-gui.bat` をダブルクリック（[hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md)）
-   - CLI を使う場合 → `python -m hve --help`（[hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md)）
+   - GUI を使う場合 → `hve.cmd gui`（ダブルクリックも可。[hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md)）
+   - CLI を使う場合 → `hve.cmd --help`（[hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md)）
 
 `.cmd` がサポートする引数（`.ps1` のフラグを verbatim 転送）:
 
 | 引数 | 動作 |
 |---|---|
 | なし（既定） | 不足 OS ツール（Python / venv / Git / gh / Node.js / Azure CLI / ShellCheck / Copilot CLI）の導入 + venv 作成 + SDK + 全 extras（test / mdq-watch / mdq-ja / semantic / gui / gui-pty / gui-docconvert / code）を導入 |
-| `-CheckOnly` | 状態確認のみ（変更なし） |
+| `-CheckOnly` | 状態確認のみ（変更なし。通常 GUI 構成で `gh` / PTY backend が不足していれば警告を表示） |
 | `-NoGui` | GUI extras をスキップ（CLI のみ） |
 | `-Minimal` | base のみインストール（extras 全スキップ） |
 | `-Force` | `.venv` を削除して再作成 |
@@ -350,11 +352,11 @@ Copilot CLI または Claude Code を使う場合、Microsoft Learn MCP サー�
 
 ### markdown-query Skill（ローカル完結 Markdown 横断クエリ）
 
-Copilot / Prompt が `docs/` `knowledge/` `qa/` `original-docs/` `work/` 等の Markdown を横断参照する際の Context Window を最小化する、**100% ローカル**で動作する Skill です。クラウド埋め込み・外部 API 呼び出しは行いません。
+Copilot / Prompt が `docs/` `knowledge/` `qa/` `docs-original/` `work/` 等の Markdown を横断参照する際の Context Window を最小化する、**100% ローカル**で動作する Skill です。クラウド埋め込み・外部 API 呼び出しは行いません。
 
 - Skill 本体: `.github/skills/markdown-query/SKILL.md`
 - 実装: `mdq`（SQLite + BM25）
-- 索引対象（既定 10 フォルダ）: `docs/`, `docs-generated/`, `users-guide/`, `template/`, `knowledge/`, `qa/`, `original-docs/`, `work/`, `sample/`, `hve-dev/`
+- 索引対象（既定 10 フォルダ）: `docs/`, `docs-generated/`, `users-guide/`, `template/`, `knowledge/`, `qa/`, `docs-original/`, `work/`, `sample/`, `hve-dev/`
 
 #### 任意依存の導入（推奨）
 
@@ -605,7 +607,7 @@ bash src/infra/azure/create-azure-webui-resources.sh
 
 Setup Labels ワークフローが作成・更新するラベル一覧です:
 
-**ワークフロートリガー系（13 個）**
+**ワークフロートリガー系（12 個）**
 
 > **FR-CLOUD-06**: `auto-app-dev-microservice` / `auto-app-dev-microservice-web`（ASDW / ASDW-WEB）は、reusable workflow が `hve/workflow_registry.py` の Step 体系と非同期のため Cloud 起動を停止しています。ラベル自体は作成されますが、付与しても Sub-Issue は生成されず、dispatcher が CLI / GUI への誘導コメントを投稿します。ASDW-WEB は [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md) / [hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md) の経路が supported です。
 
@@ -623,7 +625,6 @@ Setup Labels ワークフローが作成・更新するラベル一覧です:
 | `auto-app-documentation` | `#0E8A16` | ADOC ワークフロートリガー |
 | `knowledge-management` | `#0E8A16` | AKM ワークフロートリガー |
 | `self-improve` | `#0E8A16` | 自己改善ループトリガー |
-| `original-docs-review` | `#0E8A16` | AQOD ワークフロートリガー |
 
 **PR 制御系（6 個）**
 
@@ -739,6 +740,19 @@ Step.5 のラベル設定完了後、以下の確認を順に実施してくだ�
 
 > トラブルが発生した場合は [troubleshooting.md](./troubleshooting.md) を参照してください。初期セットアップ中は特に [Setup Labels / ラベル初期化](./troubleshooting.md#2-setup-labels--ラベル初期化) と [Copilot 自動アサイン](./troubleshooting.md#3-copilot-自動アサイン) を優先して確認してください。
 
+### 失敗時の切り分け
+
+| 症状 | 最初に確認すること | 対応 |
+|---|---|---|
+| Issue を作成しても Actions が動かない | Issue に付与されたラベル | Setup Labels workflow（`.github/workflows/setup-labels.yml`）を手動実行してラベルを再作成する |
+| Dispatcher は動くが reusable workflow が起動しない | Dispatcher 実行ログのジョブ条件 | `.github/workflows/auto-orchestrator-dispatcher.yml` の分岐条件と、Issue Template が付与するラベルの対応を確認する |
+| `@copilot` がアサインされない | `COPILOT_PAT` の登録有無とスコープ | 未設定時はスキップされ警告が出る仕様。[Step.4](#step4-認証設定copilot_pat) を再確認する |
+| ワークフローがファイルを書き込めない | Actions の Workflow permissions | [Step.4.2](#step42-ワークフロー権限設定) で **Read and write permissions** に設定する |
+| セルフホストランナーのジョブが待機し続ける | ランナーのラベルと稼働状況 | [Step.4.5](#step45-self-hosted-runner-設定オプション) を確認する。GitHub-hosted runner で実行する場合は `runner_type` を既定値に戻す |
+| 何が不足しているか分からない | preflight スクリプト | `bash .github/scripts/preflight-cloud-setup.sh OWNER/REPO` を実行する。API 権限不足で取得できない項目は未設定と断定せず手動確認する |
+
+> 秘密情報の扱い: PAT やトークンの値を Issue 本文・PR 本文・ワークフローログ・このリポジトリのドキュメントへ貼り付けないでください。値はリポジトリの Secrets にのみ登録します。
+
 ---
 
 ## クイックスタート（サンプルで動かしてみる）
@@ -801,6 +815,51 @@ cp sample/business-requirement.md docs/business-requirement.md
 
 `knowledge/` ファイルが存在すると、設計・開発の各 Prompt が業務要件・制約のコンテキストとして自動参照します。アプリケーション設計・開発ワークフローを開始する前に、`knowledge-management` ワークフローを実行しておくことを推奨します。
 
+---
+
+## Cloud セットアップをカスタマイズする（開発者向け）
+
+Issue Template・ラベル・Dispatcher を自分のリポジトリ向けに変更する場合の正本と回帰検証をまとめます。
+
+### 設定の正本
+
+| 変更したいもの | 正本 |
+|---|---|
+| Issue Template のフォーム項目・付与ラベル | `.github/ISSUE_TEMPLATE/*.yml` |
+| ラベル定義（名前・色・説明） | `.github/labels.json` |
+| ラベル作成ワークフロー | `.github/workflows/setup-labels.yml` |
+| ラベルから reusable workflow への振り分け | `.github/workflows/auto-orchestrator-dispatcher.yml` |
+| 各ワークフローの実体 | `.github/workflows/auto-*-reusable.yml` |
+| 初期セットアップの検査 | `.github/scripts/preflight-cloud-setup.sh` |
+| リポジトリ共通ルール | `.github/copilot-instructions.md` |
+| Skills | `.github/skills/` |
+
+### 変更手順
+
+1. **ラベルを追加する**: `.github/labels.json` に追加し、Setup Labels workflow を再実行する。Dispatcher 側の条件も同じ変更で更新する。
+2. **Issue Template を追加する**: `.github/ISSUE_TEMPLATE/` にフォームを追加し、起動したいワークフローに対応するラベルを付与するよう設定する。
+3. **ワークフローを追加する**: reusable workflow を追加し、Dispatcher から呼び出す分岐を追加する。
+4. **文書を更新する**: 上記チェックリストと Step.7 の疎通確認項目を、同じ変更で更新する。
+
+### 回帰検証
+
+```bash
+# ラベル整合・Issue Template の対応
+python -m pytest hve/tests/test_label_consistency_audit.py hve/tests/test_issue_template_qa_parity.py
+
+# Cloud / ローカルのワークフロー定義の整合
+python -m pytest hve/tests/test_cloud_reusable_workflow_parity.py
+
+# 初期セットアップの検査（対象リポジトリを指定）
+bash .github/scripts/preflight-cloud-setup.sh OWNER/REPO
+```
+
+### 互換性・安全性
+
+- ラベル名は Dispatcher の分岐条件と Issue Template の双方から参照されます。改名する場合は 3 箇所（`labels.json` / Issue Template / Dispatcher）を必ず同時に変更してください。
+- 権限は最小構成から始めてください。`COPILOT_PAT` は Fine-grained PAT で必要最小のスコープに絞ります。
+- Secrets は GitHub の Secrets 機能でのみ管理し、ワークフローの `echo` やログ出力に露出させないでください。
+
 ## 次のステップ
 
 - **Cloud Orchestrator の本格利用**: [web-ui-guide.md](./web-ui-guide.md)
@@ -808,3 +867,12 @@ cp sample/business-requirement.md docs/business-requirement.md
 - **全体像の把握**: [README.md](../README.md)
 - **フェーズ別ガイド**: [README.md の users-guide への導線](../README.md#users-guide-への導線)
 - **トラブルシューティング**: [troubleshooting.md](./troubleshooting.md)
+- **Copilot SDK の Cloud Sessions（別機能）**: [cloud-session.md](./cloud-session.md)
+
+---
+
+## 公式出典
+
+- Using secrets in GitHub Actions — <https://docs.github.com/en/actions/security-for-github-actions/security-guides/using-secrets-in-github-actions>
+- Managing your personal access tokens — <https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens>
+- Automatic model selection — <https://docs.github.com/en/copilot/concepts/auto-model-selection>

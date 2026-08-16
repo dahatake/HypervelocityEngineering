@@ -261,7 +261,7 @@ class TestSummarizeOthers:
         assert s.overall_status == "ok"
 
     def test_akm_or_logic_qa_only(self):
-        # original-docs/ なし、qa/ あり → "any" で ok
+        # docs-original/ なし、qa/ あり → "any" で ok
         def fe(p: str) -> bool:
             return p == "qa/"
         s = summarize_requirements("akm", "1", file_exists=fe)
@@ -271,11 +271,11 @@ class TestSummarizeOthers:
         s = summarize_requirements("akm", "1", file_exists=lambda _p: False)
         assert s.overall_status == "warn"
 
-    def test_aqod_requires_original_docs(self):
-        # akm と異なり aqod は original-docs/ のみ
+    def test_adi_requires_original_docs(self):
+        # akm と異なり adi は docs-original/ のみ
         def fe(p: str) -> bool:
             return p == "qa/"
-        s = summarize_requirements("aqod", "1", file_exists=fe)
+        s = summarize_requirements("adi", "1", file_exists=fe)
         assert s.overall_status == "warn"
 
     def test_adoc_requires_target_dirs(self):

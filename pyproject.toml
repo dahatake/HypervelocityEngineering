@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hve"
-version = "0.4.0"
+version = "0.8.8"
 description = "HVE CLI Orchestrator package"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
@@ -91,6 +91,39 @@ code = [
 # 手動インストール: pip install -e .[code,code-sql]
 code-sql = [
   "sqlfluff>=4.2",
+]
+# 言語別 extras: `code` は全言語をまとめて導入するが、索引したい言語が決まっている
+# 環境では不要な文法まで入る。以下は言語 1 つに対応する最小の依存集合で、
+# `pip install -e .[code-python,code-csharp]` のように必要な分だけ選べる。
+# setup スクリプトの -CodeLanguages / --code-languages はこの名前をそのまま使う。
+# `tree-sitter` は全文法が共有するランタイムなので各 extras が個別に要求する。
+code-python = ["tree-sitter>=0.23", "tree-sitter-python>=0.25"]
+code-csharp = ["tree-sitter>=0.23", "tree-sitter-c-sharp>=0.23"]
+code-javascript = ["tree-sitter>=0.23", "tree-sitter-javascript>=0.25"]
+code-typescript = ["tree-sitter>=0.23", "tree-sitter-typescript>=0.23"]
+code-java = ["tree-sitter>=0.23", "tree-sitter-java>=0.23"]
+code-go = ["tree-sitter>=0.23", "tree-sitter-go>=0.25"]
+code-rust = ["tree-sitter>=0.23", "tree-sitter-rust>=0.24"]
+# `.h` は C と C++ の両文法で parse して判別するため（cq/languages/cfamily.py の
+# `language_for_header`）、どちらの言語を選んでも両方の文法が要る。
+code-c = ["tree-sitter>=0.23", "tree-sitter-c>=0.24", "tree-sitter-cpp>=0.23"]
+code-cpp = ["tree-sitter>=0.23", "tree-sitter-c>=0.24", "tree-sitter-cpp>=0.23"]
+code-scala = ["tree-sitter>=0.23", "tree-sitter-scala>=0.26"]
+code-shell = ["tree-sitter>=0.23", "tree-sitter-bash>=0.25"]
+code-powershell = ["tree-sitter>=0.23", "tree-sitter-powershell>=0.26"]
+code-batch = ["tree-sitter>=0.23", "tree-sitter-batch>=0.11"]
+# SQL 言語対応。`code-sql`（sqlfluff）は解析できない本体のエスカレーション用で別物。
+code-sqlglot = ["tree-sitter>=0.23", "sqlglot>=30", "tree-sitter-sql>=0.3"]
+# cq 自身の任意依存。`cq watch` と cq のトークン計測が mdq の extras へ相乗り
+# しないよう、cq 側で宣言する（FR-CQ-01 / FR-KIT-05 の独立性）。
+code-watch = ["watchdog>=6.0"]
+code-tokenizer = ["tiktoken>=0.13"]
+# code-semantic: `cq search --semantic` 用の任意依存（FR-CQ-17）。
+# `mdq` の `semantic` extra と同じパッケージを使うが、cq は mdq に依存しない
+# 契約（FR-CQ-01 / FR-KIT-05）なので別名で宣言する。既定は OFF。
+code-semantic = [
+  "fastembed>=0.8",
+  "numpy>=2.0",
 ]
 # semantic: `--strategy semantic_paragraph` 用の任意依存（work/semantic-paragraph/plan.md 参照）。
 # - fastembed: ONNX ベースのローカル埋め込み（既定 model = intfloat/multilingual-e5-large、MIT、Q2=C）。
@@ -211,7 +244,7 @@ exclude = ["hve.tests*"]
 # 連動対象外: cq / mdq engine、各 Skill / GUI / 移植用キット（独立ライフサイクル）
 # ---------------------------------------------------------------------------
 [tool.bumpversion]
-current_version = "0.4.0"
+current_version = "0.8.8"
 commit = true
 tag = true
 tag_name = "v{new_version}"

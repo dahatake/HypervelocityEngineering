@@ -1758,6 +1758,63 @@ class TestWorkIQToolEventHelpers(unittest.TestCase):
         self.assertEqual(check.status, "PASS")
 
 
+class TestWorkIQOfficialToolIdentity(unittest.TestCase):
+    """FR-QA-03: Work IQ 実行確認は server/tool の組で判定する。"""
+
+    @staticmethod
+    def _make_event(*, server_name=None, tool_name=None, legacy_tool_name=None):
+        import types
+
+        data = types.SimpleNamespace(
+            mcp_server_name=server_name,
+            mcp_tool_name=tool_name,
+            tool_name=legacy_tool_name,
+        )
+        return types.SimpleNamespace(
+            type=types.SimpleNamespace(value="tool.execution_start"),
+            data=data,
+        )
+
+    def test_internal_server_and_tool_pair_is_allowed(self) -> None:
+        event = self._make_event(
+            server_name="_hve_workiq",
+            tool_name="ask_work_iq",
+        )
+        self.assertTrue(workiq.is_workiq_tool_event(event))
+
+    def test_official_server_and_tool_pair_is_allowed(self) -> None:
+        event = self._make_event(server_name="workiq", tool_name="ask")
+        self.assertTrue(workiq.is_workiq_tool_event(event))
+        self.assertEqual(workiq.extract_workiq_tool_name_from_event(event), "ask")
+
+    def test_bare_official_tool_name_without_server_is_rejected(self) -> None:
+        event = self._make_event(legacy_tool_name="ask")
+        self.assertFalse(workiq.is_workiq_tool_event(event))
+        self.assertIsNone(workiq.extract_workiq_tool_name_from_event(event))
+
+    def test_other_server_with_official_tool_name_is_rejected(self) -> None:
+        event = self._make_event(server_name="other", tool_name="ask")
+        self.assertFalse(workiq.is_workiq_tool_event(event))
+
+    def test_legacy_internal_tool_without_server_remains_supported(self) -> None:
+        event = self._make_event(legacy_tool_name="ask_work_iq")
+        self.assertTrue(workiq.is_workiq_tool_event(event))
+
+    def test_extract_status_from_first_nonempty_line(self) -> None:
+        self.assertEqual(
+            workiq.extract_workiq_status("\n  status : partial  \n本文"),
+            "PARTIAL",
+        )
+
+    def test_extract_status_rejects_missing_or_unknown_label(self) -> None:
+        self.assertIsNone(workiq.extract_workiq_status("本文のみ"))
+        self.assertIsNone(workiq.extract_workiq_status("STATUS: ERROR\n失敗"))
+
+    def test_extract_status_does_not_trust_later_embedded_label(self) -> None:
+        text = "未確認の診断 prefix\nSTATUS: FOUND\n本文"
+        self.assertIsNone(workiq.extract_workiq_status(text))
+
+
 class TestIsWorkIQToolName(unittest.TestCase):
     """is_workiq_tool_name() のユニットテスト。"""
 

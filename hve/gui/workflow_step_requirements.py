@@ -63,7 +63,7 @@ class FileKindSpec:
 WORKFLOW_PRIORITY: Tuple[str, ...] = (
     "ard", "aas", "aad-web", "asdw-web",
     "adfd", "adfdv", "aag", "aagd", "aar",
-    "akm", "aqod", "adoc",
+    "akm", "adi", "adoc",
 )
 
 
@@ -81,7 +81,7 @@ WORKFLOW_TO_SECTION: Dict[str, str] = {
     "adfd": "C10",
     "adfdv": "C10",
     "akm": "C11",
-    "aqod": "C12",
+    "adi": "C17",
     "adoc": "C13",
     "aas": "OPTIONS_TOP",
     "aag": "OPTIONS_TOP",
@@ -118,8 +118,23 @@ INPUT_FIELD_KEYS_STATIC: Tuple[str, ...] = (
 )
 
 
+def gui_visible_required_params(step) -> Tuple[str, ...]:
+    """GUI が入力欄・永続化・監視の対象とする必須パラメータを返す（FR-GUI-02）。
+
+    `default_params` を持つキーは実行時に `apply_step_default_params`（FR-DAG-07）
+    が補完するため対象外とする。入力欄を設けると、保存された非空値が補完を
+    抑止してレジストリ既定値を無言で上書きする。
+
+    precheck（`_summarize_step_required_params`）と入力欄導出
+    （`registry_required_param_keys`）の双方が本関数を使う（FR-MAINT-07）。
+    """
+    required = getattr(step, "required_params", ()) or ()
+    defaults = getattr(step, "default_params", {}) or {}
+    return tuple(key for key in required if key not in defaults)
+
+
 def registry_required_param_keys() -> Tuple[str, ...]:
-    """全 Workflow の `StepDef.required_params` を重複除去して返す（FR-GUI-02）。
+    """全 Workflow の GUI 可視な必須パラメータを重複除去して返す（FR-GUI-02）。
 
     必須キーの正本は `hve/workflow_registry.py` の宣言（FR-DAG-07）であり、
     GUI 側で二重管理しない。
@@ -129,7 +144,7 @@ def registry_required_param_keys() -> Tuple[str, ...]:
     keys: List[str] = []
     for wf in list_workflows():
         for step in wf.steps:
-            for key in step.required_params:
+            for key in gui_visible_required_params(step):
                 if key not in keys:
                     keys.append(key)
     return tuple(keys)
@@ -173,14 +188,14 @@ FILE_KIND_TO_SPEC: Dict[str, FileKindSpec] = {
         display_name="docs/dataflow/dataflow-app-catalog.md",
     ),
     "original_docs": FileKindSpec(
-        paths=("original-docs/",),
+        paths=("docs-original/",),
         logic="all",
-        display_name="original-docs/ 配下",
+        display_name="docs-original/ 配下",
     ),
     "original_docs_or_qa": FileKindSpec(
-        paths=("original-docs/", "qa/"),
+        paths=("docs-original/", "qa/"),
         logic="any",
-        display_name="original-docs/ または qa/ 配下",
+        display_name="docs-original/ または qa/ 配下",
     ),
 }
 
@@ -354,19 +369,19 @@ _add(StepRequirement(
     required_info_logic="none",
     required_file_kind="original_docs_or_qa",
     guidance_text=(
-        "knowledge/ ドキュメント生成には original-docs/ または qa/ 配下のいずれかに "
+        "knowledge/ ドキュメント生成には docs-original/ または qa/ 配下のいずれかに "
         "ソースファイルが配置されている必要があります。"
     ),
 ))
 
-# ---- AQOD ----
+# ---- ADI ----
 _add(StepRequirement(
-    workflow_id="aqod", step_id="1",
+    workflow_id="adi", step_id="1",
     required_info_keys=(),
     required_info_logic="none",
     required_file_kind="original_docs",
     guidance_text=(
-        "original-docs レビューには original-docs/ 配下に対象ファイルが "
+        "設計書の取り込み・質問票生成・下流選別には docs-original/ 配下に対象ファイルが "
         "配置されている必要があります。"
     ),
 ))
@@ -757,20 +772,20 @@ def _summarize_step_required_params(
 ) -> Optional[RequirementsSummary]:
     """`StepDef.required_params` 由来の必須入力サマリーを生成する（FR-GUI-02）。
 
-    `default_params` を持つキーは実行時に `apply_step_default_params`（FR-DAG-07）
-    が補完するため、GUI 未入力でも不足としない。
+    対象キーは `gui_visible_required_params` が返すものに限る。
     """
     from hve.workflow_registry import get_workflow
 
     wf = get_workflow(workflow_id)
     step = wf.get_step(step_id) if wf is not None else None
-    if step is None or not step.required_params:
+    if step is None:
+        return None
+    visible_keys = gui_visible_required_params(step)
+    if not visible_keys:
         return None
 
     items: List[RequirementItem] = []
-    for key in step.required_params:
-        if key in step.default_params:
-            continue
+    for key in visible_keys:
         value = (input_values.get(key) or "").strip()
         items.append(RequirementItem(
             label=key,
@@ -815,6 +830,11 @@ def summarize_all_requirements_for_selection(
     - **パラメータ要件**（`StepDef.required_params` 由来）: **全選択ワークフローの
       全選択 Step**。パラメータはどの上流ワークフローも生成しないため、
       判定を実行時まで遅らせても解消されない。
+
+    例外として、ARD グループ 1 を併せて選択している場合はグループ 2 の
+    `target_business` を検査しない。この経路では `hve/orchestrator.py` の
+    bridge mode が Step 1.2 の Strategic Recommendation から値を生成するため、
+    `hve/__main__.py` の対話ウィザードも同条件で必須にしていない。
     """
     iv = dict(input_values or {})
     summaries: List[RequirementsSummary] = summarize_requirements_for_selection(
@@ -829,6 +849,11 @@ def summarize_all_requirements_for_selection(
     seen = {(s.workflow_id, s.step_id) for s in summaries}
     target = pick_target_step(selected)
     priority_workflow_id = target[0] if target is not None else None
+    ard_group1_selected = any(
+        workflow_id == "ard"
+        and any(str(sid).split("/", 1)[0] == "1" for sid in (step_ids or ()))
+        for workflow_id, step_ids in selected
+    )
 
     for workflow_id, step_ids in selected:
         base_ids: List[str] = []
@@ -846,6 +871,7 @@ def summarize_all_requirements_for_selection(
                 not autopilot_mode
                 and workflow_id == priority_workflow_id
                 and key in REQUIREMENT_TABLE
+                and not (ard_group1_selected and key == ("ard", "2"))
             ):
                 table_summary = summarize_requirements(
                     workflow_id, step_id,

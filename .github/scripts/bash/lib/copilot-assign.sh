@@ -32,6 +32,16 @@ extract_qa_model() {
   printf '%s' "${body}" | python3 "${_COPILOT_ASSIGN_LIB_DIR}/extract-qa-model.py"
 }
 
+extract_akm_model() {
+  local body="$1"
+  printf '%s' "${body}" | python3 "${_COPILOT_ASSIGN_LIB_DIR}/extract-akm-model.py"
+}
+
+extract_qa_akm_merge() {
+  local body="$1"
+  printf '%s' "${body}" | python3 "${_COPILOT_ASSIGN_LIB_DIR}/extract-qa-akm-merge.py"
+}
+
 resolve_model() {
   local raw="$1"
   if [[ -z "${raw}" || "${raw}" == "Auto" ]]; then

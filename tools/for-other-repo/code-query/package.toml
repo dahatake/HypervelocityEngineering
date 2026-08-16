@@ -6,7 +6,7 @@
 
 [package]
 name = "code-query"
-version = "1.2.0"
+version = "1.3.0"
 engine = "cq"
 summary = "ローカル完結のソースコード横断検索 Skill（定義・参照・要件 ID 追跡）"
 source_repo = "dahatake/RoyalytyService2ndGen"

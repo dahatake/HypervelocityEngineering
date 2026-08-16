@@ -27,7 +27,8 @@ Knowledge Base への 1 回の retrieve 要求は次の順で処理される。
 | `Effort rationale` | ✅ | latency / cost / 検索深度のトレードオフをどう判断したか |
 | `Output mode` | ✅ | `extractiveData` / `answerSynthesis`。`minimal` のときは `extractiveData` 固定 |
 | `Retrieval instructions` | ✅ | LLM の KS 選択・スキップを誘導する指示文。不要なら `none: <理由>` |
-| `Knowledge source count` | ✅ | AR-CAP-02 の行数と一致する整数 |
+| `Knowledge source count` | ✅ | AR-CAP-02 の行数と一致する整数。2 以上 10 以下（R14 / R5） |
+| `Index semantic configuration` | ✅ | どの semantic configuration を用いるか、またはどこで確定するか。各サブクエリが semantic rerank を通るため、ここで検索品質の上限が決まる。単語だけの `TBD` は不可 |
 | `Region availability` | 条件付き | `medium` を選ぶ場合は必須。対象 region で利用可能か確認した結果 |
 | `Design status` | ✅ | `supported` / `preview` / `limited-access` / `unavailable` / `unknown` |
 | `Checked at` | ✅ | `YYYY-MM-DD` |

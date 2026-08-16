@@ -17,6 +17,8 @@ AI Agentを設計・実装するための汎用設計ドキュメントです。
 
 > **共通能力契約**: AAG / AAGD では Skill `ai-agent-capability-contract` を参照し、AG-CAP-01〜06を設計・テスト・実装・検証します。詳細は `.github/skills/ai-agent-capability-contract/SKILL.md` を参照してください。
 
+> **注記**: 本ドキュメントの Step 1〜3 に掲載する Prompt は **手動実行用** です。AAG / AAGD で自動実行する場合の Single Source of Truth は [`.github/prompts/Arch-AIAgentDesign-Step1.prompt.md`](../.github/prompts/Arch-AIAgentDesign-Step1.prompt.md) / [`Step2`](../.github/prompts/Arch-AIAgentDesign-Step2.prompt.md) / [`Step3`](../.github/prompts/Arch-AIAgentDesign-Step3.prompt.md) であり、本文ではありません。両者は同一内容を保証しません。
+
 ## 対象読者・前提・次のステップ
 
 - 対象読者: AAG（設計）と AAGD（実装/Deploy）を実運用で回す担当者
@@ -146,7 +148,7 @@ Prompt:
 > | ドキュメント上の Step | ワークフロー | hve ワークフロー ID | Step ID（コード上） |
 > |---|---|---|---|
 > | Step 1〜3（設計フェーズ） | AI Agent Design | `aag` | 1 / 2 / 3 |
-> | Step 4（実装・Deployフェーズ） | AI Agent Dev & Deploy | `aagd` | 1 / 2.1 / 2.2 / 2.3 / 3 |
+> | Step 4（実装・Deployフェーズ） | AI Agent Dev & Deploy | `aagd` | 1 / 2.1 / 2.2 / 2.3 / 3 / 4 |
 >
 > hve CLI で実行する場合: `hve orchestrate -w aag` → `hve orchestrate -w aagd`
 > Issue Template から実行する場合: `ai-agent-design.yml`（AAG）→ `ai-agent-dev.yml`（AAGD）
@@ -171,6 +173,63 @@ Prompt:
 | AAGD | 2.2 | `Dev-Microservice-Azure-AgentTestCoding` |
 | AAGD | 2.3 | `Dev-Microservice-Azure-AgentCoding` |
 | AAGD | 3 | `Dev-Microservice-Azure-AgentDeploy` |
+| AAGD | 4 | `QA-ToolSearchEval`（`--enable-tool-search no` では skip） |
+
+### 生成する AI Agent の Agentic Retrieval 方針
+
+`--enable-agentic-retrieval {auto,yes,no}`（CLI / ウィザード / GUI）は 2 つの作用点を持ちます。混同しないでください。
+
+| 作用点 | 対象 | 振る舞い |
+|---|---|---|
+| Step の実行可否 | AAD-WEB 2.6 / ASDW-WEB 2.5・2.6 / AAR 全 Step | `no` のとき実行対象から外れる |
+| 生成 Agent の経路方針 | **AAG Step 3 / AAGD Step 2.3・3** | Prompt へ 3 値を注入し、設計成果物ゲートが方針別に検証する |
+
+AAG / AAGD には Agentic Retrieval 専用の Step が無いため、方針は Step を間引くのではなく「どの検索経路を選ぶか」を拘束します。
+
+| 値 | AAG / AAGD での意味 |
+|---|---|
+| `auto`（既定） | 経路選択を AG-CAP-03 の決定表へ委ねる |
+| `yes` | `enterprise-unstructured` の Request class を持つ Agent は Foundry IQ / Azure AI Search Agentic Retrieval を選ぶ。選ばなければ設計ゲートが FAIL |
+| `no` | 当該経路を選べない。選んだ場合は設計ゲートが FAIL |
+
+3 値以外を渡すと既定へ丸めず fail-closed で停止します。Cloud 面の成果物再検証は本方針を伝搬せず `auto` 相当で動作します。
+
+### Foundry IQ を選んだときの検索契約
+
+AG-CAP-03 で Foundry IQ / Azure AI Search Agentic Retrieval を選んだ Agent は、`agentic-retrieval-contract` の AR-CAP-01〜05 が必須になります。うち次の 2 点は設計ゲートが機械検証します。
+
+- **Knowledge Source は 2 件以上 10 件以下**（AR-CAP-02）。1 件だけの Knowledge Base はファンアウト先が 1 つしかなく、クラシックな単一クエリ検索と等価になるためです。横断が不要なら Agentic Retrieval を選ばず、AG-CAP-03 で別経路を選んでください。
+- **`Index semantic configuration` の記載**（AR-CAP-01）。各サブクエリは semantic rerank を通るため、索引側の構成が検索品質の上限を決めます。設計時に確定できない場合も、確認予定と確認手段を書きます（単語だけの `TBD` は FAIL）。
+
+AAGD Step 3 の Deploy ゲートは、Toolbox の採否に関わらず AR-CAP-01 の `Knowledge base name` と AR-CAP-02 の各 `KS name` が `src/infra/azure/` 配下のスクリプトから追跡できることを静的に確認します。Azure へは接続しません。
+
+### 生成物の Agent Plugin パッケージング
+
+AAGD Step 2.3 は、Agent 実装とともに [Agent Plugins Specification 1.0.0](https://github.com/agentplugins/agent-plugins-spec) 準拠のマニフェストを生成します。`src/agent/{key}/` を plugin root とみなし、AG-CAP-06 が `required` のときに作られる `src/agent/{key}/skills/{skill-name}/` が仕様の固定位置 `skills/` に相当します。
+
+```text
+src/agent/{key}/
+├── plugin.json          # Agent Plugins 1.0.0 マニフェスト（常に生成）
+├── skills/              # AG-CAP-06 が required のときだけ
+│   └── {skill-name}/
+│       └── SKILL.md
+├── agent-config.json    # HVE 固有のランタイム設定（マニフェストとは別）
+└── ...
+```
+
+- `name` は fan-out キー `{key}` の**小文字化**です（`AG-01` → `ag-01`）。仕様 §5.5 は大文字を許容しません。
+- 書き込むフィールドは `$schema` / `name` / `description` / `version` の 4 つだけです。マニフェストは closed schema のため、HVE 固有の設定を top-level へ追加すると検証が FAIL します。利用者が仕様の任意フィールド（`license` / `keywords` 等）を後から追記することはできます。
+- `SKILL.md` の frontmatter は Agent Skills 仕様の長さ制約（`name` 1〜64 文字、`description` 1〜1024 文字）を満たします。
+- 仕様の `mcp.json` は生成しません。AG-CAP-05 は生成 Agent を MCP client と定めており、Agent 自身を MCP Server として公開しないためです。
+
+### 利用・完了確認・カスタマイズ
+
+1. 設計は AAG を完了し、`docs/agent/agent-application-definition.md`、`docs/agent/agent-architecture.md`、`docs/ai-agent-catalog.md`、各 `docs/agent/agent-detail-{key}.md` を確認します。
+2. 実装は AAGD を実行します。Step 2.1〜2.3 は Agent ごとの fan-out であり、Step 3 の Deploy は Step 2.3 完了後、Step 4 の tool search 実測評価は Step 3 完了後です。
+3. AAG の Step 3 と AAGD の Step 2.1〜3 では、`ai-agent-capability-contract` の AG-CAP-01〜05 を、実装するか理由と根拠付き N/A として追跡します。AG-CAP-06 は N/A ではなく、再利用根拠に基づく Decision を `required` または `not-required` として記録します。選択した能力だけをテスト・実装・Deploy します。
+4. 設定・拡張の正本は `hve/workflow_registry.py`、Issue Template、対応 Prompt、および `ai-agent-capability-contract` です。Step ID、Prompt、入出力を変更する場合はこれらの契約と `hve/tests/test_workflow_registry.py`、能力契約テストを更新して回帰確認してください。
+
+失敗・blocked 時は、失敗した Step の Issue または CLI の完了報告で validator / テストのエラーと証跡を確認し、上流成果物の不足は上流 Step へ戻します。未選択の provider や Skill を補完実装して回避しません。
 
 ## AAG / AAGD / ASDW 連携チェーン図
 
@@ -560,7 +619,7 @@ Prompt:
 ## Step 4. AI Agent 実装（Microsoft Foundry）
 
 > **ワークフロー**: AAGD（`aagd`） — `ai-agent-dev.yml` Issue Template または `hve orchestrate -w aagd` で実行します。
-> コード上の Step ID は `1`（構成設計）/ `2.1`（テスト仕様書）/ `2.2`（テストコード生成）/ `2.3`（実装）/ `3`（Deploy）です。
+> コード上の Step ID は `1`（構成設計）/ `2.1`（テスト仕様書）/ `2.2`（テストコード生成）/ `2.3`（実装）/ `3`（Deploy）/ `4`（tool search 実測評価、機能有効時）です。
 > 以下の「手動実行プロンプト」で使う Step ID（`2.7T`, `2.7TC`, `2.7`, `2.8`）は、このドキュメント固有の通番であり、ワークフロー上の Step ID とは異なります。
 
 ## 目的
@@ -597,6 +656,7 @@ Step 1〜3 で完成した設計書（アプリケーション定義・アーキ
 8. **Guardrails / Policy Gate**: Section 8 の Policy & Guardrails に基づく入出力フィルタリング
 9. **Observability**: Section 10 に基づく監査ログ・メトリクス
 10. **Agent 設定ファイル**: 環境変数・接続先の管理（`agent-config.json` または `appsettings.json`）
+11. **Agent Plugin マニフェスト**: `plugin.json`（Agent Plugins Specification 1.0.0 準拠。常に生成）
 
 ## 成果物
 
@@ -604,7 +664,7 @@ Step 1〜3 で完成した設計書（アプリケーション定義・アーキ
 |---------|--------|
 | Step.2.7T | `docs/test-specs/{key}-test-spec.md`（Agent テスト仕様書） |
 | Step.2.7TC | `src/test/agent/{key}.Tests/`（TDD テストコード — RED 状態） |
-| Step.2.7 | `src/agent/{key}/`（Agent 実装コード） |
+| Step.2.7 | `src/agent/{key}/`（Agent 実装コード。`plugin.json` を含む） |
 | Step.2.8 | `src/infra/azure/create-azure-agent-resources-prep.sh`, `src/infra/azure/create-azure-agent-resources.sh`, `src/infra/azure/verify-agent-resources.sh`, `.github/workflows/deploy-agent-*.yml`, `docs/test-specs/deploy-step2-agent-test-spec.md`, `docs/azure/service-catalog.md`（Agent エンドポイント追記） |
 
 ## TDD フロー

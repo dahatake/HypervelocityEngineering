@@ -39,7 +39,7 @@
 
     <rect x="40" y="155" width="220" height="62" class="file"/>
     <text x="52" y="181" class="node">original-docs（既定 ON）</text>
-    <text x="52" y="201" class="tiny">original-docs/</text>
+    <text x="52" y="201" class="tiny">docs-original/</text>
 
     <rect x="40" y="230" width="220" height="62" class="workiq"/>
     <text x="52" y="256" class="node" fill="#9a3412">workiq（任意）</text>

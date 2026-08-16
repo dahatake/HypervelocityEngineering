@@ -22,7 +22,7 @@ from functools import partial
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from PySide6.QtCore import Qt, QStringListModel, Signal
+from PySide6.QtCore import Qt, QStringListModel, QT_TRANSLATE_NOOP, Signal
 from PySide6.QtGui import QDoubleValidator
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -490,6 +490,260 @@ class TriStateCombo(QComboBox):
             self.setCurrentIndex(0)
 
 
+class RequiredChoiceCombo(TriStateCombo):
+    """必須選択用の 3 状態セレクタ。初期状態は「未選択」で、明示選択を促す。
+
+    永続化表現は `TriStateCombo` と同じ ``"" / "on" / "off"``。
+    """
+
+    def __init__(
+        self,
+        on_text: str,
+        off_text: str,
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setItemText(0, self.tr("未選択"))
+        self.setItemText(1, on_text)
+        self.setItemText(2, off_text)
+
+
+# Step 1 右ペインの「共通設定」枠に常時表示する項目のタイトル。
+# `_LabeledField(title=...)` とテストの双方から参照する。
+# 定数化しても翻訳対象に残すため QT_TRANSLATE_NOOP で登録する。
+_AUTO_QA_FIELD_TITLE = str(QT_TRANSLATE_NOOP("_CQaPrompt", "QA (質問票) 自動投入"))
+_QA_ANSWER_MODE_FIELD_TITLE = str(QT_TRANSLATE_NOOP("_CQaPrompt", "QA (質問票) 回答モード"))
+_QA_AKM_MERGE_FIELD_TITLE = str(QT_TRANSLATE_NOOP(
+    "_CKnowledgeManagement",
+    "QA (質問票) を Knowledge Management へバックグラウンドでマージする",
+))
+_AKM_MODEL_FIELD_TITLE = str(QT_TRANSLATE_NOOP(
+    "_CKnowledgeManagement", "Knowledge Management 用モデル"
+))
+_AKM_CONTEXT_TIER_FIELD_TITLE = str(QT_TRANSLATE_NOOP(
+    "_CKnowledgeManagement", "Knowledge Management 用コンテキスト階層"
+))
+
+
+# --------------------------------------------------------------------------
+# モデル + Effort 行の共通ヘルパ（C1 基本設定 / Knowledge Management セクションで共有）
+# --------------------------------------------------------------------------
+
+
+def _build_model_effort_row(
+    owner: QWidget,
+    model_combo: QComboBox,
+    effort_combo: QComboBox,
+    context_label: QLabel,
+    cost_label: QLabel,
+) -> QWidget:
+    """モデル + Effort + Context size + Cost を 2 行に分けて構築する。
+
+    1 行に全要素を並べると最低幅が 500px を超え、設定画面の幅を縮めた際に
+    水平スクロールを誘発するため、1 行目 ``[model] [Effort label] [effort]``、
+    2 行目 ``[context] [cost]`` の 2 行構成とする。
+    """
+    composite = QWidget(owner)
+    v = QVBoxLayout(composite)
+    v.setContentsMargins(0, 0, 0, 0)
+    v.setSpacing(2)
+    try:
+        model_combo.setMinimumWidth(180)
+    except Exception:
+        pass
+    try:
+        effort_combo.setMinimumWidth(120)
+    except Exception:
+        pass
+    effort_description = owner.tr(
+        "モデルがサポートする reasoning effort 値（SDK から取得）。"
+        "Auto モデルおよび reasoning effort 非対応モデルでは選択できません。"
+    )
+    try:
+        effort_combo.setToolTip(effort_description)
+    except Exception:
+        pass
+
+    effort_label = QLabel(owner.tr("Effort"))
+    effort_label.setStyleSheet("font-size: 10pt; padding: 0 4px;")
+    effort_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+    context_label.setProperty("hveRole", "description")
+    context_label.setStyleSheet("font-size: 9pt;")
+    context_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+    cost_label.setProperty("hveRole", "description")
+    cost_label.setStyleSheet("font-size: 9pt;")
+    cost_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+    try:
+        cost_label.setToolTip(owner.tr(
+            "GitHub Copilot API の token_prices より計算した USD/1M tokens 単価。"
+            "In=入力 / Out=出力 / Cache=キャッシュ。モデル単位で Effort 依存せず。"
+        ))
+    except Exception:
+        pass
+
+    # 1 行目: [model] [Effort label] [effort]
+    row1 = QHBoxLayout()
+    row1.setContentsMargins(0, 0, 0, 0)
+    row1.setSpacing(8)
+    row1.addWidget(model_combo, 0, Qt.AlignLeft | Qt.AlignVCenter)
+    row1.addWidget(effort_label, 0, Qt.AlignLeft | Qt.AlignVCenter)
+    row1.addWidget(effort_combo, 0, Qt.AlignLeft | Qt.AlignVCenter)
+    row1.addStretch(1)
+
+    # 2 行目: [context size] [cost]（細字・補足情報）
+    row2 = QHBoxLayout()
+    row2.setContentsMargins(0, 0, 0, 0)
+    row2.setSpacing(8)
+    row2.addWidget(context_label, 0, Qt.AlignLeft | Qt.AlignVCenter)
+    row2.addWidget(cost_label, 1, Qt.AlignLeft | Qt.AlignVCenter)
+
+    v.addLayout(row1)
+    v.addLayout(row2)
+    composite.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+    return composite
+
+
+def _populate_main_combo(combo: QComboBox, choices: List[str]) -> None:
+    """主モデル用: choices をそのまま追加(先頭は Auto を含む想定)。"""
+    for m in choices:
+        combo.addItem(m, userData=m)
+
+
+def _populate_secondary_combo(
+    owner: QWidget,
+    combo: QComboBox,
+    choices: List[str],
+    *,
+    inherit_text: Optional[str] = None,
+) -> None:
+    """副モデル用(review/qa/akm): 先頭に「継承」(userData=None)、続いて Auto を除いた残り。"""
+    combo.addItem(inherit_text or owner.tr("（上の「使用するモデル」を継承）"), userData=None)
+    for m in choices[1:]:  # choices[0] == Auto を除外
+        combo.addItem(m, userData=m)
+
+
+def _refresh_effort_row(
+    owner: QWidget,
+    entries_map: Dict[str, object],
+    model_combo: QComboBox,
+    effort_combo: QComboBox,
+    context_label: QLabel,
+    cost_label: QLabel,
+    *,
+    is_secondary: bool,
+) -> None:
+    """モデル選択に応じて Effort コンボ／Context Size／Cost ラベルを更新する。
+
+    - 副モデル + 「継承」: Effort コンボは disable + 「（モデル設定を継承）」固定、Context/Cost ラベル空。
+    - Auto モデル選択: Effort 無効、Context/Cost ラベル空（Auto は ModelEntry を一意特定できないため）。
+    - ModelEntry あり + supports_reasoning_effort=True + supported_reasoning_efforts 非空:
+        選択肢を投入し default_reasoning_effort を初期選択。Context ラベルに上限、Cost ラベルに token_prices を表示。
+    - 上記以外: Effort 無効 + 空、Context/Cost ラベル空。
+
+    autosave 連鎖を避けるため blockSignals でラップし、最終的にデフォルト値を反映した状態で
+    effort_combo.currentIndexChanged を 1 回だけ明示発火させて自動保存をトリガする。
+    """
+    try:
+        from hve.config import MODEL_AUTO_VALUE
+    except ImportError:  # pragma: no cover
+        MODEL_AUTO_VALUE = "Auto"
+
+    model_value = model_combo.currentData()
+
+    was_blocked = effort_combo.blockSignals(True)
+    emit_change = False
+    try:
+        effort_combo.clear()
+
+        # ケース1: 副モデルで「継承」(None) → 固定表示 + disable
+        if is_secondary and model_value is None:
+            effort_combo.addItem(owner.tr("（モデル設定を継承）"), userData=None)
+            effort_combo.setCurrentIndex(0)
+            effort_combo.setEnabled(False)
+            context_label.setText("")
+            cost_label.setText("")
+            return
+
+        # ケース2: Auto モデル選択時
+        if not model_value or model_value == MODEL_AUTO_VALUE:
+            effort_combo.setEnabled(False)
+            context_label.setText("")
+            cost_label.setText("")
+            return
+
+        # ケース3: ModelEntry ルックアップ
+        entry = entries_map.get(model_value)
+        supports = bool(getattr(entry, "supports_reasoning_effort", False)) if entry else False
+        sre = getattr(entry, "supported_reasoning_efforts", None) if entry else None
+
+        if entry and supports and sre:
+            for v in sre:
+                effort_combo.addItem(str(v), userData=str(v))
+            # default_reasoning_effort を初期選択
+            default = getattr(entry, "default_reasoning_effort", None)
+            if isinstance(default, str):
+                for i in range(effort_combo.count()):
+                    if effort_combo.itemData(i) == default:
+                        effort_combo.setCurrentIndex(i)
+                        break
+            effort_combo.setEnabled(True)
+            emit_change = True  # autosave をトリガ（モデル変更で effort が変わったため）
+        else:
+            effort_combo.setEnabled(False)
+
+        # Context Size 上限ラベル
+        max_ctx = getattr(entry, "max_context_window_tokens", None) if entry else None
+        context_label.setText(_format_context_size_label(max_ctx))
+
+        # Cost ラベル
+        cost_label.setText(_format_cost_label(entry))
+    finally:
+        effort_combo.blockSignals(was_blocked)
+        if emit_change:
+            # blockSignals 解除後に手動で発火（autosave 接続にデフォルト Effort を保存させる）
+            try:
+                effort_combo.currentIndexChanged.emit(effort_combo.currentIndex())
+            except Exception:
+                pass
+
+
+def _reload_model_combos(
+    owner: QWidget,
+    combos_with_populators: List[tuple],
+) -> Optional[List[str]]:
+    """モデルキャッシュ更新後にコンボを再投入し、選択値を可能な限り保持する。
+
+    空相当(Auto のみ)受信時は何もせず None を返す。
+    """
+    try:
+        choices = _load_model_choices()
+    except Exception:
+        return None
+    if not choices or len(choices) <= 1:
+        return None
+
+    for combo, populator in combos_with_populators:
+        prev = combo.currentData()
+        was_blocked = combo.blockSignals(True)
+        try:
+            combo.clear()
+            populator(combo, choices)
+            restored = False
+            if prev is not None:
+                for i in range(combo.count()):
+                    if combo.itemData(i) == prev:
+                        combo.setCurrentIndex(i)
+                        restored = True
+                        break
+            if not restored:
+                combo.setCurrentIndex(0)
+        finally:
+            combo.blockSignals(was_blocked)
+    return choices
+
+
 # --------------------------------------------------------------------------
 # 個別カテゴリの内部ウィジェット
 # 各クラスは to_args(args: OrchestrateArgs) でフィールドを書き戻す
@@ -750,6 +1004,29 @@ class _C1Basic(QWidget):
             input_widget=self.gui_session_cleanup_policy,
         ))
 
+        # --- 旧 _C3AutoPrompt から移設: 追加プロンプト / コンテキスト上限 ---
+        self.additional_prompt = QPlainTextEdit()
+        self.additional_prompt.setFixedHeight(80)
+        self.additional_prompt.setPlaceholderText(self.tr("全 Custom Agent prompt の末尾に追記"))
+        layout.addWidget(_LabeledField(
+            title=self.tr("追加プロンプト"),
+            description=self.tr("全 Custom Agent prompt の末尾に追記する文字列（省略可）。"),
+            input_widget=self.additional_prompt,
+        ))
+
+        self.context_max_chars = QSpinBox()
+        self.context_max_chars.setRange(0, 10_000_000)
+        self.context_max_chars.setValue(0)
+        self.context_max_chars.setSpecialValueText("（既定 20000 文字を使用）")
+        layout.addWidget(_LabeledField(
+            title=self.tr("コンテキスト最大文字数"),
+            description=(
+                self.tr("各フェーズで注入するコンテキストの最大文字数。"
+                "0 のとき SDKConfig 既定値 20,000 を使用。")
+            ),
+            input_widget=self.context_max_chars,
+        ))
+
     def _build_model_effort_row(
         self,
         model_combo: QComboBox,
@@ -757,85 +1034,15 @@ class _C1Basic(QWidget):
         context_label: QLabel,
         cost_label: QLabel,
     ) -> QWidget:
-        """モデル + Effort + Context size + Cost を 2 行に分けて構築する。
-
-        旧実装では 1 行に全要素を並べていたが最低幅が 500px を超え、
-        設定画面の幅を縮めた際に水平スクロールを誘発していた。
-        1 行目 ``[model] [Effort label] [effort]``、2 行目 ``[context] [cost]``
-        の 2 行構成に変更する。呼び出し側互換のため引数の各 widget は
-        そのまま参照可能（属性として保持される）。
-        """
-        composite = QWidget(self)
-        v = QVBoxLayout(composite)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(2)
-        try:
-            model_combo.setMinimumWidth(180)
-        except Exception:
-            pass
-        try:
-            effort_combo.setMinimumWidth(120)
-        except Exception:
-            pass
-        effort_description = self.tr(
-            "モデルがサポートする reasoning effort 値（SDK から取得）。"
-            "Auto モデルおよび reasoning effort 非対応モデルでは選択できません。"
+        return _build_model_effort_row(
+            self, model_combo, effort_combo, context_label, cost_label,
         )
-        try:
-            effort_combo.setToolTip(effort_description)
-        except Exception:
-            pass
-
-        effort_label = QLabel(self.tr("Effort"))
-        effort_label.setStyleSheet("font-size: 10pt; padding: 0 4px;")
-        effort_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-
-        context_label.setProperty("hveRole", "description")
-        context_label.setStyleSheet("font-size: 9pt;")
-        context_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-
-        cost_label.setProperty("hveRole", "description")
-        cost_label.setStyleSheet("font-size: 9pt;")
-        cost_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        try:
-            cost_label.setToolTip(self.tr(
-                "GitHub Copilot API の token_prices より計算した USD/1M tokens 単価。"
-                "In=入力 / Out=出力 / Cache=キャッシュ。モデル単位で Effort 依存せず。"
-            ))
-        except Exception:
-            pass
-
-        # 1 行目: [model] [Effort label] [effort]
-        row1 = QHBoxLayout()
-        row1.setContentsMargins(0, 0, 0, 0)
-        row1.setSpacing(8)
-        row1.addWidget(model_combo, 0, Qt.AlignLeft | Qt.AlignVCenter)
-        row1.addWidget(effort_label, 0, Qt.AlignLeft | Qt.AlignVCenter)
-        row1.addWidget(effort_combo, 0, Qt.AlignLeft | Qt.AlignVCenter)
-        row1.addStretch(1)
-
-        # 2 行目: [context size] [cost]（細字・補足情報）
-        row2 = QHBoxLayout()
-        row2.setContentsMargins(0, 0, 0, 0)
-        row2.setSpacing(8)
-        row2.addWidget(context_label, 0, Qt.AlignLeft | Qt.AlignVCenter)
-        row2.addWidget(cost_label, 1, Qt.AlignLeft | Qt.AlignVCenter)
-
-        v.addLayout(row1)
-        v.addLayout(row2)
-        composite.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        return composite
 
     def _populate_main_combo(self, combo: QComboBox, choices: List[str]) -> None:
-        """主モデル用: choices をそのまま追加(先頭は Auto を含む想定)。"""
-        for m in choices:
-            combo.addItem(m, userData=m)
+        _populate_main_combo(combo, choices)
 
     def _populate_secondary_combo(self, combo: QComboBox, choices: List[str]) -> None:
-        """副モデル用(review/qa): 先頭に「継承」(userData=None)、続いて Auto を除いた残り。"""
-        combo.addItem(self.tr("（上の「使用するモデル」を継承）"), userData=None)
-        for m in choices[1:]:  # choices[0] == Auto を除外
-            combo.addItem(m, userData=m)
+        _populate_secondary_combo(self, combo, choices)
 
     def _refresh_effort_row(
         self,
@@ -846,122 +1053,30 @@ class _C1Basic(QWidget):
         *,
         is_secondary: bool,
     ) -> None:
-        """モデル選択に応じて Effort コンボ／Context Size／Cost ラベルを更新する。
-
-        - 副モデル + 「継承」: Effort コンボは disable + 「（モデル設定を継承）」固定、Context/Cost ラベル空。
-        - Auto モデル選択: Effort 無効、Context/Cost ラベル空（Auto は ModelEntry を一意特定できないため）。
-        - ModelEntry あり + supports_reasoning_effort=True + supported_reasoning_efforts 非空:
-            選択肢を投入し default_reasoning_effort を初期選択。Context ラベルに上限、Cost ラベルに token_prices を表示。
-        - 上記以外: Effort 無効 + 空、Context/Cost ラベル空。
-
-        autosave 連鎖を避けるため blockSignals でラップし、最終的にデフォルト値を反映した状態で
-        effort_combo.currentIndexChanged を 1 回だけ明示発火させて自動保存をトリガする。
-        """
-        try:
-            from hve.config import MODEL_AUTO_VALUE
-        except ImportError:  # pragma: no cover
-            MODEL_AUTO_VALUE = "Auto"
-
-        model_value = model_combo.currentData()
-
-        was_blocked = effort_combo.blockSignals(True)
-        emit_change = False
-        try:
-            effort_combo.clear()
-
-            # ケース1: 副モデルで「継承」(None) → 固定表示 + disable
-            if is_secondary and model_value is None:
-                effort_combo.addItem(self.tr("（モデル設定を継承）"), userData=None)
-                effort_combo.setCurrentIndex(0)
-                effort_combo.setEnabled(False)
-                context_label.setText("")
-                cost_label.setText("")
-                return
-
-            # ケース2: Auto モデル選択時
-            if not model_value or model_value == MODEL_AUTO_VALUE:
-                effort_combo.setEnabled(False)
-                context_label.setText("")
-                cost_label.setText("")
-                return
-
-            # ケース3: ModelEntry ルックアップ
-            entry = self._entries_map.get(model_value)
-            supports = bool(getattr(entry, "supports_reasoning_effort", False)) if entry else False
-            sre = getattr(entry, "supported_reasoning_efforts", None) if entry else None
-
-            if entry and supports and sre:
-                for v in sre:
-                    effort_combo.addItem(str(v), userData=str(v))
-                # default_reasoning_effort を初期選択
-                default = getattr(entry, "default_reasoning_effort", None)
-                if isinstance(default, str):
-                    for i in range(effort_combo.count()):
-                        if effort_combo.itemData(i) == default:
-                            effort_combo.setCurrentIndex(i)
-                            break
-                effort_combo.setEnabled(True)
-                emit_change = True  # autosave をトリガ（モデル変更で effort が変わったため）
-            else:
-                effort_combo.setEnabled(False)
-
-            # Context Size 上限ラベル
-            max_ctx = getattr(entry, "max_context_window_tokens", None) if entry else None
-            context_label.setText(_format_context_size_label(max_ctx))
-
-            # Cost ラベル
-            cost_label.setText(_format_cost_label(entry))
-        finally:
-            effort_combo.blockSignals(was_blocked)
-            if emit_change:
-                # blockSignals 解除後に手動で発火（autosave 接続にデフォルト Effort を保存させる）
-                try:
-                    effort_combo.currentIndexChanged.emit(effort_combo.currentIndex())
-                except Exception:
-                    pass
+        _refresh_effort_row(
+            self, self._entries_map, model_combo, effort_combo,
+            context_label, cost_label, is_secondary=is_secondary,
+        )
 
     def reload_models(self) -> None:
         """モデルキャッシュ更新後に呼び出される。3 コンボを再投入し選択値を保持する。
 
         - 空相当(Auto のみ)受信時は何もしない(既存表示維持)。
-        - blockSignals でラップし、wire_autosave 経由の保存連鎖を抑止する。
         - 選択値が新リストに不在の場合は既定 index 0(main=Auto / secondary=継承)へ。
         - 例外は内部で握り潰す。
         """
-        try:
-            choices = _load_model_choices()
-        except Exception:
-            return
-        if not choices or len(choices) <= 1:
-            return
-
         # ModelEntry マップも更新
         try:
             self._entries_map = _load_model_entries_map()
         except Exception:
             self._entries_map = {}
 
-        for combo, populator in (
-            (self.model, self._populate_main_combo),
-            (self.review_model, self._populate_secondary_combo),
-            (self.qa_model, self._populate_secondary_combo),
-        ):
-            prev = combo.currentData()
-            was_blocked = combo.blockSignals(True)
-            try:
-                combo.clear()
-                populator(combo, choices)
-                restored = False
-                if prev is not None:
-                    for i in range(combo.count()):
-                        if combo.itemData(i) == prev:
-                            combo.setCurrentIndex(i)
-                            restored = True
-                            break
-                if not restored:
-                    combo.setCurrentIndex(0)
-            finally:
-                combo.blockSignals(was_blocked)
+        if _reload_model_combos(self, [
+            (self.model, _populate_main_combo),
+            (self.review_model, lambda c, ch: _populate_secondary_combo(self, c, ch)),
+            (self.qa_model, lambda c, ch: _populate_secondary_combo(self, c, ch)),
+        ]) is None:
+            return
 
         # 各 Effort 行も再評価
         self._refresh_effort_row(self.model, self.effort, self.context_size_label, self.cost_label, is_secondary=False)
@@ -995,20 +1110,34 @@ class _C1Basic(QWidget):
         args.review_timeout = self.review_timeout.value()
         # theme は GUI のみで使用するため OrchestrateArgs には渡さない
         args.verbosity = self.verbosity.currentData()
+        # 旧 _C3AutoPrompt から移設
+        args.additional_prompt = self.additional_prompt.toPlainText().strip() or None
+        _ctx_max = self.context_max_chars.value()
+        args.context_max_chars = _ctx_max if _ctx_max > 0 else None
 
 
-class _C3AutoPrompt(QWidget):
+class _CQaPrompt(QWidget):
+    """QA (質問票) セクション: 自動投入と回答モード。"""
+
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        self.auto_qa = QCheckBox(self.tr("有効化"))
+        self.auto_qa = RequiredChoiceCombo(
+            on_text=self.tr("有効にする"),
+            off_text=self.tr("無効にする"),
+        )
         layout.addWidget(_LabeledField(
-            title=self.tr("QA 自動投入"),
-            description=self.tr("QA 質問票を自動的に投入します（既定: 無効）。"),
+            title=self.tr(_AUTO_QA_FIELD_TITLE),
+            description=self.tr(
+                "実行前 QA 質問票を自動投入します。有効にすると、回答済み QA を保存・検証してから"
+                "メインタスクを開始します。回答を knowledge/ へ取り込むかどうかは"
+                "「Knowledge Management」の設定で別途選択します。"
+            ),
             input_widget=self.auto_qa,
+            required=True,
         ))
 
         # QA 回答モード（auto_qa=True のときのみ有効）
@@ -1019,23 +1148,63 @@ class _C3AutoPrompt(QWidget):
         self.qa_answer_mode.addItem(self.tr("ユーザー回答"), userData="user")
         self.qa_answer_mode.setCurrentIndex(0)
         layout.addWidget(_LabeledField(
-            title=self.tr("QA 回答モード"),
+            title=self.tr(_QA_ANSWER_MODE_FIELD_TITLE),
             description=(
                 self.tr(
                     "Autopilot: AI が作成した既定回答を全て自動採用してメインタスクへ適用します。\n"
                     "ユーザー回答: AI が作成した質問と既定回答を GUI ダイアログに表示し、"
                     "ユーザーが回答を入力してから Submit するとメインタスクへ適用します。\n"
-                    "「QA 自動投入」が無効のときは設定値は無視されます（既定: Autopilot）。"
+                    "「QA (質問票) 自動投入」が無効のときは設定値は無視されます（既定: Autopilot）。"
                 )
             ),
             input_widget=self.qa_answer_mode,
         ))
 
-        # auto_qa 連動で qa_answer_mode をグレーアウト
-        def _on_auto_qa_toggled(checked: bool) -> None:
-            self.qa_answer_mode.setEnabled(bool(checked))
-        self.auto_qa.toggled.connect(_on_auto_qa_toggled)
-        _on_auto_qa_toggled(self.auto_qa.isChecked())
+        self.auto_qa.currentIndexChanged.connect(self._on_auto_qa_changed)
+        self._on_auto_qa_changed()
+
+    def is_auto_qa_enabled(self) -> bool:
+        return self.auto_qa.get_tristate() is True
+
+    def _on_auto_qa_changed(self, _index: int = 0) -> None:
+        self.qa_answer_mode.setEnabled(self.is_auto_qa_enabled())
+
+    def to_args(self, args: OrchestrateArgs) -> None:
+        args.auto_qa = self.is_auto_qa_enabled()
+
+        # QA 回答モード: auto_qa が有効なときのみ CLI へ渡す
+        if args.auto_qa:
+            _ui_mode = self.qa_answer_mode.currentData() or "autopilot"
+            if _ui_mode == "user":
+                # GUI ユーザー回答モード: CLI 側は "gui-file" として動作
+                # IPC ディレクトリは <repo_root>/.hve/qa-ipc/<uuid>/ に生成
+                import tempfile
+                ipc_root = Path(args.repo_root) / ".hve" / "qa-ipc"
+                try:
+                    ipc_root.mkdir(parents=True, exist_ok=True)
+                    args.qa_ipc_dir = tempfile.mkdtemp(prefix="gui-", dir=str(ipc_root))
+                    args.qa_answer_mode = "gui-file"
+                except OSError:
+                    # IPC dir 作成失敗 → Autopilot にフォールバック
+                    args.qa_answer_mode = "autopilot"
+                    args.qa_ipc_dir = None
+            else:
+                args.qa_answer_mode = "autopilot"
+                args.qa_ipc_dir = None
+        else:
+            # auto_qa 無効時は qa_answer_mode を渡さず既存挙動を維持
+            args.qa_answer_mode = None
+            args.qa_ipc_dir = None
+
+
+class _CReviewPrompt(QWidget):
+    """レビュー セクション: 敵対的レビューと Code Review Agent の自動投入。"""
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
 
         self.auto_contents_review = QCheckBox(self.tr("有効化"))
         layout.addWidget(_LabeledField(
@@ -1062,7 +1231,158 @@ class _C3AutoPrompt(QWidget):
             input_widget=self.auto_coding_agent_review_auto_approval,
         ))
 
-        # --- 旧 _C16Misc から移動: 自己改善ループ ---
+    def to_args(self, args: OrchestrateArgs) -> None:
+        args.auto_contents_review = self.auto_contents_review.isChecked()
+        args.auto_coding_agent_review = self.auto_coding_agent_review.isChecked()
+        args.auto_coding_agent_review_auto_approval = (
+            self.auto_coding_agent_review_auto_approval.isChecked()
+        )
+
+
+class _CKnowledgeManagement(QWidget):
+    """Knowledge Management セクション: QA 起点 AKM のマージ可否と実行品質。
+
+    FR-QA-05: `qa_akm_background_merge` が本セクションの入口。
+    FR-QA-04: 有効時のみ AKM 子実行専用のモデル / effort / context tier を選べる。
+
+    `auto_qa` は別セクション（`_CQaPrompt`）が所有するため、活性判定に必要な状態は
+    `set_auto_qa_enabled()` で外部から注入する。活性判定そのものは
+    `_refresh_enabled()` の単一実装に集約する（FR-MAINT-07）。
+    """
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        self._auto_qa_enabled = False
+
+        self.qa_akm_background_merge = QCheckBox(self.tr("有効化"))
+        layout.addWidget(_LabeledField(
+            title=self.tr(_QA_AKM_MERGE_FIELD_TITLE),
+            description=self.tr(
+                "回答済み QA を knowledge/ へ取り込む Knowledge Management を"
+                "バックグラウンドで起動します（メインタスクは完了を待ちません）。"
+                "「QA (質問票) 自動投入」が有効のときだけ選択できます（既定: 無効）。"
+            ),
+            input_widget=self.qa_akm_background_merge,
+        ))
+
+        self._entries_map: Dict[str, object] = _load_model_entries_map()
+        _model_choices = _load_model_choices()
+
+        self.akm_model = QComboBox()
+        self.akm_model.setEditable(False)
+        _populate_secondary_combo(
+            self, self.akm_model, _model_choices,
+            inherit_text=self.tr("（「使用するモデル」を継承）"),
+        )
+        self.akm_model.setCurrentIndex(0)
+        self.akm_effort = QComboBox()
+        self.akm_effort.setEditable(False)
+        self.akm_context_size_label = QLabel("")
+        self.akm_cost_label = QLabel("")
+        layout.addWidget(_LabeledField(
+            title=self.tr(_AKM_MODEL_FIELD_TITLE),
+            description=self.tr(
+                "QA 回答を knowledge/ へ同期する Knowledge Management の"
+                "バックグラウンド実行で使用するモデル。"
+                "未指定時は設定画面の「使用するモデル」を継承します。"
+                "上のマージ設定が無効のときは使用されません。"
+            ),
+            input_widget=_build_model_effort_row(
+                self, self.akm_model, self.akm_effort,
+                self.akm_context_size_label, self.akm_cost_label,
+            ),
+        ))
+
+        self.akm_context_tier = QComboBox()
+        self.akm_context_tier.setEditable(False)
+        self.akm_context_tier.addItem(self.tr("（「コンテキスト階層」を継承）"), userData=None)
+        self.akm_context_tier.addItem("default", userData="default")
+        self.akm_context_tier.addItem("long_context", userData="long_context")
+        self.akm_context_tier.setCurrentIndex(0)
+        layout.addWidget(_LabeledField(
+            title=self.tr(_AKM_CONTEXT_TIER_FIELD_TITLE),
+            description=self.tr(
+                "Knowledge Management のバックグラウンド実行で使用するコンテキスト階層。"
+                "未指定時は設定画面の「コンテキスト階層 (context_tier)」を継承します。"
+            ),
+            input_widget=self.akm_context_tier,
+        ))
+
+        self.akm_model.currentIndexChanged.connect(self._on_akm_model_changed)
+        self.qa_akm_background_merge.toggled.connect(lambda _c: self._refresh_enabled())
+        self._on_akm_model_changed()
+
+    def set_auto_qa_enabled(self, enabled: bool) -> None:
+        """`auto_qa` の選択状態を注入する（所有者は `_CQaPrompt`）。"""
+        self._auto_qa_enabled = bool(enabled)
+        self._refresh_enabled()
+
+    def is_merge_enabled(self) -> bool:
+        return self._auto_qa_enabled and self.qa_akm_background_merge.isChecked()
+
+    def _refresh_enabled(self) -> None:
+        self.qa_akm_background_merge.setEnabled(self._auto_qa_enabled)
+        quality_enabled = self.is_merge_enabled()
+        self.akm_model.setEnabled(quality_enabled)
+        self.akm_context_tier.setEnabled(quality_enabled)
+        self.akm_effort.setEnabled(
+            quality_enabled and self.akm_model.currentData() is not None
+            and self.akm_effort.count() > 0
+            and self.akm_effort.itemData(0) is not None
+        )
+
+    def _on_akm_model_changed(self, _index: int = 0) -> None:
+        _refresh_effort_row(
+            self, self._entries_map, self.akm_model, self.akm_effort,
+            self.akm_context_size_label, self.akm_cost_label, is_secondary=True,
+        )
+        # Effort 行の再構築で enable が復活し得るため、ゲートを再適用する。
+        self._refresh_enabled()
+
+    def reload_models(self) -> None:
+        """モデルキャッシュ更新後に AKM 用モデルコンボを再投入する。"""
+        try:
+            self._entries_map = _load_model_entries_map()
+        except Exception:
+            self._entries_map = {}
+        if _reload_model_combos(self, [
+            (self.akm_model, lambda c, ch: _populate_secondary_combo(
+                self, c, ch, inherit_text=self.tr("（「使用するモデル」を継承）"))),
+        ]) is None:
+            return
+        self._on_akm_model_changed()
+
+    def to_args(self, args: OrchestrateArgs) -> None:
+        merge_enabled = self.is_merge_enabled()
+        args.qa_akm_background_merge = merge_enabled
+        # FR-QA-05: マージ無効なら AKM 子実行自体が起きないため CLI へ渡さない。
+        if merge_enabled:
+            args.akm_model = self.akm_model.currentData()
+            args.akm_reasoning_effort = (
+                self.akm_effort.currentData()
+                if self.akm_effort.isEnabled() and isinstance(self.akm_effort.currentData(), str)
+                else None
+            )
+            args.akm_context_tier = self.akm_context_tier.currentData()
+        else:
+            args.akm_model = None
+            args.akm_reasoning_effort = None
+            args.akm_context_tier = None
+
+
+class _CSelfImprove(QWidget):
+    """自己改善 (Self Improve) セクション。"""
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
         self.self_improve = TriStateCombo()
         layout.addWidget(_LabeledField(
             title=self.tr("自己改善ループ"),
@@ -1101,70 +1421,16 @@ class _C3AutoPrompt(QWidget):
         ))
 
         # self_improve 連動で 3 オプションをグレーアウト
-        def _on_self_improve_changed(_index: int) -> None:
-            explicitly_enabled = self.self_improve.get_tristate() is True
-            self.self_improve_max_iterations.setEnabled(explicitly_enabled)
-            self.self_improve_target_scope.setEnabled(explicitly_enabled)
-            self.self_improve_goal.setEnabled(explicitly_enabled)
-        self.self_improve.currentIndexChanged.connect(_on_self_improve_changed)
-        _on_self_improve_changed(self.self_improve.currentIndex())
+        self.self_improve.currentIndexChanged.connect(self._on_self_improve_changed)
+        self._on_self_improve_changed(self.self_improve.currentIndex())
 
-        # --- 旧 _C15AdditionalPrompt から移動: 追加プロンプト / コメント ---
-        self.additional_prompt = QPlainTextEdit()
-        self.additional_prompt.setFixedHeight(80)
-        self.additional_prompt.setPlaceholderText(self.tr("全 Custom Agent prompt の末尾に追記"))
-        layout.addWidget(_LabeledField(
-            title=self.tr("追加プロンプト"),
-            description=self.tr("全 Custom Agent prompt の末尾に追記する文字列（省略可）。"),
-            input_widget=self.additional_prompt,
-        ))
-
-        self.context_max_chars = QSpinBox()
-        self.context_max_chars.setRange(0, 10_000_000)
-        self.context_max_chars.setValue(0)
-        self.context_max_chars.setSpecialValueText("（既定 20000 文字を使用）")
-        layout.addWidget(_LabeledField(
-            title=self.tr("コンテキスト最大文字数"),
-            description=(
-                self.tr("各フェーズで注入するコンテキストの最大文字数。"
-                "0 のとき SDKConfig 既定値 20,000 を使用。")
-            ),
-            input_widget=self.context_max_chars,
-        ))
+    def _on_self_improve_changed(self, _index: int) -> None:
+        explicitly_enabled = self.self_improve.get_tristate() is True
+        self.self_improve_max_iterations.setEnabled(explicitly_enabled)
+        self.self_improve_target_scope.setEnabled(explicitly_enabled)
+        self.self_improve_goal.setEnabled(explicitly_enabled)
 
     def to_args(self, args: OrchestrateArgs) -> None:
-        args.auto_qa = self.auto_qa.isChecked()
-        args.auto_contents_review = self.auto_contents_review.isChecked()
-        args.auto_coding_agent_review = self.auto_coding_agent_review.isChecked()
-        args.auto_coding_agent_review_auto_approval = (
-            self.auto_coding_agent_review_auto_approval.isChecked()
-        )
-
-        # QA 回答モード: auto_qa が有効なときのみ CLI へ渡す
-        if args.auto_qa:
-            _ui_mode = self.qa_answer_mode.currentData() or "autopilot"
-            if _ui_mode == "user":
-                # GUI ユーザー回答モード: CLI 側は "gui-file" として動作
-                # IPC ディレクトリは <repo_root>/.hve/qa-ipc/<uuid>/ に生成
-                import tempfile
-                ipc_root = Path(args.repo_root) / ".hve" / "qa-ipc"
-                try:
-                    ipc_root.mkdir(parents=True, exist_ok=True)
-                    args.qa_ipc_dir = tempfile.mkdtemp(prefix="gui-", dir=str(ipc_root))
-                    args.qa_answer_mode = "gui-file"
-                except OSError:
-                    # IPC dir 作成失敗 → Autopilot にフォールバック
-                    args.qa_answer_mode = "autopilot"
-                    args.qa_ipc_dir = None
-            else:
-                args.qa_answer_mode = "autopilot"
-                args.qa_ipc_dir = None
-        else:
-            # auto_qa 無効時は qa_answer_mode を渡さず既存挙動を維持
-            args.qa_answer_mode = None
-            args.qa_ipc_dir = None
-
-        # 旧 _C16Misc から移動: self_improve
         self_improve_state = self.self_improve.get_tristate()
         args.self_improve = self_improve_state is True
         args.no_self_improve = self_improve_state is False
@@ -1178,10 +1444,69 @@ class _C3AutoPrompt(QWidget):
             args.self_improve_max_iterations = None
             args.self_improve_target_scope = None
             args.self_improve_goal = None
-        # 旧 _C15AdditionalPrompt から移動
-        args.additional_prompt = self.additional_prompt.toPlainText().strip() or None
-        v = self.context_max_chars.value()
-        args.context_max_chars = v if v > 0 else None
+
+
+class _C3AutoPrompt(QWidget):
+    """Step 1 右ペインの「共通設定」枠が使う 4 セクションの合成ウィジェット。
+
+    設定画面では 4 セクションが独立ノードとして表示されるため（FR-GUI-20）、
+    ウィジェットの実装は各サブクラスが単一で持ち、本クラスは合成と属性公開だけを行う。
+    """
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        self.qa = _CQaPrompt()
+        self.km = _CKnowledgeManagement()
+        self.review = _CReviewPrompt()
+        self.self_improve_section = _CSelfImprove()
+        for section in (self.qa, self.km, self.review, self.self_improve_section):
+            layout.addWidget(section)
+
+        # 既存参照（`page.c3.<field>`）との互換のため入力ウィジェットを再公開する。
+        self.auto_qa = self.qa.auto_qa
+        self.qa_answer_mode = self.qa.qa_answer_mode
+        self.qa_akm_background_merge = self.km.qa_akm_background_merge
+        self.akm_model = self.km.akm_model
+        self.akm_effort = self.km.akm_effort
+        self.akm_context_tier = self.km.akm_context_tier
+        self.auto_contents_review = self.review.auto_contents_review
+        self.auto_coding_agent_review = self.review.auto_coding_agent_review
+        self.auto_coding_agent_review_auto_approval = (
+            self.review.auto_coding_agent_review_auto_approval
+        )
+        self.self_improve = self.self_improve_section.self_improve
+        self.self_improve_max_iterations = self.self_improve_section.self_improve_max_iterations
+        self.self_improve_target_scope = self.self_improve_section.self_improve_target_scope
+        self.self_improve_goal = self.self_improve_section.self_improve_goal
+
+        wire_auto_qa_to_knowledge_management(self.qa, self.km)
+
+    def reload_models(self) -> None:
+        self.km.reload_models()
+
+    def to_args(self, args: OrchestrateArgs) -> None:
+        # QA → KM の順で反映する（KM は auto_qa の選択状態に依存する）。
+        self.qa.to_args(args)
+        self.km.to_args(args)
+        self.review.to_args(args)
+        self.self_improve_section.to_args(args)
+
+
+def wire_auto_qa_to_knowledge_management(
+    qa: _CQaPrompt, km: _CKnowledgeManagement,
+) -> None:
+    """`auto_qa` の選択状態を Knowledge Management セクションへ配線する。
+
+    Step 1 右ペイン（合成ウィジェット）と設定画面（独立ノード）で同じ配線を使う。
+    """
+    qa.auto_qa.currentIndexChanged.connect(
+        lambda _index: km.set_auto_qa_enabled(qa.is_auto_qa_enabled())
+    )
+    km.set_auto_qa_enabled(qa.is_auto_qa_enabled())
 
 
 class _C4WorkIQ(QWidget):
@@ -2322,133 +2647,12 @@ class _C7Connection(QWidget):
         args.cli_url = self.cli_url.text().strip() or None
 
 
-# ----------------------------------------------------------------------
-# ASDW-WEB Step 1.3（Dev-Microservice-Azure-DataDeploy）bootstrap 入力の説明文。
-#
-# 根拠（捏造防止）:
-#   - 検証仕様: hve/asdw_data_runtime_context.py
-#     (build_asdw_data_deploy_bootstrap_context / _RESOURCE_SUFFIX_PATTERN /
-#      _DIGEST_REFERENCE_PATTERN / CIDR 包含・非重複チェック)
-#   - リソース生成手順: hve/asdw_data_script_generator.py (_render_prep_script)
-#   - network 契約: .github/skills/azure-skills/azure-cli-deploy-scripts/
-#     references/asdw-data-verifier-contract.md
-#
-# 説明文はヘルプポップアップ（QLabel）と入力欄のツールチップに同じ文字列が
-# 使われる。QLabel のリッチテキスト自動判定を避けるため `<` `>` `&` は使わない。
-# ----------------------------------------------------------------------
-
-_DATA_DEPLOY_HELP_PREFIX = (
-    "【ASDW-WEB Step 1.3「Azure データ基盤デプロイ」専用の設定です】\n"
-)
-
-_DATA_DEPLOY_HELP_LOCATION = _DATA_DEPLOY_HELP_PREFIX + (
-    "\n"
-    "■ 何を入れる項目か\n"
-    "Step 1.3 が Azure 上にデータ基盤を作成するリージョン（場所）です。\n"
-    "\n"
-    "■ 何に使われるか\n"
-    "・リソースグループ作成コマンド `az group create --location` にそのまま渡されます。\n"
-    "・VNet / NAT Gateway / マネージド ID など、リージョン指定を省略して作成される\n"
-    "  配下リソースは、このリソースグループのリージョンに作成されます。\n"
-    "\n"
-    "■ なぜ入力が必要か\n"
-    "HVE は値を推測・捏造しない fail-closed 方式です。未入力のまま Step 1.3 を実行すると、\n"
-    "Azure へ 1 件も書き込まないまま「bootstrap input is missing: LOCATION」で停止します。\n"
-    "\n"
-    "■ 入力形式\n"
-    "Azure のリージョン名（前後に空白を含まない 1 行の文字列）。\n"
-    "例: japaneast / japanwest / eastus"
-)
-
-_DATA_DEPLOY_HELP_RESOURCE_SUFFIX = _DATA_DEPLOY_HELP_PREFIX + (
-    "\n"
-    "■ 何を入れる項目か\n"
-    "Step 1.3 が作成する Azure リソースの名前に共通で付ける識別子（デプロイ用スラッグ）です。\n"
-    "\n"
-    "■ 何に使われるか\n"
-    "・SQL Server / Cosmos DB アカウント / VNet / Private Endpoint などのリソース名を\n"
-    "  組み立てる際の共通サフィックスとして、実行環境に固定値で引き渡されます。\n"
-    "・アプリや環境（dev / stg など）ごとに値を変えることで、同じサブスクリプション内での\n"
-    "  名前衝突と、既存リソースの上書きを防ぎます。\n"
-    "\n"
-    "■ なぜ入力が必要か\n"
-    "SQL Server 名や Cosmos DB アカウント名はグローバルに一意である必要があり、\n"
-    "HVE は名前を自動生成しません。誰が実行しても同じ名前が再現できるよう明示指定が必須です。\n"
-    "\n"
-    "■ 入力形式\n"
-    "小文字の英数字とハイフンのみ。先頭と末尾は英数字。1〜24 文字。\n"
-    "例: app009 / royalty-dev\n"
-    "（大文字・アンダースコア・空白・日本語を含むとエラーになります）"
-)
-
-_DATA_DEPLOY_HELP_VNET_CIDR = _DATA_DEPLOY_HELP_PREFIX + (
-    "\n"
-    "■ 何を入れる項目か\n"
-    "Step 1.3 が作成する仮想ネットワーク（VNet）全体のアドレス空間です。\n"
-    "\n"
-    "■ 何に使われるか\n"
-    "・`az network vnet create` で作成する VNet のアドレス範囲になります。\n"
-    "・この範囲の内側に、下 2 つのサブネット（Private Endpoint 用・ACI 用）を切り出します。\n"
-    "\n"
-    "■ なぜ入力が必要か\n"
-    "Step 1.3 のデータ基盤は public アクセスを使わない private 構成\n"
-    "（DATA_NETWORK_MODE=private）で構築され、SQL Database / Cosmos DB へは\n"
-    "Private Endpoint 経由でしか接続しません。その土台となる閉じたネットワークが必要です。\n"
-    "既存のオンプレ網やハブ VNet とアドレスが重複すると経路障害になるため、\n"
-    "HVE は値を推測せず、利用者が承認したレンジの明示を求めます。\n"
-    "\n"
-    "■ 入力形式\n"
-    "IPv4 の CIDR 表記。例: 10.40.0.0/16\n"
-    "ホスト部が 0 のネットワークアドレスであること（10.40.0.1/16 はエラー）。"
-)
-
-_DATA_DEPLOY_HELP_PRIVATE_ENDPOINT_SUBNET_CIDR = _DATA_DEPLOY_HELP_PREFIX + (
-    "\n"
-    "■ 何を入れる項目か\n"
-    "SQL Database と Cosmos DB の Private Endpoint を配置するサブネットのアドレス範囲です。\n"
-    "\n"
-    "■ 何に使われるか\n"
-    "・VNet 内にこのサブネットを作成し、SQL / Cosmos DB の Private Endpoint（プライベート IP）を\n"
-    "  ここに割り当てます。\n"
-    "・Step 1.2 の検証スクリプトが、各 Private Endpoint がこのサブネットに属し、接続状態が\n"
-    "  Approved であることを読み取り専用でチェックします。\n"
-    "\n"
-    "■ なぜ入力が必要か\n"
-    "private 構成ではデータストアへの到達経路が Private Endpoint だけになるため、\n"
-    "その配置先サブネットを決めないとデプロイも検証も開始できません。\n"
-    "\n"
-    "■ 入力形式\n"
-    "IPv4 の CIDR 表記。例: 10.40.1.0/24\n"
-    "・「DataDeploy VNet CIDR」の内側に完全に収まること。\n"
-    "・「DataDeploy ACI subnet CIDR」と 1 アドレスも重ならないこと。"
-)
-
-_DATA_DEPLOY_HELP_ACI_SUBNET_CIDR = _DATA_DEPLOY_HELP_PREFIX + (
-    "\n"
-    "■ 何を入れる項目か\n"
-    "検証・データ登録に使う一時 Azure Container Instances (ACI) を起動するサブネットの\n"
-    "アドレス範囲です。\n"
-    "\n"
-    "■ 何に使われるか\n"
-    "・Microsoft.ContainerInstance/containerGroups へ委任（delegation）済みのサブネットとして\n"
-    "  作成され、送信通信用に NAT Gateway が関連付けられます。\n"
-    "・Step 1.3 のデータ登録 ACI と Step 1.2 の件数検証 ACI が、`az container create --subnet`\n"
-    "  でこのサブネットに接続されます。\n"
-    "\n"
-    "■ なぜ入力が必要か\n"
-    "Private Endpoint 経由でしか到達できない SQL / Cosmos DB へサンプルデータを登録し、\n"
-    "件数を検証するには、同じ VNet の内側で動くコンテナーが必要です。\n"
-    "ACI の VNet 統合には専用の委任済みサブネットが必須で、Private Endpoint 用サブネットとは\n"
-    "共有できないため、別レンジを指定します。\n"
-    "\n"
-    "■ 入力形式\n"
-    "IPv4 の CIDR 表記。例: 10.40.2.0/24\n"
-    "・「DataDeploy VNet CIDR」の内側に完全に収まること。\n"
-    "・「DataDeploy private endpoint subnet CIDR」と 1 アドレスも重ならないこと。"
-)
-
 class _CAzure(QWidget):
-    """各サービス連携 / Azure：Azure 連携設定。"""
+    """各サービス連携 / Azure：Azure 連携設定。
+
+    ASDW-WEB Step 1.3 の `data_*` は `StepDef.default_params` が既定値を持つため
+    入力欄を設けない（FR-WF-ASDW-02）。明示上書きは CLI の `--data-*` で行う。
+    """
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -2462,53 +2666,9 @@ class _CAzure(QWidget):
             description=self.tr("Azure リソースグループ名。"),
             input_widget=self.resource_group,
         ))
-        self.data_location = QLineEdit()
-        self.data_resource_suffix = QLineEdit()
-        self.data_vnet_cidr = QLineEdit()
-        self.data_private_endpoint_subnet_cidr = QLineEdit()
-        self.data_aci_subnet_cidr = QLineEdit()
-        for title, input_widget, description in (
-            (
-                "DataDeploy location",
-                self.data_location,
-                _DATA_DEPLOY_HELP_LOCATION,
-            ),
-            (
-                "DataDeploy resource suffix",
-                self.data_resource_suffix,
-                _DATA_DEPLOY_HELP_RESOURCE_SUFFIX,
-            ),
-            (
-                "DataDeploy VNet CIDR",
-                self.data_vnet_cidr,
-                _DATA_DEPLOY_HELP_VNET_CIDR,
-            ),
-            (
-                "DataDeploy private endpoint subnet CIDR",
-                self.data_private_endpoint_subnet_cidr,
-                _DATA_DEPLOY_HELP_PRIVATE_ENDPOINT_SUBNET_CIDR,
-            ),
-            (
-                "DataDeploy ACI subnet CIDR",
-                self.data_aci_subnet_cidr,
-                _DATA_DEPLOY_HELP_ACI_SUBNET_CIDR,
-            ),
-        ):
-            layout.addWidget(_LabeledField(
-                title=self.tr(title),
-                description=self.tr(description),
-                input_widget=input_widget,
-            ))
 
     def to_args(self, args: OrchestrateArgs) -> None:
         args.resource_group = self.resource_group.text().strip() or None
-        args.data_location = self.data_location.text().strip() or None
-        args.data_resource_suffix = self.data_resource_suffix.text().strip() or None
-        args.data_vnet_cidr = self.data_vnet_cidr.text().strip() or None
-        args.data_private_endpoint_subnet_cidr = (
-            self.data_private_endpoint_subnet_cidr.text().strip() or None
-        )
-        args.data_aci_subnet_cidr = self.data_aci_subnet_cidr.text().strip() or None
 
 
 class _CAgenticRetrieval(QWidget):
@@ -2771,48 +2931,64 @@ class _C11AKM(QWidget):
         args.custom_source_dir = text.split() if text else []
 
 
-class _C12AQOD(QWidget):
+class _C17ADI(QWidget):
+    purpose: QLineEdit
+    target_scope: _FilePickerWidget
+    focus_areas: QLineEdit
+    analysis_depth: QComboBox
+
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        # target-scope: フォルダピッカー化
+        self.purpose = QLineEdit()
+        self.purpose.setPlaceholderText(
+            self.tr("例: EC 倉庫の取り置き算出バッチを再構築する")
+        )
+        layout.addWidget(_LabeledField(
+            title=self.tr("選別の目的"),
+            description=self.tr(
+                "設計書を選別する目的（任意）。空のときは目的非依存モードとなり must を付与しません。"
+            ),
+            input_widget=self.purpose,
+        ))
+
         self.target_scope = _FilePickerWidget(
             mode="dir",
-            title=self.tr("チェック対象ファイルのフォルダを選択"),
+            title=self.tr("対象設計書フォルダを選択"),
         )
-        self.target_scope.setPlaceholderText(self.tr("（空欄=original-docs/）"))
+        self.target_scope.setPlaceholderText(self.tr("（空欄=docs-original/）"))
         layout.addWidget(_LabeledField(
             title=self.tr("チェック対象ファイルのフォルダパス"),
-            description=self.tr("チェック対象ファイルのフォルダパス（省略時: original-docs/）。"),
+            description=self.tr("対象設計書のフォルダパス（省略時: docs-original/）。"),
             input_widget=self.target_scope,
         ))
 
-        self.depth = QComboBox()
-        self.depth.setEditable(False)
-        self.depth.addItem(self.tr("（未指定）"), userData=None)
-        self.depth.addItem(self.tr("標準（standard）"), userData="standard")
-        self.depth.addItem(self.tr("軽量（lightweight）"), userData="lightweight")
-        # デフォルトは standard（インデックス 1）
-        self.depth.setCurrentIndex(1)
+        self.analysis_depth = QComboBox()
+        self.analysis_depth.setEditable(False)
+        self.analysis_depth.addItem(self.tr("（未指定）"), userData=None)
+        self.analysis_depth.addItem(self.tr("標準（standard）"), userData="standard")
+        self.analysis_depth.addItem(self.tr("軽量（lightweight）"), userData="lightweight")
+        self.analysis_depth.setCurrentIndex(1)
         layout.addWidget(_LabeledField(
             title=self.tr("分析の深さ"),
             description=self.tr("standard（標準）または lightweight（軽量）から選択（既定: standard）。"),
-            input_widget=self.depth,
+            input_widget=self.analysis_depth,
         ))
 
         self.focus_areas = QLineEdit()
         layout.addWidget(_LabeledField(
             title=self.tr("分析の観点"),
-            description=self.tr("分析の重点観点を自由記述（任意）。"),
+            description=self.tr("設計書選別時の重点観点を自由記述（任意）。"),
             input_widget=self.focus_areas,
         ))
 
     def to_args(self, args: OrchestrateArgs) -> None:
+        args.purpose = self.purpose.text().strip() or None
         args.target_scope = self.target_scope.text().strip() or None
-        args.depth = self.depth.currentData()
+        args.depth = self.analysis_depth.currentData()
         args.focus_areas = self.focus_areas.text().strip() or None
 
 
@@ -2911,7 +3087,7 @@ class _C14ARD(QWidget):
         layout.addWidget(_LabeledField(
             title=self.tr("業務エリア"),
             description=(
-                self.tr("対象業務名（または基準ファイル）。省略時は Step 1 → 2 → 3、指定時は Step 2 直行。"
+                self.tr("対象業務名（または基準ファイル）。ステップ 1 を併せて選択する場合は省略可（Step 1.2 の戦略提言から自動生成）。ステップ 2 を単独で実行する場合は必須。"
                 "文章のほか、フォルダパスまたは複数ファイルパス（カンマ区切り）も指定可能。")
             ),
             input_widget=self.target_business,
@@ -3009,11 +3185,6 @@ _STEP2_FIELDS_BY_WORKFLOW: Dict[str, List[Tuple[str, str]]] = {
     "asdw-web": [
         ("c10", "対象アプリケーション (APP-ID)"),
         ("c_azure", "Azure リソースグループ名"),
-        ("c_azure", "DataDeploy location"),
-        ("c_azure", "DataDeploy resource suffix"),
-        ("c_azure", "DataDeploy VNet CIDR"),
-        ("c_azure", "DataDeploy private endpoint subnet CIDR"),
-        ("c_azure", "DataDeploy ACI subnet CIDR"),
         ("c10", "github.com で CI/CD を実行（ASDW-WEB / ADFDV）"),
         ("c10", "マージ後にローカル作業ブランチを削除"),
     ],
@@ -3039,10 +3210,11 @@ _STEP2_FIELDS_BY_WORKFLOW: Dict[str, List[Tuple[str, str]]] = {
         ("c11", "既存Knowledgeファイルの再生成"),
         ("c11", "追加ファイル"),
     ],
-    "aqod": [
-        ("c12", "チェック対象ファイルのフォルダパス"),
-        ("c12", "分析の深さ"),
-        ("c12", "分析の観点"),
+    "adi": [
+        ("c17", "選別の目的"),
+        ("c17", "チェック対象ファイルのフォルダパス"),
+        ("c17", "分析の深さ"),
+        ("c17", "分析の観点"),
     ],
     "adoc": [
         ("c13", "ドキュメント生成対象ディレクトリ"),
@@ -3074,17 +3246,13 @@ _CICD_TOGGLE_FIELD_TITLES: Tuple[str, ...] = (
 _STEP2_COMMON_FIELDS: List[Tuple[str, str]] = []
 
 # Step 2 から完全に外すカテゴリ（設定画面のみで編集）。
-# C3（自動プロンプト）はカテゴリ全体としては非表示扱いだが、
-# 内包する「追加プロンプト」`_LabeledField` のみ最上部に常時表示する例外処理を
-# `_refresh_specific_categories` で行う。
+# C3（共通設定枠）は本セットに含めつつ、`_refresh_specific_categories` で
+# 明示的に再表示する例外を持つ。
 _STEP2_HIDDEN_CATEGORIES = {"C1", "C3", "C5", "C6", "C7", "AZURE", "AGENTIC"}
 
-# C3 カテゴリ内で「追加プロンプト」以外のフィールド（タイトル文字列）。
-# Step 1 右ペインでは C3 内の他フィールドを表示しないため明示的に hide する。
-# 文字列は `_C3AutoPrompt.__init__` で `_LabeledField(title=...)` に渡している値と完全一致。
-_C3_NON_ADDITIONAL_PROMPT_TITLES: Tuple[str, ...] = (
-    "QA 自動投入",
-    "QA 回答モード",
+# 共通設定枠（C3 合成ウィジェット）内で Step 1 右ペインに出さないフィールド。
+# 文字列は `_CReviewPrompt` / `_CSelfImprove` の `_LabeledField(title=...)` と完全一致。
+_COMMON_FRAME_HIDDEN_TITLES: Tuple[str, ...] = (
     "レビュー自動投入",
     "ローカルでコードレビュー実行",
     "コードレビュー修正プランを自動承認",
@@ -3092,14 +3260,13 @@ _C3_NON_ADDITIONAL_PROMPT_TITLES: Tuple[str, ...] = (
     "自己改善 最大繰り返し回数",
     "自己改善 対象パス",
     "自己改善 ゴール説明",
-    "コンテキスト最大文字数",
 )
 
 # Step 1 右ペインのワークフロー枠 表示順（正準順 — ARD 先頭）。
 # `_refresh_specific_categories` が選択 Workflow 群を本リスト順で並べてグループ枠を生成する。
 _WORKFLOW_CANONICAL_ORDER: List[str] = [
     "ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv",
-    "aag", "aagd", "akm", "aqod", "adoc",
+    "aag", "aagd", "akm", "adi", "adoc",
 ]
 
 # Step 1 右ペインのワークフロー単位グループ枠（QGroupBox）共通スタイル。
@@ -3149,9 +3316,9 @@ class OptionsPage(QWidget):
         self.c_agentic = _CAgenticRetrieval()
         self.c10 = _C10AppId()
         self.c11 = _C11AKM()
-        self.c12 = _C12AQOD()
         self.c13 = _C13ADOC()
         self.c14 = _C14ARD()
+        self.c17 = _C17ADI()
 
         # ARD 添付ペイン（ARD 選択時のみ表示）— 遅延 import で循環依存回避
         self._attachment_pane: Optional[QWidget] = None
@@ -3177,7 +3344,7 @@ class OptionsPage(QWidget):
         self._setup_ui()
         self._refresh_specific_categories()
         # auto_qa の変更で C4 (Work IQ) の表示が変わるため購読
-        self.c3.auto_qa.stateChanged.connect(
+        self.c3.auto_qa.currentIndexChanged.connect(
             lambda _s: self._refresh_specific_categories()
         )
 
@@ -3269,9 +3436,9 @@ class OptionsPage(QWidget):
             self.c_agentic,
             self.c10,
             self.c11,
-            self.c12,
             self.c13,
             self.c14,
+            self.c17,
         ):
             cat.to_args(args)
 
@@ -3325,6 +3492,11 @@ class OptionsPage(QWidget):
         """入力検証。OK なら (True, "")、NG なら (False, エラー文)。"""
         if not self._workflow_ids and not self._workflow_id:
             return False, "ワークフローが選択されていません。"
+        if self.c3.auto_qa.get_tristate() is None:
+            return False, self.tr(
+                "「{0}」を選択してください。実行前 QA を行うかどうかは"
+                "回答の AKM 同期有無を左右するため、明示的な選択が必要です。"
+            ).format(self.c3.tr(_AUTO_QA_FIELD_TITLE))
         if self.c10.github_cicd_enabled.isChecked():
             selected_set = set(self._workflow_ids or ([self._workflow_id] if self._workflow_id else []))
             cicd_auth_required = any(
@@ -3361,13 +3533,6 @@ class OptionsPage(QWidget):
             "target_business": self.c14.target_business,
             "resource_group": self.c_azure.resource_group,
             "target_dirs": self.c13.target_dirs,
-            "data_location": self.c_azure.data_location,
-            "data_resource_suffix": self.c_azure.data_resource_suffix,
-            "data_vnet_cidr": self.c_azure.data_vnet_cidr,
-            "data_private_endpoint_subnet_cidr": (
-                self.c_azure.data_private_endpoint_subnet_cidr
-            ),
-            "data_aci_subnet_cidr": self.c_azure.data_aci_subnet_cidr,
         }
 
     def _wire_requirements_banner_listeners(self) -> None:
@@ -3523,7 +3688,7 @@ class OptionsPage(QWidget):
         """バナーを指定セクションのレイアウト先頭に移動する。
 
         - section="OPTIONS_TOP": OptionsPage の最上部（C3 直下相当）に配置。
-        - section が "C10"/"C11"/"C12"/"C13"/"C14" 等のカテゴリ識別子の場合は、
+                - section が "C10"/"C11"/"C13"/"C14"/"C17" 等のカテゴリ識別子の場合は、
           対応するワークフロー枠 (`_workflow_group_boxes[workflow_id]`) の先頭へ配置する。
         - section=None または配置先未解決 → 非表示。
 
@@ -3620,7 +3785,8 @@ class OptionsPage(QWidget):
             self._category_groups[key] = group
 
         _add("C1", "基本設定  *必須", self.c1)
-        _add("C3", "自動プロンプト", self.c3)
+        # 実タイトルは `_refresh_specific_categories` が「共通設定  *必須」へ上書きする。
+        _add("C3", "共通設定", self.c3)
         _add("C4", "Work IQ", self.c4)
         _add("C5", "GitHub", self.c5)
         _add("C6", "出力制御", self.c6)
@@ -3628,10 +3794,14 @@ class OptionsPage(QWidget):
         _add("AZURE", "Azure", self.c_azure)
         _add("AGENTIC", "Agentic Retrieval", self.c_agentic)
         _add("C10", "アプリケーションID", self.c10)
-        _add("C11", "AKM 固有", self.c11)
-        _add("C12", "AQOD 固有", self.c12)
+        _add("C11", "Knowledge Management 固有", self.c11)
         _add("C13", "ADOC 固有", self.c13)
         _add("C14", "要求定義書", self.c14)
+        _add("C17", "ADI 固有", self.c17)
+
+        # 「追加プロンプト」の所有者は設定画面の基本設定（C1）だが、Step 1 右ペインでは
+        # 共通設定枠の最下段に常時表示する（FR-GUI-20）。
+        self._move_additional_prompt_to_common_frame()
 
         groups_layout.addStretch(1)
 
@@ -3647,11 +3817,24 @@ class OptionsPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(scroll, stretch=1)
 
+    def _move_additional_prompt_to_common_frame(self) -> None:
+        """`追加プロンプト` の入力行を C1 から共通設定枠（C3 合成）の末尾へ移す。"""
+        target = self.c3.layout()
+        if target is None:
+            return
+        for lf in self.c1.findChildren(_LabeledField):
+            lbl = lf.findChild(QLabel)
+            if lbl is None:
+                continue
+            if lbl.text().split("  *")[0].strip() == "追加プロンプト":
+                target.addWidget(lf)
+                return
+
     def _refresh_specific_categories(self) -> None:
         """ワークフロー別の表示制御（ワークフロー単位のグループ枠生成）。
 
-        - `_STEP2_HIDDEN_CATEGORIES` のカテゴリ枠は常時非表示。
-        - C4/C10〜C14 のカテゴリ枠は表示せず、内部の `_LabeledField` を
+                - `_STEP2_HIDDEN_CATEGORIES` のカテゴリ枠は常時非表示。
+                - C4/C10〜C11/C13〜C14/C17 のカテゴリ枠は表示せず、内部の `_LabeledField` を
           ワークフロー単位の `QGroupBox` 枠（タイトル＝ワークフロー名）へ
           動的に移設して表示する。
         - 選択 ON のワークフローのみ枠を生成し、OFF のワークフローの枠は
@@ -3663,10 +3846,10 @@ class OptionsPage(QWidget):
             [self._workflow_id] if self._workflow_id else []
         )
 
-        # 1) Step 2 非表示カテゴリ + C4/C10〜C14 を全て非表示にする。
-        #    （C4/C10〜C14 は `_LabeledField` の退避先として生かしておくが枠は出さない）
+        # 1) Step 2 非表示カテゴリ + C4/C10〜C11/C13〜C14/C17 を全て非表示にする。
+        #    （対象カテゴリは `_LabeledField` の退避先として生かしておくが枠は出さない）
         always_hidden = set(_STEP2_HIDDEN_CATEGORIES) | {
-            "C4", "C10", "C11", "C12", "C13", "C14"
+            "C4", "C10", "C11", "C13", "C14", "C17"
         }
         for cat_key in always_hidden:
             g = self._category_groups.get(cat_key)
@@ -3678,7 +3861,7 @@ class OptionsPage(QWidget):
         if c3_group is not None:
             c3_group.setVisible(True)
             try:
-                c3_group.setTitle(self.tr("追加プロンプト"))
+                c3_group.setTitle(self.tr("共通設定  *必須"))
             except Exception:
                 pass
             for lf in self.c3.findChildren(_LabeledField):
@@ -3686,7 +3869,7 @@ class OptionsPage(QWidget):
                 head = ""
                 if lbl is not None:
                     head = lbl.text().split("  *")[0].strip()
-                lf.setVisible(head not in _C3_NON_ADDITIONAL_PROMPT_TITLES)
+                lf.setVisible(head not in _COMMON_FRAME_HIDDEN_TITLES)
 
         # 2) `_LabeledField` レジストリを遅延構築。
         self._ensure_lf_registry()
@@ -3809,9 +3992,9 @@ class OptionsPage(QWidget):
             "c5",
             "c10",
             "c11",
-            "c12",
             "c13",
             "c14",
+            "c17",
             "c_azure",
         ):
             cw = getattr(self, cat_attr, None)

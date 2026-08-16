@@ -9,7 +9,7 @@ from hve.config import SDKConfig
 
 def _parse_orch(extra: list[str]):
     parser = build_parser()
-    base = ["orchestrate", "--workflow", "aqod"] + extra
+    base = ["orchestrate", "--workflow", "adi"] + extra
     return parser.parse_args(base)
 
 

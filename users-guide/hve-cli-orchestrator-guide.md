@@ -26,6 +26,7 @@
 - [フォーク機能 Fork-on-Retry](#フォーク機能-fork-on-retry)
 - [付録D: トラブルシューティング](#付録d-トラブルシューティング)
 - [付録E: セキュリティ・SSO・関連リンク](#付録e-セキュリティsso関連リンク)
+- [付録G: HVE を拡張する（開発者向け）](#付録g-hve-を拡張する開発者向け)
 
 ---
 
@@ -176,7 +177,7 @@ HVE の基本実行環境は、`hve/` 直下のセットアップスクリプト
 | 引数 | 動作 |
 |---|---|
 | なし（既定） | 不足している OS ツール（Python / venv / Git / gh / Node.js / Azure CLI / ShellCheck / Copilot CLI）を winget ・npm で導入 + venv 作成 + `github-copilot-sdk` + 全 extras（`test` / `mdq-watch` / `mdq-ja` / `semantic` / `gui` / `gui-pty` / `gui-docconvert` / `code`）を導入 |
-| `-CheckOnly` | 環境状態のみ表示（変更なし） |
+| `-CheckOnly` | 環境状態のみ表示（変更なし。通常 GUI 構成では `gh` / PTY backend の不足も警告として報告） |
 | `-NoGui` | GUI 関連 extras（gui / gui-pty / gui-docconvert）をスキップ（CLI 専用） |
 | `-Minimal` | runtime base のみインストール（extras / pytest なし） |
 | `-Force` | 既存 `.venv` を削除して再作成 |
@@ -252,7 +253,7 @@ chmod +x hve/setup-hve.sh
 - `.venv` が存在し、Python 3.11+ で作成されている場合は再利用します。
 - `.venv` が Python 3.11 未満で作成されている場合、通常モードでは自動再作成します。`-CheckOnly` / `--check-only` 下では警告のみにダウングレードし、`-Force` / `--force` を明示すると無条件で削除して作り直します。
 - `github-copilot-sdk` は再実行時も `python -m pip install --upgrade github-copilot-sdk` で更新確認します。
-- `-CheckOnly` / `--check-only` は環境を変更せず、不足している項目を警告として表示します。
+- `-CheckOnly` / `--check-only` は環境を変更せず、不足している項目を警告として表示します。通常 GUI 構成（`-NoGui` / `--no-gui` / `-Minimal` / `--minimal` なし）では、`gh` を解決できない場合と、既存 `.venv` で PTY backend を利用できない場合も警告に含みます（非ゼロ終了はしません）。通常実行ではこれらは非ゼロ終了になる点が異なります。
 
 ### 認証と任意機能
 
@@ -822,6 +823,11 @@ MCP Server を使用する場合は JSON 設定ファイルを作成し、`--mcp
 
 ### Phase 7（Issue D）: `.github/.mcp.json` の改修判断基準
 
+> **現状との差分 (2026-08-13)**: 以下は Phase 6 時点の棚卸結果です。現在の `.github/.mcp.json` は
+> `azure` / `microsoft-learn` の 2 サーバで、`context7` は削除済みです。
+> あわせて Step 実行セッションは `.github/.mcp.json` の宣言分のみを公開し、
+> ワークスペース / ユーザースコープ / プラグイン由来の MCP 自動探索を行いません（FR-CLI-76）。
+
 Phase 6 の棚卸結果（リポジトリ内の確認済みファイル）:
 
 - `measurements/phase1-issuef-investigation.md`
@@ -984,7 +990,7 @@ HVE が npx コマンドを解決する際に使用するコマンドを明示�
 ```powershell
 # セッション内のみ有効（PowerShell）
 $env:WORKIQ_NPX_COMMAND = "C:\Program Files\nodejs\npx.cmd"
-python -m hve orchestrate --workflow aqod --auto-qa --workiq
+python -m hve orchestrate --workflow aas --auto-qa --workiq
 
 # 永続的に設定（ユーザースコープ）
 [Environment]::SetEnvironmentVariable(
@@ -997,7 +1003,7 @@ python -m hve orchestrate --workflow aqod --auto-qa --workiq
 ```cmd
 :: コマンドプロンプト（cmd）
 set WORKIQ_NPX_COMMAND=C:\Program Files\nodejs\npx.cmd
-python -m hve orchestrate --workflow aqod --auto-qa --workiq
+python -m hve orchestrate --workflow aas --auto-qa --workiq
 ```
 
 **回避策 3: Execution Policy を一時的に変更する**
@@ -1218,7 +1224,7 @@ hve wizard / CLI
 | 用途 | CLI 引数 | 環境変数 | wizard メニュー |
 |---|---|---|---|
 | 有効化 | `--workiq` | `WORKIQ_ENABLED=true` | `QA フェーズで Work IQ 経由の情報確認を有効にする` |
-| QA 回答ドラフト有効化 | `--workiq-draft` | `WORKIQ_DRAFT_MODE=true` | 通常は `Work IQ で回答ドラフトを自動生成する？`（QA有効時）。ただし `aqod` かつ `auto_qa=True` の場合は自動ON（質問なし） |
+| QA 回答ドラフト有効化 | `--workiq-draft` | `WORKIQ_DRAFT_MODE=true` | `Work IQ で回答ドラフトを自動生成する？`（QA有効時） |
 | Work IQ 補助レポート出力先 | `--workiq-draft-output-dir` | `WORKIQ_DRAFT_OUTPUT_DIR` | なし |
 | テナントID | `--workiq-tenant-id` | `WORKIQ_TENANT_ID` | なし |
 | QA プロンプト | `--workiq-prompt-qa` | `WORKIQ_PROMPT_QA` | なし（下記の Work IQ 追加プロンプトで追記可） |
@@ -1227,8 +1233,6 @@ hve wizard / CLI
 | Work IQ 追加プロンプト（QA） | なし | なし | `Work IQ (Microsoft 365 Copilot) の末尾に追加するプロンプト（省略可）` |
 | AKM 入力としての Work IQ | `--workiq-akm-ingest` / `--no-workiq-akm-ingest` | `WORKIQ_AKM_INGEST_ENABLED=true` | `--sources qa,original-docs,workiq` 等で `workiq` を選ぶと自動 ON |
 | AKM 取り込み対象 Dxx | `--workiq-dxx D01,D04` | `WORKIQ_AKM_INGEST_DXX=D01,D04` | ウィザードで Work IQ 選択後にプロンプト表示（省略=全件 D01〜D21） |
-
-※ `aqod` かつ `auto_qa=True` の場合、QA 回答ドラフトは自動 ON になり質問は表示されません。
 
 ### AKM 入力ソースとしての Work IQ（hve ローカル CLI のみ）
 
@@ -1334,17 +1338,18 @@ wizard は以下の段階で進行します。ステップ 4（モデル選択�
 
 ```text
 ? ワークフローを選択してください
-  1) Auto Requirement Definition (ard — 3 steps)
-  2) App Architecture Design (aas — 8 steps)
-  3) Web App Design (aad-web — 4 steps)
+  1) Auto Requirement Definition (ard — 8 steps)
+  2) Architecture Design (aas — 11 steps)
+  3) Web App Design (aad-web — 8 steps)
   4) Web App Dev & Deploy (asdw-web — 20 steps)
-  5) Dataflow Design (adfd — 9 steps)
+  5) Dataflow Design (adfd — 7 steps)
   6) Dataflow Dev (adfdv — 7 steps)
   7) AI Agent Design (aag — 3 steps)
-  8) AI Agent Dev & Deploy (aagd — 5 steps)
-  9) Knowledge Management (akm — 1 step)
-  10) Original Docs Review (aqod — 1 step)
-  11) Source Codeからのドキュメント作成 (adoc — 23 steps)
+  8) AI Agent Dev & Deploy (aagd — 6 steps)
+  9) Agentic Retrieval Add-on (aar — 6 steps)
+  10) Knowledge Management (akm — 2 steps)
+  11) Auto Design-doc Ingestion (adi — 9 steps)
+  12) Source Codeからのドキュメント作成 (adoc — 19 steps)
 > 3
 ```
 
@@ -1362,8 +1367,6 @@ wizard は以下の段階で進行します。ステップ 4（モデル選択�
 > 1,2,3      ← カンマ区切りで指定
 >            ← Enter のみ = 全ステップ
 ```
-
-> **AKM / AQOD の場合**: AKM と AQOD はステップが 1 つのみのため、ステップ選択はスキップされ自動で全選択されます。
 
 #### ステップ 4: モデル選択
 
@@ -1474,6 +1477,7 @@ wizard は以下の段階で進行します。ステップ 4（モデル選択�
 | ログレベル | `error` | `--log-level` |
 | タイムアウト | `21600`（6時間） | `--timeout` |
 | QA 自動投入 | OFF | `--auto-qa` |
+| QA 回答の Knowledge Management へのバックグラウンドマージ | OFF | `--qa-akm-background-merge` |
 | Review 自動投入 | OFF | `--auto-contents-review` |
 | GitHub Issue 作成 | OFF | `--create-issues` |
 | GitHub PR 作成 | OFF | `--create-pr` |
@@ -1503,6 +1507,7 @@ wizard は以下の段階で進行します。ステップ 4（モデル選択�
 - `adfdv`: `app_ids`（対象 APP-ID 一覧、カンマ区切り）, `app_id`（主対象 APP-ID を1つ指定）, `resource_group`, `app_id`
 - `aag`: `app_ids`, `app_id`, `usecase_id`
 - `aagd`: `app_ids`, `app_id`（主対象 APP-ID）, `resource_group`, `usecase_id`
+- `adi`: `purpose`, `target_scope`, `depth`, `focus_areas`
 - `akm`: `sources`, `target_files`, `force_refresh`, `custom_source_dir`
 
 > **推薦アーキテクチャによる自動 APP-ID フィルタリング**:
@@ -1515,7 +1520,7 @@ wizard は以下の段階で進行します。ステップ 4（モデル選択�
 
 > **AKM ワークフローの場合**: 固有パラメータ（sources=qa, target_files=sourcesに応じた全件, force_refresh=true, custom_source_dir=空）はデフォルト値で自動設定され、プロンプトはスキップされます。
 
-> 固有パラメータのないワークフローは `aas` のみです。`aad-web` / `adfd` / `adfdv` / `aag` / `aagd` は `app_ids` / `app_id` を、`aqod` は `target_scope` / `depth` / `focus_areas` を受け付けます。
+> 固有パラメータのないワークフローは `aas` のみです。`aad-web` / `adfd` / `adfdv` / `aag` / `aagd` は `app_ids` / `app_id` を、`adi` は `purpose` / `target_scope` / `depth` / `focus_areas` を受け付けます。
 
 #### Work IQ 追加プロンプト（QA有効 + Work IQログイン成功時のみ）
 
@@ -1623,7 +1628,7 @@ CLI モード（`orchestrate` サブコマンド）は、全てのオプショ�
 python -m hve orchestrate --workflow <WORKFLOW_ID> [OPTIONS]
 ```
 
-> **正規の workflow ID**: `ard` / `aas` / `aad-web` / `asdw-web` / `adfd` / `adfdv` / `aag` / `aagd` / `akm` / `aqod` / `adoc` です。`aad` / `asdw` は後方互換エイリアスとして引き続き利用できますが、本ガイドでは正規 ID を優先します。
+> **正規の workflow ID**: `ard` / `aas` / `aad-web` / `asdw-web` / `adfd` / `adfdv` / `aag` / `aagd` / `aar` / `akm` / `adi` / `adoc` です。`aad` / `asdw` は後方互換エイリアスとして引き続き利用できますが、本ガイドでは正規 ID を優先します。
 
 ### 最もシンプルな実行
 
@@ -1705,7 +1710,7 @@ python -m hve orchestrate \
 
 | オプション | 説明 | デフォルト値 |
 |-----------|------|------------|
-| `--workflow`, `-w` | ワークフロー ID（`ard` / `aas` / `aad-web` / `asdw-web` / `adfd` / `adfdv` / `aag` / `aagd` / `akm` / `aqod` / `adoc`。`aad` / `asdw` は後方互換エイリアス） | なし（**必須**） |
+| `--workflow`, `-w` | ワークフロー ID（`ard` / `aas` / `aad-web` / `asdw-web` / `adfd` / `adfdv` / `aag` / `aagd` / `aar` / `akm` / `adi` / `adoc`。`aad` / `asdw` は後方互換エイリアス） | なし（**必須**） |
 | `--branch` | ターゲットブランチ名 | `main` |
 | `--steps` | 実行ステップをカンマ区切りで指定 | 全ステップ |
 | `--dry-run` | 事前確認モード（SDK 呼び出しなし） | `false` |
@@ -1720,18 +1725,14 @@ python -m hve orchestrate \
 | `--model`, `-m` | 使用する AI モデル（`Auto` を指定すると GitHub が最適モデルを動的選択） | `Auto` |
 | `--review-model` | 敵対的レビュー（`--auto-contents-review`）および Code Review Agent（`--auto-coding-agent-review`）で使用するモデル（省略時は `--model` と同じ） | `None`（`--model` にフォールバック） |
 | `--qa-model` | QA 質問票生成（`--auto-qa`）で使用するモデル（省略時は `--model` と同じ） | `None`（`--model` にフォールバック） |
+| `--akm-model` | QA 回答から起動する AKM 差分同期（`--auto-qa` 有効時）で使用するモデル | `None`（`--model` にフォールバック） |
+| `--akm-reasoning-effort` | 同 AKM 実行の reasoning effort | `None`（`--reasoning-effort` にフォールバック） |
+| `--akm-context-tier` | 同 AKM 実行の context tier（`default` / `long_context`） | `None`（`--context-tier` にフォールバック） |
 | `--max-parallel` | 同時実行するステップ数の上限 | `15` |
 | `--auto-qa` | 各ステップ後に自動 QA を実行（対話的） | `false` |
 | `--auto-contents-review` | 各ステップ後に自動レビューを実行 | `false` |
 | `--auto-coding-agent-review` | 全ステップ完了後に Code Review Agent レビューを実行（`--repo` / `GH_TOKEN` 不要、ローカル SDK で実行） | `false` |
 | `--auto-coding-agent-review-auto-approval` | Code Review Agent の修正プランを全て自動承認 | `false` |
-
-> **⚠️ `--auto-contents-review` と `--auto-coding-agent-review` の同時有効化について**:
-> 両オプションを同時に有効にすると、同一成果物に対してレビューセッションが重複し、**トークン消費・タスク回数が増える**可能性があります。
-> 同時有効化時は CLI 起動時に WARNING が表示されます（強制終了はしません）。
-> 通常はどちらか一方を選択してください:
-> - `--auto-contents-review` … ステップごとに敵対的レビューを実行（Phase 3 組み込み）
-> - `--auto-coding-agent-review` … 全ステップ完了後に Code Review Agent が差分全体をレビュー
 | `--timeout` | idle タイムアウト秒数 | `21600`（6時間） |
 | `--review-timeout` | Code Review Agent レビュー完了待ちタイムアウト秒数 | `7200`（2時間） |
 | `--show-stream` | モデル応答のトークンストリーム表示 | `false` |
@@ -1741,6 +1742,17 @@ python -m hve orchestrate \
 | `--screen-reader` | スクリーンリーダー対応モード: 絵文字を日本語ラベルに置換し、スピナーを無効化する（ラベル訳語は提案値で Copilot CLI 実機との一致は未確認） | `false` |
 | `--timestamp-style` | タイムスタンプ表示位置: `prefix`=行頭（デフォルト）/ `suffix`=行末（DIM）/ `off`=非表示 | `prefix` |
 | `--final-only` | DAG 完了時のサマリと各ステップの最終応答のみを出力する（CI/スクリプト連携用）。timestamp/カラー/スピナーを自動無効化する | `false` |
+
+> **⚠️ `--auto-contents-review` と `--auto-coding-agent-review` の同時有効化について**:
+> 両オプションを同時に有効にすると、同一成果物に対してレビューセッションが重複し、**トークン消費・タスク回数が増える**可能性があります。
+> 同時有効化時は CLI 起動時に WARNING が表示されます（強制終了はしません）。
+> 通常はどちらか一方を選択してください:
+> - `--auto-contents-review` … ステップごとに敵対的レビューを実行（Phase 3 組み込み）
+> - `--auto-coding-agent-review` … 全ステップ完了後に Code Review Agent が差分全体をレビュー
+
+#### Cloud Session オプション
+
+`orchestrate` には Step セッションを Copilot SDK の Cloud Sessions で実行するための `--cloud-session` 系オプションがあります（既定は無効）。オプション一覧・自動振り分け・フォールバック・設定正本は [cloud-session.md](./cloud-session.md) を正典とします。HVE Cloud 版（Issue Template 起点）とは別機能です。
 
 #### 環境変数
 
@@ -1755,6 +1767,12 @@ python -m hve orchestrate \
 | `NO_COLOR` | 空でない値を設定すると ANSI カラー出力を無効化する（[no-color.org 規格](https://no-color.org/) 準拠）。`--no-color` フラグと同等 | なし（未設定） |
 
 > **注意**: `--review-model` / `--qa-model` を使って別モデルを指定すると、1ステップあたり最大 3 セッション（メイン + QA + レビュー）が起動する場合があります。
+>
+> **注意**: `--akm-*` の 3 つは QA 回答からバックグラウンド起動される Knowledge Management 子プロセスにだけ効きます。`--workflow akm` を明示指定した実行には適用されず、その場合は従来どおり `--model` / `--reasoning-effort` / `--context-tier` に従います。対話ウィザードでは `--qa-akm-background-merge` を有効にしたときだけ 3 項目を尋ねます（既定はいずれも継承）。
+>
+> **注意（既定値の変更）**: 以前は `--auto-qa` を指定するだけで QA 回答から Knowledge Management が常にバックグラウンド起動されていました。現在は `--qa-akm-background-merge` を明示指定したときだけ起動します（既定無効）。従来と同じ挙動にするには本フラグを追加してください。共有資産である `knowledge/` への自動書込みを利用者が選べるようにするための変更です。
+>
+> **注意**: `--akm-*` には環境変数経路がありません。`--akm-reasoning-effort` / `--akm-context-tier` は継承元の `--reasoning-effort` / `--context-tier` 自体に環境変数経路が無いためで、`--akm-model` も 3 項目の指定方法を揃える目的で CLI フラグ専用としています（`MODEL` / `REVIEW_MODEL` / `QA_MODEL` に相当する `AKM_MODEL` はありません）。
 >
 > **注意**: GitHub Actions 経路（`@copilot` メンション起動）ではモデル指定はできません。
 
@@ -2012,9 +2030,10 @@ python -m hve orchestrate --workflow aas --final-only > result.txt
 | `--force-refresh` / `--no-force-refresh` | AKM の status 再生成制御 | `akm` |
 | `--custom-source-dir` | AKM の追加ソースディレクトリ | `akm` |
 | `--enable-auto-merge` | PR 自動 Approve & Auto-merge。有効時は ASDW-WEB / ADFDV で Deploy 成果物の push / PR / merge 待機にも使用 | `asdw-web`, `adfdv`, `akm` |
-| `--target-scope` | AQOD の確認対象スコープ | `aqod` |
-| `--depth` | AQOD の分析深さ（`standard` / `lightweight`） | `aqod` |
-| `--focus-areas` | AQOD の重点観点 | `aqod` |
+| `--purpose` | ADI の設計書選別目的（空の場合は `must` を付与しない） | `adi` |
+| `--target-scope` | ADI の確認対象スコープ（`docs-original/` またはその配下） | `adi` |
+| `--depth` | ADI の分析深さ（`standard` / `lightweight`） | `adi` |
+| `--focus-areas` | ADI の重点観点 | `adi` |
 | `--target-dirs` | ADOC の対象ディレクトリ | `adoc` |
 | `--exclude-patterns` | ADOC の除外パターン | `adoc` |
 | `--doc-purpose` | ADOC の文書目的（`all` / `onboarding` / `refactoring` / `migration`） | `adoc` |
@@ -2107,21 +2126,22 @@ python -m hve orchestrate \
 
 | Workflow ID | 名称 | Step 数 | 主な固有パラメータ | 最小 dry-run 例 |
 |-------------|------|--------:|--------------------|-----------------|
-| `ard` | Auto Requirement Definition | 3 | `--company-name`、`--target-business`、`--survey-base-date`、`--survey-period-years`、`--target-region`、`--analysis-purpose`、`--attached-docs` | `python -m hve orchestrate --workflow ard --company-name "Contoso" --dry-run` |
-| `aas` | Architecture Design | 8 | なし | `python -m hve orchestrate --workflow aas --dry-run` |
-| `aad-web` | Web App Design | 4 | `--app-ids`、`--app-id` | `python -m hve orchestrate --workflow aad-web --app-ids APP-01 --dry-run` |
+| `ard` | Auto Requirement Definition | 8 | `--company-name`、`--target-business`、`--survey-base-date`、`--survey-period-years`、`--target-region`、`--analysis-purpose`、`--attached-docs` | `python -m hve orchestrate --workflow ard --company-name "Contoso" --dry-run` |
+| `aas` | Architecture Design | 11 | なし | `python -m hve orchestrate --workflow aas --dry-run` |
+| `aad-web` | Web App Design | 8 | `--app-ids`、`--app-id` | `python -m hve orchestrate --workflow aad-web --app-ids APP-01 --dry-run` |
 | `asdw-web` | Web App Dev & Deploy | 20 | `--app-ids`、`--app-id`、`--resource-group`、`--usecase-id`、`--tdd-max-retries` | `python -m hve orchestrate --workflow asdw-web --app-ids APP-01 --resource-group rg-dev --usecase-id UC-01 --dry-run` |
-| `adfd` | Dataflow Design | 9 | `--app-ids`、`--app-id` | `python -m hve orchestrate --workflow adfd --app-ids APP-02 --dry-run` |
+| `adfd` | Dataflow Design | 7 | `--app-ids`、`--app-id` | `python -m hve orchestrate --workflow adfd --app-ids APP-02 --dry-run` |
 | `adfdv` | Dataflow Dev | 7 | `--app-ids`、`--app-id`、`--resource-group`、`--app-id`、`--tdd-max-retries` | `python -m hve orchestrate --workflow adfdv --app-ids APP-02 --resource-group rg-batch --app-id JOB-01 --dry-run` |
 | `aag` | AI Agent Design | 3 | `--app-ids`、`--app-id`、`--usecase-id` | `python -m hve orchestrate --workflow aag --app-ids APP-01 --usecase-id UC-01 --dry-run` |
-| `aagd` | AI Agent Dev & Deploy | 5 | `--app-ids`、`--app-id`、`--resource-group`、`--usecase-id`、`--tdd-max-retries` | `python -m hve orchestrate --workflow aagd --app-ids APP-01 --resource-group rg-agent --usecase-id UC-01 --dry-run` |
-| `akm` | Knowledge Management | 1 | `--sources`、`--target-files`、`--force-refresh`、`--custom-source-dir`、`--enable-auto-merge` | `python -m hve orchestrate --workflow akm --sources both --dry-run` |
-| `aqod` | Original Docs Review | 1 | `--target-scope`、`--depth`、`--focus-areas` | `python -m hve orchestrate --workflow aqod --target-scope original-docs/ --depth lightweight --dry-run` |
-| `adoc` | Source Codeからのドキュメント作成 | 23 | `--target-dirs`、`--exclude-patterns`、`--doc-purpose`、`--max-file-lines` | `python -m hve orchestrate --workflow adoc --target-dirs src/,hve/ --doc-purpose onboarding --dry-run` |
+| `aagd` | AI Agent Dev & Deploy | 6 | `--app-ids`、`--app-id`、`--resource-group`、`--usecase-id`、`--tdd-max-retries` | `python -m hve orchestrate --workflow aagd --app-ids APP-01 --resource-group rg-agent --usecase-id UC-01 --dry-run` |
+| `aar` | Agentic Retrieval Add-on | 6 | `--app-ids`、`--app-id`、`--resource-group`、`--usecase-id` | `python -m hve orchestrate --workflow aar --app-ids APP-01 --resource-group rg-search --usecase-id UC-01 --dry-run` |
+| `akm` | Knowledge Management | 2 | `--sources`、`--target-files`、`--force-refresh`、`--custom-source-dir`、`--enable-auto-merge` | `python -m hve orchestrate --workflow akm --sources both --dry-run` |
+| `adi` | Auto Design-doc Ingestion | 9 | `--purpose`、`--target-scope`、`--depth`、`--focus-areas` | `python -m hve orchestrate --workflow adi --target-scope docs-original/ --depth lightweight --dry-run` |
+| `adoc` | Source Codeからのドキュメント作成 | 19 | `--target-dirs`、`--exclude-patterns`、`--doc-purpose`、`--max-file-lines` | `python -m hve orchestrate --workflow adoc --target-dirs src/,hve/ --doc-purpose onboarding --dry-run` |
 
 > **補足**: `aad` / `asdw` はそれぞれ `aad-web` / `asdw-web` の後方互換エイリアスです。Issue Template / Workflow 名 / `workflow_registry` の表記に合わせ、本ガイドでは正規 ID を優先します。
 
-> **補足**: `akm` は `--sources qa` で `qa/`、`--sources original-docs` で `original-docs/` を処理します。`aqod` は質問票生成専用 workflow で、`original-docs/` を直接 `knowledge/` へ取り込むものではありません。
+> **補足**: `akm` は `--sources qa` で `qa/`、`--sources original-docs` で `docs-original/` を処理します。ADIの原本質問票生成はStep 1.1 / 1.2のmain DAGであり、`--auto-qa`による事前QAとは別です。
 
 ---
 
@@ -2269,15 +2289,22 @@ Fleet mode を CLI / GUI で使う場合は、`SPLIT_REQUIRED` ではなく work
 |---|---|---|---|
 | AAD-WEB / その他通常 | `auto_qa=True` で実行 | 廃止 | — |
 | **AKM** | `auto_qa=True` で実行 | 廃止 | 事前 QA → Phase 1 注入で要件充足。DAG 終了後に `_run_akm_workiq_verification` が別途実行される |
-| **AQOD** | 常時スキップ | 廃止 | AQOD 本体は事後の整合性チェックのため、事前 QA は不要 |
 
 ```bash
 # AKM: 事前 QA を有効化してメインタスクへ注入
 python -m hve orchestrate --workflow akm --auto-qa
-
-# AQOD: 事前/事後 QA ともにスキップ（AQOD は本体タスクのみ）
-python -m hve orchestrate --workflow aqod
 ```
+
+> ADI Step 1.1 / 1.2の原本質問票はmain DAGの成果物です。`--auto-qa`を付けると、それとは別に各Step前のPhase 0 QAが実行されます。
+
+#### 事前 QA 回答からの AKM 自動同期
+
+`--auto-qa` で質問が 1 件以上あった場合、回答済み QA ファイルは保存後に再読込・内容・全回答を検証してから、AKM（`KnowledgeManager`）へ当該ファイル 1 件ずつ差分同期されます。Knowledge Management 自身（`--workflow akm`）は再帰を避けるため対象外です。
+
+- メインの DAG は AKM の完了を待たずに次 Step へ進みます。
+- AKM は FIFO かつリポジトリ単位のロックで直列実行され、明示的な `akm` 実行とも排他されます。
+- Git commit / branch 切替 / GUI 終了などの境界では、未完了の AKM 書き込みを残さないよう待ち合わせます。
+- Cloud（GitHub Issue 経路）では、回答コメントを回答済み QA として `qa/` の固定パスへ保存し、Contents API の再取得と SHA 照合が成功してから、QA 起点 AKM 調整ワークフロー（`auto-akm-after-qa.yml`）を非同期 dispatch します。dispatch 要求が受理された時点でメインタスクのアサインへ進み、AKM の完了は待ちません。
 
 > **インタラクティブモードでの設定**: wizard 内で「QA 自動投入を有効にする？ [y/N]」「Review 自動投入を有効にする？ [y/N]」と順番に確認されます。`y` を選んだ場合のみ、各項目ごとに「メインモデルとは別モデルを使うか」を確認し、必要時のみ QA/Review 用モデル選択メニューが表示されます。CLI モードの `--auto-qa` / `--auto-contents-review` フラグに相当します。
 
@@ -2336,7 +2363,7 @@ Copilot / Prompt が大量の Markdown を参照する際の **Context Window �
 
 - Skill: `.github/skills/markdown-query/SKILL.md`
 - 実装: `mdq/`（SQLite + BM25、見出し境界・コードフェンス対応）
-- 索引対象（既定）: `docs/`, `docs-generated/`, `users-guide/`, `template/`, `knowledge/`, `qa/`, `original-docs/`, `work/`, `sample/`, `hve-dev/`
+- 索引対象（既定）: `docs/`, `docs-generated/`, `users-guide/`, `template/`, `knowledge/`, `qa/`, `docs-original/`, `work/`, `sample/`, `hve-dev/`
 - 索引ファイル: `.mdq/index.sqlite`（gitignore 済、リポジトリにコミットしないこと）
 
 ### F.1 環境構築
@@ -2609,7 +2636,8 @@ ANSI エスケープシーケンスに対応していないターミナルでは
 | 利用ガイド（README） | [README.md](../README.md) |
 | GitHub Copilot SDK（リポジトリ） | https://github.com/github/copilot-sdk |
 | SDK Getting Started | https://github.com/github/copilot-sdk/blob/main/docs/getting-started.md |
-| Custom Agents ドキュメント（上流 Copilot SDK 機能）<!-- TBD: 上流 SDK の現行名称・リンク妥当性要確認 --> | https://github.com/github/copilot-sdk/blob/main/docs/features/custom-agents.md |
+| Custom Agents ドキュメント（上流 Copilot SDK 機能） | https://github.com/github/copilot-sdk/blob/main/docs/features/custom-agents.md |
+| Cloud Sessions ドキュメント（上流 Copilot SDK 機能） | https://github.com/github/copilot-sdk/blob/main/docs/features/cloud-sessions.md |
 | MCP Servers ドキュメント | https://github.com/github/copilot-sdk/blob/main/docs/features/mcp.md |
 | Copilot CLI インストールガイド | https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli |
 | Model Context Protocol（MCP）仕様 | https://modelcontextprotocol.io/ |
@@ -2624,3 +2652,50 @@ python -m hve orchestrate --workflow akm
 ```
 
 `knowledge/` ファイルが存在すると、以降の設計・実装ワークフロー（`aas`, `aad-web`, `asdw-web` 等）での設計品質が向上します。詳細は [km-guide.md](./km-guide.md) を参照してください。
+
+---
+
+## 付録G: HVE を拡張する（開発者向け）
+
+CLI Orchestrator 自体を変更する場合の正本、変更手順、回帰検証、互換性の観点をまとめます。利用手順のみが目的の場合は本節を読み飛ばしてください。
+
+### 設定・実装の正本
+
+| 変更したいもの | 正本 |
+|---|---|
+| サブコマンド・引数・既定値の宣言 | `hve/__main__.py` |
+| 設定値の解決・環境変数・正規化 | `hve/config.py` |
+| ワークフロー・Step・`custom_agent`・成果物パス | `hve/workflow_registry.py` |
+| DAG 構築と並列実行 | `hve/dag_planner.py` / `hve/dag_executor.py` |
+| Step 実行と出力ゲート | `hve/runner.py` |
+| Prompt の解決 | `hve/prompt_loader.py` と `.github/prompts/*.prompt.md` |
+| Skill の解決 | `hve/skill_resolver.py` と `.github/skills/` |
+| Cloud Session の振り分け | `hve/cloud_session.py`（→ [cloud-session.md](./cloud-session.md)） |
+| セットアップスクリプト | `hve/setup-hve.ps1` / `hve/setup-hve.sh` / `hve/setup-hve.cmd` |
+| 依存パッケージ・extras | `pyproject.toml` |
+
+### 変更手順
+
+1. **引数を追加・変更する**: `hve/__main__.py` に定義を追加し、対応する設定フィールドを `hve/config.py` に置く。既定値は `config.py` 側を正とし、CLI 側は「未指定＝継承」にする。
+2. **Step / 成果物を変更する**: `hve/workflow_registry.py` を変更する。`output_paths` は実行時ゲートの参照元なので、成果物パスの変更は必ず registry 側と対で行う。
+3. **Prompt を変更する**: `.github/prompts/<Name>.prompt.md` を変更する。Step からの参照名は registry の `custom_agent` フィールド。
+4. **文書を更新する**: 引数・既定値・ワークフロー一覧を変更したら、本ガイドの該当表と、影響する入門ガイドを同じ変更で更新する。
+
+### 回帰検証
+
+```bash
+# CLI パーサー・エントリポイント
+python -m pytest hve/tests/test_main.py hve/tests/test_main_entrypoints.py
+
+# Prompt / Skill の解決
+python -m pytest hve/tests/test_prompt_loader.py hve/tests/test_skill_resolver.py
+
+# GUI ヘルプ本文（CLI ガイドと共有する記述の契約）
+python -m pytest hve/tests/test_gui_help_content.py
+```
+
+### 互換性・安全性
+
+- 既存の引数名・既定値の変更は互換性を壊します。別名を追加してから移行し、廃止する場合は本ガイドに廃止版数を明記してください（例: 「中断と再開（Resume）— 廃止（v1.1）」）。
+- `--auto-coding-agent-review` / `--create-issues` / `--create-pr` は GitHub API を使うため `GH_TOKEN` が必要です。トークンは環境変数で渡し、ドキュメントやコードへ埋め込まないでください。
+- Cloud Session の `policy_blocked` はローカルへフォールバックしません。組織ポリシーの拒否を迂回する変更を入れないでください。

@@ -52,7 +52,7 @@
   <text class="h" x="580" y="234">添付ファイルパイプライン（ARD ワークフロー）</text>
   <text x="580" y="254">D&amp;D 受領 → MIME 判定</text>
   <text x="580" y="272">変換: docx / pdf / xlsx → markdown</text>
-  <text x="580" y="290">保存: original-docs/&lt;timestamp&gt;-&lt;name&gt;/ （読取専用領域）</text>
+  <text x="580" y="290">保存: docs-original/&lt;timestamp&gt;-&lt;name&gt;/ （読取専用領域）</text>
   <text x="580" y="308">起点ファイル選択 → `--attached-docs` 引数を自動生成</text>
   <text x="580" y="326">エラーは Step2 のエラーパネルに表示（実行ボタン無効化）</text>
 

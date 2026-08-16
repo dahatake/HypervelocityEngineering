@@ -6,7 +6,7 @@ Step 1 右ペインは「ワークフロー単位の QGroupBox（タイトル＝
 - 選択ワークフローごとに `_workflow_group_boxes` にエントリが作られること
 - 表示順が `_WORKFLOW_CANONICAL_ORDER` (ARD 先頭) に従うこと
 - 固有設定を持たないワークフロー (aas / aag / aagd) は枠が作られないこと
-- 旧カテゴリ枠 (C4 / C10〜C14) は常時非表示であること
+- 旧カテゴリ枠 (C4 / C10〜C11 / C13〜C14 / C17) は常時非表示であること
 - 「追加プロンプト」(C3) は最上部 (index 0) に固定されること
 """
 
@@ -80,12 +80,12 @@ class TestWorkflowGroupBoxes(unittest.TestCase):
         self.assertEqual(self.page._workflow_group_boxes, {})
 
     def test_category_groups_always_hidden(self) -> None:
-        """C4 / C10〜C14 のカテゴリ枠は常時非表示。"""
+        """C4 / C10〜C11 / C13〜C14 / C17 のカテゴリ枠は常時非表示。"""
         self.page.set_workflows(
             ["ard", "akm"],
             {"ard": "Auto Requirement Definition", "akm": "Knowledge Management"},
         )
-        for key in ("C4", "C10", "C11", "C12", "C13", "C14"):
+        for key in ("C4", "C10", "C11", "C13", "C14", "C17"):
             self.assertFalse(
                 self.page._category_groups[key].isVisibleTo(self.page),
                 f"{key} should be hidden, but is visible",

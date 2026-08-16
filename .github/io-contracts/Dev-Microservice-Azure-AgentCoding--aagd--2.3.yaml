@@ -60,6 +60,11 @@ outputs:
 - path: src/agent/{key}/
   required: true
   mode: create
+# Agent Plugins Specification 1.0.0 の plugin root マニフェスト。
+# `skills/` は AG-CAP-06 が required のときだけ生成される条件付き成果物のため宣言しない。
+- path: src/agent/{key}/plugin.json
+  required: true
+  mode: create
 # 注: 設定ファイル（Python: agent-config.json / C#: appsettings.json）は
 # Dev-Microservice-Azure-AgentCoding.prompt.md のとおり `src/agent/{key}/` 配下の
 # 言語排他な条件付き成果物であり、リポジトリルート直下の契約パスではないため

@@ -3,7 +3,7 @@
      aria-labelledby="svg-title svg-desc"
      font-family="'Segoe UI','Hiragino Kaku Gothic ProN','Meiryo',sans-serif">
   <title id="svg-title">knowledge/ を介した要求定義の一元管理フロー（Work IQ 入力対応）</title>
-  <desc id="svg-desc">4つの情報源（original-docs/, qa/, src/, Work IQ）から、aqod / akm / adoc の3ワークフローを経由して knowledge/ と docs-generated/ を生成。akm は qa/original-docs/workiq のマルチ選択入力に対応し、workiq 選択時は AKM メイン DAG の前段で Work IQ 取り込みフェーズが走る。設計・開発ワークフローが knowledge/ を業務コンテキストとして自動参照し、反復により精緻化される（HVE Cloud Agent は workiq 入力対象外）。</desc>
+  <desc id="svg-desc">4つの情報源（docs-original/, qa/, src/, Work IQ）から、adi / akm / adoc の3ワークフローを経由して knowledge/ と docs-generated/ を生成。ADI Step 1.1 / 1.2が原本質問票をqa/へ生成する。akm は qa/original-docs/workiq のマルチ選択入力に対応し、workiq 選択時は AKM メイン DAG の前段で Work IQ 取り込みフェーズが走る。設計・開発ワークフローが knowledge/ を業務コンテキストとして自動参照し、反復により精緻化される（HVE Cloud Agent は workiq 入力対象外）。</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/>
@@ -30,7 +30,7 @@
   <rect x="40" y="90" width="240" height="410" rx="8" class="group-frame"/>
   <text x="160" y="112" text-anchor="middle" class="group-title">① 情報源（入力）</text>
   <rect x="60" y="140" width="200" height="80" rx="6" class="input-box"/>
-  <text x="160" y="170" text-anchor="middle" class="node-title" fill="#0d47a1">original-docs/</text>
+  <text x="160" y="170" text-anchor="middle" class="node-title" fill="#0d47a1">docs-original/</text>
   <text x="160" y="190" text-anchor="middle" class="node-sub" fill="#0d47a1">既存ビジネス分析</text>
   <text x="160" y="206" text-anchor="middle" class="node-sub" fill="#0d47a1">ドキュメント（読み取り専用）</text>
   <rect x="60" y="260" width="200" height="80" rx="6" class="input-box"/>
@@ -47,9 +47,9 @@
   <rect x="350" y="90" width="260" height="410" rx="8" class="group-frame"/>
   <text x="480" y="112" text-anchor="middle" class="group-title">② ワークフロー</text>
   <rect x="370" y="140" width="220" height="80" rx="6" class="wf-box"/>
-  <text x="480" y="166" text-anchor="middle" class="node-title" fill="#e65100">aqod</text>
-  <text x="480" y="184" text-anchor="middle" class="node-sub" fill="#e65100">auto-aqod.yml</text>
-  <text x="480" y="200" text-anchor="middle" class="node-sub" fill="#e65100">原本 → 質問票生成</text>
+  <text x="480" y="166" text-anchor="middle" class="node-title" fill="#e65100">adi Step 1.1 / 1.2</text>
+  <text x="480" y="184" text-anchor="middle" class="node-sub" fill="#e65100">local DAG（21 fan-out → join）</text>
+  <text x="480" y="200" text-anchor="middle" class="node-sub" fill="#e65100">正規化済み原本 → 質問票22件</text>
   <rect x="370" y="260" width="220" height="80" rx="6" class="wf-box"/>
   <text x="480" y="286" text-anchor="middle" class="node-title" fill="#e65100">akm</text>
   <text x="480" y="304" text-anchor="middle" class="node-sub" fill="#e65100">auto-knowledge-management.yml</text>
@@ -102,5 +102,5 @@
   </text>
   <path d="M 985 195 Q 700 560 260 320" class="edge-iter" marker-end="url(#arrow)"/>
   <text x="600" y="600" text-anchor="middle" class="iter-label">🔄 開発中に生じた疑問を qa/ に追記 → akm 再実行で knowledge/ を精緻化（反復ループ）</text>
-  <text x="1160" y="710" text-anchor="end" class="legend" font-style="italic">検証基点: main@b987c08 / 実装根拠: auto-knowledge-management.yml, auto-aqod.yml, auto-app-documentation.yml</text>
+  <text x="1160" y="710" text-anchor="end" class="legend" font-style="italic">実装根拠: hve/workflow_registry.py, auto-knowledge-management-reusable.yml, auto-app-documentation-reusable.yml</text>
 </svg>

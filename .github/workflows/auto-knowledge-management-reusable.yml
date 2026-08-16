@@ -55,9 +55,9 @@ jobs:
     runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 360
     concurrency:
-      # knowledge/ への書き込み競合防止: 同一リポジトリ内で AKM orchestrate を直列化する。
-      # 複数の AKM Issue が同時起動しても knowledge/ への並列書き込みが発生しない。
-      group: akm-knowledge-write-${{ github.repository }}
+      # 通常 AKM は大域直列化する。QA同期AKMだけは、その大域groupを保持して待機する
+      # coordinatorとの自己デッドロックを避けるため、専用の子groupで直列化する。
+      group: ${{ contains(fromJSON(inputs.issue_labels), 'qa-akm-sync') && format('akm-qa-sync-child-{0}', github.repository) || format('akm-knowledge-write-{0}', github.repository) }}
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -291,12 +291,20 @@ jobs:
           set -euo pipefail
 
           # Issue body を API 経由で安全に取得（YAML 展開問題を回避）
-          ISSUE_BODY=$(curl -s \
+          ISSUE_RESPONSE=$(curl -sf \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}") || {
+            echo "ERROR: Issue #${ISSUE_NUMBER} の取得に失敗しました。" >&2
+            exit 1
+          }
+          ISSUE_BODY=$(printf '%s' "${ISSUE_RESPONSE}" \
             | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
+          ISSUE_LABELS=$(printf '%s' "${ISSUE_RESPONSE}" \
+            | python3 -c "import sys,json; print(json.dumps([l['name'] for l in json.load(sys.stdin).get('labels',[])]))")
+          ROOT_HAS_QA_AKM_SYNC=$(printf '%s' "${ISSUE_LABELS}" \
+            | jq -r 'if index("qa-akm-sync") then "true" else "false" end')
           export ISSUE_BODY
 
           if [[ -z "${COPILOT_PAT:-}" ]]; then
@@ -550,6 +558,10 @@ jobs:
           # Step Issue に付与するラベルセット
           STEP_LABELS='["knowledge-management"]'
 
+          if [[ "${ROOT_HAS_QA_AKM_SYNC}" == "true" ]]; then
+            STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["qa-akm-sync"]')
+          fi
+
           if [[ "${ADVERSARIAL_REVIEW}" == "true" ]]; then
             STEP_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["adversarial-review"]')
           fi
@@ -588,7 +600,7 @@ jobs:
             CUSTOM_SOURCE_DISPLAY=$(printf '%s' "${CUSTOM_SOURCE_DIR}" | tr ' ' '\n' | sed 's/^/- /')
           fi
 
-          BODY_S1=$(printf '%s\n## 目的\n`qa/` / `original-docs/` から knowledge ファイルを生成・更新する。\n\n## 実行パラメータ\n\n| パラメータ | 値 |\n|-----------|----|\n| sources | %s |\n| force_refresh | %s |\n\n### target_files\n%s\n\n### custom_source_dir\n%s\n\n## 入力\n- `qa/*.md`（sources=qa,both）\n- `original-docs/*`（sources=original-docs,both）\n- `template/business-requirement-document-master-list.md`\n\n## 出力\n- `knowledge/business-requirement-document-status.md`\n- `knowledge/D{NN}-<文書名>.md` — **要求項目（REQ）テーブル形式**（Skill `knowledge-management` §7 / §11.6 準拠：§2=Confirmed REQ-D{NN}-001番台 / §3=Tentative REQ-D{NN}-101番台 / §4=Unknown表 / §5-§7=REQ単位カバー率・件数）\n- `knowledge/D{NN}-<文書名>-ChangeLog.md` — REQ-ID 別サブセクション構造（要求項目別ログ：各REQに対する新規/マージ/値更新を日付昇順で記録）+ 付録A（原文保全）\n\n## Custom Agent\n`KnowledgeManager`\n\n## 依存\n- なし（単独ステップ）\n\n## 完了条件\n- `knowledge/business-requirement-document-status.md` が生成されている\n- `knowledge/D{NN}-<文書名>.md` が REQ テーブル形式で更新されている（散文の箇条書きや QA トレース文の貼り付けは禁止）\n- `knowledge/D{NN}-<文書名>-ChangeLog.md` が REQ-ID 別サブセクション構造で更新されている\n- 完了時に自身に `akm:done` ラベルを付与すること%s' \
+          BODY_S1=$(printf '%s\n## 目的\n`qa/` / `docs-original/` から knowledge ファイルを生成・更新する。\n\n## 実行パラメータ\n\n| パラメータ | 値 |\n|-----------|----|\n| sources | %s |\n| force_refresh | %s |\n\n### target_files\n%s\n\n### custom_source_dir\n%s\n\n## 入力\n- `qa/*.md`（sources=qa,both）\n- `docs-original/*`（sources=original-docs,both）\n- `template/business-requirement-document-master-list.md`\n\n## 出力\n- `knowledge/business-requirement-document-status.md`\n- `knowledge/D{NN}-<文書名>.md` — **要求項目（REQ）テーブル形式**（Skill `knowledge-management` §7 / §11.6 準拠：§2=Confirmed REQ-D{NN}-001番台 / §3=Tentative REQ-D{NN}-101番台 / §4=Unknown表 / §5-§7=REQ単位カバー率・件数）\n- `knowledge/D{NN}-<文書名>-ChangeLog.md` — REQ-ID 別サブセクション構造（要求項目別ログ：各REQに対する新規/マージ/値更新を日付昇順で記録）+ 付録A（原文保全）\n\n## Custom Agent\n`KnowledgeManager`\n\n## 依存\n- なし（単独ステップ）\n\n## 完了条件\n- `knowledge/business-requirement-document-status.md` が生成されている\n- `knowledge/D{NN}-<文書名>.md` が REQ テーブル形式で更新されている（散文の箇条書きや QA トレース文の貼り付けは禁止）\n- `knowledge/D{NN}-<文書名>-ChangeLog.md` が REQ-ID 別サブセクション構造で更新されている\n- 完了時に自身に `akm:done` ラベルを付与すること%s' \
             "${ROOT_REF}" "${SOURCES}" "${FORCE_REFRESH_DISPLAY}" "${TARGET_FILES_DISPLAY}" "${CUSTOM_SOURCE_DISPLAY}" "${ADDITIONAL_SECTION}")
 
           if RESP=$(create_issue \

@@ -63,7 +63,7 @@ SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS: Dict[str, str] = {
     "aas": "docs/", "aad-web": "docs/", "asdw-web": ".",
     "adfd": "docs/", "adfdv": ".",
     "aag": "docs/", "aagd": ".",
-    "akm": "knowledge/", "aqod": "qa/", "adoc": "docs/",
+    "akm": "knowledge/", "adi": "docs/original-design-doc-ingest/", "adoc": "docs/",
 }
 
 MODEL_AUTO_VALUE: str = "Auto"
@@ -339,17 +339,23 @@ class SDKConfig:
     model: str = DEFAULT_MODEL              # デフォルトモデル
     review_model: Optional[str] = None      # レビュー専用モデル（未指定時は model）
     qa_model: Optional[str] = None          # QA 専用モデル（未指定時は model）
+    # QA 起点 AKM 子実行専用モデル（FR-QA-04。未指定時は model）。
+    # 適用されるのは qa_akm_dispatch の子プロセス引数生成だけで、
+    # メイン / review / QA のセッション生成には影響しない。
+    akm_model: Optional[str] = None
     # --- reasoning_effort (SDK が返す supported_reasoning_efforts から選択された値) ---
     # None: 未指定。Auto モデル時は何も指定せず、サーバ側 Auto Model Selection が
     # モデル毎に適切な effort を選ぶ。明示モデル時も None は SDK 既定振る舞いを使う。
     reasoning_effort: Optional[str] = None
     review_reasoning_effort: Optional[str] = None
     qa_reasoning_effort: Optional[str] = None
+    akm_reasoning_effort: Optional[str] = None
     # --- context_tier (SDK の create_session(context_tier=...) へ渡す) ---
     # "default" | "long_context" | None。None は未指定（SDK/サーバ既定）。
     # GUI 設定の既定値 (long_context) は GUI 層 (settings_store / OrchestrateArgs) が
-    # 担い、本フィールドの既定は None として CLI 直接実行時の従来挙動を保つ。
+    # 担い、本フィールドの既定は None として CLI 直接実行時の従来振る舞いを保つ。
     context_tier: Optional[str] = None
+    akm_context_tier: Optional[str] = None
     timeout_seconds: float = 21600.0        # セッションの idle タイムアウト
     # per-step wall-clock タイムアウト（秒）。DAG の 1 ステップ実行が本値を超えたら
     # 当該ステップを失敗扱いで打ち切り、ハングによる DAG 全体の無期限停止を防ぐ。
@@ -366,6 +372,8 @@ class SDKConfig:
 
     # --- Post-step 自動プロンプト ---
     auto_qa: bool = False                   # QA 自動投入（デフォルト: 無効）
+    # QA 回答を knowledge/ へバックグラウンドでマージするか（FR-QA-05、既定: 無効）。
+    qa_akm_background_merge: bool = False
     auto_contents_review: bool = False      # Review 自動投入（デフォルト: 無効）
     qa_answer_mode: Optional[str] = None    # QA 回答モード: "all" = 全問まとめて, "one" = 1問ずつ, "autopilot" = 全問既定値自動採用（GUI）, "gui-file" = GUI 経由 IPC ファイル, None = 実行時に選択
     qa_auto_defaults: bool = False          # True: QA Phase 2b で全問デフォルト値を自動採用（設定元: __main__.py wizard / 消費先: runner.py _collect_qa_answers）
@@ -397,8 +405,8 @@ class SDKConfig:
     delete_local_merged_branch: bool = True
     ignore_paths: List[str] = field(default_factory=lambda: ["docs", "images", "qa", "src", "work"])
     # qa/ は PR commit 対象外（ignore_paths に含まれる）。
-    # 例外: AQOD ワークフローでは qa/ の成果物が主成果物となる場合がある。
-    #   → auto-aqod.yml が qa/ を commit 対象に含めるかどうかはワークフロー設定で制御する。
+    # 例外: ADI Step 1.1 / 1.2 の原本質問票は main 成果物のため、
+    #   orchestrator.py が安全な明示パスだけを commit 対象へ追加する。
     #   → runner.py は qa/ に質問票・QA マージファイルを保存するが、
     #     それらは hve ローカル実行時の作業ファイルであり、通常は commit しない。
     # Skill work-artifacts-layout §4.1 の delete→create ルールは Git 上の成果物更新フローを指す。
@@ -540,7 +548,7 @@ class SDKConfig:
     # 重要度フィルタ（workiq_priority_filter）により "最重要"/"高" の質問を優先し、不足分は残りの質問で補填する。
     workiq_priority_filter: bool = True                   # Work IQ: 高優先度の質問を優先して抽出し、最大件数に満たない分は他の質問で補填する
 
-    # 注: 旧 qa_phase / aqod_post_qa_enabled (post-QA モード) は廃止済み。事前 QA のみが提供される。
+    # 注: 旧 post-QA モードは廃止済み。事前 QA のみが提供される。
 
     # --- Self-Improve ---
     auto_self_improve: bool = False             # デフォルト: 無効。Issue Template / CLI --self-improve / HVE_AUTO_SELF_IMPROVE で有効化
@@ -682,6 +690,8 @@ class SDKConfig:
             self.review_model = _normalize_model_with_warning(self.review_model)
         if self.qa_model != MODEL_AUTO_VALUE:
             self.qa_model = _normalize_model_with_warning(self.qa_model)
+        if self.akm_model != MODEL_AUTO_VALUE:
+            self.akm_model = _normalize_model_with_warning(self.akm_model)
         # model_override が設定されている場合、model フィールドを上書きする。
         # Issue Template の選択（AUTO 含む）よりも優先される緊急回避手段。
         if self.model_override:
@@ -781,7 +791,7 @@ class SDKConfig:
         except (TypeError, ValueError):
             env_workiq_max_draft_questions = 10
 
-        # 旧 HVE_QA_PHASE / HVE_AQOD_POST_QA 環境変数は廃止済み（post-QA モード削除）。
+        # 旧 post-QA 用環境変数は廃止済み。
 
         _raw_si_scope = os.environ.get("HVE_SELF_IMPROVE_SCOPE", "").strip().lower()
         if _raw_si_scope and _raw_si_scope not in VALID_SELF_IMPROVE_SCOPES:
@@ -918,6 +928,10 @@ class SDKConfig:
         QA 質問票生成（auto_qa）で使用する。
         """
         return self.qa_model or self.model
+
+    def get_akm_model(self) -> str:
+        """QA 起点 AKM 子実行用モデルを返す（FR-QA-04）。"""
+        return self.akm_model or self.model
 
     def resolve_token(self) -> str:
         """有効なトークンを返す。"""

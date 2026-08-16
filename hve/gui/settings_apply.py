@@ -128,20 +128,30 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
         "verbosity": "verbosity",
         # 旧 GUI_SESSION セクションから移動
         "gui_session_cleanup_policy": "gui_session_cleanup_policy",
+        # 旧「自動プロンプト」ノードから移設
+        "additional_prompt": "additional_prompt",
+        "context_max_chars": "context_max_chars",
     },
-    "C3": {
+    "QA": {
         "auto_qa": "auto_qa",
         "qa_answer_mode": "qa_answer_mode",
+    },
+    "REVIEW": {
         "auto_contents_review": "auto_contents_review",
         "auto_coding_agent_review": "auto_coding_agent_review",
         "auto_coding_agent_review_auto_approval": "auto_coding_agent_review_auto_approval",
-        # 旧 C16 / C15 から移動
+    },
+    "KM": {
+        "qa_akm_background_merge": "qa_akm_background_merge",
+        "akm_model": "akm_model",
+        "akm_reasoning_effort": "akm_effort",
+        "akm_context_tier": "akm_context_tier",
+    },
+    "SELFIMPROVE": {
         "self_improve": "self_improve",
         "self_improve_max_iterations": "self_improve_max_iterations",
         "self_improve_target_scope": "self_improve_target_scope",
         "self_improve_goal": "self_improve_goal",
-        "additional_prompt": "additional_prompt",
-        "context_max_chars": "context_max_chars",
     },
     "C5": {
         "create_issues": "create_issues",
@@ -164,14 +174,10 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
         "cloud_session_subtask_overrides": "cloud_session_subtask_overrides",
     },
     "C7": {"cli_path": "cli_path", "cli_url": "cli_url"},
+    # FR-GUI-03: 永続化するのは `default_params` を持たない必須パラメータだけ。
+    # 既定値を持つ ASDW-WEB Step 1.3 の `data_*` は入力欄を持たない（FR-WF-ASDW-02）。
     "AZURE": {
         "resource_group": "resource_group",
-        # FR-GUI-03: ASDW-WEB Step 1.3 の required_params（FR-DAG-07）を永続化する。
-        "data_location": "data_location",
-        "data_resource_suffix": "data_resource_suffix",
-        "data_vnet_cidr": "data_vnet_cidr",
-        "data_private_endpoint_subnet_cidr": "data_private_endpoint_subnet_cidr",
-        "data_aci_subnet_cidr": "data_aci_subnet_cidr",
     },
     "C4": {
         "workiq": "workiq",
@@ -202,9 +208,10 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
         "sources_original_docs": "sources_original_docs",
         "sources_workiq": "sources_workiq",
     },
-    "C12": {
+    "C17": {
+        "purpose": "purpose",
         "target_scope": "target_scope",
-        "depth": "depth",
+        "depth": "analysis_depth",
         "focus_areas": "focus_areas",
     },
     "C13": {

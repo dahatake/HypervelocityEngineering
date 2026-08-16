@@ -4,9 +4,9 @@
 
 | 項目 | 内容 |
 |---|---|
-| **ステータス** | Accepted |
+| **ステータス** | Accepted（旧原本質問票Workflow廃止に伴いADI Step 1.1 / 1.2へ改訂） |
 | **日付** | 2026-05-11 |
-| **対象** | `hve/` パッケージ全般（11 ワークフロー: ARD/AAS/AAD-WEB/ASDW-WEB/ABD/ABDV/AAG/AAGD/AKM/AQOD/ADOC） |
+| **対象** | `hve/` パッケージ全般（12ワークフロー: ARD/AAS/AAD-WEB/ASDW-WEB/ADFD/ADFDV/AAG/AAGD/AAR/AKM/ADI/ADOC） |
 | **関連** | `hve/workflow_registry.py`, `hve/dag_planner.py`, `hve/dag_executor.py`, `hve/runner.py`, `hve/console.py`, `hve/run_state.py` |
 
 ---
@@ -52,7 +52,7 @@
 | M | M-3 | per-key プロンプトは `hve/prompt/fanout/{wf}/_common.md` 外部化 |
 | N | N-1 | サブ 1 件失敗で親 fan-out 元を fail |
 | O | O-1 | ARD は対象外 |
-| P | P-1 | 横断レビューは AKM / AQOD のみ追加 |
+| P | P-1 | 横断joinはAKMとADIの原本質問票生成に追加 |
 | Q | Q-1 | T3C の SDK イベント仕様はローカルインストール済パッケージから抽出 |
 | R | R-1 | T4 系テストは各 WF ごとに分離 |
 
@@ -103,9 +103,9 @@ if not expanded_keys:
     )
 ```
 
-### 3.5 横断レビュー join (J-1, P-1)
+### 3.5 横断レビュー / 質問票 join (J-1, P-1)
 
-AKM / AQOD のみ、fan-out 元 StepDef の直下に `depends_on=[<fan-out元のid>]` の review StepDef を新設する。他 WF は既存 `auto_contents_review` (Phase 3 敵対的レビュー) に委譲し追加しない。
+AKMはStep 1のD01〜D21 fan-out直後にStep 2の横断レビューを置く。原本質問票生成は、独立WorkflowではなくADI Step 1.1のD01〜D21 fan-outと、`depends_on=["1.1"]` のStep 1.2 joinとして構成する。他WFは既存 `auto_contents_review` (Phase 3敵対的レビュー) に委譲し追加しない。
 
 例（AKM）:
 ```python
@@ -116,6 +116,16 @@ StepDef(id="2", title="knowledge/ 横断整合性レビュー",
         custom_agent="QA-DocConsistency",
         depends_on=["1"], consumed_artifacts=["knowledge"],
         body_template_path="templates/akm/step-2.md"),
+```
+
+例（ADI原本質問票）:
+```python
+StepDef(id="1.1", title="原本質問票生成", custom_agent="QA-DocConsistency",
+    depends_on=["1"],
+    fanout_static_keys=[f"D{n:02d}" for n in range(1, 22)],
+    additional_prompt_template_path="hve/prompt/fanout/adi/_questionnaire.md"),
+StepDef(id="1.2", title="原本質問票横断統合",
+    custom_agent="QA-DocConsistency", depends_on=["1.1"]),
 ```
 
 ### 3.6 stderr JSON スキーマ (D-3 + L-3)
@@ -154,16 +164,16 @@ StepDef(id="2", title="knowledge/ 横断整合性レビュー",
 
 | ファイル | 変更内容 |
 |---|---|
-| `hve/workflow_registry.py` | `StepDef` フィールド 4 追加、`WorkflowDef.max_parallel`、AKM/AAS/AAD-WEB/ASDW-WEB/ABD/ABDV/AAG/AAGD/AQOD に fan-out 設定 |
+| `hve/workflow_registry.py` | `StepDef` フィールド4追加、`WorkflowDef.max_parallel`、AKM/AAS/AAD-WEB/ASDW-WEB/ADFD/ADFDV/AAG/AAGD/AAR/ADIにfan-out設定 |
 | `hve/catalog_parsers.py` | **新規** — 5 パーサ集約 |
 | `hve/fanout_expander.py` | **新規** — WorkflowDef を展開する non-mutating ヘルパー |
 | `hve/dag_executor.py` | fan-out 展開呼び出し、N-1 失敗伝搬、K-1 空展開 skip |
 | `hve/runner.py` | per-key MCP / prompt 注入 |
 | `hve/console.py` | `_emit_structured()`、`token_chunk()`、`set_run_id()` |
 | `hve/orchestrator.py` | `DAGExecutor` に `repo_root` 伝搬、`Console.set_run_id()` 呼び出し |
-| `hve/prompt/fanout/{wf}/_common.md` | **新規** — per-key プロンプトテンプレ (akm, aas, aad-web, asdw-web, abd, abdv, aag, aagd, aqod) |
+| `hve/prompt/fanout/{wf}/_common.md` | **新規** — per-keyプロンプトテンプレ（akm, aas, aad-web, asdw-web, adfd, adfdv, aag, aagd, aar, adi） |
 | `.github/scripts/templates/akm/step-2.md` | **新規** — AKM 横断レビュー本文テンプレ |
-| `.github/scripts/templates/aqod/step-2.md` | **新規** — AQOD 横断レビュー本文テンプレ |
+| `.github/scripts/templates/adi/step-1.1.md` / `step-1.2.md` | ADI原本質問票fan-out / join本文テンプレ |
 
 ---
 
@@ -180,8 +190,8 @@ StepDef(id="2", title="knowledge/ 横断整合性レビュー",
 
 1. **単体**: `hve/tests/test_fanout.py`, `hve/tests/test_e2e_akm_fanout_dryrun.py`（実装済）
 2. **結合**: AKM 21 並列の DRY-RUN E2E（実装済、2 件 PASS）
-3. **整合**: 全 11 WorkflowDef の fan-out 設定が `catalog_parsers` の登録キーと整合（`test_fanout.py::test_all_workflows_fanout_parsers_are_known`）
-4. **後方互換**: 既存 `hve/tests/` 全 2249 件 PASS を維持
+3. **整合**: 全WorkflowDefのfan-out設定が `catalog_parsers` の登録キーと整合（`test_fanout.py::test_all_workflows_fanout_parsers_are_known`）
+4. **移行契約**: 独立した原本質問票Workflow ID / alias / Cloud入口が無く、ADI Step 1.1 / 1.2が質問票22成果物を所有することを契約テストで検証
 
 ---
 
@@ -189,7 +199,7 @@ StepDef(id="2", title="knowledge/ 横断整合性レビュー",
 
 | リスク | 緩和策 |
 |---|---|
-| Copilot CLI の同時セッション数上限超過 | `WorkflowDef.max_parallel` で WF 単位制御。AKM/AQOD は 21 を明示。 |
+| Copilot CLI の同時セッション数上限超過 | `WorkflowDef.max_parallel` でWF単位制御。AKM / ADIは21を明示。 |
 | Streaming API の SDK 非互換 | 検出時は従来 `send_and_wait` にフォールバック |
 | per-key プロンプトの分散による保守性低下 | `hve/prompt/fanout/{wf}/_common.md` ディレクトリ規約で集約 |
 | 動的展開時の上流出力 schema 変更 | パーサ単体テストで検証、版数 mismatch 時は明示エラー |

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,19 @@ INSTRUCTIONS = REPO_ROOT / ".github/copilot-instructions.md"
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def _imports_package(source: str, package: str) -> bool:
+    """Does ``source`` import ``package`` in any form the interpreter accepts?
+
+    Both `import X` and `from X import Y` must match; a substring check for
+    ``"import X"`` alone silently misses the second form. The word boundary keeps
+    a prose mention such as ``mdq.watcher`` in a docstring from counting.
+    `importlib.import_module("X")` is out of scope: neither package uses it for
+    the other today, and a dynamic form cannot be decided from the text alone.
+    """
+    pattern = rf"^[ \t]*(?:import|from)[ \t]+{re.escape(package)}\b"
+    return re.search(pattern, source, re.MULTILINE) is not None
 
 
 class TestSkillDefinition:
@@ -105,15 +119,22 @@ class TestIsolationFromMarkdownQuery:
         offenders = [
             source.relative_to(REPO_ROOT).as_posix()
             for source in (REPO_ROOT / "cq").rglob("*.py")
-            if "import mdq" in source.read_text(encoding="utf-8")
+            if _imports_package(source.read_text(encoding="utf-8"), "mdq")
         ]
         assert offenders == []
+
+    @pytest.mark.parametrize(
+        "source",
+        ["import mdq", "import mdq.tokens", "from mdq import tokens", "from mdq.search import x"],
+    )
+    def test_import_guard_catches_every_import_form(self, source: str) -> None:
+        """`from X import Y` を見逃すと、最も一般的な形式の結合が素通りする。"""
+        assert _imports_package(source, "mdq")
 
     def test_mdq_package_is_unmodified_by_cq(self) -> None:
         offenders = [
             source.relative_to(REPO_ROOT).as_posix()
             for source in (REPO_ROOT / "mdq").rglob("*.py")
-            if "import cq" in source.read_text(encoding="utf-8")
-            or "from cq" in source.read_text(encoding="utf-8")
+            if _imports_package(source.read_text(encoding="utf-8"), "cq")
         ]
         assert offenders == []

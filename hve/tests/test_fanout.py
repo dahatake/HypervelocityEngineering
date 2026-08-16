@@ -54,7 +54,7 @@ def test_all_known_fanout_parsers_registered():
 def test_all_workflows_fanout_parsers_are_known():
     """全 WorkflowDef の fanout_parser 名が catalog_parsers に登録されている。"""
     for wf_id in ("ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv",
-                  "aag", "aagd", "akm", "aqod", "adoc"):
+                  "aag", "aagd", "akm", "adi", "adoc"):
         wf = wr.get_workflow(wf_id)
         for s in wf.steps:
             parser = getattr(s, "fanout_parser", None)
@@ -84,6 +84,21 @@ def test_akm_fanout_expander_produces_21_children(tmp_path):
     # Step 2 の depends_on が子 ID リストへ remapping されている
     step2 = next(s for s in expanded.steps if s.id == "2")
     assert sorted(step2.depends_on) == sorted(child_ids)
+
+
+def test_adi_questionnaire_fanout_produces_21_children(tmp_path):
+    adi = wr.get_workflow("adi")
+    expanded = expand_workflow_fanout(adi, tmp_path)
+    child_ids = expanded.fanout_map.get("1.1", [])
+
+    assert child_ids == [f"1.1/D{n:02d}" for n in range(1, 22)]
+    for n, child_id in enumerate(child_ids, start=1):
+        child = next(s for s in expanded.steps if s.id == child_id)
+        assert child.output_paths == [
+            f"qa/D{n:02d}-original-docs-questionnaire.md",
+        ]
+    join = next(s for s in expanded.steps if s.id == "1.2")
+    assert sorted(join.depends_on) == sorted(child_ids)
 
 
 def test_fanout_child_carries_fanout_meta(tmp_path):

@@ -159,6 +159,13 @@ hve orchestrate --workflow aar --resource-group <RG> --app-ids APP-001
 - 機密情報管理、認証・認可、秘密情報注入は既存 Skill /
   既存運用基盤に委譲してください。
 
+## カスタマイズと完了確認
+
+- 設定の正本は Cloud では `web-app-design.yml` / `web-app-dev.yml` と各 reusable workflow、CLI / GUI では `hve/workflow_registry.py` の `aad-web` / `asdw-web` 定義です。Cloud の Step ID を CLI / GUI の `StepDef.id` として指定しないでください。
+- `enable_agentic_retrieval`、データソース投入方式、Foundry 連携、既存設計の差分更新、SKU フォールバックを変更する場合は、既存の Issue Form または CLI / GUI 設定を使います。Prompt や Skill の本文をコピーして設定の代わりにしません。
+- 完了時は対象サービスごとの spec、Azure 実装設計、Deploy スクリプト、AC4B-1 / 14 / 15 / 18 の証跡を確認します。対象サービスがない場合は、成果物を捏造せず「対象なし」の作業ログで完了します。
+- Cloud で Sub-Issue が生成されない、または CLI / GUI で Step が skip された場合は、まず `enable_agentic_retrieval` の値と対象サービス判定を確認します。Cloud の制御は workflow 条件分岐、CLI / GUI の制御は `disabled_when_config` であり、片方の番号や設定をもう片方へ読み替えません。
+
 ## 生成される成果物
 
 - `docs/services/{serviceId}-agentic-retrieval-spec.md`（AAD-WEB Step.2.6）

@@ -257,5 +257,109 @@ class TestSkillKindRouting(unittest.TestCase):
         self.assertEqual(catalog[0].id, "skill:skills:skill_adversarial-review")
 
 
+class TestSave(unittest.TestCase):
+    """FR-GUI-07: `policy.json` の保存 API（GUI からの編集を支える書き込み経路）。"""
+
+    def _write(self, path: Path, raw: dict) -> None:
+        path.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def test_to_dict_round_trips_through_from_dict(self) -> None:
+        original = _policy(
+            pins={"mcp:azure:x": "always"},
+            additional_search_text={"native:hve:search_code": "実装 定義"},
+            step_overrides={"asdw-web:1.2": {"mode": "pin_only"}},
+        )
+        self.assertEqual(ToolSearchPolicy.from_dict(original.to_dict()), original)
+
+    def test_round_trip_preserves_every_field(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "policy.json"
+            self._write(path, _BASE)
+            original = _policy(
+                limit=3,
+                max_limit=7,
+                tau=0.25,
+                pins={"mcp:azure:*": "never"},
+                additional_search_text={"native:hve:search_markdown": "仕様 要件"},
+                step_overrides={"asdw-web:1.3": {"mode": "pin_only"}},
+            )
+            original.save(path)
+            self.assertEqual(ToolSearchPolicy.load(path), original)
+
+    def test_preserves_unknown_top_level_keys(self) -> None:
+        """同梱ファイルの `_comment` を保存で失わないこと。"""
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "policy.json"
+            self._write(path, {**_BASE, "_comment": "キー形式の説明"})
+            _policy(limit=2).save(path)
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(raw["_comment"], "キー形式の説明")
+            self.assertEqual(raw["limit"], 2)
+
+    def test_writes_lf_without_bom(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "policy.json"
+            self._write(path, _BASE)
+            _policy().save(path)
+            data = path.read_bytes()
+            self.assertNotIn(b"\r\n", data)
+            self.assertFalse(data.startswith(b"\xef\xbb\xbf"))
+
+    def test_keeps_non_ascii_readable(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "policy.json"
+            self._write(path, _BASE)
+            _policy(additional_search_text={"native:hve:search_code": "実装 定義"}).save(path)
+            self.assertIn("実装 定義", path.read_text(encoding="utf-8"))
+
+    def test_invalid_payload_raises_and_leaves_the_file_untouched(self) -> None:
+        """検証を経ずに組み立てた不正なポリシーでファイルを壊さないこと（fail-closed）。"""
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "policy.json"
+            self._write(path, _BASE)
+            before = path.read_bytes()
+            invalid = ToolSearchPolicy(
+                version=1,
+                limit=20,
+                max_limit=10,
+                tau=0.4,
+                field_weights=dict(_BASE["field_weights"]),
+                pins={},
+                additional_search_text={},
+                step_overrides={},
+            )
+            with self.assertRaises(PolicyError):
+                invalid.save(path)
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_invalid_key_is_rejected_before_writing(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "policy.json"
+            self._write(path, _BASE)
+            before = path.read_bytes()
+            invalid = ToolSearchPolicy(
+                version=1,
+                limit=5,
+                max_limit=10,
+                tau=0.4,
+                field_weights=dict(_BASE["field_weights"]),
+                pins={"execute_query": "always"},
+                additional_search_text={},
+                step_overrides={},
+            )
+            with self.assertRaises(PolicyError):
+                invalid.save(path)
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_broken_existing_file_is_not_silently_overwritten(self) -> None:
+        """既存ファイルを読めないと未知キーの保持を保証できないため書かない。"""
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "policy.json"
+            path.write_text("{ not json", encoding="utf-8")
+            with self.assertRaises(PolicyError):
+                _policy().save(path)
+            self.assertEqual(path.read_text(encoding="utf-8"), "{ not json")
+
+
 if __name__ == "__main__":
     unittest.main()

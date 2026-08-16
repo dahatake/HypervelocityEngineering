@@ -314,11 +314,11 @@ class TestOptionsPageMultiWorkflow(_GuiTestBase):
 
         page = OptionsPage()
         page.set_workflows(
-            ["akm", "aqod"],
-            {"akm": "Knowledge Management", "aqod": "Original Docs Review"},
+            ["akm", "adi"],
+            {"akm": "Knowledge Management", "adi": "Design Doc Ingestion"},
         )
         args_list = page.build_args_list()
-        self.assertEqual([a.workflow for a in args_list], ["akm", "aqod"])
+        self.assertEqual([a.workflow for a in args_list], ["akm", "adi"])
 
 
 class TestTriStateCombo(_GuiTestBase):
@@ -392,12 +392,12 @@ class TestOptionsPageDefaults(_GuiTestBase):
         page.c11.to_args(args3)
         self.assertIsNone(args3.sources)
 
-    def test_c12_depth_default_standard(self) -> None:
-        """C12: --depth のデフォルトは standard。"""
+    def test_c17_depth_default_standard(self) -> None:
+        """C17: --depth のデフォルトは standard。"""
         from hve.gui.page_options import OptionsPage
 
         page = OptionsPage()
-        self.assertEqual(page.c12.depth.currentData(), "standard")
+        self.assertEqual(page.c17.analysis_depth.currentData(), "standard")
 
     def test_c13_doc_purpose_default_all(self) -> None:
         """C13: --doc-purpose のデフォルトは all。"""

@@ -4,6 +4,13 @@
 >
 > 関連: [users-guide/tool-search.md](tool-search.md)（仕組みとカスタマイズ）
 > 要件: FR-TS-09（統計収集） / FR-TS-10（ダッシュボード）
+>
+> **最終更新: 2026-08-13**
+
+> **先に読むこと**: [tool-search.md の冲頭バナー](tool-search.md)（2026-08-13 実測）のとおり、
+> 現行の Copilot CLI では遅延公開が発火せず、`--tool-search-ranking hve` はトークンを**増やす**。
+> 本ページの手順は **実装の検証と SDK 更新後の再評価**向けであり、本番運用で常時有効化するためのものではない。
+> 判定に使う指標は `deferral_inactive_rate`（§3.2）と `token_reduction_valid`（§3.5）。
 
 Tool Search は「必要になったときにツールを検索して公開する」機構なので、
 **検索が実際に呼ばれているか**、**呼ばれた結果が使われているか**が見えないと調整できない。
@@ -13,8 +20,19 @@ Tool Search は「必要になったときにツールを検索して公開す�
 
 ## 1. 3 分で使う
 
+### 利用手順の要約
+
+| 軸 | 内容 |
+|---|---|
+| **前提** | 本リポジトリのルートで実行できること。Python は `pyproject.toml` の `requires-python = ">=3.11"` に従う。`hve` パッケージが import できること（追加インストールは不要）。GUI から使う場合は `PySide6` が導入済みであること |
+| **操作** | 収集を有効にして 1 回 orchestrate を実行 → `python -m hve toolsearch dashboard` を実行 |
+| **入力** | `.toolsearch/events.jsonl`（検索イベント）と `.toolsearch/usage.jsonl`（採用履歴）。パスは `--events` / `--usage`、または `HVE_TOOLSEARCH_EVENTS` / `HVE_TOOLSEARCH_USAGE` で差し替える |
+| **出力** | 端末のテキスト表（既定） / `--json` の JSON / `--html <path>` の自己完結 HTML |
+| **完了確認** | `queries` が 1 以上で、`catalog` と `上位一覧` が表示される。§3 の各指標が数値で埋まっていれば成功 |
+| **失敗時対応** | `queries` が 0 のままなら §4 の切り分けフローへ。ファイルが無い旨のメッセージなら収集条件（下の注記）を満たしていない |
+
 ```bash
-# 1. 収集を有効にして実行する（既定では収集も差し替えも行われない）
+# 1. 収集を有効にして実行する（既定では収集も差し替えも行われない。検証目的のときだけ使う）
 python -m hve orchestrate --workflow ard --tool-search-ranking hve
 
 # 2. 端末で確認する
@@ -36,13 +54,15 @@ python -m hve toolsearch dashboard --json
 
 ### GUI から使う
 
-設定画面の **skills → Tool-Search** に 3 つのタブがある（Markdown-Query / Code-Query と同じ位置）。
+設定画面の **skills → Tool-Search** に 5 つのタブがある（Markdown-Query / Code-Query と同じ位置）。
 
 | タブ | 内容 |
 |---|---|
 | **基本** | `tool_search`（遅延ロードの ON/OFF）と `tool_search_ranking`（ランキング実装）。この 2 つの入力欄は設定画面が単独で持ち、Step 1 右ペインには置かない |
-| **ポリシー** | `policy.json` の現在値（limit / tau / フィールド重み / pin / 検索語彙 / Step 別モード）を**読み取り専用**で表示。編集はファイルを直接編集する |
+| **Skill Layer** | Skill の Core / Extend 分類と `hve/skill_manifest.json` の workflow / step 別宣言を**閲覧専用**で表示。実行時の必須 Skill 解決は `runner.py` / `skill_resolver.py` が担う |
+| **ポリシー** | `policy.json` の現在値（limit / tau / フィールド重み / pin / 検索語彙 / Step 別モード）を表示し、その場で編集・保存できる。詳細は [tool-search.md §6.5](tool-search.md#65-gui-から編集する) |
 | **統計情報** | 本ページで説明するダッシュボードを表示。「再集計」「HTML で書き出す」「収集済みイベントを削除」の 3 ボタン |
+| **コンテキスト内訳** | Step 実行と同じ経路でセッションを張り、層別（システムプロンプト / 組み込みツール定義 / MCP サーバー別）の実トークン数を実測する。ボタンを押したときだけ実行される |
 
 統計は**タブを開いたときにだけ**読み込む（イベントログは伸び続けるため）。
 削除は不可逆なので確認ダイアログを挟む。
@@ -182,9 +202,10 @@ sequenceDiagram
 `hve toolsearch dashboard` はこのファイルを読まない（HVE 自身の 2 ストアだけを集計する）。
 本節は保存先を `.toolsearch/` に揃えるところまでを対象とする。
 
-### 2.4 ファイルの中身
+### 2.5 ファイルの中身
 
-1 行 1 イベントの JSONL。`toolsearch.query` の例（実際は 1 行）:
+1 行 1 イベントの JSONL。`toolsearch.query` の例（実際は 1 行）。
+**以下の数値はキーの並びを示すサンプルであり、現在の実測値ではない**（カタログ件数は接続する MCP サーバで変わる）:
 
 ```json
 {
@@ -217,7 +238,7 @@ sequenceDiagram
 `ts` は後から足したフィールドなので、それ以前の履歴には無い。
 無い行も自動 pin（FR-TS-07）では従来どおり数えるが、`--since` を付けたときだけ除外される。
 
-### 2.5 掃除とプライバシー
+### 2.6 掃除とプライバシー
 
 ストアは追記専用なので放置すると増え続ける。削除は単にファイルを消せばよい。
 
@@ -286,6 +307,14 @@ CI などで収集したくない場合は `--tool-search-ranking hve` を付け
 | `baseline_tokens` | 全定義前置き | 全ツール定義を前置きした場合の推定トークン量 | `tiktoken` があれば実トークン、無ければ文字数 ÷ 4 の概算 |
 | `exposed_tokens` | 実公開 | pin + その検索の返却分の推定トークン量 | |
 | `token_reduction` | トークン削減 | `1 - exposed / baseline` | **この機能の投資対効果そのもの**。低いなら pin を絞る |
+| `token_reduction_valid` | （表示は下記） | `token_reduction` が削減率として成立するか | `deferral_inactive_rate` が 1.0（＝遅延公開が一度も発火していない）のとき `false` |
+
+> **`token_reduction_valid` が `false` のとき、テキストと HTML は削減率の代わりに
+> 「無効（遅延公開が発火していない）」と表示する。** ランカー内部の「pin + 返却分」対「全件」の比は、
+> SDK が実際にツール定義を遅延化していなければ実際の削減につながらないため。
+> JSON では `token_reduction` の値をそのまま残し、`token_reduction_valid` で成否を判別する。
+> `deferral_inactive_rate` が `null`（検索が 1 件も無い）の場合は判定できないので `true` のままとし、
+> `token_reduction` 自体が「データ不足」になる。
 
 > この 3 つは**集計期間の平均ではなく、最新の 1 検索の観測値**。
 > カタログ構成は実行中にほとんど変わらないため、現在の状態を表す値として扱う。
@@ -348,9 +377,9 @@ FR-TS-07 の学習状況。`workflow × step` ごとに 1 行。
 
 ```mermaid
 flowchart TD
-    A["queries が 0"] --> B{"--tool-search を<br/>付けたか"}
-    B -- いいえ --> B1["付けて再実行。<br/>SDK が tool_search_tool を呼ばない"]
-    B -- はい --> C{"--tool-search-ranking hve<br/>を付けたか"}
+    A["queries が 0"] --> B{"--no-tool-search や<br/>HVE_TOOL_SEARCH=0 で<br/>無効化していないか"}
+    B -- 無効化していた --> B1["有効化して再実行。<br/>SDK が tool_search_tool を呼ばない"]
+    B -- 有効のまま --> C{"--tool-search-ranking hve<br/>を付けたか"}
     C -- いいえ --> C1["既定は sdk。<br/>SDK 標準ランカーが動いており HVE には残らない"]
     C -- はい --> D{"Cloud Session<br/>だったか"}
     D -- はい --> D1["G4 未実測のため Cloud では<br/>差し替えない仕様"]
@@ -363,6 +392,9 @@ flowchart TD
 
 `HVE_TOOLSEARCH_EVENTS` を別パスへ向けている場合、ダッシュボード側にも
 同じ `--events` を渡す必要がある点にも注意。
+
+> ツール検索そのものは **既定で有効**（`HVE_TOOL_SEARCH` の既定値が真、`--tool-search` は明示指定用）。
+> 無効化は `--no-tool-search` または `HVE_TOOL_SEARCH=0` を指定したときだけ起こる。
 
 ---
 
@@ -431,6 +463,23 @@ print(render_json(snapshot))
 
 `DashboardSnapshot` は frozen dataclass で、`to_dict()` がそのまま JSON 化できる。
 
+### 7.1 カスタマイズの正本・拡張手順・回帰検証・互換性
+
+| 変えたいもの | 設定の正本 | 拡張手順 | 回帰検証 |
+|---|---|---|---|
+| 集計指標の追加・変更 | `hve/toolsearch/stats.py`（`aggregate` / `DashboardSnapshot`） | フィールドを追加し `to_dict()` へ載せる。既存キーは削除しない | `python -m pytest hve/tests/test_toolsearch_stats.py hve/tests/test_toolsearch_dashboard.py -q` |
+| 端末表示 / JSON / HTML の描画 | `hve/toolsearch/dashboard.py`（`render_text` / `render_json` / `render_html`） | HTML は外部ネットワークへ接続しない自己完結を維持する | `python -m pytest hve/tests/test_toolsearch_dashboard.py -q` |
+| CLI の引数 | `hve/__main__.py` の `toolsearch dashboard` パーサ | 既定値（`--top 10` / `--interval 2.0`）を変える場合は本ページも更新する | `python -m pytest hve/tests/test_toolsearch_dashboard.py -q` |
+| 収集先パス | 環境変数 `HVE_TOOLSEARCH_EVENTS` / `HVE_TOOLSEARCH_USAGE` | コード変更なしで差し替えられる。ダッシュボード側にも同じパスを `--events` / `--usage` で渡す | 実行後にファイルへ追記されることを確認 |
+| GUI の統計情報タブ | `hve/gui/toolsearch_settings_section.py` | タブ構成（基本 / ポリシー / 統計情報）と「収集済みイベントを削除」の確認ダイアログは維持する | 専用テストは未整備。`PySide6` 導入済み環境で GUI を起動して手動確認する（要確認） |
+
+**互換性・安全性で壊してはならない境界**
+
+- 収集は**失敗しても Step を落とさない**（§2.3）。例外を送出する変更を入れない。
+- 記録するのはツール **ID とスコアだけ**で、クエリ本文や引数値は残さない（§2.2）。個人情報・秘密情報を書き出す変更を入れない。
+- 2 つの JSONL は**追記専用**。既存行を書き換える実装にしない。
+- `DashboardSnapshot.to_dict()` の既存キーは外部連携の契約。改名・削除は互換性を壊す。
+
 ---
 
 ## 8. 設計上の割り切り
@@ -446,7 +495,17 @@ print(render_json(snapshot))
 
 ## 9. 収集のオーバヘッド（実測）
 
-2026-08-05 実測。Skill 73 件のリポジトリ、Python 3.14 / Windows。
+**取得条件**: 2026-08-05 実測。Python 3.14 / Windows。
+Skill 総数 **73 件**は、リポジトリ内の `.github/skills`（2026-08-07 時点で 35 件）に加えて、
+`default_skill_roots()` が併せて走査する `~/.agents/skills` / `~/.copilot/skills` を含めた計測環境の値。
+外部 Skill ルートを持たない環境では件数がこれより少なくなり、所要時間も相応に短くなる。
+自分の環境の件数はリポジトリのルートで次を実行すると確認できる（本リポジトリでは 35 件）。
+
+```bash
+python -c "from pathlib import Path; from hve.toolsearch.session import default_skill_roots; from hve.toolsearch.skill_catalog import discover_skills; print(len(discover_skills(default_skill_roots(Path('.')))))"
+```
+
+（本体 CLI の `hve toolsearch` は `dashboard` サブコマンドのみ。Skill 列挙サブコマンドは他リポジトリ配布キット側の `toolsearch skills` が持つ。）
 
 | 処理 | 値 | 発生頻度 |
 |---|---|---|

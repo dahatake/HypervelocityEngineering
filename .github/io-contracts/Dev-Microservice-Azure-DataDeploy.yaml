@@ -17,9 +17,6 @@ inputs:
 - path: knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md
   required: false
   kind: static
-- path: users-guide/setup-self-hosted-runner.md
-  required: true
-  kind: static
 outputs:
 # HVE-owned lifecycle output; Agent read-only
 - path: src/infra/azure/create-azure-data-resources-prep.sh

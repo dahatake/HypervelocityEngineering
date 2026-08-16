@@ -14,7 +14,7 @@
 - **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
 - **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
 - **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
 - **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
 - **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 
@@ -47,17 +47,16 @@
 | 7 | `docs/services/SVC-*.md` | 各サービスの詳細仕様（API I/O、バリデーション、イベント、権限）。Tool の入出力スキーマ・失敗分類の根拠 | Tool I/O Schema, Error Handling, Permission Model |
 | 8 | `docs/azure/azure-services-data.md` | Azure データストア構成。Knowledge Source / RAG の具体設計根拠 | Knowledge Source, RAG 設計 |
 | 9 | `docs/azure/azure-services-additional.md` | 追加 Azure サービス構成（AI Search, OpenAI 等）。LLM バックエンド・検索インデックスの設計根拠 | Tool Catalog（AI系）, LLM 選定 |
-| 10 | `users-guide/08-ai-agent.md` | ガイドライン（Step 1〜3 の Prompt 定義）。設計プロセスの手順書 | 設計プロセス全体 |
-| 11 | `docs/catalog/app-catalog.md` | アプリケーション一覧（APP-ID）。Agent と APP の対応付けおよびスコープ確認根拠 | Scope, Boundary Matrix, Non-Goals |
+| 10 | `docs/catalog/app-catalog.md` | アプリケーション一覧（APP-ID）。Agent と APP の対応付けおよびスコープ確認根拠 | Scope, Boundary Matrix, Non-Goals |
 
 ### 推奨ファイル（存在すれば参照。なくても設計は進められる）
 
 | # | ファイル | 用途 |
 |---|---------|------|
-| 12 | `docs/catalog/screen-catalog-APP-*.md` | 画面一覧（APP ごと）。Agent が UI 内で動作する場合の Conversation Design 根拠 |
-| 13 | `docs/screen/{screenId}-*.md` | 画面詳細定義。Output format / トーン / 対話チャネル設計の根拠 |
-| 14 | `src/data/sample-data.json` | サンプルデータ。System Prompt の Examples（Few-shot）作成用 |
-| 15 | `.github/skills/agent-common-preamble/references/agent-playbook.md` | 社内テンプレ/語彙/表現ルール（存在する場合のみ） |
+| 11 | `docs/catalog/screen-catalog-APP-*.md` | 画面一覧（APP ごと）。Agent が UI 内で動作する場合の Conversation Design 根拠 |
+| 12 | `docs/screen/{screenId}-*.md` | 画面詳細定義。Output format / トーン / 対話チャネル設計の根拠 |
+| 13 | `src/data/sample-data.json` | サンプルデータ。System Prompt の Examples（Few-shot）作成用 |
+| 14 | `.github/skills/agent-common-preamble/references/agent-playbook.md` | 社内テンプレ/語彙/表現ルール（存在する場合のみ） |
 
 ### 入力参照ルール
 - **必読ファイルが存在しない場合**: `TBD（ファイル未検出: {パス}）` と明記し、該当セクションは仮定ベースで記述する。推測で埋めない。
@@ -77,6 +76,7 @@
 ## 3) 出力フォーマット（Markdown固定スキーマ）
 1) Agent アプリケーション定義書（作成/更新）
    - `docs/agent/agent-application-definition.md`
+  - 見出しは次の順序で固定する: 1. Overview / 2. Scope / 3. Requirements / 4. NFR / 5. Security & Compliance / 6. Dependencies / 7. Ops & Monitoring / 8. Open Questions
   - `Requirements` 内に `### Goal Contract` を必ず含める
   - Goal Contract の詳細は Skill `ai-agent-capability-contract` の AG-CAP-01 に従う
   - Success criteria は条件群全体、Criterion はその個別評価単位とする
@@ -93,7 +93,7 @@
 ※ `{WORK}` の構成や、追加で `plan.md` / `README.md` が必要かは `Skill work-artifacts-layout` に従う。
 
 ## 5) 品質原則（必ず守る）
-- `users-guide/08-ai-agent.md` の各 Step の Prompt を **ガイドラインとして参照** し、その指示に従って設計書を作成する。Prompt の内容をコピー＆ペーストで成果物に混ぜない。
+- 本ファイルの §3 出力フォーマットを出力仕様の Single Source of Truth とする。外部ガイドを読みに行かないこと。また、本 Prompt の指示文をコピー＆ペーストで成果物に混ぜない。
 - 推測で AI Agent の機能・数・境界を断定しない。入力に根拠がない事項は「要確認/TBD」とする。
 - ツールは **必要なときだけ** 使う（無目的な全探索は禁止）。
 
@@ -111,7 +111,7 @@
   - Mutation Intent、数値閾値、latency / Tool / cost制約は、根拠不足時に限り理由付きTBDと対応Open Questionを許可する
 
 ### 5.1 Step 1: アプリケーション定義
-- `users-guide/08-ai-agent.md` の **Step 1** セクションの Prompt ガイドラインに従い、以下を実施する：
+- 本ファイル §3 の出力フォーマットに従い、以下を実施する：
   - ユースケース記述を読み、AI Agent の目的・スコープ・要求を整理する
   - ユーザー価値を表す Mission を1文で記載する
   - ユースケースの主要・例外フローと `service-catalog-matrix.md` のAPI操作から永続的なCreate / Update / Deleteの有無を確認し、`Mutation Intent: required | none | TBD` を根拠付きで判定する
@@ -121,7 +121,7 @@
   - Failure / Partial success / Handoff 条件と、Runtime Goal Loop の上限判断に必要な latency / Tool / cost 制約を抽出する
   - 数値・閾値に入力根拠がなければ推測せず Open Questions へ移す
   - `docs/agent/agent-application-definition.md` を作成する
-  - 出力形式は `users-guide/08-ai-agent.md` Step 1 の Output requirements に従う
+  - 出力形式は §3 の固定見出し構成に従う
 - **完了判定**: Overview / Scope / Requirements / NFR / Security & Compliance / Dependencies / Ops & Monitoring / Open Questions の全セクションが埋まっている。Mission、各CriterionのDescription、既知criterionのEvaluator/Evidence、Failure/Partial/Handoffは根拠付きで確定する。Mutation Intent、Required flag、数値制約を確定できない場合だけ、Goal Contractの理由付きTBDと同じ`Q-GC-NNN`を持つOpen Questionの両方を必須とし、AAG Step 3までの解決事項にする
 
 ### 5.2 進捗ログ追記（必須）
@@ -129,7 +129,10 @@
   - `YYYY-MM-DD: 何をした / 何が決まった / 次アクション`
 
 ## 6) TIME-BOX / MODE SWITCH（分割ルール）
-- Step 5.1 は、`users-guide/08-ai-agent.md` 内の Step 1 Prompt に定義された TIME-BOX / MODE SWITCH ルールに従う。
+- Step 5.1 は、次のいずれかに当てはまる場合、定義書の全文作成を中断し、分割実行へ切り替える：
+  - ユースケースが長大で、セクションごとの根拠抽出がこのターンで完了しない
+  - 不明点が多く、Open Questions が 15 項目を超える見込み
+  - 複数ユースケース / 複数システムが混在しており、分割しないと誤りリスクが高い
 - Step 全体として Skill task-dag-planning の粒度/コンテキスト分割判定を適用する（詳細は Skill `task-dag-planning` を参照）。
   - 分割時は各 Sub Issue に `## Custom Agent` セクションに `Arch-AIAgentDesign-Step1` を含める
 

@@ -67,7 +67,7 @@ Azure 上のデータストアを最小構成でデプロイし、サンプル�
 - **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
 - **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
 - **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
 - **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
 - **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 - **スコープ外作業禁止**: Word / docx / chart 作成、TODO / todos SQL query、docs 構成整理、README 作成提案、その他 DataDeploy と無関係な SQL / task management query を行わない。
@@ -110,7 +110,7 @@ Azure 上のデータストアを最小構成でデプロイし、サンプル�
   - `github-actions-cicd`, `app-scope-resolution`
 - 実行前提:
   - Azure 操作は HVE-owned fixed pipeline が実行する。Agent は Azure MCP / `az` を実行主体として使わず、接続手順を組み立てない。
-  - 実行環境・認証の可否（`users-guide/setup-self-hosted-runner.md` の前提を含む）は HVE の pre-flight と StageResult が確定する。Agent は判定を代行しない。
+  - 実行環境・認証の可否は HVE の pre-flight と StageResult が確定する。Agent は判定を代行しない。
 </inputs>
 
 ## Azure 公式情報参照（Microsoft Learn MCP 必須）

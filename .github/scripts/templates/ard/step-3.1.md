@@ -10,7 +10,7 @@
 ## 入力
 - `docs/business-requirement.md`（Step 2 出力。存在時優先）または `docs/company-business-requirement.md`（Step 1.2 出力。フォールバック）
 - `docs/recommended-kpi-okr.md`（ARD Step 2.1 出力。**任意**、存在する場合のみ参照し、各 UC が満たす KPI/OKR ID を Step 3.2 詳細生成時に意識する）
-- `original-docs/*`（任意）
+- `docs-original/*`（任意）
 
 ## 出力
 - `docs/catalog/use-case-skeleton.md`（UC 骨格表 + `UC-*` ID）

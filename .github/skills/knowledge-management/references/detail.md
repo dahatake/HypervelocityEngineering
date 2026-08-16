@@ -11,7 +11,7 @@
 
 `knowledge/` 配下のドメイン知識ドキュメントの分類・**内容合成**・構造化・**マージ管理を行う**。
 
-> **重要**: 本 Skill の主目的は qa/ や original-docs/ の入力を D クラス別の **要求定義書ドラフト** として再構築することである。単なるマッピング表の作成ではない。
+> **重要**: 本 Skill の主目的は qa/ や docs-original/ の入力を D クラス別の **要求定義書ドラフト** として再構築することである。単なるマッピング表の作成ではない。
 
 ## Non-goals（このスキルの範囲外）
 
@@ -53,28 +53,28 @@
 | フォルダ | 用途 |
 |---------|------|
 | `qa/` | 質問票・未回答・確認中の項目 |
-| `knowledge/` | qa/ + original-docs/ から合成された要求定義書ドラフト（出力） |
+| `knowledge/` | qa/ + docs-original/ から合成された要求定義書ドラフト（出力） |
 
-### original-docs/ と qa/ と knowledge/ と docs/catalog/ の責務分担
+### docs-original/ と qa/ と knowledge/ と docs/catalog/ の責務分担
 
 | フォルダー | 責務 | SoT 対象 | 書き込み主体 |
 |-----------|------|----------|-------------|
-| `original-docs/` | ユーザー提供の原本（テキスト形式: `.md` / `.txt` / `.csv`） | 原本そのもの | ユーザー手動 |
+| `docs-original/` | ユーザー提供の原本（テキスト形式: `.md` / `.txt` / `.csv`） | 原本そのもの | ユーザー手動 |
 | `qa/` | Copilot が生成した質問票・チェックリスト | QA プロセスの証跡 | 各 Agent（task-questionnaire 経由） |
-| `knowledge/` | qa/ + original-docs/ 由来の構造化ドキュメント（D01〜D21） | セッション間の参照ハブ | KnowledgeManager / KnowledgeManager |
+| `knowledge/` | qa/ + docs-original/ 由来の構造化ドキュメント（D01〜D21） | セッション間の参照ハブ | KnowledgeManager / KnowledgeManager |
 | `docs/catalog/` | 確定済みの正式仕様（app-catalog, use-case-catalog 等） | アプリ仕様・アーキテクチャ仕様の正本 | Arch-* Agent 群 |
 
 #### SoT 優先順位（矛盾時の解決ルール）
-1. `original-docs/` のユーザー原本が最優先（ユーザーが提供した事実）
+1. `docs-original/` のユーザー原本が最優先（ユーザーが提供した事実）
 2. `qa/` のユーザー回答（Confirmed）が次に優先
 3. `knowledge/` の構造化ドキュメント（1, 2 から派生）
 4. `docs/catalog/` の設計仕様（3 から派生）
 
-### original-docs/ のファイル形式ルール
+### docs-original/ のファイル形式ルール
 
 - Copilot が読み取り可能な **テキスト形式のみ** を配置する（`.md`, `.txt`, `.csv`）
 - Word / Excel / PDF 等のバイナリは **Markdown に変換してから配置** する
-- 変換前の原本を保管する場合は `original-docs/binary-originals/` に配置し、変換後ファイルの冒頭に以下を付与する:
+- 変換前の原本を保管する場合は `docs-original/binary-originals/` に配置し、変換後ファイルの冒頭に以下を付与する:
   ```
   <!-- source: binary-originals/{filename}, converted: {YYYY-MM-DD} -->
   ```
@@ -90,11 +90,11 @@
 
 ※ 以下は説明用の架空例です。
 
-### 例1: qa/ + original-docs/ → knowledge/ への内容合成ケース
+### 例1: qa/ + docs-original/ → knowledge/ への内容合成ケース
 
 **入力**:
 - `qa/UC-01-membership-flow.md` に会員フロー関連の Confirmed / Tentative / Unknown 回答が存在する
-- `original-docs/membership-spec.md` にフロー仕様の記述がある
+- `docs-original/membership-spec.md` にフロー仕様の記述がある
 
 **出力**:
 - 対象カテゴリ判定: D05（ユースケース）
@@ -116,7 +116,7 @@
   | **詳細条件** | 各ステップは同期処理。中間状態の永続化を行わない |
   | **受入基準（AC）** | - AC1: 任意のステップで失敗した場合、登録前の状態へ完全に戻ること |
   | **非対象（Out of Scope）** | 非同期通知（メール送信完了通知等） |
-  | **根拠（Source of Truth）** | original-docs/membership-spec.md §3 |
+  | **根拠（Source of Truth）** | docs-original/membership-spec.md §3 |
   | **トレーサビリティ** | D08 データモデル（会員エンティティ）・D10 API 契約 |
 
   ### REQ-D05-002: メールアドレス変更時の同一フロー経由

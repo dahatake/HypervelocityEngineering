@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -386,6 +387,7 @@ class _FakeConsole:
         self.show_stream = show_stream
         self.calls: list = []
         self.ctx_at_call: list = []
+        self.stats_events: list = []
 
     def _record(self, name: str, *args: object) -> None:
         # 呼び出し時点の行帰属 ContextVar をキャプチャする（帰属マーカー検証用）。
@@ -414,6 +416,9 @@ class _FakeConsole:
 
     def stream_token(self, step_id: str, token: str) -> None:
         self._record("stream_token", step_id, token)
+
+    def stats_event(self, kind: str, step_id: str = "", **fields: object) -> None:
+        self.stats_events.append((kind, step_id, fields))
 
 
 def _event(etype: str, **data: object) -> SimpleNamespace:
@@ -558,3 +563,226 @@ def test_collector_streaming_shows_delta_and_suppresses_final_message():
     collector.handle_event(_event("assistant.message", parent_tool_call_id="t1", content="token"))
     assert ("stream_token", "Worker A", "to") in console.calls
     assert not any(call[0] == "final_message" for call in console.calls)
+
+
+# ----------------------------------------------------------------------
+# FR-RTO-07: Fleet wave の AI Credit 回収
+# ----------------------------------------------------------------------
+
+
+class _UsageData(SimpleNamespace):
+    """SDK ``AssistantUsageData`` 相当のスタブ（``to_dict()`` を持つ）。"""
+
+    def __init__(self, *, copilot_usage: object = None, **attrs: object) -> None:
+        super().__init__(**attrs)
+        self._copilot_usage_dict = copilot_usage
+
+    def to_dict(self) -> dict:
+        return {} if self._copilot_usage_dict is None else {"copilotUsage": self._copilot_usage_dict}
+
+
+def test_collector_emits_usage_credit_from_assistant_usage():
+    """Fleet セッションの ``assistant.usage`` から ``usage_credit`` を発火する。"""
+    console = _FakeConsole()
+    collector = FleetEventCollector(console=console, wave_index=2)
+    collector.handle_event(SimpleNamespace(
+        type="assistant.usage",
+        data=_UsageData(
+            copilot_usage={"totalNanoAiu": 1_500_000_000},
+            api_call_id="api-1",
+            cost=0.5,
+            model="claude-opus-5",
+        ),
+    ))
+
+    credits = [ev for ev in console.stats_events if ev[0] == "usage_credit"]
+    assert len(credits) == 1
+    _kind, _step, fields = credits[0]
+    assert fields["nano_aiu"] == 1_500_000_000
+    assert fields["api_call_id"] == "api-1"
+    assert fields["multiplier_cost"] == 0.5
+    assert fields["model"] == "claude-opus-5"
+
+
+def test_collector_usage_credit_uses_empty_step_id():
+    """Fleet 発火の ``usage_credit`` は Wave 内のいずれかの Step へ割り当ててはならない。"""
+    console = _FakeConsole()
+    collector = FleetEventCollector(console=console, wave_index=2)
+    collector.handle_event(_event("subagent.started", tool_call_id="t1", agent_display_name="Worker A"))
+    collector.handle_event(SimpleNamespace(
+        type="assistant.usage",
+        data=_UsageData(
+            copilot_usage={"totalNanoAiu": 2_000_000_000},
+            api_call_id="api-2",
+            model="claude-opus-5",
+            parent_tool_call_id="t1",
+        ),
+    ))
+
+    credits = [ev for ev in console.stats_events if ev[0] == "usage_credit"]
+    assert len(credits) == 1
+    assert credits[0][1] == "", "Fleet worker → step_id の対応は解決不能なため空文字でなければならない"
+
+
+def test_collector_does_not_emit_tool_invoked_for_unresolved_worker():
+    """Step を解決できない Fleet worker の tool を誤帰属させない（``tool_invoked`` を出さない）。"""
+    console = _FakeConsole()
+    collector = FleetEventCollector(console=console, wave_index=2)
+    collector.handle_event(_event("subagent.started", tool_call_id="t1", agent_display_name="Worker A"))
+    collector.handle_event(_event("tool.execution_start", parent_tool_call_id="t1", tool_name="edit_file"))
+
+    assert not any(ev[0] == "tool_invoked" for ev in console.stats_events)
+
+
+def test_collector_usage_credit_reports_unavailable_reason():
+    """``copilotUsage`` 欠落時は取得不能理由を併送する（捿造禁止）。"""
+    console = _FakeConsole()
+    collector = FleetEventCollector(console=console, wave_index=2)
+    collector.handle_event(SimpleNamespace(
+        type="assistant.usage",
+        data=_UsageData(copilot_usage=None, api_call_id="api-3", model="claude-opus-5"),
+    ))
+
+    credits = [ev for ev in console.stats_events if ev[0] == "usage_credit"]
+    assert len(credits) == 1
+    assert credits[0][2].get("unavailable_reason")
+
+
+def test_collector_usage_credit_without_console_is_noop():
+    """console 未設定時は従来どおり作業イベントを無視する（例外も出さない）。"""
+    collector = FleetEventCollector()
+    collector.handle_event(SimpleNamespace(
+        type="assistant.usage",
+        data=_UsageData(copilot_usage={"totalNanoAiu": 1}, api_call_id="api-4"),
+    ))
+    assert collector.running == {}
+
+
+# ----------------------------------------------------------------------
+# FR-RTO-07 (改訂 2.19): Fleet worker → Step 帰属
+# ----------------------------------------------------------------------
+
+_WAVE_STEP_IDS = ("2/APP-001", "2/APP-002", "2/APP-003")
+
+
+def _spawn(tool_call_id: str, arguments: object) -> SimpleNamespace:
+    """sub-agent を起動する親の tool call（``parent_tool_call_id`` なし）。"""
+    return _event("tool.execution_start", tool_call_id=tool_call_id, tool_name="runSubagent", arguments=arguments)
+
+
+def _worker_usage(parent_tool_call_id: str, *, nano_aiu: int = 1_000_000_000, api_call_id: str = "api-1") -> SimpleNamespace:
+    return SimpleNamespace(
+        type="assistant.usage",
+        data=_UsageData(
+            copilot_usage={"totalNanoAiu": nano_aiu},
+            api_call_id=api_call_id,
+            model="claude-opus-5",
+            parent_tool_call_id=parent_tool_call_id,
+        ),
+    )
+
+
+def test_collector_resolves_step_from_subagent_spawn_arguments():
+    """起動 tool の引数から Wave の Step を一意に解決し、worker の消費を当該 Step へ帰属させる。"""
+    console = _FakeConsole()
+    collector = FleetEventCollector(console=console, wave_index=2, step_ids=_WAVE_STEP_IDS)
+    collector.handle_event(_spawn("t1", {"prompt": "### task-002: Step.2/APP-002 \u3092実行する"}))
+    collector.handle_event(_event("subagent.started", tool_call_id="t1", agent_display_name="Worker A"))
+    collector.handle_event(_worker_usage("t1"))
+
+    credits = [ev for ev in console.stats_events if ev[0] == "usage_credit"]
+    assert len(credits) == 1
+    assert credits[0][1] == "2/APP-002"
+    assert credits[0][2]["nano_aiu"] == 1_000_000_000
+
+
+def test_collector_emits_tool_invoked_for_resolved_worker():
+    """解決済み worker の ``tool.execution_start`` を ``tool_invoked`` として当該 Step へ帰属させる。"""
+    console = _FakeConsole()
+    collector = FleetEventCollector(console=console, wave_index=2, step_ids=_WAVE_STEP_IDS)
+    collector.handle_event(_spawn("t1", "### task-001: Step.2/APP-001"))
+    collector.handle_event(_event("subagent.started", tool_call_id="t1", agent_display_name="Worker A"))
+    collector.handle_event(_event("tool.execution_start", parent_tool_call_id="t1", tool_call_id="w1", tool_name="edit_file"))
+
+    tools = [ev for ev in console.stats_events if ev[0] == "tool_invoked"]
+    assert len(tools) == 1
+    assert tools[0][1] == "2/APP-001"
+    assert tools[0][2]["tool_name"] == "edit_file"
+
+
+def test_collector_does_not_attribute_when_multiple_steps_match():
+    """引数が複数の Step に一致する場合はいずれへも割り当てない。"""
+    console = _FakeConsole()
+    collector = FleetEventCollector(console=console, wave_index=2, step_ids=_WAVE_STEP_IDS)
+    collector.handle_event(_spawn("t1", "Step.2/APP-001 \u3068 Step.2/APP-003 \u306e両方"))
+    collector.handle_event(_event("subagent.started", tool_call_id="t1", agent_display_name="Worker A"))
+    collector.handle_event(_worker_usage("t1"))
+
+    credits = [ev for ev in console.stats_events if ev[0] == "usage_credit"]
+    assert len(credits) == 1
+    assert credits[0][1] == ""
+
+
+def test_collector_does_not_attribute_when_no_step_matches():
+    """一致が 0 件の場合はいずれへも割り当てない。"""
+    console = _FakeConsole()
+    collector = FleetEventCollector(console=console, wave_index=2, step_ids=_WAVE_STEP_IDS)
+    collector.handle_event(_spawn("t1", "\u4f55の Step も含まない指示"))
+    collector.handle_event(_event("subagent.started", tool_call_id="t1", agent_display_name="Worker A"))
+    collector.handle_event(_worker_usage("t1"))
+    collector.handle_event(_event("tool.execution_start", parent_tool_call_id="t1", tool_call_id="w1", tool_name="edit_file"))
+
+    credits = [ev for ev in console.stats_events if ev[0] == "usage_credit"]
+    assert len(credits) == 1
+    assert credits[0][1] == ""
+    assert not any(ev[0] == "tool_invoked" for ev in console.stats_events)
+
+
+def test_collector_step_match_requires_boundary():
+    """``Step.2`` が ``Step.2/APP-001`` へ誤一致しない。"""
+    console = _FakeConsole()
+    collector = FleetEventCollector(console=console, wave_index=2, step_ids=("2", "2/APP-001"))
+    collector.handle_event(_spawn("t1", "Step.2/APP-001 \u3060けを担当"))
+    collector.handle_event(_event("subagent.started", tool_call_id="t1", agent_display_name="Worker A"))
+    collector.handle_event(_worker_usage("t1"))
+
+    credits = [ev for ev in console.stats_events if ev[0] == "usage_credit"]
+    assert credits[0][1] == "2/APP-001"
+
+
+def test_collector_does_not_persist_tool_arguments():
+    """FR-RTO-04: 解決に用いた tool 引数を観測イベントへ含めない。"""
+    console = _FakeConsole()
+    collector = FleetEventCollector(console=console, wave_index=2, step_ids=_WAVE_STEP_IDS)
+    secret = "SECRET_PROMPT_BODY_DO_NOT_PERSIST"
+    collector.handle_event(_spawn("t1", {"prompt": f"Step.2/APP-001 {secret}"}))
+    collector.handle_event(_event("subagent.started", tool_call_id="t1", agent_display_name="Worker A"))
+    collector.handle_event(_worker_usage("t1"))
+    collector.handle_event(_event("tool.execution_start", parent_tool_call_id="t1", tool_call_id="w1", tool_name="edit_file"))
+
+    serialized = json.dumps(console.stats_events, ensure_ascii=False, default=str)
+    assert secret not in serialized
+
+
+def test_collector_resolves_step_when_spawn_arrives_after_subagent_started():
+    """起動 tool と ``subagent.started`` の到着順が逆でも解決できる。"""
+    console = _FakeConsole()
+    collector = FleetEventCollector(console=console, wave_index=2, step_ids=_WAVE_STEP_IDS)
+    collector.handle_event(_event("subagent.started", tool_call_id="t1", agent_display_name="Worker A"))
+    collector.handle_event(_spawn("t1", "Step.2/APP-003"))
+    collector.handle_event(_worker_usage("t1"))
+
+    credits = [ev for ev in console.stats_events if ev[0] == "usage_credit"]
+    assert credits[0][1] == "2/APP-003"
+
+
+def test_collector_without_step_ids_keeps_unattributed():
+    """Wave の Step 集合が未注入なら従来どおり `step_id=""` で発火する。"""
+    console = _FakeConsole()
+    collector = FleetEventCollector(console=console, wave_index=2)
+    collector.handle_event(_spawn("t1", "Step.2/APP-001"))
+    collector.handle_event(_event("subagent.started", tool_call_id="t1", agent_display_name="Worker A"))
+    collector.handle_event(_worker_usage("t1"))
+
+    credits = [ev for ev in console.stats_events if ev[0] == "usage_credit"]
+    assert credits[0][1] == ""

@@ -23,6 +23,7 @@ _SETUP_CMD = _REPO_ROOT / "hve" / "setup-hve.cmd"
 _SETUP_PS1 = _REPO_ROOT / "hve" / "setup-hve.ps1"
 _SETUP_SH = _REPO_ROOT / "hve" / "setup-hve.sh"
 _COPILOT_SDK_LOCK = _REPO_ROOT / "hve" / "copilot-sdk.lock"
+_PYTHON_TEST_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "test-hve-python.yml"
 _WORKSPACE_PYTHON = "${workspaceFolder}\\.venv\\Scripts\\python.exe"
 _PERMANENT_TASK_LABELS = {
     "Sub-17 Orchestrator RED contracts",
@@ -42,6 +43,61 @@ def test_pyproject_declares_pytest_test_extra() -> None:
 
     assert "test" in extras
     assert any(requirement.startswith("pytest>=") for requirement in extras["test"])
+
+
+# `code` と言語別 extras は同じ pin を二重に持つため、片方だけ更新すると drift する。
+_LANGUAGE_CODE_EXTRAS = (
+    "code-python", "code-csharp", "code-javascript", "code-typescript",
+    "code-java", "code-go", "code-rust", "code-c", "code-cpp", "code-scala",
+    "code-shell", "code-powershell", "code-batch", "code-sqlglot",
+)
+
+
+def test_code_extra_equals_the_union_of_the_language_extras() -> None:
+    extras = tomllib.loads(_PYPROJECT.read_text(encoding="utf-8"))["project"]["optional-dependencies"]
+
+    union: set[str] = set()
+    for name in _LANGUAGE_CODE_EXTRAS:
+        assert name in extras, name
+        union |= set(extras[name])
+
+    assert union == set(extras["code"])
+
+
+def test_cq_optional_dependencies_do_not_borrow_the_mdq_extras() -> None:
+    """`cq watch` とトークン計測は cq 側の extras で完結しなければならない（FR-CQ-01）。"""
+    extras = tomllib.loads(_PYPROJECT.read_text(encoding="utf-8"))["project"]["optional-dependencies"]
+
+    assert any(r.startswith("watchdog>=") for r in extras["code-watch"])
+    assert any(r.startswith("tiktoken>=") for r in extras["code-tokenizer"])
+
+
+def test_setup_scripts_offer_exactly_the_language_extras() -> None:
+    """`-CodeLanguages` / `--code-languages` の受理名は言語別 extras と 1 対 1 で対応する。
+
+    利用者が打つのは `sql` だが、sqlfluff 用の既存 `code-sql` と衝突するため
+    extras 名だけ `code-sqlglot` へ写す。
+    """
+    block = re.search(
+        r"\$CodeLanguageExtras = \[ordered\]@\{(.+?)^\}",
+        _SETUP_PS1.read_text(encoding="utf-8"),
+        re.DOTALL | re.MULTILINE,
+    )
+    assert block is not None, "setup-hve.ps1 に $CodeLanguageExtras が見つからない"
+    ps1_map = dict(re.findall(r"(\w+)\s*=\s*'(code-[\w-]+)'", block.group(1)))
+
+    sh_text = _SETUP_SH.read_text(encoding="utf-8")
+    sh_names_match = re.search(r'CODE_LANGUAGE_NAMES="([^"]+)"', sh_text)
+    assert sh_names_match is not None, "setup-hve.sh に CODE_LANGUAGE_NAMES が見つからない"
+    sh_names = set(sh_names_match.group(1).split())
+
+    expected = {name.removeprefix("code-") for name in _LANGUAGE_CODE_EXTRAS} - {"sqlglot"} | {"sql"}
+    assert set(ps1_map) == expected
+    assert sh_names == expected
+
+    # `sql` の写像は両スクリプトで同じでなければ、片方だけ存在しない extras を叩く。
+    assert ps1_map["sql"] == "code-sqlglot"
+    assert "code-sqlglot" in sh_text
 
 
 def test_normal_setup_installs_test_extra_but_minimal_remains_base_only() -> None:
@@ -255,6 +311,10 @@ def _record_has(record: tuple[str, ...], *values: str) -> bool:
 
 def _has_gui_pty_install(calls: tuple[tuple[str, ...], ...]) -> bool:
     return any(_record_has(record, "pip", "install", "gui-pty") for record in calls)
+
+
+def _has_pip_install(calls: tuple[tuple[str, ...], ...]) -> bool:
+    return any(_record_has(record, "pip", "install") for record in calls)
 
 
 def _has_shared_pty_probe(calls: tuple[tuple[str, ...], ...]) -> bool:
@@ -846,6 +906,69 @@ def test_no_gui_and_minimal_remain_explicit_opt_outs(tmp_path: Path) -> None:
     assert not gaps, "FR-GUI-09 opt-out gaps:\n- " + "\n- ".join(gaps)
 
 
+def test_check_only_audits_gui_prerequisites_without_changing_anything(
+    tmp_path: Path,
+) -> None:
+    """FR-GUI-09: check-only stays diagnostic and warns instead of failing closed."""
+    # (label, run, audits_pty)
+    # Git for Windows の Bash は NTFS 上の fake venv python を ``[[ -x ]]`` と
+    # 認識しないため、Windows ホストでは shell harness の PTY 監査は到達しない。
+    runs: list[tuple[str, _SetupRun, bool]] = [
+        (
+            "setup-hve.sh check-only missing prerequisites",
+            _run_shell_setup(
+                tmp_path / "shell-check-missing",
+                args=("--check-only",),
+                gh_available=False,
+                pty_available=False,
+            ),
+            os.name != "nt",
+        )
+    ]
+    powershell_run = _run_powershell_setup(
+        tmp_path / "powershell-check-missing",
+        args=("-CheckOnly",),
+        gh_available=False,
+        pty_available=False,
+    )
+    if powershell_run is not None:
+        runs.append(
+            ("setup-hve.ps1 check-only missing prerequisites", powershell_run, True)
+        )
+
+    gaps: list[str] = []
+    for label, run, audits_pty in runs:
+        if run.returncode != 0:
+            gaps.append(_run_summary(label, run))
+        output = f"{run.stdout}\n{run.stderr}"
+        if "GitHub CLI (gh) is unavailable" not in output:
+            gaps.append(f"{label}: missing gh was not reported as a warning")
+        if _has_pip_install(run.calls) or _created_venv(run.calls):
+            gaps.append(f"{label}: check-only modified the environment")
+        if not audits_pty:
+            continue
+        if not _has_shared_pty_probe(run.calls):
+            gaps.append(f"{label}: shared is_pty_available() was not audited")
+        if "PTY backend required by the GUI" not in output:
+            gaps.append(f"{label}: unavailable PTY backend was not reported as a warning")
+
+    satisfied = _run_powershell_setup(
+        tmp_path / "powershell-check-satisfied",
+        args=("-CheckOnly",),
+        gh_available=True,
+        pty_available=True,
+    )
+    if satisfied is not None:
+        if satisfied.returncode != 0:
+            gaps.append(_run_summary("setup-hve.ps1 check-only satisfied", satisfied))
+        if "is unavailable" in f"{satisfied.stdout}\n{satisfied.stderr}":
+            gaps.append(
+                "setup-hve.ps1 check-only satisfied: warned despite available prerequisites"
+            )
+
+    assert not gaps, "FR-GUI-09 check-only audit gaps:\n- " + "\n- ".join(gaps)
+
+
 def test_setup_does_not_run_gh_auth_login_or_reject_unauthenticated_status(
     tmp_path: Path,
 ) -> None:
@@ -895,3 +1018,38 @@ def test_posix_setup_script_is_executable() -> None:
 
     assert len(entries) == 1
     assert entries[0].split(maxsplit=1)[0] == "100755"
+
+
+def test_ci_verifies_the_pty_backend_on_every_supported_os() -> None:
+    """FR-GUI-09: each OS installs gui-pty and runs the PTY suite without skips."""
+    import yaml
+
+    workflow = yaml.safe_load(_PYTHON_TEST_WORKFLOW.read_text(encoding="utf-8"))
+    job = workflow["jobs"]["gui-pty-tests"]
+    steps = "\n".join(str(step.get("run", "")) for step in job["steps"])
+
+    assert set(job["strategy"]["matrix"]["os"]) == {
+        "windows-latest",
+        "macos-latest",
+        "ubuntu-latest",
+    }
+    assert job["strategy"]["fail-fast"] is False
+    assert "gui-pty" in steps
+    assert "is_pty_available" in steps
+    assert "hve/tests/test_pty_backend.py" in steps
+    assert "skipped == 0" in steps
+
+
+def test_ci_smoke_tests_the_interactive_copilot_cli_on_every_supported_os() -> None:
+    """FR-GUI-10: 3 OS で解決済み Copilot CLI の実 PTY smoke を skip 無しで実行する。"""
+    import yaml
+
+    workflow = yaml.safe_load(_PYTHON_TEST_WORKFLOW.read_text(encoding="utf-8"))
+    job = workflow["jobs"]["gui-pty-tests"]
+    steps = "\n".join(str(step.get("run", "")) for step in job["steps"])
+
+    # CLI が解決できないまま skip されると smoke が無言で消えるため fail-closed にする。
+    assert "download-runtime" in steps
+    assert "CopilotCliBridge.find_binary()" in steps
+    assert "hve/tests/test_copilot_cli_pty_smoke.py" in steps
+    assert "skipped == 0" in steps

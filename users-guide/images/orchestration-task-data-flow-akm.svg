@@ -37,7 +37,7 @@
   <rect x="20" y="205" width="310" height="120" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
   <text x="175" y="227" text-anchor="middle" font-size="10" fill="#24292e">qa/*.md（sources に qa 指定）</text>
   <text x="175" y="242" text-anchor="middle" font-size="9" fill="#586069">※ qa/*-workiq-*.md は除外</text>
-  <text x="175" y="262" text-anchor="middle" font-size="10" fill="#24292e">original-docs/*（sources に original-docs 指定）</text>
+  <text x="175" y="262" text-anchor="middle" font-size="10" fill="#24292e">docs-original/*（sources に original-docs 指定）</text>
   <text x="175" y="277" text-anchor="middle" font-size="9" fill="#586069">.md / .txt / .csv</text>
   <text x="175" y="298" text-anchor="middle" font-size="10" fill="#24292e">パラメータ: sources / target_files /</text>
   <text x="175" y="313" text-anchor="middle" font-size="10" fill="#24292e">force_refresh / custom_source_dir</text>
@@ -45,7 +45,7 @@
   <rect x="430" y="205" width="270" height="120" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
   <text x="565" y="228" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">KnowledgeManager</text>
   <text x="565" y="248" text-anchor="middle" font-size="9" fill="#9a3412" font-weight="bold">[fan-out × 21: D01, D02, ..., D21]</text>
-  <text x="565" y="266" text-anchor="middle" font-size="10" fill="#586069">qa 抽出 / original-docs セクション分割</text>
+  <text x="565" y="266" text-anchor="middle" font-size="10" fill="#586069">qa 抽出 / docs-original セクション分割</text>
   <text x="565" y="282" text-anchor="middle" font-size="10" fill="#586069">Dxx ごとに独立 Copilot session</text>
   <text x="565" y="302" text-anchor="middle" font-size="9" fill="#9a3412">Work IQ 由来既存 Dxx を保護しつつ差分マージ</text>
   <text x="565" y="316" text-anchor="middle" font-size="9" fill="#586069">required_skills: knowledge-management</text>

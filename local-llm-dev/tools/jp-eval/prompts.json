@@ -1,0 +1,105 @@
+{
+  "_comment": "日本語ローカル LLM 評価プロンプトセット。判定は客観的に自動判定できる項目のみを対象とする。",
+  "u1_tasks": [
+    {
+      "id": "U1-01",
+      "category": "日本語仕様→コード生成",
+      "prompt": "次の仕様を満たす Python 関数を1つ書いてください。\n\n仕様: 与えられた日付文字列のリスト（形式 'YYYY-MM-DD'）を受け取り、月ごとの件数を辞書で返す。不正な形式の要素は無視する。関数名は count_by_month とする。\n\n出力は ```python で囲んだコードブロックのみとし、説明文は日本語で1文だけコードブロックの後に書いてください。",
+      "checks": {
+        "must_have_code_fence": true,
+        "fence_lang": "python",
+        "must_contain": ["count_by_month", "def "],
+        "require_japanese": true
+      }
+    },
+    {
+      "id": "U1-02",
+      "category": "日本語でのバグ原因説明",
+      "prompt": "次の Python コードは意図した動作をしません。原因を日本語で説明し、修正版を ```python ブロックで示してください。\n\n```python\ndef add_item(item, bucket=[]):\n    bucket.append(item)\n    return bucket\n```",
+      "checks": {
+        "must_have_code_fence": true,
+        "fence_lang": "python",
+        "must_contain_any": ["デフォルト", "既定", "ミュータブル", "可変", "共有"],
+        "require_japanese": true
+      }
+    },
+    {
+      "id": "U1-03",
+      "category": "日本語→構造化出力(JSON)",
+      "prompt": "以下のコードレビュー指摘を JSON で出力してください。JSON以外は一切出力しないでください。\n\n対象コード:\n```python\nimport os\ndef run(cmd):\n    os.system(cmd)\n```\n\nスキーマ: {\"findings\": [{\"severity\": \"high|medium|low\", \"title\": \"日本語の見出し\", \"detail\": \"日本語の説明\"}]}",
+      "checks": {
+        "must_be_json": true,
+        "json_must_have_key": "findings",
+        "require_japanese": true
+      }
+    },
+    {
+      "id": "U1-04",
+      "category": "日本語技術用語の正確性",
+      "prompt": "「べき等性（idempotency）」という用語を、HTTP メソッドの例を2つ挙げながら日本語で3文以内で説明してください。コードブロックは使わないでください。",
+      "checks": {
+        "require_japanese": true,
+        "must_contain_any": ["GET", "PUT", "DELETE", "HEAD"],
+        "must_not_have_code_fence": true
+      }
+    },
+    {
+      "id": "U1-05",
+      "category": "日本語仕様→英語識別子命名",
+      "_note": "期待出力が漢字のみでひらがなを含まないため、日本語判定(require_japanese)は集計から除外される。",
+      "prompt": "次の日本語のドメイン用語に対応する、Python の変数名として適切な英語スネークケース識別子を提案してください。出力は「日本語 => 識別子」の形式で1行ずつ、5行だけ出力してください。\n\n1. 契約者番号\n2. 請求締め日\n3. 未収残高\n4. 解約予定日\n5. 支払方法区分",
+      "checks": {
+        "require_japanese": true,
+        "must_contain": ["=>"],
+        "must_contain_any": ["contract", "billing", "closing", "balance", "payment"]
+      }
+    },
+    {
+      "id": "U1-06",
+      "category": "長文日本語の要約",
+      "prompt": "次の日本語仕様を、箇条書き3点に要約してください。箇条書き以外は出力しないでください。\n\n仕様: 本システムはロイヤリティ計算を行う。月次バッチは毎月1日の午前2時に起動し、前月分の販売実績を集計する。売上が10万円未満の契約は計算対象から除外する。計算結果は監査ログに残し、7年間保管する。再計算は管理者権限を持つ利用者のみが実行でき、実行時は必ず理由の入力を求める。エラー発生時は処理を中断せず、該当契約をスキップして続行し、最後にサマリーを出力する。",
+      "checks": {
+        "require_japanese": true,
+        "must_contain_any": ["・", "-", "*", "1."]
+      }
+    },
+    {
+      "id": "U1-07",
+      "category": "日本語エラー解析",
+      "prompt": "次のエラーの原因として最も可能性が高いものを日本語で1つだけ挙げ、対処法を日本語で2つ提示してください。\n\nエラー: `UnicodeDecodeError: 'cp932' codec can't decode byte 0x87 in position 12: illegal multibyte sequence`",
+      "checks": {
+        "require_japanese": true,
+        "must_contain_any": ["UTF-8", "utf-8", "エンコーディング", "文字コード", "encoding"]
+      }
+    },
+    {
+      "id": "U1-08",
+      "category": "日本語での否定指示追従",
+      "prompt": "PowerShell で現在のディレクトリのファイル一覧を取得するコマンドを1行だけ示してください。エイリアス（ls, dir, gci）は使わず、正式なコマンドレット名を使ってください。コードブロックは使わず、コマンドだけを1行で出力してください。",
+      "checks": {
+        "must_contain": ["Get-ChildItem"],
+        "must_not_have_code_fence": true,
+        "must_not_contain_tokens": ["ls ", "dir ", "gci "]
+      }
+    }
+  ],
+
+  "_instruction_variants_comment": "否定形と肯定形は意味的に等価でなければならない。判定が特定の語（「不明」「python」）の出現を見る以上、両バリアントともその語を指示に含める必要がある。含めないと否定形が構造的に合格不可能になり、比較が無効になる。test_jp_eval.py の test_variants_are_comparable がこれを検査する。",
+  "instruction_variants": {
+    "negative": "あなたはコーディング支援アシスタントです。以下のルールを必ず守ってください。\n\n1. 英語で回答してはならない。\n2. Markdown の見出し（# で始まる行）を使ってはならない。\n3. 知らないことについて、「不明」と書く以外の回答をしてはならない。\n4. コードを ```python で始まるコードフェンス以外の形式で書いてはならない。",
+    "positive": "あなたはコーディング支援アシスタントです。以下のルールを必ず守ってください。\n\n1. 回答は日本語で書く。\n2. 本文は段落と箇条書きだけで構成する。\n3. 知らないことは「不明」と書く。\n4. コードは ```python で始まるコードフェンスの中に書く。"
+  },
+
+  "instruction_tasks": [
+    { "id": "IT-01", "prompt": "リストの重複を除去する Python のコードを示してください。", "expects_code": true },
+    { "id": "IT-02", "prompt": "Python の dict と OrderedDict の違いを簡潔に述べてください。", "expects_code": false },
+    { "id": "IT-03", "prompt": "このプロジェクトのデプロイ先リージョンはどこですか？", "expects_code": false, "unknowable": true },
+    { "id": "IT-04", "prompt": "文字列を逆順にする Python のコードを示してください。", "expects_code": true },
+    { "id": "IT-05", "prompt": "What is the difference between a list and a tuple in Python?", "expects_code": false },
+    { "id": "IT-06", "prompt": "社内 API のレート制限の値を教えてください。", "expects_code": false, "unknowable": true },
+    { "id": "IT-07", "prompt": "Python でファイルを1行ずつ読み込むコードを示してください。", "expects_code": true },
+    { "id": "IT-08", "prompt": "REST と GraphQL の違いを説明してください。", "expects_code": false },
+    { "id": "IT-09", "prompt": "Python で例外を再送出するコードを示してください。", "expects_code": true },
+    { "id": "IT-10", "prompt": "本システムの前回リリース日を答えてください。", "expects_code": false, "unknowable": true }
+  ]
+}

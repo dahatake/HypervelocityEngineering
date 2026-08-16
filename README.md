@@ -35,7 +35,7 @@ Hypervelocity Engineering（HVE）は、GitHub Copilot cloud agent と `hve` CLI
 
 - GitHub Issues / Issue Template を起点に Web 上で実行する
 - `python -m hve` からローカルで同じ Workflow / Prompt を実行する
-- `knowledge/` を中核ストアとして、`original-docs/`・`qa/`・既存コードの情報を再利用する
+- `knowledge/` を中核ストアとして、`docs-original/`・`qa/`・既存コードの情報を再利用する
 
 ## 全体像
 
@@ -49,17 +49,18 @@ HVE は「タスク定義書（Issue Template / CLI 起動メタデータ）」�
 
 ![README 用 3 段構造フロー図](users-guide/images/readme-3-tier-flow.svg)
 
-次の俯瞰図は、**どのファイルがどのワークフローで生成されるか**（タスク = Custom Agent 群が入力ファイルを読み、出力ファイルを生成する）をデータフローとして示します。`knowledge/` は全設計・実装ワークフローが業務コンテキストとして参照します。各ワークフロー単体の入出力詳細は `users-guide/images/orchestration-task-data-flow-<id>.svg`（11 枚）を参照してください。
+次の俯瞰図は、**どのファイルがどのワークフローで生成されるか**（タスク = Custom Agent 群が入力ファイルを読み、出力ファイルを生成する）をデータフローとして示します。`knowledge/` は全設計・実装ワークフローが業務コンテキストとして参照します。各ワークフロー単体の入出力詳細は `users-guide/images/orchestration-task-data-flow-<id>.svg`（10 枚）を参照してください。
 
 ![HVE オーケストレーション データフロー俯瞰](users-guide/images/orchestration-dataflow-overview.svg)
 
-### `knowledge/` と `qa/` と `original-docs/` の関係
+### `knowledge/` と `qa/` と `docs-original/` の関係
 
-- `original-docs/`—社内ドキュメント等の **取り込み元（読み取り専用）**。全 Prompt は記述を変更しません。
-- `qa/`—`AQOD` や Prompt が生成した **質問票 / 回答** ファイル。
-- `knowledge/`—`AKM`（`KnowledgeManager`）が `qa/` / `original-docs/` を読み込んで生成・更新する **確定済みドキュメント（D01〜D21）**。以降の設計・実装ワークフローが業務コンテキストとして参照します。
+- `docs-original/`—社内ドキュメント等の **取り込み元（読み取り専用）**。全 Prompt は記述を変更しません。
+- `docs/original-design-doc-ingest/`—`ADI` が `docs-original/` を正規化した **派生物**（Markdown 化した本文 / 目録 / Doc Card）。原本が PDF / Office でも下流 ワークフローが読める形にします。
+- `qa/`—`ADI`（Step 1.1 / 1.2）や Prompt が生成した **質問票 / 回答** ファイル。
+- `knowledge/`—`AKM`（`KnowledgeManager`）が `qa/` / `docs-original/` を読み込んで生成・更新する **確定済みドキュメント（D01〜D21）**。以降の設計・実装ワークフローが業務コンテキストとして参照します。
 
-詳細は [km-guide.md](users-guide/km-guide.md) を参照してください。
+詳細は [km-guide.md](users-guide/km-guide.md) を参照してください。Markdown 以外の設計書を取り込む場合は、前段として [00-design-doc-ingestion.md](users-guide/00-design-doc-ingestion.md) を参照してください。
 
 ## 技術アーキテクチャ
 
@@ -75,7 +76,7 @@ HVE は「タスク定義書（Issue Template / CLI 起動メタデータ）」�
 
 ### 中核となる Workflow ID
 
-`hve/workflow_registry.py` で定義されているオーケストレーション Workflow ID は次の 11 個です。**正の一覧は `workflow_registry.py` を参照**し、`python -m hve orchestrate --help` の例示や後方互換エイリアスよりこちらを優先してください。
+`hve/workflow_registry.py` で定義されているオーケストレーション Workflow ID は次の 12 個です。**正の一覧は `workflow_registry.py` を参照**し、`python -m hve orchestrate --help` の例示や後方互換エイリアスよりこちらを優先してください。
 
 | Workflow ID | 役割 | 主な成果物 | 対応ガイド |
 |---|---|---|---|
@@ -87,8 +88,9 @@ HVE は「タスク定義書（Issue Template / CLI 起動メタデータ）」�
 | `adfdv` | Dataflow 実装・デプロイ | `src/`, `src/test/`, `src/infra/azure/dataflow/` など | [06-app-dev-dataflow-azure.md](users-guide/06-app-dev-dataflow-azure.md) |
 | `aag` | AI Agent 設計（アプリケーション定義・粒度設計・詳細設計） | `docs/agent/` 配下の Agent 詳細設計書群 | [07-ai-agent-simple.md](users-guide/07-ai-agent-simple.md) |
 | `aagd` | AI Agent 詳細設計・実装 | `docs/agent/`, `src/test/agent/`, Azure Agent 関連成果物 | [08-ai-agent.md](users-guide/08-ai-agent.md) |
-| `akm` | `qa/` と `original-docs/` から `knowledge/` を生成・更新 | `knowledge/D01〜D21-*.md` | [km-guide.md](users-guide/km-guide.md) |
-| `aqod` | `original-docs/` を横断分析して質問票を生成 | `qa/D01〜D21-original-docs-questionnaire.md`, `qa/original-docs-cross-questionnaire.md` | [original-docs-review.md](users-guide/original-docs-review.md) |
+| `aar` | Agentic Retrieval Add-on（既存サービスへの検索基盤追加） | `docs/services/<serviceId>-agentic-retrieval-spec.md`, `docs/azure/agentic-retrieval/`, `src/infra/azure/create-azure-agentic-retrieval/` | [agentic-retrieval-guide.md](users-guide/agentic-retrieval-guide.md) |
+| `adi` | `docs-original/` の原本（PDF / Office 等）を目録化・正規化し、D01〜D21 の質問票生成と横断統合を行い、目的に沿って選別して下流成果物へ候補を反映する | `docs/original-design-doc-ingest/index.json`, `docs/catalog/design-doc-inventory.md`, `qa/D01〜D21-original-docs-questionnaire.md`, `qa/original-docs-cross-questionnaire.md`, `docs/catalog/design-doc-catalog.md`, `docs/catalog/design-doc-routing.md`, 下流成果物への候補セクション（`use-case-skeleton.md` / `app-catalog.md` / `domain-analytics.md` / `data-model.md` / `dataflow-app-catalog.md`） | [00-design-doc-ingestion.md](users-guide/00-design-doc-ingestion.md) |
+| `akm` | `qa/` と `docs-original/` から `knowledge/` を生成・更新 | `knowledge/D01〜D21-*.md` | [km-guide.md](users-guide/km-guide.md) |
 | `adoc` | ソースコードから技術ドキュメントを生成 | `docs-generated/` | [sourcecode-documentation.md](users-guide/sourcecode-documentation.md) |
 
 > [!NOTE]
@@ -100,7 +102,7 @@ HVE は「タスク定義書（Issue Template / CLI 起動メタデータ）」�
 |---|---|
 | **Prompt** | `.github/prompts/` 配下の再利用 Prompt 定義ファイル（`*.prompt.md`）。例: `Arch-ApplicationAnalytics`, `Dev-Dataflow-FunctionsDeploy`, `QA-DocConsistency`, `KnowledgeManager`。`workflow_registry.py` の各 Step は `custom_agent` フィールドでこの Prompt 名を指定します（フィールド名は歴史的経緯で残置）。 |
 | **Workflow** | `hve/workflow_registry.py` の Workflow ID と、それに対応する GitHub Actions ワークフロー群 |
-| **Phase** | `users-guide/01`〜`08` と Knowledge / Documentation 系ガイドで区切った利用フェーズ |
+| **Phase** | `users-guide/00`〜`08` と Knowledge / Documentation 系ガイドで区切った利用フェーズ |
 | **Chain** | 複数の Workflow / Step を前後関係で束ねた流れ。README では Phase の進行順として扱います |
 
 ### Prompt の見方
@@ -128,9 +130,11 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 
 ## Issue Template 一覧
 
-`.github/ISSUE_TEMPLATE/*.yml` に存在する 11 個のテンプレートです。README では「どのフォームを選ぶか」を判断できる粒度だけを記載し、詳細な手順は users-guide に委譲します。下表の「主な入力」列は代表項目の抜粋です。各テンプレートには他にレビュー・QA・自己改善などのチェックボックスや追加項目がある場合があり、全項目は各 `.github/ISSUE_TEMPLATE/*.yml` または [workflow-reference.md](users-guide/workflow-reference.md#issue-テンプレート一覧) を参照してください。
+`.github/ISSUE_TEMPLATE/*.yml` に存在する 10 個のテンプレートです。README では「どのフォームを選ぶか」を判断できる粒度だけを記載し、詳細な手順は users-guide に委譲します。下表の「主な入力」列は代表項目の抜粋です。各テンプレートには他にレビュー・QA・自己改善などのチェックボックスや追加項目がある場合があり、全項目は各 `.github/ISSUE_TEMPLATE/*.yml` または [workflow-reference.md](users-guide/workflow-reference.md#issue-テンプレート一覧) を参照してください。
 
 > 自己改善（Self-Improve）は独立の Issue Template を持たず、上記の設計・実装テンプレートの `enable_self_improve` チェックボックスで起動します。
+
+> `adi`（原本の取り込みと質問票生成）は Issue Template を持たない CLI / GUI 専用ワークフローです。手順は [00-design-doc-ingestion.md](users-guide/00-design-doc-ingestion.md) を参照してください。
 
 | ファイル | UI 名 (`name`) | 使うとき | 主な入力 |
 |---|---|---|---|
@@ -142,8 +146,7 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 | `dataflow-dev.yml` | `Dataflow Dev` | バッチを実装・デプロイしたい | `app_ids`, `branch`, `runner_type`, `resource_group`, `app_ids`, `steps` |
 | `ai-agent-design.yml` | `AI Agent Design` | AI Agent の設計を開始したい | `app_ids`, `usecase_id`, `branch`, `runner_type`, `steps`, `model` |
 | `ai-agent-dev.yml` | `AI Agent Dev & Deploy` | AI Agent の実装・デプロイを進めたい | `app_ids`, `branch`, `runner_type`, `resource_group`, `usecase_id`, `steps` |
-| `knowledge-management.yml` | `knowledge/ ドキュメント生成・管理` | `qa/` / `original-docs/` / 追加ソースから `knowledge/` を再構成したい | `branch`, `runner_type`, `sources`, `target_files`, `force_refresh`, `enable_review` |
-| `original-docs-review.yml` | `Original Docs Review` | `original-docs/` を分析して質問票を作りたい | `branch`, `runner_type`, `target_scope`, `depth`, `focus_areas`, `enable_review` |
+| `knowledge-management.yml` | `knowledge/ ドキュメント生成・管理` | `qa/` / `docs-original/` / 追加ソースから `knowledge/` を再構成したい | `branch`, `runner_type`, `sources`, `target_files`, `force_refresh`, `enable_review` |
 | `sourcecode-to-documentation.yml` | `Source Codeからのドキュメント作成` | 既存コードから技術文書を自動生成したい | `branch`, `runner_type`, `target_dirs`, `exclude_patterns`, `doc_purpose`, `max_file_lines` |
 
 ## GitHub Actions workflows
@@ -174,7 +177,6 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 - `.github/workflows/auto-ai-agent-dev-reusable.yml`
 - `.github/workflows/auto-app-documentation-reusable.yml`
 - `.github/workflows/auto-knowledge-management-reusable.yml`
-- `.github/workflows/auto-aqod.yml`
 - `.github/workflows/setup-labels.yml`
 
 ### PR / Issue automation workflows
@@ -239,7 +241,7 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 | `gui` | GUI ウィザードを明示起動 | — |
 | `run` | インタラクティブモードでワークフローを選んで実行（中身は対話型 wizard） | wizard で対話入力 |
 | `cli` | `run` のエイリアス（引数なし起動が GUI に変わったため導入した明示起動用コマンド） | 同上 |
-| `orchestrate` | Workflow ID を指定して DAG を実行 | `--workflow/-w`, `--model`, `--review-model`, `--qa-model`, `--max-parallel`, `--auto-qa`, `--auto-contents-review`, `--auto-coding-agent-review`, `--create-issues`, `--mcp-config`, `--branch`, `--steps`, `--app-id`, `--app-ids`, `--resource-group`, `--target-scope`, `--depth`, `--target-dirs`, `--exclude-patterns`, `--doc-purpose`, `--max-file-lines`, `--dry-run` |
+| `orchestrate` | Workflow ID を指定して DAG を実行 | `--workflow/-w`, `--model`, `--review-model`, `--qa-model`, `--max-parallel`, `--auto-qa`, `--auto-contents-review`, `--auto-coding-agent-review`, `--create-issues`, `--mcp-config`, `--branch`, `--steps`, `--app-id`, `--app-ids`, `--resource-group`, `--purpose`, `--target-scope`, `--depth`, `--focus-areas`, `--target-dirs`, `--exclude-patterns`, `--doc-purpose`, `--max-file-lines`, `--dry-run` |
 | `qa-merge` | 回答済みの質問票をマージし、統合 QA ドキュメントを生成 | `qa/` 配下の回答ファイル指定 |
 | `workiq-doctor` | Work IQ 連携の診断 | `--json`, `--skip-mcp-probe`, `--tenant-id`, `--timeout`, `--sdk-probe`, `--sdk-tool-probe`, `--sdk-event-trace`, `--sdk-tool-probe-tools-all` |
 | `emit-prompt` | プロンプトテンプレートの出力（ワークフロー内部用途・テスト用途） | `--comment-body` 等 |
@@ -255,8 +257,8 @@ python -m hve
 # Web / Microservice 設計を CLI から実行
 python -m hve orchestrate --workflow aad-web --dry-run
 
-# original-docs から質問票を生成
-python -m hve orchestrate --workflow aqod --target-scope original-docs/ --depth lightweight
+# docs-original の原本を目録化し、D01〜D21 の質問票まで生成
+python -m hve orchestrate --workflow adi --target-scope docs-original/ --depth lightweight
 
 # knowledge/ を再生成
 python -m hve orchestrate --workflow akm --sources both
@@ -313,6 +315,7 @@ git commit -m "chore: mark hve.sh as executable"
 
 | フェーズ | ドキュメント |
 |---|---|
+| 既存設計書の取り込み（前段・任意） | [00-design-doc-ingestion.md](users-guide/00-design-doc-ingestion.md) |
 | ARD（要求定義の自動化） | [01-business-requirement.md（ARD セクション）](users-guide/01-business-requirement.md#要求定義の自動化ard-auto-requirement-definition) |
 | 要求定義 | [01-business-requirement.md](users-guide/01-business-requirement.md) |
 | アプリケーションアーキテクチャ設計 | [02-app-architecture-design.md](users-guide/02-app-architecture-design.md) |
@@ -323,7 +326,6 @@ git commit -m "chore: mark hve.sh as executable"
 | AI Agent（簡易） | [07-ai-agent-simple.md](users-guide/07-ai-agent-simple.md) |
 | AI Agent（本格） | [08-ai-agent.md](users-guide/08-ai-agent.md) |
 | Knowledge Management | [km-guide.md](users-guide/km-guide.md) |
-| Original Docs Review | [original-docs-review.md](users-guide/original-docs-review.md) |
 | Source Code からの Documentation | [sourcecode-documentation.md](users-guide/sourcecode-documentation.md) |
 | プロンプト例 | [prompt-examples.md](users-guide/prompt-examples.md) |
 
@@ -367,9 +369,14 @@ SDK 組み込みの `tool_search_tool` を HVE 実装で差し替え、ランキ
 > **注意**: `users-guide/tool-search-guide.md` は HVE が**生成する AI Agent** 側の
 > Microsoft Foundry Toolbox 設定を扱う別ガイドです。本機能は Foundry を使いません。
 >
-> **有効化**: 既定では無効です。`--tool-search` と `--tool-search-ranking hve` の
-> 両方を指定したときにだけ動作します。GUI は設定画面の **skills → Tool-Search** で
-> 設定・ポリシー確認・統計表示を行えます。
+> **既定値**: SDK の遅延ロード（`tool_search`）は**既定で有効**、HVE 実装への
+> ランキング差し替え（`tool_search_ranking`）は**既定 `sdk`（＝差し替えなし）**です。
+> 差し替えを試すには `--tool-search-ranking hve` を指定します。GUI は設定画面の
+> **skills → Tool-Search** で設定・ポリシー確認・統計表示を行えます。
+>
+> **⚠ 現行の Copilot CLI では差し替えを有効化しないでください。** 2026-08-13 の実測で
+> 遅延公開が発火せず、ツール定義トークンが逆に増えることを確認しています。詳細と
+> 判定方法は [users-guide/tool-search.md](users-guide/tool-search.md) の冒頭バナーを参照してください。
 
 - 設計・カスタマイズ・図解: [users-guide/tool-search.md](users-guide/tool-search.md)
 - ダッシュボードと統計の見方: [users-guide/tool-search-dashboard.md](users-guide/tool-search-dashboard.md)
@@ -387,8 +394,8 @@ README では、実在確認できた主要ディレクトリだけを掲載し�
 | `users-guide/` | ユーザー向けガイド |
 | `src/data/` | サンプルデータ生成先（AAS Step 4.2 出力） |
 | `knowledge/` | 業務要件ドキュメント（D01〜D21）— AKM 実行時に生成 |
-| `original-docs/` | 原本ドキュメント（読み取り専用、手動配置） |
-| `qa/` | 質問票（AQOD / Prompt が生成） |
+| `docs-original/` | 原本ドキュメント（読み取り専用、手動配置） |
+| `qa/` | 質問票（ADI Step 1.1 / 1.2 / Prompt が生成） |
 | `template/` | テンプレート類 |
 | `sample/` | サンプル成果物 |
 | `work/` | 実行ログ・作業成果物 |
@@ -399,7 +406,7 @@ README では、実在確認できた主要ディレクトリだけを掲載し�
 | `src/` | 実装コード出力先（ASDW-WEB / ADFDV / AAGD 実行時に生成） |
 
 > [!NOTE]
-> `knowledge/` / `original-docs/` / `qa/` / `infra/` / `docs/` / `docs-generated/` / `src/` / `work/` は `.gitignore` や `template/` の敗見れ上未トラックのことがあり、ワークフロー実行時に生成・更新されるディレクトリです。クローン直後に存在しないことがあります。
+> `knowledge/` / `docs-original/` / `qa/` / `infra/` / `docs/` / `docs-generated/` / `src/` / `work/` は `.gitignore` や `template/` の敗見れ上未トラックのことがあり、ワークフロー実行時に生成・更新されるディレクトリです。クローン直後に存在しないことがあります。
 
 ## ライセンス
 

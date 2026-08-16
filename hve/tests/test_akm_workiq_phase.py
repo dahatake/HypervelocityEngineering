@@ -28,7 +28,7 @@ def test_summarize_dxx_for_query_basic():
 
 ## 2. 確定事項（Confirmed）
 
-### 2.1 original-docs/ 由来の確定事項
+### 2.1 docs-original/ 由来の確定事項
 
 確定事項あり。
 

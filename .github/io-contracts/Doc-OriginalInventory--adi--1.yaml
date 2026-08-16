@@ -1,0 +1,17 @@
+inputs:
+- path: docs-original/
+  required: true
+  kind: static
+- path: work/run/<run-id>/kpi/fork-kpi.jsonl
+  required: true
+  kind: external
+outputs:
+- path: docs/catalog/design-doc-inventory.md
+  required: true
+  mode: create
+- path: docs/original-design-doc-ingest/index.json
+  required: true
+  mode: create
+- path: docs/original-design-doc-ingest/*/content.md
+  required: true
+  mode: create

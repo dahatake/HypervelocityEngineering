@@ -3,7 +3,7 @@
 # Without this file, `python -m mdq index` would scan only the generic
 # defaults (`docs/`, `users-guide/`). This repository has additional
 # documentation roots produced by the HVE orchestrator and design phases
-# (knowledge/, qa/, original-docs/, etc.), so they are enumerated here.
+# (knowledge/, qa/, docs-original/, etc.), so they are enumerated here.
 #
 # `work/` is deliberately absent: it holds per-run working artifacts that
 # restate design documents, so indexing it lets superseded copies outrank the
@@ -20,7 +20,7 @@ roots = [
     "template",
     "knowledge",
     "qa",
-    "original-docs",
+    "docs-original",
     "sample",
     "hve-dev",
 ]

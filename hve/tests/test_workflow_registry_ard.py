@@ -182,7 +182,7 @@ class TestARDWizardOrder(unittest.TestCase):
     def test_existing_workflows_still_present(self):
         ids = {wf.id for wf in list_workflows()}
         for expected in ("aas", "aad-web", "asdw-web", "adfd", "adfdv",
-                         "aag", "aagd", "akm", "aqod", "adoc"):
+                         "aag", "aagd", "aar", "akm", "adi", "adoc"):
             self.assertIn(expected, ids)
 
 

@@ -149,7 +149,10 @@ _WORKFLOW_AGENT_MAP: Dict[str, List[str]] = {
     "aag":      ["Arch-AIAgentDesign-Step1.agent.md", "Arch-AIAgentDesign-Step2.agent.md", "Arch-AIAgentDesign-Step3.agent.md"],
     "aagd":     ["Dev-Microservice-Azure-AgentCoding.agent.md"],
     "akm":      ["KnowledgeManager.agent.md"],
-    "aqod":     ["QA-DocConsistency.agent.md"],
+    "adi":      ["Doc-OriginalInventory.agent.md",
+                 "QA-DocConsistency.agent.md",
+                 "Doc-OriginalDocCard.agent.md",
+                 "Doc-OriginalTriage.agent.md"],
     "adoc":     ["Doc-ArchOverview.agent.md",
                  "Doc-FileSummary.agent.md"],
 }
@@ -167,7 +170,8 @@ _WORKFLOW_SKILLS_MAP: Dict[str, List[str]] = {
     "aag":      ["planning/task-dag-planning"],
     "aagd":     ["testing/test-strategy-template"],
     "akm":      ["planning/knowledge-management"],
-    "aqod":     ["planning/knowledge-lookup"],
+    # 実在パスは .github/skills/knowledge-lookup/（planning/ サブディレクトリは存在しない）
+    "adi":      ["knowledge-lookup"],
     "adoc":     ["planning/task-dag-planning"],
 }
 
@@ -183,7 +187,7 @@ _WORKFLOW_DOCS_MAP: Dict[str, List[str]] = {
     "aag":      ["docs/agent"],
     "aagd":     ["docs/agent"],
     "akm":      [],
-    "aqod":     [],
+    "adi":      ["docs/original-design-doc-ingest"],
     "adoc":     ["docs/catalog"],
 }
 
@@ -197,7 +201,7 @@ _WORKFLOW_KNOWLEDGE_MAP: Dict[str, List[str]] = {
     "aag":      ["D05", "D07", "D18"],
     "aagd":     ["D05", "D07", "D18"],
     "akm":      ["D01", "D02", "D03"],
-    "aqod":     ["D01", "D02"],
+    "adi":      ["D01", "D02"],
     "adoc":     ["D19"],
 }
 
@@ -482,11 +486,12 @@ _WORKFLOW_TASK_GOALS: Dict[str, "TaskGoal"] = {
         reward_weights={"lint": 0.1, "test": 0.0, "documentation": 0.9},
         tdd_phase="GREEN",
     ),
-    "aqod": TaskGoal(
-        goal_description="qa/ の質問票・回答が業務要件分析として十分な深さと品質を持つこと",
+    "adi": TaskGoal(
+        goal_description="正規化済み設計書と原本質問票が整合し、下流選別に利用できる品質を持つこと",
         success_criteria=[
             "markdownlint エラーが 0 件",
-            "qa/ 配下の全ファイルに質問・回答・根拠の 3 要素が含まれる",
+            "原本質問票にサマリーと質問・根拠が含まれ、質問 0 件も明示される",
+            "正規化済み設計書と質問票の参照元が一致する",
         ],
         reward_weights={"lint": 0.1, "test": 0.0, "documentation": 0.9},
         tdd_phase="GREEN",

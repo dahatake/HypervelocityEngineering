@@ -5,17 +5,19 @@
 - 子行: 各 Step（完了時のスナップショット）
 - 列: Workflow/Step, Context, Model, 実行時間, AI Credit, Tools, Skills
 
-AI Credit は SDK ``assistant.usage.copilot_usage.total_nano_aiu`` の累積。
-- Workflow 親行: 累積 AIU を ``0.1234 AIU`` 形式で表示
-- Step 子行: 該当 Step の消費分（直前 Step 完了からの差分）を ``0.0234 AIU`` 形式で表示
-  ※ 並列実行時、差分には他 Step 消費分が混ざり得る（厳密な単独消費量ではない）
-  ※ 差分が計算不能（直前 Step 未取得・0/負値）の場合は ``-``
+FR-RTO-07: Step 行の値は当該 Step へ帰属したイベントだけから算出する。
+- AI Credit: 当該 Step 帰属の ``usage_credit`` 合計（``aiu_nano_own``）。
+  帰属イベントが無ければ ``-``。隣接 Step の累積差分などの推定値で補わない。
+- Model: 当該 Step 帰属のモデル別呼び出し回数。
+- Workflow 親行の AI Credit は Workflow 累積（Step へ帰属できない Fleet wave の
+  消費を含む真値）のため、子行の合計と一致しないことがある。理由は凡例へ明示する。
+- Workflow 親行の Context は瞬間値のため合算せず、最後に完了した Step の値を示す。
 
 リアルタイム更新:
 - `stats_history_updated` シグナルを購読し、1 秒スロットルで再描画する。
 - 関連シグナル（context_updated / tool_counts_updated / skill_counts_updated）も同様。
 
-Tools / Skills は Top-5 + ``+N more`` 形式。セル D-click で全件ポップアップを表示する。
+Tools / Skills / Model は Top-5 + ``+N more`` 形式。セル D-click で全件ポップアップを表示する。
 
 CSV エクスポート:
 - ツリー上部の 📋 ボタンで全行（ヘッダー + Workflow 親 + Step 子）を CSV としてクリップボードへ。
@@ -27,7 +29,7 @@ from __future__ import annotations
 import csv
 import io
 import time
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Iterable, List, Optional, Sequence
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
@@ -155,68 +157,6 @@ def _sorted_steps_by_finish(
     )
 
 
-def _compute_step_prev_map(
-    history: Sequence[WorkflowStatsSnapshot],
-) -> Dict[int, Optional[StepStatsSnapshot]]:
-    """全 Workflow の Step を ``finished_at`` 昇順で flat sort し、各 Step の直前 Step を返す。
-
-    キーは ``id(step)``。`WorkbenchState.sdk_aiu_total_nano` は Workflow 切替時にも
-    リセットされない通算累積のため、差分計算は Workflow 跨ぎでも前 Step との差分を
-    使う必要がある（さもないと 2 つ目以降の Workflow の最初の Step 差分に前 Workflow
-    分が混入してしまう）。
-    """
-    flat: List[StepStatsSnapshot] = []
-    for wf in history:
-        flat.extend(wf.steps)
-    flat_sorted = sorted(
-        flat,
-        key=lambda s: (s.finished_at is None, s.finished_at or 0.0),
-    )
-    prev_map: Dict[int, Optional[StepStatsSnapshot]] = {}
-    prev: Optional[StepStatsSnapshot] = None
-    for st in flat_sorted:
-        prev_map[id(st)] = prev
-        prev = st
-    return prev_map
-
-
-def _step_aiu_delta_nano(
-    step: StepStatsSnapshot,
-    prev_step: Optional[StepStatsSnapshot],
-) -> Optional[int]:
-    """直前 Step との累積 AIU 差分（Nano）。計算不能 / 負値 / 0 以下は None（捏造禁止）。
-
-    並列実行注意: 本関数は ``finished_at`` 昇順の隣接 Step 間で
-    「workflow 累積値の増分」を返す。並列で他 Step が消費した分が混入し得るため、
-    厳密な「この Step 単独の消費量」ではない（呼び出し側でその旨を明示する）。
-    """
-    if step.sdk_aiu_total_nano is None:
-        return None
-    try:
-        cur = int(step.sdk_aiu_total_nano)
-    except (TypeError, ValueError):
-        return None
-    if cur <= 0:
-        return None
-    if prev_step is None:
-        # 最初の Step: 直前=0 として累積=差分とみなす（捏造ではなく workflow 開始時点が 0 のため）
-        return cur
-    if prev_step.sdk_aiu_total_nano is None:
-        # 前 Step が未取得 → 差分計算不能（捏造禁止）
-        return None
-    try:
-        prev = int(prev_step.sdk_aiu_total_nano)
-    except (TypeError, ValueError):
-        return None
-    delta = cur - prev
-    # 0 以下は None（docstring 整合: 「計算不能 / 負値 / 0 以下は None」）。
-    # 0 差分は「Step が実行されたが消費なし」の可能性もあるが、
-    # 表示は `_fmt_aiu(None) == "-"`、CSV は `_csv_aiu(None) == ""` と整合させるため None を返す。
-    if delta <= 0:
-        return None
-    return delta
-
-
 def _csv_pct(cur: Optional[int], lim: Optional[int]) -> str:
     try:
         if cur is None or lim is None:
@@ -282,13 +222,14 @@ _CSV_HEADERS: tuple = (
     "Context",
     "Limit",
     "Pct",
+    # モデル別呼び出し回数（Top-N + `+N more`）。Step 行は当該 Step 帰属分のみ。
     "Model",
     "ElapsedSec",
     "ElapsedHMS",
     "AiuTotal",
-    # 注意: 「Step 単独消費量」ではなく「finished_at 昇順で見た直前 Step 完了時点の
-    # workflow 累積値からの差分」。並列実行時は他 Step の消費が混ざり得る。
-    "AiuDeltaSincePrev",
+    # FR-RTO-07: 当該 Step へ帰属した `usage_credit` の実測合計。
+    # 帰属イベントが無ければ空欄（累積差分などの推定値で補わない）。
+    "AiuOwn",
     "ToolsTop",
     "SkillsTop",
     "Status",
@@ -303,9 +244,10 @@ def build_csv(
     """履歴を RFC 4180 準拠の CSV 文字列へ変換する。
 
     - 1 行目: ヘッダー（`_CSV_HEADERS`）
-    - Workflow 親行: Type=workflow / Step=空 / AiuDeltaSincePrev=空 / Status=空
+    - Workflow 親行: Type=workflow / Step=空 / AiuOwn=空 / Status=空。
+      Model は子 Step のモデル別合計。
     - Step 子行: Type=step / Workflow=親 workflow 名（フィルタ用に再掲）/
-      累積 AiuTotal + AiuDeltaSincePrev（差分）
+      Workflow 累積 AiuTotal + Step 実測 AiuOwn
     - 改行コード: ``\\r\\n``（Excel 互換）
     - 未取得値は空欄（捏造禁止）
     - CSV formula injection 対策として、テキスト列の ``=+-@`` 先頭値は ``'`` を付与
@@ -320,9 +262,6 @@ def build_csv(
     writer = csv.writer(buf, lineterminator="\r\n", quoting=csv.QUOTE_MINIMAL)
     writer.writerow(_CSV_HEADERS)
 
-    # 全 history 横断で finished_at 順の prev_map を構築（Workflow 跨ぎの差分を正しく計算）
-    prev_map = _compute_step_prev_map(history)
-
     for wf in history:
         wf_name = wf.workflow_name or wf.workflow_id or ""
         wf_elapsed = wf.elapsed_sec
@@ -333,6 +272,7 @@ def build_csv(
         wf_elapsed_hms = "" if wf_elapsed is None else _fmt_elapsed(int(wf_elapsed))
         tools_total = _agg_workflow_counts(wf, "tool_counts")
         skills_total = _agg_workflow_counts(wf, "skill_counts")
+        models_total = _agg_workflow_counts(wf, "model_counts")
 
         writer.writerow([
             "workflow",
@@ -341,7 +281,7 @@ def build_csv(
             _csv_safe_int(wf.context_current),
             _csv_safe_int(wf.context_limit),
             _csv_pct(wf.context_current, wf.context_limit),
-            _sanitize_csv_cell(wf.model or ""),
+            _sanitize_csv_cell(_csv_counts_topn(models_total)),
             wf_elapsed_sec,
             wf_elapsed_hms,
             _csv_aiu(wf.sdk_aiu_total_nano),
@@ -353,7 +293,6 @@ def build_csv(
 
         sorted_steps = _sorted_steps_by_finish(wf.steps)
         for st in sorted_steps:
-            delta = _step_aiu_delta_nano(st, prev_map.get(id(st)))
             elapsed_sec = "" if st.elapsed_sec is None else f"{int(st.elapsed_sec)}"
             elapsed_hms = (
                 "" if st.elapsed_sec is None else _fmt_elapsed(int(st.elapsed_sec))
@@ -365,11 +304,11 @@ def build_csv(
                 _csv_safe_int(st.context_current),
                 _csv_safe_int(st.context_limit),
                 _csv_pct(st.context_current, st.context_limit),
-                _sanitize_csv_cell(st.model or ""),
+                _sanitize_csv_cell(_csv_counts_topn(st.model_counts)),
                 elapsed_sec,
                 elapsed_hms,
                 _csv_aiu(st.sdk_aiu_total_nano),
-                _csv_aiu(delta),
+                _csv_aiu(st.aiu_nano_own),
                 _sanitize_csv_cell(_csv_counts_topn(st.tool_counts)),
                 _sanitize_csv_cell(_csv_counts_topn(st.skill_counts)),
                 _sanitize_csv_cell(st.status or ""),
@@ -431,9 +370,12 @@ class StatsHistoryView(QWidget):
         header_bar.setSpacing(6)
         legend = QLabel(
             self.tr(
-                "AI Credit は Workflow 親行＝累積合計、Step 子行＝該当 Step の消費分"
-                "（完了時刻順で見た直前 Step からの差分）。"
-                "並列実行時、Step の消費分には他 Step 消費分が混ざることがあります。"
+                "Step 行は当該 Step へ帰属したイベントだけから算出します"
+                "（取得できない項目は「-」）。"
+                "Workflow 行の AI Credit は累積のため、SDK Fleet mode へ委譲した並列 Wave の"
+                "消費を含み、子 Step の合計と一致しないことがあります。"
+                "Workflow 行の Context は最後に完了した Step の値、"
+                "並列 Wave の Step の実行時間は Wave 全体の所要時間です。"
             )
         )
         legend.setStyleSheet("font-size: 8pt;")
@@ -502,9 +444,8 @@ class StatsHistoryView(QWidget):
     def _do_refresh(self) -> None:
         self._tree.setSortingEnabled(False)
         self._tree.clear()
-        prev_map = _compute_step_prev_map(self._state.stats_history)
         for wf in self._state.stats_history:
-            self._tree.addTopLevelItem(self._build_workflow_item(wf, prev_map))
+            self._tree.addTopLevelItem(self._build_workflow_item(wf))
         self._tree.setSortingEnabled(True)
         # 全て展開
         self._tree.expandAll()
@@ -514,14 +455,11 @@ class StatsHistoryView(QWidget):
         """CopyButton 用 CSV 生成。例外は CopyButton 側で握って tooltip 表示される。"""
         return build_csv(self._state.stats_history)
 
-    def _build_workflow_item(
-        self,
-        wf: WorkflowStatsSnapshot,
-        prev_map: Dict[int, Optional[StepStatsSnapshot]],
-    ) -> QTreeWidgetItem:
+    def _build_workflow_item(self, wf: WorkflowStatsSnapshot) -> QTreeWidgetItem:
         name = wf.workflow_name or wf.workflow_id or "(unknown)"
         tools_total = _agg_workflow_counts(wf, "tool_counts")
         skills_total = _agg_workflow_counts(wf, "skill_counts")
+        models_total = _agg_workflow_counts(wf, "model_counts")
         elapsed = wf.elapsed_sec
         if elapsed is None and wf.started_at is not None:
             elapsed = max(0.0, time.monotonic() - wf.started_at)
@@ -529,7 +467,7 @@ class StatsHistoryView(QWidget):
             [
                 f"[Workflow] {name}",
                 _fmt_context(wf.context_current, wf.context_limit),
-                wf.model or _DASH,
+                _fmt_counts(models_total),
                 _fmt_elapsed(elapsed),
                 _fmt_aiu(wf.sdk_aiu_total_nano),
                 _fmt_counts(tools_total),
@@ -539,62 +477,76 @@ class StatsHistoryView(QWidget):
         # ソート/再利用用に raw データを保持
         item.setData(COL_TOOLS, Qt.ItemDataRole.UserRole, tools_total)
         item.setData(COL_SKILLS, Qt.ItemDataRole.UserRole, skills_total)
+        item.setData(COL_MODEL, Qt.ItemDataRole.UserRole, models_total)
         item.setData(COL_NAME, Qt.ItemDataRole.UserRole, ("workflow", wf.workflow_id, wf.run_id))
         item.setData(COL_AI_CREDIT, Qt.ItemDataRole.UserRole, wf.sdk_aiu_total_nano)
         # AI Credit 列の数値ソート用キー（未取得 / 0 / 負値は -1 で表示と整合）
         item.setData(COL_AI_CREDIT, _SORT_ROLE, _aiu_sort_key(wf.sdk_aiu_total_nano))
+        item.setToolTip(
+            COL_CONTEXT,
+            self.tr("Workflow 行の Context は瞬間値のため合算せず、最後に完了した Step の値を示します。"),
+        )
+        item.setToolTip(
+            COL_AI_CREDIT,
+            self.tr(
+                "Workflow 累積（Step へ帰属できない並列 Wave の消費を含む）。"
+                "子 Step の合計と一致しないことがあります。"
+            ),
+        )
 
-        # Step は finished_at 昇順で並べ、全 history 横断の直前 Step との差分を計算する
-        sorted_steps = _sorted_steps_by_finish(wf.steps)
-        for st in sorted_steps:
-            delta = _step_aiu_delta_nano(st, prev_map.get(id(st)))
-            item.addChild(self._build_step_item(st, delta))
+        # Step は finished_at 昇順で並べる
+        for st in _sorted_steps_by_finish(wf.steps):
+            item.addChild(self._build_step_item(st))
         return item
 
-    def _build_step_item(
-        self, st: StepStatsSnapshot, delta_nano: Optional[int]
-    ) -> QTreeWidgetItem:
-        # AI Credit セルは「該当 Step の消費分（直前 Step 完了からの差分）」のみ表示する。
-        # 差分が計算不能（直前 Step 未取得・0/負値）の場合は `-`（_fmt_aiu(None) と整合）。
-        credit_cell = _fmt_aiu(delta_nano)
+    def _build_step_item(self, st: StepStatsSnapshot) -> QTreeWidgetItem:
+        # FR-RTO-07: AI Credit セルは当該 Step へ帰属した実測消費のみ。
+        # 帰属イベントが無ければ `-`（累積差分などの推定値で補わない）。
         item = _StatsTreeItem(
             [
                 f"  {st.step_id}",
                 _fmt_context(st.context_current, st.context_limit),
-                st.model or _DASH,
+                _fmt_counts(st.model_counts),
                 _fmt_elapsed(st.elapsed_sec),
-                credit_cell,
+                _fmt_aiu(st.aiu_nano_own),
                 _fmt_counts(st.tool_counts),
                 _fmt_counts(st.skill_counts),
             ]
         )
         item.setData(COL_TOOLS, Qt.ItemDataRole.UserRole, dict(st.tool_counts))
         item.setData(COL_SKILLS, Qt.ItemDataRole.UserRole, dict(st.skill_counts))
+        item.setData(COL_MODEL, Qt.ItemDataRole.UserRole, dict(st.model_counts))
         item.setData(COL_NAME, Qt.ItemDataRole.UserRole, ("step", st.step_id, st.status))
-        # AI Credit の raw 値（累積, 差分）を保持
+        # AI Credit の raw 値（Workflow 累積, Step 実測）を保持
         item.setData(
             COL_AI_CREDIT,
             Qt.ItemDataRole.UserRole,
-            {"total_nano": st.sdk_aiu_total_nano, "delta_nano": delta_nano},
+            {"total_nano": st.sdk_aiu_total_nano, "own_nano": st.aiu_nano_own},
         )
-        # AI Credit 列の数値ソート用キー（表示と一致させるため差分値で比較、未取得 / 0 / 負値は -1）
-        item.setData(COL_AI_CREDIT, _SORT_ROLE, _aiu_sort_key(delta_nano))
+        # AI Credit 列の数値ソート用キー（表示と一致させるため実測値で比較）
+        item.setData(COL_AI_CREDIT, _SORT_ROLE, _aiu_sort_key(st.aiu_nano_own))
         # status 表示（tooltip）
         item.setToolTip(COL_NAME, f"status: {st.status}")
-        if delta_nano is not None:
+        if st.aiu_nano_own is None:
             item.setToolTip(
                 COL_AI_CREDIT,
                 self.tr(
-                    "該当 Step の消費分（直前 Step 完了からの差分）: {delta}"
-                ).format(delta=_fmt_aiu(delta_nano)),
+                    "この Step へ帰属した課金イベントがないため取得できません。"
+                    "SDK Fleet mode へ委譲した並列 Wave の消費は Workflow 行にのみ計上されます。"
+                ),
             )
         return item
 
     def _on_item_double_clicked(self, item: QTreeWidgetItem, column: int) -> None:
-        if column not in (COL_TOOLS, COL_SKILLS):
+        if column not in (COL_TOOLS, COL_SKILLS, COL_MODEL):
             return
         counts = item.data(column, Qt.ItemDataRole.UserRole)
         if not isinstance(counts, dict) or not counts:
             return
-        title = self.tr("Tools 全件") if column == COL_TOOLS else self.tr("Skills 全件")
+        if column == COL_TOOLS:
+            title = self.tr("Tools 全件")
+        elif column == COL_SKILLS:
+            title = self.tr("Skills 全件")
+        else:
+            title = self.tr("Model 全件")
         QMessageBox.information(self, title, _full_counts_text(counts))

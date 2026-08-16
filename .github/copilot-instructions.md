@@ -11,6 +11,12 @@
 - **PowerShell は最新 `pwsh` 固定**: Windows の PowerShell 実行は `pwsh.exe`（PowerShell 7+ / PSEdition Core）の最新インストール済み版だけを使う。`powershell` / `powershell.exe` / Windows PowerShell 5.1 の直接実行・フォールバックは禁止。`pwsh` が無ければ PowerShell 7+ 必須として fail-closed で停止する。自動化・テスト・`.ps1` 実行は `pwsh.exe -NoLogo -NoProfile` を基本とする。
 - **出力は最小限**: 長文は `work/` 配下（Skill work-artifacts-layout）。
 - **変更は最小差分**: 無関係な整形・一括リファクタ・不要依存追加をしない。
+- **HVE の版管理と変更履歴（必須）**: HVE の実装または実行契約を変更するジョブは、**ユーザーからの指示・依頼の有無にかかわらず**、完了報告前に同じ変更セットで `CHANGELOG.md` と HVE パッケージ版を更新する。
+  - 対象は `hve/**`、`hve-dev/**`、`.github/copilot-instructions.md`、`.github/instructions/**`、`.github/prompts/**`、`.github/skills/**`、`.github/io-contracts/**`、`.github/scripts/**`、`.github/workflows/**`（後述の生成アプリ向けデプロイ workflow を除く）、`.github/ISSUE_TEMPLATE/**`、HVE が使用する `template/**`、および HVE の実行・契約を変える設定・スクリプトとする。`CHANGELOG.md`、`hve/__init__.py`、`pyproject.toml` だけの同期修正は、この規則による追加 bump のトリガーにしない。独立ライフサイクルで版管理する `mdq/**` / `cq/**` / 配布キットは本規則の PATCH 対象ではなく、それぞれの版管理手順に従う。
+  - **HVE が生成・支援する別アプリケーションの成果物には適用しない**。`src/**`、`docs/**`、`docs-generated/**`、`knowledge/**`、`qa/**`、`docs-original/**`、`sample/**`、`tests/run/**`、`package.json` / `jest.config.js` / `babel.config.js` / `playwright.config.js`、および `.github/workflows/deploy-*.yml` / `.github/workflows/azure-static-web-apps-*.yml` / `.github/workflows/app<数字>*.yml` は対象外で、これらだけを変更するジョブは HVE の版を上げない。対象判定の単一の機械正本は [.github/scripts/hve_scope.py](.github/scripts/hve_scope.py) であり、本規則の列挙と食い違う場合は同モジュールを正とする。
+  - **PATCH（`x.y.z` の `z`）の更新は Copilot が自律的に実施する（必須・確認不要）**。対象変更を 1 件でも含むジョブは、指示・承認を待たずに 1 ジョブにつき 1 回だけ PATCH を増やす。「指示が無い」「差分が小さい」「文書だけの変更に見える」「別ジョブと競合しうる」「`CHANGELOG.md` に既存の `[Unreleased]` がある」のいずれも、省略・後回し・ユーザーへの委譲・提案止まりの理由にしてはならない。判断に迷う場合は更新する側へ倒す。MINOR（`x.y.0` の `y`）への更新だけはユーザーが明示的に判断した場合に行い、Copilot が自律的に増やしてはならない。
+  - `pyproject.toml` の `[project].version` と `[tool.bumpversion].current_version`、`hve/__init__.py` の `__version__`、`CHANGELOG.md` の版見出しを同一バージョンへ同期する。`CHANGELOG.md` には変更点・影響・検証結果を記録し、他作業の `[Unreleased]` エントリーを移動または再分類してはならない。既存の `[Unreleased]` 内容がある場合は、その内容の後ろに新しい版見出しを追加し、見出し直後への機械挿入で既存記録を新リリースへ取り込ませない。
+  - **完了報告前の版更新セルフチェック（必須）**: 完了報告を出す前に変更パス一覧（`git diff --name-only` 等）を取得し、上記の機械正本で対象変更の有無を判定する。対象変更があるのに (a) `pyproject.toml` / `hve/__init__.py` / `CHANGELOG.md` が同じ変更セットに揃っていない、(b) 前項の 4 箇所の版番号が相互に一致しない、(c) 直前の版から増えていない、のいずれかに該当する場合は、完了報告を出さずに版更新を実施してから再確認する。確認結果は §7.1 の検証結果へ 1 行で記録する。
 - **捏造禁止**: ID/URL/固有名/数値/事実を根拠なく作らない。不明は `TBD` / `不明（要確認）` と明記する。
 - **秘密情報禁止**: 鍵・トークン・個人情報・内部 URL 等を追加・出力しない。
 - **推論補完時**: `TBD（推論: {根拠}）` + 「この回答はCopilot推論をしたものです。」と明記する。
@@ -36,7 +42,7 @@
 - **恒久成果物からの work/ 出典引用の禁止（絶対）**：`docs/` `knowledge/` `qa/` `src/` 等の恒久成果物は使い捨ての `work/` 配下パスをリンク／コードスパンで出典引用してはならない。唯一の例外は `CHANGELOG.md` で、そこでもパス／リンクは禁止し要約文字列のみ許可する。詳細は Skill `work-artifacts-layout` 参照。
 - **knowledge/ 書き込みルール（絶対）**：`knowledge/` 配下へのファイル書き込みも Skill `work-artifacts-layout` §4.1 準拠（削除→新規作成）。例外なし。
 - **knowledge/ 同時更新防止（LOCK）**: `knowledge/` 本体ファイルへ LOCK 情報を埋め込んではならない。LOCK が必要な場合は `work/` 配下のロックファイル、または Issue ラベル等、`knowledge/` の「削除→新規作成」ルールと両立する方式を用いる。他の Agent により対象 D{NN} の LOCK が取得済みであることを検知した場合、後続 Agent は当該 `knowledge/` ファイルを **読み取り専用** とし、書き込みを中止して再実行に回す。
-- **original-docs/ 読み取り専用（絶対）**: `original-docs/` 配下のファイルは全 Agent から **読み取り専用**。変更・削除・追記を禁止。
+- **docs-original/ 読み取り専用（絶対）**: `docs-original/` 配下のファイルは全 Agent から **読み取り専用**。変更・削除・追記を禁止。
 - **Markdown 横断検索の既定手段**: リポジトリ内 Markdown 群への横断検索・要件参照は `markdown-query` Skill（`python -m mdq search`）を最初に試す。0 ヒット時、対象が `.md` 以外を含む場合、または編集対象ファイルが既知の場合に限り `grep_search` / `read_file` へフォールバックする。**ただし、fail-closed shell allowlist が markdown-query CLI を許可しない Step では、CLI を実行せず read/search tool で宣言済み入力を参照する。** 詳細は Skill `markdown-query`（`.github/skills/markdown-query/SKILL.md`）参照。
 - **ソースコード横断検索の既定手段**: リポジトリ内のソースコード（`.py` / `.cs` / `.js` / `.ts` / `.sh` / `.ps1` 等）に対する「どこで定義されているか」「何が呼んでいるか」「実装を探す」系の調査は `code-query` Skill（`python -m cq search`）を最初に試す。0 ヒット時、または編集対象ファイルが既知の場合に限り `grep_search` / `read_file` へフォールバックする。**ただし、fail-closed shell allowlist が code-query CLI を許可しない Step では、CLI を実行せず read/search tool で宣言済み入力を参照する。** 対象が `.md` の場合は `markdown-query` を使う（両者は索引対象が排他）。詳細は Skill `code-query`（`.github/skills/code-query/SKILL.md`）参照。
 - **ripgrep (rg) 利用ガイドライン（絶対）**:
@@ -157,11 +163,11 @@ Agent の動作仕様本文は `.github/prompts/<Name>.prompt.md` に、入出�
 - Custom Agent 固有の追加 Skills は `## Agent 固有の Skills 依存` セクションに明示する。
 - SKILL.md の情報を採用しない場合は、Custom Agent 側でその理由を明記すること（Non-goals 等で）。
 
-**original-docs/ に関するルール（全 Agent 必須）**:
+**docs-original/ に関するルール（全 Agent 必須）**:
 - 読み取り専用ルール: §0 参照（変更・削除・追記禁止）
-- `original-docs/` のファイルを knowledge/ に取り込む作業は `KnowledgeManager` Agent が担当
+- `docs-original/` のファイルを knowledge/ に取り込む作業は `KnowledgeManager` Agent が担当
 - 他の Agent は、ユースケースに応じて以下のいずれかの参照方式を選択できる:
-  - **直接参照**: `original-docs/` を直接読み取る（横断分析・質問票作成・早期フィードバック等で有効）
+  - **直接参照**: `docs-original/` を直接読み取る（横断分析・質問票作成・早期フィードバック等で有効）
   - **knowledge/ 経由参照**: `KnowledgeManager` が生成した `knowledge/D01〜D21-*.md` を参照
   - **ハイブリッド**: 両方を参照
 - どの参照方式を採用したかは Agent 仕様の `## 入力` セクションに明記すること

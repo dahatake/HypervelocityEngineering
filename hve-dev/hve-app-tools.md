@@ -39,13 +39,15 @@
 
 CHANGELOG への追記は、変更を加えた当人がソース変更とあわせて行うことを推奨する。リリース時にまとめて書く運用は変更内容の取りこぼしを生むため、§3・§4 は全エンジニアの必須知識である。
 
+> **Copilot が実行する HVE 関連ジョブ**では、[`.github/copilot-instructions.md`](../.github/copilot-instructions.md) の「HVE の版管理と変更履歴」が最優先です。HVE の実装・Prompt・Skill・Workflow・契約を変更した各ジョブは、完了報告前に PATCH を 1 回だけ増やし、変更履歴と同じ変更セットで同期します。MINOR 以上への更新はユーザーの明示判断だけで行います。ここで説明する `bump-my-version` の一括リリース手順は、既存の `[Unreleased]` エントリーを誤って別ジョブのリリースへ含めない場合にのみ使用してください。
+
 ### 0.3 前提とする運用形態
 
 本書の手順は、現リポジトリの実態に即した以下の運用を前提とする。**この前提から外れる運用（PyPI 公開、CI による自動リリース等）は本書のスコープ外**。
 
 - **配布形態**: PyPI 等への公開は行わず、リポジトリを `git clone` した上で `hve/setup-hve.{ps1,sh,cmd}` から editable install (`pip install -e .`) する社内運用
 - **バージョン情報の保持箇所**: `pyproject.toml`（`[project].version` と `[tool.bumpversion].current_version`）と `hve/__init__.py` (`__version__`)
-- **変更履歴**: リポジトリ直下の [CHANGELOG.md](../CHANGELOG.md) に集約。`bump-my-version` 実行時に `## [Unreleased]` 見出しを自動で `## [x.y.z] - YYYY-MM-DD` 形式に昇格する
+- **変更履歴**: リポジトリ直下の [CHANGELOG.md](../CHANGELOG.md) に集約。`bump-my-version` の見出し自動挿入は、`[Unreleased]` の全エントリーが同一リリースに属する明示的な一括リリースだけで使用する。Copilot ジョブでは既存の `[Unreleased]` エントリーを保持し、対象ジョブの版見出しをその内容の後ろへ手動配置する
 - **同梱パッケージ**: リポジトリ直下の `mdq/` は `hve` 本体と同時にビルドされるが、`tools/skills/markdown_query/` 配下のスキル本体と vendored コピーは独立ライフサイクルで管理され、`bump-my-version` の対象外（詳細は [§7](#7-対象外パッケージmdq-等の運用)）
 
 ### 0.4 用語
@@ -87,7 +89,7 @@ CHANGELOG への追記は、変更を加えた当人がソース変更とあわ�
  └─────────────────────────┘
 ```
 
-`bump-my-version` は上記 ①②③ のうち、`CHANGELOG.md` の見出し昇格・バージョン番号の同時更新・commit・Git タグ作成までを 1 コマンドで実行する。push のみ手動である（[§5.5](#55-リモートへの反映)）。
+`bump-my-version` は、意図的にまとめたリリースに限り、上記 ①②③ のうち、`CHANGELOG.md` の見出し昇格・バージョン番号の同時更新・commit・Git タグ作成までを 1 コマンドで実行する。push のみ手動である（[§5.5](#55-リモートへの反映)）。Copilot ジョブでは、既存の `[Unreleased]` エントリーを含む場合にこの自動昇格を使わず、最優先規約どおり同じ変更セットで手動同期する。
 
 ### 1.2 `hve` における配布チャネル
 
@@ -109,14 +111,14 @@ CHANGELOG への追記は、変更を加えた当人がソース変更とあわ�
 | Step | 内容 | 詳細 |
 |---|---|---|
 | 1 | `CHANGELOG.md` の `## [Unreleased]` 配下のエントリを確認し、書式が整っているか確認 | [§4](#4-changelogmd-の書き方) |
-| 2 | 変更の最大インパクトから `patch` / `minor` / `major` を判定 | [§3.3](#33-patch--minor--major-の判定) |
+| 2 | 変更の最大インパクトから `patch` / `minor` / `major` を判定（Copilot ジョブはユーザーが明示しない限り `patch`） | [§3.3](#33-patch--minor--major-の判定) |
 | 3 | `git status` がクリーンであることを確認 | [§5.1](#51-前提条件) |
 | 4 | （任意）dry-run で挙動確認 | [§5.4](#54-事前確認dry-run) |
-| 5 | `bump-my-version bump {patch\|minor\|major}` を実行 | [§5.3](#53-バージョンアップの実行) |
+| 5 | 一括リリース時だけ `bump-my-version bump {patch\|minor\|major}` を実行（Copilot ジョブは手動同期） | [§5.3](#53-バージョンアップの実行) |
 | 6 | `git push --follow-tags` でリモートへ反映 | [§5.5](#55-リモートへの反映) |
 | 7 | 動作確認（`hve.__version__` と `pip show hve` の一致） | [§6.1](#61-動作確認) |
 
-Step 1 は変更を加えた **各エンジニアが PR / 作業の一環として行う**。Step 2 以降は **リリース担当者** が変更の集積を見て判定・実行する。
+Step 1 は変更を加えた **各エンジニアが PR / 作業の一環として行う**。通常の一括リリースでは Step 2 以降を **リリース担当者** が変更の集積を見て判定・実行する。Copilot が実行する HVE 関連ジョブでは、最優先規約により、完了前の PATCH 更新と変更履歴同期をジョブ自身が実施する。
 
 ---
 
@@ -148,7 +150,7 @@ Step 1 は変更を加えた **各エンジニアが PR / 作業の一環とし�
 | 2 | [pyproject.toml](../pyproject.toml) | `[tool.bumpversion]` の `current_version = "x.y.z"` |
 | 3 | [hve/\_\_init\_\_.py](../hve/__init__.py) | `__version__ = "x.y.z"` |
 
-加えてリリース時には [CHANGELOG.md](../CHANGELOG.md) の `## [Unreleased]` 見出し直下に `## [x.y.z] - YYYY-MM-DD` 見出しが自動挿入される（[§4.3](#43-bump-my-version-による自動昇格)）。
+加えて、明示的な一括リリース時には [CHANGELOG.md](../CHANGELOG.md) の `## [Unreleased]` 見出し直下に `## [x.y.z] - YYYY-MM-DD` 見出しが自動挿入される（[§4.3](#43-bump-my-version-による自動昇格)）。Copilot ジョブでは、既存の `[Unreleased]` 内容を維持するためこの自動挿入を使わない。
 
 > **補足**: `pyproject.toml` 内で `[project].version` と `[tool.bumpversion].current_version` の 2 箇所に同じ値が必要な理由は、前者がパッケージメタデータ用、後者が `bump-my-version` の差分計算用であり、ツール仕様上どちらも独立に解釈されるため。`bump-my-version` 1.x は `pyproject.toml` を暗黙の設定ファイルとして扱い両方を同時更新する。
 
@@ -188,6 +190,8 @@ Step 1 は変更を加えた **各エンジニアが PR / 作業の一環とし�
 
 `mdq/` と `cq/` は `hve` 本体と同時にビルドされる一方、それぞれ engine の `__version__` を持つ。**各 Skill、独立 GUI、移植用キット、および vendored コピーは HVE と独立したライフサイクル**で管理され、`bump-my-version` の対象外である。詳細と更新手順は [§7](#7-対象外パッケージmdq-等の運用) を参照。
 
+ここでの「独立」は各コンポーネント固有の版番号を個別に管理する意味であり、HVE の実行契約を構成する Prompt・Skill・Workflow の変更を HVE パッケージ PATCH から除外する意味ではない。Copilot ジョブには [§0.2](#02-想定読者) の注記が示す最優先規約を適用する。
+
 ### 2.6 `setup-hve` スクリプトとの関係
 
 リポジトリ直下の `hve/setup-hve.{ps1,sh,cmd}` は、初回環境構築（`.venv` 作成 → `pip install -e .[extras...]` → NLTK データ DL → GUI アセット DL 等）を担う。**バージョン操作とは独立** であり、bump 後に setup-hve を再実行する必要はない。ただし bump で extras 定義が変わった場合（本書スコープ外）は、利用者側で `pip install -e .[...] --upgrade` の再実行が必要となる。
@@ -210,7 +214,7 @@ Step 1 は変更を加えた **各エンジニアが PR / 作業の一環とし�
 
 ### 3.2 SemVer §4 — 0.x 系の解釈
 
-`hve` の現バージョンは `0.3.0` であり、SemVer §4 の対象である。
+`hve` は 0.x 系（現在値の正本は [pyproject.toml](../pyproject.toml) の `[project].version`）であり、SemVer §4 の対象である。
 
 > **SemVer §4**: メジャーバージョン 0 (0.y.z) は初期開発用である。いかなる時点でもパブリック API は変更されてよい。このバージョンのソフトウェアは安定とみなすべきではない。
 
@@ -227,6 +231,8 @@ Step 1 は変更を加えた **各エンジニアが PR / 作業の一環とし�
 ### 3.3 PATCH / MINOR / MAJOR の判定
 
 複数の変更が混在する場合、**最もインパクトの大きい変更に合わせて** bump 種別を決定する（例: バグ修正 1 件と機能追加 1 件 → `minor`）。
+
+ただし Copilot が実行する HVE 関連ジョブでは、ユーザーが MINOR / MAJOR を明示的に判断しない限り、変更内容にかかわらず PATCH を 1 回だけ増やす。この例外はジョブ単位の追跡可能性を優先する最優先規約であり、以下の判定フローは人間が管理する一括リリースの判断に使用する。
 
 #### 1.x 以降での判定フロー
 
@@ -325,6 +331,8 @@ filename = "CHANGELOG.md"
 search   = "## [Unreleased]"
 replace  = "## [Unreleased]\n\n## [{new_version}] - {now:%Y-%m-%d}"
 ```
+
+> **Copilot ジョブでは通常使用しない**: この置換は見出し直後へ版見出しを挿入するため、既に存在する `[Unreleased]` エントリーを新しい版へ取り込む。一括リリースとして全エントリーを同じ版に含めると確認できる場合だけ使用し、それ以外は既存内容の後ろに対象ジョブの版見出しを手動で追加する。
 
 #### 昇格前
 
@@ -447,6 +455,8 @@ GUI から ARD 等の Workflow を実行中に、過去タスク（例: `Issue-g
 
 [§3.3](#33-patch--minor--major-の判定) の判定フローに従い、変更内容で `patch` / `minor` / `major` を選ぶ。
 
+このコマンドは一括リリース向けである。Copilot ジョブで既存の `[Unreleased]` エントリーがある場合は、`CHANGELOG.md` の自動昇格を避けるために実行せず、版番号と対象ジョブの変更履歴を手動で同じ変更セットへ同期する。Copilot ジョブの `minor` / `major` はユーザーの明示判断がある場合だけ選択する。
+
 | 変更内容 | コマンド | 例 |
 |---|---|---|
 | バグ修正のみ | `bump patch` | `0.1.0` → `0.1.1` |
@@ -548,15 +558,15 @@ git push
 
 | # | ファイル | 現在の値 | 用途 |
 |---|---|---|---|
-| 1 | [cq/\_\_init\_\_.py](../cq/__init__.py) | `__version__ = "0.2.0"` | Code Query engine |
-| 2 | [.github/skills/code-query/SKILL.md](../.github/skills/code-query/SKILL.md) | `version: 0.2.0` | Code Query Skill |
-| 3 | [tools/skills/code_query/pyproject.toml](../tools/skills/code_query/pyproject.toml) | `version = "0.2.0"` | `code-query-gui` distribution |
-| 4 | [tools/for-other-repo/code-query/package.toml](../tools/for-other-repo/code-query/package.toml) | `version = "1.2.0"` | Code Query 移植用キット |
-| 5 | [mdq/\_\_init\_\_.py](../mdq/__init__.py) | `__version__ = "0.6.0"` | Markdown Query engine |
-| 6 | [.github/skills/markdown-query/SKILL.md](../.github/skills/markdown-query/SKILL.md) | `version: 0.6.0` | Markdown Query Skill |
-| 7 | [tools/skills/markdown_query/pyproject.toml](../tools/skills/markdown_query/pyproject.toml) | `version = "0.2.0"` | `markdown-query-gui` distribution |
-| 8 | [tools/for-other-repo/markdown-query/package.toml](../tools/for-other-repo/markdown-query/package.toml) | `version = "1.2.0"` | Markdown Query 移植用キット |
-| 9 | [tools/for-other-repo/tool-search/package.toml](../tools/for-other-repo/tool-search/package.toml) | `version = "1.2.0"` | Tool Search 移植用キット |
+| 1 | [cq/\_\_init\_\_.py](../cq/__init__.py) | `__version__ = "0.4.0"` | Code Query engine |
+| 2 | [.github/skills/code-query/SKILL.md](../.github/skills/code-query/SKILL.md) | `version: 0.4.0` | Code Query Skill |
+| 3 | [tools/skills/code_query/pyproject.toml](../tools/skills/code_query/pyproject.toml) | `version = "0.3.0"` | `code-query-gui` distribution |
+| 4 | [tools/for-other-repo/code-query/package.toml](../tools/for-other-repo/code-query/package.toml) | `version = "1.3.0"` | Code Query 移植用キット |
+| 5 | [mdq/\_\_init\_\_.py](../mdq/__init__.py) | `__version__ = "0.8.0"` | Markdown Query engine |
+| 6 | [.github/skills/markdown-query/SKILL.md](../.github/skills/markdown-query/SKILL.md) | `version: 0.8.0` | Markdown Query Skill |
+| 7 | [tools/skills/markdown_query/pyproject.toml](../tools/skills/markdown_query/pyproject.toml) | `version = "0.3.0"` | `markdown-query-gui` distribution |
+| 8 | [tools/for-other-repo/markdown-query/package.toml](../tools/for-other-repo/markdown-query/package.toml) | `version = "1.3.0"` | Markdown Query 移植用キット |
+| 9 | [tools/for-other-repo/tool-search/package.toml](../tools/for-other-repo/tool-search/package.toml) | `version = "1.3.0"` | Tool Search 移植用キット |
 
 > **注**: `tools/skills/*/vendor/` と `tools/skills/*/skill/` は正本から生成する。版数変更時も直接編集せず、各キットの `sync-vendor` を実行して同期する。
 

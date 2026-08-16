@@ -27,7 +27,6 @@ _TEMPLATES_WITH_REVIEW = [
     "dataflow-dev.yml",
     "sourcecode-to-documentation.yml",
     "knowledge-management.yml",
-    "original-docs-review.yml",
 ]
 
 # model ドロップダウンを持つ全 Issue Template (setup-labels.yml は除外)
@@ -41,7 +40,6 @@ _TEMPLATES_WITH_MODEL = [
     "dataflow-dev.yml",
     "sourcecode-to-documentation.yml",
     "knowledge-management.yml",
-    "original-docs-review.yml",
 ]
 
 # enable_auto_merge を持つべき Issue Template（全ワークフロー対象テンプレート）
@@ -55,7 +53,6 @@ _TEMPLATES_WITH_AUTO_MERGE = [
     "dataflow-dev.yml",
     "sourcecode-to-documentation.yml",
     "knowledge-management.yml",
-    "original-docs-review.yml",
 ]
 
 _TEMPLATES_WITH_RUNNER_TYPE = [
@@ -68,7 +65,6 @@ _TEMPLATES_WITH_RUNNER_TYPE = [
     "dataflow-dev.yml",
     "sourcecode-to-documentation.yml",
     "knowledge-management.yml",
-    "original-docs-review.yml",
 ]
 
 _MAX_TEMPLATE_SECTION_INDENT = 4
@@ -108,8 +104,8 @@ def _extract_template_field_block(content: str, field_id: str) -> str:
     return m.group(0) if m else ""
 
 
-class TestAkmAqodEnableReview(unittest.TestCase):
-    """AKM / AQOD テンプレートが enable_review を持つことを検証する（Phase 6 追加）。"""
+class TestAkmEnableReview(unittest.TestCase):
+    """AKM テンプレートが enable_review を持つことを検証する。"""
 
     def _read_template(self, filename: str) -> str:
         return (_TEMPLATE_DIR / filename).read_text(encoding="utf-8")
@@ -117,11 +113,6 @@ class TestAkmAqodEnableReview(unittest.TestCase):
     def test_akm_template_has_enable_review(self) -> None:
         """AKM テンプレートが enable_review チェックボックスを持つこと。"""
         content = self._read_template("knowledge-management.yml")
-        self.assertIn("id: enable_review", content)
-
-    def test_aqod_template_has_enable_review(self) -> None:
-        """AQOD テンプレートが enable_review チェックボックスを持つこと。"""
-        content = self._read_template("original-docs-review.yml")
         self.assertIn("id: enable_review", content)
 
     def test_all_target_templates_have_enable_review(self) -> None:
@@ -136,13 +127,6 @@ class TestAkmAqodEnableReview(unittest.TestCase):
         content = self._read_template("knowledge-management.yml")
         self.assertIn("レビュー設定", content)
         self.assertIn("adversarial-review", content)
-
-    def test_aqod_review_label_text(self) -> None:
-        """AQOD テンプレートの enable_review ラベルが正しいこと。"""
-        content = self._read_template("original-docs-review.yml")
-        self.assertIn("レビュー設定", content)
-        self.assertIn("adversarial-review", content)
-
 
 class TestAkmWorkflowEnableReview(unittest.TestCase):
     """AKM ワークフローが enable_review を正しくパース・適用することを検証する（Phase 6 追加）。"""
@@ -187,41 +171,6 @@ class TestAkmWorkflowEnableReview(unittest.TestCase):
         """AKM ワークフローの Step Issue に専用レビューラベルが条件付きで含まれること。"""
         content = self._read_workflow("auto-knowledge-management-reusable.yml")
         self.assertIn('"adversarial-review"', content)
-
-
-class TestAqodWorkflowEnableReview(unittest.TestCase):
-    """AQOD ワークフローが enable_review を正しくパース・適用することを検証する（Phase 6 修正）。"""
-
-    def _read_workflow(self, filename: str) -> str:
-        return (_WORKFLOW_DIR / filename).read_text(encoding="utf-8")
-
-    def test_aqod_workflow_parses_review_section(self) -> None:
-        """AQOD ワークフローが ### レビュー設定 セクションをパースすること。"""
-        content = self._read_workflow("auto-aqod.yml")
-        self.assertIn("レビュー設定", content)
-        self.assertIn("adversarial_review", content)
-
-    def test_aqod_workflow_has_adversarial_review_variable(self) -> None:
-        """AQOD ワークフローが ADVERSARIAL_REVIEW bash 変数を持つこと。"""
-        content = self._read_workflow("auto-aqod.yml")
-        self.assertIn("ADVERSARIAL_REVIEW", content)
-
-    def test_aqod_workflow_step_issue_uses_dynamic_adversarial_review(self) -> None:
-        """AQOD Step Issue の専用レビュー指定がハードコード true でないこと。"""
-        content = self._read_workflow("auto-aqod.yml")
-        self.assertNotIn('"<!-- adversarial-review: true -->"', content)
-        # 動的値が使われていること
-        self.assertIn("adversarial_review", content)
-
-    def test_aqod_workflow_labels_not_hardcoded_with_adversarial_review(self) -> None:
-        """AQOD ワークフローの LABELS が専用レビューを常時含まないこと。"""
-        content = self._read_workflow("auto-aqod.yml")
-        self.assertNotIn('\'["aqod:ready","adversarial-review"]\'', content)
-
-    def test_aqod_workflow_adds_adversarial_review_label_conditionally(self) -> None:
-        """AQOD ワークフローが ADVERSARIAL_REVIEW 条件付きでラベルを付与すること。"""
-        content = self._read_workflow("auto-aqod.yml")
-        self.assertIn('ADVERSARIAL_REVIEW}" == "true"', content)
 
 
 class TestEnableAutoMerge(unittest.TestCase):
@@ -497,21 +446,19 @@ class TestRunnerTypeOptionParity(unittest.TestCase):
         self.assertIn("runner_type = 'self-hosted'", content)
         self.assertIn("f.write(f'runner_type={runner_type}", content)
 
-    def test_dispatcher_forwards_runner_type_for_nine_targets_only(self) -> None:
-        """FR-CLOUD-06 により ASDW-WEB ジョブを削除したため runner_type 伝搬先は 9 ターゲット。"""
+    def test_dispatcher_forwards_runner_type_for_eight_targets_only(self) -> None:
+        """Cloud非対応Workflowを除き、runner_type伝搬先は8ターゲット。"""
         content = self._read_workflow("auto-orchestrator-dispatcher.yml")
         marker = "runner_type: ${{ needs.detect.outputs.runner_type }}"
-        self.assertEqual(content.count(marker), 9)
+        self.assertEqual(content.count(marker), 8)
         self.assertIn("setup_labels:", content)
-        self.assertIn("aqod:", content)
-        setup_labels_block = content.split("setup_labels:", 1)[1].split("aqod:", 1)[0]
+        setup_labels_block = content.split("setup_labels:", 1)[1]
         self.assertNotIn("runner_type", setup_labels_block)
 
     def test_pr4_reusable_workflows_accept_runner_type_and_switch_all_jobs(self) -> None:
         expected_job_counts = {
             "auto-app-documentation-reusable.yml": 2,
             "auto-knowledge-management-reusable.yml": 2,
-            "auto-aqod.yml": 2,
         }
         for filename, expected_job_count in expected_job_counts.items():
             with self.subTest(workflow=filename):

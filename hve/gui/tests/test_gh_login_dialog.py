@@ -23,8 +23,8 @@ from PySide6.QtWidgets import QApplication, QLabel, QWidget  # noqa: E402
 
 
 _PLATFORM_SETUP_CASES = [
-    pytest.param("win32", r"hve\setup-hve.cmd", id="windows"),
-    pytest.param("linux", "./hve/setup-hve.sh", id="posix"),
+    pytest.param("win32", "setup-hve.cmd", id="windows"),
+    pytest.param("linux", "setup-hve.sh", id="posix"),
 ]
 
 

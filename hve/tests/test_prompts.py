@@ -118,16 +118,6 @@ class TestQaPromptV2(unittest.TestCase):
             )
 
 
-class TestAqodPrompt(unittest.TestCase):
-    """AQOD_PROMPT は R3.5 (2026-05-20) で死コードとして削除済み。
-
-    本テストクラスは互換性のため空殻として残置し、リグレッション検出時に
-    削除経緯を追跡できるようにする。次マイナーリリースで完全削除予定。
-    """
-
-    pass
-
-
 class TestPreExecutionQaPromptV2(unittest.TestCase):
     def test_is_string(self) -> None:
         self.assertIsInstance(PRE_EXECUTION_QA_PROMPT_V2, str)
@@ -234,23 +224,25 @@ class TestMainArtifactImprovementApplyPrompt(unittest.TestCase):
         self.assertIn("STATUS: PARTIAL", MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT)
 
     def test_contains_original_docs_rule(self) -> None:
-        """original-docs/ 変更禁止の記述が含まれる。"""
-        self.assertIn("original-docs/", MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT)
+        """docs-original/ 変更禁止の記述が含まれる。"""
+        self.assertIn("docs-original/", MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT)
 
     def test_contains_readme_prohibition(self) -> None:
         """/README.md 変更禁止の記述が含まれる。"""
         self.assertIn("/README.md", MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT)
 
-    def test_contains_aqod_format_rule(self) -> None:
-        """AQOD 形式維持の記述が含まれる。"""
-        self.assertIn("aqod", MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT)
+    def test_contains_adi_questionnaire_format_rule(self) -> None:
+        """ADI Step 1.1 / 1.2 の原本質問票形式維持ルールが含まれる。"""
+        self.assertIn("ADI 原本質問票", MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT)
+        self.assertIn("`1.1` または `1.2`", MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT)
+        self.assertNotIn("aq" + "od", MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT.lower())
 
     def test_format_with_placeholders_works(self) -> None:
         """プレースホルダーを埋めた場合、KeyError が発生しないことを確認。"""
         try:
             result = MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT.format(
                 source_phase="Phase 3",
-                workflow_id="aqod",
+                workflow_id="adi",
                 step_id="1.1",
                 step_title="テスト",
                 custom_agent="TestAgent",
@@ -491,6 +483,20 @@ class TestYamlWorkflowPromptDriftPhase5(unittest.TestCase):
         self.assertIn("ENABLE_COPILOT_QA_ASSIGN", content)
         self.assertIn("source \"${GITHUB_WORKSPACE}/.github/scripts/bash/lib/copilot-assign.sh\"", content)
         self.assertIn(':qa-drafting', content)
+        self.assertIn("qa_state_count", content)
+        self.assertIn("複数の QA 状態ラベル", content)
+        drafting_add = content.index('--add-label "${QA_DRAFTING_LABEL}"')
+        ready_delete = content.index('/labels/${QA_READY_LABEL}', drafting_add)
+        self.assertLess(drafting_add, ready_delete)
+        self.assertIn("qa-drafting をロールバック", content)
+        self.assertIn("final_labels_json", content)
+
+    def test_pre_qa_assignment_accepts_and_validates_hyphenated_branch(self) -> None:
+        """pre-QA assign が feature/foo-bar を main へ誤フォールバックしないこと。"""
+        content = self._read_yaml_content()
+        self.assertIn("r'<!--\\s*branch:\\s*([^>]+?)\\s*-->'", content)
+        self.assertIn('[[ "${BRANCH}" =~ ^[A-Za-z0-9._/-]+$', content)
+        self.assertIn('"${BRANCH}" != *".."*', content)
 
     def test_yaml_has_adversarial_review_opt_out_marker(self) -> None:
         """YAML auto-review ジョブに専用 opt-out マーカーが含まれること。"""
@@ -525,7 +531,6 @@ class TestQaDraftingLabels(unittest.TestCase):
             "aag:qa-drafting",
             "aagd:qa-drafting",
             "akm:qa-drafting",
-            "aqod:qa-drafting",
             "adoc:qa-drafting",
         ]:
             self.assertIn(label, content)

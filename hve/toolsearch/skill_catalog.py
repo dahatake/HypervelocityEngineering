@@ -18,6 +18,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from .types import (
     SKILL_SERVER,
     SKILL_TOOL_PREFIX,
+    PinMode,
     ToolEntry,
 )
 
@@ -179,7 +180,7 @@ def skill_manifest_pins(
     manifest: Mapping[str, Any],
     workflow_id: str | None,
     step_id: str | None,
-) -> dict[str, str]:
+) -> dict[str, PinMode]:
     """``hve/skill_manifest.json`` の必須 Skill を pin 定義へ変換する（FR-TS-03）。
 
     ``workflow_defaults`` と ``required_skills[workflow][step]`` を ``always`` として扱う。
@@ -187,7 +188,7 @@ def skill_manifest_pins(
     """
     if not workflow_id:
         return {}
-    pins: dict[str, str] = {}
+    pins: dict[str, PinMode] = {}
 
     defaults = manifest.get("workflow_defaults")
     if isinstance(defaults, Mapping):

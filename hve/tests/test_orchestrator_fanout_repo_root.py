@@ -129,3 +129,32 @@ class TestFanoutRepoRootIsWorkingRepo:
                     f"{segment}"
                 )
         assert checked, "_build_fleet_wave_runner の repo_root 代入が見つかりません"
+
+    def test_fleet_collector_receives_wave_step_ids(self) -> None:
+        """FR-RTO-07: Wave の Step 集合を FleetEventCollector へ注入する。
+
+        注入がないと worker → Step の対応を照合する対象集合が存在せず、
+        Fleet 経路の消費は常に帰属不能となる。
+        """
+        source, tree = _orchestrator_ast()
+        targets = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name == "_build_fleet_wave_runner"
+        ]
+        assert targets, "_build_fleet_wave_runner が見つかりません"
+        calls = [
+            node
+            for func in targets
+            for node in ast.walk(func)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "FleetEventCollector"
+        ]
+        assert calls, "_build_fleet_wave_runner 内の FleetEventCollector 生成が見つかりません"
+        for call in calls:
+            keywords = {kw.arg for kw in call.keywords}
+            assert "step_ids" in keywords, (
+                "FleetEventCollector へ Wave の Step 集合 (step_ids) を注入してください: "
+                f"{_segment(source, call)}"
+            )

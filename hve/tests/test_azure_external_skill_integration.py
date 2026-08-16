@@ -21,6 +21,7 @@ from hve.workflow_registry import get_workflow
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _MANIFEST = _REPO_ROOT / "hve" / "skill_manifest.json"
 _PINNED_AZURE = {
+    "tools": ["*"],
     "command": "npx",
     "args": ["-y", "@azure/mcp@latest", "server", "start"],
 }

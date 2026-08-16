@@ -13,7 +13,7 @@
 - **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
 - **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
 - **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
 - **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
 - **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 
@@ -103,7 +103,7 @@ B) GitHub Actions CI/CD ワークフロー
     - `workflow_dispatch`（手動実行）
     - `push`（`branches: [main]` かつ `paths: ['src/dataflow/**', '.github/workflows/deploy-batch-functions.yml']`）
     - ※ `main` への全 push で走らないよう、上記 `paths` フィルタを必ず指定する。
-  - ステップ: ビルド（`dotnet build`）→ テスト（`dotnet test`）→ デプロイ（`azure/functions-action` または `azure/webapps-deploy`）
+  - ステップ: 依存導入（`pip install -r requirements.txt`）→ テスト（`pytest`）→ デプロイ（`azure/functions-action` または `azure/webapps-deploy`）
   - 環境変数/シークレットは GitHub Secrets から取得する（ハードコード禁止）。
   - デプロイ対象: `src/dataflow/` 配下の全データフローアプリ（またはジョブ別に分割する場合は `src/dataflow/{jobId}-{jobNameSlug}/`）。
   - 既存の `.github/workflows/deploy-api-functions.yml` がある場合はパターンを踏襲する。
@@ -133,7 +133,7 @@ B) GitHub Actions CI/CD ワークフロー
 | AC-2 | `verify-batch-resources.sh` が exit 0 で完了し、全リソースの `provisioningState == "Succeeded"` が確認できる | |
 | AC-3 | Function App / Storage Account / Service Bus / その他（batch-service-catalog.md 記載リソース）が Azure ポータルまたは CLI で実在する | |
 | AC-4 | `.github/workflows/deploy-batch-functions.yml` が YAML 構文的に正しい（`yamllint` またはスキーマ確認） | |
-| AC-5 | `dotnet build`・`dotnet test` がリポジトリルートで成功する | |
+| AC-5 | 依存導入と `pytest` がリポジトリルートで成功する | |
 
 #### 実在系 AC の記録要件（必須）
 

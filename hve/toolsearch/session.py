@@ -76,12 +76,15 @@ def build_session_toolset(
     差し替えが無効なとき、``enabled=False``（呼び出し側のゲート）のとき、
     または `policy.json` が壊れているときは ``([], None)`` を返す
     （検索は SDK 既定のまま動き続ける）。ポリシー不正で Step を落とさない。
+
+    `policy.json` の解決先は表示・保存と同一にする（FR-TS-03）。実行時だけ
+    ``repo_root`` を渡さないと、GUI が編集したリポジトリローカルの上書きが効かない。
     """
     if not enabled or not is_ranking_override_enabled(config):
         return [], None
 
     try:
-        policy = ToolSearchPolicy.load()
+        policy = ToolSearchPolicy.load(repo_root=repo_root)
     except PolicyError:
         return [], None
 

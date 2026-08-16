@@ -31,18 +31,19 @@
   <!-- 左ペイン: ワークフロー選択 -->
   <rect x="56" y="154" width="290" height="250" rx="6" fill="white" stroke="#28a745" stroke-width="1"/>
   <text x="201" y="171" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">左ペイン: ワークフロー選択（チェックボックス）</text>
-  <text x="70" y="189" font-size="9" fill="#586069">☑ aas — アプリアーキテクチャ設計</text>
-  <text x="70" y="205" font-size="9" fill="#586069">☐ aad-web — Web/Microservice 設計</text>
-  <text x="70" y="221" font-size="9" fill="#586069">☐ asdw-web — Web/Microservice 実装・デプロイ</text>
-  <text x="70" y="237" font-size="9" fill="#586069">☐ adfd — Dataflow 設計</text>
-  <text x="70" y="253" font-size="9" fill="#586069">☐ adfdv — Dataflow 実装・デプロイ</text>
-  <text x="70" y="269" font-size="9" fill="#586069">☐ aag — AI Agent 設計</text>
-  <text x="70" y="285" font-size="9" fill="#586069">☐ aagd — AI Agent 実装・デプロイ</text>
-  <text x="70" y="301" font-size="9" fill="#586069">☐ akm — Knowledge 生成・管理</text>
-  <text x="70" y="317" font-size="9" fill="#586069">☐ aqod — Original Docs 分析</text>
-  <text x="70" y="333" font-size="9" fill="#586069">☐ adoc — Source Code → Documentation</text>
-  <text x="70" y="349" font-size="9" fill="#586069">☐ ard — 要求定義（Auto Requirement Definition）</text>
-  <text x="201" y="372" text-anchor="middle" font-size="9" fill="#959da5">全 11 ワークフロー（複数選択可）</text>
+  <text x="70" y="189" font-size="9" fill="#586069">☐ ard — 要求定義</text>
+  <text x="70" y="203" font-size="9" fill="#586069">☑ aas — アプリアーキテクチャ設計</text>
+  <text x="70" y="217" font-size="9" fill="#586069">☐ aad-web — Web/Microservice 設計</text>
+  <text x="70" y="231" font-size="9" fill="#586069">☐ asdw-web — Web/Microservice 実装・デプロイ</text>
+  <text x="70" y="245" font-size="9" fill="#586069">☐ adfd — Dataflow 設計</text>
+  <text x="70" y="259" font-size="9" fill="#586069">☐ adfdv — Dataflow 実装・デプロイ</text>
+  <text x="70" y="273" font-size="9" fill="#586069">☐ aag — AI Agent 設計</text>
+  <text x="70" y="287" font-size="9" fill="#586069">☐ aagd — AI Agent 実装・デプロイ</text>
+  <text x="70" y="301" font-size="9" fill="#586069">☐ aar — Agentic Retrieval Add-on</text>
+  <text x="70" y="315" font-size="9" fill="#586069">☐ akm — Knowledge 生成・管理</text>
+  <text x="70" y="329" font-size="9" fill="#586069">☐ adi — 原本取込・質問票・選別</text>
+  <text x="70" y="343" font-size="9" fill="#586069">☐ adoc — Source Code → Documentation</text>
+  <text x="201" y="370" text-anchor="middle" font-size="9" fill="#959da5">全 12 ワークフロー（複数選択可）</text>
   <text x="201" y="387" text-anchor="middle" font-size="9" fill="#959da5">workflow_registry.list_workflows() から動的取得</text>
   <text x="201" y="399" text-anchor="middle" font-size="8.5" fill="#959da5">左下に「実行ステップ（チェック ON のみ）」も表示</text>
 
@@ -50,12 +51,12 @@
   <rect x="356" y="154" width="308" height="250" rx="6" fill="white" stroke="#6f42c1" stroke-width="1"/>
   <text x="510" y="171" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">右ペイン: オプション設定（QToolBox 16 カテゴリ）</text>
   <text x="368" y="189" font-size="9" fill="#586069">▼ C1 基本設定  --model / --review-model / --qa-model</text>
-  <text x="368" y="203" font-size="9" fill="#959da5">▶ C2 並列実行 / C3 自動プロンプト / C4 Work IQ</text>
+  <text x="368" y="203" font-size="9" fill="#959da5">▶ C2 並列実行 / C3 共通設定 / C4 Work IQ</text>
   <text x="368" y="217" font-size="9" fill="#959da5">▶ C5 Issue/PR / C6 出力制御 / C7 MCP・CLI 接続</text>
   <text x="368" y="231" font-size="9" fill="#959da5">▶ C8 タイムアウト / C9 ブランチ・ステップ</text>
-  <text x="368" y="245" font-size="9" fill="#959da5">▶ C10 アプリID / C11 AKM / C12 AQOD / C13 ADOC</text>
-  <text x="368" y="259" font-size="9" fill="#959da5">▶ C14 ARD（添付 D&amp;D）/ C15 追加 / C16 実行制御</text>
-  <text x="510" y="276" text-anchor="middle" font-size="8.5" fill="#959da5">選択ワークフローに応じて C10〜C14 を自動制御</text>
+  <text x="368" y="245" font-size="9" fill="#959da5">▶ C10 アプリID / C11 AKM / C13 ADOC</text>
+  <text x="368" y="259" font-size="9" fill="#959da5">▶ C14 ARD / C15 追加 / C16 実行 / C17 ADI</text>
+  <text x="510" y="276" text-anchor="middle" font-size="8.5" fill="#959da5">選択WFに応じて C10/C11/C13/C14/C17 を自動制御</text>
 
   <!-- コマンドプレビュー -->
   <rect x="366" y="285" width="288" height="44" rx="4" fill="#f6f8fa" stroke="#d1d5da" stroke-width="1"/>

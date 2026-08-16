@@ -61,7 +61,7 @@ else:
 - **Web UI 方式**: Issue 番号を run-id に流用（`work/run/issue-<N>/Issue-<N>/`）
 - **CLI SDK 方式**:
   - `work` ディレクトリ: `work/run/<run-id>/self-improve/step-{step_id}/`
-  - `qa` ファイル: `qa/{run_id}-{step_id}-execution-qa-merged.md`（HVE 実行補助 QA の回答マージ。AQOD 本体成果物 `qa/QA-DocConsistency-*.md` とは別物）
+    - `qa` ファイル: `qa/{run_id}-{step_id}-execution-qa-merged.md`（HVE 実行補助 QA の回答マージ。ADI の workflow 本体成果物 `qa/{key}-original-docs-questionnaire.md` / `qa/original-docs-cross-questionnaire.md` とは別物）
   - `qa-merged.md`（`execution-` なし）: **非推奨**（v2 以前の出力形式、新規生成は `execution-qa-merged.md` を使用）
   - ロックファイル: `work/run/<run-id>/self-improve/.self-improve-lock`
 

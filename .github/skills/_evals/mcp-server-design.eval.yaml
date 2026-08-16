@@ -21,7 +21,7 @@ test_cases:
     reason: "USE FOR: .github/.mcp.json, server configuration に該当する"
 
   - id: mcp-api-design-pattern
-    input: "MCP Server の API 設計パターンを参照したい。現在の構成（azure, context7）との整合性を確認してほしい"
+    input: "MCP Server の API 設計パターンを参照したい。現在の構成（azure, microsoft-learn）との整合性を確認してほしい"
     expected_trigger: true
     verify:
       - type: action

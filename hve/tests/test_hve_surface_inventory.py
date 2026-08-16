@@ -2,7 +2,8 @@
 
 The scope boundary is defined by `hve-dev/requirement-definition.md` §3.7 and must be
 decided by a single implementation. These tests fix that the decision lives in one
-module and that no consumer re-declares the boundary tables.
+module and that no consumer re-declares the boundary tables. The version-bump boundary
+(FR-MAINT-08) is a subset of the same decision and is therefore contracted here too.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from __future__ import annotations
 import ast
 import csv
 import importlib.util
+import tomllib
 from pathlib import Path
 from types import ModuleType
 
@@ -19,6 +21,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = REPO_ROOT / ".github" / "scripts"
 SHARED_SCOPE_MODULE = SCRIPTS_DIR / "hve_scope.py"
 VALIDATOR = SCRIPTS_DIR / "validate-hve-requirement-traceability.py"
+PYPROJECT = REPO_ROOT / "pyproject.toml"
 
 SCOPE_TABLE_NAMES = frozenset(
     {
@@ -40,7 +43,6 @@ IN_SCOPE_SAMPLES = (
     "hve-dev/requirement-definition.md",
     "template/sample.md",
     "tools/skills/markdown_query/vendor/mdq/store.py",
-    "users-guide/hve-cli-orchestrator-guide.md",
     ".github/copilot-instructions.md",
     ".github/instructions/hve-maintenance.instructions.md",
     ".github/skills/harness/adversarial-review/SKILL.md",
@@ -63,13 +65,13 @@ OUT_OF_SCOPE_SAMPLES = (
     "docs-generated/architecture/overview.md",
     "knowledge/D01-glossary.md",
     "qa/Arch-DataModeling-Issue-58.md",
-    "original-docs/spec.md",
+    "docs-original/spec.md",
     "sample/demo.md",
+    "users-guide/hve-cli-orchestrator-guide.md",
     "work/run/x/Issue-1/plan.md",
     "tests/run/x/tdd-test-report.md",
     "hve.egg-info/PKG-INFO",
     "tools/hve-app-cash/app.py",
-    "tools/gen_app04_test_specs.py",
     "package.json",
     "jest.config.js",
     "babel.config.js",
@@ -78,6 +80,45 @@ OUT_OF_SCOPE_SAMPLES = (
     ".github/workflows/deploy-app009.yml",
     ".github/workflows/azure-static-web-apps-app009.yml",
     ".github/workflows/app009-ci.yml",
+)
+
+# FR-MAINT-08: 対象境界のうち、HVE パッケージ版の更新を要求するパス。
+VERSION_BUMP_REQUIRED_SAMPLES = (
+    "hve/orchestrator.py",
+    "hve/gui/main_window.py",
+    "hve/tests/test_dag_validation.py",
+    "hve-dev/requirement-definition.md",
+    "template/sample.md",
+    ".github/copilot-instructions.md",
+    ".github/instructions/hve-maintenance.instructions.md",
+    ".github/skills/harness/adversarial-review/SKILL.md",
+    ".github/prompts/Arch-DataModeling.prompt.md",
+    ".github/io-contracts/Arch-ImprovementPlanner.yaml",
+    ".github/scripts/hve_scope.py",
+    ".github/workflows/auto-approve-and-merge.yml",
+    "tools/runner/entry.py",
+    "tools/gen_something.py",
+    "tests/bats/smoke.bats",
+    "hve.cmd",
+    "hve.sh",
+    ".vscode/tasks.json",
+    # engine 本体ではなくリポジトリ側の設定のため、独立ライフサイクルの除外に含めない。
+    "mdq.toml",
+    "cq.toml",
+)
+
+# FR-MAINT-08: 同期先ファイル自身と、独立ライフサイクルで版管理するパス。
+VERSION_BUMP_EXEMPT_SAMPLES = (
+    "pyproject.toml",
+    "hve/__init__.py",
+    "CHANGELOG.md",
+    "mdq/cli.py",
+    "mdq/gui/__main__.py",
+    "mdq/tests/test_store.py",
+    "cq/store.py",
+    "cq/tests/test_store.py",
+    "tools/skills/markdown_query/vendor/mdq/store.py",
+    "tools/skills/code_query/pyproject.toml",
 )
 
 
@@ -156,6 +197,44 @@ class TestSingleScopeDeclaration:
         assert SCOPE_TABLE_NAMES <= _module_level_assigned_names(SHARED_SCOPE_MODULE)
 
 
+class TestVersionBumpScope:
+    """FR-MAINT-08: 版更新を要求するパス判定が対象境界と同一モジュールの単一実装であること。"""
+
+    def test_predicate_is_part_of_the_shared_scope_api(self) -> None:
+        assert hasattr(_load_shared_scope(), "requires_version_bump")
+
+    @pytest.mark.parametrize("path", VERSION_BUMP_REQUIRED_SAMPLES)
+    def test_in_scope_paths_require_a_bump(self, path: str) -> None:
+        assert _load_shared_scope().requires_version_bump(path) is True
+
+    @pytest.mark.parametrize("path", VERSION_BUMP_EXEMPT_SAMPLES)
+    def test_sync_targets_and_independent_lifecycles_are_exempt(self, path: str) -> None:
+        assert _load_shared_scope().requires_version_bump(path) is False
+
+    @pytest.mark.parametrize("path", OUT_OF_SCOPE_SAMPLES)
+    def test_out_of_scope_paths_never_require_a_bump(self, path: str) -> None:
+        assert _load_shared_scope().requires_version_bump(path) is False
+
+    def test_decision_is_a_subset_of_the_scope_boundary(self) -> None:
+        module = _load_shared_scope()
+        samples = (
+            IN_SCOPE_SAMPLES
+            + OUT_OF_SCOPE_SAMPLES
+            + VERSION_BUMP_REQUIRED_SAMPLES
+            + VERSION_BUMP_EXEMPT_SAMPLES
+        )
+        for path in samples:
+            if module.requires_version_bump(path):
+                assert module.is_in_scope(path), path
+
+    def test_sync_targets_come_from_the_bumpversion_config(self) -> None:
+        """同期先の列挙が `[tool.bumpversion]` からドリフトすると除外が欠ける。"""
+        config = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))["tool"]["bumpversion"]
+        # pyproject.toml 自身は bump-my-version が暗黙の対象に含めるため files に現れない。
+        declared = {"pyproject.toml", *(entry["filename"] for entry in config["files"])}
+        assert set(_load_shared_scope().VERSION_BUMP_FILES) == declared
+
+
 GENERATOR = REPO_ROOT / "hve-dev" / "generate_tdd_inventory.py"
 SURFACE_CSV = REPO_ROOT / "hve-dev" / "hve-surface-inventory.csv"
 
@@ -202,6 +281,26 @@ def surface_rows(generator: ModuleType) -> list[dict[str, object]]:
 
 
 class TestSurfaceInventory:
+    def test_git_files_excludes_deleted_cached_paths(
+        self,
+        generator: ModuleType,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        existing = tmp_path / "hve" / "tests" / "existing.py"
+        existing.parent.mkdir(parents=True)
+        existing.write_text("def test_existing(): pass\n", encoding="utf-8")
+        monkeypatch.setattr(generator, "ROOT", tmp_path)
+        monkeypatch.setattr(
+            generator.subprocess,
+            "check_output",
+            lambda *_args, **_kwargs: (
+                "hve/tests/existing.py\nhve/tests/deleted.py\n"
+            ),
+        )
+
+        assert generator.git_files() == ["hve/tests/existing.py"]
+
     def test_fieldnames_match_requirement(self, generator: ModuleType) -> None:
         assert generator.SURFACE_FIELDNAMES == EXPECTED_SURFACE_FIELDNAMES
 

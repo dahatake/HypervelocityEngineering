@@ -31,6 +31,12 @@ WORKIQ_MCP_SERVER_NAME: str = "_hve_workiq"
 WORKIQ_MCP_TOOL_NAMES: tuple[str, ...] = (
     "ask_work_iq",
 )
+_WORKIQ_OFFICIAL_MCP_SERVER_NAME: str = "workiq"
+_WORKIQ_OFFICIAL_MCP_TOOL_NAMES: frozenset[str] = frozenset({"ask"})
+_WORKIQ_MCP_TOOL_NAMES_BY_SERVER: dict[str, frozenset[str]] = {
+    WORKIQ_MCP_SERVER_NAME: frozenset(WORKIQ_MCP_TOOL_NAMES),
+    _WORKIQ_OFFICIAL_MCP_SERVER_NAME: _WORKIQ_OFFICIAL_MCP_TOOL_NAMES,
+}
 
 
 def _sanitize_diagnostic_text(text: str) -> str:
@@ -721,11 +727,15 @@ def is_workiq_tool_name(tool_name: str) -> bool:
 
 
 def _is_workiq_tool_metadata(metadata: Optional[WorkIQToolEventMetadata]) -> bool:
-    """抽出済みメタデータが `_hve_workiq` の Work IQ tool 呼び出しか判定する。"""
+    """抽出済みメタデータが許可済み Work IQ server/tool 組か判定する。"""
     if metadata is None or not metadata.tool_name:
         return False
-    if metadata.mcp_server_name and metadata.mcp_server_name != WORKIQ_MCP_SERVER_NAME:
-        return False
+    if metadata.mcp_server_name:
+        allowed_tools = _WORKIQ_MCP_TOOL_NAMES_BY_SERVER.get(
+            metadata.mcp_server_name
+        )
+        return bool(allowed_tools and metadata.tool_name in allowed_tools)
+    # server 名を持たない legacy event は、内部 allowlist だけ後方互換で許可する。
     return is_workiq_tool_name(metadata.tool_name)
 
 
@@ -1019,6 +1029,30 @@ def format_workiq_draft_answers(
 
 _MAX_WORKIQ_CONTEXT_LENGTH: int = 10_000
 
+_WORKIQ_RESPONSE_STATUS_LABELS: frozenset[str] = frozenset({
+    "FOUND",
+    "PARTIAL",
+    "NOT_FOUND",
+    "UNAVAILABLE",
+})
+
+
+def extract_workiq_status(text: str) -> Optional[str]:
+    """Work IQ 応答の最初の非空行から許可済み STATUS を抽出する。"""
+    if not text:
+        return None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        match = re.match(r"^STATUS\s*:\s*([A-Z_]+)\b", stripped, re.IGNORECASE)
+        if not match:
+            # 出力契約では最初の非空行が STATUS。後続本文の埋込みラベルは信頼しない。
+            return None
+        status = match.group(1).upper()
+        return status if status in _WORKIQ_RESPONSE_STATUS_LABELS else None
+    return None
+
 _WORKIQ_ERROR_INDICATORS: tuple[str, ...] = (
     "アクセスできない",
     "実行できません",
@@ -1068,14 +1102,12 @@ def is_workiq_error_response(context: str) -> bool:
     if not context or not context.strip():
         return False
     # F3: 明示 STATUS ラベルがあれば優先判定（ヒューリスティック前に確定させる）
-    # 先頭行の大文字小文字・余分な空白を無視してラベルを抽出する
-    head = context.lstrip().splitlines()[0]
-    _status_match = re.match(r"^\s*STATUS\s*:\s*(\w+)", head, re.IGNORECASE)
-    if _status_match:
-        label = _status_match.group(1).upper()
-        if label == "UNAVAILABLE":
+    # 最初の非空行だけを信頼し、本文中の埋込みラベルは採用しない。
+    status = extract_workiq_status(context)
+    if status:
+        if status == "UNAVAILABLE":
             return True
-        if label in ("FOUND", "PARTIAL", "NOT_FOUND"):
+        if status in ("FOUND", "PARTIAL", "NOT_FOUND"):
             # NOT_FOUND は「正しく検索した上で関連情報なし」なのでエラー扱いしない
             return False
     # 以降は既存ヒューリスティック（後方互換のため温存）

@@ -33,6 +33,10 @@ _INLINE_CTX_PATTERN = re.compile(r"^\[hve:ctx:([^\]]+)\] ")
 # `_emit` で `timestamp_style="prefix"` 時に行頭付近へ付与される。
 _TIMESTAMP_PATTERN = re.compile(r"^\[(\d{2}:\d{2}:\d{2})\]\s*")
 
+# FR-RTO-07: run_id が未確定の間に使われるプレースホルダ。実 run_id 到着時は
+# 別実行として新規スナップショットを作らず、同一スナップショットを更新する。
+_PLACEHOLDER_RUN_IDS = ("", "unknown")
+
 
 def _extract_inline_ctx(line: str) -> Tuple[Optional[str], str]:
     """行頭の `[hve:ctx:<step_id>] ` を抽出し、(step_id, 残り行) を返す。
@@ -268,6 +272,9 @@ class StepStatsSnapshot:
     # Phase A: SDK 直接値 (Workflow 累積を Step 完了時にスナップショット)
     sdk_aiu_total_nano: Optional[int] = None
     quota_used_delta_total: Optional[int] = None
+    # FR-RTO-07: 当該 Step へ帰属したイベントだけから算出した実測値。
+    aiu_nano_own: Optional[int] = None
+    model_counts: Dict[str, int] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -284,6 +291,8 @@ class StepStatsSnapshot:
             "skill_counts": dict(self.skill_counts),
             "sdk_aiu_total_nano": self.sdk_aiu_total_nano,
             "quota_used_delta_total": self.quota_used_delta_total,
+            "aiu_nano_own": self.aiu_nano_own,
+            "model_counts": dict(self.model_counts),
         }
 
 
@@ -407,6 +416,14 @@ class WorkbenchState:
     tool_counts_by_step: Dict[str, Dict[str, int]] = field(default_factory=dict)
     # step_id -> skill_name -> count
     skill_counts_by_step: Dict[str, Dict[str, int]] = field(default_factory=dict)
+    # FR-RTO-07: Step へ帰属したイベントだけから算出する Step 別バケット。
+    # グローバル現在値 / Workflow 累積 / 他 Step の値で代替してはならない。
+    # step_id -> Nano AIU 累積
+    aiu_nano_by_step: Dict[str, int] = field(default_factory=dict)
+    # step_id -> (context_current, context_limit)
+    context_by_step: Dict[str, Tuple[int, int]] = field(default_factory=dict)
+    # step_id -> model -> 呼び出し回数
+    model_counts_by_step: Dict[str, Dict[str, int]] = field(default_factory=dict)
     # SDK 由来の詳細トークン内訳（直近の session.usage_info から）
     context_system_tokens: Optional[int] = None
     context_tool_definitions_tokens: Optional[int] = None
@@ -669,6 +686,30 @@ class WorkbenchState:
         bucket[skill_name] = bucket.get(skill_name, 0) + 1
         self._signals.skill_counts_updated.emit(sid, skill_name)
 
+    def record_step_context(
+        self,
+        step_id: Optional[str],
+        current: Optional[int],
+        limit: Optional[int],
+    ) -> None:
+        """FR-RTO-07: Step へ帰属した Context 使用量を記録する（最新値で上書き）。
+
+        ``step_id`` が空のイベントは実行中 Step へ代替帰属させない（並列 Wave 誤帰属防止）。
+        """
+        if not step_id or current is None or limit is None:
+            return
+        try:
+            self.context_by_step[step_id] = (int(current), int(limit))
+        except (TypeError, ValueError):
+            return
+
+    def record_step_model(self, step_id: Optional[str], model: str) -> None:
+        """FR-RTO-07: Step へ帰属したモデル呼び出し回数を +1 する。"""
+        if not step_id or not model:
+            return
+        bucket = self.model_counts_by_step.setdefault(step_id, {})
+        bucket[model] = bucket.get(model, 0) + 1
+
     def current_tool_counts(self) -> Dict[str, int]:
         """表示対象 Step （running または最後に running だった Step）のツール集計を返す。
 
@@ -876,6 +917,7 @@ class WorkbenchState:
         multiplier_cost: Optional[float] = None,
         nano_aiu: Optional[float] = None,
         unavailable_reason: Optional[str] = None,
+        step_id: Optional[str] = None,
     ) -> bool:
         """SDK ``assistant.usage`` イベントから AI Credit を累積する。
 
@@ -888,6 +930,9 @@ class WorkbenchState:
                 ``total_nano_aiu`` が取得不能だった理由。Unlimited プラン契約者
                 では SDK 側が常に None を返すため UI 表示を「N/A」に切り替える
                 目的で使用する (捏造禁止のため取得不能事実を明示)。
+            step_id: FR-RTO-07 の Step 別集計キー。空/None の場合は Workflow 累積
+                だけを更新する（Fleet wave 等、worker と Step の対応を解決できない
+                経路の消費を実行中 Step へ誤帰属させないため）。
 
         Returns:
             実際に累積した場合 True、重複排除 / 値ゼロでスキップした場合 False。
@@ -908,6 +953,10 @@ class WorkbenchState:
                 n = 0.0
             if n > 0:
                 self.sdk_aiu_total_nano += int(n)
+                if step_id:
+                    self.aiu_nano_by_step[step_id] = (
+                        self.aiu_nano_by_step.get(step_id, 0) + int(n)
+                    )
                 accumulated = True
         if multiplier_cost is not None:
             try:
@@ -1063,13 +1112,20 @@ class WorkbenchState:
         - 履歴が空、または末尾 snapshot の workflow_id/run_id が現値と異なれば
           新規 snapshot を追加。
         - 既存末尾 snapshot が未 finalize の場合は finalize して新規追加。
+        - FR-RTO-07: 末尾 snapshot の run_id がプレースホルダ（未確定）の間に
+          実の run_id が到着した場合は、同一実行として in-place で更新する
+          （別実行として二重計上しない）。
         """
         cur = self._current_workflow_snapshot()
-        if cur is not None and cur.workflow_id == self.workflow_id and cur.run_id == self.run_id:
-            # 同一実行: model 等の最新値を反映
-            cur.workflow_name = self.workflow_name or cur.workflow_name
-            cur.model = self.model or cur.model
-            return
+        if cur is not None and cur.workflow_id == self.workflow_id:
+            if cur.run_id == self.run_id or (
+                not cur.finalized and cur.run_id in _PLACEHOLDER_RUN_IDS
+            ):
+                # 同一実行: run_id / model 等の最新値を反映
+                cur.run_id = self.run_id or cur.run_id
+                cur.workflow_name = self.workflow_name or cur.workflow_name
+                cur.model = self.model or cur.model
+                return
         # 別実行: 直前を finalize
         if cur is not None and not cur.finalized:
             self._finalize_current_workflow_snapshot()
@@ -1114,17 +1170,28 @@ class WorkbenchState:
 
         tool_counts = dict(self.tool_counts_by_step.get(step_id, {}))
         skill_counts = dict(self.skill_counts_by_step.get(step_id, {}))
+        # FR-RTO-07: Context / AI Credit / モデルは当該 Step 帰属イベントのみから算出し、
+        # グローバル現在値や Workflow 累積で代替しない（未取得は None / 空のまま）。
+        step_context = self.context_by_step.get(step_id)
+        model_counts = dict(self.model_counts_by_step.get(step_id, {}))
+        # tie-break は表示側 (`_counts_topn_text`) と同じ、回数降順→名前昇順。
+        top_model = (
+            min(model_counts.items(), key=lambda kv: (-kv[1], kv[0]))[0]
+            if model_counts
+            else ""
+        )
+        aiu_nano_own = self.aiu_nano_by_step.get(step_id) or None
 
         snap = StepStatsSnapshot(
             step_id=step_id,
             step_title=step_title,
             status=status,
-            model=self.model,
+            model=top_model,
             started_at=started_at,
             finished_at=finished_at,
             elapsed_sec=elapsed,
-            context_current=self.context_current or None,
-            context_limit=self.context_limit or None,
+            context_current=step_context[0] if step_context else None,
+            context_limit=step_context[1] if step_context else None,
             tool_counts=tool_counts,
             skill_counts=skill_counts,
             sdk_aiu_total_nano=(
@@ -1133,6 +1200,8 @@ class WorkbenchState:
             quota_used_delta_total=(
                 self.total_quota_used_delta if self.quota_snapshots_latest else None
             ),
+            aiu_nano_own=aiu_nano_own,
+            model_counts=model_counts,
         )
         wf.steps.append(snap)
         # Workflow 側の最新 Context も更新

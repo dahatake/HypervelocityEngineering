@@ -1,6 +1,6 @@
 # HVE 技術アーキテクチャ詳細書
 
-> **⚠️ Phase 8 付記 (2026-05-26)**: 本ドキュメントの §3〜§5 には Custom Agent 廃止前の旧構造（`hve/agent_loader.py`, `.github/agents/<Name>.agent.md`）を前提とした記述が残っている。Phase 8 でパス表記 (`.github/agents/` → `.github/prompts/`) の機械置換は完了したが、`agent_loader` モジュールは Phase 2 で廃止済みであり、后継 (そもそも同一責務を果たすモジュールがあるかも TBD) の実装は `hve/prompt_loader.py` + `.github/io-contracts/<Name>.yaml` 付近と推定される（**未検証**、本文改訂時に実装を読み込んで確定させること）。本文のフロー記述は次回改訂で書き直し予定。最新の仕様は `.github/copilot-instructions.md` §5 および `.github/prompts/README.md` を参照。
+> **Phase 8 付記 (2026-08-07 改訂)**: Custom Agent（`.github/agents/<Name>.agent.md`）と `hve/agent_loader.py` は Phase 2 で廃止済みです。現行実装では、Agent 名は識別子として `StepDef.custom_agent` に残り、Prompt 本文は [`hve/prompt_loader.py`](../hve/prompt_loader.py) が `.github/prompts/<Name>.prompt.md` から読み込み、入出力契約は `.github/io-contracts/<Name>.yaml` が定義します（リポジトリ実体で確認済み。`hve/agent_loader.py` は存在しません）。本書 §3〜§5 のフロー記述はこの構成に更新済みです。最新の規範ルールは `.github/copilot-instructions.md` §5 および `.github/prompts/README.md` を参照してください。
 
 > **位置づけ**: HVE（Hypervelocity Engineering）の **3 つの Orchestrator**（Cloud Agent / CLI / GUI）について、最大限詳細な技術アーキテクチャ図・メッセージフロー・解説をまとめた一次資料。
 > 利用者向けの操作手順は `users-guide/hve-cli-orchestrator-guide.md` および `users-guide/hve-gui-orchestrator-guide.md` を参照。
@@ -83,7 +83,7 @@ HVE は **GitHub Copilot CLI** を実行エンジンとして、**Workflow（DAG
 | `hve/dag_planner.py` | `build_dag_plan()`：`WorkflowDef` を実行可能な DAG に展開（fanout・skip 条件評価）。 |
 | `hve/dag_executor.py` | `DAGExecutor`：`asyncio.Semaphore(max_parallel)` 並列・Fork-on-Retry・依存解決。 |
 | `hve/runner.py` | `StepRunner`：1 ステップを `CopilotClient.create_session()` → `send_and_wait()` で実行。 |
-| `hve/workflow_registry.py` | `WorkflowDef` / `StepDef` 定義の集合体（11 ワークフロー）。 |
+| `hve/workflow_registry.py` | `WorkflowDef` / `StepDef` 定義の集合体（`list_workflows()` は 2026-08-07 時点で 12 ワークフローを返す）。 |
 | `hve/prompt_loader.py` | `.github/prompts/*.prompt.md` を読み込み、Agent の Prompt 本文を提供する（旧 `hve/agent_loader.py` の後継、Phase 2 で SDK への custom_agents 伝搬は廃止）。 |
 | `hve/skill_resolver.py` | `.github/skills/*/SKILL.md` の frontmatter から候補抽出（`skill_manifest.json` を活用）。 |
 | `hve/run_state.py` | SDK セッション ID の決定論的生成（`make_session_id`）。fork-on-retry のフォーク用 ID 再構成に使用。 |
@@ -91,11 +91,11 @@ HVE は **GitHub Copilot CLI** を実行エンジンとして、**Workflow（DAG
 
 ### 2.3 Cloud だけが異なる点
 
-Cloud Agent Orchestrator は **DAG 実行を bash + GitHub Actions reusable workflow に展開** する点が CLI / GUI と本質的に異なる。`python -m hve` の補助呼び出し（`hve.app_arch_filter`, `hve.artifact_validation`, `hve.qa_merger` 等）は使うが、`DAGExecutor` を**直接は使わない**。代わりに各ステップを Sub-Issue として切り出し、ラベル遷移（`qa-to-review`, `review-to-approve`, `auto-approve-and-merge` 等）でフェーズ駆動する。詳細は §3。
+Cloud Agent Orchestrator は **DAG 実行を bash + GitHub Actions reusable workflow に展開** する点が CLI / GUI と本質的に異なる。`python -m hve` の補助呼び出し（`hve.app_arch_filter`, `hve.artifact_validation`, `hve.qa_merger` 等）は使うが、`DAGExecutor` を**直接は使わない**。代わりに各ステップを Sub-Issue として切り出し、ラベル遷移（`qa-to-review`, `review-to-approve`, `auto-approve-and-merge` 等）でフェーズ駆動する。ADI は Issue Template / reusable workflowを持たないlocal専用Workflowであり、このCloud展開の対象外である。詳細は §3。
 
 > **Deploy 検証に関する注意**: CLI / GUI 経路では `enable_auto_merge` 有効時に PR merge 後の check-run 状態を確認するが、Cloud Agent Orchestrator 経路は Sub-Issue / PR / ラベル遷移で駆動されるため、同じ `DAGExecutor` 内の post-merge check-run 待機は実行されない。Cloud 経路で Deploy step の妥当性を確認する場合は、各 Deploy Agent の `ac-verification.md`、PR body の検証マーカー、`auto-approve-and-merge.yml` の check-run / Deploy AC gate、および Sub-Issue の `*:blocked` ラベル有無を確認する。
 >
-> **既知制約**: `auto-app-dev-microservice-web-reusable.yml` はファイル先頭に `OUT-OF-SYNC NOTICE` を持ち、`hve/workflow_registry.py` の ASDW-WEB 現行 step 番号体系と同期していない。このため **ASDW-WEB の Cloud 起動は `auto-orchestrator-dispatcher.yml` から停止済み**（FR-CLOUD-06）で、ASDW-WEB は **CLI 経路 / GUI 経路が supported** である。`auto-app-dev-microservice-web` ラベル付き Issue を作成しても reusable workflow は起動せず、dispatcher が CLI / GUI への誘導コメントを投稿する。Cloud reusable workflow の step 体系移行は別タスクとして扱う。他の Cloud workflow（AAS / AAD-WEB / ADFD / ADFDV / AAG / AAGD / AKM / AQOD / ADOC）の挙動は変更されていない。
+> **既知制約**: `auto-app-dev-microservice-web-reusable.yml` はファイル先頭に `OUT-OF-SYNC NOTICE` を持ち、`hve/workflow_registry.py` の ASDW-WEB 現行 step 番号体系と同期していない。このため **ASDW-WEB の Cloud 起動は `auto-orchestrator-dispatcher.yml` から停止済み**（FR-CLOUD-06）で、ASDW-WEB は **CLI 経路 / GUI 経路が supported** である。`auto-app-dev-microservice-web` ラベル付き Issue を作成しても reusable workflow は起動せず、dispatcher が CLI / GUI への誘導コメントを投稿する。Cloud reusable workflow の step 体系移行は別タスクとして扱う。他のCloud workflow（AAS / AAD-WEB / ADFD / ADFDV / AAG / AAGD / AKM / ADOC）の挙動は変更されていない。ADIはlocal専用である。
 
 ---
 
@@ -107,7 +107,7 @@ Cloud Agent Orchestrator は **DAG 実行を bash + GitHub Actions reusable work
 
 1. **Issue 作成**: ユーザーが `.github/ISSUE_TEMPLATE/*.yml` から Issue を起こす。フォーム送信時に対応するワークフローラベル（例: `auto-app-selection`, `auto-app-detail-design-web`）が自動付与される。
 2. **Dispatcher 起動**: `.github/workflows/auto-orchestrator-dispatcher.yml` が `on: issues [opened, labeled, closed]` で発火。ラベルから `target` を判定し、対応する **reusable workflow** を `uses:` で呼び出す。
-3. **Reusable Workflow 実行**: `auto-<target>-reusable.yml`（AAS / AAD-WEB / ADFD / ADFDV / AAG / AAGD / AKM / AQOD ほか。ASDW-WEB は FR-CLOUD-06 により Cloud 起動停止中）が実行される。共通処理として:
+3. **Reusable Workflow 実行**: `auto-<target>-reusable.yml`（AAS / AAD-WEB / ADFD / ADFDV / AAG / AAGD / AKM / ADOC ほか。ASDW-WEB は FR-CLOUD-06 により Cloud 起動停止中）が実行される。共通処理として:
    - `env: COPILOT_PAT` を設定（Coding Agent アサインに必要な PAT）。
    - `.github/scripts/bash/lib/assign-copilot.sh` を source して `assign_copilot` 関数を読み込む。
    - ワークフローごとに定義された **Step 群** を順次処理し、各ステップで以下を実施：
@@ -162,7 +162,7 @@ bash 側からは以下の `python -m hve.*` を CLI として呼び出し、必
 `hve/runner.py` の `StepRunner` は **1 ステップ = 1 Copilot セッション** という対応関係を維持する：
 
 1. `workflow_registry.StepDef` から実行情報を取得（custom_agent, output_paths, depends_on 等）
-2. `prompt_loader.load(.github/prompts/<custom_agent>.prompt.md)` で Agent の Prompt 本文を読み込み（旧 `agent_loader.load(...)` は Phase 2 で廃止）
+2. `prompt_loader.load_prompt(custom_agent)` で `.github/prompts/<custom_agent>.prompt.md` から Agent の Prompt 本文を読み込み（`hve/runner.py` の `from .prompt_loader import load_prompt` 参照。旧 `agent_loader.load(...)` は Phase 2 で廃止）
 3. `skill_resolver` で関連 Skill 候補を抽出（マニフェスト経由）
 4. `template_engine` と `prompts` の PROMPT 定数でプロンプトを組み立て
 5. `from copilot import CopilotClient, SubprocessConfig, ExternalServerConfig` および `from copilot.session import PermissionHandler`（`hve/runner.py` 2336 行付近）
@@ -267,20 +267,22 @@ QMainWindow (MainWindow)
 |---|---|---|---|
 | C1 | 基本設定 | `--workflow`, `--model`, `--review-model`, `--qa-model` | 共通 |
 | C2 | 並列実行 | `--max-parallel` | 共通 |
-| C3 | 自動プロンプト | `--auto-qa`, `--force-interactive`, `--auto-contents-review`, `--auto-coding-agent-review`, `--auto-coding-agent-review-auto-approval` | 共通 |
+| C3 | 共通設定 | `--auto-qa`, `--qa-akm-background-merge`, `--force-interactive`, `--auto-contents-review`, `--auto-coding-agent-review`, `--auto-coding-agent-review-auto-approval` | 共通 |
 | C4 | Work IQ | `--workiq`, `--workiq-akm-review`, `--workiq-akm-ingest`, `--workiq-dxx`, `--workiq-draft`, `--workiq-draft-output-dir`, `--workiq-tenant-id`, `--workiq-prompt-qa`, `--workiq-prompt-km`, `--workiq-prompt-review`, `--workiq-per-question-timeout` | **CLI 固有**（Issue Template に存在しないことを確認済み: `grep -i workiq` で 0 件） |
 | C5 | Issue / PR 作成 | `--create-issues`, `--create-pr`, `--ignore-paths`, `--repo`, `--issue-title` | 共通 |
-| C6 | 出力制御 | `--verbose`, `--quiet`, `--verbosity`, `--show-stream`, `--log-level`, `--no-color`, `--banner`, `--screen-reader`, `--timestamp-style`, `--final-only` | CLI 固有（推定） |
-| C7 | MCP / CLI 接続 | `--mcp-config`, `--cli-path`, `--cli-url` | CLI 固有（推定） |
+| C6 | 出力制御 | `--verbose`, `--quiet`, `--verbosity`, `--show-stream`, `--log-level`, `--no-color`, `--banner`, `--screen-reader`, `--timestamp-style`, `--final-only` | **CLI 固有**（`hve/__main__.py` に定義あり／`.github/ISSUE_TEMPLATE/` に対応入力なしを確認済み） |
+| C7 | MCP / CLI 接続 | `--mcp-config`, `--cli-path`, `--cli-url` | **CLI 固有**（同上の方法で確認済み） |
 | C8 | タイムアウト | `--timeout`, `--review-timeout` | 共通 |
 | C9 | ブランチ / ステップ選択 | `--branch`, `--steps` | 共通 |
 | C10 | アプリ ID | `--app-id`, `--app-ids`, `--resource-group`, `--app-id`, `--usecase-id` | 共通（aas / aad-web / asdw-web / adfd / adfdv 選択時のみ） |
-| C11 | AKM 固有 | `--sources`, `--target-files`, `--force-refresh`, `--custom-source-dir`, `--enable-auto-merge` | akm 選択時のみ |
-| C12 | AQOD 固有 | `--target-scope`, `--depth`, `--focus-areas` | aqod 選択時のみ |
+| C11 | Knowledge Management 固有 | `--sources`, `--target-files`, `--force-refresh`, `--custom-source-dir`, `--enable-auto-merge` | akm 選択時のみ |
 | C13 | ADOC 固有 | `--target-dirs`, `--exclude-patterns`, `--doc-purpose`, `--max-file-lines` | adoc 選択時のみ |
 | C14 | ARD 固有 | `--company-name`, `--target-business`, `--survey-base-date`, `--survey-period-years`, `--target-region`, `--analysis-purpose`, `--target-recommendation-id`, `--attached-docs` | ard 選択時のみ。`--attached-docs` は §5.5 で D&D 拡張 |
 | C15 | 追加プロンプト / コメント | `--additional-prompt`, `--context-max-chars`, `--additional-comment` | 共通 |
-| C16 | 実行制御 / 拡張機能 | `--dry-run`, `--self-improve`, `--no-self-improve` | `--dry-run` は共通、他は CLI 固有（推定） |
+| C16 | 実行制御 / 拡張機能 | `--dry-run`, `--self-improve`, `--no-self-improve` | `--dry-run` は **CLI 固有**（`.github/ISSUE_TEMPLATE/` に対応入力なし）。`--self-improve` / `--no-self-improve` は Issue Template の `enable_self_improve` と同等の設定を CLI から指定するもの（`app-architecture-design.yml` 等 8 テンプレートに対応入力あり） |
+| C17 | ADI 固有 | `--purpose`, `--target-scope`, `--depth`, `--focus-areas` | adi 選択時のみ |
+
+> C12は廃止済みカテゴリの番号であり、設定互換性とテスト識別子を安定させるため欠番のまま保持する。ADOCはC13、ADIはC17であり、繰り上げない。
 
 入力検証ルール：
 
@@ -582,6 +584,66 @@ grep -nE '"--workflow"|"--max-parallel"|"--auto-qa"|"--workiq"|"--company-name"|
 
 旧版の `hve/gui/auth_providers/` manifest 方式は現行リポジトリには存在しない。MCP Server の登録・再認証は GitHub Copilot CLI の対話 UI に委ねる。
 
+### 8.3.1 GUI Copilot パネルと実行ジョブ連携
+
+GUI の Copilot ドックは 2 タブ構成であり、いずれも「対話 UI の正本は GitHub Copilot CLI 側」という原則を崩さない。
+
+**Copilot CLI タブ（対話）**
+
+- `hve/gui/copilot_interactive_session.py` が、既存 PTY backend (`hve/gui/pty_backend.py`) と
+  xterm ビュー (`hve/gui/widgets/xterm_terminal_view.py`) の上で `copilot` を **1 プロセス** として起動・維持する。
+- 起動 argv は `[<copilot>, "-C", <repo_root>, "--no-auto-update"]`（結果相談時のみ `-i <初期プロンプト>` を追加）。
+  権限緩和フラグ（`--allow-all-tools` / `--allow-all-paths` / `--yolo` / `--no-ask-user` / `-p`）は付与しない。
+  ツール実行の可否判断は CLI の対話プロンプトに残り、方針変更は `/permissions` で行う。
+- HVE は CLI の出力を解釈しない。スラッシュコマンド・会話履歴・セッション永続化はすべて Copilot CLI の責務であり、
+  HVE 側にチャット内容を複製・保存しない。
+- バイナリ解決は `hve/gui/copilot_cli_bridge.py` の `find_binary()` を共有する。CLI または PTY backend が
+  不足する場合はセッションを起動せず、OS 別セットアップ導線を案内する（fail-closed）。
+
+**実行ジョブタブ（ジョブ連携）**
+
+- 画面構成は Visual Studio Code のチャットビューと同じ並びで、上から
+  ヘッダー（対象ジョブ / 更新 / `⋯`）→ ターンナビゲーション → 会話ビュー → 送信待ちキュー → 入力ボックス → 状態行。
+  会話ビューは `hve/gui/widgets/chat_transcript.py`、入力ボックスは
+  `hve/gui/widgets/chat_input_box.py` に分離されている。
+- ターンナビゲーションは利用者の送信メッセージだけをターンとして数え、`現在番号/総数` と前後移動を提供する。
+  現在ターンは、移動操作時はその移動先を確定値とし、利用者のスクロール時は
+  `ChatTranscriptView.current_user_turn_index()` がスクロール位置から決める。後者は
+  各ターンの `y` をスクロール上限で clamp して比較するため、末尾ターンを上端へ
+  寄せきれない場合でも番号が移動先と食い違わない。
+- 会話ビューは 1 本の時系列列であり、バブル化するのは HVE 自身が発生源の要素
+  （送信メッセージ・ACK・GUI 通知）だけで、宛先の実行ログは生ログのまま提示する。
+  ログ行を解析して発話者・役割・ターン境界を推定しない（FR-GUI-13 / FR-GUI-18）。
+- 入力ボックスは複数行入力（`Enter` 送信 / `Shift+Enter` 改行、伸長上限あり）と
+  コンテキスト添付チップを持つ。添付は選んだファイルの**パスだけ**を本文へ列挙し、
+  ファイル本文は読まない。送信上限（8 KiB）は添付を含めた本文で判定する。
+- 送信経路は `hve/job_interaction_ipc.py`（schema v1）に一本化されている。GUI がリクエスト JSON を書き、
+  Runner (`hve/runner.py`) が `claim_request()` で `.processing` へ原子的にリネームして取得する。
+- action は 3 種で、Runner 側の SDK 呼び出しへ次のように写像される。
+
+  | action | Runner の動作 |
+  |---|---|
+  | `queue` | `send(mode="enqueue")` — 現在のターン完了後に順次処理 |
+  | `steer` | `send(mode="immediate")` — 実行中ターンへ即時割り込み |
+  | `stop_and_send` | `abort()` 後に保留し、次ターンとして送信して**その応答をステップ結果とする** |
+
+- 送信待ちキューは `list_pending_requests()` / `cancel_request()` / `reorder_pending()` を直接呼び出し、
+  **未消費の要求だけ**を取り消し・並べ替えできる（claim 済みは一覧から消える）。
+- ACK (`write_ack()`) は `request_id` / `action` / `status` / `detail` のみを含み、送信本文を決して含まない。
+  GUI 側では対応する送信バブルのバッジとして反映される。
+  `stop_and_send` の ACK は **実送信が成立した時点** まで遅延させ、送信前にステップが終了した場合は
+  `failed` ACK を書く（無言の指示喪失を防ぐ）。
+- GUI の各実行インスタンスには固有の IPC チャネルが割り当てられる（`hve/gui/main_window.py`）。
+  並列実行時は `hve/gui/job_interaction_model.py` の `JobTarget` で宛先ステップを明示選択する。
+- 旧 `hve/gui/steering_ipc_writer.py` は共通 IPC へ委譲する後方互換 wrapper であり、
+  リクエストファイル名 `steering-<step_id>-<sequence>.request.json` も従来 glob と互換を保つ。
+
+**完了ジョブの結果相談**
+
+- `hve/gui/copilot_job_context.py` は、実在が確認できた成果物の **パスのみ** を初期プロンプトへ載せる。
+  ファイル本文は埋め込まず、run ルート外は探索しない。
+- 参照先はセッション作業フォルダーのクリーンアップ設定に従う。`purge` を選ぶと GUI 終了後に参照先が失われる。
+
 ### 8.4 検出ソース（MCP Server / Plugin 一覧の取得）
 
 | リソース | 取得コマンド | 用途 |
@@ -679,4 +741,4 @@ grep -nE '"--workflow"|"--max-parallel"|"--auto-qa"|"--workiq"|"--company-name"|
 ---
 
 **本書の状態**: v1 初版。SVG 図 7 枚を含む。
-**根拠**: すべての構造記述は実装ファイル（`hve/`, `.github/workflows/`, `.github/prompts/`, `.github/skills/`, `pyproject.toml`）に基づく。推定箇所は §5.4 / §5.11 等で明示。
+**根拠**: すべての構造記述は実装ファイル（`hve/`, `.github/workflows/`, `.github/prompts/`, `.github/skills/`, `pyproject.toml`）に基づく。未検証の推定を含む箇所には「要確認」と明示する（2026-08-07 改訂時点で §5.4 の CLI オプション区分は実装照合により確定済み）。

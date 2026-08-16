@@ -16,6 +16,11 @@ on:
         required: false
         type: string
         default: ''
+      target_comment_id:
+        description: '本番再実行時に使用する QA 回答コメント ID'
+        required: false
+        type: string
+        default: ''
       dry_run:
         description: 'ドライラン（書き込み操作をスキップ）'
         required: false
@@ -36,12 +41,296 @@ permissions:
   issues: write
 
 jobs:
+  save-qa-answer:
+    if: >
+      github.event_name != 'pull_request_target'
+      && !github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      issues: read
+    outputs:
+      answer_detected: ${{ steps.save.outputs.answer_detected }}
+      answer_comment_id: ${{ steps.save.outputs.answer_comment_id }}
+      saved: ${{ steps.save.outputs.saved }}
+      sync_required: ${{ steps.save.outputs.sync_required }}
+      qa_path: ${{ steps.save.outputs.qa_path }}
+      qa_sha: ${{ steps.save.outputs.qa_sha }}
+      branch: ${{ steps.save.outputs.branch }}
+      auto_merge: ${{ steps.save.outputs.auto_merge }}
+      akm_model: ${{ steps.save.outputs.akm_model }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      ISSUE_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.target_issue || github.event.issue.number }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+      SIMULATE_LABEL: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_label || '' }}
+      ANSWER_COMMENT_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.target_comment_id || github.event.comment.id || '' }}
+    steps:
+      - name: Checkout QA materializer
+        uses: actions/checkout@v4
+
+      - name: Materialize, save, and read back answered QA
+        id: save
+        run: |
+          set -euo pipefail
+          {
+            echo "answer_detected=false"
+            echo "answer_comment_id="
+            echo "saved=false"
+            echo "sync_required=false"
+            echo "qa_path="
+            echo "qa_sha="
+            echo "branch="
+            echo "auto_merge=false"
+            echo "akm_model="
+          } >> "${GITHUB_OUTPUT}"
+
+          issue_json=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}")
+          is_pr=$(printf '%s' "${issue_json}" | jq -r 'has("pull_request")')
+          [[ "${is_pr}" == "false" ]] || {
+            echo "::error::Issue #${ISSUE_NUMBER} is a pull request"
+            exit 1
+          }
+          labels=$(printf '%s' "${issue_json}" | jq -r '[.labels[].name] | join(",")')
+          qa_labels_json=$(printf '%s' "${issue_json}" | jq -c '
+            [.labels[].name | select(endswith(":qa-ready") or endswith(":qa-drafting"))]')
+          qa_label_count=$(printf '%s' "${qa_labels_json}" | jq 'length')
+          if (( qa_label_count > 1 )); then
+            echo "::error::複数の QA 状態ラベルを検出しました。状態を一意に修復してから再実行してください。"
+            exit 1
+          fi
+          qa_ready_label=$(printf '%s' "${qa_labels_json}" | jq -r 'first // ""')
+          if [[ -z "${qa_ready_label}" && "${DRY_RUN}" != "true" ]]; then
+            echo "Issue is not waiting for a QA answer; skip."
+            exit 0
+          fi
+
+          body=$(printf '%s' "${issue_json}" | jq -r '.body // ""')
+          branch=$(printf '%s' "${body}" | sed -n 's/^.*<!--[[:space:]]*branch:[[:space:]]*\([^>]*\)[[:space:]]*-->.*$/\1/p' | head -1 | xargs || true)
+          branch="${branch:-main}"
+          [[ "${branch}" =~ ^[A-Za-z0-9._/-]+$ && "${branch}" != *".."* ]] || {
+            echo "::error::branch contains unsupported characters"
+            exit 1
+          }
+          BRANCH=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "${branch}")
+          gh api "/repos/${REPO}/git/ref/heads/${BRANCH}" >/dev/null
+
+          auto_merge=false
+          if [[ ",${labels}," == *",auto-approve-ready,"* ]] \
+            || printf '%s' "${body}" | grep -qE '<!--[[:space:]]*auto-merge:[[:space:]]*true[[:space:]]*-->'; then
+            auto_merge=true
+          fi
+          # FR-CLOUD-25: QA 起点 AKM へ継承する AKM 用モデル（許可リスト外は空文字）。
+          # FR-CLOUD-26: QA 起点 AKM を起動するかどうかの利用者選択（抽出不能は無効扱い）。
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/copilot-assign.sh"
+          akm_model=$(extract_akm_model "${body}")
+          qa_akm_merge=$(extract_qa_akm_merge "${body}") || qa_akm_merge="false"
+          {
+            echo "branch=${branch}"
+            echo "auto_merge=${auto_merge}"
+            echo "akm_model=${akm_model}"
+          } >> "${GITHUB_OUTPUT}"
+
+          answer_detected=false
+          use_defaults=false
+          answer_json=""
+          answer_created_at=""
+          if [[ "${DRY_RUN}" == "true" && -z "${ANSWER_COMMENT_ID}" ]]; then
+            answer_detected=true
+          else
+            [[ "${ANSWER_COMMENT_ID}" =~ ^[1-9][0-9]*$ ]] || {
+              echo "::error::target_comment_id is required for a non-dry-run replay"
+              exit 1
+            }
+            answer_json=$(gh api "/repos/${REPO}/issues/comments/${ANSWER_COMMENT_ID}")
+            answer_issue_url=$(printf '%s' "${answer_json}" | jq -r '.issue_url // ""')
+            [[ "${answer_issue_url}" == */issues/"${ISSUE_NUMBER}" ]] || {
+              echo "::error::QA answer comment does not belong to Issue #${ISSUE_NUMBER}"
+              exit 1
+            }
+            answer_body=$(printf '%s' "${answer_json}" | jq -r '.body // ""')
+            answer_author_assoc=$(printf '%s' "${answer_json}" | jq -r '.author_association // ""')
+            answer_author_type=$(printf '%s' "${answer_json}" | jq -r '.user.type // ""')
+            answer_created_at=$(printf '%s' "${answer_json}" | jq -r '.created_at // ""')
+            [[ -n "${answer_created_at}" ]] || {
+              echo "::error::QA answer comment has no created_at"
+              exit 1
+            }
+
+            if printf '%s' "${answer_body}" | grep -qF '<!-- auto-qa-default-answered -->'; then
+              answer_detected=true
+              use_defaults=true
+            elif printf '%s' "${answer_body}" | grep -qi '@copilot' \
+              && [[ "${answer_author_type}" != "Bot" ]] \
+              && ! printf '%s' "${answer_body}" | grep -qF '<!-- copilot-auto-pre-qa-posted -->' \
+              && { [[ "${answer_author_assoc}" == "OWNER" ]] \
+                || [[ "${answer_author_assoc}" == "MEMBER" ]] \
+                || [[ "${answer_author_assoc}" == "COLLABORATOR" ]]; }; then
+              answer_detected=true
+            fi
+          fi
+          [[ "${answer_detected}" == "true" ]] || {
+            echo "Comment is not a recognized QA answer; skip."
+            exit 0
+          }
+          {
+            echo "answer_detected=true"
+            echo "answer_comment_id=${ANSWER_COMMENT_ID}"
+          } >> "${GITHUB_OUTPUT}"
+
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            echo "sync_required=false" >> "${GITHUB_OUTPUT}"
+            echo "[DRY RUN] Answer detected; repository writes and AKM dispatch are skipped."
+            exit 0
+          fi
+
+          comments_file="${RUNNER_TEMP}/comments.json"
+          gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}/comments" --paginate --jq '.[]' \
+            | jq -s '.' > "${comments_file}"
+          questionnaire_json=$(jq -c \
+            --arg answer_created_at "${answer_created_at}" \
+            --argjson answer_comment_id "${ANSWER_COMMENT_ID}" '
+            [ .[]
+              | select(.id != $answer_comment_id)
+              | select(
+                  (.created_at < $answer_created_at)
+                  or (.created_at == $answer_created_at and .id < $answer_comment_id)
+                )
+              | select((.user.type // "") == "Bot")
+              | select((.user.login // "") == "Copilot" or ((.user.login // "") | startswith("copilot-swe-agent")))
+              | select(((.body // "") | contains("<!-- copilot-auto-pre-qa-posted -->")) | not)
+              | select(
+                  ((.body // "") | test("(?m)^\\[Q[0-9]+\\]\\s*$"))
+                  or ((.body // "") | contains("既定値候補"))
+                  or ((.body // "") | contains("優先順位付き質問票"))
+                )
+            ] | sort_by(.created_at, .id) | last // empty' "${comments_file}")
+          [[ -n "${questionnaire_json}" ]] || {
+            echo "::error::Questionnaire comment could not be resolved"
+            exit 1
+          }
+          printf '%s' "${questionnaire_json}" | jq -j '.body // ""' > "${RUNNER_TEMP}/questionnaire.md"
+          printf '%s' "${answer_json}" | jq -j '.body // ""' > "${RUNNER_TEMP}/answer.md"
+
+          materialize_args=(
+            python3 .github/scripts/python/materialize_answered_qa.py
+            --questionnaire-file "${RUNNER_TEMP}/questionnaire.md"
+            --answer-file "${RUNNER_TEMP}/answer.md"
+            --issue-number "${ISSUE_NUMBER}"
+            --output-dir "${RUNNER_TEMP}/answered"
+          )
+          if [[ "${use_defaults}" == "true" ]]; then
+            materialize_args+=(--use-defaults)
+          fi
+          materialized=$("${materialize_args[@]}")
+          if [[ "$(printf '%s' "${materialized}" | jq -r '.skipped // false')" == "true" ]]; then
+            echo "Questionnaire has no questions; no AKM sync is required."
+            echo "sync_required=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          filename=$(printf '%s' "${materialized}" | jq -r '.filename')
+          local_path=$(printf '%s' "${materialized}" | jq -r '.path')
+          QA_SHA=$(printf '%s' "${materialized}" | jq -r '.sha256')
+          [[ "${QA_SHA}" =~ ^[0-9a-f]{64}$ ]] || {
+            echo "::error::materializer returned an invalid SHA"
+            exit 1
+          }
+          QA_PATH="qa/Issue-${ISSUE_NUMBER}-questionnaire-answered-${QA_SHA:0:8}.md"
+          [[ "${QA_PATH}" == "qa/${filename}" && "${QA_PATH}" != *".."* ]] || {
+            echo "::error::回答済み QA の保存パスを拒否しました"
+            exit 1
+          }
+
+          encoded_content=$(base64 -w 0 < "${local_path}")
+          existing_json=$(gh api "/repos/${REPO}/contents/${QA_PATH}?ref=${BRANCH}" 2>/dev/null || true)
+          if [[ -n "${existing_json}" ]]; then
+            existing_sha=$(printf '%s' "${existing_json}" | jq -r '.content' | tr -d '\n' | base64 -d \
+              | python3 -c 'import hashlib, sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')
+            [[ "${existing_sha}" == "${QA_SHA}" ]] || {
+              echo "::error::Existing answered QA path has different content"
+              exit 1
+            }
+          else
+            gh api -X PUT "/repos/${REPO}/contents/${QA_PATH}" \
+              -f "message=[QA] Save answered questionnaire for Issue #${ISSUE_NUMBER}" \
+              -f "content=${encoded_content}" \
+              -f "branch=${branch}" >/dev/null
+          fi
+
+          readback=$(gh api "/repos/${REPO}/contents/${QA_PATH}?ref=${BRANCH}")
+          readback_sha=$(printf '%s' "${readback}" | jq -r '.content' | tr -d '\n' | base64 -d \
+            | python3 -c 'import hashlib, sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')
+          [[ "${readback_sha}" == "${QA_SHA}" ]] || {
+            echo "::error::Contents API read-back SHA mismatch"
+            exit 1
+          }
+
+          sync_required=true
+          if [[ "${qa_ready_label}" == akm:* ]]; then
+            sync_required=false
+          fi
+          # FR-CLOUD-26: 利用者がマージを選んでいなければ AKM を dispatch しない。
+          if [[ "${qa_akm_merge}" != "true" ]]; then
+            sync_required=false
+          fi
+          {
+            echo "saved=true"
+            echo "sync_required=${sync_required}"
+            echo "qa_path=${QA_PATH}"
+            echo "qa_sha=${QA_SHA}"
+            echo "branch=${branch}"
+            echo "auto_merge=${auto_merge}"
+          } >> "${GITHUB_OUTPUT}"
+
+  dispatch-akm:
+    needs: save-qa-answer
+    if: >
+      needs.save-qa-answer.result == 'success'
+      && needs.save-qa-answer.outputs.saved == 'true'
+      && needs.save-qa-answer.outputs.sync_required == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      SOURCE_ISSUE: ${{ github.event_name == 'workflow_dispatch' && inputs.target_issue || github.event.issue.number }}
+      QA_SHA: ${{ needs.save-qa-answer.outputs.qa_sha }}
+      QA_PATH: ${{ needs.save-qa-answer.outputs.qa_path }}
+      BRANCH: ${{ needs.save-qa-answer.outputs.branch }}
+      AUTO_MERGE: ${{ needs.save-qa-answer.outputs.auto_merge }}
+      AKM_MODEL: ${{ needs.save-qa-answer.outputs.akm_model }}
+    steps:
+      - name: Dispatch QA answered AKM coordinator
+        run: |
+          set -euo pipefail
+          gh workflow run auto-akm-after-qa.yml --repo "${REPO}" \
+            -f "source_issue=${SOURCE_ISSUE}" \
+            -f "qa_sha=${QA_SHA}" \
+            -f "qa_path=${QA_PATH}" \
+            -f "branch=${BRANCH}" \
+            -f "auto_merge=${AUTO_MERGE}" \
+            -f "akm_model=${AKM_MODEL}"
+
   transition:
+    needs: [save-qa-answer, dispatch-akm]
     # Issue コメントが投稿された時に、*:qa-ready ラベルを持つ Issue を *:ready に遷移させる
     # トリガー条件:
     #   - <!-- auto-qa-default-answered --> マーカー付きコメント
     #   - または @copilot メンション付きの OWNER/MEMBER/COLLABORATOR コメント
     if: >
+      always()
+      && needs.save-qa-answer.result == 'success'
+      && needs.save-qa-answer.outputs.answer_detected == 'true'
+      && (
+        needs.save-qa-answer.outputs.sync_required != 'true'
+        || needs.dispatch-akm.result == 'success'
+      )
+      &&
       github.event_name != 'pull_request_target'
       && !github.event.issue.pull_request
     runs-on: ubuntu-latest
@@ -54,8 +343,9 @@ jobs:
       ISSUE_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.target_issue || github.event.issue.number }}
       PR_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.target_pr || github.event.pull_request.number }}
       SIMULATE_LABEL: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_label || '' }}
-      COMMENT_BODY: ${{ github.event.comment.body }}
-      COMMENT_AUTHOR_ASSOC: ${{ github.event.comment.author_association }}
+      ANSWER_COMMENT_ID: ${{ needs.save-qa-answer.outputs.answer_comment_id }}
+      SAVED_BRANCH: ${{ needs.save-qa-answer.outputs.branch }}
+      SAVED_QA_PATH: ${{ needs.save-qa-answer.outputs.qa_path }}
 
     steps:
       - name: Checkout repository
@@ -93,12 +383,14 @@ jobs:
             echo "qa_ready_label=" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
-          qa_ready_label=$(echo "${issue_data}" | python3 -c "
-          import sys, json
-          labels = [l['name'] for l in json.load(sys.stdin).get('labels', [])]
-          qa_labels = [l for l in labels if l.endswith(':qa-ready') or l.endswith(':qa-drafting')]
-          print(qa_labels[0] if qa_labels else '')
-          " 2>/dev/null || echo '')
+          qa_labels_json=$(printf '%s' "${issue_data}" | jq -c '
+            [.labels[].name | select(endswith(":qa-ready") or endswith(":qa-drafting"))]')
+          qa_label_count=$(printf '%s' "${qa_labels_json}" | jq 'length')
+          if (( qa_label_count > 1 )); then
+            echo "::error::複数の QA 状態ラベルを検出しました。状態を一意に修復してから再実行してください。"
+            exit 1
+          fi
+          qa_ready_label=$(printf '%s' "${qa_labels_json}" | jq -r 'first // ""')
           echo "qa_ready_label=${qa_ready_label}" >> "${GITHUB_OUTPUT}"
           if [ -z "${qa_ready_label}" ]; then
             echo "このIssueには *:qa-ready / *:qa-drafting ラベルがありません。スキップします。"
@@ -109,33 +401,8 @@ jobs:
         if: steps.detect-qa-ready.outputs.qa_ready_label != ''
         run: |
           set -euo pipefail
-          if [ "${DRY_RUN}" = "true" ] && [ -z "${COMMENT_BODY}" ]; then
-            echo "detect=dry-run-force-answer" >> "${GITHUB_OUTPUT}"
-            echo "is_answer=true" >> "${GITHUB_OUTPUT}"
-            echo "[DRY RUN] workflow_dispatch 実行のため QA 回答判定を true 扱いにします。"
-            exit 0
-          fi
-          is_answer="false"
-
-          # 条件1: <!-- auto-qa-default-answered --> マーカー付きコメント
-          if printf '%s' "${COMMENT_BODY}" | grep -q '<!-- auto-qa-default-answered -->'; then
-            is_answer="true"
-            echo "detect=auto-qa-default-answered" >> "${GITHUB_OUTPUT}"
-          fi
-
-          # 条件2: @copilot メンション付きの OWNER/MEMBER/COLLABORATOR コメント
-          if [ "${is_answer}" != "true" ]; then
-            if printf '%s' "${COMMENT_BODY}" | grep -q '@copilot'; then
-              if [ "${COMMENT_AUTHOR_ASSOC}" = "OWNER" ] || \
-                 [ "${COMMENT_AUTHOR_ASSOC}" = "MEMBER" ] || \
-                 [ "${COMMENT_AUTHOR_ASSOC}" = "COLLABORATOR" ]; then
-                is_answer="true"
-                echo "detect=copilot-mention-by-collaborator" >> "${GITHUB_OUTPUT}"
-              fi
-            fi
-          fi
-
-          echo "is_answer=${is_answer}" >> "${GITHUB_OUTPUT}"
+          echo "detect=validated-by-save-qa-answer" >> "${GITHUB_OUTPUT}"
+          echo "is_answer=true" >> "${GITHUB_OUTPUT}"
 
       - name: QA 回答コンテキストを Issue body に注入（冪等性マーカー付き）
         id: inject-qa-context
@@ -170,6 +437,7 @@ jobs:
             exit 0
           }
           if printf '%s' "${current_body}" | grep -qF "${NEW_MARKER}"; then
+            echo "qa_comment_found=true" >> "${GITHUB_OUTPUT}"
             echo "QA コンテキストは既に注入済みです（新マーカー）。スキップします。"
             exit 0
           fi
@@ -178,61 +446,26 @@ jobs:
             echo "旧マーカーが存在しますが、新形式（本文注入）への追記を実行します。"
           fi
 
-          # QA 回答コメントを取得（最新の既定値回答コメント、または
-          # @copilot を含む人間ユーザーの回答コメント）
-          # --paginate はページごとに配列を出力するため --jq '.[]' で NDJSON 化し
-          # jq -rs で全ページを集約してから最後の一致を選択する。
-          qa_comment_json=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}/comments" \
-            --paginate \
-            --jq '.[]' \
-            2>/dev/null | jq -rs '
-              [
-                .[]
-                | select(
-                    (
-                      ((.body // "") | contains("<!-- auto-qa-default-answered -->"))
-                    )
-                    or
-                    (
-                      ((.body // "") | contains("@copilot"))
-                      and
-                      (((.body // "") | contains("<!-- copilot-auto-pre-qa-posted -->")) | not)
-                      and
-                      (
-                        (.author_association // "") == "OWNER"
-                        or (.author_association // "") == "MEMBER"
-                        or (.author_association // "") == "COLLABORATOR"
-                      )
-                      and
-                      ((.user.type // "") != "Bot")
-                      and
-                      ((.user.login // "") != "github-actions[bot]")
-                      and
-                      ((.user.login // "") != "copilot[bot]")
-                      and
-                      ((.user.login // "") != "copilot-swe-agent[bot]")
-                    )
-                  )
-              ]
-              | last
-              | {url: (.html_url // ""), body: (.body // "")}
-            ') || {
-            echo "WARNING: QA コメント一覧の取得に失敗しました。QA コンテキスト注入をスキップします。"
-            exit 0
-          }
-
-          qa_comment_url=$(printf '%s' "${qa_comment_json}" | jq -r '.url // ""')
-          qa_comment_body=$(printf '%s' "${qa_comment_json}" | jq -r '.body // ""')
-
-          if [ -z "${qa_comment_url}" ]; then
-            if [ "${DRY_RUN}" = "true" ]; then
-              echo "[DRY RUN] QA 回答コメント未検出のため、プレースホルダで注入処理を継続します。"
-              qa_comment_url="https://github.com/${REPO}/issues/${ISSUE_NUMBER}#issuecomment-dry-run-placeholder"
-              qa_comment_body="> （DRY RUN: QA 回答コメント未投稿のためプレースホルダ）"
-            else
-              echo "QA 回答未検出: 回答コメントがまだ投稿されていないため、Issue body への注入をスキップします。"
+          if [ "${DRY_RUN}" = "true" ] && [ -z "${ANSWER_COMMENT_ID}" ]; then
+            echo "[DRY RUN] QA 回答コメント未検出のため、プレースホルダで注入処理を継続します。"
+            qa_comment_url="https://github.com/${REPO}/issues/${ISSUE_NUMBER}#issuecomment-dry-run-placeholder"
+            qa_comment_body="> （DRY RUN: QA 回答コメント未投稿のためプレースホルダ）"
+          else
+            [[ "${ANSWER_COMMENT_ID}" =~ ^[1-9][0-9]*$ ]] || {
+              echo "QA 回答未検出: 検証済み回答コメント ID がありません。"
               exit 0
-            fi
+            }
+            qa_comment_json=$(gh api "/repos/${REPO}/issues/comments/${ANSWER_COMMENT_ID}" 2>/dev/null) || {
+              echo "QA 回答未検出: 回答コメントの再取得に失敗しました。"
+              exit 0
+            }
+            qa_issue_url=$(printf '%s' "${qa_comment_json}" | jq -r '.issue_url // ""')
+            [[ "${qa_issue_url}" == */issues/"${ISSUE_NUMBER}" ]] || {
+              echo "QA 回答未検出: 回答コメントと Issue が一致しません。"
+              exit 0
+            }
+            qa_comment_url=$(printf '%s' "${qa_comment_json}" | jq -r '.html_url // ""')
+            qa_comment_body=$(printf '%s' "${qa_comment_json}" | jq -r '.body // ""')
           fi
 
           # QA 回答本文が空または「質問なし」の場合の処理
@@ -251,6 +484,8 @@ jobs:
             APPEND_TEXT=$(printf '\n\n---\n## 📋 Pre-execution QA context\n\nSource comment:\n%s\n\n<!-- qa-reference-instruction-start -->\n## 🔒 PR 本文に必須セクション（CI 検証あり）\n\n完成 PR の本文に **必ず** 以下のセクションを含めてください（`verify-qa-reference-in-pr.yml` で検証されます）:\n\n<!-- qa-reference-start -->\n## Referenced QA Files\n- qa/<参照したQA回答ファイルのパス>\n<!-- qa-reference-end -->\n\nQA 参照が不要な場合は、同セクション内に「参照なし: 理由 = <理由>」と明記してください。\n\n**現在の検証モード**: 段階導入中（warning → required 予定）\n<!-- qa-reference-instruction-end -->\n\n%s' \
               "${qa_comment_url}" "${NEW_MARKER}")
           }
+              qa_reference_path="${SAVED_QA_PATH:-qa/<参照したQA回答ファイルのパス>}"
+              APPEND_TEXT="${APPEND_TEXT//qa\/<参照したQA回答ファイルのパス>/${qa_reference_path}}"
           NEW_BODY="${current_body}${APPEND_TEXT}"
           dry_run_guard "Issue body への QA コンテキスト注入" \
             gh api -X PATCH "/repos/${REPO}/issues/${ISSUE_NUMBER}" \
@@ -288,28 +523,13 @@ jobs:
           READY_LABEL="${READY_LABEL/:qa-drafting/:ready}"
           echo "遷移: ${QA_READY_LABEL} → ${READY_LABEL}"
 
-          # *:qa-ready ラベルを除去
-          dry_run_guard "qa-ready ラベル除去" \
-            gh api -X DELETE \
-              "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels/${QA_READY_LABEL}" \
-              --silent 2>/dev/null || true
-          sleep 1
-
-          # *:ready ラベルを付与
-          dry_run_guard "ready ラベル付与" \
-            gh issue edit "${ISSUE_NUMBER}" \
-              --repo "${REPO}" \
-              --add-label "${READY_LABEL}" || true
-          sleep 1
-
-          # Issue body からカスタムエージェント・ブランチ・モデルを抽出して Copilot アサイン
+          # 保存・dispatch と同一の branch で Copilot をアサインする
           issue_data=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}") || issue_data=''
-          BRANCH=$(echo "${issue_data}" | python3 -c "
-          import sys, json, re
-          body = json.load(sys.stdin).get('body', '')
-          m = re.search(r'<!--\s*branch:\s*([^\s-][^-]*?)\s*-->', body)
-          print(m.group(1).strip() if m else 'main')
-          " 2>/dev/null || echo 'main')
+          BRANCH="${SAVED_BRANCH}"
+          [[ "${BRANCH}" =~ ^[A-Za-z0-9._/-]+$ && "${BRANCH}" != *".."* ]] || {
+            echo "::error::検証済み branch が不正です"
+            exit 1
+          }
           CUSTOM_AGENT=$(echo "${issue_data}" | python3 -c "
           import sys, json, re
           body = json.load(sys.stdin).get('body', '')
@@ -325,18 +545,48 @@ jobs:
 
           # Copilot アサイン（assign-copilot.sh 使用）
           source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/copilot-assign.sh"
-          if dry_run_guard "Copilot アサイン" \
+          if ! dry_run_guard "Copilot アサイン" \
             assign_copilot "${ISSUE_NUMBER}" "${CUSTOM_AGENT}" "${BRANCH}" "" "${SELECTED_MODEL}"; then
-            # *:running ラベルを付与
-            RUNNING_LABEL="${READY_LABEL/:ready/:running}"
-            dry_run_guard "running ラベル付与" \
-              gh issue edit "${ISSUE_NUMBER}" \
-                --repo "${REPO}" \
-                --add-label "${RUNNING_LABEL}" || true
-            echo "✅ ${ISSUE_NUMBER} に Copilot アサイン + ${RUNNING_LABEL} 付与完了"
-          else
-            echo "WARNING: Issue #${ISSUE_NUMBER} への Copilot アサインに失敗しました。"
+            echo "::error::Copilot アサインに失敗したため QA 状態を維持します。"
+            exit 1
           fi
+
+          RUNNING_LABEL="${READY_LABEL/:ready/:running}"
+          if [ "${DRY_RUN}" = "true" ]; then
+            dry_run_guard "ready/running ラベル付与" \
+              gh api -X POST "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels" \
+                -f "labels[]=${READY_LABEL}" -f "labels[]=${RUNNING_LABEL}" --silent
+            dry_run_guard "qa-ready ラベル除去" \
+              gh api -X DELETE "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels/${QA_READY_LABEL}" --silent
+          else
+            # 新状態を1リクエストで追加し、read-back 後にQA待機状態を解除する。
+            gh api -X POST "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels" \
+              -f "labels[]=${READY_LABEL}" -f "labels[]=${RUNNING_LABEL}" --silent
+            staged_labels_json=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '[.labels[].name]')
+            ready_present=$(printf '%s' "${staged_labels_json}" | jq -r --arg label "${READY_LABEL}" 'index($label) != null')
+            running_present=$(printf '%s' "${staged_labels_json}" | jq -r --arg label "${RUNNING_LABEL}" 'index($label) != null')
+            if [[ "${ready_present}" != "true" || "${running_present}" != "true" ]]; then
+              gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --remove-label "${READY_LABEL}" >/dev/null 2>&1 || true
+              gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --remove-label "${RUNNING_LABEL}" >/dev/null 2>&1 || true
+              echo "::error::新状態の read-back に失敗しました。QA 状態を維持します。"
+              exit 1
+            fi
+
+            gh api -X DELETE \
+              "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels/${QA_READY_LABEL}" --silent 2>/dev/null || true
+            final_labels_json=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '[.labels[].name]')
+            qa_present=$(printf '%s' "${final_labels_json}" | jq -r --arg label "${QA_READY_LABEL}" 'index($label) != null')
+            ready_present=$(printf '%s' "${final_labels_json}" | jq -r --arg label "${READY_LABEL}" 'index($label) != null')
+            running_present=$(printf '%s' "${final_labels_json}" | jq -r --arg label "${RUNNING_LABEL}" 'index($label) != null')
+            if [[ "${qa_present}" == "true" || "${ready_present}" != "true" || "${running_present}" != "true" ]]; then
+              gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --remove-label "${READY_LABEL}" >/dev/null 2>&1 || true
+              gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --remove-label "${RUNNING_LABEL}" >/dev/null 2>&1 || true
+              gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --add-label "${QA_READY_LABEL}" >/dev/null 2>&1 || true
+              echo "::error::遷移失敗のため ready/running をロールバックし、QA 状態を復元しました。"
+              exit 1
+            fi
+          fi
+          echo "✅ ${ISSUE_NUMBER} に Copilot アサイン + ${RUNNING_LABEL} 付与完了"
           if [ "${DRY_RUN}" = "true" ]; then
             echo "::group::DRY RUN Summary"
             echo "[DRY RUN] target_issue=${ISSUE_NUMBER}"
@@ -410,8 +660,8 @@ jobs:
             echo "PR body から parent-issue を解決できませんでした。スキップします。"
           fi
 
-      - name: Issue の *:qa-ready / *:qa-drafting ラベル確認
-        id: detect-qa-ready
+      - name: Issue の単一 *:qa-drafting ラベル確認
+        id: detect-qa-drafting
         if: steps.check-copilot.outputs.is_copilot == 'true' && steps.resolve-issue.outputs.issue_number != ''
         env:
           ISSUE_NUMBER: ${{ steps.resolve-issue.outputs.issue_number }}
@@ -419,62 +669,70 @@ jobs:
           set -euo pipefail
           issue_data=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" 2>/dev/null) || issue_data=''
           if [ -z "${issue_data}" ]; then
-            echo "qa_ready_label=" >> "${GITHUB_OUTPUT}"
+            echo "qa_drafting_label=" >> "${GITHUB_OUTPUT}"
             echo "Issue #${ISSUE_NUMBER} を取得できませんでした。"
             exit 0
           fi
-          qa_ready_label=$(echo "${issue_data}" | python3 -c "
-          import sys, json
-          labels = [l['name'] for l in json.load(sys.stdin).get('labels', [])]
-          qa_labels = [l for l in labels if l.endswith(':qa-ready') or l.endswith(':qa-drafting')]
-          print(qa_labels[0] if qa_labels else '')
-          " 2>/dev/null || echo '')
-          echo "qa_ready_label=${qa_ready_label}" >> "${GITHUB_OUTPUT}"
-          if [ -z "${qa_ready_label}" ]; then
-            echo "Issue #${ISSUE_NUMBER} に *:qa-ready / *:qa-drafting ラベルがないためスキップします。"
+          qa_labels_json=$(printf '%s' "${issue_data}" | jq -c '
+            [.labels[].name | select(endswith(":qa-ready") or endswith(":qa-drafting"))]')
+          qa_label_count=$(printf '%s' "${qa_labels_json}" | jq 'length')
+          if (( qa_label_count > 1 )); then
+            echo "::error::複数の QA 状態ラベルを検出しました。状態を一意に修復してから再実行してください。"
+            exit 1
+          fi
+          qa_state_label=$(printf '%s' "${qa_labels_json}" | jq -r 'first // ""')
+          if [[ "${qa_state_label}" == *":qa-drafting" ]]; then
+            echo "qa_drafting_label=${qa_state_label}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "qa_drafting_label=" >> "${GITHUB_OUTPUT}"
+            echo "Issue #${ISSUE_NUMBER} は *:qa-drafting 状態ではないためスキップします。"
           fi
 
-      - name: hve-qa-context-injected マーカーを付与
-        id: inject-qa-context-pr
-        if: steps.check-copilot.outputs.is_copilot == 'true' && steps.resolve-issue.outputs.issue_number != '' && steps.detect-qa-ready.outputs.qa_ready_label != ''
+      - name: Issue コメントの質問票作成完了を確認
+        id: detect-questionnaire
+        if: steps.detect-qa-drafting.outputs.qa_drafting_label != ''
         env:
           ISSUE_NUMBER: ${{ steps.resolve-issue.outputs.issue_number }}
         run: |
           set -euo pipefail
-          echo "qa_comment_found=false" >> "${GITHUB_OUTPUT}"
-          MARKER="<!-- hve-qa-context-injected -->"
-          current_body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""' 2>/dev/null) || {
-            echo "Issue body の取得に失敗しました。"
-            exit 0
-          }
-          if printf '%s' "${current_body}" | grep -qF "${MARKER}"; then
-            echo "qa_comment_found=true" >> "${GITHUB_OUTPUT}"
-            echo "既に hve-qa-context-injected マーカーが存在します。"
-            exit 0
+          echo "questionnaire_found=false" >> "${GITHUB_OUTPUT}"
+          questionnaire=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}/comments" \
+            --paginate --jq '.[]' 2>/dev/null \
+            | jq -rs '
+                [ .[]
+                  | select((.user.type // "") == "Bot")
+                  | select((.user.login // "") == "Copilot" or ((.user.login // "") | startswith("copilot-swe-agent")))
+                  | select(((.body // "") | contains("<!-- copilot-auto-pre-qa-posted -->")) | not)
+                  | select(
+                      ((.body // "") | test("(?m)^\\[Q[0-9]+\\]\\s*$"))
+                      or ((.body // "") | contains("既定値候補"))
+                      or ((.body // "") | contains("優先順位付き質問票"))
+                    )
+                ] | sort_by(.created_at, .id) | last // empty')
+          if [[ -n "${questionnaire}" ]]; then
+            echo "questionnaire_found=true" >> "${GITHUB_OUTPUT}"
+            echo "Issue #${ISSUE_NUMBER} の質問票コメントを確認しました。"
+          else
+            echo "質問票コメントが未投稿のため qa-drafting を維持します。"
           fi
-          append=$(printf '\n\n%s\n' "${MARKER}")
-          new_body="${current_body}${append}"
-          gh api -X PATCH "/repos/${REPO}/issues/${ISSUE_NUMBER}" --field "body=${new_body}" --silent 2>/dev/null || {
-            echo "Issue body へのマーカー付与に失敗しました。"
-            exit 0
-          }
-          echo "qa_comment_found=true" >> "${GITHUB_OUTPUT}"
 
-      - name: qa-ready / qa-drafting → ready 遷移（PR opened 経路）
+      - name: 質問票作成完了として qa-drafting → qa-ready 遷移
         if: >
           steps.check-copilot.outputs.is_copilot == 'true'
           && steps.resolve-issue.outputs.issue_number != ''
-          && steps.detect-qa-ready.outputs.qa_ready_label != ''
-          && steps.inject-qa-context-pr.outputs.qa_comment_found == 'true'
+          && steps.detect-qa-drafting.outputs.qa_drafting_label != ''
+          && steps.detect-questionnaire.outputs.questionnaire_found == 'true'
         env:
           ISSUE_NUMBER: ${{ steps.resolve-issue.outputs.issue_number }}
-          QA_READY_LABEL: ${{ steps.detect-qa-ready.outputs.qa_ready_label }}
+          QA_DRAFTING_LABEL: ${{ steps.detect-qa-drafting.outputs.qa_drafting_label }}
         run: |
           set -euo pipefail
-          READY_LABEL="${QA_READY_LABEL/:qa-ready/:ready}"
-          READY_LABEL="${READY_LABEL/:qa-drafting/:ready}"
-          RUNNING_LABEL="${READY_LABEL/:ready/:running}"
-          gh api -X DELETE "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels/${QA_READY_LABEL}" --silent 2>/dev/null || true
-          gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --add-label "${READY_LABEL}" || true
-          gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --add-label "${RUNNING_LABEL}" || true
-          echo "PR opened 経路で遷移完了: ${QA_READY_LABEL} → ${READY_LABEL}, ${RUNNING_LABEL}"
+          QA_READY_LABEL="${QA_DRAFTING_LABEL/:qa-drafting/:qa-ready}"
+          gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --add-label "${QA_READY_LABEL}"
+          if ! gh api -X DELETE \
+            "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels/${QA_DRAFTING_LABEL}" --silent; then
+            gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --remove-label "${QA_READY_LABEL}" || true
+            echo "::error::qa-drafting の解除に失敗したため qa-ready をロールバックしました。"
+            exit 1
+          fi
+          echo "質問票作成完了: ${QA_DRAFTING_LABEL} → ${QA_READY_LABEL}（回答待ち）"

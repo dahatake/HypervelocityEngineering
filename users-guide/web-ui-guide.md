@@ -185,7 +185,6 @@ Issue Template から親 Issue を作成し、Bootstrap Workflow が Sub Issue �
 | `dataflow-dev.yml` | バッチ実装（ADFDV） |
 | `sourcecode-to-documentation.yml` | Source Codeからのドキュメント作成（ADOC） |
 | `knowledge-management.yml` | knowledge ドキュメント管理（AKM: qa/original-docs/both） |
-| `original-docs-review.yml` | Original Docs Review 質問票生成（AQOD） |
 
 
 #### ワークフロー別チェーン図
@@ -198,7 +197,7 @@ Issue Template から親 Issue を作成し、Bootstrap Workflow が Sub Issue �
 
 #### Step.1.5 PR 完全自動化チェックボックス（対応テンプレートのみ）
 
-`app-architecture-design.yml` / `web-app-design.yml` / `web-app-dev.yml` / `ai-agent-design.yml` / `ai-agent-dev.yml` / `dataflow-design.yml` / `dataflow-dev.yml` / `knowledge-management.yml` / `sourcecode-to-documentation.yml` / `original-docs-review.yml` には **「PR完全自動化設定」** チェックボックスがあります。
+`app-architecture-design.yml` / `web-app-design.yml` / `web-app-dev.yml` / `ai-agent-design.yml` / `ai-agent-dev.yml` / `dataflow-design.yml` / `dataflow-dev.yml` / `knowledge-management.yml` / `sourcecode-to-documentation.yml` には **「PR完全自動化設定」** チェックボックスがあります。
 
 - チェック ON: `auto-approve-ready` ラベル連携により、レビュー完了後に Auto Approve / Auto-merge まで自動実行
 - チェック OFF: 通常どおり人手レビュー・手動マージ
@@ -207,11 +206,12 @@ Issue Template から親 Issue を作成し、Bootstrap Workflow が Sub Issue �
 
 #### Step.1.5b 自己改善ループ設定（対応テンプレートのみ）
 
-以下の全テンプレートには **「自己改善ループ設定」** チェックボックスがあります:
-`app-architecture-design.yml` / `web-app-design.yml` / `web-app-dev.yml` / `ai-agent-design.yml` / `ai-agent-dev.yml` / `dataflow-design.yml` / `dataflow-dev.yml` / `sourcecode-to-documentation.yml` / `knowledge-management.yml` / `original-docs-review.yml`
+以下のテンプレートには **「自己改善ループ設定」**（`enable_self_improve`）チェックボックスがあります:
+`app-architecture-design.yml` / `web-app-design.yml` / `web-app-dev.yml` / `dataflow-design.yml` / `dataflow-dev.yml` / `sourcecode-to-documentation.yml` / `knowledge-management.yml`
 
 - チェック ON: 全ステップ完了後に自己改善ループが実行され、ruff / pytest / markdownlint で品質スキャンを行い、目標スコアに達するまで改善を繰り返します
 - チェック OFF（デフォルト）: 自己改善ループは実行されません
+- `ai-agent-design.yml` / `ai-agent-dev.yml` には `enable_self_improve` チェックボックスがなく、`self_improve_max_iterations` / `self_improve_quality_threshold` のみを持ちます（2026-08-07 時点の `.github/ISSUE_TEMPLATE/` 実体で確認）
 - `setup-labels.yml` は自己改善の対象外です
 
 **hve CLI からも制御可能**:
@@ -278,15 +278,15 @@ Bootstrap Workflow が自動的に Sub Issue を生成し、Copilot を各 Sub I
 
 ## 利用可能な Prompt 一覧
 
-`.github/prompts/` 配下に **77 個** の Prompt が定義されています。7 カテゴリに分類されます。
+`.github/prompts/` 配下に **84 個** の Prompt（`README.md` を除く）が定義されています。7 カテゴリに分類されます（件数は 2026-08-07 時点の実体からの集計）。
 
 | カテゴリ | 接頭辞 | 個数 | 主な役割 | 詳細参照 |
 |---------|--------|:---:|----------|---------|
 | ビジネス分析・要求定義 | `Arch-Application*`, `Arch-Architecture*` | 2 | ユースケース分析・候補アーキテクチャ選定 | [workflow-reference.md](./workflow-reference.md) |
-| アーキテクチャ設計 | `Arch-*`（Application/Architecture を除く） | 27 | ドメイン設計・データモデル・テスト設計 | [workflow-reference.md](./workflow-reference.md) |
-| 実装 | `Dev-*` | 21 | Azure リソース作成・コード生成・デプロイ | [workflow-reference.md](./workflow-reference.md) |
+| アーキテクチャ設計 | `Arch-*`（Application/Architecture を除く） | 28 | ドメイン設計・データモデル・テスト設計 | [workflow-reference.md](./workflow-reference.md) |
+| 実装 | `Dev-*` | 26 | Azure リソース作成・コード生成・デプロイ | [workflow-reference.md](./workflow-reference.md) |
 | ドキュメント生成 | `Doc-*` | 19 | API/データモデル/依存関係等の文書生成 | [workflow-reference.md](./workflow-reference.md) |
-| QA / レビュー | `QA-*` | 5 | コード品質・アーキテクチャレビュー | [workflow-reference.md](./workflow-reference.md) |
+| QA / レビュー | `QA-*` | 7 | コード品質・アーキテクチャレビュー | [workflow-reference.md](./workflow-reference.md) |
 | Knowledge Management | `KnowledgeManager` | 1 | qa/original-docs → knowledge/ D01〜D21 | [workflow-reference.md](./workflow-reference.md) |
 | E2E テスト | `E2ETesting-*` | 1 | Playwright E2E テスト実行 | [workflow-reference.md](./workflow-reference.md) |
 

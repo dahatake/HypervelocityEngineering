@@ -459,9 +459,9 @@ jobs:
     if: >
       (github.event_name == 'issues'
       && github.event.action == 'labeled'
-      && contains(fromJSON('["aas:qa-ready","aad:qa-ready","aad-web:qa-ready","asdw:qa-ready","asdw-web:qa-ready","adfd:qa-ready","adfdv:qa-ready","aag:qa-ready","aagd:qa-ready","akm:qa-ready","aqod:qa-ready","adoc:qa-ready"]'), github.event.label.name))
+      && contains(fromJSON('["aas:qa-ready","aad:qa-ready","aad-web:qa-ready","asdw:qa-ready","asdw-web:qa-ready","adfd:qa-ready","adfdv:qa-ready","aag:qa-ready","aagd:qa-ready","akm:qa-ready","adoc:qa-ready"]'), github.event.label.name))
       || (github.event_name == 'workflow_dispatch'
-      && contains(fromJSON('["aas:qa-ready","aad:qa-ready","aad-web:qa-ready","asdw:qa-ready","asdw-web:qa-ready","adfd:qa-ready","adfdv:qa-ready","aag:qa-ready","aagd:qa-ready","akm:qa-ready","aqod:qa-ready","adoc:qa-ready"]'), inputs.simulate_label))
+      && contains(fromJSON('["aas:qa-ready","aad:qa-ready","aad-web:qa-ready","asdw:qa-ready","asdw-web:qa-ready","adfd:qa-ready","adfdv:qa-ready","aag:qa-ready","aagd:qa-ready","akm:qa-ready","adoc:qa-ready"]'), inputs.simulate_label))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -594,6 +594,13 @@ jobs:
           " 2>/dev/null || echo '[]')
           QA_DRAFTING_LABEL="${QA_READY_LABEL/:qa-ready/:qa-drafting}"
 
+          qa_state_count=$(printf '%s' "${issue_labels}" | jq '
+            [ .[] | select(endswith(":qa-ready") or endswith(":qa-drafting")) ] | length')
+          if (( qa_state_count > 1 )); then
+            echo "::error::複数の QA 状態ラベルを検出しました。状態を一意に修復してから再実行してください。"
+            exit 1
+          fi
+
           if printf '%s' "${issue_labels}" | python3 -c "
           import sys, json
           labels = json.load(sys.stdin)
@@ -607,9 +614,17 @@ jobs:
           BRANCH=$(printf '%s' "${issue_data}" | python3 -c "
           import sys, json, re
           body = json.load(sys.stdin).get('body', '')
-          m = re.search(r'<!--\s*branch:\s*([^\s-][^-]*?)\s*-->', body)
+          m = re.search(r'<!--\s*branch:\s*([^>]+?)\s*-->', body)
           print(m.group(1).strip() if m else 'main')
           " 2>/dev/null || echo 'main')
+          [[ "${BRANCH}" =~ ^[A-Za-z0-9._/-]+$ && "${BRANCH}" != *".."* ]] || {
+            echo "::error::対象ブランチ名が不正です: ${BRANCH}"
+            exit 1
+          }
+          git check-ref-format --branch "${BRANCH}" >/dev/null 2>&1 || {
+            echo "::error::対象ブランチ名が Git ref として不正です: ${BRANCH}"
+            exit 1
+          }
           CUSTOM_AGENT=$(printf '%s' "${issue_data}" | python3 -c "
           import sys, json, re
           body = json.load(sys.stdin).get('body', '')
@@ -630,17 +645,35 @@ jobs:
             exit 1
           fi
 
-          dry_run_guard "qa-ready ラベル除去" \
-            gh api -X DELETE \
-              "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels/${QA_READY_LABEL}" \
-              --silent 2>/dev/null || true
-          dry_run_guard "qa-drafting ラベル付与" \
-            gh issue edit "${ISSUE_NUMBER}" \
-              --repo "${REPO}" \
-              --add-label "${QA_DRAFTING_LABEL}" || {
-              echo "::error::${QA_DRAFTING_LABEL} ラベル付与に失敗しました。"
+          if [ "${DRY_RUN}" = "true" ]; then
+            dry_run_guard "qa-drafting ラベル付与" \
+              gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --add-label "${QA_DRAFTING_LABEL}"
+            dry_run_guard "qa-ready ラベル除去" \
+              gh api -X DELETE "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels/${QA_READY_LABEL}" --silent
+          else
+            # 新状態を先に追加し、read-back 後に旧状態を解除する。
+            gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --add-label "${QA_DRAFTING_LABEL}" || {
+              echo "::error::${QA_DRAFTING_LABEL} ラベル付与に失敗しました。qa-ready を維持します。"
               exit 1
             }
+            draft_labels_json=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '[.labels[].name]')
+            if ! printf '%s' "${draft_labels_json}" | jq -e --arg label "${QA_DRAFTING_LABEL}" 'index($label) != null' >/dev/null; then
+              echo "::error::qa-drafting の read-back に失敗しました。qa-ready を維持します。"
+              exit 1
+            fi
+
+            gh api -X DELETE \
+              "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels/${QA_READY_LABEL}" --silent 2>/dev/null || true
+            final_labels_json=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '[.labels[].name]')
+            drafting_present=$(printf '%s' "${final_labels_json}" | jq -r --arg label "${QA_DRAFTING_LABEL}" 'index($label) != null')
+            ready_present=$(printf '%s' "${final_labels_json}" | jq -r --arg label "${QA_READY_LABEL}" 'index($label) != null')
+            if [[ "${drafting_present}" != "true" || "${ready_present}" == "true" ]]; then
+              gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --add-label "${QA_READY_LABEL}" >/dev/null 2>&1 || true
+              gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --remove-label "${QA_DRAFTING_LABEL}" >/dev/null 2>&1 || true
+              echo "::error::qa-ready → qa-drafting 遷移に失敗したため qa-drafting をロールバックしました。"
+              exit 1
+            fi
+          fi
           echo "✅ Issue #${ISSUE_NUMBER} に Copilot をアサインし、${QA_DRAFTING_LABEL} へ遷移しました。"
           if [ "${DRY_RUN}" = "true" ]; then
             echo "::group::DRY RUN Summary"

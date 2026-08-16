@@ -58,9 +58,9 @@
     # 両方 + custom source dir
     python -m hve orchestrate --workflow akm --sources both --custom-source-dir docs/specs
 
-    # AQOD（original-docs 横断分析質問票）
-    python -m hve orchestrate --workflow aqod
-    python -m hve orchestrate --workflow aqod --target-scope original-docs/ --depth lightweight
+    # ADI（docs-original/ の設計書を目録化・質問票生成・選別）
+    python -m hve orchestrate --workflow adi --purpose "EC 倉庫の取り置き算出バッチを再構築する"
+    python -m hve orchestrate --workflow adi --target-scope docs-original/ --depth lightweight
 
     # ARD（要求定義の自動化）
     python -m hve orchestrate --workflow ard --company-name "株式会社サンプル"
@@ -236,10 +236,10 @@ _AKM_SOURCES_MULTI_OPTIONS = [
     "workiq（Microsoft 365 Copilot Work IQ）",
 ]
 _AKM_SOURCES_MULTI_VALUES = ["qa", "original-docs", "workiq"]
-_AQOD_DEFAULT_TARGET_SCOPE = "original-docs/"
-_AQOD_DEFAULT_DEPTH = "standard"
-_AQOD_DEPTH_CHOICES = ("standard", "lightweight")
-_AQOD_DEPTH_MENU_OPTIONS = (
+_ADI_DEFAULT_TARGET_SCOPE = "docs-original/"
+_ADI_DEFAULT_DEPTH = "standard"
+_ADI_DEPTH_CHOICES = ("standard", "lightweight")
+_ADI_DEPTH_MENU_OPTIONS = (
     "standard     — 全カテゴリ",
     "lightweight  — 不明瞭/矛盾のみ",
 )
@@ -280,6 +280,7 @@ _PARAM_PROMPT_LABELS = {
     "app_id": "対象データフローアプリID（カンマ区切り・任意）",
     "target_scope": "対象スコープ",
     "focus_areas": "重点観点（任意）",
+    "purpose": "選別の目的（任意）",
     "target_dirs": "ドキュメント生成対象ディレクトリ（カンマ区切り。省略 = 全体）",
     "exclude_patterns": "除外パターン（カンマ区切り）",
     "issue_title": "GitHub Issue タイトル（任意）",
@@ -305,8 +306,10 @@ _PARAM_DEFAULTS = {
     "resource_group": "",
     "usecase_id": "",
     "app_id": "",
-    "target_scope": _AQOD_DEFAULT_TARGET_SCOPE,
+    "target_scope": _ADI_DEFAULT_TARGET_SCOPE,
+    "depth": _ADI_DEFAULT_DEPTH,
     "focus_areas": "",
+    "purpose": "",
     "target_dirs": "",
     "exclude_patterns": _ADOC_DEFAULT_EXCLUDE_PATTERNS,
     "create_remote_mcp_server": True,
@@ -577,7 +580,7 @@ def _collect_generic_workflow_params(
     is_quick_auto: bool,
     selected_step_ids: Optional[list[str]] = None,
 ) -> dict:
-    """AKM/AQOD 以外のワークフロー固有パラメータを収集する。"""
+    """AKM/ARD 以外のワークフロー固有パラメータを収集する。"""
     params: dict = {}
     # FR-CLI-14: Step 1.3 の required_params は DataDeploy ブロックが宣言由来の
     # ラベル・既定値で尋ねるため、汎用ループ側では尋ねない（二重質問防止）。
@@ -603,6 +606,8 @@ def _collect_generic_workflow_params(
             params[param_name] = _prompt_valid_doc_purpose(con)
         elif param_name == "max_file_lines":
             params[param_name] = _prompt_valid_max_file_lines(con)
+        elif wf.id == "adi" and param_name == "depth":
+            params[param_name] = _prompt_valid_adi_depth(con)
         elif param_name == "create_remote_mcp_server":
             params[param_name] = con.prompt_yes_no(
                 _PARAM_PROMPT_LABELS["create_remote_mcp_server"],
@@ -652,16 +657,16 @@ def _prompt_valid_doc_purpose(con) -> str:
     return _ADOC_DOC_PURPOSE_CHOICES[default_idx if selected_idx == -1 else selected_idx]
 
 
-def _prompt_valid_aqod_depth(con) -> str:
-    """AQOD の depth をメニュー選択させる。"""
-    default_idx = _AQOD_DEPTH_CHOICES.index(_AQOD_DEFAULT_DEPTH)
+def _prompt_valid_adi_depth(con) -> str:
+    """ADI の depth をメニュー選択させる。"""
+    default_idx = _ADI_DEPTH_CHOICES.index(_ADI_DEFAULT_DEPTH)
     selected_idx = con.menu_select(
         "分析の深さを選択してください",
-        list(_AQOD_DEPTH_MENU_OPTIONS),
+        list(_ADI_DEPTH_MENU_OPTIONS),
         allow_empty=True,
         default_index=default_idx,
     )
-    return _AQOD_DEPTH_CHOICES[default_idx if selected_idx == -1 else selected_idx]
+    return _ADI_DEPTH_CHOICES[default_idx if selected_idx == -1 else selected_idx]
 
 
 def _prompt_valid_max_file_lines(con) -> int:
@@ -886,7 +891,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "adfd(Dataflow Design) / "
             "adfdv(Dataflow Dev) / "
             "akm(Knowledge Management) / "
-            "aqod(Original Docs Review) / "
+            "adi(Auto Design-doc Ingestion) / "
             "adoc(Source Codeからのドキュメント作成)"
             " — `--autopilot-chain` 指定時は省略可（排他）"
         ),
@@ -1008,6 +1013,15 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="MODEL",
         help="QA 質問票生成（--auto-qa）で使用するモデル（省略時は --model と同じ）",
     )
+    orch.add_argument(
+        "--akm-model",
+        default=None,
+        metavar="MODEL",
+        help=(
+            "QA 回答から起動する AKM 差分同期（--auto-qa）で使用するモデル"
+            "（省略時は --model と同じ。--workflow akm の明示実行には適用されない）"
+        ),
+    )
 
     # reasoning effort (SDK ModelInfo.supported_reasoning_efforts から選択)
     orch.add_argument(
@@ -1033,6 +1047,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="QA 用モデルの reasoning effort（省略時は --reasoning-effort を継承）",
     )
     orch.add_argument(
+        "--akm-reasoning-effort",
+        default=None,
+        metavar="EFFORT",
+        help="QA 起点 AKM 用モデルの reasoning effort（省略時は --reasoning-effort を継承）",
+    )
+    orch.add_argument(
         "--context-tier",
         default=None,
         choices=["default", "long_context"],
@@ -1041,6 +1061,12 @@ def _build_parser() -> argparse.ArgumentParser:
             "long_context は対応モデルでロングコンテキストを有効化する。"
             "省略時は SDK/サーバ既定。"
         ),
+    )
+    orch.add_argument(
+        "--akm-context-tier",
+        default=None,
+        choices=["default", "long_context"],
+        help="QA 起点 AKM のコンテキスト階層（省略時は --context-tier を継承）",
     )
 
     # 並列実行
@@ -1058,6 +1084,16 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="QA 自動投入を有効化 (デフォルト: 無効)",
+    )
+    orch.add_argument(
+        "--qa-akm-background-merge",
+        action="store_true",
+        default=False,
+        help=(
+            "QA 回答を knowledge/ へ取り込む Knowledge Management (AKM) を"
+            "バックグラウンドで起動する (デフォルト: 無効)。"
+            "--auto-qa 有効時の非 AKM Workflow でだけ効く"
+        ),
     )
     orch.add_argument(
         "--force-interactive",
@@ -1558,19 +1594,25 @@ def _build_parser() -> argparse.ArgumentParser:
         "--target-scope",
         default=None,
         metavar="PATH",
-        help="AQOD: チェック対象スコープ（省略時: original-docs/）",
+        help="ADI: 対象設計書スコープ（省略時: docs-original/）",
     )
     orch.add_argument(
         "--depth",
         choices=["standard", "lightweight"],
         default=None,
-        help="AQOD: 分析の深さ（standard / lightweight）",
+        help="ADI: 分析の深さ（standard / lightweight）",
     )
     orch.add_argument(
         "--focus-areas",
         default=None,
         metavar="TEXT",
-        help="AQOD: 重点観点（任意）",
+        help="ADI: 重点観点（任意）",
+    )
+    orch.add_argument(
+        "--purpose",
+        default=None,
+        metavar="TEXT",
+        help="ADI: 設計書選別の目的（任意。空のときは must を付与しない）",
     )
     orch.add_argument(
         "--target-dirs",
@@ -1957,6 +1999,24 @@ def _build_parser() -> argparse.ArgumentParser:
         help="SDK tool probe の MCP 設定で tools=['*'] を使う（診断・切り分け用途のみ）",
     )
 
+    # --- ingest-docs サブコマンド（ADI Step 1 の前処理）---
+    ingest_docs_parser = sub.add_parser(
+        "ingest-docs",
+        help="docs-original/ を走査して docs/original-design-doc-ingest/ に目録と正規化済み Markdown を出力する",
+    )
+    ingest_docs_parser.add_argument(
+        "--source-dir",
+        default="docs-original",
+        metavar="DIR",
+        help="原本ディレクトリ（既定: docs-original）",
+    )
+    ingest_docs_parser.add_argument(
+        "--out-dir",
+        default="docs/original-design-doc-ingest",
+        metavar="DIR",
+        help="派生物の出力先（既定: docs/original-design-doc-ingest）",
+    )
+
     # --- emit-prompt サブコマンド ---
     emit_prompt = sub.add_parser(
         "emit-prompt",
@@ -1977,7 +2037,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # --- gui サブコマンド ---
     gui_parser = sub.add_parser(
         "gui",
-        help="PySide6 ベースの HVE GUI Orchestrator を起動する (pip install -e .[gui] が必要)",
+        help="PySide6 ベースの HVE GUI Orchestrator を起動する (未導入時は hve/setup-hve.cmd / ./hve/setup-hve.sh を実行)",
     )
     # Autopilot モード関連フラグ
     gui_parser.add_argument(
@@ -2123,6 +2183,13 @@ def _build_parser() -> argparse.ArgumentParser:
         help="--follow のときの更新間隔秒（デフォルト: 2.0）",
     )
 
+    # FR-TS-11: Step 実行セッションのコンテキスト内訳を実測する。
+    ts_context = toolsearch_sub.add_parser(
+        "context",
+        help="Step 実行セッションのコンテキスト内訳を実測する（プロンプトは送らない）",
+    )
+    ts_context.add_argument("--json", action="store_true", help="JSON 形式で出力する")
+
     return parser
 
 
@@ -2234,14 +2301,22 @@ def _build_config(args: argparse.Namespace):
     elif getattr(cfg, "qa_model", None):
         cfg.qa_model, _ = _resolve_model(cfg.qa_model)
         cfg.qa_model = _normalize_model_with_warning(cfg.qa_model)
+    # FR-QA-04: AKM 専用モデルに環境変数経路は新設しない（CLI 明示指定のみ）。
+    _raw_akm_model = getattr(args, "akm_model", None)
+    if _raw_akm_model:
+        cfg.akm_model, _ = _resolve_model(_raw_akm_model)
+        cfg.akm_model = _normalize_model_with_warning(cfg.akm_model)
     # reasoning_effort (ユーザー明示指定を SDKConfig に転送)
     cfg.reasoning_effort = getattr(args, "reasoning_effort", None) or None
     cfg.review_reasoning_effort = getattr(args, "review_reasoning_effort", None) or None
     cfg.qa_reasoning_effort = getattr(args, "qa_reasoning_effort", None) or None
+    cfg.akm_reasoning_effort = getattr(args, "akm_reasoning_effort", None) or None
     # context_tier (ユーザー明示指定を SDKConfig に転送)
     cfg.context_tier = getattr(args, "context_tier", None) or None
+    cfg.akm_context_tier = getattr(args, "akm_context_tier", None) or None
     cfg.max_parallel = args.max_parallel
     cfg.auto_qa = args.auto_qa
+    cfg.qa_akm_background_merge = getattr(args, "qa_akm_background_merge", False)
     cfg.force_interactive = getattr(args, "force_interactive", False)
     cfg.qa_answer_mode = getattr(args, "qa_answer_mode", None)
     cfg.qa_ipc_dir = getattr(args, "qa_ipc_dir", None)
@@ -2444,8 +2519,6 @@ def _build_config(args: argparse.Namespace):
     _workiq_req_timeout = getattr(args, "workiq_request_timeout", None)
     if _workiq_req_timeout is not None and _workiq_req_timeout > 0:
         cfg.workiq_request_timeout = _workiq_req_timeout
-    # 旧 --aqod-post-qa / aqod_post_qa_enabled は廃止済み。
-
     # 無視パス（CLI 引数が指定された場合のみ上書き）
     if getattr(args, "ignore_paths", None):
         cfg.ignore_paths = args.ignore_paths
@@ -2535,9 +2608,13 @@ def _build_params(args: argparse.Namespace) -> dict:
         _dxx_raw = getattr(args, "workiq_dxx", None)
         if _dxx_raw:
             params["workiq_akm_ingest_dxx"] = _dxx_raw
-    elif getattr(args, "workflow", None) == "aqod":
-        params["target_scope"] = getattr(args, "target_scope", None) or _AQOD_DEFAULT_TARGET_SCOPE
-        params["depth"] = getattr(args, "depth", None) or _AQOD_DEFAULT_DEPTH
+    elif getattr(args, "workflow", None) == "adi":
+        # 空を許容する（FR-WF-ADI-11: purpose が空のときは must を付与しない）。
+        params["purpose"] = getattr(args, "purpose", None) or ""
+        params["target_scope"] = (
+            getattr(args, "target_scope", None) or _ADI_DEFAULT_TARGET_SCOPE
+        )
+        params["depth"] = getattr(args, "depth", None) or _ADI_DEFAULT_DEPTH
         params["focus_areas"] = getattr(args, "focus_areas", None) or ""
     elif getattr(args, "workflow", None) == "ard":
         from datetime import date
@@ -2668,6 +2745,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "emit-prompt":
         return _cmd_emit_prompt(args)
 
+    if args.command == "ingest-docs":
+        return _cmd_ingest_docs(args)
+
     if args.command == "gui":
         from .gui import run_gui
         return run_gui(args)
@@ -2689,9 +2769,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         try:
             from .gui import run_gui
         except ImportError as exc:
+            from .gui.pty_backend import setup_command
+
             print(
                 f"{_ts()} ℹ️  PySide6 未導入のため CLI モードにフォールバックします。"
-                f' GUI を使う場合は `pip install -e ".[gui]"` を実行してください。 ({exc})',
+                f" GUI を使う場合は {setup_command()} を実行してください。 ({exc})",
                 file=sys.stderr,
             )
             return _cmd_run_interactive(args)
@@ -2994,11 +3076,37 @@ def _cmd_pricing(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_toolsearch(args: argparse.Namespace) -> int:
-    """`hve toolsearch dashboard` ハンドラー（FR-TS-10）。
+def _cmd_toolsearch_context(args: argparse.Namespace) -> int:
+    """`hve toolsearch context` ハンドラー（FR-TS-11）。
 
-    収集済みイベント（FR-TS-09）と利用履歴（FR-TS-07）だけから集計する。
-    ネットワークへは接続しない。
+    セッションを張って実測する。プロンプトは送らないためモデル推論は発生しない。
+    失敗は推定値で埋めず、理由つきで非 0 終了する。
+    """
+    import asyncio
+
+    try:
+        from .toolsearch import context_report
+    except ImportError:
+        from toolsearch import context_report  # type: ignore[no-redef]
+
+    try:
+        report = asyncio.run(context_report.collect(repo_root=Path.cwd()))
+    except context_report.ContextReportError as exc:
+        print(f"❌ {exc}", file=sys.stderr)
+        return 1
+
+    if getattr(args, "json", False):
+        print(context_report.render_json(report))
+    else:
+        print(context_report.render_text(report))
+    return 0
+
+
+def _cmd_toolsearch(args: argparse.Namespace) -> int:
+    """`hve toolsearch` ハンドラー（FR-TS-10 / FR-TS-11）。
+
+    `dashboard` は収集済みイベント（FR-TS-09）と利用履歴（FR-TS-07）だけから集計し、
+    ネットワークへは接続しない。`context` はセッションを張って実測するがプロンプトは送らない。
     """
     try:
         from .toolsearch import dashboard as ts_dashboard
@@ -3006,6 +3114,8 @@ def _cmd_toolsearch(args: argparse.Namespace) -> int:
         from toolsearch import dashboard as ts_dashboard  # type: ignore[no-redef]
 
     sub = getattr(args, "toolsearch_command", None) or "dashboard"
+    if sub == "context":
+        return _cmd_toolsearch_context(args)
     if sub != "dashboard":
         print(f"❌ 未知のサブコマンドです: {sub}", file=sys.stderr)
         return 2
@@ -3201,13 +3311,12 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     selected_wf = workflows[wf_idx]
     wf = get_workflow(selected_wf.id)
     is_akm = (wf.id == "akm")
-    is_aqod = (wf.id == "aqod")
     is_ard = (wf.id == "ard")
     is_agent_self_improve_default = wf.id in {"aag", "aagd"}
-    is_single_step_workflow = is_akm or is_aqod
+    is_single_step_workflow = is_akm
 
     # ── ステップ選択 ──────────────────────────────────────
-    # AKM/AQOD はステップが 1 つのみのため、自動で全選択
+    # AKM はステップが 1 つのみのため、自動で全選択
     # ARD はワークフロー固有入力で Step 1/2/3 を選択する
     if is_single_step_workflow:
         selected_step_ids = []  # 空 = 全ステップ
@@ -3260,6 +3369,11 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     review_model_display = None
     qa_model = None
     qa_model_display = None
+    akm_model = None
+    akm_model_display = None
+    akm_reasoning_effort = None
+    akm_context_tier = None
+    qa_akm_background_merge = False
 
     workiq_additional_prompt = ""
     ard_workiq_enabled = False
@@ -3300,10 +3414,6 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         params_extra: dict = {}
         if is_akm:
             params_extra.update(_prompt_akm_params(con, is_quick_auto=True))
-        elif is_aqod:
-            params_extra["target_scope"] = _AQOD_DEFAULT_TARGET_SCOPE
-            params_extra["depth"] = _AQOD_DEFAULT_DEPTH
-            params_extra["focus_areas"] = ""
         elif is_ard:
             _ard_wf_params, _ard_steps = _collect_ard_wizard_params(con, is_quick_auto=True)
             params_extra.update(_ard_wf_params)
@@ -3359,12 +3469,6 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                     will_create_pr=False,
                 )
             )
-        elif is_aqod:
-            params_extra["target_scope"] = con.prompt_input(
-                _PARAM_PROMPT_LABELS["target_scope"], default=_AQOD_DEFAULT_TARGET_SCOPE
-            )
-            params_extra["depth"] = _prompt_valid_aqod_depth(con)
-            params_extra["focus_areas"] = con.prompt_input(_PARAM_PROMPT_LABELS["focus_areas"], default="")
         elif is_ard:
             _ard_wf_params, _ard_steps = _collect_ard_wizard_params(con, is_quick_auto=False)
             params_extra.update(_ard_wf_params)
@@ -3443,29 +3547,23 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
             qa_answer_mode = None
             force_interactive = False
             auto_review = False
-            if is_akm:
-                auto_qa = con.prompt_yes_no(
-                    "AKM 実行前に QA（事前確認・質問票生成・回答）を実施する？",
+            auto_qa = con.prompt_yes_no(
+                "AKM 実行前に QA（事前確認・質問票生成・回答）を実施する？",
+                default=False,
+            )
+            if auto_qa:
+                qa_answer_mode = "all"
+                # QA 有効時のみ QA 用モデルを尋ねる（Phase C から移設）。
+                use_different_qa_model = con.prompt_yes_no(
+                    "QA にメインモデルとは別のモデルを使う？（n の場合、未指定なら環境変数 QA_MODEL を使用）",
                     default=False,
                 )
-                if auto_qa:
-                    qa_answer_mode = "all"
-                    # QA 有効時のみ QA 用モデルを尋ねる（Phase C から移設）。
-                    use_different_qa_model = con.prompt_yes_no(
-                        "QA にメインモデルとは別のモデルを使う？（n の場合、未指定なら環境変数 QA_MODEL を使用）",
-                        default=False,
-                    )
-                    if use_different_qa_model:
-                        qa_model_idx = con.menu_select("QA 用モデルを選択", model_options)
-                        qa_model, qa_model_display = _resolve_model(model_options[qa_model_idx])
-                        if qa_model == model:
-                            qa_model = None
-                            qa_model_display = None
-            elif is_aqod:
-                # AQOD は事前 QA スキップ・事後 QA (post-QA) 廃止のため、本体タスクのみ。
-                auto_qa = False
-            else:
-                auto_qa = False
+                if use_different_qa_model:
+                    qa_model_idx = con.menu_select("QA 用モデルを選択", model_options)
+                    qa_model, qa_model_display = _resolve_model(model_options[qa_model_idx])
+                    if qa_model == model:
+                        qa_model = None
+                        qa_model_display = None
         else:
             auto_qa = con.prompt_yes_no(
                 "QA 自動投入を有効にする？（質問票はステップ実行の前に作成されます）",
@@ -3488,6 +3586,34 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                     if qa_model == model:
                         qa_model = None
                         qa_model_display = None
+                # FR-QA-05: QA 回答を knowledge/ へ取り込む AKM を起動するか。
+                # 明示の `-w akm` 実行は対象外なのでこの分岐でのみ尋ねる。
+                qa_akm_background_merge = con.prompt_yes_no(
+                    "QA 回答を Knowledge Management へバックグラウンドでマージする？",
+                    default=False,
+                )
+                # FR-QA-04: QA 回答を knowledge/ へ同期する AKM 子実行の実行品質。
+                # マージが無効なら子実行自体が起きないため尋ねない。
+                if qa_akm_background_merge and con.prompt_yes_no(
+                    "QA 起点の AKM 同期にメインとは別の実行品質設定を使う？",
+                    default=False,
+                ):
+                    akm_model_idx = con.menu_select("AKM 用モデルを選択", model_options)
+                    akm_model, akm_model_display = _resolve_model(model_options[akm_model_idx])
+                    if akm_model == model:
+                        akm_model = None
+                        akm_model_display = None
+                    akm_reasoning_effort = (con.prompt_input(
+                        "AKM 用 reasoning effort（空 = メインと同じ）",
+                        default="",
+                    ) or "").strip() or None
+                    _akm_tier_options = ["（メインと同じ）", "default", "long_context"]
+                    _akm_tier_idx = con.menu_select(
+                        "AKM 用 context tier を選択", _akm_tier_options,
+                    )
+                    akm_context_tier = (
+                        _akm_tier_options[_akm_tier_idx] if _akm_tier_idx > 0 else None
+                    )
             else:
                 qa_answer_mode = None
                 force_interactive = False
@@ -3765,6 +3891,13 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         summary_lines.append(f"QA モデル    : {qa_model_display or '(メインと同じ)'}")
         summary_lines.append(f"QA 回答モード : 全問デフォルト自動採用")
         # force_interactive は auto_qa=True 時は常に False のため表示不要
+        if not is_akm:
+            summary_lines.append(
+                f"KM マージ    : {'ON' if qa_akm_background_merge else 'OFF'}"
+            )
+            summary_lines.append(f"AKM モデル   : {akm_model_display or '(メインと同じ)'}")
+            summary_lines.append(f"AKM effort   : {akm_reasoning_effort or '(メインと同じ)'}")
+            summary_lines.append(f"AKM context  : {akm_context_tier or '(メインと同じ)'}")
     if workiq_enabled:
         if is_akm:
             summary_lines.append(f"Work IQ QA   : {'ON' if workiq_qa_enabled else 'OFF'}")
@@ -3866,6 +3999,10 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         cfg.review_model = review_model
     if qa_model is not None:
         cfg.qa_model = qa_model
+    cfg.akm_model = akm_model
+    cfg.akm_reasoning_effort = akm_reasoning_effort
+    cfg.akm_context_tier = akm_context_tier
+    cfg.qa_akm_background_merge = qa_akm_background_merge
     cfg.max_parallel = max_parallel
     cfg.auto_qa = auto_qa
     cfg.workiq_enabled = workiq_enabled
@@ -4545,14 +4682,26 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
         continue_on_error=not _strict,
     )
 
-    result = asyncio.run(
-        run_workflow(
-            workflow_id=args.workflow,
-            params=params,
-            config=config,
-            orchestrator_ctx=orchestrator_ctx,
+    akm_lock = None
+    if args.workflow == "akm":
+        try:
+            from .qa_akm_dispatch import RepositoryAkmLock
+        except ImportError:  # pragma: no cover - script execution path
+            from qa_akm_dispatch import RepositoryAkmLock  # type: ignore[no-redef]
+        akm_lock = RepositoryAkmLock(Path.cwd())
+        akm_lock.acquire()
+    try:
+        result = asyncio.run(
+            run_workflow(
+                workflow_id=args.workflow,
+                params=params,
+                config=config,
+                orchestrator_ctx=orchestrator_ctx,
+            )
         )
-    )
+    finally:
+        if akm_lock is not None:
+            akm_lock.close()
 
     # 終了コード判定
     # T-H1H2b: blocked は failed と区別された「停止」として優先判定する。
@@ -4590,6 +4739,34 @@ def _cmd_emit_prompt(args: argparse.Namespace) -> int:
 
     output = render_pre_execution_qa_comment_body() if args.comment_body else PRE_EXECUTION_QA_PROMPT_V2
     print(output, end="")
+    return 0
+
+
+def _cmd_ingest_docs(args: argparse.Namespace) -> int:
+    """ingest-docs サブコマンドのハンドラー（ADI Step 1 の決定的前処理）。"""
+    try:
+        from .doc_ingest import MaxDocsExceededError, ingest_docs
+    except ImportError:
+        from doc_ingest import MaxDocsExceededError, ingest_docs  # type: ignore[no-redef]
+
+    source_dir = Path(args.source_dir)
+    out_dir = Path(args.out_dir)
+
+    if not source_dir.is_dir():
+        print(f"エラー: 原本ディレクトリが存在しません: {source_dir}", file=sys.stderr)
+        return 1
+
+    try:
+        result = ingest_docs(source_dir, out_dir=out_dir)
+    except MaxDocsExceededError as e:
+        print(f"エラー: {e}", file=sys.stderr)
+        return 1
+
+    docs = result["docs"]
+    excluded = result["excluded"]
+    print(f"取り込み {len(docs)} 件 / 除外 {len(excluded)} 件 → {out_dir / 'index.json'}")
+    for item in excluded:
+        print(f"  除外: {item['source_path']} — {item['reason']}")
     return 0
 
 

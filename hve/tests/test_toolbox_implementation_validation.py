@@ -178,6 +178,17 @@ def _write_fixture(
     if toolbox_config is not None:
         config["toolbox"] = toolbox_config
     (agent_dir / "agent-config.json").write_text(json.dumps(config), encoding="utf-8")
+    (agent_dir / "plugin.json").write_text(
+        json.dumps(
+            {
+                "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                "name": "ag-01",
+                "description": "Order resolution agent packaged as an Agent Plugin.",
+                "version": "0.1.0",
+            }
+        ),
+        encoding="utf-8",
+    )
     (agent_dir / "agent.py").write_text(_python_source(), encoding="utf-8")
     (agent_dir / "mcp_client.py").write_text(_mcp_source(), encoding="utf-8")
 

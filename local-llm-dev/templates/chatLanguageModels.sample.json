@@ -1,0 +1,19 @@
+[
+  {
+    "name": "Ollama (local)",
+    "vendor": "customendpoint",
+    "apiType": "chat-completions",
+    "apiKey": "unused-but-required",
+    "models": [
+      {
+        "id": "qwen3:8b",
+        "name": "Qwen3 8B (Ollama)",
+        "url": "http://127.0.0.1:11434/v1/chat/completions",
+        "toolCalling": true,
+        "vision": false,
+        "maxInputTokens": 6144,
+        "maxOutputTokens": 2048
+      }
+    ]
+  }
+]

@@ -82,12 +82,16 @@ SURFACE_FIELDNAMES = SURFACE_FIELDNAMES
 
 
 def git_files() -> list[str]:
-    return subprocess.check_output(
+    candidates = subprocess.check_output(
         ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
         cwd=ROOT,
         text=True,
         encoding="utf-8",
     ).splitlines()
+    # `git ls-files --cached` は削除をcommitする前のパスも返す。存在しないパスを
+    # parse-error行としてinventoryへ残すと、削除済みテストや旧識別子が現行契約に
+    # 見えてしまうため、現在の作業ツリーで実在する通常ファイルだけを入力にする。
+    return [path for path in candidates if (ROOT / path).is_file()]
 
 
 def category_for_test_path(path: str) -> tuple[str, str] | None:

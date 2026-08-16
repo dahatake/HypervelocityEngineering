@@ -20,12 +20,13 @@
 ---
 
 > [!TIP]
-> Step.1 と Step.3（手動手順）は `hve` の **ARD オーケストレーター** で自動化できます。ARD では Step ID 体系が `1`/`2`/`3` の直列フローに再構成されています（旧 Step.1 → ARD Step 1、旧 Step.3 → ARD Step 3。ARD Step 2 は SR 選択を経由した Targeted 分析として新設）。
+> 本文の **手動 Step 番号** と ARD の **表示グループ番号** は別体系です。ARD は表示グループ `1`〜`4` を実 Step `1` / `1.1` / `1.2` / `2` / `2.1` / `3.1` / `3.2` / `3.3` に展開します。
 > 詳細は本ドキュメント内の [要求定義の自動化（ARD: Auto Requirement Definition）](#要求定義の自動化ard-auto-requirement-definition) を参照してください。
 
 事業のアイディア、議事録、プロジェクトプランなどから、要求定義のドキュメントを作成します。
 
-GitHub Copilot cloud agent への Issue 候補でもあります: [GitHub Copilot cloud agent について](https://docs.github.com/ja/enterprise-cloud@latest/copilot/using-github-copilot/coding-agent/about-assigning-tasks-to-copilot)
+> [!IMPORTANT]
+> このリポジトリの **ARD は CLI / GUI Orchestrator 専用**です。ARD 専用 Issue Template、reusable workflow、Cloud dispatcher 登録はありません。GitHub Copilot cloud agent の一般機能と、ARD の実行経路を混同しないでください。
 
 ---
 
@@ -33,8 +34,9 @@ GitHub Copilot cloud agent への Issue 候補でもあります: [GitHub Copilo
 ## 対象読者・前提・次のステップ
 
 - 対象読者: 要求定義を手動で進めたい方、または ARD 自動化の前提を理解したい方
-- 前提: Microsoft 365 Copilot 等の情報収集ツールと GitHub Copilot が利用できること
-- 次のステップ: Step.1/Step.3 の自動化が必要な場合は本ドキュメント内の [要求定義の自動化（ARD: Auto Requirement Definition）](#要求定義の自動化ard-auto-requirement-definition)、設計へ進む場合は [02-app-architecture-design.md](./02-app-architecture-design.md)
+- 手動実行の前提: 参照資料を読み取れる LLM ツールと、結果を Markdown として保存できること
+- ARD の前提: `python -m hve` が実行でき、GitHub Copilot CLI の認証が完了していること
+- 次のステップ: 自動化する場合は [ARD](#要求定義の自動化ard-auto-requirement-definition)、設計へ進む場合は [02-app-architecture-design.md](./02-app-architecture-design.md)
 
 ## 概要
 
@@ -47,49 +49,45 @@ GitHub Copilot cloud agent への Issue 候補でもあります: [GitHub Copilo
 
 ### 前提条件
 
-- Microsoft 365 Copilot（または同等の LLM ツール）へのアクセス（Step.1〜Step.3 で使用）
-- GitHub Copilot が有効になっていること（Step.4 で使用）
-- セットアップ・トラブルシューティングは → [Cloud](./hve-cloud-getting-started.md) / [CLI](./hve-cli-getting-started.md) / [GUI](./hve-gui-getting-started.md)
+- 手動 Step: Microsoft 365 Copilot Researcher または同等の、参照資料と出典を扱える LLM ツール
+- ARD: [CLI セットアップ](./hve-cli-getting-started.md) または [GUI セットアップ](./hve-gui-getting-started.md) を完了し、必要なら `python -m hve login` を実行済みであること
+- 入力資料: 機密区分と利用許可を確認し、参照可能なローカルパスへ配置すること
+- ARD では Cloud セットアップや ARD 用ラベル初期化は前提ではありません
 
 ### 完了条件
 
-以下が作成されている状態が完了です。
+選択した経路に対応する成果物が作成され、根拠・未確定事項・追加確認事項を確認できる状態が完了です。
 
-- `docs/company-business-requirement.md`（企業レベルの事業分析レポート）
-- `docs/business-requirement.md`（事業レベルの事業分析レポート）
-- `docs/catalog/use-case-catalog.md`（ユースケース一覧）
-- `knowledge/business-requirement-document-status.md`（要求定義ドキュメントのステータス・qa/分類）
+- `docs/company-business-requirement.md`（企業レベル分析を実施した場合）
+- `docs/business-requirement.md`（対象業務の深掘り分析を実施した場合）
+- `docs/recommended-kpi-okr.md`（KPI/OKR を実施した場合）
+- `docs/catalog/use-case-catalog.md`（ユースケース作成を実施した場合）
+- `knowledge/business-requirement-document-status.md`（別ワークフローの AKM を実施した場合）
 - （Step.1.3 で必要文書クラスを作成した場合）`knowledge/D01-*.md` 〜 `knowledge/D21-*.md` のうち作成対象としたファイル
 
 ---
 
-> 💡 **knowledge/ との関連**: Step.4（`KnowledgeManager`）で `qa/` の質問ファイルを分類すると、QA マッピングが存在する D クラスについて `knowledge/D{NN}-<文書名>.md` が自動生成されます（マッピングがない D クラスは生成されません）。生成されたファイルは後続の設計・開発ワークフロー（Architecture Design / Web App Design / Web App Dev & Deploy）で業務コンテキストとして自動参照されます。詳細は [km-guide.md](./km-guide.md) を参照してください。
+> 💡 **knowledge/ との関連**: ARD の恒久成果物は `docs/` 配下です。`qa/` / `docs-original/` / Work IQ を入力として `knowledge/D01〜D21-*.md` とステータス文書を生成・更新する責務は、別ワークフローの **AKM (`KnowledgeManager`)** にあります。詳細は [km-guide.md](./km-guide.md) を参照してください。
 
 
 ## ツール
 
-ツールは、最近のLLMであれば、どれでもそれなりにドキュメントを作成してくれます。
-ビジネス上の課題は必ずしもファイル化されていない場合もありますし、それらはファイル化自体を、このプロセスでLLMにやってもらう方が良いかもしれません。そのため、社内のメールや会議などを参照できる**Microsoft 365 Copilot**の利用をお勧めします。
+手動 Step では、入力資料・利用権限・出典を扱えるツールを選びます。特定モデルの利用は前提にしません。
 
-おすすめツール:
-- (最強) Microsoft 365 Copilot リサーチツール
-    - https://blogs.windows.com/japan/2025/04/14/introducing-researcher-and-analyst-in-microsoft-365-copilot/
-    - Researcherが使える方は、こちらの利用を強くお勧めします。より詳細なドキュメントの作成をしてくれますし、何よりその理由の説明のドラフトの作成が強力です。
-
-- Microsoft 365 Copilot
-    - https://www.microsoft.com/ja-jp/microsoft-365/copilot/copilot-for-work
-    - GPT-5の利用を強く推奨します。Reasoning Modelを使いたいためです。
-
-- ドキュメント化することが大事です。
-- テキストのファイル: 各Promptの中で**要求定義**など、そのドキュメントが世間一般で通じる名称、つまり、LLMがどんなドキュメントなのかの判断がつきやすいです
-- GitHub Copilotへ情報を渡すために、**Markdown形式**のファイルにしておくのが便利です。
+- Microsoft 365 Copilot Researcher が組織で利用可能な場合、Web と権限のある業務コンテンツを横断する複数段階の調査と、出典付きレポート作成に利用できます。利用可否はライセンスと管理者設定を確認してください。
+- その他の LLM ツールを使う場合も、事実・分析・仮説を分離し、根拠のない内容を `Confirmed` として扱わないでください。
+- 後続の HVE が参照できるよう、成果物は Markdown としてリポジトリ内の指定パスへ保存します。
 
 > [!WARNING]
-> Microsoft 365 Copilot Chat から Markdown 形式を直接作成する場合は以下の点に注意してください：
->
-> - 出力結果のテキストは `応答のコピー` で取得するのが便利です
-> - ページ（Microsoft Loop）や Word への出力は Microsoft 365 内の共同作業に便利ですが、Markdown への直接変換機能は実装されていません
-> - Word などのファイルを Markdown に変換するツールとして [MarkItDown](https://github.com/microsoft/markitdown/)（オープンソース）がおすすめです
+> Word などのファイルを Markdown へ変換する場合は [MarkItDown](https://github.com/microsoft/markitdown/) を利用できます。MarkItDown は実行プロセスの権限で I/O を行うため、信頼できない入力を検証し、用途に合う最小範囲の変換方法を選んでください。
+
+### 確認済み公式一次情報
+
+| タイトル | URL | 本ガイドで確認した事項 |
+|---|---|---|
+| Get started with Researcher agent in Microsoft 365 Copilot | <https://learn.microsoft.com/microsoft-365/copilot/researcher-agent> | Web と権限のあるファイル・メール・会議・チャットを用いた複数段階調査、出典付きレポート |
+| GitHub Copilot セッションの開始 | <https://docs.github.com/ja/enterprise-cloud@latest/copilot/how-tos/use-copilot-agents/cloud-agent/start-copilot-sessions> | GitHub Issues 等から cloud agent を開始できる一般機能。ARD 固有の Cloud 配線を示すものではない |
+| MarkItDown | <https://github.com/microsoft/markitdown/> | Word、PDF、PowerPoint 等から Markdown への変換とセキュリティ上の注意事項 |
 
 ---
 
@@ -97,75 +95,75 @@ GitHub Copilot cloud agent への Issue 候補でもあります: [GitHub Copilo
 
 ### 依存グラフ
 
-![要求定義ステップ依存フロー](./images/business-requirement-dependency-flow.svg)
+```mermaid
+flowchart LR
+  S11["手動 Step.1.1<br/>企業分析"] --> S4["Step.4<br/>ユースケース"]
+  S12["手動 Step.1.2<br/>対象業務分析"] --> S4
+  S11 -. 任意 .-> S2["手動 Step.2<br/>文書棚卸し・補完"]
+  S12 -. 任意 .-> S2
+  S11 -. 任意 .-> S3["Step.3<br/>KPI/OKR"]
+  S12 -. 任意 .-> S3
+  S2 -. 補完 .-> S4
+  S3 -. 補完 .-> S4
+  S5["Step.5<br/>質問票"] --> AKM["AKM<br/>knowledge/ 生成・更新"]
+```
 
-### ARD オーケストレーション タスク／データフロー
-
-各 Prompt の入出力ファイルを示します（`hve/workflow_registry.py` の ARD 定義に準拠）。
-
-![ARD: 要求定義の自動化 データフロー](./images/orchestration-task-data-flow-ard.svg)
+Step.2 と Step.3 は必要に応じて省略できます。Step.5 と AKM は ARD とは別経路です。
 
 ### 各ステップの入出力
 
-> [!NOTE]
-> ARD 自動化を使う場合は、本表の「Step.1.1 / 1.2」「Step.3」が GUI/CLI の新 4 グループ
-> （`[1] 企業の事業分析` / `[2] 要求定義書作成` / `[3] KPI/OKR 定義（任意）` / `[4] ユースケース作成`）にマップされます。
-> 詳細は [要求定義の自動化（ARD）](#要求定義の自動化ard-auto-requirement-definition) の
-> 「ステップ構成」表を参照してください。
-
-| Step | タイトル | 使用ツール | 入力 | 出力 | 依存 | ARD 新グループ |
-|------|---------|-----------|------|------|------|---------------|
-| Step.1.1 | 企業の事業分析（対象事業 未定） | Microsoft 365 Copilot 等 / ARD `Arch-ARD-BusinessAnalysis-Untargeted` | 社内文書・メール・プロジェクトプラン等 | `docs/company-business-requirement.md` | なし | **新 Step 1** |
-| Step.1.2 | 要求定義書作成（対象事業 指定済） | Microsoft 365 Copilot 等 / ARD `Arch-ARD-BusinessAnalysis-Targeted` | `docs/company-business-requirement.md`（任意）、各種既存文書 | `docs/business-requirement.md` | なし（Step.1.1 出力があれば参考） | **新 Step 2** |
-| Step.1.3 | （任意・ARD 対象外）必要文書クラス D01〜D21 の新規作成 | Microsoft 365 Copilot（Researcher 推奨） | 事業分析レポート・既存規程・既存設計 等 | `knowledge/D{NN}-*.md`（作成対象とした文書クラスのみ。AKM ワークフローと同じ保存先） | Step.1.1 / 1.2 | （ARD 対象外） |
-| Step.2 | （ARD 対象外）ビジネスドキュメントの一覧の作成 | Microsoft 365 Copilot 等 | `docs/company-business-requirement.md`、各種既存文書 | 不足文書一覧・追加文書（`docs/` 配下） | Step.1 | （ARD 対象外） |
-| Step.3 | ユースケースの作成 | Microsoft 365 Copilot 等 / ARD `Arch-ARD-UseCaseCatalog` | `docs/business-requirement.md`、各種文書 | `docs/catalog/use-case-catalog.md` | Step.1.2 | **新 Step 4** |
-| Step.4 | qa/ 質問票ベースの要求定義プロセス | `KnowledgeManager` | `qa/` 質問票ファイル | `knowledge/business-requirement-document-status.md` | なし | （ARD 対象外） |
-
-> [!NOTE]
-> 旧版では Step.3 の依存先を `Step.2` と記載していましたが、これは誤りです。Step.3 は `docs/company-business-requirement.md`（Step.1 の出力）のみに依存し、Step.2（ビジネスドキュメントの一覧）には依存しません。
-
-> [!NOTE]
-> **Step.1.3 は ARD オーケストレーターの自動化対象外** です。`knowledge/D01〜D21-*.md` を自動生成・差分更新したい場合は AKM ワークフロー（`KnowledgeManager`）を使用してください（詳細: [km-guide.md](./km-guide.md)）。Step.1.3 と AKM の保存先は同じ `knowledge/` ディレクトリのため、Step.1.3 で手動作成したファイルは AKM 実行時に差分マージされます。
+| 手動 Step | 目的 | 主な出力 | HVE 自動化との対応 |
+|---|---|---|---|
+| Step.1.1 | 対象事業未定の企業分析 | `docs/company-business-requirement.md` | ARD 表示グループ `1`（実 Step `1` / `1.1` / `1.2`）が中間成果物を経由して生成 |
+| Step.1.2 | 対象業務の深掘り分析 | `docs/business-requirement.md` | ARD 表示グループ `2`（実 Step `2`） |
+| Step.1.3 | 必要な D01〜D21 文書を手動作成 | `knowledge/D{NN}-*.md` | ARD 対象外。自動生成・更新は AKM |
+| Step.2 | 保有文書の棚卸しと不足文書作成 | `docs/` 配下の追加文書 | ARD 対象外 |
+| Step.3 | KPI/OKR と計測データ定義 | `docs/recommended-kpi-okr.md` | ARD 表示グループ `3`（実 Step `2.1`） |
+| Step.4 | ユースケース作成 | `docs/catalog/use-case-catalog.md` | ARD 表示グループ `4`（実 Step `3.1` / `3.2` / `3.3`） |
+| Step.5 | 質問票で不足情報を補完 | `qa/`、AKM 実行後は `knowledge/` | 原本質問票の自動生成はADI Step 1.1 / 1.2、知識生成・更新はAKM |
 
 ---
 
 ## 要求定義の自動化（ARD: Auto Requirement Definition）
 
-本章は、本ガイドが扱う **手動プロセスの Step.1（事業分析）と Step.3（ユースケース作成）** を、`hve` CLI と Prompt / GitHub Issue で自動実行する **ARD オーケストレーター** の使い方をまとめたものです。
+本章は、手動 Step.1 / Step.3 / Step.4 に相当する処理を、`hve` の **CLI / GUI Orchestrator** で実行する方法を説明します。
 
-- 本ガイド本体（Step.1〜Step.4）は、ユーザーが自身の Prompt を Microsoft 365 Copilot 等で実行する **手動プロセス** を扱います
-- 本章（ARD）は、同じ Step.1 / Step.3 を **オーケストレーターで自動実行** する手段を扱います
-- Step.2（ビジネスドキュメント一覧）と Step.4（質問票）は ARD では扱いません（後者は `akm` / `aqod` ワークフローで別途対応）
+| 経路 | 責務 | 対象外 |
+|---|---|---|
+| 手動 | 本文の Prompt を利用者が実行し、指定パスへ保存 | HVE による Step 展開・完了判定 |
+| ARD | `docs/` 配下の事業分析、KPI/OKR、ユースケース成果物を生成 | `knowledge/` と `qa/` の生成・更新 |
+| ADI | `docs-original/` を正規化し、Step 1.1 / 1.2でD01〜D21質問票と横断質問票を `qa/` へ生成 | `docs/` のARD成果物生成 |
+| AKM | `qa/` / `docs-original/` / Work IQ を `knowledge/` へ分類・差分更新 | ARD の事業分析・ユースケース生成 |
 
 ### 概要と位置づけ
 
-ARD は「事業のアイディアや業務情報から、要求定義ドキュメントを自動生成する」オーケストレーターです。
-従来 Step.1（事業分析）と Step.3（ユースケース作成）として手動で行っていたプロセスを、Prompt と GitHub Issue ベースで自動化します。
+ARD は、事業のアイディアや業務情報から要求定義文書を生成する CLI / GUI Orchestrator です。Step セッションの実行先は HVE の Cloud Session 設定に従う場合がありますが、ARD の起動・制御経路は CLI / GUI です。
 
 - ARD は **4 グループ構成（Step 1: 企業の事業分析 / Step 2: 要求定義書作成 / Step 3: KPI/OKR 定義（任意）/ Step 4: ユースケース作成）** です。
-- 各グループは GUI/CLI のステップ選択 UI で **単独に ON/OFF** できます（依存伝播なし。前段の成果物が既に存在する前提）。
-- Step 2 は Step 1 の出力（`docs/company-business-requirement.md`）があれば参考にしますが、無くても実行可能です（`target_business` を直接指定）。
+- 各グループは GUI/CLI で選択できますが、前段を選ばない場合は必要な `docs/` 成果物を事前に用意します。
+- ARD 専用 Issue Template、ARD reusable workflow、Cloud dispatcher の ARD トリガーは実装されていません（契約テスト: `hve/tests/test_ard_cli_only_contract.py`）。
 - 既定では Step 2 / Step 3 / Step 4 が ON、Step 1 は OFF です。
 
 - 対象読者: 要求定義フェーズ（事業分析・ユースケース作成）を ARD で自動化したい方
-- 前提: `python -m hve` が実行でき、ラベル初期化（`setup-labels.yml`）が完了していること
+- 前提: `python -m hve` が実行でき、GitHub Copilot CLI の認証が完了していること
 - 次のステップ: 生成した `docs/catalog/use-case-catalog.md` を使って [アプリケーションアーキテクチャ設計](./02-app-architecture-design.md) に進む
 
 ### 前提条件（自動化を使う場合の追加要件）
 
 - `python -m hve` が実行できる環境（→ [hve-cli-getting-started.md](./hve-cli-getting-started.md) / [hve-gui-getting-started.md](./hve-gui-getting-started.md)）
-- GitHub Copilot が有効になっていること
-- （任意・推奨）Work IQ が利用可能な環境（Microsoft 365 Copilot に接続可能な npx 環境）。Step 3（UseCase）で利用されます。
+- GitHub Copilot CLI が認証済みであること。未認証時は `python -m hve login` を実行します
+- 実行グループに必要な入力ファイルが存在すること。`--attached-docs` とパス形式の `--target-business` は実在パスを指定します
+- （任意）Work IQ を使う場合だけ `@microsoft/workiq` と Microsoft 365 認証が必要です
 
 ### 実行モード
 
-ARD は以下の両方で実行できます。
+ARD は以下の方法で実行できます。
 
 | モード | コマンド | 適した用途 |
 |---|---|---|
 | ウィザード | `python -m hve` → ワークフロー選択で `1) Auto Requirement Definition` を選ぶ | 初めて使うとき / 対話で進めたいとき |
-| 個別実行（CLI） | `python -m hve orchestrate --workflow ard --company-name "<企業名>"` | スクリプト化・自動化したいとき |
+| 個別実行（CLI） | `python -m hve orchestrate --workflow ard --steps ...` | 入力と実行グループを明示して再現可能に実行したいとき |
+| GUI | GUI のワークフロー選択で `Auto Requirement Definition` を選ぶ | 入力と Step を画面で確認したいとき |
 
 ARD はウィザードでの表示順が **1 番目** です（`hve/workflow_registry.py` の `_REGISTRY` 先頭配置による）。
 
@@ -174,43 +172,47 @@ ARD はウィザードでの表示順が **1 番目** です（`hve/workflow_reg
 ARD は GUI（Step 1 のステップ選択チェックボックス）/ CLI（ウィザード `prompt_multi_select`）で
 **4 グループ構成** の選択肢を提示します（[hve/__main__.py `_collect_ard_wizard_params`](../hve/__main__.py) /
 [hve/gui/page_workflow_select.py `_WorkflowStepsGroup._ARD_GROUPS`](../hve/gui/page_workflow_select.py)）。
-各グループは orchestrator の `_ARD_GROUP_MAP`（[hve/orchestrator.py](../hve/orchestrator.py)）で
-内部 Step ID に展開されて順次実行されます。
+グループ展開の正本は `hve/workflow_registry.py` の `_WORKFLOW_GROUP_MAPS["ard"]` です。`hve/orchestrator.py` は `expand_group_step_ids()` を呼び出して展開します。
 
-| 新 Step | GUI/CLI 表示ラベル | 内部 Step ID（`_ARD_GROUP_MAP` 展開後） | Prompt | 出力 | 本ガイドの手動 Step |
-|---|---|---|---|---|---|
-| **1** | `[1] 企業の事業分析（事業分野候補列挙 → 分野別深掘り → 統合）` | `1` / `1.1` / `1.2` | `Arch-ARD-BusinessAnalysis-Untargeted` | `docs/company-business-recommendation.md` / `docs/business/{key}-analysis.md` / `docs/company-business-requirement.md` | Step.1.1（対象事業 未定） |
-| **2** | `[2] 要求定義書作成（Step 1 の出力があれば参考にし、無くてもよい）` | `2` | `Arch-ARD-BusinessAnalysis-Targeted` | `docs/business-requirement.md` | Step.1.2（対象事業 指定済） |
-| **3** | `[3] KPI/OKR 定義（任意・戦略的記述から KPI/OKR・計測データ・データ収集設計を生成）` | `3` | `Arch-ARD-KPIOKRDefinition` | KPI/OKR ・計測データ定義の追記 | （手動ステップ対応なし） |
-| **4** | `[4] ユースケース作成（骨格抽出 → 詳細生成 → カタログ統合）` | `4.1` / `4.2` / `4.3` | `Arch-ARD-UseCaseCatalog` | `docs/catalog/use-case-skeleton.md` / `docs/usecase/{key}-detail.md` / `docs/catalog/use-case-catalog.md` | Step.3（ユースケース作成） |
+| 表示グループ | 実 Step | 処理 / Custom Agent | 主入力 | 出力 |
+|---|---|---|---|---|
+| `1` | `1` | 事業分野候補列挙 / `Arch-ARD-BusinessAnalysis-Untargeted` | 企業名、調査条件、添付資料 | `docs/company-business-recommendation.md` |
+| `1` | `1.1` | BIZ ごとの深掘り fan-out / 同上 | Step `1` 出力 | `docs/business/{key}-analysis.md` |
+| `1` | `1.2` | 事業分析統合 / 同上 | Step `1.1` の全出力 | `docs/company-business-requirement.md` |
+| `2` | `2` | 対象業務深掘り / `Arch-ARD-BusinessAnalysis-Targeted` | `target_business`、添付資料、Step `1.2` 出力（任意） | `docs/business-requirement.md` |
+| `3` | `2.1` | KPI/OKR 定義 / `Arch-ARD-KPIOKRDefinition` | Step `2` 出力、または Step `1.2` 出力 | `docs/recommended-kpi-okr.md` |
+| `4` | `3.1` | ユースケース骨格抽出 / `Arch-ARD-UseCaseCatalog` | Step `2` 出力、または Step `1.2` 出力。KPI/OKR は任意 | `docs/catalog/use-case-skeleton.md` |
+| `4` | `3.2` | UC ごとの詳細 fan-out / 同上 | Step `3.1` 出力と事業分析 | `docs/usecase/{key}-detail.md` |
+| `4` | `3.3` | ユースケース統合 / 同上 | Step `3.2` の全出力 | `docs/catalog/use-case-catalog.md` |
 
 既定 ON 設定:
 - **Step 1（企業の事業分析）**: 既定 **OFF**（対象業務が既に決まっている運用を想定）
 - **Step 2（要求定義書作成）**: 既定 **ON**
-- **Step 3（KPI/OKR 定義）**: 既定 **ON**（任意だが Step 2 / 4 と同時実行して戦略記述から KPI/OKR を一気貫通させるため）
+- **Step 3（KPI/OKR 定義）**: 既定 **ON**（不要ならグループ `3` を選択から外す）
 - **Step 4（ユースケース作成）**: 既定 **ON**
 
 依存関係と前提条件:
-- 各グループは **単独で実行可能** です（GUI/CLI 上で任意の組合せを選択できます）。
-- **Step 2** は Step 1 の成果物（`docs/company-business-requirement.md`）が存在すれば参考にしますが、無くても `target_business` 指定で実行できます。
-- **Step 3（KPI/OKR 定義）** は Step 2 または Step 4 と同時実行したときに意味を持ちます。単独選択も可能ですがデータソースが限定されます。
-- **Step 4（ユースケース作成）** は Step 2 の成果物（`docs/business-requirement.md`）を入力とします。Step 2 を選択しない場合は事前に成果物が存在している必要があります。
-- Step 1 を選択した場合、Step 1 完了後に SR-ID を選択して `target_business` を自動生成し、Step 2 へ橋渡しします。
+- **グループ 1** の fan-out は `BIZ-NN`、**グループ 4** の fan-out は `UC-*` を上流成果物から抽出します。ID が無い場合、子 Step を展開できません。
+- **グループ 2** をグループ 1 なしで実行する場合は `target_business` を明示します。
+- **グループ 3 / 4** を前段なしで実行する場合は、`docs/business-requirement.md` または `docs/company-business-requirement.md` を事前に用意します。
+- **グループ 1 を単独で実行する場合の必須入力は `company_name` だけです**。入力ファイルを事前に用意する必要はありません（調査基準日・調査期間・対象地域・分析目的は既定値、添付資料は任意）。
+- **グループ 1 と 2 を同時に選択した場合**、`target_business` は入力不要です。`hve/orchestrator.py` の bridge mode が Step `1.2` 完了後に `docs/company-business-requirement.md` の Strategic Recommendation を読み、`target_business` を生成してから Step `2` を実行します（Step `1.2` → `2` の直列化）。提言を自分で選びたい場合は後述の **二段階実行** を使います。
 
 ### パラメータ一覧
 
-すべてのパラメータには既定値が設定されており、必須なのは `company_name` のみです。
+必須条件は選択グループで変わります。
 
 | 内部キー | CLI 引数 | 既定値 | 必須 | 備考 |
 |---|---|---|---|---|
-| `company_name` | `--company-name` | （なし） | はい | 対象企業名。ウィザードでも必ず入力 |
-| `target_business` | `--target-business` | `""` | いいえ | 空 → Step 1（Untargeted） → 自動生成された説明文で Step 2（Targeted）→ Step 3。非空 → Step 1 をスキップして Step 2（Targeted）→ Step 3。値は文章のほか、フォルダパスまたは複数ファイルパス（カンマ区切り）も指定可能（Step 2 開始前に展開） |
-| `target_recommendation_id` | `--target-recommendation-id` | `""` | いいえ | ARD ウィザード対話モードでは無視。非対話 / CLI 直接実行で SR-ID（例: `SR-1`）を指定すると Step 1 完了後の SR 選択でその ID を採用 |
+| `company_name` | `--company-name` | `""` | グループ `1` または実 Step `1.x` で必須 | 対象企業名 |
+| `target_business` | `--target-business` | `""` | グループ `2` をグループ `1` なしで実行する場合は必須 | 文章、フォルダパス、またはカンマ区切りの複数ファイルパス。Step `2` 開始前にパスを本文コンテキストへ展開 |
+| `target_recommendation_id` | `--target-recommendation-id` | `""` | いいえ | SR-ID（例: `SR-1`）。指定 ID が見つからない場合は警告して先頭候補を選択する実装 |
 | `survey_base_date` | `--survey-base-date` | 実行日 (`YYYY-MM-DD`) | いいえ | 調査基準日 |
 | `survey_period_years` | `--survey-period-years` | `30` | いいえ | 調査期間年数 |
 | `target_region` | `--target-region` | `グローバル全体` | いいえ | 対象地域 |
 | `analysis_purpose` | `--analysis-purpose` | `中長期成長戦略の立案` | いいえ | 分析目的 |
-| `attached_docs` | `--attached-docs` | `[]` | いいえ | カンマ区切り。Step 2 の一次情報として参照 |
+| `attached_docs` | `--attached-docs` | `[]` | いいえ | カンマ区切り。実 Step `1` / `2` の Prompt で一次情報として最優先参照 |
+| `include_kpi_okr` | `--include-kpi-okr` | `false` | いいえ | グループ `2` / `4` に実 Step `2.1` を追加。`--steps 3` の直接選択でも有効化 |
 
 ### 使い方: ウィザードモード
 
@@ -227,7 +229,7 @@ python -m hve
    - `[4] ユースケース作成（骨格抽出 → 詳細生成 → カタログ統合）`
 4. ARD 固有のパラメータを順に入力します:
    - **対象企業名（必須は Step 1 選択時のみ）** — Step 1 を選択した場合は空のまま続行できません
-   - 対象業務名（Step 2 用、任意） — Step 1 も同時選択していれば省略可（Step 1 出力から自動生成）、Step 1 非選択かつ Step 2 を選んだ場合は必須
+   - 対象業務名（Step 2 用） — Step 1 を併せて選択した場合は空のままで構いません（Step 1.2 の戦略提言から自動生成）。Step 2 以降だけを実行する場合は必須です
    - 調査基準日（既定: 実行日）
    - 調査期間年数（既定: 30）
    - 対象地域（既定: グローバル全体）
@@ -235,38 +237,54 @@ python -m hve
    - 添付資料パス（カンマ区切り、任意）
 5. 確認パネルで内容を確認し、実行します。
 
-> ウィザード末尾（設定サマリー表示の直前）で「ワークベンチ（4 ペイン UI）を起動しますか？」（既定 Yes）が、全モード（クイック全自動 / カスタム全自動 / 手動）共通で表示されます。詳細は [`users-guide/hve-cli-orchestrator-guide.md`](./hve-cli-orchestrator-guide.md) を参照してください。
+> ウィザード末尾（設定サマリー表示の直前）で「ワークベンチ（4 ペイン UI）を起動しますか？」（既定 Yes）が、全モード（クイック全自動 / カスタム全自動 / 手動）共通で表示されます。詳細は [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md) を参照してください。
 
 ### 使い方: 個別実行（CLI）
 
-#### 対象業務が未定の場合（Step 1 → SR 選択 → Step 2 → Step 3）
+#### 対象業務が未定の場合（推奨: 二段階実行）
+
+提言を確認してから対象業務を自分で決めたい場合は、グループ 1 を先に単独実行します。
 
 ```bash
 python -m hve orchestrate --workflow ard \
+  --steps 1 \
   --company-name "株式会社サンプル"
 ```
 
-#### 非対話で SR-2 を採用（Step 1 → Step 2 → Step 3）
+1 回目の完了後、`docs/company-business-requirement.md` の Strategic Recommendations を確認し、対象業務を明示して 2 回目を実行します。
 
 ```bash
 python -m hve orchestrate --workflow ard \
-  --company-name "株式会社サンプル" \
-  --target-recommendation-id SR-2
+  --steps 2,3,4 \
+  --target-business "選択した対象業務の説明"
 ```
 
-#### 対象業務が決まっている場合（Step 2 → Step 3）
+提言の選択を HVE に任せてよければ、グループ 1 と 2 を同時に指定して 1 回で実行できます。`--target-business` は不要です。
 
 ```bash
 python -m hve orchestrate --workflow ard \
+  --steps 1,2,3,4 \
+  --company-name "株式会社サンプル"
+```
+
+採用する提言を固定したい場合は `--target-recommendation-id SR-1` を併用します。
+
+#### 対象業務が決まっている場合
+
+```bash
+python -m hve orchestrate --workflow ard \
+  --steps 2,3,4 \
   --company-name "株式会社サンプル" \
   --target-business "ロイヤルティプログラム事業" \
   --attached-docs "docs/loyalty-program-overview.md,docs/customer-data.md"
 ```
 
+`--company-name` はこの経路では任意ですが、Prompt の対象を明確にするため指定できます。KPI/OKR が不要なら `--steps 2,4` とします。
+
 #### `target_business` をフォルダパスで指定（Step 2 開始前に展開）
 
 ```bash
-python -m hve orchestrate --workflow ard --company-name "株式会社サンプル" \
+python -m hve orchestrate --workflow ard --steps 2,4 \
   --target-business "docs/specs/loyalty/"
 ```
 
@@ -275,63 +293,97 @@ python -m hve orchestrate --workflow ard --company-name "株式会社サンプ�
 ```bash
 # 調査期間を 10 年に短縮
 python -m hve orchestrate --workflow ard \
-  --company-name "株式会社サンプル" \
+  --steps 2,4 \
+  --target-business "ロイヤルティプログラム事業" \
   --survey-period-years 10
 
-# Issue 作成 + dry-run（実際の実行はしない）
+# 実行計画だけを確認（SDK セッションと成果物生成は行わない）
 python -m hve orchestrate --workflow ard \
-  --company-name "株式会社サンプル" \
+  --steps 2,3,4 \
+  --target-business "ロイヤルティプログラム事業" \
   --dry-run
 ```
 
-> `--company-name` は必須です。CLI 直接実行で未指定の場合は SystemExit で停止します。
+`--steps` 省略時は表示グループ `2,3,4` が選択されます。入力不足を避けるため、再現可能な実行では `--steps` と `--target-business` を明示してください。終了コードは成功時 `0`、blocked / error / failed 時 `1` です。
 
-### Work IQ 連携
+### Work IQ 連携（任意）
 
-- **Step 1**: Work IQ は使いません（GitHub Copilot SDK 経由で Prompt が実行されます）
-- **Step 2**: Step 2 自体が Work IQ MCP 経由で実行されるわけではありません。以下の条件をすべて満たすときのみ、Work IQ で参照情報を取得します:
-  1. `active_steps` に `"2"` が含まれる
-  2. `is_workiq_available()` が True（npx + `@microsoft/workiq` が利用可能）
-  3. `is_workiq_qa_enabled()` が True（`--workiq` または `WORKIQ_ENABLED=true`）
-  4. dry-run でない
-- 条件を満たす場合、取得した参照情報は **Step 2 の Issue にコメントとして注入** され、その後 **通常の Prompt (`Arch-ARD-UseCaseCatalog`)** が当該 Issue を処理します。
-- Step 2 の Issue が未作成の場合はコメント注入できないため、参照情報はローカルログ出力のみとなります
+- `--workiq` は既定無効です。有効時は実行前に Work IQ 認証確認が行われ、失敗時は `python -m hve workiq-doctor` が案内されます。
+- ARD の主 Step は `.github/prompts/Arch-ARD-*.prompt.md` を使います。`hve/prompts.py` の `ARD_WORKIQ_USECASE_PROMPT` は補助情報取得用、`ARD_TARGET_BUSINESS_FROM_RECOMMENDATION_PROMPT` は SR から `target_business` を生成する補助セッション用です。
+- Issue を作成しないローカル実行では、Work IQ の Issue コメント注入先が無いため補助結果はローカルログに表示されます。
 
-Work IQ 連携用のプロンプトは `hve/prompts.py` の `ARD_WORKIQ_USECASE_PROMPT` に定義されています。
-
-詳細セットアップ: `users-guide/hve-cli-orchestrator-guide.md` の「Work IQ 連携」セクション
+詳細セットアップ: [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md) の「Work IQ 連携」セクション
 
 ### 出力ファイル
 
 | ファイル | 生成タイミング |
 |---|---|
-| `docs/company-business-requirement.md` | Step 1 または Step 2 完了時 |
-| `docs/catalog/use-case-catalog.md` | Step 3 完了時 |
+| `docs/company-business-recommendation.md` | 実 Step `1` |
+| `docs/business/{key}-analysis.md` | 実 Step `1.1` fan-out |
+| `docs/company-business-requirement.md` | 実 Step `1.2` |
+| `docs/business-requirement.md` | 実 Step `2` |
+| `docs/recommended-kpi-okr.md` | 実 Step `2.1` |
+| `docs/catalog/use-case-skeleton.md` | 実 Step `3.1` |
+| `docs/usecase/{key}-detail.md` | 実 Step `3.2` fan-out |
+| `docs/catalog/use-case-catalog.md` | 実 Step `3.3` |
 
-> 既存ファイルがある場合は上書きされます。実行前に必要に応じてバックアップしてください。
+実行時の出力ゲートは `hve/workflow_registry.py` の `StepDef.output_paths` を参照します。`.github/io-contracts/Arch-ARD-*--ard--*.yaml` は Step 単位の静的な入出力契約として、registry と整合させます。
+
+> [!NOTE]
+> **ADI を先に実行している場合**、`docs/catalog/use-case-skeleton.md` に `## 設計書由来の候補（ADI）` セクションがあります。既存設計書から抽出された候補で、**`UC-` は未採番**です。ARD Step `3.1` がこのセクションを読んで正式な `UC-` を採番し、本表へ統合します。詳細は [00-design-doc-ingestion.md](./00-design-doc-ingestion.md#adi-と設計ワークフローard--aas--adfdの関係) を参照してください。
+
+### `work/run` の作業成果物
+
+- CLI / GUI は `HVE_RUN_ID` と `HVE_WORK_ROOT` を設定し、通常は `work/run/<run-id>/` を使用します。
+- Runner は Step 起動前に `work/run/<run-id>/<Custom Agent>/Issue-<識別子>/` を作成します。
+- 非 fan-out Step の識別子は `0`、fan-out 子は Step ID 由来の `step-...` です。実行ログの `work directory ready:` に表示された実パスを確認してください。
+- `work/run/` は計画・検証・完了報告などの作業領域です。Step 間の入力は `docs/` 成果物を使い、他 Step の `work/run/` を推測して参照しません。
+- 作業ディレクトリの存在だけでは完了ではありません。
 
 ### 完了条件
 
-- `docs/company-business-requirement.md` が生成されている
-- `docs/catalog/use-case-catalog.md` が生成されている
-- Step ごとの詳細な完了条件は `.github/scripts/templates/ard/step-*.md` の `## 完了条件` セクションを参照
+1. CLI が終了コード `0` で完了している
+2. 選択した実 Step の全出力が存在する
+3. 各 `.github/scripts/templates/ard/step-*.md` の `## 完了条件` を満たす
+4. fan-out では上流の全 `BIZ-NN` / `UC-*` が下流の統合成果物に含まれる
+5. `--dry-run` は成果物を生成しないため、完了確認には使用しない
 
 ### トラブルシューティング
 
 | 症状 | 確認事項 |
 |---|---|
-| ウィザードで `company_name` を空のまま進めない | 必須項目です。任意の文字列を入力してください |
-| Step 2 が起動しない | `target_business` が空のままではないか、Step 1 完了後に `target_business` が自動生成されているかを確認してください |
-| Step 3 が起動しない | Step 2 が完了しているか、Step 2 をスキップした場合は Step 1 が完了しているかを確認してください |
+| 認証で停止する | `python -m hve login` を実行し、再試行する |
+| グループ 1 が実行されない | 既定 OFF のため `--steps 1` と `--company-name` を指定する |
+| 対象業務未定の一気通貫実行が進まない | グループ 1 を完了し、成果物から対象業務を選んでグループ `2,3,4` を二段階目として実行する |
+| Step `1.1` の子が展開されない | `docs/company-business-recommendation.md` に `BIZ-NN` があるか確認する |
+| Step `3.2` の子が展開されない | `docs/catalog/use-case-skeleton.md` に `UC-*` があるか確認する |
+| KPI/OKR が生成されない | 表示グループ `3`、実 Step `2.1`、または `--include-kpi-okr` を選択したか確認する |
+| 出力が不足する | CLI の失敗 Step、`work directory ready:` のパス、該当 Step テンプレートの入力・完了条件を確認する |
 | Work IQ が使われない | `python -m hve workiq-doctor` で接続診断を行ってください |
-| ラベルが付与されない | `setup-labels.yml` を一度実行してください（`.github/workflows/setup-labels.yml`） |
+| ARD 用 Issue Template / Actions が見つからない | 仕様どおりです。ARD は CLI / GUI 専用です |
+
+### HVE カスタマイズ入口
+
+| 変更目的 | 正本 / 確認先 |
+|---|---|
+| Step ID、依存、fan-out、出力 | `hve/workflow_registry.py` の `ARD` と `_WORKFLOW_GROUP_MAPS` |
+| Step ごとの目的・入力・完了条件 | `.github/scripts/templates/ard/step-*.md` |
+| Agent の役割・品質ルール | `.github/prompts/Arch-ARD-*.prompt.md` |
+| Step 単位の入出力契約 | `.github/io-contracts/Arch-ARD-*--ard--*.yaml` |
+| 補助 Prompt | `hve/prompts.py` |
+| Prompt 読み込みと WORK 置換 | `hve/prompt_loader.py`、`hve/runner.py` |
+| CLI 引数と既定値 | `hve/__main__.py` |
+| グループ展開と SR / Work IQ 補助処理 | `hve/orchestrator.py` |
+| 契約テスト | `hve/tests/test_workflow_registry_ard.py`、`hve/tests/test_main_ard.py`、`hve/tests/test_orchestrator_ard.py`、`hve/tests/test_ard_attached_docs_priority.py`、`hve/tests/test_ard_cli_only_contract.py` |
+
+変更時は Step ID・テンプレート・Prompt・I/O 契約・テストを同じ変更で整合させます。実行時の Step / 出力判断では、古い説明文ではなく `hve/workflow_registry.py` と Step テンプレートを優先してください。
 
 ### 関連ドキュメント
 
 - ウィザード全般: [`users-guide/hve-cli-orchestrator-guide.md`](./hve-cli-orchestrator-guide.md)
 - ワークフロー一覧: [`users-guide/workflow-reference.md`](./workflow-reference.md)
-- Knowledge Management（旧 Step.4 相当）: [`users-guide/km-guide.md`](./km-guide.md)
-- Original Docs Review: [`users-guide/original-docs-review.md`](./original-docs-review.md)
+- Knowledge Management: [km-guide.md](./km-guide.md)
+- Auto Design-doc Ingestion: [00-design-doc-ingestion.md](./00-design-doc-ingestion.md)
 
 ---
 
@@ -339,12 +391,14 @@ Work IQ 連携用のプロンプトは `hve/prompts.py` の `ARD_WORKIQ_USECASE_
 
 As-IsとTo-Beを一度に作成します。
 
-### Step.1.1 対象事業が決まっていない場合（ARD 新 Step 1: 企業の事業分析 に対応）
+### Step.1.1 対象事業が決まっていない場合（ARD 表示グループ 1 に対応）
 
 アプリケーション開発対象の事業が何か決まっていない場合に使います。
 
 - 使用するツール: Microsoft 365 Copilot（Researcher 推奨）
 - 出力先: `docs/company-business-requirement.md`
+
+> **注記**: 以下の Prompt は **手動実行用** です。ARD で自動実行する場合の Single Source of Truth は [`.github/prompts/Arch-ARD-BusinessAnalysis-Untargeted.prompt.md`](../.github/prompts/Arch-ARD-BusinessAnalysis-Untargeted.prompt.md) の §4 であり、本文ではありません。両者は同一内容を保証しません。
 
 <details>
 <summary>Prompt を表示</summary>
@@ -700,13 +754,15 @@ As-IsとTo-Beの差分を以下の形式で整理してください。
 
 </details>
 
-### Step.1.2 対象事業が決まっている場合（ARD 新 Step 2: 要求定義書作成 に対応）
+### Step.1.2 対象事業が決まっている場合（ARD 表示グループ 2 / 実 Step 2 に対応）
 
 対象事業が決まっていて、何らかのドキュメントがある場合に使います。
 Step.1.1 の Prompt と比較し、以下の **「役割」と「目的」のセクションを対象事業の情報で置き換えて** ください。
 
 - 使用するツール: Microsoft 365 Copilot（Researcher 推奨）
-- 出力先: `docs/company-business-requirement.md`
+- 出力先: `docs/business-requirement.md`
+
+> **注記**: 以下の Prompt は **手動実行用** です。ARD で自動実行する場合の Single Source of Truth は [`.github/prompts/Arch-ARD-BusinessAnalysis-Targeted.prompt.md`](../.github/prompts/Arch-ARD-BusinessAnalysis-Targeted.prompt.md) の §4 であり、本文ではありません。両者は同一内容を保証しません。
 
 <details>
 <summary>Prompt を表示</summary>
@@ -1018,7 +1074,7 @@ As-IsとTo-Beの差分を、以下の形式で整理してください。
 `template/business-requirement-document-master-list.md` で定義された **D01〜D21 の必要文書クラス** を、Microsoft 365 Copilot Researcher で 1 件ずつ作成するための Prompt を提供します。Step.2 の「保有文書の棚卸し」を行う前に、**そもそも D01〜D21 のうちまだ存在しない文書**を新規作成したい場合や、**既存ドキュメントの形式を D01〜D21 の標準に揃え直したい場合**に使います。
 
 > [!IMPORTANT]
-> **Step.1.3 は ARD オーケストレーターでは自動化されません**。ARD ワークフロー（`hve/workflow_registry.py` の `ARD` 定義）が自動化するのは Step.1.1 / 1.2（事業分析）と Step.3（ユースケース作成）のみです。`knowledge/D01〜D21-*.md` の自動生成・差分更新は **AKM ワークフロー（`KnowledgeManager`）** が担当します（[km-guide.md](./km-guide.md) 参照）。
+> **Step.1.3 は ARD の対象外**です。ARD は `docs/` 配下の事業分析・KPI/OKR・ユースケースを生成し、`knowledge/D01〜D21-*.md` の生成・差分更新は **AKM ワークフロー（`KnowledgeManager`）** が担当します（[km-guide.md](./km-guide.md) 参照）。
 >
 > Step.1.3（本節の手動 Prompt）と AKM（自動）の **保存先は同じ `knowledge/` ディレクトリ** です。Step.1.3 で先に作成しておくと、後で AKM を実行した際に既存ファイルに対して **差分マージ動作** となります（同名ファイルを完全上書きするわけではなく、ChangeLog ファイル `knowledge/D{NN}-*-ChangeLog.md` に変更履歴が記録されます）。
 
@@ -3553,7 +3609,7 @@ D01 から D21 を全件出力すること。
 
 <a id="step3-kpiokr-definition"></a>
 
-> ARD ワークフロー **Step 3** に対応する任意ステップです。既定では実行されません。
+> ARD の **表示グループ 3 / 実 Step 2.1** に対応します。CLI / ウィザードの既定選択は表示グループ `2,3,4` です。不要な場合はグループ `3` を外してください。
 
 ### 目的
 
@@ -3582,11 +3638,11 @@ python -m hve orchestrate --workflow ard --include-kpi-okr \
 
 **GUI**:
 
-ワークフロー選択画面（Step 1）の ARD グループ一覧で **「KPI/OKR 定義（任意・戦略的記述から KPI/OKR・計測データ・データ収集設計を生成）」** グループ（グループ ID = `3`）にチェックを入れる。既定は OFF。
+ワークフロー選択画面の ARD グループ一覧で **「KPI/OKR 定義（任意・戦略的記述から KPI/OKR・計測データ・データ収集設計を生成）」**（グループ ID = `3`）を選択します。既定選択に含まれます。
 
 **対話ウィザード**:
 
-`python -m hve` で起動し、ARD を選択してステップ 2 または 4 を選択すると、Yes/No プロンプトでオプトイン可能。
+表示グループ `3` が選択されていれば実 Step `2.1` が実行されます。不要な場合はグループ `3` を選択から外します。
 
 **CLI で `--steps` による直接選択**:
 
@@ -3628,7 +3684,7 @@ python -m hve orchestrate --workflow ard --steps 2,3,4 \
 
 <a id="step4-ユースケースの作成"></a>
 
-## Step.4 ユースケースの作成（ARD 新 Step 4: ユースケース作成 に対応）
+## Step.4 ユースケースの作成（ARD 表示グループ 4 / 実 Step 3.1〜3.3 に対応）
 
 ### Step.4.1 ユースケースの一覧の作成
 
@@ -3636,6 +3692,8 @@ python -m hve orchestrate --workflow ard --steps 2,3,4 \
 
 - 使用するツール: Microsoft 365 Copilot 等
 - 出力先: `docs/catalog/use-case-catalog.md`
+
+> **注記**: 以下の Prompt は **手動実行用** です。ARD で自動実行する場合の Single Source of Truth は [`.github/prompts/Arch-ARD-UseCaseCatalog.prompt.md`](../.github/prompts/Arch-ARD-UseCaseCatalog.prompt.md) の §4 であり、本文ではありません。両者は同一内容を保証しません。
 
 <details>
 <summary>Prompt を表示</summary>
@@ -3927,9 +3985,9 @@ Vibe Coding ワークフローでは、Copilot Agent がコンテキスト不足
 | アプローチ | 説明 | 適した場面 |
 |-----------|------|-----------|
 | **Step.2.1** | Microsoft 365 Copilot 等で手持ちドキュメントを一括分析し、D01〜D21 の充足度を手動で判定するプロセス | 既存資料がある場合の大枠把握 |
-| **Step.4** | Copilot cloud agent が Issue/PR のコンテキストから自動で質問票を作成し、回答を `qa/` に蓄積。`KnowledgeManager` Agent が自動分類・knowledge ドキュメント生成するプロセス | 詳細な不足の補完・新規プロジェクト |
+| **Step.5** | Cloud / VS Code / ADI Step 1.1 / 1.2で質問票を `qa/` に作成し、別ワークフローのAKM (`KnowledgeManager`) がknowledge文書へ分類・差分更新するプロセス | 詳細な不足の補完・新規プロジェクト |
 
-両方を併用可能です。Step.2.1 で大枠を把握した後に Step.4 で詳細な不足を補完する使い方が推奨されます。
+両方を併用可能です。Step.2.1 で大枠を把握した後に Step.5 で詳細な不足を補完できます。
 
 **文書クラスについて**
 
@@ -3957,16 +4015,19 @@ Issue Template の「質問票設定」チェックボックスをオンにし�
 **フロー**:
 1. Issue を作成し、「実行前 QA を実施する」チェックボックスをオン
 2. Sub-Issue 作成時に `*:qa-ready` ラベルが付与される（Copilot アサインは保留）
-3. `copilot-auto-feedback.yml` が `*:qa-ready` ラベルを検知し、事前 QA 質問票を Issue コメントに投稿
+3. `copilot-auto-feedback.yml` が `*:qa-ready` ラベルを検知し、事前 QA 質問票を Issue コメントに投稿（質問票作成中は `*:qa-drafting`）
 4. ユーザー（または `auto-qa-default-answer.yml`）が質問票に回答
-5. `auto-issue-qa-ready-transition.yml` が `*:qa-ready` → `*:ready` に遷移し、Copilot をアサイン
-6. Copilot が実行計画を立て、メインタスクを実行
+5. `auto-issue-qa-ready-transition.yml` が回答コメントを回答済み QA として `qa/` へ保存し、Contents API の再取得と SHA 照合で検証する
+6. Knowledge Management 以外の Workflow では、続けて `auto-akm-after-qa.yml` を非同期 dispatch する（AKM の完了は待たない）
+7. 保存・dispatch が成功した後に `*:qa-ready` → `*:ready` へ遷移し、Copilot をアサインする
+8. Copilot が実行計画を立て、メインタスクを実行
 
 - **`auto-qa` ラベルの役割**: Issue に付与された状態で Sub-Issue が作成されると、事前 QA フローが起動します
 - QA 完了後は自動的に `*:ready` に遷移し、Copilot がメインタスクを開始します
 - 既定値で回答する場合は `auto-qa-default-answer.yml` が自動応答します
+- Copilot の質問票生成 PR が open しただけではメインタスクは開始されず、`*:qa-drafting` → `*:qa-ready`（回答待ち）までの遷移に留まります
 
-出典: `.github/workflows/copilot-auto-feedback.yml`, `auto-issue-qa-ready-transition.yml`, `auto-qa-default-answer.yml`
+出典: `.github/workflows/copilot-auto-feedback.yml`, `auto-issue-qa-ready-transition.yml`, `auto-qa-default-answer.yml`, `auto-akm-after-qa.yml`
 
 #### 方法B: Issue から Copilot Agent に直接依頼
 
@@ -4025,6 +4086,16 @@ Issue Template の「質問票設定」チェックボックスをオンにし�
 
 #### 実行方法
 
+**CLI / GUI Orchestrator**:
+
+```bash
+python -m hve orchestrate --workflow akm --sources qa
+```
+
+`qa` に加えて `original-docs` や Work IQ を使う場合は [km-guide.md](./km-guide.md) の入力ソース指定を参照してください。GUI では `Knowledge Management` を選択します。
+
+**GitHub Cloud 経路**:
+
 1. GitHub.com で Issue を作成
 2. Issue の右側サイドバー「Copilot」セクションで「Select agent」から「KnowledgeManager」を選択
 3. Assignees に @copilot を設定
@@ -4040,22 +4111,22 @@ Issue Template の「質問票設定」チェックボックスをオンにし�
 
 | ファイルパス | 種別 | 説明 |
 |------------|------|------|
-| `knowledge/business-requirement-document-status.md` | 主成果物 | D01〜D21 の総合ステータス（Confirmed/Tentative/Unknown/NotStarted）とカバレッジギャップ |
-| `work/KnowledgeManager/Issue-<識別子>/plan.md` | 中間成果物 | 実行計画（DAG + 見積） |
-| `work/KnowledgeManager/Issue-<識別子>/artifacts/mapping-log.md` | 中間成果物 | 質問→D クラスの詳細マッピングログ |
-| `work/KnowledgeManager/Issue-<識別子>/artifacts/adversarial-review.md` | 中間成果物 | 敵対的レビュー結果 |
+| `knowledge/business-requirement-document-status.md` | 主成果物 | D01〜D21 の総合ステータス（Confirmed / Tentative / Unknown / Conflict）とカバレッジギャップ |
+| `knowledge/D{NN}-*.md` | 主成果物 | D01〜D21 の要求項目文書 |
+| `knowledge/D{NN}-*-ChangeLog.md` | 主成果物 | REQ-ID 単位の変更履歴 |
+| `work/run/<run-id>/KnowledgeManager/Issue-<識別子>/artifacts/*` | 任意の作業成果物 | 実行時に生成された調査・検証・レビュー資料 |
 
 分類ルールの詳細は `.github/skills/knowledge-management/references/knowledge-management-guide.md` に定義されています。
 
 #### 敵対的レビュー結果の活用
 
-`KnowledgeManager` は `Skill: adversarial-review` に従い、5軸（要件充足性・技術的正確性・整合性・非機能品質・捏造検出）で自己レビューを実施します。レビュー結果は `work/KnowledgeManager/Issue-<識別子>/artifacts/adversarial-review.md` に保存されます。Critical 指摘がある場合は自動修正→再レビュー（最大2サイクル）が実行されます。
+`KnowledgeManager` の敵対的レビューは常時自動ではなく、ユーザー、marker、label、または HVE Phase 3 で明示された場合のみ実施します。実施時は `adversarial-review` Skill の6軸（目的適合性、内容の妥当性、整合性、品質・運用性、根拠性・不確実性管理、オーバーエンジニアリング）と、run-scoped の指示された成果物パスを確認してください。
 
 ---
 
 ### Step.5.6 カバレッジギャップの対応（不足ドキュメントの作成）
 
-`knowledge/business-requirement-document-status.md` の「カバレッジギャップ」セクションで `NotStarted` / `Unknown` の D クラスを確認します。
+`knowledge/business-requirement-document-status.md` の「カバレッジギャップ」セクションと `Unknown` / `Conflict` の D クラスを確認します。
 
 不足 D クラスへの対応方法:
 
@@ -4078,11 +4149,11 @@ Issue Template の「質問票設定」チェックボックスをオンにし�
 
 2. **`qa/` ファイルの読み取り専用性**: `KnowledgeManager` は `qa/` のファイルを変更しません
 
-3. **`auto-qa` と `KnowledgeManager` の関係**: `auto-qa` ラベルは PR ready 時に Copilot に質問票作成を指示するトリガー（`copilot-auto-qa.yml`）です。`KnowledgeManager` は生成された質問票を D01〜D21 に分類するための別プロセスです。両者は補完関係にあります
+3. **`auto-qa` と `KnowledgeManager` の関係**: `auto-qa` / `*:qa-ready` は `copilot-auto-feedback.yml` などの質問票フローを起動します。`KnowledgeManager` は AKM で質問票等を D01〜D21 に分類する別プロセスです。
 
 4. **エラー時の対処**:
-   - `qa/` に `.md` ファイルがない場合: `KnowledgeManager` は `plan.md` に記録して停止します。先に質問票を作成してください
-   - 分類結果がおかしい場合: `work/KnowledgeManager/Issue-<識別子>/artifacts/adversarial-review.md` を確認し、Critical 指摘がないか検証してください
+  - `qa/` に対象 `.md` がない場合: `--sources` と対象ファイルを確認し、必要なら先に質問票を作成してください
+  - 分類結果がおかしい場合: `work/run/<run-id>/KnowledgeManager/Issue-<識別子>/artifacts/` の実在成果物と `knowledge/business-requirement-document-status.md` を確認してください
 
 5. **関連ファイル一覧**:
 
@@ -4092,7 +4163,7 @@ Issue Template の「質問票設定」チェックボックスをオンにし�
 | KnowledgeManager | `.github/prompts/KnowledgeManager.prompt.md` | qa/ 質問票の D01〜D21 分類 Agent |
 | 分類ルール | `.github/skills/knowledge-management/references/knowledge-management-guide.md` | D01〜D21 分類・状態判定基準 |
 | マスターリスト | `template/business-requirement-document-master-list.md` | D01〜D21 文書クラス定義と非捏造運用ルール |
-| auto-qa ワークフロー | `.github/workflows/copilot-auto-qa.yml` | PR への質問票作成指示の自動投稿 |
+| auto-qa ワークフロー | `.github/workflows/copilot-auto-feedback.yml` | PR / Issue への質問票・レビュー指示の自動投稿 |
 | QA→レビュー遷移 | `.github/workflows/auto-qa-to-review-transition.yml` | QA 完了後の auto-context-review ラベル自動付与 |
 
 

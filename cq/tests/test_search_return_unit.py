@@ -142,3 +142,67 @@ def test_cli_exposes_return_unit_defaulting_to_line() -> None:
     assert args.return_unit == "chunk"
     with pytest.raises(SystemExit):
         parser.parse_args(["search", "--q", "x", "--return-unit", "bogus"])
+
+
+class TestSymbolUnit:
+    """`symbol` 単位は本文を返さず、コードのメタ情報だけを返す（FR-CQ-17）。
+
+    実測（golden 56 問 / top-3 / 既定経路）: 応答トークンの中央値が 159 → 66 へ
+    落ち、`symbols` へ結合することで名前の付いたヒットが 31/80 → 62/80 になる。
+    結合しないと 80 件中 49 件がパスと行番号だけになり、「関数名・引数名を返す」
+    という用途を満たさない。
+    """
+
+    def test_the_cli_offers_the_symbol_unit(self) -> None:
+        parser = cli.build_parser()
+        args = parser.parse_args(["search", "--q", "x", "--return-unit", "symbol"])
+        assert args.return_unit == "symbol"
+
+    def test_no_body_is_returned(self, repo: Path) -> None:
+        hits = _search(repo, query="long_operation", max_tokens=100000,
+                       return_unit="symbol")
+        assert hits
+        assert all(h.snippet == "" for h in hits)
+        assert all("snippet" not in h.to_dict() for h in hits)
+
+    def test_the_symbol_name_and_signature_are_present(self, repo: Path) -> None:
+        hits = _search(repo, query="long_operation", max_tokens=100000,
+                       return_unit="symbol")
+        payload = _long_hit(hits).to_dict()
+        assert payload["qualname"] == "long_operation"
+        assert payload["kind"] == "function"
+        assert payload["signature"].startswith("def long_operation(payload)")
+
+    def test_a_hit_without_a_symbol_still_returns_its_location(
+        self, repo: Path
+    ) -> None:
+        """`symbols` に該当が無いチャンクもある。落とさず位置だけ返す。"""
+        (repo / "pkg" / "settings.py").write_text(
+            "SYMBOLLESS_MARKER = 1\nOTHER = 2\n", encoding="utf-8"
+        )
+        indexer.build_index(
+            repo, config.resolve_profile(repo, "test"),
+            db_path=repo / ".cq" / "index-test.sqlite",
+        )
+        hits = _search(repo, query="SYMBOLLESS_MARKER", max_tokens=100000,
+                       return_unit="symbol")
+        assert hits
+        assert hits[0].path == "pkg/settings.py"
+        assert hits[0].to_dict().get("qualname") is None
+
+    def test_ranking_is_unchanged_across_units(self, repo: Path) -> None:
+        line = _search(repo, query=_MARKER, max_tokens=100000)
+        symbol = _search(repo, query=_MARKER, max_tokens=100000, return_unit="symbol")
+        assert [(h.path, h.lines, h.route) for h in line] == [
+            (h.path, h.lines, h.route) for h in symbol
+        ]
+
+    def test_it_costs_fewer_tokens_than_the_line_unit(self, repo: Path) -> None:
+        import json
+
+        line = _search(repo, query=_MARKER, max_tokens=100000)
+        symbol = _search(repo, query=_MARKER, max_tokens=100000, return_unit="symbol")
+        as_tokens = lambda hits: len(  # noqa: E731
+            json.dumps([h.to_dict() for h in hits], ensure_ascii=True)
+        )
+        assert as_tokens(symbol) < as_tokens(line)

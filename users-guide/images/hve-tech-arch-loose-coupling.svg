@@ -52,7 +52,7 @@
   <text x="415" y="240" class="note">SKILL.md frontmatter 解析</text>
 
   <rect class="box" x="40"  y="270" width="170" height="56" rx="4"/>
-  <text x="55" y="290">hve/agent_loader</text>
+  <text x="55" y="290">hve/prompt_loader</text>
   <text x="55" y="310" class="note">.prompt.md → 内部 dict</text>
 
   <rect class="box" x="220" y="270" width="170" height="56" rx="4"/>
@@ -113,7 +113,7 @@
 
   <rect class="box" x="40"  y="540" width="530" height="60" rx="4"/>
   <text x="55" y="562">hve/workflow_registry.py — WorkflowDef + StepDef DAG</text>
-  <text x="55" y="580" class="note">AAS / AAD-WEB / ASDW-WEB / ABD / ABDV / AAG / AAGD / AKM / AQOD / ADOC / ARD</text>
+  <text x="55" y="580" class="note">ARD / AAS / AAD-WEB / ASDW-WEB / ADFD / ADFDV / AAG / AAGD / AAR / AKM / ADI / ADOC</text>
 
   <rect class="box" x="40"  y="610" width="530" height="60" rx="4"/>
   <text x="55" y="632">.github/copilot-instructions.md（最上位ルール）</text>

@@ -40,6 +40,128 @@ def test_config_defaults_are_local_loopback() -> None:
     assert cfg.query_mode == "local"
 
 
+def test_build_rag_loads_the_llm_before_indexing(tmp_path, monkeypatch) -> None:
+    """セッション開始時に LLM を 1 度呼び、モデル読み込みを前倒しすること。
+
+    Ollama は初回呼び出しでモデルを読み込む（7B で実測約 2 分）。LightRAG は
+    抽出呼び出しを並列に発行し Ollama はそれを直列化するため、読み込みが
+    待ち行列の中に入ると後続要求がタイムアウトする。LightRAG 側の worker
+    タイムアウトが上限になるので、タイムアウト値の引き上げでは解決しない。
+    """
+    import asyncio
+
+    from mdq import graphrag_runtime as runtime
+
+    calls: list[str] = []
+
+    async def _completion(prompt, system_prompt=None, history_messages=None,
+                          **_kwargs):
+        calls.append(str(prompt))
+        return "ok"
+
+    monkeypatch.setattr(
+        runtime, "get_completion_func", lambda *_a, **_k: _completion
+    )
+
+    rag = asyncio.run(gs._build_rag(tmp_path / "wd", gs.GraphRAGConfig(
+        llm_provider="mock", embed_provider="mock", embed_mock_dim=8,
+    )))
+    asyncio.run(rag.finalize_storages())
+
+    assert calls, "セッション開始時に LLM を呼んでいない（読み込みが後続要求へ相乗り）"
+
+
+def test_build_rag_does_not_queue_requests_behind_each_other(
+    tmp_path, monkeypatch
+) -> None:
+    """LLM 呼び出しの同時実行数を Ollama の直列処理に合わせること。
+
+    LightRAG の既定は 4 並列だが Ollama は既定で 1 件ずつ処理する
+    (``OLLAMA_NUM_PARALLEL=1``)。並列に投げると 3 件が待ち行列に入り、
+    待ち時間まで各要求の経過時間に含まれてタイムアウトする。直列化しても
+    Ollama 側の実効スループットは変わらない。
+    """
+    import asyncio
+
+    import lightrag
+
+    captured: dict = {}
+    real_cls = lightrag.LightRAG
+
+    def _spy(*args, **kwargs):
+        captured.update(kwargs)
+        return real_cls(*args, **kwargs)
+
+    monkeypatch.setattr(lightrag, "LightRAG", _spy)
+
+    rag = asyncio.run(gs._build_rag(tmp_path / "wd", gs.GraphRAGConfig(
+        llm_provider="mock", embed_provider="mock", embed_mock_dim=8,
+    )))
+    asyncio.run(rag.finalize_storages())
+
+    assert captured.get("llm_model_max_async") == 1
+
+
+def test_build_rag_does_not_process_documents_concurrently(
+    tmp_path, monkeypatch
+) -> None:
+    """文書の同時処理数も Ollama の直列処理へ合わせること。
+
+    LLM 呼び出しを直列化しても、LightRAG が既定で 3 文書を同時処理すると
+    各文書の呼び出しが互いの後ろに並び、待ち時間が LightRAG 自身の実行
+    タイムアウト (240 秒) を超える。実文書 1 件の抽出は実測 107.8 秒。
+    """
+    import asyncio
+
+    import lightrag
+
+    captured: dict = {}
+    real_cls = lightrag.LightRAG
+
+    def _spy(*args, **kwargs):
+        captured.update(kwargs)
+        return real_cls(*args, **kwargs)
+
+    monkeypatch.setattr(lightrag, "LightRAG", _spy)
+
+    rag = asyncio.run(gs._build_rag(tmp_path / "wd", gs.GraphRAGConfig(
+        llm_provider="mock", embed_provider="mock", embed_mock_dim=8,
+    )))
+    asyncio.run(rag.finalize_storages())
+
+    assert captured.get("max_parallel_insert") == 1
+
+
+def test_build_rag_propagates_the_configured_timeout(tmp_path, monkeypatch) -> None:
+    """設定したタイムアウトが LightRAG 側の実行タイムアウトにも効くこと。
+
+    LightRAG は自身の ``default_llm_timeout`` (既定 240 秒) で LLM 呼び出しを
+    打ち切る。mdq 側の HTTP タイムアウトだけを延ばしても LightRAG 側が先に
+    発火するため、``--graphrag-timeout`` が実質無効になる。
+    """
+    import asyncio
+
+    import lightrag
+
+    captured: dict = {}
+    real_cls = lightrag.LightRAG
+
+    def _spy(*args, **kwargs):
+        captured.update(kwargs)
+        return real_cls(*args, **kwargs)
+
+    monkeypatch.setattr(lightrag, "LightRAG", _spy)
+
+    rag = asyncio.run(gs._build_rag(tmp_path / "wd", gs.GraphRAGConfig(
+        llm_provider="mock", embed_provider="mock", embed_mock_dim=8,
+        llm_timeout=1234.0, embed_timeout=567.0,
+    )))
+    asyncio.run(rag.finalize_storages())
+
+    assert captured.get("default_llm_timeout") == 1234
+    assert captured.get("default_embedding_timeout") == 567
+
+
 def test_runtime_config_set_get_clear_cycle() -> None:
     gs.clear_runtime_config()
     assert isinstance(gs.get_runtime_config(), gs.GraphRAGConfig)

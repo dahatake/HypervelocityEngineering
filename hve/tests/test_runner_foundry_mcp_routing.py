@@ -146,6 +146,7 @@ def _write_foundry_mcp_config(root: Path, *, azure_config: dict | None = None) -
                 "mcpServers": {
                     "azure": azure_config
                     or {
+                        "tools": ["*"],
                         "command": "npx",
                         "args": ["-y", "@azure/mcp@latest", "server", "start"],
                     },
@@ -172,6 +173,7 @@ def test_foundry_mcp_loader_requires_exact_repository_pinned_servers(
             {
                 "mcpServers": {
                     "azure": {
+                        "tools": ["*"],
                         "command": "npx",
                         "args": ["-y", "@azure/mcp@latest", "server", "start"],
                     },
@@ -256,6 +258,7 @@ def test_foundry_required_main_session_injects_azure_and_learn_and_verifies_load
     assert result is True
     options = client.create_session_kwargs[0]
     assert options["mcp_servers"]["azure"] == {
+        "tools": ["*"],
         "command": "npx",
         "args": ["-y", "@azure/mcp@latest", "server", "start"],
     }
@@ -381,6 +384,7 @@ def test_foundry_required_fanout_overrides_cannot_replace_pinned_servers() -> No
     assert result is True
     options = client.create_session_kwargs[0]["mcp_servers"]
     assert options["azure"] == {
+        "tools": ["*"],
         "command": "npx",
         "args": ["-y", "@azure/mcp@latest", "server", "start"],
     }

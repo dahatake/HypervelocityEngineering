@@ -15,6 +15,11 @@
 #   - gui-docconvert: markitdown[pdf,docx,pptx,xlsx,xls,outlook]
 #   - code         : tree-sitter 文法 + sqlglot (code-query Skill の高フィデリティ解析)
 #
+# opt-in の extras (既定では導入しない):
+#   - graphrag     : lightrag-hku  (graphrag 戦略)。-Graphrag 指定時のみ。
+#                    pandas を 2.4 未満へダウングレードし、別途 Ollama の
+#                    導入と起動、モデル取得が必要なため既定では入れない。
+#
 # winget で導入する OS ツール (未導入時のみ。-NoInstallTools で抑止):
 #   - Git.Git             : リポジトリ操作 / git diff
 #   - GitHub.cli          : gh auth login / Issue / PR
@@ -41,8 +46,13 @@
 # 使い方:
 #   pwsh -NoProfile -ExecutionPolicy Bypass -File hve\setup-hve.ps1
 #       既定: 全 extras を導入 (CLI + GUI 完全構成)
-#   ... -CheckOnly         状態確認のみ。変更なし
+#   ... -CheckOnly         状態確認のみ。変更なし (通常 GUI 構成では gh / PTY backend
+#                          の不足を警告として報告するが、非ゼロ終了はしない)
 #   ... -NoGui             GUI 系 extras をスキップ (CLI 専用)
+#   ... -Graphrag          graphrag extras を追加で導入 (別途 Ollama が必要)
+#   ... -CodeLanguages python,csharp
+#                          code-query の tree-sitter 文法を指定言語だけに絞る
+#                          (未指定なら全言語。受理する名前は $CodeLanguageExtras を参照)
 #   ... -Minimal           runtime base のみ (extras / pytest なし)
 #   ... -Force             .venv を無条件削除し再構築
 #   ... -SkipNltkDownload  nltk punkt_tab の事前 DL をスキップ
@@ -58,6 +68,8 @@
 param(
     [switch]$CheckOnly,
     [switch]$NoGui,
+    [switch]$Graphrag,
+    [string]$CodeLanguages = '',
     [switch]$Minimal,
     [switch]$Force,
     [switch]$SkipNltkDownload,
@@ -346,7 +358,7 @@ if ($Minimal -and ($Force -or $WithSkills)) {
 $installGui = -not $NoGui -and -not $Minimal
 
 Write-Host "HVE setup (Windows / PowerShell)"
-Write-Host "  CheckOnly=$CheckOnly  NoGui=$NoGui  Minimal=$Minimal  Force=$Force  SkipNltkDownload=$SkipNltkDownload  WithSkills=$WithSkills  NoInstallTools=$NoInstallTools  NoGlobalCleanup=$NoGlobalCleanup  UpgradeSdk=$UpgradeSdk"
+Write-Host "  CheckOnly=$CheckOnly  NoGui=$NoGui  Graphrag=$Graphrag  Minimal=$Minimal  Force=$Force  SkipNltkDownload=$SkipNltkDownload  WithSkills=$WithSkills  NoInstallTools=$NoInstallTools  NoGlobalCleanup=$NoGlobalCleanup  UpgradeSdk=$UpgradeSdk"
 Write-Host "  repoRoot=$repoRoot"
 
 # ---------- グローバル Python 環境の遮断 ----------
@@ -375,10 +387,15 @@ Install-OsTool -Command 'shellcheck' -WingetId 'koalaman.shellcheck' -Label 'She
 $git = Get-Command git -ErrorAction SilentlyContinue
 if (-not $git) { Write-Warn2 'git is unavailable. Repository operations and git diff will fail.' }
 $gh  = Get-Command gh  -ErrorAction SilentlyContinue
-if ($installGui -and -not $CheckOnly -and -not $gh) {
-    Write-ErrLine 'GitHub CLI (gh) is required for the GUI "GitHub CLI でログイン" feature.'
-    Write-Host '    Re-run this setup without -NoInstallTools, or install GitHub CLI and re-run this setup.'
-    exit 1
+if ($installGui -and -not $gh) {
+    if ($CheckOnly) {
+        # -CheckOnly は変更を行わない診断モード。通常実行の fail-closed 契約とは分離し、警告のみで続行する。
+        Write-Warn2 'GitHub CLI (gh) is unavailable. The GUI "GitHub CLI でログイン" feature will not work. Re-run this setup without -CheckOnly to install it.'
+    } else {
+        Write-ErrLine 'GitHub CLI (gh) is required for the GUI "GitHub CLI でログイン" feature.'
+        Write-Host '    Re-run this setup without -NoInstallTools, or install GitHub CLI and re-run this setup.'
+        exit 1
+    }
 }
 
 $python = Find-Python311
@@ -506,7 +523,20 @@ if (-not (Test-Path $venvPy) -and -not $CheckOnly) {
 }
 
 if ($CheckOnly) {
-    if (-not (Test-Path $venvPy)) { Write-Warn2 ".venv does not exist. Run without -CheckOnly." }
+    if (-not (Test-Path $venvPy)) {
+        Write-Warn2 ".venv does not exist. Run without -CheckOnly."
+    } elseif ($installGui) {
+        Write-Step 'Auditing embedded GitHub CLI terminal prerequisites'
+        $ptyProbe = Invoke-Probe -Exe $venvPy -ArgList @(
+            '-c',
+            'from hve.gui.pty_backend import is_pty_available; raise SystemExit(0 if is_pty_available() else 1)'
+        )
+        if ($ptyProbe -eq 0) {
+            Write-Ok 'PTY backend for the embedded GitHub CLI terminal'
+        } else {
+            Write-Warn2 'The PTY backend required by the GUI "GitHub CLI でログイン" feature is unavailable. Re-run this setup without -CheckOnly to install it.'
+        }
+    }
     Write-Host "`nCheck-only completed with $script:WarningCount warning(s)."
     exit 0
 }
@@ -518,13 +548,19 @@ Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','--upgrade','pip','s
 # ---------- editable install + extras ----------
 if ($Minimal) {
     Write-Step 'Installing HVE (base only, no extras)'
+    if ($Graphrag) { Write-Warn2 '-Graphrag is ignored because -Minimal installs no extras.' }
+    if ($CodeLanguages.Trim()) { Write-Warn2 '-CodeLanguages is ignored because -Minimal installs no code-query grammars.' }
     Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','-e','.')
 } else {
-    $extras = @('test','mdq-watch','mdq-ja','semantic')
+    $extras = @('test','mdq-watch','mdq-ja','semantic','code-watch','code-tokenizer','code-semantic')
     if ($installGui) { $extras += @('gui','gui-pty','gui-docconvert') }
+    if ($Graphrag) { $extras += 'graphrag' }
     $target = ".[" + ($extras -join ',') + "]"
     Write-Step "Installing HVE with extras: [$($extras -join ',')]"
     Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','-e',$target)
+    if ($Graphrag) {
+        Write-Warn2 'graphrag extras installed. It also needs Ollama running on http://127.0.0.1:11434 with the qwen2.5:7b and nomic-embed-text models: winget install --id Ollama.Ollama --exact, then ollama pull qwen2.5:7b; ollama pull nomic-embed-text'
+    }
 }
 
 if ($installGui) {
@@ -541,15 +577,42 @@ if ($installGui) {
     Write-Ok 'PTY backend for the embedded GitHub CLI terminal'
 }
 
-# ---------- code-query 用文法 (extras: code) ----------
+# ---------- code-query 用文法 (extras: code / code-<言語>) ----------
 # tree-sitter 文法は platform ごとに wheel 有無が異なるため、本体インストールとは
 # 分離して警告止まりにする。未導入時は code-query が regex (lite) へ降格するだけ。
 # NOTE: code-sql (sqlfluff) は click pin が semantic extras と衝突するため導入しない。
+# 利用者が打つ言語名 → pyproject.toml の extras 名。`sql` だけは sqlfluff 用の
+# 既存 `code-sql` と衝突するため `code-sqlglot` へ写す。
+$CodeLanguageExtras = [ordered]@{
+    python     = 'code-python';     csharp     = 'code-csharp'
+    javascript = 'code-javascript'; typescript = 'code-typescript'
+    java       = 'code-java';       go         = 'code-go'
+    rust       = 'code-rust';       c          = 'code-c'
+    cpp        = 'code-cpp';        scala      = 'code-scala'
+    shell      = 'code-shell';      powershell = 'code-powershell'
+    batch      = 'code-batch';      sql        = 'code-sqlglot'
+}
 if (-not $Minimal) {
-    Write-Step 'Installing code-query grammars (extras: code)'
+    if ($CodeLanguages.Trim()) {
+        $requested = @(
+            $CodeLanguages.Split(',') |
+                ForEach-Object { $_.Trim().ToLowerInvariant() } |
+                Where-Object { $_ }
+        )
+        $unknown = @($requested | Where-Object { -not $CodeLanguageExtras.Contains($_) })
+        if ($unknown.Count -gt 0) {
+            Write-ErrLine "-CodeLanguages contains unknown languages: $($unknown -join ', ')"
+            Write-Host "    Available: $($CodeLanguageExtras.Keys -join ', ')"
+            exit 1
+        }
+        $codeExtras = @($requested | ForEach-Object { $CodeLanguageExtras[$_] } | Select-Object -Unique)
+    } else {
+        $codeExtras = @('code')
+    }
+    Write-Step "Installing code-query grammars (extras: $($codeExtras -join ','))"
     try {
-        Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','-e','.[code]')
-        Write-Ok 'code extras installed (tree-sitter grammars + sqlglot)'
+        Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','-e',(".[" + ($codeExtras -join ',') + "]"))
+        Write-Ok "code-query grammars installed: $($codeExtras -join ',')"
     } catch {
         Write-Warn2 "code extras install failed: $($_.Exception.Message). code-query falls back to regex (lite) parsing."
     }

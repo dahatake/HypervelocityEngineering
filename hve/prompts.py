@@ -520,7 +520,7 @@ degraded は改善後のスコアが改善前を下回る場合、または test
 # 送信先: サブセッションではなく Phase 1 と同じメインセッション
 # プレースホルダー:
 #   {source_phase}       = 改善材料の出所フェーズ名（例: "Phase 2c QA Merge"）
-#   {workflow_id}        = ワークフロー識別子（例: "aqod", "aad"）
+#   {workflow_id}        = ワークフロー識別子（例: "adi", "aad-web"）
 #   {step_id}            = ステップ識別子（例: "1.1"）
 #   {step_title}         = ステップタイトル
 #   {custom_agent}       = Custom Agent 名（省略可。"None" の場合あり）
@@ -557,7 +557,7 @@ MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT: str = """あなたは今から **メイ�
 - **捏造は絶対に禁止。** `improvement_context` に存在しない問題を作り出さない。
 - メインタスク成果物に関係する箇所だけを最小差分で修正する。
 - `/README.md` は変更しない。
-- `original-docs/` 配下は読み取り専用として扱い、変更しない。
+- `docs-original/` 配下は読み取り専用として扱い、変更しない。
 - 既存のファイル構造、見出し構造、成果物形式を維持する。
 - 不明点は TBD / 未確認 / 要確認 として明記し、具体値を捏造しない。
 - 変更した場合は、変更箇所と理由を簡潔に報告する。
@@ -573,12 +573,12 @@ MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT: str = """あなたは今から **メイ�
 - Work IQ と既存成果物が矛盾する場合は、一方的に上書きせず、矛盾として明記する。
 - Work IQ の情報を反映する場合は、可能な範囲で情報ソースを記載する。
 
-### AQOD 成果物形式の維持ルール
-- `workflow_id` が `aqod` の場合、AQOD 本体成果物形式を維持する。
-- `# Original ドキュメント質問票`、`対象スコープ: original-docs/`、`## サマリー`、`### Qxx` の本文形式を維持する。
-- AQOD 本体成果物を `[Qxx]` 形式の Auto-QA 補助質問票へ変換しない。
-- `original-docs/` の実在記述を根拠にする。
-- `original-docs/` 配下のファイル自体は変更しない。
+### ADI 原本質問票成果物形式の維持ルール
+- `workflow_id` が `adi` かつ Step ID の基底が `1.1` または `1.2` の場合、原本質問票の本体成果物形式を維持する。
+- `# Original ドキュメント質問票`、`対象スコープ: docs-original/`、`## サマリー`、`### Qxx` の本文形式を維持する。
+- 原本質問票の本体成果物を `[Qxx]` 形式の Auto-QA 補助質問票へ変換しない。
+- `docs-original/` の実在記述を根拠にする。
+- `docs-original/` 配下のファイル自体は変更しない。
 
 ---
 

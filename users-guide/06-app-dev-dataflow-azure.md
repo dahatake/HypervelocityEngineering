@@ -71,6 +71,8 @@
 
 > ❗ 上記ファイルがまだ存在しない場合は、先に「設計フェーズ」チュートリアルを完了してください。  
 > → 参照: [`users-guide/04-app-design-dataflow.md`](./04-app-design-dataflow.md)
+>
+> AAS 共通化への追従が完了するまでは、ADFDV の `required_input_paths` が旧パスを要求します。該当ファイルがない場合は、入力を推測で作成せず、前段の設計成果物と `hve/workflow_registry.py` の `adfdv` 定義を確認して blocked としてください。
 
 セットアップ・トラブルシューティングは → [Cloud](./hve-cloud-getting-started.md) / [CLI](./hve-cli-getting-started.md) / [GUI](./hve-gui-getting-started.md)
 
@@ -185,9 +187,16 @@ Sub Issue の状態:
 | step-1.2 | [`Dev-Dataflow-DataDeploy`](../.github/prompts/Dev-Dataflow-DataDeploy.prompt.md) | `docs/dataflow/dataflow-service-catalog.md`, `docs/dataflow/dataflow-app-catalog.md`, `src/infra/azure/dataflow/create-batch-resources.sh`, `src/infra/azure/dataflow/verify-batch-resources.sh` | Azure データリソース実行ログ・検証結果（`work/` 配下） |
 | step-2.1 | [`Dev-Dataflow-TestCoding`](../.github/prompts/Dev-Dataflow-TestCoding.prompt.md) | `docs/test-specs/{jobId}-test-spec.md` | `src/test/dataflow/{jobId}-{jobNameSlug}.Tests/` |
 | step-2.2 | [`Dev-Dataflow-ServiceCoding`](../.github/prompts/Dev-Dataflow-ServiceCoding.prompt.md) | `docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md`, step-2.1 成果物 | `src/dataflow/` 実装コード |
+
+> [!NOTE]
+> **実装言語は Python、テストは pytest が既定です**（FR-WF-ADFDV-03）。
+> 選定理由は、データフロー処理の実行基盤として **Apache Spark** / **Microsoft Fabric** / **Databricks** を選択できる言語だからです。Azure Functions も Python ランタイムをサポートします。
+> データ規模に応じて、単一ノードで足りる場合は標準ライブラリ / pandas、分散処理が必要な場合は PySpark を選択し、その根拠を README へ記録します。
 | step-3 | [`Dev-Dataflow-FunctionsDeploy`](../.github/prompts/Dev-Dataflow-FunctionsDeploy.prompt.md) | `src/dataflow/`, `docs/dataflow/dataflow-service-catalog.md`, `docs/dataflow/dataflow-app-catalog.md` | `.github/workflows/deploy-batch-functions.yml`, `src/infra/azure/dataflow/README.md` |
-| step-4.1 | [`QA-AzureArchitectureReview`](../.github/prompts/QA-AzureArchitectureReview.prompt.md) | step-3 成果物, `docs/dataflow/dataflow-service-catalog.md` | `docs/azure/azure-architecture-review-report.md` |
-| step-4.2 | [`QA-AzureDependencyReview`](../.github/prompts/QA-AzureDependencyReview.prompt.md) | step-3 成果物, `docs/dataflow/dataflow-service-catalog.md` | `docs/azure/dependency-review-report.md` |
+| step-4.1 | [`QA-AzureArchitectureReview`](../.github/prompts/QA-AzureArchitectureReview.prompt.md) | step-3 成果物, `docs/dataflow/dataflow-service-catalog.md` | `docs/azure/waf-review.md` |
+| step-4.2 | [`QA-AzureDependencyReview`](../.github/prompts/QA-AzureDependencyReview.prompt.md) | step-3 成果物, `docs/dataflow/dataflow-service-catalog.md` | `docs/azure/dependency-review.md` |
+
+各 Step の正本は `hve/workflow_registry.py` の `adfdv` 定義です。表の旧 `docs/dataflow/dataflow-*.md` 入力は移行ノートの制約を受けます。Prompt または表だけを変更して入力・出力を拡張せず、必要な変更は registry・Prompt・I/O 契約・回帰テストを同時に確認してください。
 
 ### Prompt を手動でアサインする場合
 
@@ -217,7 +226,7 @@ Prompt が成果物を生成すると、リポジトリに **PR（Pull Request�
 □ 前段の設計ドキュメントを正しく参照しているか
 
 □ work/ 配下の plan.md に split_decision が記載されているか
-  → SPLIT_REQUIRED の場合、実装ファイルが混入していないか確認
+  → `PROCEED` は単一・小中規模タスクとして続行可能、`SPLIT_REQUIRED` は分割が必要な判定です。後者の場合、実装ファイルが混入していないか確認
 ```
 
 ### 4-2. PR の自動チェック
@@ -275,7 +284,7 @@ ADFDV 完了後は、必要に応じて運用改善・追加ジョブ実装・�
 
 1. **Issues** タブ → **New issue**（またはテンプレートが存在する場合はテンプレートを使用）
 2. Issue 本文に実装タスクの仕様・参照ドキュメントを記載
-3. `work/Issue-{識別子}/subissues.md` を PR に含めて `create-subissues` ラベルを付与する
+3. `work/run/<run-id>/Issue-{識別子}/subissues.md` を PR に含めて `create-subissues` ラベルを付与する
 
 #### Sub Issue の自動作成
 
@@ -377,7 +386,7 @@ ADFDV 完了後は、必要に応じて運用改善・追加ジョブ実装・�
 
 **対処**:
 1. PR の差分を確認し、`work/` 配下以外の実装ファイルをコミットから除去する
-2. `plan.md` の見積合計が 15 分以内か確認する（Skill: task-dag-planning 参照）
+2. `plan.md` の `task_scope` と `context_size` が `split_decision` と整合するか確認する（Skill: task-dag-planning 参照）
 3. 必要であれば作業を Sub Issue に分割して再 PR する
 
 ---

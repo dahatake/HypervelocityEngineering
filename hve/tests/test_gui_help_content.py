@@ -60,12 +60,21 @@ def test_workbench_help_known():
     assert "ログ" in e.short
 
 
-def test_category_help_all_16_present():
-    """C1〜C16 のすべてに説明文があることを確認。"""
-    from hve.gui.help_content import category_help
+def test_category_help_covers_only_live_categories():
+    """実在するカテゴリ枠だけに説明文を持つことを確認。
 
-    for i in range(1, 17):
-        key = f"C{i}"
+    キー一覧の出所は `hve/gui/page_options.py` `OptionsPage._setup_ui` の `_add(...)`。
+    """
+    from hve.gui.help_content import _CATEGORY_HELP, category_help
+
+    live_keys = {
+        "C1", "C3", "C4", "C5", "C6", "C7",
+        "AZURE", "AGENTIC",
+        "C10", "C11", "C13", "C14", "C17",
+    }
+    dead = set(_CATEGORY_HELP) - live_keys
+    assert not dead, f"実在しないカテゴリの説明文が残っています: {sorted(dead)}"
+    for key in sorted(_CATEGORY_HELP):
         e = category_help(key)
         assert e.short, f"{key} の説明文が空"
         assert e.guide_path.endswith(".md"), f"{key} のガイドパスが不正"
@@ -107,3 +116,11 @@ def test_options_fallback_keys_match_orchestrate_args():
     arg_field_names = {f.name for f in fields(OrchestrateArgs)}
     unknown = [k for k in _OPTIONS_FALLBACK if k not in arg_field_names]
     assert not unknown, f"OrchestrateArgs に存在しないキーが辞書にある: {unknown}"
+
+
+def test_original_document_options_link_to_adi_guide() -> None:
+    from hve.gui.help_content import _OPTIONS_GUIDE_HINT, WORKFLOW_GUIDE_MAP
+
+    assert WORKFLOW_GUIDE_MAP["adi"] == "00-design-doc-ingestion.md"
+    for key in ("target_scope", "depth", "focus_areas"):
+        assert _OPTIONS_GUIDE_HINT[key] == "00-design-doc-ingestion.md"

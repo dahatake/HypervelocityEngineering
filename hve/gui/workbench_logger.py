@@ -262,11 +262,16 @@ def _try_consume_stats_event(state: WorkbenchState, line: str) -> bool:
         pass
 
     kind = payload.get("kind") or ""
+    # FR-RTO-07: Step 別集計の帰属キー。空の場合は実行中 Step へ代替帰属させない。
+    step_key = (payload.get("step") or payload.get("step_id") or "").strip()
     if kind == "session_usage_detail":
         state.apply_session_usage_detail(
             system=payload.get("system"),
             tool_definitions=payload.get("tool_definitions"),
             conversation=payload.get("conversation"),
+        )
+        state.record_step_context(
+            step_key or None, payload.get("current"), payload.get("limit")
         )
         return True
     if kind == "assistant_usage":
@@ -307,8 +312,8 @@ def _try_consume_stats_event(state: WorkbenchState, line: str) -> bool:
             pass
         return True
     if kind == "usage_credit":
-        # runner.py の assistant.usage ハンドラから発火される、SDK 直接値の
-        # AI Credit (Nano AIU) / Multiplier cost 累積イベント (Phase A)。
+        # runner.py の assistant.usage ハンドラおよび Fleet 経路から発火される、
+        # SDK 直接値の AI Credit (Nano AIU) / Multiplier cost 累積イベント (Phase A)。
         try:
             state.apply_assistant_credit(
                 api_call_id=payload.get("api_call_id"),
@@ -316,9 +321,14 @@ def _try_consume_stats_event(state: WorkbenchState, line: str) -> bool:
                 multiplier_cost=payload.get("multiplier_cost"),
                 nano_aiu=payload.get("nano_aiu"),
                 unavailable_reason=payload.get("unavailable_reason"),
+                step_id=step_key or None,
             )
         except Exception:
             pass
+        # Model 列の源は `usage_credit` とする。`assistant_usage` と 1 API call あたり
+        # 1:1 で発火し、かつ Fleet 経路は `usage_credit` のみを発火するため。
+        if payload.get("model"):
+            state.record_step_model(step_key or None, str(payload["model"]))
         return True
     if kind == "quota_snapshot":
         # runner.py の assistant.usage ハンドラから発火される quota スナップショット。

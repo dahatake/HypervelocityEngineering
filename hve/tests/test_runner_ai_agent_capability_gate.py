@@ -123,6 +123,7 @@ def test_runner_gate_resolves_aag_fanout_target(
         agent_dir: Path | None = None,
         test_spec_path: Path | None = None,
         tool_search_policy: str = "auto",
+        agentic_retrieval_policy: str = "auto",
     ) -> list[str]:
         calls.append(
             {
@@ -168,6 +169,7 @@ def test_runner_gate_resolves_aagd_fanout_target(
         agent_dir: Path | None = None,
         test_spec_path: Path | None = None,
         tool_search_policy: str = "auto",
+        agentic_retrieval_policy: str = "auto",
     ) -> list[str]:
         calls.append((workflow_id, design_path, agent_dir, test_spec_path))
         return []
@@ -203,8 +205,11 @@ def test_runner_gate_resolves_aagd_deploy_target(
         design_path: Path,
         infra_dir: Path,
         tool_search_policy: str = "auto",
+        agentic_retrieval_policy: str = "auto",
     ) -> list[str]:
-        calls.append((design_path, infra_dir, tool_search_policy))
+        calls.append(
+            (design_path, infra_dir, tool_search_policy, agentic_retrieval_policy)
+        )
         return []
 
     monkeypatch.setattr(
@@ -221,6 +226,7 @@ def test_runner_gate_resolves_aagd_deploy_target(
         (
             tmp_path / "docs" / "agent" / "agent-detail-AG-03.md",
             tmp_path / "src" / "infra" / "azure",
+            "auto",
             "auto",
         )
     ]

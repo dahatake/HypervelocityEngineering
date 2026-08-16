@@ -42,23 +42,23 @@ class TestDAGParity(unittest.TestCase):
             path = Path(tmpdir) / "workflow.yml"
             path.write_text(
                 "python -m hve --workflow aad-web --foo bar\n"
-                "python -m hve --workflow aqod\n",
+                "python -m hve --workflow adi\n",
                 encoding="utf-8",
             )
 
-            self.assertEqual(extract_reusable_workflow_ids([path]), ("aad-web", "aqod"))
+            self.assertEqual(extract_reusable_workflow_ids([path]), ("aad-web", "adi"))
 
     def test_compare_workflow_id_sets_classifies_alias_and_missing_registry(self) -> None:
         report = compare_workflow_id_sets(
-            hve_ids=["aas", "aad-web", "aqod"],
+            hve_ids=["aas", "aad-web", "adi"],
             cloud_bash_ids=["aas", "aad"],
-            reusable_workflow_ids=["aas", "aad-web", "aqod"],
+            reusable_workflow_ids=["aas", "aad-web", "adi"],
         )
 
         self.assertEqual(report.by_classification("same")[0].workflow_id, "aas")
         self.assertEqual(report.by_classification("legacy-alias")[0].hve_id, "aad-web")
         self.assertEqual(report.by_classification("legacy-alias")[0].cloud_bash_id, "aad")
-        self.assertEqual(report.by_classification("missing-bash-registry")[0].workflow_id, "aqod")
+        self.assertEqual(report.by_classification("missing-bash-registry")[0].workflow_id, "adi")
 
 
 # ---------------------------------------------------------------------------

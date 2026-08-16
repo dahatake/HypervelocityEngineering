@@ -2,23 +2,19 @@
 name: markdown-query
 description: >
   Answer questions from local repo docs by retrieving small, relevant chunks
-  instead of reading whole files. Local-only (no cloud API).
-  USE FOR: answer from project docs, repository Q&A, look up specification,
-  find requirement, search any markdown in this repo, RAG over local docs,
-  knowledge base lookup, search docs, query docs, find heading, bm25 markdown
-  search, grep markdown, list markdown by tag, lookup across markdown files.
-  PREFER OVER read_file, cat, and grep_search when targets are markdown (.md)
-  and you need relevance-ranked hits across multiple files, even when paths
-  are not yet known. Try this skill first; fall back to grep only
-  if hits are empty/unrelated or non-markdown sources are required.
-  DO NOT USE FOR: editing or generating markdown, general source-code search
-  (use code-query instead), cloud embedding search, html rendering.
-  WHEN: a user question likely has its answer in local markdown docs even if
-  file types/paths are unknown; multi-file docs lookup; context window must
-  be minimized.
+  instead of reading whole files. Local-only.
+  USE FOR: answer from project docs, look up a specification or requirement,
+  search markdown across the repo, find a heading, BM25 markdown search,
+  knowledge base lookup.
+  PREFER OVER read_file and grep_search for markdown (.md); fall back to grep
+  only if hits are empty/unrelated or non-markdown sources are required.
+  DO NOT USE FOR: editing markdown, source-code search (use code-query),
+  cloud embedding search.
+  WHEN: the answer likely lives in local markdown even if paths are unknown;
+  multi-file docs lookup; context window must be minimized.
 metadata:
   origin: user
-  version: 0.6.0
+  version: 0.8.0
 category: planning
 ---
 

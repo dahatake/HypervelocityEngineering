@@ -25,14 +25,16 @@ import asyncio
 import copy
 import functools
 import glob as _glob
+import ntpath
 import os
 import shutil
 import subprocess
 import sys
 import time
+import unicodedata
 import uuid
 from pathlib import Path
-from typing import Any, Callable, Dict, FrozenSet, List, Mapping, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, FrozenSet, Iterable, List, Mapping, Optional, Set, Tuple, Union
 from urllib.parse import quote
 
 # -----------------------------------------------------------------------
@@ -427,8 +429,8 @@ _AKM_DEFAULT_TARGET_FILES = "qa/*.md"
 # sources マルチ値の正規化順序（出力順は固定）
 _AKM_SOURCES_ORDER = ("workiq", "qa", "original-docs")
 _AKM_SOURCES_VALID = frozenset(_AKM_SOURCES_ORDER)
-_AQOD_DEFAULT_TARGET_SCOPE = "original-docs/"
-_AQOD_DEFAULT_DEPTH = "standard"
+_ADI_DEFAULT_TARGET_SCOPE = "docs-original/"
+_ADI_DEFAULT_DEPTH = "standard"
 
 # ARD デフォルト値
 _ARD_DEFAULT_SURVEY_PERIOD_YEARS = 30
@@ -486,9 +488,40 @@ def _default_akm_target_files(sources) -> str:
         if non_workiq[0] == "qa":
             return _AKM_DEFAULT_TARGET_FILES
         if non_workiq[0] == "original-docs":
-            return "original-docs/*"
+            return "docs-original/*"
     # 0 件（workiq のみ）または複数 → 既定パターンなし
     return ""
+
+
+def _normalize_adi_target_scope(value: Any) -> str:
+    """ADIの対象スコープを安全なPOSIX相対ディレクトリへ正規化する。
+
+    空値は ``docs-original/`` とし、同ディレクトリまたは配下だけを許可する。
+    絶対パス、drive path、親参照、NUL、prefix衝突はfail-closedで拒否する。
+    """
+    raw = unicodedata.normalize("NFKC", str(value or "")).strip()
+    if not raw:
+        return _ADI_DEFAULT_TARGET_SCOPE
+    normalized = raw.replace("\\", "/")
+    if (
+        "\x00" in normalized
+        or normalized.startswith("/")
+        or bool(ntpath.splitdrive(normalized)[0])
+    ):
+        raise ValueError(
+            "ADI target_scope は docs-original/ 配下のリポジトリ相対パスで指定してください"
+        )
+
+    parts: List[str] = []
+    for part in normalized.split("/"):
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            raise ValueError("ADI target_scope に親ディレクトリ参照 '..' は指定できません")
+        parts.append(part)
+    if not parts or parts[0] != "docs-original":
+        raise ValueError("ADI target_scope は docs-original/ またはその配下だけを指定できます")
+    return "/".join(parts).rstrip("/") + "/"
 
 
 # -----------------------------------------------------------------------
@@ -567,9 +600,13 @@ def _collect_params_non_interactive(
             else:
                 _joined = str(_ingest_dxx_raw)
             params["workiq_akm_ingest_dxx"] = _parse_dxx(_joined)
-    elif wf.id == "aqod":
-        params["target_scope"] = args.get("target_scope") or _AQOD_DEFAULT_TARGET_SCOPE
-        params["depth"] = args.get("depth") or _AQOD_DEFAULT_DEPTH
+    elif wf.id == "adi":
+        # 空を許容する（FR-WF-ADI-11: purpose が空のときは must を付与しない）。
+        params["purpose"] = args.get("purpose") or ""
+        params["target_scope"] = (
+            args.get("target_scope") or _ADI_DEFAULT_TARGET_SCOPE
+        )
+        params["depth"] = args.get("depth") or _ADI_DEFAULT_DEPTH
         params["focus_areas"] = args.get("focus_areas") or ""
     elif wf.id == "ard":
         from datetime import date
@@ -961,6 +998,38 @@ def _explicit_target_output_paths(params: Optional[Mapping[str, Any]]) -> List[s
     return [candidate.strip() for candidate in candidates if str(candidate).strip()]
 
 
+def _validated_qa_include_paths(paths: Optional[Iterable[Union[str, Path]]]) -> List[str]:
+    """明示 stage を許可する qa/ Markdown のリポジトリ相対パスを返す。"""
+    result: List[str] = []
+    for value in paths or []:
+        raw = str(value)
+        if not raw or raw != raw.strip() or "\x00" in raw:
+            raise ValueError("QA include path が不正です")
+        posix = raw.replace("\\", "/")
+        drive, _ = ntpath.splitdrive(raw)
+        parts = posix.split("/")
+        if drive or posix.startswith("/") or any(part in {"", ".", ".."} for part in parts):
+            raise ValueError(f"QA include path は安全な相対パスではありません: {raw}")
+        if parts[0] != "qa" or not posix.lower().endswith(".md"):
+            raise ValueError(f"QA include path は qa/ 配下の Markdown ではありません: {raw}")
+        if posix not in result:
+            result.append(posix)
+    return result
+
+
+def _should_enable_qa_akm_dispatch(
+    *, auto_qa: bool, workflow_id: str, dry_run: bool,
+    qa_akm_background_merge: bool,
+) -> bool:
+    """QA 起点 AKM を生成する実行だけを判定する（FR-QA-05 の唯一の判定点）。"""
+    return bool(
+        auto_qa
+        and qa_akm_background_merge
+        and workflow_id != "akm"
+        and not dry_run
+    )
+
+
 def _git_checkout_new_branch(new_branch: str, base_branch: str, console: Console) -> bool:
     """ローカルで新ブランチを作成し checkout する。
 
@@ -1020,6 +1089,7 @@ def _git_add_commit_push(
     protected_baseline: Optional["ProtectedArtifactManifest"] = None,
     repo_root: Optional[Union[str, Path]] = None,
     target_output_paths: Optional[List[str]] = None,
+    include_paths: Optional[List[str]] = None,
 ) -> bool:
     """変更を add + commit + push する。差分がなければ False を返す。
 
@@ -1035,6 +1105,7 @@ def _git_add_commit_push(
     （FR-CLI-75）。``target_output_paths`` は FR-CLI-74 と同じ規則で検査対象から
     除外する。
     """
+    validated_include_paths = _validated_qa_include_paths(include_paths)
     if protected_baseline is not None:
         guard_errors = check_protected_artifact_regression(protected_baseline, repo_root)
         if guard_errors:
@@ -1068,6 +1139,21 @@ def _git_add_commit_push(
         if add_result.returncode != 0:
             console.error(f"git add に失敗しました: {add_result.stderr.strip()}")
             return False
+        if validated_include_paths:
+            include_result = subprocess.run(
+                ["git", "add", "--", *validated_include_paths],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+            )
+            if include_result.returncode != 0:
+                console.error(
+                    "検証済み QA ファイルの git add に失敗しました: "
+                    f"{include_result.stderr.strip()}"
+                )
+                return False
 
         # FR-CLI-75: staging へ混入した HVE ソースを commit 前に拒否する。
         # add 前の status に HVE ソース候補が無ければ staged にもなり得ないため、
@@ -3902,7 +3988,7 @@ async def _run_ard_workiq_usecase(
         console.workiq_response(workiq_result, label="ARD Work IQ ユースケース参照情報")
 
 
-# --- ARD: Step 1 → Step 2 bridging hook ---
+# --- ARD: Step 1.2 → Step 2 bridging hook ---
 def _select_recommendation(
     recommendations: list,
     config: SDKConfig,
@@ -3944,7 +4030,7 @@ async def _generate_target_business_from_sr(
     params: dict,
     console: Console,
 ) -> str:
-    """選択 SR + Step1 出力から target_business 説明文を生成する。"""
+    """選択 SR + Step 1.2 出力から target_business 説明文を生成する。"""
     sr_id = str(getattr(selected_sr, "id", "SR-UNKNOWN"))
     sr_title = str(getattr(selected_sr, "title", "")).strip() or sr_id
 
@@ -3954,7 +4040,7 @@ async def _generate_target_business_from_sr(
     try:
         business_requirement_content = md_path.read_text(encoding="utf-8")
     except OSError as exc:
-        console.warning(f"Step 1 出力の読み込みに失敗したため SR タイトルで代替します: {exc}")
+        console.warning(f"Step 1.2 出力の読み込みに失敗したため SR タイトルで代替します: {exc}")
         return sr_title
 
     try:
@@ -4020,14 +4106,18 @@ async def _on_ard_step1_completed(
     params: dict,
     console: Console,
 ) -> None:
-    """ARD Step 1 完了直後: SR 抽出・選択・target_business 生成。"""
+    """ARD グループ 1（実 Step 1 → 1.1 → 1.2）完了直後の SR 抽出・選択・target_business 生成。
+
+    SR の抽出元 `docs/company-business-requirement.md` の producer は Step 1.2 のため、
+    本フックは Step 1.2 完了時にのみ呼ばれる。
+    """
     if (params.get("target_business", "") or "").strip():
         console.status("target_business が指定済みのため、SR からの自動生成をスキップします。")
         return
 
     output_path = Path("docs/company-business-requirement.md")
     if not output_path.exists():
-        console.warning("Step 1 出力ファイルが見つかりません。Step 2 は既存 target_business で継続します。")
+        console.warning("Step 1.2 出力ファイルが見つかりません。Step 2 は既存 target_business で継続します。")
         return
 
     try:
@@ -4516,6 +4606,23 @@ async def run_workflow(
             effective_params["selected_steps"] = params["steps"]
         _apply_interactive_review_choice(config, effective_params)
 
+    if wf.id == "adi":
+        try:
+            effective_params["target_scope"] = _normalize_adi_target_scope(
+                effective_params.get("target_scope")
+            )
+        except ValueError as exc:
+            error = str(exc)
+            console.error(error)
+            return {
+                "workflow_id": workflow_id,
+                "completed": [],
+                "failed": [],
+                "skipped": [],
+                "elapsed_total": time.time() - start_total,
+                "error": error,
+            }
+
     # dry_run を params に反映
     if config.dry_run:
         effective_params["dry_run"] = True
@@ -4692,22 +4799,22 @@ async def run_workflow(
 
     _ard_force_serial = (
         workflow_id == "ard"
-        and "1" in active_steps
+        and "1.2" in active_steps
         and "2" in active_steps
         and not (effective_params.get("target_business", "") or "").strip()
     )
     effective_max_parallel = 1 if _ard_force_serial else config.max_parallel
     wf_for_dag = wf
     if _ard_force_serial:
-        # bridge mode: target_business 未指定 + Step 1 & 2 同時実行時、
-        # Step 2 を Step 1 に依存させて直列化する。
+        # bridge mode: target_business 未指定 + グループ 1 & Step 2 同時実行時、
+        # Step 2 を Step 1.2（SR 抽出元の producer）に依存させて直列化する。
         # Step 2.1 は静的に depends_on=["2"] のため Step 2 完了後に自動的に直列化される
         # （effective_max_parallel=1 のため Step 2.1 と Step 3.1 は順次実行）。
         try:
             wf_for_dag = copy.deepcopy(wf)
             _step2 = wf_for_dag.get_step("2")
-            if _step2 is not None and "1" not in (_step2.depends_on or []):
-                _step2.depends_on = list(_step2.depends_on or []) + ["1"]
+            if _step2 is not None and "1.2" not in (_step2.depends_on or []):
+                _step2.depends_on = list(_step2.depends_on or []) + ["1.2"]
         except Exception as exc:
             console.warning(f"ARD 直列DAGの構築に失敗したため通常DAGで続行します: {exc}")
             wf_for_dag = wf
@@ -4716,7 +4823,7 @@ async def run_workflow(
 
     console.event(f"実行対象ステップ数: {len(active_steps)}")
     if _ard_force_serial:
-        console.event("ARD bridge mode: Step 1 → Step 2 → Step 2.1 を直列実行します。")
+        console.event("ARD bridge mode: Step 1.2 → Step 2 → Step 2.1 を直列実行します。")
     console.phase_end(p, _total_phases, "ステップフィルタリング", time.time() - phase_start)
 
     # Fan-out 事前展開（fanout-fix）:
@@ -5022,11 +5129,33 @@ async def run_workflow(
                         "error": msg,
                     }
 
+    qa_akm_coordinator: Optional[Any] = None
+    qa_akm_include_paths: List[str] = []
+
+    def _submit_qa_akm(path: Path) -> None:
+        if qa_akm_coordinator is None:
+            raise RuntimeError("QA 起点 AKM coordinator が初期化されていません")
+        qa_akm_coordinator.submit(path)
+        for validated in _validated_qa_include_paths([path]):
+            if validated not in qa_akm_include_paths:
+                qa_akm_include_paths.append(validated)
+
+    qa_akm_dispatcher = (
+        _submit_qa_akm
+        if _should_enable_qa_akm_dispatch(
+            auto_qa=config.auto_qa,
+            workflow_id=workflow_id,
+            dry_run=config.dry_run,
+            qa_akm_background_merge=config.qa_akm_background_merge,
+        )
+        else None
+    )
     runner = StepRunner(
         config=config,
         console=console,
         orchestrator_ctx=orchestrator_ctx,
         workflow_params=effective_params,
+        qa_akm_dispatcher=qa_akm_dispatcher,
     )
 
     # 既存成果物を検出し、2度目実行時の再利用コンテキストを additional_prompt に追記
@@ -5226,6 +5355,18 @@ async def run_workflow(
     )
 
     # --- 6-7. DAGExecutor 実行 ---
+    def _drain_qa_akm(reason: str) -> List[Dict[str, Any]]:
+        if qa_akm_coordinator is None:
+            return []
+        drained = qa_akm_coordinator.drain()
+        failed = [item for item in drained if int(item.get("returncode", -1)) != 0]
+        if failed:
+            console.warning(
+                f"QA 起点 AKM は {len(failed)} 件失敗しました"
+                f"（source Workflow は継続、境界={reason}）。"
+            )
+        return drained
+
     step_scoped_cicd_pr_numbers: Dict[str, int] = {}
 
     def _step_scoped_cicd_ignore_paths() -> List[str]:
@@ -5236,6 +5377,7 @@ async def run_workflow(
         branch = step_scoped_cicd_branches.get(step_id)
         if not branch:
             return True
+        _drain_qa_akm(f"Step.{step_id} branch 作成前")
         console.event(f"Step.{step_id}: remote CI/CD 用ブランチ '{branch}' を作成します。")
         if not _git_checkout_new_branch(branch, config.base_branch, console):
             return False
@@ -5246,6 +5388,7 @@ async def run_workflow(
             ignore_paths=_step_scoped_cicd_ignore_paths(),
             protected_baseline=protected_baseline,
             target_output_paths=_target_output_paths,
+            include_paths=qa_akm_include_paths,
         )
         if not pushed:
             # 差分がない場合でも remote workflow の --ref で参照できるよう branch 自体は push する。
@@ -5256,6 +5399,7 @@ async def run_workflow(
         branch = step_scoped_cicd_branches.get(step_id)
         if not branch:
             return step_success
+        _drain_qa_akm(f"Step.{step_id} branch 終了前")
         if not step_success:
             console.warning(
                 f"Step.{step_id} が失敗したため PR 作成をスキップし、base branch へ戻ります。"
@@ -5287,6 +5431,7 @@ async def run_workflow(
                 ignore_paths=_step_scoped_cicd_ignore_paths(),
                 protected_baseline=protected_baseline,
                 target_output_paths=_target_output_paths,
+                include_paths=qa_akm_include_paths,
             )
             if not pushed and not _git_push_branch(branch, console):
                 return False
@@ -5327,7 +5472,7 @@ async def run_workflow(
     ) -> bool:
         _prompt = prompt
 
-        # --- ARD: Step 1 → Step 2 bridging hook ---
+        # --- ARD: Step 1.2 → Step 2 bridging hook ---
         if workflow_id == "ard" and step_id == "2":
             await _resolve_target_business_paths(effective_params, console)
             step = wf.get_step(step_id)
@@ -5368,7 +5513,7 @@ async def run_workflow(
             workflow_id=workflow_id,
             fanout_meta=fanout_meta,
         )
-        if workflow_id == "ard" and step_id == "1" and success:
+        if workflow_id == "ard" and step_id == "1.2" and success:
             await _on_ard_step1_completed(
                 config=config,
                 params=effective_params,
@@ -5389,6 +5534,7 @@ async def run_workflow(
             from hve.artifact_validation import wave_has_deploy_step
 
             if wave_has_deploy_step(executable_steps):
+                _drain_qa_akm(f"deploy wave {wave_index} push 前")
                 # 最初の Deploy wave 直前 = local generation checkpoint。
                 # この時点の local 成果物を baseline として固定する。
                 if protected_baseline is None:
@@ -5416,6 +5562,7 @@ async def run_workflow(
                     ignore_paths=_deploy_ignore,
                     protected_baseline=protected_baseline,
                     target_output_paths=_target_output_paths,
+                    include_paths=qa_akm_include_paths,
                 )
         routing = apply_cloud_session_auto_routing(
             config,
@@ -5560,7 +5707,11 @@ async def run_workflow(
                     subtask_kind="fleet",
                     console=console,
                 )
-                collector = FleetEventCollector(console=console, wave_index=wave_index)
+                collector = FleetEventCollector(
+                    console=console,
+                    wave_index=wave_index,
+                    step_ids=tuple(fleet_plan.task_step_ids),
+                )
                 maybe_unsubscribe = session.on(collector.handle_event)
                 if callable(maybe_unsubscribe):
                     unsubscribe = maybe_unsubscribe
@@ -5789,6 +5940,16 @@ async def run_workflow(
         except Exception:
             _status_line = None
 
+    # ここより前の計画・UI構築失敗では worker を作らない。Step 実行 callback が
+    # 発火し得る executor.execute() の直前にだけ生成する。
+    if qa_akm_dispatcher is not None:
+        try:
+            from .qa_akm_dispatch import QaAkmCoordinator
+        except ImportError:  # pragma: no cover - top-level module compatibility
+            from qa_akm_dispatch import QaAkmCoordinator  # type: ignore[no-redef]
+        qa_akm_coordinator = QaAkmCoordinator(config, repo_root=Path.cwd())
+
+    _dag_execution_finished = False
     try:
         # T4: continue_on_error=True かつ executor 側で fatal 例外が発生した場合は
         # 残ステップを skip マークして exit 0 相当で正常終了する（Q6=B）。
@@ -5873,7 +6034,10 @@ async def run_workflow(
                 results = dict(getattr(executor, "_results", {}) or {})
             else:
                 raise
+        _dag_execution_finished = True
     finally:
+        if qa_akm_coordinator is not None and not _dag_execution_finished:
+            qa_akm_coordinator.cancel()
         # StatusLine を先に止め、後続の確定行と描画が衝突しないようにする。
         if _status_line is not None:
             try:
@@ -5923,6 +6087,10 @@ async def run_workflow(
             except Exception:
                 pass
 
+    if qa_akm_coordinator is not None:
+        _drain_qa_akm("DAG 完了後")
+        qa_akm_coordinator.cancel()
+
     if config.create_issues and step_issue_map:
         token = config.resolve_token()
         repo = config.repo
@@ -5944,39 +6112,74 @@ async def run_workflow(
                     )
     console.phase_end(p, _total_phases, "実行計画 → DAG 実行", time.time() - phase_start_dag)
 
-    # --- AQOD 成果物検証（warning のみ、hard fail なし）---
-    aqod_validation_result: Optional[dict] = None
-    if workflow_id == "aqod" and not config.dry_run:
+    # --- ADI 原本質問票成果物検証（warning のみ、hard fail なし）---
+    _active_base_step_ids = {
+        str(step_id).split("/", 1)[0] for step_id in active_steps
+    }
+    _adi_questionnaire_steps_active = bool(
+        workflow_id == "adi"
+        and {"1.1", "1.2"} & _active_base_step_ids
+    )
+    original_docs_questionnaire_validation_result: Optional[dict] = None
+    adi_questionnaire_include_paths: List[str] = []
+    if _adi_questionnaire_steps_active and not config.dry_run:
         try:
             try:
-                from .artifact_validation import validate_aqod_run
+                from .artifact_validation import validate_original_docs_questionnaire_run
             except ImportError:
-                from artifact_validation import validate_aqod_run  # type: ignore[no-redef]
-            aqod_validation_result = validate_aqod_run(qa_dir="qa", run_id=config.run_id)
-            _av_overall = aqod_validation_result.get("overall", "FAIL")
-            _av_found = aqod_validation_result.get("artifacts_found", 0)
-            _av_passed = aqod_validation_result.get("passed", 0)
+                from artifact_validation import validate_original_docs_questionnaire_run  # type: ignore[no-redef]
+            original_docs_questionnaire_validation_result = (
+                validate_original_docs_questionnaire_run(
+                    qa_dir="qa",
+                    run_id=config.run_id,
+                )
+            )
+            _av_overall = original_docs_questionnaire_validation_result.get("overall", "FAIL")
+            _av_found = original_docs_questionnaire_validation_result.get("artifacts_found", 0)
+            _av_passed = original_docs_questionnaire_validation_result.get("passed", 0)
             if _av_overall == "PASS":
                 console.event(
-                    f"✅ AQOD 成果物検証 PASS: {_av_passed}/{_av_found} 件の QA-DocConsistency-*.md が有効です。"
+                    f"✅ ADI 原本質問票検証 PASS: {_av_passed}/{_av_found} 件が有効です。"
                 )
             elif _av_overall == "WARN":
                 console.warning(
-                    f"⚠️ AQOD 成果物検証 WARN: {_av_passed}/{_av_found} 件が有効（一部に問題あり）。"
+                    f"⚠️ ADI 原本質問票検証 WARN: {_av_passed}/{_av_found} 件が有効（一部に問題あり）。"
                 )
             else:
                 console.warning(
-                    "⚠️ AQOD 成果物検証 FAIL: QA-DocConsistency-*.md が見つからないか、必須要件を満たしていません。\n"
-                    "   execution-qa-merged.md は HVE 実行補助 QA であり、AQOD 本体成果物ではありません。\n"
-                    "   AQOD 本体成果物は qa/QA-DocConsistency-*.md です。"
+                    "⚠️ ADI 原本質問票検証 FAIL: Step 1.1 / 1.2 の成果物が見つからないか、"
+                    "必須要件を満たしていません。\n"
+                    "   execution-qa-merged.md は HVE 実行補助 QA であり、"
+                    "ADI のmain成果物ではありません。"
                 )
-            for vr in (aqod_validation_result.get("validation_results") or []):
+            for vr in (
+                original_docs_questionnaire_validation_result.get("validation_results")
+                or []
+            ):
                 for err in (vr.get("errors") or []):
                     console.warning(f"  [検証エラー] {vr.get('path')}: {err}")
                 for warn in (vr.get("warnings") or []):
                     console.warning(f"  [検証警告] {vr.get('path')}: {warn}")
         except Exception as av_exc:
-            console.warning(f"AQOD 成果物検証中にエラーが発生しました（無視して続行）: {av_exc}")
+            console.warning(
+                "ADI 原本質問票検証中にエラーが発生しました"
+                f"（無視して続行）: {av_exc}"
+            )
+
+        # qa/ は通常のcommit対象外なので、ADIのmain成果物だけを安全な明示pathで追加する。
+        if "1.1" in _active_base_step_ids:
+            adi_questionnaire_include_paths.extend(
+                path
+                for path in (
+                    f"qa/D{number:02d}-original-docs-questionnaire.md"
+                    for number in range(1, 22)
+                )
+                if Path(path).is_file()
+            )
+        if "1.2" in _active_base_step_ids:
+            cross_path = "qa/original-docs-cross-questionnaire.md"
+            if Path(cross_path).is_file():
+                adi_questionnaire_include_paths.append(cross_path)
 
     # --- AKM Work IQ 検証（AKM 実行後レビュー Work IQ が有効な場合）---
     if workflow_id == "akm" and config.is_workiq_akm_review_enabled() and not config.dry_run:
@@ -6195,15 +6398,6 @@ async def run_workflow(
         phase_start_post = time.time()
         console.phase_start(p, _total_phases, "後処理 (git push + PR)")
         _ignore_paths_for_commit = list(config.ignore_paths or [])
-        if (
-            config.create_pr
-            and config.auto_qa
-            and workflow_id == "aqod"
-            and "qa" in _ignore_paths_for_commit
-        ):
-            # AQOD の Phase 2 QA で生成される qa/ 成果物を
-            # PR 作成時にコミット対象へ含めるため、qa を除外対象から外す。
-            _ignore_paths_for_commit = [p for p in _ignore_paths_for_commit if p != "qa"]
         if config.enable_auto_merge and "src" in _ignore_paths_for_commit:
             # enable_auto_merge（全自動）時は Deploy 成果物（src/infra/azure 等）を PR に
             # 含めるため src を除外対象から外す。Deploy 境界 push に加え、create_pr 等で
@@ -6226,6 +6420,10 @@ async def run_workflow(
                 ignore_paths=_ignore_paths_for_commit,
                 protected_baseline=protected_baseline,
                 target_output_paths=_target_output_paths,
+                include_paths=[
+                    *qa_akm_include_paths,
+                    *adi_questionnaire_include_paths,
+                ],
             )
         if pushed:
             # live フェーズだけが失敗した場合、local generation checkpoint の
@@ -6359,7 +6557,9 @@ async def run_workflow(
         "root_issue_num": root_issue_num,
         "working_branch": working_branch,
         "error": pr_error or si_error,
-        "aqod_validation": aqod_validation_result,
+        "original_docs_questionnaire_validation": (
+            original_docs_questionnaire_validation_result
+        ),
         # criteria evidence と停止理由を含む Post-DAG Self-Improve の正本結果。
         "self_improve_result": si_result,
         # Wave 2-7: 計測項目

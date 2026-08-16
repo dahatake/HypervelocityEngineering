@@ -34,7 +34,6 @@ class TestIssueTemplateSelfImprove(unittest.TestCase):
         "dataflow-dev.yml",
         "sourcecode-to-documentation.yml",
         "knowledge-management.yml",
-        "original-docs-review.yml",
     ]
 
     _TEMPLATES_EXCLUDED = [
@@ -106,9 +105,6 @@ class TestIssueTemplateSelfImprove(unittest.TestCase):
     def test_knowledge_management_has_self_improve(self) -> None:
         self._test_template_has_self_improve_fields("knowledge-management.yml")
 
-    def test_original_docs_review_has_self_improve(self) -> None:
-        self._test_template_has_self_improve_fields("original-docs-review.yml")
-
     def test_setup_labels_excluded(self) -> None:
         """setup-labels.yml は自己改善対象外であることを確認。"""
         for template in self._TEMPLATES_EXCLUDED:
@@ -133,7 +129,6 @@ class TestReusableWorkflowSelfImprove(unittest.TestCase):
         "auto-ai-agent-dev-reusable.yml",
         "auto-app-documentation-reusable.yml",
         "auto-knowledge-management-reusable.yml",
-        "auto-aqod.yml",
     ]
 
     def _read(self, filename: str) -> str:
@@ -483,6 +478,3 @@ class TestReusableWorkflowSelfImprove(unittest.TestCase):
 
     def test_auto_knowledge_management_reusable(self) -> None:
         self._assert_workflow_has_self_improve("auto-knowledge-management-reusable.yml")
-
-    def test_auto_aqod(self) -> None:
-        self._assert_workflow_has_self_improve("auto-aqod.yml")

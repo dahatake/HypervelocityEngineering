@@ -223,7 +223,7 @@ cd .github/scripts/powershell
 | `aag` | AI Agent Design | 3 |
 | `aagd` | AI Agent Dev & Deploy | 5 |
 | `akm` | Knowledge Management | 1 |
-| `aqod` | Original Docs Review | 1 |
+| `adi` | Auto Design-doc Ingestion | 9 |
 | `adoc` | Source Codeからのドキュメント作成 | 23 |
 
 ## テスト実行

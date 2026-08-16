@@ -35,7 +35,9 @@ Agentic Retrieval は「1 リクエストで Knowledge Base が全 Knowledge Sou
 | 本 Skill の契約 | 製品非依存成果物での問い方 |
 |---|---|
 | AR-CAP-01 `Retrieval reasoning effort` | 「クエリ拡張をどこまで行うか。レイテンシ・コストと検索深度のどちらを優先するか」 |
+| AR-CAP-01 `Index semantic configuration` | 「どの項目を優先して関連度を決めるか。その方針をどこで確定するか」 |
 | AR-CAP-02 `Kind` / `Locality` | 「どのデータを事前取り込みし、どのデータを問い合わせ時に取得するか」 |
+| AR-CAP-02 の行数下限 | 「この問いに答えるには何種類の情報源を同時に見る必要があるか」 |
 | AR-CAP-02 `Always query` | 「常に参照しなければならない情報源はどれか」 |
 | AR-CAP-03 | 「1 回の問い合わせにかけられる時間・費用の上限はどれか」 |
 | AR-CAP-04 | 「回答にどの出典を付ける必要があるか」 |
@@ -65,8 +67,8 @@ AR-CAP-01〜05 の**固定見出しとパラメータ名を使うのは Azure �
 
 | ID | 固定見出し | 必須内容 |
 |---|---|---|
-| AR-CAP-01 | `Knowledge Base Contract` | KB 名・知識ドメイン・query planning LLM・retrieval reasoning effort と選定根拠・output mode・retrieval instructions・KS 件数 |
-| AR-CAP-02 | `Knowledge Source Matrix` | 1 行 1 Knowledge Source。種別・indexed/remote・always query・選択記述・取り込み方式・鮮度・権限境界 |
+| AR-CAP-01 | `Knowledge Base Contract` | KB 名・知識ドメイン・query planning LLM・retrieval reasoning effort と選定根拠・output mode・retrieval instructions・索引の semantic configuration・KS 件数 |
+| AR-CAP-02 | `Knowledge Source Matrix` | 1 行 1 Knowledge Source（**2 行以上 10 行以下**）。種別・indexed/remote・always query・選択記述・取り込み方式・鮮度・権限境界 |
 | AR-CAP-03 | `Retrieval Budget` | 想定サブクエリ本数・retrieval token 予算・LLM token 予算・latency 目標・最大実行時間・超過時の縮退・測定方法 |
 | AR-CAP-04 | `Evidence & Observability` | source references / activity log の有効化可否・citation 必須項目・blocked 条件・秘密情報の扱い |
 | AR-CAP-05 | `MCP Exposure` | KB の MCP 公開可否・project connection・認証方式・Tool allowlist・per-user 権限伝播の可否 |
@@ -120,6 +122,8 @@ Microsoft Learn 確認日 2026-08-04。tier 上限・region・API version は実
 | R11 | per-user 権限が必須で、対象 runtime が per-request header を伝播できない場合は blocked にする。application 権限へ置換しない | Foundry Agent Service は preview 時点で MCP tool の per-request header 非対応 |
 | R12 | `Checked at` は `YYYY-MM-DD`。設計時の提供状態と実行時の可用性を同一視しない | availability の記録原則 |
 | R13 | AR-CAP-05 に `Connection topology` を記載する。`direct-kb` / `via-toolbox` のいずれか | R10 の適用範囲を確定するため |
+| R14 | AR-CAP-02 の行数は **2 以上**。1 行だけの Knowledge Base はファンアウト先が 1 つしかなく、クラシックな単一クエリ検索と等価になる。横断が不要なら Agentic Retrieval を採用せず AG-CAP-03 で別経路を選ぶ | 1 リクエストで全 KS へファンアウトするパイプラインであること |
+| R15 | AR-CAP-01 に `Index semantic configuration` を記載する。各サブクエリは semantic rerank を通るため、索引側の構成が検索品質の上限を決める。確定できない場合も確認予定と手段を書き、単語だけの `TBD` は FAIL | semantic configuration は Agentic Retrieval の索引で必須 |
 
 ### 接続トポロジと R10 の適用範囲
 

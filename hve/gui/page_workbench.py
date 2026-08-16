@@ -15,6 +15,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from html import escape
 from pathlib import Path
 from types import MappingProxyType
@@ -35,6 +36,7 @@ from PySide6.QtWidgets import (
 
 from .copy_button import CopyButton
 from .fonts import preferred_log_font
+from .job_interaction_model import JobTarget
 from .orchestrate_args import OrchestrateArgs
 from .page_intro import StepIntroBanner
 from .state_bridge import SubprocessReader, launch_orchestrator
@@ -359,6 +361,11 @@ class WorkbenchPage(QWidget):
     # 「全タスク停止」要求が完了したことを通知（main_window のステータス更新用）
     all_stopped = Signal()
     cloud_session_url_changed = Signal(str)
+    # FR-GUI-13: Copilot パネルへ実行ログを増分配信する (instance_id, step_id, line)。
+    job_log_line = Signal(str, str, str)
+
+    # FR-GUI-19: プロセス終了を確認してからストリーム終端通知を待つ猶予（秒。上限 10 秒）。
+    _ORPHANED_EXIT_GRACE_SEC = 5.0
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -366,6 +373,9 @@ class WorkbenchPage(QWidget):
         self._reader: Optional[SubprocessReader] = None
         self._is_running = False
         self._stop_requested = False
+        # FR-GUI-19: ストリーム終端を伴わないサブプロセス終了の検知状態
+        self._proc_exit_seen_at: Optional[float] = None
+        self._orphaned_exit_handled = False
         self._args_queue: List[OrchestrateArgs] = []
         self._queue_index: int = 0
         self._return_codes: List[int] = []
@@ -406,6 +416,10 @@ class WorkbenchPage(QWidget):
         # Steering（実行中ワークフローへの割り込み送信）用 IPC ディレクトリ。
         # ワークフロー実行開始時に _start_next_in_queue が生成する（常時有効、UI トグル無し）。
         self._steering_ipc_dir: Optional[str] = None
+
+        # FR-GUI-13: workflow instance ごとの対話 IPC チャネル。
+        # Plan モードは本クラスが、Autopilot 経路は MainWindow が登録する。
+        self._job_channels: Dict[str, str] = {}
 
         # GUI セッション中に orchestrator が「書き込み」したファイルパスの累積リスト。
         # `[hve:stats] {"kind":"file_io","mode":"write",...}` イベントから収集する。
@@ -468,6 +482,8 @@ class WorkbenchPage(QWidget):
             return
 
         self._stop_requested = False
+        self._proc_exit_seen_at = None
+        self._orphaned_exit_handled = False
         self._args_queue = list(args_queue)
         self._queue_index = 0
         self._return_codes = []
@@ -636,6 +652,8 @@ class WorkbenchPage(QWidget):
         except OSError:
             self._steering_ipc_dir = None
             args.steering_ipc_dir = None
+        if self._current_workflow_id:
+            self.register_job_channel(self._current_workflow_id, self._steering_ipc_dir)
 
         try:
             argv = args.to_argv()
@@ -814,6 +832,95 @@ class WorkbenchPage(QWidget):
     def active_steering_ipc_dir(self) -> Optional[str]:
         """現在のワークフロー実行の Steering IPC ディレクトリパスを返す（未起動/生成失敗時は None）。"""
         return self._steering_ipc_dir
+
+    # ----------------------------------------------------------
+    # FR-GUI-13: Copilot パネル向けの読み取り専用ジョブ対話 API
+    # ----------------------------------------------------------
+
+    def register_job_channel(self, instance_id: str, ipc_dir: Optional[str]) -> None:
+        """workflow instance に対話 IPC チャネルを登録する（``None`` で解除）。
+
+        同一 instance のチャネルを差し替える場合、旧チャネルが空なら削除して
+        `.hve/steering-ipc/` の無限増加を防ぐ（未処理の要求が残っていれば残す）。
+        """
+        if not instance_id:
+            return
+        previous = self._job_channels.get(instance_id)
+        if previous and previous != ipc_dir:
+            try:
+                os.rmdir(previous)
+            except OSError:
+                pass
+        if ipc_dir:
+            self._job_channels[instance_id] = str(ipc_dir)
+        else:
+            self._job_channels.pop(instance_id, None)
+
+    def job_channel_dir(self, instance_id: str) -> Optional[str]:
+        """登録済みの対話 IPC チャネルを返す。"""
+        return self._job_channels.get(instance_id)
+
+    def session_work_root(self) -> Optional[Path]:
+        """GUI セッションの ``work/run/<run-id>/`` を返す（未注入時は None）。"""
+        return self._session_work_root
+
+    def job_targets(self) -> List[JobTarget]:
+        """実行中の全 step と完了済みジョブを宛先候補として返す。
+
+        並列実行中でも全 running step を列挙する。完了ジョブは参照専用として
+        ``step_id=None`` で列挙し、``is_sendable()`` は False になる。
+        """
+        targets: List[JobTarget] = []
+        for instance_id, inst in self._state.workflows.items():
+            channel = self._job_channels.get(instance_id)
+            for step in self._iter_step_views(inst):
+                if getattr(step, "kind", "step") == "subagent":
+                    continue
+                if getattr(step, "status", "") != "running":
+                    continue
+                targets.append(
+                    JobTarget(
+                        instance_id=instance_id,
+                        workflow_id=inst.workflow_id,
+                        label=inst.label,
+                        step_id=step.id,
+                        step_title=getattr(step, "title", "") or "",
+                        status="running",
+                        channel_dir=channel,
+                    )
+                )
+            if inst.status in ("done", "failed", "skipped", "blocked"):
+                targets.append(
+                    JobTarget(
+                        instance_id=instance_id,
+                        workflow_id=inst.workflow_id,
+                        label=inst.label,
+                        step_id=None,
+                        step_title="",
+                        status=inst.status,
+                        channel_dir=channel,
+                        returncode=inst.returncode,
+                    )
+                )
+        return targets
+
+    def job_log_snapshot(self, target: JobTarget) -> List[str]:
+        """宛先の実行ログをコピーして返す（未登録 instance は空）。"""
+        inst = self._state.workflows.get(target.instance_id)
+        if inst is None:
+            return []
+        if target.step_id:
+            return list(inst.step_log_buffers.get(target.step_id, []))
+        return list(inst.log_buffer)
+
+    @staticmethod
+    def _iter_step_views(inst: "WorkflowInstance"):
+        """fan-out 子を含めて StepView を再帰列挙する。"""
+        stack = list(inst.steps.values())
+        while stack:
+            step = stack.pop(0)
+            yield step
+            stack.extend(getattr(step, "children", None) or [])
 
     def set_env_overrides(self, env_overrides: Optional[Dict[str, str]]) -> None:
         """子プロセス起動時に注入する env を設定する。
@@ -1407,6 +1514,7 @@ class WorkbenchPage(QWidget):
         signals.skill_counts_updated.connect(self._on_state_changed)
         signals.workflow_instance_changed.connect(self._on_state_changed)
         signals.all_done.connect(self._on_state_all_done)
+        signals.workflow_instance_log.connect(self.job_log_line)
 
     def _setup_timers(self) -> None:
         """周期的な更新タイマーをセットアップ。"""
@@ -1578,8 +1686,52 @@ class WorkbenchPage(QWidget):
         self._update_workflow_progress_from_line(line)
         self._update_subtask_from_line(line)
 
+    def _check_subprocess_liveness(self) -> None:
+        """ストリーム終端を伴わないサブプロセス終了を検知して経過時間を停止する（FR-GUI-19）。
+
+        `SubprocessReader` は stdout が EOF に達するまで終了を通知しないため、
+        子孫プロセスがパイプを保持したまま親が終了すると通知が届かない。判定は
+        プロセスの終了状態のみを根拠とし、出力の途絶を根拠にしない。
+        """
+        if not self._is_running or self._orphaned_exit_handled:
+            return
+        proc = getattr(self._reader, "_proc", None)
+        if proc is None:
+            return
+        try:
+            returncode = proc.poll()
+        except OSError:
+            return
+        if returncode is None:
+            self._proc_exit_seen_at = None
+            return
+        now = time.monotonic()
+        if self._proc_exit_seen_at is None:
+            self._proc_exit_seen_at = now
+            return
+        if now - self._proc_exit_seen_at < self._ORPHANED_EXIT_GRACE_SEC:
+            return
+        self._orphaned_exit_handled = True
+        self._is_running = False
+        if self._stop_requested:
+            self._log_pane.append_line(
+                f"[INFO] 停止要求によりサブプロセスが終了しました (returncode={returncode})。"
+            )
+            self._state.mark_all_done()
+        else:
+            self._log_pane.append_line(
+                f"[WARN] サブプロセスの終了を検知しました (returncode={returncode})。"
+                "出力ストリームが終端しないため経過時間の計測を停止します。"
+            )
+            self._state.mark_aborted()
+        self.freeze_progress_elapsed()
+        self._maybe_dump_console_log()
+
     @Slot("qlonglong")
     def _on_process_finished(self, returncode: int) -> None:
+        if self._orphaned_exit_handled:
+            # FR-GUI-19: 異常終了として処理済み。遅れて届いた終端通知で二重に処理しない。
+            return
         self._return_codes.append(returncode)
         current_wf = self._current_workflow_id or "unknown"
         self._log_pane.append_line(
@@ -2294,6 +2446,7 @@ class WorkbenchPage(QWidget):
     @Slot()
     def _on_update_timer(self) -> None:
         """周期的にUIを更新。"""
+        self._check_subprocess_liveness()
         self._update_ui()
 
     def _update_ui(self) -> None:

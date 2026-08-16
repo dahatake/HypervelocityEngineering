@@ -30,6 +30,31 @@ class TestGuiPackageImport(unittest.TestCase):
         self.assertTrue(callable(run_gui))
 
 
+class TestGuiDependencyGuidance(unittest.TestCase):
+    """FR-GUI-09: GUI 依存不足の案内は OS 別 setup を主導線にする。"""
+
+    def test_missing_gui_extra_recommends_setup_and_real_launcher(self) -> None:
+        from contextlib import redirect_stderr
+        import io
+        from unittest import mock
+
+        from hve.gui import run_gui
+        from hve.gui.pty_backend import setup_command
+
+        buffer = io.StringIO()
+        # gui extra 未導入と同じ経路を通すため、hve.gui.app の import を失敗させる。
+        with mock.patch.dict(sys.modules, {"hve.gui.app": None}):
+            with redirect_stderr(buffer):
+                self.assertEqual(2, run_gui())
+
+        message = buffer.getvalue()
+        launcher = "hve.cmd gui" if sys.platform.startswith("win") else "./hve.sh gui"
+        setup = setup_command()
+        self.assertIn(setup, message)
+        self.assertIn(launcher, message)
+        self.assertLess(message.index(setup), message.index("pip install"))
+
+
 class TestGuiSourceWarnings(unittest.TestCase):
     """GUI ソースがコンパイル時警告を出さないことを確認する。"""
 
@@ -303,7 +328,7 @@ class TestWorkflowChoicesFromRegistry(unittest.TestCase):
         from hve.gui.page_workflow_select import _load_workflow_choices
 
         ids = {item[0] for item in _load_workflow_choices()}
-        for expected in ("akm", "aqod", "ard"):
+        for expected in ("akm", "adi", "ard"):
             self.assertIn(expected, ids, f"Expected workflow id {expected!r} in registry")
 
     def test_workflow_names_match_registry(self) -> None:

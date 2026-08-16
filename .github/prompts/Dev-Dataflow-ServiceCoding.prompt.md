@@ -53,7 +53,7 @@
 - **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
 - **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
 - **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
 - **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
 - **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 
@@ -68,7 +68,7 @@ TDD テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）を根拠に�
 
 ## 1.5) 生成テストの実行環境
 
-- `src/test/dataflow/{jobId}-{jobNameSlug}.Tests/` のテストは **ローカル端末 / CI で `dotnet test` により決定的に PASS** すること。
+- `src/test/dataflow/{jobId}-{jobNameSlug}.Tests/` のテストは **ローカル端末 / CI で `pytest` により決定的に PASS** すること。
 - GREEN 化のために Azure Storage / SQL / Cosmos DB / Service Bus 等へ実接続するテストへ変更しない。外部 I/O は Azurite / Testcontainers / Mock / Stub に切り分ける。
 - 実装コードは Azure Functions としてデプロイ可能にしつつ、接続先・認証・キュー名・コンテナ名・リソース名は環境変数または設定ファイルから読み込む。
 - 接続文字列・アカウントキー・SAS・Bearer token 等の秘密情報をコード、README、ログにハードコードしない。README にはローカル実行コマンドとデプロイ先で使う設定キー名を記載する。
@@ -77,7 +77,9 @@ TDD テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）を根拠に�
 
 - 対象ジョブID: `{jobId}`（Arch-Dataflow-AppSpec で定義されるジョブID）
 - 対象ジョブ名スラグ: `{jobNameSlug}`（対象ジョブ名をケバブケースにしたもの）
-- Azure Functions プログラミング言語: C#（最新版のAzure Functionsでサポートされているもの）
+- 実装言語: **Python**（対象実行環境がサポートする安定版）。
+  - **選定理由**: データフロー処理の実行基盤として **Apache Spark** / **Microsoft Fabric** / **Databricks** を選択できる言語であるため。Azure Functions も Python ランタイムをサポートする。
+  - **データ規模に応じた選択**: 単一ノードで処理できる規模は標準ライブラリ / pandas、分散処理が必要な規模は PySpark を用いる。どちらを選んだかとその根拠（件数 / データ量）を README へ記録する。規模が判断できない場合は推測せず Questions へ記載する。
 
 ## 3) 入力・出力
 
@@ -131,9 +133,9 @@ TDD テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）を根拠に�
 
 ### 5.1 リポジトリ慣習の特定（推測禁止）
 
-- 既存の `src/dataflow/` または `api/` 配下に Azure Functions 実装があれば、構成/DI/ログ/例外処理/テストの"型"を踏襲する。
-- .NET/Functions の世代（isolated/in-process 等）は既存コード/設定から確定する。見つからなければ Questions に記載。
-- DI コンテナ・設定クラス・ログ構造は既存型から踏襲する（見つからなければ Azure Functions Isolated Worker の既定パターンを使用）。
+- 既存の `src/dataflow/` または `api/` 配下に実装があれば、構成/DI/ログ/例外処理/テストの"型"を踏襲する。
+- Python のバージョン、依存定義の形式（`requirements.txt` / `pyproject.toml`）、実行基盤（Azure Functions / Spark / Fabric / Databricks）は既存コード・設定から確定する。見つからなければ Questions に記載する。
+- 設定読み込み・ログ構造は既存型から踏襲する（見つからなければ標準ライブラリの `logging` と環境変数読み込みを使用）。
 
 ### 5.2 仕様要約の確定（必須）
 
@@ -166,9 +168,9 @@ TDD テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）を根拠に�
 
 ### 5.5 GREEN 確認（TDD GREEN フェーズ）
 
-- `dotnet test` を実行し、全テストが **PASS** であることを確認する。
+- `pytest` を実行し、全テストが **PASS** であることを確認する。
 - PASS しないテストがある場合は実装を修正する（テストコード自体は原則変更しない）。
-- **リトライ戦略（Skill `tdd-green-retry-strategy` 準拠）**: GREEN 化の反復（最大 `tdd_max_retries` 回、既定 5）は、各回で前回と**異なるアプローチ**を選ぶ（同一の修正を単純に繰り返さない）。各 FAIL 時は失敗の実出力（テスト名・スタックトレース・例外）から根本原因を特定し、次の修正を決める前に **Microsoft Learn MCP**（C# / .NET / Azure Functions / SDK / API）で正しい API・構文・パターンを確認する。Web 検索は MCP で解決できない場合のみ用いる。参照した Microsoft Learn の URL を作業ログに記録する。
+- **リトライ戦略（Skill `tdd-green-retry-strategy` 準拠）**: GREEN 化の反復（最大 `tdd_max_retries` 回、既定 5）は、各回で前回と**異なるアプローチ**を選ぶ（同一の修正を単純に繰り返さない）。各 FAIL 時は失敗の実出力（テスト名・トレースバック・例外）から根本原因を特定し、次の修正を決める前に **Microsoft Learn MCP**（Python / Azure Functions / Azure SDK for Python / Fabric / Databricks / API）で正しい API・構文・パターンを確認する。Web 検索は MCP で解決できない場合のみ用いる。参照した Microsoft Learn の URL を作業ログに記録する。
 - GREEN 確認結果を作業ログに記録する。
 
 ### 5.6 ビルド/テストの実行と記録
@@ -190,7 +192,7 @@ TDD テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）を根拠に�
 
 ## 7) 完了条件
 
-- `src/dataflow/{jobId}-{jobNameSlug}/` がビルド可能（`dotnet build` 成功）。
+- `src/dataflow/{jobId}-{jobNameSlug}/` が import 可能（依存定義を導入した状態で `python -m compileall` が成功）。
 - `src/test/dataflow/{jobId}-{jobNameSlug}.Tests/` の全テストが **PASS**（TDD GREEN 確認済み）。
 - テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）のテストケース表（§2, §3）の全行に対するテストがすべて PASS している。
 - 冪等性保証・DLQ 送信・構造化ログ・メトリクス送信が実装されている。

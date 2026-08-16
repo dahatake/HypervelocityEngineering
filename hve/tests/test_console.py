@@ -533,7 +533,7 @@ class TestConsolePanel(unittest.TestCase):
 
     def test_panel_cjk_and_ansi_right_border_aligned(self) -> None:
         c = Console(verbose=True, quiet=False)
-        lines = ["Wave 1: Step.1 original-docs 質問票生成", "\033[1m合計: 1 ステップ / 1 Wave\033[0m"]
+        lines = ["Wave 1: Step.1 docs-original 質問票生成", "\033[1m合計: 1 ステップ / 1 Wave\033[0m"]
         with _CaptureOutput() as cap:
             c.panel("実行計画 (DAG)", lines)
 

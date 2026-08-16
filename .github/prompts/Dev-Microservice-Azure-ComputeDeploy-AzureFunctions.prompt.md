@@ -15,7 +15,7 @@ Azure Functions 向けに、Azure リソース作成スクリプト・GitHub Act
 - **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
 - **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
 - **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
 - **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
 - **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 - **HVE Step 単位 CI/CD の branch / PR 境界**: HVE GUI/CLI で ASDW-WEB Step.3.4 を実行する場合、Orchestrator が Step 専用ブランチを作成し、PR 作成・merge・base branch 復帰を担当する。Agent は新規 branch 作成・checkout・`gh pr create` を行わず、提供された `<branch>` を `gh workflow run ... --ref <branch>` に使用する。workflow_dispatch 前に GitHub 側へ反映が必要な場合でも、`git push origin HEAD` を実行しない。`main` または base branch へ push しない。push が不可欠な場合は `git branch --show-current` が提供された `<branch>` と一致することを確認し、許可される push は `git push origin HEAD:<branch>` のみに限定する。一致しない場合は push せず、ブロッカーとして `{WORK}` に記録する。

@@ -3196,7 +3196,7 @@ class TestApplyMainArtifactImprovements(unittest.TestCase):
             session=mock_session,
             step_id="1.1",
             title="テスト",
-            workflow_id="aqod",
+            workflow_id="adi",
             custom_agent="TestAgent",
             original_prompt="original",
             main_output="main output",

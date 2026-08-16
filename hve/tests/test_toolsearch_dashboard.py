@@ -18,7 +18,14 @@ from hve.toolsearch.dashboard import (
     render_json,
     render_text,
 )
-from hve.toolsearch.stats import EVENT_CATALOG, EVENT_MISS, EVENT_QUERY, SCHEMA_VERSION, aggregate
+from hve.toolsearch.stats import (
+    EVENT_CATALOG,
+    EVENT_MISS,
+    EVENT_QUERY,
+    SCHEMA_VERSION,
+    DashboardSnapshot,
+    aggregate,
+)
 
 
 def _query_event(**kwargs) -> dict:
@@ -263,6 +270,51 @@ class TestDocumentation(unittest.TestCase):
     def test_guide_has_mermaid_diagrams(self) -> None:
         text = self.GUIDE.read_text(encoding="utf-8")
         self.assertGreaterEqual(len(re.findall(r"```mermaid", text)), 2)
+
+
+class TestTokenReductionValidity(unittest.TestCase):
+    """FR-TS-10: 遅延公開が発火していないとき `token_reduction` を削減率として出さない。"""
+
+    @staticmethod
+    def _snapshot(inactive_rate: float) -> "DashboardSnapshot":
+        return DashboardSnapshot(
+            generated_at="2026-08-13T00:00:00Z",
+            queries=4,
+            deferral_inactive_rate=inactive_rate,
+            baseline_tokens=5000,
+            exposed_tokens=1100,
+            token_reduction=0.78,
+        )
+
+    def test_snapshot_flags_the_metric_invalid(self) -> None:
+        self.assertFalse(self._snapshot(1.0).token_reduction_valid)
+        self.assertTrue(self._snapshot(0.0).token_reduction_valid)
+
+    def test_empty_store_is_not_treated_as_invalid(self) -> None:
+        """クエリ 0 件では `deferral_inactive_rate` が None。無効判定にしない。"""
+        empty = DashboardSnapshot(generated_at="2026-08-13T00:00:00Z")
+        self.assertIsNone(empty.deferral_inactive_rate)
+        self.assertTrue(empty.token_reduction_valid)
+        self.assertIn(NO_DATA, render_text(empty, width=110))
+
+    def test_text_does_not_present_it_as_a_reduction_rate(self) -> None:
+        text = render_text(self._snapshot(1.0), width=110)
+        self.assertNotIn("78.0%", text)
+        self.assertIn("無効", text)
+
+    def test_text_presents_it_when_deferral_fired(self) -> None:
+        text = render_text(self._snapshot(0.0), width=110)
+        self.assertIn("78.0%", text)
+
+    def test_json_keeps_the_value_and_flags_it(self) -> None:
+        payload = json.loads(render_json(self._snapshot(1.0)))
+        self.assertEqual(payload["token_reduction"], 0.78)
+        self.assertFalse(payload["token_reduction_valid"])
+
+    def test_html_marks_it_invalid(self) -> None:
+        html = render_html(self._snapshot(1.0))
+        self.assertNotIn("78.0%", html)
+        self.assertIn("無効", html)
 
 
 if __name__ == "__main__":

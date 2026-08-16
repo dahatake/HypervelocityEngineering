@@ -5,7 +5,6 @@
 ## 入力
 - ユースケースID: {usecase_id}
 - ユースケース記述: {usecase_path}
-- ガイドライン: `users-guide/08-ai-agent.md`（Step 1 セクション参照）
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 - 参照（存在すれば）:
   - `docs/catalog/service-catalog-matrix.md`

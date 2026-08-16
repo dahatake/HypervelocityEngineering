@@ -1,0 +1,273 @@
+name: QA Answered AKM Coordinator
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_issue:
+        description: "Source Issue number"
+        required: true
+        type: string
+      qa_sha:
+        description: "Answered QA content SHA-256 (64 hex characters)"
+        required: true
+        type: string
+      qa_path:
+        description: "Repository-relative answered QA path"
+        required: true
+        type: string
+      branch:
+        description: "Branch containing the answered QA file"
+        required: true
+        type: string
+      auto_merge:
+        description: "Inherit source auto-merge policy"
+        required: true
+        type: boolean
+      akm_model:
+        description: "Model for the QA-triggered AKM run (empty falls back to Auto)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  coordinate-akm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    concurrency:
+      group: akm-knowledge-write-${{ github.repository }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      SOURCE_ISSUE: ${{ inputs.source_issue }}
+      QA_SHA: ${{ inputs.qa_sha }}
+      QA_PATH: ${{ inputs.qa_path }}
+      BRANCH: ${{ inputs.branch }}
+      AUTO_MERGE: ${{ inputs.auto_merge }}
+      AKM_MODEL: ${{ inputs.akm_model }}
+      POLL_INTERVAL_SECONDS: "30"
+      MAX_POLLS: "700"
+      TIMEOUT_MINUTES: "350"
+
+    steps:
+      - name: Validate dispatch inputs and answered QA
+        id: validate
+        run: |
+          set -euo pipefail
+          [[ "${SOURCE_ISSUE}" =~ ^[1-9][0-9]*$ ]] || {
+            echo "::error::source_issue must be a positive integer"
+            exit 1
+          }
+          [[ "${QA_SHA}" =~ ^[0-9a-f]{64}$ ]] || {
+            echo "::error::qa_sha must be 64 lowercase hexadecimal characters"
+            exit 1
+          }
+          expected_path="qa/Issue-${SOURCE_ISSUE}-questionnaire-answered-${QA_SHA:0:8}.md"
+          [[ "${QA_PATH}" == "${expected_path}" && "${QA_PATH}" != *".."* ]] || {
+            echo "::error::qa_path does not match the answered QA contract"
+            exit 1
+          }
+          [[ "${BRANCH}" =~ ^[A-Za-z0-9._/-]+$ && "${BRANCH}" != *".."* ]] || {
+            echo "::error::branch contains unsupported characters"
+            exit 1
+          }
+          encoded_branch=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "${BRANCH}")
+          gh api "/repos/${REPO}/git/ref/heads/${encoded_branch}" >/dev/null
+          content_json=$(gh api "/repos/${REPO}/contents/${QA_PATH}?ref=${encoded_branch}")
+          printf '%s' "${content_json}" | jq -r '.content' | tr -d '\n' | base64 -d > "${RUNNER_TEMP}/answered-qa.md"
+          actual_sha=$(python3 -c 'import hashlib, pathlib; print(hashlib.sha256(pathlib.Path("'"${RUNNER_TEMP}/answered-qa.md"'").read_bytes()).hexdigest())')
+          [[ "${actual_sha}" == "${QA_SHA}" ]] || {
+            echo "::error::answered QA SHA mismatch"
+            exit 1
+          }
+
+          # FR-CLOUD-25: 許可リスト外・未指定は Auto へ丸める（失敗させない）。
+          SELECTED_AKM_MODEL="Auto"
+          case "${AKM_MODEL}" in
+            "Auto"|"claude-opus-4.7"|"claude-opus-4.6"|"gpt-5.5"|"gpt-5.4")
+              SELECTED_AKM_MODEL="${AKM_MODEL}"
+              ;;
+            *)
+              echo "akm_model='${AKM_MODEL}' is not in the allowlist; falling back to Auto."
+              ;;
+          esac
+          echo "akm_model=${SELECTED_AKM_MODEL}" >> "${GITHUB_OUTPUT}"
+
+      - name: Find existing QA sync AKM Issue (state=all)
+        id: guard
+        run: |
+          set -euo pipefail
+          marker="<!-- qa-akm-sync: source-issue=${SOURCE_ISSUE}; qa-sha=${QA_SHA}; branch=${BRANCH} -->"
+          existing=$(gh api --paginate \
+            "/repos/${REPO}/issues?state=all&labels=qa-akm-sync&per_page=100" \
+            --jq '.[]' \
+            | jq -rs --arg marker "${marker}" '
+                [ .[]
+                  | select(has("pull_request") | not)
+                  | select((.body // "") | contains($marker))
+                ]
+                | first
+                | .number // empty' || true)
+          if [[ -z "${existing}" ]]; then
+            echo "Labeled scan missed; fallback to an index-independent all-Issue marker scan."
+            existing=$(gh api --paginate \
+              "/repos/${REPO}/issues?state=all&per_page=100" \
+              --jq '.[]' \
+              | jq -rs --arg marker "${marker}" '
+                  [ .[]
+                    | select(has("pull_request") | not)
+                    | select((.body // "") | contains($marker))
+                  ]
+                  | first
+                  | .number // empty' || true)
+          fi
+          echo "issue_number=${existing}" >> "${GITHUB_OUTPUT}"
+          if [[ -n "${existing}" ]]; then
+            echo "Existing QA sync AKM Issue: #${existing}"
+          fi
+
+      - name: Ensure QA sync routing label
+        run: |
+          set -euo pipefail
+          gh label create "qa-akm-sync" --repo "${REPO}" \
+            --color "D4C5F9" --description "QA-triggered AKM execution" --force
+
+      - name: Create independent AKM Root Issue
+        id: create
+        if: steps.guard.outputs.issue_number == ''
+        env:
+          SELECTED_AKM_MODEL: ${{ steps.validate.outputs.akm_model }}
+        run: |
+          set -euo pipefail
+          marker="<!-- qa-akm-sync: source-issue=${SOURCE_ISSUE}; qa-sha=${QA_SHA}; branch=${BRANCH} -->"
+          auto_merge_line='- [ ] PR の自動 Approve & Auto-merge を有効にする'
+          if [[ "${AUTO_MERGE}" == "true" ]]; then
+            auto_merge_line='- [x] PR の自動 Approve & Auto-merge を有効にする'
+          fi
+          body_file="${RUNNER_TEMP}/qa-akm-issue.md"
+          cat > "${body_file}" <<EOF
+          ${marker}
+          # QA 回答の Knowledge Management 同期
+
+          ### 対象ブランチ
+          ${BRANCH}
+
+          ### ソース
+          qa のみ
+
+          ### target_files
+          ${QA_PATH}
+
+          ### 再生成オプション
+          - [ ] 既存 status.md を完全に再生成する
+
+          ### 質問票設定
+          - [ ] 実行前 QA を有効にする
+
+          ### PR完全自動化設定
+          ${auto_merge_line}
+
+          ### 使用するモデル
+          ${SELECTED_AKM_MODEL}
+
+          ### 追加コメント
+          Source Issue: #${SOURCE_ISSUE}
+          QA SHA-256: ${QA_SHA}
+          EOF
+          issue_url=$(gh issue create --repo "${REPO}" \
+            --title "[AKM] QA sync from #${SOURCE_ISSUE} (${QA_SHA:0:8})" \
+            --body-file "${body_file}" \
+            --label "qa-akm-sync")
+          issue_number="${issue_url##*/}"
+          [[ "${issue_number}" =~ ^[1-9][0-9]*$ ]] || {
+            echo "::error::AKM Root Issue number could not be resolved"
+            exit 1
+          }
+          echo "issue_number=${issue_number}" >> "${GITHUB_OUTPUT}"
+
+      - name: Add knowledge-management label after body is complete
+        if: steps.guard.outputs.issue_number == ''
+        env:
+          AKM_ISSUE: ${{ steps.create.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          gh issue edit "${AKM_ISSUE}" --repo "${REPO}" --add-label "knowledge-management"
+
+      - name: Resolve AKM Root Issue number
+        id: resolve
+        env:
+          EXISTING: ${{ steps.guard.outputs.issue_number }}
+          CREATED: ${{ steps.create.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          issue_number="${EXISTING:-${CREATED:-}}"
+          [[ "${issue_number}" =~ ^[1-9][0-9]*$ ]] || {
+            echo "::error::AKM Root Issue is unavailable"
+            exit 1
+          }
+          echo "issue_number=${issue_number}" >> "${GITHUB_OUTPUT}"
+
+      - name: Reconcile AKM Root routing labels before polling
+        env:
+          AKM_ISSUE: ${{ steps.resolve.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          issue_json=$(gh api "/repos/${REPO}/issues/${AKM_ISSUE}")
+          state=$(printf '%s' "${issue_json}" | jq -r '.state // ""')
+          labels=$(printf '%s' "${issue_json}" | jq -r '[.labels[].name] | join(",")')
+          if [[ "${state}" == "closed" ]] \
+            || [[ ",${labels}," == *",akm:done,"* ]] \
+            || [[ ",${labels}," == *",akm:blocked,"* ]]; then
+            echo "Existing AKM Root is already terminal; routing reconciliation is unnecessary."
+            exit 0
+          fi
+          if [[ ",${labels}," != *",qa-akm-sync,"* ]]; then
+            gh issue edit "${AKM_ISSUE}" --repo "${REPO}" --add-label "qa-akm-sync"
+          fi
+          if [[ ",${labels}," != *",knowledge-management,"* ]]; then
+            gh issue edit "${AKM_ISSUE}" --repo "${REPO}" --add-label "knowledge-management"
+          fi
+
+      - name: Poll AKM terminal state
+        env:
+          AKM_ISSUE: ${{ steps.resolve.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          for ((poll=1; poll<=MAX_POLLS; poll++)); do
+            issue_json=$(gh api "/repos/${REPO}/issues/${AKM_ISSUE}")
+            state=$(printf '%s' "${issue_json}" | jq -r '.state // ""')
+            labels=$(printf '%s' "${issue_json}" | jq -r '[.labels[].name] | join(",")')
+            if [[ "${state}" == "closed" ]] \
+              || [[ ",${labels}," == *",akm:done,"* ]] \
+              || [[ ",${labels}," == *",akm:blocked,"* ]]; then
+              echo "AKM terminal state observed: issue=#${AKM_ISSUE}, state=${state}, labels=${labels}"
+              exit 0
+            fi
+            if (( poll < MAX_POLLS )); then
+              sleep "${POLL_INTERVAL_SECONDS}"
+            fi
+          done
+          final_issue_json=$(gh api "/repos/${REPO}/issues/${AKM_ISSUE}")
+          final_state=$(printf '%s' "${final_issue_json}" | jq -r '.state // ""')
+          final_labels=$(printf '%s' "${final_issue_json}" | jq -r '[.labels[].name] | join(",")')
+          if [[ "${final_state}" == "closed" ]] \
+            || [[ ",${final_labels}," == *",akm:done,"* ]] \
+            || [[ ",${final_labels}," == *",akm:blocked,"* ]]; then
+            echo "AKM terminal state observed at final timeout check: issue=#${AKM_ISSUE}, state=${final_state}, labels=${final_labels}"
+            exit 0
+          fi
+          calculated_timeout=$((MAX_POLLS * POLL_INTERVAL_SECONDS / 60))
+          [[ "${calculated_timeout}" == "${TIMEOUT_MINUTES}" ]] || {
+            echo "::error::AKM polling timeout configuration is inconsistent"
+            exit 1
+          }
+          echo "::error::AKM coordinator timed out after ${TIMEOUT_MINUTES} minutes"
+          gh issue edit "${AKM_ISSUE}" --repo "${REPO}" --add-label "akm:blocked" || true
+          gh issue comment "${AKM_ISSUE}" --repo "${REPO}" \
+            --body "QA-triggered AKM coordinator timed out before a terminal state was observed." || true
+          exit 1

@@ -137,3 +137,28 @@ class TestSelfImproveTriStateMigration:
         # defaults() がそのまま返り、廃止キーは含まれない
         assert "mcp_config" not in merged["options"]
         assert "workiq_tenant_id" not in merged["options"]
+
+
+class TestExplorerRootsMigration:
+    def test_migrates_legacy_original_docs_root(self, tmp_settings: Path) -> None:
+        _write(
+            tmp_settings,
+            "[options]\n"
+            "explorer_roots = docs;docs-generated;knowledge;original-docs;qa;users-guide\n",
+        )
+
+        merged = settings_store.load()
+
+        expected = "docs;docs-generated;knowledge;docs-original;qa;users-guide"
+        assert merged["options"]["explorer_roots"] == expected
+        assert f"explorer_roots = {expected}" in tmp_settings.read_text(encoding="utf-8")
+
+    def test_preserves_nonlegacy_original_docs_subpath(self, tmp_settings: Path) -> None:
+        original = "[options]\nexplorer_roots = docs;custom/original-docs;docs-original\n"
+        _write(tmp_settings, original)
+        before_mtime = tmp_settings.stat().st_mtime_ns
+
+        merged = settings_store.load()
+
+        assert merged["options"]["explorer_roots"] == "docs;custom/original-docs;docs-original"
+        assert tmp_settings.stat().st_mtime_ns == before_mtime

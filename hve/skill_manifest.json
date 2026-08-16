@@ -10,7 +10,7 @@
     "aag": ["task-dag-planning", "ai-agent-capability-contract"],
     "aagd": ["test-strategy-template", "ai-agent-capability-contract"],
     "akm": ["knowledge-management"],
-    "aqod": ["knowledge-lookup"],
+    "adi": ["knowledge-lookup"],
     "adoc": ["task-dag-planning"]
   },
   "required_skills": {
@@ -27,9 +27,16 @@
     "akm": {
       "1": ["knowledge-management"]
     },
-    "aqod": {
+    "adi": {
       "1": ["knowledge-lookup"],
-      "2": ["knowledge-lookup"]
+      "1.1": ["knowledge-lookup"],
+      "1.2": ["knowledge-lookup"],
+      "2": ["knowledge-lookup"],
+      "3": ["knowledge-lookup"],
+      "4": ["knowledge-lookup"],
+      "5.1": ["knowledge-lookup"],
+      "5.2": ["knowledge-lookup"],
+      "5.3": ["knowledge-lookup"]
     },
     "asdw-web": {
       "1.2": ["azure-cli-deploy-scripts"],

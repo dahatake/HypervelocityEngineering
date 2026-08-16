@@ -26,7 +26,6 @@ from hve.gui.stats_history_view import (  # noqa: E402
     StatsHistoryView,
     _agg_workflow_counts,
     _aiu_sort_key,
-    _compute_step_prev_map,
     _csv_aiu,
     _csv_counts_topn,
     _csv_pct,
@@ -37,7 +36,6 @@ from hve.gui.stats_history_view import (  # noqa: E402
     _fmt_elapsed,
     _sanitize_csv_cell,
     _sorted_steps_by_finish,
-    _step_aiu_delta_nano,
     build_csv,
 )
 from hve.gui.workbench_state import (  # noqa: E402
@@ -60,6 +58,8 @@ def _state_with_history() -> WorkbenchState:
     s.update_identity(workflow_id="wf1", workflow_name="WF A", run_id="r1")
     s.set_step_status("s1", "running")
     s.set_context(1000, 10000, 5)
+    s.record_step_context("s1", 1000, 10000)
+    s.record_step_model("s1", "gpt-x")
     s.record_tool_call("s1", "read_file")
     s.record_tool_call("s1", "read_file")
     s.record_skill_invoked("s1", "task-questionnaire")
@@ -134,7 +134,7 @@ def test_view_renders_workflow_and_step_rows(qapp):
     assert v._tree.topLevelItemCount() == 1
     wf_item = v._tree.topLevelItem(0)
     assert "WF A" in wf_item.text(COL_NAME)
-    assert wf_item.text(COL_MODEL) == "gpt-x"
+    assert wf_item.text(COL_MODEL) == "gpt-x×1"
     assert "10,000" in wf_item.text(COL_CONTEXT)
     assert "read_file×2" in wf_item.text(COL_TOOLS)
     assert "task-questionnaire×1" in wf_item.text(COL_SKILLS)
@@ -187,6 +187,30 @@ def test_view_userrole_data_for_dclick(qapp):
     step_item = wf_item.child(0)
     sk = step_item.data(COL_SKILLS, Qt.ItemDataRole.UserRole)
     assert sk == {"task-questionnaire": 1}
+    # Model 列も Top-N 表記のため、全件ポップアップ用の raw を保持する
+    assert wf_item.data(COL_MODEL, Qt.ItemDataRole.UserRole) == {"gpt-x": 1}
+    assert step_item.data(COL_MODEL, Qt.ItemDataRole.UserRole) == {"gpt-x": 1}
+
+
+def test_view_dclick_opens_popup_for_model_column(qapp, monkeypatch):
+    """Model セルの D-click で全件ポップアップを開く（Tools / Skills と同じ経路）。"""
+    s = _state_with_history()
+    v = StatsHistoryView(s)
+    v.refresh()
+    shown: list = []
+    monkeypatch.setattr(
+        "hve.gui.stats_history_view.QMessageBox.information",
+        lambda parent, title, text: shown.append((title, text)),
+    )
+
+    step_item = v._tree.topLevelItem(0).child(0)
+    v._on_item_double_clicked(step_item, COL_MODEL)
+    assert shown and "gpt-x: 1" in shown[0][1]
+
+    # 対象外の列では開かない
+    shown.clear()
+    v._on_item_double_clicked(step_item, COL_ELAPSED)
+    assert shown == []
 
 
 def test_view_empty_state(qapp):
@@ -215,12 +239,13 @@ def test_fmt_aiu():
 # ----------------------------------------------------------------------
 
 
-def _mkstep(step_id: str, finished_at, total_nano):
+def _mkstep(step_id: str, finished_at, total_nano, own_nano=None, model_counts=None):
     return StepStatsSnapshot(
         step_id=step_id, step_title="", status="done", model="m",
         started_at=0.0, finished_at=finished_at, elapsed_sec=None,
         context_current=None, context_limit=None,
         tool_counts={}, skill_counts={}, sdk_aiu_total_nano=total_nano,
+        aiu_nano_own=own_nano, model_counts=dict(model_counts or {}),
     )
 
 
@@ -250,102 +275,6 @@ def test_sorted_steps_by_finish_is_stable_for_ties_and_none():
     assert sorted_ids == ["a", "b", "d", "c", "e"]
 
 
-def test_step_aiu_delta_nano_first_step_equals_total():
-    cur = _mkstep("s1", 1.0, 2_000_000_000)
-    # 最初の Step（prev=None）は累積=差分とみなす
-    assert _step_aiu_delta_nano(cur, None) == 2_000_000_000
-
-
-def test_step_aiu_delta_nano_normal_diff():
-    prev = _mkstep("s1", 1.0, 1_000_000_000)
-    cur = _mkstep("s2", 2.0, 2_500_000_000)
-    assert _step_aiu_delta_nano(cur, prev) == 1_500_000_000
-
-
-def test_step_aiu_delta_nano_returns_none_when_prev_unknown():
-    """前 Step の AIU が None の場合、現 Step の累積を差分に流用してはならない（捏造禁止）。"""
-    prev = _mkstep("s1", 1.0, None)
-    cur = _mkstep("s2", 2.0, 2_000_000_000)
-    assert _step_aiu_delta_nano(cur, prev) is None
-
-
-def test_step_aiu_delta_nano_returns_none_for_negative_or_zero_current():
-    prev = _mkstep("s1", 1.0, 1_000_000_000)
-    cur_zero = _mkstep("s2", 2.0, 0)
-    cur_neg = _mkstep("s2", 2.0, -1)
-    assert _step_aiu_delta_nano(cur_zero, prev) is None
-    assert _step_aiu_delta_nano(cur_neg, prev) is None
-
-
-def test_step_aiu_delta_nano_returns_none_for_zero_delta():
-    """累積が前 Step と完全に同じ（消費 0）。仕様: 0 以下は None。"""
-    prev = _mkstep("s1", 1.0, 1_000_000_000)
-    cur = _mkstep("s2", 2.0, 1_000_000_000)
-    assert _step_aiu_delta_nano(cur, prev) is None
-
-
-def test_step_aiu_delta_nano_returns_none_for_negative_delta():
-    """累積が前 Step より減るのは異常（補正のみ等）。差分は None。"""
-    prev = _mkstep("s1", 1.0, 2_000_000_000)
-    cur = _mkstep("s2", 2.0, 1_000_000_000)
-    assert _step_aiu_delta_nano(cur, prev) is None
-
-
-def test_compute_step_prev_map_within_single_workflow():
-    """単一 Workflow: 最初の Step は prev=None、以降は finished_at 順の前 Step。"""
-    s1 = _mkstep("s1", 1.0, 1_000_000_000)
-    s2 = _mkstep("s2", 2.0, 2_000_000_000)
-    s3 = _mkstep("s3", 3.0, 3_000_000_000)
-    wf = WorkflowStatsSnapshot(
-        workflow_id="wf", workflow_name="WF", run_id="r", model="m",
-        started_at=0.0, steps=[s1, s2, s3],
-    )
-    prev_map = _compute_step_prev_map([wf])
-    assert prev_map[id(s1)] is None
-    assert prev_map[id(s2)] is s1
-    assert prev_map[id(s3)] is s2
-
-
-def test_compute_step_prev_map_across_multiple_workflows():
-    """複数 Workflow 跨ぎでも finished_at 順で前 Step を返す。"""
-    a1 = _mkstep("a1", 1.0, 2_000_000_000)
-    a2 = _mkstep("a2", 2.0, 5_000_000_000)
-    b1 = _mkstep("b1", 3.0, 6_000_000_000)  # 累積: 前 wf の a2 から +1.0
-    b2 = _mkstep("b2", 4.0, 8_000_000_000)
-    wfA = WorkflowStatsSnapshot(
-        workflow_id="wfA", workflow_name="A", run_id="rA", model="m",
-        started_at=0.0, steps=[a1, a2],
-    )
-    wfB = WorkflowStatsSnapshot(
-        workflow_id="wfB", workflow_name="B", run_id="rB", model="m",
-        started_at=2.5, steps=[b1, b2],
-    )
-    prev_map = _compute_step_prev_map([wfA, wfB])
-    # Workflow A 内
-    assert prev_map[id(a1)] is None
-    assert prev_map[id(a2)] is a1
-    # Workflow B の最初 Step b1 の前は Workflow A の最終 Step a2（跨ぎ）
-    assert prev_map[id(b1)] is a2
-    assert prev_map[id(b2)] is b1
-
-
-def test_compute_step_prev_map_handles_finished_at_none_at_end():
-    """finished_at=None の Step は末尾扱い。"""
-    s1 = _mkstep("s1", 1.0, 1_000_000_000)
-    s2 = _mkstep("s2", None, 2_000_000_000)
-    wf = WorkflowStatsSnapshot(
-        workflow_id="wf", workflow_name="WF", run_id="r", model="m",
-        started_at=0.0, steps=[s1, s2],
-    )
-    prev_map = _compute_step_prev_map([wf])
-    assert prev_map[id(s1)] is None
-    assert prev_map[id(s2)] is s1
-
-
-def test_compute_step_prev_map_empty_history():
-    assert _compute_step_prev_map([]) == {}
-
-
 def test_aiu_sort_key_unifies_unknown_zero_negative_to_minus_one():
     """ソートキー: None / 0 / 負値は全て -1（表示の `-` と整合、Minor No.5 修正）。"""
     assert _aiu_sort_key(None) == -1
@@ -366,42 +295,118 @@ def test_view_renders_aiu_for_workflow_and_steps(qapp):
         workflow_id="wf1", workflow_name="WF", run_id="r1", model="m",
         started_at=0.0, elapsed_sec=2.0, sdk_aiu_total_nano=2_500_000_000,
         steps=[
-            _mkstep("s1", 1.0, 1_000_000_000),
-            _mkstep("s2", 2.0, 2_500_000_000),
+            _mkstep("s1", 1.0, 1_000_000_000, own_nano=1_000_000_000),
+            _mkstep("s2", 2.0, 2_500_000_000, own_nano=1_500_000_000),
         ],
     ))
     v = StatsHistoryView(s)
     v.refresh()
     wf = v._tree.topLevelItem(0)
     assert wf.text(COL_AI_CREDIT) == "2.5000 AIU"
-    # Workflow 親には差分を出さない
-    assert "+" not in wf.text(COL_AI_CREDIT)
-    # Step は「該当 Step の消費分（差分）のみ」
+    # Step は当該 Step へ帰属した実測消費のみ
     assert wf.child(0).text(COL_AI_CREDIT) == "1.0000 AIU"
     assert wf.child(1).text(COL_AI_CREDIT) == "1.5000 AIU"
 
 
-def test_view_aiu_diff_uses_finish_order_not_insertion_order(qapp):
-    """挿入順と finished_at 順が逆でも、差分は finished_at 順で計算される。"""
+def test_step_row_shows_own_aiu(qapp):
+    """Step 行の AI Credit 列は Step 実測値であり、隣接 Step の累積差分を用いない。"""
     s = WorkbenchState(workflow_id="wf1", run_id="r1", model="m")
     s.stats_history.append(WorkflowStatsSnapshot(
         workflow_id="wf1", workflow_name="WF", run_id="r1", model="m",
-        started_at=0.0, elapsed_sec=2.0, sdk_aiu_total_nano=2_500_000_000,
+        started_at=0.0, elapsed_sec=2.0, sdk_aiu_total_nano=9_000_000_000,
         steps=[
-            _mkstep("s_late", 2.0, 2_500_000_000),   # 後完了だが先頭に挿入
-            _mkstep("s_early", 1.0, 1_000_000_000),  # 先完了だが末尾に挿入
+            # 累積は s1=8.0 / s2=9.0 だが、実測消費は 2.0 / 3.0（Fleet 分が累積に混在）。
+            _mkstep("s1", 1.0, 8_000_000_000, own_nano=2_000_000_000),
+            _mkstep("s2", 2.0, 9_000_000_000, own_nano=3_000_000_000),
         ],
     ))
     v = StatsHistoryView(s)
     v.refresh()
     wf = v._tree.topLevelItem(0)
-    # 子は finished_at 昇順
+    assert wf.child(0).text(COL_AI_CREDIT) == "2.0000 AIU"
+    assert wf.child(1).text(COL_AI_CREDIT) == "3.0000 AIU"
+
+
+def test_step_row_shows_dash_when_own_aiu_unknown(qapp):
+    """Step 実測値が無い場合は `-`（Workflow 累積で代用しない）。"""
+    s = WorkbenchState(workflow_id="wf1", run_id="r1", model="m")
+    s.stats_history.append(WorkflowStatsSnapshot(
+        workflow_id="wf1", workflow_name="WF", run_id="r1", model="m",
+        started_at=0.0, elapsed_sec=2.0, sdk_aiu_total_nano=5_000_000_000,
+        steps=[_mkstep("fleet-step", 1.0, 5_000_000_000, own_nano=None)],
+    ))
+    v = StatsHistoryView(s)
+    v.refresh()
+    wf = v._tree.topLevelItem(0)
+    assert wf.text(COL_AI_CREDIT) == "5.0000 AIU"
+    assert wf.child(0).text(COL_AI_CREDIT) == "-"
+
+
+def test_view_orders_steps_by_finish_time(qapp):
+    """挿入順と finished_at 順が逆でも、子行は finished_at 昇順で並ぶ。"""
+    s = WorkbenchState(workflow_id="wf1", run_id="r1", model="m")
+    s.stats_history.append(WorkflowStatsSnapshot(
+        workflow_id="wf1", workflow_name="WF", run_id="r1", model="m",
+        started_at=0.0, elapsed_sec=2.0, sdk_aiu_total_nano=2_500_000_000,
+        steps=[
+            _mkstep("s_late", 2.0, 2_500_000_000, own_nano=1_500_000_000),
+            _mkstep("s_early", 1.0, 1_000_000_000, own_nano=1_000_000_000),
+        ],
+    ))
+    v = StatsHistoryView(s)
+    v.refresh()
+    wf = v._tree.topLevelItem(0)
     assert "s_early" in wf.child(0).text(COL_NAME)
     assert "s_late" in wf.child(1).text(COL_NAME)
-    # s_early は最初の Step → 消費分 = 累積 1.0
-    assert wf.child(0).text(COL_AI_CREDIT) == "1.0000 AIU"
-    # s_late は消費分 = 2.5 - 1.0 = 1.5
-    assert wf.child(1).text(COL_AI_CREDIT) == "1.5000 AIU"
+
+
+def test_step_row_shows_model_counts(qapp):
+    """Step 行のモデル列はモデル別呼び出し回数を表示する。"""
+    s = WorkbenchState(workflow_id="wf1", run_id="r1", model="m")
+    s.stats_history.append(WorkflowStatsSnapshot(
+        workflow_id="wf1", workflow_name="WF", run_id="r1", model="m",
+        started_at=0.0, elapsed_sec=1.0, sdk_aiu_total_nano=None,
+        steps=[_mkstep(
+            "s1", 1.0, None,
+            model_counts={"claude-opus-5": 42, "gpt-5.6-terra": 23},
+        )],
+    ))
+    v = StatsHistoryView(s)
+    v.refresh()
+    text = v._tree.topLevelItem(0).child(0).text(COL_MODEL)
+    assert "claude-opus-5×42" in text
+    assert "gpt-5.6-terra×23" in text
+
+
+def test_step_row_model_shows_dash_when_unknown(qapp):
+    """モデル帰属イベントが無い Step は `-`（グローバル値で代用しない）。"""
+    s = WorkbenchState(workflow_id="wf1", run_id="r1", model="claude-opus-5")
+    s.stats_history.append(WorkflowStatsSnapshot(
+        workflow_id="wf1", workflow_name="WF", run_id="r1", model="claude-opus-5",
+        started_at=0.0, elapsed_sec=1.0, sdk_aiu_total_nano=None,
+        steps=[_mkstep("fleet-step", 1.0, None)],
+    ))
+    v = StatsHistoryView(s)
+    v.refresh()
+    assert v._tree.topLevelItem(0).child(0).text(COL_MODEL) == "-"
+
+
+def test_workflow_row_aggregates_model_counts(qapp):
+    """Workflow 親行のモデル列は子 Step の合計。"""
+    s = WorkbenchState(workflow_id="wf1", run_id="r1", model="m")
+    s.stats_history.append(WorkflowStatsSnapshot(
+        workflow_id="wf1", workflow_name="WF", run_id="r1", model="m",
+        started_at=0.0, elapsed_sec=1.0, sdk_aiu_total_nano=None,
+        steps=[
+            _mkstep("s1", 1.0, None, model_counts={"claude-opus-5": 2}),
+            _mkstep("s2", 2.0, None, model_counts={"claude-opus-5": 3, "gpt-5.6-terra": 1}),
+        ],
+    ))
+    v = StatsHistoryView(s)
+    v.refresh()
+    text = v._tree.topLevelItem(0).text(COL_MODEL)
+    assert "claude-opus-5×5" in text
+    assert "gpt-5.6-terra×1" in text
 
 
 def test_view_aiu_unknown_shows_dash(qapp):
@@ -419,14 +424,14 @@ def test_view_aiu_unknown_shows_dash(qapp):
 
 
 def test_view_aiu_workflow_unknown_but_step_known(qapp):
-    """Workflow 親=未取得、Step 子=値あり。親 '-', 子 '累積 (+差分)' で混在表示。"""
+    """Workflow 親=未取得、Step 子=値あり。親 '-'、子は実測値で混在表示。"""
     s = WorkbenchState(workflow_id="wf1", run_id="r1", model="m")
     s.stats_history.append(WorkflowStatsSnapshot(
         workflow_id="wf1", workflow_name="WF", run_id="r1", model="m",
         started_at=0.0, elapsed_sec=1.0, sdk_aiu_total_nano=None,
         steps=[
-            _mkstep("s1", 1.0, 1_000_000_000),
-            _mkstep("s2", 2.0, 2_500_000_000),
+            _mkstep("s1", 1.0, 1_000_000_000, own_nano=1_000_000_000),
+            _mkstep("s2", 2.0, 2_500_000_000, own_nano=1_500_000_000),
         ],
     ))
     v = StatsHistoryView(s)
@@ -435,62 +440,12 @@ def test_view_aiu_workflow_unknown_but_step_known(qapp):
     assert wf.text(COL_AI_CREDIT) == "-"
     assert wf.child(0).text(COL_AI_CREDIT) == "1.0000 AIU"
     assert wf.child(1).text(COL_AI_CREDIT) == "1.5000 AIU"
-    # CSV では Workflow AiuTotal は空、Step は値あり（CSV は累積+差分を別列で維持）
+    # CSV: Workflow の AiuTotal は空、Step は累積と実測をそれぞれ別列で保持
     import csv as _csv
     rows = list(_csv.reader(io.StringIO(build_csv(s.stats_history, now_monotonic=0.0))))
     assert rows[1][0] == "workflow" and rows[1][9] == "" and rows[1][10] == ""
     assert rows[2][0] == "step" and rows[2][9] == "1.000000" and rows[2][10] == "1.000000"
     assert rows[3][0] == "step" and rows[3][9] == "2.500000" and rows[3][10] == "1.500000"
-
-
-def test_view_step_known_total_but_unknown_delta_shows_dash(qapp):
-    """累積は既知でも差分が計算不能（直前 Step 未取得）な Step は `-`（累積で代用しない=捏造禁止）。"""
-    s = WorkbenchState(workflow_id="wf1", run_id="r1", model="m")
-    s.stats_history.append(WorkflowStatsSnapshot(
-        workflow_id="wf1", workflow_name="WF", run_id="r1", model="m",
-        started_at=0.0, elapsed_sec=2.0, sdk_aiu_total_nano=2_000_000_000,
-        steps=[
-            _mkstep("s_unknown", 1.0, None),         # 累積=未取得
-            _mkstep("s_known", 2.0, 2_000_000_000),  # 累積=2.0 だが直前(s_unknown)が未取得→差分不能
-        ],
-    ))
-    v = StatsHistoryView(s)
-    v.refresh()
-    wf = v._tree.topLevelItem(0)
-    # s_unknown: 累積 None → 差分 None → `-`
-    assert wf.child(0).text(COL_AI_CREDIT) == "-"
-    # s_known: 累積 2.0 は既知だが、直前 Step 未取得のため差分計算不能 → `-`
-    assert wf.child(1).text(COL_AI_CREDIT) == "-"
-
-
-def test_view_aiu_diff_continues_across_workflows(qapp):
-    """View でも Workflow 跨ぎで前 Step との差分を計算する（Critical No.1 修正の検証）。"""
-    s = WorkbenchState(workflow_id="wf1", run_id="r1", model="m")
-    # 累積動作: a1=2.0, a2=5.0 / b1=6.0（5.0+1.0）, b2=8.0（5.0+3.0）
-    s.stats_history.append(WorkflowStatsSnapshot(
-        workflow_id="wfA", workflow_name="A", run_id="rA", model="m",
-        started_at=0.0, elapsed_sec=2.0, sdk_aiu_total_nano=5_000_000_000,
-        steps=[
-            _mkstep("a1", 1.0, 2_000_000_000),
-            _mkstep("a2", 2.0, 5_000_000_000),
-        ],
-    ))
-    s.stats_history.append(WorkflowStatsSnapshot(
-        workflow_id="wfB", workflow_name="B", run_id="rB", model="m",
-        started_at=2.5, elapsed_sec=2.0, sdk_aiu_total_nano=8_000_000_000,
-        steps=[
-            _mkstep("b1", 3.0, 6_000_000_000),
-            _mkstep("b2", 4.0, 8_000_000_000),
-        ],
-    ))
-    v = StatsHistoryView(s)
-    v.refresh()
-    # Workflow B の Tree item は 2 番目
-    wfB_item = v._tree.topLevelItem(1)
-    # b1 は前 Workflow の a2（累積 5.0）との差分 = 1.0 を表示
-    assert wfB_item.child(0).text(COL_AI_CREDIT) == "1.0000 AIU"
-    # b2 は b1（累積 6.0）との差分 = 2.0
-    assert wfB_item.child(1).text(COL_AI_CREDIT) == "2.0000 AIU"
 
 
 def test_view_aiu_column_sorts_numerically(qapp):
@@ -516,17 +471,15 @@ def test_view_aiu_column_sorts_numerically(qapp):
 
 
 def test_view_aiu_column_sorts_step_children_numerically(qapp):
-    """子 Step 行も AI Credit 列で数値ソートされる。"""
+    """子 Step 行も AI Credit 列（実測値）で数値ソートされる。"""
     s = WorkbenchState(workflow_id="wf1", run_id="r1", model="m")
     s.stats_history.append(WorkflowStatsSnapshot(
         workflow_id="wf1", workflow_name="WF", run_id="r1", model="m",
         started_at=0.0, elapsed_sec=10.0, sdk_aiu_total_nano=11_000_000_000,
         steps=[
-            # 完了順は s_small → s_large → s_mid（累積も同順）。
-            # ソートは「差分」基準: s_small=0.5, s_large=9.5, s_mid=1.0
-            _mkstep("s_small", 1.0, 500_000_000),       # 累積 0.5 / 差分 0.5
-            _mkstep("s_large", 2.0, 10_000_000_000),    # 累積 10.0 / 差分 9.5
-            _mkstep("s_mid", 3.0, 11_000_000_000),      # 累積 11.0 / 差分 1.0
+            _mkstep("s_small", 1.0, 500_000_000, own_nano=500_000_000),
+            _mkstep("s_large", 2.0, 10_000_000_000, own_nano=9_500_000_000),
+            _mkstep("s_mid", 3.0, 11_000_000_000, own_nano=1_000_000_000),
         ],
     ))
     v = StatsHistoryView(s)
@@ -534,7 +487,7 @@ def test_view_aiu_column_sorts_step_children_numerically(qapp):
     v._tree.sortByColumn(COL_AI_CREDIT, Qt.SortOrder.AscendingOrder)
     wf = v._tree.topLevelItem(0)
     children_ids = [wf.child(i).text(COL_NAME).strip() for i in range(wf.childCount())]
-    # 差分昇順: s_small(0.5) < s_mid(1.0) < s_large(9.5)
+    # 実測値昇順: s_small(0.5) < s_mid(1.0) < s_large(9.5)
     assert children_ids == ["s_small", "s_mid", "s_large"]
 
 
@@ -595,15 +548,17 @@ def test_build_csv_headers_and_basic_row():
         started_at=0.0, elapsed_sec=10.0, sdk_aiu_total_nano=2_500_000_000,
         context_current=1000, context_limit=10000,
         steps=[
-            _mkstep("s1", 1.0, 1_000_000_000),
-            _mkstep("s2", 2.0, 2_500_000_000),
+            _mkstep("s1", 1.0, 1_000_000_000, own_nano=1_000_000_000,
+                    model_counts={"gpt-x": 3}),
+            _mkstep("s2", 2.0, 2_500_000_000, own_nano=1_500_000_000,
+                    model_counts={"gpt-x": 2}),
         ],
     ))
     import csv as _csv
     rows = list(_csv.reader(build_csv(s.stats_history).splitlines()))
     expected_header = [
         "Type", "Workflow", "Step", "Context", "Limit", "Pct", "Model",
-        "ElapsedSec", "ElapsedHMS", "AiuTotal", "AiuDeltaSincePrev",
+        "ElapsedSec", "ElapsedHMS", "AiuTotal", "AiuOwn",
         "ToolsTop", "SkillsTop", "Status",
     ]
     assert rows[0] == expected_header
@@ -612,46 +567,65 @@ def test_build_csv_headers_and_basic_row():
         assert len(r) == 14
     # ヘッダ + Workflow + Step×2 = 4 行
     assert len(rows) == 4
-    # Workflow 行（idx=1）: AiuTotal=2.500000、AiuDelta=空
+    # Workflow 行（idx=1）: AiuTotal=2.500000、AiuOwn=空、Model=子の合計
     assert rows[1][0] == "workflow"
     assert rows[1][1] == "WF"
     assert rows[1][2] == ""
+    assert rows[1][6] == "gpt-x×5"
     assert rows[1][9] == "2.500000"
     assert rows[1][10] == ""
-    # Step1: 累積 1.000000、差分 1.000000
+    # Step1: 累積 1.000000、実測 1.000000
     assert rows[2][0] == "step"
     assert rows[2][1] == "WF"
     assert rows[2][2] == "s1"
+    assert rows[2][6] == "gpt-x×3"
     assert rows[2][9] == "1.000000"
     assert rows[2][10] == "1.000000"
-    # Step2: 累積 2.500000、差分 1.500000
+    # Step2: 累積 2.500000、実測 1.500000
     assert rows[3][2] == "s2"
     assert rows[3][9] == "2.500000"
     assert rows[3][10] == "1.500000"
 
 
-def test_build_csv_multiple_workflows_diff_continues_across_workflows(qapp):
-    """複数 Workflow CSV: ``sdk_aiu_total_nano`` は WorkbenchState 通算累積。
-
-    Workflow 切替時に backend 側でリセットされないため、Workflow 跨ぎでも
-    「直前 Step との差分」で正しい単独消費量を表示する必要がある。
-    """
+def test_build_csv_has_aiu_own_column():
+    """CSV は `AiuOwn` 列を持ち、推定値である `AiuDeltaSincePrev` を持たない。"""
     s = WorkbenchState(workflow_id="wf1", run_id="r1", model="m")
-    # 累積動作を模した値: a1=2.0, a2=5.0 / b1=6.0, b2=8.0（5.0 + 1.0, 5.0 + 3.0）
+    s.stats_history.append(WorkflowStatsSnapshot(
+        workflow_id="wf1", workflow_name="WF", run_id="r1", model="m",
+        started_at=0.0, elapsed_sec=1.0, sdk_aiu_total_nano=9_000_000_000,
+        steps=[
+            _mkstep("s1", 1.0, 8_000_000_000, own_nano=2_000_000_000),
+            _mkstep("fleet-step", 2.0, 9_000_000_000, own_nano=None),
+        ],
+    ))
+    import csv as _csv
+    rows = list(_csv.reader(build_csv(s.stats_history, now_monotonic=0.0).splitlines()))
+    assert "AiuOwn" in rows[0]
+    assert "AiuDeltaSincePrev" not in rows[0]
+    own_idx = rows[0].index("AiuOwn")
+    # 累積差分 (8.0-0=8.0) ではなく実測 2.0。
+    assert rows[2][own_idx] == "2.000000"
+    # 実測不可な Step は空欄（累積差分で補わない）。
+    assert rows[3][own_idx] == ""
+
+
+def test_build_csv_multiple_workflows_keep_row_structure(qapp):
+    """複数 Workflow CSV: 行順・列数・実測値が Workflow を跨いでも崩れない。"""
+    s = WorkbenchState(workflow_id="wf1", run_id="r1", model="m")
     s.stats_history.append(WorkflowStatsSnapshot(
         workflow_id="wf1", workflow_name="WF_A", run_id="r1", model="m",
         started_at=0.0, elapsed_sec=2.0, sdk_aiu_total_nano=5_000_000_000,
         steps=[
-            _mkstep("a1", 1.0, 2_000_000_000),
-            _mkstep("a2", 2.0, 5_000_000_000),
+            _mkstep("a1", 1.0, 2_000_000_000, own_nano=2_000_000_000),
+            _mkstep("a2", 2.0, 5_000_000_000, own_nano=3_000_000_000),
         ],
     ))
     s.stats_history.append(WorkflowStatsSnapshot(
         workflow_id="wf2", workflow_name="WF_B", run_id="r2", model="m",
         started_at=0.0, elapsed_sec=2.0, sdk_aiu_total_nano=8_000_000_000,
         steps=[
-            _mkstep("b1", 3.0, 6_000_000_000),
-            _mkstep("b2", 4.0, 8_000_000_000),
+            _mkstep("b1", 3.0, 6_000_000_000, own_nano=1_000_000_000),
+            _mkstep("b2", 4.0, 8_000_000_000, own_nano=2_000_000_000),
         ],
     ))
     import csv as _csv
@@ -663,22 +637,11 @@ def test_build_csv_multiple_workflows_diff_continues_across_workflows(qapp):
     assert [r[0] for r in rows] == ["Type", "workflow", "step", "step", "workflow", "step", "step"]
     assert [r[1] for r in rows] == ["Workflow", "WF_A", "WF_A", "WF_A", "WF_B", "WF_B", "WF_B"]
     assert [r[2] for r in rows] == ["Step", "", "a1", "a2", "", "b1", "b2"]
-    # a1: 累積 2.0, 差分 2.0（最初の Step）
-    assert rows[2][2] == "a1"
-    assert rows[2][9] == "2.000000"
-    assert rows[2][10] == "2.000000"
-    # a2: 累積 5.0, 差分 3.0（5.0 - 2.0）
-    assert rows[3][2] == "a2"
-    assert rows[3][9] == "5.000000"
-    assert rows[3][10] == "3.000000"
-    # b1: 累積 6.0, 差分 1.0（6.0 - 5.0、Workflow 跨ぎで a2 との差分を計算）
-    assert rows[5][2] == "b1"
-    assert rows[5][9] == "6.000000"
-    assert rows[5][10] == "1.000000"
-    # b2: 累積 8.0, 差分 2.0（8.0 - 6.0）
-    assert rows[6][2] == "b2"
-    assert rows[6][9] == "8.000000"
-    assert rows[6][10] == "2.000000"
+    # 実測値は Workflow 跨ぎの累積に影響されない。
+    assert rows[2][9] == "2.000000" and rows[2][10] == "2.000000"
+    assert rows[3][9] == "5.000000" and rows[3][10] == "3.000000"
+    assert rows[5][9] == "6.000000" and rows[5][10] == "1.000000"
+    assert rows[6][9] == "8.000000" and rows[6][10] == "2.000000"
 
 
 def test_build_csv_empty_history():
@@ -701,11 +664,11 @@ def test_build_csv_unknown_values_are_empty():
     import csv as _csv
     # now_monotonic を明示して実時刻に依存させない
     rows = list(_csv.reader(build_csv(s.stats_history, now_monotonic=0.0).splitlines()))
-    # Workflow 行: ElapsedSec=0 (0-0), ElapsedHMS="00:00:00", AiuTotal/AiuDelta は空欄
+    # Workflow 行: ElapsedSec=0 (0-0), ElapsedHMS="00:00:00", AiuTotal/AiuOwn は空欄
     assert rows[1][7] == "0"
     assert rows[1][8] == "00:00:00"
     assert rows[1][9] == "" and rows[1][10] == ""
-    # Step 行: ElapsedSec/ElapsedHMS は空（_mkstep の elapsed_sec=None で計算根拠なし）、AiuTotal/AiuDelta も空欄
+    # Step 行: ElapsedSec/ElapsedHMS は空（_mkstep の elapsed_sec=None で計算根拠なし）、AiuTotal/AiuOwn も空欄
     assert rows[2][7] == "" and rows[2][8] == ""
     assert rows[2][9] == "" and rows[2][10] == ""
 
@@ -746,14 +709,14 @@ def test_build_csv_sanitizes_formula_injection_in_all_text_columns():
             started_at=0.0, finished_at=1.0, elapsed_sec=1.0,
             context_current=None, context_limit=None,
             tool_counts={"=evil_tool": 1}, skill_counts={"=evil_skill": 1},
-            sdk_aiu_total_nano=None,
+            sdk_aiu_total_nano=None, model_counts={"=evil_model": 1},
         )],
     ))
     import csv as _csv
     rows = list(_csv.reader(build_csv(s.stats_history).splitlines()))
     # Workflow 行
     assert rows[1][1].startswith("'=")  # Workflow name
-    assert rows[1][6].startswith("'=")  # Model
+    assert rows[1][6].startswith("'=")  # Model（子のモデル別集計）
     # Tools / Skills は集計後の文字列が ' 始まりに（先頭の "=evil..." を sanitize）
     assert rows[1][11].startswith("'=")  # ToolsTop
     assert rows[1][12].startswith("'=")  # SkillsTop

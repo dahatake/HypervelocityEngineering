@@ -17,6 +17,8 @@
 - [方式3: ワークフローオーケストレーション（HVE CLI Orchestrator）](#方式3-ワークフローオーケストレーションhve-cli-orchestrator)
 - [成果物出力先](#成果物出力先)
 - [DAG 実行の Wave 計画](#dag-実行の-wave-計画)
+- [利用手順（前提・操作・入出力・完了確認・失敗時対応）](#利用手順前提操作入出力完了確認失敗時対応)
+- [カスタマイズ](#カスタマイズ)
 
 ---
 ## 対象読者
@@ -32,7 +34,7 @@
 
 ## 次のステップ
 
-- `original-docs/` からの質問票運用は [original-docs-review.md](./original-docs-review.md) を参照
+- `docs-original/` からの質問票運用は [00-design-doc-ingestion.md](./00-design-doc-ingestion.md) を参照
 - `knowledge/` への統合運用は [km-guide.md](./km-guide.md) を参照
 
 ## 概要（4層構造）
@@ -148,3 +150,39 @@ Wave 4: Step.4
 Wave 5: Step.5.1 ‖ Step.5.2 ‖ Step.5.3 ‖ Step.5.4
 Wave 6: Step.6.1 ‖ Step.6.2 ‖ Step.6.3
 ```
+
+> `hve/workflow_registry.py` の `adoc` 定義（2026-08-07 時点）は、上記 **19 の Agent Step** に加えて
+> 表示用のコンテナ Step（`2` / `3` / `5` / `6`）を持つ。コンテナは Prompt を持たず、
+> Cloud の Issue 上で子 Step をまとめるためのもの。チェーン図の「19 ステップ」はこの Agent Step の数。
+
+---
+
+## 利用手順（前提・操作・入出力・完了確認・失敗時対応）
+
+| 軸 | 内容 |
+|---|---|
+| **前提** | 上の「前提条件」を満たすこと（`hve` CLI 実行可、GitHub Copilot cloud agent 利用可） |
+| **操作** | 方式1〜3 のいずれか。既定は方式2（Issue Template）または方式3（CLI） |
+| **入力** | `target_dirs`（未指定時は全体）/ `exclude_patterns`（既定 `node_modules/,vendor/,dist/,*.lock,__pycache__/`）/ `doc_purpose`（既定 `all`）/ `max_file_lines`（既定 `500`）/ `steps`（未選択時は全 Step） |
+| **出力** | 上の「成果物出力先」の 6 系統。Step ごとの出力先は `hve/workflow_registry.py` の `output_paths`（fanout する Step は `output_paths_template`）が正本。ADOC の Step 2.1〜2.5 と 3.1 は `output_paths` が空で `output_paths_template` 側に出力先を持つ |
+| **完了確認** | `docs-generated/component-index.md`（Step.4）と `doc_purpose` に対応する `docs-generated/guides/` 配下が生成されていること。Cloud ではラベルが `adoc:done` に遷移すること |
+| **失敗時対応** | Wave の途中で止まった場合は依存元 Step の出力が空でないかを確認する（後段は前段の要約だけを読む設計のため、前段が空だと連鎖的に内容が薄くなる）。`max_file_lines` を下げると大規模ファイルの分割サマリーが増える。切り分けは [troubleshooting.md](./troubleshooting.md) |
+
+---
+
+## カスタマイズ
+
+| 変えたいもの | 設定の正本（ここだけを編集する） | 拡張手順 | 回帰検証 |
+|---|---|---|---|
+| Step 構成・依存（Wave 計画）・出力パス | `hve/workflow_registry.py` の `adoc` 定義 | Step を足す場合は `depends_on` を明示して Wave を壊さない。コンテナ Step（`2`/`3`/`5`/`6`）は表示用 | `python -m pytest hve/tests/test_workflow_registry.py hve/tests/test_adoc_template_parity.py -q` |
+| Step 本文テンプレート | `.github/scripts/templates/adoc/` 配下 | CLI/GUI と Cloud で同じテンプレートを使う。片側だけの変更は parity テストで落ちる | `python -m pytest hve/tests/test_adoc_template_parity.py -q` |
+| 各 Agent の振る舞い | `.github/prompts/Doc-*.prompt.md` | 入出力契約は `.github/io-contracts/Doc-*--adoc--*.yaml` と対で更新する | `python -m pytest hve/tests/test_adoc_template_parity.py -q` |
+| 既定の除外パターン・分割閾値・目的 | `hve/__main__.py` の `--exclude-patterns` / `--max-file-lines` / `--doc-purpose` の既定値 | Issue Template の既定値も揃える | `python -m pytest hve/tests/test_workflow_registry.py -q` |
+| Cloud の入力欄 | `.github/ISSUE_TEMPLATE/sourcecode-to-documentation.yml` | 呼び出し先 `.github/workflows/auto-app-documentation-reusable.yml` の `inputs` と対で更新する | Issue Template から 1 度実行して確認 |
+
+**互換性・安全性で壊してはならない境界**
+
+- 出力先は `docs-generated/` に閉じる。既存の `docs/` を上書きしない（分離が設計意図）。
+- 後段 Step は前段の**要約だけ**を読む。生ソースを後段へ渡す変更を入れると Context Window の前提が崩れる。
+- Wave 4（`Step.4` = `Doc-ComponentIndex`）は Wave 3 の全 Step に依存する。依存を落とすと索引が欠ける。
+- `docs-original/` と `knowledge/` は本ワークフローの出力先ではない。書き込まない。

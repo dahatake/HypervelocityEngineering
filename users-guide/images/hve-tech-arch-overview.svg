@@ -40,14 +40,14 @@
   <text class="h" x="770" y="84">③ HVE GUI Orchestrator</text>
   <text x="770" y="106">入口: `python -m hve` / `... gui`</text>
   <text x="770" y="124">実行: ローカル端末 (PySide6)</text>
-  <text x="770" y="142">UI 層: 3-step Wizard + Workbench Pane</text>
+  <text x="770" y="142">UI 層: 2-step Wizard + Workbench Pane</text>
   <text x="770" y="162">エンジン: subprocess → CLI を流用</text>
 
   <!-- Shared engine layer -->
   <rect class="box shared" x="390" y="210" width="680" height="110" rx="6"/>
   <text class="h" x="410" y="234">共有実行エンジン（HVE 独自 Python）</text>
   <text x="410" y="254">hve.orchestrator / dag_planner / dag_executor / runner.StepRunner</text>
-  <text x="410" y="272">workflow_registry (WorkflowDef + StepDef DAG) / agent_loader / skill_resolver</text>
+  <text x="410" y="272">workflow_registry (WorkflowDef + StepDef DAG) / prompt_loader / skill_resolver</text>
   <text x="410" y="290">run_state (resume) / fork_kpi_logger / qa_merger / template_engine</text>
   <text x="410" y="308">並列制御: asyncio.Semaphore(max_parallel) / Fan-out 展開 / Fork-on-Retry</text>
 
@@ -83,7 +83,7 @@
   <rect class="box shared" x="30" y="610" width="1040" height="90" rx="6"/>
   <text class="h" x="50" y="634">HVE 管理: Prompt / Workflow / Skill（リポジトリ内ファイル）</text>
   <text x="50" y="654">.github/prompts/*.prompt.md（Arch-*, Dev-*, QA-*, Doc-*, KnowledgeManager 等）</text>
-  <text x="50" y="672">hve/workflow_registry.py（AAS/AAD-WEB/ASDW-WEB/ABD/ABDV/AAG/AAGD/AKM/AQOD/ADOC/ARD）</text>
+  <text x="50" y="672">hve/workflow_registry.py（ARD/AAS/AAD-WEB/ASDW-WEB/ADFD/ADFDV/AAG/AAGD/AAR/AKM/ADI/ADOC）</text>
   <text x="50" y="690">.github/skills/*/SKILL.md（task-dag-planning / work-artifacts-layout / markdown-query 等）</text>
 
   <!-- Arrows -->

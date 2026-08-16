@@ -1,7 +1,4 @@
 inputs:
-- path: users-guide/01-business-requirement.md
-  required: true
-  kind: static
 - path: docs/company-business-recommendation.md
   required: true
   kind: agent_artifact

@@ -4,14 +4,14 @@
 
 ## 0) モードディスパッチ
 
-本 Agent は 2 つのモードを持ち、複数の workflow / Step で再利用される。Issue body またはプロンプトの指定に基づき分岐し、出力先は Step ごとに異なるため **実行中の Step に対応する Body テンプレート (`templates/{aad-web|akm|aqod}/step-*.md`) の `## 出力` セクションを正とし、Agent 側でパスを推測・変更してはならない**。
+本 Agent は 2 つのモードを持ち、複数の workflow / Step で再利用される。Issue body またはプロンプトの指定に基づき分岐し、出力先は Step ごとに異なるため **実行中の Step に対応する Body テンプレート (`templates/{aad-web|akm|adi}/step-*.md`) の `## 出力` セクションを正とし、Agent 側でパスを推測・変更してはならない**。
 
 | モード | 対応 workflow / Step | 実行セクション | 出力先（Body テンプレート準拠）|
 |--------|------------------------|----------------|---------------------------------------|
 | `doc-consistency-check`（デフォルト）| aad-web Step 3 | セクション 1、5 | `docs/catalog/screen-service-consistency-report.md` |
 | `doc-consistency-check`（デフォルト）| akm Step 2 | セクション 1、5 | (1) レビューレポート判定（出力先未指定）+ (2) `knowledge/business-requirement-document-status.md` 更新 |
-| `original-docs-questionnaire` | aqod Step 1（fan-out: D01〜D21）| セクション 6 | `qa/{key}-original-docs-questionnaire.md` |
-| `original-docs-questionnaire` | aqod Step 2 | セクション 6 | `qa/original-docs-cross-questionnaire.md` |
+| `original-docs-questionnaire` | adi Step 1.1（fan-out: D01〜D21）| セクション 6 | `qa/{key}-original-docs-questionnaire.md` |
+| `original-docs-questionnaire` | adi Step 1.2 | セクション 6 | `qa/original-docs-cross-questionnaire.md` |
 
 - mode が不明な場合は **1回のメッセージで確認** してから実行する。
 
@@ -30,7 +30,7 @@
 - **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
 - **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
 - **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
 - **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
 - **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 
@@ -73,7 +73,7 @@ find {target_scope} -name "*.md" -not -path "*/node_modules/*"
 1. **内容の論理的矛盾**: 同一文書内または文書間で、仕様・前提・制約・状態遷移・数値・責務が食い違っていないか
 2. **内容の一貫性**: 用語、ドメインモデル、API、データモデル、業務ルール、例外条件、非機能要件が一貫しているか
 3. **情報の欠落**: 読者が実装・設計・運用判断を行うために必要な前提、入力、出力、制約、エラー処理、境界条件、未決事項が欠けていないか
-4. **根拠不足・捏造リスク**: 実装・設計文書・knowledge/・original-docs/ に根拠のない具体値や断定が含まれていないか
+4. **根拠不足・捿造リスク**: 実装・設計文書・knowledge/・docs-original/ に根拠のない具体値や断定が含まれていないか
 5. **コード/API/インターフェース整合性**: コード実装、設定、API ドキュメント、設計文書が互いに矛盾していないか
 6. **形式・リンク・フォーマット**: 内部リンク、参照先ファイル、Markdown 構造、docs-output-format 準拠を確認する。ただし、これは補助観点とし、内容上の問題を優先して報告する。
 
@@ -136,27 +136,42 @@ find {target_scope} -name "*.md" -not -path "*/node_modules/*"
 ## 6) Originalドキュメント整合性チェック（質問票作成）
 
 > **mode**: `original-docs-questionnaire`
-> **参照方式**: `original-docs/` 直接参照（copilot-instructions.md §5 準拠）
+> **参照方式**: `docs/original-design-doc-ingest/` の正規化済み入力を参照（copilot-instructions.md §5 準拠）
 
 ### 6.1 入力
-- チェック対象: `original-docs/` 配下の全 Markdown ファイル（`{target_scope}` で絞り込み可、空 = 全体）
-- `{depth}`: `standard`（内容整合性を中心に全カテゴリ）または `lightweight`（矛盾・不明瞭・重大欠落のみ）
-- `{focus_areas}`: 重点観点（任意、例: 「データフロー不整合、冪等性欠落」）
+
+#### adi Step 1.1（fan-out 子）
+- `docs/original-design-doc-ingest/index.json`
+- `docs/original-design-doc-ingest/*/content.md`
+- `template/business-requirement-document-master-list.md` の D01〜D21 分類基準
+- （任意）`knowledge/{{key}}-*.md`
+- `{adi_target_scope}`: `index.json` の `source_path` を基準に候補を絞る対象スコープ（空 = `docs-original/` 全件）。`\\` を `/` へ変換してリポジトリ相対パスへ正規化し、`docs-original/` またはその配下だけを許可する
+- `{adi_depth}`: `standard`（内容整合性を中心に全カテゴリ）または `lightweight`（矛盾・不明瞭・重大欠落のみ）
+- `{adi_focus_areas}`: 重点観点（任意、例: 「データフロー不整合、冪等性欠落」）
+
+#### adi Step 1.2（join）
+- `qa/D01-original-docs-questionnaire.md` 〜 `qa/D21-original-docs-questionnaire.md` の 21 成果物すべて
+
+- `docs-original/` を直接走査してはならない。Step 1.1 の対象選定と本文読解は、`index.json` と正規化済み `content.md` だけで行う。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、用語の一貫性チェックのコンテキストとして参照する:
 - `knowledge/D07-用語集-ドメインモデル定義書.md` — 用語・ドメインモデル
 
 ### 6.2 事前ゲート
-- `original-docs/` が存在しない、またはファイルが 0 件の場合は `status: 失敗` で終了し、理由を報告する。
+- adi Step 1.1: `docs/original-design-doc-ingest/index.json` または `docs/original-design-doc-ingest/*/content.md` が不足している場合は `status: 失敗` で終了し、理由を報告する。
+- adi Step 1.2: `qa/D01-original-docs-questionnaire.md` 〜 `qa/D21-original-docs-questionnaire.md` のいずれかが不足している場合は `status: 失敗` で終了し、欠落ファイル名を報告する。
 
 ### 6.3 処理手順
 
 #### Phase 1: ドキュメント収集・読み取り
 ```bash
-find original-docs/ -name "*.md" -not -path "*/node_modules/*" | sort
+find docs/original-design-doc-ingest -path "*/content.md" | sort
 ```
-- 全ファイルを読み取り、内容をメモリ上に保持する
+- `index.json` に列挙された候補と対応する `content.md` だけを読み取り、内容をメモリ上に保持する
+- `adi_target_scope` を末尾 `/` 付きへ正規化し、`index.json` の `source_path` がその値で前方一致する文書だけを対象にする。`docs-original/` 外へ解決される値は処理せず `status: 失敗` で終了する
+- D01〜D21 の個別 fan-out 子は、`template/business-requirement-document-master-list.md` の `{{key}}` 分類基準に照らして関連文書を選定する
+- `docs-original/` の直接走査・直接読解は行わない
 
 #### Phase 2: 横断分析
 以下の観点で全ドキュメントを横断的に分析する（`depth=lightweight` の場合は ★ のみ）:
@@ -172,7 +187,7 @@ find original-docs/ -name "*.md" -not -path "*/node_modules/*" | sort
 | 7 | **運用設計未定義** | デプロイ戦略、ロールバック手順、ログ設計、監視、アラートの記述なし | minor〜major |
 | 8 | **形式・リンク問題** | リンク切れ、見出し構造、フォーマット不備。ただし内容理解への影響が小さい場合は minor | minor〜major |
 
-- `{focus_areas}` が指定されている場合は、該当する観点に重点を置く
+- `{adi_focus_areas}` が指定されている場合は、該当する観点に重点を置く
 - 形式・リンク問題だけを大量に列挙せず、内容上の矛盾・一貫性欠落・情報欠落を優先して質問化する
 
 #### Phase 3: 重複排除・統合
@@ -180,6 +195,7 @@ find original-docs/ -name "*.md" -not -path "*/node_modules/*" | sort
 - 重複排除キー: `(カテゴリ, 正規化キーワード)` で集約
 - 統合形式: 代表1件 + 対象ファイル配列 + 「同種N件」表記
 - 「対象ドキュメント」フィールドに関連する全ファイル名を列挙する
+- adi Step 1.2 では、21 個の D 別成果物を必ず全件 join し、D 単位の重複・矛盾・横断論点を再統合する
 
 #### Phase 4: 質問票生成
 以下のフォーマットで出力する:
@@ -187,14 +203,15 @@ find original-docs/ -name "*.md" -not -path "*/node_modules/*" | sort
 ```markdown
 # Original ドキュメント質問票
 生成日時: YYYY-MM-DD HH:MM:SS (JST)
-対象スコープ: original-docs/
-分析の深さ: {depth}
-重点観点: {focus_areas}
+対象スコープ: {adi_target_scope}
+分析の深さ: {adi_depth}
+重点観点: {adi_focus_areas}
 
 ## サマリー
 - 総質問数: {N}
 - 重大度別: critical={N} / major={N} / minor={N}
 - カテゴリ別: 矛盾={N} / 不明瞭={N} / 重大な欠落={N} / 一貫性欠落={N} / データ整合性={N} / ベストプラクティス逸脱={N} / 運用設計未定義={N} / 形式・リンク問題={N}
+- 総質問数が 0 の場合も `総質問数: 0` を明記し、その直後に `- 質問なし` を 1 行入れる
 
 ---
 
@@ -220,13 +237,13 @@ find original-docs/ -name "*.md" -not -path "*/node_modules/*" | sort
 6. **過剰な形式指摘防止**: 内容に影響しないリンク・表記・構造問題を過剰に質問化していないか
 
 ### 6.4 成果物保存
-> **aqod workflow 経由実行時は §0 モードディスパッチ表に従う**（aqod Step 1: `qa/{key}-original-docs-questionnaire.md` / aqod Step 2: `qa/original-docs-cross-questionnaire.md`）。以下の `QA-DocConsistency-*.md` 命名は **Issue / ローカル単独実行時のフォールバック** であり、aqod workflow 内では使用しない。
+> **adi workflow 経由実行時は §0 モードディスパッチ表に従う**（adi Step 1.1: `qa/{key}-original-docs-questionnaire.md` / adi Step 1.2: `qa/original-docs-cross-questionnaire.md`）。以下の `QA-DocConsistency-*.md` 命名は **Issue / ローカル単独実行時のフォールバック** であり、adi workflow 内では使用しない。
 
-- Issue 起動時（Issue 番号あり・aqod workflow 外）: `qa/QA-DocConsistency-Issue-<N>.md`
+- Issue 起動時（Issue 番号あり・adi workflow 外）: `qa/QA-DocConsistency-Issue-<N>.md`
 - ローカル実行時（Issue 番号なし）: `qa/QA-DocConsistency-<yyyymmdd-HHMMSS>.md` (JST)
 - `qa/` ディレクトリが存在しない場合は作成する
 - Skill `work-artifacts-layout` §4.1 準拠（delete → create）
-- **HVE Auto-QA が生成する `qa/{run_id}-{step_id}-execution-qa-merged.md` は本 Agent の成果物ではない。** これは HVE 実行補助 QA の回答マージファイルであり、`original-docs/` 直接分析の結果ではない。AQOD 本体成果物は上記 `QA-DocConsistency-*.md` ファイルのみ。
+- **HVE Auto-QA が生成する `qa/{run_id}-{step_id}-execution-qa-merged.md` は本 Agent の成果物ではない。** これは HVE 実行補助 QA の回答マージファイルであり、正規化済み入力に対する本分析結果そのものではない。原本質問票成果物は上記 `QA-DocConsistency-*.md` または Step 別 `qa/*.md` のみ。
 
 ### 6.5 出力（copilot-instructions.md §8 準拠）
 ```

@@ -11,7 +11,7 @@
 - **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
 - **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
 - **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
 - **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
 - **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 
@@ -31,7 +31,7 @@
 - 成果物を `docs/business-requirement.md` に出力する（Step 1 出力 `docs/company-business-requirement.md` とは別ファイル）。
 
 ## 2) 入力（必ず参照）
-- `users-guide/01-business-requirement.md` の **Step.1.2** `<details><summary>Prompt を表示</summary>` 内の Prompt を一次情報として使用する。
+- 本ファイル **§4 Prompt 本文** を出力仕様の Single Source of Truth とする。外部ガイドを読みに行かないこと。
 - 添付ファイルまたは指定資料がある場合は一次情報として最優先で参照する。
 - 本 agent は ARD ワークフロー上では **Step 2（事業分析・対象業務指定済）** に対応する（旧 Step.1.2）。
 - ARD ワークフロー上で Step 1 が先行実行されている場合、`docs/company-business-requirement.md` を **任意の参考コンテキスト** として参照可能（既存の入力ファイル・添付資料を一次情報として優先する）。

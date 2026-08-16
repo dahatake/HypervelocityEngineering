@@ -6,6 +6,8 @@ FR-CLI-34: OrchestrateArgs.to_argv() の delete_local_merged_branch 変換テス
 
 from __future__ import annotations
 
+import dataclasses
+
 from hve.gui.orchestrate_args import OrchestrateArgs
 
 
@@ -84,22 +86,34 @@ class TestAppIdToArgv:
 
 
 class TestDataDeployBootstrapToArgv:
-    def test_bootstrap_values_are_emitted_once(self) -> None:
+    """FR-WF-ASDW-02: 既定値を持つ 5 件は GUI の入力項目ではない。"""
+
+    _FLAGS = (
+        "--data-location",
+        "--data-resource-suffix",
+        "--data-vnet-cidr",
+        "--data-private-endpoint-subnet-cidr",
+        "--data-aci-subnet-cidr",
+        "--data-verify-aci-image",
+    )
+    _FIELDS = (
+        "data_location",
+        "data_resource_suffix",
+        "data_vnet_cidr",
+        "data_private_endpoint_subnet_cidr",
+        "data_aci_subnet_cidr",
+    )
+
+    def test_gui_does_not_emit_bootstrap_flags(self) -> None:
         argv = OrchestrateArgs(
-            workflow="asdw-web",
-            data_location="japaneast",
-            data_resource_suffix="app009",
-            data_vnet_cidr="10.40.0.0/16",
-            data_private_endpoint_subnet_cidr="10.40.1.0/24",
-            data_aci_subnet_cidr="10.40.2.0/24",
+            workflow="asdw-web", resource_group="rg-app009"
         ).to_argv()
 
-        for flag in (
-            "--data-location",
-            "--data-resource-suffix",
-            "--data-vnet-cidr",
-            "--data-private-endpoint-subnet-cidr",
-            "--data-aci-subnet-cidr",
-        ):
-            assert argv.count(flag) == 1
-        assert "--data-verify-aci-image" not in argv
+        assert argv[argv.index("--resource-group") + 1] == "rg-app009"
+        for flag in self._FLAGS:
+            assert flag not in argv
+
+    def test_bootstrap_fields_are_not_declared(self) -> None:
+        names = {f.name for f in dataclasses.fields(OrchestrateArgs)}
+        for name in self._FIELDS:
+            assert name not in names

@@ -72,7 +72,7 @@ class TestGithubCicdToggleVisibility(unittest.TestCase):
         finally:
             page.deleteLater()
 
-    def test_asdw_web_shows_and_preserves_data_deploy_bootstrap_inputs(self) -> None:
+    def test_asdw_web_shows_only_the_resource_group_azure_input(self) -> None:
         _get_app()
         page = OptionsPage()
         try:
@@ -83,36 +83,30 @@ class TestGithubCicdToggleVisibility(unittest.TestCase):
                 for field in box.findChildren(_LabeledField)
                 if field.findChild(QLabel) is not None
             ]
+            self.assertIn("Azure リソースグループ名", titles)
             for title in (
-                "Azure リソースグループ名",
                 "DataDeploy location",
                 "DataDeploy resource suffix",
                 "DataDeploy VNet CIDR",
                 "DataDeploy private endpoint subnet CIDR",
                 "DataDeploy ACI subnet CIDR",
+                "DataDeploy verify ACI image",
             ):
-                self.assertIn(title, titles)
-            self.assertNotIn("DataDeploy verify ACI image", titles)
+                self.assertNotIn(title, titles)
 
             page.c_azure.resource_group.setText("rg-app009")
-            page.c_azure.data_location.setText("japaneast")
-            page.c_azure.data_resource_suffix.setText("app009")
-            page.c_azure.data_vnet_cidr.setText("10.40.0.0/16")
-            page.c_azure.data_private_endpoint_subnet_cidr.setText("10.40.1.0/24")
-            page.c_azure.data_aci_subnet_cidr.setText("10.40.2.0/24")
 
             args = page.build_args_for_workflow("asdw-web")
             argv = args.to_argv()
-            expected = {
-                "--resource-group": "rg-app009",
-                "--data-location": "japaneast",
-                "--data-resource-suffix": "app009",
-                "--data-vnet-cidr": "10.40.0.0/16",
-                "--data-private-endpoint-subnet-cidr": "10.40.1.0/24",
-                "--data-aci-subnet-cidr": "10.40.2.0/24",
-            }
-            for flag, value in expected.items():
-                self.assertEqual(argv[argv.index(flag) + 1], value)
+            self.assertEqual(argv[argv.index("--resource-group") + 1], "rg-app009")
+            for flag in (
+                "--data-location",
+                "--data-resource-suffix",
+                "--data-vnet-cidr",
+                "--data-private-endpoint-subnet-cidr",
+                "--data-aci-subnet-cidr",
+            ):
+                self.assertNotIn(flag, argv)
         finally:
             page.deleteLater()
 
@@ -403,6 +397,7 @@ class TestCicdAuthValidation(unittest.TestCase):
         try:
             page.set_workflows(["asdw-web"], {"asdw-web": "ASDW Web"})
             page.set_selected_steps({"asdw-web": ["3.4"]})
+            page.c3.auto_qa.set_tristate(False)
             page.c10.github_cicd_enabled.setChecked(True)
             ok, msg = page.validate()
             self.assertFalse(ok)
@@ -419,6 +414,7 @@ class TestCicdAuthValidation(unittest.TestCase):
         try:
             page.set_workflows(["asdw-web"], {"asdw-web": "ASDW Web"})
             page.set_selected_steps({"asdw-web": ["3.4"]})
+            page.c3.auto_qa.set_tristate(False)
             page.c10.github_cicd_enabled.setChecked(True)
             ok, msg = page.validate()
             self.assertTrue(ok, msg)
@@ -433,6 +429,7 @@ class TestCicdAuthValidation(unittest.TestCase):
         try:
             page.set_workflows(["asdw-web"], {"asdw-web": "ASDW Web"})
             page.set_selected_steps({"asdw-web": ["3.4"]})
+            page.c3.auto_qa.set_tristate(False)
             page.c10.github_cicd_enabled.setChecked(False)
             ok, msg = page.validate()
             self.assertTrue(ok, msg)

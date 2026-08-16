@@ -5,6 +5,7 @@ Coverage:
   - rebuild_index force=True passes rebuild flag through
   - rebuild_index installs semantic_options into runtime config
   - search_preview returns [] for missing DB and dict rows otherwise
+  - get_index_stats never materialises an index as a side effect (FR-GUI-05)
 """
 from __future__ import annotations
 
@@ -133,3 +134,55 @@ def test_rebuild_index_progress_callback(tmp_path: Path):
     assert len(events) == 2
     assert events[-1][1] == 2  # current
     assert events[-1][2] == 2  # total
+
+
+# ---------------------------------------------------------------------------
+# FR-GUI-05: 統計取得は索引を新規作成してはならない
+# ---------------------------------------------------------------------------
+
+
+def test_get_index_stats_does_not_create_db(tmp_path: Path):
+    """未ビルドの strategy の統計取得が索引 DB を物理生成しないこと。
+
+    GUI は起動時と Strategy 切替時に単一 strategy の統計を取得するため、
+    ここで DB が生成されると「DB 有り / 0 件」の false green になる。
+    """
+    stats = svc.get_index_stats(tmp_path, strategy="heading_recursive")
+
+    db = tmp_path / ".mdq" / "index-ja-jp-heading_recursive.sqlite"
+    assert not db.exists(), "統計取得が索引 DB を新規作成した"
+    assert stats["db_exists"] is False
+    assert stats["files"] == 0
+    assert stats["chunks"] == 0
+    assert stats["strategy"] == "heading_recursive"
+    assert stats["db_path"] == str(db.resolve())
+
+
+def test_get_index_stats_does_not_create_mdq_dir(tmp_path: Path):
+    """索引ディレクトリ自体も統計取得では作らないこと。"""
+    svc.get_index_stats(tmp_path, strategy="heading")
+    assert not (tmp_path / ".mdq").exists()
+
+
+def test_get_index_stats_after_delete_does_not_recreate(tmp_path: Path):
+    """DB 削除直後の統計取得が削除済み索引を復活させないこと。
+
+    GUI の「DB 削除」は削除後に統計を再取得するため、ここで再生成されると
+    削除操作が実質的に無効化される。
+    """
+    _seed_index(tmp_path)
+    db = tmp_path / ".mdq" / "index-ja-jp-heading.sqlite"
+    assert db.exists()
+
+    assert svc.delete_index_db(tmp_path, strategy="heading")["deleted"] is True
+    stats = svc.get_index_stats(tmp_path, strategy="heading")
+
+    assert not db.exists(), "削除直後の統計取得が索引 DB を再生成した"
+    assert stats["db_exists"] is False
+
+
+def test_get_index_stats_missing_matches_all_strategies(tmp_path: Path):
+    """単一取得と一括取得で未ビルド判定が食い違わないこと (FR-MAINT-07)。"""
+    single = svc.get_index_stats(tmp_path, strategy="pageindex")
+    bulk = svc.get_index_stats_all_strategies(tmp_path)["pageindex"]
+    assert single == bulk

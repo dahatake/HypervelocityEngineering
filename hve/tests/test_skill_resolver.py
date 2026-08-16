@@ -59,8 +59,15 @@ class TestSkillResolver(unittest.TestCase):
         self.assertEqual(resolve_skill_alias("KnowledgeManager"), "knowledge-management")
 
     def test_workflow_skill_subpath(self) -> None:
-        subpaths = get_skill_subpaths_for_workflow("aqod")
+        subpaths = get_skill_subpaths_for_workflow("adi")
         self.assertIn("knowledge-lookup", subpaths)
+
+    def test_adi_questionnaire_steps_require_knowledge_lookup(self) -> None:
+        for step_id in ("1.1", "1.2"):
+            required = get_required_skills_for_step(
+                "adi", step_id, step_declared_required=["knowledge-lookup"]
+            )
+            self.assertIn("knowledge-lookup", required)
 
     def test_discover_available_skills_contains_repo_owned_azure_skills(self) -> None:
         skills = discover_available_skills()

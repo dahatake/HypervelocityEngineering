@@ -27,7 +27,10 @@ from PySide6.QtWidgets import QApplication
 from hve.config import SDKConfig
 from hve.console import Console
 from hve.qa_merger import Choice, QADocument, QAMerger, QAQuestion
-from hve.runner import _collect_qa_answers_via_ipc
+from hve.runner import (
+    _collect_qa_answers_via_ipc,
+    _persist_answered_qa_and_dispatch,
+)
 from hve.gui.qa_ipc_manager import QAIpcManager
 
 
@@ -72,7 +75,8 @@ class TestQAIpcFlow(unittest.TestCase):
     def setUp(self) -> None:
         _get_app()
         self._tmp = tempfile.mkdtemp(prefix="hve-qa-ipc-flow-")
-        self.ipc_dir = Path(self._tmp)
+        self.repo_root = Path(self._tmp)
+        self.ipc_dir = self.repo_root / ".hve" / "qa-ipc"
 
     def tearDown(self) -> None:
         import shutil
@@ -127,6 +131,21 @@ class TestQAIpcFlow(unittest.TestCase):
         self.assertIn("raw", result)
         self.assertFalse(result["skip"])
         self.assertIn("1: A", result["raw"])
+
+        dispatched: list[Path] = []
+        output = self.repo_root / "qa" / "gui-answered.md"
+        merged = _persist_answered_qa_and_dispatch(
+            doc=doc,
+            user_answers_raw=result["raw"],
+            use_defaults=result["skip"],
+            output_path=output,
+            workflow_id="aas",
+            dispatcher=dispatched.append,
+        )
+        reparsed = QAMerger.parse_qa_file(output)
+        self.assertIn("A) OK", merged)
+        self.assertEqual(reparsed.questions[0].user_answer, "A) OK")
+        self.assertEqual(dispatched, [output])
 
     def test_other_freetext_round_trip(self) -> None:
         """「その他」の自由記述が IPC を経由して変更されずに返る。"""

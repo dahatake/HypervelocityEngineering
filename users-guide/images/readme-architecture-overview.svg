@@ -37,7 +37,7 @@
   <rect x="44" y="162" width="260" height="92" class="card entry"/>
   <text x="62" y="190" class="label">Issue Template</text>
   <text x="62" y="214" class="body">`.github/ISSUE_TEMPLATE/*.yml`</text>
-  <text x="62" y="234" class="small">11 種のフォームで Web 実行を開始</text>
+  <text x="62" y="234" class="small">10種のフォームでWeb実行を開始</text>
 
   <rect x="44" y="278" width="260" height="92" class="card entry"/>
   <text x="62" y="306" class="label">hve CLI</text>
@@ -45,7 +45,7 @@
   <text x="62" y="350" class="small">ローカル PC から同じ Workflow DAG を実行</text>
 
   <rect x="44" y="394" width="260" height="88" class="card store"/>
-  <text x="62" y="422" class="label">original-docs/</text>
+  <text x="62" y="422" class="label">docs-original/</text>
   <text x="62" y="446" class="body">既存の要求定義・設計原本</text>
 
   <rect x="44" y="506" width="260" height="88" class="card store"/>
@@ -66,15 +66,15 @@
   <text x="390" y="236" class="small">Issue ラベルから対象 Workflow を選択して reusable workflow に振り分け</text>
 
   <rect x="372" y="278" width="520" height="114" class="card workflow"/>
-  <text x="390" y="306" class="label">Workflow registry（11 ID）</text>
-  <text x="390" y="330" class="body">`ard`, `aas`, `aad-web`, `asdw-web`, `abd`, `abdv`</text>
-  <text x="390" y="352" class="body">`aag`, `aagd`, `akm`, `aqod`, `adoc`</text>
+  <text x="390" y="306" class="label">Workflow registry（12 ID）</text>
+  <text x="390" y="330" class="body">`ard`, `aas`, `aad-web`, `asdw-web`, `adfd`, `adfdv`</text>
+  <text x="390" y="352" class="body">`aag`, `aagd`, `aar`, `akm`, `adi`, `adoc`</text>
   <text x="390" y="374" class="small">`aad` / `asdw` は後方互換エイリアス</text>
 
   <rect x="372" y="420" width="250" height="104" class="card store"/>
-  <text x="390" y="448" class="label">AQOD → AKM</text>
-  <text x="390" y="472" class="body">`original-docs/` と `qa/` を循環参照</text>
-  <text x="390" y="494" class="small">質問票生成 → 回答統合 → knowledge 更新</text>
+  <text x="390" y="448" class="label">ADI → AKM</text>
+  <text x="390" y="472" class="body">原本 → 質問票 → knowledge 更新</text>
+  <text x="390" y="494" class="small">ADIはCLI / GUI専用、AKMはCloudにも対応</text>
 
   <rect x="642" y="420" width="250" height="104" class="card store"/>
   <text x="660" y="448" class="label">knowledge/</text>
@@ -146,6 +146,6 @@
   <rect x="756" y="844" width="18" height="18" class="card agent"/><text x="782" y="858" class="body">Prompt</text>
   <rect x="932" y="844" width="18" height="18" class="card output"/><text x="958" y="858" class="body">成果物</text>
   <line x1="110" y1="894" x2="170" y2="894" class="arrow"/><text x="180" y="899" class="body">主経路（入口 → Workflow → 出力）</text>
-  <line x1="540" y1="894" x2="600" y2="894" class="arrow-dash"/><text x="610" y="899" class="body">反復 / 参照（AQOD・AKM・knowledge 連携）</text>
+  <line x1="540" y1="894" x2="600" y2="894" class="arrow-dash"/><text x="610" y="899" class="body">反復 / 参照（ADI・AKM・knowledge 連携）</text>
   <text x="1010" y="899" class="body">読み順: ①入口 → ②オーケストレーション → ③成果物</text>
 </svg>

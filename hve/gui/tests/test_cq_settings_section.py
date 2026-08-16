@@ -64,7 +64,7 @@ def _make_section(repo_root: Path):
 
 @pytest.fixture()
 def indexed_repo(repo: Path) -> Path:
-    """JavaScript と C# はどちらも `regex` パーサなので、パーサ別表示では区別できない。"""
+    """JavaScript と C# はどちらも `tree-sitter` パーサなので、パーサ別表示では区別できない。"""
     from cq import config, indexer, store
 
     (repo / "pkg" / "c.js").write_text(
@@ -317,8 +317,8 @@ class TestLanguageStats:
         rows = self._rows(section)
         assert rows["javascript"][0] == "1"
         assert rows["csharp"][0] == "1"
-        assert "regex" in rows["javascript"][-1]
-        assert "regex" in rows["csharp"][-1]
+        assert "tree-sitter" in rows["javascript"][-1]
+        assert "tree-sitter" in rows["csharp"][-1]
 
     def test_missing_index_leaves_the_table_empty_without_creating_files(
         self, qapp, repo: Path, patched_settings: Path

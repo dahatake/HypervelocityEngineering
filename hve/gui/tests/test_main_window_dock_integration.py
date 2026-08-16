@@ -228,3 +228,22 @@ def test_copilot_dock_without_set_workbench_page_does_not_raise(
 
     win = MainWindow(repo_root=tmp_path)  # AttributeError にならないこと
     win.deleteLater()
+
+
+def test_copilot_dock_can_reach_the_job_interaction_api(main_window) -> None:
+    """FR-GUI-13: Copilot パネルは Workbench 経由でジョブ対話 API へ到達できる。"""
+    page = main_window._page_workbench
+    assert page.job_targets() == []
+    assert page.job_channel_dir("asdw-web") is None
+    assert page.session_work_root() is not None
+    assert main_window._copilot_dock._workbench_page is page
+
+
+def test_main_window_allocates_isolated_job_channels(main_window, tmp_path: Path) -> None:
+    """FR-GUI-13: instance ごとに異なる IPC ディレクトリを払い出して登録する。"""
+    first = main_window._allocate_job_channel("aad-web#APP-001")
+    second = main_window._allocate_job_channel("aad-web#APP-002")
+    assert first != second
+    assert Path(first).is_dir() and Path(second).is_dir()
+    assert main_window._page_workbench.job_channel_dir("aad-web#APP-001") == first
+    assert main_window._page_workbench.job_channel_dir("aad-web#APP-002") == second

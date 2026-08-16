@@ -46,18 +46,22 @@ from .cq_settings_section import CqIndexSection
 from .i18n import available_languages
 from .page_options import (
     _C1Basic,
-    _C3AutoPrompt,
+    _CKnowledgeManagement,
+    _CQaPrompt,
+    _CReviewPrompt,
+    _CSelfImprove,
     _C4WorkIQ,
     _C5IssuePR,
     _C7Connection,
     _C10AppId,
     _C11AKM,
-    _C12AQOD,
+    _C17ADI,
     _C13ADOC,
     _C14ARD,
     _CAgenticRetrieval,
     _CAzure,
     _LabeledField,
+    wire_auto_qa_to_knowledge_management,
 )
 
 
@@ -356,7 +360,10 @@ _CATEGORY_TREE: List[Tuple[str, List[Tuple[str, str]]]] = [
         "一般",
         [
             ("基本設定", "C1"),
-            ("自動プロンプト", "C3"),
+            ("QA (質問票)", "QA"),
+            ("レビュー", "REVIEW"),
+            ("Knowledge Management", "KM"),
+            ("自己改善 (Self Improve)", "SELFIMPROVE"),
             ("Autopilot", "AUTOPILOT"),
             ("言語 / Language", "LANG"),
             ("エクスプローラー", "EXPLORER"),
@@ -372,10 +379,10 @@ _CATEGORY_TREE: List[Tuple[str, List[Tuple[str, str]]]] = [
             ("Work IQ", "C4"),
         ],
     ),
-    # 「ワークフロー固有設定」(C10/C11/C12/C13) は Step 1 右ペインのワークフロー枠で
+    # 「ワークフロー固有設定」(C10/C11/C13/C17) は Step 1 右ペインのワークフロー枠で
     # 編集する設計に統一したため設定画面からは削除。C14 (ARD) は従来通り Step 1 右ペインのみ。
     # `_C10AppId` / `_C11AKM` 等のクラスは OptionsPage が直接インスタンス化するため
-    # import は残置する（`_section_factory` 内の C10〜C13 分岐も維持）。
+    # import は残置する（`_section_factory` 内の C10〜C14/C17 分岐も維持）。
     (
         "skills",
         # スキル名子ノードは hve.gui.skill_sections レジストリから動的に
@@ -481,6 +488,13 @@ class SettingsWindow(QMainWindow):
                 idx = self._stack.addWidget(scroll)
                 self._stack_index_by_key[key] = idx
 
+        # FR-GUI-17: Knowledge Management の活性は `auto_qa` に依存するが、設定画面では
+        # 別ノードのため明示的に配線する（活性判定自体は KM セクションの単一実装）。
+        _qa_section = self._sections.get("QA")
+        _km_section = self._sections.get("KM")
+        if isinstance(_qa_section, _CQaPrompt) and isinstance(_km_section, _CKnowledgeManagement):
+            wire_auto_qa_to_knowledge_management(_qa_section, _km_section)
+
         self._tree.expandAll()
 
         # 既定の選択: 最初のリーフ
@@ -516,8 +530,14 @@ class SettingsWindow(QMainWindow):
     def _build_section_widget(self, key: str) -> QWidget:
         if key == "C1":
             return _C1Basic()
-        if key == "C3":
-            return _C3AutoPrompt()
+        if key == "QA":
+            return _CQaPrompt()
+        if key == "REVIEW":
+            return _CReviewPrompt()
+        if key == "KM":
+            return _CKnowledgeManagement()
+        if key == "SELFIMPROVE":
+            return _CSelfImprove()
         if key == "C4":
             return _C4WorkIQ()
         if key == "C5":
@@ -532,8 +552,8 @@ class SettingsWindow(QMainWindow):
             return _C10AppId()
         if key == "C11":
             return _C11AKM()
-        if key == "C12":
-            return _C12AQOD()
+        if key == "C17":
+            return _C17ADI()
         if key == "C13":
             return _C13ADOC()
         if key == "C14":
@@ -569,16 +589,17 @@ class SettingsWindow(QMainWindow):
         )
 
     def reload_models(self) -> None:
-        """モデルキャッシュ更新後に呼ばれる。C1 セクションのモデル系コンボを再投入する。"""
-        widget = self._sections.get("C1")
-        if widget is None:
-            return
-        fn = getattr(widget, "reload_models", None)
-        if callable(fn):
-            try:
-                fn()
-            except Exception:
-                pass
+        """モデルキャッシュ更新後に呼ばれる。モデル系コンボを持つセクションを再投入する。"""
+        for section_key in ("C1", "KM"):
+            widget = self._sections.get(section_key)
+            if widget is None:
+                continue
+            fn = getattr(widget, "reload_models", None)
+            if callable(fn):
+                try:
+                    fn()
+                except Exception:
+                    pass
 
     def _on_widget_changed(self) -> None:
         from . import settings_apply

@@ -20,7 +20,7 @@ _TEMPLATES_BASE = Path(__file__).resolve().parent.parent / ".github" / "scripts"
 
 # target_files 系ワークフローのデフォルト対象ファイル。
 # ここで指定するパターンは orchestrator 側の glob 展開で評価される。
-# `qa/*.md` は単一階層、`original-docs/*` は直下エントリを既定とする。
+# `qa/*.md` は単一階層、`docs-original/*` は直下エントリを既定とする。
 _DEFAULT_TARGET_FILES: Dict[str, str] = {
     "akm": "qa/*.md",
 }
@@ -70,7 +70,7 @@ _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
     "aag": "AI Agent Design",
     "aagd": "AI Agent Dev & Deploy",
     "akm": "Knowledge Management",
-    "aqod": "Original Docs Review",
+    "adi": "Auto Design-doc Ingestion",
     "adoc": "Source Codeからのドキュメント作成",
     # 後方互換エイリアス
     "aad": "Web App Design",
@@ -88,7 +88,7 @@ _WORKFLOW_PREFIX: Dict[str, str] = {
     "aag": "AAG",
     "aagd": "AAGD",
     "akm": "AKM",
-    "aqod": "AQOD",
+    "adi": "ADI",
     "adoc": "ADOC",
     # 後方互換エイリアス
     "aad": "AAD-WEB",
@@ -436,11 +436,16 @@ def collect_params(wf: WorkflowDef, *, will_create_pr: bool = False) -> dict:
         else:
             params["enable_auto_merge"] = False
 
-    # AQOD 固有パラメータ
-    if wf.id == "aqod":
+    # ADI 固有パラメータ
+    if wf.id == "adi":
+        params["purpose"] = _prompt(
+            "設計書選別の目的（任意）",
+            default="",
+            required=False,
+        )
         params["target_scope"] = _prompt(
-            "対象スコープ（省略時: original-docs/）",
-            default="original-docs/",
+            "対象設計書スコープ（省略時: docs-original/）",
+            default="docs-original/",
             required=False,
         )
         print("\n分析の深さを選択してください:")
@@ -909,10 +914,12 @@ def render_template(
     )
     body = body.replace("{akm_custom_source_dir}", params.get("custom_source_dir", ""))
 
-    # AQOD 固有プレースホルダ
-    body = body.replace("{aqod_target_scope}", params.get("target_scope", "original-docs/"))
-    body = body.replace("{aqod_depth}", params.get("depth", "standard"))
-    body = body.replace("{aqod_focus_areas}", params.get("focus_areas", ""))
+    # ADI 固有プレースホルダ
+    body = body.replace("{adi_target_scope}", params.get("target_scope", "docs-original/"))
+    body = body.replace("{adi_depth}", params.get("depth", "standard"))
+    body = body.replace("{adi_focus_areas}", params.get("focus_areas", ""))
+    # purpose が空のときは目的非依存モードで実行される。
+    body = body.replace("{adi_purpose}", (params.get("purpose", "") or "").strip() or "未指定")
 
     # ARD 固有プレースホルダ（未入力時も placeholder が残らないようにする）
     _ard_company_name = (params.get("company_name", "") or "").strip() or "未指定"

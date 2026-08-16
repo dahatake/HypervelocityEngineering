@@ -8,7 +8,6 @@ Step.2 の Agent Catalog の各 Agent について詳細設計書を作成し、
 - `docs/catalog/service-catalog-matrix.md`
 - `docs/services/SVC-*.md`（関連サービスのみ）
 - `docs/catalog/app-catalog.md`（アプリケーション一覧）
-- `users-guide/08-ai-agent.md`（設計ガイドライン Step 3）
 
 ## 出力
 - `docs/agent/agent-detail-{key}.md`（fan-out 子毎、1 ファイル、`{key}` = `AG-*`。Agent 名はファイル名に含めない）

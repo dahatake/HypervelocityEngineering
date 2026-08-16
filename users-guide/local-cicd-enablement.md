@@ -41,6 +41,8 @@ GUI / CLI Orchestrator は、デプロイ系ワークフロー（例: `asdw-web`
 
 これらは Cloud でのデプロイと**同一の Secrets** です。登録手順は重複を避けるため、[hve-cloud-getting-started.md](./hve-cloud-getting-started.md#3-azure-static-web-apps-デプロイ用-secretsswa-デプロイ時) の Step.4「Azure Static Web Apps デプロイ用 Secrets」を参照してください（GitHub リポジトリへの Secrets 登録手順は Cloud・ローカルで共通です。すでに Cloud 用に設定済みであれば追加作業は不要です）。
 
+Secrets の値をコマンド引数、ワークフローファイル、Issue、PR、ログへ記録してはいけません。OIDC の Federated Credential と GitHub Environment を設定正本とし、生成された各ワークフローではジョブ単位の `permissions:` を必要最小限にします。GitHub Actions の `GITHUB_TOKEN` は既定権限に頼らず、必要な権限だけを明示してください。
+
 ---
 
 ## CI/CD 有効化フロー（GUI / CLI 共通）
@@ -61,6 +63,8 @@ GUI / CLI Orchestrator は既定ではコミット・push を行いません。�
 4. **マージで CI/CD が発火**
 
    多くの生成ワークフローは `on: push:` の `branches: [main]` を含むため、`main` へのマージで自動的に実行されます。push トリガーを持たないワークフローの場合は、次節の手動発火（`workflow_dispatch`）を使用してください。
+
+入力は、対象リポジトリ、登録済みの OIDC Secrets、生成されたワークフローファイルです。出力は GitHub 上の PR と、マージ後または手動発火後の workflow run です。Actions の run が成功し、必要な Azure リソースへ期待どおり反映された時点を完了とします。
 
 ---
 
@@ -94,6 +98,14 @@ GUI / CLI Orchestrator は既定ではコミット・push を行いません。�
 - **ローカル実行中はその場で CI/CD が発火しない**: デプロイステップ実行時点では生成ワークフローがまだリモートの `main` に存在しないため、その場での GitHub Actions 発火は行われません。CI/CD は `main` マージ後に有効化されます（この挙動は「ワークフローはデフォルトブランチに存在する必要がある」という GitHub Actions の仕様に基づく説明です）。
 - **`--create-pr` は自動マージしない**: 前述のとおりマージは手動です。
 - **OIDC Secrets 未登録時はデプロイジョブが失敗**: `azure/login` が認証情報を取得できず失敗します。
+- **権限不足で失敗した場合**: run の失敗ログから不足した GitHub Actions 権限または Azure RBAC を確認し、対象ジョブまたは対象スコープに限定して追加します。リポジトリ全体への書込み権限や Azure の Owner 権限を回避してください。
+
+## HVE カスタマイズと回帰確認
+
+- **設定正本**: 生成後の `.github/workflows/deploy-*.yml` と、各デプロイステップの現行テンプレート／I/O 契約です。値を別の手順書へ複製して管理しません。
+- **拡張手順**: まず既存の workflow を 1 本だけ変更し、必要な `permissions:`、Environment、`runs-on` をジョブ単位で確認します。秘密値は GitHub Secrets または Azure 側の ID 参照だけを使います。
+- **回帰検証**: PR で workflow 構文と既存トリガーを確認し、マージ後は対象 run の成功とデプロイ結果を確認してから次の workflow へ展開します。
+- **互換性**: GUI / CLI の `--create-pr` は PR 作成までです。既存の `push` または `workflow_dispatch` トリガーを削除・変更する場合は、既存の運用手順への影響を要確認とします。
 
 ---
 
@@ -110,3 +122,4 @@ GUI / CLI Orchestrator は既定ではコミット・push を行いません。�
 - [hve-cli-getting-started.md](./hve-cli-getting-started.md) / [hve-gui-getting-started.md](./hve-gui-getting-started.md) — ローカル環境のセットアップ
 - [hve-cloud-getting-started.md](./hve-cloud-getting-started.md) — Azure OIDC Secrets の登録手順
 - [README.md](../README.md) — 全体像
+- [Use GITHUB_TOKEN for authentication in workflows](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token) — `permissions:` による最小権限

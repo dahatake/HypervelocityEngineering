@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1360 880" role="img" aria-labelledby="title desc">
   <title id="title">HVE オーケストレーション データフロー俯瞰（どのファイルがどのワークフローで作られるか）</title>
-  <desc id="desc">タスク=Custom Agent 群を束ねた各ワークフローが入力ファイルを読み、出力ファイルを生成する全体データフロー。左列は knowledge パイプライン（original-docs/ → AQOD → qa/ → AKM → knowledge/D01-D21）、中央は設計→実装パイプライン（ARD → AAS → AAD-WEB/ADFD/AAG → ASDW-WEB/ADFDV/AAGD → ADOC）。上流の成果物ファイルが下流ワークフローの入力になる。knowledge/ は全設計・実装ワークフローが業務コンテキストとして参照する。</desc>
+  <desc id="desc">タスク=Prompt群を束ねた各ワークフローが入力ファイルを読み、出力ファイルを生成する全体データフロー。左列はknowledgeパイプライン（docs-original/ → ADI Step 1.1 / 1.2 → qa/ → AKM → knowledge/D01-D21）、中央は設計→実装パイプライン（ARD → AAS → AAD-WEB/ADFD/AAG → ASDW-WEB/ADFDV/AAGD → ADOC）。上流の成果物ファイルが下流ワークフローの入力になる。knowledge/ は全設計・実装ワークフローが業務コンテキストとして参照する。</desc>
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0 0 L10 5 L0 10 z" fill="#334155"/>
@@ -34,13 +34,13 @@
   <text x="34" y="98" class="lane">knowledge パイプライン</text>
 
   <rect x="36" y="106" width="288" height="40" class="card infile"/>
-  <text x="48" y="124" class="flabel" fill="#0369a1">original-docs/</text>
+  <text x="48" y="124" class="flabel" fill="#0369a1">docs-original/</text>
   <text x="48" y="139" class="small">原本ドキュメント（読み取り専用・手動配置）</text>
 
   <path class="arrow" d="M180 146 L180 166"/>
   <rect x="36" y="168" width="288" height="42" class="card wf"/>
-  <text x="48" y="186" class="wflabel">AQOD</text>
-  <text x="48" y="202" class="small">横断分析 → 質問票生成</text>
+  <text x="48" y="186" class="wflabel">ADI Step 1.1 / 1.2</text>
+  <text x="48" y="202" class="small">D01〜D21 fan-out → 横断join</text>
 
   <path class="arrow" d="M180 210 L180 230"/>
   <rect x="36" y="232" width="288" height="42" class="card infile"/>
@@ -50,7 +50,7 @@
   <path class="arrow" d="M180 274 L180 294"/>
   <rect x="36" y="296" width="288" height="42" class="card wf"/>
   <text x="48" y="314" class="wflabel">AKM（KnowledgeManager）</text>
-  <text x="48" y="330" class="small">qa/ + original-docs/ を読み込み生成</text>
+  <text x="48" y="330" class="small">qa/ + docs-original/ を読み込み生成</text>
 
   <path class="arrow" d="M180 338 L180 358"/>
   <rect x="36" y="360" width="288" height="62" class="card know"/>
@@ -153,12 +153,12 @@
   <rect x="20" y="700" width="1316" height="158" class="panel"/>
   <text x="34" y="724" class="lane">凡例・読み方</text>
   <rect x="36" y="736" width="22" height="16" class="card wf"/><text x="66" y="749" class="small">ワークフロー（= Custom Agent タスク群。入力ファイルを読み、出力ファイルを生成）</text>
-  <rect x="36" y="760" width="22" height="16" class="card infile"/><text x="66" y="773" class="small">入力 / 中間ファイル（original-docs/ は読み取り専用、qa/ は質問票・回答）</text>
+  <rect x="36" y="760" width="22" height="16" class="card infile"/><text x="66" y="773" class="small">入力 / 中間ファイル（docs-original/ は読み取り専用、qa/ は質問票・回答）</text>
   <rect x="36" y="784" width="22" height="16" class="card know"/><text x="66" y="797" class="small">knowledge/（確定済み業務コンテキスト。全設計・実装 WF が参照）</text>
   <rect x="36" y="808" width="22" height="16" class="card outfile"/><text x="66" y="821" class="small">生成される成果物ファイル / ディレクトリ（docs/ ・ src/ ・ docs-generated/ ・ Azure）</text>
   <line x1="40" y1="844" x2="62" y2="844" class="arrow"/><text x="66" y="848" class="small">データフロー（上流ファイル → 下流ワークフロー → 下流ファイル）</text>
   <line x1="640" y1="844" x2="662" y2="844" class="ref"/><text x="666" y="848" class="small">knowledge/ の参照（業務コンテキスト注入）</text>
-  <text x="640" y="773" class="small">各ワークフロー単体の入出力詳細は users-guide/images/orchestration-task-data-flow-&lt;id&gt;.svg（11 枚）を参照。</text>
+  <text x="640" y="773" class="small">各ワークフローの入出力詳細は users-guide の対応ガイドと workflow-reference.md を参照。</text>
   <text x="640" y="797" class="small">標準の進行順: ARD → AAS → AAD-WEB / ADFD / AAG → ASDW-WEB / ADFDV / AAGD（ADOC は実装後に逆方向で文書化）。</text>
   <text x="640" y="821" class="small">CLI / GUI は DAGExecutor で実行、Cloud は Sub-Issue + reusable workflow で同じ DAG を展開。</text>
 </svg>

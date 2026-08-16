@@ -104,7 +104,7 @@ jobs:
 
             if [ "${xref_count}" = "1" ]; then
               xref_issue=$(printf '%s\n' "${xref_unique}" | head -1 || true)
-              managed_issue=$(gh api "/repos/${REPO}/issues/${xref_issue}" 2>/dev/null | python3 -c "import json, sys; issue = json.load(sys.stdin); title = issue.get('title', ''); labels = [l.get('name', '') for l in issue.get('labels', [])]; prefixes = ('aas','aad-web','asdw-web','adfd','adfdv','aag','aagd','akm','adoc','aqod','aad','asdw'); title_tokens = ('[AAS]','[AAD-WEB]','[ASDW-WEB]','[ADFD]','[ADFDV]','[AAG]','[AAGD]','[AKM]','[ADOC]','[AQOD]','[AAD]','[ASDW]'); print('true' if (title.startswith(title_tokens) or any(any(lbl.startswith(f'{p}:') for p in prefixes) for lbl in labels)) else 'false')" 2>/dev/null || echo 'false')
+              managed_issue=$(gh api "/repos/${REPO}/issues/${xref_issue}" 2>/dev/null | python3 -c "import json, sys; issue = json.load(sys.stdin); title = issue.get('title', ''); labels = [l.get('name', '') for l in issue.get('labels', [])]; prefixes = ('aas','aad-web','asdw-web','adfd','adfdv','aag','aagd','akm','adoc','aad','asdw'); title_tokens = ('[AAS]','[AAD-WEB]','[ASDW-WEB]','[ADFD]','[ADFDV]','[AAG]','[AAGD]','[AKM]','[ADOC]','[AAD]','[ASDW]'); print('true' if (title.startswith(title_tokens) or any(any(lbl.startswith(f'{p}:') for p in prefixes) for lbl in labels)) else 'false')" 2>/dev/null || echo 'false')
               if [ "${managed_issue}" = "true" ]; then
                 issue_number="${xref_issue}"
                 echo "PR #${PR_NUMBER}: Method 5 (PR timeline cross-referenced) から Issue #${issue_number} を解決しました。"
@@ -140,7 +140,7 @@ jobs:
           title = issue.get('title', '')
           labels = [l.get('name', '') for l in issue.get('labels', [])]
 
-          # 全12系列: aas, aad, aad-web, asdw, asdw-web, adfd, adfdv, aag, aagd, akm, adoc, aqod
+            # 管理系列: aas, aad, aad-web, asdw, asdw-web, adfd, adfdv, aag, aagd, akm, adoc
           title_prefix_map = [
               ('[AAD-WEB]', 'aad-web'),
               ('[ASDW-WEB]', 'asdw-web'),
@@ -151,7 +151,6 @@ jobs:
               ('[AAGD]', 'aagd'),
               ('[AKM]', 'akm'),
               ('[ADOC]', 'adoc'),
-              ('[AQOD]', 'aqod'),
               # 後方互換: 旧プレフィックス [AAD]/[ASDW] は -web 系列にマップ
               ('[AAD]', 'aad-web'),
               ('[ASDW]', 'asdw-web'),
@@ -164,7 +163,7 @@ jobs:
                   break
 
           if not resolved:
-              candidates = ['aas', 'aad-web', 'asdw-web', 'adfd', 'adfdv', 'aag', 'aagd', 'akm', 'aqod', 'adoc', 'aad', 'asdw']
+              candidates = ['aas', 'aad-web', 'asdw-web', 'adfd', 'adfdv', 'aag', 'aagd', 'akm', 'adoc', 'aad', 'asdw']
               for cand in candidates:
                   if any(lbl.startswith(f'{cand}:') for lbl in labels):
                       if cand == 'aad':

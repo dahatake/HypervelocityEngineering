@@ -918,7 +918,7 @@ class TestDAGExecutorStepTimeout(unittest.TestCase):
 class TestOrchestratorWiresStepTimeout(unittest.TestCase):
     """orchestrator が config.step_timeout_seconds を DAGExecutor へ配線することを
     ソース検査で確認する（重い run_workflow のモック実行を避ける軽量検証。
-    既存 test_aqod_qa_prompt.py の inspect.getsource パターンに倣う）。"""
+    既存の inspect.getsource 契約テストパターンに倣う）。"""
 
     def test_run_workflow_passes_step_timeout_to_executor(self) -> None:
         import inspect

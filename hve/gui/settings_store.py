@@ -51,9 +51,16 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "run_id_timezone": "Asia/Tokyo",
             # C2
             "max_parallel": 15,
-            # C3 自動プロンプト
-            "auto_qa": False,
+            # QA (質問票) / Knowledge Management / レビュー
+            # auto_qa は必須選択のため既定は未選択（"" | "on" | "off"）。
+            "auto_qa": "",
             "qa_answer_mode": "autopilot",  # "autopilot" | "user"（auto_qa=True 時のみ有効）
+            # QA 回答を knowledge/ へバックグラウンドでマージするか（FR-QA-05、既定: 無効）。
+            "qa_akm_background_merge": False,
+            # QA 起点 AKM 子実行専用の実行品質（空 = メイン設定を継承）。
+            "akm_model": "",
+            "akm_reasoning_effort": "",
+            "akm_context_tier": "",
             "auto_contents_review": False,
             "auto_coding_agent_review": False,
             "auto_coding_agent_review_auto_approval": False,
@@ -94,7 +101,7 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "context_max_chars": 0,
             # C16
             "self_improve": "",
-            # self_improve_* は _SECTION_FIELDS["C3"] 登録済みだが defaults 未登録だった。
+            # self_improve_* は _SECTION_FIELDS["SELFIMPROVE"] 登録済みだが defaults 未登録だった。
             # _coerce(default=None) フォールバックでの型喪失を防ぐため明示既定値を置く
             # (page_options の QSpinBox=3 / QLineEdit="" / QPlainTextEdit="" と整合)。
             "self_improve_max_iterations": 3,
@@ -139,9 +146,11 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "target_files": "",
             "force_refresh": "",  # tri-state
             "custom_source_dir": "",
-            # C12 (AQOD) 既定値（depth は既存）。
+            # ADI で再利用する既定値（depth は既存）。
             "target_scope": "",
             "focus_areas": "",
+            # C17 (ADI) 既定値。
+            "purpose": "",
             # C13 (ADOC) 既定値（exclude_patterns/doc_purpose/max_file_lines は既存）。
             "target_dirs": "",
             # C14 (ARD) 既定値。
@@ -154,20 +163,15 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "target_recommendation_id": "",
             "attached_docs": "",
             # AZURE セクション既定値。
-            # FR-GUI-03: ASDW-WEB Step 1.3 の required_params（FR-DAG-07）も永続化する。
+            # FR-GUI-03: 永続化するのは `default_params` を持たない必須パラメータだけ。
             # 既定値そのものはレジストリ側 `StepDef.default_params` が正本であり、
             # ここでは空文字を置いて二重管理を避ける。
             "resource_group": "",
-            "data_location": "",
-            "data_resource_suffix": "",
-            "data_vnet_cidr": "",
-            "data_private_endpoint_subnet_cidr": "",
-            "data_aci_subnet_cidr": "",
             # ADOC 既定
             "doc_purpose": "all",
             "max_file_lines": 0,
             "exclude_patterns": "node_modules/,vendor/,dist/,*.lock,__pycache__/",
-            # AQOD 既定
+            # 既存キー互換の既定値
             "depth": "standard",
             # tdd_max_retries は設定パネル送り
             "tdd_max_retries": 0,
@@ -189,7 +193,8 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "tool_search": True,
             # 上記を有効にしたときのランキング実装（FR-TS-01）。
             # "sdk"（既定）: SDK 組み込み。"hve": HVE 実装へ差し替え、統計も収集する。
-            "tool_search_ranking": "sdk",            # Fleet mode（GitHub Copilot SDK 1.0.0+）。既定 OFF。
+            "tool_search_ranking": "sdk",
+            # Fleet mode（GitHub Copilot SDK 1.0.0+）。既定 OFF。
             # SPLIT_REQUIRED ではなく、複数 Step の DAG wave を対象にする。
             "fleet_mode_enabled": "",
             # Cloud Sessions（GitHub Copilot SDK 1.0.0+）。既定 OFF。
@@ -225,7 +230,7 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             # ";" 区切りのリポジトリ相対 POSIX パスリスト。未存在のものは設定保存時と
             # 起動時に mkdir(parents=True, exist_ok=True) で自動作成する（.gitkeep は作らない）。
             # 既定値は本リポジトリ標準成果物ディレクトリ群。
-            "explorer_roots": "docs;docs-generated;knowledge;original-docs;qa;users-guide",
+            "explorer_roots": "docs;docs-generated;docs-original;knowledge;qa;users-guide",
             # 全 Dock レイアウトの永続化（QMainWindow.saveState() の base64 文字列）。
             # 空文字列 = 未保存（既定レイアウトで起動）。
             "workbench_layout_state": "",
@@ -284,7 +289,17 @@ def defaults() -> Dict[str, Dict[str, Any]]:
 
 # Q9=b: 廃止済みキー。読み込み時に検出し、ファイルから削除して再保存する。
 _OBSOLETE_KEYS: Dict[str, set[str]] = {
-    "options": {"mcp_config", "workiq_tenant_id"},
+    "options": {
+        "mcp_config",
+        "workiq_tenant_id",
+        # FR-WF-ASDW-02: GUI 入力欄を廃止した ASDW-WEB Step 1.3 の既定値付きパラメータ。
+        # 保存値を残すと UI から修正できないままレジストリ既定値を上書きし続ける。
+        "data_location",
+        "data_resource_suffix",
+        "data_vnet_cidr",
+        "data_private_endpoint_subnet_cidr",
+        "data_aci_subnet_cidr",
+    },
 }
 
 # リネーム済みキー: 旧キー名 -> 新キー名。読み込み時に旧キー値を新キーへ移行し、
@@ -333,6 +348,31 @@ def _migrate_renamed_keys(cp: configparser.ConfigParser) -> bool:
                 cp[section][new_key] = cp[section][old_key]
             del cp[section][old_key]
             changed = True
+    return changed
+
+
+def _migrate_legacy_explorer_roots(cp: configparser.ConfigParser) -> bool:
+    """旧ルート ``original-docs`` を ``docs-original`` へ置換する。"""
+    if "options" not in cp:
+        return False
+
+    options = cp["options"]
+    raw = options.get("explorer_roots")
+    if raw is None:
+        return False
+
+    migrated: list[str] = []
+    changed = False
+    for token in raw.split(";"):
+        normalized = token.strip().replace("\\", "/").rstrip("/")
+        if normalized == "original-docs":
+            migrated.append("docs-original")
+            changed = True
+        else:
+            migrated.append(token)
+
+    if changed:
+        options["explorer_roots"] = ";".join(migrated)
     return changed
 
 
@@ -401,6 +441,8 @@ def load() -> Dict[str, Dict[str, Any]]:
     if _migrate_obsolete_keys(cp):
         changed = True
     if _migrate_renamed_keys(cp):
+        changed = True
+    if _migrate_legacy_explorer_roots(cp):
         changed = True
     if _migrate_self_improve_tristate(cp):
         changed = True

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Callable, Dict, Optional, Sequence
@@ -11,6 +13,11 @@ try:
     from .split_fork import SubIssueDef, make_subtask_work_subdir
 except ImportError:  # pragma: no cover
     from split_fork import SubIssueDef, make_subtask_work_subdir  # type: ignore[no-redef]
+
+try:
+    from .runtime_observability import extract_usage_credit_fields
+except ImportError:  # pragma: no cover
+    from runtime_observability import extract_usage_credit_fields  # type: ignore[no-redef]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -72,6 +79,15 @@ class FleetEventCollector:
     表示・帰属は通常ステップ実行（runner.py の _handle_session_event）と同じ
     console メソッド／verbosity ゲートに揃える。worker 判別のため、転送中だけ
     console の行帰属 ContextVar に worker ラベルを設定する。
+
+    FR-RTO-07: ``step_ids`` （当該 Wave の Step 集合）が与えられた場合、sub-agent を
+    起動する tool call の引数を当該集合へ照合し、一意に定まるときだけ
+    ``tool_call_id → step_id`` の対応を記録する。以降、``parent_tool_call_id`` を
+    持つ worker の ``assistant.usage`` / ``tool.execution_start`` を当該 Step へ帰属させる。
+    一意に定まらない場合は Wave 内のいずれの Step へも割り当てない（AI Credit は
+    ``step_id=""`` で Workflow 累積にのみ計上し、tool は発火しない）。
+    ``session.usage_info`` / ``skill.invoked`` は SDK が ``parent_tool_call_id`` を
+    付与しないため、Context と Skill は帰属不能のままとなる。
     """
 
     running: Dict[str, str] = field(default_factory=dict)
@@ -79,6 +95,10 @@ class FleetEventCollector:
     failed: Dict[str, str] = field(default_factory=dict)
     console: Any = None
     wave_index: int = 0
+    # FR-RTO-07: 当該 Wave の Step 集合。worker と Step の対応を照合する対象。
+    step_ids: Sequence[str] = ()
+    # sub-agent 起動 tool_call_id -> 一意に解決できた step_id。
+    _worker_step: Dict[str, str] = field(default_factory=dict, repr=False)
 
     @property
     def has_failed(self) -> bool:
@@ -128,6 +148,7 @@ class FleetEventCollector:
             label = self._worker_label(data)
             tool_name = _get(data, "tool_name", "toolName", "name") or "unknown"
             self._forward(label, lambda c: c.tool(str(tool_name), label))
+            self._on_tool_execution_start(data, str(tool_name))
             return
 
         if etype == "assistant.message":
@@ -145,6 +166,81 @@ class FleetEventCollector:
                 label = self._worker_label(data)
                 self._forward(label, lambda c: c.stream_token(label, str(token)))
             return
+
+        if etype == "assistant.usage":
+            self._emit_usage_credit(data)
+            return
+
+    def _on_tool_execution_start(self, data: Any, tool_name: str) -> None:
+        """tool 実行開始イベントを Step 解決と ``tool_invoked`` 発火へ振り分ける。
+
+        親ターンが sub-agent を起動する tool call は、後続の ``subagent.started`` と
+        同じ ``tool_call_id`` を持つ。その引数には担当 Step が含まれ得るため、
+        Wave の Step 集合へ一意に照合できた場合だけ対応を記録する。
+        """
+        parent_id = _get(data, "parent_tool_call_id", "parentToolCallId")
+        if parent_id is None:
+            tool_call_id = _get(data, "tool_call_id", "toolCallId")
+            if tool_call_id is not None:
+                step_id = self._resolve_step_from_arguments(_get(data, "arguments"))
+                if step_id:
+                    self._worker_step[str(tool_call_id)] = step_id
+            return
+        # worker 自身の tool 呼び出し。解決済みのときだけ Step へ帰属させる。
+        step_id = self._worker_step.get(str(parent_id))
+        if not step_id:
+            # 帰属不能の事実だけを記録する（FR-RTO-04: 引数本文は出さない）。
+            _LOGGER.debug(
+                "fleet worker step unresolved (wave=%s, parent_tool_call_id=%s)",
+                self.wave_index,
+                parent_id,
+            )
+            return
+        if self.console is None:
+            return
+        try:
+            self.console.stats_event("tool_invoked", step_id=step_id, tool_name=tool_name)
+        except Exception:
+            _LOGGER.debug("fleet tool_invoked emit failed", exc_info=True)
+
+    def _resolve_step_from_arguments(self, arguments: Any) -> Optional[str]:
+        """tool 引数から Wave 内の Step を一意に解決する。一意でなければ ``None``。
+
+        FR-RTO-04: 引数本文は照合にのみ使い、観測イベントへ保存しない。
+        """
+        if not self.step_ids or arguments is None:
+            return None
+        try:
+            text = arguments if isinstance(arguments, str) else json.dumps(arguments, ensure_ascii=False, default=str)
+        except Exception:
+            text = str(arguments)
+        # Fleet prompt は `### task-NNN: Step.<step_id>` 形式で Step を提示する。
+        # 前方一致の誤判定（`Step.2` が `Step.2/APP-001` へ一致）を避けるため境界を要求する。
+        matched = [
+            step_id
+            for step_id in self.step_ids
+            if re.search(re.escape(f"Step.{step_id}") + r"(?![\w./#-])", text)
+        ]
+        return matched[0] if len(matched) == 1 else None
+
+    def _emit_usage_credit(self, data: Any) -> None:
+        """Fleet worker の AI Credit 消費を計上する（FR-RTO-07）。
+
+        worker と Step の対応を Wave の Step 集合へ一意に解決できた場合は当該 Step へ、
+        解決できない場合は ``step_id=""`` で発火する（Workflow 累積にのみ計上）。
+        """
+        console = self.console
+        if console is None:
+            return
+        fields = extract_usage_credit_fields(data)
+        if fields is None:
+            return
+        parent_id = _get(data, "parent_tool_call_id", "parentToolCallId")
+        step_id = self._worker_step.get(str(parent_id)) if parent_id is not None else None
+        try:
+            console.stats_event("usage_credit", step_id=step_id or "", **fields)
+        except Exception:
+            _LOGGER.debug("fleet usage_credit emit failed", exc_info=True)
 
     def _worker_label(self, data: Any) -> str:
         """作業イベントの worker ラベル（agent 表示名）を解決する。

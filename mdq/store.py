@@ -32,6 +32,20 @@ def db_path_for(lang: str = "ja-jp", strategy: str = "heading") -> Path:
     safe_strategy = _strat.normalize(strategy)
     return _DB_DIR / f"index-{safe_lang}-{safe_strategy}.sqlite"
 
+
+def graphrag_dir_for(lang: str = "ja-jp") -> Path:
+    """Return ``.mdq/graphrag-<lang>/``.
+
+    The ``graphrag`` strategy stores its index outside SQLite, so this is the
+    single source of truth for its index location (used by both the CLI and
+    the GUI). Like :func:`db_path_for` the path is relative and ``lang`` is
+    validated against the known allow-list.
+    """
+    from . import tokenize as _tok
+
+    return _DB_DIR / f"graphrag-{_tok.normalize(lang)}"
+
+
 # Schema version - bump whenever the migration code adds/changes columns
 # or changes chunk_id derivation (forcing a rebuild).
 # v1: introduced part_index / part_total columns.

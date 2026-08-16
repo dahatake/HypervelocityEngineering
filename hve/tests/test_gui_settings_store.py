@@ -25,14 +25,14 @@ class TestSettingsStore(unittest.TestCase):
                 s = settings_store.defaults()
                 s["options"]["model"] = "claude-opus-4.7"
                 s["options"]["max_parallel"] = 8
-                s["options"]["auto_qa"] = True
+                s["options"]["auto_qa"] = "on"
                 s["options"]["timeout"] = 12345.0
                 settings_store.save(s)
                 self.assertTrue(p.exists())
                 loaded = settings_store.load()
                 self.assertEqual(loaded["options"]["model"], "claude-opus-4.7")
                 self.assertEqual(loaded["options"]["max_parallel"], 8)
-                self.assertIs(loaded["options"]["auto_qa"], True)
+                self.assertEqual(loaded["options"]["auto_qa"], "on")
                 self.assertAlmostEqual(loaded["options"]["timeout"], 12345.0)
 
     def test_corrupt_file_falls_back_to_defaults(self) -> None:

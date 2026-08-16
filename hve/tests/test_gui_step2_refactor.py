@@ -47,7 +47,7 @@ def test_aas_shows_only_notice(qapp):
     assert page._aas_notice is not None
     assert page._aas_notice.isVisible()
     # 他のカテゴリ枠は全て非表示
-    for cat_key in ("C4", "C10", "C11", "C12", "C13", "C14"):
+    for cat_key in ("C4", "C10", "C11", "C13", "C14", "C17"):
         g = page._category_groups.get(cat_key)
         if g is not None:
             assert not g.isVisible(), f"{cat_key} should be hidden for aas"
@@ -66,11 +66,12 @@ def test_workiq_draft_does_not_override_existing_true(qapp):
     assert args.workiq is True
 
 
-def test_aqod_depth_choices_are_japanese(qapp):
+def test_adi_depth_choices_are_japanese(qapp):
     from hve.gui.page_options import OptionsPage
 
     page = OptionsPage()
-    items = [page.c12.depth.itemText(i) for i in range(page.c12.depth.count())]
+    depth = page.c17.analysis_depth
+    items = [depth.itemText(i) for i in range(depth.count())]
     assert any("標準" in t and "standard" in t for t in items)
     assert any("軽量" in t and "lightweight" in t for t in items)
 
@@ -106,7 +107,7 @@ def test_common_additional_prompt_visible_for_all(qapp):
 
     page = OptionsPage()
     page.show()
-    for wf in ("ard", "akm", "aqod", "adoc", "aad-web", "asdw-web", "adfd", "adfdv"):
+    for wf in ("ard", "akm", "adi", "adoc", "aad-web", "asdw-web", "adfd", "adfdv"):
         page.set_workflows([wf], {wf: wf})
         titles = _visible_field_titles(page)
         assert "追加プロンプト" in titles, f"missing in {wf}"
@@ -124,12 +125,13 @@ def test_cxx_prefix_removed_from_groups(qapp):
 
 
 def test_additional_prompt_pinned_top_for_all_workflows(qapp):
-    """C3（追加プロンプト）が `_groups_layout` の先頭に常時固定されることを検証する。
+    """C3（共通設定）が `_groups_layout` の先頭に常時固定されることを検証する。
 
     全ワークフロー（`aas` を含む）に対して:
       - C3 カテゴリ枠が可視
       - `_groups_layout` の index 0 が C3
-      - C3 内の `_LabeledField` のうち「追加プロンプト」のみが可視
+      - C3 内の `_LabeledField` のうち FR-GUI-20 が規定する 6 項目のみが
+        規定順で可視
     """
     from hve.gui.page_options import OptionsPage, _LabeledField
 
@@ -137,7 +139,7 @@ def test_additional_prompt_pinned_top_for_all_workflows(qapp):
     page.show()
     workflows = (
         "ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv",
-        "aag", "aagd", "akm", "aqod", "adoc",
+        "aag", "aagd", "akm", "adi", "adoc",
     )
     for wf in workflows:
         page.set_workflows([wf], {wf: wf})
@@ -146,7 +148,6 @@ def test_additional_prompt_pinned_top_for_all_workflows(qapp):
         assert page._groups_layout.indexOf(c3) == 0, (
             f"C3 not at top in {wf} (index={page._groups_layout.indexOf(c3)})"
         )
-        # C3 内の可視 LabeledField は「追加プロンプト」のみ
         visible_c3_titles = []
         for lf in page.c3.findChildren(_LabeledField):
             if not lf.isVisible():
@@ -155,6 +156,11 @@ def test_additional_prompt_pinned_top_for_all_workflows(qapp):
             if lbl is None:
                 continue
             visible_c3_titles.append(lbl.text().split("  *")[0].strip())
-        assert visible_c3_titles == ["追加プロンプト"], (
+        assert visible_c3_titles == [
+            "QA (質問票) 自動投入", "QA (質問票) 回答モード",
+            "QA (質問票) を Knowledge Management へバックグラウンドでマージする",
+            "Knowledge Management 用モデル", "Knowledge Management 用コンテキスト階層",
+            "追加プロンプト",
+        ], (
             f"unexpected visible fields in C3 for {wf}: {visible_c3_titles}"
         )

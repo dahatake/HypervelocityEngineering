@@ -71,6 +71,8 @@ sdkconfig_internal_fields:
   - qa_gui_input_timeout_seconds    # GUI QA回答タイムアウト
   - qa_ipc_dir                      # GUI QA IPC directory
   - qa_reasoning_effort             # QA sub-session reasoning設定
+  - akm_reasoning_effort            # QA 起点 AKM 子実行の reasoning設定（FR-QA-04。Cloud に対応概念なし）
+  - akm_context_tier                # QA 起点 AKM 子実行の context tier（FR-QA-04。Cloud に対応概念なし）
   - quiet                           # 出力抑制（レガシー互換）
   - repo                            # リポジトリ指定（インフラ）
   - require_input_artifacts         # strict モード（実行時内部）
@@ -116,10 +118,10 @@ issue_form_internal_fields:
   - app_ids                 # ワークフロー固有パラメータ（APP-ID 指定）
   - job_ids                 # dataflow-dev.yml 固有パラメータ（BJ-* ジョブ ID 指定）
   - confirmation            # self-improve.yml UI 確認ゲート
-  - depth                   # AQOD 専用パラメータ（original-docs-review.yml）
+  - depth                   # ADI 専用パラメータ（CLI / GUI）
   - doc_purpose             # ADOC 専用パラメータ（sourcecode-to-documentation.yml）
   - exclude_patterns        # ADOC 専用パラメータ
-  - focus_areas             # AQOD 専用パラメータ
+  - focus_areas             # ADI 専用パラメータ
   - force_refresh           # AKM 専用パラメータ（knowledge-management.yml）
   - improvement_targets     # self-improve.yml 専用
   - max_file_lines          # ADOC 専用パラメータ
@@ -130,7 +132,7 @@ issue_form_internal_fields:
   - steps                   # ワークフロー固有パラメータ（ステップ選択）
   - target_dirs             # ADOC 専用パラメータ
   - target_files            # AKM 専用パラメータ
-  - target_scope            # AQOD / self-improve 専用パラメータ
+  - target_scope            # ADI / self-improve 専用パラメータ
   - task_goal               # self-improve.yml 専用
   - usecase_id              # ワークフロー固有パラメータ（APP-ID 系）
 
@@ -159,6 +161,27 @@ options:
     hve_cli_flag: "--qa-model"
     applies_to: common
     notes: "QA 用モデル（省略時は model を継承）。config.py:116, __main__.py:605"
+
+  - option_key: akm_model
+    issue_form_field_id: akm_model
+    hve_config_attr: akm_model
+    hve_cli_flag: "--akm-model"
+    applies_to: common
+    notes: >-
+      QA 起点 AKM 子実行専用モデル（FR-QA-04 / FR-CLOUD-25。省略時は model を継承）。
+      Issue Form は knowledge-management.yml を除く 9 テンプレートに持つ（AKM から AKM を
+      再帰起動しないため）。qa_akm_dispatch.QaAkmCoordinator._build_argv だけが適用する。
+
+  - option_key: qa_akm_background_merge
+    issue_form_field_id: enable_qa_akm_merge
+    hve_config_attr: qa_akm_background_merge
+    hve_cli_flag: "--qa-akm-background-merge"
+    applies_to: common
+    notes: >-
+      QA 回答を knowledge/ へバックグラウンドでマージするかどうか（FR-QA-05 / FR-GUI-20 /
+      FR-CLOUD-26。既定は無効）。Issue Form は knowledge-management.yml を除く 9 テンプレート
+      に持つ。CLI / GUI は orchestrator._should_enable_qa_akm_dispatch、Cloud は
+      auto-issue-qa-ready-transition.yml の save-qa-answer が出力する sync_required だけが判定する。
 
   - option_key: branch
     issue_form_field_id: branch
@@ -228,7 +251,7 @@ options:
     hve_config_attr: enable_agentic_retrieval
     hve_cli_flag: --enable-agentic-retrieval
     applies_to: common
-    notes: "Agentic Retrieval Step（AAD-WEB 2.6 / ASDW-WEB 2.5・2.6）の有効化。CLI フラグ / Wizard / GUI から設定でき、no のとき StepDef.disabled_when_config により実行対象から外れる。config.py:628"
+    notes: "Agentic Retrieval の有効化。(1) Step 実行可否: AAD-WEB 2.6 / ASDW-WEB 2.5・2.6 / AAR 全 Step は no のとき StepDef.disabled_when_config により実行対象から外れる。(2) 生成 AI Agent の方針: AAG 3 / AAGD 2.3・3 は Prompt へ 3 値を注入し（FR-WF-AAG-03）、設計成果物ゲートが方針別に検証する（FR-WF-AAG-04）。Cloud 面の成果物再検証は方針を伝搬せず auto 相当で動く。config.py:628"
 
   - option_key: agentic_data_source_modes
     issue_form_field_id: agentic_data_source_modes

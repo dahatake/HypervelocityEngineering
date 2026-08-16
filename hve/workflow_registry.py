@@ -1,6 +1,6 @@
 """workflow_registry.py — ワークフロー定義レジストリ
 
-10 個のオーケストレーションワークフロー (AAS/AAD-WEB/ASDW-WEB/ADFD/ADFDV/AAG/AAGD/AKM/AQOD/ADOC) の
+12 個のオーケストレーションワークフロー (ARD/AAS/AAD-WEB/ASDW-WEB/ADFD/ADFDV/AAG/AAGD/AAR/AKM/ADI/ADOC) の
 ステップ DAG 定義をデータとして保持する。
 
 Step ID スコープ規則:
@@ -212,7 +212,7 @@ class WorkflowDef:
     """1 ワークフローの定義 (ステップ DAG + ラベル + パラメータ)。"""
 
     id: str
-    """ワークフロー識別子 (小文字): "aas", "aad", "asdw", "adfd", "adfdv", "akm", "aqod", "adoc"。"""
+    """ワークフロー識別子 (小文字): "aas", "aad-web", "asdw-web", "adfd", "adfdv", "akm", "adi", "adoc"。"""
 
     name: str
     """人間可読な正式名称。"""
@@ -1117,6 +1117,9 @@ AAGD = WorkflowDef(
                 body_template_path="templates/aagd/step-2.1.md",
                 fanout_parser="agent_catalog",
                 additional_prompt_template_path="hve/prompt/fanout/aagd/_common.md",
+                # Foundry IQ 経路を選んだ Agent の AR-CAP-03 予算縮退・AR-CAP-04 引用を
+                # テスト観点へ落とすため、検証観点の正本を TDD Step へも公開する。
+                required_skills=["agentic-retrieval-contract"],
                 output_paths_template=["docs/test-specs/{key}-test-spec.md"],
                 required_input_paths=["docs/agent/agent-application-definition.md", "docs/catalog/app-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/test-strategy.md", "docs/screen/{screenId}-{screenNameSlug}-description.md", "docs/services/{serviceId}-{serviceNameSlug}-description.md"]),
         StepDef(id="2.2", title="AI Agent テストコード生成 (TDD RED)",
@@ -1126,6 +1129,8 @@ AAGD = WorkflowDef(
                 body_template_path="templates/aagd/step-2.2.md",
                 fanout_parser="agent_catalog",
                 additional_prompt_template_path="hve/prompt/fanout/aagd/_common.md",
+                # Step 2.1 と同じ理由で AR-CAP の検証観点をテストコードへ届ける。
+                required_skills=["agentic-retrieval-contract"],
                 # 根拠: templates/aagd/step-2.2.md `## 出力` と
                 # Dev-Microservice-Azure-AgentTestCoding.prompt.md `## 出力`。
                 # ディレクトリ参照は展開時に落ち、README.md だけが確定ファイルパスとして展開される。
@@ -1148,8 +1153,11 @@ AAGD = WorkflowDef(
                 required_skills=["agentic-retrieval-contract", "foundry-toolbox-contract"],
                 # 根拠: templates/aagd/step-2.3.md `## 出力` と
                 # Dev-Microservice-Azure-AgentCoding.prompt.md `## 出力`。
+                # `plugin.json` は Agent Plugins 1.0.0 の plugin root マニフェストで、
+                # `skills/` と違い無条件に生成されるため宣言できる。
                 output_paths_template=[
                     "src/agent/{key}/",
+                    "src/agent/{key}/plugin.json",
                     "src/agent/{key}/README.md",
                 ],
                 required_input_paths=["docs/agent/agent-detail-{key}.md", "docs/ai-agent-catalog.md", "docs/azure/azure-services-additional.md", "docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/service-catalog.md", "docs/test-specs/{key}-test-spec.md", "src/test/agent/{key}.Tests/"]),
@@ -1311,7 +1319,7 @@ AKM = WorkflowDef(
             title="knowledge/ ドキュメント生成・管理",
             custom_agent="KnowledgeManager",
             depends_on=[],
-            # qa/, original-docs/, template/, .github/skills/ は既知 key なし → 成果物参照なし
+            # qa/, docs-original/, template/, .github/skills/ は既知 key なし → 成果物参照なし
             consumed_artifacts=[],
             required_skills=["knowledge-management"],
             body_template_path="templates/akm/step-1.md",
@@ -1342,42 +1350,158 @@ AKM = WorkflowDef(
     ],
 )
 
-# --- AQOD: Original Docs Review ---
-# ADR-0002 (T4H): D01〜D21 を 21 並列で質問票生成し、横断レビュー (Step 2) で統合する。
-_AQOD_FANOUT_KEYS: List[str] = [f"D{n:02d}" for n in range(1, 22)]
+# --- ADI: Auto Design-doc Ingestion ---
+# docs-original/ の設計書を目録化し、下流ワークフローへ選別して渡す前処理。
+_ADI_QUESTIONNAIRE_FANOUT_KEYS: List[str] = [f"D{n:02d}" for n in range(1, 22)]
 
-AQOD = WorkflowDef(
-    id="aqod",
-    name="Original Docs Review",
-    label_prefix="aqod",
-    state_labels=_make_state_labels("aqod"),
-    params=["target_scope", "depth", "focus_areas"],
+ADI = WorkflowDef(
+    id="adi",
+    name="Auto Design-doc Ingestion",
+    label_prefix="adi",
+    state_labels=_make_state_labels("adi"),
+    params=["purpose", "target_scope", "depth", "focus_areas"],
+    # D01〜D21 の質問票を同一 wave で生成する。
     max_parallel=21,
     steps=[
         StepDef(
             id="1",
-            title="original-docs 質問票生成",
-            custom_agent="QA-DocConsistency",
+            title="原本インベントリ",
+            custom_agent="Doc-OriginalInventory",
             depends_on=[],
-            # original-docs/ は既知 key なし; knowledge/D07-* は knowledge キーでカバー
-            consumed_artifacts=["knowledge"],
+            # docs-original/ と docs/original-design-doc-ingest/ は既知 key なし → 成果物参照なし
+            consumed_artifacts=[],
             required_skills=["knowledge-lookup"],
-            body_template_path="templates/aqod/step-1.md",
-            fanout_static_keys=_AQOD_FANOUT_KEYS,
-            additional_prompt_template_path="hve/prompt/fanout/aqod/_common.md",
-            # v1.0.4 (TBD-13): fan-out 子ステップが生成する質問票パス
-            output_paths_template=["qa/{key}-original-docs-questionnaire.md"],
+            body_template_path="templates/adi/step-1.md",
+            # index.json は Agent が `python -m hve ingest-docs` で生成する副次成果物。
+            output_paths=[
+                "docs/catalog/design-doc-inventory.md",
+                "docs/original-design-doc-ingest/index.json",
+            ],
+            # 文書数に応じて増える glob は確定ファイルパスではないため、
+            # runner の output_paths ゲートではなく I/O 契約宣言として保持する。
+            output_paths_template=["docs/original-design-doc-ingest/*/content.md"],
         ),
         StepDef(
-            id="2",
-            title="original-docs 横断整合性レビュー",
+            id="1.1",
+            title="原本質問票生成",
             custom_agent="QA-DocConsistency",
             depends_on=["1"],
             consumed_artifacts=["knowledge"],
             required_skills=["knowledge-lookup"],
-            body_template_path="templates/aqod/step-2.md",
+            body_template_path="templates/adi/step-1.1.md",
+            fanout_static_keys=_ADI_QUESTIONNAIRE_FANOUT_KEYS,
+            additional_prompt_template_path="hve/prompt/fanout/adi/_questionnaire.md",
+            output_paths_template=["qa/{key}-original-docs-questionnaire.md"],
+            required_input_paths=[
+                "docs/original-design-doc-ingest/index.json",
+                "docs/original-design-doc-ingest/*/content.md",
+            ],
+        ),
+        StepDef(
+            id="1.2",
+            title="原本質問票 join",
+            custom_agent="QA-DocConsistency",
+            depends_on=["1.1"],
+            consumed_artifacts=["knowledge"],
+            required_skills=["knowledge-lookup"],
+            body_template_path="templates/adi/step-1.2.md",
             output_paths=["qa/original-docs-cross-questionnaire.md"],
             required_input_paths=["qa/{key}-original-docs-questionnaire.md"],
+        ),
+        StepDef(
+            id="2",
+            title="Doc Card 生成",
+            custom_agent="Doc-OriginalDocCard",
+            depends_on=["1.2"],
+            consumed_artifacts=[],
+            required_skills=["knowledge-lookup"],
+            body_template_path="templates/adi/step-2.md",
+            # Step 1 が出力する目録の第 1 列（DOC-NNNN）を fan-out キーにする。
+            fanout_parser="design_doc_inventory",
+            additional_prompt_template_path="hve/prompt/fanout/adi/_common.md",
+            # 出力先は slug ディレクトリのため {key} では展開できない（glob で宣言）。
+            output_paths_template=["docs/original-design-doc-ingest/*/card.md"],
+            required_input_paths=[
+                "docs/catalog/design-doc-inventory.md",
+                "docs/original-design-doc-ingest/index.json",
+                "qa/original-docs-cross-questionnaire.md",
+            ],
+        ),
+        StepDef(
+            id="3",
+            title="関連性トリアージ・カタログ統合",
+            custom_agent="Doc-OriginalTriage",
+            depends_on=["2"],
+            consumed_artifacts=[],
+            required_skills=["knowledge-lookup"],
+            body_template_path="templates/adi/step-3.md",
+            output_paths=["docs/catalog/design-doc-catalog.md"],
+            required_input_paths=[
+                "docs/original-design-doc-ingest/*/card.md",
+                "docs/catalog/design-doc-inventory.md",
+            ],
+        ),
+        StepDef(
+            id="4",
+            title="下流ルーティング表",
+            custom_agent="Doc-OriginalRouting",
+            depends_on=["3"],
+            consumed_artifacts=[],
+            required_skills=["knowledge-lookup"],
+            body_template_path="templates/adi/step-4.md",
+            output_paths=["docs/catalog/design-doc-routing.md"],
+            required_input_paths=[
+                "docs/catalog/design-doc-catalog.md",
+                "docs/original-design-doc-ingest/*/card.md",
+            ],
+        ),
+        # Step 5.x は下流ワークフローの「最上流 Step の成果物」へ候補セクションを追記する。
+        # ID 採番は下流の責務なので ADI は行わない。書き込み先が重ならないため並列実行する。
+        StepDef(
+            id="5.1",
+            title="ARD 成果物への設計書由来候補の反映",
+            custom_agent="Doc-OriginalDownstreamSeed",
+            depends_on=["4"],
+            consumed_artifacts=[],
+            required_skills=["knowledge-lookup"],
+            body_template_path="templates/adi/step-5.1.md",
+            output_paths=["docs/catalog/use-case-skeleton.md"],
+            required_input_paths=[
+                "docs/catalog/design-doc-routing.md",
+                "docs/original-design-doc-ingest/*/card.md",
+            ],
+        ),
+        StepDef(
+            id="5.2",
+            title="AAS 成果物への設計書由来候補の反映",
+            custom_agent="Doc-OriginalDownstreamSeed",
+            depends_on=["4"],
+            consumed_artifacts=[],
+            required_skills=["knowledge-lookup"],
+            body_template_path="templates/adi/step-5.2.md",
+            output_paths=[
+                "docs/catalog/app-catalog.md",
+                "docs/catalog/domain-analytics.md",
+                "docs/catalog/data-model.md",
+            ],
+            required_input_paths=[
+                "docs/catalog/design-doc-routing.md",
+                "docs/original-design-doc-ingest/*/card.md",
+            ],
+        ),
+        StepDef(
+            id="5.3",
+            title="ADFD 成果物への設計書由来候補の反映",
+            custom_agent="Doc-OriginalDownstreamSeed",
+            depends_on=["4"],
+            consumed_artifacts=[],
+            required_skills=["knowledge-lookup"],
+            body_template_path="templates/adi/step-5.3.md",
+            output_paths=["docs/dataflow/dataflow-app-catalog.md"],
+            required_input_paths=[
+                "docs/catalog/design-doc-routing.md",
+                "docs/original-design-doc-ingest/*/card.md",
+            ],
         ),
     ],
 )
@@ -1648,7 +1772,7 @@ FULL_PIPELINE = MetaWorkflowDef(
 # ---------------------------------------------------------------------------
 
 _REGISTRY: Dict[str, WorkflowDef] = {
-    wf.id: wf for wf in [ARD, AAS, AAD_WEB, ASDW_WEB, ADFD, ADFDV, AAG, AAGD, AAR, AKM, AQOD, ADOC]
+    wf.id: wf for wf in [ARD, AAS, AAD_WEB, ASDW_WEB, ADFD, ADFDV, AAG, AAGD, AAR, AKM, ADI, ADOC]
 }
 
 _META_REGISTRY: Dict[str, MetaWorkflowDef] = {

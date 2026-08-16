@@ -65,20 +65,20 @@ class TestLabelConsistencyAuditWorkflowExists(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# D1: 全 12 系列プレフィックスの監査対象確認
+# D1: 全 11 系列プレフィックスの監査対象確認
 # ---------------------------------------------------------------------------
 
 
 class TestLabelConsistencyAuditPrefixes(unittest.TestCase):
-    """全 12 系列プレフィックスが監査対象に含まれること。"""
+    """全 11 系列プレフィックスが監査対象に含まれること。"""
 
     _PREFIXES = [
         "aas", "aad", "aad-web", "asdw", "asdw-web",
-        "adfd", "adfdv", "aag", "aagd", "akm", "adoc", "aqod",
+        "adfd", "adfdv", "aag", "aagd", "akm", "adoc",
     ]
 
     def test_all_prefixes_present_in_workflow(self):
-        """全 12 系列プレフィックスが workflow の PREFIXES 変数にトークンとして存在すること。"""
+        """全 11 系列プレフィックスが workflow の PREFIXES 変数に存在すること。"""
         import re
         content = _read_workflow_text(_WORKFLOW)
         # PREFIXES="..." 行からトークンを抽出して境界チェック（部分一致誤検知を防ぐ）
@@ -89,15 +89,15 @@ class TestLabelConsistencyAuditPrefixes(unittest.TestCase):
             self.assertIn(prefix, workflow_prefixes,
                           f"prefix={prefix!r} が PREFIXES 変数のトークン集合に見つかりません（部分一致不可）")
 
-    def test_twelve_prefixes_count(self):
-        """監査対象プレフィックスがちょうど 12 系列含まれること。"""
+    def test_eleven_prefixes_count(self):
+        """監査対象プレフィックスがちょうど 11 系列含まれること。"""
         import re
         content = _read_workflow_text(_WORKFLOW)
         m = re.search(r'PREFIXES="([^"]+)"', content)
         self.assertIsNotNone(m, 'PREFIXES="..." 行が workflow に見つかりません')
         workflow_prefixes = set(m.group(1).split())
         # 定義リストとの完全一致を確認
-        self.assertEqual(len(self._PREFIXES), 12)
+        self.assertEqual(len(self._PREFIXES), 11)
         missing = [p for p in self._PREFIXES if p not in workflow_prefixes]
         self.assertEqual(missing, [], f"以下の prefix が不足: {missing}")
 

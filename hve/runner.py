@@ -37,6 +37,7 @@ if __package__:
         build_asdw_data_deploy_bootstrap_context,
     )
     from .fanout_expander import resolve_output_path_prefix_gates
+    from .runtime_observability import extract_usage_credit_fields
     from .workflow_registry import (
         ASDW_DATA_DEPLOY_SUPPORTED_APP_ID as _ASDW_SUPPORTED_APP_ID,
     )
@@ -61,6 +62,9 @@ else:  # pragma: no cover - top-level runner compatibility
     )
     from fanout_expander import (  # type: ignore[import-not-found,no-redef]
         resolve_output_path_prefix_gates,
+    )
+    from runtime_observability import (  # type: ignore[import-not-found,no-redef]
+        extract_usage_credit_fields,
     )
     from workflow_registry import (  # type: ignore[import-not-found,no-redef]
         ASDW_DATA_DEPLOY_SUPPORTED_APP_ID as _ASDW_SUPPORTED_APP_ID,
@@ -216,6 +220,34 @@ def _tool_search_policy_prefix(
     )
 
 
+# FR-WF-AAG-03: 生成する AI Agent の Agentic Retrieval 方針を注入する Step。
+# Step 4 は tool search 専用評価のため対象外。
+_AGENTIC_RETRIEVAL_POLICY_STEPS: Dict[str, Tuple[str, ...]] = {
+    "aag": ("3",),
+    "aagd": ("2.3", "3"),
+}
+
+
+def _agentic_retrieval_policy_prefix(
+    workflow_id: Optional[str],
+    step_id: str,
+    policy: str,
+) -> str:
+    """対象 Step の Prompt へ生成 AI Agent の Agentic Retrieval 方針を注入する。
+
+    同じ Step へ Tool Search 方針も注入されるため、見出しを別にする。
+    """
+    steps = _AGENTIC_RETRIEVAL_POLICY_STEPS.get((workflow_id or "").strip().casefold())
+    if not steps or str(step_id).split("/", 1)[0] not in steps:
+        return ""
+    return (
+        "## 生成する AI Agent の Agentic Retrieval 方針\n"
+        f"- 方針: `{policy}`\n"
+        "- これは利用者指定であり、Agent の判断・追加コメントで上書きしない。\n"
+        "- `auto` / `yes` / `no` 以外なら推測せず、blocked として停止する。"
+    )
+
+
 def _repository_skill_directories(
     skill_names: Optional[List[str]] = None,
 ) -> List[str]:
@@ -353,6 +385,7 @@ _ASDW_DATA_DEPLOY_MICROSOFT_LEARN_CONFIG = {
 }
 _FOUNDRY_REQUIRED_AZURE_MCP_SERVER = "azure"
 _FOUNDRY_REQUIRED_AZURE_MCP_CONFIG = {
+    "tools": ["*"],
     "command": "npx",
     "args": ["-y", "@azure/mcp@latest", "server", "start"],
 }
@@ -453,11 +486,8 @@ def _permission_repo_relative_path(
         return None
 
 
-def _load_repository_pinned_mcp_servers(
-    repo_root: Path,
-    expected_servers: Dict[str, Any],
-) -> Dict[str, Any]:
-    """Load an exact named subset from the repository-pinned MCP config."""
+def _read_repository_mcp_config(repo_root: Path) -> Dict[str, Any]:
+    """Return the `mcpServers` map declared in the repository-pinned MCP config."""
     if repo_root.resolve() != Path.cwd().resolve():
         return {}
     config_relative = _permission_repo_relative_path(
@@ -472,7 +502,16 @@ def _load_repository_pinned_mcp_servers(
     except (OSError, UnicodeError, ValueError, TypeError):
         return {}
     servers = payload.get("mcpServers") if isinstance(payload, dict) else None
-    if not isinstance(servers, dict):
+    return servers if isinstance(servers, dict) else {}
+
+
+def _load_repository_pinned_mcp_servers(
+    repo_root: Path,
+    expected_servers: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Load an exact named subset from the repository-pinned MCP config."""
+    servers = _read_repository_mcp_config(repo_root)
+    if not servers:
         return {}
     configured = {name: servers.get(name) for name in expected_servers}
     if configured != expected_servers:
@@ -973,7 +1012,7 @@ try:
         query_workiq, query_workiq_detailed,
         get_workiq_prompt_template, save_workiq_result,
         WORKIQ_MCP_SERVER_NAME, WORKIQ_MCP_TOOL_NAMES,
-        is_workiq_error_response,
+        extract_workiq_status,
         is_workiq_tool_name, extract_tool_name_from_event,
         extract_workiq_tool_name_from_event,
     )
@@ -1015,7 +1054,7 @@ except ImportError:
         query_workiq, query_workiq_detailed,
         get_workiq_prompt_template, save_workiq_result,
         WORKIQ_MCP_SERVER_NAME, WORKIQ_MCP_TOOL_NAMES,
-        is_workiq_error_response,
+        extract_workiq_status,
         is_workiq_tool_name, extract_tool_name_from_event,
         extract_workiq_tool_name_from_event,
     )
@@ -1186,7 +1225,7 @@ def _check_output_paths_gate(
         missing.append(f"{prefix}*")
     return missing
 
-# Auto-QA マージファイルのサフィックス（HVE 実行補助 QA。AQOD 本体成果物 QA-DocConsistency-*.md とは別物）
+# Auto-QA マージファイルのサフィックス（HVE 実行補助 QA。ADI 原本質問票のmain成果物とは別物）
 _EXECUTION_QA_MERGED_SUFFIX: str = "execution-qa-merged.md"
 # 事前実行 QA ファイルのサフィックス（メインタスク実行前の質問票）
 _PRE_EXECUTION_QA_SUFFIX: str = "pre-execution-qa.md"
@@ -1327,6 +1366,16 @@ async def _create_session_with_auto_reasoning_fallback(
         _repository_skill_dirs = _repository_skill_directories()
         if _repository_skill_dirs:
             _opts_with_skills["skill_directories"] = _repository_skill_dirs
+    # FR-CLI-76: 呼び出し側が MCP を指定していないときは、リポジトリ宣言分だけを公開し
+    # ワークスペース / ユーザースコープ / プラグイン由来の自動探索を止める。
+    if (
+        "mcp_servers" not in _opts_with_skills
+        and "enable_config_discovery" not in _opts_with_skills
+    ):
+        _declared_mcp_servers = _read_repository_mcp_config(Path.cwd())
+        if _declared_mcp_servers:
+            _opts_with_skills["mcp_servers"] = copy.deepcopy(_declared_mcp_servers)
+            _opts_with_skills["enable_config_discovery"] = False
     if "enable_config_discovery" not in _opts_with_skills:
         _opts_with_skills["enable_config_discovery"] = True
 
@@ -1872,6 +1921,49 @@ async def _collect_qa_answers(
     return user_answers_raw, skip_input
 
 
+def _should_run_pre_execution_qa(
+    *,
+    auto_qa: bool,
+    workflow_id: Optional[str],
+    custom_agent: Optional[str],
+    prompt: str,
+) -> bool:
+    """FR-QA-03: auto_qa 有効時はワークフロー共通の事前 QA を実行する。"""
+    del workflow_id, custom_agent, prompt
+    return bool(auto_qa)
+
+
+def _persist_answered_qa_and_dispatch(
+    *,
+    doc: "QADocument",
+    user_answers_raw: str,
+    use_defaults: bool,
+    output_path: Path,
+    workflow_id: Optional[str],
+    dispatcher: Optional[Callable[[Path], None]],
+) -> str:
+    """回答済み QA を保存・再検証し、AKM 登録キューへ非待機で渡す。"""
+    if not doc.questions:
+        return ""
+    answers = {} if use_defaults else QAMerger.parse_answers(user_answers_raw)
+    merged = QAMerger.merge_answers(doc, answers, use_defaults=use_defaults)
+    content = QAMerger.render_merged(merged)
+    if not QAMerger.save_merged(content, output_path):
+        raise RuntimeError(f"回答済み QA を保存できませんでした: {output_path}")
+    errors = QAMerger.validate_answered_file(
+        output_path,
+        expected_content=content,
+        expected_questions=len(doc.questions),
+    )
+    if errors:
+        raise RuntimeError(
+            "回答済み QA の保存検証に失敗しました: " + " / ".join(errors)
+        )
+    if workflow_id != "akm" and dispatcher is not None:
+        dispatcher(output_path)
+    return content
+
+
 # ------------------------------------------------------------------
 # ファイル I/O 追跡 — ツール分類定数
 # ------------------------------------------------------------------
@@ -1906,6 +1998,9 @@ _WORKIQ_TOOL_NAMES: frozenset = frozenset(WORKIQ_MCP_TOOL_NAMES)
 # QA Draft の Work IQ 質問間隔（workiq._WORKIQ_QUERY_INTERVAL_SECONDS と同値のローカル定数）
 _WORKIQ_DRAFT_QUERY_INTERVAL_SECONDS: float = 2.0
 
+# FR-GUI-12: GUI からのジョブ対話 IPC を監視する間隔。
+_STEERING_POLL_INTERVAL_SECONDS: float = 1.0
+
 # QA Draft の Work IQ 結果マーカー文字列
 # _clean_results フィルタとの一貫性を保つために定数化する
 _WORKIQ_RESULT_NO_DATA = "関連情報なし"
@@ -1929,7 +2024,7 @@ class StepRunner:
     ┌──────────────────────────────────────────────────┐
     │ CopilotSession (同一セッション = コンテキスト保持)   │
     │                                                    │
-    │  [auto_qa=True かつ AQOD でない場合]                │
+    │  [auto_qa=True の場合]                               │
     │  Phase 0: 事前 QA                                  │
     │    0a: session.send_and_wait(PRE_EXECUTION_QA_PROMPT_V2)│
     │       → Agent が実行前質問票を生成（成果物なし）    │
@@ -1945,7 +2040,7 @@ class StepRunner:
     │                                                    │
     │  注: Phase 2（事後 QA / post-QA モード）は廃止済み。 │
     │     旧 qa_phase="post"/"both" および                │
-    │     aqod_post_qa_enabled は削除されました。         │
+    │     旧post-QA制御は削除されました。                 │
     │                                                    │
     │  [auto_contents_review=True の場合]                 │
     │  Phase 3: session.send_and_wait(REVIEW_PROMPT)     │
@@ -1972,6 +2067,7 @@ class StepRunner:
         *,
         orchestrator_ctx: Optional["OrchestratorContext"] = None,
         workflow_params: Optional[Mapping[str, Any]] = None,
+        qa_akm_dispatcher: Optional[Callable[[Path], None]] = None,
     ) -> None:
         self.config = config
         self.console = console
@@ -1984,6 +2080,7 @@ class StepRunner:
         self._workflow_params: Mapping[str, Any] = MappingProxyType(
             dict(workflow_params or {})
         )
+        self._qa_akm_dispatcher = qa_akm_dispatcher
         self._workiq_tool_called = False
         self._workiq_mcp_connection_failed = False
         self._workiq_called_tools: List[str] = []
@@ -2024,6 +2121,9 @@ class StepRunner:
         # fail-fast 対象にし、2h step-timeout まで待ち続ける事態を防ぐ。
         self._model_call_failure_counts: Dict[str, int] = {}
         self._model_call_failure_events: Dict[str, asyncio.Event] = {}
+        # FR-GUI-12: `stop_and_send` で受け取った (request_id, 指示)。主タスク復帰後に
+        # 新しいターンとして送信し、その応答を Step の主応答として扱う。
+        self._pending_job_redirects: Dict[str, List[Tuple[str, str]]] = {}
         self._asdw_data_deploy_environment_snapshots: Dict[
             str, Mapping[str, str]
         ] = {}
@@ -2500,7 +2600,7 @@ class StepRunner:
             session: メインセッション（Phase 1 と同じセッション）。
             step_id: ステップ識別子。
             title: ステップタイトル。
-            workflow_id: ワークフロー識別子（AQOD ルール適用に使用）。
+            workflow_id: ワークフロー識別子（成果物形式ルールの適用に使用）。
             custom_agent: Custom Agent 名。
             original_prompt: メインタスク実行時の元プロンプト。
             main_output: Phase 1 メインタスクの実行結果（参考）。Phase 2c/3/4 の改善適用後も
@@ -2997,7 +3097,8 @@ class StepRunner:
         """Phase 0: 事前 QA 質問票生成・回答収集・Work IQ (optional)。
 
         PRE_EXECUTION_QA_PROMPT_V2 を使用し、メインタスク実行前に不明点を確認する。
-        AKM/AQOD ワークフローでは呼び出し元でスキップすること。
+        全 Workflow で実行する。AKM 自身では回答済み QA を保存するが、
+        QA 起点 AKM は再登録しない。
 
         Returns:
             pre_qa_context: Phase 1 プロンプト先頭に注入する Markdown 文字列。
@@ -3168,6 +3269,7 @@ class StepRunner:
                     _question_items = [(q.no, q.question) for q in _filtered_questions]
 
                     _per_question_results: Dict[int, str] = {}
+                    _mergeable_results: Dict[int, str] = {}
                     for _q_no, _q_text in _question_items:
                         _before_count = len(self._workiq_called_tools)
                         try:
@@ -3198,22 +3300,31 @@ class StepRunner:
                                 _per_question_results[_q_no] = (
                                     f"Work IQ 失敗: {_detail_result.error}"
                                 )
-                            elif _after_tools:
-                                _per_question_results[_q_no] = _detail_result.content or ""
                             else:
-                                _per_question_results[_q_no] = (
-                                    f"（Work IQ: ツール呼び出しなし）\n{_detail_result.content or ''}"
-                                )
+                                _raw_content = _detail_result.content or ""
+                                _status = extract_workiq_status(_raw_content)
+                                if _after_tools and _status in ("FOUND", "PARTIAL"):
+                                    _per_question_results[_q_no] = _raw_content
+                                    _mergeable_results[_q_no] = _raw_content
+                                elif _after_tools:
+                                    _status_label = _status or "不明"
+                                    _per_question_results[_q_no] = (
+                                        f"（QA未統合: status={_status_label}）\n{_raw_content}"
+                                    )
+                                else:
+                                    _per_question_results[_q_no] = (
+                                        "（Work IQ: ツール呼び出しなし）\n"
+                                        "（QA未統合: tool実行未確認）\n"
+                                        f"{_raw_content}"
+                                    )
                         except Exception as _wiq_exc:
                             _per_question_results[_q_no] = f"Work IQ エラー: {_wiq_exc}"
 
                     # 結果をマージ
-                    _clean_results = {
-                        _q_no: _res
-                        for _q_no, _res in _per_question_results.items()
-                        if _res and not is_workiq_error_response(_res)
-                    }
-                    parsed_pre_qa = QAMerger.merge_workiq_results(parsed_pre_qa, _clean_results)
+                    parsed_pre_qa = QAMerger.merge_workiq_results(
+                        parsed_pre_qa,
+                        _mergeable_results,
+                    )
                     _workiq_output_dir = self.config.workiq_draft_output_dir or "qa"
                     _raw_lines: List[str] = []
                     for q in parsed_pre_qa.questions[:self.config.workiq_max_draft_questions]:
@@ -3238,45 +3349,42 @@ class StepRunner:
 
             # Phase 0d: QA 回答マージ + qa/ ファイル保存
             if _parse_succeeded and parsed_pre_qa.questions:
-                try:
-                    if skip_input:
-                        answers: Dict[int, str] = {}
-                        merged_pre_qa = QAMerger.merge_answers(parsed_pre_qa, answers, use_defaults=True)
-                    else:
-                        answers = QAMerger.parse_answers(user_answers_raw)
-                        merged_pre_qa = QAMerger.merge_answers(parsed_pre_qa, answers)
-                    merged_content = QAMerger.render_merged(merged_pre_qa)
+                _pre_qa_file_path = Path(
+                    f"qa/{self.config.run_id}-{step_id}-{_PRE_EXECUTION_QA_SUFFIX}"
+                )
+                _pre_qa_old_content = ""
+                if _pre_qa_file_path.exists():
+                    try:
+                        _pre_qa_old_content = _pre_qa_file_path.read_text(encoding="utf-8")
+                    except OSError as _e:
+                        self.console.warning(f"事前 QA ファイルの旧コンテンツ読み込みに失敗しました ({_pre_qa_file_path}): {_e}。diff は全行追加として表示されます。")
+                merged_content = _persist_answered_qa_and_dispatch(
+                    doc=parsed_pre_qa,
+                    user_answers_raw=user_answers_raw,
+                    use_defaults=skip_input,
+                    output_path=_pre_qa_file_path,
+                    workflow_id=workflow_id,
+                    dispatcher=self._qa_akm_dispatcher,
+                )
+                self.console.status(
+                    f"✅ 事前 QA 質問票を保存・検証しました ({_pre_qa_file_path.as_posix()})"
+                )
+                self.console.file_diff(
+                    step_id,
+                    _pre_qa_file_path.as_posix(),
+                    _pre_qa_old_content,
+                    merged_content,
+                )
 
-                    _pre_qa_file_path = Path(
-                        f"qa/{self.config.run_id}-{step_id}-{_PRE_EXECUTION_QA_SUFFIX}"
-                    )
-                    _pre_qa_old_content = ""
-                    if _pre_qa_file_path.exists():
-                        try:
-                            _pre_qa_old_content = _pre_qa_file_path.read_text(encoding="utf-8")
-                        except OSError as _e:
-                            self.console.warning(f"事前 QA ファイルの旧コンテンツ読み込みに失敗しました ({_pre_qa_file_path}): {_e}。diff は全行追加として表示されます。")
-                    _written = QAMerger.save_merged(merged_content, _pre_qa_file_path)
-                    if _written:
-                        self.console.status(
-                            f"✅ 事前 QA 質問票を保存しました ({_pre_qa_file_path.as_posix()})"
-                        )
-                        self.console.file_diff(step_id, _pre_qa_file_path.as_posix(), _pre_qa_old_content, merged_content)
-
-                    # pre_qa_context を組み立てる
-                    _context_lines = [
-                        "## 事前 QA 確認済み情報\n",
-                        merged_content,
-                    ]
-                    if _workiq_pre_qa_context:
-                        _context_lines.append("\n\n## Work IQ による補足情報\n")
-                        _context_lines.append(_workiq_pre_qa_context)
-                    pre_qa_context = "\n".join(_context_lines)
-                except Exception as merge_exc:
-                    self.console.warning(f"事前 QA マージ処理に失敗しました: {merge_exc}")
-                    # pre_qa_context を生の質問票から組み立てるフォールバック
-                    if pre_qa_raw:
-                        pre_qa_context = f"## 事前 QA 質問票（未マージ）\n\n{pre_qa_raw}"
+                # pre_qa_context を組み立てる
+                _context_lines = [
+                    "## 事前 QA 確認済み情報\n",
+                    merged_content,
+                ]
+                if _workiq_pre_qa_context:
+                    _context_lines.append("\n\n## Work IQ による補足情報\n")
+                    _context_lines.append(_workiq_pre_qa_context)
+                pre_qa_context = "\n".join(_context_lines)
 
         finally:
             if _pre_qa_session is not None:
@@ -3655,7 +3763,7 @@ class StepRunner:
             title: ステップタイトル（表示用）
             prompt: メインタスクのプロンプト文字列
             custom_agent: 使用する Custom Agent 名（省略可）
-            workflow_id: ワークフロー識別子（省略可）。AQOD 専用プロンプト切り替えに使用。
+            workflow_id: ワークフロー識別子（省略可）。成果物形式ルールの切り替えに使用。
             fanout_meta: ADR-0002 fan-out 子ステップのメタ情報。次のキーを含む:
                 - fanout_key: fan-out キー（例 "D01"）
                 - base_step_id: 親ステップ ID（例 "1"）
@@ -4260,28 +4368,15 @@ class StepRunner:
                 self.console.stream_start(step_id)
 
             # フェーズ総数を動的算出
-            # Phase 0 (事前 QA): auto_qa かつ AQOD でない場合
-            _is_aqod_workflow = (
-                workflow_id == "aqod"
-                or (
-                    custom_agent == "QA-DocConsistency"
-                    and "original-docs-questionnaire" in (prompt or "")
-                )
-            )
-            _is_akm_workflow = (workflow_id == "akm")
-
-            # 事前 QA のスキップ判定:
-            #   AKM: 事前 QA を実行（メインタスクに pre_qa_context を注入）
-            #   AQOD: 事前 QA は引き続きスキップ（ワークフロー本体が事後の整合性チェック仕様のため）
-            _skip_pre_qa = _is_aqod_workflow
-
-            _run_pre_qa = (
-                self.config.auto_qa
-                and not _skip_pre_qa
+            _run_pre_qa = _should_run_pre_execution_qa(
+                auto_qa=self.config.auto_qa,
+                workflow_id=workflow_id,
+                custom_agent=custom_agent,
+                prompt=prompt,
             )
 
             # 事後 QA (post-QA モード) は廃止されました。
-            # 旧 qa_phase="post"/"both"、aqod_post_qa_enabled は削除済み。
+            # 旧 post-QA 制御は削除済み。
             total_phases = 1  # Phase 1: メインタスク
             if _run_pre_qa:
                 total_phases += 1
@@ -4329,6 +4424,13 @@ class StepRunner:
             )
             if _tool_search_policy_text:
                 _prompt_prefix_parts.append(_tool_search_policy_text)
+            _agentic_retrieval_policy_text = _agentic_retrieval_policy_prefix(
+                workflow_id,
+                step_id,
+                self.config.enable_agentic_retrieval,
+            )
+            if _agentic_retrieval_policy_text:
+                _prompt_prefix_parts.append(_agentic_retrieval_policy_text)
             if _additional_suffix:
                 _prompt_prefix_parts.append(_additional_suffix)
             _agent_prefix = "\n\n".join(_prompt_prefix_parts).strip()
@@ -4441,7 +4543,7 @@ class StepRunner:
                 return False
 
             # Phase 2 (post-QA / 事後 QA) は廃止されました。
-            # 旧 qa_phase="post"/"both" / aqod_post_qa_enabled / --aqod-post-qa は削除済み。
+            # 旧 post-QA 制御とCLIオプションは削除済み。
 
             # Phase 3: 敵対的レビュー（auto_contents_review=True の場合）
             if self.config.auto_contents_review:
@@ -5197,12 +5299,14 @@ class StepRunner:
                     workflow,
                     design_path,
                     tool_search_policy=self.config.enable_tool_search,
+                    agentic_retrieval_policy=self.config.enable_agentic_retrieval,
                 )
             elif mode == "deploy":
                 validation_errors = validate_ai_agent_deploy_artifacts(
                     design_path,
                     repo_root / "src" / "infra" / "azure",
                     self.config.enable_tool_search,
+                    self.config.enable_agentic_retrieval,
                 )
             elif mode == "eval":
                 validation_errors = validate_tool_search_eval_report(
@@ -5226,6 +5330,7 @@ class StepRunner:
                         / f"{target_key}-test-spec.md"
                     ),
                     tool_search_policy=self.config.enable_tool_search,
+                    agentic_retrieval_policy=self.config.enable_agentic_retrieval,
                 )
         except Exception as exc:
             return [
@@ -5865,12 +5970,11 @@ class StepRunner:
         return default
 
     async def _poll_steering_ipc(self, session: Any, step_id: str) -> None:
-        """GUI からの Steering（実行中ワークフローへの割り込み送信）IPC を監視する。
+        """GUI からのジョブ対話 IPC を監視する（FR-GUI-12）。
 
         `config.steering_ipc_dir` が未設定の場合は即座に終了する（機能無効）。
-        設定されている場合は `<ipc_dir>/steering-<safe_step_id>-<epoch_ms>.request.json`
-        を 1 秒間隔で polling し、検出したファイルを epoch_ms 昇順（作成順）で処理する:
-        読み込み → `session.send(text, mode="immediate")` → ファイル削除。
+        検出した要求は作成順に原子的に claim してから処理するため、順序変更や
+        取消と競合しても同じ要求を 2 度送信しない。
 
         呼び出し元（`_send_and_wait_with_model_call_failure_guard`）が
         `asyncio.create_task` でタスク化し、メインタスク完了時に `cancel()` する前提の
@@ -5879,49 +5983,199 @@ class StepRunner:
         ipc_dir_raw = getattr(self.config, "steering_ipc_dir", None)
         if not ipc_dir_raw:
             return
-        ipc_dir = Path(ipc_dir_raw)
-        safe_step_id = re.sub(r"[^A-Za-z0-9_.-]", "-", str(step_id))
-        poll_interval = 1.0
+        try:
+            from .job_interaction_ipc import (
+                claim_request,
+                list_request_paths,
+                read_request,
+                release_request,
+            )
+        except ImportError:  # pragma: no cover - script execution path
+            from job_interaction_ipc import (  # type: ignore[no-redef]
+                claim_request,
+                list_request_paths,
+                read_request,
+                release_request,
+            )
 
-        def _epoch_ms_key(p: Path) -> int:
-            m = re.search(r"-(\d+)\.request\.json$", p.name)
-            return int(m.group(1)) if m else 0
+        ipc_dir = Path(ipc_dir_raw)
 
         while True:
             try:
-                if ipc_dir.is_dir():
-                    files = sorted(
-                        ipc_dir.glob(f"steering-{safe_step_id}-*.request.json"),
-                        key=_epoch_ms_key,
-                    )
-                    for f in files:
-                        text = ""
-                        try:
-                            payload = json.loads(f.read_text(encoding="utf-8"))
-                            text = str(payload.get("text", "")).strip()
-                        except (OSError, ValueError, TypeError):
-                            text = ""
-                        if text:
-                            try:
-                                await session.send(text, mode="immediate")
-                                self.console.event(
-                                    f"  ⚡ [{step_id}] Steering 割り込みメッセージを送信しました"
-                                )
-                            except Exception as exc:
-                                self.console.warning(
-                                    f"  ⚠️ [{step_id}] Steering 送信に失敗しました: {exc}"
-                                )
-                        try:
-                            f.unlink()
-                        except OSError:
-                            pass
+                for path in list_request_paths(ipc_dir, step_id):
+                    claimed = claim_request(path)
+                    if claimed is None:
+                        continue
+                    request = read_request(claimed)
+                    if request is None:
+                        release_request(claimed)
+                        continue
+                    try:
+                        await self._dispatch_job_interaction(
+                            session, step_id, request, ipc_dir
+                        )
+                    finally:
+                        release_request(claimed)
             except asyncio.CancelledError:
                 raise
             except Exception:
-                # Steering はベストエフォート機能のため、想定外の例外（OSError 以外を含む）で
-                # polling ループ自体が停止しないようにする。
+                # 対話送信はベストエフォート機能のため、想定外の例外で polling ループ
+                # 自体が停止しないようにする。
                 pass
-            await asyncio.sleep(poll_interval)
+            await asyncio.sleep(_STEERING_POLL_INTERVAL_SECONDS)
+
+    async def _dispatch_job_interaction(
+        self,
+        session: Any,
+        step_id: str,
+        request: Any,
+        ipc_dir: Path,
+    ) -> None:
+        """1 件の対話要求を SDK 呼び出しへ写像し、ACK を書き出す（FR-GUI-12）。
+
+        ACK には要求 ID・action・状態だけを含め、要求本文を複写しない。
+        `stop_and_send` は abort 成功だけでは受理とせず、実際に新しいターンとして
+        送信できた時点で ACK する（送信前に Step が例外復帰しても accepted を残さない）。
+        """
+        try:
+            from .job_interaction_ipc import ACTION_QUEUE, ACTION_STOP_AND_SEND
+        except ImportError:  # pragma: no cover - script execution path
+            from job_interaction_ipc import (  # type: ignore[no-redef]
+                ACTION_QUEUE,
+                ACTION_STOP_AND_SEND,
+            )
+
+        try:
+            if request.action == ACTION_QUEUE:
+                await session.send(request.text, mode="enqueue")
+                self.console.event(
+                    f"  ⏳ [{step_id}] 対話メッセージをキューへ追加しました"
+                )
+            elif request.action == ACTION_STOP_AND_SEND:
+                await session.abort()
+                self._pending_job_redirects.setdefault(step_id, []).append(
+                    (request.request_id, request.text)
+                )
+                self.console.event(
+                    f"  ⏹ [{step_id}] 実行中のターンを中断し、指示を新しいターンへ引き継ぎます"
+                )
+                return
+            else:
+                await session.send(request.text, mode="immediate")
+                self.console.event(
+                    f"  ⚡ [{step_id}] 割り込みメッセージを送信しました"
+                )
+        except Exception as exc:
+            detail = type(exc).__name__
+            self.console.warning(
+                f"  ⚠️ [{step_id}] 対話メッセージの送信に失敗しました ({detail})"
+            )
+            self._write_job_interaction_ack(
+                ipc_dir, request.request_id, request.action, "failed", detail=detail
+            )
+            return
+        self._write_job_interaction_ack(
+            ipc_dir, request.request_id, request.action, "accepted"
+        )
+
+    def _write_job_interaction_ack(
+        self,
+        ipc_dir: Optional[Path],
+        request_id: str,
+        action: str,
+        status: str,
+        *,
+        detail: str = "",
+    ) -> None:
+        """ジョブ対話の ACK を書き出す。失敗しても Step を落とさない。"""
+        if ipc_dir is None:
+            ipc_dir_raw = getattr(self.config, "steering_ipc_dir", None)
+            if not ipc_dir_raw:
+                return
+            ipc_dir = Path(ipc_dir_raw)
+        try:
+            from .job_interaction_ipc import write_ack
+        except ImportError:  # pragma: no cover - script execution path
+            from job_interaction_ipc import write_ack  # type: ignore[no-redef]
+        try:
+            write_ack(ipc_dir, request_id, action, status, detail=detail)
+        except (OSError, ValueError):
+            pass
+
+    def _pop_pending_job_redirect(self, step_id: str) -> Optional[Tuple[str, str]]:
+        """`stop_and_send` で受け取った未送信の (request_id, 指示) を 1 件取り出す。"""
+        pending = self._pending_job_redirects.get(step_id)
+        if not pending:
+            return None
+        entry = pending.pop(0)
+        if not pending:
+            self._pending_job_redirects.pop(step_id, None)
+        return entry
+
+    def _fail_pending_job_redirects(self, step_id: str, detail: str) -> None:
+        """送信されないまま破棄される指示を failed として ACK する。"""
+        try:
+            from .job_interaction_ipc import ACTION_STOP_AND_SEND
+        except ImportError:  # pragma: no cover - script execution path
+            from job_interaction_ipc import ACTION_STOP_AND_SEND  # type: ignore[no-redef]
+        for request_id, _text in self._pending_job_redirects.pop(step_id, []):
+            self._write_job_interaction_ack(
+                None, request_id, ACTION_STOP_AND_SEND, "failed", detail=detail
+            )
+
+    async def _drain_pending_job_redirects(
+        self,
+        session: Any,
+        step_id: str,
+        result: Any,
+        *,
+        timeout: float,
+    ) -> Any:
+        """`stop_and_send` の指示を新しいターンとして実行し、その応答を主応答とする。
+
+        abort により主タスクの待機が復帰しても、送信内容が観測されないまま
+        Step が後続ゲートへ進まないことを保証する。
+        """
+        try:
+            from .job_interaction_ipc import ACTION_STOP_AND_SEND
+        except ImportError:  # pragma: no cover - script execution path
+            from job_interaction_ipc import ACTION_STOP_AND_SEND  # type: ignore[no-redef]
+
+        while True:
+            entry = self._pop_pending_job_redirect(step_id)
+            if entry is None:
+                return result
+            request_id, text = entry
+            try:
+                result = await session.send_and_wait(text, timeout=timeout)
+            except Exception as exc:
+                self._write_job_interaction_ack(
+                    None,
+                    request_id,
+                    ACTION_STOP_AND_SEND,
+                    "failed",
+                    detail=type(exc).__name__,
+                )
+                raise
+            self._write_job_interaction_ack(
+                None, request_id, ACTION_STOP_AND_SEND, "accepted"
+            )
+            # 主タスクの待機は既に解消済みのため、再待機したターンでも
+            # セキュリティ違反と model.call_failure の閾値超過を取りこぼさない。
+            security_event = self._session_security_violation_events.get(step_id)
+            if security_event is not None and security_event.is_set():
+                raise RuntimeError(
+                    self._session_security_violations.get(
+                        step_id,
+                        f"session security violation for step {step_id}",
+                    )
+                )
+            failure_event = self._model_call_failure_events.get(step_id)
+            if failure_event is not None and failure_event.is_set():
+                count = self._model_call_failure_counts.get(step_id, 0)
+                raise RuntimeError(
+                    f"model.call_failure repeated {count} times for step {step_id}"
+                )
 
     async def _send_and_wait_with_model_call_failure_guard(
         self,
@@ -5982,7 +6236,10 @@ class StepRunner:
                 raise RuntimeError(
                     f"model.call_failure repeated {count} times for step {step_id}"
                 )
-            return await send_task
+            result = await send_task
+            return await self._drain_pending_job_redirects(
+                session, step_id, result, timeout=timeout
+            )
         finally:
             if not failure_task.done():
                 failure_task.cancel()
@@ -6004,6 +6261,7 @@ class StepRunner:
                     pass
             self._model_call_failure_events.pop(step_id, None)
             self._model_call_failure_counts.pop(step_id, None)
+            self._fail_pending_job_redirects(step_id, "step_ended_before_send")
 
     # ------------------------------------------------------------------
     # 内部イベントハンドラー
@@ -6644,50 +6902,18 @@ class StepRunner:
             except Exception:
                 pass
             # --- AI Credit / 課金関連の抽出 (Phase A) ---
-            # SDK の AssistantUsageData から以下を抽出して GUI へ流す:
-            # - api_call_id: 重複排除キー
-            # - cost (Model multiplier cost): 補助情報
-            # - copilotUsage.totalNanoAiu: AI Credit (Nano AIU) の直接値
-            # - quotaSnapshots[*]: 各 quota の最新スナップショット (datetime は ISO 化)
+            # 抽出は `runtime_observability.extract_usage_credit_fields` へ単一化し
+            # （FR-MAINT-07）、SDK Fleet mode 経路と同一実装を共有する。
             # session.disconnect が即時ハンドラクリアするため session.shutdown
             # 経由の totalPremiumRequests は届かない。assistant.usage 経由で
             # リアルタイムに料金/Reqs を把握する経路を新設する (捏造禁止)。
             try:
-                api_call_id = _get(data, "api_call_id", "apiCallId", default=None)
-                multiplier_cost = _get(data, "cost", default=None)
-                nano_aiu = None
-                if copilot_usage is not None:
-                    nano_aiu = copilot_usage.get("totalNanoAiu")
-                # 値が一切無ければ stats_event を発火しない（無意味な log を避ける）
-                # SDK が copilotUsage を返さなかった場合は UI 表示を「N/A」に
-                # 切り替えるため理由を併送する。totalNanoAiu が付与されない
-                # ケース (プラン依存等) でハイフン表示を避け取得不能事実を
-                # 明示する。捏造禁止。
-                unavailable_reason = None
-                if copilot_usage is None:
-                    unavailable_reason = (
-                        "SDK assistant.usage provided no copilotUsage "
-                        "(totalNanoAiu unavailable)"
-                    )
-                # 発火条件に unavailable_reason も含める。これにより
-                # api_call_id / multiplier_cost / nano_aiu が全て None でも
-                # copilotUsage 欠落の事実だけは UI に伝達される。
-                if (
-                    (api_call_id is not None)
-                    or (multiplier_cost is not None)
-                    or (nano_aiu is not None)
-                    or (unavailable_reason is not None)
-                ):
+                credit_fields = extract_usage_credit_fields(data)
+                if credit_fields is not None:
                     self.console.stats_event(
                         "usage_credit",
                         step_id=step_id,
-                        model=str(model),
-                        api_call_id=str(api_call_id) if api_call_id is not None else None,
-                        multiplier_cost=(
-                            float(multiplier_cost) if multiplier_cost is not None else None
-                        ),
-                        nano_aiu=(float(nano_aiu) if nano_aiu is not None else None),
-                        unavailable_reason=unavailable_reason,
+                        **credit_fields,
                     )
             except Exception:
                 pass

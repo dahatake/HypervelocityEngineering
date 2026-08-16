@@ -5,7 +5,7 @@ FR-CLOUD-06 は「registry と同期していない Cloud reusable workflow を 
 `hve/workflow_registry.py` の ASDW-WEB Step 体系と非同期（ファイル冒頭で OUT-OF-SYNC
 NOTICE を自己申告）であるため、`.github/workflows/auto-orchestrator-dispatcher.yml` から
 ASDW-WEB の Cloud 起動を停止し、CLI / GUI 経路が supported であることを明示する。
-他の Cloud workflow（AAS / AAD-WEB / ADFD / ADFDV / AAG / AAGD / AKM / AQOD / ADOC）の
+他の Cloud workflow（AAS / AAD-WEB / ADFD / ADFDV / AAG / AAGD / AKM / ADOC）の
 挙動は変更しない。
 
 本テストは dispatcher の `detect` ステップに埋め込まれた Python スクリプトを抽出して
@@ -225,11 +225,9 @@ class TestOtherCloudWorkflowsUnchanged:
         assert outputs["target"] == expected
         assert outputs["mode"] == "closed"
 
-    def test_setup_labels_and_aqod_paths_unchanged(self, tmp_path):
+    def test_setup_labels_path_unchanged(self, tmp_path):
         setup = _run_detect(tmp_path, action="opened", labels=["setup-labels"])
         assert (setup["target"], setup["mode"]) == ("SETUP_LABELS", "initialize")
-        aqod = _run_detect(tmp_path, action="labeled", label_name="original-docs-review")
-        assert (aqod["target"], aqod["mode"]) == ("AQOD", "initialize")
 
     def test_other_reusable_workflow_jobs_remain(self):
         """FR-CLOUD-06: ASDW-WEB 以外の reusable workflow 呼び出しジョブを維持すること。"""
@@ -244,8 +242,12 @@ class TestOtherCloudWorkflowsUnchanged:
             "adfdv": "auto-dataflow-dev-reusable.yml",
             "akm": "auto-knowledge-management-reusable.yml",
             "setup_labels": "setup-labels.yml",
-            "aqod": "auto-aqod.yml",
         }
         for job_name, workflow in expected.items():
             assert job_name in jobs, f"ジョブ {job_name} が dispatcher から消えています"
             assert jobs[job_name]["uses"].endswith(workflow)
+
+        reusable_jobs = {
+            name for name, job in jobs.items() if isinstance(job, dict) and job.get("uses")
+        }
+        assert reusable_jobs == set(expected)

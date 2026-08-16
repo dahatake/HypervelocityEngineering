@@ -10,7 +10,7 @@ ARD ワークフロー Step 2.1（任意）。事業要件文書の **戦略的�
 - 一次情報（いずれか優先順）:
   - `docs/business-requirement.md`（Step 2 出力。存在時優先）
   - `docs/company-business-requirement.md`（Step 1.2 出力。フォールバック）
-- 参考（任意）: `original-docs/*`, `docs/business/*-analysis.md`
+- 参考（任意）: `docs-original/*`, `docs/business/*-analysis.md`
 - 対象企業名: `{company_name}`（任意）
 - 分析対象事業・業務名: `{target_business}`（任意）
 - 調査期間年数: `{survey_period_years}` 年

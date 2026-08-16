@@ -48,7 +48,7 @@ def _load_workflow_choices() -> List[Tuple[str, str]]:
         # workflow_registry.WorkflowDef.name と一致させる
         return [
             ("akm", "Knowledge Management"),
-            ("aqod", "Original Docs Review"),
+            ("adi", "Auto Design-doc Ingestion"),
             ("ard", "Auto Requirement Definition"),
             ("aad-web", "Web App Design"),
             ("asdw-web", "Web App Dev & Deploy"),

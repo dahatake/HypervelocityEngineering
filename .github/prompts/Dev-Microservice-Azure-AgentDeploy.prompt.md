@@ -15,7 +15,7 @@ Azure AI Foundry Agent Service への AI Agent デプロイ・CI/CD 構築専用
 - **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
 - **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
 - **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
 - **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
 - **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 
@@ -117,6 +117,8 @@ Agent詳細設計のSection 7.0 / 7.3を行単位で読み、`Preferred route`�
 - data boundaryはsource region、Foundry project region、外部サービスへ送るquery/data、ネットワーク経路、保持の有無を記録する。設計の承認境界を越える場合は接続しない。
 - deploy前inventoryとして、対象Projectのprovider connection名、RBAC / consentの識別可能な最小メタデータ、Key Vault参照名、Agent依存package、設定flagを値なしで採取する。token、secret値、同意URL、本文は取得・保存しない。
 - 各選択routeに、実データを変更しない最小smoke query、期待するcitation / query evidence、成功・partial・blocked条件を定義する。実行はA-cap-verifyで行う。
+- **Agentic Retrieval 方針（`auto` / `yes` / `no`）は Prompt 冒頭に注入される**。注入が無ければ `auto` とし、3 値以外は推測せず blocked とする。方針は設計時の経路選択を拘束するものであり、Deploy で新たに経路を追加・削除する根拠にはしない。
+- **AR-CAP-01 の `Knowledge base name` と AR-CAP-02 の各 `KS name` は、HVE の Deploy ゲートが `src/infra/azure/` 配下から機械的に追跡する**。設計値をスクリプトから参照できない形（別名化・動的生成のみ）にしない。Toolbox の採否に関わらず検証される。
 
 | 選択route | 条件付きPre-flight |
 |---|---|

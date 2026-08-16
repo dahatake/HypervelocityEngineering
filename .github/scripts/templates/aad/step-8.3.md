@@ -9,7 +9,6 @@ Step.8.2 の Agent Catalog の各 Agent について詳細設計書を作成し�
 - `docs/catalog/service-catalog-matrix.md`
 - `docs/services/SVC-*.md`（関連サービスのみ）
 - `docs/catalog/app-catalog.md`（アプリケーション一覧）
-- `users-guide/08-ai-agent.md`（設計ガイドライン Step 3）
 
 ## 出力
 - `docs/agent/agent-detail-<Agent-ID>-<Agent名>.md`（Agent ごとに1ファイル）

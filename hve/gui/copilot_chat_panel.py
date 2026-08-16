@@ -1,464 +1,809 @@
-"""hve.gui.copilot_chat_panel — GitHub Copilot CLI と対話するドックパネル。
+"""hve.gui.copilot_chat_panel — Copilot CLI 対話ドックと実行ジョブ連携。
 
-設計（改訂版）:
-  - `copilot` CLI の対話モードは TTY 前提の TUI のため、QProcess（パイプ stdin/stdout）
-    では入力/出力が成立しない。旧実装が応答しなかった主因はこの非互換。
-  - 本実装は送信ごとに **非インタラクティブ `-p/--prompt` モード** で `copilot` を
-    spawn し、stdout をパネルへ流し込む。
-  - リポジトリと実行中ワークフローのデータ（`work/`, `docs/` 等）を
-    参照可能にするため、リポジトリルートで起動 (`-C`) する。`-C` 配下は自動的に
-    アクセス許可されるため `--add-dir` は付与しない。
-  - 非インタラクティブ実行には `--allow-all-tools` が必須（公式ヘルプ参照）。
+構成（FR-GUI-10〜15 / FR-GUI-18）:
+  - 「Copilot CLI」タブ: `copilot` の対話 TUI を PTY + xterm.js ビューへ埋め込み、
+    1 本の永続セッションとして保持する。モデル選択・コンテキスト管理・権限・MCP・
+    plugin・skill は CLI 側の機能をそのまま利用する（GUI 側で再実装しない）。
+  - 「実行ジョブ」タブ: Visual Studio Code のチャットビューと同じ構成（会話ビュー /
+    送信待ちキュー / 入力ボックス / 状態行）で、実行中のワークフローステップを
+    宛先として選び、キュー追加 / 割り込み / 中断して送信 を IPC 経由で依頼する。
+    完了ジョブは参照専用で、成果物パスを添えて新しい CLI セッションを開始できる。
 
 セキュリティ:
-  - `QProcess.start(program, args)` を直接呼ぶ（シェル経由ではない）ため shell injection は発生しない。
-  - 入力長は 8KB に制限。
-  - 既知の制約: Windows では `copilot` 実体が `.CMD` シムのため、プロンプト中の
-    `"`/`^`/`&`/`|` などは Qt 6 のクォーティングを経た上で cmd.exe に再解釈される。
-    意図しない展開リスクがあるためユーザーへ status 行で注意喚起する。
-
-根拠:
-  - `copilot --help` 出力（`-p/--prompt`, `--allow-all-tools`, `--add-dir`, `-C`,
-    `--no-ask-user` の存在を確認）。
-  - GitHub Copilot CLI 公式: https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli
+  - PTY へは argv を配列で渡す（シェル連結しない）。
+  - `--allow-all*` / `--yolo` / 非対話用フラグを GUI から暗黙付与しない。
+  - 入力長は 8KB に制限する（添付パスを含めた送信本文で判定する）。
 """
 
 from __future__ import annotations
 
-import codecs
-import re
-import shutil
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
+from uuid import uuid4
 
-from PySide6.QtCore import QProcess, Qt, QTimer
-from PySide6.QtGui import QTextCursor
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
-    QCheckBox,
+    QComboBox,
     QDockWidget,
+    QFileDialog,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
-    QPlainTextEdit,
+    QListWidget,
+    QMenu,
+    QMessageBox,
     QPushButton,
+    QTabWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
-from .fonts import preferred_log_font
-from .steering_ipc_writer import write_steering_request
-from .widgets.wrap_helpers import apply_cjk_wrap
+from hve.job_interaction_ipc import (
+    JobInteractionRequest,
+    cancel_request,
+    list_acks,
+    list_pending_requests,
+    reorder_pending,
+    write_request,
+)
 
+from .copilot_interactive_session import (
+    CopilotInteractiveSession,
+    CopilotInteractiveSessionError,
+)
+from .copilot_job_context import build_job_result_context
+from .job_interaction_model import JobTarget
+from .widgets.chat_input_box import ChatInputBox
+from .widgets.chat_transcript import ChatTranscriptView
+
+__all__ = ["CopilotChatPanel"]
 
 _MAX_INPUT_BYTES = 8 * 1024
-
-# ANSI CSI/Fe エスケープシーケンス（色付け・カーソル移動・スピナー消去等）の検出用。
-# ECMA-48 / VT100 の標準的なパターン（`strip-ansi` 系実装で広く使われる形）:
-#   ESC の後に「単一の Fe 文字（@-Z, \, _）」または
-#   「`[`(CSI) + パラメータバイト(0-?) + 中間バイト( -/) + 終端バイト(@-~)」が続く。
-_ANSI_ESCAPE_RE = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+_ACK_POLL_INTERVAL_MS = 1000
+_PENDING_LIST_MAX_HEIGHT = 84
+_TURN_LABEL_MAX_CHARS = 60
 
 
-def _sanitize_stream_text(text: str) -> str:
-    """Copilot CLI ストリーミング断片を表示用に正規化する。
-
-    ``QPlainTextEdit`` は端末エミュレータではないため、以下をそのまま挿入すると
-    表示が崩れる（合成データ（\\r・ANSI混じりの文字列）を ``_append_copilot_delta``
-    へ直接投入するオフスクリーンQt検証で確認済み。実 ``copilot`` CLI プロセスは
-    実行していないため、実際に \\r/ANSI を出力するかどうか自体は未確認）。
-
-    - ANSI CSI/Fe エスケープシーケンス: 解釈されず生の制御文字として挿入され、
-      グリフ抜け・不可視文字混入の原因になるため除去する。
-    - ``\r\n``: ``\n`` へ正規化する（Windows 改行対策）。
-    - 単独の ``\r``（行末上書き用途。スピナー等）: ``QPlainTextEdit`` に
-      「その場で上書き」する機能はなく、そのまま挿入すると Qt が改段落として
-      扱ってしまい、スピナーの全フレームが個別の行として残ってしまう。
-      本関数では除去し、後続テキストは直前の内容にそのまま連結させる
-      （完全な端末再現ではないが、余分な行の氾濫は防げる）。
-    """
-    text = _ANSI_ESCAPE_RE.sub("", text)
-    text = text.replace("\r\n", "\n").replace("\r", "")
-    return text
+def _elide_turn_text(text: str) -> str:
+    """ターン見出し用に 1 行へ収める。改行以降と上限超過分は省略記号へ置き換える。"""
+    first, separator, _rest = text.partition("\n")
+    if len(first) > _TURN_LABEL_MAX_CHARS or separator:
+        return first[:_TURN_LABEL_MAX_CHARS] + "…"
+    return first
 
 
 class CopilotChatPanel(QDockWidget):
-    """右側にドッキングするチャットパネル。
+    """右側にドッキングする Copilot 対話 / ジョブ連携パネル。"""
 
-    送信のたびに `copilot -p <prompt> --allow-all-tools --no-ask-user -C <repo>` を
-    非インタラクティブモードで起動し、stdout/stderr をマージして表示する。
-    """
-
-    def __init__(  # noqa: D401
+    def __init__(
         self,
         parent: Optional[QWidget] = None,
         *,
         repo_root: Optional[Path] = None,
+        terminal_factory: Optional[Callable[[], QWidget]] = None,
+        session_factory: Optional[Callable[[Any, Path], Any]] = None,
     ) -> None:
-        super().__init__("GitHub Copilot Chat", parent)
+        super().__init__("GitHub Copilot", parent)
         self.setObjectName("CopilotChatDock")
         self.setAllowedAreas(
             Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.LeftDockWidgetArea
         )
 
         self._repo_root: Path = Path(repo_root) if repo_root else Path.cwd()
+        self._workbench_page: Optional[Any] = None
+        self._targets: List[JobTarget] = []
+        self._terminal_factory = terminal_factory
+        self._session_factory = session_factory or self._default_session_factory
+        self._terminal_view: Optional[QWidget] = None
+        self._session: Optional[Any] = None
+        # request_id -> (channel_dir, action)
+        self._pending_acks: Dict[str, Tuple[str, str]] = {}
+        self._turn_index = -1
 
-        container = QWidget(self)
-        layout = QVBoxLayout(container)
+        self._tabs = QTabWidget(self)
+        self._tabs.addTab(self._build_cli_tab(), self.tr("Copilot CLI"))
+        self._tabs.addTab(self._build_job_tab(), self.tr("実行ジョブ"))
+        self.setWidget(self._tabs)
+        self.resize(520, 700)
+
+        self._ack_timer = QTimer(self)
+        self._ack_timer.setInterval(_ACK_POLL_INTERVAL_MS)
+        self._ack_timer.timeout.connect(self.poll_acks)
+        self._ack_timer.timeout.connect(self.refresh_pending_queue)
+        self._ack_timer.start()
+
+        self._update_cli_status()
+        self._update_job_controls()
+
+    # ------------------------------------------------------------------
+    # UI 構築
+    # ------------------------------------------------------------------
+
+    def _build_cli_tab(self) -> QWidget:
+        page = QWidget(self)
+        layout = QVBoxLayout(page)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(6)
 
-        self._status = QLabel()
-        self._status.setProperty("hveRole", "description")
-        self._status.setWordWrap(True)
-        layout.addWidget(self._status)
-
-        self._history = QPlainTextEdit()
-        self._history.setReadOnly(True)
-        self._history.setFont(preferred_log_font(10))
-        # 他のログ系ペイン（page_workbench.py の _LogPane 等）と同じ折り返しpolicyを
-        # 適用する。CJK混在テキストでも横スクロールを発生させず、ウィジェット幅で
-        # 折り返す（WrapAtWordBoundaryOrAnywhere）。
-        apply_cjk_wrap(self._history)
-        layout.addWidget(self._history, stretch=1)
-
-        input_row = QHBoxLayout()
-        input_label = QLabel(self.tr("メッセージ:"))
-        input_label.setMaximumWidth(280)
-        self._input = QLineEdit()
-        self._input.setPlaceholderText(self.tr("メッセージを入力して Enter で送信..."))
-        self._input.returnPressed.connect(self._on_send)
-        self._send_btn = QPushButton(self.tr("送信"))
-        self._send_btn.clicked.connect(self._on_send)
-        self._stop_btn = QPushButton(self.tr("停止"))
-        self._stop_btn.clicked.connect(self._on_stop)
-        self._stop_btn.setEnabled(False)
-        input_row.addWidget(input_label, 0)
-        input_row.addWidget(self._input, 1)
-        input_row.addWidget(self._send_btn)
-        input_row.addWidget(self._stop_btn)
-        layout.addLayout(input_row)
-
-        # Steering（実行中ワークフローへの割り込み送信）トグル。既定 OFF。
-        # 対象ワークフローが単一 step 実行中かつ IPC ディレクトリが利用可能な
-        # 場合のみ有効化する（不明点2・8）。
-        self._steering_checkbox = QCheckBox(
-            self.tr("実行中ワークフローへ割り込む (Steering)")
+        self._cli_status = QLabel()
+        self._cli_status.setProperty("hveRole", "description")
+        self._cli_status.setWordWrap(True)
+        self._cli_status.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
         )
-        self._steering_checkbox.setEnabled(False)
-        self._steering_checkbox.setToolTip(
-            self.tr("単一ステップ実行中のワークフローが無いため利用できません。")
+        self._cli_status.setAccessibleName(self.tr("Copilot CLI セッションの状態"))
+        layout.addWidget(self._cli_status)
+
+        self._cli_host = QWidget(page)
+        self._cli_host_layout = QVBoxLayout(self._cli_host)
+        self._cli_host_layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._cli_host, 1)
+
+        row = QHBoxLayout()
+        self._cli_start_btn = QPushButton(self.tr("セッション開始"))
+        self._cli_start_btn.setAccessibleName(self.tr("Copilot CLI セッションを開始"))
+        self._cli_start_btn.clicked.connect(self._on_start_clicked)
+        self._cli_stop_btn = QPushButton(self.tr("セッション停止"))
+        self._cli_stop_btn.setAccessibleName(self.tr("Copilot CLI セッションを停止"))
+        self._cli_stop_btn.setEnabled(False)
+        self._cli_stop_btn.clicked.connect(self.stop_cli_session)
+        row.addWidget(self._cli_start_btn)
+        row.addWidget(self._cli_stop_btn)
+        row.addStretch(1)
+        layout.addLayout(row)
+        return page
+
+    def _build_job_tab(self) -> QWidget:
+        page = QWidget(self)
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+        self._job_tab_layout = layout
+
+        layout.addLayout(self._build_job_header())
+
+        self._turn_nav_bar = self._build_turn_nav_bar(page)
+        layout.addWidget(self._turn_nav_bar)
+
+        self._transcript = ChatTranscriptView(page)
+        layout.addWidget(self._transcript, 1)
+        scroll_bar = self._transcript.verticalScrollBar()
+        if scroll_bar is not None:
+            scroll_bar.valueChanged.connect(self._on_transcript_scrolled)
+
+        self._pending_bar = self._build_pending_bar(page)
+        layout.addWidget(self._pending_bar)
+
+        self._input_box = ChatInputBox(page)
+        self._input_box.submitted.connect(self._on_job_send_clicked)
+        self._input_box.attach_requested.connect(self._on_attach_requested)
+        layout.addWidget(self._input_box)
+
+        self._status_footer = QLabel(page)
+        self._status_footer.setProperty("hveRole", "description")
+        self._status_footer.setWordWrap(True)
+        self._status_footer.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
         )
-        layout.addWidget(self._steering_checkbox)
+        self._status_footer.setAccessibleName(self.tr("選択したジョブの状態"))
+        layout.addWidget(self._status_footer)
+        return page
 
-        self.setWidget(container)
-        self.resize(420, 600)
+    def _build_job_header(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        target_label = QLabel(self.tr("対象ジョブ:"))
+        self._target_combo = QComboBox()
+        self._target_combo.setAccessibleName(self.tr("対話対象の実行ジョブ"))
+        target_label.setBuddy(self._target_combo)
+        self._target_combo.currentIndexChanged.connect(self._on_target_changed)
+        refresh_btn = QPushButton(self.tr("更新"))
+        refresh_btn.setAccessibleName(self.tr("実行ジョブ一覧を更新"))
+        refresh_btn.clicked.connect(self.refresh_job_targets)
 
-        self._process: Optional[QProcess] = None
-        self._copilot_path: Optional[str] = shutil.which("copilot")
-        # Copilot応答のストリーミング表示用状態（断片ごとの改行を防ぎ、実データ中の
-        # 実際の改行のみを段落区切りとして扱うための状態）。
-        self._utf8_decoder: Optional[codecs.IncrementalDecoder] = None
-        self._copilot_turn_open: bool = False
+        self._overflow_menu = QMenu(self)
+        self._overflow_menu.addAction(self.tr("会話をクリア"), self.clear_transcript)
+        self._overflow_menu.addAction(self.tr("会話をコピー"), self.copy_transcript)
+        self._open_result_action = self._overflow_menu.addAction(
+            self.tr("結果を Copilot で開く"), self.open_selected_job_result
+        )
+        self._overflow_btn = QToolButton()
+        self._overflow_btn.setText("⋯")
+        self._overflow_btn.setAutoRaise(True)
+        self._overflow_btn.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self._overflow_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self._overflow_btn.setAccessibleName(self.tr("その他の操作"))
+        self._overflow_btn.setToolTip(self.tr("その他の操作"))
+        self._overflow_btn.setMenu(self._overflow_menu)
 
-        # Steering 機能: WorkbenchPage への参照（main_window.py から
-        # set_workbench_page() 経由で注入される）。
-        self._workbench_page: Optional[Any] = None
-        self._steering_poll_timer = QTimer(self)
-        self._steering_poll_timer.setInterval(1000)
-        self._steering_poll_timer.timeout.connect(self._update_steering_availability)
-        self._steering_poll_timer.start()
+        row.addWidget(target_label)
+        row.addWidget(self._target_combo, 1)
+        row.addWidget(refresh_btn)
+        row.addWidget(self._overflow_btn)
+        return row
 
-        self._update_status()
+    def _build_turn_nav_bar(self, parent: QWidget) -> QWidget:
+        """FR-GUI-18: 送信メッセージの現在位置と前後移動。"""
+        bar = QWidget(parent)
+        bar.setProperty("hveRole", "noteBox")
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(6, 2, 6, 2)
+        row.setSpacing(4)
+
+        self._turn_label = QLabel(bar)
+        self._turn_label.setProperty("hveRole", "description")
+        self._turn_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        self._turn_label.setAccessibleName(self.tr("現在の送信メッセージ"))
+        self._turn_position = QLabel(bar)
+        self._turn_position.setAccessibleName(self.tr("送信メッセージの位置"))
+        self._turn_prev_btn = QToolButton(bar)
+        self._turn_prev_btn.setText("▲")
+        self._turn_prev_btn.setAccessibleName(self.tr("前の送信メッセージへ"))
+        self._turn_prev_btn.setToolTip(self.tr("前の送信メッセージへ"))
+        self._turn_prev_btn.clicked.connect(self.goto_previous_turn)
+        self._turn_next_btn = QToolButton(bar)
+        self._turn_next_btn.setText("▼")
+        self._turn_next_btn.setAccessibleName(self.tr("次の送信メッセージへ"))
+        self._turn_next_btn.setToolTip(self.tr("次の送信メッセージへ"))
+        self._turn_next_btn.clicked.connect(self.goto_next_turn)
+
+        row.addWidget(self._turn_label, 1)
+        row.addWidget(self._turn_position)
+        row.addWidget(self._turn_prev_btn)
+        row.addWidget(self._turn_next_btn)
+
+        bar.hide()
+        return bar
+
+    def _build_pending_bar(self, parent: QWidget) -> QWidget:
+        """FR-GUI-12 が許可する未消費要求の取り消し・並べ替えを提供する。"""
+        bar = QWidget(parent)
+        bar.setProperty("hveRole", "noteBox")
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(6, 4, 6, 4)
+        layout.setSpacing(4)
+
+        self._pending_list = QListWidget(bar)
+        self._pending_list.setAccessibleName(self.tr("送信待ちのメッセージ"))
+        self._pending_list.setMaximumHeight(_PENDING_LIST_MAX_HEIGHT)
+        layout.addWidget(self._pending_list, 1)
+
+        buttons = QVBoxLayout()
+        buttons.setSpacing(2)
+        self._pending_up_btn = QToolButton(bar)
+        self._pending_up_btn.setText("↑")
+        self._pending_up_btn.setAccessibleName(self.tr("送信待ちを上へ"))
+        self._pending_up_btn.clicked.connect(lambda: self.move_selected_pending(-1))
+        self._pending_down_btn = QToolButton(bar)
+        self._pending_down_btn.setText("↓")
+        self._pending_down_btn.setAccessibleName(self.tr("送信待ちを下へ"))
+        self._pending_down_btn.clicked.connect(lambda: self.move_selected_pending(1))
+        self._pending_cancel_btn = QToolButton(bar)
+        self._pending_cancel_btn.setText("×")
+        self._pending_cancel_btn.setAccessibleName(self.tr("送信待ちを取り消す"))
+        self._pending_cancel_btn.clicked.connect(self.cancel_selected_pending)
+        buttons.addWidget(self._pending_up_btn)
+        buttons.addWidget(self._pending_down_btn)
+        buttons.addWidget(self._pending_cancel_btn)
+        layout.addLayout(buttons)
+
+        bar.hide()
+        return bar
 
     # ------------------------------------------------------------------
-    # 公開 API
+    # 公開 API（MainWindow から利用）
     # ------------------------------------------------------------------
 
     def set_repo_root(self, repo_root: Path) -> None:
-        """リポジトリルートを更新する（ワークフロー切替時に呼び出し可）。"""
+        """リポジトリルートを更新する。"""
         self._repo_root = Path(repo_root)
-        self._update_status()
+        if self._session is not None:
+            self._session.set_repo_root(self._repo_root)
+        self._update_cli_status()
 
     def set_workbench_page(self, page: Any) -> None:
-        """Steering 機能用に WorkbenchPage への参照を設定する。
-
-        ``main_window.py`` の WorkbenchPage 生成直後に呼び出される。
-        ``page`` は ``resolve_active_main_step_id()`` / ``active_steering_ipc_dir()``
-        の 2 メソッドを持つオブジェクトを期待する（duck typing、テスト用フェイクでも可）。
-        """
+        """ジョブ対話 API を持つ WorkbenchPage を注入する。"""
         self._workbench_page = page
-        self._update_steering_availability()
-
-    # ------------------------------------------------------------------
-    # Steering（実行中ワークフローへの割り込み送信）
-    # ------------------------------------------------------------------
-
-    def _update_steering_availability(self) -> None:
-        """WorkbenchPage の状態を見て Steering トグルの有効/無効を更新する。
-
-        単一ステップ実行中かつ IPC ディレクトリが利用可能な場合のみ有効化する
-        （不明点2: 並列実行時は無効化、不明点8: フォールバックはボタン無効化）。
-        """
-        page = self._workbench_page
-        step_id: Optional[str] = None
-        ipc_dir: Optional[str] = None
-        if page is not None:
+        signal = getattr(page, "job_log_line", None)
+        if signal is not None and hasattr(signal, "connect"):
             try:
-                step_id = page.resolve_active_main_step_id()
-                ipc_dir = page.active_steering_ipc_dir()
-            except Exception:
-                step_id = None
-                ipc_dir = None
-        available = bool(step_id) and bool(ipc_dir)
-        self._steering_checkbox.setEnabled(available)
-        if not available:
-            self._steering_checkbox.setChecked(False)
-            self._steering_checkbox.setToolTip(
-                self.tr("単一ステップ実行中のワークフローが無いため利用できません。")
-            )
-        else:
-            self._steering_checkbox.setToolTip(
-                self.tr("ON: 送信内容は実行中ステップ ({step}) への割り込みメッセージとして送信されます。").format(
-                    step=step_id
-                )
-            )
-
-    def _send_steering_message(self, text: str) -> bool:
-        """Steering IPC ファイルへ書き込む。成功すれば True を返す。"""
-        page = self._workbench_page
-        if page is None:
-            return False
-        try:
-            step_id = page.resolve_active_main_step_id()
-            ipc_dir = page.active_steering_ipc_dir()
-        except Exception:
-            return False
-        if not step_id or not ipc_dir:
-            return False
-        try:
-            write_steering_request(Path(ipc_dir), step_id, text)
-        except OSError as exc:
-            self._append("system", f"Steering 送信に失敗しました: {exc}")
-            return False
-        self._append(
-            "system",
-            f"⚡ Steering: 実行中ステップ ({step_id}) へ割り込みメッセージを送信しました。"
-            " 応答はワークフロー実行ログに反映されます。",
-        )
-        return True
-
-    # ------------------------------------------------------------------
-    # 状態表示
-    # ------------------------------------------------------------------
-
-    def _update_status(self) -> None:
-        if self._copilot_path is None:
-            self._status.setText(
-                self.tr("⚠️ `copilot` コマンドが見つかりません。\n"
-                "インストール: https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli")
-            )
-            self._input.setEnabled(False)
-            self._send_btn.setEnabled(False)
-        else:
-            self._status.setText(
-                f"✅ Copilot CLI: {self._copilot_path}\n"
-                f"📁 Context: {self._repo_root}\n"
-                "⚠️ 非対話モード (`-p` + `--allow-all-tools` + `--no-ask-user`) で実行します。\n"
-                "   Copilot がツール実行（ファイル書込・コマンド実行等）を確認なしで行います。"
-            )
-
-    # ------------------------------------------------------------------
-    # 送受信
-    # ------------------------------------------------------------------
-
-    def _on_send(self) -> None:
-        text = self._input.text().strip()
-        if not text:
-            return
-        if len(text.encode("utf-8")) > _MAX_INPUT_BYTES:
-            self._append("system", f"入力が長すぎます (上限 {_MAX_INPUT_BYTES} バイト)")
-            return
-
-        # Steering トグルが ON の場合は IPC 書き込みのみで完結し、既存の
-        # 使い捨て copilot -p 経路（QProcess）は使わない。
-        if self._steering_checkbox.isChecked():
-            self._append("you", text)
-            self._input.clear()
-            self._send_steering_message(text)
-            return
-
-        if self._copilot_path is None:
-            self._append("system", "copilot CLI が利用できません。")
-            return
-        if self._process is not None and self._process.state() != QProcess.ProcessState.NotRunning:
-            self._append("system", "前のリクエストがまだ実行中です。完了をお待ちください。")
-            return
-
-        self._append("you", text)
-        self._input.clear()
-
-        # `-C` でリポジトリルートに chdir するため、その配下は --add-dir なしで参照可能。
-        # work/, docs/, knowledge/ もこの中に含まれる。
-        args: list[str] = [
-            "-p",
-            text,
-            "--allow-all-tools",
-            "--no-ask-user",
-            "-C",
-            str(self._repo_root),
-        ]
-
-        proc = QProcess(self)
-        proc.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
-        proc.setWorkingDirectory(str(self._repo_root))
-        proc.readyReadStandardOutput.connect(self._on_stdout)
-        proc.errorOccurred.connect(self._on_error)
-        proc.finished.connect(self._on_finished)
-        self._process = proc
-        # 新しいリクエストごとにデコーダとストリーミング状態をリセットする。
-        self._utf8_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-        self._copilot_turn_open = False
-
-        self._append("system", "実行: copilot -p ... （リポジトリ全体を参照可能）")
-        self._set_running(True)
-        try:
-            proc.start(self._copilot_path, args)
-        except Exception as exc:  # pragma: no cover - defensive
-            self._append("system", f"起動に失敗しました: {exc}")
-            self._set_running(False)
-            self._process = None
-
-    def _on_stop(self) -> None:
-        if self._process is not None and self._process.state() != QProcess.ProcessState.NotRunning:
-            self._process.terminate()
-            if not self._process.waitForFinished(2000):
-                self._process.kill()
-            self._finalize_copilot_stream()
-            self._append("system", "ユーザー操作により停止しました。")
-
-    def _on_stdout(self) -> None:
-        proc = self._process
-        if proc is None:
-            return
-        raw = bytes(proc.readAllStandardOutput())
-        if not raw:
-            return
-        if self._utf8_decoder is None:
-            self._utf8_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-        # マルチバイト文字が読み取り境界で分割されても、IncrementalDecoder が
-        # 未確定分を内部保持するため文字化けしない。
-        text = self._utf8_decoder.decode(raw)
-        if text:
-            self._append_copilot_delta(text)
-
-    def _on_error(self, err: QProcess.ProcessError) -> None:
-        self._finalize_copilot_stream()
-        self._append("system", f"プロセスエラー: {err}")
-        # `errorOccurred` 後に `finished` が来ないケース（FailedToStart 等）に備えて
-        # UI を必ず解放する。`finished` も来た場合は二重実行になるが副作用なし。
-        proc = self._process
-        if proc is not None and proc.state() == QProcess.ProcessState.NotRunning:
-            self._set_running(False)
-            proc.deleteLater()
-            self._process = None
-
-    def _on_finished(self, code: int, status: QProcess.ExitStatus) -> None:
-        status_label = (
-            "正常終了" if status == QProcess.ExitStatus.NormalExit else "異常終了(クラッシュ)"
-        )
-        self._finalize_copilot_stream()
-        self._append("system", f"完了 (exit={code}, {status_label})")
-        self._set_running(False)
-        proc = self._process
-        if proc is not None:
-            proc.deleteLater()
-        self._process = None
-
-    def _set_running(self, running: bool) -> None:
-        self._send_btn.setEnabled(not running)
-        self._input.setEnabled(not running)
-        self._stop_btn.setEnabled(running)
-
-    def _append(self, role: str, text: str) -> None:
-        prefix = {
-            "you": "[あなた]",
-            "copilot": "[Copilot]",
-            "system": "[system]",
-        }.get(role, role)
-        # you/system の発言は常に新しい段落として扱うため、進行中の Copilot
-        # ストリーミング段落があればここで閉じる（次の Copilot 応答は新規段落から
-        # 再開する）。
-        self._copilot_turn_open = False
-        cursor = QTextCursor(self._history.document())
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-        if not self._history.document().isEmpty():
-            # ユーザーの新規発言（you）の前のみ空行を挿入し、会話のターン境界を
-            # 視覚的に明確にする。systemはステータス注記に近いので詰めて表示する。
-            cursor.insertText("\n\n" if role == "you" else "\n")
-        cursor.insertText(f"{prefix} {text}")
-        self._autoscroll()
-
-    def _append_copilot_delta(self, delta: str) -> None:
-        """Copilot 応答のストリーミング断片を、現在の応答段落へ連結して追記する。
-
-        ``QPlainTextEdit.appendPlainText`` は呼ぶたびに新しい段落を作ってしまうため
-        （Qt仕様）、ここではカーソルを文末へ移動して ``insertText`` で追記する。
-        断片自体の到着境界が新しい行を作ることはなく、``delta`` 内に実際の改行
-        (``\n``) が含まれる場合のみ新しい段落になる。
-
-        ターン開始時（``_copilot_turn_open`` が ``False`` から ``True`` になる瞬間）のみ
-        空行を挿入して会話のターン境界を明確にする（``_append`` の you と対の仕様）。
-
-        Note:
-            ``self._history.textCursor()``（ウィジェットの対話用カーソル）ではなく
-            ``QTextCursor(self._history.document())`` で**独立したカーソル**を
-            生成して編集する。ウィジェット側のカーソルを操作すると、ユーザーが
-            ログをドラッグ選択してコピーしようとしている最中に選択範囲が毎回
-            末尾へ強制移動されてしまう（読み取り専用でもカーソル移動・選択は可能）。
-            文書末尾への追記は、それより前にある既存の選択範囲の位置に影響しない。
-        """
-        delta = _sanitize_stream_text(delta)
-        if not delta:
-            return
-        cursor = QTextCursor(self._history.document())
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-        if not self._copilot_turn_open:
-            if not self._history.document().isEmpty():
-                cursor.insertText("\n\n")
-            cursor.insertText("[Copilot] ")
-            self._copilot_turn_open = True
-        cursor.insertText(delta)
-        self._autoscroll()
-
-    def _autoscroll(self) -> None:
-        """履歴ビューを最新行が見えるよう末尾までスクロールする。"""
-        scrollbar = self._history.verticalScrollBar()
-        if scrollbar is not None:
-            scrollbar.setValue(scrollbar.maximum())
-
-    def _finalize_copilot_stream(self) -> None:
-        """ストリーミング用デコーダに残る未確定バイト列を flush する。
-
-        プロセスの終了/停止/エラー時に呼び出す。マルチバイト文字の末尾断片が
-        途中で打ち切られた場合でも、確定できる範囲を表示に反映してから破棄する。
-        デコーダは常に ``errors="replace"`` で生成しているため ``decode()`` が
-        ``UnicodeDecodeError`` を送出することはない。
-        """
-        if self._utf8_decoder is None:
-            return
-        remainder = self._utf8_decoder.decode(b"", final=True)
-        if remainder:
-            self._append_copilot_delta(remainder)
-        self._utf8_decoder = None
-
-    # ------------------------------------------------------------------
-    # 終了処理
-    # ------------------------------------------------------------------
+                signal.connect(self.on_job_log_line)
+            except (RuntimeError, TypeError):
+                pass
+        self.refresh_job_targets()
 
     def shutdown(self) -> None:
-        """ウィンドウクローズ時に呼ばれる。"""
-        if self._process is not None and self._process.state() != QProcess.ProcessState.NotRunning:
-            self._process.terminate()
-            if not self._process.waitForFinished(3000):
-                self._process.kill()
-                self._process.waitForFinished(1000)
+        """パネルを終了する（対話セッションと ACK 監視を停止）。"""
+        self._ack_timer.stop()
+        session = self._session
+        self._session = None
+        if session is not None:
+            session.stop()
+
+    # ------------------------------------------------------------------
+    # Copilot CLI タブ
+    # ------------------------------------------------------------------
+
+    def tab_titles(self) -> List[str]:
+        return [self._tabs.tabText(i) for i in range(self._tabs.count())]
+
+    def cli_status_text(self) -> str:
+        return self._cli_status.text()
+
+    def start_cli_session(self, initial_prompt: Optional[str] = None) -> bool:
+        """永続対話セッションを開始する。成功したら True。"""
+        session = self._ensure_session()
+        if session is None:
+            return False
+        try:
+            session.start(initial_prompt=initial_prompt)
+        except CopilotInteractiveSessionError as exc:
+            self._cli_status.setText(str(exc))
+            return False
+        self._update_cli_status()
+        return True
+
+    def stop_cli_session(self) -> None:
+        if self._session is not None:
+            self._session.stop()
+        self._update_cli_status()
+
+    def _on_start_clicked(self) -> None:
+        self.start_cli_session()
+
+    def _default_session_factory(self, view: Any, repo_root: Path) -> Any:
+        return CopilotInteractiveSession(view, repo_root=repo_root, parent=self)
+
+    def _ensure_session(self) -> Optional[Any]:
+        if self._session is not None:
+            return self._session
+        view = self._ensure_terminal_view()
+        if view is None:
+            return None
+        session = self._session_factory(view, self._repo_root)
+        finished = getattr(session, "finished", None)
+        if finished is not None and hasattr(finished, "connect"):
+            try:
+                finished.connect(self._on_session_finished)
+            except (RuntimeError, TypeError):
+                pass
+        self._session = session
+        return session
+
+    def _ensure_terminal_view(self) -> Optional[QWidget]:
+        if self._terminal_view is not None:
+            return self._terminal_view
+        factory = self._terminal_factory or self._default_terminal_factory
+        try:
+            view = factory()
+        except Exception as exc:  # QtWebEngine 未導入・初期化失敗など
+            self._cli_status.setText(
+                self.tr("端末ビューを初期化できませんでした: {err}").format(err=exc)
+            )
+            return None
+        self._cli_host_layout.addWidget(view)
+        self._terminal_view = view
+        return view
+
+    def _default_terminal_factory(self) -> QWidget:
+        # QtWebEngine の読み込みを CLI タブ利用時まで遅延させる。
+        from .widgets.xterm_terminal_view import XtermTerminalView
+
+        return XtermTerminalView(self._cli_host)
+
+    def _on_session_finished(self, _code: int) -> None:
+        self._update_cli_status()
+
+    def _session_is_running(self) -> bool:
+        session = self._session
+        return session is not None and bool(session.is_running())
+
+    def _update_cli_status(self) -> None:
+        running = self._session_is_running()
+        if running:
+            self._cli_status.setText(
+                self.tr(
+                    "Copilot CLI 対話セッション実行中 / 作業ディレクトリ: {repo}"
+                ).format(repo=self._repo_root)
+            )
+        else:
+            self._cli_status.setText(
+                self.tr(
+                    "Copilot CLI 対話セッションは停止中です。"
+                    "[セッション開始] で起動します（作業ディレクトリ: {repo}）。"
+                ).format(repo=self._repo_root)
+            )
+        self._cli_start_btn.setEnabled(not running)
+        self._cli_stop_btn.setEnabled(running)
+
+    # ------------------------------------------------------------------
+    # 実行ジョブタブ
+    # ------------------------------------------------------------------
+
+    def refresh_job_targets(self) -> None:
+        """WorkbenchPage から宛先一覧を取り直す（選択は可能な限り維持）。"""
+        previous = self.current_target()
+        targets: List[JobTarget] = []
+        page = self._workbench_page
+        if page is not None:
+            try:
+                targets = list(page.job_targets())
+            except (AttributeError, RuntimeError, TypeError):
+                targets = []
+        self._targets = targets
+
+        self._target_combo.blockSignals(True)
+        self._target_combo.clear()
+        for target in targets:
+            self._target_combo.addItem(target.display_name())
+        index = 0
+        if previous is not None:
+            for i, target in enumerate(targets):
+                if (
+                    target.instance_id == previous.instance_id
+                    and target.step_id == previous.step_id
+                ):
+                    index = i
+                    break
+        self._target_combo.setCurrentIndex(index if targets else -1)
+        self._target_combo.blockSignals(False)
+        self._on_target_changed()
+
+    def target_labels(self) -> List[str]:
+        return [
+            self._target_combo.itemText(i) for i in range(self._target_combo.count())
+        ]
+
+    def current_target(self) -> Optional[JobTarget]:
+        index = self._target_combo.currentIndex()
+        if 0 <= index < len(self._targets):
+            return self._targets[index]
+        return None
+
+    def select_action(self, label: str) -> None:
+        self._input_box.select_action(label)
+
+    def job_log_text(self) -> str:
+        return self._transcript.plain_text()
+
+    def on_job_log_line(self, instance_id: str, step_id: str, line: str) -> None:
+        """FR-GUI-13: 選択中の宛先に一致するログ行だけを追記する。"""
+        target = self.current_target()
+        if target is None or instance_id != target.instance_id:
+            return
+        if target.step_id and step_id != target.step_id:
+            # 帰属が確定しない行は推測で表示しない。
+            return
+        self._transcript.append_log(line)
+
+    def send_job_message(self, text: str) -> bool:
+        """選択中の実行ジョブへ対話要求を書き出す。成功したら True。"""
+        text = (text or "").strip()
+        if not text:
+            return False
+        if len(text.encode("utf-8")) > _MAX_INPUT_BYTES:
+            self._append_note(
+                self.tr("入力が長すぎます（上限 {n} バイト）。").format(
+                    n=_MAX_INPUT_BYTES
+                )
+            )
+            return False
+        target = self.current_target()
+        if target is None or not target.is_sendable():
+            self._append_note(
+                self.tr(
+                    "この宛先へは送信できません。実行中のステップと対話チャネルが必要です。"
+                )
+            )
+            return False
+
+        action = self._input_box.current_action()
+        channel = str(target.channel_dir)
+        request_id = uuid4().hex
+        try:
+            write_request(
+                Path(channel),
+                str(target.step_id),
+                text,
+                action=str(action),
+                request_id=request_id,
+            )
+        except (OSError, ValueError) as exc:
+            self._append_note(self.tr("送信に失敗しました: {err}").format(err=exc))
+            return False
+
+        self._pending_acks[request_id] = (channel, str(action))
+        self._transcript.append_user(
+            text,
+            action_label=self._action_label(str(action)),
+            request_id=request_id,
+        )
+        self._turn_index = self._transcript.user_turn_count() - 1
+        self._refresh_turn_nav()
+        self.refresh_pending_queue()
+        return True
+
+    def poll_acks(self) -> None:
+        """Runner が書いた ACK を取り込み、受理/失敗を表示する。"""
+        if not self._pending_acks:
+            return
+        channels = {channel for channel, _ in self._pending_acks.values()}
+        for channel in channels:
+            try:
+                acks = list_acks(Path(channel))
+            except OSError:
+                continue
+            for ack in acks:
+                request_id = str(ack.get("request_id") or "")
+                pending = self._pending_acks.pop(request_id, None)
+                if pending is None:
+                    continue
+                status = str(ack.get("status"))
+                detail = str(ack.get("detail") or "")
+                if not self._transcript.update_ack(request_id, status, detail):
+                    # 会話をクリア済みでも ACK を失わない。
+                    self._append_note(
+                        self.tr("→ {action}: {status}").format(
+                            action=self._action_label(pending[1]),
+                            status=self._format_ack_status(ack),
+                        )
+                    )
+
+    @staticmethod
+    def _format_ack_status(ack: Dict[str, Any]) -> str:
+        status = str(ack.get("status"))
+        detail = ack.get("detail") or ""
+        return f"{status} ({detail})" if detail else status
+
+    def open_selected_job_result(self) -> bool:
+        """FR-GUI-14: 選択ジョブの成果物パスを添えて新しい CLI セッションを開く。"""
+        target = self.current_target()
+        if target is None:
+            return False
+        page = self._workbench_page
+        work_root = None
+        artifacts: Tuple[Path, ...] = ()
+        if page is not None:
+            try:
+                work_root = page.session_work_root()
+            except (AttributeError, RuntimeError):
+                work_root = None
+            try:
+                artifacts = tuple(Path(p) for p in (page.session_artifacts() or ()))
+            except (AttributeError, RuntimeError, TypeError):
+                artifacts = ()
+        if not work_root:
+            self._append_note(self.tr("参照できる実行ディレクトリがまだありません。"))
+            return False
+
+        if self._session_is_running():
+            if not self._confirm_session_restart():
+                return False
+            self.stop_cli_session()
+
+        context = build_job_result_context(
+            target,
+            work_root=Path(work_root),
+            returncode=target.returncode,
+            artifacts=artifacts,
+        )
+        self._tabs.setCurrentIndex(0)
+        return self.start_cli_session(context.prompt)
+
+    def _confirm_session_restart(self) -> bool:
+        answer = QMessageBox.question(
+            self,
+            self.tr("Copilot セッションの再起動"),
+            self.tr(
+                "実行中の Copilot 対話セッションを終了して、"
+                "ジョブ結果を新しいセッションで開きますか?"
+            ),
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    # ------------------------------------------------------------------
+    # 送信待ちキュー（FR-GUI-12 の未消費要求操作）
+    # ------------------------------------------------------------------
+
+    def refresh_pending_queue(self) -> None:
+        """選択中の宛先の未消費要求を処理順で並べ直す。"""
+        requests = self._pending_requests()
+        previous = self._pending_list.currentRow()
+        self._pending_list.clear()
+        for request in requests:
+            self._pending_list.addItem(request.text)
+        if requests:
+            self._pending_list.setCurrentRow(min(max(previous, 0), len(requests) - 1))
+        self._pending_bar.setVisible(bool(requests))
+        self._update_status_footer()
+
+    def pending_request_labels(self) -> List[str]:
+        return [
+            self._pending_list.item(i).text() for i in range(self._pending_list.count())
+        ]
+
+    def select_pending_row(self, row: int) -> None:
+        self._pending_list.setCurrentRow(row)
+
+    def cancel_selected_pending(self) -> bool:
+        """選択中の未消費要求を取り消す。成功したら True。"""
+        target = self.current_target()
+        requests = self._pending_requests()
+        row = self._pending_list.currentRow()
+        if target is None or not target.channel_dir or not 0 <= row < len(requests):
+            return False
+        try:
+            cancelled = cancel_request(Path(target.channel_dir), requests[row].request_id)
+        except OSError:
+            cancelled = False
+        self.refresh_pending_queue()
+        return cancelled
+
+    def move_selected_pending(self, delta: int) -> bool:
+        """選択中の未消費要求の処理順を ``delta`` だけ入れ替える。"""
+        target = self.current_target()
+        requests = self._pending_requests()
+        row = self._pending_list.currentRow()
+        if target is None or not target.channel_dir or not target.step_id:
+            return False
+        if not 0 <= row < len(requests):
+            return False
+        new_row = row + delta
+        if not 0 <= new_row < len(requests):
+            return False
+
+        request_ids = [request.request_id for request in requests]
+        request_ids.insert(new_row, request_ids.pop(row))
+        try:
+            reordered = reorder_pending(
+                Path(target.channel_dir), str(target.step_id), request_ids
+            )
+        except OSError:
+            reordered = False
+        self.refresh_pending_queue()
+        if reordered:
+            self._pending_list.setCurrentRow(new_row)
+        return reordered
+
+    def _pending_requests(self) -> List[JobInteractionRequest]:
+        target = self.current_target()
+        if target is None or not target.channel_dir or not target.step_id:
+            return []
+        try:
+            return list(
+                list_pending_requests(Path(target.channel_dir), str(target.step_id))
+            )
+        except OSError:
+            return []
+
+    # ------------------------------------------------------------------
+    # 補助操作と状態行
+    # ------------------------------------------------------------------
+
+    def overflow_menu_labels(self) -> List[str]:
+        return [action.text() for action in self._overflow_menu.actions()]
+
+    def clear_transcript(self) -> None:
+        """表示だけをリセットする（送信済み要求と IPC チャネルは触らない）。"""
+        self._transcript.clear()
+        self._turn_index = -1
+        self._refresh_turn_nav()
+
+    def copy_transcript(self) -> None:
+        clipboard = QGuiApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setText(self._transcript.plain_text())
+
+    def status_footer_text(self) -> str:
+        return self._status_footer.text()
+
+    # ------------------------------------------------------------------
+    # ターンナビゲーション
+    # ------------------------------------------------------------------
+
+    def turn_label_text(self) -> str:
+        return self._turn_label.text()
+
+    def turn_position_text(self) -> str:
+        return self._turn_position.text()
+
+    def goto_previous_turn(self) -> bool:
+        return self._goto_turn(self._turn_index - 1)
+
+    def goto_next_turn(self) -> bool:
+        return self._goto_turn(self._turn_index + 1)
+
+    def _refresh_turn_nav(self) -> None:
+        """送信メッセージの件数と現在位置を表示へ反映する。"""
+        count = self._transcript.user_turn_count()
+        if count == 0:
+            self._turn_index = -1
+            self._turn_label.clear()
+            self._turn_position.clear()
+            self._turn_nav_bar.hide()
+            return
+        self._turn_index = min(max(self._turn_index, 0), count - 1)
+        self._turn_label.setText(
+            _elide_turn_text(self._transcript.user_turn_text(self._turn_index))
+        )
+        self._turn_position.setText(f"{self._turn_index + 1}/{count}")
+        self._turn_prev_btn.setEnabled(self._turn_index > 0)
+        self._turn_next_btn.setEnabled(self._turn_index < count - 1)
+        self._turn_nav_bar.show()
+
+    def _goto_turn(self, index: int) -> bool:
+        if not self._transcript.scroll_to_user_turn(index):
+            return False
+        # スクロールで発火する連動更新より後に確定させる（移動先と表示を一致させる）。
+        self._turn_index = index
+        self._refresh_turn_nav()
+        return True
+
+    def _on_transcript_scrolled(self) -> None:
+        index = self._transcript.current_user_turn_index()
+        if index >= 0:
+            self._turn_index = index
+        self._refresh_turn_nav()
+
+    def _update_status_footer(self) -> None:
+        target = self.current_target()
+        if target is None:
+            self._status_footer.setText(self.tr("対象ジョブが選択されていません。"))
+            return
+        channel = (
+            self.tr("対話チャネル: 利用できます")
+            if target.channel_dir
+            else self.tr("対話チャネル: 利用できません")
+        )
+        self._status_footer.setText(
+            self.tr("状態: {status} / {channel} / 送信待ち: {count} 件").format(
+                status=target.status,
+                channel=channel,
+                count=self._pending_list.count(),
+            )
+        )
+
+    # ------------------------------------------------------------------
+    # 内部
+    # ------------------------------------------------------------------
+
+    def _on_job_send_clicked(self) -> None:
+        if self.send_job_message(self._input_box.compose_text()):
+            self._input_box.clear()
+
+    def _on_attach_requested(self) -> None:
+        """FR-GUI-18: 選んだファイルのパスだけを添付する（本文は読まない）。"""
+        paths, _filter = QFileDialog.getOpenFileNames(
+            self, self.tr("コンテキストを添付"), str(self._repo_root)
+        )
+        for path in paths:
+            self._input_box.add_attachment(path)
+
+    def _on_target_changed(self) -> None:
+        target = self.current_target()
+        lines: List[str] = []
+        page = self._workbench_page
+        if target is not None and page is not None:
+            try:
+                lines = list(page.job_log_snapshot(target))
+            except (AttributeError, RuntimeError, TypeError):
+                lines = []
+        self._transcript.set_log_snapshot(lines)
+        self._turn_index = -1
+        self._refresh_turn_nav()
+        self._update_job_controls()
+        self.refresh_pending_queue()
+
+    def _update_job_controls(self) -> None:
+        target = self.current_target()
+        self._input_box.set_sendable(target is not None and target.is_sendable())
+        self._open_result_action.setEnabled(target is not None)
+        self._update_status_footer()
+
+    def _action_label(self, action: str) -> str:
+        return self._input_box.action_label(action)
+
+    def _append_note(self, text: str) -> None:
+        self._transcript.append_notice(text)

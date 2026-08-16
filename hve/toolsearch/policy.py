@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 from .types import PinMode, ToolEntry, ToolSearchContractError, resolve_policy_value
+from .usage import LOG_DIRNAME
 
 _POLICY_FILE = Path(__file__).with_name("policy.json")
 
@@ -135,13 +136,26 @@ class ToolSearchPolicy:
         )
 
     @staticmethod
-    def default_path() -> Path:
-        """`policy.json` の場所。表示側がパス規則を再実装しないための単一経路。"""
+    def default_path(repo_root: Path | str | None = None) -> Path:
+        """`policy.json` の場所。表示側がパス規則を再実装しないための単一経路。
+
+        ``repo_root`` を渡したとき、そのリポジトリに ``.toolsearch/policy.json`` が
+        あればそれを優先する（別リポジトリで使うときの上書き経路）。
+        """
+        if repo_root is not None:
+            local = Path(repo_root) / LOG_DIRNAME / "policy.json"
+            if local.is_file():
+                return local
         return _POLICY_FILE
 
     @classmethod
-    def load(cls, path: Path | str | None = None) -> "ToolSearchPolicy":
-        target = Path(path) if path is not None else cls.default_path()
+    def load(
+        cls,
+        path: Path | str | None = None,
+        *,
+        repo_root: Path | str | None = None,
+    ) -> "ToolSearchPolicy":
+        target = Path(path) if path is not None else cls.default_path(repo_root)
         try:
             raw = json.loads(target.read_text(encoding="utf-8"))
         except OSError as exc:
@@ -149,6 +163,51 @@ class ToolSearchPolicy:
         except json.JSONDecodeError as exc:
             raise PolicyError(f"policy file is not valid JSON: {target}") from exc
         return cls.from_dict(raw)
+
+    # --- 書き戻し ---------------------------------------------------------
+    def to_dict(self) -> dict[str, Any]:
+        """`from_dict()` が受け付ける形へ戻す。"""
+        return {
+            "version": self.version,
+            "limit": self.limit,
+            "max_limit": self.max_limit,
+            "tau": self.tau,
+            "field_weights": dict(self.field_weights),
+            "pins": dict(self.pins),
+            "additional_search_text": dict(self.additional_search_text),
+            "step_overrides": {k: dict(v) for k, v in self.step_overrides.items()},
+        }
+
+    def save(self, path: Path | str) -> None:
+        """検証を通してから既存ファイルへ書き戻す（不正なら 1 バイトも書かない）。
+
+        `_comment` のような未知のトップレベルキーを保持するため、既存の内容へ
+        既知フィールドだけを重ねる。既存ファイルが読めない場合は保持を保証
+        できないため ``PolicyError`` を送出して書き込まない。
+        """
+        target = Path(path)
+        payload = self.to_dict()
+        # 生成物ではなく from_dict と同じ経路で検証する（GUI と CLI で判定を分けない）。
+        ToolSearchPolicy.from_dict(payload)
+
+        existing: dict[str, Any] = {}
+        if target.exists():
+            try:
+                loaded = json.loads(target.read_text(encoding="utf-8"))
+            except OSError as exc:
+                raise PolicyError(f"cannot read policy file: {target}") from exc
+            except json.JSONDecodeError as exc:
+                raise PolicyError(f"policy file is not valid JSON: {target}") from exc
+            if not isinstance(loaded, dict):
+                raise PolicyError(f"policy file is not a JSON object: {target}")
+            existing = loaded
+
+        existing.update(payload)
+        target.write_text(
+            json.dumps(existing, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
 
     # --- 参照 -------------------------------------------------------------
     def pin_for(self, entry_id: str) -> PinMode:
@@ -178,7 +237,7 @@ def apply_policy(
     *,
     excluded_tools: Iterable[str] | None = None,
     pin_only: bool = False,
-    manifest_pins: Mapping[str, str] | None = None,
+    manifest_pins: Mapping[str, PinMode] | None = None,
     auto_pins: Iterable[str] | None = None,
 ) -> PolicyDecision:
     """`ToolEntry` 列へ pin と検索語彙を適用し、pin / 検索対象へ振り分ける。
@@ -203,7 +262,7 @@ def apply_policy(
         if entry.name in excluded or entry.id in excluded:
             dropped.append(entry.id)
             continue
-        pin = overrides.get(entry.id) or policy.pin_for(entry.id)
+        pin: PinMode = overrides.get(entry.id) or policy.pin_for(entry.id)
         if pin == "auto" and entry.id in promoted:
             pin = "always"
         resolved = dataclasses.replace(

@@ -17,7 +17,9 @@
 - [Issue Template 入力](#issue-template-入力)
 - [CLI 例](#cli-例)
 - [状態判定](#状態判定)
+- [利用手順（前提・操作・入出力・完了確認・失敗時対応）](#利用手順前提操作入出力完了確認失敗時対応)
 - [自動実行ガイド（ワークフロー）](#自動実行ガイドワークフロー)
+- [カスタマイズ](#カスタマイズ)
 - [セットアップ・トラブルシューティング](#セットアップトラブルシューティング)
 
 ---
@@ -25,7 +27,7 @@
 ## 対象読者
 
 - `knowledge-management.yml`（AKM）を運用する担当者
-- `qa/` / `original-docs/` / `knowledge/` の更新フローを管理する担当者
+- `qa/` / `docs-original/` / `knowledge/` の更新フローを管理する担当者
 
 ## 前提
 
@@ -35,7 +37,7 @@
 
 ## 次のステップ
 
-- `original-docs/` から質問票を生成する場合は [original-docs-review.md](./original-docs-review.md) を参照
+- `docs-original/` の目録化・正規化と質問票生成は [00-design-doc-ingestion.md](./00-design-doc-ingestion.md) を参照
 - ソースコードから文書を段階生成する場合は [sourcecode-documentation.md](./sourcecode-documentation.md) を参照
 
 ## 概要
@@ -50,7 +52,7 @@ AKM は `qa` / `original-docs` / `workiq` をカンマ区切りでマルチ選�
 
 ![AKM アーキテクチャ。sources に応じて qa、original-docs、workiq のいずれかまたは複数を入力とし、workiq 選択時は Work IQ 取り込みフェーズが先行して knowledge/Dxx を生成・更新した後、auto-knowledge-management ワークフローで KnowledgeManager が統合処理を実行し、knowledge 配下の D01〜D21 とステータスファイルを差分更新する。反復精緻化ループで再取り込みしていく。](./images/infographic-akm.svg)
 
-AKM は 1 回実行して終わりではなく、`aqod` で生成した質問票を `qa/` に蓄積し、再度 `akm` で統合する反復精緻化ループを前提に運用します。
+AKM は 1 回実行して終わりではなく、ADI Step 1.1 / 1.2で生成した原本質問票を `qa/` に蓄積し、再度 `akm` で統合する反復精緻化ループを前提に運用します。
 
 > [!NOTE]
 > **Step.1.3（手動 Prompt）で作成した `knowledge/D{NN}-*.md` との関係**: [01-business-requirement.md](./01-business-requirement.md) の Step.1.3 で Microsoft 365 Copilot Researcher を使って手動作成した `knowledge/D01〜D21-*.md` がある場合、AKM はそのファイルを **完全上書き** ではなく **差分マージ** で更新します。変更履歴は `knowledge/D{NN}-*-ChangeLog.md` に記録されます。Step.1.3（手動）と AKM（自動）は同じ保存先 `knowledge/` を共有する補完関係です。
@@ -61,6 +63,25 @@ AKM は 1 回実行して終わりではなく、`aqod` で生成した質問票
 
 ![AKM: KnowledgeManager の1ステップチェーン（並列0箇所含む）](./images/chain-akm.svg)
 
+> [!IMPORTANT]
+> **図は Prompt の連鎖だけを描いており、CLI / GUI の Step 構成とは一致しない。**
+> `hve/workflow_registry.py` の AKM 定義（2026-08-07 時点）は次の 2 ステップで、
+> Step 1 は D01〜D21 の **21 並列 fanout** を持つ。
+>
+> | Step | Prompt | 依存 | 出力 |
+> |---|---|---|---|
+> | 1 | `KnowledgeManager` | なし | `knowledge/business-requirement-document-status.md` / `knowledge/{key}-*.md` / `knowledge/{key}-*-ChangeLog.md`（`{key}` = D01〜D21） |
+> | 2 | `QA-DocConsistency`（`knowledge/` 横断整合性レビュー） | Step 1 | `knowledge/business-requirement-document-status.md` |
+>
+> 上図の SVG は Step 2 と fanout を描いていない（**図の更新は要確認**）。
+>
+> **Cloud（Issue Template）経路は現状これと異なる。**
+> `.github/workflows/auto-knowledge-management-reusable.yml` は `[AKM] Step.1` の Step Issue を
+> **1 件だけ**作成し、同ファイル内に「AKM はステップが 1 つのみ: Step.1 完了 → Root Issue に `akm:done`」と
+> 明記されている（fanout 展開と Step 2 は生成されない）。
+> したがって **CLI / GUI の正本は `hve/workflow_registry.py`、Cloud の正本は上記 workflow** であり、
+> 両者の同期は本ガイドの範囲外の課題として**要確認**。
+
 ### タスク／データフロー
 
 Prompt の入出力ファイルを示します（`hve/workflow_registry.py` の AKM 定義に準拠）。
@@ -69,7 +90,7 @@ Prompt の入出力ファイルを示します（`hve/workflow_registry.py` の 
 
 ## 前提条件
 
-- `qa/` または `original-docs/` に対象ファイルが存在すること
+- `qa/` または `docs-original/` に対象ファイルが存在すること
 - GitHub Copilot が有効であること
 - セットアップ手順は [hve-cloud-getting-started.md](./hve-cloud-getting-started.md) / [hve-cli-getting-started.md](./hve-cli-getting-started.md) / [hve-gui-getting-started.md](./hve-gui-getting-started.md) を参照
 
@@ -97,6 +118,34 @@ hve CLI の Work IQ 取り込みステージを使うと、Microsoft 365 側の�
 - `enable_review` / `enable_qa` / `enable_self_improve` / `enable_auto_merge`
 - `model` / `review_model` / `qa_model`
 
+## QA 回答から起動する Knowledge Management のマージ設定とモデル指定
+
+`akm` 以外のワークフローで実行前 QA を有効にし、さらに **バックグラウンドマージを明示的に有効化** すると、回答済み QA を `knowledge/` へ取り込む Knowledge Management が**バックグラウンドで直列起動**されます（メインタスクは完了を待ちません）。
+
+| 経路 | マージ可否の指定方法 |
+|---|---|
+| CLI | `--qa-akm-background-merge`。対話ウィザードでは「QA 自動投入」を有効にしたときに尋ねられます |
+| GUI | 右ペインの「共通設定  *必須」枠、または設定画面の「一般 > Knowledge Management」の「QA (質問票) を Knowledge Management へバックグラウンドでマージする」 |
+| Cloud | ワークフロー起動用の各 Issue Template にある `Knowledge Management マージ設定` チェックボックス（9 テンプレート） |
+
+- **既定はいずれも無効**です。有効にしない限り QA 回答は `knowledge/` へ取り込まれません。
+- 以前は「QA 自動投入」を有効にするだけで常に起動していました。共有資産である `knowledge/` への自動書込みを利用者が選べるようにするため、既定無効の明示選択へ変更しています。
+
+マージを有効にした Knowledge Management 子実行だけに、メインタスクとは別の実行品質を指定できます。
+
+| 経路 | 指定方法 | 指定できる項目 |
+|---|---|---|
+| CLI | `--akm-model` / `--akm-reasoning-effort` / `--akm-context-tier`。対話ウィザードではマージを有効にしたときに尋ねられます | モデル / reasoning effort / context tier |
+| GUI | 右ペインの「共通設定  *必須」枠、または設定画面の「一般 > Knowledge Management」 | モデル / reasoning effort / context tier |
+| Cloud | ワークフロー起動用の各 Issue Template にある `akm_model` ドロップダウン（9 テンプレート） | モデルのみ |
+
+- いずれも既定は「継承」で、未指定の項目はメインタスクの設定（`--model` / `--reasoning-effort` / `--context-tier`）をそのまま使います。従来の挙動と同じです。
+- **`--workflow akm` を明示指定した実行には適用されません**。その場合は従来どおり `--model` などに従います。
+- Cloud にモデルしか無いのは、GitHub Actions 経路に reasoning effort / context tier に相当する設定が存在しないためです。
+- Knowledge Management の Issue Template には `akm_model` がありません（AKM から AKM を再帰起動しないため）。ラベル初期化用の `setup-labels` など、ワークフローを起動しない Template にもありません。
+
+> **使いどころ**: 設計・実装のメインタスクは高品質モデルで走らせつつ、定型作業に近い `knowledge/` の差分同期だけを安価なモデルへ逃がすと、品質を下げずにコストを抑えられます。
+
 ## CLI 例
 ```bash
 # 従来互換
@@ -116,6 +165,20 @@ python -m hve orchestrate --workflow akm --sources qa,original-docs --workiq-akm
 ## 状態判定
 - `Confirmed` / `Tentative` / `Unknown` / `Conflict`
 - `Conflict` は original-docs を含む場合に利用
+
+## 利用手順（前提・操作・入出力・完了確認・失敗時対応）
+
+| 軸 | 内容 |
+|---|---|
+| **前提** | `qa/` または `docs-original/` に対象ファイルがあること。GitHub Copilot が有効なこと。CLI で実行する場合は [hve-cli-getting-started.md](./hve-cli-getting-started.md) のセットアップが済んでいること |
+| **操作** | Cloud: Issue Template **Knowledge Management** を起票 → ラベル `knowledge-management` で `auto-orchestrator-dispatcher.yml` が起動。CLI: 上の「CLI 例」のコマンドを実行 |
+| **入力** | `sources`（CLI 既定 `qa,original-docs`）/ `target_files` / `custom_source_dir` / `force_refresh`。`workiq` は CLI のみ。**`target_files` の既定は `sources` に依存**する（`hve/orchestrator.py` の `_default_akm_target_files()`）: 非 Work IQ ソースが **1 種類**なら `workiq` 併用時もその glob になる（`qa` / `qa,workiq` → `qa/*.md`、`original-docs` / `original-docs,workiq` → `docs-original/*`）。**`workiq` 単独、または `qa` と `original-docs` を併用した場合（CLI 既定の `qa,original-docs` を含む）は既定パターンなし（空）**＝固定 glob で絞り込まない。Cloud の Issue Template は `target_files` を空欄のまま起票できる |
+| **出力** | `knowledge/business-requirement-document-status.md` と `knowledge/D01〜D21-*.md`（および `-ChangeLog.md`） |
+| **完了確認** | 上記「完了条件」を満たすこと。Cloud ではラベルが `akm:done` に遷移すること |
+| **失敗時対応** | ラベルが `akm:blocked` の場合は Issue のコメントを確認。切り分けは [troubleshooting.md](./troubleshooting.md)。`knowledge/` が中途半端な場合は `force_refresh` で再生成 |
+
+> `knowledge/` への書き込みは「削除 → 新規作成」が規約（Skill `work-artifacts-layout`）。
+> 追記編集を前提にした運用をしないこと。
 
 ## 自動実行ガイド（ワークフロー）
 
@@ -138,6 +201,24 @@ python -m hve orchestrate --workflow akm --sources qa,original-docs --workiq-akm
 2. **Knowledge Management** テンプレートを選択
 3. `sources`（`qa` / `original-docs` / `both`）を選択
 4. **Submit** して実行
+
+## カスタマイズ
+
+| 変えたいもの | 設定の正本（ここだけを編集する） | 拡張手順 | 回帰検証 |
+|---|---|---|---|
+| Step 構成・依存・出力パス・fanout キー（D01〜D21） | `hve/workflow_registry.py` の `akm` 定義 | `fanout_static_keys` を増減する場合は Prompt 側の共通テンプレートも合わせる | `python -m pytest hve/tests/test_workflow_registry.py hve/tests/test_fanout.py hve/tests/test_e2e_akm_fanout_dryrun.py -q` |
+| Step 本文テンプレート | `.github/scripts/templates/akm/step-1.md` / `step-2.md`、fanout 共通は `hve/prompt/fanout/akm/_common.md` | 出力先パスの表記を変えるときは registry の `output_paths_template` と揃える | `python -m pytest hve/tests/test_e2e_akm_fanout_dryrun.py -q` |
+| Agent の振る舞い | `.github/prompts/KnowledgeManager.prompt.md` / `.github/prompts/QA-DocConsistency.prompt.md` | 入出力契約は `.github/io-contracts/KnowledgeManager--akm--1.yaml` / `QA-DocConsistency--akm--2.yaml` と対で更新する | `python -m pytest hve/tests/test_knowledge_source_creation_contract.py -q` |
+| `sources` の受理値と正規化 | `hve/` の AKM 入力正規化 | 旧値 `qa` / `original-docs` / `both` の後方互換を壊さない | `python -m pytest hve/tests/test_akm_sources_normalization.py -q` |
+| Work IQ 取り込み | `hve/` の Work IQ 取り込みフェーズ | Cloud 実行では利用できない前提を維持する | `python -m pytest hve/tests/test_akm_workiq_ingest.py hve/tests/test_akm_workiq_phase.py -q` |
+| Cloud の入力欄 | `.github/ISSUE_TEMPLATE/knowledge-management.yml` | 呼び出し先 `.github/workflows/auto-knowledge-management-reusable.yml` の `inputs` と対で更新する | Issue Template から 1 度実行して確認 |
+
+**互換性・安全性で壊してはならない境界**
+
+- `docs-original/` は**読み取り専用**。AKM は参照するだけで変更しない。
+- `knowledge/` の更新は差分マージ。手動作成した `knowledge/D{NN}-*.md` を完全上書きしない（変更履歴は `-ChangeLog.md`）。
+- `sources` の旧値 `both` は `qa,original-docs` へ正規化する後方互換を維持する。
+- `workiq` は CLI 専用。Cloud の Issue Template に `workiq` を足すと実行時に解決できない。
 
 ## セットアップ・トラブルシューティング
 

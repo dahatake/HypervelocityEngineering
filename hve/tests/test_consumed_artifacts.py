@@ -112,7 +112,7 @@ class TestConsumedArtifactsSemantics:
 # ---------------------------------------------------------------------------
 
 # Phase 4 で consumed_artifacts を明示設定したワークフロー ID
-PHASE4_TARGET_WORKFLOWS = ["aas", "adfd", "adfdv", "aag", "aagd", "akm", "aqod", "asdw-web"]
+PHASE4_TARGET_WORKFLOWS = ["aas", "adfd", "adfdv", "aag", "aagd", "akm", "adi", "asdw-web"]
 
 
 class TestPhase4ConsumedArtifactsMinimized:
@@ -322,16 +322,16 @@ class TestPhase4ConsumedArtifactsValues:
         assert "agent_specs" in step.consumed_artifacts
 
     def test_akm_step1_consumed_artifacts_empty(self) -> None:
-        """AKM Step 1: qa/, original-docs/ は既知 key なし → []"""
+        """AKM Step 1: qa/, docs-original/ は既知 key なし → []"""
         wf = get_workflow("akm")
         step = wf.get_step("1")
         assert step is not None
         assert step.consumed_artifacts == []
 
-    def test_aqod_step1_uses_knowledge(self) -> None:
-        """AQOD Step 1: knowledge/D07-* は knowledge キーでカバー"""
-        wf = get_workflow("aqod")
-        step = wf.get_step("1")
+    def test_adi_questionnaire_step_uses_knowledge(self) -> None:
+        """ADI Step 1.1: knowledge/Dxx-* は knowledge キーでカバーする。"""
+        wf = get_workflow("adi")
+        step = wf.get_step("1.1")
         assert step is not None
         assert "knowledge" in step.consumed_artifacts
 

@@ -23,6 +23,7 @@ def test_get_parser_input_path_returns_expected_paths() -> None:
         "agent_catalog": "docs/agent/agent-architecture.md",
         "business_candidate": "docs/company-business-recommendation.md",
         "use_case_skeleton": "docs/catalog/use-case-skeleton.md",
+        "design_doc_inventory": "docs/catalog/design-doc-inventory.md",
     }
     for name, path in expected.items():
         assert get_parser_input_path(name) == path, (

@@ -7,7 +7,7 @@ inputs:
   required: false
   kind: agent_artifact
   producer: Arch-ARD-BusinessAnalysis-Untargeted--ard--1.2
-- path: original-docs/*
+- path: docs-original/*
   required: false
   kind: static
 - path: docs/business/*-analysis.md

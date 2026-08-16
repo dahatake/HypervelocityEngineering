@@ -17,7 +17,7 @@
 - **`report_progress` 必須**: `report_progress.prDescription` に検証記録を必ず含める。推奨形式は `- [x] <!-- validation-confirmed --> 検証・セキュリティ確認を実施する`。
 - **最終回答のみ記載は不可**: 最終 assistant message だけに `<!-- validation-confirmed -->` を書いても不十分。PR body 反映対象の `report_progress.prDescription` に含めること。
 - **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
 - **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
 - **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 

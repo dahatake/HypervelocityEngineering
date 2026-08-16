@@ -39,10 +39,10 @@ metadata:
 | Toolbox / tool search 設計・検証 | `foundry-toolbox-contract` | `.github/skills/foundry-toolbox-contract/SKILL.md` | Tool 総数の算出と閾値判定、Toolbox 採否、pin、検索メタデータ、探索予算（TB-CAP-01〜05） |
 | データフロー処理設計 | `dataflow-design-guide` | `.github/skills/dataflow-design-guide/SKILL.md` | バッチ要件定義〜テスト仕様の統合ガイド |
 | マイクロサービス設計 | `microservice-design-guide` | `.github/skills/microservice-design-guide/SKILL.md` | サービス定義書テンプレート |
-| original-docs/ 取り込み | `knowledge-management` | `.github/skills/knowledge-management/SKILL.md` | original-docs/ → D01〜D21 分類・矛盾検出 |
+| docs-original/ 取り込み | `knowledge-management` | `.github/skills/knowledge-management/SKILL.md` | docs-original/ → D01〜D21 分類・矛盾検出 |
 | Markdown 横断クエリ（ローカル） | `markdown-query` | `.github/skills/markdown-query/SKILL.md` | ローカル完結の Markdown 検索・該当チャンクのみ返却で Context 最小化。**対象が `.md` のみであれば `grep_search` より優先**。索引未作成時は `python -m mdq index` を先に実行。HVE CLI Orchestrator 実行中はリアルタイム索引更新が並走する（既定 ON、`--no-mdq-watch` で無効化、Cloud Agent では非対応） || ソースコード横断クエリ（ローカル） | `code-query` | `.github/skills/code-query/SKILL.md` | ローカル完結のソースコード検索（定義 / 参照 / 正規表現 / 俯瞰マップ / トレース）。**対象が `.md` 以外のソースであれば `grep_search` より優先**。`--profile hve`（HVE 本体）/ `--profile app`（`src/` の生成アプリ）を使い分ける。索引未作成時は `python -m cq index` を先に実行 |
 **Workflow 一覧（Issue Template / hve）**
-- `aas`, `aad`, `asdw`, `adfd`, `adfdv`, `aag`, `aagd`, `akm`, `aqod`, `adoc`
+- `ard`, `aas`, `aad-web`, `asdw-web`, `adfd`, `adfdv`, `aag`, `aagd`, `akm`, `adi`, `adoc`
 
 **【出力 / output】**
 

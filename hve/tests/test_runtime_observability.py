@@ -172,3 +172,86 @@ class TestNoNewConfigSurface:
 
     def test_module_defines_single_stream_env_marker(self) -> None:
         assert rto.STATS_STREAM_ENV == "HVE_STATS_STREAM"
+
+
+class _UsageData:
+    """SDK ``AssistantUsageData`` 相当のスタブ。"""
+
+    def __init__(self, *, dict_payload: dict | None = None, raise_on_to_dict: bool = False, **attrs) -> None:
+        self._dict_payload = dict_payload
+        self._raise = raise_on_to_dict
+        for key, value in attrs.items():
+            setattr(self, key, value)
+
+    def to_dict(self) -> dict:
+        if self._raise:
+            raise RuntimeError("to_dict failed")
+        return dict(self._dict_payload or {})
+
+
+class TestUsageCreditExtraction:
+    """FR-RTO-07 / FR-MAINT-07: usage_credit フィールド抽出の単一実装。"""
+
+    def test_extracts_nano_aiu_api_call_id_and_cost(self) -> None:
+        data = _UsageData(
+            dict_payload={"copilotUsage": {"totalNanoAiu": 1_500_000_000}},
+            api_call_id="api-1",
+            cost=0.75,
+            model="claude-opus-5",
+        )
+        fields = rto.extract_usage_credit_fields(data)
+        assert fields is not None
+        assert fields["nano_aiu"] == 1_500_000_000
+        assert fields["api_call_id"] == "api-1"
+        assert fields["multiplier_cost"] == 0.75
+        assert fields["model"] == "claude-opus-5"
+        assert fields["unavailable_reason"] is None
+
+    def test_missing_copilot_usage_sets_unavailable_reason(self) -> None:
+        data = _UsageData(dict_payload={}, api_call_id="api-2", model="m")
+        fields = rto.extract_usage_credit_fields(data)
+        assert fields is not None
+        assert fields["nano_aiu"] is None
+        assert fields["unavailable_reason"]
+
+    def test_camel_case_attribute_fallback(self) -> None:
+        data = _UsageData(
+            dict_payload={"copilotUsage": {"totalNanoAiu": 42}},
+            apiCallId="api-3",
+            model="m",
+        )
+        fields = rto.extract_usage_credit_fields(data)
+        assert fields is not None
+        assert fields["api_call_id"] == "api-3"
+
+    def test_to_dict_failure_is_treated_as_missing_copilot_usage(self) -> None:
+        data = _UsageData(raise_on_to_dict=True, api_call_id="api-4", model="m")
+        fields = rto.extract_usage_credit_fields(data)
+        assert fields is not None
+        assert fields["nano_aiu"] is None
+        assert fields["unavailable_reason"]
+
+    def test_returns_none_when_nothing_is_available(self) -> None:
+        # copilotUsage はあるが totalNanoAiu / apiCallId / cost が全て欠落。
+        data = _UsageData(dict_payload={"copilotUsage": {}}, model="m")
+        assert rto.extract_usage_credit_fields(data) is None
+
+    def test_none_data_returns_none(self) -> None:
+        assert rto.extract_usage_credit_fields(None) is None
+
+    def test_does_not_return_prompt_or_response_text(self) -> None:
+        """FR-RTO-04: 本文系フィールドを返値へ含めない。"""
+        data = _UsageData(
+            dict_payload={"copilotUsage": {"totalNanoAiu": 1}, "promptText": "secret"},
+            api_call_id="api-5",
+            model="m",
+        )
+        fields = rto.extract_usage_credit_fields(data)
+        assert fields is not None
+        assert set(fields) == {
+            "api_call_id",
+            "model",
+            "multiplier_cost",
+            "nano_aiu",
+            "unavailable_reason",
+        }

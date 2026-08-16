@@ -1,7 +1,4 @@
-inputs:
-- path: users-guide/01-business-requirement.md
-  required: true
-  kind: static
+inputs: []
 outputs:
 - path: docs/company-business-recommendation.md
   required: true

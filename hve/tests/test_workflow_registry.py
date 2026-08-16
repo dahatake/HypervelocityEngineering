@@ -37,7 +37,7 @@ EXPECTED_STEP_COUNTS = {
     "aagd": 6,  # Step 4 (tool search 実測評価) 追加で 5 → 6
     "aar": 6,  # Agentic Retrieval Add-on: 6 real steps (コンテナなし)
     "akm": 2,  # ADR-0002: fan-out base + cross-cutting review join
-    "aqod": 2,  # ADR-0002 T4H: fan-out base + cross-cutting review join
+    "adi": 9,  # 目録 / 質問票 fan-out・join / Doc Card / トリアージ / ルーティング / 下流反映 3 件
     "adoc": 23,  # 4 containers + 19 real steps
 }
 
@@ -52,7 +52,7 @@ EXPECTED_NON_CONTAINER_COUNTS = {
     "aagd": 6,  # Step 4 (tool search 実測評価) 追加で 5 → 6
     "aar": 6,
     "akm": 2,  # ADR-0002: fan-out base + cross-cutting review join
-    "aqod": 2,  # ADR-0002 T4H: fan-out base + cross-cutting review join
+    "adi": 9,
     "adoc": 19,
 }
 
@@ -547,23 +547,22 @@ class TestAKMWorkflow:
         assert wf.max_parallel == 21
 
 
-class TestAQODWorkflow:
-    """AQOD ワークフロー固有テスト。"""
+class TestADIQuestionnaireWorkflow:
+    """ADIへ統合した原本質問票StepのRegistry契約。"""
 
-    def test_aqod_params(self):
-        wf = get_workflow("aqod")
+    def test_adi_params(self):
+        wf = get_workflow("adi")
         assert wf is not None
-        assert wf.params == ["target_scope", "depth", "focus_areas"]
+        assert wf.params == ["purpose", "target_scope", "depth", "focus_areas"]
 
-    def test_aqod_single_step(self):
-        # ADR-0002 T4H: AQOD は fan-out base (Step 1) + 横断レビュー (Step 2) の 2 ステップ構成
-        wf = get_workflow("aqod")
+    def test_adi_questionnaire_steps(self):
+        wf = get_workflow("adi")
         assert wf is not None
-        assert len(wf.steps) == 2
-        assert wf.steps[0].id == "1"
-        assert wf.steps[1].id == "2"
-        assert wf.steps[0].fanout_static_keys is not None
-        assert len(wf.steps[0].fanout_static_keys) == 21
+        assert wf.get_step("1.1").fanout_static_keys == [
+            f"D{n:02d}" for n in range(1, 22)
+        ]
+        assert wf.get_step("1.2").depends_on == ["1.1"]
+        assert wf.get_step("2").depends_on == ["1.2"]
         assert wf.max_parallel == 21
 
 
@@ -657,7 +656,7 @@ class TestABDVAgentNames:
 #     aag:      1 / 2 / 3（もとから宣言済みで allowlist が陳腐化していた）
 #     aagd:     2.2 / 2.3 / 3
 #     akm:      1 / 2
-#     aqod:     1 / 2（もとから宣言済みで allowlist が陳腐化していた）
+#     旧独立原本質問票: 1 / 2（ADI 1.1 / 1.2 へ移設）
 #     adoc:     2.1〜2.5 / 3.1（TBD-14 の動的パスを `output_paths_template` で宣言）
 #
 # 残置理由:
@@ -949,4 +948,47 @@ class TestAsdwWebLocalFirstDag:
         if declared:
             missing = sorted(set(step.depends_on) - declared)
             assert missing == [], f"step-{step_id}.md の `## 依存` に {missing} が無い"
+
+
+_PROMPTS_DIR = Path(__file__).resolve().parents[2] / ".github" / "prompts"
+
+
+class TestCustomAgentPromptFilesExist:
+    """全ワークフローの custom_agent に対応する Prompt ファイルが実在すること。
+
+    `hve/prompt_loader.py::load_prompt()` はファイル不存在時に例外ではなく空文字を
+    返すため、Prompt 未作成のまま Step が実行されても実行時には落ちない
+    （Agent 仕様が LLM に一切渡らないまま進行する）。既存の CI は
+    `body_template_path` の実在しか検証しておらず Prompt 側は無検査だったので、
+    本テストで宣言と実体の 1:1 を強制する。
+    """
+
+    @pytest.mark.parametrize("wf", list_workflows(), ids=lambda w: w.id)
+    def test_every_custom_agent_has_a_prompt_file(self, wf):
+        missing = [
+            f"step {s.id}: {s.custom_agent}"
+            for s in wf.steps
+            if s.custom_agent
+            and s.custom_agent != "(none)"
+            and not (_PROMPTS_DIR / f"{s.custom_agent}.prompt.md").is_file()
+        ]
+        assert missing == [], (
+            f"Workflow '{wf.id}': 以下の custom_agent に対応する "
+            f".github/prompts/<name>.prompt.md がありません: {missing}"
+        )
+
+    @pytest.mark.parametrize("wf", list_workflows(), ids=lambda w: w.id)
+    def test_every_custom_agent_prompt_is_not_empty(self, wf):
+        """0 バイト書き込み事故を検出する（空ファイルは実質未作成と同義）。"""
+        empty = [
+            f"step {s.id}: {s.custom_agent}"
+            for s in wf.steps
+            if s.custom_agent
+            and s.custom_agent != "(none)"
+            and (path := _PROMPTS_DIR / f"{s.custom_agent}.prompt.md").is_file()
+            and not path.read_text(encoding="utf-8").strip()
+        ]
+        assert empty == [], (
+            f"Workflow '{wf.id}': 以下の Prompt ファイルが空です: {empty}"
+        )
 

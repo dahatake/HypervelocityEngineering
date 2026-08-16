@@ -1,0 +1,10 @@
+{
+  "extensions.autoUpdate": false,
+  "extensions.autoCheckUpdates": false,
+  "extensions.showRecommendationsOnlyOnDemand": true,
+  "extensions.ignoreRecommendations": true,
+  "chat.utilityModel": "qwen3:8b",
+  "chat.utilitySmallModel": "qwen3:8b",
+  "inlineChat.defaultModel": "qwen3:8b",
+  "chat.byokUtilityModelDefault": "Main Agent Model"
+}

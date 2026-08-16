@@ -1,10 +1,10 @@
 # Plugin / MCP Server 認証ガイド
 
-> ⚠️ **本ドキュメントの位置付け（2026-05-27 現在）**
+> ⚠️ **本ドキュメントの位置付け（2026-08-07 現在）**
 >
 > - **ユーザー影響**: HVE GUI から MCP / Plugin の認証を起動する専用 UI（旧 🔐 ボタン）は廃止されています（[hve/gui/main_window.py](../hve/gui/main_window.py) の該当箇所に「Plugin / MCP Server 認証ボタンは廃止」とコメントあり）。認証は **GitHub Copilot CLI 側で完結** させる運用に移行しました。
-> - **実装状況（参考）**: 旧ガイドが参照していた `hve/gui/auth_providers/`（manifest システム）は 2026-02 のコミットで他作業と併せ削除済みです。同じく旧記述の `hve/gui/pty_auth_controller.py` / `hve/gui/pty_auth_session_widget.py` は **過去・現在いずれも本リポジトリに存在しません**。PTY 関連コード（[hve/gui/pty_backend.py](../hve/gui/pty_backend.py) / [hve/gui/widgets/xterm_terminal_view.py](../hve/gui/widgets/xterm_terminal_view.py)）は残存していますが、本番 GUI コードからは現在呼び出されておらず、テスト経由でのみ実行されます。
-> - **公式ルート**: 本ドキュメントは現状を整理し、公式 GitHub Copilot CLI の `/mcp add` / `/login` フローに読者を誘導します（公式: <https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/overview>）。
+> - **実装状況（参考）**: 旧ガイドが参照していた `hve/gui/auth_providers/`（manifest システム）は 2026-02 のコミットで他作業と併せ削除済みです。同じく旧記述の `hve/gui/pty_auth_controller.py` / `hve/gui/pty_auth_session_widget.py` は **過去・現在いずれも本リポジトリに存在しません**。PTY 関連コード（[hve/gui/pty_backend.py](../hve/gui/pty_backend.py) / [hve/gui/widgets/xterm_terminal_view.py](../hve/gui/widgets/xterm_terminal_view.py)）は、GUI の「GitHub CLI でログイン」（[hve/gui/gh_login_dialog.py](../hve/gui/gh_login_dialog.py)）から本番利用されています。
+> - **公式ルート**: 本ドキュメントは現状を整理し、公式 GitHub Copilot CLI の `/mcp add` / `copilot mcp add` / `/login` / `copilot login` フローに読者を誘導します（公式: <https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers>、<https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli>）。
 
 ---
 
@@ -24,8 +24,8 @@
 | 設定パネルから利用中 | [hve/gui/copilot_cli_bridge.py](../hve/gui/copilot_cli_bridge.py) | GitHub Copilot CLI の薄いラッパ。MCP / Plugin 一覧の取得に使用。 |
 | 設定パネルから利用中 | [hve/gui/page_options.py](../hve/gui/page_options.py) | 上記ブリッジを呼び出す画面実装。 |
 | CLI バイナリ解決 / login | [hve/auth.py](../hve/auth.py) | `find_copilot_binary` / `is_authenticated` / `run_login` を提供。`copilot_cli_bridge.py` が委譲。 |
-| 実装は残存・本番未使用 | [hve/gui/pty_backend.py](../hve/gui/pty_backend.py) | PTY 抽象レイヤ。現在は単体テストからのみ参照。 |
-| 実装は残存・本番未使用 | [hve/gui/widgets/xterm_terminal_view.py](../hve/gui/widgets/xterm_terminal_view.py) | xterm.js を埋め込んだターミナルウィジェット。同上。 |
+| 埋め込み端末ログインで利用中 | [hve/gui/pty_backend.py](../hve/gui/pty_backend.py) | PTY 抽象レイヤ。「GitHub CLI でログイン」の事前チェックと子プロセス起動で使用。 |
+| 埋め込み端末ログインで利用中 | [hve/gui/widgets/xterm_terminal_view.py](../hve/gui/widgets/xterm_terminal_view.py) | xterm.js を埋め込んだターミナルウィジェット。同上。 |
 | 削除済み（過去存在） | `hve/gui/auth_providers/` 配下 | 2026-02 のコミットで他作業と併せ削除済み（manifest システム）。 |
 | 過去・現在いずれも未実装 | `hve/gui/pty_auth_controller.py` / `hve/gui/pty_auth_session_widget.py` | 旧ガイドに記載があったが、git 履歴を含め本リポジトリには存在しません。 |
 
@@ -41,7 +41,7 @@ GUI 設定 (`settings.ini`) の `[options]` セクションにあった `mcp_con
 
 ## 2. 公式ルート: GitHub Copilot CLI での MCP サーバ登録と認証
 
-本章は GitHub Copilot CLI 公式ドキュメントに基づきます（一次情報源: <https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/overview>）。
+本章は GitHub Copilot CLI 公式ドキュメントに基づきます（一次情報源: <https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers>、<https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli>）。
 
 ### 2.1 対話 UI 経由での登録（推奨）
 
@@ -54,7 +54,23 @@ GUI 設定 (`settings.ini`) の `[options]` セクションにあった `mcp_con
 
 3. 表示されるフォームに、MCP サーバの起動コマンド・引数・環境変数等を入力し、`Ctrl+S` で保存する。
 
-詳細手順は GitHub Copilot CLI 公式ドキュメント [Using GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/overview) の「Add an MCP server」節を参照してください。
+詳細手順は GitHub Copilot CLI 公式ドキュメント [Adding MCP servers for GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers) を参照してください。
+
+### 2.1.1 `copilot mcp add` サブコマンド
+
+対話セッションを開かずに登録する公式サブコマンドもあります。
+
+```bash
+copilot mcp add SERVER-NAME -- COMMAND [ARGS...]
+```
+
+例:
+
+```bash
+copilot mcp add playwright -- npx @playwright/mcp@latest
+```
+
+リモート HTTP/SSE サーバ、環境変数、HTTP ヘッダー、公開ツール、タイムアウトも公式オプションで指定できます。秘密情報は本文や設定例に直書きせず、環境変数・シークレットストア・プレースホルダーで扱ってください。
 
 ### 2.2 設定保存先
 
@@ -65,12 +81,13 @@ GUI 設定 (`settings.ini`) の `[options]` セクションにあった `mcp_con
 | Linux / macOS | `~/.copilot/mcp-config.json` |
 | Windows | `%USERPROFILE%\.copilot\mcp-config.json` |
 
-- 環境変数 `COPILOT_HOME` を設定すると保存ディレクトリを変更できます（公式記載）。
-- JSON 構造の仕様は GitHub Copilot 公式ドキュメント（<https://docs.github.com/en/copilot>）の MCP 関連ページを参照してください。
+- 公式ドキュメントではユーザー設定の保存先として `~/.copilot/mcp-config.json` が示されています。`COPILOT_HOME` による保存先変更は本調査で取得した公式ページには確認できなかったため、要確認です。
+- JSON 構造の仕様は GitHub Copilot 公式ドキュメント [Adding MCP servers for GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers) の「Editing the configuration file」を参照してください。
+- Copilot CLI が自動ロードするプロジェクト単位の公式パスは `.mcp.json` または `.github/mcp.json` です。本リポジトリの `.github/.mcp.json` は HVE / SDK 用に `--mcp-config` で渡す設定ファイルであり、Copilot CLI 公式の自動ロードパスではありません。
 
 ### 2.3 認証（`/login`）
 
-GitHub への認証は対話セッション内の `/login` slash command で実施します。詳細は [About GitHub Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-copilot-cli) を参照してください。サービス固有の認証（Azure / GitHub 等）は **各 MCP サーバの実装仕様に依存** します（例: `az login` で取得した資格情報を Azure SDK 経由で利用する等）。具体手順は §2.4 の各サーバ公式情報源を参照してください。
+GitHub への認証は対話セッション内の `/login` slash command、または端末の `copilot login` で実施します。詳細は [Authenticating GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli) を参照してください。環境変数認証の優先順は `COPILOT_GITHUB_TOKEN` → `GH_TOKEN` → `GITHUB_TOKEN` です。サービス固有の認証（Azure / GitHub 等）は **各 MCP サーバの実装仕様に依存** します（例: `az login` で取得した資格情報を Azure SDK 経由で利用する等）。具体手順は §2.4 の各サーバ公式情報源を参照してください。
 
 ### 2.4 サービス別の参照先
 
@@ -97,12 +114,12 @@ HVE GUI の設定パネル ([hve/gui/page_options.py](../hve/gui/page_options.py
 
 | 呼び出すコマンド | 用途 |
 |---|---|
-| `copilot mcp list --json` | 登録済み MCP サーバの一覧取得（`{ "mcpServers": { name: {...} } }` 形式を期待） |
-| `copilot mcp get <name> --json` | 個別 MCP サーバの定義取得 |
-| `copilot plugin list` | Plugin 一覧取得（`--json` 未対応のため行ベース正規表現で解析） |
-| `copilot login` | GitHub Copilot へのログイン（`hve.auth.run_login` 経由） |
+| `copilot mcp list --json` | 登録済み MCP サーバの一覧取得。公式に `--json` 付き一覧取得が記載されています。 |
+| `copilot mcp get <name> --json` | 個別 MCP サーバの定義取得。公式に `--json` 付き詳細取得が記載されています。 |
+| `copilot plugin list` | Plugin 一覧取得。公式 MCP ページでは未確認のため、HVE 実装依存の互換経路です。 |
+| `copilot login` | GitHub Copilot へのログイン（`hve.auth.run_login` 経由）。公式認証ページに記載されています。 |
 
-> ⚠️ **公式ドキュメントとの差異**: 公式は対話 UI の `/mcp add` slash command と `~/.copilot/mcp-config.json` を一次情報源として推奨しており、本ブリッジが利用する **サブコマンド形式** (`copilot mcp list` / `copilot mcp get` / `copilot plugin list` / `copilot login`) については、本ドキュメント作成時点の公式ドキュメント（<https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-copilot-cli> 、<https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/overview>）に明記を確認できませんでした。本ブリッジは [hve/gui/copilot_cli_bridge.py](../hve/gui/copilot_cli_bridge.py) のソースコメント記載のターゲットバージョン **Copilot CLI v1.0.48 時点の振る舞い** に基づきます（本リポジトリ内に実機検証エビデンスは保有していません）。Copilot CLI 内部仕様の変更により、出力スキーマやサブコマンドが変更される可能性があります。
+> ⚠️ **公式ドキュメントとの差異**: `copilot mcp list` / `copilot mcp get` / `copilot mcp remove` / `copilot mcp add` と `copilot login` は公式ページで確認済みです。一方、`copilot plugin list` は本調査で取得した公式ページには確認できませんでした。本ブリッジは [hve/gui/copilot_cli_bridge.py](../hve/gui/copilot_cli_bridge.py) のソースコメント記載のターゲットバージョン **Copilot CLI v1.0.48 時点の振る舞い** に基づきます（本リポジトリ内に実機検証エビデンスは保有していません）。Copilot CLI 内部仕様の変更により、出力スキーマやサブコマンドが変更される可能性があります。
 
 ### 3.2 廃止済み GUI 設定キーのマイグレーション
 
@@ -130,20 +147,28 @@ GUI フォームから `mcp_config` / `workiq_tenant_id` を入力する経路�
 
 ## 4. トラブルシューティング
 
-> 本章は **過去存在した GUI 認証ダイアログ / 将来 PTY 利用 UI が再導入された場合の参考情報** として残しています。現状では GUI からこれらのフローを起動する手段はありません（§1.1 参照）。手元の Copilot CLI / Azure CLI / GitHub CLI を直接利用する場合のヒントとしてもご活用ください。
+> 本章は **GUI の「GitHub CLI でログイン」を含む PTY 利用 UI 全般** の参考情報です。手元の Copilot CLI / Azure CLI / GitHub CLI を直接利用する場合のヒントとしてもご活用ください。
 
 ### 4.1 PTY バックエンドが見つからない
 
-PTY 抽象レイヤ ([hve/gui/pty_backend.py](../hve/gui/pty_backend.py)) が依存する OS ごとのパッケージが未インストールの場合、`PtyBackendError` が発生します。
+PTY 抽象レイヤ ([hve/gui/pty_backend.py](../hve/gui/pty_backend.py)) が依存する OS ごとのパッケージが未インストールの場合、GUI の「GitHub CLI でログイン」は端末を起動せず案内文を表示します（直接呼び出し時は `PtyBackendError`）。
 
 - **Windows**: `pywinpty>=2.0`（pyproject.toml で宣言。ConPTY 利用）。Windows 10 1809 未満は ConPTY 非対応のため利用できません。
 - **Linux / macOS**: `ptyprocess>=0.7`（pyproject.toml で宣言）。
 
-依存をインストールするには、リポジトリで以下を実行してください（`gui-pty` extras は `pyproject.toml` で定義されています）。
+復旧は **OS 別の通常セットアップを再実行** してください。通常セットアップは依存の導入に加え、完了前に PTY バックエンドの利用可否を検証します（既存の `.venv` が正常なら `-Force` / `--force` は不要）。
 
-```powershell
-pip install -e .[gui,gui-pty]
+```cmd
+REM Windows
+hve\setup-hve.cmd
 ```
+
+```bash
+# macOS / Linux
+./hve/setup-hve.sh
+```
+
+> **補助情報**: 手動で依存だけを入れる場合は `pip install -e .[gui,gui-pty]`（`gui-pty` extras は `pyproject.toml` で定義）。この経路は利用可否の検証を行わないため、唯一の復旧手段にはしないでください。
 
 ### 4.2 xterm.js のアセットが無い
 
@@ -181,7 +206,8 @@ HVE 自身は **トークンや資格情報を一切保存しません**。Copil
 英語版を一次情報源として採用しています（日本語版は翻訳遅延が発生する場合があります）。
 
 - GitHub Copilot CLI 概要: <https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-copilot-cli>
-- GitHub Copilot CLI 利用ガイド: <https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/overview>
+- GitHub Copilot CLI MCP 追加: <https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers>
+- GitHub Copilot CLI 認証: <https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/authenticate-copilot-cli>
 - GitHub MCP Server リポジトリ: <https://github.com/github/github-mcp-server>
 - Azure MCP Server（現行）: <https://github.com/microsoft/mcp/blob/main/servers/Azure.Mcp.Server/README.md>
 

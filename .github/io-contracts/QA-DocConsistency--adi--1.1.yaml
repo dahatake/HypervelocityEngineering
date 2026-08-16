@@ -1,0 +1,22 @@
+inputs:
+- path: docs/original-design-doc-ingest/index.json
+  required: true
+  kind: agent_artifact
+  producer: Doc-OriginalInventory--adi--1
+- path: docs/original-design-doc-ingest/*/content.md
+  required: true
+  kind: agent_artifact
+  producer: Doc-OriginalInventory--adi--1
+- path: template/business-requirement-document-master-list.md
+  required: true
+  kind: static
+- path: knowledge/
+  required: false
+  kind: static
+- path: work/run/<run-id>/kpi/fork-kpi.jsonl
+  required: true
+  kind: external
+outputs:
+- path: qa/{key}-original-docs-questionnaire.md
+  required: true
+  mode: create

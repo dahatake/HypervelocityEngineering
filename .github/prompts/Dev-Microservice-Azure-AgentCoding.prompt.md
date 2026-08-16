@@ -56,7 +56,7 @@ Azure AI Foundry Agent Service を使用した AI Agent 実装（TDD GREEN フ�
 - **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
 - **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
 - **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`original-docs/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
+- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
 - **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
 - **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 
@@ -164,6 +164,7 @@ Issue body または追加コメントにプログラミング言語の指定が
   - **Guardrails / Policy Gate 実装**: 詳細設計書 Section 8 の Policy & Guardrails に基づく入出力フィルタリング
   - **Observability コード**: Application Insights / OpenTelemetry による監査ログ・メトリクス
   - **設定ファイル**: `agent-config.json`（Python）または `appsettings.json`（C#）— 環境変数・接続先の管理
+  - **Agent Plugin マニフェスト**: `src/agent/{key}/plugin.json` — Agent Plugins Specification 1.0.0 準拠。`src/agent/{key}/` を plugin root、既存の `src/agent/{key}/skills/` を仕様の固定位置として扱う
   - **依存定義**: `requirements.txt`（Python）または `.csproj`（C#）
 
 任意だが推奨:
@@ -211,7 +212,14 @@ Issue body または追加コメントにプログラミング言語の指定が
 - **SELECT-only SQL**: 選択時だけ、単一SELECT、parameterization、table/view/column allowlist、read-only identity、row limit、timeout、構文検査を実装する。INSERT / UPDATE / DELETE / MERGE / DDL / stored procedure、複文、検査不能queryを実行しない。監査証跡には正規化・redact済みquery識別情報、対象source、実行時刻、返却行数を残し、token、secret、parameter値、結果本文、過剰な機微値を保存しない。
 - **AG-CAP-04**: Create / Update / Deleteは既存API契約に対応するREST Function Toolだけをprimary経路にする。method / path / schema、認証、RBAC、HITL、冪等性、有限retry、error class、audit evidenceを実装し、SQL/direct DB writeやMCP mutation迂回を禁止する。
 - **AG-CAP-05**: Agentは選択されたMCP Serverのclientとして接続する。Tool allowlist、auth、untrusted result、timeout、有限retry、failure behaviorを実装し、Agent自身のRemote MCP Server化を既定で行わない。adapterが必要な場合はSection 7.3記載のowner serviceを参照し、`src/agent/`へ複製しない。
-- **AG-CAP-06**: Section 7.4の`Decision` / `Repeated procedure count` / `Reuse evidence` / `Location` / `Decision source`を検証する。`required`は共有能力契約の3条件、すなわち(1)同じ手順連鎖が3回以上、(2)複数Toolまたは複数状態から再利用する明確な要件がある、(3)deterministic script化で反復処理の正確性が上がる、のいずれかに証跡付きで該当する場合だけ認める。根拠のない`required`、`TBD`、Location未記載、Section 7.4の恒久的な`Decision source`で承認されていないLocationは設計不整合としてblocked / Handoffにし、Skillを生成しない。妥当な`required`の場合だけ、承認された`src/agent/{key}/skills/{skill-name}/`へ`SKILL.md`と実際に必要な`scripts/` / `references/` / `assets/`を作り、target runtimeから明示loadする。`not-required`ではSkill、loader、hook、設定flagを作らない。
+- **AG-CAP-06**: Section 7.4の`Decision` / `Repeated procedure count` / `Reuse evidence` / `Location` / `Decision source`を検証する。`required`は共有能力契約の3条件、すなわち(1)同じ手順連鎖が3回以上、(2)複数Toolまたは複数状態から再利用する明確な要件がある、(3)deterministic script化で反復処理の正確性が上がる、のいずれかに証跡付きで該当する場合だけ認める。根拠のない`required`、`TBD`、Location未記載、Section 7.4の恒久的な`Decision source`で承認されていないLocationは設計不整合としてblocked / Handoffにし、Skillを生成しない。妥当な`required`の場合だけ、承認された`src/agent/{key}/skills/{skill-name}/`へ`SKILL.md`と実際に必要な`scripts/` / `references/` / `assets/`を作り、target runtimeから明示loadする。`not-required`ではSkill、loader、hook、設定flagを作らない。**`SKILL.md` の frontmatter は Agent Skills 仕様の長さ制約（`name` は 1〜64 文字、`description` は 1〜1024 文字）を満たす。**
+- **Agent Plugin マニフェスト（常に生成）**: `src/agent/{key}/plugin.json` を Agent Plugins Specification 1.0.0 に準拠して作る。
+  - `$schema` は `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json` を**そのまま**書く。取得しに行かない。
+  - `name` は fan-out キー `{key}` の**小文字化**とする（例: `AG-01` → `ag-01`）。仕様の制約は 1〜64 文字・`a-z` `0-9` `-` `.` のみ・先頭末尾は英数・`--` と `..` を含まない。大文字を含むキーをそのまま書かない。
+  - 書き込むフィールドは `$schema` / `name` / `description` / `version` の 4 つだけにする。`description` は 1 文、`version` は Semantic Versioning（初回は `0.1.0`）。
+  - マニフェストは **closed schema** であり、HVE 固有のランタイム設定（`max_iterations` / `toolbox` / route 設定等）を top-level へ足してはならない。それらは従来どおり `agent-config.json` または `appsettings.json` に置き、二重管理を作らない。
+  - `author` / `homepage` / `repository` / `license` / `keywords` は根拠なく埋めない（推測禁止）。
+  - **MCP 設定ファイル（仕様の `mcp.json`）は作らない**。AG-CAP-05 は本 Agent を MCP client と定めており、Agent 自身を MCP Server として公開しないため。
 
 # 6) TDD GREEN フロー（反復 — Issue body 指定値 / 未指定時 5 回）
 

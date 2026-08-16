@@ -61,6 +61,20 @@ class TestWriteSteeringRequest(unittest.TestCase):
         matches = list(self.ipc_dir.glob(f"steering-{safe_step_id}-*.request.json"))
         self.assertIn(path, matches)
 
+    def test_written_request_is_readable_by_the_shared_ipc_module(self) -> None:
+        """FR-GUI-12: legacy writer の出力を共通 IPC が `steer` として読める。"""
+        from hve.job_interaction_ipc import ACTION_STEER, list_pending_requests, read_request
+
+        path = write_steering_request(self.ipc_dir, "1.1", "legacy body")
+        request = read_request(path)
+        self.assertIsNotNone(request)
+        assert request is not None
+        self.assertEqual(request.action, ACTION_STEER)
+        self.assertEqual(request.text, "legacy body")
+        self.assertTrue(request.request_id)
+        pending = list_pending_requests(self.ipc_dir, "1.1")
+        self.assertEqual([r.text for r in pending], ["legacy body"])
+
 
 if __name__ == "__main__":
     unittest.main()

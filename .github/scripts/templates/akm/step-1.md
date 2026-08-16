@@ -1,6 +1,6 @@
 {root_ref}
 ## 目的
-`qa/` または `original-docs/`（または両方）から D01〜D21 へのマッピングを実施し、`knowledge/business-requirement-document-status.md` と `knowledge/D{NN}-<文書名>.md` を生成・更新する。
+`qa/` または `docs-original/`（または両方）から D01〜D21 へのマッピングを実施し、`knowledge/business-requirement-document-status.md` と `knowledge/D{NN}-<文書名>.md` を生成・更新する。
 
 ## Custom Agent
 `KnowledgeManager`
@@ -31,7 +31,7 @@
 
 ## 入力
 - `qa/*.md`（sources に qa を含む場合）
-- `original-docs/*`（sources に original-docs を含む場合）
+- `docs-original/*`（sources に original-docs を含む場合）
 - `template/business-requirement-document-master-list.md`
 - `.github/skills/knowledge-management/references/knowledge-management-guide.md`
 

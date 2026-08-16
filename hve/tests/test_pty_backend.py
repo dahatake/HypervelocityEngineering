@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 import sys
 import time
 
@@ -15,8 +16,8 @@ from hve.gui import pty_backend
 
 
 _PLATFORM_SETUP_CASES = [
-    pytest.param("win32", r"hve\setup-hve.cmd", id="windows"),
-    pytest.param("linux", "./hve/setup-hve.sh", id="posix"),
+    pytest.param("win32", "setup-hve.cmd", id="windows"),
+    pytest.param("linux", "setup-hve.sh", id="posix"),
 ]
 
 
@@ -59,6 +60,39 @@ def test_missing_dependency_hint_recommends_platform_setup(
     hint = pty_backend.missing_dependency_hint()
 
     _assert_setup_is_primary_guidance(hint, setup_command)
+
+
+@pytest.mark.parametrize(("platform", "setup_command"), _PLATFORM_SETUP_CASES)
+def test_setup_command_resolves_the_real_script_from_any_cwd(
+    monkeypatch, tmp_path: Path, platform: str, setup_command: str
+) -> None:
+    """FR-GUI-09: リポジトリ外の CWD から GUI を起動しても案内をそのまま実行できる。"""
+    monkeypatch.setattr(pty_backend.sys, "platform", platform)
+    monkeypatch.chdir(tmp_path)
+
+    command = pty_backend.setup_command()
+    resolved = Path(command.strip('"'))
+
+    assert resolved.is_absolute()
+    assert resolved.is_file()
+    assert resolved.name == setup_command
+
+
+@pytest.mark.parametrize(
+    ("platform", "fallback"),
+    [
+        pytest.param("win32", r"hve\setup-hve.cmd", id="windows"),
+        pytest.param("linux", "./hve/setup-hve.sh", id="posix"),
+    ],
+)
+def test_setup_command_falls_back_to_relative_path_when_script_is_absent(
+    monkeypatch, tmp_path: Path, platform: str, fallback: str
+) -> None:
+    """setup スクリプトが同居しない導入形態では、推測絶対パスを出さず相対表記へ退避する。"""
+    monkeypatch.setattr(pty_backend.sys, "platform", platform)
+    monkeypatch.setattr(pty_backend, "__file__", str(tmp_path / "gui" / "pty_backend.py"))
+
+    assert pty_backend.setup_command() == fallback
 
 
 # ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ PySide6 が未導入の環境ではスキップする。
 from __future__ import annotations
 
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -127,6 +128,95 @@ def test_freeze_elapsed_keeps_summary_at_job_end_time(qapp, monkeypatch):
     w.deleteLater()
 
 
+# ---------------------------------------------------------------------------
+# FR-GUI-19: ジョブ終了時の経過時間停止は 4 系統すべてを対象とする
+# ---------------------------------------------------------------------------
+
+
+def _running_plan_widget(monkeypatch, clock):
+    """Workflow / Step とも running の Plan モードウィジェットを返す。"""
+    monkeypatch.setattr(time, "monotonic", lambda: clock["now"])
+    w = DagStatusWidget()
+    steps = [{"id": "1", "title": "T1", "depends_on": []}]
+    w.set_plan(_plan("wf-a", steps), {"wf-a": "実行中"}, {"wf-a": {"1": "実行中"}})
+    return w
+
+
+def test_freeze_elapsed_stops_workflow_header_elapsed(qapp, monkeypatch):
+    """停止後は Workflow ノードの経過時間が進まない。"""
+    clock = {"now": 100.0}
+    w = _running_plan_widget(monkeypatch, clock)
+    header = w._wf_items["wf-a"]
+
+    clock["now"] = 112.0
+    w.freeze_elapsed()
+    header.update_text(0, 1)
+    assert "[00:00:12]" in header._lbl.text()
+
+    clock["now"] = 3712.0
+    header.update_text(0, 1)
+    assert "[00:00:12]" in header._lbl.text()
+    w.deleteLater()
+
+
+def test_freeze_elapsed_stops_step_node_elapsed(qapp, monkeypatch):
+    """停止後は Step ノードの経過時間が進まない。"""
+    clock = {"now": 100.0}
+    w = _running_plan_widget(monkeypatch, clock)
+    node = w._step_items[("wf-a", "1")]
+
+    clock["now"] = 112.0
+    w.freeze_elapsed()
+    node.update_text()
+    assert node._lbl_elapsed.text() == "⏱ 00:00:12"
+
+    clock["now"] = 3712.0
+    node.update_text()
+    assert node._lbl_elapsed.text() == "⏱ 00:00:12"
+    w.deleteLater()
+
+
+def _instances_state():
+    """running の Workflow / Step を 1 件持つ Instances モード入力を返す。"""
+    step = SimpleNamespace(
+        status="running", started_at=100.0, finished_at=None, title="T1", children=[]
+    )
+    inst = SimpleNamespace(
+        status="running",
+        started_at=100.0,
+        finished_at=None,
+        workflow_id="wf-a",
+        label="WF-A",
+        steps={"1": step},
+    )
+    return SimpleNamespace(workflows={"wf-a": inst})
+
+
+def test_freeze_elapsed_survives_instances_mode_refresh(qapp, monkeypatch):
+    """停止後に表示ノードを再生成しても停止状態が維持される。"""
+    clock = {"now": 100.0}
+    monkeypatch.setattr(time, "monotonic", lambda: clock["now"])
+    w = DagStatusWidget()
+    state = _instances_state()
+    w.update_workflow_instances(state)
+
+    clock["now"] = 112.0
+    w.freeze_elapsed()
+
+    # 停止後に 1 時間経過し、同じ state で再描画する（_update_ui 相当）。
+    clock["now"] = 3712.0
+    w.update_workflow_instances(state)
+
+    node = w._step_items[("wf-a", "1")]
+    node.update_text()
+    assert node._lbl_elapsed.text() == "⏱ 00:00:12"
+    header = w._wf_items["wf-a"]
+    header.update_text(0, 1)
+    assert "[00:00:12]" in header._lbl.text()
+    assert "[00:00:12]" in w._summary_label.text()
+    w.deleteLater()
+
+
 def test_step_fanout_expand_persists_across_relayout(qapp):
     """Fanout を持つ Step のダブルクリック展開状態が再レイアウト後も維持される。"""
     w = DagStatusWidget()
@@ -190,6 +280,26 @@ def _expand_step1_with_subs(w, subs):
         {"wf-a": {"1": "実行中"}},
         subtask_status={"wf-a": {"1": subs}},
     )
+
+
+def test_freeze_elapsed_stops_fanout_child_elapsed(qapp, monkeypatch):
+    """停止後は fan-out 子ノードの経過時間が進まない。"""
+    clock = {"now": 100.0}
+    monkeypatch.setattr(time, "monotonic", lambda: clock["now"])
+    w = DagStatusWidget()
+    subs = [("1/a", "child a", "実行中", 100.0, None)]
+    _expand_step1_with_subs(w, subs)
+    child = w._child_items[("wf-a", "1/a")]
+
+    clock["now"] = 112.0
+    w.freeze_elapsed()
+    child.update_text()
+    assert child._lbl_elapsed.text() == "⏱ 00:00:12"
+
+    clock["now"] = 3712.0
+    child.update_text()
+    assert child._lbl_elapsed.text() == "⏱ 00:00:12"
+    w.deleteLater()
 
 
 def test_fanout_children_rendered_as_child_nodes(qapp):

@@ -81,7 +81,7 @@ def _safe_path(repo_root: Path, raw: object, where: str) -> tuple[str, Path]:
     target = (repo_root / path).resolve()
     if not target.is_relative_to(repo_root) or not target.is_file():
         raise GoldenSetError(f"{where}: path does not exist in repository: {raw}")
-    if raw.startswith(("work/", "original-docs/")):
+    if raw.startswith(("work/", "docs-original/")):
         raise GoldenSetError(f"{where}: path is not allowed as golden evidence: {raw}")
     if raw.startswith("hve-dev/") and raw.endswith(".csv"):
         raise GoldenSetError(f"{where}: generated inventory is not stable evidence: {raw}")

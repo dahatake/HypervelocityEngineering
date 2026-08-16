@@ -16,7 +16,7 @@
 - `src/dataflow/{jobId}-{jobNameSlug}/` 配下の本実装コード
 
 ## 生成テストの実行環境
-- `src/test/dataflow/{jobId}-{jobNameSlug}.Tests/` のテストはローカル端末 / CI で `dotnet test` により決定的に PASS すること。
+- `src/test/dataflow/{jobId}-{jobNameSlug}.Tests/` のテストはローカル端末 / CI で `pytest` により決定的に PASS すること。
 - GREEN 化のために Azure Storage / SQL / Cosmos DB / Service Bus 等へ実接続するテストへ変更しない。外部 I/O は Azurite / Testcontainers / Mock / Stub に切り分ける。
 - 実装コードは Azure Functions としてデプロイ可能にしつつ、接続先・認証・キュー名・コンテナ名・リソース名は環境変数または設定ファイルから読み込む。秘密情報をコード、README、ログにハードコードしない。
 
@@ -29,10 +29,10 @@
 - Step.2.1（TDD RED: テストコード作成）が `adfdv:done` であること
 
 ## 完了条件
-- `dotnet test` が全テスト PASS（TDD GREEN）になっている
+- `pytest` が全テスト PASS（TDD GREEN）になっている
 
 ## TDD GREEN リトライルール
-- テストが PASS にならない場合、最大 {tdd_max_retries} 回まで実装を修正して再試行する（Skill `tdd-green-retry-strategy` 準拠：各回は前回と異なるアプローチを選び、失敗の都度に根本原因を特定し Microsoft Learn MCP（C# / .NET / SDK）で解決策を確認してから次手を決める）
+- テストが PASS にならない場合、最大 {tdd_max_retries} 回まで実装を修正して再試行する（Skill `tdd-green-retry-strategy` 準拠：各回は前回と異なるアプローチを選び、失敗の都度に根本原因を特定し Microsoft Learn MCP（Python / Azure SDK for Python / Fabric / Databricks）で解決策を確認してから次手を決める）
 - {tdd_max_retries} 回で全 PASS にならない場合: `adfdv:blocked` ラベルを付与し、未 PASS テスト一覧と試行回数を Issue コメントで報告する
 - テストコード（`src/test/dataflow/`）は原則変更禁止
 ## TDD テスト結果レポート（必須）

@@ -11,8 +11,12 @@
 ## 必須参照
 
 1. **`template/business-requirement-document-master-list.md`** の `{{key}}.` セクションを必ず最初に読み、当該文書の「必須度 / 目的 / 最低内容 / 不足判定」を確認する。
-2. `original-docs/` 配下の関連資料を読み取り専用で参照する（変更・削除禁止 — `.github/copilot-instructions.md` §0）。
-3. `qa/` 配下の既存質問票・回答（あれば）。
+2. **`docs/catalog/design-doc-routing.md`（ADI が生成。存在する場合は優先）**
+   - 「D 分類別の担当文書」節に `{{key}}` の担当 `doc_id` が列挙されていれば、
+     その文書を優先して読む（`docs/original-design-doc-ingest/<slug>/content.md`）。
+   - **ファイルが存在しない場合は従来どおり `docs-original/` を走査する**（後方互換）。
+3. `docs-original/` 配下の関連資料を読み取り専用で参照する（変更・削除禁止 — `.github/copilot-instructions.md` §0）。
+4. `qa/` 配下の既存質問票・回答（あれば）。
 
 ## 並列実行ルール（厳守）
 

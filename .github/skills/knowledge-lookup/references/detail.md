@@ -16,7 +16,7 @@ Custom Agent がタスク実行中に不明瞭な点に遭遇した際、
 
 - **knowledge/ ファイルの作成・更新** → Skill `knowledge-management` が担当
 - **docs/catalog/ の参照** → 各 Arch-* Agent が直接参照
-- **original-docs/ の直接参照ガイド** → `copilot-instructions.md` §5 が規定
+- **docs-original/ の直接参照ガイド** → `copilot-instructions.md` §5 が規定
 - **Agent の参照方式選択（直接/経由/ハイブリッド）の制約** → 本 Skill は knowledge/ 経由参照の手順を提供するのみ
 
 ## 既存の `### knowledge/ 参照` セクションとの関係

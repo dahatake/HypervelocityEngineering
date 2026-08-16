@@ -51,8 +51,8 @@
 
   <rect x="480" y="480" width="320" height="166" class="tier tier3"/>
   <text x="508" y="518" class="label">Batch</text>
-  <text x="508" y="550" class="body">設計: `abd`</text>
-  <text x="508" y="576" class="body">実装: `abdv`</text>
+  <text x="508" y="550" class="body">設計: `adfd`</text>
+  <text x="508" y="576" class="body">実装: `adfdv`</text>
   <text x="508" y="606" class="small">ジョブ設計、データ設計、Functions 配備</text>
 
   <rect x="860" y="480" width="320" height="166" class="tier tier3"/>
@@ -63,7 +63,7 @@
 
   <rect x="952" y="116" width="198" height="78" class="tier support"/>
   <text x="972" y="146" class="body" font-weight="700">横断系 Workflow</text>
-  <text x="972" y="168" class="small">`akm` / `aqod` / `adoc`</text>
+  <text x="972" y="168" class="small">`adi` / `akm` / `adoc`</text>
   <text x="972" y="186" class="small">Phase 全体を補助</text>
 
   <path d="M 640 220 C 640 248, 640 262, 640 290" class="arrow"/>

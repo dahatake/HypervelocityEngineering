@@ -1,26 +1,27 @@
 # 料金 / リアルタイム統計表示ガイド
 
-hve は GitHub Copilot CLI 実行中の **コンテキスト使用量・経過時間・AI Credit 料金 (Premium Requests)** を GUI / CUI 両方で ~1Hz で可視化します。本ガイドでは設定・利用方法・トラブルシュートをまとめます。
+hve は GitHub Copilot CLI 実行中の **コンテキスト使用量・経過時間・SDK が返す AIU / Premium Requests 相当値・pricing 計算値** を GUI / CUI 両方で ~1Hz で可視化します。本ガイドでは設定・利用方法・トラブルシュートをまとめます。
 
 > **重要 (捏造禁止)**: 料金表が未取得 / 不明モデルの場合、コストは **`-`** と表示されます。推定値で埋めることはしません。
 
-> **未実装の範囲 (2026-07-28 実測)**: 以下の 2 機能は **モジュールは存在するがアプリ本体から呼ばれておらず、利用できません**。
+> **公式料金体系との境界 (2026-08-07 照合)**: GitHub 公式ドキュメントでは 2026-06-01 以降、通常の Copilot 課金は **GitHub AI Credits** による使用量課金です。`hve/pricing/` の現行実装は `docs.github.com` の model multiplier と `github.com/pricing` のプラン情報をクロールする **legacy premium request ベースの補助計算**であり、公式の新しい AI Credits 請求額そのものではありません。公式請求額は GitHub の Billing / Usage 画面を正としてください。
+
+> **未配線の範囲 (2026-08-07 実装照合)**: 以下は **モジュールは存在するが利用画面に配線されていない** 範囲です。
 >
-> - **§4.2 GUI 設定タブ** — [hve/gui/settings_pricing_tab.py](../hve/gui/settings_pricing_tab.py) は [hve/gui/settings_window.py](../hve/gui/settings_window.py) から import されておらず、設定画面にタブが追加されません。
-> - **§6 CUI StatusLine** — [hve/statusline.py](../hve/statusline.py) はどこからも import されておらず、`hve` 実行中に StatusLine は表示されません（`CHANGELOG.md` に「orchestrator / console への実呼び出し統合は未実施」と記録されたままです）。
+> - **§4.2 GUI 設定タブ** — [hve/gui/settings_pricing_tab.py](../hve/gui/settings_pricing_tab.py) は存在しますが、[hve/gui/settings_window.py](../hve/gui/settings_window.py) のカテゴリツリー / skill section 登録に含まれておらず、設定画面にタブが追加されません。
 >
-> GUI Footer / 統計ポップアップ・`hve pricing` CLI・環境変数による料金計算は配線済みです。
+> GUI Footer / 統計ポップアップ・`hve pricing` CLI・環境変数による pricing 計算・Workbench なし TTY 実行時の CUI StatusLine は配線済みです。
 
 ---
 
 ## 1. 概要
 
-| 表示項目 | GUI Footer | GUI 統計ポップアップ | CUI StatusLine（**未実装**） |
+| 表示項目 | GUI Footer | GUI 統計ポップアップ | CUI StatusLine |
 |---|---|---|---|
 | Context Window 使用率 | ✅ | ✅ | ✅ |
 | Workflow / Step 経過時間 | ✅ | ✅ | ✅ |
-| 累積コスト (USD / JPY) | ✅ | ✅ | ✅ |
-| Premium Requests 累積 | ✅ | ✅ | ✅ |
+| SDK AIU / Premium Requests 相当値 | ✅ | ✅ | ✅ |
+| pricing 計算の累積コスト (USD / JPY) | ✅ | ✅ | ✅ |
 | 計算方式 / 料金表メタ | – | ✅ | – |
 
 更新間隔: GUI / CUI とも **1 Hz** (1 秒に 1 回)。
@@ -29,12 +30,18 @@ hve は GitHub Copilot CLI 実行中の **コンテキスト使用量・経過�
 
 ## 2. 料金データ
 
-### 2.1 取得元
+### 2.1 取得元と公式料金体系の違い
 
-- **モデル multiplier** (例: `claude-sonnet-4 = 1.0`): GitHub Docs (docs.github.com)
-- **プラン定義** (例: `copilot_pro` の月額・追加 Premium Request 単価): github.com/pricing
+- **現行実装の取得元**:
+  - **モデル multiplier**: [hve/pricing/crawler.py](../hve/pricing/crawler.py) の `DOCS_URL`（GitHub Docs）
+  - **プラン定義**: [hve/pricing/crawler.py](../hve/pricing/crawler.py) の `PRICING_URL`（`https://github.com/pricing`）
+- **公式の現行課金**:
+  - 通常の Copilot プランは GitHub AI Credits を使う使用量課金です（1 AI credit = $0.01 USD）。
+  - legacy の model multiplier は、2026-06-01 以降も既存の年額 Copilot Pro / Pro+ で request-based billing に残っている利用者向けの概念です。
 
-両者を **公式情報のみ** から取得し、`~/.hve/pricing/copilot-pricing.json` に JSON でキャッシュします。
+取得できた内容だけを `~/.hve/pricing/copilot-pricing.json` に JSON でキャッシュします。取得・解析できない値は `None` / `-` のまま扱い、推定で補完しません。
+
+> **要確認**: [hve/pricing/crawler.py](../hve/pricing/crawler.py) の `DOCS_URL` は legacy 移行後の公式ページ構成とずれている可能性があります。`hve pricing refresh` が失敗した場合は、公式の [Models and pricing for GitHub Copilot](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing) または legacy multiplier ページを確認してください。
 
 ### 2.2 キャッシュパス
 
@@ -49,7 +56,7 @@ $Env:HVE_PRICING_CACHE_PATH = "C:\path\to\custom\copilot-pricing.json"
 ### 2.3 自動更新ポリシー
 
 - **月初** (取得日時の月が変わったとき) に自動取得
-- **手動**: `hve pricing refresh`（※ GUI 設定タブの「🔄 料金表を今すぐ更新」ボタンは **未実装**。本頁冗頭参照）
+- **手動**: `hve pricing refresh`（※ GUI 設定タブの「🔄 料金表を今すぐ更新」ボタンは **未配線**。本頁冒頭参照）
 - **失敗時**: 両ソース失敗 → エラー。片方のみ成功 → `status="partial"` で記録 (利用可)
 
 ---
@@ -84,8 +91,8 @@ GitHub Docs / Pricing ページから最新を取得しキャッシュを上書�
 | `HVE_PRICING_CURRENCY` | `auto` | 表示通貨。`auto` / `usd` / `jpy` / `both` |
 | `HVE_PRICING_AUTO_REFRESH` | `1` | 月初自動取得 (`0` で無効) |
 | `HVE_PRICING_CACHE_PATH` | `~/.hve/pricing/copilot-pricing.json` | キャッシュファイルパス |
-| `HVE_PRICING_STATUSLINE_ENABLED` | `1` | CUI StatusLine 有効化 (`0` で無効)。**※ 現在この値を読む実装はなく、効果を持ちません** |
-| `HVE_NO_STATUSLINE` | (未設定) | 設定時は StatusLine を常に抑止。**※ 同上（StatusLine 自体が未配線）** |
+| `HVE_PRICING_STATUSLINE_ENABLED` | `1` | CUI StatusLine 有効化 (`0` で無効)。`hve/config.py` と `hve/orchestrator.py` で参照されます。 |
+| `HVE_NO_STATUSLINE` | (未設定) | 設定時は StatusLine を常に抑止。`hve/statusline.py` で参照されます。 |
 
 #### 通貨表示モード
 
@@ -96,9 +103,9 @@ GitHub Docs / Pricing ページから最新を取得しキャッシュを上書�
 | `usd` | `$0.4000` | グローバル / Copilot 請求基準 |
 | `jpy` | `¥60` | 簡易見積もり |
 
-### 4.2 GUI 設定タブ（**未実装**）
+### 4.2 GUI 設定タブ（**未配線**）
 
-> [hve/gui/settings_pricing_tab.py](../hve/gui/settings_pricing_tab.py) にウィジェット実装は存在しますが、[hve/gui/settings_window.py](../hve/gui/settings_window.py) から import されておらず設定画面にタブが出ません。下記は配線時の仕様予定です。現時点では §4.1 の環境変数で設定してください。
+> [hve/gui/settings_pricing_tab.py](../hve/gui/settings_pricing_tab.py) にウィジェット実装は存在しますが、[hve/gui/settings_window.py](../hve/gui/settings_window.py) のカテゴリツリー / skill section 登録に含まれておらず設定画面にタブが出ません。下記は配線時の仕様予定です。現時点では §4.1 の環境変数で設定してください。
 
 `設定` → `料金 / 統計` タブで以下を編集できる想定です:
 
@@ -130,16 +137,16 @@ Context: 12,345 / 200,000 (6%) | Model: claude-sonnet-4 | Elapsed: 00:01:23
 
 Footer の **「📊 統計情報」** ボタンで表示。タブ:
 
-- **スナップショット**: System / User Context / Reasoning & Cache / Latency / Step Activity / Compaction / Permission / **Cost (AI Credit)** / **Elapsed** / その他 (1Hz 再構築)
-  - Cost セクション項目: 累積コスト / Premium Requests 累積 / 計算方式 / USD/JPY レート / 料金表 取得日時 / 料金表 ステータス / 未計算理由 (該当時のみ)
+- **スナップショット**: System / User Context / Reasoning & Cache / Latency / Step Activity / Compaction / Permission / **Cost (pricing 計算)** / **Elapsed** / その他 (1Hz 再構築)
+  - Cost セクション項目: 累積コスト (pricing 計算) / Premium Requests 累積 / 計算方式 / USD/JPY レート / 料金表 取得日時 / 料金表 ステータス / 未計算理由 (該当時のみ)
   - Elapsed セクション項目: Workflow 経過 / Step 経過
 - **今回の実行履歴**: 既存履歴ビュー
 
 ---
 
-## 6. CUI StatusLine（**未実装**）
+## 6. CUI StatusLine
 
-> [hve/statusline.py](../hve/statusline.py) に `StatusLine` / `format_status_line()` の実装は存在しますが、`hve` 本体（orchestrator / console）から呼ばれていないため、通常の `hve` 実行中に StatusLine は表示されません。以下はモジュール単体の仕様です（§6.3 の直接呼び出しは動作します）。
+[hve/statusline.py](../hve/statusline.py) に `StatusLine` / `format_status_line()` の実装があり、[hve/orchestrator.py](../hve/orchestrator.py) の `_attach_runtime_statusline()` から **Workbench を使わない TTY 実行時** に起動されます。Workbench UI が有効な GUI / TUI 実行では Workbench 側の表示を優先し、StatusLine は起動しません。
 
 ### 6.1 表示例
 
@@ -186,14 +193,14 @@ with StatusLine(interval=1.0) as sl:
 主な原因:
 
 1. 料金表未取得 → `hve pricing refresh` を実行
-2. モデル multiplier が料金表に無い → ポップアップ「Cost (AI Credit)」セクションの **未計算理由** を確認 (`model_not_found` 等)
+2. モデル multiplier が料金表に無い → ポップアップ「Cost (pricing 計算)」セクションの **未計算理由** を確認 (`model_not_found` 等)
 3. プラン未指定で additional_request_usd が解決できない → 料金表 `status` を確認
 
 **捏造禁止ポリシー**: 不明値を埋めずに `-` 表示するのは仕様です。
 
 ### Q2. StatusLine が出ない
 
-**現在は仕様です**。§6 のとおり [hve/statusline.py](../hve/statusline.py) は本体から呼ばれておらず、`hve` 実行中に StatusLine は表示されません。環境変数（`HVE_NO_STATUSLINE` / `HVE_PRICING_STATUSLINE_ENABLED`）をどう設定しても変わりません。モジュールを直接使う場合の抑止条件は §6.2 を参照してください。
+§6 のとおり StatusLine は Workbench を使わない TTY 実行時のみ表示されます。表示されない場合は、`quiet` / `final_only`、Workbench 有効、`stderr.isatty() == False`、`HVE_NO_STATUSLINE`、`HVE_PRICING_STATUSLINE_ENABLED=0` のいずれかを確認してください。
 
 ### Q3. 料金表取得が失敗する
 
@@ -203,7 +210,7 @@ with StatusLine(interval=1.0) as sl:
 
 ### Q4. JPY 換算値が実勢レートと違う
 
-固定レートのため正確性は保証しません。`HVE_PRICING_USD_JPY_RATE` で調整してください（GUI 設定タブは **未実装**。§4.2 参照）。リアルタイム為替 API 連携は将来検討。
+固定レートのため正確性は保証しません。`HVE_PRICING_USD_JPY_RATE` で調整してください（GUI 設定タブは **未配線**。§4.2 参照）。リアルタイム為替 API 連携は将来検討。
 
 ---
 
@@ -214,11 +221,19 @@ with StatusLine(interval=1.0) as sl:
 - `hve/gui/workbench_widgets.py` `FooterWidget` — GUI Footer
 - `hve/gui/stats_detail_popup.py` — 統計ポップアップ
 - `hve/gui/settings_pricing_tab.py` — GUI 設定タブ（**未配線**：settings_window から import されていない）
-- `hve/statusline.py` — CUI StatusLine（**未配線**：本体から呼ばれていない）
+- `hve/statusline.py` — CUI StatusLine（**配線済み**：[hve/orchestrator.py](../hve/orchestrator.py) の `_attach_runtime_statusline()` から起動）
 - `hve/tests/pricing/` — 全 67 件のテスト
 
 ---
 
 ## 9. 変更履歴
 
-機能リリース履歴は [`CHANGELOG.md`](../CHANGELOG.md) の "Added — リアルタイム統計 + AI Credit 料金表示" を参照。
+機能リリース履歴は [`CHANGELOG.md`](../CHANGELOG.md) の "Added — リアルタイム統計 + AI Credit 料金表示" を参照。ただし CHANGELOG には過去時点の「StatusLine 未統合」記録も残るため、現状は本頁の実装照合結果を優先してください。
+
+## 10. 公式出典
+
+- Usage-based billing for individuals — <https://docs.github.com/en/copilot/concepts/billing/usage-based-billing-for-individuals>
+- Usage-based billing for organizations and enterprises — <https://docs.github.com/en/copilot/concepts/billing/usage-based-billing-for-organizations-and-enterprises>
+- Model multipliers for annual plans on request-based billing (legacy) — <https://docs.github.com/en/copilot/reference/copilot-billing/request-based-billing-legacy/model-multipliers-for-annual-plans>
+- GitHub Copilot is moving to usage-based billing — <https://github.blog/news-insights/company-news/github-copilot-is-moving-to-usage-based-billing/>
+- Pricing · Plans for every developer · GitHub — <https://github.com/pricing>

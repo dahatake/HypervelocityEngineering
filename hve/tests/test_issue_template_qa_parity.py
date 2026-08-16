@@ -26,7 +26,6 @@ class TestIssueTemplateQaControls(unittest.TestCase):
         "dataflow-dev.yml",
         "sourcecode-to-documentation.yml",
         "knowledge-management.yml",
-        "original-docs-review.yml",
     ]
 
     _TEMPLATES_OUT_OF_SCOPE = [
@@ -58,7 +57,7 @@ class TestIssueTemplateQaControls(unittest.TestCase):
 
 
 class TestWorkflowAutoQaParity(unittest.TestCase):
-    """AKM/AQOD Actions が auto-qa を固定値ではなく入力から反映することを検証する。"""
+    """Cloud Actions が auto-qa を固定値ではなく入力から反映することを検証する。"""
 
     def _read_workflow(self, filename: str) -> str:
         return (_WORKFLOW_DIR / filename).read_text(encoding="utf-8")
@@ -70,16 +69,6 @@ class TestWorkflowAutoQaParity(unittest.TestCase):
         self.assertIn('("auto-qa", auto_qa)', content)
         self.assertIn('<!-- auto-qa: %s -->', content)
         self.assertIn('add_label "${ROOT_ISSUE}" "auto-qa"', content)
-
-    def test_aqod_workflow_uses_template_auto_qa_value(self) -> None:
-        content = self._read_workflow("auto-aqod.yml")
-        self.assertIn('qa_section = section("質問票設定")', content)
-        self.assertIn('"auto_qa": auto_qa', content)
-        self.assertIn('("auto-qa", auto_qa)', content)
-        self.assertIn('f"<!-- auto-qa: {os.environ.get(\'AUTO_QA\', \'false\')} -->"', content)
-        self.assertIn('add_label "${ISSUE_NUMBER}" "auto-qa"', content)
-        self.assertNotIn('"<!-- auto-qa: true -->"', content)
-        self.assertNotIn('LABELS=\'["aqod:ready","auto-context-review","auto-qa"]\'', content)
 
     def test_aas_workflow_auto_qa_dynamic(self) -> None:
         """AAS ワークフローが auto-qa を Issue 入力から動的に反映することを検証する。"""
@@ -191,7 +180,7 @@ class TestWorkflowAutoQaParity(unittest.TestCase):
         QA 参照セクションは CLI/GUI 側 (hve/template_engine.py の
         _build_qa_review_context_section) と Cloud 側 (各 auto-*.yml) の二重実装であり、
         片方だけ更新すると文言がドリフトする。両者の cross-step work/run 読取り禁止文の
-        存在を担保してドリフトを防ぐ（auto-aqod.yml は heredoc 形式のため本テストで併せて検査）。
+        存在を担保してドリフトを防ぐ。
         """
         prohibition = "`work/run/<run-id>/...` 配下の作業ファイルは入力として読まないこと"
         targets = [
@@ -204,7 +193,6 @@ class TestWorkflowAutoQaParity(unittest.TestCase):
             "auto-dataflow-design-reusable.yml",
             "auto-dataflow-dev-reusable.yml",
             "auto-knowledge-management-reusable.yml",
-            "auto-aqod.yml",
         ]
         for filename in targets:
             with self.subTest(filename=filename):
@@ -215,13 +203,13 @@ class TestWorkflowAutoQaParity(unittest.TestCase):
                     f"{filename} の QA セクションに cross-step work/run 読取り禁止文がありません",
                 )
 
-    def test_akm_aqod_python_heredoc_blocks_are_compilable(self) -> None:
-        """AKM/AQODワークフローのPython heredocブロックが構文的に有効であることを検証する。"""
+    def test_akm_python_heredoc_blocks_are_compilable(self) -> None:
+        """AKM workflowのPython heredocブロックが構文的に有効であることを検証する。"""
         pattern = re.compile(
             r"<<'(?P<marker>PY(?:EOF|TAGS|MERGE))'\n(?P<code>.*?)\n\s*(?P=marker)",
             re.DOTALL,
         )
-        for filename in ("auto-knowledge-management-reusable.yml", "auto-aqod.yml"):
+        for filename in ("auto-knowledge-management-reusable.yml",):
             content = self._read_workflow(filename)
             blocks = list(pattern.finditer(content))
             self.assertGreater(len(blocks), 0, filename)
@@ -232,6 +220,136 @@ class TestWorkflowAutoQaParity(unittest.TestCase):
                         f"{filename}:{match.group('marker')}:{idx}",
                         "exec",
                     )
+
+
+class TestAkmModelCloudParity(unittest.TestCase):
+    """FR-CLOUD-25: QA 起点 AKM Root Issue への AKM 用モデル継承。"""
+
+    _SCRIPT_DIR = _REPO_ROOT / ".github" / "scripts" / "bash" / "lib"
+
+    # QA→AKM 同期の対象となる Workflow のテンプレート（AKM 自身は再帰禁止で対象外）。
+    _TEMPLATES_WITH_AKM_MODEL = [
+        "app-architecture-design.yml",
+        "web-app-design.yml",
+        "web-app-dev.yml",
+        "ai-agent-design.yml",
+        "ai-agent-dev.yml",
+        "dataflow-design.yml",
+        "dataflow-dev.yml",
+        "sourcecode-to-documentation.yml",
+    ]
+
+    def _read_template(self, filename: str) -> str:
+        return (_TEMPLATE_DIR / filename).read_text(encoding="utf-8")
+
+    def _read_workflow(self, filename: str) -> str:
+        return (_WORKFLOW_DIR / filename).read_text(encoding="utf-8")
+
+    @staticmethod
+    def _allowlist(script_text: str) -> set:
+        match = re.search(r"allowed\s*=\s*\{([^}]*)\}", script_text)
+        assert match, "allowlist が見つかりません"
+        return set(re.findall(r'"([^"]+)"', match.group(1)))
+
+    # -- Issue Form ------------------------------------------------------
+
+    def test_target_templates_have_akm_model(self) -> None:
+        for template in self._TEMPLATES_WITH_AKM_MODEL:
+            with self.subTest(template=template):
+                self.assertIn("id: akm_model", self._read_template(template))
+
+    def test_akm_template_does_not_have_akm_model(self) -> None:
+        """AKM 自身は QA 起点 AKM を再帰生成しないため対象外。"""
+        self.assertNotIn(
+            "id: akm_model", self._read_template("knowledge-management.yml"),
+        )
+
+    def test_akm_model_choices_match_qa_model_choices(self) -> None:
+        block = re.compile(
+            r"id: (?P<id>akm_model|qa_model)\b.*?options:\s*\n(?P<options>(?:\s+- \".*?\"\s*\n)+)",
+            re.DOTALL,
+        )
+        for template in self._TEMPLATES_WITH_AKM_MODEL:
+            with self.subTest(template=template):
+                found = {
+                    m.group("id"): re.findall(r'- "([^"]+)"', m.group("options"))
+                    for m in block.finditer(self._read_template(template))
+                }
+                self.assertIn("akm_model", found)
+                self.assertIn("qa_model", found)
+                self.assertEqual(found["akm_model"], found["qa_model"])
+
+    def test_akm_model_section_label_matches_extractor(self) -> None:
+        for template in self._TEMPLATES_WITH_AKM_MODEL:
+            with self.subTest(template=template):
+                self.assertIn("AKM 用モデル", self._read_template(template))
+
+    # -- extractor -------------------------------------------------------
+
+    def test_extract_akm_model_script_exists(self) -> None:
+        script = self._SCRIPT_DIR / "extract-akm-model.py"
+        self.assertTrue(script.is_file(), "extract-akm-model.py が存在しません")
+        text = script.read_text(encoding="utf-8")
+        self.assertIn("AKM 用モデル", text)
+
+    def test_extract_akm_model_allowlist_matches_extract_model(self) -> None:
+        akm = (self._SCRIPT_DIR / "extract-akm-model.py").read_text(encoding="utf-8")
+        main = (self._SCRIPT_DIR / "extract-model.py").read_text(encoding="utf-8")
+        self.assertEqual(self._allowlist(akm), self._allowlist(main))
+
+    def test_copilot_assign_exposes_extract_akm_model(self) -> None:
+        text = (self._SCRIPT_DIR / "copilot-assign.sh").read_text(encoding="utf-8")
+        self.assertIn("extract_akm_model()", text)
+        self.assertIn("extract-akm-model.py", text)
+
+    def test_transition_workflow_calls_extract_akm_model_wrapper(self) -> None:
+        """wrapper をデッドコード化させない（python3 直呼びへの退行を禁じる）。"""
+        content = self._read_workflow("auto-issue-qa-ready-transition.yml")
+        self.assertIn(
+            'source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/copilot-assign.sh"',
+            content,
+            "save-qa-answer が copilot-assign.sh を source していません",
+        )
+        self.assertIn('akm_model=$(extract_akm_model "${body}")', content)
+        self.assertNotIn(
+            "extract-akm-model.py", content,
+            "extract-akm-model.py の python3 直呼びが残っています"
+            "（copilot-assign.sh の extract_akm_model がデッドコード化します）",
+        )
+
+    # -- source workflow -------------------------------------------------
+
+    def test_transition_workflow_outputs_akm_model(self) -> None:
+        content = self._read_workflow("auto-issue-qa-ready-transition.yml")
+        self.assertIn(
+            "akm_model: ${{ steps.save.outputs.akm_model }}", content,
+            "save-qa-answer が akm_model を output していません",
+        )
+        self.assertIn('echo "akm_model=', content)
+
+    def test_transition_workflow_forwards_akm_model_to_dispatch(self) -> None:
+        content = self._read_workflow("auto-issue-qa-ready-transition.yml")
+        self.assertIn(
+            "AKM_MODEL: ${{ needs.save-qa-answer.outputs.akm_model }}", content,
+        )
+        self.assertIn('-f "akm_model=${AKM_MODEL}"', content)
+
+    # -- coordinator workflow --------------------------------------------
+
+    def test_coordinator_accepts_akm_model_input(self) -> None:
+        content = self._read_workflow("auto-akm-after-qa.yml")
+        self.assertIn("akm_model:", content)
+        self.assertIn("required: false", content)
+
+    def test_coordinator_writes_model_section_into_root_issue(self) -> None:
+        content = self._read_workflow("auto-akm-after-qa.yml")
+        self.assertIn("### 使用するモデル", content)
+
+    def test_coordinator_falls_back_to_auto(self) -> None:
+        content = self._read_workflow("auto-akm-after-qa.yml")
+        # 内部変数名に依存せず、許可リスト外を "Auto" へ丸める実装があることを検証する。
+        self.assertRegex(content, r'[A-Z_]*AKM_MODEL[A-Z_]*="Auto"')
+        self.assertIn("claude-opus-4.7", content, "許可リスト検証がありません")
 
 
 if __name__ == "__main__":

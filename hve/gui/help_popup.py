@@ -134,6 +134,8 @@ def _entry_for_key(key: str) -> HelpEntry:
         return hc.workbench_help(name)
     if scope == "category":
         return hc.category_help(name)
+    if scope == "toolsearch":
+        return hc.toolsearch_policy_help(name)
     if scope == "step_intro":
         try:
             return hc.step_intro(int(name))

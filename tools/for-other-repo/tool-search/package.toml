@@ -9,7 +9,7 @@
 
 [package]
 name = "tool-search"
-version = "1.2.0"
+version = "1.3.0"
 engine = "toolsearch"
 summary = "Copilot SDK セッションのツール定義を遅延ロードし、ランキングを自前で持つ仕組み"
 source_repo = "dahatake/RoyalytyService2ndGen"

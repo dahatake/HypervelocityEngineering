@@ -119,6 +119,135 @@ class TestParseQaContent6Columns(unittest.TestCase):
     def test_user_answer_q3(self):
         self.assertEqual(self.doc.questions[2].user_answer, "C) TBD")
 
+
+# ---------------------------------------------------------------------------
+# FR-QA-03: 回答済み QA ファイルの read-back 検証 API
+# ---------------------------------------------------------------------------
+
+_ANSWERED_ALL_DEFAULTS = """\
+# テスト質問票
+
+**状態**: 回答済み
+**推論許可**: なし
+
+---
+
+## 質問項目
+
+| No. | 質問 | 選択肢 | 既定値候補 | 既定値候補の理由 | ユーザー回答 |
+|-----|------|--------|-----------|-----------------|------------|
+| 1 | サービス分割方針 | A) 分割 / B) 統合 | A) 分割 | ドメイン分析 | A) 分割 |
+| 2 | 通信方式 | A) REST / B) gRPC | A) REST | 習熟度 | B) gRPC |
+"""
+
+_NO_ANSWER_NO_DEFAULT = """\
+# テスト質問票
+
+**状態**: 回答済み
+**推論許可**: なし
+
+---
+
+## 質問項目
+
+| No. | 質問 | 選択肢 | 既定値候補 | 既定値候補の理由 | ユーザー回答 |
+|-----|------|--------|-----------|-----------------|------------|
+| 1 | サービス分割方針 | A) 分割 / B) 統合 | A) 分割 | ドメイン分析 | A) 分割 |
+| 2 | 未決定項目 | A) Yes / B) No |  |  |  |
+"""
+
+
+class TestAnsweredQaValidation(unittest.TestCase):
+    """FR-QA-03: validate_answered_file — 保存後 read-back 検証。"""
+
+    def test_roundtrip_content_matches(self):
+        """保存→再読込で内容・質問数・全回答が一致すれば OK を返す。"""
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "qa-answered.md"
+            QAMerger.save_merged(_ANSWERED_ALL_DEFAULTS, p)
+            errors = QAMerger.validate_answered_file(
+                p,
+                expected_content=_ANSWERED_ALL_DEFAULTS,
+                expected_questions=2,
+            )
+            self.assertEqual(errors, [], f"検証エラーが出るべきではない: {errors}")
+
+    def test_parse_merge_render_save_validate_flow(self):
+        """実運用と同じ parse→merge→render→save→validate を通す。"""
+        doc = QAMerger.parse_qa_content(_STRUCTURED_CONTENT)
+        merged = QAMerger.merge_answers(doc, {}, use_defaults=True)
+        rendered = QAMerger.render_merged(merged)
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "qa-answered.md"
+            self.assertTrue(QAMerger.save_merged(rendered, p))
+            errors = QAMerger.validate_answered_file(
+                p,
+                expected_content=rendered,
+                expected_questions=len(doc.questions),
+            )
+            self.assertEqual(errors, [])
+
+    def test_inference_completed_status_is_valid(self):
+        doc = QAMerger.parse_qa_content(_INFERENCE_ALLOWED_CONTENT)
+        merged = QAMerger.merge_answers(doc, {}, use_defaults=True)
+        rendered = QAMerger.render_merged(merged)
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "qa-inferred.md"
+            self.assertTrue(QAMerger.save_merged(rendered, p))
+            self.assertEqual(QAMerger.validate_answered_file(p), [])
+
+    def test_rejects_empty_user_answer(self):
+        """回答が空の質問が含まれていれば拒否する。"""
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "qa-answered.md"
+            QAMerger.save_merged(_NO_ANSWER_NO_DEFAULT, p)
+            errors = QAMerger.validate_answered_file(p)
+            self.assertTrue(len(errors) > 0, "回答も既定値も無い質問は拒否されるべき")
+            self.assertTrue(
+                any("2" in e for e in errors),
+                f"質問 2 についてのエラーがあるべき: {errors}",
+            )
+
+    def test_rejects_tampered_content(self):
+        """保存後にファイル内容が改変されていれば拒否する。"""
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "qa-answered.md"
+            QAMerger.save_merged(_ANSWERED_ALL_DEFAULTS, p)
+            tampered = p.read_text(encoding="utf-8").replace("A) 分割", "X) 改変")
+            p.write_text(tampered, encoding="utf-8")
+            original_doc = QAMerger.parse_qa_content(_ANSWERED_ALL_DEFAULTS)
+            errors = QAMerger.validate_answered_file(
+                p,
+                expected_content=_ANSWERED_ALL_DEFAULTS,
+                expected_questions=len(original_doc.questions),
+            )
+            self.assertTrue(len(errors) > 0, "内容改変は検出されるべき")
+
+    def test_question_count_mismatch_rejected(self):
+        """再読込した質問数が期待値と異なれば拒否する。"""
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "qa-answered.md"
+            QAMerger.save_merged(_ANSWERED_ALL_DEFAULTS, p)
+            errors = QAMerger.validate_answered_file(p, expected_questions=99)
+            self.assertTrue(len(errors) > 0, "質問数不一致は検出されるべき")
+
+    def test_rejects_document_without_questions(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "qa-empty.md"
+            p.write_text(
+                "# QA\n\n**状態**: 回答済み\n\n質問はありません。\n",
+                encoding="utf-8",
+            )
+            errors = QAMerger.validate_answered_file(p)
+            self.assertTrue(any("質問が見つかりません" in e for e in errors))
+
+
+class TestParseQaContent6ColumnsQuestionCount(unittest.TestCase):
+    """6列テーブルの質問数テスト（TestParseQaContent6Columns から分離された既存テスト）。"""
+
+    def setUp(self):
+        self.doc = QAMerger.parse_qa_content(_6COL_CONTENT)
+
     def test_question_count(self):
         self.assertEqual(len(self.doc.questions), 3)
 
@@ -697,14 +826,14 @@ _STRUCTURED_CONTENT = """\
 - 未回答のまま進めた場合の影響: 実装方針が未決
 """
 
-_AQOD_STRUCTURED_CONTENT = """\
+_ORIGINAL_DOCS_STRUCTURED_CONTENT = """\
 [Q01]
-- 対象ドキュメント: original-docs/spec.md
+- 対象ドキュメント: docs-original/spec.md
 - 該当箇所: 「代表SKUの算出条件が明記されていない」
 - 問題種別: 不明瞭
 - 重大度: major
 - 質問内容: 代表SKUの算出条件はどのドキュメントを正としますか。
-- 未回答時の既定値候補: original-docs/spec.md を暫定的な正とする
+- 未回答時の既定値候補: docs-original/spec.md を暫定的な正とする
 - 既定値候補の理由: 他に明示された根拠がないため
 - 未回答のまま進めた場合の影響: 算出結果の解釈が分岐する
 """
@@ -816,11 +945,11 @@ class TestStructuredQuestionParsing(unittest.TestCase):
         self.assertEqual(self.doc.questions[1].priority, "高")
 
 
-class TestAqodStructuredQuestionParsing(unittest.TestCase):
-    """AQOD 専用フィールド名（質問内容/問題種別/重大度）のパーステスト"""
+class TestOriginalDocsStructuredQuestionParsing(unittest.TestCase):
+    """原本質問票フィールド名（質問内容/問題種別/重大度）のパーステスト。"""
 
     def setUp(self):
-        self.doc = QAMerger.parse_qa_content(_AQOD_STRUCTURED_CONTENT)
+        self.doc = QAMerger.parse_qa_content(_ORIGINAL_DOCS_STRUCTURED_CONTENT)
 
     def test_question_content_alias_parsed(self):
         self.assertEqual(len(self.doc.questions), 1)
@@ -1069,6 +1198,102 @@ class TestColumnIndexZeroSafety(unittest.TestCase):
         self.assertEqual(doc.questions[0].no, 1)
         # インデックス0の既定値候補の理由が正しく取得される
         self.assertEqual(doc.questions[0].reason, "実績あり")
+
+
+class TestRenderMergedMultilineCells(unittest.TestCase):
+    """FR-QA-03: 複数行セルでも回答済み QA の往復構造を壊さない。"""
+
+    @staticmethod
+    def _make_doc(workiq_answer: str) -> QADocument:
+        doc = QADocument(
+            title="Work IQ 複数行テスト",
+            status="回答待ち",
+            header_fields=[("状態", "回答待ち")],
+            questions=[
+                QAQuestion(no=1, question="質問1", default_answer="A. 回答1"),
+                QAQuestion(
+                    no=2,
+                    question="質問2",
+                    default_answer="B. 回答2",
+                    workiq_answer=workiq_answer,
+                    workiq_reason="Work IQ 調査結果",
+                ),
+                QAQuestion(no=3, question="質問3", default_answer="C. 回答3"),
+            ],
+        )
+        return QAMerger.merge_answers(doc, {}, use_defaults=True)
+
+    @staticmethod
+    def _table_body_lines(rendered: str) -> list[str]:
+        lines = rendered.splitlines()
+        header_index = next(
+            index for index, line in enumerate(lines)
+            if line.startswith("| No. |")
+            and index + 1 < len(lines)
+            and lines[index + 1].startswith("|-----|")
+        )
+        return [line for line in lines[header_index + 2:] if line]
+
+    def test_multiline_workiq_answer_keeps_one_physical_row_per_question(self) -> None:
+        doc = self._make_doc(
+            "STATUS: FOUND\n| 種別 | 情報ソース |\n|---|---|\n| ファイル | 仕様書 |"
+        )
+
+        rendered = QAMerger.render_merged(doc)
+
+        body_lines = self._table_body_lines(rendered)
+        self.assertEqual(len(body_lines), 3)
+        self.assertEqual(
+            [line.split("|", 2)[1].strip() for line in body_lines],
+            ["1", "2", "3"],
+        )
+        self.assertIn("STATUS: FOUND", body_lines[1])
+
+    def test_crlf_cr_lf_and_pipe_are_safe_in_one_table_cell(self) -> None:
+        """採用済み D1=A: 改行は `<br>`、pipe は entity へ変換する。"""
+        doc = self._make_doc(
+            "STATUS: PARTIAL\r\nalpha\rbeta\ngamma | delta"
+        )
+
+        rendered = QAMerger.render_merged(doc)
+        body_lines = self._table_body_lines(rendered)
+
+        self.assertNotIn("\r", rendered)
+        self.assertIn("STATUS: PARTIAL<br>alpha<br>beta<br>gamma &#124; delta", body_lines[1])
+        self.assertEqual(len(body_lines), 3)
+
+    def test_render_save_parse_validate_round_trip_preserves_questions_and_answers(self) -> None:
+        doc = self._make_doc(
+            "STATUS: FOUND\n| 種別 | 情報ソース |\n| ファイル | 要件定義書 |"
+        )
+        rendered = QAMerger.render_merged(doc)
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "answered.md"
+            self.assertTrue(QAMerger.save_merged(rendered, path))
+            errors = QAMerger.validate_answered_file(
+                path,
+                expected_content=rendered,
+                expected_questions=3,
+            )
+            reparsed = QAMerger.parse_qa_file(path)
+
+        self.assertEqual(errors, [])
+        self.assertEqual([q.no for q in reparsed.questions], [1, 2, 3])
+        self.assertTrue(all((q.user_answer or "").strip() for q in reparsed.questions))
+        self.assertIn("STATUS: FOUND", reparsed.questions[1].workiq_answer)
+        self.assertIn("<br>", reparsed.questions[1].workiq_answer)
+        self.assertIn("&#124;", reparsed.questions[1].workiq_answer)
+        self.assertIn("要件定義書", reparsed.questions[1].workiq_answer)
+
+    def test_render_parse_render_is_stable_for_multiline_workiq_answer(self) -> None:
+        rendered = QAMerger.render_merged(
+            self._make_doc("STATUS: FOUND\nline 1\nline 2 | value")
+        )
+
+        reparsed = QAMerger.parse_qa_content(rendered)
+
+        self.assertEqual(QAMerger.render_merged(reparsed), rendered)
 
 
 class TestMergeWorkiqResultsStatusSkip(unittest.TestCase):

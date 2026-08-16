@@ -104,15 +104,22 @@ def test_get_index_stats_all_strategies_returns_all(
 ) -> None:
     """T16: 戻り値のキーが ALL_STRATEGIES と一致し、各 dict が strategy 名を持つ。
 
-    No.1 修正後は DB ファイル未存在時に ``get_index_stats`` を呼ばない経路
-    に分岐するため、各 Strategy の DB を事前に touch しておく。
+    未生成の索引には ``get_index_stats`` を呼ばない経路へ分岐するため、
+    各 Strategy の索引実体を事前に用意しておく。``graphrag`` の実体は
+    SQLite ではなく LightRAG 作業ディレクトリで、SQLite 統計を持たないため
+    ``get_index_stats`` の呼び出し対象外となる。
     """
     from mdq.gui import index_service as mdq_index_service
 
+    sqlite_strategies = [s for s in ALL_STRATEGIES if s != "graphrag"]
     mdq_dir = tmp_path / ".mdq"
     mdq_dir.mkdir(exist_ok=True)
-    for strategy in ALL_STRATEGIES:
+    for strategy in sqlite_strategies:
         (mdq_dir / f"index-ja-jp-{strategy}.sqlite").write_bytes(b"")
+    working = mdq_dir / "graphrag-ja-jp"
+    working.mkdir()
+    # 空ディレクトリはビルド済みと見なされないため、LightRAG のマーカーを置く。
+    (working / "kv_store_doc_status.json").write_text("{}", encoding="utf-8")
 
     # 高速化のため get_index_stats をモック。
     captured_calls: List[str] = []
@@ -149,8 +156,9 @@ def test_get_index_stats_all_strategies_returns_all(
     assert set(result.keys()) == set(ALL_STRATEGIES)
     for strategy in ALL_STRATEGIES:
         assert result[strategy]["strategy"] == strategy
-    # 全 Strategy について 1 回ずつ呼び出されたこと
-    assert sorted(captured_calls) == sorted(ALL_STRATEGIES)
+    assert result["graphrag"]["db_exists"] is True
+    # SQLite を持つ全 Strategy について 1 回ずつ呼び出されたこと
+    assert sorted(captured_calls) == sorted(sqlite_strategies)
 
 
 def test_get_index_stats_all_strategies_handles_exception(

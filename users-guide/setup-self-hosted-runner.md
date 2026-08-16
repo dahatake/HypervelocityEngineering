@@ -2,12 +2,12 @@
 
 ← [README](../README.md) | ← [hve-cloud-getting-started.md](./hve-cloud-getting-started.md)
 
-この手順書は、`tools/runner/README.md` と `tools/runner/SETUP.md` を統合した単一ドキュメントです。  
+この手順書は、`tools/runner/` の現行実装に対応する単一ドキュメントです。
 以下の順番で実行すれば、GitHub Actions Self-hosted Runner を Azure Container Apps Jobs にデプロイして検証できます。
 
 > **HVE Cloud Agent Orchestrator における位置づけ（省略可能）**: この手順は**オプション**です。GitHub-hosted runner（`ubuntu-latest` 等）を使う場合はスキップして [hve-cloud-getting-started.md の Step.5（ラベル設定）](./hve-cloud-getting-started.md#step5-ラベル設定) に進んでください。Self-hosted runner が必要なのは、組織のセキュリティ要件・閉域ネットワーク・固定 IP・専用ツール利用などの理由で自前の実行環境でワークフローを動かしたい場合です。設定タイミングは **認証・認可設定（Step.4）の後、Setup Labels 実行（Step.5）の前** が推奨です。なお、Self-hosted runner 側に設定した runner label（デフォルト: `self-hosted,linux,x64,aca`）は、Issue Template や workflow の `runs-on:` に指定する label と**一致している必要があります**。ラベルが不一致の場合、ジョブが `Waiting for a runner...` のまま進まなくなります。
 >
-> **⚠️ 認証トークンに関する注意**: この手順で必要なトークンは、hve-cloud-getting-started.md Step.4 の `COPILOT_PAT`（Copilot 自動アサイン用 Fine-grained PAT）とは**別物**です。Self-hosted runner のデプロイには **GitHub Personal Access Token (classic)** が必要です（スコープ: `repo` + `admin:repo_hook`）。詳細は [Step 2: GitHub PAT を発行](#step-2-github-pat-を発行) を参照してください。
+> **⚠️ 認証トークンに関する注意**: この手順で必要なトークンは、hve-cloud-getting-started.md Step.4 の `COPILOT_PAT`（Copilot 自動アサイン用 Fine-grained PAT）とは**別物**です。現行の `tools/runner/deploy.sh` は KEDA scaler と runner 登録のため `GITHUB_PAT` を受け取ります。対象リポジトリだけに限定し、GitHub が求める最小権限・最短の有効期限で発行してください。トークン値を文書、コマンド履歴、Issue、PR、ログへ保存してはいけません。詳細は [Step 2: GitHub PAT を発行](#step-2-github-pat-を発行) を参照してください。
 >
 > **対象読者**: Azure Container Apps で Self-hosted Runner を構築・運用するリポジトリ管理者  
 > **前提**: Azure サブスクリプション権限、GitHub リポジトリアクセス権、`tools/runner/` を実行できるローカル環境があること  
@@ -67,14 +67,15 @@ Runner Container
 
 ### 3.1 Azure
 - Azure サブスクリプションが有効
-- リソース作成権限（Contributor 以上推奨）
-- Key Vault にシークレットを書き込める RBAC 権限（例: `Key Vault Secrets Officer` 以上）
+- リソースグループ内で必要なリソースを作成できる権限
+- `tools/runner/deploy.sh` が Key Vault スコープで行う `Key Vault Secrets Officer` の割り当てを実行できる権限。必要な場合は管理者に対象 Key Vault に限定した割り当てを依頼し、サブスクリプションの Owner を付与しない
 - 対象リージョン（例: `japaneast`）
 
 ### 3.2 GitHub
 - 対象リポジトリが存在
-- Personal Access Token (classic) を発行可能
-- PAT スコープ: `repo` と `admin:repo_hook`
+- 対象リポジトリの管理者権限を持つユーザーが Personal Access Token を発行可能
+- Fine-grained PAT: 対象リポジトリだけを選択し、Repository permissions の `Actions: Read-only`、`Administration: Read and write`、`Metadata: Read-only`（自動付与）
+- Personal Access Token (classic) を使う場合: `repo` スコープ（`admin:repo_hook` は不要）
 
 ### 3.3 ローカル
 - `bash` 4.0+
@@ -146,15 +147,16 @@ az account set --subscription <subscription-id-or-name>
 
 ### Step 2: GitHub PAT を発行
 
-1. GitHub: `Settings` > `Developer settings` > `Personal access tokens` > `Tokens (classic)`
-2. `Generate new token (classic)` を選択
-3. `repo` + `admin:repo_hook` を付与
-4. トークンをコピー（有効期限は短め推奨）
+1. GitHub: `Settings` > `Developer settings` > `Personal access tokens` を開く
+2. Fine-grained PAT で対象リポジトリだけを選択し、Repository permissions に `Actions: Read-only`、`Administration: Read and write`、`Metadata: Read-only`（自動付与）を設定
+3. 組織ポリシーなどで fine-grained PAT が使えない場合だけ classic PAT を選択し、`repo` スコープを設定（この構成は Webhook を使わないため `admin:repo_hook` は不要）
+4. 有効期限を設定し、トークン値はパスワードと同様に扱う
 
 ### Step 3: 必須環境変数を設定
 
 ```bash
-export GITHUB_PAT="github_pat_xxxxxxxxxxxxxxxxxxxx"
+read -rs -p "GitHub PAT: " GITHUB_PAT; echo
+export GITHUB_PAT
 export REPO_URL="https://github.com/<owner>/<repo>"
 ```
 
@@ -178,10 +180,9 @@ cd <このリポジトリのルート>
 ./tools/runner/deploy.sh
 ```
 
-実行例（インライン指定）:
+`GITHUB_PAT` はインライン指定せず、前節の対話入力で設定した環境変数を使います。
 ```bash
-export GITHUB_PAT="github_pat_xxxxx..." && \
-export REPO_URL="https://github.com/dahatake/RoyalytyService2ndGen" && \
+export REPO_URL="https://github.com/<owner>/<repo>" && \
 export RESOURCE_GROUP="my-runner-rg" && \
 export LOCATION="eastus" && \
 ./tools/runner/deploy.sh
@@ -368,7 +369,8 @@ az account show
 - 原因: `GITHUB_PAT` 未設定
 - 対処:
 ```bash
-export GITHUB_PAT="github_pat_xxxxxxxxxxxx"
+read -rs -p "GitHub PAT: " GITHUB_PAT; echo
+export GITHUB_PAT
 ./tools/runner/deploy.sh
 ```
 
@@ -404,7 +406,8 @@ az role assignment create \
 > RBAC 割り当て直後は反映に数十秒かかる場合があります。少し待ってから再実行してください。
 
 ### Runner が登録されない
-- PAT スコープ（`repo` / `admin:repo_hook`）を確認
+- Fine-grained PAT は対象リポジトリへのアクセスと `Actions: Read-only`、`Administration: Read and write`、`Metadata: Read-only`、classic PAT は `repo` スコープを確認
+- PAT を発行したユーザーが対象リポジトリの管理者権限を持つことを確認
 - `REPO_URL` 形式（`https://github.com/{owner}/{repo}`）を確認
 - Container Apps Job から GitHub API への疎通を確認
 
@@ -418,33 +421,26 @@ az role assignment create \
 ## 9. セキュリティ運用
 
 ### 9.1 PAT の取り扱い
-1. PAT をスクリプトに埋め込まない（環境変数で渡す）
+1. PAT をスクリプト、文書、コマンド履歴に埋め込まない（対話入力後に環境変数で渡す）
 2. 有効期限は短め（例: 30〜90日）
 3. 不要になった PAT は GitHub 上で削除
-4. 必要に応じて履歴と環境変数をクリア
+4. 実行後に環境変数をクリア
 
 ```bash
-history -c
 export GITHUB_PAT=""
 ```
 
 ### 9.2 Azure 側アクセス制御
-- Managed Identity + RBAC で最小権限化
-- Key Vault へのアクセス権を必要最小限に設定
+- Managed Identity + RBAC で最小権限化する
+- `deploy.sh` が設定する ACR pull 権限は job の User-Assigned Managed Identity に限定される。Key Vault へのシークレット書込みはデプロイ実行主体へ Key Vault スコープでのみ割り当てる
+- 手動で Contributor、Owner、広域の Key Vault ポリシーを追加しない。追加権限が必要な場合は、失敗した操作と対象リソースを確認してから最小スコープで要確認とする
 
-例:
-```bash
-az role assignment create \
-  --assignee <your-user-id> \
-  --role "Contributor" \
-  --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP"
+### 9.3 HVE カスタマイズと回帰確認
 
-az keyvault set-policy \
-  --name $KV_NAME \
-  --resource-group $RESOURCE_GROUP \
-  --secret-permissions get list \
-  --object-id <your-object-id>
-```
+- **設定正本**: `tools/runner/deploy.sh` の環境変数既定値、`tools/runner/Dockerfile`、`tools/runner/entrypoint.sh` です。`RUNNER_LABELS` と workflow の `runs-on` は一致させます。
+- **拡張手順**: まず `RUNNER_LABELS` または容量設定を 1 つだけ変更し、対象リポジトリの runner scope を維持します。現行スクリプトは `runnerScope=repo` と `repos=<対象リポジトリ>` を設定するため、組織全体へ拡張する変更は別途設計・権限レビューが必要です。
+- **回帰検証**: [smoke test workflow](../.github/workflows/self-hosted-runner-smoke-test.yml) を 1 本実行し、選択された labels、`python3`、`az`、`jq`、実行後のゼロスケールを確認してから他 workflow を移行します。
+- **互換性**: `deploy.sh` の再実行は既存の Container Apps Job を削除して再作成します。実行中ジョブのない保守時間帯に実施し、失敗時は直前の既知のイメージと設定値へ戻せることを確認してから行います。
 
 ## 10. 運用・保守
 
@@ -497,5 +493,6 @@ az group delete --name $RESOURCE_GROUP --yes
 - [Azure Container Apps](https://learn.microsoft.com/azure/container-apps/)
 - [Azure Cosmos DB Emulator](https://learn.microsoft.com/azure/cosmos-db/emulator)
 - [GitHub Actions Self-Hosted Runners](https://docs.github.com/en/actions/hosting-your-own-runners)
-- [KEDA GitHub Runner Scaler](https://keda.sh/docs/scalers/github-runner/)
 - [GitHub Actions Runner Releases](https://github.com/actions/runner/releases)
+- [Managing your personal access tokens](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
+- [KEDA GitHub Runner Scaler](https://keda.sh/docs/latest/scalers/github-runner/)
