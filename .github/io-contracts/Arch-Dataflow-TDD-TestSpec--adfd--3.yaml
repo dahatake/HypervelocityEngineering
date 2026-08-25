@@ -2,11 +2,11 @@ inputs:
 - path: docs/catalog/test-strategy.md
   required: true
   kind: agent_artifact
-  producer: Arch-TDD-TestStrategy--aas--7
+  producer: Arch-TDD-TestStrategy--aas--6
 - path: docs/catalog/service-catalog-matrix.md
   required: true
   kind: agent_artifact
-  producer: Arch-Microservice-ServiceCatalog--aas--6
+  producer: Arch-Microservice-ServiceCatalog--aas--5
 - path: docs/dataflow/apps/{key}-spec.md
   required: true
   kind: agent_artifact

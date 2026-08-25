@@ -1,8 +1,8 @@
 """T1 回帰防止: クリック順に依らず `_steps_layout` 内の表示順がワークフロー正準順になる。
 
 要件: 画面左下「実行ステップ」のワークフロー表示順は、ユーザーがチェックを入れた
-順番ではなく、ワークフロー定義の正準順（カテゴリー定義 `_WORKFLOW_CATEGORIES` 由来）
-に必ず整列されること。
+順番ではなく、ワークフロー定義の正準順（`hve.workflow_registry.WORKFLOW_CATEGORIES`
+のカテゴリー定義順）に必ず整列されること。
 """
 from __future__ import annotations
 

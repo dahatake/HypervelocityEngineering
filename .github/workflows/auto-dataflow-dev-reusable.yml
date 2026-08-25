@@ -17,6 +17,7 @@ name: ADFDV Orchestrator
 #   Step.3   — Azure Functions/コンテナ Deploy (Dev-Dataflow-FunctionsDeploy)               ← Step.2.2 完了後
 #   Step.4.1 — WAF レビュー                (QA-AzureArchitectureReview)        ← Step.3 完了後（並列）
 #   Step.4.2 — 整合性チェック              (QA-AzureDependencyReview)          ← Step.3 完了後（並列）
+#   Step.4.3 — 要件適合実測                (QA-RequirementsConformanceEval)    ← Step.4.1 AND Step.4.2 完了後
 #
 # 状態ラベル（adfdv: プレフィックス）:
 #   adfdv:initialized — Bootstrap 完了（Sub Issue 生成済み）
@@ -26,8 +27,8 @@ name: ADFDV Orchestrator
 #   adfdv:blocked     — 依存先未完了でブロック中
 #
 # 依存関係 DAG:
-#   Step.1.1 → Step.1.2 → Step.2.1 → Step.2.2 → Step.3 → Step.4.1 ‖ Step.4.2
-#   Step.4.1 AND Step.4.2 → Root adfdv:done（AND 依存）
+#   Step.1.1 → Step.1.2 → Step.2.1 → Step.2.2 → Step.3 → Step.4.1 ‖ Step.4.2 → Step.4.3
+#   Step.4.1 AND Step.4.2 → Step.4.3 → Root adfdv:done（AND 依存）
 on:
   workflow_call:
     inputs:
@@ -309,7 +310,7 @@ jobs:
                   _msg="⚠️ エラー: \`${_catalog}\` が見つかりません。Architecture Design (AAS) を先に実行してください。"
                   ;;
                 *"セクションが見つかりません"*)
-                  _msg="⚠️ エラー: \`${_catalog}\` の見出し \`## A) サマリ表（全APP横断）\` セクションが見つかりません。出力契約 (.github/skills/architecture-questionnaire/assets/output-format.md §7.2) に沿って見出しを修正するか、AAS Step.2 を再実行してください。詳細: ${_err}"
+                  _msg="⚠️ エラー: \`${_catalog}\` の見出し \`## A) サマリ表（全APP横断）\` セクションが見つかりません。出力契約 (.github/skills/architecture-questionnaire/assets/output-format.md §7.2) に沿って見出しを修正するか、AAS Step.1 を再実行してください。詳細: ${_err}"
                   ;;
                 *"Markdown テーブルが見つかりません"*)
                   _msg="⚠️ エラー: \`${_catalog}\` の \`A) サマリ表\` セクションに Markdown テーブルが見つかりません。詳細: ${_err}"
@@ -696,6 +697,7 @@ jobs:
           S3_NUM=""  S3_ID=""
           S41_NUM="" S41_ID=""
           S42_NUM="" S42_ID=""
+          S43_NUM="" S43_ID=""
 
           # ---- Step.1.1: データサービス選定 ----
           if [[ ! " ${SKIP_STEPS} " =~ " 1 " ]]; then
@@ -833,6 +835,22 @@ jobs:
             echo "Step.4 はスキップ対象のため Step.4.2 は作成しません。"
           fi
 
+          # ---- Step.4.3: 要件適合実測 ----
+          if [[ ! " ${SKIP_STEPS} " =~ " 4 " ]]; then
+            BODY_S43=$(printf '%s\n## 目的\nデプロイ済みのデータフロー基盤を実際に動かし、機能要件・非機能要件への適合を測定で判定する。\n\n## なぜ必要か\nStep.4.1（WAF レビュー）と Step.4.2（整合性チェック）は設計文書と成果物の照合で完結する。そのため「デプロイしたジョブが目標の処理時間・スループット・成功率を実際に満たすか」は確認されていない。選んだ実行基盤（Functions / コンテナ / Spark 系）が過剰かどうかも、目標値と実測値の差でしか評価できない。\n\n## 入力\n- `docs/dataflow/dataflow-app-catalog.md`（ジョブ一覧 — 測定対象の定義元）\n- `docs/azure/waf-review.md`（Step.4.1 出力 — 目標値と閾値の根拠）\n- `docs/azure/dependency-review.md`（Step.4.2 出力）\n- `src/test/dataflow/`（測定に再利用する既存テスト資産）\n\n## 出力\n- `docs/dataflow/requirements-conformance-report.md`\n\n## 測定要件\n- 測定対象はデプロイ済みのジョブ実行環境とする。本 Step のために Azure リソースを新規作成しない。\n- 測定には当該ワークフローが既に生成したテスト資産を再利用する。Azure Load Testing 等の利用は任意。\n- 処理時間はパーセンタイル（p50 / p95 等）で記録し、どのパーセンタイルかを明示する。1 回だけの実行値を代表値にしない。\n- 設計成果物に数値目標が無い要件は `NO_TARGET` とし、実測値だけを残す。目標を推測で補わない。\n\n## レポートの固定フォーマット（HVE artifact gate が機械検証）\n- 測定条件: `Schema-Version` / `Workflow` / `Step` / `Agent` / `Measured-At` / `Target-Environment` / `Measurement-Tool` / `Secret-Redaction`\n- 測定表: `| Req ID | Kind | Target | Threshold | Measured | Judgement | Headroom | Evidence |`（1 行以上必須）\n- 判定語彙: `PASS` / `FAIL` / `NOT_MEASURED` / `NO_TARGET` の 4 値のみ\n- 結論: `- Conclusion:` と `- Rationale:`\n- 簡素化候補: `- Simplification-Candidate:`（該当なしは `none`）\n\n## 禁止事項\n- 測定していない数値を書かない。実行できなかった指標は `NOT_MEASURED` と理由を記す。\n- 実測値から逆算して目標・閾値を作らない。\n- 目標が無いこと（`NO_TARGET`）と測れなかったこと（`NOT_MEASURED`）を同じ語彙へ畳み込まない。\n- 測定のためにジョブ実装・インフラ定義・デプロイ済みリソースを変更しない。\n\n## Custom Agent\n`QA-RequirementsConformanceEval` を使用\n\n## 依存\n- Step.4.1（WAF レビュー）と Step.4.2（整合性チェック）が `adfdv:done` であること\n\n## 完了条件\n- `docs/dataflow/requirements-conformance-report.md` が作成されている\n- 測定条件ラベル 8 件がすべて記載されている\n- 測定表が 1 行以上あり、各行の判定が 4 値のいずれかである\n- `Conclusion` / `Rationale` / `Simplification-Candidate` が記載されている\n- 完了時に自身に `adfdv:done` ラベルを付与すること%s%s%s' \
+              "${ROOT_REF}" "${RG_SECTION}" "${JOB_SECTION}" "${ADDITIONAL_SECTION}")
+            S43_RESP=$(create_issue \
+              "[ADFDV] Step.4.3: 要件適合実測" \
+              "${BODY_S43}" \
+              "${STEP_LABELS}")
+            S43_NUM=$(echo "${S43_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))")
+            S43_ID=$(echo "${S43_RESP}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
+            echo "Step.4.3 作成: #${S43_NUM}"
+            sleep 3
+          else
+            echo "Step.4 はスキップ対象のため Step.4.3 は作成しません。"
+          fi
+
           # ---- Sub Issue を Root Issue に紐付け ----
           [[ -n "${S11_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S11_ID}"; echo "Root → Step.1.1 紐付け完了"; }
           [[ -n "${S12_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S12_ID}"; echo "Root → Step.1.2 紐付け完了"; }
@@ -841,6 +859,7 @@ jobs:
           [[ -n "${S3_NUM}" ]]  && { link_sub_issue "${ROOT_ISSUE}" "${S3_ID}";  echo "Root → Step.3 紐付け完了"; }
           [[ -n "${S41_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S41_ID}"; echo "Root → Step.4.1 紐付け完了"; }
           [[ -n "${S42_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S42_ID}"; echo "Root → Step.4.2 紐付け完了"; }
+          [[ -n "${S43_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S43_ID}"; echo "Root → Step.4.3 紐付け完了"; }
 
           # ---- 最初に実行すべき Step を起動 ----
           # Step.1.1 が存在 → Step.1.1 から開始
@@ -907,8 +926,9 @@ jobs:
           [[ -n "${S3_NUM}" ]]  && SUBISSUE_LIST="${SUBISSUE_LIST}- #${S3_NUM} Step.3: Azure Functions/コンテナ Deploy\n"
           [[ -n "${S41_NUM}" ]] && SUBISSUE_LIST="${SUBISSUE_LIST}- #${S41_NUM} Step.4.1: WAF レビュー\n"
           [[ -n "${S42_NUM}" ]] && SUBISSUE_LIST="${SUBISSUE_LIST}- #${S42_NUM} Step.4.2: 整合性チェック\n"
+          [[ -n "${S43_NUM}" ]] && SUBISSUE_LIST="${SUBISSUE_LIST}- #${S43_NUM} Step.4.3: 要件適合実測\n"
 
-          INIT_COMMENT=$(printf '✅ ADFDV ワークフローを初期化しました。\n\n**生成された Sub Issue:**\n%s\n**実行順序（DAG）:**\nStep.1.1 → Step.1.2 → Step.2.1 → Step.2.2 → Step.3 → Step.4.1 ‖ Step.4.2\n\n各 Step に `adfdv:done` ラベルを付与すると次の Step が自動的に起動します。' \
+          INIT_COMMENT=$(printf '✅ ADFDV ワークフローを初期化しました。\n\n**生成された Sub Issue:**\n%s\n**実行順序（DAG）:**\nStep.1.1 → Step.1.2 → Step.2.1 → Step.2.2 → Step.3 → Step.4.1 ‖ Step.4.2 → Step.4.3\n\n各 Step に `adfdv:done` ラベルを付与すると次の Step が自動的に起動します。' \
             "${SUBISSUE_LIST}")
           post_comment "${ROOT_ISSUE}" "${INIT_COMMENT}" \
             || echo "WARNING: Root Issue へのコメント投稿に失敗しました。" >&2
@@ -1246,13 +1266,27 @@ jobs:
               [[ -z "${S42_NUM}" ]] && S42_DONE="true"
 
               if [[ "${S41_DONE}" == "true" ]] && [[ "${S42_DONE}" == "true" ]]; then
-                add_label "${ROOT_ISSUE}" "adfdv:done"
-                echo "Root Issue #${ROOT_ISSUE} に adfdv:done を付与しました。"
-                post_comment "${ROOT_ISSUE}" "🎉 全ての ADFDV ワークフローステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。（Step.4.1: ${S41_DONE}, Step.4.2: ${S42_DONE}）"
-                echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
+                S43_NUM=$(get_sub_issue_number '\[ADFDV\] Step\.4\.3:')
+                if [[ -n "${S43_NUM}" ]]; then
+                  activate_issue "${S43_NUM}"
+                  echo "Step.4.1/4.2 完了: Step.4.3 (#${S43_NUM}) を起動しました。"
+                else
+                  add_label "${ROOT_ISSUE}" "adfdv:done"
+                  echo "Root Issue #${ROOT_ISSUE} に adfdv:done を付与しました。"
+                  post_comment "${ROOT_ISSUE}" "🎉 全ての ADFDV ワークフローステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。（Step.4.1: ${S41_DONE}, Step.4.2: ${S42_DONE}）"
+                  echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
+                fi
               else
                 echo "AND 依存待機: Step.4.1/4.2 の両方完了を待機中です。（Step.4.1: ${S41_DONE}, Step.4.2: ${S42_DONE}）"
               fi
+              ;;
+
+            "4.3")
+              # Step.4.3 完了 → ADFDV の最終 Step
+              add_label "${ROOT_ISSUE}" "adfdv:done"
+              echo "Root Issue #${ROOT_ISSUE} に adfdv:done を付与しました。"
+              post_comment "${ROOT_ISSUE}" "🎉 全ての ADFDV ワークフローステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。（Step.4.3: 要件適合実測まで完了）"
+              echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
               ;;
 
             *)

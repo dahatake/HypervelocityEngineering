@@ -19,14 +19,14 @@ def test_runner_returns_result_object(tmp_path: Path) -> None:
     assert r.count() == 0
 
 
-def test_runner_aas_step1_requires_use_case_catalog(tmp_path: Path) -> None:
+def test_runner_aas_step1_requires_app_artifacts(tmp_path: Path) -> None:
     r = run_step1_precheck(
         ["aas"], tmp_path,
         steps_by_workflow={"aas": ["1"]},
     )
     file_items = r.by_category(PrecheckCategory.FILE)
     assert any(
-        it.field_name == "docs/catalog/use-case-catalog.md" for it in file_items
+        it.field_name == "docs/catalog/app-catalog.md" for it in file_items
     )
 
 
@@ -34,7 +34,7 @@ def test_runner_aas_middle_steps_do_not_trigger_extra_checks(tmp_path: Path) -> 
     """v2: 中間ステップの required_input_paths は検査対象外（バナー方針へ統一）。"""
     r = run_step1_precheck(
         ["aas"], tmp_path,
-        steps_by_workflow={"aas": ["1", "6"]},
+        steps_by_workflow={"aas": ["1", "5"]},
     )
     file_names = {it.field_name for it in r.by_category(PrecheckCategory.FILE)}
     assert "docs/catalog/screen-catalog.md" not in file_names
@@ -43,9 +43,9 @@ def test_runner_aas_middle_steps_do_not_trigger_extra_checks(tmp_path: Path) -> 
 def test_runner_ard_aas_combined_only_checks_priority_workflow(tmp_path: Path) -> None:
     """ARD + AAS 同時選択時はバナーと同じく最優先 (ARD) のみ評価する。
 
-    バナーで「ARD Step 3 OK」と表示されているのに precheck が AAS Step 1 の
-    use-case-catalog.md 不足で NG を出す不整合（ユーザー報告）への回帰防止。
-    ARD Step 4 がユースケースカタログを生成するため、AAS 側の入力不足は
+    バナーで「ARD Step 3 OK」と表示されているのにprecheckがAAS Step 2の
+    前提成果物不足でNGを出す不整合（ユーザー報告）への回帰防止。
+    ARD Step 4/5がAAS前提成果物を生成するため、AAS側の入力不足は
     実行時に上流ステップで解消される。
     """
     br = tmp_path / "docs" / "business-requirement.md"
@@ -54,11 +54,11 @@ def test_runner_ard_aas_combined_only_checks_priority_workflow(tmp_path: Path) -
 
     r = run_step1_precheck(
         ["ard", "aas"], tmp_path,
-        steps_by_workflow={"ard": ["3", "4"], "aas": ["1"]},
+        steps_by_workflow={"ard": ["3", "4", "5"], "aas": ["1"]},
         input_values={},
     )
     file_names = {it.field_name for it in r.by_category(PrecheckCategory.FILE)}
-    # AAS Step 1 の use-case-catalog.md は警告しない
+    # AAS Step 1 の入力は同一runのARD Step 4.1/4.2が生成するため警告しない
     assert "docs/catalog/use-case-catalog.md" not in file_names
     # ARD Step 3 の business-requirement.md は存在するので警告なし
     assert "docs/business-requirement.md" not in file_names

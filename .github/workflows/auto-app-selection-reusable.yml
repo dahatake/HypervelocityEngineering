@@ -540,11 +540,11 @@ jobs:
           SELECTED_QA_MODEL=$(resolve_model "${QA_MODEL_RAW}")
           export SELECTED_MODEL SELECTED_REVIEW_MODEL SELECTED_QA_MODEL
 
-          # ---- Step.8 が SKIP の場合、Step.9 も強制 SKIP (Step.9 は Step.8 の出力 persona-catalog.md に依存) ----
-          if echo " ${SKIP_STEPS} " | grep -q " 8 "; then
-            if ! echo " ${SKIP_STEPS} " | grep -q " 9 "; then
-              SKIP_STEPS="${SKIP_STEPS} 9"
-              echo "Step.8 スキップ検知: Step.9 (persona-screen-catalog) も依存関係により強制スキップします"
+          # ---- Step.7 が SKIP の場合、Step.8 も強制 SKIP (Step.8 は Step.7 の出力 persona-catalog.md に依存) ----
+          if echo " ${SKIP_STEPS} " | grep -q " 7 "; then
+            if ! echo " ${SKIP_STEPS} " | grep -q " 8 "; then
+              SKIP_STEPS="${SKIP_STEPS} 8"
+              echo "Step.7 スキップ検知: Step.8 (persona-screen-catalog) も依存関係により強制スキップします"
             fi
           fi
 
@@ -685,16 +685,15 @@ jobs:
 
           # ---- Step Issue 生成 ----
           S1_NUM="" S1_ID=""
-          S2_NUM="" S2_ID=""
+          S21_NUM="" S21_ID=""
+          S22_NUM="" S22_ID=""
           S31_NUM="" S31_ID=""
           S32_NUM="" S32_ID=""
-          S41_NUM="" S41_ID=""
-          S42_NUM="" S42_ID=""
+          S4_NUM="" S4_ID=""
           S5_NUM="" S5_ID=""
           S6_NUM="" S6_ID=""
           S7_NUM="" S7_ID=""
           S8_NUM="" S8_ID=""
-          S9_NUM="" S9_ID=""
 
           # 各 Step Issue の body 先頭に埋め込む共通メタ情報
           ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- adversarial-review: %s -->\n<!-- auto-qa: %s -->\n<!-- auto-merge: %s -->\n<!-- review-model: %s -->\n<!-- qa-model: %s -->' "${ROOT_ISSUE}" "${BRANCH}" "${ADVERSARIAL_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}" "${SELECTED_REVIEW_MODEL}" "${SELECTED_QA_MODEL}")
@@ -711,7 +710,7 @@ jobs:
 
           # テンプレートからボディを生成する関数
           # テンプレートファイルを読み込み、プレースホルダを展開する。
-          # 引数: $1=ステップ番号 (例: "3.1"), $2=ROOT_REF, $3=ADDITIONAL_SECTION
+          # 引数: $1=ステップ番号 (例: "2.1"), $2=ROOT_REF, $3=ADDITIONAL_SECTION
           render_aas_step_body() {
             local step_num="$1"
             local root_ref_arg="$2"
@@ -759,7 +758,7 @@ jobs:
           if ! skip_step "1"; then
             BODY_S1=$(render_aas_step_body "1" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
-              "[AAS] Step.1: アプリケーションリストの作成" \
+              "[AAS] Step.1: ソフトウェアアーキテクチャの推薦" \
               "${BODY_S1}" \
               "${STEP_LABELS}")
             S1_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -768,16 +767,29 @@ jobs:
             sleep 3
           fi
 
-          # ---- Step.2 ----
-          if ! skip_step "2"; then
-            BODY_S2=$(render_aas_step_body "2" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+          # ---- Step.2.1 ----
+          if ! skip_step "2.1"; then
+            BODY_S21=$(render_aas_step_body "2.1" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
-              "[AAS] Step.2: ソフトウェアアーキテクチャの推薦" \
-              "${BODY_S2}" \
+              "[AAS] Step.2.1: ドメイン分析" \
+              "${BODY_S21}" \
               "${STEP_LABELS}")
-            S2_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
-            S2_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
-            echo "Step.2 作成: #${S2_NUM}"
+            S21_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S21_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2.1 作成: #${S21_NUM}"
+            sleep 3
+          fi
+
+          # ---- Step.2.2 ----
+          if ! skip_step "2.2"; then
+            BODY_S22=$(render_aas_step_body "2.2" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAS] Step.2.2: サービス一覧抽出" \
+              "${BODY_S22}" \
+              "${STEP_LABELS}")
+            S22_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S22_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2.2 作成: #${S22_NUM}"
             sleep 3
           fi
 
@@ -785,7 +797,7 @@ jobs:
           if ! skip_step "3.1"; then
             BODY_S31=$(render_aas_step_body "3.1" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
-              "[AAS] Step.3.1: ドメイン分析" \
+              "[AAS] Step.3.1: データモデル" \
               "${BODY_S31}" \
               "${STEP_LABELS}")
             S31_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -798,7 +810,7 @@ jobs:
           if ! skip_step "3.2"; then
             BODY_S32=$(render_aas_step_body "3.2" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
-              "[AAS] Step.3.2: サービス一覧抽出" \
+              "[AAS] Step.3.2: サンプルデータ生成" \
               "${BODY_S32}" \
               "${STEP_LABELS}")
             S32_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -807,29 +819,16 @@ jobs:
             sleep 3
           fi
 
-          # ---- Step.4.1 ----
-          if ! skip_step "4.1"; then
-            BODY_S41=$(render_aas_step_body "4.1" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
+          # ---- Step.4 ----
+          if ! skip_step "4"; then
+            BODY_S4=$(render_aas_step_body "4" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
-              "[AAS] Step.4.1: データモデル" \
-              "${BODY_S41}" \
+              "[AAS] Step.4: データカタログ作成" \
+              "${BODY_S4}" \
               "${STEP_LABELS}")
-            S41_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
-            S41_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
-            echo "Step.4.1 作成: #${S41_NUM}"
-            sleep 3
-          fi
-
-          # ---- Step.4.2 ----
-          if ! skip_step "4.2"; then
-            BODY_S42=$(render_aas_step_body "4.2" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            RESP=$(create_issue \
-              "[AAS] Step.4.2: サンプルデータ生成" \
-              "${BODY_S42}" \
-              "${STEP_LABELS}")
-            S42_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
-            S42_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
-            echo "Step.4.2 作成: #${S42_NUM}"
+            S4_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S4_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.4 作成: #${S4_NUM}"
             sleep 3
           fi
 
@@ -837,7 +836,7 @@ jobs:
           if ! skip_step "5"; then
             BODY_S5=$(render_aas_step_body "5" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
-              "[AAS] Step.5: データカタログ作成" \
+              "[AAS] Step.5: サービスカタログ" \
               "${BODY_S5}" \
               "${STEP_LABELS}")
             S5_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -850,7 +849,7 @@ jobs:
           if ! skip_step "6"; then
             BODY_S6=$(render_aas_step_body "6" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
-              "[AAS] Step.6: サービスカタログ" \
+              "[AAS] Step.6: テスト戦略書" \
               "${BODY_S6}" \
               "${STEP_LABELS}")
             S6_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -859,11 +858,11 @@ jobs:
             sleep 3
           fi
 
-          # ---- Step.7 ----
+          # ---- Step.7 (ペルソナカタログ) ----
           if ! skip_step "7"; then
             BODY_S7=$(render_aas_step_body "7" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
-              "[AAS] Step.7: テスト戦略書" \
+              "[AAS] Step.7: ペルソナカタログ" \
               "${BODY_S7}" \
               "${STEP_LABELS}")
             S7_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -872,11 +871,11 @@ jobs:
             sleep 3
           fi
 
-          # ---- Step.8 (ペルソナカタログ) ----
+          # ---- Step.8 (ペルソナ別共通画面カタログ) ----
           if ! skip_step "8"; then
             BODY_S8=$(render_aas_step_body "8" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
             RESP=$(create_issue \
-              "[AAS] Step.8: ペルソナカタログ" \
+              "[AAS] Step.8: ペルソナ別共通画面カタログ" \
               "${BODY_S8}" \
               "${STEP_LABELS}")
             S8_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
@@ -885,32 +884,18 @@ jobs:
             sleep 3
           fi
 
-          # ---- Step.9 (ペルソナ別共通画面カタログ) ----
-          if ! skip_step "9"; then
-            BODY_S9=$(render_aas_step_body "9" "${ROOT_REF}" "${ADDITIONAL_SECTION}")
-            RESP=$(create_issue \
-              "[AAS] Step.9: ペルソナ別共通画面カタログ" \
-              "${BODY_S9}" \
-              "${STEP_LABELS}")
-            S9_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
-            S9_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
-            echo "Step.9 作成: #${S9_NUM}"
-            sleep 3
-          fi
-
           # ---- Sub Issue 紐付け ----
           echo "Sub Issue 紐付けを開始します..."
           [[ -n "${S1_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S1_ID}"; echo "Root → Step.1 紐付け完了"; }
-          [[ -n "${S2_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S2_ID}"; echo "Root → Step.2 紐付け完了"; }
+          [[ -n "${S21_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S21_ID}"; echo "Root → Step.2.1 紐付け完了"; }
+          [[ -n "${S22_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S22_ID}"; echo "Root → Step.2.2 紐付け完了"; }
           [[ -n "${S31_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S31_ID}"; echo "Root → Step.3.1 紐付け完了"; }
           [[ -n "${S32_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S32_ID}"; echo "Root → Step.3.2 紐付け完了"; }
-          [[ -n "${S41_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S41_ID}"; echo "Root → Step.4.1 紐付け完了"; }
-          [[ -n "${S42_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S42_ID}"; echo "Root → Step.4.2 紐付け完了"; }
+          [[ -n "${S4_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S4_ID}"; echo "Root → Step.4 紐付け完了"; }
           [[ -n "${S5_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S5_ID}"; echo "Root → Step.5 紐付け完了"; }
           [[ -n "${S6_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S6_ID}"; echo "Root → Step.6 紐付け完了"; }
           [[ -n "${S7_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S7_ID}"; echo "Root → Step.7 紐付け完了"; }
           [[ -n "${S8_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S8_ID}"; echo "Root → Step.8 紐付け完了"; }
-          [[ -n "${S9_NUM}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S9_ID}"; echo "Root → Step.9 紐付け完了"; }
 
           # ---- 最初に実行すべき Step を起動 ----
           if [[ -n "${S1_NUM}" ]]; then
@@ -928,10 +913,6 @@ jobs:
                 echo "WARNING: Step.1 へのアサイン失敗。aas:running は付与しません。"
               fi
             fi
-          elif [[ -n "${S2_NUM}" ]]; then
-            # Step.1 が存在しない / スキップされている状態で Step.2 は実行できないため、blocked とする
-            add_label "${S2_NUM}" "aas:blocked"
-            echo "Step.1 が存在しないため Step.2 (#${S2_NUM}) を実行できません。Step.1 を作成・完了してから再実行してください。"
           else
             echo "実行すべき Step が存在しません（全 Step スキップ）。"
           fi
@@ -1234,22 +1215,9 @@ jobs:
           # ---- 依存関係マップに基づき次 Step を特定 & 起動 ----
           case "${STEP_MATCH}" in
             "1")
-              # Step.1 完了 → Step.2 を ready + assign（前提: app-catalog.md が存在すること）
-              S2_NUM=$(get_sub_issue_number '\[AAS\] Step\.2:')
-              if [[ -n "${S2_NUM}" ]]; then
-                activate_with_prereq_check "${S2_NUM}" "2" \
-                  "docs/catalog/app-catalog.md"
-              else
-                echo "Step.2 が存在しません。フェーズ1完了。"
-                add_label "${ROOT_ISSUE}" "aas:done"
-                post_comment "${ROOT_ISSUE}" "✅ Step.1 が完了しました。Step.2 がスキップされているため、フェーズ1（アプリケーションアーキテクチャ設計）が完了しました。\n\nフェーズ2（アプリケーション設計）を実行するには、**App Detail Design** Issue を別途作成してください。"
-              fi
-              ;;
-
-            "2")
-              S31_NUM=$(get_sub_issue_number '\[AAS\] Step\.3\.1:')
-              if [[ -n "${S31_NUM}" ]]; then
-                activate_with_prereq_check "${S31_NUM}" "3.1" \
+              S21_NUM=$(get_sub_issue_number '\[AAS\] Step\.2\.1:')
+              if [[ -n "${S21_NUM}" ]]; then
+                activate_with_prereq_check "${S21_NUM}" "2.1" \
                   "docs/catalog/app-catalog.md" \
                   "docs/catalog/use-case-catalog.md"
               else
@@ -1257,103 +1225,103 @@ jobs:
               fi
               ;;
 
-            "3.1")
-              S32_NUM=$(get_sub_issue_number '\[AAS\] Step\.3\.2:')
-              if [[ -n "${S32_NUM}" ]]; then
-                activate_with_prereq_check "${S32_NUM}" "3.2" \
+            "2.1")
+              S22_NUM=$(get_sub_issue_number '\[AAS\] Step\.2\.2:')
+              if [[ -n "${S22_NUM}" ]]; then
+                activate_with_prereq_check "${S22_NUM}" "2.2" \
                   "docs/catalog/domain-analytics.md" \
                   "docs/catalog/app-catalog.md"
               fi
               ;;
 
-            "3.2")
-              S41_NUM=$(get_sub_issue_number '\[AAS\] Step\.4\.1:')
-              if [[ -n "${S41_NUM}" ]]; then
-                activate_with_prereq_check "${S41_NUM}" "4.1" \
+            "2.2")
+              S31_NUM=$(get_sub_issue_number '\[AAS\] Step\.3\.1:')
+              if [[ -n "${S31_NUM}" ]]; then
+                activate_with_prereq_check "${S31_NUM}" "3.1" \
                   "docs/catalog/service-catalog.md" \
                   "docs/catalog/domain-analytics.md"
               fi
               ;;
 
-            "4.1")
-              # Step.4.2 (サンプルデータ生成) を起動
-              S42_NUM=$(get_sub_issue_number '\[AAS\] Step\.4\.2:')
-              if [[ -n "${S42_NUM}" ]]; then
-                activate_with_prereq_check "${S42_NUM}" "4.2" \
+            "3.1")
+              # Step.3.2 (サンプルデータ生成) を起動
+              S32_NUM=$(get_sub_issue_number '\[AAS\] Step\.3\.2:')
+              if [[ -n "${S32_NUM}" ]]; then
+                activate_with_prereq_check "${S32_NUM}" "3.2" \
                   "docs/catalog/data-model.md" \
                   "docs/catalog/app-catalog.md" \
                   "docs/catalog/domain-analytics.md" \
                   "docs/catalog/service-catalog.md"
               fi
-              # Step.5 (データカタログ) は data-model.md のみに依存するため Step.4.2 と並列起動可能
-              S5_NUM=$(get_sub_issue_number '\[AAS\] Step\.5:')
-              if [[ -n "${S5_NUM}" ]]; then
-                activate_with_prereq_check "${S5_NUM}" "5" \
+              # Step.4 (データカタログ) は data-model.md のみに依存するため Step.3.2 と並列起動可能
+              S4_NUM=$(get_sub_issue_number '\[AAS\] Step\.4:')
+              if [[ -n "${S4_NUM}" ]]; then
+                activate_with_prereq_check "${S4_NUM}" "4" \
                   "docs/catalog/data-model.md" \
                   "docs/catalog/domain-analytics.md"
               fi
               ;;
 
-            "4.2")
-              # Step.5 は "4.1" 完了時に既に起動済み。Step.4.2 完了時は遷移なし
-              echo "Step.4.2 完了。Step.5 は Step.4.1 完了時点で起動済みのため遷移なし。"
+            "3.2")
+              # Step.4 は "3.1" 完了時に既に起動済み。Step.3.2 完了時は遷移なし
+              echo "Step.3.2 完了。Step.4 は Step.3.1 完了時点で起動済みのため遷移なし。"
+              ;;
+
+            "4")
+              S5_NUM=$(get_sub_issue_number '\[AAS\] Step\.5:')
+              if [[ -n "${S5_NUM}" ]]; then
+                activate_with_prereq_check "${S5_NUM}" "5" \
+                  "docs/catalog/service-catalog.md" \
+                  "docs/catalog/data-model.md" \
+                  "docs/catalog/domain-analytics.md"
+              fi
               ;;
 
             "5")
               S6_NUM=$(get_sub_issue_number '\[AAS\] Step\.6:')
               if [[ -n "${S6_NUM}" ]]; then
                 activate_with_prereq_check "${S6_NUM}" "6" \
-                  "docs/catalog/service-catalog.md" \
-                  "docs/catalog/data-model.md" \
-                  "docs/catalog/domain-analytics.md"
-              fi
-              ;;
-
-            "6")
-              S7_NUM=$(get_sub_issue_number '\[AAS\] Step\.7:')
-              if [[ -n "${S7_NUM}" ]]; then
-                activate_with_prereq_check "${S7_NUM}" "7" \
                   "docs/catalog/service-catalog-matrix.md" \
                   "docs/catalog/data-model.md" \
                   "docs/catalog/domain-analytics.md"
               fi
               ;;
 
+            "6")
+              # Step.6 完了 → Step.7 (ペルソナカタログ) 起動
+              S7_NUM=$(get_sub_issue_number '\[AAS\] Step\.7:')
+              if [[ -n "${S7_NUM}" ]]; then
+                activate_with_prereq_check "${S7_NUM}" "7" \
+                  "docs/catalog/use-case-catalog.md" \
+                  "docs/catalog/app-catalog.md"
+              else
+                # Step.7 がスキップされている場合は直接 aas:done
+                add_label "${ROOT_ISSUE}" "aas:done"
+                echo "Step.7 スキップ。Root Issue #${ROOT_ISSUE} に aas:done を付与しました。"
+                post_comment "${ROOT_ISSUE}" "🎉 AAS 拡張ステップ（Step.1〜6）が完了しました（Step.7/8 スキップ）。\n\n**成果物:**\n- \`docs/catalog/app-catalog.md\`\n- \`docs/catalog/app-arch-catalog.md\`\n- \`docs/catalog/domain-analytics.md\`\n- \`docs/catalog/service-catalog.md\`\n- \`docs/catalog/data-model.md\`\n- \`docs/catalog/data-catalog.md\`\n- \`docs/catalog/service-catalog-matrix.md\`\n- \`docs/catalog/test-strategy.md\`"
+              fi
+              ;;
+
             "7")
-              # Step.7 完了 → Step.8 (ペルソナカタログ) 起動
+              # Step.7 完了 → Step.8 (ペルソナ別共通画面カタログ) 起動
               S8_NUM=$(get_sub_issue_number '\[AAS\] Step\.8:')
               if [[ -n "${S8_NUM}" ]]; then
                 activate_with_prereq_check "${S8_NUM}" "8" \
-                  "docs/catalog/use-case-catalog.md" \
+                  "docs/catalog/persona-catalog.md" \
                   "docs/catalog/app-catalog.md"
               else
                 # Step.8 がスキップされている場合は直接 aas:done
                 add_label "${ROOT_ISSUE}" "aas:done"
                 echo "Step.8 スキップ。Root Issue #${ROOT_ISSUE} に aas:done を付与しました。"
-                post_comment "${ROOT_ISSUE}" "🎉 AAS 拡張ステップ（Step.1〜7）が完了しました（Step.8/9 スキップ）。\n\n**成果物:**\n- \`docs/catalog/app-catalog.md\`\n- \`docs/catalog/app-arch-catalog.md\`\n- \`docs/catalog/domain-analytics.md\`\n- \`docs/catalog/service-catalog.md\`\n- \`docs/catalog/data-model.md\`\n- \`docs/catalog/data-catalog.md\`\n- \`docs/catalog/service-catalog-matrix.md\`\n- \`docs/catalog/test-strategy.md\`"
+                post_comment "${ROOT_ISSUE}" "🎉 AAS 拡張ステップが完了しました（Step.8 スキップ）。\n\n**成果物:**\n- \`docs/catalog/app-catalog.md\`\n- \`docs/catalog/app-arch-catalog.md\`\n- \`docs/catalog/domain-analytics.md\`\n- \`docs/catalog/service-catalog.md\`\n- \`docs/catalog/data-model.md\`\n- \`docs/catalog/data-catalog.md\`\n- \`docs/catalog/service-catalog-matrix.md\`\n- \`docs/catalog/test-strategy.md\`\n- \`docs/catalog/persona-catalog.md\`"
               fi
               ;;
 
             "8")
-              # Step.8 完了 → Step.9 (ペルソナ別共通画面カタログ) 起動
-              S9_NUM=$(get_sub_issue_number '\[AAS\] Step\.9:')
-              if [[ -n "${S9_NUM}" ]]; then
-                activate_with_prereq_check "${S9_NUM}" "9" \
-                  "docs/catalog/persona-catalog.md" \
-                  "docs/catalog/app-catalog.md"
-              else
-                # Step.9 がスキップされている場合は直接 aas:done
-                add_label "${ROOT_ISSUE}" "aas:done"
-                echo "Step.9 スキップ。Root Issue #${ROOT_ISSUE} に aas:done を付与しました。"
-                post_comment "${ROOT_ISSUE}" "🎉 AAS 拡張ステップが完了しました（Step.9 スキップ）。\n\n**成果物:**\n- \`docs/catalog/app-catalog.md\`\n- \`docs/catalog/app-arch-catalog.md\`\n- \`docs/catalog/domain-analytics.md\`\n- \`docs/catalog/service-catalog.md\`\n- \`docs/catalog/data-model.md\`\n- \`docs/catalog/data-catalog.md\`\n- \`docs/catalog/service-catalog-matrix.md\`\n- \`docs/catalog/test-strategy.md\`\n- \`docs/catalog/persona-catalog.md\`"
-              fi
-              ;;
-
-            "9")
-              # Step.9 完了 → Root Issue に aas:done + 完了コメント
+              # Step.8 完了 → Root Issue に aas:done + 完了コメント
               add_label "${ROOT_ISSUE}" "aas:done"
               echo "Root Issue #${ROOT_ISSUE} に aas:done を付与しました。"
-              post_comment "${ROOT_ISSUE}" "🎉 AAS 拡張ステップ（Step.1〜9）が完了しました。\n\n**成果物:**\n- \`docs/catalog/app-catalog.md\`\n- \`docs/catalog/app-arch-catalog.md\`\n- \`docs/catalog/domain-analytics.md\`\n- \`docs/catalog/service-catalog.md\`\n- \`docs/catalog/data-model.md\`\n- \`docs/catalog/data-catalog.md\`\n- \`docs/catalog/service-catalog-matrix.md\`\n- \`docs/catalog/test-strategy.md\`\n- \`docs/catalog/persona-catalog.md\`\n- \`docs/catalog/persona-screen-catalog.md\`"
+              post_comment "${ROOT_ISSUE}" "🎉 AAS 拡張ステップ（Step.1〜8）が完了しました。\n\n**成果物:**\n- \`docs/catalog/app-catalog.md\`\n- \`docs/catalog/app-arch-catalog.md\`\n- \`docs/catalog/domain-analytics.md\`\n- \`docs/catalog/service-catalog.md\`\n- \`docs/catalog/data-model.md\`\n- \`docs/catalog/data-catalog.md\`\n- \`docs/catalog/service-catalog-matrix.md\`\n- \`docs/catalog/test-strategy.md\`\n- \`docs/catalog/persona-catalog.md\`\n- \`docs/catalog/persona-screen-catalog.md\`"
               ;;
 
             *)

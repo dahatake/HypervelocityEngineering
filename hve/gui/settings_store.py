@@ -70,17 +70,10 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "ignore_paths": "",
             "repo": "",
             "issue_title": "",
-            # C6 出力制御（ウィザード非露出は設定パネル専用）
+            # C6 出力制御。設定画面の「出力制御」ノードは撤去済みで、
+            # `verbosity` 以外は Step 1 右ペインで選ぶセッション限りの値
+            # （settings_apply._SECTION_FIELDS に C6 は無く往復しない）。
             "verbosity": "compact",
-            "log_level": "error",
-            "timestamp_style": "prefix",
-            "verbose": False,
-            "quiet": False,
-            "show_stream": False,
-            "no_color": False,
-            "banner": "",  # 空 = 未指定 (inherit)
-            "screen_reader": False,
-            "final_only": False,
             # テーマ (Step 2 「作業状況」ツリーの表示色)
             "theme": "light",  # "dark" | "light"
             # GUI 表示言語 ("auto" | "ja_JP" | "en_US"). "auto" = OS ロケールから判定。
@@ -139,7 +132,6 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "enable_auto_merge": False,
             "delete_local_merged_branch": True,
             # C10 (App ID) 既定値。
-            "app_id": "",
             "app_ids": "",
             "usecase_id": "",
             # C11 (AKM) 既定値（sources_* 以外）。
@@ -173,8 +165,6 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "exclude_patterns": "node_modules/,vendor/,dist/,*.lock,__pycache__/",
             # 既存キー互換の既定値
             "depth": "standard",
-            # tdd_max_retries は設定パネル送り
-            "tdd_max_retries": 0,
             # Autopilot 並列上限（GUI Orchestrator Autopilot モード）。
             # 範囲: 1〜16、既定 4。子 GUI プロセスの同時起動数を制限する。
             "autopilot_max_parallel": 4,
@@ -231,9 +221,6 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             # 起動時に mkdir(parents=True, exist_ok=True) で自動作成する（.gitkeep は作らない）。
             # 既定値は本リポジトリ標準成果物ディレクトリ群。
             "explorer_roots": "docs;docs-generated;docs-original;knowledge;qa;users-guide",
-            # 全 Dock レイアウトの永続化（QMainWindow.saveState() の base64 文字列）。
-            # 空文字列 = 未保存（既定レイアウトで起動）。
-            "workbench_layout_state": "",
             # Issue-gui-session-workdir-isolation T7/T8:
             # GUI セッション作業ディレクトリ (work/run/<id>/) の後処理。
             # "keep"   = 何もしない（既定）
@@ -299,6 +286,26 @@ _OBSOLETE_KEYS: Dict[str, set[str]] = {
         "data_vnet_cidr",
         "data_private_endpoint_subnet_cidr",
         "data_aci_subnet_cidr",
+        # 参照元の無いキー。値を残すと「編集しても効かない設定」になる。
+        # app_id: 入力欄は `app_ids` のみで、実行時はその先頭から補完される。
+        # tdd_max_retries: GUI ウィジェットも CLI フラグも無く、CLI 対話
+        #   ウィザードが独立に解決する。
+        # workbench_layout_state: settings_store 以外から参照されない。
+        "app_id",
+        "tdd_max_retries",
+        "workbench_layout_state",
+        # C6 出力制御: 設定画面のノード撤去と対に、保存・復元を行わない
+        # （settings_apply._SECTION_FIELDS に C6 は無い）。値は Step 1 右ペイン
+        # または CLI フラグで都度指定する。
+        "log_level",
+        "timestamp_style",
+        "verbose",
+        "quiet",
+        "show_stream",
+        "no_color",
+        "banner",
+        "screen_reader",
+        "final_only",
     },
 }
 

@@ -1337,6 +1337,31 @@ class TestMergeWorkiqResultsStatusSkip(unittest.TestCase):
         merged = QAMerger.merge_workiq_results(doc, results)
         self.assertEqual(merged.questions[0].workiq_answer, "")
 
+    def test_partial_with_unperformed_search_note_is_merged(self) -> None:
+        """本文に「未実施」を含む PARTIAL 応答も統合される（FR-QA-03）。
+
+        Work IQ が「どの追加検索を行わなかったか」を説明する文脈で「未実施」を
+        使うことがあり、これを Work IQ の利用不能と誤判定してはならない。
+        呼び出し元 (`hve/runner.py`) は `is_workiq_result_mergeable` で
+        tool 実行確認済み + status FOUND/PARTIAL の結果だけを渡している。
+        """
+        doc = self._make_doc()
+        results = {
+            4: (
+                "STATUS: PARTIAL\n"
+                "\n"
+                "| 種別 | 情報ソース | 日時 | パス/場所 | 関連観点 |\n"
+                "|---|---|---:|---|---|\n"
+                "| メール | 件名: 設計レビュー | 2026-07-10 | Outlook | 設計レビューの実施予定 |\n"
+                "\n"
+                "**補足**:\n"
+                "- 「構成図」等のキーワードでのファイル深掘り検索は今回未実施。"
+                "追加検索で設計書自体が見つかる可能性は残る。"
+            )
+        }
+        merged = QAMerger.merge_workiq_results(doc, results)
+        self.assertNotEqual(merged.questions[3].workiq_answer, "")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -35,13 +35,13 @@ class TestDAGPlanner(unittest.TestCase):
         wf = get_workflow("aas")
         self.assertIsNotNone(wf)
 
-        plan = build_dag_plan(wf, {"1", "3.1"})
+        plan = build_dag_plan(wf, {"1", "2.2"})
 
-        skipped_node = plan.get_node("2")
+        skipped_node = plan.get_node("2.1")
         self.assertIsNotNone(skipped_node)
         self.assertEqual(skipped_node.skip_reason, "inactive")
-        self.assertIn("2", plan.auto_skipped_step_ids)
-        self.assertEqual([wave.step_ids for wave in plan.waves], [("1",), ("3.1",)])
+        self.assertIn("2.1", plan.auto_skipped_step_ids)
+        self.assertEqual([wave.step_ids for wave in plan.waves], [("1",), ("2.2",)])
 
     def test_build_dag_plan_records_container_nodes_but_excludes_them_from_waves(self) -> None:
         wf = get_workflow("asdw-web")

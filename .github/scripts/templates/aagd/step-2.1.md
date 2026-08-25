@@ -9,7 +9,7 @@ TDD RED フェーズ: Agent 詳細設計書・テスト戦略書に基づき、A
 4. **状態遷移テスト** — 正常フロー・例外フロー・エスカレーションフローの検証
 5. **プロンプト回帰テスト** — System Prompt 変更後の動作一貫性（期待出力のマッチング）検証
 
-## AI Agent 共通能力契約テスト（AG-CAP-01〜06）
+## AI Agent 共通能力契約テスト（AG-CAP-01〜10）
 Skill `ai-agent-capability-contract` と対象Agent詳細設計を根拠に、選択された能力だけを次の観点で仕様化する。各テストケースにContract ID、入力、test double、期待結果、必要なevidenceを記載する。
 
 - **Goal Contract / Runtime Goal Loop**: 全required criterion PASS時のDONE、required全PASSかつ許可されたoptionalだけ未達時のPARTIAL、required未達時のBLOCKED / HANDOFFを検証する。観測した新Evidenceに基づく異なるactionへの再計画、新Evidenceなしの同一action反復拒否、MAX_ITERATIONS / DEADLINE / Tool・cost budget / POLICY_STOP / USER_CANCELLED / DEGRADATION、mutation部分失敗時のHandoffを決定的に検証する。

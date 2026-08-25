@@ -37,6 +37,8 @@ def _default_bash_syntax_runner(script_path: Path) -> int:
         [_trusted_bash_path(), "--noprofile", "--norc", "-n", str(script_path)],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     return int(result.returncode)
@@ -50,6 +52,8 @@ def _default_shellcheck_runner(script_path: Path) -> Optional[int]:
         [shellcheck, str(script_path)],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
     return int(result.returncode)

@@ -32,6 +32,8 @@ HVE アプリケーション自体の保守で、関連する active 要件と�
 - `source=hve-dev/requirement-definition.md` かつ `active-or-described` だけを適用可能とする。
 - 未知・競合・`deprecated-or-removed`・`partial-or-not-supported` の ID は現行要件として適用してはならない。
 - 索引と要求定義の不整合を解消するまで実装へ進まない。
+- 適用してよいのは規範要件（`FR-*` / `NFR-*` / `G-*` の定義行と、当該要件が明示的に参照する従属表・箇条書き・スキーマ）だけとする。逆抽出の表・構成・確認時点の記述は説明的基線、改訂履歴・解消済み TBD・`deprecated-or-removed` は履歴情報であり、現行要件として適用しない。
+- 現行コードと規範要件が矛盾する場合、コードを正解として要件を上書きせず、バグ修正か仕様変更かを明示して解消する。仕様変更なら実装前に規範要件を改訂する。
 
 ## 面横断の再利用確認
 
@@ -74,10 +76,12 @@ HVE 対象パスへ新規の判定・生成・検証ロジックを追加する�
 - feature では要件 ID・実在テストパス・RED / GREEN 証跡の N/A を認めない。
 - bugfix / maintenance で N/A を使う場合は具体的理由と人間レビューを必須とする。
 - `hve-dev/hve-tdd-change-policy.md` と生成元 `hve-dev/generate_tdd_inventory.py` は §3.7 と同一変更で同期する。
+- 変更種別は `feature` / `bugfix` / `maintenance` の 3 値とする。観測できる能力・動作・公開インタフェース・設定・Workflow / Prompt / I/O 契約を追加または変更するなら `feature`、既存の規範要件または明示済み受入条件へ戻すだけなら `bugfix`、実行時の観測可能な挙動を変えないなら `maintenance` とする。分類を確定できない場合は `feature` とする。
 
 ## 関連要件の選択取得
 
 - 検索キーは Issue 本文、対象パス、対象 symbol、失敗テスト、Workflow / Step ID から構成する。
+- 要件 ID が既知の場合は検索せず、`hve-dev/hve-feature-inventory.csv` の当該行の `line` 列が指す定義行だけを読む。ID が未知の場合に限り以下の検索へ進む。
 1. `python -m mdq search --q "<検索語>" --paths "hve-dev/requirement-definition.md" --top-k 5 --max-tokens 800` で初回取得する。
 2. 初回結果が不足する場合に限り、親見出しを 1 段取得する。
 3. 親見出しでも不足する場合に限り、隣接チャンクを 1 段取得する。

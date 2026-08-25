@@ -129,6 +129,7 @@ metadata:
 | テスト戦略テンプレート | `test-strategy-template` | `.github/skills/testing/test-strategy-template/SKILL.md` | テストピラミッド・テストダブル・データ戦略・カバレッジ方針 |
 | TDD RED/GREEN リアリティ | `tdd-red-green-reality` | `.github/skills/testing/tdd-red-green-reality/SKILL.md` | 実出力で RED/GREEN を証明・恒真式禁止・プラットフォーム別 verify コマンド確定（Azure/AWS/GCP/Windows/iOS） |
 | TDD GREEN リトライ戦略 | `tdd-green-retry-strategy` | `.github/skills/testing/tdd-green-retry-strategy/SKILL.md` | GREEN 化ループの多層・異アプローチ・公式情報駆動リトライ。同一手段の単純反復を禁止し、失敗の都度に根本原因特定＋公式技術情報 MCP から解決策取得 |
+| 要件適合の実測 | `requirements-conformance-measurement` | `.github/skills/testing/requirements-conformance-measurement/SKILL.md` | デプロイ済み成果物を実行して機能・非機能要件への適合を実測し、目標との差・余裕度・証跡を記録する |
 
 ## Skill Deprecation スキーマ（W6-2: 廃止予定 Skill の標準マーカー）
 

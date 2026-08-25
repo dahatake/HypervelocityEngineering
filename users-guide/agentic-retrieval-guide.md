@@ -75,6 +75,15 @@ AAD-WEB / ASDW-WEB を最初から流し直す必要がありません。
 hve orchestrate --workflow aar --resource-group <RG> --app-ids APP-001
 ```
 
+HVE GUI では Step 1 の **AI Agent** カテゴリから `Agentic Retrieval Add-on (AAR)` を選択します。
+Cloud では Issue Template **Agentic Retrieval Add-on**（`agentic-retrieval.yml`）から起動します。
+`auto-agentic-retrieval` ラベルを dispatcher が検出し、Step.1〜7 を順次実行します。
+
+> **Cloud の機能差**: Cloud の AAR は Step の逐次実行に特化しており、ASDW-WEB 等が持つ
+> QA ジョブ・敌対的レビュー・自動マージ・Self-Improve・モデル選択を含みません。
+> また Step.7 完了後の Step / Root Issue の自動クローズも行いません（Root に `aar:done` を付与して完了を通知します）。
+> これらが必要な場合は CLI / GUI を使ってください。
+
 | Step | Custom Agent | 出力 |
 |---|---|---|
 | 1 | `Arch-AgenticRetrieval-Detail` | `docs/services/{serviceId}-agentic-retrieval-spec.md` |
@@ -83,6 +92,7 @@ hve orchestrate --workflow aar --resource-group <RG> --app-ids APP-001
 | 4 | `Dev-Microservice-Azure-AgenticRetrievalTestCoding` | `src/test/integration/agentic-retrieval/`（TDD RED） |
 | 5 | `Dev-Microservice-Azure-AgenticRetrievalDeploy` | `src/infra/azure/create-azure-agentic-retrieval/` |
 | 6 | `QA-AgenticRetrievalEval` | `docs/azure/agentic-retrieval/{serviceId}-eval-report.md` |
+| 7 | `QA-RequirementsConformanceEval` | `docs/azure/agentic-retrieval/requirements-conformance-report.md` |
 
 - Step 1・2・5 は AAD-WEB / ASDW-WEB と同じ Custom Agent を再利用します。
 - **Step.6 が本ワークフロー固有の価値**です。`minimal` と `low` を同一クエリ集合で実測比較し、
@@ -103,17 +113,16 @@ hve orchestrate --workflow aar --resource-group <RG> --app-ids APP-001
 - **Cloud（Issue Form）**: 「しない」を選ぶと、Agentic Retrieval の Sub-Issue が**生成されません**。
   Cloud は `python -m hve orchestrate` を起動せず GitHub Issue を作成して Copilot Cloud Agent が処理する方式のため、
   Python 側の `StepDef.disabled_when_config` ではなく、ワークフロー内の条件分岐で Issue 作成を抑止します。
-  - **Cloud と CLI / GUI は Step 採番が別体系**です。同じ番号が別の Step を指すため読み替えてください。
+  - ASDW-WEB は Cloud と CLI / GUI で同じ Step 採番です。AAD-WEB Cloud は現行 reusable の採番を確認してください。
 
     | 役割 | Cloud | CLI / GUI |
     |---|---|---|
     | 機能要件詳細 | AAD-WEB `Step.7.5` | AAD-WEB `2.6` |
-    | Azure 実装設計 | ASDW-WEB `Step.2.9` | ASDW-WEB `2.5` |
-    | Deploy | ASDW-WEB `Step.2.10` | ASDW-WEB `2.6` |
+    | Azure 実装設計 | ASDW-WEB `Step.2.5` | ASDW-WEB `2.5` |
+    | Deploy | ASDW-WEB `Step.2.6` | ASDW-WEB `2.6` |
 
-  - Cloud では `Step.2.3`（追加 Azure サービス Deploy）→ `2.9`（実装設計）→ `2.10`（Deploy）→ `2.3TC` の順に進みます。
-    AI Agent 系（`2.6`〜`2.8`）より**前**に Knowledge Base を作るため、Agent が KB を利用できます。
-    無効時は `2.3` 完了で従来どおり `2.3TC` へ進みます。
+  - Cloud の依存は registry と同じで、`2.1` → `2.5`、かつ `2.2` + `2.5` → `2.6` です。
+    無効時は `2.5` / `2.6` の Issue を生成せず、下流依存では解決済みとして扱います。
 - 対象サービスが 0 件の場合、各 Step は「対象なし」を作業ログへ記録して成果物なしで完了します。
 - 実行 Step を限定したい場合は CLI の `--steps` で明示指定してください。
 

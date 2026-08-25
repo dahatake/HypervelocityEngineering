@@ -171,6 +171,30 @@ def _contract_output_paths(contract: dict) -> set[str]:
     }
 
 
+def check_static_input_paths(agents: dict[str, dict], exc: dict) -> list[str]:
+    """Verify `kind: static` inputs that resolve to a concrete path exist (FR-WF-OUT-11).
+
+    Paths containing placeholders (`{...}` / `<...>`), globs (`*` / `?`) or
+    trailing `/` are not concrete file references and are skipped.
+    """
+    errors: list[str] = []
+    static_paths = set(exc.get("static_paths") or [])
+    for name, contract in sorted(agents.items()):
+        for inp in contract.get("inputs") or []:
+            if not isinstance(inp, dict) or inp.get("kind") != "static":
+                continue
+            path = (inp.get("path") or "").strip()
+            if not path or path in static_paths:
+                continue
+            if path.endswith("/") or any(c in path for c in "{}<>*?"):
+                continue
+            if not (REPO_ROOT / path).exists():
+                errors.append(
+                    f"{name}: static input '{path}' does not exist in the repository"
+                )
+    return errors
+
+
 def check_integrity(agents: dict[str, dict], producers: dict[str, list[str]], exc: dict) -> list[str]:
     """Verify required agent_artifact inputs have a matching producer.
 
@@ -272,6 +296,7 @@ def main() -> int:
 
     producers = collect_producers(agents)
     integrity_errors = check_integrity(agents, producers, exceptions)
+    integrity_errors += check_static_input_paths(agents, exceptions)
     registry_mismatch_errors = (
         [] if skip_registry else check_registry_mismatch(agents)
     )

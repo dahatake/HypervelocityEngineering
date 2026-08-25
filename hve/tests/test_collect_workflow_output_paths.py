@@ -34,9 +34,9 @@ class TestCollectWorkflowOutputPaths(unittest.TestCase):
         self.assertIsInstance(result, list)
         self.assertGreater(len(result), 0, "AAS の output_paths が空です")
 
-    def test_aas_contains_app_catalog(self) -> None:
-        """AAS Step 1 の output_paths は app-catalog.md を含む。"""
-        result = collect_workflow_output_paths("aas")
+    def test_ard_contains_app_catalog(self) -> None:
+        """ARD Step 4.1 の output_paths は app-catalog.md を含む（AAS Step 1 廃止・ARD へ移設）。"""
+        result = collect_workflow_output_paths("ard")
         self.assertIn("docs/catalog/app-catalog.md", result)
 
     def test_aas_no_duplicates(self) -> None:

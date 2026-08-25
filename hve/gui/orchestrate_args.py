@@ -104,8 +104,9 @@ class OrchestrateArgs:
     # 実装状況:
     #   - dataclass: 以下の 12 フィールド を保持
     #   - CLI:  hve/__main__.py `--workiq*` オプション群 で 12 フィールドすべて受付可能
-    #   - GUI:  hve/gui/page_options.py `_C4WorkIQ` クラスが 12 フィールドすべての
-    #           フォームを提供（2026-05 リファクタで tenant_id / prompt_review を追加）
+    #   - GUI:  hve/gui/page_options.py `_C4WorkIQ` クラスが 11 フィールドのフォームを提供。
+    #           `workiq_tenant_id` は GUI 入力経路を廃止済みで（同クラスに明記、
+    #           settings_store._OBSOLETE_KEYS へ登録済み）、GUI からは常に None が入る。
     #   - to_argv() は 12 フィールドすべてを --workiq* 引数に変換可能。
     workiq: bool = False
     workiq_akm_review: TriState = None  # BooleanOptionalAction

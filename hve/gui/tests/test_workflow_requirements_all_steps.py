@@ -20,6 +20,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from hve.gui.workflow_step_requirements import (
+    AUTOPILOT_PSEUDO_WORKFLOW_ID,
     INPUT_FIELD_KEYS,
     REQUIREMENT_TABLE,
     WORKFLOW_PRIORITY,
@@ -373,6 +374,33 @@ class TestRequirementTableCoversRegistry(unittest.TestCase):
             registered - set(WORKFLOW_PRIORITY),
             set(),
             "WORKFLOW_PRIORITY に未登録のワークフローがあります",
+        )
+
+    def test_requirement_table_step_ids_exist_in_registry(self) -> None:
+        """FR-GUI-01: 要件テーブルの step ID がレジストリ上に実在すること。
+
+        実在しない step ID を指すエントリは `pick_target_step` の候補に一度も
+        一致せず、ワークフローが登録済みでもファイル要件が 1 件も評価されないまま
+        precheck が無警告で通過する。
+
+        除外対象:
+          - ``ard``: GUI がグループ ID（``page_workflow_select._WorkflowStepsGroup._ARD_GROUPS``）
+            で選択を表現するため、レジストリの step ID とは体系が異なる。
+          - ``autopilot``: ``workflow_registry`` に存在しない GUI 内部の疑似 ID。
+        """
+        registry_steps = {
+            wf.id: {step.id for step in wf.steps} for wf in list_workflows()
+        }
+        orphans = sorted(
+            (workflow_id, step_id)
+            for workflow_id, step_id in REQUIREMENT_TABLE
+            if workflow_id not in ("ard", AUTOPILOT_PSEUDO_WORKFLOW_ID)
+            and step_id not in registry_steps.get(workflow_id, set())
+        )
+        self.assertEqual(
+            orphans,
+            [],
+            "REQUIREMENT_TABLE が実在しない step ID を指しています",
         )
 
     def test_registered_workflow_alone_yields_a_file_requirement(self) -> None:

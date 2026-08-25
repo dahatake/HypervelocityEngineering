@@ -117,11 +117,25 @@ jobs:
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 
     steps:
-      - name: 判定スクリプトをチェックアウト（base 側のみ・PR コードは実行しない）
+      - name: 判定スクリプトをチェックアウト（base 側、trusted）
         uses: actions/checkout@v4
         with:
+          repository: ${{ github.repository }}
           ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
           fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+
+      - name: PR コードをチェックアウト（G-DIFF 検証対象データとしてのみ、subject）
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: subject
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
 
       - name: 冪等化チェック（既に完了・Approve 済みかどうか確認）
         id: guard
@@ -255,7 +269,7 @@ jobs:
             combined_text=$(printf '%s\n%s\n' "${pr_body}" "$(echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null)")
             validation_subject="${RUNNER_TEMP}/validation-subject.md"
             printf '%s' "${combined_text}" > "${validation_subject}"
-            if python3 "${GITHUB_WORKSPACE}/.github/scripts/check_validation_marker.py" \
+            if python3 "${GITHUB_WORKSPACE}/trusted/.github/scripts/check_validation_marker.py" \
               --text-file "${validation_subject}"; then
               echo "✅ PR body/コメントに検証実施記録を確認しました。"
               echo "has_validation=true" >> "${GITHUB_OUTPUT}"
@@ -446,6 +460,101 @@ jobs:
             --body "${comment_body}" || echo "WARNING: QA Reference 案内コメントの投稿に失敗しました。"
           echo "QA Reference 案内コメントを PR #${PR_NUMBER} に投稿しました。"
 
+      - name: G-DIFF 判定用 PR メタデータ収集
+        id: g-diff-metadata
+        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.skip_reason != 'initial_plan'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          pr_json=$(gh api "/repos/${REPO}/pulls/${PR_NUMBER}")
+          pr_title=$(printf '%s' "${pr_json}" | jq -r '.title // ""')
+          pr_body=$(printf '%s' "${pr_json}" | jq -r '.body // ""')
+
+          files_json=$(gh api --paginate "/repos/${REPO}/pulls/${PR_NUMBER}/files" \
+            --jq '[.[] | {filename, status, previous_filename}]' | jq -s 'add // []')
+          changed_files_count=$(printf '%s' "${files_json}" | jq 'length')
+
+          owner="${REPO%%/*}"
+          repo_name="${REPO#*/}"
+          linked_json=$(gh api graphql -f query='
+            query($owner: String!, $repo: String!, $pr: Int!) {
+              repository(owner: $owner, name: $repo) {
+                pullRequest(number: $pr) {
+                  closingIssuesReferences(first: 10) {
+                    nodes {
+                      title
+                      labels(first: 20) { nodes { name } }
+                    }
+                  }
+                }
+              }
+            }
+          ' -f owner="${owner}" -f repo="${repo_name}" -F pr="${PR_NUMBER}" 2>/dev/null || echo '{}')
+          issue_titles_json=$(printf '%s' "${linked_json}" \
+            | jq -c '[.data.repository.pullRequest.closingIssuesReferences.nodes[]?.title // empty]' 2>/dev/null || echo '[]')
+          issue_labels_json=$(printf '%s' "${linked_json}" \
+            | jq -c '[.data.repository.pullRequest.closingIssuesReferences.nodes[]?.labels.nodes[]?.name // empty]' 2>/dev/null || echo '[]')
+
+          jq -n \
+            --arg title "${pr_title}" \
+            --arg body "${pr_body}" \
+            --argjson issue_titles "${issue_titles_json:-[]}" \
+            --argjson issue_labels "${issue_labels_json:-[]}" \
+            --argjson changed_files "${changed_files_count}" \
+            '{title: $title, body: $body, issue_titles: $issue_titles, issue_labels: $issue_labels, changed_files: $changed_files}' \
+            > "${RUNNER_TEMP}/g-diff-pr-metadata.json"
+          printf '%s' "${files_json}" > "${RUNNER_TEMP}/g-diff-changed-files.json"
+
+      - name: G-DIFF 判定（trusted, auto-approve 前提条件）
+        id: check-g-diff
+        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.skip_reason != 'initial_plan'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          G_DIFF_MARKER='<!-- hve-workflow-diff-gate-blocked -->'
+          SHA_MARKER="<!-- auto-approve-and-merge-head-sha: ${HEAD_SHA} -->"
+
+          result_json=$(python -I "$GITHUB_WORKSPACE/trusted/.github/scripts/validate-workflow-diff.py" \
+            --root "$GITHUB_WORKSPACE/subject" \
+            --pr-metadata-file "${RUNNER_TEMP}/g-diff-pr-metadata.json" \
+            --changed-files-file "${RUNNER_TEMP}/g-diff-changed-files.json" \
+            --format json || true)
+          if ! printf '%s' "${result_json}" | python -m json.tool >/dev/null 2>&1; then
+            echo "::error::G-DIFF validator result was empty or invalid"
+            echo "g_diff_passed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          status=$(printf '%s' "${result_json}" | jq -r '.status // ""')
+          echo "G-DIFF status=${status}"
+          if [ "${status}" = "PASS" ] || [ "${status}" = "N/A" ]; then
+            echo "g_diff_passed=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          echo "g_diff_passed=false" >> "${GITHUB_OUTPUT}"
+
+          # 同一 SHA の案内コメントがある場合は重複投稿しない
+          existing_count=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" --paginate --jq '.[]' 2>/dev/null \
+            | jq -s --arg marker "${G_DIFF_MARKER}" --arg sha_marker "${SHA_MARKER}" \
+              '[.[] | select(.body | contains($marker) and contains($sha_marker))] | length' 2>/dev/null || echo 0)
+          if [ "${existing_count:-0}" -gt 0 ]; then
+            echo "同一 SHA の G-DIFF blocked 案内は投稿済みです。"
+            exit 0
+          fi
+          errors_md=$(printf '%s' "${result_json}" | jq -r '(.errors // [])[] | "- \(.)"' 2>/dev/null || echo '')
+          comment_body="$(
+            {
+              printf '%s\n\n' "${G_DIFF_MARKER}"
+              printf '%s\n\n' '## ⛔ G-DIFF（Workflow Diff Gate）が PASS/N-A になりませんでした'
+              printf '%s: %s\n\n' 'status' "${status}"
+              printf '%s\n' "${errors_md}"
+              printf '%s\n' '許可されていない差分が含まれるため auto-approve/auto-merge を停止しました。'
+              printf '%s\n' "${SHA_MARKER}"
+            }
+          )"
+          gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "${comment_body}" || echo "WARNING: G-DIFF blocked 案内コメント投稿に失敗しました。"
+
       - name: Check-run 失敗確認（auto-approve 前提条件）
         id: check-check-runs
         if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.skip_reason != 'initial_plan'
@@ -455,48 +564,90 @@ jobs:
           set -euo pipefail
           CHECK_FAIL_MARKER='<!-- auto-approve-check-runs-failed -->'
           SHA_MARKER="<!-- auto-approve-and-merge-head-sha: ${HEAD_SHA} -->"
+          current_run_prefix="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/"
+          check_runs_max_attempts=30
+          check_runs_retry_seconds=10
+          attempt=1
           blocked="false"
+          failed_checks="[]"
+          failed_count=0
+          relevant_count=0
+          g_diff_passed_count=0
+          pending_count=0
 
-          CHECK_API_ERR_FILE=$(mktemp)
-          if ! check_runs_json=$(gh api "/repos/${REPO}/commits/${HEAD_SHA}/check-runs" 2>"${CHECK_API_ERR_FILE}"); then
-            api_err_msg=$(head -5 "${CHECK_API_ERR_FILE}" 2>/dev/null || echo "unknown error")
-            rm -f "${CHECK_API_ERR_FILE}"
-            echo "::error::check-runs API の取得に失敗しました: ${api_err_msg}"
-            echo "checks_passed=false" >> "${GITHUB_OUTPUT}"
-            CHECK_API_ERR_MARKER='<!-- auto-approve-check-runs-api-error -->'
-            existing_err=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" --paginate --jq '.[]' 2>/dev/null \
-              | jq -s --arg marker "${CHECK_API_ERR_MARKER}" --arg sha_marker "${SHA_MARKER}" \
-                '[.[] | select(.body | contains($marker) and contains($sha_marker))] | length' 2>/dev/null || echo 0)
-            if [ "${existing_err:-0}" -eq 0 ]; then
-              err_comment="$(printf '%s\n\n%s\n\n%s\n%s\n%s' \
-                "${CHECK_API_ERR_MARKER}" \
-                '## ❌ check-runs API 取得失敗 → auto-approve/auto-merge を停止しました' \
-                "check-runs API の取得に失敗したため、fail-closed として auto-approve/auto-merge を停止しました。" \
-                "エラー詳細: \`${api_err_msg}\`" \
-                "${SHA_MARKER}")"
-              gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "${err_comment}" \
-                || echo "WARNING: check-runs API エラー案内コメント投稿に失敗しました。"
+          while [ "${attempt}" -le "${check_runs_max_attempts}" ]; do
+            CHECK_API_ERR_FILE=$(mktemp)
+            if ! check_runs_json=$(gh api --paginate "/repos/${REPO}/commits/${HEAD_SHA}/check-runs" --jq '.check_runs[]' 2>"${CHECK_API_ERR_FILE}" | jq -e -s '.'); then
+              api_err_msg=$(head -5 "${CHECK_API_ERR_FILE}" 2>/dev/null || echo "unknown error")
+              rm -f "${CHECK_API_ERR_FILE}"
+              echo "::error::check-runs API の取得または応答検証に失敗しました: ${api_err_msg}"
+              echo "checks_passed=false" >> "${GITHUB_OUTPUT}"
+              CHECK_API_ERR_MARKER='<!-- auto-approve-check-runs-api-error -->'
+              existing_err=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" --paginate --jq '.[]' 2>/dev/null \
+                | jq -s --arg marker "${CHECK_API_ERR_MARKER}" --arg sha_marker "${SHA_MARKER}" \
+                  '[.[] | select(.body | contains($marker) and contains($sha_marker))] | length' 2>/dev/null || echo 0)
+              if [ "${existing_err:-0}" -eq 0 ]; then
+                err_comment="$(printf '%s\n\n%s\n\n%s\n%s\n%s' \
+                  "${CHECK_API_ERR_MARKER}" \
+                  '## ❌ check-runs API 取得失敗 → auto-approve/auto-merge を停止しました' \
+                  "check-runs API の取得または応答検証に失敗したため、fail-closed として auto-approve/auto-merge を停止しました。" \
+                  "詳細は trusted workflow log を確認してください。" \
+                  "${SHA_MARKER}")"
+                gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "${err_comment}" \
+                  || echo "WARNING: check-runs API エラー案内コメント投稿に失敗しました。"
+              fi
+              exit 0
             fi
-            exit 0
-          fi
-          rm -f "${CHECK_API_ERR_FILE}"
-          failed_checks=$(printf '%s' "${check_runs_json}" | jq -c '
-            [.check_runs[]?
-              | select(
-                  (.conclusion == "failure")
-                  or (.conclusion == "cancelled")
-                  or (.conclusion == "timed_out")
-                  or (.conclusion == "action_required")
-                  or (.conclusion == "startup_failure")
-                )
-              | select((.name // "") | test("auto-approve-and-merge|PR 自動 Approve & Auto-merge"; "i") | not)
-              | {name: (.name // "unknown"), conclusion: (.conclusion // "unknown"), details_url: (.details_url // "")}
-            ]')
-          failed_count=$(printf '%s' "${failed_checks}" | jq 'length')
+            rm -f "${CHECK_API_ERR_FILE}"
+
+            relevant_checks=$(printf '%s' "${check_runs_json}" | jq -c --arg current_run_prefix "${current_run_prefix}" '
+              [.[] | select(((.details_url // "") | startswith($current_run_prefix)) | not)]')
+            relevant_count=$(printf '%s' "${relevant_checks}" | jq 'length')
+
+            g_diff_passed_count=$(printf '%s' "${relevant_checks}" | jq '
+              [.[] | select((.name // "") == "G-DIFF") | select((.status // "") == "completed") | select((.conclusion // "") == "success")] | length')
+
+            pending_checks=$(printf '%s' "${relevant_checks}" | jq -c '[.[] | select((.status // "") != "completed")]')
+            pending_count=$(printf '%s' "${pending_checks}" | jq 'length')
+
+            failed_checks=$(printf '%s' "${relevant_checks}" | jq -c '
+              [.[] | select((.status // "") == "completed")
+                | . as $check
+                | select((["success", "neutral", "skipped"] | index($check.conclusion)) == null)
+                | {name: ($check.name // "unknown"), conclusion: ($check.conclusion // "unknown"), details_url: ($check.details_url // "")}
+              ]')
+            failed_count=$(printf '%s' "${failed_checks}" | jq 'length')
+
+            blocked="false"
+            retryable="false"
+            if [ "${relevant_count}" -eq 0 ] || [ "${g_diff_passed_count}" -eq 0 ]; then
+              blocked="true"
+              retryable="true"
+            fi
+            if [ "${pending_count}" -gt 0 ]; then
+              blocked="true"
+              retryable="true"
+            fi
+            if [ "${failed_count}" -gt 0 ]; then
+              blocked="true"
+              retryable="false"
+            fi
+
+            if [ "${retryable}" = "true" ] && [ "${failed_count}" -eq 0 ] && [ "${attempt}" -lt "${check_runs_max_attempts}" ]; then
+              echo "check-run が未完了、または G-DIFF check-run が未検出のため再試行します（${attempt}/${check_runs_max_attempts}）..."
+              sleep "${check_runs_retry_seconds}"
+              attempt=$((attempt + 1))
+              continue
+            fi
+            break
+          done
 
           if [ "${failed_count}" -gt 0 ]; then
-            blocked="true"
             echo "⚠️ 失敗 check-run を ${failed_count} 件検出しました。"
+          elif [ "${relevant_count}" -eq 0 ] || [ "${g_diff_passed_count}" -eq 0 ]; then
+            echo "⚠️ G-DIFF check-run が検出されないか、成功していません。"
+          elif [ "${pending_count}" -gt 0 ]; then
+            echo "⚠️ pending 状態の check-run が残っています。"
           else
             echo "✅ check-run 失敗は検出されませんでした。"
           fi
@@ -521,10 +672,10 @@ jobs:
           comment_body="$(
             {
               printf '%s\n\n' "${CHECK_FAIL_MARKER}"
-              printf '%s\n\n' '## ⚠️ failed check-run を検出したため auto-approve/auto-merge を停止しました'
-              printf '%s\n' '以下の check-run が失敗状態です（failure/cancelled/timed_out/action_required/startup_failure）。'
+              printf '%s\n\n' '## ⚠️ 必須 check-run が完了/成功していないため auto-approve/auto-merge を停止しました'
+              printf '%s\n' '以下のいずれかの状態です: (1) G-DIFF check-run が未検出/未成功、(2) pending の check-run が残存、(3) 失敗 check-run（failure/cancelled/timed_out/action_required/startup_failure 等）。'
               printf '\n%s\n\n' "${failed_md}"
-              printf '%s\n' '失敗 check を解消した後に再実行してください。'
+              printf '%s\n' '解消した後に再実行してください。'
               printf '%s\n' '> ℹ️ このコメントは `auto-approve-and-merge.yml` によって自動投稿されました。'
               printf '%s\n' "${SHA_MARKER}"
             }
@@ -655,7 +806,7 @@ jobs:
 
       - name: PR を Approve
         id: approve
-        if: steps.guard.outputs.already_done != 'true' && steps.guard.outputs.already_approved != 'true' && steps.check-validation.outputs.has_validation != 'false' && steps.check-validation.outputs.skip_reason != 'initial_plan' && steps.check-qa-reference.outputs.qa_reference_passed != 'false' && steps.check-check-runs.outputs.checks_passed != 'false' && steps.check-deploy-ac.outputs.deploy_gate_passed != 'false'
+        if: steps.guard.outputs.already_done != 'true' && steps.guard.outputs.already_approved != 'true' && steps.check-validation.outputs.has_validation != 'false' && steps.check-validation.outputs.skip_reason != 'initial_plan' && steps.check-qa-reference.outputs.qa_reference_passed != 'false' && steps.check-check-runs.outputs.checks_passed == 'true' && steps.check-g-diff.outputs.g_diff_passed == 'true' && steps.check-deploy-ac.outputs.deploy_gate_passed != 'false'
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
         run: |
@@ -674,7 +825,7 @@ jobs:
 
       - name: Auto-merge を有効化（squash）
         id: merge
-        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.has_validation != 'false' && steps.check-validation.outputs.skip_reason != 'initial_plan' && steps.check-qa-reference.outputs.qa_reference_passed != 'false' && steps.check-check-runs.outputs.checks_passed != 'false' && steps.check-deploy-ac.outputs.deploy_gate_passed != 'false'
+        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.has_validation != 'false' && steps.check-validation.outputs.skip_reason != 'initial_plan' && steps.check-qa-reference.outputs.qa_reference_passed != 'false' && steps.check-check-runs.outputs.checks_passed == 'true' && steps.check-g-diff.outputs.g_diff_passed == 'true' && steps.check-deploy-ac.outputs.deploy_gate_passed != 'false'
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
         run: |
@@ -702,7 +853,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: サマリーコメントを PR に投稿
-        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.has_validation != 'false' && steps.check-validation.outputs.skip_reason != 'initial_plan' && steps.check-qa-reference.outputs.qa_reference_passed != 'false' && steps.check-check-runs.outputs.checks_passed != 'false' && steps.check-deploy-ac.outputs.deploy_gate_passed != 'false'
+        if: steps.guard.outputs.already_done != 'true' && steps.check-validation.outputs.has_validation != 'false' && steps.check-validation.outputs.skip_reason != 'initial_plan' && steps.check-qa-reference.outputs.qa_reference_passed != 'false' && steps.check-check-runs.outputs.checks_passed == 'true' && steps.check-g-diff.outputs.g_diff_passed == 'true' && steps.check-deploy-ac.outputs.deploy_gate_passed != 'false'
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
           APPROVED: ${{ steps.guard.outputs.already_approved == 'true' && 'true' || steps.approve.outputs.approved }}

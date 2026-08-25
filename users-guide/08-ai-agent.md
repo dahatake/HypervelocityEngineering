@@ -15,7 +15,7 @@
 ---
 AI Agentを設計・実装するための汎用設計ドキュメントです。  
 
-> **共通能力契約**: AAG / AAGD では Skill `ai-agent-capability-contract` を参照し、AG-CAP-01〜06を設計・テスト・実装・検証します。詳細は `.github/skills/ai-agent-capability-contract/SKILL.md` を参照してください。
+> **共通能力契約**: AAG / AAGD では Skill `ai-agent-capability-contract` を参照し、AG-CAP-01〜10を設計・テスト・実装・検証します。詳細は `.github/skills/ai-agent-capability-contract/SKILL.md` を参照してください。
 
 > **注記**: 本ドキュメントの Step 1〜3 に掲載する Prompt は **手動実行用** です。AAG / AAGD で自動実行する場合の Single Source of Truth は [`.github/prompts/Arch-AIAgentDesign-Step1.prompt.md`](../.github/prompts/Arch-AIAgentDesign-Step1.prompt.md) / [`Step2`](../.github/prompts/Arch-AIAgentDesign-Step2.prompt.md) / [`Step3`](../.github/prompts/Arch-AIAgentDesign-Step3.prompt.md) であり、本文ではありません。両者は同一内容を保証しません。
 
@@ -25,7 +25,11 @@ AI Agentを設計・実装するための汎用設計ドキュメントです。
 - 前提: `ai-agent-design.yml` / `ai-agent-dev.yml` で Root Issue を起票できること
 - 次のステップ:
   - まず試す: [07-ai-agent-simple.md](./07-ai-agent-simple.md)
+  - 画面を持たないデータ中心 Agent の前段設計: [09-agent-data-architecture.md](./09-agent-data-architecture.md)
+  - 検索経路の評価（AAGD Step.6）: [10-agent-evaluation.md](./10-agent-evaluation.md)
+  - 配布と Microsoft 365 公開（AAGD Step.7）: [11-agent-m365-publish.md](./11-agent-m365-publish.md)
   - Agentic Retrieval を使う場合: [agentic-retrieval-guide.md](./agentic-retrieval-guide.md)
+  - Tool 数が多い Agent の Foundry Toolbox / tool search 設定: [tool-search-guide.md](./tool-search-guide.md)
   - プロンプト雛形: [prompt-examples.md](./prompt-examples.md)
 
 ## Step 1. アプリケーション定義（Application Definition）
@@ -148,10 +152,11 @@ Prompt:
 > | ドキュメント上の Step | ワークフロー | hve ワークフロー ID | Step ID（コード上） |
 > |---|---|---|---|
 > | Step 1〜3（設計フェーズ） | AI Agent Design | `aag` | 1 / 2 / 3 |
-> | Step 4（実装・Deployフェーズ） | AI Agent Dev & Deploy | `aagd` | 1 / 2.1 / 2.2 / 2.3 / 3 / 4 |
+> | Step 4（実装・Deployフェーズ） | AI Agent Dev & Deploy | `aagd` | 1 / 2.1 / 2.2 / 2.3 / 3 / 4 / 5 |
 >
 > hve CLI で実行する場合: `hve orchestrate -w aag` → `hve orchestrate -w aagd`
 > Issue Template から実行する場合: `ai-agent-design.yml`（AAG）→ `ai-agent-dev.yml`（AAGD）
+> HVE GUI から実行する場合: Step 1 の **AI Agent** カテゴリから `AI Agent Design (AAG)` → `AI Agent Dev & Deploy (AAGD)` を選択
 
 ### Issue Template / Workflow / Prompt 対応（実装準拠）
 
@@ -161,6 +166,7 @@ Prompt:
 | Workflow | `.github/workflows/auto-ai-agent-design-reusable.yml` | `.github/workflows/auto-ai-agent-dev-reusable.yml` |
 | ラベルトリガー | `auto-ai-agent-design` | `auto-ai-agent-dev` |
 | hve 実行 | `hve orchestrate -w aag` | `hve orchestrate -w aagd` |
+| GUI カテゴリ | AI Agent | AI Agent |
 | 主な入力項目 | `app_ids`, `usecase_id`, `branch`, `runner_type`, `steps`, `model`, `review_model`, `qa_model` | `app_ids`, `resource_group`, `usecase_id`, `branch`, `runner_type`, `steps`, `tdd_max_retries`, `model`, `review_model`, `qa_model` |
 
 | Workflow | Step | Prompt |
@@ -174,6 +180,7 @@ Prompt:
 | AAGD | 2.3 | `Dev-Microservice-Azure-AgentCoding` |
 | AAGD | 3 | `Dev-Microservice-Azure-AgentDeploy` |
 | AAGD | 4 | `QA-ToolSearchEval`（`--enable-tool-search no` では skip） |
+| AAGD | 5 | `QA-RequirementsConformanceEval` |
 
 ### 生成する AI Agent の Agentic Retrieval 方針
 
@@ -225,7 +232,7 @@ src/agent/{key}/
 ### 利用・完了確認・カスタマイズ
 
 1. 設計は AAG を完了し、`docs/agent/agent-application-definition.md`、`docs/agent/agent-architecture.md`、`docs/ai-agent-catalog.md`、各 `docs/agent/agent-detail-{key}.md` を確認します。
-2. 実装は AAGD を実行します。Step 2.1〜2.3 は Agent ごとの fan-out であり、Step 3 の Deploy は Step 2.3 完了後、Step 4 の tool search 実測評価は Step 3 完了後です。
+2. 実装は AAGD を実行します。Step 2.1〜2.3 は Agent ごとの fan-out であり、Step 3 の Deploy は Step 2.3 完了後です。Step 4（tool search 実測評価）/ Step 5（要件適合実測）/ Step 6（検索経路の適正化実測）/ Step 7（Microsoft 365 / Teams 公開）はいずれも Step 3 完了後です。
 3. AAG の Step 3 と AAGD の Step 2.1〜3 では、`ai-agent-capability-contract` の AG-CAP-01〜05 を、実装するか理由と根拠付き N/A として追跡します。AG-CAP-06 は N/A ではなく、再利用根拠に基づく Decision を `required` または `not-required` として記録します。選択した能力だけをテスト・実装・Deploy します。
 4. 設定・拡張の正本は `hve/workflow_registry.py`、Issue Template、対応 Prompt、および `ai-agent-capability-contract` です。Step ID、Prompt、入出力を変更する場合はこれらの契約と `hve/tests/test_workflow_registry.py`、能力契約テストを更新して回帰確認してください。
 
@@ -442,7 +449,7 @@ Prompt:
 - 権限分離（Read/Write/External Send、Writeは承認ゲート前提、監査ログ）
 - “3回ルール”でSkill化（手順連鎖が3回ならSkill化）
 - 評価は最終出力だけでなく遷移判断も対象
-- AG-CAP-01〜06をすべて記載し、非該当は理由・根拠・再判定条件付きN/Aとする
+- AG-CAP-01〜10をすべて記載し、非該当は理由・根拠・再判定条件付きN/Aとする
 
 ## 2) 採用パターン（必要に応じて）
 - Router/Orchestrator
@@ -619,7 +626,7 @@ Prompt:
 ## Step 4. AI Agent 実装（Microsoft Foundry）
 
 > **ワークフロー**: AAGD（`aagd`） — `ai-agent-dev.yml` Issue Template または `hve orchestrate -w aagd` で実行します。
-> コード上の Step ID は `1`（構成設計）/ `2.1`（テスト仕様書）/ `2.2`（テストコード生成）/ `2.3`（実装）/ `3`（Deploy）/ `4`（tool search 実測評価、機能有効時）です。
+> コード上の Step ID は `1`（構成設計）/ `2.1`（テスト仕様書）/ `2.2`（テストコード生成）/ `2.3`（実装）/ `3`（Deploy）/ `4`（tool search 実測評価、機能有効時）/ `5`（要件適合実測）/ `6`（検索経路の適正化実測）/ `7`（Microsoft 365 / Teams 公開）です。Step 6 は [10-agent-evaluation.md](./10-agent-evaluation.md)、Step 7 は [11-agent-m365-publish.md](./11-agent-m365-publish.md) を参照してください。
 > 以下の「手動実行プロンプト」で使う Step ID（`2.7T`, `2.7TC`, `2.7`, `2.8`）は、このドキュメント固有の通番であり、ワークフロー上の Step ID とは異なります。
 
 ## 目的

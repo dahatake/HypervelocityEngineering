@@ -1,0 +1,2635 @@
+{
+  "schema_version": 1,
+  "started_at": "2026-07-29T01:02:37Z",
+  "finished_at": "2026-07-29T01:04:20Z",
+  "env": {
+    "tokenizer": "tiktoken/cl100k_base",
+    "python": "3.14.6",
+    "platform": "Windows-11-10.0.29591-SP0",
+    "commit": "fd75cf65bb95167e102eb758e1a774c43456404a"
+  },
+  "params": {
+    "top_k": 5,
+    "max_tokens": 800,
+    "repeat": 3,
+    "scenarios": "mdq_bm25,mdq_grep,mdq_auto",
+    "roots": [
+      "docs",
+      "users-guide"
+    ],
+    "path_globs": null,
+    "queries_file": null,
+    "queries_json": null,
+    "golden": "tools/skills/markdown_query/golden-queries.json",
+    "db": ".mdq/index-ja-jp-heading.sqlite",
+    "queries_count": 33
+  },
+  "index": null,
+  "baseline_full": null,
+  "scenarios": {
+    "mdq_bm25": {
+      "mode": "bm25",
+      "queries": 33,
+      "total_hits": 165,
+      "avg_response_tokens": 1339.39,
+      "avg_vs_baseline_savings_pct": null,
+      "latency_ms_all": {
+        "n": 99,
+        "mean": 361.575,
+        "p50": 369.265,
+        "min": 35.603,
+        "max": 1094.858,
+        "p95": 649.881
+      },
+      "golden": {
+        "overall": {
+          "queries": 33,
+          "k": 5,
+          "top1_accuracy": 0.1212,
+          "topk_accuracy": 0.1818
+        },
+        "per_group": {
+          "catalog": {
+            "queries": 18,
+            "k": 5,
+            "top1_accuracy": 0.2222,
+            "topk_accuracy": 0.3333
+          },
+          "hve-inventory": {
+            "queries": 8,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.0
+          },
+          "hve-requirement": {
+            "queries": 7,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.0
+          }
+        }
+      },
+      "per_query": [
+        {
+          "query": "APP-002",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/app-catalog.md",
+            "docs/test-specs/APP-009-S004-test-spec.md",
+            "docs/test-specs/APP-009-S002-test-spec.md",
+            "docs/test-specs/APP-009-S003-test-spec.md",
+            "docs/test-specs/APP-009-S003-test-spec.md"
+          ],
+          "response_chars": 2811,
+          "response_tokens": 1453,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 529.948,
+            "p50": 514.303,
+            "min": 449.927,
+            "max": 625.612,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/app-catalog.md"
+          ],
+          "id": "B-01",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-009 会員セルフサービス 主責務",
+          "hits": 5,
+          "hit_paths": [
+            "docs/services/SVC-01-member-consent-service-description.md",
+            "sample/services/SVC-01-member-consent-service-description.md",
+            "docs/test-specs/APP-009-S001-test-spec.md",
+            "docs/catalog/service-catalog.md",
+            "docs/catalog/service-catalog-matrix.md"
+          ],
+          "response_chars": 2350,
+          "response_tokens": 1401,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 478.662,
+            "p50": 487.609,
+            "min": 453.268,
+            "max": 495.109,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/app-catalog.md"
+          ],
+          "id": "B-02",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-013 財務収益性 ポイント負債分析 所有SoR",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/app-arch-catalog.md",
+            "docs/catalog/service-catalog.md",
+            "docs/catalog/app-arch-catalog.md",
+            "docs/catalog/service-catalog.md",
+            "docs/catalog/service-catalog.md"
+          ],
+          "response_chars": 2253,
+          "response_tokens": 1319,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 512.945,
+            "p50": 462.897,
+            "min": 430.579,
+            "max": 645.358,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/app-catalog.md"
+          ],
+          "id": "B-03",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "CAP-003 ポイント取引を計上・訂正する 束ね先APP",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/app-catalog.md",
+            "docs/catalog/service-catalog.md",
+            "docs/services/SVC-02-description.md",
+            "docs/services/SVC-02-description.md",
+            "docs/catalog/app-catalog.md"
+          ],
+          "response_chars": 2511,
+          "response_tokens": 1578,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 406.716,
+            "p50": 422.729,
+            "min": 334.975,
+            "max": 462.445,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/app-catalog.md"
+          ],
+          "id": "B-04",
+          "group": "catalog",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "RULE-001 実装手段 A B C D E の判断基準",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/app-catalog.md",
+            "template/decisions/ADR-0002-hve-fanout-architecture.md",
+            "users-guide/hve-technical-architecture.md",
+            "docs/catalog/app-catalog.md",
+            "docs/catalog/app-catalog.md"
+          ],
+          "response_chars": 2884,
+          "response_tokens": 1864,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 457.693,
+            "p50": 416.182,
+            "min": 386.814,
+            "max": 570.083,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/app-catalog.md"
+          ],
+          "id": "B-05",
+          "group": "catalog",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "UC-05 実装手段 Primary Capability SoR候補",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/app-catalog.md",
+            "work/run/20260713T092531-99f893/Arch-ApplicationAnalytics/Issue-0/completion-report.md",
+            "work/run/20260713T092531-99f893/Arch-ApplicationAnalytics/Issue-0/completion-report.md",
+            "docs/catalog/domain-analytics.md",
+            "docs/catalog/app-catalog.md"
+          ],
+          "response_chars": 2447,
+          "response_tokens": 1402,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 371.678,
+            "p50": 377.807,
+            "min": 352.443,
+            "max": 384.785,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/app-catalog.md"
+          ],
+          "id": "B-06",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "SVC-02",
+          "hits": 5,
+          "hit_paths": [
+            "docs/test-specs/SVC-02-test-spec.md",
+            "docs/test-specs/SVC-02-test-spec.md",
+            "work/run/20260713T130720-6e10d3/Arch-Microservice-ServiceDetail/Issue-step-2-2-SVC-02/completion-report.md",
+            "docs/test-specs/SVC-02-test-spec.md",
+            "docs/test-specs/SVC-02-test-spec.md"
+          ],
+          "response_chars": 2440,
+          "response_tokens": 1288,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 343.376,
+            "p50": 347.219,
+            "min": 334.769,
+            "max": 348.142,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/service-catalog.md"
+          ],
+          "id": "B-07",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "SVC-12 監査 AIガバナンスサービス 利用APP",
+          "hits": 5,
+          "hit_paths": [
+            "docs/services/SVC-12.md",
+            "docs/catalog/service-catalog.md",
+            "docs/test-specs/SVC-12-test-spec.md",
+            "work/run/20260713T130720-6e10d3/Arch-Microservice-ServiceDetail/Issue-step-2-2-SVC-12/plan.md",
+            "docs/services/SVC-12.md"
+          ],
+          "response_chars": 1972,
+          "response_tokens": 1121,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 321.771,
+            "p50": 320.179,
+            "min": 318.834,
+            "max": 326.299,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/service-catalog.md"
+          ],
+          "id": "B-08",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "ConsentRecord 物理テーブル マッピング",
+          "hits": 5,
+          "hit_paths": [
+            "users-guide/02-app-architecture-design.md",
+            "docs/catalog/data-catalog.md",
+            "docs/catalog/test-strategy.md",
+            "docs/services/SVC-01-member-consent-service-description.md",
+            "template/business-requirement-document-master-list.md"
+          ],
+          "response_chars": 2122,
+          "response_tokens": 1284,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 332.857,
+            "p50": 343.536,
+            "min": 310.558,
+            "max": 344.479,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/data-catalog.md"
+          ],
+          "id": "B-09",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "PointTransaction 所有APP 所有サービス",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/data-catalog.md",
+            "docs/catalog/data-catalog.md",
+            "docs/catalog/service-catalog.md",
+            "docs/services/SVC-02-description.md",
+            "docs/services/SVC-07-paid-membership-contract-service-description.md"
+          ],
+          "response_chars": 2432,
+          "response_tokens": 1403,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 366.842,
+            "p50": 373.148,
+            "min": 349.52,
+            "max": 377.858,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/data-catalog.md"
+          ],
+          "id": "B-10",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "PointTransaction 台帳明細 データモデル定義",
+          "hits": 5,
+          "hit_paths": [
+            "docs/services/SVC-02-description.md",
+            "docs/services/SVC-02-description.md",
+            "docs/catalog/data-catalog.md",
+            "docs/catalog/service-catalog-matrix.md",
+            "sample/screen/S004-ポイント残高-明細照会画面-description.md"
+          ],
+          "response_chars": 2611,
+          "response_tokens": 1562,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 386.965,
+            "p50": 392.131,
+            "min": 356.42,
+            "max": 412.343,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/data-model.md"
+          ],
+          "id": "B-11",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "UC-18 不正なポイント・特典取引を検知して調査する",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/use-case-catalog.md",
+            "docs/usecase/UC-18-detail.md",
+            "docs/catalog/service-catalog.md",
+            "docs/usecase/UC-18-detail.md",
+            "docs/catalog/app-arch-catalog.md"
+          ],
+          "response_chars": 1970,
+          "response_tokens": 1179,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 399.174,
+            "p50": 358.549,
+            "min": 356.044,
+            "max": 482.93,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/use-case-catalog.md"
+          ],
+          "id": "B-12",
+          "group": "catalog",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "UC-05 購買・行動に応じたポイントを正確に獲得する",
+          "hits": 5,
+          "hit_paths": [
+            "docs/usecase/UC-05-detail.md",
+            "docs/usecase/UC-05-detail.md",
+            "docs/catalog/use-case-catalog.md",
+            "docs/catalog/use-case-skeleton.md",
+            "docs/catalog/domain-analytics.md"
+          ],
+          "response_chars": 2019,
+          "response_tokens": 1204,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 344.944,
+            "p50": 344.029,
+            "min": 334.043,
+            "max": 356.759,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/use-case-catalog.md"
+          ],
+          "id": "B-13",
+          "group": "catalog",
+          "rank": 3,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "APP-002 推薦アーキテクチャ 実行分類",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/app-arch-catalog.md",
+            "docs/catalog/app-arch-catalog.md",
+            "docs/catalog/app-arch-catalog.md",
+            "docs/catalog/app-arch-catalog.md",
+            "docs/catalog/app-arch-catalog.md"
+          ],
+          "response_chars": 1649,
+          "response_tokens": 949,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 396.968,
+            "p50": 400.09,
+            "min": 369.265,
+            "max": 421.55,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/app-arch-catalog.md"
+          ],
+          "id": "B-14",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-009 アーキテクチャ詳細 セクション",
+          "hits": 5,
+          "hit_paths": [
+            "users-guide/08-ai-agent.md",
+            "users-guide/01-business-requirement.md",
+            "users-guide/hve-gui-orchestrator-guide.md",
+            "users-guide/08-ai-agent.md",
+            "users-guide/hve-gui-orchestrator-guide.md"
+          ],
+          "response_chars": 2395,
+          "response_tokens": 1164,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 506.986,
+            "p50": 482.125,
+            "min": 421.738,
+            "max": 617.094,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/app-arch-catalog.md"
+          ],
+          "id": "B-15",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-009-S003 セルフサービス問い合わせ画面",
+          "hits": 5,
+          "hit_paths": [
+            "work/run/20260713T130720-6e10d3/Arch-UI-Detail/Issue-step-2-1-APP-009-S003/screen-detail-work-status.md",
+            "work/run/20260713T130720-6e10d3/Arch-UI-Detail/Issue-step-2-1-APP-009-S003/plan.md",
+            "docs/test-specs/APP-009-S003-test-spec.md",
+            "docs/screen/APP-009-S003.md",
+            "docs/test-specs/APP-009-S003-test-spec.md"
+          ],
+          "response_chars": 1706,
+          "response_tokens": 940,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 670.448,
+            "p50": 690.581,
+            "min": 595.049,
+            "max": 725.713,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/screen-catalog-APP-009.md"
+          ],
+          "id": "B-16",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "PRS-001 ペルソナ 顧客 参照UC",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/persona-catalog.md",
+            "docs/catalog/persona-screen-catalog.md",
+            "work/run/20260713T092531-99f893/Arch-PersonaCatalog/Issue-0/completion-report.md",
+            "work/run/20260713T092531-99f893/Arch-PersonaCatalog/Issue-0/plan.md",
+            "docs/catalog/screen-catalog-APP-009.md"
+          ],
+          "response_chars": 2686,
+          "response_tokens": 1622,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 603.175,
+            "p50": 569.607,
+            "min": 453.648,
+            "max": 786.271,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/persona-catalog.md"
+          ],
+          "id": "B-17",
+          "group": "catalog",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "SVC-02 連携方式 同期API 利用APP 一覧",
+          "hits": 5,
+          "hit_paths": [
+            "docs/test-specs/SVC-02-test-spec.md",
+            "docs/services/SVC-02-description.md",
+            "docs/test-specs/SVC-03-test-spec.md",
+            "docs/test-specs/SVC-02-test-spec.md",
+            "docs/catalog/service-catalog-matrix.md"
+          ],
+          "response_chars": 3042,
+          "response_tokens": 1801,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 862.714,
+            "p50": 909.787,
+            "min": 583.497,
+            "max": 1094.858,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/service-catalog-matrix.md"
+          ],
+          "id": "B-18",
+          "group": "catalog",
+          "rank": 5,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "面横断の再利用確認 新規ロジック追加前",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md"
+          ],
+          "response_chars": 3084,
+          "response_tokens": 1511,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 46.229,
+            "p50": 45.379,
+            "min": 44.807,
+            "max": 48.5,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "A-01",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "run 開始時 未コミット変更 一括報告 停止",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md"
+          ],
+          "response_chars": 2772,
+          "response_tokens": 1481,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 44.318,
+            "p50": 45.53,
+            "min": 38.496,
+            "max": 48.927,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "A-02",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "repository-wide instructions 検索ルーター 3箇条",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md"
+          ],
+          "response_chars": 2912,
+          "response_tokens": 1449,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 46.466,
+            "p50": 48.079,
+            "min": 39.838,
+            "max": 51.479,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "A-03",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "fanout_static_keys fanout_parser 子ステップ 動的展開",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md"
+          ],
+          "response_chars": 3294,
+          "response_tokens": 1716,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 41.194,
+            "p50": 38.884,
+            "min": 38.401,
+            "max": 46.297,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "A-04",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "self-improve 有効化 no-self-improve 最優先",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md"
+          ],
+          "response_chars": 3308,
+          "response_tokens": 1478,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 40.701,
+            "p50": 36.683,
+            "min": 35.603,
+            "max": 49.817,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "A-05",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "FR-MAINT-05 対応テスト 受入ケース",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/requirement-test-mapping.md",
+            "hve-dev/requirement-test-mapping.md",
+            "hve-dev/requirement-test-mapping.md",
+            "hve-dev/requirement-test-mapping.md",
+            "hve-dev/requirement-test-mapping.md"
+          ],
+          "response_chars": 3243,
+          "response_tokens": 1340,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 36.226,
+            "p50": 36.18,
+            "min": 35.829,
+            "max": 36.667,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/requirement-test-mapping.md"
+          ],
+          "id": "A-06",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "FR-CLI-74 対応テスト マッピング",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/requirement-test-mapping.md",
+            "hve-dev/requirement-test-mapping.md",
+            "hve-dev/requirement-test-mapping.md",
+            "hve-dev/requirement-test-mapping.md",
+            "hve-dev/requirement-test-mapping.md"
+          ],
+          "response_chars": 2161,
+          "response_tokens": 1192,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 43.891,
+            "p50": 40.184,
+            "min": 38.573,
+            "max": 52.915,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/requirement-test-mapping.md"
+          ],
+          "id": "A-07",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "classify_query 実装 ファイル 行",
+          "hits": 5,
+          "hit_paths": [
+            "users-guide/skills-markdown-query.md",
+            "users-guide/skills-markdown-query.md",
+            "users-guide/06-app-dev-dataflow-azure.md",
+            "work/run/20260713T130720-6e10d3/Arch-UI-Detail/Issue-step-2-1-APP-009-S002/plan.md",
+            "work/run/20260713T130720-6e10d3/Arch-Microservice-ServiceDetail/Issue-step-2-2-SVC-01/plan.md"
+          ],
+          "response_chars": 2189,
+          "response_tokens": 1175,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 344.567,
+            "p50": 343.605,
+            "min": 342.123,
+            "max": 347.972,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-surface-inventory.csv"
+          ],
+          "id": "A-08",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "validate_asdw_data_verify_script 既存実装",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/README.md",
+            "hve-dev/hve-tdd-change-policy.md",
+            "work/run/20260713T130720-6e10d3/Arch-Microservice-ServiceDetail/Issue-step-2-2-SVC-07/completion-report.md",
+            "work/run/20260713T141502-0b8144/Arch-TDD-TestSpec/Issue-step-2-4-APP-009-S008/completion-report.md",
+            "template/decisions/ADR-0002-hve-fanout-architecture.md"
+          ],
+          "response_chars": 1733,
+          "response_tokens": 939,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 485.98,
+            "p50": 492.822,
+            "min": 419.095,
+            "max": 546.024,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-surface-inventory.csv"
+          ],
+          "id": "A-09",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "app-catalog.md から APP-NN 形式の ID を抽出する既存実装",
+          "hits": 5,
+          "hit_paths": [
+            "users-guide/workflow-reference.md",
+            "hve-dev/requirement-definition.md",
+            "template/decisions/ADR-0003-ard-fanout-architecture.md",
+            "work/run/20260713T092531-99f893/Arch-PersonaCatalog/Issue-0/persona-catalog-work-status.md",
+            "users-guide/hve-technical-architecture.md"
+          ],
+          "response_chars": 2526,
+          "response_tokens": 1325,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 550.685,
+            "p50": 557.041,
+            "min": 521.458,
+            "max": 573.558,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-surface-inventory.csv"
+          ],
+          "id": "A-10",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "work/run/<run-id> の run-id を解決する実装",
+          "hits": 5,
+          "hit_paths": [
+            "work/run/20260713T130720-6e10d3/Arch-UI-Detail/Issue-step-2-1-APP-009-S006/completion-report.md",
+            "work/run/20260713T130720-6e10d3/Arch-Microservice-ServiceDetail/Issue-step-2-2-SVC-02/completion-report.md",
+            "work/run/20260713T092531-99f893/Arch-DataCatalog/Issue-0/completion-report.md",
+            "users-guide/hve-cli-orchestrator-guide.md",
+            "users-guide/hve-cli-orchestrator-guide.md"
+          ],
+          "response_chars": 2149,
+          "response_tokens": 1048,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 414.949,
+            "p50": 433.018,
+            "min": 356.479,
+            "max": 455.351,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-surface-inventory.csv"
+          ],
+          "id": "A-11",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "test_id_lookup_single_token 既存テスト",
+          "hits": 5,
+          "hit_paths": [
+            "work/run/20260713T092531-99f893/Arch-TDD-TestStrategy/Issue-0/completion-report.md",
+            "template/decisions/ADR-0002-hve-fanout-architecture.md",
+            "hve-dev/hve-tdd-change-policy.md",
+            "hve-dev/README.md",
+            "docs/test-specs/APP-009-S001-test-spec.md"
+          ],
+          "response_chars": 2209,
+          "response_tokens": 1334,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 315.659,
+            "p50": 313.518,
+            "min": 312.097,
+            "max": 321.36,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-test-inventory.csv"
+          ],
+          "id": "A-12",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "test_concept_overview_route 既存テスト",
+          "hits": 5,
+          "hit_paths": [
+            "work/run/20260713T092531-99f893/Arch-TDD-TestStrategy/Issue-0/completion-report.md",
+            "template/decisions/ADR-0002-hve-fanout-architecture.md",
+            "hve-dev/hve-tdd-change-policy.md",
+            "hve-dev/README.md",
+            "docs/test-specs/APP-009-S001-test-spec.md"
+          ],
+          "response_chars": 2209,
+          "response_tokens": 1334,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 352.819,
+            "p50": 339.707,
+            "min": 310.212,
+            "max": 408.538,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-test-inventory.csv"
+          ],
+          "id": "A-13",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "FR-MAINT-07 active_status 機能索引",
+          "hits": 5,
+          "hit_paths": [
+            "users-guide/skills-markdown-query.md",
+            "users-guide/skills-markdown-query.md",
+            "users-guide/skills-markdown-query.md",
+            "hve-dev/hve-tdd-crosswalk-baseline.md",
+            "users-guide/skills-markdown-query.md"
+          ],
+          "response_chars": 2119,
+          "response_tokens": 1127,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 472.197,
+            "p50": 453.522,
+            "min": 440.344,
+            "max": 522.725,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-feature-inventory.csv"
+          ],
+          "id": "A-14",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "NFR-CTX-01 active_status 機能索引",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "users-guide/skills-markdown-query.md",
+            "users-guide/pricing-guide.md",
+            "hve-dev/hve-tdd-crosswalk-baseline.md"
+          ],
+          "response_chars": 2340,
+          "response_tokens": 1217,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 402.218,
+            "p50": 392.556,
+            "min": 364.474,
+            "max": 449.623,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-feature-inventory.csv"
+          ],
+          "id": "A-15",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        }
+      ]
+    },
+    "mdq_grep": {
+      "mode": "grep",
+      "queries": 33,
+      "total_hits": 24,
+      "avg_response_tokens": 226.15,
+      "avg_vs_baseline_savings_pct": null,
+      "latency_ms_all": {
+        "n": 99,
+        "mean": 36.625,
+        "p50": 35.84,
+        "min": 26.744,
+        "max": 54.753,
+        "p95": 47.938
+      },
+      "golden": {
+        "overall": {
+          "queries": 33,
+          "k": 5,
+          "top1_accuracy": 0.0,
+          "topk_accuracy": 0.0
+        },
+        "per_group": {
+          "catalog": {
+            "queries": 18,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.0
+          },
+          "hve-inventory": {
+            "queries": 8,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.0
+          },
+          "hve-requirement": {
+            "queries": 7,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.0
+          }
+        }
+      },
+      "per_query": [
+        {
+          "query": "APP-002",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/persona-catalog.md",
+            "docs/catalog/app-catalog.md",
+            "docs/catalog/service-catalog.md",
+            "docs/catalog/app-catalog.md",
+            "docs/catalog/data-catalog.md"
+          ],
+          "response_chars": 2979,
+          "response_tokens": 1607,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 38.952,
+            "p50": 37.326,
+            "min": 37.055,
+            "max": 42.476,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/app-catalog.md"
+          ],
+          "id": "B-01",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-009 会員セルフサービス 主責務",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 36.329,
+            "p50": 36.299,
+            "min": 35.366,
+            "max": 37.323,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/app-catalog.md"
+          ],
+          "id": "B-02",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-013 財務収益性 ポイント負債分析 所有SoR",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 37.32,
+            "p50": 35.473,
+            "min": 34.847,
+            "max": 41.639,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/app-catalog.md"
+          ],
+          "id": "B-03",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "CAP-003 ポイント取引を計上・訂正する 束ね先APP",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 34.668,
+            "p50": 34.233,
+            "min": 33.659,
+            "max": 36.111,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/app-catalog.md"
+          ],
+          "id": "B-04",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "RULE-001 実装手段 A B C D E の判断基準",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 36.568,
+            "p50": 34.732,
+            "min": 34.608,
+            "max": 40.365,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/app-catalog.md"
+          ],
+          "id": "B-05",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "UC-05 実装手段 Primary Capability SoR候補",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 45.553,
+            "p50": 44.141,
+            "min": 37.766,
+            "max": 54.753,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/app-catalog.md"
+          ],
+          "id": "B-06",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "SVC-02",
+          "hits": 5,
+          "hit_paths": [
+            "docs/test-specs/SVC-02-test-spec.md",
+            "docs/test-specs/SVC-02-test-spec.md",
+            "docs/test-specs/SVC-02-test-spec.md",
+            "docs/test-specs/SVC-02-test-spec.md",
+            "docs/test-specs/SVC-02-test-spec.md"
+          ],
+          "response_chars": 2758,
+          "response_tokens": 1597,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 46.139,
+            "p50": 45.821,
+            "min": 44.664,
+            "max": 47.931,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/service-catalog.md"
+          ],
+          "id": "B-07",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "SVC-12 監査 AIガバナンスサービス 利用APP",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 41.356,
+            "p50": 40.565,
+            "min": 38.775,
+            "max": 44.729,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/service-catalog.md"
+          ],
+          "id": "B-08",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "ConsentRecord 物理テーブル マッピング",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 33.105,
+            "p50": 32.491,
+            "min": 31.926,
+            "max": 34.897,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/data-catalog.md"
+          ],
+          "id": "B-09",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "PointTransaction 所有APP 所有サービス",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 35.399,
+            "p50": 35.863,
+            "min": 33.26,
+            "max": 37.074,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/data-catalog.md"
+          ],
+          "id": "B-10",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "PointTransaction 台帳明細 データモデル定義",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 35.227,
+            "p50": 33.482,
+            "min": 33.0,
+            "max": 39.199,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/data-model.md"
+          ],
+          "id": "B-11",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "UC-18 不正なポイント・特典取引を検知して調査する",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/domain-analytics.md",
+            "docs/catalog/domain-analytics.md",
+            "docs/catalog/domain-analytics.md",
+            "docs/catalog/domain-analytics.md",
+            "docs/catalog/domain-analytics.md"
+          ],
+          "response_chars": 3073,
+          "response_tokens": 1862,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 38.312,
+            "p50": 36.855,
+            "min": 36.331,
+            "max": 41.75,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/use-case-catalog.md"
+          ],
+          "id": "B-12",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "UC-05 購買・行動に応じたポイントを正確に獲得する",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/domain-analytics.md",
+            "docs/catalog/domain-analytics.md",
+            "docs/catalog/domain-analytics.md",
+            "docs/catalog/domain-analytics.md",
+            "docs/catalog/domain-analytics.md"
+          ],
+          "response_chars": 3071,
+          "response_tokens": 1847,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 38.775,
+            "p50": 38.437,
+            "min": 36.994,
+            "max": 40.895,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/use-case-catalog.md"
+          ],
+          "id": "B-13",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-002 推薦アーキテクチャ 実行分類",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 39.111,
+            "p50": 38.885,
+            "min": 38.469,
+            "max": 39.978,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/app-arch-catalog.md"
+          ],
+          "id": "B-14",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-009 アーキテクチャ詳細 セクション",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 36.847,
+            "p50": 35.556,
+            "min": 35.401,
+            "max": 39.585,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/app-arch-catalog.md"
+          ],
+          "id": "B-15",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-009-S003 セルフサービス問い合わせ画面",
+          "hits": 4,
+          "hit_paths": [
+            "docs/screen/APP-009-S003.md",
+            "work/run/20260713T130720-6e10d3/Arch-UI-Detail/Issue-step-2-1-APP-009-S003/plan.md",
+            "work/run/20260713T130720-6e10d3/Arch-UI-Detail/Issue-step-2-1-APP-009-S003/screen-detail-work-status.md",
+            "docs/test-specs/APP-009-S003-test-spec.md"
+          ],
+          "response_chars": 1081,
+          "response_tokens": 550,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 35.747,
+            "p50": 35.84,
+            "min": 34.787,
+            "max": 36.615,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/screen-catalog-APP-009.md"
+          ],
+          "id": "B-16",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "PRS-001 ペルソナ 顧客 参照UC",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 33.704,
+            "p50": 33.486,
+            "min": 32.732,
+            "max": 34.894,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/persona-catalog.md"
+          ],
+          "id": "B-17",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "SVC-02 連携方式 同期API 利用APP 一覧",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 38.603,
+            "p50": 37.31,
+            "min": 37.309,
+            "max": 41.191,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/service-catalog-matrix.md"
+          ],
+          "id": "B-18",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "面横断の再利用確認 新規ロジック追加前",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 28.185,
+            "p50": 27.777,
+            "min": 26.744,
+            "max": 30.033,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "A-01",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "run 開始時 未コミット変更 一括報告 停止",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 30.641,
+            "p50": 30.375,
+            "min": 29.887,
+            "max": 31.66,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "A-02",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "repository-wide instructions 検索ルーター 3箇条",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 35.08,
+            "p50": 34.632,
+            "min": 30.893,
+            "max": 39.717,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "A-03",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "fanout_static_keys fanout_parser 子ステップ 動的展開",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 30.99,
+            "p50": 30.204,
+            "min": 29.962,
+            "max": 32.805,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "A-04",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "self-improve 有効化 no-self-improve 最優先",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 30.649,
+            "p50": 30.543,
+            "min": 29.584,
+            "max": 31.82,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "A-05",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "FR-MAINT-05 対応テスト 受入ケース",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 29.151,
+            "p50": 29.505,
+            "min": 27.808,
+            "max": 30.14,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/requirement-test-mapping.md"
+          ],
+          "id": "A-06",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "FR-CLI-74 対応テスト マッピング",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 29.311,
+            "p50": 28.973,
+            "min": 28.449,
+            "max": 30.511,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/requirement-test-mapping.md"
+          ],
+          "id": "A-07",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "classify_query 実装 ファイル 行",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 45.834,
+            "p50": 44.824,
+            "min": 39.843,
+            "max": 52.834,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-surface-inventory.csv"
+          ],
+          "id": "A-08",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "validate_asdw_data_verify_script 既存実装",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 42.35,
+            "p50": 40.284,
+            "min": 38.762,
+            "max": 48.005,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-surface-inventory.csv"
+          ],
+          "id": "A-09",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "app-catalog.md から APP-NN 形式の ID を抽出する既存実装",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 47.443,
+            "p50": 49.251,
+            "min": 42.787,
+            "max": 50.291,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-surface-inventory.csv"
+          ],
+          "id": "A-10",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "work/run/<run-id> の run-id を解決する実装",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 35.311,
+            "p50": 35.937,
+            "min": 33.612,
+            "max": 36.383,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-surface-inventory.csv"
+          ],
+          "id": "A-11",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "test_id_lookup_single_token 既存テスト",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 34.433,
+            "p50": 34.775,
+            "min": 33.746,
+            "max": 34.777,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-test-inventory.csv"
+          ],
+          "id": "A-12",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "test_concept_overview_route 既存テスト",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 35.766,
+            "p50": 34.825,
+            "min": 34.539,
+            "max": 37.935,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-test-inventory.csv"
+          ],
+          "id": "A-13",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "FR-MAINT-07 active_status 機能索引",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 34.707,
+            "p50": 35.375,
+            "min": 32.995,
+            "max": 35.752,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-feature-inventory.csv"
+          ],
+          "id": "A-14",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "NFR-CTX-01 active_status 機能索引",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 3,
+            "mean": 37.056,
+            "p50": 36.982,
+            "min": 35.348,
+            "max": 38.837,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-feature-inventory.csv"
+          ],
+          "id": "A-15",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        }
+      ]
+    },
+    "mdq_auto": {
+      "per_query": [
+        {
+          "query": "APP-002",
+          "hits": 5,
+          "response_tokens": 1453,
+          "router_strategy": "heading",
+          "router_reason": "id_lookup",
+          "router_fallback_used": false,
+          "latency_ms": {
+            "mean": 374.863,
+            "p50": 338.322,
+            "p95": 575.227
+          },
+          "id": "B-01",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-009 会員セルフサービス 主責務",
+          "hits": 5,
+          "response_tokens": 1401,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 381.635,
+            "p50": 372.116,
+            "p95": 431.039
+          },
+          "id": "B-02",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-013 財務収益性 ポイント負債分析 所有SoR",
+          "hits": 5,
+          "response_tokens": 1319,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 405.803,
+            "p50": 399.438,
+            "p95": 497.053
+          },
+          "id": "B-03",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "CAP-003 ポイント取引を計上・訂正する 束ね先APP",
+          "hits": 5,
+          "response_tokens": 1578,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 468.71,
+            "p50": 445.674,
+            "p95": 695.96
+          },
+          "id": "B-04",
+          "group": "catalog",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "RULE-001 実装手段 A B C D E の判断基準",
+          "hits": 5,
+          "response_tokens": 1864,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 345.415,
+            "p50": 344.029,
+            "p95": 359.106
+          },
+          "id": "B-05",
+          "group": "catalog",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "UC-05 実装手段 Primary Capability SoR候補",
+          "hits": 5,
+          "response_tokens": 1402,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 514.748,
+            "p50": 463.232,
+            "p95": 843.53
+          },
+          "id": "B-06",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "SVC-02",
+          "hits": 5,
+          "response_tokens": 1288,
+          "router_strategy": "heading",
+          "router_reason": "id_lookup",
+          "router_fallback_used": false,
+          "latency_ms": {
+            "mean": 479.372,
+            "p50": 486.555,
+            "p95": 607.859
+          },
+          "id": "B-07",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "SVC-12 監査 AIガバナンスサービス 利用APP",
+          "hits": 5,
+          "response_tokens": 1121,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 536.632,
+            "p50": 616.29,
+            "p95": 652.358
+          },
+          "id": "B-08",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "ConsentRecord 物理テーブル マッピング",
+          "hits": 5,
+          "response_tokens": 1284,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 524.893,
+            "p50": 497.945,
+            "p95": 750.697
+          },
+          "id": "B-09",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "PointTransaction 所有APP 所有サービス",
+          "hits": 5,
+          "response_tokens": 1403,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 709.134,
+            "p50": 694.404,
+            "p95": 1047.599
+          },
+          "id": "B-10",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "PointTransaction 台帳明細 データモデル定義",
+          "hits": 5,
+          "response_tokens": 1562,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 507.539,
+            "p50": 504.344,
+            "p95": 638.198
+          },
+          "id": "B-11",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "UC-18 不正なポイント・特典取引を検知して調査する",
+          "hits": 5,
+          "response_tokens": 1179,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 702.948,
+            "p50": 690.943,
+            "p95": 872.639
+          },
+          "id": "B-12",
+          "group": "catalog",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "UC-05 購買・行動に応じたポイントを正確に獲得する",
+          "hits": 5,
+          "response_tokens": 1204,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 398.836,
+            "p50": 427.251,
+            "p95": 449.813
+          },
+          "id": "B-13",
+          "group": "catalog",
+          "rank": 3,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "APP-002 推薦アーキテクチャ 実行分類",
+          "hits": 5,
+          "response_tokens": 949,
+          "router_strategy": "heading",
+          "router_reason": "concept_overview",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 317.732,
+            "p50": 313.12,
+            "p95": 351.409
+          },
+          "id": "B-14",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-009 アーキテクチャ詳細 セクション",
+          "hits": 5,
+          "response_tokens": 1164,
+          "router_strategy": "heading",
+          "router_reason": "concept_overview",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 513.946,
+            "p50": 552.551,
+            "p95": 581.704
+          },
+          "id": "B-15",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-009-S003 セルフサービス問い合わせ画面",
+          "hits": 5,
+          "response_tokens": 940,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 522.709,
+            "p50": 576.281,
+            "p95": 586.459
+          },
+          "id": "B-16",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "PRS-001 ペルソナ 顧客 参照UC",
+          "hits": 5,
+          "response_tokens": 1622,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 403.783,
+            "p50": 370.745,
+            "p95": 553.38
+          },
+          "id": "B-17",
+          "group": "catalog",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "SVC-02 連携方式 同期API 利用APP 一覧",
+          "hits": 5,
+          "response_tokens": 1801,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 385.166,
+            "p50": 379.237,
+            "p95": 468.233
+          },
+          "id": "B-18",
+          "group": "catalog",
+          "rank": 5,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "面横断の再利用確認 新規ロジック追加前",
+          "hits": 5,
+          "response_tokens": 1511,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 62.302,
+            "p50": 67.242,
+            "p95": 69.439
+          },
+          "id": "A-01",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "run 開始時 未コミット変更 一括報告 停止",
+          "hits": 5,
+          "response_tokens": 1481,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 55.714,
+            "p50": 56.407,
+            "p95": 60.857
+          },
+          "id": "A-02",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "repository-wide instructions 検索ルーター 3箇条",
+          "hits": 5,
+          "response_tokens": 1449,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 66.474,
+            "p50": 64.443,
+            "p95": 87.096
+          },
+          "id": "A-03",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "fanout_static_keys fanout_parser 子ステップ 動的展開",
+          "hits": 5,
+          "response_tokens": 1716,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 55.708,
+            "p50": 55.169,
+            "p95": 63.105
+          },
+          "id": "A-04",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "self-improve 有効化 no-self-improve 最優先",
+          "hits": 5,
+          "response_tokens": 1478,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 49.119,
+            "p50": 49.398,
+            "p95": 52.435
+          },
+          "id": "A-05",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "FR-MAINT-05 対応テスト 受入ケース",
+          "hits": 5,
+          "response_tokens": 1340,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 47.102,
+            "p50": 46.906,
+            "p95": 56.575
+          },
+          "id": "A-06",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "FR-CLI-74 対応テスト マッピング",
+          "hits": 5,
+          "response_tokens": 1192,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 41.834,
+            "p50": 41.744,
+            "p95": 44.636
+          },
+          "id": "A-07",
+          "group": "hve-requirement",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "classify_query 実装 ファイル 行",
+          "hits": 5,
+          "response_tokens": 1175,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 416.407,
+            "p50": 414.913,
+            "p95": 480.328
+          },
+          "id": "A-08",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "validate_asdw_data_verify_script 既存実装",
+          "hits": 5,
+          "response_tokens": 939,
+          "router_strategy": "heading",
+          "router_reason": "default",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 490.843,
+            "p50": 402.482,
+            "p95": 893.069
+          },
+          "id": "A-09",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "app-catalog.md から APP-NN 形式の ID を抽出する既存実装",
+          "hits": 5,
+          "response_tokens": 1325,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 643.626,
+            "p50": 603.105,
+            "p95": 961.254
+          },
+          "id": "A-10",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "work/run/<run-id> の run-id を解決する実装",
+          "hits": 5,
+          "response_tokens": 1048,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 560.411,
+            "p50": 512.405,
+            "p95": 865.613
+          },
+          "id": "A-11",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "test_id_lookup_single_token 既存テスト",
+          "hits": 5,
+          "response_tokens": 1334,
+          "router_strategy": "heading",
+          "router_reason": "default",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 365.472,
+            "p50": 365.61,
+            "p95": 384.986
+          },
+          "id": "A-12",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "test_concept_overview_route 既存テスト",
+          "hits": 5,
+          "response_tokens": 1334,
+          "router_strategy": "heading",
+          "router_reason": "concept_overview",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 407.928,
+            "p50": 436.991,
+            "p95": 442.03
+          },
+          "id": "A-13",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "FR-MAINT-07 active_status 機能索引",
+          "hits": 5,
+          "response_tokens": 1127,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 417.492,
+            "p50": 433.716,
+            "p95": 453.825
+          },
+          "id": "A-14",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "NFR-CTX-01 active_status 機能索引",
+          "hits": 5,
+          "response_tokens": 1217,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "latency_ms": {
+            "mean": 392.097,
+            "p50": 417.616,
+            "p95": 432.075
+          },
+          "id": "A-15",
+          "group": "hve-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        }
+      ],
+      "avg_response_tokens": 1339.39,
+      "avg_vs_baseline_savings_pct": null,
+      "latency_ms_all": {
+        "mean": 380.8,
+        "p50": 402.482,
+        "p95": 694.404
+      },
+      "total_hits": 165,
+      "scenarios_used": [
+        "heading"
+      ],
+      "golden": {
+        "overall": {
+          "queries": 33,
+          "k": 5,
+          "top1_accuracy": 0.1212,
+          "topk_accuracy": 0.1818
+        },
+        "per_group": {
+          "catalog": {
+            "queries": 18,
+            "k": 5,
+            "top1_accuracy": 0.2222,
+            "topk_accuracy": 0.3333
+          },
+          "hve-inventory": {
+            "queries": 8,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.0
+          },
+          "hve-requirement": {
+            "queries": 7,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.0
+          }
+        }
+      }
+    }
+  }
+}

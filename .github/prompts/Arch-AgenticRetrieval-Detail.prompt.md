@@ -33,7 +33,7 @@
 1. `docs/catalog/app-catalog.md` — アーキタイプ列・機能列（対象サービスの特定）
 2. `docs/catalog/service-catalog.md` — サービス一覧
 3. `docs/services/{serviceId}-*-description.md` — 既存サービス定義書（機能要件抽出）
-4. `knowledge/D05-ユースケース・シナリオカタログ.md` および `knowledge/` ディレクトリ配下の業務要件系ファイル
+4. `knowledge/D05-ユースケース-シナリオカタログ.md` および `knowledge/` ディレクトリ配下の業務要件系ファイル
 5. `docs/catalog/domain-analytics.md` — ドメイン分析（コンテキスト補強。存在しない場合はスキップ）
 
 # 2) 成果物（必ず作る/更新する）
@@ -200,7 +200,7 @@
 
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する:
 - `knowledge/D04-業務プロセス仕様書.md` — 業務プロセス
-- `knowledge/D05-ユースケース・シナリオカタログ.md` — ユースケース・シナリオ（Agentic Retrieval 判定の根拠として最優先）
+- `knowledge/D05-ユースケース-シナリオカタログ.md` — ユースケース・シナリオ（Agentic Retrieval 判定の根拠として最優先）
 - `knowledge/D06-業務ルール・判定表仕様書.md` — 業務ルール・判定表
 - `knowledge/D07-用語集・ドメインモデル定義書.md` — 用語・ドメインモデル
 - `knowledge/D08-データモデル・SoR-SoT・データ品質仕様書.md` — データモデル

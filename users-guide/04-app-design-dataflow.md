@@ -1,5 +1,7 @@
 # アプリケーション設計 - Dataflow Design（ADFD）
 
+← [README](../README.md)
+
 > **確認日: 2026-08-07**
 > 現行 ADFD の実行契約は
 > [`hve/workflow_registry.py`](../hve/workflow_registry.py) の `ADFD` 定義です。
@@ -47,7 +49,7 @@ Step ID が数値順でないのは、既存の Step 1 / 2 / 3 と下流契約�
 
 ### 必須成果物
 
-先に AAS を完了し、次の共通カタログを用意します。
+先に AAS（[02-app-architecture-design.md](./02-app-architecture-design.md)）を完了し、次の共通カタログを用意します。
 
 - `docs/catalog/app-arch-catalog.md`
   - 対象 APP-ID の自動選択とアーキテクチャ種別フィルタに使用します。

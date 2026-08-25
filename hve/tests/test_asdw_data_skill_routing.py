@@ -31,7 +31,11 @@ from hve.workflow_registry import (
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _MANIFEST = _REPO_ROOT / "hve" / "skill_manifest.json"
-_EXPECTED = ["microservice-design-guide", "azure-cli-deploy-scripts"]
+_EXPECTED = [
+    "microservice-design-guide",
+    "application-requirement-traceability",
+    "azure-cli-deploy-scripts",
+]
 _DATA_STEP_AGENTS = {
     "1.2": "Dev-Microservice-Azure-DataTestCoding",
     "1.3": "Dev-Microservice-Azure-DataDeploy",
@@ -88,7 +92,8 @@ def test_policy_private_skill_is_scoped_to_exact_manifest_coordinates() -> None:
         for skills in manifest["workflow_defaults"].values()
     )
     assert get_required_skills_for_step("asdw-web", "1.1", []) == [
-        "microservice-design-guide"
+        "microservice-design-guide",
+        "application-requirement-traceability",
     ]
     assert skill_name not in get_required_skills_for_step("aad-web", "1.2", [])
 

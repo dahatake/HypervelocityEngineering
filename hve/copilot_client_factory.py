@@ -43,6 +43,8 @@ def _require_pwsh7_on_windows() -> Optional[str]:
         ],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=10,
         check=False,
     )

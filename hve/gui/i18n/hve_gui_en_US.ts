@@ -990,19 +990,19 @@ Database: {db}</translation>
         <translation type="vanished">Step 3: Running</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1251"/>
-        <location filename="../main_window.py" line="1534"/>
-        <location filename="../main_window.py" line="1544"/>
+        <location filename="../main_window.py" line="1263"/>
+        <location filename="../main_window.py" line="1546"/>
+        <location filename="../main_window.py" line="1556"/>
         <source>入力エラー</source>
         <translation>Input error</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1544"/>
+        <location filename="../main_window.py" line="1556"/>
         <source>ワークフローが選択されていません。</source>
         <translation>No workflow selected.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1557"/>
+        <location filename="../main_window.py" line="1569"/>
         <source>依存関係エラー</source>
         <translation>Dependency error</translation>
     </message>
@@ -1045,7 +1045,7 @@ Missing files:
 {detail}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1604"/>
+        <location filename="../main_window.py" line="1616"/>
         <source>エラー</source>
         <translation>Error</translation>
     </message>
@@ -1054,19 +1054,19 @@ Missing files:
         <translation type="vanished">Step 3: Done (all workflows succeeded)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2992"/>
+        <location filename="../main_window.py" line="3004"/>
         <source>全てのタスクが終わりました</source>
         <translation>All tasks have finished</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2999"/>
+        <location filename="../main_window.py" line="3011"/>
         <source>全てのタスクが終わりました（一部失敗あり）
 returncode={rc}</source>
         <translation>All tasks have finished (some failed)
 returncode={rc}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="3014"/>
+        <location filename="../main_window.py" line="3026"/>
         <source>完了</source>
         <translation>Done</translation>
     </message>
@@ -1080,42 +1080,47 @@ returncode={rc}</translation>
         <translation>Working folder</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="908"/>
+        <location filename="../main_window.py" line="907"/>
         <source>使用するモデル</source>
         <translation>Model to use</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="909"/>
+        <location filename="../main_window.py" line="908"/>
         <source>Effort</source>
         <translation>Effort</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="919"/>
+        <location filename="../main_window.py" line="918"/>
         <source>「HVE 設定」の「基本設定」にある「使用するモデル」と同じ値です。ここで変更すると即座に反映されます。</source>
         <translation>Same value as &quot;Model to use&quot; under &quot;Basic settings&quot; in &quot;HVE Settings&quot;. Changes made here take effect immediately.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1114"/>
+        <location filename="../main_window.py" line="1117"/>
+        <source>索引 (markdown-query / code-query) の差分更新中です。完了後に実行を開始できます。</source>
+        <translation>Refreshing the markdown-query / code-query indexes. You can start a run once it finishes.</translation>
+    </message>
+    <message>
+        <location filename="../main_window.py" line="1126"/>
         <source>（未選択）</source>
         <translation>(Not selected)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1118"/>
+        <location filename="../main_window.py" line="1130"/>
         <source>ワークフローの選択: {wf}</source>
         <translation>Select workflow: {wf}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1132"/>
+        <location filename="../main_window.py" line="1144"/>
         <source>実行中</source>
         <translation>Running</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1297"/>
+        <location filename="../main_window.py" line="1309"/>
         <source>APP-ID 未選択</source>
         <translation>No APP-ID selected</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1299"/>
+        <location filename="../main_window.py" line="1311"/>
         <source>downstream workflow ({wf}) の実行には APP-ID を 1 件以上選択してください。
 
 Step 1 右側「対象アプリケーション (APP-ID)」のチェックリストから 対象を選択してから再度「次へ」を押してください。</source>
@@ -1124,37 +1129,37 @@ Step 1 右側「対象アプリケーション (APP-ID)」のチェックリス�
 Choose the targets from the &quot;Target applications (APP-ID)&quot; checklist on the right side of Step 1, then press &quot;Next&quot; again.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1335"/>
+        <location filename="../main_window.py" line="1347"/>
         <source>Cloud Session: Mission Control URL を取得しました</source>
         <translation>Cloud Session: retrieved the Mission Control URL</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1691"/>
+        <location filename="../main_window.py" line="1703"/>
         <source>Step 1: プランレビュー上限到達</source>
         <translation>Step 1: plan review limit reached</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1693"/>
+        <location filename="../main_window.py" line="1705"/>
         <source>ギャップ提案の適用ループが {n} 回を超えました。手動でワークフロー / ステップを調整してから再度お試しください。</source>
         <translation>The gap-suggestion loop ran more than {n} times. Adjust the workflow / steps manually and try again.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1765"/>
+        <location filename="../main_window.py" line="1777"/>
         <source>Step 1: 事前検証で {n} 件の不足を検出しました。解決後 [次へ] を押してください。</source>
         <translation>Step 1: the precheck found {n} missing items. Resolve them and press [Next].</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1833"/>
+        <location filename="../main_window.py" line="1845"/>
         <source>Step 1: {n} 件のギャップ提案を適用しました。再検証中...</source>
         <translation>Step 1: applied {n} gap suggestions. Re-validating...</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1914"/>
+        <location filename="../main_window.py" line="1926"/>
         <source>Autopilot 開始確認</source>
         <translation>Confirm Autopilot start</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1916"/>
+        <location filename="../main_window.py" line="1928"/>
         <source>以下の設定で Autopilot を開始します。
 
 Workflow: {wf}
@@ -1169,58 +1174,58 @@ Parallel limit: {mp}
 It does not stop during the run except on errors. Continue?</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2060"/>
+        <location filename="../main_window.py" line="2072"/>
         <source>Autopilot エラー</source>
         <translation>Autopilot error</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2061"/>
+        <location filename="../main_window.py" line="2073"/>
         <source>指定したカタログファイルが存在しません:
 {path}</source>
         <translation>The specified catalog file does not exist:
 {path}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2125"/>
+        <location filename="../main_window.py" line="2137"/>
         <source>実行対象 APP が 0 件です。
 Application Architecture Catalog ({catalog}) のアーキテクチャと、「ワークフローの選択」で有効化した workflow の組み合わせを確認してください。</source>
         <translation>There are 0 target APPs.
 Check the architectures in the Application Architecture Catalog ({catalog}) against the workflows enabled in &quot;Select workflow&quot;.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2130"/>
+        <location filename="../main_window.py" line="2142"/>
         <source>除外された APP:
 {detail}</source>
         <translation>Excluded APPs:
 {detail}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2131"/>
-        <location filename="../main_window.py" line="2595"/>
-        <location filename="../main_window.py" line="2637"/>
-        <location filename="../main_window.py" line="2719"/>
+        <location filename="../main_window.py" line="2143"/>
+        <location filename="../main_window.py" line="2607"/>
+        <location filename="../main_window.py" line="2649"/>
+        <location filename="../main_window.py" line="2731"/>
         <source>Autopilot 警告</source>
         <translation>Autopilot warning</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2176"/>
+        <location filename="../main_window.py" line="2188"/>
         <source>Autopilot 実行中: 0/{total} (並列上限 {mp})</source>
         <translation>Autopilot running: 0/{total} (parallel limit {mp})</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2549"/>
-        <location filename="../main_window.py" line="2565"/>
-        <location filename="../main_window.py" line="2628"/>
+        <location filename="../main_window.py" line="2561"/>
+        <location filename="../main_window.py" line="2577"/>
+        <location filename="../main_window.py" line="2640"/>
         <source>Autopilot: 完了</source>
         <translation>Autopilot: finished</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2570"/>
+        <location filename="../main_window.py" line="2582"/>
         <source>Autopilot: downstream 継続確認</source>
         <translation>Autopilot: confirm downstream continuation</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2572"/>
+        <location filename="../main_window.py" line="2584"/>
         <source>ARD/AAS の事前位相が完了しました。
 Application Architecture Catalog から downstream ワークフロー
 (Web/Dataflow Design/Deploy 等) を続けて実行しますか？</source>
@@ -1229,13 +1234,13 @@ Do you want to continue with the downstream workflows
 (Web / Dataflow Design / Deploy, etc.) from the Application Architecture Catalog?</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2582"/>
+        <location filename="../main_window.py" line="2594"/>
         <source>Autopilot: 事前位相完了（downstream スキップ）</source>
         <translation>Autopilot: preliminary phase finished (downstream skipped)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2597"/>
-        <location filename="../main_window.py" line="2639"/>
+        <location filename="../main_window.py" line="2609"/>
+        <location filename="../main_window.py" line="2651"/>
         <source>Application Architecture Catalog の生成が確認できませんでした。
 {path}
 ARD/AAS の出力ログを確認のうえ、手動で再実行してください。</source>
@@ -1244,102 +1249,102 @@ ARD/AAS の出力ログを確認のうえ、手動で再実行してください
 Check the ARD/AAS output log and re-run manually.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2610"/>
+        <location filename="../main_window.py" line="2622"/>
         <source>Autopilot 実行中 (downstream): {done}/{total} (並列上限 {mp})</source>
         <translation>Autopilot running (downstream): {done}/{total} (parallel limit {mp})</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2613"/>
+        <location filename="../main_window.py" line="2625"/>
         <source>downstream 実行対象 APP が 0 件です。
 Application Architecture Catalog ({path}) を確認してください。</source>
         <translation>There are 0 downstream target APPs.
 Check the Application Architecture Catalog ({path}).</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2651"/>
+        <location filename="../main_window.py" line="2663"/>
         <source>Autopilot 実行中 (app_chains): {done}/{total} (並列上限 {mp})</source>
         <translation>Autopilot running (app_chains): {done}/{total} (parallel limit {mp})</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2654"/>
+        <location filename="../main_window.py" line="2666"/>
         <source>app_chains 実行対象 APP が 0 件です。
 Application Architecture Catalog ({path}) を確認してください。</source>
         <translation>There are 0 app_chains target APPs.
 Check the Application Architecture Catalog ({path}).</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2696"/>
+        <location filename="../main_window.py" line="2708"/>
         <source>Autopilot: downstream スキップ</source>
         <translation>Autopilot: downstream skipped</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2704"/>
+        <location filename="../main_window.py" line="2716"/>
         <source>Autopilot: APP-ID 未選択のため downstream スキップ</source>
         <translation>Autopilot: downstream skipped because no APP-ID is selected</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2782"/>
+        <location filename="../main_window.py" line="2794"/>
         <source>Autopilot 実行: {wf} — Session #{idx}</source>
         <translation>Autopilot run: {wf} — Session #{idx}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2783"/>
+        <location filename="../main_window.py" line="2795"/>
         <source>Autopilot: 実行中 ({wf})</source>
         <translation>Autopilot: running ({wf})</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2809"/>
+        <location filename="../main_window.py" line="2821"/>
         <source>Autopilot: 失敗 ({wf}, exit code={code})</source>
         <translation>Autopilot: failed ({wf}, exit code={code})</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2811"/>
+        <location filename="../main_window.py" line="2823"/>
         <source>ワークフロー失敗</source>
         <translation>Workflow failed</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2813"/>
+        <location filename="../main_window.py" line="2825"/>
         <source>{wf} が exit code={code} で失敗しました。Autopilot を中止します。</source>
         <translation>{wf} failed with exit code={code}. Autopilot will be aborted.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2831"/>
+        <location filename="../main_window.py" line="2843"/>
         <source>Autopilot 実行中: {done}/{total} (並列上限 {mp})</source>
         <translation>Autopilot running: {done}/{total} (parallel limit {mp})</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2909"/>
+        <location filename="../main_window.py" line="2921"/>
         <source>Autopilot: 全 APP 完了</source>
         <translation>Autopilot: all APPs finished</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2956"/>
         <location filename="../main_window.py" line="2968"/>
+        <location filename="../main_window.py" line="2980"/>
         <source>停止されました（全タスク）</source>
         <translation>Stopped (all tasks)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2972"/>
+        <location filename="../main_window.py" line="2984"/>
         <source>停止されました</source>
         <translation>Stopped</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2980"/>
+        <location filename="../main_window.py" line="2992"/>
         <source>Step 2: 致命的エラーで停止しました</source>
         <translation>Step 2: stopped due to a fatal error</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2990"/>
+        <location filename="../main_window.py" line="3002"/>
         <source>Step 2: 完了 (all workflows succeeded)</source>
         <translation>Step 2: finished (all workflows succeeded)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="3033"/>
+        <location filename="../main_window.py" line="3045"/>
         <source>致命的エラー</source>
         <translation>Fatal Error</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="3036"/>
+        <location filename="../main_window.py" line="3048"/>
         <source>ワークフロー実行中に致命的エラーが発生しました。
 後続ワークフローの実行を停止しました。
 
@@ -1352,22 +1357,22 @@ Error type: {exc_type}
 Message: {msg}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="3086"/>
+        <location filename="../main_window.py" line="3098"/>
         <source>新規セッション</source>
         <translation>New Session</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="3087"/>
+        <location filename="../main_window.py" line="3099"/>
         <source>新規セッション起動コールバックが設定されていません。（プログラム的に起動する場合は MainWindow(on_new_session=...) を渡してください。）</source>
         <translation>No new-session callback is set. (When launching programmatically, pass MainWindow(on_new_session=...).)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="3130"/>
+        <location filename="../main_window.py" line="3142"/>
         <source>確認</source>
         <translation>Confirm</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="3131"/>
+        <location filename="../main_window.py" line="3143"/>
         <source>実行中のセッションがあります。終了しますか？</source>
         <translation>A session is running. Quit anyway?</translation>
     </message>
@@ -1384,7 +1389,7 @@ Message: {msg}</translation>
         <translation type="vanished">🔄 Checking authentication status...</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="882"/>
+        <location filename="../main_window.py" line="881"/>
         <source>利用できるモデルの取得</source>
         <translation>Fetch available models</translation>
     </message>
@@ -1395,7 +1400,7 @@ Message: {msg}</translation>
 Use [Authenticate Plugins / MCP Servers] first.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="886"/>
+        <location filename="../main_window.py" line="885"/>
         <source>利用できるモデル一覧を取得しキャッシュへ保存します。</source>
         <translation>Fetch the list of available models and cache it.</translation>
     </message>
@@ -1428,23 +1433,23 @@ Use [Authenticate Plugins / MCP Servers] first.</translation>
         <translation type="vanished">GitHub authentication is not complete. Use [Authenticate Plugins / MCP Servers].</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="988"/>
+        <location filename="../main_window.py" line="987"/>
         <source>モデル一覧を取得中...</source>
         <translation>Fetching model list...</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1023"/>
-        <location filename="../main_window.py" line="1026"/>
+        <location filename="../main_window.py" line="1022"/>
+        <location filename="../main_window.py" line="1025"/>
         <source>モデル取得失敗</source>
         <translation>Failed to fetch models</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1024"/>
+        <location filename="../main_window.py" line="1023"/>
         <source>モデル一覧の取得に失敗しました: {err}</source>
         <translation>Failed to fetch model list: {err}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1035"/>
+        <location filename="../main_window.py" line="1034"/>
         <source>モデル一覧を取得しました ({n} 件)</source>
         <translation>Fetched {n} model(s).</translation>
     </message>
@@ -2070,42 +2075,42 @@ Target: </translation>
         <translation type="vanished">Step 1: Select Workflow</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="411"/>
+        <location filename="../page_workflow_select.py" line="421"/>
         <source>実行するワークフローを 1 つ以上選択してください。選択後、実行するステップをチェックボックスで調整できます。</source>
         <translation>Select one or more workflows to run. After selection, you can fine-tune which steps to run via checkboxes.</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="442"/>
+        <location filename="../page_workflow_select.py" line="453"/>
         <source>その他</source>
         <translation>Other</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="479"/>
+        <location filename="../page_workflow_select.py" line="490"/>
         <source>（ワークフローを選択するとステップが表示されます）</source>
         <translation>(Steps will appear after a workflow is selected)</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="490"/>
+        <location filename="../page_workflow_select.py" line="501"/>
         <source>実行ステップ（チェック ON のみ実行対象）</source>
         <translation>Run steps (only checked steps are executed)</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="529"/>
+        <location filename="../page_workflow_select.py" line="540"/>
         <source>（オプションページ未指定）</source>
         <translation>(Options page not specified)</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="593"/>
+        <location filename="../page_workflow_select.py" line="604"/>
         <source>🤖 Autopilot — Application Architecture Catalog から実行ワークフローを自動判定する</source>
         <translation>🤖 Autopilot — determine the workflows to run automatically from the Application Architecture Catalog</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="600"/>
+        <location filename="../page_workflow_select.py" line="611"/>
         <source>ON にすると `推薦アーキテクチャ` に応じて `aad-web → asdw-web` または `adfd → adfdv` を APP ごとに自動実行します。下のワークフロー/ステップ選択は無効化されます。</source>
         <translation>When ON, `aad-web → asdw-web` or `adfd → adfdv` runs automatically per APP according to the `推薦アーキテクチャ` column. The workflow / step selection below is disabled.</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="611"/>
+        <location filename="../page_workflow_select.py" line="622"/>
         <source>カタログパス:</source>
         <translation>Catalog path:</translation>
     </message>
@@ -3084,8 +3089,8 @@ Ignored when &quot;QA auto-injection&quot; is disabled (default: Autopilot).</tr
     </message>
     <message>
         <location filename="../page_options.py" line="1661"/>
-        <source>Work IQ MCP サーバーへのツール呼び出し 1 回あたりのタイムアウト秒数（数値のみ）。Copilot SDK の MCP クライアントが発行する -32001 (Request timed out) を防ぐための設定。未入力または 0 のとき環境変数 WORKIQ_REQUEST_TIMEOUT / 設定（既定 300 秒 = 5 分）を使用。</source>
-        <translation>Timeout in seconds for a single tool call to the Work IQ MCP server (numbers only). It prevents -32001 (Request timed out) raised by the MCP client of the Copilot SDK. When empty or 0, the WORKIQ_REQUEST_TIMEOUT environment variable / setting is used (default 300 seconds = 5 minutes).</translation>
+        <source>Work IQ MCP サーバーへのツール呼び出し 1 回あたりのタイムアウト秒数（数値のみ）。Copilot SDK の MCPServerConfigLocal.timeout へミリ秒として渡り、ツール呼び出しにのみ作用する（接続時のツール一覧取得には適用されない）。未入力または 0 のとき環境変数 WORKIQ_REQUEST_TIMEOUT / 設定（既定 300 秒 = 5 分）を使用。</source>
+        <translation>Timeout in seconds for a single tool call to the Work IQ MCP server (numbers only). It is passed to MCPServerConfigLocal.timeout of the Copilot SDK in milliseconds and applies only to tool calls, not to the tool listing performed when connecting. When empty or 0, the WORKIQ_REQUEST_TIMEOUT environment variable / setting is used (default 300 seconds = 5 minutes).</translation>
     </message>
     <message>
         <location filename="../page_options.py" line="1695"/>
@@ -4506,34 +4511,34 @@ Select the files to import as attachments.
 <context>
     <name>_WorkflowStepsGroup</name>
     <message>
-        <location filename="../page_workflow_select.py" line="179"/>
+        <location filename="../page_workflow_select.py" line="189"/>
         <source>ℹ️ ARD は 4 グループ構成です。各グループは内部で複数の実 Step を順次実行します。
 Step 2（要求定義書作成）は Step 1 の出力があれば参考にしますが、無くても実行できます。</source>
         <translation>ℹ️ ARD consists of 4 groups. Each group runs several actual Steps in sequence internally.
 Step 2 (requirements document) refers to the output of Step 1 when it exists, but it can run without it.</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="188"/>
+        <location filename="../page_workflow_select.py" line="198"/>
         <source>（ステップ情報が取得できませんでした）</source>
         <translation>(Step information could not be retrieved)</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="209"/>
+        <location filename="../page_workflow_select.py" line="219"/>
         <source>☁ 継承</source>
         <translation>☁ Inherit</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="210"/>
+        <location filename="../page_workflow_select.py" line="220"/>
         <source>☁ ON</source>
         <translation>☁ ON</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="211"/>
+        <location filename="../page_workflow_select.py" line="221"/>
         <source>☁ OFF</source>
         <translation>☁ OFF</translation>
     </message>
     <message>
-        <location filename="../page_workflow_select.py" line="212"/>
+        <location filename="../page_workflow_select.py" line="222"/>
         <source>この Step の Cloud Session 使用を上書きします。未指定時は基本設定を継承します。</source>
         <translation>Overrides Cloud Session usage for this Step. When unspecified, the basic settings are inherited.</translation>
     </message>
@@ -4568,27 +4573,27 @@ Displays step status (⚪🔄✅❌⏭️), logs, and the activity status tree.
 Use the [Stop] button to interrupt execution.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="109"/>
+        <location filename="../help_content.py" line="113"/>
         <source>事業分析〜要件定義（4 グループ）。Step 1: 企業の事業分析 / Step 2: 要求定義書作成 / Step 3: KPI/OKR 定義 / Step 4: ユースケース作成。既定で Step 2/3/4 が ON（Step 1 は明示的に有効化）。</source>
         <translation>Business analysis through requirements definition (4 groups). Step 1: corporate business analysis / Step 2: requirements document / Step 3: KPI/OKR definition / Step 4: use case creation. Steps 2/3/4 are ON by default (Step 1 must be enabled explicitly).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="110"/>
+        <location filename="../help_content.py" line="114"/>
         <source>アプリケーション設計（Step.1〜Step.7）。アーキテクチャ候補を分析し最適構成を選定します。</source>
         <translation>Application design (Steps 1–7). Analyzes architecture candidates and selects the optimal configuration.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="111"/>
+        <location filename="../help_content.py" line="116"/>
         <source>Web 画面定義書・サービス定義書・TDD テスト仕様書を生成します。</source>
         <translation>Generates Web screen definitions, service definitions, and TDD test specifications.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="112"/>
+        <location filename="../help_content.py" line="117"/>
         <source>Web アプリケーションの開発とデプロイ（TDD RED/GREEN）を実施します。</source>
         <translation>Develops and deploys Web applications (TDD RED/GREEN).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="113"/>
+        <location filename="../help_content.py" line="118"/>
         <source>バッチドメイン分析・ジョブ設計を実施します。</source>
         <translation>Performs batch domain analysis and job design.</translation>
     </message>
@@ -4597,35 +4602,42 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation type="vanished">Implements batch jobs and deploys to Azure.</translation>
     </message>
     <message>
+        <location filename="../help_content.py" line="120"/>
         <source>AI Agent 構成設計（粒度・詳細）を実施します。</source>
-        <translation type="vanished">Performs AI Agent composition design (granularity and details).</translation>
+        <translation>Performs AI Agent composition design (granularity and details).</translation>
     </message>
     <message>
+        <location filename="../help_content.py" line="121"/>
         <source>AI Agent の実装とデプロイを実施します。</source>
-        <translation type="vanished">Implements and deploys the AI Agent.</translation>
+        <translation>Implements and deploys the AI Agent.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="115"/>
+        <location filename="../help_content.py" line="122"/>
+        <source>Agentic Retrieval の実装設計・テスト・デプロイ・実測評価を実施します。</source>
+        <translation>Designs, tests, deploys, and measures Agentic Retrieval.</translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="123"/>
         <source>knowledge/ D01〜D21 を 21 並列で生成・更新します。</source>
         <translation>Generates and updates knowledge/ D01–D21 with 21-way parallelism.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="117"/>
+        <location filename="../help_content.py" line="125"/>
         <source>ソースコードからレイヤー別ドキュメントを自動生成します。</source>
         <translation>Auto-generates layered documentation from source code.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="158"/>
+        <location filename="../help_content.py" line="166"/>
         <source>使用するモデル名 (デフォルト: Auto)。Auto を指定すると GitHub が最適モデルを自動選択します。</source>
         <translation>Model name to use (default: Auto). When &quot;Auto&quot; is specified, GitHub picks the optimal model automatically.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="159"/>
+        <location filename="../help_content.py" line="167"/>
         <source>敵対的レビューおよび Code Review Agent で使用するモデル（省略時は --model と同じ）。</source>
         <translation>Model used for adversarial review and the Code Review Agent (defaults to --model if omitted).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="160"/>
+        <location filename="../help_content.py" line="168"/>
         <source>QA 質問票生成（--auto-qa）で使用するモデル（省略時は --model と同じ）。</source>
         <translation>Model used for QA questionnaire generation (--auto-qa) (defaults to --model if omitted).</translation>
     </message>
@@ -4642,7 +4654,7 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation type="vanished">Context tier for the QA-triggered AKM run (inherits --context-tier if omitted).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="165"/>
+        <location filename="../help_content.py" line="173"/>
         <source>並列実行上限 (デフォルト: 15)。</source>
         <translation>Max parallelism (default: 15).</translation>
     </message>
@@ -4659,32 +4671,32 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation type="vanished">Bypass the TTY check for QA answer input and force interactive mode.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="168"/>
+        <location filename="../help_content.py" line="176"/>
         <source>Review 自動投入を有効化 (デフォルト: 無効)。</source>
         <translation>Enable Review auto-injection (default: disabled).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="169"/>
+        <location filename="../help_content.py" line="177"/>
         <source>Copilot CLI SDK でローカルにコードレビューを実行する (デフォルト: 無効)。</source>
         <translation>Run code review locally via the Copilot CLI SDK (default: disabled).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="170"/>
+        <location filename="../help_content.py" line="178"/>
         <source>Code Review Agent の修正プランを全て自動承認 (デフォルト: 無効)。</source>
         <translation>Auto-approve all fix plans from the Code Review Agent (default: disabled).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="171"/>
+        <location filename="../help_content.py" line="179"/>
         <source>Work IQ 経由の M365 データ参照を有効化する (@microsoft/workiq のインストールが必要)。</source>
         <translation>Enable references to M365 data via Work IQ (requires @microsoft/workiq).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="172"/>
+        <location filename="../help_content.py" line="180"/>
         <source>AKM Work IQ 取り込み対象 Dxx をカンマ区切りで指定（例: D01,D04）。</source>
         <translation>Specify AKM Work IQ ingest targets (Dxx) as a comma-separated list (e.g. D01,D04).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="173"/>
+        <location filename="../help_content.py" line="181"/>
         <source>QA フェーズで質問ごとに Work IQ 回答ドラフトを生成する。</source>
         <translation>Generate a Work IQ answer draft per question during the QA phase.</translation>
     </message>
@@ -4693,12 +4705,12 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation type="vanished">Entra tenant ID for Work IQ (if omitted: common).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="174"/>
+        <location filename="../help_content.py" line="182"/>
         <source>Work IQ の QA 用プロンプトを上書きする。</source>
         <translation>Override the Work IQ QA prompt.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="175"/>
+        <location filename="../help_content.py" line="183"/>
         <source>Work IQ の KM 用プロンプトを上書きする。</source>
         <translation>Override the Work IQ KM prompt.</translation>
     </message>
@@ -4707,82 +4719,82 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation type="vanished">Override the Work IQ Original Docs review prompt.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="177"/>
+        <location filename="../help_content.py" line="185"/>
         <source>Work IQ: QA 質問ごとのクエリタイムアウト秒数。</source>
         <translation>Work IQ: per-question query timeout in seconds.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="179"/>
+        <location filename="../help_content.py" line="187"/>
         <source>GitHub Issue を作成する。新規ブランチと PR が自動的に作成されます（--repo と GH_TOKEN が必要）。</source>
         <translation>Create a GitHub Issue. A new branch and PR are created automatically (requires --repo and GH_TOKEN).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="180"/>
+        <location filename="../help_content.py" line="188"/>
         <source>ローカル実行後に GitHub PR を作成する（--repo と GH_TOKEN が必要）。</source>
         <translation>Create a GitHub PR after the local run (requires --repo and GH_TOKEN).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="181"/>
+        <location filename="../help_content.py" line="189"/>
         <source>git add 時に除外するパス (スペース区切りで複数指定可)。</source>
         <translation>Paths to exclude during git add (space-separated for multiple values).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="182"/>
+        <location filename="../help_content.py" line="190"/>
         <source>リポジトリ (owner/repo 形式)。REPO 環境変数からも取得可能。</source>
         <translation>Repository (owner/repo format). Can also be supplied via the REPO environment variable.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="183"/>
+        <location filename="../help_content.py" line="191"/>
         <source>Issue 作成時の Root Issue タイトルを上書きする。</source>
         <translation>Override the Root Issue title at creation.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="184"/>
+        <location filename="../help_content.py" line="192"/>
         <source>詳細出力 (--verbosity verbose と同等)。</source>
         <translation>Verbose output (equivalent to --verbosity verbose).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="185"/>
+        <location filename="../help_content.py" line="193"/>
         <source>出力抑制 (--verbosity quiet と同等)。</source>
         <translation>Quiet output (equivalent to --verbosity quiet).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="186"/>
+        <location filename="../help_content.py" line="194"/>
         <source>コンソール出力レベル: quiet / compact / normal / verbose。</source>
         <translation>Console output level: quiet / compact / normal / verbose.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="187"/>
+        <location filename="../help_content.py" line="195"/>
         <source>モデル応答のトークンストリーム表示を有効化。</source>
         <translation>Enable token-stream display for model responses.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="188"/>
+        <location filename="../help_content.py" line="196"/>
         <source>Copilot CLI のログレベル: none/error/warning/info/debug/all。</source>
         <translation>Copilot CLI log level: none/error/warning/info/debug/all.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="189"/>
+        <location filename="../help_content.py" line="197"/>
         <source>ANSI カラー出力を無効化する。</source>
         <translation>Disable ANSI color output.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="190"/>
+        <location filename="../help_content.py" line="198"/>
         <source>起動時バナー表示を制御する。</source>
         <translation>Control the startup banner display.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="191"/>
+        <location filename="../help_content.py" line="199"/>
         <source>スクリーンリーダー対応モード: 絵文字を日本語ラベルに置換し、スピナーを無効化。</source>
         <translation>Screen reader mode: replace emoji with Japanese labels and disable spinners.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="192"/>
+        <location filename="../help_content.py" line="200"/>
         <source>タイムスタンプ表示位置: prefix / suffix / off。</source>
         <translation>Timestamp position: prefix / suffix / off.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="193"/>
+        <location filename="../help_content.py" line="201"/>
         <source>DAG 完了時のサマリと各ステップの最終応答のみを出力する。</source>
         <translation>Output only the DAG completion summary and each step&apos;s final response.</translation>
     </message>
@@ -4791,37 +4803,37 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation type="vanished">MCP Server config JSON file path.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="194"/>
+        <location filename="../help_content.py" line="202"/>
         <source>Copilot CLI 実行ファイルパス (省略時: PATH から自動検出)。</source>
         <translation>Copilot CLI executable path (if omitted: auto-detected from PATH).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="195"/>
+        <location filename="../help_content.py" line="203"/>
         <source>外部 CLI サーバー URL (例: localhost:4321)。</source>
         <translation>External CLI server URL (e.g. localhost:4321).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="196"/>
+        <location filename="../help_content.py" line="204"/>
         <source>idle タイムアウト秒数 (デフォルト: 21600 = 6時間)。</source>
         <translation>Idle timeout in seconds (default: 21600 = 6 hours).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="197"/>
+        <location filename="../help_content.py" line="205"/>
         <source>Code Review Agent レビュー完了待ちタイムアウト秒数 (デフォルト: 7200 = 2時間)。</source>
         <translation>Timeout in seconds waiting for the Code Review Agent (default: 7200 = 2 hours).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="198"/>
+        <location filename="../help_content.py" line="206"/>
         <source>ベースブランチ (デフォルト: main)。</source>
         <translation>Base branch (default: main).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="199"/>
+        <location filename="../help_content.py" line="207"/>
         <source>実行ステップをカンマ区切りで指定 (省略時: 全ステップ)。</source>
         <translation>Specify steps to run as a comma-separated list (if omitted: all steps).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="200"/>
+        <location filename="../help_content.py" line="208"/>
         <source>アプリ ID (ASDW/ADFDV 等で使用)。後方互換のため残されています。</source>
         <translation>App ID (used by ASDW/ADFDV, etc.). Kept for backward compatibility.</translation>
     </message>
@@ -4830,7 +4842,7 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation type="vanished">Target Applications (APP-ID) — comma-separated for multiple values.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="202"/>
+        <location filename="../help_content.py" line="210"/>
         <source>Azure リソースグループ名。</source>
         <translation>Azure resource group name.</translation>
     </message>
@@ -4839,307 +4851,312 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation type="vanished">Batch Job ID (used by ADFDV, etc.; comma-separated supported).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="114"/>
+        <location filename="../help_content.py" line="119"/>
         <source>データフローアプリの実装と Azure デプロイを実施します。</source>
         <translation>Implements the dataflow application and deploys it to Azure.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="116"/>
+        <location filename="../help_content.py" line="124"/>
         <source>docs-original/ の設計書を目録化し、質問票生成・横断整理・目的に応じた選別をまとめて実施します。</source>
         <translation>Inventories design documents under docs-original/, generates questionnaires, consolidates cross-document findings, and triages documents by purpose.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="126"/>
+        <location filename="../help_content.py" line="134"/>
         <source>Application Architecture Catalog の `推薦アーキテクチャ` 列から、APP ごとに `aad-web → asdw-web` または `adfd → adfdv` を自動判定して実行します。 ON にすると Step 1 の下部に Workflow ごとの入力統合パネルが表示され、 [次へ] 押下時に必須ファイル/設定/認証の事前検証 (precheck) を実行し、 不足があれば Step 1 に留まります。不足なしで確認 OK すると「Step 2: 実行中」で 並列実行を開始します（無人実行）。 実行中はエラー発生 lane のみ停止し、他 lane は継続します。</source>
         <translation>Determines and runs `aad-web → asdw-web` or `adfd → adfdv` per APP from the `推薦アーキテクチャ` column of the Application Architecture Catalog. When ON, an integrated input panel per Workflow appears at the bottom of Step 1, a precheck of the required files / settings / authentication runs when [Next] is pressed, and you stay on Step 1 if anything is missing. Once nothing is missing and you confirm, parallel execution starts under &quot;Step 2: running&quot; (unattended). During the run only the lane that hit an error stops, and the other lanes continue.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="136"/>
+        <location filename="../help_content.py" line="144"/>
         <source>Application Architecture Catalog のパス。空欄のとき `docs/catalog/app-arch-catalog.md` を使用します。 カスタムパスを指定した場合、そのファイルが存在しないときはエラーになります。</source>
         <translation>Path to the Application Architecture Catalog. When empty, `docs/catalog/app-arch-catalog.md` is used. When a custom path is specified and that file does not exist, it is an error.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="142"/>
+        <location filename="../help_content.py" line="150"/>
         <source>Autopilot モードで同時に起動する子 GUI プロセスの最大数。 範囲 1〜16、既定 4。設定ウィンドウの「Autopilot」セクションで変更できます。</source>
         <translation>Maximum number of child GUI processes started concurrently in Autopilot mode. Range 1–16, default 4. It can be changed in the &quot;Autopilot&quot; section of the settings window.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="161"/>
+        <location filename="../help_content.py" line="169"/>
         <source>QA 回答から起動する Knowledge Management 差分同期で使用するモデル（省略時は --model と同じ）。</source>
         <translation>Model used by the Knowledge Management incremental sync started from QA answers (same as --model when omitted).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="162"/>
+        <location filename="../help_content.py" line="170"/>
         <source>QA 起点 Knowledge Management 用モデルの reasoning effort（省略時は --reasoning-effort を継承）。</source>
         <translation>Reasoning effort of the QA-triggered Knowledge Management model (inherits --reasoning-effort when omitted).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="163"/>
+        <location filename="../help_content.py" line="171"/>
         <source>QA 起点 Knowledge Management のコンテキスト階層（省略時は --context-tier を継承）。</source>
         <translation>Context tier of the QA-triggered Knowledge Management run (inherits --context-tier when omitted).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="164"/>
+        <location filename="../help_content.py" line="172"/>
         <source>QA (質問票) の回答を knowledge/ へ取り込む Knowledge Management をバックグラウンドで起動する (デフォルト: 無効)。</source>
         <translation>Start Knowledge Management in the background to ingest QA (questionnaire) answers into knowledge/ (default: disabled).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="166"/>
+        <location filename="../help_content.py" line="174"/>
         <source>QA (質問票) 自動投入を有効化 (デフォルト: 無効)。</source>
         <translation>Enable QA (questionnaire) auto-injection (default: disabled).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="167"/>
+        <location filename="../help_content.py" line="175"/>
         <source>QA (質問票) 回答モード。Autopilot=AI が作成した既定回答を全て自動採用 / ユーザー回答=GUIダイアログで回答入力。QA (質問票) 自動投入が無効のときは無視されます。</source>
         <translation>QA (questionnaire) answer mode. Autopilot = automatically adopt all AI-generated default answers / User answers = enter answers in a GUI dialog. Ignored while QA (questionnaire) auto-injection is disabled.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="176"/>
+        <location filename="../help_content.py" line="184"/>
         <source>Work IQ の文書レビュー用プロンプトを上書きする。</source>
         <translation>Override the Work IQ document review prompt.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="178"/>
-        <source>Work IQ MCP サーバーへのツール呼び出し 1 回あたりのタイムアウト秒数（既定 5 分）。Copilot SDK の MCP クライアントが発行する -32001 (Request timed out) を防ぐための設定。</source>
-        <translation>Timeout in seconds for a single tool call to the Work IQ MCP server (default 5 minutes). It prevents -32001 (Request timed out) raised by the MCP client of the Copilot SDK.</translation>
+        <location filename="../help_content.py" line="186"/>
+        <source>Work IQ MCP サーバーへのツール呼び出し 1 回あたりのタイムアウト秒数（既定 5 分）。Copilot SDK の MCPServerConfigLocal.timeout へミリ秒として渡り、ツール呼び出しにのみ作用する（接続時のツール一覧取得には適用されない）。</source>
+        <translation>Timeout in seconds for a single tool call to the Work IQ MCP server (default 5 minutes). It is passed to MCPServerConfigLocal.timeout of the Copilot SDK in milliseconds and applies only to tool calls, not to the tool listing performed when connecting.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="201"/>
+        <location filename="../help_content.py" line="209"/>
         <source>対象アプリケーション (APP-ID) — カンマ区切りで複数指定可。AAD-WEB/ASDW-WEB/ADFD/ADFDV で共通使用。</source>
         <translation>Target applications (APP-ID) — comma-separated, multiple allowed. Shared by AAD-WEB/ASDW-WEB/ADFD/ADFDV.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="203"/>
+        <location filename="../help_content.py" line="211"/>
         <source>ユースケース ID (ASDW 等で使用)。</source>
         <translation>Use Case ID (used by ASDW, etc.).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="204"/>
+        <location filename="../help_content.py" line="212"/>
         <source>AKM: 取り込みソース。qa / original-docs / workiq / both のカンマ区切り組合せ。</source>
         <translation>AKM: ingest source. Comma-separated combination of qa / original-docs / workiq / both.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="205"/>
+        <location filename="../help_content.py" line="213"/>
         <source>AKM: 対象ファイルパス (省略時: --sources で選択したソース配下の全件)。</source>
         <translation>AKM: target file paths (if omitted: all files under the source selected via --sources).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="206"/>
+        <location filename="../help_content.py" line="214"/>
         <source>AKM: 既存 knowledge/ 出力を完全に再生成する。</source>
         <translation>AKM: fully regenerate existing knowledge/ output.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="207"/>
+        <location filename="../help_content.py" line="215"/>
         <source>AKM: custom_source_dir 追加入力（複数指定可）。</source>
         <translation>AKM: custom_source_dir additional inputs (multiple supported).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="208"/>
+        <location filename="../help_content.py" line="216"/>
         <source>ASDW-WEB の remote CI/CD 対象 Step では Step 専用ブランチを作成し、push / PR 作成 / 自動 Approve &amp; Auto-merge / base branch 復帰を Step 単位で行う。その他の PR 作成経路では従来どおり PR の自動 Approve &amp; Auto-merge を有効にする。</source>
         <translation>For ASDW-WEB remote CI/CD target Steps, create a Step-specific branch and perform push / PR creation / auto Approve &amp; Auto-merge / base branch return per Step. For other PR creation paths, enable the existing PR auto Approve &amp; Auto-merge behavior.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="209"/>
+        <location filename="../help_content.py" line="217"/>
         <source>FR-CLI-34: PR マージ完了（auto-approve-and-merge）を検知後、今回作成したローカル作業ブランチを削除する（既定: 有効）。PR 自動 Approve &amp; Auto-merge が有効な場合のみ動作する。</source>
         <translation>FR-CLI-34: after detecting that the PR merge (auto-approve-and-merge) has finished, delete the local working branch created this time (default: enabled). It works only when PR auto Approve &amp; Auto-merge is enabled.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="213"/>
+        <location filename="../help_content.py" line="221"/>
         <source>ADI: 設計書選別の目的（任意）。空のときは must を付与しません。</source>
         <translation>ADI: purpose for design-document triage (optional). When empty, no document is marked as must.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="210"/>
+        <location filename="../help_content.py" line="218"/>
         <source>ADI: 対象設計書フォルダ（省略時: docs-original/）。</source>
         <translation>ADI: target design document folder (if omitted: docs-original/).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="211"/>
+        <location filename="../help_content.py" line="115"/>
+        <source>画面を持たないデータ中心の AI Agent 向けに、データカタログ・API 詳細・非構造化データ資産を設計します。AAG の前段に実行します。</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../help_content.py" line="219"/>
         <source>ADI: 分析の深さ（standard / lightweight）。</source>
         <translation>ADI: analysis depth (standard / lightweight).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="212"/>
+        <location filename="../help_content.py" line="220"/>
         <source>ADI: 重点観点（任意）。</source>
         <translation>ADI: focus areas (optional).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="214"/>
+        <location filename="../help_content.py" line="222"/>
         <source>ADOC: ドキュメント生成対象ディレクトリ（カンマ区切り。省略 = 全体）。</source>
         <translation>ADOC: documentation target directories (comma-separated; if omitted: entire workspace).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="215"/>
+        <location filename="../help_content.py" line="223"/>
         <source>ADOC: 除外パターン（カンマ区切り）。</source>
         <translation>ADOC: exclude patterns (comma-separated).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="216"/>
+        <location filename="../help_content.py" line="224"/>
         <source>ADOC: ドキュメントの主目的（all / onboarding / refactoring / migration）。</source>
         <translation>ADOC: documentation primary purpose (all / onboarding / refactoring / migration).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="217"/>
+        <location filename="../help_content.py" line="225"/>
         <source>ADOC: 大規模ファイル分割閾値（行数。デフォルト: 500）。</source>
         <translation>ADOC: large file split threshold (lines; default: 500).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="218"/>
+        <location filename="../help_content.py" line="226"/>
         <source>ARD: 対象企業名（Step 1『企業の事業分析』を実行する場合は必須）。</source>
         <translation>ARD: target company name (required when running Step 1 &apos;Corporate business analysis&apos;).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="219"/>
+        <location filename="../help_content.py" line="227"/>
         <source>ARD: 対象業務名（Step 2 で利用。Step 1 を実行する場合は省略可で、Step 1 の出力から自動生成）。</source>
         <translation>ARD: target business name (used by Step 2. May be omitted when Step 1 is run; auto-generated from Step 1 output in that case).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="220"/>
+        <location filename="../help_content.py" line="228"/>
         <source>ARD: 調査基準日（省略時は実行日）。</source>
         <translation>ARD: survey base date (if omitted: the run date).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="221"/>
+        <location filename="../help_content.py" line="229"/>
         <source>ARD: 調査期間年数（省略時は 30）。</source>
         <translation>ARD: survey period in years (if omitted: 30).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="222"/>
+        <location filename="../help_content.py" line="230"/>
         <source>ARD: 対象地域（省略時は『グローバル全体』）。</source>
         <translation>ARD: target region (if omitted: &apos;Global&apos;).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="223"/>
+        <location filename="../help_content.py" line="231"/>
         <source>ARD: 分析目的（省略時は『中長期成長戦略の立案』）。</source>
         <translation>ARD: analysis purpose (if omitted: &apos;Long-term growth strategy planning&apos;).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="224"/>
+        <location filename="../help_content.py" line="232"/>
         <source>ARD: Step 1（企業の事業分析）完了後に採用する Strategic Recommendation の ID（例: SR-1）。</source>
         <translation>ARD: ID of the Strategic Recommendation to adopt after Step 1 &apos;Corporate business analysis&apos; (e.g. SR-1).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="225"/>
+        <location filename="../help_content.py" line="233"/>
         <source>ARD: 添付資料パス（カンマ区切り・省略可）。</source>
         <translation>ARD: attachment paths (comma-separated, optional).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="226"/>
+        <location filename="../help_content.py" line="234"/>
         <source>全 Custom Agent の prompt 末尾に追記する文字列 (省略可)。</source>
         <translation>String appended to the end of every Custom Agent prompt (optional).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="227"/>
+        <location filename="../help_content.py" line="235"/>
         <source>各フェーズで注入するコンテキストの最大文字数（既定 20,000）。</source>
         <translation>Maximum number of characters injected as context per phase (default 20,000).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="228"/>
+        <location filename="../help_content.py" line="236"/>
         <source>ドライラン（実際の SDK 呼び出しをしない）。</source>
         <translation>Dry run (does not perform actual SDK calls).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="229"/>
+        <location filename="../help_content.py" line="237"/>
         <source>自己改善ループ（Phase 4）を有効化する。</source>
         <translation>Enable the self-improvement loop (Phase 4).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="230"/>
+        <location filename="../help_content.py" line="238"/>
         <source>自己改善ループ（Phase 4）を無効化する。</source>
         <translation>Disable the self-improvement loop (Phase 4).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="231"/>
+        <location filename="../help_content.py" line="239"/>
         <source>Markdown ファイルの追加/更新/削除を OS イベントで検知し索引を逐次更新する（既定 ON）。</source>
         <translation>Detect Markdown file add/update/delete events from the OS and incrementally update the index (default: ON).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="232"/>
+        <location filename="../help_content.py" line="240"/>
         <source>mdq watcher のデバウンス間隔（ms、既定 500）。</source>
         <translation>mdq watcher debounce interval (ms; default 500).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="233"/>
+        <location filename="../help_content.py" line="241"/>
         <source>ソースファイルの追加/更新/削除を OS イベントで検知し cq 索引を逐次更新する（既定 ON）。cq 設定不在時は自動で無効化される。</source>
         <translation>Detects added, changed and removed source files through OS events and updates the cq index incrementally (on by default). Disabled automatically when the cq configuration is missing.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="234"/>
+        <location filename="../help_content.py" line="242"/>
         <source>cq watcher のデバウンス間隔（ms）。0 のとき cq の既定値を使う。</source>
         <translation>Debounce interval of the cq watcher in milliseconds. 0 uses the cq default.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="285"/>
+        <location filename="../help_content.py" line="293"/>
         <source>使用するモデル名を選択します。Auto を選ぶと GitHub が最適モデルを自動選択します。レビュー用 / QA (質問票) 用は省略時メインモデルを継承します。コンソール出力レベル、追加プロンプト、コンテキスト最大文字数もここで設定します。</source>
         <translation>Selects the model name to use. Choosing Auto lets GitHub pick the best model automatically. The review and QA (questionnaire) models inherit the main model when omitted. The console output level, additional prompt, and max context characters are also set here.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="289"/>
+        <location filename="../help_content.py" line="297"/>
         <source>QA (質問票) の自動投入と回答モード、回答を Knowledge Management へバックグラウンドでマージするかどうか、その実行品質、および全 Custom Agent への追加プロンプトを設定します。レビューと自己改善は設定画面で編集します。</source>
         <translation>Configures QA (questionnaire) auto-injection and answer mode, whether the answers are merged into Knowledge Management in the background, the execution quality of that run, and the additional prompt for every Custom Agent. Review and self-improvement are edited in the settings window.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="297"/>
+        <location filename="../help_content.py" line="305"/>
         <source>GitHub Issue / PR の自動作成・ベースブランチ・PR 自動 Approve &amp; Auto-merge に加え、Fleet mode / Cloud Session（GitHub Copilot SDK）を設定します。Issue / PR 作成には --repo と GH_TOKEN が必要です。「ブランチ取得」でリポジトリのブランチ一覧を取得し、ベースブランチ欄に候補表示できます。</source>
         <translation>Configures automatic GitHub Issue / PR creation, the base branch, and PR auto Approve &amp; Auto-merge, plus Fleet mode / Cloud Session (GitHub Copilot SDK). Issue / PR creation requires --repo and GH_TOKEN. &quot;Fetch branches&quot; retrieves the repository branch list and shows the candidates in the base branch field.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="301"/>
+        <location filename="../help_content.py" line="309"/>
         <source>詳細出力 / 出力抑制 / モデル応答ストリーム表示 / Copilot CLI ログレベル / ANSI カラー無効化 / 起動時バナー表示等の出力制御を設定します。</source>
         <translation>Configures output control such as verbose output, output suppression, model response streaming, the Copilot CLI log level, disabling ANSI colors, and the startup banner.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="309"/>
+        <location filename="../help_content.py" line="317"/>
         <source>APP-ID / リソースグループ / データフローアプリ ID / ユースケース ID 等、ワークフロー固有の対象を指定します。</source>
         <translation>Specifies workflow-specific targets such as APP-ID, resource group, dataflow application ID, and use case ID.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="313"/>
+        <location filename="../help_content.py" line="321"/>
         <source>Knowledge Management ワークフロー固有: 取り込みソース・対象ファイル・強制再生成・追加入力ディレクトリ等を設定します。</source>
         <translation>Knowledge Management workflow specific: configures the ingest sources, target files, forced regeneration, additional input directories, and so on.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="325"/>
+        <location filename="../help_content.py" line="333"/>
         <source>ADI ワークフロー固有: 選別の目的・対象設計書フォルダ・分析の深さ・重点観点を設定します。</source>
         <translation>ADI-specific: configure the triage purpose, target design document folder, analysis depth, and focus areas.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="384"/>
+        <location filename="../help_content.py" line="392"/>
         <source>policy.json の書式そのもののバージョンです。設定値ではないため編集できません。HVE 側が書式を変えたときだけ上がります。現在は 1 です。</source>
         <translation>The version of the policy.json format itself. It is not a setting, so it cannot be edited. It only increases when HVE changes the format. It is currently 1.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="392"/>
+        <location filename="../help_content.py" line="400"/>
         <source>AI が 1 回ツールを検索したときに、候補として返すツールの既定件数です（既定: 5）。増やすと目的のツールを取りこぼしにくくなりますが、そのぶん候補の説明文がコンテキストを占有し、AI が選び間違える余地も増えます。減らすとコンテキストは軽くなりますが、必要なツールが候補から漏れやすくなります。AI 自身が件数を指定してきた場合でも「上限件数」を超えることはありません。</source>
         <translation>The default number of tools returned as candidates when the AI runs one tool search (default: 5). Raising it makes it less likely that the tool you want is missed, but the candidate descriptions take up more context and give the AI more room to pick the wrong one. Lowering it keeps context small, but the tool you need is more likely to be left out. Even when the AI asks for a specific count, it never exceeds the maximum count.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="403"/>
+        <location filename="../help_content.py" line="411"/>
         <source>AI が自分で件数を指定してきたときに、それでも超えさせない上限です（既定: 10）。「既定件数」以上の値である必要があり、小さいほど 1 回の検索で返る量が確実に抑えられます。既定件数より小さい値は保存できません。</source>
         <translation>The hard ceiling applied even when the AI asks for a specific number of results (default: 10). It must be at least the default count; the smaller it is, the more firmly the amount returned by a single search is capped. A value below the default count cannot be saved.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="412"/>
+        <location filename="../help_content.py" line="420"/>
         <source>スコアが低い候補を打ち切る比率です（0.0〜1.0、既定: 0.4）。最上位候補のスコアを 1 としたとき、この比率に満たない候補は件数に余裕があっても返しません。1.0 に近づけるほど「明らかに一致したものだけ」に絞られ、0.0 に近づけるほど関連が薄い候補まで件数いっぱいまで返ります。</source>
         <translation>The ratio at which low-scoring candidates are cut off (0.0 to 1.0, default: 0.4). Treating the top candidate&apos;s score as 1, candidates below this ratio are not returned even when there is room left in the result count. The closer to 1.0, the more it narrows down to clear matches only; the closer to 0.0, the more loosely related candidates are returned until the count is filled.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="422"/>
+        <location filename="../help_content.py" line="430"/>
         <source>検索スコアを計算するとき、ツールのどの部分の一致を重く見るかの重みです。name はツール名、description はツールの説明文、additional_search_text は下の「検索専用語彙」で足した語、arg_terms はツールの引数名と引数説明です。値を大きくするとその部分が一致したツールが上位に来ます。既定は name=3.0 / additional_search_text=2.5 / description=2.0 / arg_terms=1.0 で、ツール名の一致を最も重視しています。</source>
         <translation>The weights that decide which part of a tool counts most when the search score is computed. name is the tool name, description is the tool&apos;s description text, additional_search_text is the wording added under &quot;Search-only terms&quot; below, and arg_terms is the tool&apos;s argument names and argument descriptions. Raising a value pushes tools that match that part higher up. The defaults are name=3.0 / additional_search_text=2.5 / description=2.0 / arg_terms=1.0, which weighs a tool-name match the most.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="435"/>
+        <location filename="../help_content.py" line="443"/>
         <source>ツールを検索させるか、常に見せておくかの指定です。always は検索を経ずに常時 AI へ公開します（よく使う中核ツール向け）。auto は検索で見つけさせ、利用実績が溜まれば自動的に常時公開へ昇格します。never は検索でだけ見つかる状態に固定し、自動昇格させません。いずれも「呼び出しの禁止」ではありません。キーは `{種別}:{サーバー}:{ツール名}` 形式（種別は mcp / native / skill）で、`mcp:azure:*` のようにサーバー単位のワイルドカードも書けます。ツール名だけのキーは、別サーバーの同名ツールへ誤って効くため保存時に拒否されます。</source>
         <translation>Decides whether a tool is found through search or is always visible. always exposes it to the AI at all times without search (for frequently used core tools). auto makes it discoverable through search and promotes it to always once enough usage builds up. never keeps it discoverable through search only and never auto-promotes it. None of these forbid a call. Keys use the form `{kind}:{server}:{tool name}` (kind is mcp / native / skill), and a per-server wildcard such as `mcp:azure:*` is also allowed. A key that is only a tool name is rejected on save, because it would wrongly apply to a same-named tool on a different server.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="449"/>
+        <location filename="../help_content.py" line="457"/>
         <source>そのツールを見つけやすくするための検索専用の語です。実装として正しい説明文が、利用者が使う言葉と一致するとは限りません。例えば「クエリを実行します」としか書かれていないツールは『ダッシュボード用のデータが欲しい』では見つかりません。ここに『分析 ダッシュボード SQL レポート』のように空白区切りで足すと検索で当たるようになります。ここへ書いた語は検索の索引にだけ入り、AI へ渡すツール定義は 1 トークンも増えません。キーの形式は上の pin 設定と同じです。</source>
         <translation>Search-only wording that makes a tool easier to find. A description that is technically correct does not necessarily match the words users type. For example, a tool described only as &quot;runs a query&quot; is not found by &quot;I want data for a dashboard&quot;. Adding space-separated wording such as &quot;analytics dashboard SQL report&quot; here makes it match. Wording added here goes only into the search index; it adds not one token to the tool definitions passed to the AI. The key format is the same as the pin setting above.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="462"/>
+        <location filename="../help_content.py" line="470"/>
         <source>特定のワークフロー Step だけ検索の挙動を変える指定です。キーは `{ワークフロー ID}:{Step ID}` 形式（例: `asdw-web:1.2`）です。search は通常どおり検索させます。pin_only は検索結果を返さず、常時公開（always）のツールだけを見せます。使ってよいツールを限定したい Step に使います。</source>
         <translation>Changes the search behaviour for specific workflow Steps only. Keys use the form `{workflow ID}:{Step ID}` (for example `asdw-web:1.2`). search behaves normally. pin_only returns no search results and shows only the always-exposed tools. Use it for Steps where the usable tool set must be restricted.</translation>
     </message>
@@ -5156,7 +5173,7 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation type="vanished">Control auto-injection for the QA phase, adversarial review, and the Code Review Agent. All disabled by default.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="293"/>
+        <location filename="../help_content.py" line="301"/>
         <source>Work IQ (Microsoft 365 データ参照) の有効化と詳細設定を行います。@microsoft/workiq のインストールが必要です。</source>
         <translation>Enable and configure Work IQ (Microsoft 365 data references). Requires @microsoft/workiq to be installed.</translation>
     </message>
@@ -5169,7 +5186,7 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation type="vanished">Control console output level, log level, color, timestamps, and other display settings.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="305"/>
+        <location filename="../help_content.py" line="313"/>
         <source>MCP Server 設定ファイル・Copilot CLI 実行ファイルパス・外部 CLI サーバー URL を設定します。</source>
         <translation>Configure the MCP Server config file, Copilot CLI executable path, and external CLI server URL.</translation>
     </message>
@@ -5190,12 +5207,12 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation type="vanished">AKM-specific: configure ingest source, target files, force-regenerate, and additional input directories.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="317"/>
+        <location filename="../help_content.py" line="325"/>
         <source>ADOC ワークフロー固有: 対象ディレクトリ・除外パターン・ドキュメントの主目的・大規模ファイル分割閾値を設定します。</source>
         <translation>ADOC-specific: configure target directories, exclude patterns, documentation primary purpose, and large file split threshold.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="321"/>
+        <location filename="../help_content.py" line="329"/>
         <source>ARD ワークフロー固有: 対象企業名・対象業務・調査基準日・調査期間・対象地域・分析目的・添付資料を設定します。</source>
         <translation>ARD-specific: configure target company name, target business, survey base date, survey period, target region, analysis purpose, and attachments.</translation>
     </message>
@@ -5212,37 +5229,37 @@ Use the [Stop] button to interrupt execution.</translation>
         <translation type="vanished">Configure execution controls such as dry run, Self-Improve (self-improvement loop), and mdq realtime index update.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="344"/>
+        <location filename="../help_content.py" line="352"/>
         <source>アプリ名・選択ワークフロー・実行番号を表示します。</source>
         <translation>Show the app name, selected workflow, and run number.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="348"/>
+        <location filename="../help_content.py" line="356"/>
         <source>各ステップの状態を絵文字で表示します: ⚪=未着手 / 🔄=実行中 / ✅=完了 / ❌=失敗 / ⏭️=スキップ。</source>
         <translation>Show step status with emojis: ⚪=pending / 🔄=running / ✅=done / ❌=failed / ⏭️=skipped.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="352"/>
+        <location filename="../help_content.py" line="360"/>
         <source>ワークフロー実行中のログをリアルタイム表示します。右上のコピーボタンで全文をコピー可能。</source>
         <translation>Show workflow logs in real time. Use the top-right copy button to copy the full text.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="356"/>
+        <location filename="../help_content.py" line="364"/>
         <source>セッションのサブタスク階層を表示します。Cloud Agent Orchestrator 実行時に各 Sub-issue が枝として現れます。</source>
         <translation>Show the session&apos;s subtask hierarchy. Each Sub-issue appears as a branch when the Cloud Agent Orchestrator runs.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="360"/>
+        <location filename="../help_content.py" line="368"/>
         <source>実行中にユーザー操作が必要な事項（QA 入力待ち等）を表示します。</source>
         <translation>Show items that require user action during execution (e.g. waiting for QA input).</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="364"/>
+        <location filename="../help_content.py" line="372"/>
         <source>コンテキスト消費量・選択モデル・経過時間を表示します。</source>
         <translation>Show context consumption, selected model, and elapsed time.</translation>
     </message>
     <message>
-        <location filename="../help_content.py" line="368"/>
+        <location filename="../help_content.py" line="376"/>
         <source>実行中のオーケストレーターをグレースフルに停止します（SIGTERM 相当）。</source>
         <translation>Gracefully stop the running orchestrator (SIGTERM-equivalent).</translation>
     </message>

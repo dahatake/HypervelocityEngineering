@@ -1,0 +1,13 @@
+inputs:
+- path: docs/ai-agent-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-AIAgentDesign-Step3--aag--3
+- path: docs/agent/agent-detail-{key}.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-AIAgentDesign-Step3--aag--3
+outputs:
+- path: docs/agent/m365-publish-report.md
+  required: true
+  mode: create

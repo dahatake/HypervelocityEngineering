@@ -188,7 +188,18 @@ if __name__ == "__main__":
 
 try:
     from .config import DEFAULT_MODEL, MODEL_AUTO_VALUE, MODEL_CHOICES, SDKConfig
-    from .workflow_registry import canonicalize_workflow_id, get_workflow
+    from .workflow_registry import (
+        ADI_DEFAULT_DEPTH as _ADI_DEFAULT_DEPTH,
+        ADI_DEFAULT_TARGET_SCOPE as _ADI_DEFAULT_TARGET_SCOPE,
+        AKM_DEFAULT_SOURCES as _AKM_DEFAULT_SOURCES,
+        AKM_DEFAULT_TARGET_FILES as _AKM_DEFAULT_TARGET_FILES,
+        ARD_DEFAULT_ANALYSIS_PURPOSE as _ARD_DEFAULT_ANALYSIS_PURPOSE,
+        ARD_DEFAULT_GROUP_IDS,
+        ARD_DEFAULT_SURVEY_PERIOD_YEARS as _ARD_DEFAULT_SURVEY_PERIOD_YEARS,
+        ARD_DEFAULT_TARGET_REGION as _ARD_DEFAULT_TARGET_REGION,
+        canonicalize_workflow_id,
+        get_workflow,
+    )
 except ImportError:
     # 平坦 import への退避は `cd hve && python __main__.py` のような
     # パッケージ文脈なし実行のときだけ。パッケージとして import されて
@@ -202,6 +213,23 @@ except ImportError:
         "canonicalize_workflow_id",
     )
     get_workflow = getattr(_workflow_registry_module, "get_workflow")
+    ARD_DEFAULT_GROUP_IDS = getattr(
+        _workflow_registry_module,
+        "ARD_DEFAULT_GROUP_IDS",
+    )
+    _AKM_DEFAULT_SOURCES = getattr(_workflow_registry_module, "AKM_DEFAULT_SOURCES")
+    _AKM_DEFAULT_TARGET_FILES = getattr(_workflow_registry_module, "AKM_DEFAULT_TARGET_FILES")
+    _ADI_DEFAULT_TARGET_SCOPE = getattr(_workflow_registry_module, "ADI_DEFAULT_TARGET_SCOPE")
+    _ADI_DEFAULT_DEPTH = getattr(_workflow_registry_module, "ADI_DEFAULT_DEPTH")
+    _ARD_DEFAULT_SURVEY_PERIOD_YEARS = getattr(
+        _workflow_registry_module,
+        "ARD_DEFAULT_SURVEY_PERIOD_YEARS",
+    )
+    _ARD_DEFAULT_TARGET_REGION = getattr(_workflow_registry_module, "ARD_DEFAULT_TARGET_REGION")
+    _ARD_DEFAULT_ANALYSIS_PURPOSE = getattr(
+        _workflow_registry_module,
+        "ARD_DEFAULT_ANALYSIS_PURPOSE",
+    )
 
 
 def _ts() -> str:
@@ -216,9 +244,7 @@ def _ts() -> str:
 MODEL_AUTO = MODEL_AUTO_VALUE
 
 # AKM デフォルト値
-# Work IQ を入力ソースとして任意追加できるよう、既定は qa + original-docs のマルチ値（カンマ区切り）。
-_AKM_DEFAULT_SOURCES = "qa,original-docs"
-_AKM_DEFAULT_TARGET_FILES = "qa/*.md"
+# `_AKM_DEFAULT_SOURCES` / `_AKM_DEFAULT_TARGET_FILES` は workflow_registry からの alias import。
 _AKM_SOURCES_OPTIONS = [
     "qa のみ",
     "original-docs のみ",
@@ -236,8 +262,6 @@ _AKM_SOURCES_MULTI_OPTIONS = [
     "workiq（Microsoft 365 Copilot Work IQ）",
 ]
 _AKM_SOURCES_MULTI_VALUES = ["qa", "original-docs", "workiq"]
-_ADI_DEFAULT_TARGET_SCOPE = "docs-original/"
-_ADI_DEFAULT_DEPTH = "standard"
 _ADI_DEPTH_CHOICES = ("standard", "lightweight")
 _ADI_DEPTH_MENU_OPTIONS = (
     "standard     — 全カテゴリ",
@@ -259,11 +283,6 @@ _ADOC_MAX_FILE_LINES_MENU_OPTIONS = (
 )
 _ADOC_DEFAULT_MAX_FILE_LINES = 500
 _ADOC_DEFAULT_EXCLUDE_PATTERNS = "node_modules/,vendor/,dist/,*.lock,__pycache__/"
-
-# ARD デフォルト値
-_ARD_DEFAULT_SURVEY_PERIOD_YEARS = 30
-_ARD_DEFAULT_TARGET_REGION = "グローバル全体"
-_ARD_DEFAULT_ANALYSIS_PURPOSE = "中長期成長戦略の立案"
 
 _APP_ID_AUTO_HINTS = {
     "aad-web": "Webフロントエンド + クラウドの APP-ID を自動選択",
@@ -299,6 +318,7 @@ _PARAM_PROMPT_LABELS = {
     "survey_period_years": "調査期間年数（任意）",
     "target_region": "対象地域（任意）",
     "analysis_purpose": "分析目的（任意）",
+    "target_recommendation_id": "Strategic Recommendation ID（任意、例: SR-1）",
     "attached_docs": "添付資料のファイルパス（カンマ区切り・任意）",
 }
 
@@ -405,40 +425,109 @@ def _step_options_with_groups(wf) -> tuple:
     return non_container_steps, options
 
 
-def _collect_ard_wizard_params(con, *, is_quick_auto: bool) -> tuple[dict, list[str]]:
+def _workflow_options_with_categories(workflows, display_names, style=None) -> tuple:
+    """カテゴリー順に並べたワークフローと、その選択肢ラベルを返す（FR-GUI-21）。
+
+    `Console.menu_select` は与えられた全行を連番付きの選択肢として描画するため、
+    選択できない見出し行は挿入せず、カテゴリー名を各選択肢の接頭辞にする。
+    戻り値のワークフロー列と選択肢列は同じ順序で、選択索引がそのまま使える。
+    """
+    try:
+        from .workflow_registry import WORKFLOW_CATEGORIES
+    except ImportError:
+        from workflow_registry import WORKFLOW_CATEGORIES  # type: ignore[no-redef]
+
+    dim = getattr(style, "DIM", "") or ""
+    reset = getattr(style, "RESET", "") or ""
+
+    by_id = {wf.id: wf for wf in workflows}
+    category_of = {
+        wf_id: name for name, ids in WORKFLOW_CATEGORIES for wf_id in ids
+    }
+
+    ordered = [
+        by_id[wf_id]
+        for _name, ids in WORKFLOW_CATEGORIES
+        for wf_id in ids
+        if wf_id in by_id
+    ]
+    ordered += [wf for wf in workflows if wf.id not in category_of]
+
+    options = []
+    for wf in ordered:
+        step_count = len([s for s in wf.steps if not s.is_container])
+        display = display_names.get(wf.id, wf.id)
+        options.append(
+            f"{category_of.get(wf.id, 'その他')} > {display}  "
+            f"{dim}({wf.id} — {step_count} 実行ステップ){reset}"
+        )
+    return ordered, options
+
+
+def _collect_ard_wizard_params(
+    con,
+    *,
+    is_quick_auto: bool,
+    is_custom_auto: bool = False,
+) -> tuple[dict, list[str]]:
     """ARD ワークフロー固有のパラメータ収集と selected_steps 計算。
 
     Returns:
         (params, selected_steps) のタプル。
-        - selected_steps: ウィザードでユーザーが選択したグループ ID 一覧（"1" / "2" / "3" / "4"）。
-          Enter 時の初期値は ["2", "3", "4"]。
+        - selected_steps: ウィザードでユーザーが選択したグループ ID 一覧（"1"〜"5"）。
+                    Enter 時の初期値は `ARD_DEFAULT_GROUP_IDS` に従う。
+                    `include_kpi_okr` はグループ `3` の選択だけから導出し、別質問は設けない。
           グループ ID は registry 侧の `_WORKFLOW_GROUP_MAPS["ard"]` で実 Step ID に展開される:
             "1" → ["1", "1.1", "1.2"]（企業の事業分析）
             "2" → ["2"]（要求定義書作成）
             "3" → ["2.1"]（KPI/OKR 定義・任意）
             "4" → ["3.1", "3.2", "3.3"]（ユースケース作成）
+            "5" → ["4.1", "4.2"]（アプリケーション要求定義）
     """
     from datetime import date
 
+    if is_quick_auto and is_custom_auto:
+        raise ValueError("ARD wizardの実行モードを同時に複数指定できません")
+
     params: dict = {}
-    # 4 グループ体系。各グループは内部で複数 Step を順次実行する。
+    # 5 グループ体系。各グループは内部で複数 Step を順次実行する。
     # Step 3（KPI/OKR）も既定で選択に含める（Step 2 / 4 と同時実行することで戦略的記述から
     # KPI/OKR・計測データ・データ収集設計まで一気通貫で生成する運用に合わせる）。
-    _ard_step_ids = ["1", "2", "3", "4"]
+    _ard_step_ids = ["1", "2", "3", "4", "5"]
     _ard_step_options = [
         "[1] 企業の事業分析（事業分野候補列挙 → 分野別深掘り → 統合）",
         "[2] 要求定義書作成（Step 1 の出力があれば参考にし、無くてもよい）",
         "[3] KPI/OKR 定義（任意・戦略的記述から KPI/OKR・計測データ・データ収集設計を生成）",
         "[4] ユースケース作成（骨格抽出 → 詳細生成 → カタログ統合）",
+        "[5] アプリケーション要求定義（APP一覧 → APP別要求定義書を順次upsert）",
     ]
+    if len(ARD_DEFAULT_GROUP_IDS) != len(set(ARD_DEFAULT_GROUP_IDS)):
+        raise ValueError("ARD_DEFAULT_GROUP_IDS に重複したグループ ID があります")
+    unknown_default_groups = [
+        group_id
+        for group_id in ARD_DEFAULT_GROUP_IDS
+        if group_id not in _ard_step_ids
+    ]
+    if unknown_default_groups:
+        raise ValueError(
+            "ARD_DEFAULT_GROUP_IDS に未登録のグループ ID があります: "
+            + ", ".join(unknown_default_groups)
+        )
     selected_indices = con.prompt_multi_select(
         "ARD で実行するステップを選択",
         _ard_step_options,
-        default_indices=[1, 2, 3],
+        default_indices=[
+            _ard_step_ids.index(group_id)
+            for group_id in ARD_DEFAULT_GROUP_IDS
+        ],
     )
-    selected_steps = [_ard_step_ids[i] for i in selected_indices if 0 <= i < len(_ard_step_ids)]
+    selected_steps = [
+        _ard_step_ids[i]
+        for i in selected_indices
+        if 0 <= i < len(_ard_step_ids)
+    ]
     if not selected_steps:
-        selected_steps = ["2", "3", "4"]
+        selected_steps = list(ARD_DEFAULT_GROUP_IDS)
 
     requires_company_name = "1" in selected_steps
     requires_target_business = ("2" in selected_steps) and ("1" not in selected_steps)
@@ -464,9 +553,6 @@ def _collect_ard_wizard_params(con, *, is_quick_auto: bool) -> tuple[dict, list[
         params["target_region"] = _ARD_DEFAULT_TARGET_REGION
         params["analysis_purpose"] = _ARD_DEFAULT_ANALYSIS_PURPOSE
         params["attached_docs"] = []
-        # quick-auto モードでも Step 3 (KPI/OKR 定義) を既定で有効化する（GUI/CLI 対話ウィザードと整合）。
-        # orchestrator 側で selected_steps に "3" が含まれれば自動同期されるが、明示的に True を記録する。
-        params["include_kpi_okr"] = True
     else:
         params["company_name"] = con.prompt_input(
             _PARAM_PROMPT_LABELS["company_name"],
@@ -506,18 +592,28 @@ def _collect_ard_wizard_params(con, *, is_quick_auto: bool) -> tuple[dict, list[
             _PARAM_PROMPT_LABELS["attached_docs"], default="", required=False,
         )
         params["attached_docs"] = _split_csv(attached_raw or "")
-        # Step 3 (KPI/OKR 定義・任意): Step 2 または Step 4 が選択時のみプロンプト。
-        # 他の場合は自動的に False（DAG にも組み込まれない）。
-        if ("2" in selected_steps or "4" in selected_steps):
-            params["include_kpi_okr"] = con.prompt_yes_no(
-                "KPI/OKR 定義 (Step 3・任意) を実行しますか？"
-                "（戦略的記述から KPI/OKR・計測データ・データ収集設計を生成）",
-                default=False,
-            )
-        else:
-            params["include_kpi_okr"] = False
 
-    # グループ ID ("1"/"2"/"3"/"4") は registry 侧の _WORKFLOW_GROUP_MAPS で実 Step ID に展開される。
+    # グループ3がKPI/OKR実行有無の唯一のwizard状態（FR-CLI-12）。
+    # run_workflow側の同じ正規化は直接CLI等も受ける実行境界の安全網として維持する。
+    params["include_kpi_okr"] = "3" in selected_steps
+
+    # custom-auto のbridge経路だけ、無人選択に使うSR-IDを事前入力できる。
+    # quick-autoは先頭候補、manualはStep 1.2完了後の対話メニューを維持する。
+    if (
+        is_custom_auto
+        and "1" in selected_steps
+        and "2" in selected_steps
+        and not (params.get("target_business", "") or "").strip()
+    ):
+        recommendation_id = con.prompt_input(
+            _PARAM_PROMPT_LABELS["target_recommendation_id"],
+            default="",
+            required=False,
+        )
+        if recommendation_id and recommendation_id.strip():
+            params["target_recommendation_id"] = recommendation_id.strip()
+
+    # グループ ID ("1"〜"5") は registry 侧の _WORKFLOW_GROUP_MAPS で実 Step ID に展開される。
     # （旧仕様の "1.1 選択時に Step '1' を自動前提" は撤廃。グループ "1" 自体が 1,1.1,1.2 を包含する。）
 
     return params, selected_steps
@@ -1998,6 +2094,15 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         help="SDK tool probe の MCP 設定で tools=['*'] を使う（診断・切り分け用途のみ）",
     )
+    workiq_doctor.add_argument(
+        "--qa-integration-probe",
+        action="store_true",
+        default=False,
+        help=(
+            "事前 QA と同じ Work IQ プロンプトを 1 問だけ送り、"
+            "回答が QA へ統合される条件を満たすか判定する（Workflow を再実行せずに確認する）"
+        ),
+    )
 
     # --- ingest-docs サブコマンド（ADI Step 1 の前処理）---
     ingest_docs_parser = sub.add_parser(
@@ -2621,17 +2726,18 @@ def _build_params(args: argparse.Namespace) -> dict:
         company_name = getattr(args, "company_name", None)
         target_business = getattr(args, "target_business", None) or ""
         requested_steps = list(params.get("steps") or [])
-        # 4 グループ体系 ("1"/"2"/"3"/"4") を主とし、実 Step ID も許容する。
+        # 5 グループ体系 ("1"〜"5") を主とし、実 Step ID も許容する。
         # グループ ID は registry 侧の _WORKFLOW_GROUP_MAPS で実 Step ID に展開される:
-        #   "1" → [1, 1.1, 1.2]、"2" → [2]、"3" → [2.1]、"4" → [3.1, 3.2, 3.3]
-        _valid_step_ids = {"1", "2", "3", "4", "1.1", "1.2", "2.1", "3.1", "3.2", "3.3"}
+        #   "1" → [1, 1.1, 1.2]、"2" → [2]、"3" → [2.1]、
+        #   "4" → [3.1, 3.2, 3.3]、"5" → [4.1, 4.2]
+        _valid_step_ids = {"1", "2", "3", "4", "5", "1.1", "1.2", "2.1", "3.1", "3.2", "3.3", "4.1", "4.2"}
         normalized_steps = requested_steps
         if requested_steps:
             invalid_steps = [sid for sid in requested_steps if sid not in _valid_step_ids]
             if invalid_steps:
                 raise SystemExit(
                     f"ERROR: ARD の無効な --steps が指定されました: {', '.join(invalid_steps)} "
-                    "(有効値: 1, 2, 3, 4 / 実 Step ID: 1.1, 1.2, 2.1, 3.1, 3.2, 3.3)"
+                    "(有効値: 1, 2, 3, 4, 5 / 実 Step ID: 1.1, 1.2, 2.1, 3.1, 3.2, 3.3, 4.1, 4.2)"
                 )
             normalized_steps = list(requested_steps)
             # 旧 実 Step ID '1.1' 指定時は Step '1' を自動前提として付与
@@ -2639,10 +2745,9 @@ def _build_params(args: argparse.Namespace) -> dict:
                 normalized_steps = ["1"] + normalized_steps
             params["steps"] = normalized_steps
         else:
-            # 既定は Step 2/3/4（Step 1 は --steps で明示的に有効化する必要がある）。
-            # help_content.py の説明（「既定で Step 2/3/4 が ON、Step 1 は明示的に有効化」）
-            # および Autopilot 事前実行（素の `orchestrate --workflow ard`）の仕様に合わせる。
-            normalized_steps = ["2", "3", "4"]
+            # 既定は registry の ARD_DEFAULT_GROUP_IDS を使用する。
+            # Step 1 を含める場合は --steps で明示する。
+            normalized_steps = list(ARD_DEFAULT_GROUP_IDS)
             params["steps"] = normalized_steps
 
         # グループ "1" または実 Step "1.1" / "1.2"（ARD グループ 1 系列）を含む場合は
@@ -2673,8 +2778,6 @@ def _build_params(args: argparse.Namespace) -> dict:
         attached = getattr(args, "attached_docs", None)
         params["attached_docs"] = _split_csv(attached) if attached else []
         params["include_kpi_okr"] = bool(getattr(args, "include_kpi_okr", False))
-        if not params.get("steps"):
-            params["steps"] = normalized_steps
     else:
         if getattr(args, "target_files", None):
             params["target_files"] = " ".join(args.target_files)
@@ -2723,6 +2826,22 @@ def _ensure_run_workdir_env() -> None:
     work_root.mkdir(parents=True, exist_ok=True)
 
 
+# FR-CLI-77: 起動時の索引差分更新を行うサブコマンド。引数なし（GUI 既定起動）と
+# `gui` は FR-GUI-22 が担う。GUI は起動位置からリポジトリルートを遡って解決するため、
+# 作業ディレクトリをルートとみなす CLI 側では担えない。
+INDEX_REFRESH_COMMANDS = frozenset({"run", "cli", "orchestrate"})
+
+
+def _start_startup_index_refresh(command: Optional[str]) -> None:
+    if command not in INDEX_REFRESH_COMMANDS:
+        return
+    try:
+        from .index_refresh import start_background
+    except ImportError:  # pragma: no cover - script execution path
+        from index_refresh import start_background  # type: ignore[no-redef]
+    start_background(Path.cwd())
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """エントリポイント。
 
@@ -2731,6 +2850,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     """
     parser = _build_parser()
     args = parser.parse_args(argv)
+
+    _start_startup_index_refresh(args.command)
 
     if args.command == "orchestrate":
         _ensure_run_workdir_env()
@@ -3302,11 +3423,9 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         )
 
     # ── ワークフロー選択 ──────────────────────────────────
-    workflows = list_workflows()
-    wf_options = [
-        f"{_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}  {con.s.DIM}({wf.id} — {len([s for s in wf.steps if not s.is_container])} 実行ステップ){con.s.RESET}"
-        for wf in workflows
-    ]
+    workflows, wf_options = _workflow_options_with_categories(
+        list_workflows(), _WORKFLOW_DISPLAY_NAMES, style=con.s
+    )
     wf_idx = con.menu_select("ワークフローを選択してください", wf_options)
     selected_wf = workflows[wf_idx]
     wf = get_workflow(selected_wf.id)
@@ -3470,7 +3589,11 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                 )
             )
         elif is_ard:
-            _ard_wf_params, _ard_steps = _collect_ard_wizard_params(con, is_quick_auto=False)
+            _ard_wf_params, _ard_steps = _collect_ard_wizard_params(
+                con,
+                is_quick_auto=False,
+                is_custom_auto=is_custom_auto,
+            )
             params_extra.update(_ard_wf_params)
             selected_step_ids = _ard_steps
         else:
@@ -4401,6 +4524,7 @@ def _cmd_workiq_doctor(args: argparse.Namespace) -> int:
         sdk_tool_probe_timeout = 60.0
     sdk_event_trace = getattr(args, "sdk_event_trace", False)
     sdk_tool_probe_tools_all = getattr(args, "sdk_tool_probe_tools_all", False)
+    qa_integration_probe = getattr(args, "qa_integration_probe", False)
 
     report = run_workiq_diagnostics(
         tenant_id=tenant_id,
@@ -4413,6 +4537,7 @@ def _cmd_workiq_doctor(args: argparse.Namespace) -> int:
         sdk_tool_probe_timeout=sdk_tool_probe_timeout,
         sdk_event_trace=sdk_event_trace,
         sdk_tool_probe_tools_all=sdk_tool_probe_tools_all,
+        qa_integration_probe=qa_integration_probe,
     )
 
     if as_json:
@@ -4462,6 +4587,19 @@ def _cmd_workiq_doctor(args: argparse.Namespace) -> int:
     print(f"{'=' * 60}\n")
 
     return 1 if has_fail else 0
+
+
+def _confirm_autopilot_chain_start(app_count: int) -> bool:
+    """CLI Autopilot の実行開始を確認する（FR-CLI-78）。
+
+    非対話環境では確認せずに続行する（既存の CI 実行を壊さないため）。
+    """
+    if not sys.stdin.isatty():
+        return True
+    answer = input(
+        f"{app_count} 件の APP チェーンを実行します。開始しますか？ [y/N]: "
+    ).strip().lower()
+    return answer in ("y", "yes")
 
 
 def _cmd_orchestrate_autopilot_chain(args: argparse.Namespace) -> int:
@@ -4555,6 +4693,10 @@ def _cmd_orchestrate_autopilot_chain(args: argparse.Namespace) -> int:
             f"{_ts()} ⚠️  実行対象の APP チェーンがありません。",
             file=sys.stderr,
         )
+        return 0
+
+    if not _confirm_autopilot_chain_start(len(plan.app_chains)):
+        print(f"{_ts()} ⏹  実行を開始せずに終了しました。")
         return 0
 
     runner = CliAutopilotRunner(

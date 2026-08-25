@@ -20,7 +20,7 @@ from hve.artifact_validation import validate_ai_agent_capability_artifacts  # no
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Validate AAG/AAGD AG-CAP-01..06 artifacts.",
+        description="Validate AAG/AAGD AG-CAP-01..10 artifacts.",
     )
     parser.add_argument("--workflow", choices=("aag", "aagd"), required=True)
     parser.add_argument("--design", type=Path, required=True)

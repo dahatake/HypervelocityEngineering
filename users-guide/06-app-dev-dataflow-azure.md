@@ -99,14 +99,15 @@
 ### 依存グラフ（ADFDV ワークフロー）
 
 ```
-step-1.1 ──► step-1.2 ──► step-2.1 ──► step-2.2 ──► step-3 ──┬──► step-4.1
-                                                              └──► step-4.2
+step-1.1 ──► step-1.2 ──► step-2.1 ──► step-2.2 ──► step-3 ──┬──► step-4.1 ──┬──► step-4.3
+                                                              └──► step-4.2 ──┘
 ```
 
 | 重要な依存関係 | 説明 |
 |---|---|
 | step-1.1 → step-1.2 → step-2.1 → step-2.2 → step-3 | 実装準備からデプロイ前までを直列で実行 |
 | step-4.1 と step-4.2 は **step-3 完了後に並列開始** | QA レビュー系の 2 ステップは同時進行 |
+| step-4.3 は **step-4.1 AND step-4.2 完了後** | デプロイ済みジョブを実行して要件適合を測る |
 
 ---
 
@@ -195,6 +196,7 @@ Sub Issue の状態:
 | step-3 | [`Dev-Dataflow-FunctionsDeploy`](../.github/prompts/Dev-Dataflow-FunctionsDeploy.prompt.md) | `src/dataflow/`, `docs/dataflow/dataflow-service-catalog.md`, `docs/dataflow/dataflow-app-catalog.md` | `.github/workflows/deploy-batch-functions.yml`, `src/infra/azure/dataflow/README.md` |
 | step-4.1 | [`QA-AzureArchitectureReview`](../.github/prompts/QA-AzureArchitectureReview.prompt.md) | step-3 成果物, `docs/dataflow/dataflow-service-catalog.md` | `docs/azure/waf-review.md` |
 | step-4.2 | [`QA-AzureDependencyReview`](../.github/prompts/QA-AzureDependencyReview.prompt.md) | step-3 成果物, `docs/dataflow/dataflow-service-catalog.md` | `docs/azure/dependency-review.md` |
+| step-4.3 | [`QA-RequirementsConformanceEval`](../.github/prompts/QA-RequirementsConformanceEval.prompt.md) | step-4.1 / step-4.2 成果物, `docs/dataflow/dataflow-app-catalog.md`, `src/test/dataflow/` | `docs/dataflow/requirements-conformance-report.md` |
 
 各 Step の正本は `hve/workflow_registry.py` の `adfdv` 定義です。表の旧 `docs/dataflow/dataflow-*.md` 入力は移行ノートの制約を受けます。Prompt または表だけを変更して入力・出力を拡張せず、必要な変更は registry・Prompt・I/O 契約・回帰テストを同時に確認してください。
 

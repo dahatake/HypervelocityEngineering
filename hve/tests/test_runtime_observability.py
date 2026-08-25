@@ -83,6 +83,42 @@ class TestInstanceId:
         assert rto.make_instance_id("aad-web", "  ") == "aad-web"
 
 
+class TestInstanceScope:
+    """FR-RTO-01: instance_id はプロセス単位で、Step fan-out では切り替えない。"""
+
+    def _ctx(self) -> rto.RuntimeContext:
+        return rto.RuntimeContext(run_id="run-1", workflow_id="aas", instance_id="aas", pid=1)
+
+    def test_fanout_step_keeps_process_instance_id(self) -> None:
+        ctx = self._ctx()
+        first = rto.build_event("assistant_usage", "2/APP-001", ctx, input=10)
+        last = rto.build_event("assistant_usage", "2/APP-014", ctx, input=4)
+        assert first["instance_id"] == "aas"
+        assert last["instance_id"] == "aas"
+        assert (first["step"], last["step"]) == ("2/APP-001", "2/APP-014")
+
+    def test_fanout_children_are_separated_by_step_not_instance(self) -> None:
+        ctx = self._ctx()
+        registry = rto.RuntimeMetricsRegistry()
+        for index in (1, 14):
+            step_id = f"2/APP-{index:03d}"
+            registry.apply(rto.build_event("step_status", step_id, ctx, status="running"))
+            registry.apply(rto.build_event("tool_invoked", step_id, ctx, tool_name="view"))
+
+        assert registry.instance_ids() == ["aas"]
+        assert set(registry.for_instance("aas").tool_counts_by_step) == {"2/APP-001", "2/APP-014"}
+
+    def test_context_is_preserved_for_a_single_process_run(self) -> None:
+        """Step fan-out で instance を分けないので、run 合算の Context が残る。"""
+        ctx = self._ctx()
+        registry = rto.RuntimeMetricsRegistry()
+        registry.apply(
+            rto.build_event("session_usage_detail", "2/APP-001", ctx, current=900, limit=1000, msgs=5)
+        )
+        totals = registry.totals()
+        assert (totals.context_current, totals.context_limit) == (900, 1000)
+
+
 class TestWireFormat:
     """FR-RTO-01: `[hve:stats]` 行形式を維持する。"""
 

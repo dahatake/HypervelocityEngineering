@@ -32,7 +32,7 @@
     2. 見出し: `## 検証` / `## 検証結果` / `## Validation` 等（行頭 `#` + 語）
     3. 箇条書き / 強調: `- 検証: <内容>` / `**検証**: <内容>`（行頭 + 語 + コロン）
   - 検証実施が困難な場合も「検証: 該当なし（理由: ...、代替: ...）」と記載すること。
-- **ルート README.md 変更禁止**: `/README.md` を作成・変更してはならない。`README.md` のような裸パス表現は避け、ルート以外の README を指す必要がある場合は `src/infra/.../README.md` などの明示パスで記載する。
+- **ルート README.md の扱い**: `/README.md` は users-guide への導線インデックスであり、変更してよい（CI の変更制限は [.github/workflows/protect-readonly-paths.yml](.github/workflows/protect-readonly-paths.yml) の `check-readme` ジョブで解除済み）。Workflow ID / Issue Template / `.github/workflows/` の増減を伴う変更では、同じ変更セットで README の該当一覧も更新する。ただし Self-Improve ループの改善適用 Prompt（[hve/prompts.py](hve/prompts.py)）は引き続き `/README.md` を変更しない。`README.md` のような裸パス表現は避け、ルート以外の README を指す必要がある場合は `src/infra/.../README.md` などの明示パスで記載する。
 - **質問方針**：質問なしで進められる場合は質問しない。必要な質問は分類項目・重要度（最重要/高/中/低）付きで過不足なく行う。「最重要」「高」は回答を優先的に求め、「中」「低」は既定値で進行可能とする。タスク定義書（GitHub Issue body / CLI 起動時メタデータ）に `<!-- auto-context-review: true -->` が記載されている時は、コンテキストが十分な場合でも設計判断・技術選定・スコープの確認を目的として質問する。
 - **推論許可**：「推論で進めてください」の意思表示を以降「**推論許可**」と呼ぶ。
 - **書き込み失敗対策**：edit 後に read で空でないことを確認。空なら小チャンク（2,000〜5,000文字）に分割して再試行（最大3回）。
@@ -236,6 +236,6 @@ Agent の動作仕様本文は `.github/prompts/<Name>.prompt.md` に、入出�
 
 ## §12 HVE アプリケーション保守ルーティング
 
-- HVE 対象変更では `.github/skills/hve-requirement-traceability/SKILL.md` を使用する。
+- HVE 対象変更・不具合調査では `.github/skills/hve-requirement-traceability/SKILL.md` を使用する。
 - HVE コアパスでは `.github/instructions/hve-maintenance.instructions.md` も適用する。
 - `hve-dev/requirement-definition.md` 全文を既定の入力にしない。

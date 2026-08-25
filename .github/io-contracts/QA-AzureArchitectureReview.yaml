@@ -30,7 +30,7 @@ inputs:
 - path: knowledge/
   required: false
   kind: static
-- path: knowledge/D09-システムコンテキスト-責任境界-再利用方針書.md
+- path: knowledge/D09-システムコンテキスト・責任境界・再利用方針書.md
   required: true
   kind: static
 - path: knowledge/D13-セキュリティ-プライバシー-監査-法規マトリクス.md

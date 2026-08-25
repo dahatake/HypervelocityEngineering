@@ -19,6 +19,7 @@ import workiq  # type: ignore[import-untyped]
 class TestWorkIQAvailability(unittest.TestCase):
     def setUp(self) -> None:
         workiq._workiq_available_cache = None
+        workiq._workiq_available_probe_attempts = 0
 
     def test_is_workiq_available_true_when_npx_check_succeeds(self) -> None:
         proc = mock.Mock(returncode=0)
@@ -802,7 +803,7 @@ class TestWorkIQConstants(unittest.TestCase):
         self.assertEqual(workiq.WORKIQ_MCP_SERVER_NAME, "_hve_workiq")
 
     def test_mcp_tool_names_constant_contains_all_expected(self) -> None:
-        expected = {"ask_work_iq"}
+        expected = {"ask"}
         self.assertEqual(set(workiq.WORKIQ_MCP_TOOL_NAMES), expected)
 
     def test_build_mcp_config_uses_server_name_constant(self) -> None:
@@ -833,15 +834,17 @@ class TestDefaultPromptsNoWorkiqToolRef(unittest.TestCase):
             self.assertNotIn("workiq ツールを使用して", prompt, f"{attr_name} に旧表現 'workiq ツールを使用して' が含まれています")
 
     def test_default_prompts_do_not_include_mcp_tool_names_or_args(self) -> None:
-        """プロンプト本文に MCP ツール名 (`ask_work_iq`) や引数名 (`question`) を書かない方針の検証。
+        """プロンプト本文に MCP ツール名 (`ask`) や引数名 (`question`) を書かない方針の検証。
 
         SDK は MCP ツール schema を system prompt に自動注入するため、本文側で
         ツール実装語彙を併記すると「合成語による外部環境説明」となり
         Microsoft 365 Copilot のベストプラクティスに反する。再発防止の assertion。
+
+        `ask` は 3 文字の一般語のため、バッククォート付き表記に限定して誤検知を避ける。
         """
         forbidden_substrings = (
-            "`ask_work_iq`",   # ツール名のバッククォート表記
-            "ask_work_iq ツール",  # 「〜ツール」の併記
+            "`ask`",   # ツール名のバッククォート表記
+            "`_hve_workiq`",  # 内部 MCP server 名のバッククォート表記
             "引数 `question`",  # 引数名の併記
             "`question` を",     # 引数名を行為主語として書く形
         )
@@ -1206,7 +1209,7 @@ class TestProbeWorkIQCopilotSession(unittest.TestCase):
             name = "_hve_workiq"
             status = "connected"
             error = None
-            tools = ["ask_work_iq"]  # ツールあり
+            tools = ["ask"]  # ツールあり
 
         class _FakeMcp:
             async def list(self):
@@ -1325,7 +1328,7 @@ class TestProbeWorkIQCopilotToolInvocation(unittest.TestCase):
                     event = _types.SimpleNamespace(
                         type=_types.SimpleNamespace(value="tool.execution_start"),
                         data=_types.SimpleNamespace(
-                            mcp_tool_name="ask_work_iq",
+                            mcp_tool_name="ask",
                             mcp_server_name="_hve_workiq",
                             arguments={"question": "ping"},
                         ),
@@ -1362,7 +1365,8 @@ class TestProbeWorkIQCopilotToolInvocation(unittest.TestCase):
         invocation = next(c for c in checks if c.name == "copilot_tool_invocation")
         trace = next(c for c in checks if c.name == "copilot_sdk_event_trace")
         self.assertEqual(invocation.status, "PASS")
-        self.assertIn("ask_work_iq", invocation.detail)
+        # `ask` は 3 文字の一般語のため、ツール名を列挙する区切り込みで判定する
+        self.assertIn(": ask", invocation.detail)
         self.assertIn("mcp_server=_hve_workiq", trace.detail)
         self.assertNotIn("ping", trace.detail)
 
@@ -1514,7 +1518,7 @@ class TestProbeWorkIQCopilotToolInvocation(unittest.TestCase):
             name = "_hve_workiq"
             status = "connected"
             error = None
-            tools = ["ask_work_iq"]  # ツールあり
+            tools = ["ask"]  # ツールあり
 
         class _FakeMcp:
             async def list(self):
@@ -1718,37 +1722,37 @@ class TestWorkIQToolEventHelpers(unittest.TestCase):
     def test_workiq_mcp_server_event_detected(self) -> None:
         import types
         event = self._make_event(types.SimpleNamespace(
-            mcp_tool_name="ask_work_iq",
+            mcp_tool_name="ask",
             mcp_server_name=workiq.WORKIQ_MCP_SERVER_NAME,
         ))
         self.assertTrue(workiq.is_workiq_tool_event(event))
-        self.assertEqual(workiq.extract_workiq_tool_name_from_event(event), "ask_work_iq")
+        self.assertEqual(workiq.extract_workiq_tool_name_from_event(event), "ask")
 
     def test_other_mcp_server_tool_not_detected_as_workiq(self) -> None:
         import types
         event = self._make_event(types.SimpleNamespace(
-            mcp_tool_name="ask_work_iq",
+            mcp_tool_name="ask",
             mcp_server_name="other_server",
         ))
         self.assertFalse(workiq.is_workiq_tool_event(event))
         self.assertIsNone(workiq.extract_workiq_tool_name_from_event(event))
 
-    def test_legacy_workiq_tool_without_server_stays_supported(self) -> None:
+    def test_tool_without_server_name_is_not_detected(self) -> None:
         import types
-        event = self._make_event(types.SimpleNamespace(tool_name="ask_work_iq"))
-        self.assertTrue(workiq.is_workiq_tool_event(event))
-        self.assertEqual(workiq.extract_workiq_tool_name_from_event(event), "ask_work_iq")
+        event = self._make_event(types.SimpleNamespace(tool_name="ask"))
+        self.assertFalse(workiq.is_workiq_tool_event(event))
+        self.assertIsNone(workiq.extract_workiq_tool_name_from_event(event))
 
     def test_trace_line_excludes_arguments_and_content(self) -> None:
         event = self._make_event({
-            "mcpToolName": "ask_work_iq",
+            "mcpToolName": "ask",
             "mcpServerName": workiq.WORKIQ_MCP_SERVER_NAME,
             "arguments": {"query": "secret query"},
             "content": "secret content",
         })
         trace = workiq.format_sdk_event_trace_line(event)
         self.assertIn("type=tool.execution_start", trace)
-        self.assertIn("mcp_tool=ask_work_iq", trace)
+        self.assertIn("mcp_tool=ask", trace)
         self.assertIn(workiq.WORKIQ_MCP_SERVER_NAME, trace)
         self.assertNotIn("secret", trace)
         self.assertNotIn("arguments", trace)
@@ -1778,7 +1782,7 @@ class TestWorkIQOfficialToolIdentity(unittest.TestCase):
     def test_internal_server_and_tool_pair_is_allowed(self) -> None:
         event = self._make_event(
             server_name="_hve_workiq",
-            tool_name="ask_work_iq",
+            tool_name="ask",
         )
         self.assertTrue(workiq.is_workiq_tool_event(event))
 
@@ -1796,9 +1800,9 @@ class TestWorkIQOfficialToolIdentity(unittest.TestCase):
         event = self._make_event(server_name="other", tool_name="ask")
         self.assertFalse(workiq.is_workiq_tool_event(event))
 
-    def test_legacy_internal_tool_without_server_remains_supported(self) -> None:
+    def test_legacy_internal_tool_name_without_server_is_rejected(self) -> None:
         event = self._make_event(legacy_tool_name="ask_work_iq")
-        self.assertTrue(workiq.is_workiq_tool_event(event))
+        self.assertFalse(workiq.is_workiq_tool_event(event))
 
     def test_extract_status_from_first_nonempty_line(self) -> None:
         self.assertEqual(
@@ -1819,12 +1823,12 @@ class TestIsWorkIQToolName(unittest.TestCase):
     """is_workiq_tool_name() のユニットテスト。"""
 
     def test_known_workiq_tools_return_true(self) -> None:
-        for tool in ("ask_work_iq",):
+        for tool in ("ask",):
             with self.subTest(tool=tool):
                 self.assertTrue(workiq.is_workiq_tool_name(tool))
 
     def test_non_workiq_tools_return_false(self) -> None:
-        for tool in ("edit_file", "write_file", "bash", "read_file", "task", ""):
+        for tool in ("edit_file", "write_file", "bash", "read_file", "task", "ask_work_iq", ""):
             with self.subTest(tool=tool):
                 self.assertFalse(workiq.is_workiq_tool_name(tool))
 
@@ -1895,7 +1899,7 @@ class TestWorkIQStructuredOutputPrompts(unittest.TestCase):
     def test_search_strategy_directive_removed(self) -> None:
         """検索キーワード戦略（同義語/略称/英訳）の指示は削除されていること。
 
-        Work IQ MCP `ask_work_iq` は自然言語クエリ 1 個を引数にとるインターフェース。
+        Work IQ MCP `ask` は自然言語クエリ 1 個を引数にとるインターフェース。
         検索クエリ展開はサーバ側 (Microsoft Graph) に委ねる方針のため、
         プロンプトで同義語展開を強制しない。
         """
@@ -2015,6 +2019,261 @@ class TestFilterWorkiqQuestions(unittest.TestCase):
         self.assertEqual(result, [])
         result2 = self._filter(questions, max_questions=-1, priority_filter=False)
         self.assertEqual(result2, [])
+
+
+class TestWorkIQSubprocessEncoding(unittest.TestCase):
+    """Windows のロケール既定 decode による UnicodeDecodeError を防ぐ。"""
+
+    def setUp(self) -> None:
+        workiq._workiq_available_cache = None
+        workiq._workiq_available_probe_attempts = 0
+
+    def test_is_workiq_available_declares_utf8_decoding(self) -> None:
+        proc = mock.Mock(returncode=0)
+        with mock.patch("workiq.shutil.which", return_value="/usr/bin/npx"), \
+                mock.patch("workiq.subprocess.run", return_value=proc) as run_mock:
+            self.assertTrue(workiq.is_workiq_available())
+        self.assertEqual(run_mock.call_args.kwargs["encoding"], "utf-8")
+        self.assertEqual(run_mock.call_args.kwargs["errors"], "replace")
+
+
+class TestWorkIQAvailabilityTimeout(unittest.TestCase):
+    """タイムアウトは「判定不能」であり不可用として恒久キャッシュしない。"""
+
+    def setUp(self) -> None:
+        workiq._workiq_available_cache = None
+        workiq._workiq_available_probe_attempts = 0
+
+    def test_probe_timeout_is_long_enough_for_cold_npx_fetch(self) -> None:
+        proc = mock.Mock(returncode=0)
+        with mock.patch("workiq.shutil.which", return_value="/usr/bin/npx"), \
+                mock.patch("workiq.subprocess.run", return_value=proc) as run_mock:
+            workiq.is_workiq_available()
+        self.assertGreaterEqual(workiq._WORKIQ_VERSION_PROBE_TIMEOUT_SECONDS, 120.0)
+        self.assertEqual(
+            run_mock.call_args.kwargs["timeout"],
+            workiq._WORKIQ_VERSION_PROBE_TIMEOUT_SECONDS,
+        )
+
+    def test_timeout_is_not_cached_and_is_retried(self) -> None:
+        timeout_exc = subprocess.TimeoutExpired(cmd="npx", timeout=1.0)
+        with mock.patch("workiq.shutil.which", return_value="/usr/bin/npx"), \
+                mock.patch("workiq.subprocess.run", side_effect=timeout_exc) as run_mock:
+            self.assertFalse(workiq.is_workiq_available())
+            self.assertFalse(workiq.is_workiq_available())
+        self.assertEqual(run_mock.call_count, 2)
+
+    def test_timeout_retry_is_capped(self) -> None:
+        timeout_exc = subprocess.TimeoutExpired(cmd="npx", timeout=1.0)
+        with mock.patch("workiq.shutil.which", return_value="/usr/bin/npx"), \
+                mock.patch("workiq.subprocess.run", side_effect=timeout_exc) as run_mock:
+            for _ in range(5):
+                self.assertFalse(workiq.is_workiq_available())
+        self.assertEqual(
+            run_mock.call_count, workiq._WORKIQ_AVAILABILITY_MAX_PROBE_ATTEMPTS
+        )
+
+    def test_timeout_then_success_returns_true(self) -> None:
+        timeout_exc = subprocess.TimeoutExpired(cmd="npx", timeout=1.0)
+        proc = mock.Mock(returncode=0)
+        with mock.patch("workiq.shutil.which", return_value="/usr/bin/npx"), \
+                mock.patch("workiq.subprocess.run", side_effect=[timeout_exc, proc]):
+            self.assertFalse(workiq.is_workiq_available())
+            self.assertTrue(workiq.is_workiq_available())
+
+    def test_missing_executable_is_cached_as_unavailable(self) -> None:
+        with mock.patch("workiq.shutil.which", return_value="/usr/bin/npx"), \
+                mock.patch("workiq.subprocess.run", side_effect=FileNotFoundError()) as run_mock:
+            self.assertFalse(workiq.is_workiq_available())
+            self.assertFalse(workiq.is_workiq_available())
+        self.assertEqual(run_mock.call_count, 1)
+
+
+class TestWorkIQQueryToolDetection(unittest.TestCase):
+    """FR-QA-03: 実行確認集合は参照系ツールを網羅し、公開 allowlist とは分離する。"""
+
+    @staticmethod
+    def _event(*, server_name: str, tool_name: str) -> object:
+        import types
+
+        return types.SimpleNamespace(
+            type=types.SimpleNamespace(value="tool.execution_start"),
+            data=types.SimpleNamespace(
+                mcp_server_name=server_name,
+                mcp_tool_name=tool_name,
+                tool_name=None,
+            ),
+        )
+
+    def test_query_tools_are_detected_on_both_servers(self) -> None:
+        for server in ("_hve_workiq", "workiq"):
+            for tool in ("ask", "retrieve", "fetch", "fetch_blob", "get_schema", "search_paths"):
+                with self.subTest(server=server, tool=tool):
+                    event = self._event(server_name=server, tool_name=tool)
+                    self.assertTrue(workiq.is_workiq_tool_event(event))
+                    self.assertEqual(
+                        workiq.extract_workiq_tool_name_from_event(event), tool
+                    )
+
+    def test_query_tools_are_detected_on_preview_server(self) -> None:
+        """`workiq-preview` プラグインの MCP サーバー経由の実行も確認対象にする。"""
+        for tool in ("ask", "retrieve", "fetch", "fetch_blob", "get_schema", "search_paths"):
+            with self.subTest(tool=tool):
+                event = self._event(server_name="workiq-preview", tool_name=tool)
+                self.assertTrue(workiq.is_workiq_tool_event(event))
+                self.assertEqual(
+                    workiq.extract_workiq_tool_name_from_event(event), tool
+                )
+
+    def test_write_and_admin_tools_are_not_execution_evidence(self) -> None:
+        for tool in (
+            "create_entity", "update_entity", "delete_entity", "do_action",
+            "accept_eula", "get_debug_link", "call_function", "list_agents",
+        ):
+            with self.subTest(tool=tool):
+                event = self._event(server_name="workiq", tool_name=tool)
+                self.assertFalse(workiq.is_workiq_tool_event(event))
+
+    def test_preview_server_write_and_admin_tools_are_not_execution_evidence(self) -> None:
+        for tool in (
+            "create_entity", "update_entity", "delete_entity", "do_action",
+            "accept_eula", "get_debug_link", "call_function", "list_agents",
+            "upload_blob",
+        ):
+            with self.subTest(tool=tool):
+                event = self._event(server_name="workiq-preview", tool_name=tool)
+                self.assertFalse(workiq.is_workiq_tool_event(event))
+
+    def test_other_server_with_query_tool_is_rejected(self) -> None:
+        event = self._event(server_name="other", tool_name="retrieve")
+        self.assertFalse(workiq.is_workiq_tool_event(event))
+
+    def test_mcp_publish_allowlist_stays_minimal(self) -> None:
+        self.assertEqual(set(workiq.WORKIQ_MCP_TOOL_NAMES), {"ask"})
+        with mock.patch("workiq.resolve_npx_command", return_value="npx"):
+            cfg = workiq.build_workiq_mcp_config()
+        self.assertEqual(cfg["_hve_workiq"]["tools"], ["ask"])
+
+    def test_detection_set_is_a_superset_of_publish_allowlist(self) -> None:
+        self.assertLess(
+            set(workiq.WORKIQ_MCP_TOOL_NAMES),
+            set(workiq.WORKIQ_MCP_QUERY_TOOL_NAMES),
+        )
+
+    def test_server_names_constant_is_the_single_source_of_truth(self) -> None:
+        """server 名判定を二重に持たないための正本（FR-MAINT-07）。"""
+        self.assertEqual(
+            workiq.WORKIQ_MCP_SERVER_NAMES,
+            frozenset({"_hve_workiq", "workiq", "workiq-preview"}),
+        )
+        self.assertEqual(
+            workiq.WORKIQ_MCP_SERVER_NAMES,
+            frozenset(workiq._WORKIQ_MCP_TOOL_NAMES_BY_SERVER),
+        )
+
+
+class TestWorkIQToolNotInvokedWarning(unittest.TestCase):
+    """FR-QA-06: tool 実行未確認の警告文は単一ヘルパーが生成する。"""
+
+    def test_warning_states_detection_failure(self) -> None:
+        message = workiq.format_workiq_tool_not_invoked_warning("Q1")
+        self.assertIn("Q1", message)
+        self.assertIn("確認できませんでした", message)
+
+    def test_warning_includes_diagnostic_command(self) -> None:
+        message = workiq.format_workiq_tool_not_invoked_warning("prefetch")
+        self.assertIn("python -m hve workiq-doctor", message)
+
+    def test_warning_includes_observed_tool_names(self) -> None:
+        message = workiq.format_workiq_tool_not_invoked_warning(
+            "Q3", observed_tools=["retrieve", "retrieve", "edit"]
+        )
+        self.assertIn("retrieve", message)
+        self.assertIn("edit", message)
+
+    def test_warning_without_observed_tools_is_still_valid(self) -> None:
+        message = workiq.format_workiq_tool_not_invoked_warning("Q3", observed_tools=[])
+        self.assertIn("確認できませんでした", message)
+
+    def test_warning_reports_status_when_given(self) -> None:
+        message = workiq.format_workiq_tool_not_invoked_warning("Q2", status="FOUND")
+        self.assertIn("FOUND", message)
+
+    def test_prefetch_path_uses_shared_helper(self) -> None:
+        orchestrator_source = (
+            Path(workiq.__file__).parent / "orchestrator.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("format_workiq_tool_not_invoked_warning", orchestrator_source)
+        runner_source = (
+            Path(workiq.__file__).parent / "runner.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("format_workiq_tool_not_invoked_warning", runner_source)
+
+
+class TestWorkIQMergeDecision(unittest.TestCase):
+    """FR-QA-03 の統合可否判定を単一ヘルパーへ寄せる。"""
+
+    def test_tool_confirmed_found_is_mergeable(self) -> None:
+        self.assertTrue(
+            workiq.is_workiq_result_mergeable(tool_confirmed=True, status="FOUND")
+        )
+
+    def test_tool_confirmed_partial_is_mergeable(self) -> None:
+        self.assertTrue(
+            workiq.is_workiq_result_mergeable(tool_confirmed=True, status="PARTIAL")
+        )
+
+    def test_tool_unconfirmed_found_is_not_mergeable(self) -> None:
+        self.assertFalse(
+            workiq.is_workiq_result_mergeable(tool_confirmed=False, status="FOUND")
+        )
+
+    def test_non_positive_statuses_are_not_mergeable(self) -> None:
+        for status in ("NOT_FOUND", "UNAVAILABLE", None, ""):
+            with self.subTest(status=status):
+                self.assertFalse(
+                    workiq.is_workiq_result_mergeable(
+                        tool_confirmed=True, status=status
+                    )
+                )
+
+    def test_runner_uses_the_shared_helper(self) -> None:
+        runner_source = (
+            Path(workiq.__file__).parent / "runner.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("is_workiq_result_mergeable", runner_source)
+
+
+class TestWorkIQQaIntegrationDecisionCheck(unittest.TestCase):
+    """FR-QA-08: 事前 QA 統合可否を診断 1 回で判定できる。"""
+
+    def test_pass_when_tool_confirmed_and_status_found(self) -> None:
+        check = workiq.evaluate_workiq_qa_merge_decision(
+            called_tools=["retrieve"], status="FOUND", observed_tools=["retrieve"],
+        )
+        self.assertEqual(check.name, "workiq_qa_merge_decision")
+        self.assertEqual(check.status, "PASS")
+
+    def test_fail_when_tool_not_confirmed(self) -> None:
+        check = workiq.evaluate_workiq_qa_merge_decision(
+            called_tools=[], status="FOUND", observed_tools=["retrieve", "edit"],
+        )
+        self.assertEqual(check.status, "FAIL")
+        self.assertIn("retrieve", check.detail)
+        self.assertIn("python -m hve workiq-doctor", check.detail)
+
+    def test_warn_when_status_is_not_positive(self) -> None:
+        check = workiq.evaluate_workiq_qa_merge_decision(
+            called_tools=["ask"], status="NOT_FOUND", observed_tools=["ask"],
+        )
+        self.assertEqual(check.status, "WARN")
+        self.assertIn("NOT_FOUND", check.detail)
+
+    def test_detail_excludes_response_body(self) -> None:
+        check = workiq.evaluate_workiq_qa_merge_decision(
+            called_tools=[], status=None, observed_tools=[],
+        )
+        self.assertNotIn("STATUS:", check.detail.replace("STATUS 不明", ""))
 
 
 if __name__ == "__main__":

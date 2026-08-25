@@ -1,0 +1,2 @@
+[console_scripts]
+code-query-gui = cq.gui.__main__:main

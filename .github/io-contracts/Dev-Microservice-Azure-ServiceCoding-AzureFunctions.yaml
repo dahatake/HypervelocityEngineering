@@ -10,11 +10,11 @@ inputs:
 - path: docs/catalog/service-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-Microservice-ServiceIdentify--aas--3.2
+  producer: Arch-Microservice-ServiceIdentify--aas--2.2
 - path: docs/catalog/data-model.md
   required: true
   kind: agent_artifact
-  producer: Arch-DataModeling--aas--4.1
+  producer: Arch-DataModeling--aas--3.1
 - path: docs/catalog/service-catalog-matrix.md
   required: true
   kind: agent_artifact

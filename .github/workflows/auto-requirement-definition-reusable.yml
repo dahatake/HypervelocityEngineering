@@ -1,0 +1,101 @@
+name: ARD Orchestrator
+
+# Parameter contract: company_name, target_business, survey_base_date,
+# survey_period_years, target_region, analysis_purpose,
+# target_recommendation_id, attached_docs, include_kpi_okr.
+on:
+  workflow_call:
+    inputs:
+      mode:
+        required: false
+        type: string
+        default: ''
+      issue_number:
+        required: true
+        type: string
+      event_action:
+        required: false
+        type: string
+        default: ''
+      label_name:
+        required: false
+        type: string
+        default: ''
+      issue_labels:
+        required: false
+        type: string
+        default: '[]'
+      runner_type:
+        required: false
+        type: string
+        default: "github-hosted"
+
+permissions:
+  issues: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  check_qa_skip:
+    uses: ./.github/workflows/check-auto-qa-skip-reusable.yml
+    with:
+      issue_number: ${{ fromJSON(inputs.issue_number) }}
+      issue_labels: ${{ inputs.issue_labels }}
+      issue_body: ''
+    secrets: inherit
+
+  orchestrate:
+    needs: check_qa_skip
+    runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
+    timeout-minutes: 360
+    concurrency:
+      group: ard-orchestrator-${{ inputs.issue_number }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
+      REPO: ${{ github.repository }}
+      ISSUE_NUMBER: ${{ inputs.issue_number }}
+      REQUESTED_MODE: ${{ inputs.mode }}
+      SKIP_AUTO_QA: ${{ needs.check_qa_skip.outputs.skip_auto_qa }}
+    steps:
+      - name: Resolve ARD mode
+        id: gate
+        run: |
+          set -euo pipefail
+          issue=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}")
+          title=$(printf '%s' "${issue}" | jq -r '.title // ""')
+          labels=$(printf '%s' "${issue}" | jq -c '[.labels[].name]')
+          mode="skip"
+          case "${REQUESTED_MODE}" in
+            initialize)
+              if [[ ! "${title}" =~ ^\[ARD\]\ Step\. ]] \
+                && ! printf '%s' "${labels}" | jq -e 'any(.[]; startswith("ard:"))' >/dev/null; then
+                mode="initialize"
+              fi
+              ;;
+            state_transition|closed)
+              if [[ "${title}" =~ ^\[ARD\]\ Step\. ]]; then
+                mode="advance"
+              fi
+              ;;
+          esac
+          echo "mode=${mode}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout repository
+        if: steps.gate.outputs.mode != 'skip'
+        uses: actions/checkout@v4
+
+      - name: Initialize ARD issues
+        if: steps.gate.outputs.mode == 'initialize'
+        run: |
+          set -euo pipefail
+          bash .github/scripts/bash/ard-cloud.sh initialize \
+            --issue "${ISSUE_NUMBER}" --repo "${REPO}"
+
+      - name: Advance ARD DAG
+        if: steps.gate.outputs.mode == 'advance'
+        run: |
+          set -euo pipefail
+          bash .github/scripts/bash/ard-cloud.sh advance \
+            --issue "${ISSUE_NUMBER}" --repo "${REPO}"

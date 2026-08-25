@@ -82,8 +82,13 @@ jobs:
         run: |
           Import-Module PSScriptAnalyzer -MinimumVersion 1.20.0
           $results = @()
-          $results += Invoke-ScriptAnalyzer -Path '.github/scripts/powershell' -Recurse -Severity Warning,Error |
-              Where-Object { $_.ScriptName -notlike '*.Tests.ps1' }
+          # PowerShell 7+ only: UTF-8 without BOM is intentional and portable.
+            # Pester BeforeAll variables are consumed by child It blocks, which the analyzer
+            # cannot resolve; suppress only that rule on test files.
+            $results += Invoke-ScriptAnalyzer -Path '.github/scripts/powershell' -Recurse -Severity Warning,Error -ExcludeRule PSUseBOMForUnicodeEncodedFile |
+              Where-Object {
+                -not ($_.RuleName -eq 'PSUseDeclaredVarsMoreThanAssignments' -and $_.ScriptName -like '*.Tests.ps1')
+              }
           if ($results.Count -gt 0) {
               $results | Format-Table -AutoSize
               throw "PSScriptAnalyzer found $($results.Count) issue(s)"
@@ -130,8 +135,13 @@ jobs:
         run: |
           Import-Module PSScriptAnalyzer -MinimumVersion 1.20.0
           $results = @()
-          $results += Invoke-ScriptAnalyzer -Path '.github/scripts/powershell' -Recurse -Severity Warning,Error |
-              Where-Object { $_.ScriptName -notlike '*.Tests.ps1' }
+          # PowerShell 7+ only: UTF-8 without BOM is intentional and portable.
+            # Pester BeforeAll variables are consumed by child It blocks, which the analyzer
+            # cannot resolve; suppress only that rule on test files.
+            $results += Invoke-ScriptAnalyzer -Path '.github/scripts/powershell' -Recurse -Severity Warning,Error -ExcludeRule PSUseBOMForUnicodeEncodedFile |
+              Where-Object {
+                -not ($_.RuleName -eq 'PSUseDeclaredVarsMoreThanAssignments' -and $_.ScriptName -like '*.Tests.ps1')
+              }
           if ($results.Count -gt 0) {
               $results | Format-Table -AutoSize
               throw "PSScriptAnalyzer found $($results.Count) issue(s)"
@@ -144,5 +154,14 @@ jobs:
           Import-Module Pester -MinimumVersion 5.0.0
           $config = New-PesterConfiguration
           $config.Run.Path = '.github/scripts/tests/test-powershell.ps1'
+          $config.Run.Exit = $true
+          Invoke-Pester -Configuration $config
+
+      - name: Run Pester tests (commands.Tests.ps1)
+        shell: pwsh
+        run: |
+          Import-Module Pester -MinimumVersion 5.0.0
+          $config = New-PesterConfiguration
+          $config.Run.Path = '.github/scripts/powershell/tests'
           $config.Run.Exit = $true
           Invoke-Pester -Configuration $config

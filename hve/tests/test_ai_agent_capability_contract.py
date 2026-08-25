@@ -34,7 +34,7 @@ _AAGD_FILES = {
     "deploy": _PROMPTS / "Dev-Microservice-Azure-AgentDeploy.prompt.md",
 }
 _ALL_CONTRACT_FILES = tuple(_AAG_PROMPTS.values()) + tuple(_AAGD_FILES.values())
-_CONTRACT_IDS = tuple(f"AG-CAP-0{index}" for index in range(1, 7))
+_CONTRACT_IDS = tuple(f"AG-CAP-{index:02d}" for index in range(1, 11))
 
 
 def _read(path: Path) -> str:
@@ -139,9 +139,13 @@ def test_aag_step3_fixes_all_sections_reasoned_na_and_completion_gate() -> None:
         "REST CRUD Matrix",
         "MCP Integration Plan",
         "Skill Packaging Decision",
+        "Agent Identity & Authorization",
+        "Observability Contract",
+        "Distribution & Packaging",
+        "Evaluation & Route Right-sizing",
     )
-    assert len(fixed_sections) == len(_CONTRACT_IDS) == 6
-    assert "AG-CAP-01〜06" in text
+    assert len(fixed_sections) == len(_CONTRACT_IDS) == 10
+    assert "AG-CAP-01〜10" in text
     for heading in fixed_sections:
         assert text.count(heading) >= 1
     for token in (
@@ -152,12 +156,12 @@ def test_aag_step3_fixes_all_sections_reasoned_na_and_completion_gate() -> None:
         "required時だけ配置先・resources・明示load・validation",
     ):
         assert token in text
-    assert "AG-CAP-01〜06が確定または理由付きN/A" in text
+    assert "AG-CAP-01〜10が確定または理由付きN/A" in text
 
 
 def test_aagd_test_spec_traces_every_contract_to_deterministic_test_doubles() -> None:
     text = _read(_AAGD_FILES["test-spec"])
-    assert "AG-CAP-01〜06" in text
+    assert "AG-CAP-01〜10" in text
     for token in (
         "Contract ID、入力、test double、期待結果、必要なevidence",
         "Preferred→Fallback→Blocked",
@@ -173,7 +177,7 @@ def test_aagd_test_spec_traces_every_contract_to_deterministic_test_doubles() ->
 
 def test_aagd_test_coding_uses_selected_providers_and_no_live_services() -> None:
     text = _read(_AAGD_FILES["test-code"])
-    assert "AG-CAP-01〜06" in text
+    assert "AG-CAP-01〜10" in text
     for contract_id in ("AG-CAP-01 / 02", "AG-CAP-03", "AG-CAP-04", "AG-CAP-05", "AG-CAP-06"):
         assert contract_id in text
     for token in (
@@ -242,9 +246,17 @@ def test_scoped_io_registry_and_runner_paths_are_identical() -> None:
     optional_inputs = {
         item["path"] for item in contract["inputs"] if item["required"] is False
     }
+    # ADA（画面を持たないデータ中心経路）から来た場合、画面・matrix・Azure 系の
+    # 成果物は存在しない。AAS / AAD-WEB / ASDW-WEB 経由なら存在するため、
+    # 必須ではなく任意入力として宣言する。
     assert optional_inputs == {
         ".github/skills/agent-common-preamble/references/agent-playbook.md",
         "knowledge/",
+        "docs/azure/azure-services-additional.md",
+        "docs/azure/azure-services-data.md",
+        "docs/catalog/screen-catalog-APP-*.md",
+        "docs/catalog/service-catalog-matrix.md",
+        "docs/screen/{screenId}-*.md",
     }
 
     aag = get_workflow("aag")

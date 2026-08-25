@@ -6,7 +6,7 @@ inputs:
 - path: docs/catalog/data-model.md
   required: true
   kind: agent_artifact
-  producer: Arch-DataModeling--aas--4.1
+  producer: Arch-DataModeling--aas--3.1
 outputs:
 - path: docs/dataflow/dataflow-data-model.md
   required: true

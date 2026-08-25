@@ -1,5 +1,7 @@
 # Tool Search（HVE ランタイムのツール検索）
 
+← [README](../README.md)
+
 HVE 自身の Copilot SDK セッションに対して、**ツール定義を毎ターン全件渡すのをやめ、
 必要なものだけをその場で発見させる**ための仕組み。ランキングを HVE が所有し、
 `policy.json` でカスタマイズできる。

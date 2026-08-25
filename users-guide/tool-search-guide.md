@@ -1,5 +1,7 @@
 # Foundry Toolbox / Tool Search 利用ガイド（生成する AI Agent 向け）
 
+← [README](../README.md)
+
 生成する AI Agent に Microsoft Foundry の **Toolbox** と **tool search**（ツール定義の遅延ロード）を
 適用するための手引き。
 

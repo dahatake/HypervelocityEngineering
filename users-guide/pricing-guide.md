@@ -1,5 +1,7 @@
 # 料金 / リアルタイム統計表示ガイド
 
+← [README](../README.md)
+
 hve は GitHub Copilot CLI 実行中の **コンテキスト使用量・経過時間・SDK が返す AIU / Premium Requests 相当値・pricing 計算値** を GUI / CUI 両方で ~1Hz で可視化します。本ガイドでは設定・利用方法・トラブルシュートをまとめます。
 
 > **重要 (捏造禁止)**: 料金表が未取得 / 不明モデルの場合、コストは **`-`** と表示されます。推定値で埋めることはしません。
@@ -223,6 +225,7 @@ with StatusLine(interval=1.0) as sl:
 - `hve/gui/settings_pricing_tab.py` — GUI 設定タブ（**未配線**：settings_window から import されていない）
 - `hve/statusline.py` — CUI StatusLine（**配線済み**：[hve/orchestrator.py](../hve/orchestrator.py) の `_attach_runtime_statusline()` から起動）
 - `hve/tests/pricing/` — 全 67 件のテスト
+- 表示先の操作ガイド: [hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md)（GUI）/ [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md)（CLI）
 
 ---
 

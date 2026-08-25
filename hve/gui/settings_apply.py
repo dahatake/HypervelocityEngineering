@@ -194,7 +194,6 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
         "workiq_akm_ingest": "workiq_akm_ingest",
     },
     "C10": {
-        "app_id": "app_id",
         "app_ids": "app_ids",
         "usecase_id": "usecase_id",
     },

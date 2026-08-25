@@ -1174,6 +1174,8 @@ def _run_tool(cmd: List[str], cwd: Optional[str] = None, timeout: int = 120) -> 
             cmd,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=cwd,
             timeout=timeout,
         )
@@ -3307,6 +3309,8 @@ def run_improvement_loop(
             cwd=str(effective_repo),
             stderr=subprocess.DEVNULL,
             text=True,
+            encoding="utf-8",
+            errors="replace",
         ).strip()
     except Exception:
         _current_branch = "(unknown)"

@@ -115,14 +115,18 @@ sdkconfig_internal_fields:
 issue_form_internal_fields:
   - additional_comment      # ユーザー向けテキスト補足（UI 用、web-app-dev.yml 等）
   - additional_context      # self-improve.yml 専用テキスト補足
+  - analysis_purpose        # ARD 専用パラメータ（auto-requirement-definition.yml）
   - app_ids                 # ワークフロー固有パラメータ（APP-ID 指定）
+  - attached_docs           # ARD 専用パラメータ（添付資料パス）
   - job_ids                 # dataflow-dev.yml 固有パラメータ（BJ-* ジョブ ID 指定）
+  - company_name            # ARD 専用パラメータ（対象企業名）
   - confirmation            # self-improve.yml UI 確認ゲート
   - depth                   # ADI 専用パラメータ（CLI / GUI）
   - doc_purpose             # ADOC 専用パラメータ（sourcecode-to-documentation.yml）
   - exclude_patterns        # ADOC 専用パラメータ
   - focus_areas             # ADI 専用パラメータ
   - force_refresh           # AKM 専用パラメータ（knowledge-management.yml）
+  - groups                  # ARD 専用パラメータ（表示グループ選択）
   - improvement_targets     # self-improve.yml 専用
   - max_file_lines          # ADOC 専用パラメータ
   - max_iterations          # self-improve.yml 専用（self_improve_max_iterations の別名）
@@ -130,8 +134,13 @@ issue_form_internal_fields:
   - resource_group          # ワークフロー固有パラメータ（Azure RG 名）
   - sources                 # AKM 専用パラメータ（knowledge-management.yml）
   - steps                   # ワークフロー固有パラメータ（ステップ選択）
+  - survey_base_date        # ARD 専用パラメータ（調査基準日）
+  - survey_period_years     # ARD 専用パラメータ（調査期間年数）
+  - target_business         # ARD 専用パラメータ（対象業務）
   - target_dirs             # ADOC 専用パラメータ
   - target_files            # AKM 専用パラメータ
+  - target_recommendation_id # ARD 専用パラメータ（採用 SR-ID）
+  - target_region           # ARD 専用パラメータ（対象地域）
   - target_scope            # ADI / self-improve 専用パラメータ
   - task_goal               # self-improve.yml 専用
   - usecase_id              # ワークフロー固有パラメータ（APP-ID 系）

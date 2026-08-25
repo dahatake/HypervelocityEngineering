@@ -16,25 +16,33 @@ inputs:
   kind: agent_artifact
   producer: Arch-TDD-TestSpec--aagd--2.1
 - path: docs/catalog/service-catalog-matrix.md
+  required: false
+  kind: agent_artifact
+  producer: Arch-Microservice-ServiceCatalog--aas--5
+- path: docs/catalog/data-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-Microservice-ServiceCatalog--aas--6
-- path: docs/azure/azure-services-additional.md
+  producer: Arch-DataCatalog--ada--5
+- path: docs/catalog/unstructured-data-catalog.md
   required: true
+  kind: agent_artifact
+  producer: Arch-AgentDataAsset--ada--8
+- path: docs/azure/azure-services-additional.md
+  required: false
   kind: agent_artifact
   producer: Dev-Microservice-Azure-AddServiceDesign--asdw-web--2.1
 - path: docs/catalog/app-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-ApplicationAnalytics--aas--1
+  producer: Arch-ApplicationAnalytics--ard--4.1
 - path: docs/azure/azure-services-data.md
-  required: true
+  required: false
   kind: agent_artifact
   producer: Dev-Microservice-Azure-DataDesign--asdw-web--1.1
 - path: docs/catalog/service-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-Microservice-ServiceIdentify--aas--3.2
+  producer: Arch-Microservice-ServiceIdentify--aas--2.2
 - path: src/agent/
   required: false
   kind: agent_artifact
@@ -61,7 +69,9 @@ outputs:
   required: true
   mode: create
 # Agent Plugins Specification 1.0.0 の plugin root マニフェスト。
-# `skills/` は AG-CAP-06 が required のときだけ生成される条件付き成果物のため宣言しない。
+# `skills/` は AG-CAP-06 が required のときだけ、`mcp.json` は AG-CAP-09 の
+# `Plugin components` が要としたときだけ生成される条件付き成果物のため宣言しない
+# （どちらも `src/agent/{key}/` 配下に包含される）。
 - path: src/agent/{key}/plugin.json
   required: true
   mode: create

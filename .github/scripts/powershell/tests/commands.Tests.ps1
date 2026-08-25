@@ -4,8 +4,6 @@ BeforeAll {
     if (Test-Path Function:\Invoke-GhApi) { Remove-Item Function:\Invoke-GhApi }
     if (Test-Path Function:\Invoke-CopilotAssign) { Remove-Item Function:\Invoke-CopilotAssign }
     if (Test-Path Function:\Get-IssueMetadatum) { Remove-Item Function:\Get-IssueMetadatum }
-
-    $ScriptRoot = "$PSScriptRoot/.."
 }
 
 Describe 'validate-plan.ps1' {
@@ -262,32 +260,31 @@ Describe 'orchestrate.ps1' {
         $ScriptPath = "$PSScriptRoot/../orchestrate.ps1"
         $output = & $ScriptPath -Workflow aas -DryRun *>&1 | Out-String
         $output | Should -Match 'AAS.*App Architecture Design'
-        $output | Should -Match '2'
-        $output | Should -Match 'Step\.1:.*アプリケーションリストの作成'
-        $output | Should -Match 'Step\.2:.*ソフトウェアアーキテクチャの推薦'
+        $output | Should -Match '1'
+        $output | Should -Match 'Step\.1:.*ソフトウェアアーキテクチャの推薦'
         $output | Should -Match 'ドライラン'
     }
 
     It 'shows execution plan for ADFD with step filter' {
         $ScriptPath = "$PSScriptRoot/../orchestrate.ps1"
-        $output = & $ScriptPath -Workflow adfd -Steps '1.1,1.2' -DryRun *>&1 | Out-String
+        $output = & $ScriptPath -Workflow adfd -Steps '0.1,0.2' -DryRun *>&1 | Out-String
         $output | Should -Match 'ADFD.*Dataflow Design'
-        $output | Should -Match 'Step\.1\.1:.*バッチドメイン分析'
-        $output | Should -Match 'Step\.1\.2:.*データソース'
+        $output | Should -Match 'Step\.0\.1:.*データフローデータモデル定義書'
+        $output | Should -Match 'Step\.0\.2:.*データフローアプリカタログ'
         $output | Should -Match 'スキップされるステップ'
     }
 
     It 'shows execution plan for all 3 workflows' {
         $ScriptPath = "$PSScriptRoot/../orchestrate.ps1"
         $workflows = @(
-            @{ id = 'aas';  prefix = 'AAS';  count = 2 },
-            @{ id = 'adfd';  prefix = 'ADFD';  count = 9 },
-            @{ id = 'adfdv'; prefix = 'ADFDV'; count = 7 }
+            @{ id = 'aas';  prefix = 'AAS';  count = 10 },
+            @{ id = 'adfd';  prefix = 'ADFD';  count = 7 },
+            @{ id = 'adfdv'; prefix = 'ADFDV'; count = 8 }
         )
         foreach ($wf in $workflows) {
             $output = & $ScriptPath -Workflow $wf.id -DryRun *>&1 | Out-String
             $output | Should -Match "\[$($wf.prefix)\]"
-            $output | Should -Match "$($wf.count)"
+            $output | Should -Match "作成するステップ \($($wf.count) 個\)"
         }
     }
 

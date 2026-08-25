@@ -1,6 +1,6 @@
 """workflow_registry.py — ワークフロー定義レジストリ
 
-12 個のオーケストレーションワークフロー (ARD/AAS/AAD-WEB/ASDW-WEB/ADFD/ADFDV/AAG/AAGD/AAR/AKM/ADI/ADOC) の
+13 個のオーケストレーションワークフロー (ARD/AAS/ADA/AAD-WEB/ASDW-WEB/ADFD/ADFDV/AAG/AAGD/AAR/AKM/ADI/ADOC) の
 ステップ DAG 定義をデータとして保持する。
 
 Step ID スコープ規則:
@@ -22,7 +22,7 @@ Step ID スコープ規則:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, FrozenSet, Iterable, List, Mapping, Optional
+from typing import Any, Dict, FrozenSet, Iterable, List, Mapping, Optional, Tuple
 
 
 # ASDW-WEB Step 1.3 はこの 1 つの APP スコープに固定されている。
@@ -388,102 +388,102 @@ AAS = WorkflowDef(
     state_labels=_make_state_labels("aas"),
     params=[],
     steps=[
-        StepDef(id="1", title="アプリケーションリストの作成",
-                custom_agent="Arch-ApplicationAnalytics",
-                consumed_artifacts=["use_case_catalog"],
-                body_template_path="templates/aas/step-1.md",
-                output_paths=["docs/catalog/app-catalog.md"],
-                required_input_paths=["docs/catalog/use-case-catalog.md"]),
-        StepDef(id="2", title="ソフトウェアアーキテクチャの推薦",
+        StepDef(id="1", title="ソフトウェアアーキテクチャの推薦",
                 custom_agent="Arch-ArchitectureCandidateAnalyzer",
-                depends_on=["1"],
-                # docs/architectural-requirements-app-xx.md は既知 key なし → app_catalog のみ
-                consumed_artifacts=["app_catalog"],
-                body_template_path="templates/aas/step-2.md",
+                depends_on=[],
+                consumed_artifacts=["app_catalog", "app_requirements"],
+                body_template_path="templates/aas/step-1.md",
                 output_paths=["docs/catalog/app-arch-catalog.md"],
-                required_input_paths=["docs/catalog/app-catalog.md"],
-                # ADR-0002 T4B: per-APP fan-out
-                fanout_parser="app_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aas/_common.md"),
-        StepDef(id="3.1", title="ドメイン分析",
+                required_input_paths=[
+                    "docs/catalog/app-catalog.md",
+                    "docs/architectural-requirements-app-*.md",
+                ]),
+        StepDef(id="2.1", title="ドメイン分析",
                 custom_agent="Arch-Microservice-DomainAnalytics",
-                depends_on=["2"],
+                depends_on=["1"],
                 consumed_artifacts=["use_case_catalog", "app_catalog"],
-                body_template_path="templates/aas/step-3.1.md",
+                body_template_path="templates/aas/step-2.1.md",
                 output_paths=["docs/catalog/domain-analytics.md"],
                 required_input_paths=["docs/catalog/app-arch-catalog.md", "docs/catalog/app-catalog.md", "docs/catalog/use-case-catalog.md"]),
-        StepDef(id="3.2", title="サービス一覧抽出",
+        StepDef(id="2.2", title="サービス一覧抽出",
                 custom_agent="Arch-Microservice-ServiceIdentify",
-                depends_on=["3.1"],
+                depends_on=["2.1"],
                 consumed_artifacts=["use_case_catalog", "domain_analytics", "app_catalog"],
-                body_template_path="templates/aas/step-3.2.md",
+                body_template_path="templates/aas/step-2.2.md",
                 output_paths=["docs/catalog/service-catalog.md"],
                 required_input_paths=["docs/catalog/use-case-catalog.md",
                                       "docs/catalog/domain-analytics.md",
                                       "docs/catalog/app-catalog.md"]),
-        StepDef(id="4.1", title="データモデル設計",
+        StepDef(id="3.1", title="データモデル設計",
                 custom_agent="Arch-DataModeling",
-                depends_on=["3.2"],
+                depends_on=["2.2"],
                 consumed_artifacts=["domain_analytics", "service_catalog", "app_catalog"],
-                body_template_path="templates/aas/step-4.1.md",
+                body_template_path="templates/aas/step-3.1.md",
                 output_paths=["docs/catalog/data-model.md"],
+                # FR-WF-DM-01: 50,000文字超過時だけ生成する条件付きsidecar。
+                # 非fan-out宣言面のためruntime G-OUT / Self-Improve scopeには含めない。
+                output_paths_template=[
+                    "docs/catalog/data-model-service-stores.md",
+                    "docs/catalog/data-model-consistency-events.md",
+                    "docs/catalog/data-model-diagrams.md",
+                ],
                 required_input_paths=["docs/catalog/domain-analytics.md",
                                       "docs/catalog/service-catalog.md",
                                       "docs/catalog/app-catalog.md"]),
-        StepDef(id="4.2", title="サンプルデータ生成",
+        StepDef(id="3.2", title="サンプルデータ生成",
                 custom_agent="Arch-DataModeling",
-                depends_on=["4.1"],
+                depends_on=["3.1"],
                 consumed_artifacts=["data_model", "domain_analytics", "service_catalog", "app_catalog"],
-                body_template_path="templates/aas/step-4.2.md",
+                body_template_path="templates/aas/step-3.2.md",
                 output_paths=["src/data/sample-data.json"],
                 required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/service-catalog.md"]),
-        StepDef(id="5", title="データカタログ作成",
+        StepDef(id="4", title="データカタログ作成",
                 custom_agent="Arch-DataCatalog",
-                depends_on=["4.1"],
-                skip_fallback_deps=["4.1"],
+                depends_on=["3.1"],
+                skip_fallback_deps=["3.1"],
                 # service_catalog / service_catalog_matrix は optional 入力のため除外
                 consumed_artifacts=["data_model", "domain_analytics", "app_catalog"],
-                body_template_path="templates/aas/step-5.md",
+                body_template_path="templates/aas/step-4.md",
                 output_paths=["docs/catalog/data-catalog.md"],
                 required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/service-catalog.md"]),
-        StepDef(id="6", title="サービスカタログ",
+        StepDef(id="5", title="サービスカタログ",
                 custom_agent="Arch-Microservice-ServiceCatalog",
-                depends_on=["5"],
-                skip_fallback_deps=["5"],
+                depends_on=["4"],
+                skip_fallback_deps=["4"],
                 consumed_artifacts=["service_catalog", "data_model", "screen_catalog", "domain_analytics", "app_catalog"],
-                body_template_path="templates/aas/step-6.md",
+                body_template_path="templates/aas/step-5.md",
                 output_paths=["docs/catalog/service-catalog-matrix.md"],
                 required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/data-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/service-catalog.md"]),
-        StepDef(id="7", title="テスト戦略書",
+        StepDef(id="6", title="テスト戦略書",
                 custom_agent="Arch-TDD-TestStrategy",
-                depends_on=["6"],
-                skip_fallback_deps=["6"],
+                depends_on=["5"],
+                skip_fallback_deps=["5"],
                 consumed_artifacts=["service_catalog_matrix", "data_model", "domain_analytics", "service_catalog", "app_catalog"],
-                body_template_path="templates/aas/step-7.md",
+                body_template_path="templates/aas/step-6.md",
                 output_paths=["docs/catalog/test-strategy.md"],
                 required_input_paths=["docs/catalog/service-catalog-matrix.md",
                                       "docs/catalog/data-model.md",
                                       "docs/catalog/domain-analytics.md",
                                       "docs/catalog/service-catalog.md",
                                       "docs/catalog/app-catalog.md"]),
-        # Step 8 — ペルソナカタログ（Use Case Catalog からアクター/ロールを抽出）
+        # Step 7 — ペルソナカタログ（Use Case Catalog からアクター/ロールを抽出）
         # Q3=B 採用: docs/catalog/use-case-catalog.md を一次ソースとする
-        StepDef(id="8", title="ペルソナカタログ",
+        StepDef(id="7", title="ペルソナカタログ",
                 custom_agent="Arch-PersonaCatalog",
-                depends_on=["7"],
-                skip_fallback_deps=["7"],
+                depends_on=["6"],
+                skip_fallback_deps=["6"],
                 consumed_artifacts=["use_case_catalog", "app_catalog"],
-                body_template_path="templates/aas/step-8.md",
+                body_template_path="templates/aas/step-7.md",
                 output_paths=["docs/catalog/persona-catalog.md"],
                 required_input_paths=["docs/catalog/use-case-catalog.md",
                                       "docs/catalog/app-catalog.md"]),
-        # Step 9 — ペルソナ別共通画面カタログ（Step 8 のペルソナ一覧を前提）
-        StepDef(id="9", title="ペルソナ別共通画面カタログ",
+        # Step 8 — ペルソナ別共通画面カタログ（Step 7 のペルソナ一覧を前提）
+        StepDef(id="8", title="ペルソナ別共通画面カタログ",
                 custom_agent="Arch-UI-PersonaScreenList",
-                depends_on=["8"],
-                skip_fallback_deps=["8"],
+                depends_on=["7"],
+                skip_fallback_deps=["7"],
                 consumed_artifacts=["persona_catalog", "app_catalog"],
-                body_template_path="templates/aas/step-9.md",
+                body_template_path="templates/aas/step-8.md",
                 output_paths=["docs/catalog/persona-screen-catalog.md"],
                 required_input_paths=["docs/catalog/persona-catalog.md",
                                       "docs/catalog/app-catalog.md"]),
@@ -929,6 +929,15 @@ ASDW_WEB = WorkflowDef(
                 # 根拠: templates/asdw-web/step-5.2.md `## 出力`
                 output_paths=["docs/azure/dependency-review-report.md"],
                 required_input_paths=["docs/azure/azure-services-compute.md", "docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "src/api/", "src/app/"]),
+        # Step.5.3: 設計文書の照合ではなく、デプロイ済み構成を実行して測る（FR-WF-CONF-01）。
+        StepDef(id="5.3", title="要件適合実測",
+                custom_agent="QA-RequirementsConformanceEval",
+                depends_on=["5.1", "5.2"],
+                consumed_artifacts=["app_catalog", "service_catalog_matrix"],
+                body_template_path="templates/asdw-web/step-5.3.md",
+                output_paths=["docs/azure/requirements-conformance-report.md"],
+                required_skills=["requirements-conformance-measurement"],
+                required_input_paths=["docs/azure/azure-architecture-review-report.md", "docs/azure/dependency-review-report.md", "docs/catalog/app-catalog.md"]),
     ],
 )
 
@@ -980,7 +989,7 @@ ADFDV = WorkflowDef(
     name="Dataflow Dev",
     label_prefix="adfdv",
     state_labels=_make_state_labels("adfdv"),
-    params=["app_ids", "app_id", "resource_group", "app_id", "tdd_max_retries"],
+    params=["app_ids", "app_id", "resource_group", "tdd_max_retries"],
     steps=[
         # docs/dataflow/dataflow-data-source-analysis.md, dataflow-test-strategy.md は既知 key なし → スキップ
         # 注: `docs/dataflow/apps/{key}-spec.md` の ``{key}`` は ADFD Step 1 (Arch-Dataflow-AppSpec) の
@@ -1038,6 +1047,141 @@ ADFDV = WorkflowDef(
         # 根拠: templates/adfdv/step-4.2.md `## 出力` / `## 完了条件` および
         # QA-AzureDependencyReview.prompt.md Step 別出力テーブル（adfdv 4.2 = dependency-review.md）。
         StepDef(id="4.2", title="整合性チェック", custom_agent="QA-AzureDependencyReview", depends_on=["3"], consumed_artifacts=["batch_service_catalog"], body_template_path="templates/adfdv/step-4.2.md", output_paths=["docs/azure/dependency-review.md"], required_input_paths=["docs/azure/azure-services-compute.md", "docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "src/api/", "src/app/"]),
+        # Step.4.3: デプロイ済みのデータフロー基盤を実行して測る（FR-WF-CONF-01）。
+        StepDef(id="4.3", title="要件適合実測",
+                custom_agent="QA-RequirementsConformanceEval",
+                depends_on=["4.1", "4.2"],
+                consumed_artifacts=["batch_service_catalog", "dataflow_catalog"],
+                body_template_path="templates/adfdv/step-4.3.md",
+                output_paths=["docs/dataflow/requirements-conformance-report.md"],
+                required_skills=["requirements-conformance-measurement"],
+                required_input_paths=["docs/azure/dependency-review.md", "docs/azure/waf-review.md", "docs/dataflow/dataflow-app-catalog.md"]),
+    ],
+)
+
+# --- ADA: Agent Data Architecture ---
+# ARD の要求定義から「画面を持たない、データ中心の AI Agent」を設計するための
+# データ資産設計ワークフロー。AAS を置き換えるものではなく、AI Agent 経路専用の
+# 並走ワークフローとして独立させている。
+#
+# AAS から除外した 3 Step とその根拠:
+#   - AAS Step.2（app-arch-catalog）: hve/app_arch_filter.py の _WORKFLOW_TARGET_KIND は
+#     aad-web / asdw-web / adfd / adfdv のみを対象とし、aag / aagd から参照されない。
+#   - AAS Step.6（service-catalog-matrix）: 出力表のキーが画面 ID 固定で
+#     （Arch-Microservice-ServiceCatalog.prompt.md の Table A）、画面が無いと 1 行も書けない。
+#     Tool 定義根拠は Step.7 の docs/services/SVC-*.md で代替する。
+#   - AAS Step.9（persona-screen-catalog）: 画面専用。
+#
+# 新規 Custom Agent は Step.8 の Arch-AgentDataAsset のみ。残る 9 Step は
+# AAS / AAD-WEB の既存 Agent をそのまま再利用する。
+ADA = WorkflowDef(
+    id="ada",
+    name="Agent Data Architecture",
+    label_prefix="ada",
+    state_labels=_make_state_labels("ada"),
+    params=["app_ids", "app_id"],
+    steps=[
+        # ADA Step 1（アプリケーションリストの作成）は ARD Step 4.1 へ移管して廃止済み。
+        # Step ID は既存ステップの再採番禁止の原則により "2" から開始する。
+        StepDef(id="2", title="ドメイン分析",
+                custom_agent="Arch-Microservice-DomainAnalytics",
+                depends_on=[],
+                consumed_artifacts=["use_case_catalog", "app_catalog"],
+                body_template_path="templates/ada/step-2.md",
+                output_paths=["docs/catalog/domain-analytics.md"],
+                required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/use-case-catalog.md"]),
+        StepDef(id="3", title="サービス一覧抽出",
+                custom_agent="Arch-Microservice-ServiceIdentify",
+                depends_on=["2"],
+                consumed_artifacts=["use_case_catalog", "domain_analytics", "app_catalog"],
+                body_template_path="templates/ada/step-3.md",
+                output_paths=["docs/catalog/service-catalog.md"],
+                required_input_paths=["docs/catalog/app-catalog.md",
+                                      "docs/catalog/domain-analytics.md",
+                                      "docs/catalog/use-case-catalog.md"]),
+        StepDef(id="4.1", title="データモデル設計",
+                custom_agent="Arch-DataModeling",
+                depends_on=["3"],
+                consumed_artifacts=["domain_analytics", "service_catalog", "app_catalog"],
+                body_template_path="templates/ada/step-4.1.md",
+                output_paths=["docs/catalog/data-model.md"],
+                # FR-WF-DM-01: 50,000文字超過時だけ生成する条件付きsidecar。
+                # 非fan-out宣言面のためruntime G-OUT / Self-Improve scopeには含めない。
+                output_paths_template=[
+                    "docs/catalog/data-model-service-stores.md",
+                    "docs/catalog/data-model-consistency-events.md",
+                    "docs/catalog/data-model-diagrams.md",
+                ],
+                required_input_paths=["docs/catalog/app-catalog.md",
+                                      "docs/catalog/domain-analytics.md",
+                                      "docs/catalog/service-catalog.md"]),
+        StepDef(id="4.2", title="サンプルデータ生成",
+                custom_agent="Arch-DataModeling",
+                depends_on=["4.1"],
+                consumed_artifacts=["data_model", "domain_analytics", "service_catalog", "app_catalog"],
+                body_template_path="templates/ada/step-4.2.md",
+                output_paths=["src/data/sample-data.json"],
+                required_input_paths=["docs/catalog/app-catalog.md",
+                                      "docs/catalog/data-model.md",
+                                      "docs/catalog/domain-analytics.md",
+                                      "docs/catalog/service-catalog.md"]),
+        StepDef(id="5", title="データカタログ作成",
+                custom_agent="Arch-DataCatalog",
+                depends_on=["4.1"],
+                consumed_artifacts=["data_model", "domain_analytics", "app_catalog"],
+                body_template_path="templates/ada/step-5.md",
+                output_paths=["docs/catalog/data-catalog.md"],
+                # AAS Step.5 と異なり service-catalog-matrix.md は要求しない
+                # （ADA では画面キーの matrix を作らないため）。
+                required_input_paths=["docs/catalog/app-catalog.md",
+                                      "docs/catalog/data-model.md",
+                                      "docs/catalog/domain-analytics.md",
+                                      "docs/catalog/service-catalog.md"]),
+        StepDef(id="6", title="ペルソナカタログ",
+                custom_agent="Arch-PersonaCatalog",
+                depends_on=["5"],
+                consumed_artifacts=["use_case_catalog", "app_catalog"],
+                body_template_path="templates/ada/step-6.md",
+                output_paths=["docs/catalog/persona-catalog.md"],
+                required_input_paths=["docs/catalog/app-catalog.md",
+                                      "docs/catalog/use-case-catalog.md"]),
+        # Step.7: Tool 定義の根拠となる API 詳細。AAD-WEB Step.2.2 と同じ Agent を
+        # 再利用するが、画面カタログは入力に宣言しない（ADA は画面を作らない）。
+        StepDef(id="7", title="サービス詳細（Tool 定義根拠）",
+                custom_agent="Arch-Microservice-ServiceDetail",
+                depends_on=["5"],
+                consumed_artifacts=["app_catalog", "service_catalog", "data_model", "domain_analytics"],
+                body_template_path="templates/ada/step-7.md",
+                fanout_parser="service_catalog",
+                additional_prompt_template_path="hve/prompt/fanout/ada/_common.md",
+                # {serviceNameSlug} は catalog parser から復元できないため fan-out 展開時に落ちる。
+                output_paths_template=["docs/services/{serviceId}-{serviceNameSlug}-description.md"],
+                required_input_paths=["docs/catalog/app-catalog.md",
+                                      "docs/catalog/data-catalog.md",
+                                      "docs/catalog/data-model.md",
+                                      "docs/catalog/domain-analytics.md",
+                                      "docs/catalog/service-catalog.md"]),
+        StepDef(id="8", title="非構造化データ資産カタログ",
+                custom_agent="Arch-AgentDataAsset",
+                depends_on=["5"],
+                consumed_artifacts=["use_case_catalog", "app_catalog"],
+                body_template_path="templates/ada/step-8.md",
+                required_skills=["ai-agent-capability-contract"],
+                output_paths=["docs/catalog/unstructured-data-catalog.md"],
+                required_input_paths=["docs/catalog/app-catalog.md",
+                                      "docs/catalog/data-catalog.md",
+                                      "docs/catalog/use-case-catalog.md"]),
+        StepDef(id="9", title="テスト戦略書",
+                custom_agent="Arch-TDD-TestStrategy",
+                depends_on=["6", "7", "8"],
+                consumed_artifacts=["data_model", "domain_analytics", "service_catalog", "app_catalog"],
+                body_template_path="templates/ada/step-9.md",
+                output_paths=["docs/catalog/test-strategy.md"],
+                # service-catalog-matrix.md は ADA では生成しないため要求しない。
+                required_input_paths=["docs/catalog/app-catalog.md",
+                                      "docs/catalog/data-model.md",
+                                      "docs/catalog/domain-analytics.md",
+                                      "docs/catalog/service-catalog.md"]),
     ],
 )
 
@@ -1055,7 +1199,7 @@ AAG = WorkflowDef(
                 consumed_artifacts=["use_case_catalog", "service_catalog_matrix", "domain_analytics", "data_model", "service_catalog", "service_specs", "app_catalog"],
                 body_template_path="templates/aag/step-1.md",
                 output_paths=["docs/agent/agent-application-definition.md"],
-                required_input_paths=["docs/azure/azure-services-additional.md", "docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/screen-catalog-APP-*.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/service-catalog.md", "docs/catalog/use-case-catalog.md", "docs/screen/{screenId}-*.md", "docs/services/SVC-*.md", "src/data/sample-data.json"]),
+                required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/data-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/persona-catalog.md", "docs/catalog/service-catalog.md", "docs/catalog/unstructured-data-catalog.md", "docs/catalog/use-case-catalog.md", "docs/services/SVC-*.md", "src/data/sample-data.json"]),
         StepDef(id="2", title="AI Agent 粒度設計",
                 custom_agent="Arch-AIAgentDesign-Step2",
                 depends_on=["1"],
@@ -1064,7 +1208,7 @@ AAG = WorkflowDef(
                 consumed_artifacts=["agent_specs", "service_catalog_matrix", "domain_analytics", "data_model", "app_catalog"],
                 body_template_path="templates/aag/step-2.md",
                 output_paths=["docs/agent/agent-architecture.md"],
-                required_input_paths=["docs/agent/agent-application-definition.md", "docs/azure/azure-services-additional.md", "docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/screen-catalog-APP-*.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/service-catalog.md", "docs/catalog/use-case-catalog.md", "docs/screen/{screenId}-*.md", "docs/services/SVC-*.md", "src/data/sample-data.json"]),
+                required_input_paths=["docs/agent/agent-application-definition.md", "docs/catalog/app-catalog.md", "docs/catalog/data-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/persona-catalog.md", "docs/catalog/service-catalog.md", "docs/catalog/unstructured-data-catalog.md", "docs/catalog/use-case-catalog.md", "docs/services/SVC-*.md", "src/data/sample-data.json"]),
         StepDef(id="3", title="AI Agent 詳細設計",
                 custom_agent="Arch-AIAgentDesign-Step3",
                 depends_on=["2"],
@@ -1079,7 +1223,7 @@ AAG = WorkflowDef(
                 required_skills=["agentic-retrieval-contract", "foundry-toolbox-contract"],
                 output_paths=["docs/ai-agent-catalog.md"],
                 output_paths_template=["docs/agent/agent-detail-{key}.md"],
-                required_input_paths=["docs/agent/agent-application-definition.md", "docs/agent/agent-architecture.md", "docs/azure/azure-services-additional.md", "docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/screen-catalog-APP-*.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/service-catalog.md", "docs/catalog/use-case-catalog.md", "docs/screen/{screenId}-*.md", "docs/services/SVC-*.md", "src/data/sample-data.json"]),
+                required_input_paths=["docs/agent/agent-application-definition.md", "docs/agent/agent-architecture.md", "docs/catalog/app-catalog.md", "docs/catalog/data-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/persona-catalog.md", "docs/catalog/service-catalog.md", "docs/catalog/unstructured-data-catalog.md", "docs/catalog/use-case-catalog.md", "docs/services/SVC-*.md", "src/data/sample-data.json"]),
     ],
 )
 
@@ -1097,16 +1241,14 @@ AAGD = WorkflowDef(
                 consumed_artifacts=["app_catalog", "service_catalog_matrix", "service_catalog", "data_model", "domain_analytics", "use_case_catalog", "service_specs"],
                 body_template_path="templates/aagd/step-1.md",
                 output_paths=["docs/agent/agent-application-definition.md"],
-                required_input_paths=["docs/azure/azure-services-additional.md",
-                                      "docs/azure/azure-services-data.md",
-                                      "docs/catalog/app-catalog.md",
+                required_input_paths=["docs/catalog/app-catalog.md",
+                                      "docs/catalog/data-catalog.md",
                                       "docs/catalog/data-model.md",
                                       "docs/catalog/domain-analytics.md",
-                                      "docs/catalog/screen-catalog-APP-*.md",
-                                      "docs/catalog/service-catalog-matrix.md",
+                                      "docs/catalog/persona-catalog.md",
                                       "docs/catalog/service-catalog.md",
+                                      "docs/catalog/unstructured-data-catalog.md",
                                       "docs/catalog/use-case-catalog.md",
-                                      "docs/screen/{screenId}-*.md",
                                       "docs/services/SVC-*.md",
                                       "src/data/sample-data.json"]),
         StepDef(id="2.1", title="AI Agent テスト仕様書 (TDD RED)",
@@ -1121,7 +1263,7 @@ AAGD = WorkflowDef(
                 # テスト観点へ落とすため、検証観点の正本を TDD Step へも公開する。
                 required_skills=["agentic-retrieval-contract"],
                 output_paths_template=["docs/test-specs/{key}-test-spec.md"],
-                required_input_paths=["docs/agent/agent-application-definition.md", "docs/catalog/app-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/test-strategy.md", "docs/screen/{screenId}-{screenNameSlug}-description.md", "docs/services/{serviceId}-{serviceNameSlug}-description.md"]),
+                required_input_paths=["docs/agent/agent-application-definition.md", "docs/catalog/app-catalog.md", "docs/catalog/data-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/test-strategy.md", "docs/catalog/unstructured-data-catalog.md", "docs/services/{serviceId}-{serviceNameSlug}-description.md"]),
         StepDef(id="2.2", title="AI Agent テストコード生成 (TDD RED)",
                 custom_agent="Dev-Microservice-Azure-AgentTestCoding",
                 depends_on=["2.1"],
@@ -1138,7 +1280,7 @@ AAGD = WorkflowDef(
                     "src/test/agent/{key}.Tests/",
                     "src/test/agent/{key}.Tests/README.md",
                 ],
-                required_input_paths=["docs/agent/agent-detail-{key}.md", "docs/ai-agent-catalog.md", "docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/test-strategy.md", "docs/test-specs/{key}-test-spec.md", "src/test/api/"]),
+                required_input_paths=["docs/agent/agent-detail-{key}.md", "docs/ai-agent-catalog.md", "docs/catalog/app-catalog.md", "docs/catalog/data-catalog.md", "docs/catalog/test-strategy.md", "docs/test-specs/{key}-test-spec.md", "src/test/api/"]),
         StepDef(id="2.3", title="AI Agent 実装 (TDD GREEN)",
                 custom_agent="Dev-Microservice-Azure-AgentCoding",
                 depends_on=["2.2"],
@@ -1160,7 +1302,7 @@ AAGD = WorkflowDef(
                     "src/agent/{key}/plugin.json",
                     "src/agent/{key}/README.md",
                 ],
-                required_input_paths=["docs/agent/agent-detail-{key}.md", "docs/ai-agent-catalog.md", "docs/azure/azure-services-additional.md", "docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/service-catalog.md", "docs/test-specs/{key}-test-spec.md", "src/test/agent/{key}.Tests/"]),
+                required_input_paths=["docs/agent/agent-detail-{key}.md", "docs/ai-agent-catalog.md", "docs/catalog/app-catalog.md", "docs/catalog/data-catalog.md", "docs/catalog/service-catalog.md", "docs/catalog/unstructured-data-catalog.md", "docs/test-specs/{key}-test-spec.md", "src/test/agent/{key}.Tests/"]),
         StepDef(id="3", title="AI Agent Deploy",
                 custom_agent="Dev-Microservice-Azure-AgentDeploy",
                 depends_on=["2.3"],
@@ -1188,7 +1330,7 @@ AAGD = WorkflowDef(
                     "docs/test-specs/deploy-step2-agent-test-spec.md",
                     "docs/azure/azure-service-catalog.md",
                 ],
-                required_input_paths=["docs/agent/agent-detail-{key}.md", "docs/ai-agent-catalog.md", "docs/azure/azure-services-additional.md", "docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "src/agent/{key}/"]),
+                required_input_paths=["docs/agent/agent-detail-{key}.md", "docs/ai-agent-catalog.md", "docs/catalog/app-catalog.md", "src/agent/{key}/"]),
         # Step.4: tool search の on/off を実測比較する。
         # 公開ベンチマークの削減率は自社カタログの Tool 記述品質に依存するため、
         # TB-CAP-02 の判定は測定でしか裏付けられない。
@@ -1204,6 +1346,40 @@ AAGD = WorkflowDef(
                 required_skills=["foundry-toolbox-contract"],
                 disabled_when_config={"enable_tool_search": ["no"]},
                 required_input_paths=["docs/agent/agent-detail-{key}.md", "docs/catalog/app-catalog.md", "src/agent/{key}/"]),
+        # Step.5: Deploy 済み Agent を実行し、要件適合を測る（FR-WF-CONF-01）。
+        # Step 4 は enable_tool_search=no で外れるため、依存先は Deploy（Step 3）に置く。
+        StepDef(id="5", title="要件適合実測",
+                custom_agent="QA-RequirementsConformanceEval",
+                depends_on=["3"],
+                consumed_artifacts=["agent_specs", "app_catalog"],
+                body_template_path="templates/aagd/step-5.md",
+                output_paths=["docs/agent/requirements-conformance-report.md"],
+                required_skills=["requirements-conformance-measurement"],
+                required_input_paths=["docs/agent/agent-detail-{key}.md", "docs/ai-agent-catalog.md", "docs/catalog/app-catalog.md"]),
+        # Step.6: AG-CAP-10。検索経路のコスト階段を 2 段以上実測し、選んだ段が過剰でないかを判定する。
+        # Step.5 は「デプロイした構成が目標を満たすか」を測るが、
+        # 「別の（安い）経路でも足りたのではないか」は比較実測でしか判定できない。
+        StepDef(id="6", title="検索経路の適正化実測",
+                custom_agent="QA-AgentRouteRightsizingEval",
+                depends_on=["3"],
+                consumed_artifacts=["agent_specs", "app_catalog"],
+                body_template_path="templates/aagd/step-6.md",
+                output_paths=["docs/agent/route-rightsizing-report.md"],
+                required_skills=["ai-agent-capability-contract"],
+                # unstructured-data-catalog.md は ADA 専用成果物で、AAS 経由では存在しない。
+                # 比較候補の参考に使うだけなので必須にしない。
+                required_input_paths=["docs/agent/agent-detail-{key}.md", "docs/ai-agent-catalog.md"]),
+        # Step.7: AG-CAP-09 の Microsoft 365 / Teams チャネル。
+        # 設計が当該チャネルを not-selected とした場合も Step 自体は動き、
+        # 公開しない判断と根拠をレポートへ残す（実行しない選択を無記録にしない）。
+        StepDef(id="7", title="Microsoft 365 / Teams 公開",
+                custom_agent="Dev-Agent-M365Publish",
+                depends_on=["3"],
+                consumed_artifacts=["agent_specs", "app_catalog", "src_files"],
+                body_template_path="templates/aagd/step-7.md",
+                output_paths=["docs/agent/m365-publish-report.md"],
+                required_skills=["ai-agent-capability-contract"],
+                required_input_paths=["docs/agent/agent-detail-{key}.md", "docs/ai-agent-catalog.md"]),
     ],
 )
 
@@ -1297,6 +1473,17 @@ AAR = WorkflowDef(
                 additional_prompt_template_path="hve/prompt/fanout/aar/_common.md",
                 output_paths_template=["docs/azure/agentic-retrieval/{serviceId}-eval-report.md"],
                 required_skills=["agentic-retrieval-contract"],
+                disabled_when_config={"enable_agentic_retrieval": ["no"]},
+                required_input_paths=["docs/azure/agentic-retrieval/{serviceId}-design.md", "docs/catalog/app-catalog.md", "src/test/integration/agentic-retrieval/"]),
+        # Step.7: reasoning effort の比較（Step 6）とは別に、後付けした検索経路が
+        # アプリの要件を満たすかをアプリ単位で測る（FR-WF-CONF-01）。
+        StepDef(id="7", title="要件適合実測",
+                custom_agent="QA-RequirementsConformanceEval",
+                depends_on=["6"],
+                consumed_artifacts=["app_catalog"],
+                body_template_path="templates/aar/step-7.md",
+                output_paths=["docs/azure/agentic-retrieval/requirements-conformance-report.md"],
+                required_skills=["requirements-conformance-measurement"],
                 disabled_when_config={"enable_agentic_retrieval": ["no"]},
                 required_input_paths=["docs/azure/agentic-retrieval/{serviceId}-design.md", "docs/catalog/app-catalog.md", "src/test/integration/agentic-retrieval/"]),
     ],
@@ -1565,6 +1752,23 @@ ADOC = WorkflowDef(
 )
 
 # --- ARD: Auto Requirement Definition ---
+# 全起動面が共有する利用者向け表示グループの既定選択（FR-WF-ARD-03）。
+# tuple のまま公開し、CLI / GUI / Orchestrator 側で別の既定値を再宣言しない。
+ARD_DEFAULT_GROUP_IDS: Tuple[str, ...] = ("2", "3", "4", "5")
+
+# CLI 入口（hve/__main__.py）と Orchestrator の非対話 fallback（hve/orchestrator.py）が
+# 共有する Workflow パラメータの既定値（FR-MAINT-07 / TBD-27）。
+# 両モジュールは本定義を alias import する。片方だけを書き換えると起動面ごとに
+# 既定値が食い違い、値が一致しているうちは既存テストでも検出できない。
+# AKM: Work IQ を入力ソースとして任意追加できるよう、既定は qa + original-docs のマルチ値（カンマ区切り）。
+AKM_DEFAULT_SOURCES: str = "qa,original-docs"
+AKM_DEFAULT_TARGET_FILES: str = "qa/*.md"
+ADI_DEFAULT_TARGET_SCOPE: str = "docs-original/"
+ADI_DEFAULT_DEPTH: str = "standard"
+ARD_DEFAULT_SURVEY_PERIOD_YEARS: int = 30
+ARD_DEFAULT_TARGET_REGION: str = "グローバル全体"
+ARD_DEFAULT_ANALYSIS_PURPOSE: str = "中長期成長戦略の立案"
+
 ARD = WorkflowDef(
     id="ard",
     name="Auto Requirement Definition",
@@ -1577,12 +1781,15 @@ ARD = WorkflowDef(
         "survey_period_years",
         "target_region",
         "analysis_purpose",
+        "target_recommendation_id",
         "attached_docs",
         "include_kpi_okr",
     ],
     steps=[
-        # Sub-10 (ADR-0003): ARD は 8 step (1, 1.1, 1.2, 2, 2.1, 3.1, 3.2, 3.3) に再設計され、Step 1.1 / 3.2 で fan-out する。
-        # 旧 step_id (1, 2, 3) からの resume は warning + 新規実行扱い (ADR-0003 §3.4)。
+        # ADR-0003 の8実Stepにアプリケーション要求定義2 Stepを加えた10実Step。
+        # (1, 1.1, 1.2, 2, 2.1, 3.1, 3.2, 3.3, 4.1, 4.2)。
+        # Step 1.1 / 3.2だけをfan-outし、Step 4.2は単一Agentで全APPを順次upsertする。
+        # 旧 step_id の Resume 互換は Resume 機能全廃に伴い廃止済み（NFR-COMP-01）。
         # 注: Step 3 (KPI/OKR) は新体系で Step 2.1 に、旧 Step 4.1/4.2/4.3 は新 Step 3.1/3.2/3.3 に整理。
         StepDef(
             id="1",
@@ -1681,6 +1888,31 @@ ARD = WorkflowDef(
             body_template_path="templates/ard/step-3.3.md",
                 # 注: company-business-requirement.md は Step 3.1 / 3.2 と同一方針で除外（skip_fallback 詳細は Step 3.1 コメント参照）。
                 required_input_paths=["docs/usecase/{key}-detail.md"]),
+        StepDef(
+            id="4.1",
+            title="アプリケーションリスト作成",
+            custom_agent="Arch-ApplicationAnalytics",
+            depends_on=["3.3"],
+            consumed_artifacts=["use_case_catalog"],
+            output_paths=["docs/catalog/app-catalog.md"],
+            body_template_path="templates/ard/step-4.1.md",
+            required_input_paths=["docs/catalog/use-case-catalog.md"],
+        ),
+        StepDef(
+            id="4.2",
+            title="APP別要求定義書作成",
+            custom_agent="Arch-ApplicationRequirementDefinition",
+            depends_on=["4.1"],
+            consumed_artifacts=["app_catalog", "use_case_catalog"],
+            output_paths_template=[
+                "docs/architectural-requirements-app-*.md"
+            ],
+            body_template_path="templates/ard/step-4.2.md",
+            required_input_paths=[
+                "docs/catalog/app-catalog.md",
+                "docs/catalog/use-case-catalog.md",
+            ],
+        ),
     ],
     max_parallel=15,
 )
@@ -1688,9 +1920,39 @@ ARD = WorkflowDef(
 
 FULL_PIPELINE = MetaWorkflowDef(
     id="full-pipeline",
-    workflows=["aas", "aad-web", "asdw-web", "adfd", "adfdv", "aag", "aagd"],
+    workflows=["ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv", "aag", "aagd"],
     dependencies={
-        "aas": [],
+        "ard": [],
+        "aas": [
+            WorkflowDependency(
+                workflow_id="ard",
+                required_artifacts=[
+                    "docs/catalog/app-catalog.md",
+                    "docs/catalog/use-case-catalog.md",
+                    "docs/architectural-requirements-app-*.md",
+                ],
+            ),
+        ],
+        "ada": [
+            WorkflowDependency(
+                workflow_id="ard",
+                required_artifacts=[
+                    "docs/catalog/app-catalog.md",
+                    "docs/catalog/use-case-catalog.md",
+                    "docs/architectural-requirements-app-*.md",
+                ],
+            ),
+        ],
+        "aar": [
+            WorkflowDependency(
+                workflow_id="ard",
+                required_artifacts=[
+                    "docs/catalog/app-catalog.md",
+                    "docs/catalog/use-case-catalog.md",
+                    "docs/architectural-requirements-app-*.md",
+                ],
+            ),
+        ],
         "aad-web": [
             WorkflowDependency(
                 workflow_id="aas",
@@ -1772,7 +2034,7 @@ FULL_PIPELINE = MetaWorkflowDef(
 # ---------------------------------------------------------------------------
 
 _REGISTRY: Dict[str, WorkflowDef] = {
-    wf.id: wf for wf in [ARD, AAS, AAD_WEB, ASDW_WEB, ADFD, ADFDV, AAG, AAGD, AAR, AKM, ADI, ADOC]
+    wf.id: wf for wf in [ARD, AAS, ADA, AAD_WEB, ASDW_WEB, ADFD, ADFDV, AAG, AAGD, AAR, AKM, ADI, ADOC]
 }
 
 _META_REGISTRY: Dict[str, MetaWorkflowDef] = {
@@ -1834,6 +2096,7 @@ def get_meta_dependencies(workflow_id: str) -> List[WorkflowDependency]:
 # ま表示する）。
 ARTIFACT_DESCRIPTIONS: Dict[str, str] = {
     "docs/catalog/app-catalog.md": "アプリケーションカタログ",
+    "docs/architectural-requirements-app-*.md": "APP別要求定義書（一覧）",
     "docs/catalog/domain-analytics.md": "ドメイン分析",
     "docs/catalog/service-catalog.md": "サービスカタログ",
     "docs/catalog/data-model.md": "データモデル",
@@ -1855,6 +2118,24 @@ ARTIFACT_DESCRIPTIONS: Dict[str, str] = {
 
 
 # ---------------------------------------------------------------------------
+# ワークフロー一覧のカテゴリー表 (SSOT)
+# ---------------------------------------------------------------------------
+# GUI Step 1 左ペイン (hve/gui/page_workflow_select.py) と CLI 対話ウィザード
+# (hve/__main__.py) が共有する表示分類 (FR-GUI-21)。CLI は PySide6 に依存する
+# hve/gui/ を import できないため、正本を GUI 側へ置かない。
+# 本表に載らない ID は各表示面で「その他」枠へ集約される（縮退経路）。
+WORKFLOW_CATEGORIES: List[Tuple[str, List[str]]] = [
+    ("Business Engineering (要求定義)", ["ard"]),
+    ("Architecture Design",             ["aas"]),
+    ("Software Engineering",            ["aad-web", "asdw-web", "adfd", "adfdv"]),
+    # ADI は knowledge 化の前段（原本の取り込み）なので独立カテゴリに置く。
+    ("既存ドキュメントのインポート",       ["adi"]),
+    ("Knowledge Management",            ["akm", "adoc"]),
+    ("AI Agent",                        ["ada", "aag", "aagd", "aar"]),
+]
+
+
+# ---------------------------------------------------------------------------
 # Workflow ステップ ID グループマップ (SSOT)
 # ---------------------------------------------------------------------------
 # GUI / CLI 側で表示するグループ ID と registry の実 Step ID の対応表。
@@ -1873,6 +2154,8 @@ _WORKFLOW_GROUP_MAPS: Dict[str, Dict[str, List[str]]] = {
         "3": ["2.1"],
         # GUI/CLI 側のグループ ID "4" はユースケース系。registry 上は "3.1/3.2/3.3" に再採番済み。
         "4": ["3.1", "3.2", "3.3"],
+        # グループ ID "5" はAPP一覧とAPP別要求定義書を単一の選択単位で生成する。
+        "5": ["4.1", "4.2"],
     },
 }
 

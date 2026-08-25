@@ -1,5 +1,7 @@
 # Tool Search ダッシュボード — データ収集と指標の読み方
 
+← [README](../README.md)
+
 > 対象読者: HVE の Tool Search（`hve/toolsearch/`）を運用・調整する Software Engineer
 >
 > 関連: [users-guide/tool-search.md](tool-search.md)（仕組みとカスタマイズ）

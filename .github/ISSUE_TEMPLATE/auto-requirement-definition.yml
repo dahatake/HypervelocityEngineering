@@ -1,0 +1,181 @@
+name: "Auto Requirement Definition（要求定義）"
+description: "事業分析からユースケース、APP一覧、APP別要求定義書までを生成します"
+title: "[ARD] 要求定義"
+labels:
+  - "auto-requirement-definition"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Auto Requirement Definition
+
+        5つの表示Groupから10実Stepを実行します。
+
+        | Group | 内容 | 実Step |
+        |---|---|---|
+        | Group 1 | 企業の事業分析（opt-in） | 1, 1.1, 1.2 |
+        | Group 2 | 対象業務の要求定義 | 2 |
+        | Group 3 | KPI/OKR定義 | 2.1 |
+        | Group 4 | ユースケース作成 | 3.1, 3.2, 3.3 |
+        | Group 5 | アプリケーション要求定義 | 4.1, 4.2 |
+
+        **未選択時はGroup 2〜5を実行します。Group 1は明示opt-inです。**
+
+  - type: input
+    id: branch
+    attributes:
+      label: "対象ブランチ"
+      value: "main"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: groups
+    attributes:
+      label: "実行するグループ"
+      description: "未選択ならGroup 2〜5。Group 1は企業全体分析が必要な場合だけ選択してください。"
+      options:
+        - label: "Group 1 — 企業の事業分析（opt-in）"
+        - label: "Group 2 — 対象業務の要求定義"
+        - label: "Group 3 — KPI/OKR定義"
+        - label: "Group 4 — ユースケース作成"
+        - label: "Group 5 — アプリケーション要求定義"
+
+  - type: input
+    id: company_name
+    attributes:
+      label: "対象企業名"
+      description: "Group 1を選択する場合は必須"
+
+  - type: input
+    id: target_business
+    attributes:
+      label: "対象業務名"
+      description: "Group 2をGroup 1なしで選択する場合は必須"
+
+  - type: input
+    id: survey_base_date
+    attributes:
+      label: "調査基準日"
+      placeholder: "YYYY-MM-DD（未指定時は実行日）"
+
+  - type: input
+    id: survey_period_years
+    attributes:
+      label: "調査期間年数"
+      value: "30"
+
+  - type: input
+    id: target_region
+    attributes:
+      label: "対象地域"
+      value: "グローバル全体"
+
+  - type: input
+    id: analysis_purpose
+    attributes:
+      label: "分析目的"
+      value: "中長期成長戦略の立案"
+
+  - type: input
+    id: target_recommendation_id
+    attributes:
+      label: "対象Strategic Recommendation ID（任意）"
+
+  - type: textarea
+    id: attached_docs
+    attributes:
+      label: "添付資料パス（任意）"
+      description: "1行1パス。実在するリポジトリ相対パスだけを指定してください。"
+
+  - type: dropdown
+    id: runner_type
+    attributes:
+      label: "実行 Runner"
+      options:
+        - "GitHub Hosted"
+        - "Self-hosted (ACA)"
+      default: 0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: model
+    attributes:
+      label: "使用するモデル"
+      options:
+        - "Auto"
+        - "claude-opus-4.7"
+        - "claude-opus-4.6"
+        - "gpt-5.5"
+        - "gpt-5.4"
+      default: 0
+
+  - type: dropdown
+    id: review_model
+    attributes:
+      label: "レビュー用モデル（任意）"
+      options:
+        - "Auto"
+        - "claude-opus-4.7"
+        - "claude-opus-4.6"
+        - "gpt-5.5"
+        - "gpt-5.4"
+      default: 0
+
+  - type: dropdown
+    id: qa_model
+    attributes:
+      label: "QA 用モデル（任意）"
+      options:
+        - "Auto"
+        - "claude-opus-4.7"
+        - "claude-opus-4.6"
+        - "gpt-5.5"
+        - "gpt-5.4"
+      default: 0
+
+  - type: dropdown
+    id: akm_model
+    attributes:
+      label: "AKM 用モデル（任意）"
+      options:
+        - "Auto"
+        - "claude-opus-4.7"
+        - "claude-opus-4.6"
+        - "gpt-5.5"
+        - "gpt-5.4"
+      default: 0
+
+  - type: checkboxes
+    id: enable_qa_akm_merge
+    attributes:
+      label: "Knowledge Management マージ設定"
+      options:
+        - label: "QA回答をKnowledge Managementへバックグラウンドでマージする"
+
+  - type: checkboxes
+    id: enable_review
+    attributes:
+      label: "レビュー設定"
+      options:
+        - label: "敵対的レビューを有効にする"
+
+  - type: checkboxes
+    id: enable_qa
+    attributes:
+      label: "質問票設定"
+      options:
+        - label: "実行前QAを実施する"
+
+  - type: checkboxes
+    id: enable_auto_merge
+    attributes:
+      label: "PR完全自動化設定"
+      options:
+        - label: "有効にする"
+
+  - type: textarea
+    id: additional_comment
+    attributes:
+      label: "追加コメント（任意）"

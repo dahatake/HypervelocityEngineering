@@ -139,6 +139,33 @@ class TestRequiredInputFieldsInWorkflowBox(unittest.TestCase):
         page.set_workflows(["aagd"], {"aagd": "AAGD"})
         self.assertIn("aagd", page._workflow_group_boxes)
 
+    def test_ard_recommendation_id_is_visible_in_workflow_box(self) -> None:
+        """ARDの任意SR-ID入力を内部保持だけでなく右ペインへ公開する。"""
+        page = self.page
+        page.set_workflows(["ard"], {"ard": "ARD"})
+        box = page._workflow_group_boxes.get("ard")
+        self.assertIsNotNone(box)
+        recommendation_field = _owning_labeled_field(
+            page.c14.target_recommendation_id
+        )
+        self.assertIsNotNone(recommendation_field)
+        self.assertIn(
+            id(recommendation_field),
+            {id(field) for field in box.findChildren(_LabeledField)},
+        )
+
+    def test_ard_recommendation_id_reaches_cli_argv(self) -> None:
+        """右ペインのSR-IDをOrchestrateArgsとCLI argvへ欠落なく伝搬する。"""
+        page = self.page
+        page.set_workflows(["ard"], {"ard": "ARD"})
+        page.c14.target_recommendation_id.setText("sr-3")
+
+        args = page.build_args_for_workflow("ard")
+        self.assertEqual(args.target_recommendation_id, "sr-3")
+        argv = args.to_argv()
+        option_index = argv.index("--target-recommendation-id")
+        self.assertEqual(argv[option_index + 1], "sr-3")
+
     def test_defaulted_params_have_no_input_field(self) -> None:
         """既定値を持つ ASDW-WEB Step 1.3 の 5 件に入力欄を設けない（FR-WF-ASDW-02）。"""
         step = get_workflow("asdw-web").get_step("1.3")

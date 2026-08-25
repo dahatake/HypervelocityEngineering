@@ -25,7 +25,7 @@
 - `app-scope-resolution` — APP-ID 指定時の対象サービス・画面・エンティティのスコープ判定
 - `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
 - `task-questionnaire` — 詳細設計時の不明点確認
-- `ai-agent-capability-contract` — AG-CAP-01〜06 の詳細設計・N/A・完了判定契約
+- `ai-agent-capability-contract` — AG-CAP-01〜10 の詳細設計・N/A・完了判定契約
 - `agentic-retrieval-contract` — Section 7.0 で Foundry IQ / Azure AI Search Agentic Retrieval を選んだ場合の AR-CAP-01〜05 契約
 - `foundry-toolbox-contract` — Tool 総数が 10〜15 を超えた場合の TB-CAP-01〜05 契約（Toolbox / tool search）
 
@@ -45,10 +45,10 @@
 | 3 | `docs/catalog/domain-analytics.md` | Bounded Context 境界。Agent 分割判断の根拠 | Architecture Decision, Boundary Matrix |
 | 4 | `docs/catalog/data-model.md` | エンティティ定義。I/O Contract のスキーマ根拠 | Input/Output Contract, Knowledge Source |
 | 5 | `docs/catalog/service-catalog.md` | マイクロサービス一覧。Agent ↔ サービスのマッピング | Tool Catalog, Boundary Matrix |
-| 6 | `docs/catalog/service-catalog-matrix.md` | 画面→API→データの完全マッピング。Tool（Actions）定義の根拠 | **Tool Catalog（最重要）**, Procedure |
+| 6 | `docs/catalog/data-catalog.md` | 構造化データの正本。物理マッピング・PII 区分・所有権・ライフサイクル | Knowledge Source, Permission Model, Data Boundary |
 | 7 | `docs/services/SVC-*.md` | 各サービスの詳細仕様（API I/O、バリデーション、イベント、権限）。Tool の入出力スキーマ・失敗分類の根拠 | Tool I/O Schema, Error Handling, Permission Model |
-| 8 | `docs/azure/azure-services-data.md` | Azure データストア構成。Knowledge Source / RAG の具体設計根拠 | Knowledge Source, RAG 設計 |
-| 9 | `docs/azure/azure-services-additional.md` | 追加 Azure サービス構成（AI Search, OpenAI 等）。LLM バックエンド・検索インデックスの設計根拠 | Tool Catalog（AI系）, LLM 選定 |
+| 8 | `docs/catalog/unstructured-data-catalog.md` | 非構造化データ資産と検索経路候補。AG-CAP-03 の Preferred / Fallback と AG-CAP-10 の候補経路の根拠 | Knowledge Source, RAG 設計, Evaluation |
+| 9 | `docs/catalog/persona-catalog.md` | 権限主体のペルソナ。AG-CAP-07 の Permission scope の根拠 | Permission Model, Scope |
 | 10 | `docs/catalog/app-catalog.md` | アプリケーション一覧（APP-ID）。Agent と APP の対応付けおよびスコープ確認根拠 | Scope, Boundary Matrix, Non-Goals |
 | — | `docs/agent/agent-application-definition.md` | **Step 1 成果物（必須前提）** | Step 3 参照用 |
 | — | `docs/agent/agent-architecture.md` | **Step 2 成果物（必須前提）**。Agent Catalog の入力 | Step 3 全体 |
@@ -57,8 +57,10 @@
 
 | # | ファイル | 用途 |
 |---|---------|------|
-| 11 | `docs/catalog/screen-catalog-APP-*.md` | 画面一覧（APP ごと）。Agent が UI 内で動作する場合の Conversation Design 根拠 |
-| 12 | `docs/screen/{screenId}-*.md` | 画面詳細定義。Output format / トーン / 対話チャネル設計の根拠 |
+| 11 | `docs/catalog/service-catalog-matrix.md` | 画面→API→データの完全マッピング（AAS 実行済みの場合のみ存在）。Tool 定義の補強 |
+| 11.1 | `docs/azure/azure-services-data.md` / `docs/azure/azure-services-additional.md` | Azure 構成（ASDW-WEB / AAD-WEB 実行済みの場合のみ存在）。LLM バックエンド・検索インデックスの設計根拠 |
+| 11.2 | `docs/catalog/screen-catalog-APP-*.md` | 画面一覧（AAD-WEB 実行済みの場合のみ存在）。Agent が UI 内で動作する場合の Conversation Design 根拠 |
+| 12 | `docs/screen/{screenId}-*.md` | 画面詳細定義（AAD-WEB 実行済みの場合のみ存在）。Output format / トーン / 対話チャネル設計の根拠。**ADA 経由の場合は存在しないので `TBD` 扱いにしない** |
 | 13 | `src/data/sample-data.json` | サンプルデータ。System Prompt の Examples（Few-shot）作成用 |
 | 14 | `.github/skills/agent-common-preamble/references/agent-playbook.md` | 社内テンプレ/語彙/表現ルール（存在する場合のみ） |
 
@@ -118,6 +120,11 @@
   - Section 7.1 `REST CRUD Matrix` にC/R/U/D、REST method/path、HITL、RBAC、冪等性、error、auditを確定する。C/U/Dのprimary経路はREST Function Toolだけにする
   - Section 7.3 `MCP Integration Plan` にclient利用、Tool allowlist、auth、failure behavior、Remote adapter ownerを確定し、REST mutationを迂回させない
   - Section 7.4 `Skill Packaging Decision` をrequired / not-requiredで確定する。required時だけ配置先・resources・明示load・validationを記載する
+  - Skill `ai-agent-capability-contract` に従い、Section 7.4 の後（TB-CAP を追加する場合は 7.5.x の後）へ次の見出しを追加する。**12セクションの番号・順序は変えない**
+    - `7.6 Agent Identity & Authorization (AG-CAP-07)` / `7.7 Observability Contract (AG-CAP-08)` / `7.8 Distribution & Packaging (AG-CAP-09)` / `7.9 Evaluation & Route Right-sizing (AG-CAP-10)`
+    - **見出しレベルは Section 7.0〜7.4 と同じレベルにする**（子レベルにしない）。子レベルにすると前のセクションの範囲が後続ブロックを取り込み、判定が壊れる
+    - **AG-CAP-07 / AG-CAP-08 / AG-CAP-10 は N/A にできない**。確定できない項目は単語だけの `TBD` にせず、確認予定と確認手段を書く
+    - AG-CAP-09 は配布先が無い場合だけ、`Contract ID / 理由 / Decision source / 再判定条件` を伴う**理由付きN/A**にできる
   - **Tool 総数を数える**。`Section 7.1 の Required: yes 行数` + `Section 7.3 の Tool allowlist に列挙した Tool 名数（重複排除）` + `Section 7.0 の異なる検索経路数（Preferred と Fallback。同じ経路が複数行にあっても 1 と数える）`
   - **Tool Search 方針（`auto` / `yes` / `no`）に従う**。方針は Prompt 冒頭に注入される。注入が無ければ `auto` とし、**3 値以外は推測で丸めず blocked とする**
     - `auto`: 総数が **15 を超える**場合だけ TB-CAP-01〜05 を追加する（超えない場合は追加しない）
@@ -152,7 +159,7 @@
   13. C/U/DがREST Function Toolだけをprimary経路にする
   14. MCP client / Remote adapterの責務が分離される
   15. Agent別Skillのrequired / not-required / TBDが根拠付きで決定される
-- **完了判定**: 全 Agent の詳細設計書がある / 各設計書が12セクション全て埋まっている / 上記の完成判定15項目を全てパスしている / AG-CAP-01〜06が確定または理由付きN/Aである / Foundry IQ経路を選んだAgentはAR-CAP-01〜05が揃っている / Tool Search 方針に応じて TB-CAP-01〜05 が揃っている（`auto` は Tool 総数 15 超のとき、`yes` は常時、`no` は TB-CAP-01/02 と理由付き N/A の TB-CAP-03〜05） / Step 1・2由来TBDが残っていない
+- **完了判定**: 全 Agent の詳細設計書がある / 各設計書が12セクション全て埋まっている / 上記の完成判定15項目を全てパスしている / AG-CAP-01〜10が確定または理由付きN/Aである / Foundry IQ経路を選んだAgentはAR-CAP-01〜05が揃っている / Tool Search 方針に応じて TB-CAP-01〜05 が揃っている（`auto` は Tool 総数 15 超のとき、`yes` は常時、`no` は TB-CAP-01/02 と理由付き N/A の TB-CAP-03〜05） / Step 1・2由来TBDが残っていない
 
 ### 5.2 Agent 一覧の出力
 - Step 2 と Step 3 の成果物を元に、`docs/ai-agent-catalog.md` を作成/更新する。
@@ -204,7 +211,7 @@
 - `docs/ai-agent-catalog.md` が存在し、全 Agent が記載されている
 - 各 Agent の詳細設計書に System Prompt の雛形が含まれている
 - 各設計書の完成判定チェックをパスしている
-- 各設計書にAG-CAP-01〜06の固定見出しがあり、理由なしN/Aと上流TBDが残っていない
+- 各設計書にAG-CAP-01〜10の固定見出しがあり、理由なしN/Aと上流TBDが残っていない
 
 ### 8.2 ドメイン固有観点
 

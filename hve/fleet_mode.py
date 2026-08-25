@@ -519,6 +519,33 @@ def _get(data: Any, *names: str) -> Any:
     return None
 
 
+def format_fleet_wave_skipped_phases_warning(
+    *,
+    wave_index: int,
+    auto_qa: bool,
+    auto_contents_review: bool,
+) -> str:
+    """Return the FR-QA-03 warning for phases a Fleet wave will not run.
+
+    Fleet waves do not go through ``StepRunner.run_step``, so the pre-execution
+    QA (and the QA-originated Knowledge Management it dispatches) and the
+    adversarial review never fire.  Returns an empty string when neither option
+    is enabled.
+    """
+    skipped: list[str] = []
+    if auto_qa:
+        skipped.append("事前 QA（および QA 起点 Knowledge Management）")
+    if auto_contents_review:
+        skipped.append("敵対的レビュー")
+    if not skipped:
+        return ""
+    return (
+        f"Fleet wave {wave_index}: {' / '.join(skipped)} は実行されません。"
+        "Fleet mode へ委譲した wave は Step 単位の実行経路を通らないためです。"
+        "これらが必要な wave では --no-fleet-mode を指定してください。"
+    )
+
+
 async def start_fleet(session: object, prompt: str) -> FleetStartOutcome:
     """Start Copilot SDK fleet mode from an existing session.
 

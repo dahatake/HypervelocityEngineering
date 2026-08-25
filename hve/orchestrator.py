@@ -56,6 +56,7 @@ try:
     from .dag_planner import build_dag_plan
     from .run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id
     from .orchestrator_context import OrchestratorContext
+    from . import index_refresh
 except ImportError:
     from config import SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS, to_wire_model  # type: ignore[no-redef]
     from console import Console, timestamp_prefix  # type: ignore[no-redef]
@@ -72,11 +73,20 @@ except ImportError:
     from dag_planner import build_dag_plan  # type: ignore[no-redef]
     from run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id  # type: ignore[no-redef]
     from orchestrator_context import OrchestratorContext  # type: ignore[no-redef]
+    import index_refresh  # type: ignore[no-redef]
 
 # -----------------------------------------------------------------------
 # hve 内部モジュール（旧 .github/cli/ から移植済み）
 # -----------------------------------------------------------------------
 from hve.workflow_registry import (  # noqa: F401
+    ADI_DEFAULT_DEPTH as _ADI_DEFAULT_DEPTH,
+    ADI_DEFAULT_TARGET_SCOPE as _ADI_DEFAULT_TARGET_SCOPE,
+    AKM_DEFAULT_SOURCES as _AKM_DEFAULT_SOURCES,
+    AKM_DEFAULT_TARGET_FILES as _AKM_DEFAULT_TARGET_FILES,
+    ARD_DEFAULT_ANALYSIS_PURPOSE as _ARD_DEFAULT_ANALYSIS_PURPOSE,
+    ARD_DEFAULT_GROUP_IDS,
+    ARD_DEFAULT_SURVEY_PERIOD_YEARS as _ARD_DEFAULT_SURVEY_PERIOD_YEARS,
+    ARD_DEFAULT_TARGET_REGION as _ARD_DEFAULT_TARGET_REGION,
     get_local_phase_step_ids,
     get_workflow,
     WorkflowDef,
@@ -423,19 +433,11 @@ _COPILOT_USERNAMES = (
 _MAX_DIFF_CHARS = 80_000
 
 # AKM デフォルト値
-# Work IQ を入力ソースとして任意追加できるよう、既定は qa + original-docs のマルチ値（カンマ区切り）。
-_AKM_DEFAULT_SOURCES = "qa,original-docs"
-_AKM_DEFAULT_TARGET_FILES = "qa/*.md"
+# `_AKM_DEFAULT_SOURCES` / `_AKM_DEFAULT_TARGET_FILES` と ADI / ARD の既定値は
+# workflow_registry からの alias import（FR-MAINT-07 / TBD-27）。
 # sources マルチ値の正規化順序（出力順は固定）
 _AKM_SOURCES_ORDER = ("workiq", "qa", "original-docs")
 _AKM_SOURCES_VALID = frozenset(_AKM_SOURCES_ORDER)
-_ADI_DEFAULT_TARGET_SCOPE = "docs-original/"
-_ADI_DEFAULT_DEPTH = "standard"
-
-# ARD デフォルト値
-_ARD_DEFAULT_SURVEY_PERIOD_YEARS = 30
-_ARD_DEFAULT_TARGET_REGION = "グローバル全体"
-_ARD_DEFAULT_ANALYSIS_PURPOSE = "中長期成長戦略の立案"
 
 
 def _normalize_akm_sources(value) -> list:
@@ -540,8 +542,7 @@ def _collect_params_non_interactive(
     # 'steps' (CLI側) と 'selected_steps' (orchestrate.py側) の両キーに対応
     steps_value = args.get("steps") or args.get("selected_steps") or []
     if wf.id == "ard" and not steps_value:
-        target_business = args.get("target_business", "") or ""
-        steps_value = ["2", "3"] if target_business.strip() else ["1", "2", "3"]
+        steps_value = list(ARD_DEFAULT_GROUP_IDS)
     params: dict = {
         "branch": args.get("branch", "main"),
         "selected_steps": steps_value,
@@ -617,6 +618,9 @@ def _collect_params_non_interactive(
         params["survey_period_years"] = args.get("survey_period_years") or _ARD_DEFAULT_SURVEY_PERIOD_YEARS
         params["target_region"] = args.get("target_region") or _ARD_DEFAULT_TARGET_REGION
         params["analysis_purpose"] = args.get("analysis_purpose") or _ARD_DEFAULT_ANALYSIS_PURPOSE
+        recommendation_id = str(args.get("target_recommendation_id") or "").strip()
+        if recommendation_id:
+            params["target_recommendation_id"] = recommendation_id
         attached = args.get("attached_docs")
         params["attached_docs"] = attached if attached else []
         params["include_kpi_okr"] = bool(args.get("include_kpi_okr", False))
@@ -894,6 +898,8 @@ def _filter_hve_source_paths(
 def _git_dirty_hve_source_paths(
     target_output_paths: Optional[List[str]] = None,
     timeout: int = 30,
+    *,
+    cwd: Optional[Path] = None,
 ) -> List[str]:
     """HVE 自身のソースに残る未コミット変更パスを返す（FR-CLI-74）。
 
@@ -917,6 +923,7 @@ def _git_dirty_hve_source_paths(
             encoding="utf-8",
             errors="replace",
             timeout=timeout,
+            cwd=str(cwd) if cwd is not None else None,
         )
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
         return []
@@ -1028,6 +1035,22 @@ def _should_enable_qa_akm_dispatch(
         and workflow_id != "akm"
         and not dry_run
     )
+
+
+def _resolve_max_parallel(
+    *, workflow: Any, config_max_parallel: int, ard_force_serial: bool,
+) -> Tuple[int, str]:
+    """DAG の並列上限と解決根拠を返す（FR-DAG-03 の唯一の解決点）。
+
+    `WorkflowDef.max_parallel` の宣言は利用者設定より優先する。asdw-web の 1 は
+    同一 worktree の並列書込みを避ける安全制約であり、緩められてはならない。
+    """
+    if ard_force_serial:
+        return 1, "ard-serial"
+    declared = getattr(workflow, "max_parallel", None)
+    if declared:
+        return int(declared), "workflow"
+    return int(config_max_parallel), "config"
 
 
 def _git_checkout_new_branch(new_branch: str, base_branch: str, console: Console) -> bool:
@@ -2058,6 +2081,14 @@ def _detect_existing_artifacts(workflow_id: str, params: dict) -> dict:
     if screen_catalogs:
         existing["screen_catalog"] = screen_catalogs
 
+    # APP別要求定義書は per-APP 分割形式 (ARD Step 4.2 fan-out)
+    app_requirements = [
+        p.replace("\\", "/")
+        for p in _glob.glob("docs/architectural-requirements-app-*.md")
+    ]
+    if app_requirements:
+        existing["app_requirements"] = app_requirements
+
     # サービス詳細仕様書の検出
     service_specs = _glob.glob("docs/services/*.md")
     if service_specs:
@@ -2123,6 +2154,7 @@ _ARTIFACT_KEY_TO_EXPECTED_PATH: Dict[str, str] = {
     "data_model": "docs/catalog/data-model.md",
     "domain_analytics": "docs/catalog/domain-analytics.md",
     "screen_catalog": "docs/catalog/screen-catalog-APP-*.md",
+    "app_requirements": "docs/architectural-requirements-app-*.md",
     "test_strategy": "docs/catalog/test-strategy.md",
     "service_catalog_matrix": "docs/catalog/service-catalog-matrix.md",
     "use_case_catalog": "docs/catalog/use-case-catalog.md",
@@ -2149,16 +2181,17 @@ _ARTIFACT_KEY_TO_EXPECTED_PATH: Dict[str, str] = {
 #   "user_provided"  — ワークフローでは生成されない。ユーザーが事前に手動で用意する成果物
 #   None             — 生成ワークフロー未確認（ユーザー提供またはワークフロー生成の可能性あり）
 _ARTIFACT_KEY_TO_GENERATING_WORKFLOW: Dict[str, Optional[str]] = {
-    "app_catalog": "aas",
+    "app_catalog": "ard",  # ARD Step 4.1 (Arch-ApplicationAnalytics) で生成（旧仕様では aas Step 1）
     "service_catalog": "aas",
     "data_model": "aas",
     "domain_analytics": "aas",
     "screen_catalog": "aad-web",
+    "app_requirements": "ard",  # ARD Step 4.2 (Arch-ApplicationRequirementDefinition) で生成
     "test_strategy": "aas",
     "service_catalog_matrix": "aas",
-    "use_case_catalog": "ard",  # ARD Step 4.3 で生成（旧仕様では user_provided）
+    "use_case_catalog": "ard",  # ARD Step 3.3 で生成（旧仕様では user_provided）
     "persona_catalog": "aas",   # T-H3: AAS Step 8 (Arch-PersonaCatalog) で生成
-    "dataflow_catalog": "aas",  # docs/catalog/app-catalog.md を AAS Step.1 が生成
+    "dataflow_catalog": "ard",  # docs/catalog/app-catalog.md を ARD Step 4.1 が生成（旧仕様では aas Step.1）
     "batch_service_catalog": "adfd",
     "batch_data_model": "adfd",
     "batch_domain_analytics": "adfd",
@@ -2525,6 +2558,58 @@ def _check_dirty_hve_sources(
         "blocked": True,
         "blocked_step_ids": ["hve-source-dirty"],
     }
+
+
+def _format_qa_akm_failure_warning(
+    failed: List[Dict[str, Any]],
+    reason: str,
+) -> str:
+    """QA 起点 AKM 子実行の失敗報告を組み立てる（FR-QA-07）。
+
+    子ログの本文は展開せず、保存先パスと ``returncode`` だけを出す。
+    バッチ実行では複数の QA ファイルが同一の子実行を共有するため、保存先単位で束ねる。
+    """
+    lines = [
+        f"QA 起点 AKM は {len(failed)} 件失敗しました"
+        f"（source Workflow は継続、境界={reason}）。"
+    ]
+    grouped: Dict[tuple, List[str]] = {}
+    for item in failed:
+        key = (int(item.get("returncode", -1)), str(item.get("log_path", "")))
+        grouped.setdefault(key, []).append(str(item.get("file", "")))
+    for (returncode, log_path), files in grouped.items():
+        location = log_path or "（子ログ未保存: 子プロセスを起動できませんでした）"
+        lines.append(
+            f"  - returncode={returncode} 対象 {len(files)} 件 / ログ: {location}"
+        )
+    lines.append(
+        "  子が status=blocked で停止した場合は HVE ソースの未コミット変更"
+        "（FR-CLI-74）が最も多い原因です。`git status --porcelain hve mdq hve-dev .github` を確認してください。"
+    )
+    return "\n".join(lines)
+
+
+def _format_qa_akm_skip_warning(
+    skipped: List[Dict[str, Any]],
+    reason: str,
+) -> str:
+    """登録時点の事前判定で起動しなかった登録を報告する（FR-QA-07）。
+
+    実行失敗とは別件として扱う。子を起動していないため `returncode` は意味を持たない。
+    """
+    files = [str(item.get("file", "")) for item in skipped]
+    lines = [
+        f"QA 起点 AKM の登録を {len(skipped)} 件スキップしました"
+        f"（source Workflow は継続、境界={reason}）。"
+    ]
+    for path in files:
+        lines.append(f"  - {path}")
+    lines.append(
+        "  HVE ソースに未コミット変更があるためです（FR-CLI-74）。"
+        "`git status --porcelain hve mdq hve-dev .github` を確認し、"
+        "コミットまたは退避してから `--workflow akm` で手動取り込みしてください。"
+    )
+    return "\n".join(lines)
 
 
 def _collect_workflow_output_paths_by_step(
@@ -3047,12 +3132,14 @@ async def _prefetch_workiq_detailed(
             build_workiq_mcp_config, query_workiq,
             WorkIQPrefetchResult, WORKIQ_MCP_SERVER_NAME,
             extract_workiq_tool_name_from_event,
+            format_workiq_tool_not_invoked_warning,
         )
     except ImportError:
         from workiq import (  # type: ignore[no-redef]
             build_workiq_mcp_config, query_workiq,
             WorkIQPrefetchResult, WORKIQ_MCP_SERVER_NAME,
             extract_workiq_tool_name_from_event,
+            format_workiq_tool_not_invoked_warning,
         )
 
     _start = time.monotonic()
@@ -3186,19 +3273,16 @@ async def _prefetch_workiq_detailed(
                 # LLM がツールを呼ばずに説明文のみ返した可能性があるため、
                 # M365 信頼データとして扱わない（safe_to_inject=False）。
                 _has_text = bool(result_text)
-                if _has_text:
-                    console.warning(
-                        "⚠️ Work IQ prefetch: Work IQ MCP ツール呼び出しを SDK イベント上で確認できませんでした。\n"
-                        "  LLM がツールを呼ばずに応答した、またはイベント検出に失敗した可能性があります。\n"
-                        "  テキスト応答は Work IQ 由来のデータとして扱いません。\n"
-                        "  診断コマンド: python -m hve workiq-doctor --event-extractor-self-test --sdk-tool-probe --sdk-event-trace"
+                console.warning(
+                    format_workiq_tool_not_invoked_warning(
+                        "prefetch",
+                        detail=(
+                            ""
+                            if _has_text
+                            else "エージェントが Work IQ 指示を実行しませんでした（応答本文もありません）。"
+                        ),
                     )
-                else:
-                    console.warning(
-                        "⚠️ Work IQ prefetch: ツールが呼び出されませんでした。\n"
-                        "  エージェントが Work IQ 指示を実行しなかった可能性があります。\n"
-                        "  診断コマンド: python -m hve workiq-doctor --event-extractor-self-test --sdk-tool-probe --sdk-event-trace"
-                    )
+                )
                 return WorkIQPrefetchResult(
                     content=result_text or "",
                     error_type="tool_not_invoked",
@@ -4133,10 +4217,21 @@ async def _on_ard_step1_completed(
         console.warning("Strategic Recommendations が抽出できなかったため target_business は変更しません。")
         return
 
+    # FR-WF-ARD-03: 明示 SR-ID はグループ 1 + 2 の bridge 選択だけに使う。
+    # Step 1.2 後の hook 自体はグループ 1 + 4 等でも target_business を補完するため、
+    # bridge 外では明示 ID を選択層へ渡さない。
+    selected_steps = {
+        str(step_id) for step_id in (params.get("selected_steps") or [])
+    }
+    selection_params = params
+    if "2" not in selected_steps and params.get("target_recommendation_id"):
+        selection_params = dict(params)
+        selection_params.pop("target_recommendation_id", None)
+
     selected_sr = _select_recommendation(
         recommendations=recommendations,
         config=config,
-        params=params,
+        params=selection_params,
         console=console,
     )
     params["target_business"] = await _generate_target_business_from_sr(
@@ -4327,6 +4422,83 @@ def _attach_runtime_observability(
     return recorder
 
 
+def _start_index_watchers(config) -> None:
+    """起動時の索引差分更新を待ってから mdq / cq watcher を起動する（FR-CLI-77）。
+
+    同一の索引 DB へ 2 つの書き込み経路を同時に存在させないため、待ち合わせは
+    watcher の生成より前に行う。
+    """
+    index_refresh.wait_until_idle()
+
+    # ファイル追加・更新・削除を OS イベントで検知し索引を逐次更新する。
+    # 既存の `python -m mdq index` / `python -m cq index` による手動更新は維持される。
+    # watchdog 未導入や起動失敗は警告ログのみで本体実行を妨げない。
+    # Cloud Agent / GitHub Actions では本機能を使用しない（config.mdq_watch=False で無効化）。
+    _mdq_watcher = None
+    if getattr(config, "mdq_watch", True):
+        try:
+            from mdq.watcher import MdqWatcher  # type: ignore
+            from mdq.cli import DEFAULT_ROOTS as _MDQ_ROOTS  # type: ignore
+            from mdq.store import DEFAULT_DB_PATH as _MDQ_DB  # type: ignore
+            _mdq_watcher = MdqWatcher(
+                repo_root=Path.cwd(),
+                roots=_MDQ_ROOTS,
+                db_path=_MDQ_DB,
+                debounce_ms=getattr(config, "mdq_watch_debounce_ms", 500),
+            )
+            if not _mdq_watcher.start():
+                _mdq_watcher = None
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"WARN: mdq watcher 起動をスキップしました ({exc})", file=sys.stderr)
+            _mdq_watcher = None
+    # 本関数は watcher を起動したらすぐ戻るため、停止は atexit で回収する。
+    if _mdq_watcher is not None:
+        import atexit as _atexit
+        _atexit.register(_mdq_watcher.stop)
+
+    # cq は設定不在を fail-closed で拒否するため（FR-CQ-01）、設定が無い
+    # リポジトリでは警告のみで本体実行を継続する。
+    _cq_watcher = None
+    if getattr(config, "cq_watch", True):
+        try:
+            from cq import config as _cq_config  # type: ignore
+            from cq import store as _cq_store  # type: ignore
+            from cq.watcher import DEFAULT_DEBOUNCE_MS as _CQ_DEBOUNCE  # type: ignore
+            from cq.watcher import CqWatcher  # type: ignore
+            _cq_repo_root = Path.cwd()
+            _cq_profile_name = next(iter(_cq_config.resolve_profiles(_cq_repo_root)))
+            _cq_watcher = CqWatcher(
+                _cq_repo_root,
+                _cq_config.resolve_profile(_cq_repo_root, _cq_profile_name),
+                db_path=_cq_repo_root / _cq_store.db_path_for(_cq_profile_name),
+                debounce_ms=getattr(config, "cq_watch_debounce_ms", _CQ_DEBOUNCE),
+            )
+            if not _cq_watcher.start():
+                _cq_watcher = None
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"WARN: cq watcher 起動をスキップしました ({exc})", file=sys.stderr)
+            _cq_watcher = None
+    if _cq_watcher is not None:
+        import atexit as _atexit
+        _atexit.register(_cq_watcher.stop)
+
+
+def _start_index_watchers_when_idle(config):
+    """watcher 起動を専用スレッドへ退避する。待ち合わせで本体実行を止めないため。"""
+    if getattr(config, "dry_run", False):
+        return None
+    if not getattr(config, "mdq_watch", True) and not getattr(config, "cq_watch", True):
+        return None
+    import threading as _threading
+
+    thread = _threading.Thread(
+        target=_start_index_watchers, args=(config,),
+        name="hve-index-watchers", daemon=True,
+    )
+    thread.start()
+    return thread
+
+
 async def run_workflow(
     workflow_id: str,
     params: Optional[dict] = None,
@@ -4439,60 +4611,9 @@ async def run_workflow(
     start_total = time.time()
     _start_monotonic = time.monotonic()
 
-    # --- mdq リアルタイム索引更新（HVE CLI Orchestrator 限定） ---
-    # ファイル追加・更新・削除を OS イベントで検知し .mdq/index.sqlite を逐次更新する。
-    # 既存の `python -m mdq index` による手動索引更新は維持されている。
-    # watchdog 未導入や起動失敗は警告ログのみで本体実行を妨げない。
-    # Cloud Agent / GitHub Actions では本機能を使用しない（config.mdq_watch=False で無効化）。
-    _mdq_watcher = None
-    if getattr(config, "mdq_watch", True) and not getattr(config, "dry_run", False):
-        try:
-            from mdq.watcher import MdqWatcher  # type: ignore
-            from mdq.cli import DEFAULT_ROOTS as _MDQ_ROOTS  # type: ignore
-            from mdq.store import DEFAULT_DB_PATH as _MDQ_DB  # type: ignore
-            _mdq_watcher = MdqWatcher(
-                repo_root=Path.cwd(),
-                roots=_MDQ_ROOTS,
-                db_path=_MDQ_DB,
-                debounce_ms=getattr(config, "mdq_watch_debounce_ms", 500),
-            )
-            if not _mdq_watcher.start():
-                _mdq_watcher = None
-        except Exception as exc:  # pragma: no cover - defensive
-            print(f"WARN: mdq watcher 起動をスキップしました ({exc})", file=sys.stderr)
-            _mdq_watcher = None
-    # プロセス終了時に確実に停止（早期 return が複数ある関数のため atexit を使用）
-    if _mdq_watcher is not None:
-        import atexit as _atexit
-        _atexit.register(_mdq_watcher.stop)
-
-    # --- cq リアルタイム索引更新（HVE CLI Orchestrator 限定） ---
-    # ソースファイルの変更を .cq/index-<profile>.sqlite へ逐次反映する。
-    # cq は設定不在を fail-closed で拒否するため（FR-CQ-01）、設定が無い
-    # リポジトリでは警告のみで本体実行を継続する。
-    _cq_watcher = None
-    if getattr(config, "cq_watch", True) and not getattr(config, "dry_run", False):
-        try:
-            from cq import config as _cq_config  # type: ignore
-            from cq import store as _cq_store  # type: ignore
-            from cq.watcher import DEFAULT_DEBOUNCE_MS as _CQ_DEBOUNCE  # type: ignore
-            from cq.watcher import CqWatcher  # type: ignore
-            _cq_repo_root = Path.cwd()
-            _cq_profile_name = next(iter(_cq_config.resolve_profiles(_cq_repo_root)))
-            _cq_watcher = CqWatcher(
-                _cq_repo_root,
-                _cq_config.resolve_profile(_cq_repo_root, _cq_profile_name),
-                db_path=_cq_repo_root / _cq_store.db_path_for(_cq_profile_name),
-                debounce_ms=getattr(config, "cq_watch_debounce_ms", _CQ_DEBOUNCE),
-            )
-            if not _cq_watcher.start():
-                _cq_watcher = None
-        except Exception as exc:  # pragma: no cover - defensive
-            print(f"WARN: cq watcher 起動をスキップしました ({exc})", file=sys.stderr)
-            _cq_watcher = None
-    if _cq_watcher is not None:
-        import atexit as _atexit
-        _atexit.register(_cq_watcher.stop)
+    # --- mdq / cq リアルタイム索引更新（HVE CLI Orchestrator 限定）---
+    # 起動時の索引差分更新（FR-CLI-77）が終わるまで watcher を起動しない。
+    _start_index_watchers_when_idle(config)
 
     # --- 1. ワークフロー定義取得 ---
     wf = get_workflow(workflow_id)
@@ -4803,7 +4924,11 @@ async def run_workflow(
         and "2" in active_steps
         and not (effective_params.get("target_business", "") or "").strip()
     )
-    effective_max_parallel = 1 if _ard_force_serial else config.max_parallel
+    effective_max_parallel, _max_parallel_source = _resolve_max_parallel(
+        workflow=wf,
+        config_max_parallel=config.max_parallel,
+        ard_force_serial=_ard_force_serial,
+    )
     wf_for_dag = wf
     if _ard_force_serial:
         # bridge mode: target_business 未指定 + グループ 1 & Step 2 同時実行時、
@@ -4819,7 +4944,11 @@ async def run_workflow(
             console.warning(f"ARD 直列DAGの構築に失敗したため通常DAGで続行します: {exc}")
             wf_for_dag = wf
             _ard_force_serial = False
-            effective_max_parallel = config.max_parallel
+            effective_max_parallel, _max_parallel_source = _resolve_max_parallel(
+                workflow=wf,
+                config_max_parallel=config.max_parallel,
+                ard_force_serial=False,
+            )
 
     console.event(f"実行対象ステップ数: {len(active_steps)}")
     if _ard_force_serial:
@@ -4873,7 +5002,7 @@ async def run_workflow(
         wf_for_dag,
         active_steps,
         max_parallel=effective_max_parallel,
-        max_parallel_source="ard-serial" if _ard_force_serial else "config",
+        max_parallel_source=_max_parallel_source,
     )
 
     # --- dry_run: 実行計画表示のみ ---
@@ -5351,7 +5480,7 @@ async def run_workflow(
         active_steps,
         step_prompts=step_prompts,
         max_parallel=effective_max_parallel,
-        max_parallel_source="ard-serial" if _ard_force_serial else "config",
+        max_parallel_source=_max_parallel_source,
     )
 
     # --- 6-7. DAGExecutor 実行 ---
@@ -5359,12 +5488,15 @@ async def run_workflow(
         if qa_akm_coordinator is None:
             return []
         drained = qa_akm_coordinator.drain()
-        failed = [item for item in drained if int(item.get("returncode", -1)) != 0]
+        skipped = [item for item in drained if item.get("skipped")]
+        failed = [
+            item for item in drained
+            if not item.get("skipped") and int(item.get("returncode", -1)) != 0
+        ]
+        if skipped:
+            console.warning(_format_qa_akm_skip_warning(skipped, reason))
         if failed:
-            console.warning(
-                f"QA 起点 AKM は {len(failed)} 件失敗しました"
-                f"（source Workflow は継続、境界={reason}）。"
-            )
+            console.warning(_format_qa_akm_failure_warning(failed, reason))
         return drained
 
     step_scoped_cicd_pr_numbers: Dict[str, int] = {}
@@ -5610,6 +5742,7 @@ async def run_workflow(
                     DagWaveFleetTask,
                     FleetEventCollector,
                     build_dag_wave_fleet_prompt,
+                    format_fleet_wave_skipped_phases_warning,
                     start_fleet,
                 )
                 from .split_fork import check_subtask_completion, resolve_work_root
@@ -5618,6 +5751,7 @@ async def run_workflow(
                     DagWaveFleetTask,
                     FleetEventCollector,
                     build_dag_wave_fleet_prompt,
+                    format_fleet_wave_skipped_phases_warning,
                     start_fleet,
                 )
                 from split_fork import check_subtask_completion, resolve_work_root  # type: ignore[no-redef]
@@ -5743,6 +5877,15 @@ async def run_workflow(
                         "Falling back to normal DAG execution."
                     )
                     return None
+                skipped_phases_warning = format_fleet_wave_skipped_phases_warning(
+                    wave_index=wave_index,
+                    auto_qa=bool(getattr(config, "auto_qa", False)),
+                    auto_contents_review=bool(
+                        getattr(config, "auto_contents_review", False)
+                    ),
+                )
+                if skipped_phases_warning:
+                    console.warning(skipped_phases_warning)
                 console.status(
                     f"Fleet wave {wave_index}: Fleet 起動完了 "
                     f"({fleet_start_elapsed:.1f}s)。completion-report 待機を開始します"
@@ -5860,7 +6003,7 @@ async def run_workflow(
     # 実行計画を事前表示
     waves = executor.compute_waves()
     if waves:
-        console.execution_plan(waves, len(active_steps), effective_max_parallel)
+        console.execution_plan(waves, executor.total_display_steps(), effective_max_parallel)
 
     # Workbench UI の起動（TTY/quiet/final_only/HVE_NO_WORKBENCH 等で自動降格）
     _wb = None
@@ -5875,7 +6018,7 @@ async def run_workflow(
             steps_view = [
                 StepView(id=s.id, title=s.title, status="pending")
                 for s in _expanded_steps
-                if s.id in _active_for_view
+                if s.id in _active_for_view and not getattr(s, "is_container", False)
             ]
             wb_state = WorkbenchState(
                 workflow_id=workflow_id,
@@ -5947,7 +6090,9 @@ async def run_workflow(
             from .qa_akm_dispatch import QaAkmCoordinator
         except ImportError:  # pragma: no cover - top-level module compatibility
             from qa_akm_dispatch import QaAkmCoordinator  # type: ignore[no-redef]
-        qa_akm_coordinator = QaAkmCoordinator(config, repo_root=Path.cwd())
+        qa_akm_coordinator = QaAkmCoordinator(
+            config, repo_root=Path.cwd(), warn=console.warning,
+        )
 
     _dag_execution_finished = False
     try:

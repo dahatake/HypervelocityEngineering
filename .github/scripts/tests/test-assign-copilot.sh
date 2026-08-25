@@ -5,12 +5,18 @@ SCRIPT_DIR="$(cd "$(dirname "$0")/../../scripts/bash/lib" && pwd)"
 GITHUB_WORKSPACE="$(cd "$(dirname "$0")/../../.." && pwd)"
 export GITHUB_WORKSPACE
 export _SCRIPT_DIR="${SCRIPT_DIR}"
+# Windows Git Bash から native Python を起動すると、stdin の既定 encoding が
+# cp932 になり得る。Issue body fixture は UTF-8 なのでテスト境界で明示する。
+export PYTHONIOENCODING=utf-8
 
 # テストヘルパー
 PASS=0
 FAIL=0
 assert_eq() {
   local actual="$1" expected="$2" msg="$3"
+  # Windows native Python の print が付加する CRLF を内容比較前に正規化する。
+  actual="${actual//$'\r'/}"
+  expected="${expected//$'\r'/}"
   if [[ "${actual}" == "${expected}" ]]; then
     echo "  ✅ PASS: ${msg}"
     PASS=$((PASS + 1))

@@ -63,12 +63,14 @@ def _get_default_akm_target_files(sources) -> str:
 _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
     "ard": "Auto Requirement Definition",
     "aas": "Architecture Design",
+    "ada": "Agent Data Architecture",
     "aad-web": "Web App Design",
     "asdw-web": "Web App Dev & Deploy",
     "adfd": "Dataflow Design",
     "adfdv": "Dataflow Dev & Deploy",
     "aag": "AI Agent Design",
     "aagd": "AI Agent Dev & Deploy",
+    "aar": "Agentic Retrieval Add-on",
     "akm": "Knowledge Management",
     "adi": "Auto Design-doc Ingestion",
     "adoc": "Source Codeからのドキュメント作成",
@@ -81,6 +83,7 @@ _WORKFLOW_DISPLAY_NAMES: Dict[str, str] = {
 _WORKFLOW_PREFIX: Dict[str, str] = {
     "ard": "ARD",
     "aas": "AAS",
+    "ada": "ADA",
     "aad-web": "AAD-WEB",
     "asdw-web": "ASDW-WEB",
     "adfd": "ADFD",

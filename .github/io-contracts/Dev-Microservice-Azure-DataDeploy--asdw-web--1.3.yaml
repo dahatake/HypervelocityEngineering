@@ -12,7 +12,7 @@ inputs:
 - path: docs/catalog/service-catalog-matrix.md
   required: true
   kind: agent_artifact
-  producer: Arch-Microservice-ServiceCatalog--aas--6
+  producer: Arch-Microservice-ServiceCatalog--aas--5
 - path: src/infra/azure/verify-data-resources.sh
   required: true
   kind: agent_artifact
@@ -20,11 +20,11 @@ inputs:
 - path: src/data/sample-data.json
   required: true
   kind: agent_artifact
-  producer: Arch-DataModeling--aas--4.2
+  producer: Arch-DataModeling--aas--3.2
 - path: docs/catalog/app-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-ApplicationAnalytics--aas--1
+  producer: Arch-ApplicationAnalytics--ard--4.1
 - path: knowledge/D08-データモデル-SoR-SoT-データ品質仕様書.md
   required: false
   kind: static

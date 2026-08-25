@@ -1,5 +1,10 @@
 [
   {
+    "name": "auto-requirement-definition",
+    "color": "0E8A16",
+    "description": "run auto requirement definition workflow (business analysis to APP requirement definition)"
+  },
+  {
     "name": "auto-app-selection",
     "color": "0E8A16",
     "description": "run app architecture design workflow (usecase to app list and architecture recommendation)"
@@ -43,6 +48,11 @@
     "name": "auto-dataflow-dev",
     "color": "0E8A16",
     "description": "run full batch dev workflow (Azure resource, coding, deploy, review)"
+  },
+  {
+    "name": "auto-agentic-retrieval",
+    "color": "5319E7",
+    "description": "run Agentic Retrieval add-on workflow"
   },
   {
     "name": "self-improve",
@@ -295,6 +305,31 @@
     "description": "AAGD ブロック中"
   },
   {
+    "name": "ard:initialized",
+    "color": "C5DEF5",
+    "description": "ARD 初期化完了"
+  },
+  {
+    "name": "ard:ready",
+    "color": "0075CA",
+    "description": "ARD 実行可能"
+  },
+  {
+    "name": "ard:running",
+    "color": "E4E669",
+    "description": "ARD 実行中"
+  },
+  {
+    "name": "ard:done",
+    "color": "0E8A16",
+    "description": "ARD 完了"
+  },
+  {
+    "name": "ard:blocked",
+    "color": "D73A4A",
+    "description": "ARD ブロック中"
+  },
+  {
     "name": "aas:initialized",
     "color": "C5DEF5",
     "description": "AAS 初期化完了"
@@ -535,6 +570,21 @@
     "description": "ADOC Step が QA 質問票作成中（Copilot アサイン済み）"
   },
   {
+    "name": "ard:qa-ready",
+    "color": "C8E6C9",
+    "description": "ARD Step が事前 QA 完了待ち"
+  },
+  {
+    "name": "ard:qa-drafting",
+    "color": "C8E6C9",
+    "description": "ARD Step が QA 質問票作成中（Copilot アサイン済み）"
+  },
+  {
+    "name": "ard:qa-timeout",
+    "color": "B60205",
+    "description": "ARD Step が QA フェーズでタイムアウト"
+  },
+  {
     "name": "aas:qa-timeout",
     "color": "B60205",
     "description": "AAS Step が QA フェーズでタイムアウト"
@@ -753,5 +803,60 @@
     "name": "adoc:human-resolved",
     "color": "1A7F37",
     "description": "ADOC 人間解決済み — :ready への自動復帰トリガー"
+  },
+  {
+    "name": "aar:initialized",
+    "color": "C5DEF5",
+    "description": "AAR workflow initialized"
+  },
+  {
+    "name": "aar:ready",
+    "color": "0075CA",
+    "description": "AAR step ready"
+  },
+  {
+    "name": "aar:running",
+    "color": "E4E669",
+    "description": "AAR step running"
+  },
+  {
+    "name": "aar:done",
+    "color": "0E8A16",
+    "description": "AAR step done"
+  },
+  {
+    "name": "aar:blocked",
+    "color": "D73A4A",
+    "description": "AAR step blocked"
+  },
+  {
+    "name": "auto-agent-data-architecture",
+    "color": "5319E7",
+    "description": "Agent Data Architecture ワークフロートリガー"
+  },
+  {
+    "name": "ada:initialized",
+    "color": "C5DEF5",
+    "description": "ADA workflow initialized"
+  },
+  {
+    "name": "ada:ready",
+    "color": "0075CA",
+    "description": "ADA step ready"
+  },
+  {
+    "name": "ada:running",
+    "color": "E4E669",
+    "description": "ADA step running"
+  },
+  {
+    "name": "ada:done",
+    "color": "0E8A16",
+    "description": "ADA step done"
+  },
+  {
+    "name": "ada:blocked",
+    "color": "D73A4A",
+    "description": "ADA step blocked"
   }
 ]

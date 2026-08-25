@@ -67,7 +67,7 @@ Azure AI Foundry Agent Service を使用した AI Agent 実装（TDD GREEN フ�
 - `harness-error-recovery` — ビルド・テスト失敗時の E-01〜E-05 リカバリ
 - `harness-safety-guard` — ツール実行時の破壊的操作検出と中断
 - `karpathy-guidelines` — 実装時の LLM 共通ミス防止指針
-- `ai-agent-capability-contract` — AG-CAP-01〜06 の選択能力、実装境界、GREEN判定
+- `ai-agent-capability-contract` — AG-CAP-01〜10 の選択能力、実装境界、GREEN判定
 - `agentic-retrieval-contract` — Section 7.0 で Foundry IQ / Azure AI Search Agentic Retrieval を選んだ場合の AR-CAP-01〜05 実装境界
 - `foundry-toolbox-contract` — Tool 総数が 15 を超える場合の TB-CAP-01〜05 実装境界（Toolbox / tool search）
 
@@ -128,7 +128,7 @@ Issue body または追加コメントにプログラミング言語の指定が
 
 # 3) 入力（優先順位順）
 必須:
-- `docs/agent/agent-detail-{key}.md`（Agent 詳細設計書。AG-CAP-01〜06の選択結果を正本とする）
+- `docs/agent/agent-detail-{key}.md`（Agent 詳細設計書。AG-CAP-01〜10の選択結果を正本とする）
 - `docs/ai-agent-catalog.md`（Agent 一覧）
 - `src/test/agent/{key}.Tests/`（TDD テストコード — RED 状態。Step.2.7TC の成果物）
 - `docs/test-specs/{key}-test-spec.md`（Agent テスト仕様書）
@@ -165,6 +165,7 @@ Issue body または追加コメントにプログラミング言語の指定が
   - **Observability コード**: Application Insights / OpenTelemetry による監査ログ・メトリクス
   - **設定ファイル**: `agent-config.json`（Python）または `appsettings.json`（C#）— 環境変数・接続先の管理
   - **Agent Plugin マニフェスト**: `src/agent/{key}/plugin.json` — Agent Plugins Specification 1.0.0 準拠。`src/agent/{key}/` を plugin root、既存の `src/agent/{key}/skills/` を仕様の固定位置として扱う
+  - **MCP 公開設定**: `src/agent/{key}/mcp.json` — 詳細設計 Section 7.8 の `Plugin components` が `mcp.json` を要とした場合だけ生成する
   - **依存定義**: `requirements.txt`（Python）または `.csproj`（C#）
 
 任意だが推奨:
@@ -187,8 +188,9 @@ Issue body または追加コメントにプログラミング言語の指定が
 | Guardrails / Policy Gate | Section 8: Policy & Guardrails |
 | 状態遷移ロジック | Section 6: State Machine / Flow |
 | エラーハンドリング・縮退 | Section 9: Error Handling & Resilience |
-| Observability | Section 10: Observability |
-| 権限モデル | Section 7.2: Permission Model |
+| Observability | Section 10: Observability, **Section 7.7: Observability Contract**（AG-CAP-08） |
+| 権限モデル | Section 7.2: Permission Model, **Section 7.6: Agent Identity & Authorization**（AG-CAP-07） |
+| 配布パッケージ | **Section 7.8: Distribution & Packaging**（AG-CAP-09） |
 
 ## 5.1) AG-CAP実装境界
 - **AG-CAP-01 / 02**: Criterion evaluatorとEvidenceを実装し、各ACT前にUSER_CANCELLED、POLICY_STOP、deadline、cost、Tool budget、Max iterationsを短絡評価する。Action fingerprintとrequest内attempted setで、新Evidenceなしの同一action反復を拒否する。System Prompt、policy、RBAC、production code、testをruntimeで自己変更しない。
@@ -213,13 +215,24 @@ Issue body または追加コメントにプログラミング言語の指定が
 - **AG-CAP-04**: Create / Update / Deleteは既存API契約に対応するREST Function Toolだけをprimary経路にする。method / path / schema、認証、RBAC、HITL、冪等性、有限retry、error class、audit evidenceを実装し、SQL/direct DB writeやMCP mutation迂回を禁止する。
 - **AG-CAP-05**: Agentは選択されたMCP Serverのclientとして接続する。Tool allowlist、auth、untrusted result、timeout、有限retry、failure behaviorを実装し、Agent自身のRemote MCP Server化を既定で行わない。adapterが必要な場合はSection 7.3記載のowner serviceを参照し、`src/agent/`へ複製しない。
 - **AG-CAP-06**: Section 7.4の`Decision` / `Repeated procedure count` / `Reuse evidence` / `Location` / `Decision source`を検証する。`required`は共有能力契約の3条件、すなわち(1)同じ手順連鎖が3回以上、(2)複数Toolまたは複数状態から再利用する明確な要件がある、(3)deterministic script化で反復処理の正確性が上がる、のいずれかに証跡付きで該当する場合だけ認める。根拠のない`required`、`TBD`、Location未記載、Section 7.4の恒久的な`Decision source`で承認されていないLocationは設計不整合としてblocked / Handoffにし、Skillを生成しない。妥当な`required`の場合だけ、承認された`src/agent/{key}/skills/{skill-name}/`へ`SKILL.md`と実際に必要な`scripts/` / `references/` / `assets/`を作り、target runtimeから明示loadする。`not-required`ではSkill、loader、hook、設定flagを作らない。**`SKILL.md` の frontmatter は Agent Skills 仕様の長さ制約（`name` は 1〜64 文字、`description` は 1〜1024 文字）を満たす。**
+- **AG-CAP-07**: Section 7.6 の `Identity model` だけを実装する。`attended`（delegated / on-behalf-of）を選んだ場合は利用者 identity を下流へ伝搬し、伝搬できない場合は application 権限へ置き換えず blocked にする。`Permission scope` に無い権限を要求しない。資格情報の値をコード・設定・マニフェストへ埋めない。
+- **AG-CAP-08**: Section 7.7 の telemetry 規約に従い、リクエスト全体 / Goal Loop の各 iteration / 各 Tool 呼び出し / 各検索呼び出しの 4 種の span を出す。相関 ID を全 Tool 呼び出しへ伝搬させる。**span 属性へ query 本文・response 本文・access token・raw URL を入れない**。送信先（Application Insights 等）は設定から読み込む。
+- **AG-CAP-10**: 本 Step では評価を実施しない。実測は後続 Step の責務であり、ここでは評価に必要な計測点（トークン消費・応答時間・採用経路）を AG-CAP-08 の span へ残すことだけを行う。
 - **Agent Plugin マニフェスト（常に生成）**: `src/agent/{key}/plugin.json` を Agent Plugins Specification 1.0.0 に準拠して作る。
   - `$schema` は `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json` を**そのまま**書く。取得しに行かない。
   - `name` は fan-out キー `{key}` の**小文字化**とする（例: `AG-01` → `ag-01`）。仕様の制約は 1〜64 文字・`a-z` `0-9` `-` `.` のみ・先頭末尾は英数・`--` と `..` を含まない。大文字を含むキーをそのまま書かない。
   - 書き込むフィールドは `$schema` / `name` / `description` / `version` の 4 つだけにする。`description` は 1 文、`version` は Semantic Versioning（初回は `0.1.0`）。
   - マニフェストは **closed schema** であり、HVE 固有のランタイム設定（`max_iterations` / `toolbox` / route 設定等）を top-level へ足してはならない。それらは従来どおり `agent-config.json` または `appsettings.json` に置き、二重管理を作らない。
   - `author` / `homepage` / `repository` / `license` / `keywords` は根拠なく埋めない（推測禁止）。
-  - **MCP 設定ファイル（仕様の `mcp.json`）は作らない**。AG-CAP-05 は本 Agent を MCP client と定めており、Agent 自身を MCP Server として公開しないため。
+- **MCP 設定ファイル `src/agent/{key}/mcp.json`（AG-CAP-09 が採用したときだけ生成）**: 詳細設計 Section 7.8 `Distribution & Packaging` の `Plugin components` が **`mcp.json: required`（または `mcp.json: yes`）**と明記している場合だけ作る。それ以外は**作らない**（AG-CAP-05 は本 Agent を MCP client と定めており、client 接続設定は `agent-config.json` / `appsettings.json` に置く）。作る場合は Agent Plugins Specification 1.0.0 §7.2 に従う。
+  - 置き場所は **plugin root 直下の `mcp.json` だけ**。`plugin.json` へインライン記述しない。
+  - top-level は `$schema` と `mcpServers` の 2 つだけ。`$schema` は `https://agent-plugins.org/schemas/1.0.0/mcp.schema.json` を**そのまま**書き、`plugin.json` と版を揃える。
+  - 各 server の `type` は `stdio` / `streamable-http` / `sse` のいずれか。`stdio` は `command` / `args` / `env` のみ、リモートは `url` / `headers` のみを書く。両者を混在させない（リモートへ `env` を書くことも含む）。
+  - `url` は絶対 HTTP(S)。**loopback 以外は HTTPS 必須**。user-info（`user:pass@`）と fragment（`#...`）を含めない。
+  - **`headers` と `env` に資格情報の値を書かない**。可視のパッケージデータであり、v1 は OAuth 設定も可搬な資格情報参照フィールドも定義していない。認可は client 側が管理する前提で、`${...}` 形式の変数参照だけを置く。
+  - `PLUGIN_ROOT` / `PLUGIN_DATA` は client が解決する予約変数であり、`env` で再定義しない。
+  - 公開する Tool は AG-CAP-04 で `Required: yes` としたものだけに限る。mutation は REST と同じ認可・HITL・監査・冪等性を通す。
+  - 利用者が接続に必要な設定手順を `src/agent/{key}/README.md` へ残す（認可が client 管理のため、手順が無いと接続できない）。
 
 # 6) TDD GREEN フロー（反復 — Issue body 指定値 / 未指定時 5 回）
 

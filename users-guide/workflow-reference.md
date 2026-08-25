@@ -36,11 +36,13 @@
 | `aas-timeout-monitor.yml` | AAS Timeout Monitor | `schedule` / `workflow_dispatch` |
 | `advance-subissues.yml` | Advance Sub Issues | `pull_request: [closed]` / `issues: [labeled]` |
 | `audit-plans.yml` | Audit all plan.md (scheduled) | `schedule` / `workflow_dispatch` |
+| `auto-agent-data-architecture-reusable.yml` | ADA: Agent Data Architecture (Reusable) | `workflow_call` |
 | `auto-ai-agent-design-reusable.yml` | AAG: AI Agent Design (Reusable) | `workflow_call` |
 | `auto-ai-agent-dev-reusable.yml` | AAGD: AI Agent Dev & Deploy (Reusable) | `workflow_call` |
 | `auto-akm-after-qa.yml` | QA Answered AKM Coordinator（回答済み QA を AKM へ非待機同期） | `workflow_dispatch` |
 | `auto-app-detail-design-web-reusable.yml` | AAD-WEB: Web App Design (Reusable) | `workflow_call` |
-| `auto-app-dev-microservice-web-reusable.yml` | ASDW-WEB: Web App Dev & Deploy (Reusable) | `workflow_call`（**dispatcher からの呼び出しは停止中 / FR-CLOUD-06**）|
+| `auto-app-dev-microservice-web-reusable.yml` | ASDW-WEB: Web App Dev & Deploy (Reusable) | `workflow_call` |
+| `auto-agentic-retrieval-reusable.yml` | AAR: Agentic Retrieval Add-on (Reusable) | `workflow_call` |
 | `auto-app-documentation-reusable.yml` | ADOC Orchestrator | `workflow_call` |
 | `auto-app-selection-reusable.yml` | AAS Orchestrator | `workflow_call` |
 | `auto-approve-and-merge.yml` | PR 自動 Approve & Auto-merge | `pull_request_target: [labeled, ready_for_review, synchronize, edited]` |
@@ -91,7 +93,7 @@
 
 > **運用メモ**: オーケストレーション系 reusable workflow は `workflow_call` で呼び出されます。少なくとも `auto-app-dev-microservice-web-reusable.yml` / `auto-dataflow-dev-reusable.yml` / `auto-ai-agent-dev-reusable.yml` では `runner_type` 入力により `ubuntu-latest` と `[self-hosted, linux, x64, aca]` を切り替えます。
 >
-> **FR-CLOUD-06**: `auto-app-dev-microservice-web-reusable.yml` は `hve/workflow_registry.py` の ASDW-WEB Step 体系と非同期（冒頭に `OUT-OF-SYNC NOTICE` を自己申告）のため、`auto-orchestrator-dispatcher.yml` からの起動を停止しています。ファイル自体は残存しますが dispatcher からは `uses:` されません。ASDW-WEB は **CLI 経路 / GUI 経路が supported** です。
+> **Cloud parity**: ASDW-WEB / AAR reusable workflow の生成 Step は `hve/workflow_registry.py` と parity test で同期します。
 
 ### HVE CLI Orchestrator ワークフロー ID（逆引き）
 
@@ -100,12 +102,13 @@
 | `ard` | Auto Requirement Definition | なし（`hve` ローカル実行専用） |
 | `aas` | App Architecture Design | `auto-app-selection-reusable.yml` |
 | `aad` / `aad-web` | Web App Design | `auto-app-detail-design-web-reusable.yml` |
-| `asdw` / `asdw-web` | Web App Dev & Deploy | `auto-app-dev-microservice-web-reusable.yml`（**Cloud 起動停止中 / FR-CLOUD-06。CLI / GUI 経路が supported**）|
+| `asdw` / `asdw-web` | Web App Dev & Deploy | `auto-app-dev-microservice-web-reusable.yml` |
 | `adfd` | Dataflow Design | `auto-dataflow-design-reusable.yml` |
 | `adfdv` | Dataflow Dev | `auto-dataflow-dev-reusable.yml` |
 | `aag` | AI Agent Design | `auto-ai-agent-design-reusable.yml`（dispatcher 経由） |
 | `aagd` | AI Agent Dev & Deploy | `auto-ai-agent-dev-reusable.yml`（dispatcher 経由） |
-| `akm` | Knowledge Management（QA + original-docs + Work IQ） | `auto-knowledge-management-reusable.yml` |
+| `aar` | Agentic Retrieval Add-on | `auto-agentic-retrieval-reusable.yml`（dispatcher 経由） |
+| `akm` | Knowledge Management（QA + docs-original + Work IQ） | `auto-knowledge-management-reusable.yml` |
 | `adoc` | Source Codeからのドキュメント作成 | `auto-app-documentation-reusable.yml` |
 | `adi` | Auto Design-doc Ingestion | なし（`hve` ローカル実行専用） |
 
@@ -123,12 +126,12 @@
 | 1.1 | 事業分野別深掘り分析（fan-out: `business_candidate`） | 同上 | 必須（グループ 1） | `docs/business/{key}-analysis.md` |
 | 1.2 | 事業分析統合 | 同上 | 必須（グループ 1） | `docs/company-business-requirement.md` |
 | 2 | 対象業務深掘り分析 | `Arch-ARD-BusinessAnalysis-Targeted` | 必須（グループ 2） | `docs/business-requirement.md` |
-| **2.1** | **KPI/OKR 定義（任意）** | **`Arch-ARD-KPIOKRDefinition`** | **任意（オプトイン）** | **`docs/recommended-kpi-okr.md`** |
+| **2.1** | **KPI/OKR 定義（任意）** | **`Arch-ARD-KPIOKRDefinition`** | **任意（グループ 3・既定 ON）** | **`docs/recommended-kpi-okr.md`** |
 | 3.1 | ユースケース骨格抽出 | `Arch-ARD-UseCaseCatalog` | 必須（グループ 4） | `docs/catalog/use-case-skeleton.md` |
 | 3.2 | ユースケース詳細生成（fan-out: `use_case_skeleton`） | 同上 | 必須（グループ 4） | `docs/usecase/{key}-detail.md` |
 | 3.3 | ユースケースカタログ統合 | 同上 | 必須（グループ 4） | `docs/catalog/use-case-catalog.md` |
 
-> Step 2.1 は CLI `--include-kpi-okr` / GUI チェックボックス / 対話ウィザードのいずれかで明示有効化した場合のみ実行されます（既定 OFF）。後続 Step 3.1/3.2 および `aas` の `Arch-ApplicationAnalytics` が任意参照します。
+> Step 2.1 は 4 表示グループのうちグループ `3` に対応し、CLI wizard / GUI / `--steps` 省略の直接 CLI で**既定選択**されます（既定グループは `2` / `3` / `4`）。実行しない場合はグループ `3` を選択から外してください。直接 CLI の `--include-kpi-okr` フラグ自体の既定は `false` で、既定グループ選択とは別の後方互換ショートカットです。後続 Step 3.1/3.2 および ARD Step 4.1 の `Arch-ApplicationAnalytics` が任意参照します。
 >
 > Step ID は `hve/workflow_registry.py` の ARD `StepDef` を一次根拠としています。上記 8 Step は 4 表示グループ（1 / 2 / 3 / 4）に集約して提示されます。展開規則の正本は `hve/workflow_registry.py` の `_WORKFLOW_GROUP_MAPS["ard"]` です（`1` → `1`/`1.1`/`1.2`、`2` → `2`、`3` → `2.1`、`4` → `3.1`/`3.2`/`3.3`）。
 
@@ -142,15 +145,16 @@
 | `ard` | ❌ | ✅ | `hve/workflow_registry.py` の canonical workflow。dispatcher の `trigger_map` / `done_map` / `closed_prefix_map` に含まれず、Issue label 経路では起動しません（local 専用）。 |
 | `aas` | ✅ | ✅ | Cloud では `auto-app-selection` ラベルで dispatcher が `AAS` を選択。 |
 | `aad-web` | ✅ | ✅ | Cloud では `auto-app-detail-design-web` ラベルで dispatcher が `AAD-WEB` を選択。 |
-| `asdw-web` | ⚠️ | ✅ | dispatcher の `trigger_map` には `auto-app-dev-microservice-web` が残っていますが、`auto-app-dev-microservice-web-reusable.yml` は `uses:` されておらず、Cloud 起動は停止中です（FR-CLOUD-06）。CLI / GUI 経路が supported。 |
+| `asdw-web` | ✅ | ✅ | Cloud では `auto-app-dev-microservice-web` ラベルで dispatcher が `ASDW-WEB` を選択。 |
 | `adfd` | ✅ | ✅ | Cloud では `auto-dataflow-design` ラベルで dispatcher が `ADFD` を選択。 |
 | `adfdv` | ✅ | ✅ | Cloud では `auto-dataflow-dev` ラベルで dispatcher が `ADFDV` を選択。 |
+| `ada` | ✅ | ✅ | Cloud では `auto-agent-data-architecture` ラベルで dispatcher が `ADA` を選択。画面を持たないデータ中心 AI Agent 向けのデータ設計（AAG の前段）。 |
 | `aag` | ✅ | ✅ | Cloud では `auto-ai-agent-design` ラベルで dispatcher が `AAG` を選択。 |
 | `aagd` | ✅ | ✅ | Cloud では `auto-ai-agent-dev` ラベルで dispatcher が `AAGD` を選択。 |
 | `akm` | ✅ | ✅ | Cloud では `knowledge-management` ラベルで dispatcher が `AKM` を選択。 |
 | `adoc` | ✅ | ✅ | Cloud では `auto-app-documentation` ラベルで dispatcher が `ADOC` を選択。 |
 | `adi` | ❌ | ✅ | 原本の目録化・選別に加え、Step 1.1のD01〜D21質問票21並列生成とStep 1.2の横断joinを行うcanonical workflow。Issue Template / dispatcher経路は持たない（local専用）。 |
-| `aar` | ❌ | ✅ | `hve/workflow_registry.py` の canonical workflow（Agentic Retrieval Add-on）。dispatcher の `trigger_map` に含まれず、Issue label 経路では起動しません（local 専用）。 |
+| `aar` | ✅ | ✅ | Cloud では `auto-agentic-retrieval` ラベルで dispatcher が `AAR` を選択。`Agentic Retrieval を使用する=しない` の場合は Step Issue を生成しません。**Cloud の AAR は Step の逐次実行のみ**で、他ワークフローの QA ・敌対的レビュー・自動マージ・Self-Improve・モデル選択は含みません。これらが必要な場合は CLI / GUI を使ってください。 |
 
 #### canonical workflow ID と alias（`hve/workflow_registry.py`）
 
@@ -167,7 +171,7 @@
 
 - GitHub.com の Issue Template から起動する場合は、**HVE Cloud Agent Orchestrator 対応 workflow**（上表で HVE Cloud Agent Orchestrator 列が ✅）を選択してください。
 - ローカルで `python -m hve` から起動する場合は、`hve/workflow_registry.py` に登録された workflow ID を使用してください。
-- `ard` / `adi` / `aar` は **HVE CLI / GUI Orchestrator 専用** です。HVE Cloud Agent Orchestrator のIssue label / dispatcher経路では実行できません。
+- `ard` / `adi` は **HVE CLI / GUI Orchestrator 専用** です。AAR は CLI / GUI / Cloud の全経路に対応します。
 - alias（`aad`, `asdw`）は HVE CLI Orchestrator で canonical ID（`aad-web`, `asdw-web`）に解決されます。workflow ID の記載時は canonical ID と混同しないでください。
 
 ### Work IQ 連携（オプション）
@@ -175,12 +179,12 @@
 `--auto-qa` と `--workiq` が有効な場合のみ、QA フェーズで M365 補助情報を読み取り専用で参照します（未インストール時は自動スキップ）。Phase 1 の本処理、Review フェーズ、自己改善フェーズでは Work IQ を使用しません。
 
 - **QA（`--auto-qa`）**:  
-  - 通常モード: 質問票から要約した問いを一括で問い合わせ、`qa/{run_id}-{step_id}-workiq-qa.md` を生成
-  - ドラフトモード（`--workiq-draft`）: 質問ごとに問い合わせ、`qa/{run_id}-{step_id}-workiq-qa-draft.md` を生成
+  - 質問票の**質問ごとに 1 回**問い合わせ、`qa/{run_id}-{step_id}-workiq-pre-qa-draft.md` を生成
+  - `--workiq-draft` は問い合わせ方式を切り替えるフラグではなく、Work IQ 連携自体を有効化するトリガー
 - wizard モード（`python -m hve`）では、QA 自動投入を有効にした場合のみ Work IQ 有効化メニューが表示されます。ログイン成功後に「Work IQ (Microsoft 365 Copilot) の末尾に追加するプロンプト」を入力すると、QA フェーズの Work IQ プロンプトへ追記できます。
 
 利用ツール（読み取り専用）:
-- `ask_work_iq`
+- `ask`
 
 ---
 
@@ -196,7 +200,9 @@
 
 | ワークフロー ID | ワークフロー名 | 必須入力文書名（説明文） | ファイルパス | soft |
 |---|---|---|---|---|
-| `aas` | Architecture Design | （なし） | — | — |
+| `aas` | Architecture Design | アプリケーションカタログ | `docs/catalog/app-catalog.md` | required |
+| `aas` | Architecture Design | ユースケースカタログ | `docs/catalog/use-case-catalog.md` | required |
+| `aas` | Architecture Design | APP別要求定義書（一覧） | `docs/architectural-requirements-app-*.md` | required |
 | `aad-web` | Web App Design | アプリケーションカタログ | `docs/catalog/app-catalog.md` | required |
 | `aad-web` | Web App Design | ドメイン分析 | `docs/catalog/domain-analytics.md` | required |
 | `aad-web` | Web App Design | サービスカタログ | `docs/catalog/service-catalog.md` | required |
@@ -229,7 +235,7 @@
 | `ard` | `1` | `company_name` | — |
 | `ard` | `2` | `target_business` | — |
 | `ard` | `3` / `4` | — | `docs/business-requirement.md` |
-| `aas` | `1` | — | `docs/catalog/use-case-catalog.md` |
+| `aas` | `1` | — | `app-catalog.md` と APP別要求定義書 |
 | `aad-web` | `1` | — | `docs/catalog/app-catalog.md` |
 | `asdw-web` | `1.1` | `resource_group` | `docs/catalog/app-catalog.md` |
 | `adfd` | `6.1` / `6.2` | — | `docs/catalog/app-catalog.md` |
@@ -256,16 +262,16 @@
 | 略称 | `ARD` |
 | ラベルプレフィックス | `ard` |
 | ウィザード表示順 | 1 番目 |
-| ステップ数 | 8（`hve/workflow_registry.py` の実 `StepDef` 数。表示上は 4 グループ: 1 / 2 / 2.1 / 3） |
+| ステップ数 | 8（`hve/workflow_registry.py` の実 `StepDef` 数。表示上は 4 グループ: 1 / 2 / 3 / 4） |
 | 主な出力 | `docs/company-business-requirement.md`、`docs/catalog/use-case-catalog.md` |
 | Work IQ 連携 | Step 2 のみ（条件付き） |
 
 ### ステップ DAG
 
-- グループ 1（Step 1 → 1.1 → 1.2）: `target_business` 空のときのみ実行（Untargeted 事業分析）。Step 1.1 は `business_candidate` パーサで fan-out
-- グループ 2（Step 2）: 常に実行（Targeted 事業分析）。グループ 1 完了時は SR-ID 選択 → `target_business` 自動生成を経由
-- Step 2.1（KPI/OKR 定義）: 明示オプトイン時のみ実行（既定 OFF）
-- グループ 3（Step 3.1 → 3.2 → 3.3）: グループ 2 完了で起動（UseCase 作成）。Step 3.2 は `use_case_skeleton` パーサで fan-out
+- グループ 1（Step 1 → 1.1 → 1.2）: 対象業務が未定のときに使う Untargeted 事業分析（既定 OFF、明示選択時に実行）。Step 1.1 は `business_candidate` パーサで fan-out
+- グループ 2（Step 2）: DAG 前提条件なしで、既定選択される Targeted 事業分析。グループ 1 と同時選択し `target_business` が空なら、Step 1.2 完了後の SR-ID 選択 → `target_business` 自動生成を経由
+- グループ 3（Step 2.1）: グループ 2 完了で起動し、グループ 2 非選択時は Step 1.2 完了を fallback 前提として起動できる KPI/OKR 定義。既定で選択される（不要ならグループ `3` を選択から外す）
+- グループ 4（Step 3.1 → 3.2 → 3.3）: グループ 2 完了で起動し、グループ 2 非選択時は Step 1.2 完了を fallback 前提として起動できる（UseCase 作成）。Step 3.2 は `use_case_skeleton` パーサで fan-out
 
 ### 詳細
 詳細な使い方は [`01-business-requirement.md` の「要求定義の自動化（ARD: Auto Requirement Definition）」セクション](./01-business-requirement.md#要求定義の自動化ard-auto-requirement-definition) を参照してください。
@@ -284,7 +290,7 @@
 | `auto-dataflow-design` | **データフロー設計ワークフロー（ADFD）の起動トリガー**。Issue にこのラベルが付与されると、ADFD オーケストレーターが起動し、Step.1〜3 の Sub Issue を自動生成して Copilot にアサインする |
 | `auto-dataflow-dev` | **バッチ実装ワークフロー（ADFDV）の起動トリガー**。Issue にこのラベルが付与されると、ADFDV オーケストレーターが起動し、Step.1〜4 の Sub Issue を自動生成して Copilot にアサインする |
 | `auto-app-documentation` | **Source Codeからのドキュメント作成ワークフロー（ADOC）の起動トリガー**。Issue にこのラベルが付与されると、ADOC オーケストレーターが起動し、Step.1〜6 の Sub Issue を自動生成して Copilot にアサインする |
-| `knowledge-management` | **Knowledge Management ワークフロー（AKM）の起動トリガー**。Issue にこのラベルが付与されると、AKM オーケストレーターが起動し、`[AKM] Step.1: knowledge/ ドキュメント生成・管理` Sub Issue を自動生成して `KnowledgeManager` Agent で Copilot にアサインする。sources（qa/original-docs/both）は Issue Template で選択する（HVE Cloud Agent はこの 3 選択のみ）。`hve` ローカル CLI を使うと `workiq` をさらにマルチ選択で追加できる（例: `--sources qa,original-docs,workiq`）。 |
+| `knowledge-management` | **Knowledge Management ワークフロー（AKM）の起動トリガー**。Issue にこのラベルが付与されると、AKM オーケストレーターが起動し、`[AKM] Step.1: knowledge/ ドキュメント生成・管理` Sub Issue を自動生成して `KnowledgeManager` Agent で Copilot にアサインする。sources（qa/docs-original/both）は Issue Template で選択する（HVE Cloud Agent はこの 3 選択のみ）。`hve` ローカル CLI を使うと `workiq` をさらにマルチ選択で追加できる（例: `--sources qa,docs-original,workiq`）。 |
 | `qa-akm-sync` | **QA 回答起点の AKM 実行を識別するラベル**。`auto-akm-after-qa.yml` が作成する AKM Root Issue と、その Step Issue に付与される。このラベルを持つ AKM だけが `akm-qa-sync-child-<repo>` の concurrency で直列化され、調整ワークフローが保持する `akm-knowledge-write-<repo>` との自己デッドロックを回避する |
 | `create-subissues` | **Sub Issue 自動作成のトリガー**。人間が PR にこのラベルを手動付与すると、PR 内の `work/**/subissues.md` をパースして Sub Issue を自動作成する |
 | `setup-labels` | **ラベル初期セットアップのトリガー**。Issue にこのラベルが付与されると `.github/labels.json` に定義された全ラベルがリポジトリに自動作成・更新される。リポジトリ作成後に1度実行する想定だが、ラベル定義変更時は再実行可能（冪等設計）。Actions タブの `workflow_dispatch` からも手動実行可能。 |
@@ -438,7 +444,6 @@ StepDef(
 | ARD | `1.1`（`business_candidate`）、`3.2`（`use_case_skeleton`） | 事業分野候補数 / UC 数 | Step `1.2` / `3.3`（統合） |
 | AKM | `1`（静的キー D01〜D21） | 21 | Step `2`（`QA-DocConsistency`） |
 | ADI | `1.1`（静的キー D01〜D21） | 21 | Step `1.2`（`QA-DocConsistency`） |
-| AAS | `2`（`app_catalog`） | APP 数 | — |
 | AAD-WEB | `1` / `2.1` / `2.2` / `2.3` / `2.4` / `2.6` | APP / 画面 / サービス数 | Step `3`（`QA-DocConsistency`） |
 | ASDW-WEB | `2.5` / `3.2` / `3.3`（per-service）、`4.1` / `4.2`（per-screen） | サービス / 画面数 | — |
 | ADFD | `1` / `3`（`dataflow_catalog`） | APP 数 | — |
@@ -449,7 +454,15 @@ StepDef(
 
 > **ADOC は fan-out 対象外**（[ADR-0002](../template/decisions/ADR-0002-hve-fanout-architecture.md) H-1 / O-1）。ARD は ADR-0002 の O-1 で当初「対象外」と決定されましたが、[ADR-0003](../template/decisions/ADR-0003-ard-fanout-architecture.md) による再評価を経て `1.1` / `3.2` に fan-out が実装されています（`hve/catalog_parsers.py` の `business_candidate` / `use_case_skeleton`）。
 >
-> `max_parallel` はワークフロー単位で上書きされます（既定 `15`）。実装値: ARD `15` / AKM `21` / ADI `21` / ASDW-WEB `1`（直列化）。その他は既定値です。
+> 上記の `max_parallel` は各ワークフローが `hve/workflow_registry.py` の `WorkflowDef` で**宣言する値**です。宣言値: ARD `15` / AKM `21` / ADI `21` / ASDW-WEB `1`（直列化）。その他のワークフローは宣言を持ちません。
+>
+> CLI / GUI の `orchestrate` 実行では、DAG の並列上限を次の順で解決します（`hve/orchestrator.py` の `_resolve_max_parallel()` が唯一の解決点）。
+>
+> 1. ARD の bridge mode が成立するとき → `1`
+> 2. 上表の**宣言値がある**とき → その宣言値。`--max-parallel` では上書きできません
+> 3. どちらでもないとき → `--max-parallel`（既定 `15`）
+>
+> ASDW-WEB の `1` は同一 worktree での並列書込みを避ける安全制約、AKM / ADI の `21` は D01〜D21 の fan-out が設計上その並列度で動くことを表すため、いずれも利用者設定より優先されます。
 
 ### per-key プロンプトテンプレート規約
 
@@ -521,19 +534,20 @@ StepDef(
 | E2E テスト | `E2ETesting-*` | 1 |
 | **合計** | | **84** |
 
-### ワークフローごとの実行 Agent（`hve/workflow_registry.py` の `list_workflows()` から 2026-08-07 時点で抽出）
+### ワークフローごとの実行 Agent（`hve/workflow_registry.py` の `list_workflows()` から 2026-08-18 時点で抽出）
 
 | Workflow ID | 名称 | Step 数 | 実行 Agent |
 |-------------|------|--------:|------------|
-| `ard` | Auto Requirement Definition | 8 | `1`: `Arch-ARD-BusinessAnalysis-Untargeted`<br>`1.1`: `Arch-ARD-BusinessAnalysis-Untargeted`<br>`1.2`: `Arch-ARD-BusinessAnalysis-Untargeted`<br>`2`: `Arch-ARD-BusinessAnalysis-Targeted`<br>`2.1`: `Arch-ARD-KPIOKRDefinition`<br>`3.1`: `Arch-ARD-UseCaseCatalog`<br>`3.2`: `Arch-ARD-UseCaseCatalog`<br>`3.3`: `Arch-ARD-UseCaseCatalog` |
-| `aas` | Architecture Design | 11 | `1`: `Arch-ApplicationAnalytics`<br>`2`: `Arch-ArchitectureCandidateAnalyzer`<br>`3.1`: `Arch-Microservice-DomainAnalytics`<br>`3.2`: `Arch-Microservice-ServiceIdentify`<br>`4.1`: `Arch-DataModeling`<br>`4.2`: `Arch-DataModeling`<br>`5`: `Arch-DataCatalog`<br>`6`: `Arch-Microservice-ServiceCatalog`<br>`7`: `Arch-TDD-TestStrategy`<br>`8`: `Arch-PersonaCatalog`<br>`9`: `Arch-UI-PersonaScreenList` |
+| `ard` | Auto Requirement Definition | 10 | `1`: `Arch-ARD-BusinessAnalysis-Untargeted`<br>`1.1`: `Arch-ARD-BusinessAnalysis-Untargeted`<br>`1.2`: `Arch-ARD-BusinessAnalysis-Untargeted`<br>`2`: `Arch-ARD-BusinessAnalysis-Targeted`<br>`2.1`: `Arch-ARD-KPIOKRDefinition`<br>`3.1`: `Arch-ARD-UseCaseCatalog`<br>`3.2`: `Arch-ARD-UseCaseCatalog`<br>`3.3`: `Arch-ARD-UseCaseCatalog`<br>`4.1`: `Arch-ApplicationAnalytics`<br>`4.2`: `Arch-ApplicationRequirementDefinition` |
+| `aas` | Architecture Design | 10 | `1`: `Arch-ArchitectureCandidateAnalyzer`<br>`2.1`: `Arch-Microservice-DomainAnalytics`<br>`2.2`: `Arch-Microservice-ServiceIdentify`<br>`3.1`: `Arch-DataModeling`<br>`3.2`: `Arch-DataModeling`<br>`4`: `Arch-DataCatalog`<br>`5`: `Arch-Microservice-ServiceCatalog`<br>`6`: `Arch-TDD-TestStrategy`<br>`7`: `Arch-PersonaCatalog`<br>`8`: `Arch-UI-PersonaScreenList` |
 | `aad-web` | Web App Design | 8 | `1`: `Arch-UI-List`<br>`2.1`: `Arch-UI-Detail`<br>`2.2`: `Arch-Microservice-ServiceDetail`<br>`2.3`: `Arch-TDD-TestSpec`<br>`2.4`: `Arch-TDD-TestSpec`<br>`2.5`: `Dev-Microservice-Azure-AddServiceDesign`<br>`2.6`: `Arch-AgenticRetrieval-Detail`<br>`3`: `QA-DocConsistency` |
-| `asdw-web` | Web App Dev & Deploy | 25 | `1`: （グループ見出し・Agent 割当なし）<br>`2`: （グループ見出し・Agent 割当なし）<br>`3`: （グループ見出し・Agent 割当なし）<br>`4`: （グループ見出し・Agent 割当なし）<br>`5`: （グループ見出し・Agent 割当なし）<br>`1.1`: `Dev-Microservice-Azure-DataDesign`<br>`1.2`: `Dev-Microservice-Azure-DataTestCoding`<br>`1.3`: `Dev-Microservice-Azure-DataDeploy`<br>`2.1`: `Dev-Microservice-Azure-AddServiceDesign`<br>`2.2`: `Dev-Microservice-Azure-AddServiceDeploy`<br>`2.3`: `Dev-Microservice-Azure-AddServiceTestCoding`<br>`2.4`: `Dev-Microservice-Azure-AddServiceTesting`<br>`2.5`: `Dev-Microservice-Azure-AgenticRetrievalDesign`<br>`2.6`: `Dev-Microservice-Azure-AgenticRetrievalDeploy`<br>`3.1`: `Dev-Microservice-Azure-ComputeDesign`<br>`3.2`: `Dev-Microservice-Azure-ServiceTestCoding`<br>`3.3`: `Dev-Microservice-Azure-ServiceCoding-AzureFunctions`<br>`3.4`: `Dev-Microservice-Azure-ComputeDeploy-AzureFunctions`<br>`3.5`: `Dev-Microservice-Azure-ComputePostDeployTest`<br>`4.1`: `Dev-Microservice-Azure-UITestCoding`<br>`4.2`: `Dev-Microservice-Azure-UICoding`<br>`4.3`: `Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps`<br>`4.4`: `E2ETesting-Playwright`<br>`5.1`: `QA-AzureArchitectureReview`<br>`5.2`: `QA-AzureDependencyReview` |
+| `ada` | Agent Data Architecture | 9 | `2`: `Arch-Microservice-DomainAnalytics`<br>`3`: `Arch-Microservice-ServiceIdentify`<br>`4.1`: `Arch-DataModeling`<br>`4.2`: `Arch-DataModeling`<br>`5`: `Arch-DataCatalog`<br>`6`: `Arch-PersonaCatalog`<br>`7`: `Arch-Microservice-ServiceDetail`<br>`8`: `Arch-AgentDataAsset`<br>`9`: `Arch-TDD-TestStrategy` |
+| `asdw-web` | Web App Dev & Deploy | 26 | `1`: （グループ見出し・Agent 割当なし）<br>`2`: （グループ見出し・Agent 割当なし）<br>`3`: （グループ見出し・Agent 割当なし）<br>`4`: （グループ見出し・Agent 割当なし）<br>`5`: （グループ見出し・Agent 割当なし）<br>`1.1`: `Dev-Microservice-Azure-DataDesign`<br>`1.2`: `Dev-Microservice-Azure-DataTestCoding`<br>`1.3`: `Dev-Microservice-Azure-DataDeploy`<br>`2.1`: `Dev-Microservice-Azure-AddServiceDesign`<br>`2.2`: `Dev-Microservice-Azure-AddServiceDeploy`<br>`2.3`: `Dev-Microservice-Azure-AddServiceTestCoding`<br>`2.4`: `Dev-Microservice-Azure-AddServiceTesting`<br>`2.5`: `Dev-Microservice-Azure-AgenticRetrievalDesign`<br>`2.6`: `Dev-Microservice-Azure-AgenticRetrievalDeploy`<br>`3.1`: `Dev-Microservice-Azure-ComputeDesign`<br>`3.2`: `Dev-Microservice-Azure-ServiceTestCoding`<br>`3.3`: `Dev-Microservice-Azure-ServiceCoding-AzureFunctions`<br>`3.4`: `Dev-Microservice-Azure-ComputeDeploy-AzureFunctions`<br>`3.5`: `Dev-Microservice-Azure-ComputePostDeployTest`<br>`4.1`: `Dev-Microservice-Azure-UITestCoding`<br>`4.2`: `Dev-Microservice-Azure-UICoding`<br>`4.3`: `Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps`<br>`4.4`: `E2ETesting-Playwright`<br>`5.1`: `QA-AzureArchitectureReview`<br>`5.2`: `QA-AzureDependencyReview`<br>`5.3`: `QA-RequirementsConformanceEval` |
 | `adfd` | Dataflow Design | 7 | `0.1`: `Arch-Dataflow-DataModel`<br>`0.2`: `Arch-Dataflow-AppCatalog`<br>`4`: `Arch-Dataflow-ServiceCatalog`<br>`5`: `Arch-Dataflow-TestStrategy`<br>`1`: `Arch-Dataflow-AppSpec`<br>`2`: `Arch-Dataflow-MonitoringDesign`<br>`3`: `Arch-Dataflow-TDD-TestSpec` |
-| `adfdv` | Dataflow Dev | 7 | `1.1`: `Dev-Dataflow-DataServiceSelect`<br>`1.2`: `Dev-Dataflow-DataDeploy`<br>`2.1`: `Dev-Dataflow-TestCoding`<br>`2.2`: `Dev-Dataflow-ServiceCoding`<br>`3`: `Dev-Dataflow-FunctionsDeploy`<br>`4.1`: `QA-AzureArchitectureReview`<br>`4.2`: `QA-AzureDependencyReview` |
+| `adfdv` | Dataflow Dev | 8 | `1.1`: `Dev-Dataflow-DataServiceSelect`<br>`1.2`: `Dev-Dataflow-DataDeploy`<br>`2.1`: `Dev-Dataflow-TestCoding`<br>`2.2`: `Dev-Dataflow-ServiceCoding`<br>`3`: `Dev-Dataflow-FunctionsDeploy`<br>`4.1`: `QA-AzureArchitectureReview`<br>`4.2`: `QA-AzureDependencyReview`<br>`4.3`: `QA-RequirementsConformanceEval` |
 | `aag` | AI Agent Design | 3 | `1`: `Arch-AIAgentDesign-Step1`<br>`2`: `Arch-AIAgentDesign-Step2`<br>`3`: `Arch-AIAgentDesign-Step3` |
-| `aagd` | AI Agent Dev & Deploy | 6 | `1`: `Arch-AIAgentDesign-Step1`<br>`2.1`: `Arch-TDD-TestSpec`<br>`2.2`: `Dev-Microservice-Azure-AgentTestCoding`<br>`2.3`: `Dev-Microservice-Azure-AgentCoding`<br>`3`: `Dev-Microservice-Azure-AgentDeploy`<br>`4`: `QA-ToolSearchEval` |
-| `aar` | Agentic Retrieval Add-on | 6 | `1`: `Arch-AgenticRetrieval-Detail`<br>`2`: `Dev-Microservice-Azure-AgenticRetrievalDesign`<br>`3`: `Arch-TDD-TestSpec`<br>`4`: `Dev-Microservice-Azure-AgenticRetrievalTestCoding`<br>`5`: `Dev-Microservice-Azure-AgenticRetrievalDeploy`<br>`6`: `QA-AgenticRetrievalEval` |
+| `aagd` | AI Agent Dev & Deploy | 9 | `1`: `Arch-AIAgentDesign-Step1`<br>`2.1`: `Arch-TDD-TestSpec`<br>`2.2`: `Dev-Microservice-Azure-AgentTestCoding`<br>`2.3`: `Dev-Microservice-Azure-AgentCoding`<br>`3`: `Dev-Microservice-Azure-AgentDeploy`<br>`4`: `QA-ToolSearchEval`<br>`5`: `QA-RequirementsConformanceEval`<br>`6`: `QA-AgentRouteRightsizingEval`<br>`7`: `Dev-Agent-M365Publish` |
+| `aar` | Agentic Retrieval Add-on | 7 | `1`: `Arch-AgenticRetrieval-Detail`<br>`2`: `Dev-Microservice-Azure-AgenticRetrievalDesign`<br>`3`: `Arch-TDD-TestSpec`<br>`4`: `Dev-Microservice-Azure-AgenticRetrievalTestCoding`<br>`5`: `Dev-Microservice-Azure-AgenticRetrievalDeploy`<br>`6`: `QA-AgenticRetrievalEval`<br>`7`: `QA-RequirementsConformanceEval` |
 | `akm` | Knowledge Management | 2 | `1`: `KnowledgeManager`<br>`2`: `QA-DocConsistency` |
 | `adi` | Auto Design-doc Ingestion | 9 | `1`: `Doc-OriginalInventory`<br>`1.1`: `QA-DocConsistency`（D01〜D21 fan-out）<br>`1.2`: `QA-DocConsistency`（join）<br>`2`: `Doc-OriginalDocCard`<br>`3`: `Doc-OriginalTriage`<br>`4`: `Doc-OriginalRouting`<br>`5.1`: `Doc-OriginalDownstreamSeed`<br>`5.2`: `Doc-OriginalDownstreamSeed`<br>`5.3`: `Doc-OriginalDownstreamSeed` |
 | `adoc` | Source Codeからのドキュメント作成 | 23 | `2`: （グループ見出し・Agent 割当なし）<br>`3`: （グループ見出し・Agent 割当なし）<br>`5`: （グループ見出し・Agent 割当なし）<br>`6`: （グループ見出し・Agent 割当なし）<br>`1`: `Doc-FileInventory`<br>`2.1`: `Doc-FileSummary`<br>`2.2`: `Doc-TestSummary`<br>`2.3`: `Doc-ConfigSummary`<br>`2.4`: `Doc-CICDSummary`<br>`2.5`: `Doc-LargeFileSummary`<br>`3.1`: `Doc-ComponentDesign`<br>`3.2`: `Doc-APISpec`<br>`3.3`: `Doc-DataModel`<br>`3.4`: `Doc-TestSpecSummary`<br>`3.5`: `Doc-TechDebt`<br>`4`: `Doc-ComponentIndex`<br>`5.1`: `Doc-ArchOverview`<br>`5.2`: `Doc-DependencyMap`<br>`5.3`: `Doc-InfraDeps`<br>`5.4`: `Doc-NFRAnalysis`<br>`6.1`: `Doc-Onboarding`<br>`6.2`: `Doc-Refactoring`<br>`6.3`: `Doc-Migration` |
@@ -583,6 +597,8 @@ StepDef(
 
 | ファイル名 | name | labels | 主要 inputs（先頭6件） |
 |-----------|------|--------|------------------------|
+| `agent-data-architecture.yml` | Agent Data Architecture（AI Agent 向けデータ設計） | `auto-agent-data-architecture` | `branch, runner_type, app_ids, additional_comment` |
+| `agentic-retrieval.yml` | Agentic Retrieval Add-on | `auto-agentic-retrieval` | `enable_agentic_retrieval, app_ids, branch, resource_group, runner_type, additional_comment` |
 | `ai-agent-design.yml` | AI Agent Design | `auto-ai-agent-design` | `app_ids, usecase_id, branch, runner_type, steps, model` |
 | `ai-agent-dev.yml` | AI Agent Dev & Deploy | `auto-ai-agent-dev` | `app_ids, branch, runner_type, resource_group, usecase_id, steps` |
 | `app-architecture-design.yml` | Architecture Design（アーキテクチャ設計） | `auto-app-selection` | `branch, runner_type, steps, model, review_model, qa_model` |

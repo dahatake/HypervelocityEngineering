@@ -398,8 +398,9 @@ def _make_child(step: Any, key: str) -> FanoutChildStep:
                 resolved_outputs.append(resolved)
     else:
         resolved_outputs = list(getattr(step, "output_paths", []) or [])
+    placeholder_names = _key_placeholder_names(step)
     resolved_inputs = [
-        p.replace("{key}", key)
+        _substitute_key_placeholders(p, key, placeholder_names)
         for p in (getattr(step, "required_input_paths", []) or [])
     ]
     return FanoutChildStep(

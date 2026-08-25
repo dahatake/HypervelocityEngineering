@@ -410,7 +410,6 @@ class TestBuildParams(unittest.TestCase):
         args = _parse(["orchestrate", "-w", "asdw", "--resource-group", "rg-test"])
         params = _build_params(args)
         self.assertEqual(params["resource_group"], "rg-test")
-
     def test_data_deploy_bootstrap_inputs_are_carried_to_params(self) -> None:
         args = _parse(
             [
@@ -2899,6 +2898,14 @@ class TestWorkIQDoctorSdkProbeArgs(unittest.TestCase):
         self.assertTrue(args.sdk_event_trace)
         self.assertTrue(args.sdk_tool_probe_tools_all)
 
+    def test_qa_integration_probe_default_false(self) -> None:
+        args = _parse(["workiq-doctor"])
+        self.assertFalse(args.qa_integration_probe)
+
+    def test_qa_integration_probe_arg_parsed(self) -> None:
+        args = _parse(["workiq-doctor", "--qa-integration-probe"])
+        self.assertTrue(args.qa_integration_probe)
+
     def test_cmd_workiq_doctor_passes_sdk_probe_to_diagnostics(self) -> None:
         import workiq as _workiq_mod
         mock_report = _workiq_mod.WorkIQDiagnosticReport(checks=[
@@ -3031,6 +3038,43 @@ class TestBuildConfigOutputFlags(unittest.TestCase):
         parser = _build_parser()
         with self.assertRaises(SystemExit):
             parser.parse_args(["orchestrate", "-w", "aas", "--timestamp-style", "invalid"])
+
+
+class TestAutopilotChainStartConfirmation(unittest.TestCase):
+    """FR-CLI-78: CLI Autopilot は対話時に実行開始を確認する。
+
+    `_cmd_orchestrate_autopilot_chain` 自体は実行しない。このテストモジュールは
+    `__main__.py` を importlib で別名ロードするため `hve.autopilot` への patch が
+    届かず、本物の Autopilot が起動する。
+    """
+
+    def _confirm(self, *, isatty: bool, answer: str):
+        with mock.patch.object(_main_mod.sys.stdin, "isatty", return_value=isatty), \
+                mock.patch("builtins.input", return_value=answer) as prompt:
+            return _main_mod._confirm_autopilot_chain_start(2), prompt
+
+    def test_non_interactive_stdin_does_not_prompt(self) -> None:
+        ok, prompt = self._confirm(isatty=False, answer="n")
+        self.assertTrue(ok)
+        prompt.assert_not_called()
+
+    def test_accepting_starts_the_run(self) -> None:
+        ok, prompt = self._confirm(isatty=True, answer="y")
+        self.assertTrue(ok)
+        prompt.assert_called_once()
+
+    def test_declining_stops(self) -> None:
+        ok, _ = self._confirm(isatty=True, answer="n")
+        self.assertFalse(ok)
+
+    def test_empty_answer_stops(self) -> None:
+        ok, _ = self._confirm(isatty=True, answer="")
+        self.assertFalse(ok)
+
+    def test_the_chain_command_consults_the_confirmation(self) -> None:
+        source = pathlib.Path(_main_path).read_text(encoding="utf-8")
+        code = "\n".join(line.split("#", 1)[0] for line in source.splitlines())
+        self.assertIn("_confirm_autopilot_chain_start(", code)
 
 
 if __name__ == "__main__":

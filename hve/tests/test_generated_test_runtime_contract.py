@@ -264,8 +264,8 @@ def test_aagd_capability_tests_use_selected_deterministic_test_doubles() -> None
     test_coding = (
         _PROMPTS_DIR / "Dev-Microservice-Azure-AgentTestCoding.prompt.md"
     ).read_text(encoding="utf-8")
-    assert "AG-CAP-01〜06" in test_spec
-    assert "AG-CAP-01〜06" in test_coding
+    assert "AG-CAP-01〜10" in test_spec
+    assert "AG-CAP-01〜10" in test_coding
     for contract_id in ("AG-CAP-01 / 02", "AG-CAP-03", "AG-CAP-04", "AG-CAP-05", "AG-CAP-06"):
         assert contract_id in test_coding
     for token in (

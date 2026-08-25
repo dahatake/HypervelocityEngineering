@@ -22,7 +22,7 @@ Agentic Retrieval は「1 リクエストで Knowledge Base が全 Knowledge Sou
 - **クラシック検索（単一クエリ）のインデックス設計・チューニング** — Agentic Retrieval を採用しない場合は対象外。
 - **ベクトルインデックスの次元・アルゴリズム設計** — 索引側の設計は既存の検索設計に委ねる。
 - **Azure リソース作成スクリプトの記法** — `azure-cli-deploy-scripts` の責務。
-- **AI Agent の Goal Loop / REST mutation / Skill 梱包** — `ai-agent-capability-contract`（AG-CAP-01〜06）の責務。
+- **AI Agent の Goal Loop / REST mutation / Skill 梱包** — `ai-agent-capability-contract`（AG-CAP-01〜10）の責務。
 - **provider 抽象化層・汎用コネクタ framework の新設** — 要件に根拠がある場合を除いて作らない。
 - **SKU / API version / model / region / tier 上限の固定** — 実行時に公式情報で確認する。
 

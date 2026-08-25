@@ -107,8 +107,8 @@ class TestMdqTargetFoldersPersistence:
         settings_store.save(cur)
 
         # 直後に他オプション変更で _on_widget_changed
-        _simulate_on_widget_changed(snapshot, {"verbose": True})
+        _simulate_on_widget_changed(snapshot, {"create_issues": True})
 
         result = settings_store.load()
         assert result["mdq"]["target_folders"] == "docs/services;docs/usecase"
-        assert result["options"]["verbose"] is True
+        assert result["options"]["create_issues"] is True

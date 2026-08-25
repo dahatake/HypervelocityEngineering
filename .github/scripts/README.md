@@ -130,8 +130,8 @@ cd .github/scripts/bash
 # Bash — モデルを明示指定
 ./orchestrate.sh --workflow aas --model claude-opus-4.7 --dry-run
 
-# Bash — AAD ワークフロー（ステップ選択）
-./orchestrate.sh --workflow aad --steps 1.1,1.2 --dry-run
+# Bash — ステップ選択
+./orchestrate.sh --workflow aas --steps 2.1,2.2 --dry-run
 
 # Bash — run-workflow.sh 経由
 ./run-workflow.sh --workflow aas --dry-run
@@ -145,8 +145,8 @@ cd .github/scripts/powershell
 # PowerShell — モデルを明示指定
 .\orchestrate.ps1 -Workflow aas -Model claude-opus-4.7 -DryRun
 
-# PowerShell — AAD ワークフロー（ステップ選択）
-.\orchestrate.ps1 -Workflow aad -Steps "1.1,1.2" -DryRun
+# PowerShell — ステップ選択
+.\orchestrate.ps1 -Workflow aas -Steps "2.1,2.2" -DryRun
 
 # PowerShell — run-workflow.ps1 経由
 .\run-workflow.ps1 -Workflow aas -DryRun
@@ -215,16 +215,18 @@ cd .github/scripts/powershell
 
 | ID | 名称 | ステップ数 |
 |----|------|-----------|
-| `aas` | App Architecture Design | 8 |
-| `aad-web` | Web App Design | 4 |
-| `asdw-web` | Web App Dev & Deploy | 19 |
-| `adfd` | Dataflow Design | 9 |
-| `adfdv` | Dataflow Dev | 7 |
+| `aas` | App Architecture Design | 10 |
+| `ard` | Auto Requirement Definition | 10 |
+| `ada` | Agent Data Architecture | 9 |
+| `asdw-web` | Web App Dev & Deploy | 21 |
+| `adfd` | Dataflow Design | 7 |
+| `adfdv` | Dataflow Dev | 8 |
 | `aag` | AI Agent Design | 3 |
-| `aagd` | AI Agent Dev & Deploy | 5 |
-| `akm` | Knowledge Management | 1 |
-| `adi` | Auto Design-doc Ingestion | 9 |
-| `adoc` | Source Codeからのドキュメント作成 | 23 |
+| `aagd` | AI Agent Dev & Deploy | 9 |
+| `aar` | Agentic Retrieval Add-on | 7 |
+| `adoc` | Source Codeからのドキュメント作成 | 19 |
+
+> 本表の正本は [bash/lib/workflow-registry.sh](bash/lib/workflow-registry.sh) であり、ステップ数は Sub-Issue を作成する Step の数（Agent を持たないグループ見出し Step を含まない）です。そのため `asdw-web` / `adoc` は [hve/workflow_registry.py](../../hve/workflow_registry.py) の宣言数（26 / 23）より少なくなります。`aad-web` / `akm` / `adi` は Bash registry に存在せず、本スクリプト群からは実行できません（CLI / GUI または Cloud reusable workflow を使用してください）。PowerShell registry が持つのは `aas` / `ard` / `adfd` / `adfdv` の 4 件だけです。
 
 ## テスト実行
 

@@ -1,0 +1,17 @@
+inputs:
+- path: docs/catalog/app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ApplicationAnalytics--ard--4.1
+- path: docs/azure/agentic-retrieval/{serviceId}-design.md
+  required: true
+  kind: agent_artifact
+  producer: Dev-Microservice-Azure-AgenticRetrievalDesign--aar--2
+- path: src/test/integration/agentic-retrieval/
+  required: true
+  kind: agent_artifact
+  producer: Dev-Microservice-Azure-AgenticRetrievalTestCoding--aar--4
+outputs:
+- path: docs/azure/agentic-retrieval/requirements-conformance-report.md
+  required: true
+  mode: create

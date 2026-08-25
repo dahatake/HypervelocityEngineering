@@ -44,6 +44,12 @@ class CliRunSummary:
         return not self.aborted_apps and self.completed_apps == self.total_apps
 
 
+# FR-CLI-80: NFR-TIME-02 の Cloud 側ジョブタイムアウト（360 分）と同値。
+# CLI の既定タイムアウトは無入出力時間ベース（NFR-TIME-01）のため lane 全体を拘束しない。
+# 本定数は観測専用で、超過しても lane を停止させない。
+LANE_WALL_CLOCK_WARN_SECONDS: float = 360 * 60
+
+
 class CliAutopilotRunner:
     """Qt 非依存の Autopilot 実行ランナー。
 
@@ -60,6 +66,7 @@ class CliAutopilotRunner:
         poll_interval_sec: float = 0.1,
         progress_callback: Optional[Callable[[int, int], None]] = None,
         echo: Optional[Callable[[str], None]] = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._plan = plan
         self._argv_factory = argv_factory
@@ -77,6 +84,8 @@ class CliAutopilotRunner:
         }
         self._pending: List[str] = [c.app_id for c in plan.app_chains]
         self._running: Dict[str, subprocess.Popen] = {}
+        self._clock = clock
+        self._lane_started_at: Dict[str, float] = {}
         self._done = 0
         self._summary = CliRunSummary(total_apps=len(self._states))
 
@@ -149,6 +158,8 @@ class CliAutopilotRunner:
             return
         argv = self._build_argv(app_id, wf)
         proc = self._popen_factory(argv)
+        # lane の起点は chain 内の最初の Workflow 起動時とする（FR-CLI-80）。
+        self._lane_started_at.setdefault(app_id, self._clock())
         self._running[app_id] = proc
         if getattr(proc, "stdout", None) is not None:
             reader = threading.Thread(
@@ -173,6 +184,23 @@ class CliAutopilotRunner:
                 # progress callback の例外は実行に影響させない
                 pass
 
+    def _warn_if_lane_ran_long(self, app_id: str) -> None:
+        """FR-CLI-80: lane の経過時間を観測し、超過時に警告だけ出す（停止しない）。"""
+        started = self._lane_started_at.pop(app_id, None)
+        if started is None:
+            return
+        try:
+            elapsed = self._clock() - started
+            if elapsed <= LANE_WALL_CLOCK_WARN_SECONDS:
+                return
+            self._echo(
+                f"[{app_id}] ⚠ lane の経過時間が {elapsed / 60:.0f} 分に達しました"
+                f"（目安 {LANE_WALL_CLOCK_WARN_SECONDS / 60:.0f} 分）。"
+            )
+        except Exception:
+            # 観測の失敗で実行を止めない
+            pass
+
     def _poll_once(self) -> None:
         total = len(self._states)
         completed: List[str] = []
@@ -194,6 +222,7 @@ class CliAutopilotRunner:
             if reader is not None:
                 reader.join(timeout=2.0)
             self._done += 1
+            self._warn_if_lane_ran_long(app_id)
             state = self._states[app_id]
             if state.aborted_code is not None:
                 self._summary.aborted_apps.append(app_id)

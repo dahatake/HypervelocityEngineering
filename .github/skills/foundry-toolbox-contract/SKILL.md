@@ -214,6 +214,6 @@ Foundry IQ は Tool として **1** と数える。
 
 ## Related Skills
 
-- `ai-agent-capability-contract` — AG-CAP-01〜06。個々の Tool 定義の正本。
+- `ai-agent-capability-contract` — AG-CAP-01〜10。個々の Tool 定義の正本。
 - `agentic-retrieval-contract` — AR-CAP-01〜05。Knowledge Base の検索設計。接続トポロジで境界を分ける。
 - `mcp-server-design` — MCP Server 自体の設計。

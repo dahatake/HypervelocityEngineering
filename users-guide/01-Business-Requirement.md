@@ -15,12 +15,13 @@
 - [Step.2 ビジネスドキュメントの一覧の作成](#step2-ビジネスドキュメントの一覧の作成)
 - [Step.3 KPI/OKR 定義（任意）](#step3-kpiokr-definition)
 - [Step.4 ユースケースの作成](#step4-ユースケースの作成)
+- [ARD Step 4.1 / 4.2 アプリケーション要求定義](#ard-step-4-1-4-2-app-requirements)
 - [Step.5 qa/ フォルダーを使った質問票ベースの要求定義プロセス](#step5-qa-フォルダーを使った質問票ベースの要求定義プロセス)
 
 ---
 
 > [!TIP]
-> 本文の **手動 Step 番号** と ARD の **表示グループ番号** は別体系です。ARD は表示グループ `1`〜`4` を実 Step `1` / `1.1` / `1.2` / `2` / `2.1` / `3.1` / `3.2` / `3.3` に展開します。
+> 本文の **手動 Step 番号** と ARD の **表示グループ番号** は別体系です。ARD は表示グループ `1`〜`5` を実 Step `1` / `1.1` / `1.2` / `2` / `2.1` / `3.1` / `3.2` / `3.3` / `4.1` / `4.2` に展開します。
 > 詳細は本ドキュメント内の [要求定義の自動化（ARD: Auto Requirement Definition）](#要求定義の自動化ard-auto-requirement-definition) を参照してください。
 
 事業のアイディア、議事録、プロジェクトプランなどから、要求定義のドキュメントを作成します。
@@ -36,7 +37,7 @@
 - 対象読者: 要求定義を手動で進めたい方、または ARD 自動化の前提を理解したい方
 - 手動実行の前提: 参照資料を読み取れる LLM ツールと、結果を Markdown として保存できること
 - ARD の前提: `python -m hve` が実行でき、GitHub Copilot CLI の認証が完了していること
-- 次のステップ: 自動化する場合は [ARD](#要求定義の自動化ard-auto-requirement-definition)、設計へ進む場合は [02-app-architecture-design.md](./02-app-architecture-design.md)
+- 次のステップ: 自動化する場合は [ARD](#要求定義の自動化ard-auto-requirement-definition)（`docs/catalog/app-catalog.md` と APP別要求定義書も ARD が生成します）、設計へ進む場合は [02-app-architecture-design.md](./02-app-architecture-design.md)
 
 ## 概要
 
@@ -139,14 +140,14 @@ Step.2 と Step.3 は必要に応じて省略できます。Step.5 と AKM は A
 
 ARD は、事業のアイディアや業務情報から要求定義文書を生成する CLI / GUI Orchestrator です。Step セッションの実行先は HVE の Cloud Session 設定に従う場合がありますが、ARD の起動・制御経路は CLI / GUI です。
 
-- ARD は **4 グループ構成（Step 1: 企業の事業分析 / Step 2: 要求定義書作成 / Step 3: KPI/OKR 定義（任意）/ Step 4: ユースケース作成）** です。
+- ARD は **5 グループ構成（Step 1: 企業の事業分析 / Step 2: 要求定義書作成 / Step 3: KPI/OKR 定義（任意）/ Step 4: ユースケース作成 / Step 5: アプリケーション要求定義）** です。
 - 各グループは GUI/CLI で選択できますが、前段を選ばない場合は必要な `docs/` 成果物を事前に用意します。
 - ARD 専用 Issue Template、ARD reusable workflow、Cloud dispatcher の ARD トリガーは実装されていません（契約テスト: `hve/tests/test_ard_cli_only_contract.py`）。
-- 既定では Step 2 / Step 3 / Step 4 が ON、Step 1 は OFF です。
+- 既定では Step 2 / Step 3 / Step 4 / Step 5 が ON、Step 1 は OFF です。
 
-- 対象読者: 要求定義フェーズ（事業分析・ユースケース作成）を ARD で自動化したい方
+- 対象読者: 要求定義フェーズ（事業分析・ユースケース作成・アプリケーション要求定義）を ARD で自動化したい方
 - 前提: `python -m hve` が実行でき、GitHub Copilot CLI の認証が完了していること
-- 次のステップ: 生成した `docs/catalog/use-case-catalog.md` を使って [アプリケーションアーキテクチャ設計](./02-app-architecture-design.md) に進む
+- 次のステップ: 生成した `docs/catalog/use-case-catalog.md` に加え、グループ 5 が生成する `docs/catalog/app-catalog.md` と `docs/architectural-requirements-app-NNN.md` を使って [アプリケーションアーキテクチャ設計](./02-app-architecture-design.md) に進む
 
 ### 前提条件（自動化を使う場合の追加要件）
 
@@ -167,10 +168,10 @@ ARD は以下の方法で実行できます。
 
 ARD はウィザードでの表示順が **1 番目** です（`hve/workflow_registry.py` の `_REGISTRY` 先頭配置による）。
 
-### ステップ構成（GUI/CLI ウィザードの 4 グループ ↔ 内部 Step / 手動 Step との対応）
+### ステップ構成（GUI/CLI ウィザードの 5 グループ ↔ 内部 Step / 手動 Step との対応）
 
 ARD は GUI（Step 1 のステップ選択チェックボックス）/ CLI（ウィザード `prompt_multi_select`）で
-**4 グループ構成** の選択肢を提示します（[hve/__main__.py `_collect_ard_wizard_params`](../hve/__main__.py) /
+**5 グループ構成** の選択肢を提示します（[hve/__main__.py `_collect_ard_wizard_params`](../hve/__main__.py) /
 [hve/gui/page_workflow_select.py `_WorkflowStepsGroup._ARD_GROUPS`](../hve/gui/page_workflow_select.py)）。
 グループ展開の正本は `hve/workflow_registry.py` の `_WORKFLOW_GROUP_MAPS["ard"]` です。`hve/orchestrator.py` は `expand_group_step_ids()` を呼び出して展開します。
 
@@ -184,12 +185,15 @@ ARD は GUI（Step 1 のステップ選択チェックボックス）/ CLI（ウ
 | `4` | `3.1` | ユースケース骨格抽出 / `Arch-ARD-UseCaseCatalog` | Step `2` 出力、または Step `1.2` 出力。KPI/OKR は任意 | `docs/catalog/use-case-skeleton.md` |
 | `4` | `3.2` | UC ごとの詳細 fan-out / 同上 | Step `3.1` 出力と事業分析 | `docs/usecase/{key}-detail.md` |
 | `4` | `3.3` | ユースケース統合 / 同上 | Step `3.2` の全出力 | `docs/catalog/use-case-catalog.md` |
+| `5` | `4.1` | アプリケーションリスト作成 / `Arch-ApplicationAnalytics` | `docs/catalog/use-case-catalog.md` | `docs/catalog/app-catalog.md` |
+| `5` | `4.2` | APP別要求定義書作成 / `Arch-ApplicationRequirementDefinition` | `docs/catalog/app-catalog.md`（APP全件を単一 Agent が順次 upsert） | `docs/architectural-requirements-app-NNN.md`（APP全件） |
 
 既定 ON 設定:
 - **Step 1（企業の事業分析）**: 既定 **OFF**（対象業務が既に決まっている運用を想定）
 - **Step 2（要求定義書作成）**: 既定 **ON**
 - **Step 3（KPI/OKR 定義）**: 既定 **ON**（不要ならグループ `3` を選択から外す）
 - **Step 4（ユースケース作成）**: 既定 **ON**
+- **Step 5（アプリケーション要求定義）**: 既定 **ON**（`docs/catalog/app-catalog.md` と APP別要求定義書を生成。不要ならグループ `5` を選択から外す）
 
 依存関係と前提条件:
 - **グループ 1** の fan-out は `BIZ-NN`、**グループ 4** の fan-out は `UC-*` を上流成果物から抽出します。ID が無い場合、子 Step を展開できません。
@@ -206,7 +210,7 @@ ARD は GUI（Step 1 のステップ選択チェックボックス）/ CLI（ウ
 |---|---|---|---|---|
 | `company_name` | `--company-name` | `""` | グループ `1` または実 Step `1.x` で必須 | 対象企業名 |
 | `target_business` | `--target-business` | `""` | グループ `2` をグループ `1` なしで実行する場合は必須 | 文章、フォルダパス、またはカンマ区切りの複数ファイルパス。Step `2` 開始前にパスを本文コンテキストへ展開 |
-| `target_recommendation_id` | `--target-recommendation-id` | `""` | いいえ | SR-ID（例: `SR-1`）。指定 ID が見つからない場合は警告して先頭候補を選択する実装 |
+| `target_recommendation_id` | `--target-recommendation-id` | `""` | いいえ | SR-ID（例: `SR-1`、大文字小文字は区別しない）。直接 CLI で指定した値、または下記条件でカスタム全自動ウィザードから入力した値を優先する。一致しない場合は警告して先頭候補を選択 |
 | `survey_base_date` | `--survey-base-date` | 実行日 (`YYYY-MM-DD`) | いいえ | 調査基準日 |
 | `survey_period_years` | `--survey-period-years` | `30` | いいえ | 調査期間年数 |
 | `target_region` | `--target-region` | `グローバル全体` | いいえ | 対象地域 |
@@ -235,6 +239,7 @@ python -m hve
    - 対象地域（既定: グローバル全体）
    - 分析目的（既定: 中長期成長戦略の立案）
    - 添付資料パス（カンマ区切り、任意）
+  - **採用する Strategic Recommendation ID（任意）** — カスタム全自動でグループ `1` と `2` を選択し、対象業務名を空にした bridge 経路だけ最後に事前表示されます。クイック全自動は事前質問せず先頭候補を採用し、手動モードは事前質問せず Step `1.2` 完了後の既存メニュー（既定: 先頭）で選択します
 5. 確認パネルで内容を確認し、実行します。
 
 > ウィザード末尾（設定サマリー表示の直前）で「ワークベンチ（4 ペイン UI）を起動しますか？」（既定 Yes）が、全モード（クイック全自動 / カスタム全自動 / 手動）共通で表示されます。詳細は [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md) を参照してください。
@@ -268,6 +273,9 @@ python -m hve orchestrate --workflow ard \
 ```
 
 採用する提言を固定したい場合は `--target-recommendation-id SR-1` を併用します。
+
+> [!NOTE]
+> 上記フラグは直接 CLI からの明示指定です。ウィザード上の事前入力欄をカスタム全自動の bridge 経路だけに限定する規則とは別で、手動ウィザードではフラグ相当の事前質問を行わず、Step `1.2` 完了後の選択メニューを維持します。
 
 #### 対象業務が決まっている場合
 
@@ -3671,7 +3679,7 @@ python -m hve orchestrate --workflow ard --steps 2,3,4 \
 ### 後続工程での参照
 
 - **ARD Step 3.1 / 3.2（ユースケース作成・実 Step ID）**: 各 UC が満たす `KPI-*` / `OKR-*` ID を任意で記載
-- **`aas`（アプリケーション選定）**: `Arch-ApplicationAnalytics` が `docs/catalog/app-catalog.md` の **「対応 KPI/OKR」列** に APP-* と KPI/OKR ID を紐付け
+- **ARD Step 4.1（アプリケーション選定）**: `Arch-ApplicationAnalytics` が `docs/catalog/app-catalog.md` の **「対応 KPI/OKR」列** に APP-* と KPI/OKR ID を紐付け
 - **テスト仕様（`docs/test-specs/`）**: `docs/recommended-kpi-okr.md` §7.2 の運用ルールに従って KPI/OKR ID を紐付け
 
 これにより「作成されるアプリケーションが KPI/OKR を満たすか」を設計から実装まで一貫して追跡できます。
@@ -3972,6 +3980,43 @@ TARGET_UC_ID = "<<<UC_ID>>>"
 
 ---
 
+<a id="ard-step-4-1-4-2-app-requirements"></a>
+## ARD Step 4.1 / 4.2 アプリケーション要求定義（ARD 表示グループ 5 に対応）
+
+グループ 5 は、ユースケースカタログから **アプリケーション一覧**（`docs/catalog/app-catalog.md`）と **APP 別要求定義書**（`docs/architectural-requirements-app-NNN.md`）を生成します。[アプリケーションアーキテクチャ設計（AAS）](./02-app-architecture-design.md) の Step 1 は、この 2 つの成果物を必須入力とします。
+
+### 実 Step 4.1 アプリケーションリスト作成
+
+- 使用するカスタムエージェント: `Arch-ApplicationAnalytics`
+- 入力: `docs/catalog/use-case-catalog.md`
+- 出力: `docs/catalog/app-catalog.md`
+
+> **注記**: 以下の Prompt は **手動実行用** です。ARD で自動実行する場合の Single Source of Truth は [`.github/prompts/Arch-ApplicationAnalytics.prompt.md`](../.github/prompts/Arch-ApplicationAnalytics.prompt.md) であり、本文ではありません。両者は同一内容を保証しません。
+
+Prompt:
+
+```text
+ユースケース文書（UCが可変数）から、実装手段（アプリ導入／既存拡張／連携／業務改革／組織改革）を仕分けし、複数UCを束ねて実装できる「アプリリスト（アプリ種別＝アーキタイプ）」と最小ポートフォリオ（MVP）を選出するための、エージェント定義とプロンプト集を作成する
+
+## 3) 入力（必ず参照）
+- ユースケース文書: `docs/catalog/use-case-catalog.md`
+
+## 4) 出力先（成果物）
+- `docs/catalog/app-catalog.md`
+```
+
+### 実 Step 4.2 APP 別要求定義書作成
+
+- 使用するカスタムエージェント: `Arch-ApplicationRequirementDefinition`
+- 入力: `docs/catalog/app-catalog.md`（列挙された APP 全件を単一 Agent が順次処理。fan-out はしない）
+- 出力: `docs/architectural-requirements-app-NNN.md`（APP-ID ごとに1ファイル。再実行は upsert で、既存の `confirmed` 行や人手追記を削除しない）
+- schema・ID 採番・upsert ルールの詳細: `hve-dev/requirement-definition.md` の FR-APPREQ-01 / FR-APPREQ-02、および [`.github/prompts/Arch-ApplicationRequirementDefinition.prompt.md`](../.github/prompts/Arch-ApplicationRequirementDefinition.prompt.md) を参照してください。
+- 任意の生成 AI へ Prompt を貼り付けて手動で `docs/architectural-requirements-app-xx.md` を作成したい場合は、[02-app-architecture-design.md の「ユーザー入力情報ファイルの作成」節](./02-app-architecture-design.md#ユーザー入力情報ファイルの作成) のヒアリング Prompt を参照してください（AAS Step 1 の任意入力と同一ファイルのため、本書では重複掲載しません）。
+
+次のステップ: `docs/catalog/app-catalog.md` と `docs/architectural-requirements-app-NNN.md` を使って [アプリケーションアーキテクチャ設計](./02-app-architecture-design.md) に進みます。
+
+---
+
 ## Step.5 qa/ フォルダーを使った質問票ベースの要求定義プロセス
 
 ### Step.5.1 概要と位置づけ
@@ -4092,7 +4137,7 @@ Issue Template の「質問票設定」チェックボックスをオンにし�
 python -m hve orchestrate --workflow akm --sources qa
 ```
 
-`qa` に加えて `original-docs` や Work IQ を使う場合は [km-guide.md](./km-guide.md) の入力ソース指定を参照してください。GUI では `Knowledge Management` を選択します。
+`qa` に加えて `docs-original` や Work IQ を使う場合は [km-guide.md](./km-guide.md) の入力ソース指定を参照してください。GUI では `Knowledge Management` を選択します。
 
 **GitHub Cloud 経路**:
 

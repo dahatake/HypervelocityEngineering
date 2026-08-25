@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 540" role="img" aria-labelledby="title desc">
   <title id="title">AKM インフォグラフィック（Work IQ 入力対応）</title>
-  <desc id="desc">AKM の sources 分岐（qa / original-docs / workiq のマルチ選択）、Work IQ 先行ステージ、auto-knowledge-management.yml の KnowledgeManager 実行、knowledge 出力と反復精緻化ループを示す図。</desc>
+  <desc id="desc">AKM の sources 分岐（qa / docs-original / workiq のマルチ選択）、Work IQ 先行ステージ、auto-knowledge-management.yml の KnowledgeManager 実行、knowledge 出力と反復精緻化ループを示す図。</desc>
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
   </defs>
@@ -38,16 +38,16 @@
     <text x="52" y="126" class="tiny">qa/*.md（質問票）</text>
 
     <rect x="40" y="155" width="220" height="62" class="file"/>
-    <text x="52" y="181" class="node">original-docs（既定 ON）</text>
+    <text x="52" y="181" class="node">docs-original（既定 ON）</text>
     <text x="52" y="201" class="tiny">docs-original/</text>
 
     <rect x="40" y="230" width="220" height="62" class="workiq"/>
     <text x="52" y="256" class="node" fill="#9a3412">workiq（任意）</text>
     <text x="52" y="276" class="tiny">Microsoft 365 Copilot</text>
 
-    <text x="40" y="320" class="tiny">--sources qa,original-docs,workiq</text>
+    <text x="40" y="320" class="tiny">--sources qa,docs-original,workiq</text>
     <text x="40" y="340" class="tiny">(hve ローカル CLI のみ。Cloud Agent は対象外)</text>
-    <text x="40" y="370" class="tiny">後方互換: qa / original-docs / both 単体も受理</text>
+    <text x="40" y="370" class="tiny">後方互換: qa / docs-original / both 単体も受理</text>
   </g>
 
   <g id="process-zone">
@@ -63,7 +63,7 @@
     <text x="370" y="275" class="node">DAG step-1: 取り込み → 差分マージ</text>
     <rect x="370" y="298" width="480" height="42" class="agent"/>
     <text x="390" y="324" class="node">KnowledgeManager Agent</text>
-    <text x="370" y="362" class="tiny">qa / original-docs を順次処理し、Work IQ 由来の既存 Dxx を保護しつつ差分マージ</text>
+    <text x="370" y="362" class="tiny">qa / docs-original を順次処理し、Work IQ 由来の既存 Dxx を保護しつつ差分マージ</text>
     <text x="370" y="382" class="tiny">D01〜D21 更新 / 状態集計 / 矛盾検知</text>
 
     <rect x="330" y="490" width="96" height="24" fill="#64748b" class="label"/><text x="378" y="502" class="labelText">akm:ready</text>

@@ -781,7 +781,6 @@ class MainWindow(QMainWindow):
                     "SELFIMPROVE": self._page_options.c3,
                     "C4": self._page_options.c4,
                     "C5": self._page_options.c5,
-                    "C6": self._page_options.c6,
                     "C7": self._page_options.c7,
                     "AZURE": self._page_options.c_azure,
                     "C10": self._page_options.c10,
@@ -1093,6 +1092,10 @@ class MainWindow(QMainWindow):
     def _refresh_navigation(self) -> None:
         step = self._current_step()
         running = self._is_any_execution_running()
+        # FR-GUI-22: 差分更新中は子プロセスの watcher と同一索引 DB へ同時に書き込まないよう実行を止める。
+        from .. import index_refresh
+
+        indexing = index_refresh.is_running()
         # 戻るボタン (Step 2 「実行」のみ有効、ただし実行中は不可)
         self._btn_back.setEnabled(step == _STEP_WORKBENCH and not running)
         # 次へボタン (Step 1 のみ)
@@ -1100,13 +1103,22 @@ class MainWindow(QMainWindow):
         if step == _STEP_WORKFLOW:
             self._btn_next.setEnabled(
                 len(self._page_workflow.selected_workflow_ids()) > 0
+                and not indexing
             )
         # 停止ボタン (Step 2 「実行」のみ)
         self._btn_stop.setVisible(step == _STEP_WORKBENCH)
         self._btn_stop.setEnabled(running)
 
         # ステータスバー
-        if step == _STEP_WORKFLOW:
+        if step == _STEP_WORKFLOW and indexing:
+            self._set_status(
+                StatusKind.RUNNING,
+                self.tr(
+                    "索引 (markdown-query / code-query) の差分更新中です。"
+                    "完了後に実行を開始できます。"
+                ),
+            )
+        elif step == _STEP_WORKFLOW:
             wf_ids = self._page_workflow.selected_workflow_ids()
             wf = (
                 ", ".join(format_workflow_label(wid) for wid in wf_ids)

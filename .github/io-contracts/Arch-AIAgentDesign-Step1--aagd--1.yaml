@@ -6,47 +6,59 @@ inputs:
 - path: docs/catalog/domain-analytics.md
   required: true
   kind: agent_artifact
-  producer: Arch-Microservice-DomainAnalytics--aas--3.1
+  producer: Arch-Microservice-DomainAnalytics--aas--2.1
 - path: docs/catalog/data-model.md
   required: true
   kind: agent_artifact
-  producer: Arch-DataModeling--aas--4.1
+  producer: Arch-DataModeling--aas--3.1
 - path: docs/catalog/service-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-Microservice-ServiceIdentify--aas--3.2
+  producer: Arch-Microservice-ServiceIdentify--aas--2.2
 - path: docs/catalog/service-catalog-matrix.md
+  required: false
+  kind: agent_artifact
+  producer: Arch-Microservice-ServiceCatalog--aas--5
+- path: docs/catalog/data-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-Microservice-ServiceCatalog--aas--6
+  producer: Arch-DataCatalog--ada--5
+- path: docs/catalog/persona-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-PersonaCatalog--ada--6
+- path: docs/catalog/unstructured-data-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-AgentDataAsset--ada--8
 - path: docs/services/SVC-*.md
   required: true
   kind: agent_artifact
   producer: Dev-Dataflow-DataDeploy--adfdv--1.2
 - path: docs/azure/azure-services-data.md
-  required: true
+  required: false
   kind: agent_artifact
   producer: Dev-Microservice-Azure-DataDesign--asdw-web--1.1
 - path: docs/azure/azure-services-additional.md
-  required: true
+  required: false
   kind: agent_artifact
   producer: Dev-Microservice-Azure-AddServiceDesign--asdw-web--2.1
 - path: docs/catalog/app-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-ApplicationAnalytics--aas--1
+  producer: Arch-ApplicationAnalytics--ard--4.1
 - path: docs/catalog/screen-catalog-APP-*.md
-  required: true
+  required: false
   kind: agent_artifact
   producer: Arch-UI-List--aad-web--1
 - path: docs/screen/{screenId}-*.md
-  required: true
+  required: false
   kind: agent_artifact
   producer: Arch-UI-Detail--aad-web--2.1
 - path: src/data/sample-data.json
   required: true
   kind: agent_artifact
-  producer: Arch-DataModeling--aas--4.2
+  producer: Arch-DataModeling--aas--3.2
 - path: .github/skills/agent-common-preamble/references/agent-playbook.md
   required: false
   kind: static

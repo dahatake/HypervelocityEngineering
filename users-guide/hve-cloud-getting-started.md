@@ -607,9 +607,7 @@ bash src/infra/azure/create-azure-webui-resources.sh
 
 Setup Labels ワークフローが作成・更新するラベル一覧です:
 
-**ワークフロートリガー系（12 個）**
-
-> **FR-CLOUD-06**: `auto-app-dev-microservice` / `auto-app-dev-microservice-web`（ASDW / ASDW-WEB）は、reusable workflow が `hve/workflow_registry.py` の Step 体系と非同期のため Cloud 起動を停止しています。ラベル自体は作成されますが、付与しても Sub-Issue は生成されず、dispatcher が CLI / GUI への誘導コメントを投稿します。ASDW-WEB は [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md) / [hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md) の経路が supported です。
+**ワークフロートリガー系（13 個）**
 
 | ラベル名 | 色 | 用途 |
 |---------|-----|------|
@@ -617,11 +615,12 @@ Setup Labels ワークフローが作成・更新するラベル一覧です:
 | `auto-app-detail-design` | `#0E8A16` | AAD ワークフロートリガー |
 | `auto-app-detail-design-web` | `#1D76DB` | AAD-WEB ワークフロートリガー |
 | `auto-ai-agent-design` | `#7B68EE` | AAG ワークフロートリガー |
-| `auto-app-dev-microservice` | `#1D76DB` | ASDW ワークフロートリガー（**Cloud 起動停止中 / FR-CLOUD-06**）|
-| `auto-app-dev-microservice-web` | `#0E8A16` | ASDW-WEB ワークフロートリガー（**Cloud 起動停止中 / FR-CLOUD-06**）|
+| `auto-app-dev-microservice` | `#1D76DB` | ASDW 後方互換ワークフロートリガー |
+| `auto-app-dev-microservice-web` | `#0E8A16` | ASDW-WEB ワークフロートリガー |
 | `auto-ai-agent-dev` | `#6A5ACD` | AAGD ワークフロートリガー |
 | `auto-dataflow-design` | `#0E8A16` | ADFD ワークフロートリガー |
 | `auto-dataflow-dev` | `#0E8A16` | ADFDV ワークフロートリガー |
+| `auto-agentic-retrieval` | `#5319E7` | AAR ワークフロートリガー |
 | `auto-app-documentation` | `#0E8A16` | ADOC ワークフロートリガー |
 | `knowledge-management` | `#0E8A16` | AKM ワークフロートリガー |
 | `self-improve` | `#0E8A16` | 自己改善ループトリガー |

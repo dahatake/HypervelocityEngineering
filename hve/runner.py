@@ -37,7 +37,7 @@ if __package__:
         build_asdw_data_deploy_bootstrap_context,
     )
     from .fanout_expander import resolve_output_path_prefix_gates
-    from .runtime_observability import extract_usage_credit_fields
+    from .runtime_observability import extract_usage_credit_fields, is_plain_repo_path_token
     from .workflow_registry import (
         ASDW_DATA_DEPLOY_SUPPORTED_APP_ID as _ASDW_SUPPORTED_APP_ID,
     )
@@ -65,6 +65,7 @@ else:  # pragma: no cover - top-level runner compatibility
     )
     from runtime_observability import (  # type: ignore[import-not-found,no-redef]
         extract_usage_credit_fields,
+        is_plain_repo_path_token,
     )
     from workflow_registry import (  # type: ignore[import-not-found,no-redef]
         ASDW_DATA_DEPLOY_SUPPORTED_APP_ID as _ASDW_SUPPORTED_APP_ID,
@@ -750,6 +751,8 @@ def _resolve_asdw_data_deploy_subscription_id() -> str:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
     except (OSError, ScriptLauncherError) as exc:
@@ -1011,10 +1014,12 @@ try:
         is_workiq_available, build_workiq_mcp_config,
         query_workiq, query_workiq_detailed,
         get_workiq_prompt_template, save_workiq_result,
-        WORKIQ_MCP_SERVER_NAME, WORKIQ_MCP_TOOL_NAMES,
+        WORKIQ_MCP_SERVER_NAME, WORKIQ_MCP_SERVER_NAMES, WORKIQ_MCP_TOOL_NAMES,
         extract_workiq_status,
         is_workiq_tool_name, extract_tool_name_from_event,
         extract_workiq_tool_name_from_event,
+        format_workiq_tool_not_invoked_warning,
+        is_workiq_result_mergeable,
     )
     from .orchestrator_context import OrchestratorContext
     from .cloud_session import (
@@ -1053,10 +1058,12 @@ except ImportError:
         is_workiq_available, build_workiq_mcp_config,
         query_workiq, query_workiq_detailed,
         get_workiq_prompt_template, save_workiq_result,
-        WORKIQ_MCP_SERVER_NAME, WORKIQ_MCP_TOOL_NAMES,
+        WORKIQ_MCP_SERVER_NAME, WORKIQ_MCP_SERVER_NAMES, WORKIQ_MCP_TOOL_NAMES,
         extract_workiq_status,
         is_workiq_tool_name, extract_tool_name_from_event,
         extract_workiq_tool_name_from_event,
+        format_workiq_tool_not_invoked_warning,
+        is_workiq_result_mergeable,
     )
     from orchestrator_context import OrchestratorContext  # type: ignore[no-redef]
     from cloud_session import (  # type: ignore[no-redef]
@@ -1082,7 +1089,7 @@ _MODEL_CALL_FAILURE_THRESHOLD: int = 3
 # priority_filter=True 時は "最重要"/"高" を先頭に寄せ、不足分は残りで補填して max 件に収める
 _WORKIQ_HIGH_PRIORITY_VALUES: frozenset[str] = frozenset(["最重要", "高"])
 _WORKIQ_MCP_SERVER_ALIASES: frozenset[str] = frozenset(
-    [WORKIQ_MCP_SERVER_NAME.lower(), "workiq"]
+    name.lower() for name in WORKIQ_MCP_SERVER_NAMES
 )
 
 
@@ -1090,23 +1097,35 @@ def _is_workiq_mcp_server_name(name: Any) -> bool:
     return str(name or "").strip().lower() in _WORKIQ_MCP_SERVER_ALIASES
 
 
+_AZURE_MCP_SERVER_NAME = "azure"
+
+# FR-CLI-79: 全 Step の Custom Agent プロンプトが Azure に言及しない Workflow。
+# 未登録の Workflow は従来どおり全サーバを受け取る（宣言漏れを機能破壊にしない）。
+_AZURE_FREE_WORKFLOWS = frozenset({"ard", "akm", "adi", "adoc"})
+
+
 def _filter_mcp_servers_for_session(
     mcp_servers: Optional[Dict[str, Any]],
     *,
     include_workiq: bool = False,
+    workflow_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Return MCP servers for a session, excluding Work IQ aliases by default.
 
     HVE uses `_hve_workiq` internally, while user-level MCP config can expose a
     server named `workiq`. Main coding sessions should not connect either alias
     unless a dedicated Work IQ phase explicitly opts in.
+
+    FR-CLI-79: Azure を使わない Workflow では `azure` サーバも外す。
     """
     if not mcp_servers:
         return {}
+    _drop_azure = str(workflow_id or "").strip().lower() in _AZURE_FREE_WORKFLOWS
     return {
         _k: _v
         for _k, _v in mcp_servers.items()
-        if include_workiq or not _is_workiq_mcp_server_name(_k)
+        if (include_workiq or not _is_workiq_mcp_server_name(_k))
+        and not (_drop_azure and str(_k).strip().lower() == _AZURE_MCP_SERVER_NAME)
     }
 
 
@@ -1304,6 +1323,7 @@ async def _create_session_with_auto_reasoning_fallback(
     *,
     config: Optional[SDKConfig] = None,
     step_id: Optional[str] = None,
+    workflow_id: Optional[str] = None,
     subtask_kind: Optional[str] = None,
     console: Optional[Any] = None,
     requires_external_skill_directories: bool = False,
@@ -1374,7 +1394,12 @@ async def _create_session_with_auto_reasoning_fallback(
     ):
         _declared_mcp_servers = _read_repository_mcp_config(Path.cwd())
         if _declared_mcp_servers:
-            _opts_with_skills["mcp_servers"] = copy.deepcopy(_declared_mcp_servers)
+            # include_workiq=True: 本経路は従来 workiq を落としていないので挻動を変えない。
+            _opts_with_skills["mcp_servers"] = _filter_mcp_servers_for_session(
+                copy.deepcopy(_declared_mcp_servers),
+                include_workiq=True,
+                workflow_id=workflow_id,
+            )
             _opts_with_skills["enable_config_discovery"] = False
     if "enable_config_discovery" not in _opts_with_skills:
         _opts_with_skills["enable_config_discovery"] = True
@@ -1635,6 +1660,26 @@ def _is_review_fail(content: str) -> bool:
     return not has_judgement_line
 
 
+# Windows では監視側（GUI のファイル監視通知で宛先を開く読み取り）がハンドルを
+# 握っている瞬間に os.replace が WinError 5 を返すため、短時間だけ再試行する。
+_ATOMIC_REPLACE_ATTEMPTS: int = 10
+_ATOMIC_REPLACE_RETRY_INTERVAL_SECONDS: float = 0.05
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    """tmp + os.replace でアトミックに書き込む。"""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(content, encoding="utf-8")
+    for attempt in range(_ATOMIC_REPLACE_ATTEMPTS):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == _ATOMIC_REPLACE_ATTEMPTS - 1:
+                raise
+            time.sleep(_ATOMIC_REPLACE_RETRY_INTERVAL_SECONDS)
+
+
 async def _collect_qa_answers_via_ipc(
     console: "Console",
     doc: "QADocument",
@@ -1679,12 +1724,6 @@ async def _collect_qa_answers_via_ipc(
     answers_path = ipc_dir / f"{step_id}.answers.md"
     cancel_path = ipc_dir / f"{step_id}.cancel"
 
-    def _atomic_write(path: Path, content: str) -> None:
-        """tmp + os.replace でアトミックに書き込む。"""
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_text(content, encoding="utf-8")
-        os.replace(tmp, path)
-
     # 1. 質問票（rendered）を IPC dir に書き出す
     try:
         from .qa_merger import QAMerger
@@ -1703,7 +1742,7 @@ async def _collect_qa_answers_via_ipc(
             if q.default_answer:
                 _lines.append(f"\n既定値候補: {q.default_answer}\n")
         questionnaire_md = "\n".join(_lines)
-    _atomic_write(questionnaire_path, questionnaire_md)
+    _atomic_write_text(questionnaire_path, questionnaire_md)
 
     # 2. request JSON
     request_data = {
@@ -1714,7 +1753,7 @@ async def _collect_qa_answers_via_ipc(
         "questionnaire_path": str(questionnaire_path.resolve()),
         "qa_input_timeout_seconds": config.qa_gui_input_timeout_seconds,
     }
-    _atomic_write(request_path, json.dumps(request_data, ensure_ascii=False, indent=2))
+    _atomic_write_text(request_path, json.dumps(request_data, ensure_ascii=False, indent=2))
 
     console.status(
         f"GUI からの QA 回答待ち... (IPC dir: {ipc_dir.as_posix()},"
@@ -2082,7 +2121,6 @@ class StepRunner:
         )
         self._qa_akm_dispatcher = qa_akm_dispatcher
         self._workiq_tool_called = False
-        self._workiq_mcp_connection_failed = False
         self._workiq_called_tools: List[str] = []
         # FR-TS-07: 自動 pin の学習材料。Step 終了時に id へ解決して記録する。
         self._toolsearch_called_tools: List[str] = []
@@ -2225,6 +2263,7 @@ class StepRunner:
         step_id: Optional[str] = None,
         suffix: str = "",
         custom_agent: Optional[str] = None,
+        workflow_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """レビュー/QA 用の別セッション構築オプションを生成する。
 
@@ -2267,10 +2306,23 @@ class StepRunner:
         ):
             _workiq_mcp = build_workiq_mcp_config(
                 tenant_id=self.config.workiq_tenant_id,
+                request_timeout=self.config.workiq_request_timeout,
             )
             for _k, _v in _workiq_mcp.items():
                 if _k not in _mcp:
                     _mcp[_k] = _v
+            # FR-CLI-76 (v2.41): `mcp_servers` を明示すると共通経路の縮約が効かず自動探索が
+            # 残るため、プラグイン由来の `workiq` が tools:["*"] で併存し `_hve_workiq` の
+            # 最小権限 allowlist を迂回できてしまう。宣言分（Work IQ 別名を除く）を併合して
+            # 自動探索を止める。宣言が無い場合は従来どおり自動探索を残す。
+            _declared_mcp_servers = _filter_mcp_servers_for_session(
+                copy.deepcopy(_read_repository_mcp_config(Path.cwd())),
+                workflow_id=workflow_id,
+            )
+            if _declared_mcp_servers:
+                for _k, _v in _declared_mcp_servers.items():
+                    _mcp.setdefault(_k, _v)
+                opts["enable_config_discovery"] = False
 
         if _mcp:
             opts["mcp_servers"] = _mcp
@@ -2380,6 +2432,7 @@ class StepRunner:
         client: Any,
         session_opts: Dict[str, Any],
         step_id: str,
+        workflow_id: Optional[str] = None,
         requires_external_skill_directories: bool = False,
     ) -> Any:
         """メインセッションを create_session で構築する。"""
@@ -2388,6 +2441,7 @@ class StepRunner:
             session_opts,
             config=self.config,
             step_id=step_id,
+            workflow_id=workflow_id,
             subtask_kind="main",
             console=self.console,
             requires_external_skill_directories=requires_external_skill_directories,
@@ -2667,7 +2721,7 @@ class StepRunner:
         try:
             result = subprocess.run(
                 ["git", "diff", "--name-only"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
             )
             if result.returncode != 0:
                 self.console.warning(
@@ -2902,7 +2956,7 @@ class StepRunner:
                 r'-(?:Path|LiteralPath)\s+([^\s;|&]+)', seg, re.IGNORECASE
             ):
                 path = m.group(1).strip("'\"")
-                if path and not path.startswith("-"):
+                if is_plain_repo_path_token(path) and not path.startswith("-"):
                     # 既知 write cmdlet 以外は read 扱い（best-effort）
                     mode = "write" if cmdlet in path_write_cmdlets else "read"
                     normalized = os.path.normpath(path)
@@ -2912,7 +2966,7 @@ class StepRunner:
             # -FilePath
             for m in re.finditer(r'-FilePath\s+([^\s;|&]+)', seg, re.IGNORECASE):
                 path = m.group(1).strip("'\"")
-                if path and not path.startswith("-"):
+                if is_plain_repo_path_token(path) and not path.startswith("-"):
                     # 既知 write cmdlet 以外は read 扱い（best-effort）
                     mode = "write" if cmdlet in file_path_write_cmdlets else "read"
                     normalized = os.path.normpath(path)
@@ -2922,7 +2976,7 @@ class StepRunner:
             # -Destination（copy/move の出力先）
             for m in re.finditer(r'-Destination\s+([^\s;|&]+)', seg, re.IGNORECASE):
                 path = m.group(1).strip("'\"")
-                if path and not path.startswith("-"):
+                if is_plain_repo_path_token(path) and not path.startswith("-"):
                     normalized = os.path.normpath(path)
                     self.console.track_file(step_id, normalized, "write")
                     self.console.file_io(step_id, normalized, "write")
@@ -2930,7 +2984,7 @@ class StepRunner:
         # PowerShell リダイレクト演算子 (>, >>)
         for m in re.finditer(r'(?:\d+)?>>?\s*([^\s;|&]+)', command):
             path = m.group(1).strip("'\"")
-            if path and not path.startswith("-"):
+            if is_plain_repo_path_token(path) and not path.startswith("-"):
                 normalized = os.path.normpath(path)
                 self.console.track_file(step_id, normalized, "write")
                 self.console.file_io(step_id, normalized, "write")
@@ -3157,6 +3211,7 @@ class StepRunner:
                     step_id=step_id,
                     suffix="pre-qa",
                     custom_agent=custom_agent,
+                    workflow_id=workflow_id,
                 )
                 _pre_qa_required_skills = self._get_required_skills_for_step(
                     workflow_id,
@@ -3270,8 +3325,10 @@ class StepRunner:
 
                     _per_question_results: Dict[int, str] = {}
                     _mergeable_results: Dict[int, str] = {}
+                    _workiq_response_count = 0
                     for _q_no, _q_text in _question_items:
                         _before_count = len(self._workiq_called_tools)
+                        _before_any_tools = len(self._toolsearch_called_tools)
                         try:
                             # F6: 検索精度向上のため構造化（QAQuestion の category/priority/default_answer を活用）
                             _q_obj = next((q for q in parsed_pre_qa.questions if q.no == _q_no), None)
@@ -3302,8 +3359,12 @@ class StepRunner:
                                 )
                             else:
                                 _raw_content = _detail_result.content or ""
+                                _workiq_response_count += 1
                                 _status = extract_workiq_status(_raw_content)
-                                if _after_tools and _status in ("FOUND", "PARTIAL"):
+                                if is_workiq_result_mergeable(
+                                    tool_confirmed=bool(_after_tools),
+                                    status=_status,
+                                ):
                                     _per_question_results[_q_no] = _raw_content
                                     _mergeable_results[_q_no] = _raw_content
                                 elif _after_tools:
@@ -3317,6 +3378,18 @@ class StepRunner:
                                         "（QA未統合: tool実行未確認）\n"
                                         f"{_raw_content}"
                                     )
+                                    if _status in ("FOUND", "PARTIAL"):
+                                        # FR-QA-06: 一次情報ありと申告された応答が
+                                        # 統合されないのは検出漏れの疑いがあるため警告する。
+                                        self.console.warning(
+                                            format_workiq_tool_not_invoked_warning(
+                                                f"Q{_q_no}",
+                                                observed_tools=self._toolsearch_called_tools[
+                                                    _before_any_tools:
+                                                ],
+                                                status=_status,
+                                            )
+                                        )
                         except Exception as _wiq_exc:
                             _per_question_results[_q_no] = f"Work IQ エラー: {_wiq_exc}"
 
@@ -3339,9 +3412,20 @@ class StepRunner:
                         base_dir=_workiq_output_dir,
                     )
                     _workiq_pre_qa_context = "\n".join(_raw_lines).strip()
-                    self.console.status(
-                        f"✅ Work IQ: {sum(1 for q in parsed_pre_qa.questions if q.workiq_answer)} 件の質問に回答案を統合しました"
+                    _merged_count = sum(
+                        1 for q in parsed_pre_qa.questions if q.workiq_answer
                     )
+                    if _merged_count == 0 and _workiq_response_count > 0:
+                        # FR-QA-06: 応答があるのに統合 0 件は異常の可能性が高い。
+                        self.console.warning(
+                            f"Work IQ: {_workiq_response_count} 件の応答を得ましたが、"
+                            "0 件の質問にしか回答案を統合できませんでした。"
+                            "検証済み一次情報として扱える結果がありません。"
+                        )
+                    else:
+                        self.console.status(
+                            f"✅ Work IQ: {_merged_count} 件の質問に回答案を統合しました"
+                        )
                 except Exception as draft_exc:
                     self.console.warning(f"Work IQ 事前 QA 連携に失敗しました: {draft_exc}")
                 finally:
@@ -3820,7 +3904,6 @@ class StepRunner:
         else:
             self._current_fanout_meta = None
         self._workiq_tool_called = False
-        self._workiq_mcp_connection_failed = False
         self._workiq_called_tools = []
         # Phase 6: サブセッション作成回数カウンターをリセット
         self._sub_sessions_created = 0
@@ -3932,6 +4015,39 @@ class StepRunner:
             elapsed = time.time() - start
             self.console.step_end(step_id, "failed", elapsed=elapsed)
             return False
+
+        # FR-APPREQ-03: 生成アプリケーション要求トレーサビリティの preflight。
+        # allowlist 対象 Custom Agent だけ、SDK 起動前に対象 APP の要求定義書を
+        # 検証し、fail-closed で停止する。対象外 Agent は no-op（既存呼び出し元を
+        # 壊さない）。
+        _app_requirement_context = ""
+        if custom_agent in self._APP_REQUIREMENT_PREFLIGHT_AGENTS and workflow_id:
+            try:
+                from .application_requirements import (
+                    ApplicationRequirementError,
+                    build_application_requirement_context,
+                )
+            except ImportError:
+                from application_requirements import (  # type: ignore[no-redef]
+                    ApplicationRequirementError,
+                    build_application_requirement_context,
+                )
+            try:
+                _app_requirement_context = build_application_requirement_context(
+                    workflow_id=workflow_id,
+                    workflow_params=self._workflow_params or {},
+                    fanout_meta=fanout_meta,
+                    repo_root=Path.cwd(),
+                )
+            except ApplicationRequirementError as _app_requirement_error:
+                self.console.error(
+                    f"  ❌ [{step_id}] APP要求preflight failed: {_app_requirement_error}"
+                )
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
+        if _app_requirement_context:
+            prompt = f"{prompt}\n\n{_app_requirement_context}"
 
         # Agent Prompt に注入する WORK path を、Agent/SDK 起動前に実在させる。
         # Prompt 任せの mkdir では、最初の read/search が Issue-* 不在で失敗するため、
@@ -4352,6 +4468,7 @@ class StepRunner:
                 client=client,
                 session_opts=session_opts,
                 step_id=step_id,
+                workflow_id=workflow_id,
                 requires_external_skill_directories=
                 _requires_external_skill_directories,
             )
@@ -4918,6 +5035,84 @@ class StepRunner:
 
         elapsed = time.time() - start
         self.console.step_io_summary(step_id)
+
+        # FR-APPREQ-04: ARD Step 4.2 完了時の APP 要求 coverage 検証（catalog 全 APP
+        # の文書実在・schema・orphan）。ARD Step 4.2 以外は no-op。
+        _app_requirement_coverage_errors: List[str] = []
+        if (
+            workflow_id
+            and str(workflow_id).strip().lower() == "ard"
+            and str(step_id).split("/", 1)[0] == "4.2"
+        ):
+            try:
+                from .application_requirements import validate_requirement_coverage
+            except ImportError:
+                from application_requirements import (  # type: ignore[no-redef]
+                    validate_requirement_coverage,
+                )
+            try:
+                _app_requirement_coverage = validate_requirement_coverage(Path.cwd())
+            except Exception as _app_requirement_coverage_exc:
+                _app_requirement_coverage_errors = [str(_app_requirement_coverage_exc)]
+            else:
+                _app_requirement_coverage_errors = list(_app_requirement_coverage.errors)
+        if _app_requirement_coverage_errors:
+            for _msg in _app_requirement_coverage_errors:
+                self.console.error(f"  ❌ [{step_id}] APP要求coverage failed: {_msg}")
+            self.console.step_end(step_id, "failed", elapsed=elapsed)
+            return False
+
+        # FR-APPREQ-04: allowlist 対象 Custom Agent の完了報告に記録された
+        # trace block（<!-- app-requirements:start/end -->）を検証する。
+        # 完了報告が無い（未対応 Agent・単体テスト等）場合は no-op とする。
+        _app_requirement_trace_errors: List[str] = []
+        if custom_agent in self._APP_REQUIREMENT_PREFLIGHT_AGENTS and workflow_id:
+            try:
+                from .application_requirements import (
+                    ApplicationRequirementError,
+                    resolve_application_requirement_app_ids,
+                    validate_application_requirement_trace_block,
+                )
+            except ImportError:
+                from application_requirements import (  # type: ignore[no-redef]
+                    ApplicationRequirementError,
+                    resolve_application_requirement_app_ids,
+                    validate_application_requirement_trace_block,
+                )
+            try:
+                _app_requirement_report_path = (
+                    _step_work_dir(custom_agent, _work_identifier) / "completion-report.md"
+                )
+                _app_requirement_report_text = _app_requirement_report_path.read_text(
+                    encoding="utf-8", errors="replace"
+                )
+            except (OSError, ValueError):
+                _app_requirement_report_text = None
+            if _app_requirement_report_text is not None:
+                try:
+                    _app_requirement_expected_ids = resolve_application_requirement_app_ids(
+                        workflow_id=workflow_id,
+                        workflow_params=self._workflow_params or {},
+                        fanout_meta=fanout_meta,
+                        repo_root=Path.cwd(),
+                    )
+                except ApplicationRequirementError as _app_requirement_resolve_error:
+                    _app_requirement_trace_errors = [str(_app_requirement_resolve_error)]
+                else:
+                    try:
+                        _app_requirement_trace_errors = validate_application_requirement_trace_block(
+                            _app_requirement_report_text,
+                            repo_root=Path.cwd(),
+                            expected_app_ids=_app_requirement_expected_ids,
+                        )
+                    except Exception as _app_requirement_trace_exc:
+                        _app_requirement_trace_errors = [str(_app_requirement_trace_exc)]
+        if _app_requirement_trace_errors:
+            for _msg in _app_requirement_trace_errors:
+                self.console.error(f"  ❌ [{step_id}] APP要求trace block failed: {_msg}")
+            self.console.step_end(step_id, "failed", elapsed=elapsed)
+            return False
+
         self.console.final_message(step_id, final_response_text or main_output or "")
 
         verify_contract_errors = (
@@ -4980,6 +5175,24 @@ class StepRunner:
             self.console.step_end(step_id, "failed", elapsed=elapsed)
             return False
 
+        conformance_errors = self._run_requirements_conformance_gate(
+            step_id, custom_agent, _resolved_workflow
+        )
+        if conformance_errors:
+            for _msg in conformance_errors:
+                self.console.error(_msg)
+            self.console.step_end(step_id, "failed", elapsed=elapsed)
+            return False
+
+        agent_report_errors = self._run_agent_capability_report_gate(
+            step_id, custom_agent, _resolved_workflow
+        )
+        if agent_report_errors:
+            for _msg in agent_report_errors:
+                self.console.error(_msg)
+            self.console.step_end(step_id, "failed", elapsed=elapsed)
+            return False
+
         # Deploy 系 Agent: ac-verification.md の実在系 AC が GREEN かを検証し、
         # 未達なら Step を fail に降格する (T5)。
         # 既存 stop_on_fatal 経路を再利用するため、未達時は [hve:fatal] マーカーも出力。
@@ -5024,6 +5237,105 @@ class StepRunner:
 
         self.console.step_end(step_id, "success", elapsed=elapsed)
         return True
+
+    # 要件適合実測レポートの成果物ゲート（FR-WF-CONF-02 / 03 / 05）。
+    _REQUIREMENTS_CONFORMANCE_GATE_TARGETS = {
+        ("asdw-web", "5.3"): "docs/azure/requirements-conformance-report.md",
+        ("adfdv", "4.3"): "docs/dataflow/requirements-conformance-report.md",
+        ("aagd", "5"): "docs/agent/requirements-conformance-report.md",
+        ("aar", "7"): "docs/azure/agentic-retrieval/requirements-conformance-report.md",
+    }
+
+    def _run_requirements_conformance_gate(
+        self,
+        step_id: str,
+        custom_agent: Optional[str],
+        workflow_id: Optional[str],
+    ) -> List[str]:
+        if custom_agent != "QA-RequirementsConformanceEval" or not workflow_id:
+            return []
+        workflow = str(workflow_id).strip().casefold()
+        base_step_id = str(step_id).split("/", 1)[0]
+        report = self._REQUIREMENTS_CONFORMANCE_GATE_TARGETS.get(
+            (workflow, base_step_id)
+        )
+        if report is None:
+            return []
+
+        try:
+            from hve.artifact_validation import (
+                validate_requirements_conformance_report,
+            )
+        except Exception as exc:
+            return [
+                f"[{custom_agent}] requirements conformance gate import failed: "
+                f"{type(exc).__name__}: {exc}"
+            ]
+
+        try:
+            validation_errors = validate_requirements_conformance_report(
+                Path.cwd() / report,
+                workflow_id=workflow,
+                step_id=base_step_id,
+            )
+        except Exception as exc:
+            return [
+                f"[{custom_agent}] requirements conformance validator raised: "
+                f"{type(exc).__name__}: {exc}"
+            ]
+        return [f"[{custom_agent}] {error}" for error in validation_errors]
+
+    # AAGD Step 6 / 7 の成果物ゲート（AG-CAP-10 / AG-CAP-09）。
+    # Agent 名で引くため、他 workflow へ同名 Agent を足しても誤発火しない。
+    _AGENT_CAPABILITY_REPORT_GATE_TARGETS = {
+        ("QA-AgentRouteRightsizingEval", "aagd", "6"): "docs/agent/route-rightsizing-report.md",
+        ("Dev-Agent-M365Publish", "aagd", "7"): "docs/agent/m365-publish-report.md",
+    }
+
+    def _run_agent_capability_report_gate(
+        self,
+        step_id: str,
+        custom_agent: Optional[str],
+        workflow_id: Optional[str],
+    ) -> List[str]:
+        if not custom_agent or not workflow_id:
+            return []
+        workflow = str(workflow_id).strip().casefold()
+        base_step_id = str(step_id).split("/", 1)[0]
+        report = self._AGENT_CAPABILITY_REPORT_GATE_TARGETS.get(
+            (custom_agent, workflow, base_step_id)
+        )
+        if report is None:
+            return []
+
+        try:
+            from hve.artifact_validation import (
+                validate_m365_publish_report,
+                validate_route_rightsizing_report,
+            )
+        except Exception as exc:
+            return [
+                f"[{custom_agent}] agent capability report gate import failed: "
+                f"{type(exc).__name__}: {exc}"
+            ]
+        validator = (
+            validate_route_rightsizing_report
+            if custom_agent == "QA-AgentRouteRightsizingEval"
+            else validate_m365_publish_report
+        )
+
+        try:
+            validation_errors = validator(
+                Path.cwd() / report,
+                workflow_id=workflow,
+                step_id=base_step_id,
+            )
+        except Exception as exc:
+            return [
+                f"[{custom_agent}] agent capability report validator raised: "
+                f"{type(exc).__name__}: {exc}"
+            ]
+        return [f"[{custom_agent}] {error}" for error in validation_errors]
 
     def _run_asdw_data_verify_contract_gate(
         self,
@@ -5359,6 +5671,19 @@ class StepRunner:
         ("aagd", "2.2", "Dev-Microservice-Azure-AgentTestCoding"): "RED",
         ("aagd", "2.3", "Dev-Microservice-Azure-AgentCoding"): "GREEN",
     }
+
+    # ------------------------------------------------------------------
+    # FR-APPREQ-03: 生成アプリケーション要求トレーサビリティ preflight/completion gate
+    # ------------------------------------------------------------------
+    # Prompt が docs/architectural-requirements-app-NNN.md を必須参照へ更新済みの
+    # Custom Agent だけを対象とする allowlist（_TDD_REPORT_PHASES と同じ、既存呼び
+    # 出し元（47 箇所超）を壊さない段階的展開パターン）。対象外の custom_agent は
+    # preflight/trace gate とも no-op のままとする。
+    _APP_REQUIREMENT_PREFLIGHT_AGENTS = frozenset(
+        {
+            "Arch-ArchitectureCandidateAnalyzer",
+        }
+    )
 
     @staticmethod
     def _safe_tdd_step_dir(step_id: str) -> str:
@@ -7078,7 +7403,9 @@ class StepRunner:
             dur_ms = int(_get(data, "total_api_duration_ms", "totalApiDurationMs", default=0) or 0)
             lines_added = int(_get(changes, "lines_added", "linesAdded", default=0) or 0) if changes else 0
             lines_removed = int(_get(changes, "lines_removed", "linesRemoved", default=0) or 0) if changes else 0
-            files_mod = int(_get(changes, "files_modified", "filesModified", default=0) or 0) if changes else 0
+            # SDK の ShutdownCodeChanges.files_modified は list[str]（件数ではない）。
+            _files_mod = _get(changes, "files_modified", "filesModified", default=None) if changes else None
+            files_mod = len(_files_mod) if isinstance(_files_mod, (list, tuple)) else int(_files_mod or 0)
             self.console.shutdown_stats(step_id, lines_added, lines_removed,
                                         files_mod, reqs, dur_ms)
             # GUI 連携: premium_requests を累積コスト計算に渡すための stats_event
@@ -7131,12 +7458,17 @@ class StepRunner:
                 if status == "connected":
                     self.console.status(f"✅ MCP サーバー '{name}' 接続成功")
                 elif status in ("failed", "needs-auth"):
+                    # Work IQ だけが best-effort（FR-QA-03 / FR-QA-06）。他サーバーは fail-closed ガード（FR-TS-03）を持つ。
+                    _non_fatal = (
+                        "。Work IQ は補助的な情報源のため実行は継続します"
+                        if _is_workiq_mcp_server_name(name)
+                        else ""
+                    )
                     self.console.warning(
                         f"❌ MCP サーバー '{name}' 接続失敗 (status={status})"
                         + (f": {error}" if error else "")
+                        + _non_fatal
                     )
-                    if name == WORKIQ_MCP_SERVER_NAME:
-                        self._workiq_mcp_connection_failed = True
                 else:
                     self.console.event(f"ℹ️ MCP '{name}' status={status}")
             return
@@ -7146,8 +7478,10 @@ class StepRunner:
             status_obj = _get(data, "status", default=None)
             status = getattr(status_obj, "value", str(status_obj)) if status_obj else "unknown"
             if status in ("failed", "needs-auth") and server_name == WORKIQ_MCP_SERVER_NAME:
-                self._workiq_mcp_connection_failed = True
-                self.console.warning(f"❌ Work IQ MCP サーバー接続状態変更: {status}")
+                self.console.warning(
+                    f"❌ Work IQ MCP サーバー接続状態変更: {status}"
+                    "。Work IQ は補助的な情報源のため実行は継続します"
+                )
             else:
                 self.console.event(f"MCP '{server_name}' → {status}")
             return

@@ -15,7 +15,7 @@ import os
 import time
 import urllib.error
 import urllib.request
-from typing import Optional
+from typing import Any, Optional, cast
 
 __all__ = [
     "GitHubAPIError",
@@ -27,6 +27,7 @@ __all__ = [
     "list_issue_comments",
     "create_pull_request",
     "get_pull_request",
+    "list_pull_request_files",
     "list_check_runs_for_ref",
     "list_branches",
     "get_repository_metadata",
@@ -37,6 +38,8 @@ _GITHUB_API_BASE = "https://api.github.com"
 _GITHUB_API_VERSION = "2022-11-28"
 _DEFAULT_MAX_RETRIES = 5
 _DEFAULT_TIMEOUT = 30
+_PULL_REQUEST_FILES_PAGE_SIZE = 100
+_PULL_REQUEST_FILES_MAX = 3000
 
 
 # ---------------------------------------------------------------------------
@@ -261,11 +264,22 @@ def create_issue(
     """
     resolved_repo = _resolve_repo(repo)
     url = f"{_GITHUB_API_BASE}/repos/{resolved_repo}/issues"
-    payload: dict = {"title": title, "body": body, "labels": list(labels)}
+    payload: dict[str, Any] = {
+        "title": title,
+        "body": body,
+        "labels": list(labels),
+    }
     if assignees:
         payload["assignees"] = list(assignees)
-    resp = api_call("POST", url, data=payload, token=token)
-    return (int(resp["number"]), int(resp["id"]))
+    raw_resp = api_call("POST", url, data=payload, token=token)
+    if not isinstance(raw_resp, dict):
+        raise GitHubAPIError("create issue response is not an object")
+    resp = cast(dict[str, Any], raw_resp)
+    number = resp.get("number")
+    issue_id = resp.get("id")
+    if number is None or issue_id is None:
+        raise GitHubAPIError("create issue response is missing number or id")
+    return (int(number), int(issue_id))
 
 
 def add_labels(
@@ -355,12 +369,23 @@ def create_pull_request(
     """Pull Request を作成し PR 番号を返す。"""
     resolved_repo = _resolve_repo(repo)
     url = f"{_GITHUB_API_BASE}/repos/{resolved_repo}/pulls"
-    payload = {"title": title, "body": body, "head": head, "base": base}
+    payload: dict[str, Any] = {
+        "title": title,
+        "body": body,
+        "head": head,
+        "base": base,
+    }
     if draft:
         # draft は必要時のみ送信し、既存の PR 作成 payload を変えない。
-        payload["draft"] = True
-    resp = api_call("POST", url, data=payload, token=token)
-    return int(resp["number"])
+        payload = {**payload, "draft": True}
+    raw_resp = api_call("POST", url, data=payload, token=token)
+    if not isinstance(raw_resp, dict):
+        raise GitHubAPIError("create pull request response is not an object")
+    resp = cast(dict[str, Any], raw_resp)
+    number = resp.get("number")
+    if number is None:
+        raise GitHubAPIError("create pull request response is missing number")
+    return int(number)
 
 
 def get_pull_request(
@@ -376,6 +401,92 @@ def get_pull_request(
     url = f"{_GITHUB_API_BASE}/repos/{resolved_repo}/pulls/{pr_number}"
     resp = api_call("GET", url, token=token)
     return resp if isinstance(resp, dict) else {}
+
+
+def _sanitize_pull_request_file(entry: object, index: int) -> dict:
+    """PR Files API の 1 行を path 判定に必要な最小フィールドへ縮約する。"""
+
+    if not isinstance(entry, dict):
+        raise GitHubAPIError(f"invalid pull request file entry at index {index}: not an object")
+    filename = entry.get("filename")
+    status = entry.get("status")
+    if not isinstance(filename, str) or not filename:
+        raise GitHubAPIError(
+            f"invalid pull request file entry at index {index}: filename is missing"
+        )
+    if not isinstance(status, str) or not status:
+        raise GitHubAPIError(
+            f"invalid pull request file entry at index {index}: status is missing"
+        )
+
+    result = {"filename": filename, "status": status}
+    previous = entry.get("previous_filename")
+    if status in {"renamed", "copied"}:
+        if not isinstance(previous, str) or not previous:
+            raise GitHubAPIError(
+                f"invalid pull request file entry at index {index}: "
+                f"{status} source is missing"
+            )
+        result["previous_filename"] = previous
+    return result
+
+
+def list_pull_request_files(
+    pr_number: int,
+    repo: Optional[str] = None,
+    token: Optional[str] = None,
+) -> list[dict]:
+    """PR の変更ファイルを全ページ取得し、最小フィールドだけを返す。
+
+    GitHub REST API の当該 endpoint は最大 3,000 files である。PR metadata の
+    ``changed_files`` と取得件数を照合し、上限超過・途中空ページ・非 list・件数
+    不一致を部分結果へ縮退せず例外にする。``patch`` 等の本文は保持しない。
+    """
+
+    resolved_repo = _resolve_repo(repo)
+    metadata = get_pull_request(pr_number, repo=resolved_repo, token=token)
+    expected = metadata.get("changed_files")
+    if isinstance(expected, bool) or not isinstance(expected, int) or expected < 0:
+        raise GitHubAPIError("pull request metadata changed_files is invalid")
+    if expected > _PULL_REQUEST_FILES_MAX:
+        raise GitHubAPIError(
+            "pull request has more than the GitHub API limit of 3,000 changed files"
+        )
+    if expected == 0:
+        return []
+
+    result: list[dict] = []
+    page = 1
+    while len(result) < expected:
+        url = (
+            f"{_GITHUB_API_BASE}/repos/{resolved_repo}/pulls/{pr_number}/files"
+            f"?per_page={_PULL_REQUEST_FILES_PAGE_SIZE}&page={page}"
+        )
+        response = api_call("GET", url, token=token)
+        if not isinstance(response, list):
+            raise GitHubAPIError(
+                f"pull request files page {page} response is not a list"
+            )
+        if not response:
+            raise GitHubAPIError(
+                f"pull request changed_files expected {expected} but retrieved {len(result)}"
+            )
+        start = len(result)
+        result.extend(
+            _sanitize_pull_request_file(entry, start + index)
+            for index, entry in enumerate(response)
+        )
+        if len(result) > expected:
+            raise GitHubAPIError(
+                f"pull request changed_files expected {expected} but retrieved {len(result)}"
+            )
+        page += 1
+
+    if len(result) != expected:
+        raise GitHubAPIError(
+            f"pull request changed_files expected {expected} but retrieved {len(result)}"
+        )
+    return result
 
 
 def list_check_runs_for_ref(

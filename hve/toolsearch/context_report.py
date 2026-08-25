@@ -45,10 +45,13 @@ class ContextReport:
     system_prompt_tokens: int | None
     layers: tuple[Layer, ...]
     unconnected: tuple[str, ...]
+    # modelName はセッションモデルを反映しないため、渡した設定モデルを別に持つ。
+    requested_model: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "model_name": self.model_name,
+            "requested_model": self.requested_model,
             "limit": self.limit,
             "total_tokens": self.total_tokens,
             "system_tokens": self.system_tokens,
@@ -71,6 +74,7 @@ def build_report(
     tools: Sequence[Any],
     connected: Iterable[str],
     declared: Iterable[str],
+    requested_model: str | None = None,
 ) -> ContextReport:
     """ランタイムのスナップショットを層別レポートへ正規化する。"""
     server_of = {
@@ -116,6 +120,7 @@ def build_report(
         system_prompt_tokens=system_prompt_tokens,
         layers=layers,
         unconnected=unconnected,
+        requested_model=requested_model,
     )
 
 
@@ -127,6 +132,7 @@ def render_text(report: ContextReport) -> str:
     lines = [
         "Step 実行セッションのコンテキスト内訳（実測）",
         f"  モデル (トークナイザ): {report.model_name}",
+        f"  セッションの設定モデル: {report.requested_model or '未指定 (SDK 既定)'}",
         f"  コンテキスト上限      : {report.limit:,} tokens",
         "",
         f"  合計                  : {report.total_tokens:,} tokens",
@@ -135,7 +141,7 @@ def render_text(report: ContextReport) -> str:
         f"  うち MCP              : {report.mcp_tools_tokens:,} tokens",
         f"  会話                  : {report.conversation_tokens:,} tokens",
         "",
-        "  ツール定義の層別内訳",
+        "  ツール定義の層別内訳（上記とは別のトークナイザで計測されるため合計は一致しない）",
         f"  {'層':<28}{'ツール数':>8}{'tokens':>12}",
     ]
     for layer in report.layers:
@@ -171,6 +177,23 @@ async def _wait_for_servers(session: Any, expected: set[str]) -> set[str]:
     return connected
 
 
+def session_options(config: Any) -> dict[str, Any]:
+    """実測セッションの options を組み立てる。
+
+    Step 実行と同じモデル・context_tier でなければ、測定値が Step を代表しない。
+    """
+    from ..config import to_wire_model
+
+    opts: dict[str, Any] = {"streaming": True}
+    wire_model = to_wire_model(getattr(config, "model", None))
+    if wire_model:
+        opts["model"] = wire_model
+    tier = getattr(config, "context_tier", None)
+    if tier:
+        opts["context_tier"] = tier
+    return opts
+
+
 async def collect(*, repo_root: Path | str) -> ContextReport:
     """Step 実行と同じ経路でセッションを張り、コンテキスト内訳を実測する。
 
@@ -185,6 +208,7 @@ async def collect(*, repo_root: Path | str) -> ContextReport:
     root = Path(repo_root)
     declared = set(_read_repository_mcp_config(root))
     config = SDKConfig.from_env()
+    opts = session_options(config)
     try:
         client = create_copilot_client(
             cli_path=config.cli_path,
@@ -198,7 +222,7 @@ async def collect(*, repo_root: Path | str) -> ContextReport:
         raise ContextReportError(f"Copilot CLI を起動できません: {type(exc).__name__}: {exc}") from exc
 
     try:
-        session = await _create_session_with_auto_reasoning_fallback(client, {"streaming": True})
+        session = await _create_session_with_auto_reasoning_fallback(client, opts)
         try:
             connected = await _wait_for_servers(session, declared)
             await session.rpc.tools.initialize_and_validate(timeout=CONNECT_TIMEOUT_SECONDS)
@@ -233,6 +257,7 @@ async def collect(*, repo_root: Path | str) -> ContextReport:
             tools=list(metadata.tools or []),
             connected=connected,
             declared=declared,
+            requested_model=opts.get("model"),
         )
     except ContextReportError:
         raise

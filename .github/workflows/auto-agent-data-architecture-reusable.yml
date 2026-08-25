@@ -1,0 +1,280 @@
+name: "ADA: Agent Data Architecture (Reusable)"
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        required: false
+        type: string
+        default: ""
+      issue_number:
+        required: true
+        type: string
+      event_action:
+        required: false
+        type: string
+        default: ""
+      label_name:
+        required: false
+        type: string
+        default: ""
+      issue_labels:
+        required: false
+        type: string
+        default: "[]"
+      runner_type:
+        description: "実行 Runner 種別: github-hosted | self-hosted"
+        required: false
+        type: string
+        default: "github-hosted"
+
+permissions:
+  issues: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  orchestrate:
+    runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
+    timeout-minutes: 360
+    concurrency:
+      group: ada-orchestrator-${{ inputs.issue_number }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
+      REPO: ${{ github.repository }}
+
+    steps:
+      - name: 実行ゲートチェック
+        id: gate
+        env:
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          EVENT_ACTION: ${{ inputs.event_action }}
+          LABEL_NAME: ${{ inputs.label_name }}
+        run: |
+          set -euo pipefail
+          ISSUE_JSON=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}")
+          ISSUE_TITLE=$(printf '%s' "${ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))")
+          ISSUE_LABELS=$(printf '%s' "${ISSUE_JSON}" | python3 -c "import sys,json; print(json.dumps([x['name'] for x in json.load(sys.stdin).get('labels',[])]))")
+
+          if [[ "${EVENT_ACTION}" == "labeled" && "${LABEL_NAME}" == "ada:done" ]]; then
+            echo "mode=state_transition" >> "${GITHUB_OUTPUT}"
+            echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [[ "${EVENT_ACTION}" == "closed" ]]; then
+            if [[ "${ISSUE_TITLE}" =~ ^\[ADA\] ]]; then
+              echo "mode=state_transition" >> "${GITHUB_OUTPUT}"
+              echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
+            else
+              echo "mode=skip" >> "${GITHUB_OUTPUT}"
+            fi
+            exit 0
+          fi
+
+          if [[ "${ISSUE_TITLE}" =~ ^\[ADA\] ]]; then
+            echo "mode=skip" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [[ "${EVENT_ACTION}" == "labeled" && "${LABEL_NAME}" != "auto-agent-data-architecture" ]]; then
+            echo "mode=skip" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          HAS_TRIGGER=$(printf '%s' "${ISSUE_LABELS}" | python3 -c "import sys,json; print('true' if 'auto-agent-data-architecture' in json.load(sys.stdin) else 'false')")
+          HAS_STATE=$(printf '%s' "${ISSUE_LABELS}" | python3 -c "import sys,json; labels=json.load(sys.stdin); print('true' if any(x.startswith('ada:') for x in labels) else 'false')")
+          if [[ "${HAS_TRIGGER}" == "true" && "${HAS_STATE}" == "false" ]]; then
+            echo "mode=initialize" >> "${GITHUB_OUTPUT}"
+            echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "mode=skip" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.mode != 'skip'
+
+      - name: ラベル bootstrap
+        if: steps.gate.outputs.mode == 'initialize'
+        run: |
+          set -euo pipefail
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/label-helpers.sh"
+          create_label "auto-agent-data-architecture" "5319E7" "run Agent Data Architecture workflow"
+          create_label "ada:initialized" "C5DEF5" ""
+          create_label "ada:ready" "0075CA" ""
+          create_label "ada:running" "E4E669" ""
+          create_label "ada:done" "0E8A16" ""
+          create_label "ada:blocked" "D73A4A" ""
+
+      - name: Issue 初期化と Step Issue 生成
+        if: steps.gate.outputs.mode == 'initialize'
+        env:
+          ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          source "${GITHUB_WORKSPACE}/.github/scripts/adfd-common.sh"
+          ROOT_ISSUE="${ISSUE_NUMBER}"
+          add_label "${ROOT_ISSUE}" "ada:initialized"
+
+          ISSUE_BODY=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
+          export ISSUE_BODY ROOT_ISSUE
+          PARSED=$(python3 - <<'PY'
+          import json, os, re
+          body = os.environ.get("ISSUE_BODY", "")
+          def value(label, default=""):
+              m = re.search(r"###\s*" + re.escape(label) + r"\s*\n+(.*?)(?=\n###|\Z)", body, re.S)
+              if not m:
+                  return default
+              v = m.group(1).strip()
+              return default if v == "_No response_" else v
+          print(json.dumps({
+              "branch": value("対象ブランチ", "main").splitlines()[0],
+              "app_ids": value("対象アプリケーション (APP-ID) — 複数指定可（任意）").replace("\n", ", "),
+              "additional": value("追加コメント（任意）"),
+          }))
+          PY
+          )
+          BRANCH=$(printf '%s' "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['branch'])")
+          APP_IDS=$(printf '%s' "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['app_ids'])")
+          ADDITIONAL=$(printf '%s' "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['additional'])")
+          git check-ref-format --branch "${BRANCH}" >/dev/null 2>&1 || {
+            add_label "${ROOT_ISSUE}" "ada:blocked"
+            post_comment "${ROOT_ISSUE}" "❌ 対象ブランチ名が不正です。"
+            exit 1
+          }
+          if [[ -n "${APP_IDS}" ]] && ! [[ "${APP_IDS}" =~ ^APP-[0-9]+([[:space:]]*,[[:space:]]*APP-[0-9]+)*$ ]]; then
+            add_label "${ROOT_ISSUE}" "ada:blocked"
+            post_comment "${ROOT_ISSUE}" "❌ APP-ID は APP-数字 のカンマ区切りで指定してください。"
+            exit 1
+          fi
+          export BRANCH APP_IDS ADDITIONAL
+
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- app-ids: %s -->' \
+            "${ROOT_ISSUE}" "${BRANCH}" "${APP_IDS}")
+          export ROOT_REF
+
+          python3 - <<'PY' > "${RUNNER_TEMP}/ada-steps.tsv"
+          import base64, os
+          from pathlib import Path
+
+          steps = [
+              ("2", "[ADA] Step.2: ドメイン分析", "Arch-Microservice-DomainAnalytics"),
+              ("3", "[ADA] Step.3: サービス一覧抽出", "Arch-Microservice-ServiceIdentify"),
+              ("4.1", "[ADA] Step.4.1: データモデル設計", "Arch-DataModeling"),
+              ("4.2", "[ADA] Step.4.2: サンプルデータ生成", "Arch-DataModeling"),
+              ("5", "[ADA] Step.5: データカタログ作成", "Arch-DataCatalog"),
+              ("6", "[ADA] Step.6: ペルソナカタログ", "Arch-PersonaCatalog"),
+              ("7", "[ADA] Step.7: サービス詳細（Tool 定義根拠）", "Arch-Microservice-ServiceDetail"),
+              ("8", "[ADA] Step.8: 非構造化データ資産カタログ", "Arch-AgentDataAsset"),
+              ("9", "[ADA] Step.9: テスト戦略書", "Arch-TDD-TestStrategy"),
+          ]
+
+          class Safe(dict):
+              def __missing__(self, key):
+                  return "{" + key + "}"
+
+          existing = Path(".github/scripts/templates/_shared/existing-artifact-policy.md").read_text(encoding="utf-8").strip()
+          app_ids = os.environ.get("APP_IDS", "")
+          values = Safe(
+              root_ref=os.environ["ROOT_REF"],
+              app_arch_scope_section=("## 対象 APP-ID\n" + app_ids + "\n") if app_ids else "",
+              WORK="work/",
+              existing_artifact_policy=existing,
+              completion_instruction="- 完了時に自身に `ada:done` ラベルを付与すること\n",
+              app_id_section=("\n## 対象 APP-ID\n" + app_ids + "\n") if app_ids else "",
+              additional_section=("\n## 追加コメント\n" + os.environ["ADDITIONAL"] + "\n") if os.environ.get("ADDITIONAL") else "",
+          )
+          for sid, title, agent in steps:
+              template = Path(f".github/scripts/templates/ada/step-{sid}.md").read_text(encoding="utf-8")
+              body = template.format_map(values)
+              encoded = base64.b64encode(body.encode()).decode()
+              print("\t".join((sid, title, agent, encoded)))
+          PY
+
+          STEP_LABELS='["ada:blocked","auto-agent-data-architecture"]'
+          declare -A NUMS IDS AGENTS
+          while IFS=$'\t' read -r sid title agent body64; do
+            body=$(printf '%s' "${body64}" | base64 --decode)
+            response=$(create_issue "${title}" "${body}" "${STEP_LABELS}")
+            NUMS["${sid}"]=$(printf '%s' "${response}" | python3 -c "import sys,json; print(json.load(sys.stdin)['number'])")
+            IDS["${sid}"]=$(printf '%s' "${response}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+            AGENTS["${sid}"]="${agent}"
+            link_sub_issue "${ROOT_ISSUE}" "${IDS[${sid}]}"
+            echo "Step.${sid} 作成: #${NUMS[${sid}]}"
+          done < "${RUNNER_TEMP}/ada-steps.tsv"
+
+          FIRST="${NUMS[2]}"
+          curl -s -o /dev/null -X DELETE \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO}/issues/${FIRST}/labels/ada%3Ablocked" || true
+          add_label "${FIRST}" "ada:ready"
+          if assign_copilot "${FIRST}" "${AGENTS[2]}" "${BRANCH}" ""; then
+            add_label "${FIRST}" "ada:running"
+          fi
+          post_comment "${ROOT_ISSUE}" "✅ ADA ワークフローを初期化しました。Step.2〜9 を順次実行します。"
+
+      - name: 状態遷移処理
+        if: steps.gate.outputs.mode == 'state_transition'
+        env:
+          DONE_ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          source "${GITHUB_WORKSPACE}/.github/scripts/adfd-common.sh"
+          ISSUE_JSON=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}")
+          TITLE=$(printf '%s' "${ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))")
+          BODY=$(printf '%s' "${ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('body','') or '')")
+          HAS_DONE=$(printf '%s' "${ISSUE_JSON}" | python3 -c "import sys,json; print('true' if 'ada:done' in [x['name'] for x in json.load(sys.stdin).get('labels',[])] else 'false')")
+          if [[ "${HAS_DONE}" == "false" ]]; then
+            add_label "${DONE_ISSUE_NUMBER}" "ada:done"
+          fi
+          STEP=$(printf '%s' "${TITLE}" | sed -n 's/^\[ADA\] Step\.\([0-9][0-9.]*\):.*/\1/p')
+          ROOT=$(printf '%s' "${BODY}" | sed -n 's/^.*<!-- root-issue: #\([0-9][0-9]*\) -->.*$/\1/p' | head -1)
+          BRANCH=$(printf '%s' "${BODY}" | sed -n 's/^.*<!-- branch: \([^>]*\) -->.*$/\1/p' | head -1)
+          if [[ -z "${STEP}" || -z "${ROOT}" ]]; then
+            echo "ERROR: 完了 Issue #${DONE_ISSUE_NUMBER} から Step または root-issue を特定できません。" >&2
+            exit 1
+          fi
+          [[ -z "${BRANCH}" ]] && BRANCH="main"
+
+          # 逐次実行順（registry の依存 DAG を線形化したもの）。
+          NEXT=$(STEP="${STEP}" python3 -c "
+          import os, sys
+          order = ['2','3','4.1','4.2','5','6','7','8','9']
+          step = os.environ['STEP']
+          if step not in order:
+              sys.exit('unknown step: ' + step)
+          i = order.index(step)
+          print(order[i + 1] if i + 1 < len(order) else '')
+          ")
+
+          if [[ -z "${NEXT}" ]]; then
+            add_label "${ROOT}" "ada:done"
+            post_comment "${ROOT}" "🎉 ADA Step.2〜9 が完了しました。次は AAG（AI Agent Design）を実行できます。"
+            exit 0
+          fi
+
+          SUBS=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${ROOT}/sub_issues")
+          NEXT_JSON=$(printf '%s' "${SUBS}" | python3 -c "import sys,json,re; n=sys.argv[1]; xs=json.load(sys.stdin); print(json.dumps(next((x for x in xs if re.search(r'\\[ADA\\] Step\\.'+re.escape(n)+r':', x.get('title',''))), {})))" "${NEXT}")
+          NEXT_NUM=$(printf '%s' "${NEXT_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))")
+          [[ -z "${NEXT_NUM}" ]] && { echo "Step.${NEXT} が見つかりません。" >&2; exit 1; }
+          NEXT_BODY=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${NEXT_NUM}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('body','') or '')")
+          AGENT=$(printf '%s' "${NEXT_BODY}" | sed -n '/^## Custom Agent$/ {n;s/^`\([^`]*\)`.*/\1/p;q;}')
+          [[ -n "${AGENT}" ]] || { echo "ERROR: Step.${NEXT} (#${NEXT_NUM}) の Custom Agent を特定できません。" >&2; exit 1; }
+          curl -s -o /dev/null -X DELETE \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO}/issues/${NEXT_NUM}/labels/ada%3Ablocked" || true
+          add_label "${NEXT_NUM}" "ada:ready"
+          if assign_copilot "${NEXT_NUM}" "${AGENT}" "${BRANCH}" ""; then
+            add_label "${NEXT_NUM}" "ada:running"
+          fi
+          echo "Step.${STEP} 完了 → Step.${NEXT} (#${NEXT_NUM}) を起動しました。"

@@ -1,5 +1,6 @@
 <!-- task_scope: single -->
 <!-- context_size: medium -->
+<!-- estimate_total: 6 -->
 <!-- split_decision: PROCEED -->
 <!-- subissues_count: 0 -->
 <!-- implementation_files: false -->

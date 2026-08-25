@@ -1,5 +1,7 @@
 # skills: markdown-query 技術リファレンス & 利用統計ガイド
 
+← [README](../README.md)
+
 > **本ページは HVE リポジトリ固有の技術リファレンスです。汎用 Skill 仕様は [.github/skills/markdown-query/SKILL.md](../.github/skills/markdown-query/SKILL.md) を参照してください。**
 >
 > **最終更新: 2026-08-13** — 定数・既定値・モジュール構成は同日の `mdq/` 実装と突合済み。数値を伴う主張には節ごとに取得条件を併記する。実装と食い違う場合は常に実装（`mdq/` と `mdq/tests/`）が正である。
@@ -110,9 +112,9 @@ markdown-query Skill の実体は HVE リポジトリ同梱の `mdq/` Python パ
 | Strategy 分岐と全戦略の定数 | [mdq/strategies.py](../mdq/strategies.py) | `ALL_STRATEGIES`, `scan_file_for_strategy`, `_scan_fixed_window`, `HEADING_RECURSIVE_MAX_CHARS`, `FIXED_WINDOW_CHARS` / `FIXED_WINDOW_OVERLAP`, **`PAGEINDEX_SUMMARY_CHARS` / `PAGEINDEX_SUMMARY_MODE`** |
 | Semantic 分割 | [mdq/strategies_semantic.py](../mdq/strategies_semantic.py) | `SEMANTIC_*` 定数, `_CTX_TEMPLATE`, `scan_file_semantic_paragraph`, `set_runtime_config` |
 | PageIndex 分割 | [mdq/strategies_pageindex.py](../mdq/strategies_pageindex.py) | `scan_file_pageindex`, `set_runtime_config`, `_summarize`（**定数は `mdq/strategies.py` 側にある**） |
-| クエリ分類 | [mdq/query_router.py](../mdq/query_router.py) | `classify_query`, `discover_available_strategies`, `_FALLBACK_ORDER`, `RouterDecision` |
+| クエリ分類 | [mdq/query_router.py](../mdq/query_router.py) | `classify_query`, `discover_available_strategies`（索引ファイル名の分解は `mdq/store.py` へ委譲）, `_FALLBACK_ORDER`, `RouterDecision` |
 | 検索 | [mdq/search.py](../mdq/search.py) | `Hit`, `_MiniBM25`, `_make_snippet` |
-| ストレージ | [mdq/store.py](../mdq/store.py) | `SCHEMA`, `SCHEMA_VERSION` (現在 **7**), `_migrate` (v1→v7), `open_store`, `db_path_for` |
+| ストレージ | [mdq/store.py](../mdq/store.py) | `SCHEMA`, `SCHEMA_VERSION` (現在 **7**), `_migrate` (v1→v7), `open_store`, `db_path_for`, **`existing_index_dbs`**（`index-<lang>-<strategy>.sqlite` の分解はここが唯一の正本） |
 | Watcher | [mdq/watcher.py](../mdq/watcher.py) | `MdqWatcher`, `DEFAULT_DEBOUNCE_MS` / `DEFAULT_BURST_THRESHOLD` / `DEFAULT_BURST_WINDOW_S`, `_flush_once`, `_fallback_reindex` |
 | 利用ログ | [mdq/usage_log.py](../mdq/usage_log.py) | `append_record`, JSONL スキーマ |
 | GraphRAG (任意) | [mdq/strategies_graphrag.py](../mdq/strategies_graphrag.py), [mdq/graphrag_runtime.py](../mdq/graphrag_runtime.py) | adapter と LLM / embed callable factory（§3.4） |
@@ -203,6 +205,8 @@ python -m mdq search --q "Chunking Strategy" --top-k 2
 
 **Cloud Agent では起動しない**: HVE Cloud Agent (GitHub Issue 起点) は短命プロセスで I/O 完了次第終了するため Watcher daemon thread を立てない。CLI Orchestrator では起動する。
 
+**起動順序**: CLI Orchestrator では、起動時の差分更新（§4.2）が終わってから Watcher を起動する。同一の索引 DB へ 2 つの書き込み経路を同時に置かないためで、その分だけ Watcher の開始が遅れる。
+
 ---
 
 ## 3. Chunking Strategy 詳説
@@ -286,7 +290,7 @@ python -m mdq search --strategy graphrag --q "<質問文>" --graphrag-query-mode
 
 | ファイル / テーブル | 役割 | 更新契機 | 典型的な更新頻度 | サイズ目安 |
 |---|---|---|---|---|
-| `.mdq/index-<lang>-<strategy>.sqlite` の `files` テーブル | ファイル単位の SHA1 / mtime / size / frontmatter | `cmd_index` 実行時、Watcher の `_flush_once` (500 ms ごと) | 中 (編集量に応じて) | 〜数 MB |
+| `.mdq/index-<lang>-<strategy>.sqlite` の `files` テーブル | ファイル単位の SHA1 / mtime / size / frontmatter | `cmd_index` 実行時、Watcher の `_flush_once` (500 ms ごと)、HVE CLI / GUI 起動時の差分更新 (§4.2) | 中 (編集量に応じて) | 〜数 MB |
 | 同 `chunks` テーブル | 分割後のチャンク本文 + heading_path + part_index + parent_chunk_id | 同上 | 同上 | 数十〜数百 MB |
 | 同 `chunks_fts` (FTS5 mirror) | 全文検索用トークン索引 (SCHEMA v3 以降) | `chunks` への INSERT/DELETE と同一トランザクション | 同上 | `chunks` の 0.5〜1.5 倍 |
 | 同 `chunks.text_raw` 列 (v5 で追加) | contextualize ON 時の原文保存 | semantic_paragraph 索引時のみ | 索引再構築時 | `chunks.body` の 0.7 倍程度 |
@@ -298,6 +302,11 @@ python -m mdq search --strategy graphrag --q "<質問文>" --graphrag-query-mode
 
 ### 4.2 索引整合性の前提と運用 Tips
 
+- **起動時の差分更新 (HVE CLI / GUI)**: HVE CLI (`run` / `cli` / `orchestrate`) と HVE GUI は起動時に、`.mdq/` に **実在する** `index-<lang>-<strategy>.sqlite` だけをバックグラウンドで差分更新する。未構築の strategy を新規作成することはなく、SQLite 索引を持たない `graphrag` は対象外。レガシーの `.mdq/index.sqlite` も命名規則に一致しないため対象外。`HVE_STARTUP_INDEX_REFRESH=0` で無効化できる。
+  - Watcher はこの差分更新の**完了後**に起動するため、同一 DB への並行書き込みは起きない。
+  - `--dry-run` でも索引は更新される（索引は Workflow の成果物ではないため）。Watcher が `--dry-run` で起動しないのとは扱いが異なる。
+  - GUI は差分更新中、実行開始操作を無効化する（子プロセスの Watcher と同一 DB へ同時に書き込むのを避けるため）。
+  - HVE プロセスを複数同時に起動した場合は、同一 DB への書き込みが競合して片方が警告を出し当該対象をスキップすることがある。
 - **増分索引の信頼境界**: `index_one_file` は `(stored_sha1 == current_sha1)` で skip するため、`.git` の checkout や `git restore` のように **内容が同じだが mtime が変わる** ケースでも余計な再索引は走らない。逆に **mtime が変わらず内容だけ書き換わる** ケース (極めて稀) は検知されない。完全性が要件なら `--rebuild` を使用する。
 - **Strategy 切り替え時の所要時間**: 新 Strategy の索引は同 lang・別 strategy として **別 DB ファイル** に生成されるため、既存 DB は触らない。並行運用可能。
 - **DB 破損時の復旧**: `.mdq/index-<lang>-<strategy>.sqlite` を削除して `python -m mdq index --strategy <name>` で再生成すれば良い。`.mdq/usage.jsonl` は索引と独立なので削除不要。
@@ -431,6 +440,11 @@ python -m mdq search --lang en-us --q "design pattern overview" --with-parent-de
 既定）または `query_router` 経由でクエリごとに最適な Strategy のインデックスが
 自動選択されるため、通常は **全 Strategy のインデックスをビルドしておくこと**
 が推奨される。
+
+> **一括ビルドと起動時差分更新の役割分担**: HVE の起動時差分更新（§4.2）は
+> **既に DB が存在する Strategy だけ**を維持する。未構築の Strategy はこの一括ビルド
+> （または `python -m mdq index --strategy <name>`）で 1 回作っておく必要があり、
+> 以降は起動のたびに自動で差分更新される。
 
 - **基本タブ: 「一括ビルド対象 Strategy」**
   - `mdq.strategies.ALL_STRATEGIES` の全項目がチェックボックスとして表示される。
@@ -810,3 +824,4 @@ markdown (.md) and you need relevance-ranked hits across multiple files.
 - 集計モジュール: [mdq/usage_stats.py](../mdq/usage_stats.py)
 - レポート生成モジュール: [mdq/usage_report.py](../mdq/usage_report.py)
 - Skill 定義: [.github/skills/markdown-query/SKILL.md](../.github/skills/markdown-query/SKILL.md)
+- 本ページの日本語トークナイザを再利用する HVE ランタイム機能: [tool-search.md](tool-search.md)

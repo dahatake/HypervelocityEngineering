@@ -622,6 +622,30 @@ jobs:
           link_sub_issue "${ROOT_ISSUE}" "${S1_ID}"
           echo "Root → Step.1 紐付け完了"
 
+          # ---- Step.2 ----
+          # `hve/workflow_registry.py` の AKM 定義（Step.1 → Step.2）と同期させる。
+          # 起動は Step.1 完了時（状態遷移）で行うため、ここでは akm:blocked を付けて待機させる。
+          BODY_S2=$(printf '%s\n## 目的\nAKM Step.1 で生成された `knowledge/D01〜D21-*.md` 全体の **横断整合性レビュー** を行う。\n\n## 実行パラメータ\n\n| パラメータ | 値 |\n|-----------|----|\n| sources | %s |\n| force_refresh | %s |\n\n### target_files\n%s\n\n### custom_source_dir\n%s\n\n## 入力\n- 必須: `knowledge/D01-*.md` 〜 `knowledge/D21-*.md`（Step.1 の成果物）\n- 必須: `template/business-requirement-document-master-list.md`（必須度・最低内容の正本）\n- 任意: `knowledge/business-requirement-document-status.md`（既存ステータス）\n\n## 観点（5 観点）\n1. **用語整合**: D07 用語集と他文書の語彙が一致するか\n2. **境界整合**: D02 スコープ × D03 ステークホルダー × D09 システムコンテキストの境界線が矛盾しないか\n3. **依存整合**: D04 業務プロセス × D05 ユースケース × D10 連携契約の前後関係に矛盾がないか\n4. **非機能整合**: D15 非機能要件 × D17 UAT × D21 CI/CD の数値・期限が齟齬していないか\n5. **マスター不足判定**: マスターリストの各 Dxx「不足判定」条件をすべて自己点検\n\n## 出力\n- レビューレポート（合格判定: ✅ PASS / ❌ FAIL + 観点別の指摘）を本 Issue のコメントへ記録\n- `knowledge/business-requirement-document-status.md` 更新（観点別の整合性ステータス追記）\n\n## Custom Agent\n`QA-DocConsistency`\n\n## 依存\n- Step.1\n\n## 完了条件\n- 5 観点すべてについてレビュー結果が記録されている\n- `knowledge/business-requirement-document-status.md` が更新されている\n- `knowledge/` への書き込みは Skill `work-artifacts-layout` §4.1「削除→新規作成」を遵守すること\n- 完了時に自身に `akm:done` ラベルを付与すること%s' \
+            "${ROOT_REF}" "${SOURCES}" "${FORCE_REFRESH_DISPLAY}" "${TARGET_FILES_DISPLAY}" "${CUSTOM_SOURCE_DISPLAY}" "${ADDITIONAL_SECTION}")
+
+          STEP2_LABELS=$(echo "${STEP_LABELS}" | jq -c '. + ["akm:blocked"]')
+
+          if RESP=$(create_issue \
+            "[AKM] Step.2: knowledge/ 横断整合性レビュー" \
+            "${BODY_S2}" \
+            "${STEP2_LABELS}"); then
+            S2_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S2_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.2 作成: #${S2_NUM}"
+            sleep 3
+            link_sub_issue "${ROOT_ISSUE}" "${S2_ID}"
+            echo "Root → Step.2 紐付け完了"
+          else
+            post_comment "${ROOT_ISSUE}" "⚠️ Step Issue の作成に失敗しました: [AKM] Step.2 (ワークフローログを確認してください)" || true
+            echo "ERROR: create_issue に失敗しました。ワークフローを中断します。" >&2
+            exit 1
+          fi
+
           # ---- Step.1 を起動 ----
           add_label "${S1_NUM}" "akm:ready"
           CUSTOM_INSTRUCTIONS=""
@@ -715,20 +739,49 @@ jobs:
           echo "Root Issue: #${ROOT_ISSUE}"
 
           # ---- 依存関係マップに基づき処理 ----
-          # AKM はステップが 1 つのみ: Step.1 完了 → Root Issue に akm:done + 完了コメント
-          case "${STEP_MATCH}" in
-            "1")
-              add_label "${ROOT_ISSUE}" "akm:done"
-              echo "Root Issue #${ROOT_ISSUE} に akm:done を付与しました。"
-              _done_msg=$(printf '🎉 knowledge/ ドキュメント生成・管理（AKM）が完了しました！\n\n**生成された成果物:**\n- `knowledge/business-requirement-document-status.md` — D01〜D21 クラス別ステータス・カバレッジギャップ・詳細マッピング\n- `knowledge/D{NN}-<文書名>.md` — QA マッピングが存在する D クラスごとの要求定義書ドラフト（REQ テーブル形式：REQ-D{NN}-001 番台=Confirmed / REQ-D{NN}-101 番台=Tentative）\n- `knowledge/D{NN}-<文書名>-ChangeLog.md` — REQ-ID 別サブセクション構造の変更ログ（要求項目別ログ + 付録A原文保全）\n- `work/KnowledgeManager/Issue-xxx/plan.md` — 実行計画')
-              post_comment "${ROOT_ISSUE}" "${_done_msg}"
-              echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
-              ;;
+          # AKM は 2 ステップ: Step.1 完了 → Step.2 起動 / Step.2 完了 → Root Issue に akm:done
+          DONE_BRANCH=$(printf '%s' "${DONE_ISSUE_BODY}" | sed -n 's/^.*<!-- branch: \([^>]*\) -->.*$/\1/p' | head -1)
+          [[ -z "${DONE_BRANCH}" ]] && DONE_BRANCH="main"
 
-            *)
-              echo "未定義の Step: ${STEP_MATCH}。スキップ。"
-              ;;
-          esac
+          if [[ "${STEP_MATCH}" == "1" ]]; then
+            NEXT_JSON=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}/sub_issues" \
+              | python3 -c "import sys,json,re; xs=json.load(sys.stdin); print(json.dumps(next((x for x in xs if re.search(r'\\[AKM\\] Step\\.2:', x.get('title',''))), {})))")
+            NEXT_NUM=$(printf '%s' "${NEXT_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))")
+            if [[ -z "${NEXT_NUM}" ]]; then
+              echo "WARNING: Step.2 の Sub Issue が見つかりません。起動をスキップします。"
+            else
+              # closed と labeled の二重発火で同じ Step を 2 回起動しない。
+              # akm:blocked は Step.2 の初期ラベルなので未起動を意味し、busy には含めない。
+              NEXT_BUSY=$(printf '%s' "${NEXT_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); busy={'akm:ready','akm:running','akm:done'}; print('true' if busy & {x['name'] for x in d.get('labels',[])} else 'false')")
+              if [[ "${NEXT_BUSY}" == "true" ]]; then
+                echo "Step.2 (#${NEXT_NUM}) は起動済みのためスキップします。"
+              else
+                NEXT_BODY=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${NEXT_NUM}" \
+                  | python3 -c "import sys,json; print(json.load(sys.stdin).get('body','') or '')")
+                NEXT_CA=$(extract_custom_agent "${NEXT_BODY}")
+                curl -s -o /dev/null -X DELETE \
+                  -H "Authorization: Bearer ${GH_TOKEN}" \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  "https://api.github.com/repos/${REPO}/issues/${NEXT_NUM}/labels/akm%3Ablocked" || true
+                add_label "${NEXT_NUM}" "akm:ready"
+                if assign_copilot "${NEXT_NUM}" "${NEXT_CA}" "${DONE_BRANCH}" ""; then
+                  add_label "${NEXT_NUM}" "akm:running"
+                  echo "Step.1 完了 → Step.2 (#${NEXT_NUM}) を起動しました。"
+                else
+                  echo "WARNING: Step.2 (#${NEXT_NUM}) へのアサイン失敗。akm:running は付与しません。"
+                fi
+              fi
+            fi
+          elif [[ "${STEP_MATCH}" == "2" ]]; then
+            add_label "${ROOT_ISSUE}" "akm:done"
+            echo "Root Issue #${ROOT_ISSUE} に akm:done を付与しました。"
+            _done_msg=$(printf '🎉 knowledge/ ドキュメント生成・管理（AKM）が完了しました！\n\n**生成された成果物:**\n- `knowledge/business-requirement-document-status.md` — D01〜D21 クラス別ステータス・カバレッジギャップ・詳細マッピング + 横断整合性レビュー結果\n- `knowledge/D{NN}-<文書名>.md` — QA マッピングが存在する D クラスごとの要求定義書ドラフト（REQ テーブル形式：REQ-D{NN}-001 番台=Confirmed / REQ-D{NN}-101 番台=Tentative）\n- `knowledge/D{NN}-<文書名>-ChangeLog.md` — REQ-ID 別サブセクション構造の変更ログ（要求項目別ログ + 付録A原文保全）\n- `work/KnowledgeManager/Issue-xxx/plan.md` — 実行計画')
+            post_comment "${ROOT_ISSUE}" "${_done_msg}"
+            echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
+          else
+            echo "未定義の Step: ${STEP_MATCH}。スキップ。"
+          fi
           # ── 自動クローズ判定（auto-merge 有効時）──────────────
           if [[ -f "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/auto-close.sh" ]]; then
             source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/auto-close.sh"

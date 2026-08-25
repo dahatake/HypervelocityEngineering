@@ -16,27 +16,59 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Optional, Sequence, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .console import Console
 
 _workiq_available_cache: Optional[bool] = None
+_workiq_available_probe_attempts: int = 0
 _workiq_cache_lock = threading.Lock()
 _SHELL_ON_WINDOWS = (os.name == "nt")
 _WORKIQ_QUERY_INTERVAL_SECONDS: float = 2.0
+# 初回は `npx -y` が npm レジストリからパッケージを取得するため 30 秒では足りない。
+_WORKIQ_VERSION_PROBE_TIMEOUT_SECONDS: float = 120.0
+# タイムアウトは「判定不能」であり不可用の確定ではないため再試行するが、
+# 応答しない環境で毎回待たされないように同一プロセス内の試行回数を制限する。
+_WORKIQ_AVAILABILITY_MAX_PROBE_ATTEMPTS: int = 2
 
 # Work IQ MCP 関連定数（runner.py / workiq.py の両方から参照する）
 WORKIQ_MCP_SERVER_NAME: str = "_hve_workiq"
+# HVE が MCP サーバーへ公開する tool の allowlist（最小権限）。
+# HVE が使うのは自然言語問い合わせの 1 経路だけのため `ask` に限定する。
 WORKIQ_MCP_TOOL_NAMES: tuple[str, ...] = (
-    "ask_work_iq",
+    "ask",
+)
+# tool 実行確認（FR-QA-03）に用いる参照系ツール名。公開 allowlist とは別集合。
+# `@microsoft/workiq` は自動探索された公式 `workiq` サーバー経由では allowlist の
+# 制限を受けずに全ツールを公開するため、`ask` 以外の参照系も実行確認の対象にする。
+# 実測（tools=["*"]）で公開される 14 件のうち、書き込み系（create_entity /
+# update_entity / delete_entity / do_action）と accept_eula / get_debug_link /
+# call_function / list_agents は M365 データ参照の証拠にならないため含めない。
+WORKIQ_MCP_QUERY_TOOL_NAMES: tuple[str, ...] = (
+    "ask",
+    "retrieve",
+    "fetch",
+    "fetch_blob",
+    "get_schema",
+    "search_paths",
 )
 _WORKIQ_OFFICIAL_MCP_SERVER_NAME: str = "workiq"
-_WORKIQ_OFFICIAL_MCP_TOOL_NAMES: frozenset[str] = frozenset({"ask"})
+# `workiq-preview` プラグインは同じ Work IQ サービスを別サーバー名で登録するため、
+# 自動探索で併存したときに実行確認が漏れないよう同じ参照系集合を割り当てる。
+_WORKIQ_PREVIEW_MCP_SERVER_NAME: str = "workiq-preview"
 _WORKIQ_MCP_TOOL_NAMES_BY_SERVER: dict[str, frozenset[str]] = {
-    WORKIQ_MCP_SERVER_NAME: frozenset(WORKIQ_MCP_TOOL_NAMES),
-    _WORKIQ_OFFICIAL_MCP_SERVER_NAME: _WORKIQ_OFFICIAL_MCP_TOOL_NAMES,
+    WORKIQ_MCP_SERVER_NAME: frozenset(WORKIQ_MCP_QUERY_TOOL_NAMES),
+    _WORKIQ_OFFICIAL_MCP_SERVER_NAME: frozenset(WORKIQ_MCP_QUERY_TOOL_NAMES),
+    _WORKIQ_PREVIEW_MCP_SERVER_NAME: frozenset(WORKIQ_MCP_QUERY_TOOL_NAMES),
 }
+# Work IQ とみなす MCP サーバー名の単一の正本。server 名判定を複数箇所で別々に
+# 保つと片方だけ追随できず、実行確認やセッション分離が漏れる（FR-MAINT-07）。
+WORKIQ_MCP_SERVER_NAMES: frozenset[str] = frozenset(_WORKIQ_MCP_TOOL_NAMES_BY_SERVER)
+_WORKIQ_TOOL_DIAGNOSTIC_COMMAND: str = (
+    "python -m hve workiq-doctor --event-extractor-self-test "
+    "--sdk-tool-probe --sdk-event-trace"
+)
 
 
 def _sanitize_diagnostic_text(text: str) -> str:
@@ -109,7 +141,7 @@ def resolve_npx_command() -> Optional[str]:
 # 役割プライミング（最小限・断定文）。
 # - MCP サーバー名 `_hve_workiq` はリポジトリ内部のセッション別名のためプロンプト本文には含めない
 #   （SDK 側の system prompt にツール schema が自動注入される）。
-# - 同様にツール名（`ask_work_iq`）や引数名（`question`）も本文に含めない。
+# - 同様にツール名（`ask`）や引数名（`question`）も本文に含めない。
 #   MCP ツール schema は SDK が system prompt へ自動注入するため、本文で併記すると
 #   「合成語による外部環境説明」となり Microsoft 365 Copilot のベストプラクティスに反する。
 # - 同義語・略称・英訳の指示は Work IQ サーバ側検索ロジック（Microsoft Graph）に委ねるため記載しない。
@@ -543,6 +575,7 @@ def is_workiq_available() -> bool:
         ``python -m hve workiq-doctor --sdk-probe`` を使用すること。
     """
     global _workiq_available_cache
+    global _workiq_available_probe_attempts
     if _workiq_available_cache is not None:
         return _workiq_available_cache
     with _workiq_cache_lock:
@@ -554,16 +587,33 @@ def is_workiq_available() -> bool:
             _workiq_available_cache = False
             return False
 
+        if _workiq_available_probe_attempts >= _WORKIQ_AVAILABILITY_MAX_PROBE_ATTEMPTS:
+            return False
+        _workiq_available_probe_attempts += 1
+
         try:
             result = subprocess.run(
                 [npx_cmd, "-y", "@microsoft/workiq", "version"],
                 capture_output=True,
                 text=True,
-                timeout=30,
+                encoding="utf-8",
+                errors="replace",
+                timeout=_WORKIQ_VERSION_PROBE_TIMEOUT_SECONDS,
                 shell=_SHELL_ON_WINDOWS,
             )
             _workiq_available_cache = (result.returncode == 0)
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError, OSError):
+        except subprocess.TimeoutExpired:
+            # タイムアウトは不可用の確定ではないため結果をキャッシュせず、
+            # 上限までは次回の呼び出しで再試行できるようにする。
+            logging.getLogger(__name__).warning(
+                "Work IQ CLI の可用性判定がタイムアウトしました "
+                "(%.0f 秒, 試行 %d/%d)。今回は利用不可として扱います。",
+                _WORKIQ_VERSION_PROBE_TIMEOUT_SECONDS,
+                _workiq_available_probe_attempts,
+                _WORKIQ_AVAILABILITY_MAX_PROBE_ATTEMPTS,
+            )
+            return False
+        except (subprocess.SubprocessError, FileNotFoundError, OSError):
             _workiq_available_cache = False
 
         return _workiq_available_cache
@@ -598,6 +648,8 @@ def workiq_login(console: "Console", timeout: float = 600.0) -> bool:
             timeout=timeout,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             shell=_SHELL_ON_WINDOWS,
         )
         if eula_result.returncode != 0:
@@ -613,6 +665,8 @@ def workiq_login(console: "Console", timeout: float = 600.0) -> bool:
             timeout=timeout,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             shell=_SHELL_ON_WINDOWS,
         )
         if result.returncode != 0:
@@ -730,13 +784,12 @@ def _is_workiq_tool_metadata(metadata: Optional[WorkIQToolEventMetadata]) -> boo
     """抽出済みメタデータが許可済み Work IQ server/tool 組か判定する。"""
     if metadata is None or not metadata.tool_name:
         return False
-    if metadata.mcp_server_name:
-        allowed_tools = _WORKIQ_MCP_TOOL_NAMES_BY_SERVER.get(
-            metadata.mcp_server_name
-        )
-        return bool(allowed_tools and metadata.tool_name in allowed_tools)
-    # server 名を持たない legacy event は、内部 allowlist だけ後方互換で許可する。
-    return is_workiq_tool_name(metadata.tool_name)
+    # MCP 由来の tool event は必ず server 名を伴う。server 名を持たない event は
+    # 組み込みツールのものであり、短いツール名の衝突を避けるため Work IQ として扱わない。
+    if not metadata.mcp_server_name:
+        return False
+    allowed_tools = _WORKIQ_MCP_TOOL_NAMES_BY_SERVER.get(metadata.mcp_server_name)
+    return bool(allowed_tools and metadata.tool_name in allowed_tools)
 
 
 def is_workiq_tool_event(event: object) -> bool:
@@ -752,6 +805,50 @@ def extract_workiq_tool_name_from_event(event: object) -> Optional[str]:
     if not _is_workiq_tool_metadata(metadata):
         return None
     return metadata.tool_name
+
+
+def format_workiq_tool_not_invoked_warning(
+    context_label: str,
+    *,
+    observed_tools: Optional[Sequence[str]] = None,
+    status: Optional[str] = None,
+    detail: str = "",
+) -> str:
+    """Work IQ tool 実行を確認できなかったときの警告文を生成する（FR-QA-06）。
+
+    prompt 本文・tool の引数・Work IQ 応答本文を含めてはならない（FR-RTO-04）。
+    事前 QA 経路（runner）と prefetch 経路（orchestrator）はこの実装だけを使う。
+
+    Args:
+        context_label: 発生箇所の識別（``Q3`` / ``prefetch`` 等）。
+        observed_tools: 当該区間で観測されたツール名。順序を保って重複を除く。
+        status: Work IQ 応答から抽出した status（判明している場合）。
+        detail: 追加の 1 行説明。応答本文を渡してはならない。
+    """
+    lines = [
+        f"⚠️ Work IQ [{context_label}]: "
+        "Work IQ MCP ツール呼び出しを SDK イベント上で確認できませんでした。"
+    ]
+    if status:
+        lines.append(f"  応答 status: {status}（一次情報ありと申告されています）")
+    if detail:
+        lines.append(f"  {detail}")
+    unique_tools: list[str] = []
+    for tool in observed_tools or ():
+        name = str(tool).strip()
+        if name and name not in unique_tools:
+            unique_tools.append(name)
+    if unique_tools:
+        lines.append("  当該区間で観測されたツール: " + ", ".join(unique_tools))
+    else:
+        lines.append("  当該区間でツール呼び出しは観測されませんでした。")
+    lines.append(
+        "  LLM がツールを呼ばずに応答した、許可済み server/tool 組と実際の"
+        "ツール名が乖離した、またはイベント検出に失敗した可能性があります。"
+    )
+    lines.append("  テキスト応答は Work IQ 由来のデータとして扱いません。")
+    lines.append(f"  診断コマンド: {_WORKIQ_TOOL_DIAGNOSTIC_COMMAND}")
+    return "\n".join(lines)
 
 
 def format_sdk_event_trace_line(event: object) -> str:
@@ -790,38 +887,38 @@ def run_workiq_event_extractor_self_test() -> WorkIQDiagnosticCheck:
 
     cases = [
         (
-            "legacy_tool_name",
-            _Event(_EventType("tool.execution_start"), _Data(tool_name="ask_work_iq")),
-            "ask_work_iq",
-            True,
+            "tool_name_without_server",
+            _Event(_EventType("tool.execution_start"), _Data(tool_name="ask")),
+            "ask",
+            False,
         ),
         (
             "mcp_snake_case",
             _Event(
                 _EventType("tool.execution_start"),
-                _Data(mcp_tool_name="ask_work_iq", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
+                _Data(mcp_tool_name="ask", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
             ),
-            "ask_work_iq",
+            "ask",
             True,
         ),
         (
             "mcp_camel_case_dict",
-            {"type": "tool.execution_start", "data": {"mcpToolName": "ask_work_iq", "mcpServerName": WORKIQ_MCP_SERVER_NAME}},
-            "ask_work_iq",
+            {"type": "tool.execution_start", "data": {"mcpToolName": "ask", "mcpServerName": WORKIQ_MCP_SERVER_NAME}},
+            "ask",
             True,
         ),
         (
             "other_mcp_server",
             _Event(
                 _EventType("tool.execution_start"),
-                _Data(mcp_tool_name="ask_work_iq", mcp_server_name="other_server"),
+                _Data(mcp_tool_name="ask", mcp_server_name="other_server"),
             ),
-            "ask_work_iq",
+            "ask",
             False,
         ),
         (
             "non_tool_event",
-            _Event(_EventType("assistant.message_delta"), _Data(tool_name="ask_work_iq")),
+            _Event(_EventType("assistant.message_delta"), _Data(tool_name="ask")),
             None,
             False,
         ),
@@ -1053,6 +1150,72 @@ def extract_workiq_status(text: str) -> Optional[str]:
         return status if status in _WORKIQ_RESPONSE_STATUS_LABELS else None
     return None
 
+
+# 一次情報が少なくとも一部見つかった status だけを QA 統合対象とする（FR-QA-03）。
+_WORKIQ_MERGEABLE_STATUSES: frozenset[str] = frozenset({"FOUND", "PARTIAL"})
+
+
+def is_workiq_result_mergeable(
+    *,
+    tool_confirmed: bool,
+    status: Optional[str],
+) -> bool:
+    """Work IQ 応答を検証済み回答へ統合してよいかを判定する（FR-QA-03 の単一実装）。"""
+    return bool(tool_confirmed) and status in _WORKIQ_MERGEABLE_STATUSES
+
+
+def evaluate_workiq_qa_merge_decision(
+    *,
+    called_tools: Sequence[str],
+    status: Optional[str],
+    observed_tools: Sequence[str],
+) -> "WorkIQDiagnosticCheck":
+    """事前 QA と同じ条件で統合可否を判定し、診断チェックとして返す（FR-QA-08）。
+
+    Work IQ 応答本文は detail へ含めない（FR-RTO-04 / NFR-SEC-01）。
+    """
+    tool_confirmed = bool(called_tools)
+    status_label = status or "STATUS 不明"
+    if is_workiq_result_mergeable(tool_confirmed=tool_confirmed, status=status):
+        return WorkIQDiagnosticCheck(
+            name="workiq_qa_merge_decision",
+            status="PASS",
+            detail=(
+                f"事前 QA へ統合されます（tool={', '.join(called_tools)} / "
+                f"status={status_label}）"
+            ),
+        )
+    unique_observed: list[str] = []
+    for tool in observed_tools:
+        name = str(tool).strip()
+        if name and name not in unique_observed:
+            unique_observed.append(name)
+    if not tool_confirmed:
+        observed_line = (
+            "  当該区間で観測されたツール: " + ", ".join(unique_observed)
+            if unique_observed
+            else "  当該区間でツール呼び出しは観測されませんでした。"
+        )
+        return WorkIQDiagnosticCheck(
+            name="workiq_qa_merge_decision",
+            status="FAIL",
+            detail=(
+                "事前 QA へ統合されません: 許可済み server/tool 組の実行を"
+                f"確認できませんでした（status={status_label}）。\n"
+                f"{observed_line}\n"
+                f"  診断コマンド: {_WORKIQ_TOOL_DIAGNOSTIC_COMMAND}"
+            ),
+        )
+    return WorkIQDiagnosticCheck(
+        name="workiq_qa_merge_decision",
+        status="WARN",
+        detail=(
+            f"事前 QA へ統合されません: status={status_label} は統合対象外です"
+            f"（統合対象は {' / '.join(sorted(_WORKIQ_MERGEABLE_STATUSES))}）。\n"
+            "  一次情報が見つからなかっただけの場合は正常です。"
+        ),
+    )
+
 _WORKIQ_ERROR_INDICATORS: tuple[str, ...] = (
     "アクセスできない",
     "実行できません",
@@ -1076,7 +1239,6 @@ _WORKIQ_DATA_INDICATORS: tuple[str, ...] = (
     "送信者",
     "会議名",
     "ファイル名",
-    "ask_work_iq",
 )
 
 _NEGATIVE_CONTEXT_PATTERNS: tuple[str, ...] = (
@@ -1578,16 +1740,22 @@ async def probe_workiq_copilot_tool_invocation(
     timeout: float = 60.0,
     trace_events: bool = False,
     tools_all: bool = False,
+    qa_integration_probe: bool = False,
 ) -> list[WorkIQDiagnosticCheck]:
     """Copilot SDK セッションで Work IQ MCP tool が実際に呼び出されるか検証する。
 
     既存の ``--sdk-probe`` は MCP server の connected 状態のみを確認する。
     この probe は短い診断プロンプトを送信し、SDK の ``tool.execution_start`` イベント上で
     `_hve_workiq` の tool 呼び出しを観測できるかを確認する。
+
+    ``qa_integration_probe=True`` の場合は、診断用プロンプトの代わりに本番と同じ
+    事前 QA 用 Work IQ テンプレートを 1 問だけ送り、FR-QA-03 の統合条件を満たすかを
+    判定する（FR-QA-08）。Workflow を丸ごと再実行せずに統合可否を確認できる。
     """
     checks: list[WorkIQDiagnosticCheck] = []
     trace_lines: list[str] = []
     called_tools: list[str] = []
+    observed_tools: list[str] = []
 
     try:
         import importlib
@@ -1725,6 +1893,9 @@ async def probe_workiq_copilot_tool_invocation(
         def _on_event(event: object) -> None:
             if trace_events and len(trace_lines) < 30:
                 trace_lines.append(format_sdk_event_trace_line(event))
+            any_tool = extract_tool_name_from_event(event)
+            if any_tool:
+                observed_tools.append(any_tool)
             tool_name = extract_workiq_tool_name_from_event(event)
             if tool_name:
                 called_tools.append(tool_name)
@@ -1750,11 +1921,30 @@ async def probe_workiq_copilot_tool_invocation(
             "- 検索が実行できない場合（権限・接続・初期化の問題等）は、その理由を 1 文で返す。\n"
             "- **創作・推測は禁止**。存在しない件名・送信者・ファイル名を作り出すのは不適切。"
         )
-        try:
-            await asyncio.wait_for(
-                session.send_and_wait(probe_prompt, timeout=timeout),
-                timeout=timeout + 5.0,
+        _response_text = ""
+        if qa_integration_probe:
+            # 本番の事前 QA と同じテンプレートを 1 問だけ流す（FR-MAINT-07）。
+            probe_prompt = get_workiq_prompt_template("qa").format(
+                target_content=(
+                    "- No: Q1\n"
+                    "- 質問: 本件の見積もり・体制・契約に関する一次情報はありますか。\n"
+                    "- 分類: 診断\n"
+                    "- 重要度: 中\n"
+                )
             )
+        try:
+            if qa_integration_probe:
+                _detail = await query_workiq_detailed(
+                    session, probe_prompt, timeout=timeout,
+                )
+                _response_text = _detail.content or ""
+                if _detail.error:
+                    raise RuntimeError(_detail.error)
+            else:
+                await asyncio.wait_for(
+                    session.send_and_wait(probe_prompt, timeout=timeout),
+                    timeout=timeout + 5.0,
+                )
             checks.append(WorkIQDiagnosticCheck(
                 name="copilot_tool_probe_send",
                 status="PASS",
@@ -1795,6 +1985,13 @@ async def probe_workiq_copilot_tool_invocation(
                 status="PASS" if trace_lines else "WARN",
                 detail=trace_detail,
             ))
+
+        if qa_integration_probe:
+            checks.append(evaluate_workiq_qa_merge_decision(
+                called_tools=called_tools,
+                status=extract_workiq_status(_response_text),
+                observed_tools=observed_tools,
+            ))
     finally:
         if session is not None:
             try:
@@ -1821,6 +2018,7 @@ def run_workiq_diagnostics(
     sdk_tool_probe_timeout: float = 60.0,
     sdk_event_trace: bool = False,
     sdk_tool_probe_tools_all: bool = False,
+    qa_integration_probe: bool = False,
     cli_path: Optional[str] = None,
     cli_url: Optional[str] = None,
     github_token: Optional[str] = None,
@@ -1894,7 +2092,7 @@ def run_workiq_diagnostics(
     try:
         node_result = subprocess.run(
             ["node", "-v"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
             shell=_SHELL_ON_WINDOWS,
         )
         if node_result.returncode == 0:
@@ -1923,7 +2121,7 @@ def run_workiq_diagnostics(
     try:
         npm_result = subprocess.run(
             ["npm", "-v"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
             shell=_SHELL_ON_WINDOWS,
         )
         if npm_result.returncode == 0:
@@ -1952,7 +2150,7 @@ def run_workiq_diagnostics(
     try:
         ver_result = subprocess.run(
             [npx_cmd, "-y", "@microsoft/workiq", "version"],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
             shell=_SHELL_ON_WINDOWS,
         )
         if ver_result.returncode == 0:
@@ -1985,7 +2183,7 @@ def run_workiq_diagnostics(
     try:
         eula_result = subprocess.run(
             [npx_cmd, "-y", "@microsoft/workiq", "accept-eula"],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
             shell=_SHELL_ON_WINDOWS,
         )
         if eula_result.returncode == 0:
@@ -2018,7 +2216,7 @@ def run_workiq_diagnostics(
     try:
         ping_result = subprocess.run(
             [npx_cmd, "-y", "@microsoft/workiq", "ask", "-q", "ping"],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
             shell=_SHELL_ON_WINDOWS,
         )
         if ping_result.returncode == 0:
@@ -2094,8 +2292,8 @@ def run_workiq_diagnostics(
                 detail=f"SDK probe に失敗しました: {_truncate_diagnostic_text(str(exc))}",
             ))
 
-    # 12. SDK tool invocation 検証 (--sdk-tool-probe 時のみ)
-    if sdk_tool_probe:
+    # 12. SDK tool invocation 検証 (--sdk-tool-probe / --qa-integration-probe 時のみ)
+    if sdk_tool_probe or qa_integration_probe:
         try:
             sdk_tool_checks = asyncio.run(
                 probe_workiq_copilot_tool_invocation(
@@ -2106,6 +2304,7 @@ def run_workiq_diagnostics(
                     timeout=sdk_tool_probe_timeout,
                     trace_events=sdk_event_trace,
                     tools_all=sdk_tool_probe_tools_all,
+                    qa_integration_probe=qa_integration_probe,
                 )
             )
             checks.extend(sdk_tool_checks)

@@ -61,7 +61,7 @@ class FileKindSpec:
 # --------------------------------------------------------------------------
 
 WORKFLOW_PRIORITY: Tuple[str, ...] = (
-    "ard", "aas", "aad-web", "asdw-web",
+    "ard", "aas", "ada", "aad-web", "asdw-web",
     "adfd", "adfdv", "aag", "aagd", "aar",
     "akm", "adi", "adoc",
 )
@@ -84,6 +84,7 @@ WORKFLOW_TO_SECTION: Dict[str, str] = {
     "adi": "C17",
     "adoc": "C13",
     "aas": "OPTIONS_TOP",
+    "ada": "OPTIONS_TOP",
     "aag": "OPTIONS_TOP",
     "aagd": "OPTIONS_TOP",
     "aar": "OPTIONS_TOP",
@@ -182,6 +183,14 @@ FILE_KIND_TO_SPEC: Dict[str, FileKindSpec] = {
         logic="all",
         display_name="docs/catalog/app-catalog.md",
     ),
+    "app_requirements": FileKindSpec(
+        paths=(
+            "docs/catalog/app-catalog.md",
+            "docs/architectural-requirements-app-*.md",
+        ),
+        logic="all",
+        display_name="app-catalog.md と APP別要求定義書",
+    ),
     "dataflow_app_catalog": FileKindSpec(
         paths=("docs/dataflow/dataflow-app-catalog.md",),
         logic="all",
@@ -251,15 +260,37 @@ _add(StepRequirement(
         "同セッション内で ARD Step 2 を ON にするか、既に当該ファイルが存在する状態で実行してください。"
     ),
 ))
+_add(StepRequirement(
+    workflow_id="ard", step_id="5",
+    required_info_keys=(),
+    required_info_logic="none",
+    required_file_kind="use_case_catalog",
+    guidance_text=(
+        "アプリケーション要求定義は docs/catalog/use-case-catalog.md を入力とします。"
+        "同セッション内で ARD Step 4 を ON にするか、既に当該ファイルが存在する状態で実行してください。"
+    ),
+))
 
 # ---- AAS ----
 _add(StepRequirement(
     workflow_id="aas", step_id="1",
     required_info_keys=(),
     required_info_logic="none",
+    required_file_kind="app_requirements",
+    guidance_text=(
+        "アーキテクチャ推薦は app-catalog.md と全APPの要求定義書を入力とします。"
+        "ARD Step 4.1 / 4.2 を先に実行してください。"
+    ),
+))
+
+# ---- ADA ----
+_add(StepRequirement(
+    workflow_id="ada", step_id="1",
+    required_info_keys=(),
+    required_info_logic="none",
     required_file_kind="use_case_catalog",
     guidance_text=(
-        "アーキテクチャ設計は docs/catalog/use-case-catalog.md を入力とします。"
+        "AI Agent 向けデータ設計は docs/catalog/use-case-catalog.md を入力とします。"
         "ARD ワークフローを先に実行するか、当該ファイルを配置してください。"
     ),
 ))
@@ -292,7 +323,7 @@ _add(StepRequirement(
 
 # ---- ADFD ----
 _add(StepRequirement(
-    workflow_id="adfd", step_id="6.1",
+    workflow_id="adfd", step_id="0.1",
     required_info_keys=(),
     required_info_logic="none",
     required_file_kind="app_catalog",
@@ -302,7 +333,7 @@ _add(StepRequirement(
     ),
 ))
 _add(StepRequirement(
-    workflow_id="adfd", step_id="6.2",
+    workflow_id="adfd", step_id="2",
     required_info_keys=(),
     required_info_logic="none",
     required_file_kind="app_catalog",
@@ -835,6 +866,8 @@ def summarize_all_requirements_for_selection(
     `target_business` を検査しない。この経路では `hve/orchestrator.py` の
     bridge mode が Step 1.2 の Strategic Recommendation から値を生成するため、
     `hve/__main__.py` の対話ウィザードも同条件で必須にしていない。
+    同様にARDグループ4と5を併せて選択している場合、グループ4が同一runで
+    `use-case-catalog.md`を生成するため、グループ5の事前ファイル警告を出さない。
     """
     iv = dict(input_values or {})
     summaries: List[RequirementsSummary] = summarize_requirements_for_selection(
@@ -852,6 +885,11 @@ def summarize_all_requirements_for_selection(
     ard_group1_selected = any(
         workflow_id == "ard"
         and any(str(sid).split("/", 1)[0] == "1" for sid in (step_ids or ()))
+        for workflow_id, step_ids in selected
+    )
+    ard_group4_selected = any(
+        workflow_id == "ard"
+        and any(str(sid).split("/", 1)[0] == "4" for sid in (step_ids or ()))
         for workflow_id, step_ids in selected
     )
 
@@ -872,6 +910,7 @@ def summarize_all_requirements_for_selection(
                 and workflow_id == priority_workflow_id
                 and key in REQUIREMENT_TABLE
                 and not (ard_group1_selected and key == ("ard", "2"))
+                and not (ard_group4_selected and key == ("ard", "5"))
             ):
                 table_summary = summarize_requirements(
                     workflow_id, step_id,

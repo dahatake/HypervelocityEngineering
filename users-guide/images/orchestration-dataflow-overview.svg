@@ -67,8 +67,9 @@
   <text x="372" y="144" class="small">要求定義の自動化</text>
   <path class="arrow" d="M580 129 L612 129"/>
   <rect x="614" y="106" width="722" height="46" class="card outfile"/>
-  <text x="626" y="124" class="flabel" fill="#15803d">docs/ 要求定義成果物</text>
-  <text x="626" y="142" class="mono">company-business-requirement.md / business-requirement.md / catalog/use-case-catalog.md / recommended-kpi-okr.md(任意)</text>
+  <text x="626" y="122" class="flabel" fill="#15803d">docs/ 要求定義成果物</text>
+  <text x="626" y="135" class="mono" style="font-size:9px">company-business-requirement.md / business-requirement.md / catalog/use-case-catalog.md / recommended-kpi-okr.md(任意)</text>
+  <text x="626" y="147" class="mono" style="font-size:9px">catalog/app-catalog.md / architectural-requirements-app-*.md（ARD Step 4.1/4.2）</text>
 
   <path class="arrow" d="M470 152 L470 176"/>
 
@@ -79,7 +80,7 @@
   <path class="arrow" d="M580 201 L612 201"/>
   <rect x="614" y="178" width="722" height="46" class="card outfile"/>
   <text x="626" y="196" class="flabel" fill="#15803d">docs/catalog/ アプリ・画面・サービス・データ</text>
-  <text x="626" y="214" class="mono">catalog/app-catalog.md / screen・service・data catalog / docs/test-specs/</text>
+  <text x="626" y="214" class="mono" style="font-size:9px">screen・service・data catalog / docs/test-specs/（app-catalog.md は ARD 生成・入力として消費）</text>
 
   <path class="arrow" d="M470 224 L470 248"/>
 

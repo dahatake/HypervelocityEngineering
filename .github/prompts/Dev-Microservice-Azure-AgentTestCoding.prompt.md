@@ -69,7 +69,7 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 - `harness-safety-guard` — ツール実行時の破壊的操作検出と中断
 - `tdd-red-green-reality` — 実出力で RED/GREEN を証明・恒真式禁止・プラットフォーム別 verify コマンドの確定
 - `karpathy-guidelines` — テストコード生成時の LLM 共通ミス防止指針
-- `ai-agent-capability-contract` — AG-CAP-01〜06 のREDテスト、test double、選択能力の境界
+- `ai-agent-capability-contract` — AG-CAP-01〜10 のREDテスト、test double、選択能力の境界
 
 ## 生成テストの実行環境
 
@@ -100,7 +100,7 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 - `docs/catalog/app-catalog.md`（アプリケーション一覧 — 対象 APP-ID のスコープ判定根拠。存在しない場合はスコープ絞り込みなしで全件処理）
 
 参照候補（存在すれば読む）:
-- `docs/agent/agent-detail-{key}.md`（Agent 詳細設計書 — I/O 契約・Tool 定義・状態遷移・AG-CAP-01〜06の確認用）
+- `docs/agent/agent-detail-{key}.md`（Agent 詳細設計書 — I/O 契約・Tool 定義・状態遷移・AG-CAP-01〜10の確認用）
 - `docs/catalog/service-catalog-matrix.md`（API 一覧・依存関係マトリクス）
 - `src/test/agent/` ディレクトリ構造（既存テストコードのパターン確認）
 - `src/test/api/` ディレクトリ構造（既存テストプロジェクトのパターン参照 — `src/test/agent/` が新規の場合に命名規則・構造を踏襲）
@@ -174,7 +174,7 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 - テストケース表の各行をテストメソッドにマッピングする。
 - テストダブル設計に基づくモック/スタブのセットアップ方針を確認する。
 - 5種のテスト種別がどのテストケースに対応するかを整理する。
-- AG-CAP-01〜06のContract IDごとに、選択能力、理由付きN/A、期待Evidence、停止状態を対応付ける。設計が`TBD`の能力は推測でテストを作らず停止する。
+- AG-CAP-01〜10のContract IDごとに、選択能力、理由付きN/A、期待Evidence、停止状態を対応付ける。設計が`TBD`の能力は推測でテストを作らず停止する。
 
 ## 6.3) テストコード生成（RED 状態）
 - 未実装production behaviorに対応するテストを1件以上FAILさせてsuite全体をREDにする。既に成立する不在・禁止契約のテストはPASSを許容する。
@@ -208,7 +208,7 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 - 5種のテスト種別（I/O 契約・Tool モック統合・Guardrails・状態遷移・プロンプト回帰）のテストが含まれている。
 - build/collectionが成功し、未実装production behaviorに対応するテストが1件以上FAILしてsuite全体がREDである。既に成立する契約テストのPASSは許容する。
 - Azure AI Foundry Agent Service の呼び出しがモック化されている。
-- AG-CAP-01〜06の選択能力が、Contract ID付きの決定的なtest doubleへトレースされている。
+- AG-CAP-01〜10の選択能力が、Contract ID付きの決定的なtest doubleへトレースされている。
 - 設計に TB-CAP がある Agent は、TB-CAP-01〜05 が Contract ID 付きのテストへトレースされている。TB-CAP が無い Agent には Toolbox / tool search のテストを生成していない。
 - 理由付きN/Aまたは`not-required`はContract ID付きの判定・不在検証へトレースされ、非該当providerのmock / fixtureを生成していない。
 - SQL validator、REST method/path、MCP Tool schema、Skill artifact判定は対象Agentの設計で必要なものだけが検証されている。
@@ -224,7 +224,7 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
 
 ## 9.2 ドメイン固有観点
-- **テスト仕様書との整合性**：テストケース表の全行、5種のテスト種別、AG-CAP-01〜06の選択能力または理由付きN/A、Evidence・停止状態が決定的なtest doubleへ反映されているか
+- **テスト仕様書との整合性**：テストケース表の全行、5種のテスト種別、AG-CAP-01〜10の選択能力または理由付きN/A、Evidence・停止状態が決定的なtest doubleへ反映されているか
 - **TDD RED フェーズとしての妥当性**：build/collection成功後に未実装production behaviorのテストが1件以上FAILしてsuite全体がREDか、既に成立する契約のPASSを無理に失敗させていないか、選択された外部provider / REST / SQL / MCPだけがモック化されているか、後続の GREEN フェーズで実装者が理解しやすい構造か
 - **保守性・拡張性・堅牢性**：テストコードの可読性、モック/スタブの再利用性、新テストケース追加時の変更容易性、未選択provider / MCP / Skillの不要fixtureがないか
 

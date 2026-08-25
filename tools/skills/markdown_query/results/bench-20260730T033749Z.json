@@ -1,0 +1,1726 @@
+{
+  "schema_version": 1,
+  "started_at": "2026-07-30T03:37:49Z",
+  "finished_at": "2026-07-30T03:38:26Z",
+  "env": {
+    "tokenizer": "tiktoken/cl100k_base",
+    "python": "3.14.6",
+    "platform": "Windows-11-10.0.29634-SP0",
+    "commit": "1000fe299b940b1d9617226f1cdc588e335a20f9"
+  },
+  "params": {
+    "top_k": 5,
+    "max_tokens": 800,
+    "repeat": 3,
+    "scenarios": "baseline_full,mdq_bm25,mdq_grep,mdq_auto",
+    "roots": [
+      "docs",
+      "users-guide"
+    ],
+    "path_globs": null,
+    "queries_file": null,
+    "queries_json": null,
+    "golden": "mdq/golden-queries.json",
+    "db": ".mdq/index-ja-jp-heading.sqlite",
+    "queries_count": 20
+  },
+  "database_paths": {
+    "primary": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+    "strategy:heading": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite"
+  },
+  "provenance": {
+    "engine_sha256": "f561bcf7039cac625cc8333a4932ddedd19b289fc02eae16db451bffa8a1cf12",
+    "config_sha256": "000893d97ebaf1f54204cc72859a87ddbaa346caadbccd7276f3f40394111a88",
+    "golden_sha256": "d2055f25566cb5f838142698a45f5e23349d1ef1536f8f7831039dff66b09077",
+    "dependency_sha256": "1628d4386981c85761be937916f50697cd0358be392fcf8d8945d6094b1fd1ba"
+  },
+  "index": null,
+  "baseline_full": {
+    "files": 106,
+    "chars": 1439354,
+    "tokens": 970812,
+    "roots": [
+      "docs",
+      "users-guide"
+    ],
+    "path_globs": null,
+    "file_list_sample": [
+      "docs/azure/azure-services-additional.md",
+      "docs/azure/azure-services-compute.md",
+      "docs/azure/azure-services-data.md",
+      "docs/business-requirement.md",
+      "docs/catalog/app-arch-catalog.md"
+    ]
+  },
+  "scenarios": {
+    "mdq_bm25": {
+      "mode": "bm25",
+      "queries": 20,
+      "total_hits": 100,
+      "avg_response_tokens": 1368.55,
+      "avg_vs_baseline_savings_pct": 99.859,
+      "latency_ms_all": {
+        "n": 60,
+        "mean": 166.194,
+        "p50": 139.066,
+        "min": 118.003,
+        "max": 687.909,
+        "p95": 241.243
+      },
+      "golden": {
+        "overall": {
+          "queries": 20,
+          "k": 5,
+          "top1_accuracy": 0.4,
+          "topk_accuracy": 0.75
+        },
+        "per_group": {
+          "catalog": {
+            "queries": 4,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.5
+          },
+          "design-docs": {
+            "queries": 2,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.5
+          },
+          "generated-inventory": {
+            "queries": 4,
+            "k": 5,
+            "top1_accuracy": 0.75,
+            "topk_accuracy": 0.75
+          },
+          "guides": {
+            "queries": 2,
+            "k": 5,
+            "top1_accuracy": 0.5,
+            "topk_accuracy": 1.0
+          },
+          "requirements": {
+            "queries": 8,
+            "k": 5,
+            "top1_accuracy": 0.5,
+            "topk_accuracy": 0.875
+          }
+        }
+      },
+      "per_query": [
+        {
+          "query": "markdown query golden query top-1 top-k accuracy",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md"
+          ],
+          "response_chars": 3100,
+          "response_tokens": 1957,
+          "vs_baseline_savings_pct": 99.7984,
+          "latency_ms": {
+            "n": 3,
+            "mean": 133.98,
+            "p50": 136.774,
+            "min": 123.333,
+            "max": 141.835,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "REQ-01",
+          "group": "requirements",
+          "rank": 2,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "feature change TDD requirement mapping RED inventory GREEN order",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md"
+          ],
+          "response_chars": 3041,
+          "response_tokens": 1616,
+          "vs_baseline_savings_pct": 99.8335,
+          "latency_ms": {
+            "n": 3,
+            "mean": 140.075,
+            "p50": 139.01,
+            "min": 134.202,
+            "max": 147.012,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "REQ-02",
+          "group": "requirements",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "repository-wide instructions context minimization traceability router",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md"
+          ],
+          "response_chars": 3237,
+          "response_tokens": 1815,
+          "vs_baseline_savings_pct": 99.813,
+          "latency_ms": {
+            "n": 3,
+            "mean": 145.657,
+            "p50": 142.07,
+            "min": 136.613,
+            "max": 158.288,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "REQ-03",
+          "group": "requirements",
+          "rank": 2,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "fanout static keys parser dynamic child step id",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md"
+          ],
+          "response_chars": 3377,
+          "response_tokens": 1697,
+          "vs_baseline_savings_pct": 99.8252,
+          "latency_ms": {
+            "n": 3,
+            "mean": 132.147,
+            "p50": 130.298,
+            "min": 127.431,
+            "max": 138.712,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "REQ-04",
+          "group": "requirements",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "delete local merged branch polling timeout",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md"
+          ],
+          "response_chars": 3457,
+          "response_tokens": 1726,
+          "vs_baseline_savings_pct": 99.8222,
+          "latency_ms": {
+            "n": 3,
+            "mean": 127.884,
+            "p50": 127.65,
+            "min": 118.003,
+            "max": 138.001,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "REQ-05",
+          "group": "requirements",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "out of sync cloud reusable workflow dispatcher ASDW",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md"
+          ],
+          "response_chars": 3101,
+          "response_tokens": 1343,
+          "vs_baseline_savings_pct": 99.8617,
+          "latency_ms": {
+            "n": 3,
+            "mean": 132.836,
+            "p50": 132.448,
+            "min": 129.045,
+            "max": 137.014,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "REQ-06",
+          "group": "requirements",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "prefix existence gate dropped output path fan-out key",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md"
+          ],
+          "response_chars": 2750,
+          "response_tokens": 1394,
+          "vs_baseline_savings_pct": 99.8564,
+          "latency_ms": {
+            "n": 3,
+            "mean": 153.506,
+            "p50": 157.72,
+            "min": 144.5,
+            "max": 158.299,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "REQ-07",
+          "group": "requirements",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "data deploy required params six bootstrap",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-definition.md"
+          ],
+          "response_chars": 2834,
+          "response_tokens": 1289,
+          "vs_baseline_savings_pct": 99.8672,
+          "latency_ms": {
+            "n": 3,
+            "mean": 156.06,
+            "p50": 157.059,
+            "min": 150.838,
+            "max": 160.282,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "REQ-08",
+          "group": "requirements",
+          "rank": 2,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "APP-009 member self service support",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/app-catalog.md",
+            "docs/catalog/app-catalog.md",
+            "docs/catalog/app-catalog.md",
+            "docs/catalog/app-catalog.md",
+            "docs/catalog/app-catalog.md"
+          ],
+          "response_chars": 2400,
+          "response_tokens": 1386,
+          "vs_baseline_savings_pct": 99.8572,
+          "latency_ms": {
+            "n": 3,
+            "mean": 146.988,
+            "p50": 144.601,
+            "min": 139.174,
+            "max": 157.189,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/app-catalog.md"
+          ],
+          "id": "CAT-01",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-002 loyalty ledger points processing",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/app-catalog.md",
+            "docs/catalog/app-catalog.md",
+            "docs/catalog/app-catalog.md",
+            "docs/catalog/app-catalog.md",
+            "docs/catalog/app-catalog.md"
+          ],
+          "response_chars": 2970,
+          "response_tokens": 1922,
+          "vs_baseline_savings_pct": 99.802,
+          "latency_ms": {
+            "n": 3,
+            "mean": 144.29,
+            "p50": 149.997,
+            "min": 131.583,
+            "max": 151.289,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/app-catalog.md"
+          ],
+          "id": "CAT-02",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "SVC-09 member support service",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/service-catalog.md",
+            "docs/catalog/service-catalog.md",
+            "docs/catalog/service-catalog.md",
+            "docs/catalog/service-catalog.md",
+            "docs/catalog/service-catalog.md"
+          ],
+          "response_chars": 2626,
+          "response_tokens": 1476,
+          "vs_baseline_savings_pct": 99.848,
+          "latency_ms": {
+            "n": 3,
+            "mean": 149.5,
+            "p50": 154.403,
+            "min": 136.172,
+            "max": 157.927,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/service-catalog.md"
+          ],
+          "id": "CAT-03",
+          "group": "catalog",
+          "rank": 3,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "APP-009-S003 self service inquiry screen",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/screen-catalog-APP-009.md",
+            "docs/catalog/screen-catalog-APP-009.md",
+            "docs/catalog/screen-catalog-APP-009.md",
+            "docs/catalog/screen-catalog-APP-009.md",
+            "docs/catalog/screen-catalog-APP-009.md"
+          ],
+          "response_chars": 2412,
+          "response_tokens": 1336,
+          "vs_baseline_savings_pct": 99.8624,
+          "latency_ms": {
+            "n": 3,
+            "mean": 132.025,
+            "p50": 131.153,
+            "min": 127.541,
+            "max": 137.38,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/screen-catalog-APP-009.md"
+          ],
+          "id": "CAT-04",
+          "group": "catalog",
+          "rank": 2,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "SVC-09 ownership boundary data model",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/data-model.md",
+            "docs/catalog/data-model.md",
+            "docs/catalog/data-model.md",
+            "docs/catalog/data-model.md",
+            "docs/catalog/data-model.md"
+          ],
+          "response_chars": 2079,
+          "response_tokens": 1146,
+          "vs_baseline_savings_pct": 99.882,
+          "latency_ms": {
+            "n": 3,
+            "mean": 133.258,
+            "p50": 131.195,
+            "min": 129.457,
+            "max": 139.121,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/data-model.md"
+          ],
+          "id": "DOC-01",
+          "group": "design-docs",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "test double strategy",
+          "hits": 5,
+          "hit_paths": [
+            "docs/catalog/test-strategy.md",
+            "docs/catalog/test-strategy.md",
+            "docs/catalog/test-strategy.md",
+            "docs/catalog/test-strategy.md",
+            "docs/catalog/test-strategy.md"
+          ],
+          "response_chars": 2575,
+          "response_tokens": 1451,
+          "vs_baseline_savings_pct": 99.8505,
+          "latency_ms": {
+            "n": 3,
+            "mean": 128.436,
+            "p50": 129.802,
+            "min": 122.724,
+            "max": 132.78,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/test-strategy.md"
+          ],
+          "id": "DOC-02",
+          "group": "design-docs",
+          "rank": 2,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "disable self improve web UI",
+          "hits": 5,
+          "hit_paths": [
+            "users-guide/web-ui-guide.md",
+            "users-guide/web-ui-guide.md",
+            "users-guide/web-ui-guide.md",
+            "users-guide/web-ui-guide.md",
+            "users-guide/web-ui-guide.md"
+          ],
+          "response_chars": 1959,
+          "response_tokens": 991,
+          "vs_baseline_savings_pct": 99.8979,
+          "latency_ms": {
+            "n": 3,
+            "mean": 134.566,
+            "p50": 140.012,
+            "min": 122.55,
+            "max": 141.134,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "users-guide/web-ui-guide.md"
+          ],
+          "id": "DOC-03",
+          "group": "guides",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "self improve command environment variable workflow reference",
+          "hits": 5,
+          "hit_paths": [
+            "users-guide/workflow-reference.md",
+            "users-guide/workflow-reference.md",
+            "users-guide/workflow-reference.md",
+            "users-guide/workflow-reference.md",
+            "users-guide/workflow-reference.md"
+          ],
+          "response_chars": 2465,
+          "response_tokens": 1045,
+          "vs_baseline_savings_pct": 99.8924,
+          "latency_ms": {
+            "n": 3,
+            "mean": 130.415,
+            "p50": 130.562,
+            "min": 126.824,
+            "max": 133.857,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "users-guide/workflow-reference.md"
+          ],
+          "id": "DOC-04",
+          "group": "guides",
+          "rank": 3,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "FR-MDQ-01 active requirement inventory",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/hve-feature-inventory.csv",
+            "hve-dev/hve-feature-inventory.csv",
+            "hve-dev/hve-feature-inventory.csv",
+            "hve-dev/hve-feature-inventory.csv",
+            "hve-dev/hve-feature-inventory.csv"
+          ],
+          "response_chars": 2720,
+          "response_tokens": 1311,
+          "vs_baseline_savings_pct": 99.865,
+          "latency_ms": {
+            "n": 3,
+            "mean": 137.636,
+            "p50": 135.06,
+            "min": 127.0,
+            "max": 150.849,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/hve-feature-inventory.csv"
+          ],
+          "id": "INV-01",
+          "group": "generated-inventory",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "resolve run id implementation surface",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/hve-surface-inventory.csv",
+            "hve-dev/hve-surface-inventory.csv",
+            "hve-dev/hve-surface-inventory.csv",
+            "hve-dev/hve-surface-inventory.csv",
+            "hve-dev/hve-surface-inventory.csv"
+          ],
+          "response_chars": 1883,
+          "response_tokens": 728,
+          "vs_baseline_savings_pct": 99.925,
+          "latency_ms": {
+            "n": 3,
+            "mean": 204.569,
+            "p50": 192.792,
+            "min": 192.052,
+            "max": 228.863,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/hve-surface-inventory.csv"
+          ],
+          "id": "INV-02",
+          "group": "generated-inventory",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "resolve run id from environment test",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/hve-test-inventory.csv",
+            "hve-dev/hve-test-inventory.csv",
+            "hve-dev/hve-test-inventory.csv",
+            "hve-dev/hve-test-inventory.csv",
+            "hve-dev/hve-test-inventory.csv"
+          ],
+          "response_chars": 3492,
+          "response_tokens": 996,
+          "vs_baseline_savings_pct": 99.8974,
+          "latency_ms": {
+            "n": 3,
+            "mean": 590.308,
+            "p50": 606.567,
+            "min": 476.449,
+            "max": 687.909,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/hve-test-inventory.csv"
+          ],
+          "id": "INV-03",
+          "group": "generated-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "ASDW web workflow active code inventory",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/hve-feature-inventory.csv",
+            "hve-dev/hve-feature-inventory.csv",
+            "hve-dev/hve-feature-inventory.csv",
+            "hve-dev/hve-feature-inventory.csv",
+            "hve-dev/hve-feature-inventory.csv"
+          ],
+          "response_chars": 2124,
+          "response_tokens": 746,
+          "vs_baseline_savings_pct": 99.9232,
+          "latency_ms": {
+            "n": 3,
+            "mean": 169.752,
+            "p50": 174.018,
+            "min": 158.648,
+            "max": 176.59,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/hve-feature-inventory.csv"
+          ],
+          "id": "INV-04",
+          "group": "generated-inventory",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        }
+      ]
+    },
+    "mdq_grep": {
+      "mode": "grep",
+      "queries": 20,
+      "total_hits": 0,
+      "avg_response_tokens": 0.0,
+      "avg_vs_baseline_savings_pct": 100.0,
+      "latency_ms_all": {
+        "n": 60,
+        "mean": 140.816,
+        "p50": 132.205,
+        "min": 96.248,
+        "max": 223.258,
+        "p95": 193.06
+      },
+      "golden": {
+        "overall": {
+          "queries": 20,
+          "k": 5,
+          "top1_accuracy": 0.0,
+          "topk_accuracy": 0.0
+        },
+        "per_group": {
+          "catalog": {
+            "queries": 4,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.0
+          },
+          "design-docs": {
+            "queries": 2,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.0
+          },
+          "generated-inventory": {
+            "queries": 4,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.0
+          },
+          "guides": {
+            "queries": 2,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.0
+          },
+          "requirements": {
+            "queries": 8,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.0
+          }
+        }
+      },
+      "per_query": [
+        {
+          "query": "markdown query golden query top-1 top-k accuracy",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 146.189,
+            "p50": 147.523,
+            "min": 134.12,
+            "max": 156.923,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "REQ-01",
+          "group": "requirements",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "feature change TDD requirement mapping RED inventory GREEN order",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 161.382,
+            "p50": 158.45,
+            "min": 155.529,
+            "max": 170.168,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "REQ-02",
+          "group": "requirements",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "repository-wide instructions context minimization traceability router",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 146.855,
+            "p50": 151.534,
+            "min": 135.804,
+            "max": 153.226,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "REQ-03",
+          "group": "requirements",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "fanout static keys parser dynamic child step id",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 194.855,
+            "p50": 185.868,
+            "min": 175.439,
+            "max": 223.258,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "REQ-04",
+          "group": "requirements",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "delete local merged branch polling timeout",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 177.297,
+            "p50": 171.193,
+            "min": 170.348,
+            "max": 190.349,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "REQ-05",
+          "group": "requirements",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "out of sync cloud reusable workflow dispatcher ASDW",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 162.978,
+            "p50": 154.608,
+            "min": 153.247,
+            "max": 181.078,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "REQ-06",
+          "group": "requirements",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "prefix existence gate dropped output path fan-out key",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 166.87,
+            "p50": 169.216,
+            "min": 160.093,
+            "max": 171.3,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "REQ-07",
+          "group": "requirements",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "data deploy required params six bootstrap",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 204.083,
+            "p50": 207.01,
+            "min": 192.326,
+            "max": 212.914,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "REQ-08",
+          "group": "requirements",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-009 member self service support",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 154.586,
+            "p50": 153.586,
+            "min": 140.274,
+            "max": 169.896,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/app-catalog.md"
+          ],
+          "id": "CAT-01",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-002 loyalty ledger points processing",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 118.792,
+            "p50": 120.152,
+            "min": 114.999,
+            "max": 121.225,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/app-catalog.md"
+          ],
+          "id": "CAT-02",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "SVC-09 member support service",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 97.854,
+            "p50": 98.132,
+            "min": 96.248,
+            "max": 99.184,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/service-catalog.md"
+          ],
+          "id": "CAT-03",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-009-S003 self service inquiry screen",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 105.802,
+            "p50": 104.71,
+            "min": 104.385,
+            "max": 108.311,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/screen-catalog-APP-009.md"
+          ],
+          "id": "CAT-04",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "SVC-09 ownership boundary data model",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 122.116,
+            "p50": 118.854,
+            "min": 117.203,
+            "max": 130.289,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/data-model.md"
+          ],
+          "id": "DOC-01",
+          "group": "design-docs",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "test double strategy",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 117.217,
+            "p50": 118.159,
+            "min": 113.938,
+            "max": 119.555,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/test-strategy.md"
+          ],
+          "id": "DOC-02",
+          "group": "design-docs",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "disable self improve web UI",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 120.087,
+            "p50": 119.644,
+            "min": 116.91,
+            "max": 123.708,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "users-guide/web-ui-guide.md"
+          ],
+          "id": "DOC-03",
+          "group": "guides",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "self improve command environment variable workflow reference",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 115.367,
+            "p50": 113.878,
+            "min": 107.997,
+            "max": 124.227,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "users-guide/workflow-reference.md"
+          ],
+          "id": "DOC-04",
+          "group": "guides",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "FR-MDQ-01 active requirement inventory",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 123.045,
+            "p50": 123.847,
+            "min": 115.068,
+            "max": 130.22,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-feature-inventory.csv"
+          ],
+          "id": "INV-01",
+          "group": "generated-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "resolve run id implementation surface",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 108.526,
+            "p50": 108.638,
+            "min": 107.962,
+            "max": 108.976,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-surface-inventory.csv"
+          ],
+          "id": "INV-02",
+          "group": "generated-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "resolve run id from environment test",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 153.788,
+            "p50": 153.56,
+            "min": 144.696,
+            "max": 163.108,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-test-inventory.csv"
+          ],
+          "id": "INV-03",
+          "group": "generated-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "ASDW web workflow active code inventory",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 0,
+          "vs_baseline_savings_pct": 100.0,
+          "latency_ms": {
+            "n": 3,
+            "mean": 118.641,
+            "p50": 120.486,
+            "min": 112.639,
+            "max": 122.798,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-feature-inventory.csv"
+          ],
+          "id": "INV-04",
+          "group": "generated-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        }
+      ]
+    },
+    "mdq_auto": {
+      "per_query": [
+        {
+          "query": "markdown query golden query top-1 top-k accuracy",
+          "hits": 5,
+          "response_tokens": 1957,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 148.992,
+            "p50": 150.52,
+            "p95": 171.882
+          },
+          "id": "REQ-01",
+          "group": "requirements",
+          "rank": 2,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "feature change TDD requirement mapping RED inventory GREEN order",
+          "hits": 5,
+          "response_tokens": 1616,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 152.814,
+            "p50": 152.962,
+            "p95": 181.874
+          },
+          "id": "REQ-02",
+          "group": "requirements",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "repository-wide instructions context minimization traceability router",
+          "hits": 5,
+          "response_tokens": 1815,
+          "router_strategy": "heading",
+          "router_reason": "default",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 138.589,
+            "p50": 141.937,
+            "p95": 147.993
+          },
+          "id": "REQ-03",
+          "group": "requirements",
+          "rank": 2,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "fanout static keys parser dynamic child step id",
+          "hits": 5,
+          "response_tokens": 1697,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 110.849,
+            "p50": 111.318,
+            "p95": 113.427
+          },
+          "id": "REQ-04",
+          "group": "requirements",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "delete local merged branch polling timeout",
+          "hits": 5,
+          "response_tokens": 1726,
+          "router_strategy": "heading",
+          "router_reason": "default",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 119.541,
+            "p50": 119.837,
+            "p95": 130.45
+          },
+          "id": "REQ-05",
+          "group": "requirements",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "out of sync cloud reusable workflow dispatcher ASDW",
+          "hits": 5,
+          "response_tokens": 1343,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 117.295,
+            "p50": 113.266,
+            "p95": 137.69
+          },
+          "id": "REQ-06",
+          "group": "requirements",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "prefix existence gate dropped output path fan-out key",
+          "hits": 5,
+          "response_tokens": 1394,
+          "router_strategy": "heading",
+          "router_reason": "narrative_query",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 125.403,
+            "p50": 123.183,
+            "p95": 141.281
+          },
+          "id": "REQ-07",
+          "group": "requirements",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "data deploy required params six bootstrap",
+          "hits": 5,
+          "response_tokens": 1289,
+          "router_strategy": "heading",
+          "router_reason": "default",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 141.17,
+            "p50": 144.405,
+            "p95": 158.42
+          },
+          "id": "REQ-08",
+          "group": "requirements",
+          "rank": 2,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "APP-009 member self service support",
+          "hits": 5,
+          "response_tokens": 1386,
+          "router_strategy": "heading",
+          "router_reason": "default",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 166.709,
+            "p50": 158.029,
+            "p95": 242.682
+          },
+          "id": "CAT-01",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-002 loyalty ledger points processing",
+          "hits": 5,
+          "response_tokens": 1922,
+          "router_strategy": "heading",
+          "router_reason": "default",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 129.751,
+            "p50": 129.862,
+            "p95": 137.448
+          },
+          "id": "CAT-02",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "SVC-09 member support service",
+          "hits": 5,
+          "response_tokens": 1476,
+          "router_strategy": "heading",
+          "router_reason": "default",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 110.161,
+            "p50": 109.252,
+            "p95": 114.465
+          },
+          "id": "CAT-03",
+          "group": "catalog",
+          "rank": 3,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "APP-009-S003 self service inquiry screen",
+          "hits": 5,
+          "response_tokens": 1336,
+          "router_strategy": "heading",
+          "router_reason": "default",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 135.949,
+            "p50": 137.366,
+            "p95": 155.225
+          },
+          "id": "CAT-04",
+          "group": "catalog",
+          "rank": 2,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "SVC-09 ownership boundary data model",
+          "hits": 5,
+          "response_tokens": 1146,
+          "router_strategy": "heading",
+          "router_reason": "default",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 121.343,
+            "p50": 120.021,
+            "p95": 128.522
+          },
+          "id": "DOC-01",
+          "group": "design-docs",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "test double strategy",
+          "hits": 5,
+          "response_tokens": 1451,
+          "router_strategy": "heading",
+          "router_reason": "concept_overview",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 121.401,
+            "p50": 123.301,
+            "p95": 147.499
+          },
+          "id": "DOC-02",
+          "group": "design-docs",
+          "rank": 2,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "disable self improve web UI",
+          "hits": 5,
+          "response_tokens": 991,
+          "router_strategy": "heading",
+          "router_reason": "default",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 122.6,
+            "p50": 124.806,
+            "p95": 126.024
+          },
+          "id": "DOC-03",
+          "group": "guides",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "self improve command environment variable workflow reference",
+          "hits": 5,
+          "response_tokens": 1045,
+          "router_strategy": "heading",
+          "router_reason": "default",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 134.823,
+            "p50": 132.867,
+            "p95": 143.933
+          },
+          "id": "DOC-04",
+          "group": "guides",
+          "rank": 3,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "FR-MDQ-01 active requirement inventory",
+          "hits": 5,
+          "response_tokens": 1311,
+          "router_strategy": "heading",
+          "router_reason": "default",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 139.695,
+            "p50": 139.375,
+            "p95": 151.724
+          },
+          "id": "INV-01",
+          "group": "generated-inventory",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "resolve run id implementation surface",
+          "hits": 5,
+          "response_tokens": 728,
+          "router_strategy": "heading",
+          "router_reason": "default",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 157.995,
+            "p50": 169.143,
+            "p95": 174.041
+          },
+          "id": "INV-02",
+          "group": "generated-inventory",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "resolve run id from environment test",
+          "hits": 5,
+          "response_tokens": 996,
+          "router_strategy": "heading",
+          "router_reason": "default",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 473.583,
+            "p50": 464.633,
+            "p95": 539.191
+          },
+          "id": "INV-03",
+          "group": "generated-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "ASDW web workflow active code inventory",
+          "hits": 5,
+          "response_tokens": 746,
+          "router_strategy": "heading",
+          "router_reason": "default",
+          "router_fallback_used": true,
+          "database_path": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite",
+          "latency_ms": {
+            "mean": 145.176,
+            "p50": 146.144,
+            "p95": 160.015
+          },
+          "id": "INV-04",
+          "group": "generated-inventory",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        }
+      ],
+      "avg_response_tokens": 1368.55,
+      "avg_vs_baseline_savings_pct": 97.18,
+      "latency_ms_all": {
+        "mean": 150.692,
+        "p50": 133.108,
+        "p95": 437.811
+      },
+      "total_hits": 100,
+      "scenarios_used": [
+        "heading"
+      ],
+      "golden": {
+        "overall": {
+          "queries": 20,
+          "k": 5,
+          "top1_accuracy": 0.4,
+          "topk_accuracy": 0.75
+        },
+        "per_group": {
+          "catalog": {
+            "queries": 4,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.5
+          },
+          "design-docs": {
+            "queries": 2,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.5
+          },
+          "generated-inventory": {
+            "queries": 4,
+            "k": 5,
+            "top1_accuracy": 0.75,
+            "topk_accuracy": 0.75
+          },
+          "guides": {
+            "queries": 2,
+            "k": 5,
+            "top1_accuracy": 0.5,
+            "topk_accuracy": 1.0
+          },
+          "requirements": {
+            "queries": 8,
+            "k": 5,
+            "top1_accuracy": 0.5,
+            "topk_accuracy": 0.875
+          }
+        }
+      }
+    }
+  }
+}

@@ -43,6 +43,7 @@ KNOWN_ARTIFACT_KEYS: frozenset[str] = frozenset(
         "agent_specs",
         "dataflow_specs",
         "doc_generated",
+        "app_requirements",
     ]
 )
 
@@ -253,16 +254,18 @@ class TestPhase1ReuseContextFilteringUnchanged:
 class TestPhase4ConsumedArtifactsValues:
     """Phase 4 で設定した consumed_artifacts の代表値が正しいこと。"""
 
-    def test_aas_step1_uses_use_case_catalog(self) -> None:
-        wf = get_workflow("aas")
-        step = wf.get_step("1")
+    def test_ard_step41_uses_use_case_catalog(self) -> None:
+        """APP要求トレーサビリティパイロットで、アプリリスト作成は AAS Step 1 から
+        ARD Step 4.1 へ移設された（consumed_artifacts 契約は不変）。"""
+        wf = get_workflow("ard")
+        step = wf.get_step("4.1")
         assert step is not None
         assert "use_case_catalog" in step.consumed_artifacts
 
-    def test_aas_step4_uses_service_catalog(self) -> None:
-        # Sub-4 (B-1): Step 4 を 4.1 (データモデル) / 4.2 (サンプルデータ) に分割
+    def test_aas_step3_1_uses_service_catalog(self) -> None:
+        # AAS Step.1 起点化リナンバリングで旧 Step 4.1 (データモデル) は Step 3.1 へ移行
         wf = get_workflow("aas")
-        step = wf.get_step("4.1")
+        step = wf.get_step("3.1")
         assert step is not None
         assert "service_catalog" in step.consumed_artifacts
         assert "domain_analytics" in step.consumed_artifacts

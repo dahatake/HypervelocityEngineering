@@ -194,6 +194,12 @@ RoyalytyService2ndGen/
 
 いずれの方法でも **単一ウィンドウ** が開き、2 つの画面（ワークフロー選択 → 実行）を順に進めます。
 
+起動直後、GUI は **既存の `markdown-query` / `cq` 索引 DB をバックグラウンドで差分更新** します。更新中はステータス欄に「索引 (markdown-query / code-query) の差分更新中です。完了後に実行を開始できます。」と表示され、実行開始ボタンが一時的に無効になります。GUI が起動する `hve orchestrate` 子プロセスは自身の索引 watcher を起動するため、同一の索引 DB へ同時に書き込まないようにするためです。更新が終わるとボタンは自動的に有効へ戻ります。
+
+- 対象は **実在する索引 DB のみ**です。未構築の chunking strategy / `cq` profile を新規作成することはありません。
+- `HVE_STARTUP_INDEX_REFRESH=0` を設定すると無効化できます（CLI と共通。GUI 専用の設定項目はありません）。
+- 詳細は [skills-markdown-query.md §4.2](./skills-markdown-query.md#42-索引整合性の前提と運用-tips) / [skills-code-query.md §4.3](./skills-code-query.md#43-索引整合性の前提と運用-tips) を参照してください。
+
 ---
 
 ## 2 ステップ操作ガイド
@@ -214,20 +220,23 @@ RoyalytyService2ndGen/
 
 ![GUI Step 1: AAS を選択した状態](./images/screenshots/gui-03-workflow-selected-aas.png)
 
-| ワークフロー ID | 正式名称 |
-|---|---|
-| `aas` | Application Architecture Selection |
-| `aad-web` | Architecture Design – Web App |
-| `asdw-web` | Web App Design |
-| `adfd` | Dataflow Design |
-| `adfdv` | Dataflow Dev |
-| `aag` | AI Agent Design |
-| `aagd` | AI Agent Dev & Deploy |
-| `aar` | Agentic Retrieval Add-on |
-| `adi` | Auto Design-doc Ingestion |
-| `akm` | Knowledge Management |
-| `adoc` | Source Code → Documentation |
-| `ard` | Auto Requirement Definition |
+| グループ | ワークフロー ID | 正式名称 |
+|---|---|---|
+| Business Engineering (要求定義) | `ard` | Auto Requirement Definition |
+| Architecture Design | `aas` | Architecture Design |
+| Software Engineering | `aad-web` | Web App Design |
+| Software Engineering | `asdw-web` | Web App Dev & Deploy |
+| Software Engineering | `adfd` | Dataflow Design |
+| Software Engineering | `adfdv` | Dataflow Dev & Deploy |
+| 既存ドキュメントのインポート | `adi` | Auto Design-doc Ingestion |
+| Knowledge Management | `akm` | Knowledge Management |
+| Knowledge Management | `adoc` | Source Codeからのドキュメント作成 |
+| AI Agent | `ada` | Agent Data Architecture |
+| AI Agent | `aag` | AI Agent Design |
+| AI Agent | `aagd` | AI Agent Dev & Deploy |
+| AI Agent | `aar` | Agentic Retrieval Add-on |
+
+- ワークフローは上表の **グループ見出しごとにまとめて表示**されます。グループ定義は `hve/workflow_registry.py` の `WORKFLOW_CATEGORIES` が正本で、HVE CLI Orchestrator の対話メニューと共通です。
 
 - 選択中ワークフローの ID・正式名称・短い説明を下部に表示。
 - 画面左下の **「実行ステップ（チェック ON のみ実行対象）」** では、実行したいステップだけを個別に ON/OFF できます。各チェックは**単独で切り替わり、前後のステップへ自動連動しません**（依存伝播なし）。前段ステップの成果物が既に存在していれば、途中のステップ（例: `Step 2.1` の追加サービスから）だけを選んで実行できます。
@@ -238,30 +247,31 @@ RoyalytyService2ndGen/
 
 ### Step 1（右ペイン）: オプション選択
 
-`orchestrate` サブコマンドの **80 以上のオプション** を `QToolBox` アコーディオン形式で 16 カテゴリに分類します（Cloud 版 Issue Template と類似の UI）。
+`orchestrate` サブコマンドの多数のオプション（`OrchestrateArgs` は 114 フィールド）は、**設定画面（HVE 設定）** 側でカテゴリー別に分類して保持します。設定画面のツリーは固定 13 ノードと `skills` グループの 3 ノードを合わせた計 16 ノードです。
 
-| カテゴリ | 主な内容 |
-|---|---|
-| C1 基本設定 | `--model` / `--review-model` / `--qa-model` |
-| C2 並列実行 | `--max-parallel` |
-| C3 共通設定 | `--auto-qa`（**必須選択** / 下記参照）/ `--qa-akm-background-merge`（下記参照）/ `--auto-contents-review` / `--auto-coding-agent-review` / **QA (質問票) 回答モード**（下記参照）。設定画面では `QA (質問票)` / `レビュー` / `Knowledge Management` / `自己改善 (Self Improve)` の 4 ノードへ分かれています |
-| C4 **Work IQ**（GUI / CLI 両対応） | `--workiq` 系 10 オプション（M365 メール・チャット・会議・ファイル参照。`@microsoft/workiq` プラグインのインストールが必要）。GUI では本カテゴリ（`hve/gui/page_workiq.py` の Work IQ 設定 UI）で設定し、値は `OrchestrateArgs` 経由で `--workiq*` 引数として CLI に渡る。 |
-| C5 Issue / PR 作成 | `--create-issues` / `--create-pr` / `--repo` |
-| C6 出力制御 | `--verbose` / `--quiet` / `--verbosity` / `--log-level` 他 |
-| C7 MCP / CLI 接続 | `--mcp-config` / `--cli-path` / `--cli-url` |
-| C8 タイムアウト | `--timeout` / `--review-timeout` |
-| C9 ブランチ / ステップ | `--branch` / `--steps` |
-| C10 アプリ ID 系 | `--app-id` / `--app-ids` / `--resource-group` / `--app-id` / `--usecase-id` |
-| C11 Knowledge Management 固有 | `--sources` / `--target-files` / `--force-refresh` 他 |
-| C13 ADOC 固有 | `--target-dirs` / `--exclude-patterns` / `--doc-purpose` 他 |
-| C14 ARD 固有 | `--company-name` / `--target-business` / 添付資料 D&D（下記参照） |
-| C15 追加プロンプト | `--additional-prompt` / `--additional-comment` |
-| C16 実行制御 / 拡張機能 | `--dry-run` / `--self-improve` 他（mdq 系は [skills] → [Markdown-Query] へ移設） |
-| C17 ADI 固有 | `--purpose` / `--target-scope` / `--depth` / `--focus-areas` |
+**Step 1 の右ペインはこのカテゴリー一覧をそのまま並べません**。選択中のワークフローに応じて実効的な行だけを表示し、ワークフロー固有の入力欄は選択ワークフロー枠へ移されます（例: AAS の Step 1 では C3 内の 6 行 / 7 入力だけが実効表示されます）。
 
-選択ワークフローに応じて C10 / C11 / C13 / C14 / C17 の表示・有効化が自動制御されます。
+以下の表は、設定画面側のカテゴリー ID と保持するオプションの対応です。
 
-> C12は廃止済みカテゴリの番号で、設定互換性のため欠番のままです。ADOCはC13、ADIはC17であり、番号を繰り上げません。
+| カテゴリ | 画面上の見出し | 主な内容 |
+|---|---|---|
+| C1 | 基本設定  *必須 | `--model` / `--review-model` / `--qa-model` / `--reasoning-effort` 系 / `--context-tier` / `--max-parallel` / `--timeout` / `--review-timeout` / `--verbosity` / テーマ / `--additional-prompt` / `--context-max-chars` |
+| C3 | 共通設定  *必須 | `--auto-qa`（**必須選択** / 下記参照）/ **QA (質問票) 回答モード**（下記参照）/ `--auto-contents-review` / `--auto-coding-agent-review` / `--qa-akm-background-merge`（下記参照）/ `--akm-model` / `--akm-reasoning-effort` / `--akm-context-tier` / `--self-improve` 系。設定画面では `QA (質問票)` / `レビュー` / `Knowledge Management` / `自己改善 (Self Improve)` の 4 ノードへ分かれています |
+| C4 | Work IQ | `--workiq` 系（M365 メール・チャット・会議・ファイル参照。`@microsoft/workiq` プラグインのインストールが必要）。`OrchestrateArgs` は Work IQ 関連 12 フィールドを保持し、`--workiq*` 引数として CLI に渡ります（`--workiq-tenant-id` の GUI 入力欄は廃止済み。CLI 引数と環境変数 `WORKIQ_TENANT_ID` は引き続き有効） |
+| C5 | GitHub | `--create-issues` / `--create-pr` / `--repo` / `--branch` / `--enable-auto-merge` / マージ後ローカルブランチ削除 / Fleet mode / Cloud Sessions 関連 |
+| C6 | 出力制御 | `--verbose` / `--quiet` / `--show-stream` / `--log-level` / `--no-color` / `--banner` / `--screen-reader` / `--timestamp-style` / `--final-only`。**この枠の値は保存されず、起動のたびに既定値へ戻ります**（設定画面の「出力制御」ノードは撤去済み。固定したい場合は CLI 実行時に同名のフラグを指定してください。なお `--banner` は `orchestrate` では効果がありません） |
+| C7 | MCP / CLI 接続 | `--cli-path` / `--cli-url` |
+| AZURE | Azure | `--resource-group`（`default_params` を持たない必須パラメータのみ。FR-GUI-02 / FR-WF-ASDW-02） |
+| AGENTIC | Agentic Retrieval | `--enable-agentic-retrieval` / データソース方式 / Foundry MCP 連携 / データソースのヒント / 既存設計の差分更新 / Foundry SKU フォールバック方針 |
+| C10 | アプリケーションID | `--app-ids` / `--usecase-id` / github.com CI/CD トグル（下記参照） |
+| C11 | Knowledge Management 固有 | `--sources` / `--target-files` / `--force-refresh` / `--custom-source-dir` |
+| C13 | ADOC 固有 | `--target-dirs` / `--exclude-patterns` / `--doc-purpose` / `--max-file-lines` |
+| C14 | 要求定義書 | `--company-name` / `--target-business` / `--target-recommendation-id` / 調査基準日・調査期間・対象地域 / 添付資料 D&D（下記参照） |
+| C17 | ADI 固有 | `--purpose` / `--target-scope` / `--depth` / `--focus-areas` |
+
+選択ワークフローに応じて各カテゴリ枠の表示・有効化が自動制御されます。`C1` / `C5` / `C6` / `C7` / `AZURE` / `AGENTIC` は Step 2 セッションでは非表示です。`C3` も非表示集合に含まれますが例外として再表示され、追加プロンプトと、見出し非表示対象外の共通設定行を表示します。
+
+> カテゴリ ID（`C1` / `C3` / …）は設定互換性のための内部識別子です。`C2` / `C8` / `C9` / `C12` / `C15` / `C16` は他カテゴリへ統合または廃止済みで、欠番のまま番号を繰り上げません。`--max-parallel` は C1、`--timeout` 系は C1、`--branch` は C5、`--additional-prompt` は C1 へ統合されています。mdq / cq / Tool Search の設定は設定画面の `skills` グループにあります。
 
 #### C10 対象アプリケーション (APP-ID) の絞り込み
 
@@ -271,10 +281,20 @@ RoyalytyService2ndGen/
 - catalog に存在しない APP-ID を手動入力した場合は、Autopilot 計画ログ（GUI ログペイン / CLI dry-run 出力）の `skipped` セクションに `reason=unknown app_id (not in catalog)` として記録され、実行対象からは除外されます。アーキテクチャ不一致の指定 APP も同様に skip 扱いとなります（`reason=unmapped architecture or filtered by selection`）。
 
 - `argparse.BooleanOptionalAction`（例: `--banner` / `--no-banner`）は「継承（未指定）/ 明示 ON / 明示 OFF」の 3 状態を `QComboBox` で表現します。
-- 「プレビュー更新」をクリックすると、生成される `python -m hve orchestrate ...` コマンドを確認・コピーできます。
 - 「実行 ▶」で Step 2（Workbench 実行）に移行します。
 
-> **GUI 強制制約**: GUI モードでは内部で `--workbench off` が自動注入され、ターミナル UI 系オプション（`--workbench` / `--workbench-body-lines` / `--workbench-history`）はオプション設定（右ペイン）C16 から除外されます。
+> 通常起動の GUI は MainWindow の 2 画面構成で、実行前に生成コマンドを提示する確認ページはありません。「プレビュー更新」は legacy の `QWizard` 実装（`hve/gui/wizard.py`）にある確認ページの機能であり、通常 GUI の Step 1 には含まれません。
+
+> **GUI 強制制約**: GUI モードでは内部で `--workbench off` が自動注入されます。GUI は自前の Workbench 画面を持つため、ターミナル UI 系オプション（`--workbench` / `--workbench-body-lines` / `--workbench-history`）を利用者が選択する必要がないからです。なおこれらのオプションを収めていた `C16` カテゴリは現行の Step 1 右ペインにも設定画面にも存在せず、互換 ID の欠番としてのみ残っています。
+
+#### ARD のみ: Strategic Recommendation の指定
+
+ワークフローが `ard` の場合、要求定義書の枠に **「採用 Strategic Recommendation ID」**（例: `SR-1`）が常に表示されます。グループ `1` と `2` を選択し、業務エリアを空にする bridge 経路で、Step `1.2` 完了後に採用する候補を固定したい場合に入力します。
+
+- ID の大文字小文字は区別しません。指定 ID が候補にあれば、その候補から `target_business` を生成します。
+- 指定 ID が見つからなければ警告し、先頭候補へ縮退します。
+- 空欄なら、GUI の非対話実行では先頭候補を採用します。
+- 入力値は他の C14 項目と同じく設定へ保存されますが、グループ `1` + `2` の bridge を使わない実行では SR 選択に使用しません。
 
 #### ARD のみ: 添付ファイル D&D
 
@@ -312,6 +332,12 @@ RoyalytyService2ndGen/
 
 > 既定値による暗黙の決定を避けるため、未選択は `False` として保存されません。
 > 回答を `knowledge/` へ取り込むかどうかは、次の「Knowledge Management へのバックグラウンドマージ」で別途選択します。
+
+> **⚠️ fan-out する Step では適用されません**
+>
+> Fleet mode（設定画面の「Fleet mode」）が有効な状態で、1 つの wave に実行対象 Step が 2 件以上ある場合、その wave は Fleet mode へ委譲され Step 単位の実行経路を通りません。このとき **実行前 QA・Knowledge Management へのバックグラウンドマージ・敵対的レビューは実行されません**。
+>
+> APP-ID や D01〜D21 へ fan-out する Step（例: AKM Step 1）が該当します。Fleet 起動成功を確認した時点で wave ごとに 1 回警告が出ます。これらを実行したい場合は、設定画面の「GitHub」セクションにある「Fleet mode」を OFF にしてください（CLI では `--no-fleet-mode`）。
 
 #### 共通設定: Knowledge Management へのバックグラウンドマージ
 
@@ -368,7 +394,7 @@ RoyalytyService2ndGen/
 ```
 ┌─────────────────────────────────────────────────────┐
 │ Step 2: 実行 (ard — Auto Requirement Definition)    │
-│ 実行コマンド: python -m hve orchestrate ...  [📋]   │
+
 ├─────────────────────────────────────────────────────┤
 │  ログ出力                                     [📋]  │
 │  （QPlainTextEdit — マウスホイールスクロール・     │
@@ -379,7 +405,7 @@ RoyalytyService2ndGen/
                                               [■ 停止]
 ```
 
-- **📋 コピーアイコン**: 実行コマンド・ログ・ユーザーアクション各ペインのテキストをクリップボードに 1 クリックでコピー。
+- **📋 コピーアイコン**: ログ・ユーザーアクション各ペインのテキストをクリップボードに 1 クリックでコピー。なお通常 GUI の Workbench では実行コマンドの表示ペインは撤去済みです。
 - **スクロール**: OS ネイティブのマウスホイール / スクロールバーが利用可能。
 - **テキスト選択**: `Ctrl+A`（全選択）・ドラッグ選択・`Ctrl+C` で部分コピー可能。
 - **停止**: 「■ 停止」ボタンで `subprocess.Popen.terminate()` を送信（Windows ではハードキル相当）。
@@ -558,7 +584,7 @@ MCP Server の登録・OAuth 再認証は GitHub Copilot CLI の対話 UI で実
 - 押下時は **モデル一覧の取得とキャッシュ更新のみ** を実行します（GitHub Copilot SDK へのログイン自体は行いません。未ログインの場合は事前に CLI で `python -m hve login` を実行してください）
 - 同じボタンは「HVE 設定」→「基本設定」の一番上にも配置されており、機能・挙動は全く同じです（どちらから押しても同じ処理が実行され、両方の画面の表示に反映されます）
 
-「利用できるモデルの取得」ボタンの右側には **「使用するモデル」** / **「Effort」** の選択コンボがあり、「HVE 設定」→「基本設定」の「使用するモデル *必須」および「Effort」と**同一のウィジェット**（同じ選択内容）です。ここで直接選択を変更でき、変更内容は即座に `settings_store` へ保存され、「HVE 設定」ダイアログを開いている場合はそちらの表示にも反映されます。
+「利用できるモデルの取得」ボタンの右側には **「使用するモデル」** / **「Effort」** の選択コンボがあり、「HVE 設定」→「基本設定」の「使用するモデル *必須」および「Effort」と**同じ選択内容**を示します。両者は別々に生成されたウィジェットであり、`settings_store` とシグナル経由で値を同期しています（同一の物理ウィジェットではありません）。ここで直接選択を変更でき、変更内容は即座に `settings_store` へ保存され、「HVE 設定」ダイアログを開いている場合はそちらの表示にも反映されます。
 
 ---
 
@@ -610,7 +636,7 @@ GitHub Copilot CLI SDK の複数デバイス間セッション管理が不十分
 
 ## コマンドリファレンス
 
-GUI Orchestrator は最終的に `python -m hve orchestrate ...` コマンドを生成・実行します。生成されたコマンドは Step 3 のヘッダーで確認・コピー可能です。
+GUI Orchestrator は最終的に `python -m hve orchestrate ...` コマンドを生成・実行します。通常 GUI は Step 1（ワークフロー / オプション）と Step 2（Workbench）の 2 画面構成で、生成コマンドを画面上で確認・コピーする経路はありません。
 
 - **全オプションの一覧・既定値・型**: [hve-cli-orchestrator-guide.md — コマンドリファレンス（CLI モード）](./hve-cli-orchestrator-guide.md#コマンドリファレンスcli-モード) を参照。
 - **GUI 固有の制約**: `--workbench off` が自動注入され、ターミナル Workbench 系オプション（`--workbench` / `--workbench-body-lines` / `--workbench-history`）は GUI から指定不可です。
@@ -619,7 +645,7 @@ GUI Orchestrator は最終的に `python -m hve orchestrate ...` コマンドを
 
 ## ワークフロー一覧
 
-選択可能な12ワークフロー（`ard` / `aas` / `aad-web` / `asdw-web` / `adfd` / `adfdv` / `aag` / `aagd` / `aar` / `akm` / `adi` / `adoc`）の正式名称は [Step 1: ワークフロー選択](#step-1-ワークフロー選択) に記載しています。
+選択可能な 13 ワークフロー（`ard` / `aas` / `aad-web` / `asdw-web` / `adfd` / `adfdv` / `adi` / `akm` / `adoc` / `ada` / `aag` / `aagd` / `aar`）の正式名称は [Step 1: ワークフロー選択](#step-1-ワークフロー選択) に記載しています。
 
 - **各ワークフローの DAG・成果物・依存関係**: [workflow-reference.md](./workflow-reference.md) を参照。
 - **フェーズ別ガイド**: [README — フェーズ別ガイド](../README.md#フェーズ別ガイド) を参照。
@@ -717,6 +743,7 @@ GUI 自体を変更する場合の正本、変更手順、回帰検証、互換�
 | ウィンドウ構成・Dock・監視ルートの適用 | `hve/gui/main_window.py` |
 | Step 1 / Step 2 のページ | `hve/gui/page_workflow_select.py` / `hve/gui/page_options.py` / `hve/gui/page_workbench.py` |
 | 設定項目と既定値・永続化（`hve/.settings.txt`） | `hve/gui/settings_store.py` |
+| 設定値とウィジェットの対応（`_SECTION_FIELDS`。永続化・復元・autosave の配線） | `hve/gui/settings_apply.py` |
 | 設定ウィンドウの UI | `hve/gui/settings_window.py` |
 | ヘルプ本文 | `hve/gui/help_content.py` |
 | CLI 引数への変換 | `hve/gui/orchestrate_args.py` |
@@ -728,7 +755,7 @@ GUI 自体を変更する場合の正本、変更手順、回帰検証、互換�
 
 ### 変更手順
 
-1. **設定項目を追加する**: `hve/gui/settings_store.py` の既定値に追加し、`hve/gui/settings_window.py` に UI を追加する。CLI へ渡す必要がある項目は `hve/gui/orchestrate_args.py` の変換も更新する。
+1. **設定項目を追加する**: `hve/gui/settings_store.py` の既定値に追加し、`hve/gui/settings_window.py` に UI を追加する。**値を保存・復元する項目は `hve/gui/settings_apply.py` の `_SECTION_FIELDS` へ「設定キー → ウィジェット属性名」を登録する**（登録しないと設定ファイルに値は残るが画面へ復元されず、画面の変更も保存されない）。CLI へ渡す必要がある項目は `hve/gui/orchestrate_args.py` の変換も更新する。
 2. **ページを追加・変更する**: `hve/gui/page_*.py` を変更する。Step 構成を変える場合は Step 1 → Step 2 の受け渡し（`OrchestrateArgs`）を壊さないことを確認する。
 3. **ヘルプ文言を変更する**: `hve/gui/help_content.py` を変更する。本ガイドと文言が対応するため、同じ変更でドキュメント側も更新する。
 4. **翻訳を追加する**: 日本語をソースとし、`hve/gui/i18n/hve_gui_en_US.ts` を更新して `.qm` をコンパイルする。
@@ -763,6 +790,7 @@ GUI テストはヘッドレス環境では実行環境（Qt プラットフォ�
 | [hve-gui-getting-started.md](./hve-gui-getting-started.md) | 初期セットアップ全体（GUI） |
 | [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md) | CLI Orchestrator ガイド・詳細オプション |
 | [cloud-session.md](./cloud-session.md) | Copilot SDK Cloud Sessions（Step 実行先の振り分け） |
+| [pricing-guide.md](./pricing-guide.md) | GUI Footer / 統計ポップアップに出る料金・リアルタイム統計の見方 |
 | [web-ui-guide.md](./web-ui-guide.md) | Cloud Agent Orchestrator（GitHub Issue/PR） |
 | [workflow-reference.md](./workflow-reference.md) | ワークフロー一覧・Prompt 一覧 |
 | [hve-technical-architecture.md](./hve-technical-architecture.md) | GUI / CLI / Cloud の技術アーキテクチャ詳細（開発者向け） |

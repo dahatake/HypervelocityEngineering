@@ -231,8 +231,8 @@ def test_copilot_sdk_lock_pins_an_exact_version() -> None:
     assert "\r\n" not in _COPILOT_SDK_LOCK.read_text(encoding="utf-8", newline="")
 
 
-def test_setup_installs_copilot_sdk_from_the_lock_unless_upgrade_requested() -> None:
-    """既定は lock 版の導入で、最新化は明示フラグ指定時のみ。"""
+def test_setup_pins_the_copilot_sdk_only_behind_an_explicit_flag() -> None:
+    """FR-MODEL-07: 既定は最新追従。lock 版固定と lock 書き換えは明示フラグの内側だけ。"""
     powershell = _SETUP_PS1.read_text(encoding="utf-8")
     shell = _SETUP_SH.read_text(encoding="utf-8")
 
@@ -243,11 +243,46 @@ def test_setup_installs_copilot_sdk_from_the_lock_unless_upgrade_requested() -> 
     )
     assert re.search(r"pip install --no-deps -r \"\$LOCK_FILE\"", shell)
 
+    assert "[switch]$PinSdk" in powershell
+    assert re.search(r"--pin-sdk\)\s+PIN_SDK=true", shell)
     assert "[switch]$UpgradeSdk" in powershell
     assert "--upgrade-sdk) UPGRADE_SDK=true" in shell
-    # 最新化は必ずフラグの内側に置く（既定経路で --upgrade させない）。
+    # 版固定と lock 書き換えは必ずフラグの内側に置く（既定経路は最新へ追従する）。
+    assert 'if ($PinSdk) {' in powershell
+    assert 'if [[ "$PIN_SDK" == true ]]; then' in shell
     assert 'if ($UpgradeSdk) {' in powershell
     assert 'if [[ "$UPGRADE_SDK" == true ]]; then' in shell
+
+
+_COPILOT_CLI_PACKAGE = "@github/copilot@latest"
+
+
+def test_setup_scripts_install_the_latest_copilot_cli() -> None:
+    """FR-MODEL-08: 3 OS 共通で外部 copilot CLI を最新版へ導入・更新する。
+
+    npm グローバル管理下でない ``copilot`` へ npm 導入を重ねると PATH 解決が
+    分岐するため、その場合は導入せず警告と手動更新手順だけを提示する。
+    """
+    powershell = _SETUP_PS1.read_text(encoding="utf-8")
+    shell = _SETUP_SH.read_text(encoding="utf-8")
+
+    powershell_packages = re.findall(
+        r"'install'\s*,\s*'-g'\s*,\s*'(@github/copilot[^']*)'", powershell
+    )
+    shell_packages = re.findall(r"npm install -g (@github/copilot[\w@./-]*)", shell)
+    assert powershell_packages
+    assert shell_packages
+    assert all(package == _COPILOT_CLI_PACKAGE for package in powershell_packages), (
+        powershell_packages
+    )
+    assert all(package == _COPILOT_CLI_PACKAGE for package in shell_packages), (
+        shell_packages
+    )
+
+    for name, script in ((_SETUP_PS1.name, powershell), (_SETUP_SH.name, shell)):
+        assert "Installing the latest GitHub Copilot CLI" in script, name
+        assert f"npm install -g {_COPILOT_CLI_PACKAGE}" in script, name
+        assert "not managed by npm" in script, name
 
 
 _CALL_SEPARATOR = "\x1f"
@@ -315,6 +350,26 @@ def _has_gui_pty_install(calls: tuple[tuple[str, ...], ...]) -> bool:
 
 def _has_pip_install(calls: tuple[tuple[str, ...], ...]) -> bool:
     return any(_record_has(record, "pip", "install") for record in calls)
+
+
+def _has_latest_sdk_upgrade(calls: tuple[tuple[str, ...], ...]) -> bool:
+    return any(
+        _record_has(record, "pip", "install", "--upgrade", "github-copilot-sdk")
+        for record in calls
+    )
+
+
+def _touched_sdk_lock(calls: tuple[tuple[str, ...], ...]) -> bool:
+    return any(
+        any("copilot-sdk.lock" in field for field in record[1:]) for record in calls
+    )
+
+
+def _has_locked_sdk_install(calls: tuple[tuple[str, ...], ...]) -> bool:
+    return any(
+        _record_has(record, "pip", "install", "-r", "copilot-sdk.lock")
+        for record in calls
+    )
 
 
 def _has_shared_pty_probe(calls: tuple[tuple[str, ...], ...]) -> bool:
@@ -904,6 +959,65 @@ def test_no_gui_and_minimal_remain_explicit_opt_outs(tmp_path: Path) -> None:
         if _has_shared_pty_probe(run.calls):
             gaps.append(f"{label}: ran shared PTY verification despite explicit opt-out")
     assert not gaps, "FR-GUI-09 opt-out gaps:\n- " + "\n- ".join(gaps)
+
+
+def test_default_setup_upgrades_the_copilot_sdk_and_pin_sdk_uses_the_lock(
+    tmp_path: Path,
+) -> None:
+    """FR-MODEL-07: 既定実行は最新版へ更新し、明示 pin のときだけ lock 版を導入する。"""
+    gaps: list[str] = []
+
+    default_runs: list[tuple[str, _SetupRun]] = [
+        (
+            "setup-hve.sh default",
+            _run_shell_setup(
+                tmp_path / "shell-sdk-default", gh_available=True, pty_available=True
+            ),
+        )
+    ]
+    powershell_default = _run_powershell_setup(
+        tmp_path / "powershell-sdk-default", gh_available=True, pty_available=True
+    )
+    if powershell_default is not None:
+        default_runs.append(("setup-hve.ps1 default", powershell_default))
+
+    for label, run in default_runs:
+        if run.returncode != 0:
+            gaps.append(_run_summary(label, run))
+        if not _has_latest_sdk_upgrade(run.calls):
+            gaps.append(f"{label}: skipped the github-copilot-sdk upgrade to the latest release")
+        if _touched_sdk_lock(run.calls):
+            gaps.append(f"{label}: touched hve/copilot-sdk.lock on the default path")
+
+    pinned_runs: list[tuple[str, _SetupRun]] = [
+        (
+            "setup-hve.sh --pin-sdk",
+            _run_shell_setup(
+                tmp_path / "shell-sdk-pinned",
+                args=("--pin-sdk",),
+                gh_available=True,
+                pty_available=True,
+            ),
+        )
+    ]
+    powershell_pinned = _run_powershell_setup(
+        tmp_path / "powershell-sdk-pinned",
+        args=("-PinSdk",),
+        gh_available=True,
+        pty_available=True,
+    )
+    if powershell_pinned is not None:
+        pinned_runs.append(("setup-hve.ps1 -PinSdk", powershell_pinned))
+
+    for label, run in pinned_runs:
+        if run.returncode != 0:
+            gaps.append(_run_summary(label, run))
+        if not _has_locked_sdk_install(run.calls):
+            gaps.append(f"{label}: did not install github-copilot-sdk from the lock")
+        if _has_latest_sdk_upgrade(run.calls):
+            gaps.append(f"{label}: upgraded github-copilot-sdk despite the explicit pin")
+
+    assert not gaps, "FR-MODEL-07 SDK install gaps:\n- " + "\n- ".join(gaps)
 
 
 def test_check_only_audits_gui_prerequisites_without_changing_anything(

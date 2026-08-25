@@ -146,8 +146,8 @@ class TestPreQaAkmDispatch(unittest.TestCase):
         self.assertEqual(submitted, [])
 
 
-class TestPreQaWorkiqRoundTrip(unittest.TestCase):
-    """FR-QA-03: verified Work IQ 結果だけを回答済み QA へ統合する。"""
+class _PreQaWorkiqHarness:
+    """事前 QA の Work IQ 経路を実行するための共通ハーネス。"""
 
     _QUESTIONNAIRE = """\
 # 事前 QA
@@ -212,7 +212,7 @@ class TestPreQaWorkiqRoundTrip(unittest.TestCase):
             event = SimpleNamespace(
                 type=SimpleNamespace(value="tool.execution_start"),
                 data=SimpleNamespace(
-                    mcp_tool_name="ask_work_iq",
+                    mcp_tool_name="ask",
                     mcp_server_name="_hve_workiq",
                     arguments={"question": "redacted"},
                 ),
@@ -241,10 +241,12 @@ class TestPreQaWorkiqRoundTrip(unittest.TestCase):
         responses: dict[int, str],
         verified_questions: set[int],
         submitted: list[Path],
+        console: Console | None = None,
+        observed_tools: dict[int, str] | None = None,
     ) -> tuple[str, Path, Path]:
         runner = runner_module.StepRunner(
             config=self._config(run_id),
-            console=Console(verbose=False, quiet=True),
+            console=console or Console(verbose=False, quiet=True),
             qa_akm_dispatcher=submitted.append,
         )
         session = self._FakeSession(self._QUESTIONNAIRE)
@@ -256,6 +258,8 @@ class TestPreQaWorkiqRoundTrip(unittest.TestCase):
             )
             if question_no in verified_questions:
                 session.emit_internal_workiq_event()
+            elif observed_tools and question_no in observed_tools:
+                runner._toolsearch_called_tools.append(observed_tools[question_no])
             return WorkIQQueryResult(content=responses[question_no])
 
         original_cwd = Path.cwd()
@@ -286,6 +290,10 @@ class TestPreQaWorkiqRoundTrip(unittest.TestCase):
         self.assertTrue(answered_path.is_file())
         self.assertTrue(draft_path.is_file())
         return context, answered_path, draft_path
+
+
+class TestPreQaWorkiqRoundTrip(_PreQaWorkiqHarness, unittest.TestCase):
+    """FR-QA-03: verified Work IQ 結果だけを回答済み QA へ統合する。"""
 
     def test_only_verified_found_result_is_merged_and_saved_round_trip(self) -> None:
         submitted: list[Path] = []
@@ -349,6 +357,154 @@ class TestPreQaWorkiqRoundTrip(unittest.TestCase):
         self.assertIn("STATUS: UNAVAILABLE", draft)
         self.assertIn("tool event 未確認", draft)
         self.assertEqual(len(submitted), 1)
+
+
+class _RecordingConsole(Console):
+    """warning / status の呼び出しを記録する Console。"""
+
+    def __init__(self) -> None:
+        super().__init__(verbose=False, quiet=True)
+        self.warnings: list[str] = []
+        self.statuses: list[str] = []
+
+    def warning(self, message: str, *args, **kwargs) -> None:  # type: ignore[override]
+        self.warnings.append(str(message))
+
+    def status(self, message: str, *args, **kwargs) -> None:  # type: ignore[override]
+        self.statuses.append(str(message))
+
+
+class TestPreQaWorkiqDetectionMissWarning(_PreQaWorkiqHarness, unittest.TestCase):
+    """FR-QA-06: tool 実行未確認を成功記号で報告しない。"""
+
+    _FOUND_BODY = "STATUS: FOUND\n機微な一次情報の本文がここに入る"
+    _NOT_FOUND_BODY = "STATUS: NOT_FOUND\n関連情報は見つかりませんでした。"
+
+    def _run(
+        self,
+        *,
+        run_id: str,
+        responses: dict[int, str],
+        verified_questions: set[int],
+        observed_tools: dict[int, str] | None = None,
+    ) -> _RecordingConsole:
+        import asyncio
+
+        console = _RecordingConsole()
+        with tempfile.TemporaryDirectory() as td:
+            asyncio.run(self._run_case(
+                Path(td),
+                run_id=run_id,
+                responses=responses,
+                verified_questions=verified_questions,
+                submitted=[],
+                console=console,
+                observed_tools=observed_tools,
+            ))
+        return console
+
+    @staticmethod
+    def _detection_warnings(console: _RecordingConsole) -> list[str]:
+        return [w for w in console.warnings if "確認できませんでした" in w]
+
+    def test_warns_when_found_status_without_tool_evidence(self) -> None:
+        console = self._run(
+            run_id="pre-qa-workiq-miss-found",
+            responses={
+                1: self._NOT_FOUND_BODY,
+                2: self._FOUND_BODY,
+                3: "STATUS: PARTIAL\n一部だけ確認",
+            },
+            verified_questions=set(),
+        )
+        warnings = self._detection_warnings(console)
+        self.assertEqual(len(warnings), 2)
+        self.assertTrue(any("Q2" in w for w in warnings))
+        self.assertTrue(any("Q3" in w for w in warnings))
+
+    def test_does_not_warn_for_not_found_status(self) -> None:
+        console = self._run(
+            run_id="pre-qa-workiq-miss-notfound",
+            responses={
+                1: self._NOT_FOUND_BODY,
+                2: "STATUS: UNAVAILABLE\nツール未接続",
+                3: "本文だけで status なし",
+            },
+            verified_questions=set(),
+        )
+        self.assertEqual(self._detection_warnings(console), [])
+
+    def test_warning_includes_observed_tool_names(self) -> None:
+        console = self._run(
+            run_id="pre-qa-workiq-miss-tools",
+            responses={
+                1: self._NOT_FOUND_BODY,
+                2: self._FOUND_BODY,
+                3: self._NOT_FOUND_BODY,
+            },
+            verified_questions=set(),
+            observed_tools={2: "retrieve"},
+        )
+        warnings = self._detection_warnings(console)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("retrieve", warnings[0])
+
+    def test_warning_includes_diagnostic_command(self) -> None:
+        console = self._run(
+            run_id="pre-qa-workiq-miss-diag",
+            responses={
+                1: self._NOT_FOUND_BODY,
+                2: self._FOUND_BODY,
+                3: self._NOT_FOUND_BODY,
+            },
+            verified_questions=set(),
+        )
+        self.assertIn("python -m hve workiq-doctor", self._detection_warnings(console)[0])
+
+    def test_warning_excludes_response_body(self) -> None:
+        console = self._run(
+            run_id="pre-qa-workiq-miss-body",
+            responses={
+                1: self._NOT_FOUND_BODY,
+                2: self._FOUND_BODY,
+                3: self._NOT_FOUND_BODY,
+            },
+            verified_questions=set(),
+        )
+        for warning in self._detection_warnings(console):
+            self.assertNotIn("機微な一次情報の本文", warning)
+
+    def test_zero_merge_summary_is_warning(self) -> None:
+        console = self._run(
+            run_id="pre-qa-workiq-miss-summary",
+            responses={
+                1: self._NOT_FOUND_BODY,
+                2: self._FOUND_BODY,
+                3: self._NOT_FOUND_BODY,
+            },
+            verified_questions=set(),
+        )
+        summary_status = [s for s in console.statuses if "回答案を統合" in s]
+        summary_warn = [w for w in console.warnings if "回答案を統合" in w]
+        self.assertEqual(summary_status, [])
+        self.assertEqual(len(summary_warn), 1)
+        self.assertNotIn("✅", summary_warn[0])
+
+    def test_nonzero_merge_summary_stays_status(self) -> None:
+        console = self._run(
+            run_id="pre-qa-workiq-merge-summary",
+            responses={
+                1: self._NOT_FOUND_BODY,
+                2: self._FOUND_BODY,
+                3: self._NOT_FOUND_BODY,
+            },
+            verified_questions={2},
+        )
+        summary_status = [s for s in console.statuses if "回答案を統合" in s]
+        summary_warn = [w for w in console.warnings if "回答案を統合" in w]
+        self.assertEqual(len(summary_status), 1)
+        self.assertIn("✅", summary_status[0])
+        self.assertEqual(summary_warn, [])
 
 
 if __name__ == "__main__":

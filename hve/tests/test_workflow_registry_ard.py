@@ -51,15 +51,17 @@ class TestARDWorkflowRegistration(unittest.TestCase):
             "survey_period_years",
             "target_region",
             "analysis_purpose",
+            "target_recommendation_id",
             "attached_docs",
             "include_kpi_okr",
         ])
 
     def test_steps_ids(self):
-        # Sub-10 (ADR-0003) + step renumber: ARD は 8 step (Step 2.1 = KPI/OKR 任意, 3.1/3.2/3.3 = UC ケース生成)
+        # Sub-10 (ADR-0003) + step renumber: ARD は 10 step
+        # (2.1 = KPI/OKR 任意, 3.1/3.2/3.3 = UC ケース生成, 4.1/4.2 = アプリケーション要求定義)
         wf = get_workflow("ard")
         ids = [s.id for s in wf.steps]
-        self.assertEqual(ids, ["1", "1.1", "1.2", "2", "2.1", "3.1", "3.2", "3.3"])
+        self.assertEqual(ids, ["1", "1.1", "1.2", "2", "2.1", "3.1", "3.2", "3.3", "4.1", "4.2"])
 
     def test_step_2_1_kpi_okr_definition(self):
         """Step 2.1 (KPI/OKR 定義) が正しく登録されていること。"""

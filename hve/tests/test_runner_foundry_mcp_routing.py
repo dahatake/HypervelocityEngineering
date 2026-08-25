@@ -19,6 +19,7 @@ from hve.runner import (
     _load_trusted_foundry_mcp_servers,
     _require_trusted_foundry_mcp_servers,
 )
+from hve.workiq import WORKIQ_MCP_SERVER_NAME
 
 
 class _Mcp:
@@ -610,3 +611,29 @@ def test_asdw_data_deploy_never_opens_a_main_mcp_session(
     # 重要なのは SDK セッションが一切作られないこと。
     assert result is False
     assert client.create_session_kwargs == []
+
+
+def test_pre_qa_sub_session_applies_the_configured_workiq_timeout() -> None:
+    """事前 QA サブセッションに `workiq_request_timeout` が適用される。
+
+    `hve/orchestrator.py` の Work IQ 経路 4 箇所は `request_timeout` を渡すが、
+    runner の pre-qa サブセッションだけが渡しておらず、CLI `--workiq-request-timeout`
+    / GUI C4 / `WORKIQ_REQUEST_TIMEOUT` が Work IQ の主用途に届いていなかった。
+    """
+    config = SDKConfig(workiq_enabled=True, workiq_request_timeout=600.0)
+    runner = StepRunner(config=config, console=Console(verbose=False, quiet=True))
+    with patch.object(
+        runner,
+        "_build_step_permission_handler",
+        return_value="permission-handler",
+    ), patch("hve.runner.is_workiq_available", return_value=True):
+        options = runner._build_sub_session_opts(
+            config.model,
+            include_workiq=True,
+            step_id="1",
+            suffix="pre-qa",
+        )
+
+    server = options["mcp_servers"][WORKIQ_MCP_SERVER_NAME]
+    # Copilot SDK MCPServerConfigLocal.timeout はミリ秒 int。
+    assert server["timeout"] == 600_000

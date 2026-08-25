@@ -11,6 +11,7 @@ from hve.fleet_mode import (
     FleetEventCollector,
     build_dag_wave_fleet_prompt,
     build_split_fleet_prompt,
+    format_fleet_wave_skipped_phases_warning,
     start_fleet,
 )
 from hve.split_fork import SubIssueDef
@@ -786,3 +787,49 @@ def test_collector_without_step_ids_keeps_unattributed():
 
     credits = [ev for ev in console.stats_events if ev[0] == "usage_credit"]
     assert credits[0][1] == ""
+
+
+# ---------------------------------------------------------------------------
+# FR-QA-03: Fleet wave で実行されないフェーズの警告
+# ---------------------------------------------------------------------------
+
+def test_skipped_phases_warning_is_empty_when_both_disabled():
+    assert format_fleet_wave_skipped_phases_warning(
+        wave_index=1, auto_qa=False, auto_contents_review=False
+    ) == ""
+
+
+def test_skipped_phases_warning_mentions_pre_qa():
+    msg = format_fleet_wave_skipped_phases_warning(
+        wave_index=2, auto_qa=True, auto_contents_review=False
+    )
+    assert "wave 2" in msg
+    assert "事前 QA" in msg
+    assert "敵対的レビュー" not in msg
+
+
+def test_skipped_phases_warning_mentions_review():
+    msg = format_fleet_wave_skipped_phases_warning(
+        wave_index=3, auto_qa=False, auto_contents_review=True
+    )
+    assert "敵対的レビュー" in msg
+    assert "事前 QA" not in msg
+
+
+def test_skipped_phases_warning_mentions_both_and_workaround():
+    msg = format_fleet_wave_skipped_phases_warning(
+        wave_index=1, auto_qa=True, auto_contents_review=True
+    )
+    assert "事前 QA" in msg
+    assert "敵対的レビュー" in msg
+    assert "--no-fleet-mode" in msg
+
+
+def test_orchestrator_emits_skipped_phases_warning_after_fleet_start():
+    """警告は Fleet 起動成功を確認した後に 1 回だけ出す（FR-QA-03）。"""
+    src = (Path(__file__).resolve().parents[1] / "orchestrator.py").read_text(encoding="utf-8")
+    assert "format_fleet_wave_skipped_phases_warning" in src
+    start_idx = src.index("if not outcome.started:")
+    warn_idx = src.index("format_fleet_wave_skipped_phases_warning(", start_idx)
+    status_idx = src.index("Fleet 起動完了", start_idx)
+    assert start_idx < warn_idx < status_idx

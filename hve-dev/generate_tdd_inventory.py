@@ -731,7 +731,7 @@ def scope_module():
         scripts_dir = str(ROOT / ".github" / "scripts")
         if scripts_dir not in sys.path:
             sys.path.insert(0, scripts_dir)
-        import hve_scope
+        import hve_scope  # type: ignore[import-not-found]
 
         _SCOPE_MODULE = hve_scope
     return _SCOPE_MODULE
@@ -852,6 +852,8 @@ def write_crosswalk(test_rows: list[dict[str, object]], feature_rows: list[dict[
         "",
         f"- `{TEST_CSV.relative_to(ROOT).as_posix()}` — 既存テストコードの全関数/ケース棚卸し。",
         f"- `{FEATURE_CSV.relative_to(ROOT).as_posix()}` — 要求定義 ID と実コード Workflow/Step の機能一覧。",
+        f"- `{SURFACE_CSV.relative_to(ROOT).as_posix()}` — HVE 対象の実装シンボルと実行面の一覧。",
+        f"- `{CROSSWALK_MD.relative_to(ROOT).as_posix()}` — 要求定義・テストマッピング・生成inventoryの突合サマリー。",
         f"- `{POLICY_MD.relative_to(ROOT).as_posix()}` — 今後の hve 限定 TDD 運用ルール。",
         "",
         "## 対象範囲",

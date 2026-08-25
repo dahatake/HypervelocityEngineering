@@ -1,0 +1,17 @@
+inputs:
+- path: docs/catalog/app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ApplicationAnalytics--ard--4.1
+- path: docs/azure/azure-architecture-review-report.md
+  required: true
+  kind: agent_artifact
+  producer: QA-AzureArchitectureReview--asdw-web--5.1
+- path: docs/azure/dependency-review-report.md
+  required: true
+  kind: agent_artifact
+  producer: QA-AzureDependencyReview--asdw-web--5.2
+outputs:
+- path: docs/azure/requirements-conformance-report.md
+  required: true
+  mode: create

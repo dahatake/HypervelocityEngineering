@@ -80,8 +80,8 @@ def test_adi_questionnaire_steps_contract() -> None:
 _SEED_AGENT = "Doc-OriginalDownstreamSeed"
 
 # Step 5.x が候補を反映する下流成果物。下流の最上流 Step の出力に対応させる
-# （use-case-skeleton=ARD 3.1 / app-catalog=AAS 1 / domain-analytics=AAS 3.1 /
-#  data-model=AAS 4.1 / dataflow-app-catalog=ADFD 0.2）。
+# （use-case-skeleton=ARD 3.1 / app-catalog=AAS 1 / domain-analytics=AAS 2.1 /
+#  data-model=AAS 3.1 / dataflow-app-catalog=ADFD 0.2）。
 _SEED_TARGETS = {
     "5.1": ["docs/catalog/use-case-skeleton.md"],
     "5.2": [
@@ -237,3 +237,79 @@ def test_adi_non_interactive_defaults() -> None:
     assert params["target_scope"] == "docs-original/"
     assert params["depth"] == "standard"
     assert params["focus_areas"] == ""
+
+
+# --- FR-QA-03: ADI に例外を持たせない ------------------------------------
+
+
+def _answered_qa_doc():
+    from hve.qa_merger import QADocument, QAQuestion
+
+    return QADocument(
+        title="事前 QA",
+        status="回答待ち",
+        header_fields=[("状態", "回答待ち")],
+        questions=[QAQuestion(no=1, question="対象範囲は？", default_answer="A")],
+    )
+
+
+def test_adi_is_not_excluded_from_pre_qa() -> None:
+    """ADI は事前 QA の対象外としてはならない。"""
+    from hve.runner import _should_run_pre_execution_qa
+
+    for step_agent in ("QA-DocConsistency", "Doc-OriginalInventory"):
+        assert _should_run_pre_execution_qa(
+            auto_qa=True,
+            workflow_id="adi",
+            custom_agent=step_agent,
+            prompt="dummy",
+        ) is True
+    assert _should_run_pre_execution_qa(
+        auto_qa=False, workflow_id="adi", custom_agent=None, prompt="dummy",
+    ) is False
+
+
+def test_adi_answered_qa_is_dispatched_like_other_workflows(tmp_path: Path) -> None:
+    """再帰防止の対象は `akm` だけで、ADI は除外されない。"""
+    from hve.runner import _persist_answered_qa_and_dispatch
+
+    submitted: list[Path] = []
+    _persist_answered_qa_and_dispatch(
+        doc=_answered_qa_doc(),
+        user_answers_raw="",
+        use_defaults=True,
+        output_path=tmp_path / "adi-answered.md",
+        workflow_id="adi",
+        dispatcher=submitted.append,
+    )
+    assert [p.name for p in submitted] == ["adi-answered.md"]
+
+    recursive: list[Path] = []
+    _persist_answered_qa_and_dispatch(
+        doc=_answered_qa_doc(),
+        user_answers_raw="",
+        use_defaults=True,
+        output_path=tmp_path / "akm-answered.md",
+        workflow_id="akm",
+        dispatcher=recursive.append,
+    )
+    assert recursive == []
+
+
+def test_adi_questionnaire_main_outputs_are_separate_from_pre_qa_file() -> None:
+    """Step 1.1 / 1.2 の main 成果物は事前 QA の回答済み補助ファイルと別物。"""
+    from hve.artifact_validation import is_original_docs_questionnaire_filename
+
+    adi = get_workflow("adi")
+    assert adi.get_step("1.1").output_paths_template == [
+        "qa/{key}-original-docs-questionnaire.md"
+    ]
+    assert adi.get_step("1.2").output_paths == [
+        "qa/original-docs-cross-questionnaire.md"
+    ]
+    assert is_original_docs_questionnaire_filename(
+        Path("qa/D01-original-docs-questionnaire.md")
+    )
+    assert not is_original_docs_questionnaire_filename(
+        Path("qa/Issue-1-questionnaire-answered-abc12345.md")
+    )

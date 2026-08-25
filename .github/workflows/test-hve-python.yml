@@ -9,6 +9,9 @@ on:
       - 'cq/**'
       - 'pyproject.toml'
       - '.github/scripts/**'
+      # 契約テスト（test_data_model_split_contract 等）が読むため、単独変更でも検査する。
+      - '.github/prompts/**'
+      - '.github/io-contracts/**'
       - '.github/workflows/test-hve-python.yml'
       # チェックアウト時の改行を決めるため、test_surface_export のバイト比較結果を左右する。
       - '.gitattributes'
@@ -21,6 +24,9 @@ on:
       - 'pyproject.toml'
       - '.github/scripts/**'
       - '.github/scripts/bash/lib/workflow-registry.sh'
+      # 契約テスト（test_data_model_split_contract 等）が読むため、単独変更でも検査する。
+      - '.github/prompts/**'
+      - '.github/io-contracts/**'
       - '.github/workflows/**'
       - '.github/workflows/test-hve-python.yml'
       - '.gitattributes'

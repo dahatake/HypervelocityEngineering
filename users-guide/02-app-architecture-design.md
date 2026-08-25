@@ -26,8 +26,11 @@
 ユースケースからアプリケーションリストの作成・アーキテクチャ選定を行うフェーズ1のガイドです。
 
 > [!NOTE]
-> フェーズ1は Step.1〜Step.9 の **11 Step ID**
-> （`1`, `2`, `3.1`, `3.2`, `4.1`, `4.2`, `5`, `6`, `7`, `8`, `9`）で構成されます。
+> フェーズ1は Step.1〜Step.8 の **10 Step ID**
+> （`1`, `2.1`, `2.2`, `3.1`, `3.2`, `4`, `5`, `6`, `7`, `8`）で構成されます。
+> 旧 Step.1（アプリケーションリストの作成）は ARD（Auto Requirement Definition）ワークフローの
+> Step 4.1 / 4.2 へ移設され、`docs/catalog/app-catalog.md` と `docs/architectural-requirements-app-*.md` は
+> AAS 起動前に ARD が生成します。詳細は [01-business-requirement.md](./01-business-requirement.md) を参照してください。
 > フェーズ2は以下を参照してください。
 > - Web アプリケーション設計: [Web Application 設計ガイド（AAD-WEB）](./03-app-design-microservice-azure.md)
 > - AI Agent 設計: [AI Agent 設計ガイド（AAG）](./08-ai-agent.md)（Issue Template: `ai-agent-design.yml`）
@@ -45,7 +48,7 @@ Cloud では Issue Form から Sub-Issue を生成し、CLI / GUI では同じ P
 後続の AAD-WEB / ADFD / AAG は別ワークフローです。必要な AAS 成果物と、AAG では AAD-WEB 等の追加成果物が揃ってから起動します。
 
 > [!NOTE]
-> **ADI を先に実行している場合**、`docs/catalog/app-catalog.md` / `domain-analytics.md` / `data-model.md` に `## 設計書由来の候補（ADI）` セクションがあります。既存設計書から抽出された候補で、**`APP-` は未採番**です。AAS Step `1` / `3.1` / `4.1` がこのセクションを読んで正式な ID を採番し、本表へ統合します。詳細は [00-design-doc-ingestion.md](./00-design-doc-ingestion.md#adi-と設計ワークフローard--aas--adfdの関係) を参照してください。
+> **ADI を先に実行している場合**、`docs/catalog/app-catalog.md` / `domain-analytics.md` / `data-model.md` に `## 設計書由来の候補（ADI）` セクションがあります。既存設計書から抽出された候補で、**`APP-` は未採番**です。ARD Step `4.1` および AAS Step `2.1` / `3.1` がこのセクションを読んで正式な ID を採番し、本表へ統合します。詳細は [00-design-doc-ingestion.md](./00-design-doc-ingestion.md#adi-と設計ワークフローard--aas--adfdの関係) を参照してください。
 
 ### PR 完全自動化オプション（Issue Template）
 
@@ -54,8 +57,8 @@ Cloud では Issue Form から Sub-Issue を生成し、CLI / GUI では同じ P
 
 ### 前提条件
 
-- `docs/catalog/use-case-catalog.md` が存在していること（Step.1 の必須入力）
-- Step.2 の判定精度を上げる場合は、APP ごとに `docs/architectural-requirements-app-xx.md` を用意すること（未作成でもデフォルト推薦で続行可能）
+- `docs/catalog/app-catalog.md` と `docs/architectural-requirements-app-*.md` が ARD ワークフローにより生成済みであること（Step.1 の必須入力）
+- Step.1 の判定精度を上げる場合は、APP ごとに `docs/architectural-requirements-app-xx.md` を用意すること（未作成でもデフォルト推薦で続行可能）
 - GitHub Copilot が有効になっていること
 - セットアップ・トラブルシューティングは → [Cloud](./hve-cloud-getting-started.md) / [CLI](./hve-cli-getting-started.md) / [GUI](./hve-gui-getting-started.md)
 
@@ -63,7 +66,7 @@ Cloud では Issue Form から Sub-Issue を生成し、CLI / GUI では同じ P
 ## 対象読者・前提・次のステップ
 
 - 対象読者: `docs/catalog/use-case-catalog.md` をもとに共通アーキテクチャ（AAS）を設計する方
-- 前提: 利用する経路に応じて Cloud Issue を起票できるか、HVE CLI / GUI を起動できること
+- 前提: 入力となる `docs/catalog/use-case-catalog.md` が生成済みであること（生成手順は [01-business-requirement.md](./01-business-requirement.md)）。利用する経路に応じて Cloud Issue を起票できるか、HVE CLI / GUI を起動できること
 - 次のステップ: フェーズ2として Web は [03-app-design-microservice-azure.md](./03-app-design-microservice-azure.md)、AI Agent は [08-ai-agent.md](./08-ai-agent.md)、バッチは [04-app-design-dataflow.md](./04-app-design-dataflow.md)
 
 ### このガイドで扱わないこと
@@ -81,21 +84,21 @@ Cloud では Issue Form から Sub-Issue を生成し、CLI / GUI では同じ P
 |---|---|---|---|---|
 | Cloud | `.github/ISSUE_TEMPLATE/app-architecture-design.yml` | `auto-orchestrator-dispatcher.yml` が `auto-app-selection-reusable.yml` を呼び、Step ごとに Sub-Issue を作成 | 後続 Step の必須ファイルが対象ブランチで HTTP 404 の場合は `aas:blocked`。API・権限・通信等の非 404 エラーは欠損とみなさず状態遷移を中断 | Root Issue の `aas:done` と完了コメント |
 | CLI | `python -m hve orchestrate --workflow aas` | `hve/workflow_registry.py` から `DAGPlan` を作り、CLI が Step を制御。SDK セッションの実行先は `--cloud-session` 等の設定によりローカル / Cloud Session を選択 | 一括の全入力 precheck は行わず、各 Prompt が停止 / 質問 / `TBD` を判断。主成果物が未生成なら Step は失敗 | 終了コード、サマリー、成果物 |
-| GUI | `python -m hve gui` | GUI が `OrchestrateArgs` を CLI 引数へ変換し、CLI と同じ DAG エンジンを起動 | Step.1 選択時は `use-case-catalog.md` を事前確認。その後は CLI と同じ | Workbench の結果、終了状態、成果物 |
+| GUI | `python -m hve gui` | GUI が `OrchestrateArgs` を CLI 引数へ変換し、CLI と同じ DAG エンジンを起動 | Step.1 選択時は `app-catalog.md` を事前確認。その後は CLI と同じ | Workbench の結果、終了状態、成果物 |
 | 手動 Prompt | `.github/prompts/<Agent>.prompt.md` を順に実行 | オーケストレーターなし。利用者が依存順を管理 | Prompt ごとの入力契約に従い、利用者が不足を解消 | 各出力ファイルを利用者が確認 |
 
 > [!IMPORTANT]
 > Cloud の部分実行と CLI / GUI の部分実行は同じではありません。Cloud はチェックした Step の前段も明示選択する必要があります。
-> CLI / GUI は非選択 Step を `skipped`（依存解決済み）として扱うため、入力成果物が既にあれば `--steps 5,6,7` のような再実行ができます。
+> CLI / GUI は非選択 Step を `skipped`（依存解決済み）として扱うため、入力成果物が既にあれば `--steps 4,5,6` のような再実行ができます。
 
 
 ## Agent チェーン図（AAS）
 
 以下の図は、このワークフローで使用される Prompt がファイルの入出力を介してどのように連鎖するかを示します。
-実際の DAG では Step.4.2 と Step.5 が並列です。
+実際の DAG では Step.3.2 と Step.4 が並列です。
 
 
-![AAS: Arch-ApplicationAnalytics → Arch-UI-PersonaScreenList の11 Step ID（Step.4.2 と Step.5 は並列）](./images/chain-aas.svg)
+![AAS: Arch-ArchitectureCandidateAnalyzer → Arch-UI-PersonaScreenList の10 Step ID（Step.3.2 と Step.4 は並列）](./images/chain-aas.svg)
 
 
 ### アーキテクチャ図
@@ -122,37 +125,34 @@ Cloud は GitHub Copilot cloud agent、CLI / GUI は GitHub Copilot SDK を使�
 ### 依存グラフ
 
 ```
-step-1 ──► step-2 ──► step-3.1 ──► step-3.2 ──► step-4.1 ─┬─► step-4.2
-                                                        └─► step-5 ──► step-6 ──► step-7 ──► step-8 ──► step-9
+step-1 ──► step-2.1 ──► step-2.2 ──► step-3.1 ─┬─► step-3.2
+                                                        └─► step-4 ──► step-5 ──► step-6 ──► step-7 ──► step-8
 ```
 
 ### 各ステップの入出力
 
 | Step ID | タイトル | Prompt | 主入力 | 主出力 | 依存 |
 |---|---|---|---|---|---|
-| `1` | アプリケーションリストの作成 | `Arch-ApplicationAnalytics` | `docs/catalog/use-case-catalog.md` | `docs/catalog/app-catalog.md` | なし |
-| `2` | ソフトウェアアーキテクチャの推薦 | `Arch-ArchitectureCandidateAnalyzer` | `docs/catalog/app-catalog.md`、任意の `docs/architectural-requirements-app-{appId}.md` | `docs/catalog/app-arch-catalog.md` | `1` |
-| `3.1` | ドメイン分析 | `Arch-Microservice-DomainAnalytics` | `docs/catalog/app-arch-catalog.md`、`docs/catalog/app-catalog.md`、`docs/catalog/use-case-catalog.md` | `docs/catalog/domain-analytics.md` | `2` |
-| `3.2` | サービス一覧抽出 | `Arch-Microservice-ServiceIdentify` | `docs/catalog/use-case-catalog.md`、`docs/catalog/domain-analytics.md`、`docs/catalog/app-catalog.md` | `docs/catalog/service-catalog.md` | `3.1` |
-| `4.1` | データモデル設計 | `Arch-DataModeling` | `docs/catalog/domain-analytics.md`、`docs/catalog/service-catalog.md`、`docs/catalog/app-catalog.md` | `docs/catalog/data-model.md` | `3.2` |
-| `4.2` | サンプルデータ生成 | `Arch-DataModeling` | `docs/catalog/data-model.md`、`docs/catalog/domain-analytics.md`、`docs/catalog/service-catalog.md`、`docs/catalog/app-catalog.md` | `src/data/sample-data.json` | `4.1` |
-| `5` | データカタログ作成 | `Arch-DataCatalog` | 必須: `docs/catalog/data-model.md`、`docs/catalog/domain-analytics.md`、`docs/catalog/app-catalog.md`。任意: `docs/catalog/service-catalog.md`、`docs/catalog/service-catalog-matrix.md` | `docs/catalog/data-catalog.md` | `4.1` |
-| `6` | サービスカタログ | `Arch-Microservice-ServiceCatalog` | `docs/catalog/service-catalog.md`、`docs/catalog/data-model.md`、`docs/catalog/domain-analytics.md`、`docs/catalog/app-catalog.md`、`docs/catalog/data-catalog.md`。画面カタログは任意 | `docs/catalog/service-catalog-matrix.md` | `5` |
-| `7` | テスト戦略書 | `Arch-TDD-TestStrategy` | 必須: `docs/catalog/service-catalog-matrix.md`、`docs/catalog/data-model.md`、`docs/catalog/domain-analytics.md`。`docs/catalog/app-catalog.md`、`docs/catalog/service-catalog.md`、`docs/catalog/data-catalog.md` は補強入力 | `docs/catalog/test-strategy.md` | `6` |
-| `8` | ペルソナカタログ | `Arch-PersonaCatalog` | `docs/catalog/use-case-catalog.md`、`docs/catalog/app-catalog.md` | `docs/catalog/persona-catalog.md` | `7` |
-| `9` | ペルソナ別共通画面カタログ | `Arch-UI-PersonaScreenList` | `docs/catalog/persona-catalog.md`、`docs/catalog/app-catalog.md`。ドメイン / サービスカタログは補助 | `docs/catalog/persona-screen-catalog.md` | `8` |
+| `1` | ソフトウェアアーキテクチャの推薦 | `Arch-ArchitectureCandidateAnalyzer` | `docs/catalog/app-catalog.md`（ARD 生成）、`docs/architectural-requirements-app-*.md`（ARD 生成） | `docs/catalog/app-arch-catalog.md` | なし（ARD ワークフローの成果物が前提） |
+| `2.1` | ドメイン分析 | `Arch-Microservice-DomainAnalytics` | `docs/catalog/app-arch-catalog.md`、`docs/catalog/app-catalog.md`、`docs/catalog/use-case-catalog.md` | `docs/catalog/domain-analytics.md` | `1` |
+| `2.2` | サービス一覧抽出 | `Arch-Microservice-ServiceIdentify` | `docs/catalog/use-case-catalog.md`、`docs/catalog/domain-analytics.md`、`docs/catalog/app-catalog.md` | `docs/catalog/service-catalog.md` | `2.1` |
+| `3.1` | データモデル設計 | `Arch-DataModeling` | `docs/catalog/domain-analytics.md`、`docs/catalog/service-catalog.md`、`docs/catalog/app-catalog.md` | `docs/catalog/data-model.md`（常に必須）。単一ファイル版が 50,000 文字を超える見込みのときは `docs/catalog/data-model-service-stores.md` / `docs/catalog/data-model-consistency-events.md` / `docs/catalog/data-model-diagrams.md` を併せて生成し、親を索引/統合版として維持します（分割不要に戻った再実行では 3 件を削除） | `2.2` |
+| `3.2` | サンプルデータ生成 | `Arch-DataModeling` | `docs/catalog/data-model.md`、`docs/catalog/domain-analytics.md`、`docs/catalog/service-catalog.md`、`docs/catalog/app-catalog.md` | `src/data/sample-data.json` | `3.1` |
+| `4` | データカタログ作成 | `Arch-DataCatalog` | 必須: `docs/catalog/data-model.md`、`docs/catalog/domain-analytics.md`、`docs/catalog/app-catalog.md`。任意: `docs/catalog/service-catalog.md`、`docs/catalog/service-catalog-matrix.md` | `docs/catalog/data-catalog.md` | `3.1` |
+| `5` | サービスカタログ | `Arch-Microservice-ServiceCatalog` | `docs/catalog/service-catalog.md`、`docs/catalog/data-model.md`、`docs/catalog/domain-analytics.md`、`docs/catalog/app-catalog.md`、`docs/catalog/data-catalog.md`。画面カタログは任意 | `docs/catalog/service-catalog-matrix.md` | `4` |
+| `6` | テスト戦略書 | `Arch-TDD-TestStrategy` | 必須: `docs/catalog/service-catalog-matrix.md`、`docs/catalog/data-model.md`、`docs/catalog/domain-analytics.md`。`docs/catalog/app-catalog.md`、`docs/catalog/service-catalog.md`、`docs/catalog/data-catalog.md` は補強入力 | `docs/catalog/test-strategy.md` | `5` |
+| `7` | ペルソナカタログ | `Arch-PersonaCatalog` | `docs/catalog/use-case-catalog.md`、`docs/catalog/app-catalog.md` | `docs/catalog/persona-catalog.md` | `6` |
+| `8` | ペルソナ別共通画面カタログ | `Arch-UI-PersonaScreenList` | `docs/catalog/persona-catalog.md`、`docs/catalog/app-catalog.md`。ドメイン / サービスカタログは補助 | `docs/catalog/persona-screen-catalog.md` | `7` |
 
 > [!NOTE]
 > `hve/workflow_registry.py` の `required_input_paths` は実行計画・Fleet 用の宣言であり、CLI / GUI 標準経路で全行を一括 precheck する機構ではありません。
-> また Step.5 は Python レジストリ / scoped I/O contract が `service-catalog.md` と、後続 Step.6 が生成する `service-catalog-matrix.md` も required と宣言する一方、
-> Cloud テンプレートと `Arch-DataCatalog.prompt.md` は両方を任意入力としています。新規フル実行では DAG と Prompt に従い、Step.5 を Step.4.1 後に起動します。
+> また Step.4 は Python レジストリ / scoped I/O contract が `service-catalog.md` と、後続 Step.5 が生成する `service-catalog-matrix.md` も required と宣言する一方、
+> Cloud テンプレートと `Arch-DataCatalog.prompt.md` は両方を任意入力としています。新規フル実行では DAG と Prompt に従い、Step.4 を Step.3.1 後に起動します。
 
-### Step.2 のローカル fan-out
+### Step.1 について
 
-- CLI / GUI では `fanout_parser="app_catalog"` により Step.2 を `2/APP-*` へ展開します。
-- 各子 Step には `hve/prompt/fanout/aas/_common.md` が追加され、対象 APP だけを処理します。
-- Step.3.1 の依存は全子 Step へ置換されるため、すべての対象 APP の Step.2 が完了してから進みます。
-- Cloud reusable workflow はこの Python fan-out を使わず、単一の Step.2 Sub-Issue で統合レポートを生成します。
+- Step.1 は単一 Agent が全 APP を順次処理します(ローカル fan-out は行いません)。
+- `docs/catalog/app-catalog.md` / `docs/architectural-requirements-app-*.md` は ARD ワークフローが生成します。AAS 単独では再生成しません。
 
 ---
 
@@ -161,33 +161,19 @@ step-1 ──► step-2 ──► step-3.1 ──► step-3.2 ──► step-4.1
 以下の短縮 Prompt は操作説明用です。実行時の正本は `.github/prompts/<Custom Agent>.prompt.md` です。
 手動経路には DAG、ラベル遷移、入力 precheck、`output_paths` ゲートがないため、各 Step の前後で入力と出力を自分で確認してください。
 
-### Step 1. ユースケースから、アプリケーションリストの作成
-
-- 使用するカスタムエージェント
-  - Arch-ApplicationAnalytics
-
-Prompt:
-
-```text
-ユースケース文書（UCが可変数）から、実装手段（アプリ導入／既存拡張／連携／業務改革／組織改革）を仕分けし、複数UCを束ねて実装できる「アプリリスト（アプリ種別＝アーキタイプ）」と最小ポートフォリオ（MVP）を選出するための、エージェント定義とプロンプト集を作成する
-
-## 3) 入力（必ず参照）
-- ユースケース文書: `docs/catalog/use-case-catalog.md`
-
-## 4) 出力先（成果物）
-- `docs/catalog/app-catalog.md`
-```
+> [!NOTE]
+> アプリケーションリストの作成(`Arch-ApplicationAnalytics`)は AAS から **ARD Step 4.1** へ移設されました。この Agent を使った手動実行手順は [01-business-requirement.md の「ARD Step 4.1 / 4.2 アプリケーション要求定義」節](./01-business-requirement.md#ard-step-4-1-4-2-app-requirements) を参照してください。
 
 ---
 
-### Step 2. ソフトウェアアーキテクチャの推薦
+### Step 1. ソフトウェアアーキテクチャの推薦
 
 - 使用するカスタムエージェント
   - Arch-ArchitectureCandidateAnalyzer
 
 #### 概要
 
-このステップでは、Step 1 で特定したアプリケーション（APP-01〜APP-xx）の **各アプリケーションごと** にソフトウェアアーキテクチャを選定します。
+このステップでは、ARD Step 4.1（`Arch-ApplicationAnalytics`）が生成した `docs/catalog/app-catalog.md` に列挙されたアプリケーション（APP-01〜APP-xx）の **各アプリケーションごと** にソフトウェアアーキテクチャを選定します。
 
 - APP 別の任意入力は `docs/architectural-requirements-app-xx.md`
 - 入力ファイルがない APP は、`app-catalog.md` の `client_type` / 概要 / APP 名を根拠にデフォルト推薦を適用し、`⚠️デフォルト適用（入力ファイルなし）` と記録します
@@ -485,7 +471,7 @@ Prompt:
 
 ---
 
-### Step 3.1. ドメイン分析
+### Step 2.1. ドメイン分析
 
 - 使用するカスタムエージェント
   - Arch-Microservice-DomainAnalytics
@@ -505,7 +491,7 @@ Prompt:
 
 ---
 
-### Step 3.2. サービス一覧の抽出
+### Step 2.2. サービス一覧の抽出
 
 - 使用するカスタムエージェント
   - Arch-Microservice-ServiceIdentify
@@ -525,7 +511,7 @@ docs/ のドメイン分析からマイクロサービス候補を抽出し、se
 
 ---
 
-### Step 4.1. データモデル作成
+### Step 3.1. データモデル作成
 
 - 使用するカスタムエージェント
   - Arch-DataModeling
@@ -541,18 +527,22 @@ docs/ のドメイン分析からマイクロサービス候補を抽出し、se
 
 # 出力（必須）
 - `docs/catalog/data-model.md`
+
+# 条件付き出力
+- 単一ファイル版が 50,000 Unicode 文字を超える見込みの場合だけ、ステップ概要表の canonical sidecar 3 件を併せて生成する
+- 分割不要の再実行では親へ統合し、既存 sidecar 3 件を削除する
 ```
 
 ---
 
-### Step 4.2. サンプルデータ生成
+### Step 3.2. サンプルデータ生成
 
 - 使用するカスタムエージェント
   - Arch-DataModeling
 
 ```text
 # タスク
-Step 4.1 のデータモデルに対応する架空のサンプルデータを生成する
+Step 3.1 のデータモデルに対応する架空のサンプルデータを生成する
 
 # 入力
 - `docs/catalog/data-model.md`
@@ -566,7 +556,7 @@ Step 4.1 のデータモデルに対応する架空のサンプルデータを�
 
 ---
 
-### Step 5. データカタログの作成
+### Step 4. データカタログの作成
 
 - 使用するカスタムエージェント
   - Arch-DataCatalog
@@ -586,7 +576,7 @@ Step 4.1 のデータモデルに対応する架空のサンプルデータを�
 
 ---
 
-### Step 6. サービスカタログ作成
+### Step 5. サービスカタログ作成
 
 - 使用するカスタムエージェント
   - Arch-Microservice-ServiceCatalog
@@ -607,7 +597,7 @@ Step 4.1 のデータモデルに対応する架空のサンプルデータを�
 
 ---
 
-### Step 7. テスト戦略書の作成
+### Step 6. テスト戦略書の作成
 
 - 使用するカスタムエージェント
   - Arch-TDD-TestStrategy
@@ -628,7 +618,7 @@ Step 4.1 のデータモデルに対応する架空のサンプルデータを�
 
 ---
 
-### Step 8. ペルソナカタログの作成
+### Step 7. ペルソナカタログの作成
 
 - 使用するカスタムエージェント
   - Arch-PersonaCatalog
@@ -647,17 +637,17 @@ Step 4.1 のデータモデルに対応する架空のサンプルデータを�
 
 ---
 
-### Step 9. ペルソナ別共通画面カタログの作成
+### Step 8. ペルソナ別共通画面カタログの作成
 
 - 使用するカスタムエージェント
   - Arch-UI-PersonaScreenList
 
 ```text
 # タスク
-Step 8 のペルソナ一覧を前提に、複数 APP-ID で共通化できる画面骨格を抽出する
+Step 7 のペルソナ一覧を前提に、複数 APP-ID で共通化できる画面骨格を抽出する
 
 # 入力
-- `docs/catalog/persona-catalog.md`（Step 8 の出力）
+- `docs/catalog/persona-catalog.md`（Step 7 の出力）
 - `docs/catalog/app-catalog.md`
 
 # 出力（必須）
@@ -697,10 +687,10 @@ Step 8 のペルソナ一覧を前提に、複数 APP-ID で共通化できる�
 ### 部分実行と入力欠損
 
 - Step チェックが全て未選択なら全 Step を生成します。一部選択時は依存する前段も選択してください。
-- Step.1 を作らず Step.2 だけ作ると Step.2 は `aas:blocked` になります。Step.1 / Step.2 の両方がない場合、後続だけを選択しても初期起動されません。
-- Step.8 をスキップすると、`persona-catalog.md` に依存する Step.9 も強制スキップされます。
-- Step.1 は状態遷移時のファイル precheck より前に起動されます。`docs/catalog/use-case-catalog.md` は Issue 作成前に配置してください。
-- Step.2 以降は、状態遷移時に Cloud workflow が対象ブランチ上の必須ファイルを GitHub Contents API で確認します。HTTP 404 のみを欠損と確定し、`aas:blocked` と不足一覧コメントを付けます。
+- Step.1 は AAS の root Step です。Step.1 を含めずに後続 Step だけを選択すると、依存関係が解決できず初期起動されません。
+- Step.7 をスキップすると、`persona-catalog.md` に依存する Step.8 も強制スキップされます。
+- Step.1 は Bootstrap 完了後すぐに起動されます。`docs/catalog/app-catalog.md` と `docs/architectural-requirements-app-*.md`（いずれも ARD が生成）を Issue 作成前に対象ブランチへ配置してください。
+- Step.1 以降は、状態遷移時に Cloud workflow が対象ブランチ上の必須ファイルを GitHub Contents API で確認します。HTTP 404 のみを欠損と確定し、`aas:blocked` と不足一覧コメントを付けます。
 - API / 通信 / 権限 / レート制限など非 404 の確認失敗は「ファイルなし」と誤判定せず、状態遷移ジョブを失敗させます。
 
 ### 使い方（Issue 作成手順）
@@ -748,7 +738,7 @@ python -m hve orchestrate --workflow aas
 python -m hve orchestrate --workflow aas --dry-run
 
 # 既存成果物を使った部分再実行
-python -m hve orchestrate --workflow aas --steps 5,6,7
+python -m hve orchestrate --workflow aas --steps 4,5,6
 ```
 
 Windows で仮想環境の Python を直接指定する場合は次のとおりです。
@@ -761,12 +751,12 @@ Windows で仮想環境の Python を直接指定する場合は次のとおり�
 .\.venv\Scripts\python.exe -m hve orchestrate --workflow aas --dry-run
 
 # 既存成果物を使った部分再実行
-.\.venv\Scripts\python.exe -m hve orchestrate --workflow aas --steps 5,6,7
+.\.venv\Scripts\python.exe -m hve orchestrate --workflow aas --steps 4,5,6
 ```
 
 - `--steps` 省略時は全 Step が active です。
 - 非選択の依存 Step は `skipped` として解決済みになるため、部分再実行前に対象 Step の入力ファイルを配置してください。
-- Step.2 は APP カタログのキーごとに fan-out し、全子完了後に Step.3.1 へ進みます。
+- Step.1 は単一 Agent が全 APP を順次処理します（fan-out はしません）。全 APP の処理完了後に Step.2.1 へ進みます。
 - 各 Prompt が致命的入力の停止条件を持ちます。Prompt が成功応答を返しても、`hve/runner.py` が Step の `output_paths` を確認し、主成果物がなければ `output-missing` で失敗にします。
 - 失敗した Step の後続は起動せず、最終結果の `failed` / `blocked` と終了コードで確認できます。
 
@@ -775,11 +765,11 @@ Windows で仮想環境の Python を直接指定する場合は次のとおり�
 
 1. `hve.cmd gui` または `python -m hve gui` で起動します。
 2. GUI 画面の Step 1 で `Architecture Design (AAS)` と実行する AAS Step ID を選びます。
-3. Step.1 を含む場合、実行前 precheck で `docs/catalog/use-case-catalog.md` の存在を確認します。
+3. Step.1 を含む場合、実行前 precheck で `docs/catalog/app-catalog.md` / `docs/architectural-requirements-app-*.md` の存在を確認します。
 4. GUI 画面の Step 2（Workbench）で実行します。
 
 GUI は `hve/gui/orchestrate_args.py` で選択内容を `python -m hve orchestrate --workflow aas ... --workbench off` 相当へ変換します。
-したがって DAG、Step.2 fan-out、非選択依存の skip、Prompt の欠損処理、`output_paths` 完了ゲートは CLI と同じです。
+したがって DAG、Step.1 の入力 precheck（fan-out はしません）、非選択依存の skip、Prompt の欠損処理、`output_paths` 完了ゲートは CLI と同じです。
 詳しい画面操作は [HVE GUI Orchestrator ガイド](./hve-gui-orchestrator-guide.md) を参照してください。
 
 <a id="failure-aas"></a>
@@ -791,7 +781,7 @@ GUI は `hve/gui/orchestrate_args.py` で選択内容を `python -m hve orchestr
 | Cloud の Step が `aas:blocked` | Step の不足ファイルコメントと reusable workflow の該当ジョブ | 不足成果物を対象ブランチへ反映する。HTTP 404 以外で確認に失敗した場合は、欠損と決めつけず Actions の API・権限・通信エラーを解消して再実行する |
 | Cloud で Copilot が assign されない | `AAS Orchestrator` の警告、`COPILOT_PAT`、`aas:qa-ready` | PAT と権限を [Cloud セットアップ](./hve-cloud-getting-started.md#step4-認証設定copilot_pat)で確認する。事前 QA 有効時は回答完了まで assign されない |
 | CLI / GUI の Step が `failed` / `blocked` | 終了サマリーの最初の失敗 Step、`output-missing`、当該 Prompt の必須入力 | [各ステップの入出力](#各ステップの入出力)と実ファイルを突合する。後続だけを再実行する場合は、非選択の前段成果物も事前に配置する |
-| Step.2 の一部 APP だけ未完了 | `docs/catalog/app-arch-catalog.md` の入力ステータス / 未処理一覧 | APP 入力ファイルなしはデフォルト推薦、ファイルありで核心入力不足は当該 APP の質問待ちになる。質問へ回答し、利用中の経路で Step.2 を再実行する |
+| Step.1 の一部 APP だけ未完了 | `docs/catalog/app-arch-catalog.md` の入力ステータス / 未処理一覧 | APP 入力ファイルなしはデフォルト推薦、ファイルありで核心入力不足は当該 APP の質問待ちになる。質問へ回答し、利用中の経路で Step.1 を再実行する |
 
 上表で解消しない場合は、経路別セットアップのトラブルシューティング（[Cloud](./hve-cloud-getting-started.md) / [CLI](./hve-cli-getting-started.md) / [GUI](./hve-gui-getting-started.md)）を確認してください。
 
@@ -812,14 +802,14 @@ GUI は `hve/gui/orchestrate_args.py` で選択内容を `python -m hve orchestr
 - [ ] `docs/catalog/persona-catalog.md`
 - [ ] `docs/catalog/persona-screen-catalog.md`
 
-Cloud は Root Issue の `aas:done` と Step.9 完了コメント、CLI / GUI は終了コード 0、`failed=[]` / `blocked=[]`、上記ファイルの実在を確認します。
+Cloud は Root Issue の `aas:done` と Step.8 完了コメント、CLI / GUI は終了コード 0、`failed=[]` / `blocked=[]`、上記ファイルの実在を確認します。
 手動 Prompt は自動ゲートがないため、表の依存順と上記チェックリストを利用します。部分実行の成功はフル AAS 完了を意味しません。
 
 ### 次のワークフロー
 
 | 後続 | Cloud の入口 | CLI | AAS 以外も含む開始条件 |
 |---|---|---|---|
-| AAD-WEB | `.github/ISSUE_TEMPLATE/web-app-design.yml` | `python -m hve orchestrate --workflow aad-web` | `FULL_PIPELINE` は `app-catalog.md`、`domain-analytics.md`、`service-catalog.md`、`data-model.md`、`service-catalog-matrix.md`、`test-strategy.md` を required とする。Step.9 成果物は AAD-WEB の Prompt が共通画面骨格として再利用する |
+| AAD-WEB | `.github/ISSUE_TEMPLATE/web-app-design.yml` | `python -m hve orchestrate --workflow aad-web` | `FULL_PIPELINE` は `app-catalog.md`、`domain-analytics.md`、`service-catalog.md`、`data-model.md`、`service-catalog-matrix.md`、`test-strategy.md` を required とする。Step.8 成果物は AAD-WEB の Prompt が共通画面骨格として再利用する |
 | ADFD | `.github/ISSUE_TEMPLATE/dataflow-design.yml` | `python -m hve orchestrate --workflow adfd` | `FULL_PIPELINE` の AAS 依存は `app-catalog.md` と `domain-analytics.md` の soft 依存。ただし ADFD Step.0.1 / 0.2 は `data-model.md` と `service-catalog-matrix.md` も入力にするため、通常はフル AAS 後に開始する |
 | AAG | `.github/ISSUE_TEMPLATE/ai-agent-design.yml` | `python -m hve orchestrate --workflow aag` | AAS、AAD-WEB、Azure サービス設計の成果物が必要。下記の Step.1 入力一覧を確認し、AAS の `aas:done` だけで開始しない |
 
@@ -854,7 +844,7 @@ AAG Step.1 の宣言済み入力は次のとおりです。
 7. 本ガイドと必要な図を更新します。
 8. `hve/tests/test_workflow_registry.py` で DAG、`hve/tests/test_template_engine.py` で Step template の列挙・展開、横断契約テストで Prompt / Template / I/O / Cloud / Issue Form / shell registry / guide の同期を固定します。
 
-Step.8 / Step.9 の実例は `hve/tests/test_aas_persona_step_numbering_contract.py` です。片方の面だけを変更するとこのテストが失敗するため、拡張時のチェックリストとして利用できます。
+Step.7 / Step.8 の実例は `hve/tests/test_aas_persona_step_numbering_contract.py` です。片方の面だけを変更するとこのテストが失敗するため、拡張時のチェックリストとして利用できます。
 
 ---
 
@@ -867,14 +857,13 @@ Step.8 / Step.9 の実例は `hve/tests/test_aas_persona_step_numbering_contract
 5. 対象ブランチに `main` を入力し、全チェックを外したまま Issue を作成して全 Step を選択する
 6. Actions タブで `AAS Orchestrator` の Bootstrap ジョブが起動したことを確認する
 7. Bootstrap 完了後、Step.1 の Issue が作成され `aas:running` ラベルが付き Copilot が assign されることを確認する
-8. 親 Issue にサマリコメントと Step Issue 一覧が投稿されたことを確認する
-9. Step.1 の成果物をマージ / 対象ブランチへ反映して Sub-Issue を close し、状態遷移ジョブが起動することを確認する
-10. Step.2 に `aas:ready` + `aas:running` が付与され Copilot が assign されることを確認する
-11. Step.2 完了後に Step.3.1、Step.3.1 完了後に Step.3.2 が起動することを確認する
-12. Step.4.1 完了後、Step.4.2 と Step.5 が並列に起動することを確認する
-13. Step.7 → Step.8 → Step.9 の順に進み、Step.9 完了後に Root Issue の `aas:done` と全成果物一覧コメントを確認する
-14. [フル AAS の成果物チェックリスト](#completion-next-aas)を確認する
-15. 必要な入力が揃った後、AAD-WEB / ADFD / AAG のいずれかを起動する
+8. 親 Issue にサマリーコメントと Step Issue 一覧が投稿されたことを確認する
+9. Step.1 の成果物をマージ / 対象ブランチへ反映して Sub-Issue を close し、状態遷移ジョブが起動して Step.2.1 に `aas:ready` + `aas:running` が付与され Copilot が assign されることを確認する
+10. Step.2.1 完了後に Step.2.2 が起動することを確認する
+11. Step.3.1 完了後、Step.3.2 と Step.4 が並列に起動することを確認する
+12. Step.6 → Step.7 → Step.8 の順に進み、Step.8 完了後に Root Issue の `aas:done` と全成果物一覧コメントを確認する
+13. [フル AAS の成果物チェックリスト](#completion-next-aas)を確認する
+14. 必要な入力が揃った後、AAD-WEB / ADFD / AAG のいずれかを起動する
 
 <a id="sources-aas"></a>
 ## 実装根拠
@@ -886,7 +875,7 @@ Step.8 / Step.9 の実例は `hve/tests/test_aas_persona_step_numbering_contract
 - Cloud 入口 / 状態遷移: `.github/workflows/auto-orchestrator-dispatcher.yml`、`.github/workflows/auto-app-selection-reusable.yml`
 - Cloud 入力フォーム: `.github/ISSUE_TEMPLATE/app-architecture-design.yml`
 - Prompt / Cloud Step body / I/O: `.github/prompts/`、`.github/scripts/templates/aas/`、`.github/io-contracts/*--aas--*.yaml`
-- Step.8 / Step.9 横断契約: `hve/tests/test_aas_persona_step_numbering_contract.py`
+- Step.7 / Step.8 横断契約: `hve/tests/test_aas_persona_step_numbering_contract.py`
 - AAS DAG 回帰: `hve/tests/test_workflow_registry.py`
 
 ### 外部仕様の公式出典

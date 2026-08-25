@@ -460,20 +460,24 @@ class TestWorkflowYamlAgenticInputs:
             assert input_name in with_keys, \
                 f"dispatcher の aad-web ジョブ with に '{input_name}' が見つかりません"
 
-    def test_dispatcher_does_not_dispatch_asdw_web(self):
-        """FR-CLOUD-06: dispatcher から ASDW-WEB の Cloud 起動ジョブが削除されていること。
+    def test_dispatcher_dispatches_asdw_web_with_agentic_inputs(self):
+        """FR-CLOUD-06: registry と同期済みの ASDW-WEB を dispatcher が起動すること。
 
         auto-app-dev-microservice-web-reusable.yml は hve/workflow_registry.py の
-        ASDW-WEB Step 体系と非同期（OUT-OF-SYNC NOTICE を自己申告）のため、
-        Cloud 起動を停止し CLI / GUI 経路を supported とする。
-        reusable workflow 側の Agentic 入力宣言は
-        test_asdw_web_reusable_has_all_six_agentic_inputs で引き続き検証する。
+        ASDW-WEB Step 体系と同期済み（test_cloud_reusable_workflow_parity.py が固定）。
+        Agentic 入力が asdw-web ジョブへ渡ることも合わせて確認する。
         """
         jobs = _load_workflow_yaml("auto-orchestrator-dispatcher.yml").get("jobs", {})
-        assert "asdw-web" not in jobs, "dispatcher に ASDW-WEB 起動ジョブが残っています"
-        assert f"uses: ./.github/workflows/{self._ASDW_WEB_REUSABLE}" not in _read_workflow_text(
-            "auto-orchestrator-dispatcher.yml"
-        )
+        assert "asdw-web" in jobs, "dispatcher に ASDW-WEB 起動ジョブがありません"
+        assert jobs["asdw-web"]["uses"].endswith(self._ASDW_WEB_REUSABLE)
+        with_keys = _get_dispatcher_job_with_keys("asdw-web")
+        for input_name in [
+            "enable_agentic_retrieval",
+            "agentic_data_source_modes",
+            "foundry_mcp_integration",
+        ]:
+            assert input_name in with_keys, \
+                f"dispatcher の asdw-web ジョブ with に '{input_name}' が見つかりません"
 
 
 class TestQaReadyLabelTokenFallback:
@@ -734,17 +738,18 @@ class TestLabelStateMachineFixWorkflows(unittest.TestCase):
         content = _read_workflow_text(workflow)
         for prefix in [
             "aas", "aad", "aad-web", "asdw", "asdw-web", "adfd",
-            "adfdv", "aag", "aagd", "akm", "adoc",
+            "adfdv", "aag", "aagd", "aar", "ada", "akm", "adoc",
         ]:
             self.assertIn(prefix, content)
         self.assertIn("<!-- state-transition-on-pr-merge-done -->", content)
 
     def test_state_transition_on_pr_merge_has_done_idempotency_guard(self):
         content = _read_workflow_text("state-transition-on-pr-merge.yml")
-        self.assertIn("if printf ',%s,' \"${labels_csv}\" | grep -q \",${done_label},\"; then", content)
+        self.assertIn('if [ "${done_present}" = "true" ]; then', content)
         self.assertIn("付与をスキップ", content)
-        self.assertIn("if [ \"${done_present}\" != \"true\" ]; then", content)
-        self.assertIn("残置ラベル削除をスキップ", content)
+        self.assertIn('elif gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --add-label "${done_label}"; then', content)
+        self.assertIn("cleanup_failed", content)
+        self.assertIn("stale_remaining", content)
 
     def test_state_transition_on_pr_merge_has_issue_resolution_fallback_and_auto_close(self):
         content = _read_workflow_text("state-transition-on-pr-merge.yml")

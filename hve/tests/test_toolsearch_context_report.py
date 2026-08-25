@@ -11,7 +11,12 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from hve.toolsearch.context_report import build_report, render_json, render_text
+from hve.toolsearch.context_report import (
+    build_report,
+    render_json,
+    render_text,
+    session_options,
+)
 
 _MODULE = Path(__file__).resolve().parents[1] / "toolsearch" / "context_report.py"
 
@@ -87,6 +92,17 @@ class TestBuildReport(unittest.TestCase):
         self.assertIn("claude-sonnet-4.5", render_text(_report()))
         self.assertEqual(json.loads(render_json(_report()))["model_name"], "claude-sonnet-4.5")
 
+    def test_reports_the_model_that_was_requested_for_the_session(self) -> None:
+        """FR-TS-11: `modelName` はセッションモデルを反映しないため、設定モデルを併記する。"""
+        report = _report(requested_model="claude-opus-4.7")
+        self.assertEqual(json.loads(render_json(report))["requested_model"], "claude-opus-4.7")
+        self.assertIn("claude-opus-4.7", render_text(report))
+
+    def test_requested_model_is_explicit_when_not_configured(self) -> None:
+        report = _report(requested_model=None)
+        self.assertIsNone(json.loads(render_json(report))["requested_model"])
+        self.assertIn("未指定", render_text(report))
+
     def test_reports_declared_but_unconnected_servers(self) -> None:
         report = _report(connected=("microsoft-learn",))
         self.assertEqual(report.unconnected, ("azure",))
@@ -138,6 +154,32 @@ class TestSourceContract(unittest.TestCase):
         self.assertIn("async def collect", self.source)
         for forbidden in (".send(", "send_and_wait"):
             self.assertNotIn(forbidden, self.source)
+
+    def test_collect_builds_its_session_from_session_options(self) -> None:
+        # コメントだけで満たされたように見えるのを避けるため、行コメントを除いて判定する。
+        code = "\n".join(line.split("#", 1)[0] for line in self.source.splitlines())
+        self.assertIn("session_options(config)", code)
+        self.assertNotIn('_create_session_with_auto_reasoning_fallback(client, {"streaming": True})', code)
+
+
+class TestSessionOptions(unittest.TestCase):
+    """FR-TS-11: 実測は Step 実行と同じモデル / context_tier で行う。"""
+
+    def test_uses_the_configured_model_and_context_tier(self) -> None:
+        opts = session_options(
+            SimpleNamespace(model="claude-opus-4.7", context_tier="long_context")
+        )
+        self.assertEqual(opts["model"], "claude-opus-4.7")
+        self.assertEqual(opts["context_tier"], "long_context")
+        self.assertTrue(opts["streaming"])
+
+    def test_omits_context_tier_when_it_is_not_configured(self) -> None:
+        opts = session_options(SimpleNamespace(model="claude-opus-4.7", context_tier=None))
+        self.assertNotIn("context_tier", opts)
+
+    def test_omits_model_when_it_resolves_to_nothing(self) -> None:
+        opts = session_options(SimpleNamespace(model=None, context_tier=None))
+        self.assertNotIn("model", opts)
 
 
 if __name__ == "__main__":

@@ -94,15 +94,12 @@ class TestWorkflowAutoQaParity(unittest.TestCase):
         self.assertIn('<!-- auto-qa: %s -->', content)
         self.assertIn('add_label "${ROOT_ISSUE}" "auto-qa"', content)
 
-    def test_asdw_web_workflow_has_step_3_3_e2e_transition(self) -> None:
-        """ASDW-WEB に Step.3.3 E2E が追加され、3.2→3.3→4.1/4.2 の遷移であること。"""
+    def test_asdw_web_workflow_has_e2e_step_and_dependencies(self) -> None:
+        """ASDW-WEB の E2E は Step.4.4 で、4.3→4.4→5.1/5.2 の依存であること。"""
         content = self._read_workflow("auto-app-dev-microservice-web-reusable.yml")
-        self.assertIn("[ASDW-WEB] Step.3.3: E2E テスト (Playwright)", content)
-        self.assertIn("Step.3.2 完了 → Step.3.3 を起動", content)
-        self.assertIn(
-            "Step.3.3 完了 → Step.3 コンテナに asdw-web:done → Step.4.1 + Step.4.2 を並列起動",
-            content,
-        )
+        self.assertIn("[ASDW-WEB] Step.4.4: E2E テスト (Playwright)", content)
+        self.assertIn('"4.4": ["4.3"]', content)
+        self.assertIn('"5.1": ["4.4"], "5.2": ["4.4"]', content)
 
     def test_abd_workflow_auto_qa_dynamic(self) -> None:
         """ADFD ワークフローが auto-qa を Issue 入力から動的に反映することを検証する。"""

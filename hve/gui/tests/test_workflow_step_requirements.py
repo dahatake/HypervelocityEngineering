@@ -130,7 +130,7 @@ class TestPickTargetStep:
         assert result == ("ard", "1")
 
     def test_skip_workflow_without_table_entry(self):
-        # aas は step "1" のみ登録。"999" は未登録 → スキップして次の登録済みへ
+        # aas は step "1" を登録。"999" は未登録 → スキップして次の登録済みへ
         result = pick_target_step([
             ("aas", ["999"]),
             ("aad-web", ["1"]),
@@ -142,9 +142,9 @@ class TestPickTargetStep:
         assert pick_target_step([("ard", [])]) is None
 
     def test_natural_order_within_workflow(self):
-        # adfd は "6.1" と "6.2" を登録 → "6.1" が選ばれる
-        result = pick_target_step([("adfd", ["6.2", "6.1"])])
-        assert result == ("adfd", "6.1")
+        # adfd は "0.1" と "2" を登録 → 自然順最小の "0.1" が選ばれる
+        result = pick_target_step([("adfd", ["2", "0.1"])])
+        assert result == ("adfd", "0.1")
 
 
 # --------------------------------------------------------------------------
@@ -227,7 +227,7 @@ class TestSummarizeArd:
 
 
 class TestSummarizeOthers:
-    def test_aas_requires_use_case_catalog(self):
+    def test_aas_requires_app_catalog_and_app_requirements(self):
         s = summarize_requirements("aas", "1", file_exists=lambda _p: False)
         assert s.overall_status == "warn"
         s2 = summarize_requirements("aas", "1", file_exists=lambda _p: True)

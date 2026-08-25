@@ -1,0 +1,198 @@
+name: Workflow Diff Gate
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+concurrency:
+  group: workflow-diff-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  g-diff:
+    name: G-DIFF
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout trusted base
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+
+      - name: Checkout subject as data
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: subject
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+
+      - name: Collect PR metadata and changed paths
+        id: inputs
+        uses: actions/github-script@v7
+        env:
+          G_DIFF_FILES_PATH: ${{ runner.temp }}/g-diff-files.json
+          G_DIFF_METADATA_PATH: ${{ runner.temp }}/g-diff-metadata.json
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const pr = context.payload.pull_request;
+            if (!pr || !Number.isInteger(pr.changed_files) || pr.changed_files < 0) {
+              throw new Error('pull request changed_files metadata is invalid');
+            }
+            if (pr.changed_files > 3000) {
+              throw new Error('pull request exceeds the 3000-file API limit');
+            }
+
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                per_page: 100,
+              }
+            );
+            if (files.length !== pr.changed_files) {
+              throw new Error(
+                `pull request file count mismatch: expected ${pr.changed_files}, got ${files.length}`
+              );
+            }
+            const changedFiles = files.map((file) => {
+              if (!file || typeof file.filename !== 'string' || typeof file.status !== 'string') {
+                throw new Error('pull request files response contains an invalid entry');
+              }
+              const item = {filename: file.filename, status: file.status};
+              if (file.status === 'renamed' || file.status === 'copied') {
+                if (typeof file.previous_filename !== 'string' || !file.previous_filename) {
+                  throw new Error(`${file.status} entry is missing previous_filename`);
+                }
+                item.previous_filename = file.previous_filename;
+              }
+              return item;
+            });
+
+            const issueNumbers = new Set();
+            const body = typeof pr.body === 'string' ? pr.body : '';
+            for (const match of body.matchAll(/<!--\s*parent-issue:\s*#(\d+)\s*-->/gi)) {
+              issueNumbers.add(Number(match[1]));
+            }
+
+            let cursor = null;
+            let hasNextPage = true;
+            while (hasNextPage) {
+              const data = await github.graphql(
+                `query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $number) {
+                      closingIssuesReferences(first: 100, after: $cursor) {
+                        nodes { number }
+                        pageInfo { hasNextPage endCursor }
+                      }
+                    }
+                  }
+                }`,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  number: pr.number,
+                  cursor,
+                }
+              );
+              const references = data?.repository?.pullRequest?.closingIssuesReferences;
+              if (!references || !Array.isArray(references.nodes) || !references.pageInfo) {
+                throw new Error('closing issue references response is invalid');
+              }
+              for (const issue of references.nodes) {
+                if (!issue || !Number.isInteger(issue.number)) {
+                  throw new Error('closing issue reference is invalid');
+                }
+                issueNumbers.add(issue.number);
+              }
+              hasNextPage = references.pageInfo.hasNextPage === true;
+              if (hasNextPage) {
+                if (typeof references.pageInfo.endCursor !== 'string' || !references.pageInfo.endCursor) {
+                  throw new Error('closing issue pagination cursor is invalid');
+                }
+                cursor = references.pageInfo.endCursor;
+              }
+            }
+
+            const issueTitles = [];
+            const issueLabels = [];
+            for (const issueNumber of [...issueNumbers].sort((a, b) => a - b)) {
+              const response = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+              });
+              if (!response.data || typeof response.data.title !== 'string') {
+                throw new Error('linked issue response is invalid');
+              }
+              issueTitles.push(response.data.title);
+              if (!Array.isArray(response.data.labels)) {
+                throw new Error('linked issue labels response is invalid');
+              }
+              for (const label of response.data.labels) {
+                const name = typeof label === 'string' ? label : label?.name;
+                if (typeof name !== 'string') {
+                  throw new Error('linked issue label is invalid');
+                }
+                issueLabels.push(name);
+              }
+            }
+
+            const metadata = {
+              title: typeof pr.title === 'string' ? pr.title : '',
+              body,
+              issue_titles: issueTitles,
+              issue_labels: issueLabels,
+              changed_files: pr.changed_files,
+            };
+            fs.writeFileSync(process.env.G_DIFF_FILES_PATH, JSON.stringify(changedFiles), {encoding: 'utf8'});
+            fs.writeFileSync(process.env.G_DIFF_METADATA_PATH, JSON.stringify(metadata), {encoding: 'utf8'});
+            core.setOutput('files-path', process.env.G_DIFF_FILES_PATH);
+            core.setOutput('metadata-path', process.env.G_DIFF_METADATA_PATH);
+
+      - name: Validate workflow diff
+        shell: bash
+        env:
+          G_DIFF_FILES_PATH: ${{ steps.inputs.outputs.files-path }}
+          G_DIFF_METADATA_PATH: ${{ steps.inputs.outputs.metadata-path }}
+          G_DIFF_RESULT_PATH: ${{ runner.temp }}/g-diff-result.json
+        run: |
+          set -euo pipefail
+          if python -I "$GITHUB_WORKSPACE/trusted/.github/scripts/validate-workflow-diff.py" \
+            --root "$GITHUB_WORKSPACE/subject" \
+            --pr-metadata-file "$G_DIFF_METADATA_PATH" \
+            --changed-files-file "$G_DIFF_FILES_PATH" \
+            --format json > "$G_DIFF_RESULT_PATH"; then
+            result=0
+          else
+            result=$?
+          fi
+          if [ ! -s "$G_DIFF_RESULT_PATH" ] || ! python -m json.tool "$G_DIFF_RESULT_PATH" > /dev/null; then
+            printf '%s\n' '{"errors":["validator result was empty or invalid"],"status":"BLOCKED"}' > "$G_DIFF_RESULT_PATH"
+            result=1
+          fi
+          cat "$G_DIFF_RESULT_PATH"
+          {
+            echo "## G-DIFF"
+            echo
+            echo '```json'
+            cat "$G_DIFF_RESULT_PATH"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$result"

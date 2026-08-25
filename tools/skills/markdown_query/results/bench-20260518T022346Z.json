@@ -1,0 +1,335 @@
+{
+  "schema_version": 1,
+  "started_at": "2026-05-18T02:23:46Z",
+  "finished_at": "2026-05-18T02:23:50Z",
+  "env": {
+    "tokenizer": "fallback(chars/4)",
+    "python": "3.13.13",
+    "platform": "Windows-11-10.0.29585-SP0",
+    "commit": "d43b488aa54fdef6fc80960ba8c0be89821a8956"
+  },
+  "params": {
+    "top_k": 5,
+    "max_tokens": 800,
+    "repeat": 3,
+    "scenarios": "baseline_full,mdq_bm25,mdq_grep",
+    "roots": [
+      "docs",
+      "docs-generated",
+      "users-guide",
+      "template",
+      "knowledge",
+      "qa",
+      "original-docs",
+      "work",
+      "sample",
+      "session-state",
+      "hve-dev"
+    ],
+    "path_globs": null,
+    "queries_file": "tools\\skills\\markdown-query\\queries.sample.txt",
+    "queries_json": null,
+    "queries_count": 5
+  },
+  "index": {
+    "files_indexed": 81,
+    "files_skipped": 0,
+    "chunks_written": 1980,
+    "pruned_files": 0,
+    "pruned_chunks": 0,
+    "index_ms": 535.651
+  },
+  "baseline_full": {
+    "files": 81,
+    "chars": 1003418,
+    "tokens": 250823,
+    "roots": [
+      "docs",
+      "docs-generated",
+      "users-guide",
+      "template",
+      "knowledge",
+      "qa",
+      "original-docs",
+      "work",
+      "sample",
+      "session-state",
+      "hve-dev"
+    ],
+    "path_globs": null,
+    "file_list_sample": [
+      "docs/business-requirement.md",
+      "docs/catalog/app-arch-catalog.md",
+      "docs/catalog/app-catalog.md",
+      "docs/catalog/data-catalog.md",
+      "docs/catalog/data-model.md"
+    ]
+  },
+  "scenarios": {
+    "mdq_bm25": {
+      "mode": "bm25",
+      "queries": 5,
+      "total_hits": 25,
+      "avg_response_tokens": 480.8,
+      "avg_vs_baseline_savings_pct": 99.8083,
+      "latency_ms_all": {
+        "n": 15,
+        "mean": 139.55,
+        "p50": 140.709,
+        "min": 128.873,
+        "max": 150.365,
+        "p95": 147.603
+      },
+      "per_query": [
+        {
+          "query": "業務要件 概要",
+          "hits": 5,
+          "hit_paths": [
+            "template/decisions/ADR-0003-ard-fanout-architecture.md",
+            "users-guide/01-business-requirement.md",
+            "users-guide/08-ai-agent.md",
+            "users-guide/06-app-dev-dataflow-azure.md",
+            "users-guide/01-business-requirement.md"
+          ],
+          "response_chars": 2265,
+          "response_tokens": 566,
+          "vs_baseline_savings_pct": 99.7743,
+          "latency_ms": {
+            "n": 3,
+            "mean": 132.53,
+            "p50": 132.776,
+            "min": 131.644,
+            "max": 133.17,
+            "p95": null
+          },
+          "coverage_proxy": null,
+          "expected_paths": null
+        },
+        {
+          "query": "ARD",
+          "hits": 5,
+          "hit_paths": [
+            "template/decisions/ADR-0003-ard-fanout-architecture.md",
+            "users-guide/01-business-requirement.md",
+            "users-guide/workflow-reference.md",
+            "template/decisions/ADR-0003-ard-fanout-architecture.md",
+            "users-guide/01-business-requirement.md"
+          ],
+          "response_chars": 1881,
+          "response_tokens": 470,
+          "vs_baseline_savings_pct": 99.8126,
+          "latency_ms": {
+            "n": 3,
+            "mean": 136.655,
+            "p50": 134.841,
+            "min": 128.873,
+            "max": 146.251,
+            "p95": null
+          },
+          "coverage_proxy": null,
+          "expected_paths": null
+        },
+        {
+          "query": "知識ベース",
+          "hits": 5,
+          "hit_paths": [
+            "users-guide/agentic-retrieval-guide.md",
+            "users-guide/hve-cli-orchestrator-guide.md",
+            "docs/use-cases/UC-05-detail.md",
+            "users-guide/agentic-retrieval-guide.md",
+            "users-guide/hve-cli-orchestrator-guide.md"
+          ],
+          "response_chars": 1926,
+          "response_tokens": 481,
+          "vs_baseline_savings_pct": 99.8082,
+          "latency_ms": {
+            "n": 3,
+            "mean": 145.773,
+            "p50": 145.143,
+            "min": 141.81,
+            "max": 150.365,
+            "p95": null
+          },
+          "coverage_proxy": null,
+          "expected_paths": null
+        },
+        {
+          "query": "ユースケース",
+          "hits": 5,
+          "hit_paths": [
+            "users-guide/01-business-requirement.md",
+            "users-guide/getting-started.md",
+            "template/business-requirement-document-master-list.md",
+            "sample/business-requirement-document-master-list.md",
+            "users-guide/02-app-architecture-design.md"
+          ],
+          "response_chars": 1461,
+          "response_tokens": 365,
+          "vs_baseline_savings_pct": 99.8545,
+          "latency_ms": {
+            "n": 3,
+            "mean": 141.718,
+            "p50": 140.709,
+            "min": 138.027,
+            "max": 146.419,
+            "p95": null
+          },
+          "coverage_proxy": null,
+          "expected_paths": null
+        },
+        {
+          "query": "アーキテクチャ",
+          "hits": 5,
+          "hit_paths": [
+            "users-guide/02-app-architecture-design.md",
+            "users-guide/04-app-design-dataflow.md",
+            "users-guide/05-app-dev-microservice-azure.md",
+            "users-guide/03-app-design-microservice-azure.md",
+            "hve-dev/requirement-definition.md"
+          ],
+          "response_chars": 2088,
+          "response_tokens": 522,
+          "vs_baseline_savings_pct": 99.7919,
+          "latency_ms": {
+            "n": 3,
+            "mean": 141.074,
+            "p50": 141.067,
+            "min": 140.235,
+            "max": 141.921,
+            "p95": null
+          },
+          "coverage_proxy": null,
+          "expected_paths": null
+        }
+      ]
+    },
+    "mdq_grep": {
+      "mode": "grep",
+      "queries": 5,
+      "total_hits": 17,
+      "avg_response_tokens": 323.2,
+      "avg_vs_baseline_savings_pct": 99.8711,
+      "latency_ms_all": {
+        "n": 15,
+        "mean": 13.431,
+        "p50": 12.649,
+        "min": 10.361,
+        "max": 21.281,
+        "p95": 19.394
+      },
+      "per_query": [
+        {
+          "query": "業務要件 概要",
+          "hits": 0,
+          "hit_paths": [],
+          "response_chars": 0,
+          "response_tokens": 1,
+          "vs_baseline_savings_pct": 99.9996,
+          "latency_ms": {
+            "n": 3,
+            "mean": 10.864,
+            "p50": 11.038,
+            "min": 10.361,
+            "max": 11.194,
+            "p95": null
+          },
+          "coverage_proxy": null,
+          "expected_paths": null
+        },
+        {
+          "query": "ARD",
+          "hits": 5,
+          "hit_paths": [
+            "hve-dev/requirement-test-mapping.md",
+            "template/decisions/ADR-0003-ard-fanout-architecture.md",
+            "users-guide/01-business-requirement.md",
+            "docs/business-requirement.md",
+            "sample/business-requirement.md"
+          ],
+          "response_chars": 1717,
+          "response_tokens": 429,
+          "vs_baseline_savings_pct": 99.829,
+          "latency_ms": {
+            "n": 3,
+            "mean": 19.361,
+            "p50": 18.585,
+            "min": 18.216,
+            "max": 21.281,
+            "p95": null
+          },
+          "coverage_proxy": null,
+          "expected_paths": null
+        },
+        {
+          "query": "知識ベース",
+          "hits": 2,
+          "hit_paths": [
+            "users-guide/agentic-retrieval-guide.md",
+            "users-guide/agentic-retrieval-guide.md"
+          ],
+          "response_chars": 844,
+          "response_tokens": 211,
+          "vs_baseline_savings_pct": 99.9159,
+          "latency_ms": {
+            "n": 3,
+            "mean": 11.427,
+            "p50": 11.575,
+            "min": 10.907,
+            "max": 11.799,
+            "p95": null
+          },
+          "coverage_proxy": null,
+          "expected_paths": null
+        },
+        {
+          "query": "ユースケース",
+          "hits": 5,
+          "hit_paths": [
+            "users-guide/07-ai-agent-simple.md",
+            "users-guide/01-business-requirement.md",
+            "users-guide/08-ai-agent.md",
+            "users-guide/01-business-requirement.md",
+            "users-guide/01-business-requirement.md"
+          ],
+          "response_chars": 1732,
+          "response_tokens": 433,
+          "vs_baseline_savings_pct": 99.8274,
+          "latency_ms": {
+            "n": 3,
+            "mean": 12.868,
+            "p50": 12.871,
+            "min": 12.649,
+            "max": 13.084,
+            "p95": null
+          },
+          "coverage_proxy": null,
+          "expected_paths": null
+        },
+        {
+          "query": "アーキテクチャ",
+          "hits": 5,
+          "hit_paths": [
+            "users-guide/01-business-requirement.md",
+            "users-guide/01-business-requirement.md",
+            "users-guide/02-app-architecture-design.md",
+            "users-guide/hve-cli-orchestrator-guide.md",
+            "users-guide/web-ui-guide.md"
+          ],
+          "response_chars": 2170,
+          "response_tokens": 542,
+          "vs_baseline_savings_pct": 99.7839,
+          "latency_ms": {
+            "n": 3,
+            "mean": 12.636,
+            "p50": 12.865,
+            "min": 11.617,
+            "max": 13.425,
+            "p95": null
+          },
+          "coverage_proxy": null,
+          "expected_paths": null
+        }
+      ]
+    }
+  }
+}

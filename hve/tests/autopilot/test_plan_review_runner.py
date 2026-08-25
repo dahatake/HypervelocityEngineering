@@ -82,28 +82,27 @@ def test_ard_group_id_expanded_to_real_step_ids(tmp_path: Path) -> None:
     )
 
 
-def test_ard_group_4_resolves_use_case_catalog_gap(tmp_path: Path) -> None:
-    """ARD グループ "4" 選択時、aas 側の use-case-catalog.md 要求が
-    MISSING_PRODUCED に昇格する（ARD 3.3 が producer として解決される）。
+def test_ard_group_5_resolves_app_catalog_gap(tmp_path: Path) -> None:
+    """ARDグループ5選択時、AAS側のapp-catalog要求がMISSING_PRODUCEDになる。
     """
     r = build_step1_plan_review(
         ["ard", "aas"],
         tmp_path,
-        steps_by_workflow={"ard": ["4"], "aas": ["1"]},
+        steps_by_workflow={"ard": ["5"], "aas": ["1"]},
     )
-    # aas Step 1 は use-case-catalog.md を required_input_paths に持つ。
+    # AAS Step 1 は app-catalog.md を required_input_paths に持つ。
     target = [
         i for i in r.inputs
-        if i.workflow_id == "aas" and i.path == "docs/catalog/use-case-catalog.md"
+        if i.workflow_id == "aas" and i.path == "docs/catalog/app-catalog.md"
     ]
-    assert target, "aas/1 の use-case-catalog.md 入力が見つからない"
+    assert target, "aas/1 の app-catalog.md 入力が見つからない"
     inp = target[0]
     assert inp.status == FileStatus.MISSING_PRODUCED, (
-        f"ARD 3.3 が producer として解決されていない: status={inp.status}, "
+        f"ARD 4.1 が producer として解決されていない: status={inp.status}, "
         f"producer={inp.producer}"
     )
-    assert inp.producer == ("ard", "3.3"), (
-        f"producer が ARD 3.3 ではない: {inp.producer}"
+    assert inp.producer == ("ard", "4.1"), (
+        f"producer が ARD 4.1 ではない: {inp.producer}"
     )
 
 
@@ -112,5 +111,5 @@ def test_non_ard_workflow_passthrough_unchanged(tmp_path: Path) -> None:
     r = build_step1_plan_review(
         ["aas"], tmp_path, steps_by_workflow={"aas": ["1"]}
     )
-    # aas Step 1 が列挙されている（具体的な output 数までは検証しない）。
+    # AAS Step 1 が列挙されている（具体的な output 数までは検証しない）。
     assert any(o.workflow_id == "aas" and o.step_id == "1" for o in r.outputs)

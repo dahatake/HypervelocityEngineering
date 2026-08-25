@@ -1,5 +1,7 @@
 # skills: code-query 技術リファレンス & 運用ガイド
 
+← [README](../README.md)
+
 > **本ページは HVE リポジトリ固有の技術リファレンスです。汎用 Skill 仕様は [.github/skills/code-query/SKILL.md](../.github/skills/code-query/SKILL.md) を参照してください。**
 >
 > **最終更新: 2026-08-13** — 定数・既定値・CLI オプション・フォールバック連鎖は同日の `cq/` 実装と突合済み。実測値は取得日を併記している。
@@ -384,7 +386,7 @@ Russ Cox の trigram 方式。
 
 | ファイル / テーブル | 役割 | 更新契機 | 典型的な更新頻度 |
 |---|---|---|---|
-| `.cq/index-<profile>.sqlite` の `files` | パス / 言語 / SHA-1 / mtime / size / parser | `cq index`、`cq watch` の flush、`cq search` の鮮度ガード | 中（編集量に応じて） |
+| `.cq/index-<profile>.sqlite` の `files` | パス / 言語 / SHA-1 / mtime / size / parser | `cq index`、`cq watch` の flush、`cq search` の鮮度ガード、HVE CLI / GUI 起動時の差分更新（§4.3） | 中（編集量に応じて） |
 | 同 `symbols` | 定義の qualname / kind / 行範囲 / シグネチャ / デコレータ / `is_test` | 同上 | 同上 |
 | 同 `chunks` | チャンク本文 + `name` / `signature` / `ident_text` / `token_est` | 同上 | 同上 |
 | 同 `chunks_tri`（FTS5 trigram） | 部分一致・正規表現の前段 | `chunks` への INSERT/DELETE と同一トランザクション（トリガ） | 同上 |
@@ -429,6 +431,10 @@ C# / JavaScript を brace 深度追跡から tree-sitter へ昇格したこと�
 
 ### 4.3 索引整合性の前提と運用 Tips
 
+- **起動時の差分更新（HVE CLI / GUI）**: HVE CLI（`run` / `cli` / `orchestrate`）と HVE GUI は起動時に、設定ファイルが宣言する profile のうち `.cq/index-<profile>.sqlite` が **実在するものだけ** をバックグラウンドで差分更新する。未構築の profile を新規作成することはない。`HVE_STARTUP_INDEX_REFRESH=0` で無効化できる。
+  - `cq watch` はこの差分更新の**完了後**に起動するため、同一 DB への並行書き込みは起きない。なお HVE が起動する watcher は設定の先頭 profile だけを監視するが、起動時の差分更新は実在する全 profile を対象にする。
+  - `--dry-run` でも索引は更新される（索引は Workflow の成果物ではないため）。watcher が `--dry-run` で起動しないのとは扱いが異なる。
+  - HVE プロセスを複数同時に起動した場合は、同一 DB への書き込みが競合して片方が警告を出し当該対象をスキップすることがある。
 - **増分判定の信頼境界**: SHA-1 と size の両方一致で skip するため、`git restore` のように mtime だけ変わるケースでは再索引されない。逆に **mtime も size も変わらず内容だけ書き換わる**ケース（極めて稀）は検知されない。完全性が要件なら `--rebuild` を使う。
 - **profile 追加時**: 新 profile は別 DB ファイルに作られるため、既存 DB には触れない。並行運用できる。
 - **DB 破損時の復旧**: `.cq/index-<profile>.sqlite` を削除して `python -m cq index --profile <name>` で再生成する。
@@ -940,7 +946,7 @@ python -m pytest cq/tests -q
   - ただし **fail-closed shell allowlist が `cq` CLI を許可しない Step では CLI を実行せず**、宣言済み入力を read/search tool で参照する。
 - **抽出アルゴリズムの共有**: [hve-dev/generate_tdd_inventory.py](../hve-dev/generate_tdd_inventory.py) が `cq.surface_export` と `cq.traces.FEATURE_ID_RE` を import する。面横断シンボル抽出と規範 ID パターンは `cq` 側に単一実装され、inventory 生成側で再定義しない（FR-CQ-10）。
   - このため `cq/surface_export.py` を変更したら `hve-dev/hve-surface-inventory.csv` の再生成と差分確認が必要。
-- **保守時の要件トレーサビリティ**: `cq/**` の変更は [.github/instructions/hve-maintenance.instructions.md](../.github/instructions/hve-maintenance.instructions.md) の適用対象。`hve-requirement-traceability` Skill に従う。
+- **保守時の要件トレーサビリティ**: `cq/**` の変更・不具合調査は [.github/instructions/hve-maintenance.instructions.md](../.github/instructions/hve-maintenance.instructions.md) の適用対象。`hve-requirement-traceability` Skill に従う。
 
 ### 10.1 HVE カスタマイズ（設定正本・拡張手順・回帰検証・互換性）
 
@@ -1001,6 +1007,7 @@ CLI を打たずに索引を運用できる（FR-GUI-04）。画面の実体は 
 
 - 既定のデバウンス値は `cq.watcher.DEFAULT_DEBOUNCE_MS` を実行時に読み出して表示する（GUI 側に数値を持たない）。
 - CLI orchestrator 側の優先順位は `--no-cq-watch` > `--cq-watch` > `HVE_CQ_WATCH` > 既定 ON。
+- **起動時の差分更新（§4.3）はここの設定とは別系統**で、GUI 側の設定項目を持たない。有効・無効は環境変数 `HVE_STARTUP_INDEX_REFRESH` だけで制御する。
 - **CLI への伝播は HVE 組み込み経路だけ**。独立ランチャーは値を対象リポジトリの設定ファイルへ保存するが、`hve orchestrate` を起動しないため監視は自動で始まらない（`python -m cq watch` を併走させる）。
 - **監視対象は設定ファイルで最初に宣言された profile のみ**。GUI で選択中の profile は CLI へ伝播しない（§14 参照）。
 
@@ -1028,6 +1035,7 @@ CLI を打たずに索引を運用できる（FR-GUI-04）。画面の実体は 
 | `parser` が `lite` ばかり | その言語に専用抽出器が無い、または解析失敗 | 定義行しか取れていない前提で読む（§7） |
 | `error: watching needs the optional 'watchdog' dependency` | 任意依存が未導入 | `pip install -e ".[code-watch]"`（`watchdog` を含む）。`cq watch` は必須ではない |
 | Windows で DB ロックエラー | `cq watch` と手動 `cq index` の並行実行 | watcher を止めてから索引する |
+| HVE 起動時に `index refresh: cq <profile> の差分更新に失敗しました` が出る | 複数の HVE プロセスが同一 DB へ同時に書き込んだ（§4.3） | 実害は当該対象のスキップのみ。気になる場合は HVE を 1 プロセスにするか、`HVE_STARTUP_INDEX_REFRESH=0` で起動時更新を切って `python -m cq index` を手動実行する |
 | GUI が `PySide6 is not installed` で exit 2 | GUI の任意依存が未導入 | 本リポジトリでは `hve\setup-hve.cmd` / `./hve/setup-hve.sh`（手動は補助手段として `pip install -e ".[gui,gui-pty,gui-docconvert]"`）、導入キットでは `setup.ps1 --with-gui` / `setup.sh --with-gui` |
 | GUI ランチャが `vendor/cq is missing or has no GUI` で exit 2 | GUI 追加前に作った古い `vendor/` を使っている | 上流で `sync-vendor` を再実行して `vendor/` を置き換える |
 | トークン数が概算になる | `tiktoken` 未導入 | `pip install -e ".[code-tokenizer]"`。未導入時は `chars/4-approx` で近似される |
@@ -1189,7 +1197,7 @@ python -m cq map   --profile <name> --max-tokens 400   # 3. 俯瞰が意味を�
 ### 未確認事項
 
 - 上記の性能実測値（§9.3）は本リポジトリのゴールデン 21 問での観測であり、他リポジトリ・他クエリ分布での再現性は未検証。
-- **CLI orchestrator の watcher は 1 profile のみを監視する**。`hve orchestrate` が起動する `CqWatcher` の対象は設定ファイルで最初に宣言された profile に固定されており、GUI で選択中の profile を CLI へ伝播する手段は現時点で無い。他 profile の索引は GUI の「差分更新」または `python -m cq index --profile <名前>` で更新する。
+- **CLI orchestrator の watcher は 1 profile のみを監視する**。`hve orchestrate` が起動する `CqWatcher` の対象は設定ファイルで最初に宣言された profile に固定されており、GUI で選択中の profile を CLI へ伝播する手段は現時点で無い。ただし起動時の差分更新（§4.3）は実在する全 profile を対象にするため、起動時点の鮮度は全 profile で揃う。実行中に変更された他 profile の索引は GUI の「差分更新」または `python -m cq index --profile <名前>` で更新する。
 - 他 Agent ホスト（Claude Code / Codex CLI 等）での Skill 選択率は未計測。
 
 ---
@@ -1203,3 +1211,4 @@ python -m cq map   --profile <name> --max-tokens 400   # 3. 俯瞰が意味を�
 - 索引 DB: `.cq/index-<profile>.sqlite`（`.gitignore` 対象）
 - 要件・テスト対応: [hve-dev/requirement-test-mapping.md](../hve-dev/requirement-test-mapping.md) の FR-CQ-01〜12 / NFR-CQ-01
 - Markdown 側の対応ガイド: [users-guide/skills-markdown-query.md](skills-markdown-query.md)
+- HVE ランタイムのツール検索: [tool-search.md](tool-search.md)

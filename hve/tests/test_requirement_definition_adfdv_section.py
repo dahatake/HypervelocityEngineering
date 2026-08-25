@@ -7,13 +7,15 @@
 という実装と乖離した状態が残っていた。
 
 要求定義は正規文書であり、実装と乖離したまま放置すると保守判断の根拠を失う。
-ここでは §13.5 が宣言する Step 構成・依存・fan-out parser を
+ここでは §13.5 固有の宣言（見出し名・fan-out parser・Custom Agent・旧パス不在）を
 `hve/workflow_registry.py` の実定義と突き合わせて固定する。
+
+Step ID 集合の一致は全 Workflow 横断の単一実装（FR-MAINT-09 /
+`hve/tests/test_requirement_section13_parity.py`）が担うため、本ファイルでは検査しない（FR-MAINT-07）。
 """
 
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -41,25 +43,14 @@ def test_section_13_5_uses_the_current_workflow_name() -> None:
     assert "Dataflow Dev" in heading, heading
 
 
-def test_section_13_5_declares_every_registry_step() -> None:
-    """実定義の全 Step が §13.5 の表に現れる。"""
-    section = _section_13_5()
-    declared = {
-        row.split("|")[1].strip()
-        for row in section.splitlines()
-        if row.startswith("| ") and re.match(r"\|\s*\d", row)
-    }
-    actual = {step.id for step in get_workflow("adfdv").steps}
-
-    assert actual <= declared, f"§13.5 に未記載の Step がある: {sorted(actual - declared)}"
-
-
 def test_section_13_5_declares_the_actual_fanout_parser() -> None:
     """fan-out parser 名を実装と一致させる。"""
     section = _section_13_5()
+    workflow = get_workflow("adfdv")
+    assert workflow is not None
     parsers = {
         step.fanout_parser
-        for step in get_workflow("adfdv").steps
+        for step in workflow.steps
         if getattr(step, "fanout_parser", None)
     }
 
@@ -72,8 +63,10 @@ def test_section_13_5_declares_the_actual_fanout_parser() -> None:
 def test_section_13_5_declares_the_actual_custom_agents() -> None:
     """Custom Agent 名を実装と一致させる。"""
     section = _section_13_5()
+    workflow = get_workflow("adfdv")
+    assert workflow is not None
 
-    for step in get_workflow("adfdv").steps:
+    for step in workflow.steps:
         agent = getattr(step, "custom_agent", None)
         if not agent:
             continue

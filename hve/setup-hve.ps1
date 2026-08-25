@@ -26,7 +26,7 @@
 #   - OpenJS.NodeJS.LTS   : MCP Server / Work IQ / npx skills
 #   - Microsoft.AzureCLI  : Azure 系ワークフロー (asdw-* / ADFD)
 #   - koalaman.shellcheck : ASDW Step 1.2 の静的検証
-#   - @github/copilot     : GUI の Copilot チャットパネル (npm -g、Node.js 導入後)
+#   - @github/copilot     : GUI の Copilot チャットパネル (npm -g で常に最新版へ更新)
 #
 # 追加で行うこと:
 #   - グローバル Python 環境からの遮断 (PYTHONPATH/PYTHONHOME/PIP_* の無効化、
@@ -35,9 +35,9 @@
 #   - .venv 作成 / 検証 (Python 3.11+ 必須)
 #   - pip / setuptools / wheel をアップグレード
 #   - editable install: pip install -e .
-#   - github-copilot-sdk を hve\copilot-sdk.lock 固定版で導入 (--no-deps で
-#     pydantic-core 不整合を回避) し、pin された Copilot ランタイムを
-#     先読みして版の整合を検証 (-UpgradeSdk で最新化 + lock 更新)
+#   - github-copilot-sdk を既定で最新版へ更新 (--no-deps で pydantic-core
+#     不整合を回避) し、pin された Copilot ランタイムを先読みして版の
+#     整合を検証 (-PinSdk で hve\copilot-sdk.lock 固定版、-UpgradeSdk で lock も更新)
 #   - nltk punkt_tab を事前ダウンロード (semantic 初回ビルドのオフライン安定化)
 #   - Mermaid / KaTeX アセット DL (Markdown プレビュー)
 #   - GUI 翻訳 .ts → .qm コンパイル (pyside6-lrelease)
@@ -57,7 +57,8 @@
 #   ... -Force             .venv を無条件削除し再構築
 #   ... -SkipNltkDownload  nltk punkt_tab の事前 DL をスキップ
 #   ... -WithSkills        microsoft/skills を npx で .github/skills/azure-skills/ に導入
-#   ... -UpgradeSdk        github-copilot-sdk を最新化し hve\copilot-sdk.lock を更新
+#   ... -UpgradeSdk        github-copilot-sdk を最新化し hve\copilot-sdk.lock も更新
+#   ... -PinSdk            hve\copilot-sdk.lock の固定版を導入 (既定は最新版へ追従)
 #   ... -Yes               確認プロンプトをスキップ (Python の winget 自動導入を含む)
 #   ... -NoInstallPython   Python の winget 自動導入を行わない
 #   ... -NoInstallTools    git / gh / Node.js / Azure CLI / ShellCheck / Copilot CLI の
@@ -75,6 +76,7 @@ param(
     [switch]$SkipNltkDownload,
     [switch]$WithSkills,
     [switch]$UpgradeSdk,
+    [switch]$PinSdk,
     [switch]$Yes,
     [switch]$NoInstallPython,
     [switch]$NoInstallTools,
@@ -623,9 +625,9 @@ if (-not $Minimal) {
 #   pydantic-core を最新版 (例: 2.47.0) へ引き上げ、pydantic 2.13.4 が要求する
 #   pin (pydantic-core==2.46.4) と不整合になり GUI 起動時に例外となる。
 #   SDK の依存 (pydantic>=2.0 等) は editable install 時点で既に充足済み。
-# 版は hve\copilot-sdk.lock で固定する。無条件に最新へ追従すると「セットアップ
-#   した日」でマシンごとに版が変わり、公開直後のリリースにパーサ不整合があった
-#   場合に特定の人だけ壊れて再現・切り分けが不能になるため。
+# 既定は最新版へ追従する。版を固定して再現性を取りたい場合だけ -PinSdk を指定し、
+#   hve\copilot-sdk.lock の版を導入する。-UpgradeSdk は最新化に加えて lock を
+#   書き換える (チーム既定版を進める操作) ため、既定経路では lock に触れない。
 $lockFile = Join-Path $repoRoot 'hve\copilot-sdk.lock'
 # NOTE: Python ソース内は単一引用符のみ使用（PowerShell のネイティブコマンド
 #       引数渡しで二重引用符が剥がれる問題を回避するため）。
@@ -643,29 +645,33 @@ p.write_text(t, encoding='utf-8', newline='\n')
 print(sdk)
 '@
 
-if ($UpgradeSdk) {
-    Write-Step 'Upgrading github-copilot-sdk to latest (no-deps) and refreshing the lock'
-    Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','--upgrade','--no-deps','github-copilot-sdk')
-    if (-not (Test-Path -LiteralPath $lockFile)) {
-        Write-Warn2 "Lock file not found: $lockFile"
+if ($PinSdk) {
+    if (Test-Path -LiteralPath $lockFile) {
+        Write-Step 'Installing github-copilot-sdk from hve\copilot-sdk.lock (no-deps)'
+        Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','--no-deps','-r',$lockFile)
     } else {
-        $prev = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        try { $newSdk = (& $venvPy -c $lockUpdatePy $lockFile 2>$null | Select-Object -First 1 | Out-String).Trim() }
-        finally { $ErrorActionPreference = $prev }
-        if ($newSdk) {
-            Write-Ok "hve\copilot-sdk.lock now pins $newSdk. Review the diff and commit it so the whole team moves together."
+        Write-Warn2 'hve\copilot-sdk.lock not found. Installing the latest release instead; re-run with -UpgradeSdk to regenerate the lock.'
+        Write-Step 'Upgrading github-copilot-sdk to the latest release (no-deps)'
+        Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','--upgrade','--no-deps','github-copilot-sdk')
+    }
+} else {
+    Write-Step 'Upgrading github-copilot-sdk to the latest release (no-deps)'
+    Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','--upgrade','--no-deps','github-copilot-sdk')
+    if ($UpgradeSdk) {
+        if (-not (Test-Path -LiteralPath $lockFile)) {
+            Write-Warn2 "Lock file not found: $lockFile"
         } else {
-            Write-Warn2 'Could not refresh hve\copilot-sdk.lock. Update it by hand.'
+            $prev = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            try { $newSdk = (& $venvPy -c $lockUpdatePy $lockFile 2>$null | Select-Object -First 1 | Out-String).Trim() }
+            finally { $ErrorActionPreference = $prev }
+            if ($newSdk) {
+                Write-Ok "hve\copilot-sdk.lock now pins $newSdk. Review the diff and commit it so the whole team moves together."
+            } else {
+                Write-Warn2 'Could not refresh hve\copilot-sdk.lock. Update it by hand.'
+            }
         }
     }
-} elseif (Test-Path -LiteralPath $lockFile) {
-    Write-Step 'Installing github-copilot-sdk from hve\copilot-sdk.lock (no-deps)'
-    Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','--no-deps','-r',$lockFile)
-} else {
-    Write-Warn2 'hve\copilot-sdk.lock not found. Falling back to the latest release; re-run with -UpgradeSdk to regenerate the lock.'
-    Write-Step 'Upgrading github-copilot-sdk to latest (no-deps)'
-    Invoke-Checked -Exe $venvPy -ArgList @('-m','pip','install','--upgrade','--no-deps','github-copilot-sdk')
 }
 
 # ---------- 依存整合性チェック（pydantic / pydantic-core 等） ----------
@@ -839,49 +845,53 @@ if ($installGui) {
 # WARNING: この CLI は SDK の pin とは独立に自己更新する。COPILOT_CLI_PATH /
 #   --cli-path でこの CLI を Step 実行に流用すると、上の整合検証で固定した
 #   ランタイム版から必ず乖離し session.event 解析エラーの原因になる。
-Write-Step 'Checking GitHub Copilot CLI (copilot)'
-$copilotHint = 'npm install -g @github/copilot'
+Write-Step 'Installing the latest GitHub Copilot CLI (copilot)'
+$copilotHint = 'npm install -g @github/copilot@latest'
 $copilot = Get-Command copilot -ErrorAction SilentlyContinue
+$npm = Get-Command npm -ErrorAction SilentlyContinue
 if ($copilot) {
     Write-Ok "copilot: $($copilot.Source)"
     $copilotVer = Get-CopilotCliVersion -Exe $copilot.Source
     if ($copilotVer) {
-        Write-Host "    version: $copilotVer (independent of the SDK pin; do not point COPILOT_CLI_PATH here)" -ForegroundColor DarkGray
+        Write-Host "    installed: $copilotVer (independent of the SDK pin; do not point COPILOT_CLI_PATH here)" -ForegroundColor DarkGray
     }
-    $npmForUpdate = Get-Command npm -ErrorAction SilentlyContinue
-    if (-not $NoInstallTools -and $npmForUpdate -and
-        (Invoke-Probe -Exe $npmForUpdate.Source -ArgList @('ls','-g','--depth=0','@github/copilot')) -eq 0) {
+    if ($NoInstallTools) {
+        Write-Warn2 "Skipped the copilot CLI update (-NoInstallTools). Update manually: $copilotHint"
+    } elseif (-not $npm) {
+        Write-Warn2 "npm not found. Install Node.js, then update: $copilotHint"
+    } elseif ((Invoke-Probe -Exe $npm.Source -ArgList @('ls','-g','--depth=0','@github/copilot')) -ne 0) {
+        # npm 経由でないもの (スタンドアロン導入等) を npm で上書きすると 2 つの
+        # copilot が PATH 上に並び、どちらが解決されるかが環境依存になる。
+        Write-Warn2 "copilot on PATH is not managed by npm (-g). Skipped the npm update to avoid a second installation; update it through the channel you installed it with, or run: $copilotHint"
+    } else {
         try {
-            Invoke-Checked -Exe $npmForUpdate.Source -ArgList @('install','-g','@github/copilot@latest')
+            Invoke-Checked -Exe $npm.Source -ArgList @('install','-g','@github/copilot@latest')
             Write-Ok "copilot CLI updated to $(Get-CopilotCliVersion -Exe $copilot.Source)"
         } catch {
-            Write-Warn2 "copilot CLI update failed: $($_.Exception.Message). Update manually: $copilotHint@latest"
+            Write-Warn2 "copilot CLI update failed: $($_.Exception.Message). Update manually: $copilotHint"
         }
     }
 } elseif ($NoInstallTools) {
     Write-Warn2 "copilot not found (GUI Copilot chat panel). Install: $copilotHint"
+} elseif (-not $npm) {
+    Write-Warn2 "npm not found. Install Node.js, then: $copilotHint"
 } else {
-    $npm = Get-Command npm -ErrorAction SilentlyContinue
-    if (-not $npm) {
-        Write-Warn2 "npm not found. Install Node.js, then: $copilotHint"
+    $proceed = $Yes
+    if (-not $proceed) {
+        $resp = Read-Host 'Install the latest GitHub Copilot CLI via npm? (enables the GUI Copilot chat panel) [y/N]'
+        $proceed = ($resp -match '^[Yy]$')
+    }
+    if (-not $proceed) {
+        Write-Warn2 "copilot skipped. Install later: $copilotHint"
     } else {
-        $proceed = $Yes
-        if (-not $proceed) {
-            $resp = Read-Host 'Install GitHub Copilot CLI via npm? (enables the GUI Copilot chat panel) [y/N]'
-            $proceed = ($resp -match '^[Yy]$')
-        }
-        if (-not $proceed) {
-            Write-Warn2 "copilot skipped. Install later: $copilotHint"
-        } else {
-            try {
-                Invoke-Checked -Exe $npm.Source -ArgList @('install','-g','@github/copilot')
-                Update-PathFromRegistry
-                $copilot = Get-Command copilot -ErrorAction SilentlyContinue
-                if ($copilot) { Write-Ok "copilot installed: $($copilot.Source)" }
-                else { Write-Warn2 "copilot installed but not on PATH yet. Open a new terminal and re-run." }
-            } catch {
-                Write-Warn2 "Copilot CLI install failed: $($_.Exception.Message). Install manually: $copilotHint"
-            }
+        try {
+            Invoke-Checked -Exe $npm.Source -ArgList @('install','-g','@github/copilot@latest')
+            Update-PathFromRegistry
+            $copilot = Get-Command copilot -ErrorAction SilentlyContinue
+            if ($copilot) { Write-Ok "copilot installed: $($copilot.Source) ($(Get-CopilotCliVersion -Exe $copilot.Source))" }
+            else { Write-Warn2 "copilot installed but not on PATH yet. Open a new terminal and re-run." }
+        } catch {
+            Write-Warn2 "Copilot CLI install failed: $($_.Exception.Message). Install manually: $copilotHint"
         }
     }
 }

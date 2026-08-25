@@ -30,6 +30,7 @@ _REUSED_AGENTS = {
     "Dev-Microservice-Azure-AgenticRetrievalDesign",
     "Dev-Microservice-Azure-AgenticRetrievalDeploy",
     "Arch-TDD-TestSpec",
+    "QA-RequirementsConformanceEval",
 }
 # AAR のために新規作成した Agent
 _NEW_AGENTS = {
@@ -72,18 +73,28 @@ class TestAgentReuse:
 class TestEvaluationStep:
     """実測評価が無いと reasoning effort の選択を裏付けられない。"""
 
-    def test_last_step_is_the_evaluation(self, workflow):
-        assert workflow.steps[-1].custom_agent == "QA-AgenticRetrievalEval"
+    def test_retrieval_evaluation_precedes_conformance(self, workflow):
+        assert workflow.steps[-2].custom_agent == "QA-AgenticRetrievalEval"
+        assert workflow.steps[-1].custom_agent == "QA-RequirementsConformanceEval"
 
     def test_evaluation_depends_on_deploy(self, workflow):
         """デプロイ済みリソースが無ければ実測できない。"""
-        eval_step = workflow.steps[-1]
+        eval_step = next(
+            s for s in workflow.steps if s.custom_agent == "QA-AgenticRetrievalEval"
+        )
         deploy_ids = {
             s.id
             for s in workflow.steps
             if s.custom_agent == "Dev-Microservice-Azure-AgenticRetrievalDeploy"
         }
         assert set(eval_step.depends_on) & deploy_ids
+
+    def test_conformance_depends_on_retrieval_evaluation(self, workflow):
+        eval_step = next(
+            s for s in workflow.steps if s.custom_agent == "QA-AgenticRetrievalEval"
+        )
+        conformance = workflow.steps[-1]
+        assert eval_step.id in conformance.depends_on
 
     def test_evaluation_prompt_forbids_unmeasured_numbers(self):
         """「測っていない数値を書かない」が Prompt に明記されている。"""

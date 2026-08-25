@@ -43,7 +43,8 @@ from .workflow_display import format_workflow_label, format_workflow_label_html
 # --------------------------------------------------------------------------
 
 _WORKFLOW_DESCRIPTIONS = {
-    "aas": "Architecture Design — アプリケーション設計（Step.1〜Step.9）",
+    "aas": "Architecture Design — アプリケーション設計（Step.2〜Step.9）",
+    "ada": "Agent Data Architecture — 画面を持たないデータ中心 AI Agent 向けのデータ設計（Step.1〜Step.9）",
     "aad-web": "Web App Design — Web 画面定義書・サービス定義書・TDD テスト仕様書",
     "asdw-web": "Web App Dev & Deploy — Web アプリ開発とデプロイ（TDD RED/GREEN）",
     "adfd": "Dataflow Design — バッチドメイン分析・ジョブ設計",
@@ -51,23 +52,32 @@ _WORKFLOW_DESCRIPTIONS = {
     "akm": "Knowledge Management — knowledge/ D01〜D21 を 21 並列で生成",
     "adi": "Auto Design-doc Ingestion — docs-original/ の設計書を目録化し、質問票生成と下流選別をまとめて扱う",
     "adoc": "Source Codeからのドキュメント作成 — レイヤー別ドキュメント自動生成",
-    "ard": "Auto Requirement Definition — 事業分析〜要件定義（4 グループ: 企業の事業分析 / 要求定義書作成 / KPI/OKR 定義（任意）/ ユースケース作成）",
+    "ard": "Auto Requirement Definition — 事業分析〜APP別要求定義（5 グループ）",
+    "aag": "AI Agent Design — AI Agent のアプリケーション定義・粒度設計・詳細設計",
+    "aagd": "AI Agent Dev & Deploy — AI Agent の実装とデプロイ",
+    "aar": "Agentic Retrieval Add-on — Agentic Retrieval の実装設計・テスト・デプロイ・実測評価",
 }
 
 
 # --------------------------------------------------------------------------
 # カテゴリー定義（Step 1 のワークフロー一覧をカテゴリー枠でグルーピング表示）
+# 正本は `hve.workflow_registry.WORKFLOW_CATEGORIES`（CLI と共有 / FR-GUI-21）。
 # 未分類の ID は「その他」枠で末尾に表示する。
 # --------------------------------------------------------------------------
 
-_WORKFLOW_CATEGORIES: List[Tuple[str, List[str]]] = [
-    ("Business Engineering (要求定義)", ["ard"]),
-    ("Architecture Design",             ["aas"]),
-    ("Software Engineering",            ["aad-web", "asdw-web", "adfd", "adfdv"]),
-    # ADI は knowledge 化の前段（原本の取り込み）なので独立カテゴリに置く。
-    ("既存ドキュメントのインポート",       ["adi"]),
-    ("Knowledge Management",            ["akm", "adoc"]),
-]
+
+def _load_workflow_categories() -> List[Tuple[str, List[str]]]:
+    """`workflow_registry.WORKFLOW_CATEGORIES` から (カテゴリー名, ID 群) を取得する。
+
+    インポートに失敗した場合は空リストを返し、全ワークフローを「その他」枠へ
+    集約した縮退表示にする。
+    """
+    try:
+        from hve.workflow_registry import WORKFLOW_CATEGORIES
+
+        return [(name, list(ids)) for name, ids in WORKFLOW_CATEGORIES]
+    except Exception:
+        return []
 
 
 def _load_workflow_choices() -> List[Tuple[str, str]]:
@@ -114,6 +124,16 @@ def _load_workflow_steps(wf_id: str) -> List[Tuple[str, str, List[str]]]:
         return []
 
 
+def _load_ard_default_group_ids() -> Optional[Tuple[str, ...]]:
+    """ARD既定グループをregistryから取得する。取得不能時は縮退表示用にNoneを返す。"""
+    try:
+        from hve.workflow_registry import ARD_DEFAULT_GROUP_IDS
+
+        return tuple(ARD_DEFAULT_GROUP_IDS)
+    except Exception:
+        return None
+
+
 # --------------------------------------------------------------------------
 # StepsChecklistPanel — 1 ワークフロー分のステップチェックリスト
 # --------------------------------------------------------------------------
@@ -124,16 +144,18 @@ class _WorkflowStepsGroup(QWidget):
 
     steps_changed = Signal(str, list)  # workflow_id, enabled_step_ids
 
-    # ARD: 4 グループ体系のラベル定義。
+    # ARD: 5 グループ体系のラベル定義。
     # `enabled_step_ids()` が返す ID は registry侧の
     # `_WORKFLOW_GROUP_MAPS["ard"]` で実 Step ID
-    # （"1"→["1","1.1","1.2"] / "2"→["2"] / "3"→["2.1"] / "4"→["3.1","3.2","3.3"]）
+    # （"1"→["1","1.1","1.2"] / "2"→["2"] / "3"→["2.1"] /
+    #  "4"→["3.1","3.2","3.3"] / "5"→["4.1","4.2"]）
     # に展開される。
-    _ARD_GROUPS: List[Tuple[str, str, bool]] = [
-        ("1", "企業の事業分析（事業分野候補列挙 → 分野別深掘り → 統合）", False),
-        ("2", "要求定義書作成（Step 1 の出力があれば参考にし、無くてもよい）", True),
-        ("3", "KPI/OKR 定義（任意・戦略的記述から KPI/OKR・計測データ・データ収集設計を生成）", True),
-        ("4", "ユースケース作成（骨格抽出 → 詳細生成 → カタログ統合）", True),
+    _ARD_GROUPS: List[Tuple[str, str]] = [
+        ("1", "企業の事業分析（事業分野候補列挙 → 分野別深掘り → 統合）"),
+        ("2", "要求定義書作成（Step 1 の出力があれば参考にし、無くてもよい）"),
+        ("3", "KPI/OKR 定義（任意・戦略的記述から KPI/OKR・計測データ・データ収集設計を生成）"),
+        ("4", "ユースケース作成（骨格抽出 → 詳細生成 → カタログ統合）"),
+        ("5", "アプリケーション要求定義（APP一覧 → APP別要求定義書を順次upsert）"),
     ]
 
     def __init__(
@@ -148,9 +170,26 @@ class _WorkflowStepsGroup(QWidget):
         # ARD はグループ ID を表示する。それ以外は registry の実 Step を表示する。
         self._steps: List[Tuple[str, str, List[str]]]
         if workflow_id == "ard":
-            self._steps = [(gid, title, []) for gid, title, _on in self._ARD_GROUPS]
-            self._default_on: Dict[str, bool] = {
-                gid: default_on for gid, _title, default_on in self._ARD_GROUPS
+            default_group_ids = _load_ard_default_group_ids()
+            known_group_ids = [gid for gid, _title in self._ARD_GROUPS]
+            if default_group_ids is None:
+                default_group_ids = ()
+            elif len(default_group_ids) != len(set(default_group_ids)):
+                raise ValueError("ARD_DEFAULT_GROUP_IDS に重複したグループ ID があります")
+            else:
+                unknown_group_ids = [
+                    group_id
+                    for group_id in default_group_ids
+                    if group_id not in known_group_ids
+                ]
+                if unknown_group_ids:
+                    raise ValueError(
+                        "ARD_DEFAULT_GROUP_IDS に未登録のグループ ID があります: "
+                        + ", ".join(unknown_group_ids)
+                    )
+            self._steps = [(gid, title, []) for gid, title in self._ARD_GROUPS]
+            self._default_on = {
+                gid: gid in default_group_ids for gid, _title in self._ARD_GROUPS
             }
         else:
             self._steps = steps  # (id, title, depends_on)
@@ -173,10 +212,10 @@ class _WorkflowStepsGroup(QWidget):
         header.setStyleSheet("padding: 2px 0;")
         layout.addWidget(header)
 
-        # ARD: 4 グループ体系の説明
+        # ARD: 5 グループ体系の説明
         if self._workflow_id == "ard":
             note = QLabel(
-                self.tr("ℹ️ ARD は 4 グループ構成です。各グループは内部で複数の実 Step を順次実行します。\n"
+                self.tr("ℹ️ ARD は 5 グループ構成です。各グループは内部で複数の実 Step を順次実行します。\n"
                 "Step 2（要求定義書作成）は Step 1 の出力があれば参考にしますが、無くても実行できます。")
             )
             note.setProperty("hveRole", "noteBox")
@@ -424,8 +463,9 @@ class WorkflowSelectPage(QWidget):
         wf_layout.setSpacing(6)
 
         name_map = {wf_id: name for wf_id, name in self._workflows}
+        category_defs = _load_workflow_categories()
         categorized_ids: set = set()
-        for _cat_name, ids in _WORKFLOW_CATEGORIES:
+        for _cat_name, ids in category_defs:
             categorized_ids.update(ids)
         uncategorized = [
             (wf_id, name) for wf_id, name in self._workflows
@@ -434,7 +474,7 @@ class WorkflowSelectPage(QWidget):
 
         # カテゴリー定義 + 未分類 ID は末尾「その他」に集約
         categories: List[Tuple[str, List[Tuple[str, str]]]] = []
-        for cat_name, ids in _WORKFLOW_CATEGORIES:
+        for cat_name, ids in category_defs:
             items = [(wf_id, name_map[wf_id]) for wf_id in ids if wf_id in name_map]
             if items:
                 categories.append((cat_name, items))

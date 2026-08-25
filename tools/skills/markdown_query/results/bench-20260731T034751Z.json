@@ -1,0 +1,670 @@
+{
+  "schema_version": 1,
+  "started_at": "2026-07-31T03:47:51Z",
+  "finished_at": "2026-07-31T03:48:22Z",
+  "env": {
+    "tokenizer": "tiktoken/cl100k_base",
+    "python": "3.14.6",
+    "platform": "Windows-11-10.0.29634-SP0",
+    "commit": "56b72b65c511e36e7d4d261b97fd43f2468ec2a4"
+  },
+  "params": {
+    "top_k": 5,
+    "max_tokens": 800,
+    "repeat": 1,
+    "scenarios": "mdq_bm25",
+    "roots": [
+      "docs",
+      "users-guide"
+    ],
+    "path_globs": null,
+    "queries_file": null,
+    "queries_json": null,
+    "golden": "mdq\\golden-queries-holdout.json",
+    "ignore_golden_paths": true,
+    "db": ".mdq\\index-ja-jp-heading.sqlite",
+    "queries_count": 20
+  },
+  "database_paths": {
+    "primary": "C:\\GitHub\\RoyalytyService2ndGen\\.mdq\\index-ja-jp-heading.sqlite"
+  },
+  "provenance": {
+    "engine_sha256": "e1c37fa680f7e6b9c976f7cab099ad5159d1b6e00ffa6ddea03ae0bc990453ab",
+    "config_sha256": "7b81f057e27588b2a39f69e57bdd1107835c265b7036a2f5ab27db6ae65cf52f",
+    "golden_sha256": "49d9e44aeca2d49ff5975fbe9cff56070a52426f49988f90e148a1cfbc5bbaf7",
+    "dependency_sha256": "68666e666b05c167070f8a18d0520cde4f92b082c1b15e259eea9b565107171b"
+  },
+  "index": null,
+  "baseline_full": null,
+  "scenarios": {
+    "mdq_bm25": {
+      "mode": "bm25",
+      "queries": 20,
+      "total_hits": 46,
+      "avg_response_tokens": 638.1,
+      "avg_vs_baseline_savings_pct": null,
+      "latency_ms_all": {
+        "n": 20,
+        "mean": 752.566,
+        "p50": 717.817,
+        "min": 663.188,
+        "max": 1050.284,
+        "p95": 850.709
+      },
+      "golden": {
+        "overall": {
+          "queries": 20,
+          "k": 5,
+          "top1_accuracy": 0.4,
+          "topk_accuracy": 0.5,
+          "mrr_at_k": 0.45
+        },
+        "per_group": {
+          "catalog": {
+            "queries": 5,
+            "k": 5,
+            "top1_accuracy": 0.6,
+            "topk_accuracy": 0.6,
+            "mrr_at_k": 0.6
+          },
+          "design-docs": {
+            "queries": 7,
+            "k": 5,
+            "top1_accuracy": 0.1429,
+            "topk_accuracy": 0.2857,
+            "mrr_at_k": 0.2143
+          },
+          "generated-inventory": {
+            "queries": 1,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.0,
+            "mrr_at_k": 0.0
+          },
+          "guides": {
+            "queries": 4,
+            "k": 5,
+            "top1_accuracy": 1.0,
+            "topk_accuracy": 1.0,
+            "mrr_at_k": 1.0
+          },
+          "requirements": {
+            "queries": 3,
+            "k": 5,
+            "top1_accuracy": 0.0,
+            "topk_accuracy": 0.3333,
+            "mrr_at_k": 0.1667
+          }
+        }
+      },
+      "per_query": [
+        {
+          "query": "サービス × データストア 所有権 マトリクス",
+          "hits": 2,
+          "hit_paths": [
+            "docs/catalog/data-catalog.md",
+            "docs/catalog/test-strategy.md"
+          ],
+          "response_chars": 935,
+          "response_tokens": 546,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 1050.284,
+            "p50": 1050.284,
+            "min": 1050.284,
+            "max": 1050.284,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/data-catalog.md"
+          ],
+          "id": "H-CAT-01",
+          "group": "catalog",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "ID体系 採番規則",
+          "hits": 2,
+          "hit_paths": [
+            "docs/catalog/data-catalog.md",
+            "template/decisions/ADR-0003-ard-fanout-architecture.md"
+          ],
+          "response_chars": 822,
+          "response_tokens": 511,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 785.442,
+            "p50": 785.442,
+            "min": 785.442,
+            "max": 785.442,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/data-catalog.md"
+          ],
+          "id": "H-CAT-02",
+          "group": "catalog",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "Polyglot Persistence テスト方針",
+          "hits": 2,
+          "hit_paths": [
+            "docs/catalog/test-strategy.md",
+            "docs/test-specs/SVC-12-test-spec.md"
+          ],
+          "response_chars": 906,
+          "response_tokens": 530,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 840.205,
+            "p50": 840.205,
+            "min": 840.205,
+            "max": 840.205,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/catalog/test-strategy.md"
+          ],
+          "id": "H-CAT-03",
+          "group": "catalog",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "テスト分類 定義",
+          "hits": 2,
+          "hit_paths": [
+            "users-guide/01-business-requirement.md",
+            "docs/usecase/UC-11-detail.md"
+          ],
+          "response_chars": 993,
+          "response_tokens": 729,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 764.967,
+            "p50": 764.967,
+            "min": 764.967,
+            "max": 764.967,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/test-strategy.md"
+          ],
+          "id": "H-CAT-04",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "ペルソナ一覧",
+          "hits": 2,
+          "hit_paths": [
+            "docs/catalog/persona-screen-catalog.md",
+            "docs/catalog/screen-catalog-APP-009.md"
+          ],
+          "response_chars": 990,
+          "response_tokens": 553,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 719.307,
+            "p50": 719.307,
+            "min": 719.307,
+            "max": 719.307,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/catalog/persona-catalog.md"
+          ],
+          "id": "H-CAT-05",
+          "group": "catalog",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "SVC-01 会員同意 公開インターフェース 非同期",
+          "hits": 1,
+          "hit_paths": [
+            "docs/test-specs/SVC-01-test-spec.md"
+          ],
+          "response_chars": 618,
+          "response_tokens": 378,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 838.054,
+            "p50": 838.054,
+            "min": 838.054,
+            "max": 838.054,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/services/SVC-01-member-consent-service-description.md"
+          ],
+          "id": "H-DOC-01",
+          "group": "design-docs",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "SVC-01 セキュリティ 権限",
+          "hits": 2,
+          "hit_paths": [
+            "docs/test-specs/SVC-23-test-spec.md",
+            "sample/services/SVC-01-member-consent-service-description.md"
+          ],
+          "response_chars": 828,
+          "response_tokens": 446,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 698.886,
+            "p50": 698.886,
+            "min": 698.886,
+            "max": 698.886,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/services/SVC-01-member-consent-service-description.md"
+          ],
+          "id": "H-DOC-02",
+          "group": "design-docs",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-009-S008 A11y i18n",
+          "hits": 2,
+          "hit_paths": [
+            "docs/test-specs/APP-009-S008-test-spec.md",
+            "docs/test-specs/APP-009-S008-test-spec.md"
+          ],
+          "response_chars": 1254,
+          "response_tokens": 776,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 663.188,
+            "p50": 663.188,
+            "min": 663.188,
+            "max": 663.188,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/screen/APP-009-S008.md"
+          ],
+          "id": "H-DOC-03",
+          "group": "design-docs",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "APP-009-S008 バリデーション エラーメッセージ",
+          "hits": 2,
+          "hit_paths": [
+            "docs/test-specs/APP-009-S008-test-spec.md",
+            "docs/test-specs/APP-009-S001-test-spec.md"
+          ],
+          "response_chars": 1245,
+          "response_tokens": 765,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 765.424,
+            "p50": 765.424,
+            "min": 765.424,
+            "max": 765.424,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "docs/screen/APP-009-S008.md"
+          ],
+          "id": "H-DOC-04",
+          "group": "design-docs",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "エンティティ別 ストア選定 Azure",
+          "hits": 2,
+          "hit_paths": [
+            "docs/azure/azure-services-data.md",
+            "docs/azure/azure-services-data.md"
+          ],
+          "response_chars": 1215,
+          "response_tokens": 764,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 704.109,
+            "p50": 704.109,
+            "min": 704.109,
+            "max": 704.109,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/azure/azure-services-data.md"
+          ],
+          "id": "H-DOC-05",
+          "group": "design-docs",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "ストア間 整合性 同期戦略",
+          "hits": 3,
+          "hit_paths": [
+            "users-guide/01-business-requirement.md",
+            "docs/azure/azure-services-data.md",
+            "docs/catalog/test-strategy.md"
+          ],
+          "response_chars": 1271,
+          "response_tokens": 761,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 691.751,
+            "p50": 691.751,
+            "min": 691.751,
+            "max": 691.751,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/azure/azure-services-data.md"
+          ],
+          "id": "H-DOC-06",
+          "group": "design-docs",
+          "rank": 2,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "Azure 追加提案 サービス別",
+          "hits": 2,
+          "hit_paths": [
+            "docs/azure/azure-services-additional.md",
+            "docs/azure/azure-services-additional.md"
+          ],
+          "response_chars": 924,
+          "response_tokens": 528,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 716.326,
+            "p50": 716.326,
+            "min": 716.326,
+            "max": 716.326,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "docs/azure/azure-services-additional.md"
+          ],
+          "id": "H-DOC-07",
+          "group": "design-docs",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "ワークフロー 必須入力ファイル 一覧",
+          "hits": 2,
+          "hit_paths": [
+            "users-guide/workflow-reference.md",
+            "users-guide/workflow-reference.md"
+          ],
+          "response_chars": 899,
+          "response_tokens": 576,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 702.88,
+            "p50": 702.88,
+            "min": 702.88,
+            "max": 702.88,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "users-guide/workflow-reference.md"
+          ],
+          "id": "H-GUIDE-01",
+          "group": "guides",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "Fan-out 並列実行 ADR-0002",
+          "hits": 3,
+          "hit_paths": [
+            "users-guide/workflow-reference.md",
+            "users-guide/workflow-reference.md",
+            "template/decisions/ADR-0003-ard-fanout-architecture.md"
+          ],
+          "response_chars": 1222,
+          "response_tokens": 711,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 702.642,
+            "p50": 702.642,
+            "min": 702.642,
+            "max": 702.642,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "users-guide/workflow-reference.md"
+          ],
+          "id": "H-GUIDE-02",
+          "group": "guides",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "SDK ツール制限 環境変数",
+          "hits": 3,
+          "hit_paths": [
+            "users-guide/workflow-reference.md",
+            "users-guide/workflow-reference.md",
+            "users-guide/hve-cli-orchestrator-guide.md"
+          ],
+          "response_chars": 1227,
+          "response_tokens": 718,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 727.919,
+            "p50": 727.919,
+            "min": 727.919,
+            "max": 727.919,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "users-guide/workflow-reference.md"
+          ],
+          "id": "H-GUIDE-03",
+          "group": "guides",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "Firewall 設定 Web UI",
+          "hits": 5,
+          "hit_paths": [
+            "users-guide/web-ui-guide.md",
+            "users-guide/web-ui-guide.md",
+            "users-guide/hve-cloud-getting-started.md",
+            "users-guide/web-ui-guide.md",
+            "users-guide/03-app-design-microservice-azure.md"
+          ],
+          "response_chars": 1672,
+          "response_tokens": 795,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 701.054,
+            "p50": 701.054,
+            "min": 701.054,
+            "max": 701.054,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "users-guide/web-ui-guide.md"
+          ],
+          "id": "H-GUIDE-04",
+          "group": "guides",
+          "rank": 1,
+          "top1": true,
+          "topk": true
+        },
+        {
+          "query": "PR トレーサビリティブロック 記録 CI 検査",
+          "hits": 1,
+          "hit_paths": [
+            "hve-dev/hve-feature-inventory.csv"
+          ],
+          "response_chars": 675,
+          "response_tokens": 391,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 780.619,
+            "p50": 780.619,
+            "min": 780.619,
+            "max": 780.619,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "H-REQ-01",
+          "group": "requirements",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "ルート Step 前提成果物 存在チェック",
+          "hits": 3,
+          "hit_paths": [
+            "hve-dev/hve-feature-inventory.csv",
+            "users-guide/06-app-dev-dataflow-azure.md",
+            "hve-dev/hve-feature-inventory.csv"
+          ],
+          "response_chars": 1500,
+          "response_tokens": 748,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 780.233,
+            "p50": 780.233,
+            "min": 780.233,
+            "max": 780.233,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "H-REQ-02",
+          "group": "requirements",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        },
+        {
+          "query": "Workflow 状態ラベル initialized ready running done blocked",
+          "hits": 3,
+          "hit_paths": [
+            "hve-dev/hve-feature-inventory.csv",
+            "hve-dev/requirement-definition.md",
+            "hve-dev/requirement-test-mapping.md"
+          ],
+          "response_chars": 1701,
+          "response_tokens": 750,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 713.027,
+            "p50": 713.027,
+            "min": 713.027,
+            "max": 713.027,
+            "p95": null
+          },
+          "coverage_proxy": 1.0,
+          "expected_paths": [
+            "hve-dev/requirement-definition.md"
+          ],
+          "id": "H-REQ-03",
+          "group": "requirements",
+          "rank": 2,
+          "top1": false,
+          "topk": true
+        },
+        {
+          "query": "normalise_relative パス正規化 実装",
+          "hits": 2,
+          "hit_paths": [
+            "hve-dev/requirement-definition.md",
+            "hve-dev/hve-feature-inventory.csv"
+          ],
+          "response_chars": 1303,
+          "response_tokens": 786,
+          "vs_baseline_savings_pct": null,
+          "latency_ms": {
+            "n": 1,
+            "mean": 705.003,
+            "p50": 705.003,
+            "min": 705.003,
+            "max": 705.003,
+            "p95": null
+          },
+          "coverage_proxy": 0.0,
+          "expected_paths": [
+            "hve-dev/hve-surface-inventory.csv"
+          ],
+          "id": "H-INV-01",
+          "group": "generated-inventory",
+          "rank": null,
+          "top1": false,
+          "topk": false
+        }
+      ]
+    }
+  }
+}

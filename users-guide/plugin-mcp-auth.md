@@ -1,5 +1,7 @@
 # Plugin / MCP Server 認証ガイド
 
+← [README](../README.md)
+
 > ⚠️ **本ドキュメントの位置付け（2026-08-07 現在）**
 >
 > - **ユーザー影響**: HVE GUI から MCP / Plugin の認証を起動する専用 UI（旧 🔐 ボタン）は廃止されています（[hve/gui/main_window.py](../hve/gui/main_window.py) の該当箇所に「Plugin / MCP Server 認証ボタンは廃止」とコメントあり）。認証は **GitHub Copilot CLI 側で完結** させる運用に移行しました。
@@ -215,5 +217,6 @@ HVE 自身は **トークンや資格情報を一切保存しません**。Copil
 
 - [HVE GUI Orchestrator ガイド — Plugin / MCP Server 認証](./hve-gui-orchestrator-guide.md#plugin-mcp-server-認証)
 - [HVE 技術アーキテクチャ §8 認証と資格情報の取扱い](./hve-technical-architecture.md#8-認証と資格情報の取扱い)
+- [Copilot CLI への Playwright MCP 導入手順](./setup-playwright-mcp.md)
 
 内部コード参照は §1.2 / §3 にまとめています。

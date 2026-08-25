@@ -1,6 +1,6 @@
 # Web Application 設計（AAD-WEB）
 
-← [02-app-architecture-design.md](./02-app-architecture-design.md) | [05-app-dev-microservice-azure.md](./05-app-dev-microservice-azure.md) →
+← [README](../README.md) | ← [02-app-architecture-design.md](./02-app-architecture-design.md) | [05-app-dev-microservice-azure.md](./05-app-dev-microservice-azure.md) →
 
 > [!IMPORTANT]
 > 本文の Step ID・依存・入出力は、2026-08-07 時点の

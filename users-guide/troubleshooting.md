@@ -190,6 +190,77 @@ Self-hosted runner は **オプション** です。GitHub-hosted runner を使�
 
 ---
 
+### 8-0) Work IQ の回答案が QA へ 1 件も統合されない
+
+**症状**: 実行ログに次のような警告が出て、`qa/` の回答済み質問票に Work IQ 回答案が入らない。
+
+```text
+⚠️ Work IQ [Q2]: Work IQ MCP ツール呼び出しを SDK イベント上で確認できませんでした。
+  応答 status: FOUND（一次情報ありと申告されています）
+  当該区間で観測されたツール: retrieve
+Work IQ: 3 件の応答を得ましたが、0 件の質問にしか回答案を統合できませんでした。
+```
+
+**原因と対処**:
+
+| 原因 | 確認方法 | 対処 |
+|---|---|---|
+| 実際に呼ばれたツールが HVE の実行確認集合に無い | 警告の「当該区間で観測されたツール」を見る | 参照系ツールなのに検出されない場合は不具合。ツール名を添えて報告してください |
+| LLM がツールを呼ばずに説明文だけ返した | 観測されたツールが空 | `python -m hve workiq-doctor --sdk-tool-probe --sdk-event-trace` で実呼び出しを確認 |
+| SDK のイベント形式が変わり抽出できない | `python -m hve workiq-doctor --event-extractor-self-test` | 自己診断が FAIL なら抽出ロジックの更新が必要 |
+
+> `STATUS: NOT_FOUND` の応答は「一次情報が見つからなかった」という正常な結果であり、この警告は出ません。統合 0 件でもすべて `NOT_FOUND` なら異常ではありません。
+
+**修正後の確認**: Workflow を丸ごと再実行せずに、次の診断で統合可否だけを確認できます。
+
+```bash
+python -m hve workiq-doctor --skip-mcp-probe --qa-integration-probe --sdk-tool-probe-timeout 300
+```
+
+`workiq_qa_merge_decision` が `PASS` なら本番でも統合されます。`FAIL` の場合は同じチェックに観測されたツール名が出るため、上表で切り分けてください。
+
+---
+
+### 8-0-1) Work IQ の可用性判定が初回だけ失敗する
+
+**症状**: npx キャッシュが無い環境で 1 回目の実行だけ Work IQ が無効化され、2 回目以降は有効になる。
+
+**原因**: 初回は `npx -y @microsoft/workiq` が npm レジストリからパッケージを取得するため、可用性判定がタイムアウトすることがあります。
+
+**対処**: 現在の HVE はタイムアウトを「判定不能」として扱い、同一プロセス内で再試行します（不可用として恒久キャッシュしません）。それでも失敗する場合は、事前に次を実行してキャッシュを温めてください。
+
+```bash
+npx -y @microsoft/workiq version
+```
+
+---
+
+### 8-0-2) QA 起点 AKM が失敗したが原因が分からない
+
+**症状**: 親実行のログに `QA 起点 AKM は N 件失敗しました` と出る。
+
+**確認**: 警告に子実行の `returncode` と子ログのパスが併記されます。
+
+```text
+QA 起点 AKM は 3 件失敗しました（source Workflow は継続、境界=DAG 完了後）。
+  - returncode=1 対象 3 件 / ログ: work/run/qa-akm-<id>/child-stdio.log
+  子が status=blocked で停止した場合は HVE ソースの未コミット変更（FR-CLI-74）が最も多い原因です。
+```
+
+**対処**:
+
+1. 表示された `child-stdio.log` を開いて子実行のエラー本文を確認する
+2. `status=blocked` で停止していた場合は `git status --porcelain hve mdq hve-dev .github` で未コミット変更を確認し、コミットまたは退避してから再実行する（この検査を無効化するオプションはありません）
+**登録時にスキップされる場合**: 登録時点で既に HVE ソースが dirty なら、子を起動せずに即時で次の警告が出ます。
+
+```text
+QA 起点 AKM の登録を 1 件スキップしました（source Workflow は継続、境界=DAG 完了後）。
+  - qa/<run-id>-1-pre-execution-qa.md
+```
+
+コミット後に `--workflow akm --sources qa --target-files <当該ファイル>` で手動取り込みしてください。
+---
+
 ### 8-1) `ModuleNotFoundError: No module named 'cq'` / `'config'`
 
 **症状**: `hve` コマンドが以下で落ちる。
@@ -439,7 +510,7 @@ AAD-WEB / ASDW-WEB / ADFD / ADFDV ワークフローで以下のエラーが Iss
 | エラー文言（先頭） | 原因 | 対処 |
 |---|---|---|
 | `... が見つかりません。Architecture Design (AAS) を先に実行してください` | catalog ファイル自体が未生成 | AAS ワークフローを先に実行する |
-| `... の見出し \`## A) サマリ表（全APP横断）\` セクションが見つかりません` | catalog の見出しが出力契約と大きく異なる（`サマリ表` / `選定結果一覧` を含まない） | `.github/skills/architecture-questionnaire/assets/output-format.md` §7.2 に沿って見出しを `## A) サマリ表（全APP横断）` に修正、または AAS Step.2 を再実行（`選定結果一覧（サマリ表）` などの軽微な揺れは受理されるが WARN が出ます） |
+| `... の見出し \`## A) サマリ表（全APP横断）\` セクションが見つかりません` | catalog の見出しが出力契約と大きく異なる（`サマリ表` / `選定結果一覧` を含まない） | `.github/skills/architecture-questionnaire/assets/output-format.md` §7.2 に沿って見出しを `## A) サマリ表（全APP横断）` に修正、または AAS Step.1 を再実行（`選定結果一覧（サマリ表）` などの軽微な揺れは受理されるが WARN が出ます） |
 | `... のサマリ表に必要な列 ...` | テーブル列名（APP-ID / 推薦アーキテクチャ）の不在/誤表記 | サマリ表の列ヘッダを出力契約に揃える |
 | `... が予期せず失敗しました（exit 1, 詳細不明）` | Python 自体の起動失敗等 | ワークフローログで `python3 -m hve.app_arch_filter` のスタックトレースを確認 |
 
@@ -636,6 +707,19 @@ HVE CLI Orchestrator（ローカル実行方式）のトラブルシューティ
 
 GitHub Copilot CLI SDK の複数デバイス間セッション管理が不十分なため、Session State（Resume）機能（`Ctrl+R` 中断・`hve resume` サブコマンド・`session-state/` 永続化）は v1.1 で全廃しました。ワークフローを分割実行したい場合は `--steps` でステップ範囲を絞ってください。
 
+### 起動時の索引差分更新で警告が出る / 実行開始が遅い
+
+| 段階 | 対応 |
+|---|---|
+| 症状 | 起動直後に `index refresh: mdq <lang>/<strategy> の差分更新に失敗しました` または `index refresh: cq <profile> ...` が stderr へ出る。あるいは `hve orchestrate` で watcher の起動が数十秒遅れる。 |
+| 確認 | 他の HVE プロセス（GUI と子プロセス、複数の `hve orchestrate` 等）が同時に走っていないか。`.mdq/` / `.cq/` を別ツールが開いていないか。 |
+| 原因候補 | 同一の索引 DB への並行書き込み（SQLite のファイルロック）。watcher は差分更新の完了後に起動する仕様のため、初回起動や大量のファイル変更後は待ち時間が伸びる。 |
+| 安全な復旧 | 失敗は当該対象のスキップだけで、Workflow の実行は継続される（索引は次回起動または `python -m mdq index` / `python -m cq index` で追いつく）。常に切りたい場合は `HVE_STARTUP_INDEX_REFRESH=0` を設定する。 |
+| 検証 | 再実行して警告が出ないこと。`python -m mdq stats` / `python -m cq stats --profile <名前>` で files / chunks が期待値になっていること。 |
+| エスカレーション | 警告行全文、同時に走らせていた HVE プロセス数、OS、`.mdq/` / `.cq/` のファイル一覧を共有する。 |
+
+> 仕様の詳細は [hve-cli-orchestrator-guide.md §F.8.1](./hve-cli-orchestrator-guide.md#f81-起動時の索引差分更新hve-cli--gui) を参照してください。
+
 ---
 
 ## HVE GUI Orchestrator のトラブル
@@ -661,6 +745,17 @@ GitHub Copilot CLI SDK の複数デバイス間セッション管理が不十分
 | 安全な復旧 | `HVE_GUI_STOP_ON_FATAL=1` で fatal 時停止、`0` で継続に切り替える。実行中のログを共有する場合は token / 内部 URL / 顧客情報をマスクする。 |
 | 検証 | 次回実行で fatal 時の停止挙動が期待どおりになる。 |
 | エスカレーション | GUI の該当ログ、設定値、実行した workflow / step を共有する。 |
+
+### 起動直後に実行ボタンが押せない
+
+| 段階 | 対応 |
+|---|---|
+| 症状 | GUI 起動直後、ワークフローを選んでも実行開始ボタンが無効のままで、ステータス欄に「索引 (markdown-query / code-query) の差分更新中です。完了後に実行を開始できます。」と出る。 |
+| 確認 | 仕様どおりの挙動。差分更新が終わるとボタンは自動で有効へ戻る。 |
+| 原因候補 | 子プロセスの索引 watcher と同一の索引 DB へ同時に書き込むのを避けるため、更新中は実行開始を受け付けない（FR-GUI-22）。初回起動や大量のファイル変更後は待ち時間が伸びる。 |
+| 安全な復旧 | 待つ。待ちたくない場合は `HVE_STARTUP_INDEX_REFRESH=0` を設定して GUI を起動し、索引は `python -m mdq index` / `python -m cq index` で手動更新する。GUI 専用の設定項目はありません。 |
+| 検証 | ステータス欄が「ワークフローの選択: ...」へ戻り、実行開始ボタンが押せること。 |
+| エスカレーション | 待機が終わらない場合は、stderr の `index refresh:` 行、`.mdq/` / `.cq/` のファイル一覧、同時に走らせている HVE プロセス数を共有する。 |
 
 
 ## knowledge/ ドキュメント関連のトラブル

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
 import unittest
@@ -18,7 +19,9 @@ from hve.skill_resolver import (
     resolve_skill_alias,
     validate_skill_names,
 )
-from hve.workflow_registry import get_step
+from hve.workflow_registry import get_step, list_workflows
+
+_MANIFEST = Path(__file__).resolve().parents[1] / "skill_manifest.json"
 
 
 class TestSkillResolver(unittest.TestCase):
@@ -51,7 +54,8 @@ class TestSkillResolver(unittest.TestCase):
         self.assertNotIn("knowledge-management", req)
 
     def test_required_skill_from_manifest_for_ard_step(self) -> None:
-        req = get_required_skills_for_step("ard", "3", step_declared_required=[])
+        # ARD の実在 Step。step_declared_required を空にして manifest 由来だけを見る。
+        req = get_required_skills_for_step("ard", "1", step_declared_required=[])
         self.assertIn("task-dag-planning", req)
         self.assertIn("knowledge-management", req)
 
@@ -87,7 +91,10 @@ class TestSkillResolver(unittest.TestCase):
             "azure-ac-verification",
             "azure-region-policy",
         )
-        self.assertEqual(required, ["microservice-design-guide", *expected_step_skills])
+        self.assertEqual(
+            required,
+            ["microservice-design-guide", "application-requirement-traceability", *expected_step_skills],
+        )
         for skill in expected_step_skills:
             self.assertIn(skill, required)
         missing, _, _ = validate_skill_names(required)
@@ -261,6 +268,32 @@ class TestSkillResolver(unittest.TestCase):
     def test_optional_skills_unknown_coordinate_is_empty(self) -> None:
         self.assertEqual(get_optional_skills_for_step("unknown", "1"), [])
         self.assertEqual(get_optional_skills_for_step("aagd", "99"), [])
+
+
+class TestManifestMatchesRegistry(unittest.TestCase):
+    """skill_manifest.json の参照先は registry に実在する。
+
+    到達しない Step ID は実行時エラーにならず、Skill が黙って適用されない。
+    """
+
+    def setUp(self) -> None:
+        self.manifest = json.loads(_MANIFEST.read_text(encoding="utf-8"))
+        self.registry = {w.id: {s.id for s in w.steps} for w in list_workflows()}
+
+    def test_referenced_workflow_ids_exist(self) -> None:
+        for section in ("workflow_defaults", "required_skills", "optional_skills"):
+            for workflow_id in self.manifest.get(section) or {}:
+                self.assertIn(workflow_id, self.registry, f"{section}.{workflow_id}")
+
+    def test_referenced_step_ids_exist(self) -> None:
+        unknown: dict[str, list[str]] = {}
+        for section in ("required_skills", "optional_skills"):
+            for workflow_id, steps in (self.manifest.get(section) or {}).items():
+                known = self.registry.get(workflow_id, set())
+                missing = sorted(step_id for step_id in steps if step_id not in known)
+                if missing:
+                    unknown[f"{section}.{workflow_id}"] = missing
+        self.assertEqual(unknown, {})
 
 
 if __name__ == "__main__":

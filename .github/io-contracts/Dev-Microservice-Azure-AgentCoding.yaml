@@ -34,7 +34,7 @@ inputs:
 - path: docs/catalog/service-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-Microservice-ServiceIdentify--aas--3.2
+  producer: Arch-Microservice-ServiceIdentify--aas--2.2
 - path: src/agent/
   required: false
   kind: agent_artifact

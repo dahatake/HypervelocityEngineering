@@ -24,7 +24,7 @@
 - `input-file-validation` — 必読ファイルの存在確認と欠損時の TBD 既定処理
 
 ## 1) このエージェントの目的
-AAS Step.9 として、`docs/catalog/persona-catalog.md`（AAS Step.8 出力）と `docs/catalog/app-catalog.md` を根拠に、**APP-ID を横断して共通化できるペルソナ別画面の骨格** を一覧化する。
+AAS Step.8 として、`docs/catalog/persona-catalog.md`（AAS Step.7 出力）と `docs/catalog/app-catalog.md` を根拠に、**APP-ID を横断して共通化できるペルソナ別画面の骨格** を一覧化する。
 
 目的は「同じペルソナが複数 APP で類似画面を必要とする場合、共通化候補としてここで一度だけ定義し、APP 固有カタログ（`screen-catalog-{APP-ID}.md`）での重複再定義を防ぐ」こと。
 
@@ -33,7 +33,7 @@ AAS Step.9 として、`docs/catalog/persona-catalog.md`（AAS Step.8 出力）�
 
 ## 2) 入力（読む順序）
 最優先：
-- `docs/catalog/persona-catalog.md`（**必須**。AAS Step.8 出力。本 Agent はここで定義済みの persona_id のみ扱う。**存在しない場合は成果物生成を停止し、進捗ログに `BLOCKED: persona-catalog.md 不在` と理由を記録する**）
+- `docs/catalog/persona-catalog.md`（**必須**。AAS Step.7 出力。本 Agent はここで定義済みの persona_id のみ扱う。**存在しない場合は成果物生成を停止し、進捗ログに `BLOCKED: persona-catalog.md 不在` と理由を記録する**）
 - `docs/catalog/app-catalog.md`（**必須**。APP-ID 一覧。アプリ名・責務/機能・対象ユーザー記述を `shared_by_apps` 判定の根拠とする）
 
 補助：

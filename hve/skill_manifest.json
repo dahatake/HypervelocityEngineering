@@ -2,13 +2,15 @@
   "version": 1,
   "workflow_defaults": {
     "ard": ["task-dag-planning"],
-    "aas": ["task-dag-planning", "architecture-questionnaire"],
-    "aad-web": ["task-dag-planning", "microservice-design-guide"],
-    "asdw-web": ["microservice-design-guide"],
-    "adfd": ["dataflow-design-guide"],
-    "adfdv": ["dataflow-design-guide", "test-strategy-template"],
-    "aag": ["task-dag-planning", "ai-agent-capability-contract"],
-    "aagd": ["test-strategy-template", "ai-agent-capability-contract"],
+    "aas": ["task-dag-planning", "architecture-questionnaire", "application-requirement-traceability"],
+    "ada": ["task-dag-planning", "microservice-design-guide", "application-requirement-traceability"],
+    "aad-web": ["task-dag-planning", "microservice-design-guide", "application-requirement-traceability"],
+    "asdw-web": ["microservice-design-guide", "application-requirement-traceability"],
+    "adfd": ["dataflow-design-guide", "application-requirement-traceability"],
+    "adfdv": ["dataflow-design-guide", "test-strategy-template", "application-requirement-traceability"],
+    "aag": ["task-dag-planning", "ai-agent-capability-contract", "application-requirement-traceability"],
+    "aagd": ["test-strategy-template", "ai-agent-capability-contract", "application-requirement-traceability"],
+    "aar": ["application-requirement-traceability"],
     "akm": ["knowledge-management"],
     "adi": ["knowledge-lookup"],
     "adoc": ["task-dag-planning"]
@@ -18,11 +20,7 @@
       "1": ["knowledge-management"],
       "1.1": ["knowledge-management"],
       "1.2": ["knowledge-management"],
-      "2": ["knowledge-management"],
-      "3": ["knowledge-management"],
-      "4.1": ["knowledge-management"],
-      "4.2": ["knowledge-management"],
-      "4.3": ["knowledge-management"]
+      "2": ["knowledge-management"]
     },
     "akm": {
       "1": ["knowledge-management"]

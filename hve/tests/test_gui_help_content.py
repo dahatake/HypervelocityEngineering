@@ -124,3 +124,28 @@ def test_original_document_options_link_to_adi_guide() -> None:
     assert WORKFLOW_GUIDE_MAP["adi"] == "00-design-doc-ingestion.md"
     for key in ("target_scope", "depth", "focus_areas"):
         assert _OPTIONS_GUIDE_HINT[key] == "00-design-doc-ingestion.md"
+
+
+def test_ai_agent_workflows_have_help_entries() -> None:
+    """FR-GUI-21: AAG / AAGD / AAR にも説明文と実在するガイドがあること。"""
+    from hve.gui.help_content import guide_url, workflow_help
+
+    for wf_id in ("aag", "aagd", "aar"):
+        entry = workflow_help(wf_id)
+        assert entry.short, wf_id
+        assert entry.guide_path.endswith(".md"), wf_id
+        assert guide_url(entry.guide_path) is not None, entry.guide_path
+
+
+def test_every_registered_workflow_has_help_entry() -> None:
+    """FR-GUI-21: 登録済み全ワークフローが説明文とガイドパスを持つこと。"""
+    from hve.gui.help_content import guide_url, workflow_help
+    from hve.workflow_registry import list_workflows
+
+    missing = []
+    for wf in list_workflows():
+        entry = workflow_help(wf.id)
+        if not entry.short or guide_url(entry.guide_path) is None:
+            missing.append(wf.id)
+    assert missing == []
+

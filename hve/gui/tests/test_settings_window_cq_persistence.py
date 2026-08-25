@@ -105,11 +105,11 @@ class TestCqSectionPersistence:
         cur["cq"]["build_profiles"] = "hve;app"
         settings_store.save(cur)
 
-        _simulate_on_widget_changed(snapshot, {"verbose": True})
+        _simulate_on_widget_changed(snapshot, {"create_issues": True})
 
         result = settings_store.load()
         assert result["cq"]["build_profiles"] == "hve;app"
-        assert result["options"]["verbose"] is True
+        assert result["options"]["create_issues"] is True
 
     def test_mdq_and_cq_sections_survive_each_other(self, tmp_settings: Path) -> None:
         """`[mdq]` と `[cq]` が相互に消去されないこと（FR-GUI-04）。"""
@@ -119,7 +119,7 @@ class TestCqSectionPersistence:
         settings_store.save(initial)
 
         snapshot = settings_store.load()
-        _simulate_on_widget_changed(snapshot, {"verbose": True})
+        _simulate_on_widget_changed(snapshot, {"create_issues": True})
 
         result = settings_store.load()
         assert result["mdq"]["target_folders"] == "docs/usecase"

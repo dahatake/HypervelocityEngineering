@@ -74,6 +74,8 @@ _BEFORE_EDIT_LINES = (
     f"- `source={_REQUIREMENT_DEFINITION}` かつ `active-or-described` だけを適用可能とする。",
     "- 未知・競合・`deprecated-or-removed`・`partial-or-not-supported` の ID は現行要件として適用してはならない。",
     "- 索引と要求定義の不整合を解消するまで実装へ進まない。",
+    "- 適用してよいのは規範要件（`FR-*` / `NFR-*` / `G-*` の定義行と、当該要件が明示的に参照する従属表・箇条書き・スキーマ）だけとする。逆抽出の表・構成・確認時点の記述は説明的基線、改訂履歴・解消済み TBD・`deprecated-or-removed` は履歴情報であり、現行要件として適用しない。",
+    "- 現行コードと規範要件が矛盾する場合、コードを正解として要件を上書きせず、バグ修正か仕様変更かを明示して解消する。仕様変更なら実装前に規範要件を改訂する。",
 )
 _BOOTSTRAP_LINES = (
     *(f"{index}. {step}" for index, step in enumerate(_FEATURE_STEPS, 1)),
@@ -89,9 +91,11 @@ _FEATURE_LINES = (
     "- feature では要件 ID・実在テストパス・RED / GREEN 証跡の N/A を認めない。",
     "- bugfix / maintenance で N/A を使う場合は具体的理由と人間レビューを必須とする。",
     f"- `{_TDD_POLICY}` と生成元 `{_TDD_POLICY_GENERATOR}` は §3.7 と同一変更で同期する。",
+    "- 変更種別は `feature` / `bugfix` / `maintenance` の 3 値とする。観測できる能力・動作・公開インタフェース・設定・Workflow / Prompt / I/O 契約を追加または変更するなら `feature`、既存の規範要件または明示済み受入条件へ戻すだけなら `bugfix`、実行時の観測可能な挙動を変えないなら `maintenance` とする。分類を確定できない場合は `feature` とする。",
 )
 _RETRIEVAL_LINES = (
     "- 検索キーは Issue 本文、対象パス、対象 symbol、失敗テスト、Workflow / Step ID から構成する。",
+    f"- 要件 ID が既知の場合は検索せず、`{_FEATURE_INVENTORY}` の当該行の `line` 列が指す定義行だけを読む。ID が未知の場合に限り以下の検索へ進む。",
     *(f"{index}. {step}" for index, step in enumerate(_RETRIEVAL_STEPS, 1)),
     "- 索引欠損・stale・検索 CLI 障害時は、特定済みの要件 ID または見出しだけを read / grep する。",
     "- 本規則を汎用 Markdown 検索 fallback より優先する。",
@@ -489,7 +493,7 @@ def test_path_specific_instructions_are_narrow_and_delegate_to_skill() -> None:
     body_lines = _nonempty_lines(_body(instructions))
     assert body_lines == (
         "# HVE アプリケーション保守",
-        f"- HVE コアパスの変更では `{_SKILL_REFERENCE}` を使用する。",
+        f"- HVE コアパスの変更・不具合調査では `{_SKILL_REFERENCE}` を使用する。",
     )
 
 
@@ -513,7 +517,7 @@ def test_repository_wide_router_is_short_and_does_not_embed_requirements() -> No
     assert len(traceability_headings) == 1
     assert "HVE アプリケーション保守ルーティング" in traceability_headings[0]
     assert nonempty_lines == [
-        f"- HVE 対象変更では `{_SKILL_REFERENCE}` を使用する。",
+        f"- HVE 対象変更・不具合調査では `{_SKILL_REFERENCE}` を使用する。",
         "- HVE コアパスでは `.github/instructions/hve-maintenance.instructions.md` も適用する。",
         "- `hve-dev/requirement-definition.md` 全文を既定の入力にしない。",
     ]

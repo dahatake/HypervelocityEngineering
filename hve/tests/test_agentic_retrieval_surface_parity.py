@@ -120,9 +120,8 @@ class TestCloudTags:
     `StepDef.disabled_when_config` は効かず、無効化は
     「Issue を作らない」というワークフロー内の条件分岐で実現する。
 
-    Cloud と registry は Step 採番が別体系のため ID は一致しない。
-    Cloud: AAD-WEB `Step.7.5` / ASDW-WEB `Step.2.9`・`Step.2.10`
-    registry: AAD-WEB `2.6` / ASDW-WEB `2.5`・`2.6`
+    AAD-WEB Cloud は `Step.7.5`、ASDW-WEB Cloud は registry と同じ
+    `Step.2.5` / `Step.2.6` を使用する。
     """
 
     _WORKFLOWS = (
@@ -144,10 +143,10 @@ class TestCloudTags:
         assert "[AAD-WEB] Step.7.5: Agentic Retrieval 機能要件詳細" in text
         assert "Arch-AgenticRetrieval-Detail" in text
 
-    def test_dev_workflow_creates_step_2_9_and_2_10(self):
+    def test_dev_workflow_creates_step_2_5_and_2_6(self):
         text = self._text("auto-app-dev-microservice-web-reusable.yml")
-        assert "[ASDW-WEB] Step.2.9: Agentic Retrieval 実装設計" in text
-        assert "[ASDW-WEB] Step.2.10: Agentic Retrieval Deploy" in text
+        assert "[ASDW-WEB] Step.2.5: Agentic Retrieval Azure 実装設計" in text
+        assert "[ASDW-WEB] Step.2.6: Agentic Retrieval Deploy" in text
         assert "Dev-Microservice-Azure-AgenticRetrievalDesign" in text
         assert "Dev-Microservice-Azure-AgenticRetrievalDeploy" in text
 
@@ -165,25 +164,17 @@ class TestCloudTags:
         assert '"7.3"|"7.4"|"7.5")' in text
         assert "s75_ok" in text
 
-    def test_dev_transition_chains_2_3_to_2_9_to_2_10(self):
-        """2.3 → 2.9 → 2.10 → 2.3TC の連鎖が張られている。
-
-        AI Agent 系（2.6〜2.8）より前に Knowledge Base を作る必要がある。
-        後ろに置くと Agent が KB を使えないまま設計・実装・デプロイされてしまう。
-        """
+    def test_dev_transition_declares_current_agentic_dependencies(self):
+        """2.1 → 2.5、2.2 + 2.5 → 2.6 の依存を固定する。"""
         text = self._text("auto-app-dev-microservice-web-reusable.yml")
-        assert '"2.9"|"2.10")' in text
-        assert r"\] Step\.2\.9:" in text
-        assert r"\] Step\.2\.10:" in text
-        # 2.3 のハンドラから 2.9 を起動している
-        assert "Step.2.3 完了: Step.2.9" in text
+        assert '"2.5": ["2.1"]' in text
+        assert '"2.6": ["2.2", "2.5"]' in text
 
     def test_dev_falls_back_when_ar_steps_absent(self):
-        """AR 無効時は 2.3 完了で従来どおり Step.2.3TC へ進む。"""
+        """AR 無効時は 2.5 / 2.6 Issue を作らず、欠落依存を完了扱いにする。"""
         text = self._text("auto-app-dev-microservice-web-reusable.yml")
-        assert r"\] Step\.2\.3TC:" in text
-        # 2.8 は AR を待たず従来どおり Step.2 を完了させる
-        assert '"2.8")' in text
+        assert 'if [[ "${ENABLE_AGENTIC_RETRIEVAL}" != "no" ]]; then' in text
+        assert "return sid not in steps or" in text
 
 
 class TestCliOverridePrecedence:

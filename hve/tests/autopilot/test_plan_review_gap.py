@@ -42,6 +42,7 @@ def test_implicit_constants_preserved() -> None:
     ]
     assert _ARD_STEP_TO_GROUP["1.1"] == "1"
     assert _ARD_STEP_TO_GROUP["3.2"] == "4"
+    assert _ARD_STEP_TO_GROUP["4.2"] == "5"
     # canonical order に現行 workflow が含まれる
     for wf in ["ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv",
              "aag", "aagd", "akm", "adi", "adoc"]:
@@ -100,14 +101,14 @@ def test_compute_gaps_aad_web_implicit_app_catalog(tmp_path: Path) -> None:
 
 
 def test_compute_gaps_producer_already_checked_becomes_produced(tmp_path: Path) -> None:
-    # 想定: aas Step 1 が docs/catalog/app-arch-catalog.md を生成し、
-    #       aad-web Step (implicit 依存) と aas Step 1 が両方チェック済み
+    # 想定: AAS Step 1がdocs/catalog/app-arch-catalog.mdを生成し、
+    #       aad-web Step (implicit 依存) とAAS Step 1が両方チェック済み
     #       → catalog は MISSING_PRODUCED へ昇格
     from hve.workflow_registry import get_workflow
 
     aas = get_workflow("aas")
     assert aas is not None
-    # aas step 1 の output_paths を確認
+    # AAS Step 1のoutput_pathsを確認
     step1 = aas.get_step("1")
     if step1 is None or "docs/catalog/app-arch-catalog.md" not in (step1.output_paths or []):
         pytest.skip("aas step 1 does not output app-arch-catalog.md in current registry")

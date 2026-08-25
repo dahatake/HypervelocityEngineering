@@ -1,11 +1,14 @@
 name: Protect Read-Only Paths
 
 # PR で以下のパスへの変更を禁止する:
-#   - ルート README.md (.github/copilot-instructions.md §0「ルート README.md 変更禁止」)
 #   - docs-original/ 配下のファイル (.github/copilot-instructions.md §0「docs-original/ 読み取り専用（絶対）」)
 #     ただし旧 original-docs/ から同じ相対パスへ移す初回リネームだけは許可する。
 #   - リポジトリルート直下への新規ファイル／ディレクトリ追加
 #     (.github/copilot-instructions.md §0「一時作業ファイルは work/ 配下に限定（絶対）」)
+#
+# 注: ルート README.md の変更制限は解除済み
+#     (.github/copilot-instructions.md §0「ルート README.md の扱い」)。
+#     check-readme ジョブは解除を明示する no-op として残している。
 #
 # 注: paths フィルタを使うと違反のない PR ではチェック自体が実行されず、
 #     ブランチ保護の必須チェックとして機能しない。全 PR で実行し、

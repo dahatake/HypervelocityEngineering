@@ -181,3 +181,21 @@ ID パターン（推論）:
 ## 7. 関連 ADR
 
 - [ADR-0002: hve サブタスク Fan-out アーキテクチャ](ADR-0002-hve-fanout-architecture.md) — ARD を「O-1: 対象外」と決定。本 ADR で**撤回**。
+
+---
+
+## 8. 追補: 本 ADR 決定後の構成変化（2026-08-23 追記）
+
+本 ADR が §3.1 で決定した **7 base Step の fan-out 構成そのものは有効**であり、撤回・変更していない。KPI/OKR 定義機能は 2026-05-19 の commit `01dcebd75f6c0e068ae5bf4fb496acb726e8ce04` で当時の Step `2.5` として追加され、その後、現行 ID `2.1` と 4 表示グループへ整理された。現在の ARD は **8 実 Step** で構成される。本追補は事実の記録であり、ステータス（Proposed）は変更しない。
+
+| 項目 | 本 ADR（2026-05-12） | 現行 |
+|---|---|---|
+| 実 Step 数 | 7（`1` / `1.1` / `1.2` / `2` / `3.1` / `3.2` / `3.3`） | 8（左記 + `2.1`） |
+| 追加された Step | — | `2.1` KPI/OKR 定義（任意）／`Arch-ARD-KPIOKRDefinition`／`depends_on=["2"]`, `skip_fallback_deps=["1.2"]`／`docs/recommended-kpi-okr.md` |
+| 利用者向けの選択単位 | 実 Step ID | 4 表示グループ（`1`=`1`/`1.1`/`1.2`、`2`=`2`、`3`=`2.1`、`4`=`3.1`/`3.2`/`3.3`） |
+| 既定選択 | 当時の実 Step 選択 | `ARD_DEFAULT_GROUP_IDS = ("2", "3", "4")` |
+
+- 現行構成・グループ対応・既定選択の機械正本は [hve/workflow_registry.py](../../hve/workflow_registry.py) の `ARD`、`_WORKFLOW_GROUP_MAPS["ard"]`、`ARD_DEFAULT_GROUP_IDS` とし、規範要件は `hve-dev/requirement-definition.md` の FR-WF-ARD-03 が定める。
+- Step `2.1` と Step `3.1` はいずれも Step `2` に依存し、Step `2` 非選択時は Step `1.2` を fallback 前提とするため、両 Step は並列実行可能である。
+- 本 ADR §3.1 / §3.2 / §6 に残る「7 step」表記は決定時点の記述として保持する。実装状態を参照する場合は上表と registry を正とすること。
+- §3.4「既存実行履歴との互換性」で扱った旧 `RunState` からの resume は、Resume 機能の全廃に伴い現行契約の対象外である。

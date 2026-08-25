@@ -9,10 +9,13 @@
 #
 # Registered workflow IDs:
 #   - aas   (App Architecture Design)       : step execution
+#   - asdw-web (Web App Dev & Deploy)           : step execution (container + deploy step を含む)
 #   - adfd   (Dataflow Design)                  : step execution
 #   - adfdv  (Dataflow Dev)                     : step execution + QA/review feedback
 #   - aag   (AI Agent Design)               : step execution
 #   - aagd  (AI Agent Dev & Deploy)         : step execution (deploy step を含む)
+#   - aar   (Agentic Retrieval Add-on)      : step execution (deploy step を含む)
+#   - ada   (Agent Data Architecture)       : step execution
 #   - adoc  (Source Codeからのドキュメント作成) : step execution
 #
 # Registry responsibilities:
@@ -68,23 +71,98 @@ _WORKFLOW_REGISTRY[aas]=$(cat <<'JSONEOF'
   },
   "params": [],
   "steps": [
-    {"id":"1","title":"アプリケーションリストの作成","custom_agent":"Arch-ApplicationAnalytics","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aas/step-1.md"},
-    {"id":"2","title":"ソフトウェアアーキテクチャの推薦","custom_agent":"Arch-ArchitectureCandidateAnalyzer","depends_on":["1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aas/step-2.md"},
-    {"id":"3.1","title":"ドメイン分析","custom_agent":"Arch-Microservice-DomainAnalytics","depends_on":["2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aas/step-3.1.md"},
-    {"id":"3.2","title":"サービス一覧抽出","custom_agent":"Arch-Microservice-ServiceIdentify","depends_on":["3.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aas/step-3.2.md"},
-    {"id":"4.1","title":"データモデル設計","custom_agent":"Arch-DataModeling","depends_on":["3.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aas/step-4.1.md"},
-    {"id":"4.2","title":"サンプルデータ生成","custom_agent":"Arch-DataModeling","depends_on":["4.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aas/step-4.2.md"},
-    {"id":"5","title":"データカタログ作成","custom_agent":"Arch-DataCatalog","depends_on":["4.1"],"is_container":false,"skip_fallback_deps":["4.1"],"block_unless":[],"body_template_path":"templates/aas/step-5.md"},
-    {"id":"6","title":"サービスカタログ","custom_agent":"Arch-Microservice-ServiceCatalog","depends_on":["5"],"is_container":false,"skip_fallback_deps":["5"],"block_unless":[],"body_template_path":"templates/aas/step-6.md"},
-    {"id":"7","title":"テスト戦略書","custom_agent":"Arch-TDD-TestStrategy","depends_on":["6"],"is_container":false,"skip_fallback_deps":["6"],"block_unless":[],"body_template_path":"templates/aas/step-7.md"},
-    {"id":"8","title":"ペルソナカタログ","custom_agent":"Arch-PersonaCatalog","depends_on":["7"],"is_container":false,"skip_fallback_deps":["7"],"block_unless":[],"body_template_path":"templates/aas/step-8.md"},
-    {"id":"9","title":"ペルソナ別共通画面カタログ","custom_agent":"Arch-UI-PersonaScreenList","depends_on":["8"],"is_container":false,"skip_fallback_deps":["8"],"block_unless":[],"body_template_path":"templates/aas/step-9.md"}
+    {"id":"1","title":"ソフトウェアアーキテクチャの推薦","custom_agent":"Arch-ArchitectureCandidateAnalyzer","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aas/step-1.md"},
+    {"id":"2.1","title":"ドメイン分析","custom_agent":"Arch-Microservice-DomainAnalytics","depends_on":["1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aas/step-2.1.md"},
+    {"id":"2.2","title":"サービス一覧抽出","custom_agent":"Arch-Microservice-ServiceIdentify","depends_on":["2.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aas/step-2.2.md"},
+    {"id":"3.1","title":"データモデル設計","custom_agent":"Arch-DataModeling","depends_on":["2.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aas/step-3.1.md"},
+    {"id":"3.2","title":"サンプルデータ生成","custom_agent":"Arch-DataModeling","depends_on":["3.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aas/step-3.2.md"},
+    {"id":"4","title":"データカタログ作成","custom_agent":"Arch-DataCatalog","depends_on":["3.1"],"is_container":false,"skip_fallback_deps":["3.1"],"block_unless":[],"body_template_path":"templates/aas/step-4.md"},
+    {"id":"5","title":"サービスカタログ","custom_agent":"Arch-Microservice-ServiceCatalog","depends_on":["4"],"is_container":false,"skip_fallback_deps":["4"],"block_unless":[],"body_template_path":"templates/aas/step-5.md"},
+    {"id":"6","title":"テスト戦略書","custom_agent":"Arch-TDD-TestStrategy","depends_on":["5"],"is_container":false,"skip_fallback_deps":["5"],"block_unless":[],"body_template_path":"templates/aas/step-6.md"},
+    {"id":"7","title":"ペルソナカタログ","custom_agent":"Arch-PersonaCatalog","depends_on":["6"],"is_container":false,"skip_fallback_deps":["6"],"block_unless":[],"body_template_path":"templates/aas/step-7.md"},
+    {"id":"8","title":"ペルソナ別共通画面カタログ","custom_agent":"Arch-UI-PersonaScreenList","depends_on":["7"],"is_container":false,"skip_fallback_deps":["7"],"block_unless":[],"body_template_path":"templates/aas/step-8.md"}
   ]
 }
 JSONEOF
 )
 
 
+
+_WORKFLOW_REGISTRY[ard]=$(cat <<'JSONEOF'
+{
+  "id": "ard",
+  "name": "Auto Requirement Definition",
+  "label_prefix": "ard",
+  "state_labels": {
+    "initialized": "ard:initialized",
+    "ready": "ard:ready",
+    "running": "ard:running",
+    "done": "ard:done",
+    "blocked": "ard:blocked"
+  },
+  "params": ["company_name", "target_business", "survey_base_date", "survey_period_years", "target_region", "analysis_purpose", "target_recommendation_id", "attached_docs", "include_kpi_okr"],
+  "steps": [
+    {"id":"1","title":"事業分野候補列挙","custom_agent":"Arch-ARD-BusinessAnalysis-Untargeted","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/ard/step-1.md"},
+    {"id":"1.1","title":"事業分野別深掘り分析","custom_agent":"Arch-ARD-BusinessAnalysis-Untargeted","depends_on":["1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/ard/step-1.1.md"},
+    {"id":"1.2","title":"事業分析統合","custom_agent":"Arch-ARD-BusinessAnalysis-Untargeted","depends_on":["1.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/ard/step-1.2.md"},
+    {"id":"2","title":"対象業務深掘り分析","custom_agent":"Arch-ARD-BusinessAnalysis-Targeted","depends_on":[],"is_container":false,"skip_fallback_deps":["1.2"],"block_unless":[],"body_template_path":"templates/ard/step-2.md"},
+    {"id":"2.1","title":"KPI/OKR 定義（任意）","custom_agent":"Arch-ARD-KPIOKRDefinition","depends_on":["2"],"is_container":false,"skip_fallback_deps":["1.2"],"block_unless":[],"body_template_path":"templates/ard/step-2.1.md"},
+    {"id":"3.1","title":"ユースケース骨格抽出","custom_agent":"Arch-ARD-UseCaseCatalog","depends_on":["2"],"is_container":false,"skip_fallback_deps":["1.2"],"block_unless":[],"body_template_path":"templates/ard/step-3.1.md"},
+    {"id":"3.2","title":"ユースケース詳細生成","custom_agent":"Arch-ARD-UseCaseCatalog","depends_on":["3.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/ard/step-3.2.md"},
+    {"id":"3.3","title":"ユースケースカタログ統合","custom_agent":"Arch-ARD-UseCaseCatalog","depends_on":["3.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/ard/step-3.3.md"},
+    {"id":"4.1","title":"アプリケーションリスト作成","custom_agent":"Arch-ApplicationAnalytics","depends_on":["3.3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/ard/step-4.1.md"},
+    {"id":"4.2","title":"APP別要求定義書作成","custom_agent":"Arch-ApplicationRequirementDefinition","depends_on":["4.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/ard/step-4.2.md"}
+  ]
+}
+JSONEOF
+)
+
+
+
+_WORKFLOW_REGISTRY[asdw-web]=$(cat <<'JSONEOF'
+{
+  "id": "asdw-web",
+  "name": "Web App Dev & Deploy",
+  "label_prefix": "asdw-web",
+  "state_labels": {
+    "initialized": "asdw-web:initialized",
+    "ready": "asdw-web:ready",
+    "running": "asdw-web:running",
+    "done": "asdw-web:done",
+    "blocked": "asdw-web:blocked"
+  },
+  "params": ["app_ids", "app_id", "resource_group", "usecase_id", "tdd_max_retries", "create_remote_mcp_server"],
+  "steps": [
+    {"id":"1","title":"データ（コンテナ）","custom_agent":null,"depends_on":[],"is_container":true,"skip_fallback_deps":[],"block_unless":[],"body_template_path":null},
+    {"id":"2","title":"追加サービス（コンテナ）","custom_agent":null,"depends_on":[],"is_container":true,"skip_fallback_deps":[],"block_unless":[],"body_template_path":null},
+    {"id":"3","title":"Compute（コンテナ）","custom_agent":null,"depends_on":[],"is_container":true,"skip_fallback_deps":[],"block_unless":[],"body_template_path":null},
+    {"id":"4","title":"UI（コンテナ）","custom_agent":null,"depends_on":[],"is_container":true,"skip_fallback_deps":[],"block_unless":[],"body_template_path":null},
+    {"id":"5","title":"レビュー（コンテナ）","custom_agent":null,"depends_on":[],"is_container":true,"skip_fallback_deps":[],"block_unless":[],"body_template_path":null},
+    {"id":"1.1","title":"Azure データストア選定","custom_agent":"Dev-Microservice-Azure-DataDesign","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-1.1.md"},
+    {"id":"1.2","title":"データストア検証テスト生成 (TDD RED)","custom_agent":"Dev-Microservice-Azure-DataTestCoding","depends_on":["1.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-1.2.md"},
+    {"id":"1.3","title":"Azure データサービス Deploy (TDD GREEN)","custom_agent":"Dev-Microservice-Azure-DataDeploy","depends_on":["1.2","4.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-1.3.md"},
+    {"id":"2.1","title":"追加 Azure サービス選定","custom_agent":"Dev-Microservice-Azure-AddServiceDesign","depends_on":["1.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-2.1.md"},
+    {"id":"2.2","title":"追加 Azure サービス Deploy","custom_agent":"Dev-Microservice-Azure-AddServiceDeploy","depends_on":["1.3","2.1"],"is_container":false,"skip_fallback_deps":["2.1"],"block_unless":[],"body_template_path":"templates/asdw-web/step-2.2.md"},
+    {"id":"2.3","title":"追加サービスのテストコード生成 (TDD RED)","custom_agent":"Dev-Microservice-Azure-AddServiceTestCoding","depends_on":["2.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-2.3.md"},
+    {"id":"2.4","title":"追加サービスのテスト実施 (TDD GREEN)","custom_agent":"Dev-Microservice-Azure-AddServiceTesting","depends_on":["2.2","2.3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-2.4.md"},
+    {"id":"2.5","title":"Agentic Retrieval Azure 実装設計","custom_agent":"Dev-Microservice-Azure-AgenticRetrievalDesign","depends_on":["2.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-2.5.md"},
+    {"id":"2.6","title":"Agentic Retrieval Deploy","custom_agent":"Dev-Microservice-Azure-AgenticRetrievalDeploy","depends_on":["2.2","2.5"],"is_container":false,"skip_fallback_deps":["2.5"],"block_unless":[],"body_template_path":"templates/asdw-web/step-2.6.md"},
+    {"id":"3.1","title":"Azure コンピュート選定","custom_agent":"Dev-Microservice-Azure-ComputeDesign","depends_on":["2.3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-3.1.md"},
+    {"id":"3.2","title":"サービス テストコード生成 (TDD RED)","custom_agent":"Dev-Microservice-Azure-ServiceTestCoding","depends_on":["3.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-3.2.md"},
+    {"id":"3.3","title":"サービスコード実装 (TDD GREEN)","custom_agent":"Dev-Microservice-Azure-ServiceCoding-AzureFunctions","depends_on":["3.2"],"is_container":false,"skip_fallback_deps":["3.2"],"block_unless":[],"body_template_path":"templates/asdw-web/step-3.3.md"},
+    {"id":"3.4","title":"Azure Compute Deploy","custom_agent":"Dev-Microservice-Azure-ComputeDeploy-AzureFunctions","depends_on":["2.4","3.3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-3.4.md"},
+    {"id":"3.5","title":"Deploy 後 再テスト","custom_agent":"Dev-Microservice-Azure-ComputePostDeployTest","depends_on":["3.4"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-3.5.md"},
+    {"id":"4.1","title":"UI テストコード生成 (TDD RED)","custom_agent":"Dev-Microservice-Azure-UITestCoding","depends_on":["3.3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-4.1.md"},
+    {"id":"4.2","title":"UI 実装 (TDD GREEN)","custom_agent":"Dev-Microservice-Azure-UICoding","depends_on":["1.2","2.5","4.1"],"is_container":false,"skip_fallback_deps":["4.1"],"block_unless":[],"body_template_path":"templates/asdw-web/step-4.2.md"},
+    {"id":"4.3","title":"Web アプリ Deploy (Azure SWA)","custom_agent":"Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps","depends_on":["3.5","4.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-4.3.md"},
+    {"id":"4.4","title":"UI E2E テスト (Playwright)","custom_agent":"E2ETesting-Playwright","depends_on":["4.3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-4.4.md"},
+    {"id":"5.1","title":"WAF アーキテクチャレビュー","custom_agent":"QA-AzureArchitectureReview","depends_on":["4.4"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-5.1.md"},
+    {"id":"5.2","title":"整合性チェック","custom_agent":"QA-AzureDependencyReview","depends_on":["4.4"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-5.2.md"},
+    {"id":"5.3","title":"要件適合実測","custom_agent":"QA-RequirementsConformanceEval","depends_on":["5.1","5.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/asdw-web/step-5.3.md"}
+  ]
+}
+JSONEOF
+)
 
 _WORKFLOW_REGISTRY[adfd]=$(cat <<'JSONEOF'
 {
@@ -132,7 +210,8 @@ _WORKFLOW_REGISTRY[adfdv]=$(cat <<'JSONEOF'
     {"id":"2.2","title":"TDD GREEN — データフローアプリ本実装","custom_agent":"Dev-Dataflow-ServiceCoding","depends_on":["2.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfdv/step-2.2.md"},
     {"id":"3","title":"Azure Functions/コンテナ Deploy","custom_agent":"Dev-Dataflow-FunctionsDeploy","depends_on":["2.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfdv/step-3.md"},
     {"id":"4.1","title":"WAF レビュー","custom_agent":"QA-AzureArchitectureReview","depends_on":["3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfdv/step-4.1.md"},
-    {"id":"4.2","title":"整合性チェック","custom_agent":"QA-AzureDependencyReview","depends_on":["3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfdv/step-4.2.md"}
+    {"id":"4.2","title":"整合性チェック","custom_agent":"QA-AzureDependencyReview","depends_on":["3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfdv/step-4.2.md"},
+    {"id":"4.3","title":"要件適合実測","custom_agent":"QA-RequirementsConformanceEval","depends_on":["4.1","4.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/adfdv/step-4.3.md"}
   ]
 }
 JSONEOF
@@ -179,7 +258,64 @@ _WORKFLOW_REGISTRY[aagd]=$(cat <<'JSONEOF'
     {"id":"2.2","title":"AI Agent テストコード生成 (TDD RED)","custom_agent":"Dev-Microservice-Azure-AgentTestCoding","depends_on":["2.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aagd/step-2.2.md"},
     {"id":"2.3","title":"AI Agent 実装 (TDD GREEN)","custom_agent":"Dev-Microservice-Azure-AgentCoding","depends_on":["2.2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aagd/step-2.3.md"},
     {"id":"3","title":"AI Agent Deploy","custom_agent":"Dev-Microservice-Azure-AgentDeploy","depends_on":["2.3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aagd/step-3.md"},
-    {"id":"4","title":"tool search 実測評価","custom_agent":"QA-ToolSearchEval","depends_on":["3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aagd/step-4.md"}
+    {"id":"4","title":"tool search 実測評価","custom_agent":"QA-ToolSearchEval","depends_on":["3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aagd/step-4.md"},
+    {"id":"5","title":"要件適合実測","custom_agent":"QA-RequirementsConformanceEval","depends_on":["3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aagd/step-5.md"},
+    {"id":"6","title":"検索経路の適正化実測","custom_agent":"QA-AgentRouteRightsizingEval","depends_on":["3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aagd/step-6.md"},
+    {"id":"7","title":"Microsoft 365 / Teams 公開","custom_agent":"Dev-Agent-M365Publish","depends_on":["3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aagd/step-7.md"}
+  ]
+}
+JSONEOF
+)
+
+_WORKFLOW_REGISTRY[aar]=$(cat <<'JSONEOF'
+{
+  "id": "aar",
+  "name": "Agentic Retrieval Add-on",
+  "label_prefix": "aar",
+  "state_labels": {
+    "initialized": "aar:initialized",
+    "ready": "aar:ready",
+    "running": "aar:running",
+    "done": "aar:done",
+    "blocked": "aar:blocked"
+  },
+  "params": ["app_ids", "app_id", "resource_group", "usecase_id"],
+  "steps": [
+    {"id":"1","title":"Agentic Retrieval 機能要件詳細","custom_agent":"Arch-AgenticRetrieval-Detail","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aar/step-1.md"},
+    {"id":"2","title":"Agentic Retrieval Azure 実装設計","custom_agent":"Dev-Microservice-Azure-AgenticRetrievalDesign","depends_on":["1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aar/step-2.md"},
+    {"id":"3","title":"Agentic Retrieval テスト仕様","custom_agent":"Arch-TDD-TestSpec","depends_on":["2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aar/step-3.md"},
+    {"id":"4","title":"Agentic Retrieval テストコード（TDD RED）","custom_agent":"Dev-Microservice-Azure-AgenticRetrievalTestCoding","depends_on":["3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aar/step-4.md"},
+    {"id":"5","title":"Agentic Retrieval Deploy","custom_agent":"Dev-Microservice-Azure-AgenticRetrievalDeploy","depends_on":["4"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aar/step-5.md"},
+    {"id":"6","title":"Retrieval 実測評価（reasoning effort 比較）","custom_agent":"QA-AgenticRetrievalEval","depends_on":["5"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aar/step-6.md"},
+    {"id":"7","title":"要件適合実測","custom_agent":"QA-RequirementsConformanceEval","depends_on":["6"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/aar/step-7.md"}
+  ]
+}
+JSONEOF
+)
+
+_WORKFLOW_REGISTRY[ada]=$(cat <<'JSONEOF'
+{
+  "id": "ada",
+  "name": "Agent Data Architecture",
+  "label_prefix": "ada",
+  "state_labels": {
+    "initialized": "ada:initialized",
+    "ready": "ada:ready",
+    "running": "ada:running",
+    "done": "ada:done",
+    "blocked": "ada:blocked"
+  },
+  "params": ["app_ids", "app_id"],
+  "steps": [
+    {"id":"2","title":"ドメイン分析","custom_agent":"Arch-Microservice-DomainAnalytics","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/ada/step-2.md"},
+    {"id":"3","title":"サービス一覧抽出","custom_agent":"Arch-Microservice-ServiceIdentify","depends_on":["2"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/ada/step-3.md"},
+    {"id":"4.1","title":"データモデル設計","custom_agent":"Arch-DataModeling","depends_on":["3"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/ada/step-4.1.md"},
+    {"id":"4.2","title":"サンプルデータ生成","custom_agent":"Arch-DataModeling","depends_on":["4.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/ada/step-4.2.md"},
+    {"id":"5","title":"データカタログ作成","custom_agent":"Arch-DataCatalog","depends_on":["4.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/ada/step-5.md"},
+    {"id":"6","title":"ペルソナカタログ","custom_agent":"Arch-PersonaCatalog","depends_on":["5"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/ada/step-6.md"},
+    {"id":"7","title":"サービス詳細（Tool 定義根拠）","custom_agent":"Arch-Microservice-ServiceDetail","depends_on":["5"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/ada/step-7.md"},
+    {"id":"8","title":"非構造化データ資産カタログ","custom_agent":"Arch-AgentDataAsset","depends_on":["5"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/ada/step-8.md"},
+    {"id":"9","title":"テスト戦略書","custom_agent":"Arch-TDD-TestStrategy","depends_on":["6","7","8"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":"templates/ada/step-9.md"}
   ]
 }
 JSONEOF

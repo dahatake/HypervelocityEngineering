@@ -31,6 +31,7 @@
 - Issue Template: `.github/ISSUE_TEMPLATE/ai-agent-design.yml`（ラベル: `auto-ai-agent-design`）
 - Workflow: `.github/workflows/auto-ai-agent-design-reusable.yml`（AAG 設計）
 - hve CLI: `hve orchestrate -w aag`
+- HVE GUI: Step 1 の **AI Agent** カテゴリから `AI Agent Design (AAG)` を選択
 - Step と Prompt の対応:
   - Step 1: `Arch-AIAgentDesign-Step1`
   - Step 2: `Arch-AIAgentDesign-Step2`

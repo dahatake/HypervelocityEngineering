@@ -13,14 +13,17 @@ from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import orchestrator as orchestrator_module
 from config import SDKConfig
 from orchestrator import (
+    _collect_params_non_interactive,
     _generate_target_business_from_sr,
     _on_ard_step1_completed,
     _resolve_target_business_paths,
     _select_recommendation,
     run_workflow,
 )
+from hve.workflow_registry import get_workflow
 
 
 def _run(coro):
@@ -203,6 +206,130 @@ class TestOrchestratorARD(unittest.TestCase):
         self.assertEqual(params["target_business"], "既存の対象業務")
         parse_mock.assert_not_called()
         annotate_mock.assert_not_called()
+
+
+class TestArdRecommendationIdPropagation(unittest.TestCase):
+    """FR-WF-ARD-03: build由来IDをeffective paramsへ保持する。"""
+
+    def test_target_recommendation_id_survives_effective_param_normalization(self):
+        workflow = get_workflow("ard")
+        self.assertIsNotNone(workflow)
+        effective = _collect_params_non_interactive(
+            workflow, {"target_recommendation_id": "SR-2"}
+        )
+        self.assertEqual(effective.get("target_recommendation_id"), "SR-2")
+
+    def test_unattended_bridge_selects_the_propagated_explicit_id(self):
+        """B2がcustom-autoだけへ供給するIDを、共通unattended選択層が採用する。"""
+        workflow = get_workflow("ard")
+        self.assertIsNotNone(workflow)
+        effective = _collect_params_non_interactive(
+            workflow, {"target_recommendation_id": "sr-2"}
+        )
+        config = SDKConfig()
+        config.unattended = True
+        selected = _select_recommendation(
+            _make_recommendations(), config, effective, mock.MagicMock()
+        )
+        self.assertEqual(selected.id, "SR-2")
+
+    def test_manual_bridge_without_explicit_id_keeps_console_menu(self):
+        workflow = get_workflow("ard")
+        self.assertIsNotNone(workflow)
+        effective = _collect_params_non_interactive(workflow, {})
+        config = SDKConfig()
+        config.unattended = False
+        console = mock.MagicMock()
+        console.menu_select.return_value = 1
+
+        selected = _select_recommendation(
+            _make_recommendations(), config, effective, console
+        )
+
+        self.assertEqual(selected.id, "SR-2")
+        console.menu_select.assert_called_once()
+
+    def test_explicit_id_is_ignored_outside_group_1_2_bridge(self):
+        params = {
+            "selected_steps": ["1", "4"],
+            "target_business": "",
+            "target_recommendation_id": "SR-2",
+        }
+        config = SDKConfig(dry_run=True)
+        config.unattended = True
+        recommendations = _make_recommendations()
+        with tempfile.TemporaryDirectory() as td:
+            cwd = Path.cwd()
+            os.chdir(td)
+            try:
+                Path("docs").mkdir(parents=True, exist_ok=True)
+                Path("docs/company-business-requirement.md").write_text(
+                    "# sample", encoding="utf-8"
+                )
+                with mock.patch(
+                    "ard_recommendations.parse_recommendations",
+                    return_value=recommendations,
+                ), mock.patch(
+                    "ard_recommendations.annotate_with_ids",
+                    return_value=recommendations,
+                ), mock.patch.object(
+                    orchestrator_module,
+                    "_generate_target_business_from_sr",
+                    new=mock.AsyncMock(return_value="generated"),
+                ) as generate_mock:
+                    _run(
+                        _on_ard_step1_completed(
+                            config=config,
+                            params=params,
+                            console=mock.MagicMock(),
+                        )
+                    )
+            finally:
+                os.chdir(cwd)
+
+        selected_sr = generate_mock.await_args.kwargs["selected_sr"]
+        self.assertEqual(selected_sr.id, "SR-1")
+
+
+class TestArdNonInteractiveDefaults(unittest.TestCase):
+    def test_missing_steps_use_registry_default_regardless_of_target_business(self):
+        workflow = get_workflow("ard")
+        self.assertIsNotNone(workflow)
+        with mock.patch.object(
+            orchestrator_module,
+            "ARD_DEFAULT_GROUP_IDS",
+            ("2", "4"),
+        ):
+            without_target = _collect_params_non_interactive(workflow, {})
+            with_target = _collect_params_non_interactive(
+                workflow,
+                {"target_business": "事業A"},
+            )
+        self.assertEqual(without_target["selected_steps"], ["2", "4"])
+        self.assertEqual(with_target["selected_steps"], ["2", "4"])
+
+    def test_explicit_steps_are_not_overridden_by_the_default(self):
+        workflow = get_workflow("ard")
+        self.assertIsNotNone(workflow)
+        with mock.patch.object(
+            orchestrator_module,
+            "ARD_DEFAULT_GROUP_IDS",
+            ("2", "4"),
+        ):
+            effective = _collect_params_non_interactive(
+                workflow,
+                {"selected_steps": ["1", "3"]},
+            )
+        self.assertEqual(effective["selected_steps"], ["1", "3"])
+
+    def test_blank_recommendation_id_is_treated_as_unspecified(self):
+        workflow = get_workflow("ard")
+        self.assertIsNotNone(workflow)
+        effective = _collect_params_non_interactive(
+            workflow,
+            {"target_recommendation_id": "   "},
+        )
+        self.assertNotIn("target_recommendation_id", effective)
 
 
 class TestArdBridgeBindsToStep12(unittest.TestCase):

@@ -37,7 +37,7 @@
   <rect x="20" y="205" width="310" height="120" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
   <text x="175" y="227" text-anchor="middle" font-size="10" fill="#24292e">qa/*.md（sources に qa 指定）</text>
   <text x="175" y="242" text-anchor="middle" font-size="9" fill="#586069">※ qa/*-workiq-*.md は除外</text>
-  <text x="175" y="262" text-anchor="middle" font-size="10" fill="#24292e">docs-original/*（sources に original-docs 指定）</text>
+  <text x="175" y="262" text-anchor="middle" font-size="10" fill="#24292e">docs-original/*（sources に docs-original 指定）</text>
   <text x="175" y="277" text-anchor="middle" font-size="9" fill="#586069">.md / .txt / .csv</text>
   <text x="175" y="298" text-anchor="middle" font-size="10" fill="#24292e">パラメータ: sources / target_files /</text>
   <text x="175" y="313" text-anchor="middle" font-size="10" fill="#24292e">force_refresh / custom_source_dir</text>

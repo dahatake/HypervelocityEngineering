@@ -119,6 +119,57 @@ class TestValidateIoContract(unittest.TestCase):
         self.assertTrue(any("inputs[0].path missing" in e for e in errs))
 
 
+class TestStaticInputPathExistence(unittest.TestCase):
+    """FR-WF-OUT-11: `kind: static` の確定パスがリポジトリに実在すること。"""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.mod = _load_validate_io_contract_module()
+
+    def _check(self, path: str, *, kind: str = "static", static_paths=()) -> list[str]:
+        agents = {"X": {"inputs": [{"path": path, "required": True, "kind": kind}], "outputs": []}}
+        return self.mod.check_static_input_paths(agents, {"static_paths": list(static_paths)})
+
+    def test_existing_path_passes(self) -> None:
+        self.assertEqual(self._check("hve/qa_merger.py"), [])
+
+    def test_missing_path_is_error(self) -> None:
+        errs = self._check("knowledge/D99-存在しない.md")
+        self.assertTrue(any("knowledge/D99-存在しない.md" in e for e in errs), errs)
+
+    def test_non_static_kind_is_ignored(self) -> None:
+        self.assertEqual(self._check("docs/does-not-exist.md", kind="agent_artifact"), [])
+
+    def test_brace_placeholder_is_ignored(self) -> None:
+        self.assertEqual(self._check("docs/architectural-requirements-app-{appId}.md"), [])
+
+    def test_angle_placeholder_is_ignored(self) -> None:
+        self.assertEqual(self._check("work/kpi/fork-kpi-<run_id>.jsonl"), [])
+
+    def test_glob_is_ignored(self) -> None:
+        self.assertEqual(self._check("docs/services/SVC-*.md"), [])
+
+    def test_trailing_slash_directory_is_ignored(self) -> None:
+        self.assertEqual(self._check("docs/usecase/"), [])
+
+    def test_exception_list_suppresses_error(self) -> None:
+        path = "knowledge/D99-存在しない.md"
+        self.assertEqual(self._check(path, static_paths=[path]), [])
+
+    def test_repository_contracts_have_no_missing_static_paths(self) -> None:
+        """リポジトリ実体に対する回帰ガード（FR-WF-OUT-11）。"""
+        agents: dict[str, dict] = {}
+        for fp in sorted((REPO_ROOT / ".github" / "io-contracts").glob("*.yaml")):
+            if fp.name.startswith("_"):
+                continue
+            contract, err = self.mod.load_io_contract(fp)
+            if err or not isinstance(contract, dict):
+                continue
+            agents[fp.stem] = contract
+        errs = self.mod.check_static_input_paths(agents, self.mod.load_exceptions())
+        self.assertEqual(errs, [], "\n".join(errs))
+
+
 class TestCollectProducers(unittest.TestCase):
     """`collect_producers` の動作確認。"""
 

@@ -37,6 +37,7 @@ jobs:
           set -euo pipefail
 
           TARGET_LABELS=(
+            "ard:qa-ready" "ard:qa-drafting"
             "aas:qa-ready" "aas:qa-drafting"
             "aad:qa-ready" "aad:qa-drafting"
             "aad-web:qa-ready" "aad-web:qa-drafting"

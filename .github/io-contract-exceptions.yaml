@@ -40,6 +40,9 @@ static_paths:
   - "src/test/SVC-*/smoke-test.sh"
   # KnowledgeManager-specific manual/external inputs (handled via kind:static)
   - "work/kpi/fork-kpi-<run_id>.jsonl"
+  # ASDW-WEB deploy workflow generated per APP by the workflow itself; not present
+  # until the target app is generated. Excluded from FR-WF-OUT-11 existence check.
+  - ".github/workflows/azure-static-web-apps-app009.yml"
 
 # External system paths (out of scope)
 external_paths: []

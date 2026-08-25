@@ -107,6 +107,9 @@ class TestMainDispatch(unittest.TestCase):
         """`from .gui import run_gui` をフックする __import__ ラッパーを返す。
 
         - `name` が `*.gui` （絶対 `hve.gui` or 相対 `gui`）の場合のみ介入する
+        - PySide6 未導入フォールバック経路の `from .gui.pty_backend import setup_command` は、
+          このテストの合成モジュール（相対importの親パッケージを持たない）では解決できないため、
+          実パッケージへの絶対import (`hve.gui.pty_backend`) へ委譲する
         - それ以外は通常の `__import__` に委譲する
         """
         real_import = __import__
@@ -122,6 +125,13 @@ class TestMainDispatch(unittest.TestCase):
                     raise ImportError("PySide6 not installed (simulated)")
                 assert fake_gui is not None
                 return fake_gui
+            is_pty_backend_request = (
+                (level > 0 and name == "gui.pty_backend")
+                or name.endswith(".gui.pty_backend")
+                or name == "gui.pty_backend"
+            ) and fromlist and "setup_command" in fromlist
+            if is_pty_backend_request:
+                return real_import("hve.gui.pty_backend", globals, locals, fromlist, 0)
             return real_import(name, globals, locals, fromlist, level)
 
         return hook

@@ -9,7 +9,8 @@
       "APP-009 GREEN Tests / APP-009 API GREEN test",
       "E2E Playwright (APP-009) / APP-009 E2E Playwright",
       "HVE Requirement Traceability / HVE Requirement Traceability",
-      "HVE Requirement Traceability Trusted / HVE Requirement Traceability Trusted"
+      "HVE Requirement Traceability Trusted / HVE Requirement Traceability Trusted",
+      "Workflow Diff Gate / G-DIFF"
     ]
   },
   "enforce_admins": false,

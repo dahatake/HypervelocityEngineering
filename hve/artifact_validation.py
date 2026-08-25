@@ -15,6 +15,7 @@ import shlex
 import unicodedata
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from urllib.parse import urlparse
 
 
 # 原本質問票成果物として認められるファイル名パターン
@@ -10425,6 +10426,10 @@ _AI_AGENT_CONTRACT_HEADINGS = {
     "AG-CAP-04": "REST CRUD Matrix",
     "AG-CAP-05": "MCP Integration Plan",
     "AG-CAP-06": "Skill Packaging Decision",
+    "AG-CAP-07": "Agent Identity & Authorization",
+    "AG-CAP-08": "Observability Contract",
+    "AG-CAP-09": "Distribution & Packaging",
+    "AG-CAP-10": "Evaluation & Route Right-sizing",
 }
 # Skill `agentic-retrieval-contract` の AR-CAP-01〜05。
 # AG-CAP-03 で Foundry IQ / Azure AI Search Agentic Retrieval を選んだ場合だけ必須になる。
@@ -10470,6 +10475,20 @@ _AGENT_PLUGIN_ALLOWED_FIELDS = frozenset(
 # 仕様 §5.5 の name 制約（plugin.schema.json の pattern と同じ）。
 _AGENT_PLUGIN_NAME = re.compile(r"^(?!.*(?:--|\.\.))[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$")
 _AGENT_PLUGIN_MAX_NAME_LENGTH = 64
+# 仕様 §7.2 の MCP server 設定。plugin root 固定で、`plugin.json` へインラインできない。
+_AGENT_PLUGIN_MCP_FILE = "mcp.json"
+_AGENT_PLUGIN_MCP_SCHEMA = "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json"
+_AGENT_PLUGIN_MCP_TRANSPORTS = frozenset({"stdio", "streamable-http", "sse"})
+_AGENT_PLUGIN_MCP_SERVER_FIELDS = frozenset(
+    {"type", "command", "args", "env", "url", "headers"}
+)
+# 仕様 §7.2.1: `${PLUGIN_ROOT}` / `${PLUGIN_DATA}` は client が解決する予約変数。
+_AGENT_PLUGIN_RESERVED_VARS = frozenset({"PLUGIN_ROOT", "PLUGIN_DATA"})
+# `headers` / `env` は可視のパッケージデータであり、資格情報を書けない（仕様 §7.2.1 / §9.2）。
+_AGENT_PLUGIN_CREDENTIAL_KEY = re.compile(
+    r"(?:authorization|api[_-]?key|secret|token|password|credential|connection[_-]?string)",
+    re.IGNORECASE,
+)
 # Skill `foundry-toolbox-contract` の TB-CAP-01〜05。
 # Tool 総数が閾値を超えた場合だけ必須になる。
 _TOOLBOX_CONTRACT_HEADINGS = {
@@ -11109,6 +11128,49 @@ def _validate_ai_agent_skill(
     metadata["skill_name"] = name
     metadata["skill_location"] = expected_location
     metadata["skill_resources"] = _parse_ai_agent_resources(resources)
+    return errors
+
+
+def _validate_ai_agent_distribution(
+    section: str,
+    metadata: Dict[str, Any],
+) -> List[str]:
+    """AG-CAP-09 の配布契約を検証し、`mcp.json` の要否を metadata へ残す。"""
+    contract_id = "AG-CAP-09"
+    metadata["mcp_config_required"] = False
+
+    is_na, errors = _reasoned_ai_agent_na(section, contract_id)
+    if is_na:
+        return errors
+
+    for label in (
+        "Channels",
+        "Plugin manifest",
+        "Plugin components",
+        "Metadata visibility",
+        "Decision source",
+    ):
+        if not _is_meaningful_ai_agent_value(_ai_agent_field(section, label)):
+            errors.append(f"[{contract_id}] missing meaningful {label}")
+
+    # ラベル正規化は非 ASCII を落とすため、否定語（日本語の「不要」等）は判定に使えない。
+    # 採用は肯定語の閉じた語彙が明示されたときだけとし、既定を not-required にする。
+    components = _normalize_ai_agent_label(_ai_agent_field(section, "Plugin components"))
+    mcp_required = any(
+        token in components for token in ("mcpjsonrequired", "mcpjsonyes")
+    )
+    metadata["mcp_config_required"] = mcp_required
+    if mcp_required and not _is_meaningful_ai_agent_value(_ai_agent_field(section, "MCP exposure")):
+        errors.append(f"[{contract_id}] mcp.json requires a meaningful MCP exposure")
+
+    channels = _normalize_ai_agent_label(_ai_agent_field(section, "Channels"))
+    m365_selected = (
+        "microsoft365" in channels or "teams" in channels
+    ) and "notselected" not in channels
+    if m365_selected and not _is_meaningful_ai_agent_value(
+        _ai_agent_field(section, "M365 publish")
+    ):
+        errors.append(f"[{contract_id}] Microsoft 365 channel requires a meaningful M365 publish")
     return errors
 
 
@@ -11899,6 +11961,8 @@ def _parse_ai_agent_design(
                 agent_key,
             )
         )
+    if sections["AG-CAP-09"]:
+        errors.extend(_validate_ai_agent_distribution(sections["AG-CAP-09"], metadata))
 
     if _agentic_retrieval_route_selected(metadata.get("routes", [])):
         errors.extend(_validate_agentic_retrieval_contracts(visible, metadata))
@@ -11934,7 +11998,7 @@ def validate_ai_agent_design_artifact(
     tool_search_policy: str = "auto",
     agentic_retrieval_policy: str = "auto",
 ) -> List[str]:
-    """AAG Step 3のAG-CAP-01〜06設計成果物を決定的に検証する。"""
+    """AAG Step 3のAG-CAP-01〜10設計成果物を決定的に検証する。"""
     errors, _ = _parse_ai_agent_design(
         Path(path), tool_search_policy, agentic_retrieval_policy
     )
@@ -12355,6 +12419,141 @@ def validate_agent_plugin_manifest(
     return errors
 
 
+def _agent_plugin_mcp_env_errors(
+    server_name: str, field: str, mapping: Any
+) -> List[str]:
+    errors: List[str] = []
+    if mapping is None:
+        return errors
+    if not isinstance(mapping, dict):
+        return [f"[AGENT-PLUGIN] {server_name}.{field} must be an object"]
+    for key, value in mapping.items():
+        if not isinstance(value, str):
+            errors.append(f"[AGENT-PLUGIN] {server_name}.{field}.{key} must be a string")
+            continue
+        if key in _AGENT_PLUGIN_RESERVED_VARS:
+            errors.append(
+                f"[AGENT-PLUGIN] {server_name}.{field} must not redefine the reserved "
+                f"variable {key}"
+            )
+        if _AGENT_PLUGIN_CREDENTIAL_KEY.search(key) and "${" not in value:
+            errors.append(
+                f"[AGENT-PLUGIN] {server_name}.{field}.{key} must not embed a credential "
+                "value (Agent Plugins 1.0.0 §7.2.1)"
+            )
+    return errors
+
+
+def _agent_plugin_mcp_url_errors(server_name: str, url: Any) -> List[str]:
+    if not isinstance(url, str) or not url.strip():
+        return [f"[AGENT-PLUGIN] {server_name}.url must be a non-empty string"]
+    try:
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").casefold()
+    except ValueError as exc:
+        return [f"[AGENT-PLUGIN] {server_name}.url is not a parsable URL: {exc}"]
+    if parsed.scheme not in {"http", "https"}:
+        return [f"[AGENT-PLUGIN] {server_name}.url must be an absolute http(s) URL"]
+    errors: List[str] = []
+    if not host:
+        errors.append(f"[AGENT-PLUGIN] {server_name}.url must declare a host")
+    if parsed.username or parsed.password:
+        errors.append(f"[AGENT-PLUGIN] {server_name}.url must not contain user info")
+    if parsed.fragment:
+        errors.append(f"[AGENT-PLUGIN] {server_name}.url must not contain a fragment")
+    # loopback は仕様例外のため、別名を広げず代表的な 3 形式だけを認める。
+    is_loopback = host in {"localhost", "127.0.0.1", "::1"}
+    if parsed.scheme == "http" and host and not is_loopback:
+        errors.append(
+            f"[AGENT-PLUGIN] {server_name}.url must use HTTPS for a non-loopback host"
+        )
+    return errors
+
+
+def validate_agent_plugin_mcp_config(
+    agent_dir: "Path | str", required: bool
+) -> List[str]:
+    """AG-CAP-09 が採用した場合の `mcp.json` を検証する（Agent Plugins 1.0.0 §7.2）。"""
+    path = Path(agent_dir) / _AGENT_PLUGIN_MCP_FILE
+    if not path.is_file():
+        if required:
+            return [f"[AGENT-PLUGIN] mcp.json not found: {path}"]
+        return []
+    if not required:
+        return [
+            "[AGENT-PLUGIN] mcp.json exists but AG-CAP-09 Plugin components does not "
+            f"select it: {path}"
+        ]
+    if path.is_symlink():
+        return [f"[AGENT-PLUGIN] mcp.json must not be a symlink: {path}"]
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return [f"[AGENT-PLUGIN] mcp.json read error ({path}): {exc}"]
+    try:
+        config = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        return [f"[AGENT-PLUGIN] mcp.json is not valid JSON ({path}): {exc}"]
+    if not isinstance(config, dict):
+        return [f"[AGENT-PLUGIN] mcp.json must be a JSON object: {path}"]
+
+    errors: List[str] = []
+    # キー名だけでは値側のリテラルを見逃すため、既存の secret 検出を本文へ適用する。
+    errors.extend(_ai_agent_secret_errors(path, raw))
+    unknown = sorted(set(config) - {"$schema", "mcpServers"})
+    if unknown:
+        errors.append(
+            "[AGENT-PLUGIN] mcp.json has fields outside the Agent Plugins 1.0.0 "
+            "schema: " + ", ".join(unknown)
+        )
+    if config.get("$schema") != _AGENT_PLUGIN_MCP_SCHEMA:
+        errors.append(f"[AGENT-PLUGIN] mcp.json $schema must be {_AGENT_PLUGIN_MCP_SCHEMA}")
+
+    servers = config.get("mcpServers")
+    if not isinstance(servers, dict) or not servers:
+        errors.append("[AGENT-PLUGIN] mcp.json mcpServers must be a non-empty object")
+        return errors
+
+    for server_name, server in servers.items():
+        if not isinstance(server, dict):
+            errors.append(f"[AGENT-PLUGIN] {server_name} must be an object")
+            continue
+        extra = sorted(set(server) - _AGENT_PLUGIN_MCP_SERVER_FIELDS)
+        if extra:
+            errors.append(
+                f"[AGENT-PLUGIN] {server_name} has fields outside the MCP server "
+                "schema: " + ", ".join(extra)
+            )
+        transport = server.get("type")
+        if transport not in _AGENT_PLUGIN_MCP_TRANSPORTS:
+            errors.append(
+                f"[AGENT-PLUGIN] {server_name}.type must be one of "
+                + ", ".join(sorted(_AGENT_PLUGIN_MCP_TRANSPORTS))
+            )
+            continue
+        if transport == "stdio":
+            command = server.get("command")
+            if not isinstance(command, str) or not command.strip():
+                errors.append(f"[AGENT-PLUGIN] {server_name}.command must be a non-empty string")
+            args = server.get("args", [])
+            if not isinstance(args, list) or any(not isinstance(arg, str) for arg in args):
+                errors.append(f"[AGENT-PLUGIN] {server_name}.args must be a list of strings")
+            if "url" in server or "headers" in server:
+                errors.append(f"[AGENT-PLUGIN] {server_name} stdio must not declare url or headers")
+        else:
+            errors.extend(_agent_plugin_mcp_url_errors(server_name, server.get("url")))
+            if "command" in server or "args" in server or "env" in server:
+                errors.append(
+                    f"[AGENT-PLUGIN] {server_name} remote transport must not declare "
+                    "command, args, or env"
+                )
+        errors.extend(_agent_plugin_mcp_env_errors(server_name, "env", server.get("env")))
+        errors.extend(
+            _agent_plugin_mcp_env_errors(server_name, "headers", server.get("headers"))
+        )
+    return errors
+
+
 def validate_ai_agent_implementation_artifacts(
     design_path: "Path | str",
     agent_dir: "Path | str",
@@ -12387,6 +12586,9 @@ def validate_ai_agent_implementation_artifacts(
     if key and root.name != key:
         errors.append(f"AAGD agent directory key mismatch: expected {key}, actual {root.name}")
     errors.extend(validate_agent_plugin_manifest(root, key))
+    errors.extend(
+        validate_agent_plugin_mcp_config(root, bool(metadata.get("mcp_config_required")))
+    )
 
     files, file_errors = _collect_ai_agent_files(root)
     errors.extend(file_errors)
@@ -12826,6 +13028,374 @@ def validate_tool_search_eval_report(
             "[TB-CAP-02] report must state a Conclusion and Rationale for the "
             "TB-CAP-02 decision"
         )
+    return errors
+
+
+# --- 要件適合実測レポート（ASDW-WEB 5.3 / ADFDV 4.3 / AAGD 5 / AAR 7）---
+_CONFORMANCE_LABELS = (
+    "Schema-Version",
+    "Workflow",
+    "Step",
+    "Agent",
+    "Measured-At",
+    "Target-Environment",
+    "Measurement-Tool",
+    "Secret-Redaction",
+)
+_CONFORMANCE_TABLE_HEADER = (
+    "Req ID",
+    "Kind",
+    "Target",
+    "Threshold",
+    "Measured",
+    "Judgement",
+    "Headroom",
+    "Evidence",
+)
+_CONFORMANCE_KINDS = ("FR", "NFR")
+_CONFORMANCE_JUDGEMENTS = ("PASS", "FAIL", "NOT_MEASURED", "NO_TARGET")
+_CONFORMANCE_NEED_MEASURED = ("PASS", "FAIL", "NO_TARGET")
+
+
+def _requirements_conformance_table_errors(text: str) -> List[str]:
+    rows = _find_ai_agent_table(text, _CONFORMANCE_TABLE_HEADER)
+    if not rows:
+        return ["[FR-WF-CONF-02] measurement table is missing or has no rows"]
+
+    errors: List[str] = []
+    req_key = _normalize_ai_agent_label("Req ID")
+    kind_key = _normalize_ai_agent_label("Kind")
+    target_key = _normalize_ai_agent_label("Target")
+    threshold_key = _normalize_ai_agent_label("Threshold")
+    judgement_key = _normalize_ai_agent_label("Judgement")
+    measured_key = _normalize_ai_agent_label("Measured")
+    headroom_key = _normalize_ai_agent_label("Headroom")
+    evidence_key = _normalize_ai_agent_label("Evidence")
+    seen_req_ids: set = set()
+    for row in rows:
+        req = row.get(req_key, "").strip() or "?"
+        if req in seen_req_ids:
+            # 同じ要件を複数行に分けて都合のよい行だけ PASS にさせない。
+            errors.append(f"[FR-WF-CONF-02] duplicate 'Req ID': {req!r}")
+        seen_req_ids.add(req)
+        kind = row.get(kind_key, "").strip().upper()
+        if kind not in _CONFORMANCE_KINDS:
+            found = kind or "(blank)"
+            errors.append(
+                f"[FR-WF-CONF-02] {req}: 'Kind' must be FR or NFR, found {found!r}"
+            )
+        judgement = row.get(judgement_key, "").strip().upper()
+        if judgement not in _CONFORMANCE_JUDGEMENTS:
+            found = judgement or "(blank)"
+            errors.append(
+                f"[FR-WF-CONF-03] {req}: 'Judgement' must be one of "
+                f"{', '.join(_CONFORMANCE_JUDGEMENTS)}, found {found!r}"
+            )
+            continue
+        measured = row.get(measured_key, "").strip()
+        if judgement in _CONFORMANCE_NEED_MEASURED and not measured:
+            # 測っていない値を根拠に合否・目標未定義を主張させない。
+            errors.append(
+                f"[FR-WF-CONF-03] {req}: {judgement} requires a measured value"
+            )
+        if judgement in ("PASS", "FAIL"):
+            # 合否は「目標に対する差」でしか主張できない。証跡と余裕度も欠かせない。
+            for label, key in (
+                ("Target", target_key),
+                ("Threshold", threshold_key),
+                ("Headroom", headroom_key),
+                ("Evidence", evidence_key),
+            ):
+                if not row.get(key, "").strip():
+                    errors.append(
+                        f"[FR-WF-CONF-05] {req}: {judgement} requires {label!r}"
+                    )
+        if judgement == "NOT_MEASURED" and not row.get(evidence_key, "").strip():
+            errors.append(
+                f"[FR-WF-CONF-03] {req}: NOT_MEASURED requires a reason in 'Evidence'"
+            )
+    return errors
+
+
+def validate_requirements_conformance_report(
+    report_path: "Path | str",
+    *,
+    workflow_id: str,
+    step_id: str,
+) -> List[str]:
+    """要件適合実測レポートを検証する（FR-WF-CONF-02 / 03 / 05）。
+
+    測定値の妥当性は判定しない。未測定を PASS へ畳み込む経路と、
+    目標未定義を測定済みと偽る経路だけを塞ぐ。
+    """
+    path = Path(report_path)
+    if not path.is_file() or path.is_symlink():
+        return [f"[FR-WF-CONF-02] conformance report not found: {path}"]
+    text = _strip_ai_agent_markdown_code(
+        path.read_text(encoding="utf-8", errors="replace")
+    )
+
+    errors: List[str] = []
+    values = {label: _ai_agent_field(text, label) for label in _CONFORMANCE_LABELS}
+    for label in _CONFORMANCE_LABELS:
+        if not values[label].strip():
+            errors.append(
+                f"[FR-WF-CONF-02] measurement condition {label!r} is missing"
+            )
+
+    expected = {
+        "Workflow": str(workflow_id).strip(),
+        "Step": str(step_id).strip(),
+        "Agent": "QA-RequirementsConformanceEval",
+    }
+    for label, want in expected.items():
+        found = values[label].strip()
+        if found and found != want:
+            errors.append(
+                f"[FR-WF-CONF-02] {label!r} must be {want!r}, found {found!r}"
+            )
+    redaction = values["Secret-Redaction"].strip()
+    if redaction and redaction.casefold() != "confirmed":
+        errors.append(
+            f"[FR-WF-CONF-02] 'Secret-Redaction' must be confirmed, found {redaction!r}"
+        )
+
+    errors.extend(_requirements_conformance_table_errors(text))
+
+    for label in ("Conclusion", "Rationale"):
+        if not _is_meaningful_ai_agent_value(_ai_agent_field(text, label)):
+            errors.append(f"[FR-WF-CONF-02] {label!r} is missing")
+    # 該当なしは none と書かせる。空欄は判断の放棄と区別できない。
+    if not _ai_agent_field(text, "Simplification-Candidate").strip():
+        errors.append(
+            "[FR-WF-CONF-05] 'Simplification-Candidate' is missing; "
+            "write none when there is no candidate"
+        )
+    return errors
+
+
+# --- 検索経路の適正化実測レポート（AAGD 6、AG-CAP-10）---
+_ROUTE_RIGHTSIZING_LABELS = (
+    "Schema-Version",
+    "Workflow",
+    "Step",
+    "Agent",
+    "Measured-At",
+    "Dataset",
+    "Dataset-Size",
+    "Secret-Redaction",
+)
+_ROUTE_RIGHTSIZING_TABLE_HEADER = (
+    "Rung",
+    "Route",
+    "Accuracy",
+    "Tokens",
+    "Latency",
+    "Judgement",
+    "Evidence",
+)
+_ROUTE_RIGHTSIZING_JUDGEMENTS = ("KEEP", "DOWNGRADE", "INSUFFICIENT", "NOT_MEASURED")
+_ROUTE_RIGHTSIZING_NEED_METRICS = ("KEEP", "DOWNGRADE")
+
+# --- Microsoft 365 / Teams 公開レポート（AAGD 7、AG-CAP-09）---
+_M365_PUBLISH_LABELS = (
+    "Schema-Version",
+    "Workflow",
+    "Step",
+    "Agent",
+    "Published-At",
+    "Publish-Scope",
+    "Auth-Scheme",
+    "Secret-Redaction",
+)
+_M365_PUBLISH_TABLE_HEADER = (
+    "Agent Key",
+    "Channel",
+    "Publish Scope",
+    "App Version",
+    "Judgement",
+    "Approval",
+    "Evidence",
+)
+_M365_PUBLISH_JUDGEMENTS = ("PUBLISHED", "PENDING_APPROVAL", "NOT_SELECTED", "FAILED")
+
+
+def _fixed_report_condition_errors(
+    text: str,
+    labels: Tuple[str, ...],
+    expected: Dict[str, str],
+    contract_id: str,
+) -> List[str]:
+    """測定条件ラベルの存在と、workflow / step / agent の一致を検証する。"""
+    errors: List[str] = []
+    values = {label: _ai_agent_field(text, label) for label in labels}
+    for label in labels:
+        if not values[label].strip():
+            errors.append(f"[{contract_id}] report condition {label!r} is missing")
+    for label, want in expected.items():
+        found = values.get(label, "").strip()
+        if found and found != want:
+            errors.append(f"[{contract_id}] {label!r} must be {want!r}, found {found!r}")
+    redaction = values.get("Secret-Redaction", "").strip()
+    if redaction and redaction.casefold() != "confirmed":
+        errors.append(
+            f"[{contract_id}] 'Secret-Redaction' must be confirmed, found {redaction!r}"
+        )
+    return errors
+
+
+def validate_route_rightsizing_report(
+    report_path: "Path | str",
+    *,
+    workflow_id: str,
+    step_id: str,
+) -> List[str]:
+    """検索経路の適正化実測レポートを検証する（AG-CAP-10）。
+
+    測定値そのものは判定しない。1 段だけの比較を「適正」と結論する経路と、
+    未実測を判定値へ畳み込む経路を塞ぐ。
+    """
+    contract_id = "AG-CAP-10"
+    path = Path(report_path)
+    if not path.is_file() or path.is_symlink():
+        return [f"[{contract_id}] route rightsizing report not found: {path}"]
+    text = _strip_ai_agent_markdown_code(path.read_text(encoding="utf-8", errors="replace"))
+
+    errors = _fixed_report_condition_errors(
+        text,
+        _ROUTE_RIGHTSIZING_LABELS,
+        {
+            "Workflow": str(workflow_id).strip(),
+            "Step": str(step_id).strip(),
+            "Agent": "QA-AgentRouteRightsizingEval",
+        },
+        contract_id,
+    )
+
+    rows = _find_ai_agent_table(text, _ROUTE_RIGHTSIZING_TABLE_HEADER)
+    if rows is None:
+        # ヘッダーのみの表もここへ落ちるため、列と行の両方を示す。
+        errors.append(
+            f"[{contract_id}] comparison table needs the columns "
+            + " | ".join(_ROUTE_RIGHTSIZING_TABLE_HEADER)
+            + " and at least 2 data rows"
+        )
+        return errors
+    if len(rows) < 2:
+        # 1 段だけの測定は比較ではない。AG-CAP-10 は 2 段以上の実測を要求する。
+        errors.append(
+            f"[{contract_id}] comparison table needs 2 or more rungs, found {len(rows)}"
+        )
+
+    judgement_key = _normalize_ai_agent_label("Judgement")
+    evidence_key = _normalize_ai_agent_label("Evidence")
+    metric_keys = [_normalize_ai_agent_label(name) for name in ("Accuracy", "Tokens", "Latency")]
+    for row in rows:
+        rung = row.get(_normalize_ai_agent_label("Rung"), "").strip() or "?"
+        judgement = row.get(judgement_key, "").strip().upper()
+        if judgement not in _ROUTE_RIGHTSIZING_JUDGEMENTS:
+            found = judgement or "(blank)"
+            errors.append(
+                f"[{contract_id}] {rung}: 'Judgement' must be one of "
+                f"{', '.join(_ROUTE_RIGHTSIZING_JUDGEMENTS)}, found {found!r}"
+            )
+            continue
+        if judgement in _ROUTE_RIGHTSIZING_NEED_METRICS:
+            missing = [
+                name
+                for name, key in zip(("Accuracy", "Tokens", "Latency"), metric_keys)
+                if not row.get(key, "").strip()
+            ]
+            if missing:
+                errors.append(
+                    f"[{contract_id}] {rung}: {judgement} requires measured "
+                    + ", ".join(missing)
+                )
+        if judgement == "NOT_MEASURED" and not row.get(evidence_key, "").strip():
+            errors.append(
+                f"[{contract_id}] {rung}: NOT_MEASURED requires a reason in 'Evidence'"
+            )
+
+    for label in ("Conclusion", "Rationale", "Recommended-Route"):
+        if not _is_meaningful_ai_agent_value(_ai_agent_field(text, label)):
+            errors.append(f"[{contract_id}] {label!r} is missing")
+    conclusion = _ai_agent_field(text, "Conclusion").strip().upper()
+    if conclusion and conclusion not in _ROUTE_RIGHTSIZING_JUDGEMENTS:
+        errors.append(
+            f"[{contract_id}] 'Conclusion' must be one of "
+            f"{', '.join(_ROUTE_RIGHTSIZING_JUDGEMENTS)}, found {conclusion!r}"
+        )
+    return errors
+
+
+def validate_m365_publish_report(
+    report_path: "Path | str",
+    *,
+    workflow_id: str,
+    step_id: str,
+) -> List[str]:
+    """Microsoft 365 / Teams 公開レポートを検証する（AG-CAP-09）。
+
+    公開そのものの成否は判定しない。公開していないのに公開済みと書く経路と、
+    公開メタデータへ資格情報を書く経路を塞ぐ。
+    """
+    contract_id = "AG-CAP-09"
+    path = Path(report_path)
+    if not path.is_file() or path.is_symlink():
+        return [f"[{contract_id}] M365 publish report not found: {path}"]
+    raw = path.read_text(encoding="utf-8", errors="replace")
+    text = _strip_ai_agent_markdown_code(raw)
+
+    errors = _fixed_report_condition_errors(
+        text,
+        _M365_PUBLISH_LABELS,
+        {
+            "Workflow": str(workflow_id).strip(),
+            "Step": str(step_id).strip(),
+            "Agent": "Dev-Agent-M365Publish",
+        },
+        contract_id,
+    )
+    # 公開メタデータは利用者に見えるため、レポートにも生の資格情報を残させない。
+    errors.extend(_ai_agent_secret_errors(path, raw))
+
+    rows = _find_ai_agent_table(text, _M365_PUBLISH_TABLE_HEADER)
+    if rows is None:
+        # ヘッダーのみの表もここへ落ちるため、列と行の両方を示す。
+        errors.append(
+            f"[{contract_id}] publish table needs the columns "
+            + " | ".join(_M365_PUBLISH_TABLE_HEADER)
+            + " and at least 1 data row"
+        )
+        return errors
+
+    judgement_key = _normalize_ai_agent_label("Judgement")
+    version_key = _normalize_ai_agent_label("App Version")
+    evidence_key = _normalize_ai_agent_label("Evidence")
+    for row in rows:
+        agent_key = row.get(_normalize_ai_agent_label("Agent Key"), "").strip() or "?"
+        judgement = row.get(judgement_key, "").strip().upper()
+        if judgement not in _M365_PUBLISH_JUDGEMENTS:
+            found = judgement or "(blank)"
+            errors.append(
+                f"[{contract_id}] {agent_key}: 'Judgement' must be one of "
+                f"{', '.join(_M365_PUBLISH_JUDGEMENTS)}, found {found!r}"
+            )
+            continue
+        if judgement in ("PUBLISHED", "PENDING_APPROVAL") and not row.get(
+            version_key, ""
+        ).strip():
+            errors.append(
+                f"[{contract_id}] {agent_key}: {judgement} requires an App Version"
+            )
+        if judgement in ("NOT_SELECTED", "FAILED") and not row.get(evidence_key, "").strip():
+            errors.append(
+                f"[{contract_id}] {agent_key}: {judgement} requires a reason in 'Evidence'"
+            )
+
+    for label in ("Conclusion", "Rationale", "Consumer-Setup"):
+        if not _is_meaningful_ai_agent_value(_ai_agent_field(text, label)):
+            errors.append(f"[{contract_id}] {label!r} is missing")
     return errors
 
 

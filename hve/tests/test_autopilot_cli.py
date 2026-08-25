@@ -13,7 +13,11 @@ from typing import List
 import pytest
 
 from hve.autopilot import AutopilotPlan, AppChain
-from hve.autopilot.cli_runner import CliAutopilotRunner, CliRunSummary
+from hve.autopilot.cli_runner import (
+    LANE_WALL_CLOCK_WARN_SECONDS,
+    CliAutopilotRunner,
+    CliRunSummary,
+)
 
 
 class _FakeProc:
@@ -108,7 +112,6 @@ def test_cli_runner_abort_propagates_exit_code() -> None:
 def test_cli_runner_argv_factory_override() -> None:
     plan = _plan(["APP-X"], chain=["aad-web"])
     captured: List = []
-
     def argv_factory(app_id, wf_id):
         captured.append((app_id, wf_id))
         return ["custom", "--app", app_id, "--wf", wf_id]
@@ -176,3 +179,78 @@ def test_cli_orchestrate_requires_either_workflow_or_autopilot_chain() -> None:
         timeout=30,
     )
     assert result.returncode == 1
+
+
+# ---------------------------------------------------------------------------
+# FR-CLI-80: lane 経過時間の観測（停止はしない）
+# ---------------------------------------------------------------------------
+
+
+class _FakeClock:
+    """テストから経過時間を注入する。実時間に依存させない。"""
+
+    def __init__(self, steps: List[float]) -> None:
+        self._steps = list(steps)
+        self._last = self._steps[0] if self._steps else 0.0
+
+    def __call__(self) -> float:
+        if self._steps:
+            self._last = self._steps.pop(0)
+        return self._last
+
+
+def _run_with_clock(elapsed_seconds: float):
+    plan = _plan(["APP-01"], chain=["aad-web"])
+    messages: List[str] = []
+    # spawn 時に 0.0、完了判定で elapsed_seconds を返す。
+    clock = _FakeClock([0.0, elapsed_seconds, elapsed_seconds])
+    runner = CliAutopilotRunner(
+        plan,
+        popen_factory=lambda argv: _FakeProc(exit_code=0),
+        poll_interval_sec=0.0,
+        echo=messages.append,
+        clock=clock,
+    )
+    summary = runner.run()
+    return summary, messages
+
+
+def test_lane_over_the_threshold_emits_one_warning() -> None:
+    summary, messages = _run_with_clock(LANE_WALL_CLOCK_WARN_SECONDS + 1.0)
+    warnings = [m for m in messages if "経過時間" in m]
+    assert len(warnings) == 1
+    assert "APP-01" in warnings[0]
+    # 警告は結果を変えない
+    assert summary.success
+    assert summary.completed_apps == 1
+    assert summary.aborted_apps == []
+
+
+def test_lane_within_the_threshold_is_silent() -> None:
+    summary, messages = _run_with_clock(LANE_WALL_CLOCK_WARN_SECONDS - 1.0)
+    assert [m for m in messages if "経過時間" in m] == []
+    assert summary.success
+    assert summary.completed_apps == 1
+
+
+def test_threshold_matches_the_cloud_job_timeout() -> None:
+    """NFR-TIME-02 の Cloud 側 360 分と同値であることを固定する。"""
+    assert LANE_WALL_CLOCK_WARN_SECONDS == 360 * 60
+
+
+def test_warning_failure_does_not_break_the_run() -> None:
+    plan = _plan(["APP-01"], chain=["aad-web"])
+
+    def broken_echo(_message: str) -> None:
+        raise RuntimeError("echo is broken")
+
+    runner = CliAutopilotRunner(
+        plan,
+        popen_factory=lambda argv: _FakeProc(exit_code=0),
+        poll_interval_sec=0.0,
+        echo=broken_echo,
+        clock=_FakeClock([0.0, LANE_WALL_CLOCK_WARN_SECONDS + 1.0]),
+    )
+    summary = runner.run()
+    assert summary.success
+    assert summary.completed_apps == 1

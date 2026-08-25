@@ -96,8 +96,8 @@ HVE は、要求整理〜実装までを Workflow / Custom Agent / DAG として
 ### 3.1 Workflow レジストリ参照
 
 - **FR-COMMON-01（訂正版）**: **CLI Orchestrator** は [hve/workflow_registry.py](hve/workflow_registry.py) の `WorkflowDef` を単一情報源として Workflow を解決する。**Cloud Orchestrator** ([.github/workflows/auto-orchestrator-dispatcher.yml](.github/workflows/auto-orchestrator-dispatcher.yml)) は `workflow_registry.py` を直接参照せず、dispatcher 内の `trigger_map` / `done_map` / `closed_prefix_map` で Workflow ID を判定する。
-  - **リスク**: Workflow ID 定義が二重管理になっており、片方の追加（例: `ard`）が他方に伝播していない。
-  - **検証方法**: `auto-orchestrator-dispatcher.yml` の `trigger_map` キーと `list_workflows()` の戻り値が完全一致することをテストで確認する。
+  - **リスク**: Workflow ID 定義が二重管理になっており、片方の追加が他方に伝播しない。
+  - **検証方法**: Cloud 対応を宣言する §3.2 の Workflow ID 集合と、dispatcher の `trigger_map` / `done_map` / `closed_prefix_map` / reusable job の集合が一致することをテストで確認する。CLI / GUI 専用 Workflow（現行は `adi`）を `list_workflows()` との単純な完全一致で Cloud 対象へ昇格させてはならない。
 - **FR-COMMON-02**: 後方互換エイリアスの解決は以下の 3 局面で行われる:
   - ラベル解決: `auto-app-detail-design` → `AAD-WEB`、`auto-app-dev-microservice` → `ASDW-WEB`、`aad:done` → `AAD-WEB`、`asdw:done` → `ASDW-WEB`
   - タイトルプレフィックス解決: `[AAD]` → `AAD-WEB`、`[ASDW]` → `ASDW-WEB`
@@ -107,20 +107,28 @@ HVE は、要求整理〜実装までを Workflow / Custom Agent / DAG として
 
 | Workflow ID | 名称 | Cloud Orch | CLI Orch | 固有パラメータ |
 |---|---|:---:|:---:|---|
+| `ard` | Auto Requirement Definition | ✓ | ✓ | `company_name`, `target_business`, `survey_base_date`, `survey_period_years`, `target_region`, `analysis_purpose`, `attached_docs`, `include_kpi_okr` |
 | `aas` | App Architecture Design | ✓ | ✓ | （なし） |
-| `aad-web` | App Detail Design (Web) | ✓ | ✓ | `app_ids` 等 |
-| `asdw-web` | App Dev (Web / Microservice on Azure) | ✓ | ✓ | `app_ids`, `resource_group`, `usecase_id` 等 |
-| `abd` | Batch Design | ✓ | ✓ | `app_ids` |
-| `abdv` | Batch Dev | ✓ | ✓ | `app_ids`, `batch_job_id`, `resource_group` |
-| `aag` | AI Agent Design | ✓ | ✓ | `app_ids`, `usecase_id` |
-| `aagd` | AI Agent Dev | ✓ | ✓ | `app_ids`, `usecase_id`, `resource_group` |
+| `ada` | Agent Data Architecture | ✓ | ✓ | `app_ids`, `app_id` |
+| `aad-web` | App Detail Design (Web) | ✓ | ✓ | `app_ids`, `app_id`, `create_remote_mcp_server` |
+| `asdw-web` | App Dev (Web / Microservice on Azure) | ✓ | ✓ | `app_ids`, `app_id`, `resource_group`, `usecase_id`, `tdd_max_retries`, `create_remote_mcp_server` |
+| `adfd` | Dataflow Design | ✓ | ✓ | `app_ids`, `app_id` |
+| `adfdv` | Dataflow Dev | ✓ | ✓ | `app_ids`, `app_id`, `resource_group`, `tdd_max_retries` |
+| `aag` | AI Agent Design | ✓ | ✓ | `app_ids`, `app_id`, `usecase_id` |
+| `aagd` | AI Agent Dev & Deploy | ✓ | ✓ | `app_ids`, `app_id`, `resource_group`, `usecase_id`, `tdd_max_retries` |
+| `aar` | Agentic Retrieval Add-on | ✓ | ✓ | `app_ids`, `app_id`, `resource_group`, `usecase_id` |
 | `akm` | Knowledge Management | ✓ | ✓ | `sources`, `target_files`, `force_refresh`, `custom_source_dir`, `enable_auto_merge`, `enable_review`*¹, `workiq_akm_ingest_dxx`*² |
 | `adi` | Auto Design-doc Ingestion | **✗（dispatcher 未対応）** | ✓ | `purpose`, `target_scope`, `depth`, `focus_areas` |
 | `adoc` | Source Code → Documentation | ✓ | ✓ | `target_dirs`, `exclude_patterns`, `doc_purpose`, `max_file_lines` |
-| `ard` | Auto Requirement Definition | **✗（dispatcher 未対応）** | ✓ | `company_name`, `target_business`, `survey_base_date`, `survey_period_years`, `target_region`, `analysis_purpose`, `attached_docs`, `include_kpi_okr` |
 
 \*¹ `enable_review` は Issue Template 入力には存在するが、`WorkflowDef.params` 宣言ではなく内部処理で扱われる。
 \*² `workiq_akm_ingest_dxx` も同様に `WorkflowDef.params` には宣言されないが、`_collect_params_non_interactive` で `params` 経由に伝搬される。
+
+行順は [hve/workflow_registry.py](hve/workflow_registry.py) の登録順に合わせる。Cloud Orch 欄は
+[.github/workflows/auto-orchestrator-dispatcher.yml](.github/workflows/auto-orchestrator-dispatcher.yml) の
+`trigger_map` に当該 Workflow が登録されているかを根拠とする。本表の Workflow ID 集合が registry と
+一致することは [hve/tests/test_workflow_registry.py](hve/tests/test_workflow_registry.py)
+`test_requirement_doc_workflow_table_lists_every_registered_workflow` が固定する。
 
 旧独立の原本質問票処理は ADI に統合し、独立した Workflow ID・Cloud reusable workflow・CLI / GUI 選択肢として再公開してはならない。後方互換 alias も提供しない。
 
@@ -128,9 +136,13 @@ HVE は、要求整理〜実装までを Workflow / Custom Agent / DAG として
 
 - **FR-DAG-01**: Step の依存関係は AND join、並列 fork、スキップフォールバック（`skip_fallback_deps`）、ブロック（`block_unless`）の 4 パターンをサポートする（[hve/workflow_registry.py](hve/workflow_registry.py)）。
 - **FR-DAG-02**: **計画段階**（[hve/dag_planner.py](hve/dag_planner.py)）で Wave 単位の論理プランを生成し、**実行段階**（[hve/dag_executor.py](hve/dag_executor.py)）で `asyncio.Semaphore(max_parallel)` により並列上限を制御する。
-- **FR-DAG-03**: 並列上限の階層関係:
-  - `WorkflowDef.max_parallel` 未指定 → DAGExecutor 既定値 **15**
-  - 明示指定: `akm` = 21、`adi` = 21、`ard` = 15
+- **FR-DAG-03**: DAG の並列上限は次の順序で解決し、解決結果を計画段階（[hve/dag_plan.py](hve/dag_plan.py) `DAGPlan.max_parallel`）と実行段階の semaphore の双方における唯一の上限としなければならない。
+  1. ARD bridge mode の直列化が成立するとき → **1**
+  2. `WorkflowDef.max_parallel` の宣言があるとき → **その宣言値**
+  3. いずれでもないとき → `SDKConfig.max_parallel`（CLI `--max-parallel`、既定 **15**）
+  - 宣言値は `akm` = 21、`adi` = 21、`ard` = 15、`asdw-web` = 1 とする。他の Workflow は宣言を持たない。
+  - 解決は [hve/orchestrator.py](hve/orchestrator.py) の単一実装で行い（FR-MAINT-07）、解決根拠を `DAGPlan.max_parallel_source` へ `ard-serial` / `workflow` / `config` として保持しなければならない。`DAGExecutor` へ `dag_plan` を渡す経路では `DAGPlan.max_parallel` が semaphore を決めるため、実行段階で `WorkflowDef.max_parallel` を再解決してはならない。
+  - 宣言を持つ Workflow に対して `SDKConfig.max_parallel` で宣言値を上書きしてはならない。`asdw-web` の宣言は同一 worktree での並列書込みを避ける安全制約であり、`akm` / `adi` の宣言は fan-out が設計上その並列度で動くことを表すため、いずれも利用者設定より優先する。従来 `run_workflow` は `SDKConfig.max_parallel` だけを計画へ渡しており、`dag_plan` を伴う経路では `WorkflowDef.max_parallel` が実行に一切反映されていなかった（実測: `asdw-web` は宣言 1 に対し 2 ステップの wave が 4 箇所とも並列実行され、`akm` / `adi` は宣言 21 に対し semaphore 15 で fan-out が分割されていた）。
 - **FR-DAG-04**: Step に `fanout_static_keys` または `fanout_parser` が定義されている場合、子ステップへ動的展開する。展開後の `step_id` は `{base_id}/{key}` 形式。`fanout_parser` の取り得る値:
   - `app_catalog` / `screen_catalog` / `service_catalog` / `dataflow_catalog` / `agent_catalog`
   - `business_candidate`（ARD Step 1.1）
@@ -159,11 +171,10 @@ HVE は、要求整理〜実装までを Workflow / Custom Agent / DAG として
 
 - **FR-STATE-01**: 各 Workflow は `{prefix}:initialized` / `{prefix}:ready` / `{prefix}:running` / `{prefix}:done` / `{prefix}:blocked` の状態ラベルを保持する（`_make_state_labels`、[hve/workflow_registry.py](hve/workflow_registry.py)）。
 - **FR-STATE-02**: `qa-ready` ラベルは Copilot アサインを保留する状態として明示的にスキップされ、質問票作成を担当する Copilot がアサインされた場合は `qa-drafting`（回答下書き中）へ遷移する。`auto-issue-qa-ready-transition.yml` は回答受領後に `qa-ready` または `qa-drafting` から `ready` への遷移を担当する。
-  - 対象セット: `aas:qa-ready` / `aad:qa-ready` / `asdw:qa-ready` / `abd:qa-ready` / `abdv:qa-ready` / `aag:qa-ready` / `aagd:qa-ready` / `akm:qa-ready` / `adoc:qa-ready` / `aad-web:qa-ready` / `asdw-web:qa-ready`
-  - **対象外**: `ard:qa-ready` は `qa_ready_labels` セットに含まれない
+  - 対象セット: `ard:qa-ready` / `aas:qa-ready` / `aad:qa-ready` / `asdw:qa-ready` / `abd:qa-ready` / `abdv:qa-ready` / `aag:qa-ready` / `aagd:qa-ready` / `akm:qa-ready` / `adoc:qa-ready` / `aad-web:qa-ready` / `asdw-web:qa-ready`
 - **FR-STATE-03**: 完了ラベル `{prefix}:done` 付与時、Cloud Orchestrator は次の推奨 Workflow を Issue コメントで提示する。
-  - チェーン定義: `AAS` → `AAD-WEB` / `ABD` / `AAG` の 3 候補（全提示・1 つ選択は利用者判断）、`AAD-WEB` → `ASDW-WEB`、`ABD` → `ABDV`、`AAG` → `AAGD`
-  - **終端 Workflow（`ASDW-WEB` / `ABDV` / `AAGD` / `ADOC` / `AKM` / `ARD`）完了時は次候補が提示されない**
+  - チェーン定義: `ARD` → `AAS`、`AAS` → `AAD-WEB` / `ADFD` / `AAG` の 3 候補（全提示・1 つ選択は利用者判断）、`AAD-WEB` → `ASDW-WEB`、`ADFD` → `ADFDV`、`AAG` → `AAGD`
+  - **終端 Workflow（`ASDW-WEB` / `ADFDV` / `AAGD` / `ADOC` / `AKM`）完了時は次候補が提示されない**
 
 ### 3.5 モデルと SDK
 
@@ -175,7 +186,8 @@ HVE は、要求整理〜実装までを Workflow / Custom Agent / DAG として
 - **FR-MODEL-04**: HVE は GitHub Copilot SDK の `create_session(tool_search=...)`（ツール定義の遅延ロード）を CLI / GUI から設定可能とする。有効時は SDK へ `tool_search={"enabled": True}` を渡し、無効時は当該引数を渡さない。**既定は有効**とする。設定値は Step 実行経路のメインセッション、サブセッション（Pre-QA / Review）、Self-Improve セッションへ同一値を伝搬しなければならない。Fleet mode 親セッション（[hve/orchestrator.py](hve/orchestrator.py)）は意図的にツール公開を狭めた別系統であり、当該経路の実測根拠がないため本要件の対象外とする。`defer_threshold` は SDK 既定に委ね、設定として公開しない。本要件の `SDKConfig.tool_search` は、AAGD ワークフローのパラメータ `enable_tool_search`（生成する AI Agent の Foundry Toolbox 設定）とは別ドメインであり、HVE 自身の SDK セッションにだけ作用する。本要件はツール定義がコンテキストの大きな割合を占める実態（実測: 登録 171 ツール / 54,865 tokens のうち実使用は 10 種 / 9,108 tokens）を背景とするが、**削減効果は本要件の受入対象外**とし、受入は設定の伝搬だけとする（[hve/config.py](hve/config.py)、[hve/runner.py](hve/runner.py)、[hve/self_improve.py](hve/self_improve.py)）。既定を無効から有効へ変更した根拠は利用者の適用方針決定であり、削減率の実測を根拠としてはならない。**2026-08-13 の実測（Copilot CLI 1.0.79 / SDK 1.0.7、`session.metadata.contextInfo`）では、`tool_search` の有効 / 無効 / `defer_threshold=1` の 3 条件で `toolDefinitionsTokens` が 52,756 で完全に一致し、全ツールの `defer_loading` が `null`、`tool_search_tool` もツール一覧に現れなかった。すなわち当該環境では遅延公開が一切発火しておらず、削減効果は 0 である。**この実測は既定有効を否定しない（コンテキストを増やさないため）が、本設定を削減手段として期待してはならない。
 - **FR-MODEL-06**: FR-MODEL-04 の既定有効化は、利用者による明示的な無効化を上書きしてはならない。`--no-tool-search` と `HVE_TOOL_SEARCH` の falsy 値は無効として扱い、当該実行では SDK へ引数を渡さない。GUI では新規プロファイルの初期値だけを有効とし、**保存済み設定の値は移行・上書きしない**（保存済みの `false` が利用者の明示指定か旧既定かを区別できないため）。ランキング実装の既定（FR-TS-01 の `tool_search_ranking`）は本変更の対象外であり `sdk` のままとする。
 - **FR-MODEL-05**: SDK が `tool_search` 引数を未サポートの場合、Step 実行経路のセッション生成（[hve/runner.py](hve/runner.py) `_create_session_with_auto_reasoning_fallback`）は `TypeError` を捕捉して当該引数を除外し再試行しなければならない。未サポートを理由に実行を停止してはならない（既存の `reasoning_effort` 縮退規則に従う）。
-- **FR-MODEL-07**: 開発環境セットアップ（[hve/setup-hve.sh](hve/setup-hve.sh) / [hve/setup-hve.ps1](hve/setup-hve.ps1)）は、`github-copilot-sdk` の導入版を単一の宣言ファイル [hve/copilot-sdk.lock](hve/copilot-sdk.lock) で固定しなければならない。最新版への更新は明示フラグ（`--upgrade-sdk` / `-UpgradeSdk`）を指定したときにだけ行い、その際に当該ファイルの pin 行と Copilot CLI ランタイム版の記録行を書き換えなければならない。既定経路で `--upgrade` してはならない。あわせてセットアップは、SDK が pin する Copilot CLI ランタイム（`copilot/_cli_version.py` の `CLI_VERSION`）を先読みし、実際に解決されるランタイムの埋め込み版と突合して不一致を警告しなければならない。埋め込み版の取得には `--no-auto-update` を付与しなければならない（`--version` 単体はオンライン更新チェックの結果である「最新利用可能版」を返すため pin との突合に使えない。実測: 埋め込み 1.0.69 のバイナリが `--version` では 1.0.78 を返す）。pin を無効化する環境変数 `COPILOT_CLI_PATH` / `COPILOT_CLI_EXTRACT_DIR` / `COPILOT_SKIP_CLI_DOWNLOAD` が設定されている場合は警告しなければならない。本要件は、SDK の生成イベントパーサ（`copilot/generated/session_events.py`）がイベントのエンベロープ（`id` / `timestamp` / `type`）を assert で固めており、pin と異なるランタイムを掴むと `session.event` の解析が `AssertionError` となって当該イベントが黙って捨てられる（終端イベントを取り逃すと `send_and_wait` がタイムアウトまで返らない）ことへの予防である。`pyproject.toml` の下限指定は API 互換の床であり、導入版の情報源としてはならない。
+- **FR-MODEL-07**: 開発環境セットアップ（[hve/setup-hve.sh](hve/setup-hve.sh) / [hve/setup-hve.ps1](hve/setup-hve.ps1)）は、**既定で `github-copilot-sdk` を最新版へ更新しなければならない**（`pip install --upgrade --no-deps github-copilot-sdk`）。`--no-deps` は必須とする（付けないと pip resolver が `pydantic-core` を pydantic 本体の pin から乖離させ GUI 起動が例外になる）。再現性のために版を固定する経路は明示フラグ（`--pin-sdk` / `-PinSdk`）に限り、指定時だけ単一の宣言ファイル [hve/copilot-sdk.lock](hve/copilot-sdk.lock) の版を導入しなければならない。`--upgrade-sdk` / `-UpgradeSdk` は最新化に加えて当該ファイルの pin 行と Copilot CLI ランタイム版の記録行を書き換えなければならない（既定経路は宣言ファイルを書き換えてはならない）。既定を最新追従へ変更した根拠は利用者の明示的な方針決定であり、下記のランタイム整合検証は変更後も維持する。あわせてセットアップは、SDK が pin する Copilot CLI ランタイム（`copilot/_cli_version.py` の `CLI_VERSION`）を先読みし、実際に解決されるランタイムの埋め込み版と突合して不一致を警告しなければならない。埋め込み版の取得には `--no-auto-update` を付与しなければならない（`--version` 単体はオンライン更新チェックの結果である「最新利用可能版」を返すため pin との突合に使えない。実測: 埋め込み 1.0.69 のバイナリが `--version` では 1.0.78 を返す）。pin を無効化する環境変数 `COPILOT_CLI_PATH` / `COPILOT_CLI_EXTRACT_DIR` / `COPILOT_SKIP_CLI_DOWNLOAD` が設定されている場合は警告しなければならない。ランタイム整合検証は、SDK の生成イベントパーサ（`copilot/generated/session_events.py`）がイベントのエンベロープ（`id` / `timestamp` / `type`）を assert で固めており、pin と異なるランタイムを掴むと `session.event` の解析が `AssertionError` となって当該イベントが黙って捨てられる（終端イベントを取り逃すと `send_and_wait` がタイムアウトまで返らない）ことへの予防である。`pyproject.toml` の下限指定は API 互換の床であり、導入版の情報源としてはならない。
+- **FR-MODEL-08**: 開発環境セットアップは、Windows / macOS / Linux のいずれでも外部 `copilot` コマンド（npm パッケージ `@github/copilot`）を**最新版へ導入・更新**しなければならない。未導入時は `@github/copilot@latest` を導入する（他の OS ツールと同じ確認プロンプトに従い、`-Yes` / `-y` で省略できる）。導入済みかつ npm グローバル管理下の場合は確認なしで `@github/copilot@latest` へ更新しなければならない。`copilot` が解決できるのに npm グローバル管理下でない場合は、二重導入で PATH 解決が分岐するため npm 導入を行わず、警告と更新手順を提示しなければならない。`--no-install-tools` / `-NoInstallTools` と `--check-only` / `-CheckOnly` は導入・更新を抑止し、検出結果の報告だけを行わなければならない。npm が解決できない場合は Node.js の導入手順とともに警告しなければならない。本 CLI は GUI の Copilot チャットパネル（FR-GUI-10）の前提であり、SDK が pin する Step 実行用ランタイム（FR-MODEL-07）とは独立に自己更新するため、`COPILOT_CLI_PATH` 等で Step 実行へ流用してはならない。
 
 ### 3.5.1 Tool Search ランキングの HVE 実装（FR-TS）
 
@@ -192,7 +204,7 @@ FR-MODEL-04 が「SDK 組み込みツール検索を有効化する設定」を�
 - **FR-TS-08**: 遅延公開が発火していないことを検知できなければならない。SDK の `defer_threshold` の既定値はサーバー側にありクライアントから静的に確認できないため、ツール総数が閾値未満だと差し替えたランカーが一度も呼ばれず機能が不活性になる。`available_tools` に `defer_loading=True` のエントリが 0 件の場合は警告を発出しなければならない。**本検知が動くのは `tool_search_ranking="hve"` のときだけである**（既定の `sdk` では差し替えランカーを登録せず、`available_tools` を受け取る経路自体が存在しない）。既定経路での検知は本要件の対象外とする。なお 2026-08-13 の実測（Copilot CLI 1.0.79 / SDK 1.0.7）では、`defer_threshold=1` を指定しても全 183 ツールの `defer_loading` が `null` のままで、遅延公開は一切発火しなかった。
 - **FR-TS-09**: 差し替えたランカーの動作は実行時に観測可能でなければならない。`ToolSearchContext.on_event` が発火する `toolsearch.catalog` / `toolsearch.query` / `toolsearch.miss` を追記専用の JSONL（既定 `<repo-root>/.toolsearch/events.jsonl`、`HVE_TOOLSEARCH_EVENTS` で差し替え）へ逐次追記する。`<repo-root>` は FR-TS-07 と同一の解決規則に従う。各イベントは少なくとも発生時刻・schema バージョン・workflow / step・カタログ構成（総数 / pinned / searchable / kind 別内訳 / deferred 数）・検索レイテンシ・返却ツール名とスコア・推定トークン量（全定義前置き相当と実公開分）・FR-TS-08 警告の有無を含む。検索専用語彙（`additional_search_text`）とクエリ以外の会話内容を記録してはならない。収集は best-effort とし、書き込み失敗・集計失敗で Step を落としてはならない。
 - **FR-TS-10**: 収集した統計を人間が確認できるダッシュボードを提供しなければならない。CLI（`hve toolsearch dashboard`）はテキスト / JSON / 自己完結 HTML の各形式で描画でき、`--follow` 指定時は一定間隔で再集計して表示を更新する。指標は収集済みイベントと利用履歴（FR-TS-07）だけから算出し、データが不足する指標は 0 や推定値で埋めず「データ不足」と明示しなければならない。HTML 出力は外部ネットワークへ接続してはならない（CDN・外部フォント・リモート画像を参照しない）。**`token_reduction` は遅延公開が発火していない環境では削減率として成立しない。`deferral_inactive_rate` が 1.0 のときは削減率として表示してはならず、無効である旨とその理由を表示しなければならない。JSON 出力では値を残してよいが、無効であることを示すフィールドを併せて出力しなければならない。**
-- **FR-TS-11**: Step 実行セッションのコンテキスト内訳を実測する CLI を提供しなければならない。`hve toolsearch context` は、[hve/runner.py](hve/runner.py) `_create_session_with_auto_reasoning_fallback` と同じ経路でセッションを生成し、`session.metadata.contextInfo` と `session.metadata.getContextAttribution` から、システムプロンプト / 組み込みツール定義 / MCP サーバー別の実トークン量とツール数を取得してテキストまたは JSON（`--json`）で出力する。`session.send` を行ってはならず、モデル推論を発生させてはならない。`hve/toolsearch/eval.py` のトークン推定で代替してはならない。測定に用いたモデル名（`contextInfo.modelName`）を出力に含めなければならない。`.github/.mcp.json` が宣言する MCP サーバーの接続完了を待ってから測定し、待っても接続しなかったサーバーは未接続として報告しなければならない（実測: stdio の `azure` は接続に 3.7〜5.1 秒）。測定に失敗した場合は非 0 の終了コードと失敗理由を返し、推定値や前回値で埋めてはならない。取得と整形の実装は単一とし、GUI（FR-GUI-07）は本 CLI を呼び出すか同じ実装を共有しなければならない（FR-MAINT-07）。
+- **FR-TS-11**: Step 実行セッションのコンテキスト内訳を実測する CLI を提供しなければならない。`hve toolsearch context` は、[hve/runner.py](hve/runner.py) `_create_session_with_auto_reasoning_fallback` と同じ経路でセッションを生成し、`session.metadata.contextInfo` と `session.metadata.getContextAttribution` から、システムプロンプト / 組み込みツール定義 / MCP サーバー別の実トークン量とツール数を取得してテキストまたは JSON（`--json`）で出力する。`session.send` を行ってはならず、モデル推論を発生させてはならない。`hve/toolsearch/eval.py` のトークン推定で代替してはならない。測定に用いたモデル名（`contextInfo.modelName`）を出力に含めなければならない。`.github/.mcp.json` が宣言する MCP サーバーの接続完了を待ってから測定し、待っても接続しなかったサーバーは未接続として報告しなければならない（実測: stdio の `azure` は接続に 3.7〜5.1 秒）。測定に失敗した場合は非 0 の終了コードと失敗理由を返し、推定値や前回値で埋めてはならない。取得と整形の実装は単一とし、GUI（FR-GUI-07）は本 CLI を呼び出すか同じ実装を共有しなければならない（FR-MAINT-07）。**測定セッションは Step 実行と同じ設定モデル（`to_wire_model(SDKConfig.model)`）および `context_tier` で生成しなければならない**。あわせて、出力には `contextInfo.modelName` に加えて**セッションへ渡した設定モデル**を含めなければならない（未指定の場合はその旨を示す）。実測では `contextInfo.modelName` はセッションモデルに関わらず `claude-sonnet-4.5` を返す一方、`session.metadata.getContextAttribution` 由来の層別内訳はセッションモデルに依存して変化する（`MODEL=claude-opus-4.7` 指定時、`modelName` は不変のまま azure MCP の層別内訳が 15,047 → 18,047 tokens へ増加、`contextInfo.mcpToolsTokens` は 17,302 で不変）。両者は異なるトークナイザで計測されているため、`contextInfo.toolDefinitionsTokens` と層別内訳の合計との差分を、欠損・未計上・不整合として提示してはならない。
 
 ### 3.6 セキュリティ
 
@@ -261,11 +273,11 @@ HVE 対象変更を含む PR は、次のマーカーと 8 キーを各 1 回だ
 - 要件 ID を記載した場合、各 ID は要求テストマッピングに存在し、各 ID のマッピング節には `Test-Paths` の少なくとも 1 件が記載されていなければならない。
 - `feature` の `TDD-Evidence` は同じ対象テストについて実装前 RED と実装後 GREEN の両結果を含める。`bugfix` は再現テストの修正前失敗と修正後成功、`maintenance` は実行した回帰検証、または理由付き `N/A` を記録する。
 
-- **FR-MAINT-01**: Coding Agent は HVE 対象ファイルを変更する前に、`hve-dev/hve-feature-inventory.csv` を索引として適用候補を絞り込み、`hve-dev/requirement-definition.md` の関連箇所と `hve-dev/requirement-test-mapping.md` の対応箇所を確認しなければならない。適用できる要件 ID は、要求定義書を source とし、索引上 `active-or-described` であるものに限る。未知、競合、`deprecated-or-removed`、`partial-or-not-supported` の ID を現行要件として適用してはならない。新規 ID を追加する bootstrap 中は要求定義書の定義行を一次情報とし、要求テストマッピングと RED テストを追加後、実装前に索引を再生成して当該 ID・source・status・テストパスを照合する。既存 ID では索引と要求定義書が矛盾した場合、推測せず不整合を解消してから実装へ進む。
-- **FR-MAINT-02**: Coding Agent は要求書全文を既定の入力にせず、Issue 本文、対象パス、対象 symbol、失敗テスト、Workflow / Step ID を検索キーとして関連チャンクを取得する。初回取得で不足する場合に限り、親見出し、隣接チャンク、関連章の順に一段ずつ拡張する。0 件または矛盾時は検索語を変えて最大 2 回再試行し、それでも解消できなければ理由を記録して確認を求める。索引欠損・stale・検索 CLI 障害時は、既に特定した要求 ID または見出しの限定範囲を read / grep で取得し、要求書全文へ自動 fallback しない。本規則は HVE 要件検索において汎用 Markdown 検索 fallback より優先する。全文取得は、ユーザーの明示要求、要求定義書自体の横断改訂、または章単位でも解消できない複数章の矛盾がある場合に限る。
+- **FR-MAINT-01**: Coding Agent は HVE 対象ファイルを変更する前に、`hve-dev/hve-feature-inventory.csv` を索引として適用候補を絞り込み、`hve-dev/requirement-definition.md` の関連箇所と `hve-dev/requirement-test-mapping.md` の対応箇所を確認しなければならない。適用できる要件 ID は、要求定義書を source とし、索引上 `active-or-described` であるものに限る。未知、競合、`deprecated-or-removed`、`partial-or-not-supported` の ID を現行要件として適用してはならない。新規 ID を追加する bootstrap 中は要求定義書の定義行を一次情報とし、要求テストマッピングと RED テストを追加後、実装前に索引を再生成して当該 ID・source・status・テストパスを照合する。既存 ID では索引と要求定義書が矛盾した場合、推測せず不整合を解消してから実装へ進む。`hve-requirement-traceability` Skill は §1.3 の 3 層優先順位と §3.7 の変更種別判定規則を保持し、Coding Agent が要求定義書本文を追加取得せずに適用可否と変更種別を判定できるようにしなければならない。
+- **FR-MAINT-02**: Coding Agent は要求書全文を既定の入力にせず、Issue 本文、対象パス、対象 symbol、失敗テスト、Workflow / Step ID を検索キーとして関連チャンクを取得する。要件 ID が既知の場合は検索を行わず、`hve-dev/hve-feature-inventory.csv` の当該行の `line` 列が指す定義行だけを読む。ID が未知の場合に限り検索を行う。初回取得で不足する場合に限り、親見出し、隣接チャンク、関連章の順に一段ずつ拡張する。0 件または矛盾時は検索語を変えて最大 2 回再試行し、それでも解消できなければ理由を記録して確認を求める。索引欠損・stale・検索 CLI 障害時は、既に特定した要求 ID または見出しの限定範囲を read / grep で取得し、要求書全文へ自動 fallback しない。本規則は HVE 要件検索において汎用 Markdown 検索 fallback より優先する。全文取得は、ユーザーの明示要求、要求定義書自体の横断改訂、または章単位でも解消できない複数章の矛盾がある場合に限る。ID 直引きを検索より優先するのは次の実測を根拠とする: 同一の問いに対し BM25 の chunk 返却が 3,613 tokens / 151 ms であるのに対し、索引の `line` 列からの直引きは 501〜687 tokens で検索を伴わない。
 - **FR-MAINT-03**: `feature` 変更は、要求定義への active 要件追加または改訂 → 要求テストマッピングへの受入テスト追加（未実装時は `要追加`）→ 失敗するテストの作成と RED 確認 → 機能・テスト索引の再生成と新規 ID / test path の照合 → 実装 → 同じ対象テストの GREEN 確認 → 要求テストマッピングへの実結果反映、の順で行う。`feature` では要件 ID、実在テストパス、RED / GREEN 証跡の省略を認めない。`bugfix` / `maintenance` で要件またはテストを `N/A` とする場合は、前項のブロックへ具体的理由と人間レビュー必須を記録する。`hve-dev/hve-tdd-change-policy.md` と生成元が本節と矛盾する場合は本節を正とし、同一変更で同期する。本要件の初回導入では、下記「本要件の導入ゲート」を FR-MAINT-03 の従属規範として適用する。
 - **FR-MAINT-04**: HVE 対象変更を含む PR は、前項のトレーサビリティブロックを記録しなければならない。CI は変更パス取得失敗、ブロックの欠落・重複・未置換値、組合せ違反、未知または索引statusが `active-or-described` 以外の ID、存在しない・リポジトリ外・許可テストルート外のパス、要件 ID と要求テストマッピング上の test path 不一致を拒否する。`feature` では要求定義、要求テストマッピング、機能索引の更新と RED / GREEN 証跡を追加で要求する。N/A と変更種別の意味的妥当性は CI が推測せず、既存 branch protection の承認レビューで確認する。HVE 対象外の変更のみである場合は本ゲートを適用しない。validator の正規entrypointは `.github/scripts/validate-hve-requirement-traceability.py` とし、リポジトリroot、PR本文ファイル、変更パス一覧ファイルを明示入力として受け取る。PR workflow は `pull_request` イベントだけで当該 validator を必須ゲートとして実行し、PR本文を shell の `run` へ直接展開せず、最小読取権限で実行する。既定ブランチで実行するtrusted workflowは `pull_request_target` を使用し、base側validatorとPR内容を別ディレクトリへcheckoutし、PR内容はデータとして検証するだけで実行してはならない。branch protection の required status check は両workflow名とvalidator job名から構成されるcheck contextを含み、既存の承認レビュー要求を維持する。
-- **NFR-CTX-01**: repository-wide instructions のうち **HVE 要求トレーサビリティに関する記述**は検索ルーターだけを保持し、要求定義書本文を埋め込んではならない。当該ルーターは、(1) HVE 対象変更で `hve-requirement-traceability` Skill を使用する、(2) HVE コアパスでは path-specific instructions も適用する、(3) 要求定義書全文を既定の入力にしない、の 3 箇条だけで構成する。CI はルーターの見出し・3 箇条・Skill 参照・要求書パス・既知の要件 ID / schema key /取得オプションの重複を決定論的に検査する。Coding Agent は customization の raw source を入力として受け取るため、既知識別子の重複検査は HTML comment、code span、fenced / indented code を含むルーター外の raw source 全体を対象とする。言い換えによる意味的な分散・矛盾は捏造して判定せず人間レビューへ委ねる。他のリポジトリ共通ルールは本要件の対象外とする。初回の関連要件取得は最大 5 チャンクかつ最大 800 tokens を上限とし、追加コンテキストは FR-MAINT-02 の段階的拡張でのみ取得する。
+- **NFR-CTX-01**: repository-wide instructions のうち **HVE 要求トレーサビリティに関する記述**は検索ルーターだけを保持し、要求定義書本文を埋め込んではならない。当該ルーターは、(1) HVE 対象変更または HVE 対象パスの不具合調査で `hve-requirement-traceability` Skill を使用する、(2) HVE コアパスでは path-specific instructions も適用する、(3) 要求定義書全文を既定の入力にしない、の 3 箇条だけで構成する。CI はルーターの見出し・3 箇条・Skill 参照・要求書パス・既知の要件 ID / schema key /取得オプションの重複を決定論的に検査する。Coding Agent は customization の raw source を入力として受け取るため、既知識別子の重複検査は HTML comment、code span、fenced / indented code を含むルーター外の raw source 全体を対象とする。言い換えによる意味的な分散・矛盾は捏造して判定せず人間レビューへ委ねる。他のリポジトリ共通ルールは本要件の対象外とする。初回の関連要件取得は最大 5 チャンクかつ最大 800 tokens を上限とし、追加コンテキストは FR-MAINT-02 の段階的拡張でのみ取得する。
 
 #### 本要件の導入ゲート
 
@@ -280,6 +292,13 @@ HVE は Cloud Agent Orchestrator / CLI Orchestrator / GUI Orchestrator の 3 実
 - **FR-MAINT-05**: HVE 対象の実装シンボル索引を `hve-dev/hve-surface-inventory.csv` として機械生成する。生成の正規 entrypoint は `hve-dev/generate_tdd_inventory.py` とする。索引対象は §3.7 対象境界の判定に一致するパスだけとし、当該判定は「対象パスの機械判定は単一の validator に集約する」原則に従って既存判定を再利用し、別の範囲定義を作ってはならない。索引は同一入力に対して決定的に生成し、対象外パスに由来する行を含めてはならない。索引の各行は、実行面（`cloud` / `cli` / `gui` / `core`）、シンボル種別、定義ファイルと行、振る舞い要約、当該シンボルが参照する規範リテラルの集合を保持する。CI は、生成スクリプトの出力と索引が不一致の場合、または対象外パスの行を含む場合に失敗させる。不一致の索引は stale として扱い、再生成するまで FR-MAINT-06 / FR-MAINT-07 の判断根拠に使ってはならない。参照数を表す列は静的解析による値であり、CI から `pytest <path>` や `python -m <module>` で起動される経路を数えない。当該列だけを根拠に未使用と判断してはならない。本索引は HVE アプリケーション自体だけを対象とし、HVE が生成・支援する他アプリケーションの成果物を含めてはならない。後者のスコープ解決は `app-scope-resolution` Skill と生成物側のカタログが担う。
 - **FR-MAINT-06**: 規範リテラルを判定する実装は、リテラルごとに単一とする。同一の規範リテラル（例: タスク完了報告の検証マーカー、`plan.md` の分割判定メタデータ）を判定する実装が複数の実行面に併存してはならず、他面は単一の実装を呼び出す。CI は FR-MAINT-05 の索引を用いて、規範リテラルごとの判定実装数を決定論的に検査し、許可された単一実装以外を検出した場合は失敗させる。検査対象の規範リテラルと許可実装は明示リストで固定し、リストに無いリテラルを推測して判定してはならない。規範リテラルを**生成する**側の文言複製は本要件の対象外とする。複製の維持を意図する根拠文書がリポジトリ内に存在する箇所（vendoring 等）も対象外とし、その根拠を許可リストに明記する。
 - **FR-MAINT-07**: Coding Agent は、HVE 対象パスへ新規の判定・生成・検証ロジックを追加する前に、FR-MAINT-05 の索引を用いて既存実装の有無を確認しなければならない。確認は規範リテラル一致 → 振る舞い要約 → シンボル名の順に行う。この順序は、名前や構文の類似だけでは識別子の異なる同一手続きへ到達できないために定める。シンボル名の不一致だけを根拠に既存実装が無いと判断してはならない。複数の実行面に同一ルールの実装が存在する場合は新規実装を追加せず、単一実装へ寄せる。索引に一致が無い場合に限り新規実装を許可し、どの実行面を単一実装とするかをタスク完了報告へ記録する。本手順は `hve-requirement-traceability` Skill に置き、NFR-CTX-01 を維持するため repository-wide instructions へ手順本文を追加してはならない。本手順は HVE 対象変更にだけ適用し、HVE が生成・支援する他アプリケーションの成果物には適用しない。
+- **FR-MAINT-09**: §13 の各 Workflow 節が持つ Step 表と [hve/workflow_registry.py](hve/workflow_registry.py) の StepDef 集合は一致しなければならない。検査は次を満たす単一の実装（[hve/tests/test_requirement_section13_parity.py](hve/tests/test_requirement_section13_parity.py)）が担い、Workflow ごとの個別テストで同じ検査を重複実装してはならない（FR-MAINT-07）。
+  - Workflow ごとの検査モード（全 Step 一致 / 要約表としての部分集合）と、§13 に節を持たない Workflow の除外を明示リストで固定し、除外には理由を記載する。除外を理由なく追加してはならない（FR-WF-OUT-09 の allowlist と同じ方式）。
+  - registry へ登録済みの Workflow が検査モードにも除外リストにも無い場合は失敗させる。新規 Workflow を追加した変更で §13 の同期を忘れることを防ぐためである。
+  - Step ID 列には ID として解釈できるトークンだけを置く。要約表では範囲表記（`2.1〜2.5`）に限り許容する。実装に存在しない ID（過去の `2.3T` / `3.0T` 等）を残してはならない。
+  - 表の Step タイトルは registry の同一 Step を指していなければならない。表記揺れで検査が壊れないよう、記号・空白・連体助詞「の」を除去した正規化後の包含で判定する。
+  - 依存・Fan-out・生成ファイルの一致は本要件の対象外とする。これらは列構成が節ごとに異なり、機械検査を成立させるには §13 全体の表形式統一が前提になるためである。表を編集する変更では、当該行の値を registry と照合して同時に正す。
+  - 本要件は、同種の乖離が §13.5（ADFDV: 旧称 ABDV と実在しない fan-out parser の残存）と §13.12（ARD: 旧 7-Step 表記）で個別に発生し、そのつど当該 Workflow だけのテストで塞いだ結果、§13.2（AAD-WEB: Step 2.4 / 2.5 / 2.6 の欠落）と §13.3（ASDW-WEB: Step ID 体系が実装と系統的に不一致）へ同じ乖離が残存していたことを根拠とする。
 
 ### 3.8 markdown-query（mdq）検索品質の回帰計測
 
@@ -367,7 +386,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 本節は、HVE の各実行面（GUI Workbench / GUI Autopilot / 対話 CLI / 直接 `orchestrate` / CUI Workbench / CLI Autopilot、および `--autopilot-child` の互換ウィンドウ）が、実行中の状態と統計を同一の根拠から表示・記録するための契約を規定する。本節は entrypoint の起動仕様（FR-CLI-10）を改訂しない。閾値アラート、外部 telemetry 送信、run を跨いだ履歴検索は本節の対象外とする。
 
-- **FR-RTO-01**: 実行時観測イベントの構築と解析は単一実装とする（FR-MAINT-07）。既存 `[hve:stats]` 行形式および既存の `kind` / `step` キーを維持したうえで、`schema_version` / `ts` / `seq` / `pid` / `run_id` / `workflow_id` / `instance_id` を付加する。`instance_id` は `workflow_id` とし、APP 単位で並列実行する経路では `workflow_id#app_id` とする。既存キーの意味を変更してはならない。未知の `kind` は解析可能とし、無言で捨てずに件数を計上する。
+- **FR-RTO-01**: 実行時観測イベントの構築と解析は単一実装とする（FR-MAINT-07）。既存 `[hve:stats]` 行形式および既存の `kind` / `step` キーを維持したうえで、`schema_version` / `ts` / `seq` / `pid` / `run_id` / `workflow_id` / `instance_id` を付加する。`instance_id` は実行プロセス（ジョブ）単位の識別子とし、既定は `workflow_id`、当該プロセスが単一の APP へ専従する経路（Autopilot の APP 別子プロセス、および起動時の APP 指定が 1 件に確定している場合）では `workflow_id#app_id` とする。同一プロセス内で APP キーごとに fan-out した Step の内訳は `step` フィールドで分離し（FR-RTO-07）、`instance_id` を Step 単位で切り替えてはならない。envelope の `pid` と観測ファイル `observability/events-<pid>.jsonl`（FR-RTO-03）がプロセス単位で対応するため、`instance_id` だけを Step 単位にすると同一プロセスの識別子が複数値となり、表示の集計単位（FR-RTO-05）と保存単位が一致しなくなるためである。既存キーの意味を変更してはならない。未知の `kind` は解析可能とし、無言で捨てずに件数を計上する。
 - **FR-RTO-02**: 「収集」「保存」「子プロセスへの配信」「人間向け表示」を分離する。`[hve:stats]` 行の stdout 出力は、GUI 子プロセス（`HVE_GUI_SESSION_ID` 設定時）および Dashboard を持つ親プロセスが環境変数 `HVE_STATS_STREAM=1` を付与して起動した子プロセスに限る。当該判定に新規 CLI オプションを用いてはならない（NFR-RTO-02）。通常 CLI、CUI Workbench、非 TTY 実行では stdout へ出力せず、CUI Workbench の本文ペインにも表示しない。`quiet` および `final_only` でも収集・保存・子プロセス配信は継続し、人間向けの追加表示だけを抑止する（NFR-OBS-03 と矛盾させない）。
 - **FR-RTO-03**: 観測イベントは実行プロセスが `resolve_work_root()` 配下の `observability/events-<pid>.jsonl` へ追記する。`HVE_WORK_ROOT` 未設定時および dry-run では書き込まない。同一プロセス内の追記は直列化する。形式は UTF-8 / LF / BOM なしの 1 行 1 JSON とする。ファイルサイズが 32 MiB に達した場合は追記を停止し、その事実を 1 回だけ警告する（ローテーションは行わない）。プロセス内の順序は `seq` により厳密とし、プロセス間の時刻順序は近似であることを明示する。
 - **FR-RTO-04**: 永続化する項目は allowlist 方式とし、状態、時刻、数値、モデル ID、Step / Workflow / APP 識別子、例外型名、リポジトリルート相対パスに限る。prompt 本文、応答本文、reasoning 本文、tool の引数・出力、環境変数、認証情報、認証 URL、生 SDK ペイロードを保存してはならない（NFR-SEC-01）。相対化の基準は実行プロセスの作業ディレクトリ（リポジトリルート）とし、当該ルート配下へ相対化できないパスは保存しない。
@@ -381,9 +400,12 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 - **FR-QA-01**: 質問票生成プロンプトは、各質問に「背景と根拠」と「判断の観点」を必須項目として出力させなければならない。「背景と根拠」は、判断材料として確認した対象（出典）、そこから確定した事項と確定していない事項、および当該未確定が質問に値する理由を含めなければならない。確認していない場合は「未確認」と記載させ、出典を推測で記載させてはならない。「判断の観点」は、回答によって結論が変わる評価軸を 2 つ以上挙げ、主要な選択肢が各軸で有利・不利のいずれとなるかを示さなければならない。「既定値候補の理由」は、当該選択を支持する根拠となる事実、優先した評価軸、および他の選択肢を既定値としなかった理由を含めなければならない。各項目の値は 1 行で記述させ、結論のみの記述を許してはならない。本要件は事前 QA（メインタスク実行前）と事後 QA（成果物に対する QA）の双方へ同一の項目定義で適用する。
 - **FR-QA-02**: QA 質問票のパイプラインは FR-QA-01 の 2 項目を欠落させてはならない。[hve/qa_merger.py](hve/qa_merger.py) は当該 2 項目を構造化質問票（`[Qxx]` 形式）およびマージ済みテーブル形式の双方で解析し、`render_merged` の出力へ列として保持しなければならない。当該 2 項目を持たない既存の質問票ファイルは空値として扱い、解析を失敗させてはならない。CLI は [hve/console.py](hve/console.py) の質問票表示で当該 2 項目を提示しなければならない。ただし既存の質問票テーブルへ列として追加してはならず、テーブルとは別の形式で提示する（列追加は既存列の可読幅を損なうため）。GUI の QA 回答ダイアログ（[hve/gui/qa_answer_dialog.py](hve/gui/qa_answer_dialog.py)）は当該 2 項目を回答入力前に参照できるよう表示しなければならない。質問票フォーマットを規定する Skill（[.github/skills/task-questionnaire/SKILL.md](.github/skills/task-questionnaire/SKILL.md) および `references/` 配下のテンプレート）は、プロンプトと同一の項目定義を保持しなければならない。経路によって項目定義が異なってはならない。
-- **FR-QA-03**: `auto_qa` が有効な Knowledge Management (`akm`) 以外の Workflow は、質問が 1 件以上ある事前 QA について、ユーザー回答または明示された既定値を全質問へ適用した回答済み Markdown を `qa/` 配下へ保存し、最終パスを再読込して内容・質問数・各質問の非空回答を検証した後でなければメインタスクを開始してはならない。回答済み Markdown の表セルは、Work IQ 応答を含め、CR / LF / pipe を含む入力でも 1 質問 1 物理行を維持し、render → 保存 → 再解析の往復で質問数と全回答を失ってはならない。Work IQ 回答案へ統合できるのは、SDK の `tool.execution_start` イベントから Work IQ 用として許可された MCP server/tool の組を確認でき、かつ応答 status が `FOUND` または `PARTIAL` の結果だけとする。tool 名だけの一致を実行確認としてはならない。`FOUND` / `PARTIAL` は一次情報が少なくとも一部見つかった結果であるため統合対象とする。`NOT_FOUND` は既定回答を変更する一次情報が見つからず、`UNAVAILABLE` / status 不明 / tool 実行未確認は検索または出典を検証できないため、いずれも検証済み回答へ統合せず、調査用 draft にだけ未確認として保持する。質問が 0 件の場合は同期対象なしとしてメインタスクを継続する。FR-QA-05 の `qa_akm_background_merge` が有効な場合に限り、検証済み QA ファイル 1 件ごとに `sources=qa`、`target_files=<当該ファイル>`、`force_refresh=false`、`auto_qa=false` の AKM 差分更新を別のバックグラウンド実行として登録し、登録キューが当該要求を受理した時点で **QA を生成した source Workflow の親 DAG** は AKM 完了を待たず次 Step へ進めなければならない。CLI / GUI のバックグラウンド AKM と明示実行 AKM は同一リポジトリ内で直列化し、親 Workflow の Git 後処理・branch 切替・GUI cleanup より前に未完了の書込みを安全に終了または取消できなければならない。branch / PR を作る親実行では、AKM が出典として使用した検証済み QA ファイルだけを knowledge 変更とともに commit 対象へ含める。ADI も本要件の対象とし、Step 1.1 / 1.2 が生成する原本質問票 main 成果物は事前 QA の回答済み補助ファイルとは別成果物として扱う。`workflow_id=akm` の実行は QA 起点 AKM 登録を行ってはならず、AKM Root Issue から別の QA 起点 AKM を再帰生成してはならない。ファイル単位の起動とリポジトリ単位の直列化は、複数 Step が回答を保存した場合にも各回答を早期反映しつつ、共有する `knowledge/` への同時書込みと差分喪失を防ぐために必要な最小境界である。
+- **FR-QA-03**: `auto_qa` が有効な Knowledge Management (`akm`) 以外の Workflow は、質問が 1 件以上ある事前 QA について、ユーザー回答または明示された既定値を全質問へ適用した回答済み Markdown を `qa/` 配下へ保存し、最終パスを再読込して内容・質問数・各質問の非空回答を検証した後でなければメインタスクを開始してはならない。回答済み Markdown の表セルは、Work IQ 応答を含め、CR / LF / pipe を含む入力でも 1 質問 1 物理行を維持し、render → 保存 → 再解析の往復で質問数と全回答を失ってはならない。Work IQ 回答案へ統合できるのは、SDK の `tool.execution_start` イベントから Work IQ 用として許可された MCP server/tool の組を確認でき、かつ応答 status が `FOUND` または `PARTIAL` の結果だけとする。tool 名だけの一致を実行確認としてはならない。許可する tool 名は `@microsoft/workiq` が公開する参照系ツールに限り、書き込み系ツール（entity の作成・更新・削除、`do_action`）および EULA 承認・デバッグリンク取得の実行を統合根拠としてはならない。MCP サーバーへ公開する tool の allowlist（最小権限）と、実行確認に用いる tool 名の集合は別の集合として保持しなければならない。前者を後者に合わせて広げると `_hve_workiq` の公開権限が不必要に緩み、後者を前者に合わせて狭めると、自動探索で併存する Work IQ サーバー経由の実行を検出できなくなるためである。事前 QA サブセッションは FR-CLI-76（v2.41）で自動探索を停止したため併存しないが、`workiq-doctor` の tool probe（`probe_workiq_copilot_tool_invocation`）は利用者環境の実態を観測する診断であり自動探索を残したまま実行確認を行うため、実行確認の集合は引き続き別集合として保持しなければならない。ここでいう Work IQ サーバーには、公式 `workiq` サーバーに加え、同一の Work IQ サービスを別サーバー名で登録するプラグイン（`workiq-preview` 等）を含めなければならない。Work IQ とみなす MCP サーバー名は単一の正本として保持し、実行確認とメインセッションからの分離とで別々に定義してはならない（FR-MAINT-07）。`FOUND` / `PARTIAL` は一次情報が少なくとも一部見つかった結果であるため統合対象とする。`NOT_FOUND` は既定回答を変更する一次情報が見つからず、`UNAVAILABLE` / status 不明 / tool 実行未確認は検索または出典を検証できないため、いずれも検証済み回答へ統合せず、調査用 draft にだけ未確認として保持する。質問が 0 件の場合は同期対象なしとしてメインタスクを継続する。FR-QA-05 の `qa_akm_background_merge` が有効な場合に限り、検証済み QA ファイル 1 件ごとに `sources=qa`、`target_files=<当該ファイル>`（登録単位の値。実行時の値は後述のバッチ規則が定める）、`force_refresh=false`、`auto_qa=false` の AKM 差分更新を別のバックグラウンド実行として登録し、登録キューが当該要求を受理した時点で **QA を生成した source Workflow の親 DAG** は AKM 完了を待たず次 Step へ進めなければならない。登録は検証済み QA ファイル 1 件ごとに行うが、実行開始時点でキューに滞留している複数の登録は 1 回の AKM 子実行へまとめてよい。まとめた場合は `target_files` へ当該バッチの全ファイルを与え、実行結果は登録件数分（ファイル単位）で報告しなければならない。CLI / GUI のバックグラウンド AKM と明示実行 AKM は同一リポジトリ内で直列化し、同時に 2 つ以上の AKM 子プロセスを起動してはならない。AKM の出力空間は `target_files` の指定によらず `knowledge/D01`〜`D21` の全体と `knowledge/business-requirement-document-status.md` を含むため、子プロセスを多重起動すると同一ファイルへの同時書込みと差分喪失が生じる。AKM 子実行の fan-out 並列度は FR-DAG-03 の解決順序に従い AKM の宣言値となる。子プロセスの argv で並列度を固定してはならない（FR-MAINT-07: 同一ルールを二重に実装しない）。当該 fan-out 子は各自の `knowledge/D{NN}-*.md` だけを書く契約（[hve/prompt/fanout/akm/_common.md](hve/prompt/fanout/akm/_common.md)）であるため、宣言値までの並列化は上記の直列化要件と両立する。親 Workflow の Git 後処理・branch 切替・GUI cleanup より前に未完了の書込みを安全に終了または取消できなければならない。branch / PR を作る親実行では、AKM が出典として使用した検証済み QA ファイルだけを knowledge 変更とともに commit 対象へ含める。ADI も本要件の対象とし、Step 1.1 / 1.2 が生成する原本質問票 main 成果物は事前 QA の回答済み補助ファイルとは別成果物として扱う。`workflow_id=akm` の実行は QA 起点 AKM 登録を行ってはならず、AKM Root Issue から別の QA 起点 AKM を再帰生成してはならない。ファイル単位の起動とリポジトリ単位の直列化は、複数 Step が回答を保存した場合にも各回答を早期反映しつつ、共有する `knowledge/` への同時書込みと差分喪失を防ぐために必要な最小境界である。SDK Fleet mode へ委譲した wave（実行可能 Step が 2 件以上ある wave。[hve/orchestrator.py](hve/orchestrator.py) `_fleet_wave_runner`）は本要件の事前 QA と QA 起点 AKM の対象外とする。Fleet 経路は `StepRunner.run_step` を経由せず、事前 QA（Phase 0）と敵対的レビュー（Phase 3）は `run_step` の内部にあるためである。ただし実行面は、`auto_qa` または `auto_contents_review` が有効なまま Fleet wave を開始する場合、当該 wave では両フェーズが実行されないことを、Fleet の起動成功が確認できた時点で 1 回だけ警告として通知しなければならない。利用者が明示的に有効化した設定が無言で失われてはならない。警告は wave ごとに 1 回とし、Step ごとに繰り返してはならない（並列 Step 数だけ同一警告が出ると信号が失われるため）。Fleet の起動に失敗して通常経路へフォールバックした場合は、当該 wave で両フェーズが実行されるため警告してはならない。警告文の生成は単一のヘルパーに限定する（FR-MAINT-07）。
 - **FR-QA-04**: FR-QA-03 の QA 起点 AKM に対して、利用者は AKM 子実行が使うモデル・reasoning effort・context tier を、メインタスクの実行品質設定とは独立に選択できなければならない。設定キーは `akm_model` / `akm_reasoning_effort` / `akm_context_tier` とし、CLI は `--akm-model` / `--akm-reasoning-effort` / `--akm-context-tier` で受け取る。いずれも未指定を既定とし、未指定のキーは対応するメイン設定（`model` / `reasoning_effort` / `context_tier`）を継承しなければならない。`reasoning_effort` / `context_tier` には既存の環境変数経路が存在しないため（[hve/config.py](hve/config.py) `SDKConfig.from_env`）、本設定にも環境変数経路を新設してはならない。継承の解決は QA 起点 AKM 子プロセスの引数生成（[hve/qa_akm_dispatch.py](hve/qa_akm_dispatch.py) `QaAkmCoordinator._build_argv`）だけで行い、メインタスク・敵対的レビュー・QA 質問票生成のセッション生成へ本設定を適用してはならない。`--workflow akm` を明示指定した実行は本設定の適用対象外とし、従来どおり `--model` / `--reasoning-effort` / `--context-tier` に従わなければならない。CLI 対話 wizard は `auto_qa` を有効化した非 AKM Workflow のときにだけ本 3 項目を尋ね、既定は継承としなければならない。モデル値は既存のモデル正規化（[hve/config.py](hve/config.py) `_normalize_model_with_warning`）と同一の規則で検証しなければならない。本設定は AKM が扱う `knowledge/` の更新粒度と、メインタスクの実行品質・コストを独立に決められるようにするために必要であり、既定の継承によって既存実行の挙動を変えてはならない。
 - **FR-QA-05**: FR-QA-03 の QA 起点 AKM をバックグラウンドで起動するかどうかは、利用者が明示的に選択できる設定 `qa_akm_background_merge` で制御しなければならない。既定は無効とし、無効のときは QA 起点 AKM を登録・dispatch してはならない。CLI は `--qa-akm-background-merge` で受け取り、CLI 対話 wizard は `auto_qa` を有効化した非 AKM Workflow のときにだけ本設定を尋ね、既定は無効としなければならない。GUI は設定画面と Step 1 右ペインの双方で選択でき（FR-GUI-20）、Cloud は Issue Form の入力で選択できなければならない（FR-CLOUD-26）。本設定が無効のとき、CLI 対話 wizard は FR-QA-04 の 3 項目を尋ねてはならず、GUI は当該 3 項目を非活性とし値を CLI へ渡してはならない（AKM 子実行自体が起きないため）。判定の実装は実行面ごとに 1 箇所へ限定し、CLI / GUI は [hve/orchestrator.py](hve/orchestrator.py) `_should_enable_qa_akm_dispatch`、Cloud は [.github/workflows/auto-issue-qa-ready-transition.yml](.github/workflows/auto-issue-qa-ready-transition.yml) の `save-qa-answer` job が出力する `sync_required` だけが判定してよい。同一面に判定を重複実装してはならない。FR-QA-04 と同様に環境変数経路を新設してはならない。`--workflow akm` を明示指定した実行は従来どおり本設定の対象外とする。本設定は、QA 回答のたびに `knowledge/` が更新されコスト・実行時間・差分レビュー量が増えることを利用者が制御できるようにするために必要であり、既定を無効とするのは、利用者が明示的に選択していない共有資産（`knowledge/`）への自動書込みを行わないためである。
+- **FR-QA-06**: Work IQ 応答の status が `FOUND` または `PARTIAL` であるにもかかわらず、FR-QA-03 の許可済み server/tool 組による tool 実行を SDK イベント上で確認できなかった場合、実行面は当該事象を警告として通知しなければならない。成功記号（`✅`）付きの情報メッセージだけで報告してはならない。統合できた質問が 0 件で、かつ Work IQ 応答が 1 件以上ある場合の統合結果サマリーも警告として扱う。警告には (a) tool 実行を確認できなかったこと、(b) 当該区間で実際に観測されたツール名（観測できた場合）、(c) 診断コマンドを含めなければならない。prompt 本文・tool の引数・M365 応答本文を警告へ含めてはならない（FR-RTO-04 / NFR-SEC-01）。status が `NOT_FOUND` / `UNAVAILABLE` / 不明の応答は一次情報が見つからなかった正常な結果であるため、本警告を出してはならない（全質問で警告が出ると検出漏れの信号が失われるため）。警告文の生成は [hve/workiq.py](hve/workiq.py) の単一ヘルパーに限定し、事前 QA 経路（[hve/runner.py](hve/runner.py)）と prefetch 経路（[hve/orchestrator.py](hve/orchestrator.py)）の双方が同一実装を使わなければならない（FR-MAINT-07）。本要件は、許可集合と実際に公開されるツール名の乖離によって統合が恒久的に 0 件となる事象を、実行中に検知可能にするために必要である。
+- **FR-QA-07**: FR-QA-03 の QA 起点 AKM 子実行の標準出力・標準エラーは、当該子実行の run ディレクトリ（`work/run/qa-akm-<id>/`）配下の単一ファイルへ保存しなければならない。破棄してはならない。保存は UTF-8 / 復元可能な decode（`errors="replace"`）で行い、子の出力に含まれる非 UTF-8 バイト列によって親実行を失敗させてはならない。実行結果には当該保存先のリポジトリルート相対パスを含め、親実行は失敗時に `returncode` と当該パスを報告しなければならない。子ログの本文を親実行のログへ展開してはならない（親ログの肥大を避けるため）。バッチ実行では 1 実行につき 1 ファイルとし、当該バッチに含まれる全ファイルの結果へ同一のパスを与える。失敗報告には、FR-CLI-74 の HVE ソース未コミット変更による停止（status=blocked）が代表的な原因であることの確認導線を含めなければならない。また、QA 起点 AKM の登録時点で HVE ソースに未コミット変更を検出した場合は、子実行を起動せずに登録をスキップし、その事実を即時に警告しなければならない。スキップは実行失敗とは別の事象として報告し、`returncode` を失敗として集計してはならない。本事前判定は FR-CLI-74 の最終ガードを置き換えてはならず、登録時点で clean でも実行時点で dirty になり得ることを前提とする。判定は FR-CLI-74 と同一の実装を再利用し、対象リポジトリは coordinator が保持するルートへスコープしなければならない（FR-MAINT-07）。本要件は、子実行が失敗したときに親のログへ件数しか残らず、原因究明に手動再現を要していたことを根拠とする。
+- **FR-QA-08**: FR-QA-03 の Work IQ 統合可否を、Workflow を丸ごと再実行せずに確認できる診断経路を提供しなければならない。`workiq-doctor` は `--qa-integration-probe` で、本番の事前 QA と同じ Work IQ プロンプトテンプレートを 1 問だけ送信し、(a) 許可済み server/tool 組の実行確認、(b) 応答 status、(c) 両者から導かれる統合可否を単一の診断チェックとして報告しなければならない。統合可否の判定は事前 QA 本体と同一の実装を使わなければならず、診断用に別実装してはならない（FR-MAINT-07）。判定の理由には、実行未確認の場合に限り当該区間で観測されたツール名を含めなければならない。診断出力へ Work IQ 応答本文・prompt 本文・tool 引数を含めてはならない（FR-RTO-04 / NFR-SEC-01）。本要件は、統合 0 件の受入確認が Workflow 全体の再実行（実測 40 分超）を要し、修正の検証コストが過大だったことを根拠とする。
 
 ---
 
@@ -396,7 +418,8 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 - **FR-CLOUD-03**: `opened` イベントでは `author_association` が `OWNER` / `MEMBER` / `COLLABORATOR` のいずれかである場合のみ起動する。**`labeled` / `closed` イベントには `author_association` ガードは適用されない**。
 - **FR-CLOUD-04**: `closed` イベントでは Issue タイトルの `[AAS]` / `[AAD-WEB]` 等プレフィックスから対象 Workflow を判定する。
 - **FR-CLOUD-05**: `setup-labels` ラベル付与時は `setup-labels.yml` を起動する。
-- **FR-CLOUD-06**: registry と同期していない Cloud reusable workflow を dispatcher から起動してはならない。[.github/workflows/auto-app-dev-microservice-web-reusable.yml](.github/workflows/auto-app-dev-microservice-web-reusable.yml) は [hve/workflow_registry.py](hve/workflow_registry.py) の ASDW-WEB Step 体系と非同期（ファイル冒頭で OUT-OF-SYNC NOTICE を自己申告）であるため、ASDW-WEB の Cloud 起動を停止し、CLI / GUI 経路が supported であることを明示する（[.github/workflows/auto-orchestrator-dispatcher.yml](.github/workflows/auto-orchestrator-dispatcher.yml)）。他の Cloud workflow の挙動は変更しない。
+- **FR-CLOUD-06**: registry と同期していない Cloud reusable workflow を dispatcher から起動してはならない。同期とは、reusable workflow が生成する Step Issue の Step ID 集合と Custom Agent 集合が、[.github/scripts/bash/lib/workflow-registry.sh](.github/scripts/bash/lib/workflow-registry.sh) と [hve/workflow_registry.py](hve/workflow_registry.py) の当該 Workflow 定義に一致することを指し、判定は [hve/tests/test_cloud_reusable_workflow_parity.py](hve/tests/test_cloud_reusable_workflow_parity.py) が行う。同期が確認できた Workflow は dispatch 対象としてよい。ASDW-WEB は [.github/workflows/auto-app-dev-microservice-web-reusable.yml](.github/workflows/auto-app-dev-microservice-web-reusable.yml) が現行 Step 体系と非同期であったため Cloud 起動を停止していたが、同 workflow を現行体系へ再構築して同期を確立したため、dispatcher の停止対象（`cloud_dispatch_disabled_targets`）と停止通知ジョブを撤去する（[.github/workflows/auto-orchestrator-dispatcher.yml](.github/workflows/auto-orchestrator-dispatcher.yml)）。将来いずれかの Workflow で同期が崩れた場合は、本要件に基づき対象 ID と根拠を明記したうえで再び dispatch 対象から外す。AKM は [.github/scripts/bash/lib/workflow-registry.sh](.github/scripts/bash/lib/workflow-registry.sh) へ未登録で reusable workflow が Step をハードコードしているため、同期判定は [hve/workflow_registry.py](hve/workflow_registry.py) の AKM 定義（Step.1 `KnowledgeManager` → Step.2 `QA-DocConsistency`）に対してのみ行う。[.github/workflows/auto-knowledge-management-reusable.yml](.github/workflows/auto-knowledge-management-reusable.yml) は Step.1 と Step.2 の Step Issue を生成し、Step.1 完了で Step.2 を起動し、Step.2 完了で Root Issue へ `akm:done` を付与しなければならない。Step.1 の D01〜D21 fan-out を Cloud で Step Issue へ展開してはならない（`knowledge/` の出力空間は `target_files` によらず D01〜D21 全体と `knowledge/business-requirement-document-status.md` を含み、Step Issue 単位の並列化が同一ファイルへの同時書込みを生むため。FR-QA-03 と同一の根拠）。
+- **FR-CLOUD-07**: AAR（Agentic Retrieval Add-on）を Cloud Agent Orchestrator の対象とする。`trigger_map` へ `auto-agentic-retrieval` → `AAR`、`done_map` へ `aar:done` → `AAR`、`closed_prefix_map` へ `[AAR]` → `AAR` を登録し、`auto-agentic-retrieval-reusable.yml` を `workflow_call` で起動する。起動トリガーラベル `auto-agentic-retrieval` と状態ラベル `aar:initialized` / `aar:ready` / `aar:running` / `aar:done` / `aar:blocked` は [.github/labels.json](.github/labels.json) へ登録しなければならない。AAR の全 Step は `enable_agentic_retrieval` が `no` のとき実行対象から外れる（[hve/workflow_registry.py](hve/workflow_registry.py) の `disabled_when_config`）ため、Cloud も FR-CLOUD-10 で抽出した同一値を受け取り、`no` のときは Step Issue を生成してはならない。AAR は AAD-WEB / ASDW-WEB を再実行せずに Agentic Retrieval だけを後付けする単独 Workflow であり、Cloud だけ実行経路を持たない状態を解消するために本要件を置く。
 
 ### 4.2 `mode` 値と発火条件
 
@@ -422,6 +445,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 ### 4.4 Reusable Workflow ディスパッチ
 
 - **FR-CLOUD-20**: 各 Workflow ID に対して個別の reusable workflow を 1 対 1 で起動する:
+  - `ARD` → `auto-requirement-definition-reusable.yml`
   - `AAD-WEB` → `auto-app-detail-design-web-reusable.yml`
   - `ASDW-WEB` → `auto-app-dev-microservice-web-reusable.yml`
   - `AAG` → `auto-ai-agent-design-reusable.yml`
@@ -460,7 +484,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 | `run` | インタラクティブ wizard（引数なし時の既定動作） |
 | `orchestrate` | Workflow ID を指定して DAG を実行 |
 | `qa-merge` | 回答済み質問票をマージ |
-| `workiq-doctor` | Work IQ 連携の診断 |
+| `workiq-doctor` | Work IQ 連携の診断（`--qa-integration-probe` で事前 QA 統合可否を含む、FR-QA-08） |
 | `emit-prompt` | Step のプロンプトを表示（デバッグ用） |
 
 ### 5.2 `orchestrate` の必須・主要オプション
@@ -490,8 +514,8 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 ### 5.3 対話 wizard
 
 - **FR-CLI-10**: `python -m hve`（引数なし）または `python -m hve run` は対話 wizard を起動する。
-- **FR-CLI-11**: wizard はクイック全自動モードと詳細モードを提供し、Workflow 固有パラメータを順次収集する。
-- **FR-CLI-12**: ARD wizard は Step 1〜3 をマルチ選択させ、Step 1 選択時のみ `company_name` を必須、Step 2 単独実行時のみ `target_business` を必須とする。
+- **FR-CLI-11**: wizard は実行モードとして `quick-auto`（画面表示: クイック全自動）、`custom-auto`（画面表示: カスタム全自動）、`manual`（画面表示: 手動）の 3 つを提供する。`quick-auto` は既定値中心、`custom-auto` は全設定を事前入力した後の無人実行、`manual` は実行中も対話可能な経路とし、Workflow 固有パラメータは選択したモードに従って収集する。
+- **FR-CLI-12**: ARD wizard は FR-WF-ARD-03 の 5 表示グループ（`1`〜`5`）をマルチ選択させ、既定選択は同要件の `ARD_DEFAULT_GROUP_IDS` に従う。グループ `1` を選択した場合だけ `company_name` を必須とし、グループ `2` を選択してグループ `1` を選択しない場合だけ `target_business` を必須とする。グループ `1` と `2` を同時選択した場合の空の `target_business` は、Step 1.2 完了後に Strategic Recommendation から生成する bridge 経路で解決する。KPI/OKR の実行有無はグループ `3` の選択だけから導出し、同じ状態を表す別の Yes/No 質問を設けてはならない。グループ `5` はアプリケーション一覧と APP 別要求定義書を一体で生成するため、片方だけを選択する別 UI を設けてはならない。
 - **FR-CLI-13**: AKM wizard は `sources` をマルチ選択（`qa` / `original-docs` / `workiq`）し、`workiq` を含む場合のみ取り込み対象 Dxx を尋ねる。
 - **FR-CLI-14**: ASDW-WEB wizard は Step 1.3 に到達し得る選択のとき、Step 1.3 の `required_params`（FR-DAG-07）が宣言する Workflow パラメータを順次尋ねる。`default_params` に既定値があるキーは既定値を提示し、空入力（Enter のみ）で既定値を採用する。既定値を持たないキーだけを空入力不可とする。
 
@@ -509,7 +533,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 - **FR-CLI-72**: HVE は製品 run の実行中に、HVE 自身のテストスイート（`python -m pytest` 等）を子プロセスとして起動してはならない。ASDW-WEB Step 1.2 のローカル検証は、生成物に対する静的検査（`bash -n`、利用可能な場合の ShellCheck、artifact validator、LF/BOM 検査）に限定する。HVE 自身の回帰テストは CI と開発時に実行する（[hve/asdw_step12_verification.py](hve/asdw_step12_verification.py)）。
 - **FR-CLI-73**: `StepRunner` が Copilot セッションへ公開する repository Skill ディレクトリは、`.github/skills` root と、当該 active Step が `required_skills` で宣言した Skill、およびインストール済みの optional Skill に限定する。`.github/skills` 直下の全ディレクトリを無条件に公開してはならない。external Skill の fail-closed 解決は維持する（[hve/runner.py](hve/runner.py)）。
-- **FR-CLI-76**: Step 実行経路のセッション生成（[hve/runner.py](hve/runner.py) `_create_session_with_auto_reasoning_fallback`）は、呼び出し側が `mcp_servers` を明示していない場合、リポジトリが宣言した `.github/.mcp.json` の `mcpServers` を `mcp_servers` として渡し、あわせて `enable_config_discovery=False` を指定しなければならない。ワークスペース / ユーザースコープ / プラグイン由来の MCP サーバを自動探索で取り込んではならない。この結果、リポジトリが宣言していない MCP サーバ（実測環境では `github-mcp-server` / `workiq` / プラグイン由来の `azure`）は Step 実行セッションから外れる。`.github/.mcp.json` が存在しない・読み取れない・`mcpServers` が dict でない・`mcpServers` が空の場合は `mcp_servers` を渡さず、`enable_config_discovery` は従来どおり `True` とする（リポジトリが MCP を宣言していない作業ディレクトリでの回帰を避けるため）。呼び出し側が `mcp_servers` または `enable_config_discovery` を明示している経路（`_require_trusted_asdw_data_deploy_mcp_servers` / `_require_trusted_foundry_mcp_servers` / `SDKConfig.mcp_servers` / Work IQ を有効化した QA サブセッション）の挙動は変更してはならない。これらの経路では自動探索が残るが、Step 実行の主経路（各 Step のメインセッション）を縮約することを本要件の受入範囲とする。SDK が `enable_config_discovery` を未サポートの場合、既存規則どおり当該引数を剥がして再試行せず停止する（自動探索の再有効化を伴う縮退を禁じる既存の分離境界規則が、本要件により全 Step へ適用される）。Skill の公開範囲は FR-CLI-73 が定める `skill_directories` の明示指定で維持する。`.github/.mcp.json` の各サーバ定義は `tools` キー（`["*"]` = 全件 / `[]` = なし）を明示しなければならない。明示指定した MCP サーバ設定に `tools` キーが無いと、当該サーバは起動されずツールが 1 件も公開されない（実測: `azure` を `tools` なしで明示指定すると connected 0 件・ツール 0 件、`"tools": ["*"]` を付けると connected かつ 68 ツール。`type: "stdio"` の付与では解決しない）。同じ制約は `_require_trusted_foundry_mcp_servers` が渡す設定にも適用される。本要件は FR-TS-03 の pin ポリシー判定を変更しない（`pin_only` の判定は `hve/toolsearch/policy.json` の `step_overrides` だけで決まり、`enable_config_discovery` を参照しない）。本要件は次の実測（Copilot CLI 1.0.79 / SDK 1.0.7、`session.metadata.contextInfo`、model=`claude-sonnet-4.5`、会話 0）を根拠とする: 自動探索が有効なとき、リポジトリが宣言していないユーザースコープ設定・プラグイン由来の MCP サーバが全件接続され、ツール定義は 52,756 tokens（うち MCP 41,096）を占めた。重複していた MCP サーバ 2 系統を環境側で除いた後でも 33,384 tokens（うち MCP 21,728）だった。自動探索を無効にすると同環境で 11,403 tokens（MCP 0）になる。本要件の実装後、`.github/.mcp.json` が宣言する 2 サーバ（`azure` 68 ツール / `microsoft-learn` 3 ツール）だけを公開した Step セッションは 28,763 tokens（MCP 17,217）で、同環境の自動探索有効時 33,527 tokens（MCP 21,728）に対し 4,764 tokens 少ない。あわせて、自動探索は `.github/.mcp.json` を探索対象としておらず（探索対象は作業ディレクトリ直下の `.mcp.json` / `.vscode/mcp.json`）、同ファイル固有のサーバは 1 度も起動していない。本要件はこの「宣言が無視されている状態」の是正を兼ねる。
+- **FR-CLI-76**: Step 実行経路のセッション生成（[hve/runner.py](hve/runner.py) `_create_session_with_auto_reasoning_fallback`）は、呼び出し側が `mcp_servers` を明示していない場合、リポジトリが宣言した `.github/.mcp.json` の `mcpServers` を `mcp_servers` として渡し、あわせて `enable_config_discovery=False` を指定しなければならない。ワークスペース / ユーザースコープ / プラグイン由来の MCP サーバを自動探索で取り込んではならない。この結果、リポジトリが宣言していない MCP サーバ（実測環境では `github-mcp-server` / `workiq` / プラグイン由来の `azure`）は Step 実行セッションから外れる。`.github/.mcp.json` が存在しない・読み取れない・`mcpServers` が dict でない・`mcpServers` が空の場合は `mcp_servers` を渡さず、`enable_config_discovery` は従来どおり `True` とする（リポジトリが MCP を宣言していない作業ディレクトリでの回帰を避けるため）。呼び出し側が `mcp_servers` または `enable_config_discovery` を明示している経路（`_require_trusted_asdw_data_deploy_mcp_servers` / `_require_trusted_foundry_mcp_servers` / `SDKConfig.mcp_servers`）の挙動は変更してはならない。**Work IQ を有効化した QA サブセッションは本要件の受入範囲に含める**（v2.41 で追加）。当該サブセッションは `mcp_servers` に `_hve_workiq` だけを明示するため従来は自動探索が残り、利用者グローバル設定のプラグインが登録する Work IQ サーバー（`workiq` / `workiq-preview`）が同一セッションへ併存していた。併存側は `tools: ["*"]` で登録されるため HVE が `_hve_workiq` へ課す最小権限 allowlist（`ask` のみ）が及ばず、書き込み系ツール（`create_entity` / `update_entity` / `delete_entity` / `do_action`）および `accept_eula` / `call_function` / `get_debug_link` が同一セッションから到達可能だった（実測: `tools: ["*"]` で公開 14 件）。`available_tools` / `excluded_tools` は既定 `None`、権限ハンドラは `PermissionHandler.approve_all` であり、FR-TS-03 が求める安全境界がどちらの手段でも張られていなかった。したがって当該サブセッションでも `.github/.mcp.json` の宣言分を `mcp_servers` へ併合したうえで `enable_config_discovery=False` を指定しなければならない。併合時は Work IQ 別名（`workiq` / `workiq-preview`）を落とし、HVE が最小権限 allowlist を課した `_hve_workiq` だけを Work IQ 経路として残さなければならない。宣言分が存在しない・読み取れない・空の場合は、`_hve_workiq` の注入だけを従来どおり行い `enable_config_discovery` は `True` のままとする（MCP を宣言していない作業ディレクトリでの回帰を避けるため。本要件の他経路と同じフォールバック規則）。FR-CLI-79 の Azure 除外は本サブセッションにも適用する。`_hve_workiq` のツール allowlist と Work IQ 別名の除外規則（FR-QA-03）は変更しない。新規 CLI オプションおよび新規 `SDKConfig` フィールドを追加してはならない。これらを除く経路では自動探索が残るが、Step 実行の主経路（各 Step のメインセッション）と Work IQ を有効化した QA サブセッションを縮約することを本要件の受入範囲とする。SDK が `enable_config_discovery` を未サポートの場合、既存規則どおり当該引数を剥がして再試行せず停止する（自動探索の再有効化を伴う縮退を禁じる既存の分離境界規則が、本要件により全 Step へ適用される）。Skill の公開範囲は FR-CLI-73 が定める `skill_directories` の明示指定で維持する。`.github/.mcp.json` の各サーバ定義は `tools` キー（`["*"]` = 全件 / `[]` = なし）を明示しなければならない。明示指定した MCP サーバ設定に `tools` キーが無いと、当該サーバは起動されずツールが 1 件も公開されない（実測: `azure` を `tools` なしで明示指定すると connected 0 件・ツール 0 件、`"tools": ["*"]` を付けると connected かつ 68 ツール。`type: "stdio"` の付与では解決しない）。同じ制約は `_require_trusted_foundry_mcp_servers` が渡す設定にも適用される。本要件は FR-TS-03 の pin ポリシー判定を変更しない（`pin_only` の判定は `hve/toolsearch/policy.json` の `step_overrides` だけで決まり、`enable_config_discovery` を参照しない）。本要件は次の実測（Copilot CLI 1.0.79 / SDK 1.0.7、`session.metadata.contextInfo`、model=`claude-sonnet-4.5`、会話 0）を根拠とする: 自動探索が有効なとき、リポジトリが宣言していないユーザースコープ設定・プラグイン由来の MCP サーバが全件接続され、ツール定義は 52,756 tokens（うち MCP 41,096）を占めた。重複していた MCP サーバ 2 系統を環境側で除いた後でも 33,384 tokens（うち MCP 21,728）だった。自動探索を無効にすると同環境で 11,403 tokens（MCP 0）になる。本要件の実装後、`.github/.mcp.json` が宣言する 2 サーバ（`azure` 68 ツール / `microsoft-learn` 3 ツール）だけを公開した Step セッションは 28,763 tokens（MCP 17,217）で、同環境の自動探索有効時 33,527 tokens（MCP 21,728）に対し 4,764 tokens 少ない。あわせて、自動探索は `.github/.mcp.json` を探索対象としておらず（探索対象は作業ディレクトリ直下の `.mcp.json` / `.vscode/mcp.json`）、同ファイル固有のサーバは 1 度も起動していない。本要件はこの「宣言が無視されている状態」の是正を兼ねる。
 
 ### 5.5 Issue / PR 作成（CLI 経路）
 
@@ -557,6 +581,47 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 - **FR-CLI-61**: スコープは `""`（既定 = step + workflow）、`"disabled"`、`"step"`、`"workflow"` の 4 値（[hve/config.py](hve/config.py) `VALID_SELF_IMPROVE_SCOPES`）。
 - **FR-CLI-62**: ワイルドカード `*` 展開先は `data`、`docs`、`docs-generated`、`knowledge`、`src` で、`work/` は常時除外する。
 
+### 5.9 起動時の索引差分更新
+
+- **FR-CLI-77**: HVE CLI Orchestrator の起動時（`run` / `cli` / `orchestrate`）、実在する `mdq`（§3.8）および `cq`（§3.9）の索引 DB をバックグラウンドで差分更新しなければならない。
+  - 対象は**実在する索引 DB に限る**。`mdq` は `.mdq/index-<lang>-<strategy>.sqlite` に一致するファイル、`cq` は設定ファイルが宣言する profile のうち `.cq/index-<profile>.sqlite` が実在するものとする。索引 DB を新規に作成してはならない。差分更新は既存索引を前提とする操作であり、未構築の strategy / profile を起動時に構築すると、利用者が選択していない索引（埋め込みモデルの取得を伴う `semantic_paragraph` 等）を起動のたびに生成することになるからである。SQLite 索引を持たない strategy（`graphrag`）は、この対象規則により自動的に対象外となる。
+  - 更新は差分更新とし、完全再ビルドを行ってはならない。
+  - 索引 DB のパス規則と `(lang, strategy)` / profile の解決は `mdq` / `cq` 側の実装を単一の情報源とし、HVE 側で再実装してはならない（FR-MAINT-07）。
+  - 本処理の完了前に `mdq` / `cq` の watcher を起動してはならない。同一の索引 DB に対して 2 つの書き込み経路が同時に存在してはならず、`mdq` の索引構築は走査の終了時に 1 回だけコミットするため、走査中は書き込みトランザクションを保持しうるからである。
+  - 索引更新の失敗、任意依存の欠落、`cq` 設定の不在は、警告の出力に留めなければならない。Workflow の実行を中断させてはならない。
+  - 環境変数 `HVE_STARTUP_INDEX_REFRESH` で無効化できなければならない。既定は有効とする。
+
+### 5.10 CLI Autopilot の実行開始確認
+
+- **FR-CLI-78**: `hve orchestrate --autopilot-chain` は、標準入力が対話可能な場合、計画サマリの表示後・APP チェーンの実行開始前に、利用者へ実行の可否を確認しなければならない。
+  - 承認されなかった場合は Step を 1 つも実行せずに終了しなければならない。CLI Autopilot は複数 APP のチェーンを無人で連続実行するため、計画を提示しただけで即時に実行を開始してはならない。
+  - 標準入力が対話不可能な場合（CI 等）は確認せずに実行する。既存の非対話実行を後方非互換にしてはならない。確認を省略するための新しいオプションを追加してはならない。
+  - `--autopilot-dry-run` 指定時は従来どおり計画のみを表示して終了し、確認を求めてはならない。
+  - 対話可否の判定は既存の CLI 実装と同一の規則（`sys.stdin.isatty()`）に従う（[hve/__main__.py](hve/__main__.py)）。
+
+### 5.11 Azure を利用しない Workflow の MCP 縮約
+
+- **FR-CLI-79**: FR-CLI-76 がリポジトリ宣言の MCP サーバを Step 実行セッションへ渡す際、当該 Step が属する Workflow が「Azure を利用しない」と宣言されている場合、`azure` MCP サーバを除いて渡さなければならない。
+  - 宣言は **Workflow 単位の allowlist** とし、[hve/runner.py](hve/runner.py) の定数 1 つで保持する。**allowlist に載っていない Workflow・`workflow_id` が解決できない場合は、従来どおり全サーバを渡さなければならない**（宣言漏れが機能破壊にならない側へ倒すため）。
+  - Step 単位の判定を行ってはならない。Step ごとの Azure 利用有無を機械的に判定する根拠は、Custom Agent プロンプト中の文字列一致しか無く、誤判定時に Azure 系 Step を機能破壊するためである。
+  - 呼び出し側が `mcp_servers` を明示している経路のうち、FR-CLI-76 が受入範囲から除外する 3 経路（`_require_trusted_asdw_data_deploy_mcp_servers` / `_require_trusted_foundry_mcp_servers` / `SDKConfig.mcp_servers`）の挙動を変更してはならない。当該 3 経路では `enable_config_discovery=False` の指定も変更してはならない。Work IQ を有効化した QA サブセッションは v2.41 で FR-CLI-76 の受入範囲へ移ったため本条の対象外とする。
+  - `microsoft-learn` MCP サーバを除外してはならない。Azure を利用しない Workflow でも公式ドキュメント参照は発生しうる。
+  - 新規 CLI オプションおよび新規 `SDKConfig` フィールドを追加してはならない。
+  - **allowlist の妥当性は次の 2 点を機械的に検査しなければならない**。(1) allowlist の各 Workflow に属する全 Step の Custom Agent プロンプトが Azure に言及しないこと、(2) `.github/.mcp.json` の `mcpServers` に除外対象のサーバ名が実在すること。前者は allowlist が実装から取り残されて Step を壊すことを防ぎ、後者はサーバ名の改名により縮約が無言で無効化されることを防ぐ。
+  - 本要件は次の実測を根拠とする（全 13 Workflow / 131 Step の Custom Agent プロンプト走査）: `ard`（8 Step）/ `akm`（2 Step）/ `adi`（9 Step）/ `adoc`（23 Step）の計 42 Step は 1 件も Azure に言及しない。一方 `aas` は 11 Step 中 1 件、`aad-web` は 8 Step 中 5 件が言及するため、Workflow 単位では除外できない。
+
+### 5.12 CLI Autopilot の lane 経過時間観測
+
+- **FR-CLI-80**: `CliAutopilotRunner` は lane（APP チェーン）ごとの経過時間を計測し、閾値を超えた lane について警告を 1 行出力しなければならない。
+  - **lane を停止させてはならない**。本要件は観測のみを規定する。NFR-TIME-01 の CLI タイムアウトは**無入出力時間ベース**であり、出力が継続する限り lane は無制限に伸びうる。一方 NFR-TIME-02 のとおり Cloud 側は経過時間ベースの上限を持つ。この Cloud / CLI の差を可視化することが本要件の目的である。
+  - 閾値は **360 分**とし、NFR-TIME-02 の Cloud 側ジョブタイムアウトと同値にする。**ハードコードとし、設定では変更不可**とする（NFR-PERF-02 と同じ扱い）。新規 CLI オプションおよび新規 `SDKConfig` フィールドを追加してはならない。
+  - 警告は lane の完了時に 1 回だけ出力する。lane が chain 内で複数の Workflow を順次実行する場合、計測対象は最初の Workflow の起動から lane 完了までとする。
+  - 警告の出力に失敗しても実行を中断してはならない（NFR-RTO-03 と同じ扱い）。
+  - 警告の有無は `CliRunSummary` の内容および終了コードを変えてはならない。
+  - 経過時間の取得は差し替え可能にし、実時間に依存するテストを書かずに検証できなければならない。
+  - 索引と無関係なサブコマンド（`login` / `pricing` / `toolsearch` / `qa-merge` / `workiq-doctor` / `emit-prompt` / `ingest-docs`）では起動してはならない。`gui` サブコマンドと引数なし起動（GUI が既定）の経路は FR-GUI-22 が担う。CLI 側は作業ディレクトリをリポジトリルートとして扱うのに対し、GUI は起動位置からルートを遡って解決するため、引数なし起動を CLI 側で担うと誤ったルートを対象にしうる。
+  - `--dry-run` でも実行してよい。索引 DB は Workflow の成果物ではないためである。既存の watcher が `dry_run` で起動しない扱いとは異なる点を、利用者向け文書へ明示しなければならない。
+
 ---
 
 ## 6. パラメータ仕様（抜粋）
@@ -572,7 +637,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 ### 6.2 ARD のステップ選択ロジック
 
-- **FR-PARAM-10**: CLI 非対話モードで `--target-business` が空の場合 `[1, 2, 3]`、指定時は `[2, 3]` を既定の `selected_steps` とする（[hve/orchestrator.py](hve/orchestrator.py) `_collect_params_non_interactive`）。
+- **FR-PARAM-10**: CLI 非対話モードで `--steps` / `selected_steps` が未指定の場合、`target_business` の有無にかかわらず FR-WF-ARD-03 の `ARD_DEFAULT_GROUP_IDS`（`("2", "3", "4", "5")`）を既定の `selected_steps` とする（[hve/orchestrator.py](hve/orchestrator.py) `_collect_params_non_interactive`）。起動面ごとに別の既定値を持ってはならない。グループ `3` または実 Step `2.1` が明示選択された場合は `include_kpi_okr=True` と同じ実行状態へ正規化し、直接 CLI の `--include-kpi-okr` は後方互換ショートカットとして維持する。
 - **FR-PARAM-11**: 既定値:
   - `survey_base_date` = 実行日（`date.today().isoformat()`）
   - `survey_period_years` = `30`
@@ -655,6 +720,12 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
   - **収集済みイベントが 0 件のときは、「データ不足」の表示に加えて未充足の収集条件を表示しなければならない。** 収集には `tool_search` が有効であること、`tool_search_ranking` が `"hve"` であること、および CLI がモデルへ `tool_search_tool` を公開していることのすべてが必要である。設定から判定できる前 2 者は設定値から判定し、3 番目は「設定は満たしているがイベントが 0 件」という観測事実として表示する。観測していない事実を原因として断定してはならない。
   - **コンテキスト内訳の実測**は、`session.metadata.contextInfo` と `session.metadata.getContextAttribution` から層別（システムプロンプト / 組み込みツール定義 / MCP サーバー別）の実トークン量を取得して表示する。[hve/toolsearch/eval.py](hve/toolsearch/eval.py) のトークン推定で代替してはならない。測定は `session.send` を行わずモデル推論を発生させてはならない。実行は利用者の明示操作に限り、タブを開いただけで実行してはならない。集計ロジックは CLI（`hve toolsearch context`）と単一実装を共有し、GUI 側で再実装してはならない（FR-MAINT-07）。トークン量はトークナイザ依存であるため、測定に用いたモデル名を併せて表示しなければならない。stdio MCP は接続に時間を要する（実測: `azure` は 3.7〜5.1 秒）ため、宣言済みサーバーの接続完了を待ってから測定し、待っても接続しなかったサーバーはその事実を表示しなければならない。
   - 実測が失敗した場合（Copilot CLI 不在・認証不足・MCP 接続不能等）は、失敗した旨と理由を表示し、推定値や前回値で埋めてはならない。
+- **FR-GUI-22**: HVE GUI の起動時、FR-CLI-77 と同一の対象規則・同一の実装で、実在する `mdq` / `cq` の索引 DB をバックグラウンドで差分更新しなければならない。対象列挙と更新処理を CLI と GUI で二重に実装してはならない（FR-MAINT-07）。
+  - 起動は GUI プロセスにつき 1 回とする。複数の MainWindow を開いても、同一の索引 DB へ 2 つの更新経路を同時に生じさせてはならない。
+  - 差分更新の実行中は、Workflow 実行の開始操作を受け付けてはならない。GUI が起動する `hve orchestrate` 子プロセスは自身の watcher を起動するため、GUI 側の更新と子プロセス側の書き込みが同一の索引 DB へ同時に到達しうるからである。
+  - 実行中であることとその理由を利用者へ表示しなければならない。理由を示さずに操作を無効化してはならない。表示文字列は翻訳カタログの抽出対象とし、`.ts` だけを更新してコンパイル済み `.qm` を再生成しない状態を残してはならない。
+  - 更新の失敗で GUI を異常終了させてはならない。
+  - 有効・無効の制御は FR-CLI-77 と同一の環境変数による。GUI 専用の設定項目を追加してはならない。
 
 ### 6.6 GUI 質問票の「その他」回答
 
@@ -753,13 +824,24 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
   - 利用者が略語の意味を判別できるよう、GUI の表示ラベルと説明文では `QA` を `QA (質問票)`、`AKM` を `Knowledge Management` と表記しなければならない。CLI のフラグ名（`--akm-model` 等）と設定キー名は互換性のため改称してはならない。
   - Step 1 右ペインの入力値はセッション限りであり、永続化の唯一の入口は設定画面とする。右ペインへ独自の保存経路を追加してはならない。
 
+### 6.11 ワークフロー一覧のカテゴリー構成
+
+- **FR-GUI-21**: GUI の Step 1 ワークフロー選択（[hve/gui/page_workflow_select.py](hve/gui/page_workflow_select.py)）と CLI 対話ウィザードのワークフロー選択（[hve/__main__.py](hve/__main__.py)）は、同一のカテゴリー表に従ってワークフロー一覧を分類表示しなければならない。
+  - カテゴリー表は単一実装（FR-MAINT-07）とし、[hve/workflow_registry.py](hve/workflow_registry.py) の `WORKFLOW_CATEGORIES` を正本とする。GUI 専用モジュールに定義してはならない。CLI は PySide6 に依存する `hve/gui/` 配下を import できず、GUI 側へ正本を置くと CLI が同じ分類を参照できないためである。
+  - カテゴリーとその構成員は次の順序で定義する。`Business Engineering (要求定義)`: `ard` / `Architecture Design`: `aas` / `Software Engineering`: `aad-web`, `asdw-web`, `adfd`, `adfdv` / `既存ドキュメントのインポート`: `adi` / `Knowledge Management`: `akm`, `adoc` / `AI Agent`: `ada`, `aag`, `aagd`, `aar`。`ada` は AI Agent 経路専用のデータ設計 Workflow であるため `AI Agent` へ分類する。
+  - カテゴリー表は登録済みの全ワークフローを過不足なく分類しなければならない。同一 ID を複数カテゴリーへ重複させてはならず、`workflow_registry` に存在しない ID を含めてはならない。
+  - 未分類 ID を「その他」枠へ集約する縮退経路は維持しなければならない。新規ワークフローをレジストリへ追加した時点でカテゴリー表への登録が漏れても、選択肢自体が一覧から消えてはならないためである。
+  - CLI 対話ウィザードは選択肢をカテゴリー順に並べ、各選択肢へカテゴリー名を接頭辞として表示しなければならない。`Console.menu_select` は与えられた全行を連番付きの選択肢として描画するため、選択できない見出し行を挿入してはならない。選択肢を並べ替える場合は、表示用リストと選択結果の解決に用いるリストを同一にして索引の整合を維持しなければならない。
+  - GUI / Autopilot がワークフローの表示順を列挙する表（[hve/gui/page_options.py](hve/gui/page_options.py) `_WORKFLOW_CANONICAL_ORDER`、[hve/autopilot/plan_review_gap.py](hve/autopilot/plan_review_gap.py) `_WORKFLOW_CANONICAL_ORDER`、[hve/gui/workflow_step_requirements.py](hve/gui/workflow_step_requirements.py) `WORKFLOW_PRIORITY`）は、登録済みの全ワークフローを欠落なく列挙しなければならない。列挙から漏れたワークフローは当該経路の走査対象外となり、表ごとに対象範囲が食い違うためである。
+  - GUI のワークフロー説明（[hve/gui/help_content.py](hve/gui/help_content.py) `_WORKFLOW_SHORT` / `WORKFLOW_GUIDE_MAP`）と表示名（[hve/template_engine.py](hve/template_engine.py) `_WORKFLOW_DISPLAY_NAMES`）は、登録済みの全ワークフローを対象としなければならない。`_WORKFLOW_SHORT` に説明を持たないワークフローはヘルプボタン自体が生成されず（`HelpPopupButton.from_key` が `None` を返す）、利用者が当該ワークフローの説明を参照する手段を持たないためである。
+
 ---
 
 ## 7. 非機能要件
 
 | ID | 要件 |
 |---|---|
-| NFR-PERF-01 | DAG 実行は `asyncio.Semaphore` を使い、Workflow ごとの `max_parallel`（AKM/ADI は 21、その他は 15、ARD は 15）を超えない |
+| NFR-PERF-01 | DAG 実行は `asyncio.Semaphore` を使い、FR-DAG-03 の解決順序で得た並列上限（宣言値: AKM / ADI は 21、ARD は 15、ASDW-WEB は 1。宣言のない Workflow は `--max-parallel` の値で既定 15）を超えない |
 | NFR-PERF-02 | 既存成果物走査は `src/` 50 件、`test/` 30 件で早期打ち切る。**ハードコード値であり、設定では変更不可** |
 | NFR-PERF-03 | 性能の測定方法 / 目標値（KPI、SLA）は未定義（§12 TBD）|
 | NFR-OBS-01 | Wave 2 コンテキスト注入計測（`none_steps` / `total_chars` / `max_chars` / `phase_breakdown` / `self_improve_scope`）を Console / stderr に出力する。`GITHUB_STEP_SUMMARY` 環境変数が設定されている場合に限りサマリにも出力。`OSError` 時は警告のみで継続 |
@@ -906,6 +988,27 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 | 2.25 | 2026-08-16 | **FR-QA-05 / FR-GUI-20 / FR-CLOUD-26 新規、FR-QA-03 / FR-GUI-16 / FR-GUI-17 改訂**: QA 起点 AKM のバックグラウンド起動を、利用者が明示選択する設定 `qa_akm_background_merge`（既定無効）で制御する契約を追加。従来は `auto_qa` を有効にするだけで共有資産 `knowledge/` への自動書込みが常に起動し、利用者がコスト・実行時間・差分レビュー量を制御できなかったことを根拠として明記。判定を CLI / GUI は `_should_enable_qa_akm_dispatch`、Cloud は `save-qa-answer` の `sync_required` の各 1 箇所へ限定し、環境変数経路の新設と `--workflow akm` 明示実行への適用を禁止。GUI は設定画面の「自動プロンプト」ノードを廃止して `QA (質問票)` / `レビュー` / `Knowledge Management` / `自己改善 (Self Improve)` へ再編し、`追加プロンプト` / `コンテキスト最大文字数` を `基本設定` へ移し、略語 `QA` / `AKM` の表示を `QA (質問票)` / `Knowledge Management` へ改称。Cloud は Issue Form へ `enable_qa_akm_merge` を追加し、`knowledge-management.yml` を除外 |
 | 2.26 | 2026-08-16 | **FR-WF-ADI-17 / 18 新規、FR-WF-ADI-12 改訂**: 旧独立の原本質問票処理を廃止し、D01〜D21 質問票 fan-out と横断 join を ADI Step 1.1 / 1.2 へ統合。ADI は CLI / GUI 専用のまま維持し、独立 Workflow ID・Cloud reusable workflow・CLI / GUI 選択肢・後方互換 alias を設けない契約を追加 |
 | 2.27 | 2026-08-16 | **FR-WF-AAG-03 / 04・FR-WF-AAGD-05 / 06 / 07 新規**: 生成 AI Agent の Agentic Retrieval 方針を `auto` / `yes` / `no` の 3 値に固定し、AAG Step 3 と AAGD Step 2.3 / 3 への同一値注入と、方針別の設計成果物ゲートを必須化。Foundry IQ 経路では Knowledge Source Matrix の行数下限を 2 とし（1 行のみでは複数ソース横断の前提を満たさずクラシック単一クエリ検索と等価になるため）、AR-CAP-01 へ `Index semantic configuration` を必須ラベルとして追加（各サブクエリが semantic rerank を通るため索引側構成が検索品質の上限を決めることを根拠とする）。AAGD Step 2.1 / 2.2 への `agentic-retrieval-contract` 公開と、Toolbox 採否に依存しない Deploy ゲートの AR-CAP-01 / 02 静的照合を追加。併せて Agent Plugins Specification 1.0.0 準拠のマニフェスト `src/agent/{key}/plugin.json` の生成と検証、および `SKILL.md` frontmatter の長さ制約検証を必須化 |
+| 2.28 | 2026-08-17 | **FR-MODEL-07 改訂 / FR-MODEL-08 新規**: セットアップの `github-copilot-sdk` 既定経路を lock 版固定から最新追従（`--upgrade --no-deps`）へ変更し、版固定を明示フラグ `--pin-sdk` / `-PinSdk` の opt-in へ移した。`--upgrade-sdk` / `-UpgradeSdk` は最新化に加えて宣言ファイルの pin 行と CLI ランタイム記録行を書き換える役割として維持し、既定経路では宣言ファイルを書き換えない。ランタイム整合検証（pin 先読み・`--no-auto-update` による埋め込み版突合・pin 無効化環境変数の警告）は変更せず維持する。あわせて外部 `copilot` コマンド（npm パッケージ `@github/copilot`）を Windows / macOS / Linux の全セットアップで最新版へ導入・更新することを必須化し、npm グローバル管理下でない `copilot` を検出した場合の二重導入禁止と警告、`--no-install-tools` / `--check-only` での抑止を規定 |
+| 2.30 | 2026-08-17 | **§13.14 新設（FR-WF-CONF-01〜06 新規）／ FR-CLOUD-06 改訂・FR-CLOUD-07 新規**: 生成・デプロイ済みの成果物を実際に動かし、機能要件・非機能要件への適合を測定して報告する Step を ASDW-WEB `5.3` / ADFDV `4.3` / AAGD `5` / AAR `7` へ追加し、単一 Custom Agent `QA-RequirementsConformanceEval` を 4 Workflow で共有することを規定。従来は設計文書の照合による WAF レビューと整合性チェックまでで完結し、デプロイした構成が目標値を満たすかを実測で確認する経路が無かったこと、および実行基盤の選択が過剰かどうかは設計文書から判定できないことを根拠として明記。判定語彙を `PASS` / `FAIL` / `NOT_MEASURED` / `NO_TARGET` の 4 値に固定して目標未定義と未測定を区別し、実測値からの目標逆算を禁止。本 Step のための Azure リソース新規作成の必須化を禁止し、マネージド負荷試験サービスの利用は任意とした。あわせて FR-CLOUD-06 を「同期が確認できた reusable workflow は dispatch 対象としてよい」へ改めて ASDW-WEB の Cloud 起動停止を撤去し、FR-CLOUD-07 で AAR を Cloud dispatch 対象へ追加 |
+| 2.29 | 2026-08-17 | **§6.11 新設（FR-GUI-21 新規）**: GUI Step 1 と CLI 対話ウィザードのワークフロー一覧を共通のカテゴリー表で分類することを必須化し、`aag` / `aagd` / `aar` を新カテゴリー `AI Agent` へ分類。従来この 3 件はどのカテゴリーにも登録されておらず未分類の縮退枠「その他」に落ちていたこと、およびカテゴリー表が GUI 専用モジュールにあり CLI から参照できなかったことを根拠として明記。正本を `hve/workflow_registry.py` の `WORKFLOW_CATEGORIES` へ集約（FR-MAINT-07）、全ワークフローの過不足ない分類と重複・未登録 ID の禁止、未分類 ID の「その他」縮退経路の維持、CLI での見出し行挿入禁止と索引整合の維持、表示順を列挙する 3 つの表への全ワークフロー列挙、および全ワークフローに対する GUI 説明文・表示名の提供を規定 |
+| 2.31 | 2026-08-19 | **FR-QA-03 改訂**: QA 起点 AKM のバックグラウンド実行について、(1) 実行開始時点でキューに滞留している複数の登録を 1 回の AKM 子実行へまとめてよいこと（`target_files` へ全件を与え、結果はファイル単位で報告）、(2) 同時に 2 つ以上の AKM 子プロセスを起動してはならないこと、(3) AKM 子実行へ Workflow 定義の宣言並列上限（`WorkflowDef.max_parallel`）を明示的に渡すことを追加。従来は検証済み QA ファイル 1 件ごとに子実行が逐次起動され、待ち合わせ境界（Git 後処理・branch 切替・GUI cleanup・DAG 完了）で親 Workflow の待ち時間が登録件数に比例していたこと、および子実行が `--max-parallel` を受け取らず `SDKConfig.max_parallel` の既定値で動くため D01〜D21 の 21 fan-out が複数 wave へ分割されていたことを根拠として明記。子プロセスの多重起動を禁じる根拠として、AKM の出力空間が `target_files` によらず `knowledge/D01`〜`D21` 全体と `knowledge/business-requirement-document-status.md` を含むことを明記 |
+| 2.32 | 2026-08-19 | **FR-DAG-03 改訂 / NFR-PERF-01 改訂**: DAG の並列上限の解決順序を「ARD bridge mode → `WorkflowDef.max_parallel` の宣言値 → `SDKConfig.max_parallel`」と規定し、解決を `hve/orchestrator.py` の単一実装へ限定（FR-MAINT-07）、解決根拠を `DAGPlan.max_parallel_source` へ `ard-serial` / `workflow` / `config` として保持することを必須化。宣言を持つ Workflow に対して `SDKConfig.max_parallel` で宣言値を上書きすることを禁止し、宣言値へ `asdw-web` = 1 を追加した。従来 `run_workflow` は `SDKConfig.max_parallel` だけを `build_dag_plan()` へ渡しており、`DAGExecutor` は `dag_plan` がある限り `DAGPlan.max_parallel` で semaphore を作るため、`WorkflowDef.max_parallel` が実行へ一切反映されていなかったことを根拠として明記（実測: `asdw-web` は宣言 1 に対して 2 ステップの wave が 4 箇所とも並列実行され、`akm` / `adi` は宣言 21 に対して semaphore 15 で fan-out が分割されていた）。`asdw-web` の宣言は同一 worktree の並列書込みを避ける安全制約であり、利用者設定で緩められてはならない。あわせて v2.31 で FR-QA-03 へ追加した (3)（AKM 子実行へ宣言並列上限を明示的に渡す）を本解決順序へ統合し、子 argv での並列度固定を禁止した（FR-MAINT-07。本改訂後は子へ `--max-parallel` を渡しても宣言値が優先されるため、当該の明示付与は効果を持たない） |
+| 2.33 | 2026-08-19 | **FR-QA-06 / FR-QA-07 新規、FR-QA-03 改訂**: (1) Work IQ 応答が `FOUND` / `PARTIAL` でありながら許可済み server/tool 組の実行を確認できない場合の警告通知を必須化し（FR-QA-06）、警告文の生成を `hve/workiq.py` の単一ヘルパーへ限定（FR-MAINT-07）。(2) QA 起点 AKM 子実行の標準出力・標準エラーの保全と、失敗時の `returncode` / 保存先パス報告を必須化（FR-QA-07）。(3) FR-QA-03 へ、MCP 公開 allowlist（最小権限）と実行確認用 tool 名集合を別集合として保持すること、および書き込み系ツールを統合根拠としないことを追加。根拠は 2026-08-19 の実測（`work/2026-08-19-qa_workiq_dryrun.md`）で、事前 QA の Work IQ 応答 6 件中 3 件が `FOUND` であったにもかかわらず統合 0 件となり、実行面には `✅ Work IQ: 0 件の質問に回答案を統合しました` という成功記号付きの情報メッセージしか出なかったこと（実際に呼ばれたツールは `retrieve` 10 回で、当時の許可集合は `ask` のみ）、および QA 起点 AKM 子実行が失敗しても親のログに件数しか残らず、原因究明に手動再現を要したこと。あわせて、許可集合を SDK の `session.rpc.mcp.list()` から動的構築する案は採らなかった（実測で server オブジェクトが tools を公開せず、`session.rpc.tools` にも一覧取得 API が無いため実装不能）ことを記録する |
+| 2.34 | 2026-08-19 | **FR-QA-08 新規 / FR-QA-07 改訂**: (1) 事前 QA の Work IQ 統合可否を Workflow 全体を再実行せずに確認する診断経路 `workiq-doctor --qa-integration-probe` を必須化し、統合可否判定を事前 QA 本体と同一実装（`hve/workiq.py` の `is_workiq_result_mergeable()`）へ限定した（FR-MAINT-07）。従来 FR-QA-03 の統合条件は `hve/runner.py` にインライン実装され、受入確認に実測 40 分超の Workflow 再実行を要していたことを根拠として明記。(2) FR-QA-07 へ、QA 起点 AKM の登録時点で HVE ソースの未コミット変更を検出した場合に子実行を起動せず登録をスキップして即時警告すること、スキップを実行失敗と別事象として報告すること、および FR-CLI-74 の最終ガードを置き換えず対象リポジトリを coordinator のルートへスコープすることを追加した。従来は親 run の開始から 40 分以上経過した後の drain 境界でしか失敗を知り得なかったことを根拠とする |
+| 2.34 | 2026-08-19 | **FR-CLOUD-06 改訂**: AKM の Cloud 経路を `hve/workflow_registry.py` の AKM 定義（Step.1 `KnowledgeManager` → Step.2 `QA-DocConsistency`）と同期させることを必須化。従来 `auto-knowledge-management-reusable.yml` は `[AKM] Step.1` の Step Issue を 1 件だけ作成し「AKM はステップが 1 つのみ」と明記していたため、Cloud 利用者が横断整合性レビュー（Step.2）を受け取れず、かつ AKM が parity テストの対象外であったため不一致を検出するゲートが存在しなかったことを根拠として明記。AKM は Bash registry へ未登録のため同期判定を hve registry のみに対して行うこと、Step.1 の D01〜D21 fan-out を Cloud で Step Issue へ展開してはならないこと（`knowledge/` の出力空間が `target_files` によらず D01〜D21 全体を含むため。FR-QA-03 と同一の根拠）を規定 |
+| 2.35 | 2026-08-19 | **FR-QA-03 改訂**: 実行確認の対象となる Work IQ サーバーに、公式 `workiq` だけでなく同一の Work IQ サービスを別サーバー名で登録するプラグイン（`workiq-preview` 等）を含めることを明記し、Work IQ とみなす MCP サーバー名を単一の正本で保持すること（FR-MAINT-07）を規定。従来の根拠文は公式 `workiq` サーバーだけを例示しており、実装側（[hve/workiq.py](hve/workiq.py) の server 集合と [hve/runner.py](hve/runner.py) の main session 分離集合）が 2 箇所に分かれていたため、`workiq-preview` 経由の参照系ツール実行が確認されず QA への統合が 0 件になり得たことを根拠として明記 |
+| 2.36 | 2026-08-19 | **NFR-CTX-01 / FR-MAINT-01 / FR-MAINT-02 改訂**: (1) NFR-CTX-01 のルーター箇条(1) を「HVE 対象変更」から「HVE 対象変更または HVE 対象パスの不具合調査」へ拡張し、実装を伴わない調査でも `hve-requirement-traceability` Skill を起動対象とすることを規定。従来は起動条件が「変更」に限定されていたため、`hve/**` を読むだけの不具合調査では要求定義書への到達経路が存在しなかったことを根拠とする。(2) FR-MAINT-01 へ、Skill が §1.3 の 3 層優先順位と §3.7 の変更種別判定規則を保持する義務を追加。両規則は Skill に不在で、適用可否と変更種別の判定に要求定義書本文の追加取得を要していた。(3) FR-MAINT-02 へ、要件 ID が既知の場合は検索せず `hve-dev/hve-feature-inventory.csv` の `line` 列が指す定義行だけを読む規則を追加。同一の問いに対し BM25 の chunk 返却が 3,613 tokens / 151 ms であるのに対し、索引の `line` 列からの直引きは 501〜687 tokens で検索を伴わないことを実測根拠として明記 |
+| 2.37 | 2026-08-19 | **FR-WF-OUT-11 新規 / FR-QA-03 改訂**: (1) FR-WF-OUT-11 を新規追加し、io-contract の `kind: static` 入力のうち変数記法・glob・ディレクトリ参照を含まないパスの実在を CI で必須化。FR-WF-OUT-05 の registry mismatch 検査が `required: true` かつ `kind: agent_artifact` の入力しか照合しないため、実体と一致しない static 宣言 8 件がどの検査にも掛からず残存していたことを根拠とする。(2) FR-QA-03 へ、SDK Fleet mode へ委譲した wave（2 step 以上）は事前 QA と QA 起点 AKM の対象外である旨の但し書きと、当該 wave 開始前の警告義務を追加。Fleet 経路（[hve/orchestrator.py](hve/orchestrator.py) `_fleet_wave_runner`）は `StepRunner.run_step` を経由しないため、利用者が `auto_qa` / `qa_akm_background_merge` を明示的に有効化しても無言で適用されない状態が観測されたことを根拠とする |
+| 2.38 | 2026-08-20 | **§5.9 新設（FR-CLI-77 新規）/ FR-GUI-22 新規**: CLI / GUI の起動時に、実在する `mdq` / `cq` 索引 DB をバックグラウンドで差分更新することを必須化。対象を実在 DB に限定し（未構築 strategy / profile の起動時生成を禁止）、watcher 起動を差分更新の完了後に直列化することを規定した。直列化の根拠は、同一索引 DB への並行書き込みが禁止されていること（[users-guide/skills-markdown-query.md](users-guide/skills-markdown-query.md) §4.2 / [users-guide/skills-code-query.md](users-guide/skills-code-query.md) §4.3）と、`mdq` の索引構築が走査終了時に 1 回だけコミットするため走査中に書き込みトランザクションを保持しうること（[mdq/indexer.py](mdq/indexer.py) `build_index`）。GUI では更新中の実行開始操作を禁止し、その理由の表示を必須化した。制御面は環境変数 1 本（`HVE_STARTUP_INDEX_REFRESH`）に限定し、GUI 専用設定項目の追加を禁止した |
+| 2.39 | 2026-08-20 | **§5.10 新設（FR-CLI-78 新規）**: `hve orchestrate --autopilot-chain` が計画サマリ表示後に確認なく複数 APP のチェーン実行を開始していたため、標準入力が対話可能な場合に限り実行可否の確認を必須化した。GUI には開始前の確認ダイアログが存在する一方、CLI 経路には無く、経路によって無人実行の扱いが食い違っていたことを根拠とする。非対話（CI 等）では従来どおり確認せず実行し、確認を省略するための新規オプションは追加しない。`--autopilot-dry-run` は確認より前に return するため対象外とした |
+| 2.40 | 2026-08-20 | **§3.2 訂正 / §5.11 新設（FR-CLI-79 新規）/ §5.12 新設（FR-CLI-80 新規）/ FR-TS-11 改訂 / TBD-25 追加**: (1) §3.2 の Cloud / CLI 対応マップが registry と 3 件乖離していた（実在しない `abd` / `abdv` が残存し、改称後の `adfd` / `adfdv` と実在する `ada` が欠落）。行順を registry の登録順へ揃え、Cloud 対応欄の根拠を `auto-orchestrator-dispatcher.yml` の `trigger_map` と明示した上で、ID 集合の一致を契約テストで固定した。(2) FR-CLI-79 を新規追加し、Azure を利用しない Workflow（`ard` / `akm` / `adi` / `adoc`。全 131 Step のプロンプト走査で計 42 Step が Azure 非言及）では `azure` MCP サーバを Step 実行セッションへ渡さないことを規定。Step 単位の判定は誤判定時に機能破壊となるため禁止し、allowlist 未登録は従来どおり全サーバを渡す fail-safe とした。allowlist のドリフト検査 2 種を必須化した。(3) FR-CLI-80 を新規追加し、CLI Autopilot の lane 経過時間を観測して閾値超過時に警告のみ出すことを規定。NFR-TIME-01 の CLI タイムアウトが無入出力時間ベースである一方 NFR-TIME-02 の Cloud 側は経過時間ベースの上限を持つという差の可視化を目的とし、停止は行わない。(4) FR-TS-11 へ、測定セッションを Step 実行と同じ設定モデル / `context_tier` で生成すること、出力に設定モデルを併記すること、`contextInfo` と `contextAttribution` の差分を欠損として提示しないことを追加した。(5) TBD-25 を追加し、`_build_step_permission_handler` の未使用引数を現状維持と判断した |
+| 2.41 | 2026-08-20 | **FR-CLI-76 改訂 / FR-CLI-79 改訂 / FR-QA-03 改訂**: Work IQ を有効化した QA サブセッションを FR-CLI-76 の受入範囲へ移した。当該サブセッションは `mcp_servers` に `_hve_workiq` だけを明示するため FR-CLI-76 の縮約条件（`mcp_servers` / `enable_config_discovery` いずれも未指定）を満たさず自動探索が残り、利用者グローバル設定のプラグインが登録する Work IQ サーバー（`workiq`）が `tools: ["*"]`（公開 14 件）で同一セッションへ併存していた。`available_tools` / `excluded_tools` は既定 `None`、権限ハンドラは `PermissionHandler.approve_all` であるため、HVE が `_hve_workiq` へ課す最小権限 allowlist（`ask` のみ）が併存側へ及ばず、書き込み系（`create_entity` / `update_entity` / `delete_entity` / `do_action`）と `accept_eula` / `call_function` / `get_debug_link` が到達可能で、FR-TS-03 が求める安全境界がどちらの手段でも張られていなかった。対処として当該サブセッションでも `.github/.mcp.json` の宣言分（Work IQ 別名を除く）を併合したうえで `enable_config_discovery=False` を指定することとし、宣言分が無い場合は従来どおり自動探索を残すフォールバックを維持した。FR-CLI-79 の「挙動を変更してはならない経路」は 4 経路から 3 経路へ改め、Azure 除外は本サブセッションにも適用する。FR-QA-03 の 2 集合分離の根拠を訂正し、併存の実在箇所を事前 QA サブセッションから `workiq-doctor` の tool probe（`probe_workiq_copilot_tool_invocation`。利用者環境の実態を観測する診断のため自動探索を残す）へ移した |
+| 2.42 | 2026-08-21 | **FR-RTO-01 改訂 / FR-GUI-21 改訂**: (1) FR-RTO-01 の `instance_id` を「実行プロセス（ジョブ）単位の識別子」と明確化し、`workflow_id#app_id` を適用する経路を当該プロセスが単一 APP へ専従する場合に限定した。同一プロセス内で APP キーごとに fan-out した Step の内訳は `step`（FR-RTO-07）で分離し、`instance_id` を Step 単位で切り替えないことを明記した。envelope の `pid` と `observability/events-<pid>.jsonl`（FR-RTO-03）がプロセス単位で対応し、`instance_id` だけを Step 単位にすると表示の集計単位（FR-RTO-05）と保存単位が食い違うことを根拠とする。従来の「APP 単位で並列実行する経路」という表記はプロセス内 Step fan-out を含むとも読め、システムテストで解釈が分かれたため文言を確定した。(2) FR-GUI-21 のカテゴリー構成員へ `ada` を追加し `AI Agent` を `ada` / `aag` / `aagd` / `aar` とした。`ada` は登録済みでありながら本要件の列挙から漏れており、「登録済みの全ワークフローを過不足なく分類する」規定と矛盾していたことを根拠とする。カテゴリーの定義順（`AI Agent` を末尾とする）は変更しない |
+| 2.43 | 2026-08-23 | **FR-CLI-11 / 12、FR-PARAM-10、FR-WF-OUT-01 / 05 / 07 改訂、FR-WF-ARD-03 / FR-WF-DM-01 新規、§13.13 GATE 境界改訂**: ARD を旧 Step 1〜3 / 7-Step 表記から、現行の 4 表示グループ / 8 実 Step へ同期した。wizard の3実行モードを `quick-auto` / `custom-auto` / `manual` として定義し、既定グループ `2` / `3` / `4` を `ARD_DEFAULT_GROUP_IDS` の immutable tuple 1 箇所で所有して全起動面が参照する契約、KPI/OKR をグループ `3` だけで表す単一選択状態、および `target_recommendation_id` を bridge 経路へ欠落なく伝搬してモード別に入力時点を分ける契約を追加した。従来は再設計後も規範要件と §13.12 が旧採番・旧既定値を保持し、実装との一致を検査する受入テストも無かったことを根拠とする。あわせて、完了ゲートを全経路へ一律適用する旧文を改め、G-LBL は Cloud、G-CONS は AKM、G-DIFF は PR 作成経路だけへ適用し、G-OUT は実行時に解決された必須成果物だけを対象とすることを明確化した。Data Model は親を常時必須の索引/統合版とし、50,000文字超の見込み時だけ固定名3 sidecarへ分割し、分割不要へ戻った再実行では stale sidecarを削除するAAS/ADA共通契約を追加した |
+| 2.44 | 2026-08-23 | **FR-MAINT-09 新規 / §13.2・§13.3・§13.7 改訂 / TBD-26 追加**: §13 の Step 表と `hve/workflow_registry.py` の StepDef 集合の一致を全 Workflow 横断で機械検査する要件を追加した。従来は §13.5（ADFDV）と §13.12（ARD）で同種の乖離が個別に発生し、そのつど当該 Workflow だけのテストで塞いでいたため、§13.2 には非コンテナ Step `2.4` / `2.5` / `2.6` の欠落が、§13.3 には実装に存在しない ID（`2.3T` / `2.3TC` / `3.0T` / `3.0TC`）と Step ID 体系の系統的な不一致（表の `1.2` が実装の `1.3` を指す等）が残存していた。あわせて §13.2 / §13.3 / §13.7 の Step ID・タイトル・依存・Fan-out・生成物を registry へ同期し、コンテナ Step は FR-WF-OUT-04 に基づき §13.11 と同じ方針で表から省いた。AAGD Step 6 / 7 は registry へ登録済みだが対応する規範要件が本書に無いため、事実を TBD-26 として記録した |
+| 2.45 | 2026-08-23 | **FR-WF-AAGD-08 / 09 新規 / TBD-26 解消**: AAGD Step 6（検索経路の適正化実測）と Step 7（Microsoft 365 / Teams 公開）の成果物契約を規範化した。両 Step は [hve/artifact_validation.py](hve/artifact_validation.py) の決定的検証、[hve/runner.py](hve/runner.py) の成果物ゲート、共有 Prompt の固定フォーマットによって実装側では既に契約が確定していた一方、規範文書側には対応する要件がなく、変更時の判断根拠を持てなかったことを根拠とする。測定条件 / 公開条件ラベル各 8 件、比較表 / 公開表の列構成と最小行数（それぞれ 2 行以上 / 1 行以上）、判定語彙 4 値（`KEEP` / `DOWNGRADE` / `INSUFFICIENT` / `NOT_MEASURED`、`PUBLISHED` / `PENDING_APPROVAL` / `NOT_SELECTED` / `FAILED`）、未実測値の記載禁止、公開メタデータへの secret 混入禁止を固定した。新しい制約は追加していない |
+| 2.46 | 2026-08-23 | **TBD-27 解消（FR-MAINT-07 適用、振る舞い変更なし）**: CLI 入口（[hve/__main__.py](hve/__main__.py)）と Orchestrator（[hve/orchestrator.py](hve/orchestrator.py)）に重複していた Workflow パラメータ既定値 7 件を [hve/workflow_registry.py](hve/workflow_registry.py) の公開定数へ集約し、両モジュールを alias import へ変えた。値が一致している間は既存テストで検出できないため、リテラルによる再宣言を AST で拒否する契約テストを追加した。ARD の既定ステップ選択で同型の乖離（CLI `["2","3","4"]` / Orchestrator fallback `["1","2","3"]`）が実際に発生していたことを根拠とする |
+| 2.47 | 2026-08-24 | **§13.13 G-DIFF 詳細化・実装**: HVE 管理 PR の実変更パスを GitHub Pull Request Files API から全ページ取得し、Workflow registry / fan-out / prefix / optional template / constrained placeholder の閉じた policy と照合する差分ゲートを規範化した。通常 PR と PR 非作成 local run は `N/A`、識別矛盾・未知 marker・不正 path/status・rename/copy旧path欠落・3,000件超・pagination件数不一致・validator/API失敗は `BLOCKED` とする。Cloud は base SHA の trusted validator だけを実行し subject head はデータ専用とする。CLI / GUI PR作成後のlabel付与、Cloud required check、auto-approve/mergeを同じ判定へ接続し、auto-approve側では `G-DIFF` completed/successの欠落、pending check、check-runs API/応答不正もfail-closedとした。利用者向けoverrideは追加していない |
 
 ---
 
@@ -918,7 +1021,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 | TBD-03 | ~~ADR-0002 / ADR-0003 のファイルパス~~ → **解消（v1.0.4）**: `docs/decisions/` 配下を走査した結果 ADR-0001（[docs/decisions/ADR-0001-agentic-retrieval-prerequisites.md](docs/decisions/ADR-0001-agentic-retrieval-prerequisites.md)）のみ存在し、ADR-0002 / ADR-0003 は未作成。本文中の ADR-0002 / ADR-0003 への参照は**計画上の仮名**として扱う（作成者未定） | `docs/decisions/` 配下を検索 |
 | TBD-04 | ~~`users-guide/*.md` 各リンクの実在~~ → **解消（v1.0.4）**: `users-guide/hve-cli-orchestrator-guide.md` / `users-guide/web-ui-guide.md` / `users-guide/km-guide.md` を含む§10 参照リンクはすべて実在を確認済み | ファイル存在確認 |
 | TBD-05 | 各 FR への個別受入基準の付与 → **保留（v1.0.4 時点でイスケジュー化推奨）**: 現状の FR-CLI-44〜51 は文章記述で、Given/When/Then 展開はテストとのトレーサビリティ表を設ける導入コストが大きい。個別 FR 改訂時に小さく始める方針としたい | 次版で Given/When/Then 形式に展開 |
-| TBD-06 | ~~Cloud Orchestrator の ARD 対応有無の確定~~ → **解消（v1.6）**: **ARD を CLI / GUI 専用と確定**した（FR-WF-ARD-01）。根拠は (1) `auto-orchestrator-dispatcher.yml` の `trigger_map` に ARD は未登録で、専用の Issue Template / state-transition / `auto-ard-reusable.yml` も存在しない、(2) Cloud 対応を追加すると 30+ ファイル規模の新規作成が必要、(3) FR-CLOUD-06 で ASDW-WEB を Cloud dispatch から **削除** しており、Cloud 対象ワークフローを増やす方向とは逆。契約テストで dispatcher に ARD が現れないことを固定した | 完了（追加作業なし） |
+| TBD-06 | ~~Cloud Orchestrator の ARD 対応有無の確定~~ → **解消（v1.6）**: **ARD を CLI / GUI 専用と確定**した（FR-WF-ARD-01）。根拠は (1) `auto-orchestrator-dispatcher.yml` の `trigger_map` に ARD は未登録で、専用の Issue Template / state-transition / `auto-ard-reusable.yml` も存在しない、(2) Cloud 対応を追加すると 30+ ファイル規模の新規作成が必要、(3) FR-CLOUD-06 で ASDW-WEB を Cloud dispatch から **削除** しており、Cloud 対象ワークフローを増やす方向とは逆。契約テストで dispatcher に ARD が現れないことを固定した。**v2.30 追記**: 根拠 (3) は失効した（FR-CLOUD-06 改訂により ASDW-WEB の Cloud 起動を再開し、FR-CLOUD-07 で AAR を Cloud dispatch 対象へ追加したため）。根拠 (1)(2) は現時点でも成立するため、ARD を CLI / GUI 専用とする FR-WF-ARD-01 の結論は維持する | 完了（追加作業なし） |
 | TBD-07 | ~~AKM 以外の reusable workflow における `check_qa_skip` 同等チェックの有無~~ → **解消（v1.0.4、v2.16 改訂）**: `auto-knowledge-management-reusable.yml` / `auto-dataflow-dev-reusable.yml` / `auto-dataflow-design-reusable.yml` / `auto-app-selection-reusable.yml` / `auto-app-documentation-reusable.yml` / `auto-app-dev-microservice-web-reusable.yml` を含む主要 reusable workflow に `check_qa_skip` ジョブが存在する。旧記述では廃止した旧独立原本質問票処理を事前 QA 常時スキップの例外としていたが、FR-QA-03 / FR-CLOUD-24 により当該例外を廃止し、専用 Cloud 経路も同じ回答保存経路へ統合する | 各 `auto-*-reusable.yml` を確認 |
 | TBD-08 | 外部 IF 要件 / データ要件 / エラー処理要件セクションの拡充 → **次版の大規模拡張 / 保留**: Resume 2 層トランザクション保護を扱った旧版では「ソース逆抽出で説明できる範囲」だけをカバーしていた。IF / データ / エラー処理を体系的に拡充するには Cloud / CLI 両方での実況検証が必要 | 次版で追加 |
 | TBD-09 | 性能 KPI / SLA の数値目標 → **運用データ蓄積後 / 保留**: NFR-PERF-01〜04 は「上限・期待値」の記述に留め、実測で裏付けるのは実運用開始後とする。`work/run/` の実行データと GitHub Actions の `metrics` API をケーススタディとするコスト見積りが必要 | 運用データ蓄積後に設定 |
@@ -933,6 +1036,9 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 | TBD-22 | `hve/artifact_validation.py`（11,365 行）の分割 → **実施しない（判断確定）**: 機能変更を伴わない大規模リファクタであり、`import` 経路の変更が [hve/runner.py](hve/runner.py) の定数 re-export（`_ASDW_AUDIT_MODE_*` / `_ASDW_DATA_DEPLOY_NETWORK_KEYS`）と契約テスト群に波及する一方、得られる価値は可読性のみ。行数肥大が実害（テスト実行時間・変更衝突）を生んでいる事実が観測されていないため、実害が観測された時点で再評価する | 実害が観測された時点で再評価 |
 | TBD-23 | `_run_asdw_data_deploy_preflight_failure_gate` 等の到達不能コード削除 → **保持する（判断確定）**: Step 1.3 は HVE-native pipeline で実行されるため現状 SDK 経路は到達不能だが、経路自体は構造上復活し得る（routing 変更・新 Agent 追加）。削除すると復活時に preflight 失敗の検出が無言で失われるため、**多層防御として保持** する。同様の理由で post-main / final の producer contract gate、`_session_security_violation*` も保持する | 保持（削除しない） |
 | TBD-24 | PR トレーサビリティブロックへの面横断影響フィールド（`Surface-Impact` / `Reuse-Check`）追加 → **初期スコープから除外（判断確定）**: FR-MAINT-04 は 8 キーを例示順で厳密に 1 組要求しており、キー追加は PR テンプレート・生成側・契約テストへ波及する破壊的変更となる。一方、面横断の重複検出自体は FR-MAINT-06 の決定論的検査で担保でき、自己申告フィールドは advisory に留まる。FR-MAINT-06 の運用後に、機械検査で捕捉できない重複が観測された時点で再評価する | FR-MAINT-06 の運用実績を確認した時点で再評価 |
+| TBD-25 | `StepRunner._build_step_permission_handler` の未使用引数（`step_id` / `custom_agent`）の扱い → **現状維持（判断確定）**: 引数を使って拒否判定を入れる方向は [hve/tests/test_runner_deploy_gate_order.py](hve/tests/test_runner_deploy_gate_order.py) `test_data_deploy_agent_permission_and_mcp_dead_path_stay_removed` が機械的に禁止している（当該テストの根拠は「native pipeline は SDK import より前に return するため到達不能であり、復活は"到達しない安全境界"を増やすだけで実効性が無い」）。残る選択肢である引数削除は可読性のみの価値で、[hve/runner.py](hve/runner.py) の呼び出し 2 箇所・5 つのテストファイルの参照・`run_step` 内での呼び出し位置を検査する契約テストへ波及する。TBD-22 と同型の判断として現状を維持する。Step 種別で権限を変える具体的な要求が発生した時点で、規範要件の新設から再評価する | 権限分岐の具体要求が発生した時点で起票 |
+| TBD-26 | ~~AAGD Step 6（検索経路の適正化実測）/ Step 7（Microsoft 365 / Teams 公開）の規範要件が本書に無い~~ → **解消（v2.45）**: 実装側は [hve/artifact_validation.py](hve/artifact_validation.py) の決定的検証、[hve/runner.py](hve/runner.py) の成果物ゲート、共有 Prompt の固定フォーマットで契約が確定していたため、その内容（ラベル 8 件・表の列構成・最小行数・判定語彙 4 値）を FR-WF-AAGD-08 / FR-WF-AAGD-09 として明文化した。新しい制約は追加していない | 完了（追加作業なし） |
+| TBD-27 | ~~CLI 入口（[hve/__main__.py](hve/__main__.py)）と Orchestrator（[hve/orchestrator.py](hve/orchestrator.py)）に同名の既定値定数が 7 件重複している~~ → **解消（v2.46）**: `_ADI_DEFAULT_DEPTH` / `_ADI_DEFAULT_TARGET_SCOPE` / `_AKM_DEFAULT_SOURCES` / `_AKM_DEFAULT_TARGET_FILES` / `_ARD_DEFAULT_ANALYSIS_PURPOSE` / `_ARD_DEFAULT_SURVEY_PERIOD_YEARS` / `_ARD_DEFAULT_TARGET_REGION` の 7 件を [hve/workflow_registry.py](hve/workflow_registry.py) の公開定数へ集約し、両モジュールは alias import で参照する（FR-MAINT-07）。値が一致しているうちは通常のテストで検出できないため、再宣言そのものを禁じる契約テスト（[hve/tests/test_workflow_registry.py](hve/tests/test_workflow_registry.py) `TestLaunchSurfacesShareParameterDefaults`）を追加した。flat import 時の `getattr` fallback は registry から値を引くため許容し、リテラルを直接束縛する代入だけを拒否する | 完了（追加作業なし） |
 
 ---
 
@@ -942,18 +1048,18 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 ### 13.0 共通約束
 
-- **FR-WF-OUT-01**: 各 Step は `output_paths` で宣言した全ファイルを実行完了時点で存在させなければならない。1 件でも欠落した場合、当該 Step は `failed` とする（Self-Improve target scope 解決・Wave 入力チェックの前提）。本ゲートの適用範囲は CLI / GUI Orchestrator 配下モード（`OrchestratorContext` が注入された実行）に限る。単独実行モード（`ctx` 未注入）と fleet mode（`split_fork_enabled=true`）ではサブタスクが別スコープで成果物を生成するため、親 Step の完了条件として本ゲートを適用しない。欠落報告には欠落したパスのみを列挙し、存在する宣言パスを含めてはならない（[hve/runner.py](hve/runner.py) `_check_output_paths_gate`）。
+- **FR-WF-OUT-01**: 各 Step は `output_paths` で宣言した全ファイルを実行完了時点で存在させなければならない。`output_paths` は実行時に常に必要な成果物だけを宣言し、条件付き・任意の成果物を含めてはならない。1 件でも欠落した場合、当該 Step は `failed` とする（Self-Improve target scope 解決・Wave 入力チェックの前提）。本ゲートの適用範囲は CLI / GUI Orchestrator 配下モード（`OrchestratorContext` が注入された実行）に限る。単独実行モード（`ctx` 未注入）と fleet mode（`split_fork_enabled=true`）ではサブタスクが別スコープで成果物を生成するため、親 Step の完了条件として本ゲートを適用しない。欠落報告には欠落したパスのみを列挙し、存在する宣言パスを含めてはならない（[hve/runner.py](hve/runner.py) `_check_output_paths_gate`）。
 - **FR-WF-OUT-02**: `output_paths_template` は fan-out 子ステップに対して、`{key}` および **fan-out parser 別の ID 別名プレースホルダ**（`app_catalog` / `dataflow_catalog` → `{appId}`、`screen_catalog` → `{screenId}`、`service_catalog` → `{serviceId}`、`agent_catalog` → `{agentId}`、`business_candidate` → `{businessId}`、`use_case_skeleton` → `{useCaseId}`）を fan-out キーで置換した実パスを生成する。別名の対応表は [hve/fanout_expander.py](hve/fanout_expander.py) `_KEY_ALIAS_PLACEHOLDERS_BY_PARSER` を単一情報源とし、「fan-out キーそのものを指す名前」以外を登録してはならない（`{screenNameSlug}` 等の catalog parser から復元できない属性を置換してはならない）。確定ファイルパスへ解決できないエントリの扱いは FR-WF-OUT-06 に従う。fan-out キーが空集合の場合、当該 Step はスキップではなく `failed`（fan-out 失敗）とする。
 - **FR-WF-OUT-03**: `required_input_paths` に列挙された全ファイルが存在しない場合の挙動は `HVE_REQUIRE_INPUT_ARTIFACTS` に従う（`true`: 中断 / 既定 `false`: 警告継続、§3.3 FR-DAG-06）。
 - **FR-WF-OUT-04**: 表中「生成ファイル」列の `{key}` は fan-out キーを表す。Container Step（`is_container=true`）は生成ファイルを持たず、Sub-Issue 束ね用途に限定する。
-- **FR-WF-OUT-05**: [hve/workflow_registry.py](hve/workflow_registry.py) の StepDef 宣言（`output_paths` + `output_paths_template` / `required_input_paths`）と `.github/io-contracts/<Agent>--<workflow>--<stepId>.yaml` の宣言は一致しなければならない。`.github/scripts/validate-io-contract.py`（引数なし）の registry mismatch を 0 件に保ち、[.github/workflows/validate-io-contract.yml](.github/workflows/validate-io-contract.yml) は当該チェックを hard fail として実行する。registry mismatch は `.github/io-contract-exceptions.yaml` では抑止できない（`check_registry_mismatch()` は例外ファイルを参照しない）ため、解消は StepDef 側または io-contract 側の修正で行うこと。
+- **FR-WF-OUT-05**: [hve/workflow_registry.py](hve/workflow_registry.py) の StepDef 宣言（`output_paths` + `output_paths_template` / `required_input_paths`）と `.github/io-contracts/<Agent>--<workflow>--<stepId>.yaml` の宣言は一致しなければならない。同一 Step でも閾値等の実行時条件により生成有無そのものが分岐する条件付き成果物（FR-WF-DM-01 の sidecar 等）は、非 fan-out Step の `output_paths_template` と io-contract の双方へ同じパスを宣言し、io-contract 側では `required: false` としなければならない。既存成果物を更新し得る当該条件付き成果物は `mode: upsert` とし、`mode: create` で再実行を阻害してはならない。入力ごとに出力パスだけが動的に変わる成果物（ADOC の `{relative-path}` 等）は本追加規定の対象外とし、既存の `required` / `mode` 契約を変更しない。`.github/scripts/validate-io-contract.py`（引数なし）の registry mismatch を 0 件に保ち、[.github/workflows/validate-io-contract.yml](.github/workflows/validate-io-contract.yml) は当該チェックを hard fail として実行する。registry mismatch は `.github/io-contract-exceptions.yaml` では抑止できない（`check_registry_mismatch()` は例外ファイルを参照しない）ため、解消は StepDef 側または io-contract 側の修正で行うこと。
 - **FR-WF-OUT-06**: `output_paths_template` の各エントリのうち、次のいずれかに該当するものは **確定ファイルパスへ解決できない**ものとして fan-out 子の `output_paths` に載せてはならない（FR-WF-OUT-01 のゲートを誤 fail させないための fail-closed 規則、[hve/fanout_expander.py](hve/fanout_expander.py) `_resolve_output_path_template`）。載せない場合も、`output_paths_template` の宣言自体は io-contract との契約整合（FR-WF-OUT-05）のために保持する。
   1. キー別名プレースホルダを 1 つも含まない（全 fan-out 子で同一パスになり per-key 成果物ではない）
   2. 置換後もプレースホルダ（`{...}` / `<...>`）が残る
   3. glob（`*` / `?`）を含む
   4. ディレクトリ参照（末尾 `/`）
   5. 同一 `output_paths_template` 内で宣言されたディレクトリ成果物の配下にある（配下のファイル構成は Agent の裁量であり、個別ファイル単位でゲートすると同一成果物でも構成差で誤 fail する）
-- **FR-WF-OUT-07**: fan-out 対象でない StepDef の `output_paths_template` は展開されないため、`_check_output_paths_gate` および `collect_workflow_output_paths` の対象にならない。動的パス（`docs-generated/files/{relative-path}.md` 等）や条件付き生成物を io-contract と整合させるための**契約宣言専用の宣言面**として用いてよい。実行時ゲートの対象としたい確定成果物は `output_paths` に宣言すること。
+- **FR-WF-OUT-07**: fan-out 対象でない StepDef の `output_paths_template` は展開されないため、`_check_output_paths_gate` および `collect_workflow_output_paths` の対象にならない。動的パス（`docs-generated/files/{relative-path}.md` 等）や条件付き生成物を io-contract と整合させるための**契約宣言専用の宣言面**として用いてよい。この面に宣言した条件付き成果物は実行時 G-OUT と Self-Improve target scope の対象外であり、生成条件・親成果物からの参照・非生成時の stale cleanup は個別の成果物契約と専用テストで担保する。実行時ゲートの対象としたい確定成果物は `output_paths` に宣言すること。
 - **FR-WF-OUT-08**: 名称スラッグ（`{screenNameSlug}` / `{serviceNameSlug}` / `{jobNameSlug}`）は **日本語カタログ名の英訳** であり（`docs/catalog/service-catalog.md` の `SVC-01 | 会員・同意管理サービス` に対し実在ファイルは `docs/services/SVC-01-member-consent-service-description.md`）、訳語は Agent が生成するため [hve/catalog_parsers.py](hve/catalog_parsers.py) を拡張しても決定的には復元できない。したがって名称スラッグを `_KEY_ALIAS_PLACEHOLDERS_BY_PARSER` へ登録してはならず、これを含むエントリは FR-WF-OUT-06 規則 2 により恒久的に drop される。
 - **FR-WF-OUT-09**: FR-WF-OUT-06 の結果、fan-out する Step の `output_paths_template` が**どの fan-out キーでも 1 件も解決されない**場合、当該 Step の実行時ゲート（FR-WF-OUT-01）は無言で空になる。この状態は誤 fail を起こさない代わりに検証の消失を招くため、対象 Step を明示 allowlist として固定し、allowlist 外の Step がゲート空になった場合は CI で検出しなければならない（[hve/tests/test_output_paths_template_resolvability.py](hve/tests/test_output_paths_template_resolvability.py) `_EMPTY_GATE_ALLOWLIST`）。allowlist の各項目には空になる理由を記載すること。FR-WF-OUT-10 の prefix ゲートで検証を回復した Step は allowlist から除くこと。
 - **FR-WF-OUT-10**: FR-WF-OUT-06 で drop されたエントリのうち、**fan-out キーを実際に含む**ものは、キー出現位置の直後までを接頭辞とする **prefix 存在ゲート**へ降格して検証を回復する（[hve/fanout_expander.py](hve/fanout_expander.py) `resolve_output_path_prefix_gates`、[hve/runner.py](hve/runner.py) `_check_output_paths_gate`）。
@@ -961,31 +1067,45 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
   - **根拠**: 名称スラッグは FR-WF-OUT-08 のとおり決定的に復元できないうえ、単一 run（`ed3931b8`）の生成物が `docs/services/` だけで `{serviceId}-{serviceNameSlug}-description.md` / `{serviceId}-description.md` / `{serviceId}.md` の 3 形式に分岐しており、完全パス一致でも glob 一致でも誤 fail する。一方で全生成物が **ID 接頭辞で始まる**点は一貫しているため、接頭辞一致だけが誤 fail なしに「当該キーの成果物が存在するか」を検証できる。
   - キー別名を 1 つも含まないエントリ（全 fan-out 子で同一の固定パス）と、キーがそもそも代入されないエントリ（ADFDV の `{jobId}` 等、FR-WF-ADFDV-01）は prefix 化の対象外とし、FR-WF-OUT-09 の allowlist に残す。
   - ID 体系は `SVC-NN` / `APP-NNN-SNNN` / `DNN` のように桁数固定であり、接頭辞が別キーの成果物へ誤って一致しないこと。
+- **FR-WF-OUT-11**: `.github/io-contracts/*.yaml` の `inputs[]` のうち `kind: static` であり、かつ変数記法（`{...}` / `<...>`）・glob（`*` / `?`）・ディレクトリ参照（末尾 `/`）のいずれも含まないパスは、リポジトリに実在しなければならない。[.github/scripts/validate-io-contract.py](.github/scripts/validate-io-contract.py)（引数なし）が本検査を行い、違反を integrity error として報告する。除外は [.github/io-contract-exceptions.yaml](.github/io-contract-exceptions.yaml) の `static_paths` に列挙されたパスだけとし、本検査専用の除外機構を新設してはならない（FR-MAINT-07）。FR-WF-OUT-05 の registry mismatch 検査は `required: true` かつ `kind: agent_artifact` の入力しか照合せず、`kind: static` の実在はどの検査も対象にしていなかった。その結果、実体と一致しない static 宣言が 8 件残存していた（`knowledge/D05` と `knowledge/D09` の区切り文字ゆれ 6 件、`knowledge/D15` のファイル名断片 1 件、未生成の生成対象ファイル 1 件）ことを根拠とする。
+
+- **FR-WF-DM-01**: AAS Step 3.1 と ADA Step 4.1 が共有する `Arch-DataModeling` の主成果物は `docs/catalog/data-model.md` とし、分割の有無にかかわらず `output_paths` および io-contract で `required: true` のまま維持する。単一ファイル版が 50,000 文字を超える見込みの場合だけ、次の canonical sidecar 3 件を**全て**作成または更新し、親を索引/統合版として各 sidecar へのリンクと全体要約を保持する。親は分割時も固定見出し `1`〜`6` を維持し、見出し `3`〜`5` には主キー・主要制約・代表インデックス・整合性判断・主要イベント・図の要旨を含む統合ビューを残して、下流 Step が親単独で必要情報を取得できなければならない。sidecar は詳細を補足する任意成果物とし、下流の必須入力へ追加しない。各 sidecar は親への戻りリンクを持つこと。
+  - `docs/catalog/data-model-service-stores.md` — Service Data Stores
+  - `docs/catalog/data-model-consistency-events.md` — Consistency & Events
+  - `docs/catalog/data-model-diagrams.md` — Diagrams
+  canonical 3 件以外の章別・APP-ID別 Data Model sidecar を生成してはならない。registry では AAS / ADA の非 fan-out Step 4.1 の `output_paths_template` へ3件を宣言し、io-contract では各々を `required: false`, `mode: upsert` とする（FR-WF-OUT-05 / 07）。分割不要の再実行では、親から sidecar リンクを除去して固定章を親へ統合し、canonical sidecar 3 件の既存ファイルを削除して stale 成果物を残してはならない。分割条件・相互リンク・stale cleanup は共有 Prompt、AAS / ADA Body template、および専用契約テストで同一に保つ。
 
 ### 13.1 AAS — Architecture Design
 
-- **目的**: ユースケースカタログから、アプリ群／ドメイン／サービス／データ／テスト戦略までの上流アーキテクチャ資産を一式生成する。AAD-WEB / ABD / AAG の上流に位置する。
-- **必須入力（ルート）**: `docs/catalog/use-case-catalog.md`
+- **目的**: ARD が確定したアプリ群と APP 別要求定義書から、アーキテクチャ推薦／ドメイン／サービス／データ／テスト戦略までの上流アーキテクチャ資産を生成する。AAD-WEB / ADFD / AAG の上流に位置する。
+- **必須入力（ルート）**: `docs/catalog/app-catalog.md`、対象 APP 全件の `docs/architectural-requirements-app-NNN.md`
 - **Step DAG と生成ファイル**:
 
 | Step | タイトル | Custom Agent | 依存 | 生成ファイル |
 |---|---|---|---|---|
-| 1 | アプリケーションリスト作成 | Arch-ApplicationAnalytics | — | `docs/catalog/app-catalog.md` |
-| 2 | ソフトウェアアーキテクチャ推薦（APP 毎 fan-out） | Arch-ArchitectureCandidateAnalyzer | 1 | `docs/catalog/app-arch-catalog.md`（fan-out 結果統合） |
-| 3.1 | ドメイン分析 | Arch-Microservice-DomainAnalytics | 2 | `docs/catalog/domain-analytics.md` |
-| 3.2 | サービス一覧抽出 | Arch-Microservice-ServiceIdentify | 3.1 | `docs/catalog/service-catalog.md` |
-| 4.1 | データモデル設計 | Arch-DataModeling | 3.2 | `docs/catalog/data-model.md` |
-| 4.2 | サンプルデータ生成 | Arch-DataModeling | 4.1 | `src/data/sample-data.json` |
-| 5 | データカタログ | Arch-DataCatalog | 4.1 | `docs/catalog/data-catalog.md` |
-| 6 | サービスカタログ統合 | Arch-Microservice-ServiceCatalog | 5 | `docs/catalog/service-catalog-matrix.md` |
-| 7 | テスト戦略書 | Arch-TDD-TestStrategy | 6 | `docs/catalog/test-strategy.md` |
-| 8 | ペルソナカタログ | Arch-PersonaCatalog | 7 | `docs/catalog/persona-catalog.md` |
-| 9 | ペルソナ別共通画面カタログ | Arch-UI-PersonaScreenList | 8 | `docs/catalog/persona-screen-catalog.md` |
+| 1 | ソフトウェアアーキテクチャの推薦（APP 毎 fan-out） | Arch-ArchitectureCandidateAnalyzer | — | `docs/catalog/app-arch-catalog.md`（fan-out 結果統合） |
+| 2.1 | ドメイン分析 | Arch-Microservice-DomainAnalytics | 1 | `docs/catalog/domain-analytics.md` |
+| 2.2 | サービス一覧抽出 | Arch-Microservice-ServiceIdentify | 2.1 | `docs/catalog/service-catalog.md` |
+| 3.1 | データモデル設計 | Arch-DataModeling | 2.2 | `docs/catalog/data-model.md`（常時必須）＋ FR-WF-DM-01 の条件付き sidecar 3件 |
+| 3.2 | サンプルデータ生成 | Arch-DataModeling | 3.1 | `src/data/sample-data.json` |
+| 4 | データカタログ作成 | Arch-DataCatalog | 3.1 | `docs/catalog/data-catalog.md` |
+| 5 | サービスカタログ | Arch-Microservice-ServiceCatalog | 4 | `docs/catalog/service-catalog-matrix.md` |
+| 6 | テスト戦略書 | Arch-TDD-TestStrategy | 5 | `docs/catalog/test-strategy.md` |
+| 7 | ペルソナカタログ | Arch-PersonaCatalog | 6 | `docs/catalog/persona-catalog.md` |
+| 8 | ペルソナ別共通画面カタログ | Arch-UI-PersonaScreenList | 7 | `docs/catalog/persona-screen-catalog.md` |
 
-- **FR-WF-AAS-01**: AAS 末尾 2 Step の Step ID は成果物依存と同じ昇順に採番しなければならない。Step 8 を `Arch-PersonaCatalog`（`depends_on=["7"]`、`docs/catalog/persona-catalog.md` を生成）、Step 9 を `Arch-UI-PersonaScreenList`（`depends_on=["8"]`、`docs/catalog/persona-screen-catalog.md` を生成）とする。Step 9 は Step 8 の出力を `required_input_paths` に持つため、依存と逆順の採番（Step 9 → Step 8）へ戻してはならない。
+- **FR-WF-AAS-01**: AAS 末尾 2 Step の Step ID は成果物依存と同じ昇順に採番しなければならない。Step 7 を `Arch-PersonaCatalog`（`depends_on=["6"]`、`docs/catalog/persona-catalog.md` を生成）、Step 8 を `Arch-UI-PersonaScreenList`（`depends_on=["7"]`、`docs/catalog/persona-screen-catalog.md` を生成）とする。Step 8 は Step 7 の出力を `required_input_paths` に持つため、依存と逆順の採番（Step 8 → Step 7）へ戻してはならない。
   - 本契約は [hve/workflow_registry.py](hve/workflow_registry.py) を正本とし、[.github/scripts/bash/lib/workflow-registry.sh](.github/scripts/bash/lib/workflow-registry.sh)・[.github/scripts/powershell/lib/workflow-registry.ps1](.github/scripts/powershell/lib/workflow-registry.ps1)・[.github/workflows/auto-app-selection-reusable.yml](.github/workflows/auto-app-selection-reusable.yml)・[.github/ISSUE_TEMPLATE/app-architecture-design.yml](.github/ISSUE_TEMPLATE/app-architecture-design.yml)・`.github/prompts/`・`.github/scripts/templates/aas/`・`.github/io-contracts/` が同一の意味と順序を宣言すること。
-  - Cloud のスキップ伝播は Step 8 のスキップが Step 9 を強制スキップする方向のみとする（逆方向は Step 9 の入力欠落を招くため禁止）。
+  - Cloud のスキップ伝播は Step 7 のスキップが Step 8 を強制スキップする方向のみとする（逆方向は Step 8 の入力欠落を招くため禁止）。
   - Step ID は SDK セッション ID（`run_id × step_id`）の構成要素であり、同じ ID の意味が入れ替わる。透過的な旧 ID 変換は実装せず、再採番をまたぐ実行中 run は完了させるか、新しい run-id / Issue で再起動すること。
+
+- **FR-WF-AAS-02**: AAS の旧 Step 1（`Arch-ApplicationAnalytics`）と `docs/catalog/app-catalog.md` の所有権は ARD Step 4.1 へ移管済みである。AAS Step 1（`Arch-ArchitectureCandidateAnalyzer`）は APP 単位に fan-out せず 1 Agent で全 APP 横断の `docs/catalog/app-arch-catalog.md` を生成する。`docs/catalog/app-catalog.md` と、カタログに列挙された全 APP の `docs/architectural-requirements-app-NNN.md` を必須入力とし、1 件でも欠落・構造不正・未解決 Blocker がある場合はデフォルト推薦へ降格せず対象 APP を fail-closed で停止する。既存の「入力ファイルなしなら Web/データフローをデフォルト推薦する」経路を残してはならない。
+
+- **FR-WF-AAS-03**: AAS の Step ID は本節時点で、旧 Step "2"（`Arch-ArchitectureCandidateAnalyzer`、root）を新 Step "1" へ昇格させ、以降の全 Step ID を 1 つ繰り上げる例外的な再採番を実施した（旧 3.1→2.1 / 3.2→2.2 / 4.1→3.1 / 4.2→3.2 / 5→4 / 6→5 / 7→6 / 8→7 / 9→8）。旧 Step 1（`Arch-ApplicationAnalytics`）が ARD Step 4.1 へ移管された結果、AAS の Step ID が "2" から始まる歯抜け状態になっていたことの解消を目的とする一度限りの措置であり、以後の新規 Step 追加は既存 ID を維持したまま追加する原則（既存ステップの再採番禁止）に復帰する。本措置は FR-WF-AAS-01 の「末尾 2 Step の依存順採番」とは独立しており、影響は AAS 全体（`hve/workflow_registry.py` 正本、bash/PowerShell registry ミラー、Cloud workflow、Issue Form、Prompt、Template、I/O contract、`users-guide/`）に及ぶ。旧 ID を参照する run-id / Issue は、FR-WF-AAS-01 と同様に新しい run-id / Issue で再起動すること。
+
+#### 13.1.1 ADA — Agent Data Architecture の Data Model共有契約
+
+ADA は画面を持たないデータ中心の AI Agent 向けに AAS と並走し、Step 4.1 で同じ `Arch-DataModeling` と同じ主成果物 `docs/catalog/data-model.md` を使用する。ADA Step 4.1 の親成果物と条件付き sidecar 3件にも FR-WF-DM-01 を同一に適用し、AAS と異なるファイル名・分割閾値・cleanup規則を持ってはならない。
 
 ### 13.2 AAD-WEB — Web App Design
 
@@ -995,40 +1115,47 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 | Step | タイトル | Custom Agent | 依存 | Fan-out | 生成ファイル |
 |---|---|---|---|---|---|
-| 1 | 画面一覧と遷移図 | Arch-UI-List | — | — | `docs/catalog/screen-catalog.md` |
+| 1 | 画面一覧と遷移図 | Arch-UI-List | — | `app_catalog` | `docs/catalog/screen-catalog-{key}.md` |
 | 2.1 | 画面定義書 | Arch-UI-Detail | 1 | `screen_catalog` | `docs/screen/{screenId}-{screenNameSlug}-description.md` |
 | 2.2 | マイクロサービス定義書 | Arch-Microservice-ServiceDetail | 1 | `service_catalog` | `docs/services/{serviceId}-{serviceNameSlug}-description.md` |
-| 2.3 | TDD テスト仕様書 | Arch-TDD-TestSpec | 2.1, 2.2 | `service_catalog` | `docs/test-specs/{serviceId}-test-spec.md`（テンプレ上 `docs/test-specs/{screenId}-test-spec.md` も併記の表記揺れあり） |
-| 3 | 画面 ↔ サービス整合性レビュー | QA-DocConsistency | 2.1, 2.2, 2.3 | — | `docs/catalog/screen-service-consistency-report.md` |
+| 2.3 | サービス別 TDD テスト仕様書 | Arch-TDD-TestSpec | 2.2 | `service_catalog` | `docs/test-specs/{serviceId}-test-spec.md` |
+| 2.4 | 画面別 TDD テスト仕様書 | Arch-TDD-TestSpec | 2.1 | `screen_catalog` | `docs/test-specs/{screenId}-test-spec.md` |
+| 2.5 | 追加 Azure サービス選定 | Dev-Microservice-Azure-AddServiceDesign | 2.2 | — | `docs/azure/azure-services-additional.md` |
+| 2.6 | Agentic Retrieval 機能要件詳細 | Arch-AgenticRetrieval-Detail | 2.2 | `service_catalog` | `docs/services/{serviceId}-agentic-retrieval-spec.md` |
+| 3 | 画面 ↔ サービス整合性レビュー | QA-DocConsistency | 2.1, 2.2, 2.3, 2.4 | — | `docs/catalog/screen-service-consistency-report.md` |
 
-> 注: 上記パスはテンプレート（`.github/scripts/templates/aad-web/step-*.md` の「## 出力」）の実体に基づく。Step 1 / 2.1 / 2.2 / 2.3 / 2.4 は `hve/workflow_registry.py` の `output_paths_template` へ登録済み（**TBD-11 解消**、§13.0 FR-WF-OUT-02 / 06）。
+> 注: 上記の Step ID・タイトル・依存・Fan-out・生成ファイルは `hve/workflow_registry.py` の StepDef を一次根拠とし、テンプレート（`.github/scripts/templates/aad-web/step-*.md` の「## 出力」）とも整合する。Step 1 / 2.1 / 2.2 / 2.3 / 2.4 / 2.6 は `output_paths_template`、Step 2.5 / 3 は `output_paths` へ登録済み（**TBD-11 解消**、§13.0 FR-WF-OUT-02 / 06）。Step 2.6 は `enable_agentic_retrieval` が `no` のとき `disabled_when_config` により実行対象から外れる。
 
 ### 13.3 ASDW-WEB — Web App Dev & Deploy
 
 - **目的**: AAD-WEB を入力に、Azure データ層／コンピュート／追加サービス／UI を TDD（RED → GREEN）でデプロイし、WAF レビューまで完了させる。
-- **Step DAG（抜粋）と生成物カテゴリ**:
+- **Step DAG（コンテナ Step を除く）と生成物カテゴリ**:
 
 | Step | タイトル | Fan-out | 生成カテゴリ |
 |---|---|---|---|
-| 1 / 2 / 3 / 4 | 各種コンテナ | — | （Sub-Issue 束ね、ファイル非生成） |
 | 1.1 | Azure データストア選定 | — | `docs/azure/azure-services-data.md` |
-| 1.2 | Azure データサービス Deploy | — | `src/infra/azure/create-azure-data-resources-prep.sh`、`src/infra/azure/create-azure-data-resources.sh`、`src/data/azure/data-registration-script.sh`、`docs/azure/service-catalog.md` 更新 |
-| 2.1 | Azure コンピュート選定 | — | `docs/azure/azure-services-compute.md` |
-| 2.2 | 追加 Azure サービス選定 | — | `docs/azure/azure-services-additional.md` |
-| 2.3 | 追加 Azure サービス Deploy | — | `src/infra/azure/create-azure-additional-resources-prep.sh`、`src/infra/azure/create-azure-additional-resources/create.sh`、`docs/catalog/service-catalog-matrix.md` 更新 |
-| 2.3T | サービステスト仕様書（TDD RED） | `service_catalog` | `docs/test-specs/{serviceId}-test-spec.md` |
-| 2.3TC | サービステストコード生成（TDD RED） | `service_catalog` | `src/test/api/{サービス名}.Tests/**` |
-| 2.4 | サービス実装（TDD GREEN） | `service_catalog` | `src/api/{サービスID}-{サービス名}/**` |
-| 2.5 | Azure Compute Deploy | — | `src/infra/azure/create-azure-api-resources-prep.sh`、`.github/workflows/*.yml`（CI/CD）、`docs/catalog/service-catalog-matrix.md` 更新、`src/test/{サービスID}-{サービス名}/**`、デプロイ TDD 用 `docs/test-specs/deploy-step2-compute-test-spec.md`、`src/infra/azure/verify-api-resources.sh` |
-| 3.0T | UI テスト仕様書（TDD RED） | `screen_catalog` | `docs/test-specs/{screenId}-test-spec.md` |
-| 3.0TC | UI テストコード生成（TDD RED） | `screen_catalog` | `src/test/ui/**`（Jest + jsdom） |
-| 3.1 | UI 実装（TDD GREEN） | `screen_catalog` | `src/app/**` |
-| 3.2 | Web アプリ Deploy（Azure SWA） | — | `src/infra/azure/create-azure-webui-resources-prep.sh`、`src/infra/azure/create-azure-webui-resources.sh`、`.github/workflows/*.yml`（SWA）、`docs/catalog/service-catalog-matrix.md` 更新、デプロイ TDD 用 `docs/test-specs/deploy-step3-swa-test-spec.md`、`src/infra/azure/verify-webui-resources.sh` |
-| 3.3 | UI E2E テスト（Playwright） | — | Playwright 実行ログ、失敗時 HTML レポート / trace artifact（永続ファイル非生成） |
-| 4.1 | WAF アーキテクチャレビュー | — | `docs/azure/azure-architecture-review-report.md` |
-| 4.2 | 整合性チェック | — | `docs/azure/dependency-review-report.md` |
+| 1.2 | データストア検証テスト生成（TDD RED） | — | `src/infra/azure/verify-data-resources.sh` |
+| 1.3 | Azure データサービス Deploy（TDD GREEN） | — | `src/infra/azure/create-azure-data-resources-prep.sh`、`src/infra/azure/create-azure-data-resources.sh`、`src/data/azure/data-registration-script.sh`、`docs/azure/service-catalog.md` 更新 |
+| 2.1 | 追加 Azure サービス選定 | — | `docs/azure/azure-services-additional.md` |
+| 2.2 | 追加 Azure サービス Deploy | — | `src/infra/azure/create-azure-additional-resources-prep.sh`、`src/infra/azure/create-azure-additional-resources/create.sh` |
+| 2.3 | 追加サービスのテストコード生成（TDD RED） | — | `src/test/integration/add-service/` |
+| 2.4 | 追加サービスのテスト実施（TDD GREEN） | — | `src/test/integration/add-service/` |
+| 2.5 | Agentic Retrieval Azure 実装設計 | `service_catalog` | `docs/azure/agentic-retrieval/{serviceId}-design.md` |
+| 2.6 | Agentic Retrieval Deploy | — | `src/infra/azure/create-azure-agentic-retrieval/prep.sh`、`src/infra/azure/create-azure-agentic-retrieval/create.sh` |
+| 3.1 | Azure コンピュート選定 | — | `docs/azure/azure-services-compute.md` |
+| 3.2 | サービス テストコード生成（TDD RED） | `service_catalog` | `src/test/api/{serviceId}.Tests/` |
+| 3.3 | サービスコード実装（TDD GREEN） | `service_catalog` | `src/api/{serviceId}-{serviceNameSlug}/` |
+| 3.4 | Azure Compute Deploy | — | `src/infra/azure/create-azure-api-resources-prep.sh`、`src/infra/azure/create-azure-api-resources.sh`、`src/infra/azure/verify-azure-resources.sh`、`.github/workflows/*`（CI/CD）、`docs/catalog/service-catalog-matrix.md` 更新 |
+| 3.5 | Deploy 後 再テスト | — | `src/test/post-deploy/` |
+| 4.1 | UI テストコード生成（TDD RED） | `screen_catalog` | `src/test/ui/{screenId}/` |
+| 4.2 | UI 実装（TDD GREEN） | `screen_catalog` | `src/app/` |
+| 4.3 | Web アプリ Deploy（Azure SWA） | — | `src/infra/azure/create-azure-webui-resources.sh`、`src/app/staticwebapp.config.json`、`src/infra/azure/verify-webui-resources.sh`、`docs/catalog/service-catalog-matrix.md` 更新 |
+| 4.4 | UI E2E テスト（Playwright） | — | `src/test/e2e/playwright/` |
+| 5.1 | WAF アーキテクチャレビュー | — | `docs/azure/azure-architecture-review-report.md` |
+| 5.2 | 整合性チェック | — | `docs/azure/dependency-review-report.md` |
+| 5.3 | 要件適合実測 | — | `docs/azure/requirements-conformance-report.md`（§13.14 FR-WF-CONF-01） |
 
-> 注: 上記パスはテンプレート（`.github/scripts/templates/asdw-web/step-*.md` の「## 出力」）の実体に基づく。ASDW-WEB の全非コンテナ Step は `hve/workflow_registry.py` へ登録済み（**TBD-12 解消**）。実行時ゲートの対象は `output_paths` のみで、ディレクトリ参照・glob・未解決スラッグを含む成果物は `output_paths_template` で契約宣言のみ行う（§13.0 FR-WF-OUT-06 / 07）。
+> 注: 上記の Step ID・タイトル・Fan-out・生成物は `hve/workflow_registry.py` の StepDef を一次根拠とし、テンプレート（`.github/scripts/templates/asdw-web/step-*.md` の「## 出力」）とも整合する。コンテナ Step `1` / `2` / `3` / `4` / `5` は §13.0 FR-WF-OUT-04 のとおり生成ファイルを持たない Sub-Issue 束ね用途のため本表から省く。ASDW-WEB の全非コンテナ Step は `hve/workflow_registry.py` へ登録済み（**TBD-12 解消**）。実行時ゲートの対象は `output_paths` のみで、ディレクトリ参照・glob・未解決スラッグを含む成果物は `output_paths_template` で契約宣言のみ行う（§13.0 FR-WF-OUT-06 / 07）。Step `2.5` / `2.6` は `enable_agentic_retrieval` が `no` のとき `disabled_when_config` により実行対象から外れる。
 
 #### 13.3.1 Step 1.3（Azure データサービス Deploy）のパラメータ契約
 
@@ -1089,6 +1216,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 | 3 | Azure Functions/コンテナ Deploy | Dev-Dataflow-FunctionsDeploy | 2.2 | — | `.github/workflows/deploy-batch-functions.yml`、`src/infra/azure/dataflow/README.md` |
 | 4.1 | WAF レビュー | QA-AzureArchitectureReview | 3 | — | `docs/azure/waf-review.md` |
 | 4.2 | 整合性チェック | QA-AzureDependencyReview | 3 | — | `docs/azure/dependency-review.md` |
+| 4.3 | 要件適合実測 | QA-RequirementsConformanceEval | 4.1, 4.2 | — | `docs/azure/dataflow-requirements-conformance-report.md` |
 
 - **FR-WF-ADFDV-01**: Step 2.1 / 2.2 の fan-out parser は `dataflow_catalog` であり、上流の ADFD（§13.4）が生成する `docs/dataflow/dataflow-app-catalog.md` をキー元とする。
 - **FR-WF-ADFDV-02**: `output_paths_template` の `{jobNameSlug}` は、[hve/catalog_parsers.py](hve/catalog_parsers.py) が ID のみを返すため現状解決できず、FR-WF-OUT-06 の fail-closed drop 規則により実行時ゲートから除外される。契約宣言としては保持する。
@@ -1135,12 +1263,17 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 | Step | タイトル | 依存 | Fan-out | 生成カテゴリ |
 |---|---|---|---|---|
-| 1 | AI Agent 構成設計 | — | — | `docs/azure/azure-services-agent.md` 等 |
-| 2.1 | テスト仕様書（TDD RED） | 1 | `agent_catalog` | `docs/test-specs/{key}-test-spec.md` |
-| 2.2 | テストコード生成（TDD RED） | 2.1 | `agent_catalog` | `src/test/agent/{key}.Tests/**` |
-| 2.3 | 実装（TDD GREEN） | 2.2 | `agent_catalog` | `src/agent/{key}/**` |
-| 3 | AI Agent Deploy | 2.3 | `agent_catalog` | `.github/workflows/*.yml`、Foundry Agent リソース実体 |
+| 1 | AI Agent 構成設計 | — | — | `docs/agent/agent-application-definition.md` |
+| 2.1 | AI Agent テスト仕様書（TDD RED） | 1 | `agent_catalog` | `docs/test-specs/{key}-test-spec.md` |
+| 2.2 | AI Agent テストコード生成（TDD RED） | 2.1 | `agent_catalog` | `src/test/agent/{key}.Tests/` |
+| 2.3 | AI Agent 実装（TDD GREEN） | 2.2 | `agent_catalog` | `src/agent/{key}/`、`src/agent/{key}/plugin.json`（FR-WF-AAGD-06） |
+| 3 | AI Agent Deploy | 2.3 | `agent_catalog` | `.github/workflows/deploy-agent-{key}.yml`、`src/infra/azure/create-azure-agent-resources.sh`、`src/infra/azure/verify-agent-resources.sh` |
 | 4 | tool search 実測評価 | 3 | `agent_catalog` | `docs/agent/tool-search-eval/{key}-eval-report.md` |
+| 5 | 要件適合実測 | 3 | — | `docs/agent/requirements-conformance-report.md` |
+| 6 | 検索経路の適正化実測 | 3 | — | `docs/agent/route-rightsizing-report.md` |
+| 7 | Microsoft 365 / Teams 公開 | 3 | — | `docs/agent/m365-publish-report.md` |
+
+> 注: 上記の Step ID・タイトル・依存・Fan-out・生成物は `hve/workflow_registry.py` の StepDef を一次根拠とする。Step 4 は `enable_tool_search` が `no` のとき `disabled_when_config` により実行対象から外れる（FR-WF-AAGD-03）。Step 5 の要件は §13.14 FR-WF-CONF-01〜06、Step 6 は FR-WF-AAGD-08、Step 7 は FR-WF-AAGD-09 が規定する。
 
 #### 生成 AI Agent の Tool Search 実装・デプロイ・評価ゲート（FR-WF-AAGD）
 
@@ -1164,6 +1297,21 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
   - validator は、仕様 §5.2 が許容する 10 種（`$schema` / `name` / `version` / `description` / `author` / `homepage` / `repository` / `license` / `keywords` / `extensions`）以外の top-level フィールドが存在する場合を FAIL とする。HVE 固有のランタイム設定を top-level へ追加してはならず、従来どおり `agent-config.json` または `appsettings.json` に置いて二重管理を作らない。
   - `mcp.json` は生成しない。仕様の `mcp.json` はプラグインが接続する MCP server の設定であるのに対し、AG-CAP-05 は生成 Agent を MCP client と定め、Agent 自身の Remote MCP Server 化を既定で禁じている。加えて AG-CAP-05 の Tool allowlist・承認条件・timeout・retry・入力信頼性は仕様 1.0.0 に対応フィールドが無く、認証も同版に OAuth / 資格情報参照フィールドが定義されていない。
 - **FR-WF-AAGD-07**: AG-CAP-06 が `required` のとき、`src/agent/{key}/skills/{skill-name}/SKILL.md` の frontmatter は Agent Skills 仕様の長さ制約を満たさなければならない。`name` は 1〜64 文字、`description` は 1〜1024 文字とする。既存の検証は `name` の kebab-case 形状と `description` の有意性のみを見ており、長さ超過を検出できない。
+
+#### 生成 AI Agent の検索経路適正化と Microsoft 365 公開（FR-WF-AAGD）
+
+- **FR-WF-AAGD-08**: AAGD Step 6 は `docs/agent/route-rightsizing-report.md` を必ず生成しなければならない。成果物は次のラベルと表を持ち、[hve/artifact_validation.py](hve/artifact_validation.py) が決定的に検証する。ラベル名・列名は機械検証の固定値であり変更してはならない。
+  - 測定条件ラベル（各 1 行）: `Schema-Version` / `Workflow` / `Step` / `Agent` / `Measured-At` / `Dataset` / `Dataset-Size` / `Secret-Redaction`
+  - 比較表: `| Rung | Route | Accuracy | Tokens | Latency | Judgement | Evidence |`（**2 行以上**）
+  - 結論: `- Conclusion:` と `- Rationale:`、および推奨経路 `- Recommended-Route:`
+  - `Judgement` の語彙は `KEEP` / `DOWNGRADE` / `INSUFFICIENT` / `NOT_MEASURED` の 4 値だけとし、他の値を許してはならない。実行できなかった段は `NOT_MEASURED` の行として比較表に残し、理由を `Evidence` へ記す。行を省いて 1 段だけの比較表としてはならない。安い経路で要件を満たせるかを比較しない限り、採用経路が過剰かどうかを判定できないためである。
+  - 実測していない段の数値を記載してはならない。段ごとに異なる評価データセットを用いてはならない。測定のために Agent 実装・設定・デプロイ済みリソースを恒久的に変更してはならない。
+- **FR-WF-AAGD-09**: AAGD Step 7 は `docs/agent/m365-publish-report.md` を必ず生成しなければならない。成果物は次のラベルと表を持ち、[hve/artifact_validation.py](hve/artifact_validation.py) が決定的に検証する。ラベル名・列名は機械検証の固定値であり変更してはならない。
+  - 公開条件ラベル（各 1 行）: `Schema-Version` / `Workflow` / `Step` / `Agent` / `Published-At` / `Publish-Scope` / `Auth-Scheme` / `Secret-Redaction`
+  - 公開表: `| Agent Key | Channel | Publish Scope | App Version | Judgement | Approval | Evidence |`（**1 行以上**）
+  - 結論: `- Conclusion:` と `- Rationale:`、および利用者向け接続手順 `- Consumer-Setup:`
+  - `Judgement` の語彙は `PUBLISHED` / `PENDING_APPROVAL` / `NOT_SELECTED` / `FAILED` の 4 値だけとし、他の値を許してはならない。公開が完了していない状態を `PUBLISHED` としてはならない。
+  - 公開メタデータへ secret・API キー・接続文字列・内部 URL を含めてはならない（NFR-SEC-01）。利用者から参照できる面へ出るためである。既に公開した版と同じ版を再利用してはならず、更新時は版を上げる。既存の認可スキーム・プロトコル設定を削除・置換してはならない。
 
 ### 13.8 AKM — Knowledge Management
 
@@ -1258,10 +1406,20 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 ### 13.12 ARD — Auto Requirement Definition
 
-- **目的**: 企業全体／対象事業の事業分析からユースケースカタログまでを自動生成する Workflow。ADR-0003 で 7 step 構成に再設計。
-- **Cloud Orchestrator 対応**: **非対応（確定）**。詳細は FR-WF-ARD-01（§12 TBD-06 解消）。
-- **FR-WF-ARD-01**: ARD は **CLI / GUI Orchestrator 専用**とする。[.github/workflows/auto-orchestrator-dispatcher.yml](.github/workflows/auto-orchestrator-dispatcher.yml) の `trigger_map` / `done_map` に ARD を登録してはならず、`auto-ard-reusable.yml` を新設してはならない。Cloud 対応が必要になった場合は、ARD 専用の Issue Template・state-transition・reusable workflow の新規作成（30+ ファイル規模）を伴う独立設計タスクとして起票すること。本制約は FR-CLOUD-06（registry と同期しない Cloud reusable workflow を dispatcher から外す）と同じ方針に立つ。
+- **目的**: 企業全体／対象事業の事業分析から KPI/OKR、ユースケース、アプリケーション一覧、APP 別要求定義書までを自動生成する Workflow。5 表示グループ / 10 実 Step で構成する。
+- **Cloud Orchestrator 対応**: **対応**。CLI / GUI と同じ 5 グループ・10 Step 契約を使用する。
+- **FR-WF-ARD-01**: ARD は CLI / GUI / Cloud Orchestrator の 3 面で利用できなければならない。Cloud は専用 Issue Form、`auto-requirement-definition-reusable.yml`、dispatcher の trigger / done / closed routing、`ard:initialized` / `ready` / `running` / `done` / `blocked` / `qa-ready` / `qa-drafting` を持つ。Cloud の未選択時は `ARD_DEFAULT_GROUP_IDS` と同じグループ `2`〜`5` を実行し、グループ `1` は明示 opt-in とする。Cloud reusable workflow の Step ID / Custom Agent / 依存は Python と Bash の registry に一致しなければならない（FR-CLOUD-06）。
 - **FR-WF-ARD-02**: ARD がユーザー提供資料（`attached_docs` およびパス指定の `target_business`）を受け取る Step では、当該資料を **一次情報として最優先で参照する**ことを Prompt および Body テンプレートに明示しなければならない。根拠: ユーザー提供資料は ARD のどの Step の `required_input_paths` にも宣言されず、`{attached_docs}` / `{target_business}` のパラメータ注入だけが到達経路であるため、優先度の明示が無い Step では固定パスの既定入力に埋没する。対象は Step 1（[.github/prompts/Arch-ARD-BusinessAnalysis-Untargeted.prompt.md](.github/prompts/Arch-ARD-BusinessAnalysis-Untargeted.prompt.md) / [.github/scripts/templates/ard/step-1.md](.github/scripts/templates/ard/step-1.md)）と Step 2（[.github/prompts/Arch-ARD-BusinessAnalysis-Targeted.prompt.md](.github/prompts/Arch-ARD-BusinessAnalysis-Targeted.prompt.md) / [.github/scripts/templates/ard/step-2.md](.github/scripts/templates/ard/step-2.md)）とし、Step 2 は既に本規定を満たす。
+- **FR-WF-ARD-03**: ARD の利用者向け選択単位は次表の 5 表示グループ、実行単位は同表から展開される 10 実 Step とする。グループ対応の単一情報源は [hve/workflow_registry.py](hve/workflow_registry.py) の `_WORKFLOW_GROUP_MAPS["ard"]`、既定選択の単一情報源は同ファイルの immutable tuple `ARD_DEFAULT_GROUP_IDS = ("2", "3", "4", "5")` とし、CLI 直接実行・CLI wizard・GUI・Cloud、およびこれらが値を与えない場合の Orchestrator 側の安全網である fallback は同じ tuple を参照しなければならない。グループ `3` は KPI/OKR 実行有無を表す唯一の wizard / GUI 選択状態とし、別の真偽入力で上書きしてはならない。ARD 固有の任意パラメータ `target_recommendation_id` は CLI / GUI / Cloud から実効パラメータまで欠落させず伝搬し、`target_business` が空でグループ `1` と `2` を同一 run で実行する bridge 経路の Strategic Recommendation 選択にだけ用いる。CLI wizard の custom-auto はこの条件を満たす場合だけ事前入力を許可し、quick-auto は事前入力を尋ねず先頭候補を採用し、manual は事前入力を尋ねず Step 1.2 完了後の既存選択メニューを維持する。明示 ID が候補に存在しない場合は警告して先頭候補へ縮退する。
+
+| 表示グループ | 利用者向け名称 | 展開する実 Step |
+|---|---|---|
+| `1` | 企業の事業分析 | `1`, `1.1`, `1.2` |
+| `2` | 要求定義書作成 | `2` |
+| `3` | KPI/OKR 定義 | `2.1` |
+| `4` | ユースケース作成 | `3.1`, `3.2`, `3.3` |
+| `5` | アプリケーション要求定義 | `4.1`, `4.2` |
+
 - **Step DAG と生成ファイル**:
 
 | Step | タイトル | 依存 | Fan-out | 生成ファイル |
@@ -1269,26 +1427,88 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 | 1 | 事業分野候補列挙 | — | — | `docs/company-business-recommendation.md` |
 | 1.1 | 事業分野別深掘り分析 | 1 | `business_candidate` | `docs/business/{key}-analysis.md` |
 | 1.2 | 事業分析統合 | 1.1 | — | `docs/company-business-requirement.md` |
-| 2 | 対象業務深掘り分析 | （`target_business` 指定時ルート／未指定時 1.2 経由 skip_fallback） | — | `docs/business-requirement.md` |
-| 4.1 | ユースケース骨格抽出 | 2（skip_fallback `1.2`） | — | `docs/catalog/use-case-skeleton.md` |
-| 4.2 | ユースケース詳細生成 | 4.1 | `use_case_skeleton` | `docs/usecase/{key}-detail.md` |
-| 4.3 | ユースケースカタログ統合 | 4.2 | — | `docs/catalog/use-case-catalog.md` |
+| 2 | 対象業務深掘り分析 | —（bridge 時は動的に 1.2） | — | `docs/business-requirement.md` |
+| 2.1 | KPI/OKR 定義（任意） | 2（skip_fallback `1.2`） | — | `docs/recommended-kpi-okr.md` |
+| 3.1 | ユースケース骨格抽出 | 2（skip_fallback `1.2`） | — | `docs/catalog/use-case-skeleton.md` |
+| 3.2 | ユースケース詳細生成 | 3.1 | `use_case_skeleton` | `docs/usecase/{key}-detail.md` |
+| 3.3 | ユースケースカタログ統合 | 3.2 | — | `docs/catalog/use-case-catalog.md` |
+| 4.1 | アプリケーションリスト作成 | 3.3 | — | `docs/catalog/app-catalog.md` |
+| 4.2 | APP 別要求定義書作成 | 4.1 | — | `docs/architectural-requirements-app-NNN.md`（APP 全件、単一 Agent が順次 upsert） |
+
+- **FR-WF-ARD-04**: ARD Step 4.1 は従来 AAS Step 1 が所有した `Arch-ApplicationAnalytics` と `docs/catalog/app-catalog.md` を同じ Prompt 契約で引き継ぐ。Step 4.2 は `app-catalog.md` に列挙された APP を出現順に 1 Agent で処理し、各 APP の canonical path `docs/architectural-requirements-app-NNN.md` を upsert する。Step 4.2 は fan-out してはならず、APP 間で共有する既存ファイルへの並列書込みを発生させない。非 fan-out Step は fan-out キー別名を代入できないため、registry と io-contract の `output_paths_template` へは glob `docs/architectural-requirements-app-*.md` を宣言し、`{appId}` のような fan-out プレースホルダを宣言してはならない。専用の完了ゲートは `app-catalog.md` の APP-ID 集合に対応する canonical file が全件実在して FR-APPREQ-01 を満たすことを検証する。カタログに無い orphan 文書は削除せず、警告として列挙する。AAS / ADA の既存 Step ID は再採番せず、ADA Step 1（`Arch-ApplicationAnalytics` による `app-catalog.md` 生成）も AAS Step 1 と同じ理由で ARD Step 4.1 へ移管して廃止した。ADA は Step 2（ドメイン分析）から開始する 9 実 Step となり、ADA 単独での `app-catalog.md` 生成はサポートしない。
+
+#### 13.12.1 生成アプリケーションの要求トレーサビリティ
+
+- **FR-APPREQ-01**: APP 別要求定義書の canonical path は APP-ID `APP-NNN` に対して `docs/architectural-requirements-app-NNN.md` とする。各文書は `APP-ID` / `APP名` / `Schema-Version` / `Document-Status`、および固定列 `Requirement ID | Status | Requirement | Source | Acceptance Criteria | Blocker` の要求表を持つ。Requirement ID は `APP-NNN-FR-NNN` / `APP-NNN-NFR-NNN` / `APP-NNN-C-NNN` のいずれかで文書内一意とし、末尾番号は kind ごとに `001`〜`999` を使用する。次番号が `999` を超える場合は桁を暗黙拡張せず fail-closed とする。`Status` は `confirmed` / `source-backed` / `TBD`、`Blocker` は `yes` / `no` に限定する。
+- **FR-APPREQ-02**: 再実行は upsert とし、既存 `confirmed` 行の ID と内容、既存 `source-backed` 行の ID、人手追記、およびカタログから削除された APP の文書を自動削除してはならない。新規 ID は同じ APP・kind 内の最大番号の次を割り当て、既存 ID を再番号付けしない。根拠の優先順位は既存 confirmed > 明示添付 / 回答済み QA > ARD 成果物 > staleness 合格済み knowledge > 推論 TBD とし、上位根拠と競合する場合は上書きせず Blocker として停止する。
+- **FR-APPREQ-03**: AAS / ADA / AAD-WEB / ASDW-WEB / ADFD / ADFDV / AAG / AAGD / AAR は、対象 APP-ID を `app-scope-resolution` で確定し、対応する APP 別要求定義書だけを必須参照する。APP-ID fan-out 子は自身の fan-out key、画面・サービス・エンティティ等の fan-out 子は `app-catalog.md` の対応関係、非 fan-out Step は実効 `app_ids` を使用する。実効 `app_ids` が空の横断 Step だけは当該 Workflow の対象分類に含まれる全 APP を参照対象とする。全文を全 Step へ常時注入せず、canonical path と対象 ID をプロンプトへ注入し、詳細は `markdown-query` で選択取得する。対象文書の欠落、構造不正、対象 APP と異なる ID、または `TBD` かつ `Blocker=yes` が 1 件でもあれば、警告降格やデフォルト推薦を行わず対象 APP を fail-closed で停止する。
+- **FR-APPREQ-04**: 対象 Workflow の Step 完了報告は、`<!-- app-requirements:start -->` / `<!-- app-requirements:end -->` 間に `APP-IDs` / `Requirement-IDs` / `Requirement-Documents` / `Unresolved-Blockers` の 4 キーを各 1 回だけ記録する。`Requirement-IDs` は対象文書に存在する `confirmed` / `source-backed` ID だけを引用し、`TBD` を実装根拠として引用してはならない。validator はファイル存在、ID 実在、APP-ID整合、ブロック形式だけを決定的に検証し、要求の意味的妥当性は既存の contents review または人間レビューへ委ねる。
+- **FR-APPREQ-05**: `application-requirement-traceability` Skill は `app-scope-resolution` と `markdown-query` を再利用し、新規設定・新規外部依存・要求書全文の常時注入を追加してはならない。CLI / GUI は `hve/skill_manifest.json` の workflow default と Runner の単一 preflight / completion gateを、Cloud は全 Custom Agent が継承する `agent-common-preamble` の短いルーターと reusable workflow の前提成果物チェックを使用する。同じパス解決・ID検証を実行面ごとに再実装してはならない（FR-MAINT-07）。
 
 - **必須入力**:
-  - Step 4.1: `docs/business-requirement.md`、`docs/company-business-requirement.md`
+  - Step 1.1: `docs/company-business-recommendation.md`
+  - Step 1.2: `docs/business/{key}-analysis.md`
+  - Step 3.2: `docs/catalog/use-case-skeleton.md`
+  - Step 3.3: `docs/usecase/{key}-detail.md`
 - **旧後方互換（廃止）**: 旧 step_id（`1` / `2` / `3`）からの resume 互換は、Resume 機能全廃に伴い NFR-COMP-01 とともに廃止済み。
 
 ### 13.13 ゲート条件（受入基準）
 
-各 Workflow の完了判定は以下を全て満たすこと:
+各 Workflow の完了判定は、実行経路と Workflow に対して**適用可能なゲートだけ**を評価し、その全てを満たすこと。適用条件を満たさないゲートは `N/A` とし、未達または `NOT_RUN` として扱ってはならない。
 
-1. **G-OUT**: 当該 Workflow の全 Step（コンテナ除く）について `output_paths` / `output_paths_template` 展開後の全ファイルが存在し、サイズ > 0。
+1. **G-OUT**: HVE が実行時の存在ゲートへ解決した必須成果物が全て存在すること。対象は固定 `output_paths`、fan-out 子について確定パスへ解決された `output_paths_template`、および FR-WF-OUT-10 の prefix 存在ゲートとする。非 fan-out Step の `output_paths_template` は FR-WF-OUT-07 の契約宣言専用であり、任意出力を含めて本ゲートの対象外とする。
 2. **G-IN**: 後続 Workflow が要求する `required_input_paths`（§13 表中の必須入力）が満たされている。
-3. **G-LBL**: `{prefix}:done` ラベルが付与され、`{prefix}:running` / `{prefix}:blocked` が外れている（§3.4 FR-STATE-01）。
-4. **G-CONS**: AKM の場合のみ、`knowledge/business-requirement-document-status.md` 上で全 21 ドキュメントのステータスが一貫していること。
-5. **G-DIFF**: PR 作成経路（CLI `--create-pr` / Cloud）では、当該 Workflow の生成パス以外への変更が含まれていないこと（§9 差分品質評価、`.github/copilot-instructions.md` §9）。
+3. **G-LBL**: Cloud Agent Orchestrator の完了判定に限り、`{prefix}:done` ラベルが付与され、`{prefix}:running` / `{prefix}:blocked` が外れていること（§3.4 FR-STATE-01）。CLI `--create-issues` が完了済み Step Issue へ done ラベルを付与する既存挙動は補助的な状態通知であり、本ゲートではない。Cloud Agent Orchestrator 以外の実行では、Issue 作成の有無にかかわらず `N/A` とする。
+4. **G-CONS**: AKM Workflow に限り、`knowledge/business-requirement-document-status.md` 上で全 21 ドキュメントのステータスが一貫していること。AKM 以外では `N/A` とする。
+5. **G-DIFF**: 当該 run で PR が実際に作成された場合に限り、GitHub Pull Request Files API が返す base...head の全変更パスが当該 Workflow の生成パス契約に収まること（[.github/copilot-instructions.md](.github/copilot-instructions.md) §9「差分品質評価」）。適用可否は起動フラグ名ではなく PR 作成結果で判定し、CLI / GUI の `--create-pr`、`--create-issues` により PR 作成も有効になる経路、ASDW-WEB / ADFDV の `--enable-auto-merge` による PR 作成経路、および Cloud を含む。PR が作成されない local CLI / GUI 実行では `N/A` とする。HVE Workflow の識別根拠を一切持たない通常 PR も `N/A` とし、通常の保守 PR を本ゲートで拒否してはならない。
+  - HVE 管理 PR の Workflow ID は、PR body の `<!-- hve-workflow-id: <id> -->`、closing / parent Issue の Workflow タイトルプレフィックスまたは状態ラベル、PR title の既知プレフィックスの順に解決する。marker の値が registry に存在しない場合、または複数の根拠が異なる Workflow を指す場合は `N/A` へ縮退せず `BLOCKED` とする。canonical title の `[AAD-WEB]` / `[ASDW-WEB]` に加え、`[AAD]` → `aad-web`、`[ASDW]` → `asdw-web` の後方互換を維持し、解決結果は常に registry の canonical Workflow ID とする。PR 本文の任意文字列から許可パスを追加してはならない。
+  - 許可パスは [hve/workflow_registry.py](hve/workflow_registry.py) の全 Step 宣言と [hve/fanout_expander.py](hve/fanout_expander.py) の既存展開規則を単一の情報源として、固定ファイル、ディレクトリ、segment 境界を越えない glob、subject 側カタログで解決した fan-out 出力、FR-WF-OUT-10 の prefix、非 fan-out の条件付き concrete template、および既知 placeholder の閉じた matcher へ分類する。非 fan-out の条件付き concrete template は G-OUT の必須存在ゲートからは除外されるが、G-DIFF では正当な作成・更新・削除の全てを許可する。ディレクトリ宣言は当該ディレクトリ自身と任意の深さの配下を許可する。`{relative-path}` は `.` / `..` / 空 segment を含まない 1 つ以上の安全な相対 segment、`{module-name}` は `/` を含まない安全な単一 segment とする。fan-out key alias は `_KEY_ALIAS_PLACEHOLDERS_BY_PARSER` を再利用し、未知 placeholder は許可範囲を推測せず policy 解決失敗とする。共通補助出力として許可できるのは `qa/**/*.md` だけとし、任意の `qa/` ファイル、JSONL、`work/` 成果物を許可してはならない。さらに §3.7 の HVE 対象境界を所有する [.github/scripts/hve_scope.py](.github/scripts/hve_scope.py) を再利用し、同モジュールが HVE 対象と判定する path は Workflow の広い directory / glob 宣言に一致しても許可してはならない。同モジュールが対象外とする生成アプリ向け `deploy-*` / `azure-static-web-apps-*` / `app<数字>*` workflow は、Workflow policy にも一致する場合に限り許可する。
+  - Git path は case-sensitive な POSIX `/` 区切りの repository-relative path とし、空、absolute、backslash、NUL、CR / LF、`.` / `..` segment を拒否する。duplicate は初出順で除去する。GitHub REST API が列挙する status `added` / `removed` / `modified` / `renamed` / `copied` / `changed` / `unchanged` だけを受理し、`removed` は削除前 path、`renamed` / `copied` は旧・新 path の双方を検査して、いずれか一方でも許可範囲外なら `BLOCKED` とする。これ以外の status、必須 filename の欠落、`renamed` / `copied` の旧 path 欠落、非 JSON、pagination 途中失敗は fail-closed とする。Pull Request Files API は 1 PR につき最大 3,000 files しか返さないため、PR metadata の `changed_files` と取得件数を照合し、3,000 件超または件数不一致を部分一覧のまま `PASS` にしてはならない（[GitHub REST API — List pull requests files](https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files)、2026-08-24 確認）。
+  - 判定結果は `PASS` / `BLOCKED` / `N/A` の 3 値とする。管理 PR で 1 件でも宣言外 path がある場合、Workflow ID 解決に矛盾がある場合、GitHub API / pagination / JSON / catalog parser / policy 構築に失敗した場合は `BLOCKED` とする。`BLOCKED` は check failure として違反 path と安全な解決失敗理由だけを報告し、token、PR 本文全文、patch、catalog 本文を出力してはならない。
+  - Cloud の authoritative check は `pull_request_target` で base SHA の validator を `trusted/` へ、PR head SHA をデータ専用の `subject/` へ別 checkout し、実行・import・source するコードを `trusted/` だけに固定する。subject 側の Python / shell / PowerShell を実行せず、subject を `PYTHONPATH` へ追加せず、PR body を shell の `run:` へ直接展開してはならない。`opened` / `synchronize` / `reopened` / `edited` / `ready_for_review` の各更新で再検証する。
+  - G-DIFF が `PASS` になる前に `auto-approve-ready` を付与してはならず、`BLOCKED`、判定エラー、missing / pending check を Approve / merge / `{prefix}:done` へ進めてはならない。branch protection の required context と `auto-approve-and-merge.yml` 内の共有 validator の直接実行を併用し、remote branch protection の再適用前も fail-closed を維持する。利用者向けの無効化・override フラグを追加してはならない。
 
-上記いずれか 1 件でも未達のとき、Workflow は `done` ではなく `blocked` 扱いとし、Self-Improve または手動介入の対象とする。
+適用可能なゲートのいずれか 1 件でも未達のとき、Workflow は `done` ではなく `blocked` 扱いとし、Self-Improve または手動介入の対象とする。`N/A` のゲートだけを理由に `blocked` としてはならない。
+
+### 13.14 CONF — 生成物の要件適合実測（ASDW-WEB / ADFDV / AAGD / AAR 共通）
+
+本節は「生成・デプロイした成果物を実際に動かし、機能要件・非機能要件への適合を測定して報告する」Step を規定する。設計妥当性を文書照合で評価する既存のレビュー Step（`QA-AzureArchitectureReview` / `QA-AzureDependencyReview`）とは異なり、**実行して得た測定値**だけを判定根拠とする。
+
+- **FR-WF-CONF-01**: 次の 4 Workflow へ要件適合実測 Step を 1 件ずつ追加し、いずれも単一の Custom Agent `QA-RequirementsConformanceEval` を共有する。Step ID・依存・成果物は下表で固定し、既存 Step の ID・依存・成果物を変更してはならない。
+
+| Workflow | Step ID | 依存 | 成果物 |
+|---|---|---|---|
+| `asdw-web` | `5.3` | `5.1`, `5.2` | `docs/azure/requirements-conformance-report.md` |
+| `adfdv` | `4.3` | `4.1`, `4.2` | `docs/dataflow/requirements-conformance-report.md` |
+| `aagd` | `5` | `3` | `docs/agent/requirements-conformance-report.md` |
+| `aar` | `7` | `6` | `docs/azure/agentic-retrieval/requirements-conformance-report.md` |
+
+  - `aagd` の依存を `4` ではなく `3` とするのは、Step 4 が `enable_tool_search=no` のとき実行対象から外れるためである。Deploy 完了（Step 3）だけを前提にすることで、tool search 方針に依存せず実測 Step が到達可能になる。
+  - `asdw-web` の `5.3` は既存のコンテナ Step `5`（レビュー）配下に置き、`5.1` / `5.2` と同じ階層とする。Cloud の Sub-Issue はコンテナ配下として生成する。他の 3 Workflow はコンテナ Step を持たないため階層を持たない。
+  - `aar` の Step 7 にも他の AAR Step と同じ `disabled_when_config`（`enable_agentic_retrieval` が `no`）を適用する。AAR は Agentic Retrieval 専用 Workflow であり、方針が `no` のとき Workflow 全体が実行対象外となるため。
+  - 本 Step は fan-out してはならない。非機能要件はアプリケーション単位で判定する対象であり、要素単位へ分割すると同一の負荷条件を要素数分だけ再測定することになり、測定コストが要件の粒度と一致しない。
+
+- **FR-WF-CONF-02**: 成果物は次のラベルと表を持たなければならず、[hve/artifact_validation.py](hve/artifact_validation.py) が決定的に検証する。ラベル名・列名は機械検証の固定値であり変更してはならない。
+  - 測定条件ラベル（各 1 行）: `Schema-Version` / `Workflow` / `Step` / `Agent` / `Measured-At` / `Target-Environment` / `Measurement-Tool` / `Secret-Redaction`
+  - 測定表: `| Req ID | Kind | Target | Threshold | Measured | Judgement | Headroom | Evidence |`（`Kind` は `FR` または `NFR`）
+  - 結論: `- Conclusion:` と `- Rationale:`
+  - 簡素化候補: `- Simplification-Candidate:`（該当なしのときは `none`）
+  - 測定表は 1 行以上を持たなければならない。空表を PASS としてはならない。
+
+- **FR-WF-CONF-03**: `Judgement` 列の語彙は `PASS` / `FAIL` / `NOT_MEASURED` / `NO_TARGET` の 4 値だけとし、他の値を許してはならない。
+  - `NO_TARGET` は、対象要件に数値目標（`Target` / `Threshold`）が設計成果物側に存在しない場合に用いる。このとき `Measured` は実測値で埋め、Step を失敗させてはならない。目標が無いことと測っていないことを同一視すると、次サイクルで目標を決める材料が失われるため、両者を別語彙で区別する。
+  - `NOT_MEASURED` は測定を実行できなかった場合に用い、`Evidence` 列へ理由を記載しなければならない。空欄にしてはならない。
+  - `Measured` 列を空にしたまま `PASS` としてはならない。測定していない値を根拠に合格判定を出してはならない。
+  - 測定値から目標値を逆算して `Target` / `Threshold` を生成してはならない。現状の性能をそのまま目標にすると改善余地の判定基準を失うため（[Google SRE Book, Chapter 4: Service Level Objectives](https://sre.google/sre-book/service-level-objectives/) の "Don't pick a target based on current performance"、2026-08-17 確認）。
+
+- **FR-WF-CONF-04**: 測定は、当該 Workflow が既にデプロイした資産と既存のテスト資産を用いて実施する。本 Step のために Azure リソースを新規作成することを必須にしてはならない。Azure Load Testing 等のマネージド負荷試験サービスの利用は任意とし、利用した場合は `Measurement-Tool` へ記録する。
+  - 根拠: [Azure Well-Architected Framework PE:06 Architecture strategies for performance testing](https://learn.microsoft.com/azure/well-architected/performance-efficiency/performance-test)（2026-08-17 確認）は、性能テストのための専用インフラと専門知識が運用コストを増やすことをトレードオフとして明記し、後から問題を発見するコストと比較して投資を判断するよう求めている。
+  - 応答時間を集約する場合は平均ではなくパーセンタイル（p50 / p95 等）を用い、どのパーセンタイルかを `Req ID` または `Target` 列で明示する。平均はロングテールを隠すため（同 SRE Book Chapter 4）。
+
+- **FR-WF-CONF-05**: `Headroom` 列には目標値に対する余裕度を記録する。余裕が過大で構成を簡素化できる可能性がある項目は `- Simplification-Candidate:` へ列挙する。本 Step は測定と報告までを責務とし、簡素化の実施・構成変更・再デプロイを行ってはならない。
+  - 根拠: 実運用 FaaS ワークロードの呼び出し頻度は 8 桁のレンジに広がり、大半の関数はごく低頻度でしか呼ばれない（Shahrad ほか, "Serverless in the Wild: Characterizing and Optimizing the Serverless Workload at a Large Cloud Provider", USENIX ATC 2020, <https://www.usenix.org/conference/atc20/presentation/shahrad>、2026-08-17 確認）。したがって選択した実行基盤が過剰かどうかは設計文書からは判定できず、実測値と目標値の差でしか評価できない。
+
+- **FR-WF-CONF-06**: 本 Step は CLI / GUI / Cloud の 3 経路すべてから実行できなければならない。CLI / GUI は [hve/workflow_registry.py](hve/workflow_registry.py) への登録により反映される。Cloud は FR-CLOUD-06 の同期要件に従い、4 Workflow の reusable workflow と [.github/scripts/bash/lib/workflow-registry.sh](.github/scripts/bash/lib/workflow-registry.sh) の双方へ本 Step を登録しなければならない。
 
 ---
 

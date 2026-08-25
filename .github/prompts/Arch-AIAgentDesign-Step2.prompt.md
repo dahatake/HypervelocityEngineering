@@ -43,10 +43,10 @@
 | 3 | `docs/catalog/domain-analytics.md` | Bounded Context 境界。Agent 分割判断の根拠 | Architecture Decision, Boundary Matrix |
 | 4 | `docs/catalog/data-model.md` | エンティティ定義。I/O Contract のスキーマ根拠 | Input/Output Contract, Knowledge Source |
 | 5 | `docs/catalog/service-catalog.md` | マイクロサービス一覧。Agent ↔ サービスのマッピング | Tool Catalog, Boundary Matrix |
-| 6 | `docs/catalog/service-catalog-matrix.md` | 画面→API→データの完全マッピング。Tool（Actions）定義の根拠 | **Tool Catalog（最重要）**, Procedure |
+| 6 | `docs/catalog/data-catalog.md` | 構造化データの正本。物理マッピング・PII 区分・所有権・ライフサイクル | Knowledge Source, Permission Model, Data Boundary |
 | 7 | `docs/services/SVC-*.md` | 各サービスの詳細仕様（API I/O、バリデーション、イベント、権限）。Tool の入出力スキーマ・失敗分類の根拠 | Tool I/O Schema, Error Handling, Permission Model |
-| 8 | `docs/azure/azure-services-data.md` | Azure データストア構成。Knowledge Source / RAG の具体設計根拠 | Knowledge Source, RAG 設計 |
-| 9 | `docs/azure/azure-services-additional.md` | 追加 Azure サービス構成（AI Search, OpenAI 等）。LLM バックエンド・検索インデックスの設計根拠 | Tool Catalog（AI系）, LLM 選定 |
+| 8 | `docs/catalog/unstructured-data-catalog.md` | 非構造化データ資産と検索経路候補。AG-CAP-03 の Preferred / Fallback 判定の根拠 | Knowledge Source, RAG 設計 |
+| 9 | `docs/catalog/persona-catalog.md` | 権限主体のペルソナ。誰の権限で動くかの判定根拠 | Permission Model, Scope |
 | 10 | `docs/catalog/app-catalog.md` | アプリケーション一覧（APP-ID）。Agent と APP の対応付けおよびスコープ確認根拠 | Scope, Boundary Matrix, Non-Goals |
 | — | `docs/agent/agent-application-definition.md` | **Step 1 成果物（必須前提）**。粒度設計の入力 | Step 2 全体 |
 
@@ -54,8 +54,10 @@
 
 | # | ファイル | 用途 |
 |---|---------|------|
-| 11 | `docs/catalog/screen-catalog-APP-*.md` | 画面一覧（APP ごと）。Agent が UI 内で動作する場合の Conversation Design 根拠 |
-| 12 | `docs/screen/{screenId}-*.md` | 画面詳細定義。Output format / トーン / 対話チャネル設計の根拠 |
+| 11 | `docs/catalog/service-catalog-matrix.md` | 画面→API→データの完全マッピング（AAS 実行済みの場合のみ存在）。Tool 定義の補強 |
+| 11.1 | `docs/azure/azure-services-data.md` / `docs/azure/azure-services-additional.md` | Azure 構成（ASDW-WEB / AAD-WEB 実行済みの場合のみ存在）。LLM バックエンド・検索インデックスの設計根拠 |
+| 11.2 | `docs/catalog/screen-catalog-APP-*.md` | 画面一覧（AAD-WEB 実行済みの場合のみ存在）。Agent が UI 内で動作する場合の Conversation Design 根拠 |
+| 12 | `docs/screen/{screenId}-*.md` | 画面詳細定義（AAD-WEB 実行済みの場合のみ存在）。Output format / トーン / 対話チャネル設計の根拠。**ADA 経由の場合は存在しないので `TBD` 扱いにしない** |
 | 13 | `src/data/sample-data.json` | サンプルデータ。System Prompt の Examples（Few-shot）作成用 |
 | 14 | `.github/skills/agent-common-preamble/references/agent-playbook.md` | 社内テンプレ/語彙/表現ルール（存在する場合のみ） |
 

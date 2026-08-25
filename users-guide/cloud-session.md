@@ -50,11 +50,11 @@ python -m hve orchestrate --workflow akm --cloud-session --repo owner/repo --clo
 ## GUI で設定する
 
 1. HVE GUI を起動します。
-2. 設定画面の「一般 > 基本設定」を開きます。
+2. 設定画面の「各サービス連携 > GitHub」を開きます。
 3. `Cloud Session` を ON にします。
 4. 必要に応じて repository owner/name/branch と同時実行上限を設定します。
 5. Step 選択画面では各 Step 行の `☁ 継承 / ☁ ON / ☁ OFF` で Step 単位の上書きを指定できます。
-6. サブタスク単位の上書きは「基本設定」の `Cloud サブタスク上書き JSON` に指定します。例: `{"pre_qa": true, "review": false}`。
+6. サブタスク単位の上書きは同じ「GitHub」画面の `Cloud サブタスク上書き JSON` に指定します。例: `{"pre_qa": true, "review": false}`。
 
 ## 自動振り分け
 

@@ -593,9 +593,11 @@ class TestResolveSelectedSteps:
     def test_empty_returns_all(self):
         # Sub-4 (B-1): AAS Step 4 が 4.1 / 4.2 に分割された
         # T2.2: AAS に Step.8 (ペルソナカタログ) / Step.9 (ペルソナ別共通画面) を追加
+        # ARD Step 4.1/4.2 新設に伴い AAS Step 1 は廃止（ARD へ移設）
+        # AAS Step.1 起点化（旧 Step.2→1 昇格に伴う全 Step 番号の繰り上がり）
         wf = get_workflow("aas")
         result = resolve_selected_steps(wf, [])
-        assert result == {"1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6", "7", "8", "9"}
+        assert result == {"1", "2.1", "2.2", "3.1", "3.2", "4", "5", "6", "7", "8"}
 
     def test_specific_steps(self):
         wf = get_workflow("aad-web")
@@ -606,12 +608,13 @@ class TestResolveSelectedSteps:
     def test_unknown_steps_excluded(self, capsys):
         # Sub-4 (B-1): AAS Step 4 が 4.1 / 4.2 に分割された
         # T2.2: AAS に Step.8 (ペルソナカタログ) / Step.9 (ペルソナ別共通画面) を追加
+        # AAS Step.1 起点化（旧 Step.2→1 昇格に伴う全 Step 番号の繰り上がり）
         wf = get_workflow("aas")
         result = resolve_selected_steps(wf, ["999"])
         captured = capsys.readouterr()
         assert "未知の Step ID" in captured.out
         # 有効な選択がないので全ステップにフォールバック
-        assert result == {"1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6", "7", "8", "9"}
+        assert result == {"1", "2.1", "2.2", "3.1", "3.2", "4", "5", "6", "7", "8"}
 
     def test_mixed_valid_invalid(self, capsys):
         wf = get_workflow("aad-web")

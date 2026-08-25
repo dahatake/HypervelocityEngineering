@@ -41,16 +41,16 @@
 - ソースコードから文書を段階生成する場合は [sourcecode-documentation.md](./sourcecode-documentation.md) を参照
 
 ## 概要
-AKM は `qa` / `original-docs` / `workiq` をカンマ区切りでマルチ選択し、`knowledge/` の D01〜D21 を生成・更新する統合フローです。既定は `qa,original-docs` で、`workiq` は任意で追加できます。
+AKM は `qa` / `docs-original` / `workiq` をカンマ区切りでマルチ選択し、`knowledge/` の D01〜D21 を生成・更新する統合フローです。既定は `qa,docs-original` で、`workiq` は任意で追加できます。
 
-- **入力ソース**: `qa` / `original-docs` / `workiq`（複数選択可、既定 `qa,original-docs`）
-- **後方互換**: 旧値 `qa` / `original-docs` / `both` もそのまま受理される（`both` → `qa,original-docs` として正規化）
-- **`workiq` 選択時**: AKM メイン DAG の **前段** で Work IQ 取り込みフェーズが走り、`knowledge/Dxx-*.md` を Work IQ 由来の情報で起票・差分更新した上で、後段で `qa` / `original-docs` が順次差分マージします。
-- **HVE Cloud Agent は未対応**: 本機能は `hve` ローカル CLI のみで利用可能です。Issue Template 経由の Cloud 実行（`auto-knowledge-management-reusable.yml`）は従来通り `qa` / `original-docs` / `both` の単一選択となります。
+- **入力ソース**: `qa` / `docs-original` / `workiq`（複数選択可、既定 `qa,docs-original`）
+- **後方互換**: 旧値 `qa` / `docs-original` / `both` もそのまま受理される（`both` → `qa,docs-original` として正規化）
+- **`workiq` 選択時**: AKM メイン DAG の **前段** で Work IQ 取り込みフェーズが走り、`knowledge/Dxx-*.md` を Work IQ 由来の情報で起票・差分更新した上で、後段で `qa` / `docs-original` が順次差分マージします。
+- **HVE Cloud Agent は未対応**: 本機能は `hve` ローカル CLI のみで利用可能です。Issue Template 経由の Cloud 実行（`auto-knowledge-management-reusable.yml`）は従来通り `qa` / `docs-original` / `both` の単一選択となります。
 
-![AKM の知識統合フロー。Issue Template から auto-knowledge-management ワークフローが起動し、sources に応じて qa、original-docs、または両方を処理して KnowledgeManager に渡し、knowledge 配下のステータスファイルと D01〜D21 を生成・更新する。](./images/knowledge-interface-flow.svg)
+![AKM の知識統合フロー。Issue Template から auto-knowledge-management ワークフローが起動し、sources に応じて qa、docs-original、または両方を処理して KnowledgeManager に渡し、knowledge 配下のステータスファイルと D01〜D21 を生成・更新する。](./images/knowledge-interface-flow.svg)
 
-![AKM アーキテクチャ。sources に応じて qa、original-docs、workiq のいずれかまたは複数を入力とし、workiq 選択時は Work IQ 取り込みフェーズが先行して knowledge/Dxx を生成・更新した後、auto-knowledge-management ワークフローで KnowledgeManager が統合処理を実行し、knowledge 配下の D01〜D21 とステータスファイルを差分更新する。反復精緻化ループで再取り込みしていく。](./images/infographic-akm.svg)
+![AKM アーキテクチャ。sources に応じて qa、docs-original、workiq のいずれかまたは複数を入力とし、workiq 選択時は Work IQ 取り込みフェーズが先行して knowledge/Dxx を生成・更新した後、auto-knowledge-management ワークフローで KnowledgeManager が統合処理を実行し、knowledge 配下の D01〜D21 とステータスファイルを差分更新する。反復精緻化ループで再取り込みしていく。](./images/infographic-akm.svg)
 
 AKM は 1 回実行して終わりではなく、ADI Step 1.1 / 1.2で生成した原本質問票を `qa/` に蓄積し、再度 `akm` で統合する反復精緻化ループを前提に運用します。
 
@@ -64,8 +64,8 @@ AKM は 1 回実行して終わりではなく、ADI Step 1.1 / 1.2で生成し�
 ![AKM: KnowledgeManager の1ステップチェーン（並列0箇所含む）](./images/chain-akm.svg)
 
 > [!IMPORTANT]
-> **図は Prompt の連鎖だけを描いており、CLI / GUI の Step 構成とは一致しない。**
-> `hve/workflow_registry.py` の AKM 定義（2026-08-07 時点）は次の 2 ステップで、
+> **図は Prompt の連鎖を描いており、CLI / GUI の Step 構成と一致する。**
+> `hve/workflow_registry.py` の AKM 定義は次の 2 ステップで、
 > Step 1 は D01〜D21 の **21 並列 fanout** を持つ。
 >
 > | Step | Prompt | 依存 | 出力 |
@@ -73,14 +73,13 @@ AKM は 1 回実行して終わりではなく、ADI Step 1.1 / 1.2で生成し�
 > | 1 | `KnowledgeManager` | なし | `knowledge/business-requirement-document-status.md` / `knowledge/{key}-*.md` / `knowledge/{key}-*-ChangeLog.md`（`{key}` = D01〜D21） |
 > | 2 | `QA-DocConsistency`（`knowledge/` 横断整合性レビュー） | Step 1 | `knowledge/business-requirement-document-status.md` |
 >
-> 上図の SVG は Step 2 と fanout を描いていない（**図の更新は要確認**）。
->
-> **Cloud（Issue Template）経路は現状これと異なる。**
-> `.github/workflows/auto-knowledge-management-reusable.yml` は `[AKM] Step.1` の Step Issue を
-> **1 件だけ**作成し、同ファイル内に「AKM はステップが 1 つのみ: Step.1 完了 → Root Issue に `akm:done`」と
-> 明記されている（fanout 展開と Step 2 は生成されない）。
-> したがって **CLI / GUI の正本は `hve/workflow_registry.py`、Cloud の正本は上記 workflow** であり、
-> 両者の同期は本ガイドの範囲外の課題として**要確認**。
+> **Cloud（Issue Template）経路も同じ 2 ステップ構成。**
+> `.github/workflows/auto-knowledge-management-reusable.yml` は `[AKM] Step.1` と `[AKM] Step.2` の
+> Step Issue を作成し、Step.1 完了で Step.2 を起動、Step.2 完了で Root Issue へ `akm:done` を付与する。
+> D01〜D21 の fanout は Step.1 の Agent 内部で処理し、Cloud では Step Issue へ展開しない
+> （`knowledge/` への同時書込みを避けるため）。
+> CLI / GUI と Cloud の Step 同期は
+> `hve/tests/test_cloud_reusable_workflow_parity.py` の `TestAkmCloudParity` が固定している。
 
 ### タスク／データフロー
 
@@ -103,15 +102,15 @@ Prompt の入出力ファイルを示します（`hve/workflow_registry.py` の 
 
 AKM は一度きりではなく、初回作成 → 不足補完 → 開発中の気づき反映 → 既存資産取り込みを繰り返して `knowledge/` を継続的に精緻化します。全体像は [README.md](../README.md) を参照してください。
 
-hve CLI の Work IQ 取り込みステージを使うと、Microsoft 365 側のメール / チャット / 会議 / ファイルを一次情報として `knowledge/Dxx` を起票できるため、初回セットアップ時の初回作成そのものを省力化できます。後段の `qa` / `original-docs` ステージが同一ファイルを差分マージします。
+hve CLI の Work IQ 取り込みステージを使うと、Microsoft 365 側のメール / チャット / 会議 / ファイルを一次情報として `knowledge/Dxx` を起票できるため、初回セットアップ時の初回作成そのものを省力化できます。後段の `qa` / `docs-original` ステージが同一ファイルを差分マージします。
 
 ## Issue Template 入力
 
-> **注記**: Issue Template 経由（HVE Cloud Agent）は `qa` / `original-docs` / `both` の単一選択のみ。Work IQ を入力ソースとして使うには `hve` ローカル CLI を使用してください。
+> **注記**: Issue Template 経由（HVE Cloud Agent）は `qa` / `docs-original` / `both` の単一選択のみ。Work IQ を入力ソースとして使うには `hve` ローカル CLI を使用してください。
 
 - `branch`: 実行対象ブランチ
 - `runner_type`: `GitHub Hosted` / `Self-hosted (ACA)`
-- `sources`: `qa のみ` / `original-docs のみ` / `両方`
+- `sources`: `qa のみ` / `docs-original のみ` / `両方`
 - `target_files`: サブセット指定（任意）
 - `additional_comment`: `custom_source_dir: <path>` を 1 行ずつ指定可
 - `force_refresh`: 完全再生成
@@ -120,7 +119,13 @@ hve CLI の Work IQ 取り込みステージを使うと、Microsoft 365 側の�
 
 ## QA 回答から起動する Knowledge Management のマージ設定とモデル指定
 
-`akm` 以外のワークフローで実行前 QA を有効にし、さらに **バックグラウンドマージを明示的に有効化** すると、回答済み QA を `knowledge/` へ取り込む Knowledge Management が**バックグラウンドで直列起動**されます（メインタスクは完了を待ちません）。
+`akm` 以外のワークフローで実行前 QA を有効にし、さらに **バックグラウンドマージを明示的に有効化** すると、回答済み QA を `knowledge/` へ取り込む Knowledge Management が**バックグラウンドで起動**されます（メインタスクは完了を待ちません）。
+
+実行の並列度は次のとおりです。
+
+- **`knowledge/` へ同時に書き込む子プロセスは常に 1 つ**です。Knowledge Management は `target_files` の指定によらず `knowledge/D01`〜`D21` 全体と `business-requirement-document-status.md` を出力対象にするため、子プロセスを多重起動すると同一ファイルへの同時書込みで差分が失われます。
+- **実行中に滞留した回答済み QA は 1 回の子実行へまとめて渡されます**。まとめられた QA は Knowledge Management 内部の D01〜D21 の fan-out で同時に処理されるため、回答件数が増えても子実行の回数は増えません。
+- **子実行の fan-out 並列度は Knowledge Management の宣言値（`21`）**になります。宣言値を持つワークフローは `--max-parallel` で上書きできないため（[workflow-reference.md](./workflow-reference.md) 参照）、メインタスクの並列実行数は子実行へ影響しません。
 
 | 経路 | マージ可否の指定方法 |
 |---|---|
@@ -144,27 +149,41 @@ hve CLI の Work IQ 取り込みステージを使うと、Microsoft 365 側の�
 - Cloud にモデルしか無いのは、GitHub Actions 経路に reasoning effort / context tier に相当する設定が存在しないためです。
 - Knowledge Management の Issue Template には `akm_model` がありません（AKM から AKM を再帰起動しないため）。ラベル初期化用の `setup-labels` など、ワークフローを起動しない Template にもありません。
 
+### バックグラウンド子実行が失敗したとき
+
+子実行の標準出力・標準エラーは `work/run/qa-akm-<id>/child-stdio.log` へ保存されます。親実行の警告には失敗件数に加えて `returncode` と当該ログのパスが出ます。
+
+```text
+QA 起点 AKM は 3 件失敗しました（source Workflow は継続、境界=DAG 完了後）。
+  - returncode=1 対象 3 件 / ログ: work/run/qa-akm-<id>/child-stdio.log
+```
+
+- 子ログの本文は親のログへ展開しません。原因を見るときは表示されたパスを直接開いてください。
+- 子が `status=blocked` で停止する最も多い原因は、HVE ソース（`hve/` / `mdq/` / `hve-dev/` / `.github/` 配下）の未コミット変更です。`git status --porcelain hve mdq hve-dev .github` で確認し、コミットまたは退避してから再実行してください。この検査を無効化するオプションはありません。
+- **登録時点で既に dirty な場合は、子を起動せずに登録をスキップして即時に警告します**。無駄な子プロセス起動とセッション消費を避けるためです。この事前判定は最終ガードを置き換えません（登録時に clean でも実行時に dirty になる場合があるため）。スキップされた QA は、コミット後に `--workflow akm --sources qa --target-files <当該ファイル>` で手動取り込みできます。
+- 切り分け手順は [troubleshooting.md](./troubleshooting.md) を参照してください。
+
 > **使いどころ**: 設計・実装のメインタスクは高品質モデルで走らせつつ、定型作業に近い `knowledge/` の差分同期だけを安価なモデルへ逃がすと、品質を下げずにコストを抑えられます。
 
 ## CLI 例
 ```bash
 # 従来互換
 python -m hve orchestrate --workflow akm --sources qa
-python -m hve orchestrate --workflow akm --sources original-docs
+python -m hve orchestrate --workflow akm --sources docs-original
 python -m hve orchestrate --workflow akm --sources both
 python -m hve orchestrate --workflow akm --sources qa --custom-source-dir docs/specs
 
 # Work IQ 入力を追加（hve ローカル CLI でのみ利用可能）
-python -m hve orchestrate --workflow akm --sources qa,original-docs,workiq
+python -m hve orchestrate --workflow akm --sources qa,docs-original,workiq
 python -m hve orchestrate --workflow akm --sources workiq                       # Work IQ 単独モード
 python -m hve orchestrate --workflow akm --sources workiq --workiq-dxx D01,D04   # 対象 Dxx を絞り込み
 # `--workiq-akm-ingest` で明示制御可（未指定時は --sources に workiq が含まれるかで自動判定）
-python -m hve orchestrate --workflow akm --sources qa,original-docs --workiq-akm-ingest
+python -m hve orchestrate --workflow akm --sources qa,docs-original --workiq-akm-ingest
 ```
 
 ## 状態判定
 - `Confirmed` / `Tentative` / `Unknown` / `Conflict`
-- `Conflict` は original-docs を含む場合に利用
+- `Conflict` は docs-original を含む場合に利用
 
 ## 利用手順（前提・操作・入出力・完了確認・失敗時対応）
 
@@ -172,7 +191,7 @@ python -m hve orchestrate --workflow akm --sources qa,original-docs --workiq-akm
 |---|---|
 | **前提** | `qa/` または `docs-original/` に対象ファイルがあること。GitHub Copilot が有効なこと。CLI で実行する場合は [hve-cli-getting-started.md](./hve-cli-getting-started.md) のセットアップが済んでいること |
 | **操作** | Cloud: Issue Template **Knowledge Management** を起票 → ラベル `knowledge-management` で `auto-orchestrator-dispatcher.yml` が起動。CLI: 上の「CLI 例」のコマンドを実行 |
-| **入力** | `sources`（CLI 既定 `qa,original-docs`）/ `target_files` / `custom_source_dir` / `force_refresh`。`workiq` は CLI のみ。**`target_files` の既定は `sources` に依存**する（`hve/orchestrator.py` の `_default_akm_target_files()`）: 非 Work IQ ソースが **1 種類**なら `workiq` 併用時もその glob になる（`qa` / `qa,workiq` → `qa/*.md`、`original-docs` / `original-docs,workiq` → `docs-original/*`）。**`workiq` 単独、または `qa` と `original-docs` を併用した場合（CLI 既定の `qa,original-docs` を含む）は既定パターンなし（空）**＝固定 glob で絞り込まない。Cloud の Issue Template は `target_files` を空欄のまま起票できる |
+| **入力** | `sources`（CLI 既定 `qa,docs-original`）/ `target_files` / `custom_source_dir` / `force_refresh`。`workiq` は CLI のみ。**`target_files` の既定は `sources` に依存**する（`hve/orchestrator.py` の `_default_akm_target_files()`）: 非 Work IQ ソースが **1 種類**なら `workiq` 併用時もその glob になる（`qa` / `qa,workiq` → `qa/*.md`、`docs-original` / `docs-original,workiq` → `docs-original/*`）。**`workiq` 単独、または `qa` と `docs-original` を併用した場合（CLI 既定の `qa,docs-original` を含む）は既定パターンなし（空）**＝固定 glob で絞り込まない。Cloud の Issue Template は `target_files` を空欄のまま起票できる |
 | **出力** | `knowledge/business-requirement-document-status.md` と `knowledge/D01〜D21-*.md`（および `-ChangeLog.md`） |
 | **完了確認** | 上記「完了条件」を満たすこと。Cloud ではラベルが `akm:done` に遷移すること |
 | **失敗時対応** | ラベルが `akm:blocked` の場合は Issue のコメントを確認。切り分けは [troubleshooting.md](./troubleshooting.md)。`knowledge/` が中途半端な場合は `force_refresh` で再生成 |
@@ -199,7 +218,7 @@ python -m hve orchestrate --workflow akm --sources qa,original-docs --workiq-akm
 ### 使い方（Issue 作成手順）
 1. **Issues** → **New Issue** を開く
 2. **Knowledge Management** テンプレートを選択
-3. `sources`（`qa` / `original-docs` / `both`）を選択
+3. `sources`（`qa` / `docs-original` / `both`）を選択
 4. **Submit** して実行
 
 ## カスタマイズ
@@ -209,7 +228,7 @@ python -m hve orchestrate --workflow akm --sources qa,original-docs --workiq-akm
 | Step 構成・依存・出力パス・fanout キー（D01〜D21） | `hve/workflow_registry.py` の `akm` 定義 | `fanout_static_keys` を増減する場合は Prompt 側の共通テンプレートも合わせる | `python -m pytest hve/tests/test_workflow_registry.py hve/tests/test_fanout.py hve/tests/test_e2e_akm_fanout_dryrun.py -q` |
 | Step 本文テンプレート | `.github/scripts/templates/akm/step-1.md` / `step-2.md`、fanout 共通は `hve/prompt/fanout/akm/_common.md` | 出力先パスの表記を変えるときは registry の `output_paths_template` と揃える | `python -m pytest hve/tests/test_e2e_akm_fanout_dryrun.py -q` |
 | Agent の振る舞い | `.github/prompts/KnowledgeManager.prompt.md` / `.github/prompts/QA-DocConsistency.prompt.md` | 入出力契約は `.github/io-contracts/KnowledgeManager--akm--1.yaml` / `QA-DocConsistency--akm--2.yaml` と対で更新する | `python -m pytest hve/tests/test_knowledge_source_creation_contract.py -q` |
-| `sources` の受理値と正規化 | `hve/` の AKM 入力正規化 | 旧値 `qa` / `original-docs` / `both` の後方互換を壊さない | `python -m pytest hve/tests/test_akm_sources_normalization.py -q` |
+| `sources` の受理値と正規化 | `hve/` の AKM 入力正規化 | 旧値 `qa` / `docs-original` / `both` の後方互換を壊さない | `python -m pytest hve/tests/test_akm_sources_normalization.py -q` |
 | Work IQ 取り込み | `hve/` の Work IQ 取り込みフェーズ | Cloud 実行では利用できない前提を維持する | `python -m pytest hve/tests/test_akm_workiq_ingest.py hve/tests/test_akm_workiq_phase.py -q` |
 | Cloud の入力欄 | `.github/ISSUE_TEMPLATE/knowledge-management.yml` | 呼び出し先 `.github/workflows/auto-knowledge-management-reusable.yml` の `inputs` と対で更新する | Issue Template から 1 度実行して確認 |
 
@@ -217,7 +236,7 @@ python -m hve orchestrate --workflow akm --sources qa,original-docs --workiq-akm
 
 - `docs-original/` は**読み取り専用**。AKM は参照するだけで変更しない。
 - `knowledge/` の更新は差分マージ。手動作成した `knowledge/D{NN}-*.md` を完全上書きしない（変更履歴は `-ChangeLog.md`）。
-- `sources` の旧値 `both` は `qa,original-docs` へ正規化する後方互換を維持する。
+- `sources` の旧値 `both` は `qa,docs-original` へ正規化する後方互換を維持する。
 - `workiq` は CLI 専用。Cloud の Issue Template に `workiq` を足すと実行時に解決できない。
 
 ## セットアップ・トラブルシューティング

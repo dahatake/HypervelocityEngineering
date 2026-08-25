@@ -1,0 +1,306 @@
+name: "AAR: Agentic Retrieval Add-on (Reusable)"
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        required: false
+        type: string
+        default: ""
+      issue_number:
+        required: true
+        type: string
+      event_action:
+        required: false
+        type: string
+        default: ""
+      label_name:
+        required: false
+        type: string
+        default: ""
+      issue_labels:
+        required: false
+        type: string
+        default: "[]"
+      enable_agentic_retrieval:
+        required: false
+        type: string
+        default: "auto"
+      runner_type:
+        description: "実行 Runner 種別: github-hosted | self-hosted"
+        required: false
+        type: string
+        default: "github-hosted"
+
+permissions:
+  issues: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  orchestrate:
+    runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
+    timeout-minutes: 360
+    concurrency:
+      group: aar-orchestrator-${{ inputs.issue_number }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
+      COPILOT_PAT: ${{ secrets.COPILOT_PAT }}
+      REPO: ${{ github.repository }}
+
+    steps:
+      - name: 実行ゲートチェック
+        id: gate
+        env:
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          EVENT_ACTION: ${{ inputs.event_action }}
+          LABEL_NAME: ${{ inputs.label_name }}
+        run: |
+          set -euo pipefail
+          ISSUE_JSON=$(curl -sf \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}")
+          ISSUE_TITLE=$(printf '%s' "${ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))")
+          ISSUE_LABELS=$(printf '%s' "${ISSUE_JSON}" | python3 -c "import sys,json; print(json.dumps([x['name'] for x in json.load(sys.stdin).get('labels',[])]))")
+
+          if [[ "${EVENT_ACTION}" == "labeled" && "${LABEL_NAME}" == "aar:done" ]]; then
+            if [[ "${ISSUE_TITLE}" =~ ^\[AAR\]\ Step\.[1-7]: ]]; then
+              echo "mode=state_transition" >> "${GITHUB_OUTPUT}"
+              echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
+            else
+              echo "mode=skip" >> "${GITHUB_OUTPUT}"
+            fi
+            exit 0
+          fi
+
+          if [[ "${EVENT_ACTION}" == "closed" ]]; then
+            if [[ "${ISSUE_TITLE}" =~ ^\[AAR\] ]]; then
+              echo "mode=state_transition" >> "${GITHUB_OUTPUT}"
+              echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
+            else
+              echo "mode=skip" >> "${GITHUB_OUTPUT}"
+            fi
+            exit 0
+          fi
+
+          if [[ "${ISSUE_TITLE}" =~ ^\[AAR\] ]]; then
+            echo "mode=skip" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [[ "${EVENT_ACTION}" == "labeled" && "${LABEL_NAME}" != "auto-agentic-retrieval" ]]; then
+            echo "mode=skip" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          HAS_TRIGGER=$(printf '%s' "${ISSUE_LABELS}" | python3 -c "import sys,json; print('true' if 'auto-agentic-retrieval' in json.load(sys.stdin) else 'false')")
+          # blocked は入力不備で停止した状態。入力修正後の再実行を閉ざさないため初期化済判定から除く。
+          HAS_STATE=$(printf '%s' "${ISSUE_LABELS}" | python3 -c "import sys,json; labels=json.load(sys.stdin); busy={'aar:initialized','aar:ready','aar:running','aar:done'}; print('true' if busy & set(labels) else 'false')")
+          if [[ "${HAS_TRIGGER}" == "true" && "${HAS_STATE}" == "false" ]]; then
+            echo "mode=initialize" >> "${GITHUB_OUTPUT}"
+            echo "issue_number=${ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "mode=skip" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.mode != 'skip'
+
+      - name: ラベル bootstrap
+        if: steps.gate.outputs.mode == 'initialize'
+        run: |
+          set -euo pipefail
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/label-helpers.sh"
+          create_label "auto-agentic-retrieval" "5319E7" "run Agentic Retrieval add-on workflow"
+          create_label "aar:initialized" "C5DEF5" ""
+          create_label "aar:ready" "0075CA" ""
+          create_label "aar:running" "E4E669" ""
+          create_label "aar:done" "0E8A16" ""
+          create_label "aar:blocked" "D73A4A" ""
+
+      - name: Issue 初期化と Step Issue 生成
+        if: steps.gate.outputs.mode == 'initialize'
+        env:
+          ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+          ENABLE_AGENTIC_RETRIEVAL: ${{ inputs.enable_agentic_retrieval }}
+        run: |
+          set -euo pipefail
+          source "${GITHUB_WORKSPACE}/.github/scripts/adfd-common.sh"
+          ROOT_ISSUE="${ISSUE_NUMBER}"
+
+          if [[ "${ENABLE_AGENTIC_RETRIEVAL}" == "no" ]]; then
+            add_label "${ROOT_ISSUE}" "aar:done"
+            post_comment "${ROOT_ISSUE}" "ℹ️ Agentic Retrieval が無効のため、AAR Step Issue は生成しません。"
+            exit 0
+          fi
+
+          ISSUE_BODY=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
+          export ISSUE_BODY ROOT_ISSUE
+          PARSED=$(python3 - <<'PY'
+          import json, os, re
+          body = os.environ.get("ISSUE_BODY", "")
+          def value(label, default=""):
+              m = re.search(r"###\s*" + re.escape(label) + r"\s*\n+(.*?)(?=\n###|\Z)", body, re.S)
+              if not m:
+                  return default
+              v = m.group(1).strip()
+              return default if v == "_No response_" else v
+          print(json.dumps({
+              "branch": value("対象ブランチ", "main").splitlines()[0],
+              "resource_group": value("リソースグループ名").splitlines()[0],
+              "app_ids": value("対象アプリケーション (APP-ID) — 複数指定可（任意）").replace("\n", ", "),
+              "additional": value("追加コメント（任意）"),
+          }))
+          PY
+          )
+          BRANCH=$(printf '%s' "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['branch'])")
+          RESOURCE_GROUP=$(printf '%s' "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['resource_group'])")
+          APP_IDS=$(printf '%s' "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['app_ids'])")
+          ADDITIONAL=$(printf '%s' "${PARSED}" | python3 -c "import sys,json; print(json.load(sys.stdin)['additional'])")
+          if [[ -z "${RESOURCE_GROUP//[[:space:]]/}" ]]; then
+            add_label "${ROOT_ISSUE}" "aar:blocked"
+            post_comment "${ROOT_ISSUE}" "❌ リソースグループ名が空です。入力を修正して再実行してください。"
+            exit 1
+          fi
+          git check-ref-format --branch "${BRANCH}" >/dev/null 2>&1 || {
+            add_label "${ROOT_ISSUE}" "aar:blocked"
+            post_comment "${ROOT_ISSUE}" "❌ 対象ブランチ名が不正です。"
+            exit 1
+          }
+          if [[ -n "${APP_IDS}" ]] && ! [[ "${APP_IDS}" =~ ^APP-[0-9]+([[:space:]]*,[[:space:]]*APP-[0-9]+)*$ ]]; then
+            add_label "${ROOT_ISSUE}" "aar:blocked"
+            post_comment "${ROOT_ISSUE}" "❌ APP-ID は APP-数字 のカンマ区切りで指定してください。"
+            exit 1
+          fi
+          # 入力検証を通過してから initialized を立てる。
+          # 先に立てると入力不備で blocked になった Issue を修正しても再実行できない。
+          add_label "${ROOT_ISSUE}" "aar:initialized"
+          export BRANCH RESOURCE_GROUP APP_IDS ADDITIONAL
+
+          ROOT_REF=$(printf '<!-- root-issue: #%s -->\n<!-- branch: %s -->\n<!-- resource-group: %s -->\n<!-- app-ids: %s -->' \
+            "${ROOT_ISSUE}" "${BRANCH}" "${RESOURCE_GROUP}" "${APP_IDS}")
+          export ROOT_REF
+
+          python3 - <<'PY' > "${RUNNER_TEMP}/aar-steps.tsv"
+          import base64, os
+          from pathlib import Path
+
+          steps = [
+              ("1", "[AAR] Step.1: Agentic Retrieval 機能要件詳細", "Arch-AgenticRetrieval-Detail"),
+              ("2", "[AAR] Step.2: Agentic Retrieval Azure 実装設計", "Dev-Microservice-Azure-AgenticRetrievalDesign"),
+              ("3", "[AAR] Step.3: Agentic Retrieval テスト仕様", "Arch-TDD-TestSpec"),
+              ("4", "[AAR] Step.4: Agentic Retrieval テストコード（TDD RED）", "Dev-Microservice-Azure-AgenticRetrievalTestCoding"),
+              ("5", "[AAR] Step.5: Agentic Retrieval Deploy", "Dev-Microservice-Azure-AgenticRetrievalDeploy"),
+              ("6", "[AAR] Step.6: Retrieval 実測評価（reasoning effort 比較）", "QA-AgenticRetrievalEval"),
+              ("7", "[AAR] Step.7: 要件適合実測", "QA-RequirementsConformanceEval"),
+          ]
+
+          class Safe(dict):
+              def __missing__(self, key):
+                  return "{" + key + "}"
+
+          existing = Path(".github/scripts/templates/_shared/existing-artifact-policy.md").read_text(encoding="utf-8").strip()
+          app_ids = os.environ.get("APP_IDS", "")
+          values = Safe(
+              root_ref=os.environ["ROOT_REF"],
+              app_arch_scope_section=("## 対象 APP-ID\n" + app_ids + "\n") if app_ids else "",
+              resource_group=os.environ.get("RESOURCE_GROUP", ""),
+              WORK=f"work/run/cloud-aar-{os.environ['ROOT_ISSUE']}/Issue-{os.environ['ROOT_ISSUE']}/artifacts/",
+              existing_artifact_policy=existing,
+              completion_instruction="- 完了時に自身に `aar:done` ラベルを付与すること\n",
+              # 対象 APP-ID は app_arch_scope_section で出し済み。二重見出しを作らない。
+              app_id_section="",
+              additional_section=("\n## 追加コメント\n" + os.environ["ADDITIONAL"] + "\n") if os.environ.get("ADDITIONAL") else "",
+          )
+          for sid, title, agent in steps:
+              template = Path(f".github/scripts/templates/aar/step-{sid}.md").read_text(encoding="utf-8")
+              body = template.format_map(values)
+              encoded = base64.b64encode(body.encode()).decode()
+              print("\t".join((sid, title, agent, encoded)))
+          PY
+
+          STEP_LABELS='["aar:blocked","auto-agentic-retrieval"]'
+          declare -A NUMS IDS AGENTS
+          while IFS=$'\t' read -r sid title agent body64; do
+            body=$(printf '%s' "${body64}" | base64 --decode)
+            response=$(create_issue "${title}" "${body}" "${STEP_LABELS}")
+            NUMS["${sid}"]=$(printf '%s' "${response}" | python3 -c "import sys,json; print(json.load(sys.stdin)['number'])")
+            IDS["${sid}"]=$(printf '%s' "${response}" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+            AGENTS["${sid}"]="${agent}"
+            link_sub_issue "${ROOT_ISSUE}" "${IDS[${sid}]}"
+            echo "Step.${sid} 作成: #${NUMS[${sid}]}"
+          done < "${RUNNER_TEMP}/aar-steps.tsv"
+
+          FIRST="${NUMS[1]}"
+          curl -s -o /dev/null -X DELETE \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO}/issues/${FIRST}/labels/aar%3Ablocked" || true
+          add_label "${FIRST}" "aar:ready"
+          if assign_copilot "${FIRST}" "${AGENTS[1]}" "${BRANCH}" ""; then
+            add_label "${FIRST}" "aar:running"
+          fi
+          SUBISSUE_LIST=""
+          while IFS=$'\t' read -r sid title agent body64; do
+            SUBISSUE_LIST="${SUBISSUE_LIST}- #${NUMS[${sid}]} ${title}"$'\n'
+          done < "${RUNNER_TEMP}/aar-steps.tsv"
+          post_comment "${ROOT_ISSUE}" "$(printf '✅ AAR ワークフローを初期化しました。\n\n**生成された Sub Issue:**\n%s\n**実行順序:** Step.1 → 2 → 3 → 4 → 5 → 6 → 7' "${SUBISSUE_LIST}")"
+
+      - name: 状態遷移処理
+        if: steps.gate.outputs.mode == 'state_transition'
+        env:
+          DONE_ISSUE_NUMBER: ${{ steps.gate.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          source "${GITHUB_WORKSPACE}/.github/scripts/adfd-common.sh"
+          ISSUE_JSON=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${DONE_ISSUE_NUMBER}")
+          TITLE=$(printf '%s' "${ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('title',''))")
+          BODY=$(printf '%s' "${ISSUE_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('body','') or '')")
+          HAS_DONE=$(printf '%s' "${ISSUE_JSON}" | python3 -c "import sys,json; print('true' if 'aar:done' in [x['name'] for x in json.load(sys.stdin).get('labels',[])] else 'false')")
+          if [[ "${HAS_DONE}" == "false" ]]; then
+            add_label "${DONE_ISSUE_NUMBER}" "aar:done"
+          fi
+          STEP=$(printf '%s' "${TITLE}" | sed -n 's/^\[AAR\] Step\.\([1-7]\):.*/\1/p')
+          ROOT=$(printf '%s' "${BODY}" | sed -n 's/^.*<!-- root-issue: #\([0-9][0-9]*\) -->.*$/\1/p' | head -1)
+          BRANCH=$(printf '%s' "${BODY}" | sed -n 's/^.*<!-- branch: \([^>]*\) -->.*$/\1/p' | head -1)
+          if [[ -z "${STEP}" || -z "${ROOT}" ]]; then
+            echo "ERROR: 完了 Issue #${DONE_ISSUE_NUMBER} から Step または root-issue を特定できません。" >&2
+            exit 1
+          fi
+          [[ -z "${BRANCH}" ]] && BRANCH="main"
+
+          if [[ "${STEP}" == "7" ]]; then
+            add_label "${ROOT}" "aar:done"
+            post_comment "${ROOT}" "🎉 AAR Step.1〜7 が完了しました。"
+            exit 0
+          fi
+
+          NEXT=$((STEP + 1))
+          SUBS=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${ROOT}/sub_issues")
+          NEXT_JSON=$(printf '%s' "${SUBS}" | python3 -c "import sys,json,re; n=sys.argv[1]; xs=json.load(sys.stdin); print(json.dumps(next((x for x in xs if re.search(r'\\[AAR\\] Step\\.'+n+r':', x.get('title',''))), {})))" "${NEXT}")
+          NEXT_NUM=$(printf '%s' "${NEXT_JSON}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('number',''))")
+          [[ -z "${NEXT_NUM}" ]] && { echo "Step.${NEXT} が見つかりません。" >&2; exit 1; }
+          # closed と labeled の二重発火で同じ Step を 2 回起動しない。
+          # aar:blocked は Step Issue の初期ラベルなので未起動を意味し、busy には含めない。
+          NEXT_BUSY=$(printf '%s' "${NEXT_JSON}" | python3 -c "import sys,json; d=json.load(sys.stdin); busy={'aar:ready','aar:running','aar:done'}; print('true' if busy & {x['name'] for x in d.get('labels',[])} else 'false')")
+          if [[ "${NEXT_BUSY}" == "true" ]]; then
+            echo "Step.${NEXT} (#${NEXT_NUM}) は起動済みのためスキップします。"
+            exit 0
+          fi
+          NEXT_BODY=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${NEXT_NUM}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('body','') or '')")
+          AGENT=$(printf '%s' "${NEXT_BODY}" | sed -n '/^## Custom Agent$/ {n;s/^`\([^`]*\)`.*/\1/p;q;}')
+          [[ -n "${AGENT}" ]] || { echo "ERROR: Step.${NEXT} (#${NEXT_NUM}) の Custom Agent を特定できません。" >&2; exit 1; }
+          curl -s -o /dev/null -X DELETE \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO}/issues/${NEXT_NUM}/labels/aar%3Ablocked" || true
+          add_label "${NEXT_NUM}" "aar:ready"
+          if assign_copilot "${NEXT_NUM}" "${AGENT}" "${BRANCH}" ""; then
+            add_label "${NEXT_NUM}" "aar:running"
+          fi
+          echo "Step.${STEP} 完了 → Step.${NEXT} (#${NEXT_NUM}) を起動しました。"

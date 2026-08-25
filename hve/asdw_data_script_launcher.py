@@ -653,6 +653,8 @@ def _resolve_deploy_identity_client_id(environment: Mapping[str, str]) -> str:
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
         )
     except OSError as exc:

@@ -272,7 +272,9 @@ output=$(bash -c '
   set -euo pipefail
   export GITHUB_WORKSPACE="'"$(cd "${SCRIPT_DIR}/../../.." && pwd)"'"
   source "'"${BASH_DIR}"'/lib/yaml-safe-helpers.sh"
-  json="{\"labels\":[],\"body\":\"### PR完全自動化設定\n- [x] PR の自動 Approve & Auto-merge を有効にする\"}"
+  # ASCII の JSON Unicode escape に固定し、Windows Git Bash から native
+  # Python へ pipe するときのコードページ変換にテスト結果を依存させない。
+  json="{\"labels\":[],\"body\":\"### PR\u5b8c\u5168\u81ea\u52d5\u5316\u8a2d\u5b9a\n- [x] PR \u306e\u81ea\u52d5 Approve & Auto-merge \u3092\u6709\u52b9\u306b\u3059\u308b\"}"
   echo "${json}" | wh_check_auto_merge
 ' 2>&1) || true
 if echo "${output}" | grep -q "true"; then
@@ -288,6 +290,9 @@ output=$(bash -c '
   body="Fixes #12\nCloses owner/repo#34\nresolves #12"
   printf "%s" "${body}" | wh_parse_closing_issues
 ' 2>&1) || true
+# Windows native Python の print は Git Bash pipe 上でも CRLF を返すため、
+# 行内容と順序の契約を比較する前に CR だけを正規化する。
+output="${output//$'\r'/}"
 if [[ "${output}" == $'12\n34' ]]; then
   pass "yaml-safe-helpers: parse closing issues unique order"
 else

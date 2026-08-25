@@ -1,5 +1,7 @@
 # GitHub Copilot CLI への Playwright (MCP) 導入手順書
 
+← [README](../README.md)
+
 > 本書は GitHub Copilot CLI から Playwright によるブラウザ自動化機能を利用できるようにするための、MCP (Model Context Protocol) サーバー登録手順をまとめたものです。
 > 対象: `https://github.com/microsoft/playwright` 本体ではなく、その公式 MCP ラッパー `@playwright/mcp` (`https://github.com/microsoft/playwright-mcp`) を Copilot CLI に登録します。
 >
@@ -168,6 +170,7 @@ Playwright MCP を使って https://example.com を開き、ページタイト�
 
 ## 11. 参考リンク
 
+- 本リポジトリ内: MCP Server 全般の認証設定とトラブルシュート — [plugin-mcp-auth.md](./plugin-mcp-auth.md)
 - GitHub 公式: Adding MCP servers for GitHub Copilot CLI
   <https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers>
 - About GitHub Copilot CLI

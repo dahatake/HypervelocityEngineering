@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 700" role="img" aria-label="AAS インフォグラフィック">
-  <desc>AAS（App Architecture Design）11ステップ: 入力ファイル → Prompt → 出力ファイルのデータフロー図。Step.8 はペルソナカタログ、Step.9 はペルソナ別共通画面カタログ。</desc>
+  <desc>AAS（App Architecture Design）10ステップ: 入力ファイル → Prompt → 出力ファイルのデータフロー図。Step.7 はペルソナカタログ、Step.8 はペルソナ別共通画面カタログ。</desc>
   <defs>
     <marker id="arr" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
       <polygon points="0 0, 9 3.5, 0 7" fill="#555"/>
@@ -19,87 +19,79 @@
   <text x="450" y="25" text-anchor="middle" class="ttl">AAS データフロー（入力→Agent→出力）</text>
   <!-- Input -->
   <rect x="20" y="45" width="150" height="30" rx="4" class="in"/>
-  <text x="95" y="64" text-anchor="middle" class="bt">docs/catalog/use-case-catalog.md</text>
+  <text x="95" y="64" text-anchor="middle" class="bt">app-catalog.md（ARD生成）</text>
   <!-- Step 1 -->
   <line x1="170" y1="60" x2="200" y2="60" class="ln"/>
   <rect x="200" y="40" width="130" height="40" rx="5" class="agt"/>
   <text x="265" y="57" text-anchor="middle" class="bt">Step.1</text>
-  <text x="265" y="71" text-anchor="middle" class="bs">Arch-ApplicationAnalytics</text>
+  <text x="265" y="71" text-anchor="middle" class="bs">Arch-ArchitectureCandidate</text>
   <line x1="330" y1="60" x2="360" y2="60" class="ln"/>
   <rect x="360" y="45" width="150" height="30" rx="4" class="out"/>
-  <text x="435" y="64" text-anchor="middle" class="bt">app-catalog.md</text>
-  <!-- Step 2 -->
+  <text x="435" y="64" text-anchor="middle" class="bt">app-arch-catalog.md</text>
+  <!-- Step 2.1 -->
   <line x1="435" y1="75" x2="435" y2="100" class="ln"/>
   <rect x="370" y="100" width="130" height="40" rx="5" class="agt"/>
-  <text x="435" y="117" text-anchor="middle" class="bt">Step.2</text>
-  <text x="435" y="131" text-anchor="middle" class="bs">Arch-ArchitectureCandidate</text>
+  <text x="435" y="117" text-anchor="middle" class="bt">Step.2.1</text>
+  <text x="435" y="131" text-anchor="middle" class="bs">Arch-Microservice-Domain</text>
   <line x1="500" y1="120" x2="530" y2="120" class="ln"/>
   <rect x="530" y="105" width="150" height="30" rx="4" class="out"/>
-  <text x="605" y="124" text-anchor="middle" class="bt">app-arch-catalog.md</text>
-  <!-- Step 3.1 -->
+  <text x="605" y="124" text-anchor="middle" class="bt">domain-analytics.md</text>
+  <!-- Step 2.2 -->
   <line x1="435" y1="140" x2="435" y2="165" class="ln"/>
   <rect x="370" y="165" width="130" height="40" rx="5" class="agt"/>
-  <text x="435" y="182" text-anchor="middle" class="bt">Step.3.1</text>
-  <text x="435" y="196" text-anchor="middle" class="bs">Arch-Microservice-Domain</text>
+  <text x="435" y="182" text-anchor="middle" class="bt">Step.2.2</text>
+  <text x="435" y="196" text-anchor="middle" class="bs">Arch-Microservice-ServiceIdentify</text>
   <line x1="500" y1="185" x2="530" y2="185" class="ln"/>
   <rect x="530" y="170" width="150" height="30" rx="4" class="out"/>
-  <text x="605" y="189" text-anchor="middle" class="bt">domain-analytics.md</text>
-  <!-- Step 3.2 -->
+  <text x="605" y="189" text-anchor="middle" class="bt">service-catalog.md</text>
+  <!-- Step 3.1 -->
   <line x1="435" y1="205" x2="435" y2="230" class="ln"/>
   <rect x="370" y="230" width="130" height="40" rx="5" class="agt"/>
-  <text x="435" y="247" text-anchor="middle" class="bt">Step.3.2</text>
-  <text x="435" y="261" text-anchor="middle" class="bs">Arch-Microservice-ServiceIdentify</text>
+  <text x="435" y="247" text-anchor="middle" class="bt">Step.3.1</text>
+  <text x="435" y="261" text-anchor="middle" class="bs">Arch-DataModeling</text>
   <line x1="500" y1="250" x2="530" y2="250" class="ln"/>
   <rect x="530" y="235" width="150" height="30" rx="4" class="out"/>
-  <text x="605" y="254" text-anchor="middle" class="bt">service-catalog.md</text>
+  <text x="605" y="254" text-anchor="middle" class="bt">data-model.md</text>
   <!-- Step 4 -->
   <line x1="435" y1="270" x2="435" y2="295" class="ln"/>
   <rect x="370" y="295" width="130" height="40" rx="5" class="agt"/>
   <text x="435" y="312" text-anchor="middle" class="bt">Step.4</text>
-  <text x="435" y="326" text-anchor="middle" class="bs">Arch-DataModeling</text>
+  <text x="435" y="326" text-anchor="middle" class="bs">Arch-DataCatalog</text>
   <line x1="500" y1="315" x2="530" y2="315" class="ln"/>
   <rect x="530" y="300" width="150" height="30" rx="4" class="out"/>
-  <text x="605" y="319" text-anchor="middle" class="bt">data-model.md</text>
+  <text x="605" y="319" text-anchor="middle" class="bt">data-catalog.md</text>
   <!-- Step 5 -->
   <line x1="435" y1="335" x2="435" y2="360" class="ln"/>
   <rect x="370" y="360" width="130" height="40" rx="5" class="agt"/>
   <text x="435" y="377" text-anchor="middle" class="bt">Step.5</text>
-  <text x="435" y="391" text-anchor="middle" class="bs">Arch-DataCatalog</text>
+  <text x="435" y="391" text-anchor="middle" class="bs">Arch-Microservice-ServiceCatalog</text>
   <line x1="500" y1="380" x2="530" y2="380" class="ln"/>
-  <rect x="530" y="365" width="150" height="30" rx="4" class="out"/>
-  <text x="605" y="384" text-anchor="middle" class="bt">data-catalog.md</text>
+  <rect x="530" y="365" width="160" height="30" rx="4" class="out"/>
+  <text x="610" y="384" text-anchor="middle" class="bt">service-catalog-matrix.md</text>
   <!-- Step 6 -->
   <line x1="435" y1="400" x2="435" y2="425" class="ln"/>
   <rect x="370" y="425" width="130" height="40" rx="5" class="agt"/>
   <text x="435" y="442" text-anchor="middle" class="bt">Step.6</text>
-  <text x="435" y="456" text-anchor="middle" class="bs">Arch-Microservice-ServiceCatalog</text>
+  <text x="435" y="456" text-anchor="middle" class="bs">Arch-TDD-TestStrategy</text>
   <line x1="500" y1="445" x2="530" y2="445" class="ln"/>
-  <rect x="530" y="430" width="160" height="30" rx="4" class="out"/>
-  <text x="610" y="449" text-anchor="middle" class="bt">service-catalog-matrix.md</text>
+  <rect x="530" y="430" width="150" height="30" rx="4" class="out"/>
+  <text x="605" y="449" text-anchor="middle" class="bt">test-strategy.md</text>
   <!-- Step 7 -->
   <line x1="435" y1="465" x2="435" y2="490" class="ln"/>
   <rect x="370" y="490" width="130" height="40" rx="5" class="agt"/>
   <text x="435" y="507" text-anchor="middle" class="bt">Step.7</text>
-  <text x="435" y="521" text-anchor="middle" class="bs">Arch-TDD-TestStrategy</text>
+  <text x="435" y="521" text-anchor="middle" class="bs">Arch-PersonaCatalog</text>
   <line x1="500" y1="510" x2="530" y2="510" class="ln"/>
-  <rect x="530" y="495" width="150" height="30" rx="4" class="out"/>
-  <text x="605" y="514" text-anchor="middle" class="bt">test-strategy.md</text>
+  <rect x="530" y="495" width="160" height="30" rx="4" class="out"/>
+  <text x="610" y="514" text-anchor="middle" class="bt">persona-catalog.md</text>
   <!-- Step 8 -->
   <line x1="435" y1="530" x2="435" y2="555" class="ln"/>
   <rect x="370" y="555" width="130" height="40" rx="5" class="agt"/>
   <text x="435" y="572" text-anchor="middle" class="bt">Step.8</text>
-  <text x="435" y="586" text-anchor="middle" class="bs">Arch-PersonaCatalog</text>
+  <text x="435" y="586" text-anchor="middle" class="bs">Arch-UI-PersonaScreenList</text>
   <line x1="500" y1="575" x2="530" y2="575" class="ln"/>
-  <rect x="530" y="560" width="160" height="30" rx="4" class="out"/>
-  <text x="610" y="579" text-anchor="middle" class="bt">persona-catalog.md</text>
-  <!-- Step 9 -->
-  <line x1="435" y1="595" x2="435" y2="620" class="ln"/>
-  <rect x="370" y="620" width="130" height="40" rx="5" class="agt"/>
-  <text x="435" y="637" text-anchor="middle" class="bt">Step.9</text>
-  <text x="435" y="651" text-anchor="middle" class="bs">Arch-UI-PersonaScreenList</text>
-  <line x1="500" y1="640" x2="530" y2="640" class="ln"/>
-  <rect x="530" y="625" width="190" height="30" rx="4" class="out"/>
-  <text x="625" y="644" text-anchor="middle" class="bt">persona-screen-catalog.md</text>
+  <rect x="530" y="560" width="190" height="30" rx="4" class="out"/>
+  <text x="625" y="579" text-anchor="middle" class="bt">persona-screen-catalog.md</text>
   <!-- Legend -->
   <rect x="20" y="620" width="14" height="14" rx="2" class="in"/>
   <text x="40" y="631" class="lbl">入力</text>

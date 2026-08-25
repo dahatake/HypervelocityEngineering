@@ -42,21 +42,26 @@
 | 2 | `docs/catalog/use-case-catalog.md` | 全ユースケース俯瞰。Agent の対象/非対象の境界決定 | Non-Goals, Boundary Matrix |
 | 3 | `docs/catalog/domain-analytics.md` | Bounded Context 境界。Agent 分割判断の根拠 | Architecture Decision, Boundary Matrix |
 | 4 | `docs/catalog/data-model.md` | エンティティ定義。I/O Contract のスキーマ根拠 | Input/Output Contract, Knowledge Source |
-| 5 | `docs/catalog/service-catalog.md` | マイクロサービス一覧。Agent ↔ サービスのマッピング | Tool Catalog, Boundary Matrix |
-| 6 | `docs/catalog/service-catalog-matrix.md` | 画面→API→データの完全マッピング。Tool（Actions）定義の根拠 | **Tool Catalog（最重要）**, Procedure |
-| 7 | `docs/services/SVC-*.md` | 各サービスの詳細仕様（API I/O、バリデーション、イベント、権限）。Tool の入出力スキーマ・失敗分類の根拠 | Tool I/O Schema, Error Handling, Permission Model |
-| 8 | `docs/azure/azure-services-data.md` | Azure データストア構成。Knowledge Source / RAG の具体設計根拠 | Knowledge Source, RAG 設計 |
-| 9 | `docs/azure/azure-services-additional.md` | 追加 Azure サービス構成（AI Search, OpenAI 等）。LLM バックエンド・検索インデックスの設計根拠 | Tool Catalog（AI系）, LLM 選定 |
+| 5 | `docs/catalog/data-catalog.md` | 構造化データの正本。物理マッピング・PII 区分・所有権・ライフサイクル | Knowledge Source, Permission Model, Data Boundary |
+| 6 | `docs/catalog/service-catalog.md` | マイクロサービス一覧。Agent ↔ サービスのマッピング | Tool Catalog, Boundary Matrix |
+| 7 | `docs/services/SVC-*.md` | 各サービスの詳細仕様（API I/O、バリデーション、イベント、権限）。**Tool（Actions）定義の根拠（最重要）** | **Tool Catalog（最重要）**, Tool I/O Schema, Error Handling, Permission Model |
+| 8 | `docs/catalog/unstructured-data-catalog.md` | 非構造化データ資産と検索経路候補。RAG 設計の根拠 | Knowledge Source, RAG 設計 |
+| 9 | `docs/catalog/persona-catalog.md` | 権限主体のペルソナ。誰の権限で動くかの判定根拠 | Permission Model, Scope |
 | 10 | `docs/catalog/app-catalog.md` | アプリケーション一覧（APP-ID）。Agent と APP の対応付けおよびスコープ確認根拠 | Scope, Boundary Matrix, Non-Goals |
 
 ### 推奨ファイル（存在すれば参照。なくても設計は進められる）
 
 | # | ファイル | 用途 |
 |---|---------|------|
-| 11 | `docs/catalog/screen-catalog-APP-*.md` | 画面一覧（APP ごと）。Agent が UI 内で動作する場合の Conversation Design 根拠 |
-| 12 | `docs/screen/{screenId}-*.md` | 画面詳細定義。Output format / トーン / 対話チャネル設計の根拠 |
-| 13 | `src/data/sample-data.json` | サンプルデータ。System Prompt の Examples（Few-shot）作成用 |
-| 14 | `.github/skills/agent-common-preamble/references/agent-playbook.md` | 社内テンプレ/語彙/表現ルール（存在する場合のみ） |
+| 11 | `src/data/sample-data.json` | サンプルデータ。System Prompt の Examples（Few-shot）作成用 |
+| 12 | `docs/azure/azure-services-data.md` | Azure データストア構成（ASDW-WEB 実行済みの場合）。Knowledge Source の具体設計根拠 |
+| 13 | `docs/azure/azure-services-additional.md` | 追加 Azure サービス構成（ASDW-WEB / AAD-WEB 実行済みの場合）。LLM バックエンド・検索インデックスの設計根拠 |
+| 14 | `docs/catalog/service-catalog-matrix.md` | 画面→API→データの完全マッピング（AAS 実行済みの場合のみ存在）。Tool 定義の補強 |
+| 15 | `docs/catalog/screen-catalog-APP-*.md` | 画面一覧（AAD-WEB 実行済みの場合のみ存在）。Agent が UI 内で動作する場合の Conversation Design 根拠 |
+| 16 | `docs/screen/{screenId}-*.md` | 画面詳細定義（AAD-WEB 実行済みの場合のみ存在）。Output format / トーン / 対話チャネル設計の根拠 |
+| 17 | `.github/skills/agent-common-preamble/references/agent-playbook.md` | 社内テンプレ/語彙/表現ルール（存在する場合のみ） |
+
+> **経路の前提**: ADA（Agent Data Architecture）から来た場合、#14〜#16 は存在しない。画面が無いことを前提に設計し、欠落を `TBD` として扱わないこと。
 
 ### 入力参照ルール
 - **必読ファイルが存在しない場合**: `TBD（ファイル未検出: {パス}）` と明記し、該当セクションは仮定ベースで記述する。推測で埋めない。

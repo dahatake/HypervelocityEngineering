@@ -1,5 +1,5 @@
 name: "AI Agent Dev & Deploy"
-description: "Issue から AI Agent 実装・デプロイワークフロー (Step.1〜Step.4) を自動起動します"
+description: "Issue から AI Agent 実装・デプロイワークフロー (Step.1〜Step.7) を自動起動します"
 title: "[AI Agent Dev] "
 labels:
   - "auto-ai-agent-dev"
@@ -17,6 +17,9 @@ body:
         | **Step.2.3** | AI Agent 実装 (TDD GREEN) |
         | **Step.3** | AI Agent Deploy |
         | **Step.4** | tool search 実測評価 |
+        | **Step.5** | 要件適合実測 |
+        | **Step.6** | 検索経路の適正化実測 |
+        | **Step.7** | Microsoft 365 / Teams 公開 |
 
         全実装・テスト・Deployステップ完了後、AAGD成果物を対象とするPost-DAG Self-Improveが必ず実行されます。
         TDD GREENのリトライ上限とPost-DAG Self-Improveのイテレーション上限は別々に管理されます。
@@ -92,13 +95,15 @@ body:
       description: |
         実行したいステップにチェックを入れてください。
         ✅ **デフォルト（全チェックなし）: 全 Step が実行されます。**
-        📋 **依存関係**: Step.1 → Step.2 → Step.3 → Step.4
+        📋 **依存関係**: Step.1 → Step.2 → Step.3 → Step.4 / Step.5 / Step.6 / Step.7（Step.4〜7 はいずれも Step.3 完了後）
       options:
         - label: "Step.1 — AI Agent 構成設計"
         - label: "Step.2 — AI Agent 実装 (Step.2.1 テスト仕様書 / Step.2.2 テストコード生成 / Step.2.3 実装)"
         - label: "Step.3 — AI Agent Deploy ※ Step.2 が必須"
         - label: "Step.4 — tool search 実測評価 ※ Step.3 が必須"
-        - label: "Step.3 — AI Agent Deploy ※ Step.2 が必須"
+        - label: "Step.5 — 要件適合実測 ※ Step.3 が必須"
+        - label: "Step.6 — 検索経路の適正化実測 ※ Step.3 が必須"
+        - label: "Step.7 — Microsoft 365 / Teams 公開 ※ Step.3 が必須"
 
   - type: dropdown
     id: model

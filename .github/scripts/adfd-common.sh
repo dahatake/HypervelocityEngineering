@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# adfd-common.sh — ADFD/ADFDV ワークフロー共通ユーティリティ関数
+# adfd-common.sh — ADFD/ADFDV/AAR ワークフロー共通ユーティリティ関数
+#
+# ファイル名は ADFD 由来だが、Issue/ラベル/Copilot アサイン操作はワークフロー非依存のため
+# AAR も同じ関数群を利用する。
 #
 # 前提環境変数:
 #   GH_TOKEN    — GitHub API 認証トークン

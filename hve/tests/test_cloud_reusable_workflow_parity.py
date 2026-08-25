@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -22,8 +23,18 @@ _BASH_REGISTRY = _REPO / ".github" / "scripts" / "bash" / "lib" / "workflow-regi
 _UNIFIED = {
     "auto-ai-agent-design-reusable.yml": ("aag", "AAG"),
     "auto-ai-agent-dev-reusable.yml": ("aagd", "AAGD"),
+    "auto-agentic-retrieval-reusable.yml": ("aar", "AAR"),
+    "auto-agent-data-architecture-reusable.yml": ("ada", "ADA"),
+    "auto-app-dev-microservice-web-reusable.yml": ("asdw-web", "ASDW-WEB"),
+    "auto-dataflow-dev-reusable.yml": ("adfdv", "ADFDV"),
 }
 _PENDING: dict[str, tuple[str, str]] = {}
+
+
+def _workflow(workflow_id: str):
+    workflow = get_workflow(workflow_id)
+    assert workflow is not None, f"workflow が未登録: {workflow_id}"
+    return workflow
 
 
 def _created_step_ids(workflow_file: str, prefix: str) -> set[str]:
@@ -68,7 +79,7 @@ class TestUnifiedWorkflows:
         """CLI/GUI 側の registry とも一致すること。"""
         created = _created_step_ids(workflow_file, prefix)
         hve = {
-            s.id for s in get_workflow(workflow_id).steps if not s.is_container
+            s.id for s in _workflow(workflow_id).steps if not s.is_container
         }
         assert created == hve
 
@@ -80,7 +91,9 @@ class TestUnifiedWorkflows:
             encoding="utf-8"
         )
         expected = {
-            s.custom_agent for s in get_workflow(workflow_id).steps if not s.is_container
+            s.custom_agent
+            for s in _workflow(workflow_id).steps
+            if not s.is_container and s.custom_agent
         }
         for agent in expected:
             assert agent in text, f"{workflow_file} に {agent} が無い"
@@ -97,9 +110,20 @@ class TestUnifiedWorkflows:
             encoding="utf-8"
         )
         allowed = {
-            s.custom_agent for s in get_workflow(workflow_id).steps if not s.is_container
+            s.custom_agent
+            for s in _workflow(workflow_id).steps
+            if not s.is_container and s.custom_agent
         }
         used = set(re.findall(r"## Custom Agent\\n`([A-Za-z0-9\-]+)`", text))
+        if not used:
+            template_dir = _REPO / ".github" / "scripts" / "templates" / workflow_id
+            for template in template_dir.glob("step-*.md"):
+                used.update(
+                    re.findall(
+                        r"## Custom Agent\s*\n`([A-Za-z0-9\-]+)`",
+                        template.read_text(encoding="utf-8"),
+                    )
+                )
         assert used, "Custom Agent を 1 件も抽出できていない（検査が無効）"
         assert used <= allowed, f"複製元の Agent が残存: {sorted(used - allowed)}"
 
@@ -114,6 +138,103 @@ class TestUnifiedWorkflows:
         steps = _created_step_ids(workflow_file, prefix)
         assert containers.isdisjoint(steps), (
             f"{workflow_file}: コンテナと Step の ID が衝突 {sorted(containers & steps)}"
+        )
+
+
+
+def test_asdw_web_state_transition_dependencies_match_registry() -> None:
+    """Cloud 状態遷移の依存表を registry の非コンテナ Step と一致させる。"""
+    text = (_REPO / ".github" / "workflows" / "auto-app-dev-microservice-web-reusable.yml").read_text(
+        encoding="utf-8"
+    )
+    match = re.search(r"^\s*DEPS = (\{.*?^\s*\})", text, re.MULTILINE | re.DOTALL)
+    assert match, "ASDW-WEB の状態遷移 DEPS が見つかりません"
+    cloud_deps = ast.literal_eval(match.group(1))
+    registry_deps = {
+        step.id: list(step.depends_on)
+        for step in _workflow("asdw-web").steps
+        if not step.is_container
+    }
+    assert cloud_deps == registry_deps
+
+
+def test_asdw_web_inline_bodies_have_no_legacy_step_ids() -> None:
+    text = (_REPO / ".github" / "workflows" / "auto-app-dev-microservice-web-reusable.yml").read_text(
+        encoding="utf-8"
+    )
+    legacy_ids = ["Step.2.3TC", "Step.2.7T", "Step.2.7TC", "Step.2.8", "Step.2.9", "Step.2.10", "Step.3.0TC"]
+    assert [step_id for step_id in legacy_ids if step_id in text] == []
+
+
+def test_aar_root_done_event_does_not_reenter_step_transition() -> None:
+    text = (_REPO / ".github" / "workflows" / "auto-agentic-retrieval-reusable.yml").read_text(
+        encoding="utf-8"
+    )
+    assert '"${ISSUE_TITLE}" =~ ^\\[AAR\\]\\ Step\\.[1-7]:' in text
+    assert 'echo "mode=skip" >> "${GITHUB_OUTPUT}"' in text
+
+
+def test_aar_no_policy_skips_step_creation_and_uses_run_scoped_work() -> None:
+    text = (_REPO / ".github" / "workflows" / "auto-agentic-retrieval-reusable.yml").read_text(
+        encoding="utf-8"
+    )
+    assert 'if [[ "${ENABLE_AGENTIC_RETRIEVAL}" == "no" ]]; then' in text
+    assert 'add_label "${ROOT_ISSUE}" "aar:done"' in text
+    assert "work/run/cloud-aar-" in text
+    assert "/artifacts/" in text
+
+class TestAkmCloudParity:
+    """AKM の Cloud 経路が `hve/workflow_registry.py` と同じ Step を作ること。
+
+    AKM は Bash registry (`workflow-registry.sh`) に未登録で Cloud YAML が
+    ハードコードしているため、`TestUnifiedWorkflows` ではなく hve registry
+    のみと突き合わせる。
+    """
+
+    _WORKFLOW_FILE = "auto-knowledge-management-reusable.yml"
+    _PREFIX = "AKM"
+
+    @staticmethod
+    def _text() -> str:
+        return (
+            _REPO / ".github" / "workflows" / TestAkmCloudParity._WORKFLOW_FILE
+        ).read_text(encoding="utf-8")
+
+    def test_yaml_creates_exactly_the_hve_registry_steps(self) -> None:
+        created = _created_step_ids(self._WORKFLOW_FILE, self._PREFIX)
+        declared = {s.id for s in _workflow("akm").steps if not s.is_container}
+        assert created == declared, (
+            f"yaml_only={sorted(created - declared)} "
+            f"registry_only={sorted(declared - created)}"
+        )
+
+    def test_custom_agents_match_registry(self) -> None:
+        text = self._text()
+        expected = {
+            s.custom_agent
+            for s in _workflow("akm").steps
+            if not s.is_container and s.custom_agent
+        }
+        for agent in expected:
+            assert agent in text, f"{self._WORKFLOW_FILE} に {agent} が無い"
+
+    def test_step1_completion_starts_step2(self) -> None:
+        """Step.1 完了で Root を done にせず Step.2 を起動すること。"""
+        text = self._text()
+        assert "AKM はステップが 1 つのみ" not in text
+        assert "[AKM] Step.2" in text
+        assert 'if [[ "${STEP_MATCH}" == "1" ]]; then' in text
+
+    def test_only_last_step_marks_root_done(self) -> None:
+        """Root の akm:done は最終 Step（Step.2）完了時のみ付与すること。"""
+        text = self._text()
+        transition = text.split("# ---- 依存関係マップに基づき処理 ----", 1)
+        assert len(transition) == 2, "状態遷移セクションが見つかりません"
+        body = transition[1]
+        root_done_index = body.index('add_label "${ROOT_ISSUE}" "akm:done"')
+        step2_index = body.index('"${STEP_MATCH}" == "2"')
+        assert step2_index < root_done_index, (
+            "Root への akm:done 付与が Step.2 判定より前にある"
         )
 
 

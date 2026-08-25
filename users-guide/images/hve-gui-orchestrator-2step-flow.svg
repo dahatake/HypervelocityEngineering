@@ -37,13 +37,14 @@
   <text x="70" y="231" font-size="9" fill="#586069">☐ asdw-web — Web/Microservice 実装・デプロイ</text>
   <text x="70" y="245" font-size="9" fill="#586069">☐ adfd — Dataflow 設計</text>
   <text x="70" y="259" font-size="9" fill="#586069">☐ adfdv — Dataflow 実装・デプロイ</text>
-  <text x="70" y="273" font-size="9" fill="#586069">☐ aag — AI Agent 設計</text>
-  <text x="70" y="287" font-size="9" fill="#586069">☐ aagd — AI Agent 実装・デプロイ</text>
-  <text x="70" y="301" font-size="9" fill="#586069">☐ aar — Agentic Retrieval Add-on</text>
-  <text x="70" y="315" font-size="9" fill="#586069">☐ akm — Knowledge 生成・管理</text>
-  <text x="70" y="329" font-size="9" fill="#586069">☐ adi — 原本取込・質問票・選別</text>
-  <text x="70" y="343" font-size="9" fill="#586069">☐ adoc — Source Code → Documentation</text>
-  <text x="201" y="370" text-anchor="middle" font-size="9" fill="#959da5">全 12 ワークフロー（複数選択可）</text>
+  <text x="70" y="273" font-size="9" fill="#586069">☐ adi — 原本取込・質問票・選別</text>
+  <text x="70" y="287" font-size="9" fill="#586069">☐ akm — Knowledge 生成・管理</text>
+  <text x="70" y="301" font-size="9" fill="#586069">☐ adoc — Source Code → Documentation</text>
+  <text x="70" y="315" font-size="9" fill="#586069">☐ ada — Agent 向けデータ設計</text>
+  <text x="70" y="329" font-size="9" fill="#586069">☐ aag — AI Agent 設計</text>
+  <text x="70" y="343" font-size="9" fill="#586069">☐ aagd — AI Agent 実装・デプロイ</text>
+  <text x="70" y="357" font-size="9" fill="#586069">☐ aar — Agentic Retrieval Add-on</text>
+  <text x="201" y="373" text-anchor="middle" font-size="9" fill="#959da5">全 13 ワークフロー（複数選択可）</text>
   <text x="201" y="387" text-anchor="middle" font-size="9" fill="#959da5">workflow_registry.list_workflows() から動的取得</text>
   <text x="201" y="399" text-anchor="middle" font-size="8.5" fill="#959da5">左下に「実行ステップ（チェック ON のみ）」も表示</text>
 

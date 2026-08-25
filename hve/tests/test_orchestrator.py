@@ -885,12 +885,10 @@ class TestRunWorkflowFanout(unittest.TestCase):
                 calls.append(kwargs)
                 return True
 
+        # `service_catalog` を合成キーへ差し替えない。fan-out の APP-ID フィルタは
+        # 選択 APP に紐づかないキーを除外するため、カタログに実在しない ID を返すと
+        # Step 2.2 が fanout-empty で skip される。
         with patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
-            patch.dict(
-                "catalog_parsers._PARSERS",
-                {"service_catalog": lambda _repo_root: ["SVC-FANOUT-TEST"]},
-                clear=False,
-            ), \
             patch("orchestrator.StepRunner", FakeStepRunner):
             result = _run(run_workflow(
                 workflow_id="aad-web",
@@ -1994,7 +1992,7 @@ class TestCreatePrIfNeeded(unittest.TestCase):
     class _FailedDAGExecutor:
         def __init__(self, *args, **kwargs):
             self.completed = set()
-            self.failed = {"1"}
+            self.failed = {"2"}
             self.skipped = set()
 
         def compute_waves(self):
@@ -2015,15 +2013,16 @@ class TestCreatePrIfNeeded(unittest.TestCase):
 
         with patch("orchestrator._git_checkout_new_branch", return_value=True), \
              patch("orchestrator._git_add_commit_push", return_value=True), \
+             patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
              patch("orchestrator.DAGExecutor", side_effect=lambda *a, **k: self._FailedDAGExecutor()), \
              patch("orchestrator._create_pr_if_needed") as mock_create_pr:
             result = _run(run_workflow(
                 workflow_id="aas",
-                params={"branch": "main", "selected_steps": ["1"]},
+                params={"branch": "main", "selected_steps": ["2"]},
                 config=cfg,
             ))
 
-        self.assertEqual(result.get("failed"), ["1"])
+        self.assertEqual(result.get("failed"), ["2"])
         self.assertIsNone(result.get("pr_number"))
         self.assertEqual(result.get("error"), "失敗 Step があるため PR 作成をスキップしました。")
         mock_create_pr.assert_not_called()
@@ -2040,15 +2039,16 @@ class TestCreatePrIfNeeded(unittest.TestCase):
 
         with patch("orchestrator._git_checkout_new_branch", return_value=True) as mock_checkout, \
              patch("orchestrator._git_add_commit_push", return_value=True) as mock_add_commit_push, \
+             patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
              patch("orchestrator.DAGExecutor", side_effect=lambda *a, **k: self._FailedDAGExecutor()), \
              patch("orchestrator._create_pr_if_needed") as mock_create_pr:
             result = _run(run_workflow(
                 workflow_id="aas",
-                params={"branch": "main", "selected_steps": ["1"]},
+                params={"branch": "main", "selected_steps": ["2"]},
                 config=cfg,
             ))
 
-        self.assertEqual(result.get("failed"), ["1"])
+        self.assertEqual(result.get("failed"), ["2"])
         self.assertIsNone(result.get("pr_number"))
         self.assertIsNone(result.get("error"))
         mock_checkout.assert_not_called()
@@ -2546,7 +2546,7 @@ class TestAsdwStepScopedCicd(unittest.TestCase):
 class TestDoneLabeling(unittest.TestCase):
     class _FakeDAGExecutor:
         def __init__(self, *args, **kwargs):
-            self.completed = {"1"}
+            self.completed = {"2"}
             self.failed = set()
             self.skipped = set()
 
@@ -2573,11 +2573,12 @@ class TestDoneLabeling(unittest.TestCase):
         with patch("orchestrator._git_checkout_new_branch", return_value=True), \
              patch("orchestrator._git_add_commit_push", return_value=False), \
              patch("orchestrator._create_issues_if_needed", return_value=(123, {})), \
+             patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
              patch("orchestrator.DAGExecutor", side_effect=lambda *a, **k: self._FakeDAGExecutor()), \
              patch("orchestrator._build_step_prompt", side_effect=_fake_build_step_prompt):
             _run(run_workflow(
                 workflow_id="aas",
-                params={"branch": "main", "selected_steps": ["1"]},
+                params={"branch": "main", "selected_steps": ["2"]},
                 config=cfg,
             ))
 
@@ -2595,12 +2596,13 @@ class TestDoneLabeling(unittest.TestCase):
 
         with patch("orchestrator._git_checkout_new_branch", return_value=True), \
              patch("orchestrator._git_add_commit_push", return_value=False), \
-             patch("orchestrator._create_issues_if_needed", return_value=(123, {"1": 456})), \
+             patch("orchestrator._create_issues_if_needed", return_value=(123, {"2": 456})), \
+             patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
              patch("orchestrator.DAGExecutor", side_effect=lambda *a, **k: self._FakeDAGExecutor()), \
              patch("orchestrator.add_labels", return_value=True) as mock_add_labels:
             result = _run(run_workflow(
                 workflow_id="aas",
-                params={"branch": "main", "selected_steps": ["1"]},
+                params={"branch": "main", "selected_steps": ["2"]},
                 config=cfg,
             ))
 
@@ -4002,7 +4004,15 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
         with tempfile.TemporaryDirectory() as repo:
             with patch("orchestrator.get_workflow", return_value=override):
                 collected = collect_workflow_output_paths("aagd", repo_root=Path(repo))
-                self.assertEqual(collected, ["docs/agent/agent-deploy-report.md"])
+                self.assertEqual(
+                    collected,
+                    [
+                        "docs/agent/agent-deploy-report.md",
+                        "docs/agent/requirements-conformance-report.md",
+                        "docs/agent/route-rightsizing-report.md",
+                        "docs/agent/m365-publish-report.md",
+                    ],
+                )
                 self.assertFalse(
                     workflow_output_paths_cover_workflow("aagd", repo_root=Path(repo)),
                     "agent catalog 未生成のまま具体 path を scope として採用してはならない",
@@ -4073,6 +4083,9 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
                     f"src/test/agent/{agent_key}.Tests",
                     f"src/agent/{agent_key}",
                     f"docs/agent/tool-search-eval/{agent_key}-eval-report.md",
+                    "docs/agent/requirements-conformance-report.md",
+                    "docs/agent/route-rightsizing-report.md",
+                    "docs/agent/m365-publish-report.md",
                 },
             }
             catalog = Path(
@@ -4702,7 +4715,7 @@ class TestPrefetchWorkIQDetailed(unittest.TestCase):
         async def _fake_query_workiq(session, query, timeout=120.0):
             # ツール呼び出しイベントをシミュレートしてから結果を返す
             if _session_ref:
-                _session_ref[0]._fire_tool_event("ask_work_iq")
+                _session_ref[0]._fire_tool_event("ask")
             return "m365 context"
 
         with patch.dict(sys.modules, {"copilot": fake_copilot, "copilot.session": fake_copilot_session}), \
@@ -5072,22 +5085,37 @@ class TestQaAkmBackgroundCoordinator(unittest.TestCase):
     # -- FIFO 直列: 同時 Popen しない ------------------------------------
 
     def test_multiple_submits_fifo_no_concurrent_popen(self):
+        """FIFO 順で処理し、同時に 2 つ以上の子プロセスを起動しない。
+
+        FR-QA-03（v2.31）で滞留登録のバッチ化を許容したため、submit 件数と
+        子プロセス数は一致しない。ここでは順序・同時起動数・登録件数分の
+        結果報告だけを固定する。
+        """
         import threading
         QaAkmCoordinator, _ = self._import()
 
         finish_events = [threading.Event() for _ in range(3)]
         started_events = [threading.Event() for _ in range(3)]
+        # 1 件目だけ保持し、残りをキューへ滞留させる。
+        for event in finish_events[1:]:
+            event.set()
         call_idx = [0]
         max_concurrent = [0]
         current_concurrent = [0]
+        target_files: list = []
         lock = threading.Lock()
 
         def popen_factory(*args, **kwargs):
+            argv = [str(a) for a in (args[0] if args else kwargs.get("args"))]
             idx = call_idx[0]
             call_idx[0] += 1
             with lock:
                 current_concurrent[0] += 1
                 max_concurrent[0] = max(max_concurrent[0], current_concurrent[0])
+                for token in argv[argv.index("--target-files") + 1:]:
+                    if token.startswith("--"):
+                        break
+                    target_files.append(token)
             started_events[idx].set()
             proc = self._make_fake_process(
                 finish_event=finish_events[idx], pid=2000 + idx,
@@ -5110,17 +5138,23 @@ class TestQaAkmBackgroundCoordinator(unittest.TestCase):
         coord = QaAkmCoordinator(
             cfg, repo_root=repo, popen_factory=popen_factory,
         )
-        for i in range(3):
-            coord.submit(Path(f"qa/Issue-1-q-{i:04d}.md"))
+        coord.submit(Path("qa/Issue-1-q-0000.md"))
+        self.assertTrue(started_events[0].wait(timeout=2))
+        coord.submit(Path("qa/Issue-1-q-0001.md"))
+        coord.submit(Path("qa/Issue-1-q-0002.md"))
+        finish_events[0].set()
 
-        for i in range(3):
-            self.assertTrue(started_events[i].wait(timeout=2))
-            finish_events[i].set()
-
-        coord.drain()
+        results = coord.drain()
+        coord.cancel()
         self.assertLessEqual(
             max_concurrent[0], 1, "concurrent Popen detected; must be sequential",
         )
+        self.assertEqual(
+            target_files,
+            [str(Path(f"qa/Issue-1-q-{i:04d}.md")) for i in range(3)],
+            "submit した順（FIFO）で子へ渡す",
+        )
+        self.assertEqual(len(results), 3)
 
     # -- argv 必須フラグ --------------------------------------------------
 
@@ -5227,9 +5261,12 @@ class TestQaAkmBackgroundCoordinator(unittest.TestCase):
         coord = QaAkmCoordinator(
             cfg, repo_root=repo, popen_factory=popen_factory,
         )
+        # バッチ化に左右されず「子ごとに固有」を見るため 1 件ずつ完了させる。
         coord.submit(Path("qa/a.md"))
+        coord.drain()
         coord.submit(Path("qa/b.md"))
         coord.drain()
+        coord.cancel()
 
         self.assertEqual(len(captured_env), 2)
         run_ids = [e.get("HVE_RUN_ID") for e in captured_env]
@@ -5272,20 +5309,25 @@ class TestQaAkmBackgroundCoordinator(unittest.TestCase):
         QaAkmCoordinator, _ = self._import()
 
         finish = [threading.Event(), threading.Event()]
+        started = [threading.Event(), threading.Event()]
         call_idx = [0]
 
         def popen_factory(*args, **kwargs):
             idx = call_idx[0]
             call_idx[0] += 1
-            return self._make_fake_process(finish_event=finish[idx], pid=3000 + idx)
+            proc = self._make_fake_process(finish_event=finish[idx], pid=3000 + idx)
+            started[idx].set()
+            return proc
 
         cfg = self._make_config()
         repo = self._make_repo_with_files("qa/f1.md", "qa/f2.md")
         coord = QaAkmCoordinator(
             cfg, repo_root=repo, popen_factory=popen_factory,
         )
-        for p in (Path("qa/f1.md"), Path("qa/f2.md")):
-            coord.submit(p)
+        # 1 件目の子が起動してから 2 件目を投入し、子を 2 つに確定させる。
+        coord.submit(Path("qa/f1.md"))
+        self.assertTrue(started[0].wait(timeout=2), "1 件目の子が起動しない")
+        coord.submit(Path("qa/f2.md"))
 
         drained = threading.Event()
         results: list = []
@@ -5298,10 +5340,12 @@ class TestQaAkmBackgroundCoordinator(unittest.TestCase):
         t.start()
         self.assertFalse(drained.wait(timeout=0.1), "drain must block until children finish")
         finish[0].set()
+        self.assertTrue(started[1].wait(timeout=2), "2 件目の子が起動しない")
         self.assertFalse(drained.wait(timeout=0.1), "drain must wait for ALL children")
         finish[1].set()
         self.assertTrue(drained.wait(timeout=2), "drain must return after all children")
         t.join(timeout=2)
+        coord.cancel()
         self.assertEqual(len(results), 2)
         for result in results:
             self.assertIn("returncode", result)
@@ -5361,12 +5405,15 @@ class TestQaAkmBackgroundCoordinator(unittest.TestCase):
         coord = QaAkmCoordinator(
             self._make_config(), repo_root=repo, popen_factory=popen_factory,
         )
+        # バッチ化に左右されず「失敗後も worker が継続する」を見るため 1 件ずつ流す。
         coord.submit(first)
+        failed = coord.drain()
         coord.submit(second)
-        results = coord.drain()
-        self.assertEqual(len(results), 2)
-        self.assertEqual(results[0]["returncode"], -1)
-        self.assertEqual(results[1]["returncode"], 0)
+        succeeded = coord.drain()
+        self.assertEqual(len(failed), 1)
+        self.assertEqual(failed[0]["returncode"], -1)
+        self.assertEqual(len(succeeded), 1)
+        self.assertEqual(succeeded[0]["returncode"], 0)
         coord.cancel()
 
     # -- RepositoryAkmLock: 同一プロセス直列化 ---------------------------

@@ -59,6 +59,50 @@ Tool 総数が 10〜15 を超える見込みなら、**統合ではなく公開�
 | `structured-numeric` | 数値・集計・時系列を構造化storeから取得し、Fabric IQを使えない | SELECT-only SQL Tool | `none`。安全条件を満たせなければblocked | read-only identity、table/view allowlist、row/time limit | parameterized query、対象source、実行時刻、行数。secretと機微値は除外 |
 | `operational-api-read` | 検索ではなく既存業務APIから単一状態・entityを読む | 既存REST GET Function Tool | 設計済みRead-only MCP Toolがある場合だけ使用可 | API RBAC、tenant/user scope | method/path、status、correlation ID |
 
+### 4.1 コスト階段（AG-CAP-10 の候補経路）
+
+`enterprise-unstructured` の Preferred は高機能だが、その分のコストを伴う。AG-CAP-10 `Candidate routes` はこの階段から選ぶ。上ほど高機能・高コスト。
+
+| 段 | 経路 | 主なコスト要因 | 段を下げると失うもの |
+|---|---|---|---|
+| 1 | Agentic Retrieval（反復検索を伴う推論量） | 検索側のリトリーバルトークン + LLMのquery planning / answer synthesisトークン | — |
+| 2 | Agentic Retrieval（既定の推論量） | 同上。1より少ない | 反復検索 |
+| 3 | Agentic Retrieval（LLMを使わない最小構成） | 検索側のトークンのみ | サブクエリ分解と並列化、answer synthesis |
+| 4 | データストアnativeの全文検索 + ベクトル検索 | データストアの実行コストのみ | 複数ソース横断、統合ランキング、KSごとの権限フィルタ |
+| 5 | 自前実装の全文検索（+必要なら順位統合） | 実行環境のコストのみ | 上記に加えマネージドな同期・スケール |
+
+規則:
+
+- **選定した段と、その下の段のうち最低1つ**を同じ評価セットで実測する。1段しか測らない評価は受理しない。
+- 品質基準を満たす**最も下の段**を勧告する。
+- 「段を下げると失うもの」が要件上必須なら、その段は候補から外し、外した理由を記録する。
+- 公式に示されているコスト抑制手段は、Knowledge Source 数を減らす / 推論量を下げる / 少ないソースで見つかるようコンテンツを整理する、の3つである（§12 の Agentic retrieval 参照）。
+
+### 4.2 データストアnativeを選べる条件
+
+段4は「対象データが1つのデータストア内で完結し、複数ソース横断が不要」なときだけ選べる。
+
+判定に必要な事実:
+
+- **Azure AI Search の Knowledge Source として提供されているストアかどうか**を §12 の Knowledge Source 一覧で確認する。一覧に無いストアは、段1〜3を選ぶとインデックスへの同期経路が別途必要になる。
+- 一覧にあっても **preview** のものは §9（不確実性と公式情報）に従い、確定値として扱わない。
+- **document-level permission を明示的にサポートすると書かれていない Knowledge Source は、ユーザー単位のフィルタが自動では効かない。** per-user 権限が要件なら、そのソースは段1〜3の候補から外す。
+
+### 4.3 段5（自前実装）を選んだ場合に補う機能
+
+段1〜3が提供している機能のうち、段5では自前で用意する必要があるものを列挙し、`Decision source` に何を採用し何を捨てたかを書く。
+
+| 機能 | 段5で用意するもの |
+|---|---|
+| クエリ計画（サブクエリ生成） | LLM呼び出し1回。出力は構造化データ |
+| 並列実行 | 言語標準の非同期機構 |
+| 統合ランキング | 順位統合アルゴリズム。データストアが関数として提供する場合はそれを使う |
+| 意味的再ランキング | 省略可。省略する場合は品質への影響を評価で確認する |
+| 権限フィルタ | クエリ条件へ実行ユーザーの識別子・ロールを注入する |
+| 実行証跡 | AG-CAP-08 の span としてサブクエリ・所要時間・件数を記録する |
+
+外部の汎用パッケージへの依存は必須ではない。依存を増やす場合は、保守主体と更新方針を `Decision source` に書く。
+
 ## 5. Azure AI Search / Foundry IQ
 
 ### 使用条件

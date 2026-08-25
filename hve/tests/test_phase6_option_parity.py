@@ -57,6 +57,7 @@ _TEMPLATES_WITH_AUTO_MERGE = [
 
 _TEMPLATES_WITH_RUNNER_TYPE = [
     "app-architecture-design.yml",
+    "agent-data-architecture.yml",
     "web-app-design.yml",
     "web-app-dev.yml",
     "ai-agent-design.yml",
@@ -446,11 +447,11 @@ class TestRunnerTypeOptionParity(unittest.TestCase):
         self.assertIn("runner_type = 'self-hosted'", content)
         self.assertIn("f.write(f'runner_type={runner_type}", content)
 
-    def test_dispatcher_forwards_runner_type_for_eight_targets_only(self) -> None:
-        """Cloud非対応Workflowを除き、runner_type伝搬先は8ターゲット。"""
+    def test_dispatcher_forwards_runner_type_for_ten_targets_only(self) -> None:
+        """Cloud対応 Workflow への runner_type 伝搬先は13ターゲット（ARD ・check_app_requirements 追加で11→ 13）。"""
         content = self._read_workflow("auto-orchestrator-dispatcher.yml")
         marker = "runner_type: ${{ needs.detect.outputs.runner_type }}"
-        self.assertEqual(content.count(marker), 8)
+        self.assertEqual(content.count(marker), 13)
         self.assertIn("setup_labels:", content)
         setup_labels_block = content.split("setup_labels:", 1)[1]
         self.assertNotIn("runner_type", setup_labels_block)
@@ -486,11 +487,11 @@ class TestAgenticRetrievalWorkflowWiring(unittest.TestCase):
         self.assertIn("foundry_mcp_integration = 'false'", content)
         self.assertIn("foundry_sku_fallback_policy = 'standard_allowed'", content)
 
-    def test_dispatcher_passes_agentic_inputs_to_aad(self) -> None:
-        """FR-CLOUD-06: ASDW-WEB の Cloud 起動は停止済みのため AAD-WEB への伝搬のみ検証する。"""
+    def test_dispatcher_passes_agentic_inputs_to_aad_and_asdw(self) -> None:
+        """FR-CLOUD-06: AAD-WEB と ASDW-WEB の両方へ Agentic 入力が伝搬されること。"""
         content = self._read_workflow("auto-orchestrator-dispatcher.yml")
         self.assertIn("uses: ./.github/workflows/auto-app-detail-design-web-reusable.yml", content)
-        self.assertNotIn("uses: ./.github/workflows/auto-app-dev-microservice-web-reusable.yml", content)
+        self.assertIn("uses: ./.github/workflows/auto-app-dev-microservice-web-reusable.yml", content)
         self.assertIn("enable_agentic_retrieval: ${{ needs.detect.outputs.enable_agentic_retrieval }}", content)
         self.assertIn("agentic_data_source_modes: ${{ needs.detect.outputs.agentic_data_source_modes }}", content)
         self.assertIn("foundry_mcp_integration: ${{ needs.detect.outputs.foundry_mcp_integration }}", content)

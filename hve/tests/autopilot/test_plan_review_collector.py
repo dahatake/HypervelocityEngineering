@@ -34,7 +34,7 @@ def test_path_exists_glob_hit(tmp_path: Path) -> None:
 
 
 def test_collect_planned_inputs_returns_existing_status(tmp_path: Path) -> None:
-    """aas Step 1 の required_input_paths が宣言されていれば、tmp_path 下に
+    """AAS Step 1のrequired_input_pathsがtmp_path下で全件MISSING_GAPになる。
     ファイルがないため全件 MISSING_GAP となることを確認。
 
     Major #8: 入力 0 件で vacuous true にならないよう、宣言値の数を別途確認。
@@ -99,7 +99,7 @@ def test_collect_planned_outputs(tmp_path: Path) -> None:
     outputs = collect_planned_outputs(
         ["aas"], tmp_path, steps_by_workflow={"aas": ["1"]}
     )
-    # 出力 0 件ではない（aas Step 1 は output_paths を持つ）と仮定。
+    # 出力0件ではない（AAS Step 1はoutput_pathsを持つ）と仮定。
     # 持たない場合は空リストになり得るためアサートは「型のみ」。
     assert isinstance(outputs, list)
     for o in outputs:

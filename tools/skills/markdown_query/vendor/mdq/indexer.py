@@ -714,7 +714,8 @@ def index_one_file(repo_root: Path, file_path: Path, conn,
         parent_hp = hp.rsplit(" > ", 1)[0]
         c.parent_chunk_id = by_hp.get(parent_hp)
 
-    fm_json = json.dumps(fm, ensure_ascii=False) if fm else None
+    # `default=str`: unquoted YAML dates load as `datetime.date`, which json refuses.
+    fm_json = json.dumps(fm, ensure_ascii=False, default=str) if fm else None
     _store.upsert_file(conn, rel, sha1, mtime, len(raw), fm_json)
     _store.delete_chunks_for(conn, rel)
     rows = [(

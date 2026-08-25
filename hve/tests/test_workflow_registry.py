@@ -1,5 +1,6 @@
 """test_workflow_registry.py — hve/workflow_registry.py のテスト"""
 
+import ast
 import re
 from pathlib import Path
 
@@ -25,32 +26,39 @@ from hve.workflow_registry import (
 # ---------------------------------------------------------------------------
 
 EXPECTED_STEP_COUNTS = {
-    "ard": 8,  # Step 3 (KPI/OKR 定義・任意) 追加で 7 → 8
-    "aas": 11,  # AAS に Step 8 (ペルソナカタログ) と Step 9 (ペルソナ別共通画面カタログ) 追加で 9 → 11
+    "ard": 10,  # Step 3 (KPI/OKR 定義・任意) 追加で 7 → 8、アプリケーション要求定義 2 Step (4.1/4.2) 追加で 8 → 10
+    "aas": 10,  # ARD Step 4.1/4.2 へ Step 1 を移設し Step 8/9 (ペルソナ) を追加で 11 → 10。
+    # その後 Step 1 起点化リナンバリングで 2→1, 3.1→2.1, 3.2→2.2, 4.1→3.1, 4.2→3.2,
+    # 5→4, 6→5, 7→6, 8→7, 9→8 へ番号のみ変更（総数 10 は不変）。
+    # ADA: AAS から画面依存の 3 Step（app-arch / service-catalog-matrix / persona-screen）を
+    # 除外し、8 の非構造化データ資産カタログを追加した Step 1〜9 の 9 Step。
+    # Step 1（app-catalog.md 生成）は ARD Step 4.1 へ移管され廃止済み。
+    "ada": 9,
     "aad-web": 8,  # Step 2.5 (追加 Azure サービス選定) で 6 → 7、Step 2.6 (Agentic Retrieval 機能要件詳細) で 7 → 8
-    "asdw-web": 25,  # 5 containers + 20 real steps (Agentic Retrieval Step 2.5/2.6 追加で 23 → 25)
+    "asdw-web": 26,  # 5 containers + 21 real steps (要件適合実測 Step 5.3 追加で 25 → 26)
     # ADFDV が required_input_paths として要求していた 4 ドキュメントの producer Step
     # (0.1 / 0.2 / 4 / 5) を追加して 3 → 7。
     "adfd": 7,
-    "adfdv": 7,
+    "adfdv": 8,  # 要件適合実測 Step 4.3 追加で 7 → 8
     "aag": 3,
-    "aagd": 6,  # Step 4 (tool search 実測評価) 追加で 5 → 6
-    "aar": 6,  # Agentic Retrieval Add-on: 6 real steps (コンテナなし)
+    "aagd": 9,  # Step 4 で 5 → 6、Step 5 で 6 → 7、Step 6 / 7（AG-CAP-10 / AG-CAP-09）で 7 → 9
+    "aar": 7,  # Agentic Retrieval Add-on: 要件適合実測 Step 7 追加で 6 → 7（コンテナなし）
     "akm": 2,  # ADR-0002: fan-out base + cross-cutting review join
     "adi": 9,  # 目録 / 質問票 fan-out・join / Doc Card / トリアージ / ルーティング / 下流反映 3 件
     "adoc": 23,  # 4 containers + 19 real steps
 }
 
 EXPECTED_NON_CONTAINER_COUNTS = {
-    "ard": 8,  # Step 3 (KPI/OKR 定義・任意) 追加で 7 → 8
-    "aas": 11,  # 同上
+    "ard": 10,  # 同上
+    "aas": 10,  # 同上
+    "ada": 9,  # コンテナ Step を持たないため総数と一致
     "aad-web": 8,  # Step 2.5 (追加 Azure サービス選定) で 6 → 7、Step 2.6 (Agentic Retrieval 機能要件詳細) で 7 → 8
-    "asdw-web": 20,  # Agentic Retrieval Step 2.5/2.6 追加で 18 → 20
+    "asdw-web": 21,  # 要件適合実測 Step 5.3 追加で 20 → 21
     "adfd": 7,  # 同上（ADFD はコンテナ Step を持たないため総数と一致）
-    "adfdv": 7,
+    "adfdv": 8,  # 要件適合実測 Step 4.3 追加で 7 → 8
     "aag": 3,
-    "aagd": 6,  # Step 4 (tool search 実測評価) 追加で 5 → 6
-    "aar": 6,
+    "aagd": 9,  # Step 4 で 5 → 6、Step 5 で 6 → 7、Step 6 / 7（AG-CAP-10 / AG-CAP-09）で 7 → 9
+    "aar": 7,  # 要件適合実測 Step 7 追加で 6 → 7
     "akm": 2,  # ADR-0002: fan-out base + cross-cutting review join
     "adi": 9,
     "adoc": 19,
@@ -111,7 +119,7 @@ class TestWorkflowDef:
         wf = get_workflow("aas")
         step = wf.get_step("1")
         assert step is not None
-        assert step.title == "アプリケーションリストの作成"
+        assert step.title == "ソフトウェアアーキテクチャの推薦"
 
     def test_get_step_nonexistent(self):
         wf = get_workflow("aas")
@@ -239,51 +247,51 @@ class TestGetNextSteps:
     """get_next_steps() のテスト — DAG 走査ロジック。"""
 
     def test_aas_expanded_dag_walk(self):
-        # Sub-4 (B-1): Step 4 → 4.1 / 4.2 に分割
+        # Sub-4 (B-1): Step 4 → 4.1 / 4.2 に分割（現在は Step 1 起点化リナンバリングにより 3.1/3.2）
+        # ARD Step 4.1/4.2 へ移設され、Step "1" が新しい root。
         assert [s.id for s in get_next_steps("aas", completed_step_ids=[])] == ["1"]
-        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1"])] == ["2"]
-        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2"])] == ["3.1"]
-        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2", "3.1"])] == ["3.2"]
-        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2", "3.1", "3.2"])] == ["4.1"]
-        # Step 4.1 完了後は 4.2 と 5 が並列起動可能（5 は depends_on=["4.1"]）
+        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1"])] == ["2.1"]
+        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2.1"])] == ["2.2"]
+        assert [s.id for s in get_next_steps("aas", completed_step_ids=["1", "2.1", "2.2"])] == ["3.1"]
+        # Step 3.1 完了後は 3.2 と 4 が並列起動可能（4 は depends_on=["3.1"]）
         nexts = sorted(s.id for s in get_next_steps(
-            "aas", completed_step_ids=["1", "2", "3.1", "3.2", "4.1"]
+            "aas", completed_step_ids=["1", "2.1", "2.2", "3.1"]
         ))
-        assert nexts == ["4.2", "5"]
-        # 4.2 と 5 が完了したら 6 が走り、その後 7
+        assert nexts == ["3.2", "4"]
+        # 3.2 と 4 が完了したら 5 が走り、その後 6
         assert [s.id for s in get_next_steps(
-            "aas", completed_step_ids=["1", "2", "3.1", "3.2", "4.1", "4.2", "5"]
+            "aas", completed_step_ids=["1", "2.1", "2.2", "3.1", "3.2", "4"]
+        )] == ["5"]
+        assert [s.id for s in get_next_steps(
+            "aas", completed_step_ids=["1", "2.1", "2.2", "3.1", "3.2", "4", "5"]
         )] == ["6"]
+        # Step 6 完了後は Step 7 (ペルソナカタログ) が起動
         assert [s.id for s in get_next_steps(
-            "aas", completed_step_ids=["1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6"]
+            "aas", completed_step_ids=["1", "2.1", "2.2", "3.1", "3.2", "4", "5", "6"]
         )] == ["7"]
-        # Step 7 完了後は Step 8 (ペルソナカタログ) が起動
+        # Step 7 完了後は Step 8 (ペルソナ別共通画面カタログ) が起動
         assert [s.id for s in get_next_steps(
-            "aas", completed_step_ids=["1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6", "7"]
+            "aas", completed_step_ids=["1", "2.1", "2.2", "3.1", "3.2", "4", "5", "6", "7"]
         )] == ["8"]
-        # Step 8 完了後は Step 9 (ペルソナ別共通画面カタログ) が起動
-        assert [s.id for s in get_next_steps(
-            "aas", completed_step_ids=["1", "2", "3.1", "3.2", "4.1", "4.2", "5", "6", "7", "8"]
-        )] == ["9"]
 
-    def test_aas_step42_and_step5_are_parallel(self):
-        """Sub-5 (C-1 部分): Step 4.2 (サンプルデータ) と Step 5 (データカタログ) が
-        Step 4.1 完了後に並列起動可能であることを保証する。
+    def test_aas_step32_and_step4_are_parallel(self):
+        """Sub-5 (C-1 部分): Step 3.2 (サンプルデータ) と Step 4 (データカタログ) が
+        Step 3.1 完了後に並列起動可能であることを保証する。
 
         Sub-4 で導入された並列性が将来の DAG 変更で失われないことを回帰防止する。
         """
-        step_42 = get_step("aas", "4.2")
-        step_5 = get_step("aas", "5")
-        # 両方とも 4.1 のみに依存（互いに依存しない）
-        assert step_42.depends_on == ["4.1"]
-        assert step_5.depends_on == ["4.1"]
+        step_32 = get_step("aas", "3.2")
+        step_4 = get_step("aas", "4")
+        # 両方とも 3.1 のみに依存（互いに依存しない）
+        assert step_32.depends_on == ["3.1"]
+        assert step_4.depends_on == ["3.1"]
         # get_next_steps 経由でも並列に取得できる
         nexts = sorted(
             s.id for s in get_next_steps(
-                "aas", completed_step_ids=["1", "2", "3.1", "3.2", "4.1"]
+                "aas", completed_step_ids=["1", "2.1", "2.2", "3.1"]
             )
         )
-        assert "4.2" in nexts and "5" in nexts
+        assert "3.2" in nexts and "4" in nexts
 
     def test_abd_step61_and_step62_are_parallel(self):
         """Sub-6 (C-3 確認): ADFD の Step 1 (ジョブ詳細仕様) と Step 2 (監視・運用設計) が
@@ -521,6 +529,19 @@ class TestMetaWorkflow:
     def test_get_meta_dependencies_unknown(self):
         assert get_meta_dependencies("unknown") == []
 
+    @pytest.mark.parametrize("wf_id", ("ada", "aar"))
+    def test_get_meta_dependencies_for_app_requirement_consumers(self, wf_id: str):
+        """FR-APPREQ-03: ada / aar は ard への hard 依存で前提成果物 glob を要求する。"""
+        deps = get_meta_dependencies(wf_id)
+        assert len(deps) == 1
+        assert deps[0].workflow_id == "ard"
+        assert deps[0].soft is False
+        assert deps[0].required_artifacts == [
+            "docs/catalog/app-catalog.md",
+            "docs/catalog/use-case-catalog.md",
+            "docs/architectural-requirements-app-*.md",
+        ]
+
 
 class TestAKMWorkflow:
     """AKM ワークフロー固有テスト。"""
@@ -591,9 +612,9 @@ class TestStepDefFields:
         assert step.body_template_path == "templates/aas/step-1.md"
 
     def test_skip_fallback_deps(self):
-        # Sub-4 (B-1): Step 5 の skip_fallback_deps は 4 → 4.1 に更新
-        step = get_step("aas", "5")
-        assert step.skip_fallback_deps == ["4.1"]
+        # Sub-4 (B-1) → Step 1 起点化リナンバリングにより、Step 4 の skip_fallback_deps は 3.1
+        step = get_step("aas", "4")
+        assert step.skip_fallback_deps == ["3.1"]
 
     def test_block_unless_empty(self):
         step = get_step("aas", "1")
@@ -787,7 +808,7 @@ ASDW_WEB_LOCAL_STEP_IDS = [
 
 # local generation checkpoint より後に実行する Step（Azure live 操作またはその結果に依存）。
 ASDW_WEB_LIVE_STEP_IDS = [
-    "1.3", "2.2", "2.4", "2.6", "3.4", "3.5", "4.3", "4.4", "5.1", "5.2",
+    "1.3", "2.2", "2.4", "2.6", "3.4", "3.5", "4.3", "4.4", "5.1", "5.2", "5.3",
 ]
 
 ASDW_WEB_EXPECTED_DEPENDS_ON = {
@@ -948,6 +969,78 @@ class TestAsdwWebLocalFirstDag:
         if declared:
             missing = sorted(set(step.depends_on) - declared)
             assert missing == [], f"step-{step_id}.md の `## 依存` に {missing} が無い"
+
+
+_REQUIREMENT_DOC = Path(__file__).resolve().parents[2] / "hve-dev" / "requirement-definition.md"
+
+
+def test_requirement_doc_workflow_table_lists_every_registered_workflow() -> None:
+    """要求定義書 §3.2 の Cloud / CLI 対応マップが registry を過不足なく列挙すること。
+
+    表が実装から取り残されると、Workflow ごとの Cloud 対応可否を読み取れなくなる。
+    """
+    lines = _REQUIREMENT_DOC.read_text(encoding="utf-8").splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith("### 3.2 "))
+    end = next(i for i, line in enumerate(lines[start + 1:], start + 1) if line.startswith("### "))
+    documented = {
+        match.group(1)
+        for line in lines[start:end]
+        if (match := re.match(r"^\| `([a-z0-9-]+)` \|", line))
+    }
+    assert documented == {w.id for w in list_workflows()}
+
+
+# registry を単一情報源とする Workflow パラメータ既定値（private 別名 -> registry の公開名）。
+_SHARED_PARAM_DEFAULTS = {
+    "_AKM_DEFAULT_SOURCES": "AKM_DEFAULT_SOURCES",
+    "_AKM_DEFAULT_TARGET_FILES": "AKM_DEFAULT_TARGET_FILES",
+    "_ADI_DEFAULT_TARGET_SCOPE": "ADI_DEFAULT_TARGET_SCOPE",
+    "_ADI_DEFAULT_DEPTH": "ADI_DEFAULT_DEPTH",
+    "_ARD_DEFAULT_SURVEY_PERIOD_YEARS": "ARD_DEFAULT_SURVEY_PERIOD_YEARS",
+    "_ARD_DEFAULT_TARGET_REGION": "ARD_DEFAULT_TARGET_REGION",
+    "_ARD_DEFAULT_ANALYSIS_PURPOSE": "ARD_DEFAULT_ANALYSIS_PURPOSE",
+}
+_LAUNCH_SURFACE_SOURCES = (
+    Path(__file__).resolve().parents[1] / "__main__.py",
+    Path(__file__).resolve().parents[1] / "orchestrator.py",
+)
+
+
+class TestLaunchSurfacesShareParameterDefaults:
+    """CLI 入口と Orchestrator が既定値を再宣言しないこと（FR-MAINT-07 / TBD-27）。
+
+    値が一致しているうちは通常のテストで検出できないため、再宣言そのものを禁じる。
+    ARD の `selected_steps` では実際に片側だけが変更され、起動面ごとに既定値が食い違った。
+    """
+
+    def test_defaults_resolve_to_the_registry_values(self) -> None:
+        import hve.__main__ as main_module
+        import hve.orchestrator as orchestrator_module
+        import hve.workflow_registry as registry
+
+        for private_name, public_name in _SHARED_PARAM_DEFAULTS.items():
+            expected = getattr(registry, public_name)
+            assert getattr(main_module, private_name) == expected, private_name
+            assert getattr(orchestrator_module, private_name) == expected, private_name
+
+    @pytest.mark.parametrize(
+        "source", _LAUNCH_SURFACE_SOURCES, ids=lambda p: p.name
+    )
+    def test_launch_surfaces_do_not_redeclare_the_defaults(self, source: Path) -> None:
+        # registry から値を引く代入（flat import 時の getattr fallback）は許可し、
+        # リテラルを直接束縛する代入だけを再宣言として拒否する。
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        redeclared = sorted(
+            target.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant)
+            for target in node.targets
+            if isinstance(target, ast.Name) and target.id in _SHARED_PARAM_DEFAULTS
+        )
+        assert redeclared == [], (
+            f"{source.name} が registry の既定値をリテラルで再宣言している: {redeclared}。"
+            " workflow_registry から alias import すること。"
+        )
 
 
 _PROMPTS_DIR = Path(__file__).resolve().parents[2] / ".github" / "prompts"

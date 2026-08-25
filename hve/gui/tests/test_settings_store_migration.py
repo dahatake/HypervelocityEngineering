@@ -30,17 +30,17 @@ class TestObsoleteKeyMigration:
     def test_removes_mcp_config_from_options(self, tmp_settings: Path) -> None:
         _write(
             tmp_settings,
-            "[options]\nmcp_config = /tmp/x.json\nverbose = true\n",
+            "[options]\nmcp_config = /tmp/x.json\ncreate_issues = true\n",
         )
         merged = settings_store.load()
         # ロード結果には廃止キーが残らない
         assert "mcp_config" not in merged["options"]
         # 既存の正規キーは保持される
-        assert merged["options"]["verbose"] is True
+        assert merged["options"]["create_issues"] is True
         # 物理ファイルからも削除されていること
         on_disk = tmp_settings.read_text(encoding="utf-8")
         assert "mcp_config" not in on_disk
-        assert "verbose" in on_disk
+        assert "create_issues" in on_disk
 
     def test_removes_workiq_tenant_id_from_options(self, tmp_settings: Path) -> None:
         _write(

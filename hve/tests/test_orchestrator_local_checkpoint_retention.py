@@ -52,7 +52,7 @@ def test_live_phase_is_the_complement_of_the_local_phase() -> None:
     """live フェーズは local フェーズの補集合（非コンテナ Step）である。"""
     # 2.6（Agentic Retrieval Deploy）は live deploy。
     assert get_live_phase_step_ids("asdw-web") == frozenset(
-        {"1.3", "2.2", "2.4", "2.6", "3.4", "3.5", "4.3", "4.4", "5.1", "5.2"}
+        {"1.3", "2.2", "2.4", "2.6", "3.4", "3.5", "4.3", "4.4", "5.1", "5.2", "5.3"}
     )
 
 

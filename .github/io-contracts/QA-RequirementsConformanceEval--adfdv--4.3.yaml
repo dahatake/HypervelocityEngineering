@@ -1,0 +1,17 @@
+inputs:
+- path: docs/dataflow/dataflow-app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-Dataflow-AppCatalog--adfd--0.2
+- path: docs/azure/waf-review.md
+  required: true
+  kind: agent_artifact
+  producer: QA-AzureArchitectureReview--adfdv--4.1
+- path: docs/azure/dependency-review.md
+  required: true
+  kind: agent_artifact
+  producer: QA-AzureDependencyReview--adfdv--4.2
+outputs:
+- path: docs/dataflow/requirements-conformance-report.md
+  required: true
+  mode: create

@@ -76,20 +76,21 @@ HVE は「タスク定義書（Issue Template / CLI 起動メタデータ）」�
 
 ### 中核となる Workflow ID
 
-`hve/workflow_registry.py` で定義されているオーケストレーション Workflow ID は次の 12 個です。**正の一覧は `workflow_registry.py` を参照**し、`python -m hve orchestrate --help` の例示や後方互換エイリアスよりこちらを優先してください。
+`hve/workflow_registry.py` で定義されているオーケストレーション Workflow ID は次の 13 個です。**正の一覧は `workflow_registry.py` を参照**し、`python -m hve orchestrate --help` の例示や後方互換エイリアスよりこちらを優先してください。
 
 | Workflow ID | 役割 | 主な成果物 | 対応ガイド |
 |---|---|---|---|
-| `ard` | 企業・業務分析からユースケース候補を整理する（ADR-0003 で 7 ステップ。+ 本リリースで任意 Step 2.5「KPI/OKR 定義」を追加） | `docs/catalog/use-case-catalog.md`, `docs/company-business-requirement.md`, `docs/business-requirement.md`, `docs/recommended-kpi-okr.md`（Step 2.5 を `--include-kpi-okr` で有効化時） | [01-business-requirement.md（ARD セクション）](users-guide/01-business-requirement.md#要求定義の自動化ard-auto-requirement-definition) |
-| `aas` | アプリケーションアーキテクチャ設計 | `docs/catalog/app-catalog.md` など | [02-app-architecture-design.md](users-guide/02-app-architecture-design.md) |
+| `ard` | 企業・業務分析からユースケース候補とアプリケーション一覧・APP別要求定義書までを整理する（5 表示グループ・10 実 Step。Step 2.1「KPI/OKR 定義」は任意） | `docs/catalog/use-case-catalog.md`, `docs/company-business-requirement.md`, `docs/business-requirement.md`, `docs/recommended-kpi-okr.md`（Step 2.1 を `--include-kpi-okr` で有効化時）, `docs/catalog/app-catalog.md`, `docs/architectural-requirements-app-NNN.md` | [01-business-requirement.md（ARD セクション）](users-guide/01-business-requirement.md#要求定義の自動化ard-auto-requirement-definition) |
+| `aas` | アプリケーションアーキテクチャ設計（`app-catalog.md` は ARD Step 4.1 生成、本 Workflow は入力として消費） | `docs/catalog/app-arch-catalog.md`, `docs/catalog/data-model.md` など | [02-app-architecture-design.md](users-guide/02-app-architecture-design.md) |
 | `aad-web` | Web / Microservice 設計 | `docs/catalog/screen-catalog.md`, `docs/catalog/service-catalog-matrix.md`, `docs/screen/`, `docs/services/`, `docs/test-specs/` | [03-app-design-microservice-azure.md](users-guide/03-app-design-microservice-azure.md) |
 | `asdw-web` | Web / Microservice 実装・デプロイ | `src/`, `src/test/`, Azure リソース関連成果物 | [05-app-dev-microservice-azure.md](users-guide/05-app-dev-microservice-azure.md) |
 | `adfd` | Dataflow 設計 | `docs/dataflow/*.md` | [04-app-design-dataflow.md](users-guide/04-app-design-dataflow.md) |
 | `adfdv` | Dataflow 実装・デプロイ | `src/`, `src/test/`, `src/infra/azure/dataflow/` など | [06-app-dev-dataflow-azure.md](users-guide/06-app-dev-dataflow-azure.md) |
+| `ada` | 画面を持たないデータ中心 AI Agent 向けのデータ設計（AAG の前段） | `docs/catalog/data-catalog.md`, `docs/catalog/persona-catalog.md`, `docs/catalog/unstructured-data-catalog.md` など | [09-agent-data-architecture.md](users-guide/09-agent-data-architecture.md) |
 | `aag` | AI Agent 設計（アプリケーション定義・粒度設計・詳細設計） | `docs/agent/` 配下の Agent 詳細設計書群 | [07-ai-agent-simple.md](users-guide/07-ai-agent-simple.md) |
 | `aagd` | AI Agent 詳細設計・実装 | `docs/agent/`, `src/test/agent/`, Azure Agent 関連成果物 | [08-ai-agent.md](users-guide/08-ai-agent.md) |
 | `aar` | Agentic Retrieval Add-on（既存サービスへの検索基盤追加） | `docs/services/<serviceId>-agentic-retrieval-spec.md`, `docs/azure/agentic-retrieval/`, `src/infra/azure/create-azure-agentic-retrieval/` | [agentic-retrieval-guide.md](users-guide/agentic-retrieval-guide.md) |
-| `adi` | `docs-original/` の原本（PDF / Office 等）を目録化・正規化し、D01〜D21 の質問票生成と横断統合を行い、目的に沿って選別して下流成果物へ候補を反映する | `docs/original-design-doc-ingest/index.json`, `docs/catalog/design-doc-inventory.md`, `qa/D01〜D21-original-docs-questionnaire.md`, `qa/original-docs-cross-questionnaire.md`, `docs/catalog/design-doc-catalog.md`, `docs/catalog/design-doc-routing.md`, 下流成果物への候補セクション（`use-case-skeleton.md` / `app-catalog.md` / `domain-analytics.md` / `data-model.md` / `dataflow-app-catalog.md`） | [00-design-doc-ingestion.md](users-guide/00-design-doc-ingestion.md) |
+| `adi` | `docs-original/` の原本（PDF / Office 等）を目録化・正規化し、D01〜D21 の質問票生成と横断統合を行い、目的に沿って選別して下流成果物へ候補を反映する | `docs/original-design-doc-ingest/index.json`, `docs/catalog/design-doc-inventory.md`, `qa/D01〜D21-docs-original-questionnaire.md`, `qa/docs-original-cross-questionnaire.md`, `docs/catalog/design-doc-catalog.md`, `docs/catalog/design-doc-routing.md`, 下流成果物への候補セクション（`use-case-skeleton.md` / `app-catalog.md` / `domain-analytics.md` / `data-model.md` / `dataflow-app-catalog.md`） | [00-design-doc-ingestion.md](users-guide/00-design-doc-ingestion.md) |
 | `akm` | `qa/` と `docs-original/` から `knowledge/` を生成・更新 | `knowledge/D01〜D21-*.md` | [km-guide.md](users-guide/km-guide.md) |
 | `adoc` | ソースコードから技術ドキュメントを生成 | `docs-generated/` | [sourcecode-documentation.md](users-guide/sourcecode-documentation.md) |
 
@@ -130,7 +131,7 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 
 ## Issue Template 一覧
 
-`.github/ISSUE_TEMPLATE/*.yml` に存在する 10 個のテンプレートです。README では「どのフォームを選ぶか」を判断できる粒度だけを記載し、詳細な手順は users-guide に委譲します。下表の「主な入力」列は代表項目の抜粋です。各テンプレートには他にレビュー・QA・自己改善などのチェックボックスや追加項目がある場合があり、全項目は各 `.github/ISSUE_TEMPLATE/*.yml` または [workflow-reference.md](users-guide/workflow-reference.md#issue-テンプレート一覧) を参照してください。
+`.github/ISSUE_TEMPLATE/*.yml` に存在する 12 個のテンプレートです。README では「どのフォームを選ぶか」を判断できる粒度だけを記載し、詳細な手順は users-guide に委譲します。下表の「主な入力」列は代表項目の抜粋です。各テンプレートには他にレビュー・QA・自己改善などのチェックボックスや追加項目がある場合があり、全項目は各 `.github/ISSUE_TEMPLATE/*.yml` または [workflow-reference.md](users-guide/workflow-reference.md#issue-テンプレート一覧) を参照してください。
 
 > 自己改善（Self-Improve）は独立の Issue Template を持たず、上記の設計・実装テンプレートの `enable_self_improve` チェックボックスで起動します。
 
@@ -144,8 +145,10 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 | `web-app-dev.yml` | `Web App Dev & Deploy` | 対象 APP-ID の Web / Microservice 実装・デプロイを進めたい | `app_ids`, `branch`, `runner_type`, `resource_group`, `steps`, `model` |
 | `dataflow-design.yml` | `Dataflow Design` | バッチの設計書を作りたい | `app_ids`, `branch`, `runner_type`, `steps`, `model`, `review_model` |
 | `dataflow-dev.yml` | `Dataflow Dev` | バッチを実装・デプロイしたい | `app_ids`, `branch`, `runner_type`, `resource_group`, `app_ids`, `steps` |
+| `agent-data-architecture.yml` | `Agent Data Architecture（AI Agent 向けデータ設計）` | 画面を持たないデータ中心の AI Agent 向けにデータ資産を設計したい | `branch`, `runner_type`, `app_ids`, `additional_comment` |
 | `ai-agent-design.yml` | `AI Agent Design` | AI Agent の設計を開始したい | `app_ids`, `usecase_id`, `branch`, `runner_type`, `steps`, `model` |
 | `ai-agent-dev.yml` | `AI Agent Dev & Deploy` | AI Agent の実装・デプロイを進めたい | `app_ids`, `branch`, `runner_type`, `resource_group`, `usecase_id`, `steps` |
+| `agentic-retrieval.yml` | `Agentic Retrieval Add-on` | 既存アプリケーションへ Agentic Retrieval を後付けして実測評価したい | `enable_agentic_retrieval`, `app_ids`, `branch`, `resource_group`, `runner_type`, `additional_comment` |
 | `knowledge-management.yml` | `knowledge/ ドキュメント生成・管理` | `qa/` / `docs-original/` / 追加ソースから `knowledge/` を再構成したい | `branch`, `runner_type`, `sources`, `target_files`, `force_refresh`, `enable_review` |
 | `sourcecode-to-documentation.yml` | `Source Codeからのドキュメント作成` | 既存コードから技術文書を自動生成したい | `branch`, `runner_type`, `target_dirs`, `exclude_patterns`, `doc_purpose`, `max_file_lines` |
 
@@ -161,7 +164,7 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 |---|---|---|---|
 | **HVE Cloud Agent Orchestrator** | GitHub Actions | Issue Template から作成された Issue の label / state | `.github/workflows/auto-orchestrator-dispatcher.yml`（`name: HVE Cloud Agent Orchestrator Dispatcher`）から各 `auto-*-reusable.yml` を `workflow_call` で起動 |
 | **HVE CLI Orchestrator** | PC / Mac / 仮想マシン | ローカル端末での `python -m hve cli` / `python -m hve orchestrate --workflow <id>` | `hve/__main__.py` / `hve/orchestrator.py`。詳細は [hve-cli-orchestrator-guide.md](users-guide/hve-cli-orchestrator-guide.md) |
-| **HVE GUI Orchestrator** | PC / Mac / 仮想マシン | ローカル端末での `python -m hve`（既定）/ `python -m hve gui` | `hve/gui/main_window.py`（PySide6 QWizard）。詳細は [hve-gui-orchestrator-guide.md](users-guide/hve-gui-orchestrator-guide.md)。多言語対応（日本語 / English）— [hve/gui/i18n/README.md](hve/gui/i18n/README.md) |
+| **HVE GUI Orchestrator** | PC / Mac / 仮想マシン | ローカル端末での `python -m hve`（既定）/ `python -m hve gui` | `hve/gui/main_window.py`（PySide6 `QMainWindow` + `QStackedWidget` の 2 ページ構成）。詳細は [hve-gui-orchestrator-guide.md](users-guide/hve-gui-orchestrator-guide.md)。多言語対応（日本語 / English）— [hve/gui/i18n/README.md](hve/gui/i18n/README.md) |
 
 - `.github/workflows/auto-orchestrator-dispatcher.yml` — issue-label-driven dispatcher。Issue Template 向け reusable orchestrator を呼び出します。
 - `.github/workflows/auto-pr-transition-dispatcher.yml` — PR transition dispatcher。QA/review/create-subissues の transition workflow を呼び出します。
@@ -173,11 +176,18 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 - `.github/workflows/auto-app-dev-microservice-web-reusable.yml`
 - `.github/workflows/auto-dataflow-design-reusable.yml`
 - `.github/workflows/auto-dataflow-dev-reusable.yml`
+- `.github/workflows/auto-agent-data-architecture-reusable.yml`
 - `.github/workflows/auto-ai-agent-design-reusable.yml`
 - `.github/workflows/auto-ai-agent-dev-reusable.yml`
+- `.github/workflows/auto-agentic-retrieval-reusable.yml`
 - `.github/workflows/auto-app-documentation-reusable.yml`
 - `.github/workflows/auto-knowledge-management-reusable.yml`
 - `.github/workflows/setup-labels.yml`
+
+### Reusable helper workflows
+Issue Template とは紐づかず、他 workflow から `workflow_call` で利用される部品です。
+- `.github/workflows/check-auto-qa-skip-reusable.yml` — auto-QA の skip 判定。上記 reusable orchestrator 9 件から呼ばれます。
+- `.github/workflows/mdq-index-reusable.yml` — `mdq` 索引の構築。現時点で `.github/workflows/` 内に `uses:` 呼び出し元はありません。
 
 ### PR / Issue automation workflows
 - `.github/workflows/auto-qa-to-review-transition.yml`
@@ -197,14 +207,20 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 - `.github/workflows/advance-subissues.yml`
 - `.github/workflows/link-copilot-pr-to-issue.yml`
 - `.github/workflows/auto-self-improve-close.yml`
+- `.github/workflows/auto-akm-after-qa.yml`
+- `.github/workflows/detect-qa-questionnaire-pr.yml`
+- `.github/workflows/verify-qa-reference-in-pr.yml`
+- `.github/workflows/state-transition-on-pr-merge.yml`
 
 ### Validation and test workflows
 - `.github/workflows/protect-readonly-paths.yml`
 - `.github/workflows/plan-validation-and-labeling.yml`
 - `.github/workflows/validate-subissues.yml`
-- `.github/workflows/validate-agents.yml`
 - `.github/workflows/validate-skills.yml`
 - `.github/workflows/validate-knowledge.yml`
+- `.github/workflows/validate-io-contract.yml`
+- `.github/workflows/validate-hve-requirement-traceability.yml`
+- `.github/workflows/validate-hve-requirement-traceability-trusted.yml`
 - `.github/workflows/test-hve-python.yml`
 - `.github/workflows/test-cli-scripts.yml`
 - `.github/workflows/bats-tests.yml`
@@ -213,13 +229,12 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 - `.github/workflows/aas-timeout-monitor.yml`
 - `.github/workflows/audit-plans.yml`
 - `.github/workflows/tdd-retry-metrics.yml`
-- `.github/workflows/scheduled-drift-detection.yml`
-- `.github/workflows/scheduled-health-check.yml`
+- `.github/workflows/auto-qa-timeout-watcher.yml`
+- `.github/workflows/label-consistency-audit.yml`
 - `.github/workflows/sync-azure-skills.yml`
 
 ### Manual workflows
 以下は棚卸し時点で `workflow_dispatch` が確認された manual / confirmation-required workflow です（未使用とは断定しない）。
-- `.github/workflows/copilot-setup-steps.yml`
 - `.github/workflows/rollback-drill.yml` — 意図的に保持する手動 `workflow_dispatch` 運用 workflow です。rollback drill / rollback verification で使用し、`uses:` 呼び出し元がないことは未使用の根拠になりません（手動実行が意図された経路です）。
 - `.github/workflows/self-hosted-runner-smoke-test.yml`
 
@@ -246,7 +261,7 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 | `workiq-doctor` | Work IQ 連携の診断 | `--json`, `--skip-mcp-probe`, `--tenant-id`, `--timeout`, `--sdk-probe`, `--sdk-tool-probe`, `--sdk-event-trace`, `--sdk-tool-probe-tools-all` |
 | `emit-prompt` | プロンプトテンプレートの出力（ワークフロー内部用途・テスト用途） | `--comment-body` 等 |
 | `login` | Copilot SDK のログイン補助 | — |
-| `pricing` | GitHub Copilot 料金表の表示・再取得 | `show`, `refresh` |
+| `pricing` | GitHub Copilot 料金表の表示・再取得（詳細: [pricing-guide.md](users-guide/pricing-guide.md)） | `show`, `refresh` |
 
 ### 実行例
 
@@ -323,11 +338,28 @@ git commit -m "chore: mark hve.sh as executable"
 | Dataflow 設計 | [04-app-design-dataflow.md](users-guide/04-app-design-dataflow.md) |
 | Web / Microservice 実装 | [05-app-dev-microservice-azure.md](users-guide/05-app-dev-microservice-azure.md) |
 | Dataflow 実装 | [06-app-dev-dataflow-azure.md](users-guide/06-app-dev-dataflow-azure.md) |
+| AI Agent 向けデータ設計（ADA・AAG の前段） | [09-agent-data-architecture.md](users-guide/09-agent-data-architecture.md) |
 | AI Agent（簡易） | [07-ai-agent-simple.md](users-guide/07-ai-agent-simple.md) |
 | AI Agent（本格） | [08-ai-agent.md](users-guide/08-ai-agent.md) |
+| AI Agent の評価（AAGD Step.6） | [10-agent-evaluation.md](users-guide/10-agent-evaluation.md) |
+| AI Agent の配布・Microsoft 365 公開（AAGD Step.7） | [11-agent-m365-publish.md](users-guide/11-agent-m365-publish.md) |
+| Agentic Retrieval Add-on（既存サービスへの検索基盤追加） | [agentic-retrieval-guide.md](users-guide/agentic-retrieval-guide.md) |
 | Knowledge Management | [km-guide.md](users-guide/km-guide.md) |
 | Source Code からの Documentation | [sourcecode-documentation.md](users-guide/sourcecode-documentation.md) |
 | プロンプト例 | [prompt-examples.md](users-guide/prompt-examples.md) |
+
+### セットアップ・運用オプション
+
+本編フローの外側で、必要になったときだけ参照する任意セットアップ / 運用機能のガイドです。
+
+| ドキュメント | 用途 |
+|---|---|
+| [setup-self-hosted-runner.md](users-guide/setup-self-hosted-runner.md) | Self-hosted Runner のセットアップ（Issue Template の `runner_type` で self-hosted を選ぶ場合） |
+| [local-cicd-enablement.md](users-guide/local-cicd-enablement.md) | ローカル実行から CI/CD を有効化する手順 |
+| [cloud-session.md](users-guide/cloud-session.md) | Copilot SDK Cloud Sessions（`--cloud-session` 系オプションの正典。HVE Cloud Agent Orchestrator とは別機能） |
+| [plugin-mcp-auth.md](users-guide/plugin-mcp-auth.md) | Plugin / MCP Server 認証の操作手順とトラブルシュート |
+| [setup-playwright-mcp.md](users-guide/setup-playwright-mcp.md) | GitHub Copilot CLI への Playwright MCP 導入手順 |
+| [pricing-guide.md](users-guide/pricing-guide.md) | 料金 / リアルタイム統計表示（`hve pricing`） |
 
 ### Skill: `markdown-query` 独立 GUI
 
@@ -366,7 +398,7 @@ SDK 組み込みの `tool_search_tool` を HVE 実装で差し替え、ランキ
 - Recall@k とトークン削減率を golden クエリで計測できる
 - 実行時の検索状況を収集し、`hve toolsearch dashboard` で可視化できる
 
-> **注意**: `users-guide/tool-search-guide.md` は HVE が**生成する AI Agent** 側の
+> **注意**: [users-guide/tool-search-guide.md](users-guide/tool-search-guide.md) は HVE が**生成する AI Agent** 側の
 > Microsoft Foundry Toolbox 設定を扱う別ガイドです。本機能は Foundry を使いません。
 >
 > **既定値**: SDK の遅延ロード（`tool_search`）は**既定で有効**、HVE 実装への
@@ -392,7 +424,7 @@ README では、実在確認できた主要ディレクトリだけを掲載し�
 | `.github/prompts/` | 再利用 Prompt 定義（`*.prompt.md`）|
 | `hve/` | ローカル実行用 CLI / オーケストレーター |
 | `users-guide/` | ユーザー向けガイド |
-| `src/data/` | サンプルデータ生成先（AAS Step 4.2 出力） |
+| `src/data/` | サンプルデータ生成先（AAS Step 3.2 出力） |
 | `knowledge/` | 業務要件ドキュメント（D01〜D21）— AKM 実行時に生成 |
 | `docs-original/` | 原本ドキュメント（読み取り専用、手動配置） |
 | `qa/` | 質問票（ADI Step 1.1 / 1.2 / Prompt が生成） |

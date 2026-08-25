@@ -572,11 +572,6 @@ def test_render_fails_closed_for_unknown_mode_or_invalid_sample(
 @pytest.mark.parametrize(
     "sample_text",
     (
-        _SAMPLE_DATA.replace(
-            '    "AuditRecord": [{"auditEventId": "audit-1"}]\n',
-            '    "AuditRecord": [{"auditEventId": "audit-1"}],\n'
-            '    "UnexpectedEntity": [{}]\n',
-        ),
         _SAMPLE_DATA.replace('{"memberId": "member-1"}', '{}'),
         _SAMPLE_DATA.replace('[{"memberId": "member-1"}]', '[1]'),
         _SAMPLE_DATA.replace(
@@ -596,6 +591,19 @@ def test_render_rejects_samples_that_canonical_payload_cannot_execute(
 
     with pytest.raises(module.AsdwDataScriptGenerationError):
         _render(sample_text=sample_text)
+
+
+def test_render_tolerates_entities_beyond_app009_coverage() -> None:
+    """sample-data.json is a shared ALL-APPS fixture; extra entities must not fail render."""
+    sample_text = _SAMPLE_DATA.replace(
+        '    "AuditRecord": [{"auditEventId": "audit-1"}]\n',
+        '    "AuditRecord": [{"auditEventId": "audit-1"}],\n'
+        '    "UnrelatedOtherAppEntity": [{"otherAppEntityId": "other-1"}]\n',
+    )
+
+    rendered = _render(sample_text=sample_text)
+
+    assert set(rendered) == _EXPECTED_PATHS
 
 
 def test_sample_error_does_not_echo_untrusted_entity_name() -> None:

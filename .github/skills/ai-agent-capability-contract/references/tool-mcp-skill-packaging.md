@@ -2,13 +2,14 @@
 
 ## 1. 目的
 
-AG-CAP-04 `REST CRUD Matrix`、AG-CAP-05 `MCP Integration Plan`、AG-CAP-06 `Skill Packaging Decision` の実装境界を定義する。
+AG-CAP-04 `REST CRUD Matrix`、AG-CAP-05 `MCP Integration Plan`、AG-CAP-06 `Skill Packaging Decision` の実装境界を定義する。AG-CAP-09 `Distribution & Packaging` で MCP 公開チャネルを採用した場合の公開側境界（§4.4）も本仕様で扱う。
 
 本仕様は次を守る。
 
 - 業務状態のCreate / Update / DeleteはREST API Function Toolだけをprimary実行経路にする。
 - Agentは必要なMCP Serverへclientとして接続する。
 - Remote MCP adapterは既存RESTビジネスロジックを再利用し、認可・承認・監査を迂回しない。
+- Agent自身をMCP Serverとして公開するのは、AG-CAP-09で明示的に選択した場合だけとする。
 - Agent別Skillは必要性を判定してから作成し、未使用resourceや共通hook frameworkを追加しない。
 
 ## 2. REST CRUD Matrix
@@ -119,7 +120,37 @@ Remote MCP adapterの実装主体がAAGD外の既存APIサービスである場�
 - Remote MCP公開対象となる業務APIがない、または別サービスが所有する根拠。
 - 後からMCPが必要になる条件。
 
-### 4.4 allowlist Tool 数の集計
+### 4.4 Agent自身をMCP Serverとして公開する場合
+
+AG-CAP-09 `Distribution & Packaging` で MCP 公開チャネルを採用したときだけ適用する。採用しないなら本節は不要。
+
+§4.2 は「既存業務APIをMCPとして公開する」adapter の話であり、本節は「**生成したAgent自体を1つのMCP Serverとして公開する**」話である。両者を混同しない。
+
+| 項目 | 必須内容 |
+|---|---|
+| Exposed tools | 公開するToolの列挙。AG-CAP-04で`Required: yes`のもの、およびAG-CAP-03のRead-only経路のうち外部へ出してよいものだけ |
+| Excluded tools | 公開しないToolと理由。内部専用の補助Toolを既定で公開しない |
+| Transport | Agent Plugins 1.0.0 が定義する transport のいずれか。値は AG-CAP-09 の `MCP exposure` と一致させる |
+| Endpoint form | エンドポイントの形式と、値を設定から取得する方法。マニフェストへ資格情報を書かない |
+| Authorization | 呼出元をどう認可するか。AG-CAP-07 の `Authentication mode` と一致させる |
+| Mutation guard | 公開ToolがCreate / Update / Deleteを含む場合、RESTと同じ認可・HITL・監査・冪等性を通ること |
+| Untrusted input | 外部clientからの引数を検証し、System Prompt・policy・allowlistを実行時に変更させないこと |
+| Failure behavior | 認可失敗、timeout、依存不可時の応答 |
+
+#### 禁止
+
+- AG-CAP-04 で `Required: no` のTool、および設計に無いToolを公開する。
+- 公開MCP経由でRESTのビジネスロジックを迂回する。§5 の経路規則は公開時も適用する。
+- `plugin.json` / `mcp.json` / 環境変数へ token・API キー・接続文字列の値を書く。
+- Agent自身のMCP公開を、要件の根拠なく既定で有効にする。**採否は AG-CAP-09 の `Channels` で明示的に決める。**
+
+#### AG-CAP-05 との境界
+
+- §4.1 は Agent が **client として接続する** 側。
+- 本節は Agent が **server として公開される** 側。
+- 同一の設計書で両方を持ってよいが、別々のブロックに書き、Tool の重複登録を起動前に検査する。
+
+### 4.5 allowlist Tool 数の集計
 
 `Tool allowlist` に列挙した Tool 名の総数を数える（サーバー数ではない）。
 AG-CAP-04 の `Required: yes` 行数、AG-CAP-03 の異なる検索経路数と合算し、

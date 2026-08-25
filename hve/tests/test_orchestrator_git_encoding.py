@@ -172,5 +172,62 @@ class TestOrchestratorGitEncoding(unittest.TestCase):
             )
 
 
+class TestHveSubprocessDecodeContract(unittest.TestCase):
+    """子出力を decode する subprocess 呼び出しは `encoding` を明示する契約。
+
+    Windows 日本語環境では `text=True` だけを指定すると decode 既定が cp932 になり、
+    子プロセスが UTF-8 の非 ASCII を出力すると `_readerthread` が
+    `UnicodeDecodeError` で落ちる。実測で `hve/workiq.py` の診断経路が該当した。
+    `errors` の要否は呼び出しごとの判断（診断出力は `replace`、パス列挙は既定の
+    strict）に委ねるため、本契約は `encoding` の明示だけを強制する。
+    """
+
+    _SEARCH_ROOTS = ("hve", "mdq", "cq", ".github/scripts")
+    _DECODING_CALLS = frozenset({"run", "Popen", "check_output", "check_call"})
+
+    @classmethod
+    def _offenders(cls) -> list:
+        import ast
+
+        repo_root = Path(__file__).resolve().parents[2]
+        found = []
+        for root in cls._SEARCH_ROOTS:
+            root_path = repo_root / root
+            if not root_path.is_dir():
+                continue
+            for path in root_path.rglob("*.py"):
+                if "tests" in path.parts:
+                    continue
+                try:
+                    tree = ast.parse(path.read_text(encoding="utf-8"))
+                except (OSError, SyntaxError):
+                    continue
+                for node in ast.walk(tree):
+                    if not isinstance(node, ast.Call):
+                        continue
+                    func = node.func
+                    name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+                    if name not in cls._DECODING_CALLS:
+                        continue
+                    keywords = {kw.arg for kw in node.keywords if kw.arg}
+                    if not ({"text", "universal_newlines"} & keywords):
+                        continue
+                    if "encoding" in keywords:
+                        continue
+                    found.append(
+                        f"{path.relative_to(repo_root).as_posix()}:{node.lineno} ({name})"
+                    )
+        return found
+
+    def test_no_text_mode_subprocess_without_explicit_encoding(self):
+        offenders = self._offenders()
+        self.assertEqual(
+            offenders,
+            [],
+            "text モードの subprocess 呼び出しに encoding 指定がありません:\n"
+            + "\n".join(offenders),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

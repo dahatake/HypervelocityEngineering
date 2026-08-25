@@ -4,7 +4,7 @@
 
 > **対象読者**: GitHub.com 上で Issue / Actions を使って Prompt を実行したいユーザー  
 > **前提**: [hve-cloud-getting-started.md](./hve-cloud-getting-started.md) の Step.4（認証設定）と Step.5（ラベル設定）が完了していること  
-> **次のステップ**: ワークフロー詳細は [workflow-reference.md](./workflow-reference.md)、HVE CLI Orchestratorは [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md) を参照してください
+> **次のステップ**: ワークフロー詳細は [workflow-reference.md](./workflow-reference.md)、HVE CLI Orchestratorは [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md)、HVE GUI Orchestrator は [hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md) を参照してください
 
 ---
 
@@ -184,7 +184,7 @@ Issue Template から親 Issue を作成し、Bootstrap Workflow が Sub Issue �
 | `dataflow-design.yml` | データフロー設計（ADFD） |
 | `dataflow-dev.yml` | バッチ実装（ADFDV） |
 | `sourcecode-to-documentation.yml` | Source Codeからのドキュメント作成（ADOC） |
-| `knowledge-management.yml` | knowledge ドキュメント管理（AKM: qa/original-docs/both） |
+| `knowledge-management.yml` | knowledge ドキュメント管理（AKM: qa/docs-original/both） |
 
 
 #### ワークフロー別チェーン図
@@ -287,7 +287,7 @@ Bootstrap Workflow が自動的に Sub Issue を生成し、Copilot を各 Sub I
 | 実装 | `Dev-*` | 26 | Azure リソース作成・コード生成・デプロイ | [workflow-reference.md](./workflow-reference.md) |
 | ドキュメント生成 | `Doc-*` | 19 | API/データモデル/依存関係等の文書生成 | [workflow-reference.md](./workflow-reference.md) |
 | QA / レビュー | `QA-*` | 7 | コード品質・アーキテクチャレビュー | [workflow-reference.md](./workflow-reference.md) |
-| Knowledge Management | `KnowledgeManager` | 1 | qa/original-docs → knowledge/ D01〜D21 | [workflow-reference.md](./workflow-reference.md) |
+| Knowledge Management | `KnowledgeManager` | 1 | qa/docs-original → knowledge/ D01〜D21 | [workflow-reference.md](./workflow-reference.md) |
 | E2E テスト | `E2ETesting-*` | 1 | Playwright E2E テスト実行 | [workflow-reference.md](./workflow-reference.md) |
 
 > 完全な一覧（入出力マップ・knowledge/ 参照関係を含む）は [workflow-reference.md](./workflow-reference.md#prompt-一覧) を参照してください。

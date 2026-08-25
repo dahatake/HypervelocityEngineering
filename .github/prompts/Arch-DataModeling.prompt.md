@@ -24,6 +24,10 @@
 - `app-scope-resolution` — APP-ID 指定時の対象サービス・画面・エンティティのスコープ判定
 - `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
 
+### Skill 適用境界
+- `app-scope-resolution` は対象範囲の判定にだけ用いる。Data Model のファイル分割には同 Skill の一般的な APP 単位分割を採用せず、下流契約が固定パスを要求するため §3.3.1 の canonical 3件だけを用いる。
+- Data Model には `large-output-chunking` の汎用 `index` / `part-NNNN` 命名を適用しない。サンプルデータの JSON 分割は別契約（§3 B）であり、Data Model の固定3 sidecar契約と混同しない。
+
 ## 2) 入力（必ず参照）
 ユーザーからタスクを受け取ったら、まず以下を読む（存在しない場合は search で探し、見つからなければ質問へ）。
 - `docs/catalog/domain-analytics.md`
@@ -41,6 +45,7 @@
 ## 3) 出力フォーマット（Markdown固定スキーマ）
 ### A) モデリングドキュメント
 - `docs/catalog/data-model.md`
+- 条件付き sidecar は §3.3.1 の固定3件だけとする。
 
 ### B) サンプルデータ
 - 原則：`src/data/sample-data.json`
@@ -136,12 +141,18 @@
 - ブロッカー/質問:
 
 ### 3.3.1 成果物の分割ルール
+- 本節は Data Model 専用の固定3 sidecar契約であり、§3 B のサンプルデータ `index` / `part-NNNN` 分割とは異なる。
 - **`docs/catalog/data-model.md` は常に索引/統合版として維持すること。**
   - ASD の後続 Step は `docs/catalog/data-model.md` を必須入力としているため、分割しても本ファイルを削除・置換しない。
-  - 分割する場合は、`docs/catalog/data-model.md` から各分割ファイルへのリンク一覧や統合ビュー（全体表）を提供する。
-- 1つの APP-ID のみが利用するエンティティ群がある場合、APP-ID 単位でファイル分割を検討する。
-  - 分割例: `docs/data-model-app-01.md`（APP-01 専用エンティティ）。複数 APP 共有エンティティは `docs/catalog/data-model.md` にのみ残し、`docs/data-model-shared.md` を別途作成しない。
-  - 複数 APP で共有されるエンティティは統一ファイルのまま「利用APP」列をカンマ区切りで記載する。
+  - 分割時も親は見出し `1`〜`6` を固定順で維持する。見出し `3`〜`5` はリンクだけにせず、主キー・主要制約・代表インデックス・整合性判断・主要イベント・図の要旨を含む統合ビューを残し、下流 Step が親単独で必要情報を取得できるようにする。
+- **分割は、単一ファイル版が 50,000 文字を超える見込みの場合だけ行う。** 固定章 `1`〜`6` のドラフトを単一Markdownとして組み立て、改行を含む Unicode 文字数で判定する。前回runの分割状態を閾値判定より優先しない。その場合は次の canonical sidecar 3 件を**すべて**作成または更新する。
+  - `docs/catalog/data-model-service-stores.md` — Service Data Stores
+  - `docs/catalog/data-model-consistency-events.md` — Consistency & Events
+  - `docs/catalog/data-model-diagrams.md` — Diagrams
+- **上記 3 件以外の名前・粒度（追加の章別・APP-ID別を含む）で Data Model を分割してはならない。** 下流 Step と io-contract は親と canonical 3 件だけを宣言しており、別名の分割ファイルはどの契約にも現れず検証されないまま残る。
+- **相互リンクを必ず張る。** 親ファイル `docs/catalog/data-model.md` は各 sidecar へのリンク一覧と全体要約を保持し、各 sidecar は親ファイルへの戻りリンクを保持する。
+- **分割不要になった再実行では、親から sidecar リンクを除いて固定章を親へ統合し、canonical sidecar 3 件の古い（stale）ファイルを削除する。**
+- 複数 APP で共有されるエンティティは統一ファイルのまま「利用APP」列をカンマ区切りで記載する。
 
 ### 3.4 最終品質レビュー（単回インライン・セルフチェック）
 
@@ -151,6 +162,7 @@
 - **網羅性・要件達成度**：エンティティ漏れ/サービス割当/根拠が充足しているか
 - **整合性・妥当性**：主キー/参照/イベント/PII表記/命名/Mermaid可読性が一貫しているか
 - **実用性・保守性**：JSONサンプル/表の有用性/将来の拡張可能性は妥当か
+- **分割契約**：分割時はcanonical sidecar 3件がすべて存在して相互リンクが有効か、分割不要時は親未リンクのstale sidecarが残っていないか
 
 ### 3.4.3 反映方法
 確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。

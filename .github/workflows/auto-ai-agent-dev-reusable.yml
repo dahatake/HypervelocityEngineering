@@ -853,6 +853,9 @@ jobs:
           S23_NUM="" S23_ID=""
           S3_NUM=""  S3_ID=""
           S4_NUM=""  S4_ID=""
+          S5_NUM=""  S5_ID=""
+          S6_NUM=""  S6_ID=""
+          S7_NUM=""  S7_ID=""
 
           # ---- Step.1 (AI Agent 構成設計) ----
           if ! skip_step "1"; then
@@ -961,14 +964,65 @@ jobs:
             echo "Step.4 はスキップされました。"
           fi
 
+          # ---- Step.5 (要件適合実測) ----
+          if ! skip_step "5"; then
+            BODY_S5=$(printf '%s\n## 目的\nデプロイ済みの AI Agent を実際に動かし、機能要件・非機能要件への適合を測定で判定する。\n\n## なぜ必要か\nStep.4 は tool search の on / off に限定した測定で、`--enable-tool-search no` のときは実行対象から外れる。そのため「デプロイした Agent がアプリケーションとして目標の応答時間・成功率・コストを満たすか」はどの Step でも確認されていない。選んだ実行構成が過剰かどうかも目標値と実測値の差でしか評価できない。\n\n## 入力\n- `docs/catalog/app-catalog.md`\n- `docs/ai-agent-catalog.md`（Agent 一覧 — 測定対象の定義元）\n- `docs/agent/agent-detail-{agentId}-{agentName}.md`（目標値の根拠）\n- `src/test/agent/`（測定に再利用する既存テスト資産）\n\n## 出力\n- `docs/agent/requirements-conformance-report.md`\n\n## 測定要件\n- 測定対象はデプロイ済みの Agent エンドポイントとする。本 Step のために Azure リソースを新規作成しない。\n- 測定には当該ワークフローが既に生成したテスト資産を再利用する。\n- 応答時間は平均ではなくパーセンタイル（p50 / p95 等）で記録し、どのパーセンタイルかを明示する。\n- 設計成果物に数値目標が無い要件は `NO_TARGET` とし、実測値だけを残す。目標を推測で補わない。\n- Step.4 が測る tool search 指標を再測定しない。重複は Step.4 の結果を参照する。\n\n## レポートの固定フォーマット（HVE artifact gate が機械検証）\n- 測定条件: `Schema-Version` / `Workflow` / `Step` / `Agent` / `Measured-At` / `Target-Environment` / `Measurement-Tool` / `Secret-Redaction`\n- 測定表: `| Req ID | Kind | Target | Threshold | Measured | Judgement | Headroom | Evidence |`（1 行以上必須）\n- 判定語彙: `PASS` / `FAIL` / `NOT_MEASURED` / `NO_TARGET` の 4 値のみ\n- 結論: `- Conclusion:` と `- Rationale:`\n- 簡素化候補: `- Simplification-Candidate:`（該当なしは `none`）\n\n## 禁止事項\n- 測定していない数値を書かない。実行できなかった指標は `NOT_MEASURED` と理由を記す。\n- 実測値から逆算して目標・閾値を作らない。\n- 目標が無いこと（`NO_TARGET`）と測れなかったこと（`NOT_MEASURED`）を同じ語彙へ畳み込まない。\n- 測定のために Agent 実装・設定・デプロイ済みリソースを変更しない。\n\n## Custom Agent\n`QA-RequirementsConformanceEval` を使用\n\n## 依存\n- Step.3（AI Agent Deploy）が `aagd:done` であること\n\n## 完了条件\n- `docs/agent/requirements-conformance-report.md` が作成されている\n- 測定条件ラベル 8 件がすべて記載されている\n- 測定表が 1 行以上あり、各行の判定が 4 値のいずれかである\n- `Conclusion` / `Rationale` / `Simplification-Candidate` が記載されている\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.5: 要件適合実測${APP_ID_SUFFIX}" \
+              "${BODY_S5}" \
+              "${STEP_LABELS}")
+            S5_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S5_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.5 作成: #${S5_NUM}"
+            sleep 3
+          else
+            echo "Step.5 はスキップされました。"
+          fi
+
+          # ---- Step.6 (検索経路の適正化実測) ----
+          if ! skip_step "6"; then
+            BODY_S6=$(printf '%s\n## 目的\nAG-CAP-10 に従い、Agent が採用した検索経路が目的に対して過剰でないかを 2 段以上の比較実測で判定する。\n\n## なぜ必要か\n反復検索と推論を伴う検索経路は、単一クエリ検索やデータストア native 検索よりコストと応答時間が大きい。「その経路でなければ達成できなかった」ことは、より安い経路を実際に動かして比べない限り示せない。Step.5 はデプロイ済み構成が目標を満たすかを測るが、別経路との比較は行わない。\n\n## 入力\n- `docs/ai-agent-catalog.md`（Agent 一覧）\n- `docs/agent/agent-detail-{agentId}-{agentName}.md`（Section 7.0 の採用経路と Section 7.9 の評価契約）\n- `docs/catalog/unstructured-data-catalog.md`（資産ごとの検索経路候補と除外理由）\n- `src/test/agent/`（測定に再利用する既存テスト資産）\n\n## 出力\n- `docs/agent/route-rightsizing-report.md`\n\n## 測定要件\n- 比較する経路は Skill `ai-agent-capability-contract` の `references/search-routing.md` §4.1 のコスト階段から選ぶ。採用段と、それより安い段を最低 1 つの合計 2 段以上を実測する。\n- 各段で同じ評価データセットと同じ判定基準を使う。\n- 記録する指標は正答率・1 リクエストあたりのトークン・応答時間の 3 つ。\n- 本 Step のために Azure リソースを新規作成することを必須にしない。測れない段は `NOT_MEASURED` と理由を記す。\n- 未実測を `PASS` として扱わない。1 段しか測れなかった場合の結論は `INSUFFICIENT` とする。\n\n## レポートの固定フォーマット（HVE artifact gate が機械検証）\n- 測定条件: `Schema-Version` / `Workflow` / `Step` / `Agent` / `Measured-At` / `Dataset` / `Dataset-Size` / `Secret-Redaction`\n- 比較表: `| Rung | Route | Accuracy | Tokens | Latency | Judgement | Evidence |`（2 行以上必須）\n- 判定語彙: `KEEP` / `DOWNGRADE` / `INSUFFICIENT` / `NOT_MEASURED` の 4 値のみ\n- 結論: `- Conclusion:` と `- Rationale:`\n- 推奨経路: `- Recommended-Route:`\n\n## 禁止事項\n- 実測していない段の数値を書かない。\n- 採用段の結果だけを載せて「適正」と結論しない。\n- 段ごとに異なる評価データセットを使わない。\n- 測定のために Agent 実装・設定・デプロイ済みリソースを恒久的に変更しない。\n\n## Custom Agent\n`QA-AgentRouteRightsizingEval` を使用\n\n## 依存\n- Step.3（AI Agent Deploy）が `aagd:done` であること\n\n## 完了条件\n- `docs/agent/route-rightsizing-report.md` が作成されている\n- 測定条件ラベル 8 件がすべて記載されている\n- 比較表が 2 行以上あり、各行の判定が 4 値のいずれかである\n- `Conclusion` / `Rationale` / `Recommended-Route` が記載されている\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.6: 検索経路の適正化実測${APP_ID_SUFFIX}" \
+              "${BODY_S6}" \
+              "${STEP_LABELS}")
+            S6_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S6_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.6 作成: #${S6_NUM}"
+            sleep 3
+          else
+            echo "Step.6 はスキップされました。"
+          fi
+
+          # ---- Step.7 (Microsoft 365 / Teams 公開) ----
+          if ! skip_step "7"; then
+            BODY_S7=$(printf '%s\n## 目的\nAG-CAP-09 の Microsoft 365 / Teams チャネルに従い、デプロイ済み Agent を Microsoft 365 Copilot Chat / Teams から呼べる状態にするための公開手順と結果を確定する。\n\n## なぜ必要か\nAgent をデプロイしただけでは、利用者のチャットクライアントからは呼べない。「実装したが呼び出せない」状態を防ぐため、公開経路の設定と結果を成果物として残す。\n\n## 入力\n- `docs/ai-agent-catalog.md`（Agent 一覧）\n- `docs/agent/agent-detail-{agentId}-{agentName}.md`（Section 7.8 Distribution & Packaging が正本）\n- `src/agent/`（デプロイ済み実装と plugin.json）\n\n## 出力\n- `docs/agent/m365-publish-report.md`\n\n## 実施要件\n- 公開の可否は Section 7.8 の `Channels` が正本。採っていない場合は公開作業を行わず、理由と再判定条件をレポートへ残す（判定 `NOT_SELECTED`）。\n- 公開範囲と管理者承認の要否を記録する。承認待ちで完了できない場合は `PENDING_APPROVAL` とする。\n- 既に公開した版と同じ版を再公開できない。採番規則と今回採番した版を記録する。\n- 公開メタデータは利用者に見える。secret・API キー・接続文字列・内部 URL をどのフィールドにも入れない。\n- 既存の認可スキームとプロトコル設定を削除しない。公開のために追加するのであって、置き換えない。\n- API version / SKU / リージョン / リソース名は Microsoft Learn MCP で確認し、参照 URL と確認日を残す。推測で確定しない。\n\n## レポートの固定フォーマット（HVE artifact gate が機械検証）\n- 公開条件: `Schema-Version` / `Workflow` / `Step` / `Agent` / `Published-At` / `Publish-Scope` / `Auth-Scheme` / `Secret-Redaction`\n- 公開表: `| Agent Key | Channel | Publish Scope | App Version | Judgement | Approval | Evidence |`（1 行以上必須）\n- 判定語彙: `PUBLISHED` / `PENDING_APPROVAL` / `NOT_SELECTED` / `FAILED` の 4 値のみ\n- 結論: `- Conclusion:` と `- Rationale:`\n- 利用者向け接続手順: `- Consumer-Setup:`\n\n## 禁止事項\n- 公開していないのに `PUBLISHED` と書かない。\n- 公開メタデータへ secret を書かない。\n- 既存の認可設定・プロトコル設定を削除・置換しない。\n\n## Custom Agent\n`Dev-Agent-M365Publish` を使用\n\n## 依存\n- Step.3（AI Agent Deploy）が `aagd:done` であること\n\n## 完了条件\n- `docs/agent/m365-publish-report.md` が作成されている\n- 公開条件ラベル 8 件がすべて記載されている\n- 公開表が 1 行以上あり、各行の判定が 4 値のいずれかである\n- `Conclusion` / `Rationale` / `Consumer-Setup` が記載されている\n- 完了時に自身に `aagd:done` ラベルを付与すること%s%s' \
+              "${ROOT_REF}" "${APP_ID_SECTION}" "${ADDITIONAL_SECTION}")
+            RESP=$(create_issue \
+              "[AAGD] Step.7: Microsoft 365 / Teams 公開${APP_ID_SUFFIX}" \
+              "${BODY_S7}" \
+              "${STEP_LABELS}")
+            S7_NUM=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['number'])")
+            S7_ID=$(echo "${RESP}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['id'])")
+            echo "Step.7 作成: #${S7_NUM}"
+            sleep 3
+          else
+            echo "Step.7 はスキップされました。"
+          fi
+
           # ---- Sub Issue 紐付け ----
           echo "Sub Issue 紐付けを開始します..."
 
-          # Root → Step.1, Step.2（コンテナ）, Step.3, Step.4
+          # Root → Step.1, Step.2（コンテナ）, Step.3, Step.4, Step.5, Step.6, Step.7
           [[ -n "${S1_ID}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S1_ID}"; echo "Root → Step.1 紐付け完了"; }
           [[ -n "${S2_ID}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S2_ID}"; echo "Root → Step.2 紐付け完了"; }
           [[ -n "${S3_ID}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S3_ID}"; echo "Root → Step.3 紐付け完了"; }
           [[ -n "${S4_ID}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S4_ID}"; echo "Root → Step.4 紐付け完了"; }
+          [[ -n "${S5_ID}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S5_ID}"; echo "Root → Step.5 紐付け完了"; }
+          [[ -n "${S6_ID}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S6_ID}"; echo "Root → Step.6 紐付け完了"; }
+          [[ -n "${S7_ID}" ]] && { link_sub_issue "${ROOT_ISSUE}" "${S7_ID}"; echo "Root → Step.7 紐付け完了"; }
 
           # Step.2 → Step.2.1, Step.2.2, Step.2.3
           [[ -n "${S2_NUM}" && -n "${S21_ID}" ]] && { link_sub_issue "${S2_NUM}" "${S21_ID}"; echo "Step.2 → Step.2.1 紐付け完了"; }
@@ -1016,6 +1070,15 @@ jobs:
               echo "Step.1/2/3 がスキップ済み: Step.4 (#${S4_NUM}) を起動しました。"
             else
               echo "WARNING: Step.4 へのアサイン失敗。aagd:running は付与しません。"
+            fi
+          elif [[ -n "${S5_NUM}" ]]; then
+            add_label "${S5_NUM}" "aagd:ready"
+            CA=$(extract_custom_agent "${BODY_S5}")
+            if assign_copilot "${S5_NUM}" "${CA}" "${BRANCH}" ""; then
+              add_label "${S5_NUM}" "aagd:running"
+              echo "Step.1/2/3/4 がスキップ済み: Step.5 (#${S5_NUM}) を起動しました。"
+            else
+              echo "WARNING: Step.5 へのアサイン失敗。aagd:running は付与しません。"
             fi
           else
             echo "起動可能な leaf Step が存在しません。初期化をスキップします。"
@@ -1417,18 +1480,59 @@ jobs:
               ;;
 
             "3")
-              # Step.3 完了 → Step.4（なければ必須 Self-Improve 待ち）
+              # Step.3 完了 → Step.4（なければ Step.5、それも無ければ必須 Self-Improve 待ち）
               S4_NUM=$(get_sub_issue_number '\[AAGD\] Step\.4:')
+              S5_NUM=$(get_sub_issue_number '\[AAGD\] Step\.5:')
               if [[ -n "${S4_NUM}" ]]; then
                 activate_issue "${S4_NUM}"
                 echo "Step.3 完了: Step.4 (#${S4_NUM}) を起動しました。"
+              elif [[ -n "${S5_NUM}" ]]; then
+                activate_issue "${S5_NUM}"
+                echo "Step.3 完了: Step.4 が無いため Step.5 (#${S5_NUM}) を起動しました。"
               else
                 mark_root_self_improve_ready
               fi
               ;;
 
             "4")
-              # Step.4 完了 → AAGD の最終 Step。必須 Self-Improve 待ちへ
+              # Step.4 完了 → Step.5（なければ必須 Self-Improve 待ち）
+              S5_NUM=$(get_sub_issue_number '\[AAGD\] Step\.5:')
+              if [[ -n "${S5_NUM}" ]]; then
+                activate_issue "${S5_NUM}"
+                echo "Step.4 完了: Step.5 (#${S5_NUM}) を起動しました。"
+              else
+                mark_root_self_improve_ready
+              fi
+              ;;
+
+            "5")
+              # Step.5 完了 → Step.6（なければ Step.7、それも無ければ必須 Self-Improve 待ち）
+              S6_NUM=$(get_sub_issue_number '\[AAGD\] Step\.6:')
+              S7_NUM=$(get_sub_issue_number '\[AAGD\] Step\.7:')
+              if [[ -n "${S6_NUM}" ]]; then
+                activate_issue "${S6_NUM}"
+                echo "Step.5 完了: Step.6 (#${S6_NUM}) を起動しました。"
+              elif [[ -n "${S7_NUM}" ]]; then
+                activate_issue "${S7_NUM}"
+                echo "Step.5 完了: Step.6 が無いため Step.7 (#${S7_NUM}) を起動しました。"
+              else
+                mark_root_self_improve_ready
+              fi
+              ;;
+
+            "6")
+              # Step.6 完了 → Step.7（なければ必須 Self-Improve 待ち）
+              S7_NUM=$(get_sub_issue_number '\[AAGD\] Step\.7:')
+              if [[ -n "${S7_NUM}" ]]; then
+                activate_issue "${S7_NUM}"
+                echo "Step.6 完了: Step.7 (#${S7_NUM}) を起動しました。"
+              else
+                mark_root_self_improve_ready
+              fi
+              ;;
+
+            "7")
+              # Step.7 完了 → AAGD の最終 Step。必須 Self-Improve 待ちへ
               mark_root_self_improve_ready
               ;;
 

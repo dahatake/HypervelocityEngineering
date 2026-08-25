@@ -42,6 +42,15 @@ class TestManifestBoundaries:
         assert "agent-config.json" in coding_prompt
         assert "closed schema" in coding_prompt
 
-    def test_does_not_declare_mcp_json_as_an_output(self, coding_prompt: str):
-        """AG-CAP-05 は Agent を MCP client と定めるため mcp.json は成果物にしない。"""
-        assert "src/agent/{key}/mcp.json" not in coding_prompt
+    def test_declares_mcp_json_as_a_conditional_output(self, coding_prompt: str):
+        """AG-CAP-09 が採用したときだけ mcp.json を生成する条件付き成果物とする。"""
+        assert "src/agent/{key}/mcp.json" in coding_prompt
+        assert "Plugin components" in coding_prompt
+
+    def test_forbids_inlining_mcp_config_into_the_manifest(self, coding_prompt: str):
+        """仕様 §7.2.1: mcp.json は plugin root 固定で plugin.json へ書けない。"""
+        assert "インライン記述しない" in coding_prompt
+
+    def test_forbids_credentials_in_mcp_headers_and_env(self, coding_prompt: str):
+        assert "資格情報の値を書かない" in coding_prompt
+        assert "loopback 以外は HTTPS 必須" in coding_prompt

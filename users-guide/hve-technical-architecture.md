@@ -1,5 +1,7 @@
 # HVE 技術アーキテクチャ詳細書
 
+← [README](../README.md)
+
 > **Phase 8 付記 (2026-08-07 改訂)**: Custom Agent（`.github/agents/<Name>.agent.md`）と `hve/agent_loader.py` は Phase 2 で廃止済みです。現行実装では、Agent 名は識別子として `StepDef.custom_agent` に残り、Prompt 本文は [`hve/prompt_loader.py`](../hve/prompt_loader.py) が `.github/prompts/<Name>.prompt.md` から読み込み、入出力契約は `.github/io-contracts/<Name>.yaml` が定義します（リポジトリ実体で確認済み。`hve/agent_loader.py` は存在しません）。本書 §3〜§5 のフロー記述はこの構成に更新済みです。最新の規範ルールは `.github/copilot-instructions.md` §5 および `.github/prompts/README.md` を参照してください。
 
 > **位置づけ**: HVE（Hypervelocity Engineering）の **3 つの Orchestrator**（Cloud Agent / CLI / GUI）について、最大限詳細な技術アーキテクチャ図・メッセージフロー・解説をまとめた一次資料。
@@ -83,7 +85,7 @@ HVE は **GitHub Copilot CLI** を実行エンジンとして、**Workflow（DAG
 | `hve/dag_planner.py` | `build_dag_plan()`：`WorkflowDef` を実行可能な DAG に展開（fanout・skip 条件評価）。 |
 | `hve/dag_executor.py` | `DAGExecutor`：`asyncio.Semaphore(max_parallel)` 並列・Fork-on-Retry・依存解決。 |
 | `hve/runner.py` | `StepRunner`：1 ステップを `CopilotClient.create_session()` → `send_and_wait()` で実行。 |
-| `hve/workflow_registry.py` | `WorkflowDef` / `StepDef` 定義の集合体（`list_workflows()` は 2026-08-07 時点で 12 ワークフローを返す）。 |
+| `hve/workflow_registry.py` | `WorkflowDef` / `StepDef` 定義の集合体。`_REGISTRY` は 13 ワークフロー（`ard` / `aas` / `ada` / `aad-web` / `asdw-web` / `adfd` / `adfdv` / `aag` / `aagd` / `aar` / `akm` / `adi` / `adoc`）を保持し、`list_workflows()` はその全値を返す。 |
 | `hve/prompt_loader.py` | `.github/prompts/*.prompt.md` を読み込み、Agent の Prompt 本文を提供する（旧 `hve/agent_loader.py` の後継、Phase 2 で SDK への custom_agents 伝搬は廃止）。 |
 | `hve/skill_resolver.py` | `.github/skills/*/SKILL.md` の frontmatter から候補抽出（`skill_manifest.json` を活用）。 |
 | `hve/run_state.py` | SDK セッション ID の決定論的生成（`make_session_id`）。fork-on-retry のフォーク用 ID 再構成に使用。 |
@@ -95,7 +97,7 @@ Cloud Agent Orchestrator は **DAG 実行を bash + GitHub Actions reusable work
 
 > **Deploy 検証に関する注意**: CLI / GUI 経路では `enable_auto_merge` 有効時に PR merge 後の check-run 状態を確認するが、Cloud Agent Orchestrator 経路は Sub-Issue / PR / ラベル遷移で駆動されるため、同じ `DAGExecutor` 内の post-merge check-run 待機は実行されない。Cloud 経路で Deploy step の妥当性を確認する場合は、各 Deploy Agent の `ac-verification.md`、PR body の検証マーカー、`auto-approve-and-merge.yml` の check-run / Deploy AC gate、および Sub-Issue の `*:blocked` ラベル有無を確認する。
 >
-> **既知制約**: `auto-app-dev-microservice-web-reusable.yml` はファイル先頭に `OUT-OF-SYNC NOTICE` を持ち、`hve/workflow_registry.py` の ASDW-WEB 現行 step 番号体系と同期していない。このため **ASDW-WEB の Cloud 起動は `auto-orchestrator-dispatcher.yml` から停止済み**（FR-CLOUD-06）で、ASDW-WEB は **CLI 経路 / GUI 経路が supported** である。`auto-app-dev-microservice-web` ラベル付き Issue を作成しても reusable workflow は起動せず、dispatcher が CLI / GUI への誘導コメントを投稿する。Cloud reusable workflow の step 体系移行は別タスクとして扱う。他のCloud workflow（AAS / AAD-WEB / ADFD / ADFDV / AAG / AAGD / AKM / ADOC）の挙動は変更されていない。ADIはlocal専用である。
+> **Cloud parity**: ASDW-WEB と AAR は `hve/workflow_registry.py` の Step ID と Cloud reusable workflow の生成 Step を parity test で同期する。ADI は local 専用である。
 
 ---
 
@@ -107,7 +109,7 @@ Cloud Agent Orchestrator は **DAG 実行を bash + GitHub Actions reusable work
 
 1. **Issue 作成**: ユーザーが `.github/ISSUE_TEMPLATE/*.yml` から Issue を起こす。フォーム送信時に対応するワークフローラベル（例: `auto-app-selection`, `auto-app-detail-design-web`）が自動付与される。
 2. **Dispatcher 起動**: `.github/workflows/auto-orchestrator-dispatcher.yml` が `on: issues [opened, labeled, closed]` で発火。ラベルから `target` を判定し、対応する **reusable workflow** を `uses:` で呼び出す。
-3. **Reusable Workflow 実行**: `auto-<target>-reusable.yml`（AAS / AAD-WEB / ADFD / ADFDV / AAG / AAGD / AKM / ADOC ほか。ASDW-WEB は FR-CLOUD-06 により Cloud 起動停止中）が実行される。共通処理として:
+3. **Reusable Workflow 実行**: `auto-<target>-reusable.yml`（AAS / AAD-WEB / ASDW-WEB / ADFD / ADFDV / AAG / AAGD / AAR / AKM / ADOC）が実行される。共通処理として:
    - `env: COPILOT_PAT` を設定（Coding Agent アサインに必要な PAT）。
    - `.github/scripts/bash/lib/assign-copilot.sh` を source して `assign_copilot` 関数を読み込む。
    - ワークフローごとに定義された **Step 群** を順次処理し、各ステップで以下を実施：
@@ -212,7 +214,7 @@ bash 側からは以下の `python -m hve.*` を CLI として呼び出し、必
 > **実装現況メモ**: §5.2〜§5.13 は GUI の **設計仕様**（旧 `hve-gui-orchestrator-design.md` を統合）を記述する。現行 `hve/gui/` 配下には以下 2 系統の UI 実装が並存しており、本書の構造記述は設計意図を示すものとして読むこと。
 >
 > - `hve/gui/wizard.py`: `QWizard` ベースの 3 ページ（`_WorkflowSelectPage` → `_OptionsPage` → `_ConfirmPage`）。
-> - `hve/gui/main_window.py`: `QMainWindow` + `QStackedWidget`（2 ステップ切替 + Workbench スタック）+ `page_intro.py` 等の追加ページ。
+> - `hve/gui/main_window.py`: `QMainWindow` + `QStackedWidget`。main stack は Workflow と Workbench の 2 ページだけで、`_workbench_stack` は撤去済み。`page_intro.py` 等の追加ページは main stack へ登録されていない。
 >
 > 細部の差異（ページ構成・遷移ロジック）は実装ファイルを正とすること。
 
@@ -259,16 +261,25 @@ QMainWindow (MainWindow)
 - 説明文は `_WORKFLOW_DESCRIPTIONS` 辞書を `hve/gui/page_workflow_select.py` 内に定義（`hve/__main__.py` の `--workflow` add_argument の help テキストを参照）。
 - 表示名は `WorkflowDef.name` を正とする（help テキストの表記とは異なる場合あり）。
 
-### 5.4 Step 1（右ペイン）: オプション選択（16 カテゴリ）
+### 5.4 オプションのカテゴリー ID（設定互換用の内部識別子）
 
-`orchestrate` のオプション群を **16 カテゴリ** にアコーディオン分類する。カテゴリの根拠は `hve/__main__.py` の `add_argument(...)` 呼び出しに付随するコメントセクション。
+下表は **設定の互換性とテスト識別子を安定させるためのカテゴリー ID 対応表** であり、現行 UI の画面構成を表す正本ではない。カテゴリーの根拠は `hve/__main__.py` の `add_argument(...)` 呼び出しに付随するコメントセクション。
+
+現行 UI の実態は次のとおりで、本表とは別構成である。
+
+- 設定画面（`SettingsWindow`）のツリーは固定 13 ノードと `skills` グループ 3 ノードの計 16 ノード。
+- Step 1 右ペイン（`OptionsPage`）は非表示カテゴリーを直接並べず、選択ワークフローに応じて C3 の一部とワークフロー固有の入力欄を再配置する。
+
+画面側の正確な構成は [hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md) を参照すること。
+
+`orchestrate` のオプション群とカテゴリー ID の対応は次のとおり。
 
 | # | カテゴリ | 主要オプション | 区分 |
 |---|---|---|---|
 | C1 | 基本設定 | `--workflow`, `--model`, `--review-model`, `--qa-model` | 共通 |
 | C2 | 並列実行 | `--max-parallel` | 共通 |
 | C3 | 共通設定 | `--auto-qa`, `--qa-akm-background-merge`, `--force-interactive`, `--auto-contents-review`, `--auto-coding-agent-review`, `--auto-coding-agent-review-auto-approval` | 共通 |
-| C4 | Work IQ | `--workiq`, `--workiq-akm-review`, `--workiq-akm-ingest`, `--workiq-dxx`, `--workiq-draft`, `--workiq-draft-output-dir`, `--workiq-tenant-id`, `--workiq-prompt-qa`, `--workiq-prompt-km`, `--workiq-prompt-review`, `--workiq-per-question-timeout` | **CLI 固有**（Issue Template に存在しないことを確認済み: `grep -i workiq` で 0 件） |
+| C4 | Work IQ | `--workiq`, `--workiq-akm-review`, `--workiq-akm-ingest`, `--workiq-dxx`, `--workiq-draft`, `--workiq-draft-output-dir`, `--workiq-tenant-id`, `--workiq-prompt-qa`, `--workiq-prompt-km`, `--workiq-prompt-review`, `--workiq-per-question-timeout`, `--workiq-request-timeout` | **CLI 固有**（Issue Template に存在しないことを確認済み: `grep -i workiq` で 0 件） |
 | C5 | Issue / PR 作成 | `--create-issues`, `--create-pr`, `--ignore-paths`, `--repo`, `--issue-title` | 共通 |
 | C6 | 出力制御 | `--verbose`, `--quiet`, `--verbosity`, `--show-stream`, `--log-level`, `--no-color`, `--banner`, `--screen-reader`, `--timestamp-style`, `--final-only` | **CLI 固有**（`hve/__main__.py` に定義あり／`.github/ISSUE_TEMPLATE/` に対応入力なしを確認済み） |
 | C7 | MCP / CLI 接続 | `--mcp-config`, `--cli-path`, `--cli-url` | **CLI 固有**（同上の方法で確認済み） |
@@ -334,7 +345,7 @@ python -m hve orchestrate --workflow ard \
 ```
 ┌──────────────────────────────────────────────┐
 │ Step 2: 実行 (ard, run_id=auto)                              │
-│ 実行コマンド: python -m hve orchestrate --workflow ard ... [📋]│
+
 │ ┌─ ログ出力 ──────────────────────────────────── [📋] ──┐    │
 │ │ [2026-05-14 10:00:00] Step 1 started...               │    │
 │ └────────────────────────────────────────────────────────┘    │
@@ -390,7 +401,7 @@ class OrchestrateArgs:
     auto_qa: bool = False
     auto_contents_review: bool = False
     workiq: bool = False
-    # ... C5〜C16 同様に網羅
+    # ... 他のオプションも同様に網羅
     repo_root: Path = field(default_factory=Path.cwd)
 
     def to_argv(self) -> List[str]:
@@ -419,7 +430,7 @@ Step 2（Workbench）の実行中は戻り不可。新規セッション or ウ�
 
 | # | 制約 | 詳細 |
 |---|---|---|
-| L1 | GUI モード `--workbench` 強制 off | TUI Workbench を子プロセスで描画させると重複描画とエスケープシーケンス問題が発生するため。C16 カテゴリから `--workbench` 系を除外。 |
+| L1 | GUI モード `--workbench` 強制 off | TUI Workbench を子プロセスで描画させると重複描画とエスケープシーケンス問題が発生するため。GUI は自前の Workbench 画面を持つので `--workbench` 系を利用者に選択させない。なおこれらを収めていた `C16` カテゴリーは現行の Step 1 右ペインにも設定画面にも存在せず、互換 ID の欠番としてのみ残っている。 |
 | L2 | `docs/attached/` 衝突 | 起動時に存在チェック → 空でなければ確認ダイアログ。 |
 | L3 | `--target-business` ファイルパス指定の振る舞い | `hve/__main__.py` の `--target-business` add_argument help 文に基づく暗定実装。実 ARD ワークフロー内部の扱いは別途検証が必要。 |
 | L4 | Windows OneDrive ロックファイル | D&D 時にロック中ファイルは読めない可能性あり。エラーハンドリングでメッセージ表示。 |
@@ -472,7 +483,7 @@ grep -nE '"--workflow"|"--max-parallel"|"--auto-qa"|"--workiq"|"--company-name"|
 
 ### 6.1 GUI 経由 CLI 起動 → 1 ステップ実行 → 完了までの 20 ステップ
 
-1. **GUI Step1→2→3**: ユーザーが Wizard を操作
+1. **GUI Step 1→Step 2**: 利用者が MainWindow の 2 画面（ワークフロー / オプション → Workbench）を操作
 2. **subprocess 起動**: `Popen([python, -m, hve, orchestrate, --workbench off, ...])`
 3. **orchestrator.run()**: `build_dag_plan()` で DAG 構築
 4. **StepRunner.run(step)**: `asyncio.Semaphore` で並列度制御

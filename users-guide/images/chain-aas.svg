@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" role="img" aria-label="AAS 11ステップチェーン図">
-  <desc>AAS（App Architecture Design）: 11ステップチェーン。Step.1 Arch-ApplicationAnalytics → Step.2 Arch-ArchitectureCandidateAnalyzer → Step.3.1 Arch-Microservice-DomainAnalytics → Step.3.2 Arch-Microservice-ServiceIdentify → Step.4.1 Arch-DataModeling（データモデル）→ Step.4.2 Arch-DataModeling（サンプルデータ）・Step.5 Arch-DataCatalog → Step.6 Arch-Microservice-ServiceCatalog → Step.7 Arch-TDD-TestStrategy → Step.8 Arch-PersonaCatalog → Step.9 Arch-UI-PersonaScreenList</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" role="img" aria-label="AAS 10ステップチェーン図">
+  <desc>AAS（App Architecture Design）: 10ステップチェーン。Step.1 Arch-ArchitectureCandidateAnalyzer → Step.2.1 Arch-Microservice-DomainAnalytics → Step.2.2 Arch-Microservice-ServiceIdentify → Step.3.1 Arch-DataModeling（データモデル）→ Step.3.2 Arch-DataModeling（サンプルデータ）・Step.4 Arch-DataCatalog → Step.5 Arch-Microservice-ServiceCatalog → Step.6 Arch-TDD-TestStrategy → Step.7 Arch-PersonaCatalog → Step.8 Arch-UI-PersonaScreenList</desc>
   <defs>
     <marker id="arr" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
       <polygon points="0 0, 9 3.5, 0 7" fill="#555"/>
@@ -14,47 +14,42 @@
     .out { fill: #E8A838; stroke: #8B5A00; stroke-width: 1.5; }
     .ttl { font-size: 15px; font-weight: bold; fill: #1f3a5a; }
   </style>
-  <text x="450" y="28" text-anchor="middle" class="ttl">AAS — App Architecture Design（11ステップ）</text>
-  <!-- Row 1: Steps 1,2,3.1,3.2 -->
-  <rect x="20" y="50" width="110" height="58" rx="5" class="box"/>
-  <text x="75" y="69" text-anchor="middle" class="bt">Step.1</text>
-  <text x="75" y="82" text-anchor="middle" class="bs">Arch-Application</text>
-  <text x="75" y="95" text-anchor="middle" class="bs">Analytics</text>
-  <line x1="130" y1="79" x2="153" y2="79" class="ln"/>
-  <rect x="153" y="50" width="120" height="58" rx="5" class="box"/>
-  <text x="213" y="69" text-anchor="middle" class="bt">Step.2</text>
-  <text x="213" y="82" text-anchor="middle" class="bs">Arch-Architecture</text>
-  <text x="213" y="95" text-anchor="middle" class="bs">CandidateAnalyzer</text>
-  <line x1="273" y1="79" x2="296" y2="79" class="ln"/>
-  <rect x="296" y="50" width="120" height="58" rx="5" class="box"/>
-  <text x="356" y="69" text-anchor="middle" class="bt">Step.3.1</text>
-  <text x="356" y="82" text-anchor="middle" class="bs">Arch-Microservice</text>
-  <text x="356" y="95" text-anchor="middle" class="bs">DomainAnalytics</text>
-  <line x1="416" y1="79" x2="439" y2="79" class="ln"/>
-  <rect x="439" y="50" width="120" height="58" rx="5" class="box"/>
-  <text x="499" y="69" text-anchor="middle" class="bt">Step.3.2</text>
-  <text x="499" y="82" text-anchor="middle" class="bs">Arch-Microservice</text>
-  <text x="499" y="95" text-anchor="middle" class="bs">ServiceIdentify</text>
+  <text x="450" y="28" text-anchor="middle" class="ttl">AAS — App Architecture Design（10ステップ）</text>
+  <!-- Row 1: Steps 1,2.1,2.2 -->
+  <rect x="20" y="50" width="130" height="58" rx="5" class="box"/>
+  <text x="85" y="69" text-anchor="middle" class="bt">Step.1</text>
+  <text x="85" y="82" text-anchor="middle" class="bs">Arch-Architecture</text>
+  <text x="85" y="95" text-anchor="middle" class="bs">CandidateAnalyzer</text>
+  <line x1="150" y1="79" x2="173" y2="79" class="ln"/>
+  <rect x="173" y="50" width="120" height="58" rx="5" class="box"/>
+  <text x="233" y="69" text-anchor="middle" class="bt">Step.2.1</text>
+  <text x="233" y="82" text-anchor="middle" class="bs">Arch-Microservice</text>
+  <text x="233" y="95" text-anchor="middle" class="bs">DomainAnalytics</text>
+  <line x1="293" y1="79" x2="316" y2="79" class="ln"/>
+  <rect x="316" y="50" width="120" height="58" rx="5" class="box"/>
+  <text x="376" y="69" text-anchor="middle" class="bt">Step.2.2</text>
+  <text x="376" y="82" text-anchor="middle" class="bs">Arch-Microservice</text>
+  <text x="376" y="95" text-anchor="middle" class="bs">ServiceIdentify</text>
   <!-- Connector row 1 to row 2 -->
-  <polyline points="559,79 590,79 590,167 75,167 75,180" class="ln"/>
-  <!-- Row 2: Steps 4.1,5,6,7 -->
+  <polyline points="436,79 460,79 460,167 75,167 75,180" class="ln"/>
+  <!-- Row 2: Steps 3.1,4,5,6 -->
   <rect x="20" y="180" width="110" height="58" rx="5" class="box"/>
-  <text x="75" y="199" text-anchor="middle" class="bt">Step.4.1</text>
+  <text x="75" y="199" text-anchor="middle" class="bt">Step.3.1</text>
   <text x="75" y="212" text-anchor="middle" class="bs">Arch-Data</text>
   <text x="75" y="225" text-anchor="middle" class="bs">Modeling</text>
   <line x1="130" y1="209" x2="153" y2="209" class="ln"/>
   <rect x="153" y="180" width="110" height="58" rx="5" class="box"/>
-  <text x="208" y="199" text-anchor="middle" class="bt">Step.5</text>
+  <text x="208" y="199" text-anchor="middle" class="bt">Step.4</text>
   <text x="208" y="212" text-anchor="middle" class="bs">Arch-Data</text>
   <text x="208" y="225" text-anchor="middle" class="bs">Catalog</text>
   <line x1="263" y1="209" x2="286" y2="209" class="ln"/>
   <rect x="286" y="180" width="120" height="58" rx="5" class="box"/>
-  <text x="346" y="199" text-anchor="middle" class="bt">Step.6</text>
+  <text x="346" y="199" text-anchor="middle" class="bt">Step.5</text>
   <text x="346" y="212" text-anchor="middle" class="bs">Arch-Microservice</text>
   <text x="346" y="225" text-anchor="middle" class="bs">ServiceCatalog</text>
   <line x1="406" y1="209" x2="429" y2="209" class="ln"/>
   <rect x="429" y="180" width="110" height="58" rx="5" class="box"/>
-  <text x="484" y="199" text-anchor="middle" class="bt">Step.7</text>
+  <text x="484" y="199" text-anchor="middle" class="bt">Step.6</text>
   <text x="484" y="212" text-anchor="middle" class="bs">Arch-TDD</text>
   <text x="484" y="225" text-anchor="middle" class="bs">TestStrategy</text>
   <!-- Output -->
@@ -65,9 +60,9 @@
   <text x="632" y="225" text-anchor="middle" class="bs" style="fill:white;">test-strategy.md</text>
   <!-- Connector row 2 to row 3 -->
   <polyline points="539,238 550,238 550,297 75,297 75,310" class="ln"/>
-  <!-- Row 3: Steps 8,9 -->
+  <!-- Row 3: Steps 7,8 -->
   <rect x="20" y="310" width="110" height="58" rx="5" class="box"/>
-  <text x="75" y="329" text-anchor="middle" class="bt">Step.8</text>
+  <text x="75" y="329" text-anchor="middle" class="bt">Step.7</text>
   <text x="75" y="342" text-anchor="middle" class="bs">Arch-Persona</text>
   <text x="75" y="355" text-anchor="middle" class="bs">Catalog</text>
   <line x1="130" y1="339" x2="153" y2="339" class="ln"/>
@@ -77,7 +72,7 @@
   <text x="228" y="355" text-anchor="middle" class="bs" style="fill:white;">persona-catalog.md</text>
   <line x1="303" y1="339" x2="326" y2="339" class="ln"/>
   <rect x="326" y="310" width="130" height="58" rx="5" class="box"/>
-  <text x="391" y="329" text-anchor="middle" class="bt">Step.9</text>
+  <text x="391" y="329" text-anchor="middle" class="bt">Step.8</text>
   <text x="391" y="342" text-anchor="middle" class="bs">Arch-UI-Persona</text>
   <text x="391" y="355" text-anchor="middle" class="bs">ScreenList</text>
   <line x1="456" y1="339" x2="479" y2="339" class="ln"/>
@@ -91,7 +86,7 @@
   <rect x="160" y="398" width="16" height="16" rx="3" class="out"/>
   <text x="182" y="411" style="font-size:11px;fill:#333;">成果物（出力）</text>
   <!-- Step labels -->
-  <text x="20" y="443" style="font-size:10px;fill:#555;">Step.1: アプリリスト  Step.2: アーキテクチャ推薦  Step.3.1: ドメイン分析  Step.3.2: サービス一覧</text>
-  <text x="20" y="460" style="font-size:10px;fill:#555;">Step.4.1: データモデル  Step.4.2: サンプルデータ  Step.5: データカタログ  Step.6: サービスカタログ  Step.7: テスト戦略書</text>
-  <text x="20" y="477" style="font-size:10px;fill:#555;">Step.8: ペルソナカタログ  Step.9: ペルソナ別共通画面カタログ（Step.4.2 は Step.4.1 完了後に Step.5 と並列実行）</text>
+  <text x="20" y="443" style="font-size:10px;fill:#555;">Step.1: アーキテクチャ推薦  Step.2.1: ドメイン分析  Step.2.2: サービス一覧  Step.3.1: データモデル</text>
+  <text x="20" y="460" style="font-size:10px;fill:#555;">Step.3.2: サンプルデータ  Step.4: データカタログ  Step.5: サービスカタログ  Step.6: テスト戦略書</text>
+  <text x="20" y="477" style="font-size:10px;fill:#555;">Step.7: ペルソナカタログ  Step.8: ペルソナ別共通画面カタログ（Step.3.2 は Step.3.1 完了後に Step.4 と並列実行）</text>
 </svg>

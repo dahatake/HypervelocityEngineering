@@ -1,6 +1,6 @@
 # HVE TDD ベースライン突合サマリー
 
-- 生成日時 (UTC): `2026-08-16T13:16:04Z`
+- 生成日時 (UTC): `2026-08-25T00:25:27Z`
 - 対象: `hve` アプリケーションのみ（HVE CLI / GUI / Cloud Agent Orchestrator 関連）。他アプリ開発には適用しない。
 - 捏造防止: テスト仕様欄は docstring / 関数名 / assert・raises・Pester `Should` / shell `pass` ラベル等、実在コードから機械抽出した。
 
@@ -8,6 +8,8 @@
 
 - `hve-dev/hve-test-inventory.csv` — 既存テストコードの全関数/ケース棚卸し。
 - `hve-dev/hve-feature-inventory.csv` — 要求定義 ID と実コード Workflow/Step の機能一覧。
+- `hve-dev/hve-surface-inventory.csv` — HVE 対象の実装シンボルと実行面の一覧。
+- `hve-dev/hve-tdd-crosswalk-baseline.md` — 要求定義・テストマッピング・生成inventoryの突合サマリー。
 - `hve-dev/hve-tdd-change-policy.md` — 今後の hve 限定 TDD 運用ルール。
 
 ## 対象範囲
@@ -17,56 +19,57 @@
 
 ## テスト棚卸し件数
 
-- 抽出行数: **11754**
-- 対象ファイル数: **562**
+- 抽出行数: **12479**
+- 対象ファイル数: **598**
 
 | 分類 | ファイル数 | 行数 |
 |---|---:|---:|
-| core-python | 320 | 8331 |
+| core-python | 353 | 9014 |
 | cq-support-python | 38 | 696 |
-| github-script-powershell | 5 | 79 |
+| github-script-powershell | 5 | 83 |
 | github-script-python | 4 | 81 |
-| github-script-shell | 7 | 94 |
-| gui-python | 150 | 2060 |
+| github-script-shell | 8 | 111 |
+| gui-python | 152 | 2081 |
 | markdown-query-gui-support-python | 8 | 75 |
 | mdq-support-python | 30 | 338 |
 
 | 種別 | 行数 |
 |---|---:|
-| fixture | 206 |
-| helper | 2277 |
-| pester-it | 88 |
+| fixture | 215 |
+| helper | 2446 |
+| pester-it | 92 |
 | python-file | 7 |
 | script | 1 |
-| setup-teardown | 126 |
+| setup-teardown | 130 |
 | shell-case | 36 |
 | shell-helper | 5 |
-| test | 9008 |
+| test | 9547 |
 
 ## 機能一覧件数
 
-- 抽出行数: **386**
+- 抽出行数: **434**
 
 | 種別 | 行数 |
 |---|---:|
 | C | 4 |
-| FR | 212 |
+| FR | 243 |
 | GATE | 5 |
 | NFR | 32 |
 | UC | 6 |
-| WORKFLOW | 12 |
-| WORKFLOW_STEP | 115 |
+| WORKFLOW | 13 |
+| WORKFLOW_STEP | 131 |
 
 ## 要求定義 ↔ 既存マッピング文書の突合
 
-- `hve-dev/requirement-definition.md` 側 ID 数（FR/NFR/GATE/C/UC）: **259**
-- `hve-dev/requirement-test-mapping.md` 側 ID 数: **262**
-- 要求定義にあるがマッピング見出しが未確認の ID: **20**
-- マッピングにあるが要求定義の抽出対象に無い ID: **2**
+- `hve-dev/requirement-definition.md` 側 ID 数（FR/NFR/GATE/C/UC）: **290**
+- `hve-dev/requirement-test-mapping.md` 側 ID 数: **293**
+- 要求定義にあるがマッピング見出しが未確認の ID: **27**
+- マッピングにあるが要求定義の抽出対象に無い ID: **4**
 - 要求定義上で廃止/削除表記を含む ID: **7**
 
 ### 要求定義にあるがマッピング見出しが未確認
 
+- `FR-WF-AAS-03`
 - `FR-WF-ADFDV-01`
 - `FR-WF-ADFDV-02`
 - `FR-WF-ADI-02`
@@ -86,11 +89,19 @@
 - `FR-WF-ADI-16`
 - `FR-WF-ADI-17`
 - `FR-WF-ADI-18`
+- `FR-WF-CONF-01`
+- `FR-WF-CONF-02`
+- `FR-WF-CONF-03`
+- `FR-WF-CONF-04`
+- `FR-WF-CONF-05`
+- `FR-WF-CONF-06`
 - `NFR-SEC-ADI-02`
 
 ### マッピングにあるが要求定義の抽出対象に無い ID
 
 - `FR-RTO`
+- `FR-WF-CONF`
+- `G-CAP`
 - `NFR-RTO`
 
 ### 廃止/削除表記を含む ID

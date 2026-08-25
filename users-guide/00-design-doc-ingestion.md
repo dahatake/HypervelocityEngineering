@@ -70,9 +70,9 @@ flowchart LR
   IDX --> A1["Doc-OriginalInventory<br/>Step 1"]
   A1 --> INV["docs/catalog/<br/>design-doc-inventory.md"]
   IDX --> Q11["QA-DocConsistency<br/>Step 1.1（D01〜D21 fan-out）"]
-  Q11 --> DQA["qa/D01〜D21-<br/>original-docs-questionnaire.md"]
+  Q11 --> DQA["qa/D01〜D21-<br/>docs-original-questionnaire.md"]
   DQA --> Q12["QA-DocConsistency<br/>Step 1.2（join）"]
-  Q12 --> CQA["qa/original-docs-<br/>cross-questionnaire.md"]
+  Q12 --> CQA["qa/docs-original-<br/>cross-questionnaire.md"]
   INV --> A2["Doc-OriginalDocCard<br/>Step 2（文書単位 fan-out）"]
   CQA --> A2
   A2 --> CARD["docs/original-design-doc-ingest/&lt;slug&gt;/card.md"]
@@ -102,8 +102,8 @@ flowchart LR
 | `docs/original-design-doc-ingest/<slug>/content.md` | 正規化済み Markdown | 1 |
 | `docs/original-design-doc-ingest/<slug>/provenance.json` | 変換来歴（`source_path` / `sha256` / `converter`） | 1 |
 | `docs/catalog/design-doc-inventory.md` | 人間可読な設計書インベントリ | 1 |
-| `qa/D01-original-docs-questionnaire.md` 〜 `qa/D21-original-docs-questionnaire.md` | D分類ごとの原本質問票（質問0件も有効） | 1.1 |
-| `qa/original-docs-cross-questionnaire.md` | 21質問票の重複・矛盾・横断論点を統合した質問票 | 1.2 |
+| `qa/D01-docs-original-questionnaire.md` 〜 `qa/D21-docs-original-questionnaire.md` | D分類ごとの原本質問票（質問0件も有効） | 1.1 |
+| `qa/docs-original-cross-questionnaire.md` | 21質問票の重複・矛盾・横断論点を統合した質問票 | 1.2 |
 | `docs/original-design-doc-ingest/<slug>/card.md` | Doc Card（文脈カード） | 2 |
 | `docs/catalog/design-doc-catalog.md` | トリアージ結果（must / should / may / out / excluded） | 3 |
 | `docs/catalog/design-doc-routing.md` | 下流ワークフローへのルーティング表と依存図 | 4 |
@@ -157,7 +157,7 @@ Step 5.1 / 5.2 / 5.3 は書き込み先が重ならないため**並列実行**�
 
 - `python -m hve ingest-docs` が終了コード 0 で完了している
 - `docs/catalog/design-doc-inventory.md` が生成されている（第 1 列が `doc_id`）
-- `qa/D01〜D21-original-docs-questionnaire.md` の21ファイルと `qa/original-docs-cross-questionnaire.md` が生成されている
+- `qa/D01〜D21-docs-original-questionnaire.md` の21ファイルと `qa/docs-original-cross-questionnaire.md` が生成されている
 - 質問が0件の質問票は、サマリーに `総質問数: 0` と `質問なし` の両方がある
 - Step 5.x の反映先 5 ファイルに `## 設計書由来の候補（ADI）` セクションがある（0 件の場合も `なし` と明記）
 - 候補行に出典 `doc_id` があり、採番済み ID が含まれていない
@@ -171,7 +171,7 @@ Step 5.1 / 5.2 / 5.3 は書き込み先が重ならないため**並列実行**�
 | **操作** | CLI: `python -m hve orchestrate --workflow adi --purpose "<目的>"`。GUI: Step 1 で `adi`（**既存ドキュメントのインポート** カテゴリ）を選び、Step 2 の「ADI 固有」枠に目的を入力する。**Cloud（Issue Template）経路は未対応** |
 | **入力** | `purpose`（任意）/ `target_scope`（既定 `docs-original/`）/ `depth`（`standard` / `lightweight`）/ `focus_areas`（任意）/ `docs-original/` 配下の原本（読み取り専用） |
 | **出力** | 上記「出力」のファイル群（`index.json` / `content.md` / 原本質問票22ファイル / `card.md` / 目録 / カタログ / ルーティング表） |
-| **完了確認** | `qa/original-docs-cross-questionnaire.md` とD01〜D21の21質問票がそろい、`docs/catalog/design-doc-routing.md` まで生成されていること。`design-doc-catalog.md` の件数サマリ（must / should / may / out / excluded）の合計が目録の総数と一致していること。`git status` で `docs-original/` に変更が無いこと |
+| **完了確認** | `qa/docs-original-cross-questionnaire.md` とD01〜D21の21質問票がそろい、`docs/catalog/design-doc-routing.md` まで生成されていること。`design-doc-catalog.md` の件数サマリ（must / should / may / out / excluded）の合計が目録の総数と一致していること。`git status` で `docs-original/` に変更が無いこと |
 | **失敗時対応** | まず `python -m hve ingest-docs` を単体で実行して前処理だけを切り分ける（Agent を起動しないので安価）。除外・変換失敗は下記「セットアップ・トラブルシューティング」を参照。共通の切り分けは [troubleshooting.md](./troubleshooting.md) |
 
 > `docs-original/` は**読み取り専用**です。ADI は読むだけで変更しません（CI ジョブ `check-docs-original` が変更を拒否します）。
@@ -244,9 +244,9 @@ Step 5.1 / 5.2 / 5.3 は、下流ワークフローの**最上流 Step の成果
 | Step | 反映先 | その成果物を確定させる下流 Step |
 |---|---|---|
 | 5.1 | `docs/catalog/use-case-skeleton.md` | ARD Step 3.1 |
-| 5.2 | `docs/catalog/app-catalog.md` | AAS Step 1 |
-| 5.2 | `docs/catalog/domain-analytics.md` | AAS Step 3.1 |
-| 5.2 | `docs/catalog/data-model.md` | AAS Step 4.1 |
+| 5.2 | `docs/catalog/app-catalog.md` | ARD Step 4.1 |
+| 5.2 | `docs/catalog/domain-analytics.md` | AAS Step 2.1 |
+| 5.2 | `docs/catalog/data-model.md` | AAS Step 3.1 |
 | 5.3 | `docs/dataflow/dataflow-app-catalog.md` | ADFD Step 0.2 |
 
 > [!IMPORTANT]

@@ -6,7 +6,7 @@ inputs:
 - path: docs/catalog/service-catalog-matrix.md
   required: true
   kind: agent_artifact
-  producer: Arch-Microservice-ServiceCatalog--aas--6
+  producer: Arch-Microservice-ServiceCatalog--aas--5
 - path: docs/azure/azure-services-compute.md
   required: true
   kind: agent_artifact
@@ -22,7 +22,7 @@ inputs:
 - path: docs/catalog/app-catalog.md
   required: true
   kind: agent_artifact
-  producer: Arch-ApplicationAnalytics--aas--1
+  producer: Arch-ApplicationAnalytics--ard--4.1
 - path: docs/azure/waf-review.md
   required: false
   kind: agent_artifact
@@ -30,7 +30,7 @@ inputs:
 - path: knowledge/
   required: false
   kind: static
-- path: knowledge/D09-システムコンテキスト-責任境界-再利用方針書.md
+- path: knowledge/D09-システムコンテキスト・責任境界・再利用方針書.md
   required: true
   kind: static
 - path: knowledge/D13-セキュリティ-プライバシー-監査-法規マトリクス.md

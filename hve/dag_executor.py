@@ -336,6 +336,29 @@ class DAGExecutor:
 
         return waves
 
+    def total_display_steps(self) -> int:
+        """実行計画・進捗表示に用いるステップ総数。
+
+        fan-out 事前展開で子へ置き換わったベース ID は ``active_step_ids`` に
+        残る（deferred fan-out のランタイム再展開が active 残留に依存するため）が
+        実行対象ではない。展開後 step 索引に存在するものだけを数えることで、
+        ランタイム展開された子も含めた実際の実行対象数を返す。
+
+        コンテナ step（``is_container``）も除外する。active には含まれるが
+        wave には現れず実行もされないためで、他のステップ数表示
+        （[hve/__main__.py](hve/__main__.py) の ``step_count`` 等）と同じ規則に揃える。
+
+        既知の制約: deferred fan-out は実行計画表示時点で子が未確定のため、
+        ランタイム展開後に本値が増える（従来の ``len(active_step_ids)`` も同様）。
+        """
+        total = 0
+        for step_id in self.active_step_ids:
+            step = self._workflow_step_index.get(step_id)
+            if step is None or getattr(step, "is_container", False):
+                continue
+            total += 1
+        return total
+
     # ------------------------------------------------------------------
     # T-D2 / T-D3: deferred fan-out のランタイム再展開
     # ------------------------------------------------------------------
@@ -635,7 +658,7 @@ class DAGExecutor:
                     if self.console is not None:
                         self.console.dag_progress(
                             len(self.completed), len(self.running),
-                            len(self.active_step_ids),
+                            self.total_display_steps(),
                         )
                     continue
 
@@ -690,7 +713,7 @@ class DAGExecutor:
             if self.console is not None:
                 self.console.dag_progress(
                     len(self.completed), len(self.running),
-                    len(self.active_step_ids),
+                    self.total_display_steps(),
                 )
 
         return self._results

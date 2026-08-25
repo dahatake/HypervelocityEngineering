@@ -559,8 +559,10 @@ class QAMerger:
     ) -> QADocument:
         """Work IQ の質問別調査結果を QADocument の各質問に統合する。
 
-        Work IQ の結果がエラー応答でなく、かつ既定値候補を上書きする
-        価値がある場合に、workiq_answer と workiq_reason を設定する。
+        統合可否の判定は呼び出し元（`hve/runner.py`）が
+        `hve/workiq.py` の `is_workiq_result_mergeable` で行う。本メソッドは
+        status が `NOT_FOUND` / `UNAVAILABLE` の応答と、内容が空または
+        「関連情報なし」だけの応答を除いて workiq_answer と workiq_reason を設定する。
 
         Args:
             doc: パース済みの QADocument。
@@ -580,14 +582,6 @@ class QAMerger:
             # STATUS ラベルがある場合は NOT_FOUND / UNAVAILABLE をスキップ
             _status_m = re.match(r"^\s*STATUS\s*:\s*(\w+)", result, re.IGNORECASE)
             if _status_m and _status_m.group(1).upper() in ("NOT_FOUND", "UNAVAILABLE"):
-                continue
-            # エラー応答（「実行できません」「利用できません」等）はスキップ
-            _error_indicators = (
-                "実行できません", "利用できません", "アクセスできない",
-                "調査未実施", "未実施", "ツールが見つかりません",
-                "not available", "cannot access",
-            )
-            if any(ind in result for ind in _error_indicators):
                 continue
             # 「関連情報なし」のみの場合もスキップ
             if result.strip() in ("関連情報なし", "関連情報は見つかりませんでした"):

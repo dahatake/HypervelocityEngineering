@@ -14,7 +14,7 @@
 #   別途 Ollama の導入と起動、モデル取得が必要なため既定では入れない。
 #
 # 既定で導入する OS ツール (未導入時のみ。--no-install-tools で抑止):
-#   git / gh / node (npm,npx) / az / shellcheck / @github/copilot (npm -g)
+#   git / gh / node (npm,npx) / az / shellcheck / @github/copilot (npm -g で常に最新版)
 #
 # 行うこと:
 #   - グローバル Python 環境からの遮断 (PYTHONPATH/PYTHONHOME/PIP_* の無効化、
@@ -25,8 +25,8 @@
 #   - .venv 作成・検証
 #   - pip / setuptools / wheel アップグレード
 #   - editable install with extras
-#   - github-copilot-sdk を hve/copilot-sdk.lock 固定版で導入し、pin された
-#     Copilot ランタイムとの整合を検証 (--upgrade-sdk で最新化 + lock 更新)
+#   - github-copilot-sdk を既定で最新版へ更新し、pin された Copilot ランタイムとの
+#     整合を検証 (--pin-sdk で lock 固定版、--upgrade-sdk で最新化 + lock 更新)
 #   - nltk punkt_tab を事前 DL
 #   - Mermaid / KaTeX アセット DL
 #   - GUI 翻訳 .ts → .qm コンパイル
@@ -42,7 +42,8 @@
 #   ./hve/setup-hve.sh --force        .venv を再構築
 #   ./hve/setup-hve.sh --skip-nltk-download
 #   ./hve/setup-hve.sh --with-skills  microsoft/skills を npx で導入
-#   ./hve/setup-hve.sh --upgrade-sdk  github-copilot-sdk を最新化し lock を更新
+#   ./hve/setup-hve.sh --upgrade-sdk  github-copilot-sdk を最新化し lock も更新
+#   ./hve/setup-hve.sh --pin-sdk      lock の固定版を導入 (既定は最新版へ追従)
 #   ./hve/setup-hve.sh -y             確認プロンプトをスキップ
 #   ./hve/setup-hve.sh --no-install-tools  OS ツールの自動導入を行わない
 #   ./hve/setup-hve.sh --no-global-cleanup グローバル Python の hve を除去しない
@@ -58,6 +59,7 @@ FORCE=false
 SKIP_NLTK=false
 WITH_SKILLS=false
 UPGRADE_SDK=false
+PIN_SDK=false
 ASSUME_YES=false
 NO_INSTALL_PYTHON=false
 NO_INSTALL_TOOLS=false
@@ -65,7 +67,7 @@ NO_GLOBAL_CLEANUP=false
 WARN=0
 
 usage() {
-  sed -n '2,49p' "$0"
+  sed -n '2,50p' "$0"
   exit 0
 }
 
@@ -84,6 +86,7 @@ while [[ $# -gt 0 ]]; do
     --skip-nltk-download) SKIP_NLTK=true ;;
     --with-skills) WITH_SKILLS=true ;;
     --upgrade-sdk) UPGRADE_SDK=true ;;
+    --pin-sdk)     PIN_SDK=true ;;
     -y|--yes)     ASSUME_YES=true ;;
     --no-install-python) NO_INSTALL_PYTHON=true ;;
     --no-install-tools)  NO_INSTALL_TOOLS=true ;;
@@ -721,9 +724,9 @@ fi
 #   pydantic-core を最新版 (例: 2.47.0) へ引き上げ、pydantic 2.13.4 が要求する
 #   pin (pydantic-core==2.46.4) と不整合になり GUI 起動時に例外となる。
 #   SDK の依存 (pydantic>=2.0 等) は editable install 時点で既に充足済み。
-# 版は hve/copilot-sdk.lock で固定する。無条件に最新へ追従すると「セットアップ
-#   した日」でマシンごとに版が変わり、公開直後のリリースにパーサ不整合があった
-#   場合に特定の人だけ壊れて再現・切り分けが不能になるため。
+# 既定は最新版へ追従する。版を固定して再現性を取りたい場合だけ --pin-sdk を指定し、
+#   hve/copilot-sdk.lock の版を導入する。--upgrade-sdk は最新化に加えて lock を
+#   書き換える (チーム既定版を進める操作) ため、既定経路では lock に触れない。
 LOCK_FILE="$REPO_ROOT/hve/copilot-sdk.lock"
 LOCK_UPDATE_PY='
 import re, sys, pathlib
@@ -738,23 +741,27 @@ t = re.sub(r"(?m)^github-copilot-sdk==.*$", "github-copilot-sdk==" + sdk, t)
 p.write_text(t, encoding="utf-8", newline="\n")
 print(sdk)
 '
-if [[ "$UPGRADE_SDK" == true ]]; then
-  step 'Upgrading github-copilot-sdk to latest (no-deps) and refreshing the lock'
-  run "$VENV_PY" -m pip install --upgrade --no-deps github-copilot-sdk
-  if [[ ! -f "$LOCK_FILE" ]]; then
-    warn "Lock file not found: $LOCK_FILE"
-  elif NEW_SDK="$("$VENV_PY" -c "$LOCK_UPDATE_PY" "$LOCK_FILE")"; then
-    ok "hve/copilot-sdk.lock now pins $NEW_SDK. Review the diff and commit it so the whole team moves together."
+if [[ "$PIN_SDK" == true ]]; then
+  if [[ -f "$LOCK_FILE" ]]; then
+    step 'Installing github-copilot-sdk from hve/copilot-sdk.lock (no-deps)'
+    run "$VENV_PY" -m pip install --no-deps -r "$LOCK_FILE"
   else
-    warn 'Could not refresh hve/copilot-sdk.lock. Update it by hand.'
+    warn 'hve/copilot-sdk.lock not found. Installing the latest release instead; re-run with --upgrade-sdk to regenerate the lock.'
+    step 'Upgrading github-copilot-sdk to the latest release (no-deps)'
+    run "$VENV_PY" -m pip install --upgrade --no-deps github-copilot-sdk
   fi
-elif [[ -f "$LOCK_FILE" ]]; then
-  step 'Installing github-copilot-sdk from hve/copilot-sdk.lock (no-deps)'
-  run "$VENV_PY" -m pip install --no-deps -r "$LOCK_FILE"
 else
-  warn 'hve/copilot-sdk.lock not found. Falling back to the latest release; re-run with --upgrade-sdk to regenerate the lock.'
-  step 'Upgrading github-copilot-sdk to latest (no-deps)'
+  step 'Upgrading github-copilot-sdk to the latest release (no-deps)'
   run "$VENV_PY" -m pip install --upgrade --no-deps github-copilot-sdk
+  if [[ "$UPGRADE_SDK" == true ]]; then
+    if [[ ! -f "$LOCK_FILE" ]]; then
+      warn "Lock file not found: $LOCK_FILE"
+    elif NEW_SDK="$("$VENV_PY" -c "$LOCK_UPDATE_PY" "$LOCK_FILE")"; then
+      ok "hve/copilot-sdk.lock now pins $NEW_SDK. Review the diff and commit it so the whole team moves together."
+    else
+      warn 'Could not refresh hve/copilot-sdk.lock. Update it by hand.'
+    fi
+  fi
 fi
 
 # ---------- 依存整合性チェック（pydantic / pydantic-core 等） ----------
@@ -888,27 +895,32 @@ fi
 # WARNING: この CLI は SDK の pin とは独立に自己更新する。COPILOT_CLI_PATH /
 #   --cli-path でこの CLI を Step 実行に流用すると、上の整合検証で固定した
 #   ランタイム版から必ず乖離し session.event 解析エラーの原因になる。
-step 'Checking GitHub Copilot CLI (copilot)'
-COPILOT_HINT='npm install -g @github/copilot'
+step 'Installing the latest GitHub Copilot CLI (copilot)'
+COPILOT_HINT='npm install -g @github/copilot@latest'
 if command -v copilot >/dev/null 2>&1; then
   ok "copilot: $(command -v copilot)"
   COPILOT_CLI_VER="$(cli_embedded_version copilot)"
-  [[ -n "$COPILOT_CLI_VER" ]] && printf '    version: %s (independent of the SDK pin; do not point COPILOT_CLI_PATH here)\n' "$COPILOT_CLI_VER"
-  if [[ "$NO_INSTALL_TOOLS" != true ]] && command -v npm >/dev/null 2>&1 \
-     && npm ls -g --depth=0 @github/copilot >/dev/null 2>&1; then
-    if try_run npm install -g @github/copilot@latest; then
-      ok "copilot CLI updated to $(cli_embedded_version copilot)"
-    else
-      warn "copilot CLI update failed. Update manually: npm install -g @github/copilot@latest"
-    fi
+  [[ -n "$COPILOT_CLI_VER" ]] && printf '    installed: %s (independent of the SDK pin; do not point COPILOT_CLI_PATH here)\n' "$COPILOT_CLI_VER"
+  if [[ "$NO_INSTALL_TOOLS" == true ]]; then
+    warn "Skipped the copilot CLI update (--no-install-tools). Update manually: $COPILOT_HINT"
+  elif ! command -v npm >/dev/null 2>&1; then
+    warn "npm not found. Install Node.js, then update: $COPILOT_HINT"
+  elif ! npm ls -g --depth=0 @github/copilot >/dev/null 2>&1; then
+    # npm 経由でないもの (スタンドアロン導入等) を npm で上書きすると 2 つの
+    # copilot が PATH 上に並び、どちらが解決されるかが環境依存になる。
+    warn "copilot on PATH is not managed by npm (-g). Skipped the npm update to avoid a second installation; update it through the channel you installed it with, or run: $COPILOT_HINT"
+  elif try_run npm install -g @github/copilot@latest; then
+    ok "copilot CLI updated to $(cli_embedded_version copilot)"
+  else
+    warn "copilot CLI update failed. Update manually: $COPILOT_HINT"
   fi
 elif [[ "$NO_INSTALL_TOOLS" == true ]]; then
   warn "copilot not found (GUI Copilot chat panel). Install: $COPILOT_HINT"
 elif ! command -v npm >/dev/null 2>&1; then
   warn "npm not found. Install Node.js, then: $COPILOT_HINT"
-elif confirm 'Install GitHub Copilot CLI via npm? (enables the GUI Copilot chat panel)'; then
-  if try_run npm install -g @github/copilot && command -v copilot >/dev/null 2>&1; then
-    ok "copilot installed: $(command -v copilot)"
+elif confirm 'Install the latest GitHub Copilot CLI via npm? (enables the GUI Copilot chat panel)'; then
+  if try_run npm install -g @github/copilot@latest && command -v copilot >/dev/null 2>&1; then
+    ok "copilot installed: $(command -v copilot) ($(cli_embedded_version copilot))"
   else
     warn "Copilot CLI install failed or not on PATH. Install manually: $COPILOT_HINT"
   fi

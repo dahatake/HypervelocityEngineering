@@ -63,6 +63,16 @@ Azure または Microsoft Foundry を扱う active HVE Step は、`hve/skill_man
 - AAGD `2.3` / `3` は external `microsoft-foundry` meta skill を required とし、未導入時は session 作成前に fail-closed とする。
 - Foundry meta skill の sub-skill routing を HVE 側で列挙・複製しない。Foundry-required Step は repository-pinned `azure` と `microsoft-learn` MCP の接続確認後に main turn を開始する。
 
+## 生成アプリケーション要求トレーサビリティ
+
+AAS / ADA / AAD-WEB / ASDW-WEB / ADFD / ADFDV / AAG / AAGD / AAR の 9 Workflow は、生成アプリケーション（APP）のスコープ確定と要求定義書参照を独自実装せず、Skill `application-requirement-traceability` へルーティングする。
+
+- 対象 APP-ID の解決は `app-scope-resolution` を、要求定義書内の該当箇所検索は `markdown-query` を再利用する。同じパス解決・ID 検証を Workflow ごとに再実装してはならない。
+- canonical path（`docs/architectural-requirements-app-NNN.md`）と対象 APP-ID・Requirement ID だけを Prompt へ注入し、**要求定義書全文を既定の入力にしない**。詳細本文が必要な箇所だけを `markdown-query` で選択取得する。
+- 対象文書の欠落・構造不正・対象外 APP-ID・未解決 `TBD`（`Blocker=yes`）が 1 件でもあれば、警告降格やデフォルト値の代入を行わず fail-closed で当該 APP を停止する。
+- 完了報告には `application-requirement-traceability` Skill が定義する trace block（`<!-- app-requirements:start/end -->` と 4 キー）を 1 つだけ記録する。
+- 詳細手順は Skill `application-requirement-traceability` を参照。
+
 ## 出力言語ルール（思考プロセスを含む）
 
 - 最終出力だけでなく **思考プロセス（reasoning / chain-of-thought / 内部独白）も日本語で行う** こと。

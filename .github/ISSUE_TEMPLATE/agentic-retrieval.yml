@@ -1,0 +1,76 @@
+name: "Agentic Retrieval Add-on"
+description: "既存アプリケーションへ Agentic Retrieval を後付けし、実測評価します"
+title: "[Agentic Retrieval] "
+labels:
+  - "auto-agentic-retrieval"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Agentic Retrieval Add-on
+        既存の API / データ資産を変更せず、Agentic Retrieval の設計・テスト・Deploy・実測評価を Step.1〜7 で実行します。
+
+        ### 前提条件
+        - `docs/catalog/app-catalog.md`
+        - `docs/catalog/service-catalog.md`
+        - `docs/catalog/domain-analytics.md`
+        - `docs/services/{serviceId}-{serviceNameSlug}-description.md`
+        - Repository Secret `COPILOT_PAT`
+
+  - type: dropdown
+    id: enable_agentic_retrieval
+    attributes:
+      label: "Agentic Retrieval を使用する"
+      description: "「しない」の場合は Step Issue を生成せず完了します。"
+      options:
+        - "する"
+        - "しない"
+      default: 0
+    validations:
+      required: true
+
+  - type: input
+    id: app_ids
+    attributes:
+      label: "対象アプリケーション (APP-ID) — 複数指定可（任意）"
+      description: "対象 APP-ID をカンマ区切りで指定します。未指定の場合は全対象サービスを扱います。"
+      placeholder: "例: APP-009"
+    validations:
+      required: false
+
+  - type: input
+    id: branch
+    attributes:
+      label: "対象ブランチ"
+      description: "Copilot が変更を作成するベースブランチです。"
+      value: "main"
+    validations:
+      required: true
+
+  - type: input
+    id: resource_group
+    attributes:
+      label: "リソースグループ名"
+      description: "Step.2 / Step.5 の Azure 設計・Deploy で使用します。"
+      placeholder: "例: rg-app-dev"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runner_type
+    attributes:
+      label: "実行 Runner"
+      options:
+        - "GitHub Hosted"
+        - "Self-hosted (ACA)"
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional_comment
+    attributes:
+      label: "追加コメント（任意）"
+      description: "制約・既存データソース・検証上の注意事項を記載します。"
+    validations:
+      required: false

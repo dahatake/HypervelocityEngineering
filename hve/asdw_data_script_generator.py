@@ -1196,9 +1196,22 @@ def _validate_required_sample_records(sample_data_text: str) -> None:
         raise AsdwDataScriptGenerationError(
             "Selected APP sample-data structure is invalid."
         ) from None
-    if set(entities) != set(_REQUIRED_ENTITIES):
+    if not isinstance(entities, dict):
         raise AsdwDataScriptGenerationError(
-            "Selected APP sample-data entity set must exactly match APP-009 coverage."
+            "Selected APP sample-data structure is invalid."
+        )
+    # sample-data.json is a shared, cross-APP fixture (usecaseId=ALL-APPS) that
+    # may legitimately carry entities for other APPs too. Only require that the
+    # APP-009 coverage set is present; do not reject extra, unrelated entities.
+    missing = [
+        entity
+        for entity in _REQUIRED_ENTITIES
+        if not isinstance(entities.get(entity), list)
+    ]
+    if missing:
+        raise AsdwDataScriptGenerationError(
+            "Selected APP sample-data must include list records for APP-009 "
+            "coverage entities: " + ", ".join(missing) + "."
         )
     for entity in _REQUIRED_ENTITIES:
         id_field = _REQUIRED_ID_FIELDS[entity]

@@ -597,10 +597,19 @@ _NON_PERSISTED_KINDS = frozenset({"assistant_usage_raw", "debug_env", "assistant
 
 _PATH_KEYS = frozenset({"path"})
 
+# シェルのコマンド文字列から抽出したトークンには `$p` や `` `$p)) `` のような変数・式が
+# 混じる。実パスではないため保存しない（FR-RTO-04 の fail-closed）。
+_SHELL_EXPRESSION_CHARS_RE = re.compile(r"[$`'\"()]")
+
+
+def is_plain_repo_path_token(value: Any) -> bool:
+    """シェルの変数・式・引用や括弧を含まない、素のパス表記かを返す。"""
+    return isinstance(value, str) and bool(value) and not _SHELL_EXPRESSION_CHARS_RE.search(value)
+
 
 def _to_repo_relative(value: Any, repo_root: Optional[Path]) -> Optional[str]:
     """リポジトリルート配下へ相対化する。できない場合は None（保存しない）。"""
-    if not isinstance(value, str) or not value:
+    if not is_plain_repo_path_token(value):
         return None
     try:
         path = Path(value)

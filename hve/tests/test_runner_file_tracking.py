@@ -98,6 +98,24 @@ class TestTrackPowershellFiles(unittest.TestCase):
         runner.console.track_file.assert_not_called()
         runner.console.file_io.assert_not_called()
 
+    def test_variable_and_expression_tokens_not_captured_as_path(self) -> None:
+        """シェル変数・式トークンをパスとして追跡しない。"""
+        for command in (
+            "Get-Content -Path $p",
+            "Set-Content -Path $p -Value x",
+            "Get-Content -Path `$p))",
+            "Get-Content -Path 'docs/architectural-requirements-app-006.md')",
+        ):
+            runner = self._make_runner()
+            runner._track_powershell_files("2/APP-006", command)
+            runner.console.track_file.assert_not_called()
+            runner.console.file_io.assert_not_called()
+
+    def test_quoted_literal_path_is_still_captured(self) -> None:
+        runner = self._make_runner()
+        runner._track_powershell_files("1", "Get-Content -Path 'docs/input.md'")
+        runner.console.track_file.assert_any_call("1", os.path.normpath("docs/input.md"), "read")
+
     def test_track_tool_files_edit_file_calls_file_io_read_write(self) -> None:
         runner = self._make_runner()
         runner._track_tool_files("1", "edit_file", {"path": "src/main.py"})

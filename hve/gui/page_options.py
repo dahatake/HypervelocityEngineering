@@ -1659,7 +1659,7 @@ class _C4WorkIQ(QWidget):
             title=self.tr("Work IQ Request Timeout（秒）"),
             description=(
                 self.tr("Work IQ MCP サーバーへのツール呼び出し 1 回あたりのタイムアウト秒数（数値のみ）。"
-                "Copilot SDK の MCP クライアントが発行する -32001 (Request timed out) を防ぐための設定。"
+                "Copilot SDK の MCPServerConfigLocal.timeout へミリ秒として渡り、ツール呼び出しにのみ作用する（接続時のツール一覧取得には適用されない）。"
                 "未入力または 0 のとき環境変数 WORKIQ_REQUEST_TIMEOUT / 設定（既定 300 秒 = 5 分）を使用。")
             ),
             input_widget=self.workiq_request_timeout,
@@ -3176,6 +3176,7 @@ _STEP2_FIELDS_BY_WORKFLOW: Dict[str, List[Tuple[str, str]]] = {
     "ard": [
         ("c14", "対象企業名"),
         ("c14", "業務エリア"),
+        ("c14", "採用 Strategic Recommendation ID"),
         ("c4", "Work IQ 回答ドラフト作成"),
     ],
     "aas": [],
@@ -3265,8 +3266,8 @@ _COMMON_FRAME_HIDDEN_TITLES: Tuple[str, ...] = (
 # Step 1 右ペインのワークフロー枠 表示順（正準順 — ARD 先頭）。
 # `_refresh_specific_categories` が選択 Workflow 群を本リスト順で並べてグループ枠を生成する。
 _WORKFLOW_CANONICAL_ORDER: List[str] = [
-    "ard", "aas", "aad-web", "asdw-web", "adfd", "adfdv",
-    "aag", "aagd", "akm", "adi", "adoc",
+    "ard", "aas", "ada", "aad-web", "asdw-web", "adfd", "adfdv",
+    "aag", "aagd", "aar", "akm", "adi", "adoc",
 ]
 
 # Step 1 右ペインのワークフロー単位グループ枠（QGroupBox）共通スタイル。
@@ -3531,6 +3532,7 @@ class OptionsPage(QWidget):
         return {
             "company_name": self.c14.company_name,
             "target_business": self.c14.target_business,
+            "target_recommendation_id": self.c14.target_recommendation_id,
             "resource_group": self.c_azure.resource_group,
             "target_dirs": self.c13.target_dirs,
         }
@@ -3589,6 +3591,8 @@ class OptionsPage(QWidget):
         """
         base = self._repo_root
         try:
+            if any(ch in path for ch in ("*", "?", "[")):
+                return any(base.glob(path))
             target = base / path
             if path.endswith("/"):
                 return target.is_dir() and any(target.iterdir())

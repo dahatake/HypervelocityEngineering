@@ -110,7 +110,7 @@ Windows 版には Foundry Local を含める引数はない。`--include-foundry
 通常のコマンドプロンプトを開き、リポジトリ内の実装ディレクトリへ移動する。
 
 ```batch
-cd /d C:\GitHub\HypervelocityEngineering\local-llm-dev\tools\airgap-kit
+cd /d C:\GitHub\RoyalytyService2ndGen\local-llm-dev\tools\airgap-kit
 Prepare-Windows.cmd --help
 Prepare-Windows.cmd --destination "C:\OfflineKitBuild\qwen3-8b-8192"
 ```

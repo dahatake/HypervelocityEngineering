@@ -227,8 +227,11 @@ def test_data_deploy_agent_permission_and_mcp_dead_path_stay_removed() -> None:
     assert "PermissionDecisionReject" not in handler_source
 
     sub_session_source = inspect.getsource(StepRunner._build_sub_session_opts)
-    assert "_is_asdw_data_deploy_step" not in sub_session_source
-    assert "enable_config_discovery" not in sub_session_source
+    # 削除前は `opts["enable_config_discovery"] = False` が `if is_asdw_data_deploy:` の
+    # 内側にあったため、当該キーの有無が死パス検出の代理になっていた。FR-CLI-76 (v2.41) が
+    # 事前 QA サブセッションで同キーを正当に使うようになったので、DataDeploy 由来の
+    # シンボルそのものを禁止する（代理より広く、かつ本来の意図に一致する）。
+    assert "asdw_data_deploy" not in sub_session_source
 
 
 def test_general_sub_session_mcp_routing_is_unchanged() -> None:

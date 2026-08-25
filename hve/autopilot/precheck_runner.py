@@ -70,6 +70,11 @@ def run_step1_precheck(
     def _file_exists(rel_path: str) -> bool:
         if not rel_path:
             return False
+        if any(ch in rel_path for ch in ("*", "?", "[")):
+            try:
+                return any(repo_root.glob(rel_path))
+            except (OSError, ValueError):
+                return False
         target = repo_root / rel_path
         if rel_path.endswith("/"):
             try:

@@ -20,7 +20,41 @@ _CONTRACT_HEADINGS = (
     "REST CRUD Matrix（AG-CAP-04）",
     "MCP Integration Plan（AG-CAP-05）",
     "Skill Packaging Decision（AG-CAP-06）",
+    "Agent Identity & Authorization（AG-CAP-07）",
+    "Observability Contract（AG-CAP-08）",
+    "Distribution & Packaging（AG-CAP-09）",
+    "Evaluation & Route Right-sizing（AG-CAP-10）",
 )
+
+_EXTENDED_CONTRACT_SECTIONS = """#### 7.6 Agent Identity & Authorization（AG-CAP-07）
+- Identity model: attended (delegated / on-behalf-of)
+- Identity source: Microsoft Entra Agent ID blueprint principal
+- Authorization boundary: order-reader and order-editor delegated scopes only
+- Secret handling: no credential is stored in Agent configuration
+- Decision source: docs/agent/agent-architecture.md#Identity
+
+#### 7.7 Observability Contract（AG-CAP-08）
+- Telemetry standard: OpenTelemetry GenAI semantic conventions
+- Sink: Application Insights
+- Captured groups: user input and Agent output, Tool call and result, token consumption, duration and latency
+- Correlation: request correlation ID is propagated to every Tool call
+- Redaction: secrets and personal data are redacted before export
+- Decision source: docs/agent/agent-architecture.md#Observability
+
+#### 7.8 Distribution & Packaging（AG-CAP-09）
+- Status: N/A
+- Reason: This Agent is consumed only through its own service endpoint and has no external chat-client distribution requirement.
+- Decision source: docs/agent/agent-application-definition.md#Scope
+- Recheck condition: Re-evaluate when the Agent must be callable from an external chat client.
+
+#### 7.9 Evaluation & Route Right-sizing（AG-CAP-10）
+- Evaluation dataset: 30 recorded order resolution requests with expected criterion status
+- Metrics: criterion pass rate, token cost per request, end-to-end latency
+- Baseline route: orders-search
+- Compared route: direct data store query
+- Right-sizing rule: keep the cheaper route unless the expensive route improves criterion pass rate beyond the recorded threshold
+- Decision source: docs/agent/agent-architecture.md#Evaluation
+"""
 
 
 def _design_text(*, reasoned_na: bool = False, skill_required: bool = False) -> str:
@@ -111,6 +145,7 @@ def _design_text(*, reasoned_na: bool = False, skill_required: bool = False) -> 
 {crud}
 {mcp}
 {skill}
+{_EXTENDED_CONTRACT_SECTIONS}
 """
 
 
@@ -249,8 +284,8 @@ public sealed class GoalLoop {
 
 def _test_spec() -> str:
     rows = "\n".join(
-        f"| TEST-AG-CAP-0{index} | AG-CAP-0{index} | deterministic mock result and redacted Evidence |"
-        for index in range(1, 7)
+        f"| TEST-AG-CAP-{index:02d} | AG-CAP-{index:02d} | deterministic mock result and redacted Evidence |"
+        for index in range(1, 11)
     )
     return f"""# Agent capability test specification
 | Test Case ID | Contract ID | Evidence |

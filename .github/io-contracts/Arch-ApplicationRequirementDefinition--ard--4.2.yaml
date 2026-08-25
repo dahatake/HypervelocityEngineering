@@ -1,0 +1,24 @@
+inputs:
+- path: docs/catalog/app-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ApplicationAnalytics--ard--4.1
+- path: docs/catalog/use-case-catalog.md
+  required: true
+  kind: agent_artifact
+  producer: Arch-ARD-UseCaseCatalog--ard--3.3
+- path: docs/architectural-requirements-app-*.md
+  required: false
+  kind: agent_artifact
+  producer: Arch-ApplicationRequirementDefinition--ard--4.2
+- path: docs/recommended-kpi-okr.md
+  required: false
+  kind: agent_artifact
+  producer: Arch-ARD-KPIOKRDefinition--ard--2.1
+- path: knowledge/
+  required: false
+  kind: static
+outputs:
+- path: docs/architectural-requirements-app-*.md
+  required: false
+  mode: upsert

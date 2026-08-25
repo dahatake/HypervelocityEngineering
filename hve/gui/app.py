@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import List
 
 from PySide6.QtWidgets import QApplication, QStyleFactory
-from PySide6.QtCore import QLoggingCategory
+from PySide6.QtCore import QLoggingCategory, QTimer
 
 from . import theme as _theme
 from .fonts import preferred_ui_font
@@ -68,6 +68,49 @@ def apply_theme_to_application(theme: str) -> None:
 # モジュールレベルで生存ウィンドウを保持し、参照切れによる予期しない解放を防ぐ
 _open_windows: List[MainWindow] = []
 _session_counter = [1]
+
+# 差分更新の完了ポーリング間隔。完了検知が遅れても実害は実行開始の待ち時間だけなので短くしない。
+_INDEX_REFRESH_POLL_MS = 500
+_index_refresh_timer: QTimer | None = None
+
+
+def start_startup_index_refresh(repo_root: Path) -> bool:
+    """FR-GUI-22: 起動時の索引差分更新を開始し、完了を検知して画面を再評価する。
+
+    Returns:
+        完了ポーリングを開始したかどうか。
+    """
+    global _index_refresh_timer
+
+    from .. import index_refresh
+
+    # 既に別経路が開始している場合も実行ボタンを戻す側が必要なのでポーリングする。
+    if not (index_refresh.start_background(repo_root) or index_refresh.is_running()):
+        return False
+    timer = QTimer()
+    timer.setInterval(_INDEX_REFRESH_POLL_MS)
+    timer.timeout.connect(_on_index_refresh_tick)
+    timer.start()
+    _index_refresh_timer = timer
+    return True
+
+
+def _on_index_refresh_tick() -> None:
+    from .. import index_refresh
+
+    if index_refresh.is_running():
+        return
+    if _index_refresh_timer is not None:
+        _index_refresh_timer.stop()
+    for win in list(_open_windows):
+        refresh = getattr(win, "_refresh_navigation", None)
+        if refresh is None:
+            continue
+        try:
+            refresh()
+        except RuntimeError:
+            # 既に破棄されたウィンドウ。他のウィンドウの再評価は続ける。
+            pass
 
 
 def _find_repo_root_from(start: Path) -> Path | None:
@@ -166,6 +209,7 @@ def run_app(args=None) -> int:
 
     initial_catalog = getattr(args, "app_arch_catalog", None) if args is not None else None
     _open_first_window(initial_catalog=initial_catalog)
+    start_startup_index_refresh(_resolve_repo_root())
     return app.exec()
 
 

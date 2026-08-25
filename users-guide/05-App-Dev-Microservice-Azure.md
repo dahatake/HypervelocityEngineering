@@ -1,12 +1,12 @@
 # Web Application の作成（ASDW-WEB）
 
-← [03-app-design-microservice-azure.md](./03-app-design-microservice-azure.md) | [06-app-dev-dataflow-azure.md](./06-app-dev-dataflow-azure.md) →
+← [README](../README.md) | ← [03-app-design-microservice-azure.md](./03-app-design-microservice-azure.md) | [06-app-dev-dataflow-azure.md](./06-app-dev-dataflow-azure.md) →
 
 > [!IMPORTANT]
 > 本文の Step ID・依存・入出力は、2026-08-07 時点の
 > [`hve/workflow_registry.py`](../hve/workflow_registry.py) に登録された **CLI / GUI 共通の ASDW-WEB** を正本とします。
 >
-> - GitHub Actions Cloud 起動は FR-CLOUD-06 により停止中です。
+> - GitHub Actions Cloud は registry parity 検証済みの reusable workflow から起動できます。
 > - full run の DataDeploy Step 1.3 は `APP-009` 単一スコープだけをサポートします。
 > - APP-009 の既存 `docs/azure/azure-services-compute.md` は Azure Container Apps / Container Apps Jobs を選定していますが、
 >   current Step 3.3 / 3.4 は Azure Functions 固定です。選定済み Compute を実装する汎用経路ではありません。
@@ -52,15 +52,12 @@ ASDW-WEB は AAS、ARD／既存要件、AAD-WEB の成果物を再生成せず�
 |---|---|---|
 | CLI | **現行 registry を実行可能** | `python -m hve orchestrate --workflow asdw-web` |
 | GUI | **現行 registry を実行可能** | `python -m hve`。Step 一覧は registry から動的取得 |
-| GitHub Actions Cloud | **停止中** | dispatcher は ASDW-WEB を `target=none`, `mode=skip` にし、CLI / GUI 誘導コメントだけを投稿 |
+| GitHub Actions Cloud | **実行可能**（ただし CLI / GUI と同じ Step 4.3 ブロッカーを踏みます） | `web-app-dev.yml` から Issue を作成し、dispatcher が `auto-app-dev-microservice-web-reusable.yml` を起動 |
 | SDK Cloud Session | CLI / GUI 内の任意のセッション配置 | GitHub Actions Cloud Orchestrator とは別機能。詳細は [cloud-session.md](./cloud-session.md) |
 
-停止中の Cloud 参照面は
-[`web-app-dev.yml`](../.github/ISSUE_TEMPLATE/web-app-dev.yml) と
-[`auto-app-dev-microservice-web-reusable.yml`](../.github/workflows/auto-app-dev-microservice-web-reusable.yml) です。
-reusable は冒頭で `OUT-OF-SYNC NOTICE` を宣言し、
-[`auto-orchestrator-dispatcher.yml`](../.github/workflows/auto-orchestrator-dispatcher.yml) から呼ばれません。
-`auto-app-dev-microservice-web` ラベル付き Issue を作成しても Sub-Issue は生成されません。
+Cloud では [`web-app-dev.yml`](../.github/ISSUE_TEMPLATE/web-app-dev.yml) と
+[`auto-app-dev-microservice-web-reusable.yml`](../.github/workflows/auto-app-dev-microservice-web-reusable.yml) を使用します。
+Step ID と依存は registry parity test で同期されます。
 
 ## 実行方法
 
@@ -140,9 +137,11 @@ local Step は `1.1, 1.2, 2.1, 2.3, 2.5, 3.1, 3.2, 3.3, 4.1, 4.2` です。
 3.5 + 4.2 -> 4.3 -> 4.4
 4.4 -> 5.1
 4.4 -> 5.2
+5.1 -> 5.3
+5.2 -> 5.3
 ```
 
-live Step は `1.3, 2.2, 2.4, 2.6, 3.4, 3.5, 4.3, 4.4, 5.1, 5.2` です。
+live Step は `1.3, 2.2, 2.4, 2.6, 3.4, 3.5, 4.3, 4.4, 5.1, 5.2, 5.3` です。
 live Step だけが失敗した PR-enabled run では、HVE は local checkpoint 成果物を保持し、
 auto-merge 対象外の draft PR として残せます。
 
@@ -170,6 +169,7 @@ auto-merge 対象外の draft PR として残せます。
 | live / UI verify | 4.4 Playwright E2E | `E2ETesting-Playwright` | SWA URL / screen test specs | Playwright log、失敗時 HTML / trace | 4.3 |
 | live / Review | 5.1 WAF review | `QA-AzureArchitectureReview` | Azure design + deployed resources | `docs/azure/azure-architecture-review-report.md` | 4.4 |
 | live / Review | 5.2 dependency review | `QA-AzureDependencyReview` | catalogs + `src/api`, `src/app` | `docs/azure/dependency-review-report.md` | 4.4 |
+| live / Review | 5.3 requirements conformance measurement | `QA-RequirementsConformanceEval` | 5.1 / 5.2 reports + deployed endpoints + existing test assets | `docs/azure/requirements-conformance-report.md` | 5.1, 5.2 |
 
 Step 3.5 のテンプレートには「Agent は最小スタブ」という古い注記が残っていますが、
 現行 [`Dev-Microservice-Azure-ComputePostDeployTest.prompt.md`](../.github/prompts/Dev-Microservice-Azure-ComputePostDeployTest.prompt.md)
@@ -243,7 +243,7 @@ gate は [`hve/runner.py`](../hve/runner.py)、契約テストは
 | Step 3.5 blocked | endpoint / auth 不明、または API tests に post-deploy 用 Category がない | Step 3.4 の実 endpoint 根拠を補う。Category 不足は Step 3.2 契約側へフィードバック |
 | Step 4.3 が pre-flight / contract 失敗 | SWA workflow が default branch にない、または required D15 がない | deploy へ進まない。repository-managed workflow と D15 契約を別の許可された変更で実装・検証後に再実行 |
 | Step 4.4 が blocked | `E2E_BASE_URL` も catalog URL も取得不能 | SWA URL の根拠を補い、秘密情報を除いた Playwright artifact で再試行 |
-| Cloud Issue から起動できない | FR-CLOUD-06 の正常動作 | CLI / GUI を使用。停止中 reusable を手動 dispatch しない |
+| Cloud Issue が起動しない | trigger/state ラベルまたは dispatcher routing 不整合 | `auto-app-dev-microservice-web` と `asdw-web:*` ラベル、dispatcher 実行ログを確認 |
 
 <a id="asdw-web-completion"></a>
 
@@ -277,7 +277,7 @@ full completion 条件を満たせません。これらを無視した完了報�
 | TDD report / reality gate | [`tdd-red-green-reality`](../.github/skills/testing/tdd-red-green-reality/SKILL.md), [`hve/runner.py`](../hve/runner.py), [`hve/artifact_validation.py`](../hve/artifact_validation.py) | `hve/tests/test_runner_tdd_report_gate.py`, deploy gate tests |
 | Required / optional Skill | [`hve/skill_manifest.json`](../hve/skill_manifest.json) と Step の `required_skills` | [`hve/skill_resolver.py`](../hve/skill_resolver.py), `hve/tests/test_skill_resolver.py` |
 | Step 単位 remote CI/CD | [`hve/orchestrator.py`](../hve/orchestrator.py), [`github-actions-cicd`](../.github/skills/cicd/github-actions-cicd/SKILL.md) | `hve/tests/test_asdw_web_step_scoped_cicd_contract.py` |
-| Cloud 停止境界 | [`auto-orchestrator-dispatcher.yml`](../.github/workflows/auto-orchestrator-dispatcher.yml), [`auto-app-dev-microservice-web-reusable.yml`](../.github/workflows/auto-app-dev-microservice-web-reusable.yml) | `hve/tests/test_cloud_dispatcher_asdw_stop.py` |
+| Cloud parity / dispatch | [`auto-orchestrator-dispatcher.yml`](../.github/workflows/auto-orchestrator-dispatcher.yml), [`auto-app-dev-microservice-web-reusable.yml`](../.github/workflows/auto-app-dev-microservice-web-reusable.yml) | `hve/tests/test_cloud_reusable_workflow_parity.py`, `test_cloud_dispatcher_asdw_dispatch.py` |
 
 Runtime では [`hve/runner.py`](../hve/runner.py) が Step Prompt の先頭へ Agent Prompt を注入し、
 manifest と Step 宣言から Skill を解決します。registry / template / Prompt / I/O contract / Skill / test の

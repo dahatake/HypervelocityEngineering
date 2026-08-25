@@ -1,6 +1,6 @@
 skill: ai-agent-capability-contract
 skill_path: .github/skills/ai-agent-capability-contract/SKILL.md
-description: AAG / AAGD で生成する AI Agent の Goal Loop、検索、REST Tool、MCP、Agent Skill の共通能力契約。
+description: AAG / AAGD で生成する AI Agent の Goal Loop、検索、REST Tool、MCP、Agent Skill、Identity、Observability、配布、評価の共通能力契約。
 
 test_cases:
   - id: aag-agent-detail-with-search-and-tools
@@ -8,7 +8,7 @@ test_cases:
     expected_trigger: true
     verify:
       - type: contract
-        detail: "AG-CAP-01〜06を設計し、Web/enterprise検索、REST mutation、MCP、Skill要否を決定する"
+        detail: "AG-CAP-01〜10を設計し、Web/enterprise検索、REST mutation、MCP、Skill要否、identity、observability、配布チャネル、評価を決定する"
     reason: "AAGのAI Agent詳細設計で、検索と業務Toolの共通能力契約が必要"
 
   - id: aagd-implement-goal-loop
@@ -40,7 +40,7 @@ test_cases:
     expected_trigger: true
     verify:
       - type: boundary
-        detail: "AG-CAP-01/02は設計し、AG-CAP-03〜05は理由と根拠付きN/A、AG-CAP-06はnot-requiredを判定する"
+        detail: "AG-CAP-01/02は設計し、AG-CAP-03〜05は理由と根拠付きN/A、AG-CAP-06はnot-required、AG-CAP-07/08/10は必須として判定する"
     reason: "検索やmutationがなくても、AAG生成AgentはGoal Loopと能力N/A判定が必要"
 
   - id: reject-mcp-only-business-mutation

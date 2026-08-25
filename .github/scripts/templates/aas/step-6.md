@@ -1,39 +1,41 @@
 {root_ref}
 ## 目的
-サービス一覧、データモデル、画面一覧、ドメイン分析を統合してサービスカタログを作成する。
-本ステップは Web アプリのオンライン API に加え、データフロー型アプリの**ジョブ DAG・スケジュール・リトライ戦略**も同一マトリクスに統合する。APP-ID 横断の単一の真実源（SoT）として、サービス間連携の重複定義を防ぐ。
+サービスカタログのAPI一覧・依存関係マトリクス・データモデルを根拠に、TDDのためのプロジェクト全体テスト戦略書を作成する。
+本ステップは Web アプリのオンラインテストに加え、データフロー型アプリの**バッチテスト方針**も同一テスト戦略に統合する。APP-ID 横断の単一の真実源（SoT）として、テスト方針の重複定義を防ぐ。
 
-## バッチ／ジョブ統合観点
-`docs/catalog/app-catalog.md` にデータフロー型 APP-ID が含まれる場合、当該 APP-ID に紐づくジョブの**サービス間連携のみ**を本マトリクスに統合すること。per-job 詳細仕様（パイプライン構造・データ変換ロジック・運用設計）は ADFD Step.1 で生成されるため、本ステップでは責務を絞り重複を避ける。
-- 条件付きで Table D（ジョブ実行制御マトリクス）を追加する。列構成: `APP-ID / Job-ID / ジョブ名 / 上流Job / 下流Job / 起動条件（スケジュールまたはトリガの種別） / リトライ概要 / 冪等性・再実行安全性 / 詳細仕様リンク / 出典`
-- リトライ詳細（最大試行回数・バックオフ・タイムアウト）や DLQ・補償手順は本マトリクスでは概要に留め、詳細は ADFD Step.1 の per-job 詳細仕様（`docs/dataflow/apps/...`）へリンクで委譲する
-- ジョブ情報の根拠は `docs/catalog/service-catalog.md`（T1.2 でバッチサービスを含めるよう修正済み）と `docs/catalog/use-case-catalog.md` から得る
+## バッチテスト方針統合観点
+`docs/catalog/app-catalog.md` にデータフロー型 APP-ID が含まれる場合、当該 APP-ID 向けのテスト方針も本戦略書に統合すること。per-job 個別テスト仕様は ADFD Step.3 で生成されるため、本ステップでは戦略レベルの方針に絞り重複を避ける。ADFD Step.3 は本戦略書（`docs/catalog/test-strategy.md`）を入力に参照する前提とする（T3.3 で入力切替）。
+- 冪等性テスト方針（同一入力での再実行が同一結果になることを担保するテスト範囲）
+- データ品質テスト方針（欠損・重複・遅延データに対する境界条件テスト）
+- 大量データテスト方針（性能・スループット・メモリ／ストレージ消費の検証方針。旧パフォーマンステスト方針もここに統合する）
+- 障害注入・復旧テスト方針（タイムアウト・部分失敗・リトライ・補償動作の検証方針）
 - 不明な項目は推測せず `TBD` または `不明（要確認）` と明記する
 
-データフロー型 APP-ID が存在しない場合、Table D およびジョブ実行制御セクションは作成しない。
-該当観点は、`Arch-Microservice-ServiceCatalog` Agent の出力契約に Table D 列が無い場合、T4.4 で追加する前提とする（既存 Table A/B/C は変更しない）。
+データフロー型 APP-ID が存在しない場合、バッチテスト方針セクションは作成しない。ただし Web／オンラインアプリの非同期メッセージング（Queue/Event ベース）に関する冪等性・重複配送テストは、既存のテストダブル戦略および依存パターン方針の中で扱う。
+該当観点の反映先は、`Arch-TDD-TestStrategy` Agent の既存セクション構造に従い、テスト分類定義の節にバッチ固有テスト種別を追加、Polyglot Persistence テスト方針の節にデータ品質・ストレージ観点を接続、網羅性チェックの節にデータフロー型 APP-ID の反映有無を追加すること（Agent 出力契約に未対応の場合は T4.5 で対応する前提とする）。
 
 ## 入力
-- `docs/catalog/service-catalog.md`
+- `docs/catalog/service-catalog-matrix.md`
 - `docs/catalog/data-model.md`
-- `docs/catalog/screen-catalog-APP-*.md`（全 APP の per-APP 分割された画面カタログ。`Arch-UI-List` Step 1 の per-APP fan-out 出力。全 APP 分を集約読みする）
 - `docs/catalog/domain-analytics.md`
+- `docs/catalog/service-catalog.md`
 - `docs/catalog/app-catalog.md`（アプリケーション一覧）
+- `docs/catalog/data-catalog.md`（存在すれば参照）
 
 ## 出力
-- `docs/catalog/service-catalog-matrix.md`
+- `docs/catalog/test-strategy.md`
 
 {existing_artifact_policy}
 
 ## Custom Agent
-`Arch-Microservice-ServiceCatalog` を使用
+`Arch-TDD-TestStrategy` を使用
 
 ## 依存
-- Step.5（データカタログ作成）が `aas:done` であること
+- Step.5（サービスカタログ）が `aas:done` であること
 
 ## アプリケーション粒度
-📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、Table A（画面→API）に「所属APP」（1:1）、Table C（サービス責務）に「利用APP」（N:N）を記載すること。
+📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、テスト戦略書にアプリ単位のサービス分類を考慮すること。
 
 ## 完了条件
-- `docs/catalog/service-catalog-matrix.md` が作成されている
+- `docs/catalog/test-strategy.md` が作成されている
 {completion_instruction}{additional_section}

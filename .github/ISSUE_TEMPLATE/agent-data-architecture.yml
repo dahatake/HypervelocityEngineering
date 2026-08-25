@@ -1,0 +1,95 @@
+name: "Agent Data Architecture（AI Agent 向けデータ設計）"
+description: "画面を持たないデータ中心の AI Agent 向けに、データカタログ・API 詳細・非構造化データ資産を設計します (Step.1〜Step.9)"
+title: "[Agent Data Architecture] AI Agent 向けデータ設計"
+labels:
+  - "auto-agent-data-architecture"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Agent Data Architecture（AI Agent 向けデータ設計）
+        このフォームから Issue を作成すると、AI Agent 設計（AAG）の前段となるデータ設計タスクが
+        Sub-issue として生成され、Copilot が依存関係に従って実行します。
+
+        ### Architecture Design（AAS）との違い
+        本ワークフローは **画面を持たない、データ中心の AI Agent** を対象とします。
+        AAS から次の 3 ステップを除外しています。
+
+        | 除外したステップ | 除外理由 |
+        |---|---|
+        | AAS Step.1 ソフトウェアアーキテクチャの推薦 | 生成物 `app-arch-catalog.md` は Web / データフロー系ワークフローだけが参照し、AI Agent 系からは参照されないため |
+        | AAS Step.5 サービスカタログ | 生成物 `service-catalog-matrix.md` の表が画面 ID をキーとしており、画面が無いと 1 行も書けないため |
+        | AAS Step.8 ペルソナ別共通画面カタログ | 画面専用のため |
+
+        Tool 定義の根拠は Step.7（サービス詳細）が生成する `docs/services/*-description.md` で代替します。
+
+        ### 実行されるステップ
+        | ステップ | 内容 | 出力 |
+        |---------|------|------|
+        | **Step.1** | アプリケーションリストの作成 | `docs/catalog/app-catalog.md` |
+        | **Step.2** | ドメイン分析 | `docs/catalog/domain-analytics.md` |
+        | **Step.3** | サービス一覧抽出 | `docs/catalog/service-catalog.md` |
+        | **Step.4.1** | データモデル設計 | `docs/catalog/data-model.md` |
+        | **Step.4.2** | サンプルデータ生成 | `src/data/sample-data.json` |
+        | **Step.5** | データカタログ作成 | `docs/catalog/data-catalog.md` |
+        | **Step.6** | ペルソナカタログ | `docs/catalog/persona-catalog.md` |
+        | **Step.7** | サービス詳細（Tool 定義根拠） | `docs/services/*-description.md` |
+        | **Step.8** | 非構造化データ資産カタログ | `docs/catalog/unstructured-data-catalog.md` |
+        | **Step.9** | テスト戦略書 | `docs/catalog/test-strategy.md` |
+
+        ⚠️ **前提条件**: このワークフローを実行する前に、以下のファイルが存在することを確認してください。
+        - `docs/catalog/use-case-catalog.md`（ARD の成果物）
+
+        ✅ **完了後の次ステップ**:
+        - AI Agent Design（`ai-agent-design.yml`）
+        - AI Agent Dev & Deploy（`ai-agent-dev.yml`）
+
+        📚 **knowledge/ 参照**: `knowledge/` フォルダーに業務要件ドキュメント（D01〜D21）が存在する場合、各ステップで業務コンテキストとして自動参照されます。
+
+  - type: input
+    id: branch
+    attributes:
+      label: "対象ブランチ"
+      description: "設計ドキュメントをコミットするブランチ名を入力してください"
+      placeholder: "例: main, develop, feature/agent-data"
+      value: "main"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runner_type
+    attributes:
+      label: "実行 Runner"
+      description: |
+        ワークフローを実行する Runner を選択します。
+        - **GitHub Hosted**: `ubuntu-latest`（GitHub 提供の標準ランナー）
+        - **Self-hosted (ACA)**: `[self-hosted, linux, x64, aca]`（Azure Container Apps 上のセルフホストランナー）
+        - Self-hosted を選ぶ場合は runner が online であり、label が一致していることを確認してください（詳細: `users-guide/setup-self-hosted-runner.md`）
+      options:
+        - "GitHub Hosted"
+        - "Self-hosted (ACA)"
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: app_ids
+    attributes:
+      label: "対象アプリケーション (APP-ID) — 複数指定可（任意）"
+      description: |
+        対象を絞る場合に `APP-001` 形式で入力してください（改行またはカンマ区切り）。
+        未指定の場合は全 APP を対象とします。
+      placeholder: |
+        APP-001
+        APP-002
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional_comment
+    attributes:
+      label: "追加コメント（任意）"
+      description: "各ステップの Issue 本文へそのまま転記されます。設計上の制約や前提があれば記載してください。"
+      placeholder: "例: 非構造化データは SharePoint のみを対象とする"
+    validations:
+      required: false

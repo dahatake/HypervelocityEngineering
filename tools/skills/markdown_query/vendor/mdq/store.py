@@ -46,6 +46,40 @@ def graphrag_dir_for(lang: str = "ja-jp") -> Path:
     return _DB_DIR / f"graphrag-{_tok.normalize(lang)}"
 
 
+def existing_index_dbs(repo_root: Path | str = ".") -> list[tuple[str, str, Path]]:
+    """Return ``(lang, strategy, path)`` for every per-(lang, strategy) DB present.
+
+    This is the single decoder for the :func:`db_path_for` filename layout;
+    callers must not re-split ``index-<lang>-<strategy>.sqlite`` themselves.
+    ``<lang>`` contains a hyphen of its own (``ja-jp``), so the name is matched
+    by known strategy suffix, longest first, and both parts are validated
+    against their allow-lists. ``graphrag`` never writes to the SQLite store,
+    and the legacy single-file :data:`DEFAULT_DB_PATH` does not match the
+    pattern, so neither is reported.
+    """
+    from . import strategies as _strat
+    from . import tokenize as _tok
+
+    known = sorted(
+        (s for s in _strat.ALL_STRATEGIES if s != "graphrag"), key=len, reverse=True
+    )
+    base = Path(repo_root) / _DB_DIR
+    if not base.is_dir():
+        return []
+    found: list[tuple[str, str, Path]] = []
+    for path in sorted(base.glob("index-*-*.sqlite")):
+        stem = path.stem
+        for strategy in known:
+            suffix = f"-{strategy}"
+            if not stem.endswith(suffix):
+                continue
+            lang = stem[len("index-"):-len(suffix)]
+            if lang in _tok.ALL_LANGS:
+                found.append((lang, strategy, path))
+            break
+    return found
+
+
 # Schema version - bump whenever the migration code adds/changes columns
 # or changes chunk_id derivation (forcing a rebuild).
 # v1: introduced part_index / part_total columns.

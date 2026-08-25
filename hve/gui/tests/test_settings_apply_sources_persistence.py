@@ -65,7 +65,8 @@ class TestC11SourcesPersistence:
         assert widget.sources_original_docs.isChecked() is False
         assert widget.sources_workiq.isChecked() is True
 
-    def test_c10_section_has_no_duplicate_app_id_entries(self, qapp) -> None:
-        # dict リテラル重複が再混入していないことを確認（同名キー = 1 個のみ）。
+    def test_c10_section_has_no_app_id_entry(self, qapp) -> None:
+        # `_C10AppId` に `app_id` 属性は無く、対応するエントリを持たせない
+        # （dict リテラルの重複混入も同時に防ぐ）。
         fields = settings_apply._SECTION_FIELDS["C10"]
-        assert list(fields.keys()).count("app_id") == 1
+        assert "app_id" not in fields

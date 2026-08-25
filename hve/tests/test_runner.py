@@ -21,6 +21,8 @@ from config import DEFAULT_CONTEXT_INJECTION_MAX_CHARS, SDKConfig
 from console import Console
 from runner import (
     StepRunner,
+    _AZURE_FREE_WORKFLOWS,
+    _AZURE_MCP_SERVER_NAME,
     _ensure_step_work_dir,
     _extract_safe_qa_artifact_paths,
     _filter_mcp_servers_for_session,
@@ -30,6 +32,7 @@ from runner import (
     _work_identifier_for_step,
     _step_work_dir,
 )
+from workflow_registry import get_workflow, list_workflows  # type: ignore[import-untyped]
 from workiq import WORKIQ_MCP_SERVER_NAME  # type: ignore[import-untyped]
 
 # Sentinel for distinguishing "key absent" vs. "key present with None value" in sys.modules.
@@ -516,6 +519,104 @@ class TestMcpServerFiltering(unittest.TestCase):
 
         self.assertEqual(filtered, servers)
 
+    def test_excludes_preview_plugin_alias(self) -> None:
+        """`workiq-preview` も同じ Work IQ サービスなのでメインセッションから除外する。"""
+        servers = {
+            "workiq-preview": {"type": "http"},
+            "azure": {"command": "azmcp"},
+        }
+
+        self.assertEqual(
+            _filter_mcp_servers_for_session(servers),
+            {"azure": {"command": "azmcp"}},
+        )
+        self.assertEqual(
+            _filter_mcp_servers_for_session(servers, include_workiq=True), servers,
+        )
+
+
+class TestAzureFreeWorkflowMcpFilter(unittest.TestCase):
+    """FR-CLI-79: Azure を利用しない Workflow には azure MCP を渡さない。"""
+
+    SERVERS = {
+        "azure": {"command": "azmcp", "tools": ["*"]},
+        "microsoft-learn": {"type": "http", "tools": ["*"]},
+    }
+
+    def test_drops_azure_for_declared_azure_free_workflows(self) -> None:
+        for workflow_id in sorted(_AZURE_FREE_WORKFLOWS):
+            with self.subTest(workflow_id=workflow_id):
+                filtered = _filter_mcp_servers_for_session(
+                    self.SERVERS, workflow_id=workflow_id
+                )
+                self.assertNotIn("azure", filtered)
+                self.assertIn("microsoft-learn", filtered)
+
+    def test_keeps_azure_for_every_other_workflow(self) -> None:
+        for workflow in list_workflows():
+            if workflow.id in _AZURE_FREE_WORKFLOWS:
+                continue
+            with self.subTest(workflow_id=workflow.id):
+                filtered = _filter_mcp_servers_for_session(
+                    self.SERVERS, workflow_id=workflow.id
+                )
+                self.assertIn("azure", filtered)
+
+    def test_unknown_or_missing_workflow_id_keeps_every_server(self) -> None:
+        for workflow_id in (None, "", "not-a-workflow"):
+            with self.subTest(workflow_id=workflow_id):
+                self.assertEqual(
+                    _filter_mcp_servers_for_session(self.SERVERS, workflow_id=workflow_id),
+                    self.SERVERS,
+                )
+
+    def test_allowlist_entries_exist_in_the_registry(self) -> None:
+        self.assertLessEqual(_AZURE_FREE_WORKFLOWS, {w.id for w in list_workflows()})
+
+    def test_allowlist_workflows_never_mention_azure_in_their_prompts(self) -> None:
+        """allowlist が実装から取り残されると、Azure を使う Step が壊れる。"""
+        prompts = Path(__file__).resolve().parents[2] / ".github" / "prompts"
+        offenders = []
+        for workflow_id in sorted(_AZURE_FREE_WORKFLOWS):
+            for step in get_workflow(workflow_id).steps:
+                if not step.custom_agent:
+                    continue
+                prompt = prompts / f"{step.custom_agent}.prompt.md"
+                if not prompt.exists():
+                    continue
+                if "azure" in prompt.read_text(encoding="utf-8").lower():
+                    offenders.append(f"{workflow_id}:{step.id}:{step.custom_agent}")
+        self.assertEqual(offenders, [])
+
+    def test_excluded_server_name_exists_in_the_repository_mcp_config(self) -> None:
+        """サーバ名が改名されると縮約が無言で効かなくなる。"""
+        config = json.loads(
+            (Path(__file__).resolve().parents[2] / ".github" / ".mcp.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertIn(_AZURE_MCP_SERVER_NAME, config.get("mcpServers", {}))
+
+    def test_the_filter_is_wired_into_the_repository_mcp_injection(self) -> None:
+        """フィルタ自体が正しくても、配線が外れれば削減は効かない。"""
+        import inspect
+
+        from runner import _create_session_with_auto_reasoning_fallback
+
+        self.assertIn(
+            "workflow_id",
+            inspect.signature(_create_session_with_auto_reasoning_fallback).parameters,
+        )
+        source = inspect.getsource(_create_session_with_auto_reasoning_fallback)
+        code = "\n".join(line.split("#", 1)[0] for line in source.splitlines())
+        block = code[code.index("_declared_mcp_servers"):]
+        self.assertIn("_filter_mcp_servers_for_session(", block)
+        self.assertIn("workflow_id=workflow_id", block)
+
+        run_step_source = inspect.getsource(StepRunner.run_step)
+        call = run_step_source[run_step_source.index("self._create_main_session("):]
+        self.assertIn("workflow_id=workflow_id", call[:400])
+
 
 class TestStepRunnerNonDryRunNoSDK(unittest.TestCase):
     """dry_run=False で SDK 未インストール時に False を返す。"""
@@ -933,33 +1034,32 @@ class TestStepRunnerStreamEvents(unittest.TestCase):
             runner._handle_session_event(event)
         self.assertIn("grep", cap.stdout)
 
-    def test_workiq_tool_event_sets_called_flag(self) -> None:
+    def test_tool_event_without_server_name_does_not_set_called_flag(self) -> None:
         runner = self._make_runner(show_stream=False, verbose=True)
         self.assertFalse(runner._workiq_tool_called)
-        event = _FakeEvent("tool.execution_start", _FakeEventData(tool_name="ask_work_iq"))
-        with _CaptureOutput() as cap:
+        event = _FakeEvent("tool.execution_start", _FakeEventData(tool_name="ask"))
+        with _CaptureOutput():
             runner._handle_session_event(event)
-        self.assertIn("Work IQ ツール 'ask_work_iq' が呼び出されました", cap.stdout)
-        self.assertTrue(runner._workiq_tool_called)
+        self.assertFalse(runner._workiq_tool_called)
 
     def test_workiq_mcp_tool_event_sets_called_flag(self) -> None:
         runner = self._make_runner(show_stream=False, verbose=True)
         self.assertFalse(runner._workiq_tool_called)
         event = _FakeEvent(
             "tool.execution_start",
-            _FakeEventData(mcp_tool_name="ask_work_iq", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
+            _FakeEventData(mcp_tool_name="ask", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
         )
         with _CaptureOutput() as cap:
             runner._handle_session_event(event)
-        self.assertIn("Work IQ ツール 'ask_work_iq' が呼び出されました", cap.stdout)
+        self.assertIn("Work IQ ツール 'ask' が呼び出されました", cap.stdout)
         self.assertTrue(runner._workiq_tool_called)
-        self.assertEqual(runner._workiq_called_tools, ["ask_work_iq"])
+        self.assertEqual(runner._workiq_called_tools, ["ask"])
 
     def test_other_mcp_server_tool_does_not_set_workiq_flag(self) -> None:
         runner = self._make_runner(show_stream=False, verbose=True)
         event = _FakeEvent(
             "tool.execution_start",
-            _FakeEventData(mcp_tool_name="ask_work_iq", mcp_server_name="other_server"),
+            _FakeEventData(mcp_tool_name="ask", mcp_server_name="other_server"),
         )
         with _CaptureOutput():
             runner._handle_session_event(event)
@@ -2418,16 +2518,19 @@ class TestWorkIQToolNamesConsistency(unittest.TestCase):
 
     def test_workiq_tool_names_contains_expected_tools(self) -> None:
         from runner import _WORKIQ_TOOL_NAMES
-        expected = {"ask_work_iq"}
+        expected = {"ask"}
         self.assertEqual(_WORKIQ_TOOL_NAMES, frozenset(expected))
 
-    def test_tool_execution_start_ask_work_iq_detected(self) -> None:
-        """tool.execution_start イベントで ask_work_iq が Work IQ ツールとして検出されること。"""
+    def test_tool_execution_start_ask_detected(self) -> None:
+        """tool.execution_start イベントで `_hve_workiq` の `ask` が Work IQ ツールとして検出されること。"""
         cfg = SDKConfig(dry_run=True, workiq_enabled=True)
         console = Console(verbose=False, quiet=True)
         step_runner = StepRunner(config=cfg, console=console)
 
-        event = _FakeEvent("tool.execution_start", _FakeEventData(tool_name="ask_work_iq"))
+        event = _FakeEvent(
+            "tool.execution_start",
+            _FakeEventData(mcp_tool_name="ask", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
+        )
         step_runner._handle_session_event(event)
         self.assertTrue(step_runner._workiq_tool_called)
 
@@ -3005,31 +3108,34 @@ class TestWorkIQCalledToolsTracking(unittest.TestCase):
         runner._current_step_id = "1"
         return runner
 
-    def test_workiq_tool_appended_to_called_tools(self) -> None:
-        """Work IQ ツール呼び出しで _workiq_called_tools にツール名が追加される。"""
+    def test_tool_without_server_name_not_appended(self) -> None:
+        """server 名を持たない tool event は _workiq_called_tools へ追加されない。"""
         runner = self._make_runner()
         self.assertEqual(runner._workiq_called_tools, [])
-        event = _FakeEvent("tool.execution_start", _FakeEventData(tool_name="ask_work_iq"))
+        event = _FakeEvent("tool.execution_start", _FakeEventData(tool_name="ask"))
         runner._handle_session_event(event)
-        self.assertEqual(runner._workiq_called_tools, ["ask_work_iq"])
+        self.assertEqual(runner._workiq_called_tools, [])
 
     def test_mcp_workiq_tool_appended_to_called_tools(self) -> None:
         """mcp_tool_name 形式でも _workiq_called_tools にツール名が追加される。"""
         runner = self._make_runner()
         event = _FakeEvent(
             "tool.execution_start",
-            _FakeEventData(mcp_tool_name="ask_work_iq", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
+            _FakeEventData(mcp_tool_name="ask", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
         )
         runner._handle_session_event(event)
-        self.assertEqual(runner._workiq_called_tools, ["ask_work_iq"])
+        self.assertEqual(runner._workiq_called_tools, ["ask"])
 
     def test_workiq_tool_multiple_calls_all_appended(self) -> None:
         """複数回呼び出した場合、すべて _workiq_called_tools に追記される。"""
         runner = self._make_runner()
-        for tool in ["ask_work_iq", "ask_work_iq"]:
-            event = _FakeEvent("tool.execution_start", _FakeEventData(tool_name=tool))
+        for _ in range(2):
+            event = _FakeEvent(
+                "tool.execution_start",
+                _FakeEventData(mcp_tool_name="ask", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
+            )
             runner._handle_session_event(event)
-        self.assertEqual(runner._workiq_called_tools, ["ask_work_iq", "ask_work_iq"])
+        self.assertEqual(runner._workiq_called_tools, ["ask", "ask"])
 
     def test_non_workiq_tool_not_appended(self) -> None:
         """Work IQ 以外のツールは _workiq_called_tools に追加されない。"""
@@ -3041,7 +3147,7 @@ class TestWorkIQCalledToolsTracking(unittest.TestCase):
     def test_workiq_called_tools_reset_on_run_step(self) -> None:
         """run_step() 開始時に _workiq_called_tools がリセットされる。"""
         runner = self._make_runner()
-        runner._workiq_called_tools = ["ask_work_iq"]
+        runner._workiq_called_tools = ["ask"]
         with _CaptureOutput():
             _run(runner.run_step("1", "テスト", "プロンプト"))
         # dry_run では run_step() 終了後に _workiq_called_tools が [] にリセットされている
@@ -3050,18 +3156,21 @@ class TestWorkIQCalledToolsTracking(unittest.TestCase):
     def test_diff_based_tool_detection(self) -> None:
         """呼び出し前後の差分でツール呼び出しを検出できる。"""
         runner = self._make_runner()
-        runner._workiq_called_tools = ["ask_work_iq"]  # 事前に1件追加
+        runner._workiq_called_tools = ["ask"]  # 事前に1件追加
         before = len(runner._workiq_called_tools)
-        # 新たに ask_work_iq が呼ばれた
-        event = _FakeEvent("tool.execution_start", _FakeEventData(tool_name="ask_work_iq"))
+        # 新たに ask が呼ばれた
+        event = _FakeEvent(
+            "tool.execution_start",
+            _FakeEventData(mcp_tool_name="ask", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
+        )
         runner._handle_session_event(event)
         after_tools = runner._workiq_called_tools[before:]
         self.assertTrue(bool(after_tools))
-        self.assertEqual(after_tools, ["ask_work_iq"])
+        self.assertEqual(after_tools, ["ask"])
 
 
 class TestIsWorkIQToolNameHelperInRunner(unittest.TestCase):
-    """runner.py が workiq.is_workiq_tool_name() ヘルパー経由で Work IQ ツールを検出すること。"""
+    """runner.py が workiq の server/tool 判定経由で Work IQ ツールを検出すること。"""
 
     def _make_runner(self) -> StepRunner:
         cfg = SDKConfig(dry_run=True, workiq_enabled=True)
@@ -3071,16 +3180,19 @@ class TestIsWorkIQToolNameHelperInRunner(unittest.TestCase):
     def test_is_workiq_tool_name_helper_accessible(self) -> None:
         """runner.py が workiq.is_workiq_tool_name をインポートできること。"""
         from workiq import is_workiq_tool_name
-        self.assertTrue(is_workiq_tool_name("ask_work_iq"))
+        self.assertTrue(is_workiq_tool_name("ask"))
         self.assertFalse(is_workiq_tool_name("edit_file"))
 
-    def test_handle_session_event_uses_is_workiq_tool_name(self) -> None:
-        """_handle_session_event が is_workiq_tool_name() 経由で判定し、
+    def test_handle_session_event_detects_workiq_mcp_tool(self) -> None:
+        """_handle_session_event が server/tool の組で判定し、
         Work IQ ツールは _workiq_called_tools に追加されること。"""
         runner = self._make_runner()
-        for tool in ("ask_work_iq",):
+        for tool in ("ask",):
             runner._workiq_called_tools = []
-            event = _FakeEvent("tool.execution_start", _FakeEventData(tool_name=tool))
+            event = _FakeEvent(
+                "tool.execution_start",
+                _FakeEventData(mcp_tool_name=tool, mcp_server_name=WORKIQ_MCP_SERVER_NAME),
+            )
             runner._handle_session_event(event)
             self.assertIn(tool, runner._workiq_called_tools, f"{tool} は _workiq_called_tools に追加されるべき")
 
@@ -3091,27 +3203,36 @@ class TestIsWorkIQToolNameHelperInRunner(unittest.TestCase):
         Phase 1 の _workiq_called_tools は影響しない。
         """
         runner = self._make_runner()
-        # Phase 1: ask_work_iq が2回呼ばれた
+        # Phase 1: ask が2回呼ばれた
         for _ in range(2):
-            event = _FakeEvent("tool.execution_start", _FakeEventData(tool_name="ask_work_iq"))
+            event = _FakeEvent(
+                "tool.execution_start",
+                _FakeEventData(mcp_tool_name="ask", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
+            )
             runner._handle_session_event(event)
         self.assertEqual(len(runner._workiq_called_tools), 2)
 
         # QA フェーズ開始前の snapshot
         before_qa = len(runner._workiq_called_tools)
 
-        # QA フェーズ: ask_work_iq が呼ばれた
-        event = _FakeEvent("tool.execution_start", _FakeEventData(tool_name="ask_work_iq"))
+        # QA フェーズ: ask が呼ばれた
+        event = _FakeEvent(
+            "tool.execution_start",
+            _FakeEventData(mcp_tool_name="ask", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
+        )
         runner._handle_session_event(event)
 
         after_qa_tools = runner._workiq_called_tools[before_qa:]
-        self.assertEqual(after_qa_tools, ["ask_work_iq"], "QA フェーズの差分は Phase 1 の呼び出しを含まないこと")
+        self.assertEqual(after_qa_tools, ["ask"], "QA フェーズの差分は Phase 1 の呼び出しを含まないこと")
 
     def test_qa_tool_not_called_when_no_events_after_snapshot(self) -> None:
         """QA フェーズで Work IQ ツールが呼ばれなかった場合、差分は空になること。"""
         runner = self._make_runner()
-        # Phase 1: ask_work_iq が呼ばれた
-        event = _FakeEvent("tool.execution_start", _FakeEventData(tool_name="ask_work_iq"))
+        # Phase 1: ask が呼ばれた
+        event = _FakeEvent(
+            "tool.execution_start",
+            _FakeEventData(mcp_tool_name="ask", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
+        )
         runner._handle_session_event(event)
 
         # QA フェーズ開始前の snapshot

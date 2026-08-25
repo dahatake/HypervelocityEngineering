@@ -9,6 +9,8 @@ import json
 import threading
 from pathlib import Path
 
+import pytest
+
 from hve import runtime_observability as rto
 
 
@@ -170,6 +172,24 @@ class TestSanitization:
         )
         assert clean is not None
         assert clean["path"] == "src/app.py"
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "$p",
+            "$p))",
+            "`$p))",
+            "docs/architectural-requirements-app-006.md')",
+        ],
+    )
+    def test_shell_expression_tokens_are_dropped(self, tmp_path: Path, value: str) -> None:
+        """FR-RTO-04: シェルの変数・式・末尾コード断片はパスとして保存しない。"""
+        clean = rto.sanitize_event(
+            {"kind": "file_io", "step": "2/APP-006", "mode": "read", "path": value},
+            repo_root=tmp_path,
+        )
+        assert clean is not None
+        assert "path" not in clean
 
     def test_recorder_persists_only_sanitized_payload(self, tmp_path: Path) -> None:
         rec = _recorder(tmp_path)

@@ -104,7 +104,7 @@ jobs:
 
             if [ "${xref_count}" = "1" ]; then
               xref_issue=$(printf '%s\n' "${xref_unique}" | head -1 || true)
-              managed_issue=$(gh api "/repos/${REPO}/issues/${xref_issue}" 2>/dev/null | python3 -c "import json, sys; issue = json.load(sys.stdin); title = issue.get('title', ''); labels = [l.get('name', '') for l in issue.get('labels', [])]; prefixes = ('aas','aad-web','asdw-web','adfd','adfdv','aag','aagd','akm','adoc','aad','asdw'); title_tokens = ('[AAS]','[AAD-WEB]','[ASDW-WEB]','[ADFD]','[ADFDV]','[AAG]','[AAGD]','[AKM]','[ADOC]','[AAD]','[ASDW]'); print('true' if (title.startswith(title_tokens) or any(any(lbl.startswith(f'{p}:') for p in prefixes) for lbl in labels)) else 'false')" 2>/dev/null || echo 'false')
+              managed_issue=$(gh api "/repos/${REPO}/issues/${xref_issue}" 2>/dev/null | python3 -c "import json, sys; issue = json.load(sys.stdin); title = issue.get('title', ''); labels = [l.get('name', '') for l in issue.get('labels', [])]; prefixes = ('ard','aas','aad-web','asdw-web','adfd','adfdv','aag','aagd','aar','ada','akm','adoc','aad','asdw'); title_tokens = ('[ARD]','[AAS]','[AAD-WEB]','[ASDW-WEB]','[ADFD]','[ADFDV]','[AAG]','[AAGD]','[AAR]','[ADA]','[AKM]','[ADOC]','[AAD]','[ASDW]'); print('true' if (title.startswith(title_tokens) or any(any(lbl.startswith(f'{p}:') for p in prefixes) for lbl in labels)) else 'false')" 2>/dev/null || echo 'false')
               if [ "${managed_issue}" = "true" ]; then
                 issue_number="${xref_issue}"
                 echo "PR #${PR_NUMBER}: Method 5 (PR timeline cross-referenced) から Issue #${issue_number} を解決しました。"
@@ -142,6 +142,7 @@ jobs:
 
             # 管理系列: aas, aad, aad-web, asdw, asdw-web, adfd, adfdv, aag, aagd, akm, adoc
           title_prefix_map = [
+              ('[ARD]', 'ard'),
               ('[AAD-WEB]', 'aad-web'),
               ('[ASDW-WEB]', 'asdw-web'),
               ('[AAS]', 'aas'),
@@ -149,6 +150,8 @@ jobs:
               ('[ADFDV]', 'adfdv'),
               ('[AAG]', 'aag'),
               ('[AAGD]', 'aagd'),
+              ('[AAR]', 'aar'),
+              ('[ADA]', 'ada'),
               ('[AKM]', 'akm'),
               ('[ADOC]', 'adoc'),
               # 後方互換: 旧プレフィックス [AAD]/[ASDW] は -web 系列にマップ
@@ -163,7 +166,7 @@ jobs:
                   break
 
           if not resolved:
-              candidates = ['aas', 'aad-web', 'asdw-web', 'adfd', 'adfdv', 'aag', 'aagd', 'akm', 'adoc', 'aad', 'asdw']
+              candidates = ['ard', 'aas', 'aad-web', 'asdw-web', 'adfd', 'adfdv', 'aag', 'aagd', 'aar', 'ada', 'akm', 'adoc', 'aad', 'asdw']
               for cand in candidates:
                   if any(lbl.startswith(f'{cand}:') for lbl in labels):
                       if cand == 'aad':
@@ -182,9 +185,100 @@ jobs:
             echo "Issue #${ISSUE_NUMBER}: 系列プレフィックスを判定できません。スキップします。"
           fi
 
+      - name: Checkout trusted APP requirement validator
+        if: steps.detect-prefix.outputs.prefix == 'ard'
+        uses: actions/checkout@v4
+        with:
+          path: trusted
+
+      - name: Checkout PR head as validation data
+        if: steps.detect-prefix.outputs.prefix == 'ard'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: subject
+          persist-credentials: false
+
+      - name: Validate APP requirement completion contract
+        id: validate-app-requirement-completion
+        if: steps.detect-prefix.outputs.prefix == 'ard'
+        continue-on-error: true
+        env:
+          ISSUE_NUMBER: ${{ steps.resolve.outputs.issue_number }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          issue_title=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.title' 2>/dev/null || echo '')
+          export ISSUE_TITLE="${issue_title}"
+          python3 -I - <<'PY'
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          trusted_root = Path(os.environ["GITHUB_WORKSPACE"]) / "trusted"
+          subject_root = Path(os.environ["GITHUB_WORKSPACE"]) / "subject"
+          # Validator code is imported only from the trusted checkout. The
+          # subject checkout is treated strictly as data from the merged PR head.
+          sys.path.insert(0, str(trusted_root))
+
+          from hve.application_requirements import (
+              validate_application_requirement_trace_block,
+              validate_requirement_coverage,
+          )
+
+          workflow_id = "ard"
+          title = os.environ.get("ISSUE_TITLE", "")
+          pr_body = os.environ.get("PR_BODY", "") or ""
+
+          if workflow_id == "ard" and not re.match(r"^\[ARD\]\s+Step\.4\.2:", title):
+              print("APP_REQUIREMENT_COMPLETION_NA workflow=ard")
+              raise SystemExit(0)
+
+          coverage = validate_requirement_coverage(subject_root)
+          for orphan in coverage.orphan_paths:
+              print(f"WARNING: orphan preserved: {orphan.as_posix()}")
+          if coverage.errors:
+              for error in coverage.errors:
+                  print(f"ERROR: {error}")
+              raise SystemExit(1)
+
+          # ARD Step 4.2 は単一 Issue で全 catalog APP を順次 upsert し、fan-out
+          # child Issue を作らない。そのため共有 preflight と同様、この completion
+          # gate も per-child fanout_meta=None 相当の catalog 直接解決で scope を
+          # 決定する（fanout_meta を伴う個別呼び出しは行わない）。
+          trace_errors = validate_application_requirement_trace_block(
+              pr_body,
+              repo_root=subject_root,
+              expected_app_ids=coverage.app_ids,
+          )
+          if trace_errors:
+              for error in trace_errors:
+                  print(f"ERROR: {error}")
+              raise SystemExit(1)
+
+          print(f"APP_REQUIREMENT_COMPLETION_PASS apps={len(coverage.app_ids)}")
+          PY
+
+      - name: APP requirement completion 失敗コメント
+        if: steps.detect-prefix.outputs.prefix == 'ard' && steps.validate-app-requirement-completion.outcome == 'failure'
+        env:
+          ISSUE_NUMBER: ${{ steps.resolve.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          comment_file="${RUNNER_TEMP}/app-requirement-completion-failed.md"
+          cat > "${comment_file}" <<'EOF'
+          ## ⛔ APP要求完了契約 failed
+
+          ARD Step.4.2 の完了判定で、要求定義書カバレッジまたは完了報告の trace block を検証できませんでした。詳細は Actions log を確認し、要求定義書または PR 本文を修正してから再度 merge してください。
+
+          <!-- app-requirement-completion-failed -->
+          EOF
+          gh issue comment "${ISSUE_NUMBER}" --repo "${REPO}" --body-file "${comment_file}"
+
       - name: done 付与と残置ラベル整理
         id: transition-labels
-        if: steps.resolve.outputs.issue_number != '' && steps.detect-prefix.outputs.prefix != ''
+        if: steps.resolve.outputs.issue_number != '' && steps.detect-prefix.outputs.prefix != '' && steps.validate-app-requirement-completion.outcome != 'failure'
         env:
           ISSUE_NUMBER: ${{ steps.resolve.outputs.issue_number }}
           PREFIX: ${{ steps.detect-prefix.outputs.prefix }}
@@ -196,64 +290,147 @@ jobs:
           qa_ready_label="${PREFIX}:qa-ready"
           ready_label="${PREFIX}:ready"
           running_label="${PREFIX}:running"
+          blocked_label="${PREFIX}:blocked"
 
-          issue_data=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" 2>/dev/null) || {
-            echo "result=Issue #${ISSUE_NUMBER} の取得に失敗" >> "${GITHUB_OUTPUT}"
-            exit 0
+          fetch_labels() {
+            local issue_json
+            issue_json=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" 2>/dev/null) || return 1
+            printf '%s' "${issue_json}" | python3 -c "
+          import json, sys
+          issue = json.load(sys.stdin)
+          labels = issue.get('labels')
+          if not isinstance(labels, list):
+              raise ValueError('labels must be a list')
+          names = []
+          for label in labels:
+              if not isinstance(label, dict) or not isinstance(label.get('name'), str):
+                  raise ValueError('each label must have a string name')
+              names.append(label['name'])
+          print('\\n'.join(names))
+          "
           }
-          labels_csv=$(printf '%s' "${issue_data}" | python3 -c "
-          import sys, json
-          labels = [l.get('name', '') for l in json.load(sys.stdin).get('labels', [])]
-          print(','.join(labels))
-          " 2>/dev/null || echo '')
 
-          added_done=false
-          done_present=false
-          if printf ',%s,' "${labels_csv}" | grep -q ",${done_label},"; then
-            echo "${done_label} は既に存在するため、付与をスキップします。"
-            done_present=true
-          else
-            if gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --add-label "${done_label}"; then
-              added_done=true
-            else
-              echo "WARNING: ${done_label} の付与に失敗しました。"
+          has_label() {
+            local labels="${1}"
+            local target="${2}"
+            printf '%s\n' "${labels}" | grep -Fxq -- "${target}"
+          }
+
+          rollback_done() {
+            if gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --remove-label "${done_label}" >/dev/null 2>&1; then
+              return 0
             fi
+            echo "::warning::fail-closed rollback で ${done_label} を除去できませんでした。手動確認が必要です。"
+            return 1
+          }
 
-            issue_after=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" 2>/dev/null) || issue_after=''
-            if [ -n "${issue_after}" ]; then
-              done_present=$(DONE_LABEL="${done_label}" printf '%s' "${issue_after}" | python3 -c "
-              import sys, json
-              import os
-              labels = [l.get('name', '') for l in json.load(sys.stdin).get('labels', [])]
-              done_label = os.environ.get('DONE_LABEL', '')
-              print('true' if done_label in labels else 'false')
-              " 2>/dev/null || echo 'false')
+          rollback_failed=false
+          verification_failed=false
+          if ! labels=$(fetch_labels); then
+            verification_failed=true
+            if ! rollback_done; then
+              rollback_failed=true
             fi
-          fi
-
-          if [ "${done_present}" != "true" ]; then
-            result=$(printf 'prefix=%s, done_added=%s, removed=[]' \
-              "${PREFIX}" "${added_done}")
-            echo "${done_label} が存在しないため、残置ラベル削除をスキップします。"
+            result=$(printf 'prefix=%s, done_added=false, cleanup_failed=true, verification_failed=true, rollback_failed=%s, stale_remaining=[unknown]' \
+              "${PREFIX}" "${rollback_failed}")
             echo "result=${result}" >> "${GITHUB_OUTPUT}"
-            echo "done_present=${done_present}" >> "${GITHUB_OUTPUT}"
-            exit 0
+            echo "done_present=false" >> "${GITHUB_OUTPUT}"
+            exit 1
           fi
 
-          for stale in "${qa_drafting_label}" "${qa_ready_label}" "${ready_label}" "${running_label}"; do
-            gh api -X DELETE "/repos/${REPO}/issues/${ISSUE_NUMBER}/labels/${stale}" --silent 2>/dev/null || true
+          cleanup_failed=false
+          removed_labels=''
+          for stale in "${qa_drafting_label}" "${qa_ready_label}" "${ready_label}" "${running_label}" "${blocked_label}"; do
+            if has_label "${labels}" "${stale}"; then
+              if gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --remove-label "${stale}" >/dev/null 2>&1; then
+                removed_labels="${removed_labels}${removed_labels:+,}${stale}"
+              else
+                echo "::warning::残置ラベルの削除に失敗: ${stale}"
+                cleanup_failed=true
+              fi
+            fi
           done
 
-          result=$(printf 'prefix=%s, done_added=%s, removed=[%s,%s,%s,%s]' \
-            "${PREFIX}" "${added_done}" "${qa_drafting_label}" "${qa_ready_label}" "${ready_label}" "${running_label}")
+          labels_after_cleanup=''
+          if ! labels_after_cleanup=$(fetch_labels); then
+            echo "::warning::残置ラベル整理後の Issue 取得に失敗しました。"
+            verification_failed=true
+            cleanup_failed=true
+          fi
+          stale_remaining=''
+          for stale in "${qa_drafting_label}" "${qa_ready_label}" "${ready_label}" "${running_label}" "${blocked_label}"; do
+            if has_label "${labels_after_cleanup}" "${stale}"; then
+              stale_remaining="${stale_remaining}${stale_remaining:+,}${stale}"
+            fi
+          done
+
+          done_present=false
+          if has_label "${labels_after_cleanup}" "${done_label}"; then
+            done_present=true
+          fi
+          if [ "${cleanup_failed}" = "true" ] || [ -n "${stale_remaining}" ]; then
+            if [ "${done_present}" = "true" ] || [ "${verification_failed}" = "true" ]; then
+              if ! rollback_done; then
+                rollback_failed=true
+              fi
+            fi
+            result=$(printf 'prefix=%s, done_added=false, cleanup_failed=true, verification_failed=%s, rollback_failed=%s, stale_remaining=[%s]' \
+              "${PREFIX}" "${verification_failed}" "${rollback_failed}" "${stale_remaining:-unknown}")
+            echo "result=${result}" >> "${GITHUB_OUTPUT}"
+            echo "done_present=false" >> "${GITHUB_OUTPUT}"
+            exit 1
+          fi
+
+          added_done=false
+          add_failed=false
+          if [ "${done_present}" = "true" ]; then
+            echo "${done_label} は既に存在するため、付与をスキップします。"
+          elif gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --add-label "${done_label}"; then
+            added_done=true
+          else
+            echo "::warning::${done_label} の付与に失敗しました。"
+            add_failed=true
+          fi
+
+          post_done_labels=''
+          if ! post_done_labels=$(fetch_labels); then
+            verification_failed=true
+          fi
+          done_present=false
+          if has_label "${post_done_labels}" "${done_label}"; then
+            done_present=true
+          fi
+          post_done_stale_remaining=''
+          for stale in "${qa_drafting_label}" "${qa_ready_label}" "${ready_label}" "${running_label}" "${blocked_label}"; do
+            if has_label "${post_done_labels}" "${stale}"; then
+              post_done_stale_remaining="${post_done_stale_remaining}${post_done_stale_remaining:+,}${stale}"
+            fi
+          done
+          if [ "${add_failed}" = "true" ] || [ "${verification_failed}" = "true" ] || \
+             [ "${done_present}" != "true" ] || [ -n "${post_done_stale_remaining}" ]; then
+            if [ "${done_present}" = "true" ] || [ "${verification_failed}" = "true" ]; then
+              if ! rollback_done; then
+                rollback_failed=true
+              fi
+            fi
+            result=$(printf 'prefix=%s, done_added=%s, add_failed=%s, cleanup_failed=false, verification_failed=%s, rollback_failed=%s, stale_remaining=[%s]' \
+              "${PREFIX}" "${added_done}" "${add_failed}" "${verification_failed}" "${rollback_failed}" "${post_done_stale_remaining:-unknown}")
+            echo "result=${result}" >> "${GITHUB_OUTPUT}"
+            echo "done_present=false" >> "${GITHUB_OUTPUT}"
+            exit 1
+          fi
+
+          result=$(printf 'prefix=%s, done_added=%s, removed=[%s], cleanup_failed=false, verification_failed=false, rollback_failed=false' \
+            "${PREFIX}" "${added_done}" "${removed_labels}")
           echo "result=${result}" >> "${GITHUB_OUTPUT}"
           echo "done_present=${done_present}" >> "${GITHUB_OUTPUT}"
 
       - name: Issue を冪等にクローズ
         id: close-issue
-        if: steps.resolve.outputs.issue_number != '' && steps.detect-prefix.outputs.prefix != ''
+        if: always() && steps.resolve.outputs.issue_number != '' && steps.detect-prefix.outputs.prefix != ''
         env:
           ISSUE_NUMBER: ${{ steps.resolve.outputs.issue_number }}
+          PREFIX: ${{ steps.detect-prefix.outputs.prefix }}
           DONE_PRESENT: ${{ steps.transition-labels.outputs.done_present }}
         run: |
           set -euo pipefail
@@ -264,6 +441,50 @@ jobs:
             echo "done ラベル未確認のため、クローズをスキップします。"
             echo "close_status=${close_status}" >> "${GITHUB_OUTPUT}"
             exit 0
+          fi
+
+          fetch_labels() {
+            local issue_json
+            issue_json=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" 2>/dev/null) || return 1
+            printf '%s' "${issue_json}" | python3 -c "
+          import json, sys
+          issue = json.load(sys.stdin)
+          labels = issue.get('labels')
+          if not isinstance(labels, list):
+              raise ValueError('labels must be a list')
+          names = []
+          for label in labels:
+              if not isinstance(label, dict) or not isinstance(label.get('name'), str):
+                  raise ValueError('each label must have a string name')
+              names.append(label['name'])
+          print('\\n'.join(names))
+          "
+          }
+
+          has_label() {
+            local labels="${1}"
+            local target="${2}"
+            printf '%s\n' "${labels}" | grep -Fxq -- "${target}"
+          }
+
+          verify_g_lbl() {
+            local labels="${1}"
+            has_label "${labels}" "${PREFIX}:done" && \
+              ! has_label "${labels}" "${PREFIX}:running" && \
+              ! has_label "${labels}" "${PREFIX}:blocked"
+          }
+
+          rollback_done=false
+          if ! current_labels=$(fetch_labels) || ! verify_g_lbl "${current_labels}"; then
+            if [ -z "${current_labels:-}" ] || has_label "${current_labels}" "${PREFIX}:done"; then
+              if ! gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --remove-label "${PREFIX}:done" >/dev/null 2>&1; then
+                rollback_done=true
+              fi
+            fi
+            close_status="g-lbl-invalid(rollback_failed=${rollback_done})"
+            echo "close_status=${close_status}" >> "${GITHUB_OUTPUT}"
+            echo "::warning::close直前の G-LBL 再検証に失敗したため、Issueをクローズしません。"
+            exit 1
           fi
 
           issue_state=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.state' 2>/dev/null || echo '')
@@ -294,10 +515,29 @@ jobs:
             fi
           fi
 
+          if [ "${close_status}" = "closed" ]; then
+            post_close_rollback_failed=false
+            post_close_reopen_failed=false
+            if ! post_close_labels=$(fetch_labels) || ! verify_g_lbl "${post_close_labels}"; then
+              if [ -z "${post_close_labels:-}" ] || has_label "${post_close_labels}" "${PREFIX}:done"; then
+                if ! gh issue edit "${ISSUE_NUMBER}" --repo "${REPO}" --remove-label "${PREFIX}:done" >/dev/null 2>&1; then
+                  post_close_rollback_failed=true
+                fi
+              fi
+              if ! gh issue reopen "${ISSUE_NUMBER}" --repo "${REPO}" >/dev/null 2>&1; then
+                post_close_reopen_failed=true
+              fi
+              close_status="post-close-g-lbl-invalid(rollback_failed=${post_close_rollback_failed},reopen_failed=${post_close_reopen_failed})"
+              echo "close_status=${close_status}" >> "${GITHUB_OUTPUT}"
+              echo "::warning::close直後の G-LBL 再検証に失敗しました。手動確認が必要です。"
+              exit 1
+            fi
+          fi
+
           echo "close_status=${close_status}" >> "${GITHUB_OUTPUT}"
 
       - name: 処理結果コメントを Issue に投稿
-        if: steps.resolve.outputs.issue_number != ''
+        if: always() && steps.resolve.outputs.issue_number != ''
         env:
           ISSUE_NUMBER: ${{ steps.resolve.outputs.issue_number }}
           PREFIX: ${{ steps.detect-prefix.outputs.prefix }}

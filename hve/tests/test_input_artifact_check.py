@@ -134,8 +134,8 @@ class TestCheckStepInputArtifactsMissing(unittest.TestCase):
         step = _make_step(consumed_artifacts=["app_catalog"])
         result = check_step_input_artifacts(step, existing_artifacts={})
         item = result["missing"][0]
-        # app_catalog は aas が生成する（確認済み）
-        self.assertEqual(item["next_workflow"], "aas")
+        # app_catalog は ard (Step 4.1) が生成する（確認済み）
+        self.assertEqual(item["next_workflow"], "ard")
 
     def test_missing_knowledge_next_workflow_is_akm(self) -> None:
         step = _make_step(consumed_artifacts=["knowledge"])
@@ -350,6 +350,7 @@ _KNOWN_ARTIFACT_KEYS = frozenset([
     "service_specs", "screen_specs", "test_specs",
     "src_files", "test_files", "knowledge",
     "agent_specs", "dataflow_specs", "doc_generated",
+    "app_requirements",
 ])
 
 
