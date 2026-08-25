@@ -1757,20 +1757,62 @@ class TestWorkIQAuthPreflight(unittest.TestCase):
         with mock.patch("workiq.workiq_login", return_value=True):
             self.assertTrue(_run_workiq_auth_preflight(args, cfg))
 
-    def test_non_interactive_failure_returns_false(self) -> None:
+    def test_non_interactive_failure_disables_workiq_and_continues(self) -> None:
+        """FR-CLI-81: 非対話での認証失敗は停止させず、Work IQ を無効化して続行する。"""
         args, cfg = self._make_config(["orchestrate", "-w", "aas", "--workiq"])
         with mock.patch("workiq.workiq_login", return_value=False), \
              mock.patch("sys.stdin.isatty", return_value=False):
-            self.assertFalse(_run_workiq_auth_preflight(args, cfg))
+            self.assertTrue(_run_workiq_auth_preflight(args, cfg))
+
+    def test_non_interactive_failure_clears_all_workiq_flags(self) -> None:
+        """FR-CLI-81: 無効化は Work IQ 関連 5 フラグすべてを対象とする。"""
+        args, cfg = self._make_config(
+            [
+                "orchestrate", "-w", "akm",
+                "--workiq", "--workiq-draft", "--workiq-akm-review",
+                "--sources", "qa,workiq",
+            ]
+        )
+        # 無効化前に 5 フラグすべてが有効であることを確認し、assertion の空振りを防ぐ。
+        self.assertTrue(cfg.workiq_enabled)
+        self.assertTrue(cfg.is_workiq_qa_enabled())
+        self.assertTrue(cfg.is_workiq_akm_review_enabled())
+        self.assertTrue(cfg.is_workiq_akm_ingest_enabled())
+        self.assertTrue(cfg.workiq_draft_mode)
+        with mock.patch("workiq.workiq_login", return_value=False), \
+             mock.patch("sys.stdin.isatty", return_value=False):
+            self.assertTrue(_run_workiq_auth_preflight(args, cfg))
+        self.assertFalse(cfg.workiq_enabled)
+        self.assertFalse(cfg.workiq_qa_enabled)
+        self.assertFalse(cfg.workiq_akm_review_enabled)
+        self.assertFalse(cfg.workiq_akm_ingest_enabled)
+        self.assertFalse(cfg.workiq_draft_mode)
+
+    def test_non_interactive_failure_strips_workiq_from_params(self) -> None:
+        """FR-CLI-81: `params` の Work IQ 由来の値も同時にクリアする。"""
+        args, cfg = self._make_config(
+            ["orchestrate", "-w", "akm", "--workiq", "--sources", "qa,workiq,original-docs"]
+        )
+        params = {
+            "sources": "qa,workiq,original-docs",
+            "workiq_akm_ingest_dxx": ["D01"],
+            "ard_workiq_enabled": True,
+        }
+        with mock.patch("workiq.workiq_login", return_value=False), \
+             mock.patch("sys.stdin.isatty", return_value=False):
+            self.assertTrue(_run_workiq_auth_preflight(args, cfg, params))
+        self.assertEqual(params["sources"], "qa,original-docs")
+        self.assertEqual(params["workiq_akm_ingest_dxx"], [])
+        self.assertFalse(params["ard_workiq_enabled"])
 
     def test_non_interactive_failure_reports_request_source(self) -> None:
-        """非対話での失敗時に Work IQ を要求した設定名を出力する。"""
+        """FR-CLI-81: 無効化時に Work IQ を要求した設定名を出力する。"""
         args, cfg = self._make_config(["orchestrate", "-w", "aas", "--workiq"])
         buf = io.StringIO()
         with mock.patch("workiq.workiq_login", return_value=False), \
              mock.patch("sys.stdin.isatty", return_value=False), \
              contextlib.redirect_stderr(buf):
-            self.assertFalse(_run_workiq_auth_preflight(args, cfg))
+            self.assertTrue(_run_workiq_auth_preflight(args, cfg))
         stderr_text = buf.getvalue()
         self.assertIn("workiq_enabled", stderr_text)
         self.assertIn("workiq_qa_enabled", stderr_text)
@@ -1805,6 +1847,15 @@ class TestWorkIQAuthPreflight(unittest.TestCase):
         self.assertFalse(cfg.workiq_draft_mode)
         self.assertEqual(params["sources"], "qa,original-docs")
         self.assertEqual(params["workiq_akm_ingest_dxx"], [])
+
+    def test_interactive_failure_declined_stops_the_run(self) -> None:
+        """FR-CLI-81: 対話端末で拒否された場合は従来どおり停止する。"""
+        args, cfg = self._make_config(["orchestrate", "-w", "aas", "--workiq"])
+        cfg.force_interactive = True
+        with mock.patch("workiq.workiq_login", return_value=False), \
+             mock.patch("builtins.input", return_value="n"):
+            self.assertFalse(_run_workiq_auth_preflight(args, cfg))
+        self.assertTrue(cfg.workiq_enabled)
 
     def test_cmd_orchestrate_stops_when_workiq_preflight_fails(self) -> None:
         with mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \

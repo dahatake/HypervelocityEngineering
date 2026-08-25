@@ -601,7 +601,10 @@ class TestAzureFreeWorkflowMcpFilter(unittest.TestCase):
         """フィルタ自体が正しくても、配線が外れれば削減は効かない。"""
         import inspect
 
-        from runner import _create_session_with_auto_reasoning_fallback
+        from runner import (
+            _apply_repository_mcp_scope,
+            _create_session_with_auto_reasoning_fallback,
+        )
 
         self.assertIn(
             "workflow_id",
@@ -609,9 +612,16 @@ class TestAzureFreeWorkflowMcpFilter(unittest.TestCase):
         )
         source = inspect.getsource(_create_session_with_auto_reasoning_fallback)
         code = "\n".join(line.split("#", 1)[0] for line in source.splitlines())
-        block = code[code.index("_declared_mcp_servers"):]
-        self.assertIn("_filter_mcp_servers_for_session(", block)
+        block = code[code.index("_apply_repository_mcp_scope"):]
         self.assertIn("workflow_id=workflow_id", block)
+
+        # 縮約の単一実装（FR-MAINT-07）側でフィルタが適用されていること。
+        helper = "\n".join(
+            line.split("#", 1)[0]
+            for line in inspect.getsource(_apply_repository_mcp_scope).splitlines()
+        )
+        self.assertIn("_filter_mcp_servers_for_session(", helper)
+        self.assertIn("workflow_id=workflow_id", helper)
 
         run_step_source = inspect.getsource(StepRunner.run_step)
         call = run_step_source[run_step_source.index("self._create_main_session("):]

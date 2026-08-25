@@ -214,6 +214,18 @@ class TestAssets:
         assert f"_C12{removed_workflow}" not in content
         assert removed_workflow not in content
 
+    def test_qa_answer_dialog_is_translated(self) -> None:
+        """FR-GUI-29: QA 回答ダイアログの文言が翻訳カタログに載っていること。"""
+        sources = (_I18N_DIR / "translations.pro").read_text(encoding="utf-8")
+        assert "../qa_answer_dialog.py" in sources
+
+        content = (_I18N_DIR / "hve_gui_en_US.ts").read_text(encoding="utf-8")
+        assert '<context>\n    <name>QAAnswerDialog</name>' in content
+        context = content.split("<name>QAAnswerDialog</name>", 1)[1].split("</context>", 1)[0]
+        assert "<source>質問票をコピー</source>" in context
+        assert "<source>Work IQ 用プロンプトをコピー</source>" in context
+        assert 'type="unfinished"' not in context
+
     def test_compiled_catalog_is_not_stale(self) -> None:
         """`.ts` だけ更新して `.qm` を再生成し忘れると英語 UI に反映されない。"""
         from PySide6.QtWidgets import QApplication
@@ -233,6 +245,13 @@ class TestAssets:
                 == "Select design document folder"
             )
             assert app.translate("_C17ADI", "分析の深さ") == "Analysis depth"
+            assert (
+                app.translate("QAAnswerDialog", "質問票をコピー") != "質問票をコピー"
+            )
+            assert (
+                app.translate("QAAnswerDialog", "Work IQ 用プロンプトをコピー")
+                != "Work IQ 用プロンプトをコピー"
+            )
             hint = hc._TOOLSEARCH_POLICY_HELP["limit"].short
             assert app.translate("help_content", hint) != hint
         finally:

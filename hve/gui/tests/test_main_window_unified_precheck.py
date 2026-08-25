@@ -87,3 +87,25 @@ def test_unified_precheck_off_skips_dialog_when_no_gaps(tmp_path: Path) -> None:
 
     assert result is True
     mock_dlg_cls.assert_not_called()
+
+
+def test_unified_precheck_reports_startup_args_error(tmp_path: Path) -> None:
+    _ensure_app()
+    fake_self = _make_self(tmp_path)
+    fake_self._page_options.build_args_for_workflow.side_effect = ValueError(
+        "invalid startup settings"
+    )
+
+    with patch(
+        "hve.gui.main_window.QMessageBox.warning"
+    ) as warning, patch(
+        "hve.autopilot.precheck_runner.run_step1_precheck"
+    ) as run_precheck:
+        result = MainWindow._run_step1_unified_precheck(
+            fake_self, ["aas"], autopilot_mode=False
+        )
+
+    assert result is False
+    warning.assert_called_once()
+    assert "invalid startup settings" in str(warning.call_args.args)
+    run_precheck.assert_not_called()

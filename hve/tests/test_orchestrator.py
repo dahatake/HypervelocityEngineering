@@ -853,7 +853,11 @@ class TestAdiQuestionnairePostDag(unittest.TestCase):
                             "branch": "main",
                             "selected_steps": ["1.1", "1.2"],
                         },
-                        config=self._config(create_pr=True),
+                        config=self._config(
+                            create_pr=True,
+                            repo="owner/repo",
+                            github_token="test-token",
+                        ),
                     ))
             finally:
                 os.chdir(previous)
@@ -1954,7 +1958,13 @@ class TestRequestCodeReviewSDK(unittest.TestCase):
 
     def test_dry_run_create_issues_shows_new_flow(self) -> None:
         """dry_run=True + create_issues=True で新フロー表示がエラーなく動作することを確認。"""
-        cfg = SDKConfig(dry_run=True, quiet=True, create_issues=True)
+        cfg = SDKConfig(
+            dry_run=True,
+            quiet=True,
+            create_issues=True,
+            repo="owner/repo",
+            github_token="test-token",
+        )
         result = _run(run_workflow(
             workflow_id="aas",
             params={"branch": "main", "selected_steps": []},
@@ -3615,6 +3625,8 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
             auto_self_improve=True,
             self_improve_skip=False,
             create_pr=True,
+            repo="owner/repo",
+            github_token="test-token",
             run_id="run-si-post-order",
         )
         mock_console = unittest.mock.MagicMock()
@@ -3656,6 +3668,8 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
             auto_self_improve=True,
             self_improve_skip=False,
             create_pr=True,
+            repo="owner/repo",
+            github_token="test-token",
             run_id="run-si-blocked",
         )
         fake_loop = unittest.mock.MagicMock()

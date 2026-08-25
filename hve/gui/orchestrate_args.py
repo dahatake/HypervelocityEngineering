@@ -129,6 +129,8 @@ class OrchestrateArgs:
     ignore_paths: List[str] = field(default_factory=list)
     repo: Optional[str] = None
     issue_title: Optional[str] = None
+    # FR-GUI-25: 既存 Issue を Root Issue として使う場合の Issue 番号。
+    issue_number: Optional[int] = None
 
     # ------------------------------------------------------------------
     # C6: 出力制御 (L860-L926)
@@ -386,6 +388,8 @@ class OrchestrateArgs:
             argv += ["--repo", self.repo]
         if self.issue_title:
             argv += ["--issue-title", self.issue_title]
+        if self.issue_number:
+            argv += ["--issue-number", str(self.issue_number)]
 
         # --- C6 ---
         if self.verbose:

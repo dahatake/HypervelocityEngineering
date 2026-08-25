@@ -159,6 +159,8 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
         "ignore_paths": "ignore_paths",
         "repo": "repo",
         "issue_title": "issue_title",
+        "issue_mode": "issue_mode",
+        "issue_number": "issue_number",
         # 旧 C9 / C11 から移動
         "branch": "branch",
         "enable_auto_merge": "enable_auto_merge",

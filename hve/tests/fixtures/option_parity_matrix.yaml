@@ -52,6 +52,7 @@ sdkconfig_internal_fields:
   - excluded_tools                  # SDK ツール除外リスト（内部、CLI/環境変数経由）
   - github_token                    # 認証トークン（インフラ）
   - ignore_paths                    # git add 除外パス（ファイル管理）
+  - issue_number                    # 既存 Issue への連携（FR-GUI-25、CLI/GUI 固有）
   - log_level                       # CLI ログレベル（出力制御）
   - max_diff_chars                  # git diff 最大文字数（チューニング）
   - max_parallel                    # 並列実行上限（チューニング）

@@ -7,8 +7,22 @@ FR-CLI-34: OrchestrateArgs.to_argv() の delete_local_merged_branch 変換テス
 from __future__ import annotations
 
 import dataclasses
+import os
+
+import pytest
 
 from hve.gui.orchestrate_args import OrchestrateArgs
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+
+@pytest.fixture(scope="module")
+def qapp_offscreen():
+    PySide6 = pytest.importorskip("PySide6")  # noqa: F841
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication([])
+    yield app
 
 
 class TestDeleteLocalMergedBranchToArgv:
@@ -117,3 +131,63 @@ class TestDataDeployBootstrapToArgv:
         names = {f.name for f in dataclasses.fields(OrchestrateArgs)}
         for name in self._FIELDS:
             assert name not in names
+
+
+class TestIssueNumberToArgv:
+    """FR-GUI-25: issue_number → --issue-number 変換テスト。"""
+
+    def test_default_emits_no_flag(self) -> None:
+        argv = OrchestrateArgs(workflow="aas").to_argv()
+        assert "--issue-number" not in argv
+
+    def test_issue_number_appended(self) -> None:
+        argv = OrchestrateArgs(
+            workflow="aas", create_issues=True, issue_number=1234
+        ).to_argv()
+        assert argv[argv.index("--issue-number") + 1] == "1234"
+
+    def test_zero_is_not_emitted(self) -> None:
+        """0 は有効な Issue 番号ではないため出力しない。"""
+        argv = OrchestrateArgs(workflow="aas", issue_number=0).to_argv()
+        assert "--issue-number" not in argv
+
+
+class TestIssueModeToArgs:
+    """FR-GUI-25: C5 セクションから OrchestrateArgs への反映。"""
+
+    def _section(self):
+        from hve.gui.page_options import _C5IssuePR
+
+        return _C5IssuePR()
+
+    def test_new_mode_does_not_set_issue_number(self, qapp_offscreen) -> None:
+        section = self._section()
+        section.issue_number.setText("55")
+        args = OrchestrateArgs(workflow="aas")
+        section.to_args(args)
+        assert args.issue_number is None
+
+    def test_existing_mode_sets_issue_number(self, qapp_offscreen) -> None:
+        section = self._section()
+        section.issue_mode.setCurrentIndex(section.issue_mode.findData("existing"))
+        section.issue_number.setText("55")
+        args = OrchestrateArgs(workflow="aas")
+        section.to_args(args)
+        assert args.issue_number == 55
+
+    def test_existing_mode_with_blank_number_is_none(self, qapp_offscreen) -> None:
+        section = self._section()
+        section.issue_mode.setCurrentIndex(section.issue_mode.findData("existing"))
+        section.issue_number.setText("")
+        args = OrchestrateArgs(workflow="aas")
+        section.to_args(args)
+        assert args.issue_number is None
+
+    def test_existing_mode_does_not_send_issue_title(self, qapp_offscreen) -> None:
+        """既存 Issue 連携ではタイトル上書きを送らない。"""
+        section = self._section()
+        section.issue_title.setText("上書きタイトル")
+        section.issue_mode.setCurrentIndex(section.issue_mode.findData("existing"))
+        args = OrchestrateArgs(workflow="aas")
+        section.to_args(args)
+        assert args.issue_title is None

@@ -10,6 +10,13 @@ CLI ↔ GUI IPC フローでの責務:
     - [全て既定値で進める] / [キャンセル] はそれぞれ `adopt_all_defaults()` / `cancelled()`
       シグナルを発火する。
 
+クリップボードコピー（FR-GUI-29）:
+    - [質問票をコピー] は `QAMerger.render_merged()` の出力をそのまま複製する。
+    - [Work IQ 用プロンプトをコピー] は `get_workiq_prompt_template("qa")` の
+      `{target_content}` へ上記の質問票を埋め込んだものを複製する。
+    - いずれもクリップボードへ書くだけで、Work IQ への送信・認証・ MCP 呼び出しは行わない。
+    - 整形とテンプレートは既存の単一実装を呼ぶ（FR-MAINT-07）。GUI 側へ複製しない。
+
 表形式 UI（C 仕様: 全質問を 1 つの表に並べる）:
     - 1 行 = 1 質問
     - 列: [No.] [優先度] [分類] [質問文] [背景と根拠] [判断の観点] [選択肢] [既定値候補] [理由] [回答]
@@ -21,7 +28,7 @@ CLI ↔ GUI IPC フローでの責務:
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
@@ -40,12 +47,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .copy_button import CopyButton
 from .theme import token
 
 try:
-    from ..qa_merger import QADocument, QAQuestion
+    from ..qa_merger import QADocument, QAMerger, QAQuestion
 except ImportError:  # pragma: no cover
-    from qa_merger import QADocument, QAQuestion  # type: ignore[no-redef]
+    from qa_merger import QADocument, QAMerger, QAQuestion  # type: ignore[no-redef]
+
+try:
+    from ..workiq import get_workiq_prompt_template
+except ImportError:  # pragma: no cover
+    from workiq import get_workiq_prompt_template  # type: ignore[no-redef]
 
 
 _PRIORITY_TOKENS = {
@@ -207,6 +220,21 @@ class QAAnswerDialog(QDialog):
 
         # ボタンバー
         btn_bar = QHBoxLayout()
+        self._copy_questionnaire_btn = self._make_copy_button(
+            self._questionnaire_text,
+            self.tr("質問票をコピー"),
+            self.tr("質問票の全文をクリップボードにコピーします"),
+        )
+        btn_bar.addWidget(self._copy_questionnaire_btn)
+        self._copy_workiq_prompt_btn = self._make_copy_button(
+            self._workiq_prompt_text,
+            self.tr("Work IQ 用プロンプトをコピー"),
+            self.tr("Work IQ へ貼り付けるプロンプトをクリップボードにコピーします"),
+        )
+        btn_bar.addWidget(self._copy_workiq_prompt_btn)
+        if not qa_document.questions:
+            self._copy_questionnaire_btn.setEnabled(False)
+            self._copy_workiq_prompt_btn.setEnabled(False)
         self._defaults_btn = QPushButton(self.tr("全て既定値で進める"))
         self._defaults_btn.clicked.connect(self._on_defaults)
         btn_bar.addWidget(self._defaults_btn)
@@ -219,6 +247,38 @@ class QAAnswerDialog(QDialog):
         self._submit_btn.clicked.connect(self._on_submit)
         btn_bar.addWidget(self._submit_btn)
         outer.addLayout(btn_bar)
+
+    # ------------------------------------------------------------------
+    # クリップボードコピー（FR-GUI-29）
+    # ------------------------------------------------------------------
+
+    def _make_copy_button(
+        self,
+        get_text: Callable[[], str],
+        label: str,
+        description: str,
+    ) -> CopyButton:
+        """ラベル併記のコピーボタンを作る。
+
+        `CopyButton` の既定 `toolButtonStyle` は `ToolButtonIconOnly` で、そのまま
+        2 個並べると利用者が区別できない。共通部品の既定を変えると他の
+        呼び出しへ波及するため、ここでだけ表示形式を上書きする。
+        """
+        btn = CopyButton(get_text=get_text, tooltip=description, parent=self)
+        btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        btn.setText(label)
+        btn.setAccessibleName(description)
+        return btn
+
+    def _questionnaire_text(self) -> str:
+        """質問票の Markdown 全文。整形は `QAMerger` の単一実装を使う。"""
+        return QAMerger.render_merged(self._doc)
+
+    def _workiq_prompt_text(self) -> str:
+        """Work IQ へ貼り付けるプロンプト。テンプレートは `workiq` の単一実装を使う。"""
+        return get_workiq_prompt_template("qa").format(
+            target_content=self._questionnaire_text()
+        )
 
     # ------------------------------------------------------------------
     # テーブル構築

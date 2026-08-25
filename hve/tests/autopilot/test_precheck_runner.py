@@ -146,9 +146,10 @@ def test_runner_autopilot_mode_no_se_workflow_skips_catalog_check(tmp_path: Path
 
 
 def test_runner_no_legacy_setting_category(tmp_path: Path) -> None:
-    """v2: SETTING / AUTH カテゴリは生成されない（enum 値自体は互換性のため温存）。
+    """起動引数なしでは旧 SETTING / AUTH collector を復活させない。
 
-    生成され得るのは FILE / WIZARD_INPUT のみ。
+    FR-CLI-82 の GitHub 設定判定は ``startup_args_by_workflow`` が渡された場合だけ
+    追加されるため、この既存経路で生成され得るのは FILE / WIZARD_INPUT のみ。
     """
     r = run_step1_precheck(
         ["ard"], tmp_path,

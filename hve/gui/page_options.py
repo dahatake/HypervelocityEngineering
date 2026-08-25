@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from PySide6.QtCore import Qt, QStringListModel, QT_TRANSLATE_NOOP, Signal
-from PySide6.QtGui import QDoubleValidator
+from PySide6.QtGui import QDoubleValidator, QIntValidator
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -1585,7 +1585,8 @@ class _C4WorkIQ(QWidget):
         self.workiq_draft = QCheckBox(self.tr("有効化"))
         layout.addWidget(_LabeledField(
             title=self.tr("Work IQ 回答ドラフト作成"),
-            description=self.tr("QA フェーズで質問ごとに Work IQ 回答ドラフトを生成します（既定: 無効）。"),
+            description=self.tr("QA フェーズで質問ごとに Work IQ 回答ドラフトを生成します（既定: 無効）。"
+                "本項目を有効にすると、上の「Work IQ を有効化」が未チェックでも Work IQ 連携全体が有効になります。"),
             input_widget=self.workiq_draft,
         ))
 
@@ -1936,6 +1937,31 @@ class _C5IssuePR(QWidget):
         _repo_fetch_row.addWidget(self.repo_fetch_status, 1)
         _repo_group.addLayout(_repo_fetch_row)
 
+        self.issue_mode = QComboBox()
+        self.issue_mode.addItem(self.tr("新規作成"), "new")
+        self.issue_mode.addItem(self.tr("既存 Issue に連携"), "existing")
+        _repo_group.addWidget(_LabeledField(
+            title=self.tr("Root Issue の扱い"),
+            description=(
+                self.tr("「新規作成」は従来どおり Root Issue を作成します。"
+                "「既存 Issue に連携」は指定した Issue を Root Issue として使い、"
+                "Sub-Issue の親と PR の closing keyword に用います（既定: 新規作成）。")
+            ),
+            input_widget=self.issue_mode,
+        ))
+
+        self.issue_number = QLineEdit()
+        self.issue_number.setPlaceholderText("1234")
+        self.issue_number.setValidator(QIntValidator(1, 2_147_483_647, self))
+        _repo_group.addWidget(_LabeledField(
+            title=self.tr("連携する Issue 番号"),
+            description=(
+                self.tr("「既存 Issue に連携」を選んだときの Issue 番号。"
+                "取得できない番号を指定した場合、実行は中止され新規作成へは戻りません。")
+            ),
+            input_widget=self.issue_number,
+        ))
+
         self.issue_title = QLineEdit()
         _repo_group.addWidget(_LabeledField(
             title=self.tr("Issue タイトル（上書き）"),
@@ -1945,6 +1971,8 @@ class _C5IssuePR(QWidget):
             ),
             input_widget=self.issue_title,
         ))
+        self.issue_mode.currentIndexChanged.connect(self._on_issue_mode_changed)
+        self._on_issue_mode_changed()
 
         self._cloud_session_repository_owner: Optional[str] = None
         self._cloud_session_repository_name: Optional[str] = None
@@ -2074,10 +2102,15 @@ class _C5IssuePR(QWidget):
             input_widget=self.cloud_session_subtask_overrides,
         ))
 
+    def _on_issue_mode_changed(self, *_args: object) -> None:
+        """Root Issue の扱いに応じて番号入力とタイトル上書きの活性を切り替える。"""
+        existing = self.issue_mode.currentData() == "existing"
+        self.issue_number.setEnabled(existing)
+        self.issue_title.setEnabled(not existing)
+
     def _on_fetch_repo_clicked(self) -> None:
         """「リポジトリ取得」押下時: repo metadata を非同期取得する。"""
         self._start_repo_metadata_fetch(auto=False)
-
     def _start_repo_metadata_fetch(self, *, auto: bool) -> None:
         repo_text = self.repo.text().strip()
         self.fetch_repo_button.setEnabled(False)
@@ -2274,7 +2307,17 @@ class _C5IssuePR(QWidget):
         text = self.ignore_paths.text().strip()
         args.ignore_paths = text.split() if text else []
         args.repo = self.repo.text().strip() or None
-        args.issue_title = self.issue_title.text().strip() or None
+        use_existing_issue = self.issue_mode.currentData() == "existing"
+        # FR-GUI-25: 既存 Issue 連携時は Root Issue タイトルの上書きを送らない。
+        args.issue_title = (
+            None if use_existing_issue else (self.issue_title.text().strip() or None)
+        )
+        raw_issue_number = self.issue_number.text().strip()
+        args.issue_number = (
+            int(raw_issue_number)
+            if use_existing_issue and raw_issue_number.isdigit()
+            else None
+        )
         # 旧 _C9BranchSteps / _C11AKM から移動
         args.branch = self.branch.text().strip() or "main"
         args.enable_auto_merge = self.enable_auto_merge.isChecked()
@@ -3512,6 +3555,15 @@ class OptionsPage(QWidget):
                     "github.com で CI/CD を実行するには GitHub CLI 認証が必要です。"
                     "表示された「GitHub CLI でログイン」を実行してから再度開始してください。"
                 )
+        # FR-GUI-25: 既存 Issue へ連携する場合、番号未入力のまま新規作成へ落とさない。
+        if (
+            self.c5.create_issues.isChecked()
+            and self.c5.issue_mode.currentData() == "existing"
+            and not self.c5.issue_number.text().strip()
+        ):
+            return False, self.tr(
+                "「既存 Issue に連携」を選んだ場合は Issue 番号を入力してください。"
+            )
         # ARD: company-name または target-business のいずれかは推奨だが、強制はしない
         # （CLI 仕様上は未指定でも動作可能なため）
         # 実行は許可するが警告ステータスを表示できる構造を維持

@@ -18,6 +18,7 @@
 - [起動](#起動)
 - [2 ステップ操作ガイド](#2-ステップ操作ガイド)
 - [Copilot パネル（対話と実行ジョブ連携）](#copilot-パネル対話と実行ジョブ連携)
+- [GitHub Issue / Pull Request](#github-issue-pull-request)
 - [Plugin / MCP Server 認証](#plugin-mcp-server-認証)
 - [データフロー](#データフロー)
 - [複数セッションの同時起動](#複数セッションの同時起動)
@@ -240,7 +241,7 @@ RoyalytyService2ndGen/
 
 - 選択中ワークフローの ID・正式名称・短い説明を下部に表示。
 - 画面左下の **「実行ステップ（チェック ON のみ実行対象）」** では、実行したいステップだけを個別に ON/OFF できます。各チェックは**単独で切り替わり、前後のステップへ自動連動しません**（依存伝播なし）。前段ステップの成果物が既に存在していれば、途中のステップ（例: `Step 2.1` の追加サービスから）だけを選んで実行できます。
-- 選択したステップが必要とする入力ファイルは、[次へ] 押下時のプランレビューで存在確認されます（未配置のファイルは提案として一覧表示されます）。
+- [次へ] 押下時の統合 precheck は、選択したステップの必須ファイル / 必須入力を `FILE` / `WIZARD_INPUT` として検査し、GitHub 書き込みを伴う実行では GitHub 連携のローカル不整合も `SETTING` / `AUTH` として表示します。起動引数の組み立てで `ValueError` になった場合は「入力エラー」を表示し、precheck や Step 2 へ進まず Step 1 に留まります。
 - 左ペインで選択後、同じ画面右ペインの「オプション選択」（下記）でオプションを設定します。
 
 ---
@@ -258,7 +259,7 @@ RoyalytyService2ndGen/
 | C1 | 基本設定  *必須 | `--model` / `--review-model` / `--qa-model` / `--reasoning-effort` 系 / `--context-tier` / `--max-parallel` / `--timeout` / `--review-timeout` / `--verbosity` / テーマ / `--additional-prompt` / `--context-max-chars` |
 | C3 | 共通設定  *必須 | `--auto-qa`（**必須選択** / 下記参照）/ **QA (質問票) 回答モード**（下記参照）/ `--auto-contents-review` / `--auto-coding-agent-review` / `--qa-akm-background-merge`（下記参照）/ `--akm-model` / `--akm-reasoning-effort` / `--akm-context-tier` / `--self-improve` 系。設定画面では `QA (質問票)` / `レビュー` / `Knowledge Management` / `自己改善 (Self Improve)` の 4 ノードへ分かれています |
 | C4 | Work IQ | `--workiq` 系（M365 メール・チャット・会議・ファイル参照。`@microsoft/workiq` プラグインのインストールが必要）。`OrchestrateArgs` は Work IQ 関連 12 フィールドを保持し、`--workiq*` 引数として CLI に渡ります（`--workiq-tenant-id` の GUI 入力欄は廃止済み。CLI 引数と環境変数 `WORKIQ_TENANT_ID` は引き続き有効） |
-| C5 | GitHub | `--create-issues` / `--create-pr` / `--repo` / `--branch` / `--enable-auto-merge` / マージ後ローカルブランチ削除 / Fleet mode / Cloud Sessions 関連 |
+| C5 | GitHub | `--create-issues` / `--create-pr` / `--repo` / **Root Issue の扱い**（新規作成 / 既存 Issue に連携、`--issue-number`。下記参照）/ `--issue-title` / `--branch` / `--enable-auto-merge` / マージ後ローカルブランチ削除 / Fleet mode / Cloud Sessions 関連 |
 | C6 | 出力制御 | `--verbose` / `--quiet` / `--show-stream` / `--log-level` / `--no-color` / `--banner` / `--screen-reader` / `--timestamp-style` / `--final-only`。**この枠の値は保存されず、起動のたびに既定値へ戻ります**（設定画面の「出力制御」ノードは撤去済み。固定したい場合は CLI 実行時に同名のフラグを指定してください。なお `--banner` は `orchestrate` では効果がありません） |
 | C7 | MCP / CLI 接続 | `--cli-path` / `--cli-url` |
 | AZURE | Azure | `--resource-group`（`default_params` を持たない必須パラメータのみ。FR-GUI-02 / FR-WF-ASDW-02） |
@@ -366,6 +367,22 @@ RoyalytyService2ndGen/
 - ユーザー回答モードは、GUI ↔ CLI 間で `.hve/qa-ipc/<uuid>/` 配下のファイルベース IPC を用います（タイムアウト: 既定 1 時間）。タイムアウト時は既定値を全採用してメインタスクを継続します。
 - [キャンセル] を押すと、subprocess を停止して orchestrate 全体を中断します（途中状態を破棄）。
 - 自由記述質問（選択肢がない質問）は現行 CLI の仕様により既定値が採用されます（GUI 上では入力欄が無効化されます）。
+
+##### QA 回答ダイアログからのクリップボードコピー
+
+QA 回答ダイアログの左下には、質問票をクリップボードへ複製する 2 つのボタンがあります。どちらも**クリップボードへ書き込むだけ**で、Work IQ への送信・ログインは行いません。
+
+| ボタン | コピーされる内容 |
+|---|---|
+| **質問票をコピー** | 表示中の質問票の Markdown 全文 |
+| **Work IQ 用プロンプトをコピー** | Work IQ へ貼り付けるためのプロンプト（上記の質問票全文を埋め込んだもの） |
+
+- コピーされるのは AI が生成した質問票そのものです。**ダイアログで入力途中の回答は含まれません。**
+- 質問が 1 件もない場合、両ボタンは無効になります。
+- **貼り付け先には質問票の本文がそのまま渡ります。** 質問票には対象業務やリポジトリの情報が含まれるため、貼り付け先を確認してから実行してください。
+- Work IQ 用プロンプトの応答は**最大 5 件**に制限されています（プロンプト側の出力スキーマによる）。質問数がこれを超える場合、回答されない質問が残ります。
+- 「QA (質問票) 自動投入」に組み込まれた Work IQ 自動連携とは送信内容が異なります。自動連携は質問を 1 件ずつ送り、重要度による絞り込みと件数上限（既定 10 件）を適用しますが、本ボタンは表示中の全質問を 1 つの表としてまとめて渡します。
+- 質問票の表セル内の改行は `<br>`、記号 `|` は `&#124;` として出力されます（表形式を保つための変換）。貼り付け先でそのまま表示される点に注意してください。
 
 #### 共通設定: Knowledge Management 用モデル / コンテキスト階層
 
@@ -528,18 +545,87 @@ VS Code 固有の実行面は対象外です。Copilot CLI が提供する範囲
 
 ---
 
+<a id="github-issue-pull-request"></a>
+
+## GitHub Issue / Pull Request
+
+ヘッダー右上の **[GitHub]** ボタンで、Issue と Pull Request を閲覧・編集する別ウィンドウを開きます。設定ウィンドウと同じく非モーダルで、ワークフロー実行中でも使えます。
+
+先頭の **リポジトリ** 欄は `owner/repo` を受け付け、両タブで共有されます。未入力の場合は `REPO` 環境変数、次いでローカルの `git remote origin` から推定します。
+
+### Issue タブ
+
+| できること | 操作 |
+|---|---|
+| 一覧の取得・絞り込み | 「状態」で オープン / クローズ / すべて を選び **[更新]** |
+| 詳細の閲覧 | 一覧から Issue を選択（番号・状態・作成者・ラベル・担当者・本文・URL） |
+| タイトル / 本文の編集 | 入力後に **[タイトル / 本文を保存]** |
+| クローズ / 再オープン | **[Issue をクローズ]** / **[Issue を再オープン]** |
+| コメントの閲覧・投稿 | コメント一覧を確認し、下部の入力欄から **[コメントを投稿]** |
+| 自分のコメントの編集 | コメントを選択して編集し **[コメントを更新]**（他人のコメントは編集不可） |
+
+### Pull Request タブ
+
+| できること | 操作 |
+|---|---|
+| 一覧の取得・絞り込み | 「状態」を選び **[更新]** |
+| 詳細の閲覧 | 番号・状態（merged / draft を含む）・作成者・head → base・本文・URL |
+| 変更ファイルの確認 | 「変更ファイル」一覧（パスと status） |
+| コメントの閲覧・投稿 | 会話コメントを確認し、**[コメントを投稿]** |
+
+### この画面で提供しないもの
+
+| 提供しない機能 | 理由 |
+|---|---|
+| Pull Request の新規作成 | PR 作成は `--create-pr` / `--create-issues` 経路が担います。同経路は PR 作成前に必ずローカル作業ブランチを作成して checkout します（下記） |
+| 差分の行単位レビューコメント / Approve / Request changes | 会話コメントのみを対象とします |
+| ラベル・担当者・マイルストーン・リアクション・Projects の編集 | 閲覧のみです（ラベル・担当者は Issue 詳細に表示） |
+| 一覧の自動更新 | GitHub API のレート制限を不要に消費しないため、更新は **[更新]** 押下時のみです |
+
+### Root Issue を新規作成する / 既存 Issue に連携する
+
+設定 → GitHub → 「リポジトリ / Issue 設定」の **「Root Issue の扱い」** で選びます。
+
+| 選択 | 振る舞い |
+|---|---|
+| **新規作成**（既定） | 従来どおり Root Issue を作成します。「Issue タイトル（上書き）」が使えます |
+| **既存 Issue に連携** | 「連携する Issue 番号」の Issue を Root Issue として使います。Sub-Issue はその Issue の子として作成され、PR 本文に `Closes #<番号>` が入ります。タイトル上書きは送られません |
+
+- この選択は **「GitHub Issue を作成」を有効にしたときだけ** 効力を持ちます。CLI では `--issue-number <N>` に相当し、`--create-issues` を伴わないと警告のうえ無視されます。
+- 「既存 Issue に連携」で番号が未入力の場合、[実行 ▶] は開始されず警告が出ます。
+- 指定した番号を取得できない場合や、Pull Request の番号を指定した場合は、**実行を中止します**（Root Issue の新規作成へは戻りません）。誤った番号のまま Sub-Issue を無関係な Issue へ紐付けないためです。
+
+> **PR 作成時のブランチ**: 「GitHub Issue を作成」または「GitHub Pull Request を作成」を有効にすると、Orchestrator はベースブランチから `copilot-sdk/<prefix>-<8 桁>` 形式の作業ブランチを作成して checkout し、そのブランチで作業してから PR を作成します。ベースブランチへ直接コミットすることはありません。
+
+---
+
 <a id="plugin-mcp-server-認証"></a>
 
 ## Plugin / MCP Server 認証
 
 GUI Orchestrator は、GitHub Copilot / GitHub CLI / Work IQ の認証導線を GUI から起動できます。一方、任意の MCP Server の登録・OAuth 再認証は GitHub Copilot CLI 側で管理します。GUI は登録済み MCP Server / Plugin の一覧表示と手順案内を行います。
 
+> **一覧に出ていても、リポジトリが `.github/.mcp.json` で宣言していない MCP Server / Plugin は HVE のセッションからは使われません。** HVE は実行時に MCP の自動探索を停止し、宣言分だけをセッションへ渡します（詳細は CLI ガイドの「HVE のセッションが接続する MCP サーバー」）。Copilot CLI へインストール済みでも、認証不備などで利用できない Plugin が HVE の実行を妨げないようにするためです。
+
 ### 認証ボタンの場所
 
 - CLI: `python -m hve login` — GitHub Copilot SDK へのログインを行います（GUI に専用ボタンはありません）。
 - ステータスバー / 設定 → 基本設定: **「利用できるモデルの取得」** — ログイン済みの GitHub Copilot SDK からモデル一覧を取得しキャッシュを更新します（ログイン自体は行いません）。取得結果は隣接する **「使用するモデル」** 表示にも反映されます。
+- **GUI 起動時の自動確認** — `GH_TOKEN` / `GITHUB_TOKEN` が未設定のときだけ `gh auth token` を試し、取得できなければログインを行うか確認するダイアログを 1 回だけ表示します（下記参照）。
 - 設定 → 各サービス連携 → GitHub: **「GitHub CLI でログイン」** — `gh auth login` を埋め込み端末で実行し、この GUI セッションの `GH_TOKEN` に橋渡しします。Issue / PR 作成やブランチ取得向けです。
 - Work IQ 設定: **「Work IQ 認証確認」** — `@microsoft/workiq` の EULA / Microsoft 365 認証を確認します。
+
+### 起動時の GitHub 認証確認
+
+GUI は起動時に次の順で GitHub 認証状態を解決します。
+
+1. `GH_TOKEN` または `GITHUB_TOKEN` が設定済みなら何もしません（`gh` を起動しません）。
+2. 未設定なら `gh auth token` を試し、取得できたトークンをこの GUI セッションの `GH_TOKEN` へ注入します。
+3. 取得できなかった場合に限り、**「今すぐ `gh auth login` を実行しますか？」** の確認ダイアログを 1 回だけ表示します。
+
+確認ダイアログで「いいえ」を選んでも GUI は通常どおり起動します。GitHub 連携を使わないワークフローはそのまま実行できます。後からログインしたい場合は設定 → GitHub → 「GitHub CLI でログイン」を使います。
+
+> GUI が `gh auth login` を勝手に実行することはありません。対話ログインは必ず利用者の明示操作で行われます。取得したトークンはセッション限りで、ディスクへ保存されません。
 
 ### 対象とする認証先
 
@@ -548,7 +634,7 @@ GUI は **GitHub Copilot CLI を唯一の信頼ソース** とし、以下の方
 | 対象 | 検出方法 | 認証方式 |
 |---|---|---|
 | GitHub Copilot | 常時必須 | `copilot login` (Device Flow)。CLI (`python -m hve login`) から実行（GUI に専用ボタンはなし） |
-| Microsoft Work IQ | Work IQ オプションを有効にするとき | `npx @microsoft/workiq accept-eula` + `ask -q ping`。GUI の「Work IQ 認証確認」から実行可能 |
+| Microsoft Work IQ | Work IQ オプションを有効にするとき | `npx @microsoft/workiq accept-eula` + `ask -q ping`。GUI の「Work IQ 認証確認」から実行可能。**実行開始時に認証確認が失敗した場合、GUI からの実行は停止せず、その実行に限って Work IQ を自動無効化して続行します**（実行ログに要求元の設定名を出力） |
 | 任意の MCP Server | `copilot mcp list --json` に登録されている全サーバ | GitHub Copilot CLI 側で登録・認証。GUI は一覧表示と認証手順表示のみ |
 | 外部 Copilot SDK サーバー | 「設定」→「CLI 接続」で `cli_url`（例: `localhost:4321`）を指定 | TCP 疎通テスト |
 
@@ -561,19 +647,22 @@ GUI は **GitHub Copilot CLI を唯一の信頼ソース** とし、以下の方
 
 GUI の MCP セクションは **登録済み一覧** です。実行時に MCP Server を Copilot SDK セッションへ渡す場合は、CLI と同じく `--mcp-config` を使います。`--mcp-config` は直接 map 形式と `.github/.mcp.json` の `mcpServers` wrapper 形式の両方を受け付けます。
 
+一覧に登録されていることと、HVE のセッションへ渡ることは別です。HVE が接続するのは `.github/.mcp.json` の宣言分と HVE 内部の Work IQ サーバーだけです。
+
 MCP Server の登録・OAuth 再認証は GitHub Copilot CLI の対話 UI で実施してください。GUI の「認証手順...」ボタンは、対象サーバーの再認証手順を表示する案内機能です。
 
 ### 操作フロー
 
 1. GitHub Copilot SDK を使う前に、必要なら CLI で **`python -m hve login`** を実行
-2. Issue / PR 作成やブランチ取得を使う場合は、必要なら **「GitHub CLI でログイン」** を押下
+2. Issue / PR 作成やブランチ取得を使う場合は、起動時の確認ダイアログでログインするか、後から **「GitHub CLI でログイン」** を押下
 3. Work IQ を使う場合は、必要なら **「Work IQ 認証確認」** を押下
 4. 任意 MCP Server は、GUI の一覧で登録状況を確認し、必要なら **「認証手順...」** で Copilot CLI 側の手順を確認
 
-### 認証が不足していた場合の挙動
+### 認証が不足していた場合の振る舞い
 
-- **実行開始前**: GUI は認証状態を自動で定期確認しません。「Work IQ 認証確認」「GitHub CLI でログイン」は利用者が押したときだけ実行されます。例外として「github.com で CI/CD を実行」を有効にしている場合のみ、[実行 ▶] 押下時に `GH_TOKEN` / `GITHUB_TOKEN` の有無を検査し、未設定なら実行を開始せず警告を表示します（`OptionsPage.validate()`）。
-- **実行開始後**: GitHub Copilot / Work IQ / Azure の認証は、GUI が起動する `hve orchestrate` サブプロセスの preflight（`hve/__main__.py`）が確認します。認証を確認できない場合はワークフローを開始せず、理由を実行ログへ出力して終了コード 1 で終了します。GUI からサブプロセスへ入力を送る経路は無いため、この preflight が対話入力を求めることはありません（FR-GUI-23）。
+- **起動時**: GitHub 認証のみ上記の手順で 1 回解決を試みます。拒否しても起動は継続します。
+- **実行開始前**: GUI は認証状態を自動で定期確認しません。「Work IQ 認証確認」「GitHub CLI でログイン」は利用者が押したときだけ実行されます。Step 1 の統合 precheck は、GitHub 書き込みを伴う実行に限り、起動時の認証解決後に現 GUI プロセスへ設定された `GH_TOKEN` / `GITHUB_TOKEN` を確認します。ここで `gh auth token` を再実行することはなく、未設定なら `AUTH` として表示して Step 1 に留まります。
+- **子プロセス起動後**: GUI が起動した `hve orchestrate` サブプロセスは、active step の解決後、最初のモデル呼び出し・ブランチ作成・DAG 構築より前に、Git remote `origin` と `refs/heads/<ベースブランチ>` の完全一致を共通 preflight で確認します。保存済みのベースブランチが remote に存在しない場合は fail-closed とし、`main`、ローカルブランチ、GitHub の既定ブランチへ自動補正しません。GitHub Copilot / Work IQ / Azure の各認証 preflight も子プロセスが担い、失敗理由を実行ログへ出力して終了します。GUI から子プロセスへ入力を送る経路は無いため、これらの preflight が対話入力を求めることはありません（FR-GUI-23）。
 - **実行中の失効**: 実行中に認証が失効した場合の自動検知・自動再認証は行いません。
 
 ### 「利用できるモデルの取得」ボタンと「使用するモデル」表示
@@ -809,7 +898,7 @@ GUI テストはヘッドレス環境では実行環境（Qt プラットフォ�
 
 ## Step 1 事前チェックスナップショット（args/パラメータ保存）
 
-Step 1「ワークフロー選択」画面で [次へ] を押し、事前チェック（FILE / WIZARD_INPUT / SETTING / AUTH 4 カテゴリ統合 precheck）とプランレビューが完了するたびに、その時点の args/パラメータ一式が JSON スナップショットとして自動保存されます。後追いデバッグ・監査・サポート問い合わせ時の再現用です。
+Step 1「ワークフロー選択」画面で [次へ] を押し、4 カテゴリ統合 precheck とプランレビューが完了するたびに、その時点の args/パラメータ一式が JSON スナップショットとして自動保存されます。後追いデバッグ・監査・サポート問い合わせ時の再現用です。
 
 ### 保存先
 
@@ -825,6 +914,20 @@ Step 1「ワークフロー選択」画面で [次へ] を押し、事前チェ�
 - 反復ごとに `<UTC timestamp>__iter<n>/` ディレクトリが新規作成される（同名ディレクトリは削除→新規作成）。
 - 最終承認時のみ `latest-accepted/` へコピーされる（毎回上書き）。
 
+### 4 カテゴリと検査境界
+
+| カテゴリ | Step 1 で表示する不足 / 不整合 |
+|---|---|
+| `FILE` | `REQUIREMENT_TABLE` 由来の必須ファイル要件で、対象パスが存在しないもの |
+| `WIZARD_INPUT` | `required_info_keys` または `StepDef.required_params` 由来の非ファイル必須入力で、未入力のもの。`default_params` で補完されるキーは対象外 |
+| `SETTING` | GitHub 書き込みを伴う実行における、`repo` の `owner/repo` 形式またはベースブランチ名の Git branch 形式の不整合 |
+| `AUTH` | GitHub 書き込みを伴う実行において、起動時の認証解決後も `GH_TOKEN` / `GITHUB_TOKEN` を解決できない状態 |
+
+- GitHub 書き込みを必要としない通常のローカル実行は `SETTING` / `AUTH` の対象外です。
+- `additional_prompt` や Work IQ 用プロンプトなどの Prompt 自由記述欄は内容検査の対象外です。空欄・自然言語・業務内容を理由に precheck は失敗しません。
+- Step 1 は UI thread で待ち時間が発生しないよう、remote `origin` と remote branch の照会を行いません。これらは GUI が起動する `hve orchestrate` 子プロセスが同じ共通 preflight を remote 検査ありで実行します。このため remote 不存在・認証・通信の結果は Step 1 の4カテゴリスナップショットには含まれず、子プロセスの実行ログに出力されます。
+- `AUTH` は「[起動時の GitHub 認証確認](#起動時の-github-認証確認)」で捕捉・注入されたセッション限りの token を参照する判定であり、同じ認証解決を再実装するものではありません。token 本体はスナップショットへ保存されません。
+
 ### 含まれる情報（1 ディレクトリあたり）
 
 | ファイル | 内容 |
@@ -833,7 +936,7 @@ Step 1「ワークフロー選択」画面で [次へ] を押し、事前チェ�
 | `selection.json` | 選択中の workflow_ids、Autopilot ON/OFF |
 | `orchestrate-args.json` | workflow_id → `OrchestrateArgs` 全フィールド（dict 化、マスク済み） |
 | `orchestrate-argv.json` | workflow_id → `python -m hve orchestrate ...` に渡される argv 配列（マスク済み） |
-| `precheck-result.json` | precheck の生結果（カテゴリ別不足項目など） |
+| `precheck-result.json` | Step 1 のローカル precheck 生結果（`FILE` / `WIZARD_INPUT` / `SETTING` / `AUTH` のカテゴリ別不足項目。remote 検査結果は含まない） |
 | `plan-review.json` | プランレビュー（実行順序・ギャップ提案など） |
 | `attachments.json` | additional_prompts / extra_provided / ARD 添付パス一覧 |
 | `auth-snapshot.json` | provider → AuthState 名（トークン本体は含めない） |

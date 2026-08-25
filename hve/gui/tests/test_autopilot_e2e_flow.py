@@ -12,7 +12,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QGroupBox
 
 from hve.autopilot.precheck_model import (
     AutopilotPrecheckResult,
@@ -46,7 +46,16 @@ def test_precheck_dialog_renders_items(qapp) -> None:
             description="not authenticated",
             remediation_hint="auth github",
         ),
+        PrecheckItem(
+            category=PrecheckCategory.SETTING,
+            workflow_id="asdw-web",
+            field_name="base_branch",
+            description="invalid branch",
+            remediation_hint="select an existing branch",
+        ),
     ]
     dlg = Step1PrecheckDialog(AutopilotPrecheckResult(items=items))
-    assert dlg.result_data().count() == 2
+    assert dlg.result_data().count() == 3
     assert dlg.windowTitle()  # タイトル設定済み
+    category_titles = [group.title() for group in dlg.findChildren(QGroupBox)]
+    assert any("設定" in title for title in category_titles)

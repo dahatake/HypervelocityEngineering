@@ -387,13 +387,13 @@ core,function,indexable_suffixes,cq/languages/__init__.py,236,"Suffixes cq may i
 core,function,resolve_language,cq/languages/__init__.py,241,Language for ``suffix``. ``read_source`` runs only for ambiguous suffixes.,,3
 core,function,extractor_for,cq/languages/__init__.py,249,"Return the dedicated extractor for ``lang``, or ``None`` when absent.",,0
 core,function,graph_extractor_for,cq/languages/__init__.py,255,"Return the reference / import extractor for ``lang``, or ``None``.",,4
-core,function,_name,cq/languages/batch.py,17,"return ts.text(node, src).lstrip(':').strip()",,20
+core,function,_name,cq/languages/batch.py,17,"return ts.text(node, src).lstrip(':').strip()",,22
 core,function,_callee,cq/languages/batch.py,21,return match.group(1) if match else '',,6
 core,function,extract,cq/languages/batch.py,42,"return ts.extract(GRAMMAR, source)",,54
 core,function,extract_ex,cq/languages/batch.py,46,"return ts.extract_with_fidelity(GRAMMAR, source)",,36
 core,function,chunk_spans,cq/languages/batch.py,50,"return ts.chunk_spans(GRAMMAR, source, lines, max_chars)",,52
 core,function,extract_graph,cq/languages/batch.py,54,"return ts.extract_graph(GRAMMAR, source)",,52
-core,function,_name,cq/languages/cfamily.py,57,"return ts.text(found, src) if found is not None else ''",,20
+core,function,_name,cq/languages/cfamily.py,57,"return ts.text(found, src) if found is not None else ''",,22
 core,function,_is_function_shaped,cq/languages/cfamily.py,67,"return ts.descend_for(declarator, frozenset({'function_declarator'}), _DECLARATOR_THROUGH) is not None",,2
 core,function,_declaration_name,cq/languages/cfamily.py,74,Variables are out of the contract's initial scope; only functions count.,,4
 core,function,_cpp_resolve,cq/languages/cfamily.py,81,"return (kind, local, qual_scope, bound)",,2
@@ -454,7 +454,7 @@ core,function,code_only,cq/languages/linescan.py,24,Return ``line`` with string 
 core,function,brace_delta,cq/languages/linescan.py,29,Net brace depth change contributed by the code on ``line``.,,4
 core,function,extract,cq/languages/lite.py,29,return tuple(found),,54
 core,function,_pester_label,cq/languages/powershell.py,31,"Label of a `Describe` / `Context` / `It` block, else `""""`.",,2
-core,function,_name,cq/languages/powershell.py,114,"return ts.text(target, src) if target is not None else ''",,20
+core,function,_name,cq/languages/powershell.py,114,"return ts.text(target, src) if target is not None else ''",,22
 core,function,_signature,cq/languages/powershell.py,121,return text.rstrip('{ ')[:200],,4
 core,function,_is_test,cq/languages/powershell.py,132,return node.type == 'pipeline',,16
 core,function,_callee,cq/languages/powershell.py,137,"return ts.text(target, src) if target is not None else ''",,6
@@ -490,7 +490,7 @@ core,function,extract_ex,cq/languages/rust.py,79,"return ts.extract_with_fidelit
 core,function,chunk_spans,cq/languages/rust.py,83,"return ts.chunk_spans(GRAMMAR, source, lines, max_chars)",,52
 core,function,extract_graph,cq/languages/rust.py,87,"return ts.extract_graph(GRAMMAR, source)",,52
 core,function,_import,cq/languages/scala.py,28,"`import a.b.{C, D}` keeps its selector clause as the canonical specifier.",,8
-core,function,_name,cq/languages/scala.py,34,"return ts.field_name(node, src)",,20
+core,function,_name,cq/languages/scala.py,34,"return ts.field_name(node, src)",,22
 core,function,extract,cq/languages/scala.py,70,"return ts.extract(GRAMMAR, source)",,54
 core,function,extract_ex,cq/languages/scala.py,74,"return ts.extract_with_fidelity(GRAMMAR, source)",,36
 core,function,chunk_spans,cq/languages/scala.py,78,"return ts.chunk_spans(GRAMMAR, source, lines, max_chars)",,52
@@ -526,10 +526,10 @@ core,class,Grammar,cq/languages/treesitter.py,43,Everything tree-sitter needs to
 core,function,cache_key,cq/languages/treesitter.py,75,Identity of the compiled parser: the module plus the factory it calls.,,2
 core,function,parser_for,cq/languages/treesitter.py,86,"Return a cached parser, importing the optional grammar on first use.",,2
 core,function,parse,cq/languages/treesitter.py,114,return parser_for(grammar).parse(source.encode('utf-8')),,45
-core,function,text,cq/languages/treesitter.py,118,"return src[node.start_byte:node.end_byte].decode('utf-8', 'replace')",,1118
+core,function,text,cq/languages/treesitter.py,118,"return src[node.start_byte:node.end_byte].decode('utf-8', 'replace')",,1129
 core,function,named_child_by_type,cq/languages/treesitter.py,122,return None,,22
 core,function,descend_for,cq/languages/treesitter.py,129,Walk down *named* children looking for one of ``targets``.,,6
-core,function,field_name,cq/languages/treesitter.py,148,"return text(target, src) if target is not None else ''",,49
+core,function,field_name,cq/languages/treesitter.py,148,"return text(target, src) if target is not None else ''",,53
 core,function,doc_head,cq/languages/treesitter.py,153,First meaningful line of the doc comment immediately above ``node``.,,18
 core,function,signature,cq/languages/treesitter.py,185,Declaration text up to the body. Grammars that mark the body with something,,59
 core,function,line_range,cq/languages/treesitter.py,193,"Closed 1-based line range of ``node``, clamped to the file.",,10
@@ -577,7 +577,7 @@ core,function,_fuse,cq/search.py,294,Run every route and merge the ranked lists 
 core,function,_widen_to_chunk_bodies,cq/search.py,358,Replace each excerpt with its whole chunk body (FR-CQ-06).,,2
 core,function,_guard_freshness,cq/search.py,379,Re-index small drifts before answering; report larger ones as stale.,,2
 core,function,_fallback_order,cq/search.py,409,return chains[route],,2
-core,function,_run,cq/search.py,421,"return _bm25(conn, query, top_k, radius, paths)",,10
+core,function,_run,cq/search.py,421,"return _bm25(conn, query, top_k, radius, paths)",,23
 core,function,_path_clause,cq/search.py,435,"return (f' AND {column} GLOB ?', [paths]) if paths else ('', [])",,14
 core,function,_test_rank,cq/search.py,439,"1 for test code, 0 otherwise: implementations outrank their tests.",,10
 core,function,_symbol,cq/search.py,446,return hits,,2
@@ -697,7 +697,7 @@ core,function,__getattr__,hve/__init__.py,41,raise AttributeError(f'module {__na
 core,function,__dir__,hve/__init__.py,52,"return sorted({*globals(), *__all__})",,0
 cli,function,_configure_stdio_encoding,hve/__main__.py,85,stdout/stderr を UTF-8 に再設定する（パイプ経由起動時の cp932 対策）。,,1
 cli,function,_reexec_in_venv_if_needed,hve/__main__.py,113,``python -m hve`` がリポジトリの ``.venv`` 外の Python で起動された場合に、,,2
-cli,function,_ts,hve/__main__.py,235,現在時刻のプレフィックス文字列を返す。,,74
+cli,function,_ts,hve/__main__.py,235,現在時刻のプレフィックス文字列を返す。,,75
 cli,function,_split_csv,hve/__main__.py,347,カンマ区切り文字列を空要素なしのリストに変換する。,,3
 cli,function,_prompt_app_ids,hve/__main__.py,352,APP-ID を 1 回だけ尋ね、単一指定時は app_id も派生させる。,,1
 cli,function,_prompt_param_input,hve/__main__.py,369,ワークフロー固有パラメータを内部名ではなく表示ラベルで入力させる。,,1
@@ -721,36 +721,37 @@ cli,function,_collect_agentic_retrieval_wizard_answers,hve/__main__.py,780,Agent
 cli,function,_prompt_akm_params,hve/__main__.py,853,AKM ワークフローのパラメータを収集する。,,2
 cli,function,_resolve_model,hve/__main__.py,930,モデル名を解決する。,,13
 cli,function,_build_parser,hve/__main__.py,948,メイン ArgumentParser を構築する。,,4
-cli,function,_load_mcp_config,hve/__main__.py,2305,MCP Server 設定 JSON ファイルを読み込む。,,1
-cli,function,_apply_agentic_retrieval_cli_overrides,hve/__main__.py,2337,Agentic Retrieval 関連の CLI フラグを config へ反映する。,,1
-cli,function,_build_config,hve/__main__.py,2358,argparse の Namespace から SDKConfig を構築する。,,1
-cli,function,_validate_app_id_args,hve/__main__.py,2642,Return a deterministic error for conflicting legacy and plural APP IDs.,,2
-cli,function,_build_params,hve/__main__.py,2655,CLI 引数からワークフローパラメータ dict を構築する。,,1
-cli,function,_ensure_run_workdir_env,hve/__main__.py,2809,orchestrate 限定で ``work/run/<run-id>/`` への env を注入する。,,1
-cli,function,_start_startup_index_refresh,hve/__main__.py,2835,def _start_startup_index_refresh(command: Optional[str]) -> None:,,1
-cli,function,main,hve/__main__.py,2845,エントリポイント。,,53
-cli,function,_validate_auto_coding_agent_review,hve/__main__.py,2907,--auto-coding-agent-review の前提条件を検証する。,,1
-cli,function,_run_copilot_auth_preflight,hve/__main__.py,2942,orchestrate 実行前に GitHub Copilot 認証状態を確認する。,,2
-cli,function,_workiq_request_reasons,hve/__main__.py,2996,Work IQ を要求している設定名を列挙する。,,2
-cli,function,_is_workiq_requested,hve/__main__.py,3012,Work IQ を使う設定かを返す。,,1
-cli,function,_disable_workiq,hve/__main__.py,3017,Work IQ 関連フラグを実行単位で無効化する。,,1
-cli,function,_run_workiq_auth_preflight,hve/__main__.py,3033,Work IQ 使用時に EULA / M365 認証を本処理前に確認する。,,2
-cli,function,_is_azure_auth_requested,hve/__main__.py,3078,Azure CLI 認証を必要とする可能性がある設定かを返す。,,1
-cli,function,_azure_account_available,hve/__main__.py,3085,Azure CLI がログイン済みかを確認する。,,2
-cli,function,_run_azure_auth_preflight,hve/__main__.py,3103,Azure 利用時に Azure CLI 認証を本処理前に確認する。,,2
-cli,function,_cmd_pricing,hve/__main__.py,3141,`hve pricing {show|refresh}` ハンドラー。,,1
-cli,function,_cmd_toolsearch_context,hve/__main__.py,3217,`hve toolsearch context` ハンドラー（FR-TS-11）。,,1
-cli,function,_cmd_toolsearch,hve/__main__.py,3243,`hve toolsearch` ハンドラー（FR-TS-10 / FR-TS-11）。,,1
-cli,function,_cmd_login,hve/__main__.py,3306,`hve login` ハンドラー: GitHub Copilot ログイン + モデル一覧キャッシュ更新。,,1
-cli,function,_cmd_run_interactive,hve/__main__.py,3401,インタラクティブ wizard モードのハンドラー。,,3
-cli,function,_cmd_qa_merge,hve/__main__.py,4342,qa-merge サブコマンドのハンドラー。,,1
-cli,function,_cmd_workiq_doctor,hve/__main__.py,4512,workiq-doctor サブコマンドのハンドラー。,,1
-cli,function,_confirm_autopilot_chain_start,hve/__main__.py,4611,CLI Autopilot の実行開始を確認する（FR-CLI-78）。,,1
-cli,function,_cmd_orchestrate_autopilot_chain,hve/__main__.py,4624,orchestrate --autopilot-chain サブコマンドのハンドラー（Qt 非依存）。,,1
-cli,function,_cmd_orchestrate,hve/__main__.py,4743,orchestrate サブコマンドのハンドラー。,,1
-cli,function,_cmd_emit_prompt,hve/__main__.py,4894,emit-prompt サブコマンドのハンドラー。,,1
-cli,function,_cmd_ingest_docs,hve/__main__.py,4906,ingest-docs サブコマンドのハンドラー（ADI Step 1 の決定的前処理）。,,1
-cli,function,_console_main,hve/__main__.py,4934,``hve`` console script のエントリポイント。,,1
+cli,function,_load_mcp_config,hve/__main__.py,2315,MCP Server 設定 JSON ファイルを読み込む。,,1
+cli,function,_apply_agentic_retrieval_cli_overrides,hve/__main__.py,2347,Agentic Retrieval 関連の CLI フラグを config へ反映する。,,1
+cli,function,_build_config,hve/__main__.py,2368,argparse の Namespace から SDKConfig を構築する。,,1
+cli,function,_validate_app_id_args,hve/__main__.py,2653,Return a deterministic error for conflicting legacy and plural APP IDs.,,2
+cli,function,_build_params,hve/__main__.py,2666,CLI 引数からワークフローパラメータ dict を構築する。,,1
+cli,function,_ensure_run_workdir_env,hve/__main__.py,2820,orchestrate 限定で ``work/run/<run-id>/`` への env を注入する。,,1
+cli,function,_start_startup_index_refresh,hve/__main__.py,2846,def _start_startup_index_refresh(command: Optional[str]) -> None:,,1
+cli,function,main,hve/__main__.py,2856,エントリポイント。,,53
+cli,function,_validate_auto_coding_agent_review,hve/__main__.py,2918,--auto-coding-agent-review の前提条件を検証する。,,1
+cli,function,_run_startup_configuration_preflight,hve/__main__.py,2953,FR-CLI-82 の共通設定 preflight を実行し、失敗を一括表示する。,,2
+cli,function,_run_copilot_auth_preflight,hve/__main__.py,2993,orchestrate 実行前に GitHub Copilot 認証状態を確認する。,,2
+cli,function,_workiq_request_reasons,hve/__main__.py,3047,Work IQ を要求している設定名を列挙する。,,2
+cli,function,_is_workiq_requested,hve/__main__.py,3063,Work IQ を使う設定かを返す。,,1
+cli,function,_disable_workiq,hve/__main__.py,3068,Work IQ 関連フラグを実行単位で無効化する。,,2
+cli,function,_run_workiq_auth_preflight,hve/__main__.py,3084,Work IQ 使用時に EULA / M365 認証を本処理前に確認する。,,2
+cli,function,_is_azure_auth_requested,hve/__main__.py,3134,Azure CLI 認証を必要とする可能性がある設定かを返す。,,1
+cli,function,_azure_account_available,hve/__main__.py,3141,Azure CLI がログイン済みかを確認する。,,2
+cli,function,_run_azure_auth_preflight,hve/__main__.py,3159,Azure 利用時に Azure CLI 認証を本処理前に確認する。,,2
+cli,function,_cmd_pricing,hve/__main__.py,3197,`hve pricing {show|refresh}` ハンドラー。,,1
+cli,function,_cmd_toolsearch_context,hve/__main__.py,3273,`hve toolsearch context` ハンドラー（FR-TS-11）。,,1
+cli,function,_cmd_toolsearch,hve/__main__.py,3299,`hve toolsearch` ハンドラー（FR-TS-10 / FR-TS-11）。,,1
+cli,function,_cmd_login,hve/__main__.py,3362,`hve login` ハンドラー: GitHub Copilot ログイン + モデル一覧キャッシュ更新。,,1
+cli,function,_cmd_run_interactive,hve/__main__.py,3457,インタラクティブ wizard モードのハンドラー。,,3
+cli,function,_cmd_qa_merge,hve/__main__.py,4395,qa-merge サブコマンドのハンドラー。,,1
+cli,function,_cmd_workiq_doctor,hve/__main__.py,4565,workiq-doctor サブコマンドのハンドラー。,,1
+cli,function,_confirm_autopilot_chain_start,hve/__main__.py,4664,CLI Autopilot の実行開始を確認する（FR-CLI-78）。,,1
+cli,function,_cmd_orchestrate_autopilot_chain,hve/__main__.py,4677,orchestrate --autopilot-chain サブコマンドのハンドラー（Qt 非依存）。,,1
+cli,function,_cmd_orchestrate,hve/__main__.py,4796,orchestrate サブコマンドのハンドラー。,,1
+cli,function,_cmd_emit_prompt,hve/__main__.py,4949,emit-prompt サブコマンドのハンドラー。,,1
+cli,function,_cmd_ingest_docs,hve/__main__.py,4961,ingest-docs サブコマンドのハンドラー（ADI Step 1 の決定的前処理）。,,1
+cli,function,_console_main,hve/__main__.py,4989,``hve`` console script のエントリポイント。,,1
 core,class,ExcludedAppId,hve/app_arch_filter.py,69,"return {'app_id': self.app_id, 'actual_architecture': self.actual_architecture, 'reason': self.reason}",,3
 core,class,AppArchFilterResult,hve/app_arch_filter.py,83,"return {'workflow_id': self.workflow_id, 'target_kind': self.target_kind, 'target_architectures': self.target_architectures, 'requested_app_ids': self.requested_app_ids, 'matched_app_ids': self.matched_app_ids, 'excluded_app_ids': [e.to_dict() for e in self.excluded_app_ids], 'unknown_app_ids': sel…",,5
 core,function,_normalize_arch_whitespace,hve/app_arch_filter.py,135,前後スペースを除去して空白を正規化する。,,1
@@ -1145,10 +1146,10 @@ core,function,_empty_plan,hve/autopilot/planner.py,30,"return AutopilotPlan(cata
 core,function,_filter_chain_by_selection,hve/autopilot/planner.py,55,"return [wf for wf in chain if allowed.get(wf, False)]",,1
 core,function,_requires_aas,hve/autopilot/planner.py,65,return selection.has_downstream_workflows() and (not selection.run_aas),,3
 core,function,build_plan,hve/autopilot/planner.py,71,カタログから Autopilot 実行計画を生成する。,,3
-core,class,PrecheckCategory,hve/autopilot/precheck_model.py,14,不足項目のカテゴリ。,,11
-core,class,PrecheckItem,hve/autopilot/precheck_model.py,31,precheck で検出された不足項目 1 件。,,6
+core,class,PrecheckCategory,hve/autopilot/precheck_model.py,14,不足項目のカテゴリ。,,15
+core,class,PrecheckItem,hve/autopilot/precheck_model.py,31,precheck で検出された不足項目 1 件。,,7
 core,class,AutopilotPrecheckResult,hve/autopilot/precheck_model.py,55,`run_step1_precheck()`（旧名: ``run_autopilot_precheck()``）の戻り値。,,4
-core,function,run_step1_precheck,hve/autopilot/precheck_runner.py,29,Step 1 事前検証を実行し統合結果を返す。,,1
+core,function,run_step1_precheck,hve/autopilot/precheck_runner.py,33,Step 1 事前検証を実行し統合結果を返す。,,1
 core,class,CatalogParseError,hve/catalog_parsers.py,32,カタログの構造が想定外の場合に投げる例外。,,4
 core,function,_read_text,hve/catalog_parsers.py,40,カタログを安全に読み込む。存在しない場合は None。,,15
 core,function,_extract_ids_from_table,hve/catalog_parsers.py,51,Markdown テーブルの指定列から id_pattern にマッチする値を順序付きで返す。,,7
@@ -1199,7 +1200,7 @@ core,class,SDKConfig,hve/config.py,337,return self.workiq_enabled if self.workiq
 core,function,timestamp_prefix,hve/console.py,50,現在時刻のプレフィックス文字列を返す。,,7
 core,function,_format_elapsed_ja,hve/console.py,55,秒数を日本語の経過時間表記に変換する。,,2
 core,class,_Style,hve/console.py,135,ANSI エスケープシーケンス定数。TTY 非接続時は空文字列。,,2
-core,class,Console,hve/console.py,188,タスク実行中の Console 出力を制御するクラス。,,38
+core,class,Console,hve/console.py,188,タスク実行中の Console 出力を制御するクラス。,,39
 core,function,_require_pwsh7_on_windows,hve/copilot_client_factory.py,19,Return the installed ``pwsh`` path or fail before local SDK startup.,,1
 core,function,create_copilot_client,hve/copilot_client_factory.py,59,Create a ``CopilotClient`` using the SDK 1.0.0 connection API.,,10
 core,function,_create_legacy_config_client,hve/copilot_client_factory.py,138,Fallback for older SDK-shaped test doubles and pre-1.0 SDKs.,,1
@@ -1274,24 +1275,32 @@ core,function,start_fleet,hve/fleet_mode.py,549,Start Copilot SDK fleet mode fro
 core,function,_default_kpi_dir,hve/fork_kpi_logger.py,32,起動時の ``work/run/<run-id>/kpi/`` を返す。遅延解決。,,1
 core,function,_sanitize_run_id,hve/fork_kpi_logger.py,41,run_id をパス安全な ASCII 文字列に正規化する。,,1
 core,class,ForkKPILogger,hve/fork_kpi_logger.py,51,フォーク KPI ロガー本体。,,1
-core,class,GitHubAPIError,hve/github_api.py,50,GitHub API 呼び出し失敗時の例外。,,29
-core,function,_resolve_token,hve/github_api.py,63,トークンを解決する。引数 > GH_TOKEN > GITHUB_TOKEN の優先順。,,1
-core,function,_resolve_repo,hve/github_api.py,75,リポジトリを解決する。引数 > REPO 環境変数の優先順。,,11
-core,function,_parse_retry_after,hve/github_api.py,87,Retry-After ヘッダを整数秒に変換する。,,1
-core,function,api_call,hve/github_api.py,102,認証付き GitHub API 呼び出し（指数バックオフリトライ付き）。,,14
-core,function,get_repository_metadata,hve/github_api.py,222,リポジトリの metadata を取得する。,,1
-core,function,list_viewer_repositories,hve/github_api.py,232,認証ユーザーが参照可能なリポジトリ一覧（先頭 1 ページ）を取得する。,,1
-core,function,create_issue,hve/github_api.py,249,"GitHub Issue を作成し (number, id) を返す。",,2
-core,function,add_labels,hve/github_api.py,285,Issue にラベルを付与する。,,2
-core,function,link_sub_issue,hve/github_api.py,303,Issue を親 Issue のサブイシューとしてリンクする（冪等）。,,1
-core,function,post_comment,hve/github_api.py,327,Issue / PR にコメントを投稿する。,,1
-core,function,list_issue_comments,hve/github_api.py,341,Issue / PR コメント一覧（先頭 1 ページ）を取得する。,,1
-core,function,create_pull_request,hve/github_api.py,360,Pull Request を作成し PR 番号を返す。,,1
-core,function,get_pull_request,hve/github_api.py,391,PR の情報（``merged`` / ``state`` 等）を取得して dict で返す。,,2
-core,function,_sanitize_pull_request_file,hve/github_api.py,406,PR Files API の 1 行を path 判定に必要な最小フィールドへ縮約する。,,1
-core,function,list_pull_request_files,hve/github_api.py,434,PR の変更ファイルを全ページ取得し、最小フィールドだけを返す。,,0
-core,function,list_check_runs_for_ref,hve/github_api.py,492,commit ref に紐づく check-run 一覧を返す。,,1
-core,function,list_branches,hve/github_api.py,508,リポジトリのブランチ名一覧を取得する。,,1
+core,class,GitHubAPIError,hve/github_api.py,58,GitHub API 呼び出し失敗時の例外。,,36
+core,function,_resolve_token,hve/github_api.py,71,トークンを解決する。引数 > GH_TOKEN > GITHUB_TOKEN の優先順。,,1
+core,function,_resolve_repo,hve/github_api.py,83,リポジトリを解決する。引数 > REPO 環境変数の優先順。,,16
+core,function,_resolve_page_size,hve/github_api.py,95,GitHub API が受け付ける 1..100 の範囲へ丸める。,,2
+core,function,_require_list_state,hve/github_api.py,100,一覧 API の ``state`` を検証する。,,2
+core,function,_parse_retry_after,hve/github_api.py,109,Retry-After ヘッダを整数秒に変換する。,,1
+core,function,api_call,hve/github_api.py,124,認証付き GitHub API 呼び出し（指数バックオフリトライ付き）。,,20
+core,function,get_repository_metadata,hve/github_api.py,244,リポジトリの metadata を取得する。,,1
+core,function,get_authenticated_user,hve/github_api.py,254,認証ユーザーの情報を取得する（FR-GUI-26 の自コメント判定に使用）。,,1
+core,function,list_viewer_repositories,hve/github_api.py,260,認証ユーザーが参照可能なリポジトリ一覧（先頭 1 ページ）を取得する。,,1
+core,function,create_issue,hve/github_api.py,277,"GitHub Issue を作成し (number, id) を返す。",,2
+core,function,add_labels,hve/github_api.py,313,Issue にラベルを付与する。,,2
+core,function,link_sub_issue,hve/github_api.py,331,Issue を親 Issue のサブイシューとしてリンクする（冪等）。,,1
+core,function,post_comment,hve/github_api.py,355,Issue / PR にコメントを投稿する。,,6
+core,function,list_issue_comments,hve/github_api.py,369,Issue / PR コメント一覧（先頭 1 ページ）を取得する。,,2
+core,function,update_comment,hve/github_api.py,388,Issue / PR コメントの本文を更新する（FR-GUI-26）。,,2
+core,function,list_issues,hve/github_api.py,401,Issue 一覧（先頭 1 ページ）を取得する（FR-GUI-26）。,,2
+core,function,get_issue,hve/github_api.py,429,Issue の詳細を取得する（FR-GUI-25 / FR-GUI-26）。,,3
+core,function,update_issue,hve/github_api.py,448,Issue のタイトル / 本文 / 状態を更新する（FR-GUI-26）。,,3
+core,function,create_pull_request,hve/github_api.py,480,Pull Request を作成し PR 番号を返す。,,1
+core,function,get_pull_request,hve/github_api.py,511,PR の情報（``merged`` / ``state`` 等）を取得して dict で返す。,,4
+core,function,list_pull_requests,hve/github_api.py,526,Pull Request 一覧（先頭 1 ページ）を取得する（FR-GUI-27）。,,2
+core,function,_sanitize_pull_request_file,hve/github_api.py,546,PR Files API の 1 行を path 判定に必要な最小フィールドへ縮約する。,,1
+core,function,list_pull_request_files,hve/github_api.py,574,PR の変更ファイルを全ページ取得し、最小フィールドだけを返す。,,2
+core,function,list_check_runs_for_ref,hve/github_api.py,632,commit ref に紐づく check-run 一覧を返す。,,1
+core,function,list_branches,hve/github_api.py,648,リポジトリのブランチ名一覧を取得する。,,1
 gui,function,run_gui,hve/gui/__init__.py,21,GUI モードのエントリポイント。,,2
 gui,function,apply_style_to_application,hve/gui/app.py,41,アプリのスタイルを :data:`_STYLE_NAME` に固定する。,,1
 gui,function,apply_theme_to_application,hve/gui/app.py,51,QApplication 全体にテーマを適用する。,,2
@@ -1301,10 +1310,11 @@ gui,function,_find_repo_root_from,hve/gui/app.py,116,Walk up from ``start`` and 
 gui,function,_resolve_repo_root,hve/gui/app.py,127,Locate the repository root.,,3
 gui,function,_configure_qt_logging,hve/gui/app.py,148,無害な ``qt.text.font.db`` フォントフォールバック警告を抑止する。,,1
 gui,function,run_app,hve/gui/app.py,165,GUI モードのエントリポイント。,,1
-gui,function,_open_autopilot_child_window,hve/gui/app.py,223,``--autopilot-child`` で起動された子 GUI ウィンドウを開く。,,1
-gui,function,_open_first_window,hve/gui/app.py,269,最初の MainWindow を開く。,,1
-gui,function,_open_additional_window,hve/gui/app.py,287,「新規セッション」コールバックから呼ばれる。,,2
-gui,function,_on_window_destroyed,hve/gui/app.py,301,def _on_window_destroyed(window: MainWindow) -> None:,,3
+gui,function,_run_startup_github_auth,hve/gui/app.py,217,FR-GUI-24: 起動時に GitHub 認証を解決し、未解決ならログイン導線を提示する。,,1
+gui,function,_open_autopilot_child_window,hve/gui/app.py,238,``--autopilot-child`` で起動された子 GUI ウィンドウを開く。,,1
+gui,function,_open_first_window,hve/gui/app.py,284,最初の MainWindow を開く。,,1
+gui,function,_open_additional_window,hve/gui/app.py,302,「新規セッション」コールバックから呼ばれる。,,2
+gui,function,_on_window_destroyed,hve/gui/app.py,316,def _on_window_destroyed(window: MainWindow) -> None:,,3
 gui,class,AppEntry,hve/gui/app_catalog_loader.py,18,return f'{self.app_id}: {self.name}' if self.name else self.app_id,,6
 gui,function,_catalog_path,hve/gui/app_catalog_loader.py,42,return repo_root / 'docs' / 'catalog' / 'app-arch-catalog.md',,1
 gui,function,parse,hve/gui/app_catalog_loader.py,46,Markdown 文字列から APP エントリを抽出する。,,45
@@ -1318,7 +1328,7 @@ gui,class,LogLineEvent,hve/gui/autopilot/log_events.py,20,子プロセス stdout
 gui,function,_fmt_ts,hve/gui/autopilot/log_events.py,36,"return time.strftime('%H:%M:%S', time.localtime(ts))",,0
 gui,function,format_prefix,hve/gui/autopilot/log_events.py,42,``[WORKFLOW_ID:APP_ID]`` 形式の prefix を返す（大文字化、空は ``-``）。,,0
 gui,class,Step1PlanReviewDialog,hve/gui/autopilot/plan_review_dialog.py,56,Step 1 事前検証プランレビュー Dialog。,,1
-gui,class,Step1PrecheckDialog,hve/gui/autopilot/precheck_dialog.py,43,Step 1 事前検証の結果を表示するモーダルダイアログ。,,1
+gui,class,Step1PrecheckDialog,hve/gui/autopilot/precheck_dialog.py,44,Step 1 事前検証の結果を表示するモーダルダイアログ。,,1
 gui,class,BRGenerationConfig,hve/gui/br_generator.py,32,生成処理の設定。,,3
 gui,class,SectionResult,hve/gui/br_generator.py,47,章 1 件分の生成結果。,,9
 gui,class,BRGenerationResult,hve/gui/br_generator.py,57,生成処理全体の結果。,,6
@@ -1349,7 +1359,7 @@ gui,class,JobResultContext,hve/gui/copilot_job_context.py,22,新しい Copilot C
 gui,function,_existing,hve/gui/copilot_job_context.py,31,return path.exists(),,4
 gui,function,_collect_paths,hve/gui/copilot_job_context.py,38,"return ([unique[key] for key in sorted(unique)], truncated)",,1
 gui,function,build_job_result_context,hve/gui/copilot_job_context.py,61,ジョブ結果を相談するための初期プロンプトと参照パスを構成する。,,1
-gui,class,CopyButton,hve/gui/copy_button.py,19,クリップボードコピー用の小型ツールボタン。,,9
+gui,class,CopyButton,hve/gui/copy_button.py,19,クリップボードコピー用の小型ツールボタン。,,11
 gui,class,_HveSettingsBackend,hve/gui/cq_settings_section.py,15,Adapt HVE's process-wide settings API to the repository-aware GUI API.,,2
 gui,class,CqIndexSection,hve/gui/cq_settings_section.py,35,Shared panel with HVE's existing settings store injected.,,2
 gui,class,ConversionResult,hve/gui/doc_convert.py,50,1 ファイルの変換結果。,,11
@@ -1380,9 +1390,30 @@ gui,function,_first_available_font,hve/gui/fonts.py,15,return '',,6
 gui,function,preferred_ui_font,hve/gui/fonts.py,23,Return the preferred application UI font for the current platform.,,1
 gui,function,preferred_log_font,hve/gui/fonts.py,40,Return a readable log font that avoids generic monospace fallback.,,5
 gui,function,find_gh_binary,hve/gui/gh_cli.py,24,``gh`` 実行ファイルの絶対パスを返す。見つからなければ ``None``。,,2
-gui,function,capture_gh_token,hve/gui/gh_cli.py,29,``gh auth token`` を実行し、トークン文字列を返す。,,1
-gui,function,inject_token_into_env,hve/gui/gh_cli.py,58,トークンを ``os.environ['GH_TOKEN']`` へ設定する（セッション限り）。,,1
-gui,class,GhLoginDialog,hve/gui/gh_login_dialog.py,40,``gh auth login`` を埋め込み端末で実行するモーダルダイアログ。,,1
+gui,function,capture_gh_token,hve/gui/gh_cli.py,29,``gh auth token`` を実行し、トークン文字列を返す。,,3
+gui,function,inject_token_into_env,hve/gui/gh_cli.py,58,トークンを ``os.environ['GH_TOKEN']`` へ設定する（セッション限り）。,,3
+gui,class,GhLoginDialog,hve/gui/gh_login_dialog.py,40,``gh auth login`` を埋め込み端末で実行するモーダルダイアログ。,,2
+gui,class,GitHubIssuePanel,hve/gui/github_issue_panel.py,35,Issue 一覧・詳細・コメントを 1 画面で扱うパネル。,,1
+gui,class,GitHubPullRequestPanel,hve/gui/github_pr_panel.py,33,Pull Request 一覧・詳細・変更ファイル・コメントを扱うパネル。,,1
+gui,class,GitHubServiceError,hve/gui/github_service.py,44,GUI へ表示するための GitHub 連携エラー。,,10
+gui,function,_guess_repo,hve/gui/github_service.py,48,ローカル git remote から ``owner/repo`` を推定する。,,1
+gui,function,resolve_repo,hve/gui/github_service.py,61,``owner/repo`` を解決する。明示指定 > ``REPO`` 環境変数 > git remote。,,2
+gui,function,parse_number,hve/gui/github_service.py,77,Issue / PR 番号を正の整数へ検証する。,,7
+gui,function,_describe,hve/gui/github_service.py,93,`GitHubAPIError` を利用者向けメッセージへ変換する。,,1
+gui,function,_call,hve/gui/github_service.py,105,raise GitHubServiceError(_describe(exc)) from exc,,10
+gui,function,_require_body,hve/gui/github_service.py,112,raise GitHubServiceError('本文が空です。内容を入力してください。'),,2
+gui,function,current_user_login,hve/gui/github_service.py,119,認証ユーザーの login を返す。取得できない場合は空文字列。,,1
+gui,function,list_issues,hve/gui/github_service.py,131,"return _call(github_api.list_issues, repo=repo, state=state, per_page=per_page)",,2
+gui,function,get_issue,hve/gui/github_service.py,135,"return _call(github_api.get_issue, parse_number(number), repo=repo)",,3
+gui,function,update_issue,hve/gui/github_service.py,139,"return _call(github_api.update_issue, parse_number(number), repo=repo, title=title, body=body, state=state)",,3
+gui,function,list_comments,hve/gui/github_service.py,156,"return _call(github_api.list_issue_comments, parse_number(number), repo=repo)",,2
+gui,function,post_comment,hve/gui/github_service.py,160,"def post_comment(repo: str, number: Any, body: str) -> None:",,6
+gui,function,update_comment,hve/gui/github_service.py,165,"return _call(github_api.update_comment, parse_number(comment_id), text, repo=repo)",,2
+gui,function,list_pull_requests,hve/gui/github_service.py,175,"return _call(github_api.list_pull_requests, repo=repo, state=state, per_page=per_page)",,2
+gui,function,get_pull_request,hve/gui/github_service.py,181,"return _call(github_api.get_pull_request, parse_number(number), repo=repo)",,4
+gui,function,list_pull_request_files,hve/gui/github_service.py,185,"return _call(github_api.list_pull_request_files, parse_number(number), repo=repo)",,2
+gui,class,GitHubWorker,hve/gui/github_threads.py,24,`github_service` の呼び出しを 1 回実行して結果を通知するワーカー。,,6
+gui,class,GitHubWindow,hve/gui/github_window.py,30,Issue / Pull Request を閲覧・編集する非モーダルウィンドウ。,,1
 gui,function,_tr,hve/gui/help_content.py,35,``help_content`` コンテキストで翻訳する。空文字はそのまま返す。,,6
 gui,class,HelpEntry,hve/gui/help_content.py,48,class HelpEntry:,,58
 gui,function,category_help,hve/gui/help_content.py,339,"return HelpEntry(short=_tr(entry.short), guide_path=entry.guide_path, guide_anchor=entry.guide_anchor)",,1
@@ -1427,13 +1458,13 @@ gui,class,PreviewWatcher,hve/gui/markdown_preview/preview_watcher.py,22,単一�
 gui,class,_HveSettingsBackend,hve/gui/mdq_settings_section.py,15,Adapt HVE's process-wide settings API to the repository-aware GUI API.,,2
 gui,class,MdqIndexSection,hve/gui/mdq_settings_section.py,34,Shared panel with HVE's existing settings store injected.,,3
 gui,class,OrchestrateArgs,hve/gui/orchestrate_args.py,34,`orchestrate` サブコマンドの全引数を保持する dataclass。,,28
-gui,function,_coerce_tristate,hve/gui/orchestrate_args.py,591,"設定ストアの 3 状態値（``""""`` / ``""on""`` / ``""off""``）を bool へ正規化する。",,1
-gui,function,apply_watch_settings,hve/gui/orchestrate_args.py,600,設定ストアの ``[options]`` から watch 系の値を ``OrchestrateArgs`` へ反映する。,,1
-gui,function,_append_tristate,hve/gui/orchestrate_args.py,621,3 状態フラグ（BooleanOptionalAction）を argv に追加する。,,10
-gui,function,_shell_quote,hve/gui/orchestrate_args.py,642,空白や特殊文字を含む引数を Windows / POSIX 両対応で簡易クォートする。,,1
+gui,function,_coerce_tristate,hve/gui/orchestrate_args.py,595,"設定ストアの 3 状態値（``""""`` / ``""on""`` / ``""off""``）を bool へ正規化する。",,1
+gui,function,apply_watch_settings,hve/gui/orchestrate_args.py,604,設定ストアの ``[options]`` から watch 系の値を ``OrchestrateArgs`` へ反映する。,,1
+gui,function,_append_tristate,hve/gui/orchestrate_args.py,625,3 状態フラグ（BooleanOptionalAction）を argv に追加する。,,10
+gui,function,_shell_quote,hve/gui/orchestrate_args.py,646,空白や特殊文字を含む引数を Windows / POSIX 両対応で簡易クォートする。,,1
 gui,class,StepIntroBanner,hve/gui/page_intro.py,15,Step ページの最上段に表示する説明枠。,,2
 gui,function,_parse_github_remote_url,hve/gui/page_options.py,69,GitHub remote URL から ``owner/repo`` を抽出する。,,1
-gui,function,_guess_repo_from_git_remote,hve/gui/page_options.py,86,ローカル git remote origin から GitHub ``owner/repo`` を推定する。,,1
+gui,function,_guess_repo_from_git_remote,hve/gui/page_options.py,86,ローカル git remote origin から GitHub ``owner/repo`` を推定する。,,2
 gui,function,_derive_cloud_repository_from_repo,hve/gui/page_options.py,105,``owner/repo`` 形式の repo から Cloud repository owner/name を派生する。,,1
 gui,function,_repo_permission_label,hve/gui/page_options.py,113,GitHub repository metadata から表示用の権限ラベルを返す。,,1
 gui,function,_repo_has_write_permission,hve/gui/page_options.py,130,Issue/PR 作成に使える可能性が高い repository 権限かを簡易判定する。,,1
@@ -1442,7 +1473,7 @@ gui,function,_load_model_entries_map,hve/gui/page_options.py,189,キャッシュ
 gui,function,_format_context_size_label,hve/gui/page_options.py,205,"`max_context_window_tokens` を「200K tokens (200,000)」形式に整形する。",context_size,1
 gui,function,_format_cost_label,hve/gui/page_options.py,220,ModelEntry の token_prices を「In $3.00/1M · Out $15.00/1M · Cache $0.30/1M」形式に整形する。,,1
 gui,function,_is_text_input_widget,hve/gui/page_options.py,248,テキスト入力系ウィジェットか判定する。,,1
-gui,class,_LabeledField,hve/gui/page_options.py,265,1 項目を「タイトル(太字) + 詳細説明(小・グレー) + 入力ウィジェット」の縦並びで表示する。,,101
+gui,class,_LabeledField,hve/gui/page_options.py,265,1 項目を「タイトル(太字) + 詳細説明(小・グレー) + 入力ウィジェット」の縦並びで表示する。,,103
 gui,class,_FilePickerWidget,hve/gui/page_options.py,384,QLineEdit + Browse ボタンの組み合わせ。,,8
 gui,class,TriStateCombo,hve/gui/page_options.py,461,`argparse.BooleanOptionalAction` 用の 3 状態セレクタ。,,11
 gui,class,RequiredChoiceCombo,hve/gui/page_options.py,493,必須選択用の 3 状態セレクタ。初期状態は「未選択」で、明示選択を促す。,,1
@@ -1459,19 +1490,19 @@ gui,class,_CSelfImprove,hve/gui/page_options.py,1377,自己改善 (Self Improve)
 gui,class,_C3AutoPrompt,hve/gui/page_options.py,1449,Step 1 右ペインの「共通設定」枠が使う 4 セクションの合成ウィジェット。,,1
 gui,function,wire_auto_qa_to_knowledge_management,hve/gui/page_options.py,1499,`auto_qa` の選択状態を Knowledge Management セクションへ配線する。,,1
 gui,class,_C4WorkIQ,hve/gui/page_options.py,1512,C4: Work IQ — CLI 固有オプション 11 個,,1
-gui,function,_make_delete_branch_field,hve/gui/page_options.py,1748,FR-CLI-34: 削除トグルの QCheckBox + _LabeledField を生成する共通ファクトリ。,,2
-gui,class,_GitHubCliLoginGroup,hve/gui/page_options.py,1768,GitHub CLI ログイン UI と ``GH_TOKEN`` 注入処理をまとめた認証グループ。,,1
-gui,class,_C5IssuePR,hve/gui/page_options.py,1851,C5「GitHub」セクション — Issue/PR 作成・リポジトリ・ベースブランチ・PR 自動,,1
-gui,class,_C6Output,hve/gui/page_options.py,2325,class _C6Output(QWidget):,,1
-gui,class,_C7Connection,hve/gui/page_options.py,2429,return None,,1
-gui,class,_CAzure,hve/gui/page_options.py,2650,各サービス連携 / Azure：Azure 連携設定。,,1
-gui,class,_CAgenticRetrieval,hve/gui/page_options.py,2674,各サービス連携 / Agentic Retrieval：Foundry IQ / Azure AI Search 連携設定。,,1
-gui,class,_C10AppId,hve/gui/page_options.py,2789,class _C10AppId(QWidget):,,3
-gui,class,_C11AKM,hve/gui/page_options.py,2853,class _C11AKM(QWidget):,,1
-gui,class,_C17ADI,hve/gui/page_options.py,2934,class _C17ADI(QWidget):,,1
-gui,class,_C13ADOC,hve/gui/page_options.py,2995,class _C13ADOC(QWidget):,,1
-gui,class,_C14ARD,hve/gui/page_options.py,3059,C14: ARD 固有オプション。,,1
-gui,class,OptionsPage,hve/gui/page_options.py,3283,Step 2: オプション選択ページ。,,1
+gui,function,_make_delete_branch_field,hve/gui/page_options.py,1749,FR-CLI-34: 削除トグルの QCheckBox + _LabeledField を生成する共通ファクトリ。,,2
+gui,class,_GitHubCliLoginGroup,hve/gui/page_options.py,1769,GitHub CLI ログイン UI と ``GH_TOKEN`` 注入処理をまとめた認証グループ。,,1
+gui,class,_C5IssuePR,hve/gui/page_options.py,1852,C5「GitHub」セクション — Issue/PR 作成・リポジトリ・ベースブランチ・PR 自動,,1
+gui,class,_C6Output,hve/gui/page_options.py,2368,class _C6Output(QWidget):,,1
+gui,class,_C7Connection,hve/gui/page_options.py,2472,return None,,1
+gui,class,_CAzure,hve/gui/page_options.py,2693,各サービス連携 / Azure：Azure 連携設定。,,1
+gui,class,_CAgenticRetrieval,hve/gui/page_options.py,2717,各サービス連携 / Agentic Retrieval：Foundry IQ / Azure AI Search 連携設定。,,1
+gui,class,_C10AppId,hve/gui/page_options.py,2832,class _C10AppId(QWidget):,,3
+gui,class,_C11AKM,hve/gui/page_options.py,2896,class _C11AKM(QWidget):,,1
+gui,class,_C17ADI,hve/gui/page_options.py,2977,class _C17ADI(QWidget):,,1
+gui,class,_C13ADOC,hve/gui/page_options.py,3038,class _C13ADOC(QWidget):,,1
+gui,class,_C14ARD,hve/gui/page_options.py,3102,C14: ARD 固有オプション。,,1
+gui,class,OptionsPage,hve/gui/page_options.py,3326,Step 2: オプション選択ページ。,,1
 gui,function,choose_origin_file,hve/gui/page_options_ard.py,61,"テスト容易性のためダイアログから分離した純関数版の ""デフォルト"" 選択。",,0
 gui,class,_OriginPickerDialog,hve/gui/page_options_ard.py,77,複数ファイル投入時に「business_requirement.md として採用するもの」を選択。,,1
 gui,class,_DropZone,hve/gui/page_options_ard.py,136,D&D を受け付けるエリア。`files_dropped(List[Path])` を emit。,,1
@@ -1504,44 +1535,50 @@ gui,class,PtySession,hve/gui/pty_backend.py,117,OS 別 PTY 実装の共通イン
 gui,class,_WindowsPtySession,hve/gui/pty_backend.py,195,``pywinpty`` (ConPTY) ベースの PTY セッション。,,1
 gui,class,_PosixPtySession,hve/gui/pty_backend.py,285,``ptyprocess`` ベースの PTY セッション。,,1
 gui,function,spawn,hve/gui/pty_backend.py,371,プラットフォームを自動判定して :class:`PtySession` を起動する。,,5
-gui,function,_is_other_choice,hve/gui/qa_answer_dialog.py,77,質問票に既にある「その他」選択肢かを判定する。,,2
-gui,class,_QuestionRow,hve/gui/qa_answer_dialog.py,85,1 質問分の入力状態（QComboBox or QLineEdit を保持）。,,4
-gui,class,QAAnswerDialog,hve/gui/qa_answer_dialog.py,145,QA 質問票への回答を入力する表形式ダイアログ。,,1
+gui,function,_is_other_choice,hve/gui/qa_answer_dialog.py,90,質問票に既にある「その他」選択肢かを判定する。,,2
+gui,class,_QuestionRow,hve/gui/qa_answer_dialog.py,98,1 質問分の入力状態（QComboBox or QLineEdit を保持）。,,4
+gui,class,QAAnswerDialog,hve/gui/qa_answer_dialog.py,158,QA 質問票への回答を入力する表形式ダイアログ。,,1
 gui,class,QAIpcManager,hve/gui/qa_ipc_manager.py,33,IPC ディレクトリを監視し、QA 質問票出現/subprocess 終了を通知する。,,2
 gui,function,build_session_menu,hve/gui/session_menu.py,14,セッション操作用の QMenu を構築して返す。,,1
 gui,function,_is_valid_policy,hve/gui/session_workdir.py,61,"return policy in ('keep', 'archive', 'purge')",,1
 gui,class,GuiSessionWorkdir,hve/gui/session_workdir.py,66,GUI セッション 1 つに対応する作業ディレクトリと env オーバーライド。,,2
 gui,function,_get,hve/gui/settings_apply.py,26,return None,,92
 gui,function,_set,hve/gui/settings_apply.py,58,"def _set(widget: Any, value: Any) -> None:",,1
-gui,function,apply_to_widgets,hve/gui/settings_apply.py,267,settings dict をウィジェット群へ書き込む。,,1
-gui,function,collect_from_widgets,hve/gui/settings_apply.py,300,ウィジェット群から options dict を組み立てる。,,0
-gui,function,wire_autosave,hve/gui/settings_apply.py,315,各ウィジェットの変更シグナルを on_changed に接続する。,,0
-gui,function,_connect_changed,hve/gui/settings_apply.py,332,"def _connect_changed(widget: Any, callback: Callable[[], None]) -> None:",,1
+gui,function,apply_to_widgets,hve/gui/settings_apply.py,269,settings dict をウィジェット群へ書き込む。,,1
+gui,function,collect_from_widgets,hve/gui/settings_apply.py,302,ウィジェット群から options dict を組み立てる。,,0
+gui,function,wire_autosave,hve/gui/settings_apply.py,317,各ウィジェットの変更シグナルを on_changed に接続する。,,0
+gui,function,_connect_changed,hve/gui/settings_apply.py,334,"def _connect_changed(widget: Any, callback: Callable[[], None]) -> None:",,1
 gui,class,SettingsPricingTab,hve/gui/settings_pricing_tab.py,47,料金 / ステータスライン関連設定タブ。,,0
 gui,function,_hline,hve/gui/settings_pricing_tab.py,235,return f,,6
 gui,function,settings_path,hve/gui/settings_store.py,27,設定ファイルパスを返す（テスト差し替え可能）。,,2
 gui,function,defaults,hve/gui/settings_store.py,35,設定既定値。ウィザード CLI の既定値と整合させる。,,20
-gui,function,_migrate_obsolete_keys,hve/gui/settings_store.py,322,読み込んだ ``ConfigParser`` から廃止キーを削除する。,,1
-gui,function,_migrate_renamed_keys,hve/gui/settings_store.py,339,読み込んだ ``ConfigParser`` で、旧キー名を新キー名へ移行する。,,1
-gui,function,_migrate_legacy_explorer_roots,hve/gui/settings_store.py,361,旧ルート ``original-docs`` を ``docs-original`` へ置換する。,,1
-gui,function,_migrate_self_improve_tristate,hve/gui/settings_store.py,386,旧boolean pairを ``self_improve = on/off/''`` へ移行する。,,1
-gui,function,load,hve/gui/settings_store.py,428,設定を読み込む。ファイル無し/壊れている場合は defaults() を返す。,,58
-gui,function,save,hve/gui/settings_store.py,478,設定をアトミックに保存する。,,13
-gui,function,_to_str,hve/gui/settings_store.py,495,return str(value),,3
-gui,function,_coerce,hve/gui/settings_store.py,503,既定値の型に合わせて文字列を変換する。,,3
-gui,function,get_option,hve/gui/settings_store.py,521,単一オプション値を取得する（既定値フォールバック付）。,,18
-gui,function,set_option,hve/gui/settings_store.py,527,単一オプション値を保存する（load -> 変更 -> save のショートカット）。,,7
-gui,function,_strip_quotes,hve/gui/settings_store.py,543,return s or None,,5
-gui,function,parse_semicolon_list,hve/gui/settings_store.py,548,';' 区切り文字列を要素リストへ分解する（重複除去・順序保持）。,,5
-gui,function,serialize_semicolon_list,hve/gui/settings_store.py,567,要素リストを ';' 区切り文字列へ整形する（重複除去・順序保持）。,,5
-gui,function,_normalize_target_folder,hve/gui/settings_store.py,585,フォルダパス1件を正規化する。,,8
-gui,function,parse_target_folders,hve/gui/settings_store.py,604,';' 区切り文字列を正規化済みパスのリストに変換する（重複除去・順序保持）。,,5
-gui,function,serialize_target_folders,hve/gui/settings_store.py,609,正規化済みリストを ';' 区切り文字列にシリアライズする。,,2
-gui,function,get_mdq_target_folders,hve/gui/settings_store.py,614,``[mdq] target_folders`` を正規化済みリストで取得する。,,5
+gui,function,_migrate_obsolete_keys,hve/gui/settings_store.py,325,読み込んだ ``ConfigParser`` から廃止キーを削除する。,,1
+gui,function,_migrate_renamed_keys,hve/gui/settings_store.py,342,読み込んだ ``ConfigParser`` で、旧キー名を新キー名へ移行する。,,1
+gui,function,_migrate_legacy_explorer_roots,hve/gui/settings_store.py,364,旧ルート ``original-docs`` を ``docs-original`` へ置換する。,,1
+gui,function,_migrate_self_improve_tristate,hve/gui/settings_store.py,389,旧boolean pairを ``self_improve = on/off/''`` へ移行する。,,1
+gui,function,load,hve/gui/settings_store.py,431,設定を読み込む。ファイル無し/壊れている場合は defaults() を返す。,,58
+gui,function,save,hve/gui/settings_store.py,481,設定をアトミックに保存する。,,13
+gui,function,_to_str,hve/gui/settings_store.py,498,return str(value),,3
+gui,function,_coerce,hve/gui/settings_store.py,506,既定値の型に合わせて文字列を変換する。,,3
+gui,function,get_option,hve/gui/settings_store.py,524,単一オプション値を取得する（既定値フォールバック付）。,,18
+gui,function,set_option,hve/gui/settings_store.py,530,単一オプション値を保存する（load -> 変更 -> save のショートカット）。,,7
+gui,function,_strip_quotes,hve/gui/settings_store.py,546,return s or None,,5
+gui,function,parse_semicolon_list,hve/gui/settings_store.py,551,';' 区切り文字列を要素リストへ分解する（重複除去・順序保持）。,,5
+gui,function,serialize_semicolon_list,hve/gui/settings_store.py,570,要素リストを ';' 区切り文字列へ整形する（重複除去・順序保持）。,,5
+gui,function,_normalize_target_folder,hve/gui/settings_store.py,588,フォルダパス1件を正規化する。,,8
+gui,function,parse_target_folders,hve/gui/settings_store.py,607,';' 区切り文字列を正規化済みパスのリストに変換する（重複除去・順序保持）。,,5
+gui,function,serialize_target_folders,hve/gui/settings_store.py,612,正規化済みリストを ';' 区切り文字列にシリアライズする。,,2
+gui,function,get_mdq_target_folders,hve/gui/settings_store.py,617,``[mdq] target_folders`` を正規化済みリストで取得する。,,5
 gui,class,SkillSectionEntry,hve/gui/skill_sections.py,42,設定画面 ``skills`` 配下に表示される 1 セクションの登録情報。,,5
 gui,class,SkillSectionRegistry,hve/gui/skill_sections.py,57,skill_sections の登録/参照を司るレジストリ。,,3
 gui,function,get_registry,hve/gui/skill_sections.py,95,モジュール singleton の Registry を返す。,,0
 gui,function,register_skill_section,hve/gui/skill_sections.py,100,便利関数: ``SkillSectionEntry`` を生成して登録する。,,0
+gui,function,has_env_token,hve/gui/startup_auth.py,29,`GH_TOKEN` / `GITHUB_TOKEN` のいずれかが設定済みかを返す。,,1
+gui,function,resolve_startup_token,hve/gui/startup_auth.py,34,環境変数、無ければ `gh auth token` で認証状態を解決する。,,1
+gui,function,ensure_startup_authentication,hve/gui/startup_auth.py,49,起動時の認証を解決し、未解決ならログイン導線を 1 回提示する。,,1
+gui,function,_ask_login_confirmation,hve/gui/startup_auth.py,64,GitHub CLI ログインを実行するかの確認ダイアログを表示する。,,1
+gui,function,_login_dialog_factory,hve/gui/startup_auth.py,93,`gh auth login` の埋め込み端末ダイアログを生成する。,,1
+gui,function,_prompt_login,hve/gui/startup_auth.py,100,確認 → 対話ログイン → トークン注入までを 1 回だけ実行する。,,1
 gui,function,_kill_process_tree,hve/gui/state_bridge.py,38,サブプロセスとその全子孫を OS レベルで強制終了する（最終手段）。,,1
 gui,class,SubprocessReader,hve/gui/state_bridge.py,79,サブプロセス stdout/stderr を行単位で読み取り Qt シグナルに変換する QThread。,,6
 gui,function,launch_orchestrator,hve/gui/state_bridge.py,197,orchestrator サブプロセスを起動して Popen を返す。,,3
@@ -1593,7 +1630,7 @@ gui,function,_escape,hve/gui/text_kinsoku.py,139,"return str(s).replace('&', '&a
 gui,function,normalize_theme,hve/gui/theme.py,144,未知の値・None を :data:`DEFAULT_THEME` へ丸める。,,4
 gui,function,set_current_theme,hve/gui/theme.py,149,:func:`token` の既定テーマを更新し、正規化後の名前を返す。,,1
 gui,function,current_theme,hve/gui/theme.py,156,return _current_theme,,0
-gui,function,token,hve/gui/theme.py,160,トークン名から色文字列を返す。,,179
+gui,function,token,hve/gui/theme.py,160,トークン名から色文字列を返す。,,198
 gui,function,build_palette,hve/gui/theme.py,214,21 の ColorRole すべてを埋めた :class:`QPalette` を返す。,,1
 gui,function,_icon_url,hve/gui/theme.py,233,QSS の ``url()`` へ埋め込める文字列を返す。,,2
 gui,function,build_stylesheet,hve/gui/theme.py,241,``QApplication.setStyleSheet()`` へ渡すテーマ依存の QSS を組み立てる。,,1
@@ -1752,102 +1789,104 @@ core,function,is_fresh,hve/models_cache.py,89,キャッシュが TTL 内か判�
 core,function,load,hve/models_cache.py,104,キャッシュをロードする。,,58
 core,function,save,hve/models_cache.py,211,モデル ID 一覧のみをキャッシュに保存する。親ディレクトリは自動作成。,,13
 core,function,save_entries,hve/models_cache.py,239,ModelEntry リストを v2 フォーマットでキャッシュに保存する。,,3
-core,function,clear,hve/models_cache.py,286,キャッシュを削除する。,,78
-cli,function,_create_copilot_client_from_config,hve/orchestrator.py,141,SDK 1.0.0 RuntimeConnection API で CopilotClient を生成する。,,7
-cli,function,_create_session_with_auto_reasoning_fallback,hve/orchestrator.py,162,create_session を呼び出し、SDK が reasoning_effort を未サポートの場合は除外して再試行する。,,13
-cli,function,_apply_reasoning_effort,hve/orchestrator.py,307,ユーザー指定の reasoning_effort を session_opts へ適用する。,,7
-cli,function,_format_context_injection_phase_breakdown,hve/orchestrator.py,341,context injection のフェーズ別内訳を整形する。,,1
-cli,function,_emit_context_injection_metrics,hve/orchestrator.py,349,context injection 計測を console / stderr / GitHub summary に出力する。,,1
-cli,function,_orchestrator_session_id,hve/orchestrator.py,387,orchestrator から作成する補助セッション用の決定論的 session_id を返す。,,6
-cli,function,_build_fork_kpi_logger,hve/orchestrator.py,408,`DAGExecutor` 用の ForkKPILogger を構築する。,,1
-cli,function,_normalize_akm_sources,hve/orchestrator.py,445,AKM の sources 値を正規化された list[str] に変換する。,,3
-cli,function,_default_akm_target_files,hve/orchestrator.py,483,AKM の sources に応じた ``target_files`` 既定値を返す。,,4
-cli,function,_normalize_adi_target_scope,hve/orchestrator.py,500,ADIの対象スコープを安全なPOSIX相対ディレクトリへ正規化する。,,1
-cli,function,_collect_params_non_interactive,hve/orchestrator.py,535,CLI 引数からパラメータを構築する（非対話モード）。,,1
-cli,function,_validate_asdw_data_deploy_requested_app_scope,hve/orchestrator.py,653,Reject an explicit ASDW app scope that would be normalized inconsistently.,,1
-cli,function,_is_non_interactive,hve/orchestrator.py,673,非対話モードで実行すべきかを判定する。,,1
-cli,function,_apply_interactive_review_choice,hve/orchestrator.py,683,対話ウィザードのレビュー選択を HVE Phase 3 設定へ同期する。,,1
-cli,function,capture_protected_artifact_manifest,hve/orchestrator.py,702,保護対象ルート配下のファイル一覧を manifest として記録する。,,2
-cli,function,check_protected_artifact_regression,hve/orchestrator.py,724,baseline 時点の成果物が失われていないかを検査する。,,1
-cli,function,should_retain_local_checkpoint,hve/orchestrator.py,760,live Step のみが失敗した場合に local checkpoint を保持すべきか判定する。,,1
-cli,function,_git_unmerged_paths,hve/orchestrator.py,782,Git index に残っている未解決パスを返す。,,2
-cli,function,_format_git_unmerged_index_error,hve/orchestrator.py,809,未解決 index のユーザー向けエラーメッセージを整形する。,,2
-cli,function,_normalize_repo_relative_path,hve/orchestrator.py,833,git 出力のパスをリポジトリ相対の POSIX 形式へ正規化する。,,7
-cli,function,_parse_git_status_path,hve/orchestrator.py,841,``git status --porcelain`` の 1 行から対象パスを取り出す。,,2
-cli,function,_is_hve_source_path,hve/orchestrator.py,858,パスが HVE 自身のソースツリーに属するかを返す。,,1
-cli,function,_is_under_any_path,hve/orchestrator.py,869,``path`` が ``roots`` のいずれかと一致、またはその配下かを返す。,,1
-cli,function,_filter_hve_source_paths,hve/orchestrator.py,883,HVE ソースパスだけを重複なく抽出する（target 出力パスは対象外）。,,3
-cli,function,_git_dirty_hve_source_paths,hve/orchestrator.py,900,HVE 自身のソースに残る未コミット変更パスを返す（FR-CLI-74）。,,2
-cli,function,_format_dirty_hve_source_error,hve/orchestrator.py,942,dirty HVE source のユーザー向けエラーメッセージを整形する（一括報告）。,,1
-cli,function,_format_staged_hve_source_error,hve/orchestrator.py,957,staged HVE source のユーザー向けエラーメッセージを整形する（一括報告）。,,1
-cli,function,_status_may_stage_hve_source,hve/orchestrator.py,972,``git add`` 後に HVE ソースが staged になり得るかを返す（FR-CLI-75）。,,1
-cli,function,_explicit_target_output_paths,hve/orchestrator.py,998,利用者が明示指定した target 出力パスを返す（FR-CLI-74 の対象外判定用）。,,1
-cli,function,_validated_qa_include_paths,hve/orchestrator.py,1010,明示 stage を許可する qa/ Markdown のリポジトリ相対パスを返す。,,2
-cli,function,_should_enable_qa_akm_dispatch,hve/orchestrator.py,1029,QA 起点 AKM を生成する実行だけを判定する（FR-QA-05 の唯一の判定点）。,,1
-cli,function,_resolve_max_parallel,hve/orchestrator.py,1042,DAG の並列上限と解決根拠を返す（FR-DAG-03 の唯一の解決点）。,,2
-cli,function,_git_checkout_new_branch,hve/orchestrator.py,1058,ローカルで新ブランチを作成し checkout する。,,2
-cli,function,_git_add_commit_push,hve/orchestrator.py,1109,変更を add + commit + push する。差分がなければ False を返す。,,4
-cli,function,_git_push_branch,hve/orchestrator.py,1260,現在の HEAD を origin/<branch> へ push する（差分なしブランチ作成にも使う）。,,2
-cli,function,_git_current_branch,hve/orchestrator.py,1280,現在 checkout されているブランチ名を返す。detached HEAD は None。,,1
-cli,function,_git_has_uncommitted_changes,hve/orchestrator.py,1300,未コミット変更（未追跡を含む）があるかを返す。取得失敗時は安全側で True。,,1
-cli,function,_git_checkout_existing_branch,hve/orchestrator.py,1319,既存ローカルブランチへ checkout する。,,1
-cli,function,_git_remote_branch_ahead,hve/orchestrator.py,1339,origin/<branch> がローカル <branch> より先行している場合 True を返す。,,1
-cli,function,_git_checkout_base_branch,hve/orchestrator.py,1378,base_branch へ checkout する。,,4
-cli,function,_git_pull_ff_only_base_branch,hve/orchestrator.py,1400,base_branch を origin/<base_branch> から fast-forward のみで更新する。,,1
-cli,function,_git_delete_local_branch,hve/orchestrator.py,1422,作業ブランチをローカル削除する（FR-CLI-34）。,,3
-cli,function,_git_delete_remote_branch,hve/orchestrator.py,1458,作業ブランチを origin から削除する（失敗 PR cleanup 用）。,,1
-cli,function,_cleanup_failed_pr_if_created,hve/orchestrator.py,1480,失敗 Step 後に PR が作成済みだった場合の best-effort cleanup。,,1
-cli,function,_wait_pr_merged_and_delete_local_branch,hve/orchestrator.py,1533,PR の merged を検知して作業ブランチをローカル削除する（FR-CLI-34）。,,1
-cli,function,_wait_pr_merged,hve/orchestrator.py,1560,PR の merged と、必要に応じて merge commit の check-run 成功を待機する。,,2
-cli,function,_wait_check_runs_success,hve/orchestrator.py,1623,merge commit の check-runs が失敗していないことを確認する。,,1
-cli,function,_create_issues_if_needed,hve/orchestrator.py,1670,create_issues=True の場合のみ Root Issue + Sub-Issue を作成する。,,1
-cli,function,_collect_deploy_ac_verification_lines,hve/orchestrator.py,1751,run scoped ``ac-verification.md`` から AC テーブル行だけを収集する。,,1
-cli,function,_expand_workflow_for_dag,hve/orchestrator.py,1807,fan-out 展開済み workflow と拡張済み active_step_ids を返す。,,1
-cli,function,_build_step_prompt,hve/orchestrator.py,1967,ステップのプロンプト文字列を構築する。,,2
-cli,function,_collect_file_samples,hve/orchestrator.py,2029,指定ディレクトリから最大 limit 件のファイルパスを収集して返す。,,2
-cli,function,_detect_existing_artifacts,hve/orchestrator.py,2057,既存の成果物を検出し、再利用可能なファイルリストを返す。,,1
-cli,function,check_step_input_artifacts,hve/orchestrator.py,2212,ステップの前提成果物が存在するかチェックする。,,1
-cli,function,_check_workflow_input_artifacts,hve/orchestrator.py,2251,ワークフロー実行前に**ルートステップ**の前提成果物をチェックする。,,1
-cli,function,_check_required_skills_for_active_steps,hve/orchestrator.py,2366,active step に required_skills があれば、存在する skill 名かを事前検証する。,,1
-cli,function,_check_required_workflow_params_for_active_steps,hve/orchestrator.py,2451,active step が宣言した必須 Workflow パラメータを実行開始前に検査する（FR-DAG-08）。,,1
-cli,function,_check_dirty_hve_sources,hve/orchestrator.py,2524,HVE ソースの未コミット変更を run 開始前に検査する（FR-CLI-74）。,,1
-cli,function,_format_qa_akm_failure_warning,hve/orchestrator.py,2565,QA 起点 AKM 子実行の失敗報告を組み立てる（FR-QA-07）。,,1
-cli,function,_format_qa_akm_skip_warning,hve/orchestrator.py,2594,登録時点の事前判定で起動しなかった登録を報告する（FR-QA-07）。,,1
-cli,function,_collect_workflow_output_paths_by_step,hve/orchestrator.py,2617,ベース Step ID → 具体 output_paths と fan-out キー一覧を収集する。,,2
-cli,function,collect_workflow_output_paths,hve/orchestrator.py,2666,ワークフローの全ステップの具体的な output_paths を集約して返す。,,1
-cli,function,workflow_output_paths_cover_workflow,hve/orchestrator.py,2714,収集した具体 path が workflow 全体を代表しうるかを判定する。,,1
-cli,function,_self_improve_result_succeeded,hve/orchestrator.py,2749,Post-DAG Self-Improveが上位workflowを成功させてよいか判定する。,,1
-cli,function,_agent_fanout_scope_precondition_error,hve/orchestrator.py,2815,AAG/AAGDの固定成果物と全fan-out keyの実体を確認する。,,1
-cli,function,_uses_workflow_branch_mode,hve/orchestrator.py,2895,DAG 全体を 1 本の作業ブランチで実行する従来モードかを返す。,,1
-cli,function,_remote_cicd_step_ids,hve/orchestrator.py,2912,active_steps のうち Step 単位 remote CI/CD 対象 ID を返す。,,1
-cli,function,_compute_step_additional_prompt,hve/orchestrator.py,2922,ステップの additional_prompt を計算する。,,2
-cli,function,_infer_step_kind,hve/orchestrator.py,3037,consumed_artifacts キーから step 種別を推定する (Sub-2 A-2)。,,1
-cli,function,_build_reuse_context,hve/orchestrator.py,3072,既存成果物の再利用コンテキストをプロンプトに追加する文字列を生成。,,2
-cli,function,_prefetch_workiq,hve/orchestrator.py,3103,Work IQ を別セッションで事前呼び出しし、結果テキストを返す（後方互換ラッパー）。,,0
-cli,function,_prefetch_workiq_detailed,hve/orchestrator.py,3119,Work IQ を別セッションで呼び出し、詳細結果を返す後方互換ヘルパー。,,1
-cli,function,_summarize_dxx_for_query,hve/orchestrator.py,3345,Dxx ファイルの内容から Work IQ クエリ用の要約を生成する。,,1
-cli,function,_run_akm_workiq_verification,hve/orchestrator.py,3383,AKM Post-DAG: Work IQ で knowledge/Dxx ドキュメントの妥当性を検証・修正する。,,1
-cli,function,_run_akm_workiq_ingest,hve/orchestrator.py,3629,AKM Pre-DAG: Work IQ を入力ソースとして ``knowledge/Dxx-*.md`` を起票・差分更新する。,,1
-cli,function,_run_ard_workiq_usecase,hve/orchestrator.py,3924,ARD Step.2: Work IQ 経由でユースケースカタログの参照情報を取得し、Step.2 Issue にコメントする。,,1
-cli,function,_select_recommendation,hve/orchestrator.py,4088,ARD の Strategic Recommendation を 1 件選択する。,,1
-cli,function,_generate_target_business_from_sr,hve/orchestrator.py,4122,選択 SR + Step 1.2 出力から target_business 説明文を生成する。,,1
-cli,function,_on_ard_step1_completed,hve/orchestrator.py,4199,ARD グループ 1（実 Step 1 → 1.1 → 1.2）完了直後の SR 抽出・選択・target_business 生成。,,1
-cli,function,_resolve_target_business_paths,hve/orchestrator.py,4258,target_business がパス指定なら context テキストへ展開する。,,1
-cli,function,_resolve_config_disabled_steps,hve/orchestrator.py,4278,`StepDef.disabled_when_config` と設定値から無効化 Step ID を解決する。,,1
-cli,function,_should_use_statusline,hve/orchestrator.py,4315,FR-RTO-02: Workbench を使わない実行で 1 行ステータスラインを使うか判定する。,,1
-cli,function,_build_statusline_state,hve/orchestrator.py,4332,FR-RTO-05: 集計から StatusLine 表示状態を作る（未取得値は埋めない）。,,1
-cli,function,_attach_runtime_statusline,hve/orchestrator.py,4350,Workbench 無効時の TTY で 1Hz ステータスラインを開始する。,,1
-cli,function,_format_runtime_summary,hve/orchestrator.py,4371,FR-RTO-05: 実行終了時の 1 行サマリー（整形は core 実装に単一化）。,,1
-cli,function,_emit_runtime_summary,hve/orchestrator.py,4381,非 TTY 実行の終了時にだけ、集計を 1 回出力する（FR-RTO-02）。,,1
-cli,function,_attach_runtime_observability,hve/orchestrator.py,4399,FR-RTO-03 / FR-RTO-06: 観測イベントの記録器を生成し Console へ接続する。,,1
-cli,function,_attach_mcp_io_logging,hve/orchestrator.py,4437,FR-MCPLOG-01 / 02: MCP 通信ログの記録器を生成し Console へ接続する。,,1
-cli,function,_start_index_watchers,hve/orchestrator.py,4453,起動時の索引差分更新を待ってから mdq / cq watcher を起動する（FR-CLI-77）。,,1
-cli,function,_start_index_watchers_when_idle,hve/orchestrator.py,4514,watcher 起動を専用スレッドへ退避する。待ち合わせで本体実行を止めないため。,,1
-cli,function,run_workflow,hve/orchestrator.py,4530,ワークフローを SDK でローカル実行する。,,2
-cli,function,_print_dry_run_plan,hve/orchestrator.py,6759,ドライラン時に DAG の波（Wave）を表示する。,,1
-cli,function,_get_git_diff,hve/orchestrator.py,6852,git diff base_ref との差分テキストを返す。差分なし/エラーは空文字を返す。,,1
-cli,function,_request_code_review,hve/orchestrator.py,6886,Copilot CLI SDK セッションでローカルに Code Review を実行する。,,1
-cli,function,_create_pr_if_needed,hve/orchestrator.py,7078,PR を作成する。,validation-confirmed,2
+core,function,clear,hve/models_cache.py,286,キャッシュを削除する。,,86
+cli,function,_create_copilot_client_from_config,hve/orchestrator.py,152,SDK 1.0.0 RuntimeConnection API で CopilotClient を生成する。,,7
+cli,function,_create_session_with_auto_reasoning_fallback,hve/orchestrator.py,173,create_session を呼び出し、SDK が reasoning_effort を未サポートの場合は除外して再試行する。,,13
+cli,function,_apply_reasoning_effort,hve/orchestrator.py,327,ユーザー指定の reasoning_effort を session_opts へ適用する。,,7
+cli,function,_format_context_injection_phase_breakdown,hve/orchestrator.py,361,context injection のフェーズ別内訳を整形する。,,1
+cli,function,_emit_context_injection_metrics,hve/orchestrator.py,369,context injection 計測を console / stderr / GitHub summary に出力する。,,1
+cli,function,_orchestrator_session_id,hve/orchestrator.py,407,orchestrator から作成する補助セッション用の決定論的 session_id を返す。,,6
+cli,function,_build_fork_kpi_logger,hve/orchestrator.py,428,`DAGExecutor` 用の ForkKPILogger を構築する。,,1
+cli,function,_normalize_akm_sources,hve/orchestrator.py,465,AKM の sources 値を正規化された list[str] に変換する。,,3
+cli,function,_default_akm_target_files,hve/orchestrator.py,503,AKM の sources に応じた ``target_files`` 既定値を返す。,,4
+cli,function,_normalize_adi_target_scope,hve/orchestrator.py,520,ADIの対象スコープを安全なPOSIX相対ディレクトリへ正規化する。,,1
+cli,function,_collect_params_non_interactive,hve/orchestrator.py,555,CLI 引数からパラメータを構築する（非対話モード）。,,1
+cli,function,_validate_asdw_data_deploy_requested_app_scope,hve/orchestrator.py,673,Reject an explicit ASDW app scope that would be normalized inconsistently.,,1
+cli,function,_is_non_interactive,hve/orchestrator.py,693,非対話モードで実行すべきかを判定する。,,1
+cli,function,_apply_interactive_review_choice,hve/orchestrator.py,703,対話ウィザードのレビュー選択を HVE Phase 3 設定へ同期する。,,1
+cli,function,capture_protected_artifact_manifest,hve/orchestrator.py,722,保護対象ルート配下のファイル一覧を manifest として記録する。,,2
+cli,function,check_protected_artifact_regression,hve/orchestrator.py,744,baseline 時点の成果物が失われていないかを検査する。,,1
+cli,function,should_retain_local_checkpoint,hve/orchestrator.py,780,live Step のみが失敗した場合に local checkpoint を保持すべきか判定する。,,1
+cli,function,_git_unmerged_paths,hve/orchestrator.py,802,Git index に残っている未解決パスを返す。,,2
+cli,function,_format_git_unmerged_index_error,hve/orchestrator.py,829,未解決 index のユーザー向けエラーメッセージを整形する。,,2
+cli,function,_normalize_repo_relative_path,hve/orchestrator.py,862,git 出力のパスをリポジトリ相対の POSIX 形式へ正規化する。,,7
+cli,function,_parse_git_status_path,hve/orchestrator.py,870,``git status --porcelain`` の 1 行から対象パスを取り出す。,,2
+cli,function,_is_hve_source_path,hve/orchestrator.py,887,パスが HVE 自身のソースツリーに属するかを返す。,,1
+cli,function,_is_under_any_path,hve/orchestrator.py,898,``path`` が ``roots`` のいずれかと一致、またはその配下かを返す。,,1
+cli,function,_filter_hve_source_paths,hve/orchestrator.py,912,HVE ソースパスだけを重複なく抽出する（target 出力パスは対象外）。,,3
+cli,function,_git_dirty_hve_source_paths,hve/orchestrator.py,929,HVE 自身のソースに残る未コミット変更パスを返す（FR-CLI-74）。,,2
+cli,function,_format_dirty_hve_source_error,hve/orchestrator.py,976,dirty HVE source のユーザー向けエラーメッセージを整形する（一括報告）。,,1
+cli,function,_format_staged_hve_source_error,hve/orchestrator.py,991,staged HVE source のユーザー向けエラーメッセージを整形する（一括報告）。,,1
+cli,function,_status_may_stage_hve_source,hve/orchestrator.py,1006,``git add`` 後に HVE ソースが staged になり得るかを返す（FR-CLI-75）。,,1
+cli,function,_explicit_target_output_paths,hve/orchestrator.py,1032,利用者が明示指定した target 出力パスを返す（FR-CLI-74 の対象外判定用）。,,1
+cli,function,_validated_qa_include_paths,hve/orchestrator.py,1044,明示 stage を許可する qa/ Markdown のリポジトリ相対パスを返す。,,2
+cli,function,_should_enable_qa_akm_dispatch,hve/orchestrator.py,1063,QA 起点 AKM を生成する実行だけを判定する（FR-QA-05 の唯一の判定点）。,,1
+cli,function,_resolve_max_parallel,hve/orchestrator.py,1076,DAG の並列上限と解決根拠を返す（FR-DAG-03 の唯一の解決点）。,,2
+cli,function,_git_checkout_new_branch,hve/orchestrator.py,1092,ローカルで新ブランチを作成し checkout する。,,2
+cli,function,_git_add_commit_push,hve/orchestrator.py,1143,変更を add + commit + push する。差分がなければ False を返す。,,4
+cli,function,_git_push_branch,hve/orchestrator.py,1294,現在の HEAD を origin/<branch> へ push する（差分なしブランチ作成にも使う）。,,2
+cli,function,_git_current_branch,hve/orchestrator.py,1314,現在 checkout されているブランチ名を返す。detached HEAD は None。,,1
+cli,function,_git_has_uncommitted_changes,hve/orchestrator.py,1334,未コミット変更（未追跡を含む）があるかを返す。取得失敗時は安全側で True。,,1
+cli,function,_git_checkout_existing_branch,hve/orchestrator.py,1353,既存ローカルブランチへ checkout する。,,1
+cli,function,_git_remote_branch_ahead,hve/orchestrator.py,1373,origin/<branch> がローカル <branch> より先行している場合 True を返す。,,1
+cli,function,_git_checkout_base_branch,hve/orchestrator.py,1412,base_branch へ checkout する。,,4
+cli,function,_git_pull_ff_only_base_branch,hve/orchestrator.py,1434,base_branch を origin/<base_branch> から fast-forward のみで更新する。,,1
+cli,function,_git_delete_local_branch,hve/orchestrator.py,1456,作業ブランチをローカル削除する（FR-CLI-34）。,,3
+cli,function,_git_delete_remote_branch,hve/orchestrator.py,1492,作業ブランチを origin から削除する（失敗 PR cleanup 用）。,,1
+cli,function,_cleanup_failed_pr_if_created,hve/orchestrator.py,1514,失敗 Step 後に PR が作成済みだった場合の best-effort cleanup。,,1
+cli,function,_wait_pr_merged_and_delete_local_branch,hve/orchestrator.py,1567,PR の merged を検知して作業ブランチをローカル削除する（FR-CLI-34）。,,1
+cli,function,_wait_pr_merged,hve/orchestrator.py,1594,PR の merged と、必要に応じて merge commit の check-run 成功を待機する。,,2
+cli,function,_wait_check_runs_success,hve/orchestrator.py,1657,merge commit の check-runs が失敗していないことを確認する。,,1
+cli,class,RootIssueResolutionError,hve/orchestrator.py,1704,FR-GUI-25: 指定された既存 Issue を Root Issue として解決できない。,,4
+cli,function,_resolve_existing_root_issue,hve/orchestrator.py,1712,既存 Issue を Root Issue として解決する（FR-GUI-25）。,,1
+cli,function,_create_issues_if_needed,hve/orchestrator.py,1742,create_issues=True の場合のみ Root Issue + Sub-Issue を作成する。,,1
+cli,function,_collect_deploy_ac_verification_lines,hve/orchestrator.py,1835,run scoped ``ac-verification.md`` から AC テーブル行だけを収集する。,,1
+cli,function,_expand_workflow_for_dag,hve/orchestrator.py,1891,fan-out 展開済み workflow と拡張済み active_step_ids を返す。,,1
+cli,function,_build_step_prompt,hve/orchestrator.py,2051,ステップのプロンプト文字列を構築する。,,2
+cli,function,_collect_file_samples,hve/orchestrator.py,2113,指定ディレクトリから最大 limit 件のファイルパスを収集して返す。,,2
+cli,function,_detect_existing_artifacts,hve/orchestrator.py,2141,既存の成果物を検出し、再利用可能なファイルリストを返す。,,1
+cli,function,check_step_input_artifacts,hve/orchestrator.py,2296,ステップの前提成果物が存在するかチェックする。,,1
+cli,function,_check_workflow_input_artifacts,hve/orchestrator.py,2335,ワークフロー実行前に**ルートステップ**の前提成果物をチェックする。,,1
+cli,function,_check_required_skills_for_active_steps,hve/orchestrator.py,2450,active step に required_skills があれば、存在する skill 名かを事前検証する。,,1
+cli,function,_check_required_workflow_params_for_active_steps,hve/orchestrator.py,2535,active step が宣言した必須 Workflow パラメータを実行開始前に検査する（FR-DAG-08）。,,1
+cli,function,_check_dirty_hve_sources,hve/orchestrator.py,2608,HVE ソースの未コミット変更を run 開始前に検査する（FR-CLI-74）。,,1
+cli,function,_format_qa_akm_failure_warning,hve/orchestrator.py,2650,QA 起点 AKM 子実行の失敗報告を組み立てる（FR-QA-07）。,,1
+cli,function,_format_qa_akm_skip_warning,hve/orchestrator.py,2679,登録時点の事前判定で起動しなかった登録を報告する（FR-QA-07）。,,1
+cli,function,_collect_workflow_output_paths_by_step,hve/orchestrator.py,2702,ベース Step ID → 具体 output_paths と fan-out キー一覧を収集する。,,2
+cli,function,collect_workflow_output_paths,hve/orchestrator.py,2751,ワークフローの全ステップの具体的な output_paths を集約して返す。,,1
+cli,function,workflow_output_paths_cover_workflow,hve/orchestrator.py,2799,収集した具体 path が workflow 全体を代表しうるかを判定する。,,1
+cli,function,_self_improve_result_succeeded,hve/orchestrator.py,2834,Post-DAG Self-Improveが上位workflowを成功させてよいか判定する。,,1
+cli,function,_agent_fanout_scope_precondition_error,hve/orchestrator.py,2900,AAG/AAGDの固定成果物と全fan-out keyの実体を確認する。,,1
+cli,function,_uses_workflow_branch_mode,hve/orchestrator.py,2980,DAG 全体を 1 本の作業ブランチで実行する従来モードかを返す。,,1
+cli,function,_remote_cicd_step_ids,hve/orchestrator.py,2991,active_steps のうち Step 単位 remote CI/CD 対象 ID を返す。,,1
+cli,function,_compute_step_additional_prompt,hve/orchestrator.py,3001,ステップの additional_prompt を計算する。,,2
+cli,function,_infer_step_kind,hve/orchestrator.py,3116,consumed_artifacts キーから step 種別を推定する (Sub-2 A-2)。,,1
+cli,function,_build_reuse_context,hve/orchestrator.py,3151,既存成果物の再利用コンテキストをプロンプトに追加する文字列を生成。,,2
+cli,function,_prefetch_workiq,hve/orchestrator.py,3182,Work IQ を別セッションで事前呼び出しし、結果テキストを返す（後方互換ラッパー）。,,0
+cli,function,_prefetch_workiq_detailed,hve/orchestrator.py,3198,Work IQ を別セッションで呼び出し、詳細結果を返す後方互換ヘルパー。,,1
+cli,function,_summarize_dxx_for_query,hve/orchestrator.py,3427,Dxx ファイルの内容から Work IQ クエリ用の要約を生成する。,,1
+cli,function,_run_akm_workiq_verification,hve/orchestrator.py,3465,AKM Post-DAG: Work IQ で knowledge/Dxx ドキュメントの妥当性を検証・修正する。,,1
+cli,function,_run_akm_workiq_ingest,hve/orchestrator.py,3714,AKM Pre-DAG: Work IQ を入力ソースとして ``knowledge/Dxx-*.md`` を起票・差分更新する。,,1
+cli,function,_run_ard_workiq_usecase,hve/orchestrator.py,4012,ARD Step.2: Work IQ 経由でユースケースカタログの参照情報を取得し、Step.2 Issue にコメントする。,,1
+cli,function,_select_recommendation,hve/orchestrator.py,4179,ARD の Strategic Recommendation を 1 件選択する。,,1
+cli,function,_generate_target_business_from_sr,hve/orchestrator.py,4213,選択 SR + Step 1.2 出力から target_business 説明文を生成する。,,1
+cli,function,_on_ard_step1_completed,hve/orchestrator.py,4291,ARD グループ 1（実 Step 1 → 1.1 → 1.2）完了直後の SR 抽出・選択・target_business 生成。,,1
+cli,function,_resolve_target_business_paths,hve/orchestrator.py,4350,target_business がパス指定なら context テキストへ展開する。,,1
+cli,function,_resolve_config_disabled_steps,hve/orchestrator.py,4370,`StepDef.disabled_when_config` と設定値から無効化 Step ID を解決する。,,1
+cli,function,_should_use_statusline,hve/orchestrator.py,4407,FR-RTO-02: Workbench を使わない実行で 1 行ステータスラインを使うか判定する。,,1
+cli,function,_build_statusline_state,hve/orchestrator.py,4424,FR-RTO-05: 集計から StatusLine 表示状態を作る（未取得値は埋めない）。,,1
+cli,function,_attach_runtime_statusline,hve/orchestrator.py,4442,Workbench 無効時の TTY で 1Hz ステータスラインを開始する。,,1
+cli,function,_format_runtime_summary,hve/orchestrator.py,4463,FR-RTO-05: 実行終了時の 1 行サマリー（整形は core 実装に単一化）。,,1
+cli,function,_emit_runtime_summary,hve/orchestrator.py,4473,非 TTY 実行の終了時にだけ、集計を 1 回出力する（FR-RTO-02）。,,1
+cli,function,_attach_runtime_observability,hve/orchestrator.py,4491,FR-RTO-03 / FR-RTO-06: 観測イベントの記録器を生成し Console へ接続する。,,1
+cli,function,_attach_mcp_io_logging,hve/orchestrator.py,4529,FR-MCPLOG-01 / 02: MCP 通信ログの記録器を生成し Console へ接続する。,,1
+cli,function,_start_index_watchers,hve/orchestrator.py,4545,起動時の索引差分更新を待ってから mdq / cq watcher を起動する（FR-CLI-77）。,,1
+cli,function,_start_index_watchers_when_idle,hve/orchestrator.py,4606,watcher 起動を専用スレッドへ退避する。待ち合わせで本体実行を止めないため。,,1
+cli,function,run_workflow,hve/orchestrator.py,4622,ワークフローを SDK でローカル実行する。,,2
+cli,function,_print_dry_run_plan,hve/orchestrator.py,6893,ドライラン時に DAG の波（Wave）を表示する。,,1
+cli,function,_get_git_diff,hve/orchestrator.py,6986,git diff base_ref との差分テキストを返す。差分なし/エラーは空文字を返す。,,1
+cli,function,_request_code_review,hve/orchestrator.py,7020,Copilot CLI SDK セッションでローカルに Code Review を実行する。,,1
+cli,function,_create_pr_if_needed,hve/orchestrator.py,7212,PR を作成する。,validation-confirmed,2
 core,class,OrchestratorContext,hve/orchestrator_context.py,27,Orchestrator 配下で伝播される実行コンテキスト。,,3
 core,function,is_active,hve/orchestrator_context.py,57,`ctx is not None` のショートカット（読みやすさのため）。,,0
 core,class,ScopedPermissionHandler,hve/permission_handler.py,67,Self-Improve ループ専用の PermissionHandler。,,1
@@ -1884,7 +1923,7 @@ core,class,QaAkmCoordinator,hve/qa_akm_dispatch.py,121,検証済み QA ファイ
 core,class,Choice,hve/qa_merger.py,47,"選択肢（例: A, B, C）",,6
 core,class,QAQuestion,hve/qa_merger.py,54,質問1件,,11
 core,class,QADocument,hve/qa_merger.py,72,質問票ドキュメント全体,,10
-core,class,QAMerger,hve/qa_merger.py,87,QA 質問票のパース・マージ・レンダリングを行うクラス。,,32
+core,class,QAMerger,hve/qa_merger.py,87,QA 質問票のパース・マージ・レンダリングを行うクラス。,,33
 core,function,_split_table_row,hve/qa_merger.py,885,Markdown テーブル行をセルに分割する。,,5
 core,class,RepositoryQueryError,hve/repository_query.py,41,Base error for the bounded SDK runtime.,,11
 core,class,RepositoryQueryConfigurationError,hve/repository_query.py,47,Raised before client creation when fixed execution inputs are invalid.,,9
@@ -1940,7 +1979,7 @@ cli,function,format_exception_for_log,hve/runner.py,302,例外を `型名: メ�
 cli,function,_permission_path_has_reparse_point,hve/runner.py,397,"return bool(int(getattr(path_stat, 'st_file_attributes', 0)) & reparse_flag)",,1
 cli,function,_permission_path_has_windows_alias,hve/runner.py,402,"Reject ADS, reserved devices, and Win32 trailing-dot/space aliases.",,1
 cli,function,_permission_repo_relative_path,hve/runner.py,430,"Return a direct repository-relative path, rejecting aliases and escapes.",,1
-cli,function,_read_repository_mcp_config,hve/runner.py,490,Return the `mcpServers` map declared in the repository-pinned MCP config.,,4
+cli,function,_read_repository_mcp_config,hve/runner.py,490,Return the `mcpServers` map declared in the repository-pinned MCP config.,,3
 cli,function,_load_repository_pinned_mcp_servers,hve/runner.py,509,Load an exact named subset from the repository-pinned MCP config.,,2
 cli,function,_load_trusted_asdw_data_deploy_mcp_servers,hve/runner.py,523,Load only the repository-pinned official Microsoft Learn MCP endpoint.,,1
 cli,function,_load_trusted_foundry_mcp_servers,hve/runner.py,537,Load the exact Azure and Microsoft Learn MCP servers for Foundry Steps.,,1
@@ -1955,30 +1994,31 @@ cli,function,_write_asdw_data_deploy_evidence,hve/runner.py,800,Write bounded na
 cli,function,_is_asdw_data_deploy_step,hve/runner.py,955,"return bool(custom_agent == 'Dev-Microservice-Azure-DataDeploy' and str(step_id or '').split('/', 1)[0] == '1.3')",,8
 cli,function,_has_supported_asdw_data_deploy_app_scope,hve/runner.py,965,Require exactly the one APP coverage the fixed producer can render.,,1
 cli,function,_is_workiq_mcp_server_name,hve/runner.py,1096,return str(name or '').strip().lower() in _WORKIQ_MCP_SERVER_ALIASES,,3
-cli,function,_filter_mcp_servers_for_session,hve/runner.py,1107,"Return MCP servers for a session, excluding Work IQ aliases by default.",,5
-cli,function,_filter_workiq_questions,hve/runner.py,1132,Work IQ クエリ対象の質問を絞り込む。,,1
-cli,function,_resolve_step_output_paths,hve/runner.py,1162,ステップから成果物パスを取得する。,,2
-cli,function,_build_execution_mode_constraint_suffix,hve/runner.py,1179,CLI/GUI Orchestrator 配下 (fleet mode 以外) のとき prompt 末尾に付与する制約文を返す。,task_scope;context_size,1
-cli,function,_build_review_ownership_suffix,hve/runner.py,1196,メインタスクと敵対的レビューの所有権を明示する末尾指示を返す。,,1
-cli,function,_check_output_paths_gate,hve/runner.py,1212,CLI/GUI Orchestrator 配下で `output_paths` の欠落を検出する。,,1
-cli,function,_extract_safe_qa_artifact_paths,hve/runner.py,1260,LLM 応答中の安全な `qa/*.md` artifacts パスを抽出する。,,1
-cli,function,_parse_qa_content_with_artifact_fallback,hve/runner.py,1299,QA 応答本文をパースし、失敗時は artifacts 参照先の QA ファイルを再パースする。,,1
-cli,function,_create_session_with_auto_reasoning_fallback,hve/runner.py,1320,create_session を呼び出し、SDK が reasoning_effort を未サポートの場合は除外して再試行する。,,13
-cli,function,_truncate_context,hve/runner.py,1504,コンテキストを先頭 + 末尾で切り詰める。,,1
-cli,function,_truncate_context_with_warn,hve/runner.py,1516,`_truncate_context` のラッパー。切詰めが発生した場合だけ console.warning を出す。,,5
-cli,function,_apply_fanout_prompt_template,hve/runner.py,1549,fan-out 子ステップ用の追加プロンプトを base prompt 先頭に注入する。,,2
-cli,function,_start_client_with_retry,hve/runner.py,1598,`client.start()` を最大 _CLIENT_START_MAX_ATTEMPTS 回リトライする。,,1
-cli,function,_is_review_fail,hve/runner.py,1629,合格判定行のトークンから FAIL 判定かどうかを判定する。,,3
-cli,function,_atomic_write_text,hve/runner.py,1669,tmp + os.replace でアトミックに書き込む。,,2
-cli,function,_collect_qa_answers_via_ipc,hve/runner.py,1683,"qa_answer_mode=""gui-file"" モード: GUI からの回答を IPC ファイル経由で受け取る。",,1
-cli,function,_collect_qa_answers,hve/runner.py,1820,Phase 2b: QA 質問票への回答を収集する。,,1
-cli,function,_should_run_pre_execution_qa,hve/runner.py,1963,FR-QA-03: auto_qa 有効時はワークフロー共通の事前 QA を実行する。,,1
-cli,function,_persist_answered_qa_and_dispatch,hve/runner.py,1975,回答済み QA を保存・再検証し、AKM 登録キューへ非待機で渡す。,,1
-cli,class,StepRunner,hve/runner.py,2059,1 ステップを CopilotSession で実行する。,split_decision,8
-cli,function,_blocking_stdin_read,hve/runner.py,7561,スレッドプール内で実行するブロッキング stdin 読み取り。,,1
-cli,function,_read_stdin_multiline,hve/runner.py,7569,複数行の回答入力を受け付ける。,,2
-cli,function,_extract_text,hve/runner.py,7627,SDK レスポンスからテキスト部分を取り出す。,,14
-cli,function,_extract_json_block,hve/runner.py,7653,テキストから最初の JSON オブジェクト（`{...}`）を抽出して返す。,,1
+cli,function,_filter_mcp_servers_for_session,hve/runner.py,1107,"Return MCP servers for a session, excluding Work IQ aliases by default.",,4
+cli,function,_apply_repository_mcp_scope,hve/runner.py,1132,FR-CLI-76: リポジトリ宣言の MCP サーバだけを公開し、自動探索を止める。,,7
+cli,function,_filter_workiq_questions,hve/runner.py,1158,Work IQ クエリ対象の質問を絞り込む。,,1
+cli,function,_resolve_step_output_paths,hve/runner.py,1188,ステップから成果物パスを取得する。,,2
+cli,function,_build_execution_mode_constraint_suffix,hve/runner.py,1205,CLI/GUI Orchestrator 配下 (fleet mode 以外) のとき prompt 末尾に付与する制約文を返す。,task_scope;context_size,1
+cli,function,_build_review_ownership_suffix,hve/runner.py,1222,メインタスクと敵対的レビューの所有権を明示する末尾指示を返す。,,1
+cli,function,_check_output_paths_gate,hve/runner.py,1238,CLI/GUI Orchestrator 配下で `output_paths` の欠落を検出する。,,1
+cli,function,_extract_safe_qa_artifact_paths,hve/runner.py,1286,LLM 応答中の安全な `qa/*.md` artifacts パスを抽出する。,,1
+cli,function,_parse_qa_content_with_artifact_fallback,hve/runner.py,1325,QA 応答本文をパースし、失敗時は artifacts 参照先の QA ファイルを再パースする。,,1
+cli,function,_create_session_with_auto_reasoning_fallback,hve/runner.py,1346,create_session を呼び出し、SDK が reasoning_effort を未サポートの場合は除外して再試行する。,,13
+cli,function,_truncate_context,hve/runner.py,1525,コンテキストを先頭 + 末尾で切り詰める。,,1
+cli,function,_truncate_context_with_warn,hve/runner.py,1537,`_truncate_context` のラッパー。切詰めが発生した場合だけ console.warning を出す。,,5
+cli,function,_apply_fanout_prompt_template,hve/runner.py,1570,fan-out 子ステップ用の追加プロンプトを base prompt 先頭に注入する。,,2
+cli,function,_start_client_with_retry,hve/runner.py,1619,`client.start()` を最大 _CLIENT_START_MAX_ATTEMPTS 回リトライする。,,1
+cli,function,_is_review_fail,hve/runner.py,1650,合格判定行のトークンから FAIL 判定かどうかを判定する。,,3
+cli,function,_atomic_write_text,hve/runner.py,1690,tmp + os.replace でアトミックに書き込む。,,2
+cli,function,_collect_qa_answers_via_ipc,hve/runner.py,1704,"qa_answer_mode=""gui-file"" モード: GUI からの回答を IPC ファイル経由で受け取る。",,1
+cli,function,_collect_qa_answers,hve/runner.py,1841,Phase 2b: QA 質問票への回答を収集する。,,1
+cli,function,_should_run_pre_execution_qa,hve/runner.py,1984,FR-QA-03: auto_qa 有効時はワークフロー共通の事前 QA を実行する。,,1
+cli,function,_persist_answered_qa_and_dispatch,hve/runner.py,1996,回答済み QA を保存・再検証し、AKM 登録キューへ非待機で渡す。,,1
+cli,class,StepRunner,hve/runner.py,2080,1 ステップを CopilotSession で実行する。,split_decision,8
+cli,function,_blocking_stdin_read,hve/runner.py,7577,スレッドプール内で実行するブロッキング stdin 読み取り。,,1
+cli,function,_read_stdin_multiline,hve/runner.py,7585,複数行の回答入力を受け付ける。,,2
+cli,function,_extract_text,hve/runner.py,7643,SDK レスポンスからテキスト部分を取り出す。,,14
+cli,function,_extract_json_block,hve/runner.py,7669,テキストから最初の JSON オブジェクト（`{...}`）を抽出して返す。,,1
 core,function,is_child_process,hve/runtime_observability.py,33,親プロセスから起動され作業ディレクトリを共有する子プロセスかを返す。,,2
 core,function,make_instance_id,hve/runtime_observability.py,76,FR-RTO-01: instance_id は workflow_id、APP 並列時のみ `workflow_id#app_id`。,,2
 core,class,RuntimeContext,hve/runtime_observability.py,84,1 プロセス分の実行識別子と連番。,,3
@@ -2142,6 +2182,14 @@ core,function,build_subtask_prompt,hve/split_fork.py,718,サブタスク実行�
 core,function,make_subtask_work_subdir,hve/split_fork.py,770,サブタスク用の work ディレクトリ相対パスを生成する。,,2
 core,function,check_subtask_completion,hve/split_fork.py,795,サブタスクの完了判定。,validation-confirmed,3
 core,function,compute_waves,hve/split_fork.py,853,`depends_on` を解釈して topological wave 列に分割する。,,3
+core,class,StartupPreflightIssue,hve/startup_preflight.py,22,class StartupPreflightIssue:,,4
+core,class,StartupPreflightResult,hve/startup_preflight.py,30,return not self.issues,,9
+core,function,github_write_required,hve/startup_preflight.py,37,この実行が GitHub branch / Issue / PR 書き込みを必要とするか返す。,,2
+core,function,_valid_branch_name,hve/startup_preflight.py,62,return all((part and (not part.startswith('.')) and (not part.endswith('.lock')) for part in value.split('/'))),,1
+core,function,_issue,hve/startup_preflight.py,79,"return StartupPreflightIssue(category=category, field_name=field_name, message=message, remediation_hint=remediation_hint)",,8
+core,function,_git_run,hve/startup_preflight.py,93,"return subprocess.run(command, cwd=str(repo_root), capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=30, env=env, shell=False, check=False)",,2
+core,function,validate_startup_configuration,hve/startup_preflight.py,110,GitHub 連携設定を検査し、判定可能な不整合を一括で返す。,,3
+core,function,format_startup_preflight_errors,hve/startup_preflight.py,233,token 値を含めず、preflight の全不整合を人間向けに整形する。,,2
 core,class,StatusLineState,hve/statusline.py,38,ステータスライン描画に必要な最小スナップショット。,,7
 core,function,format_status_line,hve/statusline.py,63,``StatusLineState`` を 1 行の文字列に整形する。,,1
 core,class,StatusLine,hve/statusline.py,120,CUI 用 1Hz ステータスライン。,,1
@@ -2338,7 +2386,7 @@ core,class,WorkflowDependency,hve/workflow_registry.py,332,ワークフロー間
 core,class,MetaWorkflowDef,hve/workflow_registry.py,350,ワークフロー間の依存 DAG 定義。,,2
 core,function,_make_state_labels,hve/workflow_registry.py,368,プレフィックスから標準状態ラベルセットを生成する。,,13
 core,function,canonicalize_workflow_id,hve/workflow_registry.py,2065,workflow ID を小文字化し、registry の正式 ID へ解決する。,,9
-core,function,get_workflow,hve/workflow_registry.py,2071,ワークフロー ID からワークフロー定義を取得する。存在しない場合は None。,,28
+core,function,get_workflow,hve/workflow_registry.py,2071,ワークフロー ID からワークフロー定義を取得する。存在しない場合は None。,,31
 core,function,get_meta_dependencies,hve/workflow_registry.py,2076,指定ワークフローのメタワークフロー依存を返す。,,2
 core,function,expand_group_step_ids,hve/workflow_registry.py,2163,GUI/CLI 形式のグループ step ID を registry の実 step ID 列に展開する。,,5
 core,function,group_id_for_step,hve/workflow_registry.py,2191,実 step ID から GUI グループ ID への逆引き。未登録は None。,,1
@@ -2399,7 +2447,7 @@ core,function,evaluate_workiq_qa_merge_decision,hve/workiq.py,1168,事前 QA と
 core,function,is_workiq_error_response,hve/workiq.py,1259,Work IQ 応答がエラーテキスト主体かをヒューリスティックに判定する。,,6
 core,function,_escape_workiq_sandbox_tags,hve/workiq.py,1305,Work IQ コンテンツ中のサンドボックスタグをエスケープする。,,6
 core,function,enrich_prompt_with_workiq,hve/workiq.py,1338,Work IQ 結果をプロンプト先頭に注入する。,,0
-core,function,get_workiq_prompt_template,hve/workiq.py,1364,モード別の Work IQ プロンプトテンプレートを返す。,,5
+core,function,get_workiq_prompt_template,hve/workiq.py,1364,モード別の Work IQ プロンプトテンプレートを返す。,,6
 core,function,save_workiq_result,hve/workiq.py,1380,Work IQ クエリ結果をファイルに永続化する。,,3
 core,function,sanitize_workiq_result,hve/workiq.py,1419,Work IQ 結果から制御文字と ANSI エスケープを除去する。,,2
 core,function,_truncate_workiq_context,hve/workiq.py,1425,Work IQ コンテキストを先頭 + 末尾で切り詰める。,,2
@@ -2882,13 +2930,13 @@ core,function,indexable_suffixes,tools/skills/code_query/vendor/cq/languages/__i
 core,function,resolve_language,tools/skills/code_query/vendor/cq/languages/__init__.py,241,Language for ``suffix``. ``read_source`` runs only for ambiguous suffixes.,,3
 core,function,extractor_for,tools/skills/code_query/vendor/cq/languages/__init__.py,249,"Return the dedicated extractor for ``lang``, or ``None`` when absent.",,0
 core,function,graph_extractor_for,tools/skills/code_query/vendor/cq/languages/__init__.py,255,"Return the reference / import extractor for ``lang``, or ``None``.",,4
-core,function,_name,tools/skills/code_query/vendor/cq/languages/batch.py,17,"return ts.text(node, src).lstrip(':').strip()",,20
+core,function,_name,tools/skills/code_query/vendor/cq/languages/batch.py,17,"return ts.text(node, src).lstrip(':').strip()",,22
 core,function,_callee,tools/skills/code_query/vendor/cq/languages/batch.py,21,return match.group(1) if match else '',,6
 core,function,extract,tools/skills/code_query/vendor/cq/languages/batch.py,42,"return ts.extract(GRAMMAR, source)",,54
 core,function,extract_ex,tools/skills/code_query/vendor/cq/languages/batch.py,46,"return ts.extract_with_fidelity(GRAMMAR, source)",,36
 core,function,chunk_spans,tools/skills/code_query/vendor/cq/languages/batch.py,50,"return ts.chunk_spans(GRAMMAR, source, lines, max_chars)",,52
 core,function,extract_graph,tools/skills/code_query/vendor/cq/languages/batch.py,54,"return ts.extract_graph(GRAMMAR, source)",,52
-core,function,_name,tools/skills/code_query/vendor/cq/languages/cfamily.py,57,"return ts.text(found, src) if found is not None else ''",,20
+core,function,_name,tools/skills/code_query/vendor/cq/languages/cfamily.py,57,"return ts.text(found, src) if found is not None else ''",,22
 core,function,_is_function_shaped,tools/skills/code_query/vendor/cq/languages/cfamily.py,67,"return ts.descend_for(declarator, frozenset({'function_declarator'}), _DECLARATOR_THROUGH) is not None",,2
 core,function,_declaration_name,tools/skills/code_query/vendor/cq/languages/cfamily.py,74,Variables are out of the contract's initial scope; only functions count.,,4
 core,function,_cpp_resolve,tools/skills/code_query/vendor/cq/languages/cfamily.py,81,"return (kind, local, qual_scope, bound)",,2
@@ -2949,7 +2997,7 @@ core,function,code_only,tools/skills/code_query/vendor/cq/languages/linescan.py,
 core,function,brace_delta,tools/skills/code_query/vendor/cq/languages/linescan.py,29,Net brace depth change contributed by the code on ``line``.,,4
 core,function,extract,tools/skills/code_query/vendor/cq/languages/lite.py,29,return tuple(found),,54
 core,function,_pester_label,tools/skills/code_query/vendor/cq/languages/powershell.py,31,"Label of a `Describe` / `Context` / `It` block, else `""""`.",,2
-core,function,_name,tools/skills/code_query/vendor/cq/languages/powershell.py,114,"return ts.text(target, src) if target is not None else ''",,20
+core,function,_name,tools/skills/code_query/vendor/cq/languages/powershell.py,114,"return ts.text(target, src) if target is not None else ''",,22
 core,function,_signature,tools/skills/code_query/vendor/cq/languages/powershell.py,121,return text.rstrip('{ ')[:200],,4
 core,function,_is_test,tools/skills/code_query/vendor/cq/languages/powershell.py,132,return node.type == 'pipeline',,16
 core,function,_callee,tools/skills/code_query/vendor/cq/languages/powershell.py,137,"return ts.text(target, src) if target is not None else ''",,6
@@ -2985,7 +3033,7 @@ core,function,extract_ex,tools/skills/code_query/vendor/cq/languages/rust.py,79,
 core,function,chunk_spans,tools/skills/code_query/vendor/cq/languages/rust.py,83,"return ts.chunk_spans(GRAMMAR, source, lines, max_chars)",,52
 core,function,extract_graph,tools/skills/code_query/vendor/cq/languages/rust.py,87,"return ts.extract_graph(GRAMMAR, source)",,52
 core,function,_import,tools/skills/code_query/vendor/cq/languages/scala.py,28,"`import a.b.{C, D}` keeps its selector clause as the canonical specifier.",,8
-core,function,_name,tools/skills/code_query/vendor/cq/languages/scala.py,34,"return ts.field_name(node, src)",,20
+core,function,_name,tools/skills/code_query/vendor/cq/languages/scala.py,34,"return ts.field_name(node, src)",,22
 core,function,extract,tools/skills/code_query/vendor/cq/languages/scala.py,70,"return ts.extract(GRAMMAR, source)",,54
 core,function,extract_ex,tools/skills/code_query/vendor/cq/languages/scala.py,74,"return ts.extract_with_fidelity(GRAMMAR, source)",,36
 core,function,chunk_spans,tools/skills/code_query/vendor/cq/languages/scala.py,78,"return ts.chunk_spans(GRAMMAR, source, lines, max_chars)",,52
@@ -3021,10 +3069,10 @@ core,class,Grammar,tools/skills/code_query/vendor/cq/languages/treesitter.py,43,
 core,function,cache_key,tools/skills/code_query/vendor/cq/languages/treesitter.py,75,Identity of the compiled parser: the module plus the factory it calls.,,2
 core,function,parser_for,tools/skills/code_query/vendor/cq/languages/treesitter.py,86,"Return a cached parser, importing the optional grammar on first use.",,2
 core,function,parse,tools/skills/code_query/vendor/cq/languages/treesitter.py,114,return parser_for(grammar).parse(source.encode('utf-8')),,45
-core,function,text,tools/skills/code_query/vendor/cq/languages/treesitter.py,118,"return src[node.start_byte:node.end_byte].decode('utf-8', 'replace')",,1118
+core,function,text,tools/skills/code_query/vendor/cq/languages/treesitter.py,118,"return src[node.start_byte:node.end_byte].decode('utf-8', 'replace')",,1129
 core,function,named_child_by_type,tools/skills/code_query/vendor/cq/languages/treesitter.py,122,return None,,22
 core,function,descend_for,tools/skills/code_query/vendor/cq/languages/treesitter.py,129,Walk down *named* children looking for one of ``targets``.,,6
-core,function,field_name,tools/skills/code_query/vendor/cq/languages/treesitter.py,148,"return text(target, src) if target is not None else ''",,49
+core,function,field_name,tools/skills/code_query/vendor/cq/languages/treesitter.py,148,"return text(target, src) if target is not None else ''",,53
 core,function,doc_head,tools/skills/code_query/vendor/cq/languages/treesitter.py,153,First meaningful line of the doc comment immediately above ``node``.,,18
 core,function,signature,tools/skills/code_query/vendor/cq/languages/treesitter.py,185,Declaration text up to the body. Grammars that mark the body with something,,59
 core,function,line_range,tools/skills/code_query/vendor/cq/languages/treesitter.py,193,"Closed 1-based line range of ``node``, clamped to the file.",,10
@@ -3072,7 +3120,7 @@ core,function,_fuse,tools/skills/code_query/vendor/cq/search.py,294,Run every ro
 core,function,_widen_to_chunk_bodies,tools/skills/code_query/vendor/cq/search.py,358,Replace each excerpt with its whole chunk body (FR-CQ-06).,,2
 core,function,_guard_freshness,tools/skills/code_query/vendor/cq/search.py,379,Re-index small drifts before answering; report larger ones as stale.,,2
 core,function,_fallback_order,tools/skills/code_query/vendor/cq/search.py,409,return chains[route],,2
-core,function,_run,tools/skills/code_query/vendor/cq/search.py,421,"return _bm25(conn, query, top_k, radius, paths)",,10
+core,function,_run,tools/skills/code_query/vendor/cq/search.py,421,"return _bm25(conn, query, top_k, radius, paths)",,23
 core,function,_path_clause,tools/skills/code_query/vendor/cq/search.py,435,"return (f' AND {column} GLOB ?', [paths]) if paths else ('', [])",,14
 core,function,_test_rank,tools/skills/code_query/vendor/cq/search.py,439,"1 for test code, 0 otherwise: implementations outrank their tests.",,10
 core,function,_symbol,tools/skills/code_query/vendor/cq/search.py,446,return hits,,2

@@ -16,6 +16,9 @@ SOURCES = ../app.py \
           ../../../cq/gui/settings_section.py \
           ../doc_convert.py \
           ../gh_login_dialog.py \
+          ../github_issue_panel.py \
+          ../github_pr_panel.py \
+          ../github_window.py \
           ../help_content.py \
           ../help_popup.py \
           ../main_window.py \
@@ -25,9 +28,11 @@ SOURCES = ../app.py \
           ../page_options_ard.py \
           ../page_workbench.py \
           ../page_workflow_select.py \
+          ../qa_answer_dialog.py \
           ../session_menu.py \
           ../settings_apply.py \
           ../settings_window.py \
+          ../startup_auth.py \
           ../stats_detail_popup.py \
           ../toolsearch_settings_section.py \
           ../wizard.py \

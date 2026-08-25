@@ -2,6 +2,93 @@
 
 ## [Unreleased]
 
+### Fixed — GitHub 書込み設定の不整合を Agent session とモデル呼び出しの前に検出し、存在しないベースブランチによる実行時間・費用の全損を防止した（FR-CLI-31 / FR-CLI-82 / FR-GUI-01）
+
+Issue / PR 作成や remote CI/CD を有効にしたローカル実行では、保存済みの `repo` / token / ベースブランチ / `origin` が不整合でも branch 作成フェーズまで進み、`git fetch` とローカル fallback の両方が失敗して初めて停止していた。本変更で、GitHub 書込みを伴う実行だけを対象に共通 startup preflight を実行し、判定可能な不整合をモデル利用前に一括報告して fail-closed で停止するようにした。
+
+- **単一の起動前検証を追加した**。[hve/startup_preflight.py](hve/startup_preflight.py) で `repo` の `owner/repo` 形式（`.` / `..` segment は拒否）、空白を含まない GitHub token の存在、Git branch 名、`origin`、完全一致する `refs/heads/<base_branch>` を検査する。remote branch は非対話・読み取り専用かつ30秒timeoutの `git ls-remote --exit-code --heads` で確認し、status `2` の ref 不在とその他の認証・通信・timeout等による検証不能を区別する。
+- **適用範囲を GitHub 書込み run へ限定した**。`--create-issues` / `--create-pr`、ADFDV の auto-merge、および ASDW-WEB の active `requires_remote_cicd` Step だけを対象とし、通常のローカル実行へ GitHub token・remote 接続を要求しない。`--dry-run` は対象条件を変えず、設定不備時は計画表示より前に停止する。
+- **暗黙 fallback を禁止した**。remote branch が存在しない場合に `main`、GitHub の既定 branch、同名ローカル branch へ補正せず、利用者へ設定修正を求める。
+- **CLI / GUI の起動面を同じ判定へ統合した**。CLI wizard は他の認証前にremoteまで検査し、非対話CLIとGUI子プロセスはactive Step解決直後にremoteを検査する。GUI Step 1はUI threadでネットワーク接続せず、ローカル不整合を`SETTING` / `AUTH`として表示する。起動引数の構築エラーは入力エラーとして表示しStep 1に留まる。
+- **Prompt自由記述を対象外とした**。追加PromptおよびWork IQ用Promptの自然言語・空欄・業務内容をstartup preflightで判定せず、token値もログ・エラー・スナップショットへ出力しない。
+- **敵対的レビューの実指摘を反映した**。ADFDV の workflow-wide auto-merge 対象を規範要件へ明記し、空白 token と `.` / `..` repo segment の検証漏れ、および Git timeout契約のテスト漏れを解消した。反映後の再レビューで未解決指摘は0件となった。
+- **利用者ガイドを同期した**。CLI / GUIの検査境界、statusの意味、安全な復旧、旧`couldn't find remote ref` / `not a commit`症例を [users-guide/hve-cli-orchestrator-guide.md](users-guide/hve-cli-orchestrator-guide.md)、[users-guide/hve-gui-orchestrator-guide.md](users-guide/hve-gui-orchestrator-guide.md)、[users-guide/local-cicd-enablement.md](users-guide/local-cicd-enablement.md)、[users-guide/troubleshooting.md](users-guide/troubleshooting.md)、[users-guide/hve-technical-architecture.md](users-guide/hve-technical-architecture.md)へ反映した。
+
+**影響範囲**: 新規 [hve/startup_preflight.py](hve/startup_preflight.py)、[hve/__main__.py](hve/__main__.py)、[hve/orchestrator.py](hve/orchestrator.py)、[hve/autopilot/precheck_runner.py](hve/autopilot/precheck_runner.py)、[hve/gui/main_window.py](hve/gui/main_window.py)、[hve/gui/autopilot/precheck_dialog.py](hve/gui/autopilot/precheck_dialog.py)、関連テスト、`hve-dev/` 要件・mapping・inventory、`users-guide/` 5ファイル。Markdown Query / Code Query の本体・Skill配布物は変更していない。
+
+**検証**: core統合 **558 passed / 171 subtests passed**、GUI統合 **67 passed**（既存Qt警告5件のみ）、敵対的レビュー反映後のfocused検証 **67 passed / 59 subtests passed**、inventory / traceability契約 **208 passed**。新規4ファイルのRuff・構文検査、文書差分の空白・相対リンク検査も成功した。
+
+<!-- validation-confirmed -->
+
+### Added — HVE GUI から GitHub の Issue / Pull Request を閲覧・編集・コメントできるようにし、起動時の GitHub 認証と既存 Issue への連携を追加した（FR-GUI-24〜28 新規）
+
+これまで GUI の GitHub 連携は「実行時に Issue / PR を作成する」だけで、作成後の Issue を GUI から読む・書く手段が無く、GitHub 認証も設定画面のボタンを押した利用者だけが有効化できた。また `--create-issues` は常に Root Issue を新規作成するため、既に立っている Issue へ実行を紐付けられなかった。本変更で (1) 起動時の認証解決、(2) 既存 Issue への連携、(3) Issue / Pull Request の閲覧・編集・コメント画面を追加した。
+
+- **起動時に GitHub 認証を解決するようにした（FR-GUI-24）**。`GH_TOKEN` / `GITHUB_TOKEN` が未設定のときだけ [hve/gui/gh_cli.py](hve/gui/gh_cli.py) `capture_gh_token()` を試み、取得できたトークンを `GH_TOKEN` へ注入する。取得できなかった場合に限り `gh auth login` を実行するかの確認ダイアログを 1 回だけ提示する。`gh auth login` を自動実行せず、利用者が拒否しても GUI は通常どおり起動する（GitHub 連携を必要としない Workflow があるため）。認証解決が例外を送出しても起動を妨げない。ログイン端末は既存の [hve/gui/gh_login_dialog.py](hve/gui/gh_login_dialog.py) を再利用し、起動経路向けの別実装を作っていない（FR-MAINT-07）。トークンはセッション限りで、ディスクへ保存しない（NFR-SEC-01）。
+- **Root Issue を「新規作成」と「既存 Issue に連携」から選べるようにした（FR-GUI-25）**。設定画面の「GitHub」→「リポジトリ / Issue 設定」に選択欄と Issue 番号欄を追加し、CLI には `--issue-number <N>` を追加した。既存 Issue を選ぶと Root Issue を新規作成せず、その Issue を Sub-Issue の親と PR 本文の closing keyword（`Closes #N`）に用いる。指定 Issue を取得できない場合、取得結果が Pull Request だった場合、`number` を欠く場合は fail-closed とし、新規作成へ暗黙にフォールバックしない（誤った番号のまま Sub-Issue を無関係な Issue へ紐付けないため）。`--create-issues` を伴わない `--issue-number` は警告のうえ実行を継続する。GUI は番号未入力のまま実行を開始させない。
+- **Issue の閲覧・編集・コメント画面を追加した（FR-GUI-26）**。ヘッダーの [GitHub] ボタンから開く非モーダルウィンドウ（[hve/gui/github_window.py](hve/gui/github_window.py)）の「Issue」タブで、一覧の状態別絞り込み（open / closed / all）、詳細（番号・状態・作成者・ラベル・担当者・本文・URL）の表示、タイトルと本文の編集、open ⇔ closed の切り替え、コメント一覧の表示、コメント投稿、自分が投稿したコメントの編集ができる。
+- **Pull Request の閲覧・コメント画面を追加した（FR-GUI-27）**。同ウィンドウの「Pull Request」タブで、一覧の状態別絞り込み、詳細（番号・状態・merged / draft・作成者・head → base・本文・URL）の表示、変更ファイル一覧の表示、会話コメントの投稿ができる。**GUI から PR を新規作成する経路は追加していない**。PR 作成は既存の `--create-pr` / `--create-issues` 経路が担い、同経路は PR 作成前に必ずローカル作業ブランチ（`copilot-sdk/<prefix>-<8 桁>`）を作成して checkout する。GUI へ別経路を設けるとブランチ強制の契約を二重実装することになるためである（FR-MAINT-07）。
+- **GitHub アクセスを [hve/github_api.py](hve/github_api.py) へ一本化した（FR-GUI-28）**。同モジュールへ `list_issues` / `get_issue` / `update_issue` / `update_comment` / `list_pull_requests` / `get_authenticated_user` を追加し、GUI 側はサービス層（[hve/gui/github_service.py](hve/gui/github_service.py)）とワーカー層（[hve/gui/github_threads.py](hve/gui/github_threads.py)）だけを持つ。GUI 専用の HTTP クライアント、`gh` サブプロセスによる API 代替、および PyGithub 等の GitHub SDK を新規依存として追加していない。既存のトークン解決・リポジトリ解決・指数バックオフ / `Retry-After` 準拠のリトライをそのまま再利用する。AST 検査で `urllib` / `requests` / `httpx` / `subprocess` / `github` の直接 import を禁止した。
+- **API 呼び出しを GUI スレッド外で実行する**。`GitHubWorker`（`QThread`）が `succeeded` / `failed` を通知する。実行中のワーカーはモジュールレベルのレジストリで保持し、呼び出し側ウィジェットが GC されても `QThread: Destroyed while thread is still running` でプロセスが異常終了しないようにした（実測で再現・修正）。ウィンドウを閉じるときは両パネルの `shutdown()` で終了を待つ。
+- **一覧・詳細の更新は [更新] ボタン押下時のみ**とし、自動ポーリングを行わない。GitHub API のレート制限を不要に消費しないためである。
+- **境界検証を追加した**。リポジトリは `owner/repo` の書式を検証し、Issue / PR 番号は正の整数へ検証してから URL パスへ埋め込む。API 由来の URL 文字列は `html.escape` してから rich text ラベルへ設定する。
+- **`hve/gui/i18n/translations.pro` の `SOURCES` へ 4 モジュールを追加し、新規 56 文言を英訳した**。`self.tr(変数)` や `_tr()` ヘルパー経由の間接呼び出しは `pyside6-lupdate` が抽出できず英語ロケールで日本語のまま残るため、リテラル直接指定へ改めた。状態名の「クローズ」と操作名が同一文字列になっていた箇所は「Issue をクローズ」「Issue を再オープン」へ改称して語義の衝突を解消した。
+- **要求定義と索引を同期した**。`hve-dev/requirement-definition.md` へ §6.13（FR-GUI-24〜28）を新設し、§2 の UC-06 を改訂・UC-07 を新設、§5.2 のオプション一覧と §8 の `SDKConfig` 一覧へ `--issue-number` / `issue_number` を追記し、改訂履歴へ v2.50 を追加した。`hve-dev/requirement-test-mapping.md` へ受入テストと RED / GREEN 証跡を登録し、`hve-dev/` の索引を再生成した。
+
+**影響範囲**: [hve/github_api.py](hve/github_api.py)、[hve/config.py](hve/config.py)、[hve/__main__.py](hve/__main__.py)、[hve/orchestrator.py](hve/orchestrator.py)、[hve/gui/startup_auth.py](hve/gui/startup_auth.py)（新規）、[hve/gui/github_service.py](hve/gui/github_service.py)（新規）、[hve/gui/github_threads.py](hve/gui/github_threads.py)（新規）、[hve/gui/github_issue_panel.py](hve/gui/github_issue_panel.py)（新規）、[hve/gui/github_pr_panel.py](hve/gui/github_pr_panel.py)（新規）、[hve/gui/github_window.py](hve/gui/github_window.py)（新規）、[hve/gui/app.py](hve/gui/app.py)、[hve/gui/main_window.py](hve/gui/main_window.py)、[hve/gui/page_options.py](hve/gui/page_options.py)、[hve/gui/orchestrate_args.py](hve/gui/orchestrate_args.py)、[hve/gui/settings_apply.py](hve/gui/settings_apply.py)、[hve/gui/settings_store.py](hve/gui/settings_store.py)、i18n カタログ 3 種、`hve-dev/` 4 種、[users-guide/hve-gui-orchestrator-guide.md](users-guide/hve-gui-orchestrator-guide.md)、[users-guide/hve-cli-orchestrator-guide.md](users-guide/hve-cli-orchestrator-guide.md)。
+
+**利用者への影響**: GUI 起動時、未認証なら GitHub ログインの確認ダイアログが 1 回表示される（拒否可能）。ヘッダーに [GitHub] ボタンが 1 つ増える。設定画面の「GitHub」に「Root Issue の扱い」「連携する Issue 番号」の 2 項目が増える。既定は従来どおり「新規作成」で、既存の実行結果は変わらない。
+
+**既知の制約**: (1) ラベル・担当者・マイルストーン・リアクション・Projects・タイムラインイベントの編集は対象外（Issue 詳細ではラベルと担当者を表示のみ）。(2) PR の差分に対する行単位レビューコメントと Approve / Request changes は対象外で、会話コメントのみを扱う。(3) 一覧の自動更新は行わない。(4) サービス層のエラーメッセージは日本語固定で、翻訳カタログの対象外（`hve/github_api.py` の例外文言と同じ扱い）。(5) `--autopilot-child` で起動した子 GUI では起動時の認証解決を行わない（親 GUI が注入した `GH_TOKEN` を環境変数として継承するため）。
+
+**検証**: RED を実装前に確認した——`hve/tests/test_github_api.py` が `ImportError: cannot import name 'get_issue' from 'hve.github_api'` で **1 error**。実装後の実測は `hve/tests/test_github_api.py` **69 passed**、`hve/tests/test_orchestrator_issue_link.py` **8 passed**、`hve/tests/test_main_issue_number_cli.py` **5 passed**、`hve/gui/tests/test_startup_auth.py` **10 passed**、`hve/gui/tests/test_app_startup_auth.py` **6 passed**、`hve/gui/tests/test_github_service.py` **42 passed**、`hve/gui/tests/test_github_threads.py` **8 passed**、`hve/gui/tests/test_github_issue_panel.py` **20 passed**、`hve/gui/tests/test_github_pr_panel.py` **17 passed**、`hve/gui/tests/test_github_window.py` **8 passed**、`hve/gui/tests/test_github_single_source.py` **18 passed**、`hve/gui/tests/test_github_issue_mode.py` **12 passed**、`hve/gui/tests/test_main_window_github_button.py` **5 passed**。GUI 新規群の一括実行は **161 passed**。回帰は `hve/tests/test_config.py` + `hve/tests/test_phase6_option_parity.py` **165 passed / 223 subtests**、`hve/tests/test_orchestrator_branch_mode.py` **29 passed / 59 subtests**、`hve/tests/test_gui_pages.py` ほか MainWindow 系 4 ファイル **84 passed**、`hve/gui/tests/test_github_section_grouping.py` ほか C5 系 6 ファイル **60 passed**、`hve/gui/tests/test_i18n.py` **24 passed**。FR-CLI-82 の起動前preflight導入後にGitHub書込み対象の4 fixtureがrepo / token不足で意図どおり早期停止したため、各fixtureへ明示的なrepoとテスト用tokenを追加して後段契約へ到達させ、`hve/tests/test_orchestrator.py` は **208 passed / 85 subtests passed**を確認した。翻訳は `pyside6-lrelease` が **874 finished / 0 unfinished**。索引は `hve-dev/generate_tdd_inventory.py` を再生成し、`FR-GUI-24`〜`FR-GUI-28` が `hve-dev/hve-feature-inventory.csv` へ `status=active-or-described` で登録されたことを確認した。
+
+<!-- validation-confirmed -->
+
+### Added — GUI の QA 回答ダイアログから、質問票と Work IQ 用プロンプトをクリップボードへコピーできるようにした（FR-GUI-29 新規）
+
+QA (質問票) 回答モードを「ユーザー回答」にすると GUI へ QA 回答ダイアログが表示されるが、そこに並ぶ質問を Microsoft 365 の Work IQ などへ手作業で持ち込む手段が無く、利用者は表を目視で書き写すしかなかった。ダイアログの左下へコピー操作を 2 つ追加し、質問票そのものと、Work IQ へ貼り付けるためのプロンプトを 1 クリックで複製できるようにした。いずれもクリップボードへ書き込むだけで、Work IQ への送信・ログイン・MCP ツール呼び出しは行わない。
+
+- **[質問票をコピー] を追加した**。コピーされる文字列は [hve/qa_merger.py](hve/qa_merger.py) `QAMerger.render_merged` の出力そのものである。GUI 側へ整形実装を複製していない（FR-MAINT-07）。同メソッドは未回答の回答欄を空欄として出力するため、ダイアログで入力途中の回答は含まれない。
+- **[Work IQ 用プロンプトをコピー] を追加した**。[hve/workiq.py](hve/workiq.py) `get_workiq_prompt_template("qa")` が返す既定テンプレートの `{target_content}` へ、上記の質問票全文を埋め込む。埋め込みは既存経路（[hve/runner.py](hve/runner.py) / [hve/orchestrator.py](hve/orchestrator.py)）と同じ `.format(target_content=...)` を用いる。既定テンプレートに含まれる波括弧が `{target_content}` の 1 個だけであることを実測で確認しており、組み立て処理は例外を送出しない。プロンプト全体を 1 つの Markdown とし、質問票をコードフェンスで囲んでいない。
+- **共通部品 `CopyButton` の既定は変更していない**。同部品は `QToolButton` を継承し、既定の `toolButtonStyle` が `ToolButtonIconOnly` であるため `setText("📋")` は描画されない。そのまま 2 個並べると同一外観のボタンになるため、呼び出し側でラベル併記の表示形式へ上書きし、支援技術向けの名前を付与した。既定を変えると他の 9 箇所の呼び出し（いずれもアイコンのみを意図）へ波及するためである。
+- **質問が 0 件のときは両ボタンを無効化する**。送信対象が存在しない状態で空の内容を複製する誤操作を防ぐ。
+- **既存の回答経路を一切変更していない**。`submitted` / `cancelled` / `adopt_all_defaults` の各シグナル、GUI ↔ CLI の回答形式（FR-GUI-08）、`.hve/qa-ipc/` の IPC スキーマ、[hve/gui/page_workbench.py](hve/gui/page_workbench.py) のダイアログ生成箇所はいずれも変更していない。新規の CLI オプション・設定項目・環境変数も追加していない。
+- **`hve/gui/i18n/translations.pro` の `SOURCES` へ `../qa_answer_dialog.py` を追加した**。同ダイアログはこれまで抽出対象に入っておらず、英語ロケールでも全 UI 文言が日本語のままだった。新規 4 件を含む同ダイアログの 13 文言を英訳し、`.qm` を再生成した。
+- **`hve-dev/requirement-definition.md` へ §6.14（FR-GUI-29）を新設し、改訂履歴へ v2.53 を追加した**。あわせて `hve-dev/requirement-test-mapping.md` へ受入テストと RED / GREEN 証跡を登録し、`hve-dev/` の索引を再生成した。
+
+**影響範囲**: `hve/gui/qa_answer_dialog.py`、`hve/gui/i18n/translations.pro` / `hve_gui_en_US.ts` / `hve_gui_en_US.qm`、`hve/gui/tests/test_qa_answer_dialog.py`、`hve/gui/tests/test_i18n.py`、`hve-dev/requirement-definition.md`（v2.53）、`hve-dev/requirement-test-mapping.md`、`hve-dev/` 索引 4 種、[users-guide/hve-gui-orchestrator-guide.md](users-guide/hve-gui-orchestrator-guide.md)。
+
+**利用者への影響**: QA 回答ダイアログの左下にボタンが 2 つ増える。既存の [全て既定値で進める] / [キャンセル] / [Submit] の位置と挙動は変わらない。英語ロケールでは、これまで日本語のままだった同ダイアログの文言が英語で表示されるようになる。
+
+**既知の制約**: (1) コピーされる Work IQ 用プロンプトは、QA 自動投入に組み込まれた Work IQ 自動連携（FR-QA-03）と送信内容が一致しない。自動連携は質問を 1 件ずつ送り重要度フィルタと件数上限（既定 10 件）を適用するのに対し、本操作は表示中の全質問を 1 つの表として渡す。(2) 既定テンプレートの出力スキーマにより、Work IQ の応答は質問数によらず最大 5 件に制限される。(3) `QAMerger.render_merged` の出力は先頭に `#` 見出しを含み、既定テンプレートの `### 質問一覧` 配下へ入るため見出しレベルが逆転する。表セル内の改行 `<br>` と `&#124;` のエスケープも貼り付け文面へ残る。専用の整形実装を新設しない判断による。(4) `CopyButton` がクリック後に表示する tooltip（`コピー済み: N 文字`）はハードコードされた日本語で、英語ロケールでも日本語のまま表示される。文言変更が他の 9 箇所へ波及するため対象外とした。(5) 翻訳抽出（`pyside6-lupdate`）は `SOURCES` 全体を再走査するため、`.ts` の差分には本変更と無関係の 2 件（`_WorkflowSelectPage` と `help_content` の ARD 説明文）が `type="vanished"` として含まれる。これらは先行する未コミット変更で日本語原文が更新されたまま `.ts` が再生成されていなかったものである。
+
+**検証**: RED を実装前に確認した——`hve/gui/tests/test_qa_answer_dialog.py` が **9 failed / 23 passed**（`AttributeError: 'QAAnswerDialog' object has no attribute '_copy_questionnaire_btn'` / `_copy_workiq_prompt_btn`）、`hve/gui/tests/test_i18n.py` が **2 failed / 22 passed**（`translations.pro` に `../qa_answer_dialog.py` が無い／`.qm` に英訳が無い）。実装後は `test_qa_answer_dialog.py` が **32 passed**、`test_i18n.py` が **24 passed**。回帰は `hve/tests/test_qa_merger.py` **138 passed**、`hve/tests/test_workiq.py` **201 passed / 47 subtests**、`hve/gui/tests/test_qa_ipc_flow.py` **3 passed**、`hve/gui/tests/test_qa_ipc_manager.py` **7 passed**。翻訳は `pyside6-lrelease` が **887 finished / 0 unfinished**、`.ts` の `type="unfinished"` は **0 件**。索引は `hve-dev/generate_tdd_inventory.py` を再生成し、`FR-GUI-29` が `hve-dev/hve-feature-inventory.csv` へ `status=active-or-described` で登録されたことを確認した。
+
+<!-- validation-confirmed -->
+
+### Fixed — Work IQ を無効にしても Work IQ へ接続し、認証できないと実行が停止する事象を解消した（FR-CLI-76 改訂 / FR-CLI-81 新規）
+
+「GUI で Work IQ の設定を OFF にしたのに Work IQ へ接続しに行き、認証エラーで実行が止まる」という報告を調査し、独立した 2 つの原因を特定して両方へ対処した。(1) `hve/orchestrator.py` が生成するセッションは MCP の自動探索を止めておらず、HVE 側の Work IQ 設定に関わらず Copilot CLI の `work-iq` プラグインが宣言する `workiq` サーバーを取り込み得た。(2) 認証確認が非対話環境で失敗すると実行を停止していたが、GUI が起動する子プロセスは常に非対話（FR-GUI-23）であるため、Work IQ を要求する設定が 1 つでも有効なら必ず停止していた。さらに `--workiq-draft`（GUI の「Work IQ 回答ドラフト作成」）だけで Work IQ 連携全体が有効化される仕様が、利用者から見えていなかった。
+
+- **`hve/orchestrator.py` のセッション生成へ FR-CLI-76 の MCP 縮約を適用した**。同ファイルの `_create_session_with_auto_reasoning_fallback` は [hve/runner.py](hve/runner.py) の同名関数と別実装で、リポジトリ宣言（`.github/.mcp.json`）を読まず `enable_config_discovery` を常に `True` としていた。対象は ARD の `target_business` 自動生成・Fleet wave 親・Code Review Agent の 3 セッションと、Work IQ 専用の 4 セッション（prefetch / AKM 検証 / AKM 取込 / ARD ユースケース）である。宣言が無い・読み取れない・空の場合は従来どおり自動探索を残すフォールバック規則は変えていない。
+- **縮約の実装を単一の正本へ寄せた（FR-MAINT-07）**。[hve/runner.py](hve/runner.py) にインライン展開されていた FR-CLI-76 の縮約を module-private の `_apply_repository_mcp_scope()` へ抽出し、runner の 2 経路と orchestrator の全経路が同一実装を使う。orchestrator 側で `_read_repository_mcp_config` / `_filter_mcp_servers_for_session` を直接呼ばないことを AST で固定した。
+- **FR-CLI-79 の `azure` 除外を orchestrator 経路へも適用した**。そのため当該ヘルパーへ `workflow_id` を追加し、ARD / AKM 系の 5 セッションでは静的に確定する Workflow ID を渡す。Workflow を特定できない Fleet wave 親と Code Review Agent では、宣言漏れ規則と同じ側へ倒して全宣言サーバを渡す。
+- **Work IQ 専用 4 セッションのサーバー併存を解消した**。これらは `mcp_servers` に `_hve_workiq` だけを明示するため共通経路の縮約が効かず、`tools: ["*"]` で登録されるプラグイン由来の `workiq` が同一セッションへ併存し、HVE が `_hve_workiq` へ課す最小権限 allowlist（`ask` のみ）を迂回できる状態だった。従来 CHANGELOG に「既知の制約」として記録していた事象である。
+- **Work IQ 認証確認が非対話で失敗しても実行を停止しないようにした（FR-CLI-81 新規）**。[hve/\_\_main\_\_.py](hve/__main__.py) `_run_workiq_auth_preflight` の非対話分岐を、既存の `_disable_workiq()` を再利用した「当該実行に限り Work IQ を無効化して続行」へ変えた。無効化時は Work IQ を要求していた設定名を 1 行で通知する（既存の出力を再利用しており、新しい UI・出力経路は追加していない）。対話端末での挙動（無効化して続行するかを確認し、拒否されたら停止）は変更していない。
+- **`--workiq-draft` が Work IQ 連携全体を有効化することを明記した**。GUI の C4「Work IQ 回答ドラフト作成」の説明文とヘルプ、および `users-guide` へ追記した。ロジックは変更していない（フラグ間の連動を切ると既存利用者の設定が壊れるため）。
+- **`users-guide` を更新した**。[users-guide/hve-cli-orchestrator-guide.md](users-guide/hve-cli-orchestrator-guide.md) は「QA サブセッションが接続する MCP サーバー」を「HVE のセッションが接続する MCP サーバー」へ広げ、縮約対象セッションの一覧・非対話時の自動無効化・`--workiq-draft` の副作用を追記した。[users-guide/hve-gui-orchestrator-guide.md](users-guide/hve-gui-orchestrator-guide.md) には「一覧に出ていても、リポジトリが宣言していない MCP / Plugin は HVE のセッションからは使われない」ことを明記した。
+
+**影響範囲**: `hve/runner.py`、`hve/orchestrator.py`、`hve/__main__.py`、`hve/gui/page_options.py`、`hve/gui/help_content.py`、`hve/gui/i18n/hve_gui_en_US.ts` / `.qm`、`hve/tests/test_orchestrator_session_mcp_scope.py`（新規）、`hve/tests/test_main.py`、`hve/tests/test_runner.py`、`hve-dev/requirement-definition.md`（v2.51）、`hve-dev/requirement-test-mapping.md`、`users-guide` 2 ファイル。利用者可視の新規 CLI オプション・新規 `SDKConfig` フィールド・新規環境変数は追加していない。
+
+**利用者への影響**: (1) ARD / Fleet / Code Review の各セッションから、リポジトリが `.github/.mcp.json` で宣言していない MCP サーバー（利用者がグローバル登録したもの）が外れる。Step 実行のメインセッションでは同じ縮約が既に適用済みである。(2) Work IQ の認証に失敗しても実行が止まらなくなる代わりに、Work IQ が黙って無効化される。無効化時は要求元の設定名が警告として出力される。
+
+**既知の制約**: 本変更が保証するのは認証確認の実行時点までである。確認を通過した後に認証が失効した場合は、従来どおり実行中の警告（FR-QA-06）に委ねる。また FR-CLI-76 が受入範囲外とする 3 経路（ASDW DataDeploy / Foundry / `SDKConfig.mcp_servers`）と `workiq-doctor --sdk-tool-probe` は、従来どおり縮約の対象外である。
+
+**検証**: RED を実装前に確認した——新規 `hve/tests/test_orchestrator_session_mcp_scope.py` が `ImportError: cannot import name '_apply_repository_mcp_scope' from 'hve.runner'` で collection error、`hve/tests/test_main.py::TestWorkIQAuthPreflight` が **4 failed / 8 passed**（`AssertionError: False is not true`）。実装後は同 4 ファイルで **47 passed**。回帰はグループ単位で実行し、`test_orchestrator_session_mcp_scope.py` / `test_runner_session_mcp_scope.py` / `test_runner_pre_qa_mcp_scope.py` / `test_runner_mcp_status_messages.py` / `test_runner_foundry_mcp_routing.py` / `test_akm_workiq_ingest.py` / `test_akm_workiq_phase.py` / `test_workiq.py` / `test_config.py` で **399 passed / 62 subtests**、`test_main.py` / `test_orchestrator.py` / `test_dag_parity.py` / `test_gui_imports.py` で **533 passed / 1 xfailed / 122 subtests**、`test_runner.py` / `test_runner_pre_qa.py` / `test_fleet_mode.py` で **284 passed / 22 subtests**。GUI は `test_gui_pages.py` / `test_gui_step2_refactor.py` / `test_i18n.py` で **64 passed**、`test_gui_imports.py` / `test_workiq_auth_button.py` / `test_section_fields_defaults_consistency.py` で **44 passed**、`test_settings_apply_sources_persistence.py` ほかで **28 passed**。翻訳は `pyside6-lrelease` が **819 finished / 0 unfinished**。索引は `hve-dev/generate_tdd_inventory.py` を再生成したうえで `test_gui_help_content.py` / `test_hve_surface_inventory.py` を実行し、再生成前に stale で失敗していた `test_csv_is_not_stale` を含め **147 passed** を確認した。索引照合では `FR-CLI-81` が `source=hve-dev/requirement-definition.md` / `status=active-or-described` で登録され、新規テストファイルが 16 行、`_apply_repository_mcp_scope` が `hve/runner.py` の function として登録されていることを確認した。なお回帰実行の過程で、リファクタにより `test_runner.py::TestAzureFreeWorkflowMcpFilter::test_the_filter_is_wired_into_the_repository_mcp_injection` が旧実装の変数名（`_declared_mcp_servers`）に依存して失敗することを検出し、同テストを「呼び出し側とヘルパー内部の双方で `workflow_id` が伝搬すること」を検査する形へ更新した（ゲートを弱めていない）。
+
+<!-- validation-confirmed -->
+
 ### Added — MCP 通信の入出力を作業フォルダーの `mcp-<サーバー名>.log` へ全文で記録するようにした（FR-MCPLOG-01〜03）
 
 Copilot SDK セッション経由の MCP 入出力は、これまで実行面へ要約表示されるだけで永続化されていなかった。特に HVE が Work IQ 専用セッションへ送る自然言語プロンプトは `Console.workiq_prompt` が verbosity に応じて 800 / 10,000 文字で切り詰めた表示しか残さず、利用者が同じプロンプトを Microsoft 365 Copilot Chat で再利用する手段が無かった。本変更で、MCP サーバー 1 件につき 1 ファイルの全文ログを run スコープの作業フォルダーへ出力する。
@@ -1139,6 +1226,32 @@ GUI（Workflow=`aas` / Step=`1,2` / モデル=`Auto` / Autopilot=OFF）を対象
 **検証**: 1,038 シナリオの設定計測で、宣言済みウィジェットの未解決 0 / 自動保存の往復差分 0 / 非伝播違反 0 / AAS 非適用オプションの漏れ出し 0、1-wise・pairwise・クラスターの未被覆いずれも 0 を実測した。339 profile の dry-run では実プロセス起動 0 / model 呼び出し 0 / 外部書き込み 0 / 遮断対象操作の試行 0 / 対象外 Step の選択 0 / argv 署名の不一致 0 を実測し、実 `hve/.settings.txt` が測定前後で不変であることを確認した。要件判定は 230 件で欠落・重複・未解決・不正 status すべて 0。`users-guide` / `README` は統合検証で旧文言の残存 0、更新不要と判定した対象の差分 0、`README.md` の変更行が `167` のみであることを確認した。キャンペーン全体では 40 個の完了マーカーについて 195 件の成果物ハッシュを照合し不一致 0、レビュー未 PASS 0、未解決指摘 0、製品コード差分 0 を確認した。
 
 **検証時の注記**: 検証器の初回実行で 38 件の不一致を検出したが、切り分けの結果すべて検証器側の欠陥であり成果物の破損ではなかった。内訳は (a) `core.autocrlf=true` 下で記録側が raw バイト方式・検証側が LF 正規化方式に固定されていた（実 `hve/.settings.txt` は raw ハッシュが基準値と完全一致し無変更）、(b) `artifacts` 辞書内の `*_sha256` キーをパスとして解決しようとした、(c) キャンペーン内に 4 種ある review 記録形式のうち 3 種しか判別していなかった、(d) リポジトリ相対パスと、内容不変のまま改名された受け渡し文書を解決できなかった、の 4 件である。いずれも検証器を是正して再実行し不一致 0 を確認した。
+
+<!-- validation-confirmed -->
+
+## [0.8.53] - 2026-08-25
+
+### Changed
+
+- HVEパッケージのPATCH版を`0.8.53`へ同期した。機能変更の詳細と既存の未リリース項目は`[Unreleased]`に保持する。
+- 更新前の作業ツリー版は`0.8.52`であり、本変更はそこからPATCHを1つ増やした。`0.8.50`〜`0.8.52`の版見出しは既存CHANGELOGに存在しないため、本変更では理由を推測した補完や既存`[Unreleased]`項目の再分類を行っていない。
+
+## [0.8.49] - 2026-08-25
+
+### Fixed — GUI の利用者ローカル設定 `hve/.settings.txt` が未コミットだと HVE を起動できなくなる事象を解消した（FR-CLI-74）
+
+GUI で設定を変更すると `hve/.settings.txt` が書き換わるが、このファイルは `hve/` 配下にあるため FR-CLI-74 の HVE ソース保護ガードが未コミット変更として検出し、`❌ ERROR: HVE ソースに未コミット変更があります（1 件）` で run を停止させていた。当該ファイルは `.gitignore` 済みの利用者ローカル状態であり commit できないため、利用者には回避手段が無かった。
+
+- **`hve/orchestrator.py` に `_HVE_LOCAL_RUNTIME_PATHS` を追加し、`_git_dirty_hve_source_paths()` の報告対象から `hve/.settings.txt` とアトミック書き込み用の `hve/.settings.txt.tmp` を除外した**。`hve/qa_akm_dispatch.py` の QA 起点 AKM 事前判定も同一実装を再利用しているため、自動的に同じ除外が適用される（FR-MAINT-07）。
+- **除外は FR-CLI-74 の run 開始前検査に限定し、FR-CLI-75 の staged 検査へは波及させていない**。強制的に stage された場合は引き続き生成アプリの commit / PR への混入を拒む。
+- **新しい override フラグ・設定項目・環境変数は追加していない**（FR-CLI-74 の「新しい override フラグを追加してはならない」に従う）。
+- **`hve-dev/requirement-definition.md` の FR-CLI-74 へ当該除外を規範要件として追記し、`hve-dev/requirement-test-mapping.md` へ受入テスト 3 件を追加した**。
+
+**影響範囲**: `hve/orchestrator.py`、`hve/tests/test_orchestrator_branch_mode.py`、`hve-dev/requirement-definition.md`、`hve-dev/requirement-test-mapping.md`。`.gitignore`・`hve/gui/settings_store.py`・`hve/qa_akm_dispatch.py` は変更していない。
+
+**検証**: 実装前に RED（`2 failed, 5 passed`、`'hve/.settings.txt' unexpectedly found`）を確認してから実装し、`pytest hve/tests/test_orchestrator_branch_mode.py hve/tests/test_qa_akm_dispatch.py` で **27 passed, 54 subtests passed** を確認した。
+
+**既知の制約**: `hve-dev/` の索引 CSV 3 種は再生成していない。同一ワークツリーで並行セッションが `hve/**` を多数未コミット変更中であり、再生成すると本変更と無関係の新規モジュール群が索引へ混入するため。並行セッション収束後の最終再生成が必要。
 
 <!-- validation-confirmed -->
 

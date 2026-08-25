@@ -1129,6 +1129,32 @@ def _filter_mcp_servers_for_session(
     }
 
 
+def _apply_repository_mcp_scope(
+    opts: Dict[str, Any],
+    *,
+    include_workiq: bool = False,
+    workflow_id: Optional[str] = None,
+) -> None:
+    """FR-CLI-76: リポジトリ宣言の MCP サーバだけを公開し、自動探索を止める。
+
+    既に `opts["mcp_servers"]` がある場合はそれを優先して宣言分を併合する。
+    宣言が存在しない / 読み取れない / 空の場合は何もしない（呼び出し側の
+    `enable_config_discovery` を従来どおり `True` のまま残すため）。
+    """
+    declared = _filter_mcp_servers_for_session(
+        copy.deepcopy(_read_repository_mcp_config(Path.cwd())),
+        include_workiq=include_workiq,
+        workflow_id=workflow_id,
+    )
+    if not declared:
+        return
+    merged = dict(opts.get("mcp_servers") or {})
+    for _name, _server in declared.items():
+        merged.setdefault(_name, _server)
+    opts["mcp_servers"] = merged
+    opts["enable_config_discovery"] = False
+
+
 def _filter_workiq_questions(
     questions: "List[Any]",
     max_questions: int,
@@ -1392,15 +1418,10 @@ async def _create_session_with_auto_reasoning_fallback(
         "mcp_servers" not in _opts_with_skills
         and "enable_config_discovery" not in _opts_with_skills
     ):
-        _declared_mcp_servers = _read_repository_mcp_config(Path.cwd())
-        if _declared_mcp_servers:
-            # include_workiq=True: 本経路は従来 workiq を落としていないので挻動を変えない。
-            _opts_with_skills["mcp_servers"] = _filter_mcp_servers_for_session(
-                copy.deepcopy(_declared_mcp_servers),
-                include_workiq=True,
-                workflow_id=workflow_id,
-            )
-            _opts_with_skills["enable_config_discovery"] = False
+        # include_workiq=True: 本経路は従来 workiq を落としていないので挙動を変えない。
+        _apply_repository_mcp_scope(
+            _opts_with_skills, include_workiq=True, workflow_id=workflow_id
+        )
     if "enable_config_discovery" not in _opts_with_skills:
         _opts_with_skills["enable_config_discovery"] = True
 
@@ -2315,14 +2336,9 @@ class StepRunner:
             # 残るため、プラグイン由来の `workiq` が tools:["*"] で併存し `_hve_workiq` の
             # 最小権限 allowlist を迂回できてしまう。宣言分（Work IQ 別名を除く）を併合して
             # 自動探索を止める。宣言が無い場合は従来どおり自動探索を残す。
-            _declared_mcp_servers = _filter_mcp_servers_for_session(
-                copy.deepcopy(_read_repository_mcp_config(Path.cwd())),
-                workflow_id=workflow_id,
-            )
-            if _declared_mcp_servers:
-                for _k, _v in _declared_mcp_servers.items():
-                    _mcp.setdefault(_k, _v)
-                opts["enable_config_discovery"] = False
+            opts["mcp_servers"] = _mcp
+            _apply_repository_mcp_scope(opts, workflow_id=workflow_id)
+            _mcp = opts["mcp_servers"]
 
         if _mcp:
             opts["mcp_servers"] = _mcp

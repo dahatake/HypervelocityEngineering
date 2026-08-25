@@ -393,6 +393,9 @@ class SDKConfig:
     # --- Issue/PR 作成 ---
     create_issues: bool = False             # デフォルト: 作成しない
     create_pr: bool = False                 # デフォルト: 作成しない
+    # FR-GUI-25: 既存 Issue を Root Issue として使う場合の Issue 番号。
+    # None のときは従来どおり Root Issue を新規作成する。create_issues と併用したときだけ効力を持つ。
+    issue_number: Optional[int] = None
     # PR 自動 Approve & Auto-merge。単独で branch 作成を有効にするのは
     # ASDW-WEB（Step 単位）と ADFDV（workflow 単位）のみ。他 workflow で
     # branch を作るには create_issues/create_pr の明示指定が必要で、この設定は

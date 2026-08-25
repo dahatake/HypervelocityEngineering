@@ -804,5 +804,22 @@ class TestSDKConfigToolSearch(unittest.TestCase):
                 self.assertFalse(cfg.tool_search)
 
 
+class TestIssueNumber(unittest.TestCase):
+    """FR-GUI-25: 既存 Issue へ連携するための issue_number を検証する。"""
+
+    def test_default_is_none(self) -> None:
+        """未指定時は None（Root Issue を新規作成する既存挙動）。"""
+        self.assertIsNone(SDKConfig().issue_number)
+
+    def test_holds_explicit_value(self) -> None:
+        self.assertEqual(SDKConfig(issue_number=1234).issue_number, 1234)
+
+    def test_is_independent_from_create_issues(self) -> None:
+        """create_issues の既定値を変えないこと。"""
+        cfg = SDKConfig(issue_number=7)
+        self.assertFalse(cfg.create_issues)
+        self.assertFalse(cfg.create_pr)
+
+
 if __name__ == "__main__":
     unittest.main()

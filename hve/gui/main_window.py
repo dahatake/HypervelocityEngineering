@@ -492,6 +492,14 @@ class MainWindow(QMainWindow):
         )
         self._btn_copilot.clicked.connect(self._on_copilot_clicked)
 
+        self._btn_github = _make_tool_button(
+            "GitHub",
+            "GitHub の Issue / Pull Request を開く",
+            QStyle.StandardPixmap.SP_DirLinkIcon,
+        )
+        self._btn_github.clicked.connect(self._open_github_window)
+        self._github_window: Optional[QMainWindow] = None
+
         # --- アプリ識別タイトルは画面内からは削除（要件: 「Windowのタイトルに: HVE Workbench。この文字は画面内からは削除」）。
         # 以前の self._title_label は本リファクタリングで取り除き、ウィンドウタイトル (setWindowTitle) で表示される。
 
@@ -503,6 +511,7 @@ class MainWindow(QMainWindow):
         top_row.addStretch()
         top_row.addWidget(self._btn_session)
         top_row.addWidget(self._btn_settings)
+        top_row.addWidget(self._btn_github)
         top_row.addWidget(self._btn_copilot)
 
         # Copilot チャットドック（初期状態は非表示）
@@ -745,6 +754,16 @@ class MainWindow(QMainWindow):
             _ss.set_option("markdown_preview_visible", self._preview_dock.isVisible())
         except Exception:
             pass
+
+    def _open_github_window(self) -> None:
+        """GitHub Issue / Pull Request ウィンドウを開く（非モーダル）。"""
+        from .github_window import GitHubWindow
+
+        if self._github_window is None:
+            self._github_window = GitHubWindow(parent=self)
+        self._github_window.show()
+        self._github_window.raise_()
+        self._github_window.activateWindow()
 
     def _open_settings_window(self) -> None:
         if self._settings_window is None or not self._settings_window.isVisible():
@@ -1757,6 +1776,25 @@ class MainWindow(QMainWindow):
                 except ValueError:
                     catalog_rel = str(catalog_path)
 
+            # --- FR-CLI-82: GUI Step 1 のローカル設定 precheck 入力 ---
+            # Prompt 自由記述を含む OrchestrateArgs 全体は validator へ直接渡さず、
+            # precheck_runner が GitHub 連携に必要な固定フィールドだけを選択する。
+            try:
+                startup_args_by_workflow = {
+                    wf_id: self._page_options.build_args_for_workflow(
+                        wf_id,
+                        repo_root=repo_root,
+                    )
+                    for wf_id in wf_ids_now
+                }
+            except ValueError as exc:
+                QMessageBox.warning(
+                    self,
+                    self.tr("入力エラー"),
+                    str(exc),
+                )
+                return False
+
             # --- Phase A: precheck（バナーと統一ロジック） ---
             result = run_step1_precheck(
                 wf_ids_now,
@@ -1767,6 +1805,7 @@ class MainWindow(QMainWindow):
                 origin_chosen=origin_chosen,
                 autopilot_mode=autopilot_mode,
                 autopilot_catalog_path=catalog_rel,
+                startup_args_by_workflow=startup_args_by_workflow,
             )
 
             if not result.is_ok():
@@ -3147,6 +3186,9 @@ class MainWindow(QMainWindow):
                 return
         # Phase D-4: Dock 表示状態の永続化
         self._persist_dock_visibility()
+        github_window = getattr(self, "_github_window", None)
+        if github_window is not None:
+            github_window.close()
         git_timer = getattr(self, "_git_status_timer", None)
         if git_timer is not None:
             git_timer.stop()

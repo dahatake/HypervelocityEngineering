@@ -301,6 +301,10 @@ QMainWindow (MainWindow)
 - ファイルパス系はファイルダイアログから選択可。
 - `--max-parallel` / `--timeout` は QSpinBox / QDoubleSpinBox。
 - `--workiq-akm-review`, `--workiq-akm-ingest`, `--banner`, `--force-refresh` は `argparse.BooleanOptionalAction` で **ON / OFF / 未指定の 3 状態** → `QComboBox`（"継承（未指定）" / "明示 ON" / "明示 OFF"）で表現。
+- **GitHub startup preflight の単一実装**: `hve/startup_preflight.py` の `github_write_required()` と `validate_startup_configuration()` が、CLI 非対話 / CLI wizard / GUI Plan / GUI・CLI Autopilot に共通する FR-CLI-82 の責務を持つ。各起動面で GitHub 書き込み対象の判定や repo / token / branch / remote の検査を複製しない。
+  - GitHub 書き込みを必要としない実行は検査対象外とし、token や remote 接続を要求しない。Prompt 自由記述欄も入力として渡さず、内容を検査しない。
+  - GUI Step 1 は `hve/autopilot/precheck_runner.py` の `run_step1_precheck()` から共通実装を `check_remote=False` で呼び、repo の `owner/repo` 形式・token の有無・ベースブランチ名の Git branch 形式だけを UI thread で判定する。結果は `SETTING` / `AUTH` に写像し、起動引数の組み立てが `ValueError` なら入力エラーを表示して Step 1 に留まる。
+  - GUI が起動する `hve orchestrate` 子プロセスは active step 解決後に同じ実装を `check_remote=True` で呼び、`origin` と完全一致する `refs/heads/<base_branch>` を、モデル呼び出し・ブランチ作成・DAG 構築より前に検査する。不在・検証不能は fail-closed とし、`main`、ローカルブランチ、GitHub の既定ブランチへ補正しない。
 
 ### 5.5 Step 1（ARD オプション）: 添付ファイル D&D 取り込み
 
@@ -455,6 +459,12 @@ Step 2（Workbench）の実行中は戻り不可。新規セッション or ウ�
 | `hve/gui/doc_convert.py` | ファイル変換ユーティリティ（markitdown 一本化） |
 | `hve/gui/copy_button.py` | 共通コピーアイコンウィジェット |
 | `hve/gui/gh_login_dialog.py` / `hve/gui/gh_cli.py` | GitHub CLI ログインと `GH_TOKEN` セッション橋渡し |
+| `hve/gui/startup_auth.py` | 起動時の GitHub 認証解決とログイン導線の提示（FR-GUI-24） |
+| `hve/gui/github_service.py` | GUI 向け GitHub サービス層（境界検証 + `hve/github_api.py` への委譲 + エラー文言変換。FR-GUI-28） |
+| `hve/gui/github_threads.py` | `GitHubWorker`（`QThread`。GitHub API を GUI スレッド外で実行） |
+| `hve/gui/github_issue_panel.py` | Issue の一覧・詳細・編集・コメント（FR-GUI-26） |
+| `hve/gui/github_pr_panel.py` | Pull Request の一覧・詳細・変更ファイル・コメント（FR-GUI-27） |
+| `hve/gui/github_window.py` | 上記 2 パネルを束ねる非モーダルウィンドウ（ヘッダーの [GitHub] ボタンから起動） |
 | `hve/gui/page_workiq.py` | Work IQ 設定ページ（認証確認導線を含む） |
 | `hve/gui/app.py` | 複数ウィンドウ管理 |
 

@@ -45,7 +45,7 @@
 - **GitHub Actions 不要** — `python -m hve cli` で対話型 wizard が起動し、ガイド付きで実行可能
 - **2つの実行モード** — インタラクティブモード（初回推奨）と CLI モード（`orchestrate` サブコマンド、スクリプト/CI 向け）を用意
 - **COPILOT_PAT 不要** — ローカルで直接 Agent を実行するため、Copilot アサイン用 PAT は不要
-- **基本実行に GH_TOKEN 不要** — `--create-issues` / `--create-pr` / `--auto-coding-agent-review` を使わなければ環境変数の設定は不要
+- **通常 run に GitHub 書込み token・remote 検査は不要** — GitHub 書込みを要求する実行だけが startup preflight の対象（[詳細](#github-書込み-startup-preflightfr-cli-3182)）
 - **Copilot ライセンスは必要** — Copilot SDK を利用するため、GitHub Copilot ライセンスが前提
 - MCP Server・Prompt・asyncio による並列実行など、高度な機能を利用可能
 
@@ -683,12 +683,29 @@ python -m hve --help
 
 #### HVE CLI Orchestrator の認証ポリシー（先に確認）
 
-- 基本実行は `gh auth login` を実施し、`gh auth status` で状態確認
+- GitHub へ書き込まない通常 run では、startup preflight による `GH_TOKEN` / `GITHUB_TOKEN`、`origin`、remote branch の検査を行いません。`gh auth login`、GitHub Copilot 認証、利用する MCP / Azure 等の認証はそれぞれ別に扱います。
 - Copilot SDK 実行前に `hve orchestrate` / `hve cli` が GitHub Copilot 認証状態を確認します。未ログインの場合、対話可能な端末では `copilot login` 実行確認を表示し、非対話環境では停止します。事前に `python -m hve login` を実行しておくと操作回数を減らせます。
-- `--create-issues` / `--create-pr` などの Issue / PR 作成系オプションを使う場合は `GH_TOKEN` と `REPO`（または `--repo`）が必要
-- `GH_TOKEN` は HVE CLI Orchestrator で Issue / PR を作成するためのトークンです
+- GitHub 書込み startup preflight の対象では、`GH_TOKEN`（未設定時は `GITHUB_TOKEN`）と `REPO`（または `--repo`）が必要です。
+- `GH_TOKEN` / `GITHUB_TOKEN` は HVE CLI Orchestrator が GitHub へ書き込むためのトークンです。
 - `COPILOT_PAT` は HVE Cloud Agent Orchestrator で Copilot 自動アサインに使うシークレットであり、HVE CLI Orchestrator の Issue / PR 作成用途ではありません
 - `python -m hve` 実行には GitHub Copilot SDK と Copilot ライセンスが必要です
+
+#### GitHub 書込み startup preflight（FR-CLI-31/82）
+
+startup preflight は、次の GitHub 書込み対象だけに適用されます。
+
+| 対象 | 適用範囲 |
+|---|---|
+| `--create-issues` または `--create-pr` | 全 Workflow |
+| ADFDV で `--enable-auto-merge` | Workflow 全体 |
+| ASDW-WEB で `--enable-auto-merge` | active step に `requires_remote_cicd=True` の Step が含まれる場合 |
+
+対象 run では、`repo` が非空の `owner/repo` 形式であること、`GH_TOKEN` または `GITHUB_TOKEN` が存在すること、`--branch` が有効な Git branch 名であること、Git remote `origin` が設定されていること、`origin` に完全一致する `refs/heads/<branch>` が実在することを検査します。remote branch は非対話の `git ls-remote --exit-code --heads origin refs/heads/<branch>` で読み取り専用確認し、status `2` は「一致する ref が存在しない」、その他の非 0 は認証・通信等により「検証不能」として区別します。
+
+- 不整合は判定可能な全件を一括表示して fail-closed で停止します。`main`、同名のローカル branch、GitHub の既定 branch へ暗黙に補正しません。
+- `--dry-run` でも対象条件なら同じ検査を行い、失敗時は計画表示より前に停止します。通常 run で上表の条件に該当しなければ、GitHub token・`origin`・remote branch は検査しません。
+- CLI wizard は選択 Step の確定後、GitHub Copilot 認証より前に remote まで検査します。非対話 CLI は先にローカル設定を検査し、`run_workflow` が active step を解決した直後に remote を検査します。いずれも最初の Agent session、モデル呼び出し、branch 作成、DAG 実行より前です。
+- 追加 Prompt、Work IQ Prompt などの自由記述欄は内容検査の対象外です。token の値はエラーやログへ出力しません。
 
 #### 認証手段0: `python -m hve login`（Copilot SDK）
 
@@ -730,25 +747,26 @@ gh auth status
 > 「Logged in to github.com」と表示されれば成功です。基本実行ではこれだけで十分です。追加の環境変数設定は不要です。
 
 
-#### 認証手段B: 環境変数 `GH_TOKEN`（Issue/PR 作成・Code Review Agent 使用時）
+#### 認証手段B: 環境変数 `GH_TOKEN`（GitHub 書込み時）
 
-以下のオプションを使用する場合のみ `GH_TOKEN` が必要です。
+GitHub 書込み startup preflight 対象では `GH_TOKEN`、未設定時は `GITHUB_TOKEN` が必要です。
 
-> **以下のオプションはいずれも任意です。使用しない場合は `GH_TOKEN` も不要です。**
+> **以下の GitHub 書込み機能はいずれも任意です。対象条件に該当しない通常 run では token は不要です。**
 
 | オプション | GH_TOKEN |
 |-----------|----------|
 | `--create-issues` | 必要（未設定ならエラー終了） |
 | `--create-pr` | 必要（未設定ならエラー終了） |
-| `--auto-coding-agent-review` | **必須** |
+| 対象 Workflow / Step での `--enable-auto-merge` | 必要（未設定ならエラー終了） |
+| `--auto-coding-agent-review` | 不要（ローカル SDK で実行） |
 | MCP Server（GitHub HTTP） | **必須** |
 | 上記以外（基本実行） | **不要** |
 
-> `--create-issues` / `--create-pr` の実行では、`GH_TOKEN` に加えて `REPO`（`owner/repo` 形式）または `--repo` 指定も必要です。`gh auth login` のみでは不足するため注意してください。
+> startup preflight 対象では、token に加えて `REPO`（`owner/repo` 形式）または `--repo` 指定も必要です。`gh auth login` のみでは不足するため注意してください。
 
 #### Fine-grained PAT の作成手順
 
-`--create-issues` / `--create-pr` / `--auto-coding-agent-review` を**使用しない場合、このセクションは読み飛ばせます**。
+GitHub 書込み startup preflight の対象機能を**使用しない場合、このセクションは読み飛ばせます**。
 
 1. GitHub.com > **プロフィールアイコン** > **Settings** > **Developer settings**
 2. **Personal access tokens** > **Fine-grained tokens** > **Generate new token**
@@ -761,24 +779,17 @@ gh auth status
 | 権限 | 設定値 | 用途 |
 |------|--------|------|
 | **Issues** | Read and write | `--create-issues` |
-| **Pull requests** | Read and write | `--create-pr` |
+| **Pull requests** | Read and write | `--create-pr` / 対象 Workflow の auto-merge |
 | **Metadata** | Read-only（自動付与） | — |
-| **Contents** | Read and write | `--create-issues` / `--create-pr` / `--auto-coding-agent-review` 使用時 |
+| **Contents** | Read and write | `--create-issues` / `--create-pr` / 対象 Workflow の auto-merge 使用時 |
 
-> **最小権限の原則**: `--create-issues` / `--create-pr` / `--auto-coding-agent-review` はいずれもブランチ作成・commit・push を伴うため、Contents も Read and write が必要です。
+> **最小権限の原則**: GitHub 書込み機能はブランチ作成・commit・push を伴うため、Contents も Read and write が必要です。
 
 6. **Generate token** をクリックし、表示されたトークン（`github_pat_` で始まる文字列）を**必ずこの時点でコピー**
 
 > ⚠️ トークンはこの画面を離れると二度と表示されません。
 
-7. 環境変数に設定:
-
-```bash
-# macOS / Linux
-export GH_TOKEN="github_pat_xxxxxxxxxxxxxxxxxxxx"
-```
-
-> **Windows**: PowerShell は `$env:GH_TOKEN = "github_pat_xxxx"`、コマンドプロンプトは `set GH_TOKEN=github_pat_xxxx`（`=`前後にスペース不可、ダブルクォート不可）。
+7. OS の資格情報ストアまたは安全なシークレット注入手段から `GH_TOKEN` へ設定します。token の具体値をコマンド履歴、ログ、Issue、PR、文書へ記録しないでください。
 
 #### 既存の Fine-grained PAT を使う場合
 
@@ -907,7 +918,9 @@ Copilot SDK セッションで観測した MCP の入出力は、実行ごとの
 Work IQ（`@microsoft/workiq`）をインストールして `--auto-qa --workiq` を有効化すると、QA フェーズの補助情報として M365 データを読み取り専用で参照します。Phase 1 の本処理、Review フェーズ、自己改善フェーズでは Work IQ を使用しません。  
 QA では `--workiq-draft` を指定すると、質問ごとの Work IQ 回答ドラフトを `qa/`（または指定ディレクトリ）へ出力できます。Work IQ の補助レポートは通常モード・ドラフトモードともに同じ出力先ディレクトリへ保存されます。
 
-Work IQ を使う設定が有効な場合、HVE は本処理前に `accept-eula` と `ask -q ping` 相当の確認を行います。失敗時、対話可能な端末では Work IQ を無効化して続行するかを選べます。非対話環境では停止し、`python -m hve workiq-doctor` での診断を案内します。
+> **`--workiq-draft` は Work IQ 連携全体を有効化します。** `--workiq` を指定していなくても、`--workiq-draft` だけで `workiq_enabled` と `workiq_qa_enabled` が有効になります。GUI では「Work IQ を有効化」と「Work IQ 回答ドラフト作成」が別のチェックボックスなため、前者を外しても後者が ON なら Work IQ は使われます。Work IQ を完全に使わないには両方を OFF にしてください。
+
+Work IQ を使う設定が有効な場合、HVE は本処理前に `accept-eula` と `ask -q ping` 相当の確認を行います。失敗時、対話可能な端末では Work IQ を無効化して続行するかを選べます（拒否すれば停止）。**非対話環境（GUI からの実行を含む）では実行を停止せず、その実行に限って Work IQ を自動無効化して続行します**。このとき Work IQ を要求していた設定名と、`python -m hve workiq-doctor` への診断導線を警告として出力します。
 
 #### Work IQ 接続状態の段階
 
@@ -916,7 +929,7 @@ Work IQ 連携には以下の5段階があります。各段階は独立して�
 | 段階 | 確認方法 | 説明 |
 |---|---|---|
 | 1. CLI 検出 | `is_workiq_available()` / `npx -y @microsoft/workiq version` | `@microsoft/workiq` パッケージが利用可能か |
-| 2. 認証 | `npx -y @microsoft/workiq ask -q "ping"` | M365 / Entra ID への有効な認証トークンが存在するか |
+| 2. 認証 | `npx -y @microsoft/workiq ask -q "ping"` | M365 / Entra ID への有効な認証トークンが存在するか。ここで失敗した場合、非対話環境では Work IQ を自動無効化して実行を続行します |
 | 3. MCP 起動 | `npx -y @microsoft/workiq mcp` | MCP サーバーとして起動できるか |
 | 4. SDK 接続 | `session.rpc.mcp.list()` で `connected` | Copilot SDK セッションに接続されたか |
 | 5. 実ツール呼び出し観測 | `tool.execution_start` イベント | MCP ツールが実際に呼び出されたことを SDK イベントで確認できるか |
@@ -989,15 +1002,27 @@ HVE はツール名の集合を 2 つ（公開 allowlist / 実行確認集合）
 
 > いずれの集合でも、MCP server 名を伴わない tool イベントは Work IQ 実行とみなしません（他 server の同名ツールを誤検知しないため）。
 
-#### QA サブセッションが接続する MCP サーバー
+#### HVE のセッションが接続する MCP サーバー
 
-QA サブセッションは `.github/.mcp.json` の宣言分（Work IQ 別名を除く）と HVE 内部の `_hve_workiq` だけに接続し、ワークスペース / ユーザースコープ / プラグイン由来の MCP 自動探索を行いません（FR-CLI-76）。
+HVE が生成するセッションは、`.github/.mcp.json` の宣言分（Work IQ 別名を除く）と HVE 内部の `_hve_workiq` だけに接続し、ワークスペース / ユーザースコープ / プラグイン由来の MCP 自動探索を行いません（FR-CLI-76）。対象は次のセッションです。
+
+| セッション | 縮約の適用 |
+|---|---|
+| 各 Step のメインセッション | あり |
+| 事前 QA サブセッション（Work IQ 有効時） | あり |
+| Review サブセッション | あり |
+| ARD `target_business` 自動生成 / Fleet wave 親 / Code Review Agent | あり（v0.8.50） |
+| Work IQ 専用セッション（prefetch / AKM 検証 / AKM 取込 / ARD ユースケース） | あり（v0.8.50） |
+
+> 上表の「あり」は `--mcp-config` を指定していない既定の実行が前提です。`--mcp-config` で MCP を明示した場合は、その指定が優先され自動探索は止まりません（後述の対象外を参照）。
 
 以前は `_hve_workiq` を明示指定する都合で自動探索が残り、利用者環境にインストールされた Work IQ プラグインの `workiq` サーバーが同じセッションへ併存していました。併存側は `tools: ["*"]`（公開 14 件）で登録されるため、HVE が `_hve_workiq` に課す `ask` のみの allowlist が及ばず、書き込み系ツールにも到達できる状態でした。
 
-- `.github/.mcp.json` の宣言が無い / 読み取れない / 空の場合は、従来どおり自動探索を行います（MCP を宣言していない作業ディレクトリでの回帰を避けるため）。
-- Azure を利用しない Workflow（`ard` / `akm` / `adi` / `adoc`）では `azure` を渡しません（FR-CLI-79）。
-- `workiq-doctor --sdk-tool-probe` は利用者環境の実態を観測する診断のため、この縮約の対象外です。
+> **Work IQ を無効にしても `workiq` へ接続していた経路は v0.8.50 で閉じました。** 以前は ARD の `target_business` 自動生成・Fleet wave 親・Code Review Agent の各セッションで自動探索が有効だったため、HVE 側の Work IQ 設定が OFF でも Copilot CLI の `work-iq` プラグインが宣言する `workiq` サーバーが接続対象に入りえました。
+
+- `.github/.mcp.json` の宣言が無い / 読み取れない / 空の場合は、従来どおり自動探索を行います（MCP を宣言していない作業ディレクトリでの回帰を避けるため）。`pip install` した HVE をリポジトリ外で実行する場合はこの条件に該当します。
+- Azure を利用しない Workflow（`ard` / `akm` / `adi` / `adoc`）では `azure` を渡しません（FR-CLI-79）。Workflow を特定できないセッション（Fleet wave 親 / Code Review Agent）では全宣言サーバーを渡します。
+- 以下は縮約の対象外です: ASDW DataDeploy / Foundry の fail-closed 経路、`--mcp-config` で明示指定した場合、`workiq-doctor --sdk-tool-probe`（利用者環境の実態を観測する診断のため）。
 
 #### 診断用: 全ツール許可モード（`tools: ["*"]`）
 
@@ -1685,7 +1710,7 @@ QA 自動投入と Work IQ が有効化され、ログイン成功した場合�
 | 実行中の対話 | あり | なし | なし | なし |
 | ステップ選択 | 画面上で番号選択 | 画面上で番号選択 | 画面上で番号選択 | `--steps Step.1,Step.2` |
 | 固有パラメータ | 自動プロンプト表示 | 必須のみプロンプト表示 | 自動プロンプト表示 | `--app-id APP-04` 等を明示指定 |
-| GH_TOKEN | Issue/PR 作成時のみ必要 | 同左 | 同左 | 同左 |
+| GH_TOKEN | GitHub 書込み startup preflight 対象時のみ必要 | 同左 | 同左 | 同左 |
 | MCP Server | 非対応（CLI モードを使用） | 非対応 | 非対応 | `--mcp-config` で指定 |
 | 出力制御 | カラー + 装飾（TTY 自動判定） | カラー + 装飾 | カラー + 装飾 | `--verbose` / `--quiet` で制御 |
 
@@ -1729,6 +1754,8 @@ python -m hve orchestrate --workflow aad-web
 
 `--dry-run` を付けると SDK 呼び出し・Issue/PR 作成を行わず、実行計画のみ表示します。初回は必ず使用してください。
 
+ただし、[GitHub 書込み startup preflight](#github-書込み-startup-preflightfr-cli-3182) の対象条件は `--dry-run` でも変わりません。対象 run は repo / token / branch / `origin` / exact remote ref の検査を通過してから計画を表示し、通常 run はこれらを検査しません。
+
 ```bash
 python -m hve orchestrate --workflow aas --branch main --dry-run
 ```
@@ -1757,7 +1784,7 @@ python -m hve orchestrate --workflow aad-web \
 
 ```bash
 # コピーして不要なオプションを削除して使用してください
-# ⚠️ --auto-coding-agent-review / --create-issues / --create-pr 使用時は GH_TOKEN が必要です
+# ⚠️ --create-issues / --create-pr 使用時は GH_TOKEN または GITHUB_TOKEN が必要です
 python -m hve orchestrate \
   --workflow asdw-web \
   --model claude-opus-4.7 \
@@ -1843,7 +1870,7 @@ python -m hve orchestrate \
 
 | 環境変数 | 説明 | 既定値 |
 |---------|------|--------|
-| `GH_TOKEN` | GitHub API 認証トークン（Issue/PR 作成や Code Review Agent 実行時に必要） | なし |
+| `GH_TOKEN` | GitHub API 認証トークン（GitHub 書込み startup preflight 対象時に必要） | なし |
 | `GITHUB_TOKEN` | `GH_TOKEN` 未設定時のフォールバックトークン | なし |
 | `REPO` | 対象リポジトリ（`owner/repo`） | なし |
 | `COPILOT_CLI_PATH` | Copilot CLI 実行ファイルパス | 自動検出 |
@@ -2096,6 +2123,7 @@ python -m hve orchestrate --workflow aas --final-only > result.txt
 | `--ignore-paths` | `git add` 時に除外するパス（スペース区切りで複数指定可） | `docs images infra qa src test work` |
 | `--additional-prompt` | 全 Prompt の末尾に追記する文字列 | なし |
 | `--issue-title` | Root Issue 作成時のタイトルを上書き | ワークフロー名から自動生成 |
+| `--issue-number` | Root Issue を新規作成せず、既存の Issue #N へ連携する。Sub-Issue はその Issue の子として作成され、PR 本文に `Closes #N` が入る。`--create-issues` と併用したときだけ効力を持ち、併用しない場合は警告して無視する。指定 Issue を取得できない場合は実行を中止する（新規作成へ戻らない） | なし（新規作成） |
 
 #### ワークフロー固有オプション
 
@@ -2170,7 +2198,7 @@ python -m hve orchestrate \
   --create-pr
 ```
 
-> `GH_TOKEN` が必要です。`--create-issues` または `--create-pr` を指定している状態で `GH_TOKEN` が未設定の場合、前提条件エラーとしてコマンドは終了します。
+> `GH_TOKEN` または `GITHUB_TOKEN` が必要です。どちらも未設定の場合、startup preflight で終了します。
 
 #### 複数 APP-ID 指定（ASDW）
 
@@ -2199,13 +2227,12 @@ python -m hve orchestrate \
 python -m hve orchestrate \
   --workflow aad-web \
   --branch main \
-  --auto-coding-agent-review \
-  --repo dahatake/RoyalytyService2ndGen
+  --auto-coding-agent-review
 ```
 
 自動承認を有効にする場合は `--auto-coding-agent-review-auto-approval` を追加してください。
 
-> **前提**: `GH_TOKEN` + `--repo` が必須。Agent の成果物がリモートブランチに push されている必要があります。
+> **前提**: Code Review Agent はローカル SDK で実行するため、単独では `GH_TOKEN` / `--repo` を要求しません。GitHub 書込み機能を併用した場合だけ、その機能の startup preflight 条件が適用されます。
 
 ---
 
@@ -2824,5 +2851,5 @@ python -m pytest hve/tests/test_gui_help_content.py
 ### 互換性・安全性
 
 - 既存の引数名・既定値の変更は互換性を壊します。別名を追加してから移行し、廃止する場合は本ガイドに廃止版数を明記してください（例: 「中断と再開（Resume）— 廃止（v1.1）」）。
-- `--auto-coding-agent-review` / `--create-issues` / `--create-pr` は GitHub API を使うため `GH_TOKEN` が必要です。トークンは環境変数で渡し、ドキュメントやコードへ埋め込まないでください。
+- `--create-issues` / `--create-pr` と対象 Workflow / Step の auto-merge は GitHub 書込みを行うため `GH_TOKEN` または `GITHUB_TOKEN` が必要です。Code Review Agent 単独はローカル SDK で実行します。トークンは安全な環境変数注入を使い、ドキュメントやコードへ埋め込まないでください。
 - Cloud Session の `policy_blocked` はローカルへフォールバックしません。組織ポリシーの拒否を迂回する変更を入れないでください。

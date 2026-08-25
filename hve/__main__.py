@@ -1402,6 +1402,16 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     orch.add_argument(
+        "--issue-number",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Root Issue を新規作成せず、既存の GitHub Issue #N へ連携する (省略可)。"
+            " --create-issues と併用したときだけ効力を持ちます。"
+        ),
+    )
+    orch.add_argument(
         "--ignore-paths",
         nargs="+",
         default=None,
@@ -2431,6 +2441,7 @@ def _build_config(args: argparse.Namespace):
     cfg.auto_coding_agent_review_auto_approval = args.auto_coding_agent_review_auto_approval
     cfg.create_issues = args.create_issues
     cfg.create_pr = args.create_pr
+    cfg.issue_number = getattr(args, "issue_number", None)
     cfg.enable_auto_merge = getattr(args, "enable_auto_merge", False)
     cfg.delete_local_merged_branch = getattr(args, "delete_local_merged_branch", True)
     cfg.verbose = args.verbose or not args.quiet  # verbose はデフォルト True; --quiet で抑制
@@ -2939,6 +2950,46 @@ def _validate_auto_coding_agent_review(args: argparse.Namespace, config: "SDKCon
     return True
 
 
+def _run_startup_configuration_preflight(
+    config: "SDKConfig",
+    workflow_id: str,
+    *,
+    active_steps=(),
+    check_remote: bool = False,
+) -> bool:
+    """FR-CLI-82 の共通設定 preflight を実行し、失敗を一括表示する。"""
+    try:
+        from .startup_preflight import (
+            format_startup_preflight_errors,
+            validate_startup_configuration,
+        )
+    except ImportError:
+        from startup_preflight import (  # type: ignore[no-redef]
+            format_startup_preflight_errors,
+            validate_startup_configuration,
+        )
+
+    result = validate_startup_configuration(
+        workflow=get_workflow(workflow_id),
+        active_steps=set(active_steps or ()),
+        create_issues=bool(config.create_issues),
+        create_pr=bool(config.create_pr),
+        enable_auto_merge=bool(getattr(config, "enable_auto_merge", False)),
+        repo=config.repo,
+        token=config.resolve_token(),
+        base_branch=config.base_branch,
+        check_remote=check_remote,
+        repo_root=Path.cwd(),
+    )
+    if result.is_ok():
+        return True
+    print(
+        f"{_ts()} ❌ {format_startup_preflight_errors(result)}",
+        file=sys.stderr,
+    )
+    return False
+
+
 def _run_copilot_auth_preflight(args: argparse.Namespace, config: "SDKConfig") -> bool:
     """orchestrate 実行前に GitHub Copilot 認証状態を確認する。
 
@@ -3057,13 +3108,18 @@ def _run_workiq_auth_preflight(
 
     interactive = bool(getattr(config, "force_interactive", False) or sys.stdin.isatty())
     if not interactive:
-        print(f"{_ts()} ❌ Work IQ 認証確認に失敗しました。", file=sys.stderr)
+        # FR-CLI-81: 非対話では停止せず、当該実行に限り Work IQ を無効化して続行する。
+        print(
+            f"{_ts()} ⚠️  Work IQ 認証確認に失敗したため、この実行では Work IQ を無効化して続行します。",
+            file=sys.stderr,
+        )
         print(
             f"{_ts()}    Work IQ を要求した設定: {', '.join(_workiq_request_reasons(config, wf_id))}",
             file=sys.stderr,
         )
-        print(f"{_ts()}    先に `python -m hve workiq-doctor` で診断してください。", file=sys.stderr)
-        return False
+        print(f"{_ts()}    詳細は `python -m hve workiq-doctor` で診断してください。", file=sys.stderr)
+        _disable_workiq(config, params)
+        return True
 
     try:
         answer = input("Work IQ を無効化して続行しますか？ [y/N]: ").strip().lower()
@@ -4273,16 +4329,13 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     params.update(params_extra)
 
     # ── バリデーション ────────────────────────────────────
-    if cfg.create_issues or cfg.create_pr:
-        errors: List[str] = []
-        if not cfg.repo:
-            errors.append("  REPO 環境変数が必要です。")
-        if not cfg.resolve_token():
-            errors.append("  GH_TOKEN（または GITHUB_TOKEN）環境変数が必要です。")
-        if errors:
-            for e in errors:
-                con.error(e)
-            return 1
+    if not _run_startup_configuration_preflight(
+        cfg,
+        wf.id,
+        active_steps=selected_step_ids,
+        check_remote=True,
+    ):
+        return 1
 
     if not _run_copilot_auth_preflight(args or argparse.Namespace(command="cli"), cfg):
         return 1
@@ -4781,6 +4834,13 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
     if args.create_issues:
         args.create_pr = True
 
+    # FR-GUI-25: --issue-number は --create-issues と併用したときだけ効力を持つ。
+    if getattr(args, "issue_number", None) is not None and not args.create_issues:
+        print(
+            f"{_ts()} ⚠️  --create-issues が指定されていないため --issue-number は無視されます。",
+            file=sys.stderr,
+        )
+
     # インポート
     _sdk_dir = Path(__file__).resolve().parent
     if str(_sdk_dir) not in sys.path:
@@ -4803,20 +4863,15 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
         print(f"{_ts()} ❌ {exc}", file=sys.stderr)
         return 1
 
-    # バリデーション: --create-issues または --create-pr には GH_TOKEN と --repo が必要
-    if config.create_issues or config.create_pr:
-        errors: List[str] = []
-        if not config.repo:
-            errors.append("  --repo（または REPO 環境変数）が必要です。")
-        if not config.resolve_token():
-            errors.append("  GH_TOKEN（または GITHUB_TOKEN）環境変数が必要です。")
-        if errors:
-            print(
-                f"{_ts()} ❌ --create-issues / --create-pr の前提条件が満たされていません:\n"
-                + "\n".join(errors),
-                file=sys.stderr,
-            )
-            return 1
+    # remote 検証は active step 解決後の run_workflow が担う。ここでは、
+    # Copilot 認証より前に判定できるローカル設定不整合だけを fail-closed にする。
+    if not _run_startup_configuration_preflight(
+        config,
+        args.workflow,
+        active_steps=params.get("steps") or (),
+        check_remote=False,
+    ):
+        return 1
 
     if not _validate_auto_coding_agent_review(args, config):
         return 1

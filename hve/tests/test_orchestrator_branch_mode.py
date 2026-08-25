@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import unittest
+from contextlib import nullcontext
+from dataclasses import dataclass
 from unittest.mock import Mock, patch
 
 from hve import orchestrator
@@ -23,6 +25,22 @@ _PR_SKIPPED_MESSAGE = (
 )
 
 _UNSET = object()
+
+
+@dataclass(frozen=True)
+class _StartupIssueStub:
+    category: str
+    field_name: str
+    message: str
+    remediation_hint: str
+
+
+@dataclass(frozen=True)
+class _StartupResultStub:
+    issues: tuple[_StartupIssueStub, ...] = ()
+
+    def is_ok(self) -> bool:
+        return not self.issues
 
 
 class _FakeRunner:
@@ -69,6 +87,7 @@ def _run_workflow_with_fakes(
     create_pr: bool = False,
     dirty_hve_paths: list[str] | None = None,
     params: dict | None = None,
+    startup_issues: tuple[_StartupIssueStub, ...] = (),
     orchestrator_ctx: OrchestratorContext | None = _UNSET,
 ):
     """``run_workflow`` を副作用なしで実行するための共通フェイク環境。
@@ -81,6 +100,7 @@ def _run_workflow_with_fakes(
     """
     if orchestrator_ctx is _UNSET:
         orchestrator_ctx = OrchestratorContext(run_id="branch-mode-test")
+    events: list[str] = []
     config = SDKConfig(
         enable_auto_merge=True,
         create_pr=create_pr,
@@ -92,11 +112,62 @@ def _run_workflow_with_fakes(
         repo="owner/repo",
     )
     console = Mock()
-    checkout = Mock(return_value=True)
+
+    def _checkout(*_args, **_kwargs):
+        events.append("checkout")
+        return True
+
+    checkout = Mock(side_effect=_checkout)
     add_commit_push = Mock(return_value=False)
     push_branch = Mock(return_value=True)
     create_pr_mock = Mock(return_value=None)
     dirty_probe = Mock(return_value=list(dirty_hve_paths or []))
+    subprocess_guard = Mock(
+        side_effect=AssertionError(
+            "run_workflow test helper must not invoke a real subprocess/network"
+        )
+    )
+
+    resolve_selected_steps_impl = orchestrator.resolve_selected_steps
+
+    def _resolve_selected_steps(*args, **kwargs):
+        events.append("active_steps")
+        return resolve_selected_steps_impl(*args, **kwargs)
+
+    step_resolver = Mock(side_effect=_resolve_selected_steps)
+
+    build_dag_plan_impl = orchestrator.build_dag_plan
+
+    def _build_dag_plan(*args, **kwargs):
+        events.append("dry_run_plan")
+        return build_dag_plan_impl(*args, **kwargs)
+
+    plan_builder = Mock(side_effect=_build_dag_plan)
+
+    def _make_runner(*args, **kwargs):
+        events.append("agent_runner")
+        return _FakeRunner(*args, **kwargs)
+
+    runner_factory = Mock(side_effect=_make_runner)
+
+    def _validate_startup(*_args, **_kwargs):
+        events.append("startup_validate")
+        return _StartupResultStub(tuple(startup_issues))
+
+    startup_validate = Mock(side_effect=_validate_startup)
+    try:
+        from hve import startup_preflight as startup_preflight_module
+    except ImportError:
+        startup_preflight_module = None
+    startup_module_patch = (
+        patch.object(
+            startup_preflight_module,
+            "validate_startup_configuration",
+            startup_validate,
+        )
+        if startup_preflight_module is not None
+        else nullcontext()
+    )
 
     precheck_ok: dict[str, object] = {
         "should_abort": False,
@@ -110,7 +181,17 @@ def _run_workflow_with_fakes(
 
     with (
         patch.object(orchestrator, "Console", return_value=console),
-        patch.object(orchestrator, "StepRunner", _FakeRunner),
+        patch.object(orchestrator, "StepRunner", runner_factory),
+        patch.object(orchestrator, "resolve_selected_steps", step_resolver),
+        patch.object(orchestrator, "build_dag_plan", plan_builder),
+        patch.object(orchestrator.subprocess, "run", subprocess_guard),
+        patch.object(
+            orchestrator,
+            "validate_startup_configuration",
+            startup_validate,
+            create=True,
+        ),
+        startup_module_patch,
         patch.object(
             orchestrator,
             "DAGExecutor",
@@ -169,6 +250,11 @@ def _run_workflow_with_fakes(
         "push_branch": push_branch,
         "create_pr": create_pr_mock,
         "dirty_probe": dirty_probe,
+        "startup_validate": startup_validate,
+        "step_resolver": step_resolver,
+        "plan_builder": plan_builder,
+        "runner_factory": runner_factory,
+        "events": events,
     }
 
 
@@ -263,6 +349,91 @@ class TestWorkflowBranchMode(unittest.TestCase):
             if call.args
         ]
         self.assertIn(_PR_SKIPPED_MESSAGE, messages)
+
+
+class TestStartupConfigurationPreflight(unittest.TestCase):
+    """FR-CLI-82: active step 解決直後の共通 startup preflight。"""
+
+    def test_run_workflow_passes_targeting_inputs_for_asdw_adfdv_and_ard(self) -> None:
+        from hve.startup_preflight import github_write_required
+
+        asdw = next(wf for wf in list_workflows() if wf.id == "asdw-web")
+        remote_step_id = next(
+            step.id
+            for step in asdw.steps
+            if not step.is_container and step.requires_remote_cicd
+        )
+        adfdv = next(wf for wf in list_workflows() if wf.id == "adfdv")
+        adfdv_step_id = next(step.id for step in adfdv.steps if not step.is_container)
+        cases = (
+            ("asdw-web", remote_step_id, True),
+            ("adfdv", adfdv_step_id, True),
+            ("ard", "1", False),
+        )
+
+        for workflow_id, selected_step, expected_target in cases:
+            with self.subTest(workflow=workflow_id, step=selected_step):
+                observed = _run_workflow_with_fakes(
+                    workflow_id,
+                    dry_run=True,
+                    params={"branch": "main", "selected_steps": [selected_step]},
+                )
+
+                observed["startup_validate"].assert_called_once()
+                kwargs = observed["startup_validate"].call_args.kwargs
+                self.assertEqual(kwargs["workflow"].id, workflow_id)
+                self.assertIn(selected_step, kwargs["active_steps"])
+                self.assertIs(kwargs["check_remote"], True)
+                self.assertEqual(
+                    github_write_required(
+                        workflow=kwargs["workflow"],
+                        active_steps=kwargs["active_steps"],
+                        create_issues=kwargs["create_issues"],
+                        create_pr=kwargs["create_pr"],
+                        enable_auto_merge=kwargs["enable_auto_merge"],
+                    ),
+                    expected_target,
+                )
+                self.assertTrue(observed["result"].get("dry_run"))
+                self.assertFalse(observed["result"].get("blocked"))
+
+    def test_failure_blocks_before_plan_checkout_and_agent_runner(self) -> None:
+        issue = _StartupIssueStub(
+            category="setting",
+            field_name="base_branch",
+            message="remote branch does not exist",
+            remediation_hint="push the configured base branch",
+        )
+
+        for dry_run in (True, False):
+            with self.subTest(dry_run=dry_run):
+                observed = _run_workflow_with_fakes(
+                    "adfdv",
+                    dry_run=dry_run,
+                    startup_issues=(issue,),
+                )
+
+                observed["startup_validate"].assert_called_once()
+                kwargs = observed["startup_validate"].call_args.kwargs
+                self.assertEqual(kwargs["workflow"].id, "adfdv")
+                self.assertTrue(kwargs["active_steps"])
+                self.assertIs(kwargs["check_remote"], True)
+                self.assertEqual(
+                    observed["events"][:2],
+                    ["active_steps", "startup_validate"],
+                )
+                self.assertNotIn("dry_run_plan", observed["events"])
+                self.assertNotIn("checkout", observed["events"])
+                self.assertNotIn("agent_runner", observed["events"])
+                observed["plan_builder"].assert_not_called()
+                observed["checkout"].assert_not_called()
+                observed["runner_factory"].assert_not_called()
+
+                result = observed["result"]
+                self.assertTrue(result.get("blocked"))
+                self.assertEqual(result.get("completed"), [])
+                self.assertEqual(result.get("failed"), [])
+                self.assertIn("base_branch", str(result.get("error") or ""))
 
 
 _DIRTY_HVE_PATHS = [
@@ -410,6 +581,37 @@ class TestDirtyHveSourceDetection(unittest.TestCase):
 
         self.assertNotIn("mdq/new_module.py", paths)
         self.assertIn("hve/orchestrator.py", paths)
+
+    def test_gui_local_settings_files_are_not_reported(self) -> None:
+        """FR-CLI-74: GUI の利用者ローカル設定は HVE ソースとして扱わない。"""
+        paths, _ = self._run_probe(
+            "\n".join(
+                [
+                    " M hve/.settings.txt",
+                    "?? hve/.settings.txt.tmp",
+                    " M hve/orchestrator.py",
+                ]
+            )
+        )
+
+        self.assertNotIn("hve/.settings.txt", paths)
+        self.assertNotIn("hve/.settings.txt.tmp", paths)
+        self.assertIn("hve/orchestrator.py", paths)
+
+    def test_gui_local_settings_file_alone_does_not_block_the_run(self) -> None:
+        """FR-CLI-74: 当該ファイルだけが未コミットなら停止対象は 0 件。"""
+        paths, _ = self._run_probe(" M hve/.settings.txt")
+
+        self.assertEqual(paths, [])
+
+    def test_gui_local_settings_exclusion_is_scoped_to_the_dirty_preflight(self) -> None:
+        """FR-CLI-74: 除外は run 開始前検査に限定し FR-CLI-75 へ波及させない。"""
+        self.assertEqual(
+            orchestrator._filter_hve_source_paths(
+                ["hve/.settings.txt", "hve/.settings.txt.tmp"]
+            ),
+            ["hve/.settings.txt", "hve/.settings.txt.tmp"],
+        )
 
     def test_git_failure_is_not_silently_swallowed_into_success(self) -> None:
         """git が失敗した場合は検出結果を捏造せず空扱いにする（fail-open は記録する）。"""

@@ -70,6 +70,9 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "ignore_paths": "",
             "repo": "",
             "issue_title": "",
+            # FR-GUI-25: Root Issue の扱い（"new" | "existing"）と連携先 Issue 番号
+            "issue_mode": "new",
+            "issue_number": "",
             # C6 出力制御。設定画面の「出力制御」ノードは撤去済みで、
             # `verbosity` 以外は Step 1 右ペインで選ぶセッション限りの値
             # （settings_apply._SECTION_FIELDS に C6 は無く往復しない）。

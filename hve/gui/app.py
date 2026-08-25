@@ -209,8 +209,23 @@ def run_app(args=None) -> int:
 
     initial_catalog = getattr(args, "app_arch_catalog", None) if args is not None else None
     _open_first_window(initial_catalog=initial_catalog)
+    _run_startup_github_auth()
     start_startup_index_refresh(_resolve_repo_root())
     return app.exec()
+
+
+def _run_startup_github_auth() -> None:
+    """FR-GUI-24: 起動時に GitHub 認証を解決し、未解決ならログイン導線を提示する。
+
+    認証の完了は GUI 起動の前提条件ではないため、ここでの失敗は起動を妨げない。
+    """
+    from . import startup_auth
+
+    parent = _open_windows[0] if _open_windows else None
+    try:
+        startup_auth.ensure_startup_authentication(parent)
+    except Exception as exc:  # noqa: BLE001 - 起動継続のため型を限定しない
+        print(f"[hve.gui] GitHub 認証の解決に失敗しました: {exc}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------

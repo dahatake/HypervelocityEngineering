@@ -178,7 +178,7 @@ _OPTIONS_FALLBACK: Dict[str, str] = {
     "auto_coding_agent_review_auto_approval": QT_TRANSLATE_NOOP("help_content", "Code Review Agent の修正プランを全て自動承認 (デフォルト: 無効)。"),
     "workiq": QT_TRANSLATE_NOOP("help_content", "Work IQ 経由の M365 データ参照を有効化する (@microsoft/workiq のインストールが必要)。"),
     "workiq_dxx": QT_TRANSLATE_NOOP("help_content", "AKM Work IQ 取り込み対象 Dxx をカンマ区切りで指定（例: D01,D04）。"),
-    "workiq_draft": QT_TRANSLATE_NOOP("help_content", "QA フェーズで質問ごとに Work IQ 回答ドラフトを生成する。"),
+    "workiq_draft": QT_TRANSLATE_NOOP("help_content", "QA フェーズで質問ごとに Work IQ 回答ドラフトを生成する。本項目を有効にすると Work IQ 連携全体が有効になる。"),
     "workiq_prompt_qa": QT_TRANSLATE_NOOP("help_content", "Work IQ の QA 用プロンプトを上書きする。"),
     "workiq_prompt_km": QT_TRANSLATE_NOOP("help_content", "Work IQ の KM 用プロンプトを上書きする。"),
     "workiq_prompt_review": QT_TRANSLATE_NOOP("help_content", "Work IQ の文書レビュー用プロンプトを上書きする。"),

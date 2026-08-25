@@ -51,12 +51,17 @@ try:
         ARD_WORKIQ_USECASE_PROMPT,
         ARD_TARGET_BUSINESS_FROM_RECOMMENDATION_PROMPT,
     )
-    from .runner import StepRunner, _is_review_fail, _extract_text, _apply_fanout_prompt_template
+    from .runner import StepRunner, _is_review_fail, _extract_text, _apply_fanout_prompt_template, _apply_repository_mcp_scope
     from .dag_executor import DAGExecutor, StepResult
     from .dag_planner import build_dag_plan
     from .run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id
     from .orchestrator_context import OrchestratorContext
     from .mcp_io_log import McpIoLogger, attach_mcp_io_event_logger
+    from .startup_preflight import (
+        format_startup_preflight_errors,
+        github_write_required,
+        validate_startup_configuration,
+    )
     from . import index_refresh
 except ImportError:
     from config import SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS, to_wire_model  # type: ignore[no-redef]
@@ -69,12 +74,17 @@ except ImportError:
         ARD_WORKIQ_USECASE_PROMPT,
         ARD_TARGET_BUSINESS_FROM_RECOMMENDATION_PROMPT,
     )
-    from runner import StepRunner, _is_review_fail, _extract_text, _apply_fanout_prompt_template  # type: ignore[no-redef]
+    from runner import StepRunner, _is_review_fail, _extract_text, _apply_fanout_prompt_template, _apply_repository_mcp_scope  # type: ignore[no-redef]
     from dag_executor import DAGExecutor, StepResult  # type: ignore[no-redef]
     from dag_planner import build_dag_plan  # type: ignore[no-redef]
     from run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id  # type: ignore[no-redef]
     from orchestrator_context import OrchestratorContext  # type: ignore[no-redef]
     from mcp_io_log import McpIoLogger, attach_mcp_io_event_logger  # type: ignore[no-redef]
+    from startup_preflight import (  # type: ignore[no-redef]
+        format_startup_preflight_errors,
+        github_write_required,
+        validate_startup_configuration,
+    )
     import index_refresh  # type: ignore[no-redef]
 
 # -----------------------------------------------------------------------
@@ -107,6 +117,7 @@ from hve.github_api import (
     add_labels,
     api_call,
     create_issue,
+    get_issue,
     link_sub_issue,
     post_comment,
     create_pull_request,
@@ -167,6 +178,7 @@ async def _create_session_with_auto_reasoning_fallback(
     step_id: Optional[str] = None,
     subtask_kind: Optional[str] = None,
     console: Optional[Any] = None,
+    workflow_id: Optional[str] = None,
 ) -> Any:
     """create_session を呼び出し、SDK が reasoning_effort を未サポートの場合は除外して再試行する。
 
@@ -227,6 +239,14 @@ async def _create_session_with_auto_reasoning_fallback(
             _opts_with_skills["skill_directories"] = [str(_skills_dir)] + [
                 str(p) for p in sorted(_skills_dir.iterdir()) if p.is_dir()
             ]
+    # FR-CLI-76 (v2.51): 呼び出し側が MCP を指定していないときは、リポジトリ宣言分だけを
+    # 公開してワークスペース / ユーザースコープ / プラグイン由来の自動探索を止める。
+    # 縮約の実装は runner の単一ヘルパーに限る（FR-MAINT-07）。
+    if (
+        "mcp_servers" not in _opts_with_skills
+        and "enable_config_discovery" not in _opts_with_skills
+    ):
+        _apply_repository_mcp_scope(_opts_with_skills, workflow_id=workflow_id)
     if "enable_config_discovery" not in _opts_with_skills:
         _opts_with_skills["enable_config_discovery"] = True
 
@@ -829,6 +849,15 @@ _HVE_SOURCE_PATH_PREFIXES: Tuple[str, ...] = (
     ".github/io-contracts/",
 )
 
+# HVE ソース配下にあるが、GUI が実行時に書き換える利用者ローカル設定であり
+# 生成対象アプリの成果物にはならない。未コミットのまま run を止めると GUI を
+# 起動できなくなるため FR-CLI-74 の対象外とする。FR-CLI-75 の staged 検査には
+# 適用しない（強制 stage された場合は引き続き生成アプリの commit / PR への混入を拒む）。
+_HVE_LOCAL_RUNTIME_PATHS: Tuple[str, ...] = (
+    "hve/.settings.txt",
+    "hve/.settings.txt.tmp",
+)
+
 
 def _normalize_repo_relative_path(path: str) -> str:
     """git 出力のパスをリポジトリ相対の POSIX 形式へ正規化する。"""
@@ -908,6 +937,7 @@ def _git_dirty_hve_source_paths(
     未追跡ファイルも対象にする。git 引数はリストで渡すため shell を経由しない
     （NFR-SEC-03）。git が利用できない / リポジトリ外で実行された場合は空リストを
     返し、ワークフロー実行そのものは阻害しない。
+    ``_HVE_LOCAL_RUNTIME_PATHS``（GUI の利用者ローカル設定）は報告しない。
     """
     command = [
         "git",
@@ -936,7 +966,11 @@ def _git_dirty_hve_source_paths(
         for parsed_path in (_parse_git_status_path(line) for line in result.stdout.splitlines())
         if parsed_path
     ]
-    return _filter_hve_source_paths(parsed, target_output_paths)
+    return [
+        path
+        for path in _filter_hve_source_paths(parsed, target_output_paths)
+        if path not in _HVE_LOCAL_RUNTIME_PATHS
+    ]
 
 
 def _format_dirty_hve_source_error(paths: List[str]) -> str:
@@ -1667,6 +1701,44 @@ def _wait_check_runs_success(
 # Issue/PR 作成ヘルパー
 # -----------------------------------------------------------------------
 
+class RootIssueResolutionError(Exception):
+    """FR-GUI-25: 指定された既存 Issue を Root Issue として解決できない。
+
+    誤った番号のまま Sub-Issue を無関係な Issue へ紐付けることを防ぐため、
+    Root Issue の新規作成へフォールバックせず実行を中止する。
+    """
+
+
+def _resolve_existing_root_issue(
+    issue_number: int,
+    repo: str,
+    token: str,
+    console: Console,
+) -> int:
+    """既存 Issue を Root Issue として解決する（FR-GUI-25）。"""
+    try:
+        issue = get_issue(issue_number, repo=repo, token=token)
+    except GitHubAPIError as exc:
+        raise RootIssueResolutionError(
+            f"既存 Issue #{issue_number} を取得できませんでした: {exc}"
+        ) from exc
+
+    if "pull_request" in issue:
+        raise RootIssueResolutionError(
+            f"#{issue_number} は Pull Request です。Root Issue には Issue 番号を指定してください。"
+        )
+
+    number = issue.get("number")
+    if not isinstance(number, int) or isinstance(number, bool):
+        raise RootIssueResolutionError(
+            f"既存 Issue #{issue_number} のレスポンスに number がありません。"
+        )
+
+    title = str(issue.get("title") or "")
+    console.event(f"既存 Issue #{number} を Root Issue として使用します。{title}".rstrip())
+    return number
+
+
 def _create_issues_if_needed(
     wf,
     params: dict,
@@ -1678,8 +1750,14 @@ def _create_issues_if_needed(
 ) -> tuple[Optional[int], Dict[str, int]]:
     """create_issues=True の場合のみ Root Issue + Sub-Issue を作成する。
 
+    ``config.issue_number`` が指定されている場合は Root Issue を新規作成せず、
+    当該の既存 Issue を Root Issue として扱う（FR-GUI-25）。
+
     Returns:
         (root_issue_num, step_issue_map)
+
+    Raises:
+        RootIssueResolutionError: 指定された既存 Issue を解決できない場合。
     """
     if not config.create_issues:
         return None, {}
@@ -1690,21 +1768,27 @@ def _create_issues_if_needed(
         console.warning("create_issues=True ですが GH_TOKEN または REPO が未設定のため Issue 作成をスキップします。")
         return None, {}
 
-    console.event("Root Issue を作成中...")
-    root_body = build_root_issue_body_fn(wf, params)
     prefix = _WORKFLOW_PREFIX.get(wf.id, wf.id.upper())
-    if params.get("issue_title"):
-        root_title = params["issue_title"]
+
+    if config.issue_number is not None:
+        root_issue_num = _resolve_existing_root_issue(
+            config.issue_number, repo, token, console
+        )
     else:
-        root_title = f"[{prefix}] {_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}"
-    root_issue_num, _ = create_issue(
-        title=root_title,
-        body=root_body,
-        labels=[],
-        repo=repo,
-        token=token,
-    )
-    console.event(f"Root Issue #{root_issue_num} を作成しました。")
+        console.event("Root Issue を作成中...")
+        root_body = build_root_issue_body_fn(wf, params)
+        if params.get("issue_title"):
+            root_title = params["issue_title"]
+        else:
+            root_title = f"[{prefix}] {_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}"
+        root_issue_num, _ = create_issue(
+            title=root_title,
+            body=root_body,
+            labels=[],
+            repo=repo,
+            token=token,
+        )
+        console.event(f"Root Issue #{root_issue_num} を作成しました。")
 
     step_issue_map: Dict[str, int] = {}
 
@@ -2534,6 +2618,7 @@ def _check_dirty_hve_sources(
     1 件ずつ報告すると、利用者は件数と同じ回数だけ run をやり直すことになる。
 
     利用者が明示的に指定した target 出力パス配下は対象外とする。
+    GUI の利用者ローカル設定（``_HVE_LOCAL_RUNTIME_PATHS``）も対象外とする。
 
     本チェックは常に strict であり、無効化するフラグは提供しない
     （FR-CLI-74: 「新しい override フラグを追加してはならない」）。
@@ -2894,18 +2979,12 @@ def _agent_fanout_scope_precondition_error(
 
 def _uses_workflow_branch_mode(workflow_id: str, config: "SDKConfig") -> bool:
     """DAG 全体を 1 本の作業ブランチで実行する従来モードかを返す。"""
-    if config.create_issues or config.create_pr:
-        # 明示的な Issue/PR 作成モードは既存互換の workflow-wide branch を維持する。
-        # ASDW-WEB の Step 単位 remote CI/CD は、GUI/CLI の github.com CI/CD
-        # (enable_auto_merge) のみを ON にしたローカル実行経路で適用する。
-        return True
-    # ASDW-WEB の github.com CI/CD は Step 単位ブランチへ分離する。
-    if workflow_id == "asdw-web" and getattr(config, "enable_auto_merge", False):
-        return False
-    # enable_auto_merge 単独で workflow-wide branch を作るのは ADFDV のみ。
-    return (
-        workflow_id == "adfdv"
-        and bool(getattr(config, "enable_auto_merge", False))
+    return github_write_required(
+        workflow=get_workflow(workflow_id),
+        active_steps=(),
+        create_issues=bool(config.create_issues),
+        create_pr=bool(config.create_pr),
+        enable_auto_merge=bool(getattr(config, "enable_auto_merge", False)),
     )
 
 
@@ -3182,6 +3261,9 @@ async def _prefetch_workiq_detailed(
                 config, "orchestrator", suffix="workiq-prefetch"
             ),
         }
+        # FR-CLI-76 (v2.51): `mcp_servers` を明示する経路は共通の縮約が効かないため、
+        # プラグイン由来の `workiq` が併存する。宣言分を併合して自動探索を止める。
+        _apply_repository_mcp_scope(_session_opts)
         # Auto 経路: model="auto" を SDK へ渡し、サーバ側 Auto Model Selection に委譲する。
         # 明示モデル時はそのまま渡す。空 / None は payload から省略（CLI 既定動作）。
         _wire_model = to_wire_model(config.model)
@@ -3454,6 +3536,9 @@ async def _run_akm_workiq_verification(
                 config, "akm-verify", suffix="workiq"
             ),
         }
+        # FR-CLI-76 (v2.51): `mcp_servers` を明示する経路は共通の縮約が効かないため、
+        # プラグイン由来の `workiq` が併存する。宣言分を併合して自動探索を止める。
+        _apply_repository_mcp_scope(session_opts, workflow_id="akm")
         # Auto 経路: model="auto" を SDK へ渡し、サーバ側 Auto Model Selection に委譲する。
         _wire_model = to_wire_model(config.model)
         if _wire_model:
@@ -3726,6 +3811,9 @@ async def _run_akm_workiq_ingest(
                 config, "akm-ingest", suffix="workiq"
             ),
         }
+        # FR-CLI-76 (v2.51): `mcp_servers` を明示する経路は共通の縮約が効かないため、
+        # プラグイン由来の `workiq` が併存する。宣言分を併合して自動探索を止める。
+        _apply_repository_mcp_scope(session_opts, workflow_id="akm")
         # Auto 経路: model="auto" を SDK へ渡し、サーバ側 Auto Model Selection に委譲する。
         _wire_model = to_wire_model(config.model)
         if _wire_model:
@@ -4008,6 +4096,9 @@ async def _run_ard_workiq_usecase(
                 config, "ard-workiq", suffix="usecase"
             ),
         }
+        # FR-CLI-76 (v2.51): `mcp_servers` を明示する経路は共通の縮約が効かないため、
+        # プラグイン由来の `workiq` が併存する。宣言分を併合して自動探索を止める。
+        _apply_repository_mcp_scope(session_opts, workflow_id="ard")
         # Auto 経路: model="auto" を SDK へ渡し、サーバ側 Auto Model Selection に委譲する。
         _wire_model = to_wire_model(config.model)
         if _wire_model:
@@ -4173,6 +4264,7 @@ async def _generate_target_business_from_sr(
             step_id="orchestrator",
             subtask_kind="orchestrator",
             console=console,
+            workflow_id="ard",
         )
         try:
             prompt = ARD_TARGET_BUSINESS_FROM_RECOMMENDATION_PROMPT.format(
@@ -4923,6 +5015,35 @@ async def run_workflow(
             "設定により無効化したステップ: " + ", ".join(_disabled_active)
         )
 
+    # --- FR-CLI-82: GitHub 書き込み設定の起動前整合性 preflight ---
+    # active step 解決後、dry-run 計画・branch 作成・Agent session より前に行う。
+    # CLI / GUI Orchestrator 配下は remote まで検証し、ライブラリ直接呼び出しは
+    # 副作用を増やさないためローカル判定だけに限定する。
+    _startup_check = validate_startup_configuration(
+        workflow=wf,
+        active_steps=active_steps,
+        create_issues=bool(config.create_issues),
+        create_pr=bool(config.create_pr),
+        enable_auto_merge=bool(getattr(config, "enable_auto_merge", False)),
+        repo=config.repo,
+        token=config.resolve_token(),
+        base_branch=config.base_branch,
+        check_remote=orchestrator_ctx is not None,
+        repo_root=Path.cwd(),
+    )
+    if not _startup_check.is_ok():
+        _startup_error = format_startup_preflight_errors(_startup_check)
+        console.error(_startup_error)
+        return {
+            "workflow_id": workflow_id,
+            "completed": [],
+            "failed": [],
+            "skipped": [],
+            "blocked": sorted(active_steps),
+            "elapsed_total": time.time() - start_total,
+            "error": _startup_error,
+        }
+
     # --- FR-DAG-07 / FR-DAG-08: Step パラメータ契約の既定値適用と pre-flight ---
     # DAG 実行はもちろん dry-run 計画表示よりも前に判定する。判定材料は起動時点で
     # 出揃っており、Step 実行時まで遅らせると長時間実行の全損を招くため。
@@ -5154,15 +5275,28 @@ async def run_workflow(
     # （後段の Step 実行・DAG 後 verify でも同一インスタンスへ追記される）
     workiq_report_paths: Set[str] = set()
 
-    root_issue_num, step_issue_map = _create_issues_if_needed(
-        wf=wf,
-        params=effective_params,
-        active_steps=active_steps,
-        config=config,
-        console=console,
-        render_template_fn=render_template,
-        build_root_issue_body_fn=build_root_issue_body,
-    )
+    try:
+        root_issue_num, step_issue_map = _create_issues_if_needed(
+            wf=wf,
+            params=effective_params,
+            active_steps=active_steps,
+            config=config,
+            console=console,
+            render_template_fn=render_template,
+            build_root_issue_body_fn=build_root_issue_body,
+        )
+    except RootIssueResolutionError as issue_exc:
+        # FR-GUI-25: 指定された既存 Issue を解決できない場合は fail-closed とし、
+        # Root Issue の新規作成へフォールバックしない。
+        console.error(str(issue_exc))
+        return {
+            "workflow_id": workflow_id,
+            "completed": [],
+            "failed": [],
+            "skipped": [],
+            "elapsed_total": time.time() - start_total,
+            "error": str(issue_exc),
+        }
 
     if config.create_issues:
         console.phase_end(p, _total_phases, "Issue 作成", time.time() - phase_start_issue)

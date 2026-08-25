@@ -23,14 +23,20 @@ from hve.github_api import (
     api_call,
     create_issue,
     create_pull_request,
+    get_authenticated_user,
+    get_issue,
     get_pull_request,
     get_repository_metadata,
     link_sub_issue,
     list_check_runs_for_ref,
     list_issue_comments,
+    list_issues,
+    list_pull_requests,
     list_viewer_repositories,
     list_branches,
     post_comment,
+    update_comment,
+    update_issue,
 )
 
 
@@ -640,3 +646,157 @@ class TestGitHubMetadataHelpers:
     def test_list_viewer_repositories_non_list_response_returns_empty(self, mock_api):
         mock_api.return_value = {}
         assert list_viewer_repositories(token="tok") == []
+
+    @patch("hve.github_api.api_call")
+    def test_get_authenticated_user(self, mock_api):
+        mock_api.return_value = {"login": "octocat"}
+        assert get_authenticated_user(token="tok") == {"login": "octocat"}
+        mock_api.assert_called_once_with(
+            "GET",
+            "https://api.github.com/user",
+            token="tok",
+        )
+
+    @patch("hve.github_api.api_call")
+    def test_get_authenticated_user_non_object_response_returns_empty(self, mock_api):
+        mock_api.return_value = []
+        assert get_authenticated_user(token="tok") == {}
+
+
+# =====================================================================
+# FR-GUI-26: Issue の一覧 / 詳細 / 編集 / コメント編集
+# =====================================================================
+
+
+class TestIssueEndpoints:
+    @patch("hve.github_api.api_call")
+    def test_list_issues_uses_state_and_per_page(self, mock_api):
+        mock_api.return_value = [{"number": 1}]
+        assert list_issues(repo="o/r", token="tok", state="all", per_page=30) == [
+            {"number": 1}
+        ]
+        mock_api.assert_called_once_with(
+            "GET",
+            "https://api.github.com/repos/o/r/issues?state=all&sort=updated&direction=desc&per_page=30",
+            token="tok",
+        )
+
+    @patch("hve.github_api.api_call")
+    def test_list_issues_excludes_pull_requests(self, mock_api):
+        mock_api.return_value = [
+            {"number": 1},
+            {"number": 2, "pull_request": {"url": "https://example.invalid/2"}},
+            {"number": 3},
+        ]
+        assert list_issues(repo="o/r", token="tok") == [{"number": 1}, {"number": 3}]
+
+    @patch("hve.github_api.api_call")
+    def test_list_issues_non_list_response_returns_empty(self, mock_api):
+        mock_api.return_value = {"message": "unexpected"}
+        assert list_issues(repo="o/r", token="tok") == []
+
+    @patch("hve.github_api.api_call")
+    def test_list_issues_clamps_per_page(self, mock_api):
+        mock_api.return_value = []
+        list_issues(repo="o/r", token="tok", per_page=5000)
+        assert "per_page=100" in mock_api.call_args.args[1]
+
+    @patch("hve.github_api.api_call")
+    def test_get_issue_returns_object(self, mock_api):
+        mock_api.return_value = {"number": 42, "title": "t"}
+        assert get_issue(42, repo="o/r", token="tok") == {"number": 42, "title": "t"}
+        mock_api.assert_called_once_with(
+            "GET",
+            "https://api.github.com/repos/o/r/issues/42",
+            token="tok",
+        )
+
+    @patch("hve.github_api.api_call")
+    def test_get_issue_rejects_non_object_response(self, mock_api):
+        mock_api.return_value = []
+        with pytest.raises(GitHubAPIError):
+            get_issue(42, repo="o/r", token="tok")
+
+    @patch("hve.github_api.api_call")
+    def test_update_issue_sends_only_provided_fields(self, mock_api):
+        mock_api.return_value = {"number": 42}
+        update_issue(42, repo="o/r", token="tok", title="new title")
+        mock_api.assert_called_once_with(
+            "PATCH",
+            "https://api.github.com/repos/o/r/issues/42",
+            data={"title": "new title"},
+            token="tok",
+        )
+
+    @patch("hve.github_api.api_call")
+    def test_update_issue_allows_empty_body(self, mock_api):
+        mock_api.return_value = {"number": 42}
+        update_issue(42, repo="o/r", token="tok", body="")
+        assert mock_api.call_args.kwargs["data"] == {"body": ""}
+
+    @patch("hve.github_api.api_call")
+    def test_update_issue_sends_state(self, mock_api):
+        mock_api.return_value = {"number": 42}
+        update_issue(42, repo="o/r", token="tok", state="closed")
+        assert mock_api.call_args.kwargs["data"] == {"state": "closed"}
+
+    @patch("hve.github_api.api_call")
+    def test_update_issue_without_fields_raises(self, mock_api):
+        with pytest.raises(GitHubAPIError, match="no fields"):
+            update_issue(42, repo="o/r", token="tok")
+        mock_api.assert_not_called()
+
+    @patch("hve.github_api.api_call")
+    def test_update_issue_rejects_unknown_state(self, mock_api):
+        with pytest.raises(GitHubAPIError, match="state"):
+            update_issue(42, repo="o/r", token="tok", state="merged")
+        mock_api.assert_not_called()
+
+    @patch("hve.github_api.api_call")
+    def test_update_comment_patches_comment_endpoint(self, mock_api):
+        mock_api.return_value = {"id": 9}
+        assert update_comment(9, "edited", repo="o/r", token="tok") == {"id": 9}
+        mock_api.assert_called_once_with(
+            "PATCH",
+            "https://api.github.com/repos/o/r/issues/comments/9",
+            data={"body": "edited"},
+            token="tok",
+        )
+
+
+# =====================================================================
+# FR-GUI-27: Pull Request 一覧
+# =====================================================================
+
+
+class TestPullRequestEndpoints:
+    @patch("hve.github_api.api_call")
+    def test_list_pull_requests_uses_state_and_per_page(self, mock_api):
+        mock_api.return_value = [{"number": 3}]
+        assert list_pull_requests(repo="o/r", token="tok", state="closed", per_page=20) == [
+            {"number": 3}
+        ]
+        mock_api.assert_called_once_with(
+            "GET",
+            "https://api.github.com/repos/o/r/pulls?state=closed&sort=updated&direction=desc&per_page=20",
+            token="tok",
+        )
+
+    @patch("hve.github_api.api_call")
+    def test_list_pull_requests_filters_non_dict_entries(self, mock_api):
+        mock_api.return_value = [{"number": 3}, "bad", {"number": 4}]
+        assert list_pull_requests(repo="o/r", token="tok") == [
+            {"number": 3},
+            {"number": 4},
+        ]
+
+    @patch("hve.github_api.api_call")
+    def test_list_pull_requests_non_list_response_returns_empty(self, mock_api):
+        mock_api.return_value = {"message": "unexpected"}
+        assert list_pull_requests(repo="o/r", token="tok") == []
+
+    @patch("hve.github_api.api_call")
+    def test_list_pull_requests_rejects_unknown_state(self, mock_api):
+        with pytest.raises(GitHubAPIError, match="state"):
+            list_pull_requests(repo="o/r", token="tok", state="draft")
+        mock_api.assert_not_called()

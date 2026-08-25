@@ -11,13 +11,17 @@ v2 改訂（2026-05-24）:
   - Workflow-specific 設定（``precheck_settings.collect_missing_workflow_settings``）
   - Wizard Step 2 入力検査（``wizard_input_inspector.inspect_wizard_inputs``）
   - 追加プロンプト override / LLM 自然言語判定
-  - AUTH カテゴリ（Plugin/MCP Server 認証は GitHub Copilot CLI 側で完結）
+    - Plugin/MCP Server 用の旧 AUTH collector（当該認証は GitHub Copilot CLI 側で完結）
+
+FR-CLI-82 で追加した GitHub 書き込み設定のローカル判定は、起動引数が渡された
+場合だけ SETTING / AUTH カテゴリとして同じ結果モデルへ追加する。
 """
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
-from typing import Iterable, List, Mapping, Optional
+from typing import Any, Iterable, List, Mapping, Optional
 
 from hve.autopilot.precheck_model import (
     AutopilotPrecheckResult,
@@ -36,6 +40,7 @@ def run_step1_precheck(
     origin_chosen: bool = False,
     autopilot_mode: bool = False,
     autopilot_catalog_path: Optional[str] = None,
+    startup_args_by_workflow: Optional[Mapping[str, Any]] = None,
 ) -> AutopilotPrecheckResult:
     """Step 1 事前検証を実行し統合結果を返す。
 
@@ -51,6 +56,8 @@ def run_step1_precheck(
         autopilot_mode: Autopilot ON フラグ。True のとき個別ワークフロー判定は
             行わず、Autopilot 仮想ワークフローのみ評価する。
         autopilot_catalog_path: Autopilot カタログファイルパス。
+        startup_args_by_workflow: Workflow ごとの起動引数。GitHub 連携設定の
+            ローカル判定だけに使用し、Prompt 自由記述は参照しない。
 
     Returns:
         ``AutopilotPrecheckResult``: warn 項目のみを格納（ok は除外）。
@@ -58,6 +65,8 @@ def run_step1_precheck(
     from hve.gui.workflow_step_requirements import (
         summarize_all_requirements_for_selection,
     )
+    from hve.startup_preflight import validate_startup_configuration
+    from hve.workflow_registry import get_workflow
 
     selected: List = []
     steps_map = dict(steps_by_workflow or {})
@@ -113,6 +122,39 @@ def run_step1_precheck(
                 field_name=ri.label,
                 description=ri.detail or s.guidance_text,
                 remediation_hint=s.guidance_text,
+            ))
+
+    startup_args = dict(startup_args_by_workflow or {})
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
+    for workflow_id, step_ids in selected:
+        args = startup_args.get(workflow_id)
+        workflow = get_workflow(workflow_id)
+        if args is None or workflow is None:
+            continue
+        startup_result = validate_startup_configuration(
+            workflow=workflow,
+            active_steps=set(step_ids),
+            create_issues=bool(getattr(args, "create_issues", False)),
+            create_pr=bool(getattr(args, "create_pr", False)),
+            enable_auto_merge=bool(getattr(args, "enable_auto_merge", False)),
+            repo=getattr(args, "repo", None),
+            token=token,
+            base_branch=getattr(args, "branch", None),
+            check_remote=False,
+            repo_root=repo_root,
+        )
+        for issue in startup_result.issues:
+            category = (
+                PrecheckCategory.AUTH
+                if issue.category == "auth"
+                else PrecheckCategory.SETTING
+            )
+            items.append(PrecheckItem(
+                category=category,
+                workflow_id=workflow_id,
+                field_name=issue.field_name,
+                description=issue.message,
+                remediation_hint=issue.remediation_hint,
             ))
 
     return AutopilotPrecheckResult(items=items)

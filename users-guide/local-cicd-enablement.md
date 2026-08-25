@@ -50,11 +50,13 @@ Secrets の値をコマンド引数、ワークフローファイル、Issue、P
 GUI / CLI Orchestrator は既定ではコミット・push を行いません。生成物を GitHub に反映するには `--create-pr`（または `--create-issues`）を指定します。
 
 1. **OIDC Secrets を登録**（上記「前提」、初回のみ）
-2. **`--create-pr` を付けて実行**（`GH_TOKEN` と `--repo`/`REPO` が必要）
+2. **`--create-pr` を付けて実行**（`GH_TOKEN` または `GITHUB_TOKEN`、`--repo` / `REPO`、`origin` に実在するベースブランチが必要）
 
    ```bash
    python -m hve orchestrate --workflow asdw-web ... --create-pr --repo <owner>/<repo>
    ```
+
+   この実行は GitHub 書込み startup preflight の対象です。HVE は開始前に `owner/repo`、token の存在、有効な Git branch 名、`origin`、完全一致する `refs/heads/<branch>` を検査し、不整合時は `main` やローカル branch へ補正せず停止します。`--dry-run` も同じ検査対象です。GitHub 書込みを要求しない通常 run では token・remote を検査しません。終了 status の区別と実行順序は [CLI ガイドの startup preflight](./hve-cli-orchestrator-guide.md#github-書込み-startup-preflightfr-cli-3182) を参照してください。
 
    実行後、`copilot-sdk/<prefix>-<uuid>` ブランチが push され、PR が作成されます。
 3. **PR をレビューして `main` にマージ**

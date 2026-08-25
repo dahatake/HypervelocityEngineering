@@ -25,12 +25,18 @@ __all__ = [
     "link_sub_issue",
     "post_comment",
     "list_issue_comments",
+    "update_comment",
+    "list_issues",
+    "get_issue",
+    "update_issue",
     "create_pull_request",
     "get_pull_request",
+    "list_pull_requests",
     "list_pull_request_files",
     "list_check_runs_for_ref",
     "list_branches",
     "get_repository_metadata",
+    "get_authenticated_user",
     "list_viewer_repositories",
 ]
 
@@ -40,6 +46,8 @@ _DEFAULT_MAX_RETRIES = 5
 _DEFAULT_TIMEOUT = 30
 _PULL_REQUEST_FILES_PAGE_SIZE = 100
 _PULL_REQUEST_FILES_MAX = 3000
+_LIST_STATES = ("open", "closed", "all")
+_ISSUE_UPDATE_STATES = ("open", "closed")
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +90,20 @@ def _resolve_repo(repo: Optional[str]) -> str:
             "Repository not specified. Set REPO environment variable (owner/repo)."
         )
     return r
+
+
+def _resolve_page_size(per_page: int) -> int:
+    """GitHub API が受け付ける 1..100 の範囲へ丸める。"""
+    return max(1, min(100, int(per_page)))
+
+
+def _require_list_state(state: str) -> str:
+    """一覧 API の ``state`` を検証する。"""
+    if state not in _LIST_STATES:
+        raise GitHubAPIError(
+            f"invalid state '{state}'. expected one of {list(_LIST_STATES)}"
+        )
+    return state
 
 
 def _parse_retry_after(value: Optional[str]) -> Optional[int]:
@@ -229,6 +251,12 @@ def get_repository_metadata(
     return resp if isinstance(resp, dict) else {}
 
 
+def get_authenticated_user(token: Optional[str] = None) -> dict:
+    """認証ユーザーの情報を取得する（FR-GUI-26 の自コメント判定に使用）。"""
+    resp = api_call("GET", f"{_GITHUB_API_BASE}/user", token=token)
+    return resp if isinstance(resp, dict) else {}
+
+
 def list_viewer_repositories(
     token: Optional[str] = None,
     per_page: int = 100,
@@ -357,6 +385,98 @@ def list_issue_comments(
     return [comment for comment in resp if isinstance(comment, dict)]
 
 
+def update_comment(
+    comment_id: int,
+    body: str,
+    repo: Optional[str] = None,
+    token: Optional[str] = None,
+) -> dict:
+    """Issue / PR コメントの本文を更新する（FR-GUI-26）。"""
+    resolved_repo = _resolve_repo(repo)
+    url = f"{_GITHUB_API_BASE}/repos/{resolved_repo}/issues/comments/{comment_id}"
+    resp = api_call("PATCH", url, data={"body": body}, token=token)
+    return resp if isinstance(resp, dict) else {}
+
+
+def list_issues(
+    repo: Optional[str] = None,
+    token: Optional[str] = None,
+    state: str = "open",
+    per_page: int = 50,
+) -> list[dict]:
+    """Issue 一覧（先頭 1 ページ）を取得する（FR-GUI-26）。
+
+    GitHub の Issues API は Pull Request も同じ一覧へ返すため、
+    ``pull_request`` キーを持つエントリを除外する。
+    """
+    resolved_repo = _resolve_repo(repo)
+    resolved_state = _require_list_state(state)
+    page_size = _resolve_page_size(per_page)
+    url = (
+        f"{_GITHUB_API_BASE}/repos/{resolved_repo}/issues"
+        f"?state={resolved_state}&sort=updated&direction=desc&per_page={page_size}"
+    )
+    resp = api_call("GET", url, token=token)
+    if not isinstance(resp, list):
+        return []
+    return [
+        issue
+        for issue in resp
+        if isinstance(issue, dict) and "pull_request" not in issue
+    ]
+
+
+def get_issue(
+    issue_num: int,
+    repo: Optional[str] = None,
+    token: Optional[str] = None,
+) -> dict:
+    """Issue の詳細を取得する（FR-GUI-25 / FR-GUI-26）。
+
+    Raises:
+        GitHubAPIError: レスポンスが object でない場合。FR-GUI-25 の fail-closed を
+            成立させるため、空 dict へ縮退させない。
+    """
+    resolved_repo = _resolve_repo(repo)
+    url = f"{_GITHUB_API_BASE}/repos/{resolved_repo}/issues/{issue_num}"
+    resp = api_call("GET", url, token=token)
+    if not isinstance(resp, dict):
+        raise GitHubAPIError(f"get issue #{issue_num} response is not an object")
+    return resp
+
+
+def update_issue(
+    issue_num: int,
+    repo: Optional[str] = None,
+    token: Optional[str] = None,
+    title: Optional[str] = None,
+    body: Optional[str] = None,
+    state: Optional[str] = None,
+) -> dict:
+    """Issue のタイトル / 本文 / 状態を更新する（FR-GUI-26）。
+
+    ``None`` の項目は payload へ含めない。空文字列は「本文を空にする」意図として送信する。
+    """
+    payload: dict[str, Any] = {}
+    if title is not None:
+        payload["title"] = title
+    if body is not None:
+        payload["body"] = body
+    if state is not None:
+        if state not in _ISSUE_UPDATE_STATES:
+            raise GitHubAPIError(
+                f"invalid state '{state}'. expected one of {list(_ISSUE_UPDATE_STATES)}"
+            )
+        payload["state"] = state
+    if not payload:
+        raise GitHubAPIError("update_issue called with no fields to update")
+
+    resolved_repo = _resolve_repo(repo)
+    url = f"{_GITHUB_API_BASE}/repos/{resolved_repo}/issues/{issue_num}"
+    resp = api_call("PATCH", url, data=payload, token=token)
+    return resp if isinstance(resp, dict) else {}
+
+
 def create_pull_request(
     title: str,
     body: str,
@@ -401,6 +521,26 @@ def get_pull_request(
     url = f"{_GITHUB_API_BASE}/repos/{resolved_repo}/pulls/{pr_number}"
     resp = api_call("GET", url, token=token)
     return resp if isinstance(resp, dict) else {}
+
+
+def list_pull_requests(
+    repo: Optional[str] = None,
+    token: Optional[str] = None,
+    state: str = "open",
+    per_page: int = 50,
+) -> list[dict]:
+    """Pull Request 一覧（先頭 1 ページ）を取得する（FR-GUI-27）。"""
+    resolved_repo = _resolve_repo(repo)
+    resolved_state = _require_list_state(state)
+    page_size = _resolve_page_size(per_page)
+    url = (
+        f"{_GITHUB_API_BASE}/repos/{resolved_repo}/pulls"
+        f"?state={resolved_state}&sort=updated&direction=desc&per_page={page_size}"
+    )
+    resp = api_call("GET", url, token=token)
+    if not isinstance(resp, list):
+        return []
+    return [pr for pr in resp if isinstance(pr, dict)]
 
 
 def _sanitize_pull_request_file(entry: object, index: int) -> dict:

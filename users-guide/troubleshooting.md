@@ -182,7 +182,7 @@ Self-hosted runner は **オプション** です。GitHub-hosted runner を使�
 2. `.venv` が有効化されているか
 3. `github-copilot-sdk` がインストールされているか
 4. `gh auth login` 済みで `gh auth status` が成功するか
-5. `--create-issues` / `--create-pr` を使う場合は `GH_TOKEN` と `REPO` が設定されているか
+5. GitHub 書込み startup preflight 対象では `GH_TOKEN` または `GITHUB_TOKEN`、`REPO` / `--repo`、`origin` のベースブランチが設定されているか
 6. `GH_TOKEN` と Cloud 側の `COPILOT_PAT` を混同していないか
 7. Work IQ を使う場合は Node.js / npx / `@microsoft/workiq` が利用可能か
 8. MCP の入出力を見たい場合は `work/run/<run-id>/mcp-<サーバー名>.log` を確認（[MCP 通信ログ](./hve-cli-orchestrator-guide.md#mcp-通信ログ)）
@@ -310,8 +310,8 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File hve\setup-hve.ps1              # �
 
 用途の混同を避けるため、次を分けて確認してください。
 
-- `gh auth login` / `gh auth status`: HVE CLI Orchestrator の基本認証
-- `GH_TOKEN` + `REPO`: HVE CLI Orchestrator で `--create-issues` / `--create-pr` を使うときに必要
+- `gh auth login` / `gh auth status`: GitHub CLI の認証。startup preflight の token 存在検査とは別であり、`gh auth login` だけでは token 不足を満たしません
+- `GH_TOKEN`（未設定時は `GITHUB_TOKEN`）+ `REPO`: HVE CLI Orchestrator の GitHub 書込み startup preflight 対象で必要
 - `COPILOT_PAT`: HVE Cloud Agent Orchestrator の Copilot 自動アサイン用途
 - `GITHUB_TOKEN`: GitHub Actions が workflow 実行時に自動付与するトークン
 - このリポジトリの既存 Copilot 自動アサイン処理は `COPILOT_PAT` 前提です
@@ -671,14 +671,49 @@ SWA デプロイは OIDC 認証方式を使用しています。`AZURE_STATIC_WE
 
 HVE CLI Orchestrator（ローカル実行方式）のトラブルシューティングは [hve-cli-orchestrator-guide.md 付録D](./hve-cli-orchestrator-guide.md#付録d-トラブルシューティング) を参照してください。
 
-### HVE CLI Orchestrator で Issue / PR 作成に失敗する
+### GitHub 書込み startup preflight に失敗する
 
-`--create-issues` / `--create-pr` を使う場合は、次をこの順で確認してください。
+`--create-issues` / `--create-pr`、ADFDV の auto-merge、または active `requires_remote_cicd` Step で auto-merge を使う場合は、GitHub 書込み startup preflight が動きます。対象外の通常 run は GitHub token・`origin`・remote branch を検査しません。
 
-1. `gh auth status` で GitHub CLI の認証状態を確認
-2. `GH_TOKEN` が設定されているか確認
-3. `REPO`（`owner/repo`）または `--repo` が指定されているか確認
-4. `GH_TOKEN` は Cloud の `COPILOT_PAT` とは別用途であることを確認
+次をこの順で確認してください。
+
+1. `REPO` または `--repo` が非空の `owner/repo` 形式か確認
+2. `GH_TOKEN` または `GITHUB_TOKEN` が存在するか、値を表示せずに確認
+3. `--branch` が有効な Git branch 名で、`git remote get-url origin` が成功するか確認
+4. `git ls-remote --exit-code --heads origin refs/heads/<branch>` で完全一致する remote branch を確認
+5. token は Cloud の `COPILOT_PAT` と別用途であることを確認
+
+**症状 1: repo / token 不足で startup preflight が停止する**
+
+```text
+起動前の設定整合性チェックに失敗しました:
+   - repo: GitHub リポジトリが owner/repo 形式ではありません。
+      対処: --repo または REPO に owner/repo 形式の値を設定してください。
+   - token: GitHub token を解決できません。
+      対処: GH_TOKEN または GITHUB_TOKEN を設定してください。
+```
+
+**安全な復旧**: `REPO` または `--repo` を `owner/repo` 形式へ直し、資格情報ストア等から `GH_TOKEN` または `GITHUB_TOKEN` を環境へ注入して再実行します。`gh auth login` だけでは token 不足を満たしません。token の具体値はコマンド引数、ログ、Issue、PR、文書へ貼らないでください。
+
+**症状 2: `couldn't find remote ref` の後に `not a commit` が出る**
+
+> 以下は startup preflight 導入前、または preflight を経由しない旧実装で観測された参考症例です。現行のローカル起動面では同じ不整合を branch 作成前に停止します。
+
+```text
+fatal: couldn't find remote ref <branch>
+fatal: '<branch>' is not a commit and a branch '<working-branch>' cannot be created from it
+```
+
+**原因**: 設定したベースブランチと完全一致する `refs/heads/<branch>` が `origin` にありません。現行 preflight はこの状態を branch 作成前に検出し、`remote branch 'origin/<branch>' は存在しません。` と表示して、ローカル branch や `main` への fallback を行わず停止します。
+
+**安全な復旧**:
+
+1. `git remote get-url origin` で意図した remote か確認します。
+2. 上記 `git ls-remote` が status `2` なら ref 不在です。`--branch` / GUI のベースブランチを `origin` に実在する名前へ直すか、必要な branch をリポジトリの保護ルールとレビュー手順に従って remote に作成します。
+3. status `2` 以外の非 0 なら、branch 不在とは断定せず、Git の認証・ネットワーク・`origin` 到達性を復旧して再検査します。
+4. `git checkout -b main`、同名ローカル branch、強制 push で検査を迂回しないでください。
+
+startup preflight の対象条件、5 検査、実行順序、`--dry-run` の扱いは [CLI ガイド](./hve-cli-orchestrator-guide.md#github-書込み-startup-preflightfr-cli-3182) を参照してください。
 
 主なトラブルと対応:
 
@@ -693,18 +728,19 @@ HVE CLI Orchestrator（ローカル実行方式）のトラブルシューティ
 
 **安全な復旧**:
 
-- `GH_TOKEN` をログや Issue 本文へ貼らず、必要な場合も値をマスクして認証状態だけを共有してください。
+- `GH_TOKEN` / `GITHUB_TOKEN` をログや Issue 本文へ貼らず、必要な場合も値をマスクして認証状態だけを共有してください。
 - `REPO` は `owner/repo` 形式で再指定し、Cloud 側の `COPILOT_PAT` と入れ替えないでください。
 - PR 作成失敗時に履歴書き換えや強制 push で復旧しないでください。未作成なら入力・認証・既存 PR の有無を確認して再実行します。
 
 **検証**:
 
-- `gh auth status` が成功し、`--dry-run` で対象 Issue / PR 作成内容が確認できること。
+- GitHub 書込み対象の `--dry-run` が startup preflight を通過し、その後に実行計画を表示すること。
+- GitHub 書込みを要求しない通常 run は、token や remote branch がなくても本 preflight で停止しないこと。
 - 実行後に `work/run/<run-id>/.../completion-report.md` が生成され、失敗 Step がある場合は `auto-approve-ready` が付かないこと。
 
 **エスカレーション**:
 
-- HTTP status、`gh` のマスク済み stderr、`REPO` 形式、対象 workflow / step を共有してください。
+- `git ls-remote` の終了 status、token 値を除いた stderr、`REPO` 形式、対象 workflow / active step を共有してください。
 
 ### Resume 関連のよくある質問 — 廃止（v1.1）
 

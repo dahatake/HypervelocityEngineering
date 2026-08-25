@@ -36,6 +36,7 @@ from ..theme import token
 _CATEGORY_LABEL = {
     PrecheckCategory.FILE: "📄 必須ファイル",
     PrecheckCategory.WIZARD_INPUT: "📝 必須入力",
+    PrecheckCategory.SETTING: "⚙️ 設定",
     PrecheckCategory.AUTH: "🔑 認証",
 }
 
@@ -82,6 +83,7 @@ class Step1PrecheckDialog(QDialog):
         for cat in (
             PrecheckCategory.FILE,
             PrecheckCategory.WIZARD_INPUT,
+            PrecheckCategory.SETTING,
             PrecheckCategory.AUTH,
         ):
             items = result.by_category(cat)
