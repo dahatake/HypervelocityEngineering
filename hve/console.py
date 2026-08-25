@@ -41,6 +41,11 @@ try:
 except ImportError:  # pragma: no cover - script 実行経路
     import runtime_observability as _rto  # type: ignore[no-redef]
 
+try:
+    from .workiq import WORKIQ_MCP_SERVER_NAME as _WORKIQ_SERVER
+except ImportError:  # pragma: no cover - script 実行経路
+    from workiq import WORKIQ_MCP_SERVER_NAME as _WORKIQ_SERVER  # type: ignore[no-redef]
+
 
 def timestamp_prefix() -> str:
     """現在時刻のプレフィックス文字列を返す。"""
@@ -254,9 +259,8 @@ class Console:
         self._rt_context = _rto.RuntimeContext()
         self._rt_registry = _rto.RuntimeMetricsRegistry()
         self._rt_recorder: Optional[Any] = None
-        self._stats_stream = self._gui_subprocess or os.environ.get(
-            _rto.STATS_STREAM_ENV, ""
-        ).strip() in ("1", "true", "True")
+        self._mcp_io_logger: Optional[Any] = None
+        self._stats_stream = _rto.is_child_process()
 
         # F5: final_only モード
         self.final_only = final_only
@@ -1085,6 +1089,88 @@ class Console:
     def detach_event_recorder(self) -> None:
         self._rt_recorder = None
 
+    def attach_mcp_io_logger(self, logger: Any) -> None:
+        """FR-MCPLOG-01: MCP 通信ログの記録器を接続する。"""
+        self._mcp_io_logger = logger
+
+    def detach_mcp_io_logger(self) -> None:
+        self._mcp_io_logger = None
+
+    @property
+    def mcp_io_logger(self) -> Optional[Any]:
+        """StepRunner を経由しないセッションが直接結線するための参照。"""
+        return self._mcp_io_logger
+
+    def mcp_tool_request(
+        self,
+        server: str,
+        tool: str,
+        *,
+        tool_call_id: str,
+        step_id: str = "",
+        arguments: Any = None,
+    ) -> None:
+        if self._mcp_io_logger is None:
+            return
+        try:
+            self._mcp_io_logger.record_tool_request(
+                server, tool, tool_call_id=tool_call_id,
+                step_id=step_id, arguments=arguments,
+            )
+        except Exception:
+            pass
+
+    def mcp_tool_response(
+        self,
+        *,
+        tool_call_id: str,
+        success: bool,
+        content: str = "",
+        error: str = "",
+        step_id: str = "",
+    ) -> None:
+        if self._mcp_io_logger is None:
+            return
+        try:
+            self._mcp_io_logger.record_tool_response(
+                tool_call_id=tool_call_id, success=success,
+                content=content, error=error, step_id=step_id,
+            )
+        except Exception:
+            pass
+
+    def mcp_server_status(
+        self,
+        server: str,
+        *,
+        status: str,
+        error: str = "",
+        plugin_name: str = "",
+        transport: str = "",
+        source: str = "",
+    ) -> None:
+        if self._mcp_io_logger is None:
+            return
+        try:
+            self._mcp_io_logger.record_server_status(
+                server, status=status, error=error, plugin_name=plugin_name,
+                transport=transport, source=source,
+            )
+        except Exception:
+            pass
+
+    def _record_workiq_io(self, kind: str, label: str, text: str) -> None:
+        """FR-MCPLOG-01: 表示の切り詰め・抑止とは独立に全文を記録する。"""
+        if self._mcp_io_logger is None:
+            return
+        try:
+            if kind == "prompt":
+                self._mcp_io_logger.record_session_prompt(_WORKIQ_SERVER, label, text)
+            else:
+                self._mcp_io_logger.record_session_response(_WORKIQ_SERVER, label, text)
+        except Exception:
+            pass
+
     def token_chunk(self, step_id: str, text: str, *, kind: str = "delta") -> None:
         """Streaming トークン断片を可視化する（E-1）。
 
@@ -1206,6 +1292,7 @@ class Console:
 
         _emit() を 1 回のみ呼び出し、スピナー pause/resume コストを最小化する。
         """
+        self._record_workiq_io("prompt", label, prompt)
         if self._verbosity == 0 or not prompt:
             return
         s = self.s
@@ -1239,6 +1326,7 @@ class Console:
         workiq_prompt() と対称の設計。_emit() を 1 回のみ呼び出す。
         空文字・空白のみの場合は出力しない。
         """
+        self._record_workiq_io("response", label, response)
         if self._verbosity == 0 or not response or not response.strip():
             return
         s = self.s

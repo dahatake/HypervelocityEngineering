@@ -2993,15 +2993,25 @@ def _run_copilot_auth_preflight(args: argparse.Namespace, config: "SDKConfig") -
     return False
 
 
-def _is_workiq_requested(config: "SDKConfig") -> bool:
-    """Work IQ を使う設定かを返す。"""
-    return bool(
-        getattr(config, "workiq_enabled", False)
-        or getattr(config, "workiq_draft_mode", False)
-        or config.is_workiq_qa_enabled()
-        or config.is_workiq_akm_review_enabled()
-        or config.is_workiq_akm_ingest_enabled()
+def _workiq_request_reasons(config: "SDKConfig", workflow: str = "") -> List[str]:
+    """Work IQ を要求している設定名を列挙する。"""
+    candidates = (
+        ("workiq_enabled", bool(getattr(config, "workiq_enabled", False))),
+        ("workiq_draft_mode", bool(getattr(config, "workiq_draft_mode", False))),
+        ("workiq_qa_enabled", config.is_workiq_qa_enabled()),
+        ("workiq_akm_review_enabled", config.is_workiq_akm_review_enabled()),
+        # AKM 取り込みは AKM Workflow でしか実行されない（hve/orchestrator.py）ため、他 Workflow では要求扱いにしない。
+        (
+            "workiq_akm_ingest_enabled",
+            config.is_workiq_akm_ingest_enabled() and workflow == "akm",
+        ),
     )
+    return [name for name, enabled in candidates if enabled]
+
+
+def _is_workiq_requested(config: "SDKConfig", workflow: str = "") -> bool:
+    """Work IQ を使う設定かを返す。"""
+    return bool(_workiq_request_reasons(config, workflow))
 
 
 def _disable_workiq(config: "SDKConfig", params: Optional[dict] = None) -> None:
@@ -3024,9 +3034,12 @@ def _run_workiq_auth_preflight(
     args: argparse.Namespace,
     config: "SDKConfig",
     params: Optional[dict] = None,
+    *,
+    workflow: Optional[str] = None,
 ) -> bool:
     """Work IQ 使用時に EULA / M365 認証を本処理前に確認する。"""
-    if getattr(config, "dry_run", False) or not _is_workiq_requested(config):
+    wf_id = workflow if workflow is not None else str(getattr(args, "workflow", "") or "")
+    if getattr(config, "dry_run", False) or not _is_workiq_requested(config, wf_id):
         return True
 
     try:
@@ -3045,6 +3058,10 @@ def _run_workiq_auth_preflight(
     interactive = bool(getattr(config, "force_interactive", False) or sys.stdin.isatty())
     if not interactive:
         print(f"{_ts()} ❌ Work IQ 認証確認に失敗しました。", file=sys.stderr)
+        print(
+            f"{_ts()}    Work IQ を要求した設定: {', '.join(_workiq_request_reasons(config, wf_id))}",
+            file=sys.stderr,
+        )
         print(f"{_ts()}    先に `python -m hve workiq-doctor` で診断してください。", file=sys.stderr)
         return False
 
@@ -4270,7 +4287,9 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     if not _run_copilot_auth_preflight(args or argparse.Namespace(command="cli"), cfg):
         return 1
 
-    if not _run_workiq_auth_preflight(args or argparse.Namespace(command="cli"), cfg, params):
+    if not _run_workiq_auth_preflight(
+        args or argparse.Namespace(command="cli"), cfg, params, workflow=wf.id
+    ):
         return 1
 
     if not _run_azure_auth_preflight(args or argparse.Namespace(command="cli"), cfg, params):

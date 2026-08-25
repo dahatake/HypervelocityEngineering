@@ -581,7 +581,8 @@ class TestOverEngineeringBan(unittest.TestCase):
         repo_root = pathlib.Path(__file__).resolve().parents[2]
         fanout_root = repo_root / "hve" / "prompt" / "fanout"
         common_files = sorted(fanout_root.glob("*/_common.md"))
-        self.assertEqual(len(common_files), 12, "Expected 12 fanout _common.md files")
+        # aas は fan-out を持たないため _common.md も存在しない（FR-WF-AAS-02）。
+        self.assertEqual(len(common_files), 11, "Expected 11 fanout _common.md files")
         for f in common_files:
             content = f.read_text(encoding="utf-8")
             self.assertIn(self.OE_MARKER, content, f"{f} missing OE ban")

@@ -130,8 +130,8 @@ cd .github/scripts/bash
 # Bash — モデルを明示指定
 ./orchestrate.sh --workflow aas --model claude-opus-4.7 --dry-run
 
-# Bash — ステップ選択
-./orchestrate.sh --workflow aas --steps 2.1,2.2 --dry-run
+# Bash — ADFDV ワークフロー（ステップ選択）
+./orchestrate.sh --workflow adfdv --steps 1.1,1.2 --dry-run
 
 # Bash — run-workflow.sh 経由
 ./run-workflow.sh --workflow aas --dry-run
@@ -145,8 +145,8 @@ cd .github/scripts/powershell
 # PowerShell — モデルを明示指定
 .\orchestrate.ps1 -Workflow aas -Model claude-opus-4.7 -DryRun
 
-# PowerShell — ステップ選択
-.\orchestrate.ps1 -Workflow aas -Steps "2.1,2.2" -DryRun
+# PowerShell — ADFDV ワークフロー（ステップ選択）
+.\orchestrate.ps1 -Workflow adfdv -Steps "1.1,1.2" -DryRun
 
 # PowerShell — run-workflow.ps1 経由
 .\run-workflow.ps1 -Workflow aas -DryRun
@@ -213,20 +213,26 @@ cd .github/scripts/powershell
 
 ## サポートするワークフロー
 
-| ID | 名称 | ステップ数 |
-|----|------|-----------|
-| `aas` | App Architecture Design | 10 |
-| `ard` | Auto Requirement Definition | 10 |
-| `ada` | Agent Data Architecture | 9 |
-| `asdw-web` | Web App Dev & Deploy | 21 |
-| `adfd` | Dataflow Design | 7 |
-| `adfdv` | Dataflow Dev | 8 |
-| `aag` | AI Agent Design | 3 |
-| `aagd` | AI Agent Dev & Deploy | 9 |
-| `aar` | Agentic Retrieval Add-on | 7 |
-| `adoc` | Source Codeからのドキュメント作成 | 19 |
+`.github/scripts/bash/lib/workflow-registry.sh` が定義するワークフローと、その総ステップ数（グループ見出しのみのコンテナ Step を含む）。
 
-> 本表の正本は [bash/lib/workflow-registry.sh](bash/lib/workflow-registry.sh) であり、ステップ数は Sub-Issue を作成する Step の数（Agent を持たないグループ見出し Step を含まない）です。そのため `asdw-web` / `adoc` は [hve/workflow_registry.py](../../hve/workflow_registry.py) の宣言数（26 / 23）より少なくなります。`aad-web` / `akm` / `adi` は Bash registry に存在せず、本スクリプト群からは実行できません（CLI / GUI または Cloud reusable workflow を使用してください）。PowerShell registry が持つのは `aas` / `ard` / `adfd` / `adfdv` の 4 件だけです。
+| ID | 名称 | ステップ数 | `orchestrate` 対応 |
+|----|------|-----------|-------------------|
+| `ard` | Auto Requirement Definition | 10 | — |
+| `aas` | App Architecture Design | 10 | Bash / PowerShell |
+| `ada` | Agent Data Architecture | 9 | — |
+| `asdw-web` | Web App Dev & Deploy | 26（うちコンテナ 5） | — |
+| `adfd` | Dataflow Design | 7 | Bash / PowerShell |
+| `adfdv` | Dataflow Dev | 8 | Bash / PowerShell |
+| `aag` | AI Agent Design | 3 | — |
+| `aagd` | AI Agent Dev & Deploy | 9 | — |
+| `aar` | Agentic Retrieval Add-on | 7 | — |
+| `adoc` | Source Codeからのドキュメント作成 | 23（うちコンテナ 4） | Bash のみ |
+
+> **`orchestrate` の対応範囲は registry より狭い**: `orchestrate.sh` / `orchestrate.ps1` は表示名・トリガーラベル・Issue 接頭辞を自前の定数表に持つため、そこに無い ID は `ERROR: 不明なワークフロー` で失敗する。受理するのは Bash が `aas` / `adfd` / `adfdv` / `adoc`、PowerShell が `aas` / `adfd` / `adfdv` のみ。
+>
+> **`advance` は allowlist を持たず registry を直接引く**: したがって扱える ID は registry の登録内容と等しい。`advance.sh` は上表の 10 件すべて、`advance.ps1` は PowerShell registry（`.github/scripts/powershell/lib/workflow-registry.ps1`）が定義する `ard` / `aas` / `adfd` / `adfdv` の 4 件のみ。
+>
+> `aad-web` / `akm` は Cloud Orchestrator（`.github/workflows/auto-app-detail-design-web-reusable.yml` / `auto-knowledge-management-reusable.yml`）と `hve` CLI で利用できるが、本ディレクトリのスクリプトには未登録。`adi` は `hve` CLI / GUI 専用で、Cloud workflow も本ディレクトリのスクリプトも持たない。
 
 ## テスト実行
 

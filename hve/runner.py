@@ -6707,6 +6707,18 @@ class StepRunner:
                         1,
                     )
 
+            # FR-MCPLOG-01: MCP 由来の tool は全件全文をログへ残す。
+            # 後続の `report_intent` / `task` の早期 return より前で行うこと。
+            mcp_server_name = _get(data, "mcp_server_name", "mcpServerName", default="")
+            if mcp_server_name:
+                self.console.mcp_tool_request(
+                    str(mcp_server_name),
+                    str(_get(data, "mcp_tool_name", "mcpToolName", default="") or tool_name or ""),
+                    tool_call_id=tool_call_id,
+                    step_id=step_id or "",
+                    arguments=args,
+                )
+
             # report_intent ツールは Thinking として表示する（通常のアクション表示をスキップ）
             if tool_name == "report_intent":
                 if step_id:
@@ -6793,6 +6805,15 @@ class StepRunner:
             error = _get(data, "error", default=None)
             tool_call_id = str(
                 _get(data, "tool_call_id", "toolCallId", default="") or ""
+            )
+            # FR-MCPLOG-01: 完了イベントは MCP サーバー名を持たないため、
+            # ロガ側の `tool_call_id` 相関だけが帰属を決める。
+            self.console.mcp_tool_response(
+                tool_call_id=tool_call_id,
+                success=bool(success),
+                content=str(_get(_get(data, "result", default=None), "content", default="") or ""),
+                error=str(_get(error, "message", default=error) or "") if error else "",
+                step_id=step_id or "",
             )
             last_tool_name: str
             last_args: Dict[str, Any]
@@ -7455,6 +7476,16 @@ class StepRunner:
                 status_obj = _get(srv, "status", default=None)
                 status = getattr(status_obj, "value", str(status_obj)) if status_obj else "unknown"
                 error = _get(srv, "error", default=None)
+                transport_obj = _get(srv, "transport", default=None)
+                source_obj = _get(srv, "source", default=None)
+                self.console.mcp_server_status(
+                    str(name),
+                    status=str(status),
+                    error=str(error) if error else "",
+                    plugin_name=str(_get(srv, "plugin_name", "pluginName", default="") or ""),
+                    transport=str(getattr(transport_obj, "value", transport_obj) or "") if transport_obj else "",
+                    source=str(getattr(source_obj, "value", source_obj) or "") if source_obj else "",
+                )
                 if status == "connected":
                     self.console.status(f"✅ MCP サーバー '{name}' 接続成功")
                 elif status in ("failed", "needs-auth"):
@@ -7477,6 +7508,11 @@ class StepRunner:
             server_name = _get(data, "server_name", "serverName", default="?")
             status_obj = _get(data, "status", default=None)
             status = getattr(status_obj, "value", str(status_obj)) if status_obj else "unknown"
+            self.console.mcp_server_status(
+                str(server_name),
+                status=str(status),
+                error=str(_get(data, "error", default="") or ""),
+            )
             if status in ("failed", "needs-auth") and server_name == WORKIQ_MCP_SERVER_NAME:
                 self.console.warning(
                     f"❌ Work IQ MCP サーバー接続状態変更: {status}"

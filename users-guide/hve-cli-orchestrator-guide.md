@@ -862,6 +862,46 @@ Phase 6 の棚卸結果（リポジトリ内の確認済みファイル）:
 > - 未確認の設定キー追加は、`connected` にならない・期待 tool が候補に出ない・`tool.execution_start` が観測できない等の切り分け困難な失敗を招きうる
 > - Phase 7 は「事実で確認できた範囲のみ改修」を徹底し、トークン最適化は再現可能な計測（`/usage`・`session.usage_info`）で追跡する
 
+### MCP 通信ログ
+
+Copilot SDK セッションで観測した MCP の入出力は、実行ごとの作業フォルダーへ MCP サーバー単位で保存されます。ターミナル表示は verbosity に応じて切り詰められますが、**このログには切り詰めなしの全文が残ります**。
+
+| 項目 | 内容 |
+|---|---|
+| 出力先 | `work/run/<run-id>/mcp-<サーバー名>.log`（サーバー 1 件につき 1 ファイル） |
+| 例 | `mcp-_hve_workiq.log` / `mcp-azure.log` / `mcp-microsoft-learn.log` |
+| 有効化条件 | `HVE_WORK_ROOT` が設定されている実行（CLI / GUI は自動設定）。`--dry-run` では出力しません |
+| 設定 | 専用の CLI オプション・設定項目はありません（常時有効） |
+| 上限 | 1 ファイル 32 MiB。到達時は追記を停止し、警告を 1 回出します（ローテーションなし） |
+
+記録されるレコード種別は次の 5 つで、各レコードは `=== ` で始まる 1 行のヘッダと本文からなります。
+
+| 種別 | 内容 |
+|---|---|
+| `mcp_request` | MCP ツール呼び出しの引数（JSON） |
+| `mcp_response` | 対応する結果本文またはエラー |
+| `mcp_server_status` | 接続状態・プラグイン名・トランスポート |
+| `session_prompt` | **HVE が Work IQ 専用セッションへ送った自然言語プロンプトの全文** |
+| `session_response` | その応答本文 |
+
+#### Work IQ へ送ったプロンプトを Microsoft 365 Copilot Chat で再利用する
+
+`mcp-_hve_workiq.log` の `session_prompt` レコード本文をそのまま Microsoft 365 Copilot Chat へ貼り付けられます。対象のヘッダ行は次の形式です。
+
+```text
+=== 2026-08-25T09:12:33.421037+00:00 | session_prompt | server=_hve_workiq | label=Work IQ プロンプト [Q3]
+```
+
+`label` には発行元が入ります。例: 事前 QA は `[Q<質問番号>]`、AKM は `[D<NN> KM]` / `[D<NN> KM ingest]`、ARD は `[ARD usecase]`。
+
+#### 取り扱い上の注意
+
+- このログは **M365 の業務データを平文で含みます**。共有・転送の前に内容を確認してください。
+- 代表的な認証情報（`Authorization: Bearer ...` / `token=...` / JWT）は記録前に `[REDACTED]` へマスクされますが、**完全なサニタイズは保証されません**。
+- `.gitignore` の `*.log` により、このログはリポジトリへコミットされません。
+- GUI / CLI Autopilot のように APP ごとの子プロセスが並列実行される場合は、レコードの交錯を避けるため `mcp-<サーバー名>-<pid>.log` とファイルが分かれます。
+- MCP サーバーのプロセスは Copilot CLI ランタイムが起動するため、HVE は生の JSON-RPC フレームを取得できません。記録されるのは SDK イベントが公開する範囲（上記 5 種別）です。
+
 ### Work IQ MCP 連携（オプション）
 
 Work IQ（`@microsoft/workiq`）をインストールして `--auto-qa --workiq` を有効化すると、QA フェーズの補助情報として M365 データを読み取り専用で参照します。Phase 1 の本処理、Review フェーズ、自己改善フェーズでは Work IQ を使用しません。  
@@ -921,7 +961,7 @@ npx -y @microsoft/workiq ask -q "ping"
 ```
 
 3. ヘッドレス環境（SSH / CI）の場合の注意:
-   - `_is_headless_environment()` は `CI`, `SSH_TTY`, `SSH_CLIENT` を検査し、Windows 以外では `DISPLAY` / `WAYLAND_DISPLAY` 未設定も検出
+   - `_is_headless_environment()` は `CI`, `SSH_TTY`, `SSH_CLIENT` を検査し、Windows / macOS 以外では `DISPLAY` / `WAYLAND_DISPLAY` 未設定も検出（macOS は Quartz ベースで `DISPLAY` を使わないため、未設定をヘッドレスの根拠にしない。SSH 経由の macOS は `SSH_TTY` / `SSH_CLIENT` で検出される）
    - 事前にブラウザ付き環境で認証を完了しておく必要がある
    - トークンは `~/.workiq` または `~/.config/workiq` にキャッシュされる（`_has_cached_token()`）
 

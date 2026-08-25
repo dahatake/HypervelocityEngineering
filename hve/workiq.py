@@ -13,6 +13,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -1439,7 +1440,13 @@ def _is_headless_environment() -> bool:
         return True
     if os.environ.get("SSH_TTY") or os.environ.get("SSH_CLIENT"):
         return True
-    if os.name != "nt" and not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+    # macOS は Quartz ベースで DISPLAY を使わないため、DISPLAY 未設定をヘッドレスの根拠にできない。
+    if (
+        os.name != "nt"
+        and sys.platform != "darwin"
+        and not os.environ.get("DISPLAY")
+        and not os.environ.get("WAYLAND_DISPLAY")
+    ):
         return True
     return False
 

@@ -24,6 +24,23 @@ STATS_PREFIX = "[hve:stats] "
 # FR-RTO-02: Dashboard を持つ親が子プロセスへ stats 配信を許可する唯一のマーカー。
 STATS_STREAM_ENV = "HVE_STATS_STREAM"
 
+# GUI が子プロセスへ注入する起源識別子（`hve/gui/session_workdir.py` env_overrides）。
+GUI_SESSION_ENV = "HVE_GUI_SESSION_ID"
+
+_STATS_STREAM_TRUTHY = ("1", "true", "True")
+
+
+def is_child_process() -> bool:
+    """親プロセスから起動され作業ディレクトリを共有する子プロセスかを返す。
+
+    GUI Autopilot の子は `HVE_GUI_SESSION_ID` だけを、CLI Autopilot の子は
+    `HVE_STATS_STREAM` だけを継承するため、両方を条件とする（FR-MCPLOG-02）。
+    判定は `hve/console.py` の stats 配信可否と共通の単一実装とする（FR-MAINT-07）。
+    """
+    if os.environ.get(GUI_SESSION_ENV, "").strip():
+        return True
+    return os.environ.get(STATS_STREAM_ENV, "").strip() in _STATS_STREAM_TRUTHY
+
 # 既存 producer（hve/console.py / hve/runner.py / hve/dag_executor.py）が発火する kind。
 KNOWN_KINDS = frozenset(
     {
@@ -827,6 +844,7 @@ def read_events(work_root: Path) -> list:
 __all__ = [
     "DEFAULT_INSTANCE_ID",
     "DEFAULT_MAX_BYTES",
+    "GUI_SESSION_ENV",
     "OBSERVABILITY_DIRNAME",
     "SCHEMA_VERSION",
     "STATS_PREFIX",
@@ -840,6 +858,7 @@ __all__ = [
     "format_counts_topn",
     "format_runtime_summary",
     "format_stats_line",
+    "is_child_process",
     "is_stats_line",
     "make_instance_id",
     "parse_stats_line",

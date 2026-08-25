@@ -6,9 +6,11 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import List
+from unittest import mock
 
 import pytest
 
@@ -129,6 +131,15 @@ def test_default_argv_contains_orchestrate_app_ids(qapp) -> None:
     assert "--app-ids" in argv
     assert "APP-42" in argv
     assert "--workbench" in argv
+
+
+def test_default_popen_disables_stdin(qapp) -> None:
+    """FR-GUI-23: Autopilot の子プロセスも標準入力を対話不能で起動する。"""
+    controller = AutopilotController(_plan(["APP-01"]))
+    with mock.patch("hve.gui.autopilot.child_launcher.subprocess.Popen") as popen_mock:
+        controller._default_popen(["orchestrate", "--workflow", "aas"])
+    _, kwargs = popen_mock.call_args
+    assert kwargs["stdin"] is subprocess.DEVNULL
 
 
 def test_controller_respects_max_parallel(qapp) -> None:

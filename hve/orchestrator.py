@@ -56,6 +56,7 @@ try:
     from .dag_planner import build_dag_plan
     from .run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id
     from .orchestrator_context import OrchestratorContext
+    from .mcp_io_log import McpIoLogger, attach_mcp_io_event_logger
     from . import index_refresh
 except ImportError:
     from config import SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS, to_wire_model  # type: ignore[no-redef]
@@ -73,6 +74,7 @@ except ImportError:
     from dag_planner import build_dag_plan  # type: ignore[no-redef]
     from run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id  # type: ignore[no-redef]
     from orchestrator_context import OrchestratorContext  # type: ignore[no-redef]
+    from mcp_io_log import McpIoLogger, attach_mcp_io_event_logger  # type: ignore[no-redef]
     import index_refresh  # type: ignore[no-redef]
 
 # -----------------------------------------------------------------------
@@ -3194,6 +3196,7 @@ async def _prefetch_workiq_detailed(
             subtask_kind="orchestrator",
             console=console,
         )
+        attach_mcp_io_event_logger(session, console.mcp_io_logger, step_id="orchestrator")
 
         # ツール呼び出し追跡
         _called_tools: list = []
@@ -3465,6 +3468,7 @@ async def _run_akm_workiq_verification(
             subtask_kind="orchestrator",
             console=console,
         )
+        attach_mcp_io_event_logger(session, console.mcp_io_logger, step_id="orchestrator")
 
         try:
             # MCP 接続確認
@@ -3736,6 +3740,7 @@ async def _run_akm_workiq_ingest(
             subtask_kind="orchestrator",
             console=console,
         )
+        attach_mcp_io_event_logger(session, console.mcp_io_logger, step_id="orchestrator")
 
         try:
             # MCP 接続確認
@@ -4017,11 +4022,18 @@ async def _run_ard_workiq_usecase(
             subtask_kind="orchestrator",
             console=console,
         )
+        attach_mcp_io_event_logger(session, console.mcp_io_logger, step_id="orchestrator")
 
         try:
+            console.workiq_prompt(
+                workiq_query, label="Work IQ プロンプト [ARD usecase]"
+            )
             workiq_result = await query_workiq(
                 session, workiq_query,
                 timeout=config.workiq_per_question_timeout,
+            )
+            console.workiq_response(
+                workiq_result or "", label="Work IQ 応答 [ARD usecase]"
             )
         except Exception as wiq_err:
             console.warning(f"ARD Work IQ クエリ失敗: {wiq_err}")
@@ -4422,6 +4434,22 @@ def _attach_runtime_observability(
     return recorder
 
 
+def _attach_mcp_io_logging(console: Console, config) -> Optional[Any]:
+    """FR-MCPLOG-01 / 02: MCP 通信ログの記録器を生成し Console へ接続する。
+
+    `HVE_WORK_ROOT` 未設定時と dry-run では記録せず ``None`` を返す。
+    """
+    logger = McpIoLogger.from_env(
+        dry_run=bool(getattr(config, "dry_run", False)),
+        warn=getattr(console, "warning", None),
+    )
+    if not logger.enabled:
+        logger.close()
+        return None
+    console.attach_mcp_io_logger(logger)
+    return logger
+
+
 def _start_index_watchers(config) -> None:
     """起動時の索引差分更新を待ってから mdq / cq watcher を起動する（FR-CLI-77）。
 
@@ -4607,6 +4635,13 @@ async def run_workflow(
         import atexit as _atexit
 
         _atexit.register(_rt_recorder.close)
+
+    # FR-MCPLOG-01 / 02: MCP 通信ログも同じライフサイクルで扱う。
+    _mcp_io_logger = _attach_mcp_io_logging(console, config)
+    if _mcp_io_logger is not None:
+        import atexit as _atexit
+
+        _atexit.register(_mcp_io_logger.close)
 
     start_total = time.time()
     _start_monotonic = time.monotonic()
@@ -6688,7 +6723,8 @@ async def run_workflow(
     _emit_runtime_summary(console, config)
     if _rt_recorder is not None:
         _rt_recorder.close()
-
+    if _mcp_io_logger is not None:
+        _mcp_io_logger.close()
     return {
         "workflow_id": workflow_id,
         "completed": completed_ids,

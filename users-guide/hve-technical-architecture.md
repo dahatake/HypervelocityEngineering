@@ -358,7 +358,8 @@ python -m hve orchestrate --workflow ard \
 
 - Step 2 で生成した `argv` を `launch_orchestrator(argv)` に渡す。
 - **`--workbench off` を強制注入**（GUI 側で再描画するため、TUI Workbench を抑止）。
-- `subprocess.Popen([sys.executable, "-m", "hve"] + argv, stdout=PIPE, stderr=STDOUT, text=True, bufsize=1)` で起動。
+- `subprocess.Popen([sys.executable, "-m", "hve"] + argv, stdin=DEVNULL, stdout=PIPE, stderr=STDOUT, text=True, bufsize=1)` で起動。
+  - `stdin=DEVNULL` は FR-GUI-23 による。GUI には子プロセスへ入力を送る経路が無いため、端末の標準入力を継承させると CLI 側の対話プロンプト（認証 preflight 等）で応答不能のまま停止する。
 - `SubprocessReader(QThread)` で stdout を読み取り、`_LogPane.append_line()` に流す（Signal/Slot）。
 - 「停止」: `SIGTERM` → 10 秒待っても終わらなければ `kill()`。Windows は `terminate()` がハードキル相当。
 

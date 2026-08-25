@@ -185,6 +185,7 @@ Self-hosted runner は **オプション** です。GitHub-hosted runner を使�
 5. `--create-issues` / `--create-pr` を使う場合は `GH_TOKEN` と `REPO` が設定されているか
 6. `GH_TOKEN` と Cloud 側の `COPILOT_PAT` を混同していないか
 7. Work IQ を使う場合は Node.js / npx / `@microsoft/workiq` が利用可能か
+8. MCP の入出力を見たい場合は `work/run/<run-id>/mcp-<サーバー名>.log` を確認（[MCP 通信ログ](./hve-cli-orchestrator-guide.md#mcp-通信ログ)）
 
 詳細は [hve-cli-orchestrator-guide.md 付録D](./hve-cli-orchestrator-guide.md#付録d-トラブルシューティング) も参照してください。
 
@@ -208,6 +209,8 @@ Work IQ: 3 件の応答を得ましたが、0 件の質問にしか回答案を�
 | 実際に呼ばれたツールが HVE の実行確認集合に無い | 警告の「当該区間で観測されたツール」を見る | 参照系ツールなのに検出されない場合は不具合。ツール名を添えて報告してください |
 | LLM がツールを呼ばずに説明文だけ返した | 観測されたツールが空 | `python -m hve workiq-doctor --sdk-tool-probe --sdk-event-trace` で実呼び出しを確認 |
 | SDK のイベント形式が変わり抽出できない | `python -m hve workiq-doctor --event-extractor-self-test` | 自己診断が FAIL なら抽出ロジックの更新が必要 |
+
+> 実際に送ったプロンプトと Work IQ の応答全文は `work/run/<run-id>/mcp-_hve_workiq.log` に残ります。`session_prompt` / `session_response` / `mcp_request` / `mcp_response` の各レコードを見ると、「プロンプトは送られたがツールが呼ばれていない」のか「ツールは呼ばれたが結果が空だった」のかを直接切り分けられます（[MCP 通信ログ](./hve-cli-orchestrator-guide.md#mcp-通信ログ)）。
 
 > `STATUS: NOT_FOUND` の応答は「一次情報が見つからなかった」という正常な結果であり、この警告は出ません。統合 0 件でもすべて `NOT_FOUND` なら異常ではありません。
 

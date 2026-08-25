@@ -101,6 +101,9 @@ class AutopilotController(QObject):
             env = None
         return subprocess.Popen(
             [sys.executable, "-m", "hve", *argv],
+            # FR-GUI-23: GUI には子プロセスへ入力を送る経路が無く、端末の stdin を継承すると
+            # CLI 側の対話プロンプト（認証 preflight 等）で応答不能のまま停止する。
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,

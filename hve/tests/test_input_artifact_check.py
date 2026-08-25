@@ -284,8 +284,8 @@ class TestCheckWorkflowInputArtifactsStrict(unittest.TestCase):
 
         同ワークフロー内の先行ステップが成果物を生成するケースで
         正当な実行が中断されないことを確認する。
-        例: AAS Step 2 (depends_on=["1"]) は app_catalog を consumed するが
-            Step 1 が app-catalog.md を出力するため、開始前には存在しない。
+        例: AAS Step 2.1 (depends_on=["1"]) は Step 1 が出力する
+            app-arch-catalog.md を必須入力とするため、開始前には存在しない。
         """
         root_step = _make_step("1", consumed_artifacts=[])  # ルート: 前提なし
         non_root = StepDef(

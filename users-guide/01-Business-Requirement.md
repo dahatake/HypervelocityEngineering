@@ -345,6 +345,7 @@ python -m hve orchestrate --workflow ard \
 - CLI / GUI は `HVE_RUN_ID` と `HVE_WORK_ROOT` を設定し、通常は `work/run/<run-id>/` を使用します。
 - Runner は Step 起動前に `work/run/<run-id>/<Custom Agent>/Issue-<識別子>/` を作成します。
 - 非 fan-out Step の識別子は `0`、fan-out 子は Step ID 由来の `step-...` です。実行ログの `work directory ready:` に表示された実パスを確認してください。
+- MCP サーバーを使った実行では、`work/run/<run-id>/mcp-<サーバー名>.log` に MCP の入出力が全文で残ります（[CLI ガイドの MCP 通信ログ](./hve-cli-orchestrator-guide.md#mcp-通信ログ)）。
 - `work/run/` は計画・検証・完了報告などの作業領域です。Step 間の入力は `docs/` 成果物を使い、他 Step の `work/run/` を推測して参照しません。
 - 作業ディレクトリの存在だけでは完了ではありません。
 

@@ -317,6 +317,27 @@ class TestWorkIQSaveAndHeadless(unittest.TestCase):
                 mock.patch("workiq.os.name", "posix"):
             self.assertFalse(workiq._is_headless_environment())
 
+    def test_headless_detection_macos_desktop(self) -> None:
+        """macOS は DISPLAY を持たないがブラウザ認証は可能なためヘッドレス扱いにしない。"""
+        with mock.patch.dict(os.environ, {}, clear=True), \
+                mock.patch("workiq.os.name", "posix"), \
+                mock.patch("workiq.sys.platform", "darwin"):
+            self.assertFalse(workiq._is_headless_environment())
+
+    def test_headless_detection_macos_over_ssh(self) -> None:
+        """macOS でも SSH 経由はブラウザ認証不可のためヘッドレス扱いにする。"""
+        with mock.patch.dict(os.environ, {"SSH_TTY": "/dev/ttys001"}, clear=True), \
+                mock.patch("workiq.os.name", "posix"), \
+                mock.patch("workiq.sys.platform", "darwin"):
+            self.assertTrue(workiq._is_headless_environment())
+
+    def test_headless_detection_linux_without_display(self) -> None:
+        """Linux で DISPLAY / WAYLAND_DISPLAY が無い場合は従来どおりヘッドレス扱い。"""
+        with mock.patch.dict(os.environ, {}, clear=True), \
+                mock.patch("workiq.os.name", "posix"), \
+                mock.patch("workiq.sys.platform", "linux"):
+            self.assertTrue(workiq._is_headless_environment())
+
     def test_has_cached_token(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             fake_home = Path(td)

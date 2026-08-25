@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util as _ilu
+import io
 import json
 import os
 import pathlib
@@ -1760,6 +1762,37 @@ class TestWorkIQAuthPreflight(unittest.TestCase):
         with mock.patch("workiq.workiq_login", return_value=False), \
              mock.patch("sys.stdin.isatty", return_value=False):
             self.assertFalse(_run_workiq_auth_preflight(args, cfg))
+
+    def test_non_interactive_failure_reports_request_source(self) -> None:
+        """非対話での失敗時に Work IQ を要求した設定名を出力する。"""
+        args, cfg = self._make_config(["orchestrate", "-w", "aas", "--workiq"])
+        buf = io.StringIO()
+        with mock.patch("workiq.workiq_login", return_value=False), \
+             mock.patch("sys.stdin.isatty", return_value=False), \
+             contextlib.redirect_stderr(buf):
+            self.assertFalse(_run_workiq_auth_preflight(args, cfg))
+        stderr_text = buf.getvalue()
+        self.assertIn("workiq_enabled", stderr_text)
+        self.assertIn("workiq_qa_enabled", stderr_text)
+
+    def test_akm_ingest_only_skips_preflight_for_non_akm(self) -> None:
+        """非 AKM Workflow では workiq_akm_ingest だけで preflight を起動しない。"""
+        args, cfg = self._make_config(
+            ["orchestrate", "-w", "ard", "--sources", "qa,workiq"]
+        )
+        self.assertTrue(cfg.is_workiq_akm_ingest_enabled())
+        with mock.patch("workiq.workiq_login") as login_mock:
+            self.assertTrue(_run_workiq_auth_preflight(args, cfg))
+        login_mock.assert_not_called()
+
+    def test_akm_ingest_triggers_preflight_for_akm(self) -> None:
+        """AKM Workflow では workiq_akm_ingest で preflight を起動する。"""
+        args, cfg = self._make_config(
+            ["orchestrate", "-w", "akm", "--sources", "qa,workiq"]
+        )
+        with mock.patch("workiq.workiq_login", return_value=True) as login_mock:
+            self.assertTrue(_run_workiq_auth_preflight(args, cfg))
+        login_mock.assert_called_once()
 
     def test_interactive_failure_can_disable_workiq_and_continue(self) -> None:
         args, cfg = self._make_config(["orchestrate", "-w", "aas", "--workiq", "--workiq-draft"])

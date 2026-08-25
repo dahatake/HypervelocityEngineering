@@ -1065,14 +1065,14 @@ ADFDV = WorkflowDef(
 # 並走ワークフローとして独立させている。
 #
 # AAS から除外した 3 Step とその根拠:
-#   - AAS Step.2（app-arch-catalog）: hve/app_arch_filter.py の _WORKFLOW_TARGET_KIND は
+#   - AAS Step.1（app-arch-catalog）: hve/app_arch_filter.py の _WORKFLOW_TARGET_KIND は
 #     aad-web / asdw-web / adfd / adfdv のみを対象とし、aag / aagd から参照されない。
-#   - AAS Step.6（service-catalog-matrix）: 出力表のキーが画面 ID 固定で
+#   - AAS Step.5（service-catalog-matrix）: 出力表のキーが画面 ID 固定で
 #     （Arch-Microservice-ServiceCatalog.prompt.md の Table A）、画面が無いと 1 行も書けない。
-#     Tool 定義根拠は Step.7 の docs/services/SVC-*.md で代替する。
-#   - AAS Step.9（persona-screen-catalog）: 画面専用。
+#     Tool 定義根拠は ADA Step.7 の docs/services/SVC-*.md で代替する。
+#   - AAS Step.8（persona-screen-catalog）: 画面専用。
 #
-# 新規 Custom Agent は Step.8 の Arch-AgentDataAsset のみ。残る 9 Step は
+# 新規 Custom Agent は ADA Step.8 の Arch-AgentDataAsset のみ。残る 9 Step は
 # AAS / AAD-WEB の既存 Agent をそのまま再利用する。
 ADA = WorkflowDef(
     id="ada",

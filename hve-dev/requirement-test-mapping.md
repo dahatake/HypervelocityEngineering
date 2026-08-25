@@ -2269,6 +2269,24 @@
 - 既知の制約:
   - Autopilot の子 GUI（`--autopilot-child`）では差分更新を開始しない。親 GUI と同時に複数の子プロセスが同一索引 DB へ書き込むのを避けるため。
 
+### FR-GUI-23 — GUI が起動するサブプロセスの標準入力
+
+- 判定: 実装済み
+- 受入テスト:
+  - [hve/gui/tests/test_gui_subprocess_stdin.py](hve/gui/tests/test_gui_subprocess_stdin.py) :: `test_launch_orchestrator_disables_stdin` — `launch_orchestrator()` が `stdin=subprocess.DEVNULL` を渡すこと
+  - [hve/gui/tests/test_autopilot_child_launcher.py](hve/gui/tests/test_autopilot_child_launcher.py) :: `test_default_popen_disables_stdin` — `AutopilotController._default_popen()` が `stdin=subprocess.DEVNULL` を渡すこと
+- 受入ケース:
+  - GUI が起動する `hve orchestrate` サブプロセスの標準入力が対話不能である。→ ✓
+  - Autopilot の子プロセスでも同じ扱いである。→ ✓
+  - CLI 単体実行の対話可否判定（`sys.stdin.isatty()`）を変更していない。→ ✓（[hve/__main__.py](hve/__main__.py) の判定式は未変更。`hve/tests/test_main.py::TestWorkIQAuthPreflight` 既存 6 件が passed のまま）
+- RED / GREEN 証跡:
+  - RED（実装前）: 上記 2 テストが `KeyError: 'stdin'` で 2 failed（実測）。
+  - GREEN: `hve/gui/tests/test_gui_subprocess_stdin.py` / `test_autopilot_child_launcher.py` / `test_start_autopilot_chain_branch.py` / `test_workbench_window_observability.py` 22 passed（実測）。
+- 実装後の判断（FR-MAINT-07 面横断の再利用）:
+  - CLI 側の対話プロンプト（`_run_copilot_auth_preflight` / `_run_workiq_auth_preflight` / `_run_azure_auth_preflight` / `_confirm_autopilot_chain_start`）へ GUI 判定分岐を追加せず、GUI 側の 2 つの起動点だけを修正した。判定の単一実装を維持している。
+- 既知の制約:
+  - [hve/gui/toolsearch_settings_section.py](hve/gui/toolsearch_settings_section.py) の `python -m hve toolsearch context` は本要件の対象外とした。`orchestrate` ではなく preflight を通らないため、対話プロンプトへ到達する経路が無い。
+
 ### FR-MODEL-07 — Copilot SDK の最新追従と明示 pin、ランタイム整合検証
 
 - 判定: 実装済み
@@ -2528,6 +2546,63 @@
   - 統合可否判定を `hve/runner.py` のインラインから `hve/workiq.py` へ抽出した。抽出しないと診断側が同じ条件を二重実装することになる（FR-MAINT-07）。
 - 既知の制約:
   - 本診断は `workiq-doctor` が構成するセッション上で動く。利用者の MCP 設定に公式 `workiq` サーバーが登録されている場合の併存条件までは再現しない。統合 0 件が本番だけで再現する場合は、本診断が `PASS` でも FR-QA-06 の実行時警告で切り分ける必要がある。
+
+---
+
+### FR-MCPLOG-01 — MCP 入出力の全文記録
+
+- 判定: ✓
+- 直接対応テスト:
+  - [hve/tests/test_mcp_io_log.py](hve/tests/test_mcp_io_log.py) :: `TestMcpIoLoggerRecords` — MCP request / response / server status / session prompt の各レコードが全文で追記されること
+  - [hve/tests/test_mcp_io_log.py](hve/tests/test_mcp_io_log.py) :: `TestMcpIoLoggerCorrelation` — `tool_call_id` 相関でサーバーを特定し、相関できない完了イベントを記録しないこと
+  - [hve/tests/test_mcp_io_log.py](hve/tests/test_mcp_io_log.py) :: `TestAttachMcpIoEventLogger` — SDK セッション結線ヘルパーが MCP 往復・サーバー状態を記録し、組み込みツールを無視すること
+  - [hve/tests/test_runner_mcp_io_log.py](hve/tests/test_runner_mcp_io_log.py) :: `TestRunnerMcpToolRecords` / `TestRunnerMcpServerStatusRecords` / `TestRunnerWithoutLogger` — 各イベント分岐からロガーが呼ばれること、`mcp_server_name` を持たない組み込みツールを記録しないこと、ロガー未接続でも例外を出さないこと
+  - [hve/tests/test_console_mcp_io_log.py](hve/tests/test_console_mcp_io_log.py) :: `TestConsoleToolRecords` / `TestConsoleWorkIQPersistence` — `workiq_prompt` / `workiq_response` が verbosity 0（quiet）・`final_only` でも全文を記録すること、表示側の切り詰め（800 / 10,000 文字）がログへ波及しないこと
+  - [hve/tests/test_orchestrator_mcp_io_log.py](hve/tests/test_orchestrator_mcp_io_log.py) :: `TestWorkIQSessionWiring` — Work IQ 専用セッション 4 件（prefetch / AKM verification / AKM ingest / ARD usecase）へイベントロガーが結線されること
+- 受入ケース:
+  - `mcp_server_name` を持つ `tool.execution_start` の `arguments` が切り詰めなしで記録される。→ ✓ (`test_arguments_are_not_truncated`)
+  - `mcp_server_name` を持たない `tool.execution_start`（組み込みツール）は記録されない。→ ✓ (`test_builtin_tool_without_mcp_server_is_not_recorded`)
+  - 組み込みツールと同名（`task` / `report_intent`）の MCP ツールでも記録を落とさない。→ ✓ (`test_mcp_tool_sharing_a_builtin_name_is_still_recorded`)
+  - `tool.execution_complete` は先行 request と同じ `tool_call_id` を持つときだけ記録され、未知の `tool_call_id` は無視される。→ ✓ (`test_unknown_call_id_is_dropped`)
+  - Work IQ プロンプトが全文で記録され、`console` の表示切り詰めの影響を受けない。→ ✓ (`test_prompt_is_recorded_in_full_beyond_display_truncation`)
+- 実装後の判断:
+  - `report_intent` / `task` の早期 return より前に MCP 記録を行う。後ろに置くと、同名の MCP ツールが公開された場合にレコードが無言で欠落する。
+  - 完了イベントの帰属は `(step_id, tool_call_id)` の相関のみとした。SDK 1.0.9 の `ToolExecutionCompleteData` は `mcp_server_name` を持たないため、相関なしでは MCP 由来か組み込みツール由来かを判別できない。
+  - orchestrator 側の Work IQ セッションは `StepRunner._handle_session_event` を通らないため、共有ヘルパー `attach_mcp_io_event_logger()` を 4 箇所で再利用した（FR-MAINT-07）。
+- 既知の制約:
+  - MCP サーバープロセスは Copilot CLI ランタイムが起動するため、生の JSON-RPC フレームは取得できない。記録範囲は SDK イベントが公開する 5 レコード種別に限られる。
+  - `ToolExecutionCompleteResult` からは `content` のみを記録する（`detailed_content` / `structured_content` は対象外）。
+
+### FR-MCPLOG-02 — 出力先・ファイル分離・ライフサイクル
+
+- 判定: ✓
+- 直接対応テスト:
+  - [hve/tests/test_mcp_io_log.py](hve/tests/test_mcp_io_log.py) :: `TestMcpIoLoggerFileLayout` — `mcp-<サーバー名>.log` の生成、サーバー名の正規化、`HVE_GUI_SESSION_ID` / `HVE_STATS_STREAM` 設定時の `-<pid>` 分離
+  - [hve/tests/test_mcp_io_log.py](hve/tests/test_mcp_io_log.py) :: `TestMcpIoLoggerDisabled` — `HVE_WORK_ROOT` 未設定時と dry-run で書き込まないこと、書き込み失敗が例外にならないこと
+  - [hve/tests/test_mcp_io_log.py](hve/tests/test_mcp_io_log.py) :: `TestMcpIoLoggerCap` — 上限到達で追記停止し警告が 1 回だけ出ること、上限がサーバー単位であること
+  - [hve/tests/test_mcp_io_log.py](hve/tests/test_mcp_io_log.py) :: `TestMcpIoLoggerEncoding` — UTF-8 / LF / BOM なし、ヘッダが 1 行に収まること
+  - [hve/tests/test_mcp_io_log.py](hve/tests/test_mcp_io_log.py) :: `TestMcpIoLoggerConcurrency` — 同一プロセス内の並行追記がレコードを壊さないこと
+  - [hve/tests/test_orchestrator_mcp_io_log.py](hve/tests/test_orchestrator_mcp_io_log.py) :: `TestAttachMcpIoLogging` / `TestRunWorkflowLifecycle` — 生成・Console 接続・警告転送・`run_workflow` の atexit / 終了時 close
+- 受入ケース:
+  - `HVE_GUI_SESSION_ID` 非空、または `HVE_STATS_STREAM` が `1` / `true` / `True` のとき `-<pid>` が付く。どちらも未設定なら付かない。→ ✓ (`test_pid_suffix_for_child_process` / `test_falsy_stats_stream_keeps_plain_name`)
+  - 書き込み失敗（`OSError`）が Step を失敗させない。→ ✓ (`test_write_failure_does_not_raise`)
+  - 本機能のための新規 CLI オプション・設定キー・環境変数が増えていない。→ ✓（本 FR の実装では CLI 引数定義（`hve/__main__.py`）と設定クラス（`hve/config.py`）へ一切変更を加えていない）
+- 実装後の判断:
+  - 子プロセス判定を [hve/runtime_observability.py](hve/runtime_observability.py) `is_child_process()` の単一実装へ集約し、[hve/console.py](hve/console.py) の `[hve:stats]` 配信可否もこれを参照するよう置き換えた（FR-MAINT-07）。GUI Autopilot の子は `HVE_GUI_SESSION_ID` だけ、CLI Autopilot の子は `HVE_STATS_STREAM` だけを継承するため、片方だけでは追記が交錯する。
+  - ハンドルはサーバーごとに遅延 open する。空のプロンプト・応答ではファイルを作らない。
+- 既知の制約:
+  - ローテーションは行わない（FR-RTO-03 と同じ規約）。上限到達後は当該サーバーのファイルへの追記が停止する。
+
+### FR-MCPLOG-03 — 秘密情報マスクと FR-RTO-04 との境界
+
+- 判定: ✓
+- 直接対応テスト:
+  - [hve/tests/test_mcp_io_log.py](hve/tests/test_mcp_io_log.py) :: `TestMcpIoLoggerSanitize` — `Authorization: Bearer` / `api_key=` / JWT がマスクされること、マスクが `hve/workiq.py` の既存実装へ委譲されていること
+- 受入ケース:
+  - 認証情報パターンが `[REDACTED]` へ置換される。→ ✓ (`test_masks_bearer_token_and_jwt`)
+  - マスク処理が本モジュールで再実装されていない。→ ✓ (`test_sanitizer_is_the_shared_workiq_helper` が `mcp_io_log._sanitize is workiq._sanitize_diagnostic_text` を固定)
+- 既知の制約:
+  - 既存マスク実装は完全なサニタイズを保証しない（[hve/workiq.py](hve/workiq.py) `_sanitize_diagnostic_text` の docstring に明記）。本ログは業務データを平文で含む。`.gitignore` の `*.log` によりリポジトリへはコミットされない。
 
 ---
 
