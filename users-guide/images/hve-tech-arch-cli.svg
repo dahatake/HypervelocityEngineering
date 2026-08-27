@@ -19,9 +19,10 @@
 
   <text class="title" x="20" y="30">HVE CLI Orchestrator: 内部構造</text>
 
-  <rect class="box user" x="30" y="60" width="260" height="60" rx="6"/>
+  <rect class="box user" x="30" y="60" width="260" height="76" rx="6"/>
   <text class="h" x="50" y="84">ユーザー端末</text>
   <text x="50" y="106">`python -m hve orchestrate --workflow aas ...`</text>
+  <text x="50" y="126">Prompt 版も承認後にこの経路へ委譲</text>
 
   <rect class="box py" x="320" y="60" width="200" height="60" rx="6"/>
   <text class="h" x="340" y="84">hve/__main__.py</text>
@@ -52,7 +53,7 @@
   <text class="h" x="580" y="194">hve/runner.py — StepRunner</text>
   <text x="580" y="216">workflow_registry.StepDef を 1 ステップ実行</text>
   <text x="580" y="234">prompt_templates / template_engine でプロンプト生成</text>
-  <text x="580" y="252">agent_loader: .github/prompts/&lt;Agent&gt;.prompt.md 読込</text>
+  <text x="580" y="252">prompt_loader: .github/prompts/&lt;Agent&gt;.prompt.md 読込</text>
   <text x="580" y="270">skill_resolver: SKILL.md frontmatter から候補抽出</text>
   <text x="580" y="288">artifact_validation: output_paths の存在確認</text>
   <text x="580" y="306">qa_merger / mdq_enforcement / app_arch_filter</text>
@@ -63,9 +64,9 @@
   <!-- SDK -->
   <rect class="box sdk" x="30" y="430" width="1030" height="110" rx="6"/>
   <text class="h" x="50" y="454">GitHub Copilot CLI SDK（PyPI: github-copilot-sdk）</text>
-  <text x="50" y="476">from copilot import CopilotClient, SubprocessConfig, ExternalServerConfig, PermissionHandler</text>
-  <text x="50" y="494">SubprocessConfig: ローカル `copilot` バイナリを子プロセス起動</text>
-  <text x="50" y="512">ExternalServerConfig: 既存 Copilot サーバへ接続（再利用）</text>
+  <text x="50" y="476">from copilot import CopilotClient, SubprocessConfig, ExternalServerConfig</text>
+  <text x="50" y="494">from copilot.session import PermissionHandler</text>
+  <text x="50" y="512">SubprocessConfig / ExternalServerConfig: 子プロセス起動 / 既存サーバ接続</text>
   <text x="50" y="530">イベント駆動: text / tool_use / permission_request / completion</text>
 
   <!-- External Copilot CLI -->

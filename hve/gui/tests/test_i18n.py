@@ -226,6 +226,83 @@ class TestAssets:
         assert "<source>Work IQ 用プロンプトをコピー</source>" in context
         assert 'type="unfinished"' not in context
 
+    def test_github_comment_and_picker_are_translated(self) -> None:
+        """FR-GUI-30 / FR-GUI-32: 新規 GitHub UI の文言が翻訳カタログに載っていること。"""
+        sources = (_I18N_DIR / "translations.pro").read_text(encoding="utf-8")
+        assert "../github_comment_editor.py" in sources
+        assert "../github_picker_dialog.py" in sources
+
+        content = (_I18N_DIR / "hve_gui_en_US.ts").read_text(encoding="utf-8")
+        for name in ("GitHubCommentEditor", "GitHubPickerDialog"):
+            assert f"<context>\n    <name>{name}</name>" in content, name
+            context = content.split(f"<name>{name}</name>", 1)[1].split("</context>", 1)[0]
+            assert 'type="unfinished"' not in context, name
+
+        editor = content.split("<name>GitHubCommentEditor</name>", 1)[1].split("</context>", 1)[0]
+        for source in ("編集", "プレビュー", "太字", "タスクリスト"):
+            assert f"<source>{source}</source>" in editor, source
+
+    def test_github_branch_and_console_actions_are_translated(self) -> None:
+        """FR-GUI-33 / FR-GUI-34: PR パネルの新規操作が翻訳済みであること。"""
+        content = (_I18N_DIR / "hve_gui_en_US.ts").read_text(encoding="utf-8")
+        context = content.split("<name>GitHubPullRequestPanel</name>", 1)[1].split(
+            "</context>", 1
+        )[0]
+        for source in (
+            "現在のブランチを push",
+            "head ブランチを削除",
+            "コンソール出力を投稿",
+        ):
+            assert f"<source>{source}</source>" in context, source
+        assert 'type="unfinished"' not in context
+
+    def test_github_task_and_issue_metadata_are_translated(self) -> None:
+        """FR-GUI-40 / 41: Current Task と Issue metadata 文言が翻訳済みであること。"""
+        content = (_I18N_DIR / "hve_gui_en_US.ts").read_text(encoding="utf-8")
+        issue_context = content.split("<name>GitHubIssuePanel</name>", 1)[1].split(
+            "</context>", 1
+        )[0]
+        for source in (
+            "ラベル",
+            "担当者",
+            "マイルストーン",
+            "作成候補を取得",
+            "作成後、このタスクに関連付ける",
+            "リポジトリが変更されたため、古い作成候補を破棄しました。",
+        ):
+            assert f"<source>{_escape(source)}</source>" in issue_context, source
+        assert (
+            "<source>ラベル &apos;{value}&apos; は反映されませんでした。</source>"
+            in issue_context
+        )
+        assert 'type="unfinished"' not in issue_context
+
+        window_context = content.split("<name>GitHubWindow</name>", 1)[1].split(
+            "</context>", 1
+        )[0]
+        for source in ("現在のタスク", "関連付けなし", "Issue の関連付けを解除"):
+            assert f"<source>{source}</source>" in window_context, source
+        assert 'type="unfinished"' not in window_context
+
+    def test_github_pull_request_creation_is_translated(self) -> None:
+        """FR-GUI-42 / 43: PR 作成・後処理の主要文言が翻訳済みであること。"""
+        content = (_I18N_DIR / "hve_gui_en_US.ts").read_text(encoding="utf-8")
+        context = content.split("<name>GitHubPullRequestPanel</name>", 1)[1].split(
+            "</context>", 1
+        )[0]
+        for source in (
+            "Pull Request を作成",
+            "作成前チェック",
+            "既定テンプレートを読み込む",
+            "default branch への merge 時に Issue を閉じる",
+            "レビュアー（ユーザー名、カンマ区切り）",
+            "レビュアーチーム（slug、カンマ区切り）",
+            "metadata を再試行",
+            "分類できない後処理エラー（安全のため再試行不可）",
+        ):
+            assert f"<source>{source}</source>" in context, source
+        assert 'type="unfinished"' not in context
+
     def test_compiled_catalog_is_not_stale(self) -> None:
         """`.ts` だけ更新して `.qm` を再生成し忘れると英語 UI に反映されない。"""
         from PySide6.QtWidgets import QApplication
@@ -251,6 +328,16 @@ class TestAssets:
             assert (
                 app.translate("QAAnswerDialog", "Work IQ 用プロンプトをコピー")
                 != "Work IQ 用プロンプトをコピー"
+            )
+            assert app.translate("GitHubCommentEditor", "プレビュー") == "Preview"
+            assert app.translate("GitHubPickerDialog", "Issue を選択") == "Select an issue"
+            assert (
+                app.translate("GitHubPullRequestPanel", "head ブランチを削除")
+                == "Delete head branch"
+            )
+            assert (
+                app.translate("_C5IssuePR", "連携する Pull Request 番号")
+                == "Pull request number to link"
             )
             hint = hc._TOOLSEARCH_POLICY_HELP["limit"].short
             assert app.translate("help_content", hint) != hint

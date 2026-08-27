@@ -51,7 +51,7 @@ def test_render_template_keeps_single_runtime_section_for_existing_tdd_template(
     wf = cast(WorkflowDef, get_workflow("asdw-web"))
 
     body = render_template(
-        "templates/asdw-web/step-3.2.md",
+        ".github/prompts/steps/asdw-web/step-3.2.prompt.md",
         root_issue_num=1,
         params={"branch": "main"},
         wf=wf,

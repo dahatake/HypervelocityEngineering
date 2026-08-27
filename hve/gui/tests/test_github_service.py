@@ -14,6 +14,7 @@ import pytest
 
 from hve.github_api import GitHubAPIError
 from hve.gui import github_service
+from hve.gui.github_service import create_issue as create_issue_service
 
 
 @pytest.fixture(autouse=True)
@@ -30,12 +31,22 @@ def _clear_repo_env():
 
 
 class TestResolveRepo:
-    def test_explicit_wins(self) -> None:
+    def test_explicit_wins_without_eager_git_guess(self, monkeypatch) -> None:
         os.environ["REPO"] = "env/repo"
+        monkeypatch.setattr(
+            github_service,
+            "_guess_repo",
+            lambda: pytest.fail("explicit repository must not invoke git guessing"),
+        )
         assert github_service.resolve_repo("owner/explicit") == "owner/explicit"
 
-    def test_env_fallback(self) -> None:
+    def test_env_fallback_without_eager_git_guess(self, monkeypatch) -> None:
         os.environ["REPO"] = "env/repo"
+        monkeypatch.setattr(
+            github_service,
+            "_guess_repo",
+            lambda: pytest.fail("environment repository must not invoke git guessing"),
+        )
         assert github_service.resolve_repo(None) == "env/repo"
 
     def test_git_remote_fallback(self, monkeypatch) -> None:
@@ -47,7 +58,14 @@ class TestResolveRepo:
         with pytest.raises(github_service.GitHubServiceError):
             github_service.resolve_repo(None)
 
-    def test_rejects_malformed_repo(self, monkeypatch) -> None:
+    def test_rejects_malformed_explicit_repo_without_git_guess(
+        self, monkeypatch
+    ) -> None:
+        monkeypatch.setattr(
+            github_service,
+            "_guess_repo",
+            lambda: pytest.fail("invalid explicit repository must fail before git guessing"),
+        )
         with pytest.raises(github_service.GitHubServiceError):
             github_service.resolve_repo("not-a-repo")
 
@@ -105,18 +123,87 @@ class TestErrorTranslation:
 
 
 class TestIssueService:
+    def test_create_issue_delegates_with_empty_labels(self, monkeypatch) -> None:
+        seen: Dict[str, Any] = {}
+
+        def _create(title, body, labels, repo=None, token=None, assignees=None):
+            seen.update(
+                title=title,
+                body=body,
+                labels=labels,
+                repo=repo,
+                assignees=assignees,
+            )
+            return (77, 7700)
+
+        monkeypatch.setattr(github_service.github_api, "create_issue", _create)
+
+        assert create_issue_service("o/r", "Title", "## Body") == (77, 7700)
+        assert seen == {
+            "title": "Title",
+            "body": "## Body",
+            "labels": [],
+            "repo": "o/r",
+            "assignees": None,
+        }
+
+    def test_create_issue_preserves_markdown_body_source(self, monkeypatch) -> None:
+        seen: Dict[str, Any] = {}
+        body = "\n## Body\n\n```sh\necho ok\n```\n"
+
+        def _create(title, received_body, labels, repo=None, token=None):
+            seen["body"] = received_body
+            return (77, 7700)
+
+        monkeypatch.setattr(github_service.github_api, "create_issue", _create)
+
+        create_issue_service("o/r", "Title", body)
+        assert seen["body"] == body
+
+    @pytest.mark.parametrize("title", ["", "   "])
+    def test_create_issue_rejects_blank_title(
+        self, monkeypatch, title: str
+    ) -> None:
+        monkeypatch.setattr(
+            github_service.github_api,
+            "create_issue",
+            lambda *_a, **_kw: pytest.fail("must not call API for blank input"),
+        )
+
+        with pytest.raises(github_service.GitHubServiceError):
+            create_issue_service("o/r", title, "")
+
+    def test_create_issue_allows_blank_body(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            github_service.github_api,
+            "create_issue",
+            lambda *_a, **_kw: (7, 70),
+        )
+        assert create_issue_service("o/r", "title", "") == (7, 70)
+
+    def test_create_issue_translates_api_error(self, monkeypatch) -> None:
+        def _boom(*_a, **_kw):
+            raise GitHubAPIError("validation failed", 422)
+
+        monkeypatch.setattr(github_service.github_api, "create_issue", _boom)
+
+        with pytest.raises(github_service.GitHubServiceError) as excinfo:
+            create_issue_service("o/r", "Title", "Body")
+        assert "内容" in str(excinfo.value)
+        assert "validation failed" in str(excinfo.value)
+
     def test_list_issues_delegates(self, monkeypatch) -> None:
         seen: Dict[str, Any] = {}
 
-        def _list(repo=None, token=None, state="open", per_page=50):
-            seen.update(repo=repo, state=state, per_page=per_page)
+        def _list(repo=None, token=None, state="open", per_page=50, page=1):
+            seen.update(repo=repo, state=state, per_page=per_page, page=page)
             return [{"number": 1}]
 
         monkeypatch.setattr(github_service.github_api, "list_issues", _list)
         assert github_service.list_issues("o/r", state="all", per_page=20) == [
             {"number": 1}
         ]
-        assert seen == {"repo": "o/r", "state": "all", "per_page": 20}
+        assert seen == {"repo": "o/r", "state": "all", "per_page": 20, "page": 1}
 
     def test_get_issue_validates_number(self, monkeypatch) -> None:
         monkeypatch.setattr(
@@ -129,8 +216,27 @@ class TestIssueService:
     def test_update_issue_passes_only_given_fields(self, monkeypatch) -> None:
         seen: Dict[str, Any] = {}
 
-        def _update(number, repo=None, token=None, title=None, body=None, state=None):
-            seen.update(number=number, repo=repo, title=title, body=body, state=state)
+        def _update(
+            number,
+            repo=None,
+            token=None,
+            title=None,
+            body=None,
+            state=None,
+            labels=None,
+            assignees=None,
+            milestone=None,
+        ):
+            seen.update(
+                number=number,
+                repo=repo,
+                title=title,
+                body=body,
+                state=state,
+                labels=labels,
+                assignees=assignees,
+                milestone=milestone,
+            )
             return {"number": number}
 
         monkeypatch.setattr(github_service.github_api, "update_issue", _update)
@@ -141,6 +247,9 @@ class TestIssueService:
             "title": None,
             "body": "new body",
             "state": None,
+            "labels": None,
+            "assignees": None,
+            "milestone": None,
         }
 
     def test_post_comment_rejects_blank_body(self, monkeypatch) -> None:
@@ -191,8 +300,8 @@ class TestPullRequestService:
     def test_list_pull_requests_delegates(self, monkeypatch) -> None:
         seen: Dict[str, Any] = {}
 
-        def _list(repo=None, token=None, state="open", per_page=50):
-            seen.update(repo=repo, state=state, per_page=per_page)
+        def _list(repo=None, token=None, state="open", per_page=50, page=1):
+            seen.update(repo=repo, state=state, per_page=per_page, page=page)
             return [{"number": 3}]
 
         monkeypatch.setattr(github_service.github_api, "list_pull_requests", _list)
@@ -226,21 +335,83 @@ class TestPullRequestService:
         assert captured == [(3, "o/r")]
 
 
+class TestDeleteBranch:
+    def test_delegates_to_github_api(self, monkeypatch) -> None:
+        captured: List[Any] = []
+
+        def _delete(branch, repo=None, token=None):
+            captured.append((branch, repo))
+
+        monkeypatch.setattr(github_service.github_api, "delete_branch_ref", _delete)
+        github_service.delete_branch("o/r", "feature-x")
+        assert captured == [("feature-x", "o/r")]
+
+    def test_strips_surrounding_whitespace(self, monkeypatch) -> None:
+        captured: List[Any] = []
+        monkeypatch.setattr(
+            github_service.github_api,
+            "delete_branch_ref",
+            lambda branch, repo=None, token=None: captured.append(branch),
+        )
+        github_service.delete_branch("o/r", "  feature-x  ")
+        assert captured == ["feature-x"]
+
+    @pytest.mark.parametrize("raw", ["", "   ", None])
+    def test_rejects_empty_branch(self, raw, monkeypatch) -> None:
+        called: List[Any] = []
+        monkeypatch.setattr(
+            github_service.github_api,
+            "delete_branch_ref",
+            lambda *_a, **_kw: called.append(1),
+        )
+        with pytest.raises(github_service.GitHubServiceError):
+            github_service.delete_branch("o/r", raw)
+        assert called == []
+
+    def test_api_error_becomes_service_error(self, monkeypatch) -> None:
+        def _boom(*_a, **_kw):
+            raise GitHubAPIError("ref not found", 404)
+
+        monkeypatch.setattr(github_service.github_api, "delete_branch_ref", _boom)
+        with pytest.raises(github_service.GitHubServiceError) as excinfo:
+            github_service.delete_branch("o/r", "gone")
+        assert "見つかりません" in str(excinfo.value)
+        assert "ref not found" in str(excinfo.value)
+
+
 class TestDelegationSignatures:
     """mock では検出できない引数名 / 順の不一致を実シグネチャで固定する。"""
 
     @pytest.mark.parametrize(
         ("name", "expected_head"),
         [
-            ("list_issues", ["repo", "token", "state", "per_page"]),
+            ("create_issue", ["title", "body", "labels", "repo", "token", "assignees", "milestone"]),
+            ("list_issues", ["repo", "token", "state", "per_page", "page", "cursor"]),
             ("get_issue", ["issue_num", "repo", "token"]),
-            ("update_issue", ["issue_num", "repo", "token", "title", "body", "state"]),
+            ("assign_copilot_agent", ["issue_num", "repo", "token", "base_branch"]),
+            (
+                "update_issue",
+                [
+                    "issue_num",
+                    "repo",
+                    "token",
+                    "title",
+                    "body",
+                    "state",
+                    "labels",
+                    "assignees",
+                    "milestone",
+                ],
+            ),
             ("list_issue_comments", ["issue_num", "repo", "token", "per_page"]),
             ("post_comment", ["issue_num", "body", "repo", "token"]),
             ("update_comment", ["comment_id", "body", "repo", "token"]),
-            ("list_pull_requests", ["repo", "token", "state", "per_page"]),
+            ("list_pull_requests", ["repo", "token", "state", "per_page", "page", "cursor"]),
             ("get_pull_request", ["pr_number", "repo", "token"]),
             ("list_pull_request_files", ["pr_number", "repo", "token"]),
+            ("list_check_runs_for_ref", ["ref", "repo", "token", "per_page"]),
+            ("merge_pull_request", ["pr_number", "merge_method", "repo", "token", "sha"]),
+            ("delete_branch_ref", ["branch", "repo", "token"]),
             ("get_authenticated_user", ["token"]),
         ],
     )
@@ -249,3 +420,10 @@ class TestDelegationSignatures:
 
         params = list(inspect.signature(getattr(github_service.github_api, name)).parameters)
         assert params == expected_head
+
+    @pytest.mark.parametrize(
+        "name",
+        ["assign_copilot_agent", "list_check_runs_for_ref", "merge_pull_request"],
+    )
+    def test_github_api_public_export(self, name: str) -> None:
+        assert name in github_service.github_api.__all__

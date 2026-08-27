@@ -2,7 +2,8 @@
 
 設計:
   - 単一ファイル `hve/.settings.txt` (INI / configparser)。
-  - セクション: `[options]` (フラットなキー=値) と `[mdq]` (MDQ 関連)。
+  - セクション: `[options]` (フラットなキー=値)、`[mdq]` (Markdown Query)、`[cq]` (Code Query)。
+    `[mdq]` の既定値は `mdq` パッケージが所有する (FR-GUI-05)。
   - 値型は文字列/真偽値/整数/浮動小数/リスト(セミコロン区切り)を扱う。
   - 書き込みは tmp + os.replace でアトミック。
   - 値が無い・破損時は `defaults()` の値を返す（捏造禁止 = 既定は明示）。
@@ -17,6 +18,8 @@ import logging
 import os
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Optional
+
+from mdq.gui import settings_store as _mdq_settings_store
 
 _logger = logging.getLogger(__name__)
 
@@ -67,12 +70,16 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             # C5 Issue/PR
             "create_issues": False,
             "create_pr": False,
+            "create_working_branch": True,
             "ignore_paths": "",
             "repo": "",
             "issue_title": "",
             # FR-GUI-25: Root Issue の扱い（"new" | "existing"）と連携先 Issue 番号
             "issue_mode": "new",
             "issue_number": "",
+            # FR-GUI-32: コンソール出力の投稿先として使う PR 番号。
+            # GUI セッション内限定で Orchestrator へは伝達しない。
+            "linked_pr_number": "",
             # C6 出力制御。設定画面の「出力制御」ノードは撤去済みで、
             # `verbosity` 以外は Step 1 右ペインで選ぶセッション限りの値
             # （settings_apply._SECTION_FIELDS に C6 は無く往復しない）。
@@ -92,6 +99,8 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "workiq_request_timeout": 300.0,  # Work IQ MCP ツール呼び出し 1 回あたりのタイムアウト秒数（既定 5 分）
             # C9 ブランチ
             "branch": "main",
+            # FR-GUI-38: 進捗を引き継ぐ再実行の run-id（空欄 = 通常実行）
+            "resume_run": "",
             # C15
             "additional_prompt": "",
             "context_max_chars": 0,
@@ -134,6 +143,8 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             # C5 (Issue/PR) 追加既定値。_SECTION_FIELDS 登録済みだが defaults 未登録だった。
             "enable_auto_merge": False,
             "delete_local_merged_branch": True,
+            # FR-GUI-36: 自動進捗 Post の送信先。off / issue / pr / both。既定は off。
+            "github_auto_post_target": "off",
             # C10 (App ID) 既定値。
             "app_ids": "",
             "usecase_id": "",
@@ -186,7 +197,22 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "tool_search": True,
             # 上記を有効にしたときのランキング実装（FR-TS-01）。
             # "sdk"（既定）: SDK 組み込み。"hve": HVE 実装へ差し替え、統計も収集する。
-            "tool_search_ranking": "sdk",
+            "tool_search_ranking": "sdk",            # FR-LOCAL-SURFACE-01 (a): Agentic Retrieval の shared setting 6 項目。
+            # 値は `page_options._CAgenticRetrieval` の userData と同じ文字列表現を
+            # そのまま保存する（空文字 = 「既定に従う」= CLI へ渡さない）。
+            "enable_agentic_retrieval": "auto",
+            "agentic_data_source_modes": "",
+            "foundry_mcp_integration": "",
+            "agentic_data_sources_hint": "",
+            "agentic_existing_design_diff_only": "",
+            "foundry_sku_fallback_policy": "",
+            # FR-LOCAL-SURFACE-01 (a): SDK tool search の 3 状態選択。
+            # 上記 `tool_search`（TOOLSEARCH セクションの bool）とは別の
+            # Step 1 側 3 状態 UI で、"auto" のとき CLI へ渡さない。
+            "enable_tool_search": "auto",
+            # FR-LOCAL-SURFACE-01 (a): CLI `--strict` と共通。
+            # False（既定）: local 実行モードの continue-on-precheck を維持する。
+            "strict": False,
             # Fleet mode（GitHub Copilot SDK 1.0.0+）。既定 OFF。
             # SPLIT_REQUIRED ではなく、複数 Step の DAG wave を対象にする。
             "fleet_mode_enabled": "",
@@ -231,39 +257,9 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             # "purge"  = 元 dir を削除
             "gui_session_cleanup_policy": "keep",
         },
-        "mdq": {
-            # MDQ インデックスの自動更新ポリシー等の将来拡張用
-            "auto_refresh_on_start": False,
-            # Tokenize 言語。FTS5 トークナイザと per-language DB インスタンス
-            # の選択に使用する。"ja-jp" / "en-us"。
-            "tokenize_language": "ja-jp",
-            # Markdown chunking strategy。`.mdq/index-<lang>-<strategy>.sqlite`
-            # の <strategy> 部分。"heading" / "heading_recursive" / "fixed_window"。
-            "chunk_strategy": "heading",
-            # Markdown-Query 対象フォルダ（リポジトリ相対 POSIX パス、";" 区切り）。
-            # 空 = 未指定（mdq CLI 既定の DEFAULT_ROOTS を使用、Agent への強制プロンプトも注入しない）。
-            # 非空 = 索引対象と Agent への mdq 利用強制の両方に使用する。
-            "target_folders": "",
-            # 一括ビルド対象 Strategy 群 (T17)。";" 区切り Strategy 名リスト。
-            # 空 = 全 Strategy 選択扱い (Q3「全 Strategy アクティブ」と整合)。
-            "build_strategies": "",
-            # heading_recursive 戦略の overlap 段落数（既存 standalone GUI と
-            # 同期）。0 で overlap 無効。既定 1。
-            "overlap_paragraphs": 1,
-            # --- semantic_paragraph 戦略専用 (Q3=A 単一プロファイル) -----------
-            # CLI フラグと 1:1 対応。0 / 0.0 / "" / False の値は
-            # mdq.strategies_semantic の SEMANTIC_* 既定値にフォールバック。
-            "semantic_max_chunk_chars": 0,
-            "semantic_min_chars": 0,
-            "semantic_breakpoint_percentile_lo": 0.0,
-            "semantic_breakpoint_percentile_hi": 0.0,
-            "semantic_embed_provider": "",
-            "semantic_embed_model": "",
-            "semantic_contextualize": True,
-            "semantic_late_chunking": False,
-            "semantic_fusion_alpha": 0.5,
-            "semantic_bge_m3_warning_dismissed": False,
-        },
+        # FR-GUI-05 / FR-MAINT-07: strategy 固有パラメータを含む `[mdq]` の既定値は
+        # `mdq` パッケージが単一の情報源であり、ここへ複写して二重管理しない。
+        "mdq": _mdq_settings_store.defaults(),
         "cq": {
             # FR-GUI-04: cq 索引の GUI 運用設定。
             # 索引ルート・除外・最大ファイルサイズは cq の設定ファイルが SoT
@@ -275,7 +271,6 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "build_profiles": "",
         },
     }
-
 
 # Q9=b: 廃止済みキー。読み込み時に検出し、ファイルから削除して再保存する。
 _OBSOLETE_KEYS: Dict[str, set[str]] = {
@@ -291,15 +286,20 @@ _OBSOLETE_KEYS: Dict[str, set[str]] = {
         "data_aci_subnet_cidr",
         # 参照元の無いキー。値を残すと「編集しても効かない設定」になる。
         # app_id: 入力欄は `app_ids` のみで、実行時はその先頭から補完される。
-        # tdd_max_retries: GUI ウィジェットも CLI フラグも無く、CLI 対話
-        #   ウィザードが独立に解決する。
+        # tdd_max_retries: FR-LOCAL-SURFACE-01 (b) の workflow param であり、
+        #   宣言した Workflow を選んだときだけ Step 1 で指定する。全体設定として
+        #   永続化すると、宣言の無い Workflow にも効く誤解を生むため保存しない。
+        # data_verify_aci_image: 検証イメージ参照は `resource_group` /
+        #   `data_resource_suffix` から導出する値で、Workflow パラメータではない
+        #   （FR-WF-ASDW-02）。
         # workbench_layout_state: settings_store 以外から参照されない。
         "app_id",
         "tdd_max_retries",
+        "data_verify_aci_image",
         "workbench_layout_state",
-        # C6 出力制御: 設定画面のノード撤去と対に、保存・復元を行わない
-        # （settings_apply._SECTION_FIELDS に C6 は無い）。値は Step 1 右ペイン
-        # または CLI フラグで都度指定する。
+        # C6 出力制御: 設定画面には表示するが保存・復元は行わない
+        # （settings_apply._SECTION_FIELDS に C6 は無い）。実行結果の意味論を
+        # 変えないコンソール表示制御であり、FR-LOCAL-SURFACE-01 (e) の除外対象。
         "log_level",
         "timestamp_style",
         "verbose",

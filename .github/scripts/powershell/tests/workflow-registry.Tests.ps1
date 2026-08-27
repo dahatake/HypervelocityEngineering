@@ -87,13 +87,13 @@ Describe 'workflow-registry.ps1' {
             $personaCatalog.title | Should -Be 'ペルソナカタログ'
             $personaCatalog.custom_agent | Should -Be 'Arch-PersonaCatalog'
             $personaCatalog.depends_on | Should -Contain '6'
-            $personaCatalog.body_template_path | Should -Be 'templates/aas/step-7.md'
+            $personaCatalog.body_template_path | Should -Be '.github/prompts/steps/aas/step-7.prompt.md'
 
             $personaScreen = Get-Step -WorkflowId 'aas' -StepId '8'
             $personaScreen.title | Should -Be 'ペルソナ別共通画面カタログ'
             $personaScreen.custom_agent | Should -Be 'Arch-UI-PersonaScreenList'
             $personaScreen.depends_on | Should -Contain '7'
-            $personaScreen.body_template_path | Should -Be 'templates/aas/step-8.md'
+            $personaScreen.body_template_path | Should -Be '.github/prompts/steps/aas/step-8.prompt.md'
         }
 
         It 'preserves AAS skip fallback dependencies' {

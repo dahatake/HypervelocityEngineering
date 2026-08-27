@@ -4220,5 +4220,105 @@ class TestSubSessionOptsCustomAgent(unittest.TestCase):
         self.assertNotIn("custom_agent", opts)
 
 
+# ---------------------------------------------------------------------------
+# FR-CLI-63: Phase 4d の検証結果を決定的実装へ委譲
+# ---------------------------------------------------------------------------
+
+
+class TestPhase4DeterministicVerification(unittest.TestCase):
+    """step-level Self-Improve の検証結果が scan 実測値だけから導出され、
+    LLM 応答 JSON で上書きされないことを検証する（FR-CLI-63）。
+    """
+
+    @staticmethod
+    def _scan(
+        quality_score: int,
+        *,
+        lint_errors: int = 0,
+        test_failures: int = 0,
+        raw_output: str = "",
+    ):
+        return {
+            "quality_score": quality_score,
+            "issues": [],
+            "summary": {
+                "lint_errors": lint_errors,
+                "test_failures": test_failures,
+                "coverage_pct": 0.0,
+                "doc_issues": 0,
+            },
+            "raw_output": raw_output,
+            "tool_status": {
+                "ruff": "PASS",
+                "pytest": "FAIL" if test_failures else "PASS",
+                "dotnet_build": "SKIP",
+                "dotnet_test": "NO_TESTS",
+                "markdownlint": "PASS",
+                "lint": "PASS",
+                "test": "FAIL" if test_failures else "PASS",
+                "documentation": "PASS",
+            },
+        }
+
+    def test_verification_is_derived_from_scan(self) -> None:
+        """scan 実測値と `_build_verification_result()` の結果が一致する。"""
+        from runner import _build_phase4_verification
+        from self_improve import _build_verification_result
+
+        after_scan = self._scan(70)
+        expected = _build_verification_result(after_scan, 90)
+        actual = _build_phase4_verification(after_scan, 90, "", None)
+
+        self.assertEqual(actual["after_quality_score"], expected["after_quality_score"])
+        self.assertEqual(actual["degraded"], expected["degraded"])
+        self.assertEqual(
+            actual["verification_phases"], expected["verification_phases"]
+        )
+        self.assertEqual(actual["overall"], expected["overall"])
+
+    def test_llm_json_does_not_override_verification(self) -> None:
+        """LLM が degraded=false / 高スコア / 全 PASS を返しても反映しない。"""
+        from runner import _build_phase4_verification
+
+        after_scan = self._scan(40, test_failures=3)
+        llm_text = (
+            "```json\n"
+            '{"after_quality_score": 100, "degraded": false, '
+            '"verification_phases": {"build": "PASS", "lint": "PASS", '
+            '"test": "PASS", "security": "PASS", "diff": "PASS"}}\n'
+            "```"
+        )
+        result = _build_phase4_verification(after_scan, 90, llm_text, None)
+
+        self.assertEqual(result["after_quality_score"], 40)
+        self.assertTrue(result["degraded"])
+        self.assertEqual(result["verification_phases"]["test"], "FAIL")
+        self.assertEqual(result["overall"], "FAIL")
+
+    def test_notes_keep_llm_text_and_parse_error_prefix(self) -> None:
+        """LLM 応答は notes にのみ反映し、パース失敗は前置される。"""
+        from runner import _build_phase4_verification
+
+        after_scan = self._scan(95)
+        ok = _build_phase4_verification(after_scan, 90, "LLM の所見", None)
+        self.assertEqual(ok["notes"], "LLM の所見")
+
+        ng = _build_phase4_verification(
+            after_scan, 90, "LLM の所見", "no_json_block_found"
+        )
+        self.assertTrue(ng["notes"].startswith("[json_parse_error=no_json_block_found]"))
+        self.assertIn("LLM の所見", ng["notes"])
+
+    def test_phase4_does_not_reimplement_judgement(self) -> None:
+        """Phase 4d に LLM 値での上書き実装が残っていない（FR-MAINT-07）。"""
+        from pathlib import Path
+        src = Path(__file__).resolve().parent.parent / "runner.py"
+        text = src.read_text(encoding="utf-8")
+        self.assertNotIn('_parsed.get("after_quality_score"', text)
+        self.assertNotIn('_parsed.get("degraded"', text)
+        self.assertNotIn('_parsed.get("verification_phases"', text)
+        self.assertIn("_build_phase4_verification(", text)
+
+
 if __name__ == "__main__":
     unittest.main()

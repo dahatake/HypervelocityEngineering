@@ -88,7 +88,8 @@ HVE は、要求整理〜実装までを Workflow / Custom Agent / DAG として
 - ~~UC-05: 利用者が CLI で `resume` サブコマンドにより中断セッションを再開する~~ → **廃止（v1.1）**: Session State（Resume）機能を全廃
   - **2026-07-27 再確認**: ASDW-WEB の長時間ラン全損対策として resume の復活が検討されたが、本廃止決定を維持する。代替として FR-DAG-08（実行開始時パラメータ pre-flight）により、長時間実行後に判明していた入力不備を起動直後に検出する。resume を復活させる場合は本項の廃止を先に改訂すること。
 - UC-06: 利用者が `--create-issues` / `--create-pr` で CLI 経由でも GitHub Issue / PR を作成する。`--issue-number` を併用した場合は Root Issue を新規作成せず既存 Issue へ連携する（FR-GUI-25）
-- UC-07: 利用者が GUI から GitHub Issue / Pull Request を閲覧・編集し、コメントを投稿する（FR-GUI-26 / FR-GUI-27）
+- UC-07: 利用者が GUI から GitHub Issue / Pull Request を閲覧・編集・作成し、書式支援付きの入力欄でコメントを投稿し、Pull Request をレビュー・マージする（FR-GUI-26 / FR-GUI-27 / FR-GUI-30 / FR-GUI-31 / FR-GUI-41〜49）
+- UC-08: 利用者が GUI から実行タスクへ関連付ける Issue / Pull Request を一覧または作成結果から指定し、実行後のコンソール出力を当該 Pull Request へコメントとして残し、作業ブランチの push と head ブランチ削除を行う（FR-GUI-32〜34 / FR-GUI-40）
 
 ---
 
@@ -167,15 +168,33 @@ HVE は、要求整理〜実装までを Workflow / Custom Agent / DAG として
   - 既定 strict（`should_abort=True`）とする。前提成果物チェックと異なり、必須パラメータの欠落は同一ワークフロー内の先行 Step では解消され得ないため、警告降格の既定値を持たない。
   - `continue_on_error`（local 実行モード）でも本チェックは降格しない。パラメータ欠落のまま Step を起動すると Azure write 直前まで判定が遅延し、実行時間の全損を招くため。
   - `--dry-run` はパラメータ充足性の事前確認手段として機能しなければならない。
+- **FR-DAG-09**: レビュー Step の判定を上流 Step の再実行へ結び付けるフィードバックループは、**DAG の外側**に置かなければならない。`FR-DAG-01` が定める依存パターン 4 種は非巡回であり、レビュー Step から実装 Step へ戻るエッジを DAG 内に表現してはならない。
+  - 差戻し先は `StepDef.rework_targets` の静的宣言に限る。レビュー成果物の自由記述から戻り先を推測してはならない。LLM 応答へ制御判断を委ねない方針（FR-CLI-63）と同じ理由による。
+  - 引き金は `FR-WF-CONF-03` が定める `Judgement` 列の `FAIL` だけとする。`NOT_MEASURED`（測定できなかった）と `NO_TARGET`（目標値が設計側に無い）は実装の不備を意味しないため引き金にしてはならない。`PASS` も同様とする。
+  - 測定表の解析は [hve/artifact_validation.py](hve/artifact_validation.py) の既存実装を再利用し、別の表パーサを新設してはならない（FR-MAINT-07）。
+  - 本項が規定するのは差戻し先の**決定**までとする。決定した Step 群の再実行は `--steps`（FR-CLI-02）または `--resume-run`（FR-CLI-86）による再起動で行い、`run_workflow` の DAG 構築を run 内で再入可能へ作り替えてはならない。同関数の DAG 構築部は Issue / PR 作成・branch 操作・fan-out 展開・Workbench 起動を含み、再入化の副作用を実行なしで検証できないためである。
+  - `rework_targets` を宣言するのは `asdw-web` Step 5.3（要件適合実測）だけとし、戻り先は実装 Step の `3.3` と `4.2` とする。同 Step は `FR-WF-CONF-03` の測定表を出力する 4 Step のうち、実装 Step が複数ある唯一の Workflow に属する。他 Workflow への宣言は、当該 Workflow で測定実績を得た時点で個別に判断する。どの Step へ戻すかは Workflow ごとの方針判断であり、根拠なく既定を与えてはならない。
+  - 決定した差戻し先は DAG 実行の完了後に利用者へ提示しなければならない。提示は `run_workflow` が `console.event` へ 1 回だけ出力するものとし、実行面ごとに別の提示実装を追加してはならない（FR-MAINT-07）。GUI は当該出力を既存のログ経路で受け取る。
+  - 提示内容は差戻し先 Step ID と `--steps` による再実行コマンドの提案に限る。HVE が自動で再実行を開始してはならない（前項の再起動委譲と同じ理由）。差戻し先が空のときは何も提示してはならない。提示の失敗で run の成否を変えてはならない。
+  - 契約テスト: [hve/tests/test_rework_loop.py](hve/tests/test_rework_loop.py)
 
 ### 3.4 状態ラベルとライフサイクル
 
-- **FR-STATE-01**: 各 Workflow は `{prefix}:initialized` / `{prefix}:ready` / `{prefix}:running` / `{prefix}:done` / `{prefix}:blocked` の状態ラベルを保持する（`_make_state_labels`、[hve/workflow_registry.py](hve/workflow_registry.py)）。
+- **FR-STATE-01**: 各 Workflow は `{prefix}:initialized` / `{prefix}:ready` / `{prefix}:running` / `{prefix}:done` / `{prefix}:blocked` の状態ラベルを保持する（`_make_state_labels`、[hve/workflow_registry.py](hve/workflow_registry.py)）。加えて Cloud Agent Orchestrator の HITL 経路（FR-CLOUD-41）が用いる `{prefix}:human-required` / `{prefix}:human-resolved` を保持する。HITL ラベルは `_make_state_labels` の生成対象ではなく、[.github/labels.json](.github/labels.json) の登録と Cloud の遷移 workflow が唯一の情報源である。
+  - HITL ラベルの対象プレフィックス（[.github/labels.json](.github/labels.json) 登録分）: `aas` / `aad` / `aad-web` / `asdw` / `asdw-web` / `adfd` / `adfdv` / `aag` / `aagd` / `akm` / `adoc` の 11 件。`aad` / `asdw` は FR-COMMON-02 の後方互換エイリアスである。
+  - `ard` / `aar` / `ada` / `adi` は HITL ラベルを持たない。全 Workflow への拡張は本要件の対象外とする。
+  - 契約テスト [hve/tests/test_label_consistency_audit.py](hve/tests/test_label_consistency_audit.py) が本項の宣言と `.github/labels.json` の一致を機械検査する。
 - **FR-STATE-02**: `qa-ready` ラベルは Copilot アサインを保留する状態として明示的にスキップされ、質問票作成を担当する Copilot がアサインされた場合は `qa-drafting`（回答下書き中）へ遷移する。`auto-issue-qa-ready-transition.yml` は回答受領後に `qa-ready` または `qa-drafting` から `ready` への遷移を担当する。
   - 対象セット: `ard:qa-ready` / `aas:qa-ready` / `aad:qa-ready` / `asdw:qa-ready` / `abd:qa-ready` / `abdv:qa-ready` / `aag:qa-ready` / `aagd:qa-ready` / `akm:qa-ready` / `adoc:qa-ready` / `aad-web:qa-ready` / `asdw-web:qa-ready`
 - **FR-STATE-03**: 完了ラベル `{prefix}:done` 付与時、Cloud Orchestrator は次の推奨 Workflow を Issue コメントで提示する。
   - チェーン定義: `ARD` → `AAS`、`AAS` → `AAD-WEB` / `ADFD` / `AAG` の 3 候補（全提示・1 つ選択は利用者判断）、`AAD-WEB` → `ASDW-WEB`、`ADFD` → `ADFDV`、`AAG` → `AAGD`
   - **終端 Workflow（`ASDW-WEB` / `ADFDV` / `AAGD` / `ADOC` / `AKM`）完了時は次候補が提示されない**
+- **FR-STATE-04**: HVE は run ごとの Step 完了状態を、run 終了後も残る利用者ローカル領域へ追記保存しなければならない。保存先は `hve/.run-progress.jsonl` とし、UTF-8 / LF / BOM なしの 1 行 1 JSON とする。1 レコードは `schema_version` / `ts` / `run_id` / `workflow_id` / `step_id` / `status` を持ち、`status` は `succeeded` / `failed` の 2 値とする。
+  - **本項は SDK セッションを復元しない**。§5.6 が Resume を全廃した理由は GitHub Copilot CLI SDK の複数デバイス間セッション管理であり、本項が保存するのは HVE 自身が所有する Workflow 進捗だけである。再実行時は未完了 Step を新しいセッションで実行する。
+  - `dry_run` では書き込んではならない。書き込みの失敗で run を失敗させてはならない。
+  - prompt 本文・応答本文・tool の引数・認証情報を保存してはならない（NFR-SEC-01 / FR-RTO-04 と同じ方針）。
+  - 保存先は `.gitignore` へ登録し、リポジトリへコミットしてはならない。FR-CLI-74 / FR-CLI-75 の HVE ソース保護ガードの対象外とする（`hve/.settings.txt` と同じ扱い）。
+  - 記録は既存の `on_step_complete` フックを介して行い、[hve/dag_executor.py](hve/dag_executor.py) へ新規の記録経路を追加してはならない（FR-MAINT-07）。
 
 ### 3.5 モデルと SDK
 
@@ -300,6 +319,10 @@ HVE は Cloud Agent Orchestrator / CLI Orchestrator / GUI Orchestrator の 3 実
   - 表の Step タイトルは registry の同一 Step を指していなければならない。表記揺れで検査が壊れないよう、記号・空白・連体助詞「の」を除去した正規化後の包含で判定する。
   - 依存・Fan-out・生成ファイルの一致は本要件の対象外とする。これらは列構成が節ごとに異なり、機械検査を成立させるには §13 全体の表形式統一が前提になるためである。表を編集する変更では、当該行の値を registry と照合して同時に正す。
   - 本要件は、同種の乖離が §13.5（ADFDV: 旧称 ABDV と実在しない fan-out parser の残存）と §13.12（ARD: 旧 7-Step 表記）で個別に発生し、そのつど当該 Workflow だけのテストで塞いだ結果、§13.2（AAD-WEB: Step 2.4 / 2.5 / 2.6 の欠落）と §13.3（ASDW-WEB: Step ID 体系が実装と系統的に不一致）へ同じ乖離が残存していたことを根拠とする。
+- **FR-MAINT-10**: HVE GUI に影響する保守変更で macOS 検証が必要な場合、Coding Agent は `hve-requirement-traceability` Skill が定める変更影響の判定表に基づいて検証要否と `smoke` / `full` の範囲を判定し、判定不能なら利用者へ確認しなければならない。課金されうる GitHub-hosted macOS runner を起動する前に、(a) 必要性と対象変更、(b) runner label / architecture / test scope、(c) 公式単価とその確認日および出典 URL、(d) 予測実行時間と予測課金額、(e) timeout（分）×単価（USD/分）で算出した最大額、(f) free minutes 残量を取得できない場合は実請求額が 0 から最大額までになりうることを提示し、利用者の明示承認を得なければならない。承認は当該見積りに対する特定 workflow run 1 回だけに有効とし、失敗、workflow run の cancel、または rerun には新しい見積りと承認を要求する。承認が無い場合は workflow を dispatch してはならない。
+  - macOS GUI test workflow は `workflow_dispatch` だけを trigger とし、`push` / `pull_request` / `schedule` で自動起動してはならない。`cost_approved` は既定 `false` とし、`estimated_cost_usd` が空の場合も macOS job を開始してはならない。
+  - `smoke` は Qt platform plugin が `cocoa` であることを検査する。macOS run での Python 例外、ウィンドウ生成失敗、または test skip は job failure とする。Qt Warning / Critical / Fatal の許可リストは初期状態を空とし、実測で無害と確認したメッセージだけを根拠とともに追加でき、それ以外は job failure とする。`offscreen` の成功を `cocoa` の成功として扱ってはならない。
+  - `full` は利用者が当該 scope を別途選択した場合にだけ、既存 `hve/gui/tests` の offscreen 全量と同じ `cocoa` smoke を別プロセスで実行する。初期実装では新しい GUI automation framework、TCC 権限変更、OS / architecture matrix、新規 test dependency を追加しない。
 
 ### 3.8 markdown-query（mdq）検索品質の回帰計測
 
@@ -394,6 +417,11 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 - **FR-RTO-05**: 各実行面は同一のイベント列から同一の集計値を表示する。表示は instance 単位で分離し、run 単位で合算する。未取得値を推定で補わず、取得できない項目は `-` として表示する。
 - **FR-RTO-06**: 観測記録のライフサイクルは実行プロセスが所有し、`run_workflow` の終了時に確実にクローズする。GUI 親プロセスは観測ファイルを書き込まない。GUI セッション作業ディレクトリの後処理（`keep` / `archive` / `purge`）が観測ファイルに起因して失敗してはならない。
 - **FR-RTO-07**: 実行履歴の Step 別表示は Step 単位で分離する。Step の Context、AI Credit、モデル、ツール、Skill は当該 Step へ帰属したイベント（`step` フィールドが当該 Step であるもの）だけから算出し、実行面のグローバル現在値、Workflow 累積値、他 Step の値で代替してはならない。Step へ帰属したイベントが 1 件も無い項目は `-` として表示し、隣接 Step の累積値の差分などの推定値で補ってはならない（FR-RTO-05）。実行面が Step 帰属を解決できない経路の消費も、Workflow 単位の累積値へは計上しなければならない。当該累積値が Step 別内訳の合計と一致しない場合は、その理由を表示上明示しなければならない。SDK Fleet mode へ委譲した Wave では、worker と Step の対応が当該 Wave の Step 集合に対して一意に定まる場合にだけ当該 Step へ帰属させ、一意に定まらない場合は Wave 内のいずれの Step へも割り当ててはならない。対応の解決に用いた入力（tool の引数等）を観測イベントへ保存してはならない（FR-RTO-04）。また、実行識別子（`run_id`）が未確定の時点で開始した実行を、識別子の確定後に別実行として二重に計上してはならない。
+- **FR-RTO-08**: 実行プロセスは、当該 run が対象とする GitHub の Root Issue 番号・Pull Request 番号・作業 branch を確定した時点で、既存の観測イベント経路を用いて 1 件の lifecycle イベントとして通知しなければならない。GUI が FR-GUI-36 の自動 Post 先および FR-GUI-37 の cleanup 対象を、GitHub API の一覧取得や作業ディレクトリの走査に頼らず決定できるようにするためである。
+  - イベントの `kind` は `github_target` の 1 種類とし、同じ目的で複数の `kind` を追加してはならない。payload に含めてよいのは `repo`（`owner/repo` 形式）、`issue_number`、`pr_number`、`branch`、`base_branch`、`created_by_hve`、`delete_local_merged_branch` に限る。値が未確定の項目は当該キーを省略し、推定値で補ってはならない。
+  - token、GitHub API の応答本文、Issue / PR の本文、コメント本文、prompt / 応答本文、`git remote` の URL を含めてはならない（FR-RTO-04 / NFR-SEC-01）。永続化の allowlist へ追加してよいのは前項のキーだけとする。
+  - `created_by_hve` は当該 run が新規作成した作業 branch のときだけ `True` とし、FR-CLI-83 の current branch mode では `False` としなければならない。`branch` が未確定の場合は `created_by_hve` を送出してはならない。
+  - 既存の `kind` / キーの意味を変更してはならず、本イベントを解釈しない既存の消費者が未知 `kind` として計上できる形式を維持しなければならない（FR-RTO-01 / NFR-RTO-02）。本イベントの送出失敗は Workflow 実行を失敗させてはならない（NFR-RTO-03）。
 
 ### 3.12 QA 質問票の説明深度
 
@@ -401,7 +429,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 - **FR-QA-01**: 質問票生成プロンプトは、各質問に「背景と根拠」と「判断の観点」を必須項目として出力させなければならない。「背景と根拠」は、判断材料として確認した対象（出典）、そこから確定した事項と確定していない事項、および当該未確定が質問に値する理由を含めなければならない。確認していない場合は「未確認」と記載させ、出典を推測で記載させてはならない。「判断の観点」は、回答によって結論が変わる評価軸を 2 つ以上挙げ、主要な選択肢が各軸で有利・不利のいずれとなるかを示さなければならない。「既定値候補の理由」は、当該選択を支持する根拠となる事実、優先した評価軸、および他の選択肢を既定値としなかった理由を含めなければならない。各項目の値は 1 行で記述させ、結論のみの記述を許してはならない。本要件は事前 QA（メインタスク実行前）と事後 QA（成果物に対する QA）の双方へ同一の項目定義で適用する。
 - **FR-QA-02**: QA 質問票のパイプラインは FR-QA-01 の 2 項目を欠落させてはならない。[hve/qa_merger.py](hve/qa_merger.py) は当該 2 項目を構造化質問票（`[Qxx]` 形式）およびマージ済みテーブル形式の双方で解析し、`render_merged` の出力へ列として保持しなければならない。当該 2 項目を持たない既存の質問票ファイルは空値として扱い、解析を失敗させてはならない。CLI は [hve/console.py](hve/console.py) の質問票表示で当該 2 項目を提示しなければならない。ただし既存の質問票テーブルへ列として追加してはならず、テーブルとは別の形式で提示する（列追加は既存列の可読幅を損なうため）。GUI の QA 回答ダイアログ（[hve/gui/qa_answer_dialog.py](hve/gui/qa_answer_dialog.py)）は当該 2 項目を回答入力前に参照できるよう表示しなければならない。質問票フォーマットを規定する Skill（[.github/skills/task-questionnaire/SKILL.md](.github/skills/task-questionnaire/SKILL.md) および `references/` 配下のテンプレート）は、プロンプトと同一の項目定義を保持しなければならない。経路によって項目定義が異なってはならない。
-- **FR-QA-03**: `auto_qa` が有効な Knowledge Management (`akm`) 以外の Workflow は、質問が 1 件以上ある事前 QA について、ユーザー回答または明示された既定値を全質問へ適用した回答済み Markdown を `qa/` 配下へ保存し、最終パスを再読込して内容・質問数・各質問の非空回答を検証した後でなければメインタスクを開始してはならない。回答済み Markdown の表セルは、Work IQ 応答を含め、CR / LF / pipe を含む入力でも 1 質問 1 物理行を維持し、render → 保存 → 再解析の往復で質問数と全回答を失ってはならない。Work IQ 回答案へ統合できるのは、SDK の `tool.execution_start` イベントから Work IQ 用として許可された MCP server/tool の組を確認でき、かつ応答 status が `FOUND` または `PARTIAL` の結果だけとする。tool 名だけの一致を実行確認としてはならない。許可する tool 名は `@microsoft/workiq` が公開する参照系ツールに限り、書き込み系ツール（entity の作成・更新・削除、`do_action`）および EULA 承認・デバッグリンク取得の実行を統合根拠としてはならない。MCP サーバーへ公開する tool の allowlist（最小権限）と、実行確認に用いる tool 名の集合は別の集合として保持しなければならない。前者を後者に合わせて広げると `_hve_workiq` の公開権限が不必要に緩み、後者を前者に合わせて狭めると、自動探索で併存する Work IQ サーバー経由の実行を検出できなくなるためである。事前 QA サブセッションは FR-CLI-76（v2.41）で自動探索を停止したため併存しないが、`workiq-doctor` の tool probe（`probe_workiq_copilot_tool_invocation`）は利用者環境の実態を観測する診断であり自動探索を残したまま実行確認を行うため、実行確認の集合は引き続き別集合として保持しなければならない。ここでいう Work IQ サーバーには、公式 `workiq` サーバーに加え、同一の Work IQ サービスを別サーバー名で登録するプラグイン（`workiq-preview` 等）を含めなければならない。Work IQ とみなす MCP サーバー名は単一の正本として保持し、実行確認とメインセッションからの分離とで別々に定義してはならない（FR-MAINT-07）。`FOUND` / `PARTIAL` は一次情報が少なくとも一部見つかった結果であるため統合対象とする。`NOT_FOUND` は既定回答を変更する一次情報が見つからず、`UNAVAILABLE` / status 不明 / tool 実行未確認は検索または出典を検証できないため、いずれも検証済み回答へ統合せず、調査用 draft にだけ未確認として保持する。質問が 0 件の場合は同期対象なしとしてメインタスクを継続する。FR-QA-05 の `qa_akm_background_merge` が有効な場合に限り、検証済み QA ファイル 1 件ごとに `sources=qa`、`target_files=<当該ファイル>`（登録単位の値。実行時の値は後述のバッチ規則が定める）、`force_refresh=false`、`auto_qa=false` の AKM 差分更新を別のバックグラウンド実行として登録し、登録キューが当該要求を受理した時点で **QA を生成した source Workflow の親 DAG** は AKM 完了を待たず次 Step へ進めなければならない。登録は検証済み QA ファイル 1 件ごとに行うが、実行開始時点でキューに滞留している複数の登録は 1 回の AKM 子実行へまとめてよい。まとめた場合は `target_files` へ当該バッチの全ファイルを与え、実行結果は登録件数分（ファイル単位）で報告しなければならない。CLI / GUI のバックグラウンド AKM と明示実行 AKM は同一リポジトリ内で直列化し、同時に 2 つ以上の AKM 子プロセスを起動してはならない。AKM の出力空間は `target_files` の指定によらず `knowledge/D01`〜`D21` の全体と `knowledge/business-requirement-document-status.md` を含むため、子プロセスを多重起動すると同一ファイルへの同時書込みと差分喪失が生じる。AKM 子実行の fan-out 並列度は FR-DAG-03 の解決順序に従い AKM の宣言値となる。子プロセスの argv で並列度を固定してはならない（FR-MAINT-07: 同一ルールを二重に実装しない）。当該 fan-out 子は各自の `knowledge/D{NN}-*.md` だけを書く契約（[hve/prompt/fanout/akm/_common.md](hve/prompt/fanout/akm/_common.md)）であるため、宣言値までの並列化は上記の直列化要件と両立する。親 Workflow の Git 後処理・branch 切替・GUI cleanup より前に未完了の書込みを安全に終了または取消できなければならない。branch / PR を作る親実行では、AKM が出典として使用した検証済み QA ファイルだけを knowledge 変更とともに commit 対象へ含める。ADI も本要件の対象とし、Step 1.1 / 1.2 が生成する原本質問票 main 成果物は事前 QA の回答済み補助ファイルとは別成果物として扱う。`workflow_id=akm` の実行は QA 起点 AKM 登録を行ってはならず、AKM Root Issue から別の QA 起点 AKM を再帰生成してはならない。ファイル単位の起動とリポジトリ単位の直列化は、複数 Step が回答を保存した場合にも各回答を早期反映しつつ、共有する `knowledge/` への同時書込みと差分喪失を防ぐために必要な最小境界である。SDK Fleet mode へ委譲した wave（実行可能 Step が 2 件以上ある wave。[hve/orchestrator.py](hve/orchestrator.py) `_fleet_wave_runner`）は本要件の事前 QA と QA 起点 AKM の対象外とする。Fleet 経路は `StepRunner.run_step` を経由せず、事前 QA（Phase 0）と敵対的レビュー（Phase 3）は `run_step` の内部にあるためである。ただし実行面は、`auto_qa` または `auto_contents_review` が有効なまま Fleet wave を開始する場合、当該 wave では両フェーズが実行されないことを、Fleet の起動成功が確認できた時点で 1 回だけ警告として通知しなければならない。利用者が明示的に有効化した設定が無言で失われてはならない。警告は wave ごとに 1 回とし、Step ごとに繰り返してはならない（並列 Step 数だけ同一警告が出ると信号が失われるため）。Fleet の起動に失敗して通常経路へフォールバックした場合は、当該 wave で両フェーズが実行されるため警告してはならない。警告文の生成は単一のヘルパーに限定する（FR-MAINT-07）。
+- **FR-QA-03**: `auto_qa` が有効な Knowledge Management (`akm`) 以外の Workflow は、質問が 1 件以上ある事前 QA について、ユーザー回答または明示された既定値を全質問へ適用した回答済み Markdown を `qa/` 配下へ保存し、最終パスを再読込して内容・質問数・各質問の非空回答を検証した後でなければメインタスクを開始してはならない。回答済み Markdown の表セルは、Work IQ 応答を含め、CR / LF / pipe を含む入力でも 1 質問 1 物理行を維持し、render → 保存 → 再解析の往復で質問数と全回答を失ってはならない。Work IQ 回答案へ統合できるのは、SDK の `tool.execution_start` イベントから Work IQ 用として許可された MCP server/tool の組を確認でき、かつ応答 status が `FOUND` または `PARTIAL` の結果だけとする。tool 名だけの一致を実行確認としてはならない。許可する tool 名は `@microsoft/workiq` が公開する参照系ツールに限り、書き込み系ツール（entity の作成・更新・削除、`do_action`）および EULA 承認・デバッグリンク取得の実行を統合根拠としてはならない。MCP サーバーへ公開する tool の allowlist（最小権限）と、実行確認に用いる tool 名の集合は別の集合として保持しなければならない。前者を後者に合わせて広げると `_hve_workiq` の公開権限が不必要に緩み、後者を前者に合わせて狭めると、自動探索で併存する Work IQ サーバー経由の実行を検出できなくなるためである。事前 QA サブセッションは FR-CLI-76（v2.41）で自動探索を停止したため併存しないが、`workiq-doctor` の tool probe（`probe_workiq_copilot_tool_invocation`）は利用者環境の実態を観測する診断であり自動探索を残したまま実行確認を行うため、実行確認の集合は引き続き別集合として保持しなければならない。ここでいう Work IQ サーバーには、公式 `workiq` サーバーに加え、同一の Work IQ サービスを別サーバー名で登録するプラグイン（`workiq-preview` 等）を含めなければならない。Work IQ とみなす MCP サーバー名は単一の正本として保持し、実行確認とメインセッションからの分離とで別々に定義してはならない（FR-MAINT-07）。`FOUND` / `PARTIAL` は一次情報が少なくとも一部見つかった結果であるため統合対象とする。`NOT_FOUND` は既定回答を変更する一次情報が見つからず、`UNAVAILABLE` / status 不明 / tool 実行未確認は検索または出典を検証できないため、いずれも検証済み回答へ統合せず、調査用 draft にだけ未確認として保持する。質問が 0 件の場合は同期対象なしとしてメインタスクを継続する。FR-QA-05 の `qa_akm_background_merge` が有効な場合に限り、検証済み QA ファイル 1 件ごとに `sources=qa`、`target_files=<当該ファイル>`（登録単位の値。実行時の値は後述のバッチ規則が定める）、`force_refresh=false`、`auto_qa=false` の AKM 差分更新を別のバックグラウンド実行として登録し、登録キューが当該要求を受理した時点で **QA を生成した source Workflow の親 DAG** は AKM 完了を待たず次 Step へ進めなければならない。登録は検証済み QA ファイル 1 件ごとに行うが、実行開始時点でキューに滞留している複数の登録は 1 回の AKM 子実行へまとめてよい。まとめた場合は `target_files` へ当該バッチの全ファイルを与え、実行結果は登録件数分（ファイル単位）で報告しなければならない。CLI / GUI のバックグラウンド AKM と明示実行 AKM は同一リポジトリ内で直列化し、同時に 2 つ以上の AKM 子プロセスを起動してはならない。AKM の出力空間は `target_files` の指定によらず `knowledge/D01`〜`D21` の全体と `knowledge/business-requirement-document-status.md` を含むため、子プロセスを多重起動すると同一ファイルへの同時書込みと差分喪失が生じる。AKM 子実行の fan-out 並列度は FR-DAG-03 の解決順序に従い AKM の宣言値となる。子プロセスの argv で並列度を固定してはならない（FR-MAINT-07: 同一ルールを二重に実装しない）。当該 fan-out 子は各自の `knowledge/D{NN}-*.md` だけを書く契約（[.github/prompts/fanout/akm/_common.prompt.md](.github/prompts/fanout/akm/_common.prompt.md)）であるため、宣言値までの並列化は上記の直列化要件と両立する。親 Workflow の Git 後処理・branch 切替・GUI cleanup より前に未完了の書込みを安全に終了または取消できなければならない。branch / PR を作る親実行では、AKM が出典として使用した検証済み QA ファイルだけを knowledge 変更とともに commit 対象へ含める。ADI も本要件の対象とし、Step 1.1 / 1.2 が生成する原本質問票 main 成果物は事前 QA の回答済み補助ファイルとは別成果物として扱う。`workflow_id=akm` の実行は QA 起点 AKM 登録を行ってはならず、AKM Root Issue から別の QA 起点 AKM を再帰生成してはならない。ファイル単位の起動とリポジトリ単位の直列化は、複数 Step が回答を保存した場合にも各回答を早期反映しつつ、共有する `knowledge/` への同時書込みと差分喪失を防ぐために必要な最小境界である。SDK Fleet mode へ委譲した wave（実行可能 Step が 2 件以上ある wave。[hve/orchestrator.py](hve/orchestrator.py) `_fleet_wave_runner`）は本要件の事前 QA と QA 起点 AKM の対象外とする。Fleet 経路は `StepRunner.run_step` を経由せず、事前 QA（Phase 0）と敵対的レビュー（Phase 3）は `run_step` の内部にあるためである。ただし実行面は、`auto_qa` または `auto_contents_review` が有効なまま Fleet wave を開始する場合、当該 wave では両フェーズが実行されないことを、Fleet の起動成功が確認できた時点で 1 回だけ警告として通知しなければならない。利用者が明示的に有効化した設定が無言で失われてはならない。警告は wave ごとに 1 回とし、Step ごとに繰り返してはならない（並列 Step 数だけ同一警告が出ると信号が失われるため）。Fleet の起動に失敗して通常経路へフォールバックした場合は、当該 wave で両フェーズが実行されるため警告してはならない。警告文の生成は単一のヘルパーに限定する（FR-MAINT-07）。
 - **FR-QA-04**: FR-QA-03 の QA 起点 AKM に対して、利用者は AKM 子実行が使うモデル・reasoning effort・context tier を、メインタスクの実行品質設定とは独立に選択できなければならない。設定キーは `akm_model` / `akm_reasoning_effort` / `akm_context_tier` とし、CLI は `--akm-model` / `--akm-reasoning-effort` / `--akm-context-tier` で受け取る。いずれも未指定を既定とし、未指定のキーは対応するメイン設定（`model` / `reasoning_effort` / `context_tier`）を継承しなければならない。`reasoning_effort` / `context_tier` には既存の環境変数経路が存在しないため（[hve/config.py](hve/config.py) `SDKConfig.from_env`）、本設定にも環境変数経路を新設してはならない。継承の解決は QA 起点 AKM 子プロセスの引数生成（[hve/qa_akm_dispatch.py](hve/qa_akm_dispatch.py) `QaAkmCoordinator._build_argv`）だけで行い、メインタスク・敵対的レビュー・QA 質問票生成のセッション生成へ本設定を適用してはならない。`--workflow akm` を明示指定した実行は本設定の適用対象外とし、従来どおり `--model` / `--reasoning-effort` / `--context-tier` に従わなければならない。CLI 対話 wizard は `auto_qa` を有効化した非 AKM Workflow のときにだけ本 3 項目を尋ね、既定は継承としなければならない。モデル値は既存のモデル正規化（[hve/config.py](hve/config.py) `_normalize_model_with_warning`）と同一の規則で検証しなければならない。本設定は AKM が扱う `knowledge/` の更新粒度と、メインタスクの実行品質・コストを独立に決められるようにするために必要であり、既定の継承によって既存実行の挙動を変えてはならない。
 - **FR-QA-05**: FR-QA-03 の QA 起点 AKM をバックグラウンドで起動するかどうかは、利用者が明示的に選択できる設定 `qa_akm_background_merge` で制御しなければならない。既定は無効とし、無効のときは QA 起点 AKM を登録・dispatch してはならない。CLI は `--qa-akm-background-merge` で受け取り、CLI 対話 wizard は `auto_qa` を有効化した非 AKM Workflow のときにだけ本設定を尋ね、既定は無効としなければならない。GUI は設定画面と Step 1 右ペインの双方で選択でき（FR-GUI-20）、Cloud は Issue Form の入力で選択できなければならない（FR-CLOUD-26）。本設定が無効のとき、CLI 対話 wizard は FR-QA-04 の 3 項目を尋ねてはならず、GUI は当該 3 項目を非活性とし値を CLI へ渡してはならない（AKM 子実行自体が起きないため）。判定の実装は実行面ごとに 1 箇所へ限定し、CLI / GUI は [hve/orchestrator.py](hve/orchestrator.py) `_should_enable_qa_akm_dispatch`、Cloud は [.github/workflows/auto-issue-qa-ready-transition.yml](.github/workflows/auto-issue-qa-ready-transition.yml) の `save-qa-answer` job が出力する `sync_required` だけが判定してよい。同一面に判定を重複実装してはならない。FR-QA-04 と同様に環境変数経路を新設してはならない。`--workflow akm` を明示指定した実行は従来どおり本設定の対象外とする。本設定は、QA 回答のたびに `knowledge/` が更新されコスト・実行時間・差分レビュー量が増えることを利用者が制御できるようにするために必要であり、既定を無効とするのは、利用者が明示的に選択していない共有資産（`knowledge/`）への自動書込みを行わないためである。
 - **FR-QA-06**: Work IQ 応答の status が `FOUND` または `PARTIAL` であるにもかかわらず、FR-QA-03 の許可済み server/tool 組による tool 実行を SDK イベント上で確認できなかった場合、実行面は当該事象を警告として通知しなければならない。成功記号（`✅`）付きの情報メッセージだけで報告してはならない。統合できた質問が 0 件で、かつ Work IQ 応答が 1 件以上ある場合の統合結果サマリーも警告として扱う。警告には (a) tool 実行を確認できなかったこと、(b) 当該区間で実際に観測されたツール名（観測できた場合）、(c) 診断コマンドを含めなければならない。prompt 本文・tool の引数・M365 応答本文を警告へ含めてはならない（FR-RTO-04 / NFR-SEC-01）。status が `NOT_FOUND` / `UNAVAILABLE` / 不明の応答は一次情報が見つからなかった正常な結果であるため、本警告を出してはならない（全質問で警告が出ると検出漏れの信号が失われるため）。警告文の生成は [hve/workiq.py](hve/workiq.py) の単一ヘルパーに限定し、事前 QA 経路（[hve/runner.py](hve/runner.py)）と prefetch 経路（[hve/orchestrator.py](hve/orchestrator.py)）の双方が同一実装を使わなければならない（FR-MAINT-07）。本要件は、許可集合と実際に公開されるツール名の乖離によって統合が恒久的に 0 件となる事象を、実行中に検知可能にするために必要である。
@@ -415,6 +443,13 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 - **FR-MCPLOG-01**: HVE は、Copilot SDK セッションで観測した MCP の入出力を run スコープのログファイルへ全文で追記しなければならない。記録対象は (1) `tool.execution_start` のうち MCP サーバー名を持つもの（MCP サーバー名・MCP ツール名・`tool_call_id`・`arguments`）、(2) 対応する `tool.execution_complete`（成否・結果本文・エラー）、(3) `session.mcp_servers_loaded` / `session.mcp_server_status_changed` のサーバー状態、(4) HVE が Work IQ 専用セッションへ送る自然言語プロンプトと、その応答本文とする。(2) は SDK の `ToolExecutionCompleteData` が MCP サーバー名を持たないため、(1) が記録した `tool_call_id` との相関でのみサーバーを特定しなければならず、相関できない完了イベントを記録してはならない（MCP 由来か組み込みツール由来かを判別できないため）。人間向け表示のための切り詰めを本ログへ適用してはならない。MCP サーバープロセスは Copilot CLI ランタイムが起動し HVE はその標準入出力を保持しないため、記録範囲は SDK イベントが公開する上記に限られる。生の JSON-RPC フレームを取得する目的で MCP サーバーの起動コマンドを書き換えてはならない。
 - **FR-MCPLOG-02**: 出力先は `resolve_work_root()` 配下とし、MCP サーバー 1 件につき 1 ファイル `mcp-<サーバー名>.log` とする。親プロセスから起動され作業ディレクトリを共有する子プロセスでは `mcp-<サーバー名>-<pid>.log` とし、複数プロセスが同一ファイルへ追記してはならない（1 レコードが複数行にわたるため、追記の交錯がレコードを破壊するため）。子プロセスの判定条件は `HVE_GUI_SESSION_ID` が非空であるか、`HVE_STATS_STREAM` が既存の真値集合（`1` / `true` / `True`）に一致することとし、[hve/console.py](hve/console.py) が `[hve:stats]` の子プロセス配信可否に用いている条件と同一でなければならない（FR-MAINT-07）。GUI Autopilot の APP 別子プロセス（[hve/gui/autopilot/child_launcher.py](hve/gui/autopilot/child_launcher.py)）は `HVE_STATS_STREAM` を付与されず `HVE_GUI_SESSION_ID` だけを継承する一方、CLI Autopilot の子プロセス（[hve/autopilot/cli_runner.py](hve/autopilot/cli_runner.py)）は `HVE_STATS_STREAM=1` を付与されるため、いずれか一方だけを条件にすると他方で追記が交錯する。サーバー名はファイルシステム安全な文字へ正規化してよいが、SDK が報告した名前以外の別名へ写像してはならない。`HVE_WORK_ROOT` 未設定時および dry-run では書き込んではならない。形式は UTF-8 / LF / BOM なしとし、各レコードは時刻・種別・サーバー名を含む 1 行のヘッダで始めなければならない。1 ファイルが 32 MiB に達した場合は追記を停止し、その事実を 1 回だけ警告する（ローテーションは行わない）。書き込み失敗によって Step を失敗させてはならない。本機能のために新規の CLI オプション・設定項目・環境変数を追加してはならない。
 - **FR-MCPLOG-03**: 本ログは prompt 本文・tool の引数・応答本文を意図的に保持するため、FR-RTO-04 の allowlist は適用しない。ただし NFR-SEC-01 が対象とする認証情報は、既存のマスク実装（[hve/workiq.py](hve/workiq.py) `_sanitize_diagnostic_text`）を再利用して記録前に伏せなければならず、同等の処理を新規に実装してはならない（FR-MAINT-07）。当該実装は完全なサニタイズを保証しないため、本ログが業務データを平文で含むことと、`.gitignore` の `*.log` によりリポジトリへコミットされないことを、利用者向けドキュメントへ明記しなければならない。人間向け表示の抑止設定（`quiet` / `final_only` / verbosity）によって記録を止めてはならない（FR-RTO-02 と同じ「収集・保存」と「表示」の分離方針）。
+
+### 3.14 Prompt source centralization
+
+本節は、HVE がモデルへ渡す固定 prompt 本文の正本を `.github/prompts/` 配下へ集約し、読み込み経路と許可範囲を固定する契約を規定する。目的は (a) prompt 本文の重複定義を防ぐこと、(b) 実行経路ごとに異なる prompt 本文が混在する状態を防ぐこと、(c) prompt 読み込み時のパス逸脱や欠損を model call 前に fail-closed で検出することの 3 点である。
+
+- **FR-PROMPT-SRC-01**: HVE が管理する固定 model-facing prompt 本文の正本は `.github/prompts/**` 配下の UTF-8 Markdown ファイルだけとし、Python / Workflow / shell / PowerShell は prompt の選択、安全な読込、動的値補間、および補間済み payload の送信だけを担わなければならない。正本は既存の flat Agent prompt に加え、active Step body、fan-out addendum、runtime fragment、Cloud 実行指示、developer / evaluation harness の固定 prompt を含む。Step body は `steps/`、fan-out addendum は `fanout/`、Cloud 実行指示は `cloud/`、developer / evaluation harness を含むその他の HVE 内部固定 prompt は用途別に `runtime/` 配下へ分類しなければならない。Python 定数、Workflow 定義、manifest、環境変数、CLI 引数、評価 harness のコード、Cloud Agent assignment を構築する Workflow 本文へ固定 prompt 本文を重複保持してはならない。ただし実行時にファイルから読み込んで動的値を補間した payload を model / SDK / Copilot assignment へ送信することは重複保持に含めない。利用者入力、動的データ、UI 表示文言、ログ／エラーメッセージ、テスト fixture、生成アプリが所有する生成物としての Markdown／コード、および HVE 管理外の third-party SDK / MCP / model prompt は対象に含めない。
+- **FR-PROMPT-SRC-02**: Prompt 読み込みの単一実装は [hve/prompt_loader.py](hve/prompt_loader.py) とし、repo root の `.github/prompts/` を基準として同 directory 配下だけを許可する安全な repository-relative path を解決対象としなければならない。絶対パス、`..` を含む相対パス、`.github/prompts/` 外への escape、symlink / junction を経由した逸脱を許してはならない。必須 prompt が欠損、空文字、無効な UTF-8、または安全でないパス解決結果となった場合は、model call、SDK session 作成、Copilot assignment の前に fail-closed で停止しなければならない。必須 prompt への inline fallback、別経路からの自動生成、二重定義、manifest / flag / 環境変数 / CLI option / 外部依存による迂回、および hot reload は許可してはならず、本機能のために新規 manifest / flag / 環境変数 / CLI option / 外部依存を追加してはならない。編集内容は次回 process / session から反映する。ただし公開 API `load_prompt(agent_name)` は flat Agent prompt を読む互換 facade として呼び出し互換性を維持しなければならない。
 
 ---
 
@@ -480,6 +515,26 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 - **FR-CLOUD-40**: `runner_type` 入力に応じて、reusable orchestrator は `["self-hosted","linux","x64","aca"]` または `["ubuntu-latest"]` を選択する。
 
+### 4.7 HITL エスカレーション
+
+- **FR-CLOUD-41**: Cloud Agent Orchestrator は `{prefix}:blocked` のまま SLA 時間を超えた Open Issue を `{prefix}:human-required` へ自動昇格し（[.github/workflows/auto-blocked-to-human-required.yml](.github/workflows/auto-blocked-to-human-required.yml)）、人間が `{prefix}:human-resolved` を付与したとき `{prefix}:human-required` / `{prefix}:blocked` / `{prefix}:human-resolved` の 3 つを外して `{prefix}:ready` へ戻さなければならない（[.github/workflows/auto-human-resolved-to-ready.yml](.github/workflows/auto-human-resolved-to-ready.yml)）。SLA 閾値は `vars.HITL_BLOCKED_SLA_HOURS` とし、未設定時は 24 時間とする。
+  - 昇格は `schedule`（毎時）と `workflow_dispatch` で起動し、`workflow_dispatch` の `sla_hours` 入力を最優先とする。既に `{prefix}:human-required` を持つ Issue へ重複付与してはならない。昇格処理はラベルの付与とコメント投稿だけを行い、ラベルを削除してはならない。
+  - SLA の経過時間は Issue 全体の `updatedAt`（最終更新時刻）を基準とし、`{prefix}:blocked` の付与時刻ではない。コメントや本文変更で `updatedAt` が進むと判定も延びる。
+  - 復帰時に `{prefix}:human-resolved` 自身も削除するのは、同一 Issue が再び `blocked` になったときに同じ遷移を再度発火させるためである。残置すると 2 回目の解消宣言が無視される。
+  - `{prefix}:blocked` の自動剥離は `{prefix}:human-resolved` の付与を経た場合に限る。人間が解消を宣言していない Issue を `ready` へ戻さないためである。
+  - 対象プレフィックスは FR-STATE-01 が宣言する 11 件とし、2 つの workflow で同一集合を用いなければならない。片方だけを拡張すると、昇格したまま復帰経路を持たない Issue が生じる。
+  - 本要件は §13.13 が blocked を「Self-Improve または手動介入の対象とする」と述べるにとどまり、手動介入の引き渡し方法・SLA・復帰経路が未定義だった状態を解消する。CLI / GUI に等価の経路は無く、本要件は Cloud Agent Orchestrator に限定する。
+  - 契約テスト: [hve/tests/test_hitl_escalation_contract.py](hve/tests/test_hitl_escalation_contract.py)
+
+### 4.8 定期運用 Workflow の起動契約
+
+- **FR-CLOUD-42**: `.github/workflows/` の運用 Workflow で有効な `schedule` を持てるのは、FR-CLOUD-41 の SLA 自動昇格を担う `auto-blocked-to-human-required.yml` だけとし、cron は毎時 `0 * * * *` とする。
+  - `aas-timeout-monitor.yml` と `auto-qa-timeout-watcher.yml` は `workflow_dispatch` 専用とする。`label-consistency-audit.yml` は `workflow_dispatch` と `issues: [labeled, unlabeled, closed]` だけを持ち、ラベル変更契機の自己修復を維持する。
+  - 手動専用になった `auto-qa-timeout-watcher.yml` は、定期実行の有効・無効を制御していた `ENABLE_QA_TIMEOUT_WATCHER` で手動実行を無言で skip してはならない。
+  - 旧週次全件監査 `audit-plans.yml` と旧日次メトリクス集計 `tdd-retry-metrics.yml` は存在してはならない。前者の削除後も `plan-validation-and-labeling.yml` による PR 差分内の `plan.md` 検証は維持するが、リポジトリ全件の定期再監査を代替すると主張してはならない。
+  - `aas-timeout-monitor.yml` の手動入力 `timeout_hours` は正の整数だけを受理し、時刻計算および GitHub API の副作用より前に fail-closed で検証する。手動巡回では `aas:running` の Open Issue を最大 1,000 件取得する。
+  - 契約テスト: [hve/tests/test_scheduled_workflow_policy.py](hve/tests/test_scheduled_workflow_policy.py)
+
 ---
 
 ## 5. HVE CLI Orchestrator 固有要件
@@ -490,11 +545,20 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 | サブコマンド | 役割 |
 |---|---|
-| `run` | インタラクティブ wizard（引数なし時の既定動作） |
+| `run` | インタラクティブ wizard を明示起動（引数なし時の既定は `gui`。FR-CLI-10） |
 | `orchestrate` | Workflow ID を指定して DAG を実行 |
 | `qa-merge` | 回答済み質問票をマージ |
 | `workiq-doctor` | Work IQ 連携の診断（`--qa-integration-probe` で事前 QA 統合可否を含む、FR-QA-08） |
+| `ingest-docs` | `docs-original/` を走査して `docs/original-design-doc-ingest/` へ目録と正規化済み Markdown を出力 |
 | `emit-prompt` | Step のプロンプトを表示（デバッグ用） |
+| `gui` | PySide6 ベースの GUI Orchestrator を起動（未導入時はセットアップスクリプトを案内） |
+| `cli` | 対話型 CLI ウィザードでワークフローを実行（`run` と同一の対話経路） |
+| `login` | GitHub Copilot へログインし、利用可能モデル一覧をキャッシュ |
+| `pricing` | AI Credit 料金表を取得・表示（下位サブコマンド `show` / `refresh`） |
+| `toolsearch` | Tool Search ランキングの統計を表示（下位サブコマンド `dashboard` / `context`、FR-TS-10 / FR-TS-11） |
+| `prompt` | Prompt 版 request から実行計画を提示し、承認後に既存 `orchestrate` へ委譲（下位サブコマンド `plan` / `run`、FR-PROMPT-03 / FR-PROMPT-04） |
+
+本表は `_build_parser()` が登録するトップレベルサブコマンドの全件とし、契約テスト [hve/tests/test_requirement_subcommand_parity.py](hve/tests/test_requirement_subcommand_parity.py) が実装との一致を機械検査する。索引の差分更新対象外サブコマンドの列挙は FR-CLI-77 が別に規定する。
 
 ### 5.2 `orchestrate` の必須・主要オプション
 
@@ -522,7 +586,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 ### 5.3 対話 wizard
 
-- **FR-CLI-10**: `python -m hve`（引数なし）または `python -m hve run` は対話 wizard を起動する。
+- **FR-CLI-10**: `python -m hve`（引数なし）は GUI Orchestrator を既定として起動する。PySide6 が未導入で `ImportError` となる場合に限り、導入手順を示す警告を出したうえで CLI 対話 wizard へフォールバックする。`python -m hve run` および `python -m hve cli` は対話 wizard を明示的に起動する。本項は FR-CLI-77 の「引数なし起動（GUI が既定）の経路は FR-GUI-22 が担う」という担当区分と整合しなければならない。契約テスト [hve/tests/test_requirement_entrypoint_parity.py](hve/tests/test_requirement_entrypoint_parity.py) が本項と実装の一致を機械検査する。
 - **FR-CLI-11**: wizard は実行モードとして `quick-auto`（画面表示: クイック全自動）、`custom-auto`（画面表示: カスタム全自動）、`manual`（画面表示: 手動）の 3 つを提供する。`quick-auto` は既定値中心、`custom-auto` は全設定を事前入力した後の無人実行、`manual` は実行中も対話可能な経路とし、Workflow 固有パラメータは選択したモードに従って収集する。
 - **FR-CLI-12**: ARD wizard は FR-WF-ARD-03 の 5 表示グループ（`1`〜`5`）をマルチ選択させ、既定選択は同要件の `ARD_DEFAULT_GROUP_IDS` に従う。グループ `1` を選択した場合だけ `company_name` を必須とし、グループ `2` を選択してグループ `1` を選択しない場合だけ `target_business` を必須とする。グループ `1` と `2` を同時選択した場合の空の `target_business` は、Step 1.2 完了後に Strategic Recommendation から生成する bridge 経路で解決する。KPI/OKR の実行有無はグループ `3` の選択だけから導出し、同じ状態を表す別の Yes/No 質問を設けてはならない。グループ `5` はアプリケーション一覧と APP 別要求定義書を一体で生成するため、片方だけを選択する別 UI を設けてはならない。
 - **FR-CLI-13**: AKM wizard は `sources` をマルチ選択（`qa` / `original-docs` / `workiq`）し、`workiq` を含む場合のみ取り込み対象 Dxx を尋ねる。
@@ -550,6 +614,18 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
   - FR-CLI-79 が定める `azure` 除外規則を orchestrator 経路へも適用しなければならない。FR-CLI-79 本文は Step 実行セッションを対象に記述しているが、除外の根拠（当該 Workflow の全 Step が Azure に言及しない）は同じ Workflow に属する orchestrator セッションにも当てはまるためである。これを可能にするため、当該ヘルパーは Workflow ID を受け取れなければならない。Workflow ID が解決できない経路（Fleet wave 親 / Code Review Agent）では従来どおり全宣言サーバを渡す（FR-CLI-79 の宣言漏れ規則と同じ側へ倒すため）。
   - 宣言が存在しない・読み取れない・空の場合のフォールバック（`enable_config_discovery` を `True` のまま据え置く）は orchestrator 経路でも同一とする。
 
+#### 5.4.3 Phase 1 リクエストのサイズ計画
+
+- **FR-CLI-84**: `StepRunner` は Phase 1 メインタスクを Copilot SDK セッションへ送る前に、送信するプロンプトの UTF-8 バイト数を計測し、HVE 内部のプロンプト予算と照合して Phase 1 のモデル呼び出し回数を決定しなければならない。計測は文字数ではなくバイト数で行う（日本語は 1 文字 3 バイトになり得るため、文字数では超過を検出できない）。判定と計画の実装は [hve/phase1_request_plan.py](hve/phase1_request_plan.py) の単一実装に限定し、[hve/runner.py](hve/runner.py) 側へ同等の判定を再実装してはならない（FR-MAINT-07）。
+  - 予算内の場合、プロンプトを改変せず Phase 1 のモデル呼び出しを **ちょうど 1 回** 行わなければならない。予算超過の場合、Phase 1 のモデル呼び出しを **1 回も行わず** Step を失敗として終了しなければならない。同一内容の自動再送、内容を変えた自動再試行、および同一セッションへの複数ターン分割送信を行ってはならない。任意位置での自動切り詰め、および LLM による自動要約で送信可能サイズへ縮めてはならない。要求が欠落したまま実行が続くと、成果物の欠落を検出できないためである。
+  - 判定は 3 段階で行う。(1) `run_step()` が受け取ったプロンプト単体が既に予算を超えている場合は、Copilot SDK クライアント・セッションの生成、および Phase 0 事前 QA より前に停止する。(2) fan-out 追加指示・APP 要求コンテキスト・Agent Prompt 本文・Skill Guard・各 policy prefix・実行モード制約 / TDD / レビュー所有権の各 suffix という Phase 0 前に確定する成分を連結し、メインセッション生成と Phase 0 事前 QA より前に再判定する。(3) 事前 QA コンテキストを含む **最終プロンプト**を送信直前に再判定する。(1) だけでは後続の確定成分による超過を、(2) だけでは事前 QA による超過を検出できず、(3) だけでは不要なメインセッション生成と事前 QA のモデル呼び出しを消費するためである。
+  - 最終プロンプトは送信する実ブロック列から 1 回だけ構成し、通知に用いる成分別バイト数の合計は最終プロンプトの UTF-8 バイト数と一致しなければならない。区切り・固定見出し・各 suffix を内訳から除外してはならない。通知には、状態・プロンプトの UTF-8 バイト数・予算バイト数・予定した Phase 1 呼び出し回数・成分名ごとのバイト数だけを含め、プロンプト本文、`additional_prompt` の本文、事前 QA 応答の本文、および認証情報を含めてはならない（FR-RTO-04 / NFR-SEC-01）。
+  - `step_start` 後の予算超過は `step_end(..., "failed")` を 1 回記録して終了しなければならない。`dry_run=True` はモデル呼び出しを行わない既存経路であるため、本予算によって失敗へ変更してはならない。
+  - 予算は HVE 内部の定数とし、CLI オプション・GUI 設定項目・環境変数を新設してはならない。既存の `context_injection_max_chars`（`--context-max-chars`）は Phase 0 / Phase 3 等へ注入する補助コンテキストの文字数上限であり、本要件のバイト予算とは別の設定である。一方を他方へ流用してはならない。
+  - 本要件は、Copilot API がリクエスト全体（システムプロンプト・会話履歴・ツール定義を含む）に上限を持つことに対する HVE 側の安全余白として定める。当該上限の具体値は GitHub の公開仕様として確認できていないため、予算値を公開仕様値として記述してはならない。実測として、HVE の Phase 1 送信が `The request is too large to send through CAPI Responses. Try shortening the conversation or prompt. (32.7 MB request; 5.0 MB limit)` で失敗した事例がある。
+  - 予算超過は、送信可能サイズへ縮めるのではなく、利用者が入力を分割・ファイル化して再実行するための情報を提示して停止することで解消する。
+- **FR-CLI-85**: Phase 1 の最終プロンプトにおいて、`additional_prompt` に由来するブロックと markdown-query 強制ブロックは、それぞれ高々 1 回しか現れてはならない。[hve/orchestrator.py](hve/orchestrator.py) の `_compute_step_additional_prompt()` / `_build_step_prompt()` が Step プロンプト末尾へ既に連結しているため、[hve/runner.py](hve/runner.py) が同じ値を再度前置してはならない。同一の指示を重複して送ることは、モデルへ与える指示を変えないままリクエストサイズだけを増やし、FR-CLI-84 の予算を無駄に消費するためである。本要件は `additional_prompt` の内容・適用範囲・利用者向け設定を変更しない。
+
 ### 5.5 Issue / PR 作成（CLI 経路）
 
 - **FR-CLI-30**: `--create-issues` 指定時、CLI は以下のシーケンスを実行する: 新ブランチ作成 → Root Issue 作成 → Sub-Issue 作成（active Step ごと） → DAG 実行 → `git add/commit/push` → PR 作成 → **`--auto-coding-agent-review` フラグ指定時のみ** Code Review Agent レビュー → サマリー出力（[hve/orchestrator.py](hve/orchestrator.py) module docstring および `_create_issues_if_needed`）。
@@ -557,6 +633,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 - **FR-CLI-32**: `--create-pr` は PR 作成のみ行い、自動マージは実行しない（Issue Template の `enable_auto_merge` とは別運用）。
 - **FR-CLI-33**: `--ignore-paths` で指定されたパスは `git add` の pathspec 除外として扱う（既定値は `SDKConfig` 側）。
 - **FR-CLI-34**: `--delete-local-merged-branch`（既定 **有効**、`--no-delete-local-merged-branch` で無効化。config: `delete_local_merged_branch`）が有効で、かつ `enable_auto_merge` が有効・全 Step 成功・今回実行で PR が作成済みの場合に限り、CLI は PR の merged 状態をポーリングし（既定 15 秒間隔・最大 600 秒）、リモートの auto-approve-and-merge フロー完了（PR が merged）を検知後、今回作成した作業ブランチを**ローカルのみ**削除する（`git checkout <base_branch>` の後に `git branch -D <working_branch>`）。squash マージではローカルブランチが「マージ済み」と判定されないため `-D` を用いる。タイムアウト・PR が未マージ（closed 等）・`checkout` 失敗のいずれかの場合は削除せず警告ログを 1 行出力する。実行中断（Ctrl+C 等）時はポーリングが中断され削除処理に到達しないため、削除は行われない。リモートブランチは削除せず、github.com の「Automatically delete head branches」設定に委ねる。過去に作成済みの作業ブランチは対象外（今回実行分のみ）。`enable_auto_merge` が無効な場合や PR 未作成時は何もしない（[hve/orchestrator.py](hve/orchestrator.py)、[hve/github_api.py](hve/github_api.py)、[hve/config.py](hve/config.py)）。
+  - ローカル削除の適格性判定と `git checkout <base_branch>` → `git branch -D <working_branch>` は [hve/branch_cleanup.py](hve/branch_cleanup.py) の単一 core に集約し、Orchestrator と FR-GUI-37 の GUI monitor は同じ core へ委譲しなければならない（FR-MAINT-07）。適格性判定は、当該 run が branch を新規作成したことを示す `created_by_hve=True`、target の PR 番号が `bool` ではない正の整数で取得結果の `number` と一致すること、PR の `merged is True`、PR の `head.ref` と対象 branch の一致、`head.repo.full_name` と対象 repository の一致、PR の `base.ref` と対象 base branch の一致、`base.repo.full_name` と対象 repository の一致、および対象 branch と base branch の不一致を全て必須とする。repository 名の比較は GitHub の扱いに合わせて大文字小文字を区別しない。値が欠落・不一致の場合は fail-closed とし、git delete command を実行してはならない。
 
 #### 5.5.1 HVE ソース保護ガード
 
@@ -595,6 +672,22 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 - **FR-CLI-60**: `--self-improve` または `HVE_AUTO_SELF_IMPROVE=true` で自己改善ループを有効化する。`--no-self-improve` は最優先で無効化する。
 - **FR-CLI-61**: スコープは `""`（既定 = step + workflow）、`"disabled"`、`"step"`、`"workflow"` の 4 値（[hve/config.py](hve/config.py) `VALID_SELF_IMPROVE_SCOPES`）。
 - **FR-CLI-62**: ワイルドカード `*` 展開先は `data`、`docs`、`docs-generated`、`knowledge`、`src` で、`work/` は常時除外する。
+- **FR-CLI-63**: step-level Self-Improve（[hve/runner.py](hve/runner.py) Phase 4d）の検証結果は、`scan_codebase()` の実測値から決定的に導出しなければならない。LLM 応答 JSON によって `after_quality_score` / `degraded` / `verification_phases` を上書きしてはならない。
+  - 判定ロジックは [hve/self_improve.py](hve/self_improve.py) `_build_verification_result()` を単一の実装とし、Phase 4 に同等の判定を再実装してはならない（FR-MAINT-07）。LLM 応答は `VerificationResult.notes` の説明としてのみ使用する。
+  - 本委譲により step-level の `degraded` は `_build_verification_result()` の定義（`quality_score` の低下、または test phase が `FAIL`）に従う。従来の step-level 固有定義（test 失敗件数の増加）は廃止する。同一の判定規則を 2 箇所に持たないためである。
+  - LLM 応答の JSON パース失敗および JSON ブロック不在は、従来どおり警告として可観測化し、`notes` に `[json_parse_error=...]` を前置しなければならない。
+  - 根拠: LLM が `degraded=false` を返すと、実測がデグレードでも Phase 4f のループ停止が働かず、劣化した成果物へ追加の改善試行が積まれる。さらに `learning-NNN.md` に実測と異なる値が残り、次イテレーションの判断材料が汚染される。
+- **FR-CLI-64**: [hve/self_improve.py](hve/self_improve.py) `scan_codebase()` は、解決済み scope の対象ファイルに対して秘密情報パターン検査を行い、その結果を `ScanResult.security_status`（`"PASS"` / `"FAIL"`）として設定しなければならない。
+  - 検査パターンは `_build_verification_result()` が使用するものと同一とし、新しいパターン集を別に定義してはならない（FR-MAINT-07）。
+  - 検査対象は解決済み scope 内のファイルに限る。Self-Improve は scope 内しか変更しない契約（`_path_in_scope()`）であり、scope 外の既存差分を停止理由に含めてはならないからである。
+  - 1 ファイルあたりの読み取り量に上限を設け、scope に大きな生成物やバイナリが含まれてもメモリ消費を有界に保たなければならない。上限を超える部分は未検査となる。
+  - scope が解決できずスキャン自体を行わない場合（`_empty_scan_result()`）、および解決済み scope path が得られない旧仕様経路は `"PASS"` としてはならず、`"SKIP"` を設定しなければならない。未検査を合格として扱うと fail-open になる。
+  - 根拠: `_scan_gate_failure()` は `scan.get("security_status")` が `FAIL` のとき Self-Improve を停止する契約を持つが、当該キーの producer が存在せず、本番経路で当該分岐が発火しない。
+- **FR-CLI-65**: `success_criteria` に「テストカバレッジ 70% 以上」を宣言するワークフロー（`asdw-web` / `adfdv`）の `TaskGoal` は、同条件を `criterion_definitions` の criterion として持たなければならない。
+  - criterion は `scan.summary.coverage_pct` を metric とし、`gte 70` を満たすことを `required_for_done` とする。判定は既存の `_evaluate_criteria()` を用い、新しい判定関数を追加してはならない（FR-MAINT-07）。
+  - `scan_codebase()` は `ScanResult.metric_status` へ `coverage_pct` を設定しなければならない。値は test 系ツールの実行状態（`tool_status.test`）をそのまま用いる。カバレッジは pytest の実行結果からのみ抽出されるため、test が実行されていない場合の `coverage_pct` は測定値ではなく初期値 `0.0` であり、これを未達として扱ってはならないからである。
+  - 上記により、test が `NO_TESTS` / `SKIP` / `BLOCKED` / `UNAVAILABLE` のときは `_evaluate_criteria()` が当該 criterion を `BLOCKED` とし、`_required_criteria_unverifiable()` により Self-Improve が `blocked` で停止する。`FAIL` として扱ってはならない。「テストが存在しない」ことと「カバレッジが低い」ことを同一視してはならないからである。
+  - 根拠: `success_criteria` が宣言する成功条件のうちカバレッジだけが決定的評価の対象外であり、宣言と実装が一致していない。
 
 ### 5.9 起動時の索引差分更新
 
@@ -660,6 +753,143 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
   - `additional_prompt`、`workiq_prompt_qa`、`workiq_prompt_km`、`workiq_prompt_review` その他の Prompt 自由記述欄は内容検査の対象外とする。既存の型変換・引数伝搬は維持するが、自然言語の妥当性、空欄可否、業務内容を本 preflight で判定してはならない。
   - 既存の argparse / Qt validator による型・列挙値検証、FR-DAG-08 の active step 必須パラメータ検査、および各認証 preflight は維持する。これらを再実装する包括的 validation framework、新規 CLI オプション、新規永続設定、新規依存を追加してはならない。
   - 根拠は、GUI の保存済み `base_branch` に remote / local のいずれにも存在しない値が残り、`git fetch` 失敗後のローカル fallback も失敗して Workflow が停止した実測である。設定不備は Agent session 作成前に判定可能であり、モデル実行後まで遅延させる理由がない。
+
+### 5.15 PR 用作業ブランチの選択
+
+- **FR-CLI-83**: `--create-issues` / `--create-pr` による workflow-wide PR 作成では、利用者は PR 用の新規作業ブランチを作るか、現在 checkout 中のブランチを使うかを `create_working_branch` で選択できなければならない。CLI は `--create-working-branch` / `--no-create-working-branch`、GUI は同じ設定キーを使用し、既定は新規作成（`True`）とする。
+  - `True` のときは従来どおり、選択した remote base branch から `copilot-sdk/<prefix>-<8hex>` を 1 本作成して checkout し、当該 run の commit / push / PR にだけ使用する。1 task で複数の workflow-wide branch または PR を作成してはならない。
+  - `False` のときは checkout を行わず、現在の branch を head として使用する。開始時に detached HEAD でないこと、base branch と異なること、worktree と index が clean であることを検証する。`origin/<current>` が存在する場合は local HEAD と同じ commit でなければならず、存在しない場合は最終 push で新規作成してよい。不一致を stash / reset / pull / force-push で自動補正してはならない。
+  - 上記 current branch 検査は FR-CLI-82 の共通 startup preflight に集約し、dry-run 計画・branch 作成・最初の Agent session より前に fail-closed で全不整合を報告する。GUI thread では remote 照会を行わない。
+  - HVE が新規作成した branch だけを FR-CLI-34 の自動 local cleanup 対象とする。利用者が選択した current branch は、PR が merged でも自動削除してはならない。`enable_auto_merge` の既定 OFF と GitHub の review / status check 境界は変更しない。
+  - `enable_auto_merge` 単独で Step-scoped branch を作る ASDW-WEB、および既存の workflow-wide branch を必要とする ADFDV の挙動は本設定で無効化してはならない。これらは remote CI/CD の実行契約であり、任意の PR 作成オプションとは別である。
+
+### 5.16 進捗保存による再実行
+
+本節は §5.6 が廃止した SDK セッションの復元を復活させない。復元するのは Workflow 進捗（どの Step が成功したか）だけであり、未完了 Step は常に新しいセッションで実行する。
+
+- **FR-CLI-86**: `orchestrate` は `--resume-run <run-id>` を受け取り、FR-STATE-04 が記録した当該 run の `succeeded` な Step を実行対象から除外しなければならない。既定は未指定（通常実行）とする。
+  - 指定された run-id の記録が 1 件も無い場合は fail-closed で停止する。誤った run-id を無視して全 Step を再実行してはならない。利用者が完了済みと誤認したまま全体を再実行し、既にデプロイ済みの資源へ重複操作を行う事故を防ぐためである。
+  - 除外は active step の絞り込みとして行い、DAG の依存関係（FR-DAG-01）を変更してはならない。
+  - fan-out Step は展開後の子 ID（`{base_id}/{key}`）で記録される一方、本項の除外は展開前の active step（base ID）へ適用するため、**fan-out Step は成功済みでも再実行される**。除外を fan-out 展開後へ移すと、完了済み Step の `required_params`（FR-DAG-08）が未指定であるだけで再実行全体が `blocked` となるため、取りこぼしではなく重複実行の側へ倒している。
+  - 新規の環境変数を追加してはならない。
+  - 契約テスト: [hve/tests/test_run_progress.py](hve/tests/test_run_progress.py)
+
+### 5.17 Wave 境界の承認ゲート
+
+- **FR-CLI-87**: `orchestrate` は `--approval-gates` を受け取り、有効なときに限り、`StepDef.approval_gate` を宣言した Step を含む Wave の実行開始前に利用者へ承認を求めなければならない。既定は無効とし、無効時は一切の確認を出してはならない。
+  - 承認は同期とする。標準入力が対話可能でない実行（非対話 CLI、GUI が起動する子プロセス〈FR-GUI-23〉、Cloud）では確認を出さず、当該 run を `blocked` として停止しなければならない。無人実行を承認なしで続行させないためである。
+  - 拒否および非対話での停止は、`run_workflow` の戻り値へ `blocked` と `error` を設定して返さなければならない。独自のキー集合で返してはならない（終了コード判定が `blocked` / `error` / `failed` を参照するため）。
+  - 承認要求は既存の `on_wave_start` フック経由で行い、[hve/dag_executor.py](hve/dag_executor.py) へ新規のフックを追加してはならない（FR-MAINT-07）。同フックの汎用例外握り潰しからは承認拒否の例外だけを除外する。
+  - 承認・拒否の記録は FR-STATE-04 の進捗ストアへ `approval:<wave_index>` を step_id として残し、承認者名・自由記述・prompt 本文を保存してはならない（NFR-SEC-01 / FR-RTO-04）。
+  - **GUI からの承認は本項の対象外とする**。FR-GUI-23 が GUI の子プロセスの標準入力を対話不能と定めているため、同期の標準入力プロンプトは成立しない。GUI で承認を行うには FR-QA-03 の `qa_answer_mode="gui-file"` と同種の IPC 経路が必要であり、別要件として扱う。
+  - 新規の環境変数を追加してはならない。
+  - 契約テスト: [hve/tests/test_approval_gate.py](hve/tests/test_approval_gate.py)
+
+### 5.18 PR / Issue の参照経路
+
+- **FR-CLI-88**: Pull Request および Issue（障害記録を含む）を Agent セッションから参照する場合、その経路は [.github/.mcp.json](.github/.mcp.json) への MCP サーバ宣言としなければならない。`mdq` の索引ルート（FR-MDQ-02）と `cq` の索引対象（FR-CQ-01）を拡張してはならない。両者はワークツリー上のファイルだけを索引する契約であり、GitHub API 上のデータは対象外だからである。
+  - 宣言が必要なのは、FR-CLI-76 が `enable_config_discovery=False` を指定してワークスペース / ユーザースコープ / **プラグイン由来**の MCP サーバを自動探索から除外しているためである。利用者が GitHub Copilot CLI 側へプラグインとして登録しただけでは Step 実行セッションへ届かない。
+  - GitHub の MCP サーバを宣言する場合、`tools` は**参照系だけを列挙**しなければならない。`tools: ["*"]` を用いてはならず、作成・更新・削除・マージ・クローズ・push・ラベル付与等の状態変更ツールを含めてはならない。`FR-QA-03` が Work IQ で問題視した「`tools: ["*"]` により最小権限 allowlist が及ばない」状態を再現しないためである。
+  - 具体的なサーバー定義（`command` / `url` / tool 名）は利用者環境と GitHub の提供形態に依存するため本書では確定しない。宣言した時点で上記 allowlist を満たすことを機械検査する。
+  - 契約テスト: [hve/tests/test_mcp_declaration_contract.py](hve/tests/test_mcp_declaration_contract.py)
+
+### 5.19 Copilot cloud agent への Issue 割当
+
+- **FR-CLI-89**: `orchestrate` は `--assign-copilot-agent` を受け取り、`--create-issues` で当該 run が新規作成した Root Issue を Copilot cloud agent へ割り当てられなければならない。既定は無効とする。
+  - `--create-issues` を伴わない指定は警告して無視し、既存 Issue、Pull Request、または利用者が指定していない Issue を暗黙に割り当ててはならない。
+  - 割当は [hve/github_api.py](hve/github_api.py) の FR-GUI-49 と同じ REST 実装へ委譲し、`assignees: ["copilot-swe-agent[bot]"]` と `agent_assignment.target_repo` を送る。`base_branch` が空または未指定のときは `agent_assignment` へ含めてはならない。
+  - 割当に失敗した場合は run を継続せず fail-closed とする。Issue 作成済みであることと割当失敗を区別して報告し、同じ Root Issue を再作成してはならない。
+  - public preview の Agent Tasks API（`POST /agents/repos/{owner}/{repo}/tasks`）は使用しない。既存の Issue / Sub-Issue / PR ライフサイクルを迂回しないためである。
+  - 新規の環境変数を追加してはならない。
+
+### 5.20 Prompt 版（自然言語 Prompt からの計画と実行）
+
+本節は HVE の Cloud 版 / GUI 版 / CLI 版に並ぶ **第 4 の利用面**（Prompt 版）を規定する。Prompt 版は新しい Workflow 実行エンジンではない。自然言語を型付き request へ変換する repository Agent Skill と、request を決定的に検証・計画して既存 `orchestrate` へ委譲する薄い CLI 境界だけで構成する。
+
+- **FR-PROMPT-01**: Prompt 版は既存の実行核（`run_workflow` / `DAGExecutor` / `StepRunner`）を再実装してはならない。実行は `orchestrate` サブコマンドの子プロセス起動だけを経路とし、Workflow / Step / 依存 / 入出力契約の正本は [hve/workflow_registry.py](hve/workflow_registry.py) と [.github/io-contracts/](.github/io-contracts/) のままとする。
+  - 対象面は GUI 内の既存 Copilot CLI タブ、standalone GitHub Copilot CLI、VS Code / GitHub Copilot app のローカル 3 面とする。GitHub.com / Cloud Agent Orchestrator からの Prompt request 実行は本版の対象外とし、対応済みと記載してはならない。
+  - 新しい GUI タブ・GUI ウィジェット・Prompt エディタを追加してはならない。
+  - 契約テスト: [hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py)
+
+- **FR-PROMPT-02**: Prompt 版の入力は UTF-8 JSON の **request v1** とし、HVE Python はその内容を信用せず、schema・registry・allowlist で再検証しなければならない。HVE Python 内へ自然言語を解釈する新しい parser を追加してはならない。
+  - `schema_version` は整数 `1` のみ受理する。未知の major、未知の field、重複 key、空の `workflows`、同一 Workflow の重複指定、非文字列 path は fail-closed で拒否する。
+  - `workflow_id` は [hve/workflow_registry.py](hve/workflow_registry.py) の canonical ID へ解決できるものだけを受理し、解決結果を計画へ明示する。`steps` は当該 Workflow に実在する Step ID だけを受理する。
+  - `params` / `settings_overrides` は本書が固定する allowlist の key だけを受理する。`settings_overrides` の allowlist は FR-LOCAL-SURFACE-01 (a) の shared setting 集合とし、`params` は当該 Workflow の `WorkflowDef.params` が宣言した key に限る。token・password・任意の環境変数・任意のコマンド・任意のファイルパス実行を受理してはならない。
+  - `goal` は既存 `--additional-prompt` へ渡す文字列であり、shell として解釈してはならない。
+  - `dry_run` / plan hash / 実行順 / `--workbench off` は Prompt CLI が所有し、request から上書きさせてはならない。
+  - 契約テスト: [hve/tests/test_prompt_request.py](hve/tests/test_prompt_request.py)
+
+- **FR-PROMPT-03**: `hve prompt plan --request <path>` は、成果物（`docs/` / `src/` / `knowledge/` / `qa/` 等）を一切生成・変更せずに実行計画を提示しなければならない。
+  - 検証済み request と保存済み GUI 設定から各 Workflow の argv を構築し、Workflow ごとに `orchestrate --dry-run` を argv 配列で順に実行する。いずれかが非 0 で終了した場合は計画を提示せず、その終了コードを伝播する。
+  - `orchestrate --dry-run` 自体の既存の副作用（run ディレクトリ `work/run/<run-id>/` の作成、mdq / cq の索引更新）は本版では変更しない。「一切書き込まない」と記載してはならない。
+  - `--dry-run` は実行計画を表示するだけであり、上流成果物の不足を検出して非 0 で終了する契約を持たない。利用者文書でもこれを前提にしてはならない。
+  - 提示内容は Workflow の実行順、入力別名の解決結果、各 Workflow の argv、および計画の SHA-256 とする。
+  - 計画の提示文と失敗時のメッセージは、利用者へコマンド・request path・SHA-256 の入力を求めてはならない。承認は自然言語で受け取り、`--expected-sha256` への転記は Agent が行う前提で記述する。
+  - 契約テスト: [hve/tests/test_prompt_cli.py](hve/tests/test_prompt_cli.py)
+
+- **FR-PROMPT-04**: `hve prompt run --request <path> --expected-sha256 <64 桁 hex>` は、計画を同じ規則で再構築し、SHA-256 が一致した場合だけ実行しなければならない。
+  - `--expected-sha256` の欠落・書式不正・不一致では **子プロセスを 1 つも起動してはならない**。自然言語上の「承認」だけで書き込みを開始してはならない。
+  - 実行は `sys.executable -m hve ...` の argv 配列かつ `shell=False` とし、Prompt 本文をコマンド文字列として評価してはならない。
+  - 複数 Workflow は fail-fast とする。ある Workflow が非 0 で終了した場合、後続 Workflow を起動してはならない。成功済み Workflow を取り消す振る舞い（rollback）を主張してはならない。
+  - 承認記録の永続化・署名・期限・分散ロックは本版では実装しない。
+  - 契約テスト: [hve/tests/test_prompt_cli.py](hve/tests/test_prompt_cli.py)
+
+- **FR-PROMPT-05**: 計画の SHA-256 は、版付き canonical JSON に対して計算しなければならない。対象は schema version、canonical Workflow ID と安定ソート済みの実行順、各 Workflow の最終 argv 配列（表示用 shell 文字列ではない）、正規化済み入力別名、およびリポジトリの HEAD commit とする。
+  - canonical JSON は key ソート、compact separator、UTF-8、LF、リポジトリ相対の `/` 区切りパスで正規化する。保存済み設定・request・HEAD のいずれかが計画内容を変えれば hash も変わらなければならない。
+  - 契約テスト: [hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py)
+
+- **FR-PROMPT-06**: 複数 Workflow の実行順は `get_meta_dependencies()`（FR-COMMON-01）に基づく安定ソートで決定しなければならない。選択されていない依存 Workflow を暗黙に追加してはならず、利用者定義の任意 DAG を受理してはならない。循環を検出した場合は実行前に停止する。
+  - 順序決定は GUI と Prompt 版で同一実装を共有しなければならない（FR-MAINT-07）。実装を複製して 2 つの実行面へ drift を持ち込んではならない。
+  - 契約テスト: [hve/tests/test_workflow_order.py](hve/tests/test_workflow_order.py)
+
+- **FR-PROMPT-07**: Prompt 版は保存済み GUI 設定（[hve/gui/settings_store.py](hve/gui/settings_store.py) `load()`）を基準値として `OrchestrateArgs` を構築しなければならない。構築は Qt ウィジェットを起動しない純粋関数とし、PySide6 未導入環境でも import・実行できなければならない。
+  - 3 状態（`""` / `"on"` / `"off"`）、bool、リスト、Workflow 固有値の解釈は現行 GUI と同一でなければならない。
+  - FR-LOCAL-SURFACE-01 (a) の shared setting は、GUI が保存したすべての key について本経路で `OrchestrateArgs` へ反映しなければならない。保存 key 名と `OrchestrateArgs` のフィールド名が異なる場合は明示的に対応付け、無言で捨ててはならない。
+  - request の `settings_overrides` は allowlist の key だけを上書きできる。
+  - 契約テスト: [hve/gui/tests/test_orchestrate_args_from_settings.py](hve/gui/tests/test_orchestrate_args_from_settings.py)
+
+- **FR-PROMPT-08**: 非 canonical なファイル名の入力は、**実行時の入力別名（canonical → actual）** として扱わなければならない。ファイルのコピー、canonical path への複製、per-Step I/O 契約（[.github/io-contracts/](.github/io-contracts/)）や `StepDef.output_paths` の実行時書き換えを行ってはならない。
+  - `canonical` は選択された active Step の `required_input_paths` に**リテラルで**含まれるものだけを受理する。v1 では glob、`{key}` 等の placeholder、ディレクトリ入力の別名化を拒否する。
+  - `actual` はリポジトリ内に存在する通常ファイルだけを受理する。絶対パス、`..` によるリポジトリ外への脱出、symlink / junction / reparse point を拒否する。
+  - 同一 canonical への重複・競合指定を拒否する。選択された上流 Step が生成する canonical output の差し替えを拒否する。
+  - v1 が対応しない形式は actionable なエラーで停止し、silent fallback してはならない。
+  - 契約テスト: [hve/tests/test_input_aliases.py](hve/tests/test_input_aliases.py)
+
+- **FR-PROMPT-09**: 入力別名は、root Step の前提成果物判定（FR-DAG-06）、meta 依存の artifact pattern 判定、Step Prompt、および Fleet task の必須入力表示へ、**単一の解決器**を通して同じ結果で適用しなければならない。
+  - 別名を一部の判定にだけ適用して前提ゲートを迂回させてはならない。未知・不正な別名は Agent セッション開始前に fail-closed で停止する。
+  - fail-closed の適用範囲は Prompt 版の経路だけでなく、`orchestrate --input-alias` を直接使う CLI / GUI 経路を含む。検証を省くと repo 外のパスが Step Prompt へ注入される。
+  - Agent へ渡すのは解決後の path だけとし、対象ファイルの本文を Prompt へ埋め込んではならない（NFR-CTX-01）。
+  - 別名に関係しない Step の Prompt と、全 Step の canonical output は変化してはならない。
+  - 契約テスト: [hve/tests/test_prompt_input_alias_integration.py](hve/tests/test_prompt_input_alias_integration.py)、[hve/tests/test_prompt_cli.py](hve/tests/test_prompt_cli.py)
+
+- **FR-PROMPT-10**: 自然言語から request v1 への変換手順は repository Agent Skill として提供し、HVE Python 側へ持ち込んではならない。Skill は不明な Workflow / Step / field を推測で補完せず、曖昧なときは実行せずに質問しなければならない。
+  - 利用者文書は、[hve/workflow_registry.py](hve/workflow_registry.py) が定義する全 Workflow について、Product Manager がコピーできる Markdown Prompt 例を最低 1 件ずつ持たなければならない。複数 Workflow 横断の例と、非 canonical 入力名の例を含める。
+  - 各例は「plan を先に提示し、明示承認前に run しない」ことを明記しなければならない。
+  - 利用者は自然言語だけで計画取得から実行までを完了できなければならない。`hve prompt plan` / `hve prompt run` の起動、request path の受け渡し、plan SHA-256 の転記はすべて Agent が代行し、Skill も利用者文書もこれらの入力を利用者へ求めてはならない。貼り付け用 Prompt 例の本文へ CLI サブコマンド名を含めてはならない。
+  - 承認は自然言語で受け取る。Skill は承認語の網羅列挙を持たず、明確な実行意思だけを承認とみなし、曖昧な同意は承認とせず再確認する。ただし FR-PROMPT-04 の `--expected-sha256` 一致ゲートを緩和してはならない。
+  - 利用者文書に Prompt 件数などの変動値を固定記述してはならない。正本または確認方法へ誘導する。
+  - 契約テスト: [hve/tests/test_prompt_edition_docs_contract.py](hve/tests/test_prompt_edition_docs_contract.py)
+
+### 5.21 ローカル 3 面の設定パリティ
+
+本節は、直接 `orchestrate` CLI・GUI Orchestrator・Prompt 版（§5.20）の 3 つの**ローカル**利用面に対して、利用者が指定できる設定の同一性を規定する。Cloud Agent Orchestrator は Issue Form を入口とする別経路であり、本節の対象に含めない（Cloud との対応は FR-CLOUD-10 / FR-CLOUD-11 と `hve/tests/fixtures/option_parity_matrix.yaml` が扱う）。
+
+- **FR-LOCAL-SURFACE-01**: ローカル 3 面のパリティは「同じ利用者意図が、同じ正規化済み値として `orchestrate` へ到達すること」と定義する。CLI フラグ名の字面一致を求めてはならない。各設定は次の 5 分類のいずれか 1 つに属し、分類ごとに以下の契約を満たさなければならない。
+  - **(a) shared setting**: 3 面すべてで指定できる。GUI は [hve/gui/settings_store.py](hve/gui/settings_store.py) `defaults()` へ既定値を持ち、[hve/gui/settings_apply.py](hve/gui/settings_apply.py) `_SECTION_FIELDS` で widget と対応付けて永続化する。Prompt 版は保存値を基準値とし（FR-PROMPT-07）、`ALLOWED_SETTINGS_OVERRIDES` の key として run 単位で上書きできる。CLI は同義のフラグを持つ。対象は次の 26 key とし、`ALLOWED_SETTINGS_OVERRIDES` と過不足なく一致しなければならない（FR-PROMPT-02）。
+    - 実行品質: `model` / `review_model` / `qa_model` / `akm_model` / `reasoning_effort` / `review_reasoning_effort` / `qa_reasoning_effort` / `akm_reasoning_effort` / `context_tier` / `akm_context_tier`
+    - 実行制御: `max_parallel` / `timeout` / `review_timeout` / `auto_qa` / `auto_contents_review` / `verbosity` / `branch` / `strict`
+    - Agentic Retrieval / Toolbox: `enable_agentic_retrieval` / `agentic_data_source_modes` / `foundry_mcp_integration` / `agentic_data_sources_hint` / `agentic_existing_design_diff_only` / `foundry_sku_fallback_policy` / `enable_tool_search`
+    - Cloud Session: `cloud_session_branch`（保存 key は `cloud_session_repository_branch`）
+  - shared setting の集合は 1 箇所で定義し、面ごとに別集合を持ってはならない。一致は機械検査しなければならない。
+  - 同一 Workflow と、両面で表現可能な同一の保存済み設定を入力し、Prompt request の run 単位上書き・Step・goal・入力別名、および GUI セッション固有値（QA / Steering IPC、Hub の Issue 関連付け、Cloud Session の Step 単位上書き、Autopilot の APP lane）を指定しない場合、GUI は `settings_apply.apply_to_widgets()` 後の `OptionsPage.build_args_for_workflow()`、Prompt 版は `args_from_settings()` からそれぞれ `OrchestrateArgs.to_argv()` へ到達し、生成する argv 配列の要素数・順序・値が完全一致しなければならない。GUI 専用の `qa_answer_mode=user` は比較対象外とする。実効値が同じであっても、面ごとに不要な既定値フラグを追加・省略して差分を残してはならない。
+  - **(b) workflow param**: [hve/workflow_registry.py](hve/workflow_registry.py) の `WorkflowDef.params` が宣言した Workflow 固有値。CLI フラグ、Prompt request の `workflows[].params`、および当該 Workflow を選択した GUI 画面から指定できなければならない。値は宣言した Workflow にだけ適用し、GUI の全体設定へ永続化してはならない。対象は `create_remote_mcp_server` / `tdd_max_retries` とする。
+  - **(c) semantic alias**: 同じ実行状態へ到達する別表現を持つもの。面ごとに入口が異なってよいが、解決後の実行状態は一致しなければならない。`include_kpi_okr` は FR-PARAM-10 に従い Step 選択を唯一の推奨状態とし、CLI `--include-kpi-okr` と Prompt の `params` は後方互換の入口として維持する。GUI へ重複する可視状態を追加してはならない。
+  - **(d) derived**: 他の設定から一意に導出する値。重複入力欄を設けてはならない。Cloud Session の repository owner / name は `repo`（`owner/repo`）から導出する。
+  - **(e) excluded**: 意図的に面固有とするもの。除外は根拠となる要件または実装上の制約を伴わなければならない。Workbench 表示系（GUI / Prompt は `--workbench off` を強制注入する）、GUI 固有 IPC（`qa_ipc_dir` / `steering_ipc_dir`）、対話専用（`force_interactive`、および FR-CLI-87 の `--approval-gates`）、GUI 入力欄を禁止した ASDW-WEB Step 1.3 の `data_*`（FR-WF-ASDW-02 / FR-GUI-02）、Autopilot チェーン、`_OBSOLETE_KEYS` 登録済みの旧 GUI 設定、およびコンソール出力の表示制御（`--verbose` / `--quiet` / `--show-stream` / `--log-level` / `--no-color` / `--banner` / `--screen-reader` / `--timestamp-style`）を除外とする。入力別名（`input_aliases`）は FR-PROMPT-08 の非 canonical 入力を request で扱う Prompt 版と直接 CLI の実行時機能であり、GUI へ重複する入力欄を追加しない。ただし `OrchestrateArgs` と `to_argv()` の既存受け口は維持する。コンソール出力の表示制御は `OrchestrateArgs` に存在するが GUI 設定ストアへ永続化しておらず、実行結果の意味論を変えないため、本節では面固有のままとする。
+  - 優先順位は、shared setting が「Prompt `settings_overrides` > 保存済み GUI 設定 > 既定値」、workflow param が「明示指定 > 既定値」とする。`tdd_max_retries` は既存の環境変数経路を維持し「CLI 明示 > `HVE_TDD_MAX_RETRIES` > 5」とする。本節のために新しい環境変数を追加してはならない。
+  - shared setting と workflow param の解決には、新しい設定レジストリ・シリアライザ・抽象レイヤーを導入してはならない。既存の [hve/gui/orchestrate_args.py](hve/gui/orchestrate_args.py) `OrchestrateArgs` を CLI argv への唯一の変換器として再利用する（FR-MAINT-07）。
+  - 分類の網羅性は機械検査しなければならない。`orchestrate` の全 CLI 引数は `OrchestrateArgs` のフィールド、明示した別名、または理由付きの除外リストのいずれかへ分類されていなければならず、未分類が残ってはならない。
+  - 契約テスト: [hve/tests/test_local_surface_option_parity.py](hve/tests/test_local_surface_option_parity.py)
 
 ---
 
@@ -893,21 +1123,81 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 - **FR-GUI-25**: GUI は Workflow 実行時の Root Issue を「新規作成」と「既存 Issue へ連携」から選択できなければならない。既存 Issue へ連携する場合、Orchestrator は Root Issue を新規作成せず、指定された Issue 番号を Root Issue として扱い、Sub-Issue の親および PR body の closing keyword（現行実装は `Closes #N`）に用いなければならない。
   - 選択は CLI オプション `--issue-number <N>` として Orchestrator へ伝達する。GUI 専用の伝達経路を追加してはならない。
-  - `--issue-number` は `--create-issues` と併用したときにだけ効力を持つ。`--create-issues` を伴わない指定は無視してはならず、警告して実行を継続する。
+  - `--issue-number` は `--create-issues` または `--create-pr` と併用したときに効力を持つ。`--create-issues` との併用では指定 Issue を Root Issue として Sub-Issue の親にも用いる。`--create-pr` だけとの併用では Root / Sub-Issue を作成せず、PR 作成前に指定 Issue を検証し、有効な Issue 番号を `root_issue_num` として返して PR body の `Closes #N` にだけ用いる。どちらも伴わない指定は警告して無視する。
   - 指定された番号の Issue を取得できない場合、取得結果が Pull Request である場合、または `number` を欠く場合は fail-closed とし、Root Issue の新規作成へ暗黙にフォールバックしてはならない。誤った番号のまま Sub-Issue を無関係な Issue へ紐付けることを防ぐためである。
 
 - **FR-GUI-26**: GUI は GitHub Issue を閲覧・編集できる画面を提供しなければならない。提供範囲は、Issue 一覧の取得と絞り込み（`open` / `closed` / `all`）、選択した Issue の詳細（番号・タイトル・状態・作成者・ラベル・担当者・本文・URL）の表示、タイトルと本文の編集、状態の `open` / `closed` 切り替え、コメント一覧の表示、コメントの投稿、および自身が投稿したコメントの編集とする。
-  - 一覧および詳細の更新は利用者の明示操作（更新ボタン）で行い、自動ポーリングを行ってはならない。GitHub API のレート制限を不要に消費しないためである。
+  - 選択中 Issue の会話コメント一覧は、詳細取得に伴う 1 回の取得契機で API の `Link: rel="next"` を追跡して全ページを API 順に取得する。周期的な再取得は行わない。
+  - 会話コメント一覧の各 page は object 配列でなければならず、途中 page の非配列応答または非 object 要素を「コメント 0 件」や部分結果へ縮退させてはならない。応答 schema を解釈できない場合は fail-closed とする。
+  - 一覧および詳細の更新は利用者の明示操作（更新ボタン）と FR-GUI-31 が定める初期取得で行い、自動ポーリングを行ってはならない。GitHub API のレート制限を不要に消費しないためである。ここでいう自動ポーリングとは、利用者の操作を伴わずに繰り返し取得する周期処理を指し、FR-GUI-31 の 1 回限りの初期取得は含まない。
   - GitHub API 呼び出しを GUI スレッドで実行してはならない。既存の QThread ワーカーの型（[cq/gui/threads.py](cq/gui/threads.py) の `succeeded` / `failed` シグナル）に従う。
-  - ラベル・担当者・マイルストーン・リアクション・Projects・タイムラインイベントの編集は本要件の対象外とする。
+  - コメント投稿・更新は応答の正の comment ID が要求対象と一致することを確認してから成功表示しなければならない。応答が object でも ID を確認できない場合は fail-closed とし、入力を消去してはならない。
+  - 既存 Issue のラベル・担当者・マイルストーンの編集は FR-GUI-44 が規定する。リアクション・Projects・タイムラインイベントの編集は本要件の対象外とする。新規 Issue 作成時のラベル・担当者・マイルストーンは FR-GUI-41 が規定する。
 
 - **FR-GUI-27**: GUI は GitHub Pull Request を閲覧し、コメントを投稿できる画面を提供しなければならない。提供範囲は、PR 一覧の取得と絞り込み（`open` / `closed` / `all`）、選択した PR の詳細（番号・タイトル・状態・作成者・head / base ブランチ・マージ状態・本文・URL）の表示、変更ファイル一覧の表示、コメント一覧の表示、およびコメントの投稿とする。
-  - コメントは Issue Comments API による会話コメントとする。差分の行単位レビューコメント、および Approve / Request changes のレビュー投稿は本要件の対象外とする。
-  - GUI から PR を新規作成する経路を追加してはならない。PR 作成は既存の `--create-pr` / `--create-issues` 経路が担い、当該経路は PR 作成前に必ずローカル作業ブランチを作成して checkout する（[hve/orchestrator.py](hve/orchestrator.py) の `_git_checkout_new_branch`）。GUI 側へ別経路を設けると同じブランチ強制の契約を二重実装することになる（FR-MAINT-07）。
+  - 選択中 Pull Request の会話コメント一覧は、詳細取得に伴う 1 回の取得契機で Issue Comments API の `Link: rel="next"` を追跡して全ページを API 順に取得する。周期的な再取得は行わない。
+  - コメントは Issue Comments API による会話コメントとする。Approve / Request changes / Comment のレビュー投稿は FR-GUI-45、差分の行単位レビューコメントは FR-GUI-46 が規定する。
+  - GUI からの Pull Request 新規作成は FR-GUI-42、作成後の metadata と reviewer 設定は FR-GUI-43 が規定する。既存の `--create-pr` / `--create-issues` 経路と、その経路が行う作業ブランチ作成・成果物 commit は変更しない。
 
-- **FR-GUI-28**: FR-GUI-25〜27 が用いる GitHub アクセスは [hve/github_api.py](hve/github_api.py) を単一の情報源としなければならない。GUI 専用の HTTP クライアント、`gh` サブプロセス呼び出し、および別の GitHub SDK を新規に導入してはならない（FR-MAINT-07）。
+- **FR-GUI-28**: FR-GUI-25〜27 および FR-GUI-30〜49 が用いる GitHub アクセスは [hve/github_api.py](hve/github_api.py) を単一の情報源としなければならない。GUI 専用の HTTP クライアント、`gh` サブプロセス呼び出し、および別の GitHub SDK を新規に導入してはならない（FR-MAINT-07）。
   - 同モジュールが既に備えるトークン解決（`GH_TOKEN` → `GITHUB_TOKEN`）、リポジトリ解決（`REPO`）、指数バックオフと `Retry-After` 準拠のリトライを再利用しなければならない。
+  - `max_retries` は正の整数とし、負の `Retry-After` を待機値として使用してはならない。最終試行の rate-limit 応答後に、実行しない次試行のための待機を行ってはならない。
+  - ページングに必要な場合だけ、`api_call()` は成功応答 header を呼び出し元が渡した専用 map へ複製できなければならない。既定の戻り値（JSON object / array）を変更してはならず、認証 header と応答 header を同じ変数へ格納してはならない。同名の `Link` field line が複数ある場合は受信順の comma 結合値を失わずに渡す。
+  - `Link` の `rel="next"` は HTTPS かつ `api.github.com` の同一 endpoint path だけを許可する。HTTPS既定port 443の明示と省略は同一originとして正規化し、それ以外のport、userinfo、fragment、別 origin、別 endpoint、循環 cursor は API 呼び出し前または追跡中に fail-closed で拒否する。自動 redirect が別 origin を指しても `Authorization` を転送せず、GitHub token を別 host へ送信してはならない。
   - GUI 側は同モジュールの例外 `GitHubAPIError` を利用者向けメッセージへ変換する層だけを持ち、リトライ・認証・ページングを再実装してはならない。
+
+- **FR-GUI-30**: FR-GUI-26 / FR-GUI-27 が提供する Markdown 入力欄（Issue 本文・Issue コメントの新規投稿と編集・Pull Request コメントの新規投稿）は、書式の挿入操作と描画プレビューを備えなければならない。実装は 1 つの共通ウィジェットとし、入力欄ごとに別実装を持ってはならない（FR-MAINT-07）。
+  - 入力欄は Markdown の原文を保持しなければならない。編集結果をリッチテキストから Markdown へ再生成してはならない。`QTextDocument` の Markdown 往復変換は fenced code block の言語指定・タスクリスト等を保持しないため、GitHub 上の既存本文を編集保存する経路で内容を破壊するためである。
+  - 書式の挿入操作は、太字・斜体・見出し・引用・インラインコード・リンク・箇条書き・番号付きリスト・タスクリストの 9 種とする。選択範囲がある場合は選択範囲へ、無い場合はキャレット位置へ Markdown 記法を挿入する。
+  - プレビューは入力中の Markdown を描画して表示し、入力欄と切り替えられなければならない。Markdown から HTML への変換は [hve/gui/markdown_preview/markdown_html_renderer.py](hve/gui/markdown_preview/markdown_html_renderer.py) `MarkdownHtmlRenderer` を再利用し、GUI 側へ別の変換実装を持ってはならない（FR-MAINT-07）。
+  - 画像・ファイルの添付、`@` メンション補完、`#` 参照補完、絵文字補完は本要件の対象外とする。添付に対応する公開 REST エンドポイントが [hve/github_api.py](hve/github_api.py) の単一情報源の範囲に存在せず、補完 3 種は手入力で代替できるためである。
+  - プレビューの描画に Mermaid・数式・シンタックスハイライト用の外部アセットを必須としてはならない。コメント入力欄は 1 画面に複数存在しうるため、描画面の起動コストを既存のプレビュー Dock（FR 対象外）と同等に引き上げないためである。
+
+- **FR-GUI-31**: FR-GUI-26 / FR-GUI-27 の画面は、リポジトリが確定した時点で Issue 一覧と Pull Request 一覧をそれぞれ 1 回だけ取得しなければならない。取得は画面表示時とリポジトリ適用時に限り、以後の更新は利用者の明示操作（更新ボタン）による（FR-GUI-26）。
+  - FR-GUI-37 が当該 GUI セッションで HVE-created と確認した branch の具体的な PR 番号 1 件を `GET /pulls/{number}` で確認する targeted polling は、本要件が禁じる Issue / Pull Request **一覧**の自動再取得には含めない。cleanup monitor は一覧 API を呼んではならない。
+  - 一覧の取得結果が 0 件の場合、絞り込み状態が `open` であることと、`all` へ切り替えて再取得できることを利用者へ提示しなければならない。取得成功と対象不在を区別できず、利用者が「取得できていない」と誤認するためである。
+  - 一覧には、取得済みの一覧に対してクライアント側だけで絞り込む入力欄を設けなければならない。当該絞り込みは追加の GitHub API 呼び出しを行ってはならない。
+  - 一覧の既定の絞り込み状態は `open` とする。2 ページ目以降の取得（ページング）は FR-GUI-48 が規定する。GitHub Search API による検索は本要件の対象外とする。
+
+- **FR-GUI-32**: GUI は、実行するタスクへ関連付ける Issue と Pull Request を、それぞれ一覧から選択して指定できなければならない。関連付けは GUI session の run ID、Workflow ID、instance ID の組で分離し、別 Workflow / instance の値で上書きしてはならない（FR-GUI-40）。
+  - Issue の選択結果は FR-GUI-25 が定める「連携する Issue 番号」へ反映する。FR-GUI-25 の伝達経路（`--issue-number`）を変更してはならない。
+  - Pull Request の関連付けは GUI セッション内の指定に限り、Orchestrator へ伝達してはならない。新規の CLI オプション・`SDKConfig` フィールド・Cloud 経路の入力を追加してはならない。現行の Orchestrator は Pull Request を実行結果として作成する側であり、既存 Pull Request を入力として受け取る処理を持たないためである。既存設定 `linked_pr_number` は起動時の既定値として維持するが、run-scoped な関連付けの正本としては扱わない。
+  - 選択のための一覧取得は FR-GUI-28 の単一情報源に従う。選択操作を提供しても、利用者が番号を直接入力する既存の経路を廃止してはならない。
+
+- **FR-GUI-33**: GUI は、実行面に表示されているコンソール出力を、選択中の Pull Request へコメントとして投稿できなければならない。投稿は利用者の明示操作に限る。
+  - 投稿本文の組み立ては副作用を持たない単独の関数として実装し、GUI から分離して検証できなければならない。
+  - 本文には、投稿対象を識別できる見出しと、出力の総行数および掲載した行数を含めなければならない。掲載範囲は末尾から数えて 300 行までとし、省略が発生した場合はその旨を本文へ明記しなければならない。GitHub の Issue コメント作成 API は本文の最大長を公開していないため、全文の投稿を前提にしてはならない。
+  - コンソール出力に含まれる ANSI エスケープシーケンスを除去しなければならない。また、出力本文がコードフェンス記号を含む場合でも Markdown のフェンスが閉じるよう、フェンスの長さを本文に応じて決定しなければならない。
+  - 掲載行数・本文書式を変更するための CLI オプション・設定項目・環境変数を追加してはならない。全文は既存の `work/run/<run-id>/console-log.txt`（[hve/gui/page_workbench.py](hve/gui/page_workbench.py) `_write_console_log`）に保存済みであり、本要件はその要約を GitHub 上へ残す手段を補完する。
+  - 本要件の「明示操作」は手動の「コンソール出力を投稿」操作を指す。FR-GUI-36 の利用者が明示的に有効化した自動進捗 Post は別契約であり、本操作を削除・自動実行へ置換してはならない。
+
+- **FR-GUI-34**: GUI は、Pull Request の画面から現在のローカルブランチの push と、選択中 Pull Request の head ブランチのリモート削除を行えなければならない。いずれも利用者の明示操作に限る。
+  - push と削除は別々の操作としなければならない。push 直後に同じブランチを削除する連続実行を既定の振る舞いにしてはならない。
+  - head ブランチの削除は、選択中の Pull Request が `merged` または `closed` の場合に限り実行可能としなければならない。実行前に対象ブランチ名を含む確認を利用者へ提示し、承認された場合にだけ実行しなければならない。
+  - 本画面が利用者の明示操作で削除する対象はリモート（`origin`）のブランチに限る。本画面へ手動のローカル削除操作を追加してはならない。FR-GUI-37 の自動 cleanup は例外として GUI セッション内から起動できるが、ローカル削除を GUI 側へ再実装せず、FR-CLI-34 の共通 core へ委譲しなければならない（FR-MAINT-07）。
+  - リモートブランチの削除は [hve/github_api.py](hve/github_api.py) を経由しなければならない（FR-GUI-28）。push は git の 1 コマンド実行に限定し、[hve/orchestrator.py](hve/orchestrator.py) の add / commit / 保護パス検査を含む一連の処理を GUI から呼び出してはならない。当該処理は CLI 出力器と Orchestrator の実行文脈に依存するためである。
+  - Pull Request 作成前の git 安全判定と明示 push は FR-GUI-42 に従う。本画面から `git add` / `git commit` を呼ばない契約は維持する。
+
+- **FR-GUI-35**: HVE GUI は、GitHub 連携設定・Issue 操作・Pull Request 操作を、ヘッダーの `[GitHub]` から開く単一の非モーダル画面（GitHub Hub）へ集約しなければならない。
+  - GitHub Hub は `連携設定` / `Issue` / `Pull Request` の 3 面を持つ。`連携設定` は既存 C5 の設定キーと [hve/gui/settings_store.py](hve/gui/settings_store.py) を再利用し、別の永続化スキーマを追加してはならない。設定画面の GitHub node と Hub 上部の重複 repository 入力は撤去し、利用者が GitHub 設定を編集する可視面を 1 箇所にしなければならない。Orchestrator 引数を構築する内部 adapter は利用者入力面ではないため保持してよい。
+  - GitHub Hub の Issue 面は、既存の一覧・編集機能に加えて通常 Issue を作成できなければならない。作成項目は FR-GUI-41 に従い、Projects と Issue Form の画面再現は対象外とする。
+  - Issue body は FR-GUI-30 の共通 `GitHubCommentEditor` を用い、Markdown 原文と Preview を維持する。作成は FR-GUI-28 の単一 GitHub API 実装へ委譲し、GUI thread で API を呼んではならない。成功時は一覧を更新し、作成した Issue 番号を利用者が識別できなければならない。失敗時は入力内容を消去してはならない。
+  - GitHub Hub は Workflow 実行中も操作でき、FR-GUI-26 / 27 / 32 / 33 / 34 の既存機能を失ってはならない。Hub からの直接作成は FR-GUI-42 に従い、Orchestrator の既存 PR 作成経路と責務を混在させてはならない。
+
+- **FR-GUI-36**: HVE GUI は、Workflow 実行中の進捗を関連 Issue / Pull Request へ自動 Post するかを `github_auto_post_target` で利用者が選択できなければならない。値は `off` / `issue` / `pr` / `both` の 4 値、既定は `off` とし、GitHub Hub の `連携設定` だけが可視入力を所有する。GUI セッション内の機能であるため、新規 CLI オプション、`SDKConfig` フィールド、Cloud 入力を追加してはならない。
+  - Post 先 1 件につき、run ごとに進捗コメントを 1 件だけ作成し、以降は同じ comment ID を更新する。開始・各 Step の terminal 状態（`done` / `failed` / `skipped` / `blocked`）・Workflow 終了を更新契機とし、生ログ 1 行ごと、tool 呼び出しごと、token chunk ごとに Post してはならない。API request が進行中なら中間状態を queue へ積まず、最新 snapshot 1 件へ畳み込む。
+  - コメント本文は副作用のない単一 formatter が構築し、run ID、Workflow / instance / Step ID、状態、既存観測イベントから得た時刻・経過時間だけを Markdown 表で記録する。token、環境変数、prompt / response / reasoning 本文、tool 引数・結果、生 SDK payload を含めてはならない。動的な表セルは pipe / 改行 / HTML 特殊文字 / backtick をエスケープする。最終更新だけ、[hve/workiq.py](hve/workiq.py) `_sanitize_diagnostic_text` で認証情報をマスクした後、FR-GUI-33 の既存 formatter で整形したコンソール末尾 300 行を付加してよい。interim 更新では `console_text` が渡されても無視しなければならない（FR-MAINT-07）。
+  - 実行開始時に既存 Issue / PR が指定済みなら直ちに対象とする。Orchestrator が当該 run で新規作成する Root Issue は番号確定後から対象とする。新規 PR は post-DAG で初めて確定するため、当該 PR への自動 Post は最終更新 1 回だけとし、空 commit や早期 draft PR を本要件のために作成してはならない。
+  - GitHub API 呼び出しは FR-GUI-28 の単一実装を `GitHubWorker` から使い、GUI thread で実行してはならない。Post 失敗は status へ表示するが Workflow を失敗させず、次の更新で再試行してよい。create 失敗時は comment ID 未確定のまま次回 create を再試行し、update 失敗時は既存 comment ID を保持して次回 update を再試行する。Issue / PR の一方だけが失敗しても他方の状態を変更してはならない。実行中に同種 target の番号を変更した場合、旧 comment ID を新 target へ再利用せず、新 target で新しい comment を作成する。旧 target の comment は削除しない。GUI 終了時は新規 request を停止し、実行中 worker を既存 GitHub worker と同じ上限付き手順で回収する。close 後に in-flight 完了通知が到着しても pending request を生成してはならない。
+  - 手動の Issue / PR コメント、FR-GUI-33 の手動コンソール投稿、自動 Post の ON/OFF は実行中も利用できる。自動 Post を OFF にしても、既に投稿済みの GitHub コメントを削除してはならない。
+
+- **FR-GUI-37**: `delete_local_merged_branch=True` の GUI 実行で、当該 run が新規作成したローカル作業 branch と PR 番号が確定した場合、GUI は起動中に限ってその PR 番号の状態を低頻度で確認し、マージを観測したときだけ FR-CLI-34 の共通 core へローカル cleanup を委譲しなければならない。
+  - 監視対象は repository、PR 番号、branch、base branch、`created_by_hve` を持つ当該 GUI セッション内の target に限定する。`created_by_hve=False` の current branch mode、base branch と同名の branch、PR の head が別 repository の fork、head branch が不一致または不明な PR、未マージの open PR、closed-unmerged PR は削除対象外とし、git delete command を 1 回も実行してはならない。`delete_local_merged_branch=False` の場合は target を登録してはならない。
+  - 状態確認は FR-GUI-28 の `get_pull_request` を `GitHubWorker` から呼び、GUI thread で GitHub API または git command を実行してはならない。同一 target の request が進行中は重複 request を開始せず、open PR と呼び出し側が retryable と分類した一時的な API 失敗だけを次の周期で再確認してよい。恒久的な API 失敗、closed-unmerged、cleanup request 生成済み、および適格性の恒久的不一致は当該 target の監視を終了する。GUI が起動している間は open PR の監視回数に別の上限を設けない。対象 PR 番号を指定した status API だけを使用し、Issue / Pull Request 一覧を周期取得してはならない。
+  - 各 status request は target 登録世代を識別できなければならない。同じ PR 番号の target が別 branch へ置換された後に旧 request が完了しても、旧 target の cleanup request を生成してはならない。同一 target の重複登録は進行中requestの状態を初期化せず、cleanup request生成済みのtargetを同じGUIセッションで再登録してはならない。
+  - GUI 終了時は timer を停止して新規 request を作らず、状態取得workerとcleanup workerの双方を既存 GitHub worker と同じ上限付き手順で回収する。終了後の daemon、target のディスク永続化、および次回 GUI 起動時の監視再開を追加してはならない。終了後に in-flight 完了通知が到着しても cleanup request を生成してはならない。
+  - 本要件が削除するのはローカル branch だけである。remote head branch の削除は FR-GUI-34 の明示操作または GitHub repository の `Automatically delete head branches` 設定へ委ね、自動 local cleanup から remote delete API / `git push origin --delete` を呼んではならない。
+  - cleanup の失敗は status として通知するが Workflow の成否を変更してはならない。GUI を merge 前に終了した場合、その後の自動 cleanup は行わない。
 
 ### 6.14 GUI 質問票のクリップボードコピー
 
@@ -926,6 +1216,99 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
     - 自動経路は `_filter_workiq_questions` により重要度で絞り込み、`workiq_max_draft_questions`（既定 10）で件数を制限する。本操作は表示中の全質問を対象とし、絞り込みを行わない。
     - 既定テンプレートは応答を最大 5 件に制限するため、質問数にかかわらず返る件数は 5 件までとなる。
   - `QAMerger.render_merged` の出力は先頭に質問票のタイトル（`# `）を含み、既定テンプレートでは `### 質問一覧` の配下へ埋め込まれるため、見出しレベルが逆転する。また表セル内の改行を `<br>`、pipe を `&#124;` へ変換する。いずれも Markdown 構文として不正ではないため、専用の整形実装を新設せず既知の制約として扱う。
+
+### 6.15 GUI からの進捗再実行
+
+- **FR-GUI-38**: GUI は `FR-CLI-86` の `--resume-run <run-id>` を指定できなければならない。入力欄は Step 1 のオプション画面へ 1 つ置き、空欄または空白のみのときは当該オプションを子プロセスへ渡してはならない。
+  - run-id の実在確認・一覧取得・自動選択を GUI 側で行ってはならない。記録が無い run-id は `FR-CLI-86` が fail-closed で停止する契約であり、GUI が事前判定を持つと同じ規則の実装が 2 箇所になる（FR-MAINT-07）。
+  - 入力値は既存の設定ストアで保存・復元しなければならない。保存キーは `resume_run` とする。
+  - 本要件は `FR-STATE-04` が保存する Workflow 進捗の再利用だけを対象とし、§5.6 が全廃した SDK セッションの復元を復活させない。両者を同じ機能として利用者向けドキュメントへ記述してはならない。
+  - 新規の CLI オプション・`SDKConfig` フィールド・環境変数を追加してはならない。
+  - 契約テスト: [hve/gui/tests/test_orchestrate_args.py](hve/gui/tests/test_orchestrate_args.py)
+
+### 6.16 GitHub Issue / Pull Request タイトルの自動生成
+
+- **FR-GUI-39**: HVE GUI は、GitHub Issue または Pull Request を作成するとき、GitHub Copilot CLI へ本文コンテキストを問い合わせて簡潔なタイトルを自動生成できなければならない。タイトル生成は [hve/github_title_generator.py](hve/github_title_generator.py) の単一実装へ集約し、Issue 面と Orchestrator の PR 作成経路が同じ実装を使わなければならない（FR-MAINT-07）。
+  - Issue 面には利用者が明示的に再生成できる操作を置く。title が空で body が空でない状態で **[Issue を作成]** を押した場合は、タイトル生成に成功してから Issue 作成を継続する。利用者が入力済みの空でない title は自動的に上書きせず、そのまま使用する。明示的な再生成操作だけは既存 title を置き換えてよい。body が空または空白のみの場合は Copilot CLI を呼んではならない。
+  - GUI から `create_issues=True` で起動した Orchestrator が新規 Root Issue を作成する場合も、Root Issue body から title を生成する。利用者が `issue_title` を明示した場合は生成せず、その値を保持する。Sub-Issue は Step ID / Step title という決定的な識別子を必要とするため、本要件の生成対象外とする。
+  - GUI から起動した Orchestrator（既存の `HVE_GUI_SESSION_ID` が非空の子プロセス）が PR を作成する直前にタイトルを生成する既存経路に加え、FR-GUI-42 の直接作成面では利用者の明示操作でタイトルを生成できる。直接作成面で入力済みの title は自動上書きせず、生成失敗時はフォーム入力を保持して PR を作成しない。CLI 単独実行と Cloud 実行の既存タイトルは変更しない。Orchestrator の生成失敗時は従来の決定的タイトルへフォールバックし、draft checkpoint の識別 suffix を保持する。
+  - Copilot CLI は空の一時作業ディレクトリから非対話モード（`-p` / `--silent` / `--stream off` / `--no-color` / `--no-custom-instructions` / `--no-ask-user`）で起動する。`--available-tools=ask_user` と `--no-ask-user` を併用して実行可能 tool を 0 件に制限し、shell を介さず、固定 timeout 付きで実行する。モデルは `auto` とし、同モデルと互換性がない `--effort` は指定しない。汎用チャットの対話セッションを規定する FR-GUI-10 / FR-GUI-11 は変更しない。
+  - CLI へ渡してよいのは target 種別、既存の fallback title、必須 prefix、および最大 12,000 文字へ制限した Issue / PR 本文だけとする。repository、token、環境変数、prompt / response ログ、tool 入出力を追加してはならない。本文は信頼できないデータとして区切り、本文中の命令を無視するよう生成プロンプトに明記する。
+  - 応答は改行・Markdown prefix・引用符を除去した 1 行へ正規化し、最大 120 文字とする。空応答、非 0 終了、timeout、CLI 不在は失敗とする。Issue 面では入力を保持してエラーを表示し、Issue を作成しない。生成中は title / body / 生成 / 作成操作を無効化し、GUI thread で Copilot CLI を実行してはならない。
+  - 本要件のために新規設定キー、CLI オプション、`SDKConfig` フィールド、環境変数を追加してはならない。タイトル生成の明示操作または空 title での Issue 作成、および GUI 起動の PR 作成は、GitHub Copilot の token / premium request を消費し得る。
+  - 契約テスト: [hve/tests/test_github_title_generator.py](hve/tests/test_github_title_generator.py)、[hve/gui/tests/test_github_issue_title_generation.py](hve/gui/tests/test_github_issue_title_generation.py)、[hve/tests/test_orchestrator_github_title_generation.py](hve/tests/test_orchestrator_github_title_generation.py)
+
+### 6.17 GUI の GitHub task 関連付けと作成操作
+
+- **FR-GUI-40**: GitHub Hub は現在の task に関連付けられた repository、Issue 番号、Pull Request 番号、head / base branch、関連付け元を表示しなければならない。状態は `(GUI session run ID, workflow ID, instance ID)` を key とするメモリ内状態とし、新しい永続化形式を追加してはならない。
+  - Hub が表示する current task は、Workflow 未実行時は session default、実行中は直近に `github_target` を通知した Workflow / instance とする。履歴選択 UI は設けず、Hub は `workflow_id` / `instance_id` / Issue / Pull Request / branch / source を 1 組として受け取る。
+  - 手動選択、Hub での作成成功、および FR-RTO-08 の `github_target` event を同じ表示へ反映する。`github_target` が同一 Workflow / instance の provisional な手動値を更新しても、別 Workflow / instance の値を変更してはならない。
+  - Workflow 実行前に関連付けた Issue は FR-GUI-25 の `--issue-number` へ snapshot する。実行開始後の手動変更は Hub の追跡先と FR-GUI-36 の将来の Post 先だけを変更し、起動済み Orchestrator の Root Issue を変更してはならない。
+  - 既存の `linked_pr_number` は GUI 起動時の既定値として読み取るが、Orchestrator へ渡さず、run-scoped 状態の更新を設定へ自動保存してはならない。token、本文、URL、prompt、response を関連付け状態へ保存してはならない。
+  - 契約テスト: [hve/gui/tests/test_github_task_context.py](hve/gui/tests/test_github_task_context.py)、[hve/gui/tests/test_main_window_github_task_wiring.py](hve/gui/tests/test_main_window_github_task_wiring.py)
+
+- **FR-GUI-41**: GitHub Hub の Issue 作成面は、空でない title、任意の Markdown body、labels、assignees、milestone を指定して通常 Issue を作成できなければならない。Projects と GitHub Issue Form の field / upload / required validation の再現は対象外とする。
+  - labels と assignees は複数指定、milestone は未指定または 1 件とする。候補一覧は [hve/github_api.py](hve/github_api.py) の REST 実装から `GitHubWorker` で先頭 100 件だけを取得し、取得済み候補の絞り込みで追加 API request を行ってはならない。ページング UI と全件取得は対象外とする。
+  - title が空で body が空でない場合は FR-GUI-39 の生成を経て作成する。title が空で body も空の場合は作成しない。title が空でなければ body が空でも作成できなければならない。
+  - 「作成後、この task に関連付ける」は既定 ON とし、成功した Issue 番号を FR-GUI-40 へ反映する。API 失敗時は全入力を保持し、作成成功後に GitHub が requested metadata を反映しなかった場合は Issue 番号を保持したまま警告し、Issue を再作成してはならない。
+  - 契約テスト: [hve/tests/test_github_api_issue_metadata.py](hve/tests/test_github_api_issue_metadata.py)、[hve/gui/tests/test_github_service_issue_metadata.py](hve/gui/tests/test_github_service_issue_metadata.py)、[hve/gui/tests/test_github_issue_creation_parity.py](hve/gui/tests/test_github_issue_creation_parity.py)
+
+- **FR-GUI-42**: GitHub Hub の Pull Request 面は、現在のローカル branch を head とし、選択した base branch に対して normal または draft Pull Request を直接作成できなければならない。title は必須、Markdown body は任意とし、repository root の既定 Pull Request template が存在して body が未編集なら初期値として用いる。
+  - 作成前に detached HEAD、head と base の同一、`base...head` の commit 差分 0、dirty worktree、同じ head / base の open Pull Request を検出して fail-closed とする。GUI から `git add` / `git commit` を行ってはならない。
+  - head が origin に未公開、または local に未 push commit がある場合は件数と branch を表示し、利用者の明示操作による既存 push 経路を経た後にだけ作成する。自動 push や push なしの作成を行ってはならない。
+  - close-on-merge は Pull Request 作成面だけが所有する保存しない checkbox とし、既定 OFF とする。base が repository default branch で利用者が明示的に ON にした場合だけ `Closes #N` を body へ追加する。default branch 以外では plain `#N` reference とし、自動 close を約束してはならない。既存の `enable_auto_merge` とは無関係である。
+  - 作成成功時は Pull Request 番号を直ちに FR-GUI-40 へ反映し、一覧更新後に当該 Pull Request を選択する。作成中は再送信を禁止し、timeout 後も無条件に create を再試行してはならない。
+  - 契約テスト: [hve/gui/tests/test_git_ops_preflight.py](hve/gui/tests/test_git_ops_preflight.py)、[hve/tests/test_github_api_pr_creation.py](hve/tests/test_github_api_pr_creation.py)、[hve/gui/tests/test_github_pr_creation.py](hve/gui/tests/test_github_pr_creation.py)
+
+- **FR-GUI-43**: FR-GUI-42 の Pull Request 作成面は labels、assignees、milestone、および reviewer users / teams を指定できなければならない。Pull Request 本体の作成と作成後 metadata 操作を別の結果として扱い、本体作成後の metadata / reviewer 失敗を Pull Request 作成失敗として表示してはならない。
+  - 本体作成成功時点で Pull Request 番号と URL を保持する。後処理に失敗した場合は失敗項目を警告し、後処理だけを再試行可能とし、Pull Request 本体を再作成してはならない。
+  - reviewer users と team slugs は GitHub REST API の別 field として送信する。Projects v2、native Auto-merge、merge queue、fork / cross-repository head は対象外とする。
+  - 契約テスト: [hve/tests/test_github_api_review_requests.py](hve/tests/test_github_api_review_requests.py)、[hve/gui/tests/test_github_pr_creation_metadata.py](hve/gui/tests/test_github_pr_creation_metadata.py)
+
+- **FR-GUI-44**: GitHub Hub の Issue 面は、選択中の既存 Issue の labels、assignees、milestone を編集できなければならない。
+  - 候補は FR-GUI-41 の Issue 作成面が取得済みの metadata を再利用し、編集面の表示・保存を理由に追加の候補取得 API request を発行してはならない。候補が未取得の場合は取得操作を利用者へ案内し、推測値を表示してはならない。
+  - 更新は利用者の明示操作に限る。API 引数が `None` の項目は payload へ含めず、指定した項目だけを置換する。labels / assignees の空配列は全解除として送信し、milestone の「未設定」は GitHub API の `null` へ明示変換する。
+  - 更新失敗時は入力と選択を保持する。成功時は返却された Issue の metadata を表示へ反映し、反映されなかった指定項目があれば Issue を再作成せず警告する。
+  - 更新応答は要求した Issue 番号と、要求した metadata field の存在・型を確認しなければならない。全解除要求に対して field 自体が欠落した応答を、空配列または `null` が返されたものと推測して成功扱いしてはならない。
+  - metadata 保存中は、同じ Issue の title / body / state / comment および新規 Issue 作成の mutation を開始してはならない。
+  - 契約テスト: [hve/tests/test_github_api_issue_update_metadata.py](hve/tests/test_github_api_issue_update_metadata.py)、[hve/gui/tests/test_github_service_issue_update_metadata.py](hve/gui/tests/test_github_service_issue_update_metadata.py)、[hve/gui/tests/test_github_issue_metadata_edit.py](hve/gui/tests/test_github_issue_metadata_edit.py)
+
+- **FR-GUI-45**: GitHub Hub の Pull Request 面は、選択中 Pull Request の review 一覧を表示し、`APPROVE` / `REQUEST_CHANGES` / `COMMENT` の review を提出できなければならない。
+  - review 一覧は利用者の明示操作または選択した Pull Request の詳細取得に伴う 1 回の取得に限り、自動ポーリングしてはならない。1 回の取得契機で API の `Link: rel="next"` を追跡して全ページを取得し、GitHub API が返す時系列順を維持する。
+  - `REQUEST_CHANGES` と `COMMENT` は空でない body を必須とし、`APPROVE` は body を省略できる。3 値以外の event は API 呼び出し前に fail-closed で拒否する。
+  - 提出は既存の `GitHubCommentEditor` を再利用し、GUI thread で API を呼ばない。失敗時は入力内容と選択した event を保持する。
+  - review 提出中は、同じ Pull Request の会話 comment、console comment、行単位 review comment、push、head branch 削除の mutation を開始してはならない。
+  - 契約テスト: [hve/tests/test_github_api_pr_reviews.py](hve/tests/test_github_api_pr_reviews.py)、[hve/gui/tests/test_github_service_pr_reviews.py](hve/gui/tests/test_github_service_pr_reviews.py)、[hve/gui/tests/test_github_pr_reviews_ui.py](hve/gui/tests/test_github_pr_reviews_ui.py)
+
+- **FR-GUI-46**: GitHub Hub の Pull Request 面は、選択中 Pull Request の review comment 一覧を表示し、変更ファイルの diff 行へ review comment を投稿できなければならない。
+  - review comment 一覧は、ダイアログを開く利用者の明示操作を取得契機として API の `Link: rel="next"` を追跡して全ページを取得し、API 順序を維持する。周期的な再取得は行わない。
+  - [hve/github_api.py](hve/github_api.py) の Pull Request Files API 応答は、既存の G-DIFF 用 `filename` / `status` / `previous_filename` に加えて GitHub が返した `patch` を保持する。`patch` が無いファイルへ行番号を推測してはならない。
+  - 投稿対象は取得済み `patch` から利用者が選択した `path` / `line` / `side` と、選択中 Pull Request の `head.sha` を `commit_id` として確定する。`side` は `LEFT` / `RIGHT` の 2 値、`line` は正の整数、body / path / commit_id は空でないことを API 呼び出し前に検証する。廃止予定の `position` は使用しない。
+  - 投稿は利用者の明示操作に限り、失敗時は入力と行選択を保持する。diff 全体を汎用ビューアへ拡張せず、本要件に必要な最小表示に留める。
+  - 契約テスト: [hve/tests/test_github_api_pr_review_comments.py](hve/tests/test_github_api_pr_review_comments.py)、[hve/gui/tests/test_github_service_pr_review_comments.py](hve/gui/tests/test_github_service_pr_review_comments.py)、[hve/gui/tests/test_github_review_comment_dialog.py](hve/gui/tests/test_github_review_comment_dialog.py)
+
+- **FR-GUI-47**: GitHub Hub の Pull Request 面は、選択中 Pull Request の head commit に対する check-runs を表示し、利用者の明示確認後に Pull Request をマージできなければならない。
+  - check-runs 取得は [hve/github_api.py](hve/github_api.py) の既存 `list_check_runs_for_ref()` を再利用し、選択中 Pull Request の `head.sha` を ref とする。自動ポーリングは行わず、利用者の明示的な更新操作だけで取得する。
+  - check-run が未完了、または conclusion が `success` / `neutral` / `skipped` 以外のものを 1 件でも含む場合、マージ操作は既定で無効とする。check-runs を取得していない、応答を解釈できない、または head SHA が不明な場合も fail-closed とする。
+  - merge method は `merge` / `squash` / `rebase` の 3 値だけを許し、確認ダイアログに Pull Request 番号、head / base branch、merge method を表示する。同期 merge endpoint を用い、native Auto-merge と merge queue は本要件の対象外とする。
+  - API の 405 / 409 を利用者が再判断できるメッセージへ変換し、失敗時にマージ済みと表示してはならない。
+  - merge API が失敗した場合、または成功を確認できない応答を返した場合は、取得済み check-runs を破棄し、再取得するまでマージ操作を再度有効化してはならない。
+  - 契約テスト: [hve/tests/test_github_api_pr_merge.py](hve/tests/test_github_api_pr_merge.py)、[hve/gui/tests/test_github_service_pr_merge.py](hve/gui/tests/test_github_service_pr_merge.py)、[hve/gui/tests/test_github_pr_merge_ui.py](hve/gui/tests/test_github_pr_merge_ui.py)
+
+- **FR-GUI-48**: GitHub Hub の Issue / Pull Request 一覧は、利用者の明示操作で 2 ページ目以降を取得し、取得済み一覧へ追記できなければならない。
+  - 初回 request は `sort=created&direction=desc` とし、既存項目の更新が取得済みページの並びを移動させない安定キーを用いる。新規作成物を page 1 に含め、FR-GUI-35 / 42 の作成後選択契約を維持する。同時の新規作成による前方挿入と state 変更・削除による母集合の変化は snapshot API が無いため防げないので、最新状態の確定には page 1 からの明示更新を案内する。
+  - GitHub API の `page` は後方互換の直接呼び出し用として 1 以上の整数を引き続き受理する。ただし GUI の「さらに読み込む」と、1 回の取得で全ページを集約する API は手組みした `page=N` ではなく、応答 `Link` の検証済み `rel="next"` URLだけを継続 cursorとして使用する。
+  - `Link` parser は quoted-string 内の comma / semicolon をparameter境界として扱わず、quoted-pair を unquote してから relation type を解釈する。RFC 8288 に従い、同一link-valueで2個目以降の`rel`は拒否せず無視して先頭値だけを採用する。pagination application が `anchor` を適用できないlink-valueは丸ごと無視し、複数の`rel="next"` URLは曖昧な応答としてfail-closedで拒否する。HTTP listの空要素は合理的な範囲で無視する。
+  - Issue / Pull Request page の各項目は正の整数 `number` を必須とし、非 object、番号欠落、bool、非正数を含む page は取得済み状態へ反映する前に fail-closed で拒否する。
+  - UI は「さらに読み込む」操作だけを提供し、無限スクロール、自動先読み、自動ポーリングを実装してはならない。request 中の二重送信を禁止し、成功応答が返した次 cursorだけを保存する。追加取得失敗時は同じ cursorを保持して再試行可能とし、page 1更新・repository変更・state変更時は古い cursorを破棄する。一覧 request と同じ対象の詳細取得・コメント投稿・Issue 更新は互いの正常な応答を失効させてはならず、各 request の対象 context と世代を独立に検証する。
+  - 追記後も FR-GUI-31 のクライアント側絞り込みを全取得済み項目へ適用する。同じ番号の重複は初出を保持して除去し、検証済み `rel="next"` が無い場合は取得件数に関係なく「さらに読み込む」を無効化する。
+  - 契約テスト: [hve/tests/test_github_api_list_pagination.py](hve/tests/test_github_api_list_pagination.py)、[hve/gui/tests/test_github_service_pagination.py](hve/gui/tests/test_github_service_pagination.py)、[hve/gui/tests/test_github_issue_pagination.py](hve/gui/tests/test_github_issue_pagination.py)、[hve/gui/tests/test_github_pr_pagination.py](hve/gui/tests/test_github_pr_pagination.py)
+
+- **FR-GUI-49**: GitHub Hub の Issue 面は、選択中 Issue を Copilot cloud agent へ割り当てられなければならない。
+  - 割当は利用者の明示操作と確認に限る。確認には Issue 番号、対象 repository、base branch を表示し、入力または対象を特定できない場合は fail-closed とする。
+  - REST payload は `assignees: ["copilot-swe-agent[bot]"]` と `agent_assignment.target_repo` を持つ。`base_branch` が空または未指定のときは当該 field を送信しない。Agent Tasks API は使用しない。
+  - 割当 API は public preview で変更され得る旨と、必要な token 権限を利用者へ表示する。失敗時は Issue 選択と入力を保持し、成功したと推測して表示を変更してはならない。
+  - 契約テスト: [hve/tests/test_github_api_copilot_assign.py](hve/tests/test_github_api_copilot_assign.py)、[hve/gui/tests/test_github_service_copilot_assign.py](hve/gui/tests/test_github_service_copilot_assign.py)、[hve/gui/tests/test_github_issue_copilot_assign.py](hve/gui/tests/test_github_issue_copilot_assign.py)
 
 ---
 
@@ -1109,6 +1492,29 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 | 2.51 | 2026-08-25 | **FR-CLI-76 改訂 / §5.13 新設（FR-CLI-81 新規）**: (1) FR-CLI-76 の受入範囲へ [hve/orchestrator.py](hve/orchestrator.py) `_create_session_with_auto_reasoning_fallback` が生成する全セッション（Work IQ 専用 4 経路を含む）を追加した。当該ヘルパーは runner の同名関数と別実装でリポジトリ宣言を読まず `enable_config_discovery` を常に `True` としており、ARD の `target_business` 生成・Fleet wave 親・Code Review Agent の各セッションが、Work IQ 設定の有効・無効に関わらずプラグイン由来の `workiq` サーバを自動探索で取り込みうる状態だったことを根拠とする。あわせて FR-CLI-79 の `azure` 除外を適用するため当該ヘルパーが Workflow ID を受け取れることを必須化し、縮約実装を runner の単一ヘルパーへ限定した（FR-MAINT-07）。(2) FR-CLI-81 を新設し、Work IQ 認証確認が非対話環境で失敗したときに実行を停止せず当該実行に限り Work IQ を無効化して続行することを必須化した。GUI 子プロセスの標準入力が対話不能である（FR-GUI-23）ため常に停止になっていたこと、および `--workiq-draft` が `workiq_enabled` を同時に有効化するため利用者が Work IQ を無効にしたつもりでも停止しうることを根拠とする |
 | 2.52 | 2026-08-25 | **FR-CLI-31 / FR-GUI-01 改訂 / §5.14 新設（FR-CLI-82 新規）**: GitHub 書き込みを伴うローカル実行について、repo / token / base branch / origin remote / remote branch の整合性を最初の Agent session・モデル呼び出し・branch 作成より前に単一実装で検査し、不整合を全件報告して fail-closed とする契約を追加した。存在しない remote branch をローカル branch へ暗黙 fallback しないこと、`--dry-run` でも検査すること、通常のローカル実行へ GitHub 接続を要求しないこと、および Prompt 自由記述欄を内容検査から除外することを明記した。GUI Step 1 はローカル判定を `SETTING` / `AUTH` として表示し、remote 照会は UI thread で行わず子プロセスの共通 preflight へ委譲する |
 | 2.53 | 2026-08-25 | **§6.14 新設（FR-GUI-29 新規）**: GUI の QA 回答ダイアログへ、質問票全文と Work IQ 用プロンプトをクリップボードへ複製する 2 操作を追加する契約を規定した。質問票の整形は [hve/qa_merger.py](hve/qa_merger.py) `QAMerger.render_merged`、Work IQ テンプレートの取得は [hve/workiq.py](hve/workiq.py) `get_workiq_prompt_template` を単一の情報源として再利用し、GUI 側へ整形実装やテンプレート本文を複製してはならないこととした（FR-MAINT-07）。クリップボードへの書き込みだけを行い Work IQ への送信・認証・MCP 呼び出しを行わないこと、新規の CLI オプション・設定項目・環境変数・IPC スキーマ変更を追加しないこと、既存の回答送信経路（FR-GUI-08）を変更しないことを明記した。[hve/gui/copy_button.py](hve/gui/copy_button.py) `CopyButton` は `QToolButton` を継承し、既定 `toolButtonStyle` が `ToolButtonIconOnly`（PySide6 実測で確認）であるため `setText("📋")` が描画されず、そのまま 2 個並べると利用者が操作を識別できないため、ラベル併記と支援技術向けの名前を必須とした。クリック後 tooltip の文言は他の 9 箇所の呼び出しへ波及するため国際化の対象外とした。あわせて、本操作が FR-QA-03 の自動統合経路と送信内容で一致しない 3 点（1 問単位の箇条書きに対する全問テーブル、重要度フィルタと `workiq_max_draft_questions` の不適用、既定テンプレートの応答上限 5 件）と、`render_merged` の出力に起因する見出しレベルの逆転および表セルのエスケープを、専用整形を新設せず既知の制約として扱うことを規定した |
+| 2.54 | 2026-08-25 | **§6.13 改訂（FR-GUI-30〜34 新規 / FR-GUI-26・28 改訂）/ §2 UC-07 改訂・UC-08 新規**: GUI の GitHub 連携へ 5 件の契約を追加した。(1) FR-GUI-30: Issue 本文・コメントの Markdown 入力欄へ書式挿入 9 種とプレビューを備える共通ウィジェットを必須化し、原文保持（リッチテキストからの再生成禁止）と [hve/gui/markdown_preview/markdown_html_renderer.py](hve/gui/markdown_preview/markdown_html_renderer.py) の再利用を規定した。従来の入力欄は素の複数行テキスト入力のみで、Markdown 記法を暗記していない利用者が投稿内容を確認する手段を持たなかったことを根拠とする。(2) FR-GUI-31: リポジトリ確定時の 1 回限りの初期取得、0 件時に絞り込み状態を提示する義務、クライアント側の絞り込み欄を必須化した。実測で、既定の絞り込み `open` と初期取得の不在により、`open` が 0 件・`closed` が 610 件のリポジトリでは画面が常に空となり、利用者からは取得失敗と区別できなかったことを根拠とする。あわせて FR-GUI-26 の「自動ポーリング禁止」が周期処理を指し 1 回限りの初期取得を含まないことを明文化した。(3) FR-GUI-32: 実行タスクへ関連付ける Issue / Pull Request を一覧から選べることを必須化し、Pull Request の関連付けを GUI セッション内に限定して CLI オプション・`SDKConfig` へ波及させないことを規定した。従来は Issue 番号の直接入力だけで、Pull Request を指定する経路が存在しなかった。(4) FR-GUI-33: 実行面のコンソール出力を選択中 Pull Request へコメント投稿する契約を追加し、本文組み立てを副作用のない単独関数へ分離すること、総行数と掲載行数の明記、ANSI エスケープ除去、コードフェンス長の動的決定を規定した。GitHub の Issue コメント作成 API は本文の最大長を公開していないため全文投稿を前提にしないこととした。(5) FR-GUI-34: 現在のローカルブランチの push と、`merged` / `closed` の Pull Request の head ブランチのリモート削除を GUI から行えることを必須化した。push と削除を別操作とし、削除はリモートのみ・確認必須とし、ローカル削除は FR-CLI-34 の単一実装に委ねる。FR-GUI-27 の PR 新規作成禁止は変更しない |
+| 2.55 | 2026-08-25 | **§5.8 改訂（FR-CLI-63〜65 新規）**: step-level Self-Improve の判定と `TaskGoal` の宣言・実装齟齬を是正する契約を追加した。(1) FR-CLI-63: [hve/runner.py](hve/runner.py) Phase 4d の `after_quality_score` / `degraded` / `verification_phases` を LLM 応答 JSON で上書きすることを禁じ、判定を [hve/self_improve.py](hve/self_improve.py) `_build_verification_result()` の単一実装へ委譲することを必須化した（FR-MAINT-07）。LLM が `degraded=false` を返すと実測デグレード時に Phase 4f のループ停止が働かず、`learning-NNN.md` に実測と異なる値が残ることを根拠とする。(2) FR-CLI-64: `scan_codebase()` に `ScanResult.security_status` の producer 実装を必須化した。`_scan_gate_failure()` が当該キーの `FAIL` で停止する契約を持つ一方、設定側が存在せず本番経路で当該分岐が発火しないことを根拠とする。検査パターンは `_build_verification_result()` と同一の単一定義とし、対象は解決済み scope 内のファイルに限る。(3) FR-CLI-65: `success_criteria` にカバレッジ 70% 以上を宣言する `asdw-web` / `adfdv` へ `criterion_definitions` の criterion を必須化し、あわせて `metric_status.coverage_pct` の設定を必須化した。カバレッジは pytest 実行結果からのみ抽出されるため、test 未実行時の `0.0` を未達として扱ってはならないことを根拠とする |
+| 2.56 | 2026-08-25 | **§5.1 / §3.4 / §4.7 改訂（FR-CLOUD-41 新規）**: 実装済みだが要求定義書に宣言されていなかった機能群を宣言し、`FR-MAINT-01` / `FR-MAINT-04` のトレーサビリティ対象へ戻した。(1) §5.1 のサブコマンド表が 5 件（`run` / `orchestrate` / `qa-merge` / `workiq-doctor` / `emit-prompt`）しか宣言していない一方で `_build_parser()` は 11 件を登録しており、同一文書内の `FR-CLI-77` が `login` / `pricing` / `toolsearch` / `ingest-docs` / `gui` を列挙していて矛盾していたため、表を実装の全件へ揃え、[hve/tests/test_requirement_subcommand_parity.py](hve/tests/test_requirement_subcommand_parity.py) で parity を機械検査するようにした。(2) `FR-STATE-01` が 5 種の状態ラベルしか宣言していない一方で [.github/labels.json](.github/labels.json) は `{prefix}:human-required` / `{prefix}:human-resolved` を 11 プレフィックス分（計 22 件）登録していたため、HITL ラベルと対象プレフィックス、および `_make_state_labels` の生成対象外であることを明記した。(3) 本番 Cloud 経路で稼働する [.github/workflows/auto-blocked-to-human-required.yml](.github/workflows/auto-blocked-to-human-required.yml) / [.github/workflows/auto-human-resolved-to-ready.yml](.github/workflows/auto-human-resolved-to-ready.yml) に要件 ID が無く、§13.13 が blocked を「手動介入の対象とする」と述べるにとどまっていたため、§4.7 に `FR-CLOUD-41` を新設して SLA 閾値・昇格条件・復帰時の 3 ラベル削除・対象プレフィックスの同一性を規定した。実行時の観測可能な挙動は変更していない |
+| 2.57 | 2026-08-25 | **§5.4.3 新設（FR-CLI-84 / FR-CLI-85 新規）/ FR-WF-ARD-02 改訂**: Phase 1 メインタスクの送信前にプロンプトの UTF-8 バイト数を計測し、HVE 内部予算と照合して Phase 1 のモデル呼び出し回数を 1 回または 0 回に確定する契約を追加した。根拠は、Copilot API が `The request is too large to send through CAPI Responses. Try shortening the conversation or prompt. (32.7 MB request; 5.0 MB limit)` を返して Step が失敗した実測である。既存の `context_injection_max_chars`（既定 20,000 文字）は Phase 0 事前 QA へ注入する補助コンテキストにしか適用されず（[hve/runner.py](hve/runner.py) `_run_pre_execution_qa`）、Phase 1 の最終プロンプトには一切のサイズ検査が無かったことを根拠として明記した。(1) FR-CLI-84: 計測をバイト単位とすること、判定を受領プロンプト単体と最終プロンプトの 2 箇所で行うこと、予算超過時に Phase 1 のモデル呼び出しを 0 回とすること、自動切り詰め・自動要約・複数ターン分割・自動再試行を禁止すること、通知へ本文と認証情報を含めないこと（FR-RTO-04 / NFR-SEC-01）、新規の CLI / GUI / 環境変数を追加しないこと、および予算値を GitHub の公開仕様値として記述しないことを規定した。(2) FR-CLI-85: `additional_prompt` と markdown-query 強制ブロックが最終プロンプトへ高々 1 回しか現れてはならないことを規定した。従来 [hve/orchestrator.py](hve/orchestrator.py) が Step プロンプト末尾へ連結した同じ値を [hve/runner.py](hve/runner.py) が再度前置し得たため、指示を変えないままリクエストサイズだけが増えていた。(3) FR-WF-ARD-02 へ、パス指定 `target_business` の展開結果をファイル本文ではなくパス参照（相対パス一覧・件数・合計バイト数・スキップ理由）とすること、既存の安全制約と直接テキストの扱いを変えないこと、および Body テンプレートが `{target_business}` を 1 箇所だけ展開することを追加した。従来は最大 5 MiB の本文を Prompt へ埋め込み、かつ同一値を 2 箇所へ展開していた |
+| 2.58 | 2026-08-25 | **FR-CLI-10 改訂 / §5.1 `run` 行訂正**: 引数なし起動の既定を実装へ合わせた。旧記述は「引数なしは対話 wizard を起動する」だったが、[hve/__main__.py](hve/__main__.py) `main()` の `args.command is None` 分岐は `run_gui()` を返し、`ImportError` 時にのみ `_cmd_run_interactive` へフォールバックする。同一文書内の `FR-CLI-77` は既に「引数なし起動（GUI が既定）」と記述しており、`users-guide` 5 ファイルと `hve.cmd` / `hve.sh` ランチャーも GUI 既定を前提としていたため、**要件側 2 箇所の記述が実装の変更へ追随していなかった**と判定した。実行時の振る舞いは変更していない |
+| 2.59 | 2026-08-25 | **§3.4 FR-STATE-04 新規 / §5.16 新設（FR-CLI-86 新規）**: run をまたぐ状態が保持されないことを根本原因とするギャップ群へ対処するため、Workflow 進捗（どの Step が成功したか）を `hve/.run-progress.jsonl` へ追記保存し、`--resume-run <run-id>` で成功済み Step を除外して再実行できるようにした。**§5.6 が全廃した SDK セッションの復元は復活させない**（廃止理由は SDK のセッション管理であり、本項が扱うのは HVE 自身が所有する進捗だけ）。記録は既存の `on_step_complete` フック経由とし、[hve/dag_executor.py](hve/dag_executor.py) へ新規の記録経路を追加していない（FR-MAINT-07）。進捗記録の無い run-id は fail-closed とする |
+| 2.60 | 2026-08-25 | **§5.17 新設（FR-CLI-87 新規）**: 「無人実行 vs 人間の判断点」を根本原因とするギャップ群へ対処するため、`--approval-gates`（既定無効）による Wave 境界の同期承認を追加した。対象は `StepDef.approval_gate` を宣言した Step を含む Wave とし、ASDW-WEB Step 1.3（最初の live Azure write）へ宣言した。非対話実行では確認を出さず `blocked` で停止する。承認要求は既存の `on_wave_start` フック経由とし、同フックの汎用例外握り潰しと `run_workflow` の `except BaseException` のいずれよりも前で承認拒否を扱う（そうしないと拒否が exit 0 へ縮退する）。GUI からの承認は FR-GUI-23（子プロセスの標準入力を対話不能とする）のため本項の対象外とした |
+| 2.61 | 2026-08-25 | **§3.3 FR-DAG-09 新規 / §5.18 新設（FR-CLI-88 新規）**: 残存ギャップの根本原因のうち 2 件へ対処した。(1) FR-DAG-09: レビューから実装への差戻しを **DAG の外側**に置くことを規定し、`StepDef.rework_targets` の静的宣言と `FR-WF-CONF-03` の `FAIL` だけを引き金とする決定層を追加した。`FR-DAG-01` の依存パターン 4 種は変更せず、測定表の解析は既存実装を再利用する（FR-MAINT-07）。再実行は再起動に委ね、`run_workflow` の DAG 構築部を再入可能へ作り替えない。(2) FR-CLI-88: PR / Issue（障害記録）の参照経路を `.github/.mcp.json` への宣言と定め、`mdq` / `cq` の索引契約を拡張しないこと、GitHub 系サーバへ `tools: ["*"]` を用いず参照系だけを列挙することを規定した |
+| 2.62 | 2026-08-26 | **FR-CLI-84 / FR-WF-ARD-02 敵対的レビュー反映**: Phase 1 予算判定を受領時・Phase 0 前の確定成分・事前 QA 後の最終 Prompt の 3 段階へ改訂し、成分別 UTF-8 バイト数の合計と最終 Prompt の一致、予算超過時の `step_end(failed)`、dry-run 非影響を規範化した。ARD のパス manifest は `base_dir` 外を子孫列挙前に拒否し、外部パス名・例外本文を固定表現へ匿名化し、symlink cycle の `RuntimeError` を診断へ降格すること、および `skipped` / `errors` を各 50 件 + 省略マーカーへ制限することを追加した。従来の実装は外部 symlink 子を `rglob` で列挙後に拒否し、絶対パスや外部 basename を Prompt へ含め得たほか、診断件数が無制限だったことを根拠とする |
+| 2.63 | 2026-08-26 | **§3.3 FR-DAG-09 改訂 / §6.15 新設（FR-GUI-38 新規）**: 実装済みでありながら利用者の実行経路から到達できない 2 件へ対処した。(1) FR-DAG-09: `rework_targets` を宣言する Step が 0 件で決定層が一度も発火しない状態だったため、`asdw-web` Step 5.3 へ宣言し、決定結果を DAG 実行後に提示する義務を追加した。自動再実行は導入せず、再起動委譲の方針は変更しない。(2) FR-GUI-38: `FR-CLI-86` の `--resume-run` が CLI だけに公開され GUI から指定できなかったため、オプション入力と設定保存を規定した。run-id の実在判定は CLI 側の fail-closed へ委ね、GUI へ二重実装しない |
+| 2.64 | 2026-08-26 | **§12 TBD-36 追加**: Cloud Agent Orchestrator から `FR-CLI-86`（`--resume-run`）を利用できないことを既知の制約として記録した。`FR-STATE-04` の進捗ストアが利用者ローカル領域限定であり Cloud の Issue / PR ベース実行からは到達できないため、Cloud 実行が `FR-CLI-87` の既定挙動または失敗で停止した後は Sub-Issue の再実行以外に引き継ぎ手段が無い。Cloud run とローカル `run_id` の対応付け、または Cloud 専用の進捗永続化はいずれも新規設計を要するため、要件不備ではなく PoC/設計判断待ちの TBD として保留する |
+| 2.65 | 2026-08-26 | **§6.16 新設（FR-GUI-39 新規）**: GitHub Hub の Issue 作成と、GUI から起動した Orchestrator の PR 作成で、本文を GitHub Copilot CLI に問い合わせてタイトルを自動生成する機能を追加した。Issue は明示生成または空 title での作成時に生成し、入力済み title は自動上書きしない。PR 直接作成 UI は追加せず、GUI 子プロセスだけが作成直前に生成する。単一 service、tool 無効、空一時ディレクトリ、入力 12,000 文字 / 出力 120 文字、Issue の fail-closed と PR の既存 title fallback、token 消費の明示を規定した |
+| 2.66 | 2026-08-26 | **§5.19 / §6.17 改訂（FR-CLI-89 / FR-GUI-44〜49 新規、FR-GUI-26 / 27 / 28 / 31 改訂）**: GitHub Hub に既存 Issue metadata 編集、PR review 表示・提出、行単位 review comment、check-runs 表示と明示マージ、一覧ページング、Copilot cloud agent 割当を追加する契約を定義した。CLI は `--assign-copilot-agent` で新規 Root Issue を割り当てる。Projects v2、native Auto-merge、merge queue、Agent Tasks API は対象外のまま維持した。 |
+| 2.67 | 2026-08-26 | **§5.20 新設（FR-PROMPT-01〜10 新規）／§5.1 サブコマンド表へ `prompt` 追加**: Cloud / GUI / CLI に並ぶ第 4 の利用面として Prompt 版を規定した。自然言語 → request v1 の変換は repository Agent Skill が担い、HVE Python は request を再検証して既存 `orchestrate` へ委譲する。`prompt plan` は書き込みなしで dry-run 計画と SHA-256 を提示し、`prompt run` は `--expected-sha256` 一致時だけ argv + `shell=False` で順次実行する。非 canonical な入力名は実行時の入力別名として扱い、コピーと I/O 契約の書き換えを禁止した。Cloud からの Prompt request 実行、任意 DAG、glob / ディレクトリ別名、永続 approval store は本版の対象外とした。 |
+| 2.68 | 2026-08-26 | **FR-PROMPT-03 / FR-PROMPT-10 改訂（NL-only 規約）**: Prompt 版の利用者が自然言語だけで計画取得から実行までを完了できることを規定した。根拠は、[hve/prompt_execution.py](hve/prompt_execution.py) の計画提示文が利用者へ `hve prompt run --expected-sha256 <hash>` の手実行を指示し、[users-guide/prompts/](users-guide/prompts/) の貼り付け用依頼文自体に CLI サブコマンド名が埋め込まれていた実測である。(1) FR-PROMPT-03 へ、提示文と失敗メッセージが利用者へコマンド・request path・SHA-256 の入力を求めないことを追加した。(2) FR-PROMPT-10 へ、CLI 起動と hash 転記を Agent が代行すること、貼り付け用 Prompt 例の本文へ CLI サブコマンド名を含めないこと、承認を自然言語で受け取り曖昧な同意は再確認することを追加した。**機構は変更していない**。FR-PROMPT-04 の `--expected-sha256` 一致ゲート、FR-PROMPT-02 の「HVE Python へ自然言語 parser を追加しない」制約はいずれも維持する。 |
+| 2.69 | 2026-08-26 | **§4.8 新設（FR-CLOUD-42 新規）**: 定期運用 Workflow の削除方針を規範化した。FR-CLOUD-41 の毎時 HITL エスカレーションだけを `schedule` の例外として許可し、AAS / QA のタイムアウト監視は手動実行、ラベル整合性監査は手動と Issue イベント駆動へ限定した。旧週次 `plan.md` 全件監査と旧日次 TDD メトリクス集計の不在、QA 手動監視の無言 skip 禁止、AAS 手動入力の GitHub API 副作用前の正整数検証と取得上限 1,000 件を固定した。 |
+| 2.70 | 2026-08-27 | **FR-GUI-26 / 28 / 44〜47 敵対的レビュー反映**: comment ID と metadata 更新応答の fail-closed 検証、Retry-After / retry 上限境界、review / review comment の全ページ取得、Issue metadata 保存中と Pull Request review 提出中の mutation 直列化、merge 失敗後の check-runs 再取得を規範化した。 |
+| 2.71 | 2026-08-27 | **§3.14 新設（FR-PROMPT-SRC-01 / 02 新規）**: HVE が所有する固定 model-facing prompt 本文の正本を `.github/prompts/**` へ一本化した。flat Agent prompt に加え、active Step body を `steps/`、fan-out addendum を `fanout/`、Cloud 実行指示を `cloud/`、その他の内部 prompt を用途別 `runtime/` へ分類する。Python / Workflow / shell / PowerShell は prompt の選択・安全な読込・動的値補間だけを担い、固定本文を重複保持しない。読込の単一実装を [hve/prompt_loader.py](hve/prompt_loader.py) とし、必須 prompt の欠損・空・不正な path 解決は model call / SDK session / Copilot assignment の前に fail-closed で停止させる。`load_prompt(agent_name)` の flat Agent 互換は維持し、新規 manifest / flag / 環境変数 / CLI option / 外部依存 / hot reload は追加しない。 |
+| 2.72 | 2026-08-27 | **FR-GUI-26〜28 / 45 / 46 / 48 改訂**: GitHub一覧・会話comment・review・review commentの継続取得を手組みpage番号から検証済み`Link: rel="next"` cursorへ変更し、GUI一覧の初回順序を`created desc`へ安定化した。`api_call`の既定JSON戻り値は維持し、応答headerのopt-in取得、cursorのorigin/path/cycle検証、失敗時cursor保持、context変更時破棄を規定した。同時新規作成・state変更・削除による母集合変化はsnapshot API不在の残存制約として明示更新へ委ねる。 |
+| 2.73 | 2026-08-27 | **§5.21 新設（FR-LOCAL-SURFACE-01 新規）／FR-PROMPT-02・FR-PROMPT-07 改訂**: ローカル 3 面（直接 CLI / GUI / Prompt 版）の設定パリティを shared setting・workflow param・semantic alias・derived・excluded の 5 分類として規範化した。根拠は、GUI 設定画面に存在する Agentic Retrieval 6 項目と `enable_tool_search` が `defaults()` / `_SECTION_FIELDS` へ未登録で永続化されず、保存キー `cloud_session_repository_branch` が `OrchestrateArgs.cloud_session_branch` と名前不一致のため Prompt 版で無言に失われ、`create_remote_mcp_server` / `tdd_max_retries` が対話 wizard と Cloud Issue Form からしか指定できなかった実測である。FR-PROMPT-02 の allowlist を本分類へ接続し、FR-PROMPT-07 へ保存 key 名と `OrchestrateArgs` フィールド名の明示対応を追加した。新しい設定レジストリ・環境変数・設定ファイル形式は追加せず、`OrchestrateArgs` を唯一の argv 変換器として再利用する。分類の網羅性は機械検査で担保する。 |
+| 2.74 | 2026-08-27 | **FR-GUI-26 / 28 / 48 敵対的レビュー改訂**: RFC 8288 / RFC 9110 と実行時raceの再監査により、cross-origin redirectへの認証転送禁止、複数`Link` field lineの保持、先頭`rel`優先、quoted-pair、`anchor`、空list要素、page必須番号、会話comment schema、一覽と詳細・mutationの独立世代を規範化した。重複していた改訂版2.71を2.72以降へ連番訂正した。 |
+| 2.75 | 2026-08-27 | **FR-LOCAL-SURFACE-01 (a) 改訂**: shared setting の列挙を実装の `ALLOWED_SETTINGS_OVERRIDES` と同じ 26 key へ揃え、両者の過不足なき一致を機械検査対象とした。根拠は、FR-PROMPT-02 が「`settings_overrides` の allowlist は FR-LOCAL-SURFACE-01 (a) の shared setting 集合とする」と規定する一方、本節の列挙が 9 key、実装 allowlist が 26 key で乖離していた実測である。追加した 17 key はいずれも既に `defaults()` / `_SECTION_FIELDS` / `OrchestrateArgs` / allowlist の 4 箇所へ登録済みで、[users-guide/hve-prompt-getting-started.md](users-guide/hve-prompt-getting-started.md) と [.github/skills/hve-prompt-edition/SKILL.md](.github/skills/hve-prompt-edition/SKILL.md) も `model` 等を共有設定として説明していたため、実装・利用者文書の変更を伴わない。新しい設定 key・環境変数・レジストリは追加していない。 |
+| 2.76 | 2026-08-27 | **FR-LOCAL-SURFACE-01 改訂**: 同一 Workflow・同一保存設定・面固有 runtime 値なしの条件で、GUI と Prompt 版が生成する argv 配列の要素数・順序・値の完全一致を機械検査対象とした。`asdw-web` の GUI argv が AKM 専用の `sources` / `target_files` / `force_refresh` / `custom_source_dir` を含み、Prompt 版が `auto_qa` 無効時にも `qa_answer_mode=autopilot`、自己改善無効時にも `self_improve_max_iterations` / `self_improve_target_scope` / `self_improve_goal`、SDK 既定と同じ `tool_search_ranking=sdk` を明示していた実測を根拠とする。比較入口と GUI セッション固有値・`qa_answer_mode=user` の除外条件を本文に固定した。入力別名は FR-PROMPT-08 の Prompt / 直接 CLI 専用入口として GUI 入力欄の追加対象から除外し、既存の `OrchestrateArgs` 受け口は維持する。新しい設定 key・CLI flag・環境変数・抽象レイヤーは追加しない。 |
 
 ---
 
@@ -1139,6 +1545,16 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 | TBD-25 | `StepRunner._build_step_permission_handler` の未使用引数（`step_id` / `custom_agent`）の扱い → **現状維持（判断確定）**: 引数を使って拒否判定を入れる方向は [hve/tests/test_runner_deploy_gate_order.py](hve/tests/test_runner_deploy_gate_order.py) `test_data_deploy_agent_permission_and_mcp_dead_path_stay_removed` が機械的に禁止している（当該テストの根拠は「native pipeline は SDK import より前に return するため到達不能であり、復活は"到達しない安全境界"を増やすだけで実効性が無い」）。残る選択肢である引数削除は可読性のみの価値で、[hve/runner.py](hve/runner.py) の呼び出し 2 箇所・5 つのテストファイルの参照・`run_step` 内での呼び出し位置を検査する契約テストへ波及する。TBD-22 と同型の判断として現状を維持する。Step 種別で権限を変える具体的な要求が発生した時点で、規範要件の新設から再評価する | 権限分岐の具体要求が発生した時点で起票 |
 | TBD-26 | ~~AAGD Step 6（検索経路の適正化実測）/ Step 7（Microsoft 365 / Teams 公開）の規範要件が本書に無い~~ → **解消（v2.45）**: 実装側は [hve/artifact_validation.py](hve/artifact_validation.py) の決定的検証、[hve/runner.py](hve/runner.py) の成果物ゲート、共有 Prompt の固定フォーマットで契約が確定していたため、その内容（ラベル 8 件・表の列構成・最小行数・判定語彙 4 値）を FR-WF-AAGD-08 / FR-WF-AAGD-09 として明文化した。新しい制約は追加していない | 完了（追加作業なし） |
 | TBD-27 | ~~CLI 入口（[hve/__main__.py](hve/__main__.py)）と Orchestrator（[hve/orchestrator.py](hve/orchestrator.py)）に同名の既定値定数が 7 件重複している~~ → **解消（v2.46）**: `_ADI_DEFAULT_DEPTH` / `_ADI_DEFAULT_TARGET_SCOPE` / `_AKM_DEFAULT_SOURCES` / `_AKM_DEFAULT_TARGET_FILES` / `_ARD_DEFAULT_ANALYSIS_PURPOSE` / `_ARD_DEFAULT_SURVEY_PERIOD_YEARS` / `_ARD_DEFAULT_TARGET_REGION` の 7 件を [hve/workflow_registry.py](hve/workflow_registry.py) の公開定数へ集約し、両モジュールは alias import で参照する（FR-MAINT-07）。値が一致しているうちは通常のテストで検出できないため、再宣言そのものを禁じる契約テスト（[hve/tests/test_workflow_registry.py](hve/tests/test_workflow_registry.py) `TestLaunchSurfacesShareParameterDefaults`）を追加した。flat import 時の `getattr` fallback は registry から値を引くため許容し、リテラルを直接束縛する代入だけを拒否する | 完了（追加作業なし） |
+| TBD-28 | 工程ゲート（受付・要求確定・設計確認・実装/テスト・独立レビュー・PR 最終確認）の共通契約 → **PoC 結果を待つ（判断確定）**: 各ゲートの ID・入力成果物・判定項目・機械判定と人間判定の境界・停止理由・結果 schema を規範化する案。現行 §13.13 の `G-OUT` / `G-IN` / `G-LBL` / `G-CONS` / `G-DIFF` は「完了してよいか」を判定する完了ゲートであり、「次工程へ進んでよいか」を判定する工程ゲートとは役割が異なる。出典資料（実行計画）は当該ゲートを「品質Gate案。具体的な判定項目と自動化範囲は PoC で検証する」と明記しており、確定仕様ではない。未検証の仮説を恒久契約へ実装すると、判定項目が変わるたびに 3 実行面の契約とテストを作り直すことになる | 実案件 PoC で判定項目と自動化範囲が確定した時点で起票 |
+| TBD-29 | 人間承認点の拡張（要求・受入条件 / テスト観点・期待結果 / 高リスク変更 / 最終 PR）と承認監査証跡 → **PoC 結果を待つ（判断確定）**: 現行 `FR-CLI-87` は Wave 境界の同期承認を CLI へ提供し、対象は `asdw-web` Step 1.3 の 1 件、記録は `approval:<wave_index>` に限る。承認主体・対象成果物の digest・理由・再承認条件を保持する schema は持たない。承認者名と自由記述の保存は `NFR-SEC-01` / `FR-RTO-04` が禁じており、監査証跡を足すには保存対象の再定義が要る。GUI からの承認は `FR-GUI-23` により標準入力が使えず、`FR-QA-03` の `qa_answer_mode="gui-file"` と同種の IPC 経路の新設が必要 | 承認点ごとの判定項目が PoC で確定し、保存してよい主体識別子の範囲が決まった時点で起票 |
+| TBD-30 | 案件 PoC の開始条件を固定する Run Manifest → **PoC 結果を待つ（判断確定）**: 対象案件・Done 条件・変更範囲・自動判定手段・除外条件・起動方法・知識ソース・承認者・参照/変更/禁止範囲・比較基準を 1 run として固定する schema と開始前検証の案。現行は APP 要求文書・Workflow パラメータ・`sources` 指定・起動時 preflight が個別に存在するだけで、run 単位の凍結と digest は持たない。§3.9.1 の `PoC` は Repository Query 検索計測を指し、本項の案件 PoC とは別ドメインである | 実案件 PoC で固定すべき項目が確定した時点で起票 |
+| TBD-31 | PoC KPI の共通イベント schema と比較レポート → **PoC 結果を待つ（判断確定）**: 人間介入時間・ゲート試行回数と理由・手戻り / 再実行 / 人手修正・品質指摘・セキュリティ検出と解消・追跡の完全性・比較基準との差分を観測する案。現行 `FR-RTO-01`〜`07` の `RuntimeMetrics` は token・AI Credit・コスト・Step 状態・tool / model 失敗数を保持しており、AI 実行量とコストは既に取得できる。不足するのは上記の人手・ゲート・品質・比較の各系列で、永続化 allowlist（`_METRIC_KEYS` / `_PERSISTABLE_KEYS`）の拡張を伴う。測定したい指標が確定する前に allowlist を広げると、`FR-RTO-04` の最小化方針と衝突する | 評価指標と比較基準が PoC で確定した時点で起票 |
+| TBD-32 | 要求→判断→設計→コード→テスト→レビュー→PR の追跡グラフ → **PoC 結果を待つ（判断確定）**: 現行 `FR-APPREQ-04` の trace block は `APP-IDs` / `Requirement-IDs` / `Requirement-Documents` / `Unresolved-Blockers` の 4 キーを保持し、validator は構造・ID 実在・APP 整合だけを決定的に検証する。判断・設計・コード・テスト結果・レビュー指摘・解消・PR を結ぶノードとエッジ、成果物 digest は持たない。グラフ化には各成果物へ安定 ID を与える必要があり、Prompt・テンプレート・validator へ広く波及する | 追跡したい関係の粒度が PoC で確定した時点で起票 |
+| TBD-33 | 全 run へ適用する共通セキュリティゲート → **PoC 結果を待つ（判断確定）**: 現行は `NFR-SEC-01`〜`03` が秘密情報の出力禁止・`docs-original/` 読み取り専用・`git add` の pathspec 除外を規定し、`FR-CLI-64` が Self-Improve の解決済み scope に対する秘密情報パターン検査を規定する。権限・依存脆弱性・禁止操作を含む合否 schema と PR 前 fail-closed ゲートは持たない。検査対象の範囲を決めずにゲートを足すと、既存 run が恒常的に停止する恐れがある | 検査項目と停止条件が PoC で確定した時点で起票 |
+| TBD-34 | 案件 PDCA とプロセス PDCA の二重ループ → **PoC 結果を待つ（判断確定）**: PR 後に発見した事象の入力 schema、原因分類（要求 / 知識 / テスト / 実装 / ゲート / 工程引継ぎ）、案件修正とプロセス変更の別 ID、再現テスト先行、元ケース・同種ケースの回帰対象、改善効果の判定、標準化の承認を規定する案。現行 `FR-CLI-60`〜`65` の Self-Improve は scope 内の品質改善を反復する仕組みであり、案件修正と HVE 標準の変更を別々に管理・承認する契約ではない。分類体系を先に固定すると、実際の失敗事例と合わない分類が残る | 実案件 PoC で失敗事例の分類実績が得られた時点で起票 |
+| TBD-35 | 実装前の受入条件・テスト baseline の独立確認と凍結 → **PoC 結果を待つ（判断確定）**: 生成アプリケーションの受入条件・期待結果・テスト集合を実装前に承認し、baseline の digest を固定して以後の変更を検出する案。現行は TDD RED / GREEN の Step 分離（`asdw-web` / `adfdv` / `aagd`）と TestCoding / Coding の Agent 分離で順序を担保するが、承認と凍結の工程は持たない。`FR-CLI-30` の Code Review Agent はフラグ指定時のみで全 run の必須ゲートではない。出典資料も「適用粒度は PoC で検証する」と明記している | 適用粒度と凍結対象が PoC で確定した時点で起票 |
+| TBD-36 | Cloud Agent Orchestrator からの `--resume-run`（FR-CLI-86）利用不可 → **保留（設計判断が必要）**: `FR-STATE-04` の進捗ストア（`hve/.run-progress.jsonl`）は「run 終了後も残る利用者ローカル領域」であり、Issue / PR ベースで GitHub-hosted 環境上で実行される Cloud Agent Orchestrator には保存されない。`FR-CLI-86` の `--resume-run <run-id>` は `orchestrate` CLI サブコマンドの引数であり、`auto-*-reusable.yml` の Cloud 起動経路からは呼び出されない。したがって Cloud 実行が `FR-CLI-87` の既定挙動（非対話のため確認を出さず `blocked` で停止）や失敗で停止した後、進捗を引き継いで再開する手段が無く、利用者は当該 Sub-Issue を最初から再実行するしかない。対応するには Cloud run（Issue / PR 番号）とローカル `run_id` の対応付け、または Cloud 側専用の進捗永続化（GitHub Actions cache・Issue コメント等）の新設が必要であり、いずれも保存先・保持期間・認可範囲の新規設計を要するため、現時点では要件不備ではなく未設計の既知の制約として記録するに留める | Cloud 実行の再開需要と許容される保存先・保持期間が確定した時点で起票 |
+| TBD-37 | ローカル GitHub API mutation の全画面横断直列化 → **保留（別 feature が必要）**: GitHub 公式は secondary rate limit 回避のため request の直列化と、大量の `POST` / `PATCH` / `PUT` / `DELETE` 間で最低 1 秒の待機を推奨する。現行は `add_labels` / Sub-Issue link / comment / Copilot assignment の一部が個別に 1 秒待機し、本改訂で Issue metadata 保存中と Pull Request review / merge 中の同一画面 mutation を相互排他にしたが、Issue panel・Pull Request panel・自動進捗 Post・Orchestrator を跨ぐ単一 queue / pacing は存在しない。個別 endpoint へ sleep を追加するだけでは同時開始を防げず、完了済みと誤認させるため行わない。対応には全 GitHub API consumer が共有する queue の所有者、read request を直列化する範囲、cancel / shutdown、rate-limit retry との待機統合を規範化する別 feature が必要 | 複数 GitHub mutation の並行実行が実測された時点、または全画面共通 request scheduler を設計するタスクで起票 |
 
 ---
 
@@ -1195,7 +1611,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 | 8 | ペルソナ別共通画面カタログ | Arch-UI-PersonaScreenList | 7 | `docs/catalog/persona-screen-catalog.md` |
 
 - **FR-WF-AAS-01**: AAS 末尾 2 Step の Step ID は成果物依存と同じ昇順に採番しなければならない。Step 7 を `Arch-PersonaCatalog`（`depends_on=["6"]`、`docs/catalog/persona-catalog.md` を生成）、Step 8 を `Arch-UI-PersonaScreenList`（`depends_on=["7"]`、`docs/catalog/persona-screen-catalog.md` を生成）とする。Step 8 は Step 7 の出力を `required_input_paths` に持つため、依存と逆順の採番（Step 8 → Step 7）へ戻してはならない。
-  - 本契約は [hve/workflow_registry.py](hve/workflow_registry.py) を正本とし、[.github/scripts/bash/lib/workflow-registry.sh](.github/scripts/bash/lib/workflow-registry.sh)・[.github/scripts/powershell/lib/workflow-registry.ps1](.github/scripts/powershell/lib/workflow-registry.ps1)・[.github/workflows/auto-app-selection-reusable.yml](.github/workflows/auto-app-selection-reusable.yml)・[.github/ISSUE_TEMPLATE/app-architecture-design.yml](.github/ISSUE_TEMPLATE/app-architecture-design.yml)・`.github/prompts/`・`.github/scripts/templates/aas/`・`.github/io-contracts/` が同一の意味と順序を宣言すること。
+  - 本契約は [hve/workflow_registry.py](hve/workflow_registry.py) を正本とし、[.github/scripts/bash/lib/workflow-registry.sh](.github/scripts/bash/lib/workflow-registry.sh)・[.github/scripts/powershell/lib/workflow-registry.ps1](.github/scripts/powershell/lib/workflow-registry.ps1)・[.github/workflows/auto-app-selection-reusable.yml](.github/workflows/auto-app-selection-reusable.yml)・[.github/ISSUE_TEMPLATE/app-architecture-design.yml](.github/ISSUE_TEMPLATE/app-architecture-design.yml)・`.github/prompts/`・`.github/prompts/steps/aas/`・`.github/io-contracts/` が同一の意味と順序を宣言すること。
   - Cloud のスキップ伝播は Step 7 のスキップが Step 8 を強制スキップする方向のみとする（逆方向は Step 8 の入力欠落を招くため禁止）。
   - Step ID は SDK セッション ID（`run_id × step_id`）の構成要素であり、同じ ID の意味が入れ替わる。透過的な旧 ID 変換は実装せず、再採番をまたぐ実行中 run は完了させるか、新しい run-id / Issue で再起動すること。
 
@@ -1224,7 +1640,7 @@ ADA は画面を持たないデータ中心の AI Agent 向けに AAS と並走�
 | 2.6 | Agentic Retrieval 機能要件詳細 | Arch-AgenticRetrieval-Detail | 2.2 | `service_catalog` | `docs/services/{serviceId}-agentic-retrieval-spec.md` |
 | 3 | 画面 ↔ サービス整合性レビュー | QA-DocConsistency | 2.1, 2.2, 2.3, 2.4 | — | `docs/catalog/screen-service-consistency-report.md` |
 
-> 注: 上記の Step ID・タイトル・依存・Fan-out・生成ファイルは `hve/workflow_registry.py` の StepDef を一次根拠とし、テンプレート（`.github/scripts/templates/aad-web/step-*.md` の「## 出力」）とも整合する。Step 1 / 2.1 / 2.2 / 2.3 / 2.4 / 2.6 は `output_paths_template`、Step 2.5 / 3 は `output_paths` へ登録済み（**TBD-11 解消**、§13.0 FR-WF-OUT-02 / 06）。Step 2.6 は `enable_agentic_retrieval` が `no` のとき `disabled_when_config` により実行対象から外れる。
+> 注: 上記の Step ID・タイトル・依存・Fan-out・生成ファイルは `hve/workflow_registry.py` の StepDef を一次根拠とし、テンプレート（`.github/prompts/steps/aad-web/step-*.prompt.md` の「## 出力」）とも整合する。Step 1 / 2.1 / 2.2 / 2.3 / 2.4 / 2.6 は `output_paths_template`、Step 2.5 / 3 は `output_paths` へ登録済み（**TBD-11 解消**、§13.0 FR-WF-OUT-02 / 06）。Step 2.6 は `enable_agentic_retrieval` が `no` のとき `disabled_when_config` により実行対象から外れる。
 
 ### 13.3 ASDW-WEB — Web App Dev & Deploy
 
@@ -1255,7 +1671,7 @@ ADA は画面を持たないデータ中心の AI Agent 向けに AAS と並走�
 | 5.2 | 整合性チェック | — | `docs/azure/dependency-review-report.md` |
 | 5.3 | 要件適合実測 | — | `docs/azure/requirements-conformance-report.md`（§13.14 FR-WF-CONF-01） |
 
-> 注: 上記の Step ID・タイトル・Fan-out・生成物は `hve/workflow_registry.py` の StepDef を一次根拠とし、テンプレート（`.github/scripts/templates/asdw-web/step-*.md` の「## 出力」）とも整合する。コンテナ Step `1` / `2` / `3` / `4` / `5` は §13.0 FR-WF-OUT-04 のとおり生成ファイルを持たない Sub-Issue 束ね用途のため本表から省く。ASDW-WEB の全非コンテナ Step は `hve/workflow_registry.py` へ登録済み（**TBD-12 解消**）。実行時ゲートの対象は `output_paths` のみで、ディレクトリ参照・glob・未解決スラッグを含む成果物は `output_paths_template` で契約宣言のみ行う（§13.0 FR-WF-OUT-06 / 07）。Step `2.5` / `2.6` は `enable_agentic_retrieval` が `no` のとき `disabled_when_config` により実行対象から外れる。
+> 注: 上記の Step ID・タイトル・Fan-out・生成物は `hve/workflow_registry.py` の StepDef を一次根拠とし、テンプレート（`.github/prompts/steps/asdw-web/step-*.prompt.md` の「## 出力」）とも整合する。コンテナ Step `1` / `2` / `3` / `4` / `5` は §13.0 FR-WF-OUT-04 のとおり生成ファイルを持たない Sub-Issue 束ね用途のため本表から省く。ASDW-WEB の全非コンテナ Step は `hve/workflow_registry.py` へ登録済み（**TBD-12 解消**）。実行時ゲートの対象は `output_paths` のみで、ディレクトリ参照・glob・未解決スラッグを含む成果物は `output_paths_template` で契約宣言のみ行う（§13.0 FR-WF-OUT-06 / 07）。Step `2.5` / `2.6` は `enable_agentic_retrieval` が `no` のとき `disabled_when_config` により実行対象から外れる。
 
 #### 13.3.1 Step 1.3（Azure データサービス Deploy）のパラメータ契約
 
@@ -1320,7 +1736,7 @@ ADA は画面を持たないデータ中心の AI Agent 向けに AAS と並走�
 
 - **FR-WF-ADFDV-01**: Step 2.1 / 2.2 の fan-out parser は `dataflow_catalog` であり、上流の ADFD（§13.4）が生成する `docs/dataflow/dataflow-app-catalog.md` をキー元とする。
 - **FR-WF-ADFDV-02**: `output_paths_template` の `{jobNameSlug}` は、[hve/catalog_parsers.py](hve/catalog_parsers.py) が ID のみを返すため現状解決できず、FR-WF-OUT-06 の fail-closed drop 規則により実行時ゲートから除外される。契約宣言としては保持する。
-- **FR-WF-ADFDV-03**: データフロー実装の既定プログラミング言語は **Python**、テストフレームワークは **pytest** とする。選定理由は、実行基盤として Apache Spark / Microsoft Fabric / Databricks を選択できることである。分散処理が不要な規模では標準ライブラリ / pandas、必要な規模では PySpark を選択し、どちらを選んだかと根拠を README へ記録する。対象は `Dev-Dataflow-ServiceCoding` / `Dev-Dataflow-TestCoding` / `Dev-Dataflow-FunctionsDeploy` の各 Prompt と `templates/adfdv/step-2.1.md` / `step-2.2.md`、および Cloud reusable workflow `auto-dataflow-dev-reusable.yml` の inline Issue body とし、.NET 固有の記述（`dotnet` / `xUnit` / `.csproj` / `C#` / `NuGet`）を残してはならない。
+- **FR-WF-ADFDV-03**: データフロー実装の既定プログラミング言語は **Python**、テストフレームワークは **pytest** とする。選定理由は、実行基盤として Apache Spark / Microsoft Fabric / Databricks を選択できることである。分散処理が不要な規模では標準ライブラリ / pandas、必要な規模では PySpark を選択し、どちらを選んだかと根拠を README へ記録する。対象は `Dev-Dataflow-ServiceCoding` / `Dev-Dataflow-TestCoding` / `Dev-Dataflow-FunctionsDeploy` の各 Prompt と `.github/prompts/steps/adfdv/step-2.1.prompt.md` / `step-2.2.prompt.md`、および Cloud reusable workflow `auto-dataflow-dev-reusable.yml` の inline Issue body とし、.NET 固有の記述（`dotnet` / `xUnit` / `.csproj` / `C#` / `NuGet`）を残してはならない。
 
 ### 13.6 AAG — AI Agent Design
 
@@ -1502,14 +1918,19 @@ ADA は画面を持たないデータ中心の AI Agent 向けに AAS と並走�
 | 6.2 | リファクタリングガイド | 5.2, 5.4, 3.5 | `docs-generated/guides/refactoring.md` |
 | 6.3 | 移行アセスメント | 5.1, 5.3, 5.4 | `docs-generated/guides/migration-assessment.md` |
 
-> 上記パスはテンプレート（`.github/scripts/templates/adoc/step-*.md` の「## 出力」）の実体に基づく。ADOC の全非コンテナ Step は `hve/workflow_registry.py` へ登録済み（**TBD-14 解消**）。Step 2.1〜2.5 / 3.1 の動的パスは `output_paths_template` による契約宣言専用であり、実行時のファイル存在ゲートは適用されない（§13.0 FR-WF-OUT-07）。
+> 上記パスはテンプレート（`.github/prompts/steps/adoc/step-*.prompt.md` の「## 出力」）の実体に基づく。ADOC の全非コンテナ Step は `hve/workflow_registry.py` へ登録済み（**TBD-14 解消**）。Step 2.1〜2.5 / 3.1 の動的パスは `output_paths_template` による契約宣言専用であり、実行時のファイル存在ゲートは適用されない（§13.0 FR-WF-OUT-07）。
 
 ### 13.12 ARD — Auto Requirement Definition
 
 - **目的**: 企業全体／対象事業の事業分析から KPI/OKR、ユースケース、アプリケーション一覧、APP 別要求定義書までを自動生成する Workflow。5 表示グループ / 10 実 Step で構成する。
 - **Cloud Orchestrator 対応**: **対応**。CLI / GUI と同じ 5 グループ・10 Step 契約を使用する。
 - **FR-WF-ARD-01**: ARD は CLI / GUI / Cloud Orchestrator の 3 面で利用できなければならない。Cloud は専用 Issue Form、`auto-requirement-definition-reusable.yml`、dispatcher の trigger / done / closed routing、`ard:initialized` / `ready` / `running` / `done` / `blocked` / `qa-ready` / `qa-drafting` を持つ。Cloud の未選択時は `ARD_DEFAULT_GROUP_IDS` と同じグループ `2`〜`5` を実行し、グループ `1` は明示 opt-in とする。Cloud reusable workflow の Step ID / Custom Agent / 依存は Python と Bash の registry に一致しなければならない（FR-CLOUD-06）。
-- **FR-WF-ARD-02**: ARD がユーザー提供資料（`attached_docs` およびパス指定の `target_business`）を受け取る Step では、当該資料を **一次情報として最優先で参照する**ことを Prompt および Body テンプレートに明示しなければならない。根拠: ユーザー提供資料は ARD のどの Step の `required_input_paths` にも宣言されず、`{attached_docs}` / `{target_business}` のパラメータ注入だけが到達経路であるため、優先度の明示が無い Step では固定パスの既定入力に埋没する。対象は Step 1（[.github/prompts/Arch-ARD-BusinessAnalysis-Untargeted.prompt.md](.github/prompts/Arch-ARD-BusinessAnalysis-Untargeted.prompt.md) / [.github/scripts/templates/ard/step-1.md](.github/scripts/templates/ard/step-1.md)）と Step 2（[.github/prompts/Arch-ARD-BusinessAnalysis-Targeted.prompt.md](.github/prompts/Arch-ARD-BusinessAnalysis-Targeted.prompt.md) / [.github/scripts/templates/ard/step-2.md](.github/scripts/templates/ard/step-2.md)）とし、Step 2 は既に本規定を満たす。
+- **FR-WF-ARD-02**: ARD がユーザー提供資料（`attached_docs` およびパス指定の `target_business`）を受け取る Step では、当該資料を **一次情報として最優先で参照する**ことを Prompt および Body テンプレートに明示しなければならない。根拠: ユーザー提供資料は ARD のどの Step の `required_input_paths` にも宣言されず、`{attached_docs}` / `{target_business}` のパラメータ注入だけが到達経路であるため、優先度の明示が無い Step では固定パスの既定入力に埋没する。対象は Step 1（[.github/prompts/Arch-ARD-BusinessAnalysis-Untargeted.prompt.md](.github/prompts/Arch-ARD-BusinessAnalysis-Untargeted.prompt.md) / [.github/prompts/steps/ard/step-1.prompt.md](.github/prompts/steps/ard/step-1.prompt.md)）と Step 2（[.github/prompts/Arch-ARD-BusinessAnalysis-Targeted.prompt.md](.github/prompts/Arch-ARD-BusinessAnalysis-Targeted.prompt.md) / [.github/prompts/steps/ard/step-2.prompt.md](.github/prompts/steps/ard/step-2.prompt.md)）とし、Step 2 は既に本規定を満たす。
+  - **パス指定 `target_business` の展開結果（v2.57 / v2.62 改訂）**: [hve/ard_target_business_resolver.py](hve/ard_target_business_resolver.py) `to_context_text()` が Step 2 へ渡す文字列には、対象ファイルの **本文を埋め込んではならない**。渡してよいのは、匿名化済みの指定パス、読み取り可能なファイルのリポジトリ相対パス一覧、件数、合計バイト数、スキップ理由、および解決エラーの種別に限る。Agent は読み取り可能な相対パスを自らの読み取りツールで参照する。従来は最大 5 MiB のファイル本文をそのまま Prompt へ埋め込んでいたため、Step 2 の Phase 1 リクエストが FR-CLI-84 の予算を単独で超え得た。パスだけを渡してもファイル自体は失われないため、要求の欠落は生じない。
+  - 既存の安全制約（`base_dir` 外へ解決されるシンボリックリンク・`..` の除外、バイナリ拡張子・拡張子 allowlist・`max_files` / `max_total_bytes` / `max_file_bytes` の各上限、例外を送出せず `skipped` / `errors` へ記録して継続すること）を緩めてはならない。`base_dir` 外のファイル・ディレクトリ・symlink は子孫を列挙する前に拒否し、絶対パス・外部 basename・例外本文を Prompt へ含めず固定の匿名化表現を用いる。symlink cycle による `Path.resolve()` の `RuntimeError` も外へ送出してはならない。
+  - `skipped` / `errors` はそれぞれ最大 50 件と省略マーカー 1 件までとし、診断メタデータ自体によって Prompt を無制限に肥大化させてはならない。除外されたリポジトリ内パスは相対パスと理由を提示し、`base_dir` 外は匿名化済み識別子と理由だけを提示する。
+  - パス指定でない直接テキストの `target_business` は、従来どおりそのまま渡す。本項は展開結果の形式だけを変更するものであり、`is_path_like()` の判定規則を変更しない。
+  - Body テンプレート [.github/prompts/steps/ard/step-2.prompt.md](.github/prompts/steps/ard/step-2.prompt.md) は `{target_business}` を **1 箇所だけ** 展開しなければならない。同一の値を複数箇所へ展開すると、Prompt サイズが展開箇所数に比例して増える一方で、Agent へ与える情報は増えないためである。
 - **FR-WF-ARD-03**: ARD の利用者向け選択単位は次表の 5 表示グループ、実行単位は同表から展開される 10 実 Step とする。グループ対応の単一情報源は [hve/workflow_registry.py](hve/workflow_registry.py) の `_WORKFLOW_GROUP_MAPS["ard"]`、既定選択の単一情報源は同ファイルの immutable tuple `ARD_DEFAULT_GROUP_IDS = ("2", "3", "4", "5")` とし、CLI 直接実行・CLI wizard・GUI・Cloud、およびこれらが値を与えない場合の Orchestrator 側の安全網である fallback は同じ tuple を参照しなければならない。グループ `3` は KPI/OKR 実行有無を表す唯一の wizard / GUI 選択状態とし、別の真偽入力で上書きしてはならない。ARD 固有の任意パラメータ `target_recommendation_id` は CLI / GUI / Cloud から実効パラメータまで欠落させず伝搬し、`target_business` が空でグループ `1` と `2` を同一 run で実行する bridge 経路の Strategic Recommendation 選択にだけ用いる。CLI wizard の custom-auto はこの条件を満たす場合だけ事前入力を許可し、quick-auto は事前入力を尋ねず先頭候補を採用し、manual は事前入力を尋ねず Step 1.2 完了後の既存選択メニューを維持する。明示 ID が候補に存在しない場合は警告して先頭候補へ縮退する。
 
 | 表示グループ | 利用者向け名称 | 展開する実 Step |

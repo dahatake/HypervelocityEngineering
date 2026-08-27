@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import re
 import sys
 import unittest
 
@@ -274,6 +275,29 @@ class TestReviewPromptNoLowerBound(unittest.TestCase):
         self.assertIn("捏造", REVIEW_PROMPT)
 
 
+_CLOUD_PROMPT_REF = re.compile(r"\.github/prompts/cloud/[A-Za-z0-9._-]+\.prompt\.md")
+
+
+def _read_workflow_effective_prompt(yaml_path: str) -> str:
+    """YAML 本文と、そこから参照される cloud Prompt ファイル本文を連結して返す。
+
+    Prompt 本文を外部ファイルへ移した後も、投稿される実効テキストに対して
+    ドリフト検査を継続するための合成である。
+    """
+    path = os.path.normpath(yaml_path)
+    if not os.path.exists(path):
+        return ""
+    repo_root = pathlib.Path(__file__).resolve().parent.parent.parent
+    with open(path, encoding="utf-8") as f:
+        content = f.read()
+    parts = [content]
+    for rel in sorted(set(_CLOUD_PROMPT_REF.findall(content))):
+        prompt_file = repo_root / rel
+        if prompt_file.is_file():
+            parts.append(prompt_file.read_text(encoding="utf-8"))
+    return "\n".join(parts)
+
+
 class TestYamlWorkflowPromptDrift(unittest.TestCase):
     """copilot-auto-feedback.yml と hve/prompts.py のプロンプトドリフト検出テスト。
 
@@ -286,12 +310,11 @@ class TestYamlWorkflowPromptDrift(unittest.TestCase):
     )
 
     def _read_yaml_content(self) -> str:
-        """YAML ファイルの内容を返す。ファイルが存在しない場合はスキップ。"""
+        """YAML と参照先 Prompt を合成して返す。ファイルが存在しない場合はスキップ。"""
         path = os.path.normpath(self._YAML_PATH)
         if not os.path.exists(path):
             self.skipTest(f"YAML ファイルが見つかりません: {path}")
-        with open(path, encoding="utf-8") as f:
-            return f.read()
+        return _read_workflow_effective_prompt(self._YAML_PATH)
 
     def test_yaml_review_no_minimum_count(self) -> None:
         """YAML auto-review プロンプトに '15〜50' の下限指定が含まれないこと。"""
@@ -338,8 +361,7 @@ class TestYamlWorkflowPromptDriftPhase3(unittest.TestCase):
         path = os.path.normpath(self._YAML_PATH)
         if not os.path.exists(path):
             self.skipTest(f"YAML ファイルが見つかりません: {path}")
-        with open(path, encoding="utf-8") as f:
-            return f.read()
+        return _read_workflow_effective_prompt(self._YAML_PATH)
 
     def test_review_prompt_contains_improvement_application_section(self) -> None:
         """auto-review プロンプトに 'Review Improvement Application' セクションが含まれること。"""
@@ -579,10 +601,10 @@ class TestOverEngineeringBan(unittest.TestCase):
 
     def test_fanout_common_files_contain_oe_ban(self) -> None:
         repo_root = pathlib.Path(__file__).resolve().parents[2]
-        fanout_root = repo_root / "hve" / "prompt" / "fanout"
-        common_files = sorted(fanout_root.glob("*/_common.md"))
-        # aas は fan-out を持たないため _common.md も存在しない（FR-WF-AAS-02）。
-        self.assertEqual(len(common_files), 11, "Expected 11 fanout _common.md files")
+        fanout_root = repo_root / ".github" / "prompts" / "fanout"
+        common_files = sorted(fanout_root.glob("*/_common.prompt.md"))
+        # aas は fan-out を持たないため _common も存在しない（FR-WF-AAS-02）。
+        self.assertEqual(len(common_files), 11, "Expected 11 fanout _common prompt files")
         for f in common_files:
             content = f.read_text(encoding="utf-8")
             self.assertIn(self.OE_MARKER, content, f"{f} missing OE ban")

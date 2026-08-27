@@ -506,6 +506,67 @@ class TestBuildSubtaskPrompt:
         assert "work/run/unknown-run/Issue-x/sub-002/completion-report.md" in prompt
         assert "hve/work/Issue-x/sub-002/completion-report.md" in prompt
 
+    def test_exact_render_parity_for_externalized_template(self, tmp_path: Path):
+        repo_root = tmp_path / "repo"
+        work_root = repo_root / "work" / "run" / "hash-baseline"
+        sub = SubIssueDef(
+            index=5,
+            title="Test Title",
+            labels=["hve", "test"],
+            custom_agent="Arch-UI-Detail",
+            depends_on=[1, 2],
+            body="## Sub-005\n- AC: ...",
+        )
+
+        prompt = build_subtask_prompt(
+            subissue=sub,
+            parent_step_id="2.1",
+            parent_custom_agent="Arch-UI-Detail",
+            work_subdir="Arch-UI-Detail/Issue-screen-detail/sub-005",
+            repo_root=repo_root,
+            work_root=work_root,
+        )
+
+        expected_abs = (
+            work_root / "Arch-UI-Detail" / "Issue-screen-detail" / "sub-005"
+        ).resolve().as_posix() + "/"
+        expected_rel = "work/run/hash-baseline/Arch-UI-Detail/Issue-screen-detail/sub-005/"
+        expected = "\n".join([
+            "あなたは親 Step.2.1 (Custom Agent: Arch-UI-Detail) の SPLIT_REQUIRED",
+            "判定により分割された **サブタスク Sub-005** を実行します。",
+            "",
+            "== 重要ルール ==",
+            "- これは単一責務サブタスクです。**SPLIT_REQUIRED を再発させてはなりません**。",
+            "- 親タスクの context_size 制約により分割されたため、本タスクは self-contained に完遂すること。",
+            "- 完了時は下記「出力先（厳守）」のパスに以下を必ず作成すること:",
+            "  1. completion-report.md",
+            "  2. completion-report.md 内に検証マーカー `<!-- validation-confirmed -->` を含める",
+            "  3. completion-report.md 内に「## 検証」または「## 検証結果」セクションを含める",
+            "",
+            "== サブタスク定義 ==",
+            "- index: Sub-005",
+            "- title: Test Title",
+            "- depends_on: Sub-001, Sub-002",
+            "- labels: hve, test",
+            "",
+            "== サブタスク本文 ==",
+            "## Sub-005",
+            "- AC: ...",
+            "",
+            "== 出力先（厳守）==",
+            f"- 正規パス（絶対パス）: **`{expected_abs}`**",
+            f"- 正規パス（リポジトリ相対）: `{expected_rel}`",
+            f"- CWD は親 runner によりリポジトリルート `{repo_root.as_posix()}` に固定されています（LLM 側で `cd` する必要はありません）。",
+            "- 例:",
+            f"    - ✅ 正例: `{expected_rel}completion-report.md`",
+            "  - ❌ 誤例: `hve/work/Arch-UI-Detail/Issue-screen-detail/sub-005/completion-report.md`（このリポジトリには `hve/work/` という別ディレクトリも存在しますが、完了判定は参照しません）",
+            "- 全ての成果物（completion-report.md および本文内で言及するスライス／フラグメント等）を上記の正規パス配下に出力すること。",
+            "",
+            "上記を遵守してサブタスクを完遂してください。",
+            "",
+        ])
+        assert prompt == expected
+
 
 # ---------------------------------------------------------------------------
 # make_subtask_work_subdir

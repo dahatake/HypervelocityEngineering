@@ -492,7 +492,16 @@ def _read_stable_utf8_file(
     flags |= getattr(os, "O_NOFOLLOW", 0)
     descriptor = -1
     try:
-        descriptor = os.open(lexical, flags)
+        try:
+            descriptor = os.open(lexical, flags)
+        except OSError as exc:
+            # POSIX の O_NOFOLLOW は symlink を ELOOP で拒否するため、下の symlink 検査へ
+            # 到達しない。拒否理由を失わないようここで同じ診断へ写し替える。
+            if exc.errno == errno.ELOOP:
+                raise ScriptLauncherError(
+                    f"{label} must not be a symlink or reparse point."
+                ) from exc
+            raise
         opened = os.fstat(descriptor)
         if not stat.S_ISREG(opened.st_mode):
             raise ScriptLauncherError(f"{label} is not a regular file.")

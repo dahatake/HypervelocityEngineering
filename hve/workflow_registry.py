@@ -139,10 +139,10 @@ class StepDef:
 
     **パターン A（本リポジトリの標準規約）**: パスに ``{key}`` を含まず、1 ファイルを
     全キーで共有する。テンプレート本文内の ``{{key}}`` が実行時に fan-out キーへ置換される。
-    例: ``hve/prompt/fanout/akm/_common.md``
+    例: ``.github/prompts/fanout/akm/_common.prompt.md``
 
     **パターン B（オプション）**: パス自体に ``{key}`` を含め、キーごとに異なるファイルを
-    参照する。例: ``hve/prompt/fanout/akm/{key}.md``
+    参照する。例: ``.github/prompts/fanout/akm/{key}.prompt.md``
     """
 
     per_key_mcp_servers: Optional[Dict[str, Dict[str, Any]]] = None
@@ -194,6 +194,16 @@ class StepDef:
     キーは `required_params` の部分集合でなければならない（`WorkflowDef._validate` が検証）。
     推測で既定値を作らないこと。環境固有値や承認が必要な値は既定値を持たず、
     pre-flight で利用者に入力を求める。
+    """
+
+    approval_gate: bool = False
+    """`--approval-gates` 有効時、この Step を含む Wave の実行前に承認を求める（FR-CLI-87）。"""
+
+    rework_targets: List[str] = field(default_factory=list)
+    """この Step の成果物が `FAIL` を報告したときの差戻し先 Step ID（FR-DAG-09）。
+
+    DAG のエッジではなく、DAG 外のフィードバックループが参照する静的宣言。
+    空リストは「差戻し先を宣言しない」を意味し、当該 Step は差戻しの引き金にならない。
     """
 
     disabled_when_config: Dict[str, List[str]] = field(default_factory=dict)
@@ -392,7 +402,7 @@ AAS = WorkflowDef(
                 custom_agent="Arch-ArchitectureCandidateAnalyzer",
                 depends_on=[],
                 consumed_artifacts=["app_catalog", "app_requirements"],
-                body_template_path="templates/aas/step-1.md",
+                body_template_path=".github/prompts/steps/aas/step-1.prompt.md",
                 output_paths=["docs/catalog/app-arch-catalog.md"],
                 required_input_paths=[
                     "docs/catalog/app-catalog.md",
@@ -402,14 +412,14 @@ AAS = WorkflowDef(
                 custom_agent="Arch-Microservice-DomainAnalytics",
                 depends_on=["1"],
                 consumed_artifacts=["use_case_catalog", "app_catalog"],
-                body_template_path="templates/aas/step-2.1.md",
+                body_template_path=".github/prompts/steps/aas/step-2.1.prompt.md",
                 output_paths=["docs/catalog/domain-analytics.md"],
                 required_input_paths=["docs/catalog/app-arch-catalog.md", "docs/catalog/app-catalog.md", "docs/catalog/use-case-catalog.md"]),
         StepDef(id="2.2", title="サービス一覧抽出",
                 custom_agent="Arch-Microservice-ServiceIdentify",
                 depends_on=["2.1"],
                 consumed_artifacts=["use_case_catalog", "domain_analytics", "app_catalog"],
-                body_template_path="templates/aas/step-2.2.md",
+                body_template_path=".github/prompts/steps/aas/step-2.2.prompt.md",
                 output_paths=["docs/catalog/service-catalog.md"],
                 required_input_paths=["docs/catalog/use-case-catalog.md",
                                       "docs/catalog/domain-analytics.md",
@@ -418,7 +428,7 @@ AAS = WorkflowDef(
                 custom_agent="Arch-DataModeling",
                 depends_on=["2.2"],
                 consumed_artifacts=["domain_analytics", "service_catalog", "app_catalog"],
-                body_template_path="templates/aas/step-3.1.md",
+                body_template_path=".github/prompts/steps/aas/step-3.1.prompt.md",
                 output_paths=["docs/catalog/data-model.md"],
                 # FR-WF-DM-01: 50,000文字超過時だけ生成する条件付きsidecar。
                 # 非fan-out宣言面のためruntime G-OUT / Self-Improve scopeには含めない。
@@ -434,7 +444,7 @@ AAS = WorkflowDef(
                 custom_agent="Arch-DataModeling",
                 depends_on=["3.1"],
                 consumed_artifacts=["data_model", "domain_analytics", "service_catalog", "app_catalog"],
-                body_template_path="templates/aas/step-3.2.md",
+                body_template_path=".github/prompts/steps/aas/step-3.2.prompt.md",
                 output_paths=["src/data/sample-data.json"],
                 required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/service-catalog.md"]),
         StepDef(id="4", title="データカタログ作成",
@@ -443,7 +453,7 @@ AAS = WorkflowDef(
                 skip_fallback_deps=["3.1"],
                 # service_catalog / service_catalog_matrix は optional 入力のため除外
                 consumed_artifacts=["data_model", "domain_analytics", "app_catalog"],
-                body_template_path="templates/aas/step-4.md",
+                body_template_path=".github/prompts/steps/aas/step-4.prompt.md",
                 output_paths=["docs/catalog/data-catalog.md"],
                 required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/service-catalog.md"]),
         StepDef(id="5", title="サービスカタログ",
@@ -451,7 +461,7 @@ AAS = WorkflowDef(
                 depends_on=["4"],
                 skip_fallback_deps=["4"],
                 consumed_artifacts=["service_catalog", "data_model", "screen_catalog", "domain_analytics", "app_catalog"],
-                body_template_path="templates/aas/step-5.md",
+                body_template_path=".github/prompts/steps/aas/step-5.prompt.md",
                 output_paths=["docs/catalog/service-catalog-matrix.md"],
                 required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/data-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/service-catalog.md"]),
         StepDef(id="6", title="テスト戦略書",
@@ -459,7 +469,7 @@ AAS = WorkflowDef(
                 depends_on=["5"],
                 skip_fallback_deps=["5"],
                 consumed_artifacts=["service_catalog_matrix", "data_model", "domain_analytics", "service_catalog", "app_catalog"],
-                body_template_path="templates/aas/step-6.md",
+                body_template_path=".github/prompts/steps/aas/step-6.prompt.md",
                 output_paths=["docs/catalog/test-strategy.md"],
                 required_input_paths=["docs/catalog/service-catalog-matrix.md",
                                       "docs/catalog/data-model.md",
@@ -473,7 +483,7 @@ AAS = WorkflowDef(
                 depends_on=["6"],
                 skip_fallback_deps=["6"],
                 consumed_artifacts=["use_case_catalog", "app_catalog"],
-                body_template_path="templates/aas/step-7.md",
+                body_template_path=".github/prompts/steps/aas/step-7.prompt.md",
                 output_paths=["docs/catalog/persona-catalog.md"],
                 required_input_paths=["docs/catalog/use-case-catalog.md",
                                       "docs/catalog/app-catalog.md"]),
@@ -483,7 +493,7 @@ AAS = WorkflowDef(
                 depends_on=["7"],
                 skip_fallback_deps=["7"],
                 consumed_artifacts=["persona_catalog", "app_catalog"],
-                body_template_path="templates/aas/step-8.md",
+                body_template_path=".github/prompts/steps/aas/step-8.prompt.md",
                 output_paths=["docs/catalog/persona-screen-catalog.md"],
                 required_input_paths=["docs/catalog/persona-catalog.md",
                                       "docs/catalog/app-catalog.md"]),
@@ -501,21 +511,21 @@ AAD_WEB = WorkflowDef(
         StepDef(id="1", title="画面一覧と遷移図",
                 custom_agent="Arch-UI-List",
                 consumed_artifacts=["app_catalog", "service_catalog", "data_model", "domain_analytics"],
-                body_template_path="templates/aad-web/step-1.md",
+                body_template_path=".github/prompts/steps/aad-web/step-1.prompt.md",
                 # per-APP fan-out: 各 APP-NN ごとに `docs/catalog/screen-catalog-APP-NN.md` を生成。
                 # 下流 Step 2.1 の screen_catalog parser (per-APP glob 入力) と契約整合する。
                 fanout_parser="app_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aad-web/step-1-app.md",
+                additional_prompt_template_path=".github/prompts/fanout/aad-web/step-1-app.prompt.md",
                 output_paths_template=["docs/catalog/screen-catalog-{key}.md"],
                 required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/service-catalog.md"]),
         StepDef(id="2.1", title="画面定義書",
                 custom_agent="Arch-UI-Detail",
                 depends_on=["1"],
                 consumed_artifacts=["screen_catalog", "app_catalog"],
-                body_template_path="templates/aad-web/step-2.1.md",
+                body_template_path=".github/prompts/steps/aad-web/step-2.1.prompt.md",
                 fanout_parser="screen_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aad-web/_common.md",
-                # 根拠: templates/aad-web/step-2.1.md `## 出力` / Arch-UI-Detail.prompt.md
+                additional_prompt_template_path=".github/prompts/fanout/aad-web/_common.prompt.md",
+                # 根拠: .github/prompts/steps/aad-web/step-2.1.prompt.md `## 出力` / Arch-UI-Detail.prompt.md
                 # 「画面 ID + 画面名スラッグ」形式。``{screenNameSlug}`` は catalog parser から
                 # 復元できないため fan-out 展開時に落ちる（実在しない path をゲートへ渡さない）。
                 output_paths_template=["docs/screen/{screenId}-{screenNameSlug}-description.md"],
@@ -524,10 +534,10 @@ AAD_WEB = WorkflowDef(
                 custom_agent="Arch-Microservice-ServiceDetail",
                 depends_on=["1"],
                 consumed_artifacts=["app_catalog", "service_catalog", "data_model", "domain_analytics", "service_catalog_matrix"],
-                body_template_path="templates/aad-web/step-2.2.md",
+                body_template_path=".github/prompts/steps/aad-web/step-2.2.prompt.md",
                 fanout_parser="service_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aad-web/_common.md",
-                # 根拠: templates/aad-web/step-2.2.md `## 出力`。``{serviceNameSlug}`` は
+                additional_prompt_template_path=".github/prompts/fanout/aad-web/_common.prompt.md",
+                # 根拠: .github/prompts/steps/aad-web/step-2.2.prompt.md `## 出力`。``{serviceNameSlug}`` は
                 # catalog parser から復元できないため fan-out 展開時に落ちる。
                 output_paths_template=["docs/services/{serviceId}-{serviceNameSlug}-description.md"],
                 required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/screen-catalog-APP-*.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/service-catalog.md", "docs/catalog/test-strategy.md"]),
@@ -535,9 +545,9 @@ AAD_WEB = WorkflowDef(
                 custom_agent="Arch-TDD-TestSpec",
                 depends_on=["2.2"],
                 consumed_artifacts=["test_strategy", "service_specs", "service_catalog_matrix", "data_model", "domain_analytics", "app_catalog"],
-                body_template_path="templates/aad-web/step-2.3.md",
+                body_template_path=".github/prompts/steps/aad-web/step-2.3.prompt.md",
                 fanout_parser="service_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aad-web/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/aad-web/_common.prompt.md",
                 # ``{serviceId}`` は service_catalog parser の fan-out キー（``SVC-*``）そのもの。
                 # Arch-TDD-TestSpec.prompt.md `<output_contract>` の「ファイル名 = parser キー」に従い、
                 # 展開後は `docs/test-specs/SVC-01-test-spec.md` など実生成名と一致する。
@@ -547,9 +557,9 @@ AAD_WEB = WorkflowDef(
                 custom_agent="Arch-TDD-TestSpec",
                 depends_on=["2.1"],
                 consumed_artifacts=["test_strategy", "screen_specs", "service_catalog_matrix", "data_model", "domain_analytics", "app_catalog"],
-                body_template_path="templates/aad-web/step-2.4.md",
+                body_template_path=".github/prompts/steps/aad-web/step-2.4.prompt.md",
                 fanout_parser="screen_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aad-web/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/aad-web/_common.prompt.md",
                 # ``{screenId}`` は screen_catalog parser の fan-out キー（``APP-NN-S###``）そのもの。
                 # 展開後は `docs/test-specs/APP-009-S001-test-spec.md` など実生成名と一致する。
                 output_paths_template=["docs/test-specs/{screenId}-test-spec.md"],
@@ -561,7 +571,7 @@ AAD_WEB = WorkflowDef(
                 custom_agent="Dev-Microservice-Azure-AddServiceDesign",
                 depends_on=["2.2"],
                 consumed_artifacts=["use_case_catalog", "service_catalog", "service_specs", "app_catalog"],
-                body_template_path="templates/aad-web/step-2.5.md",
+                body_template_path=".github/prompts/steps/aad-web/step-2.5.prompt.md",
                 output_paths=["docs/azure/azure-services-additional.md"],
                 required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/service-catalog.md", "docs/catalog/use-case-catalog.md", "docs/services/{serviceId}-{serviceNameSlug}-description.md"]),
         # Step.2.6: 機能要件に Chat-Bot / AI Agent / RAG を含むサービスだけを対象に、
@@ -571,12 +581,12 @@ AAD_WEB = WorkflowDef(
                 custom_agent="Arch-AgenticRetrieval-Detail",
                 depends_on=["2.2"],
                 consumed_artifacts=["service_catalog", "service_specs", "domain_analytics", "app_catalog"],
-                body_template_path="templates/aad-web/step-2.6.md",
+                body_template_path=".github/prompts/steps/aad-web/step-2.6.prompt.md",
                 # サービス単位の成果物しか持たないため fan-out する。
                 # AR 適用外のサービスでも spec を作り「適用外の理由」を記録することで
                 # 成果物ゲートを決定的にし、除外判断のトレーサビリティも確保する。
                 fanout_parser="service_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aad-web/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/aad-web/_common.prompt.md",
                 output_paths_template=["docs/services/{serviceId}-agentic-retrieval-spec.md"],
                 required_skills=["agentic-retrieval-contract"],
                 disabled_when_config={"enable_agentic_retrieval": ["no"]},
@@ -585,7 +595,7 @@ AAD_WEB = WorkflowDef(
                 custom_agent="QA-DocConsistency",
                 depends_on=["2.1", "2.2", "2.3", "2.4"],
                 consumed_artifacts=["screen_specs", "service_specs", "test_specs", "service_catalog_matrix", "app_catalog", "data_model"],
-                body_template_path="templates/aad-web/step-3.md",
+                body_template_path=".github/prompts/steps/aad-web/step-3.prompt.md",
                 output_paths=["docs/catalog/screen-service-consistency-report.md"],
                 required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "docs/screen/{screenId}-{screenNameSlug}-description.md", "docs/services/{serviceId}-{serviceNameSlug}-description.md", "docs/test-specs/{screenId}-test-spec.md", "docs/test-specs/{serviceId}-test-spec.md"]),
     ],
@@ -615,8 +625,8 @@ ASDW_WEB = WorkflowDef(
                 custom_agent="Dev-Microservice-Azure-DataDesign",
                 # docs/templates/agent-playbook.md は既知 key なし → スキップ
                 consumed_artifacts=["data_model", "service_catalog", "domain_analytics", "app_catalog"],
-                body_template_path="templates/asdw-web/step-1.1.md",
-                # 根拠: templates/asdw-web/step-1.1.md `## 出力`
+                body_template_path=".github/prompts/steps/asdw-web/step-1.1.prompt.md",
+                # 根拠: .github/prompts/steps/asdw-web/step-1.1.prompt.md `## 出力`
                 output_paths=["docs/azure/azure-services-data.md"],
                 required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/service-catalog.md"]),
         StepDef(id="1.2", title="データストア検証テスト生成 (TDD RED)",
@@ -625,17 +635,19 @@ ASDW_WEB = WorkflowDef(
                 # docs/azure/azure-services-data.md は既知 key なし → スキップ
                 # src/data/sample-data.json は src_files でカバー
                 consumed_artifacts=["app_catalog", "src_files"],
-                body_template_path="templates/asdw-web/step-1.2.md",
+                body_template_path=".github/prompts/steps/asdw-web/step-1.2.prompt.md",
                 output_paths=["src/infra/azure/verify-data-resources.sh"],
                 required_input_paths=["docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md"]),
         StepDef(id="1.3", title="Azure データサービス Deploy (TDD GREEN)",
                 custom_agent="Dev-Microservice-Azure-DataDeploy",
                 # local generation checkpoint（Step 4.2 完了）後に実行する最初の live Step。
                 depends_on=["1.2", "4.2"],
+                # FR-CLI-87: `--approval-gates` 有効時の承認対象。最初の live Azure write を伴う。
+                approval_gate=True,
                 # docs/azure/azure-services-data.md は既知 key なし → スキップ
                 # src_files の概括宣言に加え、件数契約の正本はfail-closed用に明示する
                 consumed_artifacts=["service_catalog_matrix", "app_catalog", "src_files"],
-                body_template_path="templates/asdw-web/step-1.3.md",
+                body_template_path=".github/prompts/steps/asdw-web/step-1.3.prompt.md",
                 output_paths=["src/infra/azure/create-azure-data-resources-prep.sh", "src/infra/azure/create-azure-data-resources.sh", "src/data/azure/data-registration-script.sh", "docs/azure/service-catalog.md"],
             required_input_paths=["docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "src/data/sample-data.json", "src/infra/azure/verify-data-resources.sh"],
             # FR-WF-ASDW-01: Azure write 前の fail-closed 検証に必要な bootstrap 入力。
@@ -669,8 +681,8 @@ ASDW_WEB = WorkflowDef(
                 depends_on=["1.1"],
                 # docs/azure/azure-services-*.md は既知 key なし → スキップ
                 consumed_artifacts=["use_case_catalog", "service_catalog", "service_specs", "app_catalog"],
-                body_template_path="templates/asdw-web/step-2.1.md",
-                # 根拠: templates/asdw-web/step-2.1.md `## 出力`
+                body_template_path=".github/prompts/steps/asdw-web/step-2.1.prompt.md",
+                # 根拠: .github/prompts/steps/asdw-web/step-2.1.prompt.md `## 出力`
                 output_paths=["docs/azure/azure-services-additional.md"],
                 required_input_paths=["docs/azure/azure-services-compute.md", "docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/service-catalog.md", "docs/catalog/use-case-catalog.md", "docs/services/{serviceId}-{serviceNameSlug}-description.md"]),
         StepDef(id="2.2", title="追加 Azure サービス Deploy",
@@ -679,8 +691,8 @@ ASDW_WEB = WorkflowDef(
                 skip_fallback_deps=["2.1"],
                 # docs/azure/azure-services-additional.md は既知 key なし → app_catalog のみ
                 consumed_artifacts=["app_catalog"],
-                body_template_path="templates/asdw-web/step-2.2.md",
-                # 根拠: templates/asdw-web/step-2.2.md `## 出力` の確定ファイル名 2 件。
+                body_template_path=".github/prompts/steps/asdw-web/step-2.2.prompt.md",
+                # 根拠: .github/prompts/steps/asdw-web/step-2.2.prompt.md `## 出力` の確定ファイル名 2 件。
                 # services/<service>.sh は条件付き、service-catalog-matrix.md は更新のみのため除外。
                 output_paths=["src/infra/azure/create-azure-additional-resources-prep.sh", "src/infra/azure/create-azure-additional-resources/create.sh"],
                 # 根拠: Dev-Microservice-Azure-AddServiceDeploy.prompt.md `## 出力`。
@@ -708,8 +720,8 @@ ASDW_WEB = WorkflowDef(
                 # deploy 済みリソースではなく Step 2.1 の設計から baseline integration test を生成する。
                 depends_on=["2.1"],
                 consumed_artifacts=["app_catalog"],
-                body_template_path="templates/asdw-web/step-2.3.md",
-                # 根拠: templates/asdw-web/step-2.3.md `## 出力`。ディレクトリ参照のため
+                body_template_path=".github/prompts/steps/asdw-web/step-2.3.prompt.md",
+                # 根拠: .github/prompts/steps/asdw-web/step-2.3.prompt.md `## 出力`。ディレクトリ参照のため
                 # 確定ファイルパスとしてはゲートできない。
                 output_paths_template=["src/test/integration/add-service/"],
                 required_input_paths=["docs/azure/azure-services-additional.md", "docs/catalog/app-catalog.md"]),
@@ -717,7 +729,7 @@ ASDW_WEB = WorkflowDef(
                 custom_agent="Dev-Microservice-Azure-AddServiceTesting",
                 depends_on=["2.2", "2.3"],
                 consumed_artifacts=["app_catalog"],
-                body_template_path="templates/asdw-web/step-2.4.md",
+                body_template_path=".github/prompts/steps/asdw-web/step-2.4.prompt.md",
                 # 根拠: Dev-Microservice-Azure-AddServiceTesting--asdw-web--2.4.yaml
                 # （`mode: append` = Step 2.3 が生成したテストツリーへの追記）。
                 output_paths_template=["src/test/integration/add-service/"],
@@ -729,12 +741,12 @@ ASDW_WEB = WorkflowDef(
                 custom_agent="Dev-Microservice-Azure-AgenticRetrievalDesign",
                 depends_on=["2.1"],
                 consumed_artifacts=["use_case_catalog", "service_catalog", "service_specs", "app_catalog"],
-                body_template_path="templates/asdw-web/step-2.5.md",
+                body_template_path=".github/prompts/steps/asdw-web/step-2.5.prompt.md",
                 # 根拠: Dev-Microservice-Azure-AgenticRetrievalDesign.prompt.md `## Outputs`。
                 # 成果物がサービス単位の設計書のため fan-out する（AAD-WEB Step.2.6 と同形）。
                 # 共通カタログへの追記は並列子間で競合するため宣言しない。
                 fanout_parser="service_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/asdw-web/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/asdw-web/_common.prompt.md",
                 output_paths_template=["docs/azure/agentic-retrieval/{serviceId}-design.md"],
                 required_skills=["agentic-retrieval-contract"],
                 disabled_when_config={"enable_agentic_retrieval": ["no"]},
@@ -744,7 +756,7 @@ ASDW_WEB = WorkflowDef(
                 depends_on=["2.2", "2.5"],
                 skip_fallback_deps=["2.5"],
                 consumed_artifacts=["app_catalog"],
-                body_template_path="templates/asdw-web/step-2.6.md",
+                body_template_path=".github/prompts/steps/asdw-web/step-2.6.prompt.md",
                 # 根拠: Dev-Microservice-Azure-AgenticRetrievalDeploy.prompt.md §3。
                 # 本 Step は 1 回の実行で全サービス分を生成するため fan-out しない。
                 # サービス別スクリプトは {serviceId} ではなくディレクトリ単位で宣言する。
@@ -771,8 +783,8 @@ ASDW_WEB = WorkflowDef(
                 # live service catalog（Step 1.3 出力）ではなく Step 1.1 の planned design を入力にする。
                 depends_on=["2.3"],
                 consumed_artifacts=["service_catalog", "use_case_catalog", "data_model", "service_catalog_matrix", "app_catalog"],
-                body_template_path="templates/asdw-web/step-3.1.md",
-                # 根拠: templates/asdw-web/step-3.1.md `## 出力`
+                body_template_path=".github/prompts/steps/asdw-web/step-3.1.prompt.md",
+                # 根拠: .github/prompts/steps/asdw-web/step-3.1.prompt.md `## 出力`
                 output_paths=["docs/azure/azure-services-compute.md"],
                 required_input_paths=["docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/data-model.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/service-catalog.md", "docs/catalog/use-case-catalog.md"]),
         StepDef(id="3.2", title="サービス テストコード生成 (TDD RED)",
@@ -780,9 +792,9 @@ ASDW_WEB = WorkflowDef(
                 depends_on=["3.1"],
                 skip_fallback_deps=[],
                 consumed_artifacts=["test_specs", "service_specs", "service_catalog_matrix", "app_catalog"],
-                body_template_path="templates/asdw-web/step-3.2.md",
+                body_template_path=".github/prompts/steps/asdw-web/step-3.2.prompt.md",
                 fanout_parser="service_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/asdw-web/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/asdw-web/_common.prompt.md",
                 # 根拠: ASDW-WEB 実行後に実在する `src/test/api/SVC-01.Tests` 〜 `SVC-23.Tests`
                 # の 8 ディレクトリ。テストプロジェクトは **serviceId** で命名される（
                 # `src/api/SVC-01-member-consent-service/` の
@@ -798,10 +810,10 @@ ASDW_WEB = WorkflowDef(
                 skip_fallback_deps=["3.2"],
                 # docs/azure/azure-services-*.md は既知 key なし → スキップ
                 consumed_artifacts=["service_specs", "service_catalog", "data_model", "service_catalog_matrix", "app_catalog", "test_files", "test_specs"],
-                body_template_path="templates/asdw-web/step-3.3.md",
+                body_template_path=".github/prompts/steps/asdw-web/step-3.3.prompt.md",
                 fanout_parser="service_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/asdw-web/_common.md",
-                # 根拠: templates/asdw-web/step-3.3.md `## 出力`。
+                additional_prompt_template_path=".github/prompts/fanout/asdw-web/_common.prompt.md",
+                # 根拠: .github/prompts/steps/asdw-web/step-3.3.prompt.md `## 出力`。
                 # いずれもディレクトリ参照 or 未解決スラッグ or 「任意推奨」のため
                 # 確定ファイルパスとしてはゲートできない。
                 output_paths_template=[
@@ -814,8 +826,8 @@ ASDW_WEB = WorkflowDef(
                 custom_agent="Dev-Microservice-Azure-ComputeDeploy-AzureFunctions",
                 depends_on=["2.4", "3.3"],
                 consumed_artifacts=["service_catalog", "service_catalog_matrix", "app_catalog", "src_files"],
-                body_template_path="templates/asdw-web/step-3.4.md",
-            # 根拠: templates/asdw-web/step-3.4.md `## 出力` + Prompt
+                body_template_path=".github/prompts/steps/asdw-web/step-3.4.prompt.md",
+            # 根拠: .github/prompts/steps/asdw-web/step-3.4.prompt.md `## 出力` + Prompt
             # Dev-Microservice-Azure-ComputeDeploy-AzureFunctions.prompt.md <output_contract>。
             # .github/workflows/ 配下と service-catalog-matrix.md 更新は
             # 確定ファイル名でないため除外。
@@ -838,8 +850,8 @@ ASDW_WEB = WorkflowDef(
                 custom_agent="Dev-Microservice-Azure-ComputePostDeployTest",
                 depends_on=["3.4"],
                 consumed_artifacts=["service_catalog_matrix", "app_catalog", "src_files"],
-                body_template_path="templates/asdw-web/step-3.5.md",
-                # 根拠: templates/asdw-web/step-3.5.md `## 出力`。
+                body_template_path=".github/prompts/steps/asdw-web/step-3.5.prompt.md",
+                # 根拠: .github/prompts/steps/asdw-web/step-3.5.prompt.md `## 出力`。
                 # 「必要に応じて」の条件付き生成物かつディレクトリ参照のためゲートできない。
                 output_paths_template=["src/test/post-deploy/"],
                 required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "src/test/api/"]),
@@ -849,10 +861,10 @@ ASDW_WEB = WorkflowDef(
                 depends_on=["3.3"],
                 skip_fallback_deps=[],
                 consumed_artifacts=["test_specs", "screen_specs", "service_catalog_matrix", "app_catalog"],
-                body_template_path="templates/asdw-web/step-4.1.md",
+                body_template_path=".github/prompts/steps/asdw-web/step-4.1.prompt.md",
                 fanout_parser="screen_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/asdw-web/_common.md",
-                # 根拠: templates/asdw-web/step-4.1.md `## 出力` と
+                additional_prompt_template_path=".github/prompts/fanout/asdw-web/_common.prompt.md",
+                # 根拠: .github/prompts/steps/asdw-web/step-4.1.prompt.md `## 出力` と
                 # Dev-Microservice-Azure-UITestCoding.prompt.md `## 出力`。
                 # ``{screenId}`` は screen_catalog の fan-out キーそのもの。README.md のみ
                 # 確定ファイルパスとして展開され、ディレクトリ参照 2 件は展開時に落ちる。
@@ -869,10 +881,10 @@ ASDW_WEB = WorkflowDef(
                 depends_on=["1.2", "2.5", "4.1"],
                 skip_fallback_deps=["4.1"],
                 consumed_artifacts=["screen_specs", "screen_catalog", "service_catalog_matrix", "use_case_catalog", "app_catalog", "src_files", "test_files", "test_specs"],
-                body_template_path="templates/asdw-web/step-4.2.md",
+                body_template_path=".github/prompts/steps/asdw-web/step-4.2.prompt.md",
                 fanout_parser="screen_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/asdw-web/_common.md",
-                # 根拠: templates/asdw-web/step-4.2.md `## 出力`（`src/app/` 配下に UI 実装）と
+                additional_prompt_template_path=".github/prompts/fanout/asdw-web/_common.prompt.md",
+                # 根拠: .github/prompts/steps/asdw-web/step-4.2.prompt.md `## 出力`（`src/app/` 配下に UI 実装）と
                 # Dev-Microservice-Azure-UICoding--asdw-web--4.2.yaml。いずれも画面別ではなく
                 # アプリ共通の成果物のため fan-out 子別のゲート対象にはしない。
                 output_paths_template=[
@@ -885,8 +897,8 @@ ASDW_WEB = WorkflowDef(
                 custom_agent="Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps",
                 depends_on=["3.5", "4.2"],
                 consumed_artifacts=["app_catalog"],
-                body_template_path="templates/asdw-web/step-4.3.md",
-            # 根拠: templates/asdw-web/step-4.3.md `## 出力` かつ Prompt
+                body_template_path=".github/prompts/steps/asdw-web/step-4.3.prompt.md",
+            # 根拠: .github/prompts/steps/asdw-web/step-4.3.prompt.md `## 出力` かつ Prompt
             # Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps.prompt.md <output_contract> の両方に存在するパス。
             # -prep.sh はテンプレートのみの記載で Prompt 契約に無いため除外（TBD 扱い）。
             output_paths=["src/infra/azure/create-azure-webui-resources.sh"],
@@ -906,7 +918,7 @@ ASDW_WEB = WorkflowDef(
                 custom_agent="E2ETesting-Playwright",
                 depends_on=["4.3"],
                 consumed_artifacts=["app_catalog", "service_catalog_matrix", "test_specs", "src_files"],
-                body_template_path="templates/asdw-web/step-4.4.md",
+                body_template_path=".github/prompts/steps/asdw-web/step-4.4.prompt.md",
                 # 根拠: E2ETesting-Playwright.prompt.md `## 出力`。ディレクトリ参照のためゲートできない。
                 output_paths_template=["src/test/e2e/playwright/"],
                 required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "docs/test-specs/{screenId}-test-spec.md"]),
@@ -916,8 +928,8 @@ ASDW_WEB = WorkflowDef(
                 depends_on=["4.4"],
                 # docs/azure/azure-services-*.md は既知 key なし → スキップ
                 consumed_artifacts=["use_case_catalog", "service_catalog_matrix", "app_catalog"],
-                body_template_path="templates/asdw-web/step-5.1.md",
-                # 根拠: templates/asdw-web/step-5.1.md `## 出力`
+                body_template_path=".github/prompts/steps/asdw-web/step-5.1.prompt.md",
+                # 根拠: .github/prompts/steps/asdw-web/step-5.1.prompt.md `## 出力`
                 output_paths=["docs/azure/azure-architecture-review-report.md"],
                 required_input_paths=["docs/azure/azure-services-additional.md", "docs/azure/azure-services-compute.md", "docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/use-case-catalog.md"]),
         StepDef(id="5.2", title="整合性チェック",
@@ -925,8 +937,8 @@ ASDW_WEB = WorkflowDef(
                 depends_on=["4.4"],
                 # docs/azure/azure-services-*.md は既知 key なし、src/app/ src/api/ src/infra/ は src_files でカバー
                 consumed_artifacts=["service_catalog_matrix", "app_catalog", "src_files"],
-                body_template_path="templates/asdw-web/step-5.2.md",
-                # 根拠: templates/asdw-web/step-5.2.md `## 出力`
+                body_template_path=".github/prompts/steps/asdw-web/step-5.2.prompt.md",
+                # 根拠: .github/prompts/steps/asdw-web/step-5.2.prompt.md `## 出力`
                 output_paths=["docs/azure/dependency-review-report.md"],
                 required_input_paths=["docs/azure/azure-services-compute.md", "docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "src/api/", "src/app/"]),
         # Step.5.3: 設計文書の照合ではなく、デプロイ済み構成を実行して測る（FR-WF-CONF-01）。
@@ -934,9 +946,11 @@ ASDW_WEB = WorkflowDef(
                 custom_agent="QA-RequirementsConformanceEval",
                 depends_on=["5.1", "5.2"],
                 consumed_artifacts=["app_catalog", "service_catalog_matrix"],
-                body_template_path="templates/asdw-web/step-5.3.md",
+                body_template_path=".github/prompts/steps/asdw-web/step-5.3.prompt.md",
                 output_paths=["docs/azure/requirements-conformance-report.md"],
                 required_skills=["requirements-conformance-measurement"],
+                # FR-DAG-09: 測定表が FAIL を報告したときの差戻し先（実装 Step）。
+                rework_targets=["3.3", "4.2"],
                 required_input_paths=["docs/azure/azure-architecture-review-report.md", "docs/azure/dependency-review-report.md", "docs/catalog/app-catalog.md"]),
     ],
 )
@@ -958,27 +972,27 @@ ADFD = WorkflowDef(
     state_labels=_make_state_labels("adfd"),
     params=["app_ids", "app_id"],
     steps=[
-        StepDef(id="0.1", title="データフローデータモデル定義書", custom_agent="Arch-Dataflow-DataModel", consumed_artifacts=["data_model", "app_catalog"], body_template_path="templates/adfd/step-0.1.md",
-                # 根拠: templates/adfd/step-0.1.md `## 出力`
+        StepDef(id="0.1", title="データフローデータモデル定義書", custom_agent="Arch-Dataflow-DataModel", consumed_artifacts=["data_model", "app_catalog"], body_template_path=".github/prompts/steps/adfd/step-0.1.prompt.md",
+                # 根拠: .github/prompts/steps/adfd/step-0.1.prompt.md `## 出力`
                 output_paths=["docs/dataflow/dataflow-data-model.md"], required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/data-model.md"]),
-        StepDef(id="0.2", title="データフローアプリカタログ", custom_agent="Arch-Dataflow-AppCatalog", depends_on=["0.1"], consumed_artifacts=["app_catalog", "service_catalog_matrix"], body_template_path="templates/adfd/step-0.2.md",
-                # 根拠: templates/adfd/step-0.2.md `## 出力`
+        StepDef(id="0.2", title="データフローアプリカタログ", custom_agent="Arch-Dataflow-AppCatalog", depends_on=["0.1"], consumed_artifacts=["app_catalog", "service_catalog_matrix"], body_template_path=".github/prompts/steps/adfd/step-0.2.prompt.md",
+                # 根拠: .github/prompts/steps/adfd/step-0.2.prompt.md `## 出力`
                 output_paths=["docs/dataflow/dataflow-app-catalog.md"], required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "docs/dataflow/dataflow-data-model.md"]),
-        StepDef(id="4", title="データフローサービスカタログ", custom_agent="Arch-Dataflow-ServiceCatalog", depends_on=["0.2"], consumed_artifacts=["service_catalog_matrix"], body_template_path="templates/adfd/step-4.md",
-                # 根拠: templates/adfd/step-4.md `## 出力`
+        StepDef(id="4", title="データフローサービスカタログ", custom_agent="Arch-Dataflow-ServiceCatalog", depends_on=["0.2"], consumed_artifacts=["service_catalog_matrix"], body_template_path=".github/prompts/steps/adfd/step-4.prompt.md",
+                # 根拠: .github/prompts/steps/adfd/step-4.prompt.md `## 出力`
                 output_paths=["docs/dataflow/dataflow-service-catalog.md"], required_input_paths=["docs/catalog/service-catalog-matrix.md", "docs/dataflow/dataflow-app-catalog.md"]),
-        StepDef(id="5", title="データフローテスト戦略書", custom_agent="Arch-Dataflow-TestStrategy", depends_on=["4"], consumed_artifacts=["test_strategy"], body_template_path="templates/adfd/step-5.md",
-                # 根拠: templates/adfd/step-5.md `## 出力`
+        StepDef(id="5", title="データフローテスト戦略書", custom_agent="Arch-Dataflow-TestStrategy", depends_on=["4"], consumed_artifacts=["test_strategy"], body_template_path=".github/prompts/steps/adfd/step-5.prompt.md",
+                # 根拠: .github/prompts/steps/adfd/step-5.prompt.md `## 出力`
                 output_paths=["docs/dataflow/dataflow-test-strategy.md"], required_input_paths=["docs/catalog/test-strategy.md", "docs/dataflow/dataflow-app-catalog.md", "docs/dataflow/dataflow-service-catalog.md"]),
-        StepDef(id="1", title="ジョブ詳細仕様書", custom_agent="Arch-Dataflow-AppSpec", depends_on=["5"], consumed_artifacts=["app_catalog", "service_catalog_matrix", "data_model"], body_template_path="templates/adfd/step-1.md",
+        StepDef(id="1", title="ジョブ詳細仕様書", custom_agent="Arch-Dataflow-AppSpec", depends_on=["5"], consumed_artifacts=["app_catalog", "service_catalog_matrix", "data_model"], body_template_path=".github/prompts/steps/adfd/step-1.prompt.md",
                 fanout_parser="dataflow_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/adfd/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/adfd/_common.prompt.md",
                 output_paths_template=["docs/dataflow/apps/{key}-spec.md"], required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/data-model.md", "docs/catalog/service-catalog-matrix.md"]),
-        StepDef(id="2", title="監視・運用設計書", custom_agent="Arch-Dataflow-MonitoringDesign", depends_on=["5"], consumed_artifacts=["app_catalog", "service_catalog_matrix"], body_template_path="templates/adfd/step-2.md",
+        StepDef(id="2", title="監視・運用設計書", custom_agent="Arch-Dataflow-MonitoringDesign", depends_on=["5"], consumed_artifacts=["app_catalog", "service_catalog_matrix"], body_template_path=".github/prompts/steps/adfd/step-2.prompt.md",
                 output_paths=["docs/dataflow/dataflow-monitoring-design.md"], required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md"]),
-        StepDef(id="3", title="TDDテスト仕様書", custom_agent="Arch-Dataflow-TDD-TestSpec", depends_on=["1", "2"], consumed_artifacts=["test_strategy", "service_catalog_matrix", "dataflow_specs"], body_template_path="templates/adfd/step-3.md",
+        StepDef(id="3", title="TDDテスト仕様書", custom_agent="Arch-Dataflow-TDD-TestSpec", depends_on=["1", "2"], consumed_artifacts=["test_strategy", "service_catalog_matrix", "dataflow_specs"], body_template_path=".github/prompts/steps/adfd/step-3.prompt.md",
                 fanout_parser="dataflow_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/adfd/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/adfd/_common.prompt.md",
                 output_paths_template=["docs/test-specs/{key}-test-spec.md"], required_input_paths=["docs/catalog/test-strategy.md", "docs/catalog/service-catalog-matrix.md", "docs/dataflow/apps/{key}-spec.md", "docs/dataflow/dataflow-monitoring-design.md"]),
     ],
 )
@@ -995,8 +1009,8 @@ ADFDV = WorkflowDef(
         # 注: `docs/dataflow/apps/{key}-spec.md` の ``{key}`` は ADFD Step 1 (Arch-Dataflow-AppSpec) の
         # fan-out キー（`dataflow_catalog` parser が返す ``APP-NN``）。producer 側の宣言と
         # 表記を揃える（io-contract の producer 解決は完全一致のみ）。
-        StepDef(id="1.1", title="データサービス選定", custom_agent="Dev-Dataflow-DataServiceSelect", consumed_artifacts=["batch_domain_analytics", "batch_data_model", "dataflow_catalog", "batch_service_catalog"], body_template_path="templates/adfdv/step-1.1.md",
-                # 根拠: templates/adfdv/step-1.1.md `## 出力`。ADFDV の DAG 根に `output_paths` を
+        StepDef(id="1.1", title="データサービス選定", custom_agent="Dev-Dataflow-DataServiceSelect", consumed_artifacts=["batch_domain_analytics", "batch_data_model", "dataflow_catalog", "batch_service_catalog"], body_template_path=".github/prompts/steps/adfdv/step-1.1.prompt.md",
+                # 根拠: .github/prompts/steps/adfdv/step-1.1.prompt.md `## 出力`。ADFDV の DAG 根に `output_paths` を
                 # 宣言すると Self-Improve の target scope が既定 `"."` からこの 2 件へ無言で縮小するため
                 # （`workflow_output_paths_cover_workflow` が True に反転する）、契約宣言のみの
                 # `output_paths_template` 側へ置く。
@@ -1006,31 +1020,31 @@ ADFDV = WorkflowDef(
                 ],
                 required_input_paths=["docs/dataflow/apps/{key}-spec.md", "docs/dataflow/dataflow-app-catalog.md", "docs/dataflow/dataflow-monitoring-design.md", "docs/dataflow/dataflow-service-catalog.md"]),
         # docs/azure/azure-services-data.md, batch-monitoring-design.md は既知 key なし → スキップ
-        StepDef(id="1.2", title="Azure データリソース Deploy", custom_agent="Dev-Dataflow-DataDeploy", depends_on=["1.1"], consumed_artifacts=["batch_service_catalog"], body_template_path="templates/adfdv/step-1.2.md", required_input_paths=["docs/dataflow/apps/{key}-spec.md", "docs/dataflow/dataflow-app-catalog.md", "docs/dataflow/dataflow-monitoring-design.md", "docs/dataflow/dataflow-service-catalog.md", "src/infra/azure/dataflow/create-batch-resources.sh", "src/infra/azure/dataflow/verify-batch-resources.sh"], reality_gate_acs=["AC-3"]),
+        StepDef(id="1.2", title="Azure データリソース Deploy", custom_agent="Dev-Dataflow-DataDeploy", depends_on=["1.1"], consumed_artifacts=["batch_service_catalog"], body_template_path=".github/prompts/steps/adfdv/step-1.2.prompt.md", required_input_paths=["docs/dataflow/apps/{key}-spec.md", "docs/dataflow/dataflow-app-catalog.md", "docs/dataflow/dataflow-monitoring-design.md", "docs/dataflow/dataflow-service-catalog.md", "src/infra/azure/dataflow/create-batch-resources.sh", "src/infra/azure/dataflow/verify-batch-resources.sh"], reality_gate_acs=["AC-3"]),
         # docs/dataflow/dataflow-test-strategy.md, batch-monitoring-design.md は既知 key なし → スキップ
-        StepDef(id="2.1", title="TDD RED — テストコード作成", custom_agent="Dev-Dataflow-TestCoding", depends_on=["1.2"], consumed_artifacts=["test_specs", "dataflow_catalog", "batch_service_catalog", "dataflow_specs"], body_template_path="templates/adfdv/step-2.1.md",
+        StepDef(id="2.1", title="TDD RED — テストコード作成", custom_agent="Dev-Dataflow-TestCoding", depends_on=["1.2"], consumed_artifacts=["test_specs", "dataflow_catalog", "batch_service_catalog", "dataflow_specs"], body_template_path=".github/prompts/steps/adfdv/step-2.1.prompt.md",
                 fanout_parser="dataflow_catalog",
-                # 根拠: templates/adfdv/step-2.1.md `## 出力`。``{jobId}`` / ``{jobNameSlug}`` は
+                # 根拠: .github/prompts/steps/adfdv/step-2.1.prompt.md `## 出力`。``{jobId}`` / ``{jobNameSlug}`` は
                 # dataflow_catalog parser （APP-ID を返す）から復元できないため展開時に落ちる。
                 output_paths_template=[
                     "src/test/dataflow/{jobId}-{jobNameSlug}.Tests/",
                     "src/test/dataflow/{jobId}-{jobNameSlug}.Tests/README.md",
                 ],
-                additional_prompt_template_path="hve/prompt/fanout/adfdv/_common.md", required_input_paths=["docs/dataflow/apps/{key}-spec.md", "docs/dataflow/dataflow-data-model.md", "docs/dataflow/dataflow-service-catalog.md", "docs/dataflow/dataflow-test-strategy.md", "docs/test-specs/{key}-test-spec.md"]),
+                additional_prompt_template_path=".github/prompts/fanout/adfdv/_common.prompt.md", required_input_paths=["docs/dataflow/apps/{key}-spec.md", "docs/dataflow/dataflow-data-model.md", "docs/dataflow/dataflow-service-catalog.md", "docs/dataflow/dataflow-test-strategy.md", "docs/test-specs/{key}-test-spec.md"]),
         # docs/azure/azure-services-data.md, dataflow-test-strategy.md, batch-monitoring-design.md は既知 key なし → スキップ
-        StepDef(id="2.2", title="TDD GREEN — データフローアプリ本実装", custom_agent="Dev-Dataflow-ServiceCoding", depends_on=["2.1"], consumed_artifacts=["test_files", "dataflow_specs", "batch_service_catalog"], body_template_path="templates/adfdv/step-2.2.md",
+        StepDef(id="2.2", title="TDD GREEN — データフローアプリ本実装", custom_agent="Dev-Dataflow-ServiceCoding", depends_on=["2.1"], consumed_artifacts=["test_files", "dataflow_specs", "batch_service_catalog"], body_template_path=".github/prompts/steps/adfdv/step-2.2.prompt.md",
                 fanout_parser="dataflow_catalog",
-                # 根拠: templates/adfdv/step-2.2.md `## 出力` と
+                # 根拠: .github/prompts/steps/adfdv/step-2.2.prompt.md `## 出力` と
                 # Dev-Dataflow-ServiceCoding--adfdv--2.2.yaml。同上の理由で展開時に落ちる。
                 output_paths_template=[
                     "src/dataflow/{jobId}-{jobNameSlug}/",
                     "src/dataflow/{jobId}-{jobNameSlug}/README.md",
                     "src/test/dataflow/{jobId}-{jobNameSlug}.Tests/",
                 ],
-                additional_prompt_template_path="hve/prompt/fanout/adfdv/_common.md", required_input_paths=["docs/dataflow/apps/{key}-spec.md", "docs/dataflow/dataflow-app-catalog.md", "docs/dataflow/dataflow-data-model.md", "docs/dataflow/dataflow-monitoring-design.md", "docs/dataflow/dataflow-service-catalog.md", "docs/test-specs/{key}-test-spec.md"]),
+                additional_prompt_template_path=".github/prompts/fanout/adfdv/_common.prompt.md", required_input_paths=["docs/dataflow/apps/{key}-spec.md", "docs/dataflow/dataflow-app-catalog.md", "docs/dataflow/dataflow-data-model.md", "docs/dataflow/dataflow-monitoring-design.md", "docs/dataflow/dataflow-service-catalog.md", "docs/test-specs/{key}-test-spec.md"]),
         # docs/azure/azure-services-data.md, batch-monitoring-design.md, azure-services-compute.md は既知 key なし → スキップ
-        StepDef(id="3", title="Azure Functions/コンテナ Deploy", custom_agent="Dev-Dataflow-FunctionsDeploy", depends_on=["2.2"], consumed_artifacts=["src_files", "batch_service_catalog"], body_template_path="templates/adfdv/step-3.md",
-                # 根拠: templates/adfdv/step-3.md `## 出力`。CI/CD ファイル名は「等」付きの例示で
+        StepDef(id="3", title="Azure Functions/コンテナ Deploy", custom_agent="Dev-Dataflow-FunctionsDeploy", depends_on=["2.2"], consumed_artifacts=["src_files", "batch_service_catalog"], body_template_path=".github/prompts/steps/adfdv/step-3.prompt.md",
+                # 根拠: .github/prompts/steps/adfdv/step-3.prompt.md `## 出力`。CI/CD ファイル名は「等」付きの例示で
                 # 確定でないため `output_paths` ではなく契約宣言側へ置く。
                 output_paths_template=[
                     ".github/workflows/deploy-batch-functions.yml",
@@ -1038,21 +1052,21 @@ ADFDV = WorkflowDef(
                 ],
                 required_input_paths=["docs/dataflow/apps/{key}-spec.md", "docs/dataflow/dataflow-app-catalog.md", "docs/dataflow/dataflow-monitoring-design.md", "docs/dataflow/dataflow-service-catalog.md"], reality_gate_acs=["AC-2", "AC-3"]),
         # docs/azure/azure-services-data.md, batch-monitoring-design.md, azure-services-compute.md は既知 key なし → スキップ
-        # 根拠: templates/adfdv/step-4.1.md `## 出力` および
+        # 根拠: .github/prompts/steps/adfdv/step-4.1.prompt.md `## 出力` および
         # QA-AzureArchitectureReview.prompt.md §2 Step 別出力テーブル（adfdv 4.1 = waf-review.md）。
         # ADFDV の DAG 根は Step 1.1 であり、根が具体 path を寄与しない限り
         # `workflow_output_paths_cover_workflow` は False のままなので、本宣言で
         # Self-Improve target scope は既定 `"."` のまま維持される。
-        StepDef(id="4.1", title="WAF レビュー", custom_agent="QA-AzureArchitectureReview", depends_on=["3"], consumed_artifacts=["batch_service_catalog"], body_template_path="templates/adfdv/step-4.1.md", output_paths=["docs/azure/waf-review.md"], required_input_paths=["docs/azure/azure-services-additional.md", "docs/azure/azure-services-compute.md", "docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/use-case-catalog.md"]),
-        # 根拠: templates/adfdv/step-4.2.md `## 出力` / `## 完了条件` および
+        StepDef(id="4.1", title="WAF レビュー", custom_agent="QA-AzureArchitectureReview", depends_on=["3"], consumed_artifacts=["batch_service_catalog"], body_template_path=".github/prompts/steps/adfdv/step-4.1.prompt.md", output_paths=["docs/azure/waf-review.md"], required_input_paths=["docs/azure/azure-services-additional.md", "docs/azure/azure-services-compute.md", "docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/use-case-catalog.md"]),
+        # 根拠: .github/prompts/steps/adfdv/step-4.2.prompt.md `## 出力` / `## 完了条件` および
         # QA-AzureDependencyReview.prompt.md Step 別出力テーブル（adfdv 4.2 = dependency-review.md）。
-        StepDef(id="4.2", title="整合性チェック", custom_agent="QA-AzureDependencyReview", depends_on=["3"], consumed_artifacts=["batch_service_catalog"], body_template_path="templates/adfdv/step-4.2.md", output_paths=["docs/azure/dependency-review.md"], required_input_paths=["docs/azure/azure-services-compute.md", "docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "src/api/", "src/app/"]),
+        StepDef(id="4.2", title="整合性チェック", custom_agent="QA-AzureDependencyReview", depends_on=["3"], consumed_artifacts=["batch_service_catalog"], body_template_path=".github/prompts/steps/adfdv/step-4.2.prompt.md", output_paths=["docs/azure/dependency-review.md"], required_input_paths=["docs/azure/azure-services-compute.md", "docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "src/api/", "src/app/"]),
         # Step.4.3: デプロイ済みのデータフロー基盤を実行して測る（FR-WF-CONF-01）。
         StepDef(id="4.3", title="要件適合実測",
                 custom_agent="QA-RequirementsConformanceEval",
                 depends_on=["4.1", "4.2"],
                 consumed_artifacts=["batch_service_catalog", "dataflow_catalog"],
-                body_template_path="templates/adfdv/step-4.3.md",
+                body_template_path=".github/prompts/steps/adfdv/step-4.3.prompt.md",
                 output_paths=["docs/dataflow/requirements-conformance-report.md"],
                 required_skills=["requirements-conformance-measurement"],
                 required_input_paths=["docs/azure/dependency-review.md", "docs/azure/waf-review.md", "docs/dataflow/dataflow-app-catalog.md"]),
@@ -1087,14 +1101,14 @@ ADA = WorkflowDef(
                 custom_agent="Arch-Microservice-DomainAnalytics",
                 depends_on=[],
                 consumed_artifacts=["use_case_catalog", "app_catalog"],
-                body_template_path="templates/ada/step-2.md",
+                body_template_path=".github/prompts/steps/ada/step-2.prompt.md",
                 output_paths=["docs/catalog/domain-analytics.md"],
                 required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/use-case-catalog.md"]),
         StepDef(id="3", title="サービス一覧抽出",
                 custom_agent="Arch-Microservice-ServiceIdentify",
                 depends_on=["2"],
                 consumed_artifacts=["use_case_catalog", "domain_analytics", "app_catalog"],
-                body_template_path="templates/ada/step-3.md",
+                body_template_path=".github/prompts/steps/ada/step-3.prompt.md",
                 output_paths=["docs/catalog/service-catalog.md"],
                 required_input_paths=["docs/catalog/app-catalog.md",
                                       "docs/catalog/domain-analytics.md",
@@ -1103,7 +1117,7 @@ ADA = WorkflowDef(
                 custom_agent="Arch-DataModeling",
                 depends_on=["3"],
                 consumed_artifacts=["domain_analytics", "service_catalog", "app_catalog"],
-                body_template_path="templates/ada/step-4.1.md",
+                body_template_path=".github/prompts/steps/ada/step-4.1.prompt.md",
                 output_paths=["docs/catalog/data-model.md"],
                 # FR-WF-DM-01: 50,000文字超過時だけ生成する条件付きsidecar。
                 # 非fan-out宣言面のためruntime G-OUT / Self-Improve scopeには含めない。
@@ -1119,7 +1133,7 @@ ADA = WorkflowDef(
                 custom_agent="Arch-DataModeling",
                 depends_on=["4.1"],
                 consumed_artifacts=["data_model", "domain_analytics", "service_catalog", "app_catalog"],
-                body_template_path="templates/ada/step-4.2.md",
+                body_template_path=".github/prompts/steps/ada/step-4.2.prompt.md",
                 output_paths=["src/data/sample-data.json"],
                 required_input_paths=["docs/catalog/app-catalog.md",
                                       "docs/catalog/data-model.md",
@@ -1129,7 +1143,7 @@ ADA = WorkflowDef(
                 custom_agent="Arch-DataCatalog",
                 depends_on=["4.1"],
                 consumed_artifacts=["data_model", "domain_analytics", "app_catalog"],
-                body_template_path="templates/ada/step-5.md",
+                body_template_path=".github/prompts/steps/ada/step-5.prompt.md",
                 output_paths=["docs/catalog/data-catalog.md"],
                 # AAS Step.5 と異なり service-catalog-matrix.md は要求しない
                 # （ADA では画面キーの matrix を作らないため）。
@@ -1141,7 +1155,7 @@ ADA = WorkflowDef(
                 custom_agent="Arch-PersonaCatalog",
                 depends_on=["5"],
                 consumed_artifacts=["use_case_catalog", "app_catalog"],
-                body_template_path="templates/ada/step-6.md",
+                body_template_path=".github/prompts/steps/ada/step-6.prompt.md",
                 output_paths=["docs/catalog/persona-catalog.md"],
                 required_input_paths=["docs/catalog/app-catalog.md",
                                       "docs/catalog/use-case-catalog.md"]),
@@ -1151,9 +1165,9 @@ ADA = WorkflowDef(
                 custom_agent="Arch-Microservice-ServiceDetail",
                 depends_on=["5"],
                 consumed_artifacts=["app_catalog", "service_catalog", "data_model", "domain_analytics"],
-                body_template_path="templates/ada/step-7.md",
+                body_template_path=".github/prompts/steps/ada/step-7.prompt.md",
                 fanout_parser="service_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/ada/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/ada/_common.prompt.md",
                 # {serviceNameSlug} は catalog parser から復元できないため fan-out 展開時に落ちる。
                 output_paths_template=["docs/services/{serviceId}-{serviceNameSlug}-description.md"],
                 required_input_paths=["docs/catalog/app-catalog.md",
@@ -1165,7 +1179,7 @@ ADA = WorkflowDef(
                 custom_agent="Arch-AgentDataAsset",
                 depends_on=["5"],
                 consumed_artifacts=["use_case_catalog", "app_catalog"],
-                body_template_path="templates/ada/step-8.md",
+                body_template_path=".github/prompts/steps/ada/step-8.prompt.md",
                 required_skills=["ai-agent-capability-contract"],
                 output_paths=["docs/catalog/unstructured-data-catalog.md"],
                 required_input_paths=["docs/catalog/app-catalog.md",
@@ -1175,7 +1189,7 @@ ADA = WorkflowDef(
                 custom_agent="Arch-TDD-TestStrategy",
                 depends_on=["6", "7", "8"],
                 consumed_artifacts=["data_model", "domain_analytics", "service_catalog", "app_catalog"],
-                body_template_path="templates/ada/step-9.md",
+                body_template_path=".github/prompts/steps/ada/step-9.prompt.md",
                 output_paths=["docs/catalog/test-strategy.md"],
                 # service-catalog-matrix.md は ADA では生成しないため要求しない。
                 required_input_paths=["docs/catalog/app-catalog.md",
@@ -1197,7 +1211,7 @@ AAG = WorkflowDef(
                 custom_agent="Arch-AIAgentDesign-Step1",
                 # users-guide/08-ai-agent.md は既知 key なし → スキップ
                 consumed_artifacts=["use_case_catalog", "service_catalog_matrix", "domain_analytics", "data_model", "service_catalog", "service_specs", "app_catalog"],
-                body_template_path="templates/aag/step-1.md",
+                body_template_path=".github/prompts/steps/aag/step-1.prompt.md",
                 output_paths=["docs/agent/agent-application-definition.md"],
                 required_input_paths=["docs/catalog/app-catalog.md", "docs/catalog/data-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/persona-catalog.md", "docs/catalog/service-catalog.md", "docs/catalog/unstructured-data-catalog.md", "docs/catalog/use-case-catalog.md", "docs/services/SVC-*.md", "src/data/sample-data.json"]),
         StepDef(id="2", title="AI Agent 粒度設計",
@@ -1206,7 +1220,7 @@ AAG = WorkflowDef(
                 # users-guide/08-ai-agent.md は既知 key なし → スキップ
                 # agent-application-definition.md は docs/agent/ 配下 → agent_specs でカバー
                 consumed_artifacts=["agent_specs", "service_catalog_matrix", "domain_analytics", "data_model", "app_catalog"],
-                body_template_path="templates/aag/step-2.md",
+                body_template_path=".github/prompts/steps/aag/step-2.prompt.md",
                 output_paths=["docs/agent/agent-architecture.md"],
                 required_input_paths=["docs/agent/agent-application-definition.md", "docs/catalog/app-catalog.md", "docs/catalog/data-catalog.md", "docs/catalog/data-model.md", "docs/catalog/domain-analytics.md", "docs/catalog/persona-catalog.md", "docs/catalog/service-catalog.md", "docs/catalog/unstructured-data-catalog.md", "docs/catalog/use-case-catalog.md", "docs/services/SVC-*.md", "src/data/sample-data.json"]),
         StepDef(id="3", title="AI Agent 詳細設計",
@@ -1214,9 +1228,9 @@ AAG = WorkflowDef(
                 depends_on=["2"],
                 # users-guide/08-ai-agent.md は既知 key なし → スキップ
                 consumed_artifacts=["agent_specs", "service_catalog_matrix", "service_specs", "app_catalog"],
-                body_template_path="templates/aag/step-3.md",
+                body_template_path=".github/prompts/steps/aag/step-3.prompt.md",
                 fanout_parser="agent_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aag/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/aag/_common.prompt.md",
                 # AG-CAP-03 で Foundry IQ / Azure AI Search Agentic Retrieval を選んだ場合の
                 # AR-CAP-01〜05 契約を確定させるため、repo Skill を required 宣言で公開する。
                 # TB-CAP-01〜05 は Tool 総数が閾値を超えたときの公開方式を確定させる。
@@ -1239,7 +1253,7 @@ AAGD = WorkflowDef(
                 custom_agent="Arch-AIAgentDesign-Step1",
                 # docs/azure/azure-services-data.md, azure-services-additional.md は既知 key なし → スキップ
                 consumed_artifacts=["app_catalog", "service_catalog_matrix", "service_catalog", "data_model", "domain_analytics", "use_case_catalog", "service_specs"],
-                body_template_path="templates/aagd/step-1.md",
+                body_template_path=".github/prompts/steps/aagd/step-1.prompt.md",
                 output_paths=["docs/agent/agent-application-definition.md"],
                 required_input_paths=["docs/catalog/app-catalog.md",
                                       "docs/catalog/data-catalog.md",
@@ -1256,9 +1270,9 @@ AAGD = WorkflowDef(
                 depends_on=["1"],
                 # docs/ai-agent-catalog.md は docs/agent/ 配下でないため agent_specs キーの対象外 → スキップ
                 consumed_artifacts=["test_strategy", "agent_specs", "service_catalog_matrix", "data_model", "app_catalog"],
-                body_template_path="templates/aagd/step-2.1.md",
+                body_template_path=".github/prompts/steps/aagd/step-2.1.prompt.md",
                 fanout_parser="agent_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aagd/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/aagd/_common.prompt.md",
                 # Foundry IQ 経路を選んだ Agent の AR-CAP-03 予算縮退・AR-CAP-04 引用を
                 # テスト観点へ落とすため、検証観点の正本を TDD Step へも公開する。
                 required_skills=["agentic-retrieval-contract"],
@@ -1268,12 +1282,12 @@ AAGD = WorkflowDef(
                 custom_agent="Dev-Microservice-Azure-AgentTestCoding",
                 depends_on=["2.1"],
                 consumed_artifacts=["test_specs", "agent_specs", "service_catalog_matrix", "app_catalog"],
-                body_template_path="templates/aagd/step-2.2.md",
+                body_template_path=".github/prompts/steps/aagd/step-2.2.prompt.md",
                 fanout_parser="agent_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aagd/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/aagd/_common.prompt.md",
                 # Step 2.1 と同じ理由で AR-CAP の検証観点をテストコードへ届ける。
                 required_skills=["agentic-retrieval-contract"],
-                # 根拠: templates/aagd/step-2.2.md `## 出力` と
+                # 根拠: .github/prompts/steps/aagd/step-2.2.prompt.md `## 出力` と
                 # Dev-Microservice-Azure-AgentTestCoding.prompt.md `## 出力`。
                 # ディレクトリ参照は展開時に落ち、README.md だけが確定ファイルパスとして展開される。
                 output_paths_template=[
@@ -1287,13 +1301,13 @@ AAGD = WorkflowDef(
                 # docs/ai-agent-catalog.md は agent_specs 対象外 → スキップ
                 # docs/azure/azure-services-additional.md は既知 key なし → スキップ
                 consumed_artifacts=["agent_specs", "test_files", "test_specs", "service_catalog_matrix", "app_catalog"],
-                body_template_path="templates/aagd/step-2.3.md",
+                body_template_path=".github/prompts/steps/aagd/step-2.3.prompt.md",
                 fanout_parser="agent_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aagd/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/aagd/_common.prompt.md",
                 # 設計で Foundry IQ 経路を選んだ場合の実装境界（Tool allowlist / per-user 権限）を揃える。
                 # Toolbox / tool search を選んだ場合の実装境界（pin / 検索メタデータ）も揃える。
                 required_skills=["agentic-retrieval-contract", "foundry-toolbox-contract"],
-                # 根拠: templates/aagd/step-2.3.md `## 出力` と
+                # 根拠: .github/prompts/steps/aagd/step-2.3.prompt.md `## 出力` と
                 # Dev-Microservice-Azure-AgentCoding.prompt.md `## 出力`。
                 # `plugin.json` は Agent Plugins 1.0.0 の plugin root マニフェストで、
                 # `skills/` と違い無条件に生成されるため宣言できる。
@@ -1309,13 +1323,13 @@ AAGD = WorkflowDef(
                 # docs/ai-agent-catalog.md は agent_specs 対象外 → スキップ
                 # docs/azure/azure-services-additional.md は既知 key なし → スキップ
                 consumed_artifacts=["src_files", "app_catalog"],
-                body_template_path="templates/aagd/step-3.md",
+                body_template_path=".github/prompts/steps/aagd/step-3.prompt.md",
                 fanout_parser="agent_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aagd/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/aagd/_common.prompt.md",
                 # 選択 provider の事前審査・接続検証で AR-CAP-05 の allowlist / 権限境界を照合する。
                 # 実 Toolbox の tool search / pin 設定と TB-CAP 設計値の一致も照合する。
                 required_skills=["agentic-retrieval-contract", "foundry-toolbox-contract"],
-                # 根拠: templates/aagd/step-3.md `## 出力` と
+                # 根拠: .github/prompts/steps/aagd/step-3.prompt.md `## 出力` と
                 # Dev-Microservice-Azure-AgentDeploy.prompt.md `## 出力`。
                 # `.github/workflows/` をディレクトリ成果物として宣言することで、
                 # その配下の Agent 別 workflow ファイルを含め全エントリが
@@ -1339,9 +1353,9 @@ AAGD = WorkflowDef(
                 custom_agent="QA-ToolSearchEval",
                 depends_on=["3"],
                 consumed_artifacts=["agent_specs", "app_catalog"],
-                body_template_path="templates/aagd/step-4.md",
+                body_template_path=".github/prompts/steps/aagd/step-4.prompt.md",
                 fanout_parser="agent_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aagd/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/aagd/_common.prompt.md",
                 output_paths_template=["docs/agent/tool-search-eval/{key}-eval-report.md"],
                 required_skills=["foundry-toolbox-contract"],
                 disabled_when_config={"enable_tool_search": ["no"]},
@@ -1352,7 +1366,7 @@ AAGD = WorkflowDef(
                 custom_agent="QA-RequirementsConformanceEval",
                 depends_on=["3"],
                 consumed_artifacts=["agent_specs", "app_catalog"],
-                body_template_path="templates/aagd/step-5.md",
+                body_template_path=".github/prompts/steps/aagd/step-5.prompt.md",
                 output_paths=["docs/agent/requirements-conformance-report.md"],
                 required_skills=["requirements-conformance-measurement"],
                 required_input_paths=["docs/agent/agent-detail-{key}.md", "docs/ai-agent-catalog.md", "docs/catalog/app-catalog.md"]),
@@ -1363,7 +1377,7 @@ AAGD = WorkflowDef(
                 custom_agent="QA-AgentRouteRightsizingEval",
                 depends_on=["3"],
                 consumed_artifacts=["agent_specs", "app_catalog"],
-                body_template_path="templates/aagd/step-6.md",
+                body_template_path=".github/prompts/steps/aagd/step-6.prompt.md",
                 output_paths=["docs/agent/route-rightsizing-report.md"],
                 required_skills=["ai-agent-capability-contract"],
                 # unstructured-data-catalog.md は ADA 専用成果物で、AAS 経由では存在しない。
@@ -1376,7 +1390,7 @@ AAGD = WorkflowDef(
                 custom_agent="Dev-Agent-M365Publish",
                 depends_on=["3"],
                 consumed_artifacts=["agent_specs", "app_catalog", "src_files"],
-                body_template_path="templates/aagd/step-7.md",
+                body_template_path=".github/prompts/steps/aagd/step-7.prompt.md",
                 output_paths=["docs/agent/m365-publish-report.md"],
                 required_skills=["ai-agent-capability-contract"],
                 required_input_paths=["docs/agent/agent-detail-{key}.md", "docs/ai-agent-catalog.md"]),
@@ -1405,10 +1419,10 @@ AAR = WorkflowDef(
         StepDef(id="1", title="Agentic Retrieval 機能要件詳細",
                 custom_agent="Arch-AgenticRetrieval-Detail",
                 consumed_artifacts=["service_catalog", "service_specs", "domain_analytics", "app_catalog"],
-                body_template_path="templates/aar/step-1.md",
+                body_template_path=".github/prompts/steps/aar/step-1.prompt.md",
                 # サービス単位の成果物しか持たないため fan-out する。
                 fanout_parser="service_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aar/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/aar/_common.prompt.md",
                 output_paths_template=["docs/services/{serviceId}-agentic-retrieval-spec.md"],
                 required_skills=["agentic-retrieval-contract"],
                 disabled_when_config={"enable_agentic_retrieval": ["no"]},
@@ -1417,10 +1431,10 @@ AAR = WorkflowDef(
                 custom_agent="Dev-Microservice-Azure-AgenticRetrievalDesign",
                 depends_on=["1"],
                 consumed_artifacts=["use_case_catalog", "service_catalog", "service_specs", "app_catalog"],
-                body_template_path="templates/aar/step-2.md",
+                body_template_path=".github/prompts/steps/aar/step-2.prompt.md",
                 # 共通カタログへの追記は並列子間で競合するため宣言しない。
                 fanout_parser="service_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aar/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/aar/_common.prompt.md",
                 output_paths_template=["docs/azure/agentic-retrieval/{serviceId}-design.md"],
                 required_skills=["agentic-retrieval-contract"],
                 disabled_when_config={"enable_agentic_retrieval": ["no"]},
@@ -1429,9 +1443,9 @@ AAR = WorkflowDef(
                 custom_agent="Arch-TDD-TestSpec",
                 depends_on=["2"],
                 consumed_artifacts=["service_specs", "app_catalog"],
-                body_template_path="templates/aar/step-3.md",
+                body_template_path=".github/prompts/steps/aar/step-3.prompt.md",
                 fanout_parser="service_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aar/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/aar/_common.prompt.md",
                 output_paths_template=["docs/test-specs/{serviceId}-agentic-retrieval-test-spec.md"],
                 required_skills=["agentic-retrieval-contract"],
                 disabled_when_config={"enable_agentic_retrieval": ["no"]},
@@ -1440,7 +1454,7 @@ AAR = WorkflowDef(
                 custom_agent="Dev-Microservice-Azure-AgenticRetrievalTestCoding",
                 depends_on=["3"],
                 consumed_artifacts=["app_catalog"],
-                body_template_path="templates/aar/step-4.md",
+                body_template_path=".github/prompts/steps/aar/step-4.prompt.md",
                 output_paths_template=["src/test/integration/agentic-retrieval/"],
                 required_skills=["agentic-retrieval-contract"],
                 disabled_when_config={"enable_agentic_retrieval": ["no"]},
@@ -1449,7 +1463,7 @@ AAR = WorkflowDef(
                 custom_agent="Dev-Microservice-Azure-AgenticRetrievalDeploy",
                 depends_on=["4"],
                 consumed_artifacts=["app_catalog"],
-                body_template_path="templates/aar/step-5.md",
+                body_template_path=".github/prompts/steps/aar/step-5.prompt.md",
                 output_paths_template=[
                     "src/infra/azure/create-azure-agentic-retrieval/prep.sh",
                     "src/infra/azure/create-azure-agentic-retrieval/create.sh",
@@ -1468,9 +1482,9 @@ AAR = WorkflowDef(
                 custom_agent="QA-AgenticRetrievalEval",
                 depends_on=["5"],
                 consumed_artifacts=["app_catalog"],
-                body_template_path="templates/aar/step-6.md",
+                body_template_path=".github/prompts/steps/aar/step-6.prompt.md",
                 fanout_parser="service_catalog",
-                additional_prompt_template_path="hve/prompt/fanout/aar/_common.md",
+                additional_prompt_template_path=".github/prompts/fanout/aar/_common.prompt.md",
                 output_paths_template=["docs/azure/agentic-retrieval/{serviceId}-eval-report.md"],
                 required_skills=["agentic-retrieval-contract"],
                 disabled_when_config={"enable_agentic_retrieval": ["no"]},
@@ -1481,7 +1495,7 @@ AAR = WorkflowDef(
                 custom_agent="QA-RequirementsConformanceEval",
                 depends_on=["6"],
                 consumed_artifacts=["app_catalog"],
-                body_template_path="templates/aar/step-7.md",
+                body_template_path=".github/prompts/steps/aar/step-7.prompt.md",
                 output_paths=["docs/azure/agentic-retrieval/requirements-conformance-report.md"],
                 required_skills=["requirements-conformance-measurement"],
                 disabled_when_config={"enable_agentic_retrieval": ["no"]},
@@ -1509,10 +1523,10 @@ AKM = WorkflowDef(
             # qa/, docs-original/, template/, .github/skills/ は既知 key なし → 成果物参照なし
             consumed_artifacts=[],
             required_skills=["knowledge-management"],
-            body_template_path="templates/akm/step-1.md",
+            body_template_path=".github/prompts/steps/akm/step-1.prompt.md",
             fanout_static_keys=_AKM_FANOUT_KEYS,
-            additional_prompt_template_path="hve/prompt/fanout/akm/_common.md",
-            # 根拠: templates/akm/step-1.md `## 出力` と KnowledgeManager.prompt.md `## 出力`。
+            additional_prompt_template_path=".github/prompts/fanout/akm/_common.prompt.md",
+            # 根拠: .github/prompts/steps/akm/step-1.prompt.md `## 出力` と KnowledgeManager.prompt.md `## 出力`。
             # 3 件とも fan-out 子へは展開されない（status.md はキー別成果物ではなく、
             # 残り 2 件は glob）。これにより `collect_workflow_output_paths` は空のままで、
             # Self-Improve の target scope は既定 `"knowledge/"` を維持する。
@@ -1528,8 +1542,8 @@ AKM = WorkflowDef(
             custom_agent="QA-DocConsistency",
             depends_on=["1"],
             consumed_artifacts=["knowledge"],
-            body_template_path="templates/akm/step-2.md",
-            # 根拠: templates/akm/step-2.md `## 出力` の 2.。レビューレポート本体は
+            body_template_path=".github/prompts/steps/akm/step-2.prompt.md",
+            # 根拠: .github/prompts/steps/akm/step-2.prompt.md `## 出力` の 2.。レビューレポート本体は
             # Issue コメントへの記録のため path を持たない。AKM の DAG 根は Step 1 であり、
             # 根が具体 path を寄与しない限り Self-Improve scope は既定 `"knowledge/"` のまま。
             output_paths=["knowledge/business-requirement-document-status.md"],
@@ -1558,7 +1572,7 @@ ADI = WorkflowDef(
             # docs-original/ と docs/original-design-doc-ingest/ は既知 key なし → 成果物参照なし
             consumed_artifacts=[],
             required_skills=["knowledge-lookup"],
-            body_template_path="templates/adi/step-1.md",
+            body_template_path=".github/prompts/steps/adi/step-1.prompt.md",
             # index.json は Agent が `python -m hve ingest-docs` で生成する副次成果物。
             output_paths=[
                 "docs/catalog/design-doc-inventory.md",
@@ -1575,9 +1589,9 @@ ADI = WorkflowDef(
             depends_on=["1"],
             consumed_artifacts=["knowledge"],
             required_skills=["knowledge-lookup"],
-            body_template_path="templates/adi/step-1.1.md",
+            body_template_path=".github/prompts/steps/adi/step-1.1.prompt.md",
             fanout_static_keys=_ADI_QUESTIONNAIRE_FANOUT_KEYS,
-            additional_prompt_template_path="hve/prompt/fanout/adi/_questionnaire.md",
+            additional_prompt_template_path=".github/prompts/fanout/adi/_questionnaire.prompt.md",
             output_paths_template=["qa/{key}-original-docs-questionnaire.md"],
             required_input_paths=[
                 "docs/original-design-doc-ingest/index.json",
@@ -1591,7 +1605,7 @@ ADI = WorkflowDef(
             depends_on=["1.1"],
             consumed_artifacts=["knowledge"],
             required_skills=["knowledge-lookup"],
-            body_template_path="templates/adi/step-1.2.md",
+            body_template_path=".github/prompts/steps/adi/step-1.2.prompt.md",
             output_paths=["qa/original-docs-cross-questionnaire.md"],
             required_input_paths=["qa/{key}-original-docs-questionnaire.md"],
         ),
@@ -1602,10 +1616,10 @@ ADI = WorkflowDef(
             depends_on=["1.2"],
             consumed_artifacts=[],
             required_skills=["knowledge-lookup"],
-            body_template_path="templates/adi/step-2.md",
+            body_template_path=".github/prompts/steps/adi/step-2.prompt.md",
             # Step 1 が出力する目録の第 1 列（DOC-NNNN）を fan-out キーにする。
             fanout_parser="design_doc_inventory",
-            additional_prompt_template_path="hve/prompt/fanout/adi/_common.md",
+            additional_prompt_template_path=".github/prompts/fanout/adi/_common.prompt.md",
             # 出力先は slug ディレクトリのため {key} では展開できない（glob で宣言）。
             output_paths_template=["docs/original-design-doc-ingest/*/card.md"],
             required_input_paths=[
@@ -1621,7 +1635,7 @@ ADI = WorkflowDef(
             depends_on=["2"],
             consumed_artifacts=[],
             required_skills=["knowledge-lookup"],
-            body_template_path="templates/adi/step-3.md",
+            body_template_path=".github/prompts/steps/adi/step-3.prompt.md",
             output_paths=["docs/catalog/design-doc-catalog.md"],
             required_input_paths=[
                 "docs/original-design-doc-ingest/*/card.md",
@@ -1635,7 +1649,7 @@ ADI = WorkflowDef(
             depends_on=["3"],
             consumed_artifacts=[],
             required_skills=["knowledge-lookup"],
-            body_template_path="templates/adi/step-4.md",
+            body_template_path=".github/prompts/steps/adi/step-4.prompt.md",
             output_paths=["docs/catalog/design-doc-routing.md"],
             required_input_paths=[
                 "docs/catalog/design-doc-catalog.md",
@@ -1651,7 +1665,7 @@ ADI = WorkflowDef(
             depends_on=["4"],
             consumed_artifacts=[],
             required_skills=["knowledge-lookup"],
-            body_template_path="templates/adi/step-5.1.md",
+            body_template_path=".github/prompts/steps/adi/step-5.1.prompt.md",
             output_paths=["docs/catalog/use-case-skeleton.md"],
             required_input_paths=[
                 "docs/catalog/design-doc-routing.md",
@@ -1665,7 +1679,7 @@ ADI = WorkflowDef(
             depends_on=["4"],
             consumed_artifacts=[],
             required_skills=["knowledge-lookup"],
-            body_template_path="templates/adi/step-5.2.md",
+            body_template_path=".github/prompts/steps/adi/step-5.2.prompt.md",
             output_paths=[
                 "docs/catalog/app-catalog.md",
                 "docs/catalog/domain-analytics.md",
@@ -1683,7 +1697,7 @@ ADI = WorkflowDef(
             depends_on=["4"],
             consumed_artifacts=[],
             required_skills=["knowledge-lookup"],
-            body_template_path="templates/adi/step-5.3.md",
+            body_template_path=".github/prompts/steps/adi/step-5.3.prompt.md",
             output_paths=["docs/dataflow/dataflow-app-catalog.md"],
             required_input_paths=[
                 "docs/catalog/design-doc-routing.md",
@@ -1707,46 +1721,46 @@ ADOC = WorkflowDef(
         StepDef(id="5", title="アーキテクチャ横断分析（コンテナ）", custom_agent=None, is_container=True),
         StepDef(id="6", title="目的特化ドキュメント（コンテナ）", custom_agent=None, is_container=True),
         # Step.1
-        StepDef(id="1", title="ファイルインベントリ", custom_agent="Doc-FileInventory", depends_on=[], consumed_artifacts=[], body_template_path="templates/adoc/step-1.md",
+        StepDef(id="1", title="ファイルインベントリ", custom_agent="Doc-FileInventory", depends_on=[], consumed_artifacts=[], body_template_path=".github/prompts/steps/adoc/step-1.prompt.md",
                 output_paths=["docs-generated/inventory.md"]),
         # Step.2.x — 並列 fork
-        # 根拠: templates/adoc/step-2.1～2.5.md `## 出力`。`{relative-path}` は
+        # 根拠: .github/prompts/steps/adoc/step-2.1～2.5.prompt.md `## 出力`。`{relative-path}` は
         # 入力ファイルの相対パスから導出される動的パスで、fan-out キーではないため
         # 実行時に確定ファイルパスへ展開できない（契約宣言としてのみ保持）。
-        StepDef(id="2.1", title="ファイルサマリー（プロダクションコード）", custom_agent="Doc-FileSummary", depends_on=["1"], consumed_artifacts=[], body_template_path="templates/adoc/step-2.1.md", output_paths_template=["docs-generated/files/{relative-path}.md"], required_input_paths=["docs-generated/inventory.md"]),
-        StepDef(id="2.2", title="ファイルサマリー（テストコード）", custom_agent="Doc-TestSummary", depends_on=["1"], consumed_artifacts=[], body_template_path="templates/adoc/step-2.2.md", output_paths_template=["docs-generated/files/{relative-path}.md"], required_input_paths=["docs-generated/inventory.md"]),
-        StepDef(id="2.3", title="ファイルサマリー（設定・IaC）", custom_agent="Doc-ConfigSummary", depends_on=["1"], consumed_artifacts=[], body_template_path="templates/adoc/step-2.3.md", output_paths_template=["docs-generated/files/{relative-path}.md"], required_input_paths=["docs-generated/inventory.md"]),
-        StepDef(id="2.4", title="ファイルサマリー（CI/CD）", custom_agent="Doc-CICDSummary", depends_on=["1"], consumed_artifacts=[], body_template_path="templates/adoc/step-2.4.md", output_paths_template=["docs-generated/files/{relative-path}.md"], required_input_paths=["docs-generated/inventory.md"]),
-        StepDef(id="2.5", title="ファイルサマリー（大規模ファイル分割）", custom_agent="Doc-LargeFileSummary", depends_on=["1"], consumed_artifacts=[], body_template_path="templates/adoc/step-2.5.md", output_paths_template=["docs-generated/files/{relative-path}.md"], required_input_paths=["docs-generated/inventory.md"]),
+        StepDef(id="2.1", title="ファイルサマリー（プロダクションコード）", custom_agent="Doc-FileSummary", depends_on=["1"], consumed_artifacts=[], body_template_path=".github/prompts/steps/adoc/step-2.1.prompt.md", output_paths_template=["docs-generated/files/{relative-path}.md"], required_input_paths=["docs-generated/inventory.md"]),
+        StepDef(id="2.2", title="ファイルサマリー（テストコード）", custom_agent="Doc-TestSummary", depends_on=["1"], consumed_artifacts=[], body_template_path=".github/prompts/steps/adoc/step-2.2.prompt.md", output_paths_template=["docs-generated/files/{relative-path}.md"], required_input_paths=["docs-generated/inventory.md"]),
+        StepDef(id="2.3", title="ファイルサマリー（設定・IaC）", custom_agent="Doc-ConfigSummary", depends_on=["1"], consumed_artifacts=[], body_template_path=".github/prompts/steps/adoc/step-2.3.prompt.md", output_paths_template=["docs-generated/files/{relative-path}.md"], required_input_paths=["docs-generated/inventory.md"]),
+        StepDef(id="2.4", title="ファイルサマリー（CI/CD）", custom_agent="Doc-CICDSummary", depends_on=["1"], consumed_artifacts=[], body_template_path=".github/prompts/steps/adoc/step-2.4.prompt.md", output_paths_template=["docs-generated/files/{relative-path}.md"], required_input_paths=["docs-generated/inventory.md"]),
+        StepDef(id="2.5", title="ファイルサマリー（大規模ファイル分割）", custom_agent="Doc-LargeFileSummary", depends_on=["1"], consumed_artifacts=[], body_template_path=".github/prompts/steps/adoc/step-2.5.prompt.md", output_paths_template=["docs-generated/files/{relative-path}.md"], required_input_paths=["docs-generated/inventory.md"]),
         # Step.3.x — AND join + 並列 fork
-        # 根拠: templates/adoc/step-3.1.md `## 出力`（`docs-generated/components/{module-name}.md`）。
-        StepDef(id="3.1", title="コンポーネント設計書", custom_agent="Doc-ComponentDesign", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], consumed_artifacts=[], skip_fallback_deps=["2.1"], body_template_path="templates/adoc/step-3.1.md", output_paths_template=["docs-generated/components/{module-name}.md"]),
-        StepDef(id="3.2", title="API 仕様書", custom_agent="Doc-APISpec", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], consumed_artifacts=[], skip_fallback_deps=["2.1"], body_template_path="templates/adoc/step-3.2.md",
+        # 根拠: .github/prompts/steps/adoc/step-3.1.prompt.md `## 出力`（`docs-generated/components/{module-name}.md`）。
+        StepDef(id="3.1", title="コンポーネント設計書", custom_agent="Doc-ComponentDesign", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], consumed_artifacts=[], skip_fallback_deps=["2.1"], body_template_path=".github/prompts/steps/adoc/step-3.1.prompt.md", output_paths_template=["docs-generated/components/{module-name}.md"]),
+        StepDef(id="3.2", title="API 仕様書", custom_agent="Doc-APISpec", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], consumed_artifacts=[], skip_fallback_deps=["2.1"], body_template_path=".github/prompts/steps/adoc/step-3.2.prompt.md",
                 output_paths=["docs-generated/components/api-spec.md"]),
-        StepDef(id="3.3", title="データモデル定義書", custom_agent="Doc-DataModel", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], consumed_artifacts=[], skip_fallback_deps=["2.1"], body_template_path="templates/adoc/step-3.3.md",
+        StepDef(id="3.3", title="データモデル定義書", custom_agent="Doc-DataModel", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], consumed_artifacts=[], skip_fallback_deps=["2.1"], body_template_path=".github/prompts/steps/adoc/step-3.3.prompt.md",
                 output_paths=["docs-generated/components/data-model.md"]),
-        StepDef(id="3.4", title="テスト仕様サマリー", custom_agent="Doc-TestSpecSummary", depends_on=["2.2"], consumed_artifacts=[], body_template_path="templates/adoc/step-3.4.md",
+        StepDef(id="3.4", title="テスト仕様サマリー", custom_agent="Doc-TestSpecSummary", depends_on=["2.2"], consumed_artifacts=[], body_template_path=".github/prompts/steps/adoc/step-3.4.prompt.md",
                 output_paths=["docs-generated/components/test-spec-summary.md"]),
-        StepDef(id="3.5", title="技術的負債一覧", custom_agent="Doc-TechDebt", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], consumed_artifacts=[], skip_fallback_deps=["2.1"], body_template_path="templates/adoc/step-3.5.md",
+        StepDef(id="3.5", title="技術的負債一覧", custom_agent="Doc-TechDebt", depends_on=["2.1", "2.2", "2.3", "2.4", "2.5"], consumed_artifacts=[], skip_fallback_deps=["2.1"], body_template_path=".github/prompts/steps/adoc/step-3.5.prompt.md",
                 output_paths=["docs-generated/components/tech-debt.md"]),
         # Step.4 — AND join
-        StepDef(id="4", title="コンポーネントインデックス", custom_agent="Doc-ComponentIndex", depends_on=["3.1", "3.2", "3.3", "3.4", "3.5"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-4.md",
+        StepDef(id="4", title="コンポーネントインデックス", custom_agent="Doc-ComponentIndex", depends_on=["3.1", "3.2", "3.3", "3.4", "3.5"], consumed_artifacts=["doc_generated"], body_template_path=".github/prompts/steps/adoc/step-4.prompt.md",
                 output_paths=["docs-generated/component-index.md"], required_input_paths=["docs-generated/components/api-spec.md", "docs-generated/components/data-model.md", "docs-generated/components/tech-debt.md", "docs-generated/components/test-spec-summary.md"]),
         # Step.5.x — 並列 fork
-        StepDef(id="5.1", title="アーキテクチャ概要", custom_agent="Doc-ArchOverview", depends_on=["4"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-5.1.md",
+        StepDef(id="5.1", title="アーキテクチャ概要", custom_agent="Doc-ArchOverview", depends_on=["4"], consumed_artifacts=["doc_generated"], body_template_path=".github/prompts/steps/adoc/step-5.1.prompt.md",
                 output_paths=["docs-generated/architecture/overview.md"], required_input_paths=["docs-generated/component-index.md"]),
-        StepDef(id="5.2", title="依存関係マップ", custom_agent="Doc-DependencyMap", depends_on=["4"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-5.2.md",
+        StepDef(id="5.2", title="依存関係マップ", custom_agent="Doc-DependencyMap", depends_on=["4"], consumed_artifacts=["doc_generated"], body_template_path=".github/prompts/steps/adoc/step-5.2.prompt.md",
                 output_paths=["docs-generated/architecture/dependency-map.md"], required_input_paths=["docs-generated/component-index.md"]),
-        StepDef(id="5.3", title="インフラ依存分析", custom_agent="Doc-InfraDeps", depends_on=["4"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-5.3.md",
+        StepDef(id="5.3", title="インフラ依存分析", custom_agent="Doc-InfraDeps", depends_on=["4"], consumed_artifacts=["doc_generated"], body_template_path=".github/prompts/steps/adoc/step-5.3.prompt.md",
                 output_paths=["docs-generated/architecture/infra-deps.md"], required_input_paths=["docs-generated/component-index.md"]),
-        StepDef(id="5.4", title="非機能要件現状分析", custom_agent="Doc-NFRAnalysis", depends_on=["4", "3.4", "3.5"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-5.4.md",
+        StepDef(id="5.4", title="非機能要件現状分析", custom_agent="Doc-NFRAnalysis", depends_on=["4", "3.4", "3.5"], consumed_artifacts=["doc_generated"], body_template_path=".github/prompts/steps/adoc/step-5.4.prompt.md",
                 output_paths=["docs-generated/architecture/nfr-analysis.md"], required_input_paths=["docs-generated/component-index.md", "docs-generated/components/tech-debt.md", "docs-generated/components/test-spec-summary.md"]),
         # Step.6.x — 並列 fork
-        StepDef(id="6.1", title="オンボーディングガイド", custom_agent="Doc-Onboarding", depends_on=["5.1", "5.2"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-6.1.md",
+        StepDef(id="6.1", title="オンボーディングガイド", custom_agent="Doc-Onboarding", depends_on=["5.1", "5.2"], consumed_artifacts=["doc_generated"], body_template_path=".github/prompts/steps/adoc/step-6.1.prompt.md",
                 output_paths=["docs-generated/guides/onboarding.md"], required_input_paths=["docs-generated/architecture/dependency-map.md", "docs-generated/architecture/overview.md"]),
-        StepDef(id="6.2", title="リファクタリングガイド", custom_agent="Doc-Refactoring", depends_on=["5.2", "5.4", "3.5"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-6.2.md",
+        StepDef(id="6.2", title="リファクタリングガイド", custom_agent="Doc-Refactoring", depends_on=["5.2", "5.4", "3.5"], consumed_artifacts=["doc_generated"], body_template_path=".github/prompts/steps/adoc/step-6.2.prompt.md",
                 output_paths=["docs-generated/guides/refactoring.md"], required_input_paths=["docs-generated/architecture/dependency-map.md", "docs-generated/architecture/nfr-analysis.md", "docs-generated/components/tech-debt.md"]),
-        StepDef(id="6.3", title="移行アセスメント", custom_agent="Doc-Migration", depends_on=["5.1", "5.3", "5.4"], consumed_artifacts=["doc_generated"], body_template_path="templates/adoc/step-6.3.md",
+        StepDef(id="6.3", title="移行アセスメント", custom_agent="Doc-Migration", depends_on=["5.1", "5.3", "5.4"], consumed_artifacts=["doc_generated"], body_template_path=".github/prompts/steps/adoc/step-6.3.prompt.md",
                 output_paths=["docs-generated/guides/migration-assessment.md"], required_input_paths=["docs-generated/architecture/infra-deps.md", "docs-generated/architecture/nfr-analysis.md", "docs-generated/architecture/overview.md"]),
     ],
 )
@@ -1798,7 +1812,7 @@ ARD = WorkflowDef(
             consumed_artifacts=[],
             required_skills=["knowledge-management"],
             output_paths=["docs/company-business-recommendation.md"],
-            body_template_path="templates/ard/step-1.md",
+            body_template_path=".github/prompts/steps/ard/step-1.prompt.md",
         ),
         StepDef(
             id="1.1",
@@ -1809,8 +1823,8 @@ ARD = WorkflowDef(
             required_skills=["knowledge-management"],
             fanout_parser="business_candidate",
             output_paths_template=["docs/business/{key}-analysis.md"],
-            body_template_path="templates/ard/step-1.1.md",
-            additional_prompt_template_path="hve/prompt/fanout/ard/_common.md",
+            body_template_path=".github/prompts/steps/ard/step-1.1.prompt.md",
+            additional_prompt_template_path=".github/prompts/fanout/ard/_common.prompt.md",
                 required_input_paths=["docs/company-business-recommendation.md"]),
         StepDef(
             id="1.2",
@@ -1820,7 +1834,7 @@ ARD = WorkflowDef(
             consumed_artifacts=[],
             required_skills=["knowledge-management"],
             output_paths=["docs/company-business-requirement.md"],
-            body_template_path="templates/ard/step-1.2.md",
+            body_template_path=".github/prompts/steps/ard/step-1.2.prompt.md",
                 required_input_paths=["docs/business/{key}-analysis.md"]),
         StepDef(
             id="2",
@@ -1832,7 +1846,7 @@ ARD = WorkflowDef(
             consumed_artifacts=[],
             required_skills=["knowledge-management"],
             output_paths=["docs/business-requirement.md"],
-            body_template_path="templates/ard/step-2.md",
+            body_template_path=".github/prompts/steps/ard/step-2.prompt.md",
         ),
         # Step 2.1: KPI/OKR 定義（任意ステップ）
         # ARD パラメータ `include_kpi_okr=true` の場合のみ active_steps に含まれる
@@ -1847,7 +1861,7 @@ ARD = WorkflowDef(
             consumed_artifacts=[],
             required_skills=["knowledge-management"],
             output_paths=["docs/recommended-kpi-okr.md"],
-            body_template_path="templates/ard/step-2.1.md",
+            body_template_path=".github/prompts/steps/ard/step-2.1.prompt.md",
         ),
         StepDef(
             id="3.1",
@@ -1861,7 +1875,7 @@ ARD = WorkflowDef(
             # docs/business-requirement.md (Step 2) と docs/company-business-requirement.md (Step 1.2) は
             # いずれも skip_fallback により片方しか生成されない経路があるため、required_input_paths には
             # 含めない（存在する方を consumed_artifacts 経由で参照する）。
-            body_template_path="templates/ard/step-3.1.md"),
+            body_template_path=".github/prompts/steps/ard/step-3.1.prompt.md"),
         StepDef(
             id="3.2",
             title="ユースケース詳細生成",
@@ -1871,8 +1885,8 @@ ARD = WorkflowDef(
             required_skills=["knowledge-management"],
             fanout_parser="use_case_skeleton",
             output_paths_template=["docs/usecase/{key}-detail.md"],
-            body_template_path="templates/ard/step-3.2.md",
-            additional_prompt_template_path="hve/prompt/fanout/ard/_common.md",
+            body_template_path=".github/prompts/steps/ard/step-3.2.prompt.md",
+            additional_prompt_template_path=".github/prompts/fanout/ard/_common.prompt.md",
                 # 注: docs/business-requirement.md (Step 2) と docs/company-business-requirement.md (Step 1.2) は
                 # skip_fallback により片方しか生成されない経路があるため required_input_paths には含めない。
                 # 存在する方を consumed_artifacts 経由で参照する（Step 3.1 / 3.3 も同一方針）。
@@ -1885,7 +1899,7 @@ ARD = WorkflowDef(
             consumed_artifacts=[],
             required_skills=["knowledge-management"],
             output_paths=["docs/catalog/use-case-catalog.md"],
-            body_template_path="templates/ard/step-3.3.md",
+            body_template_path=".github/prompts/steps/ard/step-3.3.prompt.md",
                 # 注: company-business-requirement.md は Step 3.1 / 3.2 と同一方針で除外（skip_fallback 詳細は Step 3.1 コメント参照）。
                 required_input_paths=["docs/usecase/{key}-detail.md"]),
         StepDef(
@@ -1895,7 +1909,7 @@ ARD = WorkflowDef(
             depends_on=["3.3"],
             consumed_artifacts=["use_case_catalog"],
             output_paths=["docs/catalog/app-catalog.md"],
-            body_template_path="templates/ard/step-4.1.md",
+            body_template_path=".github/prompts/steps/ard/step-4.1.prompt.md",
             required_input_paths=["docs/catalog/use-case-catalog.md"],
         ),
         StepDef(
@@ -1907,7 +1921,7 @@ ARD = WorkflowDef(
             output_paths_template=[
                 "docs/architectural-requirements-app-*.md"
             ],
-            body_template_path="templates/ard/step-4.2.md",
+            body_template_path=".github/prompts/steps/ard/step-4.2.prompt.md",
             required_input_paths=[
                 "docs/catalog/app-catalog.md",
                 "docs/catalog/use-case-catalog.md",

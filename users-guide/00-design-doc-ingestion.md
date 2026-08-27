@@ -298,9 +298,9 @@ Step 5.1 / 5.2 / 5.3 は、下流ワークフローの**最上流 Step の成果
 | 目録のテーブル形式 | `.github/prompts/Doc-OriginalInventory.prompt.md` の §3 | **第 1 列の `doc_id` は変えない**（fan-out キー抽出の前提） | `python -m pytest hve/tests/test_catalog_parsers_design_doc.py -q` |
 | トリアージの判定基準・節名 | `.github/prompts/Doc-OriginalTriage.prompt.md` の §3 / §5 | 節見出しの英字ラベル（`must` / `out`）は検証関数が節を特定する手掛かりなので**変えない** | `python -m pytest hve/tests/test_adi_validation.py -q` |
 | Doc Card の属性項目 | `.github/prompts/Doc-OriginalDocCard.prompt.md` の §3 | 必須キーを増やす場合は `hve/artifact_validation.py` の `_DESIGN_DOC_CARD_REQUIRED_KEYS` と対で更新する | `python -m pytest hve/tests/test_adi_validation.py -q` |
-| Step 本文テンプレート | `.github/scripts/templates/adi/step-1.md` / `step-1.1.md` / `step-1.2.md` / `step-2.md` 〜 `step-5.3.md`、fan-out共通は `hve/prompt/fanout/adi/_common.md` / `_questionnaire.md` | 出力先パスの表記を変えるときはregistryの `output_paths` / `output_paths_template` と揃える | `python -m pytest hve/tests/test_template_engine.py hve/tests/test_prompts.py -q` |
+| Step 本文テンプレート | `.github/prompts/steps/adi/step-1.prompt.md` / `step-1.1.prompt.md` / `step-1.2.prompt.md` / `step-2.prompt.md` 〜 `step-5.3.prompt.md`、fan-out共通は `.github/prompts/fanout/adi/_common.prompt.md` / `_questionnaire.prompt.md` | 出力先パスの表記を変えるときはregistryの `output_paths` / `output_paths_template` と揃える | `python -m pytest hve/tests/test_template_engine.py hve/tests/test_prompts.py -q` |
 | 原本質問票の形式・検証 | `.github/prompts/QA-DocConsistency.prompt.md` / `.github/io-contracts/QA-DocConsistency--adi--1.1.yaml` / `--adi--1.2.yaml` / `hve/artifact_validation.py` | H1、0件明示、D01〜D21とjoinのパスを同時に更新する | `python -m pytest hve/tests/test_adi_validation.py hve/tests/test_orchestrator.py::TestAdiQuestionnairePostDag -q` |
-| AKM への接続方法 | `hve/prompt/fanout/akm/_common.md` | 「ルーティング表が無ければ従来どおり」の後方互換規定を残す | `python -m pytest hve/tests/test_adi_downstream_contract.py -q` |
+| AKM への接続方法 | `.github/prompts/fanout/akm/_common.prompt.md` | 「ルーティング表が無ければ従来どおり」の後方互換規定を残す | `python -m pytest hve/tests/test_adi_downstream_contract.py -q` |
 
 **互換性・安全性で壊してはならない境界**
 

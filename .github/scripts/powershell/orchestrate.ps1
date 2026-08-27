@@ -56,8 +56,8 @@ if ($DryRun) { $env:DRY_RUN = '1' }
 if (-not $Repo) { $Repo = $env:REPO }
 if (-not $Model) { $Model = $env:MODEL }
 
-# Templates base path: .github/scripts/templates/
-$TemplatesBase = (Resolve-Path (Join-Path $ScriptDir '../templates')).Path
+# body_template_path は repo root 相対の完全パス（.github/prompts/steps/...）を保持する。
+$TemplatesBase = (Resolve-Path (Join-Path $ScriptDir '../../..')).Path
 
 # ---------------------------------------------------------------------------
 # Constants

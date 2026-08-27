@@ -392,9 +392,13 @@ class SDKConfig:
 
     # --- Issue/PR 作成 ---
     create_issues: bool = False             # デフォルト: 作成しない
+    assign_copilot_agent: bool = False      # 新規 Root Issue の Copilot cloud agent 割当
     create_pr: bool = False                 # デフォルト: 作成しない
+    # FR-CLI-83: workflow-wide PR 用の作業branchを新規作成するか。
+    # False は安全なcurrent branchを使う。起動前検査はstartup_preflightが担う。
+    create_working_branch: bool = True
     # FR-GUI-25: 既存 Issue を Root Issue として使う場合の Issue 番号。
-    # None のときは従来どおり Root Issue を新規作成する。create_issues と併用したときだけ効力を持つ。
+    # None のときは従来どおり Root Issue を新規作成する。create_issues または create_pr と併用したときだけ効力を持つ。
     issue_number: Optional[int] = None
     # PR 自動 Approve & Auto-merge。単独で branch 作成を有効にするのは
     # ASDW-WEB（Step 単位）と ADFDV（workflow 単位）のみ。他 workflow で

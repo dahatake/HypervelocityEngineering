@@ -165,7 +165,7 @@ ASDW-WEB へ進む前に、対象 APP-ID について次を確認します。
 | 変更したい内容 | 正本 | 同時に確認するもの |
 |---|---|---|
 | Step ID、タイトル、依存、fan-out、入出力、必須 Skill | [`hve/workflow_registry.py`](../hve/workflow_registry.py) の `AAD_WEB` | `hve/tests/test_workflow_registry_agentic.py`, `hve/tests/test_fanout.py` |
-| Step Issue / main task の本文 | [`.github/scripts/templates/aad-web/`](../.github/scripts/templates/aad-web/) | [`hve/template_engine.py`](../hve/template_engine.py), `hve/tests/test_template_engine.py` |
+| Step Issue / main task の本文 | [`.github/prompts/steps/aad-web/`](../.github/prompts/steps/aad-web/) | [`hve/template_engine.py`](../hve/template_engine.py), `hve/tests/test_template_engine.py` |
 | Agent の行動・禁止事項・DoD | [`.github/prompts/`](../.github/prompts/) の `Arch-UI-*`, `Arch-Microservice-ServiceDetail`, `Arch-TDD-TestSpec`, `Arch-AgenticRetrieval-Detail`, `QA-DocConsistency` | [`hve/prompt_loader.py`](../hve/prompt_loader.py), `hve/tests/test_prompt_loader.py` |
 | 座標別 input / output / producer | [`.github/io-contracts/`](../.github/io-contracts/) の `*--aad-web--<step>.yaml` | `.github/scripts/validate-io-contract.py`, `hve/tests/test_tdd_report_io_contract.py` |
 | Workflow 既定 Skill、Step 必須 / optional Skill | [`hve/skill_manifest.json`](../hve/skill_manifest.json) と Step の `required_skills` | [`hve/skill_resolver.py`](../hve/skill_resolver.py), `hve/tests/test_skill_resolver.py` |

@@ -101,7 +101,7 @@ else:  # task_scope == "single" かつ context_size IN ("small", "medium")
 
 ### メタデータの整合性制約（CI 自動検証）
 
-以下の組み合わせは CI (`validate-plan.yml` PR 時検証 / `audit-plans.yml` 定期監査) で自動的に拒否される。plan.md 作成時に必ず確認すること：
+以下の組み合わせは CI (`plan-validation-and-labeling.yml` の PR 時検証) で自動的に拒否される。plan.md 作成時に必ず確認すること：
 
 | split_decision | implementation_files | subissues_count | 結果 |
 |---|---|---|---|

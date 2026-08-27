@@ -830,14 +830,14 @@ AAG Step.1 の宣言済み入力は次のとおりです。
 - **CLI / GUI の DAG 正本**: `hve/workflow_registry.py` の `AAS`。`id`、`depends_on`、`custom_agent`、`output_paths`、`required_input_paths`、fan-out を定義します。
 - **Agent の行動正本**: `.github/prompts/<Agent>.prompt.md`。`hve/prompt_loader.py` が CLI / GUI で読み、Cloud workflow は Sub-Issue 作成時に同じ本文を付加します。
 - **Cloud の状態遷移正本**: `.github/workflows/auto-app-selection-reusable.yml`。Sub-Issue 作成、部分実行、必須ファイル確認、次 Step 起動、完了コメントを実装します。
-- **Cloud の Issue 本文**: `.github/scripts/templates/aas/step-<id>.md`。目的、入出力、Custom Agent、依存、完了条件を定義します。
+- **Cloud の Issue 本文**: `.github/prompts/steps/aas/step-<id>.prompt.md`。目的、入出力、Custom Agent、依存、完了条件を定義します。
 - **機械可読 I/O**: `.github/io-contracts/<Agent>--aas--<id>.yaml`。producer、required、出力 mode を定義します。
 
 ### Step を追加・再採番する手順
 
 1. `hve/workflow_registry.py` の `AAS` を更新し、DAG wave と成果物パスを確定します。
 2. 対応 Prompt、Cloud Step template、scoped I/O contract を同じ Step ID で作成 / 更新します。
-3. fan-out が必要なら `fanout_parser`、`hve/prompt/fanout/aas/` の追加指示、下流 AND join を定義します。
+3. fan-out が必要なら `fanout_parser`、`.github/prompts/fanout/aas/` の追加指示、下流 AND join を定義します。
 4. `auto-app-selection-reusable.yml` の Sub-Issue 作成、skip 伝播、`activate_with_prereq_check`、最終 `aas:done` と成果物一覧を更新します。
 5. `app-architecture-design.yml` の表、チェックボックス、依存チェーンを更新します。
 6. Bash / PowerShell 利用面の `.github/scripts/bash/lib/workflow-registry.sh` と `.github/scripts/powershell/lib/workflow-registry.ps1` を同期します。
@@ -874,7 +874,7 @@ Step.7 / Step.8 の実例は `hve/tests/test_aas_persona_step_numbering_contract
 - CLI / GUI 完了ゲート: `hve/runner.py`、`hve/dag_executor.py`、`hve/gui/orchestrate_args.py`、`hve/gui/workflow_step_requirements.py`
 - Cloud 入口 / 状態遷移: `.github/workflows/auto-orchestrator-dispatcher.yml`、`.github/workflows/auto-app-selection-reusable.yml`
 - Cloud 入力フォーム: `.github/ISSUE_TEMPLATE/app-architecture-design.yml`
-- Prompt / Cloud Step body / I/O: `.github/prompts/`、`.github/scripts/templates/aas/`、`.github/io-contracts/*--aas--*.yaml`
+- Prompt / Cloud Step body / I/O: `.github/prompts/`、`.github/prompts/steps/aas/`、`.github/io-contracts/*--aas--*.yaml`
 - Step.7 / Step.8 横断契約: `hve/tests/test_aas_persona_step_numbering_contract.py`
 - AAS DAG 回帰: `hve/tests/test_workflow_registry.py`
 

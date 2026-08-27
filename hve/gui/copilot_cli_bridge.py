@@ -58,7 +58,7 @@ class CopilotCliBridge:
     def find_binary() -> Optional[str]:
         """``copilot`` 実行ファイル絶対パスを返す。見つからなければ ``None``。
 
-        既存 ``hve.auth.find_copilot_binary`` を再利用 (SDK 同梱 → PATH)。
+        既存 ``hve.auth.find_copilot_binary`` を再利用 (SDK 同梱 → PATH → ランタイムキャッシュ)。
         """
         try:
             from hve.auth import find_copilot_binary

@@ -112,6 +112,10 @@ def _write_external_skill(root: Path, name: str) -> Path:
     return directory
 
 
+# 利用者環境へインストールされる Skill。CI には存在しないので実在を要求できない。
+_KNOWN_EXTERNAL_SKILLS = frozenset({"microsoft-foundry", "azure-ai"})
+
+
 def _runner(
     *,
     review_model: str | None = None,
@@ -391,12 +395,16 @@ def test_repository_skill_directories_scope_to_declared_skills() -> None:
     assert str(root / "knowledge-management") not in directories
 
 
-def test_declared_required_repository_skills_stay_resolvable() -> None:
+def test_declared_required_repository_skills_stay_resolvable(tmp_path) -> None:
     """FR-CLI-73: `required_skills` で宣言された Skill は必ず解決可能である。
 
     公開範囲の縮約後も、当該 Step の必須 Skill は
     (a) `skill_resolver` で解決でき、
     (b) repository-owned なら公開ディレクトリ集合から探索可能でなければならない。
+
+    external Skill は利用者環境へインストールされるもので CI には存在しないため、
+    既知の名前だけを external として扱い、インストール済みルートを注入して
+    fail-closed 解決が成立することを固定する。未知の名前はタイプミスとして落とす。
     """
     from hve.skill_resolver import _skills_root, discover_available_skills, get_skill_directory
 
@@ -407,11 +415,19 @@ def test_declared_required_repository_skills_stay_resolvable() -> None:
     directories = set(_repository_skill_directories(required))
     available = discover_available_skills()
 
+    external_root = tmp_path / "agents-skills"
+    external_root.mkdir()
     for skill in required:
-        assert get_skill_directory(skill) is not None, f"unresolvable required skill: {skill}"
         subpath = available.get(skill)
         if subpath is None:
-            continue  # external Skill は別経路で公開される
+            assert skill in _KNOWN_EXTERNAL_SKILLS, f"unknown required skill: {skill}"
+            _write_external_skill(external_root, skill)
+            assert (
+                get_skill_directory(skill, external_skills_root=external_root)
+                is not None
+            ), f"unresolvable required external skill: {skill}"
+            continue
+        assert get_skill_directory(skill) is not None, f"unresolvable required skill: {skill}"
         skill_dir = _skills_root() / subpath
         assert str(skill_dir.parent) in directories, (
             f"required repository skill is not discoverable: {skill}"

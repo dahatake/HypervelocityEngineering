@@ -2,12 +2,8 @@
   "required_status_checks": {
     "strict": true,
     "contexts": [
-      "Bats Tests / bats",
       "Test HVE Python / HVE Python Tests",
       "Test HVE Python / mdq index smoke test",
-      "APP-009 GREEN Tests / APP-009 UI GREEN test",
-      "APP-009 GREEN Tests / APP-009 API GREEN test",
-      "E2E Playwright (APP-009) / APP-009 E2E Playwright",
       "HVE Requirement Traceability / HVE Requirement Traceability",
       "HVE Requirement Traceability Trusted / HVE Requirement Traceability Trusted",
       "Workflow Diff Gate / G-DIFF"

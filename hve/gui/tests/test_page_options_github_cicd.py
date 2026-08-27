@@ -174,6 +174,54 @@ class TestGithubCicdToggleVisibility(unittest.TestCase):
         finally:
             page.deleteLater()
 
+    def test_create_working_branch_default_and_args(self) -> None:
+        # FR-CLI-83: C5 の既定は新規作業ブランチを作成する。
+        _get_app()
+        page = OptionsPage()
+        try:
+            self.assertTrue(page.c5.create_working_branch.isChecked())
+            args = page.build_args_for_workflow("aas")
+            self.assertTrue(args.create_working_branch)
+        finally:
+            page.deleteLater()
+
+    def test_create_working_branch_can_be_disabled(self) -> None:
+        # FR-CLI-83: OFF は current branch mode として OrchestrateArgs へ伝搬する。
+        _get_app()
+        page = OptionsPage()
+        try:
+            page.c5.create_working_branch.setChecked(False)
+            args = page.build_args_for_workflow("aas")
+            self.assertFalse(args.create_working_branch)
+            self.assertIn("--no-create-working-branch", args.to_argv())
+        finally:
+            page.deleteLater()
+
+    def test_create_working_branch_uses_existing_settings_store(self) -> None:
+        from hve.gui import settings_apply, settings_store
+
+        self.assertTrue(settings_store.defaults()["options"]["create_working_branch"])
+        self.assertEqual(
+            settings_apply._SECTION_FIELDS["C5"]["create_working_branch"],
+            "create_working_branch",
+        )
+
+    def test_create_working_branch_settings_round_trip(self) -> None:
+        from hve.gui import settings_apply
+
+        _get_app()
+        page = OptionsPage()
+        try:
+            settings_apply.apply_to_widgets(
+                {"C5": page.c5},
+                {"options": {"create_working_branch": False}},
+            )
+            self.assertFalse(page.c5.create_working_branch.isChecked())
+            collected = settings_apply.collect_from_widgets({"C5": page.c5})
+            self.assertIs(collected["create_working_branch"], False)
+        finally:
+            page.deleteLater()
+
 
 class TestCicdToggleStepCondition(unittest.TestCase):
     """CI/CD 系2トグルを Deploy ステップ選択時のみ表示する条件（ASDW-WEB Step3.4/4.3・

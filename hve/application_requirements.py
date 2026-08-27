@@ -14,9 +14,11 @@ from typing import Iterable, Mapping, Sequence
 try:  # pragma: no cover - script-style import compatibility
     from .app_arch_filter import resolve_app_arch_scope
     from .catalog_parsers import parse_catalog, parse_service_app_mapping
+    from .prompt_loader import load_prompt_file
 except ImportError:  # pragma: no cover
     from hve.app_arch_filter import resolve_app_arch_scope
     from hve.catalog_parsers import parse_catalog, parse_service_app_mapping
+    from hve.prompt_loader import load_prompt_file
 
 
 _APP_ID_RE = re.compile(r"^APP-\d{3}$")
@@ -610,14 +612,22 @@ def build_application_requirement_context(
             "未解決の TBD Blocker があります: " + ", ".join(unresolved)
         )
 
+    template_lines = load_prompt_file(
+        "runtime/addenda/application-requirements.prompt.md"
+    ).splitlines()
+    if len(template_lines) < 5 or not template_lines[1].startswith("- 対象 APP-ID:") \
+            or not template_lines[2].startswith("- 必須要求定義書:"):
+        raise ApplicationRequirementError(
+            "APP要求 addendum template が不正です: runtime/addenda/application-requirements.prompt.md"
+        )
+
     return "\n".join(
         [
-            "## APP要求トレーサビリティ（必須）",
-            "- 対象 APP-ID: " + ", ".join(app_ids),
-            "- 必須要求定義書:",
+            template_lines[0],
+            template_lines[1] + " " + ", ".join(app_ids),
+            template_lines[2],
             *(f"  - `{path.as_posix()}`" for path in paths),
-            "- 要求書全文は注入していません。必要箇所だけを `markdown-query` で選択取得してください。",
-            "- 完了報告には application-requirement-traceability Skill の trace block を1つ記録してください。",
+            *template_lines[3:],
         ]
     )
 

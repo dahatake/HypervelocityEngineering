@@ -153,6 +153,9 @@ jobs:
           # repomap の予算テストは tiktoken の計数を前提にする（未導入だと chars/4 近似になり dropped 数が変わる）。
           # tiktoken / watchdog は cq 自身の extras から入れる（mdq の extras へ相乗りしない）。
           pip install -e ".[code,code-sql,code-watch,code-tokenizer,test]"
+          # ベクトル / セマンティック系テストは numpy を module import する。本体は lazy import で
+          # degrade するがテスト側は必須。fastembed は importorskip 前提かつ onnxruntime を伴うため入れない。
+          pip install "numpy>=2.0"
 
       # tree-sitter が無いと言語契約テストは黙って skip されるため、ここで fail-closed にする。
       - name: Verify optional grammars are importable
@@ -160,6 +163,7 @@ jobs:
           python -c "import tree_sitter, tree_sitter_java, tree_sitter_go, tree_sitter_rust, tree_sitter_c, tree_sitter_cpp"
           python -c "import tree_sitter_bash, tree_sitter_powershell, tree_sitter_batch, tree_sitter_scala"
           python -c "import sqlglot, sqlfluff, tree_sitter_sql"
+          python -c "import numpy"
 
       # PowerShell の回復ノードを公式パーサで補正する経路が silent skip しないようにする。
       - name: Verify pwsh is available

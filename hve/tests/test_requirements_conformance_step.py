@@ -34,25 +34,25 @@ _EXPECTED = {
         "step_id": "5.3",
         "depends_on": ["5.1", "5.2"],
         "output": "docs/azure/requirements-conformance-report.md",
-        "template": ".github/scripts/templates/asdw-web/step-5.3.md",
+        "template": ".github/prompts/steps/asdw-web/step-5.3.prompt.md",
     },
     "adfdv": {
         "step_id": "4.3",
         "depends_on": ["4.1", "4.2"],
         "output": "docs/dataflow/requirements-conformance-report.md",
-        "template": ".github/scripts/templates/adfdv/step-4.3.md",
+        "template": ".github/prompts/steps/adfdv/step-4.3.prompt.md",
     },
     "aagd": {
         "step_id": "5",
         "depends_on": ["3"],
         "output": "docs/agent/requirements-conformance-report.md",
-        "template": ".github/scripts/templates/aagd/step-5.md",
+        "template": ".github/prompts/steps/aagd/step-5.prompt.md",
     },
     "aar": {
         "step_id": "7",
         "depends_on": ["6"],
         "output": "docs/azure/agentic-retrieval/requirements-conformance-report.md",
-        "template": ".github/scripts/templates/aar/step-7.md",
+        "template": ".github/prompts/steps/aar/step-7.prompt.md",
     },
 }
 

@@ -715,7 +715,7 @@ jobs:
             local step_num="$1"
             local root_ref_arg="$2"
             local additional_section_arg="$3"
-            local tpl_path="${GITHUB_WORKSPACE}/.github/scripts/templates/aas/step-${step_num}.md"
+            local tpl_path="${GITHUB_WORKSPACE}/.github/prompts/steps/aas/step-${step_num}.prompt.md"
             python3 - "${tpl_path}" "${root_ref_arg}" "${additional_section_arg}" <<'PY'
           import sys
           from pathlib import Path

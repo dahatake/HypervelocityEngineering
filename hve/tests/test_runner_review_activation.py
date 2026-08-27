@@ -76,20 +76,35 @@ def _statement_list_containing(
 
 
 def test_main_prompt_appends_review_ownership_once_and_sends_result() -> None:
-    """既存booleanで作ったsuffixを1回だけ最終Promptへ連結して送信する。"""
+    """既存booleanで作ったsuffixを1回だけ構成し、最終Promptへ渡す。"""
     function = _run_step_ast()
     review_assignments: list[ast.Assign] = []
+    compose_assignments: list[ast.Assign] = []
     send_assignments: list[ast.Assign] = []
 
     for node in ast.walk(function):
         if (
             isinstance(node, ast.Assign)
-            and isinstance(node.value, ast.BinOp)
-            and isinstance(node.value.right, ast.Call)
-            and isinstance(node.value.right.func, ast.Name)
-            and node.value.right.func.id == _REVIEW_SUFFIX_FUNCTION
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id == "_review_suffix"
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Name)
+            and node.value.func.id == _REVIEW_SUFFIX_FUNCTION
         ):
-                review_assignments.append(node)
+            review_assignments.append(node)
+        if (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Tuple)
+            and [
+                item.id for item in node.targets[0].elts
+                if isinstance(item, ast.Name)
+            ] == ["_injected_prompt", "_final_components"]
+            and isinstance(node.value, ast.Call)
+            and _call_name(node.value) == "_compose_phase1_prompt"
+        ):
+            compose_assignments.append(node)
         if (
             isinstance(node, ast.Assign)
             and len(node.targets) == 1
@@ -104,15 +119,8 @@ def test_main_prompt_appends_review_ownership_once_and_sends_result() -> None:
 
     assert len(review_assignments) == 1
     assignment = review_assignments[0]
-    assert len(assignment.targets) == 1
-    target = assignment.targets[0]
-    assert isinstance(target, ast.Name) and target.id == "_injected_prompt"
-    assert isinstance(assignment.value, ast.BinOp)
-    assert isinstance(assignment.value.op, ast.Add)
-    assert isinstance(assignment.value.left, ast.Name)
-    assert assignment.value.left.id == "_injected_prompt"
-    assert isinstance(assignment.value.right, ast.Call)
-    review_call = assignment.value.right
+    review_call = assignment.value
+    assert isinstance(review_call, ast.Call)
     assert isinstance(review_call.func, ast.Name)
     assert review_call.func.id == _REVIEW_SUFFIX_FUNCTION
     assert len(review_call.args) == 1
@@ -130,6 +138,17 @@ def test_main_prompt_appends_review_ownership_once_and_sends_result() -> None:
         include_attributes=False,
     )
 
+    assert len(compose_assignments) == 1
+    compose_assignment = compose_assignments[0]
+    assert isinstance(compose_assignment.value, ast.Call)
+    review_keywords = [
+        keyword for keyword in compose_assignment.value.keywords
+        if keyword.arg == "review_suffix"
+    ]
+    assert len(review_keywords) == 1
+    assert isinstance(review_keywords[0].value, ast.Name)
+    assert review_keywords[0].value.id == "_review_suffix"
+
     assert len(send_assignments) == 1
     send_assignment = send_assignments[0]
     assert isinstance(send_assignment.value, ast.Await)
@@ -139,11 +158,11 @@ def test_main_prompt_appends_review_ownership_once_and_sends_result() -> None:
     sent_prompt = send_call.args[1]
     assert isinstance(sent_prompt, ast.Name) and sent_prompt.id == "_injected_prompt"
 
-    review_body = _statement_list_containing(function, assignment)
+    review_body = _statement_list_containing(function, compose_assignment)
     send_body = _statement_list_containing(function, send_assignment)
     assert review_body is not None
     assert review_body is send_body
-    assert review_body.index(assignment) < review_body.index(send_assignment)
+    assert review_body.index(compose_assignment) < review_body.index(send_assignment)
 
 
 def test_review_suffix_has_no_new_runtime_switch_or_sdk_tool_policy() -> None:

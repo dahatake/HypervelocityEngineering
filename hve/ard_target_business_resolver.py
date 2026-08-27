@@ -43,6 +43,8 @@ _PATH_LIKE_EXTENSIONS: frozenset[str] = frozenset({
 })
 
 _JAPANESE_SENTENCE_RE = re.compile(r"[。、]")
+_MAX_DIAGNOSTIC_ENTRIES = 50
+_DIAGNOSTIC_OMITTED = "... 追加の診断項目は省略"
 
 
 @dataclass
@@ -63,6 +65,7 @@ class ResolvedTargetBusiness:
 
     is_path: bool
     raw_text: str
+    source_paths: List[str] = field(default_factory=list)
     files: List[ResolvedFile] = field(default_factory=list)
     folders: List[Path] = field(default_factory=list)
     total_size_bytes: int = 0
@@ -127,13 +130,16 @@ def _resolve_path(token: str, base_dir: Optional[Path]) -> Path:
     return p
 
 
-def _relative_str(path: Path, base_dir: Optional[Path]) -> str:
+def _safe_display_path(path: Path, base_dir: Optional[Path]) -> str:
+    """Agent へ渡してよい相対パスまたは匿名化済みパス名を返す。"""
     if base_dir is not None:
         try:
-            return str(path.relative_to(base_dir))
-        except ValueError:
-            pass
-    return str(path)
+            return path.resolve().relative_to(base_dir.resolve()).as_posix()
+        except (ValueError, OSError, RuntimeError):
+            return "outside-base:(redacted)"
+    if path.is_absolute():
+        return path.name or "(root)"
+    return path.as_posix()
 
 
 def _is_safe_path(path: Path, base_dir: Optional[Path]) -> bool:
@@ -150,8 +156,18 @@ def _is_safe_path(path: Path, base_dir: Optional[Path]) -> bool:
         base_resolved = base_dir.resolve()
         resolved.relative_to(base_resolved)
         return True
-    except (ValueError, OSError):
+    except (ValueError, OSError, RuntimeError):
         return False
+
+
+def _append_diagnostic(items: List[str], message: str) -> bool:
+    """診断を上限内で追加し、これ以上の走査を続けてよいか返す。"""
+    if len(items) < _MAX_DIAGNOSTIC_ENTRIES:
+        items.append(message)
+        return True
+    if len(items) == _MAX_DIAGNOSTIC_ENTRIES:
+        items.append(_DIAGNOSTIC_OMITTED)
+    return False
 
 
 def _iter_candidates(
@@ -161,31 +177,78 @@ def _iter_candidates(
 ) -> Generator[Path, None, None]:
     """トークンリストからファイル候補を遅延評価で yield する。
 
-    ディレクトリは rglob で再帰展開する。sorted による事前全件収集は行わず、
-    呼び出し側が件数/サイズ上限に達した時点で消費を止めることができる。
+    ディレクトリは安全確認済みの子だけを遅延走査する。解決先で cycle を除き、
+    base_dir 外の symlink へは descend しない。
     """
     for token in tokens:
         path = _resolve_path(token, base_dir)
+        display_path = _safe_display_path(path, base_dir)
+        if not _is_safe_path(path, base_dir):
+            _append_diagnostic(
+                result.skipped,
+                f"{display_path}: base_dir 外を指すパスのためスキップ",
+            )
+            continue
         try:
             if not path.exists():
-                result.errors.append(f"パスが存在しません: {token}")
+                _append_diagnostic(
+                    result.errors, f"{display_path}: パスが存在しません"
+                )
                 continue
 
             if path.is_dir():
                 result.folders.append(path)
-                try:
-                    for file_path in path.rglob("*"):
-                        if file_path.is_file():
-                            yield file_path
-                except OSError as e:
-                    result.errors.append(f"ディレクトリ列挙エラー ({token}): {e}")
+                pending = [path]
+                visited: set[Path] = set()
+                while pending:
+                    current = pending.pop()
+                    try:
+                        resolved_current = current.resolve()
+                    except (OSError, RuntimeError) as e:
+                        if not _append_diagnostic(
+                            result.errors,
+                            f"{_safe_display_path(current, base_dir)}: "
+                            f"パス解決エラー ({type(e).__name__})",
+                        ):
+                            return
+                        continue
+                    if resolved_current in visited:
+                        continue
+                    visited.add(resolved_current)
+                    try:
+                        children = current.iterdir()
+                        for child in children:
+                            child_display = _safe_display_path(child, base_dir)
+                            if not _is_safe_path(child, base_dir):
+                                if not _append_diagnostic(
+                                    result.skipped,
+                                    f"{child_display}: base_dir 外を指すパスのためスキップ",
+                                ):
+                                    return
+                                continue
+                            if child.is_dir():
+                                pending.append(child)
+                            elif child.is_file():
+                                yield child
+                    except OSError as e:
+                        if not _append_diagnostic(
+                            result.errors,
+                            f"{_safe_display_path(current, base_dir)}: "
+                            f"ディレクトリ列挙エラー ({type(e).__name__})",
+                        ):
+                            return
             elif path.is_file():
                 yield path
             else:
-                result.errors.append(f"パスが不明な種類: {token}")
+                _append_diagnostic(
+                    result.errors, f"{display_path}: パスが不明な種類"
+                )
 
         except OSError as e:
-            result.errors.append(f"パスアクセスエラー ({token}): {e}")
+            _append_diagnostic(
+                result.errors,
+                f"{display_path}: パスアクセスエラー ({type(e).__name__})",
+            )
 
 
 def resolve(
@@ -224,14 +287,22 @@ def resolve(
     )
 
     tokens = _split_paths(value)
+    result.source_paths = [
+        _safe_display_path(_resolve_path(token, base_dir), base_dir)
+        for token in tokens
+    ]
     readable_count = 0
 
     for file_path in _iter_candidates(tokens, base_dir, result):
-        relative = _relative_str(file_path, base_dir)
+        relative = _safe_display_path(file_path, base_dir)
 
         # base_dir 外に解決されるパス（symlink・.. 含む）はスキップ
         if not _is_safe_path(file_path, base_dir):
-            result.skipped.append(f"{relative}: base_dir 外を指すパスのためスキップ")
+            if not _append_diagnostic(
+                result.skipped,
+                f"{relative}: base_dir 外を指すパスのためスキップ",
+            ):
+                break
             continue
 
         suffix = file_path.suffix.lower()
@@ -251,32 +322,46 @@ def resolve(
                 skip_reason=f"バイナリファイル（{suffix}）はスキップ",
             )
             result.files.append(rf)
-            result.skipped.append(f"{relative}: {rf.skip_reason}")
+            if not _append_diagnostic(result.skipped, f"{relative}: {rf.skip_reason}"):
+                break
             continue
 
         # 拡張子フィルタ（バイナリ以外）
         if suffix not in effective_extensions:
-            result.skipped.append(f"{relative}: 対象外の拡張子（{suffix}）のためスキップ")
+            if not _append_diagnostic(
+                result.skipped,
+                f"{relative}: 対象外の拡張子（{suffix}）のためスキップ",
+            ):
+                break
             continue
 
         # 件数上限チェック（読み込み可能ファイルのみカウント）
         if readable_count >= max_files:
-            result.skipped.append(f"{relative}: max_files={max_files} 上限に達したためスキップ")
+            if not _append_diagnostic(
+                result.skipped,
+                f"{relative}: max_files={max_files} 上限に達したためスキップ",
+            ):
+                break
             continue
 
         # ファイルサイズ取得
         try:
             file_size = file_path.stat().st_size
         except OSError as e:
-            result.errors.append(f"{relative}: stat 失敗: {e}")
+            if not _append_diagnostic(
+                result.errors, f"{relative}: stat 失敗 ({type(e).__name__})"
+            ):
+                break
             continue
 
         # 累積サイズ上限の事前チェック（raw bytes ベースで統一）
         bytes_to_read = min(file_size, max_file_bytes)
         if result.total_size_bytes + bytes_to_read > max_total_bytes:
-            result.skipped.append(
-                f"{relative}: max_total_bytes={max_total_bytes} 上限に達したためスキップ"
-            )
+            if not _append_diagnostic(
+                result.skipped,
+                f"{relative}: max_total_bytes={max_total_bytes} 上限に達したためスキップ",
+            ):
+                break
             continue
 
         # ストリーミング読み込み（max_file_bytes を超えるファイルは全量読み込まない）
@@ -284,7 +369,11 @@ def resolve(
             with file_path.open("rb") as fh:
                 raw = fh.read(max_file_bytes + 1)
         except OSError as e:
-            result.errors.append(f"{relative}: 読み込みエラー: {e}")
+            if not _append_diagnostic(
+                result.errors,
+                f"{relative}: 読み込みエラー ({type(e).__name__})",
+            ):
+                break
             continue
 
         truncated = len(raw) > max_file_bytes
@@ -304,7 +393,8 @@ def resolve(
                 skip_reason="UnicodeDecodeError: バイナリとして扱いスキップ",
             )
             result.files.append(rf)
-            result.skipped.append(f"{relative}: {rf.skip_reason}")
+            if not _append_diagnostic(result.skipped, f"{relative}: {rf.skip_reason}"):
+                break
             continue
 
         if truncated:
@@ -327,20 +417,22 @@ def resolve(
 def to_context_text(resolved: ResolvedTargetBusiness) -> str:
     """ResolvedTargetBusiness を Step 2 へ渡す context 文字列に整形する。
 
+    FR-WF-ARD-02 (v2.57): ファイル本文は埋め込まず、Agent が自らの読み取りツールで
+    参照するためのパス参照だけを渡す。本文を埋め込むと Step 2 の Phase 1 リクエストが
+    FR-CLI-84 のプロンプト予算を単独で超え得るためである。
+
     形式（パス指定時）:
       ## target_business: ファイル展開結果
 
-      指定パス: <元の値>
+    指定パス:
+    - <リポジトリ相対パスまたは匿名化済みパス名>
       展開ファイル数: <N>
       合計サイズ: <bytes>
 
-      ### <相対パス1>
-      ```
-      <内容（max_file_bytes で切り詰め）>
-      ```
+      以下のファイルを一次情報として読み取ること。
 
-      ### <相対パス2>
-      ...
+      - <相対パス1>
+      - <相対パス2>
 
       （スキップしたファイル: <理由付き一覧>）
 
@@ -354,23 +446,29 @@ def to_context_text(resolved: ResolvedTargetBusiness) -> str:
     parts: List[str] = [
         "## target_business: ファイル展開結果",
         "",
-        f"指定パス: {resolved.raw_text}",
+        "指定パス:",
+        *[f"- {path}" for path in resolved.source_paths],
         f"展開ファイル数: {len(readable_files)}",
         f"合計サイズ: {resolved.total_size_bytes}",
         "",
     ]
 
-    for rf in readable_files:
-        parts.append(f"### {rf.relative_path}")
-        parts.append("```")
-        parts.append(rf.content)
-        parts.append("```")
+    if readable_files:
+        parts.append("以下のファイルを一次情報として読み取ること。")
+        parts.append("")
+        parts.extend(f"- {rf.relative_path}" for rf in readable_files)
         parts.append("")
 
     if resolved.skipped:
         parts.append("（スキップしたファイル:")
         for reason in resolved.skipped:
             parts.append(f"  - {reason}")
+        parts.append("）")
+
+    if resolved.errors:
+        parts.append("（エラー:")
+        for error in resolved.errors:
+            parts.append(f"  - {error}")
         parts.append("）")
 
     return "\n".join(parts)

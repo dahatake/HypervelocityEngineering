@@ -17,7 +17,7 @@ from hve.workflow_registry import get_workflow
 
 _REPO = Path(__file__).resolve().parents[2]
 _PROMPT = _REPO / ".github" / "prompts" / "QA-ToolSearchEval.prompt.md"
-_TEMPLATE = _REPO / ".github" / "scripts" / "templates" / "aagd" / "step-4.md"
+_TEMPLATE = _REPO / ".github" / "prompts" / "steps" / "aagd" / "step-4.prompt.md"
 _CONTRACT = _REPO / ".github" / "io-contracts" / "QA-ToolSearchEval--aagd--4.yaml"
 
 
@@ -155,7 +155,7 @@ class TestSurfaceParityOfTheStep:
         )
         assert '"custom_agent":"QA-ToolSearchEval"' in line
         assert '"depends_on":["3"]' in line
-        assert _step().body_template_path.replace("templates/", "") in line
+        assert _step().body_template_path in line
 
     def test_issue_form_lists_the_step(self):
         form = (

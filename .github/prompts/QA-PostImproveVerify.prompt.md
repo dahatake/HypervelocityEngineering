@@ -1,5 +1,7 @@
 ﻿> 自己改善後に harness-verification-loop（Build/Lint/Test/Security/Diff）を実行しデグレード検知・スコア比較を行う。Self-Improve Phase 4d として使用される。
 
+> **非実行注記（2026-08-25 時点）**: 本 Prompt は CLI / GUI / Cloud のいずれの実行経路からも呼び出されていない。Self-Improve の Phase 4d の判定実体は [hve/self_improve.py](../../hve/self_improve.py) `_build_verification_result()` である（FR-CLI-63）。詳細は [users-guide/workflow-reference.md](../../users-guide/workflow-reference.md) の「Self-Improve で使用する実装」を参照。
+
 > **WORK**: `work/run/<run-id>/QA-PostImproveVerify/Issue-<識別子>/`
 
 ## 共通ルール

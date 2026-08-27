@@ -14,7 +14,7 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 PySide6 = pytest.importorskip("PySide6")
-from PySide6.QtCore import Qt  # noqa: E402
+from PySide6.QtCore import QThread, Qt  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from hve.gui.github_service import GitHubServiceError  # noqa: E402
@@ -65,6 +65,16 @@ class TestWorkerSignals:
         assert ok == []
         assert ng == ["対象が見つかりません。"]
 
+    def test_title_generation_error_emits_safe_domain_message(self, qapp) -> None:
+        from hve.github_title_generator import GitHubTitleGenerationError
+
+        def _task():
+            raise GitHubTitleGenerationError("Copilot CLI がタイムアウトしました。")
+
+        ok, ng, _ = _run_worker(_task)
+        assert ok == []
+        assert ng == ["Copilot CLI がタイムアウトしました。"]
+
     def test_unexpected_error_includes_type_name(self, qapp) -> None:
         def _task():
             raise ValueError("broken")
@@ -73,7 +83,7 @@ class TestWorkerSignals:
         assert ok == []
         assert len(ng) == 1
         assert "ValueError" in ng[0]
-        assert "broken" in ng[0]
+        assert "broken" not in ng[0]
 
     def test_task_runs_off_the_gui_thread(self, qapp) -> None:
         gui_thread_id = threading.get_ident()
@@ -111,4 +121,21 @@ class TestActiveRegistry:
         assert worker.wait(10_000)
         # finished の配送にイベントループが必要なため明示的に回す
         QApplication.processEvents()
+        assert worker not in github_threads._ACTIVE
+
+    def test_start_failure_does_not_leak_active_worker(
+        self, qapp, monkeypatch
+    ) -> None:
+        from hve.gui import github_threads
+
+        worker = GitHubWorker(lambda: "never runs")
+
+        def _fail_start(_thread, *_args, **_kwargs):
+            raise RuntimeError("thread unavailable")
+
+        monkeypatch.setattr(QThread, "start", _fail_start)
+
+        with pytest.raises(RuntimeError, match="thread unavailable"):
+            worker.start()
+
         assert worker not in github_threads._ACTIVE

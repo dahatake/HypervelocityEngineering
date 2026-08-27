@@ -17,6 +17,7 @@ metadata:
 | フェーズ / トリガー | 参照 Skill | パス | 説明 |
 |---|---|---|---|
 | HVE アプリケーション自体の保守 / 要求トレーサビリティ | `hve-requirement-traceability` | `.github/skills/hve-requirement-traceability/SKILL.md` | active 要件と実在テストを選択取得 |
+| 自然言語の Prompt から既存 Workflow を実行したい（Prompt 版） | `hve-prompt-edition` | `.github/skills/hve-prompt-edition/SKILL.md` | 自然言語 → request v1 → `hve prompt plan` → 明示承認 → `hve prompt run`。推測実行を禁止し、既存 `orchestrate` へ委譲 |
 | Agent 作業開始（共通） | `agent-common-preamble` | `.github/skills/agent-common-preamble/SKILL.md` | 全 Agent 共通ルール・Skills 参照リスト一元管理 |
 | 入力ファイル確認 | `input-file-validation` | `.github/skills/input-file-validation/SKILL.md` | 必読ファイル確認・欠損時処理ルール |
 | APP-ID スコープ解決 | `app-scope-resolution` | `.github/skills/app-scope-resolution/SKILL.md` | APP-ID からサービス/画面/エンティティ特定 |

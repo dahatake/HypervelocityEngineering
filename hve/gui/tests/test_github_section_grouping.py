@@ -39,6 +39,7 @@ _EXPECTED_TITLES = [
     "リポジトリ / Issue 設定",
     "ベースブランチ",
     "PR 自動 Approve & Auto-merge",
+    "実行中の自動進捗 Post",
     "GitHub Copilot SDK 連携",
 ]
 
@@ -51,8 +52,8 @@ def _group_of(widget: QWidget) -> QGroupBox | None:
     return parent if isinstance(parent, QGroupBox) else None
 
 
-def test_six_groups_in_expected_order(qapp) -> None:
-    """6 つの QGroupBox が分類どおりのタイトル・生成順で並ぶ。"""
+def test_seven_groups_in_expected_order(qapp) -> None:
+    """7 つの QGroupBox が分類どおりのタイトル・生成順で並ぶ。"""
     from hve.gui.page_options import _C5IssuePR
 
     w = _C5IssuePR()
@@ -83,6 +84,7 @@ def test_grouped_widgets_belong_to_expected_groups(qapp) -> None:
         "branch": "ベースブランチ",
         "fetch_branches_button": "ベースブランチ",
         "enable_auto_merge": "PR 自動 Approve & Auto-merge",
+        "github_auto_post_target": "実行中の自動進捗 Post",
         "fleet_mode_enabled": "GitHub Copilot SDK 連携",
         "cloud_session_enabled": "GitHub Copilot SDK 連携",
     }

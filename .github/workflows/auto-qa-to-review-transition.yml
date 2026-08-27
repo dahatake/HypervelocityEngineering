@@ -708,36 +708,16 @@ jobs:
               fi
 
               # @copilot メンションで検証追記を指示するコメントを投稿
-              MISSING_COMMENT="$(
-                {
-                  printf '%s\n' "${VALIDATION_MISSING_MARKER}"
-                  printf '\n'
-                  printf '%s\n' "## ⚠️ 検証実施記録が確認できません（auto-approve-ready 付与保留）"
-                  printf '\n'
-                  printf '%s\n' "@copilot PR body に \`## 検証結果\` セクションと \`<!-- validation-confirmed -->\` マーカーを追記してください。"
-                  printf '\n'
-                  printf '%s\n' "PR body またはコメントに検証実施記録（\`validation-confirmed\` マーカー / \`Validation\`・\`検証\` 見出し / \`検証:\` 形式）が見つからないため、\`auto-approve-ready\` ラベルの付与を保留しました。"
-                  printf '\n'
-                  printf '%s\n' "**.github/copilot-instructions.md §0 要件**: 最低1つの検証を実施すること（テスト/ビルド/静的解析のいずれかを行い、できない場合は理由と代替を明記すること）。"
-                  printf '\n'
-                  printf '%s\n' "### 対処方法"
-                  printf '\n'
-                  printf '%s\n' "以下いずれかを PR body またはコメントに追記してください（推奨順）:"
-                  printf '\n'
-                  printf '%s\n' "1. HTML コメントマーカー（推奨）"
-                  printf '%s\n' "   - \`<!-- validation-confirmed -->\`"
-                  printf '%s\n' "2. 見出し方式"
-                  printf '%s\n' "   - \`## 検証\`"
-                  printf '%s\n' "   - \`## 検証結果\`"
-                  printf '%s\n' "   - \`## Validation\`"
-                  printf '%s\n' "3. 箇条書き / 強調方式"
-                  printf '%s\n' "   - \`- 検証: pytest 実行済\`"
-                  printf '%s\n' "   - \`**検証**: ビルド成功\`"
-                  printf '%s\n' "   - \`> Validation: lint OK\`"
-                  printf '\n'
-                  printf '%s\n' "> ℹ️ このコメントは \`auto-qa-to-review-transition.yml\` によって自動投稿されました。"
-                }
-              )"
+              prompt_path=".github/prompts/cloud/auto-qa-to-review-validation-missing.prompt.md"
+              if [ ! -s "${prompt_path}" ]; then
+                echo "::error::Prompt file ${prompt_path} is missing or empty."
+                exit 1
+              fi
+              MISSING_COMMENT="$(PROMPT_PATH="${prompt_path}" VALIDATION_MISSING_MARKER="${VALIDATION_MISSING_MARKER}" python3 -c 'from pathlib import Path; import os; text = Path(os.environ["PROMPT_PATH"]).read_text(encoding="utf-8"); text = text.replace("{{VALIDATION_MISSING_MARKER}}", os.environ.get("VALIDATION_MISSING_MARKER", "")); print(text, end="")')"
+              if [ -z "${MISSING_COMMENT}" ]; then
+                echo "::error::MISSING_COMMENT が空です。Prompt file ${prompt_path} を確認してください。"
+                exit 1
+              fi
               gh pr comment "${PR_NUMBER}" \
                 --repo "${REPO}" \
                 --body "${MISSING_COMMENT}" || echo "WARNING: 検証不足通知コメントの投稿に失敗しました。"

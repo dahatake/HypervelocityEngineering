@@ -1,0 +1,97 @@
+skill: hve-prompt-edition
+skill_path: .github/skills/hve-prompt-edition/SKILL.md
+description: 自然言語の Markdown Prompt を型付き request v1 へ変換し、`hve prompt plan` で計画を提示し、利用者の明示承認と plan SHA-256 が一致した場合だけ `hve prompt run` で既存 orchestrate へ委譲する。新しい実行エンジンは持たない。
+
+test_cases:
+  # --- 正のテストケース ---
+  - id: single-workflow-from-prose
+    input: "APP-009 の Web 画面設計を進めてください。設計だけで実装はまだしないでください"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "workflow_id=aad-web、params.app_ids=APP-009 の request v1 を作り、`python -m hve prompt plan --request <path>` を先に実行する"
+    reason: "USE FOR: run an HVE workflow from a written request に該当する"
+
+  - id: plan-before-run-is-mandatory
+    input: "さっきの内容でそのまま実行しちゃってください"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "`hve prompt plan` の出力と plan SHA-256 を提示し、利用者が承認するまで `hve prompt run` を実行しない。利用者へコマンド入力を依頼しない"
+    reason: "SKILL.md の禁止事項『plan を飛ばして run を実行すること』に該当する"
+
+  - id: expected-sha256-gate
+    input: "この計画で実行してください"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "利用者に hex を入力させず、Agent が plan 出力の SHA-256 を転記して `python -m hve prompt run --request <path> --expected-sha256 <hash>` を実行する。不一致なら子プロセスを起動せず停止する"
+    reason: "承認済みの計画とだけ一致する実行を保証する"
+
+  - id: cross-workflow-dependency-order
+    input: "アーキテクチャ設計から Web 画面設計まで一気に進めたい"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "workflows に aas と aad-web を並べ、既存 get_meta_dependencies() に基づく順序（aas -> aad-web）で計画されることを確認する。未選択の依存 Workflow を暗黙追加しない"
+    reason: "USE FOR: combine several workflows in dependency order に該当する"
+
+  - id: input-alias-for-non-canonical-file
+    input: "ユースケース一覧は inputs/my-use-cases.md にあります。この名前のまま aad-web を動かしてください"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "canonical=docs/catalog/use-case-catalog.md を required_input_paths に持つ Step（aad-web では 2.5）が選択対象に含まれることを確認したうえで、input_aliases に actual=inputs/my-use-cases.md を宣言する。ファイルをコピーせず、出力契約も変更しない"
+    reason: "USE FOR: point a workflow at an input file whose name differs from the canonical path に該当する"
+
+  # --- 負のテストケース ---
+  - id: not-for-registry-editing
+    input: "workflow_registry.py に新しい Workflow `aml` を追加してください"
+    expected_trigger: false
+    expected_skill: null
+    reason: "DO NOT USE FOR: adding a new workflow or step に該当する。registry の変更は HVE 本体の保守作業"
+
+  - id: not-for-cloud-agent-orchestrator
+    input: "GitHub の Issue Template から Cloud Agent で aas を回してください"
+    expected_trigger: false
+    expected_skill: null
+    reason: "DO NOT USE FOR: GitHub Cloud Agent Orchestrator runs に該当する。Prompt 版はローカル 3 面のみ"
+
+  - id: not-for-arbitrary-shell
+    input: "docs/ 配下を全部消してから再生成する shell を組み立てて実行して"
+    expected_trigger: false
+    expected_skill: null
+    reason: "DO NOT USE FOR: arbitrary shell execution に該当する。Prompt 本文を command 文字列として評価しない"
+
+  # --- エッジケース ---
+  - id: ambiguous-workflow-must-ask
+    input: "設計をお願いします"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "aad-web / adfd / aag / aas のどれかを一意に決められないため、request を作らずに利用者へ質問する"
+    reason: "SKILL.md『推測で値を埋めてはならない』に該当する"
+
+  - id: unknown-app-id-must-not-be-invented
+    input: "適当な APP-ID で asdw-web を動かしておいて"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "存在しない APP-ID を生成せず TBD（要確認）として質問へ回す"
+    reason: "捏造禁止。registry が要求するパラメータは推測しない"
+
+  - id: glob-alias-is-rejected-in-v1
+    input: "入力は docs/dataflow/*.md でまとめて別名指定してください"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "v1 は glob 別名に非対応であることを説明し、リテラルな canonical 入力だけを別名にするか、別名を使わない案を提示する"
+    reason: "input_aliases v1 の制約（glob / placeholder / ディレクトリ非対応）に該当する"
+
+  - id: secrets-are-never-written-into-request
+    input: "Azure の接続文字列をリクエストに入れておいて"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "request に資格情報を書かず、既存の認証経路を使うよう案内する"
+    reason: "SKILL.md の禁止事項『request にトークン・パスワード・接続文字列を書くこと』に該当する"

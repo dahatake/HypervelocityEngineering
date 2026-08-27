@@ -42,7 +42,7 @@ _CLOUD_WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "auto-app-selection-reu
 _ISSUE_FORM = _REPO_ROOT / ".github" / "ISSUE_TEMPLATE" / "app-architecture-design.yml"
 _IO_CONTRACTS = _REPO_ROOT / ".github" / "io-contracts"
 _PROMPTS = _REPO_ROOT / ".github" / "prompts"
-_TEMPLATES = _REPO_ROOT / ".github" / "scripts" / "templates"
+_TEMPLATES = _REPO_ROOT / ".github" / "prompts" / "steps"
 _USERS_GUIDE = _REPO_ROOT / "users-guide" / "02-app-architecture-design.md"
 
 
@@ -96,7 +96,7 @@ class TestRegistryContract:
         assert step.depends_on == ["6"]
         assert step.skip_fallback_deps == ["6"]
         assert step.output_paths == [PERSONA_CATALOG_OUTPUT]
-        assert step.body_template_path == "templates/aas/step-7.md"
+        assert step.body_template_path == ".github/prompts/steps/aas/step-7.prompt.md"
         assert "docs/catalog/use-case-catalog.md" in step.required_input_paths
         assert "use_case_catalog" in (step.consumed_artifacts or [])
         assert "persona_catalog" not in (step.consumed_artifacts or [])
@@ -109,7 +109,7 @@ class TestRegistryContract:
         assert step.depends_on == [PERSONA_CATALOG_STEP]
         assert step.skip_fallback_deps == [PERSONA_CATALOG_STEP]
         assert step.output_paths == [PERSONA_SCREEN_OUTPUT]
-        assert step.body_template_path == "templates/aas/step-8.md"
+        assert step.body_template_path == ".github/prompts/steps/aas/step-8.prompt.md"
         assert PERSONA_CATALOG_OUTPUT in step.required_input_paths
         assert "persona_catalog" in (step.consumed_artifacts or [])
 
@@ -183,14 +183,14 @@ class TestTemplatesAndPrompts:
     _agent_pattern = re.compile(r"## Custom Agent\s*\n\s*`([^`]+)`")
 
     def test_step_7_template_is_persona_catalog(self) -> None:
-        body = _read(_TEMPLATES / "aas" / "step-7.md")
+        body = _read(_TEMPLATES / "aas" / "step-7.prompt.md")
         match = self._agent_pattern.search(body)
         assert match is not None
         assert match.group(1).strip() == PERSONA_CATALOG_AGENT
         assert PERSONA_CATALOG_OUTPUT in body
 
     def test_step_8_template_is_persona_screen(self) -> None:
-        body = _read(_TEMPLATES / "aas" / "step-8.md")
+        body = _read(_TEMPLATES / "aas" / "step-8.prompt.md")
         match = self._agent_pattern.search(body)
         assert match is not None
         assert match.group(1).strip() == PERSONA_SCREEN_AGENT
@@ -212,8 +212,8 @@ class TestTemplatesAndPrompts:
         [
             "prompts/Arch-UI-List.prompt.md",
             "prompts/Arch-UI-Detail.prompt.md",
-            "scripts/templates/aad-web/step-1.md",
-            "scripts/templates/aad-web/step-2.1.md",
+            "prompts/steps/aad-web/step-1.prompt.md",
+            "prompts/steps/aad-web/step-2.1.prompt.md",
         ],
     )
     def test_downstream_consumers_point_to_step_8(self, relative_path: str) -> None:

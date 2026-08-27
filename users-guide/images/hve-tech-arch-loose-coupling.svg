@@ -25,7 +25,7 @@
   <!-- Zone A: HVE Python -->
   <rect class="zone a" x="20"   y="70" width="570" height="320" rx="10"/>
   <text class="h" x="40" y="96">A. HVE 独自 Python 制御コード（リポジトリ内）</text>
-  <text class="note" x="40" y="116">DAG / Workflow / Agent ローダ / GUI 制御 / 認証 UI / KPI / Resume 等</text>
+  <text class="note" x="40" y="116">DAG / Workflow / Prompt 読込 / Prompt request 検証 / GUI 制御 / KPI 等</text>
 
   <rect class="box" x="40"  y="130" width="170" height="56" rx="4"/>
   <text x="55" y="150">hve/orchestrator.py</text>
@@ -60,11 +60,12 @@
   <text x="235" y="310" class="note">resume 復元</text>
 
   <rect class="box" x="400" y="270" width="170" height="56" rx="4"/>
-  <text x="415" y="290">hve/fork_kpi_logger</text>
-  <text x="415" y="310" class="note">work/kpi/*.jsonl</text>
+  <text x="415" y="290">prompt_request / execution</text>
+  <text x="415" y="310" class="note">検証 / plan hash / CLI 委譲</text>
 
-  <text class="note" x="40" y="360">▶ 制約: ゾーン B (SDK) は import 経由のみ。ゾーン C (CLI 資源) は CLI コマンド経由のみ。ゾーン D (Agent/Skill) はファイル経由のみ。</text>
-  <text class="note" x="40" y="378">▶ 認証情報は一切保持しない（OS 認証ストア委譲）。</text>
+  <text class="note" x="40" y="346">▶ B (SDK): 公開 API / import 経由。</text>
+  <text class="note" x="40" y="364">▶ C (CLI 資源): CLI コマンド経由。</text>
+  <text class="note" x="40" y="382">▶ D (Prompt / Skill): ファイル経由。認証情報はディスクへ永続保存しない。</text>
 
   <!-- Zone B: SDK -->
   <rect class="zone b" x="610" y="70" width="550" height="160" rx="10"/>
@@ -96,9 +97,9 @@
   <text x="905" y="420" class="note">Win Cred Manager / Keychain / Secret Service</text>
 
   <text class="note" x="630" y="466">▶ HVE は CLI コマンド呼出 (`copilot ...`) または SDK 経由でのみアクセス。直接ファイルを覗かない。</text>
-  <text class="note" x="630" y="482">▶ 認証情報は HVE のメモリ・ディスクに 1 バイトも保存しない。</text>
+  <text class="note" x="630" y="482">▶ 認証情報を HVE のディスクへ永続保存しない。</text>
 
-  <!-- Zone D: HVE-managed Agents / Workflows / Skills -->
+  <!-- Zone D: HVE-managed Prompts / Workflows / Skills -->
   <rect class="zone d" x="20" y="410" width="570" height="320" rx="10"/>
   <text class="h" x="40" y="436">D. HVE 管理: Prompt / Workflow / Skill（リポジトリ内ファイル）</text>
   <text class="note" x="40" y="456">.github/prompts/, .github/skills/, hve/workflow_registry.py の定義群</text>
@@ -111,16 +112,17 @@
   <text x="315" y="492">.github/skills/*/SKILL.md</text>
   <text x="315" y="510" class="note">task-dag-planning / markdown-query 等</text>
 
-  <rect class="box" x="40"  y="540" width="530" height="60" rx="4"/>
+  <rect class="box" x="40"  y="540" width="530" height="64" rx="4"/>
   <text x="55" y="562">hve/workflow_registry.py — WorkflowDef + StepDef DAG</text>
-  <text x="55" y="580" class="note">ARD / AAS / AAD-WEB / ASDW-WEB / ADFD / ADFDV / AAG / AAGD / AAR / AKM / ADI / ADOC</text>
+  <text x="55" y="580" class="note">ARD / AAS / ADA / AAD-WEB / ASDW-WEB / ADFD / ADFDV</text>
+  <text x="55" y="596" class="note">AAG / AAGD / AAR / AKM / ADI / ADOC</text>
 
   <rect class="box" x="40"  y="610" width="530" height="60" rx="4"/>
   <text x="55" y="632">.github/copilot-instructions.md（最上位ルール）</text>
   <text x="55" y="650" class="note">Prompt は本ルールを継承（agent-common-preamble 経由）</text>
 
-  <text class="note" x="40" y="698">▶ ゾーン A はファイルパスとして読み込むのみ。Agent/Skill の文面に Python 制御を埋め込まない。</text>
-  <text class="note" x="40" y="716">▶ Workflow の追加は workflow_registry.py に StepDef を追加して再ビルドのみで実現可能（疎結合の利点）。</text>
+  <text class="note" x="40" y="698">▶ ゾーン A は定義を読み取るだけ。Prompt / Skill に Python 制御を埋め込まない。</text>
+  <text class="note" x="40" y="716">▶ Workflow 追加: workflow_registry.py に StepDef を登録（疎結合）。</text>
 
   <!-- Boundary connectors (legend) -->
   <line class="bar" x1="595" y1="70"  x2="595" y2="730"/>

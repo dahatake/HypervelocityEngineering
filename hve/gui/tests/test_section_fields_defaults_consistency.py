@@ -59,6 +59,57 @@ def test_section_fields_keys_not_obsolete() -> None:
     )
 
 
+class TestResumeRunPersistence:
+    """FR-GUI-38: `resume_run` の保存キー登録と往復。"""
+
+    def test_resume_run_is_registered_in_section_fields(self) -> None:
+        registered = {
+            opt_key
+            for fields in settings_apply._SECTION_FIELDS.values()
+            for opt_key in fields
+        }
+        assert "resume_run" in registered
+
+    def test_resume_run_has_a_default(self) -> None:
+        assert "resume_run" in settings_store.defaults()["options"]
+
+    def test_resume_run_roundtrip_preserves_the_value(
+        self, tmp_settings: Path, qapp
+    ) -> None:
+        """resume_run の文字列値が save→load→widget反映で保持される。
+
+        登録確認・既定値確認だけでは _SECTION_FIELDS の名前が defaults() に
+        存在することしか確認できず、実際に QLineEdit へ反映されるか
+        （_get/_set の型分岐や widget 属性名の取り違え）は別問題である。
+        """
+        from hve.gui.page_options import _C5IssuePR
+
+        expected = "20260826T101010-a1b2c3"
+        collected = _save_then_reload_via_widget(
+            "C5",
+            _C5IssuePR,
+            {"resume_run": expected},
+        )
+        assert collected.get("resume_run") == expected, (
+            f"resume_run が保存→ロード後に欠落/不一致: {collected.get('resume_run')!r}"
+        )
+
+    def test_resume_run_roundtrip_preserves_empty_string(
+        self, tmp_settings: Path, qapp
+    ) -> None:
+        """空文字（既定値）も save→load→widget反映で維持される（None化しない）。"""
+        from hve.gui.page_options import _C5IssuePR
+
+        collected = _save_then_reload_via_widget(
+            "C5",
+            _C5IssuePR,
+            {"resume_run": ""},
+        )
+        assert collected.get("resume_run") == "", (
+            f"resume_run の空文字が round-trip 後に {collected.get('resume_run')!r} に変化"
+        )
+
+
 # ---------------------------------------------------------------------------
 # 2. Bool 値 round-trip テスト（QApplication 必須）
 # ---------------------------------------------------------------------------

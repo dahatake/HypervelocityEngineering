@@ -504,25 +504,18 @@ jobs:
 
             <!-- copilot-auto-recheck-limit-reached -->
             再レビューは上限（2回）に到達しました。以降は手動で確認してください。
-          COMMENT_BODY: |
-            <!-- copilot-auto-recheck-posted -->
-            @copilot
-
-            ## 再レビュー実行指示
-
-            前回レビューで `review-verdict: FAIL` が検出されましたが、その後に修正コミットを検知しました。
-            最新コミットを対象に再レビューを実行してください。
-
-             ### 要件
-             1. 6軸レビュー → 修正実行 → 修正後の残存 Critical 再カウントの順で実施すること。
-             2. 最終サマリーの合格判定直後に、必ず次のいずれかを出力すること。
-                - `<!-- review-verdict: PASS -->`（残存 Critical = 0）
-                - `<!-- review-verdict: FAIL -->`（残存 Critical > 0）
-             3. レビュー結果の末尾に `Review Improvement Application` セクションを出力し、`### Modified Artifacts` と
-                `### Verdict After Fix`（`<!-- review-verdict-after-fix: PASS/FAIL -->`）を必ず記載すること。
-             4. 捏造は絶対に禁止です。
         run: |
           set -euo pipefail
+          prompt_path=".github/prompts/cloud/auto-review-to-approve-recheck.prompt.md"
+          if [ ! -s "${prompt_path}" ]; then
+            echo "::error::Prompt file ${prompt_path} is missing or empty."
+            exit 1
+          fi
+          COMMENT_BODY="$(cat "${prompt_path}")"
+          if [ -z "${COMMENT_BODY}" ]; then
+            echo "::error::COMMENT_BODY が空です。Prompt file ${prompt_path} を確認してください。"
+            exit 1
+          fi
 
           pr_comments=$(gh api "/repos/${REPO}/issues/${PR_NUMBER}/comments" \
             --paginate \
@@ -593,19 +586,16 @@ jobs:
           fi
 
           # @copilot 修正指示コメントを投稿
-          COMMENT_BODY=$(printf '%s\n%s\n\n%s\n\n%s\n\n%s\n\n%s\n%s\n%s\n%s\n%s\n\n%s\n\n%s' \
-            "<!-- copilot-auto-review-fix-requested -->" \
-            "${SHA_MARKER}" \
-            "@copilot" \
-            "The automated adversarial review returned **FAIL**." \
-            "Please update the existing changes in this pull request by addressing the review findings below." \
-            "**Requirements:**" \
-            "- Do not create unrelated changes." \
-            "- Modify the artifacts produced by the main task." \
-            "- Keep the diff minimal." \
-            "- Push a new commit to this PR." \
-            "**Review findings:**" \
-            "${fail_comment_body}")
+          prompt_path=".github/prompts/cloud/auto-review-to-approve-fix-request.prompt.md"
+          if [ ! -s "${prompt_path}" ]; then
+            echo "::error::Prompt file ${prompt_path} is missing or empty."
+            exit 1
+          fi
+          COMMENT_BODY="$(PROMPT_PATH="${prompt_path}" SHA_MARKER="${SHA_MARKER}" REVIEW_FINDINGS="${fail_comment_body}" python3 -c 'from pathlib import Path; import os; text = Path(os.environ["PROMPT_PATH"]).read_text(encoding="utf-8"); text = text.replace("{{SHA_MARKER}}", os.environ.get("SHA_MARKER", "")); text = text.replace("{{REVIEW_FINDINGS}}", os.environ.get("REVIEW_FINDINGS", "")); print(text, end="")')"
+          if [ -z "${COMMENT_BODY}" ]; then
+            echo "::error::COMMENT_BODY が空です。Prompt file ${prompt_path} を確認してください。"
+            exit 1
+          fi
 
           gh pr comment "${PR_NUMBER}" \
             --repo "${REPO}" \

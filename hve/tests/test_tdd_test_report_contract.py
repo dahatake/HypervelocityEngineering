@@ -12,7 +12,7 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SKILLS_DIR = _REPO_ROOT / ".github" / "skills"
 _PROMPTS_DIR = _REPO_ROOT / ".github" / "prompts"
-_TEMPLATES_DIR = _REPO_ROOT / ".github" / "scripts" / "templates"
+_TEMPLATES_DIR = _REPO_ROOT / ".github" / "prompts" / "steps"
 
 _REPORT_PATH = "tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md"
 _ASDW_DATA_DEPLOY_REPORT_PATH = (
@@ -25,7 +25,7 @@ _PROMPT_REPORT_PATH_OVERRIDES = {
     "Dev-Microservice-Azure-DataDeploy.prompt.md": _ASDW_DATA_DEPLOY_REPORT_PATH,
 }
 _TEMPLATE_REPORT_PATH_OVERRIDES = {
-    _TEMPLATES_DIR / "asdw-web" / "step-1.3.md": _ASDW_DATA_DEPLOY_REPORT_PATH,
+    _TEMPLATES_DIR / "asdw-web" / "step-1.3.prompt.md": _ASDW_DATA_DEPLOY_REPORT_PATH,
 }
 _REQUIRED_SCHEMA_TOKENS = [
     "Schema-Version",
@@ -72,18 +72,18 @@ _TDD_REPORT_PROMPTS = [
 ]
 
 _TDD_REPORT_TEMPLATES = [
-    _TEMPLATES_DIR / "asdw-web" / "step-1.2.md",
-    _TEMPLATES_DIR / "asdw-web" / "step-1.3.md",
-    _TEMPLATES_DIR / "asdw-web" / "step-2.3.md",
-    _TEMPLATES_DIR / "asdw-web" / "step-2.4.md",
-    _TEMPLATES_DIR / "asdw-web" / "step-3.2.md",
-    _TEMPLATES_DIR / "asdw-web" / "step-3.3.md",
-    _TEMPLATES_DIR / "asdw-web" / "step-4.1.md",
-    _TEMPLATES_DIR / "asdw-web" / "step-4.2.md",
-    _TEMPLATES_DIR / "adfdv" / "step-2.1.md",
-    _TEMPLATES_DIR / "adfdv" / "step-2.2.md",
-    _TEMPLATES_DIR / "aagd" / "step-2.2.md",
-    _TEMPLATES_DIR / "aagd" / "step-2.3.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-1.2.prompt.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-1.3.prompt.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-2.3.prompt.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-2.4.prompt.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-3.2.prompt.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-3.3.prompt.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-4.1.prompt.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-4.2.prompt.md",
+    _TEMPLATES_DIR / "adfdv" / "step-2.1.prompt.md",
+    _TEMPLATES_DIR / "adfdv" / "step-2.2.prompt.md",
+    _TEMPLATES_DIR / "aagd" / "step-2.2.prompt.md",
+    _TEMPLATES_DIR / "aagd" / "step-2.3.prompt.md",
 ]
 
 # 固定 TDD レポートスキーマの正本は Prompt（さらに上流は Skill `tdd-red-green-reality`）。
@@ -93,7 +93,7 @@ _TDD_REPORT_TEMPLATES = [
 # 委譲は「同一の固定スキーマを持つ Prompt が存在する template」に限定し、
 # 委譲先 Prompt には固定スキーマ全トークンを必ず要求する（検証の消滅を防ぐ）。
 _SCHEMA_DELEGATED_TEMPLATES = {
-    _TEMPLATES_DIR / "asdw-web" / "step-1.2.md": (
+    _TEMPLATES_DIR / "asdw-web" / "step-1.2.prompt.md": (
         "Dev-Microservice-Azure-DataTestCoding.prompt.md"
     ),
 }
@@ -102,7 +102,7 @@ _SCHEMA_DELEGATED_TEMPLATES = {
 # generic な `<workflow-id>` / `<step-id>` / `<phase>` プレースホルダでは表現できず、
 # Step 1.2 でのみ確定する値・パス・状態を固定する。
 _STEP_SCOPED_TEMPLATE_TOKENS = {
-    _TEMPLATES_DIR / "asdw-web" / "step-1.2.md": (
+    _TEMPLATES_DIR / "asdw-web" / "step-1.2.prompt.md": (
         "- Workflow: asdw-web",
         "- Step: 1.2",
         "- Phase: RED",
@@ -180,7 +180,7 @@ def test_asdw_data_deploy_report_path_override_is_exact_and_limited() -> None:
     assert _PROMPT_REPORT_PATH_OVERRIDES == {
         "Dev-Microservice-Azure-DataDeploy.prompt.md": _ASDW_DATA_DEPLOY_REPORT_PATH,
     }
-    data_deploy_template = _TEMPLATES_DIR / "asdw-web" / "step-1.3.md"
+    data_deploy_template = _TEMPLATES_DIR / "asdw-web" / "step-1.3.prompt.md"
     assert _TEMPLATE_REPORT_PATH_OVERRIDES == {
         data_deploy_template: _ASDW_DATA_DEPLOY_REPORT_PATH,
     }
@@ -214,7 +214,7 @@ def test_tdd_templates_require_fixed_tdd_report_schema() -> None:
 def test_fixed_schema_delegation_is_limited_and_backed_by_prompt_contract() -> None:
     """固定スキーマの Prompt 委譲は限定的で、Prompt 側検証で必ず担保される。"""
     assert _SCHEMA_DELEGATED_TEMPLATES == {
-        _TEMPLATES_DIR / "asdw-web" / "step-1.2.md": (
+        _TEMPLATES_DIR / "asdw-web" / "step-1.2.prompt.md": (
             "Dev-Microservice-Azure-DataTestCoding.prompt.md"
         ),
     }

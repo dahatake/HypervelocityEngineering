@@ -24,7 +24,7 @@ _SKILL = (
 )
 _ROUTING = _REPO_ROOT / ".github" / "skills" / "_routing" / "README.md"
 _PROMPTS_DIR = _REPO_ROOT / ".github" / "prompts"
-_TEMPLATES_DIR = _REPO_ROOT / ".github" / "scripts" / "templates"
+_TEMPLATES_DIR = _REPO_ROOT / ".github" / "prompts" / "steps"
 _TDD_REPORT_PATH = "tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md"
 
 # tdd-green-retry-strategy を結線した「TDD GREEN フェーズを持つ」Agent prompt。
@@ -139,8 +139,8 @@ def test_all_green_prompts_require_different_approach() -> None:
 
 def test_fixed_count_steps_unified_to_five() -> None:
     """固定 3 回だった Step.1.3 / Step.4.4 のテンプレートが最大 5 回に統一されている。"""
-    step_1_3 = (_TEMPLATES_DIR / "asdw-web" / "step-1.3.md").read_text(encoding="utf-8")
-    step_4_4 = (_TEMPLATES_DIR / "asdw-web" / "step-4.4.md").read_text(encoding="utf-8")
+    step_1_3 = (_TEMPLATES_DIR / "asdw-web" / "step-1.3.prompt.md").read_text(encoding="utf-8")
+    step_4_4 = (_TEMPLATES_DIR / "asdw-web" / "step-4.4.prompt.md").read_text(encoding="utf-8")
     assert "初回を含め最大5回" in step_1_3
     assert "実際に対象stage processを開始した後" in step_1_3
     assert "process開始前の拒否" in step_1_3
@@ -152,10 +152,10 @@ def test_fixed_count_steps_unified_to_five() -> None:
 # tdd_max_retries（既定 5）を使う GREEN テンプレート。回数変更は不要だが、
 # GREEN loop 記述に Skill 参照（異アプローチ＋失敗都度の公式技術情報 MCP 調査）を持つ。
 _WIRED_GREEN_TEMPLATES = [
-    _TEMPLATES_DIR / "asdw-web" / "step-3.3.md",
-    _TEMPLATES_DIR / "asdw-web" / "step-4.2.md",
-    _TEMPLATES_DIR / "aagd" / "step-2.3.md",
-    _TEMPLATES_DIR / "adfdv" / "step-2.2.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-3.3.prompt.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-4.2.prompt.md",
+    _TEMPLATES_DIR / "aagd" / "step-2.3.prompt.md",
+    _TEMPLATES_DIR / "adfdv" / "step-2.2.prompt.md",
 ]
 
 
@@ -171,7 +171,7 @@ def test_tdd_max_retries_green_templates_reference_skill() -> None:
 
 def test_count_change_green_templates_reference_skill() -> None:
     """固定回数を 5 へ統一した step-1.3 / step-4.4 も Skill を参照する。"""
-    for rel in (("asdw-web", "step-1.3.md"), ("asdw-web", "step-4.4.md")):
+    for rel in (("asdw-web", "step-1.3.prompt.md"), ("asdw-web", "step-4.4.prompt.md")):
         path = _TEMPLATES_DIR / rel[0] / rel[1]
         text = path.read_text(encoding="utf-8")
         assert "tdd-green-retry-strategy" in text, f"{path.name} に Skill 参照が無い"

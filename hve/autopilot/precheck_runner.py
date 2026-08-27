@@ -140,6 +140,9 @@ def run_step1_precheck(
             repo=getattr(args, "repo", None),
             token=token,
             base_branch=getattr(args, "branch", None),
+            create_working_branch=bool(
+                getattr(args, "create_working_branch", True)
+            ),
             check_remote=False,
             repo_root=repo_root,
         )

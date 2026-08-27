@@ -14,8 +14,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _UNTARGETED_PROMPT = _REPO_ROOT / ".github" / "prompts" / "Arch-ARD-BusinessAnalysis-Untargeted.prompt.md"
 _TARGETED_PROMPT = _REPO_ROOT / ".github" / "prompts" / "Arch-ARD-BusinessAnalysis-Targeted.prompt.md"
-_STEP1_TEMPLATE = _REPO_ROOT / ".github" / "scripts" / "templates" / "ard" / "step-1.md"
-_STEP2_TEMPLATE = _REPO_ROOT / ".github" / "scripts" / "templates" / "ard" / "step-2.md"
+_STEP1_TEMPLATE = _REPO_ROOT / ".github" / "prompts" / "steps" / "ard" / "step-1.prompt.md"
+_STEP2_TEMPLATE = _REPO_ROOT / ".github" / "prompts" / "steps" / "ard" / "step-2.prompt.md"
 
 # Targeted 側で既に使われている規範表現。Untargeted / テンプレートでも同一表現に揃える。
 _PRIORITY_PHRASE = "一次情報として最優先"
@@ -67,3 +67,26 @@ class TestArdAttachedDocsPriority:
         section = _section(_STEP2_TEMPLATE, "## 入力")
         assert "{attached_docs}" in section, "step-2.md の入力節に {attached_docs} がありません"
         assert "{target_business}" in section, "step-2.md の入力節に {target_business} がありません"
+        assert _PRIORITY_PHRASE in section, (
+            "step-2.md の入力節にユーザー提供資料の最優先参照規定がありません"
+        )
+
+    def test_step2_template_completion_declares_priority(self) -> None:
+        section = _section(_STEP2_TEMPLATE, "## 完了条件")
+        assert "添付資料・指定資料" in section, (
+            "step-2.md の完了条件が attached_docs とパス指定 target_business の両方を扱っていません"
+        )
+        assert _PRIORITY_PHRASE in section, (
+            "step-2.md の完了条件にユーザー提供資料の最優先参照規定がありません"
+        )
+
+    def test_step2_template_expands_target_business_once(self) -> None:
+        """FR-WF-ARD-02 (v2.57): `{target_business}` は 1 箇所だけ展開する。
+
+        パス指定時の展開結果を 2 箇所へ埋め込むと、リクエストサイズが二重に増える。
+        """
+        text = _STEP2_TEMPLATE.read_text(encoding="utf-8")
+        assert text.count("{target_business}") == 1, (
+            "step-2.md は {target_business} を 1 箇所だけ展開しなければなりません "
+            f"(実際: {text.count('{target_business}')} 箇所)"
+        )

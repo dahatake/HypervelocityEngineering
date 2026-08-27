@@ -17,6 +17,11 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
+try:
+    from .prompt_loader import load_prompt_file
+except ImportError:  # pragma: no cover - top-level `import runner` compatibility
+    from prompt_loader import load_prompt_file  # type: ignore[import-not-found,no-redef]
+
 if __package__:
     from .artifact_validation import (
         _ASDW_AUDIT_MODE_ACL_DIRECT,
@@ -168,29 +173,6 @@ def _ensure_step_work_dir(
     if not work_dir.is_dir():
         raise OSError(f"step work directory was not created: {work_dir}")
     return work_dir
-
-
-def _combine_additional_prompt_with_mdq(base: Optional[str]) -> Optional[str]:
-    """``base`` の additional_prompt に Markdown-Query 強制ブロックを前置する。
-
-    GUI 設定 ``[mdq] target_folders`` が空のとき: ``base`` をそのまま返す
-    （要件: 「設定がなければ、何もしない」）。
-
-    例外で設定読込に失敗した場合は ``base`` をそのまま返す（強制注入の失敗が
-    Agent 実行を止めないよう防御的に握りつぶす）。
-    """
-    try:
-        from .gui import settings_store  # 遅延 import: GUI 依存を最小化
-        from . import mdq_enforcement
-        folders = settings_store.get_mdq_target_folders()
-        block = mdq_enforcement.build_enforcement_prompt(folders)
-    except Exception:
-        return base
-    if not block:
-        return base
-    if not base:
-        return block
-    return block + "\n\n" + base
 
 
 # FR-WF-AAG-01: 生成する AI Agent の Tool Search 方針を注入する Step。
@@ -1007,7 +989,8 @@ try:
     from .run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id
     from .self_improve import (
         scan_codebase, record_learning, get_learning_summary,
-        ImprovementRecord, VerificationResult,
+        _build_verification_result,
+        ImprovementRecord, ScanResult, VerificationResult,
         DEFAULT_QUALITY_THRESHOLD, LEARNING_SUMMARY_MAX_LENGTH,
     )
     from .workiq import (
@@ -1022,6 +1005,7 @@ try:
         is_workiq_result_mergeable,
     )
     from .orchestrator_context import OrchestratorContext
+    from .phase1_request_plan import plan_phase1_request
     from .cloud_session import (
         acquire_cloud_session_slot,
         attach_cloud_session_event_logger,
@@ -1048,10 +1032,12 @@ except ImportError:
         PRE_EXECUTION_QA_PROMPT_V2, MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT,
     )
     from qa_merger import QADocument, QAMerger  # type: ignore[no-redef]
+    from phase1_request_plan import plan_phase1_request  # type: ignore[no-redef]
     from run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id  # type: ignore[no-redef]
     from self_improve import (  # type: ignore[no-redef]
         scan_codebase, record_learning, get_learning_summary,
-        ImprovementRecord, VerificationResult,
+        _build_verification_result,
+        ImprovementRecord, ScanResult, VerificationResult,
         DEFAULT_QUALITY_THRESHOLD, LEARNING_SUMMARY_MAX_LENGTH,
     )
     from workiq import (  # type: ignore[no-redef]
@@ -1184,6 +1170,28 @@ def _filter_workiq_questions(
 # （_SI_SCOPE_DEFAULTS として後方互換エイリアスを公開）
 _SI_SCOPE_DEFAULTS = SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS
 
+_RUNNER_EXECUTION_MODE_CONSTRAINT_SUFFIX = load_prompt_file(
+    "runtime/runner/execution-mode-constraint-suffix.prompt.md"
+)
+_RUNNER_REVIEW_OWNERSHIP_AUTO_CONTENTS_REVIEW_SUFFIX = load_prompt_file(
+    "runtime/runner/review-ownership-auto-contents-review.prompt.md"
+)
+_RUNNER_REVIEW_OWNERSHIP_INLINE_SELF_CHECK_SUFFIX = load_prompt_file(
+    "runtime/runner/review-ownership-inline-self-check.prompt.md"
+)
+_RUNNER_PHASE1_AGENT_PREFIX_TEMPLATE = load_prompt_file(
+    "runtime/runner/phase1-agent-prefix.prompt.md"
+)
+_RUNNER_PHASE1_PRE_QA_HEADING = load_prompt_file(
+    "runtime/runner/phase1-pre-qa-heading.prompt.md"
+)
+_RUNNER_PHASE1_MAIN_TASK_HEADING = load_prompt_file(
+    "runtime/runner/phase1-main-task-heading.prompt.md"
+)
+_RUNNER_TDD_REPORT_INSTRUCTION_SUFFIX_TEMPLATE = load_prompt_file(
+    "runtime/runner/tdd-report-instruction-suffix.prompt.md"
+)
+
 
 def _resolve_step_output_paths(workflow: Any, step_id: str) -> List[str]:
     """ステップから成果物パスを取得する。
@@ -1210,29 +1218,51 @@ def _build_execution_mode_constraint_suffix(ctx: Any) -> str:
     """
     if ctx is None or getattr(ctx, "split_fork_enabled", False):
         return ""
-    return (
-        "\n\n## 実行モード制約\n\n"
-        "本実行は CLI / GUI Orchestrator 配下です。次のルールを厳守してください:\n\n"
-        "- `task_scope` / `context_size` による SPLIT_REQUIRED 判定は **行わない**。\n"
-        "- 宣言された `output_paths` の主成果物を **必ず生成してから終了** すること。\n"
-        "- `plan.md` / `subissues.md` のみを出力して終了することは **禁止**（後続 Step が成果物不在で skip / 失敗する）。\n"
-    )
+    return _RUNNER_EXECUTION_MODE_CONSTRAINT_SUFFIX
 
 
 def _build_review_ownership_suffix(auto_contents_review: bool) -> str:
     """メインタスクと敵対的レビューの所有権を明示する末尾指示を返す。"""
     if auto_contents_review:
-        return (
-            "\n\n## レビュー所有権\n\n"
-            "- メインタスク内ではReview Sub-agentを起動しない。\n"
-            "- 敵対的レビューはメインタスク完了後にHVE Phase 3が実施する。\n"
+        return _RUNNER_REVIEW_OWNERSHIP_AUTO_CONTENTS_REVIEW_SUFFIX
+    return _RUNNER_REVIEW_OWNERSHIP_INLINE_SELF_CHECK_SUFFIX
+
+
+def _compose_phase1_prompt(
+    *,
+    agent_prefix: str,
+    step_prompt: str,
+    pre_qa_context: str,
+    execution_mode_suffix: str,
+    tdd_suffix: str,
+    review_suffix: str,
+) -> Tuple[str, Tuple[Tuple[str, str], ...]]:
+    """Phase 1 の送信本文と、合計が一致する成分列を返す。"""
+    components: List[Tuple[str, str]] = []
+    if agent_prefix:
+        components.append(
+            (
+                "agent_prefix",
+                _RUNNER_PHASE1_AGENT_PREFIX_TEMPLATE.format(
+                    agent_prefix=agent_prefix
+                ),
+            )
         )
-    return (
-        "\n\n## レビュー所有権\n\n"
-        "- Prompt固有のレビュー観点は1回のインライン・セルフチェックにまとめる。\n"
-        "- Review Sub-agentを起動しない。\n"
-        "- 敵対的レビューを実施しない。\n"
-    )
+    if pre_qa_context:
+        components.extend((
+            ("pre_qa_heading", _RUNNER_PHASE1_PRE_QA_HEADING),
+            ("pre_qa_context", pre_qa_context),
+            ("main_task_heading", _RUNNER_PHASE1_MAIN_TASK_HEADING),
+        ))
+    components.append(("step_prompt", step_prompt))
+    for name, suffix in (
+        ("execution_mode_suffix", execution_mode_suffix),
+        ("tdd_suffix", tdd_suffix),
+        ("review_suffix", review_suffix),
+    ):
+        if suffix:
+            components.append((name, suffix))
+    return "".join(text for _name, text in components), tuple(components)
 
 
 def _check_output_paths_gate(
@@ -3875,6 +3905,20 @@ class StepRunner:
         """
         start = time.time()
         self._clear_tool_start_state(step_id)
+        if not self.config.dry_run:
+            # FR-CLI-84 判定 (1): 受領プロンプト単体が既に予算を超えている場合は、
+            # Copilot SDK クライアント / セッションの生成と Phase 0 事前 QA より前に停止する。
+            _received_plan = plan_phase1_request(
+                prompt,
+                components=(("step_prompt", prompt),),
+            )
+            if _received_plan.is_over_budget:
+                self.console.error(
+                    f"Step.{step_id}: 受領したプロンプトが HVE 内部予算を超えました。"
+                    "入力を分割するかファイル化して再実行してください。\n"
+                    + _received_plan.describe()
+                )
+                return False
         # markdown-query Skill 利用ログ (.mdq/usage.jsonl) と Step 紐付けのため
         # 環境変数を伝播する。子プロセス（Copilot SDK 経由含む）が継承し、
         # mdq CLI から mdq.usage_log が読み取る。
@@ -4448,11 +4492,6 @@ class StepRunner:
                     run_id=resolve_run_id(),
                     identifier=_work_identifier,
                 )
-            _additional_suffix = (
-                self.config.additional_prompt
-                if _is_data_deploy
-                else _combine_additional_prompt_with_mdq(self.config.additional_prompt)
-            )
 
             # Skill 利用ガード（Prompt 末尾に付加）
             _skill_guard_text = ""
@@ -4474,6 +4513,61 @@ class StepRunner:
                         )
                     )
                 _skill_guard_text = "\n".join(_guard)
+
+            _prompt_prefix_parts: List[str] = []
+            if _agent_prompt_body:
+                _prompt_prefix_parts.append(_agent_prompt_body.strip())
+            if _skill_guard_text:
+                _prompt_prefix_parts.append(_skill_guard_text)
+            _tool_search_policy_text = _tool_search_policy_prefix(
+                workflow_id,
+                step_id,
+                self.config.enable_tool_search,
+            )
+            if _tool_search_policy_text:
+                _prompt_prefix_parts.append(_tool_search_policy_text)
+            _agentic_retrieval_policy_text = _agentic_retrieval_policy_prefix(
+                workflow_id,
+                step_id,
+                self.config.enable_agentic_retrieval,
+            )
+            if _agentic_retrieval_policy_text:
+                _prompt_prefix_parts.append(_agentic_retrieval_policy_text)
+            # FR-CLI-85: additional_prompt と markdown-query 強制ブロックは
+            # orchestrator が Step プロンプト末尾へ連結済みのため再度前置しない。
+            _agent_prefix = "\n\n".join(_prompt_prefix_parts).strip()
+            _execution_mode_suffix = _build_execution_mode_constraint_suffix(
+                self._orchestrator_ctx
+            )
+            _tdd_suffix = self._build_tdd_report_instruction_suffix(
+                step_id=step_id,
+                custom_agent=custom_agent,
+                workflow_id=workflow_id,
+            )
+            _review_suffix = _build_review_ownership_suffix(
+                self.config.auto_contents_review
+            )
+            _pre_qa_free_prompt, _pre_qa_free_components = _compose_phase1_prompt(
+                agent_prefix=_agent_prefix,
+                step_prompt=prompt,
+                pre_qa_context="",
+                execution_mode_suffix=_execution_mode_suffix,
+                tdd_suffix=_tdd_suffix,
+                review_suffix=_review_suffix,
+            )
+            _pre_qa_free_plan = plan_phase1_request(
+                _pre_qa_free_prompt,
+                components=_pre_qa_free_components,
+            )
+            if _pre_qa_free_plan.is_over_budget:
+                self.console.error(
+                    f"Step.{step_id}: Phase 0 前の確定プロンプトが HVE 内部予算を超えました。"
+                    "入力を分割するかファイル化して再実行してください。\n"
+                    + _pre_qa_free_plan.describe()
+                )
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
 
             # メインセッションに決定論的 session_id を付与する。
             # 既存値（呼び出し元が明示指定したケース）は尊重する。
@@ -4544,57 +4638,29 @@ class StepRunner:
             phase1_start = time.time()
             self.console.step_phase_start(step_id, current_phase, total_phases, "メインタスク")
 
-            # Agent Prompt 本文・Skill Guard・additional_prompt をプロンプト先頭に注入
-            _prompt_prefix_parts: List[str] = []
-            if _agent_prompt_body:
-                _prompt_prefix_parts.append(_agent_prompt_body.strip())
-            if _skill_guard_text:
-                _prompt_prefix_parts.append(_skill_guard_text)
-            _tool_search_policy_text = _tool_search_policy_prefix(
-                workflow_id,
-                step_id,
-                self.config.enable_tool_search,
+            _injected_prompt, _final_components = _compose_phase1_prompt(
+                agent_prefix=_agent_prefix,
+                step_prompt=prompt,
+                pre_qa_context=pre_qa_context,
+                execution_mode_suffix=_execution_mode_suffix,
+                tdd_suffix=_tdd_suffix,
+                review_suffix=_review_suffix,
             )
-            if _tool_search_policy_text:
-                _prompt_prefix_parts.append(_tool_search_policy_text)
-            _agentic_retrieval_policy_text = _agentic_retrieval_policy_prefix(
-                workflow_id,
-                step_id,
-                self.config.enable_agentic_retrieval,
+            # FR-CLI-84 判定 (2): 連結後の最終プロンプトを送信直前に再度照合する。
+            # 予算超過時は Phase 1 のモデル呼び出しを 1 回も行わずに失敗させる。
+            _final_plan = plan_phase1_request(
+                _injected_prompt,
+                components=_final_components,
             )
-            if _agentic_retrieval_policy_text:
-                _prompt_prefix_parts.append(_agentic_retrieval_policy_text)
-            if _additional_suffix:
-                _prompt_prefix_parts.append(_additional_suffix)
-            _agent_prefix = "\n\n".join(_prompt_prefix_parts).strip()
-
-            if pre_qa_context:
-                _body = (
-                    "## 事前確認済みの前提条件・補足情報\n\n"
-                    f"{pre_qa_context}\n\n"
-                    "## メインタスク\n\n"
-                    f"{prompt}"
+            if _final_plan.is_over_budget:
+                self.console.error(
+                    f"Step.{step_id}: Phase 1 のプロンプトが HVE 内部予算を超えました。"
+                    "入力を分割するかファイル化して再実行してください。\n"
+                    + _final_plan.describe()
                 )
-            else:
-                _body = prompt
-
-            if _agent_prefix:
-                _injected_prompt = f"{_agent_prefix}\n\n{_body}"
-            else:
-                _injected_prompt = _body
-            # CLI/GUI Orchestrator 配下 (fleet mode 以外) では SPLIT_REQUIRED 判定を行わず、
-            # 宣言された output_paths を必ず生成させる。詳細は copilot-instructions.md §0。
-            _injected_prompt = _injected_prompt + _build_execution_mode_constraint_suffix(
-                self._orchestrator_ctx
-            )
-            _injected_prompt = _injected_prompt + self._build_tdd_report_instruction_suffix(
-                step_id=step_id,
-                custom_agent=custom_agent,
-                workflow_id=workflow_id,
-            )
-            _injected_prompt = _injected_prompt + _build_review_ownership_suffix(
-                self.config.auto_contents_review
-            )
+                elapsed = time.time() - start
+                self.console.step_end(step_id, "failed", elapsed=elapsed)
+                return False
             main_response = await self._send_and_wait_with_model_call_failure_guard(
                 session,
                 _injected_prompt,
@@ -4941,57 +5007,32 @@ class StepRunner:
                     )
                     _verify_content = _extract_text(_verify_response)
 
-                    # 検証結果のパース: LLM JSON を解析し、取得できない場合は scan 結果で補完
-                    _after_score = _after_scan["quality_score"]
-                    _degraded = (
-                        _after_score < _before_score
-                        or _after_scan["summary"]["test_failures"] > _scan["summary"]["test_failures"]
-                    )
-
-                    # JSON ブロックを抽出してパース
-                    _phases_from_llm: Dict[str, str] = {}
+                    # 検証結果は scan 実測値だけから決定的に導出する（FR-CLI-63）。
+                    # LLM 応答は notes の説明としてのみ使用し、判定へ反映しない。
                     _json_parse_error: Optional[str] = None
                     _json_match = _extract_json_block(_verify_content)
                     if _json_match:
                         try:
-                            _parsed = json.loads(_json_match)
-                            _after_score = int(_parsed.get("after_quality_score", _after_score))
-                            _degraded = bool(_parsed.get("degraded", _degraded))
-                            _phases_from_llm = _parsed.get("verification_phases", {})
+                            json.loads(_json_match)
                         except (json.JSONDecodeError, ValueError, TypeError) as _exc:
                             # G-7: JSON パース失敗を可観測化（黙示フォールバックの抑止）
                             _json_parse_error = f"{type(_exc).__name__}: {_exc}"
                             self.console.warning(
                                 f"  ⚠️ [{step_id}] Phase 4 verify: LLM JSON のパースに失敗しました "
-                                f"({_json_parse_error}) — scan 結果ベースの値で代替します"
+                                f"({_json_parse_error}) — 判定は scan 実測値のみを使用します"
                             )
                     else:
                         _json_parse_error = "no_json_block_found"
                         self.console.warning(
                             f"  ⚠️ [{step_id}] Phase 4 verify: LLM 応答に JSON ブロックが見つかりません — "
-                            "scan 結果ベースの値で代替します"
+                            "判定は scan 実測値のみを使用します"
                         )
 
-                    _notes = _verify_content[:LEARNING_SUMMARY_MAX_LENGTH]
-                    if _json_parse_error:
-                        _notes = f"[json_parse_error={_json_parse_error}] " + _notes
-                    _verification: VerificationResult = {
-                        "after_quality_score": _after_score,
-                        "degraded": _degraded,
-                        "verification_phases": {
-                            "build": _phases_from_llm.get("build", "PASS"),
-                            "lint": _phases_from_llm.get(
-                                "lint", "PASS" if _after_scan["summary"]["lint_errors"] == 0 else "FAIL"
-                            ),
-                            "test": _phases_from_llm.get(
-                                "test", "PASS" if _after_scan["summary"]["test_failures"] == 0 else "FAIL"
-                            ),
-                            "security": _phases_from_llm.get("security", "PASS"),
-                            "diff": _phases_from_llm.get("diff", "SKIP"),
-                        },
-                        "overall": "FAIL" if _degraded else "PASS",
-                        "notes": _notes,
-                    }
+                    _verification: VerificationResult = _build_phase4_verification(
+                        _after_scan, _before_score, _verify_content, _json_parse_error,
+                    )
+                    _after_score = _verification["after_quality_score"]
+                    _degraded = _verification["degraded"]
 
                     # Phase 4e: 学習ログ記録
                     _record: ImprovementRecord = {
@@ -5983,16 +6024,13 @@ class StepRunner:
             / phase
             / "tdd-test-report.md"
         ).as_posix()
-        return (
-            "\n\n## TDD report 出力先（HVE gate 必須）\n\n"
-            "この Step は HVE の TDD report gate 対象です。以下を厳守してください:\n\n"
-            f"- `tdd-test-report.md` は必ず `{report_path}` に作成する。\n"
-            f"- `Workflow` ラベルは `- Workflow: {workflow_key}` とする。"
-            f" `{custom_agent}` は Agent 名であり workflow id ではない。\n"
-            f"- `Step` ラベルは `- Step: {base_step_id}` とする。\n"
-            f"- `Target-Key` ラベルは `- Target-Key: {target_key}` とする。\n"
-            f"- `Phase` ラベルは `- Phase: {phase}` とする。\n"
-            "- Custom Agent 名のディレクトリを workflow id として使わない。\n"
+        return _RUNNER_TDD_REPORT_INSTRUCTION_SUFFIX_TEMPLATE.format(
+            report_path=report_path,
+            workflow_key=workflow_key,
+            custom_agent=custom_agent,
+            base_step_id=base_step_id,
+            target_key=target_key,
+            phase=phase,
         )
 
     def _run_tdd_report_gate(
@@ -7706,3 +7744,22 @@ def _extract_json_block(text: str) -> Optional[str]:
             if depth == 0:
                 return search_text[start : i + 1]
     return None
+
+
+def _build_phase4_verification(
+    after_scan: "ScanResult",
+    before_score: int,
+    verify_content: str,
+    json_parse_error: Optional[str],
+) -> "VerificationResult":
+    """Phase 4d の検証結果を scan 実測値だけから決定的に構築する（FR-CLI-63）。
+
+    判定は `self_improve._build_verification_result()` を単一の実装とし、
+    LLM 応答は `notes` の説明としてのみ保持する。
+    """
+    verification = _build_verification_result(after_scan, before_score)
+    notes = verify_content[:LEARNING_SUMMARY_MAX_LENGTH]
+    if json_parse_error:
+        notes = f"[json_parse_error={json_parse_error}] " + notes
+    verification["notes"] = notes
+    return verification

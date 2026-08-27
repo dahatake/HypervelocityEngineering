@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 960" role="img" aria-labelledby="title desc">
   <title id="title">README 用アーキテクチャ概要図</title>
-  <desc id="desc">Issue Template と hve CLI を入口に、HVE Cloud Agent Orchestrator Dispatcher と workflow registry が Workflow を選択し、Prompt が knowledge、docs、src、qa、Azure、PR を生成する全体図。凡例と読み順を含む。</desc>
+  <desc id="desc">Issue Template、HVE CLI / GUI、自然言語の Prompt 版を入口に、Dispatcher または workflow registry が Workflow を選択し、Prompt が knowledge、docs、src、qa、Azure、PR を生成する全体図。Prompt 版は plan SHA-256 の一致後に既存 CLI Orchestrator へ委譲する。</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
@@ -34,28 +34,34 @@
   <rect x="24" y="104" width="300" height="700" class="panel"/>
   <text x="44" y="134" class="label">1. 入口 / 入力</text>
 
-  <rect x="44" y="162" width="260" height="92" class="card entry"/>
-  <text x="62" y="190" class="label">Issue Template</text>
-  <text x="62" y="214" class="body">`.github/ISSUE_TEMPLATE/*.yml`</text>
-  <text x="62" y="234" class="small">10種のフォームでWeb実行を開始</text>
+  <rect x="44" y="162" width="260" height="80" class="card entry"/>
+  <text x="62" y="188" class="label">Issue Template</text>
+  <text x="62" y="210" class="body">`.github/ISSUE_TEMPLATE/*.yml`</text>
+  <text x="62" y="230" class="small">13 種のフォームで Web 実行を開始</text>
 
-  <rect x="44" y="278" width="260" height="92" class="card entry"/>
-  <text x="62" y="306" class="label">hve CLI</text>
-  <text x="62" y="330" class="body">`run` / `orchestrate` / `resume`</text>
-  <text x="62" y="350" class="small">ローカル PC から同じ Workflow DAG を実行</text>
+  <rect x="44" y="258" width="260" height="80" class="card entry"/>
+  <text x="62" y="284" class="label">HVE CLI / GUI</text>
+  <text x="62" y="306" class="body">`orchestrate` / 2-step Wizard</text>
+  <text x="62" y="326" class="small">同じ Workflow DAG をローカル実行</text>
 
-  <rect x="44" y="394" width="260" height="88" class="card store"/>
-  <text x="62" y="422" class="label">docs-original/</text>
-  <text x="62" y="446" class="body">既存の要求定義・設計原本</text>
+  <rect x="44" y="354" width="260" height="96" class="card entry"/>
+  <text x="62" y="380" class="label">Prompt 版（利用面）</text>
+  <text x="62" y="402" class="body">日本語 → request → plan</text>
+  <text x="62" y="422" class="small">SHA-256 一致後だけ `prompt run`</text>
+  <text x="62" y="440" class="small">→ 既存 CLI Orchestrator へ委譲</text>
 
-  <rect x="44" y="506" width="260" height="88" class="card store"/>
-  <text x="62" y="534" class="label">qa/</text>
-  <text x="62" y="558" class="body">質問票・回答済み QA ドキュメント</text>
+  <rect x="44" y="474" width="260" height="72" class="card store"/>
+  <text x="62" y="500" class="label">docs-original/</text>
+  <text x="62" y="524" class="body">既存の要求定義・設計原本</text>
 
-  <rect x="44" y="618" width="260" height="112" class="card ops"/>
-  <text x="62" y="646" class="label">補助入力</text>
-  <text x="62" y="670" class="body">`docs/`, `src/`, `sample/`, `data/`</text>
-  <text x="62" y="692" class="small">Workflow に応じて既存成果物やサンプルを参照</text>
+  <rect x="44" y="562" width="260" height="72" class="card store"/>
+  <text x="62" y="588" class="label">qa/</text>
+  <text x="62" y="612" class="body">質問票・回答済み QA ドキュメント</text>
+
+  <rect x="44" y="650" width="260" height="80" class="card ops"/>
+  <text x="62" y="676" class="label">補助入力</text>
+  <text x="62" y="698" class="body">`docs/`, `src/`, `sample/`, `data/`</text>
+  <text x="62" y="718" class="small">既存成果物やサンプルを参照</text>
 
   <rect x="352" y="104" width="560" height="700" class="panel"/>
   <text x="372" y="134" class="label">2. オーケストレーション</text>
@@ -66,10 +72,10 @@
   <text x="390" y="236" class="small">Issue ラベルから対象 Workflow を選択して reusable workflow に振り分け</text>
 
   <rect x="372" y="278" width="520" height="114" class="card workflow"/>
-  <text x="390" y="306" class="label">Workflow registry（12 ID）</text>
-  <text x="390" y="330" class="body">`ard`, `aas`, `aad-web`, `asdw-web`, `adfd`, `adfdv`</text>
+  <text x="390" y="306" class="label">Workflow 選択（13 ID）</text>
+  <text x="390" y="330" class="body">`ard`, `aas`, `ada`, `aad-web`, `asdw-web`, `adfd`, `adfdv`</text>
   <text x="390" y="352" class="body">`aag`, `aagd`, `aar`, `akm`, `adi`, `adoc`</text>
-  <text x="390" y="374" class="small">`aad` / `asdw` は後方互換エイリアス</text>
+  <text x="390" y="374" class="small">Cloud: reusable workflow / Local: registry（`aad` / `asdw` は別名）</text>
 
   <rect x="372" y="420" width="250" height="104" class="card store"/>
   <text x="390" y="448" class="label">ADI → AKM</text>
@@ -89,7 +95,7 @@
   <text x="390" y="670" class="body">`QA-*`: 品質確認・レビュー</text>
   <text x="390" y="692" class="body">`KnowledgeManager`, `E2ETesting-Playwright`</text>
   <text x="390" y="720" class="small">Workflow / Step ごとに `.github/prompts/*.prompt.md` を割り当て</text>
-  <text x="390" y="742" class="small">同じ Agent 定義を Web 実行と CLI 実行で共有</text>
+  <text x="390" y="742" class="small">同じ Prompt 定義を Cloud / CLI / GUI で共有</text>
 
   <rect x="940" y="104" width="316" height="700" class="panel"/>
   <text x="960" y="134" class="label">3. 成果物 / 出力先</text>
@@ -125,17 +131,20 @@
   <circle cx="948" cy="150" r="14" class="order"/>
   <text x="943" y="155" fill="#ffffff" font-size="12" font-weight="700">3</text>
 
-  <path d="M 304 208 C 330 208, 340 208, 372 208" class="arrow"/>
-  <path d="M 304 324 C 330 324, 340 324, 372 324" class="arrow"/>
-  <path d="M 304 438 C 334 438, 340 462, 372 462" class="arrow"/>
-  <path d="M 304 550 C 336 550, 340 476, 372 476" class="arrow"/>
+  <path d="M 304 202 C 330 202, 340 202, 372 202" class="arrow"/>
+  <path d="M 632 252 L 632 278" class="arrow"/>
+  <path d="M 304 298 C 334 298, 340 324, 372 324" class="arrow"/>
+  <path d="M 304 402 C 334 402, 340 346, 372 346" class="arrow"/>
+  <path d="M 304 510 C 334 510, 340 462, 372 462" class="arrow"/>
+  <path d="M 304 598 C 336 598, 340 478, 372 478" class="arrow"/>
   <path d="M 622 472 C 632 472, 634 472, 642 472" class="arrow"/>
-  <path d="M 892 334 C 926 334, 934 212, 960 212" class="arrow"/>
-  <path d="M 892 334 C 926 334, 934 314, 960 314" class="arrow"/>
-  <path d="M 892 334 C 926 334, 934 416, 960 416" class="arrow"/>
-  <path d="M 892 334 C 926 334, 934 518, 960 518" class="arrow"/>
-  <path d="M 892 334 C 926 334, 934 620, 960 620" class="arrow"/>
-  <path d="M 892 334 C 926 334, 934 722, 960 722" class="arrow"/>
+  <path d="M 632 392 L 632 552" class="arrow"/>
+  <path d="M 892 663 C 926 663, 934 212, 960 212" class="arrow"/>
+  <path d="M 892 663 C 926 663, 934 314, 960 314" class="arrow"/>
+  <path d="M 892 663 C 926 663, 934 416, 960 416" class="arrow"/>
+  <path d="M 892 663 C 926 663, 934 518, 960 518" class="arrow"/>
+  <path d="M 892 663 C 926 663, 934 620, 960 620" class="arrow"/>
+  <path d="M 892 663 C 926 663, 934 722, 960 722" class="arrow"/>
   <path d="M 768 524 C 768 540, 768 540, 768 552" class="arrow-dash"/>
 
   <rect x="24" y="830" width="1232" height="106" class="legend"/>

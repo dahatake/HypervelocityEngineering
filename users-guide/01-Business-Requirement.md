@@ -353,7 +353,7 @@ python -m hve orchestrate --workflow ard \
 
 1. CLI が終了コード `0` で完了している
 2. 選択した実 Step の全出力が存在する
-3. 各 `.github/scripts/templates/ard/step-*.md` の `## 完了条件` を満たす
+3. 各 `.github/prompts/steps/ard/step-*.prompt.md` の `## 完了条件` を満たす
 4. fan-out では上流の全 `BIZ-NN` / `UC-*` が下流の統合成果物に含まれる
 5. `--dry-run` は成果物を生成しないため、完了確認には使用しない
 
@@ -376,7 +376,7 @@ python -m hve orchestrate --workflow ard \
 | 変更目的 | 正本 / 確認先 |
 |---|---|
 | Step ID、依存、fan-out、出力 | `hve/workflow_registry.py` の `ARD` と `_WORKFLOW_GROUP_MAPS` |
-| Step ごとの目的・入力・完了条件 | `.github/scripts/templates/ard/step-*.md` |
+| Step ごとの目的・入力・完了条件 | `.github/prompts/steps/ard/step-*.prompt.md` |
 | Agent の役割・品質ルール | `.github/prompts/Arch-ARD-*.prompt.md` |
 | Step 単位の入出力契約 | `.github/io-contracts/Arch-ARD-*--ard--*.yaml` |
 | 補助 Prompt | `hve/prompts.py` |

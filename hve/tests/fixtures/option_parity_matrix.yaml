@@ -13,7 +13,7 @@
 #   hve/config.py:111-     (SDKConfig dataclass フィールド定義)
 #   hve/__main__.py:566-   (orchestrate サブコマンド CLI 引数定義)
 #   .github/ISSUE_TEMPLATE/*.yml  (Issue Form フィールド ID)
-#   docs/design-discussions/orchestration-route-diff-spec.md (差分仕様)
+#   hve-dev/requirement-definition.md §5.21 (ローカル 3 面の設定パリティ)
 #
 schema_version: "1.0"
 
@@ -43,6 +43,7 @@ sdkconfig_internal_fields:
   - cq_watch_debounce_ms            # Source index watcher debounce
   - create_issues                   # GitHub Issue 作成（hve 固有インフラ）
   - create_pr                       # GitHub PR 作成（hve 固有インフラ）
+  - create_working_branch           # PR用新規branch/current branch選択（FR-CLI-83）
   - delete_local_merged_branch      # merge後ローカルbranch cleanup
   - dry_run                         # ドライランモード（テスト用）
   - final_only                      # 最終出力のみ表示（出力制御）
@@ -146,6 +147,90 @@ issue_form_internal_fields:
   - task_goal               # self-improve.yml 専用
   - usecase_id              # ワークフロー固有パラメータ（APP-ID 系）
 
+# ============================================================================
+# FR-LOCAL-SURFACE-01 — ローカル 3 面（直接 CLI / GUI / Prompt 版）の設定パリティ
+#
+# 上の options 表は Cloud（Issue Form）と hve（SDKConfig / CLI）の対応を扱う。
+# 以下はそれとは別に、ローカル 3 面の間での指定可能性を分類する。
+# 分類は排他かつ網羅とし、`orchestrate` の全 CLI dest がいずれかへ属する。
+# ============================================================================
+
+# (a) shared setting: 3 面すべてで指定できる。GUI は設定ストアへ永続化し、
+#     Prompt 版は保存値を基準に `settings_overrides` で run 単位に上書きできる。
+#     値は `OrchestrateArgs` の同名フィールドである（別名は下の
+#     local_surface_settings_key_aliases に列挙する）。
+#     本リストは `hve/prompt_request.ALLOWED_SETTINGS_OVERRIDES` と
+#     過不足なく一致しなければならない（FR-PROMPT-02 / 要求定義 §5.21 (a)）。
+local_surface_shared_settings:
+  # 実行品質
+  - model
+  - review_model
+  - qa_model
+  - akm_model
+  - reasoning_effort
+  - review_reasoning_effort
+  - qa_reasoning_effort
+  - akm_reasoning_effort
+  - context_tier
+  - akm_context_tier
+  # 実行制御
+  - max_parallel
+  - timeout
+  - review_timeout
+  - auto_qa
+  - auto_contents_review
+  - verbosity
+  - branch
+  - strict
+  # Agentic Retrieval / Foundry Toolbox
+  - enable_agentic_retrieval
+  - agentic_data_source_modes
+  - foundry_mcp_integration
+  - agentic_data_sources_hint
+  - agentic_existing_design_diff_only
+  - foundry_sku_fallback_policy
+  - enable_tool_search
+  # Cloud Session
+  - cloud_session_branch
+
+# shared setting のうち、設定ストアの key 名が `OrchestrateArgs` と一致しないもの。
+# 値は `OrchestrateArgs` フィールド名 → 設定ストア key 名。
+local_surface_settings_key_aliases:
+  cloud_session_branch: cloud_session_repository_branch
+
+# (b) workflow param: `WorkflowDef.params` が宣言した Workflow だけへ適用する。
+#     値は対応する CLI フラグ。GUI の全体設定へは永続化しない。
+local_surface_workflow_params:
+  create_remote_mcp_server: "--create-remote-mcp-server"
+  tdd_max_retries: "--tdd-max-retries"
+  include_kpi_okr: "--include-kpi-okr"
+
+# (c) semantic alias: 同じ実行状態へ到達する別表現を持つ CLI dest。
+#     値は解決先の `OrchestrateArgs` フィールド名。
+orchestrate_cli_dest_aliases:
+  input_alias: input_aliases
+  no_mdq_watch: mdq_watch
+  no_cq_watch: cq_watch
+
+# (e) excluded: 意図的に面固有とする CLI dest。値は除外の根拠。
+local_surface_excluded_cli_dests:
+  approval_gates: "FR-CLI-87 の対話専用ゲート。非対話面では確認を出さない。"
+  assign_copilot_agent: "Cloud 経路の Copilot 自動アサイン。GUI は Hub からの事後アサインを維持する。"
+  autopilot_catalog: "Autopilot チェーン専用。子 GUI プロセス起動の制御であり単発実行に対応概念がない。"
+  autopilot_chain: "Autopilot チェーン専用。"
+  autopilot_dry_run: "Autopilot チェーン専用。"
+  autopilot_max_parallel: "Autopilot チェーン専用（GUI 設定 AUTOPILOT セクションが所有）。"
+  data_location: "FR-WF-ASDW-02 / FR-GUI-02: ASDW-WEB Step 1.3 の既定値付きパラメータ。GUI 入力欄を禁止している。"
+  data_resource_suffix: "FR-WF-ASDW-02 / FR-GUI-02: 同上。"
+  data_vnet_cidr: "FR-WF-ASDW-02 / FR-GUI-02: 3 つの CIDR は包含・非重複を fail-closed 検証する相互依存した組で、部分編集を許さない。"
+  data_private_endpoint_subnet_cidr: "FR-WF-ASDW-02 / FR-GUI-02: 同上。"
+  data_aci_subnet_cidr: "FR-WF-ASDW-02 / FR-GUI-02: 同上。"
+  force_interactive: "TTY 判定バイパス。対話実行専用で、GUI / Prompt 版には対応概念がない。"
+  workbench: "Workbench 表示系。GUI / Prompt 版は `--workbench off` を強制注入する。"
+  workbench_body_lines: "Workbench 表示系。"
+  workbench_flush_on_exit: "Workbench 表示系。"
+  workbench_history: "Workbench 表示系。"
+
 options:
   # ============================================================
   # common: Issue Form と SDKConfig の両系統に存在するオプション
@@ -238,16 +323,16 @@ options:
   - option_key: tdd_max_retries
     issue_form_field_id: tdd_max_retries
     hve_config_attr: tdd_max_retries
-    hve_cli_flag: null
+    hve_cli_flag: --tdd-max-retries
     applies_to: common
-    notes: "TDD GREEN リトライ上限。CLI 直接フラグなし（環境変数 HVE_TDD_MAX_RETRIES / Issue タグ tdd-max-retries 経由）。config.py:243"
+    notes: "TDD GREEN リトライ上限。FR-LOCAL-SURFACE-01 (b) の workflow param。優先順位は CLI 明示 > 環境変数 HVE_TDD_MAX_RETRIES > 既定 5。GUI は宣言した Workflow の Step 1 ワークフロー枠で指定する（全体設定へは永続化しない）。config.py:563"
 
   - option_key: self_improve_max_iterations
     issue_form_field_id: self_improve_max_iterations
     hve_config_attr: self_improve_max_iterations
-    hve_cli_flag: null
+    hve_cli_flag: --self-improve-max-iterations
     applies_to: common
-    notes: "自己改善最大イテレーション数。CLI 直接フラグなし（Wizard / Issue タグ経由）。config.py:242"
+    notes: "自己改善最大イテレーション数。CLI / Wizard / Issue タグのいずれからも指定できる。"
 
   - option_key: self_improve_quality_threshold
     issue_form_field_id: self_improve_quality_threshold
@@ -312,9 +397,9 @@ options:
   - option_key: create_remote_mcp_server
     issue_form_field_id: create_remote_mcp_server
     hve_config_attr: null
-    hve_cli_flag: null
+    hve_cli_flag: --create-remote-mcp-server
     applies_to: issue_form_only
-    notes: "Remote MCP Server 実装の有無。Issue 本文タグとしてワークフローに渡されるが SDKConfig フィールドなし。"
+    notes: "Remote MCP Server 実装の有無。FR-LOCAL-SURFACE-01 (b) の workflow param であり SDKConfig フィールドを持たない。Cloud は Issue 本文タグ、ローカル 3 面は CLI フラグ / 対話 wizard / GUI の Step 1 ワークフロー枠から指定する。"
 
   # ============================================================
   # hve_only: hve SDKConfig にのみ存在し Issue Form には露出しないオプション
@@ -355,6 +440,13 @@ options:
     hve_cli_flag: "--auto-coding-agent-review"
     applies_to: hve_only
     notes: "Code Review Agent 呼び出し。Issue Form 経路では非公開。CLI フラグあり。config.py:137, diff-spec §3.1"
+
+  - option_key: assign_copilot_agent
+    issue_form_field_id: null
+    hve_config_attr: assign_copilot_agent
+    hve_cli_flag: "--assign-copilot-agent"
+    applies_to: hve_only
+    notes: "新規 Root Issue を Copilot cloud agent へ割り当てる user-facing CLI オプション（FR-CLI-89）。Issue Form 経路では非公開。"
 
 
   - option_key: workiq_enabled

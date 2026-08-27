@@ -26,7 +26,7 @@ import json
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, Set, Tuple
 
 from PySide6.QtCore import Qt, QThread, QTimer, Signal, Slot
 from PySide6.QtGui import QAction, QCloseEvent, QIcon, QResizeEvent
@@ -60,16 +60,19 @@ from .page_workbench import WorkbenchPage
 from .page_workflow_select import WorkflowSelectPage
 from .session_menu import build_session_menu
 from .settings_window import SettingsWindow
+from hve.workflow_order import sort_workflows_by_dependencies
 from hve.workflow_registry import (
     WorkflowDependency,
     expand_group_step_ids,
-    get_meta_dependencies,
     get_workflow,
 )
 
 from .status_banner import StatusBanner
 from .status_kind import StatusKind
 from .workflow_display import format_workflow_label
+
+if TYPE_CHECKING:
+    from .github_window import GitHubWindow
 
 # ウィンドウタイトルに名前付きで列挙するワークフロー件数の上限。
 # これを超える選択は ID のみ上位で列挙し、超過件数は ``+N more`` として表示する。
@@ -290,41 +293,8 @@ def _build_step_seeds_for_workflow(
 
 
 def _sort_workflows_by_dependencies(selected_workflows: List[str]) -> List[str]:
-    """選択ワークフローを依存関係に基づいて安定ソートする。"""
-    selected = [w for w in selected_workflows if w]
-    if len(selected) <= 1:
-        return selected
-
-    index_by_wf = {wf: i for i, wf in enumerate(selected)}
-    edges: Dict[str, List[str]] = {wf: [] for wf in selected}
-    indegree: Dict[str, int] = {wf: 0 for wf in selected}
-
-    for wf in selected:
-        deps = get_meta_dependencies(wf)
-        for dep in deps:
-            dep_wf = dep.workflow_id
-            if dep_wf not in indegree:
-                continue
-            edges[dep_wf].append(wf)
-            indegree[wf] += 1
-
-    ready = [wf for wf, deg in indegree.items() if deg == 0]
-    ready.sort(key=lambda w: index_by_wf[w])
-
-    ordered: List[str] = []
-    while ready:
-        current = ready.pop(0)
-        ordered.append(current)
-        for nxt in edges[current]:
-            indegree[nxt] -= 1
-            if indegree[nxt] == 0:
-                ready.append(nxt)
-                ready.sort(key=lambda w: index_by_wf[w])
-
-    if len(ordered) != len(selected):
-        raise ValueError("選択されたワークフロー間に循環依存があります。")
-
-    return ordered
+    """選択ワークフローを依存関係に基づいて安定ソートする（共通 core へ委譲）。"""
+    return sort_workflows_by_dependencies(selected_workflows)
 
 
 class MainWindow(QMainWindow):
@@ -373,6 +343,11 @@ class MainWindow(QMainWindow):
         self._session_workdir: GuiSessionWorkdir = GuiSessionWorkdir.create(
             self._repo_root,
             cleanup_policy=str(_policy),
+        )
+        from .github_task_context import GitHubTaskContextStore
+
+        self._github_task_contexts = GitHubTaskContextStore(
+            self._session_workdir.session_run_id
         )
         # 起動バナー（Q10/T9）: 子プロセスのログより前に GUI 側で 1 度だけ出す。
         # stderr へ出力することで workbench_logger 系の取り込み経路にも乗せる
@@ -498,7 +473,7 @@ class MainWindow(QMainWindow):
             QStyle.StandardPixmap.SP_DirLinkIcon,
         )
         self._btn_github.clicked.connect(self._open_github_window)
-        self._github_window: Optional[QMainWindow] = None
+        self._github_window: Optional[GitHubWindow] = None
 
         # --- アプリ識別タイトルは画面内からは削除（要件: 「Windowのタイトルに: HVE Workbench。この文字は画面内からは削除」）。
         # 以前の self._title_label は本リファクタリングで取り除き、ウィンドウタイトル (setWindowTitle) で表示される。
@@ -532,7 +507,11 @@ class MainWindow(QMainWindow):
 
         self._page_workbench = WorkbenchPage()
         self._page_workbench.process_finished.connect(self._on_process_finished)
+        self._page_workbench.process_started.connect(
+            self._on_github_workflow_process_started
+        )
         self._page_workbench.cloud_session_url_changed.connect(self._on_cloud_session_url_changed)
+        self._page_workbench.job_log_line.connect(self._on_github_task_log_line)
         # Steering（実行中ワークフローへの割り込み送信）機能のため、CopilotChatPanel に
         # WorkbenchPage への参照を渡す（resolve_active_main_step_id / active_steering_ipc_dir
         # の呼び出し元として使用する）。CopilotChatPanel 側に set_workbench_page が
@@ -755,15 +734,398 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    # ------------------------------------------------------------------
+    # FR-GUI-36: 実行中の自動進捗 Post
+    # ------------------------------------------------------------------
+
+    def _github_auto_post_controller(self, workflow_id: str):
+        """workflow ごとの自動 Post コントローラを返す。OFF のときは ``None``。
+
+        複数 workflow を並行実行しても run ごとの snapshot が混ざらないよう、
+        コントローラを workflow 単位で分離する（FR-GUI-36）。
+        """
+        from . import settings_store
+
+        try:
+            mode = str(settings_store.get_option("github_auto_post_target") or "off")
+        except Exception:
+            mode = "off"
+
+        controllers = getattr(self, "_auto_post_controllers", None)
+        if controllers is None:
+            controllers = {}
+            self._auto_post_controllers = controllers
+
+        controller = controllers.get(workflow_id)
+        if mode == "off":
+            if controller is not None:
+                controller.set_target_mode("off")
+            return None
+        if controller is None:
+            from .github_auto_post import GitHubAutoPostController
+
+            controller = GitHubAutoPostController(target_mode=mode)
+            controllers[workflow_id] = controller
+        elif controller.target_mode != mode:
+            controller.set_target_mode(mode)
+        return controller
+
+    def _feed_github_auto_post(self, workflow_id: str, line: str) -> None:
+        """観測イベント 1 行を取り込み、生成された request を worker で実行する。"""
+        try:
+            from hve import runtime_observability as rto
+
+            if not rto.is_stats_line(line):
+                return
+            payload = rto.parse_stats_line(line)
+            if not payload:
+                return
+            controller = self._github_auto_post_controller(workflow_id)
+            if controller is None:
+                return
+            self._dispatch_github_auto_post(controller, controller.handle_event(payload))
+        except Exception:
+            # 自動 Post の失敗で実行表示を壊さない（FR-GUI-36）。
+            pass
+    def _finalize_github_auto_post(self, workflow_id: str, exit_code: int) -> None:
+        """Workflow 終了時の最終更新を実行する。"""
+        try:
+            controllers = getattr(self, "_auto_post_controllers", None) or {}
+            controller = controllers.get(workflow_id)
+            if controller is None:
+                return
+            try:
+                console_text = self._page_workbench.console_text() or ""
+            except Exception:
+                console_text = ""
+            requests = controller.finalize(
+                overall_status="done" if exit_code == 0 else "failed",
+                console_text=console_text or None,
+            )
+            self._dispatch_github_auto_post(controller, requests)
+        except Exception:
+            pass
+
+    def _dispatch_github_auto_post(self, controller, requests) -> None:
+        """request を `GitHubWorker` で実行し、完了を controller へ返す。"""
+        from functools import partial
+
+        from . import github_service
+        from .github_threads import GitHubWorker
+
+        try:
+            repo = github_service.resolve_repo(None)
+        except Exception:
+            return
+
+        for request in requests or ():
+            if request.operation == "create":
+                task = partial(
+                    github_service.create_comment, repo, request.target_number, request.body
+                )
+            else:
+                task = partial(
+                    github_service.update_comment, repo, request.comment_id, request.body
+                )
+
+            worker = GitHubWorker(task, parent=self)
+            kind = request.kind
+            generation = request.generation
+            operation = request.operation
+            existing_comment_id = request.comment_id
+
+            def _ok(result, _k=kind, _g=generation, _op=operation, _cid=existing_comment_id):
+                if _op == "create":
+                    # ID を確定できない応答は create 未完了として扱い、次回も create する。
+                    comment_id = result if isinstance(result, int) and result > 0 else None
+                else:
+                    comment_id = _cid
+                follow_up = controller.complete(_k, comment_id=comment_id, generation=_g)
+                if follow_up is not None:
+                    self._dispatch_github_auto_post(controller, [follow_up])
+
+            def _ng(_message: str, _k=kind, _g=generation):
+                # 失敗の詳細は保持しない（本文へ混入させない: NFR-SEC-01）。
+                follow_up = controller.complete(_k, error="post_failed", generation=_g)
+                if follow_up is not None:
+                    self._dispatch_github_auto_post(controller, [follow_up])
+
+            worker.succeeded.connect(_ok)
+            worker.failed.connect(_ng)
+            worker.start()
+
+    def _close_github_auto_post(self) -> None:
+        for controller in (getattr(self, "_auto_post_controllers", None) or {}).values():
+            try:
+                controller.close()
+            except Exception:
+                pass
+
+    # ------------------------------------------------------------------
+    # FR-GUI-37: GUI 起動中の HVE-created branch cleanup 監視
+    # ------------------------------------------------------------------
+
+    # 低頻度確認の間隔（秒）。設定項目化しない。
+    _BRANCH_CLEANUP_POLL_SECONDS = 60.0
+
+    def _branch_cleanup_monitor(self):
+        """cleanup monitor を返す。`delete_local_merged_branch` が OFF なら ``None``。"""
+        from . import settings_store
+
+        try:
+            enabled = bool(settings_store.get_option("delete_local_merged_branch"))
+        except Exception:
+            enabled = False
+        if not enabled:
+            return None
+
+        monitor = getattr(self, "_cleanup_monitor", None)
+        if monitor is None:
+            from .github_branch_cleanup_monitor import GitHubBranchCleanupMonitor
+
+            monitor = GitHubBranchCleanupMonitor(
+                enabled=True,
+                poll_interval_seconds=self._BRANCH_CLEANUP_POLL_SECONDS,
+            )
+            self._cleanup_monitor = monitor
+        return monitor
+
+    def _feed_branch_cleanup(self, line: str) -> None:
+        """観測イベント 1 行から cleanup 対象を登録する（FR-GUI-37）。"""
+        try:
+            from hve import runtime_observability as rto
+
+            if not rto.is_stats_line(line):
+                return
+            payload = rto.parse_stats_line(line)
+            if not payload:
+                return
+            self._watch_branch_cleanup_target(payload)
+        except Exception:
+            # 監視の失敗で実行表示を壊さない。
+            pass
+
+    def _watch_branch_cleanup_target(self, payload) -> None:
+        """`github_target` イベントから cleanup 対象を登録する（FR-GUI-37）。"""
+        import time
+
+        from hve.branch_cleanup import LocalBranchCleanupTarget
+
+        if payload.get("kind") != "github_target":
+            return
+        if payload.get("delete_local_merged_branch") is not True:
+            return
+        if payload.get("created_by_hve") is not True:
+            return
+
+        monitor = self._branch_cleanup_monitor()
+        if monitor is None:
+            return
+        target = LocalBranchCleanupTarget(
+            repo=str(payload.get("repo") or ""),
+            pr_number=payload.get("pr_number"),
+            branch=str(payload.get("branch") or ""),
+            base_branch=str(payload.get("base_branch") or ""),
+            created_by_hve=True,
+        )
+        if not target.repo or not target.branch or not target.base_branch:
+            return
+        if monitor.watch(target, now=time.monotonic()):
+            self._poll_branch_cleanup()
+
+    def _poll_branch_cleanup(self) -> None:
+        """期限に達した target の status 確認を worker で実行する。"""
+        import time
+
+        from .github_branch_cleanup_monitor import build_status_task
+        from .github_threads import GitHubWorker
+
+        monitor = getattr(self, "_cleanup_monitor", None)
+        if monitor is None:
+            return
+        for request in monitor.poll_due(now=time.monotonic()):
+            worker = GitHubWorker(build_status_task(request), parent=self)
+            monitor.track_worker(worker)
+
+            def _ok(result, _req=request):
+                self._on_branch_cleanup_status(_req, pull_request=result)
+
+            def _ng(_message: str, _req=request):
+                # 一時的失敗として次周期で再確認する（恒久失敗の判別は行わない）。
+                self._on_branch_cleanup_status(_req, error="status_failed")
+
+            worker.succeeded.connect(_ok)
+            worker.failed.connect(_ng)
+            worker.start()
+
+    def _on_branch_cleanup_status(self, request, *, pull_request=None, error=None) -> None:
+        import time
+
+        monitor = getattr(self, "_cleanup_monitor", None)
+        if monitor is None:
+            return
+        cleanup = monitor.complete(
+            request,
+            pull_request=pull_request,
+            error=error,
+            retryable=error is not None,
+            now=time.monotonic(),
+        )
+        if cleanup is None:
+            return
+
+        from .github_threads import GitHubWorker
+
+        worker = GitHubWorker(cleanup.run, parent=self)
+        monitor.track_worker(worker)
+        worker.start()
+
+    def _close_branch_cleanup_monitor(self) -> None:
+        monitor = getattr(self, "_cleanup_monitor", None)
+        if monitor is not None:
+            try:
+                monitor.shutdown(timeout_ms=3000)
+            except Exception:
+                pass
+
     def _open_github_window(self) -> None:
         """GitHub Issue / Pull Request ウィンドウを開く（非モーダル）。"""
         from .github_window import GitHubWindow
 
         if self._github_window is None:
-            self._github_window = GitHubWindow(parent=self)
+            self._github_window = GitHubWindow(repo_root=self._repo_root, parent=self)
+            # FR-GUI-35: Hub の「連携設定」保存を他面へ伝搬する。
+            self._github_window.settings_changed.connect(self._on_settings_changed)
+            self._github_window.task_context_changed.connect(
+                self._on_github_task_context_changed
+            )
+            # FR-GUI-33: 作業状況画面のコンソール出力を PR コメントの投稿元にする。
+            self._github_window.set_console_source(
+                self._page_workbench.console_text,
+                getattr(self._session_workdir, "session_run_id", "") or "",
+            )
+            self._seed_github_task_context()
+            self._github_window.set_linked_pull_request(self._linked_pr_number())
+            self._github_window.set_task_context(self._github_task_contexts.current())
         self._github_window.show()
         self._github_window.raise_()
         self._github_window.activateWindow()
+
+    @staticmethod
+    def _linked_pr_number() -> Optional[int]:
+        """設定 C5 の「連携する Pull Request 番号」を読む（FR-GUI-32）。"""
+        from . import settings_store as _ss
+
+        raw = str(_ss.get_option("linked_pr_number") or "").strip()
+        return int(raw) if raw.isdigit() else None
+
+    def _seed_github_task_context(self) -> None:
+        """既存設定を session default の初期値として一度だけ取り込む。"""
+        current = self._github_task_contexts.current()
+        if current.generation:
+            return
+        from . import settings_store as _ss
+
+        raw_issue = str(_ss.get_option("issue_number") or "").strip()
+        issue_mode = str(_ss.get_option("issue_mode") or "new").strip()
+        issue_number = int(raw_issue) if issue_mode == "existing" and raw_issue.isdigit() else None
+        kwargs: dict[str, Any] = {"source": "manual"}
+        if issue_number is not None:
+            kwargs["issue_number"] = issue_number
+        linked_pr = self._linked_pr_number()
+        if linked_pr is not None:
+            kwargs["pr_number"] = linked_pr
+        try:
+            kwargs["repo"] = str(_ss.get_option("repo") or "").strip()
+        except Exception:
+            pass
+        self._github_task_contexts.set_manual(**kwargs)
+
+    def _on_github_task_log_line(
+        self, instance_id: str, _step_id: str, line: str
+    ) -> None:
+        """Workbench 共通ログから `github_target` を current task へ反映する。"""
+        from hve import runtime_observability as rto
+
+        payload = rto.parse_stats_line(line)
+        if not payload or payload.get("kind") != rto.GITHUB_TARGET_KIND:
+            return
+        workflow_id = str(payload.get("workflow_id") or "").strip()
+        if not workflow_id and instance_id:
+            workflow_id = instance_id.split("#", 1)[0]
+        context = self._github_task_contexts.apply_github_target(
+            payload,
+            fallback_workflow_id=workflow_id,
+            fallback_instance_id=instance_id,
+        )
+        if context is not None and self._github_window is not None:
+            self._github_window.set_task_context(context)
+
+    def _on_github_task_context_changed(self, change: object) -> None:
+        """Hub の手動選択・解除を current task へ反映する。"""
+        if not isinstance(change, dict):
+            return
+        if not self._is_any_execution_running():
+            from .github_task_context import GitHubTaskContextKey
+
+            self._github_task_contexts.select(
+                GitHubTaskContextKey(self._session_workdir.session_run_id)
+            )
+        current = self._github_task_contexts.current()
+        if change.get("clear_issue") is True:
+            context = self._github_task_contexts.clear_issue()
+        elif change.get("clear_pr") is True:
+            context = self._github_task_contexts.clear_pull_request()
+        else:
+            kwargs: dict[str, Any] = {
+                "workflow_id": current.key.workflow_id,
+                "instance_id": current.key.instance_id,
+                "source": str(change.get("source") or "manual"),
+            }
+            if "issue_number" in change:
+                kwargs["issue_number"] = change["issue_number"]
+            if "pr_number" in change:
+                kwargs["pr_number"] = change["pr_number"]
+            context = self._github_task_contexts.set_manual(**kwargs)
+        if context is not None and self._github_window is not None:
+            self._github_window.set_task_context(context)
+
+    def _activate_github_task_context(
+        self, workflow_id: str, instance_id: str = ""
+    ) -> None:
+        """実行開始時に provisional な current task key を選択する。"""
+        from .github_task_context import GitHubTaskContextKey
+
+        workflow = (workflow_id or "").strip()
+        instance = (instance_id or workflow).strip()
+        if not workflow:
+            return
+        context = self._github_task_contexts.select(
+            GitHubTaskContextKey(
+                self._session_workdir.session_run_id,
+                workflow,
+                instance,
+            )
+        )
+        if self._github_window is not None:
+            self._github_window.set_task_context(context)
+
+    def _on_github_workflow_process_started(self) -> None:
+        workflow_id = str(
+            getattr(self._page_workbench, "_current_workflow_id", "") or ""
+        )
+        self._activate_github_task_context(workflow_id)
+
+    def _apply_github_task_context_to_args(
+        self, args: Any, workflow_id: str, instance_id: str = ""
+    ) -> None:
+        """実行前の session default Issue を既存 `--issue-number` へ snapshot する。"""
+        context = self._github_task_contexts.for_task(workflow_id, instance_id)
+        if context.issue_number is not None and (
+            bool(getattr(args, "create_issues", False))
+            or bool(getattr(args, "create_pr", False))
+        ):
+            args.issue_number = context.issue_number
 
     def _open_settings_window(self) -> None:
         if self._settings_window is None or not self._settings_window.isVisible():
@@ -802,6 +1164,7 @@ class MainWindow(QMainWindow):
                     "C5": self._page_options.c5,
                     "C7": self._page_options.c7,
                     "AZURE": self._page_options.c_azure,
+                    "AGENTIC": self._page_options.c_agentic,
                     "C10": self._page_options.c10,
                     "C11": self._page_options.c11,
                     "C13": self._page_options.c13,
@@ -1596,6 +1959,7 @@ class MainWindow(QMainWindow):
                     wf_id,
                     repo_root=self._repo_root,
                 )
+                self._apply_github_task_context_to_args(args, wf_id)
                 # Step 1 のステップ選択 + Step 2 テキスト欄を合成して
                 # ``args.steps`` (CLI ``--steps``) と進捗表示用フィルタ集合を解決。
                 # Q1=C/Q2=C(AND)/Q3=B/Q4=A の採用に従う。
@@ -2183,6 +2547,8 @@ class MainWindow(QMainWindow):
             return
 
         def _argv_factory(app_id: str, workflow_id: str) -> List[str]:
+            instance_id = f"{workflow_id}#{app_id}" if app_id else workflow_id
+            self._activate_github_task_context(workflow_id, instance_id)
             # OptionsPage singleton から workflow 別 args を生成する。
             # 旧 AutopilotInputPanel / WorkflowOptionsSection による per-workflow 入力は廃止され、
             # 複数 workflow で同名フィールドは singleton 入力を共有する。
@@ -2191,6 +2557,7 @@ class MainWindow(QMainWindow):
                 repo_root=self._repo_root,
             )
             args.app_ids = app_id
+            self._apply_github_task_context_to_args(args, workflow_id, instance_id)
             # Q5=B: Autopilot 経路でも Step 1 のステップ選択を CLI --steps に反映する。
             args_steps_csv, _ = self._resolve_steps_for_workflow(
                 workflow_id, args.steps
@@ -2325,8 +2692,13 @@ class MainWindow(QMainWindow):
                 self._page_workbench.append_log(_wf, "", line)
             except (AttributeError, RuntimeError):
                 pass
+            # FR-GUI-36: 同じ観測イベント列から自動進捗 Post を駆動する。
+            self._feed_github_auto_post(_wf, line)
+            # FR-GUI-37: 同じイベント列から cleanup 監視対象を登録する。
+            self._feed_branch_cleanup(line)
 
         def _on_done(code: int, _wf=workflow_id, _w=win) -> None:
+            self._finalize_github_auto_post(_wf, code)
             on_finished(code, _wf, _w)
 
         reader.line_received.connect(_on_line)
@@ -2773,11 +3145,14 @@ class MainWindow(QMainWindow):
             return
 
         def _argv_factory(app_id: str, workflow_id: str) -> List[str]:
+            instance_id = f"{workflow_id}#{app_id}" if app_id else workflow_id
+            self._activate_github_task_context(workflow_id, instance_id)
             args = self._page_options.build_args_for_workflow(
                 workflow_id,
                 repo_root=self._repo_root,
             )
             args.app_ids = app_id
+            self._apply_github_task_context_to_args(args, workflow_id, instance_id)
             # Q5=B: Autopilot 経路でも Step 1 のステップ選択を CLI --steps に反映する。
             args_steps_csv, _ = self._resolve_steps_for_workflow(
                 workflow_id, args.steps
@@ -3186,6 +3561,10 @@ class MainWindow(QMainWindow):
                 return
         # Phase D-4: Dock 表示状態の永続化
         self._persist_dock_visibility()
+        # FR-GUI-36: 新規 Post request を止める（既投稿コメントは削除しない）。
+        self._close_github_auto_post()
+        # FR-GUI-37: cleanup 監視を停止し、worker を上限付きで回収する。
+        self._close_branch_cleanup_monitor()
         github_window = getattr(self, "_github_window", None)
         if github_window is not None:
             github_window.close()

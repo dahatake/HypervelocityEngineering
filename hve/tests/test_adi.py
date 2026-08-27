@@ -123,7 +123,7 @@ def test_adi_seed_steps_read_routing_and_cards() -> None:
 def test_adi_seed_steps_have_body_templates() -> None:
     wf = get_workflow("adi")
     for step_id in _SEED_TARGETS:
-        expected = f"templates/adi/step-{step_id}.md"
+        expected = f".github/prompts/steps/adi/step-{step_id}.prompt.md"
         assert wf.get_step(step_id).body_template_path == expected, step_id
 
 
@@ -147,7 +147,7 @@ def test_adi_is_not_registered_as_meta_dependency() -> None:
 def test_adi_fanout_uses_inventory_parser() -> None:
     step = get_workflow("adi").get_step("2")
     assert step.fanout_parser == "design_doc_inventory"
-    assert step.additional_prompt_template_path == "hve/prompt/fanout/adi/_common.md"
+    assert step.additional_prompt_template_path == ".github/prompts/fanout/adi/_common.prompt.md"
 
 
 def test_adi_step_dependencies_are_serial() -> None:
@@ -169,7 +169,7 @@ def test_adi_step1_contract() -> None:
     assert step.custom_agent == "Doc-OriginalInventory"
     assert step.depends_on == []
     assert step.consumed_artifacts == []
-    assert step.body_template_path == "templates/adi/step-1.md"
+    assert step.body_template_path == ".github/prompts/steps/adi/step-1.prompt.md"
     assert step.output_paths == [
         "docs/catalog/design-doc-inventory.md",
         "docs/original-design-doc-ingest/index.json",

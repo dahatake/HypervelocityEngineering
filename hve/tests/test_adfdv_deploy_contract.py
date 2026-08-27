@@ -60,7 +60,7 @@ def test_functions_deploy_requires_ac2_ac3_green() -> None:
 
 _SERVICE_CODING = _PROMPTS / "Dev-Dataflow-ServiceCoding.prompt.md"
 _TEST_CODING = _PROMPTS / "Dev-Dataflow-TestCoding.prompt.md"
-_TEMPLATES = _REPO_ROOT / ".github" / "scripts" / "templates" / "adfdv"
+_TEMPLATES = _REPO_ROOT / ".github" / "prompts" / "steps" / "adfdv"
 
 # 言語契約を持つファイル。Prompt・body テンプレートに加え、Cloud reusable workflow の
 # inline Issue body も対象にする（どこかに .NET 記述が残ると Agent へ矛盾した指示が渡るため）。
@@ -68,8 +68,8 @@ _LANGUAGE_CONTRACT_FILES = [
     _SERVICE_CODING,
     _TEST_CODING,
     _FUNCTIONS_DEPLOY,
-    _TEMPLATES / "step-2.1.md",
-    _TEMPLATES / "step-2.2.md",
+    _TEMPLATES / "step-2.1.prompt.md",
+    _TEMPLATES / "step-2.2.prompt.md",
     _REPO_ROOT / ".github" / "workflows" / "auto-dataflow-dev-reusable.yml",
 ]
 

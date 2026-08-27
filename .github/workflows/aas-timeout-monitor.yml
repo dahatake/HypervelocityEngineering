@@ -7,13 +7,10 @@ name: AAS Timeout Monitor
 #   - タイムアウト値は hve/config.py の timeout_seconds = 21600 (6 時間) に合わせている。
 #   - aas:done が付いている Issue は対象外（完了済みのため誤タイムアウト防止）。
 #   - aas:initialized のみで aas:running がない Issue は対象外（Step 未開始）。
-#   - schedule トリガーは fork 環境では動作しない。本リポジトリ上でのみ有効。
+#   - 定期実行は廃止済み。検知が必要なときに workflow_dispatch で手動実行する。
 #   - タイムアウト後の自動再開はしない。手動介入を促すラベル付与とコメントのみ。
 
 on:
-  schedule:
-    # 30 分ごとに実行（デフォルト）
-    - cron: '*/30 * * * *'
   workflow_dispatch:
     inputs:
       timeout_hours:
@@ -36,6 +33,14 @@ jobs:
       TIMEOUT_HOURS: ${{ inputs.timeout_hours || '6' }}
 
     steps:
+      - name: Validate timeout_hours
+        run: |
+          set -euo pipefail
+          if ! [[ "${TIMEOUT_HOURS}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::timeout_hours は正の整数で指定してください: '${TIMEOUT_HOURS}'"
+            exit 1
+          fi
+
       - name: Ensure aas:timeout label exists
         run: |
           if gh label view "aas:timeout" --repo "${REPO}" >/dev/null 2>&1; then
@@ -45,7 +50,7 @@ jobs:
             if gh label create "aas:timeout" \
               --repo "${REPO}" \
               --color "B60205" \
-              --description "AAS Step がタイムアウト（aas:running 付与から ${TIMEOUT_HOURS} 時間以上経過）"; then
+              --description "AAS Step がタイムアウト（Issue 最終更新から ${TIMEOUT_HOURS} 時間以上経過）"; then
               echo "Label aas:timeout created."
             else
               echo "WARN: Failed to create label aas:timeout. See error output above."
@@ -62,13 +67,13 @@ jobs:
           CUTOFF_EPOCH=$(date -u -d "${TIMEOUT_HOURS} hours ago" "+%s")
           echo "Cutoff epoch: ${CUTOFF_EPOCH} ($(date -u -d "@${CUTOFF_EPOCH}" --iso-8601=seconds))"
 
-          # aas:running ラベルが付いているオープン Issue を取得（最大 100 件）
+          # aas:running ラベルが付いているオープン Issue を取得（最大 1000 件）
           ISSUES=$(gh issue list \
             --repo "${REPO}" \
             --label "aas:running" \
             --state open \
             --json number,title,labels,updatedAt \
-            --limit 100)
+            --limit 1000)
 
           # 条件フィルタ:
           #   1. updatedAt を fromdateiso8601 で epoch 変換し数値比較（表記揺れを回避）

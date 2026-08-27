@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1340 1010" role="img" aria-labelledby="title desc">
   <title id="title">HVE アプリケーションアーキテクチャ（カスタマイズ／パラメータ観点）</title>
-  <desc id="desc">3 つの Orchestrator（Cloud / CLI / GUI）が共有する実行エンジン（orchestrator.py → dag_planner.py → dag_executor.py → runner.py(StepRunner) → github-copilot-sdk）と、ソフトウェアエンジニアが設定・拡張できるカスタマイズ点（workflow_registry.py / .github/prompts / .github/io-contracts / .github/skills）、主要パラメータ・環境変数を示す詳細アーキテクチャ図。</desc>
+  <desc id="desc">3 つの Orchestrator（Cloud / CLI / GUI）、既存 CLI へ委譲する Prompt 利用面、共有実行エンジン、設定・拡張できる定義ファイル、主要パラメータ・環境変数を示す詳細アーキテクチャ図。</desc>
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0 0 L10 5 L0 10 z" fill="#334155"/>
@@ -31,32 +31,39 @@
 
   <rect x="0" y="0" width="1340" height="1010" fill="#ffffff"/>
   <text x="28" y="44" class="title">HVE アプリケーションアーキテクチャ（カスタマイズ／パラメータ観点）</text>
-  <text x="28" y="68" class="subtitle">3 Orchestrator は入口のみ異なり、CLI / GUI は共有実行エンジンを使用（Cloud は bash + reusable workflow に展開）。★ = エンジニアが編集・設定する拡張点。</text>
+  <text x="28" y="68" class="subtitle">Orchestrator は Cloud / CLI / GUI の 3 つ。Prompt 版は plan SHA-256 の一致後に CLI へ委譲する利用面。★ = 編集・設定する拡張点。</text>
 
   <!-- ===== Main pipeline (left ~74%) ===== -->
   <!-- Lane 1: Entry -->
-  <text x="28" y="100" class="lane">1. 入口 / Orchestrator（入口のみ異なる）</text>
-  <rect x="28" y="110" width="300" height="86" class="card entry"/>
+  <text x="28" y="100" class="lane">1. 入口 / 利用面（Orchestrator は 3 つ）</text>
+  <rect x="28" y="110" width="220" height="86" class="card entry"/>
   <text x="44" y="134" class="label">Cloud Agent</text>
   <text x="44" y="154" class="mono">.github/ISSUE_TEMPLATE/*.yml</text>
   <text x="44" y="172" class="small">ラベル付き Issue → dispatcher →</text>
   <text x="44" y="188" class="small">reusable workflow（bash, DAGExecutor 不使用）</text>
 
-  <rect x="346" y="110" width="300" height="86" class="card entry"/>
-  <text x="362" y="134" class="label">CLI</text>
-  <text x="362" y="154" class="mono">python -m hve orchestrate -w &lt;id&gt;</text>
-  <text x="362" y="172" class="small">ローカルプロセスで DAG 実行</text>
-  <text x="362" y="188" class="small">出力: Rich Workbench（TUI）</text>
+  <rect x="266" y="110" width="220" height="86" class="card entry"/>
+  <text x="282" y="134" class="label">CLI</text>
+  <text x="282" y="154" class="mono">python -m hve orchestrate</text>
+  <text x="282" y="172" class="small">ローカルプロセスで DAG 実行</text>
+  <text x="282" y="188" class="small">出力: Rich Workbench（TUI）</text>
 
-  <rect x="664" y="110" width="300" height="86" class="card entry"/>
-  <text x="680" y="134" class="label">GUI</text>
-  <text x="680" y="154" class="mono">python -m hve（既定）/ gui</text>
-  <text x="680" y="172" class="small">PySide6。orchestrate を子プロセス起動</text>
-  <text x="680" y="188" class="small">実行本体は CLI と同一</text>
+  <rect x="504" y="110" width="220" height="86" class="card entry"/>
+  <text x="520" y="134" class="label">GUI</text>
+  <text x="520" y="154" class="mono">python -m hve / gui</text>
+  <text x="520" y="172" class="small">2-step Wizard</text>
+  <text x="520" y="188" class="small">orchestrate を子プロセス起動</text>
+
+  <rect x="742" y="110" width="220" height="86" class="card entry"/>
+  <text x="758" y="134" class="label">Prompt 版（利用面）</text>
+  <text x="758" y="154" class="mono">Copilot Chat → request</text>
+  <text x="758" y="172" class="small">plan → SHA-256 → 明示承認</text>
+  <text x="758" y="188" class="small">一致後に CLI へ委譲</text>
 
   <!-- arrows entry -> orchestrator -->
-  <path class="arrow" d="M496 196 L496 224"/>
-  <path class="arrow" d="M814 196 L814 214 L520 214 L520 224"/>
+  <path class="arrow" d="M376 196 L430 224"/>
+  <path class="arrow" d="M614 196 L520 224"/>
+  <path class="arrow" d="M852 196 L852 210 L590 210 L560 224"/>
 
   <!-- Lane 2: orchestrator.py -->
   <rect x="300" y="226" width="392" height="58" class="card core"/>
@@ -83,7 +90,7 @@
   <text x="735" y="515" class="small">StepRunner で実行</text>
 
   <!-- Lane 4: customization band -->
-  <text x="28" y="430" class="lane">2. 定義・カスタマイズ点（★ エンジニアが編集）</text>
+  <text x="28" y="430" class="lane">2. 定義・カスタマイズ点（★ 編集対象）</text>
   <rect x="60" y="416" width="430" height="150" class="panel"/>
   <rect x="74" y="430" width="402" height="30" class="card custom"/>
   <text x="84" y="450" class="star">★ hve/workflow_registry.py（WorkflowDef / StepDef）</text>
@@ -163,15 +170,15 @@
   <text x="1010" y="538" class="mono">--dry-run</text>
   <text x="1010" y="556" class="small">DAG/プロンプトを生成のみ（実行しない）</text>
 
-  <text x="1000" y="588" class="small">完全な一覧: python -m hve orchestrate --help</text>
-  <text x="1000" y="606" class="small">詳細: users-guide/hve-technical-architecture.md</text>
-  <text x="1000" y="632" class="small">（7 枚の内部構造 SVG: overview / cli / gui /</text>
-  <text x="1000" y="648" class="small">cloud / loose-coupling / sequence / auth）</text>
+  <text x="1000" y="584" class="small">Prompt gate: plan SHA-256 = --expected-sha256</text>
+  <text x="1000" y="602" class="small">（一致時だけ `prompt run` が orchestrate を起動）</text>
+  <text x="1000" y="624" class="small">完全な一覧: python -m hve orchestrate --help</text>
+  <text x="1000" y="642" class="small">詳細: users-guide/hve-technical-architecture.md</text>
 
   <!-- Legend -->
   <rect x="984" y="666" width="328" height="220" class="panel"/>
   <text x="1000" y="690" class="label">凡例</text>
-  <rect x="1000" y="702" width="22" height="16" class="card entry"/><text x="1030" y="715" class="small">入口 / Orchestrator</text>
+  <rect x="1000" y="702" width="22" height="16" class="card entry"/><text x="1030" y="715" class="small">入口 / 利用面</text>
   <rect x="1000" y="726" width="22" height="16" class="card core"/><text x="1030" y="739" class="small">共有実行エンジン（hve/*.py）</text>
   <rect x="1000" y="750" width="22" height="16" class="card custom"/><text x="1030" y="763" class="small">★ カスタマイズ点（定義ファイル）</text>
   <rect x="1000" y="774" width="22" height="16" class="card runner"/><text x="1030" y="787" class="small">StepRunner</text>

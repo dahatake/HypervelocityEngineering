@@ -9,12 +9,19 @@ WORKFLOW = (
     / "workflows"
     / "auto-qa-to-review-transition.yml"
 )
+PROMPT = (
+    Path(__file__).resolve().parents[3]
+    / "prompts"
+    / "cloud"
+    / "auto-qa-to-review-validation-missing.prompt.md"
+)
 
 
 class TestAutoQaToReviewTransitionWorkflow(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.content = WORKFLOW.read_text(encoding="utf-8")
+        cls.prompt_content = PROMPT.read_text(encoding="utf-8")
 
     def test_c1_has_preemptive_answer_file_path(self):
         self.assertIn('has_answer_files_in_diff="true"', self.content)
@@ -86,8 +93,12 @@ class TestAutoQaToReviewTransitionWorkflow(unittest.TestCase):
         self.assertIn("検証不足通知コメントは既に投稿済みです。スキップします。", self.content)
 
     def test_t4_copilot_mention_in_missing_comment(self):
-        """検証不足通知コメントに @copilot メンションが含まれること。"""
-        self.assertIn("@copilot PR body に", self.content)
+        """検証不足通知コメントに @copilot メンションが含まれ、workflow は外部 prompt を参照すること。"""
+        self.assertIn(
+            '.github/prompts/cloud/auto-qa-to-review-validation-missing.prompt.md',
+            self.content,
+        )
+        self.assertIn("@copilot PR body に", self.prompt_content)
 
     def test_t4_validation_passes_proceeds_to_label(self):
         """検証マーカーが存在する場合にラベル付与に進む案内メッセージが存在すること。"""

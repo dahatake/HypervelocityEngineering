@@ -32,8 +32,8 @@ source "${_SCRIPT_DIR}/lib/copilot-assign.sh"
 # shellcheck source=lib/workflow-registry.sh
 source "${_SCRIPT_DIR}/lib/workflow-registry.sh"
 
-# Templates base path: .github/scripts/templates/
-_TEMPLATES_BASE="$(cd "${_SCRIPT_DIR}/../templates" && pwd)"
+# body_template_path は repo root 相対の完全パス（.github/prompts/steps/...）を保持する。
+_TEMPLATES_BASE="$(cd "${_SCRIPT_DIR}/../../.." && pwd)"
 
 # ---------------------------------------------------------------------------
 # Constants

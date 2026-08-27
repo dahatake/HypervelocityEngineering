@@ -120,6 +120,7 @@ def test_uses_shared_local_preflight_and_maps_setting_and_auth_issues(
     assert kwargs["repo"] == "owner/repo"
     assert kwargs["token"] == ""
     assert kwargs["base_branch"] == "release/2026.08"
+    assert kwargs["create_working_branch"] is True
     assert kwargs["check_remote"] is False
     assert Path(kwargs["repo_root"]) == tmp_path
     assert _PROMPT_FIELDS.isdisjoint(kwargs)

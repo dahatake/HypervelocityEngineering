@@ -1,2 +1,0 @@
-[console_scripts]
-markdown-query-gui = mdq.gui.__main__:main

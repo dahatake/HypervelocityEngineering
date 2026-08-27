@@ -15,10 +15,10 @@ from hve.workflow_registry import list_workflows
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _ASDW_ADD_SERVICE_FILES = (
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "asdw-web" / "step-2.1.md",
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "asdw-web" / "step-2.2.md",
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "asdw-web" / "step-2.3.md",
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "asdw-web" / "step-2.4.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "asdw-web" / "step-2.1.prompt.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "asdw-web" / "step-2.2.prompt.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "asdw-web" / "step-2.3.prompt.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "asdw-web" / "step-2.4.prompt.md",
     _REPO_ROOT / ".github" / "prompts" / "Dev-Microservice-Azure-AddServiceDesign.prompt.md",
     _REPO_ROOT / ".github" / "prompts" / "Dev-Microservice-Azure-AddServiceDeploy.prompt.md",
     _REPO_ROOT / ".github" / "prompts" / "Dev-Microservice-Azure-AddServiceTestCoding.prompt.md",
@@ -26,10 +26,10 @@ _ASDW_ADD_SERVICE_FILES = (
 )
 
 _ASDW_COMPUTE_FILES = (
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "asdw-web" / "step-3.1.md",
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "asdw-web" / "step-3.3.md",
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "asdw-web" / "step-3.4.md",
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "asdw-web" / "step-4.3.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "asdw-web" / "step-3.1.prompt.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "asdw-web" / "step-3.3.prompt.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "asdw-web" / "step-3.4.prompt.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "asdw-web" / "step-4.3.prompt.md",
     _REPO_ROOT / ".github" / "prompts" / "Dev-Microservice-Azure-ComputeDesign.prompt.md",
     _REPO_ROOT / ".github" / "prompts" / "Dev-Microservice-Azure-ServiceCoding-AzureFunctions.prompt.md",
     _REPO_ROOT / ".github" / "prompts" / "Dev-Microservice-Azure-ComputeDeploy-AzureFunctions.prompt.md",
@@ -37,23 +37,23 @@ _ASDW_COMPUTE_FILES = (
 )
 
 _ASDW_AZURE_REVIEW_FILES = (
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "asdw-web" / "step-5.1.md",
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "asdw-web" / "step-5.2.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "asdw-web" / "step-5.1.prompt.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "asdw-web" / "step-5.2.prompt.md",
     _REPO_ROOT / ".github" / "prompts" / "QA-AzureArchitectureReview.prompt.md",
     _REPO_ROOT / ".github" / "prompts" / "QA-AzureDependencyReview.prompt.md",
 )
 
 _AAD_AZURE_FILES = (
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "aad-web" / "step-2.5.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "aad-web" / "step-2.5.prompt.md",
     _REPO_ROOT / ".github" / "prompts" / "Dev-Microservice-Azure-AddServiceDesign.prompt.md",
 )
 
 _ADFDV_AZURE_FILES = (
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "adfdv" / "step-1.1.md",
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "adfdv" / "step-1.2.md",
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "adfdv" / "step-3.md",
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "adfdv" / "step-4.1.md",
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "adfdv" / "step-4.2.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "adfdv" / "step-1.1.prompt.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "adfdv" / "step-1.2.prompt.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "adfdv" / "step-3.prompt.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "adfdv" / "step-4.1.prompt.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "adfdv" / "step-4.2.prompt.md",
     _REPO_ROOT / ".github" / "prompts" / "Dev-Dataflow-DataServiceSelect.prompt.md",
     _REPO_ROOT / ".github" / "prompts" / "Dev-Dataflow-DataDeploy.prompt.md",
     _REPO_ROOT / ".github" / "prompts" / "Dev-Dataflow-FunctionsDeploy.prompt.md",
@@ -62,9 +62,9 @@ _ADFDV_AZURE_FILES = (
 )
 
 _AAGD_AZURE_FILES = (
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "aagd" / "step-2.2.md",
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "aagd" / "step-2.3.md",
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "aagd" / "step-3.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "aagd" / "step-2.2.prompt.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "aagd" / "step-2.3.prompt.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "aagd" / "step-3.prompt.md",
     _REPO_ROOT / ".github" / "prompts" / "Dev-Microservice-Azure-AgentTestCoding.prompt.md",
     _REPO_ROOT / ".github" / "prompts" / "Dev-Microservice-Azure-AgentCoding.prompt.md",
     _REPO_ROOT / ".github" / "prompts" / "Dev-Microservice-Azure-AgentDeploy.prompt.md",

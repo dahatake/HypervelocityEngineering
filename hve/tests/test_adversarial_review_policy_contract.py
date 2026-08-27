@@ -78,6 +78,18 @@ _REVIEW_EVAL = (
     _REPO_ROOT / ".github" / "skills" / "_evals" / "adversarial-review.eval.yaml"
 )
 _LABELS = _REPO_ROOT / ".github" / "labels.json"
+
+_CLOUD_PROMPT_REF_RE = re.compile(r'"(\.github/prompts/cloud/[^"]+\.prompt\.md)"')
+
+
+def _with_referenced_cloud_prompts(workflow_text: str) -> str:
+    """Workflow が実行時に読み込む外部 Prompt を連結した実効内容を返す。"""
+    parts = [workflow_text]
+    for rel in sorted(set(_CLOUD_PROMPT_REF_RE.findall(workflow_text))):
+        path = _REPO_ROOT / rel
+        assert path.is_file(), f"referenced cloud prompt is missing: {rel}"
+        parts.append(path.read_text(encoding="utf-8"))
+    return "\n".join(parts)
 _CREATE_SUBISSUES_CONSUMER = (
     _REPO_ROOT / ".github" / "workflows" / "create-subissues-from-pr.yml"
 )
@@ -309,8 +321,10 @@ def test_cloud_review_consumer_normalizes_marker_and_dedicated_label() -> None:
         "<!-- adversarial-review: true -->"
     )
     assert '[ "${EVENT_NAME}" = "workflow_dispatch" ]' not in auto_review_job
-    assert "6つの検証軸" in auto_review_job
-    assert "5つの検証軸" not in auto_review_job
+    # 本文は `.github/prompts/cloud/` へ外部化済みのため、参照先を解決した実効内容を検査する。
+    effective_auto_review = _with_referenced_cloud_prompts(auto_review_job)
+    assert "6つの検証軸" in effective_auto_review
+    assert "5つの検証軸" not in effective_auto_review
 
 
 def test_cloud_review_transitions_use_dedicated_label_by_role() -> None:
@@ -325,8 +339,9 @@ def test_cloud_review_transitions_use_dedicated_label_by_role() -> None:
     assert "<!-- adversarial-review: false -->" in dispatcher
     assert 'contains(["adversarial-review"])' in sync_labels
     assert '--add-label "adversarial-review"' in sync_labels
-    assert "6軸レビュー" in review_transition
-    assert "5軸レビュー" not in review_transition
+    effective_review_transition = _with_referenced_cloud_prompts(review_transition)
+    assert "6軸レビュー" in effective_review_transition
+    assert "5軸レビュー" not in effective_review_transition
 
 
 def test_review_consumers_prefer_false_marker_over_stale_label() -> None:

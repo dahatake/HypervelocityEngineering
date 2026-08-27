@@ -1553,7 +1553,11 @@ class TestDeleteLocalMergedBranch(unittest.TestCase):
 
     # --- _git_delete_local_branch ---
     def test_delete_checkout_then_branch_d(self) -> None:
-        """base へ checkout 後に git branch -D で削除する。"""
+        """base へ checkout 後に git branch -D で削除する。
+
+        FR-MAINT-07: 実行は `hve/branch_cleanup.py` の共通 core へ委譲する。
+        core は branch 名がオプションと誤解釈されないよう `--` を挟む。
+        """
         from orchestrator import _git_delete_local_branch
         console = self._make_console()
         ok = unittest.mock.MagicMock(returncode=0, stdout="", stderr="")
@@ -1562,7 +1566,9 @@ class TestDeleteLocalMergedBranch(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(mrun.call_count, 2)
         self.assertEqual(mrun.call_args_list[0][0][0], ["git", "checkout", "main"])
-        self.assertEqual(mrun.call_args_list[1][0][0], ["git", "branch", "-D", "work-br"])
+        self.assertEqual(
+            mrun.call_args_list[1][0][0], ["git", "branch", "-D", "--", "work-br"]
+        )
 
     def test_delete_checkout_fail_skips_delete(self) -> None:
         """checkout 失敗時はブランチ削除（branch -D）を実行しない。"""
@@ -1576,15 +1582,65 @@ class TestDeleteLocalMergedBranch(unittest.TestCase):
 
     # --- _wait_pr_merged_and_delete_local_branch ---
     def test_merged_triggers_delete(self) -> None:
-        """PR が merged のとき作業ブランチを削除する。"""
+        """PR が merged かつ共通 core の適格性を満たすとき作業ブランチを削除する。
+
+        FR-CLI-34: 適格性判定は `hve/branch_cleanup.py` の単一 core が行うため、
+        PR 応答は head / base の ref と repository まで一致している必要がある。
+        """
         from orchestrator import _wait_pr_merged_and_delete_local_branch
         console = self._make_console()
-        with patch("orchestrator.get_pull_request", return_value={"merged": True, "state": "closed", "merge_commit_sha": "abc123"}), \
+        eligible_pr = {
+            "number": 7,
+            "merged": True,
+            "state": "closed",
+            "merge_commit_sha": "abc123",
+            "head": {"ref": "work-br", "repo": {"full_name": "o/r"}},
+            "base": {"ref": "main", "repo": {"full_name": "o/r"}},
+        }
+        with patch("orchestrator.get_pull_request", return_value=eligible_pr), \
                 patch("orchestrator._wait_check_runs_success", return_value=True), \
                 patch("orchestrator._git_delete_local_branch", return_value=True) as mdel:
             result = _wait_pr_merged_and_delete_local_branch(7, "work-br", self._cfg(), console, poll_interval=0, timeout=10)
         self.assertTrue(result)
         mdel.assert_called_once_with("work-br", "main", console)
+
+    def test_merged_but_head_mismatch_is_not_deleted(self) -> None:
+        """merged でも PR の head branch が一致しなければ削除しない（FR-CLI-34）。"""
+        from orchestrator import _wait_pr_merged_and_delete_local_branch
+        console = self._make_console()
+        mismatched_pr = {
+            "number": 7,
+            "merged": True,
+            "state": "closed",
+            "merge_commit_sha": "abc123",
+            "head": {"ref": "other-br", "repo": {"full_name": "o/r"}},
+            "base": {"ref": "main", "repo": {"full_name": "o/r"}},
+        }
+        with patch("orchestrator.get_pull_request", return_value=mismatched_pr), \
+                patch("orchestrator._wait_check_runs_success", return_value=True), \
+                patch("orchestrator._git_delete_local_branch") as mdel:
+            result = _wait_pr_merged_and_delete_local_branch(7, "work-br", self._cfg(), console, poll_interval=0, timeout=10)
+        self.assertFalse(result)
+        mdel.assert_not_called()
+
+    def test_merged_but_fork_head_is_not_deleted(self) -> None:
+        """merged でも head が別リポジトリなら削除しない（FR-CLI-34）。"""
+        from orchestrator import _wait_pr_merged_and_delete_local_branch
+        console = self._make_console()
+        fork_pr = {
+            "number": 7,
+            "merged": True,
+            "state": "closed",
+            "merge_commit_sha": "abc123",
+            "head": {"ref": "work-br", "repo": {"full_name": "someone/fork"}},
+            "base": {"ref": "main", "repo": {"full_name": "o/r"}},
+        }
+        with patch("orchestrator.get_pull_request", return_value=fork_pr), \
+                patch("orchestrator._wait_check_runs_success", return_value=True), \
+                patch("orchestrator._git_delete_local_branch") as mdel:
+            result = _wait_pr_merged_and_delete_local_branch(7, "work-br", self._cfg(), console, poll_interval=0, timeout=10)
+        self.assertFalse(result)
+        mdel.assert_not_called()
 
     def test_merged_failed_checks_no_delete(self) -> None:
         """PR が merged でも merge commit の check-run 失敗時は削除しない。"""

@@ -27,7 +27,7 @@ import yaml
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _PROMPTS_DIR = _REPO_ROOT / ".github" / "prompts"
-_TEMPLATES_DIR = _REPO_ROOT / ".github" / "scripts" / "templates" / "adfd"
+_TEMPLATES_DIR = _REPO_ROOT / ".github" / "prompts" / "steps" / "adfd"
 _IO_CONTRACTS_DIR = _REPO_ROOT / ".github" / "io-contracts"
 _EXCEPTIONS_FILE = _REPO_ROOT / ".github" / "io-contract-exceptions.yaml"
 
@@ -102,7 +102,7 @@ class TestAdfdDataflowDesignTemplates(unittest.TestCase):
 
     def test_templates_exist_with_required_placeholders(self) -> None:
         for step_id, (agent, path, _deps) in _NEW_STEPS.items():
-            tpl = _TEMPLATES_DIR / f"step-{step_id}.md"
+            tpl = _TEMPLATES_DIR / f"step-{step_id}.prompt.md"
             self.assertTrue(tpl.exists(), f"template が存在しません: {tpl}")
             body = tpl.read_text(encoding="utf-8")
             for placeholder in (
@@ -117,7 +117,7 @@ class TestAdfdDataflowDesignTemplates(unittest.TestCase):
     def test_existing_templates_depends_section_follows_registry(self) -> None:
         """既存 Step 1/2 は Step.5 依存へ変更されたため `## 依存` も追随していること。"""
         for step_id in ("1", "2"):
-            tpl = _TEMPLATES_DIR / f"step-{step_id}.md"
+            tpl = _TEMPLATES_DIR / f"step-{step_id}.prompt.md"
             self.assertTrue(tpl.exists(), f"template が存在しません: {tpl}")
             body = tpl.read_text(encoding="utf-8")
             self.assertNotIn(
@@ -145,7 +145,7 @@ class TestAdfdRegistryNewSteps(unittest.TestCase):
             self.assertEqual(sorted(step.depends_on), sorted(deps))
             self.assertEqual(
                 step.body_template_path,
-                f"templates/adfd/step-{step_id}.md",
+                f".github/prompts/steps/adfd/step-{step_id}.prompt.md",
             )
 
     def test_new_steps_are_upstream_of_existing_steps(self) -> None:

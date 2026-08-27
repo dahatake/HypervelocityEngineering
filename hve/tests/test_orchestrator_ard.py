@@ -158,7 +158,9 @@ class TestOrchestratorARD(unittest.TestCase):
             finally:
                 os.chdir(cwd)
         self.assertIn("## target_business: ファイル展開結果", params["target_business"])
-        self.assertIn("対象業務の詳細", params["target_business"])
+        # FR-WF-ARD-02 (v2.57): 本文ではなくパス参照を渡す
+        self.assertIn("biz.md", params["target_business"])
+        self.assertNotIn("対象業務の詳細", params["target_business"])
 
     def test_no_recommendations_continues_without_overwrite(self):
         with tempfile.TemporaryDirectory() as td:

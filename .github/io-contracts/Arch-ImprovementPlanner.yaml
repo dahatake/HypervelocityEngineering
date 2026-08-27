@@ -3,7 +3,7 @@ inputs:
   required: true
   kind: runtime_param
 - path: '{WORK}../QA-CodeQualityScan/artifacts/scan-result.json'
-  required: true
+  required: false
   kind: agent_artifact
   producer: QA-CodeQualityScan
 - path: '{target_scope}'
@@ -12,6 +12,9 @@ inputs:
 - path: '{iteration}'
   required: true
   kind: runtime_param
+- path: .github/skills/task-dag-planning/references/plan-template.md
+  required: true
+  kind: static
 - path: knowledge/
   required: false
   kind: static
@@ -28,12 +31,6 @@ outputs:
 - path: '{WORK}plan.md'
   required: true
   mode: create
-- path: .github/skills/task-dag-planning/references/plan-template.md
-  required: true
-  mode: create
-- path: bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md
-  required: true
-  mode: create
 - path: '{WORK}subissues.md'
-  required: true
+  required: false
   mode: create

@@ -11,7 +11,7 @@ Copilot SDK でローカル実行するバージョン。
 
 --create-issues 時のフロー:
   1. 新ブランチ作成 + checkout
-  2. Issue 作成（Root + Sub-Issue。Copilot アサインなし）
+    2. Issue 作成（Root + Sub-Issue。指定時は新規 Root を Copilot cloud agent へ割当）
   3. DAG 全ステップ実行
   4. git add（無視パス除外）+ commit + push（-u オプション付き）
   5. PR 作成（Issue 番号を PR body に記載）
@@ -43,6 +43,7 @@ from urllib.parse import quote
 try:
     from .config import SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS, to_wire_model
     from .console import Console, timestamp_prefix
+    from .prompt_loader import load_prompt_file
     from .prompts import (
         CODE_REVIEW_AGENT_FIX_PROMPT,
         CODE_REVIEW_CLI_PROMPT,
@@ -55,6 +56,9 @@ try:
     from .dag_executor import DAGExecutor, StepResult
     from .dag_planner import build_dag_plan
     from .run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id
+    from . import run_progress
+    from . import approval
+    from . import rework
     from .orchestrator_context import OrchestratorContext
     from .mcp_io_log import McpIoLogger, attach_mcp_io_event_logger
     from .startup_preflight import (
@@ -62,10 +66,15 @@ try:
         github_write_required,
         validate_startup_configuration,
     )
+    from .github_title_generator import (
+        GitHubTitleGenerationError,
+        generate_github_title,
+    )
     from . import index_refresh
 except ImportError:
     from config import SDKConfig, generate_run_id, SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS, to_wire_model  # type: ignore[no-redef]
     from console import Console, timestamp_prefix  # type: ignore[no-redef]
+    from prompt_loader import load_prompt_file  # type: ignore[no-redef]
     from prompts import (  # type: ignore[no-redef]
         CODE_REVIEW_AGENT_FIX_PROMPT,
         CODE_REVIEW_CLI_PROMPT,
@@ -84,6 +93,10 @@ except ImportError:
         format_startup_preflight_errors,
         github_write_required,
         validate_startup_configuration,
+    )
+    from github_title_generator import (  # type: ignore[no-redef]
+        GitHubTitleGenerationError,
+        generate_github_title,
     )
     import index_refresh  # type: ignore[no-redef]
 
@@ -116,6 +129,7 @@ from hve.github_api import (
     GitHubAPIError,
     add_labels,
     api_call,
+    assign_copilot_agent,
     create_issue,
     get_issue,
     link_sub_issue,
@@ -552,6 +566,48 @@ def _normalize_adi_target_scope(value: Any) -> str:
 # パラメータ収集（非対話モード対応）
 # -----------------------------------------------------------------------
 
+# FR-LOCAL-SURFACE-01 (b): `WorkflowDef.params` が宣言していても、Workflow 固有の
+# 収集分岐が扱っていない workflow param。直接 CLI / GUI / Prompt 版の 3 面から
+# 指定できるようにするため、明示指定があるときだけ params へ投影する。
+# 新しい workflow param を CLI へ出したときは、ここへ key を追加する。
+_PROJECTED_WORKFLOW_PARAMS: Tuple[str, ...] = (
+    "create_remote_mcp_server",
+    "tdd_max_retries",
+)
+
+
+def project_declared_workflow_params(
+    params: dict,
+    workflow_id: Optional[str],
+    getter: Callable[[str], Any],
+) -> None:
+    """registry 宣言済みで未処理の workflow param を明示指定時だけ投影する。
+
+    直接 CLI (`_build_params`) と非対話収集 (`_collect_params_non_interactive`)
+    の両方から呼ばれる単一実装（FR-MAINT-07）。
+
+    Args:
+        params: 投影先。既に値が入っている key は上書きしない。
+        workflow_id: 対象 Workflow ID。registry に無ければ何もしない。
+        getter: key を受け取り CLI 指定値を返す callable。未指定は None。
+    """
+    if not workflow_id:
+        return
+    try:
+        wf = get_workflow(workflow_id)
+    except Exception:
+        return
+    if wf is None:
+        return
+    declared = set(wf.params or ())
+    for key in _PROJECTED_WORKFLOW_PARAMS:
+        if key not in declared or key in params:
+            continue
+        value = getter(key)
+        if value is not None:
+            params[key] = value
+
+
 def _collect_params_non_interactive(
     wf,  # WorkflowDef
     cli_args: Optional[dict] = None,
@@ -571,6 +627,12 @@ def _collect_params_non_interactive(
         "skip_review": not args.get("auto_contents_review", False),
         "skip_qa": not args.get("auto_qa", False),
     }
+    if args.get("resume_run"):
+        params["resume_run"] = args["resume_run"]
+    if args.get("approval_gates"):
+        params["approval_gates"] = True
+    if args.get("input_aliases"):
+        params["input_aliases"] = args["input_aliases"]
 
     # ワークフロー固有パラメータ
     # app_ids/app_id は AAD-WEB・ASDW-WEB・ADFD・ADFDV で使用。
@@ -662,6 +724,10 @@ def _collect_params_non_interactive(
         # 非 AKM では、CLI で明示された場合のみ force_refresh をパラメータに含める
         if "force_refresh" in args:
             params["force_refresh"] = args["force_refresh"]
+
+    # FR-LOCAL-SURFACE-01 (b): registry が宣言していて、上の Workflow 固有
+    # 分岐で未処理の param を CLI 引数から投影する。
+    project_declared_workflow_params(params, wf.id, args.get)
 
     # Issue タイトル上書き
     if args.get("issue_title"):
@@ -1456,37 +1522,23 @@ def _git_pull_ff_only_base_branch(base_branch: str, console: Console) -> bool:
 def _git_delete_local_branch(working_branch: str, base_branch: str, console: Console) -> bool:
     """作業ブランチをローカル削除する（FR-CLI-34）。
 
-    現在ブランチは削除できないため base_branch へ checkout してから
-    ``git branch -D`` で強制削除する（squash マージではローカルが「マージ済み」と
-    判定されないため ``-D``）。checkout / 削除に失敗した場合は警告して False を返す。
+    `git checkout <base>` → `git branch -D <branch>` の実行は
+    [hve/branch_cleanup.py](hve/branch_cleanup.py) の単一 core へ委譲する
+    （FR-MAINT-07）。失敗した場合は警告して False を返す。
     """
     try:
-        checkout = subprocess.run(
-            ["git", "checkout", base_branch],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+        from .branch_cleanup import delete_local_branch
+    except ImportError:  # pragma: no cover - script 実行経路
+        from branch_cleanup import delete_local_branch  # type: ignore[no-redef]
+
+    result = delete_local_branch(working_branch, base_branch)
+    if not result.deleted:
+        console.warning(
+            f"作業ブランチ '{working_branch}' のローカル削除を中止しました: {result.reason}"
         )
-        if checkout.returncode != 0:
-            console.warning(
-                f"'{base_branch}' への checkout に失敗したため作業ブランチを削除しません: {checkout.stderr.strip()}"
-            )
-            return False
-        delete = subprocess.run(
-            ["git", "branch", "-D", working_branch],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
-        )
-        if delete.returncode != 0:
-            console.warning(
-                f"作業ブランチ '{working_branch}' のローカル削除に失敗しました: {delete.stderr.strip()}"
-            )
-            return False
-        console.event(f"マージ済みの作業ブランチ '{working_branch}' をローカルから削除しました。")
-        return True
-    except FileNotFoundError:
-        console.error("git コマンドが見つかりません。")
         return False
-    except subprocess.TimeoutExpired:
-        console.error("git 操作がタイムアウトしました。")
-        return False
+    console.event(f"マージ済みの作業ブランチ '{working_branch}' をローカルから削除しました。")
+    return True
 
 
 def _git_delete_remote_branch(working_branch: str, console: Console) -> bool:
@@ -1587,7 +1639,57 @@ def _wait_pr_merged_and_delete_local_branch(
         timeout=timeout,
     ):
         return False
+    # FR-CLI-34: 適格性判定は共通 core の単一実装で行う（FR-MAINT-07）。
+    if not _is_local_cleanup_eligible(pr_number, working_branch, config, console):
+        return False
     _git_delete_local_branch(working_branch, config.base_branch, console)
+    return True
+
+
+def _is_local_cleanup_eligible(
+    pr_number: int,
+    working_branch: str,
+    config: SDKConfig,
+    console: Console,
+) -> bool:
+    """PR の実体と対象 branch が cleanup 条件を満たすかを共通 core で判定する。
+
+    取得に失敗した場合は削除しない（fail-closed）。
+    """
+    try:
+        from .branch_cleanup import LocalBranchCleanupTarget, is_cleanup_eligible
+    except ImportError:  # pragma: no cover - script 実行経路
+        from branch_cleanup import (  # type: ignore[no-redef]
+            LocalBranchCleanupTarget,
+            is_cleanup_eligible,
+        )
+
+    token = config.resolve_token()
+    repo = config.repo
+    if not token or not repo:
+        console.warning("GH_TOKEN または REPO が未設定のため、ローカル branch を削除しません。")
+        return False
+    try:
+        pull_request = get_pull_request(pr_number, repo=repo, token=token)
+    except GitHubAPIError as exc:
+        console.warning(f"PR #{pr_number} の再取得に失敗したため削除しません: {exc}")
+        return False
+
+    result = is_cleanup_eligible(
+        LocalBranchCleanupTarget(
+            repo=repo,
+            pr_number=pr_number,
+            branch=working_branch,
+            base_branch=config.base_branch,
+            created_by_hve=True,
+        ),
+        pull_request,
+    )
+    if not result.deleted:
+        console.warning(
+            f"作業ブランチ '{working_branch}' は cleanup 条件を満たしません: {result.reason}"
+        )
+        return False
     return True
 
 
@@ -1709,6 +1811,43 @@ class RootIssueResolutionError(Exception):
     """
 
 
+class RootIssueAssignmentError(Exception):
+    """FR-CLI-89: 作成済み Root Issue の Copilot 割当を確認できない。"""
+
+    def __init__(self, root_issue_num: int, message: str) -> None:
+        super().__init__(message)
+        self.root_issue_num = root_issue_num
+
+
+def _assign_new_root_issue_to_copilot(
+    root_issue_num: int,
+    repo: str,
+    token: str,
+    base_branch: str,
+    console: Console,
+) -> None:
+    """当該 run が新規作成した Root Issue だけを Copilot へ割り当てる。"""
+    try:
+        assign_copilot_agent(
+            root_issue_num,
+            repo=repo,
+            token=token,
+            base_branch=base_branch,
+        )
+    except GitHubAPIError as exc:
+        raise RootIssueAssignmentError(
+            root_issue_num=root_issue_num,
+            message=(
+                f"Root Issue #{root_issue_num} は作成済みですが、Copilot cloud agent への"
+                f"割り当てに失敗したため run を停止します: {exc}"
+            ),
+        ) from exc
+
+    console.event(
+        f"Root Issue #{root_issue_num} を Copilot cloud agent へ割り当てました。"
+    )
+
+
 def _resolve_existing_root_issue(
     issue_number: int,
     repo: str,
@@ -1751,21 +1890,33 @@ def _create_issues_if_needed(
     """create_issues=True の場合のみ Root Issue + Sub-Issue を作成する。
 
     ``config.issue_number`` が指定されている場合は Root Issue を新規作成せず、
-    当該の既存 Issue を Root Issue として扱う（FR-GUI-25）。
+    当該の既存 Issue を Root Issue として扱う（FR-GUI-25）。``create_pr`` だけの
+    run では Issue を一切作成せず、指定 Issue を PR の closing target として返す。
 
     Returns:
         (root_issue_num, step_issue_map)
 
     Raises:
         RootIssueResolutionError: 指定された既存 Issue を解決できない場合。
+        RootIssueAssignmentError: 新規 Root Issue の Copilot 割当を確認できない場合。
     """
-    if not config.create_issues:
+    if config.dry_run:
+        return None, {}
+
+    link_only = not config.create_issues and bool(config.create_pr) and config.issue_number is not None
+    if not config.create_issues and not link_only:
         return None, {}
 
     token = config.resolve_token()
     repo = config.repo
     if not token or not repo:
-        console.warning("create_issues=True ですが GH_TOKEN または REPO が未設定のため Issue 作成をスキップします。")
+        if link_only:
+            console.warning(
+                "GH_TOKEN または REPO が未設定のため既存 Issue の解決をスキップします。"
+                " PR 作成も同条件でスキップされます。"
+            )
+        else:
+            console.warning("create_issues=True ですが GH_TOKEN または REPO が未設定のため Issue 作成をスキップします。")
         return None, {}
 
     prefix = _WORKFLOW_PREFIX.get(wf.id, wf.id.upper())
@@ -1774,13 +1925,22 @@ def _create_issues_if_needed(
         root_issue_num = _resolve_existing_root_issue(
             config.issue_number, repo, token, console
         )
+        if link_only:
+            return root_issue_num, {}
     else:
         console.event("Root Issue を作成中...")
         root_body = build_root_issue_body_fn(wf, params)
         if params.get("issue_title"):
             root_title = params["issue_title"]
         else:
-            root_title = f"[{prefix}] {_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}"
+            fallback_title = f"[{prefix}] {_WORKFLOW_DISPLAY_NAMES.get(wf.id, wf.id)}"
+            root_title = _generate_gui_issue_title(
+                fallback_title=fallback_title,
+                issue_body=root_body,
+                required_prefix=f"[{prefix}] ",
+                config=config,
+                console=console,
+            )
         root_issue_num, _ = create_issue(
             title=root_title,
             body=root_body,
@@ -1789,6 +1949,14 @@ def _create_issues_if_needed(
             token=token,
         )
         console.event(f"Root Issue #{root_issue_num} を作成しました。")
+        if bool(getattr(config, "assign_copilot_agent", False)):
+            _assign_new_root_issue_to_copilot(
+                root_issue_num,
+                repo,
+                token,
+                config.base_branch,
+                console,
+            )
 
     step_issue_map: Dict[str, int] = {}
 
@@ -2039,12 +2207,23 @@ def _expand_workflow_for_dag(
 # 思考プロセス（reasoning / chain-of-thought）も日本語で行わせるため、
 # モデルが reasoning を開始する前に確実に届くよう、Step プロンプト本文の
 # 冒頭に常時付与する。固有名詞・コマンド・パス等は英語のまま許容する。
-_LANGUAGE_DIRECTIVE_JA: str = (
-    "## 出力言語ルール（最優先・思考プロセス含む）\n"
-    "- 思考プロセス（reasoning / chain-of-thought / 内部独白）も日本語で行うこと。\n"
-    "- ツール委譲の意図表明・計画の自問自答・推論の途中経過も日本語で記述する。\n"
-    "- 固有名詞・コマンド名・ファイルパス・コード識別子・引用文は英語のままで構わない。\n"
-    "\n"
+_LANGUAGE_DIRECTIVE_JA: str = load_prompt_file(
+    "runtime/orchestrator/language-directive-ja.prompt.md"
+)
+_FALLBACK_STEP_BODY_TEMPLATE: str = load_prompt_file(
+    "runtime/orchestrator/fallback-step-body.prompt.md"
+)
+_FALLBACK_METADATA_BRANCH: str = load_prompt_file(
+    "runtime/orchestrator/fallback-metadata-branch.prompt.md"
+).rstrip("\n")
+_FALLBACK_METADATA_RESOURCE_GROUP: str = load_prompt_file(
+    "runtime/orchestrator/fallback-metadata-resource-group.prompt.md"
+).rstrip("\n")
+_FALLBACK_METADATA_APP_ID: str = load_prompt_file(
+    "runtime/orchestrator/fallback-metadata-app-id.prompt.md"
+).rstrip("\n")
+_REUSE_CONTEXT_TEMPLATE: str = load_prompt_file(
+    "runtime/orchestrator/reuse-context.prompt.md"
 )
 
 
@@ -2068,7 +2247,21 @@ def _build_step_prompt(
     複数行のシンプルなプロンプトを組み立てて返す。
     いずれの場合も additional_prompt が指定された場合は、
     末尾に空行を挟んで追記する。
+
+    FR-PROMPT-09: 当該 Step の必須入力に関係する入力別名だけを、決定的な
+    addendum として追記する。ファイル本文は埋め込まない。
     """
+    try:
+        from .input_aliases import build_alias_addendum
+    except ImportError:  # pragma: no cover - script 実行経路
+        from input_aliases import build_alias_addendum  # type: ignore[no-redef]
+
+    addendum = build_alias_addendum(step, _alias_resolver_for_params(params))
+    if addendum:
+        additional_prompt = (
+            addendum + "\n\n" + additional_prompt if additional_prompt else addendum
+        )
+
     if step.body_template_path:
         prompt = render_template_fn(
             template_path=step.body_template_path,
@@ -2078,8 +2271,8 @@ def _build_step_prompt(
             execution_mode=execution_mode,
         )
         # FR-CLI-71: `render_template` はテンプレートが存在しない / 空の場合に
-        # 空文字列を返す。これを簡易プロンプトで代替すると壊れた縮退プロンプトで
-        # Agent セッションを開始してしまうため、レンダリング失敗として停止する。
+        # fail-closed で例外を送出する。壊れた縮退プロンプトで Agent セッションを
+        # 開始しないため、空文字列になる経路も同じく停止させる。
         if not prompt:
             raise ValueError(
                 f"Step.{step.id}: body_template_path のレンダリング結果が空です: "
@@ -2090,17 +2283,33 @@ def _build_step_prompt(
         return _LANGUAGE_DIRECTIVE_JA + prompt
 
     # body_template_path 未宣言 Step: シンプルなプロンプト（FR-CLI-71 の対象外）
-    parts = [f"# Step.{step.id}: {step.title}\n"]
+    metadata_lines: List[str] = []
     if params.get("branch"):
-        parts.append(f"対象ブランチ: `{params['branch']}`")
+        metadata_lines.append(
+            _FALLBACK_METADATA_BRANCH.format(branch=params["branch"])
+        )
     if params.get("resource_group"):
-        parts.append(f"リソースグループ: `{params['resource_group']}`")
+        metadata_lines.append(
+            _FALLBACK_METADATA_RESOURCE_GROUP.format(
+                resource_group=params["resource_group"]
+            )
+        )
     app_ids = params.get("app_ids", [])
     if app_ids:
-        parts.append(f"APP-ID: {', '.join(f'`{aid}`' for aid in app_ids)}")
+        metadata_lines.append(
+            _FALLBACK_METADATA_APP_ID.format(
+                app_ids=", ".join(f"`{aid}`" for aid in app_ids)
+            )
+        )
     elif params.get("app_id"):
-        parts.append(f"APP-ID: `{params['app_id']}`")
-    fallback = "\n".join(parts)
+        metadata_lines.append(
+            _FALLBACK_METADATA_APP_ID.format(app_ids=f"`{params['app_id']}`")
+        )
+    fallback = _FALLBACK_STEP_BODY_TEMPLATE.format(
+        step_id=step.id,
+        step_title=step.title,
+        step_metadata_block=("\n" + "\n".join(metadata_lines)) if metadata_lines else "",
+    )
     if additional_prompt:
         fallback = fallback + "\n\n" + additional_prompt
     return _LANGUAGE_DIRECTIVE_JA + fallback
@@ -2138,9 +2347,32 @@ def _collect_file_samples(root: str, limit: int = 10, exclude_prefixes: tuple = 
     return files
 
 
+def _alias_resolver_for_params(params: Optional[dict]):
+    """workflow params から入力別名の**単一の**解決器を作る（FR-PROMPT-09）。
+
+    前提成果物判定・meta 依存判定・Step Prompt・Fleet の必須入力表示は、
+    すべてこの関数が返す解決器を通す。判定ごとに別実装を持たせない。
+    """
+    try:
+        from .input_aliases import resolver_from_params
+    except ImportError:  # pragma: no cover - script 実行経路
+        from input_aliases import resolver_from_params  # type: ignore[no-redef]
+
+    return resolver_from_params(params or {})
+
+
+def _artifact_pattern_exists(pattern: str, resolver=None) -> bool:
+    """成果物パターンの実在を判定する。別名が宣言されていれば実ファイルを見る。"""
+    actual = resolver.actual_for(pattern) if resolver else None
+    if actual is not None:
+        return os.path.exists(actual)
+    return next(_glob.iglob(pattern), None) is not None
+
+
 def _detect_existing_artifacts(workflow_id: str, params: dict) -> dict:
     """既存の成果物を検出し、再利用可能なファイルリストを返す。"""
     existing: dict = {}
+    resolver = _alias_resolver_for_params(params)
 
     catalog_files = {
         "app_catalog": "docs/catalog/app-catalog.md",
@@ -2158,7 +2390,11 @@ def _detect_existing_artifacts(workflow_id: str, params: dict) -> dict:
     }
 
     for key, path in catalog_files.items():
-        if os.path.exists(path):
+        actual = resolver.actual_for(path)
+        if actual is not None:
+            if os.path.exists(actual):
+                existing[key] = actual
+        elif os.path.exists(path):
             existing[key] = path
 
     # screen_catalog は per-APP 分割形式 (Arch-UI-List Step 1 fan-out)
@@ -3082,34 +3318,21 @@ def _compute_step_additional_prompt(
 # キー = step_kind、値 = 末尾に付与する箇条書きルール文の行リスト。
 # default はワークフロー単位 (`_build_reuse_context` 直接呼び出し) で使用される長文。
 _REUSE_RULES_BY_KIND: Dict[str, List[str]] = {
-    "catalog": [
-        "**再利用ルール:**",
-        "- Catalog ファイルは既存エントリを保持したまま、新規エントリのみ追加する",
-        "- 既存のテーブル構造・列順を維持する",
-    ],
-    "tests": [
-        "**再利用ルール:**",
-        "- テスト仕様書・テストコードは既存分を維持し、新規分のみ追加する",
-        "- 既存テストの命名規則・assertion 形式に従う",
-    ],
-    "code": [
-        "**再利用ルール:**",
-        "- 既存コード構造（ディレクトリ・モジュール分割）を尊重し、差分のみを更新する",
-        "- 公開 API のシグネチャ変更は最小限に抑える",
-    ],
-    "docs": [
-        "**再利用ルール:**",
-        "- 既存ドキュメント構造を尊重し、差分のみを更新する",
-        "- セクション見出し・順序を維持する",
-    ],
-    "default": [
-        "**再利用ルール:**",
-        "- 既存のドキュメント/コード構造を尊重し、差分のみを更新する",
-        "- 新規 APP-ID に関する追記は、既存ファイルのフォーマットに従う",
-        "- Catalog ファイルは既存エントリを保持したまま、新規エントリを追加する",
-        "- テスト仕様書・テストコードは既存分を維持し、新規分のみ追加する",
-        "- `docs/catalog/app-catalog.md` の既存アプリケーション定義を参照し、一貫性を保つ",
-    ],
+    "catalog": load_prompt_file(
+        "runtime/orchestrator/reuse-rules-catalog.prompt.md"
+    ).splitlines(),
+    "tests": load_prompt_file(
+        "runtime/orchestrator/reuse-rules-tests.prompt.md"
+    ).splitlines(),
+    "code": load_prompt_file(
+        "runtime/orchestrator/reuse-rules-code.prompt.md"
+    ).splitlines(),
+    "docs": load_prompt_file(
+        "runtime/orchestrator/reuse-rules-docs.prompt.md"
+    ).splitlines(),
+    "default": load_prompt_file(
+        "runtime/orchestrator/reuse-rules-default.prompt.md"
+    ).splitlines(),
 }
 
 
@@ -3157,26 +3380,22 @@ def _build_reuse_context(existing_artifacts: dict, step_kind: str = "default") -
     if not existing_artifacts:
         return ""
 
-    lines = [
-        "\n\n## 🔄 既存成果物（再利用対象）",
-        "以下の成果物が既に存在します。これらを参照・再利用してください：",
-        "",
-    ]
+    artifact_lines: List[str] = []
 
     for key, paths in existing_artifacts.items():
         if isinstance(paths, list):
             for p in paths[:10]:  # 上限10件表示
-                lines.append(f"- `{p}`")
+                artifact_lines.append(f"- `{p}`")
             if len(paths) > 10:
-                lines.append(f"  ...他 {len(paths) - 10} ファイル")
+                artifact_lines.append(f"  ...他 {len(paths) - 10} ファイル")
         else:
-            lines.append(f"- `{paths}`")
+            artifact_lines.append(f"- `{paths}`")
 
     rules = _REUSE_RULES_BY_KIND.get(step_kind, _REUSE_RULES_BY_KIND["default"])
-    lines.append("")
-    lines.extend(rules)
-
-    return "\n".join(lines)
+    return _REUSE_CONTEXT_TEMPLATE.format(
+        artifact_lines="\n".join(artifact_lines),
+        reuse_rules="\n".join(rules),
+    )
 
 
 async def _prefetch_workiq(
@@ -4526,6 +4745,60 @@ def _attach_runtime_observability(
     return recorder
 
 
+def _emit_github_target_event(
+    console: Any,
+    *,
+    repo: Any = None,
+    issue_number: Any = None,
+    pr_number: Any = None,
+    branch: Any = None,
+    base_branch: Any = None,
+    created_by_hve: Any = None,
+    delete_local_merged_branch: Any = None,
+) -> None:
+    """FR-RTO-08: 確定した GitHub target を既存の観測イベント経路で 1 件通知する。
+
+    値の検証は `runtime_observability.github_target_fields` の単一実装へ委譲する
+    （FR-MAINT-07）。確定値が 1 件も無い場合は送出しない。送出失敗は実行へ
+    波及させないが、例外型名だけを警告として残す（NFR-RTO-03 / FR-RTO-04）。
+    """
+    try:
+        from .runtime_observability import GITHUB_TARGET_KIND, github_target_fields
+    except ImportError:  # pragma: no cover - script 実行経路
+        try:
+            from runtime_observability import (  # type: ignore[no-redef]
+                GITHUB_TARGET_KIND,
+                github_target_fields,
+            )
+        except ImportError:
+            return
+
+    fields = github_target_fields(
+        repo=repo,
+        issue_number=issue_number,
+        pr_number=pr_number,
+        branch=branch,
+        base_branch=base_branch,
+        created_by_hve=created_by_hve,
+        delete_local_merged_branch=delete_local_merged_branch,
+    )
+    if not fields:
+        return
+    emit = getattr(console, "stats_event", None)
+    if emit is None:
+        return
+    try:
+        emit(GITHUB_TARGET_KIND, **fields)
+    except Exception as exc:
+        # 送出失敗で Workflow を止めない。本文は残さず例外型名だけを通知する。
+        warn = getattr(console, "warning", None)
+        if warn is not None:
+            try:
+                warn(f"GitHub target イベントの送出に失敗しました（{type(exc).__name__}）。実行は継続します。")
+            except Exception:
+                pass
+
+
 def _attach_mcp_io_logging(console: Console, config) -> Optional[Any]:
     """FR-MCPLOG-01 / 02: MCP 通信ログの記録器を生成し Console へ接続する。
 
@@ -4630,7 +4903,7 @@ async def run_workflow(
 
     --create-issues 時のフロー:
       1. 新ブランチ作成 + checkout
-      2. Issue 作成（Root + Sub-Issue。Copilot アサインなし）
+        2. Issue 作成（Root + Sub-Issue。指定時は新規 Root を Copilot cloud agent へ割当）
       3. DAG 全ステップ実行
       4. git add（無視パス除外）+ commit + push（-u オプション付き）
       5. PR 作成（Issue 番号を PR body に記載）
@@ -4759,6 +5032,14 @@ async def run_workflow(
     console.header(f"Copilot SDK Orchestrator: [{wf.id.upper()}] {display_name}")
 
     _workflow_branch_mode = _uses_workflow_branch_mode(wf.id, config)
+    # FR-CLI-83: 明示的な Issue / PR 作成でだけ current branch mode を選べる。
+    # remote CI/CD の実行契約（ADFDV / Step-scoped）が要求する branch は無効化しない。
+    _explicit_github_write = bool(config.create_issues or config.create_pr)
+    _reuse_current_branch = (
+        _workflow_branch_mode
+        and _explicit_github_write
+        and not bool(getattr(config, "create_working_branch", True))
+    )
 
     # フェーズ構成の動的算出
     _phases: List[str] = ["ワークフロー定義取得", "パラメータ収集", "ステップフィルタリング"]
@@ -5004,6 +5285,35 @@ async def run_workflow(
             selected_step_ids.append(step_id)
     active_steps: Set[str] = resolve_selected_steps(wf, selected_step_ids)
 
+    # FR-CLI-86: `--resume-run` 指定時は当該 run で成功済みの Step を実行対象から外す。
+    # 記録が 1 件も無い run-id は fail-closed とし、全 Step の再実行へ縮退させない。
+    _resume_run_id = str(effective_params.get("resume_run") or "").strip()
+    if _resume_run_id:
+        _done = run_progress.completed_steps(_resume_run_id)
+        if _done is None:
+            _resume_error = (
+                f"--resume-run に指定された run-id の進捗記録が見つかりません: {_resume_run_id}"
+            )
+            console.error(_resume_error)
+            return {
+                "workflow_id": workflow_id,
+                "completed": [],
+                "failed": [],
+                "skipped": [],
+                "blocked": sorted(active_steps),
+                "elapsed_total": time.time() - start_total,
+                "error": _resume_error,
+            }
+        _resume_skipped = sorted(active_steps & _done)
+        if _resume_skipped:
+            active_steps -= _done
+            console.event(
+                "再実行で成功済みとしてスキップするステップ: " + ", ".join(_resume_skipped)
+            )
+
+    # FR-CLI-87: 承認ゲートは既定無効。有効時だけ Wave 境界で確認を出す。
+    _approval_gates_enabled = bool(effective_params.get("approval_gates"))
+
     # 設定値による Step 無効化: `StepDef.disabled_when_config` の宣言に一致する Step を
     # 実行対象から外す。外された Step は DAG 上 skip 扱いとなり、依存先としては解決済みと
     # みなされるため下流 Step は到達不能にならない。
@@ -5028,6 +5338,9 @@ async def run_workflow(
         repo=config.repo,
         token=config.resolve_token(),
         base_branch=config.base_branch,
+        create_working_branch=bool(
+            getattr(config, "create_working_branch", True)
+        ),
         check_remote=orchestrator_ctx is not None,
         repo_root=Path.cwd(),
     )
@@ -5245,23 +5558,40 @@ async def run_workflow(
     # --- 4. 新ブランチ作成（--create-issues / --create-pr、または
     #         ADFDV で --enable-auto-merge（全自動）時） ---
     working_branch: Optional[str] = None
+    # FR-CLI-83 / FR-GUI-37: HVE がこの run で作成した branch だけを自動 cleanup 対象にする。
+    hve_created_branch = False
     if _workflow_branch_mode:
         p = _next_phase()
         phase_start = time.time()
         console.phase_start(p, _total_phases, "ブランチ作成")
 
-        prefix = _WORKFLOW_PREFIX.get(wf.id, wf.id.upper())
-        working_branch = f"copilot-sdk/{prefix.lower()}-{uuid.uuid4().hex[:8]}"
-        if not _git_checkout_new_branch(working_branch, config.base_branch, console):
-            elapsed = time.time() - start_total
-            return {
-                "workflow_id": workflow_id,
-                "completed": [],
-                "failed": [],
-                "skipped": [],
-                "elapsed_total": elapsed,
-                "error": f"ブランチ '{working_branch}' の作成に失敗しました。",
-            }
+        if _reuse_current_branch:
+            working_branch = _git_current_branch(console)
+            if not working_branch:
+                elapsed = time.time() - start_total
+                return {
+                    "workflow_id": workflow_id,
+                    "completed": [],
+                    "failed": [],
+                    "skipped": [],
+                    "elapsed_total": elapsed,
+                    "error": "現在のブランチを特定できないため current branch mode を継続できません。",
+                }
+            console.event(f"現在のブランチ '{working_branch}' を PR head として使用します。")
+        else:
+            prefix = _WORKFLOW_PREFIX.get(wf.id, wf.id.upper())
+            working_branch = f"copilot-sdk/{prefix.lower()}-{uuid.uuid4().hex[:8]}"
+            if not _git_checkout_new_branch(working_branch, config.base_branch, console):
+                elapsed = time.time() - start_total
+                return {
+                    "workflow_id": workflow_id,
+                    "completed": [],
+                    "failed": [],
+                    "skipped": [],
+                    "elapsed_total": elapsed,
+                    "error": f"ブランチ '{working_branch}' の作成に失敗しました。",
+                }
+            hve_created_branch = True
         effective_params["branch"] = working_branch
         console.phase_end(p, _total_phases, "ブランチ作成", time.time() - phase_start)
 
@@ -5286,7 +5616,7 @@ async def run_workflow(
             build_root_issue_body_fn=build_root_issue_body,
         )
     except RootIssueResolutionError as issue_exc:
-        # FR-GUI-25: 指定された既存 Issue を解決できない場合は fail-closed とし、
+        # FR-GUI-25: 既存 Root の解決失敗は fail-closed とし、
         # Root Issue の新規作成へフォールバックしない。
         console.error(str(issue_exc))
         return {
@@ -5297,9 +5627,48 @@ async def run_workflow(
             "elapsed_total": time.time() - start_total,
             "error": str(issue_exc),
         }
+    except RootIssueAssignmentError as issue_exc:
+        # FR-CLI-89: Root は作成済み。target を通知して同じ Root を再作成せず停止する。
+        root_issue_num = issue_exc.root_issue_num
+        console.error(str(issue_exc))
+        _emit_github_target_event(
+            console,
+            repo=config.repo,
+            issue_number=root_issue_num,
+            branch=working_branch,
+            base_branch=config.base_branch,
+            created_by_hve=hve_created_branch,
+            delete_local_merged_branch=bool(
+                getattr(config, "delete_local_merged_branch", True)
+            ),
+        )
+        # current branch mode は利用者所有 branch のため削除しない。
+        if hve_created_branch and working_branch:
+            _git_delete_local_branch(working_branch, config.base_branch, console)
+        return {
+            "workflow_id": workflow_id,
+            "completed": [],
+            "failed": [],
+            "skipped": [],
+            "elapsed_total": time.time() - start_total,
+            "root_issue_num": root_issue_num,
+            "working_branch": working_branch,
+            "error": str(issue_exc),
+        }
 
     if config.create_issues:
         console.phase_end(p, _total_phases, "Issue 作成", time.time() - phase_start_issue)
+
+    # FR-RTO-08: Root Issue と作業 branch が確定した時点で GUI へ target を通知する。
+    _emit_github_target_event(
+        console,
+        repo=config.repo,
+        issue_number=root_issue_num,
+        branch=working_branch,
+        base_branch=config.base_branch,
+        created_by_hve=hve_created_branch,
+        delete_local_merged_branch=bool(getattr(config, "delete_local_merged_branch", True)),
+    )
 
     # --- 4.6. ARD Work IQ ユースケース参照（Issue 作成後・Step.2 実行前）---
     # Step.2 の Issue にコメントを注入しておくことで、Custom Agent が参照できるようにする。
@@ -5395,10 +5764,11 @@ async def run_workflow(
     deps = get_meta_dependencies(workflow_id)
     if deps:
         glob_cache: Dict[str, bool] = {}
+        _alias_resolver = _alias_resolver_for_params(effective_params)
 
         def _artifact_exists(pattern: str) -> bool:
             if pattern not in glob_cache:
-                glob_cache[pattern] = next(_glob.iglob(pattern), None) is not None
+                glob_cache[pattern] = _artifact_pattern_exists(pattern, _alias_resolver)
             return glob_cache[pattern]
 
         missing_artifacts: List[str] = []
@@ -5823,8 +6193,33 @@ async def run_workflow(
         success = _finalize_step_scoped_cicd_branch(step_id, success)
         return success
 
+    def _record_run_progress(result: StepResult) -> None:
+        """FR-STATE-04: Step の完了状態を進捗ストアへ記録する。"""
+        if getattr(config, "dry_run", False) or result.skipped:
+            return
+        run_progress.record_step(
+            config.run_id,
+            workflow_id,
+            result.step_id,
+            run_progress.STATUS_SUCCEEDED if result.success else run_progress.STATUS_FAILED,
+        )
+
     def _on_wave_start(executable_steps: List[Any], wave_index: int) -> None:
         nonlocal protected_baseline
+        # FR-CLI-87: approval_gate を宣言した Step を含む Wave は実行前に承認を求める。
+        if _approval_gates_enabled and approval.wave_requires_approval(executable_steps):
+            approval.request_wave_approval(
+                executable_steps,
+                wave_index,
+                interactive=approval.stdin_is_interactive(),
+                console=console,
+            )
+            run_progress.record_step(
+                config.run_id,
+                workflow_id,
+                f"approval:{wave_index}",
+                run_progress.STATUS_SUCCEEDED,
+            )
         # enable_auto_merge（全自動）時、Deploy Step を含む wave の前に生成済み
         # workflow/成果物を push する（Deploy Agent の `gh workflow run --ref` 用）。
         # enable_auto_merge OFF はリポジトリ操作を手動とするため push しない。
@@ -5949,7 +6344,11 @@ async def run_workflow(
                     fanout_key=(fanout_meta or {}).get("fanout_key", ""),
                     base_step_id=(fanout_meta or {}).get("base_step_id", ""),
                     output_paths=tuple(getattr(step, "output_paths", []) or []),
-                    required_input_paths=tuple(getattr(step, "required_input_paths", []) or []),
+                    required_input_paths=tuple(
+                        _alias_resolver_for_params(effective_params).resolve_paths(
+                            getattr(step, "required_input_paths", []) or []
+                        )
+                    ),
                 ))
 
             try:
@@ -6150,6 +6549,8 @@ async def run_workflow(
         step_prompts=step_prompts,
         dag_plan=dag_plan,
         repo_root=Path.cwd(),
+        # FR-STATE-04: 既存フック経由で進捗を記録する（dry-run は除く）。
+        on_step_complete=_record_run_progress,
         # Fork-integration (T2.6/T2.8): フィーチャフラグ off （既定）で旧挙動と完全一致
         fork_on_retry=bool(getattr(config, "fork_on_retry", False)),
         fork_kpi_logger=_build_fork_kpi_logger(config),
@@ -6270,6 +6671,27 @@ async def run_workflow(
         # recoverable 例外は従来通り再送出。
         try:
             results = await executor.execute()
+        except approval.ApprovalDeclined as _approval_exc:
+            # FR-CLI-87: 承認拒否は停止条件。continue_on_error の fatal 縮退へ
+            # 落とさず、blocked として返す。
+            _approval_error = str(_approval_exc)
+            console.error(_approval_error)
+            # 拒否も `approval:<wave_index>` で残し、どの Wave で停止したかを復元可能にする。
+            run_progress.record_step(
+                config.run_id,
+                workflow_id,
+                f"approval:{_approval_exc.wave_index}",
+                run_progress.STATUS_FAILED,
+            )
+            return {
+                "workflow_id": workflow_id,
+                "completed": sorted(getattr(executor, "_results", {}) or {}),
+                "failed": [],
+                "skipped": [],
+                "blocked": sorted(active_steps),
+                "elapsed_total": time.time() - start_total,
+                "error": _approval_error,
+            }
         except BaseException as _exec_exc:  # noqa: BLE001
             try:
                 from .error_severity import classify_error as _classify_err
@@ -6349,6 +6771,20 @@ async def run_workflow(
             else:
                 raise
         _dag_execution_finished = True
+        # FR-DAG-09: 差戻し先を決定して提示するだけとし、自動再実行は行わない。
+        try:
+            _rework_message = rework.format_rework_suggestion(
+                workflow_id,
+                rework.resolve_rework_targets(
+                    wf.steps,
+                    [sid for sid, res in (results or {}).items() if getattr(res, "success", False)],
+                    Path.cwd(),
+                ),
+            )
+            if _rework_message:
+                console.event(_rework_message)
+        except Exception:
+            pass
     finally:
         if qa_akm_coordinator is not None and not _dag_execution_finished:
             qa_akm_coordinator.cancel()
@@ -6775,9 +7211,27 @@ async def run_workflow(
                         config=config,
                         console=console,
                     )
+                # FR-RTO-08: PR 番号が確定した時点で target を再通知する。
+                _emit_github_target_event(
+                    console,
+                    repo=config.repo,
+                    issue_number=root_issue_num,
+                    pr_number=pr_number,
+                    branch=working_branch,
+                    base_branch=config.base_branch,
+                    created_by_hve=hve_created_branch,
+                    delete_local_merged_branch=bool(
+                        getattr(config, "delete_local_merged_branch", True)
+                    ),
+                )
             if pr_number is not None and executor.failed and not retain_checkpoint:
                 console.warning("失敗 Step がある状態で PR が作成済みのため、cleanup を実行します。")
-                _cleanup_failed_pr_if_created(pr_number, working_branch, config, console)
+                _cleanup_failed_pr_if_created(
+                    pr_number,
+                    working_branch if hve_created_branch else None,
+                    config,
+                    console,
+                )
                 pr_number = None
                 pr_error = "失敗 Step があるため作成済み PR を close / branch cleanup しました。"
             # FR-CLI-34: enable_auto_merge による auto-approve-and-merge 完了を検知し、
@@ -6786,6 +7240,7 @@ async def run_workflow(
             if (
                 pr_number is not None
                 and working_branch
+                and hve_created_branch
                 and getattr(config, "delete_local_merged_branch", True)
                 and getattr(config, "enable_auto_merge", False)
                 and not executor.failed
@@ -7209,6 +7664,76 @@ async def _request_code_review(
 # PR 作成
 # -----------------------------------------------------------------------
 
+def _generate_gui_title(
+    *,
+    target_kind: str,
+    target_label: str,
+    fallback_title: str,
+    source_text: str,
+    required_prefix: str,
+    config: SDKConfig,
+    console: Console,
+) -> str:
+    if not os.environ.get("HVE_GUI_SESSION_ID", "").strip():
+        return fallback_title
+    console.event(f"Copilot CLI で {target_label} タイトルを生成中...")
+    try:
+        title = generate_github_title(
+            target_kind,
+            source_text,
+            fallback_title=fallback_title,
+            required_prefix=required_prefix,
+            cli_path=config.cli_path,
+        )
+    except GitHubTitleGenerationError:
+        console.warning(
+            f"Copilot CLI で {target_label} タイトルを生成できなかったため、"
+            "既定タイトルを使用します。"
+        )
+        return fallback_title
+    console.event(f"Copilot CLI で {target_label} タイトルを生成しました。")
+    return title
+
+
+def _generate_gui_issue_title(
+    *,
+    fallback_title: str,
+    issue_body: str,
+    required_prefix: str,
+    config: SDKConfig,
+    console: Console,
+) -> str:
+    """GUI 子プロセスの Root Issue title を生成する（FR-GUI-39）。"""
+    return _generate_gui_title(
+        target_kind="issue",
+        target_label="Root Issue",
+        fallback_title=fallback_title,
+        source_text=issue_body,
+        required_prefix=required_prefix,
+        config=config,
+        console=console,
+    )
+
+
+def _generate_gui_pr_title(
+    *,
+    fallback_title: str,
+    pr_body: str,
+    required_prefix: str,
+    config: SDKConfig,
+    console: Console,
+) -> str:
+    """GUI 子プロセスの PR title だけを Copilot CLI で生成する（FR-GUI-39）。"""
+    return _generate_gui_title(
+        target_kind="pull_request",
+        target_label="PR",
+        fallback_title=fallback_title,
+        source_text=pr_body,
+        required_prefix=required_prefix,
+        config=config,
+        console=console,
+    )
+
 def _create_pr_if_needed(
     wf,
     head_branch: str,
@@ -7337,11 +7862,22 @@ def _create_pr_if_needed(
         body_lines.append("")
         body_lines.append("<!-- validation-confirmed -->")
 
+    pr_body = "\n".join(body_lines)
+    fallback_title = f"[{prefix}] {display_name}"
+    title = _generate_gui_pr_title(
+        fallback_title=fallback_title,
+        pr_body=pr_body,
+        required_prefix=f"[{prefix}] ",
+        config=config,
+        console=console,
+    )
+    if local_checkpoint_only:
+        title += " — local checkpoint (draft)"
+
     try:
         _pr_kwargs: Dict[str, Any] = {
-            "title": f"[{prefix}] {display_name}"
-            + (" — local checkpoint (draft)" if local_checkpoint_only else ""),
-            "body": "\n".join(body_lines),
+            "title": title,
+            "body": pr_body,
             "head": head_branch,
             "base": base_branch,
             "repo": repo,

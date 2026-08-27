@@ -1,8 +1,8 @@
 name: Auto QA Timeout Watcher
 
+# 定期実行は廃止済み。QA 滞留を検査したいときに workflow_dispatch で手動実行する。
+
 on:
-  schedule:
-    - cron: '0 */6 * * *'
   workflow_dispatch:
     inputs:
       target_issue:
@@ -21,7 +21,6 @@ permissions:
 
 jobs:
   watch:
-    if: ${{ vars.ENABLE_QA_TIMEOUT_WATCHER != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:

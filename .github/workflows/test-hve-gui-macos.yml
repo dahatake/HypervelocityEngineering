@@ -1,0 +1,135 @@
+name: Test HVE GUI on macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_scope:
+        description: 実行する macOS GUI test scope
+        required: true
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          - full
+      estimated_cost_usd:
+        description: 実行前に提示・承認された予測課金額（USD）
+        required: true
+        type: string
+      cost_approved:
+        description: 提示された費用見積りに対する今回1回限りの承認
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Cocoa smoke
+    if: >-
+      inputs.test_scope == 'smoke' &&
+      inputs.cost_approved &&
+      inputs.estimated_cost_usd != '' &&
+      github.run_attempt == 1
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install GUI test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[gui,gui-pty,test]"
+
+      - name: Run Cocoa smoke
+        env:
+          QT_QPA_PLATFORM: cocoa
+          HVE_MACOS_GUI_ARTIFACT_DIR: work/run/macos-gui/artifacts
+        run: |
+          mkdir -p work/run/macos-gui/artifacts
+          python -m pytest hve/gui/tests/test_macos_cocoa_smoke.py \
+            -q --tb=short \
+            --junitxml=work/run/macos-gui/artifacts/cocoa-smoke.xml
+
+      - name: Verify Cocoa smoke was not skipped
+        run: |
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse("work/run/macos-gui/artifacts/cocoa-smoke.xml").getroot()
+          suites = [root] if root.tag == "testsuite" else list(root.findall("testsuite"))
+          skipped = sum(int(suite.get("skipped", "0")) for suite in suites)
+          assert skipped == 0, f"Cocoa smoke was skipped: {skipped}"
+          PY
+
+      - name: Upload Cocoa diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: hve-gui-macos-smoke
+          path: work/run/macos-gui/artifacts/
+          retention-days: 7
+          if-no-files-found: error
+
+  full:
+    name: Full GUI suite and Cocoa smoke
+    if: >-
+      inputs.test_scope == 'full' &&
+      inputs.cost_approved &&
+      inputs.estimated_cost_usd != '' &&
+      github.run_attempt == 1
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install GUI test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[gui,gui-pty,test]"
+
+      - name: Run full GUI suite offscreen
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          mkdir -p work/run/macos-gui/artifacts
+          python -m pytest hve/gui/tests \
+            --ignore=hve/gui/tests/test_macos_cocoa_smoke.py \
+            -q --tb=short \
+            --junitxml=work/run/macos-gui/artifacts/gui-offscreen.xml
+
+      - name: Run Cocoa smoke
+        env:
+          QT_QPA_PLATFORM: cocoa
+          HVE_MACOS_GUI_ARTIFACT_DIR: work/run/macos-gui/artifacts
+        run: |
+          python -m pytest hve/gui/tests/test_macos_cocoa_smoke.py \
+            -q --tb=short \
+            --junitxml=work/run/macos-gui/artifacts/cocoa-smoke.xml
+
+      - name: Verify Cocoa smoke was not skipped
+        run: |
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse("work/run/macos-gui/artifacts/cocoa-smoke.xml").getroot()
+          suites = [root] if root.tag == "testsuite" else list(root.findall("testsuite"))
+          skipped = sum(int(suite.get("skipped", "0")) for suite in suites)
+          assert skipped == 0, f"Cocoa smoke was skipped: {skipped}"
+          PY
+
+      - name: Upload GUI diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: hve-gui-macos-full
+          path: work/run/macos-gui/artifacts/
+          retention-days: 7
+          if-no-files-found: error

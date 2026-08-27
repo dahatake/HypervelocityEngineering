@@ -166,5 +166,5 @@ class TestTemplatesExist:
     def test_every_step_template_is_present(self, workflow):
         for step in workflow.steps:
             assert step.body_template_path, f"Step {step.id} に template 宣言が無い"
-            path = _REPO_ROOT / ".github" / "scripts" / step.body_template_path
+            path = _REPO_ROOT / step.body_template_path
             assert path.exists(), f"{path} が存在しない"

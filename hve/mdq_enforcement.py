@@ -14,8 +14,10 @@ from __future__ import annotations
 
 from typing import Iterable, Optional
 
-
-_BLOCK_HEADER = "# Markdown-Query Skill 強制利用ルール (GUI 設定由来)"
+try:  # pragma: no cover - script-style import compatibility
+    from .prompt_loader import load_prompt_file
+except ImportError:  # pragma: no cover
+    from prompt_loader import load_prompt_file  # type: ignore[no-redef]
 
 
 def build_enforcement_prompt(target_folders: Iterable[str]) -> Optional[str]:
@@ -32,17 +34,16 @@ def build_enforcement_prompt(target_folders: Iterable[str]) -> Optional[str]:
     if not folders:
         return None
 
-    folder_list = "\n".join(f"  - `{f}`" for f in folders)
-    return (
-        f"{_BLOCK_HEADER}\n"
-        "以下のフォルダ配下の Markdown ファイル (.md) を参照する必要が生じた場合は、"
-        "`read_file` や `grep_search` を使う前に、必ず `markdown-query` Skill"
-        " (`python -m mdq search --q \"<キーワード>\" --top-k 5 --max-tokens 800`)"
-        " を最優先で使用すること。\n"
-        "\n対象フォルダ:\n"
-        f"{folder_list}\n"
-        "\n例外:\n"
-        "  - `python -m mdq search` のヒットが 0 件のとき、または対象が `.md` 以外のとき"
-        "に限り、`grep_search` / `read_file` へフォールバックしてよい。\n"
-        "  - 索引未生成・索引が古いと判定された場合は `python -m mdq index` を実行してから再検索する。\n"
-    )
+    template_lines = load_prompt_file(
+        "runtime/addenda/mdq-enforcement.prompt.md"
+    ).splitlines()
+    if len(template_lines) < 8 or template_lines[3].rstrip() != "対象フォルダ:":
+        raise ValueError(
+            "mdq enforcement addendum template が不正です: runtime/addenda/mdq-enforcement.prompt.md"
+        )
+    folder_list = [f"  - `{f}`" for f in folders]
+    return "\n".join([
+        *template_lines[:4],
+        *folder_list,
+        *template_lines[4:],
+    ]) + "\n"

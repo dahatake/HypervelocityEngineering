@@ -210,6 +210,7 @@ Issue Template から親 Issue を作成し、Bootstrap Workflow が Sub Issue �
 `app-architecture-design.yml` / `web-app-design.yml` / `web-app-dev.yml` / `dataflow-design.yml` / `dataflow-dev.yml` / `sourcecode-to-documentation.yml` / `knowledge-management.yml`
 
 - チェック ON: 全ステップ完了後に自己改善ループが実行され、ruff / pytest / markdownlint で品質スキャンを行い、目標スコアに達するまで改善を繰り返します
+- `web-app-dev.yml`（ASDW-WEB）/ `dataflow-dev.yml`（ADFDV）は、目標スコアに加えて **テストカバレッジ 70% 以上** を完了条件として判定します（FR-CLI-65）。テストが 1 件も実行されなかった場合はカバレッジを測定できないため、未達（失敗）ではなく `blocked` として停止します
 - チェック OFF（デフォルト）: 自己改善ループは実行されません
 - `ai-agent-design.yml` / `ai-agent-dev.yml` には `enable_self_improve` チェックボックスがなく、`self_improve_max_iterations` / `self_improve_quality_threshold` のみを持ちます（2026-08-07 時点の `.github/ISSUE_TEMPLATE/` 実体で確認）
 - `setup-labels.yml` は自己改善の対象外です
@@ -278,17 +279,19 @@ Bootstrap Workflow が自動的に Sub Issue を生成し、Copilot を各 Sub I
 
 ## 利用可能な Prompt 一覧
 
-`.github/prompts/` 配下に **84 個** の Prompt（`README.md` を除く）が定義されています。7 カテゴリに分類されます（件数は 2026-08-07 時点の実体からの集計）。
+Copilot へアサインできる Agent 本文は `.github/prompts/<Agent 名>.prompt.md`（flat 配置、`README.md` を除く）に定義されており、次の 7 カテゴリに分類されます。件数は変動するため、最新の一覧は `.github/prompts/` を直接確認してください。
 
-| カテゴリ | 接頭辞 | 個数 | 主な役割 | 詳細参照 |
-|---------|--------|:---:|----------|---------|
-| ビジネス分析・要求定義 | `Arch-Application*`, `Arch-Architecture*` | 2 | ユースケース分析・候補アーキテクチャ選定 | [workflow-reference.md](./workflow-reference.md) |
-| アーキテクチャ設計 | `Arch-*`（Application/Architecture を除く） | 28 | ドメイン設計・データモデル・テスト設計 | [workflow-reference.md](./workflow-reference.md) |
-| 実装 | `Dev-*` | 26 | Azure リソース作成・コード生成・デプロイ | [workflow-reference.md](./workflow-reference.md) |
-| ドキュメント生成 | `Doc-*` | 19 | API/データモデル/依存関係等の文書生成 | [workflow-reference.md](./workflow-reference.md) |
-| QA / レビュー | `QA-*` | 7 | コード品質・アーキテクチャレビュー | [workflow-reference.md](./workflow-reference.md) |
-| Knowledge Management | `KnowledgeManager` | 1 | qa/docs-original → knowledge/ D01〜D21 | [workflow-reference.md](./workflow-reference.md) |
-| E2E テスト | `E2ETesting-*` | 1 | Playwright E2E テスト実行 | [workflow-reference.md](./workflow-reference.md) |
+| カテゴリ | 接頭辞 | 主な役割 | 詳細参照 |
+|---------|--------|----------|---------|
+| ビジネス分析・要求定義 | `Arch-Application*`, `Arch-Architecture*` | ユースケース分析・候補アーキテクチャ選定 | [workflow-reference.md](./workflow-reference.md) |
+| アーキテクチャ設計 | `Arch-*`（Application/Architecture を除く） | ドメイン設計・データモデル・テスト設計 | [workflow-reference.md](./workflow-reference.md) |
+| 実装 | `Dev-*` | Azure リソース作成・コード生成・デプロイ | [workflow-reference.md](./workflow-reference.md) |
+| ドキュメント生成 | `Doc-*` | API/データモデル/依存関係等の文書生成 | [workflow-reference.md](./workflow-reference.md) |
+| QA / レビュー | `QA-*` | コード品質・アーキテクチャレビュー | [workflow-reference.md](./workflow-reference.md) |
+| Knowledge Management | `KnowledgeManager` | qa/docs-original → knowledge/ D01〜D21 | [workflow-reference.md](./workflow-reference.md) |
+| E2E テスト | `E2ETesting-*` | Playwright E2E テスト実行 | [workflow-reference.md](./workflow-reference.md) |
+
+> `.github/prompts/` にはこの flat な Agent 本文のほかに、Step 本文（`steps/`）・fan-out 追加本文（`fanout/`）・HVE 内部 Prompt（`runtime/`）・Workflow から `@copilot` へ投稿する固定実行指示（`cloud/`）が配置されています。Web UI から選択できるのは flat な Agent 本文です。
 
 > 完全な一覧（入出力マップ・knowledge/ 参照関係を含む）は [workflow-reference.md](./workflow-reference.md#prompt-一覧) を参照してください。
 

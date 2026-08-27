@@ -248,7 +248,7 @@ RoyalytyService2ndGen/
 
 ### Step 1（右ペイン）: オプション選択
 
-`orchestrate` サブコマンドの多数のオプション（`OrchestrateArgs` は 114 フィールド）は、**設定画面（HVE 設定）** 側でカテゴリー別に分類して保持します。設定画面のツリーは固定 13 ノードと `skills` グループの 3 ノードを合わせた計 16 ノードです。
+`orchestrate` サブコマンドの多数のオプション（正本は [hve/gui/orchestrate_args.py](../hve/gui/orchestrate_args.py) の `OrchestrateArgs`）は、**設定画面（HVE 設定）** 側でカテゴリー別に分類して保持します。設定画面のツリーは固定 13 ノードと `skills` グループの 3 ノードを合わせた計 16 ノードです。
 
 **Step 1 の右ペインはこのカテゴリー一覧をそのまま並べません**。選択中のワークフローに応じて実効的な行だけを表示し、ワークフロー固有の入力欄は選択ワークフロー枠へ移されます（例: AAS の Step 1 では C3 内の 6 行 / 7 入力だけが実効表示されます）。
 
@@ -259,13 +259,13 @@ RoyalytyService2ndGen/
 | C1 | 基本設定  *必須 | `--model` / `--review-model` / `--qa-model` / `--reasoning-effort` 系 / `--context-tier` / `--max-parallel` / `--timeout` / `--review-timeout` / `--verbosity` / テーマ / `--additional-prompt` / `--context-max-chars` |
 | C3 | 共通設定  *必須 | `--auto-qa`（**必須選択** / 下記参照）/ **QA (質問票) 回答モード**（下記参照）/ `--auto-contents-review` / `--auto-coding-agent-review` / `--qa-akm-background-merge`（下記参照）/ `--akm-model` / `--akm-reasoning-effort` / `--akm-context-tier` / `--self-improve` 系。設定画面では `QA (質問票)` / `レビュー` / `Knowledge Management` / `自己改善 (Self Improve)` の 4 ノードへ分かれています |
 | C4 | Work IQ | `--workiq` 系（M365 メール・チャット・会議・ファイル参照。`@microsoft/workiq` プラグインのインストールが必要）。`OrchestrateArgs` は Work IQ 関連 12 フィールドを保持し、`--workiq*` 引数として CLI に渡ります（`--workiq-tenant-id` の GUI 入力欄は廃止済み。CLI 引数と環境変数 `WORKIQ_TENANT_ID` は引き続き有効） |
-| C5 | GitHub | `--create-issues` / `--create-pr` / `--repo` / **Root Issue の扱い**（新規作成 / 既存 Issue に連携、`--issue-number`。下記参照）/ `--issue-title` / `--branch` / `--enable-auto-merge` / マージ後ローカルブランチ削除 / Fleet mode / Cloud Sessions 関連 |
-| C6 | 出力制御 | `--verbose` / `--quiet` / `--show-stream` / `--log-level` / `--no-color` / `--banner` / `--screen-reader` / `--timestamp-style` / `--final-only`。**この枠の値は保存されず、起動のたびに既定値へ戻ります**（設定画面の「出力制御」ノードは撤去済み。固定したい場合は CLI 実行時に同名のフラグを指定してください。なお `--banner` は `orchestrate` では効果がありません） |
+| C5 | GitHub | `--create-issues` / `--create-pr` / `--repo` / **Root Issue の扱い**（新規作成 / 既存 Issue に連携、`--issue-number`。下記参照）/ `--issue-title` / `--branch` / **進捗を引き継いで再実行する run-id**（`--resume-run`。下記参照）/ `--enable-auto-merge` / マージ後ローカルブランチ削除 / Fleet mode / Cloud Sessions 関連 |
+| C6 | 出力制御 | `--verbose` / `--quiet` / `--show-stream` / `--log-level` / `--no-color` / `--banner` / `--screen-reader` / `--timestamp-style` / `--final-only`。**この枠の値は保存されず、起動のたびに既定値へ戻ります**（コンソール表示の制御であり実行結果の意味を変えないため、面固有のままとしています。固定したい場合は CLI 実行時に同名のフラグを指定してください。なお `--banner` は `orchestrate` では効果がありません） |
 | C7 | MCP / CLI 接続 | `--cli-path` / `--cli-url` |
 | AZURE | Azure | `--resource-group`（`default_params` を持たない必須パラメータのみ。FR-GUI-02 / FR-WF-ASDW-02） |
-| AGENTIC | Agentic Retrieval | `--enable-agentic-retrieval` / データソース方式 / Foundry MCP 連携 / データソースのヒント / 既存設計の差分更新 / Foundry SKU フォールバック方針 |
+| AGENTIC | Agentic Retrieval | `--enable-agentic-retrieval` / データソース方式 / Foundry MCP 連携 / データソースのヒント / 既存設計の差分更新 / Foundry SKU フォールバック方針。**この枠の 6 項目は保存され、次回起動時に復元されます**（Prompt 版も同じ保存値を引き継ぎます） |
 | C10 | アプリケーションID | `--app-ids` / `--usecase-id` / github.com CI/CD トグル（下記参照） |
-| C11 | Knowledge Management 固有 | `--sources` / `--target-files` / `--force-refresh` / `--custom-source-dir` |
+| C11 | Knowledge Management 固有 | `--sources` / `--target-files` / `--force-refresh` / `--custom-source-dir`。AKM 選択時だけ CLI 実行引数へ反映されます |
 | C13 | ADOC 固有 | `--target-dirs` / `--exclude-patterns` / `--doc-purpose` / `--max-file-lines` |
 | C14 | 要求定義書 | `--company-name` / `--target-business` / `--target-recommendation-id` / 調査基準日・調査期間・対象地域 / 添付資料 D&D（下記参照） |
 | C17 | ADI 固有 | `--purpose` / `--target-scope` / `--depth` / `--focus-areas` |
@@ -273,6 +273,8 @@ RoyalytyService2ndGen/
 選択ワークフローに応じて各カテゴリ枠の表示・有効化が自動制御されます。`C1` / `C5` / `C6` / `C7` / `AZURE` / `AGENTIC` は Step 2 セッションでは非表示です。`C3` も非表示集合に含まれますが例外として再表示され、追加プロンプトと、見出し非表示対象外の共通設定行を表示します。
 
 > カテゴリ ID（`C1` / `C3` / …）は設定互換性のための内部識別子です。`C2` / `C8` / `C9` / `C12` / `C15` / `C16` は他カテゴリへ統合または廃止済みで、欠番のまま番号を繰り上げません。`--max-parallel` は C1、`--timeout` 系は C1、`--branch` は C5、`--additional-prompt` は C1 へ統合されています。mdq / cq / Tool Search の設定は設定画面の `skills` グループにあります。
+
+> **追加プロンプトのサイズ**: 追加プロンプトを含む Step のプロンプト全体には HVE 内部のサイズ予算があります。予算を超えると、その Step は Phase 1 の主モデルを 1 回も呼び出さずに失敗し、バイト数と成分別内訳がログに出ます。事前 QA 後の最終判定だけで超過した場合、事前 QA は実行済みです。長文は追加プロンプト欄に直接貼らず、ファイルへ保存してそのパスを書いてください。予算値は GUI 設定・CLI オプション・環境変数では変更できません。`--context-max-chars` は事前 QA へ注入する補助コンテキストの文字数上限であり、別の設定です（[troubleshooting.md](./troubleshooting.md#プロンプトが大きすぎて-step-が停止する) 参照）。
 
 #### C10 対象アプリケーション (APP-ID) の絞り込み
 
@@ -457,6 +459,27 @@ QA 回答ダイアログの左下には、質問票をクリップボードへ�
 > `copilot` コマンドまたは OS 別 PTY backend が見つからない場合は、セッションを開始せずに
 > セットアップ手順を案内します（Windows は `hve\setup-hve.cmd`、macOS / Linux は `./hve/setup-hve.sh`）。
 
+#### このタブで Prompt 版を使う
+
+HVE の **Prompt 版**（自然言語から既存 Workflow を計画・実行する利用面）は、
+この **Copilot CLI タブをそのまま使います**。専用のタブや画面は追加されていません。
+
+1. このタブで [セッション開始] する
+2. [prompts/README.md](./prompts/README.md) から選んだ依頼文を貼り付ける
+3. Copilot が `.github/skills/hve-prompt-edition/SKILL.md` に従って request を作り、
+   `hve prompt plan` の結果（実行計画と plan SHA-256）を提示する
+4. 内容を確認して「この計画で実行してください」と日本語で伝えたときだけ
+   `hve prompt run --expected-sha256 <hash>` が実行される
+
+> **このタブであなたがコマンドを入力する必要はありません。** CLI の実行と
+> plan SHA-256 の転記は Copilot が代行します。
+
+Prompt 版は **この GUI で保存した設定**（モデル、reasoning effort、並列度、タイムアウト等）を
+そのまま再利用し、新しい実行エンジンを持たずに既存の `hve orchestrate` へ委譲します。
+手順の全体像は [hve-prompt-getting-started.md](./hve-prompt-getting-started.md) を参照してください。
+
+> GitHub.com の HVE Cloud Agent Orchestrator からの Prompt 実行は現時点では対象外です。
+
 ### 実行ジョブタブ
 
 画面の並びは Visual Studio Code の [チャット] と同じです。
@@ -549,51 +572,245 @@ VS Code 固有の実行面は対象外です。Copilot CLI が提供する範囲
 
 ## GitHub Issue / Pull Request
 
-ヘッダー右上の **[GitHub]** ボタンで、Issue と Pull Request を閲覧・編集する別ウィンドウを開きます。設定ウィンドウと同じく非モーダルで、ワークフロー実行中でも使えます。
+ヘッダー右上の **[GitHub]** ボタンで、GitHub 連携の全てを扱う別ウィンドウ（GitHub Hub）を開きます。設定ウィンドウと同じく非モーダルで、ワークフロー実行中でも使えます。
 
-先頭の **リポジトリ** 欄は `owner/repo` を受け付け、両タブで共有されます。未入力の場合は `REPO` 環境変数、次いでローカルの `git remote origin` から推定します。
+タブは **[連携設定]** / **[Issue]** / **[Pull Request]** の 3 つです。
+
+タブの上には **「現在のタスク」** が表示され、GUI セッションの run ID、Workflow / instance、対象リポジトリ、関連 Issue / Pull Request、head → base branch、関連付け元を確認できます。Hub で選択・作成した対象と、Orchestrator が確定した対象は同じ表示へ反映されます。実行中の別 Workflow / APP instance の関連付けを混在させません。
+
+- Workflow 実行前に関連付けた Issue は、GitHub 書き込みを伴う実行の `--issue-number` として使われます。
+- 実行開始後に Issue を選び直しても、起動済み Orchestrator の Root Issue は変更されません。Hub の追跡先だけが変わります。
+- **[Issue の関連付けを解除]** / **[Pull Request の関連付けを解除]** で現在の関連付けを解除できます。
+- run-scoped な関連付けは設定ファイルへ自動保存されません。既存の「連携する Pull Request 番号」は起動時の既定値としてだけ使われます。
+
+> **GitHub 設定の場所はここだけです**。以前は設定ウィンドウの「各サービス連携 > GitHub」にも同じ項目がありましたが、現在は本画面の **[連携設定]** タブに一本化されています。保存先は従来と同じ設定ファイルなので、既存の設定はそのまま引き継がれます。
+
+**[連携設定]** タブの **リポジトリ (owner/repo)** 欄が、Issue / Pull Request 両タブの対象リポジトリを兼ねます。未入力の場合は `REPO` 環境変数、次いでローカルの `git remote origin` から推定します。
+
+リポジトリが確定した時点（ウィンドウを開いたときと、リポジトリ欄の入力を確定したとき）に、Issue と Pull Request の一覧をそれぞれ **1 回だけ** 取得します。以降の更新は **[更新]** 押下時だけで、定期的な自動取得（ポーリング）は行いません。
+
+> **一覧が空のとき**: 既定の絞り込みは `オープン` です。オープンな Issue / PR が 1 件も無いリポジトリでは 0 件になります。この場合は画面下部に「「状態」を「すべて」にして [更新] するとクローズ済みも表示されます」と案内が出ます。取得失敗ではなく対象が無い状態です。
+
+一覧の上にある絞り込み欄は、**取得済みの一覧を番号・タイトルでクライアント側だけで絞り込みます**（GitHub API を追加で呼びません）。
+
+> **ページ追加と順序**: Issue / Pull Request 一覧の初回取得は作成日時の降順です。GitHub が次ページを返したときだけ **[さらに読み込む]** が有効になり、押すと取得済み一覧へ追記します。失敗時は既存一覧を保持したまま同じ操作を再試行できます。リポジトリ・状態・**[更新]** を変えると古い次ページ情報は破棄されます。既存項目の更新ではページ順が移動しませんが、ページ取得中の新規作成・state 変更・削除では母集合が変わり、未取得項目が生じる可能性があります。最新状態を確定したい場合は **[更新]** で page 1 から取得し直してください。
+
+### コメント入力欄（書式ツールバーとプレビュー）
+
+Issue 本文・Issue コメント（新規投稿・編集）・Pull Request コメントの入力欄は、github.com のコメント欄と同じく **[編集] / [プレビュー] の 2 タブ + 書式ツールバー** を持ちます。
+
+| ボタン | 挿入される記法 |
+|---|---|
+| 太字 | `**...**` |
+| 斜体 | `*...*` |
+| 見出し | 行頭に `### ` |
+| 引用 | 行頭に `> ` |
+| コード | `` `...` `` |
+| リンク | `[選択文字列](url)` |
+| 箇条書き | 行頭に `- ` |
+| 番号付きリスト | 行頭に `1. ` |
+| タスクリスト | 行頭に `- [ ] ` |
+
+- 選択範囲があるときは選択範囲へ、無いときはキャレット位置へ挿入します。行頭付与型は選択した全行に適用されます。
+- **[プレビュー]** タブは入力中の Markdown を描画します。入力欄は Markdown の原文をそのまま保持するため、保存してもコードフェンスの言語指定やタスクリストが失われません。
+- プレビューは Qt のリッチテキストで描画します。Mermaid 図と数式は描画されません（これらを見るにはファイルプレビュー Dock を使います）。
+- 画像・ファイルの添付、`@` メンション補完、`#` 参照補完、絵文字補完は提供しません。
 
 ### Issue タブ
 
 | できること | 操作 |
 |---|---|
 | 一覧の取得・絞り込み | 「状態」で オープン / クローズ / すべて を選び **[更新]** |
+| 2 ページ目以降の取得 | **[さらに読み込む]**（取得済み一覧へ追記） |
+| 一覧の絞り込み（ローカル） | 一覧上の入力欄へ番号またはタイトルの一部を入力 |
+| **Issue の新規作成** | タイトル、任意の本文、ラベル、担当者、マイルストーンを指定して **[Issue を作成]**（下記） |
 | 詳細の閲覧 | 一覧から Issue を選択（番号・状態・作成者・ラベル・担当者・本文・URL） |
 | タイトル / 本文の編集 | 入力後に **[タイトル / 本文を保存]** |
+| metadata の編集 | 取得済み候補からラベル・担当者・マイルストーンを選び **[metadata を保存]** |
+| Copilot cloud agent への割当 | base branch を確認して **[Copilotへ割り当て]** |
 | クローズ / 再オープン | **[Issue をクローズ]** / **[Issue を再オープン]** |
-| コメントの閲覧・投稿 | コメント一覧を確認し、下部の入力欄から **[コメントを投稿]** |
-| 自分のコメントの編集 | コメントを選択して編集し **[コメントを更新]**（他人のコメントは編集不可） |
+| コメントの閲覧・投稿 | API の全ページから取得したコメント一覧を確認し、下部の入力欄から **[コメントを投稿]** |
+| 自分のコメントの編集 | コメントを選択して編集し **[コメントを更新]**（他人のコメントは読み取り専用） |
+
+#### Issue を新規作成する
+
+Issue タブの作成欄に本文を入力し、**[Copilot でタイトルを生成]** を押すと、GitHub Copilot CLI が本文を要約してタイトル欄へ入力します。生成結果は作成前に自由に編集できます。
+
+タイトルを空欄のまま **[Issue を作成]** を押した場合も、Copilot CLI でタイトルを生成してから通常の Issue を作成します。タイトルを手入力済みの場合は Copilot CLI を呼ばず、そのタイトルをそのまま使います。
+
+- 本文欄はコメント入力欄と同じ **[編集] / [プレビュー] + 書式ツールバー** を持ち、Markdown をそのまま送信します。
+- タイトル生成は GitHub Copilot の token / premium request を消費することがあります。処理中はタイトル・本文・生成・作成ボタンを一時的に無効化します。
+- 本文が空の場合はタイトルを生成せず、GitHub Copilot の token も消費しません。
+- Copilot CLI が見つからない、応答が空、120 秒以内に完了しないなどの失敗時は Issue を作成せず、タイトルと本文を保持してエラーを表示します。
+- Copilot CLI は空の一時ディレクトリで `--no-ask-user` と `--available-tools=ask_user` を併用して実行し、入力本文は最大 12,000 文字、生成タイトルは最大 120 文字に制限します。
+- 作成に成功すると一覧を更新し、作成した Issue を選択状態にします。絞り込み条件のすでに一覧に現れない場合は、作成された番号をメッセージで知らせます。
+- タイトルを入力済みなら本文は空でも作成できます。タイトルと本文が両方空の場合は作成しません。
+- **[作成候補を取得]** は対象リポジトリからラベル・担当者・open マイルストーンを最大 100 件ずつ取得します。候補は追加の自動ポーリングを行いません。
+- **[作成後、このタスクに関連付ける]** は既定 ON です。OFF にすると Issue は作成しますが、現在のタスクは変更しません。
+- GitHub が指定した metadata を反映しなかった場合は、作成済み Issue 番号を保持したまま警告します。同じ Issue を自動で再作成しません。
+- API 失敗時はタイトル・本文・metadata の選択を保持します。
+- Projects と GitHub Issue Form の field / upload / required validation は本画面では提供しません。
+
+#### 既存 Issue の metadata を編集する
+
+Issue 作成面の **[作成候補を取得]** で取得したラベル・担当者・open マイルストーンを、既存 Issue の編集面でも再利用します。編集面を開くための追加 API request や自動ポーリングは行いません。
+
+- 候補未取得時は、先に **[作成候補を取得]** を実行するよう案内します。
+- 候補一覧に無い現在値も選択状態のまま表示し、保存操作だけで意図せず削除しません。
+- 空のラベル／担当者選択は全解除、マイルストーンの「未設定」は解除として送信します。
+- 保存失敗時は選択を保持します。GitHub の応答が指定値と一致しない場合は、Issue を再作成せず項目名を警告します。
+
+#### Copilot cloud agent へ割り当てる
+
+選択中 Issue で **[Copilotへ割り当て]** を押すと、Issue 番号・repository・base branch を含む確認ダイアログが表示されます。既定の回答は「いいえ」です。base branch を空欄にすると GitHub の既定 branch に委ねます。
+
+- この API は public preview です。応答で Copilot の assignee を確認できない場合は成功表示にしません。
+- 割当中は Issue 選択、metadata の置換、コメント投稿など同じ対象への操作を無効化します。失敗時は Issue 選択と base branch 入力を保持します。
+- fine-grained PAT には Metadata: read と Actions / Contents / Issues / Pull requests: read and write が必要です。classic PAT は `repo` scope が必要です。
 
 ### Pull Request タブ
 
 | できること | 操作 |
 |---|---|
-| 一覧の取得・絞り込み | 「状態」を選び **[更新]** |
+| 一覧の取得・絞り込み | 「状態」を選び **[更新]**。一覧上の入力欄でローカル絞り込み |
+| 2 ページ目以降の取得 | **[さらに読み込む]**（取得済み一覧へ追記） |
+| **Pull Request の新規作成** | 現在のローカルブランチから **[作成前チェック]** を実行し、タイトル等を確認して **[Pull Request を作成]** |
 | 詳細の閲覧 | 番号・状態（merged / draft を含む）・作成者・head → base・本文・URL |
 | 変更ファイルの確認 | 「変更ファイル」一覧（パスと status） |
-| コメントの閲覧・投稿 | 会話コメントを確認し、**[コメントを投稿]** |
+| review の閲覧・提出 | **[レビューを更新]**、種類と本文を確認して **[レビューを提出]** |
+| 差分行への review comment | **[差分行へレビューコメント]** から patch の行を選択して投稿 |
+| check-runs の確認とマージ | **[check-runs を更新]** 後、方式を選び **[Pull Request をマージ]** |
+| コメントの閲覧・投稿 | API の全ページから取得した会話コメントを確認し、**[コメントを投稿]** |
+| コンソール出力の投稿 | **[コンソール出力を投稿]**（下記） |
+| ブランチの push | **[現在のブランチを push]**（下記） |
+| head ブランチの削除 | **[head ブランチを削除]**（下記） |
+
+#### Pull Request を直接作成する
+
+Pull Request タブ上部の作成欄では、**現在 checkout 中のローカルブランチだけ**を head として使用します。任意の別ブランチへの checkout や自動 commit は行いません。
+
+1. **Base branch** を確認します（連携設定のベースブランチと同期）。
+2. **[作成前チェック]** を押し、head → base、commit 数、変更ファイル数、remote の ahead / behind、公開・未 push 状態を確認します。
+3. タイトルと任意の Markdown 本文を入力します。本文が未編集なら `.github/pull_request_template.md` を読み込めます。
+4. 必要に応じて関連 Issue、Draft、ラベル、担当者、マイルストーン番号、reviewer user、reviewer team slug を指定します。
+5. **[Pull Request を作成]** を押します。
+
+次の場合は fail-closed で作成しません。
+
+- detached HEAD、head と base が同じ、base に対する新規 commit が 0 件
+- 未コミットの変更がある
+- local checkout の origin と Hub の対象 repository が異なる
+- branch が origin に未公開、または未 push commit がある（先に **[現在のブランチを push]** を明示操作します）
+- GitHub 上の compare で ahead が 0 件
+- 同じ head / base の open Pull Request が既にある（新規作成せず既存 PR を選択します。このとき作成欄の metadata / reviewer は既存 PR へ自動適用しません）
+
+関連 Issue を入力した場合、**「default branch への merge 時に Issue を閉じる」**は既定 OFF です。ON でも base が repository の default branch の場合だけ `Closes #<番号>` を付け、それ以外は plain `#<番号>` にします。この指定は「PR 自動 Approve & Auto-merge」とは無関係で、保存されません。
+
+PR 本体の作成成功後、その番号と URL を直ちに表示し、現在のタスクへ関連付けます。ラベル・担当者・マイルストーン・reviewer の後処理が失敗しても、PR 本体を失敗扱いにしません。再試行に必要な情報を保持できた失敗だけ **[metadata を再試行]** できます。分類できない後処理エラーは警告のみで、安全のため再試行できません。再試行で PR 本体を再作成しません。
+
+**[Copilot でタイトルを生成]** は既存の title generator を使用します。入力済みタイトルを自動上書きせず、ボタンを明示操作した場合だけ置換します。生成には GitHub Copilot の token / premium request を消費することがあります。
+
+#### review と差分行コメント
+
+Pull Request の詳細を選択すると review 一覧を 1 回取得します。1 回の取得で API の全ページを時系列順に読み、以降は **[レビューを更新]** の明示操作だけで再取得し、自動ポーリングしません。review は `APPROVE` / `REQUEST_CHANGES` / `COMMENT` の 3 種です。`REQUEST_CHANGES` と `COMMENT` は本文必須、`APPROVE` は本文を省略できます。提出失敗時は本文と種類を保持します。
+
+**[差分行へレビューコメント]** は GitHub が返した `patch` を持つファイルだけを対象にします。ダイアログで行を選ぶと path / line / LEFT・RIGHT / head commit SHA が確定表示されます。同ダイアログは既存の review comment を全ページ取得して API 順に表示します。patch が無いファイルの行番号は推測しません。PR 詳細と変更ファイルの取得時点で head SHA が一致しない場合は起動せず、詳細の再取得を案内します。
+
+#### check-runs を確認してマージする
+
+**[check-runs を更新]** は選択中 Pull Request の head commit を明示取得します。未取得、応答を解釈できない、head SHA 不明、未完了、または conclusion が `success` / `neutral` / `skipped` 以外の check-run がある場合、マージボタンは無効です。
+
+マージ方式は `merge` / `squash` / `rebase` の 3 種です。実行前の確認ダイアログには Pull Request 番号、head / base branch、方式を表示し、既定の回答は「いいえ」です。確認後に head が変わった場合は送信しません。405（保護ルール等）や 409（head 更新・競合）、または成功を確認できない応答ではマージ済みと表示せず、取得済み check-runs を破棄します。再度 **[check-runs を更新]** してから判断してください。native Auto-merge と merge queue の有効化は行いません。
+
+#### コンソール出力を PR コメントとして残す
+
+**[コンソール出力を投稿]** で、[作業状況] 画面に表示中のコンソール出力を、選択中の PR へコメントとして投稿できます。
+
+- 本文は見出しとメタ情報（run-id / 総行数 / 掲載行数）の表 + 折りたたみ（`<details>`）のコードブロックという、GitHub 上で読みやすい形式に整形されます。
+- 掲載されるのは **末尾 300 行** までです。超えた分は「先頭 N 行を省略」と本文に明記されます。GitHub のコメント作成 API は本文の最大長を公開していないため、全文投稿は行いません。
+- カラー表示用の ANSI エスケープは除去され、出力中に \`\`\` があってもコードブロックが壊れないようフェンス長を自動調整します。
+- 全文は従来どおり `work/run/<run-id>/console-log.txt` に保存されます。
+- 掲載行数や書式を変える設定項目はありません。
+
+#### push と head ブランチの削除
+
+| ボタン | 動作 |
+|---|---|
+| **[現在のブランチを push]** | 現在のローカルブランチを `git push -u origin <ブランチ>` で push します。`git add` / `git commit` は行いません |
+| **[head ブランチを削除]** | 選択中 PR の head ブランチを **origin から** 削除します。github.com の PR ページにある [Delete branch] と同じ位置づけです |
+
+- 削除ボタンは **PR が merged または closed のときだけ** 有効になります。実行前に対象ブランチ名を含む確認ダイアログが出ます。
+- 削除されるのは **リモート（origin）のブランチだけ** です。ローカルブランチの削除はこの画面では行わず、「マージ後にローカル作業ブランチを削除」設定が担います。
+- push と削除は別操作です。連続実行するボタンはありません。
+
+### 実行中の進捗を Issue / PR へ自動で Post する
+
+**[連携設定]** タブの **進捗を自動 Post** で、ワークフロー実行中の進捗を関連 Issue / Pull Request へ自動投稿できます。
+
+| 選択肢 | 動作 |
+|---|---|
+| **Post しない**（既定） | 自動投稿を行いません。GitHub API を呼びません |
+| **Issue のみ** | 対象 Issue へだけ投稿します |
+| **Pull Request のみ** | 対象 PR へだけ投稿します |
+| **Issue と Pull Request** | 両方へ投稿します |
+
+- Post 先 1 件につき **実行 1 回あたりコメントを 1 件だけ作成** し、以降は同じコメントを更新します。ログ 1 行ごとにコメントが増えることはありません。
+- 更新の契機は **実行開始、各 Step の完了（完了 / 失敗 / スキップ / ブロック）、ワークフロー終了** の 3 つだけです。
+- 本文に含まれるのは run ID、ワークフロー名、Step ごとの状態と経過時間だけです。**prompt ・応答本文・ツールの入出力・認証情報は含まれません。**
+- 最終更新のときだけ、[作業状況] 画面のコンソール出力末尾 300 行を折りたたみで付加します（認証情報はマスク済み）。
+- 新規作成される PR は実行の最後にしか番号が確定しないため、その PR への自動投稿は **最終更新の 1 回だけ** です。
+- 投稿に失敗してもワークフローは失敗しません。次の更新契機で再試行します。
+- 実行中でも設定を切り替えられます。**Post しない** に戻しても、すでに投稿済みのコメントは削除されません。
+- 手動の **[コメントを投稿]** や **[コンソール出力を投稿]** はこの設定とは独立して従来どおり使えます。
+
+### マージ後のローカルブランチを自動で削除する
+
+「マージ後にローカル作業ブランチを削除」が有効な GUI 実行では、**その実行が新規作成した作業ブランチ** について、GUI が起動している間だけ対象 PR の状態を低頻度で確認し、マージを見つけたときだけローカルブランチを削除します。
+
+- 削除されるのは **ローカルブランチだけ** です。リモートの head ブランチは削除しません（**[head ブランチを削除]** または github.com の自動削除設定を使ってください）。
+- **「PR 用の新しい作業ブランチを作成」を OFF にして現在のブランチを使った場合、そのブランチは自動削除の対象外です。** 利用者が選んだブランチを勝手に消しません。
+- ベースブランチと同名、PR の head が別リポジトリ（fork）、head / base / 番号が一致しない、未マージのまま close された——のいずれかに当てはまる場合は削除しません。
+- 確認は対象 PR 番号を指定した問い合わせだけで行い、Issue / PR の一覧を定期取得することはありません。
+- **GUI をマージ前に終了した場合、その後の自動削除は行われません。** 次回起動時に監視を再開する仕組みもありません。手動で `git branch -D <ブランチ>` してください。
 
 ### この画面で提供しないもの
 
 | 提供しない機能 | 理由 |
 |---|---|
-| Pull Request の新規作成 | PR 作成は `--create-pr` / `--create-issues` 経路が担います。同経路は PR 作成前に必ずローカル作業ブランチを作成して checkout します（下記） |
-| 差分の行単位レビューコメント / Approve / Request changes | 会話コメントのみを対象とします |
-| ラベル・担当者・マイルストーン・リアクション・Projects の編集 | 閲覧のみです（ラベル・担当者は Issue 詳細に表示） |
-| 一覧の自動更新 | GitHub API のレート制限を不要に消費しないため、更新は **[更新]** 押下時のみです |
+| リアクション / Projects / タイムラインイベントの編集 | Issue metadata の編集は提供しますが、これらは対象外です |
+| Projects v2 / native Auto-merge / merge queue / fork・cross-repository head | GitHub Hub の直接 PR 作成では対象外です |
+| 一覧の自動更新（ポーリング） | GitHub API のレート制限を不要に消費しないため、リポジトリ確定時の 1 回の取得を除き **[更新]** 押下時のみです |
+| GitHub Search API によるキーワード検索 | **[さらに読み込む]** でページを追加取得できますが、絞り込みは取得済み一覧に対するローカル処理です |
+| 画像添付 / `@` / `#` / 絵文字の補完 | コメント入力欄の対象外です（手入力で代替できます） |
+
+GUI から `--create-pr` / `--create-issues` を使う実行では、Orchestrator が PR 作成直前に PR 本文を GitHub Copilot CLI へ渡し、PR タイトルを自動生成します。この Orchestrator 経路は、GitHub Hub から現在の commit 済みブランチを直接 PR 化する経路とは別です。
+
+- PR タイトル生成も GitHub Copilot の token / premium request を消費することがあります。
+- Workflow の `[AAS]` などの prefix は保持され、local checkpoint の draft PR では `— local checkpoint (draft)` も保持されます。
+- Copilot CLI の失敗時は従来の決定的タイトルへ自動的に戻し、PR 作成自体は継続します。
+- CLI 単独実行および Cloud 実行ではタイトル自動生成を行わず、従来のタイトルを使います。
 
 ### Root Issue を新規作成する / 既存 Issue に連携する
 
-設定 → GitHub → 「リポジトリ / Issue 設定」の **「Root Issue の扱い」** で選びます。
+GitHub Hub → **[連携設定]** → 「リポジトリ / Issue 設定」の **「Root Issue の扱い」** で選びます。
 
 | 選択 | 振る舞い |
 |---|---|
-| **新規作成**（既定） | 従来どおり Root Issue を作成します。「Issue タイトル（上書き）」が使えます |
+| **新規作成**（既定） | GUI workflow では Root Issue 本文から Copilot CLI がタイトルを生成します。「Issue タイトル（上書き）」を指定した場合は Copilot CLI を呼ばず、その値を使います |
 | **既存 Issue に連携** | 「連携する Issue 番号」の Issue を Root Issue として使います。Sub-Issue はその Issue の子として作成され、PR 本文に `Closes #<番号>` が入ります。タイトル上書きは送られません |
 
 - この選択は **「GitHub Issue を作成」を有効にしたときだけ** 効力を持ちます。CLI では `--issue-number <N>` に相当し、`--create-issues` を伴わないと警告のうえ無視されます。
+- 番号は直接入力できるほか、**[Issue を選択...]** でリポジトリの Issue 一覧から選べます（`GH_TOKEN` が必要）。
 - 「既存 Issue に連携」で番号が未入力の場合、[実行 ▶] は開始されず警告が出ます。
 - 指定した番号を取得できない場合や、Pull Request の番号を指定した場合は、**実行を中止します**（Root Issue の新規作成へは戻りません）。誤った番号のまま Sub-Issue を無関係な Issue へ紐付けないためです。
+- Root Issue の自動タイトル生成は GitHub Copilot の token / premium request を消費することがあります。失敗時は従来の `[AAS] ...` 形式へ fallback し、Issue 作成を継続します。
+- Sub-Issue は Step ID と Step 名を識別できる必要があるため、`[AAS] Step.1 ...` 形式の決定的タイトルを維持し、Copilot CLI へ問い合わせません。
+
+### 現在のタスクへ Pull Request を関連付ける
+
+GitHub Hub の一覧から Pull Request を選択するか、連携設定の **「連携する Pull Request 番号」** で番号を直接入力します。Hub で作成した Pull Request は自動的に現在のタスクへ関連付けられます。
+
+> この指定は **GUI セッション内の run / Workflow / instance 単位**で使われ、`hve` の実行引数（CLI オプション）には含まれません。設定の番号は起動時の既定値としてだけ読み込まれ、実行中の関連付け変更は設定へ自動保存されません。Orchestrator は既存 PR を入力として受け取る処理を持たないためです。
 
 > **PR 作成時のブランチ**: 「GitHub Issue を作成」または「GitHub Pull Request を作成」を有効にすると、Orchestrator はベースブランチから `copilot-sdk/<prefix>-<8 桁>` 形式の作業ブランチを作成して checkout し、そのブランチで作業してから PR を作成します。ベースブランチへ直接コミットすることはありません。
 
@@ -720,6 +937,17 @@ GitHub Copilot CLI SDK の複数デバイス間セッション管理が不十分
 > **Copilot CLI の `/resume` とは別概念です。** Copilot パネルの対話タブで使える `/resume` は
 > **Copilot CLI 自身のチャットセッション**を選び直す機能です。HVE のワークフロー（DAG 実行）を
 > 途中から再開するものではありません。ワークフローを分割実行したい場合は `--steps` で範囲を絞ってください。
+
+### 進捗を引き継いで再実行する（Resume とは別機能）
+
+廃止したのは **SDK セッションの復元** であり、HVE 自身が保存する **ワークフロー進捗（どのステップが成功したか）** は別機能として利用できます。
+
+Step 1 の `C5 GitHub` セクションにある **「進捗を引き継いで再実行する run-id」** へ過去の run-id を入力すると、その run で成功済みのステップを除外して実行します（CLI の `--resume-run` と同じ機能）。
+
+- 未完了のステップは **新しいセッション** で実行されます。会話履歴は復元されません。
+- 空欄のときは通常実行となり、オプションは渡されません。
+- 進捗記録が無い run-id を指定すると、実行時に停止します（全ステップの再実行へはフォールバックしません）。
+- fan-out するステップは、子ステップが成功済みでも親ステップ単位で再実行されます。
 
 ---
 
@@ -864,6 +1092,27 @@ python -m pytest hve/tests/test_run_unified_workdir.py
 
 GUI テストはヘッドレス環境では実行環境（Qt プラットフォームプラグイン）に依存します。実行できない場合は理由を記録し、CLI 側の契約テストで代替してください。
 
+#### macOS GUI テスト
+
+macOS 固有の window / menu / dialog / application lifecycle、theme / font / icon / i18n layout、QtWebEngine、`darwin` / POSIX 分岐、GUI 依存、または macOS launcher / setup に影響する変更は、手動 workflow `.github/workflows/test-hve-gui-macos.yml` で検証します。GUI に影響しない変更や docs-only 変更では実行しません。影響を判断できない場合は、費用を発生させる前に利用者へ確認します。
+
+| Scope | 内容 | Timeout |
+|---|---|---:|
+| `smoke`（既定） | Qt の実 `cocoa` platform plugin で MainWindow を起動し、Python 例外、Qt Warning / Critical / Fatal、ウィンドウ生成、skip=0、スクリーンショットを検証 | 15分 |
+| `full` | `hve/gui/tests` を `offscreen` で全量実行した後、別プロセスで同じ `cocoa` smoke を実行 | 120分 |
+
+この workflow は `workflow_dispatch` 専用で、自動起動しません。実行前に GitHub の公式 Actions runner 料金を確認し、runner / architecture / scope、単価・確認日・出典 URL、予測時間・予測額、`timeout（分）×単価（USD/分）` の最大額、および free minutes 残量が不明なら実請求額が 0 から最大額までになりうることを提示します。利用者がその1回を明示承認した場合だけ、Actions 画面の **Test HVE GUI on macOS** から次を入力します。
+
+- `test_scope`: `smoke` または `full`
+- `estimated_cost_usd`: 提示・承認済みの予測課金額
+- `cost_approved`: 承認済みの場合だけ有効化
+
+既存 run の **Re-run jobs** は `github.run_attempt == 1` のゲートで実行されません。失敗または cancel 後は、料金を再確認して新しい見積りと承認を得てから、新しい workflow run を起動します。
+
+結果は7日間の artifact（JUnit XML、Qt log、MainWindow PNG）で確認できます。MainWindow PNG は `QWidget.grab()` で取得し、macOS の Screen Recording / Accessibility 権限や TCC 変更を使用しません。
+
+料金の正本: [GitHub Actions runner pricing](https://docs.github.com/en/billing/reference/actions-minute-multipliers)
+
 ### 互換性・安全性
 
 - `hve/.settings.txt` は既存ユーザーの設定ファイルです。キー名の変更・削除は互換性を壊すため、既定値の追加を優先してください。
@@ -924,7 +1173,7 @@ Step 1「ワークフロー選択」画面で [次へ] を押し、4 カテゴ�
 | `AUTH` | GitHub 書き込みを伴う実行において、起動時の認証解決後も `GH_TOKEN` / `GITHUB_TOKEN` を解決できない状態 |
 
 - GitHub 書き込みを必要としない通常のローカル実行は `SETTING` / `AUTH` の対象外です。
-- `additional_prompt` や Work IQ 用プロンプトなどの Prompt 自由記述欄は内容検査の対象外です。空欄・自然言語・業務内容を理由に precheck は失敗しません。
+- `additional_prompt` や Work IQ 用プロンプトなどの Prompt 自由記述欄は内容検査の対象外です。空欄・自然言語・業務内容を理由に precheck は失敗しません。ただしプロンプトのサイズは Step 実行時に別途判定されます（下記）。
 - Step 1 は UI thread で待ち時間が発生しないよう、remote `origin` と remote branch の照会を行いません。これらは GUI が起動する `hve orchestrate` 子プロセスが同じ共通 preflight を remote 検査ありで実行します。このため remote 不存在・認証・通信の結果は Step 1 の4カテゴリスナップショットには含まれず、子プロセスの実行ログに出力されます。
 - `AUTH` は「[起動時の GitHub 認証確認](#起動時の-github-認証確認)」で捕捉・注入されたセッション限りの token を参照する判定であり、同じ認証解決を再実装するものではありません。token 本体はスナップショットへ保存されません。
 

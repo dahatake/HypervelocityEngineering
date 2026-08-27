@@ -72,7 +72,7 @@ class TestARDWorkflowRegistration(unittest.TestCase):
         self.assertEqual(s.depends_on, ["2"])
         self.assertEqual(s.skip_fallback_deps, ["1.2"])
         self.assertEqual(s.output_paths, ["docs/recommended-kpi-okr.md"])
-        self.assertEqual(s.body_template_path, "templates/ard/step-2.1.md")
+        self.assertEqual(s.body_template_path, ".github/prompts/steps/ard/step-2.1.prompt.md")
 
     def test_step_1_definition(self):
         # Sub-10: Step 1 は「事業分野候補列挙」

@@ -6,6 +6,7 @@ import asyncio
 import json
 from datetime import timedelta
 from functools import wraps
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Coroutine
 
@@ -19,6 +20,7 @@ from hve.repository_query import (
     RepositoryQueryExecutionError,
     RepositoryQueryLimitError,
     RepositoryQueryOutputError,
+    _SYSTEM_MESSAGE,
     run_repository_query,
 )
 
@@ -28,6 +30,7 @@ TOOL_NAMES = (
     "open_evidence",
     "find_code_references",
 )
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def async_test(
@@ -213,6 +216,24 @@ async def test_creates_a_custom_only_fail_closed_session() -> None:
     assert isinstance(decision, PermissionDecisionUserNotAvailable)
     assert session.prompts == [("ground this question", 30.0)]
     assert result["status"] == "answered"
+
+
+def test_system_message_prompt_uses_the_externalized_source() -> None:
+    prompt_path = (
+        REPO_ROOT
+        / ".github"
+        / "prompts"
+        / "runtime"
+        / "repository-query"
+        / "system-message.prompt.md"
+    )
+
+    prompt_text = prompt_path.read_text(encoding="utf-8")
+
+    assert prompt_text == _SYSTEM_MESSAGE
+    assert "Return exactly one JSON object" in prompt_text
+    assert "Never invent paths, lines, or evidence IDs" in prompt_text
+    assert "untrusted data" in prompt_text
 
 
 @async_test

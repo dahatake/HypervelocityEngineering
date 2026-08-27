@@ -271,7 +271,7 @@ full completion 条件を満たせません。これらを無視した完了報�
 | 変更したい内容 | 正本 | 同時に確認するもの |
 |---|---|---|
 | Step、DAG、local/live、fan-out、必須 parameter、reality AC | [`hve/workflow_registry.py`](../hve/workflow_registry.py) の `ASDW_WEB` | `hve/tests/test_workflow_registry.py`, `test_orchestrator_local_checkpoint_retention.py`, `test_asdw_web_production_path.py` |
-| Step 本文 | [`.github/scripts/templates/asdw-web/`](../.github/scripts/templates/asdw-web/) | [`hve/template_engine.py`](../hve/template_engine.py), template dependency tests |
+| Step 本文 | [`.github/prompts/steps/asdw-web/`](../.github/prompts/steps/asdw-web/) | [`hve/template_engine.py`](../hve/template_engine.py), template dependency tests |
 | Agent 行動、禁止、DoD | [`.github/prompts/`](../.github/prompts/) の `Dev-Microservice-Azure-*`, `E2ETesting-Playwright`, `QA-Azure*` | [`hve/prompt_loader.py`](../hve/prompt_loader.py), `hve/tests/test_prompt_loader.py` |
 | 座標別 input / output / producer | [`.github/io-contracts/`](../.github/io-contracts/) の `*--asdw-web--<step>.yaml` | `.github/scripts/validate-io-contract.py`, `hve/tests/test_tdd_report_io_contract.py` |
 | TDD report / reality gate | [`tdd-red-green-reality`](../.github/skills/testing/tdd-red-green-reality/SKILL.md), [`hve/runner.py`](../hve/runner.py), [`hve/artifact_validation.py`](../hve/artifact_validation.py) | `hve/tests/test_runner_tdd_report_gate.py`, deploy gate tests |

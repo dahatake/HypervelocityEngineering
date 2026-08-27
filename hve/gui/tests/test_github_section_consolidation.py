@@ -78,14 +78,18 @@ def test_c1_widget_lacks_moved_attributes(qapp) -> None:
 # ---------------------------------------------------------------------------
 # 3. セクションラベル
 # ---------------------------------------------------------------------------
-def test_settings_window_tree_labels_c5_as_github() -> None:
-    """設定画面ツリーの C5 ノードラベルが「GitHub」であること。"""
+def test_settings_window_tree_no_longer_exposes_c5() -> None:
+    """FR-GUI-35: GitHub 設定の可視 owner は GitHub Hub だけであること。
+
+    従来は設定画面ツリーの「各サービス連携」に C5「GitHub」ノードがあったが、
+    Hub の「連携設定」タブへ集約したため設定ツリーからは公開しない。
+    """
     from hve.gui.settings_window import _CATEGORY_TREE
 
     renkei_items = [items for label, items in _CATEGORY_TREE if label == "各サービス連携"][0]
     label_by_key = {key: name for name, key in renkei_items}
-    assert label_by_key.get("C5") == "GitHub", (
-        f"C5 のラベルが GitHub でない: {label_by_key.get('C5')!r}"
+    assert "C5" not in label_by_key, (
+        f"設定ツリーに C5 が残存: {label_by_key.get('C5')!r}"
     )
 
 

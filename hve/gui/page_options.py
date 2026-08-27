@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QCompleter,
+    QDialog,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
@@ -49,7 +50,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .orchestrate_args import OrchestrateArgs
+from .orchestrate_args import OrchestrateArgs, _coerce_tristate, _split_semicolon_list
 from .workflow_display import format_workflow_label
 from .workflow_requirements_banner import WorkflowRequirementsBanner
 from .workflow_step_requirements import (
@@ -59,28 +60,11 @@ from .workflow_step_requirements import (
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QComboBox, QCheckBox
 
 
-_GITHUB_REMOTE_PATTERNS = (
-    re.compile(r"^https://github\.com/([^/\s]+)/([^/\s]+)/?$"),
-    re.compile(r"^git@github\.com:([^/\s]+)/([^/\s]+)$"),
-    re.compile(r"^ssh://git@github\.com/([^/\s]+)/([^/\s]+)/?$"),
-)
-
-
 def _parse_github_remote_url(url: str) -> Optional[str]:
     """GitHub remote URL から ``owner/repo`` を抽出する。"""
-    value = (url or "").strip()
-    if not value:
-        return None
-    for pattern in _GITHUB_REMOTE_PATTERNS:
-        match = pattern.match(value)
-        if not match:
-            continue
-        owner, repo = match.group(1), match.group(2)
-        if repo.endswith(".git"):
-            repo = repo[:-4]
-        if owner and repo and "/" not in owner and "/" not in repo:
-            return f"{owner}/{repo}"
-    return None
+    from .git_ops import parse_github_remote_url
+
+    return parse_github_remote_url(url)
 
 
 def _guess_repo_from_git_remote(cwd: Optional[str] = None) -> Optional[str]:
@@ -1027,6 +1011,18 @@ class _C1Basic(QWidget):
             input_widget=self.context_max_chars,
         ))
 
+        # FR-LOCAL-SURFACE-01 (a): CLI `--strict` と同じ shared setting。
+        self.strict = QCheckBox(self.tr("有効化"))
+        layout.addWidget(_LabeledField(
+            title=self.tr("Pre-check 失敗で中断する (strict)"),
+            description=(
+                self.tr("local 実行モード既定の continue-on-precheck を無効化し、"
+                "入力成果物や必須 Skill の Pre-check に失敗した時点で実行を中断します"
+                "（既定: 無効 = 継続）。")
+            ),
+            input_widget=self.strict,
+        ))
+
     def _build_model_effort_row(
         self,
         model_combo: QComboBox,
@@ -1103,6 +1099,7 @@ class _C1Basic(QWidget):
         # enable_tool_search: auto は hve 既定と同じなので CLI へ渡さない
         _ts = self.enable_tool_search.currentData()
         args.enable_tool_search = _ts if _ts in ("yes", "no") else None
+        args.strict = self.strict.isChecked()
 
         # 旧 _C2Parallel / _C8Timeout から移動した項目
         args.max_parallel = self.max_parallel.value()
@@ -1901,6 +1898,18 @@ class _C5IssuePR(QWidget):
             input_widget=self.create_pr,
         ))
 
+        self.create_working_branch = QCheckBox(self.tr("有効化"))
+        self.create_working_branch.setChecked(True)
+        _scm_group.addWidget(_LabeledField(
+            title=self.tr("PR 用の新しい作業ブランチを作成"),
+            description=(
+                self.tr("ON はベースブランチから新規作業ブランチを作成します（既定）。"
+                "OFF は現在 checkout 中の安全な非ベースブランチを使用し、"
+                "不整合があれば実行開始前に停止します。")
+            ),
+            input_widget=self.create_working_branch,
+        ))
+
         self.ignore_paths = QLineEdit()
         self.ignore_paths.setPlaceholderText(self.tr("例: docs/ legacy/"))
         _scm_group.addWidget(_LabeledField(
@@ -1953,13 +1962,47 @@ class _C5IssuePR(QWidget):
         self.issue_number = QLineEdit()
         self.issue_number.setPlaceholderText("1234")
         self.issue_number.setValidator(QIntValidator(1, 2_147_483_647, self))
+        self.pick_issue_button = QPushButton(self.tr("Issue を選択..."))
+        self.pick_issue_button.setToolTip(
+            self.tr("リポジトリの Issue 一覧から選んで番号を入力します（GH_TOKEN が必要）。")
+        )
+        self.pick_issue_button.clicked.connect(self._on_pick_issue_clicked)
+        _issue_number_row = QWidget()
+        _issue_number_layout = QHBoxLayout(_issue_number_row)
+        _issue_number_layout.setContentsMargins(0, 0, 0, 0)
+        _issue_number_layout.addWidget(self.issue_number, 1)
+        _issue_number_layout.addWidget(self.pick_issue_button, 0)
         _repo_group.addWidget(_LabeledField(
             title=self.tr("連携する Issue 番号"),
             description=(
                 self.tr("「既存 Issue に連携」を選んだときの Issue 番号。"
-                "取得できない番号を指定した場合、実行は中止され新規作成へは戻りません。")
+                "取得できない番号を指定した場合、実行は中止され新規作成へは戻りません。"
+                "[Issue を選択...] で一覧から選べます。")
             ),
-            input_widget=self.issue_number,
+            input_widget=_issue_number_row,
+        ))
+
+        # FR-GUI-32: タスクと関連付ける PR。GUI セッション内の指定で Orchestrator へは伝達しない。
+        self.linked_pr_number = QLineEdit()
+        self.linked_pr_number.setPlaceholderText("5678")
+        self.linked_pr_number.setValidator(QIntValidator(1, 2_147_483_647, self))
+        self.pick_pr_button = QPushButton(self.tr("Pull Request を選択..."))
+        self.pick_pr_button.setToolTip(
+            self.tr("リポジトリの Pull Request 一覧から選んで番号を入力します（GH_TOKEN が必要）。")
+        )
+        self.pick_pr_button.clicked.connect(self._on_pick_pull_request_clicked)
+        _pr_number_row = QWidget()
+        _pr_number_layout = QHBoxLayout(_pr_number_row)
+        _pr_number_layout.setContentsMargins(0, 0, 0, 0)
+        _pr_number_layout.addWidget(self.linked_pr_number, 1)
+        _pr_number_layout.addWidget(self.pick_pr_button, 0)
+        _repo_group.addWidget(_LabeledField(
+            title=self.tr("連携する Pull Request 番号"),
+            description=(
+                self.tr("GitHub ウィンドウでコンソール出力の投稿先として使う Pull Request 番号。"
+                "この指定は GUI セッション内だけで使われ、hve の実行引数には含まれません。")
+            ),
+            input_widget=_pr_number_row,
         ))
 
         self.issue_title = QLineEdit()
@@ -2004,6 +2047,18 @@ class _C5IssuePR(QWidget):
         _branch_fetch_row.addWidget(self.branch_fetch_status, 1)
         _branch_group.addLayout(_branch_fetch_row)
 
+        # FR-GUI-38: FR-CLI-86 の --resume-run。run-id の実在判定は CLI 側に任せる。
+        self.resume_run = QLineEdit("")
+        self.resume_run.setPlaceholderText(self.tr("例: 20260826T101010-a1b2c3（空欄＝通常実行）"))
+        _branch_group.addWidget(_LabeledField(
+            title=self.tr("進捗を引き継いで再実行する run-id"),
+            description=self.tr(
+                "指定した run で成功済みのステップを除外して再実行します（未完了ステップは新しいセッションで実行）。"
+                "廃止済みのセッション復元（Resume）とは別機能です。記録が無い run-id は実行時に停止します。"
+            ),
+            input_widget=self.resume_run,
+        ))
+
         # === グループ: PR 自動 Approve & Auto-merge ===
         # --- 旧 _C11AKM から移動: PR 自動 Approve & Auto-merge ---
         _akm_group = _group(self.tr("PR 自動 Approve & Auto-merge"))
@@ -2016,6 +2071,23 @@ class _C5IssuePR(QWidget):
         # FR-CLI-34: マージ後ローカルブランチ削除トグル（共通ファクトリ生成、C10 と双方向同期）。
         self.delete_local_merged_branch, _delete_branch_field = _make_delete_branch_field(self)
         _akm_group.addWidget(_delete_branch_field)
+
+        # === グループ: 実行中の自動進捗 Post（FR-GUI-36） ===
+        _auto_post_group = _group(self.tr("実行中の自動進捗 Post"))
+        self.github_auto_post_target = QComboBox()
+        self.github_auto_post_target.addItem(self.tr("Post しない"), "off")
+        self.github_auto_post_target.addItem(self.tr("Issue のみ"), "issue")
+        self.github_auto_post_target.addItem(self.tr("Pull Request のみ"), "pr")
+        self.github_auto_post_target.addItem(self.tr("Issue と Pull Request"), "both")
+        _auto_post_group.addWidget(_LabeledField(
+            title=self.tr("進捗を自動 Post"),
+            description=self.tr(
+                "Workflow 実行中の進捗を関連 Issue / Pull Request へ自動 Post します（既定: Post しない）。"
+                " Post 先ごとに実行 1 回につきコメントを 1 件だけ作成し、以降は同じコメントを更新します。"
+                " 本文には状態・時刻・経過時間だけを記録し、prompt / 応答本文 / 認証情報は含めません。"
+            ),
+            input_widget=self.github_auto_post_target,
+        ))
 
         # === グループ: GitHub Copilot SDK 連携 ===
         _sdk_group = _group(self.tr("GitHub Copilot SDK 連携"))
@@ -2106,7 +2178,28 @@ class _C5IssuePR(QWidget):
         """Root Issue の扱いに応じて番号入力とタイトル上書きの活性を切り替える。"""
         existing = self.issue_mode.currentData() == "existing"
         self.issue_number.setEnabled(existing)
+        self.pick_issue_button.setEnabled(existing)
         self.issue_title.setEnabled(not existing)
+
+    def _on_pick_issue_clicked(self) -> None:
+        """FR-GUI-32: Issue 一覧から選んで番号を入力する。"""
+        self._pick_number("issue", self.issue_number)
+
+    def _on_pick_pull_request_clicked(self) -> None:
+        """FR-GUI-32: Pull Request 一覧から選んで番号を入力する。"""
+        self._pick_number("pr", self.linked_pr_number)
+
+    def _pick_number(self, kind: str, target: QLineEdit) -> None:
+        from .github_picker_dialog import GitHubPickerDialog
+
+        dialog = GitHubPickerDialog(self.repo.text().strip(), kind, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            dialog.shutdown()
+            return
+        number = dialog.selected_number()
+        dialog.shutdown()
+        if number is not None:
+            target.setText(str(number))
 
     def _on_fetch_repo_clicked(self) -> None:
         """「リポジトリ取得」押下時: repo metadata を非同期取得する。"""
@@ -2304,6 +2397,7 @@ class _C5IssuePR(QWidget):
     def to_args(self, args: OrchestrateArgs) -> None:
         args.create_issues = self.create_issues.isChecked()
         args.create_pr = self.create_pr.isChecked()
+        args.create_working_branch = self.create_working_branch.isChecked()
         text = self.ignore_paths.text().strip()
         args.ignore_paths = text.split() if text else []
         args.repo = self.repo.text().strip() or None
@@ -2320,6 +2414,8 @@ class _C5IssuePR(QWidget):
         )
         # 旧 _C9BranchSteps / _C11AKM から移動
         args.branch = self.branch.text().strip() or "main"
+        # FR-GUI-38: 進捗を引き継ぐ再実行の run-id。空欄は未指定。
+        args.resume_run = self.resume_run.text().strip() or None
         args.enable_auto_merge = self.enable_auto_merge.isChecked()
         args.delete_local_merged_branch = self.delete_local_merged_branch.isChecked()
         # 旧 _C1Basic から移動: Fleet mode / Cloud Sessions
@@ -2741,14 +2837,17 @@ class _CAgenticRetrieval(QWidget):
         ))
 
         # 以下 5 つは Step の実行可否ではなく生成される設計内容に影響する。
-        # 先頭の「既定に従う」を選んだときは CLI へ渡さない。
+        # 先頭の「既定に従う」（userData=""）を選んだときは CLI へ渡さない。
+        # userData は settings_store へそのまま保存し復元できる文字列に限る
+        # （FR-LOCAL-SURFACE-01 (a)）。list / bool を userData へ直接置くと
+        # `settings_apply._set()` の userData 一致が失敗し、復元できない。
         self.agentic_data_source_modes = QComboBox()
         self.agentic_data_source_modes.setEditable(False)
-        self.agentic_data_source_modes.addItem(self.tr("既定に従う"), userData=None)
-        self.agentic_data_source_modes.addItem(self.tr("Indexer (Pull)"), userData=["indexer"])
-        self.agentic_data_source_modes.addItem(self.tr("Push API"), userData=["push"])
+        self.agentic_data_source_modes.addItem(self.tr("既定に従う"), userData="")
+        self.agentic_data_source_modes.addItem(self.tr("Indexer (Pull)"), userData="indexer")
+        self.agentic_data_source_modes.addItem(self.tr("Push API"), userData="push")
         self.agentic_data_source_modes.addItem(
-            self.tr("Indexer + Push"), userData=["indexer", "push"]
+            self.tr("Indexer + Push"), userData="indexer;push"
         )
         layout.addWidget(_LabeledField(
             title=self.tr("Agentic Retrieval: データ投入方式"),
@@ -2758,9 +2857,9 @@ class _CAgenticRetrieval(QWidget):
 
         self.foundry_mcp_integration = QComboBox()
         self.foundry_mcp_integration.setEditable(False)
-        self.foundry_mcp_integration.addItem(self.tr("既定に従う"), userData=None)
-        self.foundry_mcp_integration.addItem(self.tr("連携する"), userData=True)
-        self.foundry_mcp_integration.addItem(self.tr("連携しない"), userData=False)
+        self.foundry_mcp_integration.addItem(self.tr("既定に従う"), userData="")
+        self.foundry_mcp_integration.addItem(self.tr("連携する"), userData="on")
+        self.foundry_mcp_integration.addItem(self.tr("連携しない"), userData="off")
         layout.addWidget(_LabeledField(
             title=self.tr("Agentic Retrieval: Foundry 連携"),
             description=self.tr(
@@ -2784,9 +2883,9 @@ class _CAgenticRetrieval(QWidget):
 
         self.agentic_existing_design_diff_only = QComboBox()
         self.agentic_existing_design_diff_only.setEditable(False)
-        self.agentic_existing_design_diff_only.addItem(self.tr("既定に従う"), userData=None)
-        self.agentic_existing_design_diff_only.addItem(self.tr("差分更新のみ"), userData=True)
-        self.agentic_existing_design_diff_only.addItem(self.tr("全体を再生成"), userData=False)
+        self.agentic_existing_design_diff_only.addItem(self.tr("既定に従う"), userData="")
+        self.agentic_existing_design_diff_only.addItem(self.tr("差分更新のみ"), userData="on")
+        self.agentic_existing_design_diff_only.addItem(self.tr("全体を再生成"), userData="off")
         layout.addWidget(_LabeledField(
             title=self.tr("Agentic Retrieval: 既存設計の扱い"),
             description=self.tr(
@@ -2797,7 +2896,7 @@ class _CAgenticRetrieval(QWidget):
 
         self.foundry_sku_fallback_policy = QComboBox()
         self.foundry_sku_fallback_policy.setEditable(False)
-        self.foundry_sku_fallback_policy.addItem(self.tr("既定に従う"), userData=None)
+        self.foundry_sku_fallback_policy.addItem(self.tr("既定に従う"), userData="")
         self.foundry_sku_fallback_policy.addItem(
             self.tr("Standard 許容"), userData="standard_allowed"
         )
@@ -2817,22 +2916,33 @@ class _CAgenticRetrieval(QWidget):
         # enable_agentic_retrieval: auto は hve 既定と同じので CLI へ渡さない
         _agentic = self.enable_agentic_retrieval.currentData()
         args.enable_agentic_retrieval = _agentic if _agentic in ("yes", "no") else None
-        # 以下 5 つは userData=None（「既定に従う」）のとき CLI へ渡さない
-        args.agentic_data_source_modes = self.agentic_data_source_modes.currentData()
-        args.foundry_mcp_integration = self.foundry_mcp_integration.currentData()
+        # 以下 5 つは userData=""（「既定に従う」）のとき CLI へ渡さない。
+        # userData は永続化可能な文字列なので、ここで CLI が期待する型へ戻す。
+        args.agentic_data_source_modes = _split_semicolon_list(
+            self.agentic_data_source_modes.currentData()
+        ) or None
+        args.foundry_mcp_integration = _coerce_tristate(
+            self.foundry_mcp_integration.currentData()
+        )
         args.agentic_data_sources_hint = (
             self.agentic_data_sources_hint.text().strip() or None
         )
-        args.agentic_existing_design_diff_only = (
+        args.agentic_existing_design_diff_only = _coerce_tristate(
             self.agentic_existing_design_diff_only.currentData()
         )
-        args.foundry_sku_fallback_policy = self.foundry_sku_fallback_policy.currentData()
+        args.foundry_sku_fallback_policy = (
+            self.foundry_sku_fallback_policy.currentData() or None
+        )
 
 
 class _C10AppId(QWidget):
     # github.com CI/CD（A2）トグルの _LabeledField タイトル。
     # _STEP2_FIELDS_BY_WORKFLOW の登録キーと完全一致させること。
     GITHUB_CICD_FIELD_TITLE = "github.com で CI/CD を実行（ASDW-WEB / ADFDV）"
+    # FR-LOCAL-SURFACE-01 (b) の workflow param 2 件。宣言した Workflow を
+    # 選んだときだけ Step 1 のワークフロー枠へ表示する。
+    REMOTE_MCP_FIELD_TITLE = "Remote MCP Server を公開（AAD-WEB / ASDW-WEB）"
+    TDD_MAX_RETRIES_FIELD_TITLE = "TDD 最大再試行回数（ASDW-WEB / ADFDV / AAGD）"
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -2885,12 +2995,41 @@ class _C10AppId(QWidget):
         self.delete_local_merged_branch, _delete_branch_field_c10 = _make_delete_branch_field(self)
         layout.addWidget(_delete_branch_field_c10)
 
+        # FR-LOCAL-SURFACE-01 (b): Workflow 固有パラメータ。
+        # 全体設定へは永続化せず（settings_apply._SECTION_FIELDS に含めない）、
+        # 宣言した Workflow を選んだ run でだけ指定させる。
+        self.create_remote_mcp_server = TriStateCombo()
+        layout.addWidget(_LabeledField(
+            title=self.tr(self.REMOTE_MCP_FIELD_TITLE),
+            description=(
+                self.tr("Knowledge Base を Remote MCP Server として公開する設計を生成します。"
+                "未指定のときは Workflow の既定値に従います。")
+            ),
+            input_widget=self.create_remote_mcp_server,
+        ))
+
+        self.tdd_max_retries = QSpinBox()
+        self.tdd_max_retries.setRange(0, 20)
+        self.tdd_max_retries.setValue(0)
+        self.tdd_max_retries.setSpecialValueText(self.tr("（既定に従う）"))
+        layout.addWidget(_LabeledField(
+            title=self.tr(self.TDD_MAX_RETRIES_FIELD_TITLE),
+            description=(
+                self.tr("TDD GREEN フェーズで全 PASS にならないときの最大再試行回数。"
+                "0 のときは CLI へ渡さず、環境変数または既定値に従います。")
+            ),
+            input_widget=self.tdd_max_retries,
+        ))
+
     def to_args(self, args: OrchestrateArgs) -> None:
         # `args.app_id`（単一値・後方互換）は `args.app_ids[0]` から
         # `hve/__main__.py` および `hve/orchestrator.py` 内で自動補完されるため、
         # GUI からは書き込まない。
         args.app_ids = self.app_ids.text().strip() or None
         args.usecase_id = self.usecase_id.text().strip() or None
+        args.create_remote_mcp_server = self.create_remote_mcp_server.get_tristate()
+        _tdd = self.tdd_max_retries.value()
+        args.tdd_max_retries = _tdd if _tdd > 0 else None
 
 
 class _C11AKM(QWidget):
@@ -2957,14 +3096,17 @@ class _C11AKM(QWidget):
         ))
 
     def to_args(self, args: OrchestrateArgs) -> None:
-        # --sources: チェックされた項目を CSV で結合（空なら None）
+        if args.workflow != "akm":
+            return
+
+        # --sources: FR-PARAM-02 の固定順で CSV 化する。
         selected_sources = []
+        if self.sources_workiq.isChecked():
+            selected_sources.append("workiq")
         if self.sources_qa.isChecked():
             selected_sources.append("qa")
         if self.sources_original_docs.isChecked():
             selected_sources.append("original-docs")
-        if self.sources_workiq.isChecked():
-            selected_sources.append("workiq")
         args.sources = ",".join(selected_sources) if selected_sources else None
 
         text = self.target_files.text().strip()
@@ -3225,10 +3367,13 @@ _STEP2_FIELDS_BY_WORKFLOW: Dict[str, List[Tuple[str, str]]] = {
     "aas": [],
     "aad-web": [
         ("c10", "対象アプリケーション (APP-ID)"),
+        ("c10", _C10AppId.REMOTE_MCP_FIELD_TITLE),
     ],
     "asdw-web": [
         ("c10", "対象アプリケーション (APP-ID)"),
         ("c_azure", "Azure リソースグループ名"),
+        ("c10", _C10AppId.REMOTE_MCP_FIELD_TITLE),
+        ("c10", _C10AppId.TDD_MAX_RETRIES_FIELD_TITLE),
         ("c10", "github.com で CI/CD を実行（ASDW-WEB / ADFDV）"),
         ("c10", "マージ後にローカル作業ブランチを削除"),
     ],
@@ -3238,12 +3383,14 @@ _STEP2_FIELDS_BY_WORKFLOW: Dict[str, List[Tuple[str, str]]] = {
     "adfdv": [
         ("c10", "対象アプリケーション (APP-ID)"),
         ("c_azure", "Azure リソースグループ名"),
+        ("c10", _C10AppId.TDD_MAX_RETRIES_FIELD_TITLE),
         ("c10", "github.com で CI/CD を実行（ASDW-WEB / ADFDV）"),
         ("c10", "マージ後にローカル作業ブランチを削除"),
     ],
     # aagd は resource_group 以外の固有入力欄を持たないが、必須キーがあるため枠を生成する。
     "aagd": [
         ("c_azure", "Azure リソースグループ名"),
+        ("c10", _C10AppId.TDD_MAX_RETRIES_FIELD_TITLE),
     ],
     "akm": [
         ("c4", "Work IQ 回答ドラフト作成"),

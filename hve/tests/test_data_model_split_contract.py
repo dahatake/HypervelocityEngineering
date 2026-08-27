@@ -15,7 +15,7 @@ from hve.workflow_registry import get_step, get_workflow
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _PROMPT = _REPO_ROOT / ".github" / "prompts" / "Arch-DataModeling.prompt.md"
-_TEMPLATES = _REPO_ROOT / ".github" / "scripts" / "templates"
+_TEMPLATES = _REPO_ROOT / ".github" / "prompts" / "steps"
 _IO_CONTRACTS = _REPO_ROOT / ".github" / "io-contracts"
 _PARENT = "docs/catalog/data-model.md"
 _SIDECARS = (
@@ -160,7 +160,7 @@ class TestIoContractDeclaresConditionalSidecars:
 class TestTemplateDeclaresConditionalOutputs:
     @pytest.mark.parametrize("workflow_id,step_id", _WORKFLOW_STEP_IDS)
     def test_template_lists_threshold_and_sidecars(self, workflow_id: str, step_id: str) -> None:
-        body = _read(_TEMPLATES / workflow_id / f"step-{step_id}.md")
+        body = _read(_TEMPLATES / workflow_id / f"step-{step_id}.prompt.md")
         output = _section(body, "## 出力", "## ")
         assert _THRESHOLD_RE.search(output)
         assert [path for path in _SIDECARS if path not in output] == []

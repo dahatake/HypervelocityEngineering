@@ -101,7 +101,7 @@ def test_ada_never_requires_screen_inputs() -> None:
 def test_ada_step7_fans_out_over_service_catalog() -> None:
     step = _steps_by_id()["7"]
     assert step.fanout_parser == "service_catalog"
-    assert step.additional_prompt_template_path == "hve/prompt/fanout/ada/_common.md"
+    assert step.additional_prompt_template_path == ".github/prompts/fanout/ada/_common.prompt.md"
     assert step.output_paths_template == [
         "docs/services/{serviceId}-{serviceNameSlug}-description.md"
     ]
@@ -121,13 +121,13 @@ def test_ada_test_strategy_depends_on_all_catalogs() -> None:
 @pytest.mark.parametrize("step_id", sorted(_REUSED_AGENTS) + [_NEW_AGENT_STEP])
 def test_ada_body_templates_exist(step_id: str) -> None:
     step = _steps_by_id()[step_id]
-    assert step.body_template_path == f"templates/ada/step-{step_id}.md"
-    path = _REPO_ROOT / ".github" / "scripts" / step.body_template_path
+    assert step.body_template_path == f".github/prompts/steps/ada/step-{step_id}.prompt.md"
+    path = _REPO_ROOT / step.body_template_path
     assert path.is_file(), path
 
 
 def test_ada_fanout_common_prompt_exists() -> None:
-    path = _REPO_ROOT / "hve" / "prompt" / "fanout" / "ada" / "_common.md"
+    path = _REPO_ROOT / ".github" / "prompts" / "fanout" / "ada" / "_common.prompt.md"
     assert path.is_file(), path
 
 

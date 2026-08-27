@@ -6,7 +6,8 @@
 
 ## 目次
 
-- [対象読者・前提・次のステップ](#対象読者前提次のステップ)
+- [HVE Prompt 全文リファレンス](#hve-prompt-全文リファレンス)
+- [前提・次のステップ](#前提次のステップ)
 - [現行実装との対応](#現行実装との対応)
 - [敵対的レビュー（Adversarial Review）](#敵対的レビューadversarial-review)
 - [質問票作成](#質問票作成)
@@ -15,11 +16,29 @@
 
 ---
 
-## 対象読者・前提・次のステップ
+> [!NOTE]
+> **ワークフローを実行するための Prompt を探している場合**は [prompts/README.md](./prompts/README.md) を参照してください。
+> 本ページは `hve` 実行の前後で使う定型文（レビュー依頼や質問票作成など）を扱います。
 
-- 対象読者: `hve` 実行前後で使う定型プロンプトを再利用したい方
-- 前提: HVE 本体が直接使う定型文は `hve/prompts.py`（例: `REVIEW_PROMPT` / `ADVERSARIAL_RECHECK_PROMPT` / `PRE_EXECUTION_QA_PROMPT_V2` / `QA_PROMPT_V2`）で管理され、Custom Agent の本文は `.github/prompts/*.prompt.md`（現行 84 件）から `hve/prompt_loader.py` が読み込む
+---
+
+## HVE Prompt 全文リファレンス
+
+HVE が使用する固定 Prompt の全文を確認・比較・デバッグする場合は、[HVE Prompt 全文リファレンス](./prompt-reference/README.md) を参照してください。
+
+- 正本: `.github/prompts/**`
+- 閲覧用コピー: `users-guide/prompt-reference/copies/**`
+- 全ファイルの使用状態と SHA-256: [prompt-reference/catalog.md](./prompt-reference/catalog.md)
+
+閲覧用コピーを編集しても HVE の動作は変わりません。Prompt の変更は必ず正本へ行ってください。
+
+---
+
+## 前提・次のステップ
+
+- 前提: HVE 本体が直接使う定型文の本文は `.github/prompts/runtime/**` の Prompt ファイルが正本で、`hve/prompts.py`（`REVIEW_PROMPT` / `ADVERSARIAL_RECHECK_PROMPT` / `PRE_EXECUTION_QA_PROMPT_V2` / `QA_PROMPT_V2` 等の定数）はそれを読み込む互換 facade です。Agent 本文は `.github/prompts/*.prompt.md` から `hve/prompt_loader.py` が読み込みます
 - 次のステップ:
+  - ワークフロー実行用の貼り付け Prompt: [prompts/README.md](./prompts/README.md)
   - AI Agent ワークフロー全体: [08-ai-agent.md](./08-ai-agent.md)
   - Agentic Retrieval 追加設定: [agentic-retrieval-guide.md](./agentic-retrieval-guide.md)
 
@@ -29,20 +48,21 @@
 
 | 項目 | 状態 | 正本 / 注意 |
 |---|---|---|
-| 敵対的レビュー Prompt | 実装済 | `hve/prompts.py` の `REVIEW_PROMPT`。現行は **6軸**・問題数 **0〜30件**。 |
-| 敵対的再レビュー Prompt | 実装済 | `hve/prompts.py` の `ADVERSARIAL_RECHECK_PROMPT`。最大2サイクルの再確認用。 |
-| 事前質問票 Prompt | 実装済 | `PRE_EXECUTION_QA_PROMPT_V2`。成果物作成前の質問票用。 |
-| 事後質問票 Prompt | 実装済 | `QA_PROMPT_V2`。成果物に対する質問票用。 |
-| Custom Agent Prompt | 実装済 | `.github/prompts/<Agent名>.prompt.md` を `hve/prompt_loader.py` が読む。ファイルが無い Agent 名は空文字になり、呼び出し側で警告判断する。 |
+| 敵対的レビュー Prompt | 実装済 | `.github/prompts/runtime/review/adversarial-review.prompt.md`（`hve/prompts.py` の `REVIEW_PROMPT` が読み込む）。現行は **6軸**・問題数 **0〜30件**。 |
+| 敵対的再レビュー Prompt | 実装済 | `.github/prompts/runtime/review/adversarial-recheck.prompt.md`（`ADVERSARIAL_RECHECK_PROMPT`）。最大2サイクルの再確認用。 |
+| 事前質問票 Prompt | 実装済 | `.github/prompts/runtime/qa/pre-execution.prompt.md`（`PRE_EXECUTION_QA_PROMPT_V2`）。成果物作成前の質問票用。 |
+| 事後質問票 Prompt | 実装済 | `.github/prompts/runtime/qa/post-execution.prompt.md`（`QA_PROMPT_V2`）。成果物に対する質問票用。 |
+| Agent Prompt | 実装済 | `.github/prompts/<Agent名>.prompt.md` を `hve/prompt_loader.py` が読む。ファイルが無い場合、互換 facade の `load_prompt()` は空文字を返し、現行 `hve/runner.py` は Agent prefix を付けずに続行する（警告は出さない）。 |
 | 旧 `QA_APPLY_PROMPT` | 廃止 | `hve/prompts.py` のコメント通り post-QA フェーズ廃止に伴い削除済み。 |
 
-> **変更時の注意**: Prompt 名・件数・本文の正本は上表の実装ファイルです。本ガイドの例を変更しても HVE の挙動は変わりません。
+> **変更時の注意**: Prompt 本文の正本は上表の `.github/prompts/**` のファイルです。本ガイドの例を変更しても HVE の振る舞いは変わりません。Prompt ファイルを編集した場合、反映されるのは次回の process / session からです（hot reload なし）。`{}` 形式の placeholder を壊すと読み込み後の補間が壊れるため、記法を変えないでください。
 
 ---
 
 ## 敵対的レビュー（Adversarial Review）
 
 作成したコードやドキュメントの品質を高めるために、Copilot に敵対的なレビューを依頼するプロンプトです。
+以下は手動依頼用の例です。HVE が実際に使う固定本文は [正本](../.github/prompts/runtime/review/adversarial-review.prompt.md) または [byte-for-byte コピー](./prompt-reference/copies/runtime/review/adversarial-review.prompt.md.txt) を確認してください。
 
 ```text
 あなたは今から **敵対的レビュアー** として振る舞ってください。
@@ -102,6 +122,7 @@
 ## 質問票作成
 
 タスクの依頼内容に対して、Copilot に目的達成に必要な確認事項を整理し、重要度分類・既定値候補付きの優先順位付き質問票を作成してもらうためのプロンプトです。
+以下は手動依頼用の例です。HVE の実行前質問票は [正本](../.github/prompts/runtime/qa/pre-execution.prompt.md) または [byte-for-byte コピー](./prompt-reference/copies/runtime/qa/pre-execution.prompt.md.txt) を確認してください。
 
 ```text
 あなたは、私の依頼を実行する前に、目的達成に必要な確認事項を整理し、優先順位付きの質問票を作るアシスタントです。

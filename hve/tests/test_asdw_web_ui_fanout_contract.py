@@ -7,9 +7,9 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _PROMPTS = _REPO_ROOT / ".github" / "prompts"
-_TEMPLATES = _REPO_ROOT / ".github" / "scripts" / "templates" / "asdw-web"
+_TEMPLATES = _REPO_ROOT / ".github" / "prompts" / "steps" / "asdw-web"
 _IO_CONTRACTS = _REPO_ROOT / ".github" / "io-contracts"
-_FANOUT_COMMON = _REPO_ROOT / "hve" / "prompt" / "fanout" / "asdw-web" / "_common.md"
+_FANOUT_COMMON = _REPO_ROOT / ".github" / "prompts" / "fanout" / "asdw-web" / "_common.prompt.md"
 
 
 _ROOT_SHARED_GUARD = "リポジトリルートの `package.json` / `jest.config.js` を作成・更新しない"
@@ -42,7 +42,7 @@ def test_ui_testcoding_prompt_distinguishes_workflow_id_from_agent_name() -> Non
 
 
 def test_asdw_step41_template_prioritizes_hve_tdd_report_path() -> None:
-    text = _read(_TEMPLATES / "step-4.1.md")
+    text = _read(_TEMPLATES / "step-4.1.prompt.md")
 
     assert "<workflow-id>` は HVE workflow id" in text
     assert "ASDW-WEB では `asdw-web`" in text
@@ -61,7 +61,7 @@ def test_ui_coding_prompt_does_not_generate_or_expand_step41_tests() -> None:
 
 
 def test_asdw_step_templates_repeat_fanout_shared_config_guard() -> None:
-    for name in ["step-4.1.md", "step-4.2.md"]:
+    for name in ["step-4.1.prompt.md", "step-4.2.prompt.md"]:
         text = _read(_TEMPLATES / name)
         assert "## fan-out 共有設定ファイル保護" in text
         assert "リポジトリルートの `package.json` / `jest.config.js` を作成・更新しない" in text
@@ -109,15 +109,15 @@ def test_ui_coding_prompt_records_unresolvable_test_blocker_as_blocked_not_succe
 
 
 def test_asdw_ui_step_templates_repeat_unresolved_contract_policy() -> None:
-    step41 = _read(_TEMPLATES / "step-4.1.md")
-    step42 = _read(_TEMPLATES / "step-4.2.md")
+    step41 = _read(_TEMPLATES / "step-4.1.prompt.md")
+    step42 = _read(_TEMPLATES / "step-4.2.prompt.md")
 
     assert _UITEST_UNRESOLVED_CONTRACT_POLICY in step41
     assert _UICODING_BLOCKER_POLICY in step42
 
 
 def test_asdw_step41_template_does_not_allow_src_app_stub_creation() -> None:
-    text = _read(_TEMPLATES / "step-4.1.md")
+    text = _read(_TEMPLATES / "step-4.1.prompt.md")
 
     assert "最小スタブの配置" not in text
     assert "src/app/` 配下" not in text
@@ -139,7 +139,7 @@ def test_ui_red_prompt_and_template_are_rerun_aware_with_tool_hygiene() -> None:
     """Step.4.1 RED prompt/template が再実行認識（canonical PASS 許容・失敗テスト捏造禁止・
     累積は再整合）とツール利用衛生を持つことを固定する。root cause B の main 反映を保護。"""
     prompt = _read(_PROMPTS / "Dev-Microservice-Azure-UITestCoding.prompt.md")
-    step41 = _read(_TEMPLATES / "step-4.1.md")
+    step41 = _read(_TEMPLATES / "step-4.1.prompt.md")
 
     for text in (prompt, step41):
         assert _UITEST_RERUN_NO_FABRICATION in text

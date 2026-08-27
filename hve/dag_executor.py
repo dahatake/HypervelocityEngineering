@@ -30,6 +30,11 @@ except ImportError:  # pragma: no cover
         _make_session_id = None  # type: ignore[assignment]
         _DEFAULT_SESSION_ID_PREFIX = "hve"  # type: ignore[assignment]
 
+try:
+    from .approval import ApprovalDeclined  # type: ignore
+except ImportError:  # pragma: no cover - script execution path
+    from approval import ApprovalDeclined  # type: ignore[no-redef]
+
 
 class StepResult:
     """ステップ実行結果。"""
@@ -637,6 +642,9 @@ class DAGExecutor:
                 if self._on_wave_start is not None:
                     try:
                         self._on_wave_start(executable, self._wave_counter)
+                    except ApprovalDeclined:
+                        # FR-CLI-87: 承認拒否は停止条件であり、握り潰してはならない。
+                        raise
                     except Exception as exc:
                         if self.console is not None:
                             self.console.warning(

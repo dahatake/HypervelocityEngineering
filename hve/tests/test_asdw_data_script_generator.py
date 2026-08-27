@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import importlib
 import builtins
-import dis
 import io
 import inspect
 import os
@@ -1722,8 +1721,13 @@ def test_owned_temp_and_directory_cleanup_preserve_replaced_identity(
         owned_directory,
         os.lstat(owned_directory),
     )
+    # POSIX は rmdir で解放した inode を同じ場所への mkdir で再利用するため、その順
+    # では identity が変わらない。先に別のディレクトリを作ってから移動させることで、
+    # どのプラットフォームでも確実に別 identity のディレクトリへ差し替える。
+    replacement_directory = repo_root / "replacement-dir"
+    replacement_directory.mkdir()
     owned_directory.rmdir()
-    owned_directory.mkdir()
+    replacement_directory.rename(owned_directory)
 
     file_records = [file_record]
     directory_records = [directory_record]
@@ -2060,24 +2064,29 @@ def test_resource_registration_handoff_cancellation_is_cleaned(
     before_entries = _repo_entry_set(repo_root)
     before_inputs = _input_snapshot(repo_root)
     if handoff == "temp":
-        helper = module._write_same_directory_temp
-        stream_store = max(
-            instruction.offset
-            for instruction in dis.get_instructions(helper)
-            if instruction.opname == "STORE_FAST"
-            and instruction.argval == "stream"
-        )
+        # 一時ファイルを開いた直後、所有確定前のキャンセルを再現する。bytecode オフセット
+        # への注入は Python 3.12 で `f_trace_opcodes` の後付け有効化が効かず発火しないため、
+        # 依存境界（一時ファイルを生成する `open`）で注入する。
+        real_open = builtins.open
+        injected = False
 
-        def trace(frame, event, _arg):
-            if frame.f_code is helper.__code__:
-                frame.f_trace_opcodes = True
-                if event == "opcode" and frame.f_lasti == stream_store:
-                    raise KeyboardInterrupt(
-                        "injected temp registration cancellation"
-                    )
-            return trace
+        def open_then_cancel(file, mode="r", *args, **kwargs):
+            nonlocal injected
+            handle = real_open(file, mode, *args, **kwargs)
+            name = os.path.basename(os.fspath(file))
+            if (
+                not injected
+                and name.startswith(".hve-asdw-producer-")
+                and name.endswith(".tmp")
+            ):
+                injected = True
+                handle.close()
+                raise KeyboardInterrupt(
+                    "injected temp registration cancellation"
+                )
+            return handle
 
-        sys.settrace(trace)
+        monkeypatch.setattr(builtins, "open", open_then_cancel)
     else:
         real_lstat = os.lstat
         cancelled = False
@@ -2097,14 +2106,11 @@ def test_resource_registration_handoff_cancellation_is_cleaned(
 
         monkeypatch.setattr(os, "lstat", lstat_then_cancel)
 
-    try:
-        with pytest.raises(
-            KeyboardInterrupt,
-            match="registration cancellation",
-        ) as exc_info:
-            module.ensure_asdw_data_producers(repo_root=repo_root)
-    finally:
-        sys.settrace(None)
+    with pytest.raises(
+        KeyboardInterrupt,
+        match="registration cancellation",
+    ) as exc_info:
+        module.ensure_asdw_data_producers(repo_root=repo_root)
 
     assert _input_snapshot(repo_root) == before_inputs
     if handoff == "temp":
@@ -2117,34 +2123,60 @@ def test_resource_registration_handoff_cancellation_is_cleaned(
         assert _repo_entry_set(repo_root) == before_entries | {("src/infra", "dir")}
 
 
+class _CancelOnFileno:
+    """Cancel at ``fileno()`` so the caller holds a stream but never a descriptor."""
+
+    def __init__(self, handle: BinaryIO, message: str) -> None:
+        self._handle = handle
+        self._message = message
+
+    def fileno(self) -> int:
+        raise KeyboardInterrupt(self._message)
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._handle, name)
+
+
 @pytest.mark.parametrize("attribute", ("stream", "descriptor"))
 def test_lock_file_object_handoff_cancellation_does_not_leak_lock(
     attribute: str,
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module = _generator_module()
     repo_root = tmp_path / "repo"
     _prepare_promotion_repo(repo_root, dict(_render()))
-    helper = module._ProducerLockGuard.acquire
-    store_offset = next(
-        instruction.offset
-        for instruction in dis.get_instructions(helper)
-        if instruction.opname == "STORE_ATTR" and instruction.argval == attribute
-    )
 
-    def trace(frame, event, _arg):
-        if frame.f_code is helper.__code__:
-            frame.f_trace_opcodes = True
-            if event == "opcode" and frame.f_lasti == store_offset:
-                raise KeyboardInterrupt(f"injected lock {attribute} handoff")
-        return trace
+    # `stream` は代入直後（descriptor 未設定）、`descriptor` は両方が設定された直後の
+    # キャンセルを再現する。bytecode オフセットへの注入は Python 3.12 で `f_trace_opcodes`
+    # の後付け有効化が効かず、先行テストの `sys.settrace` に依存してしまうため、
+    # いずれも依存境界で注入する。
+    # `stream` は `self.stream` 代入前、`descriptor` は `self.stream` だけが設定された
+    # 時点のキャンセルを再現する（opcode イベントは命令の実行前に発火するため、
+    # 旧実装の `STORE_ATTR` 注入も代入前だった）。bytecode オフセットへの注入は
+    # Python 3.12 で `f_trace_opcodes` の後付け有効化が効かず、先行テストの
+    # `sys.settrace` に依存してしまうため、いずれも依存境界で注入する。
+    message = f"injected lock {attribute} handoff"
+    real_open = builtins.open
+    injected = False
 
-    sys.settrace(trace)
-    try:
-        with pytest.raises(KeyboardInterrupt, match=f"{attribute} handoff"):
-            module.ensure_asdw_data_producers(repo_root=repo_root)
-    finally:
-        sys.settrace(None)
+    def open_at_lock(file, mode="r", *args, **kwargs):
+        nonlocal injected
+        handle = real_open(file, mode, *args, **kwargs)
+        if mode != "a+b" or injected:
+            return handle
+        injected = True
+        if attribute == "stream":
+            handle.close()
+            raise KeyboardInterrupt(message)
+        # `self.stream` には BinaryIO ではないラッパーが入るが、`__getattr__` 委譲で
+        # `close()` は実体へ届く。型契約からの意図的な逸脱である。
+        return _CancelOnFileno(cast(BinaryIO, handle), message)
+
+    monkeypatch.setattr(builtins, "open", open_at_lock)
+
+    with pytest.raises(KeyboardInterrupt, match=f"{attribute} handoff"):
+        module.ensure_asdw_data_producers(repo_root=repo_root)
 
     result = module.ensure_asdw_data_producers(repo_root=repo_root)
     _assert_result(result, "reused", repo_root)

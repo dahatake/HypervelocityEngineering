@@ -130,6 +130,7 @@ def _seed_repository(
     definition_ids: Iterable[str] | None = None,
     mappings: Mapping[str, Sequence[str]] | None = None,
     test_paths: Iterable[str] | None = None,
+    mapping_heading_level: int = 4,
 ) -> None:
     rows = list(
         inventory
@@ -151,7 +152,9 @@ def _seed_repository(
     mapping_sections = []
     for requirement_id, mapped_paths in mapped.items():
         links = "\n".join(f"  - [{path}]({path})" for path in mapped_paths)
-        mapping_sections.append(f"#### {requirement_id} — fixture\n- 対応テスト:\n{links}\n")
+        mapping_sections.append(
+            f"{'#' * mapping_heading_level} {requirement_id} — fixture\n- 対応テスト:\n{links}\n"
+        )
     _write(root / REQUIREMENT_MAPPING, "# Fixture mapping\n\n" + "\n".join(mapping_sections))
 
     inventory_path = root / FEATURE_INVENTORY
@@ -497,6 +500,15 @@ def test_requirement_inventory_definition_and_mapping_must_agree(tmp_path: Path)
         f"#### {REQUIREMENT_ID} — fixture\n- 対応テスト:\n  - [{TEST_PATH}](https://example.invalid/test.py)\n",
     )
     _rejects(_run_validator(root, body=_block(), changes="M\thve/runner.py\n", seed=False))
+
+
+@VALIDATOR_REQUIRED
+def test_mapping_sections_bind_at_either_heading_level(tmp_path: Path) -> None:
+    """`hve-dev/requirement-test-mapping.md` は `###` と `####` を混在させている。"""
+    for level in (3, 4):
+        root = tmp_path / f"heading-{level}"
+        _seed_repository(root, mapping_heading_level=level)
+        _accepts(_run_validator(root, body=_block(), changes="M\thve/runner.py\n", seed=False))
 
 
 @VALIDATOR_REQUIRED

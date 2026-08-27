@@ -42,7 +42,7 @@ Azure リソースの location 選択を、リポジトリ内で一貫して扱�
 | 根拠ファイル | 確認事項 |
 |---|---|
 | `.github/ISSUE_TEMPLATE/dataflow-dev.yml` / `.github/ISSUE_TEMPLATE/web-app-dev.yml` | `Japan East` 優先の記載 |
-| `.github/scripts/templates/asdw/step-2.5.md` / `.github/scripts/templates/asdw-web/step-3.4.md` | `Japan East`、利用不可時 `Japan West`、さらに不可時 `Southeast Asia` の fallback 記載 |
+| `.github/prompts/steps/asdw-web/step-3.4.prompt.md` | `Japan East`、利用不可時 `Japan West`、さらに不可時 `Southeast Asia` の fallback 記載 |
 | `docs/azure/dependency-review-report.md` | 標準リージョンとして `japaneast` を記録 |
 | `docs/azure/azure-services-compute.md` | `japaneast` 既定、SWA は既存レビュー上 `eastasia` 実装確認あり |
 

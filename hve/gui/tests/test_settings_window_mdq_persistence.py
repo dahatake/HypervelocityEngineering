@@ -43,6 +43,15 @@ def _simulate_on_widget_changed(
     return snapshot
 
 
+class TestMdqDefaultsAreOwnedByMdq:
+    """FR-GUI-05: 既定値はコード側を単一の情報源とし、GUI 設定ストアへ複写しない。"""
+
+    def test_hve_mdq_defaults_match_the_mdq_package(self, tmp_settings: Path) -> None:
+        from mdq.gui import settings_store as mdq_settings_store
+
+        assert settings_store.defaults()["mdq"] == mdq_settings_store.defaults()
+
+
 class TestMdqTargetFoldersPersistence:
     def test_concurrent_mdq_update_is_preserved_after_options_change(
         self, tmp_settings: Path

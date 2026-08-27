@@ -756,6 +756,7 @@ GitHub 書込み startup preflight 対象では `GH_TOKEN`、未設定時は `GI
 | オプション | GH_TOKEN |
 |-----------|----------|
 | `--create-issues` | 必要（未設定ならエラー終了） |
+| `--create-issues --assign-copilot-agent` | 必要（新規 Root Issue の Copilot cloud agent 割当） |
 | `--create-pr` | 必要（未設定ならエラー終了） |
 | 対象 Workflow / Step での `--enable-auto-merge` | 必要（未設定ならエラー終了） |
 | `--auto-coding-agent-review` | 不要（ローカル SDK で実行） |
@@ -778,12 +779,14 @@ GitHub 書込み startup preflight の対象機能を**使用しない場合、�
 
 | 権限 | 設定値 | 用途 |
 |------|--------|------|
-| **Issues** | Read and write | `--create-issues` |
-| **Pull requests** | Read and write | `--create-pr` / 対象 Workflow の auto-merge |
+| **Issues** | Read and write | `--create-issues` / `--assign-copilot-agent` |
+| **Actions** | Read and write | `--assign-copilot-agent` |
+| **Pull requests** | Read and write | `--create-pr` / `--assign-copilot-agent` / 対象 Workflow の auto-merge |
 | **Metadata** | Read-only（自動付与） | — |
-| **Contents** | Read and write | `--create-issues` / `--create-pr` / 対象 Workflow の auto-merge 使用時 |
+| **Contents** | Read and write | `--create-issues` / `--create-pr` / `--assign-copilot-agent` / 対象 Workflow の auto-merge 使用時 |
 
 > **最小権限の原則**: GitHub 書込み機能はブランチ作成・commit・push を伴うため、Contents も Read and write が必要です。
+> Copilot cloud agent への割当で classic PAT を使う場合は `repo` scope が必要です。GitHub App installation token はこの割当経路の代替にしません。
 
 6. **Generate token** をクリックし、表示されたトークン（`github_pat_` で始まる文字列）を**必ずこの時点でコピー**
 
@@ -1726,11 +1729,18 @@ CLI モード（`orchestrate` サブコマンド）は、全てのオプショ�
 
 | サブコマンド | 説明 |
 |------------|------|
-| （なし） | インタラクティブモードを起動（`run` と同等） |
+| （なし） | GUI Orchestrator を起動（PySide6 未導入時は CLI 対話ウィザードへ自動フォールバック） |
 | `run` | インタラクティブモードを明示的に起動 |
 | `orchestrate` | CLI モードでワークフローを実行（全オプションを引数で指定） |
 | `qa-merge` | `qa/` 配下の質問票と回答ファイルを統合する |
 | `workiq-doctor` | Work IQ 連携の診断を実行する |
+| `ingest-docs` | `docs-original/` を走査して `docs/original-design-doc-ingest/` へ目録と正規化済み Markdown を出力する |
+| `emit-prompt` | `hve/prompts.py` 経由で `.github/prompts/runtime/**` のプロンプト本文を出力する（デバッグ用） |
+| `gui` | PySide6 ベースの GUI Orchestrator を起動する（→ [hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md)） |
+| `cli` | 対話型 CLI ウィザードでワークフローを実行する（`run` と同じ経路） |
+| `login` | GitHub Copilot へログインし、利用可能モデル一覧をキャッシュする |
+| `pricing` | AI Credit 料金表を取得・表示する（`show` / `refresh`。→ [pricing-guide.md](./pricing-guide.md)） |
+| `toolsearch` | Tool Search ランキングの統計を表示する（`dashboard` / `context`。→ [tool-search-dashboard.md](./tool-search-dashboard.md)） |
 
 ### 基本構文
 
@@ -1825,10 +1835,14 @@ python -m hve orchestrate \
 | `--workflow`, `-w` | ワークフロー ID（`ard` / `aas` / `aad-web` / `asdw-web` / `adfd` / `adfdv` / `aag` / `aagd` / `aar` / `akm` / `adi` / `adoc`。`aad` / `asdw` は後方互換エイリアス） | なし（**必須**） |
 | `--branch` | ターゲットブランチ名 | `main` |
 | `--steps` | 実行ステップをカンマ区切りで指定 | 全ステップ |
+| `--resume-run` | 指定 run で成功済みのステップを除外して再実行する（未完了ステップは新しいセッションで実行。記録が無い run-id は停止） | 未指定 |
+| `--approval-gates` | 承認ゲートを宣言したステップを含む wave の実行前に `[y/N]` で確認する。ターミナルが対話可能でない実行（非対話 CLI / GUI の子プロセス）では確認を出さずに停止する | 無効 |
 | `--dry-run` | 事前確認モード（SDK 呼び出しなし） | `false` |
 | `--verbose`, `-v` | 詳細ログ出力（`--verbosity verbose` の省略形） | `false` |
 | `--quiet`, `-q` | 出力抑制（`--verbosity quiet` の省略形） | `false` |
 | `--verbosity` | 出力レベルを明示指定（`quiet`/`compact`/`normal`/`verbose`）。指定した場合は `--verbose`/`--quiet` より優先 | `compact` |
+
+> **要件適合実測が FAIL のときの差戻し案内**: `asdw-web` の `5.3`（要件適合実測）が出力するレポートの `Judgement` 列に `FAIL` があると、DAG 実行の完了後に差戻し先ステップと再実行コマンドの候補をログへ 1 回表示します。表示されるのは提案だけで、HVE が自動で再実行することはありません。`NOT_MEASURED` / `NO_TARGET` / `PASS` では表示されません。
 
 #### Agent 実行オプション
 
@@ -2080,8 +2094,28 @@ python -m hve orchestrate --workflow aas --final-only > result.txt
 | オプション | 説明 | デフォルト値 |
 |-----------|------|------------|
 | `--create-issues` | 実行前に GitHub Issue を作成 | `false` |
+| `--assign-copilot-agent` | `--create-issues` で当該 run が新規作成した Root Issue を Copilot cloud agent へ割り当てる | `false` |
 | `--create-pr` | 実行後に GitHub PR を作成 | `false` |
+| `--create-working-branch` / `--no-create-working-branch` | PR 用の作業ブランチを新規作成するか | `true`（新規作成する） |
 | `--repo` | リポジトリ名（`owner/repo` 形式） | `$REPO` 環境変数の値、未設定時は空（`--create-issues` / `--create-pr` 使用時は必須） |
+
+> **`--no-create-working-branch`（現在のブランチを使う）**:
+> 既定では `--create-issues` / `--create-pr` を指定すると、ベースブランチから新しい作業ブランチを作成して checkout します。
+
+`--assign-copilot-agent` は `--create-issues` と併用したときだけ有効です。Root Issue 作成直後、Sub-Issue 作成より前に割り当てます。`--issue-number` で既存 Root Issue を使う場合、または `--create-issues` を指定しない場合は警告して無視し、既存 Issue を割り当てません。
+
+割当 API は public preview です。割当応答で Copilot assignee を確認できない場合は fail-closed で run を停止します。この時点で Root Issue は作成済みですが、同じ Root Issue を再作成せず、作成済み番号をエラーへ残します。当該 run が作成した作業ブランチだけを cleanup し、利用者所有の現在 branch は削除しません。
+> `--no-create-working-branch` を指定すると、**現在 checkout 中のブランチをそのまま PR の head として使い、checkout を行いません**。
+> 実行開始前に次のいずれかに該当すると、Agent セッションを開始せずに停止します（自動で stash / reset / pull / force-push は行いません）。
+>
+> - 現在のブランチを特定できない（detached HEAD を含む）
+> - 現在のブランチ名がベースブランチと同じ
+> - ブランチ名として不正
+> - 未コミットの変更または未追跡ファイルがある
+> - `origin/<現在のブランチ>` が存在するのにローカル HEAD と別コミットを指している（存在しない場合は初回 push として許容）
+>
+> この方法で使ったブランチは**利用者所有**とみなし、PR がマージされても自動削除しません。
+> ADFDV / ASDW-WEB など、リモート CI/CD の実行契約が専用ブランチを必要とする経路では、本オプションに関わらず必要なブランチが作成されます。
 
 #### エラーハンドリング オプション
 
@@ -2094,7 +2128,7 @@ python -m hve orchestrate --workflow aas --final-only > result.txt
 - **Pre-check 失敗時**（入力成果物・必須 Skill 不足）: ⚠️ 警告を出力して続行。警告内容は LLM のプロンプトに注入され、不確定値は `TBD（推論: <根拠>）` として処理される。
 - **Step 失敗時**: **ワークフロー全体を停止**（continue-on-precheck の有無に関わらず R1 に従う）。
 - **致命的エラー検出時**（`KeyboardInterrupt` / `SystemExit` / `OSError(ENOSPC,EIO,EROFS,ENOMEM)` / `FileNotFoundError` / `PermissionError`）: 残ステップを `skipped (reason=fatal-abort)` でマークし、正常終了（exit 0）。journal に `fatal=true` が記録される。
-- **GUI からの起動**: `python -m hve gui` は `--strict` を渡さないため、既定で continue-on-precheck 有効。
+- **GUI からの起動**: 設定画面「基本設定」の「Pre-check 失敗で中断する (strict)」で切り替えます。既定は無効（continue-on-precheck 有効）で、有効にすると `--strict` が渡されます。Prompt 版も同じ保存値を引き継ぎ、依頼文の中で run 単位に上書きできます。
 - **Cloud (`execution_mode=github`)**: 影響なし（従来通り Pre-check で中断）。
 
 > **これらは全てオプションです。GitHub に Issue/PR を作成せずローカル実行のみで完結できます。**
@@ -2121,23 +2155,40 @@ python -m hve orchestrate --workflow aas --final-only > result.txt
 | オプション | 説明 | デフォルト値 |
 |-----------|------|------------|
 | `--ignore-paths` | `git add` 時に除外するパス（スペース区切りで複数指定可） | `docs images infra qa src test work` |
-| `--additional-prompt` | 全 Prompt の末尾に追記する文字列 | なし |
+| `--additional-prompt` | 全 Prompt の末尾に追記する文字列。長文は直接貼らずファイルへ保存し、そのパスを書くこと（下記「プロンプトのサイズ上限」参照） | なし |
 | `--issue-title` | Root Issue 作成時のタイトルを上書き | ワークフロー名から自動生成 |
-| `--issue-number` | Root Issue を新規作成せず、既存の Issue #N へ連携する。Sub-Issue はその Issue の子として作成され、PR 本文に `Closes #N` が入る。`--create-issues` と併用したときだけ効力を持ち、併用しない場合は警告して無視する。指定 Issue を取得できない場合は実行を中止する（新規作成へ戻らない） | なし（新規作成） |
+| `--issue-number` | 既存の Issue #N へ連携する。`--create-issues` との併用では Root Issue を新規作成せず、Sub-Issue の親と PR 本文の `Closes #N` に用いる。`--create-pr` だけとの併用では Issue を作成せず、PR の closing target にだけ用いる。どちらも伴わない場合は警告して無視する。指定 Issue を取得できない場合は実行を中止する（新規作成へ戻らない） | なし（新規作成） |
+
+#### プロンプトのサイズ上限
+
+HVE は各 Step のメインタスクを送信する前に、プロンプトの UTF-8 バイト数を計測して内部予算と照合します。
+
+- 予算内なら、プロンプトを改変せずにそのまま 1 回送信します。
+- 予算を超える場合は、Phase 1 の主モデルを 1 回も呼び出さずに Step を失敗させ、プロンプトのバイト数・予算バイト数・成分別バイト数を表示します。
+- 診断には判定状態・バイト数・予定した Phase 1 呼び出し回数だけを表示し、プロンプト本文、`--additional-prompt` の本文、事前 QA の応答本文、認証情報は表示しません。
+
+判定は、受領した Step プロンプト、Phase 0 前に確定する Agent / policy / suffix を含むプロンプト、事前 QA 後の最終プロンプト、の 3 段階です。最終段階だけで超過した場合は事前 QA は実行済みですが、Phase 1 の主モデル呼び出しは行いません。成分別バイト数には区切り・固定見出し・各 suffix も含まれ、合計は最終プロンプトのバイト数と一致します。dry-run では従来どおり SDK を起動せず、サイズ予算を理由に失敗へ変更しません。
+
+自動切り詰め・自動要約・複数ターンへの自動分割・自動再送は行いません。要求が欠落したまま実行が続くと、成果物の欠落を検出できなくなるためです。超過したときは、長文をファイル化してパスだけを渡す、`--steps` で実行範囲を分割する、などで入力を小さくして再実行してください。
+
+> 予算値は HVE 内部の安全余白であり、GitHub Copilot API の公開仕様値ではありません。CLI オプション・環境変数では変更できません。`--context-max-chars` は事前 QA へ注入する補助コンテキストの文字数上限であり、本予算とは別の設定です。
+
+> **Work IQ との関係**: このサイズ計画の対象は Phase 1 のメインタスクです。Work IQ は `--auto-qa` と `--workiq` が有効な QA フェーズでのみ使用されるため、この機能は Work IQ の `ask` クエリを分割・再送するものではありません。Work IQ 固有の動作は「[QA フェーズにおける Work IQ の扱い](#qa-フェーズにおける-work-iq-の扱い)」を参照してください。
 
 #### ワークフロー固有オプション
 
 | オプション | 説明 | 対応ワークフロー |
 |-----------|------|--------------|
 | `--company-name` | ARD の対象企業名。表示グループ `1`（実 Step `1` / `1.1` / `1.2`）を実行する場合だけ必須 | `ard` |
-| `--target-business` | ARD の対象業務名。グループ `2` をグループ `1` なしで実行する場合は必須。グループ `1` を含めて省略した場合は、Step `1.2` 完了後の Strategic Recommendation から生成する。値はフォルダパス／複数ファイルパスも可能 | `ard` |
+| `--target-business` | ARD の対象業務名。グループ `2` をグループ `1` なしで実行する場合は必須。グループ `1` を含めて省略した場合は、Step `1.2` 完了後の Strategic Recommendation から生成する。値はフォルダパス／複数ファイルパスも可能。パスを指定した場合、Prompt へはファイル本文ではなく相対パス一覧・件数・合計バイト数・有界なスキップ理由／解決エラーが渡り、Agent が各ファイルを読み取りツールで参照する。リポジトリ外のパス名は匿名化される | `ard` |
 | `--target-recommendation-id` | ARD のグループ `1` + `2` bridge 経路で採用する SR の ID（例: `SR-1`）。明示値を優先し、不一致なら警告して先頭へ縮退。省略した非対話実行では先頭 SR を自動採用 | `ard` |
 | `--survey-base-date` / `--survey-period-years` / `--target-region` / `--analysis-purpose` / `--attached-docs` | ARD の調査条件 | `ard` |
 | `--app-ids` | APP-ID をカンマ区切りで複数指定 | `aad-web`, `asdw-web`, `adfd`, `adfdv`, `aag`, `aagd` |
 | `--app-id` | 主対象 APP-ID（後方互換。新規利用は `--app-ids` 推奨） | `aad-web`, `asdw-web`, `adfd`, `adfdv`, `aag`, `aagd` || `--resource-group` | Azure リソースグループ名 | `asdw-web`, `adfdv`, `aagd` |
 | `--usecase-id` | ユースケース ID | `asdw-web`, `aag`, `aagd` |
 | `--app-id` | データフローアプリ ID（カンマ区切り可） | `adfdv` |
-| `--tdd-max-retries` | TDD リトライ上限 | `asdw-web`, `adfdv`, `aagd` |
+| `--tdd-max-retries` | TDD GREEN フェーズの再試行上限。未指定時は環境変数 `HVE_TDD_MAX_RETRIES`、それも無ければ既定値 | `asdw-web`, `adfdv`, `aagd` |
+| `--create-remote-mcp-server` / `--no-create-remote-mcp-server` | Knowledge Base を Remote MCP Server として公開するか。未指定時は Workflow の既定値に従う | `aad-web`, `asdw-web` |
 | `--sources` | AKM の取り込み元（`qa` / `docs-original` / `both`） | `akm` |
 | `--target-files` | AKM の対象ファイル（省略時は選択ソース配下の全件） | `akm` |
 | `--force-refresh` / `--no-force-refresh` | AKM の status 再生成制御 | `akm` |
@@ -2156,7 +2207,7 @@ python -m hve orchestrate --workflow aas --final-only > result.txt
 >
 > **対話ウィザードとの差**: `--target-recommendation-id` 相当の事前質問は、カスタム全自動でグループ `1` + `2` の bridge 条件を満たす場合だけ表示します。クイック全自動は先頭 SR、手動は Step `1.2` 後の選択メニュー（既定: 先頭）を使います。
 
-> **補足**: `create_remote_mcp_server` は `aad-web` / `asdw-web` の workflow パラメータですが、現行 CLI では `--create-remote-mcp-server` 引数は提供されていません。設定する場合は wizard の対話入力または Issue Template を使用してください。
+> **ワークフロー固有パラメータの指定面**: `--create-remote-mcp-server` / `--tdd-max-retries` は、直接 CLI・GUI・Prompt 版の 3 面すべてから指定できます。GUI では対象 Workflow を選んだときだけ Step 1 のワークフロー枠に入力欄が現れます（全体設定としては保存されません）。どちらも未指定のときは従来どおり対話ウィザードまたは既定値が使われます。
 
 ### 使い方の例
 
@@ -2352,7 +2403,7 @@ WORKFLOW_REGISTRY = {
 }
 ```
 
-`custom_agent` に指定した名前が `.github/prompts/*.prompt.md` の Prompt ファイル名に対応します。
+`custom_agent` に指定した名前が `.github/prompts/*.prompt.md` の Prompt ファイル名に対応します。Agent 本文は `load_prompt(<Agent 名>)` の呼び出し互換を保つため flat 配置のままで、サブディレクトリ化しません。Step 本文は `.github/prompts/steps/<workflow>/step-<id>.prompt.md`（StepDef の `body_template_path`）、fan-out 追加本文は `.github/prompts/fanout/<workflow>/*.prompt.md`（同 `additional_prompt_template_path`）に置きます。
 
 ### Prompt の選択優先順位
 
@@ -2822,7 +2873,7 @@ CLI Orchestrator 自体を変更する場合の正本、変更手順、回帰検
 | ワークフロー・Step・`custom_agent`・成果物パス | `hve/workflow_registry.py` |
 | DAG 構築と並列実行 | `hve/dag_planner.py` / `hve/dag_executor.py` |
 | Step 実行と出力ゲート | `hve/runner.py` |
-| Prompt の解決 | `hve/prompt_loader.py` と `.github/prompts/*.prompt.md` |
+| Prompt の解決 | `hve/prompt_loader.py` と `.github/prompts/`（Agent 本文は flat、Step 本文は `steps/`、fan-out 追加本文は `fanout/`、HVE 内部 Prompt は `runtime/`、Cloud 実行指示は `cloud/`） |
 | Skill の解決 | `hve/skill_resolver.py` と `.github/skills/` |
 | Cloud Session の振り分け | `hve/cloud_session.py`（→ [cloud-session.md](./cloud-session.md)） |
 | セットアップスクリプト | `hve/setup-hve.ps1` / `hve/setup-hve.sh` / `hve/setup-hve.cmd` |
@@ -2832,7 +2883,7 @@ CLI Orchestrator 自体を変更する場合の正本、変更手順、回帰検
 
 1. **引数を追加・変更する**: `hve/__main__.py` に定義を追加し、対応する設定フィールドを `hve/config.py` に置く。既定値は `config.py` 側を正とし、CLI 側は「未指定＝継承」にする。
 2. **Step / 成果物を変更する**: `hve/workflow_registry.py` を変更する。`output_paths` は実行時ゲートの参照元なので、成果物パスの変更は必ず registry 側と対で行う。
-3. **Prompt を変更する**: `.github/prompts/<Name>.prompt.md` を変更する。Step からの参照名は registry の `custom_agent` フィールド。
+3. **Prompt を変更する**: Agent 本文は `.github/prompts/<Name>.prompt.md`、Step 本文は `.github/prompts/steps/<workflow>/step-<id>.prompt.md`、fan-out 追加本文は `.github/prompts/fanout/<workflow>/*.prompt.md` を変更する。Step からの参照名は registry の `custom_agent` / `body_template_path` / `additional_prompt_template_path` フィールド。Prompt 本文は `.github/prompts/**` だけを正本とし、Python 定数や Workflow 側へ本文を重複保持しない。必須 Prompt の欠損・空・不正パスは model call 前に fail-closed で停止する。編集内容は次回の process / session から反映され（hot reload なし）、`{root_ref}` や `{{key}}` などの placeholder 記法を壊さないこと。
 4. **文書を更新する**: 引数・既定値・ワークフロー一覧を変更したら、本ガイドの該当表と、影響する入門ガイドを同じ変更で更新する。
 
 ### 回帰検証

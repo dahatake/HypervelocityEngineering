@@ -131,6 +131,10 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
         # 旧「自動プロンプト」ノードから移設
         "additional_prompt": "additional_prompt",
         "context_max_chars": "context_max_chars",
+        # FR-LOCAL-SURFACE-01 (a): SDK tool search の 3 状態選択。
+        "enable_tool_search": "enable_tool_search",
+        # FR-LOCAL-SURFACE-01 (a): CLI `--strict` と共通の pre-check 中断制御。
+        "strict": "strict",
     },
     "QA": {
         "auto_qa": "auto_qa",
@@ -156,15 +160,22 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
     "C5": {
         "create_issues": "create_issues",
         "create_pr": "create_pr",
+        "create_working_branch": "create_working_branch",
         "ignore_paths": "ignore_paths",
         "repo": "repo",
         "issue_title": "issue_title",
         "issue_mode": "issue_mode",
         "issue_number": "issue_number",
+        # FR-GUI-32: GUI セッション内だけで使う PR 番号（OrchestrateArgs へは出さない）
+        "linked_pr_number": "linked_pr_number",
         # 旧 C9 / C11 から移動
         "branch": "branch",
+        # FR-GUI-38: 進捗を引き継ぐ再実行の run-id
+        "resume_run": "resume_run",
         "enable_auto_merge": "enable_auto_merge",
         "delete_local_merged_branch": "delete_local_merged_branch",
+        # FR-GUI-36: GUI セッション内だけで使う自動進捗 Post の送信先
+        "github_auto_post_target": "github_auto_post_target",
         # 旧 C1 から移動: Fleet mode / Cloud Sessions
         "fleet_mode_enabled": "fleet_mode_enabled",
         "cloud_session_enabled": "cloud_session_enabled",
@@ -256,6 +267,17 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
     "TOOLSEARCH": {
         "tool_search": "tool_search",
         "tool_search_ranking": "tool_search_ranking",
+    },
+    # AGENTIC: FR-LOCAL-SURFACE-01 (a)。`_CAgenticRetrieval` の 6 項目を
+    # 永続化する。QComboBox の userData はすべて往復可能な文字列で、
+    # CLI の型への復元は `_CAgenticRetrieval.to_args()` が行う。
+    "AGENTIC": {
+        "enable_agentic_retrieval": "enable_agentic_retrieval",
+        "agentic_data_source_modes": "agentic_data_source_modes",
+        "foundry_mcp_integration": "foundry_mcp_integration",
+        "agentic_data_sources_hint": "agentic_data_sources_hint",
+        "agentic_existing_design_diff_only": "agentic_existing_design_diff_only",
+        "foundry_sku_fallback_policy": "foundry_sku_fallback_policy",
     },
     # EXPLORER: 値は ";" 区切り文字列。QListWidget との同期は
     # ``_CExplorerSection`` 内部で完結し、settings_apply 経由では QLineEdit

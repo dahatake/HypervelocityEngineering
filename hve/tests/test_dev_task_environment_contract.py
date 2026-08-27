@@ -11,7 +11,7 @@ import subprocess
 import sys
 import textwrap
 import tomllib
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -228,7 +228,8 @@ def test_copilot_sdk_lock_pins_an_exact_version() -> None:
     assert re.search(r"(?m)^github-copilot-sdk==\S+$", text)
     assert re.search(r"(?m)^# pinned Copilot CLI runtime: \S+$", text)
     assert not text.startswith("\ufeff")
-    assert "\r\n" not in _COPILOT_SDK_LOCK.read_text(encoding="utf-8", newline="")
+    # `Path.read_text(newline=...)` は 3.13 以降にしか無いため、生バイトで判定する。
+    assert b"\r\n" not in _COPILOT_SDK_LOCK.read_bytes()
 
 
 def test_setup_pins_the_copilot_sdk_only_behind_an_explicit_flag() -> None:
@@ -434,14 +435,57 @@ def _pwsh7_executable() -> str | None:
     return None
 
 
-def _shell_test_path(fake_bin: Path, bash: str) -> str:
+def _mirror_without(source: Path, sandbox: Path, hidden: tuple[str, ...]) -> Path:
+    """Expose ``source`` minus ``hidden`` so ``command -v`` cannot reach the host tool.
+
+    The PowerShell harness drops whole directories instead, which is not viable on
+    POSIX because /usr/bin also carries the tools the script legitimately needs.
+    """
+    sandbox.mkdir(parents=True, exist_ok=True)
+    for entry in sorted(source.iterdir()):
+        link = sandbox / entry.name
+        if entry.name in hidden or link.exists() or link.is_symlink():
+            continue
+        try:
+            link.symlink_to(entry)
+        except OSError as exc:  # 握り潰すと隠したい以外のツールが黙って消える。
+            raise AssertionError(f"cannot mirror {entry} into {sandbox}: {exc}") from exc
+    return sandbox
+
+
+def _shell_test_path(
+    fake_bin: Path,
+    bash: str,
+    *,
+    sandbox: Optional[Path] = None,
+    hidden: tuple[str, ...] = (),
+) -> str:
     paths = [fake_bin, Path(bash).parent]
     if os.name == "nt":
         git_root = Path(bash).parent.parent
         paths.extend((git_root / "usr" / "bin", git_root / "mingw64" / "bin"))
     else:
         paths.extend((Path("/usr/bin"), Path("/bin")))
-    return os.pathsep.join(str(path) for path in dict.fromkeys(paths) if path.is_dir())
+
+    resolved: list[Path] = []
+    for path in dict.fromkeys(paths):
+        if not path.is_dir():
+            continue
+        # GitHub-hosted runners ship `gh` in /usr/bin, so keeping the directory on PATH
+        # would make the "missing prerequisite" branches unreachable. Windows keeps the
+        # directories as-is because the Git-for-Windows bin dirs carry no such tool and
+        # symlink creation there needs extra privileges.
+        if (
+            os.name == "nt"
+            or sandbox is None
+            or not hidden
+            or path == fake_bin
+            or not any((path / name).exists() for name in hidden)
+        ):
+            resolved.append(path)
+            continue
+        resolved.append(_mirror_without(path, sandbox, hidden))
+    return os.pathsep.join(str(path) for path in dict.fromkeys(resolved))
 
 
 def _powershell_test_path(fake_bin: Path) -> str:
@@ -551,7 +595,12 @@ exit 0
     env = os.environ.copy()
     env.update(
         {
-            "PATH": _shell_test_path(fake_bin, bash),
+            "PATH": _shell_test_path(
+                fake_bin,
+                bash,
+                sandbox=root / "sandbox-bin",
+                hidden=() if gh_available else ("gh",),
+            ),
             "HVE_TEST_AST_PROBE": _PTY_AST_PROBE,
             "HVE_TEST_CALL_LOG": calls.as_posix(),
             "HVE_TEST_GH_LOG": gh_calls.as_posix(),

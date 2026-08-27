@@ -135,6 +135,7 @@ _SKILL_H2_HEADINGS = (
     "面横断の再利用確認",
     "新規要件 ID の bootstrap",
     "feature の TDD 順序",
+    "macOS GUI test の費用承認ゲート",
     "関連要件の選択取得",
     "全文取得の例外",
 )

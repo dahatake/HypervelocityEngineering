@@ -21,8 +21,6 @@ static_paths:
   - "src/test/agent/"
   - "src/test/ui/"
   - "src/test/dataflow/"
-  # Cross-WORK references (handled by orchestrator at runtime)
-  - "{WORK}../QA-CodeQualityScan/artifacts/scan-result.json"
   # Per-APP architectural requirements (user-authored, kind=external in io-contract)
   - "docs/architectural-requirements-app-{appId}.md"
   - "docs/architectural-requirements-app-*.md"

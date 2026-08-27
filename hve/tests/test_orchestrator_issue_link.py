@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import unittest
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 from unittest import mock
 
 from hve import orchestrator
@@ -39,13 +39,14 @@ def _config(**kwargs: Any) -> SDKConfig:
 
 def _call(cfg: SDKConfig, console: _RecordingConsole, active_steps=None):
     wf = get_workflow("aad-web")
+    assert wf is not None
     steps = active_steps if active_steps is not None else set()
     return orchestrator._create_issues_if_needed(
         wf=wf,
         params={},
         active_steps=steps,
         config=cfg,
-        console=console,
+        console=cast(Any, console),
         render_template_fn=lambda **_kw: "body",
         build_root_issue_body_fn=lambda *_a, **_kw: "root body",
     )
@@ -78,7 +79,7 @@ class TestExistingRootIssue(unittest.TestCase):
             linked.append(kwargs)
             return True
 
-        wf = get_workflow("aad-web")
+        wf = cast(Any, get_workflow("aad-web"))
         first_step = next(s for s in wf.steps if not s.is_container and s.body_template_path)
 
         with mock.patch.object(
@@ -127,6 +128,53 @@ class TestExistingRootIssue(unittest.TestCase):
         ), mock.patch.object(orchestrator, "create_issue") as create_mock:
             with self.assertRaises(orchestrator.RootIssueResolutionError):
                 _call(_config(create_issues=True, issue_number=12), console)
+
+        create_mock.assert_not_called()
+
+    def test_create_pr_only_links_issue_without_sub_issues(self) -> None:
+        """PR だけを作る run でも既存 Issue を closing target として返す。"""
+        console = _RecordingConsole()
+        with mock.patch.object(
+            orchestrator, "get_issue", return_value={"number": 88}
+        ) as get_mock, mock.patch.object(orchestrator, "create_issue") as create_mock, \
+                mock.patch.object(orchestrator, "link_sub_issue") as link_mock:
+            root, step_map = _call(
+                _config(create_issues=False, create_pr=True, issue_number=88),
+                console,
+                active_steps={"1"},
+            )
+
+        self.assertEqual(root, 88)
+        self.assertEqual(step_map, {})
+        get_mock.assert_called_once_with(88, repo="owner/repo", token="tok")
+        create_mock.assert_not_called()
+        link_mock.assert_not_called()
+
+    def test_create_pr_only_invalid_issue_is_fail_closed(self) -> None:
+        console = _RecordingConsole()
+        with mock.patch.object(
+            orchestrator, "get_issue", side_effect=GitHubAPIError("not found", 404)
+        ), mock.patch.object(orchestrator, "create_issue") as create_mock:
+            with self.assertRaises(orchestrator.RootIssueResolutionError):
+                _call(
+                    _config(create_issues=False, create_pr=True, issue_number=999),
+                    console,
+                )
+
+        create_mock.assert_not_called()
+
+    def test_create_pr_only_rejects_pull_request_number(self) -> None:
+        console = _RecordingConsole()
+        with mock.patch.object(
+            orchestrator,
+            "get_issue",
+            return_value={"number": 12, "pull_request": {"url": "https://example.invalid/12"}},
+        ), mock.patch.object(orchestrator, "create_issue") as create_mock:
+            with self.assertRaises(orchestrator.RootIssueResolutionError):
+                _call(
+                    _config(create_issues=False, create_pr=True, issue_number=12),
+                    console,
+                )
 
         create_mock.assert_not_called()
 

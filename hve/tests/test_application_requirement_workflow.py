@@ -33,7 +33,7 @@ def test_ard_step_41_owns_the_application_catalog() -> None:
     assert step.depends_on == ["3.3"]
     assert step.output_paths == ["docs/catalog/app-catalog.md"]
     assert step.required_input_paths == ["docs/catalog/use-case-catalog.md"]
-    assert step.body_template_path == "templates/ard/step-4.1.md"
+    assert step.body_template_path == ".github/prompts/steps/ard/step-4.1.prompt.md"
 
 
 def test_ard_step_42_is_a_single_sequential_upsert_step() -> None:
@@ -51,7 +51,7 @@ def test_ard_step_42_is_a_single_sequential_upsert_step() -> None:
         "docs/catalog/app-catalog.md",
         "docs/catalog/use-case-catalog.md",
     ]
-    assert step.body_template_path == "templates/ard/step-4.2.md"
+    assert step.body_template_path == ".github/prompts/steps/ard/step-4.2.prompt.md"
 
 
 def test_aas_starts_at_step_1_after_renumbering() -> None:

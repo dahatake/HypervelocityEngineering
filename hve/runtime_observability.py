@@ -21,6 +21,9 @@ SCHEMA_VERSION = 1
 
 STATS_PREFIX = "[hve:stats] "
 
+# FR-RTO-08: GitHub の Root Issue / PR / 作業 branch 確定を通知する唯一の kind。
+GITHUB_TARGET_KIND = "github_target"
+
 # FR-RTO-02: Dashboard を持つ親が子プロセスへ stats 配信を許可する唯一のマーカー。
 STATS_STREAM_ENV = "HVE_STATS_STREAM"
 
@@ -62,6 +65,8 @@ KNOWN_KINDS = frozenset(
         "assistant_usage_raw",
         "debug_env",
         "assistant_usage_raw_err",
+        # FR-RTO-08: GitHub の Root Issue / PR / 作業 branch の確定を通知する。
+        GITHUB_TARGET_KIND,
     }
 )
 
@@ -137,6 +142,84 @@ def build_event(
 def format_stats_line(payload: Dict[str, Any]) -> str:
     """payload を既存の `[hve:stats] {...}` 1 行形式へ整形する。"""
     return STATS_PREFIX + json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+
+# FR-RTO-08: `owner/repo` のみを許可し、remote URL や余分な階層を弾く。
+_REPO_SLUG_RE = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
+
+
+def _positive_int_or_none(value: Any) -> Optional[int]:
+    """`bool` を除く正の整数だけを返す。推定変換は行わない。"""
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return None
+    return value
+
+
+def github_target_fields(
+    *,
+    repo: Any = None,
+    issue_number: Any = None,
+    pr_number: Any = None,
+    branch: Any = None,
+    base_branch: Any = None,
+    created_by_hve: Any = None,
+    delete_local_merged_branch: Any = None,
+) -> Dict[str, Any]:
+    """FR-RTO-08: GitHub target イベントへ載せてよいフィールドだけを返す。
+
+    確定した値だけを残し、未確定・不正値のキーは省略する（推定で補わない）。
+    token / 本文 / URL は引数に取らないため、構造上イベントへ混入しない。
+    値検証の単一実装とし、producer 側で同等の検証を再実装してはならない
+    （FR-MAINT-07）。
+    """
+    fields: Dict[str, Any] = {}
+    if isinstance(repo, str) and _REPO_SLUG_RE.match(repo):
+        fields["repo"] = repo
+
+    issue = _positive_int_or_none(issue_number)
+    if issue is not None:
+        fields["issue_number"] = issue
+    pull = _positive_int_or_none(pr_number)
+    if pull is not None:
+        fields["pr_number"] = pull
+
+    branch_name = branch.strip() if isinstance(branch, str) else ""
+    if branch_name:
+        fields["branch"] = branch_name
+    base_name = base_branch.strip() if isinstance(base_branch, str) else ""
+    if base_name:
+        fields["base_branch"] = base_name
+
+    # branch が未確定なら created_by_hve は意味を持たないため送出しない。
+    if branch_name and isinstance(created_by_hve, bool):
+        fields["created_by_hve"] = created_by_hve
+    if isinstance(delete_local_merged_branch, bool):
+        fields["delete_local_merged_branch"] = delete_local_merged_branch
+    return fields
+
+
+def build_github_target_event(
+    *,
+    repo: Any = None,
+    issue_number: Any = None,
+    pr_number: Any = None,
+    branch: Any = None,
+    base_branch: Any = None,
+    created_by_hve: Any = None,
+    delete_local_merged_branch: Any = None,
+    context: Optional[RuntimeContext] = None,
+) -> Dict[str, Any]:
+    """FR-RTO-08: GitHub target lifecycle イベントを構築する。"""
+    fields = github_target_fields(
+        repo=repo,
+        issue_number=issue_number,
+        pr_number=pr_number,
+        branch=branch,
+        base_branch=base_branch,
+        created_by_hve=created_by_hve,
+        delete_local_merged_branch=delete_local_merged_branch,
+    )
+    return build_event(GITHUB_TARGET_KIND, context=context, **fields)
 
 
 def _attr(data: Any, *names: str) -> Any:
@@ -607,6 +690,15 @@ _METRIC_KEYS = frozenset(
     }
 )
 
+# FR-RTO-08: GitHub target lifecycle だけに許可するキー。他 kind が同名キーを
+# 持っても永続化されないよう、kind 限定の allowlist として分離する。
+_GITHUB_TARGET_KEYS = frozenset(
+    {
+        "repo", "issue_number", "pr_number", "branch", "base_branch",
+        "created_by_hve", "delete_local_merged_branch",
+    }
+)
+
 _PERSISTABLE_KEYS = _ENVELOPE_KEYS | _METRIC_KEYS
 
 # 生 SDK ペイロード・env dump は本文を含みうるため、イベントごと保存しない。
@@ -661,9 +753,13 @@ def sanitize_event(
         return None
 
     root = Path(repo_root).resolve() if repo_root is not None else None
+    # FR-RTO-08: GitHub target のキーは当該 kind のときだけ許可する。
+    persistable = _PERSISTABLE_KEYS
+    if kind == GITHUB_TARGET_KIND:
+        persistable = _PERSISTABLE_KEYS | _GITHUB_TARGET_KEYS
     clean: Dict[str, Any] = {}
     for key, value in payload.items():
-        if key not in _PERSISTABLE_KEYS:
+        if key not in persistable:
             continue
         if key in _PATH_KEYS:
             relative = _to_repo_relative(value, root)
@@ -844,6 +940,7 @@ def read_events(work_root: Path) -> list:
 __all__ = [
     "DEFAULT_INSTANCE_ID",
     "DEFAULT_MAX_BYTES",
+    "GITHUB_TARGET_KIND",
     "GUI_SESSION_ENV",
     "OBSERVABILITY_DIRNAME",
     "SCHEMA_VERSION",
@@ -855,9 +952,11 @@ __all__ = [
     "RuntimeMetrics",
     "RuntimeMetricsRegistry",
     "build_event",
+    "build_github_target_event",
     "format_counts_topn",
     "format_runtime_summary",
     "format_stats_line",
+    "github_target_fields",
     "is_child_process",
     "is_stats_line",
     "make_instance_id",

@@ -1,7 +1,7 @@
 """template_engine.py — テンプレート読み込み・プレースホルダ展開
 
 旧 `.github/cli/orchestrate.py` のテンプレートエンジン関連関数を移植したもの。
-テンプレートファイルは `.github/scripts/templates/` に格納されている。
+Step body は `.github/prompts/steps/` にあり、path 解決は `prompt_loader` の単一実装へ委譲する。
 """
 
 from __future__ import annotations
@@ -9,14 +9,19 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from .workflow_registry import WorkflowDef, canonicalize_workflow_id
+try:
+    from .prompt_loader import load_prompt_file
+except ImportError:  # pragma: no cover - top-level `import template_engine` compatibility
+    from prompt_loader import load_prompt_file  # type: ignore[import-not-found,no-redef]
+
+try:
+    from .workflow_registry import WorkflowDef, canonicalize_workflow_id
+except ImportError:  # pragma: no cover - top-level `import template_engine` compatibility
+    from workflow_registry import WorkflowDef, canonicalize_workflow_id  # type: ignore[import-not-found,no-redef]
 
 # ---------------------------------------------------------------------------
 # 定数
 # ---------------------------------------------------------------------------
-
-# テンプレートディレクトリのベースパス（リポジトリルート相対）
-_TEMPLATES_BASE = Path(__file__).resolve().parent.parent / ".github" / "scripts"
 
 # target_files 系ワークフローのデフォルト対象ファイル。
 # ここで指定するパターンは orchestrator 側の glob 展開で評価される。
@@ -24,23 +29,44 @@ _TEMPLATES_BASE = Path(__file__).resolve().parent.parent / ".github" / "scripts"
 _DEFAULT_TARGET_FILES: Dict[str, str] = {
     "akm": "qa/*.md",
 }
-_EXISTING_ARTIFACT_POLICY_TEMPLATE_PATH = "templates/_shared/existing-artifact-policy.md"
-_AZURE_OFFICIAL_INFO_SECTION = """
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
-""".strip()
-
-_GENERATED_TEST_RUNTIME_SECTION = """
-## 生成テストの実行環境
-
-- Unit / 実装コード向け TDD RED / TDD GREEN はローカル端末 / CI で実行可能にする。
-- 外部サービスを使う Integration / Post-deploy / E2E は、構成済みサービスを前提にしてよいが、接続先・認証・base URL は環境変数またはテスト設定ファイルで注入する。
-- 必須設定が未設定の場合は環境ブロッカーとして扱い、未実行のまま PASS / GREEN 扱いしない。
-- 接続文字列・アカウントキー・SAS・Function Key・Bearer token 等の秘密情報をコード、README、ログにハードコードしない。
-""".strip()
+# `{WORK}` は後段Agentが解決するrun-scoped作業パスのliteralであり、
+# `render_template()` の置換対象ではない。外部fragment内でもそのまま保持する。
+_EXISTING_ARTIFACT_POLICY_SECTION = load_prompt_file(
+    "runtime/template/existing-artifact-policy.prompt.md"
+).strip()
+_AZURE_OFFICIAL_INFO_SECTION = load_prompt_file(
+    "runtime/template/azure-official-info.prompt.md"
+).strip()
+_GENERATED_TEST_RUNTIME_SECTION = load_prompt_file(
+    "runtime/template/generated-test-runtime.prompt.md"
+).strip()
+_QA_REVIEW_CONTEXT_SECTION = load_prompt_file(
+    "runtime/template/qa-review-context.prompt.md"
+)
+_APP_ID_SECTION_TEMPLATE = load_prompt_file(
+    "runtime/template/app-id-section.prompt.md"
+)
+_RESOURCE_GROUP_SECTION_TEMPLATE = load_prompt_file(
+    "runtime/template/resource-group-section.prompt.md"
+)
+_JOB_SECTION_TEMPLATE = load_prompt_file(
+    "runtime/template/job-section.prompt.md"
+)
+_TARGET_FILES_SECTION_TEMPLATE = load_prompt_file(
+    "runtime/template/target-files-section.prompt.md"
+)
+_COMPLETION_GITHUB_TEMPLATE = load_prompt_file(
+    "runtime/template/completion-github.prompt.md"
+)
+_COMPLETION_LOCAL_TEMPLATE = load_prompt_file(
+    "runtime/template/completion-local.prompt.md"
+)
+_REMOTE_MCP_SERVER_SECTION = load_prompt_file(
+    "runtime/template/remote-mcp-implementation.prompt.md"
+)
+_REMOTE_MCP_SERVER_DESIGN_SECTION = load_prompt_file(
+    "runtime/template/remote-mcp-design.prompt.md"
+)
 
 
 def _get_default_akm_target_files(sources) -> str:
@@ -528,17 +554,17 @@ def collect_params(wf: WorkflowDef, *, will_create_pr: bool = False) -> dict:
 
 
 def _load_template(template_path: str) -> str:
-    """テンプレートファイルを読み込む。"""
-    full_path = _TEMPLATES_BASE / template_path
-    if not full_path.exists():
-        print(f"  ⚠️ テンプレートが見つかりません: {template_path}", flush=True)
-        return ""
-    return full_path.read_text(encoding="utf-8")
+    """Step body テンプレートを単一 loader 経由で読み込む。
+
+    FR-PROMPT-SRC-02: 必須 prompt は欠損・空・不正 path で fail-closed とする。
+    path の正規化と `.github/prompts/` prefix の取り扱いは loader 側の単一実装に任せる。
+    """
+    return load_prompt_file(template_path)
 
 
 def _build_existing_artifact_policy_section() -> str:
     """既存成果物更新方針セクションを返す。"""
-    return _load_template(_EXISTING_ARTIFACT_POLICY_TEMPLATE_PATH).strip()
+    return _EXISTING_ARTIFACT_POLICY_SECTION
 
 
 def _inject_azure_official_info_section(body: str) -> str:
@@ -624,19 +650,7 @@ def _build_qa_review_context_section() -> str:
     Issue Template 経路でも QA 回答・Review 指摘が主タスク成果物へ確実に反映されるよう、
     全 Step template に自動注入する共通参照ルール（Phase 3 追加）。
     """
-    return (
-        "\n\n## 追加コンテキストの参照\n\n"
-        "以下が存在する場合は必ず参照してください。"
-        "存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n"
-        "- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n"
-        "- この PR または関連 Issue のレビュー指摘\n"
-        "- Self-Improve 結果または改善計画（存在する場合のみ）\n"
-        "- `## 入力` に記載された前 Step 成果物（`docs/` 成果物経由のみ。"
-        "他 Step の `work/run/<run-id>/...` 配下の作業ファイルは入力として読まないこと）\n"
-        "- 追加で注入された既存成果物・reuse context\n\n"
-        "参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。"
-        "反映しない場合は理由を完了コメントまたは成果物内に記録してください。"
-    )
+    return _QA_REVIEW_CONTEXT_SECTION
 
 
 def _build_app_id_section(app_id) -> str:
@@ -656,27 +670,21 @@ def _build_app_id_section(app_id) -> str:
         # 通常このパスには到達しない。
         return ""
     id_list = ", ".join(f"`{aid}`" for aid in ids)
-    return (
-        f"\n\n## 対象アプリケーション\n"
-        f"- APP-ID: {id_list}\n"
-        f"- この Step では上記 APP-ID に関連するサービス/エンティティ/画面のみを対象とする\n"
-        f"- `docs/catalog/app-catalog.md` を参照し、対象 APP-ID に紐づく項目を特定する\n"
-        f"- 共有サービス/エンティティ（複数 APP で利用されるもの）も対象に含む"
-    )
+    return _APP_ID_SECTION_TEMPLATE.replace("{id_list}", id_list)
 
 
 def _build_rg_section(resource_group: str) -> str:
     """ADFDV テンプレートの ``{rg_section}`` を展開する。"""
     if not resource_group:
         return ""
-    return f"\n\n## リソースグループ\n`{resource_group}`"
+    return _RESOURCE_GROUP_SECTION_TEMPLATE.replace("{resource_group}", resource_group)
 
 
 def _build_job_section(app_id: str) -> str:
     """ADFDV テンプレートの ``{job_section}`` を展開する。"""
     if not app_id:
         return ""
-    return f"\n\n## 対象データフローアプリ ID\n`{app_id}`"
+    return _JOB_SECTION_TEMPLATE.replace("{job_id}", app_id)
 
 
 def _build_target_files_section(target_files: str) -> str:
@@ -687,18 +695,15 @@ def _build_target_files_section(target_files: str) -> str:
     if not files:
         return ""
     lines = "\n".join(f"- `{f}`" for f in files)
-    return f"\n\n## 対象ファイル\n{lines}"
+    return _TARGET_FILES_SECTION_TEMPLATE.replace("{target_lines}", lines)
 
 
 def _build_completion_instruction(label_prefix: str, execution_mode: str) -> str:
     """実行モードに応じた完了条件を返す。"""
     done_label = f"{label_prefix}:done"
     if execution_mode == "github":
-        return f"- 完了時に自身に `{done_label}` ラベルを付与すること"
-    return (
-        "- 上記の出力ファイルが全て正常に生成されていることを確認して完了とすること\n"
-        f"- ※ ローカル実行のため `{done_label}` ラベルの付与は不要です"
-    )
+        return _COMPLETION_GITHUB_TEMPLATE.replace("{done_label}", done_label)
+    return _COMPLETION_LOCAL_TEMPLATE.replace("{done_label}", done_label)
 
 
 def _normalize_bool(value, default: bool = True) -> bool:
@@ -764,49 +769,7 @@ def _build_remote_mcp_server_section(create_remote_mcp_server: bool) -> str:
     """
     if not create_remote_mcp_server:
         return ""
-    return (
-        "\n\n## Remote MCP Server 実装\n\n"
-        "この Step では、API を通常の REST API として実装・デプロイするだけでなく、"
-        "Remote MCP Server としても公開できるようにしてください。\n\n"
-        "### 基本方針\n\n"
-        "- REST API のビジネスロジックと MCP Server 公開層を疎結合にしてください。\n"
-        "- REST API の既存 contract を壊さないでください。\n"
-        "- MCP Server は API のユースケースを Tool / Resource / Prompt として公開してください。\n"
-        "- MCP 固有の入出力変換は adapter 層に閉じ込めてください。\n"
-        "- MCP SDK、Transport、Compute、追加 Cloud Service は実装対象の環境に応じて選定してください。\n\n"
-        "### 実装時の検討事項\n\n"
-        "- 対象 API のうち、どの操作を MCP Tool として公開するか\n"
-        "- MCP Tool の input schema / output schema\n"
-        "- 認証・認可方式\n"
-        "- CORS / network boundary / public endpoint の扱い\n"
-        "- ローカル実行と Cloud 実行の差分\n"
-        "- ログ、監視、エラーハンドリング\n"
-        "- CI/CD でのデプロイと smoke test\n"
-        "- 関連ドキュメントへの接続方法記載\n\n"
-        "### Azure 上で実装する場合の考慮事項\n\n"
-        "Azure に REST API がホスティングされる場合は、選択された Compute 環境に合わせて"
-        "最適な MCP 実装方式を選定してください。\n\n"
-        "例:\n\n"
-        "- Azure Functions の場合:\n"
-        "  - HTTP Trigger を使った MCP endpoint\n"
-        "  - 必要に応じて Azure Functions に適した MCP SDK または HTTP adapter を利用\n"
-        "- Azure App Service の場合:\n"
-        "  - Web アプリケーション内に MCP endpoint を追加\n"
-        "  - 既存 REST route と MCP route を分離\n"
-        "- Azure Container Apps の場合:\n"
-        "  - MCP Server を sidecar または同一 service 内 endpoint として構成\n"
-        "  - ingress / scaling / revision 管理を考慮\n"
-        "- API Management を利用する場合:\n"
-        "  - REST API と MCP endpoint の公開経路を整理\n"
-        "  - 認証、rate limit、logging policy を検討\n\n"
-        "### 完了条件\n\n"
-        "- REST API としての通常利用が可能である\n"
-        "- Remote MCP Server として接続可能である\n"
-        "- MCP Tool / Resource / Prompt の定義が実装されている\n"
-        "- REST API と MCP adapter が疎結合である\n"
-        "- 認証・認可・ログ・エラーハンドリングが整理されている\n"
-        "- 関連ドキュメントに MCP endpoint、利用方法、設定方法が記載されている"
-    )
+    return _REMOTE_MCP_SERVER_SECTION
 
 
 def _build_remote_mcp_server_design_section(create_remote_mcp_server: bool) -> str:
@@ -825,25 +788,7 @@ def _build_remote_mcp_server_design_section(create_remote_mcp_server: bool) -> s
     """
     if not create_remote_mcp_server:
         return ""
-    return (
-        "\n\n## Remote MCP Server 設計観点\n\n"
-        "`create-remote-mcp-server` が `true` のため、対象 API を Remote MCP Server として公開するための設計観点を含めてください。\n\n"
-        "### 設計に含めること\n\n"
-        "- どの API ユースケースを MCP Tool / Resource / Prompt として公開するか\n"
-        "- MCP Tool の入力スキーマ、出力スキーマ\n"
-        "- REST API と MCP 公開層の責務分離\n"
-        "- MCP 固有の入出力変換を adapter 層に閉じ込める方針\n"
-        "- 認証・認可方針\n"
-        "- エラー応答方針\n"
-        "- ログ・監視方針\n"
-        "- 実行環境非依存のインターフェース定義\n"
-        "- 実装フェーズで SDK / Transport / Cloud Service を選定する前提\n\n"
-        "### 設計で固定しないこと\n\n"
-        "- 特定 MCP SDK\n"
-        "- 特定 Transport\n"
-        "- 特定 Cloud Compute\n"
-        "- 特定 Cloud Provider 固有サービス"
-    )
+    return _REMOTE_MCP_SERVER_DESIGN_SECTION
 
 
 def render_template(
@@ -855,8 +800,6 @@ def render_template(
 ) -> str:
     """テンプレートを読み込み、プレースホルダを展開する。"""
     body = _load_template(template_path)
-    if not body:
-        return ""
 
     root_ref = _build_root_ref(root_issue_num, params)
     qa_review_section = _build_qa_review_context_section()

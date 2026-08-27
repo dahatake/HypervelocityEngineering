@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import importlib
 import json
 import os
 import re
@@ -15,9 +16,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from hve.prompt_loader import load_prompt_file
+
 MODEL_AUTO_VALUE = "Auto"
 DEFAULT_MODEL = "claude-opus-4.7"
-LIGHTWEIGHT_PROMPT = "このセッションは起動時計測です。'OK' のみ返答してください。"
+LIGHTWEIGHT_PROMPT = load_prompt_file(
+    "runtime/repository-query/startup-measurement.prompt.md"
+)
 
 
 @dataclass
@@ -101,25 +106,25 @@ def _load_mcp_servers(repo_root: Path, mcp_config_path: Optional[str]) -> Dict[s
 
 def _import_sdk() -> Dict[str, Any]:
     try:
-        from copilot import CopilotClient, ExternalServerConfig, SubprocessConfig  # type: ignore[import]
-        from copilot.session import PermissionHandler  # type: ignore[import]
+        sdk_module = importlib.import_module("copilot")
+        session_module = importlib.import_module("copilot.session")
 
         return {
-            "CopilotClient": CopilotClient,
-            "SubprocessConfig": SubprocessConfig,
-            "ExternalServerConfig": ExternalServerConfig,
-            "PermissionHandler": PermissionHandler,
+            "CopilotClient": getattr(sdk_module, "CopilotClient"),
+            "SubprocessConfig": getattr(sdk_module, "SubprocessConfig"),
+            "ExternalServerConfig": getattr(sdk_module, "ExternalServerConfig"),
+            "PermissionHandler": getattr(session_module, "PermissionHandler"),
             "module": "copilot",
         }
-    except ImportError:
-        from github_copilot_sdk import CopilotClient, ExternalServerConfig, SubprocessConfig  # type: ignore[import]
-        from github_copilot_sdk.session import PermissionHandler  # type: ignore[import]
+    except (ImportError, AttributeError):
+        sdk_module = importlib.import_module("github_copilot_sdk")
+        session_module = importlib.import_module("github_copilot_sdk.session")
 
         return {
-            "CopilotClient": CopilotClient,
-            "SubprocessConfig": SubprocessConfig,
-            "ExternalServerConfig": ExternalServerConfig,
-            "PermissionHandler": PermissionHandler,
+            "CopilotClient": getattr(sdk_module, "CopilotClient"),
+            "SubprocessConfig": getattr(sdk_module, "SubprocessConfig"),
+            "ExternalServerConfig": getattr(sdk_module, "ExternalServerConfig"),
+            "PermissionHandler": getattr(session_module, "PermissionHandler"),
             "module": "github_copilot_sdk",
         }
 
@@ -288,7 +293,7 @@ async def _measure_hve_config(
     else:
         phases["review"] = {"status": "skipped", "reason": "auto_contents_review=False"}
 
-    result = {
+    result: Dict[str, Any] = {
         "options": {
             "auto_qa": auto_qa,
             "auto_contents_review": auto_contents_review,
@@ -297,9 +302,8 @@ async def _measure_hve_config(
             "dry_run": False,
         },
         "phases": phases,
+        **({"warnings": non_fatal_warnings} if non_fatal_warnings else {}),
     }
-    if non_fatal_warnings:
-        result["warnings"] = non_fatal_warnings
     return result
 
 

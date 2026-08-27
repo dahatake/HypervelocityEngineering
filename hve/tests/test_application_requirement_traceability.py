@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import importlib
 import inspect
 from pathlib import Path
@@ -59,6 +60,30 @@ def test_app_fanout_context_contains_only_the_target_path(tmp_path: Path) -> Non
     assert "APP-002" not in context
     assert "登録できる" not in context
     assert "markdown-query" in context
+
+
+def test_application_requirement_context_representative_output_is_exact(tmp_path: Path) -> None:
+    api = _api()
+    _write_fixture(tmp_path)
+    context = api.build_application_requirement_context(
+        workflow_id="aas",
+        workflow_params={"app_ids": ["APP-001"]},
+        fanout_meta=None,
+        repo_root=tmp_path,
+    )
+    assert context == "\n".join(
+        [
+            "## APP要求トレーサビリティ（必須）",
+            "- 対象 APP-ID: APP-001",
+            "- 必須要求定義書:",
+            "  - `docs/architectural-requirements-app-001.md`",
+            "- 要求書全文は注入していません。必要箇所だけを `markdown-query` で選択取得してください。",
+            "- 完了報告には application-requirement-traceability Skill の trace block を1つ記録してください。",
+        ]
+    )
+    assert hashlib.sha256(context.encode("utf-8")).hexdigest() == (
+        "8f7b33fba77012e608fcf91743d78633174e07ca36fd093f91f2ae1c4809f968"
+    )
 
 
 def test_screen_fanout_resolves_its_own_app(tmp_path: Path) -> None:

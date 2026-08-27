@@ -116,7 +116,7 @@ class TestUnifiedWorkflows:
         }
         used = set(re.findall(r"## Custom Agent\\n`([A-Za-z0-9\-]+)`", text))
         if not used:
-            template_dir = _REPO / ".github" / "scripts" / "templates" / workflow_id
+            template_dir = _REPO / ".github" / "prompts" / "steps" / workflow_id
             for template in template_dir.glob("step-*.md"):
                 used.update(
                     re.findall(

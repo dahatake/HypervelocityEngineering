@@ -109,7 +109,8 @@ Cloud では Issue Template **Agentic Retrieval Add-on**（`agentic-retrieval.ym
 - **CLI**: `--enable-agentic-retrieval no`（またはウィザードで「使用しない」）のとき、AAD-WEB `2.6` / ASDW-WEB `2.5` `2.6` は実行対象から除外されます。
   指定できる値は `auto` / `yes` / `no` の 3 つで、CLI フラグがウィザード回答より優先されます。
   除外された Step は DAG 上 skip 扱いになり、依存先としては解決済みとみなされるため、下流 Step（例: `4.2`）は影響を受けません。
-- **GUI**: 設定画面の「Agentic Retrieval」で「使用しない」を選ぶと、CLI の `--enable-agentic-retrieval no` と同じ動作になります。既定の「自動判定に従う」ではフラグを付与しません。
+- **GUI**: 設定画面の「Agentic Retrieval」で「使用しない」を選ぶと、CLI の `--enable-agentic-retrieval no` と同じ動作になります。既定の「自動判定に従う」ではフラグを付与しません。この枠の 6 項目は設定へ保存され、次回起動時に復元されます。
+- **Prompt 版**: GUI の保存値をそのまま引き継ぎます。依頼文の中で run 単位に上書きすることもできます（直接 CLI・GUI・Prompt 版の 3 面で同じ項目を指定できます）。
 - **Cloud（Issue Form）**: 「しない」を選ぶと、Agentic Retrieval の Sub-Issue が**生成されません**。
   Cloud は `python -m hve orchestrate` を起動せず GitHub Issue を作成して Copilot Cloud Agent が処理する方式のため、
   Python 側の `StepDef.disabled_when_config` ではなく、ワークフロー内の条件分岐で Issue 作成を抑止します。

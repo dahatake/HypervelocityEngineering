@@ -1,6 +1,6 @@
 name: Auto Blocked to Human Required
 
-# 目的: {wf}:blocked ラベルが付いた Open Issue のうち、SLA 時間以上経過したものを
+# 目的: {wf}:blocked ラベルが付いた Open Issue のうち、最終更新から SLA 時間以上経過したものを
 #       {wf}:human-required に自動昇格し、エスカレーションコメントを投稿する。
 #
 # 設計メモ:
@@ -145,7 +145,6 @@ jobs:
 
               ## 📊 参考情報
 
-              - TDD メトリクス: \`work/dashboards/tdd-metrics.md\`
               - SLA ドキュメント: \`docs/hitl/escalation-sla.md\`
               - \`tdd_max_retries\` 既定値: 5（Issue body の \`<!-- tdd-max-retries: N -->\` で変更可能）
 

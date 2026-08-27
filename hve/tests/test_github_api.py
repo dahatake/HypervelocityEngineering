@@ -9,8 +9,10 @@ from __future__ import annotations
 import json
 import os
 import urllib.error
+import urllib.request
+from email.message import Message
 from io import BytesIO
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -23,6 +25,7 @@ from hve.github_api import (
     api_call,
     create_issue,
     create_pull_request,
+    delete_branch_ref,
     get_authenticated_user,
     get_issue,
     get_pull_request,
@@ -111,11 +114,12 @@ class TestParseRetryAfter:
 # =====================================================================
 
 
-def _mock_response(data, status=200):
+def _mock_response(data, status=200, headers=None):
     """urlopen のモック用レスポンスオブジェクトを生成する。"""
     body = json.dumps(data).encode() if data is not None else b""
     resp = MagicMock()
     resp.status = status
+    resp.headers = headers or {}
     resp.read.return_value = body
     resp.__enter__ = lambda s: s
     resp.__exit__ = MagicMock(return_value=False)
@@ -141,6 +145,8 @@ class TestApiCallSuccess:
         # Request body should be JSON-encoded
         req = mock_urlopen.call_args[0][0]
         assert json.loads(req.data) == {"key": "val"}
+        assert req.headers["Accept"] == "application/vnd.github+json"
+        assert req.headers["X-github-api-version"] == "2022-11-28"
 
     @patch("hve.github_api.urllib.request.urlopen")
     def test_empty_body_returns_empty_dict(self, mock_urlopen, monkeypatch):
@@ -148,6 +154,76 @@ class TestApiCallSuccess:
         mock_urlopen.return_value = _mock_response(None)
         result = api_call("GET", "https://api.github.com/test")
         assert result == {}
+
+    @patch("hve.github_api.urllib.request.urlopen")
+    def test_response_headers_are_opt_in_and_json_return_is_unchanged(
+        self, mock_urlopen, monkeypatch
+    ) -> None:
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        mock_urlopen.return_value = _mock_response(
+            [{"number": 1}],
+            headers={"Link": '<https://api.github.com/test?page=2>; rel="next"'},
+        )
+        captured: dict[str, str] = {}
+
+        result = api_call(
+            "GET",
+            "https://api.github.com/test",
+            response_headers=captured,
+        )
+
+        assert result == [{"number": 1}]
+        assert captured == {
+            "link": '<https://api.github.com/test?page=2>; rel="next"'
+        }
+
+    @patch("hve.github_api.urllib.request.urlopen")
+    def test_repeated_link_field_lines_are_combined_in_receive_order(
+        self, mock_urlopen, monkeypatch
+    ) -> None:
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        headers = Message()
+        headers.add_header(
+            "Link", '<https://api.github.com/test?page=2>; rel="next"'
+        )
+        headers.add_header(
+            "Link", '<https://api.github.com/test?page=9>; rel="last"'
+        )
+        mock_urlopen.return_value = _mock_response([], headers=headers)
+        captured: dict[str, str] = {}
+
+        api_call(
+            "GET",
+            "https://api.github.com/test",
+            response_headers=captured,
+        )
+
+        assert captured["link"] == (
+            '<https://api.github.com/test?page=2>; rel="next", '
+            '<https://api.github.com/test?page=9>; rel="last"'
+        )
+
+    @patch("hve.github_api.urllib.request.urlopen")
+    def test_authorization_is_not_forwarded_by_cross_origin_redirect(
+        self, mock_urlopen, monkeypatch
+    ) -> None:
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        mock_urlopen.return_value = _mock_response([])
+
+        api_call("GET", "https://api.github.com/test")
+
+        request = mock_urlopen.call_args.args[0]
+        redirected = urllib.request.HTTPRedirectHandler().redirect_request(
+            request,
+            None,
+            302,
+            "Found",
+            {},
+            "https://evil.example/collect",
+        )
+        assert request.get_header("Authorization") == "Bearer tok"
+        assert redirected is not None
+        assert redirected.get_header("Authorization") is None
 
 
 # =====================================================================
@@ -194,6 +270,79 @@ class TestApiCallErrors:
             api_call("GET", "https://api.github.com/test", max_retries=3)
         assert mock_urlopen.call_count == 1
 
+    @pytest.mark.parametrize("status", [400, 404, 410])
+    @patch("hve.github_api.time.sleep")
+    @patch("hve.github_api.urllib.request.urlopen")
+    def test_non_rate_limit_4xx_is_not_retried(
+        self, mock_urlopen, mock_sleep, monkeypatch, status: int
+    ) -> None:
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        mock_urlopen.side_effect = _make_http_error(status)
+
+        with pytest.raises(GitHubAPIError) as exc_info:
+            api_call("GET", "https://api.github.com/test", max_retries=5)
+
+        assert exc_info.value.status == status
+        assert mock_urlopen.call_count == 1
+        mock_sleep.assert_not_called()
+
+    @patch("hve.github_api.time.sleep")
+    @patch("hve.github_api.urllib.request.urlopen")
+    def test_429_without_headers_waits_at_least_one_minute(
+        self, mock_urlopen, mock_sleep, monkeypatch
+    ) -> None:
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        mock_urlopen.side_effect = [
+            _make_http_error(429),
+            _mock_response({"recovered": True}),
+        ]
+
+        result = api_call("GET", "https://api.github.com/test", max_retries=2)
+
+        assert result == {"recovered": True}
+        mock_sleep.assert_called_once_with(60)
+        retry_request = mock_urlopen.call_args_list[1].args[0]
+        assert retry_request.get_header("Authorization") == "Bearer tok"
+
+    @patch("hve.github_api.time.time", return_value=1_000)
+    @patch("hve.github_api.time.sleep")
+    @patch("hve.github_api.urllib.request.urlopen")
+    def test_rate_limit_reset_header_controls_retry_delay(
+        self, mock_urlopen, mock_sleep, _mock_time, monkeypatch
+    ) -> None:
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        mock_urlopen.side_effect = [
+            _make_http_error(
+                403,
+                headers={
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": "1061",
+                },
+            ),
+            _mock_response({"recovered": True}),
+        ]
+
+        result = api_call("GET", "https://api.github.com/test", max_retries=2)
+
+        assert result == {"recovered": True}
+        mock_sleep.assert_called_once_with(61)
+
+    @pytest.mark.parametrize("status", [405, 409])
+    @patch("hve.github_api.time.sleep")
+    @patch("hve.github_api.urllib.request.urlopen")
+    def test_non_retryable_merge_status_raises_immediately(
+        self, mock_urlopen, mock_sleep, monkeypatch, status: int
+    ) -> None:
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        mock_urlopen.side_effect = _make_http_error(status)
+
+        with pytest.raises(GitHubAPIError) as exc_info:
+            api_call("PUT", "https://api.github.com/test", max_retries=5)
+
+        assert exc_info.value.status == status
+        assert mock_urlopen.call_count == 1
+        mock_sleep.assert_not_called()
+
     @patch("hve.github_api.time.sleep")
     @patch("hve.github_api.urllib.request.urlopen")
     def test_500_retries_then_fails(
@@ -231,6 +380,41 @@ class TestApiCallErrors:
         with pytest.raises(GitHubAPIError, match="network error"):
             api_call("GET", "https://api.github.com/test", max_retries=2)
         assert mock_urlopen.call_count == 2
+
+    @patch("hve.github_api.time.sleep")
+    @patch("hve.github_api.urllib.request.urlopen")
+    def test_negative_retry_after_is_not_passed_to_sleep(
+        self, mock_urlopen, mock_sleep, monkeypatch
+    ) -> None:
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        mock_urlopen.side_effect = _make_http_error(
+            429, headers={"Retry-After": "-1"}
+        )
+
+        with pytest.raises(GitHubAPIError):
+            api_call("GET", "https://api.github.com/test", max_retries=2)
+
+        assert mock_sleep.call_args_list == [call(60)]
+
+    @patch("hve.github_api.time.sleep")
+    @patch("hve.github_api.urllib.request.urlopen")
+    def test_final_rate_limit_attempt_does_not_sleep(
+        self, mock_urlopen, mock_sleep, monkeypatch
+    ) -> None:
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        mock_urlopen.side_effect = _make_http_error(
+            429, headers={"Retry-After": "5"}
+        )
+
+        with pytest.raises(GitHubAPIError):
+            api_call("GET", "https://api.github.com/test", max_retries=1)
+
+        mock_sleep.assert_not_called()
+
+    def test_non_positive_max_retries_is_rejected(self, monkeypatch) -> None:
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        with pytest.raises(GitHubAPIError, match="max_retries"):
+            api_call("GET", "https://api.github.com/test", max_retries=0)
 
 
 # =====================================================================
@@ -318,12 +502,12 @@ class TestLinkSubIssue:
 
     @patch("hve.github_api.time.sleep")
     @patch("hve.github_api.api_call")
-    def test_422_idempotent(self, mock_api, mock_sleep, monkeypatch):
+    def test_422_validation_error_returns_false(self, mock_api, mock_sleep, monkeypatch):
         monkeypatch.setenv("GH_TOKEN", "tok")
         monkeypatch.setenv("REPO", "o/r")
-        mock_api.side_effect = GitHubAPIError("already linked", status=422)
+        mock_api.side_effect = GitHubAPIError("validation failed", status=422)
         result = link_sub_issue(1, 999)
-        assert result is True  # 422 は既にリンク済みとみなす
+        assert result is False
         mock_sleep.assert_called_once_with(1)
 
     @patch("hve.github_api.time.sleep")
@@ -402,25 +586,62 @@ class TestPostComment:
 
 class TestListIssueComments:
     @patch("hve.github_api.api_call")
-    def test_success_filters_dict_items(self, mock_api, monkeypatch):
+    def test_non_object_entry_fails_closed(self, mock_api, monkeypatch):
         monkeypatch.setenv("GH_TOKEN", "tok")
         monkeypatch.setenv("REPO", "o/r")
         mock_api.return_value = [{"body": "a"}, "bad", {"body": "b"}]
 
-        result = list_issue_comments(42)
-
-        assert result == [{"body": "a"}, {"body": "b"}]
-        mock_api.assert_called_once_with(
-            "GET",
-            "https://api.github.com/repos/o/r/issues/42/comments?per_page=100",
-            token=None,
-        )
+        with pytest.raises(GitHubAPIError, match="issue comments response"):
+            list_issue_comments(42)
 
     @patch("hve.github_api.api_call")
-    def test_non_list_response_returns_empty(self, mock_api):
+    def test_non_list_response_fails_closed(self, mock_api):
         mock_api.return_value = {"message": "unexpected"}
 
-        assert list_issue_comments(42, repo="o/r", token="tok") == []
+        with pytest.raises(GitHubAPIError, match="issue comments response"):
+            list_issue_comments(42, repo="o/r", token="tok")
+
+    @patch("hve.github_api.api_call")
+    def test_fetches_all_comment_pages(self, mock_api) -> None:
+        second_url = (
+            "https://api.github.com/repos/o/r/issues/42/comments"
+            "?per_page=2&page=2"
+        )
+
+        def respond(_method, url, *, response_headers, **_kwargs):
+            if url == second_url:
+                return [{"id": 3}]
+            response_headers["link"] = f'<{second_url}>; rel="next"'
+            return [{"id": 1}, {"id": 2}]
+
+        mock_api.side_effect = respond
+
+        result = list_issue_comments(
+            42, repo="o/r", token="tok", per_page=2
+        )
+
+        assert result == [{"id": 1}, {"id": 2}, {"id": 3}]
+        assert mock_api.call_args_list[-1].args[1] == second_url
+
+    @patch("hve.github_api.api_call")
+    def test_malformed_later_page_does_not_erase_valid_first_page(
+        self, mock_api
+    ) -> None:
+        second_url = (
+            "https://api.github.com/repos/o/r/issues/42/comments"
+            "?per_page=2&page=2"
+        )
+
+        def respond(_method, url, *, response_headers, **_kwargs):
+            if url == second_url:
+                return {"message": "malformed"}
+            response_headers["link"] = f'<{second_url}>; rel="next"'
+            return [{"id": 1}, {"id": 2}]
+
+        mock_api.side_effect = respond
+
+        with pytest.raises(GitHubAPIError, match="issue comments response"):
+            list_issue_comments(42, repo="o/r", token="tok", per_page=2)
 
 
 # =====================================================================
@@ -537,17 +758,27 @@ class TestListCheckRunsForRef:
         result = list_check_runs_for_ref("abc123")
 
         assert result == [{"name": "build", "status": "completed", "conclusion": "success"}]
-        mock_api.assert_called_once_with(
+        assert mock_api.call_args.args == (
             "GET",
             "https://api.github.com/repos/o/r/commits/abc123/check-runs?per_page=100",
-            token=None,
         )
+        assert mock_api.call_args.kwargs["token"] is None
+        assert mock_api.call_args.kwargs["response_headers"] == {}
 
     @patch("hve.github_api.api_call")
-    def test_non_dict_response_returns_empty(self, mock_api, monkeypatch):
+    def test_non_dict_response_fails_closed(self, mock_api, monkeypatch):
         monkeypatch.setenv("GH_TOKEN", "tok")
         monkeypatch.setenv("REPO", "o/r")
         mock_api.return_value = []
+
+        with pytest.raises(GitHubAPIError, match="check-runs response"):
+            list_check_runs_for_ref("abc123")
+
+    @patch("hve.github_api.api_call")
+    def test_empty_check_runs_is_valid(self, mock_api, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        monkeypatch.setenv("REPO", "o/r")
+        mock_api.return_value = {"total_count": 0, "check_runs": []}
 
         assert list_check_runs_for_ref("abc123") == []
 
@@ -614,6 +845,81 @@ class TestListBranches:
 
 
 # =====================================================================
+# delete_branch_ref (FR-GUI-34)
+# =====================================================================
+
+
+class TestDeleteBranchRef:
+    @patch("hve.github_api.api_call")
+    def test_calls_git_refs_heads_endpoint(self, mock_api, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        monkeypatch.setenv("REPO", "o/r")
+        assert delete_branch_ref("feature-x") is None
+        mock_api.assert_called_once_with(
+            "DELETE",
+            "https://api.github.com/repos/o/r/git/refs/heads/feature-x",
+            token=None,
+        )
+
+    @patch("hve.github_api.api_call")
+    def test_slash_in_branch_name_is_kept_unencoded(self, mock_api):
+        delete_branch_ref("copilot-sdk/asdw-web-1a2b3c4d", repo="x/y", token="tok")
+        mock_api.assert_called_once_with(
+            "DELETE",
+            "https://api.github.com/repos/x/y/git/refs/heads/copilot-sdk/asdw-web-1a2b3c4d",
+            token="tok",
+        )
+
+    @patch("hve.github_api.api_call")
+    def test_branch_name_is_percent_encoded(self, mock_api):
+        delete_branch_ref("feat/日本語", repo="x/y", token="tok")
+        called_url = mock_api.call_args[0][1]
+        assert called_url.startswith(
+            "https://api.github.com/repos/x/y/git/refs/heads/feat/%"
+        )
+
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            "",
+            "   ",
+            "/leading",
+            "trailing/",
+            "a//b",
+            "../etc/passwd",
+            "a..b",
+            "has space",
+            "has\tspace",
+            "star*",
+            "question?",
+            "colon:x",
+            "tilde~x",
+            "caret^x",
+            "open[bracket",
+            "back\\slash",
+            "@",
+            "a@{b",
+            "ends.",
+            "ends.lock",
+            "ctrl\x00char",
+        ],
+    )
+    @patch("hve.github_api.api_call")
+    def test_rejects_invalid_branch_names(self, mock_api, bad):
+        with pytest.raises(GitHubAPIError):
+            delete_branch_ref(bad, repo="x/y", token="tok")
+        mock_api.assert_not_called()
+
+    @patch("hve.github_api.api_call")
+    def test_404_propagates(self, mock_api, monkeypatch):
+        monkeypatch.setenv("GH_TOKEN", "tok")
+        monkeypatch.setenv("REPO", "o/r")
+        mock_api.side_effect = GitHubAPIError("not found", status=404)
+        with pytest.raises(GitHubAPIError, match="not found"):
+            delete_branch_ref("gone")
+
+
+# =====================================================================
 # repository metadata helpers
 # =====================================================================
 
@@ -675,11 +981,12 @@ class TestIssueEndpoints:
         assert list_issues(repo="o/r", token="tok", state="all", per_page=30) == [
             {"number": 1}
         ]
-        mock_api.assert_called_once_with(
+        assert mock_api.call_args.args == (
             "GET",
-            "https://api.github.com/repos/o/r/issues?state=all&sort=updated&direction=desc&per_page=30",
-            token="tok",
+            "https://api.github.com/repos/o/r/issues?state=all&sort=created&direction=desc&per_page=30",
         )
+        assert mock_api.call_args.kwargs["token"] == "tok"
+        assert mock_api.call_args.kwargs["response_headers"] == {}
 
     @patch("hve.github_api.api_call")
     def test_list_issues_excludes_pull_requests(self, mock_api):
@@ -688,12 +995,27 @@ class TestIssueEndpoints:
             {"number": 2, "pull_request": {"url": "https://example.invalid/2"}},
             {"number": 3},
         ]
-        assert list_issues(repo="o/r", token="tok") == [{"number": 1}, {"number": 3}]
+        result = list_issues(repo="o/r", token="tok")
+        assert result == [{"number": 1}, {"number": 3}]
 
     @patch("hve.github_api.api_call")
-    def test_list_issues_non_list_response_returns_empty(self, mock_api):
+    def test_list_issues_non_list_response_fails_closed(self, mock_api):
         mock_api.return_value = {"message": "unexpected"}
-        assert list_issues(repo="o/r", token="tok") == []
+        with pytest.raises(GitHubAPIError, match="issues response"):
+            list_issues(repo="o/r", token="tok")
+
+    @patch("hve.github_api.api_call")
+    def test_list_issues_non_object_entry_fails_closed(self, mock_api):
+        mock_api.return_value = [{"number": 1}, "invalid"]
+        with pytest.raises(GitHubAPIError, match="issues response"):
+            list_issues(repo="o/r", token="tok")
+
+    @pytest.mark.parametrize("item", [{}, {"number": 0}, {"number": True}])
+    @patch("hve.github_api.api_call")
+    def test_list_issues_rejects_invalid_item_number(self, mock_api, item):
+        mock_api.return_value = [item]
+        with pytest.raises(GitHubAPIError, match="number"):
+            list_issues(repo="o/r", token="tok")
 
     @patch("hve.github_api.api_call")
     def test_list_issues_clamps_per_page(self, mock_api):
@@ -763,6 +1085,15 @@ class TestIssueEndpoints:
             token="tok",
         )
 
+    @pytest.mark.parametrize("response", [[], {}, {"id": 10}])
+    @patch("hve.github_api.api_call")
+    def test_update_comment_response_must_confirm_target(
+        self, mock_api, response
+    ) -> None:
+        mock_api.return_value = response
+        with pytest.raises(GitHubAPIError, match="comment"):
+            update_comment(9, "edited", repo="o/r", token="tok")
+
 
 # =====================================================================
 # FR-GUI-27: Pull Request 一覧
@@ -776,24 +1107,31 @@ class TestPullRequestEndpoints:
         assert list_pull_requests(repo="o/r", token="tok", state="closed", per_page=20) == [
             {"number": 3}
         ]
-        mock_api.assert_called_once_with(
+        assert mock_api.call_args.args == (
             "GET",
-            "https://api.github.com/repos/o/r/pulls?state=closed&sort=updated&direction=desc&per_page=20",
-            token="tok",
+            "https://api.github.com/repos/o/r/pulls?state=closed&sort=created&direction=desc&per_page=20",
         )
+        assert mock_api.call_args.kwargs["token"] == "tok"
+        assert mock_api.call_args.kwargs["response_headers"] == {}
 
     @patch("hve.github_api.api_call")
-    def test_list_pull_requests_filters_non_dict_entries(self, mock_api):
+    def test_list_pull_requests_rejects_non_dict_entries(self, mock_api):
         mock_api.return_value = [{"number": 3}, "bad", {"number": 4}]
-        assert list_pull_requests(repo="o/r", token="tok") == [
-            {"number": 3},
-            {"number": 4},
-        ]
+        with pytest.raises(GitHubAPIError, match="pull requests response"):
+            list_pull_requests(repo="o/r", token="tok")
+
+    @pytest.mark.parametrize("item", [{}, {"number": 0}, {"number": True}])
+    @patch("hve.github_api.api_call")
+    def test_list_pull_requests_rejects_invalid_item_number(self, mock_api, item):
+        mock_api.return_value = [item]
+        with pytest.raises(GitHubAPIError, match="number"):
+            list_pull_requests(repo="o/r", token="tok")
 
     @patch("hve.github_api.api_call")
-    def test_list_pull_requests_non_list_response_returns_empty(self, mock_api):
+    def test_list_pull_requests_non_list_response_fails_closed(self, mock_api):
         mock_api.return_value = {"message": "unexpected"}
-        assert list_pull_requests(repo="o/r", token="tok") == []
+        with pytest.raises(GitHubAPIError, match="pull requests response"):
+            list_pull_requests(repo="o/r", token="tok")
 
     @patch("hve.github_api.api_call")
     def test_list_pull_requests_rejects_unknown_state(self, mock_api):

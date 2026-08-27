@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 760" font-family="Segoe UI, Hiragino Kaku Gothic ProN, sans-serif" font-size="12">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 900" font-family="Segoe UI, Hiragino Kaku Gothic ProN, sans-serif" font-size="12">
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#444"/>
@@ -13,10 +13,12 @@
       .ret   { stroke: #1a7f37; stroke-width: 1.4; fill: none; marker-end: url(#arr); stroke-dasharray: 5 3; }
       .lbl   { font-size: 12px; }
       .head  { fill: #fff; stroke: #444; stroke-width: 1.2; }
+      .promptbox { fill: #ede9fe; stroke: #7c3aed; stroke-width: 1.2; }
+      .note { font-size: 11.5px; fill: #333; }
     </style>
   </defs>
 
-  <text class="title" x="20" y="28">CLI / GUI 起動時のメッセージシーケンス（1 ステップ実行）</text>
+  <text class="title" x="20" y="28">Prompt / CLI / GUI のメッセージシーケンス（1 ステップ実行）</text>
 
   <!-- Lane headers -->
   <g>
@@ -54,7 +56,7 @@
   <!-- Messages -->
   <g class="lbl">
     <path class="arr" d="M90,110 L255,110"/>
-    <text x="100" y="104">1. Wizard 操作 (Step1→2→3)</text>
+    <text x="100" y="104">1. GUI: 2-step Wizard 操作（Step 1 → Step 2）</text>
 
     <path class="arr" d="M255,140 L430,140"/>
     <text x="265" y="134">2. Popen([python, -m, hve, orchestrate, --workbench off, ...])</text>
@@ -66,7 +68,7 @@
     <text x="620" y="194">4. StepRunner.run(step)（asyncio.Semaphore で並列度制御）</text>
 
     <path class="arr" d="M790,230 L790,230"/>
-    <text x="620" y="224">5. agent_loader.load(.github/prompts/&lt;Agent&gt;.prompt.md)</text>
+    <text x="620" y="224">5. prompt_loader.load_prompt(.github/prompts/&lt;Agent&gt;.prompt.md)</text>
 
     <path class="arr" d="M790,260 L790,260"/>
     <text x="620" y="254">6. skill_resolver / template_engine でプロンプト生成</text>
@@ -81,10 +83,10 @@
     <text x="800" y="354">9. session.send_and_wait(prompt)</text>
 
     <path class="arr" d="M950,390 L1095,390"/>
-    <text x="960" y="384">10. プロンプト送信（推論 / MCP / Skill 解決）</text>
+    <text x="960" y="384">10. 推論・MCP・Skill 解決</text>
 
     <path class="ret" d="M1095,420 L950,420"/>
-    <text x="970" y="414">11. event stream: text / tool_use / permission_request</text>
+    <text x="970" y="414">11. event stream</text>
 
     <path class="ret" d="M950,450 L790,450"/>
     <text x="800" y="444">12. PermissionHandler 評価（許可ポリシー適用）</text>
@@ -115,4 +117,10 @@
 
     <text x="20" y="730">※ Cloud Agent Orchestrator では 2〜19 が「Sub-Issue 作成 → assign-copilot.sh → Coding Agent → PR」に置換される</text>
   </g>
+
+  <rect class="promptbox" x="20" y="758" width="1140" height="116" rx="6"/>
+  <text class="lane" x="40" y="782">Prompt 版の承認前フロー（hash 一致後に上の hve CLI Process へ合流）</text>
+  <text class="note" x="40" y="806">日本語の依頼 → Copilot / hve-prompt-edition Skill → request (JSON) → `hve prompt plan --request &lt;path&gt;`</text>
+  <text class="note" x="40" y="830">計画 + plan SHA-256 を提示 → 明示承認 → Agent が `hve prompt run --request &lt;path&gt; --expected-sha256 &lt;hash&gt;` を実行</text>
+  <text class="note" x="40" y="854">hash 不在 / 不一致: 子プロセス 0 件で停止。hash 一致: `hve orchestrate` を子プロセス起動し、上の共有経路へ委譲。</text>
 </svg>

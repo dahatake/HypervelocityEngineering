@@ -175,7 +175,7 @@ Wave 6: Step.6.1 ‖ Step.6.2 ‖ Step.6.3
 | 変えたいもの | 設定の正本（ここだけを編集する） | 拡張手順 | 回帰検証 |
 |---|---|---|---|
 | Step 構成・依存（Wave 計画）・出力パス | `hve/workflow_registry.py` の `adoc` 定義 | Step を足す場合は `depends_on` を明示して Wave を壊さない。コンテナ Step（`2`/`3`/`5`/`6`）は表示用 | `python -m pytest hve/tests/test_workflow_registry.py hve/tests/test_adoc_template_parity.py -q` |
-| Step 本文テンプレート | `.github/scripts/templates/adoc/` 配下 | CLI/GUI と Cloud で同じテンプレートを使う。片側だけの変更は parity テストで落ちる | `python -m pytest hve/tests/test_adoc_template_parity.py -q` |
+| Step 本文テンプレート | `.github/prompts/steps/adoc/` 配下 | CLI/GUI と Cloud で同じテンプレートを使う。片側だけの変更は parity テストで落ちる | `python -m pytest hve/tests/test_adoc_template_parity.py -q` |
 | 各 Agent の振る舞い | `.github/prompts/Doc-*.prompt.md` | 入出力契約は `.github/io-contracts/Doc-*--adoc--*.yaml` と対で更新する | `python -m pytest hve/tests/test_adoc_template_parity.py -q` |
 | 既定の除外パターン・分割閾値・目的 | `hve/__main__.py` の `--exclude-patterns` / `--max-file-lines` / `--doc-purpose` の既定値 | Issue Template の既定値も揃える | `python -m pytest hve/tests/test_workflow_registry.py -q` |
 | Cloud の入力欄 | `.github/ISSUE_TEMPLATE/sourcecode-to-documentation.yml` | 呼び出し先 `.github/workflows/auto-app-documentation-reusable.yml` の `inputs` と対で更新する | Issue Template から 1 度実行して確認 |

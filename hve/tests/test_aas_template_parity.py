@@ -1,6 +1,6 @@
 """AAS テンプレートパリティテスト
 
-AAS の Step Issue body のソースが templates/aas/step-N.md に統一されていることを検証する。
+AAS の Step Issue body のソースが .github/prompts/steps/aas/step-N.prompt.md に統一されていることを検証する。
 (Wave 3 以降: bash ハードコード経路は廃止済み)
 
 このテストは以下を検証する:
@@ -24,7 +24,7 @@ from pathlib import Path
 
 # テンプレートのベースパス（リポジトリルートからの相対）
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_TEMPLATES_BASE = _REPO_ROOT / ".github" / "scripts" / "templates" / "aas"
+_TEMPLATES_BASE = _REPO_ROOT / ".github" / "prompts" / "steps" / "aas"
 
 # workflow_registry の AAS をインポート（hve パッケージとして）
 sys.path.insert(0, str(_REPO_ROOT / "hve"))
@@ -64,7 +64,7 @@ class TestAasTemplateFilesExist(unittest.TestCase):
 
     def test_all_step_templates_exist(self) -> None:
         for step_id in _AAS_STEP_DEPENDENCY_PATTERNS:
-            tpl = _TEMPLATES_BASE / f"step-{step_id}.md"
+            tpl = _TEMPLATES_BASE / f"step-{step_id}.prompt.md"
             self.assertTrue(
                 tpl.exists(),
                 f"AAS テンプレートが見つかりません: {tpl}",
@@ -75,7 +75,7 @@ class TestAasTemplatePlaceholders(unittest.TestCase):
     """テンプレートに必要なプレースホルダが含まれていることを検証する。"""
 
     def _load(self, step_id: str) -> str:
-        tpl = _TEMPLATES_BASE / f"step-{step_id}.md"
+        tpl = _TEMPLATES_BASE / f"step-{step_id}.prompt.md"
         if not tpl.exists():
             self.skipTest(f"テンプレートが存在しません: {tpl}")
         return tpl.read_text(encoding="utf-8")
@@ -123,7 +123,7 @@ class TestAasTemplateDependencyStepNumbers(unittest.TestCase):
     """
 
     def _load(self, step_id: str) -> str:
-        tpl = _TEMPLATES_BASE / f"step-{step_id}.md"
+        tpl = _TEMPLATES_BASE / f"step-{step_id}.prompt.md"
         if not tpl.exists():
             self.skipTest(f"テンプレートが存在しません: {tpl}")
         return tpl.read_text(encoding="utf-8")
@@ -178,7 +178,7 @@ class TestAasTemplateRendering(unittest.TestCase):
         completion_instruction = "- 完了時に自身に `aas:done` ラベルを付与すること"
 
         for step_id in _AAS_STEP_DEPENDENCY_PATTERNS:
-            tpl = _TEMPLATES_BASE / f"step-{step_id}.md"
+            tpl = _TEMPLATES_BASE / f"step-{step_id}.prompt.md"
             if not tpl.exists():
                 self.skipTest(f"テンプレートが存在しません: {tpl}")
             body = tpl.read_text(encoding="utf-8")
@@ -223,7 +223,7 @@ class TestAasStepDefBodyTemplatePath(unittest.TestCase):
                 step.body_template_path,
                 f"AAS Step.{step.id} の body_template_path が None です",
             )
-            tpl = _REPO_ROOT / ".github" / "scripts" / step.body_template_path
+            tpl = _REPO_ROOT / step.body_template_path
             self.assertTrue(
                 tpl.exists(),
                 f"AAS Step.{step.id} の body_template_path が見つかりません: {tpl}",
@@ -239,7 +239,7 @@ class TestAasStepDefCustomAgentConsistency(unittest.TestCase):
         for step in AAS.steps:
             if step.is_container or step.body_template_path is None:
                 continue
-            tpl = _REPO_ROOT / ".github" / "scripts" / step.body_template_path
+            tpl = _REPO_ROOT / step.body_template_path
             if not tpl.exists():
                 self.skipTest(f"テンプレートが存在しません: {tpl}")
             body = tpl.read_text(encoding="utf-8")
@@ -268,7 +268,7 @@ class TestAasStepDefOutputPaths(unittest.TestCase):
             self.assertTrue(
                 len(step.output_paths) > 0,
                 f"AAS Step.{step.id} の output_paths が空です。"
-                f" templates/aas/step-{step.id}.md の ## 出力 セクションを確認してください。",
+                f" .github/prompts/steps/aas/step-{step.id}.prompt.md の ## 出力 セクションを確認してください。",
             )
 
     def test_output_paths_appear_in_template(self) -> None:
@@ -279,7 +279,7 @@ class TestAasStepDefOutputPaths(unittest.TestCase):
         for step in AAS.steps:
             if step.is_container or step.body_template_path is None:
                 continue
-            tpl = _REPO_ROOT / ".github" / "scripts" / step.body_template_path
+            tpl = _REPO_ROOT / step.body_template_path
             if not tpl.exists():
                 self.skipTest(f"テンプレートが存在しません: {tpl}")
             body = tpl.read_text(encoding="utf-8")

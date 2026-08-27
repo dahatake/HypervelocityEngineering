@@ -103,6 +103,11 @@ def panel(qapp, monkeypatch):
         )
         or {"id": comment_id},
     )
+    monkeypatch.setattr(
+        module,
+        "generate_github_title",
+        lambda kind, body, **kwargs: "Generated issue title",
+    )
 
     widget = module.GitHubIssuePanel()
     widget.set_repo("o/r")
@@ -143,7 +148,7 @@ class TestIssuePanel:
         panel.refresh_issues()
         panel.issue_list.setCurrentRow(0)
         assert panel.title_edit.text() == "既存の不具合"
-        assert panel.body_edit.toPlainText() == "本文 12"
+        assert panel.body_edit.text() == "本文 12"
         meta = panel.meta_label.text()
         assert "#12" in meta and "open" in meta and "alice" in meta
         assert "bug" in meta and "bob" in meta
@@ -159,7 +164,7 @@ class TestIssuePanel:
         panel.refresh_issues()
         panel.issue_list.setCurrentRow(0)
         panel.title_edit.setText("新タイトル")
-        panel.body_edit.setPlainText("新本文")
+        panel.body_edit.set_text("新本文")
         panel.save_issue()
         repo, number, kw = panel._calls["update_issue"][-1]
         assert (repo, number) == ("o/r", 12)
@@ -191,13 +196,13 @@ class TestIssuePanel:
     def test_post_comment_sends_and_clears_input(self, panel) -> None:
         panel.refresh_issues()
         panel.issue_list.setCurrentRow(0)
-        panel.new_comment_edit.setPlainText("コメント本文")
+        panel.new_comment_edit.set_text("コメント本文")
         panel.post_comment()
         assert panel._calls["post_comment"][-1] == ("o/r", 12, "コメント本文")
-        assert panel.new_comment_edit.toPlainText() == ""
+        assert panel.new_comment_edit.text() == ""
 
     def test_post_comment_requires_selection(self, panel) -> None:
-        panel.new_comment_edit.setPlainText("孤児コメント")
+        panel.new_comment_edit.set_text("孤児コメント")
         panel.post_comment()
         assert panel._calls["post_comment"] == []
 
@@ -205,22 +210,22 @@ class TestIssuePanel:
         panel.refresh_issues()
         panel.issue_list.setCurrentRow(0)
         panel.comment_list.setCurrentRow(1)  # login == "me"
-        assert panel.comment_edit.isEnabled()
+        assert not panel.comment_edit.editor.isReadOnly()
         assert panel.save_comment_button.isEnabled()
-        assert panel.comment_edit.toPlainText() == "自分のコメント"
+        assert panel.comment_edit.text() == "自分のコメント"
 
     def test_other_comment_is_read_only(self, panel) -> None:
         panel.refresh_issues()
         panel.issue_list.setCurrentRow(0)
         panel.comment_list.setCurrentRow(0)  # login == "alice"
-        assert not panel.comment_edit.isEnabled()
+        assert panel.comment_edit.editor.isReadOnly()
         assert not panel.save_comment_button.isEnabled()
 
     def test_update_own_comment(self, panel) -> None:
         panel.refresh_issues()
         panel.issue_list.setCurrentRow(0)
         panel.comment_list.setCurrentRow(1)
-        panel.comment_edit.setPlainText("編集後")
+        panel.comment_edit.set_text("編集後")
         panel.save_comment()
         assert panel._calls["update_comment"][-1] == ("o/r", 101, "編集後")
 
@@ -228,9 +233,277 @@ class TestIssuePanel:
         panel.refresh_issues()
         panel.issue_list.setCurrentRow(0)
         panel.comment_list.setCurrentRow(0)
-        panel.comment_edit.setPlainText("勝手に編集")
+        panel.comment_edit.set_text("勝手に編集")
         panel.save_comment()
         assert panel._calls["update_comment"] == []
+
+
+class TestCommentEditorWiring:
+    """FR-GUI-30: 3 つの入力欄が共通ウィジェットであること。"""
+
+    def test_all_markdown_inputs_use_shared_editor(self, panel) -> None:
+        from hve.gui.github_comment_editor import GitHubCommentEditor
+
+        for widget in (panel.body_edit, panel.comment_edit, panel.new_comment_edit):
+            assert isinstance(widget, GitHubCommentEditor)
+
+    def test_editor_keeps_markdown_source(self, panel, monkeypatch) -> None:
+        from hve.gui import github_issue_panel as module
+
+        source = "# 見出し\n\n- [ ] task\n\n```py\nx=1\n```"
+        monkeypatch.setattr(
+            module.github_service, "get_issue", lambda repo, number: dict(_ISSUES[0], body=source)
+        )
+        panel.refresh_issues()
+        panel.issue_list.setCurrentRow(0)
+        assert panel.body_edit.text() == source
+
+
+class TestIssueCreation:
+    """FR-GUI-35: 通常 Issue を title / Markdown body から作成する。"""
+
+    def test_create_form_uses_shared_markdown_editor(self, panel) -> None:
+        from hve.gui.github_comment_editor import GitHubCommentEditor
+
+        assert panel.create_title_edit is not None
+        assert isinstance(panel.create_body_edit, GitHubCommentEditor)
+        assert panel.create_issue_button is not None
+
+    def test_create_sends_title_body_and_refreshes(self, panel, monkeypatch) -> None:
+        from hve.gui import github_issue_panel as module
+
+        created: List[Any] = []
+
+        def _create(repo: str, title: str, body: str) -> tuple[int, int]:
+            created.append((repo, title, body))
+            return (77, 7700)
+
+        monkeypatch.setattr(
+            module.github_service,
+            "create_issue_details",
+            lambda repo, title, body, **_metadata: (
+                created.append((repo, title, body))
+                or {"number": 77, "id": 7700, "warnings": []}
+            ),
+            raising=False,
+        )
+        before = len(panel._calls["list_issues"])
+        panel.create_title_edit.setText("新しい Issue")
+        panel.create_body_edit.set_text("## 本文\n\n- [ ] task")
+
+        panel.create_issue()
+
+        assert created == [("o/r", "新しい Issue", "## 本文\n\n- [ ] task")]
+        assert len(panel._calls["list_issues"]) == before + 1
+        assert "#77" in panel.status_label.text()
+        assert panel.create_title_edit.text() == ""
+        assert panel.create_body_edit.text() == ""
+
+    def test_create_disables_inputs_until_request_completes(
+        self, panel, monkeypatch
+    ) -> None:
+        pending: Dict[str, Any] = {}
+
+        def _delayed(task, on_ok, on_ng=None):
+            pending.update(task=task, on_ok=on_ok, on_ng=on_ng)
+
+        monkeypatch.setattr(panel, "_run", _delayed)
+        panel.create_title_edit.setText("Issue")
+        panel.create_body_edit.set_text("Body")
+
+        panel.create_issue()
+
+        assert not panel.create_title_edit.isEnabled()
+        assert not panel.create_body_edit.isEnabled()
+        assert not panel.create_issue_button.isEnabled()
+        pending["on_ok"]({"number": 77, "id": 7700, "warnings": []})
+        assert panel.create_title_edit.isEnabled()
+        assert panel.create_body_edit.isEnabled()
+        assert panel.create_issue_button.isEnabled()
+
+    def test_repo_change_during_create_does_not_refresh_the_new_repo(
+        self, panel, monkeypatch
+    ) -> None:
+        pending: Dict[str, Any] = {}
+        created: List[Any] = []
+
+        def _delayed(task, on_ok, on_ng=None):
+            pending.update(task=task, on_ok=on_ok, on_ng=on_ng)
+
+        from hve.gui import github_issue_panel as module
+
+        monkeypatch.setattr(
+            module.github_service,
+            "create_issue_details",
+            lambda repo, title, body, **_metadata: (
+                created.append((repo, title, body))
+                or {"number": 77, "id": 7700, "warnings": []}
+            ),
+        )
+        monkeypatch.setattr(panel, "_run", _delayed)
+        panel.create_title_edit.setText("Issue")
+        panel.create_body_edit.set_text("Body")
+        panel.create_issue()
+        result = pending["task"]()
+
+        panel.set_repo("other/repo")
+        pending["on_ok"](result)
+
+        assert created == [("o/r", "Issue", "Body")]
+        assert "o/r" in panel.status_label.text()
+        assert "#77" in panel.status_label.text()
+
+    def test_refresh_failure_keeps_created_number_visible(
+        self, panel, monkeypatch
+    ) -> None:
+        pending: List[Dict[str, Any]] = []
+
+        def _delayed(task, on_ok, on_ng=None):
+            pending.append({"task": task, "on_ok": on_ok, "on_ng": on_ng})
+
+        monkeypatch.setattr(panel, "_run", _delayed)
+        panel.create_title_edit.setText("Issue")
+        panel.create_body_edit.set_text("Body")
+        panel.create_issue()
+        pending[0]["on_ok"]({"number": 77, "id": 7700, "warnings": []})
+        pending[1]["on_ng"]("refresh failed")
+
+        assert "#77" in panel.status_label.text()
+        assert "refresh failed" in panel.status_label.text()
+        assert panel._created_issue_number is None
+
+    @pytest.mark.parametrize(("title", "body"), [("", ""), ("   ", "   ")])
+    def test_create_rejects_empty_title_and_body(
+        self, panel, monkeypatch, title: str, body: str
+    ) -> None:
+        from hve.gui import github_issue_panel as module
+
+        calls: List[Any] = []
+        monkeypatch.setattr(
+            module.github_service,
+            "create_issue_details",
+            lambda *args: calls.append(args),
+            raising=False,
+        )
+        panel.create_title_edit.setText(title)
+        panel.create_body_edit.set_text(body)
+
+        panel.create_issue()
+
+        assert calls == []
+
+    def test_create_failure_preserves_input(self, panel, monkeypatch) -> None:
+        from hve.gui import github_issue_panel as module
+
+        def _boom(*_args: Any, **_kwargs: Any) -> None:
+            raise GitHubServiceError("作成に失敗しました。")
+
+        monkeypatch.setattr(
+            module.github_service, "create_issue_details", _boom, raising=False
+        )
+        panel.create_title_edit.setText("保持するタイトル")
+        panel.create_body_edit.set_text("保持する本文")
+
+        panel.create_issue()
+
+        assert panel.create_title_edit.text() == "保持するタイトル"
+        assert panel.create_body_edit.text() == "保持する本文"
+        assert "失敗" in panel.status_label.text()
+        assert panel.create_issue_button.isEnabled()
+
+
+class TestEmptyResultGuidance:
+    """FR-GUI-31: 0 件時に絞り込み状態と切り替え手段を提示すること。"""
+
+    def test_open_zero_suggests_all_state(self, panel, monkeypatch) -> None:
+        from hve.gui import github_issue_panel as module
+
+        monkeypatch.setattr(
+            module.github_service, "list_issues", lambda repo, state="open", per_page=50: []
+        )
+        panel.refresh_issues()
+        text = panel.status_label.text()
+        assert "オープン" in text
+        assert "すべて" in text
+
+    def test_all_state_zero_does_not_suggest_switching(self, panel, monkeypatch) -> None:
+        from hve.gui import github_issue_panel as module
+
+        monkeypatch.setattr(
+            module.github_service, "list_issues", lambda repo, state="open", per_page=50: []
+        )
+        panel.state_combo.setCurrentIndex(panel.state_combo.findData("all"))
+        panel.refresh_issues()
+        assert "すべて" not in panel.status_label.text()
+
+    def test_non_zero_reports_count(self, panel) -> None:
+        panel.refresh_issues()
+        assert "2" in panel.status_label.text()
+
+
+class TestClientSideFilter:
+    """FR-GUI-31: 絞り込みが追加の API 呼び出しを行わないこと。"""
+
+    def test_filter_narrows_visible_rows(self, panel) -> None:
+        panel.refresh_issues()
+        panel.filter_edit.setText("改善")
+        assert panel.issue_list.count() == 1
+        assert "#9" in panel.issue_list.item(0).text()
+
+    def test_filter_matches_issue_number(self, panel) -> None:
+        panel.refresh_issues()
+        panel.filter_edit.setText("#12")
+        assert panel.issue_list.count() == 1
+
+    def test_filter_does_not_call_api(self, panel) -> None:
+        panel.refresh_issues()
+        before = len(panel._calls["list_issues"])
+        panel.filter_edit.setText("改善")
+        assert len(panel._calls["list_issues"]) == before
+
+    def test_clearing_filter_restores_all_rows(self, panel) -> None:
+        panel.refresh_issues()
+        panel.filter_edit.setText("改善")
+        panel.filter_edit.setText("")
+        assert panel.issue_list.count() == 2
+
+    def test_selection_uses_filtered_row(self, panel) -> None:
+        panel.refresh_issues()
+        panel.filter_edit.setText("改善")
+        panel.issue_list.setCurrentRow(0)
+        assert panel._calls["get_issue"][-1] == ("o/r", 9)
+
+    def test_filtering_out_selected_issue_clears_detail(self, panel) -> None:
+        panel.refresh_issues()
+        panel.issue_list.setCurrentRow(0)  # #12
+        assert panel._current is not None
+        panel.filter_edit.setText("改善")  # #12 は非表示になる
+        assert panel._current is None
+        assert not panel.save_button.isEnabled()
+
+
+class TestLoadOnce:
+    """FR-GUI-31: リポジトリ確定時に 1 回だけ取得すること。"""
+
+    def test_loads_on_first_call(self, panel) -> None:
+        panel.load_once()
+        assert len(panel._calls["list_issues"]) == 1
+
+    def test_second_call_for_same_repo_does_not_refetch(self, panel) -> None:
+        panel.load_once()
+        panel.load_once()
+        assert len(panel._calls["list_issues"]) == 1
+
+    def test_changing_repo_loads_again(self, panel) -> None:
+        panel.load_once()
+        panel.set_repo("o/other")
+        panel.load_once()
+        assert len(panel._calls["list_issues"]) == 2
+
+    def test_no_repo_does_not_load(self, panel) -> None:
+        panel.set_repo("")
+        panel.load_once()
+        assert panel._calls["list_issues"] == []
 
 
 class TestIssuePanelErrors:

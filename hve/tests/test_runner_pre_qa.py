@@ -54,8 +54,18 @@ class TestRunnerPreQaSourceInspection(unittest.TestCase):
 
     def test_pre_qa_context_injected_into_main_prompt(self) -> None:
         src = self._get_runner_source()
-        self.assertIn("事前確認済みの前提条件・補足情報", src)
+        # FR-PROMPT-SRC-01: 見出し本文は .github/prompts/ が正本で、runner は参照だけを持つ。
+        self.assertIn("runtime/runner/phase1-pre-qa-heading.prompt.md", src)
         self.assertIn("_injected_prompt", src)
+        heading = (
+            Path(__file__).resolve().parents[2]
+            / ".github"
+            / "prompts"
+            / "runtime"
+            / "runner"
+            / "phase1-pre-qa-heading.prompt.md"
+        )
+        self.assertIn("事前確認済みの前提条件・補足情報", heading.read_text(encoding="utf-8"))
 
     def test_context_injection_uses_sdkconfig_limit(self) -> None:
         src = self._get_runner_source()

@@ -62,16 +62,16 @@ $script:WorkflowRegistryData['aas'] = [PSCustomObject]@{
     }
     params        = @()
     steps         = @(
-        (NewWorkflowStep -Id '1' -Title 'ソフトウェアアーキテクチャの推薦' -CustomAgent 'Arch-ArchitectureCandidateAnalyzer' -BodyTemplatePath 'templates/aas/step-1.md')
-        (NewWorkflowStep -Id '2.1' -Title 'ドメイン分析' -CustomAgent 'Arch-Microservice-DomainAnalytics' -DependsOn @('1') -BodyTemplatePath 'templates/aas/step-2.1.md')
-        (NewWorkflowStep -Id '2.2' -Title 'サービス一覧抽出' -CustomAgent 'Arch-Microservice-ServiceIdentify' -DependsOn @('2.1') -BodyTemplatePath 'templates/aas/step-2.2.md')
-        (NewWorkflowStep -Id '3.1' -Title 'データモデル設計' -CustomAgent 'Arch-DataModeling' -DependsOn @('2.2') -BodyTemplatePath 'templates/aas/step-3.1.md')
-        (NewWorkflowStep -Id '3.2' -Title 'サンプルデータ生成' -CustomAgent 'Arch-DataModeling' -DependsOn @('3.1') -BodyTemplatePath 'templates/aas/step-3.2.md')
-        (NewWorkflowStep -Id '4' -Title 'データカタログ作成' -CustomAgent 'Arch-DataCatalog' -DependsOn @('3.1') -SkipFallbackDeps @('3.1') -BodyTemplatePath 'templates/aas/step-4.md')
-        (NewWorkflowStep -Id '5' -Title 'サービスカタログ' -CustomAgent 'Arch-Microservice-ServiceCatalog' -DependsOn @('4') -SkipFallbackDeps @('4') -BodyTemplatePath 'templates/aas/step-5.md')
-        (NewWorkflowStep -Id '6' -Title 'テスト戦略書' -CustomAgent 'Arch-TDD-TestStrategy' -DependsOn @('5') -SkipFallbackDeps @('5') -BodyTemplatePath 'templates/aas/step-6.md')
-        (NewWorkflowStep -Id '7' -Title 'ペルソナカタログ' -CustomAgent 'Arch-PersonaCatalog' -DependsOn @('6') -SkipFallbackDeps @('6') -BodyTemplatePath 'templates/aas/step-7.md')
-        (NewWorkflowStep -Id '8' -Title 'ペルソナ別共通画面カタログ' -CustomAgent 'Arch-UI-PersonaScreenList' -DependsOn @('7') -SkipFallbackDeps @('7') -BodyTemplatePath 'templates/aas/step-8.md')
+        (NewWorkflowStep -Id '1' -Title 'ソフトウェアアーキテクチャの推薦' -CustomAgent 'Arch-ArchitectureCandidateAnalyzer' -BodyTemplatePath '.github/prompts/steps/aas/step-1.prompt.md')
+        (NewWorkflowStep -Id '2.1' -Title 'ドメイン分析' -CustomAgent 'Arch-Microservice-DomainAnalytics' -DependsOn @('1') -BodyTemplatePath '.github/prompts/steps/aas/step-2.1.prompt.md')
+        (NewWorkflowStep -Id '2.2' -Title 'サービス一覧抽出' -CustomAgent 'Arch-Microservice-ServiceIdentify' -DependsOn @('2.1') -BodyTemplatePath '.github/prompts/steps/aas/step-2.2.prompt.md')
+        (NewWorkflowStep -Id '3.1' -Title 'データモデル設計' -CustomAgent 'Arch-DataModeling' -DependsOn @('2.2') -BodyTemplatePath '.github/prompts/steps/aas/step-3.1.prompt.md')
+        (NewWorkflowStep -Id '3.2' -Title 'サンプルデータ生成' -CustomAgent 'Arch-DataModeling' -DependsOn @('3.1') -BodyTemplatePath '.github/prompts/steps/aas/step-3.2.prompt.md')
+        (NewWorkflowStep -Id '4' -Title 'データカタログ作成' -CustomAgent 'Arch-DataCatalog' -DependsOn @('3.1') -SkipFallbackDeps @('3.1') -BodyTemplatePath '.github/prompts/steps/aas/step-4.prompt.md')
+        (NewWorkflowStep -Id '5' -Title 'サービスカタログ' -CustomAgent 'Arch-Microservice-ServiceCatalog' -DependsOn @('4') -SkipFallbackDeps @('4') -BodyTemplatePath '.github/prompts/steps/aas/step-5.prompt.md')
+        (NewWorkflowStep -Id '6' -Title 'テスト戦略書' -CustomAgent 'Arch-TDD-TestStrategy' -DependsOn @('5') -SkipFallbackDeps @('5') -BodyTemplatePath '.github/prompts/steps/aas/step-6.prompt.md')
+        (NewWorkflowStep -Id '7' -Title 'ペルソナカタログ' -CustomAgent 'Arch-PersonaCatalog' -DependsOn @('6') -SkipFallbackDeps @('6') -BodyTemplatePath '.github/prompts/steps/aas/step-7.prompt.md')
+        (NewWorkflowStep -Id '8' -Title 'ペルソナ別共通画面カタログ' -CustomAgent 'Arch-UI-PersonaScreenList' -DependsOn @('7') -SkipFallbackDeps @('7') -BodyTemplatePath '.github/prompts/steps/aas/step-8.prompt.md')
     )
 }
 
@@ -89,13 +89,13 @@ $script:WorkflowRegistryData['adfd'] = [PSCustomObject]@{
     }
     params        = @('app_ids', 'app_id')
     steps         = @(
-        (NewWorkflowStep -Id '0.1' -Title 'データフローデータモデル定義書' -CustomAgent 'Arch-Dataflow-DataModel' -BodyTemplatePath 'templates/adfd/step-0.1.md')
-        (NewWorkflowStep -Id '0.2' -Title 'データフローアプリカタログ' -CustomAgent 'Arch-Dataflow-AppCatalog' -DependsOn @('0.1') -BodyTemplatePath 'templates/adfd/step-0.2.md')
-        (NewWorkflowStep -Id '4' -Title 'データフローサービスカタログ' -CustomAgent 'Arch-Dataflow-ServiceCatalog' -DependsOn @('0.2') -BodyTemplatePath 'templates/adfd/step-4.md')
-        (NewWorkflowStep -Id '5' -Title 'データフローテスト戦略書' -CustomAgent 'Arch-Dataflow-TestStrategy' -DependsOn @('4') -BodyTemplatePath 'templates/adfd/step-5.md')
-        (NewWorkflowStep -Id '1' -Title 'ジョブ詳細仕様書' -CustomAgent 'Arch-Dataflow-AppSpec' -DependsOn @('5') -BodyTemplatePath 'templates/adfd/step-1.md')
-        (NewWorkflowStep -Id '2' -Title '監視・運用設計書' -CustomAgent 'Arch-Dataflow-MonitoringDesign' -DependsOn @('5') -BodyTemplatePath 'templates/adfd/step-2.md')
-        (NewWorkflowStep -Id '3' -Title 'TDDテスト仕様書' -CustomAgent 'Arch-Dataflow-TDD-TestSpec' -DependsOn @('1', '2') -BodyTemplatePath 'templates/adfd/step-3.md')
+        (NewWorkflowStep -Id '0.1' -Title 'データフローデータモデル定義書' -CustomAgent 'Arch-Dataflow-DataModel' -BodyTemplatePath '.github/prompts/steps/adfd/step-0.1.prompt.md')
+        (NewWorkflowStep -Id '0.2' -Title 'データフローアプリカタログ' -CustomAgent 'Arch-Dataflow-AppCatalog' -DependsOn @('0.1') -BodyTemplatePath '.github/prompts/steps/adfd/step-0.2.prompt.md')
+        (NewWorkflowStep -Id '4' -Title 'データフローサービスカタログ' -CustomAgent 'Arch-Dataflow-ServiceCatalog' -DependsOn @('0.2') -BodyTemplatePath '.github/prompts/steps/adfd/step-4.prompt.md')
+        (NewWorkflowStep -Id '5' -Title 'データフローテスト戦略書' -CustomAgent 'Arch-Dataflow-TestStrategy' -DependsOn @('4') -BodyTemplatePath '.github/prompts/steps/adfd/step-5.prompt.md')
+        (NewWorkflowStep -Id '1' -Title 'ジョブ詳細仕様書' -CustomAgent 'Arch-Dataflow-AppSpec' -DependsOn @('5') -BodyTemplatePath '.github/prompts/steps/adfd/step-1.prompt.md')
+        (NewWorkflowStep -Id '2' -Title '監視・運用設計書' -CustomAgent 'Arch-Dataflow-MonitoringDesign' -DependsOn @('5') -BodyTemplatePath '.github/prompts/steps/adfd/step-2.prompt.md')
+        (NewWorkflowStep -Id '3' -Title 'TDDテスト仕様書' -CustomAgent 'Arch-Dataflow-TDD-TestSpec' -DependsOn @('1', '2') -BodyTemplatePath '.github/prompts/steps/adfd/step-3.prompt.md')
     )
 }
 
@@ -113,14 +113,14 @@ $script:WorkflowRegistryData['adfdv'] = [PSCustomObject]@{
     }
     params        = @('app_ids', 'app_id', 'resource_group', 'tdd_max_retries')
     steps         = @(
-        (NewWorkflowStep -Id '1.1' -Title 'データサービス選定' -CustomAgent 'Dev-Dataflow-DataServiceSelect' -BodyTemplatePath 'templates/adfdv/step-1.1.md')
-        (NewWorkflowStep -Id '1.2' -Title 'Azure データリソース Deploy' -CustomAgent 'Dev-Dataflow-DataDeploy' -DependsOn @('1.1') -BodyTemplatePath 'templates/adfdv/step-1.2.md')
-        (NewWorkflowStep -Id '2.1' -Title 'TDD RED — テストコード作成' -CustomAgent 'Dev-Dataflow-TestCoding' -DependsOn @('1.2') -BodyTemplatePath 'templates/adfdv/step-2.1.md')
-        (NewWorkflowStep -Id '2.2' -Title 'TDD GREEN — データフローアプリ本実装' -CustomAgent 'Dev-Dataflow-ServiceCoding' -DependsOn @('2.1') -BodyTemplatePath 'templates/adfdv/step-2.2.md')
-        (NewWorkflowStep -Id '3' -Title 'Azure Functions/コンテナ Deploy' -CustomAgent 'Dev-Dataflow-FunctionsDeploy' -DependsOn @('2.2') -BodyTemplatePath 'templates/adfdv/step-3.md')
-        (NewWorkflowStep -Id '4.1' -Title 'WAF レビュー' -CustomAgent 'QA-AzureArchitectureReview' -DependsOn @('3') -BodyTemplatePath 'templates/adfdv/step-4.1.md')
-        (NewWorkflowStep -Id '4.2' -Title '整合性チェック' -CustomAgent 'QA-AzureDependencyReview' -DependsOn @('3') -BodyTemplatePath 'templates/adfdv/step-4.2.md')
-        (NewWorkflowStep -Id '4.3' -Title '要件適合実測' -CustomAgent 'QA-RequirementsConformanceEval' -DependsOn @('4.1', '4.2') -BodyTemplatePath 'templates/adfdv/step-4.3.md')
+        (NewWorkflowStep -Id '1.1' -Title 'データサービス選定' -CustomAgent 'Dev-Dataflow-DataServiceSelect' -BodyTemplatePath '.github/prompts/steps/adfdv/step-1.1.prompt.md')
+        (NewWorkflowStep -Id '1.2' -Title 'Azure データリソース Deploy' -CustomAgent 'Dev-Dataflow-DataDeploy' -DependsOn @('1.1') -BodyTemplatePath '.github/prompts/steps/adfdv/step-1.2.prompt.md')
+        (NewWorkflowStep -Id '2.1' -Title 'TDD RED — テストコード作成' -CustomAgent 'Dev-Dataflow-TestCoding' -DependsOn @('1.2') -BodyTemplatePath '.github/prompts/steps/adfdv/step-2.1.prompt.md')
+        (NewWorkflowStep -Id '2.2' -Title 'TDD GREEN — データフローアプリ本実装' -CustomAgent 'Dev-Dataflow-ServiceCoding' -DependsOn @('2.1') -BodyTemplatePath '.github/prompts/steps/adfdv/step-2.2.prompt.md')
+        (NewWorkflowStep -Id '3' -Title 'Azure Functions/コンテナ Deploy' -CustomAgent 'Dev-Dataflow-FunctionsDeploy' -DependsOn @('2.2') -BodyTemplatePath '.github/prompts/steps/adfdv/step-3.prompt.md')
+        (NewWorkflowStep -Id '4.1' -Title 'WAF レビュー' -CustomAgent 'QA-AzureArchitectureReview' -DependsOn @('3') -BodyTemplatePath '.github/prompts/steps/adfdv/step-4.1.prompt.md')
+        (NewWorkflowStep -Id '4.2' -Title '整合性チェック' -CustomAgent 'QA-AzureDependencyReview' -DependsOn @('3') -BodyTemplatePath '.github/prompts/steps/adfdv/step-4.2.prompt.md')
+        (NewWorkflowStep -Id '4.3' -Title '要件適合実測' -CustomAgent 'QA-RequirementsConformanceEval' -DependsOn @('4.1', '4.2') -BodyTemplatePath '.github/prompts/steps/adfdv/step-4.3.prompt.md')
     )
 }
 
@@ -138,16 +138,16 @@ $script:WorkflowRegistryData['ard'] = [PSCustomObject]@{
     }
     params        = @('company_name', 'target_business', 'survey_base_date', 'survey_period_years', 'target_region', 'analysis_purpose', 'target_recommendation_id', 'attached_docs', 'include_kpi_okr')
     steps         = @(
-        (NewWorkflowStep -Id '1' -Title '事業分野候補列挙' -CustomAgent 'Arch-ARD-BusinessAnalysis-Untargeted' -BodyTemplatePath 'templates/ard/step-1.md')
-        (NewWorkflowStep -Id '1.1' -Title '事業分野別深掘り分析' -CustomAgent 'Arch-ARD-BusinessAnalysis-Untargeted' -DependsOn @('1') -BodyTemplatePath 'templates/ard/step-1.1.md')
-        (NewWorkflowStep -Id '1.2' -Title '事業分析統合' -CustomAgent 'Arch-ARD-BusinessAnalysis-Untargeted' -DependsOn @('1.1') -BodyTemplatePath 'templates/ard/step-1.2.md')
-        (NewWorkflowStep -Id '2' -Title '対象業務深掘り分析' -CustomAgent 'Arch-ARD-BusinessAnalysis-Targeted' -SkipFallbackDeps @('1.2') -BodyTemplatePath 'templates/ard/step-2.md')
-        (NewWorkflowStep -Id '2.1' -Title 'KPI/OKR 定義（任意）' -CustomAgent 'Arch-ARD-KPIOKRDefinition' -DependsOn @('2') -SkipFallbackDeps @('1.2') -BodyTemplatePath 'templates/ard/step-2.1.md')
-        (NewWorkflowStep -Id '3.1' -Title 'ユースケース骨格抽出' -CustomAgent 'Arch-ARD-UseCaseCatalog' -DependsOn @('2') -SkipFallbackDeps @('1.2') -BodyTemplatePath 'templates/ard/step-3.1.md')
-        (NewWorkflowStep -Id '3.2' -Title 'ユースケース詳細生成' -CustomAgent 'Arch-ARD-UseCaseCatalog' -DependsOn @('3.1') -BodyTemplatePath 'templates/ard/step-3.2.md')
-        (NewWorkflowStep -Id '3.3' -Title 'ユースケースカタログ統合' -CustomAgent 'Arch-ARD-UseCaseCatalog' -DependsOn @('3.2') -BodyTemplatePath 'templates/ard/step-3.3.md')
-        (NewWorkflowStep -Id '4.1' -Title 'アプリケーションリスト作成' -CustomAgent 'Arch-ApplicationAnalytics' -DependsOn @('3.3') -BodyTemplatePath 'templates/ard/step-4.1.md')
-        (NewWorkflowStep -Id '4.2' -Title 'APP別要求定義書作成' -CustomAgent 'Arch-ApplicationRequirementDefinition' -DependsOn @('4.1') -BodyTemplatePath 'templates/ard/step-4.2.md')
+        (NewWorkflowStep -Id '1' -Title '事業分野候補列挙' -CustomAgent 'Arch-ARD-BusinessAnalysis-Untargeted' -BodyTemplatePath '.github/prompts/steps/ard/step-1.prompt.md')
+        (NewWorkflowStep -Id '1.1' -Title '事業分野別深掘り分析' -CustomAgent 'Arch-ARD-BusinessAnalysis-Untargeted' -DependsOn @('1') -BodyTemplatePath '.github/prompts/steps/ard/step-1.1.prompt.md')
+        (NewWorkflowStep -Id '1.2' -Title '事業分析統合' -CustomAgent 'Arch-ARD-BusinessAnalysis-Untargeted' -DependsOn @('1.1') -BodyTemplatePath '.github/prompts/steps/ard/step-1.2.prompt.md')
+        (NewWorkflowStep -Id '2' -Title '対象業務深掘り分析' -CustomAgent 'Arch-ARD-BusinessAnalysis-Targeted' -SkipFallbackDeps @('1.2') -BodyTemplatePath '.github/prompts/steps/ard/step-2.prompt.md')
+        (NewWorkflowStep -Id '2.1' -Title 'KPI/OKR 定義（任意）' -CustomAgent 'Arch-ARD-KPIOKRDefinition' -DependsOn @('2') -SkipFallbackDeps @('1.2') -BodyTemplatePath '.github/prompts/steps/ard/step-2.1.prompt.md')
+        (NewWorkflowStep -Id '3.1' -Title 'ユースケース骨格抽出' -CustomAgent 'Arch-ARD-UseCaseCatalog' -DependsOn @('2') -SkipFallbackDeps @('1.2') -BodyTemplatePath '.github/prompts/steps/ard/step-3.1.prompt.md')
+        (NewWorkflowStep -Id '3.2' -Title 'ユースケース詳細生成' -CustomAgent 'Arch-ARD-UseCaseCatalog' -DependsOn @('3.1') -BodyTemplatePath '.github/prompts/steps/ard/step-3.2.prompt.md')
+        (NewWorkflowStep -Id '3.3' -Title 'ユースケースカタログ統合' -CustomAgent 'Arch-ARD-UseCaseCatalog' -DependsOn @('3.2') -BodyTemplatePath '.github/prompts/steps/ard/step-3.3.prompt.md')
+        (NewWorkflowStep -Id '4.1' -Title 'アプリケーションリスト作成' -CustomAgent 'Arch-ApplicationAnalytics' -DependsOn @('3.3') -BodyTemplatePath '.github/prompts/steps/ard/step-4.1.prompt.md')
+        (NewWorkflowStep -Id '4.2' -Title 'APP別要求定義書作成' -CustomAgent 'Arch-ApplicationRequirementDefinition' -DependsOn @('4.1') -BodyTemplatePath '.github/prompts/steps/ard/step-4.2.prompt.md')
     )
 }
 

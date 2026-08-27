@@ -156,8 +156,10 @@ def test_options_page_emits_agentic_flags_when_selected(options_page) -> None:
     sec.enable_agentic_retrieval.setCurrentIndex(
         sec.enable_agentic_retrieval.findData("no")
     )
+    # FR-LOCAL-SURFACE-01 (a): userData は設定ストアへ往復できる文字列に限る。
+    # 3 状態は "" / "on" / "off" で表現し、bool を userData へ置かない。
     sec.foundry_mcp_integration.setCurrentIndex(
-        sec.foundry_mcp_integration.findData(False)
+        sec.foundry_mcp_integration.findData("off")
     )
     sec.agentic_data_sources_hint.setText("Blob と Azure SQL")
 

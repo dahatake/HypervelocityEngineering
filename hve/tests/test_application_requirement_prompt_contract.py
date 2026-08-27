@@ -9,13 +9,13 @@ _REPO = Path(__file__).resolve().parents[2]
 _PRODUCER_PROMPT = (
     _REPO / ".github" / "prompts" / "Arch-ApplicationRequirementDefinition.prompt.md"
 )
-_STEP_41 = _REPO / ".github" / "scripts" / "templates" / "ard" / "step-4.1.md"
-_STEP_42 = _REPO / ".github" / "scripts" / "templates" / "ard" / "step-4.2.md"
+_STEP_41 = _REPO / ".github" / "prompts" / "steps" / "ard" / "step-4.1.prompt.md"
+_STEP_42 = _REPO / ".github" / "prompts" / "steps" / "ard" / "step-4.2.prompt.md"
 _CANDIDATE_PROMPT = (
     _REPO / ".github" / "prompts" / "Arch-ArchitectureCandidateAnalyzer.prompt.md"
 )
 _CANDIDATE_TEMPLATE = (
-    _REPO / ".github" / "scripts" / "templates" / "aas" / "step-1.md"
+    _REPO / ".github" / "prompts" / "steps" / "aas" / "step-1.prompt.md"
 )
 
 

@@ -20,7 +20,6 @@ from hve.template_engine import (
     _build_remote_mcp_server_design_section,
     _load_template,
     _normalize_bool,
-    _TEMPLATES_BASE,
     build_root_issue_body,
     collect_params,
     render_template,
@@ -28,21 +27,21 @@ from hve.template_engine import (
 )
 from hve.workflow_registry import get_workflow, StepDef, WorkflowDef
 
-
-def _is_shared_template(md_file: Path, templates_dir: Path) -> bool:
-    return md_file.relative_to(templates_dir).parts[0] == "_shared"
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_PROMPTS_ROOT = _REPO_ROOT / ".github" / "prompts"
+_STEPS_ROOT = _PROMPTS_ROOT / "steps"
 
 
 # ---------------------------------------------------------------------------
-# _TEMPLATES_BASE パス検証
+# Prompt root 検証
 # ---------------------------------------------------------------------------
 
 
 class TestTemplatesBase:
-    def test_points_to_scripts(self):
-        """_TEMPLATES_BASE が .github/scripts/ を指すこと。"""
-        assert _TEMPLATES_BASE.name == "scripts"
-        assert _TEMPLATES_BASE.parent.name == ".github"
+    def test_step_bodies_live_under_prompts_root(self):
+        """Step body が .github/prompts/steps/ 配下に存在すること。"""
+        assert _STEPS_ROOT.is_dir()
+        assert (_STEPS_ROOT / "aas" / "step-1.prompt.md").is_file()
 
 
 # ---------------------------------------------------------------------------
@@ -53,20 +52,20 @@ class TestTemplatesBase:
 class TestLoadTemplate:
     def test_load_existing(self):
         """実在するテンプレートが読み込めること。"""
-        content = _load_template("templates/aas/step-1.md")
+        content = _load_template(".github/prompts/steps/aas/step-1.prompt.md")
         assert "{root_ref}" in content
 
-    def test_load_nonexistent(self, capsys):
-        """存在しないテンプレートは空文字列を返し警告が出ること。"""
-        result = _load_template("templates/nonexistent/step-999.md")
-        assert result == ""
-        captured = capsys.readouterr()
-        assert "テンプレートが見つかりません" in captured.out
+    def test_load_nonexistent_fails_closed(self):
+        """存在しないテンプレートは fail-closed で例外になること。"""
+        with pytest.raises(FileNotFoundError):
+            _load_template(".github/prompts/steps/nonexistent/step-999.prompt.md")
 
 
 class TestExistingArtifactPolicyTemplate:
     def test_shared_policy_template_exists(self):
-        content = _load_template("templates/_shared/existing-artifact-policy.md")
+        content = _load_template(
+            ".github/prompts/runtime/template/existing-artifact-policy.prompt.md"
+        )
         assert "## 既存成果物がある場合の更新方針" in content
         assert "再作成して" in content
 
@@ -74,6 +73,19 @@ class TestExistingArtifactPolicyTemplate:
         section = _build_existing_artifact_policy_section()
         assert "メインタスク本体を必ず実行" in section
         assert "更新なし" in section
+
+    def test_external_fragment_keeps_work_placeholder_for_downstream_agent(self):
+        section = _build_existing_artifact_policy_section()
+        assert "{WORK}" in section
+
+        wf = get_workflow("aas")
+        body = render_template(
+            ".github/prompts/steps/aas/step-1.prompt.md",
+            root_issue_num=1,
+            params={"branch": "main"},
+            wf=wf,
+        )
+        assert "{WORK}" in body
 
     def test_existing_artifact_policy_requires_single_step_input_review(self):
         """単独 Step 実行でも入力と既存成果物を読んで stale/契約不一致を扱う。"""
@@ -91,7 +103,7 @@ class TestAzureOfficialInfoSectionInjection:
         wf = get_workflow("asdw-web")
 
         body = render_template(
-            "templates/asdw-web/step-4.1.md",
+            ".github/prompts/steps/asdw-web/step-4.1.prompt.md",
             root_issue_num=0,
             params={"branch": "main"},
             wf=wf,
@@ -102,13 +114,14 @@ class TestAzureOfficialInfoSectionInjection:
         assert "title / URL / 確認事項" in body
         assert "要確認（Microsoft Learn MCP 未取得）" in body
         assert "推測で確定しない" in body
+        assert "{WORK}" in body
 
     def test_does_not_duplicate_microsoft_learn_mcp_rule_when_template_has_section(self):
         """テンプレート側に既に Microsoft Learn MCP 規律がある場合は重複注入しない。"""
         wf = get_workflow("asdw-web")
 
         body = render_template(
-            "templates/asdw-web/step-1.1.md",
+            ".github/prompts/steps/asdw-web/step-1.1.prompt.md",
             root_issue_num=0,
             params={"branch": "main"},
             wf=wf,
@@ -121,7 +134,7 @@ class TestAzureOfficialInfoSectionInjection:
         wf = get_workflow("akm")
 
         body = render_template(
-            "templates/akm/step-1.md",
+            ".github/prompts/steps/akm/step-1.prompt.md",
             root_issue_num=0,
             params={"branch": "main"},
             wf=wf,
@@ -263,7 +276,7 @@ class TestRenderTemplate:
         """AAS step-1 テンプレートが正しく展開されること。"""
         wf = get_workflow("aas")
         body = render_template(
-            "templates/aas/step-1.md",
+            ".github/prompts/steps/aas/step-1.prompt.md",
             root_issue_num=99,
             params={"branch": "main"},
             wf=wf,
@@ -276,13 +289,13 @@ class TestRenderTemplate:
 
     def test_nonexistent_template(self):
         wf = get_workflow("aas")
-        body = render_template(
-            "templates/nope.md",
-            root_issue_num=1,
-            params={},
-            wf=wf,
-        )
-        assert body == ""
+        with pytest.raises(FileNotFoundError):
+            render_template(
+                ".github/prompts/steps/aas/nope.prompt.md",
+                root_issue_num=1,
+                params={},
+                wf=wf,
+            )
 
     def test_asdw_placeholders(self):
         """ASDW テンプレートの固有プレースホルダが展開されること。"""
@@ -305,7 +318,7 @@ class TestRenderTemplate:
         """ADOC テンプレートの固有プレースホルダが展開されること。"""
         wf = get_workflow("adoc")
         body = render_template(
-            "templates/adoc/step-1.md",
+            ".github/prompts/steps/adoc/step-1.prompt.md",
             root_issue_num=60,
             params={
                 "target_dirs": "src/,hve/",
@@ -328,7 +341,7 @@ class TestRenderTemplate:
         """ADOC doc_purpose のデフォルトが all であること。"""
         wf = get_workflow("adoc")
         body = render_template(
-            "templates/adoc/step-1.md",
+            ".github/prompts/steps/adoc/step-1.prompt.md",
             root_issue_num=61,
             params={},
             wf=wf,
@@ -339,7 +352,7 @@ class TestRenderTemplate:
         """ADI Step 1.1 の質問票固有プレースホルダが展開されること。"""
         wf = get_workflow("adi")
         body = render_template(
-            "templates/adi/step-1.1.md",
+            ".github/prompts/steps/adi/step-1.1.prompt.md",
             root_issue_num=70,
             params={
                 "target_scope": "docs-original/",
@@ -359,7 +372,7 @@ class TestRenderTemplate:
         """ARD で company_name / target_business 未入力時も placeholder が残らないこと。"""
         wf = get_workflow("ard")
         body = render_template(
-            "templates/ard/step-2.md",
+            ".github/prompts/steps/ard/step-2.prompt.md",
             root_issue_num=71,
             params={
                 "company_name": "",
@@ -379,7 +392,7 @@ class TestRenderTemplate:
         """Phase B (Major No.15): ARD step-1 で全プレースホルダが展開されること。"""
         wf = get_workflow("ard")
         body = render_template(
-            "templates/ard/step-1.md",
+            ".github/prompts/steps/ard/step-1.prompt.md",
             root_issue_num=72,
             params={
                 "company_name": "テスト株式会社",
@@ -410,7 +423,7 @@ class TestRenderTemplate:
         """Phase B: ARD step-1 で任意パラメータが空でも既定値で展開されること。"""
         wf = get_workflow("ard")
         body = render_template(
-            "templates/ard/step-1.md",
+            ".github/prompts/steps/ard/step-1.prompt.md",
             root_issue_num=73,
             params={"company_name": "X 社"},
             wf=wf,
@@ -429,7 +442,7 @@ class TestRenderTemplate:
     def test_completion_instruction_github_mode(self):
         wf = get_workflow("akm")
         body = render_template(
-            "templates/akm/step-1.md",
+            ".github/prompts/steps/akm/step-1.prompt.md",
             root_issue_num=70,
             params={"branch": "main"},
             wf=wf,
@@ -440,7 +453,7 @@ class TestRenderTemplate:
     def test_completion_instruction_local_mode(self):
         wf = get_workflow("akm")
         body = render_template(
-            "templates/akm/step-1.md",
+            ".github/prompts/steps/akm/step-1.prompt.md",
             root_issue_num=70,
             params={"branch": "main"},
             wf=wf,
@@ -458,7 +471,7 @@ class TestRenderTemplate:
         )
         with patch("hve.template_engine._load_template", return_value=legacy):
             body = render_template(
-                "templates/akm/step-1.md",
+                ".github/prompts/steps/akm/step-1.prompt.md",
                 root_issue_num=1,
                 params={"branch": "main"},
                 wf=wf,
@@ -722,18 +735,16 @@ class TestWorkflowNameMappings:
 class TestAllTemplatesHaveAdditionalSection:
     def test_all_templates_have_placeholder(self):
         """全テンプレートファイルに {additional_section} プレースホルダが含まれること。"""
-        templates_dir = _TEMPLATES_BASE / "templates"
+        templates_dir = _STEPS_ROOT
         missing = []
         for md_file in sorted(templates_dir.rglob("*.md")):
-            if _is_shared_template(md_file, templates_dir):
-                continue
             content = md_file.read_text(encoding="utf-8")
             if "{additional_section}" not in content:
                 missing.append(str(md_file.relative_to(templates_dir)))
         assert not missing, f"以下のテンプレートに {{additional_section}} がありません: {missing}"
 
     def test_no_legacy_done_instruction_in_templates(self):
-        templates_dir = _TEMPLATES_BASE / "templates"
+        templates_dir = _STEPS_ROOT
         legacy_patterns = []
         for md_file in sorted(templates_dir.rglob("*.md")):
             content = md_file.read_text(encoding="utf-8")
@@ -761,10 +772,10 @@ class TestExistingArtifactPolicyIntegration:
     def test_target_templates_have_existing_artifact_policy_placeholder(self):
         missing = []
         for d in self._TARGET_TEMPLATE_DIRS:
-            for md_file in sorted((_TEMPLATES_BASE / "templates" / d).glob("*.md")):
+            for md_file in sorted((_STEPS_ROOT / d).glob("*.md")):
                 content = md_file.read_text(encoding="utf-8")
                 if "{existing_artifact_policy}" not in content:
-                    missing.append(str(md_file.relative_to(_TEMPLATES_BASE / "templates")))
+                    missing.append(str(md_file.relative_to(_STEPS_ROOT)))
         assert not missing, (
             "以下のテンプレートに {existing_artifact_policy} がありません: "
             f"{missing}"
@@ -772,16 +783,16 @@ class TestExistingArtifactPolicyIntegration:
 
     def test_render_template_replaces_existing_artifact_policy_placeholder(self):
         samples = [
-            ("aas", "templates/aas/step-1.md"),
-            ("aad-web", "templates/aad-web/step-1.md"),
-            ("asdw-web", "templates/asdw-web/step-1.1.md"),
-            ("adfd", "templates/adfd/step-1.md"),
-            ("adfdv", "templates/adfdv/step-1.1.md"),
-            ("aag", "templates/aag/step-1.md"),
-            ("aagd", "templates/aagd/step-1.md"),
-            ("adi", "templates/adi/step-1.1.md"),
-            ("akm", "templates/akm/step-1.md"),
-            ("adoc", "templates/adoc/step-1.md"),
+            ("aas", ".github/prompts/steps/aas/step-1.prompt.md"),
+            ("aad-web", ".github/prompts/steps/aad-web/step-1.prompt.md"),
+            ("asdw-web", ".github/prompts/steps/asdw-web/step-1.1.prompt.md"),
+            ("adfd", ".github/prompts/steps/adfd/step-1.prompt.md"),
+            ("adfdv", ".github/prompts/steps/adfdv/step-1.1.prompt.md"),
+            ("aag", ".github/prompts/steps/aag/step-1.prompt.md"),
+            ("aagd", ".github/prompts/steps/aagd/step-1.prompt.md"),
+            ("adi", ".github/prompts/steps/adi/step-1.1.prompt.md"),
+            ("akm", ".github/prompts/steps/akm/step-1.prompt.md"),
+            ("adoc", ".github/prompts/steps/adoc/step-1.prompt.md"),
         ]
         for wf_id, template_path in samples:
             wf = get_workflow(wf_id)
@@ -884,7 +895,7 @@ class TestQaReviewContextSection:
         """render_template の出力に QA / Review コンテキスト参照セクションが含まれること。"""
         wf = get_workflow("aas")
         body = render_template(
-            "templates/aas/step-1.md",
+            ".github/prompts/steps/aas/step-1.prompt.md",
             root_issue_num=1,
             params={"branch": "main"},
             wf=wf,
@@ -894,12 +905,9 @@ class TestQaReviewContextSection:
 
     def test_all_templates_get_qa_review_section(self):
         """全テンプレートのレンダリング結果に QA/Review 参照セクションが含まれること。"""
-        templates_dir = _TEMPLATES_BASE / "templates"
         missing = []
-        for md_file in sorted(templates_dir.rglob("*.md")):
-            if _is_shared_template(md_file, templates_dir):
-                continue
-            rel = str(md_file.relative_to(_TEMPLATES_BASE))  # e.g. "templates/aas/step-1.md"
+        for md_file in sorted(_STEPS_ROOT.rglob("*.md")):
+            rel = str(md_file.relative_to(_PROMPTS_ROOT.parent.parent)).replace("\\", "/")
             wf_id = md_file.parts[-2]  # e.g. "aas"
             try:
                 wf = get_workflow(wf_id)
@@ -927,7 +935,7 @@ class TestRegistryTemplateConsistencyPhase5:
     # 実際に不一致があり意図的に許容する場合のみここに追加する。
     _CUSTOM_AGENT_ALLOWLIST: list[str] = []
 
-    def _collect_registry_steps(self) -> list[tuple[str, str | None]]:
+    def _collect_registry_steps(self) -> list[tuple[str, str]]:
         """workflow_registry の全ワークフローから (body_template_path, custom_agent) ペアを収集する。
 
         workflow_registry モジュールを直接 import して走査するため、
@@ -942,14 +950,14 @@ class TestRegistryTemplateConsistencyPhase5:
         return results
 
     def test_all_body_template_paths_exist(self) -> None:
-        """workflow_registry.py の全 body_template_path ファイルが .github/scripts/ 配下に存在すること。"""
+        """workflow_registry.py の全 body_template_path ファイルが .github/prompts/ 配下に存在すること。"""
         missing = []
         for tpl_path, _ in self._collect_registry_steps():
-            full = _TEMPLATES_BASE / tpl_path
+            full = _REPO_ROOT / tpl_path
             if not full.exists():
                 missing.append(tpl_path)
         assert not missing, (
-            f"以下の body_template_path が .github/scripts/ 配下に存在しません: {missing}"
+            f"以下の body_template_path が .github/prompts/ 配下に存在しません: {missing}"
         )
 
     def test_template_custom_agent_matches_registry(self) -> None:
@@ -961,7 +969,7 @@ class TestRegistryTemplateConsistencyPhase5:
         for tpl_path, registry_agent in self._collect_registry_steps():
             if tpl_path in self._CUSTOM_AGENT_ALLOWLIST:
                 continue
-            full = _TEMPLATES_BASE / tpl_path
+            full = _REPO_ROOT / tpl_path
             if not full.exists():
                 continue  # 存在確認は別テストで行う
 
@@ -994,7 +1002,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server=False のとき {remote_mcp_server_section} が残らないこと。"""
         wf = get_workflow("asdw-web")
         body = render_template(
-            "templates/asdw-web/step-3.4.md",
+            ".github/prompts/steps/asdw-web/step-3.4.prompt.md",
             root_issue_num=1,
             params={"branch": "main", "create_remote_mcp_server": False},
             wf=wf,
@@ -1006,7 +1014,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server=True のとき {remote_mcp_server_section} が残らないこと。"""
         wf = get_workflow("asdw-web")
         body = render_template(
-            "templates/asdw-web/step-3.4.md",
+            ".github/prompts/steps/asdw-web/step-3.4.prompt.md",
             root_issue_num=1,
             params={"branch": "main", "create_remote_mcp_server": True},
             wf=wf,
@@ -1018,7 +1026,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server が未指定（後方互換）のとき {remote_mcp_server_section} が残らないこと。"""
         wf = get_workflow("asdw-web")
         body = render_template(
-            "templates/asdw-web/step-3.4.md",
+            ".github/prompts/steps/asdw-web/step-3.4.prompt.md",
             root_issue_num=1,
             params={"branch": "main"},
             wf=wf,
@@ -1031,7 +1039,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server=True のとき MCP セクションの主要コンテンツが含まれること。"""
         wf = get_workflow("asdw-web")
         body = render_template(
-            "templates/asdw-web/step-3.4.md",
+            ".github/prompts/steps/asdw-web/step-3.4.prompt.md",
             root_issue_num=1,
             params={"branch": "main", "create_remote_mcp_server": True},
             wf=wf,
@@ -1068,7 +1076,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server が文字列 "false" のとき Remote MCP Server セクションが出力されないこと。"""
         wf = get_workflow("asdw-web")
         body = render_template(
-            "templates/asdw-web/step-3.4.md",
+            ".github/prompts/steps/asdw-web/step-3.4.prompt.md",
             root_issue_num=1,
             params={"branch": "main", "create_remote_mcp_server": "false"},
             wf=wf,
@@ -1080,7 +1088,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server が文字列 "true" のとき Remote MCP Server セクションが出力されること。"""
         wf = get_workflow("asdw-web")
         body = render_template(
-            "templates/asdw-web/step-3.4.md",
+            ".github/prompts/steps/asdw-web/step-3.4.prompt.md",
             root_issue_num=1,
             params={"branch": "main", "create_remote_mcp_server": "true"},
             wf=wf,
@@ -1092,7 +1100,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server が文字列 "no" のとき Remote MCP Server セクションが出力されないこと。"""
         wf = get_workflow("asdw-web")
         body = render_template(
-            "templates/asdw-web/step-3.4.md",
+            ".github/prompts/steps/asdw-web/step-3.4.prompt.md",
             root_issue_num=1,
             params={"branch": "main", "create_remote_mcp_server": "no"},
             wf=wf,
@@ -1104,7 +1112,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server が "作成しない" のとき Remote MCP Server セクションが出力されないこと。"""
         wf = get_workflow("asdw-web")
         body = render_template(
-            "templates/asdw-web/step-3.4.md",
+            ".github/prompts/steps/asdw-web/step-3.4.prompt.md",
             root_issue_num=1,
             params={"branch": "main", "create_remote_mcp_server": "作成しない"},
             wf=wf,
@@ -1118,7 +1126,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server=True のとき step-2.2.md に設計観点セクションが含まれること。"""
         wf = get_workflow("aad-web")
         body = render_template(
-            "templates/aad-web/step-2.2.md",
+            ".github/prompts/steps/aad-web/step-2.2.prompt.md",
             root_issue_num=1,
             params={"branch": "main", "create_remote_mcp_server": True},
             wf=wf,
@@ -1132,7 +1140,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server=False のとき step-2.2.md に設計観点セクションが含まれないこと。"""
         wf = get_workflow("aad-web")
         body = render_template(
-            "templates/aad-web/step-2.2.md",
+            ".github/prompts/steps/aad-web/step-2.2.prompt.md",
             root_issue_num=1,
             params={"branch": "main", "create_remote_mcp_server": False},
             wf=wf,
@@ -1144,7 +1152,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server 未指定のとき step-2.2.md に設計観点セクションが含まれること（後方互換）。"""
         wf = get_workflow("aad-web")
         body = render_template(
-            "templates/aad-web/step-2.2.md",
+            ".github/prompts/steps/aad-web/step-2.2.prompt.md",
             root_issue_num=1,
             params={"branch": "main"},
             wf=wf,
@@ -1155,7 +1163,7 @@ class TestRemoteMcpServerSection:
         """create_remote_mcp_server が "作成しない" のとき step-2.2.md に設計観点セクションが含まれないこと。"""
         wf = get_workflow("aad-web")
         body = render_template(
-            "templates/aad-web/step-2.2.md",
+            ".github/prompts/steps/aad-web/step-2.2.prompt.md",
             root_issue_num=1,
             params={"branch": "main", "create_remote_mcp_server": "作成しない"},
             wf=wf,

@@ -1,5 +1,7 @@
 ﻿> コード品質スキャン結果を受け取り、Skill task-dag-planning に準拠した改善計画（DAG + 見積）を策定する。自己改善ループ（Self-Improve）の Phase 4b として使用される。改善タスクを 1責務・最小コンテキスト単位に分割し、優先度付きで出力する。
 
+> **非実行注記（2026-08-25 時点）**: 本 Prompt は CLI / GUI / Cloud のいずれの実行経路からも呼び出されていない。Self-Improve の Phase 4b の実体は [hve/prompts.py](../../hve/prompts.py) `SELF_IMPROVE_PLAN_PROMPT` である。詳細は [users-guide/workflow-reference.md](../../users-guide/workflow-reference.md) の「Self-Improve で使用する実装」を参照。
+
 > **WORK**: `work/run/<run-id>/Arch-ImprovementPlanner/Issue-<識別子>/`
 
 ## 共通ルール

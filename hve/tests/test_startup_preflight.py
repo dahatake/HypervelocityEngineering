@@ -29,6 +29,7 @@ _VALIDATE_PARAMETERS = (
     "repo",
     "token",
     "base_branch",
+    "create_working_branch",
     "check_remote",
     "repo_root",
 )
@@ -85,6 +86,7 @@ def _validate(
     repo: str = "owner/repo",
     token: str = "token-for-test",
     base_branch: str = "main",
+    create_working_branch: bool = True,
     check_remote: bool = False,
 ):
     return validate_startup_configuration(
@@ -96,6 +98,7 @@ def _validate(
         repo=repo,
         token=token,
         base_branch=base_branch,
+        create_working_branch=create_working_branch,
         check_remote=check_remote,
         repo_root=repo_root,
     )
@@ -227,6 +230,113 @@ class TestGithubWriteRequired:
 
 
 class TestLocalConfigurationValidation:
+    def test_current_branch_mode_accepts_clean_non_base_branch_locally(
+        self,
+        tmp_path: Path,
+        git_run: Mock,
+    ) -> None:
+        git_run.side_effect = [
+            _completed(["git", "branch", "--show-current"], stdout="feature/current\n"),
+            _completed(
+                ["git", "status", "--porcelain", "--untracked-files=all"],
+                stdout="",
+            ),
+        ]
+
+        result = _validate(
+            tmp_path,
+            create_pr=True,
+            create_working_branch=False,
+            check_remote=False,
+        )
+
+        assert result.is_ok()
+        assert [call.args[0] for call in git_run.call_args_list] == [
+            ["git", "branch", "--show-current"],
+            ["git", "status", "--porcelain", "--untracked-files=all"],
+        ]
+
+    @pytest.mark.parametrize(
+        ("current_stdout", "status_stdout", "expected_field"),
+        [
+            ("\n", "", "current_branch"),
+            ("main\n", "", "current_branch"),
+            ("feature/current\n", " M src/app.py\n", "worktree"),
+        ],
+    )
+    def test_current_branch_mode_rejects_detached_base_or_dirty_together(
+        self,
+        tmp_path: Path,
+        git_run: Mock,
+        current_stdout: str,
+        status_stdout: str,
+        expected_field: str,
+    ) -> None:
+        git_run.side_effect = [
+            _completed(["git", "branch", "--show-current"], stdout=current_stdout),
+            _completed(
+                ["git", "status", "--porcelain", "--untracked-files=all"],
+                stdout=status_stdout,
+            ),
+        ]
+
+        result = _validate(
+            tmp_path,
+            create_pr=True,
+            create_working_branch=False,
+            check_remote=False,
+        )
+
+        assert not result.is_ok()
+        assert expected_field in {issue.field_name for issue in result.issues}
+
+    def test_current_branch_mode_rejects_untracked_files(
+        self,
+        tmp_path: Path,
+        git_run: Mock,
+    ) -> None:
+        git_run.side_effect = [
+            _completed(["git", "branch", "--show-current"], stdout="feature/current\n"),
+            _completed(
+                ["git", "status", "--porcelain", "--untracked-files=all"],
+                stdout="?? new-file.txt\n",
+            ),
+        ]
+
+        result = _validate(
+            tmp_path,
+            create_pr=True,
+            create_working_branch=False,
+            check_remote=False,
+        )
+
+        assert "worktree" in {issue.field_name for issue in result.issues}
+
+    def test_current_branch_probe_failures_are_fail_closed(
+        self,
+        tmp_path: Path,
+        git_run: Mock,
+    ) -> None:
+        git_run.side_effect = [
+            _completed(["git", "branch", "--show-current"], returncode=128),
+            _completed(
+                ["git", "status", "--porcelain", "--untracked-files=all"],
+                returncode=128,
+            ),
+        ]
+
+        result = _validate(
+            tmp_path,
+            create_pr=True,
+            create_working_branch=False,
+            check_remote=False,
+        )
+
+        assert {issue.field_name for issue in result.issues} >= {
+            "current_branch",
+            "worktree",
+        }
+
     def test_repo_token_and_branch_issues_are_reported_together(
         self,
         tmp_path: Path,
@@ -320,7 +430,16 @@ class TestLocalConfigurationValidation:
         assert _issue_for(result, "token").category == "auth"
         git_run.assert_not_called()
 
-    @pytest.mark.parametrize("base_branch", ["-leading", "feature lock", "feature..broken"])
+    @pytest.mark.parametrize(
+        "base_branch",
+        [
+            "-leading",
+            "feature lock",
+            "feature..broken",
+            "topic/.hidden",
+            "release.lock/next",
+        ],
+    )
     def test_invalid_git_branch_names_are_rejected(
         self,
         base_branch: str,
@@ -360,6 +479,157 @@ class TestLocalConfigurationValidation:
 
 
 class TestRemoteConfigurationValidation:
+    def test_current_branch_existing_remote_must_match_local_head(
+        self,
+        tmp_path: Path,
+        git_run: Mock,
+    ) -> None:
+        branch = "feature/current"
+        local_sha = "1" * 40
+        git_run.side_effect = [
+            _completed(["git", "branch", "--show-current"], stdout=f"{branch}\n"),
+            _completed(
+                ["git", "status", "--porcelain", "--untracked-files=all"],
+                stdout="",
+            ),
+            _completed(["git", "remote", "get-url", "origin"], stdout="git@example\n"),
+            _completed(["git", "ls-remote"], stdout="base\trefs/heads/main\n"),
+            _completed(["git", "rev-parse", "HEAD"], stdout=f"{local_sha}\n"),
+            _completed(
+                ["git", "ls-remote"],
+                stdout=f"{local_sha}\trefs/heads/{branch}\n",
+            ),
+        ]
+
+        result = _validate(
+            tmp_path,
+            create_pr=True,
+            create_working_branch=False,
+            check_remote=True,
+        )
+
+        assert result.is_ok()
+        assert git_run.call_args_list[-1].args[0] == [
+            "git",
+            "ls-remote",
+            "--exit-code",
+            "--heads",
+            "origin",
+            f"refs/heads/{branch}",
+        ]
+
+    def test_current_branch_missing_remote_is_allowed_for_first_push(
+        self,
+        tmp_path: Path,
+        git_run: Mock,
+    ) -> None:
+        git_run.side_effect = [
+            _completed(["git", "branch", "--show-current"], stdout="feature/new\n"),
+            _completed(
+                ["git", "status", "--porcelain", "--untracked-files=all"],
+                stdout="",
+            ),
+            _completed(["git", "remote", "get-url", "origin"], stdout="git@example\n"),
+            _completed(["git", "ls-remote"], stdout="base\trefs/heads/main\n"),
+            _completed(["git", "rev-parse", "HEAD"], stdout=f"{'1' * 40}\n"),
+            _completed(["git", "ls-remote"], returncode=2),
+        ]
+
+        result = _validate(
+            tmp_path,
+            create_pr=True,
+            create_working_branch=False,
+            check_remote=True,
+        )
+
+        assert result.is_ok()
+
+    @pytest.mark.parametrize(
+        ("local_result", "remote_result"),
+        [
+            (
+                _completed(["git", "rev-parse", "HEAD"], stdout=f"{'1' * 40}\n"),
+                _completed(
+                    ["git", "ls-remote"],
+                    stdout=f"{'2' * 40}\trefs/heads/feature/current\n",
+                ),
+            ),
+            (
+                _completed(["git", "rev-parse", "HEAD"], returncode=128),
+                _completed(["git", "ls-remote"], returncode=2),
+            ),
+            (
+                _completed(["git", "rev-parse", "HEAD"], stdout=f"{'1' * 40}\n"),
+                _completed(["git", "ls-remote"], returncode=128),
+            ),
+        ],
+    )
+    def test_current_branch_remote_mismatch_or_unverifiable_is_fail_closed(
+        self,
+        tmp_path: Path,
+        git_run: Mock,
+        local_result,
+        remote_result,
+    ) -> None:
+        git_run.side_effect = [
+            _completed(["git", "branch", "--show-current"], stdout="feature/current\n"),
+            _completed(
+                ["git", "status", "--porcelain", "--untracked-files=all"],
+                stdout="",
+            ),
+            _completed(["git", "remote", "get-url", "origin"], stdout="git@example\n"),
+            _completed(["git", "ls-remote"], stdout="base\trefs/heads/main\n"),
+            local_result,
+            remote_result,
+        ]
+
+        result = _validate(
+            tmp_path,
+            create_pr=True,
+            create_working_branch=False,
+            check_remote=True,
+        )
+
+        assert not result.is_ok()
+        assert "current_branch" in {issue.field_name for issue in result.issues}
+
+    @pytest.mark.parametrize(
+        "remote_stdout",
+        [
+            f"{'1' * 40}\trefs/heads/other\n",
+            (
+                f"{'1' * 40}\trefs/heads/feature/current\n"
+                f"{'1' * 40}\trefs/heads/feature/current\n"
+            ),
+            "malformed\n",
+        ],
+    )
+    def test_current_remote_response_must_be_one_exact_ref(
+        self,
+        tmp_path: Path,
+        git_run: Mock,
+        remote_stdout: str,
+    ) -> None:
+        git_run.side_effect = [
+            _completed(["git", "branch", "--show-current"], stdout="feature/current\n"),
+            _completed(
+                ["git", "status", "--porcelain", "--untracked-files=all"],
+                stdout="",
+            ),
+            _completed(["git", "remote", "get-url", "origin"], stdout="git@example\n"),
+            _completed(["git", "ls-remote"], stdout="base\trefs/heads/main\n"),
+            _completed(["git", "rev-parse", "HEAD"], stdout=f"{'1' * 40}\n"),
+            _completed(["git", "ls-remote"], stdout=remote_stdout),
+        ]
+
+        result = _validate(
+            tmp_path,
+            create_pr=True,
+            create_working_branch=False,
+            check_remote=True,
+        )
+
+        assert "current_branch" in {issue.field_name for issue in result.issues}
     def test_remote_validation_uses_exact_non_interactive_git_commands(
         self,
         tmp_path: Path,

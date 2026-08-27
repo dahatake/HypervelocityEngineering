@@ -278,11 +278,58 @@ class TestEnsureAuthenticated:
 
 
 class TestFindCopilotBinary:
-    def test_returns_path_when_bundled_exists(self):
-        # SDK が実際に同梱しているため非 None で返るはず
-        path = find_copilot_binary()
-        assert path is not None
-        assert "copilot" in path.lower()
+    @staticmethod
+    def _exe_name() -> str:
+        return "copilot.exe" if sys.platform.startswith("win") else "copilot"
+
+    @staticmethod
+    def _stub_bundle(monkeypatch, bin_dir) -> None:
+        """``copilot.bin`` を差し替える。親モジュール属性も同時に差し替える。"""
+        fake_bin = types.ModuleType("copilot.bin")
+        fake_bin.__file__ = str(bin_dir / "__init__.py")
+        monkeypatch.setitem(sys.modules, "copilot.bin", fake_bin)
+        import copilot as copilot_pkg
+
+        monkeypatch.setattr(copilot_pkg, "bin", fake_bin, raising=False)
+
+    def test_returns_path_when_bundled_exists(self, monkeypatch, tmp_path):
+        bin_dir = tmp_path / "copilot" / "bin"
+        bin_dir.mkdir(parents=True)
+        bundled = bin_dir / self._exe_name()
+        bundled.write_text("", encoding="utf-8")
+        self._stub_bundle(monkeypatch, bin_dir)
+
+        assert find_copilot_binary() == str(bundled)
+
+    def test_falls_back_to_the_runtime_cache_when_bundle_and_path_are_missing(
+        self, monkeypatch, tmp_path
+    ):
+        # SDK は同梱をやめ、`download-runtime` がキャッシュへ展開する構成になった。
+        self._stub_bundle(monkeypatch, tmp_path / "nonexistent")
+        cached = tmp_path / "cli" / "1.0.79" / self._exe_name()
+        cached.parent.mkdir(parents=True)
+        cached.write_text("", encoding="utf-8")
+        import copilot._cli_download as cli_download
+
+        monkeypatch.setattr(
+            cli_download, "get_cached_cli_path", lambda version=None: str(cached)
+        )
+
+        with patch("shutil.which", return_value=None):
+            assert find_copilot_binary() == str(cached)
+
+    def test_returns_none_when_bundle_path_and_runtime_cache_are_all_missing(
+        self, monkeypatch, tmp_path
+    ):
+        self._stub_bundle(monkeypatch, tmp_path / "nonexistent")
+        import copilot._cli_download as cli_download
+
+        monkeypatch.setattr(
+            cli_download, "get_cached_cli_path", lambda version=None: None
+        )
+
+        with patch("shutil.which", return_value=None):
+            assert find_copilot_binary() is None
 
     def test_falls_back_to_which_when_bundle_missing(self, monkeypatch, tmp_path):
         # copilot.bin の __file__ を非存在パスに差し替えて同梱バイナリ未検出を再現

@@ -2610,6 +2610,13 @@ class WorkbenchPage(QWidget):
         # _LogPane のローテーションログ永続化先も同一 run_dir 配下へ向ける。
         self._log_pane.set_log_base_dir(run_dir)
 
+    def console_text(self) -> str:
+        """画面に表示中のコンソール出力全文を返す（FR-GUI-33）。"""
+        try:
+            return self._log_tabs.global_text()
+        except AttributeError:
+            return ""
+
     def _maybe_dump_console_log(self) -> None:
         """GUI セッション終了時に、画面のログ全文を ``console-log.txt`` へ書き出す。
 

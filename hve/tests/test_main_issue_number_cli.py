@@ -13,9 +13,12 @@ parity 側が 22 件失敗する。これは本変更以前から存在する組
 from __future__ import annotations
 
 import importlib.util as _ilu
+import io
 import os
 import sys
 import unittest
+from contextlib import redirect_stderr
+from unittest import mock
 
 # test_main_ard.py と同じ importlib パターンで __main__.py を直接ロードする
 # (__main__ は Python ランナーと名前が衝突するため)。`__main__.py` の絶対 import
@@ -53,6 +56,33 @@ class TestIssueNumberArg(unittest.TestCase):
     def test_build_config_default_is_none(self) -> None:
         cfg = hve_main._build_config(self._parse([]))
         self.assertIsNone(cfg.issue_number)
+
+    def test_issue_number_without_create_flags_warns_and_is_ignored(self) -> None:
+        args = self._parse(["--issue-number", "77"])
+        stderr = io.StringIO()
+
+        with mock.patch.object(
+            hve_main, "_run_startup_configuration_preflight", return_value=False
+        ), redirect_stderr(stderr):
+            self.assertEqual(hve_main._cmd_orchestrate(args), 1)
+
+        warning = stderr.getvalue()
+        self.assertIn("--issue-number", warning)
+        self.assertIn("--create-issues", warning)
+        self.assertIn("--create-pr", warning)
+        self.assertIn("無視", warning)
+
+    def test_create_pr_with_issue_number_is_valid_without_warning(self) -> None:
+        args = self._parse(["--create-pr", "--issue-number", "77"])
+        stderr = io.StringIO()
+
+        with mock.patch.object(
+            hve_main, "_run_startup_configuration_preflight", return_value=False
+        ), redirect_stderr(stderr):
+            self.assertEqual(hve_main._cmd_orchestrate(args), 1)
+
+        warning = stderr.getvalue()
+        self.assertNotIn("--issue-number は無視", warning)
 
 
 if __name__ == "__main__":

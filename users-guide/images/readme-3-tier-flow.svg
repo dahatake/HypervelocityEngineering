@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 760" role="img" aria-labelledby="title desc">
   <title id="title">README 用 3 段構造フロー図</title>
-  <desc id="desc">Tier 1 の要求定義から Tier 2 のアーキテクチャ設計へ進み、Tier 3 で Web / Batch / AI Agent 系へ分岐する。凡例と読み順を含む。</desc>
+  <desc id="desc">Tier 1 の要求定義から Tier 2 のアーキテクチャ設計へ進み、Tier 3 で Web / Batch / AI Agent 系へ分岐する。AI Agent 系は ada、aag、aagd と AAR Add-on を含む。</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
@@ -56,10 +56,11 @@
   <text x="508" y="606" class="small">ジョブ設計、データ設計、Functions 配備</text>
 
   <rect x="860" y="480" width="320" height="166" class="tier tier3"/>
-  <text x="888" y="518" class="label">AI Agent</text>
-  <text x="888" y="550" class="body">設計: `aag`</text>
-  <text x="888" y="576" class="body">詳細設計・実装: `aagd`</text>
-  <text x="888" y="606" class="small">Agent 定義、テスト、Foundry / Azure 配備</text>
+  <text x="888" y="512" class="label">AI Agent</text>
+  <text x="888" y="540" class="body">データ設計: `ada`</text>
+  <text x="888" y="566" class="body">設計: `aag` / 実装: `aagd`</text>
+  <text x="888" y="592" class="body">Add-on: `aar`（Agentic Retrieval）</text>
+  <text x="888" y="620" class="small">Agent 定義、検索、テスト、Azure 配備</text>
 
   <rect x="952" y="116" width="198" height="78" class="tier support"/>
   <text x="972" y="146" class="body" font-weight="700">横断系 Workflow</text>
@@ -76,6 +77,6 @@
   <rect x="112" y="700" width="18" height="18" class="tier tier1"/><text x="138" y="714" class="body">Tier 1: 要求定義</text>
   <rect x="306" y="700" width="18" height="18" class="tier tier2"/><text x="332" y="714" class="body">Tier 2: アーキテクチャ設計</text>
   <rect x="568" y="700" width="18" height="18" class="tier tier3"/><text x="594" y="714" class="body">Tier 3: 実装・展開</text>
-  <rect x="820" y="700" width="18" height="18" class="tier support"/><text x="846" y="714" class="body">横断系: knowledge / QA / Documentation 補助</text>
-  <text x="1120" y="714" class="body">読み順: ① → ② → ③</text>
+  <rect x="820" y="700" width="18" height="18" class="tier support"/><text x="846" y="714" class="body">横断系: ADI / AKM / ADOC</text>
+  <text x="1080" y="714" class="body">読み順: ① → ② → ③</text>
 </svg>

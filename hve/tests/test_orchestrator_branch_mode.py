@@ -8,9 +8,10 @@ workflow-wide branch behavior for every workflow.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import unittest
-from contextlib import nullcontext
 from dataclasses import dataclass
+from typing import Any, cast
 from unittest.mock import Mock, patch
 
 from hve import orchestrator
@@ -85,10 +86,11 @@ def _run_workflow_with_fakes(
     failed: bool = False,
     dry_run: bool = False,
     create_pr: bool = False,
+    create_working_branch: bool = True,
     dirty_hve_paths: list[str] | None = None,
     params: dict | None = None,
     startup_issues: tuple[_StartupIssueStub, ...] = (),
-    orchestrator_ctx: OrchestratorContext | None = _UNSET,
+    orchestrator_ctx: object = _UNSET,
 ):
     """``run_workflow`` を副作用なしで実行するための共通フェイク環境。
 
@@ -111,6 +113,8 @@ def _run_workflow_with_fakes(
         github_token="test-token",
         repo="owner/repo",
     )
+    # RED bootstrap: SDKConfig フィールド実装前でも desired runtime 挙動を検査する。
+    config.create_working_branch = create_working_branch  # type: ignore[attr-defined]
     console = Mock()
 
     def _checkout(*_args, **_kwargs):
@@ -121,6 +125,7 @@ def _run_workflow_with_fakes(
     add_commit_push = Mock(return_value=False)
     push_branch = Mock(return_value=True)
     create_pr_mock = Mock(return_value=None)
+    current_branch = Mock(return_value="feature/current")
     dirty_probe = Mock(return_value=list(dirty_hve_paths or []))
     subprocess_guard = Mock(
         side_effect=AssertionError(
@@ -155,18 +160,11 @@ def _run_workflow_with_fakes(
         return _StartupResultStub(tuple(startup_issues))
 
     startup_validate = Mock(side_effect=_validate_startup)
-    try:
-        from hve import startup_preflight as startup_preflight_module
-    except ImportError:
-        startup_preflight_module = None
-    startup_module_patch = (
-        patch.object(
-            startup_preflight_module,
-            "validate_startup_configuration",
-            startup_validate,
-        )
-        if startup_preflight_module is not None
-        else nullcontext()
+    from hve import startup_preflight as startup_preflight_module
+    startup_module_patch = patch.object(
+        startup_preflight_module,
+        "validate_startup_configuration",
+        startup_validate,
     )
 
     precheck_ok: dict[str, object] = {
@@ -222,6 +220,7 @@ def _run_workflow_with_fakes(
             return_value=_ArchFilterResult(),
         ),
         patch.object(orchestrator, "_git_checkout_new_branch", checkout),
+        patch.object(orchestrator, "_git_current_branch", current_branch),
         patch.object(orchestrator, "_git_add_commit_push", add_commit_push),
         patch.object(orchestrator, "_git_push_branch", push_branch),
         patch.object(orchestrator, "_create_pr_if_needed", create_pr_mock),
@@ -238,7 +237,7 @@ def _run_workflow_with_fakes(
                 workflow_id=workflow_id,
                 params=params or {"branch": "main", "selected_steps": ["1"]},
                 config=config,
-                orchestrator_ctx=orchestrator_ctx,
+                orchestrator_ctx=cast(OrchestratorContext | None, orchestrator_ctx),
             )
         )
 
@@ -249,6 +248,7 @@ def _run_workflow_with_fakes(
         "add_commit_push": add_commit_push,
         "push_branch": push_branch,
         "create_pr": create_pr_mock,
+        "current_branch": current_branch,
         "dirty_probe": dirty_probe,
         "startup_validate": startup_validate,
         "step_resolver": step_resolver,
@@ -326,6 +326,38 @@ class TestWorkflowBranchMode(unittest.TestCase):
             observed["result"]["working_branch"],
             r"^copilot-sdk/ard-[0-9a-f]{8}$",
         )
+
+    def test_explicit_create_pr_can_use_current_branch_without_checkout(self) -> None:
+        observed = self._run_workflow_with_fakes(
+            "ard",
+            create_pr=True,
+            create_working_branch=False,
+        )
+
+        observed["checkout"].assert_not_called()
+        observed["current_branch"].assert_called_once()
+        self.assertEqual(observed["result"]["working_branch"], "feature/current")
+
+    def test_current_branch_option_does_not_disable_adfdv_required_branch(self) -> None:
+        observed = self._run_workflow_with_fakes(
+            "adfdv",
+            create_working_branch=False,
+        )
+
+        observed["checkout"].assert_called_once()
+        observed["current_branch"].assert_not_called()
+        self.assertRegex(
+            observed["result"]["working_branch"],
+            r"^copilot-sdk/adfdv-[0-9a-f]{8}$",
+        )
+
+    def test_current_branch_is_never_auto_deleted_after_merge(self) -> None:
+        """FR-CLI-83: 利用者所有の current branch を merge 後 cleanup 対象にしない。"""
+        source = inspect.getsource(orchestrator.run_workflow)
+
+        assert "hve_created_branch = True" in source
+        assert "and hve_created_branch\n" in source
+        assert "working_branch if hve_created_branch else None" in source
 
     def test_auto_merge_dry_run_does_not_checkout(self) -> None:
         observed = self._run_workflow_with_fakes("adfdv", dry_run=True)

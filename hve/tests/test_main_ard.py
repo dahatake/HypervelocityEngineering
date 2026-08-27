@@ -557,20 +557,20 @@ class TestARDWorkflowRegistryBodyTemplatePaths(unittest.TestCase):
         from hve.workflow_registry import get_workflow
         wf = get_workflow("ard")
         s = wf.get_step("1")
-        self.assertEqual(s.body_template_path, "templates/ard/step-1.md")
+        self.assertEqual(s.body_template_path, ".github/prompts/steps/ard/step-1.prompt.md")
 
     def test_step_2_body_template_path(self):
         from hve.workflow_registry import get_workflow
         wf = get_workflow("ard")
         s = wf.get_step("2")
-        self.assertEqual(s.body_template_path, "templates/ard/step-2.md")
+        self.assertEqual(s.body_template_path, ".github/prompts/steps/ard/step-2.prompt.md")
 
     def test_step_2_1_body_template_path(self):
         # Step 2.1 (KPI/OKR 定義・任意) — 旧 Step 3 から移動
         from hve.workflow_registry import get_workflow
         wf = get_workflow("ard")
         s = wf.get_step("2.1")
-        self.assertEqual(s.body_template_path, "templates/ard/step-2.1.md")
+        self.assertEqual(s.body_template_path, ".github/prompts/steps/ard/step-2.1.prompt.md")
 
     def test_step_3_x_body_template_path(self):
         # 旧 Step 4.1/4.2/4.3 は Step 3.1/3.2/3.3 に再採番された。
@@ -579,9 +579,9 @@ class TestARDWorkflowRegistryBodyTemplatePaths(unittest.TestCase):
         s_31 = wf.get_step("3.1")
         s_32 = wf.get_step("3.2")
         s_33 = wf.get_step("3.3")
-        self.assertEqual(s_31.body_template_path, "templates/ard/step-3.1.md")
-        self.assertEqual(s_32.body_template_path, "templates/ard/step-3.2.md")
-        self.assertEqual(s_33.body_template_path, "templates/ard/step-3.3.md")
+        self.assertEqual(s_31.body_template_path, ".github/prompts/steps/ard/step-3.1.prompt.md")
+        self.assertEqual(s_32.body_template_path, ".github/prompts/steps/ard/step-3.2.prompt.md")
+        self.assertEqual(s_33.body_template_path, ".github/prompts/steps/ard/step-3.3.prompt.md")
 
 
 if __name__ == "__main__":

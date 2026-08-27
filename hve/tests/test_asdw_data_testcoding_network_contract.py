@@ -24,10 +24,10 @@ _PROMPT = (
 _TEMPLATE = (
     _REPO_ROOT
     / ".github"
-    / "scripts"
-    / "templates"
+    / "prompts"
+    / "steps"
     / "asdw-web"
-    / "step-1.2.md"
+    / "step-1.2.prompt.md"
 )
 _AZURE_CLI_SKILL = (
     _REPO_ROOT
@@ -1090,7 +1090,7 @@ def test_prompt_and_template_front_load_mandatory_outputs_before_manual_audit() 
 def test_step_1_2_render_and_agent_prompt_deliver_runtime_contract_context() -> None:
     run_id = "20260720T000000-contract"
     rendered = render_template(
-        "templates/asdw-web/step-1.2.md",
+        ".github/prompts/steps/asdw-web/step-1.2.prompt.md",
         0,
         {"app_ids": ["APP-009"]},
         ASDW_WEB,

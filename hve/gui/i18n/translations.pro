@@ -16,7 +16,9 @@ SOURCES = ../app.py \
           ../../../cq/gui/settings_section.py \
           ../doc_convert.py \
           ../gh_login_dialog.py \
+          ../github_comment_editor.py \
           ../github_issue_panel.py \
+          ../github_picker_dialog.py \
           ../github_pr_panel.py \
           ../github_window.py \
           ../help_content.py \

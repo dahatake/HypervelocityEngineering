@@ -706,7 +706,7 @@ jobs:
 
           if [[ -n "${READY_IDS}" ]]; then
             for STEP_ID in ${READY_IDS}; do
-              TEMPLATE_PATH="${GITHUB_WORKSPACE}/.github/scripts/templates/adoc/step-${STEP_ID}.md"
+              TEMPLATE_PATH="${GITHUB_WORKSPACE}/.github/prompts/steps/adoc/step-${STEP_ID}.prompt.md"
               if [[ ! -f "${TEMPLATE_PATH}" ]]; then
                 continue
               fi

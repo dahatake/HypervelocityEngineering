@@ -609,7 +609,7 @@ class TestStepDefFields:
 
     def test_template_path(self):
         step = get_step("aas", "1")
-        assert step.body_template_path == "templates/aas/step-1.md"
+        assert step.body_template_path == ".github/prompts/steps/aas/step-1.prompt.md"
 
     def test_skip_fallback_deps(self):
         # Sub-4 (B-1) → Step 1 起点化リナンバリングにより、Step 4 の skip_fallback_deps は 3.1
@@ -661,8 +661,8 @@ class TestABDVAgentNames:
 #   adoc:     1 / 3.2 / 3.3 / 3.4 / 3.5 / 4 / 5.1〜5.4 / 6.1〜6.3（宣言済みだった分の棚卸し）
 #
 # E-07 で解消済み（allowlist から除外）:
-#   akm:      1 / 2（templates/akm/step-1.md・step-2.md の `## 出力` を registry へ宣言）
-#   adfdv:    4.1 / 4.2（templates/adfdv/step-4.1.md・step-4.2.md の `## 出力` と
+#   akm:      1 / 2（.github/prompts/steps/akm/step-1.prompt.md・step-2.md の `## 出力` を registry へ宣言）
+#   adfdv:    4.1 / 4.2（.github/prompts/steps/adfdv/step-4.1.prompt.md・step-4.2.md の `## 出力` と
 #             QA-AzureArchitectureReview / QA-AzureDependencyReview prompt の Step 別出力表を registry へ宣言）
 #
 # E-09 で解消済み（allowlist から除外）:
@@ -681,7 +681,7 @@ class TestABDVAgentNames:
 #     adoc:     2.1〜2.5 / 3.1（TBD-14 の動的パスを `output_paths_template` で宣言）
 #
 # 残置理由:
-#   adfdv 1.2 : templates/adfdv/step-1.2.md `## 出力` は「Azure リソースの作成・検証完了」と
+#   adfdv 1.2 : .github/prompts/steps/adfdv/step-1.2.prompt.md `## 出力` は「Azure リソースの作成・検証完了」と
 #               `{WORK}` 配下の実行ログのみで、リポジトリ内の成果物パスが契約上存在しない。
 ALLOWED_EMPTY_OUTPUT_PATHS_STEPS: dict[str, list[str]] = {
     "adfdv": ["1.2"],
@@ -759,11 +759,9 @@ class TestOutputPathsExplicit:
         """
         template = (
             Path(__file__).resolve().parents[2]
-            / ".github"
-            / "scripts"
-            / "templates"
+            / ".github" / "prompts" / "steps"
             / workflow_id
-            / f"step-{step_id}.md"
+            / f"step-{step_id}.prompt.md"
         )
         assert template.is_file(), f"template が見つからない: {template}"
 
@@ -855,7 +853,7 @@ def _asdw_web_transitive_deps(step_id: str) -> set[str]:
 
 _IO_CONTRACT_DIR = Path(__file__).resolve().parents[2] / ".github" / "io-contracts"
 _TEMPLATES_DIR = (
-    Path(__file__).resolve().parents[2] / ".github" / "scripts" / "templates" / "asdw-web"
+    Path(__file__).resolve().parents[2] / ".github" / "prompts" / "steps" / "asdw-web"
 )
 
 
@@ -955,7 +953,7 @@ class TestAsdwWebLocalFirstDag:
         """
         step = get_step("asdw-web", step_id)
         assert step is not None, step_id
-        template = _TEMPLATES_DIR / f"step-{step_id}.md"
+        template = _TEMPLATES_DIR / f"step-{step_id}.prompt.md"
         assert template.exists(), template
         text = template.read_text(encoding="utf-8")
         if "## 依存" not in text:

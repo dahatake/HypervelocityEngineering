@@ -17,7 +17,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _ROUTING_PATH = "docs/catalog/design-doc-routing.md"
 
 _FANOUT_COMMONS = {
-    "akm": _REPO_ROOT / "hve" / "prompt" / "fanout" / "akm" / "_common.md",
+    "akm": _REPO_ROOT / ".github" / "prompts" / "fanout" / "akm" / "_common.prompt.md",
 }
 
 
@@ -47,7 +47,7 @@ def test_fanout_common_keeps_readonly_rule(workflow_id: str) -> None:
 
 
 def test_adi_fanout_common_exists_and_forbids_cross_document_writes() -> None:
-    common = _REPO_ROOT / "hve" / "prompt" / "fanout" / "adi" / "_common.md"
+    common = _REPO_ROOT / ".github" / "prompts" / "fanout" / "adi" / "_common.prompt.md"
     text = common.read_text(encoding="utf-8")
     assert "{{key}}" in text
     assert "並列実行ルール" in text
@@ -55,7 +55,7 @@ def test_adi_fanout_common_exists_and_forbids_cross_document_writes() -> None:
 
 
 def test_adi_questionnaire_fanout_reads_normalized_content_without_routing() -> None:
-    common = _REPO_ROOT / "hve" / "prompt" / "fanout" / "adi" / "_questionnaire.md"
+    common = _REPO_ROOT / ".github" / "prompts" / "fanout" / "adi" / "_questionnaire.prompt.md"
     text = common.read_text(encoding="utf-8")
     assert "{{key}}" in text
     assert "docs/original-design-doc-ingest/index.json" in text

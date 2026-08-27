@@ -180,7 +180,7 @@ jobs:
               def __missing__(self, key):
                   return "{" + key + "}"
 
-          existing = Path(".github/scripts/templates/_shared/existing-artifact-policy.md").read_text(encoding="utf-8").strip()
+          existing = Path(".github/prompts/runtime/template/existing-artifact-policy.prompt.md").read_text(encoding="utf-8").strip()
           app_ids = os.environ.get("APP_IDS", "")
           values = Safe(
               root_ref=os.environ["ROOT_REF"],
@@ -192,7 +192,7 @@ jobs:
               additional_section=("\n## 追加コメント\n" + os.environ["ADDITIONAL"] + "\n") if os.environ.get("ADDITIONAL") else "",
           )
           for sid, title, agent in steps:
-              template = Path(f".github/scripts/templates/ada/step-{sid}.md").read_text(encoding="utf-8")
+              template = Path(f".github/prompts/steps/ada/step-{sid}.prompt.md").read_text(encoding="utf-8")
               body = template.format_map(values)
               encoded = base64.b64encode(body.encode()).decode()
               print("\t".join((sid, title, agent, encoded)))

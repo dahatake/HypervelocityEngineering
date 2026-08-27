@@ -153,26 +153,18 @@ jobs:
           && steps.qa-posted.outputs.skip != 'true'
           && steps.detect-questionnaire.outputs.is_questionnaire == 'true'
           && steps.optout.outputs.opted_out != 'true'
-        env:
-          COMMENT_BODY: |
-            <!-- auto-qa-default-answered -->
-            @copilot
-
-            ## QA 質問票への回答（全問デフォルト値採用）
-
-            質問票の全質問に対して、各質問に記載された「未回答時の既定値候補」をそのまま採用します。
-
-            ### 指示
-            1. 各質問の「未回答時の既定値候補」（または「デフォルトの回答案」）を回答として適用してください。
-            2. 「未回答のまま進めた場合の影響」セクションに記載された注意点に留意してください。
-            3. 回答を反映した上で、元のタスクの実行を続行してください。
-            4. 元タスク完了後、PR body の末尾に `## 検証` セクションを追記し、`<!-- validation-confirmed -->` マーカーを含めてください。
-               - テスト/ビルド/静的解析を実施した場合: 実行コマンドと結果サマリーを記載してください。
-               - コード変更がなく実行可能な検証がない場合: `該当なし: 理由 = <差分内容に基づく具体的理由>` と `代替 = <実施した代替確認>` を明記してください（§0 要件に従い、捏造を避けるため実態を正確に記録すること）。
-
-            > ℹ️ このコメントは `auto-qa-default-answer.yml` によって自動投稿されました。
         run: |
           set -euo pipefail
+          prompt_path=".github/prompts/cloud/auto-qa-default-answer-pr.prompt.md"
+          if [ ! -s "${prompt_path}" ]; then
+            echo "::error::Prompt file ${prompt_path} is missing or empty."
+            exit 1
+          fi
+          COMMENT_BODY="$(cat "${prompt_path}")"
+          if [ -z "${COMMENT_BODY}" ]; then
+            echo "::error::COMMENT_BODY が空です。Prompt file ${prompt_path} を確認してください。"
+            exit 1
+          fi
           gh pr comment "${PR_NUMBER}" \
             --repo "${REPO}" \
             --body "${COMMENT_BODY}"
@@ -256,29 +248,32 @@ jobs:
           fi
           echo "is_questionnaire=${is_questionnaire}" >> "${GITHUB_OUTPUT}"
 
+      - name: リポジトリをチェックアウト（cloud prompt 読み込み用）
+        if: >
+          steps.labels.outputs.skip != 'true'
+          && steps.guard.outputs.skip != 'true'
+          && steps.qa-posted.outputs.skip != 'true'
+          && steps.detect-questionnaire.outputs.is_questionnaire == 'true'
+        uses: actions/checkout@v4
+
       - name: デフォルト全回答コメントを Issue に投稿
         if: >
           steps.labels.outputs.skip != 'true'
           && steps.guard.outputs.skip != 'true'
           && steps.qa-posted.outputs.skip != 'true'
           && steps.detect-questionnaire.outputs.is_questionnaire == 'true'
-        env:
-          COMMENT_BODY: |
-            <!-- auto-qa-default-answered -->
-            @copilot
-
-            ## QA 質問票への回答（全問デフォルト値採用）
-
-            質問票の全質問に対して、各質問に記載された「未回答時の既定値候補」をそのまま採用します。
-
-            ### 指示
-            1. 各質問の「未回答時の既定値候補」（または「デフォルトの回答案」）を回答として適用してください。
-            2. 「未回答のまま進めた場合の影響」セクションに記載された注意点に留意してください。
-            3. 回答を反映した上で、元のタスクの実行を続行してください。
-
-            > ℹ️ このコメントは `auto-qa-default-answer.yml` によって自動投稿されました。
         run: |
           set -euo pipefail
+          prompt_path=".github/prompts/cloud/auto-qa-default-answer-issue.prompt.md"
+          if [ ! -s "${prompt_path}" ]; then
+            echo "::error::Prompt file ${prompt_path} is missing or empty."
+            exit 1
+          fi
+          COMMENT_BODY="$(cat "${prompt_path}")"
+          if [ -z "${COMMENT_BODY}" ]; then
+            echo "::error::COMMENT_BODY が空です。Prompt file ${prompt_path} を確認してください。"
+            exit 1
+          fi
           gh issue comment "${ISSUE_NUMBER}" \
             --repo "${REPO}" \
             --body "${COMMENT_BODY}"

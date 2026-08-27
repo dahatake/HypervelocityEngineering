@@ -94,7 +94,7 @@ Step ID が数値順でないのは、既存の Step 1 / 2 / 3 と下流契約�
 - Step `3` は Step `1` と Step `2` の両方が成功した後に実行されます。
 - Step `1` と Step `3` の fan-out キーは、現行 `dataflow_catalog` parser が返す APP-ID です。
 - 実行順と成果物パスは registry、成果物の章立て・品質条件は各 Prompt、
-  Step 本文は [ADFD templates](../.github/scripts/templates/adfd/) が担当します。
+  Step 本文は [ADFD Step Prompt](../.github/prompts/steps/adfd/) が担当します。
 
 ## 開始方法
 
@@ -221,11 +221,11 @@ ADFDV の準備として新規作成しないでください。
 | 変更対象 | 正本 |
 |---|---|
 | Step ID、依存、Agent、fan-out、成果物パス | [`hve/workflow_registry.py`](../hve/workflow_registry.py) |
-| Step Issue / 実行本文 | [`.github/scripts/templates/adfd/`](../.github/scripts/templates/adfd/) |
+| Step Issue / 実行本文 | [`.github/prompts/steps/adfd/`](../.github/prompts/steps/adfd/) |
 | 成果物の内容・章立て・品質条件 | [`.github/prompts/Arch-Dataflow-*.prompt.md`](../.github/prompts/) |
 | 入出力 producer / consumer 契約 | [`.github/io-contracts/`](../.github/io-contracts/) の `Arch-Dataflow-*--adfd--*.yaml` |
 | データフロー設計テンプレート | [`dataflow-design-guide`](../.github/skills/dataflow-design-guide/SKILL.md) |
-| APP-ID fan-out の追加指示 | [`hve/prompt/fanout/adfd/_common.md`](../hve/prompt/fanout/adfd/_common.md) |
+| APP-ID fan-out の追加指示 | [`.github/prompts/fanout/adfd/_common.prompt.md`](../.github/prompts/fanout/adfd/_common.prompt.md) |
 | Cloud のフォームと状態遷移 | [`dataflow-design.yml`](../.github/ISSUE_TEMPLATE/dataflow-design.yml) と [`auto-dataflow-design-reusable.yml`](../.github/workflows/auto-dataflow-design-reusable.yml) |
 
 registry の変更は Cloud reusable workflow へ自動同期されません。Cloud 対応を変更する場合は、
@@ -318,7 +318,7 @@ Step `0.1` / `0.2` / `4` / `5` が追加され、現在の 7 Step になって�
 - ローカル成果物ゲート: [`hve/runner.py`](../hve/runner.py)
 - GUI の引数生成と起動: [`hve/gui/main_window.py`](../hve/gui/main_window.py)、
   [`hve/gui/state_bridge.py`](../hve/gui/state_bridge.py)
-- Step template: [`.github/scripts/templates/adfd/`](../.github/scripts/templates/adfd/)
+- Step template: [`.github/prompts/steps/adfd/`](../.github/prompts/steps/adfd/)
 - Prompt: [`.github/prompts/`](../.github/prompts/)
 - io-contract: [`.github/io-contracts/`](../.github/io-contracts/)
 - Cloud dispatcher: [`auto-orchestrator-dispatcher.yml`](../.github/workflows/auto-orchestrator-dispatcher.yml)

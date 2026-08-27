@@ -1,0 +1,7 @@
+# Keep generated Prompt mirrors byte-identical to LF-normalized source files.
+README.md text eol=lf
+catalog.md text eol=lf
+sync.py text eol=lf
+copies/*.txt text eol=lf
+copies/**/*.txt text eol=lf
+composed/*.txt text eol=lf

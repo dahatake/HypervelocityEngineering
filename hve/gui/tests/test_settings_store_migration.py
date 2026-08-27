@@ -66,6 +66,28 @@ class TestObsoleteKeyMigration:
         assert "workiq_tenant_id" not in on_disk
         assert "repo" in on_disk
 
+    def test_removes_data_verify_aci_image_from_options(
+        self, tmp_settings: Path
+    ) -> None:
+        """FR-GUI-03: 入力欄を廃止した key は `_OBSOLETE_KEYS` で除去する。
+
+        検証イメージは導出値であり Workflow パラメータではないため
+        （FR-WF-ASDW-02）、保存値が残ると UI から修正できない値が居座る。
+        """
+        _write(
+            tmp_settings,
+            "[options]\ndata_verify_aci_image = example.azurecr.io/verify:v1\n"
+            "resource_group = rg-dev\n",
+        )
+
+        merged = settings_store.load()
+
+        assert "data_verify_aci_image" not in merged["options"]
+        assert merged["options"]["resource_group"] == "rg-dev"
+        on_disk = tmp_settings.read_text(encoding="utf-8")
+        assert "data_verify_aci_image" not in on_disk
+        assert "resource_group" in on_disk
+
 
 class TestSelfImproveTriStateMigration:
     @pytest.mark.parametrize(

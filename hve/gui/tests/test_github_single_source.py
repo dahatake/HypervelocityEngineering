@@ -17,6 +17,7 @@ _GUI_GITHUB_MODULES = (
     "github_threads.py",
     "github_issue_panel.py",
     "github_pr_panel.py",
+    "github_picker_dialog.py",
     "github_window.py",
     "startup_auth.py",
 )
@@ -68,7 +69,13 @@ class TestNoAlternateClients:
         assert "from hve import github_api" in source
 
     @pytest.mark.parametrize(
-        "name", ("github_issue_panel.py", "github_pr_panel.py", "github_window.py")
+        "name",
+        (
+            "github_issue_panel.py",
+            "github_pr_panel.py",
+            "github_picker_dialog.py",
+            "github_window.py",
+        ),
     )
     def test_panels_go_through_the_service_layer(self, name: str) -> None:
         """パネルはサービス層を通し、API モジュールへ直接依存しないこと。"""
@@ -81,3 +88,34 @@ class TestNoNewGitHubSdkDependency:
         pyproject = (_GUI_DIR.parents[1] / "pyproject.toml").read_text(encoding="utf-8")
         for package in ("pygithub", "github3.py", "ghapi"):
             assert package not in pyproject.lower(), package
+
+
+class TestGitOpsIsNotAGitHubClient:
+    """FR-GUI-34 の push は git 操作であり、GitHub API の代替経路ではないこと。
+
+    ``git_ops.py`` は `subprocess` を使うため上の検査対象から外れているが、
+    その除外が意図したものであることを固定する。
+    """
+
+    def test_git_ops_does_not_touch_github_api(self) -> None:
+        source = (_GUI_DIR / "git_ops.py").read_text(encoding="utf-8")
+        for forbidden in ("api.github.com", "gh issue", "gh pr", "gh api", "github_api"):
+            assert forbidden not in source, forbidden
+
+    def test_git_ops_only_invokes_git(self) -> None:
+        tree = ast.parse(
+            (_GUI_DIR / "git_ops.py").read_text(encoding="utf-8"), filename="git_ops.py"
+        )
+        commands = [
+            node.args[0].elts[0].value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_run"
+            and node.args
+            and isinstance(node.args[0], ast.List)
+            and node.args[0].elts
+            and isinstance(node.args[0].elts[0], ast.Constant)
+        ]
+        assert commands and all(cmd == "git" for cmd in commands), commands
+

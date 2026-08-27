@@ -10,7 +10,7 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DOCUMENTS = (
     _REPO_ROOT / ".github" / "prompts" / "Dev-Microservice-Azure-DataDeploy.prompt.md",
-    _REPO_ROOT / ".github" / "scripts" / "templates" / "asdw-web" / "step-1.3.md",
+    _REPO_ROOT / ".github" / "prompts" / "steps" / "asdw-web" / "step-1.3.prompt.md",
 )
 _AZURE_CLI_SKILL = (
     _REPO_ROOT

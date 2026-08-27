@@ -1,8 +1,8 @@
 name: Label Consistency Audit
 
+# 定期実行は廃止済み。issues イベント駆動の自己修復と workflow_dispatch の手動実行は継続する。
+
 on:
-  schedule:
-    - cron: '0 2 * * *'  # 毎日 2:00 UTC
   workflow_dispatch:
     inputs:
       dry_run:

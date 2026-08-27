@@ -22,6 +22,11 @@ from typing import Any, Optional, Sequence, TYPE_CHECKING
 if TYPE_CHECKING:
     from .console import Console
 
+try:
+    from .prompt_loader import load_prompt_file
+except ImportError:  # pragma: no cover - top-level `import workiq` compatibility
+    from prompt_loader import load_prompt_file  # type: ignore[import-not-found,no-redef]
+
 _workiq_available_cache: Optional[bool] = None
 _workiq_available_probe_attempts: int = 0
 _workiq_cache_lock = threading.Lock()
@@ -148,58 +153,22 @@ def resolve_npx_command() -> Optional[str]:
 # - 同義語・略称・英訳の指示は Work IQ サーバ側検索ロジック（Microsoft Graph）に委ねるため記載しない。
 # - Microsoft 365 Copilot の公式ガイダンス（Goal/Context/Source/Expectations・グラウンディング・
 #   human oversight）に準拠し、「捏造禁止」「取得後の自己レビュー」を明文化する。
-_WORKIQ_ROLE_PROMPT: str = (
-    "<role>\n"
-    "あなたは Microsoft 365 のリサーチアシスタントです。\n"
-    "ユーザーが進めているソフトウェア設計／開発タスクの判断材料として、"
-    "組織内の Microsoft 365 データ（メール／Teams／会議／SharePoint／OneDrive／Loop）から、"
-    "ユーザー本人がアクセス権を持つ一次情報のみを検索・要約して報告します。\n"
-    "\n"
-    "以下を厳守してください:\n"
-    "- 検索結果に**存在しない情報を一切作り出さない**"
-    "（タイトル・送信者・日時・URL・本文の捏造を禁止）。\n"
-    "- 推測・解釈・追加助言・一般論は返さない（一次情報の引用と要約のみ）。\n"
-    "- 確証が得られなかった場合は無理に返答せず、"
-    "STATUS ラベル（後述）で正直に報告する。\n"
-    "- 個人情報（氏名・メール本文・添付内容）は最低限に留め要約する。\n"
-    "- 出力する直前に「目的との整合・引用元の有無・取得できなかったソース」を"
-    "**自己レビュー**してから返答する。\n"
-    "</role>\n"
-)
+_WORKIQ_ROLE_PROMPT: str = load_prompt_file("runtime/workiq/role.prompt.md")
 
 # 出力スキーマ＋ステータスラベル＋件数/長さ上限。
 # - サンプル行（雛形）は Few-shot 例と重複するため削除（B-6 #9）。
-_WORKIQ_OUTPUT_SCHEMA_PROMPT: str = (
-    "\n## 出力フォーマット（厳守）\n"
-    "1 行目に以下のいずれかの STATUS ラベルを必ず付ける:\n"
-    "- `STATUS: FOUND` — 関連情報が見つかった\n"
-    "- `STATUS: PARTIAL` — 一部のソース（例: メールのみ）でしか検索できなかった\n"
-    "- `STATUS: NOT_FOUND` — 検索したが関連情報なし\n"
-    "- `STATUS: UNAVAILABLE` — ツール未公開・認証失敗・タイムアウト等で検索自体が実行できなかった\n"
-    "\n2 行目以降は次の Markdown 表で報告する（**最大 5 件、各セルは 200 字以内**。"
-    "5 件を超える場合は重要度上位 5 件に絞り、補足欄にその旨を記す）:\n"
-    "\n| 種別 | 情報ソース | 日時 | パス/場所 | 関連観点 |\n"
-    "|---|---|---:|---|---|\n"
-    "\n表の下に `**補足**:` を 1 ブロックだけ追加してよい（任意・最大 5 行）。\n"
-    "`STATUS: NOT_FOUND` / `STATUS: UNAVAILABLE` の場合は表を省略し、理由を 1〜3 行で記載する。\n"
-)
+_WORKIQ_OUTPUT_SCHEMA_PROMPT: str = load_prompt_file("runtime/workiq/output-schema.prompt.md")
 
 # Few-shot 例。
 # - UNAVAILABLE は LLM 側で観測できないため例から除外（B-6 #4 / B-2 #8）。
 # - PII は匿名化（B-2 #21）。
-_WORKIQ_FEWSHOT_PROMPT: str = (
-    "\n## 例\n"
-    "### 例1（見つかった場合）\n"
-    "STATUS: FOUND\n"
-    "| 種別 | 情報ソース | 日時 | パス/場所 | 関連観点 |\n"
-    "|---|---|---:|---|---|\n"
-    "| メール | 件名: 連携設計レビュー / 送信者: 山田 (営業部) | 2026-04-20 10:15 | Outlook | API契約合意状況 |\n"
-    "| ファイル | API仕様書_v1.2.docx | 2026-04-22 | SharePoint/Docs | エンドポイント一覧 |\n"
-    "**補足**: 2件とも署名前ドラフトのため確定情報ではない。\n"
-    "\n### 例2（関連情報なしの場合）\n"
-    "STATUS: NOT_FOUND\n"
-    "Microsoft 365 を検索しましたが、対象期間内に関連するメール・チャット・ファイルは見つかりませんでした。\n"
-)
+_WORKIQ_FEWSHOT_PROMPT: str = load_prompt_file("runtime/workiq/fewshot.prompt.md")
+
+_WORKIQ_QA_TASK_PROMPT: str = load_prompt_file("runtime/workiq/qa-task.prompt.md")
+
+_WORKIQ_KM_TASK_PROMPT: str = load_prompt_file("runtime/workiq/km-task.prompt.md")
+
+_WORKIQ_REVIEW_TASK_PROMPT: str = load_prompt_file("runtime/workiq/review-task.prompt.md")
 
 
 def _compose_default_workiq_prompt(*, task_directive: str, target_label: str) -> str:
@@ -207,7 +176,8 @@ def _compose_default_workiq_prompt(*, task_directive: str, target_label: str) ->
 
     - 役割 → 出力スキーマ → Few-shot → タスク指示（Goal/Context/Source） → `{target_content}` の順で構成する。
     - `task_directive` は Microsoft 365 Copilot 推奨の Goal/Context/Source 4 要素構造を含む
-      モードごとのタスク記述。見出し（`## タスク…`）も task_directive 側に含める。
+            モードごとのタスク記述。見出し（`## タスク…`）も task_directive 側に含め、
+            末尾改行は持たない。本関数が前後の区切り改行を一意に付与する。
     - `target_label` は対象ブロックの見出し名（"質問一覧" / "Knowledge 項目" / "ドキュメント概要"）。
     """
     return (
@@ -221,66 +191,23 @@ def _compose_default_workiq_prompt(*, task_directive: str, target_label: str) ->
     )
 
 
-DEFAULT_WORKIQ_QA_PROMPT: str = _compose_default_workiq_prompt(
-    task_directive=(
-        "## タスク（Goal / Context / Source）\n"
-        "\n"
-        "### Goal（目的）\n"
-        "以下の「質問一覧」に列挙された各設問について、Microsoft 365 上で"
-        "関連する一次情報を検索し、回答の根拠候補を収集する。\n"
-        "\n"
-        "### Context（背景）\n"
-        "本検索結果は、ソフトウェア設計／開発タスクの事前 QA フェーズで、"
-        "人間が回答を確定させるための補助情報として参照される。"
-        "LLM が直接「正解」を出す用途ではないため、"
-        "**未確認の事実を補完で埋めず、見つからなかった項目は素直に NOT_FOUND を返すこと**。\n"
-        "\n"
-        "### Source（情報源）\n"
-        "ユーザーがアクセス権を持つ Microsoft 365 データ"
-        "（メール・Teams・会議・SharePoint・OneDrive・Loop）。"
-        "公開 Web 情報・一般論・モデルの事前学習知識は使わない。"
+(
+    DEFAULT_WORKIQ_QA_PROMPT,
+    DEFAULT_WORKIQ_KM_PROMPT,
+    DEFAULT_WORKIQ_REVIEW_PROMPT,
+) = (
+    _compose_default_workiq_prompt(
+        task_directive=_WORKIQ_QA_TASK_PROMPT,
+        target_label="質問一覧",
     ),
-    target_label="質問一覧",
-)
-
-DEFAULT_WORKIQ_KM_PROMPT: str = _compose_default_workiq_prompt(
-    task_directive=(
-        "## タスク（Goal / Context / Source）\n"
-        "\n"
-        "### Goal（目的）\n"
-        "以下の「Knowledge 項目」（事業要件文書 D クラスの 1 件）について、"
-        "Microsoft 365 上に文書内容を補強・修正できる一次情報があるか検索する。\n"
-        "\n"
-        "### Context（背景）\n"
-        "本検索結果は、Post-DAG の AKM 検証フェーズで `knowledge/D??-*.md` を"
-        "事実ベースで更新するための根拠として使われる。"
-        "**根拠が無い更新は行わない**ため、確証の無い情報は載せず、"
-        "見つからなかった場合は STATUS: NOT_FOUND を返すこと。\n"
-        "\n"
-        "### Source（情報源）\n"
-        "ユーザーがアクセス権を持つ Microsoft 365 データ。"
-        "公開 Web 情報・一般論・モデルの事前学習知識は使わない。"
+    _compose_default_workiq_prompt(
+        task_directive=_WORKIQ_KM_TASK_PROMPT,
+        target_label="Knowledge 項目",
     ),
-    target_label="Knowledge 項目",
-)
-
-DEFAULT_WORKIQ_REVIEW_PROMPT: str = _compose_default_workiq_prompt(
-    task_directive=(
-        "## タスク（Goal / Context / Source）\n"
-        "\n"
-        "### Goal（目的）\n"
-        "以下の「ドキュメント概要」と矛盾する情報、または補足すべき最新情報が"
-        "Microsoft 365 上にあるかを検索する。\n"
-        "\n"
-        "### Context（背景）\n"
-        "本検索結果は既存ドキュメントのレビュー補助に使われる。"
-        "**矛盾を捏造で埋めない**。実際に矛盾を示す一次情報が見つかった場合のみ報告する。\n"
-        "\n"
-        "### Source（情報源）\n"
-        "ユーザーがアクセス権を持つ Microsoft 365 データ。"
-        "公開 Web 情報・一般論・モデルの事前学習知識は使わない。"
+    _compose_default_workiq_prompt(
+        task_directive=_WORKIQ_REVIEW_TASK_PROMPT,
+        target_label="ドキュメント概要",
     ),
-    target_label="ドキュメント概要",
 )
 
 
@@ -1347,12 +1274,12 @@ def enrich_prompt_with_workiq(
         return original_prompt
 
     truncated = _truncate_workiq_context(workiq_context, _MAX_WORKIQ_CONTEXT_LENGTH)
-    truncated = _escape_workiq_sandbox_tags(truncated)  # プロンプトインジェクション対策
+    truncated = _escape_workiq_sandbox_tags(truncated) or ""  # プロンプトインジェクション対策
 
     try:
         from .prompts import WORKIQ_CONTEXT_INJECTION_PROMPT
     except ImportError:
-        from prompts import WORKIQ_CONTEXT_INJECTION_PROMPT  # type: ignore[no-redef]
+        from prompts import WORKIQ_CONTEXT_INJECTION_PROMPT  # type: ignore[import-not-found,no-redef]
 
     injection = WORKIQ_CONTEXT_INJECTION_PROMPT.format(
         context_type=context_type,
@@ -1609,7 +1536,7 @@ async def probe_workiq_copilot_session(
         try:
             from .copilot_client_factory import create_copilot_client
         except ImportError:  # pragma: no cover
-            from copilot_client_factory import create_copilot_client  # type: ignore[no-redef]
+            from copilot_client_factory import create_copilot_client  # type: ignore[import-not-found,no-redef]
         client = create_copilot_client(
             cli_path=cli_path,
             cli_url=cli_url,
@@ -1786,7 +1713,7 @@ async def probe_workiq_copilot_tool_invocation(
         try:
             from .copilot_client_factory import create_copilot_client
         except ImportError:  # pragma: no cover
-            from copilot_client_factory import create_copilot_client  # type: ignore[no-redef]
+            from copilot_client_factory import create_copilot_client  # type: ignore[import-not-found,no-redef]
         client = create_copilot_client(
             cli_path=cli_path,
             cli_url=cli_url,

@@ -143,6 +143,7 @@ jobs:
           sample
           src
           template
+          test
           tests
           tools
           users-guide

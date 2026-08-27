@@ -6,6 +6,7 @@ label-consistency-audit.yml の存在・構造・ルール定義を検証する�
 from __future__ import annotations
 
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -14,6 +15,7 @@ import yaml
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _WORKFLOWS_DIR = _REPO_ROOT / ".github" / "workflows"
 _LABELS_JSON = _REPO_ROOT / ".github" / "labels.json"
+_REQUIREMENT_DEFINITION = _REPO_ROOT / "hve-dev" / "requirement-definition.md"
 _WORKFLOW = "label-consistency-audit.yml"
 
 
@@ -39,13 +41,11 @@ class TestLabelConsistencyAuditWorkflowExists(unittest.TestCase):
         path = _WORKFLOWS_DIR / _WORKFLOW
         self.assertTrue(path.exists(), f"{_WORKFLOW} が存在しません")
 
-    def test_has_schedule_trigger(self):
-        """schedule トリガーが設定されていること。"""
+    def test_has_no_schedule_trigger(self):
+        """定期実行は廃止済みのため schedule トリガーを持たないこと。"""
         yaml_data = _load_workflow_yaml(_WORKFLOW)
         on_section = yaml_data.get(True, {}) or yaml_data.get("on", {})
-        self.assertIn("schedule", on_section, "schedule トリガーが必要です")
-        schedule = on_section["schedule"]
-        self.assertGreater(len(schedule), 0, "cron が少なくとも 1 つ必要です")
+        self.assertNotIn("schedule", on_section, "schedule トリガーは廃止済みです")
 
     def test_has_workflow_dispatch_trigger(self):
         """workflow_dispatch トリガーが設定されていること。"""
@@ -172,6 +172,54 @@ class TestNeedsLabelAuditLabelDefined(unittest.TestCase):
         entry = next((d for d in data if d["name"] == "needs-label-audit"), None)
         self.assertIsNotNone(entry, "needs-label-audit エントリが見つかりません")
         self.assertTrue(entry.get("description", ""), "description が設定されていません")
+
+
+# ---------------------------------------------------------------------------
+# FR-STATE-01: HITL 状態ラベルの宣言と labels.json の parity
+# ---------------------------------------------------------------------------
+
+
+def _requirement_block(requirement_id: str) -> str:
+    """要件の定義行と、それに続くインデント済み下位箇条書きを返す。"""
+    lines = _REQUIREMENT_DEFINITION.read_text(encoding="utf-8-sig").splitlines()
+    starts = [i for i, line in enumerate(lines) if line.startswith(f"- **{requirement_id}**")]
+    if len(starts) != 1:
+        raise AssertionError(f"{requirement_id} の定義行が {len(starts)} 件見つかりました")
+    block = [lines[starts[0]]]
+    for line in lines[starts[0] + 1 :]:
+        if not line.startswith("  "):
+            break
+        block.append(line)
+    return "\n".join(block)
+
+
+def _hitl_label_prefixes(suffix: str) -> set[str]:
+    with open(_LABELS_JSON, encoding="utf-8") as f:
+        data = json.load(f)
+    return {d["name"].split(":")[0] for d in data if d["name"].endswith(f":{suffix}")}
+
+
+class TestHitlStateLabelsAreDeclared(unittest.TestCase):
+    """labels.json の HITL ラベルが FR-STATE-01 に宣言されていること。"""
+
+    def test_fr_state_01_declares_both_hitl_suffixes(self):
+        block = _requirement_block("FR-STATE-01")
+        for suffix in ("human-required", "human-resolved"):
+            self.assertIn(
+                suffix,
+                block,
+                f"{suffix} が FR-STATE-01 に宣言されていません（labels.json には存在します）",
+            )
+
+    def test_fr_state_01_declares_every_labelled_prefix(self):
+        block = _requirement_block("FR-STATE-01")
+        documented = set(re.findall(r"`([a-z][a-z0-9-]*)`", block))
+        for suffix in ("human-required", "human-resolved"):
+            expected = _hitl_label_prefixes(suffix)
+            self.assertTrue(
+                expected <= documented,
+                f"{suffix} の対象プレフィックスのうち未宣言: {sorted(expected - documented)}",
+            )
 
     def test_needs_label_audit_has_color(self):
         """`needs-label-audit` に color が設定されていること。"""

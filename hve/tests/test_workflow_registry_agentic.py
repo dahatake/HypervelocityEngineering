@@ -1166,11 +1166,10 @@ class TestAutoQaTimeoutWatcherWorkflow:
 
     _WORKFLOW = "auto-qa-timeout-watcher.yml"
 
-    def test_has_schedule_cron_every_6_hours(self):
+    def test_has_no_schedule_trigger(self):
         yaml_data = _load_workflow_yaml(self._WORKFLOW)
         on_section = yaml_data.get(True, {}) or yaml_data.get("on", {})
-        schedule = on_section.get("schedule", [])
-        assert any(item.get("cron") == "0 */6 * * *" for item in schedule)
+        assert "schedule" not in on_section
 
     def test_has_workflow_dispatch_inputs(self):
         yaml_data = _load_workflow_yaml(self._WORKFLOW)
@@ -1179,9 +1178,10 @@ class TestAutoQaTimeoutWatcherWorkflow:
         assert "target_issue" in inputs
         assert "dry_run" in inputs
 
-    def test_job_has_enable_flag_guard(self):
+    def test_manual_job_has_no_enable_flag_guard(self):
         watch_job = _load_workflow_yaml(self._WORKFLOW).get("jobs", {}).get("watch", {})
-        assert watch_job.get("if", "") == "${{ vars.ENABLE_QA_TIMEOUT_WATCHER != 'false' }}"
+        assert "if" not in watch_job
+        assert "ENABLE_QA_TIMEOUT_WATCHER" not in _read_workflow_text(self._WORKFLOW)
 
     def test_uses_default_timeout_variable_and_notification_marker(self):
         content = _read_workflow_text(self._WORKFLOW)

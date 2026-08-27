@@ -41,6 +41,11 @@ try:
 except ImportError:
     from config import generate_run_id  # type: ignore[no-redef]
 
+try:
+    from .prompt_loader import load_prompt_file
+except ImportError:
+    from prompt_loader import load_prompt_file  # type: ignore[import-not-found,no-redef]
+
 
 # ---------------------------------------------------------------------------
 # 定数
@@ -126,6 +131,20 @@ _DOTNET_ERROR_PATTERN: re.Pattern[str] = re.compile(
 _TOOL_EXIT_CODE_PATTERN: re.Pattern[str] = re.compile(
     r"\[HVE_TOOL_EXIT_CODE=(?P<code>-?\d+)\]"
 )
+
+# 秘密情報らしい文字列の検査パターン。scan_codebase（FR-CLI-64）と
+# _build_verification_result の両方がこの単一定義を使う（FR-MAINT-07）。
+_SECRET_PATTERNS: tuple[str, ...] = (
+    "sk-",
+    "password=",
+    "connectionstring=",
+    "Bearer ",
+    "api_key",
+)
+
+# 1 ファイルあたりの検査読み取り上限。scope に大きな生成物・バイナリが
+# 含まれてもメモリ消費を有界に保つ。
+_SECURITY_SCAN_MAX_FILE_BYTES: int = 1_000_000
 
 # ---------------------------------------------------------------------------
 # ゴール自動検索用マッピング定数
@@ -245,6 +264,7 @@ class ScanResult(TypedDict):
     tests_collected: NotRequired[int]
     tests_skipped: NotRequired[int]
     metric_status: NotRequired[Dict[str, str]]
+    security_status: NotRequired[str]   # "PASS" | "FAIL" | "SKIP"
 
 
 class VerificationResult(TypedDict):
@@ -363,6 +383,25 @@ _WORKFLOW_TASK_GOALS: Dict[str, "TaskGoal"] = {
             "ruff lint エラー 0 件",
             "テストカバレッジ 70% 以上",
         ],
+        criterion_definitions=[
+            {
+                "criterion_id": "ASDW-WEB-COVERAGE",
+                "description": "ASDW-WEB成果物のテストカバレッジが70%以上",
+                "required_for_done": True,
+                "evaluator_type": "test",
+                "evaluation": {
+                    "metric": "coverage_pct",
+                    "operator": "gte",
+                    "expected": 70,
+                },
+                "evidence_required": {
+                    "kind": "test-result",
+                    "reference": "scan.summary.coverage_pct",
+                },
+                "failure_action": "continue",
+                "source": "hve.self_improve._WORKFLOW_TASK_GOALS[asdw-web]",
+            },
+        ],
         reward_weights={"lint": 0.3, "test": 0.5, "documentation": 0.2},
         tdd_phase="GREEN",
     ),
@@ -381,6 +420,25 @@ _WORKFLOW_TASK_GOALS: Dict[str, "TaskGoal"] = {
             "pytest テスト失敗 0 件",
             "ruff lint エラー 0 件",
             "テストカバレッジ 70% 以上",
+        ],
+        criterion_definitions=[
+            {
+                "criterion_id": "ADFDV-COVERAGE",
+                "description": "ADFDV成果物のテストカバレッジが70%以上",
+                "required_for_done": True,
+                "evaluator_type": "test",
+                "evaluation": {
+                    "metric": "coverage_pct",
+                    "operator": "gte",
+                    "expected": 70,
+                },
+                "evidence_required": {
+                    "kind": "test-result",
+                    "reference": "scan.summary.coverage_pct",
+                },
+                "failure_action": "continue",
+                "source": "hve.self_improve._WORKFLOW_TASK_GOALS[adfdv]",
+            },
         ],
         reward_weights={"lint": 0.3, "test": 0.5, "documentation": 0.2},
         tdd_phase="GREEN",
@@ -524,28 +582,10 @@ _PLATEAU_EPSILON: float = 2.0   # この値未満の報酬が連続すると収�
 _PLATEAU_WINDOW: int = 2        # 連続チェックするイテレーション数
 
 # LLM ゴール生成プロンプトテンプレート（discover_task_goal_with_llm で使用）
-_LLM_GOAL_PROMPT_TEMPLATE = """\
-あなたはソフトウェア品質改善の専門家です。
-以下のリポジトリドキュメントを参照し、ワークフロー「{workflow_id}」の自己改善ループの
-ゴールと成功条件を定義してください。
+_LLM_GOAL_PROMPT_TEMPLATE = load_prompt_file("runtime/self-improve/task-goal.prompt.md")
 
-## ワークフロー ID
-{workflow_id}
 
-## 参照ドキュメント（抜粋）
-{context}
-
-## 出力フォーマット
-JSON のみを出力してください。説明文・前置き・コードフェンス記号は不要です。
-{{
-  "goal_description": "ゴールを日本語1文で記述（例: 'knowledge/ D01〜D21 の内容が業務要件と整合していること'）",
-  "success_criteria": [
-    "成功条件1（具体的・検証可能な条件）",
-    "成功条件2",
-    "成功条件3"
-  ]
-}}
-"""
+_MUTATION_PROMPT_TEMPLATE = load_prompt_file("runtime/self-improve/mutation.prompt.md")
 
 
 # ---------------------------------------------------------------------------
@@ -1301,6 +1341,24 @@ def _scope_files(repo_root: Path, scope_paths: List[str]) -> List[tuple[str, Pat
     return [(relative, files[relative]) for relative in sorted(files)]
 
 
+def _contains_secret_pattern(text: str) -> bool:
+    """秘密情報らしい文字列が含まれるかを単一定義で判定する（FR-MAINT-07）。"""
+    return any(pattern in text for pattern in _SECRET_PATTERNS)
+
+
+def _security_status_from_files(inventory: List[tuple[str, Path]]) -> str:
+    """解決済み scope の対象ファイルだけを秘密情報パターンで検査する（FR-CLI-64）。"""
+    for _relative, path in inventory:
+        try:
+            with path.open("r", encoding="utf-8", errors="ignore") as handle:
+                text = handle.read(_SECURITY_SCAN_MAX_FILE_BYTES)
+        except OSError:
+            continue
+        if _contains_secret_pattern(text):
+            return "FAIL"
+    return "PASS"
+
+
 def _is_csharp_test_project(relative: str, path: Path) -> bool:
     lowered = relative.casefold().replace("\\", "/")
     if (
@@ -1514,7 +1572,9 @@ def _empty_scan_result(error_note: str = "") -> "ScanResult":
             "lint_errors": "SKIP",
             "test_failures": "SKIP",
             "doc_issues": "SKIP",
+            "coverage_pct": "SKIP",
         },
+        security_status="SKIP",
     )
 
 
@@ -1553,6 +1613,8 @@ def scan_codebase(
     markdown_files: List[str] = []
     dotnet_build_outputs: List[str] = []
     dotnet_test_outputs: List[str] = []
+    # FR-CLI-64: 秘密情報検査の対象は解決済み scope のファイルに限る。
+    security_inventory: Optional[List[tuple[str, Path]]] = None
 
     if resolved_scope_paths is not None or _is_new_resolver_enabled():
         try:
@@ -1578,6 +1640,7 @@ def scan_codebase(
 
         if language_aware:
             inventory = _scope_files(Path(cwd), scope_paths)
+            security_inventory = inventory
             python_files = [
                 relative for relative, path in inventory
                 if path.suffix.casefold() == ".py"
@@ -1662,6 +1725,7 @@ def scan_codebase(
             )
         else:
             # ── opt-in新仕様（後方互換）: scope pathを各Toolへ渡す ──
+            security_inventory = _scope_files(Path(cwd), scope_paths)
             ruff_output = _run_tool(
                 ["ruff", "check", *scope_paths, "--output-format", "text", "--exclude", "work"],
                 cwd=cwd,
@@ -1885,6 +1949,13 @@ def scan_codebase(
         "doc_issues": doc_issues,
     }
 
+    # 解決済み scope が得られない旧仕様経路は未検査として SKIP とし、PASS にしない。
+    security_status = (
+        _security_status_from_files(security_inventory)
+        if security_inventory is not None
+        else "SKIP"
+    )
+
     return ScanResult(
         quality_score=quality_score,
         issues=[],
@@ -1898,7 +1969,10 @@ def scan_codebase(
             "lint_errors": tool_status["lint"],
             "test_failures": tool_status["test"],
             "doc_issues": tool_status["documentation"],
+            # coverage_pct は test 実行結果からのみ得られるため test 状態をそのまま用いる。
+            "coverage_pct": tool_status["test"],
         },
+        security_status=security_status,
     )
 
 
@@ -3125,42 +3199,21 @@ def _build_mutation_prompt(
     learning_summary: str,
 ) -> str:
     definitions = _criterion_definitions(task_goal)
-    return f"""You are executing HVE Post-DAG Self-Improve MUTATE.
-Perform actual minimal file edits. Do not merely describe changes.
-Only edit the resolved repository-relative target paths listed below. Never edit work/,
-tests to weaken/skip them, criterion definitions, permissions, RBAC, HITL, approvals,
-or guardrails. Do not commit, revert, reset, clean, or discard pre-existing changes.
-
-## Goal
-{task_goal.get('goal_description', '')}
-
-## Resolved target paths
-{json.dumps(scope_paths, ensure_ascii=False, indent=2)}
-
-## Criterion definitions (source/evaluator/evidence are binding)
-{json.dumps(definitions, ensure_ascii=False, indent=2)}
-
-## Before criterion results
-{json.dumps(criterion_results, ensure_ascii=False, indent=2)}
-
-## Scan summary
-{json.dumps(scan.get('summary', {}), ensure_ascii=False, indent=2)}
-
-## Plan
-{json.dumps(plan, ensure_ascii=False, indent=2)}
-
-## Previous learning summary
-{learning_summary[:LEARNING_SUMMARY_MAX_LENGTH]}
-
-After editing, return exactly one JSON object and no Markdown/code fence:
-{{
-  "status": "MUTATED|PARTIAL_FAILURE|IMPROVEMENT_NOT_NEEDED",
-  "changed_files": ["repo/relative/path"],
-  "failed_changes": [{{"path": "repo/relative/path", "error": "short error"}}],
-  "no_change_reason": "non-empty only for IMPROVEMENT_NOT_NEEDED",
-  "response_summary": "short non-sensitive summary"
-}}
-"""
+    return _MUTATION_PROMPT_TEMPLATE.format(
+        goal_description=task_goal.get("goal_description", ""),
+        scope_paths_json=json.dumps(scope_paths, ensure_ascii=False, indent=2),
+        criterion_definitions_json=json.dumps(
+            definitions, ensure_ascii=False, indent=2
+        ),
+        before_criterion_results_json=json.dumps(
+            criterion_results, ensure_ascii=False, indent=2
+        ),
+        scan_summary_json=json.dumps(
+            scan.get("summary", {}), ensure_ascii=False, indent=2
+        ),
+        plan_json=json.dumps(plan, ensure_ascii=False, indent=2),
+        learning_summary=learning_summary[:LEARNING_SUMMARY_MAX_LENGTH],
+    )
 
 
 def _object_value(obj: Any, *names: str) -> Any:
@@ -3846,10 +3899,7 @@ def _build_verification_result(
         summary["doc_issues"] == 0
         and documentation_status == "PASS"
     )
-    security_pass = not any(
-        pat in raw
-        for pat in ["sk-", "password=", "connectionstring=", "Bearer ", "api_key"]
-    )
+    security_pass = not _contains_secret_pattern(raw)
 
     phases = {
         "build": "PASS" if build_pass else "FAIL",

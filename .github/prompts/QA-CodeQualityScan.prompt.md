@@ -1,5 +1,7 @@
 ﻿> コードベースの品質スキャンを実行する。ruff / pytest --cov / markdownlint のツール実行結果を収集し、LLM 統合評価でコード品質スコアと改善候補リストを生成する。自己改善ループ（Self-Improve）の Phase 4a として使用される。
 
+> **非実行注記（2026-08-25 時点）**: 本 Prompt は CLI / GUI / Cloud のいずれの実行経路からも呼び出されていない。Self-Improve の Phase 4a の実体は [hve/self_improve.py](../../hve/self_improve.py) `scan_codebase()` である。詳細は [users-guide/workflow-reference.md](../../users-guide/workflow-reference.md) の「Self-Improve で使用する実装」を参照。
+
 > **WORK**: `work/run/<run-id>/QA-CodeQualityScan/Issue-<識別子>/`
 
 ## 共通ルール

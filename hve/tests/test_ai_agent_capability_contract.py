@@ -14,7 +14,7 @@ from hve.workflow_registry import get_workflow
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SKILL_ROOT = _REPO_ROOT / ".github" / "skills" / "ai-agent-capability-contract"
 _PROMPTS = _REPO_ROOT / ".github" / "prompts"
-_TEMPLATES = _REPO_ROOT / ".github" / "scripts" / "templates" / "aagd"
+_TEMPLATES = _REPO_ROOT / ".github" / "prompts" / "steps" / "aagd"
 _IO_CONTRACT = (
     _REPO_ROOT
     / ".github"
@@ -28,7 +28,7 @@ _AAG_PROMPTS = {
     "step3": _PROMPTS / "Arch-AIAgentDesign-Step3.prompt.md",
 }
 _AAGD_FILES = {
-    "test-spec": _TEMPLATES / "step-2.1.md",
+    "test-spec": _TEMPLATES / "step-2.1.prompt.md",
     "test-code": _PROMPTS / "Dev-Microservice-Azure-AgentTestCoding.prompt.md",
     "coding": _PROMPTS / "Dev-Microservice-Azure-AgentCoding.prompt.md",
     "deploy": _PROMPTS / "Dev-Microservice-Azure-AgentDeploy.prompt.md",

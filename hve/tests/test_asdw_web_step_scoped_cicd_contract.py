@@ -7,7 +7,7 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _PROMPTS_DIR = _REPO_ROOT / ".github" / "prompts"
-_TEMPLATES_DIR = _REPO_ROOT / ".github" / "scripts" / "templates" / "asdw-web"
+_TEMPLATES_DIR = _REPO_ROOT / ".github" / "prompts" / "steps" / "asdw-web"
 _CICD_SKILL = _REPO_ROOT / ".github" / "skills" / "cicd" / "github-actions-cicd"
 _WORKFLOWS_DIR = _REPO_ROOT / ".github" / "workflows"
 _IO_CONTRACTS_DIR = _REPO_ROOT / ".github" / "io-contracts"
@@ -18,7 +18,7 @@ def _read(path: Path) -> str:
 
 
 def test_asdw_compute_deploy_template_uses_orchestrator_branch() -> None:
-    text = _read(_TEMPLATES_DIR / "step-3.4.md")
+    text = _read(_TEMPLATES_DIR / "step-3.4.prompt.md")
     assert "デプロイブランチ: `{branch}`" in text
     assert "Step.3.4 用に作成・push" in text
     assert "gh workflow run ... --ref {branch}" in text
@@ -26,7 +26,7 @@ def test_asdw_compute_deploy_template_uses_orchestrator_branch() -> None:
 
 
 def test_asdw_ui_deploy_template_uses_orchestrator_branch_not_main() -> None:
-    text = _read(_TEMPLATES_DIR / "step-4.3.md")
+    text = _read(_TEMPLATES_DIR / "step-4.3.prompt.md")
     assert "デプロイブランチ: `{branch}`" in text
     assert "デプロイブランチ: `main`" not in text
     assert "Step.4.3 用に作成・push" in text
@@ -89,7 +89,7 @@ def test_asdw_ui_deploy_prompt_uses_existing_default_branch_workflow() -> None:
 
 
 def test_asdw_ui_deploy_template_uses_existing_workflow_not_runtime_output() -> None:
-    text = _read(_TEMPLATES_DIR / "step-4.3.md")
+    text = _read(_TEMPLATES_DIR / "step-4.3.prompt.md")
     assert "既存 workflow: `.github/workflows/azure-static-web-apps-app009.yml`" in text
     assert "SWA デプロイワークフローを新規作成しない" in text
     assert "Secret `AZURE_STATIC_WEB_APPS_API_TOKEN` 参照" not in text

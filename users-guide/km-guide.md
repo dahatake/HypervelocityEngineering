@@ -226,7 +226,7 @@ python -m hve orchestrate --workflow akm --sources qa,docs-original --workiq-akm
 | 変えたいもの | 設定の正本（ここだけを編集する） | 拡張手順 | 回帰検証 |
 |---|---|---|---|
 | Step 構成・依存・出力パス・fanout キー（D01〜D21） | `hve/workflow_registry.py` の `akm` 定義 | `fanout_static_keys` を増減する場合は Prompt 側の共通テンプレートも合わせる | `python -m pytest hve/tests/test_workflow_registry.py hve/tests/test_fanout.py hve/tests/test_e2e_akm_fanout_dryrun.py -q` |
-| Step 本文テンプレート | `.github/scripts/templates/akm/step-1.md` / `step-2.md`、fanout 共通は `hve/prompt/fanout/akm/_common.md` | 出力先パスの表記を変えるときは registry の `output_paths_template` と揃える | `python -m pytest hve/tests/test_e2e_akm_fanout_dryrun.py -q` |
+| Step 本文テンプレート | `.github/prompts/steps/akm/step-1.prompt.md` / `step-2.prompt.md`、fanout 共通は `.github/prompts/fanout/akm/_common.prompt.md` | 出力先パスの表記を変えるときは registry の `output_paths_template` と揃える | `python -m pytest hve/tests/test_e2e_akm_fanout_dryrun.py -q` |
 | Agent の振る舞い | `.github/prompts/KnowledgeManager.prompt.md` / `.github/prompts/QA-DocConsistency.prompt.md` | 入出力契約は `.github/io-contracts/KnowledgeManager--akm--1.yaml` / `QA-DocConsistency--akm--2.yaml` と対で更新する | `python -m pytest hve/tests/test_knowledge_source_creation_contract.py -q` |
 | `sources` の受理値と正規化 | `hve/` の AKM 入力正規化 | 旧値 `qa` / `docs-original` / `both` の後方互換を壊さない | `python -m pytest hve/tests/test_akm_sources_normalization.py -q` |
 | Work IQ 取り込み | `hve/` の Work IQ 取り込みフェーズ | Cloud 実行では利用できない前提を維持する | `python -m pytest hve/tests/test_akm_workiq_ingest.py hve/tests/test_akm_workiq_phase.py -q` |

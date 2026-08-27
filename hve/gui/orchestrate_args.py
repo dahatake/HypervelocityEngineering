@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import Any, List, Mapping, Optional
+from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
 
 # `argparse.BooleanOptionalAction` 系オプションの 3 状態を表すリテラル
@@ -124,8 +124,13 @@ class OrchestrateArgs:
     # ------------------------------------------------------------------
     # C5: Issue / PR 作成 (L827-L857)
     # ------------------------------------------------------------------
+    # FR-LOCAL-SURFACE-01 (a): local 実行モード既定の continue-on-precheck を
+    # 無効化し、pre-check 失敗時に中断する。既定は従来通り継続。
+    strict: bool = False
     create_issues: bool = False
     create_pr: bool = False
+    # FR-CLI-83: True=新規作業branch、False=current branch mode。
+    create_working_branch: bool = True
     ignore_paths: List[str] = field(default_factory=list)
     repo: Optional[str] = None
     issue_title: Optional[str] = None
@@ -182,6 +187,13 @@ class OrchestrateArgs:
     # 受け皿として残置。to_argv() で --steps として subprocess へ伝搬する。
     steps: Optional[str] = None
 
+    # FR-GUI-38: FR-CLI-86 の `--resume-run`。空欄は未指定として扱う。
+    resume_run: Optional[str] = None
+
+    # FR-PROMPT-08: Prompt 版の実行時入力別名（canonical, actual）。
+    # canonical 契約を変えず、その run に限って実ファイルへ読み替える。
+    input_aliases: List[Tuple[str, str]] = field(default_factory=list)
+
     # ------------------------------------------------------------------
     # C10: アプリ ID 系 (L983-L1020)
     # ------------------------------------------------------------------
@@ -236,6 +248,18 @@ class OrchestrateArgs:
     analysis_purpose: Optional[str] = None
     target_recommendation_id: Optional[str] = None
     attached_docs: Optional[str] = None  # カンマ区切り
+
+    # ------------------------------------------------------------------
+    # FR-LOCAL-SURFACE-01 (b): registry 宣言済みの Workflow 固有パラメータ。
+    # 宣言した Workflow を選んだときだけ適用される（GUI の全体設定
+    # へは永続化しない）。
+    # ------------------------------------------------------------------
+    # ARD: Step 3 (KPI/OKR 定義)。FR-PARAM-10 の後方互換ショートカット。
+    include_kpi_okr: bool = False
+    # AAD-WEB / ASDW-WEB: Knowledge Base の Remote MCP Server 公開。
+    create_remote_mcp_server: TriState = None
+    # ASDW-WEB / ADFDV / AAGD: TDD ループの最大再試行回数。
+    tdd_max_retries: Optional[int] = None
 
     # ------------------------------------------------------------------
     # C15: 追加プロンプト (L1169-L1201)
@@ -378,10 +402,14 @@ class OrchestrateArgs:
             argv += ["--workiq-request-timeout", str(self.workiq_request_timeout)]
 
         # --- C5 ---
+        if self.strict:
+            argv.append("--strict")
         if self.create_issues:
             argv.append("--create-issues")
         if self.create_pr:
             argv.append("--create-pr")
+        if not self.create_working_branch:
+            argv.append("--no-create-working-branch")
         if self.ignore_paths:
             argv += ["--ignore-paths", *self.ignore_paths]
         if self.repo:
@@ -458,6 +486,10 @@ class OrchestrateArgs:
             argv += ["--branch", self.branch]
         if self.steps:
             argv += ["--steps", self.steps]
+        for canonical, actual in self.input_aliases:
+            argv += ["--input-alias", canonical, actual]
+        if self.resume_run and self.resume_run.strip():
+            argv += ["--resume-run", self.resume_run.strip()]
 
         # --- C10 ---
         if self.app_id:
@@ -523,6 +555,18 @@ class OrchestrateArgs:
             argv += ["--target-recommendation-id", self.target_recommendation_id]
         if self.attached_docs:
             argv += ["--attached-docs", self.attached_docs]
+
+        # --- Workflow 固有パラメータ（FR-LOCAL-SURFACE-01 (b)）---
+        if self.include_kpi_okr:
+            argv.append("--include-kpi-okr")
+        _append_tristate(
+            argv,
+            "--create-remote-mcp-server",
+            "--no-create-remote-mcp-server",
+            self.create_remote_mcp_server,
+        )
+        if self.tdd_max_retries is not None:
+            argv += ["--tdd-max-retries", str(self.tdd_max_retries)]
 
         # --- C15 ---
         if self.additional_prompt:
@@ -599,6 +643,243 @@ def _coerce_tristate(value: Any) -> TriState:
     if isinstance(value, str):
         return {"on": True, "off": False}.get(value.strip().lower())
     return None
+
+
+# --------------------------------------------------------------------------
+# 保存済み設定 → OrchestrateArgs（FR-PROMPT-07）
+# --------------------------------------------------------------------------
+
+# 設定ストアから読み取らないフィールド。
+# Prompt CLI / GUI ランタイムが所有し、保存値を通じて上書きさせない。
+_RUNTIME_OWNED_FIELDS = frozenset(
+    {
+        "workflow",
+        "steps",
+        "dry_run",
+        "input_aliases",
+        "repo_root",
+        "stop_on_fatal",
+        "qa_ipc_dir",
+        "steering_ipc_dir",
+        "self_improve",
+        "no_self_improve",
+        "sources",
+        "target_files",
+        "force_refresh",
+        "custom_source_dir",
+    }
+)
+
+# `settings_store` のキー名が `OrchestrateArgs` と一致しない、または
+# 型・意味の変換が要るもの。汎用マッピングから除外して個別に処理する。
+_SPECIAL_SETTINGS_KEYS = frozenset(
+    {
+        "auto_qa",
+        "self_improve",
+        "qa_answer_mode",
+        "issue_number",
+        "sources_qa",
+        "sources_original_docs",
+        "sources_workiq",
+        "tool_search_ranking",
+    }
+)
+
+_LIST_FIELDS = frozenset(    {
+        "ignore_paths",
+        "target_files",
+        "custom_source_dir",
+        # FR-LOCAL-SURFACE-01 (a): GUI は "indexer;push" の形で保存する。
+        "agentic_data_source_modes",
+    }
+)
+
+# 保存値 "auto" を CLI 未指定（None）へ正規化するフィールド。
+# GUI の `to_args()` も "auto" を CLI へ渡さないため、両面の振る舞いを揃える。
+_AUTO_MEANS_UNSET = frozenset({"enable_agentic_retrieval", "enable_tool_search"})
+
+# 設定ストアの key 名 → `OrchestrateArgs` のフィールド名。
+# 名前が一致しないものだけを列挙する（FR-PROMPT-07 / FR-LOCAL-SURFACE-01 (a)）。
+# 列挙しない限り名前不一致の保存値は無言で捨てられるため、
+# 新規の不一致を作ったときは必ずここへ追加する。
+_SETTINGS_KEY_ALIASES: Mapping[str, str] = {
+    "cloud_session_repository_branch": "cloud_session_branch",
+}
+
+# 0 を「未指定」として扱うフィールド（GUI の QSpinBox 既定 0 に対応）。
+_ZERO_MEANS_UNSET = frozenset(
+    {
+        "context_max_chars",
+        "max_file_lines",
+        "workiq_per_question_timeout",
+        "mdq_watch_debounce_ms",
+        "cq_watch_debounce_ms",
+        "survey_period_years",
+        "cloud_session_max_concurrency",
+    }
+)
+
+
+def _split_semicolon_list(value: Any) -> List[str]:
+    if isinstance(value, (list, tuple)):
+        return [str(v).strip() for v in value if str(v).strip()]
+    if not isinstance(value, str):
+        return []
+    return [part.strip() for part in value.split(";") if part.strip()]
+
+
+def _field_map() -> Mapping[str, Any]:
+    return {f.name: f for f in fields(OrchestrateArgs)}
+
+
+def _is_tristate_field(f: Any) -> bool:
+    # `TriState = Optional[bool]`。dataclass のアノテーションは文字列で保持される。
+    return str(f.type).replace(" ", "") in {"TriState", "Optional[bool]", "bool|None"}
+
+
+def _coerce_for_field(f: Any, value: Any) -> Any:
+    name = f.name
+    if name in _AUTO_MEANS_UNSET and isinstance(value, str):
+        text = value.strip()
+        return text if text in {"yes", "no"} else None
+    if name in _LIST_FIELDS:
+        return _split_semicolon_list(value)
+    if _is_tristate_field(f):
+        return _coerce_tristate(value)
+
+    annotation = str(f.type)
+    if isinstance(value, str) and not value.strip() and "Optional" in annotation:
+        return None
+    if name in _ZERO_MEANS_UNSET and isinstance(value, (int, float)) and not value:
+        return None
+    if "Optional[int]" in annotation and isinstance(value, str):
+        text = value.strip()
+        return int(text) if text.isdigit() else None
+    if annotation.endswith("bool") and not annotation.startswith("Optional"):
+        if isinstance(value, str):
+            return value.strip().lower() in {"true", "on", "1", "yes"}
+        return bool(value)
+    return value
+
+
+def args_from_settings(
+    settings: Mapping[str, Mapping[str, Any]],
+    *,
+    workflow: str,
+    overrides: Optional[Mapping[str, Any]] = None,
+    steps: Optional[Sequence[str]] = None,
+    goal: Optional[str] = None,
+    input_aliases: Optional[Sequence[Tuple[str, str]]] = None,
+    repo_root: Optional[Path] = None,
+) -> "OrchestrateArgs":
+    """保存済み GUI 設定から `OrchestrateArgs` を構築する（Qt に依存しない）。
+
+    Args:
+        settings: `settings_store.load()` / `defaults()` と同じ構造の dict。
+        workflow: 対象 Workflow ID（必須）。
+        overrides: Prompt 版 request の `settings_overrides`（allowlist 検証済みでなくてよい）。
+        steps: 実行対象 Step ID。空なら `--steps` を渡さない。
+        goal: `--additional-prompt` へ渡す文字列。
+        input_aliases: `(canonical, actual)` の並び。
+        repo_root: GUI 内部利用のリポジトリルート。
+
+    Raises:
+        ValueError: `workflow` が空、または `overrides` に許可外のキーがある場合。
+    """
+    if not (workflow or "").strip():
+        raise ValueError("workflow が空です。")
+
+    from ..prompt_request import ALLOWED_SETTINGS_OVERRIDES
+
+    merged_overrides = dict(overrides or {})
+    rejected = sorted(set(merged_overrides) - ALLOWED_SETTINGS_OVERRIDES)
+    if rejected:
+        raise ValueError(
+            "settings_overrides に許可されていないキーがあります: " + ", ".join(rejected)
+        )
+
+    options: Mapping[str, Any] = dict((settings or {}).get("options", {}))
+    field_by_name = _field_map()
+
+    args = OrchestrateArgs(
+        workflow=workflow.strip(),
+        repo_root=repo_root or Path.cwd(),
+    )
+
+    for key, value in options.items():
+        if key in _RUNTIME_OWNED_FIELDS or key in _SPECIAL_SETTINGS_KEYS:
+            continue
+        field_name = _SETTINGS_KEY_ALIASES.get(key, key)
+        f = field_by_name.get(field_name)
+        if f is None:
+            continue
+        setattr(args, field_name, _coerce_for_field(f, value))
+
+    # --- 個別変換 ---
+    args.auto_qa = _coerce_tristate(options.get("auto_qa")) is True
+
+    self_improve = _coerce_tristate(options.get("self_improve"))
+    args.self_improve = self_improve is True
+    args.no_self_improve = self_improve is False
+
+    issue_number = str(options.get("issue_number") or "").strip()
+    args.issue_number = int(issue_number) if issue_number.isdigit() else None
+
+    if workflow.strip() == "akm":
+        selected_sources = [
+            name
+            for key, name in (
+                ("sources_workiq", "workiq"),
+                ("sources_qa", "qa"),
+                ("sources_original_docs", "original-docs"),
+            )
+            if options.get(key)
+        ]
+        args.sources = ",".join(selected_sources) if selected_sources else None
+        target_files = options.get("target_files")
+        args.target_files = (
+            [str(value).strip() for value in target_files if str(value).strip()]
+            if isinstance(target_files, (list, tuple))
+            else str(target_files or "").split()
+        )
+        args.force_refresh = _coerce_tristate(options.get("force_refresh"))
+        custom_source_dir = options.get("custom_source_dir")
+        args.custom_source_dir = (
+            [str(value).strip() for value in custom_source_dir if str(value).strip()]
+            if isinstance(custom_source_dir, (list, tuple))
+            else str(custom_source_dir or "").split()
+        )
+
+    if not args.self_improve:
+        args.self_improve_max_iterations = None
+        args.self_improve_target_scope = None
+        args.self_improve_goal = None
+
+    if options.get("tool_search_ranking") == "hve":
+        args.tool_search_ranking = "hve"
+
+    # --- Prompt 版が所有する値 ---
+    for key, value in merged_overrides.items():
+        f = field_by_name.get(key)
+        if f is None:
+            continue
+        setattr(args, key, _coerce_for_field(f, value))
+
+    # GUI 保存値 "user" は IPC を持たない Prompt 経路では既定の対話判定へ落とす。
+    qa_mode = str(options.get("qa_answer_mode") or "").strip()
+    args.qa_answer_mode = (
+        qa_mode if args.auto_qa and qa_mode == "autopilot" else None
+    )
+
+    if steps:
+        args.steps = ",".join(s for s in steps if s)
+    if goal:
+        args.additional_prompt = goal
+    if input_aliases:
+        args.input_aliases = [(c, a) for c, a in input_aliases]
+    args.dry_run = False
+
+    return args
 
 
 def apply_watch_settings(args: "OrchestrateArgs", options: Mapping[str, Any]) -> None:

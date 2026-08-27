@@ -14,7 +14,7 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SKILLS_DIR = _REPO_ROOT / ".github" / "skills"
 _PROMPTS_DIR = _REPO_ROOT / ".github" / "prompts"
-_TEMPLATES_DIR = _REPO_ROOT / ".github" / "scripts" / "templates"
+_TEMPLATES_DIR = _REPO_ROOT / ".github" / "prompts" / "steps"
 
 _TDD_REALITY_SKILL = _SKILLS_DIR / "testing" / "tdd-red-green-reality" / "SKILL.md"
 _TEST_STRATEGY_SKILL = _SKILLS_DIR / "testing" / "test-strategy-template" / "SKILL.md"
@@ -54,50 +54,50 @@ _EXTERNAL_RUNTIME_PROMPTS = [
 ]
 
 _LOCAL_RUNTIME_TEMPLATES = [
-    _TEMPLATES_DIR / "asdw-web" / "step-1.2.md",
-    _TEMPLATES_DIR / "asdw-web" / "step-3.2.md",
-    _TEMPLATES_DIR / "asdw-web" / "step-3.3.md",
-    _TEMPLATES_DIR / "asdw-web" / "step-4.1.md",
-    _TEMPLATES_DIR / "asdw-web" / "step-4.2.md",
-    _TEMPLATES_DIR / "adfdv" / "step-2.1.md",
-    _TEMPLATES_DIR / "adfdv" / "step-2.2.md",
-    _TEMPLATES_DIR / "aagd" / "step-2.2.md",
-    _TEMPLATES_DIR / "aagd" / "step-2.3.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-1.2.prompt.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-3.2.prompt.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-3.3.prompt.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-4.1.prompt.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-4.2.prompt.md",
+    _TEMPLATES_DIR / "adfdv" / "step-2.1.prompt.md",
+    _TEMPLATES_DIR / "adfdv" / "step-2.2.prompt.md",
+    _TEMPLATES_DIR / "aagd" / "step-2.2.prompt.md",
+    _TEMPLATES_DIR / "aagd" / "step-2.3.prompt.md",
 ]
 
 _EXTERNAL_RUNTIME_TEMPLATES = [
-    _TEMPLATES_DIR / "asdw-web" / "step-1.3.md",
-    _TEMPLATES_DIR / "asdw-web" / "step-2.3.md",
-    _TEMPLATES_DIR / "asdw-web" / "step-2.4.md",
-    _TEMPLATES_DIR / "asdw-web" / "step-3.5.md",
-    _TEMPLATES_DIR / "asdw-web" / "step-4.4.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-1.3.prompt.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-2.3.prompt.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-2.4.prompt.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-3.5.prompt.md",
+    _TEMPLATES_DIR / "asdw-web" / "step-4.4.prompt.md",
 ]
 
 _AAGD_AGENT_DETAIL_CONSUMERS = [
     _PROMPTS_DIR / "Dev-Microservice-Azure-AgentTestCoding.prompt.md",
     _PROMPTS_DIR / "Dev-Microservice-Azure-AgentCoding.prompt.md",
     _PROMPTS_DIR / "Dev-Microservice-Azure-AgentDeploy.prompt.md",
-    _TEMPLATES_DIR / "aagd" / "step-2.1.md",
-    _TEMPLATES_DIR / "aagd" / "step-2.2.md",
-    _TEMPLATES_DIR / "aagd" / "step-2.3.md",
-    _TEMPLATES_DIR / "aagd" / "step-3.md",
+    _TEMPLATES_DIR / "aagd" / "step-2.1.prompt.md",
+    _TEMPLATES_DIR / "aagd" / "step-2.2.prompt.md",
+    _TEMPLATES_DIR / "aagd" / "step-2.3.prompt.md",
+    _TEMPLATES_DIR / "aagd" / "step-3.prompt.md",
 ]
 
 _AAGD_TDD_RED_FILES = [
     _PROMPTS_DIR / "Dev-Microservice-Azure-AgentTestCoding.prompt.md",
     _PROMPTS_DIR / "Dev-Microservice-Azure-AgentCoding.prompt.md",
-    _TEMPLATES_DIR / "aagd" / "step-2.2.md",
-    _TEMPLATES_DIR / "aagd" / "step-2.3.md",
+    _TEMPLATES_DIR / "aagd" / "step-2.2.prompt.md",
+    _TEMPLATES_DIR / "aagd" / "step-2.3.prompt.md",
 ]
 
 _AAGD_AGENT_KEY_FILES = [
     _PROMPTS_DIR / "Dev-Microservice-Azure-AgentTestCoding.prompt.md",
     _PROMPTS_DIR / "Dev-Microservice-Azure-AgentCoding.prompt.md",
     _PROMPTS_DIR / "Dev-Microservice-Azure-AgentDeploy.prompt.md",
-    _TEMPLATES_DIR / "aagd" / "step-2.1.md",
-    _TEMPLATES_DIR / "aagd" / "step-2.2.md",
-    _TEMPLATES_DIR / "aagd" / "step-2.3.md",
-    _TEMPLATES_DIR / "aagd" / "step-3.md",
+    _TEMPLATES_DIR / "aagd" / "step-2.1.prompt.md",
+    _TEMPLATES_DIR / "aagd" / "step-2.2.prompt.md",
+    _TEMPLATES_DIR / "aagd" / "step-2.3.prompt.md",
+    _TEMPLATES_DIR / "aagd" / "step-3.prompt.md",
 ]
 
 
@@ -181,7 +181,7 @@ def test_external_runtime_templates_require_configured_service_contract() -> Non
 
 
 def test_aagd_agent_detail_consumers_use_canonical_key_path() -> None:
-    assert _TEMPLATES_DIR / "aagd" / "step-2.3.md" in _AAGD_AGENT_DETAIL_CONSUMERS
+    assert _TEMPLATES_DIR / "aagd" / "step-2.3.prompt.md" in _AAGD_AGENT_DETAIL_CONSUMERS
     for path in _AAGD_AGENT_DETAIL_CONSUMERS:
         text = path.read_text(encoding="utf-8")
         assert "docs/agent/agent-detail-{key}.md" in text, (
@@ -192,10 +192,10 @@ def test_aagd_agent_detail_consumers_use_canonical_key_path() -> None:
 
 
 def test_aagd_step_chain_preserves_test_spec_red_green_and_deploy_inputs() -> None:
-    step21 = (_TEMPLATES_DIR / "aagd" / "step-2.1.md").read_text(encoding="utf-8")
-    step22 = (_TEMPLATES_DIR / "aagd" / "step-2.2.md").read_text(encoding="utf-8")
-    step23 = (_TEMPLATES_DIR / "aagd" / "step-2.3.md").read_text(encoding="utf-8")
-    step3 = (_TEMPLATES_DIR / "aagd" / "step-3.md").read_text(encoding="utf-8")
+    step21 = (_TEMPLATES_DIR / "aagd" / "step-2.1.prompt.md").read_text(encoding="utf-8")
+    step22 = (_TEMPLATES_DIR / "aagd" / "step-2.2.prompt.md").read_text(encoding="utf-8")
+    step23 = (_TEMPLATES_DIR / "aagd" / "step-2.3.prompt.md").read_text(encoding="utf-8")
+    step3 = (_TEMPLATES_DIR / "aagd" / "step-3.prompt.md").read_text(encoding="utf-8")
 
     assert "docs/test-specs/{key}-test-spec.md" in step21
     assert "docs/test-specs/{key}-test-spec.md" in step22
@@ -260,7 +260,7 @@ def test_agent_coding_prompt_pins_capability_safety_boundaries() -> None:
 
 def test_aagd_capability_tests_use_selected_deterministic_test_doubles() -> None:
     """TestSpec→TestCodingが選択能力だけを外部接続なしで決定的に検証する。"""
-    test_spec = (_TEMPLATES_DIR / "aagd" / "step-2.1.md").read_text(encoding="utf-8")
+    test_spec = (_TEMPLATES_DIR / "aagd" / "step-2.1.prompt.md").read_text(encoding="utf-8")
     test_coding = (
         _PROMPTS_DIR / "Dev-Microservice-Azure-AgentTestCoding.prompt.md"
     ).read_text(encoding="utf-8")
@@ -315,7 +315,7 @@ def test_aagd_agent_specific_contracts_use_only_canonical_key() -> None:
     deploy_prompt = (
         _PROMPTS_DIR / "Dev-Microservice-Azure-AgentDeploy.prompt.md"
     ).read_text(encoding="utf-8")
-    deploy_template = (_TEMPLATES_DIR / "aagd" / "step-3.md").read_text(
+    deploy_template = (_TEMPLATES_DIR / "aagd" / "step-3.prompt.md").read_text(
         encoding="utf-8"
     )
     assert ".github/workflows/deploy-agent-{key}.yml" in deploy_prompt

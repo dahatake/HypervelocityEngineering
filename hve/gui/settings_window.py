@@ -51,7 +51,6 @@ from .page_options import (
     _CReviewPrompt,
     _CSelfImprove,
     _C4WorkIQ,
-    _C5IssuePR,
     _C7Connection,
     _C10AppId,
     _C11AKM,
@@ -372,7 +371,8 @@ _CATEGORY_TREE: List[Tuple[str, List[Tuple[str, str]]]] = [
     (
         "各サービス連携",
         [
-            ("GitHub", "C5"),
+            # FR-GUI-35: GitHub 設定の可視 owner は GitHub Hub（`GitHubWindow` の
+            # 「連携設定」タブ）だけとする。設定ツリーからは公開しない。
             ("Azure", "AZURE"),
             ("Agentic Retrieval", "AGENTIC"),
             ("MCP / CLI 接続", "C7"),
@@ -540,8 +540,8 @@ class SettingsWindow(QMainWindow):
             return _CSelfImprove()
         if key == "C4":
             return _C4WorkIQ()
-        if key == "C5":
-            return _C5IssuePR()
+        # FR-GUI-35: C5（GitHub）の可視 owner は GitHub Hub だけのため、
+        # 本画面ではセクションを生成しない。
         if key == "C7":
             return _C7Connection()
         if key == "AZURE":

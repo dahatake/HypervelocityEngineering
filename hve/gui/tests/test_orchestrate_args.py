@@ -40,7 +40,6 @@ class TestDeleteLocalMergedBranchToArgv:
 
 class TestContextTierToArgv:
     """context_tier → --context-tier 変換テスト。"""
-
     def test_default_is_long_context(self) -> None:
         """既定では --context-tier long_context を出力する。"""
         argv = OrchestrateArgs(workflow="aas").to_argv()
@@ -71,6 +70,59 @@ class TestSteeringIpcDirToArgv:
         argv = OrchestrateArgs(workflow="aas", steering_ipc_dir="/tmp/steering").to_argv()
         assert "--steering-ipc-dir" in argv
         assert argv[argv.index("--steering-ipc-dir") + 1] == "/tmp/steering"
+
+
+class TestResumeRunArg:
+    """FR-GUI-38: resume_run → --resume-run 変換テスト。"""
+
+    def test_default_is_none(self) -> None:
+        assert OrchestrateArgs(workflow="aas").resume_run is None
+
+    def test_default_emits_no_flag(self) -> None:
+        argv = OrchestrateArgs(workflow="aas").to_argv()
+        assert "--resume-run" not in argv
+
+    def test_set_emits_flag_with_run_id(self) -> None:
+        argv = OrchestrateArgs(workflow="aas", resume_run="20260826T101010-abcdef").to_argv()
+        assert argv[argv.index("--resume-run") + 1] == "20260826T101010-abcdef"
+
+    @pytest.mark.parametrize("value", ["", "   "])
+    def test_blank_emits_no_flag(self, value: str) -> None:
+        """空欄・空白のみは未指定として扱う（FR-GUI-38）。"""
+        argv = OrchestrateArgs(workflow="aas", resume_run=value).to_argv()
+        assert "--resume-run" not in argv
+
+
+class TestResumeRunWidgetToArgs:
+    """FR-GUI-38: `_C5IssuePR.to_args()` が resume_run を OrchestrateArgs へ反映すること。
+
+    永続化（save→load→widget）の往復テストと CLI 引数への反映は別経路であり、
+    to_args() 側の書き忘れは永続化テストだけでは検出できない
+    （test_github_section_consolidation.py の fleet/cloud 回帰と同種の穴）。
+    """
+
+    def test_widget_text_flows_into_orchestrate_args(self, qapp_offscreen) -> None:
+        from hve.gui.page_options import _C5IssuePR
+
+        widget = _C5IssuePR()
+        widget.resume_run.setText("20260826T101010-abcdef")
+
+        args = OrchestrateArgs(workflow="aas")
+        widget.to_args(args)
+
+        assert args.resume_run == "20260826T101010-abcdef"
+
+    def test_blank_widget_text_yields_none(self, qapp_offscreen) -> None:
+        """空欄・空白のみの入力は None として渡る（--resume-run を出力させない）。"""
+        from hve.gui.page_options import _C5IssuePR
+
+        widget = _C5IssuePR()
+        widget.resume_run.setText("   ")
+
+        args = OrchestrateArgs(workflow="aas")
+        widget.to_args(args)
+
+        assert args.resume_run is None
 
 
 class TestToolSearchToArgv:

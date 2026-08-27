@@ -154,6 +154,7 @@ def test_start_autopilot_takes_app_chains_branch_when_no_pre_phases(
 
 def _prepare_channel_capable_window(mw, tmp_path: Path) -> None:
     """`_start_autopilot` の app_chains 経路を実 argv で走らせるための最小注入。"""
+    from hve.gui.github_task_context import GitHubTaskContextStore
     from hve.gui.orchestrate_args import OrchestrateArgs
 
     mw._page_workbench = MagicMock()
@@ -169,6 +170,9 @@ def _prepare_channel_capable_window(mw, tmp_path: Path) -> None:
     mw._refresh_navigation = MagicMock()
     mw._update_title = MagicMock()
     mw._status_label = MagicMock()
+    mw._github_window = None
+    mw._session_workdir.session_run_id = "run-1"
+    mw._github_task_contexts = GitHubTaskContextStore("run-1")
 
 
 def _app_chains_plan(tmp_path: Path) -> AutopilotPlan:
@@ -242,6 +246,75 @@ def test_app_chains_relaunch_updates_the_channel_for_the_same_lane(
     assert dir_1 != dir_2
     last = mw._page_workbench.register_job_channel.call_args_list[-1]
     assert last.args == ("aad-web#APP-001", dir_2)
+
+
+def test_app_chains_argv_factory_applies_issue_snapshot(
+    qapp, tmp_path: Path
+) -> None:
+    """FR-GUI-40: 初回 app-chain factory が関連 Issue を argv へ反映する。"""
+    from hve.gui.orchestrate_args import OrchestrateArgs
+
+    mw = _make_mock_main_window(tmp_path)
+    mw._page_workflow.selected_workflow_ids.return_value = ["aad-web"]
+    _prepare_channel_capable_window(mw, tmp_path)
+    mw._page_options.build_args_for_workflow.side_effect = (
+        lambda workflow_id, repo_root=None: OrchestrateArgs(
+            workflow=workflow_id, create_pr=True
+        )
+    )
+    mw._github_task_contexts.set_manual(issue_number=41)
+
+    with patch("hve.gui.autopilot.build_plan", return_value=_app_chains_plan(tmp_path)), \
+         patch("hve.gui.autopilot.child_launcher.AutopilotController") as mock_ctrl, \
+         patch("hve.gui.settings_store.get_option", return_value=4):
+        mw._start_autopilot()
+
+    argv_factory = mock_ctrl.call_args.kwargs["argv_factory"]
+    argv = argv_factory("APP-001", "aad-web")
+    assert argv[argv.index("--issue-number") + 1] == "41"
+    assert mw._github_task_contexts.current().key.instance_id == "aad-web#APP-001"
+
+
+def test_continuation_argv_factory_applies_issue_snapshot(
+    qapp, tmp_path: Path
+) -> None:
+    """FR-GUI-40: 継続 app-chain factory も関連 Issue を argv へ反映する。"""
+    from hve.gui.orchestrate_args import OrchestrateArgs
+
+    mw = _make_mock_main_window(tmp_path)
+    _prepare_channel_capable_window(mw, tmp_path)
+    mw._collect_requested_app_ids = MagicMock(return_value=["APP-001"])
+    mw._page_options.build_args_for_workflow.side_effect = (
+        lambda workflow_id, repo_root=None: OrchestrateArgs(
+            workflow=workflow_id, create_issues=True
+        )
+    )
+    mw._github_task_contexts.set_manual(issue_number=42)
+    selection = AutopilotSelection(
+        run_ard=False,
+        run_aas=False,
+        run_aad_web=True,
+        run_asdw_web=False,
+        run_abd=False,
+        run_abdv=False,
+    )
+
+    with patch(
+        "hve.gui.autopilot.planner.build_plan",
+        return_value=_app_chains_plan(tmp_path),
+    ), patch("hve.gui.autopilot.child_launcher.AutopilotController") as mock_ctrl:
+        mw._start_autopilot_app_chains_controller(
+            selection=selection,
+            catalog_path=tmp_path / "catalog.md",
+            max_parallel=4,
+            status_running_template="{done}/{total}/{mp}",
+            empty_warning_template="{path}",
+        )
+
+    argv_factory = mock_ctrl.call_args.kwargs["argv_factory"]
+    argv = argv_factory("APP-002", "aad-web")
+    assert argv[argv.index("--issue-number") + 1] == "42"
+    assert mw._github_task_contexts.current().key.instance_id == "aad-web#APP-002"
 
 
 def test_prephase_window_allocates_a_channel_for_the_workflow(qapp, tmp_path: Path) -> None:

@@ -54,7 +54,7 @@ def test_registration_marker_constants_are_the_documented_tokens() -> None:
 # ---------------------------------------------------------------------------
 _LOG_FILENAME = "static-verification.log"
 _STEP12_PROMPT = ".github/prompts/Dev-Microservice-Azure-DataTestCoding.prompt.md"
-_STEP12_TEMPLATE = ".github/scripts/templates/asdw-web/step-1.2.md"
+_STEP12_TEMPLATE = ".github/prompts/steps/asdw-web/step-1.2.prompt.md"
 
 
 def test_static_verification_log_filename_matches_runner_gate() -> None:

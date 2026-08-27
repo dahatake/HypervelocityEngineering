@@ -1391,6 +1391,15 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     orch.add_argument(
+        "--assign-copilot-agent",
+        action="store_true",
+        default=False,
+        help=(
+            "--create-issues で当該 run が新規作成した Root Issue を "
+            "Copilot cloud agent へ割り当てる (デフォルト: 無効)。"
+        ),
+    )
+    orch.add_argument(
         "--create-pr",
         action="store_true",
         default=False,
@@ -1402,13 +1411,23 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     orch.add_argument(
+        "--create-working-branch",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "FR-CLI-83: workflow-wide PR 用の新規作業ブランチを作成する "
+            "(デフォルト: 有効)。--no-create-working-branch は現在 checkout 中の"
+            "安全な非baseブランチを使用する。"
+        ),
+    )
+    orch.add_argument(
         "--issue-number",
         type=int,
         default=None,
         metavar="N",
         help=(
             "Root Issue を新規作成せず、既存の GitHub Issue #N へ連携する (省略可)。"
-            " --create-issues と併用したときだけ効力を持ちます。"
+            " --create-issues または --create-pr と併用したときだけ効力を持ちます。"
         ),
     )
     orch.add_argument(
@@ -1611,6 +1630,28 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="STEP_IDS",
         help="実行ステップをカンマ区切りで指定 (省略時: 全ステップ)",
     )
+    orch.add_argument(
+        "--resume-run",
+        default=None,
+        metavar="RUN_ID",
+        help="指定 run で成功済みのステップを除外して再実行する (FR-CLI-86)",
+    )
+    orch.add_argument(
+        "--approval-gates",
+        action="store_true",
+        help="approval_gate を宣言した Step を含む Wave の実行前に承認を求める (FR-CLI-87)",
+    )
+    orch.add_argument(
+        "--input-alias",
+        action="append",
+        nargs=2,
+        default=None,
+        metavar=("CANONICAL", "ACTUAL"),
+        help=(
+            "canonical な必須入力を、その run に限りリポジトリ内の実ファイルへ読み替える "
+            "(FR-PROMPT-08、複数回指定可)。ファイルはコピーせず、出力契約も変更しない"
+        ),
+    )
 
     # ワークフロー固有パラメータ
     orch.add_argument(
@@ -1812,6 +1853,28 @@ def _build_parser() -> argparse.ArgumentParser:
             "ARD: Step 3 (KPI/OKR 定義) を実行する（任意・既定 false）。"
             "true の場合、戦略的記述から KPI/OKR・計測データ定義・データ収集設計を生成し "
             "docs/recommended-kpi-okr.md を出力する。後続 UC・APP 設計が任意参照する。"
+        ),
+    )
+    # FR-LOCAL-SURFACE-01 (b): registry が宣言する Workflow 固有パラメータ。
+    # 直接 CLI / GUI / Prompt 版の 3 面で指定できるようにするため、
+    # 従来は対話 wizard と Cloud Issue Form だけが持っていた 2 値を CLI へ出す。
+    orch.add_argument(
+        "--create-remote-mcp-server",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "AAD-WEB / ASDW-WEB: Knowledge Base を Remote MCP Server として公開するか。"
+            "未指定時は Workflow の既定値に従う。"
+        ),
+    )
+    orch.add_argument(
+        "--tdd-max-retries",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "ASDW-WEB / ADFDV / AAGD: TDD ループの最大再試行回数。"
+            "未指定時は環境変数 HVE_TDD_MAX_RETRIES、それも無ければ既定値を使う。"
         ),
     )
 
@@ -2305,6 +2368,39 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     ts_context.add_argument("--json", action="store_true", help="JSON 形式で出力する")
 
+    # --- prompt サブコマンド（FR-PROMPT-03 / FR-PROMPT-04）---
+    prompt_parser = sub.add_parser(
+        "prompt",
+        help="Prompt 版 request から実行計画を提示し、承認後に orchestrate へ委譲する",
+    )
+    prompt_sub = prompt_parser.add_subparsers(dest="prompt_command")
+    prompt_plan = prompt_sub.add_parser(
+        "plan",
+        help="request を検証し、書き込みなしで実行計画と SHA-256 を提示する",
+    )
+    prompt_plan.add_argument(
+        "--request",
+        required=True,
+        metavar="PATH",
+        help="request v1（UTF-8 JSON）のパス",
+    )
+    prompt_run = prompt_sub.add_parser(
+        "run",
+        help="plan と同一の計画であることを SHA-256 で確認してから実行する",
+    )
+    prompt_run.add_argument(
+        "--request",
+        required=True,
+        metavar="PATH",
+        help="request v1（UTF-8 JSON）のパス",
+    )
+    prompt_run.add_argument(
+        "--expected-sha256",
+        required=True,
+        metavar="HEX64",
+        help="`prompt plan` が提示した計画の SHA-256（64 桁 hex）",
+    )
+
     return parser
 
 
@@ -2441,7 +2537,23 @@ def _build_config(args: argparse.Namespace):
     cfg.auto_coding_agent_review_auto_approval = args.auto_coding_agent_review_auto_approval
     cfg.create_issues = args.create_issues
     cfg.create_pr = args.create_pr
+    cfg.create_working_branch = getattr(args, "create_working_branch", True)
     cfg.issue_number = getattr(args, "issue_number", None)
+    assign_copilot_agent = bool(getattr(args, "assign_copilot_agent", False))
+    if assign_copilot_agent and not cfg.create_issues:
+        print(
+            f"{_ts()} ⚠️  --assign-copilot-agent は --create-issues と併用したときだけ有効です。指定を無視します。",
+            file=sys.stderr,
+        )
+        assign_copilot_agent = False
+    elif assign_copilot_agent and cfg.issue_number is not None:
+        print(
+            f"{_ts()} ⚠️  --issue-number で既存 Root Issue を指定しているため "
+            "--assign-copilot-agent は無視されます。既存 Issue は割り当てません。",
+            file=sys.stderr,
+        )
+        assign_copilot_agent = False
+    cfg.assign_copilot_agent = assign_copilot_agent
     cfg.enable_auto_merge = getattr(args, "enable_auto_merge", False)
     cfg.delete_local_merged_branch = getattr(args, "delete_local_merged_branch", True)
     cfg.verbose = args.verbose or not args.quiet  # verbose はデフォルト True; --quiet で抑制
@@ -2678,6 +2790,23 @@ def _build_params(args: argparse.Namespace) -> dict:
     else:
         params["steps"] = []
 
+    resume_run = (getattr(args, "resume_run", None) or "").strip()
+    if resume_run:
+        params["resume_run"] = resume_run
+    if getattr(args, "approval_gates", False):
+        params["approval_gates"] = True
+
+    # FR-PROMPT-08: `--input-alias` は開始前に正規化・重複検出する。
+    # 安全性検証（リテラル入力一致 / repo 内 / symlink 拒否 / producer 衝突）は
+    # Step 選択が確定する本関数の末尾で行う。
+    raw_aliases = getattr(args, "input_alias", None) or []
+    if raw_aliases:
+        from .input_aliases import normalize_alias_pairs
+
+        params["input_aliases"] = [
+            (a.canonical, a.actual) for a in normalize_alias_pairs(raw_aliases)
+        ]
+
     # ワークフロー固有
     if getattr(args, "app_ids", None):
         selected_app_ids = [
@@ -2806,9 +2935,35 @@ def _build_params(args: argparse.Namespace) -> dict:
         params["doc_purpose"] = getattr(args, "doc_purpose", None) or _ADOC_DEFAULT_DOC_PURPOSE
         params["max_file_lines"] = getattr(args, "max_file_lines", None) or _ADOC_DEFAULT_MAX_FILE_LINES
 
+    # FR-LOCAL-SURFACE-01 (b): registry が宣言していて、ここまでの
+    # Workflow 固有分岐で未処理の param を CLI 引数から投影する。
+    # 宣言していない Workflow へは渡さない。
+    try:
+        from .orchestrator import project_declared_workflow_params
+    except ImportError:  # pragma: no cover - top-level 実行時のフォールバック
+        from orchestrator import project_declared_workflow_params  # type: ignore[no-redef]
+
+    project_declared_workflow_params(
+        params,
+        getattr(args, "workflow", None),
+        lambda key: getattr(args, key, None),
+    )
+
     # Issue タイトル上書き
     if args.issue_title:
         params["issue_title"] = args.issue_title
+
+    # FR-PROMPT-08 / FR-PROMPT-09: 確定した Step 選択に対して別名を fail-closed で検証する。
+    # 検証しないと、repo 外のパスや不存在ファイルが Step Prompt へ注入される。
+    if params.get("input_aliases"):
+        from .input_aliases import normalize_alias_pairs, validate_aliases
+
+        validate_aliases(
+            normalize_alias_pairs(params["input_aliases"]),
+            workflow_id=getattr(args, "workflow", "") or "",
+            step_ids=list(params.get("steps") or []),
+            repo_root=Path.cwd(),
+        )
 
     return params
 
@@ -2853,6 +3008,79 @@ def _start_startup_index_refresh(command: Optional[str]) -> None:
     start_background(Path.cwd())
 
 
+# -----------------------------------------------------------------------
+# prompt サブコマンド（FR-PROMPT-03 / FR-PROMPT-04）
+# -----------------------------------------------------------------------
+
+_SHA256_HEX_LENGTH = 64
+
+
+def _cmd_prompt(args: argparse.Namespace) -> int:
+    """`prompt plan` / `prompt run` を処理する。
+
+    Prompt 版は新しい実行核を持たない。ここで行うのは request の再検証、
+    計画の組み立てと提示、承認 hash の照合、既存 `orchestrate` への委譲だけである。
+    """
+    from .input_aliases import InputAliasError
+    from .prompt_request import PromptRequestError, load_request
+    from . import prompt_execution
+
+    sub = getattr(args, "prompt_command", None)
+    if sub not in {"plan", "run"}:
+        print(
+            f"{_ts()} ❌ `hve prompt` は `plan` または `run` を指定してください。",
+            file=sys.stderr,
+        )
+        return 2
+
+    repo_root = Path.cwd()
+    try:
+        request = load_request(args.request)
+        from .gui import settings_store
+
+        plan = prompt_execution.build_execution_plan(
+            request,
+            settings=settings_store.load(),
+            repo_root=repo_root,
+            head_commit=prompt_execution.resolve_head_commit(repo_root),
+        )
+    except (PromptRequestError, InputAliasError, ValueError) as exc:
+        print(f"{_ts()} ❌ Prompt request を受理できません: {exc}", file=sys.stderr)
+        return 2
+
+    if sub == "plan":
+        code = prompt_execution.run_plan(plan, dry_run=True, cwd=repo_root)
+        if code != 0:
+            print(
+                f"{_ts()} ❌ dry-run が失敗したため計画を提示しません（終了コード {code}）。",
+                file=sys.stderr,
+            )
+            return code
+        print(prompt_execution.format_plan(plan))
+        return 0
+
+    expected = (getattr(args, "expected_sha256", "") or "").strip().lower()
+    if len(expected) != _SHA256_HEX_LENGTH or any(
+        c not in "0123456789abcdef" for c in expected
+    ):
+        print(
+            f"{_ts()} ❌ --expected-sha256 は 64 桁の hex で指定してください。実行しません。\n"
+            "   Agent が plan の出力から転記すること。利用者へ入力を求めてはならない。",
+            file=sys.stderr,
+        )
+        return 2
+    if expected != plan.sha256:
+        print(
+            f"{_ts()} ❌ 計画が承認時と一致しません（stale）。実行しません。\n"
+            f"   期待: {expected}\n   実際: {plan.sha256}\n"
+            "   Agent は計画を作り直して再提示し、利用者の承認を取り直すこと。",
+            file=sys.stderr,
+        )
+        return 2
+
+    return prompt_execution.run_plan(plan, dry_run=False, cwd=repo_root)
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """エントリポイント。
 
@@ -2895,6 +3123,9 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.command == "toolsearch":
         return _cmd_toolsearch(args)
+
+    if args.command == "prompt":
+        return _cmd_prompt(args)
 
     # 引数なし → GUI を既定として起動。PySide6 未導入時は CLI 対話ウィザードへ自動フォールバック。
     if args.command is None:
@@ -2978,6 +3209,7 @@ def _run_startup_configuration_preflight(
         repo=config.repo,
         token=config.resolve_token(),
         base_branch=config.base_branch,
+        create_working_branch=bool(getattr(config, "create_working_branch", True)),
         check_remote=check_remote,
         repo_root=Path.cwd(),
     )
@@ -3587,6 +3819,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         auto_review = False
         create_issues = False
         create_pr = False
+        create_working_branch = True
         auto_coding_agent_review = False
         auto_coding_agent_review_auto_approval = False
         review_timeout = 7200.0
@@ -4025,6 +4258,12 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         # ── Phase F: GitHub 連携 ──────────────────────────────
         create_issues = con.prompt_yes_no("GitHub Issue を作成する？", default=False)
         create_pr = con.prompt_yes_no("GitHub PR を作成する？", default=False) if not create_issues else True
+        create_working_branch = True
+        if create_issues or create_pr:
+            create_working_branch = con.prompt_yes_no(
+                "PR 用の新しい作業ブランチを作成する？",
+                default=True,
+            )
         issue_title = ""
         if create_issues:
             issue_title = con.prompt_input(
@@ -4118,6 +4357,10 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         f"PR  作成     : {'ON' if create_pr else 'OFF'}",
         f"Code Review  : {'ON' if auto_coding_agent_review else 'OFF'}",
     ]
+    if create_issues or create_pr:
+        summary_lines.append(
+            f"作業ブランチ : {'新規作成' if create_working_branch else '現在のブランチ'}"
+        )
     if auto_review:
         summary_lines.append(f"レビューモデル: {review_model_display or '(メインと同じ)'}")
     if auto_coding_agent_review:
@@ -4215,6 +4458,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     cfg.qa_answer_mode = qa_answer_mode
     cfg.create_issues = create_issues
     cfg.create_pr = create_pr or create_issues
+    cfg.create_working_branch = create_working_branch
     if cfg.create_pr and cfg.workiq_enabled:
         workiq_output_dir = (cfg.workiq_draft_output_dir or "").strip().strip("/\\") or "qa"
         if workiq_output_dir in cfg.ignore_paths:
@@ -4807,6 +5051,12 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+    if _autopilot_chain_raw and getattr(args, "assign_copilot_agent", False):
+        print(
+            f"{_ts()} ❌ --autopilot-chain と --assign-copilot-agent は同時に指定できません。",
+            file=sys.stderr,
+        )
+        return 1
     _app_id_error = _validate_app_id_args(args)
     if _app_id_error:
         print(f"{_ts()} ❌ {_app_id_error}", file=sys.stderr)
@@ -4834,10 +5084,14 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
     if args.create_issues:
         args.create_pr = True
 
-    # FR-GUI-25: --issue-number は --create-issues と併用したときだけ効力を持つ。
-    if getattr(args, "issue_number", None) is not None and not args.create_issues:
+    # FR-GUI-25: --issue-number は --create-issues または --create-pr と併用したときだけ効力を持つ。
+    if (
+        getattr(args, "issue_number", None) is not None
+        and not (args.create_issues or args.create_pr)
+    ):
         print(
-            f"{_ts()} ⚠️  --create-issues が指定されていないため --issue-number は無視されます。",
+            f"{_ts()} ⚠️  --create-issues / --create-pr のどちらも指定されていないため "
+            "--issue-number は無視されます。",
             file=sys.stderr,
         )
 

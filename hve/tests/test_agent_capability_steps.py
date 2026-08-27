@@ -22,7 +22,7 @@ from hve.workflow_registry import get_workflow
 
 _REPO = Path(__file__).resolve().parents[2]
 _PROMPTS = _REPO / ".github" / "prompts"
-_TEMPLATES = _REPO / ".github" / "scripts" / "templates" / "aagd"
+_TEMPLATES = _REPO / ".github" / "prompts" / "steps" / "aagd"
 _CONTRACTS = _REPO / ".github" / "io-contracts"
 _BASH_REGISTRY = _REPO / ".github" / "scripts" / "bash" / "lib" / "workflow-registry.sh"
 _CLOUD_WORKFLOW = _REPO / ".github" / "workflows" / "auto-ai-agent-dev-reusable.yml"
@@ -80,8 +80,8 @@ class TestPromptAndTemplate(unittest.TestCase):
         for step_id in _STEPS:
             with self.subTest(step=step_id):
                 step = _step(step_id)
-                self.assertEqual(step.body_template_path, f"templates/aagd/step-{step_id}.md")
-                self.assertTrue((_TEMPLATES / f"step-{step_id}.md").is_file())
+                self.assertEqual(step.body_template_path, f".github/prompts/steps/aagd/step-{step_id}.prompt.md")
+                self.assertTrue((_TEMPLATES / f"step-{step_id}.prompt.md").is_file())
 
     def test_io_contracts_exist_and_declare_the_output(self) -> None:
         for step_id, (agent, output) in _STEPS.items():

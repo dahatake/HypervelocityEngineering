@@ -28,18 +28,18 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _PROMPTS_DIR = _REPO_ROOT / ".github" / "prompts"
-_TEMPLATES_DIR = _REPO_ROOT / ".github" / "scripts" / "templates" / "asdw-web"
+_TEMPLATES_DIR = _REPO_ROOT / ".github" / "prompts" / "steps" / "asdw-web"
 _PROMPT = _PROMPTS_DIR / "Dev-Microservice-Azure-AddServiceDeploy.prompt.md"
 _DESIGN_PROMPT = _PROMPTS_DIR / "Dev-Microservice-Azure-AddServiceDesign.prompt.md"
 _TESTCODING_PROMPT = _PROMPTS_DIR / "Dev-Microservice-Azure-AddServiceTestCoding.prompt.md"
 _TESTING_PROMPT = _PROMPTS_DIR / "Dev-Microservice-Azure-AddServiceTesting.prompt.md"
 _COMPUTE_DESIGN_PROMPT = _PROMPTS_DIR / "Dev-Microservice-Azure-ComputeDesign.prompt.md"
-_AAD_STEP_2_5 = _REPO_ROOT / ".github" / "scripts" / "templates" / "aad-web" / "step-2.5.md"
-_STEP_2_1 = _TEMPLATES_DIR / "step-2.1.md"
-_STEP_2_2 = _TEMPLATES_DIR / "step-2.2.md"
-_STEP_2_3 = _TEMPLATES_DIR / "step-2.3.md"
-_STEP_2_4 = _TEMPLATES_DIR / "step-2.4.md"
-_STEP_3_1 = _TEMPLATES_DIR / "step-3.1.md"
+_AAD_STEP_2_5 = _REPO_ROOT / ".github" / "prompts" / "steps" / "aad-web" / "step-2.5.prompt.md"
+_STEP_2_1 = _TEMPLATES_DIR / "step-2.1.prompt.md"
+_STEP_2_2 = _TEMPLATES_DIR / "step-2.2.prompt.md"
+_STEP_2_3 = _TEMPLATES_DIR / "step-2.3.prompt.md"
+_STEP_2_4 = _TEMPLATES_DIR / "step-2.4.prompt.md"
+_STEP_3_1 = _TEMPLATES_DIR / "step-3.1.prompt.md"
 
 
 def test_addservice_deploy_prompt_requires_ac_verification_before_turn_end() -> None:

@@ -123,7 +123,8 @@ def _read_inventory(root: Path) -> dict[str, list[dict[str, str]]]:
 
 
 def _mapping_paths(mapping_text: str, requirement_id: str) -> set[str]:
-    heading = re.search(rf"^####\s+{re.escape(requirement_id)}(?:\s|—|-|$)(.*?)(?=^####\s|\Z)", mapping_text, re.MULTILINE | re.DOTALL)
+    # 要求テストマッピングは節を `###` と `####` の両方で書いている。
+    heading = re.search(rf"^#{{3,4}}\s+{re.escape(requirement_id)}(?:\s|—|-|$)(.*?)(?=^#{{1,4}}\s|\Z)", mapping_text, re.MULTILINE | re.DOTALL)
     if heading is None:
         return set()
     paths: set[str] = set()

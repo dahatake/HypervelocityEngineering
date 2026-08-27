@@ -2,16 +2,16 @@
 
 > **開発中のテンプレートリポジトリです。** 実装は随時更新されるため、README は「概要 + 導線」に絞り、実体確認できる内容だけを記載しています。
 
-Hypervelocity Engineering（HVE）は、GitHub Copilot cloud agent と `hve` CLI を使って、要求定義・設計・実装・ドキュメント生成を段階実行する Vibe Coding フレームワークです。現在のテンプレート実装は Azure を前提にしています。
+Hypervelocity Engineering（HVE）は、GitHub Copilot cloud agent、`hve` CLI / GUI、自然言語の Prompt 版を入口に、要求定義・設計・実装・ドキュメント生成を段階実行する Vibe Coding フレームワークです。現在のテンプレート実装は Azure を前提にしています。
 
 ## 目次
 
-- [はじめての方へ（3 つの始め方）](#はじめての方へ-3-つの始め方)
 - [目的](#目的)
 - [全体像](#全体像)
-- [技術アーキテクチャ](#技術アーキテクチャ)
+- [はじめての方へ（4 つの入口）](#はじめての方へ-4-つの入口)
+- [方式比較表（5 つの使い方）](#方式比較表5-つの使い方)
 - [用語](#用語)
-- [方式比較表（4 つの使い方）](#方式比較表4-つの使い方)
+- [技術アーキテクチャ](#技術アーキテクチャ)
 - [Issue Template 一覧](#issue-template-一覧)
 - [GitHub Actions workflows](#github-actions-workflows)
 - [`hve` CLI](#hve-cli)
@@ -19,33 +19,26 @@ Hypervelocity Engineering（HVE）は、GitHub Copilot cloud agent と `hve` CLI
 - [リポジトリ構造](#リポジトリ構造)
 - [ライセンス](#ライセンス)
 
-## はじめての方へ (3 つの始め方)
-
-利用したい Orchestrator を選んで、対応する Getting Started を開いてください。いずれもチュートリアル形式で、セットアップからサンプルの起動までをカバーしています。
-
-| Orchestrator | 入口 | Getting Started |
-|---|---|---|
-| HVE Cloud Agent Orchestrator | GitHub Actions（Issue Template） | [hve-cloud-getting-started.md](users-guide/hve-cloud-getting-started.md) |
-| HVE CLI Orchestrator | ローカル端末 `python -m hve cli` | [hve-cli-getting-started.md](users-guide/hve-cli-getting-started.md) |
-| HVE GUI Orchestrator | ローカル端末 `python -m hve`（GUI） | [hve-gui-getting-started.md](users-guide/hve-gui-getting-started.md) |
-
 ## 目的
 
 このリポジトリの目的は、**業務要件の整理から設計・実装・検証までを、再現可能なワークフローとして運用すること**です。
 
 - GitHub Issues / Issue Template を起点に Web 上で実行する
 - `python -m hve` からローカルで同じ Workflow / Prompt を実行する
+- Copilot へ日本語で依頼し、計画を承認してから同じローカル Workflow を実行する
 - `knowledge/` を中核ストアとして、`docs-original/`・`qa/`・既存コードの情報を再利用する
 
 ## 全体像
 
-HVE は「タスク定義書（Issue Template / CLI 起動メタデータ）」を入口とし、`hve` Orchestrator が `.github/prompts/` の Prompt を DAG に沿って逐次起動し、`docs/` / `knowledge/` / `src/` / `test/` などの成果物を生成します。
+HVE は Issue Template、CLI / GUI、自然言語の Prompt 版を入口とし、選択した実行経路が Workflow に沿って `.github/prompts/` の Prompt を起動し、`docs/` / `knowledge/` / `src/` / `test/` などの成果物を生成します。
+
+**Prompt 版** はこの入口を 1 段手前へ延ばしたものです。日本語の依頼文を Copilot が **request（JSON）** へ変換し、HVE が検証した実行計画を提示します。利用者が計画を承認してはじめて、既存の `hve orchestrate` が起動されます。新しい実行エンジンは持ちません。
 
 ![README 用アーキテクチャ概要図](users-guide/images/readme-architecture-overview.svg)
 
 ### 3 段構造
 
-各ワークフローは **(1) 入力ドキュメント → (2) Prompt チェーン → (3) 成果物ファイル** の 3 段で表現されます。上流の成果物が下流ワークフローの入力になるため、「ARD → AAS → AAD-WEB/ADFD/AAG → ASDW-WEB/ADFDV/AAGD」の順で進めるのが標準です。
+各ワークフローは **(1) 入力ドキュメント → (2) Prompt チェーン → (3) 成果物ファイル** の 3 段で表現されます。上流の成果物が下流ワークフローの入力になるため、「ARD → AAS → AAD-WEB / ADFD / ADA → ASDW-WEB / ADFDV / AAG → AAGD」の順で進めます。`AAR` は既存サービスへ検索基盤を追加する独立の Add-on です。
 
 ![README 用 3 段構造フロー図](users-guide/images/readme-3-tier-flow.svg)
 
@@ -62,15 +55,83 @@ HVE は「タスク定義書（Issue Template / CLI 起動メタデータ）」�
 
 詳細は [km-guide.md](users-guide/km-guide.md) を参照してください。Markdown 以外の設計書を取り込む場合は、前段として [00-design-doc-ingestion.md](users-guide/00-design-doc-ingestion.md) を参照してください。
 
+## はじめての方へ (4 つの入口)
+
+利用したい入口を選んで、対応する Getting Started を開いてください。いずれもチュートリアル形式で、セットアップからサンプルの起動までをカバーしています。
+
+| 利用面 | 入口 | Getting Started |
+|---|---|---|
+| HVE Cloud Agent Orchestrator | GitHub Actions（Issue Template） | [hve-cloud-getting-started.md](users-guide/hve-cloud-getting-started.md) |
+| HVE CLI Orchestrator | ローカル端末 `python -m hve cli` | [hve-cli-getting-started.md](users-guide/hve-cli-getting-started.md) |
+| HVE GUI Orchestrator | ローカル端末 `python -m hve`（GUI） | [hve-gui-getting-started.md](users-guide/hve-gui-getting-started.md) |
+| HVE Prompt 版（ローカルプレビュー） | Copilot へ日本語の依頼文を貼り付ける（コマンド入力不要） | [hve-prompt-getting-started.md](users-guide/hve-prompt-getting-started.md) |
+
+> **Prompt 版**: コマンドを打たずに日本語だけで進められます。貼り付け用の依頼文は [users-guide/prompts/README.md](users-guide/prompts/README.md) にあります。モデルを固定したい場合は、先に GUI（`python -m hve`）で設定を 1 回保存してください（任意）。
+
+> **Prompt 版は 4 つ目の Orchestrator ではありません。** 自然言語を型付き request に変換し、既存の `hve orchestrate` へ委譲するローカル実行のプレビューです。GitHub.com の Cloud Agent Orchestrator からの Prompt 実行には対応していません。
+
+### Prompt 版をはじめて使う
+
+CLI のオプションを覚えずに、日本語の依頼文からワークフローを起動する入口です。
+セットアップは CLI / GUI と共通のため、**環境構築を済ませていればすぐ使えます**。
+
+| # | やること | 参照先 |
+|---|---|---|
+| 1 | 環境構築（`.venv` 作成、Copilot CLI ログイン） | [hve-cli-getting-started.md](users-guide/hve-cli-getting-started.md) または [hve-gui-getting-started.md](users-guide/hve-gui-getting-started.md) |
+| 2 | （任意）GUI（`python -m hve`）を 1 回起動してモデル等の設定を保存する。未保存なら既定値が使われる | [hve-gui-getting-started.md](users-guide/hve-gui-getting-started.md) |
+| 3 | 依頼文を選んで Copilot（GUI 内の Copilot CLI タブ / GitHub Copilot CLI / VS Code Copilot Chat）へ貼り付ける | [users-guide/prompts/README.md](users-guide/prompts/README.md) |
+| 4 | Copilot が提示した実行計画を読む（特に Step の範囲） | [hve-prompt-getting-started.md](users-guide/hve-prompt-getting-started.md) |
+| 5 | 問題なければ「この計画で実行してください」と日本語で伝える | 同上 |
+
+- **あなたがコマンドを打つ必要はありません。** CLI の実行、request ファイルの管理、plan SHA-256 の転記はすべて Copilot が代行します。
+- **Step 3 の依頼文は自分で書いても構いません。** 変換手順は Agent Skill [.github/skills/hve-prompt-edition/SKILL.md](.github/skills/hve-prompt-edition/SKILL.md) が担い、Workflow / Step / パラメータが一意に定まらない場合は Copilot が推測せずに質問します。
+- **計画の提示段階では成果物（`docs/` / `src/` / `knowledge/` / `qa/`）を生成・変更しません。** 承認した計画と plan SHA-256 が一致した場合だけ実行されます。自然言語の承認だけでは書き込みは始まりません。
+- **入力ファイル名が canonical と違う場合** は実行時エイリアスで指定できます → [users-guide/prompts/custom-inputs.md](users-guide/prompts/custom-inputs.md)
+- **複数 Workflow をまとめて実行したい場合** → [users-guide/prompts/cross-workflow.md](users-guide/prompts/cross-workflow.md)
+- 内部構造を知りたい場合 → [hve-technical-architecture.md](users-guide/hve-technical-architecture.md) の「2.2 Prompt 版」
+
+## 方式比較表（5 つの使い方）
+
+| 方式 | 入口 | 実行場所 | 向いているケース | 参照先 |
+|---|---|---|---|---|
+| 方式 1 | 個別 Issue に Prompt を手動アサイン | GitHub Actions | 単一タスクの試行、特定 Step のデバッグ | [web-ui-guide.md#方式1-copilot-cloud-agent-手動実行](users-guide/web-ui-guide.md#方式1-copilot-cloud-agent-手動実行) |
+| 方式 2 | Issue Template から親 Issue を作成 | GitHub Actions | Sub Issue 自動生成を含むフルオーケストレーション | [web-ui-guide.md#方式2-ワークフローオーケストレーションweb](users-guide/web-ui-guide.md#方式2-ワークフローオーケストレーションweb) |
+| 方式 3 | `python -m hve cli` / `python -m hve orchestrate` | PC / Mac / 仮想マシン | GitHub Actions を使わずに同じ DAG をターミナルで実行したい場合 | [hve-cli-orchestrator-guide.md](users-guide/hve-cli-orchestrator-guide.md) |
+| 方式 4 | `python -m hve`（既定）/ `python -m hve gui` | PC / Mac / 仮想マシン | GUI ウィザードでオプションを選択して実行したい場合 | [hve-gui-orchestrator-guide.md](users-guide/hve-gui-orchestrator-guide.md) |
+| 方式 5 | Copilot へ日本語の依頼文 → 計画を確認 → 「実行してください」と伝える | PC / Mac / 仮想マシン | CLI のオプションを覚えず、コマンドを打たずに文章で依頼して計画を確認してから実行したい場合 | [hve-prompt-getting-started.md](users-guide/hve-prompt-getting-started.md) |
+
+方式 2 では、Issue 作成後に [`auto-orchestrator-dispatcher.yml`](.github/workflows/auto-orchestrator-dispatcher.yml)（`name: HVE Cloud Agent Orchestrator Dispatcher`）がラベルを見て対象 Workflow を判定し、対応する reusable workflow を起動します。
+
+## 用語
+
+| 用語 | この README での意味 |
+|---|---|
+| **Prompt** | `.github/prompts/` 配下の再利用 Prompt 定義ファイル（`*.prompt.md`）。例: `Arch-ApplicationAnalytics`, `Dev-Dataflow-FunctionsDeploy`, `QA-DocConsistency`, `KnowledgeManager`。`workflow_registry.py` の各 Step は `custom_agent` フィールドでこの Prompt 名を指定します（フィールド名は歴史的経緯で残置）。 |
+| **Workflow** | `hve/workflow_registry.py` の Workflow ID と、それに対応する GitHub Actions ワークフロー群 |
+| **Phase** | `users-guide/00`〜`08` と Knowledge / Documentation 系ガイドで区切った利用フェーズ |
+| **Chain** | 複数の Workflow / Step を前後関係で束ねた流れ。README では Phase の進行順として扱います |
+
+### Prompt の見方
+
+README では全 Prompt の列挙は行わず、命名規則と代表例だけを示します。完全一覧は [workflow-reference.md](users-guide/workflow-reference.md) を参照してください。
+
+| 系統 | 役割 | 実在する代表例 |
+|---|---|---|
+| `Arch-*` | 分析・設計 | `Arch-ApplicationAnalytics`, `Arch-Microservice-DomainAnalytics`, `Arch-Dataflow-AppSpec` |
+| `Dev-*` | 実装・デプロイ | `Dev-Microservice-Azure-ServiceCoding-AzureFunctions`, `Dev-Dataflow-DataDeploy`, `Dev-Dataflow-FunctionsDeploy` |
+| `Doc-*` | ソースコード由来の技術文書生成 | `Doc-APISpec`, `Doc-ComponentDesign`, `Doc-TechDebt` |
+| `QA-*` | 品質確認・レビュー | `QA-AzureArchitectureReview`, `QA-DocConsistency`, `QA-RequirementsConformanceEval` |
+| 固有名 | 例外的な単独 Prompt | `KnowledgeManager`, `E2ETesting-Playwright` |
+
 ## 技術アーキテクチャ
 
 3 つの Orchestrator（Cloud Agent / CLI / GUI）、メッセージフロー、4 ゾーン疎結合境界（HVE Python 制御コード / Copilot CLI SDK / Copilot CLI が管理する MCP・Plugin・Skill・認証 / HVE が管理する Prompt・Workflow・Skill）、認証と資格情報の取扱いを 7 枚の SVG 図と共に詳述したドキュメントを用意しています。
 
 - [users-guide/hve-technical-architecture.md](users-guide/hve-technical-architecture.md)
 
-開発者・運用者で内部構造を把握したい方は最初にこのドキュメントを参照してください。
+内部構造を把握する場合は、このドキュメントを参照してください。
 
-次の図は、3 Orchestrator が共有する実行エンジン（`orchestrator.py` → `dag_planner.py` → `dag_executor.py` → `runner.py` → `github-copilot-sdk`）と、ソフトウェアエンジニアが編集・設定できる **カスタマイズ点**（`workflow_registry.py` / `.github/prompts/` / `.github/io-contracts/` / `.github/skills/`）および **主要パラメータ／環境変数** を 1 枚に俯瞰したものです。内部構造の詳細図（7 枚）は上記の技術アーキテクチャ文書を参照してください。
+次の図は、CLI / GUI が共有するローカル実行エンジン（`orchestrator.py` → `dag_planner.py` → `dag_executor.py` → `runner.py` → `github-copilot-sdk`）、Cloud の別経路、Prompt 版の委譲先、編集・設定できる **カスタマイズ点**（`workflow_registry.py` / `.github/prompts/` / `.github/io-contracts/` / `.github/skills/`）を 1 枚に俯瞰したものです。内部構造の詳細図（7 枚）は上記の技術アーキテクチャ文書を参照してください。
 
 ![HVE アプリケーションアーキテクチャ（カスタマイズ／パラメータ観点）](users-guide/images/readme-app-architecture-detail.svg)
 
@@ -97,41 +158,9 @@ HVE は「タスク定義書（Issue Template / CLI 起動メタデータ）」�
 > [!NOTE]
 > `aad` / `asdw` は bash 旧実装との parity 照合で使われる旧 ID です（`hve/dag_parity.py` の `DEFAULT_WORKFLOW_ALIASES` 参照）。`hve/__main__.py` のヘルプ例や使用例には `aad` / `asdw` が残りますが、`workflow_registry.py` の canonical な ID は `aad-web` / `asdw-web` で、README では canonical 表記を採用しています。
 
-## 用語
-
-| 用語 | この README での意味 |
-|---|---|
-| **Prompt** | `.github/prompts/` 配下の再利用 Prompt 定義ファイル（`*.prompt.md`）。例: `Arch-ApplicationAnalytics`, `Dev-Dataflow-FunctionsDeploy`, `QA-DocConsistency`, `KnowledgeManager`。`workflow_registry.py` の各 Step は `custom_agent` フィールドでこの Prompt 名を指定します（フィールド名は歴史的経緯で残置）。 |
-| **Workflow** | `hve/workflow_registry.py` の Workflow ID と、それに対応する GitHub Actions ワークフロー群 |
-| **Phase** | `users-guide/00`〜`08` と Knowledge / Documentation 系ガイドで区切った利用フェーズ |
-| **Chain** | 複数の Workflow / Step を前後関係で束ねた流れ。README では Phase の進行順として扱います |
-
-### Prompt の見方
-
-README では全 Prompt の列挙は行わず、命名規則と代表例だけを示します。完全一覧は [workflow-reference.md](users-guide/workflow-reference.md) を参照してください。
-
-| 系統 | 役割 | 実在する代表例 |
-|---|---|---|
-| `Arch-*` | 分析・設計 | `Arch-ApplicationAnalytics`, `Arch-Microservice-DomainAnalytics`, `Arch-Dataflow-AppSpec` |
-| `Dev-*` | 実装・デプロイ | `Dev-Microservice-Azure-ServiceCoding-AzureFunctions`, `Dev-Dataflow-DataDeploy`, `Dev-Dataflow-FunctionsDeploy` |
-| `Doc-*` | ソースコード由来の技術文書生成 | `Doc-APISpec`, `Doc-ComponentDesign`, `Doc-TechDebt` |
-| `QA-*` | 品質確認・レビュー | `QA-CodeQualityScan`, `QA-DocConsistency`, `QA-PostImproveVerify` |
-| 固有名 | 例外的な単独 Prompt | `KnowledgeManager`, `E2ETesting-Playwright` |
-
-## 方式比較表（4 つの使い方）
-
-| 方式 | 入口 | 実行場所 | 向いているケース | 参照先 |
-|---|---|---|---|---|
-| 方式 1 | 個別 Issue に Prompt を手動アサイン | GitHub Actions | 単一タスクの試行、特定 Step のデバッグ | [web-ui-guide.md#方式1-copilot-cloud-agent-手動実行](users-guide/web-ui-guide.md#方式1-copilot-cloud-agent-手動実行) |
-| 方式 2 | Issue Template から親 Issue を作成 | GitHub Actions | Sub Issue 自動生成を含むフルオーケストレーション | [web-ui-guide.md#方式2-ワークフローオーケストレーションweb](users-guide/web-ui-guide.md#方式2-ワークフローオーケストレーションweb) |
-| 方式 3 | `python -m hve cli` / `python -m hve orchestrate` | PC / Mac / 仮想マシン | GitHub Actions を使わずに同じ DAG をターミナルで実行したい場合 | [hve-cli-orchestrator-guide.md](users-guide/hve-cli-orchestrator-guide.md) |
-| 方式 4 | `python -m hve`（既定）/ `python -m hve gui` | PC / Mac / 仮想マシン | GUI ウィザードでオプションを選択して実行したい場合 | [hve-gui-orchestrator-guide.md](users-guide/hve-gui-orchestrator-guide.md) |
-
-方式 2 では、Issue 作成後に [`auto-orchestrator-dispatcher.yml`](.github/workflows/auto-orchestrator-dispatcher.yml)（`name: HVE Cloud Agent Orchestrator Dispatcher`）がラベルを見て対象 Workflow を判定し、対応する reusable workflow を起動します。
-
 ## Issue Template 一覧
 
-`.github/ISSUE_TEMPLATE/*.yml` に存在する 12 個のテンプレートです。README では「どのフォームを選ぶか」を判断できる粒度だけを記載し、詳細な手順は users-guide に委譲します。下表の「主な入力」列は代表項目の抜粋です。各テンプレートには他にレビュー・QA・自己改善などのチェックボックスや追加項目がある場合があり、全項目は各 `.github/ISSUE_TEMPLATE/*.yml` または [workflow-reference.md](users-guide/workflow-reference.md#issue-テンプレート一覧) を参照してください。
+`.github/ISSUE_TEMPLATE/*.yml` に存在する 13 個のテンプレートです。README では「どのフォームを選ぶか」を判断できる粒度だけを記載し、詳細な手順は users-guide に委譲します。下表の「主な入力」列は代表項目の抜粋です。各テンプレートには他にレビュー・QA・自己改善などのチェックボックスや追加項目がある場合があり、全項目は各 `.github/ISSUE_TEMPLATE/*.yml` または [workflow-reference.md](users-guide/workflow-reference.md#issue-テンプレート一覧) を参照してください。
 
 > 自己改善（Self-Improve）は独立の Issue Template を持たず、上記の設計・実装テンプレートの `enable_self_improve` チェックボックスで起動します。
 
@@ -140,6 +169,7 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 | ファイル | UI 名 (`name`) | 使うとき | 主な入力 |
 |---|---|---|---|
 | `setup-labels.yml` | `Setup Labels: ラベル初期セットアップ` | リポジトリ作成直後にラベル群を投入・更新したい | `confirm` |
+| `auto-requirement-definition.yml` | `Auto Requirement Definition（要求定義）` | 事業分析からユースケース、APP 一覧、APP 別要求定義書までを生成したい | `branch`, `groups`, `company_name`, `target_business`, `runner_type`, `model` |
 | `app-architecture-design.yml` | `Architecture Design（アーキテクチャ設計）` | ユースケースからアプリ構成を設計したい | `branch`, `runner_type`, `steps`, `model`, `review_model`, `qa_model` |
 | `web-app-design.yml` | `Web App Design` | 対象 APP-ID の Web / Microservice 設計を進めたい | `branch`, `runner_type`, `app_ids`, `steps`, `model`, `review_model` |
 | `web-app-dev.yml` | `Web App Dev & Deploy` | 対象 APP-ID の Web / Microservice 実装・デプロイを進めたい | `app_ids`, `branch`, `runner_type`, `resource_group`, `steps`, `model` |
@@ -166,11 +196,14 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 | **HVE CLI Orchestrator** | PC / Mac / 仮想マシン | ローカル端末での `python -m hve cli` / `python -m hve orchestrate --workflow <id>` | `hve/__main__.py` / `hve/orchestrator.py`。詳細は [hve-cli-orchestrator-guide.md](users-guide/hve-cli-orchestrator-guide.md) |
 | **HVE GUI Orchestrator** | PC / Mac / 仮想マシン | ローカル端末での `python -m hve`（既定）/ `python -m hve gui` | `hve/gui/main_window.py`（PySide6 `QMainWindow` + `QStackedWidget` の 2 ページ構成）。詳細は [hve-gui-orchestrator-guide.md](users-guide/hve-gui-orchestrator-guide.md)。多言語対応（日本語 / English）— [hve/gui/i18n/README.md](hve/gui/i18n/README.md) |
 
+> **Prompt 版は 4 つ目の Orchestrator ではありません。** 自然言語を request へ変換して検証し、承認後に **HVE CLI Orchestrator** を子プロセスとして起動する利用面（surface）です。境界の詳細は [hve-technical-architecture.md](users-guide/hve-technical-architecture.md) の「2.2 Prompt 版」を参照してください。
+
 - `.github/workflows/auto-orchestrator-dispatcher.yml` — issue-label-driven dispatcher。Issue Template 向け reusable orchestrator を呼び出します。
 - `.github/workflows/auto-pr-transition-dispatcher.yml` — PR transition dispatcher。QA/review/create-subissues の transition workflow を呼び出します。
 
 ### Reusable issue-template orchestrators
 `auto-orchestrator-dispatcher.yml` から呼び出され、Issue Template ラベルと紐づく orchestrator 群です。
+- `.github/workflows/auto-requirement-definition-reusable.yml`
 - `.github/workflows/auto-app-selection-reusable.yml`
 - `.github/workflows/auto-app-detail-design-web-reusable.yml`
 - `.github/workflows/auto-app-dev-microservice-web-reusable.yml`
@@ -186,7 +219,7 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 
 ### Reusable helper workflows
 Issue Template とは紐づかず、他 workflow から `workflow_call` で利用される部品です。
-- `.github/workflows/check-auto-qa-skip-reusable.yml` — auto-QA の skip 判定。上記 reusable orchestrator 9 件から呼ばれます。
+- `.github/workflows/check-auto-qa-skip-reusable.yml` — auto-QA の skip 判定。上記 reusable orchestrator のうち 10 件から呼ばれます。
 - `.github/workflows/mdq-index-reusable.yml` — `mdq` 索引の構築。現時点で `.github/workflows/` 内に `uses:` 呼び出し元はありません。
 
 ### PR / Issue automation workflows
@@ -203,7 +236,6 @@ Issue Template とは紐づかず、他 workflow から `workflow_call` で利�
 - `.github/workflows/restore-auto-qa-label.yml`
 - `.github/workflows/auto-issue-qa-ready-transition.yml`
 - `.github/workflows/auto-human-resolved-to-ready.yml`
-- `.github/workflows/auto-blocked-to-human-required.yml`
 - `.github/workflows/advance-subissues.yml`
 - `.github/workflows/link-copilot-pr-to-issue.yml`
 - `.github/workflows/auto-self-improve-close.yml`
@@ -225,18 +257,23 @@ Issue Template とは紐づかず、他 workflow から `workflow_call` で利�
 - `.github/workflows/test-cli-scripts.yml`
 - `.github/workflows/bats-tests.yml`
 
-### Scheduled operational workflows
-- `.github/workflows/aas-timeout-monitor.yml`
-- `.github/workflows/audit-plans.yml`
-- `.github/workflows/tdd-retry-metrics.yml`
-- `.github/workflows/auto-qa-timeout-watcher.yml`
-- `.github/workflows/label-consistency-audit.yml`
-- `.github/workflows/sync-azure-skills.yml`
+### Operational monitoring workflows
+
+従来 6 件あった定期実行のうち 5 件を停止し、FR-CLOUD-41 が要求する毎時の HITL エスカレーションだけを維持します。
+
+- `.github/workflows/auto-blocked-to-human-required.yml` — 唯一の定期実行 workflow（毎時）＋手動実行。
+- `.github/workflows/aas-timeout-monitor.yml` — 手動実行のみ。
+- `.github/workflows/auto-qa-timeout-watcher.yml` — 手動実行のみ。
+- `.github/workflows/label-consistency-audit.yml` — Issue イベント駆動＋手動実行。
+- `.github/workflows/sync-azure-skills.yml` — 手動実行のみ。
+
+> `audit-plans.yml` と `tdd-retry-metrics.yml` は削除済みです。`plan-validation-and-labeling.yml` は PR で変更された `plan.md` だけを検証し、リポジトリ全件の定期再監査は代替しません。詳しい手動操作は [workflow-reference.md](users-guide/workflow-reference.md#運用監視-workflow-の起動方法) を参照してください。
 
 ### Manual workflows
 以下は棚卸し時点で `workflow_dispatch` が確認された manual / confirmation-required workflow です（未使用とは断定しない）。
 - `.github/workflows/rollback-drill.yml` — 意図的に保持する手動 `workflow_dispatch` 運用 workflow です。rollback drill / rollback verification で使用し、`uses:` 呼び出し元がないことは未使用の根拠になりません（手動実行が意図された経路です）。
 - `.github/workflows/self-hosted-runner-smoke-test.yml`
+- `.github/workflows/test-hve-gui-macos.yml` — 費用見積りを利用者が明示承認した1回だけ、`macos-15` で HVE GUI の Cocoa smoke または full suite を実行します。既存 run の rerun は実行しません。
 
 ### Reusable E2E workflow intentionally retained
 - `.github/workflows/e2e-playwright-reusable.yml` — reusable な E2E Playwright workflow として意図的に保持します。workflow ファイル内で確定した `uses:` 呼び出しは見つかっておらず、現在は複数のテキスト参照（例: `.github/workflows/auto-app-dev-microservice-web-reusable.yml` の Sub Issue 向け生成指示、`.github/prompts/E2ETesting-Playwright.prompt.md`、`users-guide/workflow-reference.md`）で運用上参照されています。削除/改名時は、これらの参照と依存する生成指示を合わせて更新してください。
@@ -256,7 +293,8 @@ Issue Template とは紐づかず、他 workflow から `workflow_call` で利�
 | `gui` | GUI ウィザードを明示起動 | — |
 | `run` | インタラクティブモードでワークフローを選んで実行（中身は対話型 wizard） | wizard で対話入力 |
 | `cli` | `run` のエイリアス（引数なし起動が GUI に変わったため導入した明示起動用コマンド） | 同上 |
-| `orchestrate` | Workflow ID を指定して DAG を実行 | `--workflow/-w`, `--model`, `--review-model`, `--qa-model`, `--max-parallel`, `--auto-qa`, `--auto-contents-review`, `--auto-coding-agent-review`, `--create-issues`, `--mcp-config`, `--branch`, `--steps`, `--app-id`, `--app-ids`, `--resource-group`, `--purpose`, `--target-scope`, `--depth`, `--focus-areas`, `--target-dirs`, `--exclude-patterns`, `--doc-purpose`, `--max-file-lines`, `--dry-run` |
+| `orchestrate` | Workflow ID を指定して DAG を実行 | `--workflow/-w`, `--model`, `--review-model`, `--qa-model`, `--max-parallel`, `--auto-qa`, `--auto-contents-review`, `--auto-coding-agent-review`, `--create-issues`, `--mcp-config`, `--branch`, `--steps`, `--app-id`, `--app-ids`, `--resource-group`, `--purpose`, `--target-scope`, `--depth`, `--focus-areas`, `--target-dirs`, `--exclude-patterns`, `--doc-purpose`, `--max-file-lines`, `--input-alias`, `--dry-run` |
+| `prompt` | **Prompt 版**。request（JSON）から実行計画を提示し、承認後に `orchestrate` へ委譲（詳細: [hve-prompt-getting-started.md](users-guide/hve-prompt-getting-started.md)） | `plan --request <path>` / `run --request <path> --expected-sha256 <64 桁 hex>` |
 | `qa-merge` | 回答済みの質問票をマージし、統合 QA ドキュメントを生成 | `qa/` 配下の回答ファイル指定 |
 | `workiq-doctor` | Work IQ 連携の診断 | `--json`, `--skip-mcp-probe`, `--tenant-id`, `--timeout`, `--sdk-probe`, `--sdk-tool-probe`, `--sdk-event-trace`, `--sdk-tool-probe-tools-all` |
 | `emit-prompt` | プロンプトテンプレートの出力（ワークフロー内部用途・テスト用途） | `--comment-body` 等 |
@@ -277,6 +315,10 @@ python -m hve orchestrate --workflow adi --target-scope docs-original/ --depth l
 
 # knowledge/ を再生成
 python -m hve orchestrate --workflow akm --sources both
+
+# Prompt 版: 計画だけを取得し、SHA-256 を確認してから実行
+python -m hve prompt plan --request <request.json のパス>
+python -m hve prompt run  --request <request.json のパス> --expected-sha256 <plan が表示した値>
 ```
 
 ### ランチャースクリプトでの起動
@@ -319,6 +361,9 @@ git commit -m "chore: mark hve.sh as executable"
 | [hve-cloud-getting-started.md](users-guide/hve-cloud-getting-started.md) | HVE Cloud Agent Orchestrator はじめかた（GitHub Actions） |
 | [hve-cli-getting-started.md](users-guide/hve-cli-getting-started.md) | HVE CLI Orchestrator はじめかた（ローカル CLI） |
 | [hve-gui-getting-started.md](users-guide/hve-gui-getting-started.md) | HVE GUI Orchestrator はじめかた（ローカル GUI） |
+| [hve-prompt-getting-started.md](users-guide/hve-prompt-getting-started.md) | HVE Prompt 版 はじめかた（自然言語 → 計画 → 承認 → 実行） |
+| [prompts/README.md](users-guide/prompts/README.md) | Prompt 版の貼り付け用スニペット索引（Workflow 別） |
+| [prompt-reference/README.md](users-guide/prompt-reference/README.md) | HVE が使用する固定 Prompt の全文コピー・利用状態・デバッグ手順 |
 | [web-ui-guide.md](users-guide/web-ui-guide.md) | 方式 1 / 方式 2（GitHub Web 実行） |
 | [hve-cli-orchestrator-guide.md](users-guide/hve-cli-orchestrator-guide.md) | 方式 3（ローカル CLI 実行） |
 | [hve-gui-orchestrator-guide.md](users-guide/hve-gui-orchestrator-guide.md) | 方式 4（GUI ウィザード実行） |
@@ -347,6 +392,7 @@ git commit -m "chore: mark hve.sh as executable"
 | Knowledge Management | [km-guide.md](users-guide/km-guide.md) |
 | Source Code からの Documentation | [sourcecode-documentation.md](users-guide/sourcecode-documentation.md) |
 | プロンプト例 | [prompt-examples.md](users-guide/prompt-examples.md) |
+| Prompt 版の貼り付け用スニペット | [prompts/README.md](users-guide/prompts/README.md) |
 
 ### セットアップ・運用オプション
 

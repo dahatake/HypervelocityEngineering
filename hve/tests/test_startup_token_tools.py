@@ -78,6 +78,25 @@ class TestMeasureStartupTokens(unittest.TestCase):
     def setUp(self) -> None:
         self.mod = _load_tool_module("measure_startup_tokens.py", "measure_startup_tokens_mod")
 
+    def test_lightweight_prompt_uses_the_externalized_source(self) -> None:
+        prompt_path = (
+            _REPO_ROOT
+            / ".github"
+            / "prompts"
+            / "runtime"
+            / "repository-query"
+            / "startup-measurement.prompt.md"
+        )
+        self.assertEqual(
+            self.mod.LIGHTWEIGHT_PROMPT,
+            prompt_path.read_text(encoding="utf-8"),
+        )
+        self.assertIn("'OK'", self.mod.LIGHTWEIGHT_PROMPT)
+
+    def test_prompt_cli_option_overrides_the_externalized_default(self) -> None:
+        args = self.mod._parse_args(["--label", "test", "--prompt", "custom prompt"])
+        self.assertEqual(args.prompt, "custom prompt")
+
     def test_measure_single_session_captures_usage_info(self) -> None:
         session = _FakeSession(emit_usage=True)
         result = asyncio.run(self.mod.measure_single_session(session, "hello", 30.0))

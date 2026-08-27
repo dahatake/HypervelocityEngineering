@@ -200,7 +200,8 @@ def ensure_authenticated(
 def find_copilot_binary() -> Optional[str]:
     """SDK 同梱の copilot 実行ファイル絶対パスを返す。
 
-    見つからない場合は PATH 上の `copilot` を返し、それも無ければ None。
+    見つからない場合は PATH 上の `copilot`、次に SDK が `download-runtime` で
+    展開したランタイムキャッシュを探し、いずれも無ければ None。
     """
     # 1) SDK 同梱バイナリ (copilot/bin/copilot{.exe})
     try:
@@ -217,7 +218,20 @@ def find_copilot_binary() -> Optional[str]:
     # 2) PATH フォールバック
     from shutil import which
 
-    return which("copilot")
+    on_path = which("copilot")
+    if on_path:
+        return on_path
+
+    # 3) SDK ランタイムキャッシュ。SDK はバイナリを同梱せず `download-runtime`
+    #    でキャッシュへ展開するため、キャッシュ位置は SDK 側の解決関数に委ねる。
+    try:
+        from copilot._cli_download import get_cached_cli_path
+    except ImportError:
+        return None
+    try:
+        return get_cached_cli_path()
+    except (OSError, RuntimeError):
+        return None
 
 
 def run_login(

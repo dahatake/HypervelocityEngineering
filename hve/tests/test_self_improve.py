@@ -3669,5 +3669,176 @@ class TestScanCodebaseFeatureFlag(unittest.TestCase):
         self.assertEqual(by_id["AAGD-TESTS"]["evidence"][0]["status"], "FAIL")
 
 
+# ---------------------------------------------------------------------------
+# FR-CLI-64: scan_codebase による security_status の設定
+# ---------------------------------------------------------------------------
+
+
+class TestScanSecurityStatus(unittest.TestCase):
+    """解決済み scope の対象ファイルへ秘密情報パターン検査を行い、
+    結果を ScanResult.security_status へ設定することを検証する（FR-CLI-64）。
+    """
+
+    @staticmethod
+    def _write(repo: str, relative: str, text: str) -> None:
+        path = Path(repo, relative)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    @patch("self_improve._run_tool")
+    def test_security_status_pass_without_secret(self, mock_run: MagicMock) -> None:
+        mock_run.return_value = "[HVE_TOOL_EXIT_CODE=0]"
+        with tempfile.TemporaryDirectory() as repo:
+            self._write(repo, "src/api/handler.py", "def handler():\n    return 1\n")
+            result = scan_codebase(
+                repo_root=repo,
+                resolved_scope_paths=["src/api"],
+            )
+        self.assertEqual(result.get("security_status"), "PASS")
+
+    @patch("self_improve._run_tool")
+    def test_security_status_fail_on_secret_in_scope_file(
+        self, mock_run: MagicMock,
+    ) -> None:
+        mock_run.return_value = "[HVE_TOOL_EXIT_CODE=0]"
+        with tempfile.TemporaryDirectory() as repo:
+            self._write(
+                repo,
+                "src/api/handler.py",
+                'TOKEN = "sk-sample-not-a-real-key"\n',
+            )
+            result = scan_codebase(
+                repo_root=repo,
+                resolved_scope_paths=["src/api"],
+            )
+        self.assertEqual(result.get("security_status"), "FAIL")
+
+    @patch("self_improve._run_tool")
+    def test_security_status_ignores_out_of_scope_file(
+        self, mock_run: MagicMock,
+    ) -> None:
+        """scope 外のパターンを停止理由にしない。"""
+        mock_run.return_value = "[HVE_TOOL_EXIT_CODE=0]"
+        with tempfile.TemporaryDirectory() as repo:
+            self._write(repo, "src/api/handler.py", "def handler():\n    return 1\n")
+            self._write(
+                repo,
+                "src/other/legacy.py",
+                'TOKEN = "sk-sample-not-a-real-key"\n',
+            )
+            result = scan_codebase(
+                repo_root=repo,
+                resolved_scope_paths=["src/api"],
+            )
+        self.assertEqual(result.get("security_status"), "PASS")
+
+    def test_empty_scan_result_security_status_is_skip(self) -> None:
+        """未検査を PASS としてはならない（fail-open 防止）。"""
+        from self_improve import _empty_scan_result
+        self.assertEqual(_empty_scan_result("no_scope").get("security_status"), "SKIP")
+
+
+# ---------------------------------------------------------------------------
+# FR-CLI-65: coverage 成功条件の criterion 化
+# ---------------------------------------------------------------------------
+
+
+class TestCoverageCriterion(unittest.TestCase):
+    """success_criteria のカバレッジ 70% 以上を決定的に評価する（FR-CLI-65）。"""
+
+    @staticmethod
+    def _coverage_definition(workflow_id: str) -> dict[str, Any]:
+        from self_improve import _criterion_definitions, define_task_goal
+        for item in _criterion_definitions(define_task_goal(workflow_id)):
+            evaluation = item.get("evaluation")
+            if isinstance(evaluation, dict) and evaluation.get("metric") == "coverage_pct":
+                return item
+        raise AssertionError(f"{workflow_id} に coverage_pct criterion がありません")
+
+    @staticmethod
+    def _scan_with_coverage(coverage_pct: float, test_status: str = "PASS"):
+        scan = _make_scan_result(quality_score=100, coverage_pct=coverage_pct)
+        raw = cast(dict[str, Any], scan)
+        raw["tool_status"] = {
+            "ruff": "PASS",
+            "pytest": test_status,
+            "dotnet_build": "SKIP",
+            "dotnet_test": "NO_TESTS",
+            "markdownlint": "PASS",
+            "lint": "PASS",
+            "test": test_status,
+            "documentation": "PASS",
+        }
+        raw["metric_status"] = {
+            "lint_errors": "PASS",
+            "test_failures": test_status,
+            "doc_issues": "PASS",
+            "coverage_pct": test_status,
+        }
+        return scan
+
+    def test_asdw_web_and_adfdv_declare_coverage_criterion(self) -> None:
+        for workflow_id in ("asdw-web", "adfdv"):
+            with self.subTest(workflow_id=workflow_id):
+                definition = self._coverage_definition(workflow_id)
+                self.assertTrue(definition.get("required_for_done"))
+                self.assertEqual(definition["evaluation"]["operator"], "gte")
+                self.assertEqual(definition["evaluation"]["expected"], 70)
+                self.assertEqual(
+                    definition["evidence_required"]["reference"],
+                    "scan.summary.coverage_pct",
+                )
+
+    def _coverage_result(self, workflow_id: str, scan) -> dict[str, Any]:
+        from self_improve import _evaluate_criteria, define_task_goal
+        criterion_id = self._coverage_definition(workflow_id)["criterion_id"]
+        for item in _evaluate_criteria(scan, define_task_goal(workflow_id)):
+            if item["criterion_id"] == criterion_id:
+                return item
+        raise AssertionError(f"{criterion_id} が評価されていません")
+
+    def test_coverage_criterion_passes_at_threshold(self) -> None:
+        result = self._coverage_result("asdw-web", self._scan_with_coverage(70.0))
+        self.assertEqual(result["status"], "PASS")
+
+    def test_coverage_criterion_fails_below_threshold(self) -> None:
+        result = self._coverage_result("asdw-web", self._scan_with_coverage(69.9))
+        self.assertEqual(result["status"], "FAIL")
+
+    def test_coverage_criterion_blocked_when_tests_not_executed(self) -> None:
+        """test 未実行時の coverage 0.0 を FAIL として扱わない。"""
+        scan = self._scan_with_coverage(0.0, test_status="NO_TESTS")
+        result = self._coverage_result("adfdv", scan)
+        self.assertEqual(result["status"], "BLOCKED")
+
+    @patch("self_improve._run_tool")
+    def test_scan_codebase_sets_coverage_metric_status(
+        self, mock_run: MagicMock,
+    ) -> None:
+        """metric_status.coverage_pct が test ツールの実行状態を反映する。"""
+        mock_run.side_effect = lambda command, **kwargs: (
+            "no tests ran\n[HVE_TOOL_EXIT_CODE=5]"
+            if command[0] == "pytest"
+            else "[HVE_TOOL_EXIT_CODE=0]"
+        )
+        with tempfile.TemporaryDirectory() as repo:
+            target = Path(repo, "src", "api")
+            target.mkdir(parents=True)
+            Path(target, "test_handler.py").write_text(
+                "def test_handler():\n    assert True\n",
+                encoding="utf-8",
+            )
+            result = scan_codebase(
+                repo_root=repo,
+                resolved_scope_paths=["src/api"],
+            )
+        metric_status = result.get("metric_status", {})
+        self.assertEqual(
+            metric_status.get("coverage_pct"),
+            result.get("tool_status", {}).get("test"),
+        )
+        self.assertEqual(metric_status.get("coverage_pct"), "NO_TESTS")
+
+
 if __name__ == "__main__":
     unittest.main()

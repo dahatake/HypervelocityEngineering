@@ -498,7 +498,7 @@ jobs:
             exit 0
           fi
 
-          TEMPLATE_PATH="${GITHUB_WORKSPACE}/.github/scripts/templates/adoc/step-1.md"
+          TEMPLATE_PATH="${GITHUB_WORKSPACE}/.github/prompts/steps/adoc/step-1.prompt.md"
           BODY_S1=$(python3 - "${TEMPLATE_PATH}" "${ROOT_REF}" "${TARGET_DIRS}" "${EXCLUDE_PATTERNS}" "${DOC_PURPOSE}" "${MAX_FILE_LINES}" "${ADDITIONAL_SECTION}" <<'PY'
           import sys
           from pathlib import Path

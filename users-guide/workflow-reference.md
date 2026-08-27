@@ -4,7 +4,7 @@
 
 > **対象読者**: GitHub Actions / Issue Template / `hve` CLI の関係を俯瞰したい利用者・運用担当者  
 > **前提**: `.github/workflows/`、`.github/ISSUE_TEMPLATE/`、`hve/workflow_registry.py`、`hve/__main__.py` を参照できること  
-> **次のステップ**: ローカル実行は [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md)、Self-hosted Runner の実運用は [setup-self-hosted-runner.md](./setup-self-hosted-runner.md) を参照してください
+> **次のステップ**: ローカル実行は [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md)、自然言語からの実行は [hve-prompt-getting-started.md](./hve-prompt-getting-started.md)、Self-hosted Runner の実運用は [setup-self-hosted-runner.md](./setup-self-hosted-runner.md) を参照してください
 
 ---
 
@@ -29,13 +29,12 @@
 
 `.github/workflows/` 配下の workflow ファイルを、各ファイルの `name:` と `on:` から一覧化します。
 
-> **件数について**: workflow ファイルは追加・削除されるため、本ガイドでは総数を固定値で断定しません。現在の総数は `.github/workflows/*.yml` の実体を数えて確認してください（PowerShell: `(Get-ChildItem .github/workflows/*.yml).Count` / bash: `ls .github/workflows/*.yml | wc -l`）。下表は 2026-08-07 時点の実体と一致しています。
+> **件数について**: workflow ファイルは追加・削除されるため、本ガイドでは総数を固定値で断定しません。現在の総数は `.github/workflows/*.yml` の実体を数えて確認してください（PowerShell: `(Get-ChildItem .github/workflows/*.yml).Count` / bash: `ls .github/workflows/*.yml | wc -l`）。下表は 2026-08-26 時点の実体と一致しています。
 
 | ファイル名 | Workflow 名 | Trigger |
 |-----------|-------------|---------|
-| `aas-timeout-monitor.yml` | AAS Timeout Monitor | `schedule` / `workflow_dispatch` |
+| `aas-timeout-monitor.yml` | AAS Timeout Monitor | `workflow_dispatch`（`schedule` は廃止済み） |
 | `advance-subissues.yml` | Advance Sub Issues | `pull_request: [closed]` / `issues: [labeled]` |
-| `audit-plans.yml` | Audit all plan.md (scheduled) | `schedule` / `workflow_dispatch` |
 | `auto-agent-data-architecture-reusable.yml` | ADA: Agent Data Architecture (Reusable) | `workflow_call` |
 | `auto-ai-agent-design-reusable.yml` | AAG: AI Agent Design (Reusable) | `workflow_call` |
 | `auto-ai-agent-dev-reusable.yml` | AAGD: AI Agent Dev & Deploy (Reusable) | `workflow_call` |
@@ -57,17 +56,20 @@
 | `auto-orchestrator-dispatcher.yml` | HVE Cloud Agent Orchestrator Dispatcher | `issues: [opened, labeled, closed]` |
 | `auto-pr-transition-dispatcher.yml` | PR Transition Dispatcher | `pull_request_target: [synchronize, labeled]` / `issue_comment: [created]` |
 | `auto-qa-default-answer.yml` | QA 質問票デフォルト回答の自動投稿 | `issue_comment: [created]` |
-| `auto-qa-timeout-watcher.yml` | Auto QA Timeout Watcher | `schedule` / `workflow_dispatch` |
+| `auto-qa-timeout-watcher.yml` | Auto QA Timeout Watcher | `workflow_dispatch`（`schedule` は廃止済み） |
 | `auto-qa-to-review-transition.yml` | QA 完了 → adversarial-review 自動遷移 | `workflow_call` |
+| `auto-requirement-definition-reusable.yml` | ARD Orchestrator | `workflow_call` |
 | `auto-review-to-approve-transition.yml` | レビュー完了 → auto-approve-ready 自動遷移 | `workflow_call` |
 | `auto-self-improve-close.yml` | Self-Improve Auto Close | `pull_request: [closed]` |
+| `azure-static-web-apps-app009.yml` | Azure Static Web Apps APP-009 CI/CD | `workflow_dispatch` / `push` / `pull_request`（いずれも `src/app/**` 等の path filter あり） |
 | `bats-tests.yml` | Bats Tests | `pull_request`（`src/infra/azure/**` 等の path filter あり） |
+| `check-app-requirements-reusable.yml` | APP Requirement Preflight | `workflow_call` |
 | `check-auto-qa-skip-reusable.yml` | Check Auto-QA Skip (Reusable) | `workflow_call` |
 | `copilot-auto-feedback.yml` | Copilot Auto Feedback | `pull_request_target: [opened, edited, labeled, ready_for_review]` / `issues: [labeled]` / `workflow_dispatch` |
 | `create-subissues-from-pr.yml` | Create Sub Issues from PR | `pull_request: [labeled]` |
 | `detect-qa-questionnaire-pr.yml` | Detect QA Questionnaire PR | `pull_request_target: [opened, synchronize]` |
 | `e2e-playwright-reusable.yml` | E2E Playwright (Reusable) | `workflow_call` |
-| `label-consistency-audit.yml` | Label Consistency Audit | `schedule` / `workflow_dispatch` / `issues: [labeled, unlabeled, closed]` |
+| `label-consistency-audit.yml` | Label Consistency Audit | `workflow_dispatch` / `issues: [labeled, unlabeled, closed]`（`schedule` は廃止済み） |
 | `link-copilot-pr-to-issue.yml` | Copilot PR body への Closes #N 自動補完 | `pull_request_target: [opened, ready_for_review]` |
 | `mdq-index-reusable.yml` | mdq-index (reusable) | `workflow_call` |
 | `plan-validation-and-labeling.yml` | Plan Validation and Labeling | `pull_request`（`work/**/plan.md` の path filter あり） |
@@ -78,10 +80,10 @@
 | `self-hosted-runner-smoke-test.yml` | self-hosted-runner-smoke-test | `workflow_dispatch` |
 | `setup-labels.yml` | Setup Labels | `workflow_dispatch` / `workflow_call` |
 | `state-transition-on-pr-merge.yml` | State Transition on PR Merge | `pull_request_target: [closed]` |
-| `sync-azure-skills.yml` | Sync Azure Skills | `workflow_dispatch`（`schedule` はコメントアウト済み） |
+| `sync-azure-skills.yml` | Sync Azure Skills | `workflow_dispatch` |
 | `sync-issue-labels-to-pr.yml` | Issue ラベル → PR 自動同期 | `pull_request_target: [opened, ready_for_review]` |
-| `tdd-retry-metrics.yml` | TDD Retry Metrics Dashboard | `schedule` / `workflow_dispatch` |
 | `test-cli-scripts.yml` | Test CLI Scripts (Bash / PowerShell) | `push` / `pull_request`（path filter あり） |
+| `test-hve-gui-macos.yml` | Test HVE GUI on macOS | `workflow_dispatch` |
 | `test-hve-python.yml` | Test HVE Python | `push` / `pull_request`（path filter あり） |
 | `validate-hve-requirement-traceability.yml` | HVE Requirement Traceability | `pull_request: [opened, synchronize, reopened, edited, ready_for_review]` |
 | `validate-hve-requirement-traceability-trusted.yml` | HVE Requirement Traceability Trusted | `pull_request_target: [opened, synchronize, reopened, edited, ready_for_review]` |
@@ -89,7 +91,18 @@
 | `validate-knowledge.yml` | Validate knowledge/ Files | `pull_request` / `push` / `workflow_dispatch` |
 | `validate-skills.yml` | Validate Skills | `pull_request` / `workflow_dispatch` |
 | `validate-subissues.yml` | Validate subissues.md format | `pull_request: [opened, synchronize, reopened]` |
+| `validate-workflow-diff.yml` | Workflow Diff Gate | `pull_request_target: [opened, synchronize, reopened, edited, ready_for_review]` |
 | `verify-qa-reference-in-pr.yml` | Verify QA Reference in PR | `pull_request_target: [opened, edited, synchronize, ready_for_review, reopened, labeled]` / `workflow_dispatch` |
+
+### 運用監視 Workflow の起動方法
+
+- 有効な定期実行は `auto-blocked-to-human-required.yml` の毎時実行だけです。FR-CLOUD-41 の SLA 自動昇格を維持するため、`workflow_dispatch` と併用します。
+- `aas-timeout-monitor.yml` は Actions タブから手動実行します。`timeout_hours` は正の整数（既定 6）で、`aas:running` を持つ Open Issue を最大 1,000 件巡回し、Issue の最終更新時刻を基準に判定します。
+- `auto-qa-timeout-watcher.yml` は Actions タブから手動実行します。`target_issue` を空にすると全対象、`dry_run=true` では変更せず確認だけを行います。閾値は `QA_PHASE_TIMEOUT_HOURS`（既定 72 時間）です。
+- `label-consistency-audit.yml` はラベル変更・Issue close のイベントで自動実行され、必要に応じて `workflow_dispatch` でも全件または単一 Issue を監査できます。
+- `audit-plans.yml` は削除済みです。`plan-validation-and-labeling.yml` は PR で変更された `work/**/plan.md` だけを検証し、既存ファイルを横断する定期再監査は行いません。
+- `tdd-retry-metrics.yml` は削除済みです。`work/dashboards/tdd-metrics.md` の日次生成・更新は行われません。
+- `sync-azure-skills.yml` は `workflow_dispatch` 専用です。
 
 > **運用メモ**: オーケストレーション系 reusable workflow は `workflow_call` で呼び出されます。少なくとも `auto-app-dev-microservice-web-reusable.yml` / `auto-dataflow-dev-reusable.yml` / `auto-ai-agent-dev-reusable.yml` では `runner_type` 入力により `ubuntu-latest` と `[self-hosted, linux, x64, aca]` を切り替えます。
 >
@@ -130,10 +143,12 @@
 | 3.1 | ユースケース骨格抽出 | `Arch-ARD-UseCaseCatalog` | 必須（グループ 4） | `docs/catalog/use-case-skeleton.md` |
 | 3.2 | ユースケース詳細生成（fan-out: `use_case_skeleton`） | 同上 | 必須（グループ 4） | `docs/usecase/{key}-detail.md` |
 | 3.3 | ユースケースカタログ統合 | 同上 | 必須（グループ 4） | `docs/catalog/use-case-catalog.md` |
+| 4.1 | アプリケーションリスト作成 | `Arch-ApplicationAnalytics` | 必須（グループ 5） | `docs/catalog/app-catalog.md` |
+| 4.2 | APP別要求定義書作成 | `Arch-ApplicationRequirementDefinition` | 必須（グループ 5） | `docs/architectural-requirements-app-*.md` |
 
-> Step 2.1 は 4 表示グループのうちグループ `3` に対応し、CLI wizard / GUI / `--steps` 省略の直接 CLI で**既定選択**されます（既定グループは `2` / `3` / `4`）。実行しない場合はグループ `3` を選択から外してください。直接 CLI の `--include-kpi-okr` フラグ自体の既定は `false` で、既定グループ選択とは別の後方互換ショートカットです。後続 Step 3.1/3.2 および ARD Step 4.1 の `Arch-ApplicationAnalytics` が任意参照します。
+> Step 2.1 は 5 表示グループのうちグループ `3` に対応し、CLI wizard / GUI / `--steps` 省略の直接 CLI で**既定選択**されます（既定グループは `2` / `3` / `4` / `5`）。実行しない場合はグループ `3` を選択から外してください。直接 CLI の `--include-kpi-okr` フラグ自体の既定は `false` で、既定グループ選択とは別の後方互換ショートカットです。後続 Step 3.1/3.2 および ARD Step 4.1 の `Arch-ApplicationAnalytics` が任意参照します。
 >
-> Step ID は `hve/workflow_registry.py` の ARD `StepDef` を一次根拠としています。上記 8 Step は 4 表示グループ（1 / 2 / 3 / 4）に集約して提示されます。展開規則の正本は `hve/workflow_registry.py` の `_WORKFLOW_GROUP_MAPS["ard"]` です（`1` → `1`/`1.1`/`1.2`、`2` → `2`、`3` → `2.1`、`4` → `3.1`/`3.2`/`3.3`）。
+> Step ID は `hve/workflow_registry.py` の ARD `StepDef` を一次根拠としています。上記 10 Step は 5 表示グループ（1 / 2 / 3 / 4 / 5）に集約して提示されます。展開規則の正本は `hve/workflow_registry.py` の `_WORKFLOW_GROUP_MAPS["ard"]` です（`1` → `1`/`1.1`/`1.2`、`2` → `2`、`3` → `2.1`、`4` → `3.1`/`3.2`/`3.3`、`5` → `4.1`/`4.2`）。
 
 ### Cloud / Local 対応表（初回ユーザー向け）
 
@@ -273,6 +288,8 @@
 - グループ 3（Step 2.1）: グループ 2 完了で起動し、グループ 2 非選択時は Step 1.2 完了を fallback 前提として起動できる KPI/OKR 定義。既定で選択される（不要ならグループ `3` を選択から外す）
 - グループ 4（Step 3.1 → 3.2 → 3.3）: グループ 2 完了で起動し、グループ 2 非選択時は Step 1.2 完了を fallback 前提として起動できる（UseCase 作成）。Step 3.2 は `use_case_skeleton` パーサで fan-out
 
+> **`target_business` にパスを指定した場合**: Step 2 の Prompt へはファイル本文ではなく、読み取り可能なファイルの相対パス一覧・件数・合計バイト数・スキップ理由・解決エラーが渡されます。Agent は列挙されたパスを自らの読み取りツールで参照します。リポジトリ外のパスは子孫を列挙せず固定表現へ匿名化し、スキップ／エラーは各 50 件と省略マーカーまでに制限します。フォルダ配下の全文を Prompt へ埋め込むと、Step 2 のリクエストだけでプロンプト予算を超え得るためです（[troubleshooting.md](./troubleshooting.md#プロンプトが大きすぎて-step-が停止する) 参照）。
+
 ### 詳細
 詳細な使い方は [`01-business-requirement.md` の「要求定義の自動化（ARD: Auto Requirement Definition）」セクション](./01-business-requirement.md#要求定義の自動化ard-auto-requirement-definition) を参照してください。
 
@@ -338,11 +355,11 @@
 | `:qa-drafting` | QA 質問票を作成中（Copilot アサイン済み）。質問票コメント確認後に `:qa-ready`（回答待ち）へ戻る |
 | `:ready` | 実行待ち（依存解決済み、Copilot アサイン前） |
 | `:running` | Copilot 実行中 |
-| `:timeout` | `:running` 付与から既定 6 時間以上経過（AAS のみ `aas-timeout-monitor.yml` が自動付与。他プレフィックスは定義のみで自動付与ワークフローは未配線） |
-| `:qa-timeout` | QA フェーズでタイムアウト（`auto-qa-timeout-watcher.yml` が付与） |
+| `:timeout` | Issue の最終更新から既定 6 時間以上経過（AAS のみ `aas-timeout-monitor.yml` が付与。定期実行は廃止済みのため手動実行時のみ。他プレフィックスは定義のみで自動付与ワークフローは未配線） |
+| `:qa-timeout` | QA フェーズでタイムアウト（`auto-qa-timeout-watcher.yml` が付与。定期実行は廃止済みのため手動実行時のみ） |
 | `:done` | Step 完了（次 Step の起動トリガー） |
 | `:blocked` | 実行継続不能（依存先未完了 / TDD リトライ上限超過 / Deploy 検証上限超過 等）（Copilot が自動付与） |
-| `:human-required` | `:blocked` 付与から SLA（既定 24h）経過後に自動昇格。人間介入要請 |
+| `:human-required` | `:blocked` を持つ Issue の最終更新から SLA（既定 24h）経過後に自動昇格。コメント等で Issue が更新されると判定時刻も延びる |
 | `:human-investigating` | 人間が原因調査・解決作業中（手動付与） |
 | `:human-resolved` | 人間解決済み。付与すると `:ready` へ自動復帰（`auto-human-resolved-to-ready.yml` が起動） |
 
@@ -418,7 +435,7 @@ StepDef(
     fanout_static_keys=["D01", "D02", ..., "D21"],   # 静的キー
     # または
     fanout_parser="app_catalog",                      # 動的解決（hve/catalog_parsers.py 登録名）
-    additional_prompt_template_path="hve/prompt/fanout/{wf}/_common.md",
+    additional_prompt_template_path=".github/prompts/fanout/{wf}/_common.prompt.md",
     per_key_mcp_servers={                             # キー別 MCP 上書き（任意）
         "D08": {"sql-mcp": {"url": "..."}},
     },
@@ -466,8 +483,9 @@ StepDef(
 
 ### per-key プロンプトテンプレート規約
 
-- パス規約: `hve/prompt/fanout/{workflow_id}/_common.md`
-- 本文中の `{{key}}` は実行時に fan-out キー（例 `D01`）に置換される。
+- パス規約: `.github/prompts/fanout/{workflow_id}/_common.prompt.md`（StepDef の `additional_prompt_template_path` に記述する）。
+- Step 本文そのものは `.github/prompts/steps/{workflow_id}/step-<id>.prompt.md` に置き、StepDef の `body_template_path` から参照する。
+- 本文中の `{{key}}` は実行時に fan-out キー（例 `D01`）に置換される。placeholder の記法を壊さないこと。
 - ファイル不在時は警告のみ出してベースプロンプトをそのまま使用する。
 
 ### サブタスク起動の可視化（stderr JSON）
@@ -500,7 +518,21 @@ StepDef(
 
 ## Prompt 一覧
 
-`.github/prompts/` 配下の **84** Prompt（`README.md` を除く）を、ファイル名ベースのカテゴリと `hve/workflow_registry.py` の実際の割当で整理します。
+HVE が管理する固定 Prompt 本文の正本は `.github/prompts/**` の Markdown ファイルだけです（`hve-dev/requirement-definition.md` §3.14 の FR-PROMPT-SRC-01）。用途別の配置は次のとおりです。
+
+全文を `users-guide` から確認する場合は、[HVE Prompt 全文リファレンス](./prompt-reference/README.md) と [正本・コピー・SHA-256 一覧](./prompt-reference/catalog.md) を参照してください。これらはデバッグ用の非規範コピーで、編集先は引き続き `.github/prompts/**` です。
+
+| 配置 | 用途 |
+|---|---|
+| `.github/prompts/<Agent 名>.prompt.md` | Agent 本文。`load_prompt(<Agent 名>)` の呼び出し互換のため flat のまま（サブディレクトリ化しない） |
+| `.github/prompts/steps/<workflow>/step-<id>.prompt.md` | registry の `body_template_path` が参照する Step 本文 |
+| `.github/prompts/fanout/<workflow>/*.prompt.md` | registry の `additional_prompt_template_path` が参照する fan-out 追加本文 |
+| `.github/prompts/runtime/**` | QA / Review / Self-Improve / Work IQ / orchestrator / runner / template / addenda / fleet / gui / repository-query / shared 等の内部 Prompt |
+| `.github/prompts/cloud/*.prompt.md` | Workflow から `@copilot` へ投稿する固定実行指示 |
+
+読み込みの単一実装は [`hve/prompt_loader.py`](../hve/prompt_loader.py) の `load_prompt_file()` で、`.github/prompts/` を root とする安全な repository-relative path だけを受理します。必須 Prompt の欠損・空・不正パスは model call / SDK session / Copilot assignment の前に fail-closed で停止します（FR-PROMPT-SRC-02）。Prompt 本文には frontmatter を置きません。編集内容は次回の process / session から反映され、hot reload はありません。
+
+以下の表は flat な Agent 本文（`.github/prompts/*.prompt.md`、`README.md` を除く）を、ファイル名ベースのカテゴリと `hve/workflow_registry.py` の実際の割当で整理したものです。
 
 ### 全体俯瞰図
 
@@ -521,18 +553,19 @@ StepDef(
 - Self-Improve: [chain-self-improve.svg](./images/chain-self-improve.svg)
 - Workflow interconnection: [workflow-interconnection.svg](./images/workflow-interconnection.svg)
 
-### カテゴリ別件数（`.github/prompts/*.prompt.md` 実体ベース）
+### カテゴリ分類（`.github/prompts/*.prompt.md` 実体ベース）
 
-| カテゴリ | ファイル名 prefix | 件数 |
-|---------|---|-----:|
-| ビジネス分析・要求定義 | `Arch-ApplicationAnalytics` / `Arch-ArchitectureCandidateAnalyzer` | 2 |
-| アーキテクチャ設計 | `Arch-*`（上記 2 件を除く） | 28 |
-| 実装 | `Dev-*` | 26 |
-| ドキュメント生成 | `Doc-*` | 19 |
-| QA / レビュー | `QA-*` | 7 |
-| Knowledge Management | `KnowledgeManager` | 1 |
-| E2E テスト | `E2ETesting-*` | 1 |
-| **合計** | | **84** |
+| カテゴリ | ファイル名 prefix |
+|---------|---|
+| ビジネス分析・要求定義 | `Arch-ApplicationAnalytics` / `Arch-ArchitectureCandidateAnalyzer` |
+| アーキテクチャ設計 | `Arch-*`（上記 2 件を除く） |
+| 実装 | `Dev-*` |
+| ドキュメント生成 | `Doc-*` |
+| QA / レビュー | `QA-*` |
+| Knowledge Management | `KnowledgeManager` |
+| E2E テスト | `E2ETesting-*` |
+
+> 件数は変動するため本書には固定値を書きません。現在の件数・一覧は `.github/prompts/` 配下（Step 本文は `.github/prompts/steps/<workflow>/`、fan-out 追加本文は `.github/prompts/fanout/<workflow>/`）の実ファイルを直接確認してください。
 
 ### ワークフローごとの実行 Agent（`hve/workflow_registry.py` の `list_workflows()` から 2026-08-18 時点で抽出）
 
@@ -552,16 +585,25 @@ StepDef(
 | `adi` | Auto Design-doc Ingestion | 9 | `1`: `Doc-OriginalInventory`<br>`1.1`: `QA-DocConsistency`（D01〜D21 fan-out）<br>`1.2`: `QA-DocConsistency`（join）<br>`2`: `Doc-OriginalDocCard`<br>`3`: `Doc-OriginalTriage`<br>`4`: `Doc-OriginalRouting`<br>`5.1`: `Doc-OriginalDownstreamSeed`<br>`5.2`: `Doc-OriginalDownstreamSeed`<br>`5.3`: `Doc-OriginalDownstreamSeed` |
 | `adoc` | Source Codeからのドキュメント作成 | 23 | `2`: （グループ見出し・Agent 割当なし）<br>`3`: （グループ見出し・Agent 割当なし）<br>`5`: （グループ見出し・Agent 割当なし）<br>`6`: （グループ見出し・Agent 割当なし）<br>`1`: `Doc-FileInventory`<br>`2.1`: `Doc-FileSummary`<br>`2.2`: `Doc-TestSummary`<br>`2.3`: `Doc-ConfigSummary`<br>`2.4`: `Doc-CICDSummary`<br>`2.5`: `Doc-LargeFileSummary`<br>`3.1`: `Doc-ComponentDesign`<br>`3.2`: `Doc-APISpec`<br>`3.3`: `Doc-DataModel`<br>`3.4`: `Doc-TestSpecSummary`<br>`3.5`: `Doc-TechDebt`<br>`4`: `Doc-ComponentIndex`<br>`5.1`: `Doc-ArchOverview`<br>`5.2`: `Doc-DependencyMap`<br>`5.3`: `Doc-InfraDeps`<br>`5.4`: `Doc-NFRAnalysis`<br>`6.1`: `Doc-Onboarding`<br>`6.2`: `Doc-Refactoring`<br>`6.3`: `Doc-Migration` |
 
-### Self-Improve で使用する Agent（各 reusable workflow の Self-Improve ステップ / `hve/orchestrator.py`）
+### Self-Improve で使用する実装（CLI / GUI の `hve/runner.py` Phase 4 と `hve/self_improve.py`）
 
-| 役割 | Agent |
-|------|-------|
-| Phase 4a: コード品質スキャン | `QA-CodeQualityScan` |
-| Phase 4a: ドキュメント整合性 | `QA-DocConsistency` |
-| Phase 4b: 改善計画 | `Arch-ImprovementPlanner` |
-| Phase 4d: 改善後検証 | `QA-PostImproveVerify` |
+自己改善ループは Custom Agent（`.github/prompts/*.prompt.md`）を呼び出しません。実装が使用するのは次の関数と Prompt 定数です。
 
-> **補足**: 各 Prompt の詳細な入出力や `knowledge/` 参照は、対応する `.github/prompts/*.prompt.md` と `hve/workflow_registry.py` を一次根拠として確認してください。
+| 役割 | 実装 |
+|------|------|
+| Phase 4a: コードベーススキャン | `hve/self_improve.py` `scan_codebase()`（ruff / pytest / dotnet / markdownlint を subprocess 実行） |
+| Phase 4b: LLM 統合評価 | `hve/prompts.py` `SELF_IMPROVE_SCAN_PROMPT` |
+| Phase 4b: 改善計画生成 | `hve/prompts.py` `SELF_IMPROVE_PLAN_PROMPT` |
+| Phase 4c: 改善実行 | step スコープは `hve/runner.py` が計画内容をそのまま実行指示として送信。workflow スコープは `hve/self_improve.py` `_build_mutation_prompt()` |
+| Phase 4d: 改善後検証 | 判定は `hve/self_improve.py` `_build_verification_result()`。`hve/prompts.py` `SELF_IMPROVE_VERIFY_PROMPT` の応答は説明文（`notes`）としてのみ使用（FR-CLI-63） |
+
+> 上記の `SELF_IMPROVE_*` 定数は Python 側に本文を持たず、`hve/prompts.py` が `.github/prompts/runtime/self-improve/` 配下の Prompt ファイルを読み込んで公開する互換 facade です。本文を変更する場合は Prompt ファイル側を編集してください。
+
+> **注記**: `.github/prompts/` には `QA-CodeQualityScan` / `Arch-ImprovementPlanner` / `QA-PostImproveVerify` の 3 つの Prompt が存在しますが、2026-08-25 時点で CLI / GUI / Cloud のいずれの実行経路からも呼び出されていません（`.github/workflows/`・`.github/scripts/`・`hve/` の実装コードに参照がないことを確認済み）。将来の結線を想定した定義として保持されています。
+>
+> **図について**: [chain-self-improve.svg](./images/chain-self-improve.svg) は上記 3 Prompt（`QA-CodeQualityScan [4a]` / `Arch-ImprovementPlanner [4b]` / `QA-PostImproveVerify [4d]`）を図示していますが、現行実装を表していません。本節の表を一次情報としてください。
+
+> **補足**: 各 Custom Agent の詳細な入出力や `knowledge/` 参照は、対応する `.github/prompts/*.prompt.md` と `hve/workflow_registry.py` を一次根拠として確認してください。
 
 ## knowledge/ ディレクトリとの関係
 
@@ -661,4 +703,4 @@ APP-ID 未指定の場合:
 - `adfd` / `adfdv`: `docs/catalog/app-arch-catalog.md` の `A) サマリ表（全APP横断）` から `データデータフロー処理` / `バッチ` の APP-ID が自動選択されます。
 - その他のワークフロー: 全サービス/全画面が対象となります（後方互換）。
 
-[^improvement-planner-phase4b]: QA 自己改善ループ（Self-Improve）の Phase 4b で使用。
+[^improvement-planner-phase4b]: 自己改善ループ（Self-Improve）の改善計画用として定義されていますが、2026-08-25 時点でどの実行経路からも呼び出されていません。

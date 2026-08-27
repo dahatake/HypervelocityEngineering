@@ -78,6 +78,28 @@ HVE 対象パスへ新規の判定・生成・検証ロジックを追加する�
 - `hve-dev/hve-tdd-change-policy.md` と生成元 `hve-dev/generate_tdd_inventory.py` は §3.7 と同一変更で同期する。
 - 変更種別は `feature` / `bugfix` / `maintenance` の 3 値とする。観測できる能力・動作・公開インタフェース・設定・Workflow / Prompt / I/O 契約を追加または変更するなら `feature`、既存の規範要件または明示済み受入条件へ戻すだけなら `bugfix`、実行時の観測可能な挙動を変えないなら `maintenance` とする。分類を確定できない場合は `feature` とする。
 
+## macOS GUI test の費用承認ゲート
+
+HVE GUI に影響する保守変更だけに FR-MAINT-10 を適用する。Coding Agent は次の変更影響の判定表で `smoke` / `full` / 不要を決め、複数行に該当する場合は広い scope を選ぶ。どの行に該当するか確定できない場合は利用者へ確認し、回答を得るまで macOS workflow を dispatch しない。
+
+| 変更した振る舞い | macOS scope |
+|---|---|
+| window / menu / dialog / application lifecycle、theme / font / icon / i18n layout、QtWebEngine、`darwin` / POSIX 分岐、GUI extras、macOS launcher / setup | `smoke` |
+| 共通 widget / theme / settings / main window の横断変更、GUI依存の更新、または既存 GUI test 全体への影響 | `full` |
+| 単一 widget の OS 非依存ロジックで focused test がある | `smoke` の要否を利用者へ確認 |
+| docs-only または GUI に影響しない HVE 変更 | 不要 |
+
+GitHub-hosted macOS runner を起動する直前に、GitHub 公式料金ページを再取得し、利用者へ次を提示する。
+
+1. 必要性と対象変更。
+2. runner label / architecture / test scope。
+3. 公式単価とその確認日および出典 URL。
+4. 予測実行時間と予測課金額。
+5. timeout（分）×単価（USD/分）で算出した最大額。
+6. free minutes 残量を取得できない場合、実請求額は 0 から最大額までになりうること。
+
+承認は当該見積りに対する特定 workflow run 1 回だけに有効とする。承認が無い場合は workflow を dispatch しない。workflow 側も `github.run_attempt == 1` のときだけ macOS job を開始し、既存 run の rerun では承認入力を再利用しない。失敗または workflow run の cancel 後は、公式単価を再確認して新しい見積りと明示承認を得たうえで、新しい `workflow_dispatch` run を起動する。実装指示、PR 承認、過去 run の承認を macOS workflow の承認として流用しない。
+
 ## 関連要件の選択取得
 
 - 検索キーは Issue 本文、対象パス、対象 symbol、失敗テスト、Workflow / Step ID から構成する。

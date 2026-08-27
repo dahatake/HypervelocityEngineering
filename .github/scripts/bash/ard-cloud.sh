@@ -119,7 +119,7 @@ from pathlib import Path
 
 ctx = json.loads(os.environ["CONTEXT_JSON"])
 step_id = os.environ["STEP_ID"]
-template = Path(".github/scripts/templates/ard") / f"step-{step_id}.md"
+template = Path(".github/prompts/steps/ard") / f"step-{step_id}.prompt.md"
 body = template.read_text(encoding="utf-8")
 root_ref = "\n".join([
     f"<!-- root-issue: #{os.environ['ROOT_ISSUE']} -->",
@@ -134,7 +134,7 @@ root_ref = "\n".join([
     f"<!-- akm-model: {ctx['akm_model']} -->",
     f"<!-- ard-bridge: {str(ctx['bridge']).lower()} -->",
 ])
-policy_path = Path(".github/scripts/templates/_shared/existing-artifact-policy.md")
+policy_path = Path(".github/prompts/runtime/template/existing-artifact-policy.prompt.md")
 policy = policy_path.read_text(encoding="utf-8") if policy_path.is_file() else ""
 qa_review = """## 追加コンテキストの参照
 

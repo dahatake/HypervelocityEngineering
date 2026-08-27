@@ -14,8 +14,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from hve.git_ref import is_valid_branch_name
+
 _REPO_PATTERN = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
-_INVALID_BRANCH_CHARS = frozenset(" ~^:?*[\\")
 
 
 @dataclass(frozen=True)
@@ -60,20 +61,7 @@ def github_write_required(
 
 
 def _valid_branch_name(value: Any) -> bool:
-    if not isinstance(value, str) or not value or value != value.strip():
-        return False
-    if value == "@" or value.startswith(("-", "/")):
-        return False
-    if value.endswith(("/", ".")) or "//" in value or ".." in value or "@{" in value:
-        return False
-    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in value):
-        return False
-    if any(char in _INVALID_BRANCH_CHARS for char in value):
-        return False
-    return all(
-        part and not part.startswith(".") and not part.endswith(".lock")
-        for part in value.split("/")
-    )
+    return is_valid_branch_name(value)
 
 
 def _issue(
@@ -107,6 +95,17 @@ def _git_run(command: list[str], *, repo_root: Path) -> subprocess.CompletedProc
     )
 
 
+def _exact_remote_ref_sha(stdout: str, expected_ref: str) -> str:
+    """``git ls-remote`` の単一exact-ref応答からSHAを返す。"""
+    lines = [line for line in stdout.splitlines() if line.strip()]
+    if len(lines) != 1:
+        return ""
+    fields = lines[0].split()
+    if len(fields) != 2 or fields[1] != expected_ref:
+        return ""
+    return fields[0]
+
+
 def validate_startup_configuration(
     *,
     workflow: Any | None,
@@ -117,10 +116,16 @@ def validate_startup_configuration(
     repo: Any,
     token: Any,
     base_branch: Any,
+    create_working_branch: bool,
     check_remote: bool,
     repo_root: Path,
 ) -> StartupPreflightResult:
-    """GitHub 連携設定を検査し、判定可能な不整合を一括で返す。"""
+    """GitHub 連携設定を検査し、判定可能な不整合を一括で返す。
+
+    ``create_working_branch=False`` のときは current branch の local 安全検査を
+    ``check_remote`` にかかわらず行い、remote ref の照合だけを
+    ``check_remote=True`` に限定する（FR-CLI-83）。
+    """
     if not github_write_required(
         workflow=workflow,
         active_steps=active_steps,
@@ -162,6 +167,67 @@ def validate_startup_configuration(
             "ベースブランチ名が Git branch 名として不正です。",
             "空白や禁止文字を含まない既存の remote branch 名を設定してください。",
         ))
+
+    current_branch = ""
+    if not create_working_branch:
+        try:
+            current = _git_run(
+                ["git", "branch", "--show-current"], repo_root=Path(repo_root)
+            )
+        except (FileNotFoundError, OSError, subprocess.SubprocessError):
+            current = None
+        if current is None or current.returncode != 0:
+            issues.append(_issue(
+                "setting",
+                "current_branch",
+                "現在の Git branch を確認できません。",
+                "Git が利用可能な作業ツリーで非ベースブランチを checkout してください。",
+            ))
+        else:
+            current_branch = current.stdout.strip()
+            if not current_branch:
+                issues.append(_issue(
+                    "setting",
+                    "current_branch",
+                    "detached HEAD では現在のブランチを PR head に使用できません。",
+                    "安全な非ベースブランチを checkout してください。",
+                ))
+            elif not _valid_branch_name(current_branch):
+                issues.append(_issue(
+                    "setting",
+                    "current_branch",
+                    "現在の Git branch 名が不正です。",
+                    "有効な非ベースブランチを checkout してください。",
+                ))
+            elif branch_is_valid and current_branch == str(base_branch):
+                issues.append(_issue(
+                    "setting",
+                    "current_branch",
+                    "現在のブランチがベースブランチと同一です。",
+                    "ベースブランチへ直接 commit せず、別の作業ブランチを checkout してください。",
+                ))
+
+        try:
+            status = _git_run(
+                ["git", "status", "--porcelain", "--untracked-files=all"],
+                repo_root=Path(repo_root),
+            )
+        except (FileNotFoundError, OSError, subprocess.SubprocessError):
+            status = None
+        if status is None or status.returncode != 0:
+            issues.append(_issue(
+                "setting",
+                "worktree",
+                "Git worktree / index の状態を確認できません。",
+                "Git status を実行できる作業ツリーで再実行してください。",
+            ))
+        elif status.stdout.strip():
+            issues.append(_issue(
+                "setting",
+                "worktree",
+                "current branch mode は clean な worktree / index を必要とします。",
+                "変更を commit または別途保管し、未追跡ファイルを含む差分を解消してください。",
+            ))
 
     if not check_remote:
         return StartupPreflightResult(tuple(issues))
@@ -226,6 +292,67 @@ def validate_startup_configuration(
             "remote branch の実在を確認できません。",
             "Git の認証とネットワーク接続を確認してください。",
         ))
+
+    if not create_working_branch and current_branch and _valid_branch_name(current_branch):
+        try:
+            local_head = _git_run(
+                ["git", "rev-parse", "HEAD"], repo_root=root
+            )
+        except (FileNotFoundError, OSError, subprocess.SubprocessError):
+            local_head = None
+        try:
+            remote_head = _git_run(
+                [
+                    "git",
+                    "ls-remote",
+                    "--exit-code",
+                    "--heads",
+                    "origin",
+                    f"refs/heads/{current_branch}",
+                ],
+                repo_root=root,
+            )
+        except (FileNotFoundError, OSError, subprocess.SubprocessError):
+            remote_head = None
+
+        local_sha = (
+            local_head.stdout.strip()
+            if local_head is not None and local_head.returncode == 0
+            else ""
+        )
+        if not local_sha:
+            issues.append(_issue(
+                "setting",
+                "current_branch",
+                "current branch の local HEAD を確認できません。",
+                "local HEAD が有効な commit を指していることを確認してください。",
+            ))
+        elif remote_head is None:
+            issues.append(_issue(
+                "auth",
+                "current_branch",
+                "origin の current branch を確認できません。",
+                "Git の認証、ネットワーク接続、および remote origin を確認してください。",
+            ))
+        elif remote_head.returncode == 0:
+            remote_sha = _exact_remote_ref_sha(
+                remote_head.stdout,
+                f"refs/heads/{current_branch}",
+            )
+            if not remote_sha or remote_sha != local_sha:
+                issues.append(_issue(
+                    "setting",
+                    "current_branch",
+                    "origin/current branch と local HEAD が一致しません。",
+                    "自動 pull / reset / force-push は行いません。remote と一致する branch を使用してください。",
+                ))
+        elif remote_head.returncode != 2:
+            issues.append(_issue(
+                "auth",
+                "current_branch",
+                "origin の current branch を確認できません。",
+                "Git の認証、ネットワーク接続、および remote origin を確認してください。",
+            ))
 
     return StartupPreflightResult(tuple(issues))
 

@@ -17,7 +17,34 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
-from .business_requirement_template import BRSection
+try:
+    from ..prompt_loader import load_prompt_file
+except ImportError:  # pragma: no cover - top-level import compatibility
+    from hve.prompt_loader import load_prompt_file  # type: ignore[import-not-found,no-redef]
+
+try:
+    from .business_requirement_template import BRSection
+except ImportError:  # pragma: no cover - top-level import compatibility
+    from hve.gui.business_requirement_template import BRSection  # type: ignore[import-not-found,no-redef]
+
+
+_MERGE_PROMPT_TEMPLATE = load_prompt_file("runtime/gui/br-merge-section.prompt.md")
+
+
+def _fragment(name: str) -> str:
+    """1 行の固定フラグメントを、末尾改行を除いた形で返す。"""
+    return load_prompt_file(f"runtime/gui/{name}.prompt.md").rstrip("\n")
+
+
+_SUBHEADINGS_LABEL = _fragment("br-merge-subheadings-label")
+_CONTEXT_HEADING = _fragment("br-merge-context-heading")
+_CONTEXT_COMPANY = _fragment("br-merge-context-company")
+_CONTEXT_BUSINESS = _fragment("br-merge-context-business")
+_SOURCES_EMPTY = _fragment("br-merge-sources-empty")
+_SOURCE_HEADING = _fragment("br-merge-source-heading")
+_EXISTING_PRESENT = _fragment("br-merge-existing-present")
+_EXISTING_ABSENT = _fragment("br-merge-existing-absent")
+_TRUNCATION_NOTICE = _fragment("br-merge-truncation-notice")
 
 
 @dataclass
@@ -43,7 +70,8 @@ def read_source_docs(paths: List[Path], max_chars_per_doc: int = 50000) -> List[
         except (OSError, UnicodeDecodeError):
             continue
         if len(text) > max_chars_per_doc:
-            text = text[:max_chars_per_doc] + f"\n\n[... 切り詰め: 元 {len(text)} 文字]\n"
+            notice = _TRUNCATION_NOTICE.format(original_chars=len(text))
+            text = text[:max_chars_per_doc] + f"\n\n{notice}\n"
         result.append(SourceDoc(display_name=p.name, content=text))
     return result
 
@@ -59,82 +87,53 @@ def build_merge_prompt(
 
     出力は LLM に渡す単一の文字列。
     """
-    # ヘッダー（役割・目的）
-    parts: List[str] = []
-    parts.append(
-        "# 役割\n"
-        "あなたはトップティア戦略コンサルティングファームのシニアパートナー兼ビジネスアナリストです。\n"
-        "添付資料および既存章本文のみを根拠として、`docs/business-requirement.md` の 1 章分を"
-        "統合・精緻化した Markdown を出力してください。\n"
-    )
-
-    # スコープと対象章の固定
-    parts.append("# 対象章（この章のみを生成すること）")
-    parts.append(f"- 章ID: {section.section_id}")
-    parts.append(f"- 見出し: `## {section.heading}`")
+    subheadings_block = ""
     if section.subheadings:
-        parts.append("- サブ見出し（必要に応じて使用）:")
-        for sub in section.subheadings:
-            parts.append(f"  - `### {sub}`")
-    parts.append(f"- 章の目的: {section.description}")
-    parts.append("")
+        subheadings_lines = [_SUBHEADINGS_LABEL]
+        subheadings_lines.extend(f"  - `### {sub}`" for sub in section.subheadings)
+        subheadings_block = "\n".join(subheadings_lines) + "\n"
 
-    # 文脈情報（任意）
     context_lines: List[str] = []
     if company_name:
-        context_lines.append(f"- 対象企業: {company_name}")
+        context_lines.append(_CONTEXT_COMPANY.format(company_name=company_name))
     if target_business:
-        context_lines.append(f"- 対象事業・業務: {target_business}")
+        context_lines.append(_CONTEXT_BUSINESS.format(target_business=target_business))
+    context_section = ""
     if context_lines:
-        parts.append("# 文脈情報")
-        parts.extend(context_lines)
-        parts.append("")
+        context_section = _CONTEXT_HEADING + "\n" + "\n".join(context_lines) + "\n\n"
 
-    # 添付資料
-    parts.append("# 添付資料（一次情報・最優先で参照）")
     if not sources:
-        parts.append("（添付資料なし）")
+        sources_block = _SOURCES_EMPTY + "\n"
     else:
+        source_parts: List[str] = []
         for i, src in enumerate(sources, 1):
-            parts.append(f"## 添付資料 {i}: {src.display_name}")
-            parts.append("```text")
-            parts.append(src.content)
-            parts.append("```")
-            parts.append("")
+            source_parts.extend(
+                [
+                    _SOURCE_HEADING.format(index=i, display_name=src.display_name),
+                    "```text",
+                    src.content,
+                    "```",
+                    "",
+                ]
+            )
+        sources_block = "\n".join(source_parts) + "\n"
 
-    # 既存章本文
-    parts.append("# 既存章本文（保持必須）")
     if existing_section_text and existing_section_text.strip():
-        parts.append(
-            "以下は既存の `docs/business-requirement.md` における対象章の本文です。"
-            "**この記述を削除せず**、添付資料からの追加情報をマージして精緻化してください。"
+        existing_section_block = (
+            _EXISTING_PRESENT
+            + "\n```markdown\n"
+            + f"{existing_section_text.rstrip()}\n"
+            + "```\n\n"
         )
-        parts.append("```markdown")
-        parts.append(existing_section_text.rstrip())
-        parts.append("```")
     else:
-        parts.append("（既存章本文なし。添付資料のみから本章を新規作成すること）")
-    parts.append("")
+        existing_section_block = _EXISTING_ABSENT + "\n\n"
 
-    # 厳格ルール（捏造防止）
-    parts.append("# 厳格ルール（必ず遵守）")
-    parts.append(
-        "1. 根拠は **添付資料および既存章本文のみ**。一般論・業界慣行・外部知識で空欄を埋めない。\n"
-        "2. 出典のない記述は `[要追加確認]` を付け、断定しない。\n"
-        "3. 既存章本文の記述を**削除しない**。矛盾がある場合は両方を残し「資料間で見解の相違あり」と注記。\n"
-        "4. 出力は **対象章のみ**（他の章を生成しない）。\n"
-        "5. 出力の先頭は必ず `## " + section.heading + "` とする（前後に余計な見出しや説明文を付けない）。\n"
-        "6. 数値・固有名詞・日付は資料からの引用形で記録する。\n"
-        "7. ファイル書き出し・添付ファイル生成・画像生成は行わない。テキストの構造化（表・Mermaid 等のテキスト図）のみ許可。\n"
-        "8. 言語は日本語固定（固有名詞・規格名のみ原語可）。添付資料が外国語の場合は、固有名詞・原文引用は保持しつつ日本語で記述する。\n"
+    return _MERGE_PROMPT_TEMPLATE.format(
+        section_id=section.section_id,
+        section_heading=section.heading,
+        subheadings_block=subheadings_block,
+        section_description=section.description,
+        context_section=context_section,
+        sources_block=sources_block,
+        existing_section_block=existing_section_block,
     )
-
-    # 出力フォーマット指示
-    parts.append("# 出力フォーマット")
-    parts.append(
-        f"- 先頭行: `## {section.heading}`\n"
-        "- 続けて本文（箇条書き・表・必要に応じてサブ見出し H3 を使用）\n"
-        "- 末尾に余計な締めの文（『以上です』等）を付けない\n"
-    )
-
-    return "\n".join(parts)

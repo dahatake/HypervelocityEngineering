@@ -284,6 +284,7 @@ Step 1 で [次へ] を押した時点のパラメータは `work/run/<session_r
 ## 次のステップ
 
 - **GUI Orchestrator の本格利用**: [hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md)
+- **日本語の依頼文で実行する（Prompt 版）**: [hve-prompt-getting-started.md](./hve-prompt-getting-started.md) — ここで保存した設定をそのまま再利用します
 - **ローカルから CI/CD を有効化する**: [local-cicd-enablement.md](./local-cicd-enablement.md)
 - **要求定義ワークフローの詳細**: [01-business-requirement.md](./01-business-requirement.md)
 - **別の方式を試す**: [hve-cloud-getting-started.md](./hve-cloud-getting-started.md) / [hve-cli-getting-started.md](./hve-cli-getting-started.md)

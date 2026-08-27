@@ -5,7 +5,7 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _PROMPT = _REPO_ROOT / ".github" / "prompts" / "Dev-Microservice-Azure-AgentDeploy.prompt.md"
-_TEMPLATE = _REPO_ROOT / ".github" / "scripts" / "templates" / "aagd" / "step-3.md"
+_TEMPLATE = _REPO_ROOT / ".github" / "prompts" / "steps" / "aagd" / "step-3.prompt.md"
 _PROJECT_SHOW = (
     "az cognitiveservices account project show --name <account> "
     "--resource-group <rg> --project-name <project>"

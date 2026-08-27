@@ -128,6 +128,9 @@ build/
 hve/.settings.txt
 hve/.settings.txt.tmp
 
+# HVE Workflow 進捗（FR-STATE-04。利用者ローカル状態）
+hve/.run-progress.jsonl
+
 
 # Externally-sourced agent skills (installed via setup-hve --with-skills / npx skills add microsoft/skills).
 # Keep the bulk of azure-skills ignored, but track the repository-owned compatibility skills below.

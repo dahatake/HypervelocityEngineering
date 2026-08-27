@@ -29,27 +29,27 @@ _PROMPT = (
 _STEP_1_3 = (
     _REPO_ROOT
     / ".github"
-    / "scripts"
-    / "templates"
+    / "prompts"
+    / "steps"
     / "asdw-web"
-    / "step-1.3.md"
+    / "step-1.3.prompt.md"
 )
 _COPILOT_INSTRUCTIONS = _REPO_ROOT / ".github" / "copilot-instructions.md"
 _STEP_1_2 = (
     _REPO_ROOT
     / ".github"
-    / "scripts"
-    / "templates"
+    / "prompts"
+    / "steps"
     / "asdw-web"
-    / "step-1.2.md"
+    / "step-1.2.prompt.md"
 )
 _STEP_1_1 = (
     _REPO_ROOT
     / ".github"
-    / "scripts"
-    / "templates"
+    / "prompts"
+    / "steps"
     / "asdw-web"
-    / "step-1.1.md"
+    / "step-1.1.prompt.md"
 )
 _GENERIC_IO_CONTRACT = (
     _REPO_ROOT

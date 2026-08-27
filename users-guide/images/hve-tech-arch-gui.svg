@@ -32,10 +32,10 @@
   <!-- PySide6 Main -->
   <rect class="box qt" x="530" y="60" width="540" height="120" rx="6"/>
   <text class="h" x="550" y="84">PySide6 GUI（hve/gui/）</text>
-  <text x="550" y="104">MainWindow + QStackedWidget（3 ステップ Wizard）</text>
-  <text x="550" y="122">Step1: WorkflowSelector / Step2: OptionPanel + AttachmentDropZone</text>
-  <text x="550" y="140">Step3: WorkbenchPane（既存 WorkbenchWindow 機能を埋め込み）</text>
-  <text x="550" y="158">menu: 新規セッション...（複数ウィンドウ独立起動）</text>
+  <text x="550" y="104">MainWindow + QStackedWidget（2-step Wizard）</text>
+  <text x="550" y="122">Step 1: WorkflowSelectPage + OptionsPage（右ペイン）</text>
+  <text x="550" y="140">Step 2: WorkbenchPage（ログ・進捗・操作）</text>
+  <text x="550" y="158">既存 Copilot ドックを Prompt 版にも利用（新規タブなし）</text>
 
   <!-- State bridge -->
   <rect class="box qt" x="30" y="210" width="500" height="140" rx="6"/>
@@ -52,18 +52,18 @@
   <text class="h" x="580" y="234">添付ファイルパイプライン（ARD ワークフロー）</text>
   <text x="580" y="254">D&amp;D 受領 → MIME 判定</text>
   <text x="580" y="272">変換: docx / pdf / xlsx → markdown</text>
-  <text x="580" y="290">保存: docs-original/&lt;timestamp&gt;-&lt;name&gt;/ （読取専用領域）</text>
-  <text x="580" y="308">起点ファイル選択 → `--attached-docs` 引数を自動生成</text>
-  <text x="580" y="326">エラーは Step2 のエラーパネルに表示（実行ボタン無効化）</text>
+  <text x="580" y="290">保存: docs/attached/&lt;name&gt;.md（原本は変更しない）</text>
+  <text x="580" y="308">起点選択 → `--target-business` / `--attached-docs`</text>
+  <text x="580" y="326">書き込み失敗時は Step 2 への遷移をブロック</text>
 
   <!-- Auth panel -->
   <rect class="box qt" x="30" y="380" width="500" height="140" rx="6"/>
-  <text class="h" x="50" y="404">認証パネル（hve/gui/auth_providers/）</text>
-  <text x="50" y="424">manifests/*.yaml で MCP/Plugin 単位に認証ハンドラ宣言</text>
-  <text x="50" y="442">PTY 統合（pty / pywinpty）で `copilot mcp login ...` を埋込起動</text>
-  <text x="50" y="460">success_regex で完了判定 → 結果のみ HVE に通知</text>
-  <text x="50" y="478">資格情報自体は HVE に保存せず OS の認証ストアへ委譲</text>
-  <text x="50" y="496">「利用できるモデルの取得」: models_api を呼び models_cache 更新</text>
+  <text class="h" x="50" y="404">認証導線（各 CLI へ委譲）</text>
+  <text x="50" y="424">startup_auth.py: `gh auth token` を解決</text>
+  <text x="50" y="442">明示操作時だけ埋め込み端末で `gh auth login`</text>
+  <text x="50" y="460">Work IQ 設定: EULA / Microsoft 365 認証確認</text>
+  <text x="50" y="478">MCP / Plugin: Copilot CLI の一覧・認証手順へ委譲</text>
+  <text x="50" y="496">資格情報は HVE に永続保存しない</text>
 
   <!-- subprocess output -->
   <rect class="box proc" x="560" y="380" width="510" height="140" rx="6"/>
@@ -72,7 +72,7 @@
   <text x="580" y="442">stdout/stderr 行を QThread でリアルタイム読取</text>
   <text x="580" y="460">→ Workbench Pane へ Signal 経由で行追加</text>
   <text x="580" y="478">QA 要求は IPC ディレクトリ経由（qa_ipc_dir）で双方向通信</text>
-  <text x="580" y="496">停止: Popen.terminate() / 再開: hve resume コマンド</text>
+  <text x="580" y="496">停止: Popen.terminate() → timeout 後 kill()</text>
 
   <!-- Bottom: CLI engine reuse -->
   <rect class="box py" x="200" y="560" width="700" height="100" rx="6"/>

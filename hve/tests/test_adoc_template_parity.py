@@ -21,7 +21,7 @@ import unittest
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_TEMPLATES_BASE = _REPO_ROOT / ".github" / "scripts" / "templates" / "adoc"
+_TEMPLATES_BASE = _REPO_ROOT / ".github" / "prompts" / "steps" / "adoc"
 
 # ADOC ステップ一覧（advance-subissues.yml の ADOC_DAG と同期させること）
 _ADOC_STEP_IDS = [
@@ -48,7 +48,7 @@ class TestAdocTemplateFilesExist(unittest.TestCase):
 
     def test_all_step_templates_exist(self) -> None:
         for step_id in _ADOC_STEP_IDS:
-            tpl = _TEMPLATES_BASE / f"step-{step_id}.md"
+            tpl = _TEMPLATES_BASE / f"step-{step_id}.prompt.md"
             self.assertTrue(
                 tpl.exists(),
                 f"ADOC テンプレートが見つかりません: {tpl}",
@@ -59,7 +59,7 @@ class TestAdocTemplatePlaceholders(unittest.TestCase):
     """テンプレートに必要なプレースホルダが含まれていることを検証する。"""
 
     def _load(self, step_id: str) -> str:
-        tpl = _TEMPLATES_BASE / f"step-{step_id}.md"
+        tpl = _TEMPLATES_BASE / f"step-{step_id}.prompt.md"
         if not tpl.exists():
             self.skipTest(f"テンプレートが存在しません: {tpl}")
         return tpl.read_text(encoding="utf-8")
@@ -130,7 +130,7 @@ class TestAdocTemplateRendering(unittest.TestCase):
 
     def test_render_all_steps(self) -> None:
         for step_id in _ADOC_STEP_IDS:
-            tpl = _TEMPLATES_BASE / f"step-{step_id}.md"
+            tpl = _TEMPLATES_BASE / f"step-{step_id}.prompt.md"
             if not tpl.exists():
                 self.skipTest(f"テンプレートが存在しません: {tpl}")
             body = tpl.read_text(encoding="utf-8")

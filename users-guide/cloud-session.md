@@ -34,7 +34,7 @@ python -m hve orchestrate --workflow akm --cloud-session --repo owner/repo
 | `--cloud-session` / `--no-cloud-session` | Cloud Session の既定 ON/OFF |
 | `--cloud-session-owner` | Cloud repository owner。空時は `--repo owner/repo` から補完 |
 | `--cloud-session-repository-name` | Cloud repository name。空時は `--repo owner/repo` から補完 |
-| `--cloud-session-branch` | Cloud repository branch。空時は `--branch` を使用 |
+| `--cloud-session-branch` | Cloud repository branch。空時は `--branch` を使用。GUI の「GitHub」セクションで保存した値は Prompt 版へも引き継がれる |
 | `--cloud-session-max-concurrency` | 1 プロセス内の Cloud Session 同時実行上限。既定 5 |
 | `--cloud-session-integration-id` | `GITHUB_COPILOT_INTEGRATION_ID` に渡す識別子 |
 | `--cloud-session-mc-base-url` | `COPILOT_MC_BASE_URL` に渡す Mission Control base URL |
