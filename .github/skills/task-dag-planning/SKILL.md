@@ -53,6 +53,12 @@ SPLIT_REQUIRED と判定された場合、`{WORK}subissues.md` を作成する�
 - `<!-- title: REPLACE_ME -->` や空値のまま放置する → プレースホルダ検出で失敗する。
 - `<!-- subissue -->` を箇条書きや見出し配下に埋めて行頭に置かない → ブロック分割が崩れる。
 
+## Prompt Edition controller 例外
+- Prompt Edition controller が提示済み実行計画への**明示承認**を取得し、その plan SHA-256 を渡して既存 `hve prompt run` を起動する場合、controller 自身が standalone かつ `task_scope=multi` / `context_size=large` でも、本 Skill の plan-only 規則はその**委譲自体**を禁止しない。HVE が FR-PROMPT-04 の SHA-256 一致を確認した場合だけ `orchestrate` へ進む。
+- この例外は controller の**委譲可否**だけを扱う。controller 自身が対象成果物を直接実装・編集すること、または新しい実行フラグ・抽象化・別経路を導入することは許可しない。
+- 承認前は停止する。`hve prompt run` が stale を検出した場合は `orchestrate` へ進まず、controller が再plan・再提示した後に再承認を要求する。
+- 委譲先 Step は既存 Orchestrator 規則に従い、plan/subissues のみで停止せず、宣言された `output_paths` を実行完了時点で存在させる。通常の standalone / Cloud / CLI-GUI 規則、plan metadata、subissues.md 規則は維持する。
+
 ## 詳細ガイド（Progressive Disclosure）
 - 移設した詳細本文: [references/detail.md](references/detail.md)
 - 追加の詳細資料: `references/` 配下

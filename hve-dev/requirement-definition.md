@@ -828,7 +828,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
   - 契約テスト: [hve/tests/test_prompt_cli.py](hve/tests/test_prompt_cli.py)
 
 - **FR-PROMPT-04**: `hve prompt run --request <path> --expected-sha256 <64 桁 hex>` は、計画を同じ規則で再構築し、SHA-256 が一致した場合だけ実行しなければならない。
-  - `--expected-sha256` の欠落・書式不正・不一致では **子プロセスを 1 つも起動してはならない**。自然言語上の「承認」だけで書き込みを開始してはならない。
+  - `--expected-sha256` の欠落・書式不正・不一致では **`orchestrate` 子プロセスを 1 つも起動してはならない**。HEAD 取得のための `git rev-parse` はこの禁止対象ではない。自然言語上の「承認」だけで書き込みを開始してはならない。
   - 実行は `sys.executable -m hve ...` の argv 配列かつ `shell=False` とし、Prompt 本文をコマンド文字列として評価してはならない。
   - 複数 Workflow は fail-fast とする。ある Workflow が非 0 で終了した場合、後続 Workflow を起動してはならない。成功済み Workflow を取り消す振る舞い（rollback）を主張してはならない。
   - 承認記録の永続化・署名・期限・分散ロックは本版では実装しない。
@@ -836,6 +836,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 - **FR-PROMPT-05**: 計画の SHA-256 は、版付き canonical JSON に対して計算しなければならない。対象は schema version、canonical Workflow ID と安定ソート済みの実行順、各 Workflow の最終 argv 配列（表示用 shell 文字列ではない）、正規化済み入力別名、およびリポジトリの HEAD commit とする。
   - canonical JSON は key ソート、compact separator、UTF-8、LF、リポジトリ相対の `/` 区切りパスで正規化する。保存済み設定・request・HEAD のいずれかが計画内容を変えれば hash も変わらなければならない。
+  - HEAD commit を取得できない場合は固定値 `unknown` を hash へ代入して続行せず、`orchestrate` 子プロセスを起動する前に fail-closed で停止しなければならない。
   - 契約テスト: [hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py)
 
 - **FR-PROMPT-06**: 複数 Workflow の実行順は `get_meta_dependencies()`（FR-COMMON-01）に基づく安定ソートで決定しなければならない。選択されていない依存 Workflow を暗黙に追加してはならず、利用者定義の任意 DAG を受理してはならない。循環を検出した場合は実行前に停止する。
@@ -863,10 +864,12 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
   - 契約テスト: [hve/tests/test_prompt_input_alias_integration.py](hve/tests/test_prompt_input_alias_integration.py)、[hve/tests/test_prompt_cli.py](hve/tests/test_prompt_cli.py)
 
 - **FR-PROMPT-10**: 自然言語から request v1 への変換手順は repository Agent Skill として提供し、HVE Python 側へ持ち込んではならない。Skill は不明な Workflow / Step / field を推測で補完せず、曖昧なときは実行せずに質問しなければならない。
-  - 利用者文書は、[hve/workflow_registry.py](hve/workflow_registry.py) が定義する全 Workflow について、Product Manager がコピーできる Markdown Prompt 例を最低 1 件ずつ持たなければならない。複数 Workflow 横断の例と、非 canonical 入力名の例を含める。
+  - 利用者文書（[users-guide/hve-prompt-getting-started.md](users-guide/hve-prompt-getting-started.md) と [users-guide/prompts/](users-guide/prompts/)）は、[hve/workflow_registry.py](hve/workflow_registry.py) が定義する全 Workflow について、Product Manager がコピーできる Markdown Prompt 例を最低 1 件ずつ持たなければならない。複数 Workflow 横断の例と、非 canonical 入力名の例を含める。
   - 各例は「plan を先に提示し、明示承認前に run しない」ことを明記しなければならない。
   - 利用者は自然言語だけで計画取得から実行までを完了できなければならない。`hve prompt plan` / `hve prompt run` の起動、request path の受け渡し、plan SHA-256 の転記はすべて Agent が代行し、Skill も利用者文書もこれらの入力を利用者へ求めてはならない。貼り付け用 Prompt 例の本文へ CLI サブコマンド名を含めてはならない。
   - 承認は自然言語で受け取る。Skill は承認語の網羅列挙を持たず、明確な実行意思だけを承認とみなし、曖昧な同意は承認とせず再確認する。ただし FR-PROMPT-04 の `--expected-sha256` 一致ゲートを緩和してはならない。
+  - Prompt 版の承認前に提示する実行計画と、承認後に各 Step が必要に応じて作成する `plan.md` は別の計画層として扱う。前者を提示して利用者の明示承認を得るまでは `hve prompt run` を起動してはならない。提示済み計画への明示承認を得た後、Prompt Edition controller は提示された SHA-256 を `--expected-sha256` へ渡して `hve prompt run` を起動する。HVE が現在の request・設定・HEAD から再計算した SHA-256 との一致を確認した場合だけ、既存 `orchestrate` へ委譲する。controller が単独実行モードであっても、`task_scope=multi` または `context_size=large` を理由にこの委譲を禁止してはならない。この例外が許可するのは既存 `orchestrate` への委譲だけであり、controller が対象成果物を直接実装・編集してはならない。
+  - 委譲は FR-PROMPT-01 の既存子プロセス経路を用い、直接 `orchestrate` を起動した場合と同じ argv と制約を適用する。FR-DAG-06 / FR-DAG-08 の事前検査、FR-CLI-87 の Wave 承認、および FR-WF-OUT-01 の成果物ゲートを Prompt 版専用の分岐で省略してはならない。各 Step は必要な `plan.md` を作成してよいが、`plan.md` / `subissues.md` だけで終了せず、選択済み Step の宣言 `output_paths` を実行完了時点で存在させなければならない。FR-WF-OUT-01 は存在ゲートであり、実行前から存在した成果物が今回更新されたことまでは証明しない。完全実行の範囲は選択済み Workflow / Step の成功または最初の失敗までとし、未選択 Workflow の暗黙追加、rollback、失敗後の継続を含めてはならない。Prompt 版の承認を、既存の認証・権限・Azure・QA・デプロイ承認ゲートの代替として扱ってはならない。
   - 利用者文書に Prompt 件数などの変動値を固定記述してはならない。正本または確認方法へ誘導する。
   - 契約テスト: [hve/tests/test_prompt_edition_docs_contract.py](hve/tests/test_prompt_edition_docs_contract.py)
 
@@ -1515,6 +1518,8 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 | 2.74 | 2026-08-27 | **FR-GUI-26 / 28 / 48 敵対的レビュー改訂**: RFC 8288 / RFC 9110 と実行時raceの再監査により、cross-origin redirectへの認証転送禁止、複数`Link` field lineの保持、先頭`rel`優先、quoted-pair、`anchor`、空list要素、page必須番号、会話comment schema、一覽と詳細・mutationの独立世代を規範化した。重複していた改訂版2.71を2.72以降へ連番訂正した。 |
 | 2.75 | 2026-08-27 | **FR-LOCAL-SURFACE-01 (a) 改訂**: shared setting の列挙を実装の `ALLOWED_SETTINGS_OVERRIDES` と同じ 26 key へ揃え、両者の過不足なき一致を機械検査対象とした。根拠は、FR-PROMPT-02 が「`settings_overrides` の allowlist は FR-LOCAL-SURFACE-01 (a) の shared setting 集合とする」と規定する一方、本節の列挙が 9 key、実装 allowlist が 26 key で乖離していた実測である。追加した 17 key はいずれも既に `defaults()` / `_SECTION_FIELDS` / `OrchestrateArgs` / allowlist の 4 箇所へ登録済みで、[users-guide/hve-prompt-getting-started.md](users-guide/hve-prompt-getting-started.md) と [.github/skills/hve-prompt-edition/SKILL.md](.github/skills/hve-prompt-edition/SKILL.md) も `model` 等を共有設定として説明していたため、実装・利用者文書の変更を伴わない。新しい設定 key・環境変数・レジストリは追加していない。 |
 | 2.76 | 2026-08-27 | **FR-LOCAL-SURFACE-01 改訂**: 同一 Workflow・同一保存設定・面固有 runtime 値なしの条件で、GUI と Prompt 版が生成する argv 配列の要素数・順序・値の完全一致を機械検査対象とした。`asdw-web` の GUI argv が AKM 専用の `sources` / `target_files` / `force_refresh` / `custom_source_dir` を含み、Prompt 版が `auto_qa` 無効時にも `qa_answer_mode=autopilot`、自己改善無効時にも `self_improve_max_iterations` / `self_improve_target_scope` / `self_improve_goal`、SDK 既定と同じ `tool_search_ranking=sdk` を明示していた実測を根拠とする。比較入口と GUI セッション固有値・`qa_answer_mode=user` の除外条件を本文に固定した。入力別名は FR-PROMPT-08 の Prompt / 直接 CLI 専用入口として GUI 入力欄の追加対象から除外し、既存の `OrchestrateArgs` 受け口は維持する。新しい設定 key・CLI flag・環境変数・抽象レイヤーは追加しない。 |
+| 2.77 | 2026-08-28 | **FR-PROMPT-10 改訂**: Prompt 版の承認前実行計画と承認後の Step 内 `plan.md` を別の計画層として定義し、提示済み計画への明示承認と FR-PROMPT-04 の SHA-256 一致後は、仲介 Agent が単独実行モードでも `task_scope=multi` / `context_size=large` を理由に `hve prompt run` への委譲を禁止しないことを規定した。例外を既存 `orchestrate` への委譲だけに限定し、仲介 Agent の直接実装、未選択 Workflow の暗黙追加、rollback、失敗後の継続、既存の認証・権限・Azure・QA・デプロイ承認ゲートの迂回を禁止した。Python 実行核は既に非 dry-run 委譲と FR-WF-OUT-01 の成果物ゲートを持つため変更対象外とした。 |
+| 2.78 | 2026-08-28 | **FR-PROMPT-04 / 05 / 10 敵対的レビュー反映**: 「子プロセス」を実行対象である `orchestrate` 子プロセスへ限定し、HEAD 取得用 `git rev-parse` との矛盾を解消した。HEAD commit を取得できない場合は `unknown` を hash に使わず fail-closed とした。承認後は controller が提示済み SHA-256 を `hve prompt run` へ渡し、HVE が再計算値との一致を確認してから `orchestrate` へ委譲する時系列へ訂正した。FR-WF-OUT-01 は実行完了時の存在ゲートであり、既存成果物が今回更新されたことまでは証明しない境界も明記した。 |
 
 ---
 

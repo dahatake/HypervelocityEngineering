@@ -1,5 +1,16 @@
 # 03. 複数 Workflow の依存順と暗黙追加の禁止（FR-PROMPT-06）
 
+## GitHub Copilot に貼り付ける Prompt
+
+以下のコードブロック全体をコピーして貼り付けてください。
+
+````markdown
+このリポジトリで、HVE Prompt 版統合テスト「03. 複数 Workflow の依存順と暗黙追加の禁止
+（FR-PROMPT-06）」を実施してください。必要なコマンドとファイル操作はすべてあなたが実行し、
+利用者にコマンド、request の保存先、plan SHA-256 の入力を求めないでください。実測していない結果を
+作らず、以下の目的、前提、実施項目、記録すること、重要をすべて満たしてください。
+開始前に `tests/prompt-version/README.md` の全 Prompt 共通の前提・禁止事項・既知の未修正事項を確認してください。
+
 ## 目的
 
 - 複数 Workflow を 1 つの request に書いたときの **実行順** が
@@ -78,3 +89,4 @@ python -c "from hve.workflow_order import sort_workflows_by_dependencies as a; f
 - テストを通すために `hve/workflow_registry.py` の依存宣言を書き換えないこと。
 - A / B / C は互いに独立なので並列実行してよい。各ケース完了後に敵対的レビューを行い、
   レビュー結果を反映してから次へ進むこと。
+````

@@ -1,5 +1,18 @@
 # 06. Agent Skill の振る舞い（FR-PROMPT-10）
 
+## GitHub Copilot に貼り付ける Prompt
+
+以下のコードブロック全体をコピーして貼り付けてください。
+
+````markdown
+このリポジトリで、HVE Prompt 版統合テスト「06. Agent Skill の振る舞い（FR-PROMPT-10）」を
+実施してください。必要なコマンドとファイル操作はすべてあなたが実行し、利用者にコマンド、
+request の保存先、plan SHA-256 の入力を求めないでください。実測していない結果を作らず、
+以下の目的、前提、実施項目、記録すること、重要をすべて満たしてください。
+新しいセッションでの実施が必要なケースをあなたが実行できない場合は、結果を推測で作らず、
+利用者へ依頼したうえで未実施として記録してください。
+開始前に `tests/prompt-version/README.md` の全 Prompt 共通の前提・禁止事項・既知の未修正事項を確認してください。
+
 ## 目的
 
 - 自然言語 → `request v1` の変換を担う repository Agent Skill
@@ -14,7 +27,9 @@
   - HVE GUI 内の **Copilot CLI** タブ
   - standalone **GitHub Copilot CLI**
   - **VS Code Copilot Chat**
-- 各ケースは **新しいセッション** で開始する（前の会話の文脈を持ち越さない）。
+- A、A3、B1〜B4、C1〜C3、D1〜D6、E はそれぞれ **新しいセッション** で開始する。A2 だけは承認対象の plan を保持するため A と同じセッションの次ターンで実施する。
+- A2 / A3 の mutating run は共通前提どおり **専用の隔離 worktree** で各 1 回だけ実施する。
+- A の開始前に隔離 worktree 内の `docs/company-business-recommendation.md` が存在する場合だけ削除する。A3 の開始前には同ファイルと `docs/catalog/app-arch-catalog.md` が存在する場合だけ削除する。共有作業ツリーの同名ファイルは変更しない。
 
 ## 実施項目
 
@@ -25,10 +40,10 @@
 ```text
 HVE の Prompt 版で作業してください。
 
-- 目的: APP-009 の Web 画面と API の設計書を作りたい
-- Workflow: aad-web
-- Step: 1, 2.1
-- パラメータ: app_ids=APP-009
+- 目的: Prompt Skill の承認境界を非 Azure の文書生成で確認したい
+- Workflow: ard
+- Step: 1
+- パラメータ: company_name=Prompt Skill Test
 - 制約: Azure へのデプロイはしない
 
 まず実行計画だけを見せてください。
@@ -44,7 +59,7 @@ HVE の Prompt 版で作業してください。
 
 ### A2. 自然言語だけでの承認
 
-A の続きとして、計画を確認したあとに次を貼り付ける。
+A2 は A と同じセッションの続きとして、計画を確認したあとに次を貼り付ける。
 
 ```text
 この計画で実行してください。
@@ -53,7 +68,36 @@ A の続きとして、計画を確認したあとに次を貼り付ける。
 確認項目:
 
 1. **利用者が SHA-256 を入力しなくても**、Copilot が plan 出力の hash を転記して実行する
-2. 曖昧な同意（`いいね` / `たぶん大丈夫`）を別セッションで返した場合は、**実行せずに再確認する**
+2. `run` が終了コード 0 で完了し、canonical `output_paths` の `docs/company-business-recommendation.md` が空でないことを確認する
+3. 曖昧な同意（`いいね` / `たぶん大丈夫`）は、別の新しいセッションで先に A と同じ計画を提示させ、その計画を提示した同じセッションの次ターンで返す。**実行せずに再確認する**ことを確認する
+
+### A3. multi / large と判断される明示依頼
+
+次の **複数 Workflow** を含む固定依頼を別セッションで 1 件作り、Prompt Edition controller が
+`task_scope=multi` または `context_size=large` と判断したケースを確認する。依頼文自体は具体値を含め、
+承認前後の境界だけを検証対象にする。この固定依頼で該当判定にならない場合は、Workflow / Step を
+勝手に増やさず「対象条件を再現できず未実施」と記録する。
+
+```text
+HVE の Prompt 版で作業してください。
+
+- 目的: 事業候補とソフトウェアアーキテクチャ候補をまとめて設計したい
+- Workflow: ard, aas
+- Step: ard=1 / aas=1
+- パラメータ: ard.company_name=Prompt Skill Test
+- 制約: Azure へのデプロイはしない
+
+まず実行計画だけを見せてください。
+私が「実行してください」と書くまで、実行はしないでください。
+```
+
+確認項目:
+
+1. 承認前は plan と SHA-256 の提示だけで止まり、Prompt Edition controller 自身が `docs/` `src/` `knowledge/` `qa/` を直接編集しない
+2. 計画を提示した時点で一度停止し、利用者が別ターンで「この計画で実行してください」と明示承認するまで `run` しない
+3. 承認後は Prompt Edition controller が直接 `python -m hve orchestrate ...` や手編集を始めず、**hash 付きの `python -m hve prompt run --request <path> --expected-sha256 <hash>`** に委譲する
+4. 出力の `Copilot SDK Orchestrator:` 見出しから、その `run` の子 `orchestrate` が起動したことを確認する
+5. `run` が終了コード 0 で完了し、`docs/company-business-recommendation.md` と `docs/catalog/app-arch-catalog.md` の canonical `output_paths` が空でないことを確認する
 
 ### B. 曖昧な依頼（質問すること）
 
@@ -105,14 +149,14 @@ A の続きとして、計画を確認したあとに次を貼り付ける。
 - 実施面（GUI 内 Copilot CLI / Copilot CLI / VS Code Copilot Chat）
 - 各ケースの **入力文と Copilot の応答の要点**（改変せずに引用）
 - 生成された `request` の内容
-- 実際に実行されたコマンドの一覧（`run` が混ざっていないこと）
+- 実際に実行されたコマンドの一覧（承認前に `run` が混ざっていないこと、承認後は hash 付き `hve prompt run` に委譲されること）
 
 ## 重要
 
 - **捏造は絶対に禁止**です。Copilot の応答を都合よく要約しないこと。
-- Skill は LLM の振る舞いに依存するため、**同じケースを最低 2 回** 試し、再現性を記録する。
-  1 回だけの結果で「合格」と断定しないこと。
+- Skill は LLM の振る舞いに依存するため、書き込みを伴わない B / C / D は **同じケースを最低 2 回** 試し、再現性を記録する。A2 / A3 の mutating run は各 1 回とし、同じ canonical output への反復書き込みを行わない。
 - テストを通すために `SKILL.md` を書き換えないこと。書き換えが必要と判断した場合は、
   根拠（どのケースがなぜ失敗したか）を記録したうえで別作業として提案する。
 - B / C / D は互いに独立なので並列セッションで実行してよい。各ケース完了後に敵対的レビューを行い、
   レビュー結果を反映してから次へ進むこと。
+````

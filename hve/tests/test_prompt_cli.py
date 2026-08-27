@@ -213,7 +213,7 @@ class TestPromptRunApprovalGate:
         )
         return plan.sha256
 
-    def test_mismatched_hash_starts_no_subprocess(
+    def test_mismatched_hash_starts_no_orchestrate_subprocess(
         self, tmp_path: Path, isolated_settings: Path, monkeypatch
     ):
         recorder = _Recorder([0])
@@ -225,7 +225,7 @@ class TestPromptRunApprovalGate:
         assert code != 0
         assert recorder.calls == []
 
-    def test_malformed_hash_starts_no_subprocess(
+    def test_malformed_hash_starts_no_orchestrate_subprocess(
         self, tmp_path: Path, isolated_settings: Path, monkeypatch
     ):
         recorder = _Recorder([0])
@@ -267,6 +267,27 @@ class TestPromptRunApprovalGate:
         )
         assert code == 5
         assert len(recorder.calls) == 1
+
+    @pytest.mark.parametrize("prompt_command", ["plan", "run"])
+    def test_unknown_head_fails_before_orchestrate(
+        self,
+        prompt_command: str,
+        tmp_path: Path,
+        isolated_settings: Path,
+        capsys,
+        monkeypatch,
+    ):
+        recorder = _Recorder([0])
+        monkeypatch.setattr(prompt_execution, "_default_runner", recorder)
+        monkeypatch.setattr(prompt_execution, "resolve_head_commit", lambda _root: "unknown")
+        request = _write_request(tmp_path)
+        argv = ["prompt", prompt_command, "--request", str(request)]
+        if prompt_command == "run":
+            argv.extend(["--expected-sha256", "a" * 64])
+
+        assert hve_main.main(argv) != 0
+        assert recorder.calls == []
+        assert "HEAD" in capsys.readouterr().err
 
 
 class TestSubcommandDocumentationParity:

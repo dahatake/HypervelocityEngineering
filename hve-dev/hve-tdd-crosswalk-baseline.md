@@ -1,6 +1,6 @@
 # HVE TDD ベースライン突合サマリー
 
-- 生成日時 (UTC): `2026-08-27T12:40:39Z`
+- 生成日時 (UTC): `2026-08-27T16:51:58Z`
 - 対象: `hve` アプリケーションのみ（HVE CLI / GUI / Cloud Agent Orchestrator 関連）。他アプリ開発には適用しない。
 - 捏造防止: テスト仕様欄は docstring / 関数名 / assert・raises・Pester `Should` / shell `pass` ラベル等、実在コードから機械抽出した。
 
@@ -19,12 +19,12 @@
 
 ## テスト棚卸し件数
 
-- 抽出行数: **14472**
+- 抽出行数: **14491**
 - 対象ファイル数: **698**
 
 | 分類 | ファイル数 | 行数 |
 |---|---:|---:|
-| core-python | 399 | 9958 |
+| core-python | 399 | 9977 |
 | cq-support-python | 38 | 696 |
 | github-script-powershell | 5 | 83 |
 | github-script-python | 5 | 85 |
@@ -36,7 +36,7 @@
 | 種別 | 行数 |
 |---|---:|
 | fixture | 291 |
-| helper | 2844 |
+| helper | 2846 |
 | parse-error | 1 |
 | pester-it | 92 |
 | python-file | 7 |
@@ -44,7 +44,7 @@
 | setup-teardown | 134 |
 | shell-case | 36 |
 | shell-helper | 5 |
-| test | 11061 |
+| test | 11078 |
 
 ## 機能一覧件数
 

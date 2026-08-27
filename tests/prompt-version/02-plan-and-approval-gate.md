@@ -1,5 +1,16 @@
 # 02. plan の提示内容と run の承認ゲート（FR-PROMPT-03 / 04 / 05）
 
+## GitHub Copilot に貼り付ける Prompt
+
+以下のコードブロック全体をコピーして貼り付けてください。
+
+````markdown
+このリポジトリで、HVE Prompt 版統合テスト「02. plan の提示内容と run の承認ゲート
+（FR-PROMPT-03 / 04 / 05）」を実施してください。必要なコマンドとファイル操作はすべてあなたが実行し、
+利用者にコマンド、request の保存先、plan SHA-256 の入力を求めないでください。実測していない結果を
+作らず、以下の目的、前提、実施項目、記録すること、重要をすべて満たしてください。
+開始前に `tests/prompt-version/README.md` の全 Prompt 共通の前提・禁止事項・既知の未修正事項を確認してください。
+
 ## 目的
 
 - `hve prompt plan` が提示する内容と、`hve prompt run` の **plan SHA-256 一致ゲート** を実測で検証する。
@@ -10,6 +21,29 @@
 
 - リポジトリ直下で作業する。
 - 作業ツリーの `git rev-parse HEAD` を記録しておく（plan hash に HEAD が含まれるため）。
+- `C8` は共通前提どおり、対象 revision から作った **専用の隔離 worktree** で実施する。共有作業ツリーでは実行しない。
+- 全ケースで次の固定 request を使う。`settings_overrides.model` は指定しない（C6 で保存設定の変更を hash に反映させるため）。
+
+```json
+{
+   "schema_version": 1,
+   "goal": "Prompt 承認ゲートの非 Azure 検証",
+   "workflows": [
+      {
+         "workflow_id": "ard",
+         "steps": ["1"],
+         "params": {"company_name": "Prompt Gate Test"}
+      }
+   ],
+   "settings_overrides": {
+      "auto_qa": false,
+      "auto_contents_review": false
+   }
+}
+```
+
+- `ard` Step `1` は registry 上の `Arch-ARD-BusinessAnalysis-Untargeted` で、canonical output は `docs/company-business-recommendation.md`、Azure 書き込み・remote CI/CD・Wave 承認は不要であることを実行直前にも確認する。
+- C8 の前に、隔離 worktree 内の `docs/company-business-recommendation.md` が存在する場合だけ削除し、この run が空でない canonical output を新規生成したことを確認できる状態にする。
 
 ## 実施項目
 
@@ -42,22 +76,34 @@
 
 ### C. `run` の承認ゲート（最重要）
 
-各ケースで **子プロセスが 1 つも起動しないこと** を確認する。
-確認方法は「`docs/` 等の成果物に差分が出ない」ことに加え、`work/run/` の新規ディレクトリが
-増えないことでも代用できる。実測した確認手段を記録すること。
+C1〜C6 では **子 `orchestrate` が 1 つも起動しないこと** を確認する。HEAD 取得用の
+`git rev-parse` は許容されるため、「任意の子プロセスが 0 件」と記録してはならない。
+成果物差分や `work/run/` の増減は補助証跡にしかならず、非起動の代用にはしない。
+次の既存 unit test の recorder が `orchestrate` 呼び出し 0 件を確認することを機械証跡とする。
+
+```text
+hve/tests/test_prompt_cli.py::TestPromptRunApprovalGate::test_mismatched_hash_starts_no_orchestrate_subprocess
+hve/tests/test_prompt_cli.py::TestPromptRunApprovalGate::test_malformed_hash_starts_no_orchestrate_subprocess
+```
+
+実 CLI では終了コード・stderr と `Copilot SDK Orchestrator:` 見出しの不在も併記する。
 
 | # | 入力 | 期待 |
 |---|---|---|
 | C1 | `--expected-sha256` を省略 | argparse がエラー終了（必須引数） |
-| C2 | `--expected-sha256 abc`（64 桁未満） | 拒否。子プロセス 0 件 |
-| C3 | 64 桁だが hex でない文字を含む | 拒否。子プロセス 0 件 |
+| C2 | `--expected-sha256 abc`（64 桁未満） | 拒否。子 `orchestrate` 0 件 |
+| C3 | 64 桁だが hex でない文字を含む | 拒否。子 `orchestrate` 0 件 |
 | C4 | 正しい形式だが plan と不一致 | `stale` として拒否。期待値と実際値の両方が表示される |
-| C5 | `plan` 提示後に request を書き換えてから同じ hash で `run` | 拒否 |
-| C6 | `plan` 提示後に GUI 設定（`hve/.settings.txt`）のモデルを変えてから同じ hash で `run` | 拒否 |
-| C7 | `plan` 提示後に新しい commit を作ってから同じ hash で `run` | 拒否（HEAD が hash に含まれるため） |
-| C8 | `plan` が提示した hash をそのまま指定 | 実行される |
+| C5 | `plan` 提示後に request の `goal` だけを `Prompt 承認ゲートの変更後検証` へ変え、同じ hash で `run` | 拒否。変更後 request が schema-valid であることも確認 |
+| C6 | 隔離 worktree の `hve/.settings.txt` だけで、保存設定 `strict` を `false` から `true` へ変えてから同じ hash で `run` | 拒否。request が `strict` を override していないことと、再計算 hash が変わったことも確認 |
+| C7 | `hve/tests/test_prompt_execution.py::TestSha256::test_head_change_changes_hash` | PASS。共有・隔離を問わず、この確認だけのために新しい commit を作らない |
+| C8 | `plan` が提示した hash をそのまま指定 | 実行され、子 `orchestrate` への委譲を観測できる |
 
 C2 / C3 の拒否メッセージに、hex の転記は Agent の責務である旨が含まれることも確認する。
+
+- `C8` は、plan を利用者へ提示して一度停止し、利用者が**別ターンで明示承認した後**にだけ実行する。この統合テストの開始依頼を C8 の事前承認として扱わない。
+- `C8` では、`hve prompt run --expected-sha256 <正しい hash>` の実行後に、出力の `Copilot SDK Orchestrator:` 見出しから子 `orchestrate` の起動を確認する。
+- `C8` では、選択した非 Azure Step が `plan.md` / `subissues.md` だけで終了せず、canonical `output_paths` に空でない成果物を生成することを確認する。
 
 ### D. hash の決定性
 
@@ -66,12 +112,17 @@ C2 / C3 の拒否メッセージに、hex の転記は Agent の責務である�
 3. `steps` の指定順だけを変えた request で hash がどうなるかを実測し、結果を記録する
    （期待値を先に決めつけず、実測結果を `hve/prompt_execution.py` の `canonical_plan_json` と突き合わせる）。
 
-### E. 複数 Workflow の fail-fast
+### E. 複数 Workflow の fail-fast（最初の失敗で停止）
 
-1. 2 つの Workflow を含む request で、1 つ目が失敗するように仕向ける
-   （例: 存在しないリソースを要求する等、Azure を使わない範囲で）。
-2. **2 つ目の Workflow が起動しないこと**を確認する。
-3. 「成功済み Workflow を取り消した」と報告しないこと（rollback は実装されていない）。
+失敗条件を実 Workflow や外部リソースへ依存させず、次の既存 recorder テストを実行する。
+
+```text
+hve/tests/test_prompt_cli.py::TestPromptRunApprovalGate::test_fail_fast_between_workflows
+hve/tests/test_prompt_execution.py::TestRunPlan::test_fail_fast_stops_subsequent_workflows
+```
+
+両テストが、第 1 Workflow の非 0 終了後に第 2 Workflow の `orchestrate` を起動しないことを確認する。
+このケースには成功済み Workflow が存在しないため、rollback の有無を検証したとは報告しない。
 
 ## 記録すること
 
@@ -83,6 +134,7 @@ C2 / C3 の拒否メッセージに、hex の転記は Agent の責務である�
 
 - **捏造は絶対に禁止**です。「子プロセスが起動しなかった」は必ず実測根拠とセットで書くこと。
 - **C8 以外で `run` が実行されてしまった場合は Critical** として報告する。
+- `C1`〜`C7` で確認した拒否 gate が維持され、**正しい hash の `C8` でだけ** 実行へ進むことを記録する。
 - テストを通すために `hve/prompt_execution.py` や `hve/__main__.py` を書き換えないこと。
-- C1〜C7 は互いに独立なので並列実行してよい。各ケース完了後に敵対的レビューを行い、
-  レビュー結果を反映してから次へ進むこと。
+- C1〜C4 は独立したプロセスまたは worktree なら並列実行してよい。request・保存設定・HEAD を変更する C5〜C7 と、成果物を生成する C8 は直列に実施する。各ケース完了後に敵対的レビューを行い、レビュー結果を反映してから次へ進むこと。
+````

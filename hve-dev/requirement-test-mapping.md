@@ -1599,7 +1599,7 @@
 ### FR-PROMPT-04 — `hve prompt run` の expected SHA-256 ゲートと fail-fast（v2.67 新規）
 - 判定: 実装済み・GREEN
 - 直接対応テスト:
-  - [hve/tests/test_prompt_cli.py](hve/tests/test_prompt_cli.py) — `--expected-sha256` 欠落 / 書式不正 / 不一致で子プロセス 0 件、一致時のみ `shell=False` の argv 配列で順次実行、途中失敗時に後続 Workflow を起動しないこと
+  - [hve/tests/test_prompt_cli.py](hve/tests/test_prompt_cli.py) — `--expected-sha256` 欠落 / 書式不正 / 不一致で `orchestrate` 子プロセス 0 件、一致時のみ `shell=False` の argv 配列で順次実行、途中失敗時に後続 Workflow を起動しないこと
 - 根拠: 自然言語上の「承認」だけで書き込みを開始させない gate を固定する。
 - RED / GREEN 証跡: RED を実測後に実装し、2026-08-26 に上記テストの GREEN を実測（`python -m pytest` の focused 実行）。
 
@@ -1607,7 +1607,8 @@
 - 判定: 実装済み・GREEN
 - 直接対応テスト:
   - [hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py) — 同一入力は同 hash、設定 / request / HEAD の変化で hash 変化、Windows / POSIX のパス区切り正規化、key ソートと compact separator
-- RED / GREEN 証跡: RED を実測後に実装し、2026-08-26 に上記テストの GREEN を実測（`python -m pytest` の focused 実行）。
+  - [hve/tests/test_prompt_cli.py](hve/tests/test_prompt_cli.py) :: `TestPromptRunApprovalGate.test_unknown_head_fails_before_orchestrate` — HEAD commit を取得できない plan / run が `orchestrate` 子プロセス起動前に fail-closed となること
+- RED / GREEN 証跡: RED を実測後に実装し、2026-08-26 に上記テストの GREEN を実測（`python -m pytest` の focused 実行）。v2.78 では HEAD 取得不能時の plan / run 2 ケースが **2 failed** となる RED を確認し、`unknown` hash を許可しない fail-closed 修正後、FR-PROMPT-10 の文書契約を含む直接回帰は **101 passed**。Prompt request / execution / input alias / DAG / Skill routing / traceability / inventory の広域回帰は **444 passed / 1 skipped**（Windows の symlink 権限制約、2026-08-28 実測）。
 
 ### FR-PROMPT-06 — 複数 Workflow の依存順安定ソートを GUI と共有する（v2.67 新規）
 - 判定: 実装済み・GREEN
@@ -1637,11 +1638,15 @@
   - [hve/tests/test_prompt_cli.py](hve/tests/test_prompt_cli.py) :: `TestInputAliasOption.test_unsafe_alias_is_rejected_on_the_orchestrate_path` — `orchestrate --input-alias` を直接使う CLI 経路でも repo 外パス / glob canonical / 不存在 actual / active Step の入力でない canonical を fail-closed で拒否すること
 - RED / GREEN 証跡: RED を実測後に実装し、2026-08-26 に上記テストの GREEN を実測（`python -m pytest` の focused 実行）。CLI 経路の拒否は敵対的レビューで検出した実欠陥（repo 外パスが Step Prompt へ注入されていた）の修正として追加した。
 
-### FR-PROMPT-10 — Agent Skill と利用者文書の coverage（v2.67 新規）
+### FR-PROMPT-10 — Agent Skill と利用者文書の coverage（v2.67 新規 / v2.77・v2.78 改訂）
 - 判定: 実装済み・GREEN
 - 直接対応テスト:
   - [hve/tests/test_prompt_edition_docs_contract.py](hve/tests/test_prompt_edition_docs_contract.py) — Skill の実在、Quick Start の実在、registry の全 Workflow に対する copyable Prompt 例の存在、複数 Workflow 横断例と非 canonical 入力名例の存在、各例の plan-before-run 明記、相対リンクの解決、固定件数記述の不在
-- RED / GREEN 証跡: RED を実測後に実装し、2026-08-26 に上記テストの GREEN を実測（`python -m pytest` の focused 実行）。
+  - [hve/tests/test_prompt_edition_docs_contract.py](hve/tests/test_prompt_edition_docs_contract.py) :: `TestApprovedFullExecutionContract` — Prompt 版を仲介する Agent が、承認前は plan 提示だけに留まり、提示済み計画への明示承認と SHA-256 一致後は multi / large でも対象成果物を直接編集せず `hve prompt run` へ委譲すること、および委譲後の Step が plan-only で終了せず既存 gate を維持することを Skill・最上位 instruction・task-dag 規約・Quick Start の横断契約として固定する
+  - [hve/tests/test_prompt_cli.py](hve/tests/test_prompt_cli.py) — plan / run の HEAD fail-closed、expected SHA-256、`orchestrate` 子プロセス非起動、一致時実行、fail-fast
+  - [hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py) — canonical hash、依存順、未選択 Workflow 非追加、argv 配列 + `shell=False`、子 `orchestrate` 委譲、fail-fast
+  - [hve/tests/test_runner_split_required_guard.py](hve/tests/test_runner_split_required_guard.py) — CLI / GUI Orchestrator 配下の実行モード制約注入と FR-WF-OUT-01 の存在ゲート
+- RED / GREEN 証跡: 初版は RED を実測後に実装し、2026-08-26 に既存テストの GREEN を実測。v2.77 改訂は実装前に新規契約が **6 failed / 61 passed**、敵対的レビュー反映後も同じ未実装6契約だけが **6 failed / 61 passed** となる RED を確認した。instruction / task-dag / Skill / users-guide を実装後、同ファイルは **67 passed**。Prompt CLI / execution / runner / DAG / traceability / Skill routing を含む focused 回帰は **170 passed**（2026-08-28 実測）。v2.78 の統合敵対的レビューでは HEAD fail-closed・用語/時系列・実行手順隔離・固定 fixture・偽 GREEN 防止の契約が **18 failed / 83 passed** となる RED を確認し、修正後の `test_prompt_cli.py` + `test_prompt_edition_docs_contract.py` は **101 passed**。最終広域回帰は **444 passed / 1 skipped**（Windows の symlink 権限制約、2026-08-28 実測）。
 
 ### FR-LOCAL-SURFACE-01 — ローカル 3 面の設定パリティ（v2.72 新規）
 - 判定: 実装済み・GREEN

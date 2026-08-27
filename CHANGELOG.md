@@ -2,6 +2,44 @@
 
 ## [Unreleased]
 
+### Fixed — Prompt 版の承認後完全実行契約を敵対的レビューで強化した（FR-PROMPT-04 / 05 / 10）
+
+- **HEAD 取得不能時の承認ゲートを fail-closed 化した**: 従来は `git rev-parse HEAD` が失敗すると固定値 `unknown` を plan hash へ含めて計画を提示できた。HEAD commit へ束縛できない計画を承認対象にしないよう、plan / run とも `orchestrate` 起動前に停止する。
+- **承認と SHA-256 検査の時系列を訂正した**: Prompt Edition controller は提示済み hash を `hve prompt run` へ渡し、HVE が request・保存設定・現在の HEAD から再計算した値との一致を確認した場合だけ子 `orchestrate` へ進む。`outer controller` / `仲介 Agent` の表記を `Prompt Edition controller` へ統一し、stale 時は再plan・再提示・再承認へ戻す。
+- **成果物ゲートの限界を明記した**: FR-WF-OUT-01 は宣言 `output_paths` が実行完了時に存在することを検査するが、実行前から存在した成果物が今回更新されたことまでは証明しない。利用者ガイドと Skill の「生成する」という過剰表現を存在契約へ揃えた。
+- **統合テストを非破壊・決定的にした**: mutating run は専用隔離 worktree に限定し、共有設定・Git 履歴・共有成果物を変更する手順を除去した。承認ゲートは固定 `ard` Step 1 request、E2E は固定 `ard` Step 1 fixture、multi/large は固定 `ard` + `aas` を使用する。子プロセス非起動と fail-fast は既存 recorder unit test を証跡とし、任意の外部失敗へ依存しない。cleanup は隔離 worktree 全体の削除に統一した。
+- **テスト前提と証跡を同期した**: A2 の承認は計画を提示した同一セッションで行い、曖昧な同意も plan 文脈を作った同一セッションで検査する。mutating run の反復を禁止し、解消済み macOS conflict を既知問題一覧から除去した。FR-PROMPT-10 の mapping へ runtime gate 3 ファイルを明示した。
+
+**利用者への影響**: HEAD を取得できない checkout では Prompt plan / run が終了コード 2 で停止する。通常の Git checkout での plan / run、request v1、CLI 引数、選択済み Workflow / Step の範囲は変わらない。
+
+**検証**: 敵対的 RED は **18 failed / 83 passed**。修正後の Prompt CLI / 文書契約は **101 passed**。Prompt request / execution / input alias / DAG / Skill routing / traceability / inventory の広域回帰は **444 passed / 1 skipped**（Windows の symlink 権限制約）。
+
+<!-- validation-confirmed -->
+
+### Changed — Prompt 版で計画承認後の完全実行を許可した（FR-PROMPT-10）
+
+- Prompt Edition controller は、承認前は従来どおり実行計画と SHA-256 の提示だけを行う。提示済み計画への明示承認後は hash を `hve prompt run` へ渡し、HVE が FR-PROMPT-04 の SHA-256 一致を確認した場合だけ CLI Orchestrator へ委譲する。`task_scope=multi` / `context_size=large` でも standalone の plan-only 規則を理由にこの委譲を停止しない。
+- 限定例外は controller 自身による対象成果物の直接編集を許可しない。各 Step は必要な `plan.md` を作成してよいが、`plan.md` / `subissues.md` だけで終了せず宣言 `output_paths` を実行完了時点で存在させ、既存の前提検査・Wave 承認・成果物ゲートに従う。認証・権限・Azure・QA・デプロイ承認は Prompt 版の承認で代替しない。
+- `.github/copilot-instructions.md`、task-dag planning 3 文書、Prompt Edition Skill / eval、Quick Start、Prompt 共通索引、統合テスト手順 3 件を同じ契約へ同期した。既存の `prompt run → orchestrate → StepRunner` が完全実行と fail-fast を実装しているため、実行核の再実装は行っていない。後続の敵対的レビューでは `hve/__main__.py` の HEAD 取得不能時だけ fail-closed に強化した。
+
+**利用者への影響**: Prompt 版では計画を 1 回承認すれば、Agent がコマンドや SHA-256 の再入力を求めず、選択済み Workflow / Step を成功または最初の失敗まで実行する。計画が stale になった場合は再計画・再提示・再承認が必要で、未選択 Workflow の暗黙追加、rollback、失敗後の継続は行わない。
+
+**検証**: 新規契約は実装前 **6 failed / 61 passed** から実装後 **67 passed** へ移行した。Prompt CLI / execution、runner、DAG、要件トレーサビリティ、Skill routing を含む focused 回帰は **170 passed**、拡張回帰は **175 passed**。Skill eval YAML、Markdown fence、相対リンク、inventory freshness、`git diff --check` も PASS。
+
+<!-- validation-confirmed -->
+
+### Changed — Prompt 版の統合テスト手順を GitHub Copilot へ一括貼り付けできるようにした
+
+- `tests/prompt-version/01-request-contract.md`〜`08-e2e-smoke.md` の各文書へ、既存の目的・前提・実施項目・記録すること・重要を完全保持した単一の `markdown` コードブロックを追加した。内部にコード例を持つ文書では内側を 3 バッククォートのまま残し、外側を 4 バッククォートとすることで、ブロック全体を一度にコピーできる。
+- 各 Prompt の先頭へ対象テスト名（番号と FR ID）を明記し、必要なコマンド、ファイル操作、request の保存先、plan SHA-256 を Copilot が扱い、開始前に索引の共通前提・禁止事項・既知事象を確認するよう指示した。E2E スモークの実行は利用者の明示承認を得てから行うこと、新しいセッションを要するケースは未実施として記録することも明示した。
+- `tests/prompt-version/README.md` にローカル 3 面への貼り付け手順を追加し、実測で解消済みだった `test_macos_gui_workflow_contract.py` の conflict marker 記述を既知事項から除去した。通常利用向けの `users-guide/prompts/` は既に貼り付け用ブロック（`text` フェンス）を備えるため変更していない。
+
+**利用者への影響**: 統合テスト担当者は対象ファイルのコピー用ブロックだけを GitHub Copilot へ貼り付けて実行を依頼できる。既存のテスト条件、HVE の実行コード、Prompt request v1、CLI 引数は変更していない。
+
+**検証**: 8 文書すべてで外側フェンス 1 組、内部フェンス偶数、HEAD 本文の完全保持、相対リンク切れ 0、BOM 0、既存 CRLF 維持を機械確認した。利用者文書側の Prompt 版契約は回帰確認として **61 passed**、`git diff --check` は exit 0。各文書と統合差分へ6軸の敵対的レビューを実施し、有効指摘を反映後に Critical / Major / Minor 0 件を確認した。
+
+<!-- validation-confirmed -->
+
 ### Fixed — GUI / Prompt の保存設定から生成される CLI 実行引数を一致させた（FR-LOCAL-SURFACE-01）
 
 同じ Workflow と保存設定を使っても、GUI と Prompt 版が生成する CLI 実行引数に差が残っていた。GUI の実際の設定復元経路と Prompt 版の設定ブリッジを全 13 Workflow で比較し、面固有値を指定しない条件で要素数・順序・値が一致するよう修正した。
@@ -1678,6 +1716,40 @@ HVE の GUI / CLI / Cloud 3 サーフェスに対する調査で「要件が存�
 - **同種の順序依存テストを 1 件見つけて直した**。`test_lock_file_object_handoff_cancellation_does_not_leak_lock[stream]` は同じ bytecode 注入を使っており、**先行テストが `sys.settrace` を呼んでいたおかげで偶然通っていた**。単独実行では修正前から失敗する（実測）。同じく依存境界での注入へ改め、単独でも成立するようにした。
 
 **影響範囲**: `hve/asdw_data_script_launcher.py`、`hve/tests/test_asdw_data_script_generator.py`、版番号・変更履歴。Markdown Query（`mdq`）と Code Query（`cq`）の本体・Skill・配布物は変更していない。
+
+<!-- validation-confirmed -->
+
+## [0.8.89] - 2026-08-28
+
+### Fixed — Prompt 版の敵対的レビュー修正に合わせて HVE 版を同期した
+
+- `[Unreleased]` に記録した FR-PROMPT-04 / 05 / 10 の HEAD fail-closed、承認/hash 時系列、統合テスト隔離、固定 fixture、偽 GREEN 防止に対応し、`pyproject.toml` の project version / bumpversion current version と `hve.__version__` を `0.8.89` へ同期した。
+- Markdown Query engine / Skill と Code Query engine / Skill は変更していないため据え置いた。
+
+**検証**: HVE の 4 箇所の版表現が `0.8.89` で一致し、Prompt / traceability / inventory の広域回帰 **444 passed / 1 skipped** と差分検査が成功することを確認する。
+
+<!-- validation-confirmed -->
+
+## [0.8.88] - 2026-08-28
+
+### Changed — Prompt 版の承認後完全実行契約に合わせて HVE 版を同期した
+
+- `[Unreleased]` に記録した FR-PROMPT-10 の承認済み委譲、standalone 分割規則の限定例外、既存安全ゲートの維持、Skill・利用者文書・統合テスト手順の同期に対応し、`pyproject.toml` の project version / bumpversion current version と `hve.__version__` を `0.8.88` へ同期した。
+- Markdown Query engine / Skill と Code Query engine / Skill は今回変更していないため据え置いた。
+
+**利用者への影響**: 版メタデータ以外の追加変更はない。実行契約と安全境界は上記 `[Unreleased]` エントリーに記録している。
+
+**検証**: HVE の 4 箇所の版表現が `0.8.88` で一致し、focused 回帰・inventory freshness・差分検査が成功することを確認する。
+
+<!-- validation-confirmed -->
+
+## [0.8.87] - 2026-08-27
+
+### Changed — Prompt 版統合テスト文書のコピー可能化に合わせて HVE 版を同期した
+
+- `[Unreleased]` に記録した 8 本の統合テスト Prompt の一括コピー化、索引への利用手順追加、既知事象の実測同期に対応し、`pyproject.toml` の project version / bumpversion current version と `hve.__version__` を `0.8.87` へ同期した。
+- 変更した `tests/prompt-version/**` は [.github/scripts/hve_scope.py](.github/scripts/hve_scope.py) の判定では自動版更新の対象外であり（実測 0 件）、本更新は利用者の明示指示による PATCH 更新である。
+- Markdown Query engine / Skill と Code Query engine / Skill は今回変更していないため据え置いた。
 
 <!-- validation-confirmed -->
 

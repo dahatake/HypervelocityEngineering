@@ -1,5 +1,16 @@
 # 07. 全 Workflow の貼り付け用 Prompt が実際に計画できるか（FR-PROMPT-10）
 
+## GitHub Copilot に貼り付ける Prompt
+
+以下のコードブロック全体をコピーして貼り付けてください。
+
+````markdown
+このリポジトリで、HVE Prompt 版統合テスト「07. 全 Workflow の貼り付け用 Prompt が実際に計画できるか
+（FR-PROMPT-10）」を実施してください。必要なコマンドとファイル操作はすべてあなたが実行し、
+利用者にコマンド、request の保存先、plan SHA-256 の入力を求めないでください。実測していない結果を
+作らず、以下の目的、前提、実施項目、記録すること、重要をすべて満たしてください。
+開始前に `tests/prompt-version/README.md` の全 Prompt 共通の前提・禁止事項・既知の未修正事項を確認してください。
+
 ## 目的
 
 - [users-guide/prompts/](../../users-guide/prompts/README.md) に置いた **貼り付け用 Prompt 例** が、
@@ -92,3 +103,4 @@ python -m pytest hve/tests/test_prompt_edition_docs_contract.py -q
   **registry との不一致を修正する場合のみ**。実行しやすくするための改変はしないこと。
 - C1〜C9 は互いに独立なので並列実行してよい。各ケース完了後に敵対的レビューを行い、
   レビュー結果を反映してから次へ進むこと。
+````

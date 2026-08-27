@@ -51,7 +51,8 @@ plan SHA-256 を表示する。成果物（`docs/` / `src/` / `knowledge/` / `qa
 `--dry-run` は上流成果物の不足を検出しないため、依存の満たし方は利用者へ確認すること。
 
 `hve prompt run` は同じ計画を再計算し、SHA-256 が一致しない
-場合は **子プロセスを 1 つも起動せずに停止** する。
+場合は **`orchestrate` 子プロセスを 1 つも起動せずに停止** する。HEAD commit を取得できない場合も、
+固定値で代用せず同じく実行前に停止する。
 
 ## 利用者との対話（自然言語だけで完結させる）
 
@@ -76,6 +77,16 @@ plan SHA-256 の転記はすべて Agent が代行する（FR-PROMPT-10）。
 
 自然言語の承認だけでは実行されない。実際のゲートは `--expected-sha256` の一致であり
 （FR-PROMPT-04）、これを緩和してはならない。
+
+## 承認後の完全実行
+
+- 承認前は **plan の提示だけ**を行い、対象成果物の生成・実装・編集へ進まない。
+- 利用者の**明示承認**を得た後、Prompt Edition controller は提示済み plan の SHA-256 を渡して **`hve prompt run` を起動する**。HVE が現在の request・設定・HEAD から再計算した SHA-256 との一致を確認した場合だけ、子 `orchestrate` へ委譲する。controller が standalone の `task_scope=multi` / `context_size=large` でも、この起動を plan-only 規則で止めない。
+- Prompt Edition controller 自身は、委譲対象の成果物（`docs/` / `src/` / `knowledge/` / `qa/` など）を**直接実装・編集しない**。request JSON の作成・一時保存と CLI の起動は controller の責務であり、既存 Workflow / Step の成果物生成とは区別する。
+- 委譲先 Step は必要に応じて `plan.md` / `subissues.md` を作ってよいが、**それだけで停止してはならない**。宣言された `output_paths` を実行完了時点で存在させる（FR-PROMPT-01 / FR-WF-OUT-01）。存在ゲートは、実行前から存在した成果物が今回更新されたことまでは証明しない。
+- 実行対象は **選択済み Workflow / Step だけ**であり、最初の失敗で停止する。未選択 Workflow の暗黙追加、rollback、失敗継続は行わない（FR-PROMPT-06）。
+- plan が stale になったら、その plan で続行せず、Agent が `hve prompt plan` を再実行して再提示し、利用者の承認を取り直す。
+- 既存の認証・権限・Azure・QA・デプロイ承認の各ゲートはそのまま維持する。Prompt 版は承認済み plan を既存経路へ委譲するだけで、既存の保護を緩和しない。
 
 ## 責務分界
 

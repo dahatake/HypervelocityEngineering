@@ -3038,11 +3038,19 @@ def _cmd_prompt(args: argparse.Namespace) -> int:
         request = load_request(args.request)
         from .gui import settings_store
 
+        head_commit = prompt_execution.resolve_head_commit(repo_root)
+        if head_commit == "unknown":
+            print(
+                f"{_ts()} ❌ リポジトリの HEAD commit を取得できないため、"
+                "Prompt 実行計画を作成できません。",
+                file=sys.stderr,
+            )
+            return 2
         plan = prompt_execution.build_execution_plan(
             request,
             settings=settings_store.load(),
             repo_root=repo_root,
-            head_commit=prompt_execution.resolve_head_commit(repo_root),
+            head_commit=head_commit,
         )
     except (PromptRequestError, InputAliasError, ValueError) as exc:
         print(f"{_ts()} ❌ Prompt request を受理できません: {exc}", file=sys.stderr)

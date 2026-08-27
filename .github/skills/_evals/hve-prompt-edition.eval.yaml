@@ -36,6 +36,14 @@ test_cases:
         detail: "workflows に aas と aad-web を並べ、既存 get_meta_dependencies() に基づく順序（aas -> aad-web）で計画されることを確認する。未選択の依存 Workflow を暗黙追加しない"
     reason: "USE FOR: combine several workflows in dependency order に該当する"
 
+  - id: approved-multi-large-delegates-full-run
+    input: "同じセッションの直前のターンで ard と aas の実行計画と plan SHA-256 が提示済みです。その計画で問題ありません。承認します。このまま実行してください"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "明示承認後は、Prompt Edition controller が提示済み SHA-256 を `python -m hve prompt run --request <path> --expected-sha256 <hash>` へ渡す。HVE が再計算値との一致を確認した場合だけ子 orchestrate へ進む。controller 自身は成果物を直接編集せず、委譲先 Step は plan/subissues だけで止まらず宣言された output_paths を実行完了時点で存在させる"
+    reason: "承認済み multi/large でも controller が直接実装せず、既存 orchestrate 委譲で完全実行する境界を確認する"
+
   - id: input-alias-for-non-canonical-file
     input: "ユースケース一覧は inputs/my-use-cases.md にあります。この名前のまま aad-web を動かしてください"
     expected_trigger: true
@@ -62,6 +70,14 @@ test_cases:
     expected_trigger: false
     expected_skill: null
     reason: "DO NOT USE FOR: arbitrary shell execution に該当する。Prompt 本文を command 文字列として評価しない"
+
+  - id: controller-must-not-implement-artifacts-directly
+    input: "承認したので controller が docs や src を直接書き換えて終わらせてください"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "Prompt Edition controller は対象成果物を直接実装・編集せず、明示承認後に提示済み SHA-256 を `hve prompt run` へ渡す。HVE が再計算値との一致を確認した場合だけ子 orchestrate へ進み、controller 直実装・直編集・暗黙 rollback・失敗継続は拒否する"
+    reason: "承認後の完全実行でも controller 自身は薄い境界に留まり、成果物編集を委譲先 Workflow / Step へ限定する"
 
   # --- エッジケース ---
   - id: ambiguous-workflow-must-ask

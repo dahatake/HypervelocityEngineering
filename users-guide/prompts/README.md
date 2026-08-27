@@ -14,6 +14,8 @@ HVE が内部で使用する Agent / Step / Work IQ / 質問票 / Review / Cloud
 > 書くまで実行しない」を含めています。この 2 文を消さないでください
 >（Step を絞る差分だけを示す断片例は除く）。
 
+> **共通契約:** 承認後は Prompt Edition controller がその場で成果物を直接編集せず、提示済み SHA-256 を渡して `hve prompt run` を起動します。HVE が再計算値との一致を確認した場合だけ、選択済みの Workflow / Step を `orchestrate` へ委譲します。`task_scope=multi` や `context_size=large` でも、この委譲自体は止めません。
+
 ---
 
 ## 目次

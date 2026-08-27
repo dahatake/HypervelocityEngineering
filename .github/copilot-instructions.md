@@ -22,6 +22,12 @@
 - **推論補完時**: `TBD（推論: {根拠}）` + 「この回答はCopilot推論をしたものです。」と明記する。
 - **task_scope=multi または context_size=large の扱い**:
   - **単独実行モード**（Orchestrator 配下でない Agent 単独起動・テスト等）: 実装開始禁止。plan.md + subissues.md のみ作成して終了する。
+  - **Prompt 版承認後の委譲（限定例外）**:
+    - Prompt Edition controller（Prompt 版を仲介する Agent）は承認前は plan 提示だけを行い、run してはならない。
+    - 提示済み計画への明示承認後、同 controller は提示された SHA-256 を渡して `hve prompt run` を起動する。HVE が FR-PROMPT-04 の SHA-256 一致を確認した場合だけ既存 `orchestrate` へ進む。この委譲を、controller が standalone で `task_scope=multi` / `context_size=large` であることを理由に止めてはならない。
+    - この例外は既存 `orchestrate` への委譲に限る。同 controller は対象成果物を直接実装・編集してはならない。
+    - `hve prompt run` が plan SHA-256 の不一致を stale として検出した場合は、`orchestrate` へ進まず、再plan・再提示・再承認を実施する。
+    - 委譲後も CLI Orchestrator の既存制約、`output_paths` gate、認証・権限・Azure・QA・デプロイ承認を維持する。
   - **Cloud Agent Orchestrator 配下モード**（Issue Template + GitHub Actions + Copilot Cloud Agent）: Agent は plan.md + subissues.md を作成して当該 Step を終了する。PR に `create-subissues` ラベルが付与されると GitHub Actions が subissues.md を読み込み、Sub-Issue を作成して Copilot Cloud Agent にアサインする。
   - **CLI / GUI Orchestrator 配下モード**: GitHub Sub-Issue 作成は行わない。CLI / GUI の標準実行は workflow DAG / fan-out で分割・並列化する。`subissues.md` runtime fork は legacy / 実験用途の明示 opt-in（`OrchestratorContext.split_fork_enabled=True`、Copilot SDK fleet mode）のみ。**このモードでは Agent は `task_scope` / `context_size` による SPLIT_REQUIRED 判定を行わず、宣言された `output_paths` の主成果物を必ず生成してから終了すること**（`plan.md` / `subissues.md` のみの出力で終了すると後続 Step が成果物不在で skip / 失敗するため）。本モードを Agent 側で検知する一次手段は CLI/GUI Orchestrator が prompt 末尾に注入する `## 実行モード制約` セクション、二次的に Python 側ランタイム ([hve/runner.py](hve/runner.py)) が Step 完了時に `output_paths` 全欠落を検出して当該 Step を fail 化する。
   - **判別方法**: Orchestrator 起動時に生成される `OrchestratorContext` を Python 内部で明示的引数として `StepRunner` / `check_plan_md_metadata` 等へ伝播させる方式。詳細は Skill `task-dag-planning` 参照。

@@ -83,6 +83,25 @@ SPLIT_REQUIRED の場合は `subissues-template.md` を `read` してコピー�
 - 「中断」の定義: Orchestrator 全体として次タスクへ進めない状態のみを指す。Agent 個別の確認待ち停止は中断に含まない
 - 本例外は Custom Agent の責務（成果物完遂のための fan-out）を保証する目的であり、`copilot-instructions.md §5` の優先順位（本ファイル > Custom Agent > Skills）は変更しない
 
+## Prompt Edition controller 例外
+
+Prompt Edition controller には、通常の standalone plan-only 規則を壊さずに「承認済みの実行計画を既存 orchestrate へ橋渡しする」ための狭い例外だけを認める。
+
+### 理由
+
+- controller の役割は成果物の直接実装ではなく、提示済み計画をそのまま安全に実行系へ渡すことにある。
+- そのため、controller が standalone かつ `task_scope=multi` / `context_size=large` であっても、**明示承認済み**の plan SHA-256 を渡す `hve prompt run` の起動までは plan-only 規則で禁止しない。HVE が FR-PROMPT-04 の SHA-256 一致を確認した場合だけ `orchestrate` へ進む。
+- ただし、未承認または stale な計画を流すと、計画と実行対象のずれを見逃すため、ここは従来どおり停止させる。例外は「承認済み計画の安全な受け渡し」に限定し、通常の standalone / Cloud / CLI-GUI の境界や plan metadata / subissues.md の既存規則は変えない。
+
+### 流れ
+
+1. controller は提示済み実行計画に対するユーザーの**明示承認**を確認する。
+2. controller は提示された plan SHA-256 を `--expected-sha256` へ渡して既存 `hve prompt run` を起動する。
+3. HVE は現在の request・設定・HEAD から plan を再計算し、FR-PROMPT-04 の SHA-256 一致を確認する。一致した場合だけ `orchestrate` へ進む。
+4. controller 自身は対象成果物を直接実装・編集せず、既存 orchestrate にのみ委譲する。
+5. 委譲先 Step は Orchestrator 配下の既存規則に従い、plan/subissues だけで止まらず、宣言された `output_paths` を実行完了時点で存在させる。
+6. 承認前は停止する。HVE が stale を検出した場合も `orchestrate` へ進まず、controller が再plan・再提示して承認を取り直す。
+
 ---
 
 ## ガイド一覧（references/）

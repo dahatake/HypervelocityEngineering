@@ -1,5 +1,17 @@
 # 08. E2E スモーク（自然言語 → request → plan → 承認 → run）
 
+## GitHub Copilot に貼り付ける Prompt
+
+以下のコードブロック全体をコピーして貼り付けてください。
+
+````markdown
+このリポジトリで、HVE Prompt 版統合テスト「08. E2E スモーク（自然言語 → request → plan → 承認 → run）」を
+実施してください。必要なコマンドとファイル操作はすべてあなたが実行し、利用者にコマンド、
+request の保存先、plan SHA-256 の入力を求めないでください。実測していない結果を作らず、
+以下の目的、前提、実施項目、記録すること、重要をすべて満たしてください。
+Step 4 の実行は、あなたの判断ではなく利用者の明示承認を得てから行ってください。
+開始前に `tests/prompt-version/README.md` の全 Prompt 共通の前提・禁止事項・既知の未修正事項を確認してください。
+
 ## 目的
 
 - Prompt 版の **一気通貫** の流れを、実際の成果物生成まで含めて 1 回だけ通す。
@@ -10,18 +22,17 @@
 
 - **Azure リソースの作成・変更は行わない。** デプロイ Step を含む Workflow / Step を選ばないこと。
 - Copilot のトークンを消費するため、**実行前に対象 Workflow と Step 範囲を決めて記録**する。
-- 作業ツリーの状態を `git status --porcelain` で保存しておく（差分の切り分けに使う）。
+- 対象 revision から作った **専用の隔離 worktree** で実施する。共有作業ツリーや未コミット差分のある checkout では実行しない。
+- 結果レポートは隔離 worktree の外にある run-scoped パスへ保存し、cleanup 後も残るようにする。
 
 ## 実施項目
 
 ### Step 1. 対象の決定
 
-1. `python -c "from hve.workflow_registry import list_workflows; [print(w.id, w.name, [s.id for s in w.steps]) for w in list_workflows()]"` で候補を確認する。
-2. 次の条件を満たす **設計系の 1 Workflow・少数 Step** を選ぶ。
-   - Azure への書き込みを伴わない
-   - 上流成果物が現リポジトリに揃っている（`hve prompt plan` が通っても実行時に不足する場合があるため、
-     入力ファイルの実在を先に確認する）
-3. 選んだ Workflow / Step と、その理由を記録する。
+1. 固定 fixture として **Workflow `ard` の Step `1`** を使い、`params.company_name=Prompt E2E Test` を指定する。別の Workflow / Step へ置き換えない。
+2. `hve.workflow_registry.get_workflow("ard").get_step("1")` を使い、Custom Agent が `Arch-ARD-BusinessAnalysis-Untargeted`、canonical output が `docs/company-business-recommendation.md`、remote CI/CD と approval gate が無効であることを実行直前に確認する。argv だけを Azure 安全性の根拠にしない。
+3. 隔離 worktree 内の `docs/company-business-recommendation.md` を削除し、この run が空でない成果物を新規生成したことを確認できる状態にする。共有作業ツリーの同名ファイルは変更しない。
+4. 選んだ固定 fixture と、その検証結果を記録する。
 
 ### Step 2. 自然言語からの request 生成
 
@@ -41,19 +52,22 @@
 
 1. `python -m hve prompt plan --request <path>` の出力を記録する。
 2. 次を目視で確認する。
-   - 実行順が意図どおり
-   - Step が Step 1 で決めた範囲だけ
-   - argv に **デプロイ系のオプションが含まれていない**
+   - 実行順が `ard` だけ
+   - Step が `1` だけ
+   - registry で確認した Custom Agent / output / gate が Step 1 の固定 fixture と一致する
    - `plan SHA-256` が表示されている
 3. 実行前の `docs/` `src/` `knowledge/` `qa/` に差分が無いことを確認する。
 
 ### Step 4. 承認と実行
 
-1. Step 3 の計画に問題がなければ、表示された SHA-256 を使って実行する。
+1. Step 3 の計画に問題がなく、利用者の**実行直前の明示承認**が得られたら、表示された SHA-256 を使って実行する。
 
 ```sh
 python -m hve prompt run --request <path> --expected-sha256 <hash>
 ```
+
+   - Copilot が利用者へ SHA-256 やコマンドの再入力を求めず、提示済み hash を転記していることを確認する。
+   - controller が `docs/` `src/` `knowledge/` `qa/` を直接編集せず、まず `hve prompt run --request <path> --expected-sha256 <hash>` に委譲していることを確認する。
 
 2. 実行中に **子プロセスとして `orchestrate` が起動している**ことを確認する
    （プロセス一覧、または出力に `Copilot SDK Orchestrator:` の見出しが現れること）。
@@ -61,9 +75,10 @@ python -m hve prompt run --request <path> --expected-sha256 <hash>
 
 ### Step 5. 成果物の確認
 
-1. `git status --porcelain` で生成・変更されたファイルを取得する。
-2. 生成先が **canonical な出力パス**であることを確認する（別名で出力先が変わっていないこと）。
-3. 成果物の内容が空でないこと、明らかな捏造（存在しない ID・URL・数値）が無いことを確認する。
+1. 実行前後の `git status --porcelain` と `docs/company-business-recommendation.md` の実在・サイズ・SHA-256 を比較する。
+2. 選択した非 Azure Step が `plan.md` / `subissues.md` だけで終了していないことを確認する。
+3. 生成先が **canonical な出力パス**であることを確認する（別名で出力先が変わっていないこと）。
+4. 成果物の内容が空でないこと、明らかな捏造（存在しない ID・URL・数値）が無いことを確認する。
 
 ### Step 6. 委譲であることの確認
 
@@ -74,9 +89,8 @@ python -m hve prompt run --request <path> --expected-sha256 <hash>
 
 ### Step 7. 後片付け
 
-1. 生成された成果物を残すか戻すかを判断し、判断内容を記録する。
-2. **`git checkout` / `git reset` / `git stash` は使わない**（他の作業の差分を巻き込むため）。
-   戻す場合は生成されたファイルを個別に削除する。
+1. 結果レポートが隔離 worktree 外の run-scoped パスへ保存済みであることを確認する。
+2. 隔離 worktree の外（元リポジトリ）へ移動し、`git -C <元リポジトリ> worktree remove --force <隔離パス>` で隔離 worktree を削除する。共有作業ツリーの生成物を個別削除したり、`git checkout` / `git reset` / `git stash` で戻したりしない。
 
 ## 記録すること
 
@@ -94,3 +108,4 @@ python -m hve prompt run --request <path> --expected-sha256 <hash>
   **既存 `orchestrate` 側**かを切り分けて記録する。切り分けできない場合は「切り分け不能」と書く。
 - Step 1〜7 は直列実行です。並列化しないこと。各 Step 完了後に敵対的レビューを行い、
   レビュー結果を反映してから次の Step へ進むこと。
+````

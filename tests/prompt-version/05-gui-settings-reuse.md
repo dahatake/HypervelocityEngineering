@@ -1,5 +1,16 @@
 # 05. 保存済み GUI 設定の再利用と override allowlist（FR-PROMPT-07）
 
+## GitHub Copilot に貼り付ける Prompt
+
+以下のコードブロック全体をコピーして貼り付けてください。
+
+````markdown
+このリポジトリで、HVE Prompt 版統合テスト「05. 保存済み GUI 設定の再利用と override allowlist
+（FR-PROMPT-07）」を実施してください。必要なコマンドとファイル操作はすべてあなたが実行し、
+利用者にコマンド、request の保存先、plan SHA-256 の入力を求めないでください。実測していない結果を
+作らず、以下の目的、前提、実施項目、記録すること、重要をすべて満たしてください。
+開始前に `tests/prompt-version/README.md` の全 Prompt 共通の前提・禁止事項・既知の未修正事項を確認してください。
+
 ## 目的
 
 - Prompt 版が **GUI で保存した設定** を基準値として `OrchestrateArgs` を構築し、
@@ -96,3 +107,4 @@ python -c "from hve.prompt_request import ALLOWED_SETTINGS_OVERRIDES; print(sort
 - テストを通すために `hve/gui/orchestrate_args.py` を書き換えないこと。
 - A1〜A7 / B1〜B4 は互いに独立なので並列実行してよい。各ケース完了後に敵対的レビューを行い、
   レビュー結果を反映してから次へ進むこと。
+````

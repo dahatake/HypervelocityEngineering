@@ -67,6 +67,30 @@ else:  # task_scope == "single" かつ context_size IN ("small", "medium")
 - `implementation_files: true` と `split_decision: SPLIT_REQUIRED` を同時に設定すること（CI で自動検出・拒否される）
 - `subissues_count: 0` と `split_decision: SPLIT_REQUIRED` を同時に設定すること（subissues.md 作成が必須）
 
+## Prompt Edition controller 例外
+
+以下は、通常の分割判定・plan-only 規則を維持したまま Prompt Edition controller にだけ許される境界である。
+
+### 許可されること
+
+- Prompt Edition controller が、提示済み実行計画への**明示承認**を取得済みである。
+- controller が提示された plan SHA-256 を `--expected-sha256` へ渡して既存 `hve prompt run` を起動する。
+
+この 2 条件を満たす場合、controller 自身が standalone かつ `task_scope=multi` / `context_size=large` でも、plan-only 規則は**`hve prompt run` の起動**を禁止しない。HVE が FR-PROMPT-04 の SHA-256 一致を確認した場合だけ、子 `orchestrate` へ進む。
+
+### 禁止境界
+
+- controller 自身が対象成果物を直接実装・編集すること。
+- 既存 orchestrate を迂回する別実行経路を追加すること。
+- 新フラグ・新抽象化・Python 実装変更を前提にこの例外を成立させること。
+- 承認前に `hve prompt run` を起動すること、または HVE が stale を検出した後も `orchestrate` へ進むこと。stale 時は controller が再plan・再提示・再承認へ戻る。
+- この例外を根拠に、通常 standalone / Cloud / CLI-GUI の既存規則、plan metadata、subissues.md 規則を緩和すること。
+
+### 委譲先の扱い
+
+- 例外が許可するのは controller の委譲開始までであり、委譲先 Step は既存 Orchestrator 規則に従う。
+- 委譲先 Step は Orchestrator 配下で plan/subissues だけで止まらず、必要な `output_paths` を実行完了時点で存在させなければならない。
+
 ## §2.3 分割モード（Plan-Only）— 計画のみ作成し、実装は一切しない
 
 > **このセクションは全 Custom Agent に対して強制適用される。Custom Agent に異なる記述がある場合でも本セクションが優先される。**

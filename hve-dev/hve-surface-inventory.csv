@@ -690,7 +690,7 @@ core,function,__getattr__,hve/__init__.py,41,raise AttributeError(f'module {__na
 core,function,__dir__,hve/__init__.py,52,"return sorted({*globals(), *__all__})",,0
 cli,function,_configure_stdio_encoding,hve/__main__.py,85,stdout/stderr を UTF-8 に再設定する（パイプ経由起動時の cp932 対策）。,,1
 cli,function,_reexec_in_venv_if_needed,hve/__main__.py,113,``python -m hve`` がリポジトリの ``.venv`` 外の Python で起動された場合に、,,2
-cli,function,_ts,hve/__main__.py,235,現在時刻のプレフィックス文字列を返す。,,83
+cli,function,_ts,hve/__main__.py,235,現在時刻のプレフィックス文字列を返す。,,84
 cli,function,_split_csv,hve/__main__.py,347,カンマ区切り文字列を空要素なしのリストに変換する。,,3
 cli,function,_prompt_app_ids,hve/__main__.py,352,APP-ID を 1 回だけ尋ね、単一指定時は app_id も派生させる。,,1
 cli,function,_prompt_param_input,hve/__main__.py,369,ワークフロー固有パラメータを内部名ではなく表示ラベルで入力させる。,,1
@@ -722,30 +722,30 @@ cli,function,_build_params,hve/__main__.py,2778,CLI 引数からワークフロ�
 cli,function,_ensure_run_workdir_env,hve/__main__.py,2975,orchestrate 限定で ``work/run/<run-id>/`` への env を注入する。,,1
 cli,function,_start_startup_index_refresh,hve/__main__.py,3001,def _start_startup_index_refresh(command: Optional[str]) -> None:,,1
 cli,function,_cmd_prompt,hve/__main__.py,3018,`prompt plan` / `prompt run` を処理する。,,1
-cli,function,main,hve/__main__.py,3084,エントリポイント。,,53
-cli,function,_validate_auto_coding_agent_review,hve/__main__.py,3149,--auto-coding-agent-review の前提条件を検証する。,,1
-cli,function,_run_startup_configuration_preflight,hve/__main__.py,3184,FR-CLI-82 の共通設定 preflight を実行し、失敗を一括表示する。,,2
-cli,function,_run_copilot_auth_preflight,hve/__main__.py,3225,orchestrate 実行前に GitHub Copilot 認証状態を確認する。,,2
-cli,function,_workiq_request_reasons,hve/__main__.py,3279,Work IQ を要求している設定名を列挙する。,,2
-cli,function,_is_workiq_requested,hve/__main__.py,3295,Work IQ を使う設定かを返す。,,1
-cli,function,_disable_workiq,hve/__main__.py,3300,Work IQ 関連フラグを実行単位で無効化する。,,2
-cli,function,_run_workiq_auth_preflight,hve/__main__.py,3316,Work IQ 使用時に EULA / M365 認証を本処理前に確認する。,,2
-cli,function,_is_azure_auth_requested,hve/__main__.py,3366,Azure CLI 認証を必要とする可能性がある設定かを返す。,,1
-cli,function,_azure_account_available,hve/__main__.py,3373,Azure CLI がログイン済みかを確認する。,,2
-cli,function,_run_azure_auth_preflight,hve/__main__.py,3391,Azure 利用時に Azure CLI 認証を本処理前に確認する。,,2
-cli,function,_cmd_pricing,hve/__main__.py,3429,`hve pricing {show|refresh}` ハンドラー。,,1
-cli,function,_cmd_toolsearch_context,hve/__main__.py,3505,`hve toolsearch context` ハンドラー（FR-TS-11）。,,1
-cli,function,_cmd_toolsearch,hve/__main__.py,3531,`hve toolsearch` ハンドラー（FR-TS-10 / FR-TS-11）。,,1
-cli,function,_cmd_login,hve/__main__.py,3594,`hve login` ハンドラー: GitHub Copilot ログイン + モデル一覧キャッシュ更新。,,1
-cli,function,_cmd_run_interactive,hve/__main__.py,3689,インタラクティブ wizard モードのハンドラー。,,3
-cli,function,_cmd_qa_merge,hve/__main__.py,4639,qa-merge サブコマンドのハンドラー。,,1
-cli,function,_cmd_workiq_doctor,hve/__main__.py,4809,workiq-doctor サブコマンドのハンドラー。,,1
-cli,function,_confirm_autopilot_chain_start,hve/__main__.py,4908,CLI Autopilot の実行開始を確認する（FR-CLI-78）。,,1
-cli,function,_cmd_orchestrate_autopilot_chain,hve/__main__.py,4921,orchestrate --autopilot-chain サブコマンドのハンドラー（Qt 非依存）。,,1
-cli,function,_cmd_orchestrate,hve/__main__.py,5040,orchestrate サブコマンドのハンドラー。,,1
-cli,function,_cmd_emit_prompt,hve/__main__.py,5203,emit-prompt サブコマンドのハンドラー。,,1
-cli,function,_cmd_ingest_docs,hve/__main__.py,5215,ingest-docs サブコマンドのハンドラー（ADI Step 1 の決定的前処理）。,,1
-cli,function,_console_main,hve/__main__.py,5243,``hve`` console script のエントリポイント。,,1
+cli,function,main,hve/__main__.py,3092,エントリポイント。,,53
+cli,function,_validate_auto_coding_agent_review,hve/__main__.py,3157,--auto-coding-agent-review の前提条件を検証する。,,1
+cli,function,_run_startup_configuration_preflight,hve/__main__.py,3192,FR-CLI-82 の共通設定 preflight を実行し、失敗を一括表示する。,,2
+cli,function,_run_copilot_auth_preflight,hve/__main__.py,3233,orchestrate 実行前に GitHub Copilot 認証状態を確認する。,,2
+cli,function,_workiq_request_reasons,hve/__main__.py,3287,Work IQ を要求している設定名を列挙する。,,2
+cli,function,_is_workiq_requested,hve/__main__.py,3303,Work IQ を使う設定かを返す。,,1
+cli,function,_disable_workiq,hve/__main__.py,3308,Work IQ 関連フラグを実行単位で無効化する。,,2
+cli,function,_run_workiq_auth_preflight,hve/__main__.py,3324,Work IQ 使用時に EULA / M365 認証を本処理前に確認する。,,2
+cli,function,_is_azure_auth_requested,hve/__main__.py,3374,Azure CLI 認証を必要とする可能性がある設定かを返す。,,1
+cli,function,_azure_account_available,hve/__main__.py,3381,Azure CLI がログイン済みかを確認する。,,2
+cli,function,_run_azure_auth_preflight,hve/__main__.py,3399,Azure 利用時に Azure CLI 認証を本処理前に確認する。,,2
+cli,function,_cmd_pricing,hve/__main__.py,3437,`hve pricing {show|refresh}` ハンドラー。,,1
+cli,function,_cmd_toolsearch_context,hve/__main__.py,3513,`hve toolsearch context` ハンドラー（FR-TS-11）。,,1
+cli,function,_cmd_toolsearch,hve/__main__.py,3539,`hve toolsearch` ハンドラー（FR-TS-10 / FR-TS-11）。,,1
+cli,function,_cmd_login,hve/__main__.py,3602,`hve login` ハンドラー: GitHub Copilot ログイン + モデル一覧キャッシュ更新。,,1
+cli,function,_cmd_run_interactive,hve/__main__.py,3697,インタラクティブ wizard モードのハンドラー。,,3
+cli,function,_cmd_qa_merge,hve/__main__.py,4647,qa-merge サブコマンドのハンドラー。,,1
+cli,function,_cmd_workiq_doctor,hve/__main__.py,4817,workiq-doctor サブコマンドのハンドラー。,,1
+cli,function,_confirm_autopilot_chain_start,hve/__main__.py,4916,CLI Autopilot の実行開始を確認する（FR-CLI-78）。,,1
+cli,function,_cmd_orchestrate_autopilot_chain,hve/__main__.py,4929,orchestrate --autopilot-chain サブコマンドのハンドラー（Qt 非依存）。,,1
+cli,function,_cmd_orchestrate,hve/__main__.py,5048,orchestrate サブコマンドのハンドラー。,,1
+cli,function,_cmd_emit_prompt,hve/__main__.py,5211,emit-prompt サブコマンドのハンドラー。,,1
+cli,function,_cmd_ingest_docs,hve/__main__.py,5223,ingest-docs サブコマンドのハンドラー（ADI Step 1 の決定的前処理）。,,1
+cli,function,_console_main,hve/__main__.py,5251,``hve`` console script のエントリポイント。,,1
 core,class,ExcludedAppId,hve/app_arch_filter.py,69,"return {'app_id': self.app_id, 'actual_architecture': self.actual_architecture, 'reason': self.reason}",,3
 core,class,AppArchFilterResult,hve/app_arch_filter.py,83,"return {'workflow_id': self.workflow_id, 'target_kind': self.target_kind, 'target_architectures': self.target_architectures, 'requested_app_ids': self.requested_app_ids, 'matched_app_ids': self.matched_app_ids, 'excluded_app_ids': [e.to_dict() for e in self.excluded_app_ids], 'unknown_app_ids': sel…",,5
 core,function,_normalize_arch_whitespace,hve/app_arch_filter.py,135,前後スペースを除去して空白を正規化する。,,1

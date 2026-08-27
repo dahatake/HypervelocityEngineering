@@ -10,6 +10,20 @@
 
 ---
 
+## 使い方
+
+1. 下表から検証したいファイルを開く。
+2. `GitHub Copilot に貼り付ける Prompt` の `markdown` コードブロック全体をコピーする。
+3. このリポジトリを開いた HVE GUI 内の Copilot CLI タブ、standalone GitHub Copilot CLI、または
+   VS Code Copilot Chat へ貼り付ける。
+4. コードブロック内の指示に従い、Copilot が提示する計画・実測結果を確認する。
+
+コードブロック内のコマンドは **Copilot が実行する統合テスト手順**です。利用者がコマンド、
+request の保存先、plan SHA-256 を手入力する必要はありません。本 Prompt 集は GitHub.com の
+Cloud Agent Orchestrator を対象にしません。
+
+---
+
 ## ファイル一覧
 
 | ファイル | 検証対象 | Azure |
@@ -22,6 +36,7 @@
 | [06-agent-skill-behavior.md](06-agent-skill-behavior.md) | Skill の質問・推測禁止・禁止操作と自然言語だけでの完結（FR-PROMPT-10） | 不要 |
 | [07-docs-coverage.md](07-docs-coverage.md) | 全 Workflow の貼り付け用 Prompt が実際に計画できるか（FR-PROMPT-10） | 不要 |
 | [08-e2e-smoke.md](08-e2e-smoke.md) | 自然言語 → request → plan → 承認 → run の一気通貫 | 不要 |
+| [09-full-system-test.md](09-full-system-test.md) | 要件全件・設定組合せ・対象4 Workflow の実run・性能/Token/Azure計測 | 許可（既存承認ゲート必須） |
 
 **本 Prompt 集は Azure へのデプロイを対象外**とします。デプロイを含む全範囲のシステムテストは
 リポジトリ直下の `tests/[HVE]SystemTest - Full.txt` を使ってください。
@@ -34,6 +49,10 @@
 時間が限られる場合は **`02`（承認ゲート）→ `04`（入力別名）→ `08`（E2E）** を優先してください。
 この 3 つが Prompt 版の安全性の中核です。
 
+`09` は長時間・高コストのフルシステムテストです。`01`〜`08` とは独立して実行できますが、
+安全境界を先に確認するため `02` と `08` の完了後を推奨します。最初は計画だけを提示し、
+実run と Azure 書き込みは利用者の明示承認および既存の各承認ゲート後にだけ開始します。
+
 ---
 
 ## 全 Prompt 共通の前提
@@ -43,7 +62,9 @@
    各 Prompt 内の `python` は **`.venv` の Python** を指す（Windows: `.\.venv\Scripts\python.exe`、
    macOS / Linux: `./.venv/bin/python`）。システム Python では依存が揃わず失敗する。
 3. GUI（`python -m hve`）を 1 回起動し、設定を `hve/.settings.txt` へ保存済み
-4. 作業ツリーが clean、または未コミット差分を把握済み（plan hash は HEAD を含むため）
+4. `prompt plan` だけのケースは現在の作業ツリーで実施してよい。`prompt run` により成果物の書き込みを伴うケースは、**対象 revision から作った専用の隔離 worktree** でだけ実施する。共有中または未コミット差分のある作業ツリーでは実行しない。
+5. 隔離 worktree は clean であることを確認する。未コミットの実装を検証したい場合は、共有作業ツリーへ一時 commit を作らず、その revision を安全に再現できる専用 checkout を準備できるまで書き込みケースを未実施とする。
+6. 結果レポートは隔離 worktree の外にある run-scoped パスへ保存する。終了時は隔離 worktree の外へ移動し、`git -C <元リポジトリ> worktree remove --force <隔離パス>` で隔離 worktree 全体を破棄する。共有作業ツリーの成果物を個別削除・checkout・reset・stash しない。
 
 ## 全 Prompt 共通の禁止事項
 
@@ -57,8 +78,6 @@
 
 以下は Prompt 版とは無関係の既存事象です。**これを Prompt 版の不具合として報告しないでください。**
 
-- `hve/tests/test_macos_gui_workflow_contract.py` と `hve/gui/tests/test_macos_cocoa_smoke.py` に
-  未解決のコンフリクトマーカーが commit 済み（Python 構文エラー）
 - `hve/tests/test_orchestrator_git_encoding.py::TestHveSubprocessDecodeContract` は
   `hve/branch_cleanup.py` の `encoding` 未指定により失敗する
 - `hve/tests/test_dev_task_environment_contract.py::test_copilot_sdk_lock_pins_an_exact_version` は
