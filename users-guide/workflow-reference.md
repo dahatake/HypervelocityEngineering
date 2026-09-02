@@ -17,6 +17,7 @@
 - [ワークフロートリガー系ラベル](#ワークフロートリガー系ラベル)
 - [モデル選択ルール](#モデル選択ルール)
 - [SDK ツール制限（環境変数）](#sdk-ツール制限環境変数)
+- [Durable execution と再開](#durable-execution-と再開)
 - [Prompt 一覧](#prompt-一覧)
 - [knowledge/ ディレクトリとの関係](#knowledge-ディレクトリとの関係)
 - [Issue テンプレート一覧](#issue-テンプレート一覧)
@@ -45,7 +46,7 @@
 | `auto-app-documentation-reusable.yml` | ADOC Orchestrator | `workflow_call` |
 | `auto-app-selection-reusable.yml` | AAS Orchestrator | `workflow_call` |
 | `auto-approve-and-merge.yml` | PR 自動 Approve & Auto-merge | `pull_request_target: [labeled, ready_for_review, synchronize, edited]` |
-| `auto-blocked-to-human-required.yml` | Auto Blocked to Human Required | `schedule` / `workflow_dispatch` |
+| `auto-blocked-to-human-required.yml` | Auto Blocked to Human Required | `workflow_dispatch`（`schedule` は廃止済み） |
 | `auto-create-subissues-transition.yml` | タスク完了 → create-subissues 自動付与（split-mode 専用） | `workflow_call` |
 | `auto-dataflow-design-reusable.yml` | ADFD Orchestrator | `workflow_call` |
 | `auto-dataflow-dev-reusable.yml` | ADFDV Orchestrator | `workflow_call` |
@@ -61,30 +62,25 @@
 | `auto-requirement-definition-reusable.yml` | ARD Orchestrator | `workflow_call` |
 | `auto-review-to-approve-transition.yml` | レビュー完了 → auto-approve-ready 自動遷移 | `workflow_call` |
 | `auto-self-improve-close.yml` | Self-Improve Auto Close | `pull_request: [closed]` |
-| `azure-static-web-apps-app009.yml` | Azure Static Web Apps APP-009 CI/CD | `workflow_dispatch` / `push` / `pull_request`（いずれも `src/app/**` 等の path filter あり） |
-| `bats-tests.yml` | Bats Tests | `pull_request`（`src/infra/azure/**` 等の path filter あり） |
+| `azure-static-web-apps-app009.yml` | Azure Static Web Apps APP-009 CI/CD | `workflow_dispatch`（Resource Group名とStatic Web App名を必須入力） |
 | `check-app-requirements-reusable.yml` | APP Requirement Preflight | `workflow_call` |
 | `check-auto-qa-skip-reusable.yml` | Check Auto-QA Skip (Reusable) | `workflow_call` |
 | `copilot-auto-feedback.yml` | Copilot Auto Feedback | `pull_request_target: [opened, edited, labeled, ready_for_review]` / `issues: [labeled]` / `workflow_dispatch` |
 | `create-subissues-from-pr.yml` | Create Sub Issues from PR | `pull_request: [labeled]` |
 | `detect-qa-questionnaire-pr.yml` | Detect QA Questionnaire PR | `pull_request_target: [opened, synchronize]` |
-| `e2e-playwright-reusable.yml` | E2E Playwright (Reusable) | `workflow_call` |
 | `label-consistency-audit.yml` | Label Consistency Audit | `workflow_dispatch` / `issues: [labeled, unlabeled, closed]`（`schedule` は廃止済み） |
 | `link-copilot-pr-to-issue.yml` | Copilot PR body への Closes #N 自動補完 | `pull_request_target: [opened, ready_for_review]` |
-| `mdq-index-reusable.yml` | mdq-index (reusable) | `workflow_call` |
 | `plan-validation-and-labeling.yml` | Plan Validation and Labeling | `pull_request`（`work/**/plan.md` の path filter あり） |
 | `post-qa-to-pr-comment.yml` | QA 質問票 → PR コメント自動展開 | `pull_request_target: [synchronize]` |
 | `protect-readonly-paths.yml` | Protect Read-Only Paths | `pull_request` |
 | `restore-auto-qa-label.yml` | Restore auto-qa label | `pull_request_target: [labeled, unlabeled, synchronize]` / `workflow_dispatch` |
-| `rollback-drill.yml` | Rollback Drill | `workflow_dispatch` |
 | `self-hosted-runner-smoke-test.yml` | self-hosted-runner-smoke-test | `workflow_dispatch` |
 | `setup-labels.yml` | Setup Labels | `workflow_dispatch` / `workflow_call` |
 | `state-transition-on-pr-merge.yml` | State Transition on PR Merge | `pull_request_target: [closed]` |
-| `sync-azure-skills.yml` | Sync Azure Skills | `workflow_dispatch` |
 | `sync-issue-labels-to-pr.yml` | Issue ラベル → PR 自動同期 | `pull_request_target: [opened, ready_for_review]` |
 | `test-cli-scripts.yml` | Test CLI Scripts (Bash / PowerShell) | `push` / `pull_request`（path filter あり） |
 | `test-hve-gui-macos.yml` | Test HVE GUI on macOS | `workflow_dispatch` |
-| `test-hve-python.yml` | Test HVE Python | `push` / `pull_request`（path filter あり） |
+| `test-hve-python.yml` | Test HVE Python | `push`（path filter あり）/ `pull_request`（全PRでrequired名を報告し、対象外では重いstepをskip） |
 | `validate-hve-requirement-traceability.yml` | HVE Requirement Traceability | `pull_request: [opened, synchronize, reopened, edited, ready_for_review]` |
 | `validate-hve-requirement-traceability-trusted.yml` | HVE Requirement Traceability Trusted | `pull_request_target: [opened, synchronize, reopened, edited, ready_for_review]` |
 | `validate-io-contract.yml` | Validate io-contracts | `pull_request` / `push`（`.github/io-contracts/**`・`hve/workflow_registry.py` 等の path filter あり） |
@@ -94,15 +90,18 @@
 | `validate-workflow-diff.yml` | Workflow Diff Gate | `pull_request_target: [opened, synchronize, reopened, edited, ready_for_review]` |
 | `verify-qa-reference-in-pr.yml` | Verify QA Reference in PR | `pull_request_target: [opened, edited, synchronize, ready_for_review, reopened, labeled]` / `workflow_dispatch` |
 
+### Workflow 変更のレビュー担当
+
+`.github/CODEOWNERS` は `.github/workflows/`、`.github/branch-protection-main.json`、および `.github/CODEOWNERS` 自身の変更について、書き込み権限を持つ保守担当者へレビューを要求します。Code Owner 承認の必須化は、CODEOWNERS の構文検証とレビュー要求の発火を確認した後に branch protection へ適用します。
+
 ### 運用監視 Workflow の起動方法
 
-- 有効な定期実行は `auto-blocked-to-human-required.yml` の毎時実行だけです。FR-CLOUD-41 の SLA 自動昇格を維持するため、`workflow_dispatch` と併用します。
+- repository-managed Workflow に有効な定期実行はありません。`auto-blocked-to-human-required.yml` は Actions タブから必要時に手動実行し、`sla_hours` は省略時に `HITL_BLOCKED_SLA_HOURS`、未設定なら 24 時間を使用します。
 - `aas-timeout-monitor.yml` は Actions タブから手動実行します。`timeout_hours` は正の整数（既定 6）で、`aas:running` を持つ Open Issue を最大 1,000 件巡回し、Issue の最終更新時刻を基準に判定します。
 - `auto-qa-timeout-watcher.yml` は Actions タブから手動実行します。`target_issue` を空にすると全対象、`dry_run=true` では変更せず確認だけを行います。閾値は `QA_PHASE_TIMEOUT_HOURS`（既定 72 時間）です。
 - `label-consistency-audit.yml` はラベル変更・Issue close のイベントで自動実行され、必要に応じて `workflow_dispatch` でも全件または単一 Issue を監査できます。
 - `audit-plans.yml` は削除済みです。`plan-validation-and-labeling.yml` は PR で変更された `work/**/plan.md` だけを検証し、既存ファイルを横断する定期再監査は行いません。
 - `tdd-retry-metrics.yml` は削除済みです。`work/dashboards/tdd-metrics.md` の日次生成・更新は行われません。
-- `sync-azure-skills.yml` は `workflow_dispatch` 専用です。
 
 > **運用メモ**: オーケストレーション系 reusable workflow は `workflow_call` で呼び出されます。少なくとも `auto-app-dev-microservice-web-reusable.yml` / `auto-dataflow-dev-reusable.yml` / `auto-ai-agent-dev-reusable.yml` では `runner_type` 入力により `ubuntu-latest` と `[self-hosted, linux, x64, aca]` を切り替えます。
 >
@@ -112,12 +111,13 @@
 
 | ワークフロー ID | 対応ワークフロー | GitHub ワークフローファイル |
 |--------------|--------------|--------------------------|
-| `ard` | Auto Requirement Definition | なし（`hve` ローカル実行専用） |
+| `ard` | Auto Requirement Definition | `auto-requirement-definition-reusable.yml`（dispatcher 経由） |
 | `aas` | App Architecture Design | `auto-app-selection-reusable.yml` |
 | `aad` / `aad-web` | Web App Design | `auto-app-detail-design-web-reusable.yml` |
 | `asdw` / `asdw-web` | Web App Dev & Deploy | `auto-app-dev-microservice-web-reusable.yml` |
 | `adfd` | Dataflow Design | `auto-dataflow-design-reusable.yml` |
 | `adfdv` | Dataflow Dev | `auto-dataflow-dev-reusable.yml` |
+| `ada` | Agent Data Architecture | `auto-agent-data-architecture-reusable.yml`（dispatcher 経由） |
 | `aag` | AI Agent Design | `auto-ai-agent-design-reusable.yml`（dispatcher 経由） |
 | `aagd` | AI Agent Dev & Deploy | `auto-ai-agent-dev-reusable.yml`（dispatcher 経由） |
 | `aar` | Agentic Retrieval Add-on | `auto-agentic-retrieval-reusable.yml`（dispatcher 経由） |
@@ -125,9 +125,9 @@
 | `adoc` | Source Codeからのドキュメント作成 | `auto-app-documentation-reusable.yml` |
 | `adi` | Auto Design-doc Ingestion | なし（`hve` ローカル実行専用） |
 
-> **注意**: HVE CLI Orchestrator のコマンドで `--workflow asd` は無効です。正しいワークフロー ID は上記の `ard` / `aas` / `aad-web` / `asdw-web` / `adfd` / `adfdv` / `aag` / `aagd` / `akm` / `adoc` / `adi` を使用してください（`aad`/`asdw` はエイリアスとして使用可能）。
+> **注意**: HVE CLI Orchestrator のコマンドで `--workflow asd` は無効です。正しいワークフロー ID は上記の `ard` / `aas` / `aad-web` / `asdw-web` / `adfd` / `adfdv` / `ada` / `aag` / `aagd` / `aar` / `akm` / `adoc` / `adi` を使用してください（`aad`/`asdw` はエイリアスとして使用可能）。
 >
-> `ard` / `adi` は GitHub Actions ワークフローファイルを持たず、`python -m hve orchestrate --workflow <id>` によるローカル実行専用です。
+> `adi` は GitHub Actions ワークフローファイルを持たず、`python -m hve orchestrate --workflow adi` によるローカル実行専用です。
 >
 > `akm` / `adoc` / `adi` は本リポジトリの中核的特徴（`knowledge/` を介した要求定義一元管理）を担うワークフローです。
 
@@ -157,7 +157,7 @@
 
 | Workflow ID | HVE Cloud Agent Orchestrator | HVE CLI Orchestrator | 備考 |
 |---|---|---|---|
-| `ard` | ❌ | ✅ | `hve/workflow_registry.py` の canonical workflow。dispatcher の `trigger_map` / `done_map` / `closed_prefix_map` に含まれず、Issue label 経路では起動しません（local 専用）。 |
+| `ard` | ✅ | ✅ | Cloud では `auto-requirement-definition` ラベルで dispatcher が `ARD` を選択。 |
 | `aas` | ✅ | ✅ | Cloud では `auto-app-selection` ラベルで dispatcher が `AAS` を選択。 |
 | `aad-web` | ✅ | ✅ | Cloud では `auto-app-detail-design-web` ラベルで dispatcher が `AAD-WEB` を選択。 |
 | `asdw-web` | ✅ | ✅ | Cloud では `auto-app-dev-microservice-web` ラベルで dispatcher が `ASDW-WEB` を選択。 |
@@ -186,7 +186,7 @@
 
 - GitHub.com の Issue Template から起動する場合は、**HVE Cloud Agent Orchestrator 対応 workflow**（上表で HVE Cloud Agent Orchestrator 列が ✅）を選択してください。
 - ローカルで `python -m hve` から起動する場合は、`hve/workflow_registry.py` に登録された workflow ID を使用してください。
-- `ard` / `adi` は **HVE CLI / GUI Orchestrator 専用** です。AAR は CLI / GUI / Cloud の全経路に対応します。
+- `adi` は **HVE CLI / GUI Orchestrator 専用** です。ARD と AAR は CLI / GUI / Cloud の全経路に対応します。
 - alias（`aad`, `asdw`）は HVE CLI Orchestrator で canonical ID（`aad-web`, `asdw-web`）に解決されます。workflow ID の記載時は canonical ID と混同しないでください。
 
 ### Work IQ 連携（オプション）
@@ -397,7 +397,7 @@
 
 - 区切り文字: カンマ (`,`) と空白の混在を許容（例: `"str_replace_editor, bash glob"` → 3 件）
 - 空文字 / 未設定: `None` → SDK デフォルト
-- 伝搬範囲: メインセッション・サブセッション（Pre-QA / Review）・`resume_session` の全経路
+- 伝搬範囲: 新規作成するメインセッション・サブセッション（Pre-QA / Review）。Durable recovery の `reuse-session` は保存済み SDK context を再利用する別経路であり、`available_tools` / `excluded_tools` の再注入を保証する経路ではない
 - 設定値は `SDKConfig.available_tools` / `SDKConfig.excluded_tools` に格納される
 
 例:
@@ -407,6 +407,43 @@ $env:HVE_AVAILABLE_TOOLS = "str_replace_editor,bash"
 $env:HVE_EXCLUDED_TOOLS  = "web_search"
 python -m hve aas --app-ids APP-01
 ```
+
+---
+
+## Durable execution と再開
+
+`hve resume` は SQLite の durable state store を使う標準の回復経路です。旧 `--resume-run` の JSONL 経路や、SDK に処理途中の続きを自動実行させる機能とは異なります。
+
+### 識別子と workflow instance
+
+- `execution_id` は、順序付き workflow plan 全体を識別する durable recovery のキーです。
+- plan 内の各 workflow は個別の workflow instance（`instance_id`）として保存され、0 起点の `ordinal` で順序を持ちます。再開時は ordinal 順に評価し、最初の未完了 instance から継続します。
+- `run_id` は個別 attempt と observability 用の識別子です。durable execution の同一性を表す `execution_id` とは交換できず、回復後の attempt では別の値になり得ます。
+
+### 承認と ordered workflow
+
+- 複数workflowを持つexecutionでは、各instanceの`ResumePlan`を別の承認対象として扱います。1つのinstance完了後に作られた次のplanは再提示・再承認が必要で、先行planのhashや再入力した平文値を流用しません。
+- TTYは次のplanを確認してhashを再計算します。GUI / Prompt controllerがexpected hashを渡す経路は最初の承認済みplanだけを実行し、次のplanを表示して停止します。
+- output再調停で実行対象が0件ならsubcommandなしchildを起動せず、fenced leaseの下でoutputを再確認してinstanceを`succeeded`へ確定します。
+
+### Step と fan-out child の再調整
+
+- 展開後の fan-out child（例: `1/D01`）は、child ごとに独立した durable status を持ちます。
+- `succeeded` の child を skip できるのは、その child の必須 output が存在する場合だけです。
+- `succeeded` でも必須 output が欠けている child は再実行対象へ戻し、その child と transitive descendants だけを無効化します。output が揃った sibling child は再実行しません。
+
+### SDK context の再利用
+
+- `reuse-session` は、中断対象が Main phase で、保存済み SDK session ID がある場合に限ります。HVE は `resume_session(..., continue_pending_work=False)` で保存済み context を開き、固定 recovery prompt を**新しい turn**として送ります。モデルの pending work を途中から自動継続する動作ではありません。
+- Main 以外の phase は `reuse-session` 対象外です。Pre-QA、Review、Self-Improve などは `restart-step` により fresh session から再実行します。
+
+### Legacy JSONL との境界
+
+- `hve/.run-progress.jsonl` を読む legacy 経路は、`--resume-run` を明示した場合だけ使用します。
+- 新しい durable run が JSONL へ書くレコードは 0 件です。JSONL から SQLite durable state store への自動 import も行いません。
+
+> [!WARNING]
+> Durable execution が保存・調整するのは HVE の control state です。Git、Azure、GitHub、Copilot SDK など外部 system への effect について exactly-once は保証しません。回復で Step が再実行される可能性を前提に、外部操作側で冪等性や事前確認を確保してください。
 
 ---
 
@@ -509,10 +546,10 @@ StepDef(
 
 イベント種別: `step_start` / `step_end` / `phase_start` / `phase_end` / `dag_wave_start` / `token_chunk`。
 
-### Resume との連携
+### Durable recovery との連携
 
-- 合成 step_id `1/D01` は `make_session_id()` 内で `/` → `-` に正規化され、決定論的 session_id `hve-{run_id}-step-1-D01` を生成する。
-- 既存 `--resume` 経路でそのまま `resume_session()` 可能（同一キーが再評価される）。
+- 新しい attempt では、合成 step_id `1/D01` が `make_session_id()` 内で `/` → `-` に正規化され、attempt の `run_id` を含む session ID `hve-{run_id}-step-1-D01` を生成します。これは `execution_id` の代替ではありません。
+- Durable state store は fan-out child ごとの status と session ID を保存します。回復時の child 単位の output 再調整と SDK context 再利用の境界は「[Durable execution と再開](#durable-execution-と再開)」の規則に従います。
 
 ---
 

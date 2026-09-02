@@ -55,6 +55,15 @@ LOADED_ONLY_SYMBOLS = {
 }
 LOADED_ONLY = frozenset(LOADED_ONLY_SYMBOLS)
 
+# Runtime wiring is intentionally owned by T24. Mirror this fixed recovery
+# Prompt while it is unwired without misreporting it as a production consumer.
+# Once wired, the normal consumer-based rule keeps the copy eligible.
+MIRROR_WHILE_UNWIRED = frozenset(
+    {
+        "runtime/runner/resume-recovery.prompt.md",
+    }
+)
+
 WORKIQ_COMPOSITIONS = {
     "workiq-qa.prompt.txt": (
         "runtime/workiq/qa-task.prompt.md",
@@ -223,6 +232,12 @@ def _usage_inventory(
     missing_loaded_only = sorted(LOADED_ONLY - source_relpaths)
     if missing_loaded_only:
         raise RuntimeError(f"Known load-only Prompt file is missing: {missing_loaded_only}")
+    missing_mirrored_unwired = sorted(MIRROR_WHILE_UNWIRED - source_relpaths)
+    if missing_mirrored_unwired:
+        raise RuntimeError(
+            "Known unwired mirrored Prompt file is missing: "
+            f"{missing_mirrored_unwired}"
+        )
     for relative in LOADED_ONLY:
         if not usage.get(relative):
             raise RuntimeError(f"Load-only Prompt no longer has a loader reference: {relative}")
@@ -249,17 +264,20 @@ def _status(relative: str, consumers: tuple[str, ...]) -> str:
     return "未結線"
 
 
+def _should_copy(relative: str, consumers: tuple[str, ...]) -> bool:
+    return _status(relative, consumers) != "未結線" or relative in MIRROR_WHILE_UNWIRED
+
+
 def _expected_copies(
     source_files: list[Path], usage: dict[str, tuple[str, ...]]
 ) -> dict[Path, bytes]:
     return {
         _copy_relative_path(source.relative_to(SOURCE_ROOT)): source.read_bytes()
         for source in source_files
-        if _status(
-            source.relative_to(SOURCE_ROOT).as_posix(),
-            usage.get(source.relative_to(SOURCE_ROOT).as_posix(), ()),
+        if _should_copy(
+            relative := source.relative_to(SOURCE_ROOT).as_posix(),
+            usage.get(relative, ()),
         )
-        != "未結線"
     }
 
 
@@ -311,6 +329,10 @@ def _render_catalog(
     for relative in source_relpaths:
         rel = relative.as_posix()
         status_counts[_status(rel, usage.get(rel, ()))] += 1
+    copy_count = sum(
+        _should_copy(relative.as_posix(), usage.get(relative.as_posix(), ()))
+        for relative in source_relpaths
+    )
 
     lines = [
         "# HVE Prompt 正本・コピー一覧",
@@ -324,7 +346,7 @@ def _render_catalog(
         "> コピーは Markdown 検索への重複登録を避けるため、正本の相対パス末尾に `.txt` を付けています。本文 bytes は正本と同一です。",
         "",
         f"- Prompt 正本: **{len(source_files)} 件**",
-        f"- 閲覧用コピー: **{len(source_files) - status_counts['未結線']} 件**",
+        f"- 閲覧用コピー: **{copy_count} 件**",
         f"- model-facing / Cloud 実行経路に結線済み: **{status_counts['結線済み']} 件**",
         f"- module load のみ（送信参照なし）: **{status_counts['ロードのみ（送信参照なし）']} 件**",
         f"- 未結線: **{status_counts['未結線']} 件**",
@@ -354,7 +376,7 @@ def _render_catalog(
             digest = sha256((SOURCE_ROOT / relative).read_bytes()).hexdigest()
             copy_cell = (
                 f"[`copies/{copy_rel}`](copies/{_markdown_href(copy_rel)})"
-                if status != "未結線"
+                if _should_copy(rel, consumers)
                 else "—"
             )
             lines.append(

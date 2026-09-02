@@ -29,13 +29,9 @@ def test_hve_gui_starts_on_cocoa_without_qt_errors(monkeypatch, tmp_path) -> Non
     assert isinstance(application, QApplication)
     assert application.platformName() == "cocoa"
 
-<<<<<<< HEAD
     artifact_dir = Path(
         os.environ.get("HVE_MACOS_GUI_ARTIFACT_DIR", tmp_path / "artifacts")
     )
-=======
-    artifact_dir = Path(os.environ.get("HVE_MACOS_GUI_ARTIFACT_DIR", tmp_path / "artifacts"))
->>>>>>> 759960c3640e123b72e5f09cc9b18613554982a3
     artifact_dir.mkdir(parents=True, exist_ok=True)
     screenshot_path = artifact_dir / "hve-main-window.png"
     qt_log_path = artifact_dir / "qt-messages.log"
@@ -50,7 +46,6 @@ def test_hve_gui_starts_on_cocoa_without_qt_errors(monkeypatch, tmp_path) -> Non
     previous_handler = qInstallMessageHandler(handle_qt_message)
     auth_stub = Mock(return_value=False)
     refresh_stub = Mock(return_value=False)
-<<<<<<< HEAD
 
     monkeypatch.setattr(
         startup_auth,
@@ -62,10 +57,6 @@ def test_hve_gui_starts_on_cocoa_without_qt_errors(monkeypatch, tmp_path) -> Non
         "start_background",
         refresh_stub,
     )
-=======
-    monkeypatch.setattr(startup_auth, "ensure_startup_authentication", auth_stub)
-    monkeypatch.setattr(index_refresh, "start_background", refresh_stub)
->>>>>>> 759960c3640e123b72e5f09cc9b18613554982a3
     monkeypatch.setattr(index_refresh, "is_running", lambda: False)
 
     def capture_and_close() -> None:
@@ -103,7 +94,6 @@ def test_hve_gui_starts_on_cocoa_without_qt_errors(monkeypatch, tmp_path) -> Non
     assert screenshot_path.is_file()
     assert screenshot_path.stat().st_size > 0
 
-<<<<<<< HEAD
     failing_types = {
         QtMsgType.QtWarningMsg,
         QtMsgType.QtCriticalMsg,
@@ -114,8 +104,4 @@ def test_hve_gui_starts_on_cocoa_without_qt_errors(monkeypatch, tmp_path) -> Non
         for msg_type, message in messages
         if msg_type in failing_types
     ]
-=======
-    failing_types = {QtMsgType.QtWarningMsg, QtMsgType.QtCriticalMsg, QtMsgType.QtFatalMsg}
-    failures = [f"{msg_type.name}: {message}" for msg_type, message in messages if msg_type in failing_types]
->>>>>>> 759960c3640e123b72e5f09cc9b18613554982a3
     assert not failures, "Unexpected Qt messages:\n" + "\n".join(failures)

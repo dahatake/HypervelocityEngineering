@@ -285,7 +285,7 @@ _add(StepRequirement(
 
 # ---- ADA ----
 _add(StepRequirement(
-    workflow_id="ada", step_id="1",
+    workflow_id="ada", step_id="2",
     required_info_keys=(),
     required_info_logic="none",
     required_file_kind="use_case_catalog",

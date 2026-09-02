@@ -72,17 +72,17 @@ Azure Static Web Apps への UI デプロイを、Azure CLI（リソース管理
    - `{WORK}screen-azure-deploy-work-status.md`, `{WORK}ac-verification.md`
 3. Workflow要件
   - `.github/workflows/azure-static-web-apps-app009.yml` が default branch で認識可能であることを pre-flight で確認する。未認識の場合は `{WORK}completion-report.md` に `<!-- fatal: pre-flight-failed: workflow-not-on-default-branch -->` を記録し、Azure リソース作成や `gh workflow run` へ進まない。
-  - 既存 workflow が `azure/login@v2`（OIDC）→ `az staticwebapp secrets list` で token 取得 → `Azure/static-web-apps-deploy@v1` を満たすことを確認する
+  - 既存 workflow が `azure/login@v2`（OIDC）→ `az staticwebapp show` で対象確認 → `az staticwebapp secrets list` で token 取得 → `Azure/static-web-apps-deploy@v1` を満たすことを確認する
   - PAT / 手動登録した deploy token や GitHub Secret に依存せず、OIDC + 動的 token 取得方式だけを使用する
-   - 全ジョブに `environment: copilot`
-   - `permissions` に `id-token: write`, `contents: read`, `pull-requests: write`
-   - `workflow_dispatch` を追加
-   - PR close 時 `action: "close"` ジョブを用意
+  - 全ジョブに `environment: copilot`
+  - `permissions` は `id-token: write`, `contents: read` だけを使用する
+  - trigger は `workflow_dispatch` だけとし、`resource_group` / `static_web_app_name` を既定値なしの必須入力とする
+  - `push` / `pull_request` trigger と PR close job を追加しない
 4. 実行・検証（TDD サイクル・必須）
    - **Pre-flight（必須）**: `command -v az` / `az account show -o tsv` / `command -v gh` / `gh auth status` を順に実行。いずれか失敗時は `{WORK}completion-report.md` に `<!-- fatal: pre-flight-failed: {理由} -->` を記載し、非ゼロ exit で Step を fail させる（`NEEDS-VERIFICATION` で逃げることは**禁止**）。
   - **Workflow pre-flight（必須）**: `gh workflow view .github/workflows/azure-static-web-apps-app009.yml` 等で、対象 workflow が default branch から認識可能であることを確認する。未認識の場合は `workflow-not-on-default-branch` として `{WORK}completion-report.md` / `{WORK}ac-verification.md` に記録し、deploy へ進まない。
    - **RED（初回 deploy 時のみ）**: `verify-webui-resources.sh` を実行し、全 TC FAIL を確認。冪等再実行時はスキップ可（`ac-verification.md` に明記）。
-  - **Deploy**: `create-azure-webui-resources.sh` をローカル `az` 直接実行（最大3回再試行）。アプリ deploy は Orchestrator から提供された Step 専用 `<branch>` を使い、`gh workflow run azure-static-web-apps-*.yml --ref <branch>` で発火し、`timeout 1800 gh run watch --exit-status --interval 10` で完了待ち（30 分ハードリミット、タイムアウト時は Step fail）。
+  - **Deploy**: `create-azure-webui-resources.sh` をローカル `az` 直接実行（最大3回再試行）。アプリ deploy は Orchestrator から提供された Step 専用 `<branch>` を使い、`gh workflow run azure-static-web-apps-app009.yml --ref <branch> -f resource_group="${RESOURCE_GROUP}" -f static_web_app_name="${SWA_NAME}"` で必須入力を明示して発火し、`timeout 1800 gh run watch --exit-status --interval 10` で完了待ち（30 分ハードリミット、タイムアウト時は Step fail）。
    - **GREEN**: `verify-webui-resources.sh` 再実行で全 TC PASS。出力ログを `ac-verification.md` の AC-1 / AC-6 / AC-8 行に証跡として貼る。
    - `switch-swa-to-main.sh` はマージ後手動（実行せず手順記録）
 5. API接続経路（UI→API依存時）
@@ -113,7 +113,7 @@ Azure Static Web Apps への UI デプロイを、Azure CLI（リソース管理
 - AC検証要点:
   - **AC-1（最重要・必須 `✅`）**: SWAリソース存在。`❌` または `⏳ NEEDS-VERIFICATION` のまま完了**禁止**。
   - AC-2: createスクリプト冪等性
-  - AC-3: Workflowが OIDC + `Azure/static-web-apps-deploy@v1` + `environment: copilot` + token動的取得
+  - AC-3: Workflowが manual-only + 必須target入力 + OIDC + 対象存在確認 + `Azure/static-web-apps-deploy@v1` + `environment: copilot` + token動的取得
   - AC-4: service-catalog に URL 記載
   - AC-5: 秘密情報の非混入
   - **AC-6（必須 `✅`）**: deploy 成功。`gh run watch --exit-status` のログを証跡として貼る。`❌` / `⏳` 禁止。

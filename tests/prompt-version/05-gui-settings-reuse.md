@@ -49,7 +49,8 @@ GUI で次を変更して保存し、`hve prompt plan` の argv に反映され�
 
 1. **3 状態（`""` / `"on"` / `"off"`）**: `""` は該当オプションを出さない、`"on"` は肯定フラグ、
    `"off"` は否定フラグ（`--no-*`）になることを確認する。対象例: `force_refresh` / `mdq_watch` / `cq_watch`。
-2. **リスト値**: `;` 区切りの設定値が argv で複数トークンに展開されることを確認する。対象例: `target_files` / `ignore_paths`。
+2. **リスト値**: パス系の保存値（`ignore_paths` / `target_files` / `custom_source_dir`）は GUI と同じ空白区切りで、
+   `agentic_data_source_modes` は `;` 区切りで、それぞれ argv の複数トークンに展開されることを確認する。
 3. **0 を「未指定」として扱うフィールド**: `context_max_chars` / `max_file_lines` 等が `0` のとき
    オプションが出ないことを確認する。
 4. **`akm` の sources**: GUI のチェックボックス（`sources_qa` / `sources_original_docs` / `sources_workiq`）が

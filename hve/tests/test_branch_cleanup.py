@@ -222,6 +222,8 @@ class TestLocalDeleteCommand:
             assert "shell" not in call.kwargs
             assert call.kwargs["capture_output"] is True
             assert call.kwargs["text"] is True
+            assert call.kwargs["encoding"] == "utf-8"
+            assert call.kwargs["errors"] == "replace"
 
     def test_checkout_failure_does_not_attempt_delete(self) -> None:
         _target_type, cleanup = _types()

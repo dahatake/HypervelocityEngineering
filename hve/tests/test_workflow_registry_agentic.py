@@ -508,27 +508,25 @@ class TestQaReadyLabelTokenFallback:
         assert step.get("env", {}).get("GH_TOKEN") == "${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}"
 
 
-class TestPlaywrightE2EReusableWorkflow:
-    """Playwright E2E reusable workflow の静的構造検証。"""
+class TestPlaywrightE2EDirectExecution:
+    """ASDW-WEB Step 4.4 は到達不能な reusable を介さず直接実行する。"""
 
-    _WORKFLOW = "e2e-playwright-reusable.yml"
+    _REMOVED_WORKFLOW = "e2e-playwright-reusable.yml"
 
-    def test_has_workflow_call_inputs(self):
-        yaml_data = _load_workflow_yaml(self._WORKFLOW)
-        on_section = yaml_data.get(True, {}) or yaml_data.get("on", {})
-        inputs = on_section.get("workflow_call", {}).get("inputs", {})
-        assert "e2e_base_url" in inputs
-        assert "service_catalog_path" in inputs
-        assert "working_directory" in inputs
+    def test_unreachable_reusable_workflow_is_absent(self):
+        assert not (_WORKFLOWS_DIR / self._REMOVED_WORKFLOW).exists()
 
-    def test_has_failure_artifact_upload_steps(self):
-        yaml_data = _load_workflow_yaml(self._WORKFLOW)
-        jobs = yaml_data.get("jobs", {})
-        job = jobs.get("playwright-e2e", {})
-        steps = job.get("steps", [])
-        upload_names = [step.get("name", "") for step in steps]
-        assert "Upload Playwright HTML report (failure only)" in upload_names
-        assert "Upload Playwright traces (failure only)" in upload_names
+    def test_agent_step_and_cloud_body_use_direct_execution(self):
+        paths = (
+            _REPO_ROOT / ".github" / "prompts" / "E2ETesting-Playwright.prompt.md",
+            _REPO_ROOT / ".github" / "prompts" / "steps" / "asdw-web" / "step-4.4.prompt.md",
+            _WORKFLOWS_DIR / "auto-app-dev-microservice-web-reusable.yml",
+        )
+        for path in paths:
+            text = path.read_text(encoding="utf-8")
+            assert self._REMOVED_WORKFLOW not in text, path
+            assert "npx playwright test" in text, path
+            assert "最大 5 回" in text, path
 
 
 class TestIssueQaReadyTransitionWorkflow:

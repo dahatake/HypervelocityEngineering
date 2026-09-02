@@ -2,6 +2,83 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **保存済み GUI のパスリスト設定を Prompt 版でも同じ argv に変換する**: `ignore_paths` を現行 GUI / CLI と同じ空白区切りで解釈し、`target_files` / `custom_source_dir` の既存挙動を維持した。`agentic_data_source_modes` だけは既存のセミコロン区切りを維持する。
+- **Prompt 統合テスト 05 の誤オラクルを訂正する**: 全リスト値を一律 `;` 区切りとした期待を、パス系は空白、Agentic list は `;` という実契約へ同期した。
+- **GUI / Prompt exact parity test を実設定から隔離する**: 複数値を使う回帰テストを追加し、保存 round-trip は一時設定ファイルで検証して `hve/.settings.txt` を変更しない。
+
+### Fixed — Prompt request v1 統合テストの誤オラクルと子プロセス証跡を現行契約へ同期
+
+- **C1 の拒否期待を宣言済み Workflow param の受理契約へ訂正した**: `include_kpi_okr`、`tdd_max_retries`、`create_remote_mcp_server` は FR-LOCAL-SURFACE-01 に従って `OrchestrateArgs` から CLI argv へ到達するため、4 つの正負・型変換ケースを期待 argv で検証する。ASDW-WEB は registry から非コンテナ・依存なし root・non-remote Step を一意に選び、保存設定由来の GitHub token preflight と param 変換を分離した。
+- **B1〜B13 の子 `orchestrate` 非起動を恒久 gate にした**: 30 invalid request を実ファイルから Prompt CLI へ渡し、non-zero、actionable stderr、plan hash 非提示、`prompt_execution._default_runner` 呼び出し 0 を検査する。Windows venv launcher 等の OS process 総数を子 `orchestrate` 数として扱わない。
+- **手動 Prompt と product contract の drift を機械検出する**: C1 marker の意味契約、4 accepted variants、全 `WorkflowDef.params` と `OrchestrateArgs` field の完全性を新しい統合テストで固定し、FR-PROMPT-02 / 03、FR-LOCAL-SURFACE-01、FR-MAINT-07 の要求テストマッピングと TDD inventory を同期した。
+- **修正後の fresh 統合実測を完了した**: A 4、B 30、C1 4、C2 5 の計 43 variants はすべて PASS。43 件それぞれの敵対的レビュー、raw stdout/stderr、SHA-256、checked-in no-child matrix を保存し、正本 `hve/prompt_request.py` / `hve/workflow_registry.py` の byte hash 不変を確認した。
+
+**利用者への影響**: HVE の request v1 schema、Prompt runtime、startup preflight、CLI / GUI の挙動は変わらない。統合テストが現行の宣言済み param 受理契約を正しく判定し、環境依存の token blockerや Windows launcher process を param / child 起動失敗と誤分類しなくなる。Markdown Query と Code Query の本体・Skill・版は変更していない。
+
+**検証**: 新 integration contract **40 passed**、Prompt / local-surface / startup-preflight / docs 合同回帰 **313 passed / 161 subtests passed**、inventory / traceability **234 passed / 1 skipped**、fresh request v1 統合 **43 / 43 passed**、ケース別敵対的レビュー **43 / 43 passed**、最終レビュー Critical / Major / Minor 0 件。
+
+<!-- validation-confirmed -->
+
+### Added — 実行停止から10秒以内のcontrol-stateを使って安全に再開できるdurable resumeを追加した（FR-STATE-04 / 05、FR-CLI-90、FR-GUI-50、FR-PROMPT-11）
+
+- **利用者単位のdurable state storeを追加した**: SQLiteの`executions` / `workflow_instances` / `step_instances` 3 tableへ、実行・Workflow・Step・承認のcontrol stateをtransition単位で永続化する。DELETE journal、`synchronous=EXTRA`、state-version CAS、generation付きfenced lease、専用heartbeat threadにより、通常のprocess停止・hard kill後も最後にcommit済みの状態から再開候補を構築する。heartbeatは10秒以内のfreshnessを維持し、graceful stopは未完了instanceを`suspended`へ確定する。
+- **3つの利用面を共通ResumeServiceへ統合した**: 公開入口`hve resume [<execution-id>]`を追加し、候補が1件なら確認、複数ならTTY選択、non-TTYでは明示IDまたは`--latest`を要求する。CLI・GUIのResume dialog・Prompt Edition controllerは同じcandidate、risk、allowed action、missing replay keys、plan hash、lease CAS、ordered multi-Workflow規則を利用する。GUI/Promptは判定やleaseを再実装せず、承認したhashとreplay値だけを`hve resume`子processへ渡す。
+- **安全なStep再開を実装した**: Main phaseだけは保存済みSDK sessionを`continue_pending_work=False`で開き、固定recovery turnを新しく送る`reuse-session`を選べる。その他のphaseと明示`restart-step`は新しいsessionでStep先頭から実行する。active/in-use session、stale plan hash、state-version競合、lease競合、HEAD drift、corrupt/unknown schema、必要なreplay値不足はchild・SDK・model call前にfail-closedで停止する。
+- **DAG、fan-out、approval、成果物を再調停する**: 成功済みStepは宣言outputが現在も存在するときだけskipし、欠損時は当該Stepとtransitive descendantsだけを無効化する。fan-out childは個別に再判定する。ordered multi-Workflowは最初の未成功instanceから順に実行するが、後続instanceごとに最新state / output / HEADから別のResumePlanを作成し、別の提示と明示承認を要求する。先行instanceのplan hashとreplay平文は流用せず、最初の失敗で停止する。既存`--resume-run`はWorkflow scope付きJSONL readerとして分離し、新しいexecution IDへ暗黙変換しない。
+- **実行対象が0件になったinstanceもfenced完了する**: plan作成後に成果物が揃った場合は、lease取得後にoutputを再照合し、`complete_reconciled()`が同じfencing tokenでinstanceを`succeeded`へ遷移させる。空argvをsubcommandなしの子processとして起動せず、stale state・lease競合・再照合後の実行対象発生はfail-closedで停止する。
+- **保存境界を固定allowlistへ限定した**: state storeはstatus、時刻、識別子、model ID、sanitized replay descriptor、hash、lease metadataだけを保持する。prompt/response/reasoning本文、tool引数・結果、任意環境変数、token/credential、認証URL、生のrepository root、SDK payloadは保存しない。保存不能なrequired値は値ではなく`missing_replay_keys`のkey名だけを記録する。
+- **要件・利用者ガイド・運用境界を同期した**: CLI / GUI / Promptの再開手順、10秒RPOの意味、action選択、Legacy run-idとの違い、復旧不能時の退避手順を文書化した。10秒保証はHVE-owned control metadataが対象で、model生成途中の状態、未commitの出力、外部副作用のexactly-once、OS power lossを保証しない。
+
+**利用者への影響**: ジョブを停止しても、通常はCLIの`hve resume`、GUIのResume操作、またはPromptへの自然言語指示から同じ実行を選び、安全条件とriskを確認して再開できる。新機能を使わない通常run、request v1、既存Workflow / Step ID、Legacy `--resume-run`の明示利用は互換性を維持する。
+
+**検証**: 最終durable合同回帰 **216 passed / 2 skipped**、HVE core全回帰 **9680 passed / 23 skipped / 1 xfailed / 871 subtests passed**、Prompt / 利用者文書契約 **111 passed / 1 skipped**、inventory / traceability **244 passed / 2 skipped**、Prompt/GUI共通面 **53 passed**、crash injection **3 passed**、2-process concurrency **3 passed**、3面real-state parity **6 passed**。GUIは全205 test filesをfresh processで個別実行して修正後failure 0を確認した。同一processのGUI全体実行はQt test-order/teardownによる長時間無進捗を56%で検出したため停止し、個別実行を代替証跡とした。Windows/NTFSのhard kill直前heartbeat ageは **0.016193秒**でSQLite `quick_check=ok`、Prompt mirrorは **320 copies / 3 composed templates**で一致した。macOS `full`はrun固有の費用承認がないためdispatchしていない。
+
+<!-- validation-confirmed -->
+
+### Changed — Prompt 版フルシステムテストを約1時間単位の安全な並列実行へ分割
+
+Prompt 版の長時間フルシステムテストを、停止時の影響を局所化しながら並列実行できる運用へ更新した。
+
+- **小さな実行単位と必須並列 wave**: `CASE-ID` を原則 `1 Workflow × 1実Step × 1設定ケース`、plan / run / 検証 / 敵対的レビュー込みで約60分以内の単位とした。依存・出力・worktree・設定・Azure scope・予算が競合しない ready case は、承認済みの controller-level 上限まで同時実行し、理由のない直列化を禁止した。
+- **停止影響と再開範囲の局所化**: mutating lane を専用 worktree と run-scoped 出力へ分離し、case ごとの checkpoint shard と coordinator 単一 writer の aggregate を定義した。停止要求後は新規 dispatch を止め、即時停止した case を `interrupted` として Step 先頭から再実行する。これはテスト controller の作業記録であり、廃止済みの HVE Resume 機能を復活させない。
+- **レビュー反映と証跡を強化**: 各 case の完了後に6軸の敵対的レビューを行い、有効な指摘を run-scoped テスト成果物へ反映・再検証してから依存 case を開始する。最終レポートへ wave / lane、見積対実績、並列・直列理由、deviation、停止・再開、checkpoint 照合を記録する。
+- **索引と Azure 境界を同期**: `tests/prompt-version/README.md` で `01`〜`08` の Azure 書き込み禁止と、`09` の Phase 0 全体承認・Azure case ごとの追加承認・既存 gate 後に限る条件付き書き込みを明確化した。
+
+**影響範囲**: Prompt 版フルシステムテストの貼り付け用 Prompt と索引、HVE パッケージ版。HVE の実行コード、request v1、CLI flag、Workflow registry、Markdown Query（`mdq`）、Code Query（`cq`）は変更していない。
+
+**検証**: `hve/tests/test_prompt_edition_docs_contract.py` は **77 passed**。外側 Markdown fence、JSON 例2件、必須契約語、相対リンク12件、参照するフルシステムテストの実在、既存見出し保持、`git diff --check` を確認し、Problems 診断は0件。各実装タスクと統合差分を6軸で敵対的レビューし、有効な指摘を反映後に Critical / Major 0件を確認した。
+
+<!-- validation-confirmed -->
+
+### Fixed — git サブプロセス文字エンコーディングの明示と copilot-sdk.lock の物理フォーマット・CI検証契約を確立
+
+既知の未修正テスト2件の根本原因を解消し、要件定義・トレーサビリティ・利用者文書を同期した。
+
+- **git サブプロセスの UTF-8 エンコーディング明示（FR-CLI-34）**: [hve/branch_cleanup.py](hve/branch_cleanup.py) の `_run_git` 関数に `encoding="utf-8", errors="replace"` を追加し、Windows cp932 環境下での `UnicodeDecodeError` 発生リスクを解消した。回帰テスト（[hve/tests/test_branch_cleanup.py](hve/tests/test_branch_cleanup.py)）へエンコーディングとエラーハンドリングの検証アサーションを追加した。
+- **copilot-sdk.lock の物理フォーマット修正と CI 検証契約の確立（FR-MODEL-07）**: [hve/copilot-sdk.lock](hve/copilot-sdk.lock) の改行コードを LF に統一し、BOM 無し UTF-8 / LF 契約を確立した。[.github/workflows/test-hve-python.yml](.github/workflows/test-hve-python.yml) の `gui-pty-tests` ジョブ（Windows / macOS / Ubuntu マトリクス）に `test_copilot_sdk_lock_pins_an_exact_version` を追加し、全サポート OS で lock ファイルのフォーマット契約を常時検証するようにした。また [hve/tests/test_dev_task_environment_contract.py](hve/tests/test_dev_task_environment_contract.py) に CI 定義の配線検証テストを追加した。
+- **要件定義・トレーサビリティの同期（FR-CLI-34 / FR-MODEL-07）**: [hve-dev/requirement-definition.md](hve-dev/requirement-definition.md) に両契約の明文化と改訂履歴を追加した。[hve-dev/requirement-test-mapping.md](hve-dev/requirement-test-mapping.md) において、旧テスト名（`test_setup_installs_the_latest_copilot_sdk_unless_pinned`）を参照していた2箇所の誤記を現行テスト名（`test_default_setup_upgrades_the_copilot_sdk_and_pin_sdk_uses_the_lock`）に修正し、最新の RED/GREEN 測定結果と制約事項を追記した。
+- **利用者文書・テスト手順の同期**: [tests/prompt-version/README.md](tests/prompt-version/README.md) の既知の未修正事項を更新し、対象テスト2件が合格状態であることを明記した。[users-guide/hve-cli-orchestrator-guide.md](users-guide/hve-cli-orchestrator-guide.md) の手動再インストール手順に欠落していた `--no-deps` フラグを追加し、[users-guide/hve-technical-architecture.md](users-guide/hve-technical-architecture.md) の §9.5 を現行の SDK アップグレード運用契約に全面改訂した。
+- **TDD インベントリの再生成**: `generate_tdd_inventory.py` を実行してインベントリ（[hve-dev/hve-test-inventory.csv](hve-dev/hve-test-inventory.csv), [hve-dev/hve-feature-inventory.csv](hve-dev/hve-feature-inventory.csv), [hve-dev/hve-tdd-crosswalk-baseline.md](hve-dev/hve-tdd-crosswalk-baseline.md)）を行番号ドリフトに合わせて更新した。
+
+**影響範囲**: `hve/branch_cleanup.py`、`hve/copilot-sdk.lock`、`.github/workflows/test-hve-python.yml`、`hve-dev/`、`tests/`、`users-guide/`、版番号・変更履歴。Markdown Query（`mdq`）および Code Query（`cq`）パッケージは非対象のためバージョン据え置き。
+
+**検証**:
+- 単体・結合検証: `test_branch_cleanup.py`（28 passed）、`test_orchestrator_git_encoding.py`（7 passed）、`test_dev_task_environment_contract.py` / `test_copilot_cli_pty_smoke.py` / `test_pty_backend.py`（4 passed）、`test_hve_requirement_traceability_contract.py`（12 passed）、`test_hve_surface_inventory.py` / `test_code_query_scope_contract.py`（208 passed）。
+- 全体回帰検証: `pytest hve/tests/` を実行し、**9479 passed, 19 skipped, 1 xfailed, 149 warnings, 864 subtests passed**（実行時間 19分02秒、失敗0件）。
+
+<!-- validation-confirmed -->
+
+### Fixed — GUIテストのログ出力先をセッション作業領域へ限定
+
+- `MainWindow()` を構築するGUIテストのうち3件で、明示的に `repo_root=tmp_path` を渡すよう統一した。
+- 既定・明示の `repo_root` の双方で、ログファイルが `work/run/<run-id>/gui-logs/log-0001.log` に作成され、カレントディレクトリ直下の `gui-logs/` が作成されないことを回帰テストで検証する。
+
+**影響**: 本番GUIのログ出力契約および利用者向け設定は変更しない。HVEテスト実行時の作業ディレクトリ分離を明確化する。
+
+**検証**: `test_main_window_gui_log_location.py`、更新した3テストファイル、`test_console_log_dump.py`、`test_run_unified_workdir.py`、`test_gui_pages.py` を実行し、**86 passed, 1 skipped**。実行後にリポジトリ直下の `gui-logs/` が存在しないことを確認した。
+
 ### Fixed — Prompt 版の承認後完全実行契約を敵対的レビューで強化した（FR-PROMPT-04 / 05 / 10）
 
 - **HEAD 取得不能時の承認ゲートを fail-closed 化した**: 従来は `git rev-parse HEAD` が失敗すると固定値 `unknown` を plan hash へ含めて計画を提示できた。HEAD commit へ束縛できない計画を承認対象にしないよう、plan / run とも `orchestrate` 起動前に停止する。
@@ -1716,6 +1793,216 @@ HVE の GUI / CLI / Cloud 3 サーフェスに対する調査で「要件が存�
 - **同種の順序依存テストを 1 件見つけて直した**。`test_lock_file_object_handoff_cancellation_does_not_leak_lock[stream]` は同じ bytecode 注入を使っており、**先行テストが `sys.settrace` を呼んでいたおかげで偶然通っていた**。単独実行では修正前から失敗する（実測）。同じく依存境界での注入へ改め、単独でも成立するようにした。
 
 **影響範囲**: `hve/asdw_data_script_launcher.py`、`hve/tests/test_asdw_data_script_generator.py`、版番号・変更履歴。Markdown Query（`mdq`）と Code Query（`cq`）の本体・Skill・配布物は変更していない。
+
+<!-- validation-confirmed -->
+
+### Changed — GitHub Actions を実行可能な最小構成へ整理し、必須 check と供給網境界を強化した（FR-MAINT-11 / FR-CLOUD-42 / FR-WF-ASDW-04 / FR-WF-ASDW-05 / FR-WF-AKM-01）
+
+- **必須 check を常に報告するようにした**: `test-hve-python.yml` の workflow-level path filter を単一の fail-closed detector へ移し、rename-away の `previous_filename` を含む差分を判定する。HVE / mdq の必須 job は対象外変更でも成功を報告し、検出エラー時は失敗する。
+- **到達不能または実行資産を欠く Workflow を除去した**: Bats、mdq 索引 reusable、Azure Skills 同期、Playwright reusable、rollback drill の 5 ファイルを削除した。E2E は呼出元から直接実行し、GitHub に残った旧 Workflow 登録 5 件は履歴を保持したまま手動無効化した。
+- **GitHub Actions の権限境界を強化した**: Workflow と保護設定へ write 権限を持つ 4 名の CODEOWNERS を追加し、`main` の管理者適用・1 名承認・CODEOWNER review を必須化した。repository の既定 `GITHUB_TOKEN` は read-only とし、self-hosted smoke と I/O contract validation も明示的な read-only に揃えた。
+- **APP-009 Static Web Apps deploy を manual-only / fail-closed にした**: resource group と Static Web App 名を default なしの必須入力とし、OIDC login 後に exact target を確認してから deployment token を取得・mask する。Azure deploy Action 2 件は公式 repository の 40 桁 commit SHAへ固定し、push / pull request trigger、hard-coded target、PR close jobを除去した。
+- **検証器と保守経路を現在の実体へ揃えた**: knowledge 本文と ChangeLog を別 schema で検証し、42 ファイルの双方向 pairing を確認する。branch cleanup の Git subprocess は UTF-8 を明示し、Cloud reusable の要件map、Prompt mirror、利用者ガイド、TDD inventoryを同期した。
+- **Markdown Query Skill のCloud運用記述を更新した**: 到達不能な索引 reusable Workflowへの参照を除き、`test-hve-python.yml` の `mdq-smoke` jobが直接検証する実体へ揃えた。repo-specific appendix変更に対応してMarkdown Query Skillを`0.8.1`へ更新し、engine `0.8.0`とGUI distribution `0.3.0`は据え置いた。
+
+**利用者への影響**: Pull Requestの必須checkがpath filterによってPendingのまま残らない。APP-009 deployはActions画面から対象を明示した実行だけになり、既定targetへの自動deployは行わない。削除した5 Workflowのうち必要なE2E実行は呼出元へ維持し、旧run履歴は削除していない。
+
+**検証**: 変更関連pytest **456 passed / 2 skipped**、Bash / ShellCheck **37 passed**、inventory / SWA契約 **164 passed**、knowledge文書 **42 / 42 passed**、HVE全体 **9615 passed / 21 skipped / 1 xfailed / 864 subtests passed**。55 WorkflowのYAML parse、Action SHA、Prompt mirror、CODEOWNERS、秘密情報pattern、差分・改行、GitHub remoteのbranch protection / Actions権限 / Workflow状態を確認した。
+
+**既知の制約**: `actionlint`はローカル未導入のため、PyYAML全件parse、repository契約テスト、ShellCheckで代替した。mdq / cq全体は **1012 passed / 1 skipped**、残る3件は今回未変更で`origin/main`とbyte-identicalなgolden set・評価器・対象文書間の既存anchor不一致である。
+
+<!-- validation-confirmed -->
+
+### Fixed — Actions lint と Markdown Query の残存回帰を解消した（FR-MAINT-11 / FR-MDQ-01）
+
+- **`actionlint` の未実施を解消した**: 公式 release v1.7.12 の Windows amd64 ZIPを公式checksumと照合して実行し、全55 Workflowを検査した。現行GitHub Actionsがサポートする`concurrency.queue`を同版が未知キーとして報告するため、`.github/actionlint.yaml`で該当するAAG / AAGD reusable Workflowの診断だけを限定除外した。self-hosted runnerの実在custom label `aca`も同設定へ登録した。
+- **Markdown Queryの既存golden回帰3件を解消した**: `DOC-01`の期待着地点を分割後の`docs/catalog/data-model-service-stores.md` §3.3へ、`DOC-10`を現行の利用統計見出しへ追随させた。検証器は弱めず、全40クエリのpath / anchor存在性・一意性を維持した。
+- **トレーサビリティと独立版表を実体へ同期した**: FR-MDQ-01の要件マッピングを40問へ訂正した。golden期待値はリポジトリ固有の評価データで公開engine仕様を変えないため、Markdown Query engineは`0.8.0`、Skillは`0.8.1`を維持した。Code Queryもengine `0.4.0`を維持し、既に`0.4.1`だったSkillの値だけをコンポーネント表へ反映した。
+- **vendor同期への生成cache混入を防止した**: 共有`kit_sync.py`が任意階層の`.mypy_cache`を除外するようにし、Code Query / Markdown Queryの両vendor契約へ同じ規則を反映した。修正前は再現テストが **1 failed**、修正後は **1 passed**。
+- **完了証跡を同期した**: Task 20のempty private repository削除・404確認・一時`delete_repo` scope除去をTask 21の統合証跡へ反映し、完了済み作業をpendingとする記述を除去した。
+
+**利用者への影響**: Workflowの実行契約は変わらない。ローカルActions監査が再現可能になり、Markdown Query / Code Queryの全テストが既知失敗なしで完走する。
+
+**検証**: `actionlint` v1.7.12で55 WorkflowがPASS。golden全40件のanchor監査と旧失敗3件がPASSし、mdq / cq全体は **1015 passed / 1 skipped**。cache除外・actionlint設定・inventory / traceabilityの最終focused回帰は **277 passed**。HVE全体は **9494 passed / 21 skipped / 1 xfailed / 864 subtests passed**。以前の **9615 passed** は配布対象をファイル単位でparametrizeする契約が`.mypy_cache` 127ファイルを誤って数えた結果で、cache除外後の既存実テスト **9488 passed** に今回追加した6契約を加えた値が最終9494件である。I/O契約149件はschema / integrity / registry mismatchすべて0件、TDD inventory再生成と`git diff --check origin/main`もPASS。
+
+<!-- validation-confirmed -->
+
+## [0.8.101] - 2026-09-02
+
+### Fixed — FR-PROMPT-10 live case C2 を registry-first で fail-closed 化
+
+- 利用者指定の Workflow / Step は、parameter や上流成果物を質問する前に `hve/workflow_registry.py` の正本で read-only 確認する二段階 preflight へ改めた。
+- 指定 Workflow / Step が未登録なら明示的に拒否し、registry を確認できない場合も存在を仮定せず fail-closed で停止する。どちらも request / plan / run / 成果物を作成しない。
+- exact input `aad-web の Step 9 を実行して` を Skill eval へ追加し、Step 9 が現在も未登録であることを registry から動的に検証する静的契約を追加した。自然言語解析は引き続き Skill 側の責務で、HVE Python の実行核へ parser を追加していない。
+
+**利用者への影響**: 存在しない Workflow / Step の依頼で APP-ID や上流成果物を先に質問せず、登録不在を明示して安全に停止する。登録済み Workflow / Step の parameter 確認、request v1、plan SHA-256 gate、既存 Orchestrator の挙動は変わらない。
+
+**検証**: 新規 C2 契約は実装前 **2 failed / 1 passed**、実装後 **3 passed**。FR-PROMPT-10 文書契約全体は敵対的レビュー反映後 **92 passed**。Skill frontmatter validator は PASS、routing validator は通常モード PASS（今回未変更の `application-requirement-traceability` に既存 WARN 1件）。6軸レビューで検出した段階前質問と eval ID 重複の false-green 余地をテストへ反映し、再検証した。
+
+<!-- validation-confirmed -->
+
+## [0.8.100] - 2026-09-01
+
+### Fixed — FR-PROMPT-10 の曖昧入力・routing・plan validator 契約を同期
+
+- リポジトリ内の曖昧な HVE 実行依頼を外部 Azure Skill より先に Prompt Edition へ routing し、Workflow / Step / APP-ID / resource group / deploy 範囲が一意になるまで request・plan・run・成果物書き込みを開始しない契約を、最上位 instruction、Skill、質問規約、routing 表へ同期した。
+- Prompt Edition の pre-write gate、自然言語だけの plan / 承認手順、input alias v1 の実在確認境界を静的契約と Skill eval で固定した。PowerShell の plan validator と Pester 契約を Bash / Skill metadata の検証規則へ揃えた。
+- FR-PROMPT-10 の live behavior matrix を formal revision `3f29116e8b6b75dc7c7e81a7e3e6127dab19b718` で実測した。19評価行を31 distinct fresh sessionsで完測し、B/C/Dは各ケース2回、各ケース後に敵対的レビューを実施した。C2 / C3 / D2 / D6 / EはMajor、D4はMinor、A3は条件未再現、その他はPASS。全ケースで無断write・任意shell・live Azure操作は0件だった。
+- 要求テストマッピングを「静的契約GREEN / live behavior FAIL（Major）」へ更新し、静的テストだけではLLM応答適合を証明しないことと、Major修正後のfresh再測定が必要であることを追跡可能にした。
+
+**利用者への影響**: 曖昧なHVE依頼は不足値をinlineで確認し、値が一意になるまでファイルやAzure resourceを変更しない。既存の明示的なPrompt request v1、plan SHA-256 gate、CLI / GUI / Cloudの実行核は維持する。live matrixで検出したMajor/Minorは本変更内で隠すための追加修正をせず、後続bugfixとして残す。
+
+**検証**: A2の明示承認runは成功11 / 失敗0 / スキップ32、canonical outputs 10件を確認した。B1〜D6の保存済み26 sessionsは全件no-write安全PASS、Eも変更0・lane clean・actual path不存在を確認して安全PASS。Prompt docs / request / execution / input alias / DAG / traceability / inventory のfocused回帰は **492 passed / 1 skipped / 1 xfailed / 10 subtests passed**、PowerShell validatorはPester 6.1.0で **33 passed**、inventory freshness / traceabilityは **147 passed / 2 skipped**。Problems診断0件、`git diff --check`、変更ファイルの0-byte検査、HVE版管理scope検査もPASSし、対象12 pathに対して4箇所の版を`0.8.100`へ同期した。
+
+<!-- validation-confirmed -->
+
+## [0.8.99] - 2026-09-01
+
+### Fixed
+
+- 保存済み `ignore_paths` が Prompt 版だけ単一 argv token になる不具合を修正し、GUI / Prompt の要素数・順序・値を一致させた。
+- path-list の空白区切りと Agentic list のセミコロン区切りを direct test、全 Workflow exact parity test、Prompt 統合テスト 05 で固定した。
+- FR-PROMPT-07 / FR-LOCAL-SURFACE-01 の要求テストマッピングと TDD inventory を現行実装へ同期した。
+
+**利用者への影響**: GUI で保存した複数の `ignore_paths` が Prompt 版でも個別の `--ignore-paths` token として渡る。request v1、allowlist、CLI option、設定 key、GUI widget の公開契約は変わらない。Markdown Query と Code Query の本体・Skill は変更対象外のため版を据え置いた。
+
+**検証**: direct / GUI-Prompt exact parity / AKM scope **59 passed**、修正後 Prompt 統合テスト 05 は全ケース PASS、inventory / traceability **227 passed**、最終合同回帰 **763 passed / 188 subtests passed**。HVE core 全量は inventory 再生成前の stale 1件を除き **9767 passed / 21 skipped / 1 xfailed / 871 subtests passed**。GUI 単一プロセス全量は88%で長時間無進捗となり停止し、失敗位置ファイルは単独 **2 passed**、周辺5ファイルは **39 passed**。未完走の GUI 全量を GREEN とは扱わない。
+
+<!-- validation-confirmed -->
+
+## [0.8.98] - 2026-09-01
+
+### Changed — HVE パッケージの PATCH 版を更新
+
+- Prompt request v1 統合契約の誤オラクル訂正と恒久 regression gate 追加に伴い、HVE の project version、bumpversion current version、`hve.__version__` を `0.8.97` から `0.8.98` へ同期した。
+- Markdown Query Skill / engine と Code Query Skill / engine は変更対象外のため版を据え置いた。
+
+**利用者への影響**: HVE のパッケージ版だけが 0.8.98 になる。request v1、CLI / GUI / Prompt runtime の公開契約は後方互換である。
+
+**検証**: HVE の版表現 4 箇所が 0.8.98 で一致し、直前版 0.8.97 から PATCH を 1 回だけ増やしたことを確認した。
+
+<!-- validation-confirmed -->
+
+## [0.8.97] - 2026-08-31
+
+### Changed — 管理者の `main` 直接 push と任意 reviewer 運用を再許可した（FR-MAINT-04）
+
+- `.github/branch-protection-main.json` の `enforce_admins` と `require_code_owner_reviews` を `false` に変更した。必須 status check 5 件、承認レビュー 1 件、stale review の dismiss、linear history、force push / deletion 禁止は維持する。
+- FR-MAINT-04、要求テストマッピング、branch protection 契約テスト、機能・テスト索引を同じ契約へ同期した。GitHub の実 branch protection も対象フィールドだけを更新し、宣言との乖離を残していない。
+
+**利用者への影響**: repository 管理者は `main` へ直接 push できる。Pull Request を使う場合も CODEOWNERS 対象変更に Code Owner 承認を追加必須としない。管理者以外の通常経路では、引き続き Pull Request、必須 check 5 件、承認 1 件が必要となる。
+
+**検証**: 変更前設定に対する focused 契約テストは **1 failed**、設定同期後は **1 passed**。FR-MAINT-04・branch protection・inventory の関連回帰は **244 passed / 2 skipped**。inventory 5 成果物は固定時刻で 2 回生成した SHA-256 が一致した。GitHub Branch Protection API で `enforce_admins=false`、`require_code_owner_reviews=false`、必須 check 5 件、承認 1 件を確認した。
+
+<!-- validation-confirmed -->
+
+## [0.8.96] - 2026-08-31
+
+### Changed — HVEパッケージのPATCH版を更新した
+
+- 利用者の明示指示に基づき、`pyproject.toml`のproject version / bumpversion current versionと`hve.__version__`を`0.8.95`から`0.8.96`へ同期した。
+- HVEの実行コード、公開API、CLI / GUI / Promptの契約、依存関係、Markdown Query（`mdq`）およびCode Query（`cq`）の独立版は変更していない。
+
+**利用者への影響**: パッケージ版メタデータだけが`0.8.96`になる。実行時の振る舞いは変わらない。
+
+**検証**: HVEの4表現が`0.8.96`で一致し、直前のローカルHVE版`0.8.95`からPATCHが1回だけ増えたこと、既存`[Unreleased]`内容を移動していないこと、版管理対象外の`work/`整理差分と独立package版へ影響しないことを確認する。
+
+<!-- validation-confirmed -->
+
+## [0.8.95] - 2026-08-31
+
+### Fixed — durable resumeのcheckpoint、fenced lease、GUI child起動境界を実機受入に合わせて補強した
+
+- **Main checkpointをstatus-only更新から保護した**: DAG callbackがstatusだけをtransitionしても、既にcommit済みの`phase` / `phase_state` / `session_id`を保持する。標準経路で無効なlegacy split-forkがMain checkpointを`split-fork` phaseへ上書きせず、明示opt-in時だけ同phaseを記録する。
+- **取得時lease tokenを正しいfencing条件へ揃えた**: heartbeatとreleaseはowner / generation / 未期限切れexpiryでfenceし、同じownerがtransitionでstate versionを進めた後も取得時tokenを使用できる。transition自身のstate-version CASと、期限切れ・旧owner・旧generationの拒否は維持する。
+- **GUI resume childのargvを公開CLI契約へ揃えた**: GUI launcherが補完する`--workbench off`を`orchestrate` childだけへ限定し、同optionを受理しない`hve resume` childへ注入しない。
+- **portable Code Query fixtureを共有同期規約へ再同期した**: GUI全test fileのfresh-process回帰が、共有`kit_sync.py`では除外済みの`.mypy_cache`をstandalone fixtureだけが複製していたドリフトを検出した。fixtureの除外集合を正本へ揃え、配布物と異なる一時bundleをテストしないようにした。
+- **行単位review comment UIテストのQt teardownを明示した**: 全assertion通過後のpytest unconfigureで発生したWindows heap corruption `0xC0000374`を、各testが生成したparentless Pull Request panelの未破棄へ切り分けた。fixtureへ`shutdown`、`close`、deferred deleteの正式順序を追加し、child processのexit codeまで正常化した。製品の投稿動作は変更していない。
+- **MainWindow GitHubボタンUIテストのQt lifecycleを正式経路へ揃えた**: `deleteLater()`だけで次のtestへ進んでいたfixtureを、`MainWindow.close()`、deferred-delete排出、event処理まで完了させるmaintenanceへ変更した。修正前のfresh-process実行で発生したWindows access violation `0xC0000005`を解消し、製品のウィンドウ動作・cleanup実装は変更していない。
+- **規範と回帰を同期した**: NFR-CONC-02 / FR-CLI-90 / FR-GUI-50、要求テストマッピング、state store / runner / GUI launcherの回帰テストを同じ境界へ更新した。新しいCLI option、環境変数、設定、table、外部依存は追加していない。
+
+**利用者への影響**: 中断可能な長時間runで、Main SDK sessionのcheckpointが周辺status更新により失われず、lease所有者は正当なtransition後も5秒heartbeatと正常releaseを継続できる。GUIのResume操作は公開`hve resume` parserに適合するargvで起動される。active/in-use session、stale plan、期限切れtoken、旧owner/generationをfail-closedで拒否する既存挙動は変わらない。
+
+**検証**: 変更6ファイルの直接回帰は **56 passed / 1 skipped**、state store / service / crash / concurrency / orchestrator / runner / CLI / Prompt / GUI lifecycleの合同focused回帰は **294 passed / 2 skipped**。HVE core全回帰は **9,725 passed / 21 skipped / 1 xfailed / 871 subtests passed**。portable fixtureのドリフトはGUI fresh-process回帰で **1 failed / 9 passed** として検出し、修正後の単独再検証は **10 passed**。行単位review comment UIは修正前に全 **28 assertions passed** 後もprocess exit `-1073740940`、修正後は **28 passed / exit 0**、10回のfresh-process反復も全回exit 0。MainWindow GitHubボタンUIは修正前にprocess exit `3221225477`（`0xC0000005`）、修正後は **15 passed / exit 0**、10回のfresh-process反復も全回exit 0。GUI全 **206 / 206 files** のfresh-process再回帰は **2,582 passed / 3 skipped / 38 subtests passed**、failure 0。固定repository snapshot上の実Copilot SDK same-ID resumeをCLI / GUI / Promptの3面でproducer実行し、別process verifierが各面をPASSと判定した。evidence SHA-256はCLI `4f02f94dc158002e5407866d1a76fcc82c154aec41b0747c185929d950819d9f`、GUI `d58ecd2d265ccabe1835b2340ce1af526aeafc5a64e88d5e7ee8bb0a2388a6bc`、Prompt `6de9b275ba9a7070057e8e45299f6caea37e97773bc8b74576bca8103ca25fee`。各面でtrace 4件、実orchestrate child trace 1件、最終state version 27、worktree登録と物理pathのcleanupを確認した。
+
+**30分正式attestation**: Windows 11 / NTFS / fixed driveでkeep-awakeを取得し、4 process・同一SQLite databaseのresilience soakを **1,800.009秒**完走した。event **1,453件**、event span **1,810.407秒**、最大heartbeat gap **5.113秒未満**、最大checkpoint age **5.015秒**、全caseのfencing / takeover / final suspend / `quick_check=ok`を確認した。child exit 0、source / repository snapshot不変、event hash chain、keep-awake取得・解除を別process verifierが再検証し、evidence SHA-256 `e5ae5e308be2e6d7267e8ec45e0ab2add22a5d85b489cb83930dfa571e183eee`でPASSした。先行試行はノートPCの蓋閉鎖（Windows System event 506、`LidOpenState=false`）によるModern Standbyで20秒leaseが期限切れとなり、旧owner heartbeatをfail-closedで拒否してFAILしたため、正式受入値には含めていない。
+
+<!-- validation-confirmed -->
+
+## [0.8.94] - 2026-08-30
+
+### Changed — main 外の全作業を統合し、競合生成物と版履歴を正本へ再同期した
+
+- `origin/main`、HITL schedule 手動化、durable resume / resilient recovery、Prompt 版フルシステムテスト証跡の各系統を merge commit で統合した。
+- 同時採番された `0.8.92` の変更履歴を1見出しへ集約し、後発の durable resume follow-up `0.8.93` を保持したうえで、本統合ジョブの PATCH を `0.8.94` とした。
+- 競合した HVE feature / test / surface inventory と TDD crosswalk は、統合済みの要件・実装・テストから正規生成器を2回実行して再同期した。Prompt mirror / catalog も統合済み正本から再生成した。
+- Code Query / Markdown Query の vendor 契約は、`tests`、`__pycache__`、`.mypy_cache`、`.pytest_cache` を任意階層で除外する統合結果へ揃えた。
+- Markdown Query の利用ログ wrapper テストは、固定日時 `2026-07-31` が30日集計窓から経時的に外れるため、実行時の現在UTC時刻を使うよう修正した。公開仕様と engine / Skill の版は変更していない。
+
+**利用者への影響**: main から、GitHub Actions 監査是正、HITL の明示実行化、durable resume、Prompt システムテスト証跡を一括して利用できる。既存の各機能契約は維持し、統合競合の解消以外に新しい利用者向け設定や依存は追加していない。
+
+**検証**: 統合後の重点回帰は durable resume / HITL / vendor / traceability / Prompt mirror を対象に **500 passed / 2 skipped**（inventory stale 1件を検出）となり、正規再生成後の inventory 契約は **150 passed**。続く HVE core 全回帰は **9,723 passed / 21 skipped / 1 xfailed / 871 subtests passed**。Markdown Query / Code Query 全回帰は固定日時修正後 **1,015 passed / 1 skipped**。Prompt mirror は **320 copies / 3 composed templates**で一致した。
+
+<!-- validation-confirmed -->
+
+## [0.8.93] - 2026-08-30
+
+### Fixed — durable resumeの第2回敵対的レビューで検出したfail-open境界を修正した
+
+- **永続化境界を防御した**: store直接登録でも未知surface、歯抜けordinal、credential / URL / absolute path / JSON payload形状を拒否し、multi/pair replay値から新しいCLI optionを注入できないようにした。
+- **期限切れleaseを完全にfenceした**: owner / generation一致だけではheartbeat、Workflow / Step transition、releaseを許可せず、`lease_expires_at`経過後は明示takeoverだけが次のwrite ownershipを取得できる。
+- **CLI / Promptのfalse-successを除去した**: HEAD取得不能時は登録・plan・lease・childより前に停止する。Prompt child runnerの例外・不正returncodeを非0へ変換し、終了コード0でもdurable instanceがterminal成功状態でなければ後続Workflowへ進まない。`reuse-session`は再開対象の1 Stepだけへ適用し、TTYの後続planはrecovery actionも再選択する。
+- **GUI process lifecycleを補強した**: replay平文をchild起動後にdialog、explicit queue、保持process argvから破棄する。先行非0を後続成功で隠さず、argv構築・process起動・child非0を失敗表示にする。orphan終了はparentへ1回だけ異常通知し、通常の全タスク完了表示へ流さない。reader thread終了とreader / QA managerのQObject cleanupも明示した。PR作成GUI test fixtureも各caseでpanelを破棄し、assert完了後のWindows heap corruptionを解消した。
+- **要件・mapping・回帰を同期した**: FR-STATE-04/05、NFR-CONC-02、NFR-SEC-01、FR-CLI-90、FR-PROMPT-04/11、FR-GUI-19/50へ既存意図の詳細境界と実在テストを追記した。新しいCLI option、環境変数、設定、table、抽象レイヤー、依存は追加していない。
+
+**利用者への影響**: 通常の新規実行と再開操作は互換性を維持する。不明HEAD、期限切れtoken、不正replay、childの見かけ上の成功など、安全を確認できない場合だけ従来の続行・成功表示から非0停止へ変わる。
+
+**検証**: durable合同 **270 passed / 2 skipped**、HVE core全回帰 **9,701 passed / 23 skipped / 1 xfailed / 871 subtests passed**、GUI 205 files fresh-process合算 **2,579 passed / 3 skipped / 38 subtests passed**（failure 0）、PR作成GUI **3回×19 passed / process exit 0**、traceability **305 passed / 2 skipped**。Inventoryは test **15,114 rows / 709 files**、feature **504 rows**、surface **3,742 rows**で、5成果物の固定時刻2回生成hashが一致した。版・HVE scope、差分、Python AST、TOML、競合、0-byte、新規BOM、secret-like文字列、恒久成果物のrun固有参照の最終gateもPASSした。
+
+<!-- validation-confirmed -->
+
+## [0.8.92] - 2026-08-30
+
+### Changed — 毎時 HITL エスカレーションを手動実行へ変更した（FR-CLOUD-41 / FR-CLOUD-42）
+
+- `.github/workflows/auto-blocked-to-human-required.yml` から `schedule`（`0 * * * *`）を除去し、`workflow_dispatch` と既存の `sla_hours` 入力を維持した。
+- FR-CLOUD-41 / FR-CLOUD-42 を、repository-managed Workflow の有効な `schedule` を禁止し、HITL エスカレーションを必要時の明示実行に限定する契約へ改訂した。SLA 閾値、対象 Issue、ラベル付与、コメント投稿、復帰 Workflow は変更していない。
+- README、運用リファレンス、ADFDV / AAGD の HITL 手順、および要求テストマッピングを手動実行の説明へ同期した。
+
+**利用者への影響**: GitHub Actions は blocked Issue を毎時巡回しなくなる。エスカレーションが必要な場合は Actions タブから `Auto Blocked to Human Required` を明示実行する。
+
+**検証**: 改訂した契約テストは実装前に **2 failed / 16 passed**、`schedule` 除去後に **18 passed**。HITL / schedule / inventory / HVE traceability / PR validator の関連回帰は **259 passed / 2 skipped**。全 55 Workflow の YAML parse、repository-managed `schedule` 0 件、`workflow_dispatch.sla_hours` の維持、BOM なし、版 4 表現の `0.8.92` 一致、`git diff --check`、変更対象のエディタ診断 0 件を確認した。`actionlint` はローカル未導入のため、PyYAML 全件 parse と契約テストで代替した。
+
+### Added — durable resumeの追加に合わせてHVE版を同期した
+
+- `[Unreleased]`に記録したSQLite durable state、10秒heartbeat freshness、fenced lease、公開`hve resume`、CLI / GUI / Prompt共通plan、SDK recovery、DAG/output reconciliation、固定allowlistへ対応し、並行開発ブランチでは`pyproject.toml`のproject version / bumpversion current versionと`hve.__version__`を`0.8.92`へ同期した。
+- 同ブランチは当時の`origin/main`のHVE版`0.8.91`を基準にPATCHを1つ上げた。Markdown Query engine / SkillとCode Query engine / Skillは変更していないため据え置いた。
+
+**利用者への影響**: 版メタデータ以外の追加変更はない。実行契約、安全境界、既知の非保証は上記`[Unreleased]`エントリーを正とする。
+
+**検証**: 並行ブランチ内でHVEの4箇所の版表現が`0.8.92`で一致し、変更scopeにHVE対象パスがあり独立版管理の`mdq` / `cq`対象パスがないことを機械検査した。機能・回帰テストの実績は上記`[Unreleased]`エントリーへ記録した。
+
+<!-- validation-confirmed -->
+
+## [0.8.91] - 2026-08-28
+
+### Fixed — 残存Actions / Markdown Query回帰の解消に合わせてHVE版を同期した
+
+- 上記`[Unreleased]`に記録したActions lint設定、golden期待値、FR-MDQ-01マッピング、独立コンポーネント表、完了証跡の同期に対応し、`pyproject.toml`のproject version / bumpversion current versionと`hve.__version__`を`0.8.91`へ同期した。
+- Markdown Queryはengine `0.8.0`、canonical Skill `0.8.1`、GUI distribution `0.3.0`を維持した。Code Queryはengine `0.4.0`、Skill `0.4.1`、GUI distribution `0.3.0`である。
+
+**検証**: HVEの4箇所の版表現を`0.8.91`へ同期し、HVE scope判定37パス、Markdown Query / Code Queryの正本・vendor・kitコピー、TDD inventoryの一致を確認した。最終統合結果は上記`[Unreleased]`エントリーのとおり全検証PASS。
+
+<!-- validation-confirmed -->
+
+## [0.8.90] - 2026-08-28
+
+### Changed — GitHub Actionsの監査是正に合わせてHVE版を同期した
+
+- 上記`[Unreleased]`に記録した必須checkの常時報告、不要Workflow整理、保護・権限強化、APP-009 manual-only deploy、knowledge検証器修正、Prompt / 文書 / inventory同期に対応し、`pyproject.toml`のproject version / bumpversion current versionと`hve.__version__`を`0.8.90`へ同期した。
+- Markdown Query Skillはrepo-specific Cloud運用記述の変更に対応して`0.8.1`へ更新した。Markdown Query engineは`0.8.0`、Markdown Query GUIは`0.3.0`、Code Query engineは`0.4.0`、Code Query Skillは`0.4.1`のまま据え置いた。
+
+**検証**: HVEの4箇所の版表現が`0.8.90`で一致し、`origin/main`の`0.8.89`からPATCHが1回だけ増えたことを確認した。Markdown Query Skillのcanonical / generated copyとvendor / kit / inventory契約は **360 passed**、HVE全体は **9615 passed / 21 skipped / 1 xfailed / 864 subtests passed**、I/O契約149件はschema / integrity / registry mismatchすべて0件、`git diff --check`も成功した。
 
 <!-- validation-confirmed -->
 

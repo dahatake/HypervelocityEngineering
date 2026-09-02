@@ -31,6 +31,7 @@ SOURCES = ../app.py \
           ../page_workbench.py \
           ../page_workflow_select.py \
           ../qa_answer_dialog.py \
+          ../resume_dialog.py \
           ../session_menu.py \
           ../settings_apply.py \
           ../settings_window.py \

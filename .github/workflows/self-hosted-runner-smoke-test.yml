@@ -3,6 +3,9 @@ name: self-hosted-runner-smoke-test
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   smoke:
     runs-on: [self-hosted, linux, x64, aca]

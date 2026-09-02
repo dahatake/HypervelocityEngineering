@@ -12,7 +12,7 @@
 
 - [はじめに](#はじめに)
 - [クイックスタート](#クイックスタート)
-- [中断と再開（Resume）— 廃止（v1.1）](#中断と再開resume-廃止v11)
+- [中断と再開（Resume）](#中断と再開resume)
 - [必須 / 任意ツール早見表](#必須--任意ツール早見表)
 - [セットアップスクリプトを使った環境構築](#セットアップスクリプトを使った環境構築windows--macos--linux)
 - [環境設定（ゼロからのセットアップ）](#環境設定ゼロからのセットアップ)
@@ -145,16 +145,74 @@ python3 -m hve emit-prompt pre-qa --comment-body
 
 ---
 
-## 中断と再開（Resume）— 廃止（v1.1）
+## 中断と再開（Resume）
 
-GitHub Copilot CLI SDK の複数デバイス間セッション管理が不十分なため、CLI / GUI の Session State（Resume）機能は **v1.1 で全廃** しました。以下の機能はすべて削除されています:
+`python -m hve resume` は、SQLite に確定済みの制御状態を使って、現在のリポジトリで中断した **標準ローカル実行**を再開するサブコマンドです。対象は durable state に登録された `run` / `cli` / `orchestrate` 実行です。`dry-run`、Fleet、Cloud Session、Autopilot、GitHub Cloud Agent の実行は対象外です。
 
-- `Ctrl+R` による中断（graceful pause）
-- `session-state/` への永続化（`state.json` / `journal.jsonl` / `.lock` / `journal-archive/`）
-- `python -m hve resume` サブコマンド（`list` / `show` / `rename` / `delete` / `continue` / `reconcile` / `gc-orphans`）
-- 起動時 recovery（`HVE_DISABLE_STARTUP_RECOVERY`）
+### 基本構文と候補選択
 
-ワークフローを分割実行したい場合は、`--steps` でステップ範囲を絞る運用を利用してください。
+```bash
+# TTY で候補を選択
+python -m hve resume
+
+# execution ID を完全一致で指定
+python -m hve resume <EXECUTION_ID> --action restart-step
+
+# 現在のリポジトリで最後に更新された候補を指定
+python -m hve resume --latest --action reuse-session
+```
+
+`<EXECUTION_ID>` と `--latest` は同時に指定できません。候補は現在のリポジトリに属し、未完了の workflow instance を持つ実行だけに限定されます。
+
+| 状況 | 動作 |
+|---|---|
+| 候補なし | 非ゼロ終了し、子 workflow を開始しない |
+| 候補が 1 件 | その候補を選択し、resume plan に execution ID を表示する |
+| 候補が複数・TTY | 番号付きメニューから選択する |
+| 候補が複数・非 TTY | 暗黙選択せず停止する。`<EXECUTION_ID>` または `--latest` が必要 |
+
+TTY では、必要に応じて候補・復旧方法・再入力値を対話選択し、最後に resume plan の実行確認を行います。非 TTY では入力を求めず、候補が曖昧、再入力が必要、または risk があるのに `--action` が未指定の場合は fail-closed で停止します。
+
+### Risk と復旧方法
+
+resume plan には `risk` が表示されます。代表例は、前回状態が `failed` / `running` / `suspended` / `blocked`、リポジトリの HEAD 変更、成功済み Step の宣言出力欠落、有効な lease owner、または再利用可能な SDK session の欠落です。risk がない場合の既定 action は `restart-step` です。risk がある非 TTY 実行では、次のいずれかを明示してください。
+
+| Action | 動作 |
+|---|---|
+| `--action reuse-session` | 対象 Step に保存された Main SDK session を再利用し、復旧用 prompt から継続する。session ID がない、または session が使用中の場合は停止し、`restart-step` へ暗黙 fallback しない |
+| `--action restart-step` | 保存済み SDK session を使わず、対象 Step を新しい session で先頭から再実行する |
+
+`--action` は安全性検査の回避フラグではありません。対象外 mode、有効な別 owner、破損した状態、または stale な状態は、どちらの action でも開始できません。
+
+### 再入力、成果物再照合、承認
+
+- 自由記述値、任意 path、endpoint、credential、tool / MCP payload などは durable state に値を保存しません。再開に必要な場合は key 名だけを表示し、TTY で値を再入力します。非 TTY の public CLI では停止するため、対話可能な端末から再開してください。
+- 再入力した平文は durable state と resume plan 表示へ保存・出力されません。plan の SHA-256 には平文ではなく値の digest が反映されます。
+- 成功済み Step も、宣言された必須出力の**存在**を再照合します。出力が欠けている Step と、それに依存する後続 Step は再実行対象へ戻ります。内容の意味的な正しさまでは検証しません。
+- CLI は execution / workflow / instance、state version、action、risk、未入力 key、resume SHA-256 を plan として表示します。TTY で承認した後に同じ入力から plan を再計算し、SHA-256 が変化していれば開始せず、再提示を要求します。
+- workflow 開始時は plan の state version を使った CAS と fenced lease を取得します。別プロセスによる状態更新、同時 resume、または有効な owner を検出した場合は stale として停止します。
+
+### 複数 workflow の順序と保証範囲
+
+1 つの execution に複数 workflow が登録されている場合、登録時の順序で最初の未完了 instance から直列再開します。各 child が終了コード `0` を返しただけでなく、durable state が `succeeded` へ遷移したことを確認してから次へ進みます。
+
+次の instance では現在の HEAD と状態から新しい plan を作り直します。このplanは別の承認対象です。TTYでは再提示後にもう一度確認し、承認直後にhashを再計算してから個別にCAS/leaseを取得します。GUI/Promptなどが`--expected-resume-hash`を渡した場合、そのhashで実行できるのは最初の承認済みplanだけです。HVEは次のplanとhashを表示して停止するため、controllerは利用者へ再提示して別の明示承認を得る必要があります。先行planのhashを後続planへ流用しません。先行planへ再入力した平文値もinstance完了時に破棄し、後続で同じkeyが必要なら改めて入力・承認します。最初の失敗で停止し、未承認の後続workflowは開始しません。
+
+output再照合の結果、選択済みStepがすべて成功済みで必須outputも存在する場合、実行対象は0件です。この場合はsubcommandなしchildを起動せず、取得済みfenced leaseの下でoutputを再確認してinstanceを`succeeded`へ確定し、同じordered規則で次へ進みます。
+
+Resume が保証するのは、HVE が SQLite へ commit 済みの **workflow / Step 制御状態、順序、state version、lease/fencing** に基づく再開です。次は保証しません。
+
+- 停止した Python process、生成途中のモデル応答、実行途中の tool / shell command をその位置から復元すること
+- Azure、GitHub、M365、ファイル書き込み等の外部副作用を rollback または exactly-once にすること
+- 存在する成果物の内容が完全・最新・意味的に正しいこと
+
+状態 DB の破損・未対応 schema、未知または別リポジトリの execution ID、不正な保存 plan / workflow 順序、対象外 mode、未解決の再入力、stale plan/hash/CAS、lease 競合を検出した場合は、推測や暗黙 fallback を行わず fail-closed で停止します。
+
+### Legacy `orchestrate --resume-run` との違い
+
+`python -m hve orchestrate --workflow <WORKFLOW_ID> --resume-run <RUN_ID>` は後方互換用の legacy 機能です。同じ run ID と workflow ID の進捗記録から成功済み Step を除外し、残りを新しい session で実行します。記録がない run ID は停止します。
+
+これは `hve resume` の alias ではなく、durable candidate 選択、output 再照合、plan SHA-256、state-version CAS、fenced lease、SDK session 再利用、再入力処理を提供しません。legacy の `<RUN_ID>` と durable resume の `<EXECUTION_ID>` は別の識別子であり、自動変換・自動 import も行いません。相互に取り違えないでください。
 
 ---
 
@@ -254,7 +312,7 @@ chmod +x hve/setup-hve.sh
 
 - `.venv` が存在し、Python 3.11+ で作成されている場合は再利用します。
 - `.venv` が Python 3.11 未満で作成されている場合、通常モードでは自動再作成します。`-CheckOnly` / `--check-only` 下では警告のみにダウングレードし、`-Force` / `--force` を明示すると無条件で削除して作り直します。
-- `github-copilot-sdk` は再実行時も `python -m pip install --upgrade github-copilot-sdk` で更新確認します。
+- `github-copilot-sdk` は再実行時も `python -m pip install --upgrade --no-deps github-copilot-sdk` で更新確認します。
 - `-CheckOnly` / `--check-only` は環境を変更せず、不足している項目を警告として表示します。通常 GUI 構成（`-NoGui` / `--no-gui` / `-Minimal` / `--minimal` なし）では、`gh` を解決できない場合と、既存 `.venv` で PTY backend を利用できない場合も警告に含みます（非ゼロ終了はしません）。通常実行ではこれらは非ゼロ終了になる点が異なります。
 
 ### 認証と任意機能
@@ -1732,6 +1790,7 @@ CLI モード（`orchestrate` サブコマンド）は、全てのオプショ�
 | （なし） | GUI Orchestrator を起動（PySide6 未導入時は CLI 対話ウィザードへ自動フォールバック） |
 | `run` | インタラクティブモードを明示的に起動 |
 | `orchestrate` | CLI モードでワークフローを実行（全オプションを引数で指定） |
+| `resume` | durable state に登録された標準ローカル実行を候補選択・検証して再開する |
 | `qa-merge` | `qa/` 配下の質問票と回答ファイルを統合する |
 | `workiq-doctor` | Work IQ 連携の診断を実行する |
 | `ingest-docs` | `docs-original/` を走査して `docs/original-design-doc-ingest/` へ目録と正規化済み Markdown を出力する |
@@ -1835,7 +1894,7 @@ python -m hve orchestrate \
 | `--workflow`, `-w` | ワークフロー ID（`ard` / `aas` / `aad-web` / `asdw-web` / `adfd` / `adfdv` / `aag` / `aagd` / `aar` / `akm` / `adi` / `adoc`。`aad` / `asdw` は後方互換エイリアス） | なし（**必須**） |
 | `--branch` | ターゲットブランチ名 | `main` |
 | `--steps` | 実行ステップをカンマ区切りで指定 | 全ステップ |
-| `--resume-run` | 指定 run で成功済みのステップを除外して再実行する（未完了ステップは新しいセッションで実行。記録が無い run-id は停止） | 未指定 |
+| `--resume-run <RUN_ID>` | **Legacy**: 同じ run ID / workflow ID で成功済みの Step を除外し、残りを新しい session で実行する。durable `hve resume <EXECUTION_ID>` とは別機能で、記録がない run ID は停止 | 未指定 |
 | `--approval-gates` | 承認ゲートを宣言したステップを含む wave の実行前に `[y/N]` で確認する。ターミナルが対話可能でない実行（非対話 CLI / GUI の子プロセス）では確認を出さずに停止する | 無効 |
 | `--dry-run` | 事前確認モード（SDK 呼び出しなし） | `false` |
 | `--verbose`, `-v` | 詳細ログ出力（`--verbosity verbose` の省略形） | `false` |
@@ -2610,7 +2669,7 @@ pytest 結果: `python -m pytest hve/tests/test_mdq.py -q` → 6 passed in 3.09s
 
 - Cloud runner でも同じ CLI が動作します（Python が利用可能なため）。
 - Cloud runner の作業ツリーは揮発し、索引ファイル `.mdq/index.sqlite` は gitignore 済でセッション間で共有されません。**Cloud Agent セッション側で毎回 `python -m mdq index` を自身で実行**してから `search` / `get` を使う運用です（増分キャッシュは効きません）。
-- 現行の `auto-*-reusable.yml` 群は GitHub Actions runner 上で Issue 作成と Copilot アサインを行うだけで、Prompt 本体は Copilot Cloud の独立セッションで動作します。そのため reusable workflow から runner 上で `mdq index` を事前実行しても **Cloud Agent セッションには出現しません**。付属の `.github/workflows/mdq-index-reusable.yml` は主に **CI スモークテスト** と **手動検証ヘルパー** として提供しています（`test-hve-python.yml` の `mdq-smoke` job で使用）。
+- 現行の `auto-*-reusable.yml` 群は GitHub Actions runner 上で Issue 作成と Copilot アサインを行うだけで、Prompt 本体は Copilot Cloud の独立セッションで動作します。そのため runner 上で事前生成した索引を Cloud Agent セッションへ渡す reusable workflow は提供しません。CI の索引スモークテストは `test-hve-python.yml` の `mdq-smoke` job が直接実行します。
 - Skill 発見は `.github/skills/_routing/README.md` の planning 共通テーブル経由（CLI / Cloud 共通）。Cloud Agent 側への「必ず 1 回 `mdq index` を実行」説明は `markdown-query` Skill 本体に記載済です。
 
 ### F.6 注意点

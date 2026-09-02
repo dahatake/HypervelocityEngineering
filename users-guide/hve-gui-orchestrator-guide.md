@@ -22,7 +22,7 @@
 - [Plugin / MCP Server 認証](#plugin-mcp-server-認証)
 - [データフロー](#データフロー)
 - [複数セッションの同時起動](#複数セッションの同時起動)
-- [中断と再開（Resume）— 廃止（v1.1）](#中断と再開resume-廃止v11)
+- [中断と再開（Resume）](#中断と再開resume)
 - [コマンドリファレンス](#コマンドリファレンス)
 - [ワークフロー一覧](#ワークフロー一覧)
 - [CLI との違い・使い分け](#cli-との違い使い分け)
@@ -259,7 +259,7 @@ RoyalytyService2ndGen/
 | C1 | 基本設定  *必須 | `--model` / `--review-model` / `--qa-model` / `--reasoning-effort` 系 / `--context-tier` / `--max-parallel` / `--timeout` / `--review-timeout` / `--verbosity` / テーマ / `--additional-prompt` / `--context-max-chars` |
 | C3 | 共通設定  *必須 | `--auto-qa`（**必須選択** / 下記参照）/ **QA (質問票) 回答モード**（下記参照）/ `--auto-contents-review` / `--auto-coding-agent-review` / `--qa-akm-background-merge`（下記参照）/ `--akm-model` / `--akm-reasoning-effort` / `--akm-context-tier` / `--self-improve` 系。設定画面では `QA (質問票)` / `レビュー` / `Knowledge Management` / `自己改善 (Self Improve)` の 4 ノードへ分かれています |
 | C4 | Work IQ | `--workiq` 系（M365 メール・チャット・会議・ファイル参照。`@microsoft/workiq` プラグインのインストールが必要）。`OrchestrateArgs` は Work IQ 関連 12 フィールドを保持し、`--workiq*` 引数として CLI に渡ります（`--workiq-tenant-id` の GUI 入力欄は廃止済み。CLI 引数と環境変数 `WORKIQ_TENANT_ID` は引き続き有効） |
-| C5 | GitHub | `--create-issues` / `--create-pr` / `--repo` / **Root Issue の扱い**（新規作成 / 既存 Issue に連携、`--issue-number`。下記参照）/ `--issue-title` / `--branch` / **進捗を引き継いで再実行する run-id**（`--resume-run`。下記参照）/ `--enable-auto-merge` / マージ後ローカルブランチ削除 / Fleet mode / Cloud Sessions 関連 |
+| C5 | GitHub（内部互換カテゴリ。設定ツリーには表示しない） | `--create-issues` / `--create-pr` / `--repo` / **Root Issue の扱い**（新規作成 / 既存 Issue に連携、`--issue-number`。下記参照）/ `--issue-title` / `--branch` / Legacy 進捗 run-id（`--resume-run`。durable Resume とは別機能）/ `--enable-auto-merge` / マージ後ローカルブランチ削除 / Fleet mode / Cloud Sessions 関連 |
 | C6 | 出力制御 | `--verbose` / `--quiet` / `--show-stream` / `--log-level` / `--no-color` / `--banner` / `--screen-reader` / `--timestamp-style` / `--final-only`。**この枠の値は保存されず、起動のたびに既定値へ戻ります**（コンソール表示の制御であり実行結果の意味を変えないため、面固有のままとしています。固定したい場合は CLI 実行時に同名のフラグを指定してください。なお `--banner` は `orchestrate` では効果がありません） |
 | C7 | MCP / CLI 接続 | `--cli-path` / `--cli-url` |
 | AZURE | Azure | `--resource-group`（`default_params` を持たない必須パラメータのみ。FR-GUI-02 / FR-WF-ASDW-02） |
@@ -427,7 +427,7 @@ QA 回答ダイアログの左下には、質問票をクリップボードへ�
 - **📋 コピーアイコン**: ログ・ユーザーアクション各ペインのテキストをクリップボードに 1 クリックでコピー。なお通常 GUI の Workbench では実行コマンドの表示ペインは撤去済みです。
 - **スクロール**: OS ネイティブのマウスホイール / スクロールバーが利用可能。
 - **テキスト選択**: `Ctrl+A`（全選択）・ドラッグ選択・`Ctrl+C` で部分コピー可能。
-- **停止**: 「■ 停止」ボタンで `subprocess.Popen.terminate()` を送信（Windows ではハードキル相当）。
+- **停止**: 「■ 停止」ボタンは、最初に Windows の `CTRL_BREAK_EVENT` / POSIX の `SIGINT` をプロセスグループへ送り、最大 3 秒の graceful stop を試みます。durable 対象の標準実行は、この間に状態を `suspended` へ保存し、heartbeat worker を停止して lease を解放します。応答しない場合だけプロセスツリーの terminate、最後に強制 kill へ段階的に移行します。
 
 ---
 
@@ -930,24 +930,73 @@ python -m hve &
 
 ---
 
-## 中断と再開（Resume）— 廃止（v1.1）
+## 中断と再開（Resume）
 
-GitHub Copilot CLI SDK の複数デバイス間セッション管理が不十分なため、CLI / GUI の Session State（Resume）機能は **v1.1 で全廃** しました。GUI の「■ 停止」ボタンは `subprocess.terminate()`（Windows ではハードキル相当）を送信してワークフローを停止しますが、保存付き中断・再開（Resume）は提供されません。
+標準のローカル実行では、HVE が workflow / Step の制御状態、state version、heartbeat、lease、再実行に必要な安全な引数を SQLite に保存します。GUI を閉じた後や「■ 停止」で中断した後も、同じリポジトリから未完了 execution を選んで再開できます。
 
-> **Copilot CLI の `/resume` とは別概念です。** Copilot パネルの対話タブで使える `/resume` は
-> **Copilot CLI 自身のチャットセッション**を選び直す機能です。HVE のワークフロー（DAG 実行）を
-> 途中から再開するものではありません。ワークフローを分割実行したい場合は `--steps` で範囲を絞ってください。
+### GUI から再開する
 
-### 進捗を引き継いで再実行する（Resume とは別機能）
+1. 実行中のジョブと起動時の索引差分更新が終わるまで待ちます。どちらかが動作中は、ヘッダーの **「再開」** ボタンが無効です。
+2. ヘッダーの **「再開」** を押して「実行を再開」ダイアログを開きます。ダイアログが自動で開くことはありません。
+3. 現在のリポジトリに属する候補を選び、次の表示を確認します。
 
-廃止したのは **SDK セッションの復元** であり、HVE 自身が保存する **ワークフロー進捗（どのステップが成功したか）** は別機能として利用できます。
+| 表示 | 内容 |
+|---|---|
+| `Execution` | durable execution ID |
+| `Workflow` / `Instance` | 再開対象の workflow ID と instance ID |
+| `Status` | 保存済み instance の状態 |
+| `State version` | 競合検出に使う状態版 |
+| `Heartbeat` | 最終 heartbeat と経過秒数（取得できる場合） |
 
-Step 1 の `C5 GitHub` セクションにある **「進捗を引き継いで再実行する run-id」** へ過去の run-id を入力すると、その run で成功済みのステップを除外して実行します（CLI の `--resume-run` と同じ機能）。
+4. `Risk`、`Missing replay keys`、必要なら `Recovery action` を確認します。
+5. ダイアログ下部の **「再開」** を明示的に押します。安全と判定されたプランでも自動実行はしません。
 
-- 未完了のステップは **新しいセッション** で実行されます。会話履歴は復元されません。
-- 空欄のときは通常実行となり、オプションは渡されません。
-- 進捗記録が無い run-id を指定すると、実行時に停止します（全ステップの再実行へはフォールバックしません）。
-- fan-out するステップは、子ステップが成功済みでも親ステップ単位で再実行されます。
+### プランの安全判定
+
+候補の表示値から GUI が独自に判定するのではなく、CLI / GUI / Prompt 版で共通の `ResumeService` が同じ状態スナップショットからプランを作ります。
+
+| 状態 | GUI の動作 |
+|---|---|
+| **safe** | `Risk: none` かつ `Missing replay keys: none`。Recovery action は不要ですが、利用者による「再開」の確認は必須です。 |
+| **risk** | `failed` / `non_terminal` / `active_owner` / `head_drift` / `missing_output` / `sdk_missing` などの理由を `Risk` に表示します。**Reuse session** または **Restart step** を明示的に選ぶまで「再開」は無効です。 |
+| **missing** | 永続化しない自由記述値などを `Missing replay keys` と入力欄に表示します。全てを再入力してプランを再作成するまで「再開」は無効です。再入力値そのものは durable state へ保存せず、承認プランには値の hash だけを含めます。 |
+| **stale** | ダイアログ表示後に state version や承認対象が変わった場合、エラー欄または public CLI controller が stale として拒否します。自動再試行せず、orchestrate 子プロセスも起動しません。ダイアログを開き直して最新候補を確認してください。 |
+| **unsupported** | Fleet / Cloud / Autopilot / Cloud Agent など durable scope 外の mode は登録・再開対象にしません。unsupported な保存状態を検出した場合もエラー欄へ理由を表示し、子プロセスを起動しません。 |
+
+`stale` と `unsupported` の専用 badge はありません。いずれもダイアログのエラー欄または public CLI controller のログへ理由を表示して fail-closed にします。
+
+Recovery action の意味は次のとおりです。
+
+- **Reuse session**: 対象 Step の main phase に保存済みの Copilot SDK session ID があり、再利用可能な場合にその session を使います。利用できない場合は fail-closed となります。
+- **Restart step**: 対象 Step を新しい SDK session で再実行します。
+
+再開プランの作成時には、成功済み Step の宣言出力が現在も存在するか再検査します。たとえばセッション作業フォルダーの cleanup policy `purge` によって必要な宣言出力が実際に消えた場合に限り、`missing_output` risk とし、その Step と依存する後続 Step を再実行対象へ戻します。`purge` を選んだだけで、必要な出力が残っているプランまで一律に risk 扱いにはしません。
+
+### public CLI controller と Workbench への委譲
+
+GUI は候補の表示と承認だけを担当し、lease を先に取得しません。「再開」を押すと、選択した `execution_id`、Recovery action、再入力値、および承認済み `resume_plan_hash` を `--expected-resume-hash` として public `hve resume` controller へ渡します。CLI controller が現在の state / HEAD / hash を再検証し、state-version CAS と lease を取得できた場合だけ `hve orchestrate` 子プロセスを起動します。
+
+起動後は通常実行と同じ Workbench lifecycle に合流します。`SubprocessReader`、ログ表示、停止操作、完了通知を共有するため、再開専用の別実行画面はありません。
+
+「■ 停止」では初期 3 秒の graceful window 内で cooperative cancellation を試みます。durable cancellation は状態を `suspended` へ確定し、heartbeat worker を停止して lease を解放してから終了する契約です。応答しないプロセスは、その後に terminate / kill へ段階的に切り替わります。
+
+### Legacy `--resume-run` は別機能
+
+CLI の `--resume-run <run-id>` は、従来の JSONL 進捗から成功済み Step を除外して**新しい実行**を始める互換経路です。内部互換項目名の **「進捗を引き継いで再実行する run-id」** もこの値を表し、ヘッダーの durable Resume とは連携しません。
+
+- durable execution ID、state-version CAS、heartbeat、lease、承認プラン hash は使いません。
+- Legacy run-id を新しい durable execution へ import / register しません。
+- 未完了 Step は新しい session で実行され、会話履歴は復元されません。
+- 未指定なら通常実行です。進捗記録が無い run-id は fail-closed とし、全 Step 実行へフォールバックしません。
+- fan-out Step は、子 Step が成功済みでも親 Step 単位で再実行します。
+
+現行 GUI で workflow を durable state から再開する入口は、ヘッダーの **「再開」** です。Legacy run-id を durable Resume の候補欄へ入力することはできません。
+
+### Copilot CLI `/resume` と model checkpoint との違い
+
+- **HVE durable Resume** は、HVE workflow の制御状態と成果物を照合し、未完了または再実行が必要な Step を再開する機能です。
+- Copilot パネルの **Copilot CLI `/resume`** は、Copilot CLI 自身の対話セッションを選び直す機能です。HVE の execution / DAG は再開しません。
+- Recovery action の **Reuse session** は、保存済み Copilot SDK session ID の再利用を試みるものです。モデルの重み、内部状態、推論途中の状態を checkpoint へ巻き戻す機能ではなく、HVE は **model checkpoint の復元を提供しません**。
 
 ---
 

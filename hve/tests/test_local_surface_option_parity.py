@@ -16,8 +16,8 @@
 
 from __future__ import annotations
 
-import importlib.util as _ilu
-import os
+import ast
+import importlib
 import sys
 import unittest
 from dataclasses import fields
@@ -27,16 +27,13 @@ import yaml
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _FIXTURE = _REPO_ROOT / "hve" / "tests" / "fixtures" / "option_parity_matrix.yaml"
+_SETTINGS_APPLY = _REPO_ROOT / "hve" / "gui" / "settings_apply.py"
 
-sys.path.insert(0, str(_REPO_ROOT / "hve"))
-_spec = _ilu.spec_from_file_location(
-    "hve_main_local_surface_parity", str(_REPO_ROOT / "hve" / "__main__.py")
-)
-assert _spec is not None and _spec.loader is not None
-_main_mod = _ilu.module_from_spec(_spec)
-_spec.loader.exec_module(_main_mod)
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+_main_mod = importlib.import_module("hve.__main__")
 
-from hve.gui import settings_apply, settings_store
+from hve.gui import settings_store
 from hve.gui.orchestrate_args import OrchestrateArgs
 from hve.prompt_request import ALLOWED_SETTINGS_OVERRIDES
 from hve.workflow_registry import list_workflows
@@ -67,11 +64,32 @@ def _args_fields() -> set:
     return {f.name for f in fields(OrchestrateArgs)}
 
 
+def _settings_section_fields() -> dict[str, dict[str, str]]:
+    """Read the persistence table without importing the Qt widget module."""
+
+    tree = ast.parse(_SETTINGS_APPLY.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "_SECTION_FIELDS"
+            and node.value is not None
+        ):
+            value = ast.literal_eval(node.value)
+            if isinstance(value, dict):
+                return value
+    raise AssertionError("settings_apply.py does not define literal _SECTION_FIELDS")
+
+
 def _persisted_settings_keys() -> set:
-    return {key for fields_ in settings_apply._SECTION_FIELDS.values() for key in fields_}
+    return {key for fields_ in _settings_section_fields().values() for key in fields_}
 
 
 class TestFixtureDeclarationsAreSound(unittest.TestCase):
+    def test_main_module_uses_canonical_package_context(self) -> None:
+        self.assertEqual(_main_mod.__name__, "hve.__main__")
+        self.assertEqual(_main_mod.__package__, "hve")
+
     def test_all_declared_sections_exist(self) -> None:
         fx = _fixture()
         for key in (
@@ -79,6 +97,7 @@ class TestFixtureDeclarationsAreSound(unittest.TestCase):
             "local_surface_settings_key_aliases",
             "local_surface_workflow_params",
             "orchestrate_cli_dest_aliases",
+            "orchestrate_cli_internal_dests",
             "local_surface_excluded_cli_dests",
         ):
             self.assertIn(key, fx, f"{key} が fixture にありません")
@@ -88,11 +107,13 @@ class TestFixtureDeclarationsAreSound(unittest.TestCase):
         shared = set(fx["local_surface_shared_settings"])
         workflow = set(fx["local_surface_workflow_params"])
         aliases = set(fx["orchestrate_cli_dest_aliases"])
+        internal = set(fx["orchestrate_cli_internal_dests"])
         excluded = set(fx["local_surface_excluded_cli_dests"])
         groups = {
             "shared": shared,
             "workflow_param": workflow,
             "alias": aliases,
+            "internal": internal,
             "excluded": excluded,
         }
         names = sorted(groups)
@@ -118,6 +139,7 @@ class TestEveryCliDestIsClassified(unittest.TestCase):
         classified = (
             _args_fields()
             | set(fx["orchestrate_cli_dest_aliases"])
+            | set(fx["orchestrate_cli_internal_dests"])
             | set(fx["local_surface_excluded_cli_dests"])
         )
         unclassified = sorted(_orchestrate_dests() - classified)
@@ -126,15 +148,21 @@ class TestEveryCliDestIsClassified(unittest.TestCase):
             [],
             "未分類の CLI dest があります。OrchestrateArgs へ追加するか、"
             "option_parity_matrix.yaml の orchestrate_cli_dest_aliases / "
-            "local_surface_excluded_cli_dests へ根拠付きで登録してください。",
+            "orchestrate_cli_internal_dests / local_surface_excluded_cli_dests "
+            "へ根拠付きで登録してください。",
         )
 
-    def test_declared_aliases_and_exclusions_still_exist_in_the_cli(self) -> None:
+    def test_declared_aliases_internal_dests_and_exclusions_still_exist_in_the_cli(
+        self,
+    ) -> None:
         """存在しない dest の宣言が残ると、分類表が実態から乖離する。"""
         fx = _fixture()
         dests = _orchestrate_dests()
         for dest in sorted(set(fx["orchestrate_cli_dest_aliases"])):
             with self.subTest(alias=dest):
+                self.assertIn(dest, dests, f"{dest} は orchestrate に存在しません")
+        for dest in sorted(set(fx["orchestrate_cli_internal_dests"])):
+            with self.subTest(internal=dest):
                 self.assertIn(dest, dests, f"{dest} は orchestrate に存在しません")
         for dest in sorted(set(fx["local_surface_excluded_cli_dests"])):
             with self.subTest(excluded=dest):

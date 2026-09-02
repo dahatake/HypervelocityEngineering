@@ -45,6 +45,24 @@ class TestOrchestratorContext(unittest.TestCase):
         self.assertFalse(is_active(None))
         self.assertTrue(is_active(OrchestratorContext()))
 
+    def test_durable_versions_reject_negative_values(self):
+        with self.assertRaises(ValueError):
+            OrchestratorContext(expected_state_version=-1)
+        with self.assertRaises(ValueError):
+            OrchestratorContext(lease_owner="owner", lease_generation=-1)
+
+    def test_lease_owner_and_generation_are_atomic(self):
+        with self.assertRaises(ValueError):
+            OrchestratorContext(lease_owner="owner")
+        with self.assertRaises(ValueError):
+            OrchestratorContext(lease_generation=1)
+        ctx = OrchestratorContext(lease_owner="owner", lease_generation=1)
+        self.assertEqual((ctx.lease_owner, ctx.lease_generation), ("owner", 1))
+
+    def test_recovery_action_uses_the_fixed_allowlist(self):
+        with self.assertRaises(ValueError):
+            OrchestratorContext(recovery_action="continue")
+
 
 def _sub(i: int, deps: list[int] | None = None) -> SubIssueDef:
     return SubIssueDef(index=i, title=f"sub-{i}", depends_on=deps or [])

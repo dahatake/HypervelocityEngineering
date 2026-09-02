@@ -19,7 +19,7 @@ import os
 import signal
 import subprocess
 import sys
-from typing import Dict, Optional
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 from PySide6.QtCore import QThread, Signal
 
@@ -33,6 +33,37 @@ _os_killpg = getattr(os, "killpg", None)
 _SIGINT = getattr(signal, "SIGINT", None)
 _SIGTERM = getattr(signal, "SIGTERM", None)
 _SIGKILL = getattr(signal, "SIGKILL", None)
+
+
+def append_durable_identity_args(argv: Sequence[str], args: Any) -> list[str]:
+    """Append a complete hidden durable identity without exposing it in GUI forms."""
+    result = list(argv)
+    for attribute, flag in (
+        ("_execution_id", "--execution-id"),
+        ("_instance_id", "--instance-id"),
+        ("_expected_state_version", "--expected-state-version"),
+        ("_recovery_action", "--recovery-action"),
+        ("_lease_owner", "--lease-owner"),
+        ("_lease_generation", "--lease-generation"),
+    ):
+        value = getattr(args, attribute, None)
+        if value is not None and str(value):
+            result.extend((flag, str(value)))
+    return result
+
+
+def build_resume_argv(
+    plan: Any,
+    replay_values: Optional[Mapping[str, str]] = None,
+) -> list[str]:
+    """Build the public resume-controller argv consumed by the shared CLI path."""
+    argv = ["resume", str(plan.execution_id)]
+    if getattr(plan, "action", None):
+        argv.extend(("--action", str(plan.action)))
+    argv.extend(("--expected-resume-hash", str(plan.resume_plan_hash)))
+    for key, value in sorted((replay_values or {}).items()):
+        argv.extend(("--replay-value", f"{key}={value}"))
+    return argv
 
 
 def _kill_process_tree(proc: subprocess.Popen) -> None:
@@ -212,12 +243,15 @@ def launch_orchestrator(
 
     Note:
         設計書 §8.3 / §13.4 に従い、GUI モードでは `--workbench=off` を必ず付与する必要がある。
-        通常は `OrchestrateArgs.to_argv()` が自動的に注入するため、本関数では追加の
-        セーフティチェックとして `--workbench` 系フラグが含まれない場合に `--workbench=off`
-        を末尾に追加する。
+        通常は `OrchestrateArgs.to_argv()` が自動的に注入するため、本関数では
+        ``orchestrate`` サブコマンドに限り、`--workbench` 系フラグが含まれない場合の
+        セーフティチェックとして `--workbench=off` を末尾に追加する。``resume`` は
+        public resume controller の引数だけを受け付けるため、このフラグを渡さない。
     """
     safe_argv = list(argv)
-    if not any(a == "--workbench" or a.startswith("--workbench=") for a in safe_argv):
+    if safe_argv[:1] == ["orchestrate"] and not any(
+        a == "--workbench" or a.startswith("--workbench=") for a in safe_argv
+    ):
         safe_argv += ["--workbench", "off"]
     cmd = [sys.executable, "-m", "hve"] + safe_argv
 

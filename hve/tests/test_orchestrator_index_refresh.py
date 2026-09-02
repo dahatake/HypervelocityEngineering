@@ -24,6 +24,16 @@ def _run(coro):
 
 
 class TestWatcherStartIsDeferred(unittest.TestCase):
+    def setUp(self) -> None:
+        import orchestrator
+
+        orchestrator._index_watcher_start_thread = None
+
+    def tearDown(self) -> None:
+        import orchestrator
+
+        orchestrator._index_watcher_start_thread = None
+
     def test_refresh_completes_before_any_watcher_is_constructed(self) -> None:
         import orchestrator
 
@@ -66,6 +76,27 @@ class TestWatcherStartIsDeferred(unittest.TestCase):
 
         self.assertIsNone(orchestrator._start_index_watchers_when_idle(cfg))
 
+    def test_repeated_workflows_share_one_process_lifetime_starter(self) -> None:
+        import orchestrator
+
+        starts: list[object] = []
+
+        class _FakeThread:
+            def __init__(self, *args, **kwargs) -> None:
+                self.args = args
+                self.kwargs = kwargs
+
+            def start(self) -> None:
+                starts.append(self)
+
+        cfg = SDKConfig(dry_run=False, quiet=True, mdq_watch=True, cq_watch=True)
+        with patch.object(orchestrator.threading, "Thread", _FakeThread):
+            first = orchestrator._start_index_watchers_when_idle(cfg)
+            second = orchestrator._start_index_watchers_when_idle(cfg)
+
+        self.assertIs(first, second)
+        self.assertEqual(starts, [first])
+
     def test_run_workflow_uses_the_deferred_starter(self) -> None:
         with patch("orchestrator._start_index_watchers_when_idle") as spy:
             _run(run_workflow(
@@ -83,7 +114,7 @@ class TestEntryCommands(unittest.TestCase):
 
         self.assertEqual(INDEX_REFRESH_COMMANDS, frozenset({"run", "cli", "orchestrate"}))
 
-    def test_orchestrate_starts_the_refresh(self) -> None:
+    def test_orchestrate_defers_refresh_to_the_command_handler(self) -> None:
         import hve.__main__ as entry
 
         with patch("hve.index_refresh.start_background") as spy, \
@@ -91,7 +122,10 @@ class TestEntryCommands(unittest.TestCase):
              patch.object(entry, "_cmd_orchestrate", return_value=0):
             entry.main(["orchestrate", "--workflow", "aas"])
 
-        spy.assert_called_once()
+        # Durable registration now belongs to the command handler and must
+        # commit before background index work.  Replacing that handler must
+        # therefore also remove the refresh side effect from ``main``.
+        spy.assert_not_called()
 
     def test_login_does_not_start_the_refresh(self) -> None:
         import hve.__main__ as entry

@@ -11,11 +11,11 @@ _UPSTREAM = _REPO_ROOT / "mdq"
 _VENDOR = _REPO_ROOT / "tools" / "skills" / "markdown_query" / "vendor" / "mdq"
 
 # Tied to this repository, so sync-vendor keeps it out of the portable engine.
-# ``tests`` is matched at **any** depth: the GUI package under ``mdq/gui/``
-# carries its own test package that must not ship with the engine.
-_EXCLUDED_DIR_NAMES = ("tests", "__pycache__")
+# Directory names are matched at **any** depth: the GUI package under
+# ``mdq/gui/`` carries its own test package, and generated caches must not ship.
+_EXCLUDED_DIR_NAMES = ("tests", "__pycache__", ".mypy_cache", ".pytest_cache")
 _EXCLUDED_FILE_NAMES = ("golden-queries.json", "golden-queries-holdout.json")
-_EXCLUDED_FROM_VENDOR = ("tests", *_EXCLUDED_FILE_NAMES)
+_EXCLUDED_FROM_VENDOR = ("tests", ".mypy_cache", *_EXCLUDED_FILE_NAMES)
 
 
 def _is_distributed(relative: Path) -> bool:

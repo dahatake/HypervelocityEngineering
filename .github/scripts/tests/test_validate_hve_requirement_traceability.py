@@ -767,3 +767,5 @@ def test_branch_protection_keeps_review_and_requires_validator_check() -> None:
     trusted_job = next(job for job in trusted_jobs.values() if isinstance(job, dict) and job.get("name") == "HVE Requirement Traceability Trusted")
     assert f"{trusted['name']} / {trusted_job['name']}" in contexts
     assert data["required_pull_request_reviews"]["required_approving_review_count"] >= 1
+    assert data["required_pull_request_reviews"]["require_code_owner_reviews"] is False
+    assert data["enforce_admins"] is False

@@ -350,6 +350,14 @@ else
   fail "preflight: parses OWNER/REPO argument — got: ${output}"
 fi
 
+if grep -q "Read and write permissions" "${SCRIPT_DIR}/../preflight-cloud-setup.sh"; then
+  fail "preflight: must not require repository-wide write permissions"
+elif grep -q "Read repository contents and packages" "${SCRIPT_DIR}/../preflight-cloud-setup.sh"; then
+  pass "preflight: recommends read-only repository default permissions"
+else
+  fail "preflight: read-only default permission guidance is missing"
+fi
+
 # ===========================================================================
 # 11. workflow prerequisite check safety
 # ===========================================================================

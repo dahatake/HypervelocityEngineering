@@ -22,7 +22,7 @@ on:
 
 jobs:
   validate-knowledge-files:
-    name: Validate knowledge/ D クラス要求定義書ドラフト
+    name: Validate knowledge/ D クラス本文とChangeLog
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

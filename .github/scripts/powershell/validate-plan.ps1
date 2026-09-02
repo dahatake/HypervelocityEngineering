@@ -3,8 +3,8 @@
 # Ported from: .github/scripts/bash/validate-plan.sh
 #
 # Validates:
-#   1. Required metadata presence (estimate_total, split_decision, implementation_files)
-#   2. estimate_total vs split_decision consistency
+#   1. Required metadata presence (task_scope, context_size, split_decision, implementation_files)
+#   2. task_scope/context_size vs split_decision consistency
 #   3. SPLIT_REQUIRED + implementation_files incompatibility
 #   4. SPLIT_REQUIRED → subissues.md existence
 #   5. subissues_count vs actual <!-- subissue --> block count
@@ -80,7 +80,8 @@ function script:ValidatePlan {
 
     $content = Get-Content $PlanPath -Raw
 
-    $estimate = ExtractInt -Content $content -Key 'estimate_total'
+    $taskScope = ExtractStr -Content $content -Key 'task_scope'
+    $contextSize = ExtractStr -Content $content -Key 'context_size'
     $decision = ExtractStr -Content $content -Key 'split_decision'
     $implFiles = ExtractStr -Content $content -Key 'implementation_files'
     $subissuesCount = ExtractInt -Content $content -Key 'subissues_count'
@@ -91,7 +92,7 @@ function script:ValidatePlan {
     if (-not $implFiles) { $implFiles = 'MISSING' }
 
     Write-Information "Checking: $PlanPath"
-    Write-Information "  Estimate: ${estimate}min | Decision: $decision | Impl files: $implFiles | Subissues count: $subissuesCount"
+    Write-Information "  task_scope: $taskScope | context_size: $contextSize | Decision: $decision | Impl files: $implFiles | Subissues count: $subissuesCount"
 
     # Rule 0: required metadata must exist and have valid values
     if ($decision -eq 'MISSING') {
@@ -101,8 +102,18 @@ function script:ValidatePlan {
         $errors += "${PlanPath}: invalid split_decision='$decision'. Must be PROCEED or SPLIT_REQUIRED"
     }
 
-    if ($estimate -eq 0 -and $content -notmatch 'estimate_total') {
-        $errors += "${PlanPath}: missing required metadata <!-- estimate_total: ... -->"
+    if (-not $taskScope) {
+        $errors += "${PlanPath}: missing required metadata <!-- task_scope: ... -->. Must be single or multi. See Skill task-dag-planning §2.1.2"
+    }
+    elseif ($taskScope -ne 'single' -and $taskScope -ne 'multi') {
+        $errors += "${PlanPath}: invalid task_scope='$taskScope'. Must be single or multi"
+    }
+
+    if (-not $contextSize) {
+        $errors += "${PlanPath}: missing required metadata <!-- context_size: ... -->. Must be small, medium, or large. See Skill task-dag-planning §2.1.2"
+    }
+    elseif ($contextSize -notin @('small', 'medium', 'large')) {
+        $errors += "${PlanPath}: invalid context_size='$contextSize'. Must be small, medium, or large"
     }
 
     if ($implFiles -eq 'MISSING') {
@@ -112,9 +123,14 @@ function script:ValidatePlan {
         $errors += "${PlanPath}: invalid implementation_files='$implFiles'. Must be true or false"
     }
 
-    # Rule 1: estimate > 15 must be SPLIT_REQUIRED
-    if ($estimate -gt 15 -and $decision -eq 'PROCEED') {
-        $errors += "${PlanPath}: estimate=${estimate}min > 15min but decision=PROCEED. Must be SPLIT_REQUIRED per Skill task-dag-planning §2.2"
+    # Rule 1a: task_scope=multi must be SPLIT_REQUIRED
+    if ($taskScope -eq 'multi' -and $decision -eq 'PROCEED') {
+        $errors += "${PlanPath}: task_scope=multi but split_decision=PROCEED. Must be SPLIT_REQUIRED per Skill task-dag-planning §2.2"
+    }
+
+    # Rule 1b: context_size=large must be SPLIT_REQUIRED
+    if ($contextSize -eq 'large' -and $decision -eq 'PROCEED') {
+        $errors += "${PlanPath}: context_size=large but split_decision=PROCEED. Must be SPLIT_REQUIRED per Skill task-dag-planning §2.2"
     }
 
     # Rule 2: SPLIT_REQUIRED must not have implementation files

@@ -281,6 +281,27 @@ def surface_rows(generator: ModuleType) -> list[dict[str, object]]:
 
 
 class TestSurfaceInventory:
+    def test_generation_timestamp_honors_source_date_epoch(
+        self,
+        generator: ModuleType,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("SOURCE_DATE_EPOCH", "1")
+
+        assert generator._generation_timestamp() == "1970-01-01T00:00:01Z"
+
+    @pytest.mark.parametrize("value", ["not-an-integer", "-1"])
+    def test_generation_timestamp_rejects_invalid_source_date_epoch(
+        self,
+        generator: ModuleType,
+        monkeypatch: pytest.MonkeyPatch,
+        value: str,
+    ) -> None:
+        monkeypatch.setenv("SOURCE_DATE_EPOCH", value)
+
+        with pytest.raises(ValueError, match="non-negative integer"):
+            generator._generation_timestamp()
+
     def test_git_files_excludes_deleted_cached_paths(
         self,
         generator: ModuleType,
@@ -389,10 +410,23 @@ class TestSurfaceInventoryCiGate:
         # YAML 1.1 では `on:` が真偽値 True としてパースされる。
         return data.get("on") or data[True]
 
-    @pytest.mark.parametrize("event", ("push", "pull_request"))
     @pytest.mark.parametrize("prefix", ("hve-dev/", ".github/scripts/"))
-    def test_workflow_runs_when_inventory_sources_change(self, event: str, prefix: str) -> None:
-        paths = self._triggers()[event]["paths"]
+    def test_push_runs_when_inventory_sources_change(self, prefix: str) -> None:
+        paths = self._triggers()["push"]["paths"]
         assert any(str(entry).startswith(prefix) for entry in paths), (
-            f"{event}.paths must include {prefix} so a stale surface inventory is detected"
+            f"push.paths must include {prefix} so a stale surface inventory is detected"
+        )
+
+    @pytest.mark.parametrize("prefix", ("hve-dev/", ".github/scripts/"))
+    def test_pull_request_detector_runs_when_inventory_sources_change(self, prefix: str) -> None:
+        import yaml
+
+        data = yaml.safe_load(self.WORKFLOW.read_text(encoding="utf-8"))
+        detector_script = next(
+            step["run"]
+            for step in data["jobs"]["detect-changes"]["steps"]
+            if step.get("id") == "paths"
+        )
+        assert prefix in detector_script, (
+            f"the pull-request detector must include {prefix} so a stale surface inventory is detected"
         )

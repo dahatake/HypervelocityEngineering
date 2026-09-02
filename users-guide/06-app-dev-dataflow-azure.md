@@ -455,10 +455,9 @@ ADFDV 完了後は、必要に応じて運用改善・追加ジョブ実装・�
 
 ## 事後 HITL フロー（リトライ上限超過後）
 
-Copilot がリトライ上限を超過して `adfd:blocked` または `adfdv:blocked` が付与された場合、以下の自動エスカレーションフローが起動します:
+Copilot がリトライ上限を超過して `adfd:blocked` または `adfdv:blocked` が付与された場合、必要に応じて以下の手動エスカレーションフローを実行します:
 
-1. **自動エスカレーション（SLA: 24 時間）**: `adfd:blocked` / `adfdv:blocked` 付与後、Issue の最終更新時刻から 24 時間経過すると
-   `auto-blocked-to-human-required.yml` が `adfd:human-required` / `adfdv:human-required` を自動付与し、エスカレーションコメントを投稿します。
+1. **エスカレーション（既定 SLA: 24 時間）**: Actions タブから `auto-blocked-to-human-required.yml` を明示実行します。Workflow は Issue の最終更新時刻から SLA 時間以上経過した対象へ `adfd:human-required` / `adfdv:human-required` を付与し、エスカレーションコメントを投稿します。
 2. **人間が調査**: `adfd:human-investigating` / `adfdv:human-investigating` ラベルを手動付与して調査中を明示してください。
 3. **解決後に自動復帰**: `adfd:human-resolved` / `adfdv:human-resolved` を手動付与すると `auto-human-resolved-to-ready.yml` が起動し、
    `:blocked` / `:human-required` / `:human-resolved` を削除して `adfd:ready` / `adfdv:ready` を自動付与します。

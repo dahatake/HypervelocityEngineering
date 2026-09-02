@@ -13,6 +13,8 @@ import tempfile
 import unittest
 from unittest import mock
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from prompts import PRE_EXECUTION_QA_PROMPT_V2, render_pre_execution_qa_comment_body
@@ -43,6 +45,21 @@ _PARAM_PROMPT_LABELS = _main_mod._PARAM_PROMPT_LABELS
 main = _main_mod.main
 
 from workflow_registry import get_workflow as _get_workflow
+
+
+@pytest.fixture(autouse=True)
+def _isolate_durable_state(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep CLI unit tests out of the user's real durable resume database."""
+    from hve import run_state_store
+
+    monkeypatch.setattr(
+        run_state_store,
+        "default_state_path",
+        lambda: tmp_path / "state.sqlite3",
+    )
 
 
 def _parse(argv):
@@ -634,6 +651,15 @@ class TestBuildParams(unittest.TestCase):
         args = _parse(["orchestrate", "-w", "aas", "--no-auto-compaction"])
         config = _build_config(args)
         self.assertFalse(config.auto_compaction)
+
+    def test_durable_replay_unattended_control_reaches_config(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas", "--unattended"])
+        config = _build_config(args)
+        self.assertTrue(config.unattended)
+
+    def test_durable_replay_unattended_control_is_hidden_from_help(self) -> None:
+        parser = _main_mod._build_parser()
+        self.assertNotIn("--unattended", parser.format_help())
 
     def test_tool_search_default_true(self) -> None:
         """FR-MODEL-04: 未指定時は既定 (True) のまま。"""

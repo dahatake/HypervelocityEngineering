@@ -19,6 +19,14 @@ from hve.git_ref import is_valid_branch_name
 _REPO_PATTERN = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
 
 
+def is_github_repository_slug(value: Any) -> bool:
+    """Return whether *value* is a strict ``owner/repo`` identifier."""
+    if not isinstance(value, str) or not _REPO_PATTERN.fullmatch(value):
+        return False
+    owner, repository = value.split("/", 1)
+    return owner not in {".", ".."} and repository not in {".", ".."}
+
+
 @dataclass(frozen=True)
 class StartupPreflightIssue:
     category: str
@@ -136,10 +144,7 @@ def validate_startup_configuration(
         return StartupPreflightResult()
 
     issues: list[StartupPreflightIssue] = []
-    repo_is_valid = isinstance(repo, str) and bool(_REPO_PATTERN.fullmatch(repo))
-    if repo_is_valid:
-        owner, repository = repo.split("/", 1)
-        repo_is_valid = owner not in {".", ".."} and repository not in {".", ".."}
+    repo_is_valid = is_github_repository_slug(repo)
     if not repo_is_valid:
         issues.append(_issue(
             "setting",

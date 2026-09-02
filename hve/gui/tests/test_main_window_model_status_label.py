@@ -42,7 +42,7 @@ def main_window(qapp, monkeypatch, tmp_path):
         settings_store, "settings_path", lambda: tmp_path / ".settings.txt"
     )
     from hve.gui.main_window import MainWindow
-    win = MainWindow()
+    win = MainWindow(repo_root=tmp_path)
     yield win
     win.close()
     win.deleteLater()

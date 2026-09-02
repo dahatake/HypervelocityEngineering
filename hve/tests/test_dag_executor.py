@@ -346,7 +346,7 @@ class TestDAGExecutorABD(unittest.TestCase):
         )
         _run(executor.execute())
 
-        self.assertEqual(starts, ["2a", "2b"])
+        self.assertEqual(starts, ["1", "2a", "2b", "3"])
 
     def test_fleet_wave_runner_none_falls_back_to_semaphore(self) -> None:
         executed: List[str] = []
@@ -922,8 +922,8 @@ class TestOrchestratorWiresStepTimeout(unittest.TestCase):
 
     def test_run_workflow_passes_step_timeout_to_executor(self) -> None:
         import inspect
-        from orchestrator import run_workflow
-        src = inspect.getsource(run_workflow)
+        from orchestrator import _run_workflow_body
+        src = inspect.getsource(_run_workflow_body)
         self.assertIn("step_timeout_seconds=getattr(config", src)
 
 

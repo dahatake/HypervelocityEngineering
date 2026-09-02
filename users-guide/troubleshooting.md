@@ -33,6 +33,7 @@
   - [Azure Static Web Apps デプロイエラー](#azure-static-web-apps-デプロイエラー)
   - [Copilot cloud agent のタスク実行エラー](#copilot-cloud-agent-のタスク実行エラー)
 - [HVE CLI Orchestrator のトラブル](#hve-cli-orchestrator-のトラブル)
+   - [Resume 関連のよくある質問](#resume-関連のよくある質問)
 - [HVE GUI Orchestrator のトラブル](#hve-gui-orchestrator-のトラブル)
 - [公式出典](#公式出典)
 
@@ -398,7 +399,7 @@ REM Windows
 **関連する注意点**:
 
 - セッション内でツール実行の確認を求められるのは仕様です。HVE は権限緩和フラグ（`--allow-all-tools` 等）を付与しません。方針を変えたい場合はセッション内で `/permissions` を実行してください。
-- 対話タブの `/resume` は **Copilot CLI のチャットセッション**を選び直す機能です。HVE ワークフローの再開ではありません（[Resume 関連のよくある質問 — 廃止（v1.1）](#resume-関連のよくある質問--廃止v11)）。
+- 対話タブの `/resume` は **Copilot CLI のチャットセッション**を選び直す機能です。HVE ワークフローの再開ではありません（[Resume 関連のよくある質問](#resume-関連のよくある質問)）。
 
 ---
 
@@ -598,6 +599,8 @@ AAD-WEB / ASDW-WEB / ADFD / ADFDV ワークフローで以下のエラーが Iss
 
 SWA デプロイは OIDC 認証方式を使用しています。`AZURE_STATIC_WEB_APPS_API_TOKEN` の設定は不要です。以下の Secrets が正しく設定されていることを確認してください。
 
+APP-009 の workflow は `workflow_dispatch` 専用です。Actions タブまたは `gh workflow run` から、対象subscription内に実在する `resource_group` と `static_web_app_name` を毎回明示してください。workflow は OIDC 認証後、deployment token を取得する前に同じ値で `az staticwebapp show` を実行します。
+
 1. **OIDC 認証 Secrets が設定されているか確認**
    ```bash
    gh secret list --repo <owner>/<repo>
@@ -623,6 +626,7 @@ SWA デプロイは OIDC 認証方式を使用しています。`AZURE_STATIC_WE
 - OIDC federated credential の subject / audience 条件不一致
 - `permissions: id-token: write` 不足
 - SWA リソース未作成、または `RESOURCE_GROUP` / `SWA_NAME` の取り違え
+- `workflow_dispatch` の `resource_group` / `static_web_app_name` 未指定
 
 **安全な復旧**:
 
@@ -744,17 +748,103 @@ startup preflight の対象条件、5 検査、実行順序、`--dry-run` の扱
 
 ### Resume 関連のよくある質問
 
-GitHub Copilot CLI SDK の複数デバイス間セッション管理が不十分なため、**SDK セッションを復元する** Session State（Resume）機能（`Ctrl+R` 中断・`hve resume` サブコマンド・`session-state/` 永続化）は v1.1 で全廃しました。
+現在は、SQLite の耐久制御状態を使う **durable execution resume** と、JSON Lines の成功記録だけを使う **legacy run-id resume** の 2 系統があります。v1.1 で廃止された旧 `session-state/`、`Ctrl+R`、旧 Session State の復元機構が復活したわけではありません。
 
-一方で、**どのステップが成功したか**という進捗は `hve/.run-progress.jsonl` へ自動保存されます。途中で失敗した実行を続きから実行する場合は、失敗した実行の run-id を指定してください。
+| 再開方式 | 識別子 | 保存状態 | SDK セッション |
+|---|---|---|---|
+| `python -m hve resume` | execution ID | SQLite の execution、workflow、step、lease、state version | 明示した `reuse-session` で保存済み Main session だけを再利用可能。`restart-step` は新しい session を作る。 |
+| `python -m hve orchestrate --workflow <workflow-id> --resume-run <run-id>` | run-id | `hve/.run-progress.jsonl` の成功 Step | 常に新しい session。durable execution へ変換しない。 |
+| Copilot CLI 対話タブの `/resume` | Copilot CLI の session | Copilot CLI 側の会話状態 | HVE workflow の再開ではない。 |
+
+#### Durable execution resume の基本手順
+
+`hve resume` は、現在のリポジトリに対応する未完了の **standard local execution** だけを候補にします。元の実行と同じ checkout / worktree のルートで実行してください。Cloud、fleet、dry-run、legacy `--resume-run` は durable resume の対象ではありません。
+
+```bash
+python -m hve resume
+python -m hve resume <execution-id>
+python -m hve resume --latest
+```
+
+- execution ID を省略すると、対話端末では候補を選択します。`--latest` は「最後に更新された候補」を明示的に選びます。
+- plan には execution、workflow、instance、state version、action、risk、missing replay key、resume SHA-256 が表示されます。内容を確認してから承認してください。
+- risk がない場合の既定 action は `restart-step` です。risk がある非対話実行では `--action` の明示が必要です。
+- `reuse-session` は保存済み Main session ID を再利用します。`restart-step` は保存済み session ID を使わず、対象 Step を新しい session で再実行します。
+- action、再入力値、HEAD、state version、risk のいずれかが変わった場合は別 plan です。plan を作り直し、新しい SHA-256 を確認して再承認してください。
+
+> [!IMPORTANT]
+> HVE は `reuse-session` の失敗を `restart-step` へ自動的に切り替えません。DB、schema、lease、CAS、SDK session の異常も自動削除・自動修復しません。資格情報、token、接続文字列、内部 URL、自由記述の prompt、tool payload は state DB、ログ、Issue、PR へ保存・貼付しないでください。必要な資格情報は既存の資格情報ストアまたは環境注入経路から渡します。
+
+#### 候補選択で停止する
+
+| 症状 | 意味 | 安全な復旧 |
+|---|---|---|
+| `再開候補がありません。` | 現在のリポジトリキーに未完了の durable execution がない。完了済み、別 worktree、未登録の実行、または対象外モードの可能性がある。 | 実行したリポジトリまたは worktree のルートへ移動し、元ログの execution ID を確認する。legacy run-id しかない場合は `--resume-run` を使う。候補を作る目的で state DB を削除しない。 |
+| 非対話実行で `候補が複数あります。execution IDまたは--latestを指定してください。` | HVE は候補を推測できないため、子 process を起動せず停止した。 | 対象 execution ID を指定する。最新更新を意図すると確認できた場合だけ `--latest` を使う。 |
+| `durable execution was not found` | 指定した execution ID が state DB にない。run-id を誤って渡した可能性もある。 | 元ログから execution ID を再確認する。`--resume-run` の run-id と相互に置換しない。 |
+| `durable execution belongs to another repository` | execution は存在するが、現在のリポジトリキーと一致しない。 | 元のリポジトリまたは worktree で plan を作り直す。別リポジトリの state をコピー・編集して紐付けない。 |
+
+#### plan の risk / error 語彙
+
+risk は実装の snake_case 名で表示されます。複数ある場合も、各行の意味をすべて確認してから action を決めます。
+
+| 症状 | 意味 | 安全な復旧 |
+|---|---|---|
+| `unsupported_mode` または `durable resume mode is unsupported` | 保存された workflow instance が durable resume 対象の `standard` ではない。 | action で上書きできない。元の surface と mode の通常手順から新規実行し、state DB の mode を編集しない。 |
+| `active_owner` または `durable workflow instance has an active owner` | 有効期限内の fenced lease を別 process が保持している。明示 action があっても takeover できない。 | 元 process が実行中か確認し、正常終了または停止処理を待つ。lease が失効した後に新しい plan を作る。強制的な DB 更新や二重起動を行わない。 |
+| `failed` | 前回 attempt が terminal failure として記録されている。 | 先に元の失敗原因を解消する。保存済み Main session を継続できる根拠がある場合だけ `reuse-session`、それ以外は副作用を確認して `restart-step` を明示し、plan を再承認する。 |
+| `non_terminal` | instance が `running`、`suspended`、`blocked` のいずれか、または owner 情報を残したまま lease が失効している。 | 元 process が終了済みであることを確認する。`active_owner` が消えた後、`reuse-session` または `restart-step` を明示して新しい plan を承認する。 |
+| `head_drift` | 起動時に checkpoint した Git HEAD と現在の HEAD が異なる。保存済み prompt や成果物の前提が変わり得る。 | Git 差分と履歴を確認する。同じ前提が必要なら元 commit を安全な作業環境で復元する。現在の HEAD で続けるなら `restart-step` を選び、再実行範囲と副作用を確認して再承認する。 |
+| `missing_output` | succeeded と記録された Step の必須成果物がない。依存先も再実行対象へ戻される。GUI の `purge` 後にも発生し得る。 | 信頼できる backup があれば成果物を戻して plan を作り直す。戻せない場合は workflow の対象 Step と依存先を確認し、`restart-step` を明示する。DB の succeeded 状態を手編集しない。 |
+| `missing_replay_value` または `再入力が必要です: <key>` | 自由記述、任意 path、endpoint 等の値は state DB に保存せず、key 名だけを保持している。 | 対話端末で要求された値を再入力し、更新された plan を確認する。credential や token 自体を replay 値、コマンドライン、ログ、Issue、PR に入れない。非対話では保護された controller 入力経路がない限り停止する。 |
+| `sdk_missing` または `stored SDK session cannot be reused` | `reuse-session` に必要な Main phase の保存済み session ID がない、対象 Step が一意でない、または保存 phase が Main ではない。 | session ID を推測・手入力しない。`restart-step` へ action を変更して plan を作り直し、新しい SHA-256 を承認する。 |
+| `durable SDK session is active or already in use` | `reuse-session` の開始時に、保存済み SDK session が別 process で active、または SDK が already-in-use と報告した。これは事前 plan の risk 名ではなく、SDK の resume event を確認した実行時エラーである。 | `reuse-session` は停止する。元 session の完了・切断を確認する。`restart-step` に切り替える場合も自動縮退させず、action を変更した新しい plan を承認する。 |
+
+`reuse-session` の RPC 失敗、deadline 超過、または `session.resume` event 未受信も fail-closed です。HVE は新しい session を黙って作りません。原因を確認した後、同じ action で plan を作り直すか、`restart-step` に変更した別 plan を承認してください。
+
+#### 承認、CAS、heartbeat で停止する
+
+| 症状 | 意味 | 安全な復旧 |
+|---|---|---|
+| `resume planがstaleです。` | controller が提示した resume SHA-256 と、実行直前に再計算した plan が一致しない。 | 古い hash を再利用しない。最新状態から plan を再生成し、risk、action、再入力 key、state version を再確認して承認し直す。 |
+| `次のworkflowは新しいresume planです。表示したhashの再承認後に再開してください。` | GUI / Prompt controller が渡したhashで最初の承認済みinstanceは完了したが、次のinstanceには別のplanとhashが必要。正常なfail-closed停止であり、先行hashは後続へ流用されない。 | 表示された次のplanを利用者へ再提示し、別の明示承認を得てからcontrollerが新しいhashで`hve resume`へ再委譲する。手作業でhashを転記させたり、古いhashで再試行したりしない。 |
+| `resume planが承認後に変化しました。再提示が必要です。` | 承認と lease 取得の間に HEAD、state、出力、または replay 条件が変化した。 | 子 process は起動されない。変化の原因を確認し、新しい plan を再提示・再承認する。自動 retry しない。 |
+| `reconciled outputs changed before workflow completion` | 実行対象0件として承認された後、fenced完了前の再確認で必須outputまたはStep状態が変化した。 | instanceを成功扱いにせず停止する。outputとstateを確認し、最新planを作り直して再承認する。DBを手編集しない。 |
+| `resume plan state is stale`、`durable state version is stale`、`durable lease compare-and-swap failed` | 別 process または直前の transition が state version / lease generation を更新し、承認済み snapshot が古くなった。 | 実行中 owner の有無を確認し、最新 state から plan を作り直す。同じ expected state version を強制的に再利用しない。 |
+| `durable heartbeat failed`、`durable heartbeat was fenced`、`durable heartbeat worker failed` | lease の鮮度または所有権を安全に証明できなくなった。HVE は executor を停止し、可能なら instance を `suspended` にして失敗を表面化する。 | 元 process の停止を確認する。`active_owner` の間は再開せず、lease 失効後に新しい plan と明示 action で復旧する。DB や lease を手編集しない。 |
+| `durable heartbeat worker could not be stopped` または `heartbeat worker did not stop within the timeout` | 終了処理の上限内に heartbeat thread の停止を確認できず、quiescence が不明なためエラーになった。DB corruption を意味するとは限らない。 | 元 HVE process が完全に終了したことを確認する。残存 process があれば管理者の通常手順で停止し、lease が active でなくなってから plan を作り直す。繰り返し resume を起動しない。 |
+
+#### state DB の integrity / schema エラー
+
+state DB は `platformdirs` が解決するユーザー state directory の `hve/state.sqlite3` です。以下のエラーでは候補選択や lease 取得より前に停止し、HVE は DB を削除・初期化・修復しません。
+
+| 症状 | 意味 | 安全な復旧 |
+|---|---|---|
+| `durable state database could not be opened`、`database disk image is malformed` 等 | SQLite file、権限、filesystem、または DB bytes に異常がある。 | 全 HVE process を停止し、元 DB と存在する SQLite sidecar を byte-for-byte で保全する。権限・disk・backup を確認し、管理者へエスカレーションする。元 DB を削除したり書込み修復を試したりしない。 |
+| `unsupported durable state schema version`、`unversioned durable state schema is not empty`、`unexpected schema`、`unexpected objects` | HVE が対応しない version、未 version 化の非空 DB、または期待外の table / column / foreign key がある。 | 実行に使用した HVE version を確認し、互換版または信頼できる backup からの復元を管理者判断で行う。`user_version`、table、column を手編集しない。 |
+| `durable state database failed quick_check` または `durable state quick_check could not run` | SQLite の `PRAGMA quick_check` が正確に `ok` を返さず、候補を安全に信用できない。 | resume を中止して DB を保全する。storage 障害と backup を確認し、管理者へエスカレーションする。検査を迂回して候補を起動しない。 |
+
+エスカレーション時は HVE version、OS、error type、execution ID、workflow ID、risk 名、state version、発生時刻だけを共有します。state DB 本体、raw replay 値、credential、token、接続文字列、内部 URL、prompt/tool payload は通常のログや Issue / PR に添付しないでください。
+
+#### GUI の `purge` 後に候補だけが残る
+
+| 症状 | 意味 | 安全な復旧 |
+|---|---|---|
+| GUI 終了後も execution 候補は表示されるが、結果ファイルが見つからない、または `missing_output` になる。 | cleanup policy の `purge` は GUI session の run-scoped 作業ディレクトリを削除するが、ユーザー state directory の durable DB は削除しない。 | archive policy で作成済みの信頼できる ZIP があれば復元して plan を作り直す。`purge` 済みで backup がなければ、再実行範囲を確認して `restart-step` を明示する。今後 resume が必要な実行では事前に `keep` または `archive` を選ぶ。 |
+
+#### Legacy `--resume-run` の run-id が見つからない
+
+legacy resume は、成功済み Step を `hve/.run-progress.jsonl` から除外し、未完了 Step を新しい SDK session で実行する仕組みです。durable execution ID、lease、CAS、`reuse-session` は使いません。
 
 ```bash
 python -m hve orchestrate --workflow aas --resume-run <run-id>
 ```
 
-成功済みのステップはスキップされ、未完了のステップだけが**新しいセッションで**実行されます（SDK セッションの復元ではありません）。指定した run-id の記録が見つからない場合は、全ステップを再実行せずに停止します。実行するステップを手動で絞り込む場合は従来どおり `--steps` を使います。
+| 症状 | 意味 | 安全な復旧 |
+|---|---|---|
+| `--resume-run に指定された run-id の進捗記録が見つかりません: <run-id>` | 指定 run-id と workflow に一致する進捗記録が 1 件もない。HVE は全 Step 実行へ縮退せず停止する。 | run-id と workflow ID を元ログで確認して再指定する。記録がない場合は resume ではなく通常の新規実行として範囲を明示する。execution ID を run-id として渡さず、JSON Lines を捏造・手編集しない。 |
 
-> **制約**: fan-out するステップ（APP-ID や画面単位で子ステップへ展開されるもの）は、成功済みでもスキップされず再実行されます。取りこぼしを避けるために重複実行の側へ倒した仕様です。
+成功済み Step はスキップされますが、fan-out する Step は取りこぼし防止のため再実行されます。`--steps` を併用する場合は、再実行対象と副作用を確認してください。
 
 ### 起動時の索引差分更新で警告が出る / 実行開始が遅い
 

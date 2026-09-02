@@ -11,6 +11,10 @@
 - **PowerShell は最新 `pwsh` 固定**: Windows の PowerShell 実行は `pwsh.exe`（PowerShell 7+ / PSEdition Core）の最新インストール済み版だけを使う。`powershell` / `powershell.exe` / Windows PowerShell 5.1 の直接実行・フォールバックは禁止。`pwsh` が無ければ PowerShell 7+ 必須として fail-closed で停止する。自動化・テスト・`.ps1` 実行は `pwsh.exe -NoLogo -NoProfile` を基本とする。
 - **出力は最小限**: 長文は `work/` 配下（Skill work-artifacts-layout）。
 - **変更は最小差分**: 無関係な整形・一括リファクタ・不要依存追加をしない。
+- **曖昧なリポジトリ内 HVE 実行意図の優先ルーティング（必須）**:
+  - このリポジトリを対象とする「Azure にデプロイして」「APP の Web アプリを作って」「バッチを実装して」のような依頼は、Workflow / Step / APP-ID / resource group / deploy 範囲が不足する **曖昧な HVE 実行意図**として扱う。
+  - 外部 Azure Skill の読込み、tool call、ファイル書き込みより先に repository Skill `hve-prompt-edition` を選択し、不足値を応答本文へ inline で質問する。値が一意になるまで request / plan / run を開始せず、`.azure/`、`qa/`、`docs/`、`src/` その他の成果物を作成・変更しない。
+  - 利用者が「HVE を介さず、既存 `azure.yaml` を使って `azd` で直接デプロイ」のように HVE を介さないことと操作手段を明示した direct Azure 操作だけはこの優先規則の対象外とし、対応する外部 Azure Skill の承認・安全ゲートへ委ねる。
 - **HVE の版管理と変更履歴（必須）**: HVE の実装または実行契約を変更するジョブは、**ユーザーからの指示・依頼の有無にかかわらず**、完了報告前に同じ変更セットで `CHANGELOG.md` と HVE パッケージ版を更新する。
   - 対象は `hve/**`、`hve-dev/**`、`.github/copilot-instructions.md`、`.github/instructions/**`、`.github/prompts/**`、`.github/skills/**`、`.github/io-contracts/**`、`.github/scripts/**`、`.github/workflows/**`（後述の生成アプリ向けデプロイ workflow を除く）、`.github/ISSUE_TEMPLATE/**`、HVE が使用する `template/**`、および HVE の実行・契約を変える設定・スクリプトとする。`CHANGELOG.md`、`hve/__init__.py`、`pyproject.toml` だけの同期修正は、この規則による追加 bump のトリガーにしない。独立ライフサイクルで版管理する `mdq/**` / `cq/**` / 配布キットは本規則の PATCH 対象ではなく、それぞれの版管理手順に従う。
   - **HVE が生成・支援する別アプリケーションの成果物には適用しない**。`src/**`、`docs/**`、`docs-generated/**`、`knowledge/**`、`qa/**`、`docs-original/**`、`sample/**`、`tests/run/**`、`package.json` / `jest.config.js` / `babel.config.js` / `playwright.config.js`、および `.github/workflows/deploy-*.yml` / `.github/workflows/azure-static-web-apps-*.yml` / `.github/workflows/app<数字>*.yml` は対象外で、これらだけを変更するジョブは HVE の版を上げない。対象判定の単一の機械正本は [.github/scripts/hve_scope.py](.github/scripts/hve_scope.py) であり、本規則の列挙と食い違う場合は同モジュールを正とする。

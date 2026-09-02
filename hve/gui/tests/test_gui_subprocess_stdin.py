@@ -21,3 +21,23 @@ def test_launch_orchestrator_disables_stdin() -> None:
         launch_orchestrator(["orchestrate", "--workflow", "aas"])
     _, kwargs = popen_mock.call_args
     assert kwargs["stdin"] is subprocess.DEVNULL
+
+
+def test_launch_orchestrator_adds_workbench_only_to_orchestrate() -> None:
+    with mock.patch("hve.gui.state_bridge.subprocess.Popen") as popen_mock:
+        launch_orchestrator(["orchestrate", "--workflow", "aas"])
+    orchestrate_cmd = popen_mock.call_args.args[0]
+    assert orchestrate_cmd[-2:] == ["--workbench", "off"]
+
+    with mock.patch("hve.gui.state_bridge.subprocess.Popen") as popen_mock:
+        launch_orchestrator(
+            [
+                "resume",
+                "execution-visible-17",
+                "--expected-resume-hash",
+                "a" * 64,
+            ]
+        )
+    resume_cmd = popen_mock.call_args.args[0]
+    assert "--workbench" not in resume_cmd
+    assert "--workbench=off" not in resume_cmd

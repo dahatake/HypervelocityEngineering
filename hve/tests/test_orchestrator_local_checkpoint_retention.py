@@ -214,7 +214,7 @@ def test_successful_run_still_gets_auto_merge_label(monkeypatch) -> None:
 
 def test_checkpoint_pr_is_excluded_from_failure_cleanup() -> None:
     """失敗時 PR cleanup を checkpoint PR に適用しない。"""
-    source = inspect.getsource(orchestrator.run_workflow)
+    source = inspect.getsource(orchestrator._run_workflow_body)
     cleanup_index = source.index("_cleanup_failed_pr_if_created(")
     guard_window = source[max(0, cleanup_index - 1500):cleanup_index]
 
@@ -223,7 +223,7 @@ def test_checkpoint_pr_is_excluded_from_failure_cleanup() -> None:
 
 def test_live_failure_keeps_local_checkpoint_commit() -> None:
     """live 失敗でも local checkpoint の commit / push をスキップしない。"""
-    source = inspect.getsource(orchestrator.run_workflow)
+    source = inspect.getsource(orchestrator._run_workflow_body)
 
     assert "should_retain_local_checkpoint(" in source
     # checkpoint 保持時は PR 作成をスキップせず draft PR を作る

@@ -89,7 +89,7 @@ class TestRunWorkflowLifecycle:
     """FR-MCPLOG-02: run_workflow が生成と後始末を持つ。"""
 
     def test_run_workflow_attaches_and_closes(self) -> None:
-        source = _function_sources()["run_workflow"]
+        source = _function_sources()["_run_workflow_body"]
         assert "_attach_mcp_io_logging(" in source
         assert "_atexit.register(_mcp_io_logger.close)" in source
         assert "_mcp_io_logger.close()" in source

@@ -11,7 +11,7 @@ import yaml  # type: ignore[import-untyped]
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _WORKFLOWS = _REPO_ROOT / ".github" / "workflows"
 _REQUIREMENTS = _REPO_ROOT / "hve-dev" / "requirement-definition.md"
-_ALLOWED_SCHEDULE = "auto-blocked-to-human-required.yml"
+_HITL_WORKFLOW = "auto-blocked-to-human-required.yml"
 _REMOVED_WORKFLOWS = {"audit-plans.yml", "tdd-retry-metrics.yml"}
 
 
@@ -20,16 +20,17 @@ def _load_on(path: Path) -> dict:
     return data.get(True, {}) or data.get("on", {})
 
 
-def test_requirement_declares_the_schedule_policy() -> None:
+def test_requirement_declares_the_no_schedule_policy() -> None:
     text = _REQUIREMENTS.read_text(encoding="utf-8-sig")
     requirement = next(
         line for line in text.splitlines() if line.startswith("- **FR-CLOUD-42**")
     )
-    assert _ALLOWED_SCHEDULE in requirement
-    assert "0 * * * *" in requirement
+    assert _HITL_WORKFLOW in requirement
+    assert "有効な `schedule` を持ってはならない" in requirement
+    assert "`workflow_dispatch` 専用" in requirement
 
 
-def test_only_hitl_escalation_has_an_active_schedule() -> None:
+def test_repository_managed_workflows_have_no_active_schedule() -> None:
     schedule_line = re.compile(r"^\s+schedule:\s*$", re.MULTILINE)
     paths = [*_WORKFLOWS.glob("*.yml"), *_WORKFLOWS.glob("*.yaml")]
     scheduled = {
@@ -37,9 +38,10 @@ def test_only_hitl_escalation_has_an_active_schedule() -> None:
         for path in paths
         if schedule_line.search(path.read_text(encoding="utf-8"))
     }
-    assert scheduled == {_ALLOWED_SCHEDULE}
-    allowed_on = _load_on(_WORKFLOWS / _ALLOWED_SCHEDULE)
-    assert allowed_on["schedule"] == [{"cron": "0 * * * *"}]
+    assert scheduled == set()
+    hitl_on = _load_on(_WORKFLOWS / _HITL_WORKFLOW)
+    assert set(hitl_on) == {"workflow_dispatch"}
+    assert "sla_hours" in hitl_on["workflow_dispatch"]["inputs"]
 
 
 def test_removed_periodic_workflows_are_absent() -> None:
@@ -81,9 +83,7 @@ def test_aas_manual_input_is_validated_before_any_side_effect() -> None:
     assert "--limit 1000" in steps[detect_index]["run"]
 
 
-def test_sync_azure_skills_is_manual_only() -> None:
-    path = _WORKFLOWS / "sync-azure-skills.yml"
-    assert set(_load_on(path)) == {"workflow_dispatch"}
-    text = path.read_text(encoding="utf-8")
-    assert "schedule:" not in text
-    assert "cron:" not in text
+def test_local_only_azure_skills_have_no_sync_workflow() -> None:
+    requirement = _REQUIREMENTS.read_text(encoding="utf-8")
+    assert "`sync-azure-skills.yml` を保持してはならない" in requirement
+    assert not (_WORKFLOWS / "sync-azure-skills.yml").exists()

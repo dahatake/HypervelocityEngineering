@@ -12,6 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from hve.artifact_validation import find_missing_output_paths  # noqa: E402
 from hve.fanout_expander import FanoutChildStep  # noqa: E402
 from hve.runner import _check_output_paths_gate  # noqa: E402
 
@@ -166,6 +167,35 @@ def test_concrete_and_prefix_gates_are_both_enforced(tmp_path: Path) -> None:
     missing = _check_output_paths_gate(_Ctx(), _Workflow([step]), "2.2/SVC-01", tmp_path)
 
     assert missing == ["docs/catalog/service-catalog.md", "docs/services/SVC-01*"]
+
+
+def test_shared_helper_preserves_missing_display_without_side_effects(
+    tmp_path: Path,
+) -> None:
+    """共有 helper は欠落表示を維持し、入力や filesystem を変更しない。"""
+    declared = ["docs/catalog/service-catalog.md"]
+    prefixes = ["docs/services/SVC-01"]
+
+    missing = find_missing_output_paths(tmp_path, declared, prefixes)
+
+    assert missing == ["docs/catalog/service-catalog.md", "docs/services/SVC-01*"]
+    assert declared == ["docs/catalog/service-catalog.md"]
+    assert prefixes == ["docs/services/SVC-01"]
+    assert not (tmp_path / "docs").exists()
+
+
+def test_shared_helper_treats_glob_metacharacters_as_literal_prefix(
+    tmp_path: Path,
+) -> None:
+    services = tmp_path / "docs" / "services"
+    services.mkdir(parents=True)
+    (services / "A-decoy.md").write_text("decoy", encoding="utf-8")
+    prefix = "docs/services/[AB]"
+
+    assert find_missing_output_paths(tmp_path, (), (prefix,)) == [f"{prefix}*"]
+
+    (services / "[AB]-literal.md").write_text("literal", encoding="utf-8")
+    assert find_missing_output_paths(tmp_path, (), (prefix,)) == []
 
 
 def test_gate_is_skipped_in_fleet_mode(tmp_path: Path) -> None:

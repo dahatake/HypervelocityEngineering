@@ -768,6 +768,10 @@ class TestAdiQuestionnairePostDag(unittest.TestCase):
             try:
                 with patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
                      patch(
+                         "orchestrator._resolve_durable_checkpoint_head",
+                         return_value="test-head",
+                     ), \
+                     patch(
                          "orchestrator.DAGExecutor",
                          side_effect=lambda *a, **k: self._FakeDAGExecutor(*a, **k),
                      ), \
@@ -800,6 +804,10 @@ class TestAdiQuestionnairePostDag(unittest.TestCase):
             os.chdir(td)
             try:
                 with patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
+                     patch(
+                         "orchestrator._resolve_durable_checkpoint_head",
+                         return_value="test-head",
+                     ), \
                      patch(
                          "orchestrator.DAGExecutor",
                          side_effect=lambda *a, **k: self._FakeDAGExecutor(*a, **k),
@@ -837,6 +845,10 @@ class TestAdiQuestionnairePostDag(unittest.TestCase):
                     encoding="utf-8",
                 )
                 with patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
+                     patch(
+                         "orchestrator._resolve_durable_checkpoint_head",
+                         return_value="test-head",
+                     ), \
                      patch(
                          "orchestrator.DAGExecutor",
                          side_effect=lambda *a, **k: self._FakeDAGExecutor(*a, **k),
@@ -3442,6 +3454,14 @@ class TestCollectParamsNonInteractiveAppIds(unittest.TestCase):
 class TestRunWorkflowSelfImprove(unittest.TestCase):
     """run_workflow の Self-Improve フェーズテスト。"""
 
+    def setUp(self) -> None:
+        self._durable_patcher = patch(
+            "orchestrator._open_durable_workflow_lifecycle",
+            return_value=None,
+        )
+        self._durable_patcher.start()
+        self.addCleanup(self._durable_patcher.stop)
+
     class _FakeDAGExecutor:
         def __init__(self, *args, **kwargs):
             self.completed = set()
@@ -4274,6 +4294,14 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
 
 class TestRunWorkflowSelfImproveScope(unittest.TestCase):
     """run_workflow の Self-Improve scope 制御テスト。"""
+
+    def setUp(self) -> None:
+        self._durable_patcher = patch(
+            "orchestrator._open_durable_workflow_lifecycle",
+            return_value=None,
+        )
+        self._durable_patcher.start()
+        self.addCleanup(self._durable_patcher.stop)
 
     class _FakeDAGExecutor:
         def __init__(self, *args, **kwargs):
@@ -5553,7 +5581,9 @@ class TestQaAkmRunWorkflowWiring(unittest.TestCase):
     """FR-QA-03: run_workflow の非待機登録と安全境界の配線。"""
 
     def test_coordinator_is_lazy_and_injected_into_step_runner(self):
-        source = inspect.getsource(run_workflow)
+        from orchestrator import _run_workflow_body
+
+        source = inspect.getsource(_run_workflow_body)
         self.assertIn("QaAkmCoordinator", source)
         self.assertIn("qa_akm_dispatcher=", source)
         self.assertIn("_should_enable_qa_akm_dispatch(", source)
@@ -5584,7 +5614,9 @@ class TestQaAkmRunWorkflowWiring(unittest.TestCase):
         ))
 
     def test_drain_is_after_dag_and_before_git_post_processing(self):
-        source = inspect.getsource(run_workflow)
+        from orchestrator import _run_workflow_body
+
+        source = inspect.getsource(_run_workflow_body)
         execute_pos = source.index("results = await executor.execute()")
         drain_pos = source.index('_drain_qa_akm("DAG 完了後")', execute_pos)
         git_pos = source.index("_git_add_commit_push(", drain_pos)
@@ -5592,7 +5624,9 @@ class TestQaAkmRunWorkflowWiring(unittest.TestCase):
         self.assertLess(drain_pos, git_pos)
 
     def test_exception_path_cancels_coordinator(self):
-        source = inspect.getsource(run_workflow)
+        from orchestrator import _run_workflow_body
+
+        source = inspect.getsource(_run_workflow_body)
         execute_pos = source.index("results = await executor.execute()")
         finally_pos = source.index("finally:", execute_pos)
         final_block = source[finally_pos:finally_pos + 5000]

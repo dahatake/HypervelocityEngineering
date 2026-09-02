@@ -1,15 +1,7 @@
 #!/usr/bin/env python3
-"""
-validate-knowledge-files.py
-knowledge/ フォルダーの D クラス要求定義書ドラフトファイルを検証するスクリプト。
+"""Validate D-class knowledge documents against their two canonical schemas."""
 
-検証項目:
-  1. ファイル名が D[0-9][0-9]-*.md パターンに合致すること
-  2. 必須セクション見出し（§1〜§8 + 付録 A）が存在すること
-  3. metadata-block の必須フィールドが存在すること
-  4. ファイルサイズが 20,000 文字以下であること
-"""
-
+import json
 import re
 import sys
 from pathlib import Path
@@ -20,34 +12,48 @@ from pathlib import Path
 # --------------------------------------------------------------------------- #
 
 FILENAME_PATTERN = re.compile(r"^D\d{2}-.+\.md$")
+CHANGELOG_SUFFIX = "-ChangeLog.md"
 
 MAX_FILE_SIZE_CHARS = 20_000
 
-# 必須セクション見出しを正規表現パターンで定義（行頭 ## から始まる見出し行を厳密に検索）
-# §3 は長い括弧付きのヘッダーなので prefix match を使用（意図的）
-REQUIRED_SECTION_PATTERNS: list[tuple[str, re.Pattern]] = [
+MAIN_SECTION_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("§1 目的と背景",       re.compile(r"^## 1\. 目的と背景", re.MULTILINE)),
-    ("§2 確定事項",         re.compile(r"^## 2\. 確定事項（Confirmed）", re.MULTILINE)),
-    ("§3 設計仮定",         re.compile(r"^## 3\. 設計仮定（Tentative", re.MULTILINE)),
+    ("§2 要求項目",         re.compile(r"^## 2\. 要求項目（Confirmed）", re.MULTILINE)),
+    ("§3 要求項目",         re.compile(r"^## 3\. 要求項目（Tentative", re.MULTILINE)),
     ("§4 未確定事項",       re.compile(r"^## 4\. 未確定事項（Unknown）", re.MULTILINE)),
     ("§5 最低内容カバー状況", re.compile(r"^## 5\. 最低内容カバー状況", re.MULTILINE)),
     ("§6 不足判定",         re.compile(r"^## 6\. 不足判定・推奨アクション", re.MULTILINE)),
     ("§7 状態サマリー",     re.compile(r"^## 7\. 状態サマリー", re.MULTILINE)),
     ("§8 関連文書",         re.compile(r"^## 8\. 関連文書", re.MULTILINE)),
-    ("付録 A",              re.compile(r"^## 付録 A", re.MULTILINE)),
 ]
 
-REQUIRED_METADATA_FIELDS = [
+CHANGELOG_SECTION_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    ("全体更新履歴", re.compile(r"^## 全体更新履歴", re.MULTILINE)),
+    ("要求項目別ログ", re.compile(r"^## 要求項目別ログ", re.MULTILINE)),
+    ("付録 A", re.compile(r"^## 付録 A: マッピング詳細", re.MULTILINE)),
+]
+
+MAIN_METADATA_FIELDS = [
     "**D クラス**",
     "**文書名**",
     "**必須度**",
     "**総合状態**",
-    "**カバー率**",
+    "**Prompt投入可否**",
+    "**関連 ADR / 未解決論点**",
+]
+
+CHANGELOG_METADATA_FIELDS = [
+    "**対象ファイル**",
+    "**カバー率（REQ単位）**",
     "**最終更新**",
     "**更新エージェント**",
     "**入力ソース**",
-    "**Prompt投入可否**",
-    "**関連 ADR / 未解決論点**",
+]
+
+CHANGELOG_COMMENT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    ("sources", re.compile(r"<!-- sources: (.+) -->")),
+    ("generated_at", re.compile(r"<!-- generated_at: \S+ -->")),
+    ("generator", re.compile(r"<!-- generator: \S.+ -->")),
 ]
 
 
@@ -55,34 +61,103 @@ REQUIRED_METADATA_FIELDS = [
 # 検証ロジック
 # --------------------------------------------------------------------------- #
 
+def _validate_patterns(
+    content: str, patterns: list[tuple[str, re.Pattern[str]]]
+) -> list[str]:
+    errors: list[str] = []
+    positions: list[tuple[str, int]] = []
+    for name, pattern in patterns:
+        match = pattern.search(content)
+        if match is None:
+            errors.append(f"[SECTION] 必須セクション「{name}」が見つかりません。")
+        else:
+            positions.append((name, match.start()))
+    for (previous_name, previous), (name, position) in zip(positions, positions[1:]):
+        if position < previous:
+            errors.append(
+                f"[SECTION] 必須セクション「{name}」は"
+                f"「{previous_name}」より後に配置してください。"
+            )
+    return errors
+
+
+def _validate_fields(content: str, fields: list[str]) -> list[str]:
+    return [
+        f"[METADATA] 必須フィールド「{field}」が見つかりません。"
+        for field in fields
+        if field not in content
+    ]
+
+
+def _validate_main(content: str) -> list[str]:
+    errors: list[str] = []
+    if len(content) > MAX_FILE_SIZE_CHARS:
+        errors.append(
+            f"[SIZE] ファイルサイズ {len(content)} 文字が上限 "
+            f"{MAX_FILE_SIZE_CHARS} 文字を超えています。"
+        )
+    errors.extend(_validate_patterns(content, MAIN_SECTION_PATTERNS))
+    errors.extend(_validate_fields(content, MAIN_METADATA_FIELDS))
+    return errors
+
+
+def _validate_changelog(content: str) -> list[str]:
+    errors = _validate_patterns(content, CHANGELOG_SECTION_PATTERNS)
+    errors.extend(_validate_fields(content, CHANGELOG_METADATA_FIELDS))
+
+    comments: dict[str, re.Match[str]] = {}
+    header_lines = content.splitlines()[:3]
+    for index, (name, pattern) in enumerate(CHANGELOG_COMMENT_PATTERNS):
+        match = pattern.fullmatch(header_lines[index]) if index < len(header_lines) else None
+        if match is None:
+            errors.append(
+                f"[METADATA] 冒頭の必須コメント「{name}」が見つかりません。"
+            )
+        else:
+            comments[name] = match
+
+    sources_match = comments.get("sources")
+    if sources_match is not None:
+        try:
+            sources = json.loads(sources_match.group(1))
+        except json.JSONDecodeError:
+            errors.append("[METADATA] sources は有効な JSON 配列ではありません。")
+        else:
+            if not isinstance(sources, list):
+                errors.append("[METADATA] sources は JSON 配列でなければなりません。")
+    return errors
+
+
 def validate_file(path: Path) -> list[str]:
-    """1 ファイルを検証し、エラーメッセージのリストを返す（空 = OK）。"""
+    """Validate one main document or ChangeLog and return all errors."""
     errors: list[str] = []
 
-    # 1. ファイル名パターン
     if not FILENAME_PATTERN.match(path.name):
         errors.append(
             f"[FILENAME] '{path.name}' は D[0-9][0-9]-*.md パターンに合致しません。"
         )
 
     content = path.read_text(encoding="utf-8")
+    if path.name.endswith(CHANGELOG_SUFFIX):
+        errors.extend(_validate_changelog(content))
+    else:
+        errors.extend(_validate_main(content))
+    return errors
 
-    # 2. ファイルサイズ
-    if len(content) > MAX_FILE_SIZE_CHARS:
-        errors.append(
-            f"[SIZE] ファイルサイズ {len(content)} 文字が上限 {MAX_FILE_SIZE_CHARS} 文字を超えています。"
-        )
 
-    # 3. 必須セクション見出し（行頭 ## から始まる正規表現で厳密に検索）
-    for section_name, pattern in REQUIRED_SECTION_PATTERNS:
-        if not pattern.search(content):
-            errors.append(f"[SECTION] 必須セクション「{section_name}」が見つかりません。")
-
-    # 4. metadata-block 必須フィールド
-    for field in REQUIRED_METADATA_FIELDS:
-        if field not in content:
-            errors.append(f"[METADATA] 必須フィールド「{field}」が見つかりません。")
-
+def validate_pairs(paths: list[Path]) -> list[str]:
+    """Require every main document and ChangeLog to have its counterpart."""
+    names = {path.name for path in paths}
+    errors: list[str] = []
+    for path in paths:
+        if path.name.endswith(CHANGELOG_SUFFIX):
+            counterpart = path.name.removesuffix(CHANGELOG_SUFFIX) + ".md"
+        else:
+            counterpart = path.stem + CHANGELOG_SUFFIX
+        if counterpart not in names:
+            errors.append(
+                f"[PAIR] '{path.name}' に対応する '{counterpart}' が見つかりません。"
+            )
     return errors
 
 
@@ -104,6 +179,13 @@ def main(knowledge_dir: Path) -> int:
                 print(f"   {err}")
         else:
             print(f"✅ {file_path.name}")
+
+    pair_errors = validate_pairs(target_files)
+    if pair_errors:
+        total_errors += len(pair_errors)
+        print("\n❌ 本文 / ChangeLog ペア")
+        for err in pair_errors:
+            print(f"   {err}")
 
     print()
     if total_errors > 0:

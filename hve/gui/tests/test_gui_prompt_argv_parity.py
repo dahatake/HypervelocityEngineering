@@ -54,18 +54,23 @@ def _saved_settings(scenario: str) -> dict:
                 "sources_qa": True,
                 "sources_original_docs": False,
                 "sources_workiq": True,
-                "target_files": "qa/member.md",
+                "ignore_paths": "work/one work/two",
+                "target_files": "qa/member-a.md qa/member-b.md",
                 "force_refresh": "on",
-                "custom_source_dir": "docs/custom",
+                "custom_source_dir": "docs/custom-a docs/custom-b",
             }
         )
     return saved
 
 
 @pytest.mark.parametrize("scenario", ["defaults", "non_defaults"])
-def test_gui_and_prompt_generate_identical_argv(qapp, scenario: str) -> None:
+def test_gui_and_prompt_generate_identical_argv(
+    qapp, scenario: str, tmp_path, monkeypatch
+) -> None:
     saved = _saved_settings(scenario)
+    monkeypatch.setattr(settings_store, "_SETTINGS_PATH", tmp_path / ".settings.txt")
     settings_store.save(saved)
+    saved = settings_store.load()
 
     page = OptionsPage()
     try:

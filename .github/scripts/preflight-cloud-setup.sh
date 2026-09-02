@@ -215,7 +215,7 @@ if [[ "${REPO_ACCESSIBLE}" == true ]]; then
     else
       mark_warn "主要ラベルが未作成です。初回セットアップ前なら正常です。"
       print_status "INFO" "不足ラベル: ${missing_labels[*]}" "Setup Labels workflow を Actions タブから手動実行してください。"
-      print_status "INFO" "補足" "実行前に Settings → Actions → Workflow permissions が Read and write permissions であることを確認してください。"
+      print_status "INFO" "補足" "Settings → Actions → Workflow permissions は Read repository contents and packages を既定とし、書き込み権限は各 workflow の permissions で明示します。"
     fi
   else
     mark_warn "ラベル一覧を取得できませんでした。"
@@ -283,7 +283,7 @@ echo "- GitHub Copilot ライセンスが有効であること"
 echo "- 対象リポジトリで GitHub Copilot Cloud agent が有効であること"
 echo "- Settings → Copilot → Cloud agent → MCP Servers に MCP Servers が設定済みであること"
 echo "- GitHub Copilot Skills が必要に応じて設定済みであること"
-echo "- Settings → Actions → General → Workflow permissions が Read and write permissions であること"
+echo "- Settings → Actions → General → Workflow permissions が Read repository contents and packages であること"
 echo "- self-hosted runner を使う場合、runner が online で Issue Template / workflow の runner label と一致していること"
 
 echo

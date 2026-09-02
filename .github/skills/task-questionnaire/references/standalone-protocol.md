@@ -4,6 +4,17 @@
 
 ---
 
+## Prompt Edition request preflight 例外
+
+HVE の `hve-prompt-edition` Skill が request v1 作成前に不足する Workflow / Step / APP-ID /
+resource group / input path だけを確認する **Prompt Edition request preflight** では、質問を
+応答本文へ inline で返し、`qa/` 質問票を作成しない。request、plan、run、対象成果物も変更しない。
+
+この例外は `<!-- auto-context-review: true -->` がない場合だけに適用する。一般タスクの
+コンテキスト不足と `auto-context-review: true` の場合は、以下の既存プロトコルどおり `qa/` を使う。
+
+---
+
 ## §1.2 非PR連携時のコンテキスト収集プロトコル
 
 > **適用条件**: Agent が PR と連携して動作していない場合（直接チャットやスタンドアロン実行等）に適用する。

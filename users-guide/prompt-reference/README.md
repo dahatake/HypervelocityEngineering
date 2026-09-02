@@ -23,7 +23,7 @@ HVE がモデル、Copilot Coding Agent、Copilot SDK、Work IQ へ渡す固定 
 
 ## 収録範囲
 
-`sync.py` 実行時点で実行経路に結線されている、または HVE module が読み込む `.github/prompts/**/*.prompt.md` を、相対パスの末尾へ `.txt` を付けて `copies/` へ byte-for-byte でコピーしています。例えば正本 `runtime/workiq/role.prompt.md` のコピーは `copies/runtime/workiq/role.prompt.md.txt` です。未結線 Prompt は `catalog.md` にだけ掲載し、本文はコピーしません。`.txt` にする理由は、`mdq.indexer.iter_markdown()` が再帰収集する `users-guide/**/*.md` へ Prompt 本文を重複登録しないためです。
+`sync.py` 実行時点で実行経路に結線されている、または HVE module が読み込む `.github/prompts/**/*.prompt.md` を、相対パスの末尾へ `.txt` を付けて `copies/` へ byte-for-byte でコピーしています。例えば正本 `runtime/workiq/role.prompt.md` のコピーは `copies/runtime/workiq/role.prompt.md.txt` です。未結線 Prompt は原則として `catalog.md` にだけ掲載し、本文はコピーしません。ただし、production 結線前に固定本文を確認する必要がある移行中の Prompt は、`sync.py` の `MIRROR_WHILE_UNWIRED` に明示したものだけをコピーします。この例外でも状態は `未結線` のままであり、production からの送信を示しません。`.txt` にする理由は、`mdq.indexer.iter_markdown()` が再帰収集する `users-guide/**/*.md` へ Prompt 本文を重複登録しないためです。
 
 現在のファイル数、結線状態、Registry 参照数は、再生成のたびに実装から算出される [`catalog.md`](./catalog.md) 冒頭を確認してください。手書きの件数を本ページへ重複保持しません。
 
@@ -35,7 +35,7 @@ HVE がモデル、Copilot Coding Agent、Copilot SDK、Work IQ へ渡す固定 
 | runtime Prompt | `.github/prompts/runtime/**` | production / developer / evaluation codeの `load_prompt_file()` 等 |
 | Cloud 実行指示 | `.github/prompts/cloud/**` | `.github/workflows/**` のファイル参照 |
 
-「module load のみ」は `hve/prompts.py` がファイルを読むものの、現行 production code から model へ送る参照が確認できない状態です。「未結線」は Prompt ファイルが存在するものの実行経路から参照されない状態です。module load のみの本文はコピーし、未結線の本文はコピーしません。該当ファイルと参照元は [`catalog.md`](./catalog.md) の「状態（静的判定）」「参照元（Registry / loader）」で確認できます。
+「module load のみ」は `hve/prompts.py` がファイルを読むものの、現行 production code から model へ送る参照が確認できない状態です。「未結線」は Prompt ファイルが存在するものの実行経路から参照されない状態です。module load のみの本文はコピーし、未結線の本文は `MIRROR_WHILE_UNWIRED` の明示的な移行例外だけをコピーします。該当ファイルと参照元は [`catalog.md`](./catalog.md) の「状態（静的判定）」「参照元（Registry / loader）」で確認できます。
 
 結線状態は、`hve/workflow_registry.py` の active non-container Step、`hve/**`・`hve-dev/**`・`tools/**` の実行・開発・評価用 Prompt 参照、`.github/workflows/**` の Cloud Prompt 参照を `sync.py` が静的に照合した結果です。テストコード内だけの参照は「結線済み」の根拠に含めません。特定の run で当該分岐が実行されたことを示す runtime telemetry ではありません。
 

@@ -18,6 +18,7 @@ Step.4.3 でデプロイ済みの Web アプリ（SWA URL）に対して、Playw
 ## 生成テストの実行環境
 - Playwright E2E は、Azure Static Web Apps と依存 API が正しくデプロイ済み・構成済みであることを前提にした実環境検証である。
 - ローカル端末 / CI / デプロイ先のいずれでも `E2E_BASE_URL` を優先して base URL を注入し、未設定時は service-catalog 等の根拠から取得する。根拠がなければ環境ブロッカーとして記録し、PASS 扱いしない。
+- `src/test/e2e/playwright/` で依存をインストールし、`E2E_BASE_URL` を環境変数へ設定して `npx playwright test` を headless 実行する。
 - 認証トークン、Cookie、API Key 等の秘密情報は環境変数または実行環境の secret store から渡し、テストコード、README、ログにハードコードしない。
 - 失敗時 artifact には秘密情報が含まれないよう、URL query、token、Cookie をログへ平文出力しない。
 

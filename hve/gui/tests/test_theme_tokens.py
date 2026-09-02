@@ -354,7 +354,8 @@ _COLOR_LITERAL_ALLOWLIST = (
     "hve/gui/status_banner.py",
     "hve/gui/widgets/dag_status_widget.py",
 )
-_COLOR_LITERAL = re.compile(r"#[0-9a-fA-F]{3,8}\b|\brgba?\(")
+# ``&#NNN;`` is an HTML numeric entity, not a CSS colour literal.
+_COLOR_LITERAL = re.compile(r"(?<!&)#[0-9a-fA-F]{3,8}\b|\brgba?\(")
 
 
 def _iter_source_files():

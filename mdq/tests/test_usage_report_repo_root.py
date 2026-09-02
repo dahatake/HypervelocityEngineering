@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import importlib.util
 import json
 import sys
@@ -42,7 +43,7 @@ def test_wrapper_reports_the_repository_usage_log(tmp_path: Path) -> None:
     module = _wrapper_module()
     (tmp_path / ".mdq").mkdir()
     record = {
-        "ts": "2026-07-31T00:00:00+00:00",
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "command": "search",
         "args": {"q": "x", "top_k": 5, "max_tokens": 800},
         "elapsed_ms": 1,

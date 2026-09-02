@@ -9,6 +9,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
+from PySide6.QtCore import QEvent  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from hve.gui import github_pr_panel as module  # noqa: E402
@@ -124,7 +125,12 @@ def panel(qapp, monkeypatch, tmp_path: Path):
         "_run",
         lambda task, ok, ng=None: _sync(widget, task, ok, ng),
     )
-    return widget
+    yield widget
+    widget.shutdown(0)
+    widget.close()
+    widget.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    qapp.processEvents()
 
 
 def _sync(widget, task, ok, ng=None):

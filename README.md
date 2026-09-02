@@ -220,7 +220,6 @@ README では全 Prompt の列挙は行わず、命名規則と代表例だけ�
 ### Reusable helper workflows
 Issue Template とは紐づかず、他 workflow から `workflow_call` で利用される部品です。
 - `.github/workflows/check-auto-qa-skip-reusable.yml` — auto-QA の skip 判定。上記 reusable orchestrator のうち 10 件から呼ばれます。
-- `.github/workflows/mdq-index-reusable.yml` — `mdq` 索引の構築。現時点で `.github/workflows/` 内に `uses:` 呼び出し元はありません。
 
 ### PR / Issue automation workflows
 - `.github/workflows/auto-qa-to-review-transition.yml`
@@ -255,28 +254,22 @@ Issue Template とは紐づかず、他 workflow から `workflow_call` で利�
 - `.github/workflows/validate-hve-requirement-traceability-trusted.yml`
 - `.github/workflows/test-hve-python.yml`
 - `.github/workflows/test-cli-scripts.yml`
-- `.github/workflows/bats-tests.yml`
 
 ### Operational monitoring workflows
 
-従来 6 件あった定期実行のうち 5 件を停止し、FR-CLOUD-41 が要求する毎時の HITL エスカレーションだけを維持します。
+repository-managed Workflow に有効な定期実行はありません。HITL エスカレーションも必要時に明示実行します。
 
-- `.github/workflows/auto-blocked-to-human-required.yml` — 唯一の定期実行 workflow（毎時）＋手動実行。
+- `.github/workflows/auto-blocked-to-human-required.yml` — 手動実行のみ。
 - `.github/workflows/aas-timeout-monitor.yml` — 手動実行のみ。
 - `.github/workflows/auto-qa-timeout-watcher.yml` — 手動実行のみ。
 - `.github/workflows/label-consistency-audit.yml` — Issue イベント駆動＋手動実行。
-- `.github/workflows/sync-azure-skills.yml` — 手動実行のみ。
 
 > `audit-plans.yml` と `tdd-retry-metrics.yml` は削除済みです。`plan-validation-and-labeling.yml` は PR で変更された `plan.md` だけを検証し、リポジトリ全件の定期再監査は代替しません。詳しい手動操作は [workflow-reference.md](users-guide/workflow-reference.md#運用監視-workflow-の起動方法) を参照してください。
 
 ### Manual workflows
 以下は棚卸し時点で `workflow_dispatch` が確認された manual / confirmation-required workflow です（未使用とは断定しない）。
-- `.github/workflows/rollback-drill.yml` — 意図的に保持する手動 `workflow_dispatch` 運用 workflow です。rollback drill / rollback verification で使用し、`uses:` 呼び出し元がないことは未使用の根拠になりません（手動実行が意図された経路です）。
 - `.github/workflows/self-hosted-runner-smoke-test.yml`
 - `.github/workflows/test-hve-gui-macos.yml` — 費用見積りを利用者が明示承認した1回だけ、`macos-15` で HVE GUI の Cocoa smoke または full suite を実行します。既存 run の rerun は実行しません。
-
-### Reusable E2E workflow intentionally retained
-- `.github/workflows/e2e-playwright-reusable.yml` — reusable な E2E Playwright workflow として意図的に保持します。workflow ファイル内で確定した `uses:` 呼び出しは見つかっておらず、現在は複数のテキスト参照（例: `.github/workflows/auto-app-dev-microservice-web-reusable.yml` の Sub Issue 向け生成指示、`.github/prompts/E2ETesting-Playwright.prompt.md`、`users-guide/workflow-reference.md`）で運用上参照されています。削除/改名時は、これらの参照と依存する生成指示を合わせて更新してください。
 
 ### Removed / removal-candidate workflows
 - `.github/workflows/integration-tests-sample.yml` — 過去の棚卸しで PR1 の削除候補として整理された optional sample workflow（棚卸し事実: `workflow_dispatch` のみ確認、Issue Template 連携と `uses:` caller は未確認）。現時点では `.github/workflows/` 配下に当該ファイルは存在しません。

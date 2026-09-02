@@ -269,9 +269,40 @@ class TestNumericAndListCoercion:
         args = args_from_settings(_settings(issue_number="42"), workflow="ard")
         assert args.issue_number == 42
 
-    def test_semicolon_list_becomes_list(self):
-        args = args_from_settings(_settings(ignore_paths="a;b"), workflow="ard")
+    def test_whitespace_path_list_becomes_multiple_argv_tokens(self):
+        args = args_from_settings(_settings(ignore_paths="a b"), workflow="ard")
+        argv = args.to_argv()
+
         assert args.ignore_paths == ["a", "b"]
+        start = argv.index("--ignore-paths")
+        assert argv[start : start + 3] == ["--ignore-paths", "a", "b"]
+
+    @pytest.mark.parametrize(
+        ("key", "flag", "raw", "expected"),
+        [
+            (
+                "target_files",
+                "--target-files",
+                "qa/a.md qa/b.md",
+                ["qa/a.md", "qa/b.md"],
+            ),
+            (
+                "custom_source_dir",
+                "--custom-source-dir",
+                "docs/a docs/b",
+                ["docs/a", "docs/b"],
+            ),
+        ],
+    )
+    def test_akm_whitespace_path_lists_become_multiple_argv_tokens(
+        self, key, flag, raw, expected
+    ):
+        args = args_from_settings(_settings(**{key: raw}), workflow="akm")
+        argv = args.to_argv()
+
+        assert getattr(args, key) == expected
+        start = argv.index(flag)
+        assert argv[start : start + 3] == [flag, *expected]
 
     def test_zero_context_max_chars_is_unspecified(self):
         args = args_from_settings(_settings(context_max_chars=0), workflow="ard")
@@ -395,6 +426,12 @@ class TestSharedLocalSurfaceSettings:
             "--strict",
         ):
             assert flag in argv, f"{flag} が argv へ出ていない"
+        start = argv.index("--agentic-data-source-modes")
+        assert argv[start : start + 3] == [
+            "--agentic-data-source-modes",
+            "indexer",
+            "push",
+        ]
 
     def test_defaults_emit_no_shared_flags(self):
         """既定値のままなら追加のフラグを一切出さない（既存挙動の維持）。"""

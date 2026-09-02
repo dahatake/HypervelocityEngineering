@@ -30,6 +30,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import unicodedata
 import uuid
@@ -60,6 +61,22 @@ try:
     from . import approval
     from . import rework
     from .orchestrator_context import OrchestratorContext
+    from .resume_service import (
+        ResumeService,
+        WorkflowDescriptor,
+        build_resolved_replay_argv,
+        reconcile_succeeded_steps,
+        standard_execution_is_registerable,
+    )
+    from .run_state_store import (
+        DurableStateError,
+        HEARTBEAT_INTERVAL_SECONDS,
+        HeartbeatWorker,
+        LeaseToken,
+        RunStateStore,
+        compute_repo_key,
+    )
+    from .runtime_observability import make_instance_id
     from .mcp_io_log import McpIoLogger, attach_mcp_io_event_logger
     from .startup_preflight import (
         format_startup_preflight_errors,
@@ -87,7 +104,26 @@ except ImportError:
     from dag_executor import DAGExecutor, StepResult  # type: ignore[no-redef]
     from dag_planner import build_dag_plan  # type: ignore[no-redef]
     from run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id  # type: ignore[no-redef]
+    import approval  # type: ignore[no-redef]
+    import rework  # type: ignore[no-redef]
+    import run_progress  # type: ignore[no-redef]
     from orchestrator_context import OrchestratorContext  # type: ignore[no-redef]
+    from hve.resume_service import (  # type: ignore[no-redef]
+        ResumeService,
+        WorkflowDescriptor,
+        build_resolved_replay_argv,
+        reconcile_succeeded_steps,
+        standard_execution_is_registerable,
+    )
+    from hve.run_state_store import (  # type: ignore[no-redef]
+        DurableStateError,
+        HEARTBEAT_INTERVAL_SECONDS,
+        HeartbeatWorker,
+        LeaseToken,
+        RunStateStore,
+        compute_repo_key,
+    )
+    from runtime_observability import make_instance_id  # type: ignore[no-redef]
     from mcp_io_log import McpIoLogger, attach_mcp_io_event_logger  # type: ignore[no-redef]
     from startup_preflight import (  # type: ignore[no-redef]
         format_startup_preflight_errors,
@@ -4876,20 +4912,605 @@ def _start_index_watchers(config) -> None:
         _atexit.register(_cq_watcher.stop)
 
 
+_index_watcher_start_lock = threading.Lock()
+_index_watcher_start_thread: Optional[threading.Thread] = None
+
+
 def _start_index_watchers_when_idle(config):
-    """watcher 起動を専用スレッドへ退避する。待ち合わせで本体実行を止めないため。"""
+    """Start process-lifetime watchers once without blocking workflow execution."""
+    global _index_watcher_start_thread
+
     if getattr(config, "dry_run", False):
         return None
     if not getattr(config, "mdq_watch", True) and not getattr(config, "cq_watch", True):
         return None
-    import threading as _threading
+    with _index_watcher_start_lock:
+        if _index_watcher_start_thread is not None:
+            return _index_watcher_start_thread
+        thread = threading.Thread(
+            target=_start_index_watchers,
+            args=(config,),
+            name="hve-index-watchers",
+            daemon=True,
+        )
+        _index_watcher_start_thread = thread
+        thread.start()
+        return thread
 
-    thread = _threading.Thread(
-        target=_start_index_watchers, args=(config,),
-        name="hve-index-watchers", daemon=True,
+
+def _durable_record_field(record: Any, name: str) -> Any:
+    """Read one durable row field from sqlite rows and test doubles."""
+    try:
+        return record[name]
+    except (IndexError, KeyError, TypeError):
+        try:
+            return getattr(record, name)
+        except AttributeError as exc:
+            raise DurableStateError(
+                f"durable workflow instance is missing {name}"
+            ) from exc
+
+
+def _durable_context_identity(
+    orchestrator_ctx: Optional["OrchestratorContext"],
+) -> Optional[Tuple[str, str]]:
+    """Return a complete durable identity or reject a partial context."""
+    if orchestrator_ctx is None:
+        return None
+    execution_id = getattr(orchestrator_ctx, "execution_id", None)
+    instance_id = getattr(orchestrator_ctx, "instance_id", None)
+    has_execution = isinstance(execution_id, str) and bool(execution_id)
+    has_instance = isinstance(instance_id, str) and bool(instance_id)
+    if has_execution != has_instance:
+        raise DurableStateError("durable orchestrator identity is incomplete")
+    if not has_execution:
+        recovery_values = (
+            getattr(orchestrator_ctx, "expected_state_version", None),
+            getattr(orchestrator_ctx, "recovery_action", None),
+            getattr(orchestrator_ctx, "lease_owner", None),
+            getattr(orchestrator_ctx, "lease_generation", None),
+        )
+        if any(value is not None for value in recovery_values):
+            raise DurableStateError(
+                "durable recovery context requires execution and instance identity"
+            )
+        return None
+    return str(execution_id), str(instance_id)
+
+
+def _supports_direct_durable_registration(
+    workflow_id: str,
+    params: Optional[dict],
+    config: SDKConfig,
+) -> bool:
+    """Return whether a direct call can be registered without guessing inputs."""
+    if params is None or get_workflow(workflow_id) is None:
+        return False
+    return standard_execution_is_registerable(config, params)
+
+
+def _build_direct_durable_argv(
+    workflow_id: str,
+    params: Mapping[str, Any],
+    config: SDKConfig,
+    *,
+    continue_on_error: bool = False,
+) -> Tuple[str, ...]:
+    """Build the same replay plan used by CLI and Prompt controllers."""
+    return build_resolved_replay_argv(
+        workflow_id,
+        config,
+        params,
+        continue_on_error=continue_on_error,
     )
-    thread.start()
-    return thread
+
+
+def _resolve_durable_checkpoint_head(repo_root: Path) -> str:
+    """Resolve the current HEAD through the existing Prompt execution helper."""
+    try:
+        from .prompt_execution import (
+            resolve_head_commit,
+            validate_resolved_head_commit,
+        )
+    except ImportError:  # pragma: no cover - flat-load compatibility
+        from hve.prompt_execution import (  # type: ignore[no-redef]
+            resolve_head_commit,
+            validate_resolved_head_commit,
+        )
+    return validate_resolved_head_commit(resolve_head_commit(repo_root))
+
+
+class _DurableWorkflowLifecycle:
+    """Own one fenced workflow token and synchronize it with StepRunner."""
+
+    def __init__(
+        self,
+        store: RunStateStore,
+        token: LeaseToken,
+        *,
+        locally_owned: bool,
+    ) -> None:
+        self.store = store
+        self._token = token
+        self.locally_owned = locally_owned
+        self._lock: Any = threading.RLock()
+        self._runner_token_getter: Optional[Callable[[], Optional[LeaseToken]]] = None
+        self._runner_token_setter: Optional[Callable[[LeaseToken], None]] = None
+        self._runner_checkpoint_wrapped = False
+        self._heartbeat_worker: Optional[Any] = None
+        self._heartbeat_started = False
+        self._heartbeat_stopped = False
+        self._heartbeat_failure: Optional[DurableStateError] = None
+        self._heartbeat_failure_lock = threading.Lock()
+        self._heartbeat_failure_signal: Optional[
+            asyncio.Future[DurableStateError]
+        ] = None
+        self._released = False
+        self._closed = False
+
+    def attach_runner(self, runner: Any) -> None:
+        """Use the runner's lock/token holder when its durable seam is available."""
+        lock = getattr(runner, "_durable_token_lock", None)
+        getter = getattr(runner, "_durable_lease_token_from_context", None)
+        setter = getattr(runner, "_set_durable_lease_token", None)
+        if lock is None or not callable(getter) or not callable(setter):
+            return
+        self._lock = lock
+        self._runner_token_getter = getter
+        self._runner_token_setter = setter
+        with self._lock:
+            setter(self._token)
+        checkpoint = getattr(runner, "_commit_durable_checkpoint", None)
+        if callable(checkpoint) and not self._runner_checkpoint_wrapped:
+            @functools.wraps(checkpoint)
+            def _checkpoint_with_heartbeat_token_sync(*args: Any, **kwargs: Any) -> Any:
+                result = checkpoint(*args, **kwargs)
+                with self._lock:
+                    self._current_token()
+                return result
+
+            setattr(
+                runner,
+                "_commit_durable_checkpoint",
+                _checkpoint_with_heartbeat_token_sync,
+            )
+            self._runner_checkpoint_wrapped = True
+
+    def _sync_heartbeat_token(self, token: LeaseToken) -> None:
+        worker = self._heartbeat_worker
+        if worker is None:
+            return
+        try:
+            worker.token = token
+        except Exception as exc:
+            raise DurableStateError(
+                "durable heartbeat token could not be refreshed"
+            ) from exc
+
+    def _current_token(self) -> LeaseToken:
+        token = (
+            self._runner_token_getter()
+            if self._runner_token_getter is not None
+            else self._token
+        )
+        if not isinstance(token, LeaseToken):
+            raise DurableStateError("durable workflow token is unavailable")
+        self._token = token
+        self._sync_heartbeat_token(token)
+        return token
+
+    def _publish_token(self, token: LeaseToken) -> None:
+        if not isinstance(token, LeaseToken):
+            raise DurableStateError("invalid durable workflow transition token")
+        self._token = token
+        if self._runner_token_setter is not None:
+            self._runner_token_setter(token)
+        self._sync_heartbeat_token(token)
+
+    @staticmethod
+    def _normalize_heartbeat_failure(exc: BaseException) -> DurableStateError:
+        if isinstance(exc, DurableStateError):
+            return exc
+        error = DurableStateError(
+            f"durable heartbeat worker failed ({type(exc).__name__})"
+        )
+        error.__cause__ = exc
+        return error
+
+    def _remember_heartbeat_failure(
+        self,
+        exc: BaseException,
+    ) -> DurableStateError:
+        error = self._normalize_heartbeat_failure(exc)
+        with self._heartbeat_failure_lock:
+            if self._heartbeat_failure is None:
+                self._heartbeat_failure = error
+            return self._heartbeat_failure
+
+    def heartbeat_failure(self) -> Optional[DurableStateError]:
+        with self._heartbeat_failure_lock:
+            return self._heartbeat_failure
+
+    def raise_if_heartbeat_failed(self) -> None:
+        failure = self.heartbeat_failure()
+        if failure is not None:
+            raise failure
+
+    def start_heartbeat(self) -> asyncio.Future[DurableStateError]:
+        """Start the worker immediately before executor callbacks can run."""
+        loop = asyncio.get_running_loop()
+        failure_signal: asyncio.Future[DurableStateError] = loop.create_future()
+
+        def _notify_failure(exc: BaseException) -> None:
+            failure = self._remember_heartbeat_failure(exc)
+
+            def _publish_failure() -> None:
+                if not failure_signal.done():
+                    failure_signal.set_result(failure)
+
+            try:
+                loop.call_soon_threadsafe(_publish_failure)
+            except RuntimeError:
+                # The failure remains observable through raise_if_heartbeat_failed().
+                pass
+
+        with self._lock:
+            if self._heartbeat_started:
+                raise DurableStateError("durable heartbeat worker was already started")
+            if self._heartbeat_stopped:
+                raise DurableStateError("durable heartbeat worker was already stopped")
+            path = getattr(self.store, "path", None)
+            if path is None:
+                raise DurableStateError("durable heartbeat state path is unavailable")
+            token = self._current_token()
+            try:
+                worker = HeartbeatWorker(
+                    path,
+                    token,
+                    interval_seconds=HEARTBEAT_INTERVAL_SECONDS,
+                    on_failure=_notify_failure,
+                )
+            except Exception as exc:
+                raise DurableStateError(
+                    "durable heartbeat worker could not be created"
+                ) from exc
+            self._heartbeat_worker = worker
+            self._heartbeat_failure_signal = failure_signal
+            self._heartbeat_started = True
+            try:
+                worker.start()
+            except Exception as exc:
+                raise DurableStateError(
+                    "durable heartbeat worker could not be started"
+                ) from exc
+        return failure_signal
+
+    def stop_heartbeat(self, timeout: float = 1.0) -> None:
+        """Stop the worker at most once without waiting beyond ``timeout``."""
+        sync_error: Optional[BaseException] = None
+        with self._lock:
+            if not self._heartbeat_started or self._heartbeat_stopped:
+                return
+            try:
+                self._current_token()
+            except BaseException as exc:
+                sync_error = exc
+            self._heartbeat_stopped = True
+            worker = self._heartbeat_worker
+        if worker is None:
+            raise DurableStateError("durable heartbeat worker is unavailable")
+        try:
+            worker.stop(timeout=timeout)
+        except Exception as exc:
+            raise DurableStateError(
+                "durable heartbeat worker could not be stopped"
+            ) from exc
+        try:
+            worker.raise_if_failed()
+        except BaseException as exc:
+            self._remember_heartbeat_failure(exc)
+        failure_signal = self._heartbeat_failure_signal
+        if (
+            failure_signal is not None
+            and not failure_signal.done()
+            and self.heartbeat_failure() is None
+        ):
+            failure_signal.cancel()
+        if sync_error is not None:
+            raise sync_error
+
+    def transition_workflow(self, status: str, *, run_id: str) -> None:
+        with self._lock:
+            token = self.store.transition_workflow(
+                self._current_token(),
+                status,
+                run_id=run_id,
+            )
+            self._publish_token(token)
+
+    def transition_step(
+        self,
+        step_id: str,
+        status: str,
+        *,
+        record_kind: str = "step",
+        last_error_type: Optional[str] = None,
+    ) -> None:
+        with self._lock:
+            token = self.store.transition_step(
+                self._current_token(),
+                step_id,
+                status,
+                record_kind=record_kind,
+                last_error_type=last_error_type,
+            )
+            self._publish_token(token)
+
+    def succeeded_step_ids(self) -> Set[str]:
+        """Return persisted succeeded step rows for this workflow instance."""
+        with self._lock:
+            token = self._current_token()
+            return {
+                str(_durable_record_field(row, "step_id"))
+                for row in self.store.list_steps(
+                    token.execution_id,
+                    token.instance_id,
+                )
+                if str(_durable_record_field(row, "record_kind")) == "step"
+                and str(_durable_record_field(row, "status")) == "succeeded"
+            }
+
+    def release(self) -> None:
+        """Release exactly once, and only when this process acquired the lease."""
+        if self._released:
+            return
+        self._released = True
+        if not self.locally_owned:
+            return
+        with self._lock:
+            self.store.release_lease(self._current_token())
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        self.store.close()
+
+
+def _open_durable_workflow_lifecycle(
+    workflow_id: str,
+    params: Optional[dict],
+    config: SDKConfig,
+    orchestrator_ctx: Optional["OrchestratorContext"],
+) -> Optional[_DurableWorkflowLifecycle]:
+    """Register or validate one workflow, then acquire or adopt its lease."""
+    if getattr(config, "dry_run", False):
+        return None
+
+    identity = _durable_context_identity(orchestrator_ctx)
+    identity_was_supplied = identity is not None
+    if identity is None and not _supports_direct_durable_registration(
+        workflow_id, params, config
+    ):
+        return None
+
+    store = RunStateStore()
+    try:
+        if identity is None:
+            assert params is not None
+            service = ResumeService(store, Path.cwd())
+            raw_app_ids = params.get("app_ids")
+            app_ids = (
+                [str(item).strip() for item in raw_app_ids if str(item).strip()]
+                if isinstance(raw_app_ids, (list, tuple))
+                else []
+            )
+            if not app_ids and str(params.get("app_id") or "").strip():
+                app_ids = [str(params["app_id"]).strip()]
+            instance_id = make_instance_id(
+                workflow_id,
+                app_ids[0] if len(app_ids) == 1 else None,
+            )
+            replay_argv = _build_direct_durable_argv(
+                workflow_id,
+                params,
+                config,
+                continue_on_error=bool(
+                    getattr(orchestrator_ctx, "continue_on_error", False)
+                ),
+            )
+            safe_argv, missing_replay_keys = service.sanitize_argv(replay_argv)
+            execution_id = service.new_execution_id()
+            descriptor = WorkflowDescriptor(
+                instance_id=instance_id,
+                workflow_id=workflow_id,
+                ordinal=0,
+                mode="standard",
+                argv=safe_argv,
+                missing_replay_keys=missing_replay_keys,
+            )
+            service.register_execution(
+                "orchestrate",
+                (descriptor,),
+                execution_id=execution_id,
+                checkpoint_head=_resolve_durable_checkpoint_head(Path.cwd()),
+            )
+            identity = (execution_id, instance_id)
+
+        execution_id, instance_id = identity
+        execution = store.get_execution(execution_id)
+        instance = store.get_instance(execution_id, instance_id)
+        if execution is None:
+            raise DurableStateError("durable execution was not found")
+        if instance is None:
+            raise DurableStateError("durable workflow instance was not found")
+        if str(_durable_record_field(execution, "execution_id")) != execution_id:
+            raise DurableStateError("durable execution identity does not match request")
+        if (
+            str(_durable_record_field(instance, "execution_id")) != execution_id
+            or str(_durable_record_field(instance, "instance_id")) != instance_id
+        ):
+            raise DurableStateError("durable workflow instance identity is invalid")
+        if str(_durable_record_field(instance, "workflow_id")) != workflow_id:
+            raise DurableStateError("durable workflow identity does not match request")
+        if str(_durable_record_field(instance, "mode")) != "standard":
+            raise DurableStateError("durable workflow mode is unsupported")
+        if identity_was_supplied and str(
+            _durable_record_field(execution, "repo_key")
+        ) != compute_repo_key(Path.cwd()):
+            raise DurableStateError(
+                "durable execution belongs to another repository"
+            )
+
+        recovery_action = getattr(orchestrator_ctx, "recovery_action", None)
+        if recovery_action not in {None, "reuse-session", "restart-step"}:
+            raise DurableStateError("unsupported durable recovery action")
+        lease_owner = getattr(orchestrator_ctx, "lease_owner", None)
+        lease_generation = getattr(orchestrator_ctx, "lease_generation", None)
+        if (lease_owner is None) != (lease_generation is None):
+            raise DurableStateError("durable lease identity is incomplete")
+
+        stored_status = str(_durable_record_field(instance, "status"))
+        if (
+            identity_was_supplied
+            and recovery_action is None
+            and stored_status != "pending"
+        ):
+            raise DurableStateError(
+                "identity-only durable execution requires a pending instance"
+            )
+
+        stored_version = _durable_record_field(instance, "state_version")
+        if isinstance(stored_version, bool) or not isinstance(stored_version, int):
+            raise DurableStateError("durable workflow state version is invalid")
+        expected_version = getattr(
+            orchestrator_ctx, "expected_state_version", None
+        )
+        if expected_version is None:
+            if recovery_action is not None or lease_owner is not None:
+                raise DurableStateError(
+                    "durable recovery requires an expected state version"
+                )
+            expected_version = stored_version
+        if expected_version != stored_version:
+            raise DurableStateError("durable orchestrator state version is stale")
+
+        if lease_owner is not None:
+            if (
+                str(_durable_record_field(instance, "lease_owner")) != lease_owner
+                or _durable_record_field(instance, "lease_generation")
+                != lease_generation
+            ):
+                raise DurableStateError("durable parent lease identity is stale")
+            token = LeaseToken(
+                execution_id=execution_id,
+                instance_id=instance_id,
+                owner=lease_owner,
+                generation=lease_generation,
+                state_version=expected_version,
+            )
+            locally_owned = False
+        else:
+            owner = f"orchestrator-{os.getpid()}-{uuid.uuid4().hex}"
+            token = store.acquire_lease(
+                execution_id,
+                instance_id,
+                expected_version,
+                owner,
+                allow_takeover=recovery_action is not None,
+            )
+            locally_owned = True
+
+        return _DurableWorkflowLifecycle(
+            store,
+            token,
+            locally_owned=locally_owned,
+        )
+    except BaseException as primary_error:
+        try:
+            store.close()
+        except BaseException as cleanup_error:
+            if hasattr(primary_error, "add_note"):
+                primary_error.add_note(
+                    "durable open cleanup also failed: "
+                    f"{type(cleanup_error).__name__}: {cleanup_error}"
+                )
+        raise
+
+
+def _durable_terminal_workflow_status(result: Mapping[str, Any]) -> str:
+    if result.get("blocked"):
+        return "blocked"
+    if result.get("failed") or result.get("error") or result.get("code_review_error"):
+        return "failed"
+    if not result.get("completed") and result.get("skipped"):
+        return "skipped"
+    return "succeeded"
+
+
+async def _execute_with_durable_heartbeat(
+    executor: Any,
+    durable: _DurableWorkflowLifecycle,
+    *,
+    failure_signal: Optional[asyncio.Future[DurableStateError]] = None,
+) -> Any:
+    """Race executor completion against a thread-safe heartbeat failure signal."""
+    if failure_signal is None:
+        failure_signal = durable.start_heartbeat()
+    executor_task = asyncio.create_task(executor.execute())
+
+    def _consume_late_executor_result(task: asyncio.Task[Any]) -> None:
+        try:
+            task.result()
+        except BaseException:
+            pass
+
+    async def _cancel_and_quiesce() -> Optional[BaseException]:
+        if not executor_task.done():
+            executor_task.cancel()
+        done, _pending = await asyncio.wait((executor_task,), timeout=0.5)
+        if executor_task not in done:
+            executor_task.add_done_callback(_consume_late_executor_result)
+            return DurableStateError(
+                "durable executor did not quiesce within the graceful-stop budget"
+            )
+        try:
+            await executor_task
+        except asyncio.CancelledError:
+            return None
+        except BaseException as executor_error:
+            return executor_error
+        return None
+
+    try:
+        done, _pending = await asyncio.wait(
+            (executor_task, failure_signal),
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+    except BaseException as primary_error:
+        executor_error = await _cancel_and_quiesce()
+        if executor_error is not None:
+            if hasattr(primary_error, "add_note"):
+                primary_error.add_note(
+                    "durable executor quiescence also failed: "
+                    f"{type(executor_error).__name__}: {executor_error}"
+                )
+        raise
+
+    if failure_signal in done:
+        heartbeat_error = failure_signal.result()
+        executor_error = await _cancel_and_quiesce()
+        if executor_error is not None:
+            if executor_error is not heartbeat_error and hasattr(
+                heartbeat_error, "add_note"
+            ):
+                heartbeat_error.add_note(
+                    "durable executor quiescence also failed: "
+                    f"{type(executor_error).__name__}: {executor_error}"
+                )
+        raise heartbeat_error
+
+    return await executor_task
 
 
 async def run_workflow(
@@ -4898,6 +5519,146 @@ async def run_workflow(
     config: Optional[SDKConfig] = None,
     *,
     orchestrator_ctx: Optional["OrchestratorContext"] = None,
+) -> dict:
+    """Run one workflow under the durable lifecycle when the mode supports it."""
+    if config is None:
+        config = SDKConfig()
+    if not config.run_id:
+        config.run_id = generate_run_id()
+
+    durable = _open_durable_workflow_lifecycle(
+        workflow_id,
+        params,
+        config,
+        orchestrator_ctx,
+    )
+    if durable is None:
+        return await _run_workflow_body(
+            workflow_id,
+            params=params,
+            config=config,
+            orchestrator_ctx=orchestrator_ctx,
+        )
+
+    primary_error: Optional[BaseException] = None
+    run_id = str(config.run_id)
+    try:
+        durable.transition_workflow("running", run_id=run_id)
+        heartbeat_failure_signal = durable.start_heartbeat()
+        result = await _run_workflow_body(
+            workflow_id,
+            params=params,
+            config=config,
+            orchestrator_ctx=orchestrator_ctx,
+            _durable=durable,
+            _durable_heartbeat_signal=heartbeat_failure_signal,
+        )
+        durable.raise_if_heartbeat_failed()
+        durable.transition_workflow(
+            _durable_terminal_workflow_status(result),
+            run_id=run_id,
+        )
+        durable.stop_heartbeat()
+        durable.raise_if_heartbeat_failed()
+        return result
+    except DurableStateError as exc:
+        primary_error = exc
+        try:
+            durable.transition_workflow("suspended", run_id=run_id)
+        except DurableStateError as transition_error:
+            if hasattr(exc, "add_note"):
+                exc.add_note(
+                    "durable suspended transition also failed: "
+                    f"{transition_error}"
+                )
+        raise
+    except (asyncio.CancelledError, KeyboardInterrupt, SystemExit) as exc:
+        heartbeat_error = durable.heartbeat_failure()
+        primary_error = heartbeat_error or exc
+        try:
+            durable.transition_workflow("suspended", run_id=run_id)
+        except DurableStateError as transition_error:
+            if heartbeat_error is None:
+                primary_error = transition_error
+                raise transition_error from exc
+            if hasattr(heartbeat_error, "add_note"):
+                heartbeat_error.add_note(
+                    "durable suspended transition also failed: "
+                    f"{transition_error}"
+                )
+        if heartbeat_error is not None:
+            raise heartbeat_error from exc
+        raise
+    except BaseException as exc:
+        heartbeat_error = durable.heartbeat_failure()
+        if heartbeat_error is not None:
+            primary_error = heartbeat_error
+            try:
+                durable.transition_workflow("suspended", run_id=run_id)
+            except DurableStateError as transition_error:
+                if hasattr(heartbeat_error, "add_note"):
+                    heartbeat_error.add_note(
+                        "durable suspended transition also failed: "
+                        f"{transition_error}"
+                    )
+            raise heartbeat_error from exc
+        primary_error = exc
+        try:
+            durable.transition_workflow("failed", run_id=run_id)
+        except DurableStateError as transition_error:
+            primary_error = transition_error
+            raise transition_error from exc
+        raise
+    finally:
+        cleanup_errors: List[BaseException] = []
+        try:
+            durable.stop_heartbeat()
+            durable.raise_if_heartbeat_failed()
+        except BaseException as cleanup_error:
+            if cleanup_error is not primary_error:
+                cleanup_errors.append(cleanup_error)
+        try:
+            durable.release()
+        except BaseException as cleanup_error:
+            cleanup_errors.append(cleanup_error)
+        try:
+            durable.close()
+        except BaseException as cleanup_error:
+            cleanup_errors.append(cleanup_error)
+        if cleanup_errors:
+            if primary_error is None:
+                raise cleanup_errors[0]
+            durable_cleanup_error = next(
+                (
+                    cleanup_error
+                    for cleanup_error in cleanup_errors
+                    if isinstance(cleanup_error, DurableStateError)
+                ),
+                None,
+            )
+            if (
+                durable_cleanup_error is not None
+                and not isinstance(primary_error, DurableStateError)
+            ):
+                raise durable_cleanup_error from primary_error
+            if hasattr(primary_error, "add_note"):
+                for cleanup_error in cleanup_errors:
+                    primary_error.add_note(
+                        "durable cleanup also failed: "
+                        f"{type(cleanup_error).__name__}: {cleanup_error}"
+                    )
+
+
+async def _run_workflow_body(
+    workflow_id: str,
+    params: Optional[dict] = None,
+    config: Optional[SDKConfig] = None,
+    *,
+    orchestrator_ctx: Optional["OrchestratorContext"] = None,
+    _durable: Optional[_DurableWorkflowLifecycle] = None,
+    _durable_heartbeat_signal: Optional[
+        asyncio.Future[DurableStateError]
+    ] = None,
 ) -> dict:
     """ワークフローを SDK でローカル実行する。
 
@@ -5289,7 +6050,7 @@ async def run_workflow(
     # 記録が 1 件も無い run-id は fail-closed とし、全 Step の再実行へ縮退させない。
     _resume_run_id = str(effective_params.get("resume_run") or "").strip()
     if _resume_run_id:
-        _done = run_progress.completed_steps(_resume_run_id)
+        _done = run_progress.completed_steps(_resume_run_id, workflow_id)
         if _done is None:
             _resume_error = (
                 f"--resume-run に指定された run-id の進捗記録が見つかりません: {_resume_run_id}"
@@ -5446,6 +6207,27 @@ async def run_workflow(
         console.warning(
             f"fan-out 事前展開に失敗したため非展開 workflow で続行します: {exc}"
         )
+
+    if _durable is not None:
+        succeeded_step_ids = _durable.succeeded_step_ids()
+        if succeeded_step_ids:
+            active_steps, output_missing = reconcile_succeeded_steps(
+                Path.cwd(),
+                wf_for_dag,
+                active_steps,
+                succeeded_step_ids,
+            )
+            skipped_succeeded = sorted(succeeded_step_ids - active_steps)
+            if skipped_succeeded:
+                console.event(
+                    "耐久再開で成功済みとしてスキップするステップ: "
+                    + ", ".join(skipped_succeeded)
+                )
+            if output_missing:
+                console.warning(
+                    "成功済みステップの必須成果物が不足しているため、"
+                    "当該ステップと依存先を再実行します。"
+                )
 
     # GUI Workbench 進捗集約用に fan-out 親 → 子 ID マップを 1 回だけ通知する。
     # GUI 側 (_apply_stats_fanout_init) は受信した child_ids をベース step の
@@ -5825,6 +6607,8 @@ async def run_workflow(
         workflow_params=effective_params,
         qa_akm_dispatcher=qa_akm_dispatcher,
     )
+    if _durable is not None:
+        _durable.attach_runner(runner)
 
     # 既存成果物を検出し、2度目実行時の再利用コンテキストを additional_prompt に追記
     existing_artifacts = _detect_existing_artifacts(workflow_id, effective_params)
@@ -6193,33 +6977,54 @@ async def run_workflow(
         success = _finalize_step_scoped_cicd_branch(step_id, success)
         return success
 
-    def _record_run_progress(result: StepResult) -> None:
-        """FR-STATE-04: Step の完了状態を進捗ストアへ記録する。"""
-        if getattr(config, "dry_run", False) or result.skipped:
+    def _on_step_start(step_id: str) -> None:
+        if _durable is not None:
+            _durable.transition_step(step_id, "running")
+
+    def _on_step_complete(result: StepResult) -> None:
+        if _durable is None:
             return
-        run_progress.record_step(
-            config.run_id,
-            workflow_id,
+        if result.state == "blocked":
+            status = "blocked"
+        elif result.skipped or result.state == "skipped":
+            status = "skipped"
+        elif result.success:
+            status = "succeeded"
+        else:
+            status = "failed"
+        _durable.transition_step(
             result.step_id,
-            run_progress.STATUS_SUCCEEDED if result.success else run_progress.STATUS_FAILED,
+            status,
+            last_error_type=(
+                "StepExecutionError" if status == "failed" else None
+            ),
         )
 
     def _on_wave_start(executable_steps: List[Any], wave_index: int) -> None:
         nonlocal protected_baseline
         # FR-CLI-87: approval_gate を宣言した Step を含む Wave は実行前に承認を求める。
         if _approval_gates_enabled and approval.wave_requires_approval(executable_steps):
-            approval.request_wave_approval(
-                executable_steps,
-                wave_index,
-                interactive=approval.stdin_is_interactive(),
-                console=console,
-            )
-            run_progress.record_step(
-                config.run_id,
-                workflow_id,
-                f"approval:{wave_index}",
-                run_progress.STATUS_SUCCEEDED,
-            )
+            try:
+                approval.request_wave_approval(
+                    executable_steps,
+                    wave_index,
+                    interactive=approval.stdin_is_interactive(),
+                    console=console,
+                )
+            except approval.ApprovalDeclined:
+                if _durable is not None:
+                    _durable.transition_step(
+                        f"approval:{wave_index}",
+                        "failed",
+                        record_kind="approval",
+                    )
+                raise
+            if _durable is not None:
+                _durable.transition_step(
+                    f"approval:{wave_index}",
+                    "succeeded",
+                    record_kind="approval",
+                )
         # enable_auto_merge（全自動）時、Deploy Step を含む wave の前に生成済み
         # workflow/成果物を push する（Deploy Agent の `gh workflow run --ref` 用）。
         # enable_auto_merge OFF はリポジトリ操作を手動とするため push しない。
@@ -6549,8 +7354,8 @@ async def run_workflow(
         step_prompts=step_prompts,
         dag_plan=dag_plan,
         repo_root=Path.cwd(),
-        # FR-STATE-04: 既存フック経由で進捗を記録する（dry-run は除く）。
-        on_step_complete=_record_run_progress,
+        on_step_start=_on_step_start if _durable is not None else None,
+        on_step_complete=_on_step_complete if _durable is not None else None,
         # Fork-integration (T2.6/T2.8): フィーチャフラグ off （既定）で旧挙動と完全一致
         fork_on_retry=bool(getattr(config, "fork_on_retry", False)),
         fork_kpi_logger=_build_fork_kpi_logger(config),
@@ -6653,8 +7458,9 @@ async def run_workflow(
         except Exception:
             _status_line = None
 
-    # ここより前の計画・UI構築失敗では worker を作らない。Step 実行 callback が
-    # 発火し得る executor.execute() の直前にだけ生成する。
+    # Durable worker は workflow が running へ遷移した直後から稼働する。
+    # executor 直前まで遅らせると、長い計画・preflight 中に liveness freshness
+    # と lease TTL を失うため、ここでは既に開始済みの signal を引き継ぐ。
     if qa_akm_dispatcher is not None:
         try:
             from .qa_akm_dispatch import QaAkmCoordinator
@@ -6670,19 +7476,26 @@ async def run_workflow(
         # 残ステップを skip マークして exit 0 相当で正常終了する（Q6=B）。
         # recoverable 例外は従来通り再送出。
         try:
-            results = await executor.execute()
+            if _durable is None:
+                results = await executor.execute()
+            else:
+                results = await _execute_with_durable_heartbeat(
+                    executor,
+                    _durable,
+                    failure_signal=_durable_heartbeat_signal,
+                )
+        except DurableStateError:
+            raise
+        except (asyncio.CancelledError, KeyboardInterrupt, SystemExit):
+            # Process-control signals are not workflow failures.  The outer
+            # durable lifecycle records ``suspended`` and releases the lease
+            # only after DAGExecutor has quiesced every owned sibling task.
+            raise
         except approval.ApprovalDeclined as _approval_exc:
             # FR-CLI-87: 承認拒否は停止条件。continue_on_error の fatal 縮退へ
             # 落とさず、blocked として返す。
             _approval_error = str(_approval_exc)
             console.error(_approval_error)
-            # 拒否も `approval:<wave_index>` で残し、どの Wave で停止したかを復元可能にする。
-            run_progress.record_step(
-                config.run_id,
-                workflow_id,
-                f"approval:{_approval_exc.wave_index}",
-                run_progress.STATUS_FAILED,
-            )
             return {
                 "workflow_id": workflow_id,
                 "completed": sorted(getattr(executor, "_results", {}) or {}),

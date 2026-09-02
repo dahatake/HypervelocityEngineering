@@ -649,8 +649,9 @@ def _coerce_tristate(value: Any) -> TriState:
 # 保存済み設定 → OrchestrateArgs（FR-PROMPT-07）
 # --------------------------------------------------------------------------
 
-# 設定ストアから読み取らないフィールド。
-# Prompt CLI / GUI ランタイムが所有し、保存値を通じて上書きさせない。
+# 設定ストアの汎用マッピングから除外するフィールド。
+# Prompt CLI / GUI ランタイム所有値は保存値を使わず、AKM 固有値は下の
+# workflow-aware な個別変換で `akm` のときだけ読み取る。
 _RUNTIME_OWNED_FIELDS = frozenset(
     {
         "workflow",
@@ -682,15 +683,6 @@ _SPECIAL_SETTINGS_KEYS = frozenset(
         "sources_original_docs",
         "sources_workiq",
         "tool_search_ranking",
-    }
-)
-
-_LIST_FIELDS = frozenset(    {
-        "ignore_paths",
-        "target_files",
-        "custom_source_dir",
-        # FR-LOCAL-SURFACE-01 (a): GUI は "indexer;push" の形で保存する。
-        "agentic_data_source_modes",
     }
 )
 
@@ -728,6 +720,14 @@ def _split_semicolon_list(value: Any) -> List[str]:
     return [part.strip() for part in value.split(";") if part.strip()]
 
 
+def _split_whitespace_list(value: Any) -> List[str]:
+    if isinstance(value, (list, tuple)):
+        return [str(v).strip() for v in value if str(v).strip()]
+    if not isinstance(value, str):
+        return []
+    return value.split()
+
+
 def _field_map() -> Mapping[str, Any]:
     return {f.name: f for f in fields(OrchestrateArgs)}
 
@@ -742,7 +742,11 @@ def _coerce_for_field(f: Any, value: Any) -> Any:
     if name in _AUTO_MEANS_UNSET and isinstance(value, str):
         text = value.strip()
         return text if text in {"yes", "no"} else None
-    if name in _LIST_FIELDS:
+    # GUI は path list を空白区切り、Agentic data source modes を
+    # "indexer;push" のセミコロン区切りで保存する。
+    if name == "ignore_paths":
+        return _split_whitespace_list(value)
+    if name == "agentic_data_source_modes":
         return _split_semicolon_list(value)
     if _is_tristate_field(f):
         return _coerce_tristate(value)
@@ -836,18 +840,10 @@ def args_from_settings(
             if options.get(key)
         ]
         args.sources = ",".join(selected_sources) if selected_sources else None
-        target_files = options.get("target_files")
-        args.target_files = (
-            [str(value).strip() for value in target_files if str(value).strip()]
-            if isinstance(target_files, (list, tuple))
-            else str(target_files or "").split()
-        )
+        args.target_files = _split_whitespace_list(options.get("target_files"))
         args.force_refresh = _coerce_tristate(options.get("force_refresh"))
-        custom_source_dir = options.get("custom_source_dir")
-        args.custom_source_dir = (
-            [str(value).strip() for value in custom_source_dir if str(value).strip()]
-            if isinstance(custom_source_dir, (list, tuple))
-            else str(custom_source_dir or "").split()
+        args.custom_source_dir = _split_whitespace_list(
+            options.get("custom_source_dir")
         )
 
     if not args.self_improve:

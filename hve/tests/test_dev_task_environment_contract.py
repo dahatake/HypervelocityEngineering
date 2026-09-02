@@ -1216,3 +1216,17 @@ def test_ci_smoke_tests_the_interactive_copilot_cli_on_every_supported_os() -> N
     assert "CopilotCliBridge.find_binary()" in steps
     assert "hve/tests/test_copilot_cli_pty_smoke.py" in steps
     assert "skipped == 0" in steps
+
+
+def test_ci_checks_the_sdk_lock_contract_on_every_supported_os() -> None:
+    """FR-MODEL-07: lock の UTF-8/LF/BOM 契約を Windows/macOS/Linux の全 OS で検証する。"""
+    import yaml
+
+    workflow = yaml.safe_load(_PYTHON_TEST_WORKFLOW.read_text(encoding="utf-8"))
+    job = workflow["jobs"]["gui-pty-tests"]
+    steps = "\n".join(str(step.get("run", "")) for step in job["steps"])
+
+    assert (
+        "hve/tests/test_dev_task_environment_contract.py::"
+        "test_copilot_sdk_lock_pins_an_exact_version" in steps
+    )

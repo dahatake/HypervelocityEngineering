@@ -39,7 +39,10 @@ def panel(qapp, monkeypatch, tmp_path: Path):
             "feature/x", base, 2, 2, True, 0, "o/r"
         ),
     )
-    return widget
+    yield widget
+    widget.shutdown()
+    widget.deleteLater()
+    qapp.processEvents()
 
 
 def _sync(widget, task, ok, ng=None):

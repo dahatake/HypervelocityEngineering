@@ -226,6 +226,32 @@ class TestAssets:
         assert "<source>Work IQ 用プロンプトをコピー</source>" in context
         assert 'type="unfinished"' not in context
 
+    def test_resume_dialog_and_entry_action_are_translated(self) -> None:
+        """FR-GUI-50: durable resume dialog and explicit entry labels are translated."""
+        sources = (_I18N_DIR / "translations.pro").read_text(encoding="utf-8")
+        assert "../resume_dialog.py" in sources
+
+        content = (_I18N_DIR / "hve_gui_en_US.ts").read_text(encoding="utf-8")
+        dialog_context = content.split("<name>ResumeDialog</name>", 1)[1].split(
+            "</context>", 1
+        )[0]
+        for source in (
+            "実行を再開",
+            "再開候補は 0 件です。",
+            "再開プラン",
+            "Reuse session",
+            "Restart step",
+        ):
+            assert f"<source>{source}</source>" in dialog_context, source
+        assert 'type="unfinished"' not in dialog_context
+
+        main_context = content.split("<name>MainWindow</name>", 1)[1].split(
+            "</context>", 1
+        )[0]
+        assert "<source>再開</source>" in main_context
+        assert "<source>中断した HVE execution を再開</source>" in main_context
+        assert 'type="unfinished"' not in main_context
+
     def test_github_comment_and_picker_are_translated(self) -> None:
         """FR-GUI-30 / FR-GUI-32: 新規 GitHub UI の文言が翻訳カタログに載っていること。"""
         sources = (_I18N_DIR / "translations.pro").read_text(encoding="utf-8")
@@ -331,6 +357,8 @@ class TestAssets:
             )
             assert app.translate("GitHubCommentEditor", "プレビュー") == "Preview"
             assert app.translate("GitHubPickerDialog", "Issue を選択") == "Select an issue"
+            assert app.translate("ResumeDialog", "実行を再開") == "Resume execution"
+            assert app.translate("MainWindow", "再開") == "Resume"
             assert (
                 app.translate("GitHubPullRequestPanel", "head ブランチを削除")
                 == "Delete head branch"

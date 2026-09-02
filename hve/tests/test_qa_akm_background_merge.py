@@ -82,7 +82,7 @@ class TestShouldEnableQaAkmDispatchGate(unittest.TestCase):
 
         import orchestrator
 
-        source = inspect.getsource(orchestrator.run_workflow)
+        source = inspect.getsource(orchestrator._run_workflow_body)
         self.assertIn("qa_akm_background_merge=config.qa_akm_background_merge", source)
 
 

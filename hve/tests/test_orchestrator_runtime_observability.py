@@ -84,6 +84,6 @@ class TestLifecycleWiring:
     """FR-RTO-06: run_workflow が記録器を生成し、終了時に閉じる。"""
 
     def test_run_workflow_attaches_and_closes_recorder(self) -> None:
-        source = inspect.getsource(orch.run_workflow)
+        source = inspect.getsource(orch._run_workflow_body)
         assert "_attach_runtime_observability(" in source
         assert "_rt_recorder.close()" in source

@@ -39,7 +39,12 @@ from .fonts import preferred_log_font
 from .job_interaction_model import JobTarget
 from .orchestrate_args import OrchestrateArgs
 from .page_intro import StepIntroBanner
-from .state_bridge import SubprocessReader, launch_orchestrator
+from .state_bridge import (
+    SubprocessReader,
+    append_durable_identity_args,
+    build_resume_argv,
+    launch_orchestrator,
+)
 from .widgets.wrap_helpers import apply_cjk_wrap
 from .workbench_state import WorkbenchState, format_log_prefix
 from .workbench_logger import (
@@ -377,6 +382,7 @@ class WorkbenchPage(QWidget):
         self._proc_exit_seen_at: Optional[float] = None
         self._orphaned_exit_handled = False
         self._args_queue: List[OrchestrateArgs] = []
+        self._explicit_argv_queue: Optional[List[List[str]]] = None
         self._queue_index: int = 0
         self._return_codes: List[int] = []
         self._workflow_plan: List[dict] = []
@@ -471,6 +477,8 @@ class WorkbenchPage(QWidget):
         self,
         args_queue: List[OrchestrateArgs],
         workflow_plan: Optional[List[dict]] = None,
+        *,
+        explicit_argv_queue: Optional[List[List[str]]] = None,
     ) -> None:
         """複数 `OrchestrateArgs` を依存順に逐次実行する。"""
         if self._is_running:
@@ -485,6 +493,21 @@ class WorkbenchPage(QWidget):
         self._proc_exit_seen_at = None
         self._orphaned_exit_handled = False
         self._args_queue = list(args_queue)
+        self._explicit_argv_queue = (
+            None
+            if explicit_argv_queue is None
+            else [list(argv) for argv in explicit_argv_queue]
+        )
+        if (
+            self._explicit_argv_queue is not None
+            and len(self._explicit_argv_queue) != len(self._args_queue)
+        ):
+            self._log_pane.append_line(
+                "[ERROR] 明示argv queueとworkflow queueの件数が一致しません"
+            )
+            self._args_queue = []
+            self._explicit_argv_queue = None
+            return
         self._queue_index = 0
         self._return_codes = []
 
@@ -552,6 +575,54 @@ class WorkbenchPage(QWidget):
 
         self._start_next_in_queue()
 
+    def start_resume(
+        self,
+        plan: Any,
+        *,
+        repo_root: "str | Path",
+        replay_values: Optional[Mapping[str, str]] = None,
+    ) -> None:
+        """Run a selected resume plan through the existing Workbench lifecycle."""
+        if self._is_running:
+            self._log_pane.append_line("[WARN] 既に実行中のため再開を無視しました")
+            return
+        workflow_id = str(getattr(plan, "workflow_id", "") or "")
+        if not workflow_id:
+            self._log_pane.append_line("[ERROR] 再開プランにworkflow IDがありません")
+            return
+        args = OrchestrateArgs(workflow=workflow_id, repo_root=Path(repo_root))
+        workflow_plan = self._build_workflow_plan([args])
+        self.start_orchestrators(
+            [args],
+            workflow_plan=workflow_plan,
+            explicit_argv_queue=[build_resume_argv(plan, replay_values)],
+        )
+
+    def _clear_explicit_argv_queue(self) -> None:
+        queue = self._explicit_argv_queue
+        if queue is not None:
+            for argv in queue:
+                for index in range(len(argv)):
+                    argv[index] = ""
+                argv.clear()
+        self._explicit_argv_queue = None
+
+    def _mark_current_workflow_launch_failed(self) -> None:
+        workflow_id = self._current_workflow_id
+        if not workflow_id:
+            return
+        self._workflow_status[workflow_id] = "失敗"
+        try:
+            self._state.mark_workflow_instance_finished(workflow_id, 1)
+        except AttributeError:
+            pass
+        self._progress_widget.set_plan(
+            self._workflow_plan,
+            self._workflow_status,
+            self._workflow_step_status,
+            self._workflow_subtask_status,
+        )
+
     def _mirror_plan_to_state(self) -> None:
         """``_workflow_plan`` を ``state.workflows`` に pending 事前登録する (Q9=a)。
 
@@ -596,6 +667,7 @@ class WorkbenchPage(QWidget):
     def _start_next_in_queue(self) -> None:
         if self._queue_index >= len(self._args_queue):
             self._is_running = False
+            self._clear_explicit_argv_queue()
             self._state.mark_all_done()
             self.freeze_progress_elapsed()
             self._update_ui()
@@ -603,7 +675,10 @@ class WorkbenchPage(QWidget):
             if not self._return_codes:
                 self.process_finished.emit(0)
                 return
-            overall_rc = 0 if all(code == 0 for code in self._return_codes) else self._return_codes[-1]
+            overall_rc = next(
+                (code for code in self._return_codes if code != 0),
+                0,
+            )
             self.process_finished.emit(overall_rc)
             return
 
@@ -656,24 +731,36 @@ class WorkbenchPage(QWidget):
             self.register_job_channel(self._current_workflow_id, self._steering_ipc_dir)
 
         try:
-            argv = args.to_argv()
+            if self._explicit_argv_queue is None:
+                argv = append_durable_identity_args(args.to_argv(), args)
+            else:
+                argv = list(self._explicit_argv_queue[self._queue_index])
+                self._explicit_argv_queue[self._queue_index].clear()
         except ValueError as e:
             wf = args.workflow or "unknown"
             self._log_pane.append_line(f"[ERROR] 引数構築失敗: workflow={wf}: {e}")
+            self._mark_current_workflow_launch_failed()
             self._return_codes.append(1)
             self._queue_index += 1
             QTimer.singleShot(0, self._start_next_in_queue)
             return
 
+        explicit_argv = self._explicit_argv_queue is not None
         try:
             proc = launch_orchestrator(argv, env_overrides=self._env_overrides)
         except OSError as e:
             wf = args.workflow or "unknown"
             self._log_pane.append_line(f"[ERROR] サブプロセス起動失敗: workflow={wf}: {e}")
+            self._mark_current_workflow_launch_failed()
             self._return_codes.append(1)
             self._queue_index += 1
             QTimer.singleShot(0, self._start_next_in_queue)
             return
+        finally:
+            if explicit_argv:
+                for index in range(len(argv)):
+                    argv[index] = ""
+                argv.clear()
 
         self._reader = SubprocessReader(proc, parent=self)
         self._reader.line_received.connect(self._on_line_received)
@@ -765,6 +852,7 @@ class WorkbenchPage(QWidget):
     def stop_orchestrator(self) -> None:
         self._stop_requested = True
         self._args_queue = self._args_queue[: self._queue_index + 1]
+        self._clear_explicit_argv_queue()
 
         # --- QA 関連の停止 (Q3=a: reject 扱い) ---
         # ① 保留中の QA キューをクリア（後続ダイアログを開かせない）
@@ -802,7 +890,9 @@ class WorkbenchPage(QWidget):
                 pass
 
         # --- サブプロセス停止 (T1 で段階的シャットダウンに強化済み) ---
-        if self._reader is not None and self._is_running:
+        if self._reader is not None and (
+            self._is_running or self._orphaned_exit_handled
+        ):
             self._reader.stop()
             self._log_pane.append_line("[INFO] 全タスク停止要求を送信しました")
         else:
@@ -933,6 +1023,10 @@ class WorkbenchPage(QWidget):
     def was_stopped_by_user(self) -> bool:
         """直近の完了がユーザー停止要求によるものかを返す。"""
         return self._stop_requested
+
+    def was_orphaned_exit(self) -> bool:
+        """Return whether process exit was handled without stream termination."""
+        return self._orphaned_exit_handled
 
     def freeze_progress_elapsed(self) -> None:
         """作業状況のジョブ全体の経過時間を終了時刻で固定する。"""
@@ -1713,6 +1807,7 @@ class WorkbenchPage(QWidget):
             return
         self._orphaned_exit_handled = True
         self._is_running = False
+        self._return_codes.append(int(returncode))
         if self._stop_requested:
             self._log_pane.append_line(
                 f"[INFO] 停止要求によりサブプロセスが終了しました (returncode={returncode})。"
@@ -1724,13 +1819,67 @@ class WorkbenchPage(QWidget):
                 "出力ストリームが終端しないため経過時間の計測を停止します。"
             )
             self._state.mark_aborted()
+            if self._current_workflow_id:
+                self._workflow_status[self._current_workflow_id] = "失敗"
+                try:
+                    self._state.mark_workflow_instance_finished(
+                        self._current_workflow_id,
+                        int(returncode),
+                    )
+                except AttributeError:
+                    pass
+                self._progress_widget.set_plan(
+                    self._workflow_plan,
+                    self._workflow_status,
+                    self._workflow_step_status,
+                    self._workflow_subtask_status,
+                )
         self.freeze_progress_elapsed()
         self._maybe_dump_console_log()
+        orphaned_reader = self._reader
+        self._reader = None
+        if orphaned_reader is not None and not self._dispose_reader(
+            orphaned_reader,
+            close_stdout=True,
+        ):
+            self._reader = orphaned_reader
+        self.process_finished.emit(int(returncode))
+
+    @staticmethod
+    def _dispose_reader(reader: object, *, close_stdout: bool = False) -> bool:
+        """Close an orphaned stream and delete a reader only after its thread exits."""
+        if close_stdout:
+            process = getattr(reader, "_proc", None)
+            stdout = getattr(process, "stdout", None)
+            close = getattr(stdout, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except (OSError, ValueError):
+                    pass
+        wait = getattr(reader, "wait", None)
+        if callable(wait):
+            try:
+                if wait(1000) is False:
+                    return False
+            except RuntimeError:
+                return False
+        delete_later = getattr(reader, "deleteLater", None)
+        if callable(delete_later):
+            try:
+                delete_later()
+            except RuntimeError:
+                return False
+        return True
 
     @Slot("qlonglong")
     def _on_process_finished(self, returncode: int) -> None:
         if self._orphaned_exit_handled:
             # FR-GUI-19: 異常終了として処理済み。遅れて届いた終端通知で二重に処理しない。
+            completed_reader = self._reader
+            self._reader = None
+            if completed_reader is not None:
+                self._dispose_reader(completed_reader)
             return
         self._return_codes.append(returncode)
         current_wf = self._current_workflow_id or "unknown"
@@ -1756,7 +1905,9 @@ class WorkbenchPage(QWidget):
             except (AttributeError, ValueError):
                 pass
         elif self._current_workflow_id:
-            self._workflow_status[self._current_workflow_id] = "完了"
+            self._workflow_status[self._current_workflow_id] = (
+                "完了" if returncode == 0 else "失敗"
+            )
             # Phase 3b (Q9=a): state へミラー (returncode で done/failed 判別)
             try:
                 self._state.mark_workflow_instance_finished(
@@ -1774,20 +1925,29 @@ class WorkbenchPage(QWidget):
 
         # QA IPC マネージャの停止・クリーンアップ
         if self._qa_ipc_manager is not None:
+            qa_ipc_manager = self._qa_ipc_manager
             try:
-                self._qa_ipc_manager.stop_and_cleanup()
+                qa_ipc_manager.stop_and_cleanup()
             except Exception as exc:
                 self._log_pane.append_line(f"[WARN] QA IPC マネージャ停止失敗: {exc}")
+            try:
+                qa_ipc_manager.deleteLater()
+            except (AttributeError, RuntimeError):
+                pass
             self._qa_ipc_manager = None
         self._current_qa_subprocess = None
 
+        completed_reader = self._reader
         self._reader = None
+        if completed_reader is not None:
+            self._dispose_reader(completed_reader)
         self._queue_index += 1
 
         # R1: fatal 検知時は残りのキューを切り捨て即終了。
         if fatal_active:
             # 既に消化済みの分（_queue_index まで）は保持し、未実行分のみ削除。
             self._args_queue = self._args_queue[: self._queue_index]
+            self._clear_explicit_argv_queue()
             self._is_running = False
             self._state.mark_all_done()
             self.freeze_progress_elapsed()
@@ -1797,6 +1957,7 @@ class WorkbenchPage(QWidget):
             return
 
         if self._stop_requested:
+            self._clear_explicit_argv_queue()
             self._is_running = False
             self._state.mark_all_done()
             self.freeze_progress_elapsed()

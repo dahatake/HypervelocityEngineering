@@ -108,9 +108,12 @@ def test_app009_swa_workflow_exists_and_uses_oidc_dynamic_token() -> None:
     text = _read(_WORKFLOWS_DIR / "azure-static-web-apps-app009.yml")
     assert "workflow_dispatch:" in text
     assert "environment: copilot" in text
-    assert "azure/login@v2" in text
+    assert "azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2" in text
     assert "az staticwebapp secrets list" in text
-    assert "Azure/static-web-apps-deploy@v1" in text
+    assert (
+        "Azure/static-web-apps-deploy@1a947af9992250f3bc2e68ad0754c0b0c11566c9 # v1"
+        in text
+    )
     assert "api_location: ''" in text
     assert "AZURE_STATIC_WEB_APPS_API_TOKEN" not in text
 

@@ -125,6 +125,77 @@ Cloud Agent Orchestrator は **DAG 実行を bash + GitHub Actions reusable work
 >
 > **Cloud parity**: ASDW-WEB と AAR は `hve/workflow_registry.py` の Step ID と Cloud reusable workflow の生成 Step を parity test で同期する。ADI は local 専用である。
 
+### 2.5 Durable resume 制御面（local standard execution）
+
+Durable resume は、ローカルの CLI / GUI / Prompt 利用面から開始した `standard` 実行について、プロセス終了後も Workflow / Step / Copilot Main session の制御状態を復元する仕組みである。Cloud Agent、Fleet mode、Cloud Session、dry-run、および legacy の `--resume-run` はこの制御面に含めない。`--resume-run` は同一 run の成功済み Step を進捗記録から除外する旧機能であり、SQLite の lease / fencing / SDK session 回復を行う durable resume とは別物である。
+
+#### 2.5.1 実装境界
+
+| 実装 | Durable resume での責務 |
+|---|---|
+| [`hve/run_state_store.py`](../hve/run_state_store.py) の `RunStateStore` | SQLite schema、状態遷移、`LeaseToken`、CAS、fencing、heartbeat を所有する。 |
+| [`hve/resume_service.py`](../hve/resume_service.py) の `ResumeService` | repository scope、永続化可能な replay 引数、候補列挙、成果物 reconciliation、承認対象 `ResumePlan` を共有実装として提供する。 |
+| [`hve/__main__.py`](../hve/__main__.py) の `_register_standard_execution()` / `_cmd_resume()` | CLI 実行の事前登録と、plan 提示・承認・再検証・lease 取得・再開子プロセス起動を行う。 |
+| [`hve/prompt_execution.py`](../hve/prompt_execution.py) の `_register_durable_execution()` / `run_plan()` | `ExecutionPlan.sha256` 承認後、複数 Workflow を `ordinal` 順で最初の子プロセスより前に一括登録する。 |
+| [`hve/orchestrator.py`](../hve/orchestrator.py) の `_open_durable_workflow_lifecycle()` / `_DurableWorkflowLifecycle` / `run_workflow()` | 新規実行の登録または親 lease の採用、Workflow / Step 遷移、heartbeat、終了時の `succeeded` / `failed` / `suspended` 確定を担う。 |
+| [`hve/orchestrator_context.py`](../hve/orchestrator_context.py) の `OrchestratorContext` | `execution_id` / `instance_id` / `expected_state_version` / recovery action / lease fencing identity を Runner まで伝播する。 |
+| [`hve/runner.py`](../hve/runner.py) の `StepRunner` | phase と SDK `session_id` を `_commit_durable_checkpoint()` で保存し、Main session の再利用または Step 再実行を行う。 |
+| [`hve/gui/page_workbench.py`](../hve/gui/page_workbench.py) と [`hve/gui/state_bridge.py`](../hve/gui/state_bridge.py) | `WorkbenchPage.start_resume()` → `build_resume_argv()` → `launch_orchestrator()` で public `resume` CLI へ委譲し、GUI 内に復旧ポリシーを複製しない。 |
+
+#### 2.5.2 永続状態と識別子
+
+`default_state_path()` は `user_state_path("hve", appauthor=False) / "state.sqlite3"` を返す。DB は repository 配下ではなく OS のユーザー状態ディレクトリに置かれ、schema version 1 の次の 3 table だけを持つ。
+
+| table | 主な内容 |
+|---|---|
+| `executions` | `execution_id`、raw path を保持しない `repo_key`、起動 surface、`launch_plan_hash`、sanitized plan |
+| `workflow_instances` | `instance_id`、`workflow_id`、`ordinal`、status、`state_version`、`current_run_id`、`attempt_no`、lease / heartbeat |
+| `step_instances` | `step_id`、record kind、status、phase / phase state、SDK `session_id`、最後の例外型 |
+
+`RunStateStore` は `journal_mode=DELETE`、`synchronous=EXTRA`、`foreign_keys=ON`、`trusted_schema=OFF` を必須とし、table・column・foreign key の完全一致と `PRAGMA quick_check` を open 時に検証する。未知 schema、余分な object、破損 DB は移行・再作成で上書きせず `DurableStateError` で fail-closed に停止する。
+
+| 識別子 | 意味 |
+|---|---|
+| `execution_id` | 1 回の論理的な起動計画。Prompt 版では順序付きの複数 Workflow をまとめる。 |
+| `instance_id` / `ordinal` | execution 内の Workflow instance と実行順。最初の未完了 instance だけを再開対象にする。 |
+| `run_id` / `attempt_no` | 今回の実行成果・観測を識別する ID と、lease 取得ごとに増える試行番号。resume しても `execution_id` と同一概念ではない。 |
+| `state_version` | Workflow / Step checkpoint ごとに増える optimistic CAS version。承認後に状態が変わった plan を拒否する。 |
+| `repo_key` | `compute_repo_key()` が canonical repository root を SHA-256 化した scope。raw repository path は保存しない。 |
+| `LeaseToken.owner` / `LeaseToken.generation` | 現 owner と takeover 世代を表す fencing identity。古い process の状態更新を拒否する。 |
+
+#### 2.5.3 登録・計画・承認
+
+1. 通常 CLI は `_register_standard_execution()`、Prompt 版は `_register_durable_execution()` で、外部処理を開始する前に ordered descriptor を `ResumeService.register_execution()` へ渡す。直接 `run_workflow()` を呼ぶ対応経路も `_open_durable_workflow_lifecycle()` で同じ登録契約を使う。
+2. `ResumeService.sanitize_argv()` は固定 allowlist の識別子・数値・enum・boolean だけを保存する。自由記述、任意 path、endpoint、credential、MCP/tool payload は値を保存せず `missing_replay_keys` の key 名だけを残し、1 回の resume 入力として再供給させる。
+3. `ResumeService.list_candidates()` は現在の `repo_key` に属する未完了 execution だけを返す。`ResumeService.build_plan()` は最初の未完了 `ordinal` を選び、HEAD drift、active owner、失敗・非 terminal 状態、replay 値不足、成果物不足、SDK Main checkpoint 不足を risk として確定する。
+4. `reconcile_succeeded_steps()` は保存済み `succeeded` を無条件に信用しない。宣言済み `output_paths` が欠けた Step と、その Step に依存する下流 Step を実行対象へ戻す。
+5. `ResumePlan.resume_plan_hash` は execution / instance の state snapshot、action、現在 HEAD、risk、safe argv、再入力値の **hash** から canonical JSON で計算する。`_cmd_resume()` は plan を提示した後に再構築して hash を照合し、`ResumeService.acquire()` は `expected_state_version` を再照合する。どちらかが変われば stale plan として子プロセスを起動しない。
+6. 親 `_cmd_resume()` は `ResumeService.acquire()` で lease を取得し、`execution_id` / `instance_id` / `expected_state_version` / `recovery_action` / lease owner・generation を hidden 引数で子 `orchestrate` へ渡す。子は lease を再取得せず `_open_durable_workflow_lifecycle()` で同じ fencing identity を採用する。子の終了コードが 0 でも DB status が `succeeded` でなければ成功扱いにしない。
+
+Prompt 版の `ExecutionPlan.sha256` は「自然言語 request から組み立てた起動計画」の承認 hash、`ResumePlan.resume_plan_hash` は「その時点の durable state から組み立てた復旧計画」の承認 hash であり、用途を混同しない。
+
+#### 2.5.4 Lease、CAS、heartbeat
+
+- `RunStateStore` の書き込みは `BEGIN IMMEDIATE` を使い、状態遷移は `state_version`、lease 更新は owner / generation を条件にする。active lease の二重取得は禁止し、期限切れ lease の takeover にも明示的な recovery action が必要である。
+- `HEARTBEAT_INTERVAL_SECONDS = 5.0`、`LEASE_TTL_SECONDS = 20.0` である。`HeartbeatWorker` は専用 thread・専用 `RunStateStore` connection から heartbeat と lease expiry を更新する。hard-kill acceptance で確認する 10 秒以内の heartbeat freshness は観測基準であり、takeover を許す 20 秒の lease TTL とは別である。
+- `_execute_with_durable_heartbeat()` は `DAGExecutor.execute()` と heartbeat failure signal を race させる。heartbeat が fenced、DB が利用不能、または worker が失敗した場合は executor を停止し、`run_workflow()` は可能な限り Workflow を `suspended` に遷移させる。通常例外は `failed`、正常終了は結果に対応する terminal status へ遷移する。
+- `_DurableWorkflowLifecycle.attach_runner()` は `StepRunner` が checkpoint ごとに受け取る新しい `state_version` を heartbeat 側の token にも同期する。これにより古い version の heartbeat が正しい実行を自己 fencing しない。
+
+#### 2.5.5 Main session 回復
+
+| action | Runner の動作 |
+|---|---|
+| `reuse-session` | `StepRunner._load_durable_reuse_session_id()` が選択 Step の `phase="main"` checkpoint だけを受理する。`_commit_durable_checkpoint()` 後に `client.resume_session(session_id, continue_pending_work=False)` を呼び、`session.resume` event を期限内に必須とする。`already_in_use` または `session_was_active` は競合として拒否する。 |
+| `restart-step` | 保存済み SDK session ID を使わず、現在 attempt の決定論的な新規 ID で `_create_main_session()` を通る。成果物 reconciliation で戻された Step もこの実行対象に含まれる。 |
+
+`reuse-session` は元の自由記述 Prompt を state DB から再構築しない。[`runtime/runner/resume-recovery.prompt.md`](../.github/prompts/runtime/runner/resume-recovery.prompt.md) を `_RUNNER_RESUME_RECOVERY_PROMPT_PATH` から読み、復旧専用の新しい turn として `_send_and_wait_with_model_call_failure_guard()` へ渡す。resume RPC の直前と送信直前に `_commit_durable_checkpoint()` を行う。`resume_session()`、`session.resume` event、active-session 検査のいずれかが失敗しても `create_session()` へ暗黙 fallback しない。
+
+#### 2.5.6 Security と保証の境界
+
+- 永続化境界は fixed allowlist であり、secret token / credential assignment、URL、absolute path、JSON-like payload、自由記述 Prompt を `reject_sensitive_persisted_text()` と `sanitize_argv()` で拒否または key-only 化する。再入力値は `ResumePlan` では hash のみを承認対象にし、DB へ保存しない。
+- Lease / CAS / fencing が保証するのは **HVE control state の単一 owner と stale writer 排除**である。GitHub、Azure、MCP Server、ファイルシステム等で既に完了した外部副作用を exactly-once に変換するものではない。再開可能な Step は外部 resource の照合と冪等操作を自身の契約として持つ必要がある。
+- GUI は `ResumeService` の判断を複製せず、`WorkbenchPage.start_resume()` から public `_cmd_resume()` を起動する。CLI / GUI / Prompt のどの入口でも、最終的な plan、reconciliation、lease、SDK 回復ポリシーは同じ実装を通る。
+
 ---
 
 ## 3. HVE Cloud Agent Orchestrator
@@ -557,7 +628,75 @@ grep -nE '"--workflow"|"--max-parallel"|"--auto-qa"|"--workiq"|"--company-name"|
 
 Prompt 版は Cloud Agent Orchestrator へ委譲しない。GitHub.com 上の Issue / Actions から実行する場合は §3 の Cloud 経路を使う。
 
-### 6.3 タイムアウトとリトライ
+### 6.3 Durable resume シーケンス
+
+GUI は `WorkbenchPage` の既存プロセスライフサイクルから public `resume` CLI を起動する。CLI から直接再開する場合は `_cmd_resume()` から始まる。次の図の participant、message、condition は実在する class・function・method・field・event・literal だけで構成している。
+
+```mermaid
+sequenceDiagram
+  participant WP as WorkbenchPage
+  participant BRA as build_resume_argv()
+  participant LO as launch_orchestrator()
+  participant CR as _cmd_resume()
+  participant RS as ResumeService
+  participant DB as RunStateStore
+  participant RW as run_workflow()
+  participant OD as _open_durable_workflow_lifecycle()
+  participant DL as _DurableWorkflowLifecycle
+  participant HW as HeartbeatWorker
+  participant WB as _run_workflow_body()
+  participant DH as _execute_with_durable_heartbeat()
+  participant DE as DAGExecutor
+  participant SR as StepRunner
+  participant CC as CopilotClient
+
+  opt WorkbenchPage.start_resume()
+    WP->>BRA: build_resume_argv()
+    WP->>WP: start_orchestrators()
+    WP->>WP: _start_next_in_queue()
+    WP->>LO: launch_orchestrator()
+    LO->>CR: subprocess.Popen()
+  end
+  CR->>RS: build_plan()
+  CR->>RS: acquire()
+  RS->>DB: acquire_lease()
+  CR->>RW: subprocess.run()
+  RW->>OD: _open_durable_workflow_lifecycle()
+  OD->>DB: get_execution()
+  OD->>DB: get_instance()
+  OD-->>RW: _DurableWorkflowLifecycle
+  RW->>DL: transition_workflow("running")
+  RW->>DL: start_heartbeat()
+  DL->>HW: start()
+  HW->>DB: heartbeat()
+  RW->>WB: _run_workflow_body()
+  WB->>DH: _execute_with_durable_heartbeat()
+  DH->>DE: execute()
+  DE->>SR: run_step()
+  SR->>SR: _load_durable_reuse_session_id()
+  alt recovery_action == "reuse-session"
+    SR->>SR: load_prompt_file(_RUNNER_RESUME_RECOVERY_PROMPT_PATH)
+    SR->>SR: _commit_durable_checkpoint()
+    SR->>CC: resume_session(continue_pending_work=False)
+    CC-->>SR: session.resume
+    SR->>SR: _commit_durable_checkpoint()
+    SR->>SR: _send_and_wait_with_model_call_failure_guard()
+  else recovery_action == "restart-step"
+    SR->>SR: _commit_durable_checkpoint()
+    SR->>SR: _create_main_session()
+    SR->>SR: _send_and_wait_with_model_call_failure_guard()
+  end
+  DE-->>DH: execute()
+  DH-->>WB: execute()
+  WB-->>RW: _run_workflow_body()
+  RW->>DL: transition_workflow("succeeded")
+  RW->>DL: stop_heartbeat()
+  CR->>DB: release_lease()
+```
+
+`_cmd_resume()` が取得した lease は子 `run_workflow()` が同じ owner / generation で採用し、親が子終了後に `release_lease()` する。`reuse-session` 分岐には `_create_main_session()` への fallback が存在しないため、保存済み Main session を安全に再開できない場合は Step を新規 session で黙って続行せず失敗する。
+
+### 6.4 タイムアウトとリトライ
 
 | 種別 | 既定値 | 環境変数 / CLI |
 |---|---|---|
@@ -776,10 +915,11 @@ GUI の Copilot ドックは 2 タブ構成であり、いずれも「対話 UI 
 
 ### 9.5 SDK アップグレード
 
-1. `pyproject.toml` の `github-copilot-sdk` バージョン指定を更新
-2. `pip install -e .` で再インストール
-3. 公開 API（`CopilotClient` / `CopilotSession` / `PermissionHandler` / `SubprocessConfig` / `ExternalServerConfig`）の互換性は SDK 側の CHANGELOG を参照
-4. 互換性が壊れている場合のみ `hve/runner.py` のラッパー部を修正
+1. 既定経路は `hve/setup-hve.sh` / `hve/setup-hve.ps1` の通常実行が `github-copilot-sdk` を `--upgrade --no-deps` で最新版へ自動更新します（手動での `pyproject.toml` 更新は不要）。
+2. 版を固定してチームで揃えたい場合だけ `--upgrade-sdk` / `-UpgradeSdk` を付けて実行し、`hve/copilot-sdk.lock` の pin 行と Copilot CLI ランタイム記録行を書き換えます。差分をレビューしてコミットしてください。
+3. `pyproject.toml` の `github-copilot-sdk` 下限指定は API 互換の床であり、導入版の情報源ではありません。
+4. 公開 API（`CopilotClient` / `CopilotSession` / `PermissionHandler` / `SubprocessConfig` / `ExternalServerConfig`）の互換性は SDK 側の CHANGELOG を参照してください。
+5. 互換性が壊れている場合のみ `hve/runner.py` のラッパー部を修正します。
 
 ---
 

@@ -212,6 +212,17 @@ orchestrate_cli_dest_aliases:
   no_mdq_watch: mdq_watch
   no_cq_watch: cq_watch
 
+# (d) internal: controller が child `orchestrate` へ渡す非公開 dest。
+#     GUI / Prompt / Issue Form の設定面へ露出せず、環境変数にも昇格しない。
+orchestrate_cli_internal_dests:
+  - _execution_id
+  - _instance_id
+  - _expected_state_version
+  - _recovery_action
+  - _lease_owner
+  - _lease_generation
+  - _unattended
+
 # (e) excluded: 意図的に面固有とする CLI dest。値は除外の根拠。
 local_surface_excluded_cli_dests:
   approval_gates: "FR-CLI-87 の対話専用ゲート。非対話面では確認を出さない。"

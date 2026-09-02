@@ -145,7 +145,7 @@ class TestRunWorkflowWiring:
     def test_statusline_and_summary_are_wired(self) -> None:
         import inspect
 
-        source = inspect.getsource(orch.run_workflow)
+        source = inspect.getsource(orch._run_workflow_body)
         assert "_attach_runtime_statusline(" in source
         assert "_emit_runtime_summary(" in source
         assert "_status_line.stop()" in source

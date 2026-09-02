@@ -24,7 +24,7 @@ HVE CLI Orchestrator（`hve orchestrate`）実行中は、バックグラウン�
 
 - Cloud runner 上では作業ツリーが揮発し、索引ファイル `.mdq/index.sqlite` は gitignore 済でセッション間で共有されない。
 - **Cloud Agent セッションでは、毎回 `python -m mdq index` を自身で実行**してから `search` / `get` を使う運用とする（増分キャッシュは効かない）。
-- 該当ワークフロー: `.github/workflows/mdq-index-reusable.yml`, `.github/workflows/test-hve-python.yml`
+- CI の索引スモークテストは `.github/workflows/test-hve-python.yml` の `mdq-smoke` job が直接実行する。GitHub Actions runner で生成した索引は独立した Cloud Agent セッションへ引き継げないため、索引構築専用の reusable workflow は使用しない。
 
 ## 4. 利用統計ログ（HVE 固有）
 

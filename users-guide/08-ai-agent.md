@@ -685,10 +685,9 @@ Step 1〜3 で完成した設計書（アプリケーション定義・アーキ
 
 ### 事後 HITL フロー（リトライ上限超過後）
 
-Copilot がリトライ上限を超過して `aag:blocked` / `aagd:blocked` が付与された場合、以下の自動エスカレーションフローが起動します:
+Copilot がリトライ上限を超過して `aag:blocked` / `aagd:blocked` が付与された場合、必要に応じて以下の手動エスカレーションフローを実行します:
 
-1. **自動エスカレーション（SLA: 24 時間）**: `aag:blocked` / `aagd:blocked` 付与後、Issue の最終更新時刻から 24 時間経過すると
-   `auto-blocked-to-human-required.yml` が `aag:human-required` / `aagd:human-required` を自動付与し、エスカレーションコメントを投稿します。
+1. **エスカレーション（既定 SLA: 24 時間）**: Actions タブから `auto-blocked-to-human-required.yml` を明示実行します。Workflow は Issue の最終更新時刻から SLA 時間以上経過した対象へ `aag:human-required` / `aagd:human-required` を付与し、エスカレーションコメントを投稿します。
 2. **人間が調査**: `aag:human-investigating` / `aagd:human-investigating` ラベルを手動付与して調査中を明示してください。
 3. **解決後に自動復帰**: `aag:human-resolved` / `aagd:human-resolved` を手動付与すると `auto-human-resolved-to-ready.yml` が起動し、
    `:blocked` / `:human-required` / `:human-resolved` を削除して `aag:ready` / `aagd:ready` を自動付与します。

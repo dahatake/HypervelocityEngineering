@@ -79,7 +79,10 @@ def qapp():
 
 
 def _dispose_dialog(widget, qapp) -> None:
+    workers = list(widget._workers)
     widget.shutdown(0)
+    for worker in workers:
+        worker.deleteLater()
     widget.close()
     widget.deleteLater()
     QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
@@ -505,11 +508,22 @@ class TestDialogSubmission:
 
 
 class TestPanelLaunchContract:
-    @staticmethod
-    def _loaded_panel(qapp, monkeypatch, *, head: dict[str, Any]):
+    @pytest.fixture(autouse=True)
+    def _dispose_loaded_panels(self, qapp):
+        self._loaded_panels: list[Any] = []
+        yield
+        for panel in reversed(self._loaded_panels):
+            panel.shutdown(0)
+            panel.close()
+            panel.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        qapp.processEvents()
+
+    def _loaded_panel(self, qapp, monkeypatch, *, head: dict[str, Any]):
         from hve.gui import github_pr_panel as module
 
         widget = module.GitHubPullRequestPanel()
+        self._loaded_panels.append(widget)
         widget.set_repo("o/r")
         monkeypatch.setattr(widget, "_load_files", lambda _number: None)
         monkeypatch.setattr(widget, "_load_comments", lambda _number: None)

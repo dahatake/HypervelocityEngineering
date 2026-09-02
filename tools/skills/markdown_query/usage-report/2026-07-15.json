@@ -1,0 +1,199 @@
+{
+  "schema_version": 2,
+  "window_days": 7,
+  "since_iso": "2026-07-08T01:38:07+00:00",
+  "record_count": 205,
+  "E1_index_size": {
+    "files": 351,
+    "chunks": 4058,
+    "note": null
+  },
+  "E2_index_freshness": {
+    "age_seconds": 0,
+    "db_mtime": "2026-07-15T10:38:07",
+    "note": "naive ISO mtime をローカル TZ として解釈。TZ 変更直後は誤差を含み得る。"
+  },
+  "E5_pruned_chunks_total": {
+    "value": 2951,
+    "window_records": 4,
+    "note": null
+  },
+  "A1_command_counts": {
+    "stats": 39,
+    "search": 162,
+    "index": 4
+  },
+  "A2_calls_per_step": {
+    "value": 3.7,
+    "total_calls": 185,
+    "distinct_steps": 50,
+    "note": null
+  },
+  "D1_donot_use_for_violations": 0,
+  "A4_skill_routing_listed": {
+    "value": true,
+    "note": null
+  },
+  "B1_context_reduction_ratio": {
+    "value": 0.9521,
+    "snippet_chars": 342961,
+    "source_file_chars": 7162792,
+    "note": null
+  },
+  "B2_arg_averages": {
+    "top_k_avg": 9.21,
+    "max_tokens_avg": 2272.22,
+    "snippet_radius_avg": 2.0,
+    "sample_size": 162
+  },
+  "B3_get_search_ratio": {
+    "value": 0.0,
+    "get_count": 0,
+    "search_count": 162,
+    "note": null
+  },
+  "C1_zero_hit_rate": {
+    "value": 0.1852,
+    "zero_hit_count": 30,
+    "search_count": 162,
+    "note": null
+  },
+  "C2_score_gap_avg": {
+    "value": 2.6999,
+    "sample_size": 123,
+    "note": null
+  },
+  "C3_expansion_flag_usage_rate": {
+    "value": 0.0062,
+    "expansion_count": 1,
+    "search_count": 162,
+    "note": null
+  },
+  "F1_search_elapsed_ms": {
+    "p50": 229.5,
+    "p95": 1113.7499999999995,
+    "sample_size": 162,
+    "note": null
+  },
+  "F2_index_delta_update_ratio": {
+    "value": 0.2481,
+    "sample_size": 4,
+    "note": null
+  },
+  "D3_typical_query_rate": {
+    "value": null,
+    "matched_count": 0,
+    "total_search": 0,
+    "per_workflow": {
+      "aad-web": {
+        "value": null,
+        "matched_count": 0,
+        "total_search": 0,
+        "per_pattern": [
+          {
+            "id": "screen_def",
+            "label": "画面定義",
+            "count": 0
+          },
+          {
+            "id": "service_def",
+            "label": "サービス定義",
+            "count": 0
+          },
+          {
+            "id": "test_spec",
+            "label": "TDD テスト仕様",
+            "count": 0
+          },
+          {
+            "id": "app_id",
+            "label": "APP-ID",
+            "count": 0
+          },
+          {
+            "id": "service_catalog",
+            "label": "サービスカタログ",
+            "count": 0
+          },
+          {
+            "id": "data_model",
+            "label": "データモデル",
+            "count": 0
+          }
+        ],
+        "note": "aad-web の search レコードなし"
+      },
+      "asdw-web": {
+        "value": null,
+        "matched_count": 0,
+        "total_search": 0,
+        "per_pattern": [],
+        "note": "template/typical-queries.json に asdw-web エントリ未定義"
+      },
+      "adfd": {
+        "value": null,
+        "matched_count": 0,
+        "total_search": 0,
+        "per_pattern": [],
+        "note": "template/typical-queries.json に adfd エントリ未定義"
+      },
+      "adfdv": {
+        "value": null,
+        "matched_count": 0,
+        "total_search": 0,
+        "per_pattern": [],
+        "note": "template/typical-queries.json に adfdv エントリ未定義"
+      }
+    },
+    "note": "patterns 定義済み workflow の search レコードなし"
+  },
+  "H1_auto_strategy_distribution": {
+    "total_auto_search": 162,
+    "fallback_count": 130,
+    "fallback_rate": 0.8025,
+    "by_reason": {
+      "concept_overview": {
+        "count": 13,
+        "rate": 0.0802
+      },
+      "default": {
+        "count": 10,
+        "rate": 0.0617
+      },
+      "exact_match": {
+        "count": 20,
+        "rate": 0.1235
+      },
+      "id_lookup": {
+        "count": 10,
+        "rate": 0.0617
+      },
+      "narrative_query": {
+        "count": 107,
+        "rate": 0.6605
+      },
+      "short_proper_noun": {
+        "count": 2,
+        "rate": 0.0123
+      }
+    },
+    "by_effective_strategy": {
+      "heading": {
+        "count": 162,
+        "rate": 1.0
+      }
+    },
+    "note": null
+  },
+  "H2_parent_expansion_rate": {
+    "total_parent_requests": 8,
+    "request_expanded_rate": 1.0,
+    "hit_expanded_rate": 0.9785,
+    "expanded_hits": 91,
+    "total_hits_in_parent_requests": 93,
+    "note": null
+  },
+  "generated_at": "2026-07-15T10:38:07",
+  "lang": "ja-jp",
+  "strategy": "heading"
+}

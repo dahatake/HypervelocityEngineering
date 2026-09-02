@@ -26,7 +26,7 @@ def qapp():
 def main_window(qapp, monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     from hve.gui.main_window import MainWindow
-    win = MainWindow()
+    win = MainWindow(repo_root=tmp_path)
     yield win
     win.close()
     win.deleteLater()

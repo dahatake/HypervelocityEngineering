@@ -28,6 +28,14 @@ from pathlib import Path
 
 import pytest
 
+# PySide installs a Shiboken import hook that introspects imported modules.
+# If Pydantic's lazy ``BaseModel`` export is first resolved after that hook and
+# after the Copilot SDK has imported Pydantic partially, the hook recursively
+# re-enters ``pydantic._internal._validators``.  Complete the lazy exports before
+# pytest collects any Qt-bearing module so collection order cannot corrupt the
+# shared module state.
+from pydantic import BaseModel as _PydanticBaseModel, Field as _PydanticField  # noqa: F401,E402
+
 _HVE_RUN_CONTEXT_ENV_KEYS = ("HVE_RUN_ID", "HVE_WORK_ROOT")
 
 # HVE evidence は `work/run/<run-id>` と `tests/run/<run-id>` の両方へ出力する。

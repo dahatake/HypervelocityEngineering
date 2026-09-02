@@ -73,31 +73,42 @@ A2 は A と同じセッションの続きとして、計画を確認したあ�
 
 ### A3. multi / large と判断される明示依頼
 
-次の **複数 Workflow** を含む固定依頼を別セッションで 1 件作り、Prompt Edition controller が
-`task_scope=multi` または `context_size=large` と判断したケースを確認する。依頼文自体は具体値を含め、
-承認前後の境界だけを検証対象にする。この固定依頼で該当判定にならない場合は、Workflow / Step を
-勝手に増やさず「対象条件を再現できず未実施」と記録する。
+次の **登録済みの複数 Workflow / Step** を含む固定依頼を別セッションで 1 件作る。
+開始前に registry で、`ard=1` が `docs/company-business-recommendation.md`、`aas=1` が
+`docs/catalog/app-arch-catalog.md` をそれぞれ1件ずつ出力し、相互に異なるパスであることを確認する。
+各ファイルは存在・非空を別々に判定できるため、この依頼には
+2 つの独立して検証可能な成果物がある。したがって plan では `task_scope`、`context_size`、
+`split_decision` を表示し、2 成果物を根拠に `task_scope=multi`、その結果を根拠に
+`split_decision=SPLIT_REQUIRED` と判断したことを確認する。`context_size` は plan が算出した値を
+そのまま記録し、`large` を固定値として推測しない。この条件を作るために
+Workflow / Step を追加・変更してはならない。
 
 ```text
 HVE の Prompt 版で作業してください。
 
-- 目的: 事業候補とソフトウェアアーキテクチャ候補をまとめて設計したい
+- 目的: 事業候補とソフトウェアアーキテクチャ候補を、2 つの独立して検証可能な成果物としてまとめて設計したい
 - Workflow: ard, aas
 - Step: ard=1 / aas=1
 - パラメータ: ard.company_name=Prompt Skill Test
-- 制約: Azure へのデプロイはしない
+- 独立成果物 1: ard=1 の `docs/company-business-recommendation.md`
+- 独立成果物 2: aas=1 の `docs/catalog/app-arch-catalog.md`
+- 完了条件: 上記 2 成果物をそれぞれ個別に存在・非空で検証できること
+- 計画表示: `task-dag-planning` に従い、plan 内に `task_scope`、`context_size`、`split_decision` を表示すること
+- 制約: Azure へのデプロイはしない。Workflow / Step を追加・変更してはならない
 
 まず実行計画だけを見せてください。
 私が「実行してください」と書くまで、実行はしないでください。
+明示承認前に `hve prompt run` を起動しないでください。
 ```
 
 確認項目:
 
-1. 承認前は plan と SHA-256 の提示だけで止まり、Prompt Edition controller 自身が `docs/` `src/` `knowledge/` `qa/` を直接編集しない
-2. 計画を提示した時点で一度停止し、利用者が別ターンで「この計画で実行してください」と明示承認するまで `run` しない
-3. 承認後は Prompt Edition controller が直接 `python -m hve orchestrate ...` や手編集を始めず、**hash 付きの `python -m hve prompt run --request <path> --expected-sha256 <hash>`** に委譲する
-4. 出力の `Copilot SDK Orchestrator:` 見出しから、その `run` の子 `orchestrate` が起動したことを確認する
-5. `run` が終了コード 0 で完了し、`docs/company-business-recommendation.md` と `docs/catalog/app-arch-catalog.md` の canonical `output_paths` が空でないことを確認する
+1. plan に `task_scope`、`context_size`、`split_decision` が表示され、`task_scope=multi` と `split_decision=SPLIT_REQUIRED` を観測する
+2. 承認前は plan と SHA-256 を提示した**その turn で必ず停止**し、Prompt Edition controller 自身が `docs/` `src/` `knowledge/` `qa/` を直接編集しない。明示承認前に `hve prompt run` を起動してはならない
+3. 計画を提示した時点で一度停止し、利用者が別ターンで「この計画で実行してください」と明示承認するまで `run` しない
+4. 承認後は Prompt Edition controller が直接 `python -m hve orchestrate ...` や手編集を始めず、**hash 付きの `python -m hve prompt run --request <path> --expected-sha256 <hash>`** に委譲する
+5. 出力の `Copilot SDK Orchestrator:` 見出しから、その `run` の子 `orchestrate` が起動したことを確認する
+6. `run` が終了コード 0 で完了し、`docs/company-business-recommendation.md` と `docs/catalog/app-arch-catalog.md` の canonical `output_paths` が空でないことを確認する
 
 ### B. 曖昧な依頼（質問すること）
 

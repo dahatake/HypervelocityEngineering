@@ -24,7 +24,13 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 BUNDLE_ROOT = REPO_ROOT / "tools" / "skills" / "code_query"
 
 # Mirrors the drop list in tools/skills/_kit/kit_sync.py.
-_VENDOR_EXCLUDES = ("tests", "__pycache__", "golden-queries.json", "golden-queries-holdout.json")
+_VENDOR_EXCLUDES = (
+    "tests",
+    "__pycache__",
+    ".mypy_cache",
+    "golden-queries.json",
+    "golden-queries-holdout.json",
+)
 _SHARED_SYNC = REPO_ROOT / "tools" / "skills" / "_kit" / "kit_sync.py"
 
 

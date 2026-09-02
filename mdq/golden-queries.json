@@ -89,8 +89,8 @@
       "id": "DOC-01",
       "q": "SVC-09 ownership boundary data model",
       "group": "design-docs",
-      "paths": ["docs/catalog/data-model.md"],
-      "expected": [{"path": "docs/catalog/data-model.md", "anchor": "### 3.1 SVC-09 会員サポートサービス（APP-009所有境界）"}]
+      "paths": ["docs/catalog/data-model-service-stores.md"],
+      "expected": [{"path": "docs/catalog/data-model-service-stores.md", "anchor": "### 3.3 SVC-09 会員サポートサービス（APP-009 所有境界の詳細）"}]
     },
     {
       "id": "DOC-02",
@@ -209,7 +209,7 @@
       "q": "markdown-query 利用統計 追加指標 schema_version",
       "group": "guides",
       "paths": ["users-guide/skills-markdown-query.md"],
-      "expected": [{"path": "users-guide/skills-markdown-query.md", "anchor": "## 利用統計の追加指標"}]
+      "expected": [{"path": "users-guide/skills-markdown-query.md", "anchor": "## 8. 利用統計の追加指標 v2.0 (schema_version=2)"}]
     },
     {
       "id": "REQ-09",

@@ -10,14 +10,16 @@ on:
       # registry-check の必須化(E-09)に伴い、StepDef 側の変更でも検証する。
       - 'hve/workflow_registry.py'
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - '.github/io-contracts/**'
       - '.github/scripts/validate-io-contract.py'
       - '.github/io-contract-exceptions.yaml'
       - '.github/workflows/validate-io-contract.yml'
       - 'hve/workflow_registry.py'
+
+permissions:
+  contents: read
 
 jobs:
   validate-io-contract:

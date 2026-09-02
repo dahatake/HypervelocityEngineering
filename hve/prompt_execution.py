@@ -1,4 +1,4 @@
-"""hve.prompt_execution — Prompt 版の実行計画・plan hash・委譲実行（FR-PROMPT-01 / 03 / 04 / 05）。
+"""hve.prompt_execution — Prompt 版の実行計画・plan hash・委譲実行（FR-PROMPT-01 / 03 / 04 / 05 / 11）。
 
 本モジュールは Workflow 実行エンジンを持たない。検証済み request と保存済み GUI 設定から
 既存 `orchestrate` サブコマンドの argv を組み立て、承認済みの計画だけを子プロセスとして
@@ -17,6 +17,9 @@ from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple
 
 from .input_aliases import ResolvedAlias, normalize_alias_pairs, validate_aliases
 from .prompt_request import PromptRequest
+from .resume_service import ResumeService, WorkflowDescriptor
+from .run_state_store import DurableStateError, RunStateStore
+from .runtime_observability import make_instance_id
 from .workflow_order import sort_workflows_by_dependencies
 
 PLAN_SCHEMA_VERSION = 1
@@ -62,6 +65,14 @@ def resolve_head_commit(repo_root: "str | Path") -> str:
         return "unknown"
     out = (proc.stdout or "").strip()
     return out if proc.returncode == 0 and out else "unknown"
+
+
+def validate_resolved_head_commit(value: Any) -> str:
+    """Return a resolved HEAD value or fail closed before durable execution."""
+    checked = value.strip() if isinstance(value, str) else ""
+    if not checked or checked.casefold() == "unknown":
+        raise DurableStateError("repository HEAD commit could not be resolved")
+    return checked
 
 
 def build_execution_plan(
@@ -233,6 +244,104 @@ def _default_runner(argv: Sequence[str], **kwargs: Any) -> "subprocess.Completed
     return subprocess.run(list(argv), shell=False, check=False, **kwargs)
 
 
+def _option_values(argv: Sequence[str], flag: str) -> Tuple[str, ...]:
+    """Return explicit values for one long option without interpreting argv."""
+    values: List[str] = []
+    prefix = f"{flag}="
+    for index, token in enumerate(argv):
+        if token.startswith(prefix):
+            values.append(token[len(prefix) :])
+        elif token == flag and index + 1 < len(argv):
+            values.append(argv[index + 1])
+    return tuple(values)
+
+
+def _single_app_id(argv: Sequence[str]) -> Optional[str]:
+    """Resolve only the unambiguous single APP-ID shape accepted by orchestrate."""
+    app_ids_values = _option_values(argv, "--app-ids")
+    legacy_values = _option_values(argv, "--app-id")
+    if len(app_ids_values) > 1 or len(legacy_values) > 1:
+        return None
+
+    legacy = legacy_values[0].strip() if legacy_values else ""
+    if app_ids_values:
+        selected = [
+            value.strip()
+            for value in app_ids_values[0].split(",")
+            if value.strip()
+        ]
+        if len(selected) != 1 or (legacy and legacy != selected[0]):
+            return None
+        return selected[0]
+    return legacy or None
+
+
+def _register_durable_execution(
+    plan: ExecutionPlan,
+    repo_root: "str | Path",
+) -> Tuple[str, Tuple[str, ...]]:
+    """Register every ordered Prompt Workflow before starting the first child."""
+    with RunStateStore() as store:
+        service = ResumeService(store, repo_root)
+        descriptors: List[WorkflowDescriptor] = []
+        for ordinal, workflow in enumerate(plan.workflows):
+            safe_argv, missing_replay_keys = service.sanitize_argv(workflow.argv)
+            descriptors.append(
+                WorkflowDescriptor(
+                    instance_id=make_instance_id(
+                        workflow.workflow_id,
+                        _single_app_id(safe_argv),
+                    ),
+                    workflow_id=workflow.workflow_id,
+                    ordinal=ordinal,
+                    mode="standard",
+                    argv=safe_argv,
+                    missing_replay_keys=missing_replay_keys,
+                )
+            )
+        execution_id = service.register_execution(
+            "prompt",
+            tuple(descriptors),
+            checkpoint_head=plan.head_commit,
+        )
+    if not isinstance(execution_id, str) or not execution_id.strip():
+        raise DurableStateError("durable registration returned an invalid execution ID")
+    return execution_id, tuple(item.instance_id for item in descriptors)
+
+
+def _verify_durable_child_completion(
+    execution_id: str,
+    instance_id: str,
+) -> bool:
+    """Verify that a zero-exit child committed a successful terminal state."""
+    try:
+        with RunStateStore() as store:
+            instance = store.get_instance(execution_id, instance_id)
+    except DurableStateError:
+        return False
+    if instance is None:
+        return False
+    try:
+        status = str(instance["status"])
+    except (IndexError, KeyError, TypeError):
+        status = str(getattr(instance, "status", ""))
+    return status in {"succeeded", "skipped"}
+
+
+def _head_matches_approved_plan(
+    plan: ExecutionPlan,
+    cwd: "str | Path | None",
+) -> bool:
+    """Re-read HEAD so approval cannot outlive a pre-launch repository change."""
+    if cwd is None:
+        return True
+    try:
+        current_head = validate_resolved_head_commit(resolve_head_commit(cwd))
+    except DurableStateError:
+        return False
+    return current_head == plan.head_commit
+
+
 def run_plan(
     plan: ExecutionPlan,
     *,
@@ -241,16 +350,85 @@ def run_plan(
     cwd: Optional["str | Path"] = None,
 ) -> int:
     """計画された Workflow を順番に実行する。最初の非 0 終了コードで打ち切る。"""
+    try:
+        validate_resolved_head_commit(plan.head_commit)
+    except DurableStateError:
+        print(
+            "Prompt execution の HEAD commit を確認できません。子プロセスは起動していません。",
+            file=sys.stderr,
+        )
+        return 1
+    if not _head_matches_approved_plan(plan, cwd):
+        print(
+            "Prompt execution の HEAD が承認済み計画から変化しました。子プロセスは起動していません。",
+            file=sys.stderr,
+        )
+        return 1
     execute = runner or _default_runner
-    for wp in plan.workflows:
+    durable_identity: Optional[Tuple[str, Tuple[str, ...]]] = None
+    if not dry_run:
+        try:
+            durable_identity = _register_durable_execution(
+                plan,
+                cwd if cwd is not None else Path.cwd(),
+            )
+        except DurableStateError:
+            print(
+                "Prompt durable execution の登録に失敗しました。子プロセスは起動していません。",
+                file=sys.stderr,
+            )
+            return 1
+
+    for ordinal, wp in enumerate(plan.workflows):
+        if ordinal == 0 and not _head_matches_approved_plan(plan, cwd):
+            print(
+                "Prompt execution の HEAD が登録後に変化しました。子プロセスは起動していません。",
+                file=sys.stderr,
+            )
+            return 1
         argv = [sys.executable, "-m", "hve", *wp.argv]
         if dry_run:
             argv.append("--dry-run")
+        elif durable_identity is not None:
+            execution_id, instance_ids = durable_identity
+            argv.extend(
+                (
+                    "--execution-id",
+                    execution_id,
+                    "--instance-id",
+                    instance_ids[ordinal],
+                )
+            )
         kwargs: dict = {"shell": False}
         if cwd is not None:
             kwargs["cwd"] = str(cwd)
-        result = execute(argv, **kwargs)
-        code = int(getattr(result, "returncode", 0) or 0)
+        try:
+            result = execute(argv, **kwargs)
+        except (OSError, subprocess.SubprocessError) as exc:
+            print(
+                f"Prompt child process を起動できませんでした ({type(exc).__name__})。",
+                file=sys.stderr,
+            )
+            return 1
+        raw_code = getattr(result, "returncode", None)
+        if isinstance(raw_code, bool) or not isinstance(raw_code, int):
+            print(
+                "Prompt child process が有効な終了コードを返しませんでした。",
+                file=sys.stderr,
+            )
+            return 1
+        code = raw_code
         if code != 0:
             return code
+        if not dry_run and durable_identity is not None:
+            execution_id, instance_ids = durable_identity
+            if not _verify_durable_child_completion(
+                execution_id,
+                instance_ids[ordinal],
+            ):
+                print(
+                    "Prompt child process は成功終了しましたが、durable state が完了していません。",
+                    file=sys.stderr,
+                )
+                return 1
     return 0

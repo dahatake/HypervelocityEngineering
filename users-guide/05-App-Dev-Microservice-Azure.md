@@ -10,11 +10,8 @@
 > - full run の DataDeploy Step 1.3 は `APP-009` 単一スコープだけをサポートします。
 > - APP-009 の既存 `docs/azure/azure-services-compute.md` は Azure Container Apps / Container Apps Jobs を選定していますが、
 >   current Step 3.3 / 3.4 は Azure Functions 固定です。選定済み Compute を実装する汎用経路ではありません。
-> - Step 4.3 が必須入力とする `.github/workflows/azure-static-web-apps-app009.yml` は、現リポジトリの HEAD に存在しません。
->   また、Step 4.3 の scoped I/O contract が required とする `knowledge/D15-非機能-運用-監視-DR-仕様書.md` も存在しません。
->   したがって **現状の full run は Compute 契約不整合を解消できず、遅くとも Step 4.3 の workflow pre-flight で fail-closed** します。
->   エンドツーエンド完了可能とは扱いません。
->   本ガイドは local checkpoint と実装済み Step の実行・検証方法、およびこのブロッカーを正直に記載します。
+> - Step 4.3 は default branch に存在する `.github/workflows/azure-static-web-apps-app009.yml` を手動起動します。Resource Group 名と Static Web App 名に既定値はなく、実在確認済みの値を実行ごとに指定します。
+> - 本ガイドは local checkpoint と実装済み Step の実行・検証方法、および既知の Compute 契約差分を記載します。
 
 ## 対象読者
 
@@ -52,7 +49,7 @@ ASDW-WEB は AAS、ARD／既存要件、AAD-WEB の成果物を再生成せず�
 |---|---|---|
 | CLI | **現行 registry を実行可能** | `python -m hve orchestrate --workflow asdw-web` |
 | GUI | **現行 registry を実行可能** | `python -m hve`。Step 一覧は registry から動的取得 |
-| GitHub Actions Cloud | **実行可能**（ただし CLI / GUI と同じ Step 4.3 ブロッカーを踏みます） | `web-app-dev.yml` から Issue を作成し、dispatcher が `auto-app-dev-microservice-web-reusable.yml` を起動 |
+| GitHub Actions Cloud | **実行可能**（Step 4.3 の実Azure targetは明示入力） | `web-app-dev.yml` から Issue を作成し、dispatcher が `auto-app-dev-microservice-web-reusable.yml` を起動 |
 | SDK Cloud Session | CLI / GUI 内の任意のセッション配置 | GitHub Actions Cloud Orchestrator とは別機能。詳細は [cloud-session.md](./cloud-session.md) |
 
 Cloud では [`web-app-dev.yml`](../.github/ISSUE_TEMPLATE/web-app-dev.yml) と
@@ -103,9 +100,8 @@ python -m hve orchestrate --workflow asdw-web --app-ids APP-009 --resource-group
 ```
 
 > [!CAUTION]
-> 現在は required static input `.github/workflows/azure-static-web-apps-app009.yml` が欠落しているため、
-> Step 4.3 の workflow pre-flight で停止するのが正しい結果です。
-> このファイルを Step 4.3 自身に生成させたり、missing secret を無視して GREEN 扱いしたりしないでください。
+> Step 4.3 は repository-managed workflow を新規生成せず、default branch 上の既存ファイルを使用します。
+> `resource_group` と `static_web_app_name` を推測せず、対象subscriptionで実在確認した値を明示してください。workflow未認識、入力不足、OIDC失敗、対象SWA不存在を無視してGREEN扱いしてはいけません。
 
 GUI は `python -m hve` から **Web App Dev & Deploy (ASDW-WEB)**、APP-ID、Resource Group、Step を選びます。
 full run では APP-ID を `APP-009` 1件にしてください。Step 1.3 は runner の pre-session gate で他 APP-ID を拒否します。

@@ -8,7 +8,9 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -16,7 +18,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
+from hve.gui.main_window import MainWindow  # noqa: E402
 from hve.gui.page_workbench import WorkbenchPage  # noqa: E402
+from hve.gui.status_kind import StatusKind  # noqa: E402
 from hve.gui.workbench_state import WorkflowInstanceSeed  # noqa: E402
 
 
@@ -25,6 +29,9 @@ def _ensure_app() -> QApplication:
     if app is None:
         app = QApplication(sys.argv[:1])
     return app
+
+
+_APP = _ensure_app()
 
 
 class _Clock:
@@ -39,7 +46,7 @@ class _Clock:
 
 class _ProcessExitTestBase(unittest.TestCase):
     def setUp(self) -> None:
-        _ensure_app()
+        self.app = _APP
         self.page = WorkbenchPage()
         self.page._progress_widget = MagicMock()
         self.logged: list[str] = []
@@ -49,6 +56,11 @@ class _ProcessExitTestBase(unittest.TestCase):
         reader._proc = self.proc
         self.page._reader = reader
         self.page._is_running = True
+
+    def tearDown(self) -> None:
+        self.page._update_timer.stop()
+        self.page.deleteLater()
+        self.app.processEvents()
 
     def _advance(self, clock: _Clock, *offsets: float) -> None:
         """指定オフセットごとに死活チェックを 1 回ずつ実行する。"""
@@ -144,6 +156,26 @@ class TestOrphanedExitDetection(_ProcessExitTestBase):
         assert step is not None
         self.assertEqual(step.status, "running")
 
+    def test_orphaned_exit_marks_the_workflow_failed(self) -> None:
+        self.page._current_workflow_id = "wf-a"
+        self.page._workflow_status = {"wf-a": "実行中"}
+        self.page._state.prepopulate_workflow_instances(
+            [
+                WorkflowInstanceSeed(
+                    instance_id="wf-a",
+                    workflow_id="wf-a",
+                    label="WF-A",
+                    app_id=None,
+                    steps=[("1", "T1")],
+                )
+            ]
+        )
+
+        self._trigger_orphaned_exit(returncode=3)
+
+        self.assertEqual(self.page._workflow_status["wf-a"], "失敗")
+        self.assertEqual(self.page._state.workflows["wf-a"].status, "failed")
+
     def test_late_process_finished_is_ignored_after_orphaned_exit(self) -> None:
         """遅れて到着したストリーム終端で終了処理を二重実行しない。"""
         self._trigger_orphaned_exit()
@@ -166,6 +198,26 @@ class TestOrphanedExitDetection(_ProcessExitTestBase):
 
         self.page._maybe_dump_console_log.assert_called_once_with()
 
+    def test_orphaned_exit_notifies_the_parent_once(self) -> None:
+        completed: list[int] = []
+        self.page.process_finished.connect(completed.append)
+
+        self._trigger_orphaned_exit(returncode=3)
+        self.page._check_subprocess_liveness()
+
+        self.assertEqual(completed, [3])
+
+    def test_cleanup_after_orphaned_exit_stops_the_lingering_reader(self) -> None:
+        reader = self.page._reader
+        assert reader is not None
+        reader.wait.return_value = True
+        self._trigger_orphaned_exit(returncode=3)
+
+        reader._proc.stdout.close.assert_called_once_with()
+        reader.wait.assert_called_once_with(1000)
+        reader.deleteLater.assert_called_once_with()
+        self.assertIsNone(self.page._reader)
+
     def test_user_requested_stop_is_not_recorded_as_abnormal(self) -> None:
         """停止要求後の終了は停止するが、異常終了として記録しない。"""
         self.page._stop_requested = True
@@ -186,6 +238,110 @@ class TestOrphanedExitDetection(_ProcessExitTestBase):
 
         self.page._progress_widget.freeze_elapsed.assert_not_called()
         self.assertEqual(self.page._queue_index, 1)
+
+    def test_nonzero_exit_is_displayed_as_failed(self) -> None:
+        self.page._args_queue = [MagicMock()]
+        self.page._current_workflow_id = "wf-a"
+        self.page._workflow_status = {"wf-a": "実行中"}
+
+        self.page._on_process_finished(7)
+
+        self.assertEqual(self.page._workflow_status["wf-a"], "失敗")
+
+    def test_completed_reader_and_qa_manager_are_scheduled_for_deletion(self) -> None:
+        reader = self.page._reader
+        assert reader is not None
+        manager = MagicMock()
+        self.page._qa_ipc_manager = manager
+        self.page._args_queue = [MagicMock()]
+
+        self.page._on_process_finished(0)
+
+        reader.wait.assert_called_once_with(1000)
+        reader.deleteLater.assert_called_once_with()
+        manager.stop_and_cleanup.assert_called_once_with()
+        manager.deleteLater.assert_called_once_with()
+
+
+class TestQueueCompletion(_ProcessExitTestBase):
+    def test_overall_returncode_preserves_an_earlier_failure(self) -> None:
+        completed: list[int] = []
+        self.page.process_finished.connect(completed.append)
+        self.page._args_queue = [MagicMock(), MagicMock()]
+        self.page._queue_index = 2
+        self.page._return_codes = [7, 0]
+
+        self.page._start_next_in_queue()
+
+        self.assertEqual(completed, [7])
+
+    def test_argument_build_failure_marks_workflow_failed(self) -> None:
+        self.page._is_running = False
+        self.page._reader = None
+        completed: list[int] = []
+        self.page.process_finished.connect(completed.append)
+        with tempfile.TemporaryDirectory() as raw:
+            args = MagicMock()
+            args.workflow = "wf-a"
+            args.repo_root = Path(raw)
+            args.model = None
+            args.stop_on_fatal = True
+            args.to_argv.side_effect = ValueError("injected argv failure")
+            self.page.start_orchestrators(
+                [args],
+                workflow_plan=[
+                    {"workflow_id": "wf-a", "workflow_name": "WF-A", "steps": []}
+                ],
+            )
+            self.app.processEvents()
+
+        self.assertEqual(self.page._workflow_status["wf-a"], "失敗")
+        self.assertEqual(completed, [1])
+
+    def test_process_launch_failure_marks_workflow_failed(self) -> None:
+        self.page._is_running = False
+        self.page._reader = None
+        completed: list[int] = []
+        self.page.process_finished.connect(completed.append)
+        with tempfile.TemporaryDirectory() as raw:
+            args = MagicMock()
+            args.workflow = "wf-a"
+            args.repo_root = Path(raw)
+            args.model = None
+            args.stop_on_fatal = True
+            args.to_argv.return_value = ["orchestrate", "--workflow", "wf-a"]
+            with patch(
+                "hve.gui.page_workbench.launch_orchestrator",
+                side_effect=OSError("injected launch failure"),
+            ):
+                self.page.start_orchestrators(
+                    [args],
+                    workflow_plan=[
+                        {"workflow_id": "wf-a", "workflow_name": "WF-A", "steps": []}
+                    ],
+                )
+                self.app.processEvents()
+
+        self.assertEqual(self.page._workflow_status["wf-a"], "失敗")
+        self.assertEqual(completed, [1])
+
+
+class TestMainWindowOrphanNotification(unittest.TestCase):
+    def test_orphaned_exit_is_not_reported_as_all_tasks_completed(self) -> None:
+        window = MagicMock()
+        window.tr = lambda text: text
+        window._page_workbench.was_stopped_by_user.return_value = False
+        window._page_workbench.was_fatal.return_value = False
+        window._page_workbench.was_orphaned_exit.return_value = True
+
+        MainWindow._on_process_finished(window, 7)
+
+        window._set_status.assert_called_once()
+        status_kind, message = window._set_status.call_args.args
+        self.assertEqual(status_kind, StatusKind.ERROR)
+        self.assertIn("異常終了", message)
+        self.assertNotIn("全てのタスク", message)
+        window._show_completion_popup.assert_not_called()
 
 
 class TestOrphanedExitStateReset(_ProcessExitTestBase):

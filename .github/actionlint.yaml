@@ -1,0 +1,13 @@
+# actionlint v1.7.12 predates GitHub Actions concurrency.queue support.
+# Keep these ignores scoped to the workflows that use the documented queue key.
+self-hosted-runner:
+  labels:
+    - aca
+
+paths:
+  .github/workflows/auto-ai-agent-design-reusable.yml:
+    ignore:
+      - 'unexpected key "queue" for "concurrency" section'
+  .github/workflows/auto-ai-agent-dev-reusable.yml:
+    ignore:
+      - 'unexpected key "queue" for "concurrency" section'

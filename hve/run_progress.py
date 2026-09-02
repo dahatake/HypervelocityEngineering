@@ -1,8 +1,7 @@
-"""FR-STATE-04: Workflow 進捗の run スコープ保存。
+"""FR-CLI-86: Legacy Workflow進捗の明示的なrun/workflowスコープ読取。
 
-§5.6 が全廃した SDK セッションの復元は行わない。保存するのは「どの Step が
-成功したか」という HVE 自身が所有する進捗だけで、再実行時は未完了 Step を
-新しいセッションで実行する。
+新しいdurable executionの列挙・importには使用しない。`--resume-run`で利用者が
+明示した既存JSONLだけを読み、同じrun IDでも別WorkflowのStepを混在させない。
 """
 
 from __future__ import annotations
@@ -49,15 +48,20 @@ def record_step(
         return
 
 
-def completed_steps(run_id: str, *, path: _PathLike = None) -> Optional[frozenset]:
-    """成功した step_id の集合。当該 run の記録が 1 件も無い場合は ``None``。"""
+def completed_steps(
+    run_id: str,
+    workflow_id: str,
+    *,
+    path: _PathLike = None,
+) -> Optional[frozenset[str]]:
+    """当該legacy run/Workflowで成功したStep集合。記録なしは``None``。"""
     try:
         raw = _resolve(path).read_text(encoding="utf-8")
     except OSError:
         return None
 
     found = False
-    succeeded: set = set()
+    succeeded: set[str] = set()
     for line in raw.splitlines():
         if not line.strip():
             continue
@@ -65,7 +69,11 @@ def completed_steps(run_id: str, *, path: _PathLike = None) -> Optional[frozense
             record = json.loads(line)
         except ValueError:
             continue
-        if not isinstance(record, dict) or record.get("run_id") != run_id:
+        if (
+            not isinstance(record, dict)
+            or record.get("run_id") != run_id
+            or record.get("workflow_id") != workflow_id
+        ):
             continue
         found = True
         step_id = record.get("step_id")

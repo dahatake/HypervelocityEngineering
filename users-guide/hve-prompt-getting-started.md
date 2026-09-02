@@ -12,6 +12,7 @@
 - [Step 2. 日本語の依頼文を貼り付ける](#step-2-日本語の依頼文を貼り付ける)
 - [Step 3. 提示された計画を読む（書き込みなし）](#step-3-提示された計画を読む書き込みなし)
 - [Step 4.「実行してください」と伝える](#step-4実行してくださいと伝える)
+- [中断した標準ローカル実行を自然言語で再開する](#中断した標準ローカル実行を自然言語で再開する)
 - [承認後の完全実行範囲](#承認後の完全実行範囲)
 - [参考: 内部で実行されるコマンド](#参考-内部で実行されるコマンド)
 - [うまくいかないとき](#うまくいかないとき)
@@ -149,6 +150,96 @@ Copilot が実行計画（plan）を提示します。**あなたは何も入力
 - 「いいね」「たぶん大丈夫」のような曖昧な返事は承認として扱われず、Copilot が確認し直します
 - 依頼文や設定、HEAD が変わって計画が変わった → 「stale」として実行されません。Copilot が計画を作り直して再提示します
 - 複数 Workflow のうち 1 つが失敗した → 後続の Workflow は開始しません。成功済み Workflow は自動で取り消されません
+
+---
+
+## 中断した標準ローカル実行を自然言語で再開する
+
+標準ローカル実行が中断した場合も、Prompt 版から公開 CLI の `hve resume` へ委譲して
+再開できます。**コマンド、request の保存先パス、execution ID、hash を手入力したり、
+コピーして返したりする必要はありません。** 候補の確認から承認まで日本語だけで進めます。
+
+### 1. 再開候補を確認する
+
+Copilot に次のように伝えます。
+
+```text
+再開候補を見せてください。
+```
+
+Copilot は現在のリポジトリにある durable state から、共通の
+`ResumeService.list_candidates()` を使って候補を取得します。
+
+- 候補が無ければ、何も起動せずにその旨を知らせます
+- 候補が複数あれば、対象 Workflow、状態、更新日時などを含む一覧を提示して、どれを
+  再開するか日本語で確認します。Copilot が候補を推測して選ぶことはありません
+- action や再入力が一意に決まらない場合も、値を推測せずに日本語で確認します
+
+### 2. 再開計画を確認する
+
+候補、必要な action、再入力の扱いが決まると、Copilot は
+`ResumeService.build_plan()` で最初の resume plan を作り、少なくとも次の内容を
+日本語で提示します。
+
+| 項目 | 確認する内容 |
+|---|---|
+| 候補 | 対象 execution と Workflow |
+| `action` | リスクに応じて `reuse-session` / `restart-step` を選ぶか、追加 action が不要か |
+| `risk_reasons` | 失敗状態、HEAD の変化、出力不足、既存 owner など、再開時の注意点 |
+| `missing_replay_keys` | 安全上保存されなかったため、今回だけ再入力が必要な項目名 |
+| `expected_state_version` | 承認後の競合検出に使う状態の版 |
+| `resume_plan_hash` | 提示した再開計画を一意に表す値 |
+
+この `resume_plan_hash` は通常実行の `plan SHA-256` とは別の値ですが、どちらも
+Copilot が内部で取り扱います。あなたが転記する必要はありません。
+
+再入力値はこの resume 試行のプロセス内だけで使い、durable store、request v1、ログには
+保存しません。必要なのが認証情報などの秘密値なら、既存の安全な入力経路を使います。
+Copilot が秘密値を推測・生成することはありません。
+
+### 3. 提示された再開計画を明示的に承認する
+
+内容に問題がなければ、次のように伝えます。
+
+```text
+この再開計画を承認します。再開してください。
+```
+
+「いいね」「問題なさそう」のような曖昧な返事では再開しません。明示承認を得る前に、
+Copilot が lease を取得したり、`orchestrate` 子プロセスを起動したりすることもありません。
+
+承認後は次の順に安全性を確認します。
+
+1. Copilot が承認済みの `resume_plan_hash` と今回だけの再入力値を、既存の
+   `hve resume` へ内部転記します
+2. `hve resume` が `ResumeService.build_plan()` をもう一度呼び、現在の durable state と
+   HEAD から resume plan と hash を再計算します
+3. hash が一致した場合だけ、`hve resume` が `ResumeService.acquire()` を呼び、plan の
+   `expected_state_version` を使った CAS で lease を取得します。Prompt Edition controller
+   自身が先行または重複して `acquire()` を呼ぶことはありません
+4. CAS に成功した場合だけ、既存の `hve resume` / `orchestrate` 子プロセス経路を起動します
+
+hash の不一致または CAS の競合で計画が **stale** になった場合、子プロセスは **0 件**の
+まま停止します。Copilot が最新の計画を作り直して再提示するので、内容を確認して改めて
+承認してください。古い承認を使った自動再試行や自動承認は行いません。
+
+### 再開時の実行順と保証範囲
+
+- 複数の Workflow instance は、保存済み plan の `ordinal` 順に再開します。最初の失敗で
+  停止し、後続 instance を暗黙に起動しません
+- 1つのinstanceが完了すると、次のinstanceは新しい`ResumePlan`とhashを持つ別の承認対象です。
+  Copilotがそのplanを再提示するので、内容を確認して別の明示承認を行ってください。最初の
+  planのhashを後続planへ流用することはありません
+- 先行planへ再入力した平文値はinstance完了時に破棄されます。後続planが同じ項目を必要とする
+  場合も、Copilotが改めて確認し、そのplanと一緒に再承認します
+- output再照合で実行対象のStepが0件になったinstanceは、子プロセスを起動せず、取得済みの
+  fenced leaseとoutputを共通サービスが再確認して`succeeded`へ確定します
+- execution、action、再入力値などの resume 固有情報を Prompt の request v1 に追加しません。
+  request v1 の形式は変わりません
+- これは HVE の durable control state から実行を再構築する機能であり、モデルが生成中だった
+  位置を復元する checkpoint ではありません
+- hash、CAS、lease、fencing は HVE 内の競合や重複再開を抑止・検出するための制御です。外部サービスへ
+  既に行われた副作用の exactly-once までは保証しません
 
 ---
 

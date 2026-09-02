@@ -19,6 +19,8 @@ Describe 'validate-plan.ps1' {
 
     It 'passes for valid PROCEED plan' {
         $planContent = @"
+<!-- task_scope: single -->
+<!-- context_size: small -->
 <!-- estimate_total: 10 -->
 <!-- split_decision: PROCEED -->
 <!-- subissues_count: 0 -->
@@ -37,8 +39,28 @@ Describe 'validate-plan.ps1' {
         $output | Should -Match 'PASS'
     }
 
+    It 'passes when optional estimate_total is omitted' {
+        $planContent = @"
+<!-- task_scope: single -->
+<!-- context_size: small -->
+<!-- split_decision: PROCEED -->
+<!-- subissues_count: 0 -->
+<!-- implementation_files: false -->
+
+# Test Plan
+
+## 分割判定
+"@
+        $planPath = Join-Path $TmpDir 'plan-no-estimate.md'
+        Set-Content -Path $planPath -Value $planContent
+        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
+        $output | Should -Match 'PASS'
+    }
+
     It 'fails for missing split_decision' {
         $planContent = @"
+<!-- task_scope: single -->
+<!-- context_size: small -->
 <!-- estimate_total: 10 -->
 <!-- subissues_count: 0 -->
 <!-- implementation_files: false -->
@@ -53,8 +75,80 @@ Describe 'validate-plan.ps1' {
         $output | Should -Match 'missing required metadata.*split_decision'
     }
 
+    It 'fails for missing task_scope' {
+        $planContent = @"
+<!-- context_size: small -->
+<!-- split_decision: PROCEED -->
+<!-- subissues_count: 0 -->
+<!-- implementation_files: false -->
+
+# Test Plan
+
+## 分割判定
+"@
+        $planPath = Join-Path $TmpDir 'plan-no-task-scope.md'
+        Set-Content -Path $planPath -Value $planContent
+        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
+        $output | Should -Match 'missing required metadata.*task_scope'
+    }
+
+    It 'fails for invalid task_scope' {
+        $planContent = @"
+<!-- task_scope: broad -->
+<!-- context_size: small -->
+<!-- split_decision: PROCEED -->
+<!-- subissues_count: 0 -->
+<!-- implementation_files: false -->
+
+# Test Plan
+
+## 分割判定
+"@
+        $planPath = Join-Path $TmpDir 'plan-invalid-task-scope.md'
+        Set-Content -Path $planPath -Value $planContent
+        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
+        $output | Should -Match "invalid task_scope='broad'"
+    }
+
+    It 'fails for missing context_size' {
+        $planContent = @"
+<!-- task_scope: single -->
+<!-- split_decision: PROCEED -->
+<!-- subissues_count: 0 -->
+<!-- implementation_files: false -->
+
+# Test Plan
+
+## 分割判定
+"@
+        $planPath = Join-Path $TmpDir 'plan-no-context-size.md'
+        Set-Content -Path $planPath -Value $planContent
+        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
+        $output | Should -Match 'missing required metadata.*context_size'
+    }
+
+    It 'fails for invalid context_size' {
+        $planContent = @"
+<!-- task_scope: single -->
+<!-- context_size: huge -->
+<!-- split_decision: PROCEED -->
+<!-- subissues_count: 0 -->
+<!-- implementation_files: false -->
+
+# Test Plan
+
+## 分割判定
+"@
+        $planPath = Join-Path $TmpDir 'plan-invalid-context-size.md'
+        Set-Content -Path $planPath -Value $planContent
+        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
+        $output | Should -Match "invalid context_size='huge'"
+    }
+
     It 'fails for missing implementation_files' {
         $planContent = @"
+<!-- task_scope: single -->
+<!-- context_size: small -->
 <!-- estimate_total: 10 -->
 <!-- split_decision: PROCEED -->
 <!-- subissues_count: 0 -->
@@ -69,8 +163,10 @@ Describe 'validate-plan.ps1' {
         $output | Should -Match 'missing required metadata.*implementation_files'
     }
 
-    It 'fails when estimate > 15 but decision = PROCEED' {
+    It 'does not use optional estimate_total to override scope-based PROCEED' {
         $planContent = @"
+<!-- task_scope: single -->
+<!-- context_size: small -->
 <!-- estimate_total: 20 -->
 <!-- split_decision: PROCEED -->
 <!-- subissues_count: 0 -->
@@ -83,7 +179,43 @@ Describe 'validate-plan.ps1' {
         $planPath = Join-Path $TmpDir 'plan-over15-proceed.md'
         Set-Content -Path $planPath -Value $planContent
         $output = & $ScriptPath -Path $planPath *>&1 | Out-String
-        $output | Should -Match 'estimate=20min.*PROCEED.*SPLIT_REQUIRED'
+        $output | Should -Match 'PASS'
+    }
+
+    It 'fails when task_scope is multi but decision is PROCEED' {
+        $planContent = @"
+<!-- task_scope: multi -->
+<!-- context_size: small -->
+<!-- split_decision: PROCEED -->
+<!-- subissues_count: 0 -->
+<!-- implementation_files: false -->
+
+# Test Plan
+
+## 分割判定
+"@
+        $planPath = Join-Path $TmpDir 'plan-multi-proceed.md'
+        Set-Content -Path $planPath -Value $planContent
+        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
+        $output | Should -Match 'task_scope=multi.*split_decision=PROCEED'
+    }
+
+    It 'fails when context_size is large but decision is PROCEED' {
+        $planContent = @"
+<!-- task_scope: single -->
+<!-- context_size: large -->
+<!-- split_decision: PROCEED -->
+<!-- subissues_count: 0 -->
+<!-- implementation_files: false -->
+
+# Test Plan
+
+## 分割判定
+"@
+        $planPath = Join-Path $TmpDir 'plan-large-proceed.md'
+        Set-Content -Path $planPath -Value $planContent
+        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
+        $output | Should -Match 'context_size=large.*split_decision=PROCEED'
     }
 
     It 'fails when SPLIT_REQUIRED but implementation_files=true' {
@@ -92,6 +224,8 @@ Describe 'validate-plan.ps1' {
         Set-Content -Path $subPath -Value $subContent
 
         $planContent = @"
+<!-- task_scope: multi -->
+<!-- context_size: small -->
 <!-- estimate_total: 20 -->
 <!-- split_decision: SPLIT_REQUIRED -->
 <!-- subissues_count: 1 -->
@@ -109,6 +243,8 @@ Describe 'validate-plan.ps1' {
 
     It 'fails for missing 分割判定 section' {
         $planContent = @"
+<!-- task_scope: single -->
+<!-- context_size: small -->
 <!-- estimate_total: 10 -->
 <!-- split_decision: PROCEED -->
 <!-- subissues_count: 0 -->
@@ -130,6 +266,8 @@ Describe 'validate-plan.ps1' {
         Set-Content -Path (Join-Path $subDir 'subissues.md') -Value $subContent
 
         $planContent = @"
+<!-- task_scope: multi -->
+<!-- context_size: large -->
 <!-- estimate_total: 20 -->
 <!-- split_decision: SPLIT_REQUIRED -->
 <!-- subissues_count: 2 -->
@@ -152,6 +290,8 @@ Describe 'validate-plan.ps1' {
         Set-Content -Path (Join-Path $subDir 'subissues.md') -Value $subContent
 
         $planContent = @"
+<!-- task_scope: multi -->
+<!-- context_size: large -->
 <!-- estimate_total: 20 -->
 <!-- split_decision: SPLIT_REQUIRED -->
 <!-- subissues_count: 3 -->
@@ -171,6 +311,8 @@ Describe 'validate-plan.ps1' {
         New-Item -ItemType Directory -Path $dirMode -Force | Out-Null
 
         $planContent = @"
+<!-- task_scope: single -->
+<!-- context_size: small -->
 <!-- estimate_total: 5 -->
 <!-- split_decision: PROCEED -->
 <!-- subissues_count: 0 -->
@@ -187,6 +329,8 @@ Describe 'validate-plan.ps1' {
 
     It 'fails for invalid split_decision value' {
         $planContent = @"
+<!-- task_scope: single -->
+<!-- context_size: small -->
 <!-- estimate_total: 10 -->
 <!-- split_decision: INVALID -->
 <!-- subissues_count: 0 -->
@@ -381,6 +525,8 @@ Describe 'run-workflow.ps1' {
         $TmpPlan = [System.IO.Path]::GetTempFileName()
         try {
             $planContent = @"
+<!-- task_scope: single -->
+<!-- context_size: small -->
 <!-- estimate_total: 5 -->
 <!-- split_decision: PROCEED -->
 <!-- subissues_count: 0 -->

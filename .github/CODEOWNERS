@@ -1,0 +1,4 @@
+# Review ownership for repository automation and its protection policy.
+/.github/workflows/ @dahatake @TsuyoshiUshio @ToshiEna @hirofuk-ops
+/.github/branch-protection-main.json @dahatake @TsuyoshiUshio @ToshiEna @hirofuk-ops
+/.github/CODEOWNERS @dahatake @TsuyoshiUshio @ToshiEna @hirofuk-ops

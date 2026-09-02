@@ -58,8 +58,17 @@ from .markdown_preview.preview_panel import MarkdownPreviewPanel
 from .page_options import OptionsPage
 from .page_workbench import WorkbenchPage
 from .page_workflow_select import WorkflowSelectPage
+from .resume_dialog import ResumeDialog
 from .session_menu import build_session_menu
 from .settings_window import SettingsWindow
+from hve.prompt_execution import resolve_head_commit
+from hve.resume_service import (
+    ResumeService,
+    WorkflowDescriptor,
+    standard_execution_is_registerable,
+)
+from hve.run_state_store import DurableStateError, RunStateStore
+from hve.runtime_observability import make_instance_id
 from hve.workflow_order import sort_workflows_by_dependencies
 from hve.workflow_registry import (
     WorkflowDependency,
@@ -320,6 +329,8 @@ class MainWindow(QMainWindow):
         self._repo_root = repo_root or Path.cwd()
         self._selected_workflow_ids: List[str] = []
         self._autopilot_controller: Optional[object] = None
+        self._durable_state_store: Optional[RunStateStore] = None
+        self._resume_service: Optional[ResumeService] = None
         # Step 1 統合 precheck のプランレビュー反復回数。
         # 旧名: _autopilot_plan_review_iterations。両モード共通カウンタへ統合した際にリネーム。
         self._step1_plan_review_iterations: int = 0
@@ -445,6 +456,13 @@ class MainWindow(QMainWindow):
         )
         self._btn_session.setMenu(self._session_menu)
 
+        self._btn_resume = _make_tool_button(
+            self.tr("再開"),
+            self.tr("中断した HVE execution を再開"),
+            QStyle.StandardPixmap.SP_BrowserReload,
+        )
+        self._btn_resume.clicked.connect(self._on_resume_clicked)
+
         self._btn_settings = _make_tool_button(
             "設定",
             "設定",
@@ -485,6 +503,7 @@ class MainWindow(QMainWindow):
         top_row.addWidget(self._top_file_toggles)
         top_row.addStretch()
         top_row.addWidget(self._btn_session)
+        top_row.addWidget(self._btn_resume)
         top_row.addWidget(self._btn_settings)
         top_row.addWidget(self._btn_github)
         top_row.addWidget(self._btn_copilot)
@@ -1490,6 +1509,7 @@ class MainWindow(QMainWindow):
         # 停止ボタン (Step 2 「実行」のみ)
         self._btn_stop.setVisible(step == _STEP_WORKBENCH)
         self._btn_stop.setEnabled(running)
+        self._btn_resume.setEnabled(not running and not indexing)
 
         # ステータスバー
         if step == _STEP_WORKFLOW and indexing:
@@ -1922,6 +1942,134 @@ class MainWindow(QMainWindow):
             getattr(args, "cloud_session_step_overrides", None),
         )
 
+    def _on_resume_clicked(self) -> None:
+        """Open the explicit durable-resume dialog and forward its result."""
+
+        if self._page_workbench.is_running():
+            QMessageBox.warning(
+                self,
+                self.tr("実行中"),
+                self.tr("実行中のジョブを停止してから再開してください。"),
+            )
+            return
+
+        service = None
+        get_service = getattr(self, "_get_resume_service", None)
+        if callable(get_service):
+            service = get_service()
+        if service is None:
+            service = getattr(self, "_resume_service", None)
+        if service is None:
+            service = getattr(self, "_durable_resume_service", None)
+        if service is None:
+            QMessageBox.warning(
+                self,
+                self.tr("再開できません"),
+                self.tr("Durable resume service が初期化されていません。"),
+            )
+            return
+
+        repo_root = getattr(self, "_repo_root", None)
+        current_head = None
+        if isinstance(repo_root, (str, Path)):
+            resolved_head = resolve_head_commit(repo_root)
+            if resolved_head == "unknown":
+                QMessageBox.warning(
+                    self,
+                    self.tr("再開状態を確認できません"),
+                    self.tr(
+                        "リポジトリの HEAD commit を取得できないため、再開を開始しません。"
+                    ),
+                )
+                return
+            current_head = resolved_head
+        dialog = ResumeDialog(
+            service,
+            current_head=current_head,
+            parent=self,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        plan = dialog.selected_plan()
+        if plan is None:
+            return
+        try:
+            self._page_workbench.start_resume(
+                plan,
+                repo_root=repo_root,
+                replay_values=dialog.selected_replay_values(),
+            )
+        finally:
+            clear_transient = getattr(dialog, "clear_transient_state", None)
+            if callable(clear_transient):
+                clear_transient()
+
+    def _create_resume_service(self) -> ResumeService:
+        """Create the window-owned state connection and shared resume service."""
+        store = RunStateStore()
+        try:
+            service = ResumeService(store, self._repo_root)
+        except BaseException:
+            store.close()
+            raise
+        self._durable_state_store = store
+        self._resume_service = service
+        return service
+
+    def _get_resume_service(self) -> ResumeService:
+        service = self._resume_service
+        if service is None:
+            service = self._create_resume_service()
+        return service
+
+    @staticmethod
+    def _single_gui_app_id(args: Any) -> Optional[str]:
+        raw = str(getattr(args, "app_ids", None) or getattr(args, "app_id", None) or "")
+        values = [value.strip() for value in raw.split(",") if value.strip()]
+        return values[0] if len(values) == 1 else None
+
+    def _register_normal_gui_plan(self, args_queue: List[Any]) -> None:
+        """Register one supported GUI queue and attach its internal identities."""
+        if not args_queue or any(
+            not standard_execution_is_registerable(
+                args,
+                {"resume_run": getattr(args, "resume_run", None)},
+                existing_execution_id=getattr(args, "_execution_id", None),
+            )
+            for args in args_queue
+        ):
+            return
+
+        service = self._get_resume_service()
+        execution_id = service.new_execution_id()
+        descriptors = tuple(
+            WorkflowDescriptor(
+                instance_id=make_instance_id(
+                    str(args.workflow),
+                    self._single_gui_app_id(args),
+                ),
+                workflow_id=str(args.workflow),
+                ordinal=ordinal,
+                mode="standard",
+                argv=tuple(args.to_argv()),
+            )
+            for ordinal, args in enumerate(args_queue)
+        )
+        checkpoint_head = resolve_head_commit(self._repo_root)
+        if checkpoint_head == "unknown":
+            raise DurableStateError(
+                "repository HEAD commit could not be resolved"
+            )
+        service.register_execution(
+            "gui",
+            descriptors,
+            execution_id=execution_id,
+            checkpoint_head=checkpoint_head,
+        )
+        for args, descriptor in zip(args_queue, descriptors):
+            setattr(args, "_execution_id", execution_id)
+            setattr(args, "_instance_id", descriptor.instance_id)
+
     def _on_run_clicked(self, *, skip_step1_precheck: bool = False) -> None:
         ok, msg = self._page_options.validate()
         if not ok:
@@ -2013,6 +2161,18 @@ class MainWindow(QMainWindow):
                 autopilot_mode=False,
             ):
                 return
+
+        try:
+            self._register_normal_gui_plan(args_queue)
+        except DurableStateError as exc:
+            QMessageBox.warning(
+                self,
+                self.tr("再開状態の登録に失敗"),
+                self.tr(
+                    "実行状態を安全に保存できなかったため、ジョブを開始しません。\n{error}"
+                ).format(error=str(exc)),
+            )
+            return
 
         self._stack.setCurrentIndex(_STEP_WORKBENCH)
         self._refresh_navigation()
@@ -3410,6 +3570,17 @@ class MainWindow(QMainWindow):
             self._btn_back.setEnabled(True)
             QTimer.singleShot(0, lambda i=dict(info): self._show_fatal_popup(i))
             return
+        if self._page_workbench.was_orphaned_exit():
+            self._set_status(
+                StatusKind.ERROR,
+                self.tr(
+                    "Step 2: サブプロセスが異常終了しました "
+                    "(returncode={rc})"
+                ).format(rc=returncode),
+            )
+            self._btn_stop.setVisible(False)
+            self._btn_back.setEnabled(True)
+            return
         if returncode == 0:
             self._set_status(
                 StatusKind.SUCCESS,
@@ -3573,6 +3744,19 @@ class MainWindow(QMainWindow):
             git_timer.stop()
         self._page_workbench.cleanup()
         self._copilot_dock.shutdown()
+        state_store = getattr(self, "_durable_state_store", None)
+        if state_store is not None:
+            try:
+                state_store.close()
+            except DurableStateError as exc:
+                import sys as _sys
+
+                print(
+                    f"[gui] durable state close failed: {type(exc).__name__}",
+                    file=_sys.stderr,
+                )
+            self._durable_state_store = None
+            self._resume_service = None
         # --- Autopilot Controller の参照解放（detached の子プロセスは継続） ---
         ctrl = getattr(self, "_autopilot_controller", None)
         if ctrl is not None:

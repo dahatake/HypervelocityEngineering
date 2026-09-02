@@ -34,14 +34,13 @@ UIDeploy 後の実環境 E2E 検証専用 Agent。
 
 # 3) 実行手順
 1. SWA URL を `E2E_BASE_URL` として確定する（Issue 入力優先、未指定時は service-catalog から抽出）。
-2. `src/test/e2e/playwright/` で依存をインストールし、Playwright を headless 実行する。
+2. `src/test/e2e/playwright/` で依存をインストールし、`E2E_BASE_URL` を環境変数へ設定して `npx playwright test` を headless 実行する。
 3. 以下 5 シナリオを対象に検証する（Issue 指示で増減可）:
    - ログイン / 認証導線（該当なしの場合は代表的な初期画面遷移）
    - 主要 CRUD 操作（リソース別に最低 1 件）
    - エラーハンドリング（不正入力 / 404 / API エラー時の UI 反応）
    - API 連携（フロント → バックエンド `/api/*` 呼び出し成功）
    - レスポンシブ / アクセシビリティ最低限（viewport 切替で主要要素が描画）
-4. `.github/workflows/e2e-playwright-reusable.yml` を使用する場合は `workflow_call` 入力へ同じ `E2E_BASE_URL` を渡す。
 
 # 4) 失敗時ルール（Skill `tdd-green-retry-strategy` 準拠）
 - 実行失敗時は、当該 Sub Issue の実装担当 Agent（UI/API/Deploy 側）で原因を修正した後に最大 5 回まで再実行する。

@@ -75,7 +75,7 @@ HVE Cloud Agent Orchestrator（GitHub Actions + Issue Template）を初めて使
 | 3 | MCP Server を設定した（Settings → Copilot → Cloud agent → MCP Servers） | [Step.3](#step3-mcp-server-設定) | **必須** |
 | 4 | GitHub Copilot Skills を設定した（推奨） | [Step.3.1](#step31-github-copilot-skills-設定推奨) | 推奨 |
 | 5 | `COPILOT_PAT`（Fine-grained, Issues Read/Write）をリポジトリ Secret に登録した | [Step.4](#step4-認証設定copilot_pat) | **必須**（未設定時はアサインがスキップされ警告） |
-| 6 | Actions Workflow permissions を **Read and write permissions** に設定した | [Step.4.2](#step42-ワークフロー権限設定) | **必須** |
+| 6 | Actions Workflow permissions を **Read repository contents and packages permissions** に設定した | [Step.4.2](#step42-ワークフロー権限設定) | **必須** |
 | 7 | Azure OIDC Secrets（`AZURE_CLIENT_ID` / `AZURE_TENANT_ID` / `AZURE_SUBSCRIPTION_ID`）を登録した（Azure デプロイ時） | [Step.4 - Azure Secrets](#3-azure-static-web-apps-デプロイ用-secretsswa-デプロイ時) | Azure 利用時必須 |
 | 8 | Self-hosted Runner を設定した（GitHub-hosted runner を使う場合はスキップ可） | [Step.4.5](#step45-self-hosted-runner-設定オプション) | オプション |
 | 9 | Setup Labels workflow を Actions タブから**手動実行**した（初回必須） | [Step.5](#step5-ラベル設定) | **必須** |
@@ -342,13 +342,9 @@ Copilot CLI または Claude Code を使う場合、Microsoft Learn MCP サー�
 
 - 公式手順（プラグイン / instructions 設定）: [Microsoft Learn MCP サーバーを使い始める](https://learn.microsoft.com/ja-jp/training/support/mcp-get-started)
 
-### 自動同期（任意）
+### Azure Skills の更新
 
-このリポジトリには Azure Skills の手動同期ワークフロー（`.github/workflows/sync-azure-skills.yml`）が含まれています。
-
-- **トリガー**: GitHub Actions タブからの手動実行（`workflow_dispatch`）のみ。**cron による自動実行は無効化済み**
-- **動作**: 実行時のみ microsoft/skills の最新版を取得し、差分がある場合は PR を作成（ただし `.github/skills/azure-skills/` は `.gitignore` で除外されているため、通常は PR が作成されません。明示的にコミット運用へ切り戻す場合の保険用途）
-- **カスタムスキル保護**: `large-output-chunking`, `repo-onboarding-fast`, `task-dag-planning`, `work-artifacts-layout` は同期対象外
+Azure Skills は前述の `npx skills add microsoft/skills ...` を各開発環境で実行してローカルに導入します。`.github/skills/azure-skills/` はリポジトリの管理対象外であるため、GitHub Actions から同期 PR を作成する経路は提供しません。
 
 ### markdown-query Skill（ローカル完結 Markdown 横断クエリ）
 
@@ -437,7 +433,7 @@ MCP と PAT の設定が完了すると、Repository には以下のように se
 > [!NOTE]
 > このステップは **Web App デプロイ** を実行する場合の確認です。
 
-SWA デプロイは OIDC 認証（`azure/login@v2`）+ `shibayan/swa-deploy@v1` の `app-name` モードを使用するため、**`AZURE_STATIC_WEB_APPS_API_TOKEN` や `GITHUB_PAT` の設定は不要**です。
+SWA デプロイは OIDC 認証（`azure/login@v2`）後に deployment token を動的取得し、`Azure/static-web-apps-deploy@v1` を実行するため、**`AZURE_STATIC_WEB_APPS_API_TOKEN` や `GITHUB_PAT` の手動登録は不要**です。APP-009 の repository-managed workflow は手動実行専用で、実行ごとに実在確認済みの Resource Group 名と Static Web App 名を入力します。
 
 以下の 3 つの Secrets は Functions deploy でも使用するものと共通です。すでに設定済みであれば追加作業は不要です。
 
@@ -471,7 +467,7 @@ bash src/infra/azure/create-azure-webui-resources.sh
 | Repository の Copilot Cloud agent 有効化 | Cloud | GitHub Issues から Copilot agent を動かす |
 | `COPILOT_PAT` | Cloud Orchestrator | `assign-copilot.sh` が Copilot を Issue にアサインするため |
 | `GITHUB_TOKEN` | GitHub Actions | ワークフロー内でラベル、Issue、コメント等を操作する自動付与トークン |
-| Actions Workflow permissions: Read and write | Cloud | `setup-labels.yml` などがラベル作成 API を呼ぶため |
+| Actions Workflow permissions: Read repository contents and packages | Cloud | `GITHUB_TOKEN` の既定権限を読み取り専用にし、必要な書き込みだけを各 workflow / job の `permissions` で明示するため |
 | `gh auth login` | HVE CLI Orchestrator | GitHub CLI の認証状態を利用する基本認証 |
 | `GH_TOKEN` | HVE CLI Orchestrator | `--create-issues` / `--create-pr` 等で Issue / PR を作成する場合に必要 |
 | `AZURE_CLIENT_ID` / `AZURE_TENANT_ID` / `AZURE_SUBSCRIPTION_ID` | Azure deploy | OIDC で Azure にログインするため |
@@ -484,7 +480,7 @@ bash src/infra/azure/create-azure-webui-resources.sh
 - MCP Servers は **Settings → Copilot → Cloud agent → MCP Servers** で設定すること
 - `COPILOT_PAT` は Copilot 自動アサインに利用（未設定時は既存スクリプト設計で警告してスキップされる場合あり）
 - 初回セットアップでは `COPILOT_PAT` の設定を推奨（実運用では実質必須）
-- Workflow permissions は **Read and write permissions** が必要
+- Workflow permissions は **Read repository contents and packages permissions** を既定とし、書き込みは各 workflow / job の `permissions` で明示します
 - `GITHUB_TOKEN` は GitHub Actions の自動付与トークン（`GH_TOKEN` / `COPILOT_PAT` とは別物）
 
 ### Static Web Apps / Azure 認証方針（正本）
@@ -500,9 +496,9 @@ bash src/infra/azure/create-azure-webui-resources.sh
 
 > [!IMPORTANT]
 > **Step.5（ラベル設定）より前に、この権限設定を完了してください。**
-> `setup-labels.yml` ワークフローはラベル作成 API を呼び出すため、**Read and write permissions** でないとラベル作成が 403 エラーで失敗します。
+> `setup-labels.yml` はラベル作成に必要な `issues: write` を workflow 内で明示しています。リポジトリ全体の既定権限を write に広げる必要はありません。
 
-リポジトリの **Settings → Actions → General → Workflow permissions** を **Read and write permissions** に設定してください。
+リポジトリの **Settings → Actions → General → Workflow permissions** を **Read repository contents and packages permissions** に設定してください。書き込みが必要な workflow は、`permissions` で対象を最小限に明示します。
 
 ---
 
@@ -542,7 +538,7 @@ bash src/infra/azure/create-azure-webui-resources.sh
 ```
 新規リポジトリ作成
   → Step.4. COPILOT_PAT 設定
-  → ワークフロー権限設定（Read and write permissions）
+  → ワークフロー既定権限設定（Read repository contents and packages permissions）
   → Step.5. Actions タブから Setup Labels を手動実行  ← ★ ここが最重要
   → ラベル作成完了
   → 以降は Issue テンプレートからワークフローを起動可能
@@ -559,7 +555,7 @@ bash src/infra/azure/create-azure-webui-resources.sh
 `setup-labels` ワークフロー自体は Issue の `opened` でも起動しますが、実際のラベル作成ジョブは `setup-labels` ラベルの有無を `if:` 条件で判定しています。新規リポジトリの初回は `setup-labels` ラベル自体がまだ存在しないため、Issue テンプレートから起動しても処理がスキップされます。このため、初回は Issue テンプレートからではなく、Actions タブから直接手動実行する必要があります。
 
 > [!IMPORTANT]
-> 手動実行の前提条件: **ワークフロー権限が「Read and write permissions」** になっていることを確認してください（上記「ワークフロー権限設定」セクション参照）。権限が「Read-only」のままでは、ラベル作成 API が 403 エラーで失敗します。
+> 手動実行の前提条件: **ワークフロー既定権限が「Read repository contents and packages permissions」** になっていることと、default branch の `setup-labels.yml` に `issues: write` が明示されていることを確認してください（上記「ワークフロー権限設定」セクション参照）。
 
 `setup-labels` ラベルがまだリポジトリに存在しない場合は、以下の手順で手動実行してください:
 
@@ -597,9 +593,9 @@ bash src/infra/azure/create-azure-webui-resources.sh
 <details>
 <summary>Setup Labels ワークフローが失敗する（ラベル作成 API が 403 を返す）</summary>
 
-**原因:** ワークフロー権限が「Read-only」になっています。
+**原因:** 実行対象branchの `setup-labels.yml` に `issues: write` がない、またはOrganization / Repositoryポリシーがworkflowの書き込みを制限しています。
 
-**対処法:** **Settings → Actions → General → Workflow permissions** を **「Read and write permissions」** に変更してから、再度 Actions タブから Setup Labels ワークフローを手動実行してください。
+**対処法:** default branchの `.github/workflows/setup-labels.yml` に `permissions: issues: write` があることと、上位のActionsポリシーが当該権限を許可していることを確認してください。リポジトリ全体の既定権限をwriteへ広げないでください。
 
 </details>
 
@@ -746,7 +742,7 @@ Step.5 のラベル設定完了後、以下の確認を順に実施してくだ�
 | Issue を作成しても Actions が動かない | Issue に付与されたラベル | Setup Labels workflow（`.github/workflows/setup-labels.yml`）を手動実行してラベルを再作成する |
 | Dispatcher は動くが reusable workflow が起動しない | Dispatcher 実行ログのジョブ条件 | `.github/workflows/auto-orchestrator-dispatcher.yml` の分岐条件と、Issue Template が付与するラベルの対応を確認する |
 | `@copilot` がアサインされない | `COPILOT_PAT` の登録有無とスコープ | 未設定時はスキップされ警告が出る仕様。[Step.4](#step4-認証設定copilot_pat) を再確認する |
-| ワークフローがファイルを書き込めない | Actions の Workflow permissions | [Step.4.2](#step42-ワークフロー権限設定) で **Read and write permissions** に設定する |
+| ワークフローが必要な変更を書き込めない | Workflow / job の `permissions` と上位Actionsポリシー | 対象workflowが必要なwrite権限だけを明示しているか確認する。repository-wideの既定権限はreadのまま維持する |
 | セルフホストランナーのジョブが待機し続ける | ランナーのラベルと稼働状況 | [Step.4.5](#step45-self-hosted-runner-設定オプション) を確認する。GitHub-hosted runner で実行する場合は `runner_type` を既定値に戻す |
 | 何が不足しているか分からない | preflight スクリプト | `bash .github/scripts/preflight-cloud-setup.sh OWNER/REPO` を実行する。API 権限不足で取得できない項目は未設定と断定せず手動確認する |
 

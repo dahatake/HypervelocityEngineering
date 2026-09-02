@@ -1,0 +1,60 @@
+# code-query 配布パッケージの宣言。
+#
+# エンジン（cq）・Skill 定義・共通セットアップ実装は上流の
+# tools/skills/code_query/ が既に版管理下で保持しているので、ここでは
+# 「どこから集めるか」だけを宣言する。実体をここへ複製しない。
+
+[package]
+name = "code-query"
+version = "1.3.0"
+engine = "cq"
+summary = "ローカル完結のソースコード横断検索 Skill（定義・参照・要件 ID 追跡）"
+source_repo = "dahatake/RoyalytyService2ndGen"
+
+# 宣言された profile が 1 つだけなら cq がそれを既定にするので、通常は追加操作不要。
+post_install_note = """\
+生成された cq.toml の roots / exclude を確認し、不要なディレクトリを除外してから
+`cq.ps1 index` / `./cq.sh index` を再実行してください。
+profile を複数宣言した場合は `--profile <名>` または環境変数 CQ_PROFILE で選んでください。"""
+
+# cq.toml は導入先リポジトリのルートに生成されるためここには現れない。
+preserve = []
+
+# tree-sitter 文法は上流では `pip install -e .[code]` で入るため
+# tools/skills/code_query/kit.toml の base_dependencies には無い。
+# 配布先には extras が無いのでここで補う。未導入でも索引は成立するが
+# （lite へ降格）、shell / PowerShell / batch / Scala / SQL は終了行・doc・参照・
+# 構造チャンクを失うため、配布先では既定で導入する。wheel が無い環境は `--no-extras`。
+extra_dependencies_note = "cq の高フィデリティ言語対応（pyproject.toml の [code] extras 相当）"
+extra_dependencies = [
+    "tree-sitter>=0.23",
+    "tree-sitter-java>=0.23",
+    "tree-sitter-go>=0.25",
+    "tree-sitter-rust>=0.24",
+    "tree-sitter-c>=0.24",
+    "tree-sitter-cpp>=0.23",
+    "tree-sitter-bash>=0.25",
+    "tree-sitter-powershell>=0.26",
+    "tree-sitter-batch>=0.11",
+    "tree-sitter-scala>=0.26",
+    "tree-sitter-sql>=0.3",
+    "sqlglot>=30",
+]
+
+[[package.sources]]
+from = "tools/skills/code_query"
+to = "."
+exclude = [
+    "**/__pycache__/**",
+    "__pycache__/**",
+    "*.pyc",
+    ".venv-*/**",
+]
+
+[[package.sources]]
+from = "tools/for-other-repo/code-query/GETTING-STARTED.md"
+to = "GETTING-STARTED.md"
+
+[[package.docs]]
+from = "users-guide/skills-code-query.md"
+to = "docs/skills-code-query.md"

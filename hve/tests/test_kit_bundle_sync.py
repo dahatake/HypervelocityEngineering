@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from tools.skills._kit import kit_sync
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SHARED = _REPO_ROOT / "tools" / "skills" / "_kit"
@@ -62,14 +63,36 @@ class TestSharedImplementationIsDistributed:
         shipped = sorted(
             p.relative_to(bundled).as_posix()
             for p in bundled.rglob("*")
-            if p.is_file() and "__pycache__" not in p.relative_to(bundled).parts
+            if p.is_file()
+            and not set(p.relative_to(bundled).parts).intersection(
+                kit_sync.DROP_DIR_NAMES
+            )
         )
         expected = sorted(
             p.relative_to(_SHARED).as_posix()
             for p in _SHARED.rglob("*")
-            if p.is_file() and "__pycache__" not in p.relative_to(_SHARED).parts
+            if p.is_file()
+            and not set(p.relative_to(_SHARED).parts).intersection(
+                kit_sync.DROP_DIR_NAMES
+            )
         )
         assert shipped == expected
+
+
+class TestGeneratedCacheExclusion:
+    def test_sync_engine_excludes_nested_mypy_cache(self, tmp_path: Path) -> None:
+        source = tmp_path / "engine"
+        (source / "pkg" / ".mypy_cache" / "3.14").mkdir(parents=True)
+        (source / "cli.py").write_text("def main(): pass\n", encoding="utf-8")
+        (source / "pkg" / "module.py").write_text("VALUE = 1\n", encoding="utf-8")
+        (source / "pkg" / ".mypy_cache" / "3.14" / "module.data.json").write_text(
+            "{}\n", encoding="utf-8"
+        )
+
+        target = kit_sync.sync_engine(tmp_path / "kit", "engine", source)
+
+        assert (target / "pkg" / "module.py").is_file()
+        assert not (target / "pkg" / ".mypy_cache").exists()
 
 
 class TestOsScriptsOnlyDelegate:

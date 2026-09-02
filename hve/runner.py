@@ -12,6 +12,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 from types import MappingProxyType
@@ -27,6 +28,7 @@ if __package__:
         _ASDW_AUDIT_MODE_ACL_DIRECT,
         _ASDW_AUDIT_MODE_SQL_LEDGER_DIGEST,
         _ASDW_DATA_DEPLOY_NETWORK_KEYS,
+        find_missing_output_paths,
     )
     from .asdw_data_script_generator import (
         AsdwDataScriptGenerationError,
@@ -51,6 +53,7 @@ else:  # pragma: no cover - top-level runner compatibility
         _ASDW_AUDIT_MODE_ACL_DIRECT,
         _ASDW_AUDIT_MODE_SQL_LEDGER_DIGEST,
         _ASDW_DATA_DEPLOY_NETWORK_KEYS,
+        find_missing_output_paths,
     )
     from asdw_data_script_generator import (  # type: ignore[import-not-found,no-redef]
         AsdwDataScriptGenerationError,
@@ -987,6 +990,12 @@ try:
     )
     from .qa_merger import QADocument, QAMerger
     from .run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id
+    from .run_state_store import (
+        DurableStateError,
+        LeaseToken,
+        RunStateStore,
+        default_state_path,
+    )
     from .self_improve import (
         scan_codebase, record_learning, get_learning_summary,
         _build_verification_result,
@@ -1034,6 +1043,17 @@ except ImportError:
     from qa_merger import QADocument, QAMerger  # type: ignore[no-redef]
     from phase1_request_plan import plan_phase1_request  # type: ignore[no-redef]
     from run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id  # type: ignore[no-redef]
+    # Durable state types must keep one class identity even when ``runner`` is
+    # imported through the legacy flat-module compatibility path.  The flat
+    # orchestrator delegates durable planning/storage to the canonical package
+    # modules, so importing a second top-level ``run_state_store`` here would
+    # make valid fenced tokens fail ``isinstance`` checks.
+    from hve.run_state_store import (  # type: ignore[no-redef]
+        DurableStateError,
+        LeaseToken,
+        RunStateStore,
+        default_state_path,
+    )
     from self_improve import (  # type: ignore[no-redef]
         scan_codebase, record_learning, get_learning_summary,
         _build_verification_result,
@@ -1191,6 +1211,57 @@ _RUNNER_PHASE1_MAIN_TASK_HEADING = load_prompt_file(
 _RUNNER_TDD_REPORT_INSTRUCTION_SUFFIX_TEMPLATE = load_prompt_file(
     "runtime/runner/tdd-report-instruction-suffix.prompt.md"
 )
+# Durable Main-session recovery is loaded at execution time so callers and tests
+# always use the canonical prompt file rather than a copied module constant.
+_RUNNER_RESUME_RECOVERY_PROMPT_PATH = (
+    "runtime/runner/resume-recovery.prompt.md"
+)
+_RUNNER_RESUME_EVENT_TIMEOUT_SECONDS = 5.0
+_RUNNER_CLEANUP_TIMEOUT_SECONDS = 5.0
+_RUNNER_FORCE_STOP_TIMEOUT_SECONDS = 2.0
+
+
+def _remaining_deadline_seconds(deadline: float) -> float:
+    """Return the positive time remaining for one event-loop deadline."""
+    remaining = deadline - asyncio.get_running_loop().time()
+    if remaining <= 0:
+        raise TimeoutError("durable resume deadline expired")
+    return remaining
+
+
+async def _disconnect_session_bounded(session: Any) -> None:
+    """Disconnect one SDK session without allowing cleanup to hang forever."""
+    await asyncio.wait_for(
+        session.disconnect(),
+        timeout=_RUNNER_CLEANUP_TIMEOUT_SECONDS,
+    )
+
+
+async def _stop_client_bounded(client: Any, console: Any) -> None:
+    """Stop an SDK client within fixed bounds, escalating to force_stop."""
+    try:
+        await asyncio.wait_for(
+            client.stop(),
+            timeout=_RUNNER_CLEANUP_TIMEOUT_SECONDS,
+        )
+        return
+    except TimeoutError:
+        console.warning("[cleanup] client.stop() timed out; forcing shutdown")
+    except Exception as cleanup_exc:
+        console.warning(f"[cleanup] client.stop() failed: {cleanup_exc}")
+
+    force_stop = getattr(client, "force_stop", None)
+    if not callable(force_stop):
+        return
+    try:
+        await asyncio.wait_for(
+            force_stop(),
+            timeout=_RUNNER_FORCE_STOP_TIMEOUT_SECONDS,
+        )
+    except TimeoutError:
+        console.warning("[cleanup] client.force_stop() timed out")
+    except Exception as cleanup_exc:
+        console.warning(f"[cleanup] client.force_stop() failed: {cleanup_exc}")
 
 
 def _resolve_step_output_paths(workflow: Any, step_id: str) -> List[str]:
@@ -1289,16 +1360,7 @@ def _check_output_paths_gate(
     prefix_gates = (
         resolve_output_path_prefix_gates(step) if step is not None else []
     )
-    if not declared and not prefix_gates:
-        return []
-    missing = [p for p in declared if not (repo_root / p).exists()]
-    for prefix in prefix_gates:
-        target = repo_root / prefix
-        parent = target.parent
-        if parent.is_dir() and any(parent.glob(f"{target.name}*")):
-            continue
-        missing.append(f"{prefix}*")
-    return missing
+    return find_missing_output_paths(repo_root, declared, prefix_gates)
 
 # Auto-QA マージファイルのサフィックス（HVE 実行補助 QA。ADI 原本質問票のmain成果物とは別物）
 _EXECUTION_QA_MERGED_SUFFIX: str = "execution-qa-merged.md"
@@ -2218,6 +2280,24 @@ class StepRunner:
         ] = {}
         self._session_security_violation_events: Dict[str, asyncio.Event] = {}
         self._session_security_violations: Dict[str, str] = {}
+        # One Workflow instance owns one fenced state_version chain even when
+        # DAG steps overlap.  A process-local lock keeps synchronous SQLite
+        # transitions and token replacement indivisible across callbacks.
+        self._durable_token_lock = threading.RLock()
+        self._durable_token_initialized = False
+        self._durable_token: Optional[LeaseToken] = None
+        selected_steps = self._workflow_params.get("selected_steps") or ()
+        if isinstance(selected_steps, str):
+            selected_steps = tuple(
+                item
+                for item in re.split(r"[\s,]+", selected_steps)
+                if item
+            )
+        self._durable_reuse_target_step_id = (
+            str(selected_steps[0])
+            if isinstance(selected_steps, (list, tuple)) and selected_steps
+            else None
+        )
 
     def _session_id_prefix(self) -> str:
         """SDKConfig.session_id_prefix が空ならデフォルト ("hve") を返す。"""
@@ -2467,6 +2547,170 @@ class StepRunner:
         self.console.event(
             f"  🔄 [{step_id}] {phase} メインセッションを再利用"
         )
+
+    def _durable_lease_token_from_context(self) -> Optional[LeaseToken]:
+        """Rebuild the fenced token from canonical durable context fields."""
+        with self._durable_token_lock:
+            if self._durable_token_initialized:
+                return self._durable_token
+
+            ctx = self._orchestrator_ctx
+            if ctx is None:
+                self._durable_token_initialized = True
+                return None
+
+            execution_id = getattr(ctx, "execution_id", None)
+            instance_id = getattr(ctx, "instance_id", None)
+            state_version = getattr(ctx, "expected_state_version", None)
+            recovery_action = getattr(ctx, "recovery_action", None)
+            lease_owner = getattr(ctx, "lease_owner", None)
+            lease_generation = getattr(ctx, "lease_generation", None)
+            values = (
+                execution_id,
+                instance_id,
+                state_version,
+                recovery_action,
+                lease_owner,
+                lease_generation,
+            )
+            if all(value is None for value in values):
+                self._durable_token_initialized = True
+                return None
+
+            # A newly registered normal child legitimately carries identity
+            # before T18 acquires and attaches its Workflow lease.
+            if (
+                type(execution_id) is str
+                and execution_id
+                and type(instance_id) is str
+                and instance_id
+                and all(
+                    value is None
+                    for value in (
+                        state_version,
+                        recovery_action,
+                        lease_owner,
+                        lease_generation,
+                    )
+                )
+            ):
+                self._durable_token_initialized = True
+                return None
+
+            if (
+                type(execution_id) is not str
+                or not execution_id
+                or type(instance_id) is not str
+                or not instance_id
+                or type(state_version) is not int
+                or state_version < 0
+                or type(lease_owner) is not str
+                or not lease_owner
+                or type(lease_generation) is not int
+                or lease_generation < 0
+            ):
+                raise DurableStateError("durable runner context is incomplete")
+            self._durable_token = LeaseToken(
+                execution_id=execution_id,
+                instance_id=instance_id,
+                owner=lease_owner,
+                generation=lease_generation,
+                state_version=state_version,
+            )
+            self._durable_token_initialized = True
+            return self._durable_token
+
+    def _set_durable_lease_token(self, token: LeaseToken) -> None:
+        """Replace the shared fenced token after an orchestrator transition."""
+        if not isinstance(token, LeaseToken):
+            raise DurableStateError("invalid durable lease token")
+        with self._durable_token_lock:
+            self._durable_token = token
+            self._durable_token_initialized = True
+
+    def _commit_durable_checkpoint(
+        self,
+        *,
+        step_id: str,
+        phase: str,
+        session_id: Any,
+    ) -> None:
+        """Commit one phase/session snapshot before its first SDK action."""
+        if type(phase) is not str or not phase:
+            raise DurableStateError("durable phase is invalid")
+        if type(session_id) is not str or not session_id:
+            raise DurableStateError("durable session ID is invalid")
+        with self._durable_token_lock:
+            token = self._durable_lease_token_from_context()
+            if token is None:
+                return
+            with RunStateStore(default_state_path()) as store:
+                next_token = store.transition_step(
+                    token,
+                    step_id,
+                    "running",
+                    phase=phase,
+                    phase_state="running",
+                    session_id=session_id,
+                )
+            self._durable_token = next_token
+            self._durable_token_initialized = True
+
+    def _load_durable_reuse_session_id(self, step_id: str) -> Optional[str]:
+        """Return the persisted Main session selected for durable recovery.
+
+        The row is read before any SDK session action.  Only the explicit
+        ``reuse-session`` action enters this path; ``restart-step`` deliberately
+        continues through the normal deterministic attempt-session path.
+        """
+        ctx = self._orchestrator_ctx
+        if getattr(ctx, "recovery_action", None) != "reuse-session":
+            return None
+        target_step_id = self._durable_reuse_target_step_id
+        if type(target_step_id) is not str or not target_step_id:
+            raise RuntimeError(
+                "durable reuse-session target Step is unavailable"
+            )
+        if step_id != target_step_id:
+            return None
+
+        token = self._durable_lease_token_from_context()
+        if token is None:
+            raise RuntimeError("durable reuse-session context is incomplete")
+
+        with RunStateStore(default_state_path()) as store:
+            rows = store.list_steps(token.execution_id, token.instance_id)
+
+        def _field(record: Any, name: str) -> Any:
+            if isinstance(record, Mapping):
+                return record.get(name)
+            try:
+                return record[name]
+            except (IndexError, KeyError, TypeError):
+                return getattr(record, name, None)
+
+        targets = [
+            row
+            for row in rows
+            if _field(row, "record_kind") == "step"
+            and _field(row, "step_id") == step_id
+        ]
+        if len(targets) != 1:
+            raise RuntimeError(
+                "durable reuse-session requires exactly one persisted target Step"
+            )
+
+        target = targets[0]
+        if _field(target, "phase") != "main":
+            raise RuntimeError(
+                "durable reuse-session is supported only for the Main phase"
+            )
+        session_id = _field(target, "session_id")
+        if type(session_id) is not str or not session_id.strip():
+            raise RuntimeError(
+                "durable reuse-session requires a saved Main session ID"
+            )
+        return session_id
 
     # ------------------------------------------------------------------
     # メインセッション生成
@@ -3193,6 +3437,7 @@ class StepRunner:
         workflow_id: Optional[str],
         current_phase: int,
         total_phases: int,
+        main_session_id: Optional[str] = None,
     ) -> str:
         """Phase 0: 事前 QA 質問票生成・回答収集・Work IQ (optional)。
 
@@ -3206,6 +3451,9 @@ class StepRunner:
         """
         self.console.step_phase_start(step_id, current_phase, total_phases, "事前 QA")
         phase0_start = time.time()
+        effective_main_session_id = (
+            main_session_id or self._make_step_session_id(step_id)
+        )
 
         _qa_model = self.config.get_qa_model()
         _qa_workiq_requested = (
@@ -3259,6 +3507,11 @@ class StepRunner:
                     custom_agent=custom_agent,
                     workflow_id=workflow_id,
                 )
+                self._commit_durable_checkpoint(
+                    step_id=step_id,
+                    phase="pre-qa",
+                    session_id=_pre_qa_session_opts["session_id"],
+                )
                 _pre_qa_required_skills = self._get_required_skills_for_step(
                     workflow_id,
                     step_id,
@@ -3299,6 +3552,11 @@ class StepRunner:
             else:
                 _qa_workiq_mcp_enabled = False
                 self._log_main_session_reuse(step_id, "Pre-QA")
+                self._commit_durable_checkpoint(
+                    step_id=step_id,
+                    phase="pre-qa",
+                    session_id=effective_main_session_id,
+                )
 
             # Phase 0a: 質問票生成
             pre_qa_response = await _effective_pre_qa_session.send_and_wait(
@@ -3905,7 +4163,16 @@ class StepRunner:
         """
         start = time.time()
         self._clear_tool_start_state(step_id)
-        if not self.config.dry_run:
+        _recovery_action = getattr(
+            self._orchestrator_ctx,
+            "recovery_action",
+            None,
+        )
+        _is_reuse_target = (
+            _recovery_action == "reuse-session"
+            and step_id == self._durable_reuse_target_step_id
+        )
+        if not self.config.dry_run and not _is_reuse_target:
             # FR-CLI-84 判定 (1): 受領プロンプト単体が既に予算を超えている場合は、
             # Copilot SDK クライアント / セッションの生成と Phase 0 事前 QA より前に停止する。
             _received_plan = plan_phase1_request(
@@ -4280,7 +4547,27 @@ class StepRunner:
 
         session = None
         client = None
+        _reuse_session_id: Optional[str] = None
+        _recovery_prompt: Optional[str] = None
+        _resume_flags = {
+            "already_in_use": False,
+            "session_was_active": False,
+        }
+
+        def _resumed_session_is_active(candidate: Any) -> bool:
+            return bool(
+                _resume_flags["already_in_use"]
+                or _resume_flags["session_was_active"]
+                or getattr(candidate, "already_in_use", None) is True
+                or getattr(candidate, "session_was_active", None) is True
+            )
+
         try:
+            self._durable_lease_token_from_context()
+            # FR-CLI-90: inspect the durable target before creating or resuming
+            # any SDK session.  A non-Main row therefore fails without an SDK
+            # session action, while restart-step never consumes the saved ID.
+            _reuse_session_id = self._load_durable_reuse_session_id(step_id)
             # SDK 1.0.0: CopilotClient(connection=RuntimeConnection.*)
             # verbosity >= 3 (verbose) かつデフォルトの log_level ("error") の場合のみ debug に昇格。
             # ユーザーが明示的に log_level を指定している場合はそれを尊重する。
@@ -4547,14 +4834,27 @@ class StepRunner:
             _review_suffix = _build_review_ownership_suffix(
                 self.config.auto_contents_review
             )
-            _pre_qa_free_prompt, _pre_qa_free_components = _compose_phase1_prompt(
-                agent_prefix=_agent_prefix,
-                step_prompt=prompt,
-                pre_qa_context="",
-                execution_mode_suffix=_execution_mode_suffix,
-                tdd_suffix=_tdd_suffix,
-                review_suffix=_review_suffix,
-            )
+            if _reuse_session_id is not None:
+                _recovery_prompt = load_prompt_file(
+                    _RUNNER_RESUME_RECOVERY_PROMPT_PATH
+                )
+                if not _recovery_prompt.strip():
+                    raise RuntimeError(
+                        "durable Main recovery prompt is empty"
+                    )
+                _pre_qa_free_prompt = _recovery_prompt
+                _pre_qa_free_components = (
+                    ("recovery_prompt", _recovery_prompt),
+                )
+            else:
+                _pre_qa_free_prompt, _pre_qa_free_components = _compose_phase1_prompt(
+                    agent_prefix=_agent_prefix,
+                    step_prompt=prompt,
+                    pre_qa_context="",
+                    execution_mode_suffix=_execution_mode_suffix,
+                    tdd_suffix=_tdd_suffix,
+                    review_suffix=_review_suffix,
+                )
             _pre_qa_free_plan = plan_phase1_request(
                 _pre_qa_free_prompt,
                 components=_pre_qa_free_components,
@@ -4569,26 +4869,118 @@ class StepRunner:
                 self.console.step_end(step_id, "failed", elapsed=elapsed)
                 return False
 
-            # メインセッションに決定論的 session_id を付与する。
-            # 既存値（呼び出し元が明示指定したケース）は尊重する。
-            if not session_opts.get("session_id"):
-                session_opts["session_id"] = self._make_step_session_id(step_id)
+            if _reuse_session_id is not None:
+                _main_session_id = _reuse_session_id
+                _resume_event_received = asyncio.Event()
+                _resume_deadline = (
+                    asyncio.get_running_loop().time()
+                    + _RUNNER_RESUME_EVENT_TIMEOUT_SECONDS
+                )
 
-            session = await self._create_main_session(
-                client=client,
-                session_opts=session_opts,
-                step_id=step_id,
-                workflow_id=workflow_id,
-                requires_external_skill_directories=
-                _requires_external_skill_directories,
-            )
+                def _handle_resume_event(event: Any) -> None:
+                    event_type = getattr(
+                        getattr(event, "type", None),
+                        "value",
+                        getattr(event, "type", None),
+                    )
+                    if event_type == "session.resume":
+                        data = getattr(event, "data", None)
+                        # SDK 1.0.8 SessionResumeData exposes snake_case fields.
+                        if getattr(data, "already_in_use", None) is True:
+                            _resume_flags["already_in_use"] = True
+                        if getattr(data, "session_was_active", None) is True:
+                            _resume_flags["session_was_active"] = True
+                        _resume_event_received.set()
+                    self._handle_session_event_for_step(event, step_id)
 
-            if _is_foundry_required:
-                await self._verify_foundry_required_session_mcp_servers(session)
-            session.on(
-                lambda event, sid=step_id:
-                self._handle_session_event_for_step(event, sid)
-            )
+                # T22 shared seam: re-commit the persisted identity before the
+                # resume RPC.  The callback is registered by resume_session
+                # before that RPC, so a synchronous session.resume event is not
+                # lost.  No create-session fallback exists in this branch.
+                self._commit_durable_checkpoint(
+                    step_id=step_id,
+                    phase="main",
+                    session_id=_main_session_id,
+                )
+                _resume_local_options = {
+                    key: session_opts[key]
+                    for key in ("tools",)
+                    if session_opts.get(key)
+                }
+                try:
+                    session = await asyncio.wait_for(
+                        client.resume_session(
+                            _main_session_id,
+                            on_event=_handle_resume_event,
+                            on_permission_request=session_opts[
+                                "on_permission_request"
+                            ],
+                            continue_pending_work=False,
+                            **_resume_local_options,
+                        ),
+                        timeout=_remaining_deadline_seconds(_resume_deadline),
+                    )
+                    await asyncio.wait_for(
+                        _resume_event_received.wait(),
+                        timeout=_remaining_deadline_seconds(_resume_deadline),
+                    )
+                except TimeoutError as exc:
+                    resume_error = RuntimeError(
+                        "durable SDK session resume did not complete within deadline"
+                    )
+                    if session is not None:
+                        try:
+                            await _disconnect_session_bounded(session)
+                        except Exception as cleanup_exc:
+                            resume_error.add_note(
+                                "resume timeout cleanup also failed: "
+                                f"{type(cleanup_exc).__name__}: {cleanup_exc}"
+                            )
+                        finally:
+                            session = None
+                    raise resume_error from exc
+                if _resumed_session_is_active(session):
+                    resume_error = RuntimeError(
+                        "durable SDK session is active or already in use"
+                    )
+                    try:
+                        await _disconnect_session_bounded(session)
+                    except Exception as cleanup_exc:
+                        resume_error.add_note(
+                            "active-session cleanup also failed: "
+                            f"{type(cleanup_exc).__name__}: {cleanup_exc}"
+                        )
+                    finally:
+                        session = None
+                    raise resume_error
+            else:
+                # restart-step intentionally follows this path: the saved
+                # session ID is never copied, and the current attempt's run ID
+                # produces a fresh deterministic session ID.
+                if not session_opts.get("session_id"):
+                    session_opts["session_id"] = self._make_step_session_id(step_id)
+                _main_session_id = session_opts["session_id"]
+                self._commit_durable_checkpoint(
+                    step_id=step_id,
+                    phase="main",
+                    session_id=_main_session_id,
+                )
+
+                session = await self._create_main_session(
+                    client=client,
+                    session_opts=session_opts,
+                    step_id=step_id,
+                    workflow_id=workflow_id,
+                    requires_external_skill_directories=
+                    _requires_external_skill_directories,
+                )
+
+                if _is_foundry_required:
+                    await self._verify_foundry_required_session_mcp_servers(session)
+                session.on(
+                    lambda event, sid=step_id:
+                    self._handle_session_event_for_step(event, sid)
+                )
 
             # ストリーム表示の開始マーカー
             if self.console.show_stream:
@@ -4600,7 +4992,7 @@ class StepRunner:
                 workflow_id=workflow_id,
                 custom_agent=custom_agent,
                 prompt=prompt,
-            )
+            ) and _reuse_session_id is None
 
             # 事後 QA (post-QA モード) は廃止されました。
             # 旧 post-QA 制御は削除済み。
@@ -4626,6 +5018,7 @@ class StepRunner:
                     session=session,
                     client=client,
                     step_id=step_id,
+                    main_session_id=_main_session_id,
                     original_prompt=prompt,
                     custom_agent=custom_agent,
                     workflow_id=workflow_id,
@@ -4638,14 +5031,19 @@ class StepRunner:
             phase1_start = time.time()
             self.console.step_phase_start(step_id, current_phase, total_phases, "メインタスク")
 
-            _injected_prompt, _final_components = _compose_phase1_prompt(
-                agent_prefix=_agent_prefix,
-                step_prompt=prompt,
-                pre_qa_context=pre_qa_context,
-                execution_mode_suffix=_execution_mode_suffix,
-                tdd_suffix=_tdd_suffix,
-                review_suffix=_review_suffix,
-            )
+            if _reuse_session_id is not None:
+                assert _recovery_prompt is not None
+                _injected_prompt = _recovery_prompt
+                _final_components = (("recovery_prompt", _recovery_prompt),)
+            else:
+                _injected_prompt, _final_components = _compose_phase1_prompt(
+                    agent_prefix=_agent_prefix,
+                    step_prompt=prompt,
+                    pre_qa_context=pre_qa_context,
+                    execution_mode_suffix=_execution_mode_suffix,
+                    tdd_suffix=_tdd_suffix,
+                    review_suffix=_review_suffix,
+                )
             # FR-CLI-84 判定 (2): 連結後の最終プロンプトを送信直前に再度照合する。
             # 予算超過時は Phase 1 のモデル呼び出しを 1 回も行わずに失敗させる。
             _final_plan = plan_phase1_request(
@@ -4661,6 +5059,22 @@ class StepRunner:
                 elapsed = time.time() - start
                 self.console.step_end(step_id, "failed", elapsed=elapsed)
                 return False
+            if (
+                _reuse_session_id is not None
+                and _resumed_session_is_active(session)
+            ):
+                try:
+                    await session.disconnect()
+                finally:
+                    session = None
+                raise RuntimeError(
+                    "durable SDK session is active or already in use"
+                )
+            self._commit_durable_checkpoint(
+                step_id=step_id,
+                phase="main",
+                session_id=_main_session_id,
+            )
             main_response = await self._send_and_wait_with_model_call_failure_guard(
                 session,
                 _injected_prompt,
@@ -4722,6 +5136,15 @@ class StepRunner:
             self.console.stats_event(
                 "split_fork_phase", step_id=step_id, phase="enter"
             )
+            if (
+                self._orchestrator_ctx is not None
+                and self._orchestrator_ctx.split_fork_enabled
+            ):
+                self._commit_durable_checkpoint(
+                    step_id=step_id,
+                    phase="split-fork",
+                    session_id=_main_session_id,
+                )
             _split_fork_ok = await self._maybe_run_split_fork(
                 session=session,
                 step_id=step_id,
@@ -4766,6 +5189,11 @@ class StepRunner:
                             suffix="review",
                             custom_agent=custom_agent,
                         )
+                        self._commit_durable_checkpoint(
+                            step_id=step_id,
+                            phase="review",
+                            session_id=_review_session_opts["session_id"],
+                        )
                         _review_required_skills = self._get_required_skills_for_step(
                             workflow_id,
                             step_id,
@@ -4808,6 +5236,11 @@ class StepRunner:
                         _effective_review_session = _review_session
                     else:
                         self._log_main_session_reuse(step_id, "Review")
+                        self._commit_durable_checkpoint(
+                            step_id=step_id,
+                            phase="review",
+                            session_id=_main_session_id,
+                        )
 
                     # 1回目: 敵対的レビュー実行
                     review_response = await _effective_review_session.send_and_wait(
@@ -4840,7 +5273,11 @@ class StepRunner:
                                     title=title,
                                     workflow_id=workflow_id,
                                     custom_agent=custom_agent,
-                                    original_prompt=prompt,
+                                    original_prompt=(
+                                        _recovery_prompt
+                                        if _reuse_session_id is not None
+                                        else prompt
+                                    ),
                                     main_output=main_output or "",
                                     source_phase="Phase 3 Adversarial Review",
                                     improvement_context=review_content,
@@ -4898,6 +5335,11 @@ class StepRunner:
                 current_phase += 1
                 phase4_start = time.time()
                 self.console.step_phase_start(step_id, current_phase, total_phases, "自己改善ループ")
+                self._commit_durable_checkpoint(
+                    step_id=step_id,
+                    phase="self-improve",
+                    session_id=_main_session_id,
+                )
 
                 # _work_dir は ステップ ID で分離されたパスを使用する（並列安全性）
                 # `work/run/<run-id>/self-improve/step-<step_id>/`
@@ -4973,7 +5415,11 @@ class StepRunner:
                             title=title,
                             workflow_id=workflow_id,
                             custom_agent=custom_agent,
-                            original_prompt=prompt,
+                            original_prompt=(
+                                _recovery_prompt
+                                if _reuse_session_id is not None
+                                else prompt
+                            ),
                             main_output=main_output or "",
                             source_phase=f"Phase 4 Self-Improve iteration {_iteration}",
                             improvement_context=_plan_content[:_MAX_PLAN_SCAN_LENGTH],
@@ -5064,6 +5510,8 @@ class StepRunner:
                     elapsed=time.time() - phase4_start,
                 )
 
+        except DurableStateError:
+            raise
         except Exception as exc:
             self.console.error(
                 f"Step.{step_id} 実行中にエラーが発生しました: {format_exception_for_log(exc)}"
@@ -5078,15 +5526,12 @@ class StepRunner:
             try:
                 try:
                     if session is not None:
-                        await session.disconnect()
+                        await _disconnect_session_bounded(session)
                 except Exception as cleanup_exc:
                     self.console.warning(f"[cleanup] session.disconnect() failed: {cleanup_exc}")
                 finally:
                     if client is not None:
-                        try:
-                            await client.stop()
-                        except Exception as cleanup_exc:
-                            self.console.warning(f"[cleanup] client.stop() failed: {cleanup_exc}")
+                        await _stop_client_bounded(client, self.console)
             finally:
                 self._clear_tool_start_state(step_id)
 

@@ -25,6 +25,17 @@ Issue body、PR body、または CLI 起動時メタデータに `<!-- auto-cont
 - GitHub Issue 起点モード（§1.1）: ステップ3〜4 を強制実行し、PR にコメントを投稿する
 - 非PR連携モード（§1.2）: ステップ3 を強制実行し、`qa/` 配下に質問票ファイルを作成する
 
+## Prompt Edition request preflight 例外
+
+HVE の `hve-prompt-edition` Skill が request v1 を作成する前に Workflow / Step / APP-ID /
+resource group / input path の不足値だけを確認する **Prompt Edition request preflight** では、
+質問を応答本文へ inline で返し、`qa/` 質問票を作成しない。request、plan、run、対象成果物の
+作成・変更にも進まない。
+
+この例外は `<!-- auto-context-review: true -->` がない Prompt Edition の不足値確認だけに適用する。
+一般タスクのコンテキスト収集と `auto-context-review: true` の強制質問票は、従来どおり本 Skill の
+各モードに従う。
+
 ---
 
 ## 推論許可の定義

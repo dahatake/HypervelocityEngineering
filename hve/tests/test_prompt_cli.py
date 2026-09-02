@@ -200,6 +200,31 @@ class TestPromptPlan:
 
 
 class TestPromptRunApprovalGate:
+    @pytest.fixture(autouse=True)
+    def _isolate_durable_registration(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        def _register(plan, _repo_root):
+            return (
+                "execution-prompt-cli-test",
+                tuple(
+                    f"instance-{index}"
+                    for index, _workflow in enumerate(plan.workflows)
+                ),
+            )
+
+        monkeypatch.setattr(
+            prompt_execution,
+            "_register_durable_execution",
+            _register,
+        )
+        monkeypatch.setattr(
+            prompt_execution,
+            "_verify_durable_child_completion",
+            lambda _execution_id, _instance_id: True,
+        )
+
     def _plan_hash(self, tmp_path: Path, request: Path) -> str:
         from hve import prompt_execution
         from hve.gui import settings_store
@@ -251,6 +276,8 @@ class TestPromptRunApprovalGate:
         assert len(recorder.calls) == 1
         argv, kwargs = recorder.calls[0]
         assert "--dry-run" not in argv
+        assert "--execution-id" in argv
+        assert "--instance-id" in argv
         assert kwargs.get("shell", False) is False
 
     def test_fail_fast_between_workflows(

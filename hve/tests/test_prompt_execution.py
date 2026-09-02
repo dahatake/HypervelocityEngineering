@@ -175,6 +175,24 @@ class _FakeRunner:
 
 
 class TestRunPlan:
+    @pytest.fixture(autouse=True)
+    def _isolate_durable_registration(self, monkeypatch: pytest.MonkeyPatch):
+        """Unit runner tests must not write to the process-wide durable store."""
+        monkeypatch.setattr(
+            prompt_execution,
+            "_register_durable_execution",
+            lambda plan, _repo_root: (
+                "execution-test",
+                tuple(f"{workflow.workflow_id}-test" for workflow in plan.workflows),
+            ),
+        )
+        monkeypatch.setattr(
+            prompt_execution,
+            "_verify_durable_child_completion",
+            lambda _execution_id, _instance_id: True,
+            raising=False,
+        )
+
     def test_runs_each_workflow_in_order_with_shell_false(self, tmp_path: Path):
         runner = _FakeRunner([0, 0])
         assert run_plan(_plan(tmp_path), dry_run=False, runner=runner) == 0
@@ -212,6 +230,146 @@ class TestRunPlan:
             assert run_plan(_plan(tmp_path), dry_run=True) == 0
         assert len(seen) == 2
         assert seen[0][1]["shell"] is False
+
+    def test_unknown_head_fails_before_any_child(self, tmp_path: Path):
+        runner = _FakeRunner([0, 0])
+
+        assert run_plan(
+            _plan(tmp_path, head="unknown"),
+            dry_run=True,
+            runner=runner,
+        ) != 0
+        assert runner.calls == []
+
+    def test_head_drift_after_approval_fails_before_any_child(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        runner = _FakeRunner([0, 0])
+        heads = ["abc123", "changed-after-approval"]
+        monkeypatch.setattr(
+            prompt_execution,
+            "resolve_head_commit",
+            lambda _root: heads.pop(0),
+        )
+
+        assert run_plan(
+            _plan(tmp_path, head="abc123"),
+            dry_run=False,
+            runner=runner,
+            cwd=tmp_path,
+        ) != 0
+        assert runner.calls == []
+
+    def test_invalid_runner_result_is_not_silently_successful(self, tmp_path: Path):
+        calls: list[list[str]] = []
+
+        def invalid_runner(argv, **_kwargs):
+            calls.append(list(argv))
+            return None
+
+        assert run_plan(
+            _plan(tmp_path),
+            dry_run=True,
+            runner=invalid_runner,
+        ) != 0
+        assert len(calls) == 1
+
+    def test_runner_os_error_is_reported_as_failure(self, tmp_path: Path):
+        calls: list[list[str]] = []
+
+        def failing_runner(argv, **_kwargs):
+            calls.append(list(argv))
+            raise FileNotFoundError("injected child launch failure")
+
+        assert run_plan(
+            _plan(tmp_path),
+            dry_run=True,
+            runner=failing_runner,
+        ) != 0
+        assert len(calls) == 1
+
+    def test_zero_child_exit_requires_terminal_durable_state(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        runner = _FakeRunner([0, 0])
+        verified: list[tuple[str, str]] = []
+
+        def not_completed(execution_id: str, instance_id: str) -> bool:
+            verified.append((execution_id, instance_id))
+            return False
+
+        monkeypatch.setattr(
+            prompt_execution,
+            "_verify_durable_child_completion",
+            not_completed,
+            raising=False,
+        )
+
+        assert run_plan(_plan(tmp_path), dry_run=False, runner=runner) != 0
+        assert verified == [("execution-test", "aas-test")]
+        assert len(runner.calls) == 1
+
+
+class TestDurableRegistrationCompatibility:
+    def test_saved_fleet_and_cloud_limit_plan_registers_with_real_boundary(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """FR-PROMPT-11: 保存設定由来の実 argv を real sanitizer/store で登録する。"""
+        from hve.run_state_store import RunStateStore
+
+        request = _request(
+            goal="Prompt 承認ゲートの非 Azure 検証",
+            workflows=[
+                {
+                    "workflow_id": "ard",
+                    "steps": ["1"],
+                    "params": {"company_name": "Prompt Gate Test"},
+                }
+            ],
+        )
+        plan = _plan(
+            tmp_path,
+            request=request,
+            settings=_settings(
+                cloud_session_enabled="off",
+                cloud_session_max_concurrency=5,
+                fleet_mode_enabled="on",
+            ),
+            head="a" * 40,
+        )
+        argv = plan.workflows[0].argv
+        assert "--no-cloud-session" in argv
+        assert argv[argv.index("--cloud-session-max-concurrency") + 1] == "5"
+        assert "--fleet-mode" in argv
+
+        database_path = tmp_path / "state.sqlite3"
+        monkeypatch.setattr(
+            prompt_execution,
+            "RunStateStore",
+            lambda: RunStateStore(database_path),
+        )
+
+        execution_id, instance_ids = prompt_execution._register_durable_execution(
+            plan,
+            tmp_path,
+        )
+
+        assert len(instance_ids) == 1
+        with RunStateStore(database_path) as store:
+            execution = store.get_execution(execution_id)
+            instance = store.get_instance(execution_id, instance_ids[0])
+        assert execution is not None
+        assert instance is not None
+        persisted = json.loads(execution["plan_json"])["instances"][0]["argv"]
+        assert "--no-cloud-session" in persisted
+        assert "--cloud-session-max-concurrency" in persisted
+        assert "--fleet-mode" in persisted
 
 
 class TestNoReimplementationOfTheExecutionCore:

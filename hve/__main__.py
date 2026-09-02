@@ -77,9 +77,10 @@ import os
 import shutil
 import subprocess
 import sys
+import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Sequence
 
 
 def _configure_stdio_encoding() -> None:
@@ -945,6 +946,17 @@ def _resolve_model(model: str) -> tuple:
 # argparse セットアップ
 # -----------------------------------------------------------------------
 
+def _non_negative_int(value: str) -> int:
+    """Parse one non-negative integer for an internal durable-state token."""
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a non-negative integer") from exc
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be a non-negative integer")
+    return parsed
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """メイン ArgumentParser を構築する。"""
     parser = argparse.ArgumentParser(
@@ -965,6 +977,45 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         dest="banner",
         help="起動時バナー表示を制御する (--banner: 表示, --no-banner: 抑止, 省略時: 表示)",
+    )
+
+    # --- durable resume サブコマンド (FR-CLI-90) ---
+    resume_parser = sub.add_parser(
+        "resume",
+        help="現在のリポジトリで中断した標準ローカル実行を再開する",
+    )
+    resume_selection = resume_parser.add_mutually_exclusive_group()
+    resume_selection.add_argument(
+        "execution_id",
+        nargs="?",
+        default=None,
+        help="再開するexecution ID（省略時は候補を選択）",
+    )
+    resume_selection.add_argument(
+        "--latest",
+        action="store_true",
+        default=False,
+        help="現在のリポジトリで最後に更新された候補を明示選択する",
+    )
+    resume_parser.add_argument(
+        "--action",
+        choices=("reuse-session", "restart-step"),
+        default=None,
+        help="復旧方法（riskがある非対話実行では必須）",
+    )
+    resume_parser.add_argument(
+        "--expected-resume-hash",
+        dest="_expected_resume_hash",
+        default=None,
+        help=argparse.SUPPRESS,
+    )
+    resume_parser.add_argument(
+        "--replay-value",
+        dest="_replay_values",
+        action="append",
+        default=None,
+        metavar="KEY=VALUE",
+        help=argparse.SUPPRESS,
     )
 
     # --- orchestrate サブコマンド ---
@@ -1635,6 +1686,57 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="RUN_ID",
         help="指定 run で成功済みのステップを除外して再実行する (FR-CLI-86)",
+    )
+    # FR-CLI-90 / NFR-CONC-02: resume controller から child orchestrate へ
+    # durable identity と取得済み lease fencing token を渡す内部境界。
+    # public help には表示せず、通常実行ではすべて None のままにする。
+    orch.add_argument(
+        "--execution-id",
+        dest="_execution_id",
+        default=None,
+        help=argparse.SUPPRESS,
+    )
+    orch.add_argument(
+        "--instance-id",
+        dest="_instance_id",
+        default=None,
+        help=argparse.SUPPRESS,
+    )
+    orch.add_argument(
+        "--expected-state-version",
+        dest="_expected_state_version",
+        type=_non_negative_int,
+        default=None,
+        help=argparse.SUPPRESS,
+    )
+    orch.add_argument(
+        "--recovery-action",
+        dest="_recovery_action",
+        choices=("reuse-session", "restart-step"),
+        default=None,
+        help=argparse.SUPPRESS,
+    )
+    orch.add_argument(
+        "--lease-owner",
+        dest="_lease_owner",
+        default=None,
+        help=argparse.SUPPRESS,
+    )
+    orch.add_argument(
+        "--lease-generation",
+        dest="_lease_generation",
+        type=_non_negative_int,
+        default=None,
+        help=argparse.SUPPRESS,
+    )
+    # FR-STATE-05: interactive wizard の全自動モードを durable child で
+    # 再現するための replay-only control。利用者向け help には公開しない。
+    orch.add_argument(
+        "--unattended",
+        dest="_unattended",
+        action="store_true",
+        default=False,
+        help=argparse.SUPPRESS,
     )
     orch.add_argument(
         "--approval-gates",
@@ -2529,6 +2631,7 @@ def _build_config(args: argparse.Namespace):
     cfg.auto_qa = args.auto_qa
     cfg.qa_akm_background_merge = getattr(args, "qa_akm_background_merge", False)
     cfg.force_interactive = getattr(args, "force_interactive", False)
+    cfg.unattended = bool(getattr(args, "_unattended", False))
     cfg.qa_answer_mode = getattr(args, "qa_answer_mode", None)
     cfg.qa_ipc_dir = getattr(args, "qa_ipc_dir", None)
     cfg.steering_ipc_dir = getattr(args, "steering_ipc_dir", None)
@@ -3008,6 +3111,126 @@ def _start_startup_index_refresh(command: Optional[str]) -> None:
     start_background(Path.cwd())
 
 
+class _DurableRegistrationFailure(RuntimeError):
+    """A standard execution could not be registered before external work."""
+
+
+def _build_resolved_replay_argv(
+    workflow_id: str,
+    config: Any,
+    params: dict,
+    *,
+    args: Optional[argparse.Namespace] = None,
+) -> tuple[str, ...]:
+    """Delegate replay generation to the cross-surface durable implementation."""
+    if __package__:
+        from .resume_service import build_resolved_replay_argv
+    else:  # pragma: no cover - flat-load compatibility
+        from hve.resume_service import build_resolved_replay_argv
+    return build_resolved_replay_argv(
+        workflow_id,
+        config,
+        params,
+        args=args,
+    )
+
+
+def _standard_execution_is_registerable(
+    config: Any,
+    params: dict,
+    args: Optional[argparse.Namespace],
+) -> bool:
+    """Delegate standard-run eligibility to the durable service boundary."""
+    if __package__:
+        from .resume_service import standard_execution_is_registerable
+    else:  # pragma: no cover - script/flat-load execution path
+        repo_root = str(Path(__file__).resolve().parent.parent)
+        if repo_root not in sys.path:
+            sys.path.insert(0, repo_root)
+        from hve.resume_service import standard_execution_is_registerable
+
+    return standard_execution_is_registerable(
+        config,
+        params,
+        existing_execution_id=(
+            getattr(args, "_execution_id", None) if args is not None else None
+        ),
+    )
+
+
+def _register_standard_execution(
+    workflow_id: str,
+    config: Any,
+    params: dict,
+    replay_argv: Sequence[str],
+    *,
+    args: Optional[argparse.Namespace] = None,
+) -> Optional[tuple[str, str]]:
+    """Atomically register one supported standard execution before preflight."""
+    if not _standard_execution_is_registerable(config, params, args):
+        return None
+
+    if __package__:
+        from .resume_service import ResumeService, WorkflowDescriptor
+        from .run_state_store import DurableStateError, RunStateStore
+        from .runtime_observability import make_instance_id
+    else:  # pragma: no cover - script/flat-load execution path
+        repo_root = str(Path(__file__).resolve().parent.parent)
+        if repo_root not in sys.path:
+            sys.path.insert(0, repo_root)
+        from hve.resume_service import ResumeService, WorkflowDescriptor
+        from hve.run_state_store import DurableStateError, RunStateStore
+        from hve.runtime_observability import make_instance_id
+
+    try:
+        raw_app_ids = params.get("app_ids")
+        app_ids = (
+            [str(item).strip() for item in raw_app_ids if str(item).strip()]
+            if isinstance(raw_app_ids, (list, tuple))
+            else []
+        )
+        if not app_ids and str(params.get("app_id") or "").strip():
+            app_ids = [str(params["app_id"]).strip()]
+        instance_id = make_instance_id(
+            workflow_id,
+            app_ids[0] if len(app_ids) == 1 else None,
+        )
+        with RunStateStore() as store:
+            service = ResumeService(store, Path.cwd())
+            safe_argv, missing_replay_keys = service.sanitize_argv(tuple(replay_argv))
+            execution_id = service.new_execution_id()
+            descriptor = WorkflowDescriptor(
+                instance_id=instance_id,
+                workflow_id=workflow_id,
+                ordinal=0,
+                mode="standard",
+                argv=safe_argv,
+                missing_replay_keys=missing_replay_keys,
+            )
+            try:
+                from .prompt_execution import (
+                    resolve_head_commit,
+                    validate_resolved_head_commit,
+                )
+            except ImportError:  # pragma: no cover - flat-load compatibility
+                from hve.prompt_execution import (  # type: ignore[no-redef]
+                    resolve_head_commit,
+                    validate_resolved_head_commit,
+                )
+            checkpoint_head = validate_resolved_head_commit(
+                resolve_head_commit(Path.cwd())
+            )
+            registered_id = service.register_execution(
+                "cli",
+                (descriptor,),
+                execution_id=execution_id,
+                checkpoint_head=checkpoint_head,
+            )
+        return registered_id, instance_id
+    except DurableStateError as exc:
+        raise _DurableRegistrationFailure from exc
+
+
 # -----------------------------------------------------------------------
 # prompt サブコマンド（FR-PROMPT-03 / FR-PROMPT-04）
 # -----------------------------------------------------------------------
@@ -3089,6 +3312,417 @@ def _cmd_prompt(args: argparse.Namespace) -> int:
     return prompt_execution.run_plan(plan, dry_run=False, cwd=repo_root)
 
 
+def _resume_field(record: Any, name: str) -> Any:
+    """Read one candidate/plan field from dataclasses, mappings, and sqlite rows."""
+    try:
+        return record[name]
+    except (IndexError, KeyError, TypeError):
+        return getattr(record, name)
+
+
+def _parse_resume_replay_values(raw_values: Any) -> dict[str, str]:
+    """Parse controller-provided ephemeral replay values without persisting them."""
+    replay: dict[str, str] = {}
+    for raw in raw_values or ():
+        if not isinstance(raw, str) or "=" not in raw:
+            raise ValueError("--replay-value は KEY=VALUE 形式で指定してください")
+        key, value = raw.split("=", 1)
+        key = key.strip()
+        if not key or not value.strip() or key in replay:
+            raise ValueError("--replay-value のkey/valueは空または重複にできません")
+        replay[key] = value
+    return replay
+
+
+def _format_resume_plan(plan: Any) -> str:
+    """Return a concise, secret-free resume plan for approval."""
+    risks = tuple(_resume_field(plan, "risk_reasons") or ())
+    missing = tuple(_resume_field(plan, "missing_replay_keys") or ())
+    return "\n".join(
+        (
+            "# HVE Resume Plan",
+            f"- execution: {_resume_field(plan, 'execution_id')}",
+            f"- workflow: {_resume_field(plan, 'workflow_id')}",
+            f"- instance: {_resume_field(plan, 'instance_id')}",
+            f"- state version: {_resume_field(plan, 'expected_state_version')}",
+            f"- action: {_resume_field(plan, 'action') or '(safe default)'}",
+            f"- risk: {', '.join(risks) if risks else '(none)'}",
+            f"- missing replay keys: {', '.join(missing) if missing else '(none)'}",
+            f"- resume SHA-256: {_resume_field(plan, 'resume_plan_hash')}",
+        )
+    )
+
+
+def _cmd_resume(args: argparse.Namespace) -> int:
+    """Select, approve, CAS-acquire, and launch one or more ordered resume children."""
+    try:
+        from .prompt_execution import (
+            resolve_head_commit,
+            validate_resolved_head_commit,
+        )
+        from .resume_service import ResumeService
+        from .run_state_store import DurableStateError, RunStateStore
+    except ImportError:  # pragma: no cover - flat-load compatibility
+        from hve.prompt_execution import (  # type: ignore[no-redef]
+            resolve_head_commit,
+            validate_resolved_head_commit,
+        )
+        from hve.resume_service import ResumeService
+        from hve.run_state_store import DurableStateError, RunStateStore
+
+    try:
+        replay_values = _parse_resume_replay_values(
+            getattr(args, "_replay_values", None)
+        )
+    except ValueError as exc:
+        print(f"{_ts()} ❌ {exc}", file=sys.stderr)
+        return 2
+
+    interactive = bool(getattr(sys.stdin, "isatty", lambda: False)())
+    expected_hash = str(
+        getattr(args, "_expected_resume_hash", None) or ""
+    ).strip().lower()
+    if expected_hash and (
+        len(expected_hash) != _SHA256_HEX_LENGTH
+        or any(character not in "0123456789abcdef" for character in expected_hash)
+    ):
+        print(f"{_ts()} ❌ expected resume hashが不正です。", file=sys.stderr)
+        return 2
+
+    try:
+        with RunStateStore() as store:
+            service = ResumeService(store, Path.cwd())
+            execution_id = getattr(args, "execution_id", None)
+            if execution_id is None:
+                candidates = service.list_candidates()
+                if not candidates:
+                    print(f"{_ts()} ❌ 再開候補がありません。", file=sys.stderr)
+                    return 1
+                if getattr(args, "latest", False):
+                    selected = candidates[0]
+                elif len(candidates) == 1:
+                    selected = candidates[0]
+                elif not interactive:
+                    print(
+                        f"{_ts()} ❌ 候補が複数あります。execution IDまたは--latestを指定してください。",
+                        file=sys.stderr,
+                    )
+                    return 1
+                else:
+                    for index, candidate in enumerate(candidates, start=1):
+                        print(
+                            f"{index}. {_resume_field(candidate, 'execution_id')} "
+                            f"[{_resume_field(candidate, 'workflow_id')}] "
+                            f"{_resume_field(candidate, 'status')}"
+                        )
+                    try:
+                        selected_index = int(input("再開する候補番号: ").strip()) - 1
+                    except (EOFError, ValueError):
+                        return 1
+                    if selected_index < 0 or selected_index >= len(candidates):
+                        return 1
+                    selected = candidates[selected_index]
+                execution_id = str(_resume_field(selected, "execution_id"))
+
+            current_head = validate_resolved_head_commit(
+                resolve_head_commit(Path.cwd())
+            )
+            action = getattr(args, "action", None)
+            plan = service.build_plan(
+                execution_id,
+                action=action,
+                replay_values=replay_values,
+                current_head=current_head,
+            )
+
+            missing = tuple(_resume_field(plan, "missing_replay_keys") or ())
+            if missing:
+                if not interactive or expected_hash:
+                    print(
+                        f"{_ts()} ❌ 再入力が必要です: {', '.join(missing)}",
+                        file=sys.stderr,
+                    )
+                    return 1
+                for key in missing:
+                    try:
+                        value = input(f"{key} を再入力: ")
+                    except EOFError:
+                        return 1
+                    if not value.strip():
+                        return 1
+                    replay_values[key] = value
+                plan = service.build_plan(
+                    execution_id,
+                    action=action,
+                    replay_values=replay_values,
+                    current_head=current_head,
+                )
+
+            risks = tuple(_resume_field(plan, "risk_reasons") or ())
+            if risks and action is None:
+                if not interactive:
+                    print(
+                        f"{_ts()} ❌ riskがあるため--actionを明示してください: "
+                        + ", ".join(risks),
+                        file=sys.stderr,
+                    )
+                    return 1
+                try:
+                    selected_action = input(
+                        "復旧方法 [1=reuse-session, 2=restart-step, 3=cancel]: "
+                    ).strip()
+                except EOFError:
+                    return 1
+                action = {
+                    "1": "reuse-session",
+                    "2": "restart-step",
+                }.get(selected_action)
+                if action is None:
+                    return 1
+                plan = service.build_plan(
+                    execution_id,
+                    action=action,
+                    replay_values=replay_values,
+                    current_head=current_head,
+                )
+            elif action is None and not expected_hash:
+                action = "restart-step"
+                plan = service.build_plan(
+                    execution_id,
+                    action=action,
+                    replay_values=replay_values,
+                    current_head=current_head,
+                )
+
+            print(_format_resume_plan(plan))
+            if expected_hash:
+                if expected_hash != str(_resume_field(plan, "resume_plan_hash")):
+                    print(f"{_ts()} ❌ resume planがstaleです。", file=sys.stderr)
+                    return 1
+                approved_plan = plan
+            else:
+                if interactive:
+                    try:
+                        answer = input("このresume planを実行しますか？ [y/N]: ").strip().lower()
+                    except EOFError:
+                        return 1
+                    if answer not in {"y", "yes"}:
+                        return 1
+                approved_hash = str(_resume_field(plan, "resume_plan_hash"))
+                approved_plan = service.build_plan(
+                    execution_id,
+                    action=action,
+                    replay_values=replay_values,
+                    current_head=current_head,
+                )
+                if str(_resume_field(approved_plan, "resume_plan_hash")) != approved_hash:
+                    print(
+                        f"{_ts()} ❌ resume planが承認後に変化しました。再提示が必要です。",
+                        file=sys.stderr,
+                    )
+                    return 1
+
+            completed_instances: set[str] = set()
+            while True:
+                current_instance_id = str(
+                    _resume_field(approved_plan, "instance_id")
+                )
+                if current_instance_id in completed_instances:
+                    raise DurableStateError(
+                        "ordered resume did not advance to the next workflow instance"
+                    )
+                approved_current_head = validate_resolved_head_commit(
+                    resolve_head_commit(Path.cwd())
+                )
+                if approved_current_head != current_head:
+                    raise DurableStateError(
+                        "repository HEAD changed after resume plan approval"
+                    )
+                owner = f"resume-{os.getpid()}-{uuid.uuid4().hex}"
+                token = service.acquire(approved_plan, owner)
+                try:
+                    approved_argv = tuple(
+                        _resume_field(approved_plan, "argv") or ()
+                    )
+                    if not approved_argv:
+                        token = service.complete_reconciled(
+                            approved_plan,
+                            token,
+                        )
+                        code = 0
+                    else:
+                        child_argv = [
+                            sys.executable,
+                            "-m",
+                            "hve",
+                            *approved_argv,
+                            "--execution-id",
+                            str(_resume_field(approved_plan, "execution_id")),
+                            "--instance-id",
+                            current_instance_id,
+                            "--expected-state-version",
+                            str(_resume_field(approved_plan, "expected_state_version")),
+                            "--recovery-action",
+                            str(
+                                _resume_field(approved_plan, "action")
+                                or "restart-step"
+                            ),
+                            "--lease-owner",
+                            str(_resume_field(token, "owner")),
+                            "--lease-generation",
+                            str(_resume_field(token, "generation")),
+                        ]
+                        result = subprocess.run(
+                            child_argv,
+                            shell=False,
+                            check=False,
+                        )
+                        code = int(getattr(result, "returncode", 0) or 0)
+                finally:
+                    store.release_lease(token)
+                if code != 0:
+                    return code
+
+                completed_instances.add(current_instance_id)
+                list_instances = getattr(store, "list_instances", None)
+                if not callable(list_instances):
+                    return 0
+                instances = list(list_instances(execution_id))
+                if not instances:
+                    return 0
+                current = next(
+                    (
+                        row
+                        for row in instances
+                        if str(_resume_field(row, "instance_id"))
+                        == current_instance_id
+                    ),
+                    None,
+                )
+                if current is None or str(_resume_field(current, "status")) != "succeeded":
+                    raise DurableStateError(
+                        "resume child returned success without a succeeded durable state"
+                    )
+                # Replay values are approved for one ResumePlan/instance only.
+                # Drop plaintext before planning the next ordered instance so
+                # it is neither leaked nor rejected there as an unknown key.
+                replay_values = {}
+                remaining = [
+                    row
+                    for row in instances
+                    if str(_resume_field(row, "status")) != "succeeded"
+                ]
+                if not remaining:
+                    return 0
+
+                if interactive or expected_hash:
+                    # A following instance owns a distinct ResumePlan.  TTY
+                    # users must choose its risky action again; controller
+                    # hashes must likewise never inherit the prior action.
+                    action = None
+                current_head = validate_resolved_head_commit(
+                    resolve_head_commit(Path.cwd())
+                )
+                approved_plan = service.build_plan(
+                    execution_id,
+                    action=action,
+                    replay_values=replay_values,
+                    current_head=current_head,
+                )
+                next_missing = tuple(
+                    _resume_field(approved_plan, "missing_replay_keys") or ()
+                )
+                if next_missing:
+                    if not interactive:
+                        print(_format_resume_plan(approved_plan))
+                        print(
+                            f"{_ts()} ❌ 次のworkflowに再入力が必要です: "
+                            + ", ".join(next_missing),
+                            file=sys.stderr,
+                        )
+                        return 1
+                    for key in next_missing:
+                        try:
+                            value = input(f"{key} を再入力: ")
+                        except EOFError:
+                            return 1
+                        if not value.strip():
+                            return 1
+                        replay_values[key] = value
+                    approved_plan = service.build_plan(
+                        execution_id,
+                        action=action,
+                        replay_values=replay_values,
+                        current_head=current_head,
+                    )
+                if interactive:
+                    next_risks = tuple(
+                        _resume_field(approved_plan, "risk_reasons") or ()
+                    )
+                    if next_risks and action is None:
+                        try:
+                            selected_action = input(
+                                "次の復旧方法 [1=reuse-session, "
+                                "2=restart-step, 3=cancel]: "
+                            ).strip()
+                        except EOFError:
+                            return 1
+                        action = {
+                            "1": "reuse-session",
+                            "2": "restart-step",
+                        }.get(selected_action)
+                        if action is None:
+                            return 1
+                        approved_plan = service.build_plan(
+                            execution_id,
+                            action=action,
+                            replay_values=replay_values,
+                            current_head=current_head,
+                        )
+                print(_format_resume_plan(approved_plan))
+                if expected_hash:
+                    print(
+                        f"{_ts()} ❌ 次のworkflowは新しいresume planです。"
+                        "表示したhashの再承認後に再開してください。",
+                        file=sys.stderr,
+                    )
+                    return 1
+                if interactive:
+                    try:
+                        answer = input(
+                            "次のresume planを実行しますか？ [y/N]: "
+                        ).strip().lower()
+                    except EOFError:
+                        return 1
+                    if answer not in {"y", "yes"}:
+                        return 1
+                approved_hash = str(
+                    _resume_field(approved_plan, "resume_plan_hash")
+                )
+                rechecked_plan = service.build_plan(
+                    execution_id,
+                    action=action,
+                    replay_values=replay_values,
+                    current_head=current_head,
+                )
+                if str(
+                    _resume_field(rechecked_plan, "resume_plan_hash")
+                ) != approved_hash:
+                    print(
+                        f"{_ts()} ❌ 次のresume planが承認後に変化しました。"
+                        "再提示が必要です。",
+                        file=sys.stderr,
+                    )
+                    return 1
+                approved_plan = rechecked_plan
+    except DurableStateError as exc:
+        print(
+            f"{_ts()} ❌ durable resumeを安全に開始できませんでした: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """エントリポイント。
 
@@ -3096,13 +3730,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         終了コード (0: 成功, 1: 失敗)
     """
     parser = _build_parser()
-    args = parser.parse_args(argv)
+    launch_argv = list(sys.argv[1:] if argv is None else argv)
+    args = parser.parse_args(launch_argv)
+    args._launch_argv = tuple(launch_argv)
 
-    _start_startup_index_refresh(args.command)
+    if args.command not in INDEX_REFRESH_COMMANDS:
+        _start_startup_index_refresh(args.command)
 
     if args.command == "orchestrate":
-        _ensure_run_workdir_env()
         return _cmd_orchestrate(args)
+
+    if args.command == "resume":
+        return _cmd_resume(args)
 
     if args.command == "qa-merge":
         return _cmd_qa_merge(args)
@@ -3694,6 +4333,62 @@ def _cmd_login(args: argparse.Namespace) -> int:
     return 0
 
 
+def _wizard_model_options(config_module: Any = None) -> list[str]:
+    """Return model choices without starting the Copilot SDK or a network fetch."""
+    model_ids = list(MODEL_CHOICES)
+    if config_module is not None and not isinstance(
+        getattr(config_module, "__file__", None), str
+    ):
+        return [MODEL_AUTO, *model_ids]
+    try:
+        if __package__:
+            from . import models_cache
+        else:  # pragma: no cover - script/flat-load execution path
+            repo_root = str(Path(__file__).resolve().parent.parent)
+            if repo_root not in sys.path:
+                sys.path.insert(0, repo_root)
+            from hve import models_cache
+
+        cached = models_cache.load(allow_stale=True)
+        if cached and cached.models:
+            model_ids = list(cached.models)
+    except (ImportError, OSError, ValueError):
+        pass
+
+    choices = [MODEL_AUTO]
+    seen = {MODEL_AUTO.casefold(), "auto"}
+    for model_id in model_ids:
+        normalized = str(model_id).strip()
+        if normalized and normalized.casefold() not in seen:
+            choices.append(normalized)
+            seen.add(normalized.casefold())
+    return choices
+
+
+def _workiq_available_without_external_probe(workiq_module: Any) -> bool:
+    """Check local Work IQ prerequisites without running the legacy npx probe."""
+    resolver = getattr(workiq_module, "resolve_npx_command", None)
+    if callable(resolver):
+        try:
+            command = resolver()
+        except (OSError, ValueError):
+            command = None
+        if isinstance(command, str):
+            return bool(command.strip())
+
+    # Flat-load tests and embedders can inject a side-effect-free module adapter.
+    # Never invoke the real module's zero-argument probe here: it can run `npx -y`.
+    if not isinstance(getattr(workiq_module, "__file__", None), str):
+        adapter = getattr(workiq_module, "is_workiq_available", None)
+        if callable(adapter):
+            try:
+                result = adapter()
+            except (OSError, ValueError):
+                return False
+            return result is True
+    return False
+
+
 def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     """インタラクティブ wizard モードのハンドラー。
 
@@ -3705,26 +4400,24 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
 
     try:
         from .console import Console
+        from . import config as _config_module
         from .config import SDKConfig
         from .workflow_registry import list_workflows, get_workflow
         from .template_engine import _WORKFLOW_DISPLAY_NAMES
         from .orchestrator import run_workflow
-        from .workiq import (
-            get_workiq_prompt_template,
-            is_workiq_available,
-            workiq_login,
-        )
+        from .orchestrator_context import OrchestratorContext
+        from . import workiq as _workiq_module
+        from .workiq import get_workiq_prompt_template
     except ImportError:
         from console import Console  # type: ignore[no-redef]
+        import config as _config_module  # type: ignore[no-redef]
         from config import SDKConfig  # type: ignore[no-redef]
         from workflow_registry import list_workflows, get_workflow  # type: ignore[no-redef]
         from template_engine import _WORKFLOW_DISPLAY_NAMES  # type: ignore[no-redef]
         from orchestrator import run_workflow  # type: ignore[no-redef]
-        from workiq import (  # type: ignore[no-redef]
-            get_workiq_prompt_template,
-            is_workiq_available,
-            workiq_login,
-        )
+        from orchestrator_context import OrchestratorContext  # type: ignore[no-redef]
+        import workiq as _workiq_module  # type: ignore[no-redef]
+        from workiq import get_workiq_prompt_template  # type: ignore[no-redef]
 
     con = Console(verbose=True, quiet=False, verbosity=3)  # wizard UI の表示は常に verbose（ワークフロー実行の verbosity はユーザー選択値で別途設定）
 
@@ -3780,21 +4473,8 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     # モデル選択 (Phase C) は分岐内でそれぞれ実行する:
     #   - クイック全自動: メインモデルのみ即座に選択 (QA/Review 別モデルは既定 OFF)
     #   - カスタム全自動 / 手動: Phase A' (機能要件詳細) の後にメイン/QA/Review をまとめて選択
-    # モデル一覧はキャッシュ→SDK→フォールバックの順で動的取得 (Phase 3 で追加)
-    # 取得失敗 / 戻り値が想定外型の場合は静的フォールバック ([MODEL_AUTO, *MODEL_CHOICES]) を使用する。
-    model_options: list = [MODEL_AUTO, *MODEL_CHOICES]
-    try:
-        try:
-            from .config import get_model_choices as _get_model_choices
-        except ImportError:
-            from config import get_model_choices as _get_model_choices  # type: ignore[no-redef]
-        _dynamic = _get_model_choices(include_auto=True)
-        # 受け取りは list[str] のみ採用 (test_main.py の mock_config_mod 経由で MagicMock が来る場合をガード)
-        if isinstance(_dynamic, list) and _dynamic and all(isinstance(x, str) for x in _dynamic):
-            model_options = _dynamic
-    except Exception:
-        # 動的取得が何らかの理由で失敗しても静的フォールバックで続行
-        pass
+    # durable 登録前はローカルキャッシュだけを読み、SDK / model API は起動しない。
+    model_options = _wizard_model_options(_config_module)
     model = None
     model_display = None
     review_model = None
@@ -3880,6 +4560,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         self_improve_goal = ""
         _disc_goal = None
         _disc_criteria = None
+        _defer_self_improve_goal_discovery = False
     else:
         # カスタム全自動 or 手動: 既存のインタラクティブ入力フロー
         # プロンプト順序は以下の Phase に再編済み:
@@ -4074,7 +4755,9 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         workiq_per_question_timeout = 1200.0
         workiq_request_timeout = 300.0
 
-        if _show_workiq_option and is_workiq_available():
+        if _show_workiq_option and _workiq_available_without_external_probe(
+            _workiq_module
+        ):
             if is_ard:
                 ard_workiq_enabled = con.prompt_yes_no(
                     "ARD で Work IQ への接続を有効にする？",
@@ -4100,53 +4783,41 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                 workiq_qa_enabled or workiq_akm_review_enabled or workiq_akm_ingest_enabled
             )
             if workiq_enabled:
-                con.spinner_start("Work IQ へのログイン中...")
-                login_ok = workiq_login(con)
-                con.spinner_stop()
-                if not login_ok:
-                    con.warning(
-                        "Work IQ へのログインに失敗しました。Work IQ 連携を無効にします。"
+                if is_akm and not workiq_qa_enabled:
+                    workiq_draft_mode = False
+                elif auto_qa and workiq_qa_enabled:
+                    workiq_draft_mode = con.prompt_yes_no(
+                        "Work IQ で回答ドラフトを自動生成する？",
+                        default=False,
                     )
-                    workiq_enabled = False
-                    # 入力フェーズも login 失敗時は OFF にする（独立フラグだが Work IQ 認証が必須のため）。
-                    workiq_akm_ingest_enabled = False
-                else:
-                    con.status("✅ Work IQ へのログインが完了しました")
-                    if is_akm and not workiq_qa_enabled:
-                        workiq_draft_mode = False
-                    elif auto_qa and workiq_qa_enabled:
-                        workiq_draft_mode = con.prompt_yes_no(
-                            "Work IQ で回答ドラフトを自動生成する？",
-                            default=False,
-                        )
-                    workiq_additional_prompt = con.prompt_input(
-                        "Work IQ (Microsoft 365 Copilot) の末尾に追加するプロンプト（省略可）",
-                        default="",
-                    )
-                    _wiq_pq_timeout_str = con.prompt_input(
-                        "Work IQ タイムアウト（秒。デフォルト: 1200 = 20 分）",
-                        default="1200",
-                    )
-                    try:
-                        workiq_per_question_timeout = float(_wiq_pq_timeout_str or "1200")
-                    except ValueError:
-                        con.warning("無効な値のため、デフォルトの 1200 秒（20 分）を使用します。")
-                        workiq_per_question_timeout = 1200.0
-                    if workiq_per_question_timeout <= 0:
-                        con.warning("0 以下の値は無効なため、デフォルトの 1200 秒（20 分）を使用します。")
-                        workiq_per_question_timeout = 1200.0
-                    _wiq_req_timeout_str = con.prompt_input(
-                        "Work IQ Request Timeout（秒。MCP ツール呼び出し 1 回あたり。デフォルト: 300 = 5 分）",
-                        default="300",
-                    )
-                    try:
-                        workiq_request_timeout = float(_wiq_req_timeout_str or "300")
-                    except ValueError:
-                        con.warning("無効な値のため、デフォルトの 300 秒（5 分）を使用します。")
-                        workiq_request_timeout = 300.0
-                    if workiq_request_timeout <= 0:
-                        con.warning("0 以下の値は無効なため、デフォルトの 300 秒（5 分）を使用します。")
-                        workiq_request_timeout = 300.0
+                workiq_additional_prompt = con.prompt_input(
+                    "Work IQ (Microsoft 365 Copilot) の末尾に追加するプロンプト（省略可）",
+                    default="",
+                )
+                _wiq_pq_timeout_str = con.prompt_input(
+                    "Work IQ タイムアウト（秒。デフォルト: 1200 = 20 分）",
+                    default="1200",
+                )
+                try:
+                    workiq_per_question_timeout = float(_wiq_pq_timeout_str or "1200")
+                except ValueError:
+                    con.warning("無効な値のため、デフォルトの 1200 秒（20 分）を使用します。")
+                    workiq_per_question_timeout = 1200.0
+                if workiq_per_question_timeout <= 0:
+                    con.warning("0 以下の値は無効なため、デフォルトの 1200 秒（20 分）を使用します。")
+                    workiq_per_question_timeout = 1200.0
+                _wiq_req_timeout_str = con.prompt_input(
+                    "Work IQ Request Timeout（秒。MCP ツール呼び出し 1 回あたり。デフォルト: 300 = 5 分）",
+                    default="300",
+                )
+                try:
+                    workiq_request_timeout = float(_wiq_req_timeout_str or "300")
+                except ValueError:
+                    con.warning("無効な値のため、デフォルトの 300 秒（5 分）を使用します。")
+                    workiq_request_timeout = 300.0
+                if workiq_request_timeout <= 0:
+                    con.warning("0 以下の値は無効なため、デフォルトの 300 秒（5 分）を使用します。")
+                    workiq_request_timeout = 300.0
 
         # ── Code Review Agent ─────────────────────────────
         auto_coding_agent_review = con.prompt_yes_no(
@@ -4207,6 +4878,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         self_improve_goal = ""
         _disc_goal = None
         _disc_criteria = None
+        _defer_self_improve_goal_discovery = False
         if auto_self_improve:
             _si_iter_str = con.prompt_input("自己改善 最大繰り返し回数（例: 3 → 最大3回スキャン→改善→検証を繰り返す）", default="3")
             try:
@@ -4240,28 +4912,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                 default="",
             )
             if not self_improve_goal:
-                from hve.self_improve import discover_task_goal_with_llm, discover_task_goal_from_docs
-                _env_cfg = SDKConfig.from_env()
-                con.spinner_start("自動ゴール探索中（LLM）...")
-                try:
-                    _disc_result = asyncio.run(discover_task_goal_with_llm(
-                        workflow_id=wf.id,
-                        model=model,
-                        cli_path=_env_cfg.cli_path or "",
-                        github_token=_env_cfg.resolve_token(),
-                        cli_url=_env_cfg.cli_url or "",
-                        target_scope=self_improve_target_scope,
-                    ))
-                except Exception as _disc_err:
-                    con.warning(f"LLM によるゴール探索に失敗しました（{_disc_err}）。静的解析にフォールバックします。")
-                    _disc_result = discover_task_goal_from_docs(
-                        workflow_id=wf.id,
-                        target_scope=self_improve_target_scope,
-                    )
-                finally:
-                    con.spinner_stop()
-                _disc_goal = _disc_result["task_goal"]
-                _disc_criteria = _disc_goal.get("success_criteria") or None
+                _defer_self_improve_goal_discovery = True
 
         # ── Phase F: GitHub 連携 ──────────────────────────────
         create_issues = con.prompt_yes_no("GitHub Issue を作成する？", default=False)
@@ -4420,6 +5071,8 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         elif _disc_goal:
             _disp = (_disc_goal.get("goal_description", "") or "")[:60] + ("..." if len(_disc_goal.get("goal_description", "")) > 60 else "")
             summary_lines.append(f"自己改善 ゴール     : (自動検索: {_disp})")
+        elif _defer_self_improve_goal_discovery:
+            summary_lines.append("自己改善 ゴール     : (durable 登録後に自動検索)")
         else:
             summary_lines.append(f"自己改善 ゴール     : (自動: ワークフロー '{wf.id}' の標準ゴール)")
     for k, v in params_extra.items():
@@ -4580,6 +5233,63 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     }
     params.update(params_extra)
 
+    try:
+        durable_identity = _register_standard_execution(
+            wf.id,
+            cfg,
+            params,
+            _build_resolved_replay_argv(wf.id, cfg, params, args=args),
+            args=args,
+        )
+    except _DurableRegistrationFailure:
+        con.error("durable execution の登録に失敗しました。外部処理は開始していません。")
+        return 1
+
+    _start_startup_index_refresh(getattr(args, "command", None))
+
+    orchestrator_ctx = None
+    if durable_identity is not None:
+        execution_id, instance_id = durable_identity
+        orchestrator_ctx = OrchestratorContext(
+            run_id=cfg.run_id or "",
+            execution_id=execution_id,
+            instance_id=instance_id,
+            split_fork_enabled=False,
+            continue_on_error=True,
+        )
+
+    if _defer_self_improve_goal_discovery and not cfg.dry_run:
+        from hve.self_improve import (
+            discover_task_goal_from_docs,
+            discover_task_goal_with_llm,
+        )
+
+        con.spinner_start("自動ゴール探索中（LLM）...")
+        try:
+            _disc_result = asyncio.run(discover_task_goal_with_llm(
+                workflow_id=wf.id,
+                model=model,
+                cli_path=cfg.cli_path or "",
+                github_token=cfg.resolve_token(),
+                cli_url=cfg.cli_url or "",
+                target_scope=self_improve_target_scope,
+            ))
+        except Exception as _disc_err:
+            con.warning(
+                f"LLM によるゴール探索に失敗しました（{_disc_err}）。"
+                "静的解析にフォールバックします。"
+            )
+            _disc_result = discover_task_goal_from_docs(
+                workflow_id=wf.id,
+                target_scope=self_improve_target_scope,
+            )
+        finally:
+            con.spinner_stop()
+        _disc_goal = _disc_result["task_goal"]
+        _disc_criteria = _disc_goal.get("success_criteria") or None
+        if _disc_criteria:
+            cfg.self_improve_success_criteria = _disc_criteria
+
     # ── バリデーション ────────────────────────────────────
     if not _run_startup_configuration_preflight(
         cfg,
@@ -4608,6 +5318,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                 workflow_id=wf.id,
                 params=params,
                 config=cfg,
+                orchestrator_ctx=orchestrator_ctx,
             )
         )
     except KeyboardInterrupt:
@@ -5045,6 +5756,42 @@ def _cmd_orchestrate_autopilot_chain(args: argparse.Namespace) -> int:
     return 0
 
 
+def _validate_internal_durable_args(args: argparse.Namespace) -> Optional[str]:
+    """Validate the two allowed internal child identity shapes before preflight."""
+    execution_id = getattr(args, "_execution_id", None)
+    instance_id = getattr(args, "_instance_id", None)
+    expected_version = getattr(args, "_expected_state_version", None)
+    recovery_action = getattr(args, "_recovery_action", None)
+    lease_owner = getattr(args, "_lease_owner", None)
+    lease_generation = getattr(args, "_lease_generation", None)
+
+    if bool(execution_id) != bool(instance_id):
+        return "internal execution-id and instance-id must be provided together"
+    if execution_id is not None and not str(execution_id).strip():
+        return "internal execution-id must not be blank"
+    if instance_id is not None and not str(instance_id).strip():
+        return "internal instance-id must not be blank"
+
+    recovery_values = (
+        expected_version,
+        recovery_action,
+        lease_owner,
+        lease_generation,
+    )
+    has_recovery_value = any(value is not None for value in recovery_values)
+    if has_recovery_value:
+        if not execution_id or not instance_id:
+            return "internal recovery values require execution-id and instance-id"
+        if any(value is None for value in recovery_values):
+            return (
+                "internal resume child requires expected-state-version, "
+                "recovery-action, lease-owner, and lease-generation together"
+            )
+        if not str(lease_owner).strip():
+            return "internal lease-owner must not be blank"
+    return None
+
+
 def _cmd_orchestrate(args: argparse.Namespace) -> int:
     """orchestrate サブコマンドのハンドラー。"""
     # HVE CLI Orchestrator 実行配下シグナルは OrchestratorContext を明示引数で
@@ -5069,7 +5816,29 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
     if _app_id_error:
         print(f"{_ts()} ❌ {_app_id_error}", file=sys.stderr)
         return 1
+    _durable_args_error = _validate_internal_durable_args(args)
+    if _durable_args_error:
+        print(f"{_ts()} ❌ {_durable_args_error}", file=sys.stderr)
+        return 1
+    if _autopilot_chain_raw and any(
+        getattr(args, name, None) is not None
+        for name in (
+            "_execution_id",
+            "_instance_id",
+            "_expected_state_version",
+            "_recovery_action",
+            "_lease_owner",
+            "_lease_generation",
+        )
+    ):
+        print(
+            f"{_ts()} ❌ durable internal arguments are not supported by Autopilot.",
+            file=sys.stderr,
+        )
+        return 1
     if _autopilot_chain_raw:
+        _ensure_run_workdir_env()
+        _start_startup_index_refresh(args.command)
         return _cmd_orchestrate_autopilot_chain(args)
     if not args.workflow:
         print(
@@ -5125,6 +5894,38 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
         print(f"{_ts()} ❌ {exc}", file=sys.stderr)
         return 1
 
+    replay_argv = _build_resolved_replay_argv(
+        args.workflow,
+        config,
+        params,
+        args=args,
+    )
+    try:
+        durable_identity = _register_standard_execution(
+            args.workflow,
+            config,
+            params,
+            replay_argv,
+            args=args,
+        )
+    except _DurableRegistrationFailure:
+        print(
+            f"{_ts()} ❌ durable execution の登録に失敗しました。"
+            "外部処理は開始していません。",
+            file=sys.stderr,
+        )
+        return 1
+
+    _ensure_run_workdir_env()
+    if not config.run_id:
+        config.run_id = os.environ.get("HVE_RUN_ID", "")
+    _start_startup_index_refresh(args.command)
+
+    execution_id = getattr(args, "_execution_id", None)
+    instance_id = getattr(args, "_instance_id", None)
+    if durable_identity is not None:
+        execution_id, instance_id = durable_identity
+
     # remote 検証は active step 解決後の run_workflow が担う。ここでは、
     # Copilot 認証より前に判定できるローカル設定不整合だけを fail-closed にする。
     if not _run_startup_configuration_preflight(
@@ -5156,6 +5957,12 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
     _strict = bool(getattr(args, "strict", False))
     orchestrator_ctx = OrchestratorContext(
         run_id=config.run_id or "",
+        execution_id=execution_id,
+        instance_id=instance_id,
+        expected_state_version=getattr(args, "_expected_state_version", None),
+        recovery_action=getattr(args, "_recovery_action", None),
+        lease_owner=getattr(args, "_lease_owner", None),
+        lease_generation=getattr(args, "_lease_generation", None),
         split_fork_enabled=False,
         continue_on_error=not _strict,
     )

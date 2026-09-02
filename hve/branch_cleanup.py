@@ -170,6 +170,13 @@ def cleanup_local_branch(
 def _run_git(run: Callable[..., Any], command: list) -> Optional[Any]:
     """git を shell を介さずに実行する。起動失敗・タイムアウトは ``None``。"""
     try:
-        return run(command, capture_output=True, text=True, timeout=_GIT_TIMEOUT)
+        return run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=_GIT_TIMEOUT,
+        )
     except (OSError, subprocess.SubprocessError):
         return None

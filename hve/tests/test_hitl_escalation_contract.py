@@ -67,6 +67,13 @@ class TestEscalationRequirementIsDeclared:
         assert "updatedAt" in body
         assert "付与時刻ではない" in body
 
+    def test_requirement_declares_manual_only_escalation(self) -> None:
+        section = _enclosing_section("FR-CLOUD-41")
+        text = _REQUIREMENT_DEFINITION.read_text(encoding="utf-8-sig")
+        body = text.split(section, 1)[1].split("\n## ", 1)[0]
+        assert "`workflow_dispatch` だけで起動" in body
+        assert "自動トリガーを持ってはならない" in body
+
 
 class TestEscalationImplementationMatches:
     def test_escalation_workflow_uses_the_declared_sla_default(self) -> None:
@@ -84,7 +91,7 @@ class TestEscalationImplementationMatches:
             (_WORKFLOWS / _ESCALATE_WORKFLOW).read_text(encoding="utf-8")
         )
         on_section = data.get(True, {}) or data.get("on", {})
-        assert set(on_section) == {"schedule", "workflow_dispatch"}
+        assert set(on_section) == {"workflow_dispatch"}
         assert "sla_hours" in on_section["workflow_dispatch"]["inputs"]
 
     def test_resolve_workflow_exists(self) -> None:

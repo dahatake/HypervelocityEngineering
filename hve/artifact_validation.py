@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ast
 import base64
+import glob
 import hashlib
 import json
 import re
@@ -53,6 +54,28 @@ _CONTENT_CATEGORIES = [
     "ベストプラクティス逸脱",
     "運用設計未定義",
 ]
+
+
+def find_missing_output_paths(
+    repo_root: "Path | str",
+    declared_paths: Iterable[str],
+    prefix_gates: Iterable[str] = (),
+) -> List[str]:
+    """宣言された成果物の欠落を副作用なしで返す。
+
+    確定 path はそのまま、prefix gate は前方一致する file / directory が無い
+    場合だけ末尾 ``*`` 付きで返す。入力順と欠落表示は Runner の既存契約を
+    維持し、filesystem や入力 iterable は変更しない。
+    """
+    root = Path(repo_root)
+    missing = [path for path in declared_paths if not (root / path).exists()]
+    for prefix in prefix_gates:
+        target = root / prefix
+        parent = target.parent
+        if parent.is_dir() and any(parent.glob(f"{glob.escape(target.name)}*")):
+            continue
+        missing.append(f"{prefix}*")
+    return missing
 
 
 def is_original_docs_questionnaire_filename(path: "Path | str") -> bool:

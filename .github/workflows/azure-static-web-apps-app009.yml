@@ -6,60 +6,62 @@ on:
       resource_group:
         description: Azure resource group
         required: true
-        default: dahatake-membership
+        type: string
       static_web_app_name:
         description: Azure Static Web App name
         required: true
-        default: swa-app009-dahatake-membership
-  push:
-    branches:
-      - main
-    paths:
-      - src/app/**
-      - src/infra/azure/create-azure-webui-resources*.sh
-      - src/infra/azure/verify-webui-resources.sh
-      - .github/workflows/azure-static-web-apps-app009.yml
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
-    branches:
-      - main
-    paths:
-      - src/app/**
-      - src/infra/azure/create-azure-webui-resources*.sh
-      - src/infra/azure/verify-webui-resources.sh
-      - .github/workflows/azure-static-web-apps-app009.yml
+        type: string
 
 permissions:
   id-token: write
   contents: read
-  pull-requests: write
 
 jobs:
   build_and_deploy_job:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     environment: copilot
+    env:
+      RESOURCE_GROUP: ${{ inputs.resource_group }}
+      STATIC_WEB_APP_NAME: ${{ inputs.static_web_app_name }}
     steps:
+      - name: Validate deployment target inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${RESOURCE_GROUP//[[:space:]]/}" ]]; then
+            echo "resource_group is required" >&2
+            exit 1
+          fi
+          if [[ -z "${STATIC_WEB_APP_NAME//[[:space:]]/}" ]]; then
+            echo "static_web_app_name is required" >&2
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
         with:
           submodules: true
           lfs: false
 
-      - uses: azure/login@v2
+      - uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Resolve deployment target
-        id: target
+      - name: Confirm Azure Static Web App target
         shell: bash
         run: |
           set -euo pipefail
-          resource_group="${{ github.event.inputs.resource_group || 'dahatake-membership' }}"
-          static_web_app_name="${{ github.event.inputs.static_web_app_name || 'swa-app009-dahatake-membership' }}"
-          echo "resource_group=${resource_group}" >> "$GITHUB_OUTPUT"
-          echo "static_web_app_name=${static_web_app_name}" >> "$GITHUB_OUTPUT"
+          target_id="$(az staticwebapp show \
+            --name "${STATIC_WEB_APP_NAME}" \
+            --resource-group "${RESOURCE_GROUP}" \
+            --query id \
+            --output tsv)"
+          if [[ -z "${target_id}" ]]; then
+            echo "Azure Static Web App target was not found" >&2
+            exit 1
+          fi
+          echo "Azure Static Web App target confirmed"
 
       - name: Get Azure Static Web Apps deployment token
         id: swa_token
@@ -67,8 +69,8 @@ jobs:
         run: |
           set -euo pipefail
           deployment_token="$(az staticwebapp secrets list \
-            --name "${{ steps.target.outputs.static_web_app_name }}" \
-            --resource-group "${{ steps.target.outputs.resource_group }}" \
+            --name "${STATIC_WEB_APP_NAME}" \
+            --resource-group "${RESOURCE_GROUP}" \
             --query "properties.apiKey" \
             -o tsv)"
           if [[ -z "$deployment_token" ]]; then
@@ -80,56 +82,12 @@ jobs:
 
       - name: Build and Deploy
         id: builddeploy
-        uses: Azure/static-web-apps-deploy@v1
+        uses: Azure/static-web-apps-deploy@1a947af9992250f3bc2e68ad0754c0b0c11566c9 # v1
         with:
           azure_static_web_apps_api_token: ${{ steps.swa_token.outputs.deployment_token }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: upload
           app_location: src/app
           api_location: ''
           output_location: ''
           skip_app_build: true
           production_branch: main
-
-  close_pull_request_job:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
-    runs-on: ubuntu-latest
-    environment: copilot
-    steps:
-      - uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Resolve deployment target
-        id: target
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "resource_group=${{ github.event.inputs.resource_group || 'dahatake-membership' }}" >> "$GITHUB_OUTPUT"
-          echo "static_web_app_name=${{ github.event.inputs.static_web_app_name || 'swa-app009-dahatake-membership' }}" >> "$GITHUB_OUTPUT"
-
-      - name: Get Azure Static Web Apps deployment token
-        id: swa_token
-        shell: bash
-        run: |
-          set -euo pipefail
-          deployment_token="$(az staticwebapp secrets list \
-            --name "${{ steps.target.outputs.static_web_app_name }}" \
-            --resource-group "${{ steps.target.outputs.resource_group }}" \
-            --query "properties.apiKey" \
-            -o tsv)"
-          if [[ -z "$deployment_token" ]]; then
-            echo "Deployment token is empty" >&2
-            exit 1
-          fi
-          echo "::add-mask::${deployment_token}"
-          echo "deployment_token=${deployment_token}" >> "$GITHUB_OUTPUT"
-
-      - name: Close Pull Request
-        id: closepullrequest
-        uses: Azure/static-web-apps-deploy@v1
-        with:
-          azure_static_web_apps_api_token: ${{ steps.swa_token.outputs.deployment_token }}
-          action: close

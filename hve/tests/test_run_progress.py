@@ -42,20 +42,33 @@ class TestProgressStore:
         run_progress.record_step("r1", "aas", "1.1", "succeeded", path=progress_path)
         run_progress.record_step("r1", "aas", "1.2", "failed", path=progress_path)
         run_progress.record_step("r1", "aas", "1.3", "succeeded", path=progress_path)
-        assert run_progress.completed_steps("r1", path=progress_path) == frozenset({"1.1", "1.3"})
+        assert run_progress.completed_steps("r1", "aas", path=progress_path) == frozenset({"1.1", "1.3"})
 
     def test_unknown_run_returns_none(self, progress_path: Path) -> None:
         run_progress.record_step("r1", "aas", "1.1", "succeeded", path=progress_path)
-        assert run_progress.completed_steps("r2", path=progress_path) is None
+        assert run_progress.completed_steps("r2", "aas", path=progress_path) is None
 
     def test_missing_file_returns_none(self, progress_path: Path) -> None:
-        assert run_progress.completed_steps("r1", path=progress_path) is None
+        assert run_progress.completed_steps("r1", "aas", path=progress_path) is None
 
     def test_records_are_isolated_per_run(self, progress_path: Path) -> None:
         run_progress.record_step("r1", "aas", "1.1", "succeeded", path=progress_path)
         run_progress.record_step("r2", "aas", "2.1", "succeeded", path=progress_path)
-        assert run_progress.completed_steps("r1", path=progress_path) == frozenset({"1.1"})
-        assert run_progress.completed_steps("r2", path=progress_path) == frozenset({"2.1"})
+        assert run_progress.completed_steps("r1", "aas", path=progress_path) == frozenset({"1.1"})
+        assert run_progress.completed_steps("r2", "aas", path=progress_path) == frozenset({"2.1"})
+
+    def test_records_are_isolated_per_workflow_within_the_same_run(
+        self, progress_path: Path
+    ) -> None:
+        run_progress.record_step("r1", "aas", "1.1", "succeeded", path=progress_path)
+        run_progress.record_step("r1", "aad-web", "2.1", "succeeded", path=progress_path)
+
+        assert run_progress.completed_steps(
+            "r1", "aas", path=progress_path
+        ) == frozenset({"1.1"})
+        assert run_progress.completed_steps(
+            "r1", "aad-web", path=progress_path
+        ) == frozenset({"2.1"})
 
     def test_record_holds_only_the_declared_fields(self, progress_path: Path) -> None:
         run_progress.record_step("r1", "aas", "1.1", "succeeded", path=progress_path)
@@ -84,14 +97,15 @@ class TestProgressStore:
     def test_unreadable_line_is_ignored(self, progress_path: Path) -> None:
         progress_path.write_text("not-json\n", encoding="utf-8")
         run_progress.record_step("r1", "aas", "1.1", "succeeded", path=progress_path)
-        assert run_progress.completed_steps("r1", path=progress_path) == frozenset({"1.1"})
+        assert run_progress.completed_steps("r1", "aas", path=progress_path) == frozenset({"1.1"})
 
 
 class TestRequirementIsDeclared:
     def test_fr_state_04_declares_the_store(self) -> None:
         block = _requirement_block("FR-STATE-04")
         assert "hve/.run-progress.jsonl" in block
-        assert "復元しない" in block
+        assert "legacy reader 専用" in block
+        assert "自動 import" in block
 
     def test_fr_cli_86_declares_fail_closed_for_unknown_run(self) -> None:
         block = _requirement_block("FR-CLI-86")
@@ -130,22 +144,22 @@ class TestRunWorkflowResultShape:
     def test_every_dict_return_carries_the_required_keys(self) -> None:
         source = (_REPO_ROOT / "hve" / "orchestrator.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
-        run_workflow = next(
+        workflow_body = next(
             node
             for node in ast.walk(tree)
             if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef))
-            and node.name == "run_workflow"
+            and node.name == "_run_workflow_body"
         )
         nested = {
             id(inner)
-            for outer in ast.walk(run_workflow)
+            for outer in ast.walk(workflow_body)
             if isinstance(outer, (ast.FunctionDef, ast.AsyncFunctionDef))
-            and outer is not run_workflow
+            and outer is not workflow_body
             for inner in ast.walk(outer)
         }
 
         violations = []
-        for node in ast.walk(run_workflow):
+        for node in ast.walk(workflow_body):
             if not isinstance(node, ast.Return) or id(node) in nested:
                 continue
             if not isinstance(node.value, ast.Dict):

@@ -173,6 +173,6 @@ class TestProducerWiring:
     def test_run_workflow_emits_after_issue_and_branch_are_resolved(self) -> None:
         import inspect
 
-        source = inspect.getsource(orchestrator.run_workflow)
+        source = inspect.getsource(orchestrator._run_workflow_body)
         assert source.count("_emit_github_target_event(") >= 2
         assert "created_by_hve=hve_created_branch" in source

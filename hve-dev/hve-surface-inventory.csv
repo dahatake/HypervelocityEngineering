@@ -195,7 +195,7 @@ cloud,function,_mapping_paths,.github/scripts/validate-hve-requirement-traceabil
 cloud,function,_validate_requirement_ids,.github/scripts/validate-hve-requirement-traceability.py,138,raise ValidationError(f'requirement inventory is missing or conflicting: {requirement_id}'),,1
 cloud,function,_validate_test_paths,.github/scripts/validate-hve-requirement-traceability.py,155,raise ValidationError(f'test path is outside the allowlist: {path}'),,1
 cloud,function,_require_evidence,.github/scripts/validate-hve-requirement-traceability.py,173,raise ValidationError('RED/GREEN evidence is malformed'),,3
-cloud,function,_validate_fields,.github/scripts/validate-hve-requirement-traceability.py,184,raise ValidationError('invalid change type'),,1
+cloud,function,_validate_fields,.github/scripts/validate-hve-requirement-traceability.py,184,raise ValidationError('invalid change type'),,3
 cloud,function,validate,.github/scripts/validate-hve-requirement-traceability.py,235,raise ValidationError('repository root is not a directory'),,4
 cloud,function,main,.github/scripts/validate-hve-requirement-traceability.py,246,return 0,,53
 cloud,function,load_exceptions,.github/scripts/validate-io-contract.py,45,"return {'static_paths': [], 'external_paths': [], 'skip_agents': []}",,1
@@ -208,8 +208,13 @@ cloud,function,check_static_input_paths,.github/scripts/validate-io-contract.py,
 cloud,function,check_integrity,.github/scripts/validate-io-contract.py,198,Verify required agent_artifact inputs have a matching producer.,,1
 cloud,function,main,.github/scripts/validate-io-contract.py,273,return 0 if not all_errors else 1,,53
 cloud,function,check_registry_mismatch,.github/scripts/validate-io-contract.py,318,Cross-check io-contracts against hve/workflow_registry.py StepDefs.,,1
-cloud,function,validate_file,.github/scripts/validate-knowledge-files.py,58,1 ファイルを検証し、エラーメッセージのリストを返す（空 = OK）。,,1
-cloud,function,main,.github/scripts/validate-knowledge-files.py,89,"knowledge_dir 内の全 D??-*.md を検証する。終了コード: 0=成功, 1=エラー。",,53
+cloud,function,_validate_patterns,.github/scripts/validate-knowledge-files.py,64,return errors,,2
+cloud,function,_validate_fields,.github/scripts/validate-knowledge-files.py,84,return [f'[METADATA] 必須フィールド「{field}」が見つかりません。' for field in fields if field not in content],,3
+cloud,function,_validate_main,.github/scripts/validate-knowledge-files.py,92,return errors,,1
+cloud,function,_validate_changelog,.github/scripts/validate-knowledge-files.py,104,return errors,,1
+cloud,function,validate_file,.github/scripts/validate-knowledge-files.py,131,Validate one main document or ChangeLog and return all errors.,,1
+cloud,function,validate_pairs,.github/scripts/validate-knowledge-files.py,148,Require every main document and ChangeLog to have its counterpart.,,1
+cloud,function,main,.github/scripts/validate-knowledge-files.py,164,"knowledge_dir 内の全 D??-*.md を検証する。終了コード: 0=成功, 1=エラー。",,53
 cloud,class,Violation,.github/scripts/validate-skill-routing.py,36,Represents a validation finding.,,18
 cloud,class,Frontmatter,.github/scripts/validate-skill-routing.py,45,Minimal frontmatter fields needed by this validator.,,3
 cloud,function,parse_args,.github/scripts/validate-skill-routing.py,54,Parse CLI options.,,36
@@ -350,7 +355,7 @@ core,class,SettingsBackend,cq/gui/settings_section.py,44,class SettingsBackend(P
 core,class,CqIndexSection,cq/gui/settings_section.py,51,Code Query management panel shared by standalone and HVE hosts.,,2
 core,function,defaults,cq/gui/settings_store.py,25,"return {'cq': dict(_CQ_DEFAULTS), 'options': dict(_OPTION_DEFAULTS)}",,21
 core,function,detect_settings_path,cq/gui/settings_store.py,32,return root / '.cq-gui-settings.txt',,8
-core,function,load,cq/gui/settings_store.py,40,return merged,,60
+core,function,load,cq/gui/settings_store.py,40,return merged,,61
 core,function,save,cq/gui/settings_store.py,65,Atomically save CQ-owned values while preserving all foreign settings.,,13
 core,function,parse_semicolon_list,cq/gui/settings_store.py,94,return values,,5
 core,function,serialize_semicolon_list,cq/gui/settings_store.py,106,return ';'.join(normalised),,5
@@ -519,7 +524,7 @@ core,class,Grammar,cq/languages/treesitter.py,43,Everything tree-sitter needs to
 core,function,cache_key,cq/languages/treesitter.py,75,Identity of the compiled parser: the module plus the factory it calls.,,2
 core,function,parser_for,cq/languages/treesitter.py,86,"Return a cached parser, importing the optional grammar on first use.",,2
 core,function,parse,cq/languages/treesitter.py,114,return parser_for(grammar).parse(source.encode('utf-8')),,52
-core,function,text,cq/languages/treesitter.py,118,"return src[node.start_byte:node.end_byte].decode('utf-8', 'replace')",,1229
+core,function,text,cq/languages/treesitter.py,118,"return src[node.start_byte:node.end_byte].decode('utf-8', 'replace')",,1233
 core,function,named_child_by_type,cq/languages/treesitter.py,122,return None,,22
 core,function,descend_for,cq/languages/treesitter.py,129,Walk down *named* children looking for one of ``targets``.,,6
 core,function,field_name,cq/languages/treesitter.py,148,"return text(target, src) if target is not None else ''",,56
@@ -561,7 +566,7 @@ core,function,get_chunk,cq/search.py,80,Return one indexed chunk with its parser
 core,class,Hit,cq/search.py,101,return payload,,100
 core,function,sanitize_match,cq/search.py,135,Reduce a free-form query to FTS5 barewords joined by implicit AND.,,2
 core,function,choose_route,cq/search.py,145,return 'bm25',,2
-core,function,search,cq/search.py,158,raise SearchError('either a query or a regex is required'),,388
+core,function,search,cq/search.py,158,raise SearchError('either a query or a regex is required'),,390
 core,function,_apply_return_unit,cq/search.py,210,"def _apply_return_unit(conn, hits: Sequence[Hit], return_unit: str) -> None:",,4
 core,function,_reduce_to_symbols,cq/search.py,217,Drop the body and attach the enclosing symbol's name and kind (FR-CQ-17).,,2
 core,function,_semantic_neighbours,cq/search.py,240,"Chunk ids ranked by cosine, or ``[]`` when vectors are unusable (FR-CQ-17).",,2
@@ -570,7 +575,7 @@ core,function,_fuse,cq/search.py,294,Run every route and merge the ranked lists 
 core,function,_widen_to_chunk_bodies,cq/search.py,358,Replace each excerpt with its whole chunk body (FR-CQ-06).,,2
 core,function,_guard_freshness,cq/search.py,379,Re-index small drifts before answering; report larger ones as stale.,,2
 core,function,_fallback_order,cq/search.py,409,return chains[route],,2
-core,function,_run,cq/search.py,421,"return _bm25(conn, query, top_k, radius, paths)",,50
+core,function,_run,cq/search.py,421,"return _bm25(conn, query, top_k, radius, paths)",,51
 core,function,_path_clause,cq/search.py,435,"return (f' AND {column} GLOB ?', [paths]) if paths else ('', [])",,14
 core,function,_test_rank,cq/search.py,439,"1 for test code, 0 otherwise: implementations outrank their tests.",,10
 core,function,_symbol,cq/search.py,446,return hits,,2
@@ -621,7 +626,7 @@ core,function,_resolve_log_path,cq/usage_log.py,62,return (base / USAGE_LOG_RELA
 core,function,append_record,cq/usage_log.py,67,1 レコードを ``.cq/usage.jsonl`` に追記する。,,22
 core,function,db_path_for,cq/vectors.py,40,return Path('.cq') / f'vectors-{profile}.sqlite',,22
 core,function,open_store,cq/vectors.py,45,def open_store(path: Path) -> Iterator[sqlite3.Connection]:,,46
-core,function,replace,cq/vectors.py,57,Rewrite the whole store. Partial updates would need chunk-level deletes.,,249
+core,function,replace,cq/vectors.py,57,Rewrite the whole store. Partial updates would need chunk-level deletes.,,252
 core,function,model_of,cq/vectors.py,78,return row['value'] if row else None,,2
 core,function,read_all,cq/vectors.py,83,"Return vectors whose file is unchanged, or ``{}`` if the store is unusable.",,2
 core,function,rank,cq/vectors.py,104,"Cosine ranking over already L2-normalised rows, so a dot product suffices.",,60
@@ -649,103 +654,116 @@ core,class,_OneShotBundle,hve-dev/evaluate_repository_query.py,658,No-tool bundl
 core,function,build_default_runners,hve-dev/evaluate_repository_query.py,672,Build the controlled local/one-shot/Agentic runner trio.,,1
 core,function,_build_parser,hve-dev/evaluate_repository_query.py,809,return parser,,4
 core,function,main,hve-dev/evaluate_repository_query.py,830,return 0,,53
-core,constant,NORMATIVE_LITERALS,hve-dev/generate_tdd_inventory.py,39,NORMATIVE_LITERALS = (,validation-confirmed;task_scope;context_size;split_decision;implementation_files;subissues_count;hve-traceability,3
-core,function,git_files,hve-dev/generate_tdd_inventory.py,84,return [path for path in candidates if (ROOT / path).is_file()],,1
-core,function,category_for_test_path,hve-dev/generate_tdd_inventory.py,97,return None,,2
-core,function,compact,hve-dev/generate_tdd_inventory.py,117,"return surface_export.compact(value, limit)",,39
-core,function,safe_unparse,hve-dev/generate_tdd_inventory.py,121,return surface_export.safe_unparse(node),,15
-core,function,is_fixture_decorator,hve-dev/generate_tdd_inventory.py,125,return text == 'pytest.fixture' or text.startswith('pytest.fixture(') or text.endswith('.fixture') or ('.fixture(' in text),,1
-core,function,is_parametrize_decorator,hve-dev/generate_tdd_inventory.py,135,return 'parametrize' in safe_unparse(decorator),,1
-core,function,is_pytest_mark,hve-dev/generate_tdd_inventory.py,139,return text.startswith('pytest.mark.') or '.pytest.mark.' in text,,1
-core,class,EvidenceVisitor,hve-dev/generate_tdd_inventory.py,144,class EvidenceVisitor(ast.NodeVisitor):,,1
-core,function,collect_evidence,hve-dev/generate_tdd_inventory.py,185,return ' | '.join(parts),,1
-core,function,classify_py_function,hve-dev/generate_tdd_inventory.py,202,"return (kind, class_names[-1] if class_names else 'module', decorators)",,1
-core,function,iter_py_defs,hve-dev/generate_tdd_inventory.py,230,"def iter_py_defs(tree: ast.Module) -> Iterable[tuple[ast.FunctionDef | ast.AsyncFunctionDef, tuple[tuple[str, str], ...]]]:",,1
-core,function,parse_python_test,hve-dev/generate_tdd_inventory.py,248,return rows,,1
-core,function,parse_powershell_test,hve-dev/generate_tdd_inventory.py,350,return rows,,1
-core,function,parse_shell_test,hve-dev/generate_tdd_inventory.py,414,return rows,,1
-core,function,collect_tests,hve-dev/generate_tdd_inventory.py,487,"return (rows, selected_files)",,1
-core,function,row_line_number,hve-dev/generate_tdd_inventory.py,506,return int(str(row.get('line') or 0)),,1
-core,function,section_from_heading,hve-dev/generate_tdd_inventory.py,513,return None,,1
-core,function,active_status_for_text,hve-dev/generate_tdd_inventory.py,519,return 'active-or-described',,2
-core,function,unique_in_order,hve-dev/generate_tdd_inventory.py,527,return result,,3
-core,function,defined_feature_ids_in_line,hve-dev/generate_tdd_inventory.py,538,Return feature IDs only when the line appears to define them.,,1
-core,function,defined_gate_ids_in_line,hve-dev/generate_tdd_inventory.py,552,return unique_in_order(ids),,1
-core,function,collect_features_from_requirement_definition,hve-dev/generate_tdd_inventory.py,560,return deduped,,1
-core,function,collect_workflow_features_from_code,hve-dev/generate_tdd_inventory.py,609,return rows,,1
-core,function,collect_features,hve-dev/generate_tdd_inventory.py,665,return rows,,1
-core,function,parse_mapping_ids,hve-dev/generate_tdd_inventory.py,672,return mapping,,1
-core,function,mapping_ids_from_text,hve-dev/generate_tdd_inventory.py,706,return unique_in_order(ids),,1
-core,function,canonical_feature_id,hve-dev/generate_tdd_inventory.py,716,"return re.sub('-§[0-9.]+$', '', feature_id)",,4
-core,function,write_csv,hve-dev/generate_tdd_inventory.py,720,"def write_csv(path: pathlib.Path, rows: list[dict[str, object]], fieldnames: list[str]) -> None:",,3
-core,function,scope_module,hve-dev/generate_tdd_inventory.py,727,§3.7 対象境界の単一機械判定（FR-MAINT-05）。ここで境界を再定義しない。,,1
-core,function,surface_for_path,hve-dev/generate_tdd_inventory.py,740,return 'core',,5
-core,function,literals_in,hve-dev/generate_tdd_inventory.py,752,"return surface_export.literals_in(text, NORMATIVE_LITERALS)",,7
-core,function,summarize_definition,hve-dev/generate_tdd_inventory.py,756,"return surface_export.summarize_definition(node, segment)",,3
-core,function,collect_surface_symbols,hve-dev/generate_tdd_inventory.py,760,FR-CQ-10: 抽出アルゴリズムは cq.surface_export に単一実装する。,,1
-core,function,write_policy,hve-dev/generate_tdd_inventory.py,770,def write_policy() -> None:,,1
-core,function,write_crosswalk,hve-dev/generate_tdd_inventory.py,813,"def write_crosswalk(test_rows: list[dict[str, object]], feature_rows: list[dict[str, object]], mapping: dict[str, dict[str, object]]) -> None:",,1
-core,function,main,hve-dev/generate_tdd_inventory.py,923,return 0,,53
+core,constant,NORMATIVE_LITERALS,hve-dev/generate_tdd_inventory.py,40,NORMATIVE_LITERALS = (,validation-confirmed;task_scope;context_size;split_decision;implementation_files;subissues_count;hve-traceability,3
+core,function,git_files,hve-dev/generate_tdd_inventory.py,85,return [path for path in candidates if (ROOT / path).is_file()],,1
+core,function,category_for_test_path,hve-dev/generate_tdd_inventory.py,98,return None,,2
+core,function,compact,hve-dev/generate_tdd_inventory.py,118,"return surface_export.compact(value, limit)",,39
+core,function,safe_unparse,hve-dev/generate_tdd_inventory.py,122,return surface_export.safe_unparse(node),,15
+core,function,is_fixture_decorator,hve-dev/generate_tdd_inventory.py,126,return text == 'pytest.fixture' or text.startswith('pytest.fixture(') or text.endswith('.fixture') or ('.fixture(' in text),,1
+core,function,is_parametrize_decorator,hve-dev/generate_tdd_inventory.py,136,return 'parametrize' in safe_unparse(decorator),,1
+core,function,is_pytest_mark,hve-dev/generate_tdd_inventory.py,140,return text.startswith('pytest.mark.') or '.pytest.mark.' in text,,1
+core,class,EvidenceVisitor,hve-dev/generate_tdd_inventory.py,145,class EvidenceVisitor(ast.NodeVisitor):,,1
+core,function,collect_evidence,hve-dev/generate_tdd_inventory.py,186,return ' | '.join(parts),,1
+core,function,classify_py_function,hve-dev/generate_tdd_inventory.py,203,"return (kind, class_names[-1] if class_names else 'module', decorators)",,1
+core,function,iter_py_defs,hve-dev/generate_tdd_inventory.py,231,"def iter_py_defs(tree: ast.Module) -> Iterable[tuple[ast.FunctionDef | ast.AsyncFunctionDef, tuple[tuple[str, str], ...]]]:",,1
+core,function,parse_python_test,hve-dev/generate_tdd_inventory.py,249,return rows,,1
+core,function,parse_powershell_test,hve-dev/generate_tdd_inventory.py,351,return rows,,1
+core,function,parse_shell_test,hve-dev/generate_tdd_inventory.py,415,return rows,,1
+core,function,collect_tests,hve-dev/generate_tdd_inventory.py,488,"return (rows, selected_files)",,1
+core,function,row_line_number,hve-dev/generate_tdd_inventory.py,507,return int(str(row.get('line') or 0)),,1
+core,function,section_from_heading,hve-dev/generate_tdd_inventory.py,514,return None,,1
+core,function,active_status_for_text,hve-dev/generate_tdd_inventory.py,520,return 'active-or-described',,2
+core,function,unique_in_order,hve-dev/generate_tdd_inventory.py,528,return result,,3
+core,function,defined_feature_ids_in_line,hve-dev/generate_tdd_inventory.py,539,Return feature IDs only when the line appears to define them.,,1
+core,function,defined_gate_ids_in_line,hve-dev/generate_tdd_inventory.py,553,return unique_in_order(ids),,1
+core,function,collect_features_from_requirement_definition,hve-dev/generate_tdd_inventory.py,561,return deduped,,1
+core,function,collect_workflow_features_from_code,hve-dev/generate_tdd_inventory.py,610,return rows,,1
+core,function,collect_features,hve-dev/generate_tdd_inventory.py,666,return rows,,1
+core,function,parse_mapping_ids,hve-dev/generate_tdd_inventory.py,673,return mapping,,1
+core,function,mapping_ids_from_text,hve-dev/generate_tdd_inventory.py,707,return unique_in_order(ids),,1
+core,function,canonical_feature_id,hve-dev/generate_tdd_inventory.py,717,"return re.sub('-§[0-9.]+$', '', feature_id)",,4
+core,function,write_csv,hve-dev/generate_tdd_inventory.py,721,"def write_csv(path: pathlib.Path, rows: list[dict[str, object]], fieldnames: list[str]) -> None:",,3
+core,function,scope_module,hve-dev/generate_tdd_inventory.py,728,§3.7 対象境界の単一機械判定（FR-MAINT-05）。ここで境界を再定義しない。,,1
+core,function,surface_for_path,hve-dev/generate_tdd_inventory.py,741,return 'core',,5
+core,function,literals_in,hve-dev/generate_tdd_inventory.py,753,"return surface_export.literals_in(text, NORMATIVE_LITERALS)",,7
+core,function,summarize_definition,hve-dev/generate_tdd_inventory.py,757,"return surface_export.summarize_definition(node, segment)",,3
+core,function,collect_surface_symbols,hve-dev/generate_tdd_inventory.py,761,FR-CQ-10: 抽出アルゴリズムは cq.surface_export に単一実装する。,,1
+core,function,write_policy,hve-dev/generate_tdd_inventory.py,771,def write_policy() -> None:,,1
+core,function,_generation_timestamp,hve-dev/generate_tdd_inventory.py,814,Return a reproducible UTC timestamp when SOURCE_DATE_EPOCH is set.,,1
+core,function,write_crosswalk,hve-dev/generate_tdd_inventory.py,830,"def write_crosswalk(test_rows: list[dict[str, object]], feature_rows: list[dict[str, object]], mapping: dict[str, dict[str, object]]) -> None:",,1
+core,function,main,hve-dev/generate_tdd_inventory.py,940,return 0,,53
 core,function,__getattr__,hve/__init__.py,41,raise AttributeError(f'module {__name__!r} has no attribute {name!r}'),,0
 core,function,__dir__,hve/__init__.py,52,"return sorted({*globals(), *__all__})",,0
-cli,function,_configure_stdio_encoding,hve/__main__.py,85,stdout/stderr を UTF-8 に再設定する（パイプ経由起動時の cp932 対策）。,,1
-cli,function,_reexec_in_venv_if_needed,hve/__main__.py,113,``python -m hve`` がリポジトリの ``.venv`` 外の Python で起動された場合に、,,2
-cli,function,_ts,hve/__main__.py,235,現在時刻のプレフィックス文字列を返す。,,84
-cli,function,_split_csv,hve/__main__.py,347,カンマ区切り文字列を空要素なしのリストに変換する。,,3
-cli,function,_prompt_app_ids,hve/__main__.py,352,APP-ID を 1 回だけ尋ね、単一指定時は app_id も派生させる。,,1
-cli,function,_prompt_param_input,hve/__main__.py,369,ワークフロー固有パラメータを内部名ではなく表示ラベルで入力させる。,,1
-cli,function,_build_target_business_label,hve/__main__.py,376,ARD ウィザードの target_business ラベルを Step 1 選択有無で切り替える。,,1
-cli,function,_default_param_value,hve/__main__.py,390,クイック全自動で使うワークフロー固有パラメータ既定値。,,1
-cli,function,_format_param_value,hve/__main__.py,399,確認パネル用にパラメータ値を読みやすく整形する。,,1
-cli,function,_format_param_label,hve/__main__.py,408,確認パネル用の表示名を返す。,,1
-cli,function,_step_options_with_groups,hve/__main__.py,413,コンテナステップの見出しを使ってステップ選択肢を整形する。,,1
-cli,function,_workflow_options_with_categories,hve/__main__.py,428,カテゴリー順に並べたワークフローと、その選択肢ラベルを返す（FR-GUI-21）。,,1
-cli,function,_collect_ard_wizard_params,hve/__main__.py,467,ARD ワークフロー固有のパラメータ収集と selected_steps 計算。,,2
-cli,function,_asdw_data_deploy_is_selected,hve/__main__.py,622,Return whether an ASDW selection can reach Step 1.3.,,1
-cli,function,_asdw_data_deploy_param_keys,hve/__main__.py,642,ASDW-WEB Step 1.3 が宣言する必須パラメータ名を返す（FR-DAG-07）。,,1
-cli,function,_prompt_asdw_data_deploy_params,hve/__main__.py,649,ASDW-WEB Step 1.3 の必須パラメータを宣言（FR-DAG-07）から収集する。,,1
-cli,function,_collect_generic_workflow_params,hve/__main__.py,672,AKM/ARD 以外のワークフロー固有パラメータを収集する。,,2
-cli,function,_default_akm_target_files,hve/__main__.py,719,AKM の sources に応じた target_files 既定値を返す。,,4
-cli,function,_normalize_akm_sources,hve/__main__.py,735,``orchestrator._normalize_akm_sources`` への薄いラッパー。,,3
-cli,function,_prompt_valid_doc_purpose,hve/__main__.py,744,ADOC の doc_purpose をメニュー選択させる。,,1
-cli,function,_prompt_valid_adi_depth,hve/__main__.py,756,ADI の depth をメニュー選択させる。,,1
-cli,function,_prompt_valid_max_file_lines,hve/__main__.py,768,ADOC の max_file_lines をメニュー選択させる。,,1
-cli,function,_collect_agentic_retrieval_wizard_answers,hve/__main__.py,780,Agentic Retrieval 関連の質問（Q1〜Q6）をウィザードで収集する。,,2
-cli,function,_prompt_akm_params,hve/__main__.py,853,AKM ワークフローのパラメータを収集する。,,2
-cli,function,_resolve_model,hve/__main__.py,930,モデル名を解決する。,,13
-cli,function,_build_parser,hve/__main__.py,948,メイン ArgumentParser を構築する。,,4
-cli,function,_load_mcp_config,hve/__main__.py,2411,MCP Server 設定 JSON ファイルを読み込む。,,1
-cli,function,_apply_agentic_retrieval_cli_overrides,hve/__main__.py,2443,Agentic Retrieval 関連の CLI フラグを config へ反映する。,,1
-cli,function,_build_config,hve/__main__.py,2464,argparse の Namespace から SDKConfig を構築する。,,1
-cli,function,_validate_app_id_args,hve/__main__.py,2765,Return a deterministic error for conflicting legacy and plural APP IDs.,,2
-cli,function,_build_params,hve/__main__.py,2778,CLI 引数からワークフローパラメータ dict を構築する。,,1
-cli,function,_ensure_run_workdir_env,hve/__main__.py,2975,orchestrate 限定で ``work/run/<run-id>/`` への env を注入する。,,1
-cli,function,_start_startup_index_refresh,hve/__main__.py,3001,def _start_startup_index_refresh(command: Optional[str]) -> None:,,1
-cli,function,_cmd_prompt,hve/__main__.py,3018,`prompt plan` / `prompt run` を処理する。,,1
-cli,function,main,hve/__main__.py,3092,エントリポイント。,,53
-cli,function,_validate_auto_coding_agent_review,hve/__main__.py,3157,--auto-coding-agent-review の前提条件を検証する。,,1
-cli,function,_run_startup_configuration_preflight,hve/__main__.py,3192,FR-CLI-82 の共通設定 preflight を実行し、失敗を一括表示する。,,2
-cli,function,_run_copilot_auth_preflight,hve/__main__.py,3233,orchestrate 実行前に GitHub Copilot 認証状態を確認する。,,2
-cli,function,_workiq_request_reasons,hve/__main__.py,3287,Work IQ を要求している設定名を列挙する。,,2
-cli,function,_is_workiq_requested,hve/__main__.py,3303,Work IQ を使う設定かを返す。,,1
-cli,function,_disable_workiq,hve/__main__.py,3308,Work IQ 関連フラグを実行単位で無効化する。,,2
-cli,function,_run_workiq_auth_preflight,hve/__main__.py,3324,Work IQ 使用時に EULA / M365 認証を本処理前に確認する。,,2
-cli,function,_is_azure_auth_requested,hve/__main__.py,3374,Azure CLI 認証を必要とする可能性がある設定かを返す。,,1
-cli,function,_azure_account_available,hve/__main__.py,3381,Azure CLI がログイン済みかを確認する。,,2
-cli,function,_run_azure_auth_preflight,hve/__main__.py,3399,Azure 利用時に Azure CLI 認証を本処理前に確認する。,,2
-cli,function,_cmd_pricing,hve/__main__.py,3437,`hve pricing {show|refresh}` ハンドラー。,,1
-cli,function,_cmd_toolsearch_context,hve/__main__.py,3513,`hve toolsearch context` ハンドラー（FR-TS-11）。,,1
-cli,function,_cmd_toolsearch,hve/__main__.py,3539,`hve toolsearch` ハンドラー（FR-TS-10 / FR-TS-11）。,,1
-cli,function,_cmd_login,hve/__main__.py,3602,`hve login` ハンドラー: GitHub Copilot ログイン + モデル一覧キャッシュ更新。,,1
-cli,function,_cmd_run_interactive,hve/__main__.py,3697,インタラクティブ wizard モードのハンドラー。,,3
-cli,function,_cmd_qa_merge,hve/__main__.py,4647,qa-merge サブコマンドのハンドラー。,,1
-cli,function,_cmd_workiq_doctor,hve/__main__.py,4817,workiq-doctor サブコマンドのハンドラー。,,1
-cli,function,_confirm_autopilot_chain_start,hve/__main__.py,4916,CLI Autopilot の実行開始を確認する（FR-CLI-78）。,,1
-cli,function,_cmd_orchestrate_autopilot_chain,hve/__main__.py,4929,orchestrate --autopilot-chain サブコマンドのハンドラー（Qt 非依存）。,,1
-cli,function,_cmd_orchestrate,hve/__main__.py,5048,orchestrate サブコマンドのハンドラー。,,1
-cli,function,_cmd_emit_prompt,hve/__main__.py,5211,emit-prompt サブコマンドのハンドラー。,,1
-cli,function,_cmd_ingest_docs,hve/__main__.py,5223,ingest-docs サブコマンドのハンドラー（ADI Step 1 の決定的前処理）。,,1
-cli,function,_console_main,hve/__main__.py,5251,``hve`` console script のエントリポイント。,,1
+cli,function,_configure_stdio_encoding,hve/__main__.py,86,stdout/stderr を UTF-8 に再設定する（パイプ経由起動時の cp932 対策）。,,1
+cli,function,_reexec_in_venv_if_needed,hve/__main__.py,114,``python -m hve`` がリポジトリの ``.venv`` 外の Python で起動された場合に、,,2
+cli,function,_ts,hve/__main__.py,236,現在時刻のプレフィックス文字列を返す。,,99
+cli,function,_split_csv,hve/__main__.py,348,カンマ区切り文字列を空要素なしのリストに変換する。,,3
+cli,function,_prompt_app_ids,hve/__main__.py,353,APP-ID を 1 回だけ尋ね、単一指定時は app_id も派生させる。,,1
+cli,function,_prompt_param_input,hve/__main__.py,370,ワークフロー固有パラメータを内部名ではなく表示ラベルで入力させる。,,1
+cli,function,_build_target_business_label,hve/__main__.py,377,ARD ウィザードの target_business ラベルを Step 1 選択有無で切り替える。,,1
+cli,function,_default_param_value,hve/__main__.py,391,クイック全自動で使うワークフロー固有パラメータ既定値。,,1
+cli,function,_format_param_value,hve/__main__.py,400,確認パネル用にパラメータ値を読みやすく整形する。,,1
+cli,function,_format_param_label,hve/__main__.py,409,確認パネル用の表示名を返す。,,1
+cli,function,_step_options_with_groups,hve/__main__.py,414,コンテナステップの見出しを使ってステップ選択肢を整形する。,,1
+cli,function,_workflow_options_with_categories,hve/__main__.py,429,カテゴリー順に並べたワークフローと、その選択肢ラベルを返す（FR-GUI-21）。,,1
+cli,function,_collect_ard_wizard_params,hve/__main__.py,468,ARD ワークフロー固有のパラメータ収集と selected_steps 計算。,,2
+cli,function,_asdw_data_deploy_is_selected,hve/__main__.py,623,Return whether an ASDW selection can reach Step 1.3.,,1
+cli,function,_asdw_data_deploy_param_keys,hve/__main__.py,643,ASDW-WEB Step 1.3 が宣言する必須パラメータ名を返す（FR-DAG-07）。,,1
+cli,function,_prompt_asdw_data_deploy_params,hve/__main__.py,650,ASDW-WEB Step 1.3 の必須パラメータを宣言（FR-DAG-07）から収集する。,,1
+cli,function,_collect_generic_workflow_params,hve/__main__.py,673,AKM/ARD 以外のワークフロー固有パラメータを収集する。,,2
+cli,function,_default_akm_target_files,hve/__main__.py,720,AKM の sources に応じた target_files 既定値を返す。,,4
+cli,function,_normalize_akm_sources,hve/__main__.py,736,``orchestrator._normalize_akm_sources`` への薄いラッパー。,,3
+cli,function,_prompt_valid_doc_purpose,hve/__main__.py,745,ADOC の doc_purpose をメニュー選択させる。,,1
+cli,function,_prompt_valid_adi_depth,hve/__main__.py,757,ADI の depth をメニュー選択させる。,,1
+cli,function,_prompt_valid_max_file_lines,hve/__main__.py,769,ADOC の max_file_lines をメニュー選択させる。,,1
+cli,function,_collect_agentic_retrieval_wizard_answers,hve/__main__.py,781,Agentic Retrieval 関連の質問（Q1〜Q6）をウィザードで収集する。,,2
+cli,function,_prompt_akm_params,hve/__main__.py,854,AKM ワークフローのパラメータを収集する。,,2
+cli,function,_resolve_model,hve/__main__.py,931,モデル名を解決する。,,13
+cli,function,_non_negative_int,hve/__main__.py,949,Parse one non-negative integer for an internal durable-state token.,,2
+cli,function,_build_parser,hve/__main__.py,960,メイン ArgumentParser を構築する。,,4
+cli,function,_load_mcp_config,hve/__main__.py,2513,MCP Server 設定 JSON ファイルを読み込む。,,1
+cli,function,_apply_agentic_retrieval_cli_overrides,hve/__main__.py,2545,Agentic Retrieval 関連の CLI フラグを config へ反映する。,,1
+cli,function,_build_config,hve/__main__.py,2566,argparse の Namespace から SDKConfig を構築する。,,1
+cli,function,_validate_app_id_args,hve/__main__.py,2868,Return a deterministic error for conflicting legacy and plural APP IDs.,,2
+cli,function,_build_params,hve/__main__.py,2881,CLI 引数からワークフローパラメータ dict を構築する。,,1
+cli,function,_ensure_run_workdir_env,hve/__main__.py,3078,orchestrate 限定で ``work/run/<run-id>/`` への env を注入する。,,2
+cli,function,_start_startup_index_refresh,hve/__main__.py,3104,def _start_startup_index_refresh(command: Optional[str]) -> None:,,4
+cli,class,_DurableRegistrationFailure,hve/__main__.py,3114,A standard execution could not be registered before external work.,,3
+cli,function,_build_resolved_replay_argv,hve/__main__.py,3118,Delegate replay generation to the cross-surface durable implementation.,,2
+cli,function,_standard_execution_is_registerable,hve/__main__.py,3138,Delegate standard-run eligibility to the durable service boundary.,,1
+cli,function,_register_standard_execution,hve/__main__.py,3161,Atomically register one supported standard execution before preflight.,,2
+cli,function,_cmd_prompt,hve/__main__.py,3241,`prompt plan` / `prompt run` を処理する。,,1
+cli,function,_resume_field,hve/__main__.py,3315,"Read one candidate/plan field from dataclasses, mappings, and sqlite rows.",,31
+cli,function,_parse_resume_replay_values,hve/__main__.py,3323,Parse controller-provided ephemeral replay values without persisting them.,,1
+cli,function,_format_resume_plan,hve/__main__.py,3337,"Return a concise, secret-free resume plan for approval.",,3
+cli,function,_cmd_resume,hve/__main__.py,3356,"Select, approve, CAS-acquire, and launch one or more ordered resume children.",,1
+cli,function,main,hve/__main__.py,3726,エントリポイント。,,53
+cli,function,_validate_auto_coding_agent_review,hve/__main__.py,3796,--auto-coding-agent-review の前提条件を検証する。,,1
+cli,function,_run_startup_configuration_preflight,hve/__main__.py,3831,FR-CLI-82 の共通設定 preflight を実行し、失敗を一括表示する。,,2
+cli,function,_run_copilot_auth_preflight,hve/__main__.py,3872,orchestrate 実行前に GitHub Copilot 認証状態を確認する。,,2
+cli,function,_workiq_request_reasons,hve/__main__.py,3926,Work IQ を要求している設定名を列挙する。,,2
+cli,function,_is_workiq_requested,hve/__main__.py,3942,Work IQ を使う設定かを返す。,,1
+cli,function,_disable_workiq,hve/__main__.py,3947,Work IQ 関連フラグを実行単位で無効化する。,,2
+cli,function,_run_workiq_auth_preflight,hve/__main__.py,3963,Work IQ 使用時に EULA / M365 認証を本処理前に確認する。,,2
+cli,function,_is_azure_auth_requested,hve/__main__.py,4013,Azure CLI 認証を必要とする可能性がある設定かを返す。,,1
+cli,function,_azure_account_available,hve/__main__.py,4020,Azure CLI がログイン済みかを確認する。,,2
+cli,function,_run_azure_auth_preflight,hve/__main__.py,4038,Azure 利用時に Azure CLI 認証を本処理前に確認する。,,2
+cli,function,_cmd_pricing,hve/__main__.py,4076,`hve pricing {show|refresh}` ハンドラー。,,1
+cli,function,_cmd_toolsearch_context,hve/__main__.py,4152,`hve toolsearch context` ハンドラー（FR-TS-11）。,,1
+cli,function,_cmd_toolsearch,hve/__main__.py,4178,`hve toolsearch` ハンドラー（FR-TS-10 / FR-TS-11）。,,1
+cli,function,_cmd_login,hve/__main__.py,4241,`hve login` ハンドラー: GitHub Copilot ログイン + モデル一覧キャッシュ更新。,,1
+cli,function,_wizard_model_options,hve/__main__.py,4336,Return model choices without starting the Copilot SDK or a network fetch.,,1
+cli,function,_workiq_available_without_external_probe,hve/__main__.py,4368,Check local Work IQ prerequisites without running the legacy npx probe.,,1
+cli,function,_cmd_run_interactive,hve/__main__.py,4392,インタラクティブ wizard モードのハンドラー。,,3
+cli,function,_cmd_qa_merge,hve/__main__.py,5358,qa-merge サブコマンドのハンドラー。,,1
+cli,function,_cmd_workiq_doctor,hve/__main__.py,5528,workiq-doctor サブコマンドのハンドラー。,,1
+cli,function,_confirm_autopilot_chain_start,hve/__main__.py,5627,CLI Autopilot の実行開始を確認する（FR-CLI-78）。,,1
+cli,function,_cmd_orchestrate_autopilot_chain,hve/__main__.py,5640,orchestrate --autopilot-chain サブコマンドのハンドラー（Qt 非依存）。,,1
+cli,function,_validate_internal_durable_args,hve/__main__.py,5759,Validate the two allowed internal child identity shapes before preflight.,,1
+cli,function,_cmd_orchestrate,hve/__main__.py,5795,orchestrate サブコマンドのハンドラー。,,1
+cli,function,_cmd_emit_prompt,hve/__main__.py,6018,emit-prompt サブコマンドのハンドラー。,,1
+cli,function,_cmd_ingest_docs,hve/__main__.py,6030,ingest-docs サブコマンドのハンドラー（ADI Step 1 の決定的前処理）。,,1
+cli,function,_console_main,hve/__main__.py,6058,``hve`` console script のエントリポイント。,,1
 core,class,ExcludedAppId,hve/app_arch_filter.py,69,"return {'app_id': self.app_id, 'actual_architecture': self.actual_architecture, 'reason': self.reason}",,3
 core,class,AppArchFilterResult,hve/app_arch_filter.py,83,"return {'workflow_id': self.workflow_id, 'target_kind': self.target_kind, 'target_architectures': self.target_architectures, 'requested_app_ids': self.requested_app_ids, 'matched_app_ids': self.matched_app_ids, 'excluded_app_ids': [e.to_dict() for e in self.excluded_app_ids], 'unknown_app_ids': sel…",,5
 core,function,_normalize_arch_whitespace,hve/app_arch_filter.py,135,前後スペースを除去して空白を正規化する。,,1
@@ -778,7 +796,7 @@ core,function,resolve_application_requirement_app_ids,hve/application_requiremen
 core,function,build_application_requirement_context,hve/application_requirements.py,579,対象 path と ID だけを含む、全文非注入の追加プロンプトを返す。,,1
 core,function,_parse_csv_value,hve/application_requirements.py,635,"return tuple((item.strip().strip('`') for item in stripped.split(',') if item.strip()))",,4
 core,function,validate_application_requirement_trace_block,hve/application_requirements.py,642,完了報告の APP requirement trace block を構造・実在だけで検証する。,,1
-core,class,ApprovalDeclined,hve/approval.py,13,承認が得られなかった（拒否、または非対話で確認できなかった）。,,5
+core,class,ApprovalDeclined,hve/approval.py,13,承認が得られなかった（拒否、または非対話で確認できなかった）。,,6
 core,function,_step_ids,hve/approval.py,22,return ids,,1
 core,function,wave_requires_approval,hve/approval.py,31,Wave に `approval_gate` を宣言した Step が含まれるか。,,1
 core,function,request_wave_approval,hve/approval.py,36,承認を求める。得られない場合は ``ApprovalDeclined`` を送出する。,,1
@@ -806,207 +824,208 @@ core,function,_safe_display_path,hve/ard_target_business_resolver.py,133,Agent �
 core,function,_is_safe_path,hve/ard_target_business_resolver.py,145,パスが base_dir 内に解決されることを確認する。,,3
 core,function,_append_diagnostic,hve/ard_target_business_resolver.py,163,診断を上限内で追加し、これ以上の走査を続けてよいか返す。,,15
 core,function,_iter_candidates,hve/ard_target_business_resolver.py,173,トークンリストからファイル候補を遅延評価で yield する。,,1
-core,function,resolve,hve/ard_target_business_resolver.py,254,target_business 値を解析してファイル群に展開する。,,263
+core,function,resolve,hve/ard_target_business_resolver.py,254,target_business 値を解析してファイル群に展開する。,,267
 core,function,to_context_text,hve/ard_target_business_resolver.py,417,ResolvedTargetBusiness を Step 2 へ渡す context 文字列に整形する。,,1
-core,function,is_original_docs_questionnaire_filename,hve/artifact_validation.py,58,ファイル名が原本質問票成果物の命名規則に合致するか判定する。,,2
-core,function,_looks_like_auto_qa_helper_content,hve/artifact_validation.py,64,本体ではなく Auto-QA 補助質問票（[Q01]形式）らしい本文か判定する。,,1
-core,function,_has_explicit_zero_questions,hve/artifact_validation.py,71,質問 0 件を summary 内で明示しているか判定する。,,1
-core,function,_parse_front_matter,hve/artifact_validation.py,96,先頭の ``---`` 区切り YAML front matter を ``key: value`` の辞書として返す。,,1
-core,function,_section_body,hve/artifact_validation.py,118,``## …<heading_marker>…`` 見出しの本文を返す。見つからない場合は None。,,5
-core,function,_table_rows,hve/artifact_validation.py,140,Markdown テーブルのデータ行（ヘッダ・区切り行を除く）をセル配列で返す。,,3
-core,function,validate_design_doc_card,hve/artifact_validation.py,157,ADI Step 2 が生成する Doc Card を検証する（FR-WF-ADI-09）。,,0
-core,function,validate_design_doc_catalog,hve/artifact_validation.py,185,ADI Step 3 が生成するトリアージカタログを検証する。,,0
-core,function,validate_downstream_seed_section,hve/artifact_validation.py,231,ADI Step 5.x が下流成果物へ追記する候補セクションを検証する。,,0
-core,function,validate_original_docs_questionnaire_artifact,hve/artifact_validation.py,263,原本質問票成果物の検証を行い、結果 dict を返す。,,1
-core,function,_find_original_docs_questionnaire_candidates,hve/artifact_validation.py,370,qa/ ディレクトリ内の原本質問票候補ファイルを検索する。,,1
-core,function,validate_original_docs_questionnaire_run,hve/artifact_validation.py,381,原本質問票実行後の成果物検証を行い、サマリー dict を返す。,,1
-core,function,is_deploy_step,hve/artifact_validation.py,469,Step が Deploy 系（実在系 AC を強制する Azure デプロイ Agent）か判定する。,,2
-core,function,wave_has_deploy_step,hve/artifact_validation.py,493,wave に Deploy 系 Step が 1 つでも含まれれば True。,,1
-core,function,_extract_first_az_container_create_command,hve/artifact_validation.py,509,Extract the first logical `az container create` command from shell text.,,1
-core,function,_extract_shell_logical_commands,hve/artifact_validation.py,542,コメント行を除外し、bash の継続行を論理コマンドへ結合する。,,27
-core,function,_strip_shell_inline_comment,hve/artifact_validation.py,594,Strip one unquoted inline shell comment from a logical command.,,39
-core,function,validate_asdw_foundry_deploy_artifacts,hve/artifact_validation.py,639,ASDW Step.2.2 の Foundry Project 生成契約を静的検証する。,,1
-core,function,_extract_shell_function,hve/artifact_validation.py,712,単純な bash 関数ブロックを、次の関数定義直前まで抽出する。,,3
-core,function,_has_az_tsv_wrapper,hve/artifact_validation.py,741,"`az_tsv` が `az ""$@"" -o tsv` の薄い wrapper として定義されているか判定する。",,2
-core,function,_has_postgresql_flexible_show,hve/artifact_validation.py,747,PostgreSQL Flexible Server の show 呼び出しが存在するか判定する。,,1
-core,function,_extract_postgresql_section,hve/artifact_validation.py,754,PostgreSQL 検証ブロックだけを抽出する。,,1
-core,function,_design_requires_postgresql,hve/artifact_validation.py,790,設計ドキュメント（azure-services-data.md）が PostgreSQL Flexible Server を,,1
-core,function,_normalize_asdw_design_cell,hve/artifact_validation.py,921,ASDW設計表の1セルを限定的な比較用テキストへ正規化する。,,1
-core,function,_normalize_asdw_entity_cell,hve/artifact_validation.py,937,Entityセルの平文またはbalancedな単一装飾だけを受理する。,,1
-core,function,_asdw_markdown_indent_width,hve/artifact_validation.py,947,Markdown行頭のspace/tabを表示列へ換算する。,,1
-core,function,_asdw_fence_opening,hve/artifact_validation.py,960,Parse one CommonMark-style fenced-code opener used by HVE reports.,,2
-core,function,_asdw_raw_html_block_start,hve/artifact_validation.py,975,Return whether a visible line starts a raw HTML block candidate.,,1
-core,function,_visible_asdw_design_lines,hve/artifact_validation.py,985,HTML comment・fence・indented codeを除き、raw HTMLは拒否する。,,4
-core,function,_split_asdw_pipe_row,hve/artifact_validation.py,1064,固定DataDesign表の両端pipe付き1行だけをcellへ分割する。,,2
-core,function,_looks_like_asdw_table_separator,hve/artifact_validation.py,1075,両端pipe省略も含むMarkdown table separatorか判定する。,,1
-core,function,_resolve_asdw_audit_storage_mode,hve/artifact_validation.py,1088,AuditRecordのChosen列から既知2方式のどちらかを解決する。,,4
-core,function,_shell_variable_pattern,hve/artifact_validation.py,1227,Return a regex fragment for ``$NAME`` or ``${NAME...}`` references.,,16
-core,function,_extract_shell_case_branch,hve/artifact_validation.py,1233,Extract one plain branch from a generated bash ``case`` statement.,,6
-core,function,_find_az_commands,hve/artifact_validation.py,1286,"Find executable Azure CLI commands, excluding comments and echo prose.",,11
-core,function,_cleanup_body_has_only_expected_delete,hve/artifact_validation.py,1300,"Require the generated conditional, resource-scoped cleanup delete.",,1
-core,function,_private_branch_has_disallowed_function_or_nested_az,hve/artifact_validation.py,1326,Enforce the generated private branch's direct Azure CLI sequence.,,1
-core,function,_command_option_references_variable,hve/artifact_validation.py,1374,Return whether an option value references the required shell variable.,,21
-core,function,_shell_reference_pattern,hve/artifact_validation.py,1382,Return a shell variable pattern that tolerates surrounding quotes.,,5
-core,function,_has_reference_comparison,hve/artifact_validation.py,1387,Return whether two narrow shell references are compared on one line.,,3
-core,function,_count_shell_variable_comparisons,hve/artifact_validation.py,1396,Count equality/inequality checks that consume one contract variable.,,1
-core,function,_find_executable_az_command_offset,hve/artifact_validation.py,1405,Return the first non-comment ``az <command_group>`` character offset.,,2
-core,function,_find_first_executable_az_command_offset,hve/artifact_validation.py,1418,Return the first non-comment direct Azure CLI command offset.,,2
-core,function,_find_assigned_az_command,hve/artifact_validation.py,1435,Find one ``name=$(az ...)`` command tied to its required inputs.,,7
-core,function,_has_shell_result_literal_check,hve/artifact_validation.py,1466,Return whether a shell result variable is checked against one literal.,,4
-core,function,_has_shell_result_nonempty_check,hve/artifact_validation.py,1476,Return whether a shell result variable is checked for an empty value.,,1
-core,function,_is_unreassigned_shell_result,hve/artifact_validation.py,1482,Require one result assignment before its comparison with an env value.,,1
-core,function,_contains_shell_command_token,hve/artifact_validation.py,1500,"Detect a narrow executable shell command token, including ``cmd""""``.",,5
-core,function,_extract_shell_assignment_value,hve/artifact_validation.py,1519,Extract one simple shell assignment value with ``\`` continuations.,,1
-core,function,_is_generated_shell_assignment,hve/artifact_validation.py,1542,Return whether one logical command starts a generated assignment.,,16
-core,function,_split_generated_quoted_assignment,hve/artifact_validation.py,1549,Split one narrow generated quoted assignment word from its tail.,,7
-core,function,_command_outside_generated_assignment,hve/artifact_validation.py,1594,"Return host-side content, omitting only a pure generated assignment.",,4
-core,function,_has_disallowed_generated_assignment_evaluation,hve/artifact_validation.py,1604,Reject host-evaluated syntax from the generated ACI payload assignment.,,2
-core,function,_has_disallowed_private_host_azure_cli,hve/artifact_validation.py,1688,Require host-side Azure CLI usage to follow the generated direct grammar.,,1
-core,function,_has_unquoted_shell_control_operator,hve/artifact_validation.py,1725,Return whether a narrow host command separator appears outside quotes.,,5
-core,function,_mask_generated_query_argument,hve/artifact_validation.py,1748,Mask the one quoted ``--query`` argument used by generated Azure CLI.,,4
-core,function,_generated_query_has_disallowed_host_evaluation,hve/artifact_validation.py,1761,Reject host-evaluated syntax inside one generated Azure CLI query.,,1
-core,function,_private_condition_has_disallowed_evaluation,hve/artifact_validation.py,1776,Reject host evaluation syntax inside generated ``if [[...]]`` checks.,,3
-core,function,_private_condition_is_fail_closed,hve/artifact_validation.py,1784,Allow generated topology guards to use only explicit OR comparisons.,,2
-core,function,_private_conditions_have_direct_exit,hve/artifact_validation.py,1814,Require every generated private guard to abort directly on a true result.,,1
-core,function,_private_branch_without_cleanup,hve/artifact_validation.py,1832,Remove the one permitted cleanup function before host-grammar checks.,,2
-core,function,_has_leading_fail_fast_shell_options,hve/artifact_validation.py,1840,Require fail-fast options as the first executable verifier statement.,,1
-core,function,_has_unapproved_pre_case_statement,hve/artifact_validation.py,1850,Permit no host setup before the generated network-mode case statement.,,1
-core,function,_has_canonical_private_topology_query,hve/artifact_validation.py,1863,Require a result assignment to use its exact generated JMESPath query.,,1
-core,function,_payload_has_unexecuted_python_string,hve/artifact_validation.py,1877,Reject standalone string expressions in the generated ``python -c`` code.,,1
-core,function,_private_assignment_has_command_tail,hve/artifact_validation.py,1896,Reject assignment prefixes before host commands in the private grammar.,,1
-core,function,_has_disallowed_generated_parameter_expansion,hve/artifact_validation.py,1907,Permit only simple generated parameter expansions in host statements.,,3
-core,function,_private_assignment_is_allowed,hve/artifact_validation.py,1915,Accept only fixed-name or one direct Azure CLI result assignments.,,2
-core,function,_private_branch_has_unapproved_host_statement,hve/artifact_validation.py,1948,Allow only the generated private verifier's fixed host-side grammar.,,1
-core,function,_has_obfuscated_private_host_command_source,hve/artifact_validation.py,1992,Reject shell word reconstruction at private verifier host command positions.,,1
-core,function,_payload_uses_variable,hve/artifact_validation.py,2049,Return whether an ACI payload actually consumes one runtime variable.,,1
-core,function,_extract_asdw_private_aci_payload,hve/artifact_validation.py,2074,Extract the generated private ACI assignment word for coverage checks.,,3
-core,function,_extract_asdw_known_mode_python_source,hve/artifact_validation.py,2090,"Extract Python only from one fixed, fail-closed ACI shell envelope.",,2
-core,function,_load_asdw_sample_counts,hve/artifact_validation.py,2124,Load selected sample-data counts and retain a precise parse error.,,4
-core,function,_extract_asdw_audit_python_source,hve/artifact_validation.py,2167,AuditRecord count commandから埋込みPythonを抽出する。,,1
-core,function,_asdw_audit_python_counts_entries,hve/artifact_validation.py,2184,Confidential Ledger entriesを実際に列挙・集計するPythonか確認する。,,1
-core,function,_asdw_has_executable_audit_count,hve/artifact_validation.py,2223,AuditRecordの取得値を定義済みcheck_countへ渡す契約を確認する。,,1
-core,function,_validate_asdw_acl_direct_count,hve/artifact_validation.py,2269,private ACI Python内のAzure confidential ledger直接件数を検査する。,,2
-core,function,_validate_asdw_sql_audit_count,hve/artifact_validation.py,2876,private ACI Python内のSVC-12 AuditRecord件数契約を検査する。,,2
-core,function,_validate_asdw_sql_audit_metadata,hve/artifact_validation.py,3405,private ACI Python内のSQL ledger種別とACL digest保管を検査する。,,2
-core,function,_asdw_python_env_value,hve/artifact_validation.py,4064,Return whether a Python AST node is exactly ``os.environ[KEY]``.,,9
-core,function,_asdw_direct_count_guard,hve/artifact_validation.py,4077,Parse one direct ``count == N or sys.exit(1)`` guard.,,3
-core,function,_validate_asdw_known_mode_selected_data,hve/artifact_validation.py,4115,Validate the design-selected private payload with one bounded grammar.,,1
-core,function,_validate_asdw_audit_mode_wiring,hve/artifact_validation.py,5781,選定Audit modeのshell/ACI配線と排他性を検査する。,,1
-core,function,_validate_asdw_non_private_branches,hve/artifact_validation.py,6024,Require public/nsp/blocked to fail closed without route attempts.,,2
-core,function,_validate_asdw_network_case_contract,hve/artifact_validation.py,6046,Validate the outer DATA_NETWORK_MODE case selector and clause inventory.,,2
-core,function,_validate_asdw_selected_data_coverage,hve/artifact_validation.py,6130,Require APP-009 private payload coverage to match sample-data exactly.,,1
-core,function,_validate_asdw_private_verify_capability,hve/artifact_validation.py,6342,Validate the deterministic private verifier wiring without Azure I/O.,,1
-core,function,validate_asdw_data_verify_script,hve/artifact_validation.py,7237,ASDW-WEB Step.1.2 の data verify スクリプト契約を検証する。,,3
-core,function,_build_asdw_non_audit_registration_source,hve/artifact_validation.py,7451,Build the one canonical APP-009 non-Audit registration program.,,2
-core,function,_build_asdw_non_audit_aci_command,hve/artifact_validation.py,7564,Encode the canonical program without exposing shell quote structure.,,1
-core,function,_extract_asdw_non_audit_registration_source,hve/artifact_validation.py,7578,"return (source, [])",,1
-core,function,_load_asdw_data_deploy_shell_text,hve/artifact_validation.py,7627,"Read one strict UTF-8/LF shell artifact, or validate a byte snapshot text.",,2
-core,function,_extract_asdw_data_deploy_marker_block,hve/artifact_validation.py,7658,Require the complete executable artifact inside one shebang-bound block.,,2
-core,function,_asdw_shell_tokens,hve/artifact_validation.py,7723,return list(lexer),,1
-core,function,_asdw_tokens_start_with,hve/artifact_validation.py,7733,return any((tuple(tokens[:len(prefix)]) == prefix for prefix in prefixes)),,1
-core,function,_validate_asdw_data_deploy_top_level_shape,hve/artifact_validation.py,7740,Require a fixed preamble followed by one direct top-level network case.,,1
-core,function,_validate_asdw_data_deploy_host_boundary,hve/artifact_validation.py,7771,Permit only the fixed host grammar and direct Azure command shapes.,,1
-core,function,_asdw_data_create_command_offsets,hve/artifact_validation.py,7984,Return logical commands with stable first-occurrence offsets.,,1
-core,function,_validate_asdw_data_policy_preflight,hve/artifact_validation.py,8002,Require fail-closed policy inventory before every Azure mutation.,,1
-core,function,_validate_asdw_data_create_aci_lifecycle,hve/artifact_validation.py,8051,"Require one owned, bounded, completion-checked non-Audit ACI.",,1
-core,function,_validate_asdw_data_create_selected_resources,hve/artifact_validation.py,8111,Require APP-009 selected stores and non-Audit sample coverage.,,1
-core,function,validate_asdw_data_create_scripts,hve/artifact_validation.py,8388,Validate Step 1.3 prep/create before an HVE-owned byte-pinned launch.,,4
-core,function,_extract_asdw_audit_registration_block,hve/artifact_validation.py,8473,Extract the Audit-only block fixed immediately after the Bash shebang.,,1
-core,function,_asdw_audit_registration_host_statement_is_allowed,hve/artifact_validation.py,8514,Accept one statement from the fixed Audit registration host grammar.,,1
-core,function,_validate_asdw_audit_registration_block_structure,hve/artifact_validation.py,8566,Permit only the canonical shell compound structure in the Audit block.,,1
-core,function,_validate_asdw_outside_audit_registration_block,hve/artifact_validation.py,8651,Keep every Audit-specific input and write inside the validated block.,,1
-core,function,_extract_asdw_registration_python_source,hve/artifact_validation.py,8771,Extract one direct ``python -c`` source from the registration ACI.,,1
-core,function,_validate_asdw_sql_audit_registration,hve/artifact_validation.py,8814,Validate one SVC-12 AuditRecord payload insert for SQL ledger mode.,,1
-core,function,_validate_asdw_acl_direct_audit_registration,hve/artifact_validation.py,8841,Validate one ACL application-entry AuditRecord write.,,1
-core,function,_validate_asdw_registration_mode_wiring,hve/artifact_validation.py,8870,Validate mode-selected registration ACI identity and environment wiring.,,1
-core,function,_validate_asdw_registration_audit_mode,hve/artifact_validation.py,9222,Validate the mode-selected AuditRecord registration payload.,,1
-core,function,validate_asdw_data_registration_script,hve/artifact_validation.py,9238,Step.1.3 登録ACIのrun所有権・cleanup契約を静的に検査する。,,5
-core,function,_is_meaningful_provider_evidence,hve/artifact_validation.py,9578,Provider table cellが未記入・placeholderではないか判定する。,,3
-core,function,_strip_markdown_fenced_blocks,hve/artifact_validation.py,9586,Markdown fenced code blockを検証対象から除外する。,,2
-core,function,build_provider_inventory_snapshot,hve/artifact_validation.py,9611,Raw identifierを保持せず、固定schemaのredacted inventoryを生成する。,,0
-core,function,_validate_provider_inventory_evidence,hve/artifact_validation.py,9652,before/after inventoryのredacted JSON証跡を検証する。,,2
-core,function,_validate_agent_provider_preflight,hve/artifact_validation.py,9838,AgentDeployの固定Provider Pre-flight表を検証する。,,1
-core,function,validate_deploy_ac_verification,hve/artifact_validation.py,10001,Deploy 系 Agent の ac-verification.md を検証する。,,1
-core,function,_extract_markdown_label,hve/artifact_validation.py,10141,Extract a simple Markdown list label value: ``- Label: value``.,,8
-core,function,validate_tdd_test_report,hve/artifact_validation.py,10148,Validate the minimal Markdown contract for a TDD RED/GREEN report.,validation-confirmed,1
-core,function,_asdw_step12_report_label_values,hve/artifact_validation.py,10246,Return every ``- Label: value`` list-item value for a Step 1.2 label.,,1
-core,function,_asdw_step12_log_line_values,hve/artifact_validation.py,10256,Return every authoritative ``KEY: value`` machine-log line value.,,1
-core,function,validate_asdw_step12_evidence_report,hve/artifact_validation.py,10265,Machine-check the ASDW Step 1.2 three-state evidence contract.,,1
-core,function,build_asdw_step12_machine_log,hve/artifact_validation.py,10339,Derive the ASDW Step 1.2 three-state statuses and render the machine log.,,1
-core,function,validate_asdw_ui_red_tests_no_unresolved_contracts,hve/artifact_validation.py,10386,Reject executable unresolved TBD contracts in ASDW-WEB UI RED tests.,,1
-core,function,_normalize_ai_agent_label,hve/artifact_validation.py,10600,Markdown table/field labelsを比較用ASCII keyへ正規化する。,,105
-core,function,_strip_ai_agent_markdown_code,hve/artifact_validation.py,10606,fenced/4-space code block内の見出し・table spoofを除外する。,,5
-core,function,_ai_agent_table_cells,hve/artifact_validation.py,10615,単純なMarkdown table rowをcellへ分割する。,,4
-core,function,_parse_ai_agent_tables,hve/artifact_validation.py,10623,Markdown table群を正規化header付きrow mappingとして返す。,,1
-core,function,_find_ai_agent_table,hve/artifact_validation.py,10652,return None,,14
-core,function,_ai_agent_field,hve/artifact_validation.py,10663,bullet/plain/tableの固定labelから最初の値を抽出する。,,59
-core,function,_is_meaningful_ai_agent_value,hve/artifact_validation.py,10679,return len(normalized) >= 3,,42
-core,function,_has_reasoned_none,hve/artifact_validation.py,10688,return bool(separator and _is_meaningful_ai_agent_value(reason)),,3
-core,function,_extract_ai_agent_contract_section,hve/artifact_validation.py,10698,固定見出しとContract IDが一致する単一sectionを抽出する。,,3
-core,function,_reasoned_ai_agent_na,hve/artifact_validation.py,10728,Contract全体のN/A判定と理由・根拠・再判定条件を検証する。,,8
-core,function,_safe_ai_agent_secret_value,hve/artifact_validation.py,10760,"return any((marker in normalized for marker in ('getenv(', 'os.environ', 'environment.getenvironmentvariable', 'configuration[', 'secretclient', 'key vault')))",,2
-core,function,_ai_agent_secret_errors,hve/artifact_validation.py,10786,secret値を出力せず、高確度なhard-codeだけを報告する。,,5
-core,function,_validate_ai_agent_goal,hve/artifact_validation.py,10806,return errors,,1
-core,function,_validate_ai_agent_runtime,hve/artifact_validation.py,10862,return errors,,1
-core,function,_validate_ai_agent_routing,hve/artifact_validation.py,10895,return errors,,1
-core,function,_validate_ai_agent_crud,hve/artifact_validation.py,10954,return errors,,1
-core,function,_validate_ai_agent_mcp,hve/artifact_validation.py,11038,return errors,,1
-core,function,_parse_ai_agent_resources,hve/artifact_validation.py,11075,"return sorted(set(re.findall('(?:scripts|references|assets)/[A-Za-z0-9_.\\-/]+', value.replace('`', ''))))",,1
-core,function,_validate_ai_agent_skill,hve/artifact_validation.py,11086,return errors,,1
-core,function,_validate_ai_agent_distribution,hve/artifact_validation.py,11134,AG-CAP-09 の配布契約を検証し、`mcp.json` の要否を metadata へ残す。,,1
-core,function,_agentic_retrieval_route_selected,hve/artifact_validation.py,11177,AG-CAP-03のPreferred / FallbackにFoundry IQ経路が含まれるかを判定する。,,1
-core,function,_is_declared_absent_route,hve/artifact_validation.py,11191,`none: ...` / `n/a: ...` のように「経路なし」を宣言した値かを判定する。,,2
-core,function,_agent_tool_ids,hve/artifact_validation.py,11197,AG-CAP-03/04/05から`正規化ID -> 表示名`を重複排除して収集する。,,3
-core,function,_count_agent_tools,hve/artifact_validation.py,11231,TB-CAP-01のTool総数と内訳を実データから算出する。,,1
-core,function,_validate_toolbox_inventory,hve/artifact_validation.py,11239,return errors,,1
-core,function,_validate_toolbox_decision,hve/artifact_validation.py,11280,return errors,,1
-core,function,_validate_toolbox_pinning,hve/artifact_validation.py,11313,return errors,,1
-core,function,_validate_toolbox_search_metadata,hve/artifact_validation.py,11339,return errors,,1
-core,function,_validate_toolbox_budget,hve/artifact_validation.py,11387,return errors,,1
-core,function,_validate_toolbox_contracts,hve/artifact_validation.py,11407,Tool Search方針とTool総数に応じてTB-CAP-01〜05を検証する。,,1
-core,function,_agentic_retrieval_reasoned_flag,hve/artifact_validation.py,11493,`<許可語>: 理由` 形式であることを検証する。,,3
-core,function,_agentic_retrieval_finite,hve/artifact_validation.py,11503,return _is_meaningful_ai_agent_value(value) and (not _AGENTIC_RETRIEVAL_UNBOUNDED.search(value)),,1
-core,function,_validate_agentic_retrieval_knowledge_base,hve/artifact_validation.py,11507,"return (errors, effort)",,1
-core,function,_validate_agentic_retrieval_sources,hve/artifact_validation.py,11573,"return (errors, rows)",,1
-core,function,_validate_agentic_retrieval_budget,hve/artifact_validation.py,11669,return errors,,1
-core,function,_validate_agentic_retrieval_evidence,hve/artifact_validation.py,11695,return errors,,1
-core,function,_validate_agentic_retrieval_mcp,hve/artifact_validation.py,11711,return errors,,1
-core,function,_validate_agentic_retrieval_policy,hve/artifact_validation.py,11764,FR-WF-AAG-04: 方針値と AG-CAP-03 の経路選択の整合を検証する。,,1
-core,function,_validate_agentic_retrieval_contracts,hve/artifact_validation.py,11796,AG-CAP-03でFoundry IQ経路を選んだ場合のAR-CAP-01〜05を検証する。,,1
-core,function,_validate_agentic_retrieval_implementation,hve/artifact_validation.py,11847,AR-CAP-01 / 02 / 05 の設計値が実装設定とコードへ反映されているかを検証する。,,1
-core,function,_parse_ai_agent_design,hve/artifact_validation.py,11914,"return (errors, metadata)",,4
-core,function,validate_ai_agent_design_artifact,hve/artifact_validation.py,11996,AAG Step 3のAG-CAP-01〜10設計成果物を決定的に検証する。,,1
-core,function,_ai_agent_json_values,hve/artifact_validation.py,12008,def _ai_agent_json_values(value: Any) -> Iterable[str]:,,3
-core,function,_ai_agent_json_key_values,hve/artifact_validation.py,12019,return found,,10
-core,function,_ai_agent_config_contains,hve/artifact_validation.py,12033,return has_structured_key(config),,7
-core,function,_strip_ai_agent_source_comments_and_strings,hve/artifact_validation.py,12056,callable宣言検査用にPython/C#のcomment/docstringを保守的に除外する。,,1
-core,function,_ai_agent_source_has_callable,hve/artifact_validation.py,12070,"return bool(re.search(f'^\\s*(?:async\\s+)?def\\s+{name}\\s*\\(', visible, re.IGNORECASE | re.MULTILINE) or re.search(f'^\\s*(?:(?:public|private|protected|internal|static|virtual|override|sealed|async)\\s+)*[A-Za-z_][A-Za-z0-9_<>,.?\\[\\]]*\\s+{compact_name}(?:Async)?\\s*\\(', visible, re.IGNORECA…",,3
-core,function,_collect_ai_agent_files,hve/artifact_validation.py,12089,"return (files, errors)",,1
-core,function,_ai_agent_system_prompt_candidates,hve/artifact_validation.py,12103,return sorted((path for path in agent_dir.rglob('*.md') if 'system' in path.name.casefold() and 'prompt' in path.name.casefold())),,2
-core,function,_agent_toolbox_settings,hve/artifact_validation.py,12111,Agent 設定から toolbox ブロックを取り出し、キーを正規化して返す。,,1
-core,function,_validate_toolbox_implementation,hve/artifact_validation.py,12121,設計 TB-CAP と Agent 設定・System Prompt・test trace の一致を検証する。,,1
-core,function,_validate_toolbox_test_trace,hve/artifact_validation.py,12213,return errors,,1
-core,function,_validate_ai_agent_system_prompt,hve/artifact_validation.py,12232,return errors,,1
-core,function,_validate_ai_agent_test_trace,hve/artifact_validation.py,12280,return errors,,1
-core,function,_validate_ai_agent_skill_artifacts,hve/artifact_validation.py,12312,return errors,,1
-core,function,validate_agent_plugin_manifest,hve/artifact_validation.py,12373,AAGD Step 2.3 の Agent Plugins マニフェストを検証する（FR-WF-AAGD-06）。,,1
-core,function,_agent_plugin_mcp_env_errors,hve/artifact_validation.py,12422,return errors,,2
-core,function,_agent_plugin_mcp_url_errors,hve/artifact_validation.py,12447,return errors,,1
-core,function,validate_agent_plugin_mcp_config,hve/artifact_validation.py,12473,AG-CAP-09 が採用した場合の `mcp.json` を検証する（Agent Plugins 1.0.0 §7.2）。,,1
-core,function,validate_ai_agent_implementation_artifacts,hve/artifact_validation.py,12557,AAGD Step 2.3の設計・code・config・test traceを相互検証する。,,2
-core,function,_read_deploy_script,hve/artifact_validation.py,12763,return None,,3
-core,function,_validate_agentic_retrieval_deploy,hve/artifact_validation.py,12772,AR-CAP-01 / 02 の設計値が deploy スクリプトから追跡できるかを照合する。,,1
-core,function,_validate_toolbox_deploy_scripts,hve/artifact_validation.py,12805,deploy / verify scriptがTB-CAPどおりかを静的に照合する。,,1
-core,function,validate_ai_agent_deploy_artifacts,hve/artifact_validation.py,12868,AAGD Step 3のdeploy/verify scriptを設計TB-CAP / AR-CAPと照合する。,,2
-core,function,_tool_search_eval_query_errors,hve/artifact_validation.py,12903,return errors,,1
-core,function,_tool_search_eval_metric_errors,hve/artifact_validation.py,12936,return errors,,1
-core,function,validate_tool_search_eval_report,hve/artifact_validation.py,12977,AAGD Step 4のtool search実測レポートを検証する。,,2
-core,function,_requirements_conformance_table_errors,hve/artifact_validation.py,13060,return errors,,1
-core,function,validate_requirements_conformance_report,hve/artifact_validation.py,13120,要件適合実測レポートを検証する（FR-WF-CONF-02 / 03 / 05）。,,1
-core,function,_fixed_report_condition_errors,hve/artifact_validation.py,13223,測定条件ラベルの存在と、workflow / step / agent の一致を検証する。,,2
-core,function,validate_route_rightsizing_report,hve/artifact_validation.py,13247,検索経路の適正化実測レポートを検証する（AG-CAP-10）。,,1
-core,function,validate_m365_publish_report,hve/artifact_validation.py,13331,Microsoft 365 / Teams 公開レポートを検証する（AG-CAP-09）。,,1
-core,function,validate_ai_agent_capability_artifacts,hve/artifact_validation.py,13402,AAG/AAGDだけをallowlistし、他workflowではno-opにするdispatcher。,,3
+core,function,find_missing_output_paths,hve/artifact_validation.py,59,宣言された成果物の欠落を副作用なしで返す。,,2
+core,function,is_original_docs_questionnaire_filename,hve/artifact_validation.py,81,ファイル名が原本質問票成果物の命名規則に合致するか判定する。,,2
+core,function,_looks_like_auto_qa_helper_content,hve/artifact_validation.py,87,本体ではなく Auto-QA 補助質問票（[Q01]形式）らしい本文か判定する。,,1
+core,function,_has_explicit_zero_questions,hve/artifact_validation.py,94,質問 0 件を summary 内で明示しているか判定する。,,1
+core,function,_parse_front_matter,hve/artifact_validation.py,119,先頭の ``---`` 区切り YAML front matter を ``key: value`` の辞書として返す。,,1
+core,function,_section_body,hve/artifact_validation.py,141,``## …<heading_marker>…`` 見出しの本文を返す。見つからない場合は None。,,5
+core,function,_table_rows,hve/artifact_validation.py,163,Markdown テーブルのデータ行（ヘッダ・区切り行を除く）をセル配列で返す。,,3
+core,function,validate_design_doc_card,hve/artifact_validation.py,180,ADI Step 2 が生成する Doc Card を検証する（FR-WF-ADI-09）。,,0
+core,function,validate_design_doc_catalog,hve/artifact_validation.py,208,ADI Step 3 が生成するトリアージカタログを検証する。,,0
+core,function,validate_downstream_seed_section,hve/artifact_validation.py,254,ADI Step 5.x が下流成果物へ追記する候補セクションを検証する。,,0
+core,function,validate_original_docs_questionnaire_artifact,hve/artifact_validation.py,286,原本質問票成果物の検証を行い、結果 dict を返す。,,1
+core,function,_find_original_docs_questionnaire_candidates,hve/artifact_validation.py,393,qa/ ディレクトリ内の原本質問票候補ファイルを検索する。,,1
+core,function,validate_original_docs_questionnaire_run,hve/artifact_validation.py,404,原本質問票実行後の成果物検証を行い、サマリー dict を返す。,,1
+core,function,is_deploy_step,hve/artifact_validation.py,492,Step が Deploy 系（実在系 AC を強制する Azure デプロイ Agent）か判定する。,,2
+core,function,wave_has_deploy_step,hve/artifact_validation.py,516,wave に Deploy 系 Step が 1 つでも含まれれば True。,,1
+core,function,_extract_first_az_container_create_command,hve/artifact_validation.py,532,Extract the first logical `az container create` command from shell text.,,1
+core,function,_extract_shell_logical_commands,hve/artifact_validation.py,565,コメント行を除外し、bash の継続行を論理コマンドへ結合する。,,27
+core,function,_strip_shell_inline_comment,hve/artifact_validation.py,617,Strip one unquoted inline shell comment from a logical command.,,39
+core,function,validate_asdw_foundry_deploy_artifacts,hve/artifact_validation.py,662,ASDW Step.2.2 の Foundry Project 生成契約を静的検証する。,,1
+core,function,_extract_shell_function,hve/artifact_validation.py,735,単純な bash 関数ブロックを、次の関数定義直前まで抽出する。,,3
+core,function,_has_az_tsv_wrapper,hve/artifact_validation.py,764,"`az_tsv` が `az ""$@"" -o tsv` の薄い wrapper として定義されているか判定する。",,2
+core,function,_has_postgresql_flexible_show,hve/artifact_validation.py,770,PostgreSQL Flexible Server の show 呼び出しが存在するか判定する。,,1
+core,function,_extract_postgresql_section,hve/artifact_validation.py,777,PostgreSQL 検証ブロックだけを抽出する。,,1
+core,function,_design_requires_postgresql,hve/artifact_validation.py,813,設計ドキュメント（azure-services-data.md）が PostgreSQL Flexible Server を,,1
+core,function,_normalize_asdw_design_cell,hve/artifact_validation.py,944,ASDW設計表の1セルを限定的な比較用テキストへ正規化する。,,1
+core,function,_normalize_asdw_entity_cell,hve/artifact_validation.py,960,Entityセルの平文またはbalancedな単一装飾だけを受理する。,,1
+core,function,_asdw_markdown_indent_width,hve/artifact_validation.py,970,Markdown行頭のspace/tabを表示列へ換算する。,,1
+core,function,_asdw_fence_opening,hve/artifact_validation.py,983,Parse one CommonMark-style fenced-code opener used by HVE reports.,,2
+core,function,_asdw_raw_html_block_start,hve/artifact_validation.py,998,Return whether a visible line starts a raw HTML block candidate.,,1
+core,function,_visible_asdw_design_lines,hve/artifact_validation.py,1008,HTML comment・fence・indented codeを除き、raw HTMLは拒否する。,,4
+core,function,_split_asdw_pipe_row,hve/artifact_validation.py,1087,固定DataDesign表の両端pipe付き1行だけをcellへ分割する。,,2
+core,function,_looks_like_asdw_table_separator,hve/artifact_validation.py,1098,両端pipe省略も含むMarkdown table separatorか判定する。,,1
+core,function,_resolve_asdw_audit_storage_mode,hve/artifact_validation.py,1111,AuditRecordのChosen列から既知2方式のどちらかを解決する。,,4
+core,function,_shell_variable_pattern,hve/artifact_validation.py,1250,Return a regex fragment for ``$NAME`` or ``${NAME...}`` references.,,16
+core,function,_extract_shell_case_branch,hve/artifact_validation.py,1256,Extract one plain branch from a generated bash ``case`` statement.,,6
+core,function,_find_az_commands,hve/artifact_validation.py,1309,"Find executable Azure CLI commands, excluding comments and echo prose.",,11
+core,function,_cleanup_body_has_only_expected_delete,hve/artifact_validation.py,1323,"Require the generated conditional, resource-scoped cleanup delete.",,1
+core,function,_private_branch_has_disallowed_function_or_nested_az,hve/artifact_validation.py,1349,Enforce the generated private branch's direct Azure CLI sequence.,,1
+core,function,_command_option_references_variable,hve/artifact_validation.py,1397,Return whether an option value references the required shell variable.,,21
+core,function,_shell_reference_pattern,hve/artifact_validation.py,1405,Return a shell variable pattern that tolerates surrounding quotes.,,5
+core,function,_has_reference_comparison,hve/artifact_validation.py,1410,Return whether two narrow shell references are compared on one line.,,3
+core,function,_count_shell_variable_comparisons,hve/artifact_validation.py,1419,Count equality/inequality checks that consume one contract variable.,,1
+core,function,_find_executable_az_command_offset,hve/artifact_validation.py,1428,Return the first non-comment ``az <command_group>`` character offset.,,2
+core,function,_find_first_executable_az_command_offset,hve/artifact_validation.py,1441,Return the first non-comment direct Azure CLI command offset.,,2
+core,function,_find_assigned_az_command,hve/artifact_validation.py,1458,Find one ``name=$(az ...)`` command tied to its required inputs.,,7
+core,function,_has_shell_result_literal_check,hve/artifact_validation.py,1489,Return whether a shell result variable is checked against one literal.,,4
+core,function,_has_shell_result_nonempty_check,hve/artifact_validation.py,1499,Return whether a shell result variable is checked for an empty value.,,1
+core,function,_is_unreassigned_shell_result,hve/artifact_validation.py,1505,Require one result assignment before its comparison with an env value.,,1
+core,function,_contains_shell_command_token,hve/artifact_validation.py,1523,"Detect a narrow executable shell command token, including ``cmd""""``.",,5
+core,function,_extract_shell_assignment_value,hve/artifact_validation.py,1542,Extract one simple shell assignment value with ``\`` continuations.,,1
+core,function,_is_generated_shell_assignment,hve/artifact_validation.py,1565,Return whether one logical command starts a generated assignment.,,16
+core,function,_split_generated_quoted_assignment,hve/artifact_validation.py,1572,Split one narrow generated quoted assignment word from its tail.,,7
+core,function,_command_outside_generated_assignment,hve/artifact_validation.py,1617,"Return host-side content, omitting only a pure generated assignment.",,4
+core,function,_has_disallowed_generated_assignment_evaluation,hve/artifact_validation.py,1627,Reject host-evaluated syntax from the generated ACI payload assignment.,,2
+core,function,_has_disallowed_private_host_azure_cli,hve/artifact_validation.py,1711,Require host-side Azure CLI usage to follow the generated direct grammar.,,1
+core,function,_has_unquoted_shell_control_operator,hve/artifact_validation.py,1748,Return whether a narrow host command separator appears outside quotes.,,5
+core,function,_mask_generated_query_argument,hve/artifact_validation.py,1771,Mask the one quoted ``--query`` argument used by generated Azure CLI.,,4
+core,function,_generated_query_has_disallowed_host_evaluation,hve/artifact_validation.py,1784,Reject host-evaluated syntax inside one generated Azure CLI query.,,1
+core,function,_private_condition_has_disallowed_evaluation,hve/artifact_validation.py,1799,Reject host evaluation syntax inside generated ``if [[...]]`` checks.,,3
+core,function,_private_condition_is_fail_closed,hve/artifact_validation.py,1807,Allow generated topology guards to use only explicit OR comparisons.,,2
+core,function,_private_conditions_have_direct_exit,hve/artifact_validation.py,1837,Require every generated private guard to abort directly on a true result.,,1
+core,function,_private_branch_without_cleanup,hve/artifact_validation.py,1855,Remove the one permitted cleanup function before host-grammar checks.,,2
+core,function,_has_leading_fail_fast_shell_options,hve/artifact_validation.py,1863,Require fail-fast options as the first executable verifier statement.,,1
+core,function,_has_unapproved_pre_case_statement,hve/artifact_validation.py,1873,Permit no host setup before the generated network-mode case statement.,,1
+core,function,_has_canonical_private_topology_query,hve/artifact_validation.py,1886,Require a result assignment to use its exact generated JMESPath query.,,1
+core,function,_payload_has_unexecuted_python_string,hve/artifact_validation.py,1900,Reject standalone string expressions in the generated ``python -c`` code.,,1
+core,function,_private_assignment_has_command_tail,hve/artifact_validation.py,1919,Reject assignment prefixes before host commands in the private grammar.,,1
+core,function,_has_disallowed_generated_parameter_expansion,hve/artifact_validation.py,1930,Permit only simple generated parameter expansions in host statements.,,3
+core,function,_private_assignment_is_allowed,hve/artifact_validation.py,1938,Accept only fixed-name or one direct Azure CLI result assignments.,,2
+core,function,_private_branch_has_unapproved_host_statement,hve/artifact_validation.py,1971,Allow only the generated private verifier's fixed host-side grammar.,,1
+core,function,_has_obfuscated_private_host_command_source,hve/artifact_validation.py,2015,Reject shell word reconstruction at private verifier host command positions.,,1
+core,function,_payload_uses_variable,hve/artifact_validation.py,2072,Return whether an ACI payload actually consumes one runtime variable.,,1
+core,function,_extract_asdw_private_aci_payload,hve/artifact_validation.py,2097,Extract the generated private ACI assignment word for coverage checks.,,3
+core,function,_extract_asdw_known_mode_python_source,hve/artifact_validation.py,2113,"Extract Python only from one fixed, fail-closed ACI shell envelope.",,2
+core,function,_load_asdw_sample_counts,hve/artifact_validation.py,2147,Load selected sample-data counts and retain a precise parse error.,,4
+core,function,_extract_asdw_audit_python_source,hve/artifact_validation.py,2190,AuditRecord count commandから埋込みPythonを抽出する。,,1
+core,function,_asdw_audit_python_counts_entries,hve/artifact_validation.py,2207,Confidential Ledger entriesを実際に列挙・集計するPythonか確認する。,,1
+core,function,_asdw_has_executable_audit_count,hve/artifact_validation.py,2246,AuditRecordの取得値を定義済みcheck_countへ渡す契約を確認する。,,1
+core,function,_validate_asdw_acl_direct_count,hve/artifact_validation.py,2292,private ACI Python内のAzure confidential ledger直接件数を検査する。,,2
+core,function,_validate_asdw_sql_audit_count,hve/artifact_validation.py,2899,private ACI Python内のSVC-12 AuditRecord件数契約を検査する。,,2
+core,function,_validate_asdw_sql_audit_metadata,hve/artifact_validation.py,3428,private ACI Python内のSQL ledger種別とACL digest保管を検査する。,,2
+core,function,_asdw_python_env_value,hve/artifact_validation.py,4087,Return whether a Python AST node is exactly ``os.environ[KEY]``.,,9
+core,function,_asdw_direct_count_guard,hve/artifact_validation.py,4100,Parse one direct ``count == N or sys.exit(1)`` guard.,,3
+core,function,_validate_asdw_known_mode_selected_data,hve/artifact_validation.py,4138,Validate the design-selected private payload with one bounded grammar.,,1
+core,function,_validate_asdw_audit_mode_wiring,hve/artifact_validation.py,5804,選定Audit modeのshell/ACI配線と排他性を検査する。,,1
+core,function,_validate_asdw_non_private_branches,hve/artifact_validation.py,6047,Require public/nsp/blocked to fail closed without route attempts.,,2
+core,function,_validate_asdw_network_case_contract,hve/artifact_validation.py,6069,Validate the outer DATA_NETWORK_MODE case selector and clause inventory.,,2
+core,function,_validate_asdw_selected_data_coverage,hve/artifact_validation.py,6153,Require APP-009 private payload coverage to match sample-data exactly.,,1
+core,function,_validate_asdw_private_verify_capability,hve/artifact_validation.py,6365,Validate the deterministic private verifier wiring without Azure I/O.,,1
+core,function,validate_asdw_data_verify_script,hve/artifact_validation.py,7260,ASDW-WEB Step.1.2 の data verify スクリプト契約を検証する。,,3
+core,function,_build_asdw_non_audit_registration_source,hve/artifact_validation.py,7474,Build the one canonical APP-009 non-Audit registration program.,,2
+core,function,_build_asdw_non_audit_aci_command,hve/artifact_validation.py,7587,Encode the canonical program without exposing shell quote structure.,,1
+core,function,_extract_asdw_non_audit_registration_source,hve/artifact_validation.py,7601,"return (source, [])",,1
+core,function,_load_asdw_data_deploy_shell_text,hve/artifact_validation.py,7650,"Read one strict UTF-8/LF shell artifact, or validate a byte snapshot text.",,2
+core,function,_extract_asdw_data_deploy_marker_block,hve/artifact_validation.py,7681,Require the complete executable artifact inside one shebang-bound block.,,2
+core,function,_asdw_shell_tokens,hve/artifact_validation.py,7746,return list(lexer),,1
+core,function,_asdw_tokens_start_with,hve/artifact_validation.py,7756,return any((tuple(tokens[:len(prefix)]) == prefix for prefix in prefixes)),,1
+core,function,_validate_asdw_data_deploy_top_level_shape,hve/artifact_validation.py,7763,Require a fixed preamble followed by one direct top-level network case.,,1
+core,function,_validate_asdw_data_deploy_host_boundary,hve/artifact_validation.py,7794,Permit only the fixed host grammar and direct Azure command shapes.,,1
+core,function,_asdw_data_create_command_offsets,hve/artifact_validation.py,8007,Return logical commands with stable first-occurrence offsets.,,1
+core,function,_validate_asdw_data_policy_preflight,hve/artifact_validation.py,8025,Require fail-closed policy inventory before every Azure mutation.,,1
+core,function,_validate_asdw_data_create_aci_lifecycle,hve/artifact_validation.py,8074,"Require one owned, bounded, completion-checked non-Audit ACI.",,1
+core,function,_validate_asdw_data_create_selected_resources,hve/artifact_validation.py,8134,Require APP-009 selected stores and non-Audit sample coverage.,,1
+core,function,validate_asdw_data_create_scripts,hve/artifact_validation.py,8411,Validate Step 1.3 prep/create before an HVE-owned byte-pinned launch.,,4
+core,function,_extract_asdw_audit_registration_block,hve/artifact_validation.py,8496,Extract the Audit-only block fixed immediately after the Bash shebang.,,1
+core,function,_asdw_audit_registration_host_statement_is_allowed,hve/artifact_validation.py,8537,Accept one statement from the fixed Audit registration host grammar.,,1
+core,function,_validate_asdw_audit_registration_block_structure,hve/artifact_validation.py,8589,Permit only the canonical shell compound structure in the Audit block.,,1
+core,function,_validate_asdw_outside_audit_registration_block,hve/artifact_validation.py,8674,Keep every Audit-specific input and write inside the validated block.,,1
+core,function,_extract_asdw_registration_python_source,hve/artifact_validation.py,8794,Extract one direct ``python -c`` source from the registration ACI.,,1
+core,function,_validate_asdw_sql_audit_registration,hve/artifact_validation.py,8837,Validate one SVC-12 AuditRecord payload insert for SQL ledger mode.,,1
+core,function,_validate_asdw_acl_direct_audit_registration,hve/artifact_validation.py,8864,Validate one ACL application-entry AuditRecord write.,,1
+core,function,_validate_asdw_registration_mode_wiring,hve/artifact_validation.py,8893,Validate mode-selected registration ACI identity and environment wiring.,,1
+core,function,_validate_asdw_registration_audit_mode,hve/artifact_validation.py,9245,Validate the mode-selected AuditRecord registration payload.,,1
+core,function,validate_asdw_data_registration_script,hve/artifact_validation.py,9261,Step.1.3 登録ACIのrun所有権・cleanup契約を静的に検査する。,,5
+core,function,_is_meaningful_provider_evidence,hve/artifact_validation.py,9601,Provider table cellが未記入・placeholderではないか判定する。,,3
+core,function,_strip_markdown_fenced_blocks,hve/artifact_validation.py,9609,Markdown fenced code blockを検証対象から除外する。,,2
+core,function,build_provider_inventory_snapshot,hve/artifact_validation.py,9634,Raw identifierを保持せず、固定schemaのredacted inventoryを生成する。,,0
+core,function,_validate_provider_inventory_evidence,hve/artifact_validation.py,9675,before/after inventoryのredacted JSON証跡を検証する。,,2
+core,function,_validate_agent_provider_preflight,hve/artifact_validation.py,9861,AgentDeployの固定Provider Pre-flight表を検証する。,,1
+core,function,validate_deploy_ac_verification,hve/artifact_validation.py,10024,Deploy 系 Agent の ac-verification.md を検証する。,,1
+core,function,_extract_markdown_label,hve/artifact_validation.py,10164,Extract a simple Markdown list label value: ``- Label: value``.,,8
+core,function,validate_tdd_test_report,hve/artifact_validation.py,10171,Validate the minimal Markdown contract for a TDD RED/GREEN report.,validation-confirmed,1
+core,function,_asdw_step12_report_label_values,hve/artifact_validation.py,10269,Return every ``- Label: value`` list-item value for a Step 1.2 label.,,1
+core,function,_asdw_step12_log_line_values,hve/artifact_validation.py,10279,Return every authoritative ``KEY: value`` machine-log line value.,,1
+core,function,validate_asdw_step12_evidence_report,hve/artifact_validation.py,10288,Machine-check the ASDW Step 1.2 three-state evidence contract.,,1
+core,function,build_asdw_step12_machine_log,hve/artifact_validation.py,10362,Derive the ASDW Step 1.2 three-state statuses and render the machine log.,,1
+core,function,validate_asdw_ui_red_tests_no_unresolved_contracts,hve/artifact_validation.py,10409,Reject executable unresolved TBD contracts in ASDW-WEB UI RED tests.,,1
+core,function,_normalize_ai_agent_label,hve/artifact_validation.py,10623,Markdown table/field labelsを比較用ASCII keyへ正規化する。,,105
+core,function,_strip_ai_agent_markdown_code,hve/artifact_validation.py,10629,fenced/4-space code block内の見出し・table spoofを除外する。,,5
+core,function,_ai_agent_table_cells,hve/artifact_validation.py,10638,単純なMarkdown table rowをcellへ分割する。,,4
+core,function,_parse_ai_agent_tables,hve/artifact_validation.py,10646,Markdown table群を正規化header付きrow mappingとして返す。,,1
+core,function,_find_ai_agent_table,hve/artifact_validation.py,10675,return None,,14
+core,function,_ai_agent_field,hve/artifact_validation.py,10686,bullet/plain/tableの固定labelから最初の値を抽出する。,,59
+core,function,_is_meaningful_ai_agent_value,hve/artifact_validation.py,10702,return len(normalized) >= 3,,42
+core,function,_has_reasoned_none,hve/artifact_validation.py,10711,return bool(separator and _is_meaningful_ai_agent_value(reason)),,3
+core,function,_extract_ai_agent_contract_section,hve/artifact_validation.py,10721,固定見出しとContract IDが一致する単一sectionを抽出する。,,3
+core,function,_reasoned_ai_agent_na,hve/artifact_validation.py,10751,Contract全体のN/A判定と理由・根拠・再判定条件を検証する。,,8
+core,function,_safe_ai_agent_secret_value,hve/artifact_validation.py,10783,"return any((marker in normalized for marker in ('getenv(', 'os.environ', 'environment.getenvironmentvariable', 'configuration[', 'secretclient', 'key vault')))",,2
+core,function,_ai_agent_secret_errors,hve/artifact_validation.py,10809,secret値を出力せず、高確度なhard-codeだけを報告する。,,5
+core,function,_validate_ai_agent_goal,hve/artifact_validation.py,10829,return errors,,1
+core,function,_validate_ai_agent_runtime,hve/artifact_validation.py,10885,return errors,,1
+core,function,_validate_ai_agent_routing,hve/artifact_validation.py,10918,return errors,,1
+core,function,_validate_ai_agent_crud,hve/artifact_validation.py,10977,return errors,,1
+core,function,_validate_ai_agent_mcp,hve/artifact_validation.py,11061,return errors,,1
+core,function,_parse_ai_agent_resources,hve/artifact_validation.py,11098,"return sorted(set(re.findall('(?:scripts|references|assets)/[A-Za-z0-9_.\\-/]+', value.replace('`', ''))))",,1
+core,function,_validate_ai_agent_skill,hve/artifact_validation.py,11109,return errors,,1
+core,function,_validate_ai_agent_distribution,hve/artifact_validation.py,11157,AG-CAP-09 の配布契約を検証し、`mcp.json` の要否を metadata へ残す。,,1
+core,function,_agentic_retrieval_route_selected,hve/artifact_validation.py,11200,AG-CAP-03のPreferred / FallbackにFoundry IQ経路が含まれるかを判定する。,,1
+core,function,_is_declared_absent_route,hve/artifact_validation.py,11214,`none: ...` / `n/a: ...` のように「経路なし」を宣言した値かを判定する。,,2
+core,function,_agent_tool_ids,hve/artifact_validation.py,11220,AG-CAP-03/04/05から`正規化ID -> 表示名`を重複排除して収集する。,,3
+core,function,_count_agent_tools,hve/artifact_validation.py,11254,TB-CAP-01のTool総数と内訳を実データから算出する。,,1
+core,function,_validate_toolbox_inventory,hve/artifact_validation.py,11262,return errors,,1
+core,function,_validate_toolbox_decision,hve/artifact_validation.py,11303,return errors,,1
+core,function,_validate_toolbox_pinning,hve/artifact_validation.py,11336,return errors,,1
+core,function,_validate_toolbox_search_metadata,hve/artifact_validation.py,11362,return errors,,1
+core,function,_validate_toolbox_budget,hve/artifact_validation.py,11410,return errors,,1
+core,function,_validate_toolbox_contracts,hve/artifact_validation.py,11430,Tool Search方針とTool総数に応じてTB-CAP-01〜05を検証する。,,1
+core,function,_agentic_retrieval_reasoned_flag,hve/artifact_validation.py,11516,`<許可語>: 理由` 形式であることを検証する。,,3
+core,function,_agentic_retrieval_finite,hve/artifact_validation.py,11526,return _is_meaningful_ai_agent_value(value) and (not _AGENTIC_RETRIEVAL_UNBOUNDED.search(value)),,1
+core,function,_validate_agentic_retrieval_knowledge_base,hve/artifact_validation.py,11530,"return (errors, effort)",,1
+core,function,_validate_agentic_retrieval_sources,hve/artifact_validation.py,11596,"return (errors, rows)",,1
+core,function,_validate_agentic_retrieval_budget,hve/artifact_validation.py,11692,return errors,,1
+core,function,_validate_agentic_retrieval_evidence,hve/artifact_validation.py,11718,return errors,,1
+core,function,_validate_agentic_retrieval_mcp,hve/artifact_validation.py,11734,return errors,,1
+core,function,_validate_agentic_retrieval_policy,hve/artifact_validation.py,11787,FR-WF-AAG-04: 方針値と AG-CAP-03 の経路選択の整合を検証する。,,1
+core,function,_validate_agentic_retrieval_contracts,hve/artifact_validation.py,11819,AG-CAP-03でFoundry IQ経路を選んだ場合のAR-CAP-01〜05を検証する。,,1
+core,function,_validate_agentic_retrieval_implementation,hve/artifact_validation.py,11870,AR-CAP-01 / 02 / 05 の設計値が実装設定とコードへ反映されているかを検証する。,,1
+core,function,_parse_ai_agent_design,hve/artifact_validation.py,11937,"return (errors, metadata)",,4
+core,function,validate_ai_agent_design_artifact,hve/artifact_validation.py,12019,AAG Step 3のAG-CAP-01〜10設計成果物を決定的に検証する。,,1
+core,function,_ai_agent_json_values,hve/artifact_validation.py,12031,def _ai_agent_json_values(value: Any) -> Iterable[str]:,,3
+core,function,_ai_agent_json_key_values,hve/artifact_validation.py,12042,return found,,10
+core,function,_ai_agent_config_contains,hve/artifact_validation.py,12056,return has_structured_key(config),,7
+core,function,_strip_ai_agent_source_comments_and_strings,hve/artifact_validation.py,12079,callable宣言検査用にPython/C#のcomment/docstringを保守的に除外する。,,1
+core,function,_ai_agent_source_has_callable,hve/artifact_validation.py,12093,"return bool(re.search(f'^\\s*(?:async\\s+)?def\\s+{name}\\s*\\(', visible, re.IGNORECASE | re.MULTILINE) or re.search(f'^\\s*(?:(?:public|private|protected|internal|static|virtual|override|sealed|async)\\s+)*[A-Za-z_][A-Za-z0-9_<>,.?\\[\\]]*\\s+{compact_name}(?:Async)?\\s*\\(', visible, re.IGNORECA…",,3
+core,function,_collect_ai_agent_files,hve/artifact_validation.py,12112,"return (files, errors)",,1
+core,function,_ai_agent_system_prompt_candidates,hve/artifact_validation.py,12126,return sorted((path for path in agent_dir.rglob('*.md') if 'system' in path.name.casefold() and 'prompt' in path.name.casefold())),,2
+core,function,_agent_toolbox_settings,hve/artifact_validation.py,12134,Agent 設定から toolbox ブロックを取り出し、キーを正規化して返す。,,1
+core,function,_validate_toolbox_implementation,hve/artifact_validation.py,12144,設計 TB-CAP と Agent 設定・System Prompt・test trace の一致を検証する。,,1
+core,function,_validate_toolbox_test_trace,hve/artifact_validation.py,12236,return errors,,1
+core,function,_validate_ai_agent_system_prompt,hve/artifact_validation.py,12255,return errors,,1
+core,function,_validate_ai_agent_test_trace,hve/artifact_validation.py,12303,return errors,,1
+core,function,_validate_ai_agent_skill_artifacts,hve/artifact_validation.py,12335,return errors,,1
+core,function,validate_agent_plugin_manifest,hve/artifact_validation.py,12396,AAGD Step 2.3 の Agent Plugins マニフェストを検証する（FR-WF-AAGD-06）。,,1
+core,function,_agent_plugin_mcp_env_errors,hve/artifact_validation.py,12445,return errors,,2
+core,function,_agent_plugin_mcp_url_errors,hve/artifact_validation.py,12470,return errors,,1
+core,function,validate_agent_plugin_mcp_config,hve/artifact_validation.py,12496,AG-CAP-09 が採用した場合の `mcp.json` を検証する（Agent Plugins 1.0.0 §7.2）。,,1
+core,function,validate_ai_agent_implementation_artifacts,hve/artifact_validation.py,12580,AAGD Step 2.3の設計・code・config・test traceを相互検証する。,,2
+core,function,_read_deploy_script,hve/artifact_validation.py,12786,return None,,3
+core,function,_validate_agentic_retrieval_deploy,hve/artifact_validation.py,12795,AR-CAP-01 / 02 の設計値が deploy スクリプトから追跡できるかを照合する。,,1
+core,function,_validate_toolbox_deploy_scripts,hve/artifact_validation.py,12828,deploy / verify scriptがTB-CAPどおりかを静的に照合する。,,1
+core,function,validate_ai_agent_deploy_artifacts,hve/artifact_validation.py,12891,AAGD Step 3のdeploy/verify scriptを設計TB-CAP / AR-CAPと照合する。,,2
+core,function,_tool_search_eval_query_errors,hve/artifact_validation.py,12926,return errors,,1
+core,function,_tool_search_eval_metric_errors,hve/artifact_validation.py,12959,return errors,,1
+core,function,validate_tool_search_eval_report,hve/artifact_validation.py,13000,AAGD Step 4のtool search実測レポートを検証する。,,2
+core,function,_requirements_conformance_table_errors,hve/artifact_validation.py,13083,return errors,,1
+core,function,validate_requirements_conformance_report,hve/artifact_validation.py,13143,要件適合実測レポートを検証する（FR-WF-CONF-02 / 03 / 05）。,,1
+core,function,_fixed_report_condition_errors,hve/artifact_validation.py,13246,測定条件ラベルの存在と、workflow / step / agent の一致を検証する。,,2
+core,function,validate_route_rightsizing_report,hve/artifact_validation.py,13270,検索経路の適正化実測レポートを検証する（AG-CAP-10）。,,1
+core,function,validate_m365_publish_report,hve/artifact_validation.py,13354,Microsoft 365 / Teams 公開レポートを検証する（AG-CAP-09）。,,1
+core,function,validate_ai_agent_capability_artifacts,hve/artifact_validation.py,13425,AAG/AAGDだけをallowlistし、他workflowではno-opにするdispatcher。,,3
 core,class,AsdwDataDeployContextError,hve/asdw_data_runtime_context.py,62,Raised when Step 1.3 bootstrap inputs are not explicit and safe.,,13
 core,function,_require_single_line_string,hve/asdw_data_runtime_context.py,66,raise AsdwDataDeployContextError(f'ASDW Step 1.3 bootstrap input {key} must be a non-empty single-line string.'),,3
 core,function,_require_ipv4_network,hve/asdw_data_runtime_context.py,79,raise AsdwDataDeployContextError(f'ASDW Step 1.3 bootstrap input {key} must be an IPv4 CIDR.'),,3
@@ -1145,7 +1164,7 @@ core,function,default_catalog_path,hve/autopilot/planner.py,26,return repo_root 
 core,function,_empty_plan,hve/autopilot/planner.py,30,"return AutopilotPlan(catalog_path=catalog_path, catalog_exists=exists, requires_aas=requires_aas, app_chains=[], skipped=[], max_parallel=max_parallel, pre_phases=list(pre_phases or []), main_workflows=list(main_workflows or []), ignored_workflows=list(ignored_workflows or []), pre_phase_only=pre_p…",,2
 core,function,_filter_chain_by_selection,hve/autopilot/planner.py,55,"return [wf for wf in chain if allowed.get(wf, False)]",,1
 core,function,_requires_aas,hve/autopilot/planner.py,65,return selection.has_downstream_workflows() and (not selection.run_aas),,3
-core,function,build_plan,hve/autopilot/planner.py,71,カタログから Autopilot 実行計画を生成する。,,3
+core,function,build_plan,hve/autopilot/planner.py,71,カタログから Autopilot 実行計画を生成する。,,13
 core,class,PrecheckCategory,hve/autopilot/precheck_model.py,14,不足項目のカテゴリ。,,15
 core,class,PrecheckItem,hve/autopilot/precheck_model.py,31,precheck で検出された不足項目 1 件。,,7
 core,class,AutopilotPrecheckResult,hve/autopilot/precheck_model.py,55,`run_step1_precheck()`（旧名: ``run_autopilot_precheck()``）の戻り値。,,4
@@ -1200,12 +1219,12 @@ core,function,to_wire_model,hve/config.py,81,"hve 内部センチネル ``""Auto
 core,function,get_model_choices,hve/config.py,107,利用可能なモデル ID 一覧を取得する。,,0
 core,function,normalize_model,hve/config.py,172,モデル ID を正規化する（パススルー実装）。,,3
 core,function,_normalize_model_with_warning,hve/config.py,181,モデル名を正規化する（後方互換ラッパー）。,,15
-core,function,generate_run_id,hve/config.py,204,ワークフロー実行ごとのユニークID。,,8
+core,function,generate_run_id,hve/config.py,204,ワークフロー実行ごとのユニークID。,,9
 core,function,_env_bool,hve/config.py,245,環境変数を bool として読む。,,14
 core,function,_coerce_bool,hve/config.py,260,bool / 文字列を bool に正規化する。,,2
 core,function,_parse_bool_mapping,hve/config.py,275,JSON 文字列または dict を ``{str: bool}`` に正規化する。,,7
 core,function,_parse_workiq_akm_ingest_dxx,hve/config.py,307,"``WORKIQ_AKM_INGEST_DXX`` / ``--workiq-dxx`` 文字列を ``[""D01"",""D04"",...]`` に正規化する。",,2
-core,class,SDKConfig,hve/config.py,337,return self.workiq_enabled if self.workiq_qa_enabled is None else self.workiq_qa_enabled,,40
+core,class,SDKConfig,hve/config.py,337,return self.workiq_enabled if self.workiq_qa_enabled is None else self.workiq_qa_enabled,,44
 core,function,timestamp_prefix,hve/console.py,50,現在時刻のプレフィックス文字列を返す。,,7
 core,function,_format_elapsed_ja,hve/console.py,55,秒数を日本語の経過時間表記に変換する。,,2
 core,class,_Style,hve/console.py,135,ANSI エスケープシーケンス定数。TTY 非接続時は空文字列。,,2
@@ -1213,8 +1232,8 @@ core,class,Console,hve/console.py,188,タスク実行中の Console 出力を制
 core,function,_require_pwsh7_on_windows,hve/copilot_client_factory.py,19,Return the installed ``pwsh`` path or fail before local SDK startup.,,1
 core,function,create_copilot_client,hve/copilot_client_factory.py,59,Create a ``CopilotClient`` using the SDK 1.0.0 connection API.,,10
 core,function,_create_legacy_config_client,hve/copilot_client_factory.py,138,Fallback for older SDK-shaped test doubles and pre-1.0 SDKs.,,1
-core,class,StepResult,hve/dag_executor.py,39,ステップ実行結果。,,24
-core,class,DAGExecutor,hve/dag_executor.py,75,DAG ベースの並列実行エンジン。,,1
+core,class,StepResult,hve/dag_executor.py,44,ステップ実行結果。,,25
+core,class,DAGExecutor,hve/dag_executor.py,80,DAG ベースの並列実行エンジン。,,1
 core,class,WorkflowParityItem,hve/dag_parity.py,30,class WorkflowParityItem:,,7
 core,class,WorkflowParityReport,hve/dag_parity.py,40,return any((item.classification != 'same' for item in self.items)),,2
 core,function,extract_bash_workflow_ids,hve/dag_parity.py,51,Extract workflow ids declared in .github/scripts/bash/lib/workflow-registry.sh.,,0
@@ -1259,7 +1278,7 @@ core,function,_key_placeholder_names,hve/fanout_expander.py,103,当該 StepDef �
 core,function,_substitute_key_placeholders,hve/fanout_expander.py,117,``{key}`` およびキー別名プレースホルダを fan-out キーへ置換する。,,4
 core,function,_resolve_output_path_template,hve/fanout_expander.py,129,``output_paths_template`` の 1 エントリを fan-out 子の具体 path へ解決する。,,2
 core,function,_declared_directory_prefixes,hve/fanout_expander.py,169,template 内でディレクトリ成果物として宣言されたパス接頭辞を返す。,,1
-core,function,resolve_output_path_prefix_gates,hve/fanout_expander.py,183,FR-WF-OUT-10: drop されたエントリを prefix 存在ゲートへ降格する。,,2
+core,function,resolve_output_path_prefix_gates,hve/fanout_expander.py,183,FR-WF-OUT-10: drop されたエントリを prefix 存在ゲートへ降格する。,,3
 core,class,FanoutChildStep,hve/fanout_expander.py,230,fan-out 展開後の合成 StepDef 互換オブジェクト。,,4
 core,class,ExpandedWorkflow,hve/fanout_expander.py,269,fan-out 展開後のワークフロー snapshot。,,2
 core,function,_filter_keys_by_app_ids,hve/fanout_expander.py,293,fan-out 展開キーを app_ids で絞り込む。,,1
@@ -1447,7 +1466,7 @@ gui,function,inject_token_into_env,hve/gui/gh_cli.py,58,トークンを ``os.env
 gui,class,GhLoginDialog,hve/gui/gh_login_dialog.py,40,``gh auth login`` を埋め込み端末で実行するモーダルダイアログ。,,2
 gui,class,GitOpsError,hve/gui/git_ops.py,35,GUI へ表示するための git 操作エラー。,,21
 gui,class,PullRequestPreflight,hve/gui/git_ops.py,40,return self.published and self.unpushed_commits == 0,,5
-gui,function,_run,hve/gui/git_ops.py,54,raise GitOpsError('git コマンドが見つかりません。') from exc,,50
+gui,function,_run,hve/gui/git_ops.py,54,raise GitOpsError('git コマンドが見つかりません。') from exc,,51
 gui,function,current_branch,hve/gui/git_ops.py,75,現在のブランチ名を返す。detached HEAD / 取得失敗時は ``None``。,,14
 gui,function,push_current_branch,hve/gui/git_ops.py,88,現在のブランチを ``origin`` へ push する（FR-GUI-34）。,,2
 gui,function,_required_output,hve/gui/git_ops.py,109,raise GitOpsError(f'{label}を確認できませんでした。'),,3
@@ -1550,12 +1569,12 @@ gui,function,_detect_os_language,hve/gui/i18n/__init__.py,51,OS ロケールか�
 gui,function,resolve_language,hve/gui/i18n/__init__.py,73,起動時に使用する言語コードを決定する。,,3
 gui,function,install_translator,hve/gui/i18n/__init__.py,97,``QApplication`` に ``QTranslator`` をインストールする。,,1
 gui,class,JobTarget,hve/gui/job_interaction_model.py,15,対話送信または結果参照の対象となるジョブ。,,11
-gui,function,_resolve_local_git_branch,hve/gui/main_window.py,100,Return the current local Git branch for ``repo_root``.,,1
-gui,function,_format_git_status_text,hve/gui/main_window.py,145,"return f""Git: {repo_name} @ {branch or '不明'}""",,1
-gui,class,_SessionArtifactPickerDialog,hve/gui/main_window.py,150,Step 1 戻り時に「前回セッションで生成されたファイル」を添付候補として,,1
-gui,function,_build_step_seeds_for_workflow,hve/gui/main_window.py,218,``WorkflowDef.steps`` から container 階層を反映した ``StepSeed`` リストを構築する。,,4
-gui,function,_sort_workflows_by_dependencies,hve/gui/main_window.py,295,選択ワークフローを依存関係に基づいて安定ソートする（共通 core へ委譲）。,,1
-gui,class,MainWindow,hve/gui/main_window.py,300,3 ステップ単一ウィンドウ。,context_size,6
+gui,function,_resolve_local_git_branch,hve/gui/main_window.py,109,Return the current local Git branch for ``repo_root``.,,1
+gui,function,_format_git_status_text,hve/gui/main_window.py,154,"return f""Git: {repo_name} @ {branch or '不明'}""",,1
+gui,class,_SessionArtifactPickerDialog,hve/gui/main_window.py,159,Step 1 戻り時に「前回セッションで生成されたファイル」を添付候補として,,1
+gui,function,_build_step_seeds_for_workflow,hve/gui/main_window.py,227,``WorkflowDef.steps`` から container 階層を反映した ``StepSeed`` リストを構築する。,,4
+gui,function,_sort_workflows_by_dependencies,hve/gui/main_window.py,304,選択ワークフローを依存関係に基づいて安定ソートする（共通 core へ委譲）。,,1
+gui,class,MainWindow,hve/gui/main_window.py,309,3 ステップ単一ウィンドウ。,context_size,6
 gui,function,_get_formatter,hve/gui/markdown_preview/code_highlighter.py,30,return _FORMATTER,,3
 gui,function,get_style_css,hve/gui/markdown_preview/code_highlighter.py,37,Pygments スタイルの CSS を返す（初回のみ生成、以降キャッシュ）。,,3
 gui,class,CodeHighlighter,hve/gui/markdown_preview/code_highlighter.py,45,ファイル内容をシンタックスハイライト HTML に変換する。,,2
@@ -1573,16 +1592,17 @@ gui,class,MarkdownPreviewPanel,hve/gui/markdown_preview/preview_panel.py,40,Mark
 gui,class,PreviewWatcher,hve/gui/markdown_preview/preview_watcher.py,22,単一ファイル監視ラッパ。,,1
 gui,class,_HveSettingsBackend,hve/gui/mdq_settings_section.py,15,Adapt HVE's process-wide settings API to the repository-aware GUI API.,,2
 gui,class,MdqIndexSection,hve/gui/mdq_settings_section.py,34,Shared panel with HVE's existing settings store injected.,,3
-gui,class,OrchestrateArgs,hve/gui/orchestrate_args.py,34,`orchestrate` サブコマンドの全引数を保持する dataclass。,,30
+gui,class,OrchestrateArgs,hve/gui/orchestrate_args.py,34,`orchestrate` サブコマンドの全引数を保持する dataclass。,,31
 gui,function,_coerce_tristate,hve/gui/orchestrate_args.py,639,"設定ストアの 3 状態値（``""""`` / ``""on""`` / ``""off""``）を bool へ正規化する。",,7
-gui,function,_split_semicolon_list,hve/gui/orchestrate_args.py,723,return [part.strip() for part in value.split(';') if part.strip()],,2
+gui,function,_split_semicolon_list,hve/gui/orchestrate_args.py,715,return [part.strip() for part in value.split(';') if part.strip()],,2
+gui,function,_split_whitespace_list,hve/gui/orchestrate_args.py,723,return value.split(),,3
 gui,function,_field_map,hve/gui/orchestrate_args.py,731,return {f.name: f for f in fields(OrchestrateArgs)},,1
 gui,function,_is_tristate_field,hve/gui/orchestrate_args.py,735,"return str(f.type).replace(' ', '') in {'TriState', 'Optional[bool]', 'bool|None'}",,1
 gui,function,_coerce_for_field,hve/gui/orchestrate_args.py,740,return value,,2
-gui,function,args_from_settings,hve/gui/orchestrate_args.py,765,保存済み GUI 設定から `OrchestrateArgs` を構築する（Qt に依存しない）。,,1
-gui,function,apply_watch_settings,hve/gui/orchestrate_args.py,885,設定ストアの ``[options]`` から watch 系の値を ``OrchestrateArgs`` へ反映する。,,1
-gui,function,_append_tristate,hve/gui/orchestrate_args.py,906,3 状態フラグ（BooleanOptionalAction）を argv に追加する。,,11
-gui,function,_shell_quote,hve/gui/orchestrate_args.py,927,空白や特殊文字を含む引数を Windows / POSIX 両対応で簡易クォートする。,,1
+gui,function,args_from_settings,hve/gui/orchestrate_args.py,769,保存済み GUI 設定から `OrchestrateArgs` を構築する（Qt に依存しない）。,,1
+gui,function,apply_watch_settings,hve/gui/orchestrate_args.py,881,設定ストアの ``[options]`` から watch 系の値を ``OrchestrateArgs`` へ反映する。,,1
+gui,function,_append_tristate,hve/gui/orchestrate_args.py,902,3 状態フラグ（BooleanOptionalAction）を argv に追加する。,,11
+gui,function,_shell_quote,hve/gui/orchestrate_args.py,923,空白や特殊文字を含む引数を Windows / POSIX 両対応で簡易クォートする。,,1
 gui,class,StepIntroBanner,hve/gui/page_intro.py,15,Step ページの最上段に表示する説明枠。,,2
 gui,function,_parse_github_remote_url,hve/gui/page_options.py,63,GitHub remote URL から ``owner/repo`` を抽出する。,,1
 gui,function,_guess_repo_from_git_remote,hve/gui/page_options.py,70,ローカル git remote origin から GitHub ``owner/repo`` を推定する。,,2
@@ -1629,14 +1649,14 @@ gui,class,_OriginPickerDialog,hve/gui/page_options_ard.py,77,複数ファイル�
 gui,class,_DropZone,hve/gui/page_options_ard.py,136,D&D を受け付けるエリア。`files_dropped(List[Path])` を emit。,,1
 gui,class,AttachmentPane,hve/gui/page_options_ard.py,172,ARD 添付ファイルペイン。,,1
 gui,class,_BRGenWorker,hve/gui/page_options_ard.py,585,`generate_business_requirement` を別スレッドで実行するワーカー。,,1
-gui,function,_is_windows,hve/gui/page_workbench.py,73,return sys.platform == 'win32',,2
-gui,function,_build_step_label_pattern,hve/gui/page_workbench.py,77,step_id を本文ラベル ``[<id>]`` / ``[Step.<id>]`` と照合する正規表現を返す。,,1
-gui,function,_write_console_log,hve/gui/page_workbench.py,95,GUI のログ全文を ``<run_dir>/console-log.txt`` に UTF-8 上書きする純関数。,,1
-gui,function,_parse_cloud_session_line,hve/gui/page_workbench.py,123,Parse `[hve:cloud-session] {...}` lines.,,1
-gui,function,_is_safe_cloud_session_url,hve/gui/page_workbench.py,137,"return parsed.scheme in {'http', 'https'} and bool(parsed.netloc)",,1
-gui,class,_LogPane,hve/gui/page_workbench.py,149,ログのファイル永続化ペイン。,,2
-gui,class,_EnhancedUserActionsPane,hve/gui/page_workbench.py,272,改善版 UserActions ペイン。,,1
-gui,class,WorkbenchPage,hve/gui/page_workbench.py,350,Step 2: Workbench ペイン（CUI版と同じ 7 ペインレイアウト）。,,1
+gui,function,_is_windows,hve/gui/page_workbench.py,78,return sys.platform == 'win32',,2
+gui,function,_build_step_label_pattern,hve/gui/page_workbench.py,82,step_id を本文ラベル ``[<id>]`` / ``[Step.<id>]`` と照合する正規表現を返す。,,1
+gui,function,_write_console_log,hve/gui/page_workbench.py,100,GUI のログ全文を ``<run_dir>/console-log.txt`` に UTF-8 上書きする純関数。,,1
+gui,function,_parse_cloud_session_line,hve/gui/page_workbench.py,128,Parse `[hve:cloud-session] {...}` lines.,,1
+gui,function,_is_safe_cloud_session_url,hve/gui/page_workbench.py,142,"return parsed.scheme in {'http', 'https'} and bool(parsed.netloc)",,1
+gui,class,_LogPane,hve/gui/page_workbench.py,154,ログのファイル永続化ペイン。,,2
+gui,class,_EnhancedUserActionsPane,hve/gui/page_workbench.py,277,改善版 UserActions ペイン。,,1
+gui,class,WorkbenchPage,hve/gui/page_workbench.py,355,Step 2: Workbench ペイン（CUI版と同じ 7 ペインレイアウト）。,,1
 gui,function,_load_workflow_categories,hve/gui/page_workflow_select.py,69,"`workflow_registry.WORKFLOW_CATEGORIES` から (カテゴリー名, ID 群) を取得する。",,1
 gui,function,_load_workflow_choices,hve/gui/page_workflow_select.py,83,"`workflow_registry.list_workflows()` から (id, name) を取得する。",,2
 gui,function,_load_workflow_steps,hve/gui/page_workflow_select.py,107,"指定ワークフローのステップ一覧 (step_id, title, depends_on) を返す。",,1
@@ -1660,6 +1680,9 @@ gui,function,_is_other_choice,hve/gui/qa_answer_dialog.py,90,質問票に既に�
 gui,class,_QuestionRow,hve/gui/qa_answer_dialog.py,98,1 質問分の入力状態（QComboBox or QLineEdit を保持）。,,4
 gui,class,QAAnswerDialog,hve/gui/qa_answer_dialog.py,158,QA 質問票への回答を入力する表形式ダイアログ。,,1
 gui,class,QAIpcManager,hve/gui/qa_ipc_manager.py,33,IPC ディレクトリを監視し、QA 質問票出現/subprocess 終了を通知する。,,2
+gui,function,_field,hve/gui/resume_dialog.py,31,Read a candidate field without assigning domain meaning to it.,,59
+gui,function,_display,hve/gui/resume_dialog.py,39,return '-' if value is None else str(value),,7
+gui,class,ResumeDialog,hve/gui/resume_dialog.py,43,Show shared-service resume candidates and return one approved plan.,,1
 gui,function,build_session_menu,hve/gui/session_menu.py,14,セッション操作用の QMenu を構築して返す。,,1
 gui,function,_is_valid_policy,hve/gui/session_workdir.py,61,"return policy in ('keep', 'archive', 'purge')",,1
 gui,class,GuiSessionWorkdir,hve/gui/session_workdir.py,66,GUI セッション 1 つに対応する作業ディレクトリと env オーバーライド。,,2
@@ -1677,7 +1700,7 @@ gui,function,_migrate_obsolete_keys,hve/gui/settings_store.py,325,読み込ん�
 gui,function,_migrate_renamed_keys,hve/gui/settings_store.py,342,読み込んだ ``ConfigParser`` で、旧キー名を新キー名へ移行する。,,1
 gui,function,_migrate_legacy_explorer_roots,hve/gui/settings_store.py,364,旧ルート ``original-docs`` を ``docs-original`` へ置換する。,,1
 gui,function,_migrate_self_improve_tristate,hve/gui/settings_store.py,389,旧boolean pairを ``self_improve = on/off/''`` へ移行する。,,1
-gui,function,load,hve/gui/settings_store.py,431,設定を読み込む。ファイル無し/壊れている場合は defaults() を返す。,,60
+gui,function,load,hve/gui/settings_store.py,431,設定を読み込む。ファイル無し/壊れている場合は defaults() を返す。,,61
 gui,function,save,hve/gui/settings_store.py,481,設定をアトミックに保存する。,,13
 gui,function,_to_str,hve/gui/settings_store.py,498,return str(value),,3
 gui,function,_coerce,hve/gui/settings_store.py,506,既定値の型に合わせて文字列を変換する。,,3
@@ -1700,9 +1723,11 @@ gui,function,ensure_startup_authentication,hve/gui/startup_auth.py,49,起動時�
 gui,function,_ask_login_confirmation,hve/gui/startup_auth.py,64,GitHub CLI ログインを実行するかの確認ダイアログを表示する。,,1
 gui,function,_login_dialog_factory,hve/gui/startup_auth.py,93,`gh auth login` の埋め込み端末ダイアログを生成する。,,1
 gui,function,_prompt_login,hve/gui/startup_auth.py,100,確認 → 対話ログイン → トークン注入までを 1 回だけ実行する。,,1
-gui,function,_kill_process_tree,hve/gui/state_bridge.py,38,サブプロセスとその全子孫を OS レベルで強制終了する（最終手段）。,,1
-gui,class,SubprocessReader,hve/gui/state_bridge.py,79,サブプロセス stdout/stderr を行単位で読み取り Qt シグナルに変換する QThread。,,6
-gui,function,launch_orchestrator,hve/gui/state_bridge.py,197,orchestrator サブプロセスを起動して Popen を返す。,,3
+gui,function,append_durable_identity_args,hve/gui/state_bridge.py,38,Append a complete hidden durable identity without exposing it in GUI forms.,,1
+gui,function,build_resume_argv,hve/gui/state_bridge.py,55,Build the public resume-controller argv consumed by the shared CLI path.,,1
+gui,function,_kill_process_tree,hve/gui/state_bridge.py,69,サブプロセスとその全子孫を OS レベルで強制終了する（最終手段）。,,1
+gui,class,SubprocessReader,hve/gui/state_bridge.py,110,サブプロセス stdout/stderr を行単位で読み取り Qt シグナルに変換する QThread。,,6
+gui,function,launch_orchestrator,hve/gui/state_bridge.py,228,orchestrator サブプロセスを起動して Popen を返す。,,3
 gui,class,StatItem,hve/gui/stats_detail_popup.py,42,class StatItem:,,46
 gui,class,StatSection,hve/gui/stats_detail_popup.py,48,class StatSection:,,14
 gui,function,_fmt_int,hve/gui/stats_detail_popup.py,53,return _DASH,,20
@@ -1733,7 +1758,7 @@ gui,function,_aiu_sort_key,hve/gui/stats_history_view.py,324,AI Credit 列のソ
 gui,class,_StatsTreeItem,hve/gui/stats_history_view.py,337,AI Credit 列を数値ソートする QTreeWidgetItem。他列はデフォルトのテキスト比較。,,2
 gui,class,StatsHistoryView,hve/gui/stats_history_view.py,354,「今回の実行履歴」タブ。,,1
 gui,class,StatusBanner,hve/gui/status_banner.py,51,ナビゲーション行直上の全幅ステータスバナー。,,1
-gui,class,StatusKind,hve/gui/status_kind.py,20,ステータスバナーの状況カテゴリ。,,52
+gui,class,StatusKind,hve/gui/status_kind.py,20,ステータスバナーの状況カテゴリ。,,53
 gui,function,write_steering_request,hve/gui/steering_ipc_writer.py,18,Steering 割り込みリクエストを IPC ディレクトリへアトミックに書き込む。,,0
 gui,function,_is_secret_key,hve/gui/step1_args_snapshot.py,46,return bool(_SECRET_KEY_RE.search(name)),,3
 gui,function,_mask_value,hve/gui/step1_args_snapshot.py,52,return value,,1
@@ -1751,7 +1776,7 @@ gui,function,_escape,hve/gui/text_kinsoku.py,139,"return str(s).replace('&', '&a
 gui,function,normalize_theme,hve/gui/theme.py,144,未知の値・None を :data:`DEFAULT_THEME` へ丸める。,,4
 gui,function,set_current_theme,hve/gui/theme.py,149,:func:`token` の既定テーマを更新し、正規化後の名前を返す。,,1
 gui,function,current_theme,hve/gui/theme.py,156,return _current_theme,,0
-gui,function,token,hve/gui/theme.py,160,トークン名から色文字列を返す。,,258
+gui,function,token,hve/gui/theme.py,160,トークン名から色文字列を返す。,,324
 gui,function,build_palette,hve/gui/theme.py,214,21 の ColorRole すべてを埋めた :class:`QPalette` を返す。,,1
 gui,function,_icon_url,hve/gui/theme.py,233,QSS の ``url()`` へ埋め込める文字列を返す。,,2
 gui,function,build_stylesheet,hve/gui/theme.py,241,``QApplication.setStyleSheet()`` へ渡すテーマ依存の QSS を組み立てる。,,1
@@ -1862,7 +1887,7 @@ core,function,enumerate_targets,hve/index_refresh.py,49,return _mdq_targets(root
 core,function,_resolved,hve/index_refresh.py,54,`mdq.indexer.build_index` は解決済み絶対パスとの `relative_to` で走査するため。,,6
 core,function,refresh_all,hve/index_refresh.py,59,全対象を逐次で差分更新する。1 件の失敗が残りを止めてはならない。,,1
 core,function,start_background,hve/index_refresh.py,81,差分更新をバックグラウンドで開始する。プロセス内 1 回だけ起動する。,,2
-core,function,is_running,hve/index_refresh.py,99,return not _done.is_set(),,8
+core,function,is_running,hve/index_refresh.py,99,return not _done.is_set(),,9
 core,function,wait_until_idle,hve/index_refresh.py,103,差分更新の完了を待つ。開始していなければ即座に ``True`` を返す。,,1
 core,function,_worker,hve/index_refresh.py,108,def _worker(repo_root: Path) -> None:,,24
 core,function,_mdq_targets,hve/index_refresh.py,118,"return [Target('mdq', f'{lang}/{strategy}', path) for lang, strategy, path in found]",,1
@@ -1918,119 +1943,129 @@ core,function,fetch_models,hve/models_api.py,214,モデル ID のリストのみ
 core,class,CachedModels,hve/models_cache.py,50,ロード済みキャッシュの不変表現。,,3
 core,function,get_cache_path,hve/models_cache.py,70,キャッシュファイルの絶対パスを返す。,,5
 core,function,is_fresh,hve/models_cache.py,89,キャッシュが TTL 内か判定する。,,6
-core,function,load,hve/models_cache.py,104,キャッシュをロードする。,,60
+core,function,load,hve/models_cache.py,104,キャッシュをロードする。,,61
 core,function,save,hve/models_cache.py,211,モデル ID 一覧のみをキャッシュに保存する。親ディレクトリは自動作成。,,13
 core,function,save_entries,hve/models_cache.py,239,ModelEntry リストを v2 フォーマットでキャッシュに保存する。,,3
-core,function,clear,hve/models_cache.py,286,キャッシュを削除する。,,149
-cli,function,_create_copilot_client_from_config,hve/orchestrator.py,166,SDK 1.0.0 RuntimeConnection API で CopilotClient を生成する。,,7
-cli,function,_create_session_with_auto_reasoning_fallback,hve/orchestrator.py,187,create_session を呼び出し、SDK が reasoning_effort を未サポートの場合は除外して再試行する。,,13
-cli,function,_apply_reasoning_effort,hve/orchestrator.py,341,ユーザー指定の reasoning_effort を session_opts へ適用する。,,7
-cli,function,_format_context_injection_phase_breakdown,hve/orchestrator.py,375,context injection のフェーズ別内訳を整形する。,,1
-cli,function,_emit_context_injection_metrics,hve/orchestrator.py,383,context injection 計測を console / stderr / GitHub summary に出力する。,,1
-cli,function,_orchestrator_session_id,hve/orchestrator.py,421,orchestrator から作成する補助セッション用の決定論的 session_id を返す。,,6
-cli,function,_build_fork_kpi_logger,hve/orchestrator.py,442,`DAGExecutor` 用の ForkKPILogger を構築する。,,1
-cli,function,_normalize_akm_sources,hve/orchestrator.py,479,AKM の sources 値を正規化された list[str] に変換する。,,3
-cli,function,_default_akm_target_files,hve/orchestrator.py,517,AKM の sources に応じた ``target_files`` 既定値を返す。,,4
-cli,function,_normalize_adi_target_scope,hve/orchestrator.py,534,ADIの対象スコープを安全なPOSIX相対ディレクトリへ正規化する。,,1
-cli,function,project_declared_workflow_params,hve/orchestrator.py,579,registry 宣言済みで未処理の workflow param を明示指定時だけ投影する。,,2
-cli,function,_collect_params_non_interactive,hve/orchestrator.py,611,CLI 引数からパラメータを構築する（非対話モード）。,,1
-cli,function,_validate_asdw_data_deploy_requested_app_scope,hve/orchestrator.py,739,Reject an explicit ASDW app scope that would be normalized inconsistently.,,1
-cli,function,_is_non_interactive,hve/orchestrator.py,759,非対話モードで実行すべきかを判定する。,,1
-cli,function,_apply_interactive_review_choice,hve/orchestrator.py,769,対話ウィザードのレビュー選択を HVE Phase 3 設定へ同期する。,,1
-cli,function,capture_protected_artifact_manifest,hve/orchestrator.py,788,保護対象ルート配下のファイル一覧を manifest として記録する。,,2
-cli,function,check_protected_artifact_regression,hve/orchestrator.py,810,baseline 時点の成果物が失われていないかを検査する。,,1
-cli,function,should_retain_local_checkpoint,hve/orchestrator.py,846,live Step のみが失敗した場合に local checkpoint を保持すべきか判定する。,,1
-cli,function,_git_unmerged_paths,hve/orchestrator.py,868,Git index に残っている未解決パスを返す。,,2
-cli,function,_format_git_unmerged_index_error,hve/orchestrator.py,895,未解決 index のユーザー向けエラーメッセージを整形する。,,2
-cli,function,_normalize_repo_relative_path,hve/orchestrator.py,928,git 出力のパスをリポジトリ相対の POSIX 形式へ正規化する。,,7
-cli,function,_parse_git_status_path,hve/orchestrator.py,936,``git status --porcelain`` の 1 行から対象パスを取り出す。,,2
-cli,function,_is_hve_source_path,hve/orchestrator.py,953,パスが HVE 自身のソースツリーに属するかを返す。,,1
-cli,function,_is_under_any_path,hve/orchestrator.py,964,``path`` が ``roots`` のいずれかと一致、またはその配下かを返す。,,1
-cli,function,_filter_hve_source_paths,hve/orchestrator.py,978,HVE ソースパスだけを重複なく抽出する（target 出力パスは対象外）。,,3
-cli,function,_git_dirty_hve_source_paths,hve/orchestrator.py,995,HVE 自身のソースに残る未コミット変更パスを返す（FR-CLI-74）。,,2
-cli,function,_format_dirty_hve_source_error,hve/orchestrator.py,1042,dirty HVE source のユーザー向けエラーメッセージを整形する（一括報告）。,,1
-cli,function,_format_staged_hve_source_error,hve/orchestrator.py,1057,staged HVE source のユーザー向けエラーメッセージを整形する（一括報告）。,,1
-cli,function,_status_may_stage_hve_source,hve/orchestrator.py,1072,``git add`` 後に HVE ソースが staged になり得るかを返す（FR-CLI-75）。,,1
-cli,function,_explicit_target_output_paths,hve/orchestrator.py,1098,利用者が明示指定した target 出力パスを返す（FR-CLI-74 の対象外判定用）。,,1
-cli,function,_validated_qa_include_paths,hve/orchestrator.py,1110,明示 stage を許可する qa/ Markdown のリポジトリ相対パスを返す。,,2
-cli,function,_should_enable_qa_akm_dispatch,hve/orchestrator.py,1129,QA 起点 AKM を生成する実行だけを判定する（FR-QA-05 の唯一の判定点）。,,1
-cli,function,_resolve_max_parallel,hve/orchestrator.py,1142,DAG の並列上限と解決根拠を返す（FR-DAG-03 の唯一の解決点）。,,2
-cli,function,_git_checkout_new_branch,hve/orchestrator.py,1158,ローカルで新ブランチを作成し checkout する。,,2
-cli,function,_git_add_commit_push,hve/orchestrator.py,1209,変更を add + commit + push する。差分がなければ False を返す。,,4
-cli,function,_git_push_branch,hve/orchestrator.py,1360,現在の HEAD を origin/<branch> へ push する（差分なしブランチ作成にも使う）。,,2
-cli,function,_git_current_branch,hve/orchestrator.py,1380,現在 checkout されているブランチ名を返す。detached HEAD は None。,,2
-cli,function,_git_has_uncommitted_changes,hve/orchestrator.py,1400,未コミット変更（未追跡を含む）があるかを返す。取得失敗時は安全側で True。,,1
-cli,function,_git_checkout_existing_branch,hve/orchestrator.py,1419,既存ローカルブランチへ checkout する。,,1
-cli,function,_git_remote_branch_ahead,hve/orchestrator.py,1439,origin/<branch> がローカル <branch> より先行している場合 True を返す。,,1
-cli,function,_git_checkout_base_branch,hve/orchestrator.py,1478,base_branch へ checkout する。,,4
-cli,function,_git_pull_ff_only_base_branch,hve/orchestrator.py,1500,base_branch を origin/<base_branch> から fast-forward のみで更新する。,,1
-cli,function,_git_delete_local_branch,hve/orchestrator.py,1522,作業ブランチをローカル削除する（FR-CLI-34）。,,4
-cli,function,_git_delete_remote_branch,hve/orchestrator.py,1544,作業ブランチを origin から削除する（失敗 PR cleanup 用）。,,1
-cli,function,_cleanup_failed_pr_if_created,hve/orchestrator.py,1566,失敗 Step 後に PR が作成済みだった場合の best-effort cleanup。,,1
-cli,function,_wait_pr_merged_and_delete_local_branch,hve/orchestrator.py,1619,PR の merged を検知して作業ブランチをローカル削除する（FR-CLI-34）。,,1
-cli,function,_is_local_cleanup_eligible,hve/orchestrator.py,1649,PR の実体と対象 branch が cleanup 条件を満たすかを共通 core で判定する。,,1
-cli,function,_wait_pr_merged,hve/orchestrator.py,1696,PR の merged と、必要に応じて merge commit の check-run 成功を待機する。,,2
-cli,function,_wait_check_runs_success,hve/orchestrator.py,1759,merge commit の check-runs が失敗していないことを確認する。,,1
-cli,class,RootIssueResolutionError,hve/orchestrator.py,1806,FR-GUI-25: 指定された既存 Issue を Root Issue として解決できない。,,4
-cli,class,RootIssueAssignmentError,hve/orchestrator.py,1814,FR-CLI-89: 作成済み Root Issue の Copilot 割当を確認できない。,,2
-cli,function,_assign_new_root_issue_to_copilot,hve/orchestrator.py,1822,当該 run が新規作成した Root Issue だけを Copilot へ割り当てる。,,1
-cli,function,_resolve_existing_root_issue,hve/orchestrator.py,1851,既存 Issue を Root Issue として解決する（FR-GUI-25）。,,1
-cli,function,_create_issues_if_needed,hve/orchestrator.py,1881,create_issues=True の場合のみ Root Issue + Sub-Issue を作成する。,,1
-cli,function,_collect_deploy_ac_verification_lines,hve/orchestrator.py,2003,run scoped ``ac-verification.md`` から AC テーブル行だけを収集する。,,1
-cli,function,_expand_workflow_for_dag,hve/orchestrator.py,2059,fan-out 展開済み workflow と拡張済み active_step_ids を返す。,,1
-cli,function,_build_step_prompt,hve/orchestrator.py,2230,ステップのプロンプト文字列を構築する。,,2
-cli,function,_collect_file_samples,hve/orchestrator.py,2322,指定ディレクトリから最大 limit 件のファイルパスを収集して返す。,,2
-cli,function,_alias_resolver_for_params,hve/orchestrator.py,2350,workflow params から入力別名の**単一の**解決器を作る（FR-PROMPT-09）。,,4
-cli,function,_artifact_pattern_exists,hve/orchestrator.py,2364,成果物パターンの実在を判定する。別名が宣言されていれば実ファイルを見る。,,1
-cli,function,_detect_existing_artifacts,hve/orchestrator.py,2372,既存の成果物を検出し、再利用可能なファイルリストを返す。,,1
-cli,function,check_step_input_artifacts,hve/orchestrator.py,2532,ステップの前提成果物が存在するかチェックする。,,1
-cli,function,_check_workflow_input_artifacts,hve/orchestrator.py,2571,ワークフロー実行前に**ルートステップ**の前提成果物をチェックする。,,1
-cli,function,_check_required_skills_for_active_steps,hve/orchestrator.py,2686,active step に required_skills があれば、存在する skill 名かを事前検証する。,,1
-cli,function,_check_required_workflow_params_for_active_steps,hve/orchestrator.py,2771,active step が宣言した必須 Workflow パラメータを実行開始前に検査する（FR-DAG-08）。,,1
-cli,function,_check_dirty_hve_sources,hve/orchestrator.py,2844,HVE ソースの未コミット変更を run 開始前に検査する（FR-CLI-74）。,,1
-cli,function,_format_qa_akm_failure_warning,hve/orchestrator.py,2886,QA 起点 AKM 子実行の失敗報告を組み立てる（FR-QA-07）。,,1
-cli,function,_format_qa_akm_skip_warning,hve/orchestrator.py,2915,登録時点の事前判定で起動しなかった登録を報告する（FR-QA-07）。,,1
-cli,function,_collect_workflow_output_paths_by_step,hve/orchestrator.py,2938,ベース Step ID → 具体 output_paths と fan-out キー一覧を収集する。,,2
-cli,function,collect_workflow_output_paths,hve/orchestrator.py,2987,ワークフローの全ステップの具体的な output_paths を集約して返す。,,1
-cli,function,workflow_output_paths_cover_workflow,hve/orchestrator.py,3035,収集した具体 path が workflow 全体を代表しうるかを判定する。,,1
-cli,function,_self_improve_result_succeeded,hve/orchestrator.py,3070,Post-DAG Self-Improveが上位workflowを成功させてよいか判定する。,,1
-cli,function,_agent_fanout_scope_precondition_error,hve/orchestrator.py,3136,AAG/AAGDの固定成果物と全fan-out keyの実体を確認する。,,1
-cli,function,_uses_workflow_branch_mode,hve/orchestrator.py,3216,DAG 全体を 1 本の作業ブランチで実行する従来モードかを返す。,,1
-cli,function,_remote_cicd_step_ids,hve/orchestrator.py,3227,active_steps のうち Step 単位 remote CI/CD 対象 ID を返す。,,1
-cli,function,_compute_step_additional_prompt,hve/orchestrator.py,3237,ステップの additional_prompt を計算する。,,2
-cli,function,_infer_step_kind,hve/orchestrator.py,3339,consumed_artifacts キーから step 種別を推定する (Sub-2 A-2)。,,1
-cli,function,_build_reuse_context,hve/orchestrator.py,3374,既存成果物の再利用コンテキストをプロンプトに追加する文字列を生成。,,2
-cli,function,_prefetch_workiq,hve/orchestrator.py,3401,Work IQ を別セッションで事前呼び出しし、結果テキストを返す（後方互換ラッパー）。,,0
-cli,function,_prefetch_workiq_detailed,hve/orchestrator.py,3417,Work IQ を別セッションで呼び出し、詳細結果を返す後方互換ヘルパー。,,1
-cli,function,_summarize_dxx_for_query,hve/orchestrator.py,3646,Dxx ファイルの内容から Work IQ クエリ用の要約を生成する。,,1
-cli,function,_run_akm_workiq_verification,hve/orchestrator.py,3684,AKM Post-DAG: Work IQ で knowledge/Dxx ドキュメントの妥当性を検証・修正する。,,1
-cli,function,_run_akm_workiq_ingest,hve/orchestrator.py,3933,AKM Pre-DAG: Work IQ を入力ソースとして ``knowledge/Dxx-*.md`` を起票・差分更新する。,,1
-cli,function,_run_ard_workiq_usecase,hve/orchestrator.py,4231,ARD Step.2: Work IQ 経由でユースケースカタログの参照情報を取得し、Step.2 Issue にコメントする。,,1
-cli,function,_select_recommendation,hve/orchestrator.py,4398,ARD の Strategic Recommendation を 1 件選択する。,,1
-cli,function,_generate_target_business_from_sr,hve/orchestrator.py,4432,選択 SR + Step 1.2 出力から target_business 説明文を生成する。,,1
-cli,function,_on_ard_step1_completed,hve/orchestrator.py,4510,ARD グループ 1（実 Step 1 → 1.1 → 1.2）完了直後の SR 抽出・選択・target_business 生成。,,1
-cli,function,_resolve_target_business_paths,hve/orchestrator.py,4569,target_business がパス指定なら context テキストへ展開する。,,1
-cli,function,_resolve_config_disabled_steps,hve/orchestrator.py,4589,`StepDef.disabled_when_config` と設定値から無効化 Step ID を解決する。,,1
-cli,function,_should_use_statusline,hve/orchestrator.py,4626,FR-RTO-02: Workbench を使わない実行で 1 行ステータスラインを使うか判定する。,,1
-cli,function,_build_statusline_state,hve/orchestrator.py,4643,FR-RTO-05: 集計から StatusLine 表示状態を作る（未取得値は埋めない）。,,1
-cli,function,_attach_runtime_statusline,hve/orchestrator.py,4661,Workbench 無効時の TTY で 1Hz ステータスラインを開始する。,,1
-cli,function,_format_runtime_summary,hve/orchestrator.py,4682,FR-RTO-05: 実行終了時の 1 行サマリー（整形は core 実装に単一化）。,,1
-cli,function,_emit_runtime_summary,hve/orchestrator.py,4692,非 TTY 実行の終了時にだけ、集計を 1 回出力する（FR-RTO-02）。,,1
-cli,function,_attach_runtime_observability,hve/orchestrator.py,4710,FR-RTO-03 / FR-RTO-06: 観測イベントの記録器を生成し Console へ接続する。,,1
-cli,function,_emit_github_target_event,hve/orchestrator.py,4748,FR-RTO-08: 確定した GitHub target を既存の観測イベント経路で 1 件通知する。,,3
-cli,function,_attach_mcp_io_logging,hve/orchestrator.py,4802,FR-MCPLOG-01 / 02: MCP 通信ログの記録器を生成し Console へ接続する。,,1
-cli,function,_start_index_watchers,hve/orchestrator.py,4818,起動時の索引差分更新を待ってから mdq / cq watcher を起動する（FR-CLI-77）。,,1
-cli,function,_start_index_watchers_when_idle,hve/orchestrator.py,4879,watcher 起動を専用スレッドへ退避する。待ち合わせで本体実行を止めないため。,,1
-cli,function,run_workflow,hve/orchestrator.py,4895,ワークフローを SDK でローカル実行する。,,2
-cli,function,_print_dry_run_plan,hve/orchestrator.py,7348,ドライラン時に DAG の波（Wave）を表示する。,,1
-cli,function,_get_git_diff,hve/orchestrator.py,7441,git diff base_ref との差分テキストを返す。差分なし/エラーは空文字を返す。,,1
-cli,function,_request_code_review,hve/orchestrator.py,7475,Copilot CLI SDK セッションでローカルに Code Review を実行する。,,1
-cli,function,_generate_gui_title,hve/orchestrator.py,7667,return title,,2
-cli,function,_generate_gui_issue_title,hve/orchestrator.py,7698,GUI 子プロセスの Root Issue title を生成する（FR-GUI-39）。,,1
-cli,function,_generate_gui_pr_title,hve/orchestrator.py,7718,GUI 子プロセスの PR title だけを Copilot CLI で生成する（FR-GUI-39）。,,1
-cli,function,_create_pr_if_needed,hve/orchestrator.py,7737,PR を作成する。,validation-confirmed,2
-core,class,OrchestratorContext,hve/orchestrator_context.py,27,Orchestrator 配下で伝播される実行コンテキスト。,,3
-core,function,is_active,hve/orchestrator_context.py,57,`ctx is not None` のショートカット（読みやすさのため）。,,0
+core,function,clear,hve/models_cache.py,286,キャッシュを削除する。,,161
+cli,function,_create_copilot_client_from_config,hve/orchestrator.py,202,SDK 1.0.0 RuntimeConnection API で CopilotClient を生成する。,,7
+cli,function,_create_session_with_auto_reasoning_fallback,hve/orchestrator.py,223,create_session を呼び出し、SDK が reasoning_effort を未サポートの場合は除外して再試行する。,,13
+cli,function,_apply_reasoning_effort,hve/orchestrator.py,377,ユーザー指定の reasoning_effort を session_opts へ適用する。,,7
+cli,function,_format_context_injection_phase_breakdown,hve/orchestrator.py,411,context injection のフェーズ別内訳を整形する。,,1
+cli,function,_emit_context_injection_metrics,hve/orchestrator.py,419,context injection 計測を console / stderr / GitHub summary に出力する。,,1
+cli,function,_orchestrator_session_id,hve/orchestrator.py,457,orchestrator から作成する補助セッション用の決定論的 session_id を返す。,,6
+cli,function,_build_fork_kpi_logger,hve/orchestrator.py,478,`DAGExecutor` 用の ForkKPILogger を構築する。,,1
+cli,function,_normalize_akm_sources,hve/orchestrator.py,515,AKM の sources 値を正規化された list[str] に変換する。,,3
+cli,function,_default_akm_target_files,hve/orchestrator.py,553,AKM の sources に応じた ``target_files`` 既定値を返す。,,4
+cli,function,_normalize_adi_target_scope,hve/orchestrator.py,570,ADIの対象スコープを安全なPOSIX相対ディレクトリへ正規化する。,,1
+cli,function,project_declared_workflow_params,hve/orchestrator.py,615,registry 宣言済みで未処理の workflow param を明示指定時だけ投影する。,,2
+cli,function,_collect_params_non_interactive,hve/orchestrator.py,647,CLI 引数からパラメータを構築する（非対話モード）。,,1
+cli,function,_validate_asdw_data_deploy_requested_app_scope,hve/orchestrator.py,775,Reject an explicit ASDW app scope that would be normalized inconsistently.,,1
+cli,function,_is_non_interactive,hve/orchestrator.py,795,非対話モードで実行すべきかを判定する。,,1
+cli,function,_apply_interactive_review_choice,hve/orchestrator.py,805,対話ウィザードのレビュー選択を HVE Phase 3 設定へ同期する。,,1
+cli,function,capture_protected_artifact_manifest,hve/orchestrator.py,824,保護対象ルート配下のファイル一覧を manifest として記録する。,,2
+cli,function,check_protected_artifact_regression,hve/orchestrator.py,846,baseline 時点の成果物が失われていないかを検査する。,,1
+cli,function,should_retain_local_checkpoint,hve/orchestrator.py,882,live Step のみが失敗した場合に local checkpoint を保持すべきか判定する。,,1
+cli,function,_git_unmerged_paths,hve/orchestrator.py,904,Git index に残っている未解決パスを返す。,,2
+cli,function,_format_git_unmerged_index_error,hve/orchestrator.py,931,未解決 index のユーザー向けエラーメッセージを整形する。,,2
+cli,function,_normalize_repo_relative_path,hve/orchestrator.py,964,git 出力のパスをリポジトリ相対の POSIX 形式へ正規化する。,,7
+cli,function,_parse_git_status_path,hve/orchestrator.py,972,``git status --porcelain`` の 1 行から対象パスを取り出す。,,2
+cli,function,_is_hve_source_path,hve/orchestrator.py,989,パスが HVE 自身のソースツリーに属するかを返す。,,1
+cli,function,_is_under_any_path,hve/orchestrator.py,1000,``path`` が ``roots`` のいずれかと一致、またはその配下かを返す。,,1
+cli,function,_filter_hve_source_paths,hve/orchestrator.py,1014,HVE ソースパスだけを重複なく抽出する（target 出力パスは対象外）。,,3
+cli,function,_git_dirty_hve_source_paths,hve/orchestrator.py,1031,HVE 自身のソースに残る未コミット変更パスを返す（FR-CLI-74）。,,2
+cli,function,_format_dirty_hve_source_error,hve/orchestrator.py,1078,dirty HVE source のユーザー向けエラーメッセージを整形する（一括報告）。,,1
+cli,function,_format_staged_hve_source_error,hve/orchestrator.py,1093,staged HVE source のユーザー向けエラーメッセージを整形する（一括報告）。,,1
+cli,function,_status_may_stage_hve_source,hve/orchestrator.py,1108,``git add`` 後に HVE ソースが staged になり得るかを返す（FR-CLI-75）。,,1
+cli,function,_explicit_target_output_paths,hve/orchestrator.py,1134,利用者が明示指定した target 出力パスを返す（FR-CLI-74 の対象外判定用）。,,1
+cli,function,_validated_qa_include_paths,hve/orchestrator.py,1146,明示 stage を許可する qa/ Markdown のリポジトリ相対パスを返す。,,2
+cli,function,_should_enable_qa_akm_dispatch,hve/orchestrator.py,1165,QA 起点 AKM を生成する実行だけを判定する（FR-QA-05 の唯一の判定点）。,,1
+cli,function,_resolve_max_parallel,hve/orchestrator.py,1178,DAG の並列上限と解決根拠を返す（FR-DAG-03 の唯一の解決点）。,,2
+cli,function,_git_checkout_new_branch,hve/orchestrator.py,1194,ローカルで新ブランチを作成し checkout する。,,2
+cli,function,_git_add_commit_push,hve/orchestrator.py,1245,変更を add + commit + push する。差分がなければ False を返す。,,4
+cli,function,_git_push_branch,hve/orchestrator.py,1396,現在の HEAD を origin/<branch> へ push する（差分なしブランチ作成にも使う）。,,2
+cli,function,_git_current_branch,hve/orchestrator.py,1416,現在 checkout されているブランチ名を返す。detached HEAD は None。,,2
+cli,function,_git_has_uncommitted_changes,hve/orchestrator.py,1436,未コミット変更（未追跡を含む）があるかを返す。取得失敗時は安全側で True。,,1
+cli,function,_git_checkout_existing_branch,hve/orchestrator.py,1455,既存ローカルブランチへ checkout する。,,1
+cli,function,_git_remote_branch_ahead,hve/orchestrator.py,1475,origin/<branch> がローカル <branch> より先行している場合 True を返す。,,1
+cli,function,_git_checkout_base_branch,hve/orchestrator.py,1514,base_branch へ checkout する。,,4
+cli,function,_git_pull_ff_only_base_branch,hve/orchestrator.py,1536,base_branch を origin/<base_branch> から fast-forward のみで更新する。,,1
+cli,function,_git_delete_local_branch,hve/orchestrator.py,1558,作業ブランチをローカル削除する（FR-CLI-34）。,,4
+cli,function,_git_delete_remote_branch,hve/orchestrator.py,1580,作業ブランチを origin から削除する（失敗 PR cleanup 用）。,,1
+cli,function,_cleanup_failed_pr_if_created,hve/orchestrator.py,1602,失敗 Step 後に PR が作成済みだった場合の best-effort cleanup。,,1
+cli,function,_wait_pr_merged_and_delete_local_branch,hve/orchestrator.py,1655,PR の merged を検知して作業ブランチをローカル削除する（FR-CLI-34）。,,1
+cli,function,_is_local_cleanup_eligible,hve/orchestrator.py,1685,PR の実体と対象 branch が cleanup 条件を満たすかを共通 core で判定する。,,1
+cli,function,_wait_pr_merged,hve/orchestrator.py,1732,PR の merged と、必要に応じて merge commit の check-run 成功を待機する。,,2
+cli,function,_wait_check_runs_success,hve/orchestrator.py,1795,merge commit の check-runs が失敗していないことを確認する。,,1
+cli,class,RootIssueResolutionError,hve/orchestrator.py,1842,FR-GUI-25: 指定された既存 Issue を Root Issue として解決できない。,,4
+cli,class,RootIssueAssignmentError,hve/orchestrator.py,1850,FR-CLI-89: 作成済み Root Issue の Copilot 割当を確認できない。,,2
+cli,function,_assign_new_root_issue_to_copilot,hve/orchestrator.py,1858,当該 run が新規作成した Root Issue だけを Copilot へ割り当てる。,,1
+cli,function,_resolve_existing_root_issue,hve/orchestrator.py,1887,既存 Issue を Root Issue として解決する（FR-GUI-25）。,,1
+cli,function,_create_issues_if_needed,hve/orchestrator.py,1917,create_issues=True の場合のみ Root Issue + Sub-Issue を作成する。,,1
+cli,function,_collect_deploy_ac_verification_lines,hve/orchestrator.py,2039,run scoped ``ac-verification.md`` から AC テーブル行だけを収集する。,,1
+cli,function,_expand_workflow_for_dag,hve/orchestrator.py,2095,fan-out 展開済み workflow と拡張済み active_step_ids を返す。,,1
+cli,function,_build_step_prompt,hve/orchestrator.py,2266,ステップのプロンプト文字列を構築する。,,2
+cli,function,_collect_file_samples,hve/orchestrator.py,2358,指定ディレクトリから最大 limit 件のファイルパスを収集して返す。,,2
+cli,function,_alias_resolver_for_params,hve/orchestrator.py,2386,workflow params から入力別名の**単一の**解決器を作る（FR-PROMPT-09）。,,4
+cli,function,_artifact_pattern_exists,hve/orchestrator.py,2400,成果物パターンの実在を判定する。別名が宣言されていれば実ファイルを見る。,,1
+cli,function,_detect_existing_artifacts,hve/orchestrator.py,2408,既存の成果物を検出し、再利用可能なファイルリストを返す。,,1
+cli,function,check_step_input_artifacts,hve/orchestrator.py,2568,ステップの前提成果物が存在するかチェックする。,,1
+cli,function,_check_workflow_input_artifacts,hve/orchestrator.py,2607,ワークフロー実行前に**ルートステップ**の前提成果物をチェックする。,,1
+cli,function,_check_required_skills_for_active_steps,hve/orchestrator.py,2722,active step に required_skills があれば、存在する skill 名かを事前検証する。,,1
+cli,function,_check_required_workflow_params_for_active_steps,hve/orchestrator.py,2807,active step が宣言した必須 Workflow パラメータを実行開始前に検査する（FR-DAG-08）。,,1
+cli,function,_check_dirty_hve_sources,hve/orchestrator.py,2880,HVE ソースの未コミット変更を run 開始前に検査する（FR-CLI-74）。,,1
+cli,function,_format_qa_akm_failure_warning,hve/orchestrator.py,2922,QA 起点 AKM 子実行の失敗報告を組み立てる（FR-QA-07）。,,1
+cli,function,_format_qa_akm_skip_warning,hve/orchestrator.py,2951,登録時点の事前判定で起動しなかった登録を報告する（FR-QA-07）。,,1
+cli,function,_collect_workflow_output_paths_by_step,hve/orchestrator.py,2974,ベース Step ID → 具体 output_paths と fan-out キー一覧を収集する。,,2
+cli,function,collect_workflow_output_paths,hve/orchestrator.py,3023,ワークフローの全ステップの具体的な output_paths を集約して返す。,,1
+cli,function,workflow_output_paths_cover_workflow,hve/orchestrator.py,3071,収集した具体 path が workflow 全体を代表しうるかを判定する。,,1
+cli,function,_self_improve_result_succeeded,hve/orchestrator.py,3106,Post-DAG Self-Improveが上位workflowを成功させてよいか判定する。,,1
+cli,function,_agent_fanout_scope_precondition_error,hve/orchestrator.py,3172,AAG/AAGDの固定成果物と全fan-out keyの実体を確認する。,,1
+cli,function,_uses_workflow_branch_mode,hve/orchestrator.py,3252,DAG 全体を 1 本の作業ブランチで実行する従来モードかを返す。,,1
+cli,function,_remote_cicd_step_ids,hve/orchestrator.py,3263,active_steps のうち Step 単位 remote CI/CD 対象 ID を返す。,,1
+cli,function,_compute_step_additional_prompt,hve/orchestrator.py,3273,ステップの additional_prompt を計算する。,,2
+cli,function,_infer_step_kind,hve/orchestrator.py,3375,consumed_artifacts キーから step 種別を推定する (Sub-2 A-2)。,,1
+cli,function,_build_reuse_context,hve/orchestrator.py,3410,既存成果物の再利用コンテキストをプロンプトに追加する文字列を生成。,,2
+cli,function,_prefetch_workiq,hve/orchestrator.py,3437,Work IQ を別セッションで事前呼び出しし、結果テキストを返す（後方互換ラッパー）。,,0
+cli,function,_prefetch_workiq_detailed,hve/orchestrator.py,3453,Work IQ を別セッションで呼び出し、詳細結果を返す後方互換ヘルパー。,,1
+cli,function,_summarize_dxx_for_query,hve/orchestrator.py,3682,Dxx ファイルの内容から Work IQ クエリ用の要約を生成する。,,1
+cli,function,_run_akm_workiq_verification,hve/orchestrator.py,3720,AKM Post-DAG: Work IQ で knowledge/Dxx ドキュメントの妥当性を検証・修正する。,,1
+cli,function,_run_akm_workiq_ingest,hve/orchestrator.py,3969,AKM Pre-DAG: Work IQ を入力ソースとして ``knowledge/Dxx-*.md`` を起票・差分更新する。,,1
+cli,function,_run_ard_workiq_usecase,hve/orchestrator.py,4267,ARD Step.2: Work IQ 経由でユースケースカタログの参照情報を取得し、Step.2 Issue にコメントする。,,1
+cli,function,_select_recommendation,hve/orchestrator.py,4434,ARD の Strategic Recommendation を 1 件選択する。,,1
+cli,function,_generate_target_business_from_sr,hve/orchestrator.py,4468,選択 SR + Step 1.2 出力から target_business 説明文を生成する。,,1
+cli,function,_on_ard_step1_completed,hve/orchestrator.py,4546,ARD グループ 1（実 Step 1 → 1.1 → 1.2）完了直後の SR 抽出・選択・target_business 生成。,,1
+cli,function,_resolve_target_business_paths,hve/orchestrator.py,4605,target_business がパス指定なら context テキストへ展開する。,,1
+cli,function,_resolve_config_disabled_steps,hve/orchestrator.py,4625,`StepDef.disabled_when_config` と設定値から無効化 Step ID を解決する。,,1
+cli,function,_should_use_statusline,hve/orchestrator.py,4662,FR-RTO-02: Workbench を使わない実行で 1 行ステータスラインを使うか判定する。,,1
+cli,function,_build_statusline_state,hve/orchestrator.py,4679,FR-RTO-05: 集計から StatusLine 表示状態を作る（未取得値は埋めない）。,,1
+cli,function,_attach_runtime_statusline,hve/orchestrator.py,4697,Workbench 無効時の TTY で 1Hz ステータスラインを開始する。,,1
+cli,function,_format_runtime_summary,hve/orchestrator.py,4718,FR-RTO-05: 実行終了時の 1 行サマリー（整形は core 実装に単一化）。,,1
+cli,function,_emit_runtime_summary,hve/orchestrator.py,4728,非 TTY 実行の終了時にだけ、集計を 1 回出力する（FR-RTO-02）。,,1
+cli,function,_attach_runtime_observability,hve/orchestrator.py,4746,FR-RTO-03 / FR-RTO-06: 観測イベントの記録器を生成し Console へ接続する。,,1
+cli,function,_emit_github_target_event,hve/orchestrator.py,4784,FR-RTO-08: 確定した GitHub target を既存の観測イベント経路で 1 件通知する。,,3
+cli,function,_attach_mcp_io_logging,hve/orchestrator.py,4838,FR-MCPLOG-01 / 02: MCP 通信ログの記録器を生成し Console へ接続する。,,1
+cli,function,_start_index_watchers,hve/orchestrator.py,4854,起動時の索引差分更新を待ってから mdq / cq watcher を起動する（FR-CLI-77）。,,1
+cli,function,_start_index_watchers_when_idle,hve/orchestrator.py,4919,Start process-lifetime watchers once without blocking workflow execution.,,1
+cli,function,_durable_record_field,hve/orchestrator.py,4941,Read one durable row field from sqlite rows and test doubles.,,13
+cli,function,_durable_context_identity,hve/orchestrator.py,4954,Return a complete durable identity or reject a partial context.,,1
+cli,function,_supports_direct_durable_registration,hve/orchestrator.py,4981,Return whether a direct call can be registered without guessing inputs.,,1
+cli,function,_build_direct_durable_argv,hve/orchestrator.py,4992,Build the same replay plan used by CLI and Prompt controllers.,,1
+cli,function,_resolve_durable_checkpoint_head,hve/orchestrator.py,5008,Resolve the current HEAD through the existing Prompt execution helper.,,1
+cli,class,_DurableWorkflowLifecycle,hve/orchestrator.py,5023,Own one fenced workflow token and synchronize it with StepRunner.,,4
+cli,function,_open_durable_workflow_lifecycle,hve/orchestrator.py,5280,"Register or validate one workflow, then acquire or adopt its lease.",,1
+cli,function,_durable_terminal_workflow_status,hve/orchestrator.py,5441,return 'succeeded',,1
+cli,function,_execute_with_durable_heartbeat,hve/orchestrator.py,5451,Race executor completion against a thread-safe heartbeat failure signal.,,1
+cli,function,run_workflow,hve/orchestrator.py,5516,Run one workflow under the durable lifecycle when the mode supports it.,,2
+cli,function,_run_workflow_body,hve/orchestrator.py,5652,ワークフローを SDK でローカル実行する。,,2
+cli,function,_print_dry_run_plan,hve/orchestrator.py,8161,ドライラン時に DAG の波（Wave）を表示する。,,1
+cli,function,_get_git_diff,hve/orchestrator.py,8254,git diff base_ref との差分テキストを返す。差分なし/エラーは空文字を返す。,,1
+cli,function,_request_code_review,hve/orchestrator.py,8288,Copilot CLI SDK セッションでローカルに Code Review を実行する。,,1
+cli,function,_generate_gui_title,hve/orchestrator.py,8480,return title,,2
+cli,function,_generate_gui_issue_title,hve/orchestrator.py,8511,GUI 子プロセスの Root Issue title を生成する（FR-GUI-39）。,,1
+cli,function,_generate_gui_pr_title,hve/orchestrator.py,8531,GUI 子プロセスの PR title だけを Copilot CLI で生成する（FR-GUI-39）。,,1
+cli,function,_create_pr_if_needed,hve/orchestrator.py,8550,PR を作成する。,validation-confirmed,2
+core,class,OrchestratorContext,hve/orchestrator_context.py,27,Orchestrator 配下で伝播される実行コンテキスト。,,4
+core,function,is_active,hve/orchestrator_context.py,83,`ctx is not None` のショートカット（読みやすさのため）。,,0
 core,class,ScopedPermissionHandler,hve/permission_handler.py,67,Self-Improve ループ専用の PermissionHandler。,,1
 core,function,is_safe_command,hve/permission_handler.py,179,コマンド文字列が安全かどうかを判定するスタンドアロン関数。,,0
 core,class,Phase1RequestPlan,hve/phase1_request_plan.py,28,Phase 1 送信計画。プロンプト本文は保持しない（FR-RTO-04 / NFR-SEC-01）。,,2
@@ -2055,22 +2090,28 @@ core,class,ModelPricing,hve/pricing/models.py,20,1 モデルの料金情報。,,
 core,class,PlanPricing,hve/pricing/models.py,41,1 プランの料金情報。,,6
 core,class,CopilotPricing,hve/pricing/models.py,62,料金表全体。``cache.save_cached_pricing`` で JSON 永続化される。,,11
 core,function,utcnow_iso,hve/pricing/models.py,124,ISO8601 UTC 文字列（``2026-05-21T14:23:11+00:00``）。,,1
-core,class,WorkflowPlan,hve/prompt_execution.py,28,class WorkflowPlan:,,3
-core,class,ExecutionPlan,hve/prompt_execution.py,37,return hashlib.sha256(canonical_plan_json(self).encode('utf-8')).hexdigest(),,5
-core,function,resolve_head_commit,hve/prompt_execution.py,48,"リポジトリの HEAD commit を返す。取得できない場合は `""unknown""`。",,1
-core,function,build_execution_plan,hve/prompt_execution.py,67,検証済み request と保存済み設定から決定的な実行計画を組み立てる。,,1
-core,function,_apply_workflow_params,hve/prompt_execution.py,126,Workflow 固有パラメータを `OrchestrateArgs` の同名フィールドへ反映する。,,1
-core,function,_coerce_param,hve/prompt_execution.py,145,request の文字列パラメータを `OrchestrateArgs` のフィールド型へ変換する。,,1
-core,function,canonical_plan_json,hve/prompt_execution.py,174,plan hash の入力となる canonical JSON を返す。,,1
-core,function,format_plan,hve/prompt_execution.py,195,利用者へ提示する計画テキストを返す。,,1
-core,function,_default_runner,hve/prompt_execution.py,231,"return subprocess.run(list(argv), shell=False, check=False, **kwargs)",,1
-core,function,run_plan,hve/prompt_execution.py,236,計画された Workflow を順番に実行する。最初の非 0 終了コードで打ち切る。,,2
+core,class,WorkflowPlan,hve/prompt_execution.py,31,class WorkflowPlan:,,3
+core,class,ExecutionPlan,hve/prompt_execution.py,40,return hashlib.sha256(canonical_plan_json(self).encode('utf-8')).hexdigest(),,7
+core,function,resolve_head_commit,hve/prompt_execution.py,51,"リポジトリの HEAD commit を返す。取得できない場合は `""unknown""`。",,9
+core,function,validate_resolved_head_commit,hve/prompt_execution.py,70,Return a resolved HEAD value or fail closed before durable execution.,,7
+core,function,build_execution_plan,hve/prompt_execution.py,78,検証済み request と保存済み設定から決定的な実行計画を組み立てる。,,1
+core,function,_apply_workflow_params,hve/prompt_execution.py,137,Workflow 固有パラメータを `OrchestrateArgs` の同名フィールドへ反映する。,,1
+core,function,_coerce_param,hve/prompt_execution.py,156,request の文字列パラメータを `OrchestrateArgs` のフィールド型へ変換する。,,1
+core,function,canonical_plan_json,hve/prompt_execution.py,185,plan hash の入力となる canonical JSON を返す。,,1
+core,function,format_plan,hve/prompt_execution.py,206,利用者へ提示する計画テキストを返す。,,1
+core,function,_default_runner,hve/prompt_execution.py,242,"return subprocess.run(list(argv), shell=False, check=False, **kwargs)",,1
+core,function,_option_values,hve/prompt_execution.py,247,Return explicit values for one long option without interpreting argv.,,2
+core,function,_single_app_id,hve/prompt_execution.py,259,Resolve only the unambiguous single APP-ID shape accepted by orchestrate.,,1
+core,function,_register_durable_execution,hve/prompt_execution.py,279,Register every ordered Prompt Workflow before starting the first child.,,1
+core,function,_verify_durable_child_completion,hve/prompt_execution.py,312,Verify that a zero-exit child committed a successful terminal state.,,1
+core,function,_head_matches_approved_plan,hve/prompt_execution.py,331,Re-read HEAD so approval cannot outlive a pre-launch repository change.,,2
+core,function,run_plan,hve/prompt_execution.py,345,計画された Workflow を順番に実行する。最初の非 0 終了コードで打ち切る。,,2
 core,class,_BlankPromptError,hve/prompt_loader.py,20,Internal signal used by the legacy flat compatibility facade.,,2
 core,function,_normalize_prompt_relative_path,hve/prompt_loader.py,24,raise ValueError('prompt path must be a string'),,1
 core,function,_resolve_prompts_base,hve/prompt_loader.py,50,raise ValueError('default prompts directory must resolve inside the repository root'),,1
 core,function,_resolve_prompt_path,hve/prompt_loader.py,62,raise ValueError('prompt path escapes the prompts root'),,1
 core,function,_read_prompt_text,hve/prompt_loader.py,75,raise _BlankPromptError('prompt file must not be empty or whitespace-only'),,1
-core,function,load_prompt_file,hve/prompt_loader.py,86,Load a prompt file relative to the prompts root.,,78
+core,function,load_prompt_file,hve/prompt_loader.py,86,Load a prompt file relative to the prompts root.,,79
 core,function,_validate_legacy_agent_name,hve/prompt_loader.py,111,raise ValueError('agent name must be a string'),,1
 core,function,load_prompt,hve/prompt_loader.py,122,Return the prompt body text for the given agent name.,,1
 core,function,substitute_work_placeholders,hve/prompt_loader.py,146,Agent プロンプト本文の WORK プレースホルダを実値へ置換する。,,1
@@ -2132,74 +2173,121 @@ core,function,_valid_lines,hve/repository_query_tools.py,120,raise RepositoryQue
 core,class,EvidenceLedger,hve/repository_query_tools.py,136,Query-scoped stable evidence IDs backed only by repository files.,,1
 core,class,RepositoryQueryTools,hve/repository_query_tools.py,188,"Four bounded, read-only tools sharing one query-scoped ledger.",,2
 core,function,build_repository_query_tools,hve/repository_query_tools.py,438,Bind the safe tool boundary to the existing mdq/cq implementations.,,2
+core,class,WorkflowDescriptor,hve/resume_service.py,273,class WorkflowDescriptor:,,14
+core,class,ResumeCandidate,hve/resume_service.py,283,class ResumeCandidate:,,3
+core,class,ResumePlan,hve/resume_service.py,298,class ResumePlan:,,6
+core,function,_jsonable,hve/resume_service.py,310,raise TypeError(f'value is not JSON serializable: {type(value).__name__}'),,4
+core,function,canonical_json,hve/resume_service.py,324,Return deterministic compact UTF-8 JSON for hashes and storage.,,3
+core,function,_descriptor_payload,hve/resume_service.py,336,"return {'instance_id': descriptor.instance_id, 'workflow_id': descriptor.workflow_id, 'ordinal': descriptor.ordinal, 'mode': descriptor.mode, 'argv': list(descriptor.argv), 'missing_replay_keys': list(descriptor.missing_replay_keys)}",,2
+core,function,compute_launch_plan_hash,hve/resume_service.py,347,Hash an ordered sanitized plan without an execution identity.,,2
+core,function,compute_resume_plan_hash,hve/resume_service.py,354,Hash the transient state/action/input snapshot used for approval.,,1
+core,function,_field,hve/resume_service.py,360,return record[name],,59
+core,function,_option_key,hve/resume_service.py,369,"return name.replace('-', '_')",,1
+core,function,_split_option_token,hve/resume_service.py,376,"return (_SHORT_FLAGS.get(head, head), inline_value if separator else None)",,1
+core,function,_validate_persisted_replay_value,hve/resume_service.py,384,Reject values that cannot be safely persisted as control metadata.,,2
+core,function,_validate_descriptor,hve/resume_service.py,397,raise DurableStateError('workflow descriptor ordinal is invalid'),,2
+core,function,_parse_selected_steps,hve/resume_service.py,419,raise DurableStateError('stored --steps option is malformed'),,2
+core,function,_workflow_from_argv,hve/resume_service.py,429,raise DurableStateError('replay argv must contain exactly one workflow'),,4
+core,function,_decode_replay_groups,hve/resume_service.py,439,raise DurableStateError(f'resume replay value is invalid: {key}'),,2
+core,function,_append_replay_value,hve/resume_service.py,497,"def _append_replay_value(argv: list[str], key: str, value: str) -> None:",,1
+core,function,_replace_selected_steps,hve/resume_service.py,507,raise DurableStateError('stored --steps option is malformed'),,1
+core,function,reconcile_succeeded_steps,hve/resume_service.py,519,"Reactivate succeeded steps whose outputs, or upstream outputs, are missing.",,2
+core,function,_append_resolved_replay_value,hve/resume_service.py,563,Append one non-empty resolved scalar or sequence.,,11
+core,function,_append_resolved_replay_switch,hve/resume_service.py,579,Append one resolved boolean switch.,,2
+core,function,build_resolved_replay_argv,hve/resume_service.py,592,Build the canonical replay shape from resolved config and parameters.,,2
+core,function,standard_execution_is_registerable,hve/resume_service.py,790,Return whether a resolved standard local run may be registered.,,3
+core,class,ResumeService,hve/resume_service.py,817,Register executions and build repository-scoped resume plans.,,8
 core,function,report_has_rework_trigger,hve/rework.py,22,要件適合実測レポートに `FAIL` 判定の行があるか。,,1
 core,function,_step_reports_rework,hve/rework.py,44,return False,,1
 core,function,resolve_rework_targets,hve/rework.py,58,差戻し先 Step ID を宣言順・重複なしで返す。,,1
 core,function,format_rework_suggestion,hve/rework.py,82,差戻し先を再実行コマンドの提案として 1 行へ整形する。,,1
 core,function,read_mdq_usage_records,hve/run_journal.py,39,``.mdq/usage.jsonl`` のレコードを読み込んで返す。,,0
-core,function,_resolve,hve/run_progress.py,24,return DEFAULT_PROGRESS_PATH if path is None else Path(path),,8
-core,function,record_step,hve/run_progress.py,28,1 Step の完了状態を追記する。書き込み失敗で run を止めない（FR-STATE-04）。,,3
-core,function,completed_steps,hve/run_progress.py,52,成功した step_id の集合。当該 run の記録が 1 件も無い場合は ``None``。,,1
+core,function,_resolve,hve/run_progress.py,23,return DEFAULT_PROGRESS_PATH if path is None else Path(path),,8
+core,function,record_step,hve/run_progress.py,27,1 Step の完了状態を追記する。書き込み失敗で run を止めない（FR-STATE-04）。,,0
+core,function,completed_steps,hve/run_progress.py,51,当該legacy run/Workflowで成功したStep集合。記録なしは``None``。,,1
 core,function,_safe_run_id_component,hve/run_state.py,19,run_id をパス安全な文字列に正規化する（hve/runner.py の _safe_run_id と同等規則）。,,0
 core,function,_safe_session_id_token,hve/run_state.py,46,session_id の構成要素をパストラバーサル安全に正規化する。,,4
 core,function,make_session_id,hve/run_state.py,65,SDK `client.create_session(session_id=...)` 用の決定論的 ID を生成する。,,5
-cli,function,_get_stdin_lock,hve/runner.py,85,asyncio.Lock を遅延生成して返す（イベントループ起動後に初回生成）。,,1
-cli,function,_safe_run_id,hve/runner.py,93,run_id を安全なパスコンポーネントに正規化する。,,4
-cli,function,_work_identifier_for_step,hve/runner.py,106,Agent Prompt の WORK `Issue-<識別子>` に使う識別子を返す。,,2
-cli,function,_safe_work_path_component,hve/runner.py,121,Return one direct path component for a run-scoped work directory.,,2
-cli,function,_step_work_dir,hve/runner.py,136,Return the run-scoped work directory for one Step without creating it.,,3
-cli,function,_ensure_step_work_dir,hve/runner.py,166,Create the exact run-scoped Step work directory before Agent startup.,,1
-cli,function,_tool_search_policy_prefix,hve/runner.py,185,対象 Step の Prompt へ生成 AI Agent の Tool Search 方針を注入する。,,1
-cli,function,_agentic_retrieval_policy_prefix,hve/runner.py,214,対象 Step の Prompt へ生成 AI Agent の Agentic Retrieval 方針を注入する。,,1
-cli,function,_repository_skill_directories,hve/runner.py,234,Return repository Skill discovery directories scoped to declared Skills.,,3
-cli,function,format_exception_for_log,hve/runner.py,284,例外を `型名: メッセージ` 形式へ整形する（NFR-OBS-08）。,,2
-cli,function,_permission_path_has_reparse_point,hve/runner.py,379,"return bool(int(getattr(path_stat, 'st_file_attributes', 0)) & reparse_flag)",,1
-cli,function,_permission_path_has_windows_alias,hve/runner.py,384,"Reject ADS, reserved devices, and Win32 trailing-dot/space aliases.",,1
-cli,function,_permission_repo_relative_path,hve/runner.py,412,"Return a direct repository-relative path, rejecting aliases and escapes.",,1
-cli,function,_read_repository_mcp_config,hve/runner.py,472,Return the `mcpServers` map declared in the repository-pinned MCP config.,,3
-cli,function,_load_repository_pinned_mcp_servers,hve/runner.py,491,Load an exact named subset from the repository-pinned MCP config.,,2
-cli,function,_load_trusted_asdw_data_deploy_mcp_servers,hve/runner.py,505,Load only the repository-pinned official Microsoft Learn MCP endpoint.,,1
-cli,function,_load_trusted_foundry_mcp_servers,hve/runner.py,519,Load the exact Azure and Microsoft Learn MCP servers for Foundry Steps.,,1
-cli,function,_require_trusted_asdw_data_deploy_mcp_servers,hve/runner.py,527,Return the one pinned server or fail before a DataDeploy session starts.,,2
-cli,function,_require_trusted_foundry_mcp_servers,hve/runner.py,545,Return the pinned Foundry MCP subset or fail before session creation.,,2
-cli,function,_validate_asdw_data_deploy_runtime_context,hve/runner.py,556,Validate the exact run root and pinned documentation server pre-session.,,1
-cli,function,_build_asdw_data_deploy_environment_snapshot,hve/runner.py,614,Freeze the complete non-secret Step 1.3 input contract.,,1
-cli,function,_build_asdw_data_deploy_bootstrap_inputs,hve/runner.py,706,Map only explicit workflow parameters into the Step 1.3 bootstrap API.,,1
-cli,function,_resolve_asdw_data_deploy_subscription_id,hve/runner.py,716,Return the signed-in Azure subscription ID for Step 1.3.,,1
-cli,function,_asdw_data_deploy_evidence_paths,hve/runner.py,751,Return the three HVE-owned evidence paths for native Step 1.3.,,1
-cli,function,_write_asdw_data_deploy_evidence,hve/runner.py,782,Write bounded native-pipeline evidence without accepting Agent prose.,validation-confirmed,2
-cli,function,_is_asdw_data_deploy_step,hve/runner.py,937,"return bool(custom_agent == 'Dev-Microservice-Azure-DataDeploy' and str(step_id or '').split('/', 1)[0] == '1.3')",,8
-cli,function,_has_supported_asdw_data_deploy_app_scope,hve/runner.py,947,Require exactly the one APP coverage the fixed producer can render.,,1
-cli,function,_is_workiq_mcp_server_name,hve/runner.py,1082,return str(name or '').strip().lower() in _WORKIQ_MCP_SERVER_ALIASES,,3
-cli,function,_filter_mcp_servers_for_session,hve/runner.py,1093,"Return MCP servers for a session, excluding Work IQ aliases by default.",,4
-cli,function,_apply_repository_mcp_scope,hve/runner.py,1118,FR-CLI-76: リポジトリ宣言の MCP サーバだけを公開し、自動探索を止める。,,7
-cli,function,_filter_workiq_questions,hve/runner.py,1144,Work IQ クエリ対象の質問を絞り込む。,,1
-cli,function,_resolve_step_output_paths,hve/runner.py,1196,ステップから成果物パスを取得する。,,2
-cli,function,_build_execution_mode_constraint_suffix,hve/runner.py,1213,CLI/GUI Orchestrator 配下 (fleet mode 以外) のとき prompt 末尾に付与する制約文を返す。,,1
-cli,function,_build_review_ownership_suffix,hve/runner.py,1224,メインタスクと敵対的レビューの所有権を明示する末尾指示を返す。,,1
-cli,function,_compose_phase1_prompt,hve/runner.py,1231,Phase 1 の送信本文と、合計が一致する成分列を返す。,,2
-cli,function,_check_output_paths_gate,hve/runner.py,1268,CLI/GUI Orchestrator 配下で `output_paths` の欠落を検出する。,,1
-cli,function,_extract_safe_qa_artifact_paths,hve/runner.py,1316,LLM 応答中の安全な `qa/*.md` artifacts パスを抽出する。,,1
-cli,function,_parse_qa_content_with_artifact_fallback,hve/runner.py,1355,QA 応答本文をパースし、失敗時は artifacts 参照先の QA ファイルを再パースする。,,1
-cli,function,_create_session_with_auto_reasoning_fallback,hve/runner.py,1376,create_session を呼び出し、SDK が reasoning_effort を未サポートの場合は除外して再試行する。,,13
-cli,function,_truncate_context,hve/runner.py,1555,コンテキストを先頭 + 末尾で切り詰める。,,1
-cli,function,_truncate_context_with_warn,hve/runner.py,1567,`_truncate_context` のラッパー。切詰めが発生した場合だけ console.warning を出す。,,5
-cli,function,_apply_fanout_prompt_template,hve/runner.py,1600,fan-out 子ステップ用の追加プロンプトを base prompt 先頭に注入する。,,2
-cli,function,_start_client_with_retry,hve/runner.py,1649,`client.start()` を最大 _CLIENT_START_MAX_ATTEMPTS 回リトライする。,,1
-cli,function,_is_review_fail,hve/runner.py,1680,合格判定行のトークンから FAIL 判定かどうかを判定する。,,3
-cli,function,_atomic_write_text,hve/runner.py,1720,tmp + os.replace でアトミックに書き込む。,,2
-cli,function,_collect_qa_answers_via_ipc,hve/runner.py,1734,"qa_answer_mode=""gui-file"" モード: GUI からの回答を IPC ファイル経由で受け取る。",,1
-cli,function,_collect_qa_answers,hve/runner.py,1871,Phase 2b: QA 質問票への回答を収集する。,,1
-cli,function,_should_run_pre_execution_qa,hve/runner.py,2014,FR-QA-03: auto_qa 有効時はワークフロー共通の事前 QA を実行する。,,1
-cli,function,_persist_answered_qa_and_dispatch,hve/runner.py,2026,回答済み QA を保存・再検証し、AKM 登録キューへ非待機で渡す。,,1
-cli,class,StepRunner,hve/runner.py,2110,1 ステップを CopilotSession で実行する。,split_decision,8
-cli,function,_blocking_stdin_read,hve/runner.py,7615,スレッドプール内で実行するブロッキング stdin 読み取り。,,1
-cli,function,_read_stdin_multiline,hve/runner.py,7623,複数行の回答入力を受け付ける。,,2
-cli,function,_extract_text,hve/runner.py,7681,SDK レスポンスからテキスト部分を取り出す。,,14
-cli,function,_extract_json_block,hve/runner.py,7707,テキストから最初の JSON オブジェクト（`{...}`）を抽出して返す。,,1
-cli,function,_build_phase4_verification,hve/runner.py,7749,Phase 4d の検証結果を scan 実測値だけから決定的に構築する（FR-CLI-63）。,,1
-core,function,is_child_process,hve/runtime_observability.py,36,親プロセスから起動され作業ディレクトリを共有する子プロセスかを返す。,,2
-core,function,make_instance_id,hve/runtime_observability.py,81,FR-RTO-01: instance_id は workflow_id、APP 並列時のみ `workflow_id#app_id`。,,2
+core,class,DurableStateError,hve/run_state_store.py,210,The durable state operation could not be completed safely.,,239
+core,class,LeaseToken,hve/run_state_store.py,215,Fencing token carried through lease-protected state transitions.,,32
+core,class,_RegistrationInstance,hve/run_state_store.py,226,class _RegistrationInstance:,,3
+core,function,default_state_path,hve/run_state_store.py,235,Return the process-independent user state database path.,,3
+core,function,canonical_repo_root,hve/run_state_store.py,241,Return the nearest Git worktree root without invoking Git.,,2
+core,function,compute_repo_key,hve/run_state_store.py,262,Hash a normalized repository root without retaining the raw path.,,2
+core,function,_utc_now,hve/run_state_store.py,274,return datetime.now(timezone.utc).isoformat(timespec='microseconds'),,1
+core,function,_utc_from_timestamp,hve/run_state_store.py,278,"return datetime.fromtimestamp(value, tz=timezone.utc).isoformat(timespec='microseconds')",,2
+core,function,_clock_value,hve/run_state_store.py,284,raise DurableStateError('clock value must be a finite number'),,5
+core,function,_require_non_negative_int,hve/run_state_store.py,294,raise DurableStateError(f'{field} must be a non-negative integer'),,3
+core,function,_require_text,hve/run_state_store.py,300,raise DurableStateError(f'{field} must be a non-empty single-line string'),,5
+core,function,reject_sensitive_persisted_text,hve/run_state_store.py,306,"Reject secret, payload, URL, and absolute-path shapes before persistence.",,3
+core,function,_require_control_identifier,hve/run_state_store.py,321,raise DurableStateError(f'{field} is not a valid control identifier'),,13
+core,function,_require_sha256,hve/run_state_store.py,332,raise DurableStateError(f'{field} must be a lowercase SHA-256 digest'),,3
+core,function,_descriptor_value,hve/run_state_store.py,338,raise DurableStateError(f'workflow descriptor is missing {field}'),,6
+core,function,_string_sequence,hve/run_state_store.py,349,raise DurableStateError(f'{field} must be a sequence of strings'),,2
+core,function,_normalize_instance,hve/run_state_store.py,364,raise DurableStateError('workflow descriptor ordinal must be a non-negative integer'),,2
+core,function,_validate_registration,hve/run_state_store.py,408,raise DurableStateError('execution surface is unsupported'),,1
+core,class,RunStateStore,hve/run_state_store.py,487,One-owner SQLite connection for HVE durable control state.,,13
+core,class,HeartbeatWorker,hve/run_state_store.py,1198,Maintain one fenced lease from a dedicated thread and connection.,,1
+cli,function,_get_stdin_lock,hve/runner.py,88,asyncio.Lock を遅延生成して返す（イベントループ起動後に初回生成）。,,1
+cli,function,_safe_run_id,hve/runner.py,96,run_id を安全なパスコンポーネントに正規化する。,,4
+cli,function,_work_identifier_for_step,hve/runner.py,109,Agent Prompt の WORK `Issue-<識別子>` に使う識別子を返す。,,2
+cli,function,_safe_work_path_component,hve/runner.py,124,Return one direct path component for a run-scoped work directory.,,2
+cli,function,_step_work_dir,hve/runner.py,139,Return the run-scoped work directory for one Step without creating it.,,3
+cli,function,_ensure_step_work_dir,hve/runner.py,169,Create the exact run-scoped Step work directory before Agent startup.,,1
+cli,function,_tool_search_policy_prefix,hve/runner.py,188,対象 Step の Prompt へ生成 AI Agent の Tool Search 方針を注入する。,,1
+cli,function,_agentic_retrieval_policy_prefix,hve/runner.py,217,対象 Step の Prompt へ生成 AI Agent の Agentic Retrieval 方針を注入する。,,1
+cli,function,_repository_skill_directories,hve/runner.py,237,Return repository Skill discovery directories scoped to declared Skills.,,3
+cli,function,format_exception_for_log,hve/runner.py,287,例外を `型名: メッセージ` 形式へ整形する（NFR-OBS-08）。,,2
+cli,function,_permission_path_has_reparse_point,hve/runner.py,382,"return bool(int(getattr(path_stat, 'st_file_attributes', 0)) & reparse_flag)",,1
+cli,function,_permission_path_has_windows_alias,hve/runner.py,387,"Reject ADS, reserved devices, and Win32 trailing-dot/space aliases.",,1
+cli,function,_permission_repo_relative_path,hve/runner.py,415,"Return a direct repository-relative path, rejecting aliases and escapes.",,1
+cli,function,_read_repository_mcp_config,hve/runner.py,475,Return the `mcpServers` map declared in the repository-pinned MCP config.,,3
+cli,function,_load_repository_pinned_mcp_servers,hve/runner.py,494,Load an exact named subset from the repository-pinned MCP config.,,2
+cli,function,_load_trusted_asdw_data_deploy_mcp_servers,hve/runner.py,508,Load only the repository-pinned official Microsoft Learn MCP endpoint.,,1
+cli,function,_load_trusted_foundry_mcp_servers,hve/runner.py,522,Load the exact Azure and Microsoft Learn MCP servers for Foundry Steps.,,1
+cli,function,_require_trusted_asdw_data_deploy_mcp_servers,hve/runner.py,530,Return the one pinned server or fail before a DataDeploy session starts.,,2
+cli,function,_require_trusted_foundry_mcp_servers,hve/runner.py,548,Return the pinned Foundry MCP subset or fail before session creation.,,2
+cli,function,_validate_asdw_data_deploy_runtime_context,hve/runner.py,559,Validate the exact run root and pinned documentation server pre-session.,,1
+cli,function,_build_asdw_data_deploy_environment_snapshot,hve/runner.py,617,Freeze the complete non-secret Step 1.3 input contract.,,1
+cli,function,_build_asdw_data_deploy_bootstrap_inputs,hve/runner.py,709,Map only explicit workflow parameters into the Step 1.3 bootstrap API.,,1
+cli,function,_resolve_asdw_data_deploy_subscription_id,hve/runner.py,719,Return the signed-in Azure subscription ID for Step 1.3.,,1
+cli,function,_asdw_data_deploy_evidence_paths,hve/runner.py,754,Return the three HVE-owned evidence paths for native Step 1.3.,,1
+cli,function,_write_asdw_data_deploy_evidence,hve/runner.py,785,Write bounded native-pipeline evidence without accepting Agent prose.,validation-confirmed,2
+cli,function,_is_asdw_data_deploy_step,hve/runner.py,940,"return bool(custom_agent == 'Dev-Microservice-Azure-DataDeploy' and str(step_id or '').split('/', 1)[0] == '1.3')",,8
+cli,function,_has_supported_asdw_data_deploy_app_scope,hve/runner.py,950,Require exactly the one APP coverage the fixed producer can render.,,1
+cli,function,_is_workiq_mcp_server_name,hve/runner.py,1102,return str(name or '').strip().lower() in _WORKIQ_MCP_SERVER_ALIASES,,3
+cli,function,_filter_mcp_servers_for_session,hve/runner.py,1113,"Return MCP servers for a session, excluding Work IQ aliases by default.",,4
+cli,function,_apply_repository_mcp_scope,hve/runner.py,1138,FR-CLI-76: リポジトリ宣言の MCP サーバだけを公開し、自動探索を止める。,,7
+cli,function,_filter_workiq_questions,hve/runner.py,1164,Work IQ クエリ対象の質問を絞り込む。,,1
+cli,function,_remaining_deadline_seconds,hve/runner.py,1224,Return the positive time remaining for one event-loop deadline.,,2
+cli,function,_disconnect_session_bounded,hve/runner.py,1232,Disconnect one SDK session without allowing cleanup to hang forever.,,3
+cli,function,_stop_client_bounded,hve/runner.py,1240,"Stop an SDK client within fixed bounds, escalating to force_stop.",,1
+cli,function,_resolve_step_output_paths,hve/runner.py,1267,ステップから成果物パスを取得する。,,2
+cli,function,_build_execution_mode_constraint_suffix,hve/runner.py,1284,CLI/GUI Orchestrator 配下 (fleet mode 以外) のとき prompt 末尾に付与する制約文を返す。,,1
+cli,function,_build_review_ownership_suffix,hve/runner.py,1295,メインタスクと敵対的レビューの所有権を明示する末尾指示を返す。,,1
+cli,function,_compose_phase1_prompt,hve/runner.py,1302,Phase 1 の送信本文と、合計が一致する成分列を返す。,,2
+cli,function,_check_output_paths_gate,hve/runner.py,1339,CLI/GUI Orchestrator 配下で `output_paths` の欠落を検出する。,,1
+cli,function,_extract_safe_qa_artifact_paths,hve/runner.py,1378,LLM 応答中の安全な `qa/*.md` artifacts パスを抽出する。,,1
+cli,function,_parse_qa_content_with_artifact_fallback,hve/runner.py,1417,QA 応答本文をパースし、失敗時は artifacts 参照先の QA ファイルを再パースする。,,1
+cli,function,_create_session_with_auto_reasoning_fallback,hve/runner.py,1438,create_session を呼び出し、SDK が reasoning_effort を未サポートの場合は除外して再試行する。,,13
+cli,function,_truncate_context,hve/runner.py,1617,コンテキストを先頭 + 末尾で切り詰める。,,1
+cli,function,_truncate_context_with_warn,hve/runner.py,1629,`_truncate_context` のラッパー。切詰めが発生した場合だけ console.warning を出す。,,5
+cli,function,_apply_fanout_prompt_template,hve/runner.py,1662,fan-out 子ステップ用の追加プロンプトを base prompt 先頭に注入する。,,2
+cli,function,_start_client_with_retry,hve/runner.py,1711,`client.start()` を最大 _CLIENT_START_MAX_ATTEMPTS 回リトライする。,,1
+cli,function,_is_review_fail,hve/runner.py,1742,合格判定行のトークンから FAIL 判定かどうかを判定する。,,3
+cli,function,_atomic_write_text,hve/runner.py,1782,tmp + os.replace でアトミックに書き込む。,,2
+cli,function,_collect_qa_answers_via_ipc,hve/runner.py,1796,"qa_answer_mode=""gui-file"" モード: GUI からの回答を IPC ファイル経由で受け取る。",,1
+cli,function,_collect_qa_answers,hve/runner.py,1933,Phase 2b: QA 質問票への回答を収集する。,,1
+cli,function,_should_run_pre_execution_qa,hve/runner.py,2076,FR-QA-03: auto_qa 有効時はワークフロー共通の事前 QA を実行する。,,1
+cli,function,_persist_answered_qa_and_dispatch,hve/runner.py,2088,回答済み QA を保存・再検証し、AKM 登録キューへ非待機で渡す。,,1
+cli,class,StepRunner,hve/runner.py,2172,1 ステップを CopilotSession で実行する。,split_decision,8
+cli,function,_blocking_stdin_read,hve/runner.py,8060,スレッドプール内で実行するブロッキング stdin 読み取り。,,1
+cli,function,_read_stdin_multiline,hve/runner.py,8068,複数行の回答入力を受け付ける。,,2
+cli,function,_extract_text,hve/runner.py,8126,SDK レスポンスからテキスト部分を取り出す。,,14
+cli,function,_extract_json_block,hve/runner.py,8152,テキストから最初の JSON オブジェクト（`{...}`）を抽出して返す。,,1
+cli,function,_build_phase4_verification,hve/runner.py,8194,Phase 4d の検証結果を scan 実測値だけから決定的に構築する（FR-CLI-63）。,,1
+core,function,is_child_process,hve/runtime_observability.py,36,親プロセスから起動され作業ディレクトリを共有する子プロセスかを返す。,,3
+core,function,make_instance_id,hve/runtime_observability.py,81,FR-RTO-01: instance_id は workflow_id、APP 並列時のみ `workflow_id#app_id`。,,6
 core,class,RuntimeContext,hve/runtime_observability.py,89,1 プロセス分の実行識別子と連番。,,4
 core,function,_utc_now_iso,hve/runtime_observability.py,105,return datetime.now(timezone.utc).isoformat(),,11
 core,function,build_event,hve/runtime_observability.py,109,観測イベント payload を構築する。,,2
@@ -2324,7 +2412,7 @@ core,shell_function,code_extra_for,hve/setup-hve.sh,692,code_extra_for() {,,1
 core,shell_function,warn_if_env_set,hve/setup-hve.sh,791,warn_if_env_set() {,,3
 core,shell_function,cli_embedded_version,hve/setup-hve.sh,800,cli_embedded_version() {,,4
 core,shell_function,verify,hve/setup-hve.sh,948,"verify() { local name=""$1""; shift; if ""$VENV_PY"" ""$@"" >/dev/null 2>&1; then ok ""$name""; else warn ""$name verification failed""; fi; }",,21
-core,function,_repo_root,hve/skill_resolver.py,22,return Path(__file__).resolve().parent.parent,,164
+core,function,_repo_root,hve/skill_resolver.py,22,return Path(__file__).resolve().parent.parent,,166
 core,function,_skills_root,hve/skill_resolver.py,26,return _repo_root() / '.github' / 'skills',,2
 core,function,_external_skills_root,hve/skill_resolver.py,30,Return the standard user-level Skill root without scanning it.,,1
 core,function,load_skill_manifest,hve/skill_resolver.py,36,"return data if isinstance(data, dict) else {}",,5
@@ -2365,15 +2453,16 @@ core,function,build_subtask_prompt,hve/split_fork.py,697,サブタスク実行�
 core,function,make_subtask_work_subdir,hve/split_fork.py,749,サブタスク用の work ディレクトリ相対パスを生成する。,,2
 core,function,check_subtask_completion,hve/split_fork.py,774,サブタスクの完了判定。,validation-confirmed,3
 core,function,compute_waves,hve/split_fork.py,832,`depends_on` を解釈して topological wave 列に分割する。,,3
-core,class,StartupPreflightIssue,hve/startup_preflight.py,23,class StartupPreflightIssue:,,4
-core,class,StartupPreflightResult,hve/startup_preflight.py,31,return not self.issues,,9
-core,function,github_write_required,hve/startup_preflight.py,38,この実行が GitHub branch / Issue / PR 書き込みを必要とするか返す。,,2
-core,function,_valid_branch_name,hve/startup_preflight.py,63,return is_valid_branch_name(value),,3
-core,function,_issue,hve/startup_preflight.py,67,"return StartupPreflightIssue(category=category, field_name=field_name, message=message, remediation_hint=remediation_hint)",,18
-core,function,_git_run,hve/startup_preflight.py,81,"return subprocess.run(command, cwd=str(repo_root), capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=30, env=env, shell=False, check=False)",,6
-core,function,_exact_remote_ref_sha,hve/startup_preflight.py,98,``git ls-remote`` の単一exact-ref応答からSHAを返す。,,1
-core,function,validate_startup_configuration,hve/startup_preflight.py,109,GitHub 連携設定を検査し、判定可能な不整合を一括で返す。,,3
-core,function,format_startup_preflight_errors,hve/startup_preflight.py,360,token 値を含めず、preflight の全不整合を人間向けに整形する。,,2
+core,function,is_github_repository_slug,hve/startup_preflight.py,22,Return whether *value* is a strict ``owner/repo`` identifier.,,2
+core,class,StartupPreflightIssue,hve/startup_preflight.py,31,class StartupPreflightIssue:,,4
+core,class,StartupPreflightResult,hve/startup_preflight.py,39,return not self.issues,,9
+core,function,github_write_required,hve/startup_preflight.py,46,この実行が GitHub branch / Issue / PR 書き込みを必要とするか返す。,,2
+core,function,_valid_branch_name,hve/startup_preflight.py,71,return is_valid_branch_name(value),,3
+core,function,_issue,hve/startup_preflight.py,75,"return StartupPreflightIssue(category=category, field_name=field_name, message=message, remediation_hint=remediation_hint)",,18
+core,function,_git_run,hve/startup_preflight.py,89,"return subprocess.run(command, cwd=str(repo_root), capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=30, env=env, shell=False, check=False)",,6
+core,function,_exact_remote_ref_sha,hve/startup_preflight.py,106,``git ls-remote`` の単一exact-ref応答からSHAを返す。,,1
+core,function,validate_startup_configuration,hve/startup_preflight.py,117,GitHub 連携設定を検査し、判定可能な不整合を一括で返す。,,3
+core,function,format_startup_preflight_errors,hve/startup_preflight.py,365,token 値を含めず、preflight の全不整合を人間向けに整形する。,,2
 core,class,StatusLineState,hve/statusline.py,38,ステータスライン描画に必要な最小スナップショット。,,7
 core,function,format_status_line,hve/statusline.py,63,``StatusLineState`` を 1 行の文字列に整形する。,,1
 core,class,StatusLine,hve/statusline.py,120,CUI 用 1Hz ステータスライン。,,1
@@ -2401,7 +2490,7 @@ core,function,_get_bool_param_str,hve/template_engine.py,742,"params から bool
 core,function,_build_remote_mcp_server_section,hve/template_engine.py,759,Step.2.5 テンプレートの ``{remote_mcp_server_section}`` を展開する。,,1
 core,function,_build_remote_mcp_server_design_section,hve/template_engine.py,775,Step.2.2 テンプレートの ``{remote_mcp_server_design_section}`` を展開する。,,1
 core,function,render_template,hve/template_engine.py,794,テンプレートを読み込み、プレースホルダを展開する。,,3
-core,function,resolve_selected_steps,hve/template_engine.py,944,選択ステップ ID から、実際に作成するステップ ID セットを返す。,,1
+core,function,resolve_selected_steps,hve/template_engine.py,944,選択ステップ ID から、実際に作成するステップ ID セットを返す。,,2
 core,function,build_root_issue_body,hve/template_engine.py,989,Root Issue の本文を組み立てる。,,1
 core,class,ContextReportError,hve/toolsearch/context_report.py,25,実測に失敗した。推定値で埋めずに呼び出し側へ返す。,,5
 core,class,Layer,hve/toolsearch/context_report.py,30,class Layer:,,2
@@ -2571,7 +2660,7 @@ core,class,WorkflowDependency,hve/workflow_registry.py,342,ワークフロー間
 core,class,MetaWorkflowDef,hve/workflow_registry.py,360,ワークフロー間の依存 DAG 定義。,,2
 core,function,_make_state_labels,hve/workflow_registry.py,378,プレフィックスから標準状態ラベルセットを生成する。,,13
 core,function,canonicalize_workflow_id,hve/workflow_registry.py,2079,workflow ID を小文字化し、registry の正式 ID へ解決する。,,10
-core,function,get_workflow,hve/workflow_registry.py,2085,ワークフロー ID からワークフロー定義を取得する。存在しない場合は None。,,34
+core,function,get_workflow,hve/workflow_registry.py,2085,ワークフロー ID からワークフロー定義を取得する。存在しない場合は None。,,36
 core,function,get_meta_dependencies,hve/workflow_registry.py,2090,指定ワークフローのメタワークフロー依存を返す。,,2
 core,function,expand_group_step_ids,hve/workflow_registry.py,2177,GUI/CLI 形式のグループ step ID を registry の実 step ID 列に展開する。,,6
 core,function,group_id_for_step,hve/workflow_registry.py,2205,実 step ID から GUI グループ ID への逆引き。未登録は None。,,1
@@ -2607,8 +2696,8 @@ core,function,_normalize_workiq_status,hve/workiq.py,457,return match.group(1) i
 core,function,_split_markdown_list_items,hve/workiq.py,462,return items,,2
 core,function,_resolve_workiq_repo_path,hve/workiq.py,476,return candidate if candidate.is_absolute() else repo_root / candidate,,2
 core,function,_read_workiq_text_file,hve/workiq.py,481,return path.read_text(encoding='utf-8'),,2
-core,function,is_workiq_available,hve/workiq.py,488,@microsoft/workiq CLI が利用可能かを検出する。,,7
-core,function,workiq_login,hve/workiq.py,550,Work IQ の認証を実行する（同期関数）。,,3
+core,function,is_workiq_available,hve/workiq.py,488,@microsoft/workiq CLI が利用可能かを検出する。,,6
+core,function,workiq_login,hve/workiq.py,550,Work IQ の認証を実行する（同期関数）。,,2
 core,function,_get_event_type,hve/workiq.py,617,SDK イベントから event.type を文字列として取り出す。,,2
 core,function,_get_event_data,hve/workiq.py,632,SDK イベントから data を取り出す。,,1
 core,function,_get_data_field,hve/workiq.py,639,イベント data から指定名の最初の非空値を安全に取り出す。,,3
@@ -2728,7 +2817,7 @@ core,function,_count_text,mdq/gui/settings_section.py,68,"Render a count, showin
 core,class,MdqIndexSection,mdq/gui/settings_section.py,77,Markdown-Query management section (3 tabs).,,3
 core,function,defaults,mdq/gui/settings_store.py,31,"return {'auto_refresh_on_start': False, 'tokenize_language': 'ja-jp', 'chunk_strategy': 'heading', 'target_folders': '', 'overlap_paragraphs': 1, 'build_strategies': '', 'semantic_max_chunk_chars': 0, 'semantic_min_chars': 0, 'semantic_breakpoint_percentile_lo': 0.0, 'semantic_breakpoint_percentile…",,21
 core,function,detect_settings_path,mdq/gui/settings_store.py,72,Return the path to the INI file to read/write.,,8
-core,function,load,mdq/gui/settings_store.py,84,Load the full settings (all sections) from disk.,,60
+core,function,load,mdq/gui/settings_store.py,84,Load the full settings (all sections) from disk.,,61
 core,function,save,mdq/gui/settings_store.py,112,Atomically save settings. Preserves non-[mdq] sections from disk.,,13
 core,function,_normalize_target_folder,mdq/gui/settings_store.py,140,return s,,8
 core,function,parse_target_folders,mdq/gui/settings_store.py,152,return out,,5
@@ -2793,7 +2882,7 @@ core,function,_row_has_embedding,mdq/search.py,283,return bool(v),,2
 core,function,_row_get,mdq/search.py,291,return row[key],,10
 core,function,_scoring_text,mdq/search.py,298,Text used for ranking only (FR-MDQ-05 / FR-MDQ-08).,,2
 core,function,_budget_cost,mdq/search.py,314,Budget charged for one hit (FR-MDQ-07).,,4
-core,function,search,mdq/search.py,325,Run a search against the indexed chunks.,,388
+core,function,search,mdq/search.py,325,Run a search against the indexed chunks.,,390
 core,function,_apply_expansion,mdq/search.py,489,"def _apply_expansion(conn, hits: list[Hit], include_parent: bool,",,4
 core,function,_strip_bodies,mdq/search.py,523,Drop the body from every expanded row (FR-MDQ-10 (6)).,,2
 core,function,_build_fts5_query,mdq/search.py,533,Quote each token and OR-join for FTS5 MATCH.,,2
@@ -2832,7 +2921,7 @@ core,function,all_chunks,mdq/store.py,374,"return list(conn.execute('SELECT chun
 core,function,list_all_paths,mdq/store.py,384,Return all file paths currently registered in the store.,,4
 core,function,delete_file,mdq/store.py,389,Delete a file row (chunks are removed via ON DELETE CASCADE).,,4
 core,function,stats,mdq/store.py,401,"return {'files': f, 'chunks': c}",,76
-core,function,normalize,mdq/strategies.py,74,Return a validated strategy name; falls back to default.,,16
+core,function,normalize,mdq/strategies.py,74,Return a validated strategy name; falls back to default.,,17
 core,function,scan_file_for_strategy,mdq/strategies.py,81,"Produce (frontmatter_dict, list[Chunk]) for the given strategy.",,4
 core,function,fm_empty_fallback,mdq/strategies.py,135,"Return an empty (frontmatter, chunks) tuple.",,2
 core,function,_scan_fixed_window,mdq/strategies.py,148,Fixed-size sliding-window chunker.,,2
@@ -2863,7 +2952,7 @@ core,function,_max_segment_chars,mdq/strategies_semantic.py,308,Return the large
 core,function,_build_subs,mdq/strategies_semantic.py,324,Materialise sub-bodies from sentence-index boundaries.,,2
 core,function,_merge_short_tail,mdq/strategies_semantic.py,351,Merge any sub shorter than *min_chars* into its predecessor.,,2
 core,function,scoring_terms,mdq/tokenize.py,48,Return the terms the default search path matches on (FR-MDQ-08).,,5
-core,function,normalize,mdq/tokenize.py,66,Return a validated language code; falls back to default.,,16
+core,function,normalize,mdq/tokenize.py,66,Return a validated language code; falls back to default.,,17
 core,function,fts5_tokenizer_for,mdq/tokenize.py,80,Return the FTS5 ``tokenize=...`` clause body for a language.,,2
 core,function,has_trigram_tokenizer,mdq/tokenize.py,91,Probe whether this SQLite build supports the ``trigram`` tokenizer.,,2
 core,function,resolved_fts5_tokenizer,mdq/tokenize.py,112,Return the FTS5 tokenizer actually usable on this SQLite build.,,2
@@ -2990,14 +3079,14 @@ core,function,install_skill,tools/skills/code_query/kit/kit_setup.py,96,raise Sy
 core,function,_env_with_vendor,tools/skills/code_query/kit/kit_setup.py,115,return env,,4
 core,function,build_index,tools/skills/code_query/kit/kit_setup.py,123,def build_index(,,21
 core,function,main,tools/skills/code_query/kit/kit_setup.py,143,return 0,,53
-core,function,load_manifest,tools/skills/code_query/kit/kit_sync.py,32,raise SystemExit(f'kit manifest not found: {path}'),,4
-core,function,_prune,tools/skills/code_query/kit/kit_sync.py,39,def _prune(root: Path) -> None:,,6
-core,function,_replace_tree,tools/skills/code_query/kit/kit_sync.py,48,"def _replace_tree(source: Path, target: Path) -> None:",,6
-core,function,sync_engine,tools/skills/code_query/kit/kit_sync.py,55,Copy the upstream engine package into ``<kit>/vendor/<engine>``.,,2
-core,function,sync_skill,tools/skills/code_query/kit/kit_sync.py,67,Copy the canonical Skill definition into ``<kit>/skill``.,,2
-core,function,sync_shared,tools/skills/code_query/kit/kit_sync.py,81,Copy this shared implementation into ``<kit>/kit`` for distribution.,,2
-core,function,_count_files,tools/skills/code_query/kit/kit_sync.py,89,return sum((1 for p in root.rglob('*') if p.is_file())),,2
-core,function,main,tools/skills/code_query/kit/kit_sync.py,93,return 0,,53
+core,function,load_manifest,tools/skills/code_query/kit/kit_sync.py,33,raise SystemExit(f'kit manifest not found: {path}'),,4
+core,function,_prune,tools/skills/code_query/kit/kit_sync.py,40,def _prune(root: Path) -> None:,,6
+core,function,_replace_tree,tools/skills/code_query/kit/kit_sync.py,49,"def _replace_tree(source: Path, target: Path) -> None:",,6
+core,function,sync_engine,tools/skills/code_query/kit/kit_sync.py,56,Copy the upstream engine package into ``<kit>/vendor/<engine>``.,,2
+core,function,sync_skill,tools/skills/code_query/kit/kit_sync.py,68,Copy the canonical Skill definition into ``<kit>/skill``.,,2
+core,function,sync_shared,tools/skills/code_query/kit/kit_sync.py,82,Copy this shared implementation into ``<kit>/kit`` for distribution.,,2
+core,function,_count_files,tools/skills/code_query/kit/kit_sync.py,90,return sum((1 for p in root.rglob('*') if p.is_file())),,2
+core,function,main,tools/skills/code_query/kit/kit_sync.py,94,return 0,,53
 core,function,main,tools/skills/code_query/launch.py,9,return gui_main(),,53
 core,class,BenchmarkError,tools/skills/code_query/vendor/cq/benchmark.py,23,"Raised for invalid harness input (bad filter, unknown control group).",,8
 core,function,repo_files,tools/skills/code_query/vendor/cq/benchmark.py,27,return tuple(out.splitlines()),,2
@@ -3085,7 +3174,7 @@ core,class,SettingsBackend,tools/skills/code_query/vendor/cq/gui/settings_sectio
 core,class,CqIndexSection,tools/skills/code_query/vendor/cq/gui/settings_section.py,51,Code Query management panel shared by standalone and HVE hosts.,,2
 core,function,defaults,tools/skills/code_query/vendor/cq/gui/settings_store.py,25,"return {'cq': dict(_CQ_DEFAULTS), 'options': dict(_OPTION_DEFAULTS)}",,21
 core,function,detect_settings_path,tools/skills/code_query/vendor/cq/gui/settings_store.py,32,return root / '.cq-gui-settings.txt',,8
-core,function,load,tools/skills/code_query/vendor/cq/gui/settings_store.py,40,return merged,,60
+core,function,load,tools/skills/code_query/vendor/cq/gui/settings_store.py,40,return merged,,61
 core,function,save,tools/skills/code_query/vendor/cq/gui/settings_store.py,65,Atomically save CQ-owned values while preserving all foreign settings.,,13
 core,function,parse_semicolon_list,tools/skills/code_query/vendor/cq/gui/settings_store.py,94,return values,,5
 core,function,serialize_semicolon_list,tools/skills/code_query/vendor/cq/gui/settings_store.py,106,return ';'.join(normalised),,5
@@ -3254,7 +3343,7 @@ core,class,Grammar,tools/skills/code_query/vendor/cq/languages/treesitter.py,43,
 core,function,cache_key,tools/skills/code_query/vendor/cq/languages/treesitter.py,75,Identity of the compiled parser: the module plus the factory it calls.,,2
 core,function,parser_for,tools/skills/code_query/vendor/cq/languages/treesitter.py,86,"Return a cached parser, importing the optional grammar on first use.",,2
 core,function,parse,tools/skills/code_query/vendor/cq/languages/treesitter.py,114,return parser_for(grammar).parse(source.encode('utf-8')),,52
-core,function,text,tools/skills/code_query/vendor/cq/languages/treesitter.py,118,"return src[node.start_byte:node.end_byte].decode('utf-8', 'replace')",,1229
+core,function,text,tools/skills/code_query/vendor/cq/languages/treesitter.py,118,"return src[node.start_byte:node.end_byte].decode('utf-8', 'replace')",,1233
 core,function,named_child_by_type,tools/skills/code_query/vendor/cq/languages/treesitter.py,122,return None,,22
 core,function,descend_for,tools/skills/code_query/vendor/cq/languages/treesitter.py,129,Walk down *named* children looking for one of ``targets``.,,6
 core,function,field_name,tools/skills/code_query/vendor/cq/languages/treesitter.py,148,"return text(target, src) if target is not None else ''",,56
@@ -3296,7 +3385,7 @@ core,function,get_chunk,tools/skills/code_query/vendor/cq/search.py,80,Return on
 core,class,Hit,tools/skills/code_query/vendor/cq/search.py,101,return payload,,100
 core,function,sanitize_match,tools/skills/code_query/vendor/cq/search.py,135,Reduce a free-form query to FTS5 barewords joined by implicit AND.,,2
 core,function,choose_route,tools/skills/code_query/vendor/cq/search.py,145,return 'bm25',,2
-core,function,search,tools/skills/code_query/vendor/cq/search.py,158,raise SearchError('either a query or a regex is required'),,388
+core,function,search,tools/skills/code_query/vendor/cq/search.py,158,raise SearchError('either a query or a regex is required'),,390
 core,function,_apply_return_unit,tools/skills/code_query/vendor/cq/search.py,210,"def _apply_return_unit(conn, hits: Sequence[Hit], return_unit: str) -> None:",,4
 core,function,_reduce_to_symbols,tools/skills/code_query/vendor/cq/search.py,217,Drop the body and attach the enclosing symbol's name and kind (FR-CQ-17).,,2
 core,function,_semantic_neighbours,tools/skills/code_query/vendor/cq/search.py,240,"Chunk ids ranked by cosine, or ``[]`` when vectors are unusable (FR-CQ-17).",,2
@@ -3305,7 +3394,7 @@ core,function,_fuse,tools/skills/code_query/vendor/cq/search.py,294,Run every ro
 core,function,_widen_to_chunk_bodies,tools/skills/code_query/vendor/cq/search.py,358,Replace each excerpt with its whole chunk body (FR-CQ-06).,,2
 core,function,_guard_freshness,tools/skills/code_query/vendor/cq/search.py,379,Re-index small drifts before answering; report larger ones as stale.,,2
 core,function,_fallback_order,tools/skills/code_query/vendor/cq/search.py,409,return chains[route],,2
-core,function,_run,tools/skills/code_query/vendor/cq/search.py,421,"return _bm25(conn, query, top_k, radius, paths)",,50
+core,function,_run,tools/skills/code_query/vendor/cq/search.py,421,"return _bm25(conn, query, top_k, radius, paths)",,51
 core,function,_path_clause,tools/skills/code_query/vendor/cq/search.py,435,"return (f' AND {column} GLOB ?', [paths]) if paths else ('', [])",,14
 core,function,_test_rank,tools/skills/code_query/vendor/cq/search.py,439,"1 for test code, 0 otherwise: implementations outrank their tests.",,10
 core,function,_symbol,tools/skills/code_query/vendor/cq/search.py,446,return hits,,2
@@ -3356,7 +3445,7 @@ core,function,_resolve_log_path,tools/skills/code_query/vendor/cq/usage_log.py,6
 core,function,append_record,tools/skills/code_query/vendor/cq/usage_log.py,67,1 レコードを ``.cq/usage.jsonl`` に追記する。,,22
 core,function,db_path_for,tools/skills/code_query/vendor/cq/vectors.py,40,return Path('.cq') / f'vectors-{profile}.sqlite',,22
 core,function,open_store,tools/skills/code_query/vendor/cq/vectors.py,45,def open_store(path: Path) -> Iterator[sqlite3.Connection]:,,46
-core,function,replace,tools/skills/code_query/vendor/cq/vectors.py,57,Rewrite the whole store. Partial updates would need chunk-level deletes.,,249
+core,function,replace,tools/skills/code_query/vendor/cq/vectors.py,57,Rewrite the whole store. Partial updates would need chunk-level deletes.,,252
 core,function,model_of,tools/skills/code_query/vendor/cq/vectors.py,78,return row['value'] if row else None,,2
 core,function,read_all,tools/skills/code_query/vendor/cq/vectors.py,83,"Return vectors whose file is unchanged, or ``{}`` if the store is unusable.",,2
 core,function,rank,tools/skills/code_query/vendor/cq/vectors.py,104,"Cosine ranking over already L2-normalised rows, so a dot product suffices.",,60
@@ -3380,14 +3469,14 @@ core,function,install_skill,tools/skills/markdown_query/kit/kit_setup.py,96,rais
 core,function,_env_with_vendor,tools/skills/markdown_query/kit/kit_setup.py,115,return env,,4
 core,function,build_index,tools/skills/markdown_query/kit/kit_setup.py,123,def build_index(,,21
 core,function,main,tools/skills/markdown_query/kit/kit_setup.py,143,return 0,,53
-core,function,load_manifest,tools/skills/markdown_query/kit/kit_sync.py,32,raise SystemExit(f'kit manifest not found: {path}'),,4
-core,function,_prune,tools/skills/markdown_query/kit/kit_sync.py,39,def _prune(root: Path) -> None:,,6
-core,function,_replace_tree,tools/skills/markdown_query/kit/kit_sync.py,48,"def _replace_tree(source: Path, target: Path) -> None:",,6
-core,function,sync_engine,tools/skills/markdown_query/kit/kit_sync.py,55,Copy the upstream engine package into ``<kit>/vendor/<engine>``.,,2
-core,function,sync_skill,tools/skills/markdown_query/kit/kit_sync.py,67,Copy the canonical Skill definition into ``<kit>/skill``.,,2
-core,function,sync_shared,tools/skills/markdown_query/kit/kit_sync.py,81,Copy this shared implementation into ``<kit>/kit`` for distribution.,,2
-core,function,_count_files,tools/skills/markdown_query/kit/kit_sync.py,89,return sum((1 for p in root.rglob('*') if p.is_file())),,2
-core,function,main,tools/skills/markdown_query/kit/kit_sync.py,93,return 0,,53
+core,function,load_manifest,tools/skills/markdown_query/kit/kit_sync.py,33,raise SystemExit(f'kit manifest not found: {path}'),,4
+core,function,_prune,tools/skills/markdown_query/kit/kit_sync.py,40,def _prune(root: Path) -> None:,,6
+core,function,_replace_tree,tools/skills/markdown_query/kit/kit_sync.py,49,"def _replace_tree(source: Path, target: Path) -> None:",,6
+core,function,sync_engine,tools/skills/markdown_query/kit/kit_sync.py,56,Copy the upstream engine package into ``<kit>/vendor/<engine>``.,,2
+core,function,sync_skill,tools/skills/markdown_query/kit/kit_sync.py,68,Copy the canonical Skill definition into ``<kit>/skill``.,,2
+core,function,sync_shared,tools/skills/markdown_query/kit/kit_sync.py,82,Copy this shared implementation into ``<kit>/kit`` for distribution.,,2
+core,function,_count_files,tools/skills/markdown_query/kit/kit_sync.py,90,return sum((1 for p in root.rglob('*') if p.is_file())),,2
+core,function,main,tools/skills/markdown_query/kit/kit_sync.py,94,return 0,,53
 core,function,main,tools/skills/markdown_query/launch.py,9,return gui_main(),,53
 core,function,main,tools/skills/markdown_query/tools/capture_screenshots.py,25,return 0,,53
 core,function,_effective_roots,tools/skills/markdown_query/vendor/mdq/cli.py,42,Resolve roots from CLI args / config file / built-in defaults.,,4
@@ -3476,7 +3565,7 @@ core,function,_count_text,tools/skills/markdown_query/vendor/mdq/gui/settings_se
 core,class,MdqIndexSection,tools/skills/markdown_query/vendor/mdq/gui/settings_section.py,77,Markdown-Query management section (3 tabs).,,3
 core,function,defaults,tools/skills/markdown_query/vendor/mdq/gui/settings_store.py,31,"return {'auto_refresh_on_start': False, 'tokenize_language': 'ja-jp', 'chunk_strategy': 'heading', 'target_folders': '', 'overlap_paragraphs': 1, 'build_strategies': '', 'semantic_max_chunk_chars': 0, 'semantic_min_chars': 0, 'semantic_breakpoint_percentile_lo': 0.0, 'semantic_breakpoint_percentile…",,21
 core,function,detect_settings_path,tools/skills/markdown_query/vendor/mdq/gui/settings_store.py,72,Return the path to the INI file to read/write.,,8
-core,function,load,tools/skills/markdown_query/vendor/mdq/gui/settings_store.py,84,Load the full settings (all sections) from disk.,,60
+core,function,load,tools/skills/markdown_query/vendor/mdq/gui/settings_store.py,84,Load the full settings (all sections) from disk.,,61
 core,function,save,tools/skills/markdown_query/vendor/mdq/gui/settings_store.py,112,Atomically save settings. Preserves non-[mdq] sections from disk.,,13
 core,function,_normalize_target_folder,tools/skills/markdown_query/vendor/mdq/gui/settings_store.py,140,return s,,8
 core,function,parse_target_folders,tools/skills/markdown_query/vendor/mdq/gui/settings_store.py,152,return out,,5
@@ -3541,7 +3630,7 @@ core,function,_row_has_embedding,tools/skills/markdown_query/vendor/mdq/search.p
 core,function,_row_get,tools/skills/markdown_query/vendor/mdq/search.py,291,return row[key],,10
 core,function,_scoring_text,tools/skills/markdown_query/vendor/mdq/search.py,298,Text used for ranking only (FR-MDQ-05 / FR-MDQ-08).,,2
 core,function,_budget_cost,tools/skills/markdown_query/vendor/mdq/search.py,314,Budget charged for one hit (FR-MDQ-07).,,4
-core,function,search,tools/skills/markdown_query/vendor/mdq/search.py,325,Run a search against the indexed chunks.,,388
+core,function,search,tools/skills/markdown_query/vendor/mdq/search.py,325,Run a search against the indexed chunks.,,390
 core,function,_apply_expansion,tools/skills/markdown_query/vendor/mdq/search.py,489,"def _apply_expansion(conn, hits: list[Hit], include_parent: bool,",,4
 core,function,_strip_bodies,tools/skills/markdown_query/vendor/mdq/search.py,523,Drop the body from every expanded row (FR-MDQ-10 (6)).,,2
 core,function,_build_fts5_query,tools/skills/markdown_query/vendor/mdq/search.py,533,Quote each token and OR-join for FTS5 MATCH.,,2
@@ -3580,7 +3669,7 @@ core,function,all_chunks,tools/skills/markdown_query/vendor/mdq/store.py,374,"re
 core,function,list_all_paths,tools/skills/markdown_query/vendor/mdq/store.py,384,Return all file paths currently registered in the store.,,4
 core,function,delete_file,tools/skills/markdown_query/vendor/mdq/store.py,389,Delete a file row (chunks are removed via ON DELETE CASCADE).,,4
 core,function,stats,tools/skills/markdown_query/vendor/mdq/store.py,401,"return {'files': f, 'chunks': c}",,76
-core,function,normalize,tools/skills/markdown_query/vendor/mdq/strategies.py,74,Return a validated strategy name; falls back to default.,,16
+core,function,normalize,tools/skills/markdown_query/vendor/mdq/strategies.py,74,Return a validated strategy name; falls back to default.,,17
 core,function,scan_file_for_strategy,tools/skills/markdown_query/vendor/mdq/strategies.py,81,"Produce (frontmatter_dict, list[Chunk]) for the given strategy.",,4
 core,function,fm_empty_fallback,tools/skills/markdown_query/vendor/mdq/strategies.py,135,"Return an empty (frontmatter, chunks) tuple.",,2
 core,function,_scan_fixed_window,tools/skills/markdown_query/vendor/mdq/strategies.py,148,Fixed-size sliding-window chunker.,,2
@@ -3611,7 +3700,7 @@ core,function,_max_segment_chars,tools/skills/markdown_query/vendor/mdq/strategi
 core,function,_build_subs,tools/skills/markdown_query/vendor/mdq/strategies_semantic.py,324,Materialise sub-bodies from sentence-index boundaries.,,2
 core,function,_merge_short_tail,tools/skills/markdown_query/vendor/mdq/strategies_semantic.py,351,Merge any sub shorter than *min_chars* into its predecessor.,,2
 core,function,scoring_terms,tools/skills/markdown_query/vendor/mdq/tokenize.py,48,Return the terms the default search path matches on (FR-MDQ-08).,,5
-core,function,normalize,tools/skills/markdown_query/vendor/mdq/tokenize.py,66,Return a validated language code; falls back to default.,,16
+core,function,normalize,tools/skills/markdown_query/vendor/mdq/tokenize.py,66,Return a validated language code; falls back to default.,,17
 core,function,fts5_tokenizer_for,tools/skills/markdown_query/vendor/mdq/tokenize.py,80,Return the FTS5 ``tokenize=...`` clause body for a language.,,2
 core,function,has_trigram_tokenizer,tools/skills/markdown_query/vendor/mdq/tokenize.py,91,Probe whether this SQLite build supports the ``trigram`` tokenizer.,,2
 core,function,resolved_fts5_tokenizer,tools/skills/markdown_query/vendor/mdq/tokenize.py,112,Return the FTS5 tokenizer actually usable on this SQLite build.,,2

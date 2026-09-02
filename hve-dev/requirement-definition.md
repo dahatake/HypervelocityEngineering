@@ -189,12 +189,33 @@ HVE は、要求整理〜実装までを Workflow / Custom Agent / DAG として
 - **FR-STATE-03**: 完了ラベル `{prefix}:done` 付与時、Cloud Orchestrator は次の推奨 Workflow を Issue コメントで提示する。
   - チェーン定義: `ARD` → `AAS`、`AAS` → `AAD-WEB` / `ADFD` / `AAG` の 3 候補（全提示・1 つ選択は利用者判断）、`AAD-WEB` → `ASDW-WEB`、`ADFD` → `ADFDV`、`AAG` → `AAGD`
   - **終端 Workflow（`ASDW-WEB` / `ADFDV` / `AAGD` / `ADOC` / `AKM`）完了時は次候補が提示されない**
-- **FR-STATE-04**: HVE は run ごとの Step 完了状態を、run 終了後も残る利用者ローカル領域へ追記保存しなければならない。保存先は `hve/.run-progress.jsonl` とし、UTF-8 / LF / BOM なしの 1 行 1 JSON とする。1 レコードは `schema_version` / `ts` / `run_id` / `workflow_id` / `step_id` / `status` を持ち、`status` は `succeeded` / `failed` の 2 値とする。
-  - **本項は SDK セッションを復元しない**。§5.6 が Resume を全廃した理由は GitHub Copilot CLI SDK の複数デバイス間セッション管理であり、本項が保存するのは HVE 自身が所有する Workflow 進捗だけである。再実行時は未完了 Step を新しいセッションで実行する。
-  - `dry_run` では書き込んではならない。書き込みの失敗で run を失敗させてはならない。
-  - prompt 本文・応答本文・tool の引数・認証情報を保存してはならない（NFR-SEC-01 / FR-RTO-04 と同じ方針）。
-  - 保存先は `.gitignore` へ登録し、リポジトリへコミットしてはならない。FR-CLI-74 / FR-CLI-75 の HVE ソース保護ガードの対象外とする（`hve/.settings.txt` と同じ扱い）。
-  - 記録は既存の `on_step_complete` フックを介して行い、[hve/dag_executor.py](hve/dag_executor.py) へ新規の記録経路を追加してはならない（FR-MAINT-07）。
+- **FR-STATE-04**: HVE の標準ローカル実行は、process 終了後も残る利用者単位の durable state store へ、execution・Workflow instance・Step/承認の control state を保存しなければならない。
+  - 保存先は `platformdirs.user_state_path("hve", appauthor=False) / "state.sqlite3"` の単一 SQLite database とする。リポジトリごとの生 absolute path は保存せず、正規化済み Git root の SHA-256 を `repo_key` として使用する。
+  - schema は `executions`、`workflow_instances`、`step_instances` の 3 table だけとする。attempt history table、output content hash、prompt/response/tool payload 用 table を追加してはならない。
+  - connection ごとに `journal_mode=DELETE` の実効値を検査し、`synchronous=EXTRA`、`foreign_keys=ON`、`trusted_schema=OFF`、busy timeout 1 秒を設定する。open 時に schema version を検査し、resume candidate 読取時に `quick_check` を実行する。corrupt database または未知 schema は自動削除・自動修復せず fail-closed とする。
+  - POSIX では state directory を `0700`、database file を `0600` とする。Windows は user profile ACL の継承を前提とし、ACL 強化済みとは主張しない。
+  - `dry_run` と初期対象外 mode は execution を登録してはならない。標準新規実行の state write 失敗は run を継続せず、`continue_on_error` によって成功・skip へ降格してはならない。
+  - 永続化直前の store 境界でも registration を再検証し、未知の実行面、0 から連続しない Workflow ordinal、重複 instance、credential / URL / absolute path / JSON payload に該当する descriptor 値を拒否しなければならない。上位の `ResumeService` が sanitize 済みであることだけを信用してはならない。
+  - `hve/.run-progress.jsonl` は FR-CLI-86 の明示的な legacy reader 専用とし、標準新規実行から追記・自動列挙・SQLite への自動 import を行ってはならない。
+- **FR-STATE-05**: durable state は、execution を跨いで再利用できる公開 `execution_id` と、attempt ごとの既存 `run_id` を分離し、次の lifecycle と canonical state を単一実装で管理しなければならない。
+  - parent は sanitized ordered plan と全 Workflow instance を、最初の child・model session・外部 write より前に 1 transaction で登録する。direct single-Workflow entrypoint だけが parent として `execution_id` を生成し、child は生成してはならない。
+  - `workflow_instances` は `(execution_id, instance_id)`、`step_instances` は `(execution_id, instance_id, step_id)` を key とする。Workflow status は `pending` / `running` / `suspended` / `succeeded` / `failed` / `skipped` / `blocked`、Step/承認 status は `pending` / `running` / `succeeded` / `failed` / `skipped` / `blocked` とする。`needs_reconciliation` は保存 status にせず、resume plan の risk reason として導出する。
+  - StepResult `success` と GUI `done` は `succeeded` へ変換する。承認は `record_kind=approval`、`step_id=approval:<wave_index>` とし、approved を `succeeded`、declined を `failed` として保存する。承認者名・自由記述・prompt 本文を保存してはならない。
+  - succeeded Step を skip する前に FR-WF-OUT-01 と同じ必須 output 存在判定を行う。output 不足なら当該 Step と DAG 上の transitive descendants を再実行候補にする。content hash は作成しない。
+  - 本項が保存するのは HVE-owned control state だけである。未出力 model state、streaming delta、provider 内部状態、生成途中本文、外部副作用の exactly-once を保存・保証してはならない。
+- **NFR-REL-03**: durable resume の 10 秒目標は HVE-owned control state に限定し、次の 2 条件を別々に満たさなければならない。
+  - transition durability: store method が commit 成功を返した `state_version` は hard process kill 後も欠落 0 とする。
+  - liveness freshness: owner 実行中かつ scheduler/storage が正常な受入環境では、kill 時点の `heartbeat_age` を 10 秒以下とする。heartbeat worker は event loop と独立した thread、thread 専用 connection、`time.monotonic()` による 5 秒間隔で動作し、同じ `state_version` の生存時刻だけを更新する。
+  - heartbeat write failure または fencing conflict は main executor を停止させ、成功状態を推測してはならない。worker stop は bounded とし、GUI graceful stop の最初の 3 秒以内に final state commit と worker stop を完了できなければならない。
+  - OS/VM power loss、network filesystem、model/output progress の 10 秒復元は初期受入範囲外とする。初期実測は Windows/NTFS の graceful/hard process kill と OS 非依存 unit test に限定する。
+- **NFR-CONC-02**: 同一 `(execution_id, instance_id)` の resume は state version CAS と fenced lease で直列化しなければならない。
+  - lease acquire/takeover は `BEGIN IMMEDIATE` 内で active lease が無いか期限切れであり、かつ `state_version=expected_state_version` の 1 row だけを更新する。lease TTL は 20 秒とする。
+  - acquire/takeover ごとに `lease_generation` を単調増加させ、1 へ reset してはならない。transition と heartbeat は lease owner と generation の一致を条件とし、更新 row が 1 でなければ durable state error とする。
+  - 未期限切れownerのheartbeat成功時は`lease_expires_at`を当該heartbeat時刻から20秒後へ更新し、正常実行が20秒を超えてもleaseを維持する。期限切れownerは更新できず、最後に成功したheartbeatから20秒後には明示takeoverが可能でなければならない。
+  - workflow / Step transition、heartbeat、release は owner / generation に加えて `lease_expires_at` が現在時刻より後であることを条件とする。期限切れ owner は heartbeat で自身を復活させたり、transition を commit したり、lease 情報を release して明示 takeover 要求を迂回したりしてはならない。
+  - heartbeat と release は取得時 token の `state_version` との等値を条件にしてはならない。同じ owner / generation の未期限切れ lease で自身の transition が `state_version` を進めた後も、取得時 token で heartbeat と release を継続できなければならない。transition 自体の state version CAS は維持する。
+  - 期限切れ lease の takeover は利用者が recovery action を明示した後だけ許可する。Prompt/GUI の plan 提示後に state が変化した場合は stale として再提示し、自動再試行してはならない。
+  - parent processがleaseを取得して別のHVE childを起動する場合、取得済みtokenの`lease_owner`と`lease_generation`をhelp非表示のinternal argsでchildへ渡し、childの全transition/heartbeatを同じfencing条件へ結び付ける。parentはchild終了後にleaseを解放する。tokenを渡さずparentだけがleaseを保持すること、またはchild起動前にleaseを解放して同じCASを再実行させることを禁止する。
 
 ### 3.5 モデルと SDK
 
@@ -206,7 +227,7 @@ HVE は、要求整理〜実装までを Workflow / Custom Agent / DAG として
 - **FR-MODEL-04**: HVE は GitHub Copilot SDK の `create_session(tool_search=...)`（ツール定義の遅延ロード）を CLI / GUI から設定可能とする。有効時は SDK へ `tool_search={"enabled": True}` を渡し、無効時は当該引数を渡さない。**既定は有効**とする。設定値は Step 実行経路のメインセッション、サブセッション（Pre-QA / Review）、Self-Improve セッションへ同一値を伝搬しなければならない。Fleet mode 親セッション（[hve/orchestrator.py](hve/orchestrator.py)）は意図的にツール公開を狭めた別系統であり、当該経路の実測根拠がないため本要件の対象外とする。`defer_threshold` は SDK 既定に委ね、設定として公開しない。本要件の `SDKConfig.tool_search` は、AAGD ワークフローのパラメータ `enable_tool_search`（生成する AI Agent の Foundry Toolbox 設定）とは別ドメインであり、HVE 自身の SDK セッションにだけ作用する。本要件はツール定義がコンテキストの大きな割合を占める実態（実測: 登録 171 ツール / 54,865 tokens のうち実使用は 10 種 / 9,108 tokens）を背景とするが、**削減効果は本要件の受入対象外**とし、受入は設定の伝搬だけとする（[hve/config.py](hve/config.py)、[hve/runner.py](hve/runner.py)、[hve/self_improve.py](hve/self_improve.py)）。既定を無効から有効へ変更した根拠は利用者の適用方針決定であり、削減率の実測を根拠としてはならない。**2026-08-13 の実測（Copilot CLI 1.0.79 / SDK 1.0.7、`session.metadata.contextInfo`）では、`tool_search` の有効 / 無効 / `defer_threshold=1` の 3 条件で `toolDefinitionsTokens` が 52,756 で完全に一致し、全ツールの `defer_loading` が `null`、`tool_search_tool` もツール一覧に現れなかった。すなわち当該環境では遅延公開が一切発火しておらず、削減効果は 0 である。**この実測は既定有効を否定しない（コンテキストを増やさないため）が、本設定を削減手段として期待してはならない。
 - **FR-MODEL-06**: FR-MODEL-04 の既定有効化は、利用者による明示的な無効化を上書きしてはならない。`--no-tool-search` と `HVE_TOOL_SEARCH` の falsy 値は無効として扱い、当該実行では SDK へ引数を渡さない。GUI では新規プロファイルの初期値だけを有効とし、**保存済み設定の値は移行・上書きしない**（保存済みの `false` が利用者の明示指定か旧既定かを区別できないため）。ランキング実装の既定（FR-TS-01 の `tool_search_ranking`）は本変更の対象外であり `sdk` のままとする。
 - **FR-MODEL-05**: SDK が `tool_search` 引数を未サポートの場合、Step 実行経路のセッション生成（[hve/runner.py](hve/runner.py) `_create_session_with_auto_reasoning_fallback`）は `TypeError` を捕捉して当該引数を除外し再試行しなければならない。未サポートを理由に実行を停止してはならない（既存の `reasoning_effort` 縮退規則に従う）。
-- **FR-MODEL-07**: 開発環境セットアップ（[hve/setup-hve.sh](hve/setup-hve.sh) / [hve/setup-hve.ps1](hve/setup-hve.ps1)）は、**既定で `github-copilot-sdk` を最新版へ更新しなければならない**（`pip install --upgrade --no-deps github-copilot-sdk`）。`--no-deps` は必須とする（付けないと pip resolver が `pydantic-core` を pydantic 本体の pin から乖離させ GUI 起動が例外になる）。再現性のために版を固定する経路は明示フラグ（`--pin-sdk` / `-PinSdk`）に限り、指定時だけ単一の宣言ファイル [hve/copilot-sdk.lock](hve/copilot-sdk.lock) の版を導入しなければならない。`--upgrade-sdk` / `-UpgradeSdk` は最新化に加えて当該ファイルの pin 行と Copilot CLI ランタイム版の記録行を書き換えなければならない（既定経路は宣言ファイルを書き換えてはならない）。既定を最新追従へ変更した根拠は利用者の明示的な方針決定であり、下記のランタイム整合検証は変更後も維持する。あわせてセットアップは、SDK が pin する Copilot CLI ランタイム（`copilot/_cli_version.py` の `CLI_VERSION`）を先読みし、実際に解決されるランタイムの埋め込み版と突合して不一致を警告しなければならない。埋め込み版の取得には `--no-auto-update` を付与しなければならない（`--version` 単体はオンライン更新チェックの結果である「最新利用可能版」を返すため pin との突合に使えない。実測: 埋め込み 1.0.69 のバイナリが `--version` では 1.0.78 を返す）。pin を無効化する環境変数 `COPILOT_CLI_PATH` / `COPILOT_CLI_EXTRACT_DIR` / `COPILOT_SKIP_CLI_DOWNLOAD` が設定されている場合は警告しなければならない。ランタイム整合検証は、SDK の生成イベントパーサ（`copilot/generated/session_events.py`）がイベントのエンベロープ（`id` / `timestamp` / `type`）を assert で固めており、pin と異なるランタイムを掴むと `session.event` の解析が `AssertionError` となって当該イベントが黙って捨てられる（終端イベントを取り逃すと `send_and_wait` がタイムアウトまで返らない）ことへの予防である。`pyproject.toml` の下限指定は API 互換の床であり、導入版の情報源としてはならない。
+- **FR-MODEL-07**: 開発環境セットアップ（[hve/setup-hve.sh](hve/setup-hve.sh) / [hve/setup-hve.ps1](hve/setup-hve.ps1)）は、**既定で `github-copilot-sdk` を最新版へ更新しなければならない**（`pip install --upgrade --no-deps github-copilot-sdk`）。`--no-deps` は必須とする（付けないと pip resolver が `pydantic-core` を pydantic 本体の pin から乖離させ GUI 起動が例外になる）。再現性のために版を固定する経路は明示フラグ（`--pin-sdk` / `-PinSdk`）に限り、指定時だけ単一の宣言ファイル [hve/copilot-sdk.lock](hve/copilot-sdk.lock) の版を導入しなければならない。`--upgrade-sdk` / `-UpgradeSdk` は最新化に加えて当該ファイルの pin 行と Copilot CLI ランタイム版の記録行を書き換えなければならない（既定経路は宣言ファイルを書き換えてはならない）。既定を最新追従へ変更した根拠は利用者の明示的な方針決定であり、下記のランタイム整合検証は変更後も維持する。あわせてセットアップは、SDK が pin する Copilot CLI ランタイム（`copilot/_cli_version.py` の `CLI_VERSION`）を先読みし、実際に解決されるランタイムの埋め込み版と突合して不一致を警告しなければならない。埋め込み版の取得には `--no-auto-update` を付与しなければならない（`--version` 単体はオンライン更新チェックの結果である「最新利用可能版」を返すため pin との突合に使えない。実測: 埋め込み 1.0.69 のバイナリが `--version` では 1.0.78 を返す）。pin を無効化する環境変数 `COPILOT_CLI_PATH` / `COPILOT_CLI_EXTRACT_DIR` / `COPILOT_SKIP_CLI_DOWNLOAD` が設定されている場合は警告しなければならない。ランタイム整合検証は、SDK の生成イベントパーサ（`copilot/generated/session_events.py`）がイベントのエンベロープ（`id` / `timestamp` / `type`）を assert で固めており、pin と異なるランタイムを掴むと `session.event` の解析が `AssertionError` となって当該イベントが黙って捨てられる（終端イベントを取り逃すと `send_and_wait` がタイムアウトまで返らない）ことへの予防である。`pyproject.toml` の下限指定は API 互換の床であり、導入版の情報源としてはならない。宣言ファイル [hve/copilot-sdk.lock](hve/copilot-sdk.lock) 自体は UTF-8 / LF / BOM なしで保持しなければならない。`--upgrade-sdk` / `-UpgradeSdk` の書き換え処理は当該形式を維持したまま pin 行と CLI ランタイム記録行だけを更新しなければならない。
 - **FR-MODEL-08**: 開発環境セットアップは、Windows / macOS / Linux のいずれでも外部 `copilot` コマンド（npm パッケージ `@github/copilot`）を**最新版へ導入・更新**しなければならない。未導入時は `@github/copilot@latest` を導入する（他の OS ツールと同じ確認プロンプトに従い、`-Yes` / `-y` で省略できる）。導入済みかつ npm グローバル管理下の場合は確認なしで `@github/copilot@latest` へ更新しなければならない。`copilot` が解決できるのに npm グローバル管理下でない場合は、二重導入で PATH 解決が分岐するため npm 導入を行わず、警告と更新手順を提示しなければならない。`--no-install-tools` / `-NoInstallTools` と `--check-only` / `-CheckOnly` は導入・更新を抑止し、検出結果の報告だけを行わなければならない。npm が解決できない場合は Node.js の導入手順とともに警告しなければならない。本 CLI は GUI の Copilot チャットパネル（FR-GUI-10）の前提であり、SDK が pin する Step 実行用ランタイム（FR-MODEL-07）とは独立に自己更新するため、`COPILOT_CLI_PATH` 等で Step 実行へ流用してはならない。
 
 ### 3.5.1 Tool Search ランキングの HVE 実装（FR-TS）
@@ -229,6 +250,8 @@ FR-MODEL-04 が「SDK 組み込みツール検索を有効化する設定」を�
 ### 3.6 セキュリティ
 
 - **NFR-SEC-01**: `GH_TOKEN`・`COPILOT_PAT` 等の秘密情報を Issue body / 標準出力に出力してはならない。Resume 用 `state.json` と `config_snapshot` 復元は §5.6 のとおり廃止済みであり、現行要件ではない。
+  - FR-STATE-04 の durable store と resume plan は固定 allowlist とし、状態、時刻、数値、model ID、Workflow / Step / APP 識別子、sanitized replay descriptor、hash、例外型名だけを保存できる。prompt/response/reasoning 本文、tool 引数・結果、任意環境変数、token/credential、認証 URL、生 SDK payload、生 repository root を保存してはならない。
+  - 保存不可の必須 replay 値は値を保存せず `missing_replay_keys` の key 名だけを保存する。resume 時は対話入力、GUI の current input、または Prompt の自然言語入力から再取得し、non-TTY で不足する場合は実行を開始してはならない。
 - **NFR-SEC-02**: `docs-original/` 配下は全 Agent から読み取り専用とする（`.github/copilot-instructions.md` §0）。
 - **NFR-SEC-03**: `git add` 時は `:!path` pathspec 除外で機密ファイルを除く。pathspec はリスト引数として渡し、shell インジェクションを防止する（[hve/orchestrator.py](hve/orchestrator.py) `_git_add_commit_push`）。
 
@@ -296,7 +319,7 @@ HVE 対象変更を含む PR は、次のマーカーと 8 キーを各 1 回だ
 - **FR-MAINT-01**: Coding Agent は HVE 対象ファイルを変更する前に、`hve-dev/hve-feature-inventory.csv` を索引として適用候補を絞り込み、`hve-dev/requirement-definition.md` の関連箇所と `hve-dev/requirement-test-mapping.md` の対応箇所を確認しなければならない。適用できる要件 ID は、要求定義書を source とし、索引上 `active-or-described` であるものに限る。未知、競合、`deprecated-or-removed`、`partial-or-not-supported` の ID を現行要件として適用してはならない。新規 ID を追加する bootstrap 中は要求定義書の定義行を一次情報とし、要求テストマッピングと RED テストを追加後、実装前に索引を再生成して当該 ID・source・status・テストパスを照合する。既存 ID では索引と要求定義書が矛盾した場合、推測せず不整合を解消してから実装へ進む。`hve-requirement-traceability` Skill は §1.3 の 3 層優先順位と §3.7 の変更種別判定規則を保持し、Coding Agent が要求定義書本文を追加取得せずに適用可否と変更種別を判定できるようにしなければならない。
 - **FR-MAINT-02**: Coding Agent は要求書全文を既定の入力にせず、Issue 本文、対象パス、対象 symbol、失敗テスト、Workflow / Step ID を検索キーとして関連チャンクを取得する。要件 ID が既知の場合は検索を行わず、`hve-dev/hve-feature-inventory.csv` の当該行の `line` 列が指す定義行だけを読む。ID が未知の場合に限り検索を行う。初回取得で不足する場合に限り、親見出し、隣接チャンク、関連章の順に一段ずつ拡張する。0 件または矛盾時は検索語を変えて最大 2 回再試行し、それでも解消できなければ理由を記録して確認を求める。索引欠損・stale・検索 CLI 障害時は、既に特定した要求 ID または見出しの限定範囲を read / grep で取得し、要求書全文へ自動 fallback しない。本規則は HVE 要件検索において汎用 Markdown 検索 fallback より優先する。全文取得は、ユーザーの明示要求、要求定義書自体の横断改訂、または章単位でも解消できない複数章の矛盾がある場合に限る。ID 直引きを検索より優先するのは次の実測を根拠とする: 同一の問いに対し BM25 の chunk 返却が 3,613 tokens / 151 ms であるのに対し、索引の `line` 列からの直引きは 501〜687 tokens で検索を伴わない。
 - **FR-MAINT-03**: `feature` 変更は、要求定義への active 要件追加または改訂 → 要求テストマッピングへの受入テスト追加（未実装時は `要追加`）→ 失敗するテストの作成と RED 確認 → 機能・テスト索引の再生成と新規 ID / test path の照合 → 実装 → 同じ対象テストの GREEN 確認 → 要求テストマッピングへの実結果反映、の順で行う。`feature` では要件 ID、実在テストパス、RED / GREEN 証跡の省略を認めない。`bugfix` / `maintenance` で要件またはテストを `N/A` とする場合は、前項のブロックへ具体的理由と人間レビュー必須を記録する。`hve-dev/hve-tdd-change-policy.md` と生成元が本節と矛盾する場合は本節を正とし、同一変更で同期する。本要件の初回導入では、下記「本要件の導入ゲート」を FR-MAINT-03 の従属規範として適用する。
-- **FR-MAINT-04**: HVE 対象変更を含む PR は、前項のトレーサビリティブロックを記録しなければならない。CI は変更パス取得失敗、ブロックの欠落・重複・未置換値、組合せ違反、未知または索引statusが `active-or-described` 以外の ID、存在しない・リポジトリ外・許可テストルート外のパス、要件 ID と要求テストマッピング上の test path 不一致を拒否する。`feature` では要求定義、要求テストマッピング、機能索引の更新と RED / GREEN 証跡を追加で要求する。N/A と変更種別の意味的妥当性は CI が推測せず、既存 branch protection の承認レビューで確認する。HVE 対象外の変更のみである場合は本ゲートを適用しない。validator の正規entrypointは `.github/scripts/validate-hve-requirement-traceability.py` とし、リポジトリroot、PR本文ファイル、変更パス一覧ファイルを明示入力として受け取る。PR workflow は `pull_request` イベントだけで当該 validator を必須ゲートとして実行し、PR本文を shell の `run` へ直接展開せず、最小読取権限で実行する。既定ブランチで実行するtrusted workflowは `pull_request_target` を使用し、base側validatorとPR内容を別ディレクトリへcheckoutし、PR内容はデータとして検証するだけで実行してはならない。branch protection の required status check は両workflow名とvalidator job名から構成されるcheck contextを含み、既存の承認レビュー要求を維持する。
+- **FR-MAINT-04**: HVE 対象変更を含む PR は、前項のトレーサビリティブロックを記録しなければならない。CI は変更パス取得失敗、ブロックの欠落・重複・未置換値、組合せ違反、未知または索引statusが `active-or-described` 以外の ID、存在しない・リポジトリ外・許可テストルート外のパス、要件 ID と要求テストマッピング上の test path 不一致を拒否する。`feature` では要求定義、要求テストマッピング、機能索引の更新と RED / GREEN 証跡を追加で要求する。N/A と変更種別の意味的妥当性は CI が推測せず、既存 branch protection の承認レビューで確認する。HVE 対象外の変更のみである場合は本ゲートを適用しない。validator の正規entrypointは `.github/scripts/validate-hve-requirement-traceability.py` とし、リポジトリroot、PR本文ファイル、変更パス一覧ファイルを明示入力として受け取る。PR workflow は `pull_request` イベントだけで当該 validator を必須ゲートとして実行し、PR本文を shell の `run` へ直接展開せず、最小読取権限で実行する。既定ブランチで実行するtrusted workflowは `pull_request_target` を使用し、base側validatorとPR内容を別ディレクトリへcheckoutし、PR内容はデータとして検証するだけで実行してはならない。branch protection の required status check は両workflow名とvalidator job名から構成されるcheck contextを含み、承認レビューを1件以上要求しなければならない。管理者による直接 push を許容するため、`.github/CODEOWNERS` に一致する変更でも Code Owner 承認を追加要件とせず、管理者には branch protection を強制しない（`require_code_owner_reviews=false`、`enforce_admins=false`）。
 - **NFR-CTX-01**: repository-wide instructions のうち **HVE 要求トレーサビリティに関する記述**は検索ルーターだけを保持し、要求定義書本文を埋め込んではならない。当該ルーターは、(1) HVE 対象変更または HVE 対象パスの不具合調査で `hve-requirement-traceability` Skill を使用する、(2) HVE コアパスでは path-specific instructions も適用する、(3) 要求定義書全文を既定の入力にしない、の 3 箇条だけで構成する。CI はルーターの見出し・3 箇条・Skill 参照・要求書パス・既知の要件 ID / schema key /取得オプションの重複を決定論的に検査する。Coding Agent は customization の raw source を入力として受け取るため、既知識別子の重複検査は HTML comment、code span、fenced / indented code を含むルーター外の raw source 全体を対象とする。言い換えによる意味的な分散・矛盾は捏造して判定せず人間レビューへ委ねる。他のリポジトリ共通ルールは本要件の対象外とする。初回の関連要件取得は最大 5 チャンクかつ最大 800 tokens を上限とし、追加コンテキストは FR-MAINT-02 の段階的拡張でのみ取得する。
 
 #### 本要件の導入ゲート
@@ -323,6 +346,7 @@ HVE は Cloud Agent Orchestrator / CLI Orchestrator / GUI Orchestrator の 3 実
   - macOS GUI test workflow は `workflow_dispatch` だけを trigger とし、`push` / `pull_request` / `schedule` で自動起動してはならない。`cost_approved` は既定 `false` とし、`estimated_cost_usd` が空の場合も macOS job を開始してはならない。
   - `smoke` は Qt platform plugin が `cocoa` であることを検査する。macOS run での Python 例外、ウィンドウ生成失敗、または test skip は job failure とする。Qt Warning / Critical / Fatal の許可リストは初期状態を空とし、実測で無害と確認したメッセージだけを根拠とともに追加でき、それ以外は job failure とする。`offscreen` の成功を `cocoa` の成功として扱ってはならない。
   - `full` は利用者が当該 scope を別途選択した場合にだけ、既存 `hve/gui/tests` の offscreen 全量と同じ `cocoa` smoke を別プロセスで実行する。初期実装では新しい GUI automation framework、TCC 権限変更、OS / architecture matrix、新規 test dependency を追加しない。
+- **FR-MAINT-11**: branch protection の required context である `Test HVE Python / HVE Python Tests` と `Test HVE Python / mdq index smoke test` は、`main` を対象とする全 Pull Request の最新 SHA へ結果を報告しなければならない。`.github/workflows/test-hve-python.yml` の `pull_request` trigger に `paths` / `paths-ignore` を置いて Workflow 全体を未起動にしてはならない。既存の重いテスト範囲は単一の変更パス検出 job で判定し、対象外 PR でも required 名の 2 job 自体は起動して成功を報告する。変更パスの取得に失敗した場合は両 required job を失敗させ、成功として扱ってはならない。本要件のために外部 Action、別 Workflow、利用者向け無効化 flag を追加してはならない。
 
 ### 3.8 markdown-query（mdq）検索品質の回帰計測
 
@@ -413,7 +437,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 - **FR-RTO-01**: 実行時観測イベントの構築と解析は単一実装とする（FR-MAINT-07）。既存 `[hve:stats]` 行形式および既存の `kind` / `step` キーを維持したうえで、`schema_version` / `ts` / `seq` / `pid` / `run_id` / `workflow_id` / `instance_id` を付加する。`instance_id` は実行プロセス（ジョブ）単位の識別子とし、既定は `workflow_id`、当該プロセスが単一の APP へ専従する経路（Autopilot の APP 別子プロセス、および起動時の APP 指定が 1 件に確定している場合）では `workflow_id#app_id` とする。同一プロセス内で APP キーごとに fan-out した Step の内訳は `step` フィールドで分離し（FR-RTO-07）、`instance_id` を Step 単位で切り替えてはならない。envelope の `pid` と観測ファイル `observability/events-<pid>.jsonl`（FR-RTO-03）がプロセス単位で対応するため、`instance_id` だけを Step 単位にすると同一プロセスの識別子が複数値となり、表示の集計単位（FR-RTO-05）と保存単位が一致しなくなるためである。既存キーの意味を変更してはならない。未知の `kind` は解析可能とし、無言で捨てずに件数を計上する。
 - **FR-RTO-02**: 「収集」「保存」「子プロセスへの配信」「人間向け表示」を分離する。`[hve:stats]` 行の stdout 出力は、GUI 子プロセス（`HVE_GUI_SESSION_ID` 設定時）および Dashboard を持つ親プロセスが環境変数 `HVE_STATS_STREAM=1` を付与して起動した子プロセスに限る。当該判定に新規 CLI オプションを用いてはならない（NFR-RTO-02）。通常 CLI、CUI Workbench、非 TTY 実行では stdout へ出力せず、CUI Workbench の本文ペインにも表示しない。`quiet` および `final_only` でも収集・保存・子プロセス配信は継続し、人間向けの追加表示だけを抑止する（NFR-OBS-03 と矛盾させない）。
 - **FR-RTO-03**: 観測イベントは実行プロセスが `resolve_work_root()` 配下の `observability/events-<pid>.jsonl` へ追記する。`HVE_WORK_ROOT` 未設定時および dry-run では書き込まない。同一プロセス内の追記は直列化する。形式は UTF-8 / LF / BOM なしの 1 行 1 JSON とする。ファイルサイズが 32 MiB に達した場合は追記を停止し、その事実を 1 回だけ警告する（ローテーションは行わない）。プロセス内の順序は `seq` により厳密とし、プロセス間の時刻順序は近似であることを明示する。
-- **FR-RTO-04**: 永続化する項目は allowlist 方式とし、状態、時刻、数値、モデル ID、Step / Workflow / APP 識別子、例外型名、リポジトリルート相対パスに限る。prompt 本文、応答本文、reasoning 本文、tool の引数・出力、環境変数、認証情報、認証 URL、生 SDK ペイロードを保存してはならない（NFR-SEC-01）。相対化の基準は実行プロセスの作業ディレクトリ（リポジトリルート）とし、当該ルート配下へ相対化できないパスは保存しない。
+- **FR-RTO-04**: 永続化する項目は allowlist 方式とし、状態、時刻、数値、モデル ID、Step / Workflow / APP 識別子、例外型名、リポジトリルート相対パス、FR-STATE-04/05 の sanitized replay descriptor・hash・lease metadata に限る。prompt 本文、応答本文、reasoning 本文、tool の引数・出力、任意環境変数、認証情報、認証 URL、生 SDK ペイロード、生 repository root を保存してはならない（NFR-SEC-01）。相対化の基準は実行プロセスの作業ディレクトリ（リポジトリルート）とし、当該ルート配下へ相対化できないパスは保存しない。
 - **FR-RTO-05**: 各実行面は同一のイベント列から同一の集計値を表示する。表示は instance 単位で分離し、run 単位で合算する。未取得値を推定で補わず、取得できない項目は `-` として表示する。
 - **FR-RTO-06**: 観測記録のライフサイクルは実行プロセスが所有し、`run_workflow` の終了時に確実にクローズする。GUI 親プロセスは観測ファイルを書き込まない。GUI セッション作業ディレクトリの後処理（`keep` / `archive` / `purge`）が観測ファイルに起因して失敗してはならない。
 - **FR-RTO-07**: 実行履歴の Step 別表示は Step 単位で分離する。Step の Context、AI Credit、モデル、ツール、Skill は当該 Step へ帰属したイベント（`step` フィールドが当該 Step であるもの）だけから算出し、実行面のグローバル現在値、Workflow 累積値、他 Step の値で代替してはならない。Step へ帰属したイベントが 1 件も無い項目は `-` として表示し、隣接 Step の累積値の差分などの推定値で補ってはならない（FR-RTO-05）。実行面が Step 帰属を解決できない経路の消費も、Workflow 単位の累積値へは計上しなければならない。当該累積値が Step 別内訳の合計と一致しない場合は、その理由を表示上明示しなければならない。SDK Fleet mode へ委譲した Wave では、worker と Step の対応が当該 Wave の Step 集合に対して一意に定まる場合にだけ当該 Step へ帰属させ、一意に定まらない場合は Wave 内のいずれの Step へも割り当ててはならない。対応の解決に用いた入力（tool の引数等）を観測イベントへ保存してはならない（FR-RTO-04）。また、実行識別子（`run_id`）が未確定の時点で開始した実行を、識別子の確定後に別実行として二重に計上してはならない。
@@ -490,14 +514,16 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 - **FR-CLOUD-20**: 各 Workflow ID に対して個別の reusable workflow を 1 対 1 で起動する:
   - `ARD` → `auto-requirement-definition-reusable.yml`
+  - `AAS` → `auto-app-selection-reusable.yml`
   - `AAD-WEB` → `auto-app-detail-design-web-reusable.yml`
   - `ASDW-WEB` → `auto-app-dev-microservice-web-reusable.yml`
+  - `ADFD` → `auto-dataflow-design-reusable.yml`
+  - `ADFDV` → `auto-dataflow-dev-reusable.yml`
+  - `ADA` → `auto-agent-data-architecture-reusable.yml`
   - `AAG` → `auto-ai-agent-design-reusable.yml`
   - `AAGD` → `auto-ai-agent-dev-reusable.yml`
+  - `AAR` → `auto-agentic-retrieval-reusable.yml`
   - `ADOC` → `auto-app-documentation-reusable.yml`
-  - `AAS` → `auto-app-selection-reusable.yml`
-  - `ABD` → `auto-batch-design-reusable.yml`
-  - `ABDV` → `auto-batch-dev-reusable.yml`
   - `AKM` → `auto-knowledge-management-reusable.yml`
 - **FR-CLOUD-21**: 通常の AKM Orchestrator と QA 起点 AKM 調整 Workflow は `akm-knowledge-write-${{ github.repository }}` により同一リポジトリ内で直列化し、`knowledge/` 配下への並列書き込み競合を防止する。QA 起点 AKM 調整 Workflow は当該 group を保持して子 AKM の終端を待機するため、`qa-akm-sync` ラベルを持つ Root / Step Issue の reusable AKM job だけは `akm-qa-sync-child-${{ github.repository }}` で直列化し、自己デッドロックを回避する。通常 AKM を child group へ流してはならず、QA 同期 Root の `qa-akm-sync` は Step Issue 作成時のラベルへ伝播しなければならない（[.github/workflows/auto-knowledge-management-reusable.yml](.github/workflows/auto-knowledge-management-reusable.yml) / [.github/workflows/auto-akm-after-qa.yml](.github/workflows/auto-akm-after-qa.yml)）。
 - **FR-CLOUD-22**: **AKM Orchestrator では** `check_qa_skip` ジョブが前段で実行され、`auto-qa` のスキップ条件を判定する。他 reusable workflow の同等チェック有無は要確認。
@@ -517,8 +543,8 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 ### 4.7 HITL エスカレーション
 
-- **FR-CLOUD-41**: Cloud Agent Orchestrator は `{prefix}:blocked` のまま SLA 時間を超えた Open Issue を `{prefix}:human-required` へ自動昇格し（[.github/workflows/auto-blocked-to-human-required.yml](.github/workflows/auto-blocked-to-human-required.yml)）、人間が `{prefix}:human-resolved` を付与したとき `{prefix}:human-required` / `{prefix}:blocked` / `{prefix}:human-resolved` の 3 つを外して `{prefix}:ready` へ戻さなければならない（[.github/workflows/auto-human-resolved-to-ready.yml](.github/workflows/auto-human-resolved-to-ready.yml)）。SLA 閾値は `vars.HITL_BLOCKED_SLA_HOURS` とし、未設定時は 24 時間とする。
-  - 昇格は `schedule`（毎時）と `workflow_dispatch` で起動し、`workflow_dispatch` の `sla_hours` 入力を最優先とする。既に `{prefix}:human-required` を持つ Issue へ重複付与してはならない。昇格処理はラベルの付与とコメント投稿だけを行い、ラベルを削除してはならない。
+- **FR-CLOUD-41**: Cloud Agent Orchestrator は、明示的な `workflow_dispatch` 実行時に `{prefix}:blocked` のまま SLA 時間を超えた Open Issue を `{prefix}:human-required` へ昇格し（[.github/workflows/auto-blocked-to-human-required.yml](.github/workflows/auto-blocked-to-human-required.yml)）、人間が `{prefix}:human-resolved` を付与したとき `{prefix}:human-required` / `{prefix}:blocked` / `{prefix}:human-resolved` の 3 つを外して `{prefix}:ready` へ戻さなければならない（[.github/workflows/auto-human-resolved-to-ready.yml](.github/workflows/auto-human-resolved-to-ready.yml)）。SLA 閾値は `vars.HITL_BLOCKED_SLA_HOURS` とし、未設定時は 24 時間とする。
+  - 昇格 Workflow は `workflow_dispatch` だけで起動し、`schedule` その他の自動トリガーを持ってはならない。`workflow_dispatch` の `sla_hours` 入力を最優先とする。既に `{prefix}:human-required` を持つ Issue へ重複付与してはならない。昇格処理はラベルの付与とコメント投稿だけを行い、ラベルを削除してはならない。
   - SLA の経過時間は Issue 全体の `updatedAt`（最終更新時刻）を基準とし、`{prefix}:blocked` の付与時刻ではない。コメントや本文変更で `updatedAt` が進むと判定も延びる。
   - 復帰時に `{prefix}:human-resolved` 自身も削除するのは、同一 Issue が再び `blocked` になったときに同じ遷移を再度発火させるためである。残置すると 2 回目の解消宣言が無視される。
   - `{prefix}:blocked` の自動剥離は `{prefix}:human-resolved` の付与を経た場合に限る。人間が解消を宣言していない Issue を `ready` へ戻さないためである。
@@ -526,10 +552,11 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
   - 本要件は §13.13 が blocked を「Self-Improve または手動介入の対象とする」と述べるにとどまり、手動介入の引き渡し方法・SLA・復帰経路が未定義だった状態を解消する。CLI / GUI に等価の経路は無く、本要件は Cloud Agent Orchestrator に限定する。
   - 契約テスト: [hve/tests/test_hitl_escalation_contract.py](hve/tests/test_hitl_escalation_contract.py)
 
-### 4.8 定期運用 Workflow の起動契約
+### 4.8 運用 Workflow の自動起動禁止契約
 
-- **FR-CLOUD-42**: `.github/workflows/` の運用 Workflow で有効な `schedule` を持てるのは、FR-CLOUD-41 の SLA 自動昇格を担う `auto-blocked-to-human-required.yml` だけとし、cron は毎時 `0 * * * *` とする。
+- **FR-CLOUD-42**: `.github/workflows/` の repository-managed Workflow は有効な `schedule` を持ってはならない。FR-CLOUD-41 の SLA 昇格を担う `auto-blocked-to-human-required.yml` も `workflow_dispatch` 専用とする。
   - `aas-timeout-monitor.yml` と `auto-qa-timeout-watcher.yml` は `workflow_dispatch` 専用とする。`label-consistency-audit.yml` は `workflow_dispatch` と `issues: [labeled, unlabeled, closed]` だけを持ち、ラベル変更契機の自己修復を維持する。
+  - Azure Skills は各開発環境のセットアップでローカルに導入し、`.gitignore` 対象を更新する `sync-azure-skills.yml` を保持してはならない。GitHub Actions 上で同等の同期 Workflow を追加してはならない。
   - 手動専用になった `auto-qa-timeout-watcher.yml` は、定期実行の有効・無効を制御していた `ENABLE_QA_TIMEOUT_WATCHER` で手動実行を無言で skip してはならない。
   - 旧週次全件監査 `audit-plans.yml` と旧日次メトリクス集計 `tdd-retry-metrics.yml` は存在してはならない。前者の削除後も `plan-validation-and-labeling.yml` による PR 差分内の `plan.md` 検証は維持するが、リポジトリ全件の定期再監査を代替すると主張してはならない。
   - `aas-timeout-monitor.yml` の手動入力 `timeout_hours` は正の整数だけを受理し、時刻計算および GitHub API の副作用より前に fail-closed で検証する。手動巡回では `aas:running` の Open Issue を最大 1,000 件取得する。
@@ -547,6 +574,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 |---|---|
 | `run` | インタラクティブ wizard を明示起動（引数なし時の既定は `gui`。FR-CLI-10） |
 | `orchestrate` | Workflow ID を指定して DAG を実行 |
+| `resume` | current repositoryのdurable executionを選択し、再確認したplanとfenced leaseで再開（FR-CLI-90） |
 | `qa-merge` | 回答済み質問票をマージ |
 | `workiq-doctor` | Work IQ 連携の診断（`--qa-integration-probe` で事前 QA 統合可否を含む、FR-QA-08） |
 | `ingest-docs` | `docs-original/` を走査して `docs/original-design-doc-ingest/` へ目録と正規化済み Markdown を出力 |
@@ -633,7 +661,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 - **FR-CLI-32**: `--create-pr` は PR 作成のみ行い、自動マージは実行しない（Issue Template の `enable_auto_merge` とは別運用）。
 - **FR-CLI-33**: `--ignore-paths` で指定されたパスは `git add` の pathspec 除外として扱う（既定値は `SDKConfig` 側）。
 - **FR-CLI-34**: `--delete-local-merged-branch`（既定 **有効**、`--no-delete-local-merged-branch` で無効化。config: `delete_local_merged_branch`）が有効で、かつ `enable_auto_merge` が有効・全 Step 成功・今回実行で PR が作成済みの場合に限り、CLI は PR の merged 状態をポーリングし（既定 15 秒間隔・最大 600 秒）、リモートの auto-approve-and-merge フロー完了（PR が merged）を検知後、今回作成した作業ブランチを**ローカルのみ**削除する（`git checkout <base_branch>` の後に `git branch -D <working_branch>`）。squash マージではローカルブランチが「マージ済み」と判定されないため `-D` を用いる。タイムアウト・PR が未マージ（closed 等）・`checkout` 失敗のいずれかの場合は削除せず警告ログを 1 行出力する。実行中断（Ctrl+C 等）時はポーリングが中断され削除処理に到達しないため、削除は行われない。リモートブランチは削除せず、github.com の「Automatically delete head branches」設定に委ねる。過去に作成済みの作業ブランチは対象外（今回実行分のみ）。`enable_auto_merge` が無効な場合や PR 未作成時は何もしない（[hve/orchestrator.py](hve/orchestrator.py)、[hve/github_api.py](hve/github_api.py)、[hve/config.py](hve/config.py)）。
-  - ローカル削除の適格性判定と `git checkout <base_branch>` → `git branch -D <working_branch>` は [hve/branch_cleanup.py](hve/branch_cleanup.py) の単一 core に集約し、Orchestrator と FR-GUI-37 の GUI monitor は同じ core へ委譲しなければならない（FR-MAINT-07）。適格性判定は、当該 run が branch を新規作成したことを示す `created_by_hve=True`、target の PR 番号が `bool` ではない正の整数で取得結果の `number` と一致すること、PR の `merged is True`、PR の `head.ref` と対象 branch の一致、`head.repo.full_name` と対象 repository の一致、PR の `base.ref` と対象 base branch の一致、`base.repo.full_name` と対象 repository の一致、および対象 branch と base branch の不一致を全て必須とする。repository 名の比較は GitHub の扱いに合わせて大文字小文字を区別しない。値が欠落・不一致の場合は fail-closed とし、git delete command を実行してはならない。
+  - ローカル削除の適格性判定と `git checkout <base_branch>` → `git branch -D <working_branch>` は [hve/branch_cleanup.py](hve/branch_cleanup.py) の単一 core に集約し、Orchestrator と FR-GUI-37 の GUI monitor は同じ core へ委譲しなければならない（FR-MAINT-07）。適格性判定は、当該 run が branch を新規作成したことを示す `created_by_hve=True`、target の PR 番号が `bool` ではない正の整数で取得結果の `number` と一致すること、PR の `merged is True`、PR の `head.ref` と対象 branch の一致、`head.repo.full_name` と対象 repository の一致、PR の `base.ref` と対象 base branch の一致、`base.repo.full_name` と対象 repository の一致、および対象 branch と base branch の不一致を全て必須とする。repository 名の比較は GitHub の扱いに合わせて大文字小文字を区別しない。値が欠落・不一致の場合は fail-closed とし、git delete command を実行してはならない。当該 core が実行する `git checkout` / `git branch -D` の subprocess は、`text=True` と共に `encoding="utf-8"` を明示しなければならない（`hve/tests/test_orchestrator_git_encoding.py` の横断 decode 契約と同一の理由。Windows 既定 locale では非 ASCII 出力が `UnicodeDecodeError` になり得る）。
 
 #### 5.5.1 HVE ソース保護ガード
 
@@ -765,14 +793,30 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 ### 5.16 進捗保存による再実行
 
-本節は §5.6 が廃止した SDK セッションの復元を復活させない。復元するのは Workflow 進捗（どの Step が成功したか）だけであり、未完了 Step は常に新しいセッションで実行する。
+本節は §5.6 が廃止した HVE 所有の `state.json` / `config_snapshot` 復元を復活させない。標準再開は FR-STATE-04/05 の durable execution を用い、旧 JSONL は明示的な legacy 経路だけで読む。
 
-- **FR-CLI-86**: `orchestrate` は `--resume-run <run-id>` を受け取り、FR-STATE-04 が記録した当該 run の `succeeded` な Step を実行対象から除外しなければならない。既定は未指定（通常実行）とする。
+- **FR-CLI-86**: `orchestrate --resume-run <run-id>` は `hve/.run-progress.jsonl` の既存記録だけを読む legacy 互換入口として維持し、当該 run と Workflow の `succeeded` な Step を実行対象から除外しなければならない。新しい `execution_id` をこの引数へ渡してはならず、SQLite execution の候補列挙・import・意味の多重解釈を行ってはならない。
   - 指定された run-id の記録が 1 件も無い場合は fail-closed で停止する。誤った run-id を無視して全 Step を再実行してはならない。利用者が完了済みと誤認したまま全体を再実行し、既にデプロイ済みの資源へ重複操作を行う事故を防ぐためである。
+  - legacy reader は run-id と Workflow ID の両方で絞り込み、別 Workflow の同じ Step ID を成功扱いしてはならない。
   - 除外は active step の絞り込みとして行い、DAG の依存関係（FR-DAG-01）を変更してはならない。
   - fan-out Step は展開後の子 ID（`{base_id}/{key}`）で記録される一方、本項の除外は展開前の active step（base ID）へ適用するため、**fan-out Step は成功済みでも再実行される**。除外を fan-out 展開後へ移すと、完了済み Step の `required_params`（FR-DAG-08）が未指定であるだけで再実行全体が `blocked` となるため、取りこぼしではなく重複実行の側へ倒している。
   - 新規の環境変数を追加してはならない。
   - 契約テスト: [hve/tests/test_run_progress.py](hve/tests/test_run_progress.py)
+- **FR-CLI-90**: 標準ローカル再開の公開入口は `hve resume [<execution-id>]` とし、current repository の FR-STATE-04 execution を共通 ResumeService から選択・計画・実行しなければならない。
+  - candidate 0 件は非 0、1 件は内容を表示して確認後に開始、複数件は TTY menu で選択する。non-TTY で候補を暗黙選択してはならない。`--latest` または execution ID の明示指定を受理し、両者の同時指定は拒否する。
+  - non-terminal/failed/risk ありの instance は `reuse-session` / `restart-step` / cancel の明示 action を要求する。Main phase だけ `reuse-session` または `restart-step` を許可し、Pre-QA/Review/Self-Improve その他の phase は `restart-step` だけを許可する。non-TTY で action 不足の場合は child・SDK・model を開始してはならない。
+  - `reuse-session` は保存済み session IDを SDK call 前に commit 済みであることを確認し、`resume_session(..., continue_pending_work=False)` を使用して固定 recovery promptを新しい turn として送る。`continue_pending_work=True` を使用してはならない。`session.resume` が active/in-use を報告した場合は disconnect して停止する。失敗時に `restart-step`へ silent fallbackしてはならない。
+  - status だけを更新する DAG callback が `phase` / `phase_state` / `session_id` を省略しても、commit 済みの Main checkpoint metadata を消去してはならない。legacy split-fork が無効な標準経路では `split-fork` phase を checkpoint として記録せず、明示的に有効なときだけ記録する。
+  - `restart-step` は新しい run ID/session ID で対象 Step を先頭から実行する。いずれの action も外部副作用の exactly-once を保証すると表示してはならない。
+  - `launch_plan_hash` は execution ID を含めない sanitized ordered plan、`resume_plan_hash` は execution ID、instance status/state version、選択 action、current HEAD、再入力値の hash から計算する。後者は保存せず、plan 承認後に同じ入力で再計算し、expected state version の lease CAS と併用する。
+  - current HEAD を取得できない場合は、plan 構築・lease 取得・child 起動の前に fail-closed で停止する。承認後かつlease取得前にもHEADを再取得し、承認済みplanの値から変化していればstaleとして停止する。`None` や固定値 `unknown` を hash 入力へ代入して続行してはならない。
+  - GUI/Prompt controllerが既に提示したplanを非対話で実行する場合だけ、help非表示の`--expected-resume-hash`と`--replay-value <key>=<value>`をHVE childへ渡してよい。CLIは同じplanを再構築し、hash不一致・未知key・不足値ではlease/childを開始してはならない。これらの値を利用者へ入力させてはならない。
+  - ordered multi-Workflow execution は最初の non-succeeded instance から ordinal 順に進み、最初の failed/blocked/suspended で停止する。後続を先行実行せず、成功済み instance を取り消さない。instance 完了後に次の `ResumePlan` を構築した場合、その plan は新しい instance ID・state version・hashを持つ別の承認対象とする。TTY では次のplanを再提示して再確認し、`--expected-resume-hash`を渡した非対話controllerでは最初の承認済みplanだけを実行して停止し、次のhashを再提示・再承認されるまで次のlease/childを開始してはならない。先行planのhashを後続planへ流用してはならない。先行planへ再入力した平文値もinstance完了時に破棄し、後続planへ渡してはならない。後続planが同じkeyを必要とする場合も改めて再入力・再承認する。
+  - TTY と `--expected-resume-hash` controller では、先行 instance の recovery action も後続 `ResumePlan` へ流用してはならない。後続 plan に risk があれば action を改めて選択し、plan hash の再計算後に承認する。
+  - output再調停の結果、選択済みStepがすべて成功済みで必須outputも存在し、実行すべきStepが0件になった場合は、空のargvでsubcommandなしchildを起動してはならない。承認済みplanのexpected state versionでfenced leaseを取得し、同じResumeService境界でoutputを再確認して当該instanceを`succeeded`へ確定した後、ordered規則に従って次へ進む。
+  - direct `orchestrate` と対話 `run` / `cli` は config/params 解決後かつ最初の外部 auth/model session 前に single-instance execution を登録する。`dry_run`、Autopilot、Fleet、Cloud Session、GitHub Cloud Agent は初期版で登録せず、新規実行の既存挙動を変えない。対象外 execution の resume 要求だけを理由付き非 0 とする。
+  - HVE 本体・既知 child 間の identity 伝搬は `OrchestratorContext` の `execution_id` / `instance_id` / `expected_state_version` / `recovery_action` / `lease_owner` / `lease_generation` と argparse help 非表示の internal argsだけを用い、新しい global environment variable を追加してはならない。
+  - 契約テスト: [hve/tests/test_resume_cli.py](hve/tests/test_resume_cli.py)、[hve/tests/test_resume_service.py](hve/tests/test_resume_service.py)、[hve/tests/test_runner_resume.py](hve/tests/test_runner_resume.py)、[hve/tests/test_run_state_store.py](hve/tests/test_run_state_store.py)
 
 ### 5.17 Wave 境界の承認ゲート
 
@@ -831,12 +875,14 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
   - `--expected-sha256` の欠落・書式不正・不一致では **`orchestrate` 子プロセスを 1 つも起動してはならない**。HEAD 取得のための `git rev-parse` はこの禁止対象ではない。自然言語上の「承認」だけで書き込みを開始してはならない。
   - 実行は `sys.executable -m hve ...` の argv 配列かつ `shell=False` とし、Prompt 本文をコマンド文字列として評価してはならない。
   - 複数 Workflow は fail-fast とする。ある Workflow が非 0 で終了した場合、後続 Workflow を起動してはならない。成功済み Workflow を取り消す振る舞い（rollback）を主張してはならない。
+  - child runner の結果は bool ではない整数 `returncode` を必須とする。process 起動例外、結果 object 欠落、不正な returncode を成功へ丸めてはならない。
   - 承認記録の永続化・署名・期限・分散ロックは本版では実装しない。
   - 契約テスト: [hve/tests/test_prompt_cli.py](hve/tests/test_prompt_cli.py)
 
 - **FR-PROMPT-05**: 計画の SHA-256 は、版付き canonical JSON に対して計算しなければならない。対象は schema version、canonical Workflow ID と安定ソート済みの実行順、各 Workflow の最終 argv 配列（表示用 shell 文字列ではない）、正規化済み入力別名、およびリポジトリの HEAD commit とする。
   - canonical JSON は key ソート、compact separator、UTF-8、LF、リポジトリ相対の `/` 区切りパスで正規化する。保存済み設定・request・HEAD のいずれかが計画内容を変えれば hash も変わらなければならない。
   - HEAD commit を取得できない場合は固定値 `unknown` を hash へ代入して続行せず、`orchestrate` 子プロセスを起動する前に fail-closed で停止しなければならない。
+  - 承認済みplanを実行する直前とdurable登録後の最初のchild起動直前にHEADを再取得し、planへ含めたcommitから変化していればchildを起動せずstaleとして停止しなければならない。先行child自身が生成したcommitを理由に後続childを拒否してはならないため、この再照合は最初のchildに限定する。
   - 契約テスト: [hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py)
 
 - **FR-PROMPT-06**: 複数 Workflow の実行順は `get_meta_dependencies()`（FR-COMMON-01）に基づく安定ソートで決定しなければならない。選択されていない依存 Workflow を暗黙に追加してはならず、利用者定義の任意 DAG を受理してはならない。循環を検出した場合は実行前に停止する。
@@ -872,6 +918,12 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
   - 委譲は FR-PROMPT-01 の既存子プロセス経路を用い、直接 `orchestrate` を起動した場合と同じ argv と制約を適用する。FR-DAG-06 / FR-DAG-08 の事前検査、FR-CLI-87 の Wave 承認、および FR-WF-OUT-01 の成果物ゲートを Prompt 版専用の分岐で省略してはならない。各 Step は必要な `plan.md` を作成してよいが、`plan.md` / `subissues.md` だけで終了せず、選択済み Step の宣言 `output_paths` を実行完了時点で存在させなければならない。FR-WF-OUT-01 は存在ゲートであり、実行前から存在した成果物が今回更新されたことまでは証明しない。完全実行の範囲は選択済み Workflow / Step の成功または最初の失敗までとし、未選択 Workflow の暗黙追加、rollback、失敗後の継続を含めてはならない。Prompt 版の承認を、既存の認証・権限・Azure・QA・デプロイ承認ゲートの代替として扱ってはならない。
   - 利用者文書に Prompt 件数などの変動値を固定記述してはならない。正本または確認方法へ誘導する。
   - 契約テスト: [hve/tests/test_prompt_edition_docs_contract.py](hve/tests/test_prompt_edition_docs_contract.py)
+- **FR-PROMPT-11**: Prompt 版の durable resume は request v1 を変更せず、repository Agent Skill が FR-CLI-90 の共通 resume plan を取得・提示・承認後実行する controller として提供しなければならない。
+  - Skill は利用者の自然言語から execution/action/replay不足値だけを解決し、Python 側へ自然言語 parser を追加してはならない。利用者へ command、request path、execution hash の転記を求めてはならない。
+  - 承認前は実行せず、提示済み `resume_plan_hash` と再計算値が一致し、expected state version の lease CAS が成功した場合だけ既存 `orchestrate` child 経路へ委譲する。stale の場合は child を起動せずplanを再提示し、再承認を求める。
+  - normal Prompt run は既存 SHA-256 approval 合格後かつ最初の child 前に全 Workflow instance を 1 transaction で登録し、全 childへ同じ execution IDと各instance IDを internal argsで渡す。既存fail-fastとrequest v1 schemaを変更しない。
+  - normal Prompt run は child の終了コード 0 だけで成功を推測せず、対応する durable Workflow instance が `succeeded` または `skipped` へ commit 済みであることを確認してから後続 child へ進む。状態欠落・非終端状態・read failure は非 0 で停止する。
+  - 契約テスト: [hve/tests/test_prompt_resume_contract.py](hve/tests/test_prompt_resume_contract.py)、[hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py)
 
 ### 5.21 ローカル 3 面の設定パリティ
 
@@ -893,6 +945,12 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
   - shared setting と workflow param の解決には、新しい設定レジストリ・シリアライザ・抽象レイヤーを導入してはならない。既存の [hve/gui/orchestrate_args.py](hve/gui/orchestrate_args.py) `OrchestrateArgs` を CLI argv への唯一の変換器として再利用する（FR-MAINT-07）。
   - 分類の網羅性は機械検査しなければならない。`orchestrate` の全 CLI 引数は `OrchestrateArgs` のフィールド、明示した別名、または理由付きの除外リストのいずれかへ分類されていなければならず、未分類が残ってはならない。
   - 契約テスト: [hve/tests/test_local_surface_option_parity.py](hve/tests/test_local_surface_option_parity.py)
+- **FR-LOCAL-SURFACE-02**: CLI / GUI Plan / Prompt の durable resume は、candidate・risk reason・許可 action・missing replay keys・resume plan hash・lease CAS・ordered execution を同じ ResumeService から取得しなければならない。
+  - GUI と Prompt は独自の candidate scan、risk判定、output gate、lease判定を実装してはならない。表示・入力・child launchだけを面固有責務とする。
+  - GUI Plan は Start 操作ごとに queue 全体を 1 executionとして登録し、全 childへ同じ execution IDを渡す。新しい Resume dialog は execution ID、Workflow、last state、heartbeat、risk、missing replay keysを表示し、safe executionは1回の確認、riskありはaction選択後に開始する。
+  - GUIの承認後実行はdialogが選択したplan hashと再入力値を`hve resume` childへ渡し、同childが再計算・CAS・fenced token付き`orchestrate`起動を行う。GUIが承認済み`ResumePlan.argv`を直接`orchestrate`として起動し、hash再検証またはlease取得を迂回してはならない。
+  - Prompt は FR-PROMPT-11、CLIは FR-CLI-90 に従う。3面で同じsnapshotを入力したとき、正規化済みplanの意味とhashが一致しなければならない。
+  - 契約テスト: [hve/tests/test_resume_surface_parity.py](hve/tests/test_resume_surface_parity.py)
 
 ---
 
@@ -1048,6 +1106,7 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
   - GUI セッション作業ディレクトリの後処理方針（`keep` / `archive` / `purge`）を本機能のために上書きしてはならない。`purge` を選んだ利用者に対して、削除済みの成果物を参照できると説明してはならない。
 - **FR-GUI-15**: 本節の機能境界は次のとおりとする。
   - 本節は §5.6「セッション永続化と再開（廃止）」を復活させない。Copilot CLI の `/resume` は CLI が所有するチャットセッションの再開であり、HVE ワークフローの再開ではない。両者を同一機能として説明してはならない。
+  - FR-GUI-50 の HVE execution resume は HVE-owned control state を再利用する別機能であり、Copilot CLI `/resume` や model生成途中のcheckpointとして表示してはならない。
   - VS Code 固有の実行面（エディタ内インライン補完、インラインチャットの差分適用、SCM / デバッガ / ノートブック専用 UI、拡張ホストと拡張提供ツール、統合ブラウザ、Agents Window、チェックポイント UI）は本要件の対象外とし、HVE GUI で再実装してはならない。
 - **FR-GUI-16**: GUI の実行前オプション画面（Step 1 右ペイン）は、`auto_qa`（QA (質問票) 自動投入）を全ワークフロー共通の**必須選択項目**として常時表示しなければならない。
   - `auto_qa` は FR-QA-03 の回答済み QA 保存を行うかどうかを決める唯一の入口であるため、既定値による暗黙決定を許さず「未選択 / 有効にする / 無効にする」の 3 状態で明示選択させる。Knowledge Management への差分同期を起動するかどうかは、`auto_qa` に加えて FR-QA-05 の `qa_akm_background_merge` が有効であることを要する。
@@ -1084,7 +1143,8 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
   - 「作業状況」（[hve/gui/widgets/dag_status_widget.py](hve/gui/widgets/dag_status_widget.py)）が表示する経過時間は、サマリー行・Workflow ノード・Step ノード・fan-out 子ノードのすべてを対象とする。ジョブ終了時に一部だけを停止させ、同一画面内で停止と継続が混在する状態を作ってはならない。停止後に表示ノードを再生成する画面更新（`set_plan` / `update_workflow_instances` の再呼び出し）が行われても、停止状態を維持しなければならない。
   - ジョブの終了検知を、サブプロセスの標準出力ストリームの終端だけに依存させてはならない。GUI が当該サブプロセスの終了を確認できる場合は、ストリームが終端していなくても終了として扱わなければならない。終了の根拠は当該プロセスの終了状態に限り、出力が一定時間途切れたことを終了の根拠にしてはならない。プロセスの終了確認後、既存の終端通知経路が反応するための猶予を設けてよいが、猶予は 10 秒を超えてはならない。
   - ストリーム終端を伴わない終了を検知した場合、GUI は実行ログへ警告を 1 行出力し、当該実行を正常完了と区別できる形で異常終了として記録しなければならない。ただし利用者の停止要求に続く終了は利用者の意図によるため、異常終了として記録してはならない（経過時間の停止はいずれの場合も行う）。実際の結果を観測していないため、実行中であった Step の状態表示を完了・失敗のいずれかへ書き換えてはならない。本検知のために新たな観測イベント種別（`[hve:stats]` の `kind`）を追加してはならない。
-  - 本検知による終了処理は、既存の終了経路と同じセッション後始末（実行ログ全文の保存等）を伴わなければならない。
+  - 本検知による終了処理は、既存の終了経路と同じセッション後始末（実行ログ全文の保存等）を伴わなければならない。stream終端を待つreaderが残る場合は読取端を閉じ、thread終了を確認してからQObjectの破棄を予約する。
+  - 本検知は parent window へ非 0 return code を 1 回だけ通知して navigation を更新する。ただし通常の「全タスク完了」通知へ流用せず、異常終了として表示しなければならない。Workflow は失敗として記録してよいが、実際の結果を観測していない実行中 Step の状態は `running` のまま保持する。
   - 同一の終了に対する終了処理は 1 回だけ行い、遅れて到着したストリーム終端によって二重に実行してはならない。
   - 新たな実行を開始したときは、直前の実行で記録した終了検知状態を初期化しなければならない。前回の検知状態によって、新しい実行の経過時間が計測開始直後から停止したままになってはならない。
   - 本要件は「作業状況」を持たない `--autopilot-child` 互換面（[hve/gui/workbench_window.py](hve/gui/workbench_window.py)）を対象外とする。
@@ -1222,13 +1282,12 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 
 ### 6.15 GUI からの進捗再実行
 
-- **FR-GUI-38**: GUI は `FR-CLI-86` の `--resume-run <run-id>` を指定できなければならない。入力欄は Step 1 のオプション画面へ 1 つ置き、空欄または空白のみのときは当該オプションを子プロセスへ渡してはならない。
+- **FR-GUI-38**: GUI は `FR-CLI-86` の legacy `--resume-run <run-id>` を指定できなければならない。入力欄は Advanced 領域へ `Legacy run-id` として 1 つ置き、空欄または空白のみのときは当該オプションを子プロセスへ渡してはならない。
   - run-id の実在確認・一覧取得・自動選択を GUI 側で行ってはならない。記録が無い run-id は `FR-CLI-86` が fail-closed で停止する契約であり、GUI が事前判定を持つと同じ規則の実装が 2 箇所になる（FR-MAINT-07）。
   - 入力値は既存の設定ストアで保存・復元しなければならない。保存キーは `resume_run` とする。
-  - 本要件は `FR-STATE-04` が保存する Workflow 進捗の再利用だけを対象とし、§5.6 が全廃した SDK セッションの復元を復活させない。両者を同じ機能として利用者向けドキュメントへ記述してはならない。
+  - 本要件は `FR-CLI-86` が読む既存 `hve/.run-progress.jsonl` の Workflow 進捗だけを対象とし、FR-STATE-04 の SQLite execution や §5.6 が全廃した `state.json` / `config_snapshot` 復元と同じ機能として利用者向けドキュメントへ記述してはならない。
   - 新規の CLI オプション・`SDKConfig` フィールド・環境変数を追加してはならない。
   - 契約テスト: [hve/gui/tests/test_orchestrate_args.py](hve/gui/tests/test_orchestrate_args.py)
-
 ### 6.16 GitHub Issue / Pull Request タイトルの自動生成
 
 - **FR-GUI-39**: HVE GUI は、GitHub Issue または Pull Request を作成するとき、GitHub Copilot CLI へ本文コンテキストを問い合わせて簡潔なタイトルを自動生成できなければならない。タイトル生成は [hve/github_title_generator.py](hve/github_title_generator.py) の単一実装へ集約し、Issue 面と Orchestrator の PR 作成経路が同じ実装を使わなければならない（FR-MAINT-07）。
@@ -1312,6 +1371,17 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
   - REST payload は `assignees: ["copilot-swe-agent[bot]"]` と `agent_assignment.target_repo` を持つ。`base_branch` が空または未指定のときは当該 field を送信しない。Agent Tasks API は使用しない。
   - 割当 API は public preview で変更され得る旨と、必要な token 権限を利用者へ表示する。失敗時は Issue 選択と入力を保持し、成功したと推測して表示を変更してはならない。
   - 契約テスト: [hve/tests/test_github_api_copilot_assign.py](hve/tests/test_github_api_copilot_assign.py)、[hve/gui/tests/test_github_service_copilot_assign.py](hve/gui/tests/test_github_service_copilot_assign.py)、[hve/gui/tests/test_github_issue_copilot_assign.py](hve/gui/tests/test_github_issue_copilot_assign.py)
+
+- **FR-GUI-50**: GUI Plan mode は FR-LOCAL-SURFACE-02 の共通 planを用いる明示 Resume dialog と、normal planのdurable登録・resume child launchを提供しなければならない。
+  - dialog は利用者が Resume 操作を選んだときだけ開き、常設history pageを追加してはならない。candidate 0件、safe確認、risk action、missing replay values、stale CAS、unsupported modeを共通serviceの結果どおり表示する。
+  - normal Startごとにqueue全体を1 transactionで登録し、同じGUI windowの別jobへ同じexecution IDを再利用してはならない。全childは登録済みdescriptorとinternal identityをmodel/session開始前に照合する。
+  - normal Start は current HEAD を取得できない場合に登録・child 起動前に停止する。resume processは既存Workbenchのlog/stop/finish経路へ合流し、別のprocess lifecycleを実装してはならない。graceful stopでは NFR-REL-03 のsuspend/final heartbeat規則を守る。
+  - GUI subprocess launcher が補完する `--workbench off` は `orchestrate` child だけに適用する。公開 resume controller の引数だけを受理する `hve resume` child へ同 option を注入してはならない。
+  - queue 内の argv 構築失敗・process 起動失敗・非 0 child は Workflow を失敗表示にする。queue 全体の return code は先行失敗を後続成功で隠さず、最初の非 0 を parent へ返す。完了した reader / QA manager は停止処理後に Qt object の破棄を予約し、reader thread の終了を確認してから参照を解放する。
+  - dialogは選択済み`ResumePlan`と再入力値を別々に返し、Workbenchは`hve resume`を`--expected-resume-hash`付きで起動する。再入力値をdurable storeへ保存してはならない。
+  - 再入力平文は child process 起動に必要な期間だけ保持し、起動後に dialog、Workbench の explicit argv queue、および保持している process argv list から破棄する。後続 Workflow や次回 dialog へ流用してはならない。
+  - FR-GUI-38のLegacy run-idと新しいexecution IDを同じ入力欄で多重解釈してはならない。
+  - 契約テスト: [hve/gui/tests/test_resume_dialog.py](hve/gui/tests/test_resume_dialog.py)、[hve/gui/tests/test_gui_subprocess_stdin.py](hve/gui/tests/test_gui_subprocess_stdin.py)
 
 ---
 
@@ -1520,6 +1590,9 @@ Coding Agent は、HVE 自体と HVE が生成するアプリケーションの�
 | 2.76 | 2026-08-27 | **FR-LOCAL-SURFACE-01 改訂**: 同一 Workflow・同一保存設定・面固有 runtime 値なしの条件で、GUI と Prompt 版が生成する argv 配列の要素数・順序・値の完全一致を機械検査対象とした。`asdw-web` の GUI argv が AKM 専用の `sources` / `target_files` / `force_refresh` / `custom_source_dir` を含み、Prompt 版が `auto_qa` 無効時にも `qa_answer_mode=autopilot`、自己改善無効時にも `self_improve_max_iterations` / `self_improve_target_scope` / `self_improve_goal`、SDK 既定と同じ `tool_search_ranking=sdk` を明示していた実測を根拠とする。比較入口と GUI セッション固有値・`qa_answer_mode=user` の除外条件を本文に固定した。入力別名は FR-PROMPT-08 の Prompt / 直接 CLI 専用入口として GUI 入力欄の追加対象から除外し、既存の `OrchestrateArgs` 受け口は維持する。新しい設定 key・CLI flag・環境変数・抽象レイヤーは追加しない。 |
 | 2.77 | 2026-08-28 | **FR-PROMPT-10 改訂**: Prompt 版の承認前実行計画と承認後の Step 内 `plan.md` を別の計画層として定義し、提示済み計画への明示承認と FR-PROMPT-04 の SHA-256 一致後は、仲介 Agent が単独実行モードでも `task_scope=multi` / `context_size=large` を理由に `hve prompt run` への委譲を禁止しないことを規定した。例外を既存 `orchestrate` への委譲だけに限定し、仲介 Agent の直接実装、未選択 Workflow の暗黙追加、rollback、失敗後の継続、既存の認証・権限・Azure・QA・デプロイ承認ゲートの迂回を禁止した。Python 実行核は既に非 dry-run 委譲と FR-WF-OUT-01 の成果物ゲートを持つため変更対象外とした。 |
 | 2.78 | 2026-08-28 | **FR-PROMPT-04 / 05 / 10 敵対的レビュー反映**: 「子プロセス」を実行対象である `orchestrate` 子プロセスへ限定し、HEAD 取得用 `git rev-parse` との矛盾を解消した。HEAD commit を取得できない場合は `unknown` を hash に使わず fail-closed とした。承認後は controller が提示済み SHA-256 を `hve prompt run` へ渡し、HVE が再計算値との一致を確認してから `orchestrate` へ委譲する時系列へ訂正した。FR-WF-OUT-01 は実行完了時の存在ゲートであり、既存成果物が今回更新されたことまでは証明しない境界も明記した。 |
+| 2.79 | 2026-08-28 | **FR-CLI-34 改訂 / FR-MODEL-07 改訂**: 実装済みだが未宣言だった 2 点を明文化した。(1) FR-CLI-34 の共通 cleanup core が実行する `git checkout` / `git branch -D` の subprocess に `encoding="utf-8"` の明示を必須化した。Windows 既定 locale（cp932）では非 ASCII 出力の decode が `UnicodeDecodeError` になり得ることを根拠とする。(2) FR-MODEL-07 へ `hve/copilot-sdk.lock` 自体が UTF-8 / LF / BOM なしを維持しなければならないこと、および `--upgrade-sdk` / `-UpgradeSdk` の書き換えが当該形式を保つことを追加した。実行時の観測可能な挙動は変更していない。 |
+| 2.80 | 2026-08-30 | **FR-CLOUD-41 / 42 改訂**: GitHub.com 側で毎時起動していた HITL エスカレーションの `schedule` を停止し、`auto-blocked-to-human-required.yml` を明示的な `workflow_dispatch` 専用へ変更した。repository-managed Workflow 全体で有効な `schedule` を禁止し、SLA 閾値・昇格条件・復帰経路は維持した。 |
+| 2.81 | 2026-08-31 | **NFR-CONC-02 / FR-CLI-90 / FR-GUI-50 改訂**: durable resume の実機受入で検出した3境界を既存意図の詳細条件として固定した。(1) 同じowner/generationの未期限切れ取得tokenは、自身のtransitionでstate versionが進んだ後もheartbeat/releaseへ使用できる。(2) status-only DAG callbackはcommit済みMain checkpoint metadataを保持し、legacy split-fork phaseは明示有効時だけ記録する。(3) GUI launcherの`--workbench off`補完は`orchestrate` childだけに適用し、`hve resume`へ注入しない。 |
 
 ---
 
@@ -1700,6 +1773,11 @@ ADA は画面を持たないデータ中心の AI Agent 向けに AAS と並走�
 
 - **FR-WF-ASDW-03**: Azure リソース名・リソース ID・エンドポイントと検証イメージ参照は入力項目とせず、`RESOURCE_GROUP` / `RESOURCE_SUFFIX` / `SUBSCRIPTION_ID` から `build_asdw_data_deploy_bootstrap_context` が決定論的に導出する。`SUBSCRIPTION_ID` は `az account show` から取得し、Azure が採番する `DATA_DEPLOY_IDENTITY_CLIENT_ID` のみ prep 成功後に [hve/asdw_data_script_launcher.py](hve/asdw_data_script_launcher.py) が読み戻す。
 
+#### 13.3.2 Step 4.3（Azure Static Web Apps Deploy）のrepository-managed Workflow契約
+
+- **FR-WF-ASDW-04**: APP-009のrepository-managed SWA deploy Workflow [`.github/workflows/azure-static-web-apps-app009.yml`](.github/workflows/azure-static-web-apps-app009.yml) は `workflow_dispatch` だけで起動し、`resource_group`と`static_web_app_name`を既定値なしの必須文字列入力として受け取らなければならない。Workflow権限は`id-token: write`と`contents: read`だけとし、`environment: copilot`でOIDC認証した後、入力したexact targetを`az staticwebapp show`で確認してからdeployment tokenを動的取得し、値をmaskして`Azure/static-web-apps-deploy`へ渡す。`azure/login`と`Azure/static-web-apps-deploy`は公式repositoryのrelease tagが指す40桁commit SHAへ固定し、review可能なtag名を同じ行のコメントへ残す。hard-coded target、`push` / `pull_request` trigger、PR close job、`repo_token`、手動登録したdeployment token secretを追加してはならない。Step 4.3のPromptは同じ2入力を`gh workflow run`へ明示し、Workflowを生成・編集せずdefault branch上の既存Workflowを起動する。
+- **FR-WF-ASDW-05**: APP-009のrollback drillを実行するrepository-managed Workflowを、実行対象scriptが存在しない状態で公開してはならない。現行repositoryには`.github/workflows/rollback-drill.yml`が参照する`src/infra/azure/rollback/run-rollback.sh`、`src/infra/azure/verify-webui-resources.sh`、`src/infra/azure/rollback/ui-staticwebapps-rollback.md`が存在しないため、当該Workflowと現役Workflow一覧からの参照を除去する。将来rollback drillを再導入する場合は、対象環境、実行script、検証script、復旧手順、Azure権限、production承認、受入テストを同一featureで先に定義し、本要件を改訂しなければならない。
+
 ### 13.4 ADFD — Dataflow Design
 
 - **目的**: AAS 完了後、データフロー処理（旧称 Batch）のデータモデル・アプリ（ジョブ）カタログ・サービスカタログ・テスト戦略を確定し、ジョブ詳細仕様書・監視運用設計書・TDD テスト仕様書まで生成する。ADFDV（§13.5）の全 Step の上流に位置する。
@@ -1845,6 +1923,8 @@ ADA は画面を持たないデータ中心の AI Agent 向けに AAS と並走�
 | 2 | knowledge 横断整合性レビュー | 1 | — | `knowledge/business-requirement-document-status.md` 更新（および整合性レポート） |
 
 > `knowledge/` 書き込みは「削除 → 新規作成」ルール（`.github/copilot-instructions.md` §0）に従い、本体ファイルへの LOCK 情報埋め込みは禁止。
+
+- **FR-WF-AKM-01**: [`.github/scripts/validate-knowledge-files.py`](.github/scripts/validate-knowledge-files.py) は`knowledge/D??-*.md`を、要求定義書本文と`*-ChangeLog.md`の2 schemaへファイル名で分けて検証しなければならない。本文は`knowledge-management-guide.md`のmetadata 6項目と§1〜§8、および20,000文字上限を検証し、付録AやChangeLog専用metadataを要求してはならない。ChangeLogは冒頭の`sources` / `generated_at` / `generator`コメント、metadata 5項目、全体更新履歴、要求項目別ログ、付録Aを検証し、本文の§1〜§8や20,000文字上限を要求してはならない。本体と同名prefixのChangeLogは対で存在し、片方だけを成功としてはならない。検証は既存script内の2分岐に限定し、新しいschema frameworkや外部依存を追加してはならない。
 
 ### 13.9 原本質問票の ADI 統合
 

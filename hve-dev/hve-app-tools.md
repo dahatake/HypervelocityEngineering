@@ -559,11 +559,11 @@ git push
 | # | ファイル | 現在の値 | 用途 |
 |---|---|---|---|
 | 1 | [cq/\_\_init\_\_.py](../cq/__init__.py) | `__version__ = "0.4.0"` | Code Query engine |
-| 2 | [.github/skills/code-query/SKILL.md](../.github/skills/code-query/SKILL.md) | `version: 0.4.0` | Code Query Skill |
+| 2 | [.github/skills/code-query/SKILL.md](../.github/skills/code-query/SKILL.md) | `version: 0.4.1` | Code Query Skill |
 | 3 | [tools/skills/code_query/pyproject.toml](../tools/skills/code_query/pyproject.toml) | `version = "0.3.0"` | `code-query-gui` distribution |
 | 4 | [tools/for-other-repo/code-query/package.toml](../tools/for-other-repo/code-query/package.toml) | `version = "1.3.0"` | Code Query 移植用キット |
 | 5 | [mdq/\_\_init\_\_.py](../mdq/__init__.py) | `__version__ = "0.8.0"` | Markdown Query engine |
-| 6 | [.github/skills/markdown-query/SKILL.md](../.github/skills/markdown-query/SKILL.md) | `version: 0.8.0` | Markdown Query Skill |
+| 6 | [.github/skills/markdown-query/SKILL.md](../.github/skills/markdown-query/SKILL.md) | `version: 0.8.1` | Markdown Query Skill |
 | 7 | [tools/skills/markdown_query/pyproject.toml](../tools/skills/markdown_query/pyproject.toml) | `version = "0.3.0"` | `markdown-query-gui` distribution |
 | 8 | [tools/for-other-repo/markdown-query/package.toml](../tools/for-other-repo/markdown-query/package.toml) | `version = "1.3.0"` | Markdown Query 移植用キット |
 | 9 | [tools/for-other-repo/tool-search/package.toml](../tools/for-other-repo/tool-search/package.toml) | `version = "1.3.0"` | Tool Search 移植用キット |

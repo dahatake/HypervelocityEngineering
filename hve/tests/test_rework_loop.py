@@ -156,15 +156,15 @@ class TestReworkPresentationWiring:
         部分一致だけでは import 行やコメントでも通ってしまう。
         """
         tree = ast.parse((_REPO_ROOT / "hve" / "orchestrator.py").read_text(encoding="utf-8"))
-        run_workflow = next(
+        workflow_body = next(
             node
             for node in ast.walk(tree)
             if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef))
-            and node.name == "run_workflow"
+            and node.name == "_run_workflow_body"
         )
         called = {
             node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", "")
-            for node in ast.walk(run_workflow)
+            for node in ast.walk(workflow_body)
             if isinstance(node, ast.Call)
         }
         assert "resolve_rework_targets" in called

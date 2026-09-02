@@ -178,8 +178,12 @@ def _run_workflow_with_fakes(
         return workflow, active_steps, None
 
     with (
-        patch.object(orchestrator, "Console", return_value=console),
-        patch.object(orchestrator, "StepRunner", runner_factory),
+        patch.multiple(
+            orchestrator,
+            Console=Mock(return_value=console),
+            StepRunner=runner_factory,
+            _open_durable_workflow_lifecycle=Mock(return_value=None),
+        ),
         patch.object(orchestrator, "resolve_selected_steps", step_resolver),
         patch.object(orchestrator, "build_dag_plan", plan_builder),
         patch.object(orchestrator.subprocess, "run", subprocess_guard),
@@ -353,7 +357,7 @@ class TestWorkflowBranchMode(unittest.TestCase):
 
     def test_current_branch_is_never_auto_deleted_after_merge(self) -> None:
         """FR-CLI-83: 利用者所有の current branch を merge 後 cleanup 対象にしない。"""
-        source = inspect.getsource(orchestrator.run_workflow)
+        source = inspect.getsource(orchestrator._run_workflow_body)
 
         assert "hve_created_branch = True" in source
         assert "and hve_created_branch\n" in source

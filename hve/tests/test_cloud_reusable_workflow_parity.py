@@ -12,12 +12,15 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 from hve.dag_parity import extract_bash_workflow_steps
 from hve.workflow_registry import get_workflow
 
 _REPO = Path(__file__).resolve().parents[2]
 _BASH_REGISTRY = _REPO / ".github" / "scripts" / "bash" / "lib" / "workflow-registry.sh"
+_REQUIREMENTS = _REPO / "hve-dev" / "requirement-definition.md"
+_DISPATCHER = _REPO / ".github" / "workflows" / "auto-orchestrator-dispatcher.yml"
 
 # 再利用 YAML と workflow_id の対応。未統一のものは _PENDING に置く。
 _UNIFIED = {
@@ -29,6 +32,43 @@ _UNIFIED = {
     "auto-dataflow-dev-reusable.yml": ("adfdv", "ADFDV"),
 }
 _PENDING: dict[str, tuple[str, str]] = {}
+
+_FR_CLOUD_20_MAPPING = {
+    "ARD": "auto-requirement-definition-reusable.yml",
+    "AAS": "auto-app-selection-reusable.yml",
+    "AAD-WEB": "auto-app-detail-design-web-reusable.yml",
+    "ASDW-WEB": "auto-app-dev-microservice-web-reusable.yml",
+    "ADFD": "auto-dataflow-design-reusable.yml",
+    "ADFDV": "auto-dataflow-dev-reusable.yml",
+    "ADA": "auto-agent-data-architecture-reusable.yml",
+    "AAG": "auto-ai-agent-design-reusable.yml",
+    "AAGD": "auto-ai-agent-dev-reusable.yml",
+    "AAR": "auto-agentic-retrieval-reusable.yml",
+    "ADOC": "auto-app-documentation-reusable.yml",
+    "AKM": "auto-knowledge-management-reusable.yml",
+}
+
+
+def test_fr_cloud_20_matches_dispatcher_reusable_jobs() -> None:
+    requirement_text = _REQUIREMENTS.read_text(encoding="utf-8")
+    section = requirement_text.split("- **FR-CLOUD-20**:", 1)[1].split(
+        "- **FR-CLOUD-21**:", 1
+    )[0]
+    declared = dict(re.findall(r"^  - `([^`]+)` → `([^`]+)`$", section, re.MULTILINE))
+    assert declared == _FR_CLOUD_20_MAPPING
+
+    dispatcher = yaml.safe_load(_DISPATCHER.read_text(encoding="utf-8"))
+    actual: dict[str, str] = {}
+    for job in dispatcher["jobs"].values():
+        uses = str(job.get("uses", ""))
+        if not re.fullmatch(r"\./\.github/workflows/auto-.*-reusable\.yml", uses):
+            continue
+        targets = re.findall(
+            r"needs\.detect\.outputs\.target == '([^']+)'", str(job.get("if", ""))
+        )
+        assert len(targets) == 1, f"dispatch targetを一意に抽出できません: {uses}"
+        actual[targets[0]] = Path(uses).name
+    assert actual == _FR_CLOUD_20_MAPPING
 
 
 def _workflow(workflow_id: str):

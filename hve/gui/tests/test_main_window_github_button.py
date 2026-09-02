@@ -13,6 +13,7 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 PySide6 = pytest.importorskip("PySide6")
+from PySide6.QtCore import QEvent  # noqa: E402
 from PySide6.QtWidgets import QApplication, QToolButton  # noqa: E402
 
 
@@ -44,7 +45,10 @@ def main_window(qapp, tmp_path: Path, monkeypatch):
     monkeypatch.setenv("HVE_WORK_ROOT", str(tmp_path / "work"))
     win = MainWindow(repo_root=tmp_path)
     yield win
+    win.close()
     win.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    qapp.processEvents()
 
 
 class TestGitHubButton:

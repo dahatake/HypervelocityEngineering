@@ -90,9 +90,9 @@ class TestRunWorkflowWiring(unittest.TestCase):
     """解決は orchestrator の単一実装だけで行う（FR-MAINT-07）。"""
 
     def _source(self) -> str:
-        from orchestrator import run_workflow
+        from orchestrator import _run_workflow_body
 
-        return inspect.getsource(run_workflow)
+        return inspect.getsource(_run_workflow_body)
 
     def test_run_workflow_uses_the_resolver(self):
         self.assertIn("_resolve_max_parallel(", self._source())

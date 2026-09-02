@@ -63,6 +63,32 @@ class _GuiTestBase(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    def tearDown(self) -> None:
+        """Destroy every test-owned top-level widget and drain deferred deletes."""
+        from PySide6.QtCore import QCoreApplication, QEvent
+        from PySide6.QtWidgets import QApplication, QMessageBox
+
+        application = QApplication.instance()
+        if application is None:
+            return
+        # Completion popups are queued with ``QTimer.singleShot(0, ...)``.
+        # Deliver those callbacks while their owning windows are still alive,
+        # then close the windows so their timers/workers are stopped before
+        # deferred C++ deletion.
+        application.processEvents()
+        widgets = list(application.topLevelWidgets())
+        with patch(
+            "hve.gui.main_window.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Yes,
+        ):
+            for widget in widgets:
+                widget.close()
+        application.processEvents()
+        for widget in widgets:
+            widget.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        application.processEvents()
+
 
 class TestHeaderBar_REMOVED(_GuiTestBase):
     """旧 HeaderBar 削除に伴い、関連クラスは撤去された。
@@ -166,10 +192,12 @@ class TestMainWindow(_GuiTestBase):
         # 次へ
         self.assertTrue(w._btn_next.isEnabled())
         # 2 ペイン再設計後、[次へ] は実行起動を兼ねる（_on_run_clicked → Workbench へ遷移）。
-        # ナビゲーション（index==_STEP_WORKBENCH）の検証に絞るため、モーダル precheck /
-        # 入力検証 / 子プロセス起動を patch で無効化する（いずれも別テストで検証済み）。
+           # ナビゲーション（index==_STEP_WORKBENCH）の検証に絞るため、モーダル precheck /
+           # 入力検証 / durable登録 / 子プロセス起動を patch で無効化する
+           # （いずれも別テストで検証済み）。
         with patch.object(MainWindow, "_run_step1_unified_precheck", return_value=True), \
              patch.object(OptionsPage, "validate", return_value=(True, "")), \
+               patch.object(MainWindow, "_register_normal_gui_plan"), \
              patch.object(WorkbenchPage, "start_orchestrators"):
             w._btn_next.click()
         self.assertEqual(w._stack.currentIndex(), 1)
@@ -186,6 +214,7 @@ class TestMainWindow(_GuiTestBase):
         btns[0].setChecked(True)
         with patch.object(MainWindow, "_run_step1_unified_precheck", return_value=True), \
              patch.object(OptionsPage, "validate", return_value=(True, "")), \
+               patch.object(MainWindow, "_register_normal_gui_plan"), \
              patch.object(WorkbenchPage, "start_orchestrators"):
             w._btn_next.click()
         self.assertEqual(w._stack.currentIndex(), 1)
@@ -288,10 +317,11 @@ class TestSettingsWindow(_GuiTestBase):
         if not btns:
             self.skipTest("No workflow buttons")
         btns[0].setChecked(True)
-        # [次へ]=実行起動のため、モーダル precheck / 入力検証 / 子プロセス起動を
-        # patch して Workbench への遷移のみ行わせる（C2 と同根のハング回避）。
+           # [次へ]=実行起動のため、モーダル precheck / 入力検証 / durable登録 /
+           # 子プロセス起動をpatchしてWorkbenchへの遷移のみ行わせる。
         with patch.object(MainWindow, "_run_step1_unified_precheck", return_value=True), \
              patch.object(OptionsPage, "validate", return_value=(True, "")), \
+               patch.object(MainWindow, "_register_normal_gui_plan"), \
              patch.object(WorkbenchPage, "start_orchestrators"):
             w._btn_next.click()
         w._page_workbench._is_running = True

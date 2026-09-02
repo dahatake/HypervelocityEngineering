@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ast
 import csv
+import os
 import pathlib
 import re
 import subprocess
@@ -810,6 +811,22 @@ def write_policy() -> None:
     )
 
 
+def _generation_timestamp() -> str:
+    """Return a reproducible UTC timestamp when SOURCE_DATE_EPOCH is set."""
+    source_date_epoch = os.environ.get("SOURCE_DATE_EPOCH")
+    if source_date_epoch is None:
+        generated_at = datetime.now(timezone.utc)
+    else:
+        try:
+            epoch = int(source_date_epoch)
+        except ValueError as exc:
+            raise ValueError("SOURCE_DATE_EPOCH must be a non-negative integer") from exc
+        if epoch < 0:
+            raise ValueError("SOURCE_DATE_EPOCH must be a non-negative integer")
+        generated_at = datetime.fromtimestamp(epoch, tz=timezone.utc)
+    return generated_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def write_crosswalk(test_rows: list[dict[str, object]], feature_rows: list[dict[str, object]], mapping: dict[str, dict[str, object]]) -> None:
     test_by_cat = Counter(str(r["category"]) for r in test_rows)
     test_by_kind = Counter(str(r["kind"]) for r in test_rows)
@@ -839,7 +856,7 @@ def write_crosswalk(test_rows: list[dict[str, object]], feature_rows: list[dict[
     deprecated_features = sorted(
         {str(r["feature_id"]) for r in feature_rows if r["active_status"] == "deprecated-or-removed"}
     )
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now = _generation_timestamp()
 
     lines = [
         "# HVE TDD ベースライン突合サマリー",

@@ -35,6 +35,11 @@ try:
 except ImportError:  # pragma: no cover - script execution path
     from approval import ApprovalDeclined  # type: ignore[no-redef]
 
+try:
+    from .run_state_store import DurableStateError  # type: ignore
+except ImportError:  # pragma: no cover - script execution path
+    from run_state_store import DurableStateError  # type: ignore[no-redef]
+
 
 class StepResult:
     """ステップ実行結果。"""
@@ -192,7 +197,7 @@ class DAGExecutor:
 
         # ステップ完了/skip/blocked 通知の同期コールバック（任意のフック）。
         # Fleet 委譲ステップの状態通知など、実行中に継ぎ込みたい副作用をフックする。
-        # コールバック内の例外は実行を止めないよう warn ログのみで握り潰す。
+        # 通常例外は warn ログのみで握り潰すが、耐久状態の失敗は再送出する。
         self._on_step_start = on_step_start
         self._on_step_complete = on_step_complete
 
@@ -234,13 +239,16 @@ class DAGExecutor:
         # Wave / 進捗管理
         self._wave_counter: int = 0
         self._total_waves: int = 0
+        self._pending_tasks: Set[asyncio.Task[Any]] = set()
 
     def _emit_step_start(self, step_id: str) -> None:
-        """`on_step_start` フックを安全に呼ぶ。"""
+        """`on_step_start` を呼び、耐久状態の失敗だけを再送出する。"""
         if self._on_step_start is None:
             return
         try:
             self._on_step_start(step_id)
+        except DurableStateError:
+            raise
         except Exception as exc:  # pragma: no cover - 例外パスは E2E で確認
             if self.console is not None:
                 self.console.warning(
@@ -251,12 +259,14 @@ class DAGExecutor:
         """`on_step_complete` フックを安全に呼ぶ。
 
         副作用を発火するための任意の同期フック。
-        コールバック内の例外で DAG 実行が止まらないよう、warn を出して握り潰す。
+        通常例外は warn を出して握り潰し、耐久状態の失敗だけを再送出する。
         """
         if self._on_step_complete is None:
             return
         try:
             self._on_step_complete(result)
+        except DurableStateError:
+            raise
         except Exception as exc:  # pragma: no cover - 例外パスは E2E で確認
             if self.console is not None:
                 self.console.warning(
@@ -543,6 +553,22 @@ class DAGExecutor:
                 pass
 
     async def execute(self) -> Dict[str, StepResult]:
+        """Run the DAG and quiesce every owned child before propagating failure."""
+        self._pending_tasks.clear()
+        try:
+            return await self._execute_owned_tasks()
+        except BaseException:
+            owned_tasks = tuple(self._pending_tasks)
+            for task in owned_tasks:
+                if not task.done():
+                    task.cancel()
+            if owned_tasks:
+                await asyncio.gather(*owned_tasks, return_exceptions=True)
+            raise
+        finally:
+            self._pending_tasks.clear()
+
+    async def _execute_owned_tasks(self) -> Dict[str, StepResult]:
         """DAG を走査し、全ステップを実行する。
 
         Returns:
@@ -576,7 +602,7 @@ class DAGExecutor:
         self._total_waves = len(waves)
         self._wave_counter = 0
 
-        pending_tasks: Set[asyncio.Task] = set()
+        pending_tasks = self._pending_tasks
         HEARTBEAT_INTERVAL = 15  # 秒 — ローカル実行ではより頻繁なチェックで応答性を向上
 
         while True:
@@ -645,6 +671,8 @@ class DAGExecutor:
                     except ApprovalDeclined:
                         # FR-CLI-87: 承認拒否は停止条件であり、握り潰してはならない。
                         raise
+                    except DurableStateError:
+                        raise
                     except Exception as exc:
                         if self.console is not None:
                             self.console.warning(
@@ -698,12 +726,13 @@ class DAGExecutor:
                 continue
 
             # 完了したタスクを1つ以上待つ（FIRST_COMPLETED + ハートビート）
-            done, pending_tasks = await asyncio.wait(
+            done, still_pending = await asyncio.wait(
                 pending_tasks,
                 return_when=asyncio.FIRST_COMPLETED,
                 timeout=HEARTBEAT_INTERVAL,
             )
             if not done:
+                pending_tasks.intersection_update(still_pending)
                 # タイムアウト — 実行中ステップの経過時間を表示
                 if self.console is not None:
                     for step_id in list(self.running):
@@ -716,6 +745,7 @@ class DAGExecutor:
                 if result.success and not result.skipped:
                     self._maybe_mark_dynamic_fanout_parent_complete(result.step_id)
                     self._try_dynamic_expand(result.step_id)
+            pending_tasks.difference_update(done)
 
             # 進捗更新
             if self.console is not None:
@@ -910,6 +940,7 @@ class DAGExecutor:
                     _ctx_var.set(step.id)
                 except Exception:
                     pass
+            self._emit_step_start(step.id)
             start = time.time()
             error_msg: Optional[str] = None
             # ADR-0002: fan-out 子ステップは追加メタ (fanout_key / base_step_id /
@@ -941,6 +972,8 @@ class DAGExecutor:
                 )
                 if self.console is not None:
                     self.console.warning(f"  ⏱ [Step.{step.id}] {error_msg}")
+            except DurableStateError:
+                raise
             except Exception as exc:
                 success = False
                 error_msg = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
@@ -1007,6 +1040,8 @@ class DAGExecutor:
                         )
                         if self.console is not None:
                             self.console.warning(f"  ⏱ [Step.{step.id}] {error_msg}")
+                    except DurableStateError:
+                        raise
                     except Exception as exc:
                         success = False
                         error_msg = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"

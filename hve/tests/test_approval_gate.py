@@ -180,11 +180,11 @@ class TestDeclineRecordsWaveIndex:
 
 
 class TestDeclineIntegration:
-    """FR-CLI-87: `run_workflow` を実際に呼び、拒否記録が進捗ストアへ届くことを確認する。
+    """FR-CLI-87: `run_workflow` が承認拒否を blocked として返すことを確認する。
 
-    AST/文字列検証だけでは「呼ばれるはずのコードがある」ことしか保証できず、
-    実行時の引数順序取り違え（run_progress.record_step の位置引数など）は
-    検出できないため、DAGExecutor を差し替えた統合実行で確認する。
+    Durable contextを持つ公開経路のapproval pseudo-rowは
+    ``test_orchestrator_durable_resume.py::TestApprovalRecords`` が固定する。
+    contextを持たない内部直接呼出しはLegacy JSONLへdual-writeせず、拒否結果だけを返す。
     """
 
     class _DeclineDAGExecutor:
@@ -199,7 +199,7 @@ class TestDeclineIntegration:
         async def execute(self):
             raise approval.ApprovalDeclined("承認が得られませんでした。", wave_index=3)
 
-    def test_run_workflow_records_the_wave_index_on_decline(self) -> None:
+    def test_run_workflow_blocks_without_legacy_jsonl_write(self) -> None:
         from hve import orchestrator, run_progress
         from hve.config import SDKConfig
 
@@ -216,8 +216,6 @@ class TestDeclineIntegration:
                 )
             )
 
-        mock_record.assert_called_once_with(
-            cfg.run_id, "aas", "approval:3", run_progress.STATUS_FAILED
-        )
+        mock_record.assert_not_called()
         assert result["error"] == "承認が得られませんでした。"
         assert result["blocked"] == ["1"]
