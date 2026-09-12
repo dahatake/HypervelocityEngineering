@@ -54,3 +54,26 @@ def test_excerpt_tokenizer_shares_the_published_cjk_definition() -> None:
         assert tk.scoring_terms(char) == [char]
     for char in ("A", "1", "-"):
         assert tk.scoring_terms(char) == searcher.tokenize(char)
+
+
+def test_fullwidth_alpha_is_normalized() -> None:
+    """全角英字は NFKC で半角に寄せてからスコアリングされること。"""
+    assert tk.scoring_terms("指定席Ａ") == ["指定", "定席", "a"]
+
+
+def test_fullwidth_digit_is_normalized() -> None:
+    """全角数字は NFKC で半角に寄せてからスコアリングされること。"""
+    assert tk.scoring_terms("０５０") == ["050"]
+
+
+def test_roman_numeral_is_normalized() -> None:
+    """ローマ数字は NFKC で分解されてからスコアリングされること。"""
+    assert tk.scoring_terms("カテゴリⅠ") == ["カテ", "テゴ", "ゴリ", "i"]
+
+
+def test_excerpt_tokenizer_normalizes_fullwidth() -> None:
+    """抜粋用トークナイザも NFKC 正規化すること。"""
+    from mdq import search as searcher
+
+    tokens = searcher.tokenize("指定席Ａ")
+    assert "a" in tokens
