@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import unicodedata
 from typing import Literal
 
 Lang = Literal["ja-jp", "en-us"]
@@ -45,6 +46,12 @@ _SEGMENT_RE = re.compile(rf"{_ASCII_RUN}|[{_CJK_CLASS}]+")
 _ASCII_RE = re.compile(_ASCII_RUN)
 
 
+def normalize_text(text: str) -> str:
+    """NFKC-normalize *text* so that fullwidth alphanumerics (Ａ→A, ０→0)
+    and compatibility characters (Ⅰ→I) are folded before tokenization."""
+    return unicodedata.normalize("NFKC", text)
+
+
 def scoring_terms(text: str) -> list[str]:
     """Return the terms the default search path matches on (FR-MDQ-08).
 
@@ -53,7 +60,7 @@ def scoring_terms(text: str) -> list[str]:
     same span never contributes both a bigram and a unigram.
     """
     terms: list[str] = []
-    for segment in _SEGMENT_RE.findall(text):
+    for segment in _SEGMENT_RE.findall(normalize_text(text)):
         if _ASCII_RE.fullmatch(segment):
             terms.append(segment.lower())
         elif len(segment) == 1:

@@ -43,7 +43,7 @@ HEADING_WEIGHT = 3
 
 
 def tokenize(text: str) -> list[str]:
-    return [t.lower() for t in _TOKEN_RE.findall(text)]
+    return [t.lower() for t in _TOKEN_RE.findall(_tokenize.normalize_text(text))]
 
 
 @dataclass
