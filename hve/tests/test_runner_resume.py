@@ -1,8 +1,8 @@
-"""FR-CLI-90 — StepRunner durable SDK resume の fake-only RED 契約。
+"""FR-CLI-90 / FR-TS-13 — StepRunner durable SDK resume の offline 契約。
 
-本ファイルは Copilot SDK、Azure、GitHub、ネットワークを一切呼ばない。durable
-store と SDK client/session を fake に置換し、公開 ``run_step()`` の観測可能な
-順序と fail-closed 動作を固定する。
+durable store と SDK runtime は fake に置換する。実 SDK の wire 検査も fake
+transport だけを使用し、起動・ダウンロード・実通信は行わない。公開
+``run_step()`` の観測可能な順序と fail-closed 動作を固定する。
 """
 
 from __future__ import annotations
@@ -11,8 +11,11 @@ import asyncio
 from datetime import datetime, timezone
 import hashlib
 import importlib
+import inspect
 import json
 import socket
+import sqlite3
+import subprocess
 import sys
 import types
 import unittest.mock
@@ -20,13 +23,31 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any, Callable, Iterator, Optional
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
 
+from copilot import CopilotClient as _SDKClient, RuntimeConnection as _SDKConnection
+from copilot.generated.rpc import (
+    CurrentToolMetadata,
+    MCPDisableRequest,
+    MCPListToolsRequest,
+    SessionUpdateOptionsParams,
+    ToolsGetCurrentMetadataResult,
+)
 from copilot.generated.session_events import SessionEventType, SessionResumeData
+from copilot.session import CopilotSession as _SDKSession
+from copilot.tools import Tool
 
 from hve.config import SDKConfig
 from hve.console import Console
+from hve.toolsearch.policy import ToolSearchPolicy
+from hve.toolsearch.resource_inventory import ResourceItem, ResourceSnapshot
+from hve.toolsearch.resource_routing import (
+    ResourceRoute,
+    build_routed_session_options,
+    restrict_resource_route,
+)
 
 
 _RECOVERY_PROMPT_PATH = "runtime/runner/resume-recovery.prompt.md"
@@ -398,21 +419,29 @@ class _Runtime:
     runner: Any
     network_guard: Callable[..., Any]
 
-    def run(self, step_id: str = "1") -> bool:
+    def run(
+        self,
+        step_id: str = "1",
+        *,
+        workflow_id: Optional[str] = None,
+        timeout: Optional[float] = None,
+    ) -> bool:
         async def _scenario() -> bool:
             # Windows の asyncio は event loop 作成・破棄時に内部 socketpair を
             # 使用する。loop 作成後から Runner 完了までだけ connect を禁止する。
-            with unittest.mock.patch.object(
-                socket.socket,
-                "connect",
-                self.network_guard,
+            with (
+                patch.object(socket.socket, "connect", self.network_guard),
+                patch.object(socket.socket, "connect_ex", self.network_guard),
             ):
-                return await self.runner.run_step(
+                execution = self.runner.run_step(
                     step_id,
                     "durable runner test",
                     _MAIN_PROMPT,
-                    workflow_id=None,
+                    workflow_id=workflow_id,
                 )
+                if timeout is not None:
+                    return await asyncio.wait_for(execution, timeout=timeout)
+                return await execution
 
         return asyncio.run(
             _scenario()
@@ -563,8 +592,6 @@ def runtime_factory(
             run_id="new-attempt-run",
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
-            self_improve_skip=True,
         )
         context = SimpleNamespace(
             execution_id=store.execution_id,
@@ -573,9 +600,6 @@ def runtime_factory(
             recovery_action=action,
             lease_owner=store.token.owner,
             lease_generation=store.token.generation,
-            split_fork_enabled=False,
-            split_fork_depth=0,
-            split_fork_max_depth=3,
             continue_on_error=False,
             # Runtime implementations may retain an already-acquired fenced token
             # in-process; these aliases remain fake-only and are never serialized.
@@ -663,7 +687,7 @@ class TestDurableCommitOrdering:
         assert len(runtime.trace.create_calls) == 1
         assert runtime.trace.transitions == []
 
-    def test_disabled_split_fork_preserves_main_checkpoint_across_repeated_steps(
+    def test_main_checkpoint_is_preserved_across_repeated_steps(
         self,
         runtime_factory: Callable[..., _Runtime],
     ) -> None:
@@ -678,19 +702,6 @@ class TestDurableCommitOrdering:
         phases = [transition["phase"] for transition in runtime.trace.transitions]
         assert "split-fork" not in phases
         assert set(phases) == {"main"}
-
-    def test_enabled_legacy_split_fork_records_its_phase(
-        self,
-        runtime_factory: Callable[..., _Runtime],
-    ) -> None:
-        runtime = runtime_factory(action=None, phase="main", session_id=None)
-        runtime.runner._orchestrator_ctx.split_fork_enabled = True
-
-        assert runtime.run() is True
-
-        phases = [transition["phase"] for transition in runtime.trace.transitions]
-        assert "main" in phases
-        assert "split-fork" in phases
 
     def test_saved_session_is_recommitted_before_resume_and_recovery_send(
         self,
@@ -887,8 +898,8 @@ def test_resume_failure_never_silently_falls_back_to_restart(
 
 @pytest.mark.parametrize(
     "phase",
-    ["pre-qa", "review", "self-improve"],
-    ids=["pre-qa", "review", "self-improve"],
+    ["pre-qa", "review"],
+    ids=["pre-qa", "review"],
 )
 def test_non_main_phase_rejects_reuse_before_any_sdk_session_action(
     runtime_factory: Callable[..., _Runtime],
@@ -939,7 +950,601 @@ def test_reuse_sends_fixed_recovery_prompt_through_prompt_loader(
 
     assert runtime.run() is True
     assert _RECOVERY_PROMPT_PATH in loader_calls
-    assert runtime.trace.send_prompts == [_RECOVERY_PROMPT_SENTINEL]
+    assert runtime.trace.send_prompts == [
+        _RECOVERY_PROMPT_SENTINEL
+        + runtime.module._build_runtime_guidance_suffix(
+            unattended=False,
+            step_timeout_seconds=runtime.runner.config.step_timeout_seconds,
+        )
+    ]
     assert _MAIN_PROMPT not in runtime.trace.send_prompts[0]
     assert _RECOVERY_PROMPT_SENTINEL not in repr(runtime.trace.transitions)
     assert runtime.trace.create_calls == []
+
+
+def test_reuse_session_resolves_and_applies_resource_route_before_first_send(
+    runtime_factory: Callable[..., _Runtime],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = runtime_factory(action="reuse-session")
+    snapshot = object()
+    policy = object()
+    route = ResourceRoute()
+
+    monkeypatch.setattr(
+        runtime.module,
+        "discover_sdk_resources",
+        lambda **_kwargs: snapshot,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        runtime.module,
+        "ToolSearchPolicy",
+        SimpleNamespace(load=lambda **_kwargs: policy),
+        raising=False,
+    )
+
+    def _resolve_resource_route(**kwargs: Any) -> Any:
+        runtime.trace.events.append(("route.resolve", kwargs))
+        assert kwargs["available_tools"] is None
+        assert kwargs["excluded_tools"] is None
+        return route
+
+    async def _apply_resource_route(
+        *, session: Any, route: Any, deadline: Optional[float] = None,
+    ) -> Any:
+        runtime.trace.events.append(
+            ("route.apply", {"session": session, "route": route, "deadline": deadline})
+        )
+        return route
+
+    monkeypatch.setattr(
+        runtime.module,
+        "resolve_resource_route",
+        _resolve_resource_route,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        runtime.module,
+        "apply_resource_route",
+        _apply_resource_route,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        runtime.module,
+        "_check_output_paths_gate",
+        lambda *_args, **_kwargs: [],
+        raising=False,
+    )
+
+    async def _scenario() -> bool:
+        with unittest.mock.patch.object(
+            socket.socket,
+            "connect",
+            runtime.network_guard,
+        ):
+            return await runtime.runner.run_step(
+                "1",
+                "durable runner test",
+                _MAIN_PROMPT,
+                workflow_id="ard",
+            )
+
+    assert asyncio.run(_scenario()) is True
+    assert runtime.trace.create_calls == []
+    assert len(runtime.trace.resume_calls) == 1
+    assert _event_index(runtime.trace, "route.resolve") < _event_index(
+        runtime.trace,
+        "sdk.resume",
+    )
+    assert _event_index(runtime.trace, "sdk.resume") < _event_index(
+        runtime.trace,
+        "route.apply",
+    )
+    assert _event_index(runtime.trace, "route.apply") < _event_index(
+        runtime.trace,
+        "sdk.send",
+    )
+
+
+@pytest.fixture
+def routed_resume(runtime_factory, monkeypatch):
+    """Real ARD registry/route/apply; only external boundaries are replaced."""
+    runtime = runtime_factory(action="reuse-session")
+    module, runner = runtime.module, runtime.runner
+    assert Path(module.__file__).resolve() == Path(__file__).resolve().parents[1] / "runner.py"
+    assert runner.run_step.__func__.__globals__ is vars(module)
+    workflow = importlib.import_module("hve.workflow_registry").get_workflow("ard")
+    required = tuple(runner._get_required_skills_for_step("ard", "1", workflow))
+    assert required == ("task-dag-planning", "knowledge-management")
+    runtime.store.instance["workflow_id"] = "ard"
+    for owner, name in (
+        (socket, "getaddrinfo"), (sqlite3, "connect"),
+        (subprocess, "Popen"), (subprocess, "run"),
+        (asyncio, "create_subprocess_exec"), (asyncio, "create_subprocess_shell"),
+    ):
+        monkeypatch.setattr(owner, name, runtime.network_guard)
+    monkeypatch.setattr(runner.config, "resolve_token", Mock(return_value=""))
+    monkeypatch.setattr(runner.config, "tool_search_session_option", Mock(return_value=None))
+    monkeypatch.setattr(module, "_check_output_paths_gate", Mock(return_value=[]))
+
+    r = SimpleNamespace(
+        runtime=runtime, module=module, runner=runner, client=runtime.client,
+        trace=runtime.trace, required=required, options={}, base_options={},
+        rpc_calls=[], deadlines=[],
+    )
+    r.snapshot = ResourceSnapshot(
+        plugin_state="ready", mcp_state="ready", skill_state="ready",
+        skill_ownership_state="ready", plugins=(),
+        mcp_servers=tuple(ResourceItem("mcp_server", name, True, "user") for name in (
+            "knowledge", "other-knowledge", "engineering", "unclassified",
+        )),
+        skills=tuple(ResourceItem("skill", name, True, "project") for name in (
+            *required, "optional-knowledge", "engineering-skill", "unclassified-skill",
+        )),
+    )
+    r.policy = ToolSearchPolicy(
+        version=1, limit=5, max_limit=20, tau=0.0,
+        field_weights={"name": 1, "additional_search_text": 1, "description": 1, "arg_terms": 1},
+        pins={}, additional_search_text={},
+        resource_classifications={
+            "plugins": {},
+            "mcp_servers": {
+                "knowledge": "knowledge", "other-knowledge": "knowledge",
+                "engineering": "software-engineering",
+            },
+            "skills": {
+                **{name: "software-engineering" for name in required},
+                "optional-knowledge": "knowledge", "engineering-skill": "software-engineering",
+            },
+        },
+        knowledge_tool_allowlists={"knowledge": ("lookup",), "other-knowledge": ("lookup",)},
+        software_engineering_tool_allowlists={"engineering": ("build",)},
+        required_mcp_servers_by_skill={required[0]: ("knowledge",)},
+    )
+    add_directories = runner._add_required_external_skill_directories
+
+    def add_options(options, skills):
+        result = add_directories(options, skills)
+        options.update(r.options)
+        r.base_options = dict(options)
+        return result
+
+    monkeypatch.setattr(runner, "_add_required_external_skill_directories", add_options)
+    r.discover = Mock(side_effect=lambda **_kwargs: r.snapshot)
+    r.load_policy = Mock(side_effect=lambda **_kwargs: r.policy)
+    monkeypatch.setattr(module, "discover_sdk_resources", r.discover)
+    monkeypatch.setattr(module, "ToolSearchPolicy", SimpleNamespace(load=r.load_policy))
+    r.resolve = Mock(wraps=module.resolve_resource_route)
+    r.restrict = Mock(wraps=restrict_resource_route)
+    r.build = Mock(wraps=build_routed_session_options)
+    r.apply = AsyncMock(wraps=module.apply_resource_route)
+    monkeypatch.setattr(module, "resolve_resource_route", r.resolve)
+    monkeypatch.setattr(module, "restrict_resource_route", r.restrict, raising=False)
+    monkeypatch.setattr(module, "build_routed_session_options", r.build, raising=False)
+    monkeypatch.setattr(module, "apply_resource_route", r.apply)
+    remaining = module._remaining_deadline_seconds
+
+    def remaining_time(deadline):
+        r.deadlines.append(deadline)
+        return remaining(deadline)
+
+    monkeypatch.setattr(module, "_remaining_deadline_seconds", remaining_time)
+    r.handler = Mock(wraps=runner._handle_session_event_for_step)
+    r.error = Mock(wraps=runner.console.error)
+    monkeypatch.setattr(runner, "_handle_session_event_for_step", r.handler)
+    monkeypatch.setattr(runner.console, "error", r.error)
+
+    def rpc(name):
+        async def reply(*args, timeout):
+            r.rpc_calls.append((name, args, timeout))
+            r.trace.events.append((name, args))
+            if name == "rpc.skills":
+                return SimpleNamespace(skills=[SimpleNamespace(name=n, enabled=True) for n in required])
+            if name == "rpc.list":
+                return SimpleNamespace(host=object(), servers=[
+                    SimpleNamespace(name=n, status="connected") for n in ("knowledge", "other-knowledge")
+                ])
+            if name == "rpc.tools":
+                return SimpleNamespace(tools=[SimpleNamespace(name=n) for n in ("lookup", "write")])
+            if name == "rpc.options":
+                return SimpleNamespace(success=True)
+            if name == "rpc.metadata":
+                servers = tuple(dict.fromkeys(
+                    call_args[0].server_name
+                    for call_name, call_args, _call_timeout in r.rpc_calls
+                    if call_name == "rpc.tools"
+                ))
+                return ToolsGetCurrentMetadataResult(tools=[
+                    CurrentToolMetadata(
+                        description="offline MCP tool",
+                        name=f"mcp__{server_name}__lookup",
+                        mcp_server_name=server_name,
+                        mcp_tool_name="lookup",
+                        namespaced_name=f"mcp:{server_name}-lookup",
+                    )
+                    for server_name in servers
+                ])
+            return SimpleNamespace()
+
+        return AsyncMock(side_effect=reply)
+
+    r.rpc = SimpleNamespace(
+        skills=SimpleNamespace(list=rpc("rpc.skills")),
+        tools=SimpleNamespace(
+            initialize_and_validate=rpc("rpc.init"),
+            get_current_metadata=rpc("rpc.metadata"),
+        ),
+        mcp=SimpleNamespace(list=rpc("rpc.list"), list_tools=rpc("rpc.tools"), disable=rpc("rpc.disable")),
+        options=SimpleNamespace(update=rpc("rpc.options")),
+    )
+    r.client.resumed_session.rpc = r.rpc
+    r.run = lambda **kwargs: runtime.run(workflow_id="ard", **kwargs)
+    return r
+
+
+@pytest.mark.parametrize("tool_search", [None, {"enabled": False}, {"enabled": True, "defer_threshold": 8}], ids=["absent", "off", "on"])
+def test_resume_pre_rpc_kwargs_and_apply_share_caller_restrictions(routed_resume, tool_search):
+    r = routed_resume
+    r.options.update(
+        tools=[Tool(name="local-helper", description="offline tool")],
+        disabled_mcp_servers=["other-knowledge", "absent-mcp", "other-knowledge"],
+        disabled_skills=["optional-knowledge", "absent-skill", "optional-knowledge"],
+        provider={"type": "openai"}, context_tier="long_context", reasoning_effort="high",
+        infinite_sessions={"enabled": True}, cloud={"enabled": True}, unsupported_create_field=True,
+    )
+    if tool_search is not None:
+        r.options["tool_search"] = tool_search
+    original_options = {key: list(value) if isinstance(value, list) else value for key, value in r.options.items()}
+    r.runner.config.available_tools = ["view", "local-helper", "mcp:knowledge-lookup", "mcp:other-knowledge-lookup"]
+    r.runner.config.excluded_tools = ["write", "mcp:knowledge-write"]
+
+    assert r.run() is True
+    assert len(r.trace.resume_calls) == 1
+    actual = r.trace.resume_calls[0]
+    expected = {
+        "session_id": "saved-main-session", "on_event": actual["on_event"],
+        "on_permission_request": r.base_options["on_permission_request"],
+        "continue_pending_work": False, "tools": r.options["tools"],
+        "enable_config_discovery": True, "enable_skills": True,
+        "skill_directories": r.base_options["skill_directories"],
+        "disabled_mcp_servers": ["other-knowledge", "absent-mcp", "engineering", "unclassified", "github-mcp-server"],
+        "disabled_skills": ["optional-knowledge", "absent-skill", "engineering-skill", "unclassified-skill"],
+        "available_tools": ["view", "local-helper", "mcp:knowledge-lookup"],
+        "excluded_tools": ["write", "mcp:knowledge-write"],
+        "request_extensions": False,
+    }
+    if tool_search is not None:
+        expected["tool_search"] = tool_search
+    assert actual == expected, "resume must project only resource kwargs, before its RPC"
+    inspect.signature(_SDKClient.resume_session).bind(None, **actual)
+    r.discover.assert_called_once()
+    r.load_policy.assert_called_once()
+    r.resolve.assert_called_once()
+    assert r.resolve.call_args.kwargs["workflow_id"] == "ard"
+    assert tuple(r.resolve.call_args.kwargs["required_skills"]) == r.required
+    r.restrict.assert_called_once()
+    r.build.assert_called_once()
+    route = r.apply.await_args.kwargs["route"]
+    assert route == ResourceRoute(
+        enabled_mcp_servers=("knowledge",), disabled_mcp_servers=tuple(expected["disabled_mcp_servers"]),
+        enabled_skills=r.required, disabled_skills=tuple(expected["disabled_skills"]),
+        mcp_tool_allowlists={"knowledge": ("lookup",), "other-knowledge": ("lookup",)},
+        required_mcp_servers=("knowledge",), required_skills=r.required,
+        available_tools=tuple(expected["available_tools"]), excluded_tools=tuple(expected["excluded_tools"]),
+    )
+    assert r.build.call_args.kwargs["route"] is route
+    assert [entry.args[0].server_name for entry in r.rpc.mcp.list_tools.await_args_list] == ["knowledge"]
+    assert [name for name, _args, _timeout in r.rpc_calls] == [
+        "rpc.skills", "rpc.init", "rpc.list", "rpc.tools", "rpc.options", "rpc.metadata",
+    ]
+    r.rpc.options.update.assert_awaited_once()
+    assert r.options == original_options
+    assert r.runner.config.available_tools[-1] == "mcp:other-knowledge-lookup"
+    assert r.trace.create_calls == []
+    assert _phase_session_commit_index(r.trace, "saved-main-session") < _event_index(r.trace, "sdk.resume")
+    assert _event_index(r.trace, "rpc.options") < _event_index(r.trace, "sdk.send")
+    assert _event_index(r.trace, "rpc.metadata") < _event_index(r.trace, "sdk.send")
+    assert all(row["phase"] == "main" and row["session_id"] == "saved-main-session" for row in r.trace.transitions)
+    assert len(r.handler.call_args_list) == 1 and r.handler.call_args.args[1] == "1"
+
+
+@pytest.mark.parametrize("kind", ["mcp", "skill"])
+def test_resume_required_caller_disabled_collision_stops_before_rpc(routed_resume, kind):
+    r = routed_resume
+    key, name = ("disabled_mcp_servers", "knowledge") if kind == "mcp" else ("disabled_skills", r.required[0])
+    r.options[key] = [name]
+
+    assert r.run() is False
+    assert "disabled by the caller" in str(r.error.call_args_list)
+    assert r.trace.resume_calls == r.trace.create_calls == r.trace.send_prompts == []
+    r.apply.assert_not_awaited()
+    assert r.rpc_calls == []
+    assert r.runtime.store.step["session_id"] == "saved-main-session"
+
+
+@pytest.mark.parametrize("flags, delay, attribute", [
+    ((True, False), 0, None), ((False, True), 0, None),
+    ((True, False), 0.01, None), ((False, True), 0.01, None),
+    ((False, False), 0, "already_in_use"), ((False, False), 0, "session_was_active"),
+], ids=["in-use-event", "active-event", "delayed-in-use", "delayed-active", "in-use-resident", "active-resident"])
+def test_routed_resume_active_guard_precedes_apply_and_send(routed_resume, flags, delay, attribute):
+    r = routed_resume
+    r.client.resume_flags = flags
+    r.client.resume_event_delay = delay
+    if attribute:
+        setattr(r.client.resumed_session, attribute, True)
+
+    assert r.run() is False
+    assert len(r.trace.resume_calls) == 1 and r.trace.resume_handler_present == [True]
+    r.apply.assert_not_awaited()
+    assert r.rpc_calls == r.trace.create_calls == r.trace.send_prompts == []
+    assert r.client.resumed_session.disconnect_calls == 1 and r.client.stop_calls == 1
+
+
+def test_resume_apply_inherits_the_original_resume_deadline(routed_resume):
+    r = routed_resume
+    assert r.module._RUNNER_RESUME_EVENT_TIMEOUT_SECONDS == 60.0
+    r.client.resume_event_delay = 0.01
+
+    assert r.run() is True
+    r.apply.assert_awaited_once()
+    assert r.apply.await_args.kwargs.get("deadline") == r.deadlines[0]
+    assert len(r.deadlines) >= 3 and len(set(r.deadlines)) == 1
+    assert all(0 < timeout < 60.0 for _name, _args, timeout in r.rpc_calls)
+
+
+def test_resume_deadline_starts_after_slow_resource_discovery(routed_resume, monkeypatch):
+    r = routed_resume
+    monkeypatch.setattr(r.module, "_RUNNER_RESUME_EVENT_TIMEOUT_SECONDS", 0.2)
+
+    async def slow_discovery(**_kwargs):
+        await asyncio.sleep(0.3)
+        return r.snapshot
+
+    r.discover.side_effect = slow_discovery
+    r.client.resume_event_delay = 0.01
+
+    assert r.run() is True
+    assert r.client.resumed_session is not None
+    assert r.trace.create_calls == []
+
+
+def test_resume_expired_deadline_never_creates_an_unawaited_rpc_coroutine(
+    routed_resume, monkeypatch, recwarn
+):
+    r = routed_resume
+    monkeypatch.setattr(r.module, "_RUNNER_RESUME_EVENT_TIMEOUT_SECONDS", 0.0)
+
+    assert r.run() is False
+    assert not [w for w in recwarn.list if "was never awaited" in str(w.message)]
+    assert r.trace.send_prompts == r.trace.create_calls == []
+
+def test_resume_hung_routing_is_cancelled_within_remaining_budget(routed_resume, monkeypatch):
+    r = routed_resume
+    monkeypatch.setattr(r.module, "_RUNNER_RESUME_EVENT_TIMEOUT_SECONDS", 0.05)
+    cancelled = []
+
+    async def hang(*, timeout):
+        try:
+            await asyncio.Future()
+        except asyncio.CancelledError:
+            cancelled.append(timeout)
+            raise
+
+    r.rpc.tools.initialize_and_validate.side_effect = hang
+    # A test-only safety bound catches an unbounded product apply; it is not the product deadline.
+    assert r.run(timeout=0.5) is False
+    assert len(cancelled) == 1 and 0 < cancelled[0] <= 0.05
+    r.rpc.mcp.disable.assert_not_awaited()
+    r.rpc.options.update.assert_not_awaited()
+    assert r.trace.send_prompts == r.trace.create_calls == []
+    assert r.client.resumed_session.disconnect_calls >= 1 and r.client.stop_calls == 1
+
+
+def test_resume_external_cancellation_propagates_after_shared_cleanup(routed_resume):
+    r = routed_resume
+
+    async def scenario():
+        entered = asyncio.Event()
+
+        async def hang(*, timeout):
+            entered.set()
+            await asyncio.Future()
+
+        r.rpc.tools.initialize_and_validate.side_effect = hang
+        with patch.object(socket.socket, "connect", r.runtime.network_guard), patch.object(socket.socket, "connect_ex", r.runtime.network_guard):
+            task = asyncio.create_task(r.runner.run_step("1", "T13 cancel", _MAIN_PROMPT, workflow_id="ard"))
+            try:
+                await asyncio.wait_for(entered.wait(), timeout=1)
+                task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+            finally:
+                if not task.done():
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(scenario())
+    assert r.client.resumed_session.disconnect_calls >= 1 and r.client.stop_calls == 1
+    assert r.trace.send_prompts == r.trace.create_calls == []
+    r.rpc.mcp.disable.assert_not_awaited()
+    r.rpc.options.update.assert_not_awaited()
+
+
+def test_unrouted_resume_preserves_explicit_false_and_empty_resource_options(routed_resume):
+    r = routed_resume
+    r.options.update(
+        tools=[], enable_config_discovery=False, enable_skills=False, skill_directories=[],
+        disabled_skills=[], disabled_mcp_servers=[], available_tools=[], excluded_tools=[],
+        request_extensions=False,
+    )
+
+    assert r.runtime.run() is True
+    actual = r.trace.resume_calls[0]
+    assert actual == {
+        "session_id": "saved-main-session", "on_event": actual["on_event"],
+        "on_permission_request": r.base_options["on_permission_request"],
+        "continue_pending_work": False, **r.options,
+    }
+    r.discover.assert_not_called()
+    r.apply.assert_not_awaited()
+
+
+# SDK 1.0.11 sends session.destroy on disconnect; 1.0.13 and later send session.detach.
+_SDK_DISCONNECT_METHODS = ("session.destroy", "session.detach")
+
+
+@pytest.fixture(params=["copilot-cli", "empty"])
+def sdk_resume_wire(routed_resume, request, monkeypatch):
+    """SDK 1.0.11 public resume/typed RPCs, without start or runtime resolution."""
+    r = routed_resume
+    r.snapshot = replace(r.snapshot, mcp_servers=(), skills=r.snapshot.skills[:len(r.required)])
+    r.policy = replace(r.policy, required_mcp_servers_by_skill={})
+    r.runner.config.available_tools = ["view"]  # Also required by SDK empty mode.
+    r.options["excluded_tools"] = []
+    r.wire_calls = []
+    r.persisted_disabled = set()
+    r.missing_skills = set()
+    r.mode = request.param
+    blocked = Mock(side_effect=r.runtime.network_guard)
+    for name in ("start", "_resolve_runtime_entrypoint", "_start_cli_server", "_start_inprocess_ffi", "_connect_to_server"):
+        monkeypatch.setattr(_SDKClient, name, blocked)
+    with patch.object(socket.socket, "connect", blocked), patch.object(socket.socket, "connect_ex", blocked):
+        sdk = _SDKClient(connection=_SDKConnection.for_uri("localhost:54321"), mode=r.mode)
+
+    async def rpc(method, params, **kwargs):
+        r.wire_calls.append((method, dict(params), dict(kwargs)))
+        r.trace.events.append((method, dict(params)))
+        if method == "session.resume":
+            r.resume_payload = dict(params)
+            if "disabledSkills" in params:
+                r.persisted_disabled = set(params["disabledSkills"])
+            session = sdk._sessions[params["sessionId"]]
+            assert len(session._event_handlers) == 1, "SDK must register the callback before RPC"
+            session._dispatch_event(SimpleNamespace(
+                type=SessionEventType.SESSION_RESUME,
+                data=SessionResumeData(
+                    event_count=0, resume_time=datetime.now(timezone.utc),
+                    already_in_use=False, session_was_active=False,
+                ),
+            ))
+            assert r.handler.call_count == 1, "resume event must be observed before RPC returns"
+            monkeypatch.setattr(session, "send_and_wait", r.client.resumed_session.send_and_wait)
+            return {"sessionId": params["sessionId"]}
+        if method == "session.skills.list":
+            assert params == {"sessionId": "saved-main-session"}
+            assert set(kwargs) == {"timeout"} and 0 < kwargs["timeout"] <= 60.0
+            return {"skills": [
+                {
+                    "name": name, "description": "offline required Skill", "source": "project",
+                    "userInvocable": True,
+                    "enabled": name not in r.persisted_disabled and r.resume_payload.get("enableSkills", r.mode != "empty"),
+                }
+                for name in r.required if name not in r.missing_skills
+            ]}
+        if method == "session.options.update":
+            return {"success": True}
+        if method in _SDK_DISCONNECT_METHODS:
+            assert params == {"sessionId": "saved-main-session"}
+            return {"success": True}
+        raise AssertionError(f"unexpected offline SDK request: {method}")
+
+    transport = SimpleNamespace(request=AsyncMock(side_effect=rpc))
+    sdk._client = transport
+
+    async def resume(session_id, **kwargs):
+        inspect.signature(_SDKClient.resume_session).bind(sdk, session_id, **kwargs)
+        r.trace.resume_calls.append({"session_id": session_id, **kwargs})
+        return await sdk.resume_session(session_id, **kwargs)
+
+    monkeypatch.setattr(r.client, "resume_session", resume)
+    yield r
+    blocked.assert_not_called()
+    assert not any(method in ("session.create", "session.delete", "connect") for method, _params, _kwargs in r.wire_calls)
+
+
+@pytest.mark.parametrize("required_state", ["enabled", "persisted-disabled", "missing"])
+def test_sdk_resume_empty_disabled_wire_still_checks_required_skills(sdk_resume_wire, required_state):
+    r = sdk_resume_wire
+    if required_state == "persisted-disabled":
+        r.persisted_disabled.add(r.required[0])
+    elif required_state == "missing":
+        r.missing_skills.add(r.required[0])
+
+    assert r.run() is (required_state == "enabled")
+    assert len(r.trace.resume_calls) == 1
+    actual = r.trace.resume_calls[0]
+    assert actual == {
+        "session_id": "saved-main-session", "on_event": actual["on_event"],
+        "on_permission_request": r.base_options["on_permission_request"],
+        "continue_pending_work": False, "enable_config_discovery": True, "enable_skills": True,
+        "skill_directories": r.base_options["skill_directories"], "disabled_mcp_servers": ["github-mcp-server"],
+        "disabled_skills": [], "available_tools": ["view"], "excluded_tools": [],
+        "request_extensions": False,
+    }
+    payload = r.resume_payload
+    assert payload["disabledMcpServers"] == ["github-mcp-server"]
+    assert "disabledSkills" not in payload, "SDK 1.0.11 omits an empty disabled_skills list"
+    assert payload["enableSkills"] is payload["enableConfigDiscovery"] is True
+    assert payload["continuePendingWork"] is False
+    assert payload["skillDirectories"] == r.base_options["skill_directories"]
+    assert payload["availableTools"] == ["view"] and payload["excludedTools"] == []
+    assert not {"model", "provider", "streaming", "contextTier", "infiniteSessions", "toolSearch", "mcpServers"} & payload.keys()
+    methods = [method for method, _params, _kwargs in r.wire_calls]
+    disconnects = sum(method in _SDK_DISCONNECT_METHODS for method in methods)
+    assert methods.count("session.resume") == methods.count("session.skills.list") == disconnects == 1
+    assert "session.tools.initializeAndValidate" not in methods
+    filter_updates = [params for method, params, _kwargs in r.wire_calls if method == "session.options.update" and "availableTools" in params]
+    if required_state == "enabled":
+        assert filter_updates == [{"sessionId": "saved-main-session", "availableTools": ["view"]}]
+        assert _event_index(r.trace, "session.skills.list") < _event_index(r.trace, "sdk.send")
+        assert len(r.trace.send_prompts) == 1
+    else:
+        assert filter_updates == r.trace.send_prompts == []
+        assert "required Skill runtime is unavailable" in str(r.error.call_args_list)
+        assert r.required[0] in str(r.error.call_args_list)
+    if required_state == "persisted-disabled":
+        assert r.persisted_disabled == {r.required[0]}, "omission cannot reset persisted Skill state"
+    assert r.trace.create_calls == [] and r.client.stop_calls == 1
+    assert all(row["phase"] == "main" and row["session_id"] == "saved-main-session" for row in r.trace.transitions)
+
+
+def test_sdk_resume_nonempty_caller_disables_are_emitted(sdk_resume_wire):
+    r = sdk_resume_wire
+    r.options.update(disabled_mcp_servers=["caller-off", "caller-off"], disabled_skills=["old-optional", "old-optional"])
+
+    assert r.run() is True
+    assert r.resume_payload["disabledMcpServers"] == ["caller-off", "github-mcp-server"]
+    assert r.resume_payload["disabledSkills"] == ["old-optional"]
+    assert r.apply.await_args.kwargs["route"].disabled_mcp_servers == ("caller-off", "github-mcp-server")
+    assert r.apply.await_args.kwargs["route"].disabled_skills == ("old-optional",)
+    assert sum(method == "session.skills.list" for method, _params, _kwargs in r.wire_calls) == 1
+
+
+def test_sdk_generated_routing_requests_use_public_timeout_signatures():
+    """Characterize generated serialization, not hand-written raw RPC calls."""
+    transport = SimpleNamespace(request=AsyncMock(side_effect=[
+        {"skills": []}, {}, {"servers": []}, {"tools": [{"name": "lookup"}]}, {"success": True}, {},
+    ]))
+    session = _SDKSession("offline-generated", transport)
+
+    async def scenario():
+        await session.rpc.skills.list(timeout=0.25)
+        await session.rpc.tools.initialize_and_validate(timeout=0.25)
+        await session.rpc.mcp.list(timeout=0.25)
+        await session.rpc.mcp.list_tools(MCPListToolsRequest(server_name="knowledge"), timeout=0.25)
+        result = await session.rpc.options.update(SessionUpdateOptionsParams(available_tools=[], excluded_tools=["write"]), timeout=0.25)
+        assert result.success is True
+        await session.rpc.mcp.disable(MCPDisableRequest(server_name="other-knowledge"), timeout=0.25)
+
+    asyncio.run(scenario())
+    base = {"sessionId": "offline-generated"}
+    assert transport.request.await_args_list == [
+        call("session.skills.list", base, timeout=0.25),
+        call("session.tools.initializeAndValidate", base, timeout=0.25),
+        call("session.mcp.list", base, timeout=0.25),
+        call("session.mcp.listTools", {**base, "serverName": "knowledge"}, timeout=0.25),
+        call("session.options.update", {**base, "availableTools": [], "excludedTools": ["write"]}, timeout=0.25),
+        call("session.mcp.disable", {**base, "serverName": "other-knowledge"}, timeout=0.25),
+    ]

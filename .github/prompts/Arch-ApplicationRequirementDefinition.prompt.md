@@ -67,4 +67,4 @@ Requirement ID は `APP-NNN-FR-NNN` / `APP-NNN-NFR-NNN` / `APP-NNN-C-NNN` のい
 ## 完了報告
 
 - 処理APP数、作成数、更新数、競合Blocker数、orphan数を記録する。
-- 検証マーカーを含める。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。

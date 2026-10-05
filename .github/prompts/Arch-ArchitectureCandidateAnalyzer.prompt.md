@@ -9,15 +9,7 @@
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 
@@ -65,10 +57,10 @@
 1. 入力確認
    - `app-catalog.md` からAPP一覧を取得。
    - 各APPの `docs/architectural-requirements-app-NNN.md` が実在し、schema・APP-IDが正しいことを確認する（Runner の preflight は SDK 起動前の存在チェックのみを行うため、schema・整合性チェックは本 Agent の責務として継続する）。
-   - 必須入力項目を他の属性や固定候補から補完しない。ファイルはあるが核心入力（例: `system_overview`, `client_type`, `priorities`）が欠ける場合は、APP単位で質問して判定中断。他APPは継続。
+   - 必須入力項目を他の属性や固定候補から補完しない。ファイルはあるが核心入力（例: `system_overview`, `client_type`, `priorities`）が欠ける場合は、APP単位で安全な既定値を選び、理由と影響を記録する。他APPは継続。
 2. 矛盾検出（APP単位）
    - 例: `cloud_allowed=no` と高スケール必須、`client_type=batch` と realtime/offline 必須など。
-   - 矛盾時は APP-ID・矛盾一覧・優先確認質問（最大3問）を返し、当該APPのみ停止。
+   - 矛盾時は APP-ID・矛盾一覧・採用した既定値・理由・影響を返し、当該APPは安全側の判定で扱う。
 3. hard constraints 除外
    - `cloud_allowed`, `offline.required`, `realtime.required`, `data_residency`, `client_type` で候補除外。
    - `client_type=batch` ではフロントエンド系候補を除外。逆に web/mobile/desktop では「データデータフロー処理」を除外。
@@ -83,15 +75,12 @@
 6. 統合出力生成
    - `docs/catalog/app-arch-catalog.md` を §出力契約どおりに作成/更新。
 7. 計画・分割
-   - Skill `task-dag-planning` に従い、必要時は `{WORK}plan.md` / `{WORK}subissues.md` を作成。
-   - planメタデータ・`validate-plan.sh` の要件を満たす。
-8. 最終品質レビュー
-  - 下記「最終品質レビュー」節の単回セルフチェックを実施する。
+- 計画を書く場合は Skill `task-dag-planning` に従う。
 </task>
 
-## 最終品質レビュー（単回インライン・セルフチェック）
+## 受入観点（完了条件の補足）
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 - **判定正確性**：固定候補、hard constraints、重み付きスコア、同点処理、入力ステータス、処理統計が入力と本 Prompt の規則に一致するか。
 - **説得力**：推薦・除外・代替案・トレードオフ・次アクションに参照フィールドまたはキーワードの根拠があるか。
@@ -107,7 +96,7 @@
     - ✗ 禁止例（実際に発生した契約違反）: 見出し `## 2. Architecture Selection Summary` / 列名 `Primary Arch` / 値 `**Webフロントエンド + クラウド**`
   - **A) サマリ表（全APP横断）**: 列 = APP-ID / APP名 / 推薦アーキテクチャ / Confidence / 入力ステータス
   - **B) 各APP詳細**（判定完了・仮定付きAPP）: 結論, Confidence, 入力要約, hard constraints除外, Top3, 比較表, トレードオフ, 次アクション
-  - **C) 未処理・不足APP一覧**: 矛盾停止・質問待ち・致命的欠損を必ず列挙（該当なしは明記）
+  - **C) 未処理・不足APP一覧**: 矛盾・既定値適用・致命的欠損を必ず列挙（該当なしは明記）
   - **D) 横断分析**（判定完了APPが2件以上）
   - **E) 処理統計**（全APP数/判定完了/判定未完了/横断分析実施可否）
 - 入力ステータス定義（必須）:

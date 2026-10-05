@@ -15,6 +15,15 @@
 > [code-query（`cq`）](skills-code-query.md) が担当する。両者は**別パッケージ・別 DB**で、同一コーパスに混ぜない
 > （IDF が汚染されるため）。棲み分けの一覧表は [skills-code-query.md §8](skills-code-query.md#8-mdq-との棲み分けと連携) にある。
 
+## 最短導線と副作用
+
+- 最短導線は「`mdq.toml` の roots → `mdq search --q ...` → 必要時だけ `chunk_id` で `mdq get` / Skill 配下 `references/`」。Skill 詳細は `SKILL.md` を入口にし、足りない時だけ参照を広げる。
+- 現行 roots は `docs`, `docs-generated`, `users-guide`, `template`, `knowledge`, `qa`, `docs-original`, `sample`, `hve-dev`。`work/` は対象外、表形式インベントリは `tabular` 指定で別途索引される。
+- 副作用: 通常の `mdq search` は索引を更新せず、索引済み path の size/mtime 差分を stale 警告として stderr へ出す。検索クエリと結果集計は `.mdq/usage.jsonl` へ追記される。
+- 明示更新は `mdq index` または `mdq watch`。`target_folders` 変更だけでは再構築されず、`watch` は long-running のため usage 記録対象外。
+- `index` / `search` / `get` / `list` / `stats` は usage を書くため、「完全 read-only 調査なら CLI は usage を書かない」とは案内しない。
+- HVE 固有資料・repo-specific な references は配布キット非同梱の任意資料。source copy と kit canonical の同一性は同期・verify 後に確認するもので、最終同期前の実測済み主張として書かない。
+
 ## 目次
 
 | § | 章 | 主な対象読者 |
@@ -529,7 +538,7 @@ GUI 設定画面 → `skills` → `Markdown-Query` の「**対象フォルダ**�
 1. **mdq インデックス対象の上書き**
    `python -m mdq index`（GUI の「インデックスの手動更新」含む）が、§1.2 の 3 段の優先順（`--root` > `mdq.toml` > パッケージ既定）で解決した roots ではなく `target_folders` を索引対象として使用する。索引と検索範囲を一致させるため。
 2. **Agent への Markdown-Query Skill 利用強制**
-   HVE Cloud Agent Orchestrator / CLI Orchestrator が Agent を起動する際、`additional_prompt` の先頭に強制ブロックが自動注入される。Agent は対象フォルダ配下の `.md` を参照する際に `read_file` / `grep_search` より先に `python -m mdq search` を最優先で使用するよう指示される。
+   HVE Cloud Agent Orchestrator / CLI Orchestrator が Agent を起動する際、Markdown-Query 強制ブロックが `additional_prompt` として組み立てられ、最終的な Step prompt 本文の末尾へ付与される。複数の addendum がある場合、そのブロック自身は `additional_prompt` 内の先頭側に置かれる。Agent は対象フォルダ配下の `.md` を参照する際に `read_file` / `grep_search` より先に `python -m mdq search` を最優先で使用するよう指示される。
 
 `target_folders` が **未設定（空）** の場合は、いずれの動作も発生せず既存の挙動（§1.2 の優先順で roots を解決、強制プロンプト無し）を維持する。
 
@@ -798,6 +807,8 @@ markdown (.md) and you need relevance-ranked hits across multiple files.
 2. 本ガイド §「v1 採用 15 指標」の **A1（サブコマンド別呼び出し回数）** で `search` の件数を確認。
 3. 件数が想定タスク数に対して極端に少ない（例: タスク 10 件に対して `search` 0 回）場合は、上記 1〜5 のうち未実施項目がないか再点検する。
 4. 自リポジトリでの実測トークン削減率を `python tools/skills/markdown_query/benchmark.py` で取得し、本ガイド冒頭の HVE 実測値と比較する。データ規模・クエリ分布が異なれば数値は変動するため、絶対値ではなく **同一ベンチを Skill 改善前後で 2 回実行して相対変化を見る** ことを推奨。
+
+**HVE リポジトリの CI での回帰検出**: HVE リポジトリでは、`test-hve-python.yml` の `mdq index smoke test` job が [mdq/golden-queries.json](../mdq/golden-queries.json) を `benchmark.py --golden`（`mdq_auto` シナリオ）で評価し、top-k の正解数が下限を下回ると失敗する。下限とその変え方は [要求定義書](../hve-dev/requirement-definition.md) の FR-MAINT-15 を参照。golden は配布キットに含まれないため、移植先にはこのゲートは入らない。
 
 ### 想定外/未確認事項
 

@@ -2,7 +2,7 @@
 
 ## 1. 目的
 
-HVE の AAG / AAGD で設計・実装するアプリケーション AI Agent が、ユーザー目的、検索、業務操作、MCP、Skill、自己改善を一貫した契約として扱うための最小要件を定義する。
+HVE の AAG / AAGD で設計・実装するアプリケーション AI Agent が、ユーザー目的、検索、業務操作、MCP、Skillを一貫した契約として扱うための最小要件を定義する。
 
 本契約は新しい Agent framework を定義しない。既存の Agent 詳細設計、Tool Catalog、State Machine、TDD、HVE gate に不足項目を追加する。
 
@@ -12,7 +12,7 @@ HVE の AAG / AAGD で設計・実装するアプリケーション AI Agent が
 
 - AAG の Step 1〜3 で生成する Agent 設計。
 - AAGD の Step 2.1〜3 で生成するテスト、Agent実装、デプロイ成果物。
-- AAG / AAGD の成果物を検証する HVE Self-Improve と runtime gate。
+- AAG / AAGD の成果物を検証する HVE runtime gate。
 
 ### 対象外
 
@@ -282,7 +282,6 @@ provider が提供する Agent 向け評価指標（意図解決、タスク遵�
 
 - `Quality criteria` は AG-CAP-01 の Success criteria を参照する。別の合格基準を新設しない。
 - 実測の証跡は AG-CAP-08 の span / 属性から取ることを既定とする。別経路で取る場合は理由を書く。
-- **生成 Agent の評価（AG-CAP-10）と、HVE 開発時の Post-DAG Self-Improve は別物である。** 一方の PASS を他方の PASS として流用しない。
 - Toolbox / tool search を採用した場合の実測は Skill `foundry-toolbox-contract` の TB-CAP が正本であり、AG-CAP-10 はその結果を参照する。
 
 #### 5.8.4 N/A の扱い
@@ -301,7 +300,6 @@ AG-CAP-10 は全Agentで MUST であり、N/A にできない。検索経路を�
 | AAGD Step 2.3 (`Dev-Microservice-Azure-AgentCoding`) | 設計で選択された能力だけを実装しGREEN化 | 未選択providerの先回り実装 |
 | AAGD Step 3 (`Dev-Microservice-Azure-AgentDeploy`) | 選択providerのpreflight・接続・smoke test | Preview値やAPI versionの推測固定 |
 | HVE runtime gate | 必須契約と対応成果物を決定的に検証 | LLMの自己申告だけでPASS |
-| HVE Post-DAG Self-Improve | AAG/AAGDが生成した設計・テスト・コードを対象に、静的解析とテスト証跡で未達を検出・修正・再検証 | 生成Agentの本番利用ログを必須入力にすること、scan→plan→無変更scanを改善成功扱いすること |
 
 ## 7. 設計と実装のトレーサビリティ
 
@@ -314,9 +312,8 @@ AG-CAP-10 は全Agentで MUST であり、N/A にできない。検索経路を�
 | Agent test code | テスト仕様パスとテストケースID |
 | Agent implementation | 対応 Contract ID または設計セクション |
 | Deploy evidence | 選択provider、確認事項、公式根拠、実行結果 |
-| Self-Improve evidence | criterion、改善前結果、対象 Contract ID、変更ファイル、改善後結果、変更差分または改善不要理由 |
 
-生成Agentの Runtime Goal Loop は、1リクエスト内の目的達成を AG-CAP-01 の evaluator で評価する。HVE Post-DAG Self-Improve は、開発成果物のlint/test/contract gateを改善する。両者は別の状態、上限、証跡を持ち、一方のPASSを他方のPASSとして流用しない。
+生成Agentの Runtime Goal Loop は、1リクエスト内の目的達成を AG-CAP-01 の evaluator で評価する。
 
 ## 8. 検証レベル
 
@@ -357,7 +354,6 @@ AG-CAP-10 は全Agentで MUST であり、N/A にできない。検索経路を�
 | AAGD実装と設計の対応 | `hve.artifact_validation` のAI Agent実装validator |
 | Step終了時のfail判定 | `hve.runner` のAAG/AAGD allowlist gate |
 | MUST/条件付きMUST/N/Aの回帰 | 後続Subで作成する `hve/tests/test_ai_agent_capability_contract.py` |
-| HVE Self-Improveの変更前後証跡 | Self-Improve unit/integration tests |
 
 このreference作成時点では、後続Subが `hve/tests/test_ai_agent_capability_contract.py`、`hve.artifact_validation` のvalidator、`hve.runner` のgateを実装する。契約文の存在だけを実装完了とはしない。
 
@@ -376,5 +372,5 @@ AG-CAP-10 は全Agentで MUST であり、N/A にできない。検索経路を�
 1. AAG Step 1〜3がAG-CAP-01〜10を生成する。
 2. AAGD Step 2.1〜3が契約をテスト・実装・検証する。
 3. HVE gateが欠落・理由なしN/A・実装不整合を検出する。
-4. 生成AgentのRuntime Goal LoopとHVE開発時Self-Improveを別々に検証する。
-5. 既存TDD contract tests、`hve/tests/test_artifact_validation_deploy_gate.py`、`hve/tests/test_workiq.py`、`hve/tests/test_runner.py` のWork IQ QA-only契約がPASSする。
+4. 生成AgentのRuntime Goal Loopを検証する。
+5. 既存TDD contract tests、`hve/tests/test_artifact_validation_deploy_gate.py`、`hve/tests/test_knowledge_discovery.py`、`hve/tests/test_runner.py` の知識探索（Work IQ を読み取り専用の知識源として使う経路）の契約がPASSする。

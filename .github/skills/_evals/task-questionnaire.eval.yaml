@@ -51,7 +51,7 @@ test_cases:
     input: "タスクの依存関係を DAG で整理して plan.md を作成してください。"
     expected_trigger: false
     expected_skill: task-dag-planning
-    reason: "SKILL.md の DO NOT USE FOR に 'DAG planning (use task-dag-planning)' が明示されており、計画作成は task-dag-planning が担当"
+    reason: "Skill task-dag-planning の USE FOR に task decomposition into a dependency graph が含まれ、DAG 分解と計画作成は task-dag-planning が担当"
 
   - id: implementation-request
     input: "Azure Functions の関数コードを実装してください。"

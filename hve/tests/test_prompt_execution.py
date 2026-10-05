@@ -68,6 +68,17 @@ class TestArgv:
         assert "--additional-prompt" in argv
         assert argv[argv.index("--additional-prompt") + 1] == "設計を進めたい"
 
+    def test_empty_goal_omits_additional_prompt(self, tmp_path: Path):
+        request = parse_request(
+            {"schema_version": 1, "workflows": [{"workflow_id": "aad-web"}, {"workflow_id": "aas"}]}
+        )
+        plan = _plan(tmp_path, request=request)
+        assert plan.goal == ""
+        assert [w.workflow_id for w in plan.workflows] == ["aas", "aad-web"]
+        for wp in plan.workflows:
+            assert "--additional-prompt" not in wp.argv
+            assert wp.argv[:3] == ("orchestrate", "--workflow", wp.workflow_id)
+
     def test_argv_is_a_tuple_of_strings_not_a_shell_string(self, tmp_path: Path):
         plan = _plan(tmp_path)
         for wp in plan.workflows:
@@ -120,6 +131,120 @@ class TestSha256:
         b = _plan(tmp_path, request=_request(workflows=[{"workflow_id": "aas"}]))
         assert a.sha256 != b.sha256
 
+    def test_step_input_content_and_order_are_hashed(self, tmp_path: Path):
+        incoming = tmp_path / "incoming"
+        incoming.mkdir()
+        (incoming / "a.md").write_text("A", encoding="utf-8")
+        (incoming / "b.md").write_text("B", encoding="utf-8")
+
+        def request_for(names):
+            return _request(
+                workflows=[{
+                    "workflow_id": "aas",
+                    "steps": ["1"],
+                    "step_inputs": [
+                        {"step_id": "1", "role": "additional", "source": f"incoming/{name}"}
+                        for name in names
+                    ],
+                }]
+            )
+
+        ab = _plan(tmp_path, request=request_for(["a.md", "b.md"]))
+        ba = _plan(tmp_path, request=request_for(["b.md", "a.md"]))
+        assert ab.sha256 != ba.sha256
+        (incoming / "a.md").write_text("changed", encoding="utf-8")
+        changed = _plan(tmp_path, request=request_for(["a.md", "b.md"]))
+        assert ab.sha256 != changed.sha256
+
+    def test_canonical_json_contains_normalized_step_input_bundle(self, tmp_path: Path):
+        (tmp_path / "incoming").mkdir()
+        (tmp_path / "incoming" / "a.md").write_text("A", encoding="utf-8")
+        request = _request(
+            workflows=[{
+                "workflow_id": "aas",
+                "steps": ["1"],
+                "step_inputs": [
+                    {"step_id": "1", "role": "additional", "source": "incoming/a.md"}
+                ],
+            }]
+        )
+        payload = json.loads(canonical_plan_json(_plan(tmp_path, request=request)))
+        bundles = payload["workflows"][0]["step_input_bundles"]
+        assert bundles[0]["workflow_id"] == "aas"
+        assert bundles[0]["step_id"] == "1"
+        assert len(bundles[0]["entries"][0]["sha256"]) == 64
+
+
+class TestExecutionPolicy:
+    """FR-PROMPT-13 — execution_policy を argv と plan hash へ反映する。"""
+
+    @staticmethod
+    def _policy_request(policy: dict):
+        return parse_request(
+            {
+                "schema_version": 1,
+                "goal": "デプロイまで無人で進めたい",
+                "workflows": [
+                    {"workflow_id": "asdw-web", "params": {"resource_group": "rg-hve-dev"}}
+                ],
+                "execution_policy": policy,
+            }
+        )
+
+    def test_without_policy_argv_and_json_are_unchanged(self, tmp_path: Path):
+        plan = _plan(tmp_path)
+        for wp in plan.workflows:
+            assert "--unattended" not in wp.argv
+        assert "execution_policy" not in json.loads(canonical_plan_json(plan))
+
+    def test_unattended_is_propagated_to_every_child_argv(self, tmp_path: Path):
+        plan = _plan(tmp_path, request=self._policy_request({"unattended": True}))
+        assert all("--unattended" in wp.argv for wp in plan.workflows)
+
+    def test_declared_scope_is_propagated_to_child_argv(self, tmp_path: Path):
+        plan = _plan(
+            tmp_path,
+            request=self._policy_request(
+                {
+                    "unattended": True,
+                    "pre_approved_operations": ["azure_deploy"],
+                    "allow_public_exposure": True,
+                    "budget_note": "検証用",
+                }
+            ),
+        )
+        argv = list(plan.workflows[0].argv)
+        assert argv[argv.index("--pre-approved-operation") + 1] == "azure_deploy"
+        assert "--allow-public-exposure" in argv
+        assert argv[argv.index("--budget-note") + 1] == "検証用"
+
+    def test_policy_changes_hash_and_is_in_canonical_json(self, tmp_path: Path):
+        base = _plan(tmp_path, request=self._policy_request({"unattended": False}))
+        declared = _plan(tmp_path, request=self._policy_request({"unattended": True}))
+        assert base.sha256 != declared.sha256
+        payload = json.loads(canonical_plan_json(declared))
+        assert payload["execution_policy"]["unattended"] is True
+
+    def test_format_plan_shows_the_declared_scope(self, tmp_path: Path):
+        plan = _plan(
+            tmp_path,
+            request=self._policy_request(
+                {"unattended": True, "pre_approved_operations": ["azure_deploy"]}
+            ),
+        )
+        text = prompt_execution.format_plan(plan)
+        assert "事前承認の宣言" in text
+        assert "azure_deploy" in text
+        assert "rg-hve-dev" in text
+
+
+class TestDefaultSelection:
+    def test_declared_outputs_follow_the_registry_default_selection(self) -> None:
+        """FR-WF-ADI-18（v3.33）: steps 省略時は既定で選ばれない Step の成果物を完了条件に出さない。"""
+        outputs = prompt_execution._declared_output_paths("adi", ())
+        assert "qa/original-docs-cross-questionnaire.md" not in outputs
+        assert "docs/catalog/design-doc-inventory.md" in outputs
+
 
 class TestInputAliases:
     def test_validated_aliases_appear_in_argv_and_plan(self, tmp_path: Path):
@@ -159,6 +284,31 @@ class TestInputAliases:
             ]
         )
         with pytest.raises(InputAliasError):
+            _plan(tmp_path, request=request)
+
+    def test_step_input_canonical_conflict_fails_closed(self, tmp_path: Path):
+        from hve.step_inputs import StepInputError
+
+        (tmp_path / "inputs").mkdir()
+        (tmp_path / "inputs" / "alias.md").write_text("alias", encoding="utf-8")
+        (tmp_path / "inputs" / "extra.md").write_text("extra", encoding="utf-8")
+        request = _request(
+            workflows=[{
+                "workflow_id": "aas",
+                "steps": ["1"],
+                "input_aliases": [{
+                    "canonical": "docs/catalog/app-catalog.md",
+                    "actual": "inputs/alias.md",
+                }],
+                "step_inputs": [{
+                    "step_id": "1",
+                    "role": "additional",
+                    "canonical": "docs/catalog/app-catalog.md",
+                    "source": "inputs/extra.md",
+                }],
+            }]
+        )
+        with pytest.raises(StepInputError, match="input_alias"):
             _plan(tmp_path, request=request)
 
 
@@ -260,6 +410,80 @@ class TestRunPlan:
             runner=runner,
             cwd=tmp_path,
         ) != 0
+        assert runner.calls == []
+
+    def test_step_input_digest_drift_fails_before_any_child(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        (tmp_path / "incoming").mkdir()
+        (tmp_path / "incoming" / "a.md").write_text("A", encoding="utf-8")
+        plan = _plan(
+            tmp_path,
+            request=_request(
+                workflows=[{
+                    "workflow_id": "aas",
+                    "steps": ["1"],
+                    "step_inputs": [{
+                        "step_id": "1",
+                        "role": "additional",
+                        "source": "incoming/a.md",
+                    }],
+                }]
+            ),
+            head="abc123",
+        )
+        entry = plan.workflows[0].step_input_bundles[0].entries[0]
+        (tmp_path / entry.actual).write_text("tampered", encoding="utf-8")
+        monkeypatch.setattr(
+            prompt_execution,
+            "resolve_head_commit",
+            lambda _root: "abc123",
+        )
+        runner = _FakeRunner([0])
+
+        assert run_plan(
+            plan,
+            dry_run=False,
+            runner=runner,
+            cwd=tmp_path,
+        ) != 0
+        assert runner.calls == []
+
+    def test_step_input_digest_drift_fails_when_cwd_is_omitted(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        (tmp_path / "incoming").mkdir()
+        (tmp_path / "incoming" / "a.md").write_text("A", encoding="utf-8")
+        plan = _plan(
+            tmp_path,
+            request=_request(
+                workflows=[{
+                    "workflow_id": "aas",
+                    "steps": ["1"],
+                    "step_inputs": [{
+                        "step_id": "1",
+                        "role": "additional",
+                        "source": "incoming/a.md",
+                    }],
+                }]
+            ),
+            head="abc123",
+        )
+        entry = plan.workflows[0].step_input_bundles[0].entries[0]
+        (tmp_path / entry.actual).write_text("tampered", encoding="utf-8")
+        monkeypatch.setattr(
+            prompt_execution,
+            "resolve_head_commit",
+            lambda _root: "abc123",
+        )
+        monkeypatch.chdir(tmp_path)
+        runner = _FakeRunner([0])
+
+        assert run_plan(plan, dry_run=False, runner=runner) != 0
         assert runner.calls == []
 
     def test_invalid_runner_result_is_not_silently_successful(self, tmp_path: Path):
@@ -371,6 +595,59 @@ class TestDurableRegistrationCompatibility:
         assert "--cloud-session-max-concurrency" in persisted
         assert "--fleet-mode" in persisted
 
+    def test_saved_tool_search_defer_threshold_registers_with_real_boundary(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        """FR-MODEL-04 / FR-LOCAL-SURFACE-01 (a): 27共有keyの一つである
+        tool_search_defer_threshold は、request override でも保存設定でも、
+        real ResumeService.sanitize_argv を通した durable 登録に成功しなければ
+        ならない（D-02 回帰）。"""
+        from hve.run_state_store import RunStateStore
+
+        request = _request(
+            goal="Prompt 承認ゲートの非 Azure 検証",
+            workflows=[
+                {
+                    "workflow_id": "ard",
+                    "steps": ["1"],
+                    "params": {"company_name": "Prompt Gate Test"},
+                }
+            ],
+            settings_overrides={"tool_search_defer_threshold": 17},
+        )
+        plan = _plan(
+            tmp_path,
+            request=request,
+            settings=_settings(tool_search_defer_threshold=1),
+            head="b" * 40,
+        )
+        argv = plan.workflows[0].argv
+        assert argv[argv.index("--tool-search-defer-threshold") + 1] == "17"
+
+        database_path = tmp_path / "state.sqlite3"
+        monkeypatch.setattr(
+            prompt_execution,
+            "RunStateStore",
+            lambda: RunStateStore(database_path),
+        )
+
+        execution_id, instance_ids = prompt_execution._register_durable_execution(
+            plan,
+            tmp_path,
+        )
+
+        assert len(instance_ids) == 1
+        with RunStateStore(database_path) as store:
+            execution = store.get_execution(execution_id)
+            instance = store.get_instance(execution_id, instance_ids[0])
+        assert execution is not None
+        assert instance is not None
+        persisted = json.loads(execution["plan_json"])["instances"][0]["argv"]
+        assert "--tool-search-defer-threshold" in persisted
+        assert persisted[persisted.index("--tool-search-defer-threshold") + 1] == "17"
+
 
 class TestNoReimplementationOfTheExecutionCore:
     def test_module_does_not_import_the_dag_engine(self):
@@ -450,6 +727,46 @@ class TestFormatPlan:
         assert "hve prompt run" not in text
         assert "利用者へコマンドの入力を求めてはならない" in text
         assert "--expected-sha256" in text
+
+    def test_format_plan_lists_declared_output_paths_as_completion_criteria(
+        self, tmp_path: Path
+    ):
+        # FR-DOD-03: 承認提示に選択済み Step の宣言 output_paths を完了条件として列挙する。
+        from hve.workflow_registry import get_workflow
+
+        request = _request(workflows=[{"workflow_id": "aas", "steps": ["1"]}])
+        plan = _plan(tmp_path, request=request)
+        step = next(s for s in get_workflow("aas").steps if s.id == "1")
+        declared = list(step.output_paths or ())
+        assert declared, "前提: aas Step.1 は output_paths を宣言している"
+
+        text = prompt_execution.format_plan(plan)
+        assert "完了条件" in text
+        for path in declared:
+            assert path in text
+
+    def test_format_plan_marks_steps_without_declared_output_paths(
+        self, tmp_path: Path
+    ):
+        # FR-DOD-03: 宣言 0 件の Step は値を推測せず、その事実を表示する。
+        from hve.workflow_registry import get_workflow
+
+        step = next(s for s in get_workflow("aad-web").steps if s.id == "1")
+        assert not list(step.output_paths or ()), "前提: aad-web Step.1 は宣言 0 件"
+
+        request = _request(workflows=[{"workflow_id": "aad-web", "steps": ["1"]}])
+        text = prompt_execution.format_plan(_plan(tmp_path, request=request))
+        assert "(宣言なし)" in text
+
+    def test_completion_criteria_display_does_not_change_plan_hash(
+        self, tmp_path: Path
+    ):
+        # FR-DOD-03: 表示は plan hash の入力に含めない（FR-PROMPT-04 の承認 hash 非破壊）。
+        plan = _plan(tmp_path)
+        payload = json.loads(canonical_plan_json(plan))
+        assert sorted(payload) == ["goal", "head_commit", "schema_version", "workflows"]
+        assert "完了条件" not in canonical_plan_json(plan)
+        assert sorted(payload["workflows"][0]) == ["argv", "input_aliases", "steps", "workflow_id"]
 
 
 class TestRequirementIsDeclared:

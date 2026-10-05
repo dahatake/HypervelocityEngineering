@@ -25,6 +25,10 @@ from prompts import (
 _DEPTH_FIELD_NAMES = ("背景と根拠", "判断の観点")
 _DEPTH_RULE_PHRASES = ("記述の深さ", "出典", "未確認", "評価軸", "他の選択肢", "1 行で記述")
 
+# FR-CLI-99: 捏造禁止は根拠の肯定形と理由で指示する。
+FABRICATION_MARKER = "根拠（ファイルパス・行、ツールの実行結果）を示せる内容だけを書き"
+FABRICATION_REASON = "根拠のない内容は確認と修正の手間を増やし、結果の信頼を損なうため"
+
 
 class TestPromptsNotEmpty(unittest.TestCase):
     """プロンプト定数が文字列であり、空でないことを検証する。"""
@@ -78,6 +82,14 @@ class TestQaPromptV2(unittest.TestCase):
 
     def test_qa_prompt_v2_not_empty(self) -> None:
         self.assertTrue(QA_PROMPT_V2.strip(), "QA_PROMPT_V2 should not be empty")
+
+    def test_qa_prompt_v2_intro_is_post_execution(self) -> None:
+        """事後 QA の導入文が実行前ではなく成果物を対象にしている。"""
+        intro_lines = [line for line in QA_PROMPT_V2.splitlines()[:3] if line]
+        self.assertNotIn("依頼を実行する前に", intro_lines[0])
+        self.assertIn("成果物", intro_lines[0])
+        self.assertIn("成果物", intro_lines[1])
+        self.assertIn("質問票", intro_lines[1])
 
     def test_qa_prompt_v2_mentions_priority(self) -> None:
         """QA_PROMPT_V2 には重要度の記述が含まれる。"""
@@ -138,8 +150,10 @@ class TestPreExecutionQaPromptV2(unittest.TestCase):
     def test_different_from_qa_prompt_v2(self) -> None:
         self.assertNotEqual(PRE_EXECUTION_QA_PROMPT_V2, QA_PROMPT_V2)
 
-    def test_contains_issue_comment_replication_instruction(self) -> None:
-        self.assertIn("この Issue のコメントとしても投稿してください", PRE_EXECUTION_QA_PROMPT_V2)
+    def test_posts_link_and_summary_to_the_issue_comment(self) -> None:
+        """FR-QA-11: 全文を二重に投稿させず、リンクと要約だけを投稿させる。"""
+        self.assertIn("この Issue のコメントには、そのファイルへのリンク", PRE_EXECUTION_QA_PROMPT_V2)
+        self.assertNotIn("省略なく", PRE_EXECUTION_QA_PROMPT_V2)
 
     def test_requires_background_field(self) -> None:
         """FR-QA-01: 質問テンプレートに「背景と根拠」フィールドがある。"""
@@ -212,17 +226,14 @@ class TestMainArtifactImprovementApplyPrompt(unittest.TestCase):
         """Work IQ への言及が含まれる。"""
         self.assertIn("Work IQ", MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT)
 
-    def test_contains_work_iq_status_unavailable(self) -> None:
-        self.assertIn("STATUS: UNAVAILABLE", MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT)
+    def test_uses_knowledge_discovery_status_vocabulary(self) -> None:
+        """FR-KD-05: 反映可否は `調査状態` の Confirmed / Tentative / Unknown で判定する。"""
+        for token in ("`調査状態`", "Confirmed", "Tentative", "Unknown", "`調査出典`"):
+            self.assertIn(token, MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT, msg=token)
 
-    def test_contains_work_iq_status_not_found(self) -> None:
-        self.assertIn("STATUS: NOT_FOUND", MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT)
-
-    def test_contains_work_iq_status_found(self) -> None:
-        self.assertIn("STATUS: FOUND", MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT)
-
-    def test_contains_work_iq_status_partial(self) -> None:
-        self.assertIn("STATUS: PARTIAL", MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT)
+    def test_removed_workiq_status_vocabulary_is_absent(self) -> None:
+        for token in ("STATUS: UNAVAILABLE", "STATUS: NOT_FOUND", "STATUS: FOUND", "STATUS: PARTIAL"):
+            self.assertNotIn(token, MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT, msg=token)
 
     def test_contains_original_docs_rule(self) -> None:
         """docs-original/ 変更禁止の記述が含まれる。"""
@@ -344,9 +355,11 @@ class TestYamlWorkflowPromptDrift(unittest.TestCase):
         )
 
     def test_yaml_review_no_fabrication_rule(self) -> None:
-        """YAML auto-review プロンプトに捏造禁止の記述が含まれること。"""
+        """FR-CLI-99: YAML auto-review プロンプトが捏造禁止を根拠の肯定形と理由で持つこと。"""
         content = self._read_yaml_content()
-        self.assertIn("捏造は絶対に禁止", content)
+        self.assertIn(FABRICATION_MARKER, content)
+        self.assertIn(FABRICATION_REASON, content)
+        self.assertNotIn("捏造は絶対に禁止", content)
 
 
 class TestYamlWorkflowPromptDriftPhase3(unittest.TestCase):
@@ -559,14 +572,17 @@ class TestQaDraftingLabels(unittest.TestCase):
 
 
 class TestOverEngineeringBan(unittest.TestCase):
-    """質問票・レビュー系プロンプトに OE 禁止文言が含まれていること。"""
+    """質問票・レビュー系プロンプトに OE 禁止文言が含まれていること（FR-CLI-99）。"""
 
-    OE_MARKER = "オーバーエンジニアリングは絶対に禁止"
+    OE_MARKER = "要求にない汎用化・抽象化は加えない"
+    OE_REASON = "後続のレビューと保守の費用が増えるため"
 
     def test_oe_ban_text_constants_exist(self) -> None:
         from prompts import OVERENGINEERING_BAN_TEXT, OVERENGINEERING_BAN_TEXT_QA
-        self.assertIn(self.OE_MARKER, OVERENGINEERING_BAN_TEXT)
-        self.assertIn(self.OE_MARKER, OVERENGINEERING_BAN_TEXT_QA)
+        for body in (OVERENGINEERING_BAN_TEXT, OVERENGINEERING_BAN_TEXT_QA):
+            self.assertIn(self.OE_MARKER, body)
+            self.assertIn(self.OE_REASON, body)
+            self.assertNotIn("絶対に禁止", body)
         self.assertIn("YAGNI", OVERENGINEERING_BAN_TEXT)
 
     def test_review_prompts_contain_oe_ban(self) -> None:
@@ -608,6 +624,53 @@ class TestOverEngineeringBan(unittest.TestCase):
         for f in common_files:
             content = f.read_text(encoding="utf-8")
             self.assertIn(self.OE_MARKER, content, f"{f} missing OE ban")
+
+
+class TestAbsoluteBanWording(unittest.TestCase):
+    """FR-CLI-99: 理由のない絶対表現で OE 禁止・捏造禁止を書かないこと。"""
+
+    _OLD_PHRASES = ("オーバーエンジニアリングは絶対に禁止", "捏造は絶対に禁止")
+
+    def test_prompts_and_skills_have_no_reasonless_absolute_ban(self) -> None:
+        repo_root = pathlib.Path(__file__).resolve().parents[2]
+        targets = sorted((repo_root / ".github" / "prompts").rglob("*.md"))
+        targets += [
+            repo_root / ".github" / "skills" / "adversarial-review" / "SKILL.md",
+            repo_root / ".github" / "skills" / "task-questionnaire" / "SKILL.md",
+        ]
+        offenders = [
+            f"{path.relative_to(repo_root).as_posix()}: {phrase}"
+            for path in targets
+            for phrase in self._OLD_PHRASES
+            if phrase in path.read_text(encoding="utf-8")
+        ]
+        self.assertEqual(offenders, [])
+
+    def test_fabrication_rule_states_basis_and_reason(self) -> None:
+        from prompts import CODE_REVIEW_CLI_PROMPT, REVIEW_PROMPT
+        for body in (CODE_REVIEW_CLI_PROMPT, REVIEW_PROMPT):
+            self.assertIn(FABRICATION_MARKER, body)
+            self.assertIn(FABRICATION_REASON, body)
+
+
+class TestPromptHeadingEmphasis(unittest.TestCase):
+    """FR-CLI-100: Prompt 見出しに「（必須）」の強調を付けない。"""
+
+    _FENCE = re.compile(r"^\s*(```|~~~)")
+    _HEADING = re.compile(r"^#{1,6} ")
+
+    def test_prompt_headings_have_no_required_suffix(self) -> None:
+        repo_root = pathlib.Path(__file__).resolve().parents[2]
+        offenders: list[str] = []
+        for path in sorted((repo_root / ".github" / "prompts").rglob("*.md")):
+            in_fence = False
+            for no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if self._FENCE.match(line):
+                    in_fence = not in_fence
+                    continue
+                if not in_fence and self._HEADING.match(line) and "（必須）" in line:
+                    offenders.append(f"{path.relative_to(repo_root).as_posix()}:{no}")
+        self.assertEqual(offenders, [])
 
 
 if __name__ == "__main__":

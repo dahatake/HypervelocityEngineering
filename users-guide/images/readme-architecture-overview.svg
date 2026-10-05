@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 960" role="img" aria-labelledby="title desc">
   <title id="title">README 用アーキテクチャ概要図</title>
-  <desc id="desc">Issue Template、HVE CLI / GUI、自然言語の Prompt 版を入口に、Dispatcher または workflow registry が Workflow を選択し、Prompt が knowledge、docs、src、qa、Azure、PR を生成する全体図。Prompt 版は plan SHA-256 の一致後に既存 CLI Orchestrator へ委譲する。</desc>
+  <desc id="desc">Issue Template、HVE CLI / GUI、自然言語の Prompt 版を入口に、Dispatcher または workflow registry が Workflow を選択し、Prompt が knowledge、docs、src、qa、Azure、PR を生成する全体図。Prompt 版は request v1 の execution_policy と plan SHA-256 を再検証した上で既存 CLI Orchestrator へ委譲する。</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
@@ -46,8 +46,8 @@
 
   <rect x="44" y="354" width="260" height="96" class="card entry"/>
   <text x="62" y="380" class="label">Prompt 版（利用面）</text>
-  <text x="62" y="402" class="body">日本語 → request → plan</text>
-  <text x="62" y="422" class="small">SHA-256 一致後だけ `prompt run`</text>
+  <text x="62" y="402" class="body">日本語 → request v1 → plan</text>
+  <text x="62" y="422" class="small">execution_policy / SHA-256 を再検証</text>
   <text x="62" y="440" class="small">→ 既存 CLI Orchestrator へ委譲</text>
 
   <rect x="44" y="474" width="260" height="72" class="card store"/>
@@ -78,9 +78,9 @@
   <text x="390" y="374" class="small">Cloud: reusable workflow / Local: registry（`aad` / `asdw` は別名）</text>
 
   <rect x="372" y="420" width="250" height="104" class="card store"/>
-  <text x="390" y="448" class="label">ADI → AKM</text>
+  <text x="390" y="448" class="label">ADI（Issue Template なし）→ AKM</text>
   <text x="390" y="472" class="body">原本 → 質問票 → knowledge 更新</text>
-  <text x="390" y="494" class="small">ADIはCLI / GUI専用、AKMはCloudにも対応</text>
+  <text x="390" y="494" class="small">ADI 1.1 / 1.2 は既定選択外。Prompt 経由でも実行可</text>
 
   <rect x="642" y="420" width="250" height="104" class="card store"/>
   <text x="660" y="448" class="label">knowledge/</text>
@@ -105,7 +105,7 @@
   <text x="978" y="222" class="body">設計ドキュメント</text>
 
   <rect x="960" y="272" width="276" height="84" class="card output"/>
-  <text x="978" y="300" class="label">src/ / test/</text>
+  <text x="978" y="300" class="label">src/ / src/test/</text>
   <text x="978" y="324" class="body">アプリ実装・テスト</text>
 
   <rect x="960" y="374" width="276" height="84" class="card output"/>

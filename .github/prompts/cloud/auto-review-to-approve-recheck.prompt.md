@@ -13,4 +13,4 @@
     - `<!-- review-verdict: FAIL -->`（残存 Critical > 0）
  3. レビュー結果の末尾に `Review Improvement Application` セクションを出力し、`### Modified Artifacts` と
     `### Verdict After Fix`（`<!-- review-verdict-after-fix: PASS/FAIL -->`）を必ず記載すること。
- 4. 捏造は絶対に禁止です。
+ 4. 根拠（ファイルパス・行、ツールの実行結果）を示せる内容だけを書き、捏造しないでください。根拠のない内容は確認と修正の手間を増やし、結果の信頼を損なうためです。

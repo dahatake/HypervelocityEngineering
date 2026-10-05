@@ -17,7 +17,7 @@ import re
 
 
 def _safe_run_id_component(run_id: str) -> str:
-    """run_id をパス安全な文字列に正規化する（hve/runner.py の _safe_run_id と同等規則）。
+    """run_id をパス安全な文字列に正規化する（run_id の許可文字の規則を持つ唯一の実装）。
 
     - 許可文字: 英数字 / ハイフン / アンダースコア
     - 空文字や全削除になった場合は ValueError（呼び出し側で fallback 生成すべき）

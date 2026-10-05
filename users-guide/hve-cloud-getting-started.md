@@ -9,6 +9,8 @@
 > **別の方式を試したい場合**: [hve-cli-getting-started.md](./hve-cli-getting-started.md)（CLI）/ [hve-gui-getting-started.md](./hve-gui-getting-started.md)（GUI）
 >
 > **「Cloud」の呼び分け**: 本ガイドの HVE Cloud Agent Orchestrator は、Issue Template → GitHub Actions → GitHub Copilot Cloud Agent の経路です。ローカルの CLI / GUI から Step セッションを Copilot SDK の Cloud Sessions へ送る機能は別物で、[cloud-session.md](./cloud-session.md) が正典です。両者は設定場所も前提も異なります。
+>
+> **任意のStep入力**: Issue Formの`Step Input Files` / `Step Input Bindings`は[Workflow / Step入力ガイド](./step-inputs.md#cloud)を参照してください。upload linkは現時点で取得せず、対象branchのbranch-relative pathを使用します。
 
 ---
 
@@ -18,7 +20,7 @@
 - [セットアップフロー](#セットアップフロー)
 - [HVE Cloud Agent Orchestrator 初回セットアップ チェックリスト](#hve-cloud-agent-orchestrator-初回セットアップ-チェックリスト)
 - [Step.1. リポジトリの作成](#step1-リポジトリの作成)
-- [Step.2. ファイルのコピー](#step2-ファイルのコピー)
+- [Step.2. Git によるリポジトリ転送](#step2-git-によるリポジトリ転送)
 - [Step.3. MCP Server 設定](#step3-mcp-server-設定)
   - [ローカル VS Code / Visual Studio に Microsoft Learn MCP を追加（任意）](#ローカル-vs-code--visual-studio-に-microsoft-learn-mcp-を追加任意)
 - [Step.3.1. GitHub Copilot Skills 設定（推奨）](#step31-github-copilot-skills-設定推奨)
@@ -49,12 +51,12 @@
 | Python 3.11+ | HVE CLI / GUI Orchestrator のみ | HVE ローカル実行 |
 | PySide6>=6.6 | HVE GUI Orchestrator のみ | GUI ウィザード起動（`hve\setup-hve.cmd` / `./hve/setup-hve.sh` で自動インストール） |
 | GitHub Copilot CLI（外部 `copilot` コマンド） | オプション | SDK 同梱ではなく外部 CLI を明示利用する場合 |
-| Node.js（npm/npx） | オプション | MCP Server（filesystem 等）/ Work IQ / npm 方式の外部 Copilot CLI 使用時 |
-| Microsoft Work IQ（`@microsoft/workiq`） | オプション | HVE CLI Orchestrator で M365 補助情報を参照する場合（[詳細](./hve-cli-orchestrator-guide.md#work-iq-mcp-連携オプション)） |
+| Node.js（npm/npx） | オプション | Node-based MCP Server（filesystem 等）またはnpm方式の外部Copilot CLI使用時 |
+| Microsoft Work IQ | オプション | HVE ローカル CLI / GUI 専用。Copilot CLIへexact `workiq`名のPlugin または MCP Serverを設定して知識探索でM365補助情報を参照する場合（[詳細](./hve-cli-orchestrator-guide.md#work-iq-plugin--mcp-server-連携オプション)） |
 
 > Issue Template から実行する場合は、フォーム内の **「使用するモデル」** で `Auto`（既定: GitHub が最適モデルを動的選択。0.9x 計上）または任意モデルを選択できます。公式: https://docs.github.com/en/copilot/concepts/auto-model-selection
 
-> Work IQ のセットアップ手順は [hve-cli-orchestrator-guide.md — Work IQ MCP 連携](./hve-cli-orchestrator-guide.md#work-iq-mcp-連携オプション) を参照してください。
+> Work IQはCopilot CLI 側で事前設定・認証し、変更後にHVE processを再起動します。HVE Cloud Agent OrchestratorへWork IQ入力は追加されません。詳細は [hve-cli-orchestrator-guide.md — Work IQ Plugin / MCP Server 連携](./hve-cli-orchestrator-guide.md#work-iq-plugin--mcp-server-連携オプション) を参照してください。
 
 ---
 
@@ -70,11 +72,11 @@ HVE Cloud Agent Orchestrator（GitHub Actions + Issue Template）を初めて使
 
 | # | チェック項目 | 参照ステップ | 必須 / オプション |
 |---|---|---|---|
-| 1 | リポジトリを作成した（テンプレートから `Use this template` または Clone） | [Step.1](#step1-リポジトリの作成) | **必須** |
+| 1 | リポジトリを作成した（`Use this template` を使わない場合は空のコピー先を作成し、Git で転送） | [Step.1](#step1-リポジトリの作成) | **必須** |
 | 2 | GitHub Copilot Cloud agent を有効化した（Settings → Copilot → Cloud agent） | [Step.6](#step6-copilot-有効化) | **必須** |
 | 3 | MCP Server を設定した（Settings → Copilot → Cloud agent → MCP Servers） | [Step.3](#step3-mcp-server-設定) | **必須** |
 | 4 | GitHub Copilot Skills を設定した（推奨） | [Step.3.1](#step31-github-copilot-skills-設定推奨) | 推奨 |
-| 5 | `COPILOT_PAT`（Fine-grained, Issues Read/Write）をリポジトリ Secret に登録した | [Step.4](#step4-認証設定copilot_pat) | **必須**（未設定時はアサインがスキップされ警告） |
+| 5 | `COPILOT_PAT`（Fine-grained, Issues Read/Write）をリポジトリ Secret に登録した | [Step.4](#step4-認証設定copilot_pat) | 推奨（未設定でも実行は続くが Copilot 自動アサインはスキップされ警告） |
 | 6 | Actions Workflow permissions を **Read repository contents and packages permissions** に設定した | [Step.4.2](#step42-ワークフロー権限設定) | **必須** |
 | 7 | Azure OIDC Secrets（`AZURE_CLIENT_ID` / `AZURE_TENANT_ID` / `AZURE_SUBSCRIPTION_ID`）を登録した（Azure デプロイ時） | [Step.4 - Azure Secrets](#3-azure-static-web-apps-デプロイ用-secretsswa-デプロイ時) | Azure 利用時必須 |
 | 8 | Self-hosted Runner を設定した（GitHub-hosted runner を使う場合はスキップ可） | [Step.4.5](#step45-self-hosted-runner-設定オプション) | オプション |
@@ -87,14 +89,16 @@ HVE Cloud Agent Orchestrator（GitHub Actions + Issue Template）を初めて使
 
 初回セットアップの抜け漏れをローカルから確認したい場合は、以下を実行してください。
 
+> **プレースホルダー**: このガイド内の `OWNER/REPOSITORY` は、そのまま実行せず、このガイドを含む配布元または現在の GitHub リポジトリの `owner/repository` に置き換えてください。
+
 ```bash
-bash .github/scripts/preflight-cloud-setup.sh OWNER/REPO
+bash .github/scripts/preflight-cloud-setup.sh OWNER/REPOSITORY
 ```
 
 Self-hosted runner の label も確認する場合:
 
 ```bash
-bash .github/scripts/preflight-cloud-setup.sh OWNER/REPO --self-hosted-runner-label <runner-label>
+bash .github/scripts/preflight-cloud-setup.sh OWNER/REPOSITORY --self-hosted-runner-label <runner-label>
 ```
 
 - 実行タイミングは **Setup Labels 実行前 / 実行後のどちらでも可** です。
@@ -107,32 +111,156 @@ bash .github/scripts/preflight-cloud-setup.sh OWNER/REPO --self-hosted-runner-la
 
 GitHub リポジトリを作成します。GitHub Copilot cloud agent が作業をするためのリポジトリです。
 
-### Step.1.1. テンプレートリポジトリを使う（推奨）
+### Step.1.1. テンプレートリポジトリを使う（ボタンが表示される場合）
 
-本リポジトリ（`dahatake/RoyalytyService2ndGen`）はテンプレートリポジトリです。GitHub の「Use this template」ボタンから自分のリポジトリを作成できます。
+このガイドを含む配布元または現在参照している GitHub リポジトリが template repository に設定され、**「Use this template」** ボタンが表示される場合のみ、この手順を使用します。`OWNER/REPOSITORY` は、そのリポジトリの `owner/repository` に置き換えてください。特定の upstream リポジトリは前提としません。
 
-1. [dahatake/RoyalytyService2ndGen](https://github.com/dahatake/RoyalytyService2ndGen) を開く
-2. 右上の **「Use this template」** ボタンをクリック
+1. GitHub で、置換後の `OWNER/REPOSITORY` を開く
+2. **「Use this template」** ボタンが表示されていることを確認してからクリック
 3. **「Create a new repository」** を選択
 4. リポジトリ名・可視性を設定して作成
 
-> **注意**: このリポジトリは `HypervelocityEngineering-Japanese` テンプレートから作成されたインスタンスです。テンプレートから直接作成する場合は [dahatake/HypervelocityEngineering-Japanese](https://github.com/dahatake/HypervelocityEngineering-Japanese) も参照してください。
+ボタンが表示されない場合は、この手順を使用せず、[Step.1.2 の Git 転送手順](#step12-git-clone-で転送する場合)へ進んでください。
 
-### Step.1.2. Git Clone で取得する場合
+### Step.1.2. Git Clone で転送する場合
 
-```bash
-git clone https://github.com/dahatake/RoyalytyService2ndGen.git
-```
+Step.1.1 の **「Use this template」** ボタンが表示されない場合、またはテンプレートを使用しない場合は、この手順を使用します。配布元の commit 履歴と Git tree をそのままコピー先へ転送するため、次の順序で準備してください。
+
+1. GitHub.com 上で、コピー先となる新しいリポジトリを作成する。README、`.gitignore`、ライセンスは追加せず、branch や tag がない空のリポジトリにする
+2. 作成したコピー先リポジトリの **Code** から、credential を含まない HTTPS または SSH の clone URL を取得する。トークンやパスワードを URL に埋め込まない
+3. ローカルで作業する親ディレクトリを決め、直下に `your-project` が**存在しない**ことを確認する。既に存在する場合は Step.2 を実行せず、開始前に停止する
+
+Step.2 は、コピー先 remote に既存の ref がないことを前提とします。既存 branch や tag があるリポジトリへ合成したり、ローカルの既存ディレクトリへ上書きしたりせず、別の空リポジトリと存在しないローカルパスを用意してください。
 
 ---
 
-## Step.2. ファイルのコピー
+## Step.2. Git によるリポジトリ転送
 
-「Use this template」を使った場合は、このステップは不要です。
+Step.1.1 で **「Use this template」** を使って新しいリポジトリを作成した場合は、このステップをスキップしてください。
 
-Git Clone でファイルを取得した場合は、ダウンロードしたファイルを**あなたのプロジェクトのリポジトリ**に全てコピーします。
+Step.1.2 の場合は、`your-project` を作成する親ディレクトリで PowerShell 7（`pwsh`）を開き、次を実行します。`https://github.com/OWNER/REPOSITORY.git` は実在 URL ではなく配布元を表すプレースホルダーです。コード中の `OWNER` と `REPOSITORY` を、このガイドを含む配布元または現在参照している GitHub リポジトリの値へ置き換えてください。
 
-フォルダー構造は以下のようになります:
+コピー先 URL は GitHub の **Code** から取得した credential なしの HTTPS URL（`https://github.com/<owner>/<repository>.git` 形式）または SSH URL（`git@github.com:<owner>/<repository>.git` 形式）を入力します。認証は Git Credential Manager や SSH agent に任せ、トークンやパスワードを URL へ追加しないでください。
+
+```powershell
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+if ($PSVersionTable.PSEdition -ne 'Core' -or $PSVersionTable.PSVersion.Major -lt 7) {
+  throw 'PowerShell 7 以降（pwsh）で実行してください'
+}
+
+$sourceRepositoryUrl = 'https://github.com/OWNER/REPOSITORY.git'
+$destinationRepositoryUrl = (Read-Host '空のコピー先リポジトリの credential を含まない HTTPS または SSH clone URL').Trim()
+$destination = Join-Path (Get-Location) 'your-project'
+
+if ($sourceRepositoryUrl -match '/OWNER/REPOSITORY\.git$') {
+  throw 'sourceRepositoryUrl の OWNER と REPOSITORY を配布元の値へ置き換えてください'
+}
+
+$githubHttpsPattern = '^https://github\.com/[^/@:\s]+/[^/@:\s]+\.git$'
+$githubSshPattern = '^git@github\.com:[^/:\s]+/[^/:\s]+\.git$'
+if ($sourceRepositoryUrl -notmatch $githubHttpsPattern) {
+  throw '配布元 URL は credential を含まない GitHub HTTPS clone URL にしてください'
+}
+if ($destinationRepositoryUrl -notmatch $githubHttpsPattern -and
+    $destinationRepositoryUrl -notmatch $githubSshPattern) {
+  throw 'コピー先 URL は credential を含まない GitHub HTTPS または SSH clone URL にしてください'
+}
+if ($destinationRepositoryUrl -ieq $sourceRepositoryUrl) {
+  throw '配布元とコピー先には異なるリポジトリを指定してください'
+}
+if (Test-Path -LiteralPath $destination) {
+  throw "開始前に停止: ローカルパスが既に存在します: $destination"
+}
+
+& git clone -c core.longpaths=true -- $sourceRepositoryUrl $destination
+if ($LASTEXITCODE -ne 0) { throw "配布元リポジトリの clone に失敗しました: exit $LASTEXITCODE" }
+
+$localLongPaths = (& git -C $destination config --local --get core.longpaths | Out-String).Trim()
+if ($LASTEXITCODE -ne 0) { throw "clone 先の core.longpaths 確認に失敗しました: exit $LASTEXITCODE" }
+if ($localLongPaths -cne 'true') {
+  throw 'clone 先の local config に core.longpaths=true が保持されていません'
+}
+
+$currentBranch = (& git -C $destination branch --show-current | Out-String).Trim()
+if ($LASTEXITCODE -ne 0) { throw "現在 branch の取得に失敗しました: exit $LASTEXITCODE" }
+if ([string]::IsNullOrWhiteSpace($currentBranch)) {
+  throw '配布元が detached HEAD のため、転送する branch を特定できません'
+}
+
+$remoteNames = @(& git -C $destination remote)
+if ($LASTEXITCODE -ne 0) { throw "remote 一覧の取得に失敗しました: exit $LASTEXITCODE" }
+if ($remoteNames.Count -ne 1 -or $remoteNames[0] -ne 'origin') {
+  throw 'fresh clone の remote が origin 1 個だけではありません'
+}
+
+& git -C $destination remote set-url origin $destinationRepositoryUrl
+if ($LASTEXITCODE -ne 0) { throw "origin URL の変更に失敗しました: exit $LASTEXITCODE" }
+
+$originFetchUrls = @(& git -C $destination remote get-url --all origin)
+if ($LASTEXITCODE -ne 0) { throw "origin fetch URL の確認に失敗しました: exit $LASTEXITCODE" }
+$originPushUrls = @(& git -C $destination remote get-url --all --push origin)
+if ($LASTEXITCODE -ne 0) { throw "origin push URL の確認に失敗しました: exit $LASTEXITCODE" }
+if ($originFetchUrls.Count -ne 1 -or $originFetchUrls[0] -ne $destinationRepositoryUrl -or
+    $originPushUrls.Count -ne 1 -or $originPushUrls[0] -ne $destinationRepositoryUrl -or
+    $originFetchUrls -contains $sourceRepositoryUrl -or $originPushUrls -contains $sourceRepositoryUrl) {
+  throw 'origin にコピー先以外の URL が残っています'
+}
+
+& git -C $destination ls-remote --exit-code origin *> $null
+$remoteCheckExit = $LASTEXITCODE
+if ($remoteCheckExit -eq 0) {
+  throw 'コピー先 remote は空ではありません。既存 ref への転送は行いません'
+}
+if ($remoteCheckExit -ne 2) {
+  throw "コピー先 remote の空確認に失敗しました: exit $remoteCheckExit"
+}
+
+$localHead = (& git -C $destination rev-parse HEAD | Out-String).Trim()
+if ($LASTEXITCODE -ne 0) { throw "ローカル HEAD の取得に失敗しました: exit $LASTEXITCODE" }
+
+& git -C $destination push --force-with-lease=refs/heads/main: --set-upstream origin "${currentBranch}:refs/heads/main"
+if ($LASTEXITCODE -ne 0) { throw "コピー先 main への push に失敗しました: exit $LASTEXITCODE" }
+
+$remoteHeadsOutput = @(& git -C $destination ls-remote --exit-code --heads origin)
+$remoteHeadsExit = $LASTEXITCODE
+if ($remoteHeadsExit -ne 0) {
+  throw "コピー先 heads の再検査に失敗しました。追加操作は行わず状態を確認してください: exit $remoteHeadsExit"
+}
+if ($remoteHeadsOutput.Count -ne 1) {
+  throw "コピー先 heads は main 1 件ではありません（$($remoteHeadsOutput.Count) 件）。追加操作は行わず状態を確認してください"
+}
+$remoteHeadFields = @($remoteHeadsOutput[0] -split '\s+')
+if ($remoteHeadFields.Count -ne 2 -or $remoteHeadFields[1] -cne 'refs/heads/main') {
+  throw 'コピー先の唯一の head が main ではありません。追加操作は行わず状態を確認してください'
+}
+$remoteMain = $remoteHeadFields[0]
+if ($remoteMain -cne $localHead) {
+  throw 'コピー先 main とローカル HEAD が一致しません。追加操作は行わず状態を確認してください'
+}
+
+& git -C $destination cat-file -e "${remoteMain}:.github"
+if ($LASTEXITCODE -ne 0) { throw "コピー先の Git tree に .github/ がありません: exit $LASTEXITCODE" }
+
+$treeEntries = @(& git -C $destination ls-tree -r --full-tree $remoteMain)
+if ($LASTEXITCODE -ne 0) { throw "コピー先 main の tree 確認に失敗しました: exit $LASTEXITCODE" }
+$treeEntries | Where-Object { $_ -match '^100755\s' }
+
+$workingTreeStatus = @(& git -C $destination status --short)
+if ($LASTEXITCODE -ne 0) { throw "worktree の状態確認に失敗しました: exit $LASTEXITCODE" }
+if ($workingTreeStatus.Count -ne 0) { throw '転送後の worktree に予期しない変更があります' }
+
+Write-Host "転送完了: $currentBranch -> origin/main ($remoteMain)"
+```
+
+この手順は、配布元を存在しない `your-project` へ `core.longpaths=true` を指定して clone して作られた fresh `.git` を使い、その `origin` をコピー先 URL へ置き換えます。この設定は Windows の深いパスでも checkout できるよう clone 開始時から有効になり、clone 先の local `.git/config` に `true` で保持されたことも確認します。配布元 URL の remote は残さず、現在 checkout されている branch をコピー先の `main` へ push します。Git が同じ commit と tree を転送するため、現在 branch から到達できる履歴、`.github/`、実行可能ファイルの `100755` mode が保持されます。remote へローカルの `.git/config` は転送されません。
+
+`git ls-tree` の出力は先頭列が mode です。上のコマンドは転送後の commit から `100755` の項目を表示し、`.github/` の存在と remote `main` / local `HEAD` の SHA 一致も検証します。コピー先に ref が 1 件でもあれば push 前に停止します。通常の push だけでは、空確認後に作られた `main` がローカル HEAD の祖先なら fast-forward として成功するため、create-only 条件になりません。`--force-with-lease=refs/heads/main:` の末尾が空の expected value は「remote の `main` が存在しない場合だけ作成する」という条件です。このため、空確認後に別プロセスが `main` を作成した場合、その commit がローカル HEAD の祖先か無関係かを問わず push は拒否されます。
+
+この単一 lease が原子的に保護するのは `refs/heads/main` の不在だけであり、空確認後に `main` 以外の ref が同時作成される race までは防止しません。そのため push 直後に remote の全 head を再取得し、`main` 1 件だけで SHA がローカル HEAD と一致することを検査します。これは再検査時点の heads の観測であり、tag など head 以外の ref や再検査後の変更まで原子的に保証するものではありません。別 head、欠落、または SHA 不一致を検出した場合は、削除や force push などの追加操作を行わず、エラーとして状態を報告してください。
+
+Git 転送後のコピー先 `main` のフォルダー構造は以下のようになります:
 
 ```
 your-project/
@@ -400,7 +528,7 @@ python -m mdq search --q "業務要件" --top-k 3 --format compact
 
 ## Step.4. 認証設定（COPILOT_PAT）
 
-PAT（Personal Access Token）をリポジトリのシークレットに設定します。Copilot が Issue に自動アサインされるために必要です。
+PAT（Personal Access Token）をリポジトリのシークレットに設定します。Copilot を Issue に自動アサインしたい場合に必要です。未設定でも dispatcher / reusable workflow 自体は動作しますが、`@copilot` アサインだけを警告付きでスキップします。
 
 ### 1. Personal Access Token（PAT）を作成
 
@@ -603,13 +731,15 @@ bash src/infra/azure/create-azure-webui-resources.sh
 
 Setup Labels ワークフローが作成・更新するラベル一覧です:
 
-**ワークフロートリガー系（13 個）**
+**ワークフロートリガー系（15 個）**
 
 | ラベル名 | 色 | 用途 |
 |---------|-----|------|
+| `auto-requirement-definition` | `#0E8A16` | ARD ワークフロートリガー |
 | `auto-app-selection` | `#0E8A16` | AAS ワークフロートリガー |
 | `auto-app-detail-design` | `#0E8A16` | AAD ワークフロートリガー |
 | `auto-app-detail-design-web` | `#1D76DB` | AAD-WEB ワークフロートリガー |
+| `auto-agent-data-architecture` | `#7B68EE` | ADA ワークフロートリガー |
 | `auto-ai-agent-design` | `#7B68EE` | AAG ワークフロートリガー |
 | `auto-app-dev-microservice` | `#1D76DB` | ASDW 後方互換ワークフロートリガー |
 | `auto-app-dev-microservice-web` | `#0E8A16` | ASDW-WEB ワークフロートリガー |
@@ -619,34 +749,39 @@ Setup Labels ワークフローが作成・更新するラベル一覧です:
 | `auto-agentic-retrieval` | `#5319E7` | AAR ワークフロートリガー |
 | `auto-app-documentation` | `#0E8A16` | ADOC ワークフロートリガー |
 | `knowledge-management` | `#0E8A16` | AKM ワークフロートリガー |
-| `self-improve` | `#0E8A16` | 自己改善ループトリガー |
 
-**PR 制御系（6 個）**
+**PR / QA 制御系（9 個）**
 
 | ラベル名 | 色 | 用途 |
 |---------|-----|------|
 | `auto-context-review` | `#1D76DB` | Copilot 敵対的レビュートリガー |
+| `adversarial-review` | `#B60205` | 明示的な敵対的レビューのトリガー |
 | `auto-qa` | `#BFD4F2` | Copilot 質問票作成トリガー |
+| `qa-force-regenerate` | `#D93F0B` | 既存 QA があっても質問票を再生成するトリガー |
+| `qa-questionnaire-pr` | `#FFE082` | QA 質問票専用 PR の識別 |
 | `create-subissues` | `#E4E669` | Sub Issue 自動作成トリガー |
 | `split-mode` | `#D93F0B` | 分割モード PR 識別 |
 | `plan-only` | `#D93F0B` | plan.md のみの PR 識別 |
 | `auto-approve-ready` | `#1D76DB` | PR 自動 Approve & Auto-merge トリガー |
 
-**モデル選択系（15 個 = main 5 + review 5 + qa 5）**
+**モデル選択系（18 個 = main 6 + review 6 + qa 6）**
 
 | ラベル名 | 色 | 用途 |
 |---------|-----|------|
 | `model/Auto` | `#6f42c1` | Copilot cloud agent モデル指定: Auto（GitHub が最適モデルを動的選択。0.9x 計上、1x 超モデルは対象外） |
+| `model/claude-opus-5.5` | `#6f42c1` | Copilot cloud agent モデル指定: claude-opus-5.5 |
 | `model/claude-opus-4.7` | `#6f42c1` | Copilot cloud agent モデル指定: claude-opus-4.7 |
 | `model/claude-opus-4.6` | `#6f42c1` | Copilot cloud agent モデル指定: claude-opus-4.6 |
 | `model/gpt-5.5` | `#6f42c1` | Copilot cloud agent モデル指定: gpt-5.5 |
 | `model/gpt-5.4` | `#6f42c1` | Copilot cloud agent モデル指定: gpt-5.4 |
 | `review-model/Auto` | `#6f42c1` | Copilot cloud agent レビュー用モデル指定: Auto |
+| `review-model/claude-opus-5.5` | `#6f42c1` | Copilot cloud agent レビュー用モデル指定: claude-opus-5.5 |
 | `review-model/claude-opus-4.7` | `#6f42c1` | Copilot cloud agent レビュー用モデル指定: claude-opus-4.7 |
 | `review-model/claude-opus-4.6` | `#6f42c1` | Copilot cloud agent レビュー用モデル指定: claude-opus-4.6 |
 | `review-model/gpt-5.5` | `#6f42c1` | Copilot cloud agent レビュー用モデル指定: gpt-5.5 |
 | `review-model/gpt-5.4` | `#6f42c1` | Copilot cloud agent レビュー用モデル指定: gpt-5.4 |
 | `qa-model/Auto` | `#6f42c1` | Copilot cloud agent QA 用モデル指定: Auto |
+| `qa-model/claude-opus-5.5` | `#6f42c1` | Copilot cloud agent QA 用モデル指定: claude-opus-5.5 |
 | `qa-model/claude-opus-4.7` | `#6f42c1` | Copilot cloud agent QA 用モデル指定: claude-opus-4.7 |
 | `qa-model/claude-opus-4.6` | `#6f42c1` | Copilot cloud agent QA 用モデル指定: claude-opus-4.6 |
 | `qa-model/gpt-5.5` | `#6f42c1` | Copilot cloud agent QA 用モデル指定: gpt-5.5 |
@@ -744,7 +879,7 @@ Step.5 のラベル設定完了後、以下の確認を順に実施してくだ�
 | `@copilot` がアサインされない | `COPILOT_PAT` の登録有無とスコープ | 未設定時はスキップされ警告が出る仕様。[Step.4](#step4-認証設定copilot_pat) を再確認する |
 | ワークフローが必要な変更を書き込めない | Workflow / job の `permissions` と上位Actionsポリシー | 対象workflowが必要なwrite権限だけを明示しているか確認する。repository-wideの既定権限はreadのまま維持する |
 | セルフホストランナーのジョブが待機し続ける | ランナーのラベルと稼働状況 | [Step.4.5](#step45-self-hosted-runner-設定オプション) を確認する。GitHub-hosted runner で実行する場合は `runner_type` を既定値に戻す |
-| 何が不足しているか分からない | preflight スクリプト | `bash .github/scripts/preflight-cloud-setup.sh OWNER/REPO` を実行する。API 権限不足で取得できない項目は未設定と断定せず手動確認する |
+| 何が不足しているか分からない | preflight スクリプト | `bash .github/scripts/preflight-cloud-setup.sh OWNER/REPOSITORY` を実行する。API 権限不足で取得できない項目は未設定と断定せず手動確認する |
 
 > 秘密情報の扱い: PAT やトークンの値を Issue 本文・PR 本文・ワークフローログ・このリポジトリのドキュメントへ貼り付けないでください。値はリポジトリの Secrets にのみ登録します。
 
@@ -800,7 +935,7 @@ cp sample/business-requirement.md docs/business-requirement.md
 
 `aas` は `docs/business-requirement.md` を読んでアプリケーションカタログ等を生成します。生成物の場所と意味は [02-app-architecture-design.md](./02-app-architecture-design.md) を参照してください。
 
-> **補足**: 本格運用では `ARD`（要求定義の自動化）から始める方法もありますが、ARD は CLI/GUI 専用ワークフローのため Cloud 版のクイックスタートには含めていません。CLI / GUI からの ARD は [hve-cli-getting-started.md](./hve-cli-getting-started.md) / [hve-gui-getting-started.md](./hve-gui-getting-started.md) を参照してください。
+> **補足**: Cloud 版にも `Auto Requirement Definition` の Issue Template があります。ただし、このクイックスタートでは `sample/business-requirement.md` をそのまま入力に使える最短経路として `Architecture Design` を例にしています。ARD から始めたい場合は `Auto Requirement Definition` テンプレート、ローカルから始めたい場合は [hve-cli-getting-started.md](./hve-cli-getting-started.md) / [hve-gui-getting-started.md](./hve-gui-getting-started.md) を参照してください。
 
 ---
 
@@ -846,7 +981,7 @@ python -m pytest hve/tests/test_label_consistency_audit.py hve/tests/test_issue_
 python -m pytest hve/tests/test_cloud_reusable_workflow_parity.py
 
 # 初期セットアップの検査（対象リポジトリを指定）
-bash .github/scripts/preflight-cloud-setup.sh OWNER/REPO
+bash .github/scripts/preflight-cloud-setup.sh OWNER/REPOSITORY
 ```
 
 ### 互換性・安全性

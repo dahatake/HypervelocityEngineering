@@ -17,7 +17,7 @@ Step ID: `1`, `2`
 
 | パラメータ | 意味 | 値の例 |
 |---|---|---|
-| `sources` | 取り込みソース | `qa` / `original-docs` / `workiq`（カンマ区切りで複数指定可） |
+| `sources` | 取り込みソース | `qa` / `docs-original` / `workiq`（カンマ区切りで複数指定可。`workiq` は AKM 知識探索の知識源トリガー） |
 | `target_files` | 更新対象 | 既定は `sources` に応じて決まる |
 | `force_refresh` | 既存内容を無視して作り直すか | `true` / `false` |
 | `custom_source_dir` | 追加ソースディレクトリ | `docs/specs` など |
@@ -49,7 +49,7 @@ HVE の Prompt 版で作業してください。
 - 目的: docs-original/ の内容も含めて knowledge/ を作り直したい
 - Workflow: akm
 - パラメータ:
-  - sources=qa,original-docs
+  - sources=qa,docs-original
   - force_refresh=true
 - 制約:
   - docs-original/ は読み取り専用として扱うこと

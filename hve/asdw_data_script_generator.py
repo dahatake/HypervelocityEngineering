@@ -1293,6 +1293,8 @@ case "${DATA_NETWORK_MODE:?}" in
     az network vnet subnet update --ids "$DATA_ACI_SUBNET_ID" --delegations Microsoft.ContainerInstance/containerGroups --nat-gateway "$DATA_NAT_GATEWAY_NAME" --output none
     az identity create --resource-group "$RESOURCE_GROUP" --name data-deploy-identity --output none
     az acr create --resource-group "$RESOURCE_GROUP" --name "$DATA_VERIFY_ACR_NAME" --sku Basic --output none
+    # 作成直後のレジストリは DNS 反映に数十秒かかるため、push 前に待機する。
+    sleep 30
     cd "$SCRIPT_DIR/data-verify"
     az acr build --registry "$DATA_VERIFY_ACR_NAME" --image "$DATA_VERIFY_IMAGE_NAME" --file Dockerfile .
     cd "$SCRIPT_DIR"
@@ -1387,7 +1389,9 @@ __SQL_DATABASE_STEPS__
     az cosmosdb create --resource-group "$RESOURCE_GROUP" --name "$COSMOS_ACCOUNT" --disable-local-auth true --public-network-access Disabled --output none
     az cosmosdb sql database create --resource-group "$RESOURCE_GROUP" --account-name "$COSMOS_ACCOUNT" --name "$COSMOS_DATABASE" --output none
     az cosmosdb sql container create --resource-group "$RESOURCE_GROUP" --account-name "$COSMOS_ACCOUNT" --database-name "$COSMOS_DATABASE" --name "$COSMOS_CONTAINER_VOC" --partition-key-path /sourceRecordId --output none
-    az confidentialledger create --resource-group "$RESOURCE_GROUP" --name "$CONFIDENTIAL_LEDGER_NAME" --location "$CONFIDENTIAL_LEDGER_LOCATION" --output none
+    ledger_tenant_id="$(az account show --query tenantId --output tsv)"
+    ledger_admin_object_id="$(az ad signed-in-user show --query id --output tsv 2>/dev/null || az ad sp show --id "$(az account show --query user.name --output tsv)" --query id --output tsv)"
+    az confidentialledger create --resource-group "$RESOURCE_GROUP" --name "$CONFIDENTIAL_LEDGER_NAME" --location "$CONFIDENTIAL_LEDGER_LOCATION" --aad-based-security-principals ledger-role-name=Administrator principal-id="$ledger_admin_object_id" tenant-id="$ledger_tenant_id" --output none
     az network private-dns zone create --resource-group "$RESOURCE_GROUP" --name "$SQL_PRIVATE_DNS_ZONE" --output none
     az network private-dns zone create --resource-group "$RESOURCE_GROUP" --name "$COSMOS_PRIVATE_DNS_ZONE" --output none
     az network private-dns link vnet create --resource-group "$RESOURCE_GROUP" --zone-name "$SQL_PRIVATE_DNS_ZONE" --name sql-data-link --virtual-network "$DATA_VNET_NAME" --registration-enabled false --output none

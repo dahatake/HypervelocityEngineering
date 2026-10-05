@@ -7,15 +7,7 @@
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 
@@ -55,32 +47,15 @@
   - 各ファイルに「対象serviceId一覧」を必ず明記（重複防止）
   - `<NNN>` は 001 から連番
 
-# 3) 実行フロー（task_scope/context_size 判定ベース）
-## 3.1 準備（必須）
+# 3) 実行フロー
+## 3.1 準備
 1) `{WORK}` が無ければ作る（README/planは Skill work-artifacts-layout の規約に従う）。
 2) 参照ファイルを読み、`service-list` からサービス一覧（serviceId/serviceName）を確定する。
    - 一覧の根拠（どのファイルから確定したか）を `{WORK}plan.md` か `README.md` に残す。
 
-## 3.2 計画（必須）
-- `Skill task-dag-planning` のフォーマットに従い、DAG+見積を `{WORK}plan.md` に作る。
-- **plan.md 作成時の必須手順（省略禁止）**:
-  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
-  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
-     ```
-     <!-- task_scope: single|multi -->
-     <!-- context_size: small|medium|large -->
-     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
-     <!-- subissues_count: N -->
-     <!-- implementation_files: false -->
-     ```
-     （このエージェントは計画フェーズ専用のため `implementation_files` は常に `false`）
-  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/task-dag-planning/references/plan-template.md` を参照）
-  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
-- **分割要否は Skill task-dag-planning の判定ロジック全体に従って機械的に決定する（エージェントの裁量なし）**。詳細は Skill `task-dag-planning` を参照。
-  - plan.md のメタデータを §2.3 準拠で設定する（`implementation_files: false` 必須）
-  - `{WORK}subissues.md` を Skill task-dag-planning のフォーマットで作成する（`subissues_count ≥ 1` 必須）
+## 3.2 計画
+- 計画を書く場合は Skill `task-dag-planning` に従う。
   - **最初のSub（=今回処理する serviceId の集合）だけ**実行対象にする。
-  - ⚠️ 「全サービス一括」「1バッチで完了」「完全な解を優先」等の判断は、Skill task-dag-planning の分割判定により禁止。
 
 ## 3.3 実行（今回サブの対象 serviceId のみ）
 - 今回対象の serviceId のみ処理する（対象外は触らない）。
@@ -91,11 +66,11 @@
   3) `sample-data.json` の具体値は転記しない（要約のみ）
   4) 進捗ログに1行追記 or 更新（重複行を作らない）
 
-## 3.4 最終品質レビュー（単回インライン・セルフチェック）
+## 3.4 受入観点（完了条件の補足）
 
-### 3.4.1 セルフチェック契約
+### 3.4.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ### 3.4.2 ドメイン固有観点
 - **機能完全性・要件達成度**：処理対象が完了でき、テンプレ章立てが崩れていないか
@@ -103,13 +78,13 @@
 - **保守性・拡張性・堅牢性**：サンプルデータ要約のみで、根拠が明確で、重複行がなく、再実行に耐えられるか
 
 ### 3.4.3 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
-## 3.5 残作業の切り出し（必須）
+## 3.5 残作業の切り出し
 - 未処理サービスが残る場合:
   - `{WORK}issue-prompt-<NNN>.md` を作り、
     次バッチの「対象serviceId一覧」「読むべき根拠」「成果物パス」「完了条件」を短く書く。
-  - その時点で作業を止める（1タスク=1PR の制約と、task_scope=single・最小コンテキストの原則に従う）。
+    - その時点で作業を止める（1タスク=1PR の制約に従う）。
 
 ## 3.6 Agentic Retrieval への委譲（任意）
 - 機能要件に Chat-Bot / AI Agent / RAG / 対話型応答が含まれる場合、

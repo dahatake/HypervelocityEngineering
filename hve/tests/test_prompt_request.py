@@ -114,6 +114,78 @@ class TestSteps:
         assert req.workflows[0].steps == ()
 
 
+class TestStepInputs:
+    """FR-INPUT-06: workflows[].step_inputs は後方互換な任意field。"""
+
+    def test_accepts_ordered_step_inputs(self):
+        req = parse_request(
+            _minimal(
+                workflows=[
+                    {
+                        "workflow_id": "aas",
+                        "steps": ["1"],
+                        "step_inputs": [
+                            {
+                                "step_id": "1",
+                                "role": "additional",
+                                "source": "incoming/a.md",
+                            },
+                            {
+                                "step_id": "1",
+                                "role": "substitute",
+                                "canonical": "docs/catalog/app-catalog.md",
+                                "source": "incoming/b.docx",
+                            },
+                        ],
+                    }
+                ]
+            )
+        )
+        assert [item.source for item in req.workflows[0].step_inputs] == [
+            "incoming/a.md",
+            "incoming/b.docx",
+        ]
+        assert req.workflows[0].step_inputs[1].canonical == "docs/catalog/app-catalog.md"
+
+    def test_omitted_step_inputs_keeps_legacy_request(self):
+        assert parse_request(_minimal()).workflows[0].step_inputs == ()
+
+    def test_container_selection_allows_input_for_executable_child(self):
+        req = parse_request(
+            _minimal(
+                workflows=[{
+                    "workflow_id": "asdw-web",
+                    "steps": ["1"],
+                    "step_inputs": [{
+                        "step_id": "1.1",
+                        "role": "additional",
+                        "source": "incoming/a.md",
+                    }],
+                }]
+            )
+        )
+        assert req.workflows[0].step_inputs[0].step_id == "1.1"
+
+    @pytest.mark.parametrize(
+        "entry",
+        [
+            {"step_id": "1", "role": "unknown", "source": "a.md"},
+            {"step_id": "1", "role": "substitute", "source": "a.md"},
+            {"step_id": "999", "role": "additional", "source": "a.md"},
+            {"step_id": "1", "role": "additional", "source": "a.md", "extra": True},
+        ],
+    )
+    def test_rejects_invalid_step_input(self, entry):
+        with pytest.raises(PromptRequestError):
+            parse_request(
+                _minimal(
+                    workflows=[
+                        {"workflow_id": "aas", "steps": ["1"], "step_inputs": [entry]}
+                    ]
+                )
+            )
+
+
 class TestParamsAllowlist:
     def test_accepts_declared_workflow_param(self):
         req = parse_request(
@@ -182,6 +254,10 @@ class TestGoal:
         del data["goal"]
         assert parse_request(data).goal == ""
 
+    def test_rejects_null_goal(self):
+        with pytest.raises(PromptRequestError):
+            parse_request(_minimal(goal=None))
+
 
 class TestLoadRequest:
     def test_loads_utf8_json_file(self, tmp_path: Path):
@@ -219,3 +295,85 @@ class TestRequirementIsDeclared:
     def test_fr_prompt_02_is_declared(self):
         text = Path("hve-dev/requirement-definition.md").read_text(encoding="utf-8")
         assert "**FR-PROMPT-02**" in text
+
+
+class TestExecutionPolicy:
+    """FR-PROMPT-13 — 事前承認の宣言（execution_policy）。"""
+
+    @staticmethod
+    def _deploy_request(policy: dict, resource_group: str | None = "rg-hve-dev") -> dict:
+        workflow: dict = {"workflow_id": "asdw-web"}
+        if resource_group is not None:
+            workflow["params"] = {"resource_group": resource_group}
+        return _minimal(workflows=[workflow], execution_policy=policy)
+
+    def test_omitted_policy_keeps_legacy_request(self):
+        req = parse_request(_minimal())
+        assert req.execution_policy is None
+
+    @pytest.mark.parametrize(
+        "resource_group", ["rg;az group delete", "rg name", "rg$(id)", "a" * 91]
+    )
+    def test_rejects_resource_group_outside_azure_naming_rule(self, resource_group):
+        # N-13: 計画の承認範囲と runner の宣言範囲を一致させるため、request 段階で拒否する。
+        request = self._deploy_request(
+            {"pre_approved_operations": ["azure_deploy"]}, resource_group
+        )
+        with pytest.raises(PromptRequestError, match="resource_group"):
+            parse_request(request)
+        with pytest.raises(PromptRequestError, match="resource_group"):
+            parse_request(self._deploy_request({}, resource_group))
+
+    def test_accepts_full_policy(self):
+        req = parse_request(
+            self._deploy_request(
+                {
+                    "unattended": True,
+                    "pre_approved_operations": ["azure_deploy"],
+                    "allow_public_exposure": False,
+                    "budget_note": "月 5,000 円以内を目安",
+                }
+            )
+        )
+        policy = req.execution_policy
+        assert policy is not None
+        assert policy.unattended is True
+        assert policy.pre_approved_operations == ("azure_deploy",)
+        assert policy.allow_public_exposure is False
+        assert policy.budget_note == "月 5,000 円以内を目安"
+
+    def test_rejects_unknown_policy_field(self):
+        with pytest.raises(PromptRequestError, match="execution_policy"):
+            parse_request(_minimal(execution_policy={"unattended": True, "shell": "rm"}))
+
+    @pytest.mark.parametrize("value", ["true", 1, None])
+    def test_rejects_non_bool_unattended(self, value):
+        with pytest.raises(PromptRequestError, match="unattended"):
+            parse_request(_minimal(execution_policy={"unattended": value}))
+
+    def test_rejects_operation_outside_allowlist(self):
+        with pytest.raises(PromptRequestError, match="pre_approved_operations"):
+            parse_request(
+                self._deploy_request({"pre_approved_operations": ["delete_resource_group"]})
+            )
+
+    @pytest.mark.parametrize("resource_group", [None, "", "   "])
+    def test_azure_deploy_requires_resource_group(self, resource_group):
+        with pytest.raises(PromptRequestError, match="resource_group"):
+            parse_request(
+                self._deploy_request(
+                    {"pre_approved_operations": ["azure_deploy"]},
+                    resource_group=resource_group,
+                )
+            )
+
+    def test_azure_deploy_requires_a_deploying_workflow(self):
+        with pytest.raises(PromptRequestError, match="resource_group"):
+            parse_request(
+                _minimal(execution_policy={"pre_approved_operations": ["azure_deploy"]})
+            )
+
+    @pytest.mark.parametrize("note", ["x" * 201, "改行\nを含む", "制御\x07文字"])
+    def test_rejects_unsafe_budget_note(self, note):
+        with pytest.raises(PromptRequestError, match="budget_note"):
+            parse_request(_minimal(execution_policy={"budget_note": note}))

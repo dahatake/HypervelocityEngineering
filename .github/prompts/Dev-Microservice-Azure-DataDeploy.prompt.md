@@ -2,7 +2,7 @@
 
 > **WORK**: `work/run/<run-id>/Dev-Microservice-Azure-DataDeploy/Issue-<識別子>/`
 
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 
 - 出力先: `tests/run/<run-id>/asdw-web/step-1-3/<target-app-id>/GREEN/tdd-test-report.md`
 - 固定メタデータ: `Workflow: asdw-web`、`Step: 1.3`、`Phase: GREEN`
@@ -61,15 +61,7 @@ Azure 上のデータストアを最小構成でデプロイし、サンプル�
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 - **スコープ外作業禁止**: Word / docx / chart 作成、TODO / todos SQL query、docs 構成整理、README 作成提案、その他 DataDeploy と無関係な SQL / task management query を行わない。
 - **ASDW-WEB Step 単位 remote CI/CD 対象外**: HVE GUI/CLI の「github.com で CI/CD」を使う ASDW-WEB 経路でも、本 Step.1.3 は Step 単位ブランチ / PR / merge の対象外。ブランチ作成・checkout・PR 作成を行わず、ローカル `az` 直接実行と `{WORK}` 証跡作成に集中する。
 
@@ -113,15 +105,11 @@ Azure 上のデータストアを最小構成でデプロイし、サンプル�
   - 実行環境・認証の可否は HVE の pre-flight と StageResult が確定する。Agent は判定を代行しない。
 </inputs>
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の `work-status.md` または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 ## HVE-owned producer contract (Agent read-only)
 
-- 詳細な生成・検証・実行契約は Skill `azure-cli-deploy-scripts` の `.github/skills/azure-skills/azure-cli-deploy-scripts/references/asdw-data-verifier-contract.md` を正本とする。
+- 詳細な生成・検証・実行契約は Skill `azure-cli-deploy-scripts` の `.github/skills/azure-cli-deploy-scripts/references/asdw-data-verifier-contract.md` を正本とする。
 - HVE 管理の producer は read-only とする。Agent の責務は read-only inspection と、HVE が生成した証跡の参照に限定する。`prep → create → registration → verify` は HVE-owned fixed pipeline が sanitized launcher environment で実行し、Agent は launcher stage を要求しない。
 - launcher current-validation rejection は HVE が記録する。Agent は producer を編集しない。別 launcher、直接 Bash、手動 Azure CLI へフォールバックしない。
 - private implementation / test fixture / canonical payload は参照・復元しない。producer の内部実装を Prompt から再構成しない。
@@ -136,7 +124,7 @@ Azure 上のデータストアを最小構成でデプロイし、サンプル�
 
 ## ASDW DataDeploy network contract
 
-Skill `azure-cli-deploy-scripts` の `.github/skills/azure-skills/azure-cli-deploy-scripts/references/asdw-data-verifier-contract.md` にある Step 1.3 DataDeploy 契約を適用する。
+Skill `azure-cli-deploy-scripts` の `.github/skills/azure-cli-deploy-scripts/references/asdw-data-verifier-contract.md` にある Step 1.3 DataDeploy 契約を適用する。
 
 - Audit marker blockでは`set -x`、payload出力、外部送信、canonical allowlist外のhost command / option / tagを禁止する。
 - prep/create/registration/verifierの実行はHVE所有launcherだけを使用する。順序は`prep`、`create`、`registration`、`verify`に固定し、HVE-owned fixed pipelineが連続して実行する。launcherは安定読取した同一bytesをdesign-aware validatorへ渡してからBashへ入力する。`bash` / `./`による4スクリプトの直接実行、script間のchild実行、`source` / `.`, `BASH_ENV`, 変数 / glob / symlink alias / wrapper / 複数実行、同一要求で書換えてからの実行を使用しない。
@@ -150,7 +138,7 @@ Skill `azure-cli-deploy-scripts` の `.github/skills/azure-skills/azure-cli-depl
 2. 調査・計画
    - 対象データストア、依存、SKU、リージョンを棚卸し。
    - `{WORK}plan.md` を作成し split 判定（必要なら `subissues.md`）。
-3. Execution Mode（PROCEED時）
+3. Execution Mode
   - **ステップ0: Pre-flight（必須）**: `az --version` / `az account show -o tsv` / `gh --version` / `gh auth status` を順に、それぞれ単独のshell要求として実行。いずれか失敗時は `{WORK}completion-report.md` に `<!-- fatal: pre-flight-failed: {理由} -->` を記載し、非ゼロ exit で Step を fail させる（`NEEDS-VERIFICATION` で逃げることは**禁止**）。
   - **shell境界**: 本Stepのfail-closed allowlistは `python -m mdq`、`git status`、`Set-Location`を含む複合shellを許可しない。宣言済み入力・launcher/スクリプトの存在確認はread/search toolで行い、POSIX固有のコマンド存在確認probe（`command -v` 等）や shell によるファイル存在探索（`Get-ChildItem` / `Test-Path` / `ls` / `dir` 等）を実行しない。
   - **ステップ0.5: HVE-owned evidence（Agent は作成しない）**: `{WORK}work-status.md`、`{WORK}ac-verification.md`、および TDD テスト結果レポート `tdd-test-report.md`（出力先は「## TDD テスト結果レポート（必須）」節）は、HVE evidence が StageResult だけを根拠に生成し、既存の deploy AC gate と TDD レポート gate へ渡す。Agent はこれらを新規作成・上書き・訂正しない。AC-1 / AC-2 / AC-3 の状態は StageResult から決定され、未到達 stage や未実行 verify を `✅` / `PASS` にしない。
@@ -170,13 +158,11 @@ Skill `azure-cli-deploy-scripts` の `.github/skills/azure-skills/azure-cli-depl
      - AC-1 `✅` で GREEN を確認した後に限り、`docs/azure/service-catalog.md` が存在しない場合は必ず生成し、実在する場合は実質変更時だけ更新する。AC-1 `❌` の場合は docs/ / src を更新しない。
 4. ゲート運用
    - 各ゲートNG時は状態記録（✅/⏭️/❌）、未完了Sub Issue化、必要に応じ `[WIP]` or `[BLOCKED]` を付与。
-5. 最終品質レビュー
-  - 下記「最終品質レビュー」節の単回セルフチェックを実施する。
 </task>
 
-## 最終品質レビュー（単回インライン・セルフチェック）
+## 受入観点（完了条件の補足）
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 - **実行可能性**：pre-flight、HVE launcher の固定stage順、データ登録、実verifyによるGREEN判定が順序どおり実行され、AC-1の証跡が直近出力と一致するか。
 - **運用視点**：冪等性、異なるアプローチの再試行上限、失敗時の即時証跡確定、ブロッカー時の停止、ログ分離が監査可能か。

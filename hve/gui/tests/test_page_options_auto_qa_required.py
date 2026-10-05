@@ -159,7 +159,9 @@ class TestAutoQaSelectionPropagation(unittest.TestCase):
             self.assertFalse(page.build_args_for_workflow("akm").auto_qa)
 
             page.c3.auto_qa.set_tristate(None)
-            self.assertFalse(page.build_args_for_workflow("akm").auto_qa)
+            # FR-KD-11（v3.42）: 未選択の argv は Prompt 版と同じく有効（実行は validate() が止める）。
+            self.assertTrue(page.build_args_for_workflow("akm").auto_qa)
+            self.assertFalse(page.validate()[0])
         finally:
             page.deleteLater()
 

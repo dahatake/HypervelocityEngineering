@@ -10,7 +10,7 @@ applyTo: "docs/**/SVC-*.md, docs/services/**"
 ## 使い方（必読）
 1. サービスごとの成果物 `docs/usecase/<usecaseId>/services/<serviceId>-<serviceNameSlug>-description.md` は、このテンプレを **コピーして**作成する。
 2. 推測は禁止。根拠がない場合は `TBD` を置き、`根拠:` に参照ファイル（パス）を記す。
-3. 例は **あくまで例**。ユースケース固有の用語/ID/イベント名に置き換える。
+3. 例/骨子はプレースホルダーの記入形。ユースケース固有の用語/ID/イベント名に置き換える。
 4. サンプルデータ（`data/.../sample-data.json`）の **値の転記は禁止**。必要なら「フィールド名/型/意味」を要約する。
 
 ---
@@ -41,12 +41,11 @@ applyTo: "docs/**/SVC-*.md, docs/services/**"
 - 境界（他サービスとの境界線）
 
 ### 例
-- サービス名／短縮名：Template Service（TPL）
-- 概要：申請テンプレを作成・公開し、申請者が利用できる状態にする
-- 利用アプリケーション: APP-01, APP-03
-- Do：テンプレの版管理、公開/廃止、差分提示
-- Don't：承認ルーティングの「実行」（承認エンジンの責務）
-- オーナー：TBD
+- サービス名／短縮名：`<serviceName>`（`<shortName>`）
+- 概要：`<persona>` が `<businessObject>` を `<purpose>` する
+- 利用アプリケーション: `<APP-ID>` または `TBD`
+- Do / Don't：`<本サービスの責務>` / `<他サービスの責務>`
+- オーナー：`TBD（根拠: <path>）`
 
 ### 根拠
 - docs/usecase/<usecaseId>/service-catalog.md
@@ -56,15 +55,15 @@ applyTo: "docs/**/SVC-*.md, docs/services/**"
 
 ## 2. ビジネス能力・コンテキスト
 ### 必須
-- 対象ドメイン（例：申請テンプレ管理）とユースケースとの対応
-- ライフサイクル（状態と遷移イベント）：Draft → InReview → Published → Retired
+- 対象ドメインとユースケースとの対応
+- ライフサイクル（状態と遷移イベント）
 
 ### 任意
 - 下位要件ID（FR-xxx 等）の対応表（トレーサビリティ）
 
 ### 例
-- 状態：Draft / InReview / Published / Retired
-- 遷移：publish / retire / rollback（可否はTBD）
+- 状態：`<StateA>` / `<StateB>` / `TBD`
+- 遷移：`<eventName>`（条件: `TBD`、根拠: `<path>`）
 
 ### 根拠
 - docs/usecase/<usecaseId>/usecase-description.md
@@ -88,27 +87,27 @@ applyTo: "docs/**/SVC-*.md, docs/services/**"
 ### 例（OpenAPI骨子：最小）
 ```yaml
 paths:
-  /templates:
+  /<resourcePlural>:
     get:
       responses:
-        "200": { schema: TemplateList }
+        "200": { schema: <ResourceList> }
     post:
       headers: { Idempotency-Key: string }
       responses:
-        "201": { schema: Template }
+        "201": { schema: <Resource> }
         "409": { schema: Error }
-  /templates/{templateId}:
+  /<resourcePlural>/{<resourceId>}:
     get:
       responses:
-        "200": { schema: Template }
+        "200": { schema: <Resource> }
         "404": { schema: Error }
 ````
 
 ### エラーコード例（方針のみ）
 
-* TPL-VAL-001（入力検証）
-* TPL-STATE-001（状態不正）
-* TPL-EXT-001（外部依存障害）
+* `<SVC>-VAL-001`（入力検証）
+* `<SVC>-STATE-001`（状態不正）
+* `<SVC>-EXT-001`（外部依存障害）
 
 ### 根拠
 
@@ -136,15 +135,12 @@ paths:
 
 ```yaml
 channels:
-  tpl.template.published:
+  <service>.<entity>.<event>:
     publish:
-      message: { name: TEMPLATE.PUBLISHED, key: templateId }
-  tpl.template.retired:
-    publish:
-      message: { name: TEMPLATE.RETIRED, key: templateId }
-  mdm.updated:
+      message: { name: <ENTITY.EVENT>, key: <entityId> }
+  <dependency>.<entity>.<event>:
     subscribe:
-      message: { name: MDM.UPDATED, key: orgId }
+      message: { name: <DEPENDENCY.EVENT>, key: <dependencyId> }
 ```
 
 ### 根拠
@@ -159,7 +155,7 @@ channels:
 ### 必須
 
 * 主エンティティ（名前）と所有者（本サービス/他サービス）
-* 一意性/整合性ルール（例：同一typeIdで有効版は1つ）
+* 一意性/整合性ルール
 * データ分類（PII/非PII）※推測禁止
 
 ### 任意
@@ -168,8 +164,8 @@ channels:
 
 ### 例
 
-* 所有：Template（本サービス）、RequestType（本サービス）、Org（MDM所有）
-* PII：TBD（根拠が必要）
+* 所有：`<EntityA>`（本サービス）、`<EntityB>`（所有者: `TBD`）
+* PII：`TBD（根拠: <path>）`
 
 ### 根拠
 
@@ -191,8 +187,8 @@ channels:
 
 ### 例
 
-* 認可：ABAC（departmentId, role）
-* 監査：publish/retire/rollback を必ず記録
+* 認可：`<RBAC/ABAC>`（主要属性: `TBD`）
+* 監査：`<重要操作>` を記録
 
 ### 根拠
 
@@ -213,8 +209,8 @@ channels:
 
 ### 例
 
-* 依存：MDM（組織属性参照）、承認エンジン（ルール参照のみ）
-* 障害時：暫定許可→後続検証キュー（TBD）
+* 依存：`<dependencyService>`（参照/更新: `TBD`）
+* 障害時：`TBD（根拠: <path>）`
 
 ### 根拠
 
@@ -227,7 +223,7 @@ channels:
 ### 必須
 
 * 状態機械（状態と遷移条件）
-* 公開可否ゲート（例：必須キー欠落は公開不可）
+* 公開可否ゲート
 
 ### 任意
 
@@ -235,7 +231,7 @@ channels:
 
 ### 例
 
-* Published は「必須検索キーOK」「外部検証OK」が前提（詳細TBD）
+* `<TargetState>` への遷移条件：`TBD（根拠: <path>）`
 
 ### 根拠
 
@@ -256,8 +252,8 @@ channels:
 
 ### 例
 
-* メトリクス：処理遅延、DLQ件数、エラー率
-* トレース：Trace Context を伝播（概念）
+* メトリクス：`<latencyMetric>`、`<errorMetric>`、`TBD`
+* トレース：`TBD（根拠: <path>）`
 
 ---
 
@@ -271,8 +267,8 @@ channels:
 
 ### 例
 
-* API：/api/v1
-* Event：schemaVersion 必須、後方互換（フィールド追加のみ）
+* API：`/<version>` または `TBD`
+* Event：`schemaVersion` と後方互換ルールを記載（未確定は `TBD`）
 
 ---
 
@@ -290,7 +286,7 @@ channels:
 
 ### 例
 
-* エラー：TPL-VAL-xxx / TPL-STATE-xxx / TPL-EXT-xxx
+* エラー：`<SVC>-VAL-xxx` / `<SVC>-STATE-xxx` / `<SVC>-EXT-xxx`
 
 ---
 
@@ -303,8 +299,8 @@ channels:
 
 ### 例
 
-* featureFlags: localizationEnabled, destructiveChangeGuard
-* configKeys: externalApiTimeoutMs, maxAttachmentBytes
+* featureFlags: `<flagName>`（目的: `TBD`）
+* configKeys: `<configKey>`（値は未記載）
 
 ---
 
@@ -324,7 +320,7 @@ channels:
 
 ### 例
 
-* Published への遷移条件を単体＋統合で検証
+* `<StateA>` → `<StateB>` の遷移条件を契約テストで検証
 
 ---
 
@@ -360,7 +356,7 @@ channels:
 
 | 画面/操作  | API                          | イベント               | 備考   |
 | ------ | ---------------------------- | ------------------ | ---- |
-| テンプレ公開 | POST /templates/{id}:publish | TEMPLATE.PUBLISHED | 監査必須 |
+| `<画面/操作>` | `<METHOD> /<resource>` | `<EVENT.NAME>` または `N/A` | `TBD（根拠: <path>）` |
 
 ---
 

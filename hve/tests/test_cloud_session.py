@@ -5,11 +5,9 @@ from __future__ import annotations
 import json
 import os
 import sys
-import tempfile
 import types
 import unittest
 import unittest.mock
-from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -496,6 +494,7 @@ class TestOrchestratorCloudSessionFallback(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(client.calls), 2)
         self.assertIn("cloud", client.calls[0])
         self.assertNotIn("cloud", client.calls[1])
+        self.assertIs(client.calls[1]["request_extensions"], False)
 
     async def test_cloud_session_readiness_timeout_releases_limiter_slot(self) -> None:
         import orchestrator  # type: ignore
@@ -575,204 +574,6 @@ class TestOrchestratorCloudSessionFallback(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(calls), 1)
         _args, kwargs = calls[0]
         self.assertNotIn("timeout", kwargs)
-
-
-class TestSelfImproveCloudSessionPath(unittest.IsolatedAsyncioTestCase):
-    async def test_discover_task_goal_injects_cloud_without_overriding_explicit_model(self) -> None:
-        import self_improve  # type: ignore
-
-        calls: list[dict] = []
-
-        class FakeRepository:
-            def __init__(self, **kwargs):
-                self.kwargs = kwargs
-
-        class FakeOptions:
-            def __init__(self, *, repository):
-                self.repository = repository
-
-        class FakeSession:
-            async def send_and_wait(self, *_args, **_kwargs):
-                return '{"goal_description":"llm goal","success_criteria":["criterion"]}'
-
-            async def disconnect(self):
-                return None
-
-        class FakeClient:
-            async def start(self):
-                return None
-
-            async def stop(self):
-                return None
-
-            async def create_session(self, **kwargs):
-                calls.append(dict(kwargs))
-                return FakeSession()
-
-        fake_copilot = types.ModuleType("copilot")
-        fake_copilot.__dict__["CloudSessionOptions"] = FakeOptions
-        fake_copilot.__dict__["CloudSessionRepository"] = FakeRepository
-        fake_copilot_session = types.ModuleType("copilot.session")
-
-        class PermissionHandler:
-            approve_all = object()
-
-        fake_copilot_session.__dict__["PermissionHandler"] = PermissionHandler
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "src.py").write_text("print('hello')", encoding="utf-8")
-            static_result = {
-                "task_goal": {
-                    "goal_description": "static",
-                    "success_criteria": ["static criterion"],
-                    "reward_weights": {"goal": 1.0},
-                    "tdd_phase": "green",
-                },
-                "sources": ["src.py"],
-            }
-            env = {
-                "HVE_CLOUD_SESSION_ENABLED": "true",
-                "REPO": "owner/repo",
-                "MODEL": "env-model-should-not-win",
-            }
-            with unittest.mock.patch.dict(sys.modules, {"copilot": fake_copilot, "copilot.session": fake_copilot_session}), \
-                    unittest.mock.patch.dict(os.environ, env, clear=False), \
-                    unittest.mock.patch.object(self_improve, "discover_task_goal_from_docs", return_value=static_result), \
-                    unittest.mock.patch("copilot_client_factory.create_copilot_client", return_value=FakeClient()):
-                result = await self_improve.discover_task_goal_with_llm(
-                    workflow_id="akm",
-                    model="gpt-5.4",
-                    repo_root=str(root),
-                )
-
-        self.assertEqual(result["task_goal"]["goal_description"], "llm goal")
-        self.assertEqual(calls[0]["model"], "gpt-5.4")
-        self.assertIn("cloud", calls[0])
-        self.assertTrue(calls[0]["streaming"])
-
-    async def test_discover_task_goal_cloud_fallback_preserves_explicit_streaming_false(self) -> None:
-        import self_improve  # type: ignore
-
-        calls: list[dict] = []
-
-        class FakeRepository:
-            def __init__(self, **kwargs):
-                self.kwargs = kwargs
-
-        class FakeOptions:
-            def __init__(self, *, repository):
-                self.repository = repository
-
-        class FakeSession:
-            async def send_and_wait(self, *_args, **_kwargs):
-                return '{"goal_description":"llm goal","success_criteria":["criterion"]}'
-
-            async def disconnect(self):
-                return None
-
-        class FakeClient:
-            async def start(self):
-                return None
-
-            async def stop(self):
-                return None
-
-            async def create_session(self, **kwargs):
-                calls.append(dict(kwargs))
-                if "cloud" in kwargs:
-                    raise TypeError("create_session() got an unexpected keyword argument 'cloud'")
-                return FakeSession()
-
-        fake_copilot = types.ModuleType("copilot")
-        fake_copilot.__dict__["CloudSessionOptions"] = FakeOptions
-        fake_copilot.__dict__["CloudSessionRepository"] = FakeRepository
-        fake_copilot_session = types.ModuleType("copilot.session")
-
-        class PermissionHandler:
-            approve_all = object()
-
-        fake_copilot_session.__dict__["PermissionHandler"] = PermissionHandler
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "src.py").write_text("print('hello')", encoding="utf-8")
-            static_result = {
-                "task_goal": {
-                    "goal_description": "static",
-                    "success_criteria": ["static criterion"],
-                    "reward_weights": {"goal": 1.0},
-                    "tdd_phase": "green",
-                },
-                "sources": ["src.py"],
-            }
-            with unittest.mock.patch.dict(sys.modules, {"copilot": fake_copilot, "copilot.session": fake_copilot_session}), \
-                    unittest.mock.patch.dict(os.environ, {"HVE_CLOUD_SESSION_ENABLED": "true", "REPO": "owner/repo"}, clear=False), \
-                    unittest.mock.patch.object(self_improve, "discover_task_goal_from_docs", return_value=static_result), \
-                    unittest.mock.patch("copilot_client_factory.create_copilot_client", return_value=FakeClient()):
-                await self_improve.discover_task_goal_with_llm(
-                    workflow_id="akm",
-                    model="gpt-5.4",
-                    repo_root=str(root),
-                )
-
-        self.assertIn("cloud", calls[0])
-        self.assertNotIn("cloud", calls[1])
-        self.assertFalse(calls[1]["streaming"])
-
-    async def test_discover_task_goal_policy_blocked_is_not_static_fallback(self) -> None:
-        import self_improve  # type: ignore
-
-        class FakeRepository:
-            def __init__(self, **kwargs):
-                self.kwargs = kwargs
-
-        class FakeOptions:
-            def __init__(self, *, repository):
-                self.repository = repository
-
-        class FakeClient:
-            async def start(self):
-                return None
-
-            async def stop(self):
-                return None
-
-            async def create_session(self, **kwargs):
-                raise RuntimeError("policy_blocked")
-
-        fake_copilot = types.ModuleType("copilot")
-        fake_copilot.__dict__["CloudSessionOptions"] = FakeOptions
-        fake_copilot.__dict__["CloudSessionRepository"] = FakeRepository
-        fake_copilot_session = types.ModuleType("copilot.session")
-
-        class PermissionHandler:
-            approve_all = object()
-
-        fake_copilot_session.__dict__["PermissionHandler"] = PermissionHandler
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "src.py").write_text("print('hello')", encoding="utf-8")
-            static_result = {
-                "task_goal": {
-                    "goal_description": "static",
-                    "success_criteria": ["static criterion"],
-                    "reward_weights": {"goal": 1.0},
-                    "tdd_phase": "green",
-                },
-                "sources": ["src.py"],
-            }
-            with unittest.mock.patch.dict(sys.modules, {"copilot": fake_copilot, "copilot.session": fake_copilot_session}), \
-                    unittest.mock.patch.dict(os.environ, {"HVE_CLOUD_SESSION_ENABLED": "true", "REPO": "owner/repo"}, clear=False), \
-                    unittest.mock.patch.object(self_improve, "discover_task_goal_from_docs", return_value=static_result), \
-                    unittest.mock.patch("copilot_client_factory.create_copilot_client", return_value=FakeClient()):
-                with self.assertRaises(RuntimeError):
-                    await self_improve.discover_task_goal_with_llm(
-                        workflow_id="akm",
-                        model="gpt-5.4",
-                        repo_root=str(root),
-                    )
 
 
 if __name__ == "__main__":

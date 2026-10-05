@@ -19,15 +19,15 @@
   <text x="565" y="78" text-anchor="middle" font-size="13" font-weight="bold" fill="#6f42c1">Prompt（タスク）</text>
   <text x="980" y="78" text-anchor="middle" font-size="13" font-weight="bold" fill="#28a745">成果物</text>
 
-  <!-- Pre-DAG: Work IQ ingest (optional) -->
-  <text x="565" y="98" text-anchor="middle" font-size="10" fill="#9a3412" font-weight="bold">Pre-DAG（sources に workiq 指定時のみ）</text>
+  <!-- Pre-DAG: knowledge discovery (optional) -->
+  <text x="565" y="98" text-anchor="middle" font-size="10" fill="#9a3412" font-weight="bold">Pre-DAG（知識源の指定時のみ）</text>
   <rect x="20" y="108" width="310" height="58" rx="8" fill="#fff7ed" stroke="#ea580c" stroke-width="1.8"/>
-  <text x="175" y="128" text-anchor="middle" font-size="10" fill="#9a3412" font-weight="bold">Work IQ (Microsoft 365)</text>
+  <text x="175" y="128" text-anchor="middle" font-size="10" fill="#9a3412" font-weight="bold">知識源（Work IQ / 任意の MCP server）</text>
   <text x="175" y="144" text-anchor="middle" font-size="9" fill="#9a3412">メール / チャット / 会議 / ファイル</text>
-  <text x="175" y="158" text-anchor="middle" font-size="9" fill="#586069">--workiq-dxx で対象 Dxx 絞り込み可</text>
+  <text x="175" y="158" text-anchor="middle" font-size="9" fill="#586069">--workiq / --knowledge-source で指定</text>
   <rect x="430" y="108" width="270" height="58" rx="8" fill="#ffedd5" stroke="#ea580c" stroke-width="2"/>
-  <text x="565" y="128" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">_run_akm_workiq_ingest</text>
-  <text x="565" y="144" text-anchor="middle" font-size="9" fill="#586069">Copilot session が直接 Dxx を書き込み</text>
+  <text x="565" y="128" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">_run_orchestrator_knowledge_discovery</text>
+  <text x="565" y="144" text-anchor="middle" font-size="9" fill="#586069">1 セッションで調査し出典付きで Dxx を更新</text>
   <text x="565" y="158" text-anchor="middle" font-size="9" fill="#586069">D01〜D21（または絞込）に対し差分更新</text>
   <line x1="330" y1="137" x2="430" y2="137" stroke="#ea580c" stroke-width="1.5" marker-end="url(#arrOrange)"/>
   <line x1="700" y1="137" x2="800" y2="137" stroke="#ea580c" stroke-width="1.5" marker-end="url(#arrOrange)"/>
@@ -36,7 +36,7 @@
   <text x="565" y="195" text-anchor="middle" font-size="10" fill="#959da5" font-weight="bold">Step 1: knowledge/ ドキュメント生成・管理（fan-out: D01〜D21 を 21 並列）</text>
   <rect x="20" y="205" width="310" height="120" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
   <text x="175" y="227" text-anchor="middle" font-size="10" fill="#24292e">qa/*.md（sources に qa 指定）</text>
-  <text x="175" y="242" text-anchor="middle" font-size="9" fill="#586069">※ qa/*-workiq-*.md は除外</text>
+  <text x="175" y="242" text-anchor="middle" font-size="9" fill="#586069">※ 知識探索の QA（調査済み）も入力に含む</text>
   <text x="175" y="262" text-anchor="middle" font-size="10" fill="#24292e">docs-original/*（sources に docs-original 指定）</text>
   <text x="175" y="277" text-anchor="middle" font-size="9" fill="#586069">.md / .txt / .csv</text>
   <text x="175" y="298" text-anchor="middle" font-size="10" fill="#24292e">パラメータ: sources / target_files /</text>
@@ -47,7 +47,7 @@
   <text x="565" y="248" text-anchor="middle" font-size="9" fill="#9a3412" font-weight="bold">[fan-out × 21: D01, D02, ..., D21]</text>
   <text x="565" y="266" text-anchor="middle" font-size="10" fill="#586069">qa 抽出 / docs-original セクション分割</text>
   <text x="565" y="282" text-anchor="middle" font-size="10" fill="#586069">Dxx ごとに独立 Copilot session</text>
-  <text x="565" y="302" text-anchor="middle" font-size="9" fill="#9a3412">Work IQ 由来既存 Dxx を保護しつつ差分マージ</text>
+  <text x="565" y="302" text-anchor="middle" font-size="9" fill="#9a3412">既存 Dxx を保護しつつ差分マージ</text>
   <text x="565" y="316" text-anchor="middle" font-size="9" fill="#586069">required_skills: knowledge-management</text>
 
   <rect x="800" y="205" width="360" height="120" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
@@ -91,14 +91,14 @@
   <rect x="400" y="478" width="22" height="14" fill="#d4edda" stroke="#28a745" stroke-width="1.5"/>
   <text x="432" y="490" font-size="11" fill="#24292e">成果物ファイル</text>
   <rect x="560" y="478" width="22" height="14" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
-  <text x="592" y="490" font-size="11" fill="#24292e">Pre-DAG（workiq 選択時の特別ステージ）</text>
+  <text x="592" y="490" font-size="11" fill="#24292e">Pre-DAG（知識源の指定時の知識探索ステージ）</text>
   <line x1="880" y1="485" x2="920" y2="485" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
   <text x="930" y="489" font-size="11" fill="#24292e">データフロー</text>
   <line x1="1040" y1="480" x2="1080" y2="490" stroke="#e36209" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arr)"/>
   <text x="1088" y="489" font-size="11" fill="#24292e">ステップ依存</text>
   <text x="40" y="516" font-size="11" fill="#24292e">• Step 1 は D01〜D21 を 21 並列で fan-out（hve/workflow_registry.py AKM.max_parallel=21）。</text>
   <text x="40" y="534" font-size="11" fill="#24292e">• Step 2 は全 21 件の生成完了を待って AND join し、横断整合性をレビューします。</text>
-  <text x="40" y="552" font-size="11" fill="#24292e">• Work IQ は Pre-DAG ステージで先行投入され、KnowledgeManager Agent が既存 Dxx を保護しつつ差分マージします。</text>
+  <text x="40" y="552" font-size="11" fill="#24292e">• 知識探索は Pre-DAG ステージで 1 回だけ実行され、KnowledgeManager Agent が既存 Dxx を保護しつつ差分マージします。</text>
   <text x="40" y="570" font-size="11" fill="#24292e">• 出典: hve/workflow_registry.py AKM WorkflowDef（fanout_static_keys = D01〜D21）。</text>
   <text x="40" y="592" font-size="10" fill="#24292e">関連 Agent: .github/prompts/KnowledgeManager.prompt.md / QA-DocConsistency.prompt.md</text>
 </svg>

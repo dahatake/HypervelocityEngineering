@@ -16,9 +16,11 @@ D01〜D21 の質問票を生成して、目的に沿って選別した候補を�
 Step ID: `1`, `1.1`, `1.2`, `2`, `3`, `4`, `5.1`, `5.2`, `5.3`
 
 主な成果物: `docs/original-design-doc-ingest/index.json` /
-`docs/catalog/design-doc-inventory.md` / `qa/D01〜D21-docs-original-questionnaire.md` /
-`qa/docs-original-cross-questionnaire.md` / `docs/catalog/design-doc-catalog.md` /
+`docs/catalog/design-doc-inventory.md` / `qa/D01〜D21-original-docs-questionnaire.md` /
+`qa/original-docs-cross-questionnaire.md` / `docs/catalog/design-doc-catalog.md` /
 `docs/catalog/design-doc-routing.md`
+
+> `1.1` / `1.2` は原本質問票を生成する任意 Step で、既定の選択には含まれません。必要なときだけ明示的に Step へ含めてください。
 
 | パラメータ | 意味 | 値 |
 |---|---|---|
@@ -61,7 +63,7 @@ HVE の Prompt 版で作業してください。
 
 - 目的: docs-original/ に何があるかをまず一覧化したい
 - Workflow: adi
-- Step: 1, 1.1
+- Step: 1
 - パラメータ: depth=lightweight
 - 制約: docs-original/ は読み取り専用。質問票の生成まで進めないこと
 - 期待する成果物: docs/catalog/design-doc-inventory.md
@@ -75,6 +77,7 @@ HVE の Prompt 版で作業してください。
 ## 注意
 
 - **`docs-original/` は読み取り専用です。** 原本を書き換える依頼はしないでください。
+- 原本質問票まで必要な場合は、Step `1.1`, `1.2` を明示的に追加します。
 - `purpose` を省略すると `must` 判定が付かず、選別が緩くなります。
 - 取り込み後に `knowledge/` を更新したい場合は [knowledge-management.md](knowledge-management.md) を参照してください。
 

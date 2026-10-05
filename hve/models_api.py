@@ -64,6 +64,9 @@ class ModelsAPIError(Exception):
     """モデル一覧取得失敗時の例外。"""
 
 
+_MODEL_CLIENT_STOP_TIMEOUT_SECONDS = 5.0
+
+
 # ---------------------------------------------------------------------------
 # 内部 async 実装
 # ---------------------------------------------------------------------------
@@ -113,7 +116,10 @@ async def _fetch_model_entries_async() -> List[ModelEntry]:
         raise ModelsAPIError(f"list_models 失敗: {type(e).__name__}: {e}") from e
     finally:
         try:
-            await client.stop()
+            await asyncio.wait_for(
+                client.stop(),
+                timeout=_MODEL_CLIENT_STOP_TIMEOUT_SECONDS,
+            )
         except Exception:
             pass
 
@@ -195,6 +201,8 @@ async def _fetch_model_entries_async() -> List[ModelEntry]:
 
 def fetch_model_entries(timeout: float = 30.0) -> List[ModelEntry]:
     """モデル一覧を同期取得し、ModelEntry のリストを返す。
+
+    ``timeout`` 後のSDK cleanupは別途最大5秒だけ待機する。
 
     Raises:
         ModelsAPIError: SDK 起動失敗・認証エラー・タイムアウト等。

@@ -33,6 +33,11 @@ def stubbed_app(qapp, monkeypatch):
         app_module, "_open_first_window", lambda initial_catalog=None: opened.append(initial_catalog)
     )
     monkeypatch.setattr(app_module, "start_startup_index_refresh", lambda _root: False)
+    monkeypatch.setattr(
+        app_module,
+        "start_startup_resource_snapshot_check",
+        lambda _repo_root=None: False,
+    )
     monkeypatch.setattr(QApplication, "exec", lambda _self: 0)
     return app_module, opened
 
@@ -82,6 +87,11 @@ class TestRunAppStartupAuth:
             app_module, "_run_startup_github_auth", lambda: calls.append("called")
         )
         monkeypatch.setattr(app_module, "_open_autopilot_child_window", lambda _args: 0)
+        monkeypatch.setattr(
+            app_module,
+            "start_startup_resource_snapshot_check",
+            lambda _repo_root=None: False,
+        )
         monkeypatch.setattr(QApplication, "exec", lambda _self: 0)
 
         class _Args:

@@ -21,9 +21,6 @@ body:
         | **Step.6** | 検索経路の適正化実測 |
         | **Step.7** | Microsoft 365 / Teams 公開 |
 
-        全実装・テスト・Deployステップ完了後、AAGD成果物を対象とするPost-DAG Self-Improveが必ず実行されます。
-        TDD GREENのリトライ上限とPost-DAG Self-Improveのイテレーション上限は別々に管理されます。
-
         ⚠️ **前提条件**:
         - AI Agent Design (AAG) が完了していること（`docs/agent/*.md`）
         - Web App Dev (ASDW-WEB) の Azure Compute Deploy が完了していること（Azure リソースがデプロイ済み）
@@ -40,6 +37,24 @@ body:
         対象とする APP-ID をカンマ区切りで指定してください。
         未指定の場合は全アプリケーションを対象に実行します。
       placeholder: "例: APP-01, APP-02"
+    validations:
+      required: false
+
+  - type: textarea
+    id: step_input_files
+    attributes:
+      label: "Step Input Files"
+      description: "対象branchに存在する追加・代替資料のbranch-relative pathを1行1件で指定します。ドラッグ＆ドロップのupload linkは現在未対応（Cloud upload unavailable）です。"
+      placeholder: "docs-original/example.md"
+    validations:
+      required: false
+
+  - type: textarea
+    id: step_input_bindings
+    attributes:
+      label: "Step Input Bindings"
+      description: "1行1 JSONでStep・role・上のfile番号を指定します。additionalのcanonicalは省略できます。"
+      placeholder: '{"step_id":"1","role":"additional","file":1}'
     validations:
       required: false
 
@@ -116,6 +131,7 @@ body:
         ※ `HVE_MODEL_OVERRIDE` 環境変数が設定されている場合はそちらが優先されます。
       options:
         - "Auto"
+        - "claude-opus-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "gpt-5.5"
@@ -132,6 +148,7 @@ body:
         `Auto` を選ぶと Copilot が最適モデルを自動選択します。明示指定でモデルを固定できます。
       options:
         - "Auto"
+        - "claude-opus-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "gpt-5.5"
@@ -149,6 +166,7 @@ body:
         `Auto` を選ぶと Copilot が最適モデルを自動選択します。明示指定でモデルを固定できます。
       options:
         - "Auto"
+        - "claude-opus-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "gpt-5.5"
@@ -166,6 +184,7 @@ body:
         実行前 QA が有効なときだけ使われます。`Auto` を選ぶと Copilot が最適モデルを自動選択します。
       options:
         - "Auto"
+        - "claude-opus-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "gpt-5.5"
@@ -218,32 +237,6 @@ body:
         - "5 (デフォルト)"
         - "7"
         - "10"
-      default: 1
-    validations:
-      required: false
-
-  - type: dropdown
-    id: self_improve_max_iterations
-    attributes:
-      label: "自己改善 最大イテレーション数"
-      description: "全AAGDステップ完了後に必ず実行されるPost-DAG Self-Improveの最大繰り返し回数（TDD GREENリトライとは別）"
-      options:
-        - "1"
-        - "2"
-        - "3 (デフォルト)"
-      default: 2
-    validations:
-      required: false
-
-  - type: dropdown
-    id: self_improve_quality_threshold
-    attributes:
-      label: "自己改善 品質スコア目標値"
-      description: "required criterionと検証が全てPASSしたうえで、この値に達した時点で改善完了とみなします"
-      options:
-        - "70（最低基準）"
-        - "80（標準）"
-        - "90（高品質）"
       default: 1
     validations:
       required: false

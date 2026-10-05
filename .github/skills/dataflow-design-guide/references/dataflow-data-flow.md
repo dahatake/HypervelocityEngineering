@@ -33,23 +33,16 @@ applyTo: "docs/**/batch-*.md, src/**/batch/**"
 ```mermaid
 graph LR
   subgraph Sources
-    SRC01[外部API]
-    SRC02[DBテーブル]
+    SRC01["{データソース}"]
   end
   subgraph DataflowApps
-    B001[日次集計]
-    B002[データ同期]
+    B001["{Batch-ID}: {データフロー処理名}"]
   end
   subgraph Sinks
-    SNK01[DWH]
-    SNK02[レポートDB]
+    SNK01["{データシンク}"]
   end
-  SRC01 -->|抽出| B001
-  SRC02 -->|抽出| B001
-  SRC02 -->|CDC| B002
-  B001 -->|格納| SNK01
-  B002 -->|格納| SNK01
-  B002 -->|同期| SNK02
+  SRC01 -->|取得方式| B001
+  B001 -->|書き込み方式| SNK01
 ```
 
 ### 根拠

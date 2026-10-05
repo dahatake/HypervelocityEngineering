@@ -1,7 +1,7 @@
 ---
 name: foundry-toolbox-contract
 description: >
-  Microsoft Foundry Toolbox と tool search による Tool 集約・遅延公開を TB-CAP-01〜05 の固定契約として設計・検証する。 USE FOR: tool inventory count, toolbox decision, tool search enablement, tool pinning, additional search text, tool discovery budget, large tool catalog. DO NOT USE FOR: individual REST tool schema design, MCP server implementation, knowledge base retrieval tuning, agent goal loop design. WHEN: AI Agent の Tool 総数が 10〜15 個を超えるとき、または 1 つの Agent が複数ワークフローを担うとき。
+  Foundry Toolbox/tool search contract. USE FOR: over 10–15 tools or one Agent with multiple workflows; counts, pins, lazy catalog, budget. DO NOT USE FOR: individual REST schemas or RAG/KB tuning. WHEN: toolbox/tool search may help.
 category: planning
 metadata:
   origin: user
@@ -21,7 +21,7 @@ Foundry Toolbox の tool search は、初回の `tools/list` から全 Tool を�
 ## Non-goals（このスキルの範囲外）
 
 - **個々の REST Tool の I/O スキーマ設計** — `ai-agent-capability-contract` の AG-CAP-04 の責務。
-- **MCP Server 自体の実装** — `mcp-server-design` の責務。
+- **一般 MCP Server 自体の設計・実装** — 既存の公式情報参照規約に従う。HVE-specific MCP は AG-CAP-05 / AR-CAP-05 の該当契約で扱う。
 - **Knowledge Base の検索チューニング** — `agentic-retrieval-contract`（AR-CAP-01〜05）の責務。
 - **Agent の Goal Loop / Skill 梱包** — `ai-agent-capability-contract`（AG-CAP-01 / 06）の責務。
 - **Tool を減らすための機能統合** — AG-CAP-03 は検索 Tool の統合を明示的に禁止している。本 Skill は「統合せずに増えた Tool を扱う」ための契約であり、統合を推奨しない。
@@ -216,4 +216,4 @@ Foundry IQ は Tool として **1** と数える。
 
 - `ai-agent-capability-contract` — AG-CAP-01〜10。個々の Tool 定義の正本。
 - `agentic-retrieval-contract` — AR-CAP-01〜05。Knowledge Base の検索設計。接続トポロジで境界を分ける。
-- `mcp-server-design` — MCP Server 自体の設計。
+- `AG-CAP-05 / AR-CAP-05` — HVE-specific MCP の該当契約。一般 MCP 設計は既存の公式情報参照規約に従う。

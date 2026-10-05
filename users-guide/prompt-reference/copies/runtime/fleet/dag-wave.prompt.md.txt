@@ -6,7 +6,7 @@
 - repo_root_abs: {repo_root_abs}
 
 ## Fleet 実行ルール
-- これは SPLIT_REQUIRED / subissues.md / GitHub Sub-Issue 作成ではありません。
+- これは subissues.md / GitHub Sub-Issue の作成ではありません。
 - 各 worker は 1 つの DAG step だけを担当すること。
 - 他 step の output_paths を編集しないこと。
 - required_input_paths が存在しない場合は推測で進めず blocked として理由を書くこと。

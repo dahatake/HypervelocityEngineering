@@ -2,7 +2,7 @@
 
 ← [README](../README.md)
 
-> **Phase 8 付記 (2026-08-07 改訂)**: Custom Agent（`.github/agents/<Name>.agent.md`）と `hve/agent_loader.py` は Phase 2 で廃止済みです。現行実装では、Agent 名は識別子として `StepDef.custom_agent` に残り、Prompt 本文は [`hve/prompt_loader.py`](../hve/prompt_loader.py) が `.github/prompts/<Name>.prompt.md` から読み込み、入出力契約は `.github/io-contracts/<Name>.yaml` が定義します（リポジトリ実体で確認済み。`hve/agent_loader.py` は存在しません）。本書 §3〜§5 のフロー記述はこの構成に更新済みです。最新の規範ルールは `.github/copilot-instructions.md` §5 および `.github/prompts/README.md` を参照してください。
+> **Phase 8 付記 (2026-08-07 改訂)**: Custom Agent（`.github/agents/<Name>.agent.md`）と `hve/agent_loader.py` は Phase 2 で廃止済みです。現行実装では、Agent 名は識別子として `StepDef.custom_agent` に残り、Prompt 本文は [`hve/prompt_loader.py`](../hve/prompt_loader.py) が `.github/prompts/<Name>.prompt.md` から読み込み、入出力契約は `.github/io-contracts/<Name>.yaml` が定義します（リポジトリ実体で確認済み。`hve/agent_loader.py` は存在しません）。本書 §3〜§5 のフロー記述はこの構成に更新済みです。最新の規範ルールは [`.github/copilot-instructions.md`](../.github/copilot-instructions.md)（共通ルール）および [`.github/prompts/README.md`](../.github/prompts/README.md) を参照してください。
 
 > **位置づけ**: HVE（Hypervelocity Engineering）の **3 つの Orchestrator**（Cloud Agent / CLI / GUI）と、それらへ委譲する **Prompt 利用面**について、最大限詳細な技術アーキテクチャ図・メッセージフロー・解説をまとめた一次資料。
 > 操作手順は `users-guide/hve-prompt-getting-started.md`、`users-guide/hve-cli-orchestrator-guide.md` および `users-guide/hve-gui-orchestrator-guide.md` を参照。
@@ -55,8 +55,8 @@ HVE は **Workflow（DAG）** に従って **Prompt** に作業を委譲し、�
 - **Orchestrator**: HVE のエントリポイント実装。Cloud / CLI / GUI の 3 種類。
 - **Workflow**: DAG として定義された一連のステップ。`hve/workflow_registry.py` で `WorkflowDef` として宣言。
 - **Step**: Workflow の最小実行単位。`StepDef`（id, title, custom_agent, depends_on, output_paths 等）で記述。
-- **Prompt**: `.github/prompts/**` の Markdown。Copilot Coding Agent / `copilot` CLI に渡される役割定義・実行指示の正本。Agent 本文は flat な `.github/prompts/<Name>.prompt.md`、Step 本文は `steps/`、fan-out 追加本文は `fanout/`、HVE 内部 Prompt は `runtime/`、Cloud 実行指示は `cloud/` に配置する。
-- **Skill**: `.github/skills/*/SKILL.md`。手順・コマンド・トラブルシュートを格納する技術リファレンス。
+- **Prompt**: `.github/prompts/**` の plain Markdown。HVE loader がモデル / Copilot Coding Agent / Copilot SDK へ送る固定 Prompt 本文の単一正本であり、VS Code Copilot Chat の slash prompt や migration メモとは区別する。Agent 本文は flat な `.github/prompts/<Name>.prompt.md`、Step 本文は `steps/`、fan-out 追加本文は `fanout/`、HVE 内部 Prompt は `runtime/`、Cloud 実行指示は `cloud/` に配置する。
+- **Skill**: `.github/skills/**/SKILL.md`。直下または既存カテゴリ配下に置く HVE 固有契約・配布正本のリファレンス（§9.3）。
 - **SDK**: `github-copilot-sdk`（PyPI）。Python から `copilot` プロセスを起動・制御するための公式 SDK。
 
 ---
@@ -109,11 +109,14 @@ CLI / GUI が共有するローカル実行エンジンの Python モジュー�
 |---|---|
 | `hve/orchestrator.py` | エントリポイントから呼ばれる司令塔。DAG 構築 → Issue/PR 連携 → DAG 実行 → 後処理を担う。 |
 | `hve/dag_planner.py` | `build_dag_plan()`：`WorkflowDef` を実行可能な DAG に展開（fanout・skip 条件評価）。 |
-| `hve/dag_executor.py` | `DAGExecutor`：`asyncio.Semaphore(max_parallel)` 並列・Fork-on-Retry・依存解決。 |
+| `hve/dag_executor.py` | `DAGExecutor`：`max_parallel` による通常並列、`ownership_parallel` による fan-out 子の所有範囲ベース並列、Fork-on-Retry、依存解決、per-step wall-clock timeout を扱う。 |
 | `hve/runner.py` | `StepRunner`：1 ステップを `CopilotClient.create_session()` → `send_and_wait()` で実行。 |
 | `hve/workflow_registry.py` | `WorkflowDef` / `StepDef` 定義の集合体。`_REGISTRY` は 13 ワークフロー（`ard` / `aas` / `ada` / `aad-web` / `asdw-web` / `adfd` / `adfdv` / `aag` / `aagd` / `aar` / `akm` / `adi` / `adoc`）を保持し、`list_workflows()` はその全値を返す。 |
+| `hve/catalog_parsers.py` | fan-out 用カタログと `docs/catalog/id-ledger.md` の単一パーサ実装。`parse_id_ledger()` もここが正本。 |
+| `hve/id_ledger.py` | ID 台帳の決定的検査（`check_id_ledger()`）と bootstrap 行生成。fan-out の所有範囲検証と相互参照検査の実装面。 |
 | `hve/prompt_loader.py` | `.github/prompts/` を root として Prompt 本文を読み込む単一実装。`load_prompt_file(relative_path)` が安全な repository-relative path だけを受理し、必須 Prompt の欠損・空・ root 外への escape を model call / SDK session 作成前に fail-closed で拒否する。`load_prompt(agent_name)` は flat Agent 本文用の互換 facade（旧 `hve/agent_loader.py` の後継、Phase 2 で SDK への custom_agents 伝搬は廃止）。 |
-| `hve/skill_resolver.py` | `.github/skills/*/SKILL.md` の frontmatter から候補抽出（`skill_manifest.json` を活用）。 |
+| `hve/skill_resolver.py` | `.github/skills/**/SKILL.md` の frontmatter から候補抽出（`skill_manifest.json` を活用）。 |
+| `hve/run_paths.py` | `work/run/<run-id>/` の解決と、`completion-report.md` の検証マーカー判定（`has_validation_marker()`）の単一実装。 |
 | `hve/run_state.py` | SDK セッション ID の決定論的生成（`make_session_id`）。fork-on-retry のフォーク用 ID 再構成に使用。 |
 | `hve/fork_kpi_logger.py` | Fork-on-Retry の KPI を `work/kpi/fork-kpi-<run_id>.jsonl` に出力。 |
 
@@ -242,19 +245,22 @@ bash 側からは以下の `python -m hve.*` を CLI として呼び出し、必
 
 ### 4.1 起動シーケンス
 
-1. ユーザーが端末で `python -m hve orchestrate --workflow <id> [options...]` を実行。
-2. `hve/__main__.py` のサブコマンド分岐で `orchestrate` を選択 → `hve/orchestrator.py:run_orchestrate()` を呼ぶ。
-3. `orchestrator.py` の処理：
+1. ユーザーが端末で `python -m hve orchestrate --workflow <id> [options...]` または console script `hve orchestrate ...` を実行。
+2. `python -m hve` は `hve/__main__.py` の早期 guard、console script `hve` は `hve/startup_version.py:console_main()` の軽量 bootstrap から、`main(argv)` より前に共通の stdio UTF-8 構成と `.venv` 正規化を実行する。これによりWindowsのpipe / redirectでも、重い `hve.__main__` のimport前に出す日本語の版警告をUTF-8で保持する。現在の Python がリポジトリの `.venv` 外で、同梱 `.venv` が存在する場合は、その Python で `-m hve` を再起動する。再帰防止には公開済みの `HVE_NO_VENV_REEXEC=1` を使う。
+3. 続いて共通の `check_startup_version()` が、checkout 済み `pyproject.toml` の `[project].version` と `importlib.metadata.version("hve")` のインストール済み版を比較し、remote へは問い合わせない。旧版または metadata 不明で TTY の場合だけ既存 setup の実行を確認し、成功後はリポジトリの `.venv` Python で元の argv を 1 回再起動する。重複実行は利用者向け設定として公開しない内部 process-tree marker で防ぐ。
+4. 起動正規化後にだけ `hve.__main__` の `.config` / `workflow_registry` 等を import し、`main(argv)` へ進む。`main(argv)` はライブラリ・テストからも直接利用するため、`.venv` 再起動と version check の責務を持たない。旧 editable install が生成済みの `hve.__main__:_console_main` shim は実行名を限定した早期 guard と互換入口で救済し、次回 setup 後に軽量 bootstrap を指す shim へ更新される。
+5. `main(argv)` は `argparse` で `orchestrate` を選択し、`_cmd_orchestrate(args)` へ dispatch する。`_cmd_orchestrate(args)` が preflight を行い、`asyncio.run(run_workflow(...))` で次の処理を開始する：
    - 引数バリデーション
    - `hve/dag_planner.py:build_dag_plan(workflow, options)` で DAG を構築（fanout 展開・skip 条件評価）
    - 必要なら新規ブランチ作成・Issue 作成
-   - `hve/dag_executor.py:DAGExecutor.run()` を呼ぶ
-4. `DAGExecutor.run()` の動作：
-   - `workflow.get_next_steps()` で実行可能なステップ集合を取得
-   - `asyncio.Semaphore(max_parallel)` で並列実行を制御
-   - 各ステップは `StepRunner.run(step)` を `asyncio.create_task` で起動
+  - `hve/dag_executor.py:DAGExecutor.execute()` を呼ぶ
+6. `DAGExecutor.execute()` の動作：
+  - `_get_next_steps()` が `dag_plan.nodes` から実行可能なステップ集合を取得
+  - `_run_with_semaphore()` が `asyncio.Semaphore(max_parallel)` で並列実行を制御
+  - 各ステップは `StepRunner.run_step()` を task として起動
    - 失敗時：`HVE_FORK_ON_RETRY=true` なら **1 回限定** で新 session_id（フォーク）でリトライ。`fork_kpi_logger` に JSONL 出力。
-   - 全完了後にコミット・push・PR 作成
+  - 全ノードの終端後に DAG の実行結果を Orchestrator へ返す
+7. `run_workflow()` の Post-DAG 後処理が、設定に応じてコミット・push・PR 作成を行う。
 
 ### 4.2 StepRunner の内部
 
@@ -269,14 +275,17 @@ bash 側からは以下の `python -m hve.*` を CLI として呼び出し、必
 7. `session = await client.create_session(...)` で Copilot セッション開始
 8. `response = await session.send_and_wait(prompt)` で同期実行
 9. ストリーム中の `permission_request` イベントは `PermissionHandler` でポリシー判定
-10. 終了後 `artifact_validation` で `output_paths` の存在を確認
+10. 終了後 `artifact_validation` で `output_paths` の存在を確認し、不足があれば同じ main session へ最大 2 回だけ継続生成を依頼
 11. `mdq_enforcement` / `app_arch_filter` / `qa_merger` 等の後処理を必要に応じて実施
 12. 成功/失敗を `DAGExecutor` に返す
 
 ### 4.3 並列実行・Fork-on-Retry の詳細
 
 - **並列度**: `--max-parallel`（既定 15）で `asyncio.Semaphore` のサイズを指定。
+- **所有範囲ベース並列**: `WorkflowDef.ownership_parallel` が 0 より大きい Workflow は、ID 台帳と `output_paths_template` から求めた所有範囲が重ならない fan-out 子だけを同時実行する。現行では `asdw-web` が `ownership_parallel=4`。
 - **DAG パターン**: sequential / fork / AND join / skip fallback（条件不一致時にスキップ）。
+- **既定の Step 選択**: `selected_by_default=False` の Step は `default_step_ids()` から除外され、GUI 初期チェック・CLI の `--steps` 省略・Prompt 版の `steps` 省略で共通に未選択になる。現行では ADI `1.1` / `1.2` が該当する。
+- **per-step wall-clock timeout**: `step_timeout_seconds`（既定 7200 秒）は idle timeout と別に 1 Step の上限を定め、ハングした Step が DAG 全体を無期限停止させるのを防ぐ。
 - **Fork-on-Retry**: 環境変数 `HVE_FORK_ON_RETRY=true` で有効化。非コンテナステップが失敗した時に **1 回だけ** 新 session_id を発行してフォーク再試行する。`tdd_max_retries`（TDD GREEN フェーズの再試行）とは独立。
 - **KPI**: `work/kpi/fork-kpi-<run_id>.jsonl` に `timestamp / run_id / step_id / session_id / forked_session_id / success / retry_count / elapsed_seconds / tokens / fork_on_retry_enabled` を記録。
 
@@ -351,6 +360,8 @@ QMainWindow (MainWindow)
         └── NavigationBar (QWidget) ············ [戻る] / [次へ] / [実行] / [停止]
 ```
 
+通常 GUI 起動では、`hve/gui/app.py` の `_open_first_window()` が初回 `MainWindow` を生成し、Work IQ capability の共有、`win.show()` の順に進んだ直後、既存の `MainWindow._on_login_clicked()` を1回呼ぶ。同メソッドが `QThread` で `hve/models_api.py` の `fetch_model_entries()`（SDK `CopilotClient.list_models()`）を実行し、非空の結果を `hve/models_cache.py` へ保存してモデル選択欄を再読込する。1つの`MainWindow`はactive workerを1件だけ保持し、ステータスバーと設定画面の取得ボタンを同じbusy状態へ同期する。完了時はthread参照を解除して`deleteLater()`を予約し、取得中のcloseは完了後まで延期する。SDK取得timeout後の`CopilotClient.stop()`は既存cleanup境界と同じ5秒で打ち切る。モデル取得statusは索引差分更新、Work IQ確認、Workflow実行のstatusより低い優先度で表示する。GUI 起動側は取得・キャッシュ・UI反映を再実装しない。`_open_additional_window()` と `_open_autopilot_child_window()` はこの経路を通らないため、自動取得を繰り返さない。
+
 ### 5.3 Step 1: ワークフロー選択
 
 - `hve.workflow_registry.list_workflows()` から `WorkflowDef` を動的取得。
@@ -373,31 +384,28 @@ QMainWindow (MainWindow)
 
 | # | カテゴリ | 主要オプション | 区分 |
 |---|---|---|---|
-| C1 | 基本設定 | `--workflow`, `--model`, `--review-model`, `--qa-model` | 共通 |
-| C2 | 並列実行 | `--max-parallel` | 共通 |
-| C3 | 共通設定 | `--auto-qa`, `--qa-akm-background-merge`, `--force-interactive`, `--auto-contents-review`, `--auto-coding-agent-review`, `--auto-coding-agent-review-auto-approval` | 共通 |
-| C4 | Work IQ | `--workiq`, `--workiq-akm-review`, `--workiq-akm-ingest`, `--workiq-dxx`, `--workiq-draft`, `--workiq-draft-output-dir`, `--workiq-tenant-id`, `--workiq-prompt-qa`, `--workiq-prompt-km`, `--workiq-prompt-review`, `--workiq-per-question-timeout`, `--workiq-request-timeout` | **CLI 固有**（Issue Template に存在しないことを確認済み: `grep -i workiq` で 0 件） |
-| C5 | Issue / PR 作成 | `--create-issues`, `--create-pr`, `--ignore-paths`, `--repo`, `--issue-title` | 共通 |
-| C6 | 出力制御 | `--verbose`, `--quiet`, `--verbosity`, `--show-stream`, `--log-level`, `--no-color`, `--banner`, `--screen-reader`, `--timestamp-style`, `--final-only` | **CLI 固有**（`hve/__main__.py` に定義あり／`.github/ISSUE_TEMPLATE/` に対応入力なしを確認済み） |
-| C7 | MCP / CLI 接続 | `--mcp-config`, `--cli-path`, `--cli-url` | **CLI 固有**（同上の方法で確認済み） |
-| C8 | タイムアウト | `--timeout`, `--review-timeout` | 共通 |
-| C9 | ブランチ / ステップ選択 | `--branch`, `--steps` | 共通 |
-| C10 | アプリ ID | `--app-id`, `--app-ids`, `--resource-group`, `--app-id`, `--usecase-id` | 共通（aas / aad-web / asdw-web / adfd / adfdv 選択時のみ） |
-| C11 | Knowledge Management 固有 | `--sources`, `--target-files`, `--force-refresh`, `--custom-source-dir`, `--enable-auto-merge` | akm 選択時のみ |
+| C1 | 基本設定 | `--model` / `--review-model` / `--qa-model` / `--reasoning-effort` 系 / `--context-tier` / `--max-parallel` / `--timeout` / `--review-timeout` / `--verbosity` / テーマ / `--additional-prompt` / `--context-max-chars`。GUI の新規設定既定は `model=claude-opus-5.5`、`context_tier=long_context` | 共通 |
+| C3 | 共通設定 | `--auto-qa` / QA 回答モード / `--auto-contents-review` / `--auto-coding-agent-review` / `--qa-akm-background-merge` / `--akm-model` / `--akm-reasoning-effort` / `--akm-context-tier` | 共通 |
+| C4 | Work IQ / 知識源 | `--workiq`、`--knowledge-source`（複数回 / カンマ区切り）。GUI は「Work IQ を知識源に加える」と「知識源 MCP サーバー」を保持する | **ローカル CLI / GUI 固有** |
+| C5 | GitHub（内部互換カテゴリ。設定ツリーには表示しない） | `--create-issues` / `--create-pr` / `--repo` / `--issue-number` / `--issue-title` / `--branch` / `--resume-run` / `--enable-auto-merge` / マージ後ローカルブランチ削除 / Fleet mode / Cloud Sessions 関連 | 共通 |
+| C6 | 出力制御 | `--verbose` / `--quiet` / `--show-stream` / `--log-level` / `--no-color` / `--banner` / `--screen-reader` / `--timestamp-style` / `--final-only` | **CLI / GUI 実行面固有** |
+| C7 | MCP / CLI 接続 | process-wide の single SDK `ResourceSnapshot` を読み取り専用表示。`--cli-path` / `--cli-url` の互換フィールドは内部に残るが GUI 入力欄は表示しない | **ローカル CLI / GUI 固有** |
+| AZURE | Azure | `--resource-group`（`default_params` を持たない必須パラメータのみ） | asdw-web / adfdv など対象 Workflow のみ |
+| AGENTIC | Agentic Retrieval | `--enable-agentic-retrieval` / データソース方式 / Foundry MCP 連携 / データソースのヒント / 既存設計の差分更新 / Foundry SKU フォールバック方針 | aad-web / asdw-web など対象 Workflow のみ |
+| C10 | アプリケーション ID | `--app-ids` / `--usecase-id` / github.com CI/CD トグル | 対象 Workflow のみ |
+| C11 | Knowledge Management 固有 | `--sources` / `--target-files` / `--force-refresh` / `--custom-source-dir` | akm 選択時のみ |
 | C13 | ADOC 固有 | `--target-dirs`, `--exclude-patterns`, `--doc-purpose`, `--max-file-lines` | adoc 選択時のみ |
-| C14 | ARD 固有 | `--company-name`, `--target-business`, `--survey-base-date`, `--survey-period-years`, `--target-region`, `--analysis-purpose`, `--target-recommendation-id`, `--attached-docs` | ard 選択時のみ。`--attached-docs` は §5.5 で D&D 拡張 |
-| C15 | 追加プロンプト / コメント | `--additional-prompt`, `--context-max-chars`, `--additional-comment` | 共通 |
-| C16 | 実行制御 / 拡張機能 | `--dry-run`, `--self-improve`, `--no-self-improve` | `--dry-run` は **CLI 固有**（`.github/ISSUE_TEMPLATE/` に対応入力なし）。`--self-improve` / `--no-self-improve` は Issue Template の `enable_self_improve` と同等の設定を CLI から指定するもの（`app-architecture-design.yml` 等 8 テンプレートに対応入力あり） |
+| C14 | 要求定義書 | `--company-name`, `--target-business`, `--target-recommendation-id`, `--survey-base-date`, `--survey-period-years`, `--target-region`, `--analysis-purpose`, `--attached-docs` | ard 選択時のみ |
 | C17 | ADI 固有 | `--purpose`, `--target-scope`, `--depth`, `--focus-areas` | adi 選択時のみ |
 
-> C12は廃止済みカテゴリの番号であり、設定互換性とテスト識別子を安定させるため欠番のまま保持する。ADOCはC13、ADIはC17であり、繰り上げない。
+> `C2` / `C8` / `C9` / `C12` / `C15` / `C16` は他カテゴリへ統合または廃止済みで、設定互換性とテスト識別子を安定させるため番号を詰めない。
 
 入力検証ルール：
 
 - **必須項目（ARD）**: `--company-name` は Step 1 (Untargeted) 実行時に必須。`--target-business` 指定時は Step 1 をスキップ可能（`hve/__main__.py` の `--company-name` / `--target-business` add_argument 参照）。
 - ファイルパス系はファイルダイアログから選択可。
 - `--max-parallel` / `--timeout` は QSpinBox / QDoubleSpinBox。
-- `--workiq-akm-review`, `--workiq-akm-ingest`, `--banner`, `--force-refresh` は `argparse.BooleanOptionalAction` で **ON / OFF / 未指定の 3 状態** → `QComboBox`（"継承（未指定）" / "明示 ON" / "明示 OFF"）で表現。
+- `--banner`, `--force-refresh` は `argparse.BooleanOptionalAction` で **ON / OFF / 未指定の 3 状態** → `QComboBox`（"継承（未指定）" / "明示 ON" / "明示 OFF"）で表現。
 - **GitHub startup preflight の単一実装**: `hve/startup_preflight.py` の `github_write_required()` と `validate_startup_configuration()` が、CLI 非対話 / CLI wizard / GUI Plan / GUI・CLI Autopilot に共通する FR-CLI-82 の責務を持つ。各起動面で GitHub 書き込み対象の判定や repo / token / branch / remote の検査を複製しない。
   - GitHub 書き込みを必要としない実行は検査対象外とし、token や remote 接続を要求しない。Prompt 自由記述欄も入力として渡さず、内容を検査しない。
   - GUI Step 1 は `hve/autopilot/precheck_runner.py` の `run_step1_precheck()` から共通実装を `check_remote=False` で呼び、repo の `owner/repo` 形式・token の有無・ベースブランチ名の Git branch 形式だけを UI thread で判定する。結果は `SETTING` / `AUTH` に写像し、起動引数の組み立てが `ValueError` なら入力エラーを表示して Step 1 に留まる。
@@ -566,8 +574,8 @@ Step 2（Workbench）の実行中は戻り不可。新規セッション or ウ�
 | `hve/gui/github_pr_panel.py` | Pull Request の一覧・詳細・変更ファイル・コメント・コンソール出力投稿・push / head ブランチ削除（FR-GUI-27 / 31 / 33 / 34） |
 | `hve/gui/github_picker_dialog.py` | 実行タスクへ関連付ける Issue / PR の選択ダイアログ（FR-GUI-32） |
 | `hve/gui/github_window.py` | 上記 2 パネルを束ねる非モーダルウィンドウ（ヘッダーの [GitHub] ボタンから起動） |
-| `hve/gui/page_workiq.py` | Work IQ 設定ページ（認証確認導線を含む） |
-| `hve/gui/app.py` | 複数ウィンドウ管理 |
+| `hve/gui/page_workiq.py` | Work IQ 設定ページ（SDK discovery状態の表示と入力制御） |
+| `hve/gui/app.py` | 複数ウィンドウ管理と、通常初回ウィンドウ表示後の既存モデル取得ハンドラー呼び出し |
 
 ### 5.13 orchestrate オプション コード位置
 
@@ -593,30 +601,32 @@ grep -nE '"--workflow"|"--max-parallel"|"--auto-qa"|"--workiq"|"--company-name"|
 
 ![CLI / GUI メッセージシーケンス](./images/hve-tech-arch-sequence.svg)
 
-### 6.1 GUI 経由 CLI 起動 → 1 ステップ実行 → 完了までの 20 ステップ
+### 6.1 GUI 経由 CLI 起動 → 1 ステップ実行 → 完了までの 22 ステップ
 
 1. **GUI Step 1→Step 2**: 利用者が MainWindow の 2 画面（ワークフロー / オプション → Workbench）を操作
 2. **subprocess 起動**: `Popen([python, -m, hve, orchestrate, --workbench off, ...])`
-3. **orchestrator.run()**: `build_dag_plan()` で DAG 構築
-4. **StepRunner.run(step)**: `asyncio.Semaphore` で並列度制御
-5. **prompt_loader.load_prompt**: `.github/prompts/<Agent>.prompt.md` を読み込み
-6. **skill_resolver / template_engine**: `.github/prompts/steps/` / `fanout/` / `runtime/` の Prompt を `prompt_loader` 経由で読み、プロンプトを組み立て
-7. **CopilotClient.create_session**: `SubprocessConfig` で Copilot プロセスを起動
-8. **spawn `copilot`**: 子プロセス起動
-9. **session.send_and_wait**: プロンプト送信
-10. **推論 / MCP / Skill 解決**: Copilot 内部処理
-11. **event stream**: `text` / `tool_use` / `permission_request` イベントが返る
-12. **PermissionHandler 評価**: 許可ポリシー適用
-13. **完了イベント**: 最終応答
-14. **応答 / 成果物パス**: SDK → StepRunner
-15. **artifact_validation**: `output_paths` の存在確認
-16. **ステップ完了**: success / failed を `DAGExecutor` に返す
-17. **失敗時 Fork-on-Retry**: `HVE_FORK_ON_RETRY=true` なら新 session_id で 1 回再試行
-18. **次ステップへ**: DAG 依存解決 → 全完了で run 終了
-19. **stdout → GUI**: `QThread` が読取 → Workbench Pane へ Signal
-20. **進捗確認・QA 応答**: ユーザーは TUI/GUI で確認、QA は IPC ディレクトリ経由
+3. **entrypoint 正規化**: `_reexec_in_venv_if_needed()` の後に `_run_startup_version_check()` → `check_startup_version()` を実行する。必要時だけ既存 setup と再起動を行い、remote へは問い合わせない
+4. **run_workflow() 起動**: import と `main()` の dispatch 後、`_cmd_orchestrate(args)` が preflight を行い、`asyncio.run(run_workflow(...))` で `build_dag_plan()` へ進む
+5. **DAGExecutor.execute / StepRunner.run_step**: `DAGExecutor._run_with_semaphore()` が並列度を制御し、実行可能な各ノードを `StepRunner.run_step()` へ委譲
+6. **prompt_loader.load_prompt**: `.github/prompts/<Agent>.prompt.md` を読み込み
+7. **skill_resolver / template_engine**: `.github/prompts/steps/` / `fanout/` / `runtime/` の Prompt を `prompt_loader` 経由で読み、プロンプトを組み立て
+8. **CopilotClient.create_session**: `SubprocessConfig` で Copilot プロセスを起動
+9. **spawn `copilot`**: 子プロセス起動
+10. **session.send_and_wait**: プロンプト送信
+11. **推論 / MCP / Skill 解決**: Copilot 内部処理
+12. **event stream**: `text` / `tool_use` / `permission_request` イベントが返る
+13. **PermissionHandler 評価**: 許可ポリシー適用
+14. **完了イベント**: 最終応答
+15. **応答 / 成果物パス**: SDK → StepRunner
+16. **artifact_validation**: `output_paths` の存在確認
+17. **ステップ完了**: success / failed を `DAGExecutor` に返す
+18. **失敗時 Fork-on-Retry**: `HVE_FORK_ON_RETRY=true` なら新 session_id で 1 回再試行
+19. **次ステップへ**: DAG 依存解決 → 全ノード終端後に実行結果を Orchestrator へ返す
+20. **Post-DAG 後処理**: `run_workflow()` が設定に応じて commit・push・PR 作成・Code Review を行い、run の最終結果を確定
+21. **stdout → GUI**: Step 3〜20 の間、`QThread` が子プロセスの出力を継続的に読み取り、Workbench Pane へ Signal
+22. **進捗確認・QA 応答**: ユーザーは GUI Workbench で進捗を確認し、ユーザー回答モードの QA は GUI ダイアログから IPC ディレクトリへ回答
 
-> Cloud Agent Orchestrator では 2〜19 が「Sub-Issue 作成 → `assign-copilot.sh` → Coding Agent → PR」に置換される。
+> Cloud Agent Orchestrator はこのローカル 1〜21 のシーケンスを使用せず、§3.1 の「Issue → reusable workflow → Sub-Issue → `assign-copilot.sh` → Coding Agent → PR / ラベル遷移」という別経路を使用する。
 
 ### 6.2 Prompt 版から共有経路へ合流するまで
 
@@ -725,10 +735,10 @@ sequenceDiagram
 
 | 境界 | 方向 | 許可される通信手段 | 禁止事項 |
 |---|---|---|---|
-| **A → B** | HVE → SDK | 公開 API のみ（`from copilot import ...`） | SDK 内部実装への依存、private 属性参照 |
-| **A → C** | HVE → CLI 資源 | `copilot mcp list --json` / `copilot plugin list` / `copilot model list --json` 等の CLI コマンド | `~/.copilot/` の直接ファイル読み取り、OS 認証ストアへの直接アクセス |
+| **A → B** | HVE → SDK | 公開 API。例外としてruntime binary同一性を保つ互換adapter `hve.auth.find_copilot_binary()` だけがSDKの `_cli_download` cache resolverを読取参照する | adapter外からのSDK private API・属性参照、起動時確認によるruntime自動download |
+| **A → C** | HVE → CLI 資源 | SDK discovery と process-wide の single SDK ResourceSnapshot、および model API | `~/.copilot/` の直接ファイル読み取り、OS 認証ストアへの直接アクセス |
 | **A → D** | HVE → Agent/Skill | ファイル読み取り（`prompt_loader` / `skill_resolver` 経由） | Agent/Skill ファイルへの動的書き込み（実行時生成 Agent は禁止） |
-| **B → C** | SDK → CLI | SDK が SubprocessConfig 経由で `copilot` を起動 | HVE は SDK 経由でしか CLI に触れない |
+| **B → C** | SDK → CLI | SDK が `RuntimeConnection` 経由で `copilot` を起動 | static資源確認以外でHVEがCLI token storeを直接扱うこと |
 | **D ↔ Workflow** | Agent → Workflow | Agent は Workflow を知らない（疎結合） | Agent の文面にワークフロー ID を埋め込まない |
 
 ### 7.3 設計の利点
@@ -750,7 +760,7 @@ sequenceDiagram
 | Prompt の文面に `import` 等の Python コードを実行可能な形で埋め込む | ゾーン D（宣言）とゾーン A（実行）の責務混在。 |
 | `workflow_registry.py` から MCP Server に直接 HTTP 接続 | ゾーン C を bypass。Copilot CLI の権限管理を回避してしまう。 |
 | GUI から `hve.orchestrator.run_orchestrate()` を直接 `import` して呼ぶ | プロセス境界を破壊。GUI 落ち時に DAG も道連れになる。 |
-| SDK の internal モジュール（`copilot._internal.*`）を参照 | SDK アップグレードで容易に壊れる。 |
+| `hve.auth.find_copilot_binary()` 以外からSDKのinternal runtime resolverを参照 | SDK アップグレードで容易に壊れ、static/liveで別binaryを選び得る。 |
 
 ---
 
@@ -768,16 +778,17 @@ sequenceDiagram
 | macOS | Keychain |
 | Linux | Secret Service (libsecret) |
 
-`copilot login` および `copilot mcp login <name>` の実体は **GitHub Copilot CLI** 側にあり、OAuth / Device Code Flow 等の認証フロー、トークンの暗号化保管・更新を全て担当する。HVE はこれら CLI コマンドを起動し、**完了判定のみ** を行う。
+`copilot login` とMCP OAuthの実体は **GitHub Copilot CLI** 側にあり、認証フローとトークン保管・更新を担当する。HVE は Work IQ の設定・認証を実行しない。SDKは設定済みMCPのdiscoveryとsession状態観測にだけ使用する。
 
 ### 8.2 GUI 認証導線の仕組み
 
-現行 GUI は、任意 MCP Server の OAuth を独自に自動実行する認証パネルを持たない。認証の正本は GitHub Copilot CLI / GitHub CLI / Work IQ CLI 側にあり、GUI は以下の最小導線を提供する。
+現行GUIは独自の資格情報ストアやaccount pickerを持たない。認証の正本はGitHub Copilot CLI / SDKとGitHub CLI側にあり、GUIは以下の最小導線を提供する。
 
-1. **GitHub Copilot**: CLI (`python -m hve login`) から `copilot login` を実行して認証する。GUI に専用の認証ボタンはない。認証後は GUI ステータスバー（または「HVE 設定」→「基本設定」）の「利用できるモデルの取得」でモデル一覧を取得する。
+1. **GitHub Copilot**: CLI (`python -m hve login`) から `copilot login` を実行して認証する。GUI に専用の認証ボタンはない。認証後の通常 GUI 起動では、初回ウィンドウ表示直後に利用可能モデル一覧を1回自動取得する。ステータスバー（または「HVE 設定」→「基本設定」）の「利用できるモデルの取得」は同じ処理の手動再取得に使う。
 2. **GitHub REST / Issue / PR**: 設定画面の「GitHub CLI でログイン」から `gh auth login` を埋め込み端末で起動し、`gh auth token` の結果を当該 GUI セッションの `GH_TOKEN` に橋渡しする。
-3. **Work IQ**: Work IQ 設定の「Work IQ 認証確認」から `@microsoft/workiq` の EULA / Microsoft 365 認証確認を実行する。
-4. **任意 MCP Server**: `copilot mcp list --json` の一覧表示と「認証手順...」の案内のみを行う。登録・OAuth 再認証は Copilot CLI 側で行う。
+3. **Work IQ / 知識源**: 利用者がCopilot CLIへexact `workiq`名のPlugin または MCP Server、または任意の知識源 MCP server を事前設定・認証する。起動時workerはSDK `mcp.discover`を1回だけ実行し、runtimeは`session.rpc.mcp.list()`と`list_tools(server_name=<知識源名>)`で接続状態と allowlist tool の公開を観測する。HVEはraw設定の複製、OAuth、ブラウザ起動、認証再試行を行わない。
+  - 知識探索は1探索1つのSDK sessionで実行し、`hve/toolsearch/policy.json` の `knowledge_tool_allowlists` にある読み取り専用 MCP tool だけを公開する。既定の `workiq` allowlist は `retrieve` / `ask` / `fetch` / `search_paths` / `get_schema` / `list_agents` で、書込み系 tool は公開しない。調査状態は `Confirmed` / `Tentative` / `Unknown` の 3 値で、MCP source locator が同じ session の成功応答に含まれる場合だけ検証済み出典とする。ファイル更新は `hve_qa_create` / `hve_qa_answer` / `hve_knowledge_write` の custom tool だけが行い、`.hve/locks/` の OS ロック、SHA-256 照合、atomic replace で並行実行を保護する。
+4. **任意 Plugin / MCP / Skill**: process-wide の single SDK ResourceSnapshot に現れた safe field だけを表示する。登録・OAuth 再認証は Copilot CLI 側で行う。
 
 資格情報の本体は各 CLI / OS 認証ストア側に保存され、HVE は永続保存しない。
 
@@ -849,20 +860,22 @@ GUI の Copilot ドックは 2 タブ構成であり、いずれも「対話 UI 
 
 | リソース | 取得コマンド | 用途 |
 |---|---|---|
-| MCP Server 一覧 | `copilot mcp list --json` | GUI の登録済み MCP Server 一覧表示 |
-| Plugin 一覧 | `copilot plugin list` | GUI の Plugin 一覧表示 |
-| モデル一覧 | `copilot model list --json` | Step 2 C1 のモデルドロップダウン（`hve/models_api.py` 経由、`hve/models_cache.py` でキャッシュ） |
+| single SDK ResourceSnapshot | SDK discovery と session observation | GUI が1回取得し、C7 と Tool-Search `SDK Resources` に同じ object を渡す |
+| Work IQ availability | SDK `mcp.discover` | exact `workiq`の有効状態だけを取得。一般MCP一覧とは別経路で、transport / command / URL / headerは取得しない |
+| モデル一覧 | SDK `CopilotClient.list_models()` | C1 とステータスバーのモデルドロップダウン（`hve/models_api.py` 経由、`hve/models_cache.py` でキャッシュ） |
 
-> HVE 側のキャッシュ更新は、GUI の「利用できるモデルの取得」ボタン（ステータスバー、または「HVE 設定」→「基本設定」の一番上にある同名ボタン。機能は同一）で明示的にトリガーできる。ステータスバーの「使用するモデル」/「Effort」はその場で選択変更可能なコンボであり、変更は即座に `settings_store` へ保存され「HVE 設定」の表示にも反映される。
+> HVE 側のキャッシュ更新は、通常 GUI の初回ウィンドウ表示直後に既存ハンドラーから1回自動実行される。GUI の「利用できるモデルの取得」ボタン（ステータスバー、または「HVE 設定」→「基本設定」の一番上にある同名ボタン。機能は同一）でも手動再取得できる。1window内の重複要求は抑止し、cache書込みはwriter固有の一時ファイルとプロセス内直列化、短い`PermissionError`再試行を経て`os.replace()`する。非空の取得結果だけをキャッシュと選択欄へ反映し、失敗・空結果では既存状態を維持する。ステータスバーの「使用するモデル」/「Effort」はその場で選択変更可能なコンボであり、変更は即座に `settings_store` へ保存され「HVE 設定」の表示にも反映される。
+
+Resource routing の再検出は `force_refresh=true` で single SDK ResourceSnapshot を取り直す。Cloud Session は未対応で、OFF / ON 比較は local session だけを対象にする。比較条件が崩れた場合は `runtime drift` として比較不能にし、削減率を捏造しない。
 
 ### 8.5 認証フローの統一原則
 
 | ケース | 原則 |
 |---|---|
-| 初回利用 | まず `copilot login`（Copilot CLI 本体の認証）→ 必要に応じて `copilot mcp login <name>`（MCP 個別認証） |
+| 初回利用 | まず `copilot login`（Copilot CLI 本体の認証）→ 必要に応じて対話CLI内の `/mcp auth <name>`（MCP個別再認証）。Work IQもCopilot CLIへ設定・認証し、変更後はHVE processを再起動する |
 | トークン失効 | Copilot CLI が自動更新（refresh token）。失敗時に GUI に通知。HVE はリトライしない（CLI に委ねる）。 |
 | Cloud Agent | GitHub Coding Agent 側が同等の権限を持つ。HVE リポジトリは関知しない。`COPILOT_PAT`（GitHub PAT）のみ Cloud で必要（§3.3）。 |
-| 複数アカウント | Copilot CLI のプロファイル機能（実装次第）に依存。HVE は環境変数で切替できるよう設計（未実装）。 |
+| 複数アカウント | HVE独自の切替UI・tenant overrideは持たない。Copilot CLI側で対象accountとMCP認証を管理する |
 
 ### 8.6 禁止事項（疎結合維持のため）
 
@@ -870,6 +883,7 @@ GUI の Copilot ドックは 2 タブ構成であり、いずれも「対話 UI 
 - ✗ Copilot CLI の認証ファイル（`~/.copilot/auth.json` 等）を直接読む
 - ✗ MCP Server へ HVE が直接 HTTP 接続（必ず Copilot CLI 経由）
 - ✗ 認証マニフェストに平文クレデンシャルを記載
+- ✗ HVEによるWork IQのinstall、raw設定複製、OAuth、EULA承認、ブラウザ起動
 - ✓ 認証 UI / KPI / 再開機構の追加は自由（資格情報を扱わない範囲で）
 
 ### 8.7 関連ドキュメント
@@ -886,7 +900,7 @@ GUI の Copilot ドックは 2 タブ構成であり、いずれも「対話 UI 
 1. `.github/prompts/<Agent-Name>.prompt.md` を作成（Agent 本文は `load_prompt(<Agent-Name>)` の呼び出し互換のため flat 配置のままとし、サブディレクトリ化しない）
 2. frontmatter は不要。先頭に役割の一行要約と `WORK` ディレクトリ定義を記述する
 3. 本文に Agent のジョブ定義・入出力・参照すべき Skills を記述
-4. ジョブ定義は `.github/copilot-instructions.md` のルールを継承（agent-common-preamble Skill 経由）
+4. ジョブ定義は [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) の共通ルールを継承し、Custom Agent が作業開始時に `agent-common-preamble` Skill を必ず参照する
 5. `.github/io-contracts/<Agent-Name>.yaml` を作成し、入出力契約を記述（`.github/workflows/validate-io-contract.yml` で検証）
 
 > Prompt 本文の正本は `.github/prompts/**` のファイルだけで、Python 定数・ Workflow 定義・ manifest へ本文を重複保持しない（FR-PROMPT-SRC-01）。読み込みは `hve/prompt_loader.py` の単一実装だけを使い、必須 Prompt の欠損は fail-closed で停止する（FR-PROMPT-SRC-02）。編集内容は次回の process / session から反映され、hot reload はない。
@@ -900,12 +914,15 @@ GUI の Copilot ドックは 2 タブ構成であり、いずれも「対話 UI 
 5. GUI: Step 1 の選択肢に自動表示
 6. Cloud: `.github/workflows/auto-<id>-reusable.yml` と `.github/ISSUE_TEMPLATE/auto-<id>.yml` を追加
 
-### 9.3 新しい Skill を追加する
+### 9.3 Skill 定義と同梱範囲
 
-1. `.github/skills/<skill-name>/SKILL.md` を作成
-2. frontmatter に `name` / `description`（trigger keyword を含む）/ `references`（任意）を記述
-3. `hve/skill_resolver.py` が `skill_manifest.json` 経由で自動解決
-4. `markdown-query` Skill で横断検索可能
+Skill は `.github/prompts/**` の固定 Prompt 本文とは別の参照契約である。HVE の `prompt_loader` が読むのは plain Markdown の Prompt だけで、VS Code Copilot Chat / Agent Host 側の Skill 発火や外部 Skill 読込は別レイヤーとして扱う。本書での参照は、(1) [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) の共通ルール、(2) [`.github/prompts/README.md`](../.github/prompts/README.md) の HVE loader / Prompt 配置契約、(3) 選択された `.github/skills/**/SKILL.md` と必要な `references/` の 3 層で考える。作業開始時に Skills root や全 `references/` を丸ごと読む必要はなく、Skill の `description` / `WHEN` / `USE FOR` に該当する場合だけ root `SKILL.md` を読み、root から指示された詳細またはタスク上必要な参照だけを追加で読む。なお、この整理は repository 内の配置・参照契約であり、現行 UI や SDK metadata が各 `description` / `metadata` をどう表示・選別するかを未測定のまま保証しない。
+
+1. repository Skill の同梱は、生成アプリを含む HVE 固有の成果物形式・必須項目・判定語彙・適用範囲・実行・安全・要件契約、または CQ / MDQ 配布正本に必要な場合だけ行う。配置は `.github/skills/<skill-name>/SKILL.md` または既存カテゴリ配下とする。
+2. 一般技術の一次情報と手順は、既存 MCP と外部 Skill 規約を正とし、HVE 同梱 Skill へコピーして二重管理しない。
+3. Workflow が required Skill を宣言した場合、MCP 接続が利用可能なだけでは要件を満たさない。既存 resolver が repository を優先し、なければ同名の外部 Skill を exact に解決する。解決済み `SKILL.md` が存在する必要があり、未導入時の fail-closed は維持する。
+4. Skill 追加・整理は既存 path の削除または縮小を優先する。旧同梱棚卸に基づく削除 5 件、一般技術と HVE 契約が混在する 18 件を縮小候補とするが、新しい loader や runtime flag は導入しない。
+5. repository Skill の frontmatter は `name` / `description`（trigger keyword を含む）/ `metadata.version` を必須とする。`description` は発火条件と用途境界を短く示すためのもので、詳細手順は root `SKILL.md` 本文または必要な `references/` から案内する。`hve/skill_resolver.py` と `skill_manifest.json` 経由の現行解決、および `markdown-query` / `code-query` からの横断参照を維持する。
 
 ### 9.4 新しい MCP Server を追加する
 
@@ -931,11 +948,11 @@ GUI の Copilot ドックは 2 タブ構成であり、いずれも「対話 UI 
 | **Workflow** | DAG として定義された一連のステップ。`hve/workflow_registry.py` 参照。 |
 | **Step** | Workflow の最小実行単位。`StepDef` で記述。 |
 | **Prompt** | `.github/prompts/**`。役割定義・ Step 本文・ fan-out 追加本文・ HVE 内部 Prompt の正本。 |
-| **Skill** | `.github/skills/*/SKILL.md`。技術リファレンス。 |
+| **Skill** | `.github/skills/**/SKILL.md`。HVE 固有契約・配布正本のリファレンス。 |
 | **SDK** | `github-copilot-sdk`（PyPI）。Python から Copilot プロセスを制御。 |
 | **Copilot CLI** | `copilot` バイナリ。GitHub Copilot 公式 CLI。MCP / Plugin / 認証を管理。 |
 | **MCP Server** | Model Context Protocol Server。Copilot から利用される外部ツール群。 |
-| **Plugin** | Copilot プラットフォームのプラグイン（例: `workiq@work-iq`）。 |
+| **Plugin** | Copilot プラットフォームへ登録されたプラグイン。Work IQではexact `workiq`名だけを実行対象として受理する。 |
 | **Fork-on-Retry** | 失敗ステップを新 session_id で 1 回限定リトライする機能。`HVE_FORK_ON_RETRY=true` で有効化。 |
 | **Fan-out** | 1 ステップから可変数の子ステップへ展開する DAG パターン。`fanout_expander` が担当。 |
 | **PTY 統合** | `pty` / `pywinpty` で疑似端末を作り、対話的 CLI コマンドを GUI から起動する技法。認証ハンドラで使用。 |

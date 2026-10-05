@@ -29,13 +29,13 @@
 - Step.2.1（TDD RED: テストコード作成）が `adfdv:done` であること
 
 ## 完了条件
-- `pytest` が全テスト PASS（TDD GREEN）になっている
+- `pytest src/test/dataflow/{jobId}-{jobNameSlug}.Tests/` の対象テストが PASS（TDD GREEN）になっている。着手時 baseline に無い新規 FAIL が 0 件であること
 
 ## TDD GREEN リトライルール
 - テストが PASS にならない場合、最大 {tdd_max_retries} 回まで実装を修正して再試行する（Skill `tdd-green-retry-strategy` 準拠：各回は前回と異なるアプローチを選び、失敗の都度に根本原因を特定し Microsoft Learn MCP（Python / Azure SDK for Python / Fabric / Databricks）で解決策を確認してから次手を決める）
 - {tdd_max_retries} 回で全 PASS にならない場合: `adfdv:blocked` ラベルを付与し、未 PASS テスト一覧と試行回数を Issue コメントで報告する
 - テストコード（`src/test/dataflow/`）は原則変更禁止
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 - 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - 必須ラベル: `Schema-Version`, `Evidence-Status`, `TDD-Judgement`, `Secret-Redaction`, `Test-Files-Changed`
 - `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とする。

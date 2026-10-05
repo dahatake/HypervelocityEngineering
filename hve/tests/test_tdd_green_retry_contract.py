@@ -1,13 +1,4 @@
-"""TDD GREEN リトライ戦略 Skill の契約テスト。
-
-`tdd-green-retry-strategy` Skill の新設と、TDD GREEN フェーズを持つ各 Agent prompt への
-結線が消えないことをキーフレーズ部分一致で固定する（脆性低減のため文言完全一致は避ける）。
-
-背景（捏造なし・実証済み）: ASDW-WEB Step.1.3 で、GREEN 化リトライが「同一アプローチの
-単純反復」だったため 3 回とも同じ弱点に当たり続け GREEN 未達になった（run
-20260702T181844-1a8e06）。これを受け、GREEN 化ループを持つ全 Step で「多層・異アプローチ・
-失敗の都度に公式技術情報 MCP で根本原因調査」を共通規律として一元化した。
-"""
+"""TDD GREEN リトライ戦略 Skill の契約テスト。"""
 
 from __future__ import annotations
 
@@ -18,7 +9,6 @@ _SKILL = (
     _REPO_ROOT
     / ".github"
     / "skills"
-    / "testing"
     / "tdd-green-retry-strategy"
     / "SKILL.md"
 )
@@ -52,31 +42,30 @@ def test_skill_declares_name_in_frontmatter() -> None:
 
 
 def test_skill_has_multi_layer_principle() -> None:
-    """多層リトライ（内側から外側へ）の原則が含まれる。"""
+    """旧多層リトライ規律を持たず、tdd_max_retries を正本にする。"""
     text = _SKILL.read_text(encoding="utf-8")
-    assert "多層リトライ" in text
-    assert "Layer 1" in text
-    assert "Layer 2" in text
-    assert "最大 5 回" in text
+    assert "tdd_max_retries" in text
+    assert "多層リトライ" not in text
+    assert "Layer 1" not in text
+    assert "Layer 2" not in text
+    assert "最大 5 回" not in text
 
 
 def test_skill_prohibits_same_approach_repeat() -> None:
-    """同一アプローチの単純反復を禁止し、異なるアプローチを要求する。"""
+    """旧異アプローチ強制ではなく、再試行前の原因確認だけを要求する。"""
     text = _SKILL.read_text(encoding="utf-8")
-    assert "異なるアプローチ" in text
-    assert "単純反復" in text or "単純に繰り返さない" in text
+    assert "根本原因" in text
+    assert "異なるアプローチ" not in text
+    assert "単純反復" not in text
 
 
 def test_skill_requires_official_mcp_per_failure() -> None:
-    """失敗の都度に根本原因特定＋公式技術情報 MCP で解決策取得を要求する。"""
+    """失敗時は根本原因を確認するが、技術別 MCP 規律はここに持たない。"""
     text = _SKILL.read_text(encoding="utf-8")
     assert "根本原因" in text
-    assert "Microsoft Learn MCP" in text
-    # Python / その他言語のカバレッジ（JS/TS 含む）
-    assert "Python 技術情報 MCP" in text
-    assert "JavaScript" in text or "TypeScript" in text
-    # Web は最後の手段
-    assert "Web 検索" in text
+    assert "Microsoft Learn MCP" not in text
+    assert "Python 技術情報 MCP" not in text
+    assert "Web 検索" not in text
 
 
 def test_skill_records_green_retry_to_tdd_report() -> None:

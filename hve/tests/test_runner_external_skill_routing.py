@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+import pytest
+
 from hve.config import SDKConfig
 from hve.console import Console
 from hve.runner import StepRunner, _repository_skill_directories
@@ -129,7 +131,6 @@ def _runner(
             qa_model=qa_model,
             auto_qa=qa_model is not None,
             auto_contents_review=review_model is not None,
-            auto_self_improve=False,
             run_id="20260720T000000-external-routing",
         ),
         console=Console(verbose=False, quiet=True),
@@ -144,6 +145,33 @@ def _gate_patches(runner: StepRunner):
         patch.object(runner, "_run_asdw_ui_red_unresolved_contract_gate", return_value=[]),
         patch.object(runner, "_run_deploy_ac_gate", return_value=[]),
         patch.object(runner, "_check_diff_after_improvement", return_value=[]),
+    )
+
+
+async def _create_routed_fake_session(*, client, session_options, **_kwargs):
+    """Directory routing testsを既存fake SDKへ接続する。"""
+    return await client.create_session(**session_options)
+
+
+@pytest.fixture(autouse=True)
+def _resolved_resource_route_boundary(monkeypatch):
+    """FR-TS-13のroute判定は専用suiteへ委譲し、本suiteのSkill責務を隔離する。"""
+    import hve.runner as runner_module
+
+    monkeypatch.setattr(
+        runner_module,
+        "discover_sdk_resources",
+        lambda **_kwargs: object(),
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "ToolSearchPolicy",
+        types.SimpleNamespace(load=lambda **_kwargs: object()),
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "create_routed_session",
+        _create_routed_fake_session,
     )
 
 
@@ -378,21 +406,15 @@ def test_repository_skill_directories_default_exposes_root_only() -> None:
 def test_repository_skill_directories_scope_to_declared_skills() -> None:
     """FR-CLI-73: 宣言された Skill のディレクトリだけを root に追加公開する。
 
-    `test-strategy-template` は `.github/skills/testing/` 配下にあるため、
-    CLI の深さ 1 探索用に `testing` を公開する必要がある。一方、宣言されて
-    いない `harness` / `output` / `azure-skills` は公開してはならない。
+    repository Skill は `.github/skills/<name>/` へ直接配置されるため、
+    root 以外のカテゴリディレクトリを公開してはならない。
     """
     root = _repository_skills_root()
     assert root.is_dir()
 
-    directories = _repository_skill_directories(["test-strategy-template"])
+    directories = _repository_skill_directories(["tdd-red-green-reality"])
 
-    assert str(root) in directories
-    assert str(root / "testing") in directories
-    assert str(root / "harness") not in directories
-    assert str(root / "output") not in directories
-    assert str(root / "azure-skills") not in directories
-    assert str(root / "knowledge-management") not in directories
+    assert directories == [str(root)]
 
 
 def test_declared_required_repository_skills_stay_resolvable(tmp_path) -> None:
@@ -409,7 +431,7 @@ def test_declared_required_repository_skills_stay_resolvable(tmp_path) -> None:
     from hve.skill_resolver import _skills_root, discover_available_skills, get_skill_directory
 
     required = StepRunner._get_required_skills_for_step("aagd", "2.3", None)
-    assert "test-strategy-template" in required
+    assert "tdd-red-green-reality" in required
     assert "ai-agent-capability-contract" in required
 
     directories = set(_repository_skill_directories(required))
@@ -472,7 +494,7 @@ def test_main_session_skill_directories_exclude_undeclared_repository_skills() -
     assert result is True
     directories = client.create_session_kwargs[0]["skill_directories"]
     assert str(root) in directories
-    assert str(root / "testing") in directories
+    assert str(root / "testing") not in directories
     assert str(root / "harness") not in directories
     assert str(root / "output") not in directories
     assert str(root / "azure-skills") not in directories

@@ -277,13 +277,12 @@ python -m pytest hve/tests/test_fanout.py -q
   APP-ID しか返さない parser では解決できず、output-path gate から fail-closed で除外されます。
   ADFDV 実行時は該当するテスト／実装ディレクトリを別途確認してください。
 
-### 3 Step 画像
+### SVG 画像
 
-次の既存 SVG は 3 Step 構成を表すため、現行 DAG の説明には使用していません。
-
-- `users-guide/images/chain-adfd.svg`
-- `users-guide/images/infographic-adfd.svg`
-- `users-guide/images/orchestration-task-data-flow-adfd.svg`
+`users-guide/images/chain-adfd.svg`、`infographic-adfd.svg`、
+`orchestration-task-data-flow-adfd.svg` は、現行 registry の **7 Step** と
+APP-ID fan-out を表す図として維持します。図と本文が食い違う場合は、
+Step 数・依存・成果物パスは常に `hve/workflow_registry.py` を正本としてください。
 
 ## 非現行仕様
 

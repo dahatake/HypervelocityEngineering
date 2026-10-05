@@ -176,11 +176,14 @@ Issue Template から親 Issue を作成し、Bootstrap Workflow が Sub Issue �
 
 | Issue テンプレート | ワークフロー |
 |-----------------|------------|
+| `auto-requirement-definition.yml` | Auto Requirement Definition（ARD） |
 | `app-architecture-design.yml` | アプリケーションアーキテクチャ設計（AAS） |
+| `agent-data-architecture.yml` | Agent Data Architecture（ADA） |
 | `web-app-design.yml` | Web App Design（AAD-WEB） |
 | `web-app-dev.yml` | Web App Dev & Deploy（ASDW-WEB） |
 | `ai-agent-design.yml` | AI Agent Design（AAG） |
 | `ai-agent-dev.yml` | AI Agent Dev & Deploy（AAGD） |
+| `agentic-retrieval.yml` | Agentic Retrieval Add-on（AAR） |
 | `dataflow-design.yml` | データフロー設計（ADFD） |
 | `dataflow-dev.yml` | バッチ実装（ADFDV） |
 | `sourcecode-to-documentation.yml` | Source Codeからのドキュメント作成（ADOC） |
@@ -191,36 +194,20 @@ Issue Template から親 Issue を作成し、Bootstrap Workflow が Sub Issue �
 
 ワークフロー別チェーン図の一覧は [workflow-reference.md — ワークフロー別チェーン図](./workflow-reference.md#ワークフロー別チェーン図) を参照してください。
 
-> **補足**: 自己改善ループ（Self-Improve）専用の Issue Template は存在しません。自己改善は上記の設計・実装テンプレートの `enable_self_improve` チェックボックス（後述の Step.1.5b）で起動し、各 reusable workflow 内の Self-Improve ステップとして実行されます。`knowledge-management.yml` は `auto-orchestrator-dispatcher.yml` 経由で `auto-knowledge-management-reusable.yml`、`sourcecode-to-documentation.yml` は `auto-orchestrator-dispatcher.yml` 経由で `auto-app-documentation-reusable.yml` により自動実行されます。
+> **補足**: `knowledge-management.yml` は `auto-orchestrator-dispatcher.yml` 経由で `auto-knowledge-management-reusable.yml`、`sourcecode-to-documentation.yml` は `auto-orchestrator-dispatcher.yml` 経由で `auto-app-documentation-reusable.yml` により自動実行されます。
 >
-> `setup-labels.yml` はラベル初期セットアップ専用テンプレートであり、オーケストレーションではないため自己改善の対象外です。
+> `setup-labels.yml` はラベル初期セットアップ専用テンプレートであり、オーケストレーションではありません。
 
 #### Step.1.5 PR 完全自動化チェックボックス（対応テンプレートのみ）
 
-`app-architecture-design.yml` / `web-app-design.yml` / `web-app-dev.yml` / `ai-agent-design.yml` / `ai-agent-dev.yml` / `dataflow-design.yml` / `dataflow-dev.yml` / `knowledge-management.yml` / `sourcecode-to-documentation.yml` には **「PR完全自動化設定」** チェックボックスがあります。
+`auto-requirement-definition.yml` / `app-architecture-design.yml` / `web-app-design.yml` / `web-app-dev.yml` / `ai-agent-design.yml` / `ai-agent-dev.yml` / `dataflow-design.yml` / `dataflow-dev.yml` / `knowledge-management.yml` / `sourcecode-to-documentation.yml` には **「PR完全自動化設定」** チェックボックスがあります。
 
 - チェック ON: `auto-approve-ready` ラベル連携により、レビュー完了後に Auto Approve / Auto-merge まで自動実行
 - チェック OFF: 通常どおり人手レビュー・手動マージ
 
 > ⚠️ 自動マージを有効化すると人手の最終確認なしでマージされるため、用途を限定してください。
-
-#### Step.1.5b 自己改善ループ設定（対応テンプレートのみ）
-
-以下のテンプレートには **「自己改善ループ設定」**（`enable_self_improve`）チェックボックスがあります:
-`app-architecture-design.yml` / `web-app-design.yml` / `web-app-dev.yml` / `dataflow-design.yml` / `dataflow-dev.yml` / `sourcecode-to-documentation.yml` / `knowledge-management.yml`
-
-- チェック ON: 全ステップ完了後に自己改善ループが実行され、ruff / pytest / markdownlint で品質スキャンを行い、目標スコアに達するまで改善を繰り返します
-- `web-app-dev.yml`（ASDW-WEB）/ `dataflow-dev.yml`（ADFDV）は、目標スコアに加えて **テストカバレッジ 70% 以上** を完了条件として判定します（FR-CLI-65）。テストが 1 件も実行されなかった場合はカバレッジを測定できないため、未達（失敗）ではなく `blocked` として停止します
-- チェック OFF（デフォルト）: 自己改善ループは実行されません
-- `ai-agent-design.yml` / `ai-agent-dev.yml` には `enable_self_improve` チェックボックスがなく、`self_improve_max_iterations` / `self_improve_quality_threshold` のみを持ちます（2026-08-07 時点の `.github/ISSUE_TEMPLATE/` 実体で確認）
-- `setup-labels.yml` は自己改善の対象外です
-
-**hve CLI からも制御可能**:
-```bash
-hve orchestrate -w aas --self-improve           # 自己改善を明示的に有効化
-hve orchestrate -w aas --no-self-improve         # 自己改善を無効化（--self-improve より優先）
-HVE_AUTO_SELF_IMPROVE=true hve orchestrate -w aas  # 環境変数で有効化
-```
+>
+> `agent-data-architecture.yml` と `agentic-retrieval.yml` には現行テンプレート上このチェックボックスはありません。
 
 #### Step.1.6 モデル選択 dropdown
 

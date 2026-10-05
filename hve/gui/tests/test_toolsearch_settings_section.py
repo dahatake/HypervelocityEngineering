@@ -1,7 +1,7 @@
 """FR-GUI-07: GUI 設定画面の Tool-Search セクションの契約。
 
 検証観点:
-  (a) 4 タブ構成（基本 / Skill Layer / ポリシー / 統計情報）
+    (a) 6 タブ構成（基本 / SDK Resources / Skill Layer / ポリシー / 統計情報 / コンテキスト内訳）
   (b) `settings_apply` が参照する `tool_search` / `tool_search_ranking` の公開
   (c) 設定入力欄が設定画面の単独所有であること（Step 1 右ペインと二重に持たない）
   (d) `policy.json` を表示・編集でき、検証を通った値だけを表示元と同一パスへ保存すること
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from pathlib import Path
 
 import pytest
@@ -85,12 +86,13 @@ def editable_section(qapp, patched_settings, tmp_path: Path, monkeypatch: pytest
 
 
 def test_has_five_tabs(section) -> None:
-    assert section.tab_count() == 5
+    assert section.tab_count() == 6
 
 
 def test_tab_labels(section) -> None:
     assert section.tab_labels() == (
         "基本",
+        "SDK Resources",
         "Skill Layer",
         "ポリシー",
         "統計情報",
@@ -128,7 +130,16 @@ def test_settings_apply_maps_this_section() -> None:
     assert _SECTION_FIELDS["TOOLSEARCH"] == {
         "tool_search": "tool_search",
         "tool_search_ranking": "tool_search_ranking",
+        # FR-MODEL-04: defer_threshold の入力欄も本セクションが単独で所有する。
+        "tool_search_defer_threshold": "tool_search_defer_threshold",
     }
+
+
+def test_defaults_include_the_defer_threshold_key() -> None:
+    """FR-MODEL-04: 既定は 0（= 未指定）で SDK 既定へ委譲する。"""
+    from hve.gui import settings_store
+
+    assert settings_store.defaults()["options"]["tool_search_defer_threshold"] == 0
 
 
 def test_defaults_include_the_ranking_key() -> None:
@@ -663,6 +674,34 @@ def test_context_tab_does_not_measure_until_requested(section) -> None:
     assert section.context_view.toPlainText() == ""
 
 
+def test_context_tab_exposes_a_registry_workflow_selector(section) -> None:
+    assert section._context_workflow.count() > 0
+    values = [
+        section._context_workflow.itemData(i)
+        for i in range(section._context_workflow.count())
+    ]
+    assert "ard" in values
+
+
+def test_context_step_selector_defaults_to_workflow_scope(section) -> None:
+    assert section._context_step.currentData() is None
+    assert "Workflow" in section._context_step.currentText()
+
+
+def test_context_workflow_change_rebuilds_step_selector(section) -> None:
+    index = section._context_workflow.findData("aagd")
+    section._context_workflow.setCurrentIndex(index)
+
+    values = [
+        section._context_step.itemData(i)
+        for i in range(section._context_step.count())
+    ]
+    assert values[0] is None
+    assert "2.3" in values
+    step_index = section._context_step.findData("2.3")
+    assert section._context_step.itemText(step_index) == "Step 2.3"
+
+
 def test_context_tab_renders_the_cli_payload_without_reaggregating(section) -> None:
     payload = "Step 実行セッションのコンテキスト内訳（実測）\n  azure  68  15,022"
     section.apply_context_result(0, payload, "")
@@ -675,20 +714,152 @@ def test_context_tab_reports_failure_without_fabricating(section) -> None:
     assert section.context_view.toPlainText() == ""
 
 
+def test_context_comparison_failure_keeps_the_machine_payload_visible(section) -> None:
+    payload = "Tool Search OFF / ON コンテキスト比較（実測）\n  comparable: false"
+
+    section.apply_context_result(1, payload, "")
+
+    assert section.context_view.toPlainText() == payload
+    assert "失敗" in section.context_result_label.text()
+
+
 def test_context_measurement_uses_the_cli(section, qapp) -> None:
     """ボタンからの実経路（ワーカー経由）で CLI 出力をそのまま描画する。"""
-    calls: list[int] = []
+    calls: list[bool] = []
 
-    def _fake_run():
-        calls.append(1)
+    def _fake_run(compare: bool = False):
+        calls.append(compare)
         return 0, "measured", ""
 
     section._run_context_command = _fake_run  # type: ignore[method-assign]
     section.measure_context()
     section.wait_for_context_measurement(5000)
     qapp.processEvents()
-    assert calls == [1]
+    assert calls == [False]
     assert section.context_view.toPlainText() == "measured"
+    assert section._context_worker is None
+
+
+def test_context_cli_argv_includes_selected_workflow(section) -> None:
+    index = section._context_workflow.findData("ard")
+    assert index >= 0
+    section._context_workflow.setCurrentIndex(index)
+    argv = section._context_command_argv()
+    assert argv[-2:] == ["--workflow", "ard"]
+
+
+def test_context_cli_argv_includes_selected_step(section) -> None:
+    workflow_index = section._context_workflow.findData("aagd")
+    section._context_workflow.setCurrentIndex(workflow_index)
+    step_index = section._context_step.findData("2.3")
+    section._context_step.setCurrentIndex(step_index)
+
+    argv = section._context_command_argv()
+    assert argv[-4:] == ["--workflow", "aagd", "--step", "2.3"]
+
+
+def test_context_compare_cli_argv_adds_compare_flag(section) -> None:
+    index = section._context_workflow.findData("ard")
+    assert index >= 0
+    section._context_workflow.setCurrentIndex(index)
+    argv = section._context_command_argv(compare=True)
+    assert argv[-3:] == ["--workflow", "ard", "--compare"]
+
+
+def test_context_compare_uses_the_cli(section, qapp) -> None:
+    calls: list[bool] = []
+
+    def _fake_run(compare: bool = False):
+        calls.append(compare)
+        return 0, "compared", ""
+
+    section._run_context_command = _fake_run  # type: ignore[method-assign]
+    section.compare_context()
+    section.wait_for_context_measurement(5000)
+    qapp.processEvents()
+    assert calls == [True]
+    assert section.context_view.toPlainText() == "compared"
+
+
+def test_context_buttons_are_disabled_while_one_worker_is_running(section, qapp) -> None:
+    started = threading.Event()
+    release = threading.Event()
+    calls: list[bool] = []
+
+    def _fake_run(compare: bool = False):
+        calls.append(compare)
+        started.set()
+        release.wait(2.0)
+        return 0, "done", ""
+
+    section._run_context_command = _fake_run  # type: ignore[method-assign]
+    section.measure_context()
+    assert started.wait(2.0)
+    qapp.processEvents()
+    assert not section._context_button.isEnabled()
+    assert not section._compare_context_button.isEnabled()
+    section.compare_context()
+    assert calls == [False]
+    release.set()
+    section.wait_for_context_measurement(5000)
+    qapp.processEvents()
+    assert section._context_button.isEnabled()
+    assert section._compare_context_button.isEnabled()
+
+
+def test_context_command_uses_an_interruptible_process_boundary() -> None:
+    source = (
+        _REPO_ROOT / "hve" / "gui" / "toolsearch_settings_section.py"
+    ).read_text(encoding="utf-8")
+    function = source.split("def _run_context_command", 1)[1].split(
+        "def _start_context_worker", 1
+    )[0]
+
+    assert "subprocess.Popen" in function
+    assert "isInterruptionRequested" in function
+    assert "terminate" in function
+    assert "subprocess.run" not in function
+
+
+def test_context_command_terminates_the_child_when_interrupted(
+    section, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import subprocess
+    from types import SimpleNamespace
+
+    class _Process:
+        returncode = -15
+
+        def __init__(self) -> None:
+            self.communicate_calls = 0
+            self.terminate_calls = 0
+            self.kill_calls = 0
+
+        def communicate(self, timeout=None):
+            self.communicate_calls += 1
+            if self.communicate_calls == 1:
+                raise subprocess.TimeoutExpired("hve", timeout)
+            return "", ""
+
+        def terminate(self) -> None:
+            self.terminate_calls += 1
+
+        def kill(self) -> None:
+            self.kill_calls += 1
+
+    process = _Process()
+    monkeypatch.setattr(subprocess, "Popen", lambda *_args, **_kwargs: process)
+    monkeypatch.setattr(
+        "hve.gui.toolsearch_settings_section.QThread.currentThread",
+        lambda: SimpleNamespace(isInterruptionRequested=lambda: True),
+    )
+
+    code, _out, err = section._run_context_command()
+
+    assert code == 1
+    assert "中断" in err
+    assert process.terminate_calls == 1
+    assert process.kill_calls == 0
 
 
 def test_opening_the_context_tab_does_not_load_stats(section) -> None:

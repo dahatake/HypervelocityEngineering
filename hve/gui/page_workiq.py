@@ -1,8 +1,8 @@
-"""hve.gui.page_workiq — Work IQ 設定ページ（独立モジュール）。
+"""hve.gui.page_workiq — 知識源（Work IQ / MCP）設定ページ（独立モジュール、FR-KD-01）。
 
 Sub-002 (Phase 1) で導入。本モジュールの目的:
 
-1. 既存実装 `hve.gui.page_options._C4WorkIQ`（QWidget, 12 フィールド）を
+1. 既存実装 `hve.gui.page_options._C4WorkIQ` を
    公開クラス名 `WorkIQPage` として再エクスポートし、Work IQ UI の
    正規モジュール位置を明示する。
 2. ランチウィザード（`hve.gui.wizard.LaunchWizard`）に組み込み可能な
@@ -15,7 +15,7 @@ Sub-002 (Phase 1) で導入。本モジュールの目的:
       本モジュールは委譲のみ行い、フィールド定義は `page_options.py` に残置。
     - `WorkIQWizardPage` は `OrchestrateArgs` インスタンスを受け取り、
       ページ完了時に `to_args(args)` を呼び出して同じ dataclass へ書き戻す。
-    - CLI 引数化は `OrchestrateArgs.to_argv()`（既存）が `--workiq*` 12 オプション
+    - CLI 引数化は `OrchestrateArgs.to_argv()`（既存）が保持中の `--workiq*` オプション
       を生成するため、本ページは dataclass を埋めるだけで CLI へ到達する。
 
 設計書参照:
@@ -76,17 +76,17 @@ class WorkIQWizardPage(QWizardPage):
         if wiz.exec() == QDialog.Accepted:
             args = OrchestrateArgs()
             workiq_page.apply_to(args)
-            # → args.workiq, args.workiq_akm_review, ... が埋まる
+            # → args.workiq, args.knowledge_sources が埋まる
             argv = args.to_argv()
     """
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self.setTitle(self.tr("Work IQ 設定"))
+        self.setTitle(self.tr("知識源の設定"))
         self.setSubTitle(
             self.tr(
-                "Microsoft 365 連携（メール・チャット・会議・ファイル）の設定を行います。"
-                "未指定項目は環境変数 / 設定既定値を継承します。"
+                "知識探索で使う知識源（Work IQ と MCP server）を選びます。"
+                "MCP の設定・認証はGitHub Copilot CLIで事前に行い、変更後はHVEを再起動してください。"
             )
         )
 
@@ -104,8 +104,8 @@ class WorkIQWizardPage(QWizardPage):
 
         notice = QLabel(
             self.tr(
-                "ℹ️ 前提: `@microsoft/workiq` プラグインがインストール済みで、"
-                "事前に `npx @microsoft/workiq accept-eula` を実行済みであること。"
+                "ℹ️ 前提: GitHub Copilot CLIで`workiq`名のPluginまたはMCP Serverが"
+                "設定・認証済みであること。"
             )
         )
         notice.setWordWrap(True)
@@ -129,12 +129,12 @@ class WorkIQWizardPage(QWizardPage):
         """ページ入力を `OrchestrateArgs` へ書き戻す。
 
         ウィザード `accept()` 後、もしくは `Confirm` ページ初期化時に呼び出す。
-        `_C4WorkIQ.to_args()` の薄いラッパであり、12 フィールドすべてを更新する。
+        `_C4WorkIQ.to_args()` の薄いラッパであり、保持中のWork IQ設定を更新する。
         """
         self._widget.to_args(args)
 
     def to_workiq_argv(self) -> list[str]:
-        """現在のフォーム入力から `--workiq*` 系の CLI 引数のみを抽出する。
+        """現在のフォーム入力から知識源の CLI 引数（`--workiq` / `--knowledge-source`）のみを抽出する。
 
         `LaunchWizard` のような最小ウィザードに組み込む際、`OrchestrateArgs`
         全体ではなく Work IQ 関連の引数だけを既存 argv にスプライスしたいケースで
@@ -152,7 +152,7 @@ class WorkIQWizardPage(QWizardPage):
         while i < len(full):
             tok = full[i]
             if isinstance(tok, str) and (
-                tok.startswith("--workiq") or tok.startswith("--no-workiq")
+                tok.startswith(("--workiq", "--no-workiq")) or tok == "--knowledge-source"
             ):
                 result.append(tok)
                 # 直後トークンが別のフラグ（`--` 始まり）でなければ値とみなして拾う

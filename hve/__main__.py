@@ -18,15 +18,11 @@
     # (D) フルパス指定
     python hve/__main__.py orchestrate --workflow aad
 
-    # 基本実行 (デフォルト: Auto, 並列15, compact, Issue/PR作成なし)
+    # 基本実行 (デフォルト: claude-opus-5.5, 並列15, compact, Issue/PR作成なし)
     python -m hve orchestrate --workflow aad
 
     # QA + Review 有効
     python -m hve orchestrate --workflow aad --auto-qa --auto-contents-review
-
-    # Issue 作成あり + MCP Server 設定ファイル指定
-    python -m hve orchestrate --workflow asdw \\
-      --create-issues --mcp-config mcp-servers.json
 
     # 並列数変更 + モデル変更
     python -m hve orchestrate --workflow aad \\
@@ -75,8 +71,10 @@ import asyncio
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
+import threading
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -84,108 +82,78 @@ from typing import Any, List, Optional, Sequence
 
 
 def _configure_stdio_encoding() -> None:
-    """stdout/stderr を UTF-8 に再設定する（パイプ経由起動時の cp932 対策）。
+    """軽量 bootstrap の単一 stdio 設定を module 起動から呼ぶ。"""
+    try:
+        from .startup_version import _configure_stdio_encoding as _impl
+    except ImportError:
+        if __package__:
+            raise
+        from startup_version import (  # pyright: ignore[reportMissingImports]
+            _configure_stdio_encoding as _impl,
+        )
 
-    `hve gui` などから ``subprocess.Popen(..., stdout=PIPE)`` で起動された場合、
-    Python の標準出力ストリームはコンソール直結時の UTF-8 ではなく OS ロケール
-    （Windows なら cp932）にフォールバックする。この状態で console.py が出力する
-    ``▸`` (U+25B8) 等の Unicode 記号を ``print()`` すると ``UnicodeEncodeError``
-    で落ちる。本関数で起動時に UTF-8 を強制し、全モードで一貫した出力にする。
-
-    - ``errors="replace"`` により、万一エンコード不能文字が混入しても例外で
-      落ちず置換文字に置き換える。
-    - コンソール直結時（既に UTF-8 ベース）でも冪等に動作する。
-    - ``reconfigure`` が無い環境（Python 3.6 以前等）では no-op。
-    """
-    for stream_name in ("stdout", "stderr"):
-        stream = getattr(sys, stream_name, None)
-        reconfigure = getattr(stream, "reconfigure", None)
-        if reconfigure is None:
-            continue
-        try:
-            reconfigure(encoding="utf-8", errors="replace")
-        except Exception:  # pragma: no cover - top-level guard
-            pass
-
-
-_configure_stdio_encoding()
+    _impl()
 
 
 def _reexec_in_venv_if_needed() -> None:
-    """``python -m hve`` がリポジトリの ``.venv`` 外の Python で起動された場合に、
-    同梱 ``.venv`` の Python へ自動的に再 exec する。
+    """軽量 bootstrap に集約した ``.venv`` 正規化を module 起動から呼ぶ。"""
+    try:
+        from .startup_version import _reexec_in_venv_if_needed as _impl
+    except ImportError:
+        if __package__:
+            raise
+        from startup_version import _reexec_in_venv_if_needed as _impl
 
-    セットアップ (``hve/setup-hve.*``) は全依存を ``<repo>/.venv`` に導入する。
-    しかし activate 漏れや、システム Python から ``python -m hve gui`` を直接実行
-    した場合は ``ModuleNotFoundError: No module named 'PySide6'`` 等で起動に失敗する。
-    本関数はこれを吸収し、セットアップ直後でも ``python -m hve gui`` / ``cli`` が
-    そのまま動作するようにする。
+    _impl()
 
-    挙動:
-      - 既に ``.venv`` の Python で動作している場合は何もしない（冪等）。
-      - ``.venv`` が存在しない場合は何もしない（現在の Python で続行）。
-      - ``HVE_NO_VENV_REEXEC=1`` でオプトアウト（再帰防止にも使用）。
-      - 検出・再 exec に失敗した場合は現在の Python で続行（フォールバック）。
 
-    呼び出し箇所は 2 か所に限定する:
-      - ``__name__ == "__main__"`` の module level（重い import より前）
-      - ``_console_main()``（``hve`` console script 経路）
-    ``import hve.__main__`` 等のライブラリ利用時には発火させない。
-    """
-    if os.environ.get("HVE_NO_VENV_REEXEC", "").strip().lower() in {"1", "true", "yes"}:
-        return
+def _run_startup_version_check() -> None:
+    """FR-LOCAL-SURFACE-03 の共通 checker を実 entrypoint から起動する。"""
+    try:
+        from .startup_version import check_startup_version
+    except ImportError:
+        if __package__:
+            raise
+        from startup_version import check_startup_version  # type: ignore[no-redef]
+
+    result = check_startup_version(tuple(sys.argv[1:]))
+    if result is not None:
+        raise SystemExit(result)
+
+
+def _is_legacy_console_shim_import() -> bool:
+    """更新前に生成済みの ``hve.__main__:_console_main`` shim かを判定する。"""
+    if __name__ == "__main__" or not sys.argv:
+        return False
+    import sysconfig
 
     try:
-        repo_root = Path(__file__).resolve().parent.parent
-        venv_py = (
-            repo_root / ".venv" / "Scripts" / "python.exe"
-            if os.name == "nt"
-            else repo_root / ".venv" / "bin" / "python"
-        )
-        if not venv_py.exists():
-            return
-        # 既に .venv の Python で動作しているなら再 exec は不要。
-        try:
-            already_in_venv = os.path.samefile(sys.executable, str(venv_py))
-        except OSError:
-            already_in_venv = Path(sys.executable).resolve() == venv_py.resolve()
-        if already_in_venv:
-            return
-        new_argv = [str(venv_py), "-m", "hve", *sys.argv[1:]]
-        new_env = dict(os.environ)
-        new_env["HVE_NO_VENV_REEXEC"] = "1"  # 再帰防止フラグ
-    except Exception:  # pragma: no cover - 検出失敗時は従来挙動へフォールバック
-        return
+        from .startup_version import _CHECKED_ENV
+    except ImportError:
+        if __package__:
+            raise
+        from startup_version import _CHECKED_ENV
 
-    print(
-        # NOTE: この通知は環境正規化前（.venv 外の Python・cp932 等のコンソール）に
-        # 出力される可能性があるため、文字化けを避けて ASCII のみで記述する。
-        f"[hve] Detected non-.venv Python; re-executing with .venv: {venv_py}",
-        file=sys.stderr,
+    try:
+        launcher = Path(sys.argv[0]).resolve()
+        scripts_dir = Path(sysconfig.get_path("scripts")).resolve()
+    except (OSError, TypeError, ValueError):
+        return False
+    return (
+        os.environ.get(_CHECKED_ENV) != "1"
+        and launcher.parent == scripts_dir
+        and launcher.stem.lower() in {"hve", "hve-script"}
     )
 
-    if os.name == "nt":
-        # Windows では os.execv の挙動が不安定なため subprocess + 終了コード継承を用いる。
-        import subprocess
 
-        try:
-            completed = subprocess.run(new_argv, env=new_env)
-        except Exception:  # pragma: no cover - 起動失敗時は現在の Python で続行
-            return
-        sys.exit(completed.returncode)
-    else:
-        try:
-            os.execve(str(venv_py), new_argv, new_env)
-        except Exception:  # pragma: no cover - exec 失敗時は現在の Python で続行
-            return
-
-
-if __name__ == "__main__":
+if __name__ == "__main__" or _is_legacy_console_shim_import():
     # 重い依存 (`.config` -> `cq`) を読み込む前に .venv へ再 exec する。
     # `python -m hve` では以下の module level import がファイル末尾の
     # `if __name__ == "__main__":` ブロックより先に評価されるため、
     # ガードをここに置かないと依存欠落で先に落ちる。
+    _configure_stdio_encoding()
     _reexec_in_venv_if_needed()
+    _run_startup_version_check()
 
 try:
     from .config import DEFAULT_MODEL, MODEL_AUTO_VALUE, MODEL_CHOICES, SDKConfig
@@ -200,6 +168,7 @@ try:
         ARD_DEFAULT_TARGET_REGION as _ARD_DEFAULT_TARGET_REGION,
         canonicalize_workflow_id,
         get_workflow,
+        list_workflows,
     )
 except ImportError:
     # 平坦 import への退避は `cd hve && python __main__.py` のような
@@ -214,6 +183,7 @@ except ImportError:
         "canonicalize_workflow_id",
     )
     get_workflow = getattr(_workflow_registry_module, "get_workflow")
+    list_workflows = getattr(_workflow_registry_module, "list_workflows")
     ARD_DEFAULT_GROUP_IDS = getattr(
         _workflow_registry_module,
         "ARD_DEFAULT_GROUP_IDS",
@@ -348,6 +318,17 @@ _PARAM_DEFAULTS = {
 def _split_csv(value: str) -> List[str]:
     """カンマ区切り文字列を空要素なしのリストに変換する。"""
     return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _positive_int(value: str) -> int:
+    """1 以上の整数だけを受け付ける argparse 用の型変換（FR-MODEL-04）。"""
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError(f"整数を指定してください: {value!r}") from None
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(f"1 以上の整数を指定してください: {value!r}")
+    return parsed
 
 
 def _prompt_app_ids(con, wf_id: str) -> dict:
@@ -856,6 +837,7 @@ def _prompt_akm_params(
     is_quick_auto: bool,
     *,
     will_create_pr: bool = False,
+    workiq_available: bool = True,
 ) -> dict:
     """AKM ワークフローのパラメータを収集する。
 
@@ -873,21 +855,29 @@ def _prompt_akm_params(
         params["force_refresh"] = False
         params["custom_source_dir"] = ""
         params["enable_auto_merge"] = False
-        # Work IQ 入力フェーズはクイック全自動モードでは既定 OFF（明示要求がない限り）。
-        params["workiq_akm_ingest_dxx"] = []
         return params
 
     # 取り込みソースをマルチ選択（qa / original-docs / workiq）。
     # 既定は qa + original-docs。空選択は既定にフォールバックする。
     _default_indices = [0, 1]  # qa, original-docs
+    available_sources = [
+        (label, value)
+        for label, value in zip(
+            _AKM_SOURCES_MULTI_OPTIONS,
+            _AKM_SOURCES_MULTI_VALUES,
+        )
+        if workiq_available or value != "workiq"
+    ]
+    source_options = [label for label, _value in available_sources]
+    source_values = [value for _label, value in available_sources]
     selected_indices = con.prompt_multi_select(
         "取り込みソースを選択してください（複数選択可）",
-        _AKM_SOURCES_MULTI_OPTIONS,
+        source_options,
         default_indices=_default_indices,
     )
     if not selected_indices:
         selected_indices = list(_default_indices)
-    selected_values = [_AKM_SOURCES_MULTI_VALUES[i] for i in selected_indices]
+    selected_values = [source_values[i] for i in selected_indices]
     # _normalize_akm_sources を経由して順序固定化（workiq, qa, original-docs）。
     normalized = _normalize_akm_sources(selected_values)
     params["sources"] = ",".join(normalized)
@@ -910,22 +900,19 @@ def _prompt_akm_params(
     )
     params["enable_auto_merge"] = False
 
-    # Work IQ が選択されている場合のみ、取り込み対象 Dxx の絞り込みを尋ねる（Sub-C-4）。
-    if "workiq" in normalized:
-        dxx_input = con.prompt_input(
-            "Work IQ 取り込み対象 Dxx（カンマ区切り、例: D01,D04。省略=全件 D01〜D21）",
-            default="",
-        )
-        # config 側のヘルパで正規化（無効パターンは除外、空 → []）。
-        try:
-            from .config import _parse_workiq_akm_ingest_dxx  # type: ignore
-        except ImportError:
-            from config import _parse_workiq_akm_ingest_dxx  # type: ignore[no-redef]
-        params["workiq_akm_ingest_dxx"] = _parse_workiq_akm_ingest_dxx(dxx_input or "")
-    else:
-        params["workiq_akm_ingest_dxx"] = []
-
     return params
+
+
+def _knowledge_source_arg(value: str) -> List[str]:
+    """``--knowledge-source`` の値を知識源名へ分解する（不正名は exit 2）。"""
+    try:
+        from .knowledge_discovery import parse_source_names
+    except ImportError:  # pragma: no cover - flat import compatibility
+        from knowledge_discovery import parse_source_names  # type: ignore[no-redef]
+    try:
+        return parse_source_names([value], strict=True)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"知識源名が不正です: {exc}") from None
 
 
 def _resolve_model(model: str) -> tuple:
@@ -977,6 +964,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         dest="banner",
         help="起動時バナー表示を制御する (--banner: 表示, --no-banner: 抑止, 省略時: 表示)",
+    )
+    run_parser.add_argument(
+        "--step-input-wizard",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="実行前にStep単位の追加・代替文書を選択する (デフォルト: 有効)",
     )
 
     # --- durable resume サブコマンド (FR-CLI-90) ---
@@ -1143,7 +1136,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--model", "-m",
         default=None,
         metavar="MODEL",
-        help="使用するモデル名 (デフォルト: Auto)。Auto を指定すると GitHub が最適モデルを自動選択します",
+        help=f"使用するモデル名 (デフォルト: {DEFAULT_MODEL})。Auto を指定すると GitHub が最適モデルを自動選択します",
     )
     orch.add_argument(
         "--review-model",
@@ -1228,9 +1221,12 @@ def _build_parser() -> argparse.ArgumentParser:
     # Post-step 自動プロンプト
     orch.add_argument(
         "--auto-qa",
-        action="store_true",
-        default=False,
-        help="QA 自動投入を有効化 (デフォルト: 無効)",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Step ごとの事前 QA と実行後の不明点調査を行う（FR-QA-03 / FR-KD-11 / FR-KD-13。"
+            "デフォルト: 有効。--no-auto-qa で無効）"
+        ),
     )
     orch.add_argument(
         "--qa-akm-background-merge",
@@ -1305,19 +1301,27 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     orch.add_argument(
         "--workiq",
-        action="store_true",
-        default=False,
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help=(
-            "Work IQ 経由の M365 データ（メール・チャット・会議・ファイル）参照を有効にする。"
-            "QA フェーズと、AKM では実行後レビューの後方互換トリガーとしても扱う "
-            "(デフォルト: 無効。@microsoft/workiq のインストールが必要)"
+            "Work IQ（`workiq` MCP server）を知識源に加える。事前 QA・実行後の不明点調査と AKM / ARD の"
+            "知識探索で使う（FR-KD-01 / FR-KD-11。デフォルト: 有効。未指定時は WORKIQ_ENABLED="
+            "false|0|no で無効、--no-workiq で無効。GitHub Copilot CLI に "
+            "`workiq` 名のPluginまたはMCP Server設定と認証が必要）"
         ),
     )
     orch.add_argument(
-        "--workiq-akm-review",
-        action=argparse.BooleanOptionalAction,
+        "--knowledge-source",
+        action="append",
+        type=_knowledge_source_arg,
         default=None,
-        help="AKM 実行後レビューで Work IQ 検証を有効/無効化する（未指定時は --workiq / WORKIQ_ENABLED を継承）",
+        metavar="NAME",
+        dest="knowledge_source",
+        help=(
+            "知識探索で使う MCP server 名（FR-KD-01）。複数回の指定とカンマ区切りが可能"
+            "（例: --knowledge-source confluence,jira）。読み取り専用の tool 許可リストは "
+            "hve/toolsearch/policy.json の knowledge_tool_allowlists で決まる"
+        ),
     )
     orch.add_argument(
         "--auto-compaction",
@@ -1352,74 +1356,16 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     orch.add_argument(
-        "--workiq-akm-ingest",
-        action=argparse.BooleanOptionalAction,
+        "--tool-search-defer-threshold",
+        type=_positive_int,
         default=None,
+        metavar="N",
+        dest="tool_search_defer_threshold",
         help=(
-            "AKM の入力ソースとして Work IQ を有効/無効化する"
-            "（未指定時は --sources に 'workiq' が含まれるかで自動判定）"
+            "tool_search 有効時に SDK へ渡す defer_threshold（ツール定義を遅延ロードへ"
+            "切り替えるツール数）。正の整数のみ。省略時はキーを送らず SDK 既定へ委譲する"
         ),
     )
-    orch.add_argument(
-        "--workiq-dxx",
-        default=None,
-        metavar="DXX_LIST",
-        help=(
-            "AKM Work IQ 取り込み対象 Dxx をカンマ区切りで指定（例: D01,D04）。"
-            "省略時は全 D01〜D21 を対象とする。"
-        ),
-    )
-    orch.add_argument(
-        "--workiq-draft",
-        action="store_true",
-        default=False,
-        help="QA フェーズで質問ごとに Work IQ 回答ドラフトを生成する（デフォルト: 無効）",
-    )
-    orch.add_argument(
-        "--workiq-draft-output-dir",
-        default=None,
-        metavar="DIR",
-        help="Work IQ 補助レポートの出力先ディレクトリ（互換のためオプション名は据え置き。未指定時: 設定/環境変数、最終既定値 qa）",
-    )
-    orch.add_argument(
-        "--workiq-tenant-id",
-        default=None,
-        metavar="TENANT_ID",
-        help="Work IQ の Entra テナント ID（省略時: common）",
-    )
-    orch.add_argument(
-        "--workiq-prompt-qa",
-        default=None,
-        metavar="PROMPT",
-        help="Work IQ の QA 用プロンプトを上書きする（{target_content} プレースホルダ使用可。省略時: デフォルトプロンプト）",
-    )
-    orch.add_argument(
-        "--workiq-prompt-km",
-        default=None,
-        metavar="PROMPT",
-        help="Work IQ の KM 用プロンプトを上書きする（AKM 実行後レビューで使用）",
-    )
-    orch.add_argument(
-        "--workiq-prompt-review",
-        default=None,
-        metavar="PROMPT",
-        help="Work IQ の Original Docs レビュー用プロンプトを上書きする（互換用）",
-    )
-    orch.add_argument(
-        "--workiq-per-question-timeout",
-        type=float,
-        default=None,
-        metavar="SECONDS",
-        help="Work IQ: QA 質問ごとのクエリタイムアウト秒数（未指定時: 環境変数/設定（既定 1200 秒 = 20 分））",
-    )
-    orch.add_argument(
-        "--workiq-request-timeout",
-        type=float,
-        default=None,
-        metavar="SECONDS",
-        help="Work IQ MCP サーバーへのツール呼び出し 1 回あたりのタイムアウト秒数（未指定時: 環境変数 WORKIQ_REQUEST_TIMEOUT / 設定（既定 300 秒 = 5 分））。Copilot SDK MCPServerConfigLocal.timeout にミリ秒として渡される。",
-    )
-
     # Issue/PR 作成
     orch.add_argument(
         "--strict",
@@ -1568,14 +1514,6 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         dest="fleet_mode_enabled",
         help="複数 Step の DAG wave を Copilot SDK Fleet mode に委譲する（既定: 無効、未指定時は環境変数/設定を継承）",
-    )
-
-    # MCP Server
-    orch.add_argument(
-        "--mcp-config",
-        default=None,
-        metavar="PATH",
-        help="MCP Server 設定 JSON ファイルパス",
     )
 
     # CLI 接続
@@ -1738,6 +1676,29 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         help=argparse.SUPPRESS,
     )
+    # FR-PROMPT-13: Prompt 版 request の execution_policy を子 orchestrate へ
+    # 伝える replay-only control。値は prompt_request で検証済み。
+    orch.add_argument(
+        "--pre-approved-operation",
+        dest="_pre_approved_operations",
+        action="append",
+        choices=("azure_deploy",),
+        default=[],
+        help=argparse.SUPPRESS,
+    )
+    orch.add_argument(
+        "--allow-public-exposure",
+        dest="_allow_public_exposure",
+        action="store_true",
+        default=False,
+        help=argparse.SUPPRESS,
+    )
+    orch.add_argument(
+        "--budget-note",
+        dest="_budget_note",
+        default="",
+        help=argparse.SUPPRESS,
+    )
     orch.add_argument(
         "--approval-gates",
         action="store_true",
@@ -1752,6 +1713,26 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "canonical な必須入力を、その run に限りリポジトリ内の実ファイルへ読み替える "
             "(FR-PROMPT-08、複数回指定可)。ファイルはコピーせず、出力契約も変更しない"
+        ),
+    )
+    orch.add_argument(
+        "--step-input",
+        action="append",
+        nargs=4,
+        default=None,
+        metavar=("STEP_ID", "ROLE", "CANONICAL_OR_DASH", "SOURCE"),
+        help=(
+            "対象Stepへrun-scoped文書を追加または代替する（複数回指定可）。"
+            " ROLEはadditional/substitute、canonical無しは '-' を指定する"
+        ),
+    )
+    orch.add_argument(
+        "--step-input-mcp-consent",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "custom Step入力の事前QAで、知識探索（FR-KD-06）による補填を許可する。"
+            " 未指定時は安全な対話面だけで確認する"
         ),
     )
 
@@ -1979,39 +1960,33 @@ def _build_parser() -> argparse.ArgumentParser:
             "未指定時は環境変数 HVE_TDD_MAX_RETRIES、それも無ければ既定値を使う。"
         ),
     )
-
-    # repo / token
     orch.add_argument(
-        "--repo",
+        "--issue-title",
         default=None,
-        metavar="OWNER/REPO",
-        help="リポジトリ (owner/repo 形式, REPO 環境変数からも取得)",
+        metavar="TITLE",
+        help=(
+            "Issue / PR 作成時のタイトル。"
+            "未指定時は '[PREFIX] ワークフロー名' を使用。"
+        ),
     )
-
-    # 追加プロンプト
     orch.add_argument(
         "--additional-prompt",
         default=None,
-        metavar="PROMPT",
-        help="全 Custom Agent の prompt 末尾に追記する文字列 (省略可)",
+        metavar="TEXT",
+        help="各ステップの指示へ追加する自由記述プロンプト（任意）。",
     )
     orch.add_argument(
         "--context-max-chars",
         type=int,
         default=None,
         metavar="N",
-        help="各フェーズで注入するコンテキストの最大文字数（未指定時: SDKConfig 既定値 20,000）",
+        help="追加コンテキスト注入の最大文字数（省略時は設定既定値）。",
     )
-
-    # Issue タイトル
     orch.add_argument(
-        "--issue-title",
+        "--repo",
         default=None,
-        metavar="TITLE",
-        help=(
-            "Issue 作成時の Root Issue タイトルを上書きする (省略可)。"
-            "未指定時は '[PREFIX] ワークフロー名' を使用。"
-        ),
+        metavar="OWNER/REPO",
+        help="リポジトリ (owner/repo 形式, REPO 環境変数からも取得)",
     )
 
     # ドライラン
@@ -2020,45 +1995,6 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=False,
         help="ドライラン（実際の SDK 呼び出しをしない）",
-    )
-
-    # Self-Improve
-    orch.add_argument(
-        "--self-improve",
-        action="store_true",
-        default=False,
-        help=(
-            "自己改善ループ（Phase 4）を有効化する。"
-            " --no-self-improve が同時に指定された場合は --no-self-improve に上書きされます。"
-            " HVE_AUTO_SELF_IMPROVE=true 環境変数でも有効化できる。"
-        ),
-    )
-    orch.add_argument(
-        "--no-self-improve",
-        action="store_true",
-        default=False,
-        help=(
-            "自己改善ループ（Phase 4）を無効化する（--self-improve および HVE_AUTO_SELF_IMPROVE=true より優先）。"
-        ),
-    )
-    orch.add_argument(
-        "--self-improve-max-iterations",
-        type=int,
-        default=None,
-        metavar="N",
-        help="自己改善ループの最大繰り返し回数（既定: 3）。--self-improve 有効時のみ有効。",
-    )
-    orch.add_argument(
-        "--self-improve-target-scope",
-        default=None,
-        metavar="SCOPE",
-        help="自己改善ループの対象パス（例: 'src/' / 'hve/' / 空=リポジトリ全体）。--self-improve 有効時のみ有効。",
-    )
-    orch.add_argument(
-        "--self-improve-goal",
-        default=None,
-        metavar="TEXT",
-        help="自己改善ループのゴール説明（省略時はワークフロー種別から自動設定）。--self-improve 有効時のみ有効。",
     )
 
     # mdq リアルタイム索引更新（HVE CLI Orchestrator 限定機能）
@@ -2195,90 +2131,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help=f"一貫性検証に使用するモデル（デフォルト: {DEFAULT_MODEL}）",
     )
 
-    # --- workiq-doctor サブコマンド ---
-    workiq_doctor = sub.add_parser(
-        "workiq-doctor",
-        help="Work IQ 連携の診断を実行する (Node.js / npx / @microsoft/workiq / MCP 起動確認)",
-    )
-    workiq_doctor.add_argument(
-        "--json",
-        action="store_true",
-        default=False,
-        help="診断結果を JSON 形式で出力する",
-    )
-    workiq_doctor.add_argument(
-        "--skip-mcp-probe",
-        action="store_true",
-        default=False,
-        help="MCP サーバー起動確認をスキップする",
-    )
-    workiq_doctor.add_argument(
-        "--tenant-id",
-        default=None,
-        metavar="TENANT_ID",
-        help="Work IQ MCP 起動確認時に使用する Entra テナント ID",
-    )
-    workiq_doctor.add_argument(
-        "--timeout",
-        type=float,
-        default=5.0,
-        metavar="SECONDS",
-        help="MCP サーバー起動確認の待ち秒数（デフォルト: 5.0、0より大きい値を指定）",
-    )
-    workiq_doctor.add_argument(
-        "--sdk-probe",
-        action="store_true",
-        default=False,
-        help="Copilot SDK セッション内で _hve_workiq が connected かを追加検証する",
-    )
-    workiq_doctor.add_argument(
-        "--sdk-probe-timeout",
-        type=float,
-        default=30.0,
-        metavar="SECONDS",
-        help="SDK probe の最大待ち秒数（デフォルト: 30.0）",
-    )
-    workiq_doctor.add_argument(
-        "--event-extractor-self-test",
-        action="store_true",
-        default=False,
-        help="SDK tool イベント抽出ロジックの自己診断を追加実行する",
-    )
-    workiq_doctor.add_argument(
-        "--sdk-tool-probe",
-        action="store_true",
-        default=False,
-        help="Copilot SDK セッションで Work IQ MCP tool が実際に呼び出されるか検証する",
-    )
-    workiq_doctor.add_argument(
-        "--sdk-tool-probe-timeout",
-        type=float,
-        default=60.0,
-        metavar="SECONDS",
-        help="SDK tool probe の最大待ち秒数（デフォルト: 60.0）",
-    )
-    workiq_doctor.add_argument(
-        "--sdk-event-trace",
-        action="store_true",
-        default=False,
-        help="SDK tool probe 中に観測したイベントの安全な概要を出力する（本文・arguments は出力しない）",
-    )
-    workiq_doctor.add_argument(
-        "--sdk-tool-probe-tools-all",
-        action="store_true",
-        default=False,
-        help="SDK tool probe の MCP 設定で tools=['*'] を使う（診断・切り分け用途のみ）",
-    )
-    workiq_doctor.add_argument(
-        "--qa-integration-probe",
-        action="store_true",
-        default=False,
-        help=(
-            "事前 QA と同じ Work IQ プロンプトを 1 問だけ送り、"
-            "回答が QA へ統合される条件を満たすか判定する（Workflow を再実行せずに確認する）"
-        ),
-    )
-
     # --- ingest-docs サブコマンド（ADI Step 1 の前処理）---
     ingest_docs_parser = sub.add_parser(
         "ingest-docs",
@@ -2358,6 +2210,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         dest="banner",
         help="起動時バナー表示を制御する (--banner: 表示, --no-banner: 抑止, 省略時: 表示)",
+    )
+    cli_parser.add_argument(
+        "--step-input-wizard",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="実行前にStep単位の追加・代替文書を選択する (デフォルト: 有効)",
     )
 
     # --- login サブコマンド ---
@@ -2468,6 +2326,21 @@ def _build_parser() -> argparse.ArgumentParser:
         "context",
         help="Step 実行セッションのコンテキスト内訳を実測する（プロンプトは送らない）",
     )
+    ts_context.add_argument(
+        "--workflow",
+        required=True,
+        choices=[workflow.id for workflow in list_workflows()],
+        help="比較対象の registry workflow ID",
+    )
+    ts_context.add_argument(
+        "--step",
+        help="対象 Step ID（省略時は Workflow 全体。fan-out 子は base Step で解決）",
+    )
+    ts_context.add_argument(
+        "--compare",
+        action="store_true",
+        help="同じ runtime resource 条件の Tool Search OFF / ON を比較する",
+    )
     ts_context.add_argument("--json", action="store_true", help="JSON 形式で出力する")
 
     # --- prompt サブコマンド（FR-PROMPT-03 / FR-PROMPT-04）---
@@ -2504,38 +2377,6 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     return parser
-
-
-# -----------------------------------------------------------------------
-# MCP 設定読み込み
-# -----------------------------------------------------------------------
-
-def _load_mcp_config(mcp_config_path: Optional[str]) -> Optional[dict]:
-    """MCP Server 設定 JSON ファイルを読み込む。"""
-    if not mcp_config_path:
-        return None
-
-    path = Path(mcp_config_path)
-    if not path.exists():
-        print(f"{_ts()} ⚠️  MCP 設定ファイルが見つかりません: {mcp_config_path}", file=sys.stderr)
-        return None
-
-    try:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-        if not isinstance(data, dict):
-            print(f"{_ts()} ❌ MCP 設定ファイルの形式が不正です: JSON object を指定してください。", file=sys.stderr)
-            return None
-        if "mcpServers" in data:
-            servers = data.get("mcpServers")
-            if not isinstance(servers, dict):
-                print(f"{_ts()} ❌ MCP 設定ファイルの形式が不正です: mcpServers は JSON object である必要があります。", file=sys.stderr)
-                return None
-            return servers
-        return data
-    except (json.JSONDecodeError, OSError) as exc:
-        print(f"{_ts()} ❌ MCP 設定ファイルの読み込みに失敗しました: {exc}", file=sys.stderr)
-        return None
 
 
 # -----------------------------------------------------------------------
@@ -2589,13 +2430,13 @@ def _build_config(args: argparse.Namespace):
     # CLI 引数で上書き
     env_model = os.environ.get("MODEL")
     cli_model = args.model
-    # 優先順位: 明示 CLI > MODEL 環境変数 > 既定値
+    # 優先順位: 明示 CLI > MODEL 環境変数 > DEFAULT_MODEL（FR-MODEL-01）
     if cli_model is not None:
         cfg.model = cli_model
     elif env_model:
         cfg.model = env_model
     else:
-        cfg.model = MODEL_AUTO_VALUE
+        cfg.model = DEFAULT_MODEL
     # Auto モデル解決
     cfg.model, _ = _resolve_model(cfg.model)
     if cfg.model != MODEL_AUTO_VALUE:
@@ -2628,10 +2469,14 @@ def _build_config(args: argparse.Namespace):
     cfg.context_tier = getattr(args, "context_tier", None) or None
     cfg.akm_context_tier = getattr(args, "akm_context_tier", None) or None
     cfg.max_parallel = args.max_parallel
-    cfg.auto_qa = args.auto_qa
+    # FR-KD-11: 未指定（None）は有効。`--no-auto-qa` だけが無効にする。
+    cfg.auto_qa = getattr(args, "auto_qa", None) is not False
     cfg.qa_akm_background_merge = getattr(args, "qa_akm_background_merge", False)
     cfg.force_interactive = getattr(args, "force_interactive", False)
     cfg.unattended = bool(getattr(args, "_unattended", False))
+    cfg.pre_approved_operations = tuple(getattr(args, "_pre_approved_operations", None) or ())
+    cfg.allow_public_exposure = bool(getattr(args, "_allow_public_exposure", False))
+    cfg.budget_note = str(getattr(args, "_budget_note", "") or "")
     cfg.qa_answer_mode = getattr(args, "qa_answer_mode", None)
     cfg.qa_ipc_dir = getattr(args, "qa_ipc_dir", None)
     cfg.steering_ipc_dir = getattr(args, "steering_ipc_dir", None)
@@ -2717,25 +2562,6 @@ def _build_config(args: argparse.Namespace):
     if getattr(args, "context_max_chars", None) is not None:
         cfg.context_injection_max_chars = args.context_max_chars
 
-    # Self-Improve: 優先順位 --no-self-improve > --self-improve > HVE_AUTO_SELF_IMPROVE > デフォルト False
-    if getattr(args, "no_self_improve", False):
-        cfg.self_improve_skip = True
-    elif getattr(args, "self_improve", False):
-        cfg.auto_self_improve = True
-        cfg.self_improve_skip = False
-
-    # Self-Improve 詳細オプション（auto_self_improve 有効時のみ反映）
-    if cfg.auto_self_improve and not cfg.self_improve_skip:
-        _si_iter = getattr(args, "self_improve_max_iterations", None)
-        if _si_iter is not None:
-            cfg.self_improve_max_iterations = int(_si_iter)
-        _si_scope = getattr(args, "self_improve_target_scope", None)
-        if _si_scope is not None:
-            cfg.self_improve_target_scope = _si_scope
-        _si_goal = getattr(args, "self_improve_goal", None)
-        if _si_goal is not None:
-            cfg.self_improve_goal = _si_goal
-
     # mdq リアルタイム索引更新: 優先順位 --no-mdq-watch > --mdq-watch > HVE_MDQ_WATCH > デフォルト True
     if getattr(args, "no_mdq_watch", False):
         cfg.mdq_watch = False
@@ -2788,75 +2614,38 @@ def _build_config(args: argparse.Namespace):
         cfg.cloud_session_subtask_overrides = _parse_bool_mapping(args.cloud_session_subtask_overrides)
 
     # リポジトリ（CLI 引数 > 環境変数）
-    if args.repo:
-        cfg.repo = args.repo
+    repo_arg = getattr(args, "repo", None)
+    if repo_arg:
+        cfg.repo = repo_arg
     elif not cfg.repo:
         cfg.repo = os.environ.get("REPO", "")
 
-    # MCP 設定
-    mcp = _load_mcp_config(args.mcp_config)
-    if mcp:
-        cfg.mcp_servers = mcp
-
-    # Work IQ
-    if getattr(args, "workiq", False):
-        cfg.workiq_enabled = True
-        cfg.workiq_qa_enabled = True
-    if getattr(args, "workiq_draft", False):
-        cfg.workiq_enabled = True
-        cfg.workiq_qa_enabled = True
-        cfg.workiq_draft_mode = True
-    if getattr(args, "workiq_akm_review", None) is not None:
-        if args.workiq_akm_review and not cfg.workiq_enabled and cfg.workiq_qa_enabled is None:
-            cfg.workiq_qa_enabled = False
-        cfg.workiq_akm_review_enabled = args.workiq_akm_review
-        cfg.workiq_enabled = cfg.is_workiq_qa_enabled() or cfg.is_workiq_akm_review_enabled()
+    # 知識源（FR-KD-01 / FR-KD-11）。未指定は from_env の WORKIQ_ENABLED 解釈を保つ。
+    _workiq_arg = getattr(args, "workiq", None)
+    if _workiq_arg is not None:
+        cfg.workiq_enabled = bool(_workiq_arg)
+    _knowledge_args = getattr(args, "knowledge_source", None) or []
+    if _knowledge_args:
+        _flat = [name for group in _knowledge_args for name in (group if isinstance(group, list) else [group])]
+        cfg.knowledge_sources = list(cfg.knowledge_sources or [])
+        for _name in _flat:
+            if _name not in cfg.knowledge_sources:
+                cfg.knowledge_sources.append(_name)
     if getattr(args, "auto_compaction", None) is not None:
         cfg.auto_compaction = bool(args.auto_compaction)
     if getattr(args, "tool_search", None) is not None:
         cfg.tool_search = bool(args.tool_search)
     if getattr(args, "tool_search_ranking", None):
         cfg.tool_search_ranking = str(args.tool_search_ranking)
-    # AKM 入力ソースとしての Work IQ（独立フラグ）。
-    # 明示指定（--workiq-akm-ingest / --no-workiq-akm-ingest）優先。
-    # 未指定時は --sources に 'workiq' が含まれているかで自動判定する。
-    _ingest_flag = getattr(args, "workiq_akm_ingest", None)
-    _sources_raw = getattr(args, "sources", None) or ""
-    _sources_has_workiq = "workiq" in [
-        t.strip().lower() for t in _sources_raw.replace(" ", ",").split(",") if t.strip()
-    ]
-    if _ingest_flag is not None:
-        cfg.workiq_akm_ingest_enabled = bool(_ingest_flag)
-    elif _sources_has_workiq:
-        cfg.workiq_akm_ingest_enabled = True
-    # --workiq-dxx の解析（config 側のヘルパを再利用）。
-    _dxx_raw = getattr(args, "workiq_dxx", None)
-    if _dxx_raw is not None:
-        try:
-            from .config import _parse_workiq_akm_ingest_dxx as _parse_dxx  # type: ignore
-        except ImportError:
-            from config import _parse_workiq_akm_ingest_dxx as _parse_dxx  # type: ignore[no-redef]
-        cfg.workiq_akm_ingest_dxx = _parse_dxx(_dxx_raw)
-    workiq_draft_output_dir = getattr(args, "workiq_draft_output_dir", None)
-    if workiq_draft_output_dir is not None:
-        cfg.workiq_draft_output_dir = workiq_draft_output_dir
-    cfg.workiq_tenant_id = getattr(args, "workiq_tenant_id", None)
-    cfg.workiq_prompt_qa = getattr(args, "workiq_prompt_qa", None)
-    cfg.workiq_prompt_km = getattr(args, "workiq_prompt_km", None)
-    cfg.workiq_prompt_review = getattr(args, "workiq_prompt_review", None)
-    _workiq_pq_timeout = getattr(args, "workiq_per_question_timeout", None)
-    if _workiq_pq_timeout is not None and _workiq_pq_timeout > 0:
-        cfg.workiq_per_question_timeout = _workiq_pq_timeout
-    _workiq_req_timeout = getattr(args, "workiq_request_timeout", None)
-    if _workiq_req_timeout is not None and _workiq_req_timeout > 0:
-        cfg.workiq_request_timeout = _workiq_req_timeout
+    # FR-MODEL-04: 値の正性は argparse の `_positive_int` が検査済み。
+    if getattr(args, "tool_search_defer_threshold", None) is not None:
+        cfg.tool_search_defer_threshold = int(args.tool_search_defer_threshold)
     # 無視パス（CLI 引数が指定された場合のみ上書き）
     if getattr(args, "ignore_paths", None):
         cfg.ignore_paths = args.ignore_paths
-    if cfg.create_pr and cfg.workiq_enabled:
-        workiq_output_dir = (cfg.workiq_draft_output_dir or "").strip().strip("/\\") or "qa"
-        if workiq_output_dir in cfg.ignore_paths:
-            cfg.ignore_paths = [p for p in cfg.ignore_paths if p != workiq_output_dir]
+    # 知識探索の質問票（qa/）は PR 本文から参照するため commit 対象に残す（FR-KD-07 / FR-KD-08）。
+    if cfg.create_pr and cfg.effective_knowledge_sources() and "qa" in cfg.ignore_paths:
+        cfg.ignore_paths = [p for p in cfg.ignore_paths if p != "qa"]
 
     return cfg
 
@@ -2878,20 +2667,50 @@ def _validate_app_id_args(args: argparse.Namespace) -> Optional[str]:
     return None
 
 
+def _attach_materialized_step_inputs(
+    params: dict,
+    *,
+    workflow_id: str,
+    specs: Sequence[Any],
+    consent: Optional[bool] = None,
+) -> None:
+    """Step入力を共通materializerでrun-scoped bundleへ変換する。"""
+    if not specs:
+        return
+    from .step_inputs import materialize_step_inputs
+
+    if not os.environ.get("HVE_WORK_ROOT"):
+        _ensure_run_workdir_env()
+    bundles, manifest = materialize_step_inputs(
+        repo_root=Path.cwd(),
+        work_root=Path(os.environ["HVE_WORK_ROOT"]),
+        workflow_id=workflow_id,
+        specs=specs,
+        input_aliases=params.get("input_aliases", ()),
+    )
+    params["step_input_bundles"] = bundles
+    params["step_input_manifest"] = manifest.resolve().relative_to(
+        Path.cwd().resolve()
+    ).as_posix()
+    if isinstance(consent, bool):
+        params["step_input_mcp_consent"] = consent
+
+
 def _build_params(args: argparse.Namespace) -> dict:
     """CLI 引数からワークフローパラメータ dict を構築する。"""
     params: dict = {
         "branch": args.branch,
-        "auto_qa": args.auto_qa,
+        "auto_qa": getattr(args, "auto_qa", None) is not False,
         "auto_contents_review": args.auto_contents_review,
-        "no_self_improve": getattr(args, "no_self_improve", False),
     }
 
-    # ステップ選択
+    # ステップ選択（省略時は registry の既定の選択。全 Step 既定なら [] = 全ステップ）
     if args.steps:
         params["steps"] = [s.strip() for s in args.steps.split(",") if s.strip()]
     else:
-        params["steps"] = []
+        from hve.workflow_registry import default_step_ids as _default_step_ids
+
+        params["steps"] = list(_default_step_ids(args.workflow or ""))
 
     resume_run = (getattr(args, "resume_run", None) or "").strip()
     if resume_run:
@@ -2909,6 +2728,27 @@ def _build_params(args: argparse.Namespace) -> dict:
         params["input_aliases"] = [
             (a.canonical, a.actual) for a in normalize_alias_pairs(raw_aliases)
         ]
+
+    raw_step_inputs = getattr(args, "step_input", None) or []
+    if raw_step_inputs:
+        from .step_inputs import StepInputSpec
+
+        specs = tuple(
+            StepInputSpec(
+                step_id=values[0],
+                role=values[1],
+                canonical=None if values[2] == "-" else values[2],
+                source=values[3],
+            )
+            for values in raw_step_inputs
+        )
+        consent = getattr(args, "step_input_mcp_consent", None)
+        _attach_materialized_step_inputs(
+            params,
+            workflow_id=getattr(args, "workflow", "") or "",
+            specs=specs,
+            consent=consent if isinstance(consent, bool) else None,
+        )
 
     # ワークフロー固有
     if getattr(args, "app_ids", None):
@@ -2951,11 +2791,6 @@ def _build_params(args: argparse.Namespace) -> dict:
         force_refresh = getattr(args, "force_refresh", None)
         params["force_refresh"] = False if force_refresh is None else force_refresh
         params["enable_auto_merge"] = getattr(args, "enable_auto_merge", False)
-        # Work IQ 取り込み対象 Dxx（--workiq-dxx）。
-        # 文字列が渡された場合は orchestrator 側で正規化される。
-        _dxx_raw = getattr(args, "workiq_dxx", None)
-        if _dxx_raw:
-            params["workiq_akm_ingest_dxx"] = _dxx_raw
     elif getattr(args, "workflow", None) == "adi":
         # 空を許容する（FR-WF-ADI-11: purpose が空のときは must を付与しない）。
         params["purpose"] = getattr(args, "purpose", None) or ""
@@ -3067,6 +2902,14 @@ def _build_params(args: argparse.Namespace) -> dict:
             step_ids=list(params.get("steps") or []),
             repo_root=Path.cwd(),
         )
+    if params.get("step_input_bundles"):
+        from .step_inputs import validate_step_input_bundles
+
+        validate_step_input_bundles(
+            params["step_input_bundles"],
+            repo_root=Path.cwd(),
+            input_aliases=params.get("input_aliases") or (),
+        )
 
     return params
 
@@ -3085,9 +2928,9 @@ def _ensure_run_workdir_env() -> None:
     if os.environ.get("HVE_WORK_ROOT"):
         return
     try:
-        from .split_fork import resolve_run_id, resolve_work_root
+        from .run_paths import resolve_run_id, resolve_work_root
     except ImportError:  # pragma: no cover - script execution path
-        from split_fork import resolve_run_id, resolve_work_root  # type: ignore[no-redef]
+        from run_paths import resolve_run_id, resolve_work_root  # type: ignore[no-redef]
     run_id = resolve_run_id()
     os.environ.setdefault("HVE_RUN_ID", run_id)
     work_root = resolve_work_root()
@@ -3353,6 +3196,25 @@ def _format_resume_plan(plan: Any) -> str:
     )
 
 
+def _start_resume_parent_heartbeat(worker_type: Any, store: Any, token: Any) -> Any:
+    """Start a lease heartbeat for the resume parent; None when no state path exists."""
+    path = getattr(store, "path", None)
+    if path is None:
+        return None
+    worker = worker_type(path, token)
+    worker.start()
+    return worker
+
+
+def _stop_resume_parent_heartbeat(worker: Any) -> None:
+    if worker is None:
+        return
+    try:
+        worker.stop()
+    except Exception:  # noqa: BLE001 - the child result decides the exit code
+        pass
+
+
 def _cmd_resume(args: argparse.Namespace) -> int:
     """Select, approve, CAS-acquire, and launch one or more ordered resume children."""
     try:
@@ -3361,14 +3223,22 @@ def _cmd_resume(args: argparse.Namespace) -> int:
             validate_resolved_head_commit,
         )
         from .resume_service import ResumeService
-        from .run_state_store import DurableStateError, RunStateStore
+        from .run_state_store import (
+            DurableStateError,
+            HeartbeatWorker,
+            RunStateStore,
+        )
     except ImportError:  # pragma: no cover - flat-load compatibility
         from hve.prompt_execution import (  # type: ignore[no-redef]
             resolve_head_commit,
             validate_resolved_head_commit,
         )
         from hve.resume_service import ResumeService
-        from hve.run_state_store import DurableStateError, RunStateStore
+        from hve.run_state_store import (
+            DurableStateError,
+            HeartbeatWorker,
+            RunStateStore,
+        )
 
     try:
         replay_values = _parse_resume_replay_values(
@@ -3572,11 +3442,19 @@ def _cmd_resume(args: argparse.Namespace) -> int:
                             "--lease-generation",
                             str(_resume_field(token, "generation")),
                         ]
-                        result = subprocess.run(
-                            child_argv,
-                            shell=False,
-                            check=False,
+                        # The child may need more than the lease TTL before its own
+                        # heartbeat starts, so the parent keeps the lease alive.
+                        heartbeat = _start_resume_parent_heartbeat(
+                            HeartbeatWorker, store, token
                         )
+                        try:
+                            result = subprocess.run(
+                                child_argv,
+                                shell=False,
+                                check=False,
+                            )
+                        finally:
+                            _stop_resume_parent_heartbeat(heartbeat)
                         code = int(getattr(result, "returncode", 0) or 0)
                 finally:
                     store.release_lease(token)
@@ -3746,9 +3624,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.command == "qa-merge":
         return _cmd_qa_merge(args)
 
-    if args.command == "workiq-doctor":
-        return _cmd_workiq_doctor(args)
-
     if args.command == "emit-prompt":
         return _cmd_emit_prompt(args)
 
@@ -3884,7 +3759,11 @@ def _run_copilot_auth_preflight(args: argparse.Namespace, config: "SDKConfig") -
         import auth as _auth  # type: ignore[no-redef]
 
     try:
-        info = _auth.ensure_authenticated(interactive=False)
+        info = _auth.ensure_authenticated(
+            interactive=False,
+            cli_path=getattr(config, "cli_path", None),
+            cli_url=getattr(config, "cli_url", None),
+        )
     except _auth.AuthError as exc:
         print(f"{_ts()} ❌ Copilot 認証状態を確認できません: {exc}", file=sys.stderr)
         return False
@@ -3912,7 +3791,11 @@ def _run_copilot_auth_preflight(args: argparse.Namespace, config: "SDKConfig") -
         return False
 
     try:
-        info = _auth.ensure_authenticated(interactive=True)
+        info = _auth.ensure_authenticated(
+            interactive=True,
+            cli_path=getattr(config, "cli_path", None),
+            cli_url=getattr(config, "cli_url", None),
+        )
     except _auth.AuthError as exc:
         print(f"{_ts()} ❌ Copilot ログインを開始できません: {exc}", file=sys.stderr)
         return False
@@ -3923,98 +3806,98 @@ def _run_copilot_auth_preflight(args: argparse.Namespace, config: "SDKConfig") -
     return False
 
 
-def _workiq_request_reasons(config: "SDKConfig", workflow: str = "") -> List[str]:
-    """Work IQ を要求している設定名を列挙する。"""
+def _workiq_request_reasons(
+    config: "SDKConfig",
+    workflow: str = "",
+    params: Optional[dict] = None,
+) -> List[str]:
+    """Work IQ を知識源として要求している設定名を列挙する（FR-CLI-81 / FR-KD-01）。"""
+    values = params or {}
+    sources = str(values.get("sources") or "")
     candidates = (
         ("workiq_enabled", bool(getattr(config, "workiq_enabled", False))),
-        ("workiq_draft_mode", bool(getattr(config, "workiq_draft_mode", False))),
-        ("workiq_qa_enabled", config.is_workiq_qa_enabled()),
-        ("workiq_akm_review_enabled", config.is_workiq_akm_review_enabled()),
-        # AKM 取り込みは AKM Workflow でしか実行されない（hve/orchestrator.py）ため、他 Workflow では要求扱いにしない。
+        ("knowledge_sources", "workiq" in list(getattr(config, "knowledge_sources", None) or [])),
+        # AKM の sources / ARD の ard_workiq_enabled は当該 Workflow でしか使わない。
         (
-            "workiq_akm_ingest_enabled",
-            config.is_workiq_akm_ingest_enabled() and workflow == "akm",
+            "sources",
+            workflow == "akm"
+            and "workiq" in [t.strip().lower() for t in sources.replace(" ", ",").split(",") if t.strip()],
         ),
+        ("ard_workiq_enabled", workflow == "ard" and bool(values.get("ard_workiq_enabled", False))),
     )
     return [name for name, enabled in candidates if enabled]
 
 
-def _is_workiq_requested(config: "SDKConfig", workflow: str = "") -> bool:
-    """Work IQ を使う設定かを返す。"""
-    return bool(_workiq_request_reasons(config, workflow))
+def _is_workiq_requested(
+    config: "SDKConfig",
+    workflow: str = "",
+    params: Optional[dict] = None,
+) -> bool:
+    """Work IQ を知識源として使う設定かを返す。"""
+    return bool(_workiq_request_reasons(config, workflow, params))
 
 
 def _disable_workiq(config: "SDKConfig", params: Optional[dict] = None) -> None:
-    """Work IQ 関連フラグを実行単位で無効化する。"""
-    config.workiq_enabled = False
-    config.workiq_qa_enabled = False
-    config.workiq_akm_review_enabled = False
-    config.workiq_akm_ingest_enabled = False
-    config.workiq_draft_mode = False
-    if params is not None:
-        sources = str(params.get("sources") or "")
-        if sources:
-            kept = [part for part in sources.split(",") if part.strip().lower() != "workiq"]
-            params["sources"] = ",".join(kept)
-        params["workiq_akm_ingest_dxx"] = []
-        params["ard_workiq_enabled"] = False
+    """後方互換wrapper。実装はWork IQ共通normalizerへ委譲する。"""
+    try:
+        from .workiq import disable_workiq_for_run
+    except ImportError:  # pragma: no cover - flat-load compatibility
+        from workiq import disable_workiq_for_run  # type: ignore[no-redef]
+    disable_workiq_for_run(config, params)
 
 
-def _run_workiq_auth_preflight(
+def _run_workiq_capability_preflight(
     args: argparse.Namespace,
     config: "SDKConfig",
     params: Optional[dict] = None,
     *,
     workflow: Optional[str] = None,
 ) -> bool:
-    """Work IQ 使用時に EULA / M365 認証を本処理前に確認する。"""
+    """Work IQ要求時にSDK discovery capabilityを1回だけ確認する。"""
     wf_id = workflow if workflow is not None else str(getattr(args, "workflow", "") or "")
-    if getattr(config, "dry_run", False) or not _is_workiq_requested(config, wf_id):
+    del args
+    if getattr(config, "dry_run", False) or not _is_workiq_requested(config, wf_id, params):
         return True
 
     try:
-        from .workiq import workiq_login
-    except ImportError:
-        from workiq import workiq_login  # type: ignore[no-redef]
+        from .workiq import (
+            disable_workiq_for_run,
+            probe_workiq_plugin_capability,
+        )
+    except ImportError:  # pragma: no cover - flat-load compatibility
+        from workiq import (  # type: ignore[no-redef]
+            disable_workiq_for_run,
+            probe_workiq_plugin_capability,
+        )
 
-    class _Console:
-        @staticmethod
-        def warning(message: str) -> None:
-            print(f"{_ts()} ⚠️  {message}", file=sys.stderr)
-
-    if workiq_login(_Console()):  # type: ignore[arg-type]
+    capability = probe_workiq_plugin_capability(
+        cli_path=getattr(config, "cli_path", None),
+        cli_url=getattr(config, "cli_url", None),
+        working_directory=Path.cwd(),
+    )
+    if capability.state == "ready":
         return True
 
-    interactive = bool(getattr(config, "force_interactive", False) or sys.stdin.isatty())
-    if not interactive:
-        # FR-CLI-81: 非対話では停止せず、当該実行に限り Work IQ を無効化して続行する。
+    print(
+        f"{_ts()} ⚠️  Work IQ をこの実行で無効化します "
+        f"(reason={capability.reason_code}; requested="
+        f"{','.join(_workiq_request_reasons(config, wf_id, params))})。",
+        file=sys.stderr,
+    )
+    disable_result = disable_workiq_for_run(config, params)
+    if wf_id == "akm" and disable_result.sources_became_empty:
         print(
-            f"{_ts()} ⚠️  Work IQ 認証確認に失敗したため、この実行では Work IQ を無効化して続行します。",
+            f"{_ts()} ❌ Work IQ 無効化後に AKM の取り込み source が0件になるため、"
+            "実行を開始しません。",
             file=sys.stderr,
         )
-        print(
-            f"{_ts()}    Work IQ を要求した設定: {', '.join(_workiq_request_reasons(config, wf_id))}",
-            file=sys.stderr,
-        )
-        print(f"{_ts()}    詳細は `python -m hve workiq-doctor` で診断してください。", file=sys.stderr)
-        _disable_workiq(config, params)
-        return True
-
-    try:
-        answer = input("Work IQ を無効化して続行しますか？ [y/N]: ").strip().lower()
-    except EOFError:
         return False
-    if answer in ("y", "yes"):
-        _disable_workiq(config, params)
-        return True
-    return False
+    return True
 
 
 def _is_azure_auth_requested(config: "SDKConfig", params: dict) -> bool:
     """Azure CLI 認証を必要とする可能性がある設定かを返す。"""
-    if str(params.get("resource_group") or "").strip():
-        return True
-    return any("azure" in str(name).lower() for name in (config.mcp_servers or {}).keys())
+    return bool(str(params.get("resource_group") or "").strip())
 
 
 def _azure_account_available() -> bool:
@@ -4134,10 +4017,15 @@ def _cmd_pricing(args: argparse.Namespace) -> int:
     print(f"- source     :")
     for k, v in (pricing.source_urls or {}).items():
         print(f"    - {k}: {v}")
-    print(f"\n## モデル別 multiplier ({len(pricing.models)})")
+    print(f"\n## モデル別料金 ({len(pricing.models)})")
     for m in sorted(pricing.models.values(), key=lambda x: x.model_id):
         mult = "?" if m.multiplier is None else f"{m.multiplier}x"
-        print(f"  - {m.model_id:<35} multiplier={mult}")
+        in_price = "?" if m.input_price_per_mtoken_usd is None else f"${m.input_price_per_mtoken_usd}"
+        out_price = "?" if m.output_price_per_mtoken_usd is None else f"${m.output_price_per_mtoken_usd}"
+        print(
+            f"  - {m.model_id:<35} multiplier={mult:<6} "
+            f"input/1M={in_price:<8} output/1M={out_price}"
+        )
     print(f"\n## プラン ({len(pricing.plans)})")
     for p in sorted(pricing.plans.values(), key=lambda x: x.plan_id):
         addl = "?" if p.additional_request_usd is None else f"${p.additional_request_usd}"
@@ -4163,7 +4051,29 @@ def _cmd_toolsearch_context(args: argparse.Namespace) -> int:
         from toolsearch import context_report  # type: ignore[no-redef]
 
     try:
-        report = asyncio.run(context_report.collect(repo_root=Path.cwd()))
+        if getattr(args, "compare", False):
+            comparison = asyncio.run(
+                context_report.collect_comparison(
+                    repo_root=Path.cwd(),
+                    workflow_id=str(args.workflow),
+                    step_id=getattr(args, "step", None),
+                )
+            )
+            if getattr(args, "json", False):
+                print(context_report.render_comparison_json(comparison))
+            else:
+                print(context_report.render_comparison_text(comparison))
+            has_failures = getattr(comparison, "has_failures", None)
+            failed = bool(has_failures()) if callable(has_failures) else False
+            return 1 if failed else 0
+
+        report = asyncio.run(
+            context_report.collect(
+                repo_root=Path.cwd(),
+                workflow_id=str(args.workflow),
+                step_id=getattr(args, "step", None),
+            )
+        )
     except context_report.ContextReportError as exc:
         print(f"❌ {exc}", file=sys.stderr)
         return 1
@@ -4365,28 +4275,148 @@ def _wizard_model_options(config_module: Any = None) -> list[str]:
     return choices
 
 
-def _workiq_available_without_external_probe(workiq_module: Any) -> bool:
-    """Check local Work IQ prerequisites without running the legacy npx probe."""
-    resolver = getattr(workiq_module, "resolve_npx_command", None)
-    if callable(resolver):
-        try:
-            command = resolver()
-        except (OSError, ValueError):
-            command = None
-        if isinstance(command, str):
-            return bool(command.strip())
+def _wizard_default_model_index(options: Sequence[str]) -> int:
+    """ウィザードの初期選択を DEFAULT_MODEL とする（FR-MODEL-01）。一覧に無ければ先頭。"""
+    return list(options).index(DEFAULT_MODEL) if DEFAULT_MODEL in options else 0
 
-    # Flat-load tests and embedders can inject a side-effect-free module adapter.
-    # Never invoke the real module's zero-argument probe here: it can run `npx -y`.
-    if not isinstance(getattr(workiq_module, "__file__", None), str):
-        adapter = getattr(workiq_module, "is_workiq_available", None)
-        if callable(adapter):
-            try:
-                result = adapter()
-            except (OSError, ValueError):
-                return False
-            return result is True
+
+def _workiq_available_via_sdk_discovery(
+    workiq_module: Any,
+    *,
+    cli_path: Optional[str] = None,
+    cli_url: Optional[str] = None,
+) -> bool:
+    """Plugin capability snapshotを1回取得し、wizardで選択可能か返す。"""
+    probe = getattr(workiq_module, "probe_workiq_plugin_capability", None)
+    if callable(probe):
+        try:
+            snapshot = probe(
+                cli_path=cli_path,
+                cli_url=cli_url,
+                working_directory=Path.cwd(),
+            )
+        except Exception:
+            snapshot = None
+        state = getattr(snapshot, "state", None)
+        if isinstance(state, str):
+            return state == "ready"
     return False
+
+
+def _collect_step_input_specs_wizard(
+    con: Any,
+    workflow: Any,
+    selected_step_ids: Sequence[str],
+    *,
+    repo_root: Path,
+) -> list["StepInputSpec"]:
+    """CLI wizardでStep入力候補と明示ファイルを複数収集する。"""
+    from .step_inputs import (
+        StepInputError,
+        StepInputSpec,
+        existing_step_input_files,
+        find_docs_original_candidates,
+        load_step_input_slots,
+        resolve_step_input_step_ids,
+    )
+
+    wanted = set(resolve_step_input_step_ids(workflow.id, selected_step_ids))
+    steps = [
+        step for step in workflow.steps
+        if not step.is_container and step.id in wanted
+    ]
+    if not steps:
+        return []
+
+    contract_lines: list[str] = []
+    for step in steps:
+        try:
+            slots = load_step_input_slots(repo_root, workflow.id, step.id)
+        except StepInputError as exc:
+            con.warning(str(exc))
+            continue
+        for slot in slots:
+            exists = bool(existing_step_input_files(repo_root, slot.canonical))
+            contract_lines.append(
+                f"Step.{step.id} | {'required' if slot.required else 'optional'} | "
+                f"{slot.kind} | {'existing' if exists else 'missing'} | {slot.canonical}"
+            )
+    if contract_lines:
+        con.panel("Step入力文書", contract_lines)
+
+    if not con.prompt_yes_no(
+        "Step単位の追加・代替文書を指定しますか？",
+        default=False,
+    ):
+        return []
+
+    specs: list[Any] = []
+    while True:
+        step_index = con.menu_select(
+            "入力を追加するStepを選択",
+            [f"Step.{step.id} — {step.title}" for step in steps],
+        )
+        step = steps[step_index]
+        role_index = con.menu_select(
+            "入力の扱いを選択",
+            ["追加資料", "欠損している文書入力の代替"],
+        )
+        role = "additional" if role_index == 0 else "substitute"
+        canonical: Optional[str] = None
+        if role == "substitute":
+            slots = [
+                slot
+                for slot in load_step_input_slots(repo_root, workflow.id, step.id)
+                if slot.substitutable
+                and not existing_step_input_files(repo_root, slot.canonical)
+            ]
+            if not slots:
+                con.warning("このStepに代替可能な欠損文書入力はありません。追加資料として指定してください。")
+                role = "additional"
+            else:
+                slot_index = con.menu_select(
+                    "代替するcanonical入力を選択",
+                    [slot.canonical for slot in slots],
+                )
+                canonical = slots[slot_index].canonical
+
+        query = con.prompt_input(
+            "docs-original/ の候補検索語（空でも一覧表示）",
+            default="",
+        )
+        candidates = find_docs_original_candidates(repo_root, query)
+        if candidates.warning:
+            con.warning(candidates.warning)
+        if candidates.candidates:
+            indices = con.prompt_multi_select(
+                "入力候補を選択してください（複数選択可、Enter = 選択なし）",
+                [candidate.path for candidate in candidates.candidates],
+                default_indices=[],
+            )
+            for index in indices:
+                specs.append(
+                    StepInputSpec(
+                        step_id=step.id,
+                        role=role,
+                        canonical=canonical,
+                        source=Path(candidates.candidates[index].path),
+                    )
+                )
+        else:
+            con.status("docs-original/ に候補はありません。")
+
+        if con.prompt_yes_no("候補外のローカルファイルも追加しますか？", default=False):
+            source = con.prompt_input("ローカルファイル名またはパス", required=True)
+            specs.append(
+                StepInputSpec(
+                    step_id=step.id,
+                    role=role,
+                    canonical=canonical,
+                    source=Path(source),
+                )
+            )
+        if not con.prompt_yes_no("別のStep入力も指定しますか？", default=False):
+            return specs
 
 
 def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
@@ -4407,7 +4437,6 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         from .orchestrator import run_workflow
         from .orchestrator_context import OrchestratorContext
         from . import workiq as _workiq_module
-        from .workiq import get_workiq_prompt_template
     except ImportError:
         from console import Console  # type: ignore[no-redef]
         import config as _config_module  # type: ignore[no-redef]
@@ -4417,9 +4446,13 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         from orchestrator import run_workflow  # type: ignore[no-redef]
         from orchestrator_context import OrchestratorContext  # type: ignore[no-redef]
         import workiq as _workiq_module  # type: ignore[no-redef]
-        from workiq import get_workiq_prompt_template  # type: ignore[no-redef]
 
     con = Console(verbose=True, quiet=False, verbosity=3)  # wizard UI の表示は常に verbose（ワークフロー実行の verbosity はユーザー選択値で別途設定）
+    workiq_available = _workiq_available_via_sdk_discovery(
+        _workiq_module,
+        cli_path=getattr(args, "cli_path", None),
+        cli_url=getattr(args, "cli_url", None),
+    )
 
     # ── ウェルカムバナー ──────────────────────────────────
     if getattr(args, "banner", None) is not False:
@@ -4437,7 +4470,6 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     wf = get_workflow(selected_wf.id)
     is_akm = (wf.id == "akm")
     is_ard = (wf.id == "ard")
-    is_agent_self_improve_default = wf.id in {"aag", "aagd"}
     is_single_step_workflow = is_akm
 
     # ── ステップ選択 ──────────────────────────────────────
@@ -4456,7 +4488,10 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         if selected_indices:
             selected_step_ids = [non_container_steps[i].id for i in selected_indices]
         else:
-            selected_step_ids = []  # 空 = 全ステップ
+            # 空 = registry の既定の選択（全 Step 既定なら [] = 全ステップ）
+            from hve.workflow_registry import default_step_ids as _default_step_ids
+
+            selected_step_ids = list(_default_step_ids(wf.id))
 
     # ── 実行モード選択（Phase B: 早期分岐） ─────────────────
     _exec_mode_options = [
@@ -4487,21 +4522,22 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     akm_context_tier = None
     qa_akm_background_merge = False
 
-    workiq_additional_prompt = ""
     ard_workiq_enabled = False
 
     # ── オプション設定 ────────────────────────────────────
     if is_quick_auto:
         # クイック全自動: ステップ5〜7aをデフォルト値で自動設定
         # ── Phase C (クイック全自動): メインモデルのみ選択 ────
-        model_idx = con.menu_select("使用するモデルを選択", model_options, default_index=0)
+        model_idx = con.menu_select("使用するモデルを選択", model_options, default_index=_wizard_default_model_index(model_options))
         model, model_display = _resolve_model(model_options[model_idx])
         branch = "main"
         max_parallel = 1 if is_single_step_workflow else 15
         verbosity_key = "normal"
         verbosity_value = 2  # normal（クイック全自動は長時間実行が前提のため、compact より情報量の多い normal を採用）
         timeout_val = 86400.0  # 24時間
-        auto_qa = False
+        # FR-KD-11: AKM / ARD 以外は事前 QA と Work IQ（利用可能な場合）を既定で有効にする。
+        _quick_default_qa = not (is_akm or is_ard)
+        auto_qa = _quick_default_qa
         qa_answer_mode = "all"
         force_interactive = False
         auto_review = False
@@ -4513,31 +4549,32 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         review_timeout = 7200.0
         repo_input = os.environ.get("REPO", "")
         dry_run = False
-        workiq_enabled = False
-        workiq_qa_enabled = False
-        workiq_akm_review_enabled = False
-        # クイック全自動モードでは AKM 入力としての Work IQ も既定 OFF（明示要求なし）。
-        workiq_akm_ingest_enabled = False
-        workiq_akm_ingest_dxx: list = []
-        workiq_draft_mode = False
-        workiq_per_question_timeout = 1200.0
-        workiq_request_timeout = 300.0
+        workiq_enabled = bool(_quick_default_qa and workiq_available)
         issue_title = ""
         # ワークフロー固有パラメータ
         params_extra: dict = {}
         if is_akm:
-            params_extra.update(_prompt_akm_params(con, is_quick_auto=True))
+            params_extra.update(
+                _prompt_akm_params(
+                    con,
+                    is_quick_auto=True,
+                    workiq_available=workiq_available,
+                )
+            )
         elif is_ard:
             _ard_wf_params, _ard_steps = _collect_ard_wizard_params(con, is_quick_auto=True)
             params_extra.update(_ard_wf_params)
             selected_step_ids = _ard_steps
-            ard_workiq_enabled = con.prompt_yes_no(
-                "ARD で Work IQ への接続を有効にする？",
-                default=False,
+            ard_workiq_enabled = (
+                con.prompt_yes_no(
+                    "ARD で Work IQ への接続を有効にする？",
+                    default=False,
+                )
+                if workiq_available
+                else False
             )
             params_extra["ard_workiq_enabled"] = ard_workiq_enabled
             workiq_enabled = ard_workiq_enabled
-            workiq_qa_enabled = ard_workiq_enabled
         elif wf.params:
             params_extra.update(
                 _collect_generic_workflow_params(
@@ -4552,22 +4589,13 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         if wf.id in ("aad-web", "asdw-web"):
             _agentic_answers = _collect_agentic_retrieval_wizard_answers(con, wf.id, is_quick_auto=True)
         additional_prompt = None
-        # AAG/AAGDはPost-DAG Self-Improve既定ON。他workflowは従来どおりOFF。
-        auto_self_improve = is_agent_self_improve_default
-        self_improve_explicit_opt_out = False
-        self_improve_max_iterations = 3
-        self_improve_target_scope = ""
-        self_improve_goal = ""
-        _disc_goal = None
-        _disc_criteria = None
-        _defer_self_improve_goal_discovery = False
     else:
         # カスタム全自動 or 手動: 既存のインタラクティブ入力フロー
         # プロンプト順序は以下の Phase に再編済み:
         #   Phase A': 機能要件 詳細（ワークフロー固有 / Agentic / 追加プロンプト）
         #   Phase C : モデル群（メイン / QA 別モデル / Review 別モデル）
         #   Phase D : 出力・リソース（verbosity / timeout / branch / max_parallel）
-        #   Phase E : 自動化補助（QA / Review / Work IQ / Code Review / 自己改善）
+        #   Phase E : 自動化補助（QA / Review / 知識源 / Code Review）
         #   Phase F : GitHub 連携（Issue / PR / repo / auto-merge）
         #   Phase G : dry_run
 
@@ -4581,6 +4609,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                     con,
                     is_quick_auto=False,
                     will_create_pr=False,
+                    workiq_available=workiq_available,
                 )
             )
         elif is_ard:
@@ -4612,7 +4641,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         # QA 用 / Review 用の別モデル選択は Phase E に移動し、
         # 各機能（auto_qa / auto_review / auto_coding_agent_review）が ON のときだけ尋ねる。
         # OFF のときは Phase 冒頭の初期値（qa_model = None, review_model = None; 行 2357-2360）が維持される。
-        model_idx = con.menu_select("使用するモデルを選択", model_options, default_index=0)
+        model_idx = con.menu_select("使用するモデルを選択", model_options, default_index=_wizard_default_model_index(model_options))
         model, model_display = _resolve_model(model_options[model_idx])
 
         # ── Phase D: 出力・リソース ────────────────────────────
@@ -4685,7 +4714,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         else:
             auto_qa = con.prompt_yes_no(
                 "QA 自動投入を有効にする？（質問票はステップ実行の前に作成されます）",
-                default=False,
+                default=True,
             )
             if auto_qa:
                 # QA 自動投入 ON 時は全問デフォルト値を自動採用する一択。
@@ -4739,85 +4768,22 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
             # Code Review Agent ブロックの直後で（いずれかが y のときだけ）まとめて尋ねる。
             auto_review = con.prompt_yes_no("Review 自動投入を有効にする？", default=False)
 
-        # ── Work IQ 連携 ──────────────────────────────────────
+        # ── 知識源（FR-KD-01）──────────────────────────────────
         workiq_enabled = False
-        workiq_qa_enabled = False
-        workiq_akm_review_enabled = False
-        # Sub-C-2: AKM 入力ソースとしての Work IQ。
-        # params_extra["sources"] に "workiq" が含まれていれば自動 ON とする。
-        # （独立フラグ。`workiq_akm_review_enabled`（DAG 後検証）とは別軸。）
-        workiq_akm_ingest_enabled = bool(
-            is_akm and "workiq" in (params_extra.get("sources", "") or "").split(",")
-        )
-        workiq_akm_ingest_dxx = list(params_extra.get("workiq_akm_ingest_dxx", []) or [])
-        workiq_draft_mode = False
         _show_workiq_option = auto_qa or is_akm or is_ard
-        workiq_per_question_timeout = 1200.0
-        workiq_request_timeout = 300.0
-
-        if _show_workiq_option and _workiq_available_without_external_probe(
-            _workiq_module
-        ):
+        _akm_sources_has_workiq = is_akm and "workiq" in (params_extra.get("sources", "") or "").split(",")
+        if _show_workiq_option and workiq_available and not _akm_sources_has_workiq:
             if is_ard:
                 ard_workiq_enabled = con.prompt_yes_no(
-                    "ARD で Work IQ への接続を有効にする？",
+                    "ARD の知識探索で Work IQ を使う？",
                     default=False,
                 )
-                workiq_qa_enabled = ard_workiq_enabled
-            elif is_akm:
-                if auto_qa:
-                    workiq_qa_enabled = con.prompt_yes_no(
-                        "QA フェーズで Work IQ 経由の情報確認を有効にする？",
-                        default=False,
-                    )
-                workiq_akm_review_enabled = con.prompt_yes_no(
-                    "AKM 完了後に Work IQ で knowledge/ Dxx ドキュメントの妥当性を検証する？",
-                    default=False,
-                )
+                workiq_enabled = ard_workiq_enabled
             else:
-                workiq_qa_enabled = con.prompt_yes_no(
-                    "QA フェーズで Work IQ 経由の情報確認を有効にする？",
-                    default=False,
+                workiq_enabled = con.prompt_yes_no(
+                    "知識探索で Work IQ を使う？（事前 QA の回答や knowledge/ の更新を社内情報から調べる）",
+                    default=True,
                 )
-            workiq_enabled = (
-                workiq_qa_enabled or workiq_akm_review_enabled or workiq_akm_ingest_enabled
-            )
-            if workiq_enabled:
-                if is_akm and not workiq_qa_enabled:
-                    workiq_draft_mode = False
-                elif auto_qa and workiq_qa_enabled:
-                    workiq_draft_mode = con.prompt_yes_no(
-                        "Work IQ で回答ドラフトを自動生成する？",
-                        default=False,
-                    )
-                workiq_additional_prompt = con.prompt_input(
-                    "Work IQ (Microsoft 365 Copilot) の末尾に追加するプロンプト（省略可）",
-                    default="",
-                )
-                _wiq_pq_timeout_str = con.prompt_input(
-                    "Work IQ タイムアウト（秒。デフォルト: 1200 = 20 分）",
-                    default="1200",
-                )
-                try:
-                    workiq_per_question_timeout = float(_wiq_pq_timeout_str or "1200")
-                except ValueError:
-                    con.warning("無効な値のため、デフォルトの 1200 秒（20 分）を使用します。")
-                    workiq_per_question_timeout = 1200.0
-                if workiq_per_question_timeout <= 0:
-                    con.warning("0 以下の値は無効なため、デフォルトの 1200 秒（20 分）を使用します。")
-                    workiq_per_question_timeout = 1200.0
-                _wiq_req_timeout_str = con.prompt_input(
-                    "Work IQ Request Timeout（秒。MCP ツール呼び出し 1 回あたり。デフォルト: 300 = 5 分）",
-                    default="300",
-                )
-                try:
-                    workiq_request_timeout = float(_wiq_req_timeout_str or "300")
-                except ValueError:
-                    con.warning("無効な値のため、デフォルトの 300 秒（5 分）を使用します。")
-                    workiq_request_timeout = 300.0
-                if workiq_request_timeout <= 0:
-                    con.warning("0 以下の値は無効なため、デフォルトの 300 秒（5 分）を使用します。")
-                    workiq_request_timeout = 300.0
 
         # ── Code Review Agent ─────────────────────────────
         auto_coding_agent_review = con.prompt_yes_no(
@@ -4859,61 +4825,6 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
                     review_model = None
                     review_model_display = None
 
-        # ── 自己改善ループ ────────────────────────────────────
-        if is_agent_self_improve_default:
-            self_improve_explicit_opt_out = con.prompt_yes_no(
-                "AAG/AAGD 既定の自己改善ループを無効化する？（緊急opt-out）",
-                default=False,
-            )
-            auto_self_improve = not self_improve_explicit_opt_out
-        else:
-            auto_self_improve = con.prompt_yes_no(
-                "自己改善ループを有効にする？",
-                default=False,
-            )
-            # 対話でNoを選んだ場合は環境変数より強い明示OFFとして扱う。
-            self_improve_explicit_opt_out = not auto_self_improve
-        self_improve_max_iterations = 3
-        self_improve_target_scope = ""
-        self_improve_goal = ""
-        _disc_goal = None
-        _disc_criteria = None
-        _defer_self_improve_goal_discovery = False
-        if auto_self_improve:
-            _si_iter_str = con.prompt_input("自己改善 最大繰り返し回数（例: 3 → 最大3回スキャン→改善→検証を繰り返す）", default="3")
-            try:
-                self_improve_max_iterations = int(_si_iter_str or "3")
-            except ValueError:
-                con.warning("無効な値のため、デフォルトの 3 を使用します。")
-                self_improve_max_iterations = 3
-            try:
-                from hve.self_improve import _is_new_resolver_enabled as _si_flag
-                _si_new_resolver = _si_flag()
-            except Exception:
-                _si_new_resolver = False
-            if _si_new_resolver:
-                _si_scope_prompt = (
-                    "自己改善 対象パス（HVE_SELF_IMPROVE_NEW_SCOPE_RESOLVER=1 有効時の新仕様）\n"
-                    "  - 未入力 : そのステップの成果物（work/ 配下は自動除外）\n"
-                    "  - '*'    : data, docs, docs-generated, knowledge, src を一括対象（実在するもののみ）\n"
-                    "  - 任意   : カンマ/空白区切りで複数パス可（例: 'src/ hve/'）\n"
-                    "             ※ '-' で始まるトークンは禁止"
-                )
-            else:
-                _si_scope_prompt = (
-                    "自己改善 対象パス（例: src/  hve/  空=リポジトリ全体）\n"
-                    "  ※ 新仕様（複数パス/ワイルドカード/work/ 除外）は HVE_SELF_IMPROVE_NEW_SCOPE_RESOLVER=1 で有効"
-                )
-            self_improve_target_scope = con.prompt_input(_si_scope_prompt, default="")
-            self_improve_goal = con.prompt_input(
-                "自己改善 ゴール説明（省略可 → ワークフロー種別から自動設定）\n"
-                "  例: 'テスト失敗を 0 件にし lint エラーを解消する'\n"
-                "  例: 'knowledge/ D01〜D21 の整合性を確保する'",
-                default="",
-            )
-            if not self_improve_goal:
-                _defer_self_improve_goal_discovery = True
-
         # ── Phase F: GitHub 連携 ──────────────────────────────
         create_issues = con.prompt_yes_no("GitHub Issue を作成する？", default=False)
         create_pr = con.prompt_yes_no("GitHub PR を作成する？", default=False) if not create_issues else True
@@ -4954,6 +4865,15 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         # ── Phase G: 実行計画プレビュー ────────────────────────
         dry_run = con.prompt_yes_no("実行計画のプレビュー（実際の SDK 呼び出しをせず、DAG の実行計画のみ表示）？", default=False)
 
+    step_input_specs: list[Any] = []
+    if getattr(args, "step_input_wizard", False):
+        step_input_specs = _collect_step_input_specs_wizard(
+            con,
+            wf,
+            selected_step_ids,
+            repo_root=Path.cwd(),
+        )
+
     # ── Phase H: ワークベンチ UI 起動有無（全モード共通）──────
     # ウィザード末尾で 4 ペイン固定レイアウト UI（Workbench）を起動するか確認する。
     # 既定 Yes。No の場合は cfg.no_workbench=True を設定し、`--workbench off` 相当の動作になる。
@@ -4992,24 +4912,8 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
             summary_lines.append(f"AKM モデル   : {akm_model_display or '(メインと同じ)'}")
             summary_lines.append(f"AKM effort   : {akm_reasoning_effort or '(メインと同じ)'}")
             summary_lines.append(f"AKM context  : {akm_context_tier or '(メインと同じ)'}")
-    if workiq_enabled:
-        if is_akm:
-            summary_lines.append(f"Work IQ QA   : {'ON' if workiq_qa_enabled else 'OFF'}")
-            summary_lines.append(f"Work IQ 検証 : {'ON' if workiq_akm_review_enabled else 'OFF'}")
-            summary_lines.append(f"Work IQ 取込 : {'ON' if workiq_akm_ingest_enabled else 'OFF'}")
-            if workiq_akm_ingest_enabled and workiq_akm_ingest_dxx:
-                summary_lines.append(
-                    f"Work IQ 取込 Dxx: {','.join(workiq_akm_ingest_dxx)}"
-                )
-            elif workiq_akm_ingest_enabled:
-                summary_lines.append("Work IQ 取込 Dxx: 全件（D01〜D21）")
-        else:
-            summary_lines.append(f"Work IQ     : {s.GREEN}ON{s.RESET}")
-            summary_lines.append(f"Work IQ Draft: {'ON' if workiq_draft_mode else 'OFF'}")
-        if workiq_additional_prompt:
-            summary_lines.append(f"Work IQ Prompt: {workiq_additional_prompt[:50]}{'...' if len(workiq_additional_prompt) > 50 else ''}")
-        summary_lines.append(f"Work IQ タイムアウト: {workiq_per_question_timeout:.0f} 秒")
-        summary_lines.append(f"Work IQ Request Timeout: {workiq_request_timeout:.0f} 秒")
+    if workiq_enabled or (is_akm and "workiq" in (params_extra.get("sources", "") or "").split(",")):
+        summary_lines.append(f"知識源       : {s.GREEN}workiq{s.RESET}")
     summary_lines += [
         f"Review 自動  : {'ON' if auto_review else 'OFF'}",
         f"Issue 作成   : {'ON' if create_issues else 'OFF'}",
@@ -5031,50 +4935,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         f"リポジトリ   : {repo_input or '(なし)'}",
         f"実行計画のプレビュー : {'ON' if dry_run else 'OFF'}",
         f"ワークベンチ : {'ON' if enable_workbench else 'OFF'}",
-        f"自己改善     : {'ON' if auto_self_improve else 'OFF'}",
     ]
-    if auto_self_improve:
-        summary_lines.append(f"自己改善 繰り返し上限: {self_improve_max_iterations} 回")
-        try:
-            from hve.self_improve import _is_new_resolver_enabled
-            _new_resolver_on = _is_new_resolver_enabled()
-        except Exception:
-            _new_resolver_on = False
-        if _new_resolver_on:
-            try:
-                from hve.self_improve import _resolve_target_scope_paths
-                from hve.config import SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS
-                _wf_default = SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS.get(wf.id, "")
-                _resolved = _resolve_target_scope_paths(
-                    self_improve_target_scope,
-                    step_output_paths=None,
-                    workflow_default=_wf_default,
-                    repo_root=".",
-                )
-                _disp_resolved = ", ".join(_resolved) if _resolved else "(解決後に空 → スキャンスキップ)"
-            except ValueError as _err:
-                _disp_resolved = f"(エラー: {_err})"
-            except Exception:
-                _disp_resolved = self_improve_target_scope or "(空) = ステップ成果物"
-            if self_improve_target_scope == "":
-                summary_lines.append(f"自己改善 対象パス   : (空) → {_disp_resolved}")
-            elif self_improve_target_scope == "*":
-                summary_lines.append(f"自己改善 対象パス   : * → {_disp_resolved}")
-            else:
-                summary_lines.append(f"自己改善 対象パス   : {self_improve_target_scope} → {_disp_resolved}")
-        else:
-            # 旧仕様: 単一パス / 未入力=リポジトリ全体
-            summary_lines.append(f"自己改善 対象パス   : {self_improve_target_scope or '(空) = リポジトリ全体'}")
-        if self_improve_goal:
-            _goal_disp = self_improve_goal[:60] + ("..." if len(self_improve_goal) > 60 else "")
-            summary_lines.append(f"自己改善 ゴール     : {_goal_disp}")
-        elif _disc_goal:
-            _disp = (_disc_goal.get("goal_description", "") or "")[:60] + ("..." if len(_disc_goal.get("goal_description", "")) > 60 else "")
-            summary_lines.append(f"自己改善 ゴール     : (自動検索: {_disp})")
-        elif _defer_self_improve_goal_discovery:
-            summary_lines.append("自己改善 ゴール     : (durable 登録後に自動検索)")
-        else:
-            summary_lines.append(f"自己改善 ゴール     : (自動: ワークフロー '{wf.id}' の標準ゴール)")
     for k, v in params_extra.items():
         if k == "app_id" and params_extra.get("app_ids"):
             continue
@@ -5085,6 +4946,14 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     con.panel("実行設定", summary_lines)
 
     # ── 実行確認 ──────────────────────────────────────────
+    if getattr(con, "input_eof", False) is True:
+        print(
+            f"{_ts()} ❌ 標準入力が閉じているため、対話設定を既定値で確定できません。"
+            "外部処理は開始していません。TTY で実行するか、"
+            "`hve orchestrate` に必要な引数を明示してください。",
+            file=sys.stderr,
+        )
+        return 1
     if not con.prompt_yes_no("この設定で実行しますか？", default=True):
         con._print(f"\n  {s.YELLOW}キャンセルしました。{s.RESET}", ts=False)
         return 0
@@ -5106,24 +4975,14 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     cfg.max_parallel = max_parallel
     cfg.auto_qa = auto_qa
     cfg.workiq_enabled = workiq_enabled
-    cfg.workiq_qa_enabled = workiq_qa_enabled
-    cfg.workiq_akm_review_enabled = workiq_akm_review_enabled
-    cfg.workiq_akm_ingest_enabled = workiq_akm_ingest_enabled
-    cfg.workiq_akm_ingest_dxx = list(workiq_akm_ingest_dxx or [])
-    cfg.workiq_draft_mode = workiq_draft_mode
-    cfg.workiq_draft_output_dir = "qa"
-    cfg.workiq_per_question_timeout = workiq_per_question_timeout
-    cfg.workiq_request_timeout = workiq_request_timeout
     cfg.force_interactive = force_interactive
     cfg.auto_contents_review = auto_review
     cfg.qa_answer_mode = qa_answer_mode
     cfg.create_issues = create_issues
     cfg.create_pr = create_pr or create_issues
     cfg.create_working_branch = create_working_branch
-    if cfg.create_pr and cfg.workiq_enabled:
-        workiq_output_dir = (cfg.workiq_draft_output_dir or "").strip().strip("/\\") or "qa"
-        if workiq_output_dir in cfg.ignore_paths:
-            cfg.ignore_paths = [p for p in cfg.ignore_paths if p != workiq_output_dir]
+    if cfg.create_pr and cfg.effective_knowledge_sources() and "qa" in cfg.ignore_paths:
+        cfg.ignore_paths = [p for p in cfg.ignore_paths if p != "qa"]
     cfg.verbosity = verbosity_value
     cfg.verbose = verbosity_value >= 3
     cfg.quiet = verbosity_value == 0
@@ -5140,34 +4999,11 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     # ウィザード末尾の「ワークベンチを起動しますか？」選択を反映
     # （Yes → cfg.no_workbench=False で既定挙動 / No → True で `--workbench off` 相当）
     cfg.no_workbench = not enable_workbench
-    if workiq_additional_prompt:
-        for attr, mode in [
-            ("workiq_prompt_qa", "qa"),
-            ("workiq_prompt_km", "km"),
-            ("workiq_prompt_review", "review"),
-        ]:
-            base_prompt = getattr(cfg, attr, None) or get_workiq_prompt_template(mode)
-            setattr(cfg, attr, base_prompt + "\n\n" + workiq_additional_prompt)
     cfg.additional_prompt = additional_prompt or None
     if repo_input:
         cfg.repo = repo_input
     elif not cfg.repo:
         cfg.repo = os.environ.get("REPO", "")
-
-    # ── 自己改善ループ設定 ─────────────────────────────────
-    if self_improve_explicit_opt_out:
-        cfg.auto_self_improve = False
-        cfg.self_improve_skip = True
-    elif auto_self_improve:
-        cfg.auto_self_improve = True
-        cfg.self_improve_skip = False
-        cfg.self_improve_max_iterations = self_improve_max_iterations
-        if self_improve_target_scope:
-            cfg.self_improve_target_scope = self_improve_target_scope
-        if self_improve_goal:
-            cfg.self_improve_goal = self_improve_goal
-        if _disc_criteria:
-            cfg.self_improve_success_criteria = _disc_criteria
 
     # ── 全自動モードフラグを SDKConfig に反映 ─────────────
     cfg.unattended = is_any_auto
@@ -5232,17 +5068,45 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
         "qa_answer_mode": qa_answer_mode,
     }
     params.update(params_extra)
+    _attach_materialized_step_inputs(
+        params,
+        workflow_id=wf.id,
+        specs=step_input_specs,
+    )
 
+    replay_argv = _build_resolved_replay_argv(
+        wf.id,
+        cfg,
+        params,
+        args=args,
+    )
     try:
         durable_identity = _register_standard_execution(
             wf.id,
             cfg,
             params,
-            _build_resolved_replay_argv(wf.id, cfg, params, args=args),
+            replay_argv,
             args=args,
         )
     except _DurableRegistrationFailure:
         con.error("durable execution の登録に失敗しました。外部処理は開始していません。")
+        return 1
+
+    # ── バリデーション ────────────────────────────────────
+    if not _run_startup_configuration_preflight(
+        cfg,
+        wf.id,
+        active_steps=selected_step_ids,
+        check_remote=True,
+    ):
+        return 1
+    if not _run_copilot_auth_preflight(args or argparse.Namespace(command="cli"), cfg):
+        return 1
+    if not _run_workiq_capability_preflight(
+        args or argparse.Namespace(command="cli"), cfg, params, workflow=wf.id
+    ):
+        return 1
+    if not _run_azure_auth_preflight(args or argparse.Namespace(command="cli"), cfg, params):
         return 1
 
     _start_startup_index_refresh(getattr(args, "command", None))
@@ -5254,61 +5118,8 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
             run_id=cfg.run_id or "",
             execution_id=execution_id,
             instance_id=instance_id,
-            split_fork_enabled=False,
             continue_on_error=True,
         )
-
-    if _defer_self_improve_goal_discovery and not cfg.dry_run:
-        from hve.self_improve import (
-            discover_task_goal_from_docs,
-            discover_task_goal_with_llm,
-        )
-
-        con.spinner_start("自動ゴール探索中（LLM）...")
-        try:
-            _disc_result = asyncio.run(discover_task_goal_with_llm(
-                workflow_id=wf.id,
-                model=model,
-                cli_path=cfg.cli_path or "",
-                github_token=cfg.resolve_token(),
-                cli_url=cfg.cli_url or "",
-                target_scope=self_improve_target_scope,
-            ))
-        except Exception as _disc_err:
-            con.warning(
-                f"LLM によるゴール探索に失敗しました（{_disc_err}）。"
-                "静的解析にフォールバックします。"
-            )
-            _disc_result = discover_task_goal_from_docs(
-                workflow_id=wf.id,
-                target_scope=self_improve_target_scope,
-            )
-        finally:
-            con.spinner_stop()
-        _disc_goal = _disc_result["task_goal"]
-        _disc_criteria = _disc_goal.get("success_criteria") or None
-        if _disc_criteria:
-            cfg.self_improve_success_criteria = _disc_criteria
-
-    # ── バリデーション ────────────────────────────────────
-    if not _run_startup_configuration_preflight(
-        cfg,
-        wf.id,
-        active_steps=selected_step_ids,
-        check_remote=True,
-    ):
-        return 1
-
-    if not _run_copilot_auth_preflight(args or argparse.Namespace(command="cli"), cfg):
-        return 1
-
-    if not _run_workiq_auth_preflight(
-        args or argparse.Namespace(command="cli"), cfg, params, workflow=wf.id
-    ):
-        return 1
-
-    if not _run_azure_auth_preflight(args or argparse.Namespace(command="cli"), cfg, params):
-        return 1
 
     # ── 実行 ──────────────────────────────────────────────
     con._print("", ts=False)
@@ -5329,12 +5140,7 @@ def _cmd_run_interactive(args: "Optional[argparse.Namespace]" = None) -> int:
     # T-H1H2b: strict 停止 (status=blocked) を error より先に判定し、
     # failed と区別された「停止」として表示する。
     if result.get("blocked"):
-        blocked_items = [str(item) for item in result.get("blocked", [])]
-        blocked_label = (
-            "Post-DAG Self-Improve が成功条件を満たさなかったため停止しました"
-            if "self-improve" in blocked_items
-            else "ワークフローは必須条件を満たさなかったため停止しました"
-        )
+        blocked_label = "ワークフローは必須条件を満たさなかったため停止しました"
         con._print(
             f"\n  {s.YELLOW}⏸ {blocked_label}"
             f"（status=blocked）。{s.RESET}",
@@ -5359,7 +5165,7 @@ def _cmd_qa_merge(args: argparse.Namespace) -> int:
     """qa-merge サブコマンドのハンドラー。
 
     qa/ ファイルにユーザー回答をマージして保存し、
-    --skip-consistency 未指定時は CopilotSession で統合ドキュメントを生成する。
+    --skip-consistency 未指定時は SDK セッションで統合ドキュメントを生成する。
     """
     _sdk_dir = Path(__file__).resolve().parent
     if str(_sdk_dir) not in sys.path:
@@ -5479,149 +5285,65 @@ def _cmd_qa_merge(args: argparse.Namespace) -> int:
         )
 
         async def _generate_consolidated() -> int:
+            from copilot.session import PermissionDecisionUserNotAvailable
+
             await client.start()
-            _session_kwargs = {"client": client}
-            # Auto 選択時は model 引数を省略し、GitHub 側の Auto model selection に委譲する。
-            if model != MODEL_AUTO_VALUE:
-                _session_kwargs["model"] = model
-            async with CopilotSession(**_session_kwargs) as session:
-                consolidate_prompt = QA_CONSOLIDATE_PROMPT.format(
-                    merged_qa_content=merged_content,
+            try:
+                # 統合は本文の生成だけを行うため、ツール実行の許可要求は常に拒否する。
+                _session_kwargs: dict = {
+                    "on_permission_request": (
+                        lambda *_a, **_k: PermissionDecisionUserNotAvailable()
+                    ),
+                }
+                # Auto 選択時は model 引数を省略し、GitHub 側の Auto model selection に委譲する。
+                if model != MODEL_AUTO_VALUE:
+                    _session_kwargs["model"] = model
+                session = await client.create_session(**_session_kwargs)
+                try:
+                    consolidate_prompt = QA_CONSOLIDATE_PROMPT.format(
+                        merged_qa_content=merged_content,
+                    )
+                    response = await session.send_and_wait(
+                        consolidate_prompt, timeout=1800.0
+                    )
+                finally:
+                    await session.disconnect()
+            finally:
+                await client.stop()
+
+            content_text = ""
+            data = getattr(response, "data", None) if response else None
+            if data:
+                for attr in ("content", "message"):
+                    val = getattr(data, attr, None)
+                    if val:
+                        content_text = str(val)
+                        break
+            if not content_text and response:
+                content_text = str(response)
+            if not content_text.strip():
+                print(
+                    f"{_ts()} ❌ 統合ドキュメントの生成結果が空です。",
+                    file=sys.stderr,
                 )
-                response = await session.send_and_wait(consolidate_prompt, timeout=1800.0)
-
-                # 統合ドキュメントを保存
-                if response:
-                    content_text = ""
-                    data = getattr(response, "data", None)
-                    if data:
-                        for attr in ("content", "message"):
-                            val = getattr(data, attr, None)
-                            if val:
-                                content_text = str(val)
-                                break
-                    if not content_text:
-                        content_text = str(response)
-
-                    if QAMerger.save_merged(content_text, consolidated_path):
-                        print(
-                            f"{_ts()} ✅ 統合ドキュメントを保存しました: {consolidated_path}"
-                        )
-                    else:
-                        print(
-                            f"{_ts()} ⚠️  統合ドキュメントの保存に失敗しました。",
-                            file=sys.stderr,
-                        )
-            await client.stop()
+                return 1
+            if not QAMerger.save_merged(content_text, consolidated_path):
+                print(
+                    f"{_ts()} ❌ 統合ドキュメントの保存に失敗しました: {consolidated_path}",
+                    file=sys.stderr,
+                )
+                return 1
+            print(f"{_ts()} ✅ 統合ドキュメントを保存しました: {consolidated_path}")
             return 0
 
         return asyncio.run(_generate_consolidated())
 
     except Exception as exc:
         print(
-            f"{_ts()} ⚠️  統合ドキュメント生成に失敗しました（マージ済みファイルは保存済み）: {exc}",
+            f"{_ts()} ❌ 統合ドキュメント生成に失敗しました（マージ済みファイルは保存済み）: {exc}",
             file=sys.stderr,
         )
-        return 0
-
-
-def _cmd_workiq_doctor(args: argparse.Namespace) -> int:
-    """workiq-doctor サブコマンドのハンドラー。"""
-    import dataclasses
-    import json as _json_module
-
-    _sdk_dir = Path(__file__).resolve().parent
-    if str(_sdk_dir) not in sys.path:
-        sys.path.insert(0, str(_sdk_dir))
-
-    try:
-        from .workiq import run_workiq_diagnostics
-    except ImportError:
-        from workiq import run_workiq_diagnostics  # type: ignore[no-redef]
-
-    tenant_id = getattr(args, "tenant_id", None)
-    skip_mcp_probe = getattr(args, "skip_mcp_probe", False)
-    timeout = getattr(args, "timeout", 5.0)
-    if timeout <= 0:
-        print(f"{_ts()} ⚠️  --timeout は 0 より大きい値を指定してください。デフォルト値 5.0 を使用します。", file=sys.stderr)
-        timeout = 5.0
-    as_json = getattr(args, "json", False)
-    sdk_probe = getattr(args, "sdk_probe", False)
-    sdk_probe_timeout = getattr(args, "sdk_probe_timeout", 30.0)
-    if sdk_probe_timeout <= 0:
-        print(f"{_ts()} ⚠️  --sdk-probe-timeout は 0 より大きい値を指定してください。デフォルト値 30.0 を使用します。", file=sys.stderr)
-        sdk_probe_timeout = 30.0
-    event_extractor_self_test = getattr(args, "event_extractor_self_test", False)
-    sdk_tool_probe = getattr(args, "sdk_tool_probe", False)
-    sdk_tool_probe_timeout = getattr(args, "sdk_tool_probe_timeout", 60.0)
-    if sdk_tool_probe_timeout <= 0:
-        print(f"{_ts()} ⚠️  --sdk-tool-probe-timeout は 0 より大きい値を指定してください。デフォルト値 60.0 を使用します。", file=sys.stderr)
-        sdk_tool_probe_timeout = 60.0
-    sdk_event_trace = getattr(args, "sdk_event_trace", False)
-    sdk_tool_probe_tools_all = getattr(args, "sdk_tool_probe_tools_all", False)
-    qa_integration_probe = getattr(args, "qa_integration_probe", False)
-
-    report = run_workiq_diagnostics(
-        tenant_id=tenant_id,
-        skip_mcp_probe=skip_mcp_probe,
-        mcp_probe_timeout=timeout,
-        sdk_probe=sdk_probe,
-        sdk_probe_timeout=sdk_probe_timeout,
-        event_extractor_self_test=event_extractor_self_test,
-        sdk_tool_probe=sdk_tool_probe,
-        sdk_tool_probe_timeout=sdk_tool_probe_timeout,
-        sdk_event_trace=sdk_event_trace,
-        sdk_tool_probe_tools_all=sdk_tool_probe_tools_all,
-        qa_integration_probe=qa_integration_probe,
-    )
-
-    if as_json:
-        print(_json_module.dumps(
-            [dataclasses.asdict(c) for c in report.checks],
-            ensure_ascii=False,
-            indent=2,
-        ))
-        has_fail = any(c.status == "FAIL" for c in report.checks)
-        return 1 if has_fail else 0
-
-    _STATUS_ICONS = {
-        "PASS": "✅",
-        "FAIL": "❌",
-        "WARN": "⚠️",
-        "SKIP": "⏭️",
-    }
-
-    print(f"\n{'=' * 60}")
-    print("  Work IQ 診断レポート (workiq-doctor)")
-    print(f"{'=' * 60}")
-
-    has_fail = False
-    for check in report.checks:
-        icon = _STATUS_ICONS.get(check.status, "?")
-        print(f"\n[{check.status}] {icon} {check.name}")
-        if check.detail:
-            for line in check.detail.splitlines():
-                print(f"       {line}")
-        if check.command:
-            print(f"       コマンド: {check.command}")
-        if check.status == "FAIL":
-            has_fail = True
-
-    print(f"\n{'=' * 60}")
-    if has_fail:
-        print("診断結果: ❌ 失敗があります")
-        print("\nヒント:")
-        print("  Windows PowerShell で npx.ps1 が Execution Policy によりブロックされる場合:")
-        print("    npx.cmd -y @microsoft/workiq mcp")
-        print("  環境変数で npx コマンドを指定する場合:")
-        print("    $env:WORKIQ_NPX_COMMAND='C:\\Program Files\\nodejs\\npx.cmd'  (PowerShell)")
-        print("    set WORKIQ_NPX_COMMAND=C:\\Program Files\\nodejs\\npx.cmd  (cmd)")
-        print("    [Environment]::SetEnvironmentVariable('WORKIQ_NPX_COMMAND', 'C:\\Program Files\\nodejs\\npx.cmd', 'User')")
-    else:
-        print("診断結果: ✅ 全チェック成功")
-    print(f"{'=' * 60}\n")
-
-    return 1 if has_fail else 0
+        return 1
 
 
 def _confirm_autopilot_chain_start(app_count: int) -> bool:
@@ -5792,10 +5514,21 @@ def _validate_internal_durable_args(args: argparse.Namespace) -> Optional[str]:
     return None
 
 
+def _install_windows_break_as_interrupt() -> None:
+    """GUI の graceful 停止（CTRL_BREAK_EVENT）を SIGINT と同じ中断経路へ変換する。"""
+    sigbreak = getattr(signal, "SIGBREAK", None)
+    if sigbreak is None or threading.current_thread() is not threading.main_thread():
+        return
+    try:
+        signal.signal(sigbreak, lambda _signum, _frame: signal.raise_signal(signal.SIGINT))
+    except (OSError, ValueError):
+        pass
+
+
 def _cmd_orchestrate(args: argparse.Namespace) -> int:
     """orchestrate サブコマンドのハンドラー。"""
     # HVE CLI Orchestrator 実行配下シグナルは OrchestratorContext を明示引数で
-    # 伝播させる方式へ移行済み（copilot-instructions.md §0 Orchestrator 例外）。
+    # 伝播させる方式へ移行済み。
     # 環境変数 `HVE_ORCHESTRATOR_ACTIVE` は使用しない。
 
     # --autopilot-chain と --workflow の排他チェック
@@ -5887,6 +5620,8 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
     except ImportError:
         from orchestrator_context import OrchestratorContext  # type: ignore[no-redef]
 
+    if getattr(args, "step_input", None):
+        _ensure_run_workdir_env()
     config = _build_config(args)
     try:
         params = _build_params(args)
@@ -5916,6 +5651,24 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
         )
         return 1
 
+    # remote検証はactive step解決後のrun_workflowが担う。ここでは最初の
+    # 外部処理より前にローカル設定と認証をfail-closedで確認する。
+    if not _run_startup_configuration_preflight(
+        config,
+        args.workflow,
+        active_steps=params.get("steps") or (),
+        check_remote=False,
+    ):
+        return 1
+    if not _validate_auto_coding_agent_review(args, config):
+        return 1
+    if not _run_copilot_auth_preflight(args, config):
+        return 1
+    if not _run_workiq_capability_preflight(args, config, params):
+        return 1
+    if not _run_azure_auth_preflight(args, config, params):
+        return 1
+
     _ensure_run_workdir_env()
     if not config.run_id:
         config.run_id = os.environ.get("HVE_RUN_ID", "")
@@ -5926,34 +5679,10 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
     if durable_identity is not None:
         execution_id, instance_id = durable_identity
 
-    # remote 検証は active step 解決後の run_workflow が担う。ここでは、
-    # Copilot 認証より前に判定できるローカル設定不整合だけを fail-closed にする。
-    if not _run_startup_configuration_preflight(
-        config,
-        args.workflow,
-        active_steps=params.get("steps") or (),
-        check_remote=False,
-    ):
-        return 1
-
-    if not _validate_auto_coding_agent_review(args, config):
-        return 1
-
-    if not _run_copilot_auth_preflight(args, config):
-        return 1
-
-    if not _run_workiq_auth_preflight(args, config, params):
-        return 1
-
-    if not _run_azure_auth_preflight(args, config, params):
-        return 1
-
     # HVE CLI Orchestrator 配下シグナル: OrchestratorContext を生成して伝播。
     # `HVE_ORCHESTRATOR_ACTIVE` 環境変数は撤廃済み。
     # local 実行モード既定で continue_on_error=True、`--strict` でオプトアウト。
-    # SPLIT_REQUIRED の subissues.md → Sub-Issue 作成は Cloud Agent Orchestrator
-    # (Issue Template + GitHub Actions) の責務。CLI / GUI 標準経路では legacy
-    # runtime split-fork を明示的に無効化し、DAG/fan-out 実行に集約する。
+    # 分割は DAG / fan-out で表現し、subissues.md を実行時に fork しない（FR-PLAN-01）。
     _strict = bool(getattr(args, "strict", False))
     orchestrator_ctx = OrchestratorContext(
         run_id=config.run_id or "",
@@ -5963,7 +5692,6 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
         recovery_action=getattr(args, "_recovery_action", None),
         lease_owner=getattr(args, "_lease_owner", None),
         lease_generation=getattr(args, "_lease_generation", None),
-        split_fork_enabled=False,
         continue_on_error=not _strict,
     )
 
@@ -5975,6 +5703,7 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
             from qa_akm_dispatch import RepositoryAkmLock  # type: ignore[no-redef]
         akm_lock = RepositoryAkmLock(Path.cwd())
         akm_lock.acquire()
+    _install_windows_break_as_interrupt()
     try:
         result = asyncio.run(
             run_workflow(
@@ -5984,6 +5713,9 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
                 orchestrator_ctx=orchestrator_ctx,
             )
         )
+    except KeyboardInterrupt:
+        print(f"{_ts()} ⏸  中断されました。", file=sys.stderr)
+        return 1
     finally:
         if akm_lock is not None:
             akm_lock.close()
@@ -5992,12 +5724,7 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
     # T-H1H2b: blocked は failed と区別された「停止」として優先判定する。
     # stderr に明示ログを出して subprocess 経由の上位レイヤーが識別できるようにする。
     if result.get("blocked"):
-        blocked_items = [str(item) for item in result.get("blocked", [])]
-        blocked_label = (
-            "Post-DAG Self-Improve が成功条件を満たさなかったため停止しました"
-            if "self-improve" in blocked_items
-            else "ワークフローは必須条件を満たさなかったため停止しました"
-        )
+        blocked_label = "ワークフローは必須条件を満たさなかったため停止しました"
         print(
             f"{_ts()} ⏸  {blocked_label}（status=blocked）。",
             file=sys.stderr,
@@ -6056,15 +5783,16 @@ def _cmd_ingest_docs(args: argparse.Namespace) -> int:
 
 
 def _console_main() -> int:
-    """``hve`` console script のエントリポイント。
+    """旧 editable install の console shim を壊さない互換入口。"""
+    try:
+        from .startup_version import console_main
+    except ImportError:
+        if __package__:
+            raise
+        from startup_version import console_main
 
-    ``python -m hve`` と同じように .venv への再 exec を先に試みる。
-    ``main()`` 自体はライブラリ用途 (テスト等) でも呼ばれるため、
-    再 exec はここと ``__main__`` ブロックに限定する。
-    """
-    _reexec_in_venv_if_needed()
-    return main()
+    return console_main()
 
 
 if __name__ == "__main__":
-    sys.exit(_console_main())
+    sys.exit(main())

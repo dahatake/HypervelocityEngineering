@@ -48,7 +48,6 @@ def test_shared_skill_has_six_contracts_progressive_references_and_registration(
         assert contract_id in skill
     for reference in (
         "capability-contract.md",
-        "goal-self-improvement.md",
         "search-routing.md",
         "tool-mcp-skill-packaging.md",
     ):

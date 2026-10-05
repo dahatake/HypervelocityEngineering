@@ -7,6 +7,11 @@ on:
       - 'hve/**'
       - 'hve-dev/**'
       - 'cq/**'
+      # FR-MAINT-15: the golden gates must run when the search engines or their config change.
+      - 'mdq/**'
+      - 'tools/skills/markdown_query/**'
+      - 'mdq.toml'
+      - 'cq.toml'
       - 'pyproject.toml'
       - '.github/scripts/**'
       # 契約テスト（test_data_model_split_contract 等）が読むため、単独変更でも検査する。
@@ -15,6 +20,20 @@ on:
       - '.github/workflows/test-hve-python.yml'
       # チェックアウト時の改行を決めるため、test_surface_export のバイト比較結果を左右する。
       - '.gitattributes'
+      # FR-MAINT-12: 能動指示13文書のみ。tests/run/ の証跡・lane は含めない。
+      - 'tests/README.md'
+      - 'tests/prompt-version/README.md'
+      - 'tests/prompt-version/01-request-contract.md'
+      - 'tests/prompt-version/02-plan-and-approval-gate.md'
+      - 'tests/prompt-version/03-multi-workflow-order.md'
+      - 'tests/prompt-version/04-input-alias.md'
+      - 'tests/prompt-version/05-gui-settings-reuse.md'
+      - 'tests/prompt-version/06-agent-skill-behavior.md'
+      - 'tests/prompt-version/07-docs-coverage.md'
+      - 'tests/prompt-version/08-e2e-smoke.md'
+      - 'tests/prompt-version/09-full-system-test.md'
+      - 'tests/\[cli\]SystemTest - Full.txt'
+      - 'tests/\[gui\]SystemTest - Full.txt'
   pull_request:
     branches: [main]
 
@@ -50,7 +69,23 @@ jobs:
           run_heavy=false
           while IFS= read -r path; do
             case "${path}" in
-              hve/*|hve-dev/*|cq/*|pyproject.toml|.github/scripts/*|.github/prompts/*|.github/io-contracts/*|.github/workflows/*|.gitattributes)
+              hve/*|hve-dev/*|cq/*|mdq/*|tools/skills/markdown_query/*|mdq.toml|cq.toml|pyproject.toml|.github/scripts/*|.github/prompts/*|.github/io-contracts/*|.github/workflows/*|.gitattributes)
+                run_heavy=true
+                break
+                ;;
+              'tests/README.md'|\
+              'tests/prompt-version/README.md'|\
+              'tests/prompt-version/01-request-contract.md'|\
+              'tests/prompt-version/02-plan-and-approval-gate.md'|\
+              'tests/prompt-version/03-multi-workflow-order.md'|\
+              'tests/prompt-version/04-input-alias.md'|\
+              'tests/prompt-version/05-gui-settings-reuse.md'|\
+              'tests/prompt-version/06-agent-skill-behavior.md'|\
+              'tests/prompt-version/07-docs-coverage.md'|\
+              'tests/prompt-version/08-e2e-smoke.md'|\
+              'tests/prompt-version/09-full-system-test.md'|\
+              'tests/[cli]SystemTest - Full.txt'|\
+              'tests/[gui]SystemTest - Full.txt')
                 run_heavy=true
                 break
                 ;;
@@ -216,6 +251,30 @@ jobs:
       - name: Run all cq tests
         run: pytest cq/tests/ -v
 
+      - name: cq golden evaluation (FR-MAINT-15)
+        env:
+          MIN_TOPK_HVE: "20"
+          MIN_TOPK_APP: "21"
+        run: |
+          set -euo pipefail
+          for profile in hve app; do
+            python -m cq index --profile "${profile}"
+            python -m cq.benchmark --with-cq --profile "${profile}" --baseline "" > "cq-golden-${profile}.json"
+          done
+          python - <<'PY'
+          import json, os
+          lines, failed = [], False
+          for profile in ("hve", "app"):
+              cq = json.load(open(f"cq-golden-{profile}.json", encoding="utf-8"))["baselines"]["cq"]
+              minimum = int(os.environ[f"MIN_TOPK_{profile.upper()}"])
+              lines.append(f"- {profile}: top-k {cq['topk']}/{cq['total']} (minimum {minimum})")
+              failed = failed or cq["topk"] < minimum
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("## cq golden\n\n" + "\n".join(lines) + "\n")
+          print("\n".join(lines))
+          raise SystemExit(1 if failed else 0)
+          PY
+
   mdq-smoke:
     name: mdq index smoke test
     needs: detect-changes
@@ -266,3 +325,22 @@ jobs:
             echo
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: mdq golden evaluation (FR-MAINT-15)
+        if: needs.detect-changes.outputs.run_heavy == 'true'
+        env:
+          MIN_TOPK: "30"
+        run: |
+          set -euo pipefail
+          python tools/skills/markdown_query/benchmark.py --golden mdq/golden-queries.json --scenarios mdq_auto --db .mdq/index-ja-jp-heading.sqlite --repeat 1 --no-markdown-report --out-dir mdq-golden
+          python - <<'PY'
+          import glob, json, os
+          report = json.load(open(glob.glob("mdq-golden/bench-*.json")[0], encoding="utf-8"))
+          per_query = report["scenarios"]["mdq_auto"]["per_query"]
+          hits = sum(1 for query in per_query if query["topk"])
+          minimum = int(os.environ["MIN_TOPK"])
+          line = f"mdq golden top-k: {hits}/{len(per_query)} (minimum {minimum})"
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write(f"## mdq golden\n\n{line}\n")
+          print(line)
+          raise SystemExit(0 if hits >= minimum else 1)
+          PY

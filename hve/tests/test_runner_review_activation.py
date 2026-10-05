@@ -25,7 +25,8 @@ def _review_suffix(auto_contents_review: bool) -> str:
 def test_review_suffix_disables_subagents_when_hve_review_is_off() -> None:
     suffix = _review_suffix(False)
     assert suffix.startswith("\n\n")
-    assert "1回のインライン・セルフチェック" in suffix
+    # N4-7 / FR-CLI-101（v3.26）: 実行時にも出力前の自己確認を指示しない。
+    assert "セルフチェック" not in suffix
     assert "Review Sub-agentを起動しない" in suffix
     assert "敵対的レビューを実施しない" in suffix
     assert "Phase 3" not in suffix

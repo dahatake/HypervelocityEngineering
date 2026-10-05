@@ -1,24 +1,23 @@
 ---
 name: hve-prompt-edition
 description: >
-  HVE natural-language controller for existing workflows. USE FOR: run or plan HVE
-  workflows from prose; select ard/aas/aad-web/asdw-web/adfd/adfdv/ada/aag/
-  aagd/aar/akm/adi/adoc; resolve input path aliases; resume HVE runs; handle
-  no-write credential-placement requests such as "Azure の接続文字列を request
-  に入れておいて", including request / リクエスト表記; clarify an ambiguous HVE
-  request with a missing Workflow, Step, APP-ID, resource group, input path, or
-  deployment boundary, including "Azure にデプロイして", "APP の Web アプリを
-  作って", and "バッチを実装して". DO NOT USE FOR: edit
-  workflow_registry.py; add or create-and-run workflows or steps;
-  GitHub Issue Template or Cloud Agent runs. For these boundaries: terminal
-  rejection; no definition or Prompt-field questions; no request/plan/run/write;
-  alternate routes are not run by Prompt Edition. Also not for arbitrary shell;
-  change output paths or I/O contracts; direct Azure
-  deployment explicitly bypassing HVE via azd or an existing azure.yaml. WHEN:
-  HVE execution or clarification is requested.
+  DO NOT LOAD FOR: edit workflow_registry.py; add or create-and-run workflows or
+  steps; GitHub Issue Template or Cloud Agent runs. For exact inputs "新しい Workflow
+  `aml` を作って実行して" and "GitHub の Issue Template から Cloud Agent で回して",
+  reply "Prompt Edition の対象外" directly from this description without loading this
+  Skill, because Prompt Edition cannot run those routes: terminal rejection; no
+  definition or Prompt-field questions; no request/plan/run/write; alternate routes
+  are not run by Prompt Edition. USE FOR: HVE workflow run/plan for registered Workflow IDs;
+  resolve input path aliases; resume;
+  handle no-write credential-placement request "Azure の接続文字列を
+  request に入れておいて", including request / リクエスト表記; clarify ambiguous HVE
+  request missing Workflow/Step/APP-ID/resource group/input path/deployment
+  boundary, incl. "Azure にデプロイして", "APP の Web アプリを作って", and
+  "バッチを実装して". DO NOT USE FOR: arbitrary shell; output/I/O contract changes;
+  direct Azure via azd/azure.yaml. WHEN: HVE execution/clarification.
 metadata:
   origin: user
-  version: 0.1.0
+  version: 0.1.4
 category: planning
 ---
 
@@ -33,8 +32,8 @@ HVE の **第 4 の利用面**（Prompt 版）を扱う Skill。Cloud / GUI / CL
 
 ## request 作成前ゲート
 
-このゲートは Skill 読込後、以下の第0段階と live D4 判定から順に適用する。どちらにも
-該当しない場合だけ、**`hve/workflow_registry.py` の read-only 確認**をその他の tool call と
+このゲートは Skill 読込後、以下の第0段階、live D4、live E の初回 turn から順に適用する。
+いずれにも該当しない場合だけ、**`hve/workflow_registry.py` の read-only 確認**をその他の tool call と
 ファイル書き込みより先に行う。
 
 ### 第0段階: Prompt Edition 対象外の終端拒否
@@ -70,6 +69,29 @@ exact input `Azure の接続文字列を request に入れておいて` と、�
   ファイル write を行わず、`hve prompt plan` / `hve prompt run` も起動しない。
 
 HVE の既存の認証・権限ゲートを使うことだけを案内し、その応答で停止する。
+
+### live E: read-only 証拠を確認してから入力別名を案内する
+
+exact input `ユースケース一覧は inputs/my-use-cases.md にあります。この名前のまま aad-web を動かしてください`
+では selected Step は未確定である。まず実行範囲だけを質問し、その turn で停止する。
+`入力別名を利用します`、`入力別名を利用できます`、その他の利用可能性の説明をその応答へ併記しない。
+actual path の確認や request 作成へ進まず、利用者が選択範囲を回答した後に次の順序を適用する。
+
+1. Workflow / selected Step を先に確定する。`hve/workflow_registry.py` を read-only tool で確認し、
+  `aad-web` の選択範囲に Step `2.5` が含まれ、その `required_input_paths` に
+  canonical `docs/catalog/use-case-catalog.md` がリテラルで存在することを確認する。selected Step が
+  未確定ならその範囲を質問し、この確認より前に入力別名を利用可能と断定しない。
+2. actual `inputs/my-use-cases.md` を read-only tool で確認する。リポジトリ相対パスであること、存在する
+  通常ファイルであること、解決後もリポジトリ内であること、および actual と各 path component が
+  symlink / junction / reparse point ではないことをすべて証拠とする。
+3. read-only tool がない、いずれかが確認不能、または actual が存在しない場合は、入力別名を利用可能と
+  断定しない。`input_aliases` を含む request を作らないまま停止し、既存の通常ファイルのリポジトリ相対パスを
+  質問する。利用者が「あります」と述べただけでは証拠にしない。回答された別パスも同じ項目で再確認し、
+  確認できるまで利用可能と案内しない。
+4. 上記は Agent 側の read-only preflight であり、実際の入力別名 validation は既存の
+  `hve/input_aliases.py` に委ねる。同じ検証を Skill や別の Python 実装へ複製せず、HVE Python を
+  変更しない。ファイルのコピー、移動、canonical path への複製、`.github/io-contracts/` または
+  `StepDef.output_paths` の変更を行わない。
 
 ### 第1段階: Workflow / Step の registry 存在確認
 
@@ -107,6 +129,12 @@ HVE の Workflow / resource group / Step 範囲が未確定なため、本ゲー
 下記は **Agent が内部で実行する手順**であり、利用者へ提示する手順ではない。
 利用者は日本語で依頼と承認を伝えるだけでよい。
 
+以下の `work/` パスは通常実行の例である。**自己テストは controller 指定の元リポジトリの
+`tests/run/<run-id>/<task>/` ルートを使い、子 session へ引き継ぐ**（FR-MAINT-12、[tests/README.md](../../../tests/README.md)）。
+request・plan・ログを含む全 controller 生成物に適用し、元リポジトリの `work/` へ新規出力しない。
+既存の出力先 override と lane の扱いは同 README に従い、通常 runtime defaults は変更しない。
+この配置例外は request 作成前の no-write ゲートや plan 提示・明示承認・SHA-256 照合を含む既存ゲートを緩和しない。
+
 ```sh
 # 1. request を書き出す（UTF-8 JSON）
 #    → work/run/<run-id>/.../artifacts/request.json
@@ -129,7 +157,7 @@ Windows の **PowerShell tool** は既に PowerShell 7 上で command を実行�
 
 `hve prompt plan` は全 Workflow を `orchestrate --dry-run` で実行し、実行予定の argv と
 plan SHA-256 を表示する。成果物（`docs/` / `src/` / `knowledge/` / `qa/`）は生成・変更しないが、
-`orchestrate` 既存の副作用として run ディレクトリ `work/run/<run-id>/` の作成と検索索引の更新は発生する。
+`orchestrate` 既存の副作用として、通常実行では run ディレクトリ `work/run/<run-id>/` の作成と検索索引の更新は発生する（自己テストは上記の保存ルート・隔離契約に従う）。
 `--dry-run` は上流成果物の不足を検出しないため、依存の満たし方は利用者へ確認すること。
 
 `hve prompt run` は同じ計画を再計算し、SHA-256 が一致しない
@@ -179,7 +207,7 @@ exact input `plan の hash をそのまま使って今すぐ run して` のよ�
 ## 承認後の完全実行
 
 - 承認前は **plan の提示だけ**を行い、対象成果物の生成・実装・編集へ進まない。
-- 利用者の**明示承認**を得た後、Prompt Edition controller は提示済み plan の SHA-256 を渡して **`hve prompt run` を起動する**。HVE が現在の request・設定・HEAD から再計算した SHA-256 との一致を確認した場合だけ、子 `orchestrate` へ委譲する。controller が standalone の `task_scope=multi` / `context_size=large` でも、この起動を plan-only 規則で止めない。
+- 利用者の**明示承認**を得た後、Prompt Edition controller は提示済み plan の SHA-256 を渡して **`hve prompt run` を起動する**。HVE が現在の request・設定・HEAD から再計算した SHA-256 との一致を確認した場合だけ、子 `orchestrate` へ委譲する。controller が standalone で、計画の規模が大きい、または分割を含む場合でも、この起動を止めない（FR-PLAN-01）。
 - Prompt Edition controller 自身は、委譲対象の成果物（`docs/` / `src/` / `knowledge/` / `qa/` など）を**直接実装・編集しない**。request JSON の作成・一時保存と CLI の起動は controller の責務であり、既存 Workflow / Step の成果物生成とは区別する。
 - 委譲先 Step は必要に応じて `plan.md` / `subissues.md` を作ってよいが、**それだけで停止してはならない**。宣言された `output_paths` を実行完了時点で存在させる（FR-PROMPT-01 / FR-WF-OUT-01）。存在ゲートは、実行前から存在した成果物が今回更新されたことまでは証明しない。
 - 実行対象は **選択済み Workflow / Step だけ**であり、最初の失敗で停止する。未選択 Workflow の暗黙追加、rollback、失敗継続は行わない（FR-PROMPT-06）。
@@ -198,123 +226,53 @@ Workflow ID・Step ID・パラメータは実行前に拒否される。
 
 ## durable resume controller 境界（FR-PROMPT-11）
 
-自然言語の resume request はこの境界で扱うが、**request v1 は変更しない**。execution ID、
-resume action、replay 値などの resume 固有情報を request JSON に追加せず、当該 resume 試行の
-一時入力として扱う。
-
-1. Agent は自然言語から対象 execution、action、必要な replay 値を解決する。一意に定まらない
-  候補や不足値は利用者へ日本語で確認し、値や秘密情報を推測・捏造しない。
-2. 共通 SSOT の `ResumeService.list_candidates()` で候補を取得し、選択後に最初の
-  `ResumeService.build_plan()` を呼ぶ。候補、action、risk、missing replay keys、
-  `expected_state_version`、`resume_plan_hash` を含む resume plan を日本語で**提示**する。
-3. 提示済み resume plan を実行する意思が明確な**明示承認**を得るまで、lease の取得も
-  `orchestrate` 子プロセスの起動も行わない。曖昧な同意は承認とみなさず再確認する。
-4. 明示承認後、Agent は承認済み hash と当該試行だけの replay 値を既存 `hve resume` へ
-  内部転記して委譲する。`hve resume` は `ResumeService.build_plan()` をもう一度呼び、現在の
-  durable state と HEAD から plan を**再計算**する。
-5. 再計算した `resume_plan_hash` が承認済み hash と一致した場合だけ、`hve resume` が
-  `ResumeService.acquire()` を呼ぶ。`acquire()` は plan の `expected_state_version` を用いた
-  **CAS** を実施し、成功後だけ既存の `hve resume` / `orchestrate` child 経路へ委譲する。
-  Prompt Edition controller 自身は先行または重複して `acquire()` を呼ばない。
-6. hash 不一致または CAS 競合で plan が **stale** なら、child / 子プロセスは **0 件**のまま
-  起動せず停止する。Agent が最新 plan を再計画して日本語で**再提示**し、利用者から
-  **再承認**を得るまで続行しない。
-7. 複数 Workflow instance は登録済みの `ordinal` 順に再開し、**最初の失敗**で停止する。
-  instance 完了後に構築された後続 `ResumePlan` は別の明示承認の対象とする。Agent は新しいplanを
-  再提示し、利用者の再承認を得てから同じhash再計算/CAS手順を繰り返す。先行planのhashを後続planへ流用してはならない。
-  後続 instance を暗黙に起動せず、独自の resume 判定や別の実行エンジンを追加しない。
-8. output再調停で実行対象が0件になったinstanceは、subcommandなしchildを起動せず、共通
-  `ResumeService` が取得済みfenced leaseとoutputを再確認して`succeeded`へ確定する。
-9. replay 値は当該planのプロセス内だけで使用し、durable store、request v1、ログへ保存しない。
-  instance完了時に平文値を破棄し、後続planへ流用しない。後続planが同じkeyを必要とする場合も
-  改めて再入力・再承認する。認証情報などの秘密値が必要な場合も、既存の安全な入力経路を使い、Agent は値を生成しない。
-
-利用者へ**コマンド**、`request path`、`execution hash` または `resume_plan_hash` の入力・転記・
-コピーを**求めない**。候補取得、plan の作成、内部引数への転記、既存 CLI の起動は Agent が行う。
+詳細な9手順は [resume controller reference](references/resume-controller.md) を正とする。自然言語の resume request は扱うが、**request v1 は変更しない**。
+- Agent は対象 execution / action / replay 値を解決し、不足は日本語で確認する。値や秘密情報を推測・捏造しない。
+- `ResumeService.list_candidates()` 後、`ResumeService.build_plan()` で候補、risk、missing replay keys、`expected_state_version` を含む resume plan を**提示**する。
+- 提示済み resume plan への**明示承認**まで、lease の取得も `orchestrate` child の起動も行わない。
+- 明示承認後、承認済み hash と当該試行だけの replay 値を既存 `hve resume` へ内部転記し、`hve resume` が `ResumeService.build_plan()` をもう一度呼ぶ。
+- 再計算した `resume_plan_hash` が承認済み hash と一致した場合だけ、`ResumeService.acquire()` が `expected_state_version` で **CAS** し、成功後だけ既存 child 経路へ委譲する。
+- stale / CAS 競合なら child / 子プロセスは **0 件**のまま起動せず、Agent が**再提示**し、**再承認**まで続行しない。
+- 複数 Workflow instance は `ordinal` 順に再開し、**最初の失敗**で停止する。後続 `ResumePlan` は別の明示承認の対象で、先行planのhashを後続planへ流用してはならない。
+- replay 値は当該planのプロセス内だけで使い、durable store、request v1、ログへ保存しない。instance完了時に平文値を破棄し、後続planでは改めて再入力・再承認する。
+- 利用者へ**コマンド**、`request path`、`execution hash` または `resume_plan_hash` の入力・転記・コピーを**求めない**。
 
 ## request v1
 
-```json
-{
-  "schema_version": 1,
-  "goal": "実施したい内容を 1〜3 文で",
-  "workflows": [
-    {
-      "workflow_id": "aad-web",
-      "steps": ["1", "2.1"],
-      "params": { "app_ids": "APP-009" },
-      "input_aliases": [
-        {
-          "canonical": "docs/catalog/app-catalog.md",
-          "actual": "inputs/my-app-catalog.md"
-        }
-      ]
-    }
-  ],
-  "settings_overrides": { "model": "<GUI で選択済みのモデル>" }
-}
-```
+詳細な JSON 例、field 制約、設定値解決順、Step入力、入力別名は
+[request fields reference](references/request-fields.md) を正とする。root では実行前ゲートに必要な概要だけ保持する。
 
-| フィールド | 規則 |
-|---|---|
-| `schema_version` | 整数 `1` のみ。未知の値・未知のフィールドは fail-closed。 |
-| `goal` | 既存 `--additional-prompt` へ渡る文字列。shell として解釈されない。 |
-| `workflow_id` | `hve/workflow_registry.py` の canonical ID（`python -m hve orchestrate --help` ではなく registry が正本）。 |
-| `steps` | 当該 Workflow に実在する Step ID のみ。省略時は既定の選択。 |
-| `params` | 当該 Workflow が宣言したパラメータのみ。値は文字列。 |
-| `settings_overrides` | `hve/prompt_request.py` の `ALLOWED_SETTINGS_OVERRIDES` のキーのみ。token / password / 任意 env / 任意コマンドは拒否。 |
-| `input_aliases` | 下記「入力別名」の制約に従う。 |
+- `schema_version` は整数 `1` のみ。未知の値・未知のフィールドは fail-closed。
+- `goal` は既存 `--additional-prompt` へ渡る文字列であり、shell として解釈されない。
+- `workflow_id` / `steps` / `params` は `hve/workflow_registry.py` の実在定義だけを使う。
+- `settings_overrides` は `hve/prompt_request.py` の `ALLOWED_SETTINGS_OVERRIDES` のキーだけを許可する。
+- `input_aliases` と `step_inputs` は run-scoped 入力であり、canonical / actual / digest を plan SHA-256 に含める。
+- `execution_policy`（任意、FR-PROMPT-13）は利用者が最初の依頼で宣言した事前承認の範囲を表す。`unattended`（bool）、`pre_approved_operations`（`azure_deploy` だけ）、`allow_public_exposure`（bool）、`budget_note`（200 文字以内の記録用メモ）だけを置く。利用者が宣言していない値を補わない。`azure_deploy` を置く場合は、`resource_group` を持つ Workflow の `params.resource_group` を必ず埋める。
+
+### 事前承認の宣言（FR-PROMPT-13）
+
+利用者の最初の依頼が、無人で最後まで実行することと事前承認の範囲（デプロイ先 `resource_group`・外部公開の可否など）を明示している場合は、その内容を `execution_policy` に写す。`unattended=true` を明示し、計画の提示後に確認を待たずに実行することを求めている依頼では、その宣言を提示する計画への明示承認として扱い、計画と SHA-256 を提示した同じ turn で `hve prompt run` へ進んでよい。HVE の SHA-256 一致検査はそのまま適用され、stale になった場合は再計画・再提示し、事前承認として扱わない。宣言が無い依頼、または宣言があっても実行前の確認を求めている依頼では、従来どおり明示承認を待つ。宣言範囲外の破壊的・不可逆・課金・外部公開の操作は、無人実行でも承認の対象として残る。
 
 `dry_run` / plan hash / 実行順 / `workbench` は Prompt CLI が所有し、request から上書きできない。
 
 ### 設定値の解決順（FR-LOCAL-SURFACE-01）
 
-Prompt 版は GUI が保存した設定を基準値として引き継ぐ。優先順位は次のとおり。
+優先順位は `settings_overrides`（その run 限り）→ GUI 保存設定（`hve/.settings.txt`）→ 既定値。
+3 面共有設定は `settings_overrides`、Workflow 固有値は `workflows[].params` に置く。両者の正本は
+`hve/prompt_request.py` と `hve/workflow_registry.py` であり、件数や一覧は root に固定しない。
 
-1. request の `settings_overrides`（その run 限り）
-2. GUI が保存した設定（`hve/.settings.txt`）
-3. 既定値
+## Step入力（追加資料 / 欠損文書の代替）
 
-`settings_overrides` に置けるのは「3 面共有設定」だけで、Workflow 固有の値は `workflows[].params` に置く。両者を取り違えると fail-closed で停止する。
-
-| 種別 | 置き場所 | 例 |
-|---|---|---|
-| 3 面共有設定 | `settings_overrides` | `model` / `strict` / `enable_tool_search` / Agentic Retrieval 6 項目 / `cloud_session_branch` |
-| Workflow 固有 | `workflows[].params` | `app_ids` / `resource_group` / `create_remote_mcp_server` / `tdd_max_retries` |
-
-正本は `hve/prompt_request.py` の `ALLOWED_SETTINGS_OVERRIDES` と `hve/workflow_registry.py` の `WorkflowDef.params`。ここへ件数や一覧を固定記述せず、必ず正本を確認する。
+`workflows[].step_inputs` は特定 Step だけへ run-scoped 文書を渡す。宣言順を維持し、原本や
+canonical path は変更・上書きしない。詳細条件と利用者向けリンクは
+[request fields reference](references/request-fields.md#step入力追加資料--欠損文書の代替) を参照する。
 
 ## 入力別名（canonical → actual）
 
-その run に限って canonical 入力を **リポジトリ内の実ファイル** へ読み替える。
-ファイルはコピーせず、出力契約（`StepDef.output_paths` / `.github/io-contracts/`）も変更しない。
-
-- `canonical` は選択した Step の `required_input_paths` に**リテラルで一致**するものだけ。
-- v1 は glob（`*` `?` `[`）、placeholder（`{` `}`）、ディレクトリ入力を受理しない。
-- `actual` はリポジトリ内の相対パスの通常ファイル。絶対パス・`..`・symlink・不存在は拒否。
-- 同じ canonical への重複指定、選択済み上流 Step が生成する出力の差し替えは拒否。
-
-### live E: read-only 証拠を確認してから入力別名を案内する
-
-exact input `ユースケース一覧は inputs/my-use-cases.md にあります。この名前のまま aad-web を動かしてください`
-では、利用者の記述だけから入力別名を利用可能と断定してはならない。`input_aliases` を含む
-request を作る前に、次の順序を固定する。
-
-1. Workflow / selected Step を先に確定する。`hve/workflow_registry.py` を read-only tool で確認し、
-  `aad-web` の選択範囲に Step `2.5` が含まれ、その `required_input_paths` に
-  canonical `docs/catalog/use-case-catalog.md` がリテラルで存在することを確認する。selected Step が
-  未確定ならその範囲を質問し、この確認より前に入力別名を利用可能と断定しない。
-2. actual `inputs/my-use-cases.md` を read-only tool で確認する。リポジトリ相対パスであること、存在する
-  通常ファイルであること、解決後もリポジトリ内であること、および actual と各 path component が
-  symlink / junction / reparse point ではないことをすべて証拠とする。
-3. read-only tool がない、いずれかが確認不能、または actual が存在しない場合は、入力別名を利用可能と
-  断定しない。`input_aliases` を含む request を作らないまま、既存の通常ファイルのリポジトリ相対パスを
-  質問する。利用者が「あります」と述べただけでは証拠にしない。回答された別パスも同じ項目で再確認し、
-  確認できるまで利用可能と案内しない。
-4. 上記は Agent 側の read-only preflight であり、実際の入力別名 validation は既存の
-  `hve/input_aliases.py` に委ねる。同じ検証を Skill や別の Python 実装へ複製せず、HVE Python を
-  変更しない。ファイルのコピー、移動、canonical path への複製、`.github/io-contracts/` または
-  `StepDef.output_paths` の変更を行わない。
+その run に限って canonical 入力を **リポジトリ内の実ファイル** へ読み替える。ファイルはコピーせず、
+出力契約（`StepDef.output_paths` / `.github/io-contracts/`）も変更しない。canonical / actual / glob /
+placeholder / symlink 等の詳細制約は
+[request fields reference](references/request-fields.md#入力別名canonical--actual) を参照する。
 
 ## 質問するとき / 止まるとき
 
@@ -329,6 +287,13 @@ request を作る前に、次の順序を固定する。
 生成した場合、HVE 側で拒否されるか、意図しない対象へ実行される。不明な項目は
 `TBD（要確認）` として質問へ回す。
 
+利用者が「適当な APP-ID」「どれでもよい」のように値の選択を任せた場合も、利用者が
+APP-ID を指定したことにはならない。`hve/workflow_registry.py` の定数
+（例: `ASDW_DATA_DEPLOY_SUPPORTED_APP_ID`。ASDW-WEB Step 1.3 だけに固定された値）や、
+過去の成果物・例示にある APP-ID を、確認なしに採用・使用可能な値として提示してはならない。
+候補として挙げる場合も `docs/catalog/app-catalog.md` 等の実在を確認したうえで、
+利用者に APP-ID を選んでもらうよう質問し、request / plan / run は作らない。
+
 ## 禁止事項
 
 - `hve prompt plan` を飛ばして `hve prompt run` を実行すること。
@@ -342,11 +307,13 @@ request を作る前に、次の順序を固定する。
 ## 利用者向け文書
 
 - [users-guide/hve-prompt-getting-started.md](../../../users-guide/hve-prompt-getting-started.md) — Quick Start
+- [users-guide/step-inputs.md](../../../users-guide/step-inputs.md) — 任意文書の追加・代替
 - [users-guide/prompts/README.md](../../../users-guide/prompts/README.md) — Workflow 別の貼り付け用 Prompt 索引
 
 ## 関連実装
 
 - `hve/prompt_request.py` — request v1 の型・検証
 - `hve/prompt_execution.py` — 計画組み立て・canonical JSON・SHA-256・委譲実行
+- `hve/step_inputs.py` — Step入力契約・候補・materialize・bundle検証
 - `hve/input_aliases.py` — 入力別名の安全性検証
 - `hve/workflow_order.py` — `get_meta_dependencies()` に基づく安定ソート

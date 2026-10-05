@@ -16,7 +16,7 @@ Custom Agent がタスク実行中に不明瞭な点に遭遇した際、
 
 - **knowledge/ ファイルの作成・更新** → Skill `knowledge-management` が担当
 - **docs/catalog/ の参照** → 各 Arch-* Agent が直接参照
-- **docs-original/ の直接参照ガイド** → `copilot-instructions.md` §5 が規定
+- **docs-original/ の直接参照ガイド** → 本 Skill の範囲外（原本保護は Skill `agent-common-preamble`）
 - **Agent の参照方式選択（直接/経由/ハイブリッド）の制約** → 本 Skill は knowledge/ 経由参照の手順を提供するのみ
 
 ## 既存の `### knowledge/ 参照` セクションとの関係
@@ -75,7 +75,7 @@ Agent の入力ファイルを読み込んだ結果、上記の判断基準に�
 |------|-----------------|
 | Agent の入力ファイルに該当情報がある | **そのまま継続**（knowledge/ 参照不要） |
 | 入力ファイルに記載なし、knowledge/ に Confirmed 情報あり | **knowledge/ から採用して継続** |
-| 入力ファイルに記載なし、knowledge/ にも該当情報なし | **ユーザーに確認を求めて処理停止** |
+| 入力ファイルに記載なし、knowledge/ にも該当情報なし | **安全な既定値または `TBD（要確認）` を採用し、理由と影響を記録して継続** |
 | knowledge/ 自体が未整備（ファイルなし） | **入力ファイルの情報のみで継続し、不明点は `TBD（要確認）` として明示** |
 
 ## D01〜D21 カテゴリ参照ガイド
@@ -113,7 +113,7 @@ Agent の入力ファイルを読み込んだ結果、上記の判断基準に�
 
 - **この Skill のスコープでは** knowledge/ は読み取り専用
 - 該当ドキュメントが存在しない場合は「knowledge/ に該当情報なし」と明示し、**捏造しない**
-- 本 Skill は Agent の参照方式選択（`copilot-instructions.md` §5 で定義された 直接参照/knowledge/ 経由参照/ハイブリッド）を制約しない
+- 本 Skill は Agent の参照方式選択（直接参照/knowledge/ 経由参照/ハイブリッド）を制約しない
 
 ## 設計上の前提と注意事項
 

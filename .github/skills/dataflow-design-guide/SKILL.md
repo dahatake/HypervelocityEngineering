@@ -1,7 +1,7 @@
 ---
 name: dataflow-design-guide
 description: >
-  データフロー処理の設計ガイドを統合的に提供する。要件定義・ジョブ定義・データフロー・ 非機能要件・ワークフロー仕様・テスト仕様・テスト戦略を references/ に集約し、 SKILL.md 本文から索引を提供する。 USE FOR: batch design, job definition, data flow design. DO NOT USE FOR: batch implementation. WHEN: データフロー処理を設計する、データフローアプリを定義する。
+  HVE ADFD/ADFDV 生成時のデータフロー成果物契約エントリ。要件定義・ジョブ定義・データフロー・ 非機能要件・ワークフロー仕様・テスト仕様・テスト戦略を references/ に集約し、 SKILL.md 本文から索引を提供する。 USE FOR: HVE ADFD/ADFDV generation contract, dataflow artifact contract lookup. DO NOT USE FOR: generic batch tutorial, batch implementation. WHEN: HVE ADFD/ADFDV のデータフロー成果物を生成・確認するとき。
 metadata:
   origin: user
   version: 1.0.0
@@ -11,7 +11,7 @@ metadata:
 
 ## 目的
 
-データフロー処理設計に必要なガイド・テンプレートを一元管理する。
+HVE ADFD/ADFDV 生成で使用するデータフロー成果物契約の入口として、必要なガイド・テンプレートへの索引を一元管理する。
 
 ## ガイド一覧（references/）
 

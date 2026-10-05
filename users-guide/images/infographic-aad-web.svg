@@ -1,74 +1,51 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 400" role="img" aria-label="AAD-WEB インフォグラフィック">
-  <desc>AAD-WEB（Web App Design）5ステップのデータフロー: service-catalog-matrix.md入力 → Step.1/2.1/2.2/2.3/2.4 → 各成果物</desc>
-  <defs>
-    <marker id="arr" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
-      <polygon points="0 0, 9 3.5, 0 7" fill="#555"/>
-    </marker>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 360" role="img" aria-labelledby="title desc">
+  <title id="title">AAD-WEB インフォグラフィック</title>
+  <desc id="desc">AAD-WEB の入力、現行 Step 群、主成果物の対応。画面・サービス・TDD 仕様を生成し、Step 2.5 と 2.6 は Step 2.2 から独立して派生する。</desc>
   <style>
-    text { font-family: "Segoe UI", "Noto Sans JP", Arial, sans-serif; }
-    .in  { fill: #5B8DD9; stroke: #1f3a5a; stroke-width: 1; }
-    .agt { fill: #4A90D9; stroke: #1f3a5a; stroke-width: 1.5; }
-    .par { fill: #8B5CF6; stroke: #4a1d96; stroke-width: 1.5; }
-    .out { fill: #E8A838; stroke: #8B5A00; stroke-width: 1.5; }
-    .ln  { stroke: #555; stroke-width: 1.2; fill: none; marker-end: url(#arr); }
-    .bt  { fill: white; font-weight: bold; font-size: 10px; }
-    .bs  { fill: white; font-size: 9px; }
-    .lbl { fill: #333; font-size: 10px; }
-    .ttl { font-size: 15px; font-weight: bold; fill: #1f3a5a; }
+    text { font-family: "Segoe UI", "Noto Sans JP", Arial, sans-serif; fill: #0f172a; }
+    .title { font-size: 18px; font-weight: 700; }
+    .head { font-size: 13px; font-weight: 700; }
+    .box { rx: 10; ry: 10; stroke-width: 1.6; }
+    .input { fill: #e0f2fe; stroke: #0369a1; }
+    .proc { fill: #ede9fe; stroke: #7c3aed; }
+    .out { fill: #dcfce7; stroke: #15803d; }
+    .mono { font-family: "Consolas", "SFMono-Regular", monospace; font-size: 10px; }
+    .small { font-size: 11px; }
   </style>
-  <text x="440" y="28" text-anchor="middle" class="ttl">AAD-WEB データフロー（入力→Agent→出力）</text>
-  <!-- Input -->
-  <rect x="10" y="100" width="155" height="28" rx="4" class="in"/>
-  <text x="87" y="118" text-anchor="middle" class="bt">service-catalog-matrix.md</text>
-  <!-- Step 1 -->
-  <line x1="165" y1="114" x2="190" y2="114" class="ln"/>
-  <rect x="190" y="92" width="120" height="44" rx="5" class="agt"/>
-  <text x="250" y="110" text-anchor="middle" class="bt">Step.1</text>
-  <text x="250" y="124" text-anchor="middle" class="bs">Arch-UI-List</text>
-  <line x1="310" y1="114" x2="340" y2="114" class="ln"/>
-  <rect x="340" y="100" width="140" height="28" rx="4" class="out"/>
-  <text x="410" y="118" text-anchor="middle" class="bt">screen-catalog.md</text>
-  <!-- Fork from screen-catalog to 2.1 and 2.2 -->
-  <polyline points="410,128 410,160 520,160 520,175" class="ln"/>
-  <polyline points="410,128 410,250 520,250 520,235" class="ln"/>
-  <!-- Step 2.1 -->
-  <rect x="460" y="175" width="120" height="44" rx="5" class="par"/>
-  <text x="520" y="193" text-anchor="middle" class="bt">Step.2.1（並列）</text>
-  <text x="520" y="207" text-anchor="middle" class="bs">Arch-UI-Detail</text>
-  <line x1="580" y1="197" x2="610" y2="197" class="ln"/>
-  <rect x="610" y="183" width="140" height="28" rx="4" class="out"/>
-  <text x="680" y="201" text-anchor="middle" class="bt">docs/screen/*.md</text>
-  <!-- Step 2.2 -->
-  <rect x="460" y="235" width="120" height="44" rx="5" class="par"/>
-  <text x="520" y="253" text-anchor="middle" class="bt">Step.2.2（並列）</text>
-  <text x="520" y="267" text-anchor="middle" class="bs">Arch-Microservice-ServiceDetail</text>
-  <line x1="580" y1="257" x2="610" y2="257" class="ln"/>
-  <rect x="610" y="243" width="140" height="28" rx="4" class="out"/>
-  <text x="680" y="261" text-anchor="middle" class="bt">docs/services/*.md</text>
-  <!-- Join: 2.1 → 2.4 (画面 test-spec), 2.2 → 2.3 (サービス test-spec) -->
-  <polyline points="520,219 520,310 460,310 460,330" class="ln"/>
-  <polyline points="520,279 520,310" style="stroke:#555;stroke-width:1.2;fill:none;"/>
-  <!-- Step 2.4 (画面 test-spec, 並列) -->
-  <rect x="200" y="330" width="120" height="44" rx="5" class="par"/>
-  <text x="260" y="348" text-anchor="middle" class="bt">Step.2.4（並列）</text>
-  <text x="260" y="362" text-anchor="middle" class="bs">Arch-TDD-TestSpec（画面）</text>
-  <!-- Step 2.3 (サービス test-spec, 並列) -->
-  <rect x="360" y="330" width="120" height="44" rx="5" class="par"/>
-  <text x="420" y="348" text-anchor="middle" class="bt">Step.2.3（並列）</text>
-  <text x="420" y="362" text-anchor="middle" class="bs">Arch-TDD-TestSpec（サービス）</text>
-  <!-- Outputs (merged) -->
-  <line x1="320" y1="352" x2="360" y2="352" style="stroke:#555;stroke-width:1.2;fill:none;"/>
-  <line x1="480" y1="352" x2="510" y2="352" class="ln"/>
-  <rect x="510" y="338" width="155" height="28" rx="4" class="out"/>
-  <text x="587" y="356" text-anchor="middle" class="bt">docs/test-specs/*.md</text>
-  <!-- Legend -->
-  <rect x="10" y="360" width="14" height="14" rx="2" class="in"/>
-  <text x="30" y="371" class="lbl">入力</text>
-  <rect x="80" y="360" width="14" height="14" rx="2" class="agt"/>
-  <text x="100" y="371" class="lbl">Agent（直列）</text>
-  <rect x="200" y="360" width="14" height="14" rx="2" class="par"/>
-  <text x="220" y="371" class="lbl">Agent（並列）</text>
-  <rect x="330" y="360" width="14" height="14" rx="2" class="out"/>
-  <text x="350" y="371" class="lbl">出力</text>
+
+  <text x="490" y="28" text-anchor="middle" class="title">AAD-WEB データフロー（現行 Step と成果物）</text>
+
+  <text x="130" y="62" class="head">入力</text>
+  <rect x="36" y="74" width="250" height="220" class="box input"/>
+  <text x="52" y="102" class="small">AAS / ARD 成果物</text>
+  <text x="52" y="126" class="mono">docs/catalog/app-arch-catalog.md</text>
+  <text x="52" y="142" class="mono">docs/catalog/app-catalog.md</text>
+  <text x="52" y="158" class="mono">docs/catalog/domain-analytics.md</text>
+  <text x="52" y="174" class="mono">docs/catalog/service-catalog.md</text>
+  <text x="52" y="190" class="mono">docs/catalog/data-model.md</text>
+  <text x="52" y="206" class="mono">docs/catalog/service-catalog-matrix.md</text>
+  <text x="52" y="222" class="mono">docs/catalog/test-strategy.md</text>
+  <text x="52" y="238" class="mono">docs/catalog/use-case-catalog.md（Step 2.5）</text>
+
+  <text x="490" y="62" class="head">主要 Step</text>
+  <rect x="332" y="74" width="316" height="220" class="box proc"/>
+  <text x="348" y="102" class="small">Step 1: 画面一覧と遷移図</text>
+  <text x="348" y="126" class="small">Step 2.1 / 2.2: 画面定義書・サービス定義書</text>
+  <text x="348" y="150" class="small">Step 2.3 / 2.4: サービス別・画面別 TDD テスト仕様</text>
+  <text x="348" y="174" class="small">Step 2.5: 追加 Azure サービス選定</text>
+  <text x="348" y="198" class="small">Step 2.6: Agentic Retrieval 機能要件（設定で無効化可）</text>
+  <text x="348" y="222" class="small">Step 3: 画面 ↔ サービス整合性レビュー</text>
+  <text x="348" y="254" class="small">依存: 2.1→2.4、2.2→2.3、2.2→2.5/2.6、</text>
+  <text x="348" y="272" class="small">3 は 2.1 / 2.2 / 2.3 / 2.4 を待つ</text>
+
+  <text x="810" y="62" class="head">主成果物</text>
+  <rect x="694" y="74" width="250" height="220" class="box out"/>
+  <text x="710" y="102" class="mono">docs/catalog/screen-catalog-APP-*.md</text>
+  <text x="710" y="126" class="mono">docs/screen/{screenId}-*-description.md</text>
+  <text x="710" y="150" class="mono">docs/services/{serviceId}-*-description.md</text>
+  <text x="710" y="174" class="mono">docs/test-specs/{serviceId}-test-spec.md</text>
+  <text x="710" y="190" class="mono">docs/test-specs/{screenId}-test-spec.md</text>
+  <text x="710" y="214" class="mono">docs/azure/azure-services-additional.md</text>
+  <text x="710" y="230" class="mono">docs/services/{serviceId}-agentic-retrieval-spec.md</text>
+  <text x="710" y="254" class="mono">docs/catalog/screen-service-consistency-report.md</text>
 </svg>

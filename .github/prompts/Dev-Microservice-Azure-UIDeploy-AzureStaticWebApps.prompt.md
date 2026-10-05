@@ -9,7 +9,7 @@ Azure Static Web Apps への UI デプロイを、Azure CLI（リソース管理
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
+> 共通行動規約（Skill `agent-common-preamble`）の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
 
 - **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
 - **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
@@ -60,7 +60,7 @@ Azure Static Web Apps への UI デプロイを、Azure CLI（リソース管理
 
 <task>
 1. 計画
-   - Skill `task-dag-planning` に従って `{WORK}plan.md`（必要時 `subissues.md`）を作成。
+- 計画を書く場合は Skill `task-dag-planning` に従う。
 2. 実装
    - `src/infra/azure/create-azure-webui-resources.sh`（冪等、`az staticwebapp create --source` なし）
    - `src/app/staticwebapp.config.json`
@@ -87,13 +87,11 @@ Azure Static Web Apps への UI デプロイを、Azure CLI（リソース管理
    - `switch-swa-to-main.sh` はマージ後手動（実行せず手順記録）
 5. API接続経路（UI→API依存時）
    - 方式A Linked Backend / 方式B APIM / 方式C staticwebapp.config プロキシのいずれかを構成し記録。
-6. 最終品質レビュー
-  - 下記「最終品質レビュー」節の単回セルフチェックを実施する。
 </task>
 
-## 最終品質レビュー（単回インライン・セルフチェック）
+## 受入観点（完了条件の補足）
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 - **完全性**：SWA/設定/切替/verify/rollback/catalog/作業ログの成果物、API接続経路、実在系AC-1/AC-6/AC-8が実証済みか。
 - **実行可能性**：az/ghとdefault-branch workflowのpre-flight、RED→Deploy→GREEN、Step専用branchでのworkflow dispatch/watch、伝播リトライが再現可能か。

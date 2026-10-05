@@ -2,16 +2,16 @@
 
 {app_arch_scope_section}
 ## 目的
-テスト戦略書・ジョブ詳細仕様書・監視設計書を根拠に、TDD用テスト仕様書をジョブごとに作成する。
+テスト戦略書・ジョブ詳細仕様書・監視設計書を根拠に、注入された対象データフローアプリ（`{key}`）1件のTDD用テスト仕様書を作成する。
 
 ## 入力
 - `docs/catalog/test-strategy.md`
 - `docs/catalog/service-catalog-matrix.md`
-- `docs/dataflow/apps/{jobId}-*-spec.md`（ジョブ詳細仕様書）
+- `docs/dataflow/apps/{key}-spec.md`（対象 APP の仕様書。`dataflow_catalog` の `{key}` は APP-ID で、`{appId}` がその別名。Job-ID とは区別する）
 - `docs/dataflow/dataflow-monitoring-design.md`
 
 ## 出力
-- `docs/test-specs/{jobId}-test-spec.md`（ジョブごとに1ファイル）
+- `docs/test-specs/{key}-test-spec.md`（対象 `{key}` ごとに1ファイル）
 
 {existing_artifact_policy}
 
@@ -23,5 +23,5 @@
 - Step.2（監視・運用設計書）が `adfd:done` であること（AND依存）
 
 ## 完了条件
-- テスト仕様書がジョブカタログに基づいて全ジョブ分作成されている
+- 対象 APP `{key}` の仕様書に含まれるすべてのジョブのテストが、ジョブカタログの該当エントリに基づいて1ファイルへ記載されている
 {completion_instruction}{additional_section}

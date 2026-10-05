@@ -161,7 +161,12 @@ class TestGuiWidget(unittest.TestCase):
 
         self.assertEqual(
             _SECTION_FIELDS["TOOLSEARCH"],
-            {"tool_search": "tool_search", "tool_search_ranking": "tool_search_ranking"},
+            {
+                "tool_search": "tool_search",
+                "tool_search_ranking": "tool_search_ranking",
+                # FR-MODEL-04: defer_threshold も同じセクションが単独で所有する。
+                "tool_search_defer_threshold": "tool_search_defer_threshold",
+            },
         )
 
     def test_widget_disambiguates_from_the_foundry_setting(self) -> None:
@@ -441,13 +446,15 @@ class TestRunnerWiring(unittest.TestCase):
         self.assertIn("from .toolsearch.session import build_session_toolset", self.source)
 
     def test_injection_is_inside_the_tool_search_block(self) -> None:
-        start = self.source.index('session_opts["tool_search"] = {"enabled": True}')
+        # FR-MODEL-04: tool_search dict の組み立ては SDKConfig の単一実装へ集約され、
+        # runner はその戻り値をメインセッションへ載せる。
+        start = self.source.index('session_opts["tool_search"] = _main_tool_search_opt')
         block = self.source[start:start + 3200]
         self.assertIn("build_session_toolset(", block)
         self.assertIn('session_opts["tools"]', block)
 
     def test_injection_failure_does_not_break_the_step(self) -> None:
-        start = self.source.index('session_opts["tool_search"] = {"enabled": True}')
+        start = self.source.index('session_opts["tool_search"] = _main_tool_search_opt')
         block = self.source[start:start + 3200]
         self.assertIn("except Exception", block)
 

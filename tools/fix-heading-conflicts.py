@@ -38,12 +38,6 @@ PATTERN_A: dict[str, list[tuple[str, str]]] = {
 
 # Pattern B: demote 成果物保存
 PATTERN_B = {
-    "Arch-ImprovementPlanner.agent.md": [
-        ("## 4) 成果物保存", "### 4.1) 成果物保存"),
-    ],
-    "QA-CodeQualityScan.agent.md": [
-        ("## 4) 成果物保存", "### 4.1) 成果物保存"),
-    ],
 }
 
 # Pattern C: demote 出力ルール (3 ARD files)

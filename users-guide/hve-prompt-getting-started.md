@@ -26,6 +26,18 @@
   - リポジトリを clone 済みで、`python -m hve` が起動できる
   - GitHub Copilot にログイン済み（HVE GUI 内の Copilot CLI タブ / GitHub Copilot CLI / VS Code Copilot Chat のいずれか）
 - 次のステップ: [prompts/README.md](prompts/README.md) から目的に合った貼り付け用 Prompt を選ぶ
+- 任意の文書を特定Stepへ追加・代替する場合: [Workflow / Step入力ガイド](./step-inputs.md#prompt)
+
+### 参照先
+
+- Agent の Prompt 版ルール: [Prompt Edition Skill](../.github/skills/hve-prompt-edition/SKILL.md)
+- リポジトリ共通の入口: [copilot-instructions](../.github/copilot-instructions.md)
+- HVE 自己テスト: [共通入口・品質証跡の契約](../tests/README.md) / [Prompt 版統合テスト一覧](../tests/prompt-version/README.md)
+
+自己テストでは、通常の `work/` 運用とは別に、全 controller 生成物を最初から元リポジトリの
+`tests/run/<run-id>/<task>/` に保持します（機微情報を除き、failed / blocked / interrupted も保持）。指定された README・plan・completion report は task 直下、その他の詳細証跡は `artifacts/` に置き、いずれも lane 外に保持します。
+cleanup は必要な安全な証跡を退避し、存在・必要な非空条件・相対リンク・要求 hash を検証した後の専用 lane / fixture だけが対象です。
+欠損・検証不能なら停止し、保持証跡は削除しません。詳細は上記の両 README に従ってください。
 
 ---
 
@@ -65,7 +77,7 @@ Prompt 版は、GUI で保存済みの設定（モデル、reasoning effort、�
 
 **この Step は任意です。** 設定を保存していない場合は既定値が使われます
 （正本は [hve/gui/settings_store.py](../hve/gui/settings_store.py) の `defaults()`）。
-モデルを固定したい場合だけ、最初に 1 回 GUI で設定してください。
+未保存時のモデル既定値は `claude-opus-5.5` で、`Auto` は GUI で明示選択したときだけ使います。モデルを固定したい場合だけ、最初に 1 回 GUI で設定してください。
 
 1. `python -m hve` で GUI を起動する
 2. オプション画面でモデルなどを選ぶ
@@ -111,6 +123,15 @@ Copilot は `.github/skills/hve-prompt-edition/SKILL.md` に従って request �
 続けて計画を取得します。この間、**あなたがコマンドやファイルパスを入力する必要はありません。**
 **Workflow / Step / 入力ファイルが一意に決まらない場合、Copilot は推測せずに質問します。**
 
+最初の依頼で事前承認の範囲まで宣言したい場合、Copilot は request v1 の `execution_policy` として次を保持します。
+
+- `unattended`: 計画提示後に確認待ちを挟まない無人実行を宣言するか
+- `pre_approved_operations`: 事前承認する操作の一覧。現時点の許可値は `azure_deploy` だけ
+- `allow_public_exposure`: 外部公開を伴う操作を許可するか
+- `budget_note`: 予算メモ。200 文字以内で記録とモデルへの伝達だけに使われ、課金上限にはなりません
+
+これらは **最初の依頼で宣言した範囲だけ** が plan / hash / 実行へ引き継がれます。宣言が無ければ従来どおり明示承認を待ちます。
+
 ---
 
 ## Step 3. 提示された計画を読む（書き込みなし）
@@ -133,6 +154,9 @@ Copilot が実行計画（plan）を提示します。**あなたは何も入力
 
 計画の提示は各 Workflow を `--dry-run` で実行し、実行計画（DAG）を組み立てられるかを確かめています。
 
+**計画成功は runtime 初期化・接続・query 成功を意味しません。** plan では実働 session の初期化も query も行いません。
+ResourceSnapshot / discovery の `ready` は runtime の `connected` を意味しません。設定上の有効状態と、実行時の接続・tool 公開・問い合わせの成功は別に確認します。
+
 > **`--dry-run` は上流成果物の不足を検出しません。** 前提となるファイルが無くても計画は提示されます。
 > 依存関係は [prompts/cross-workflow.md](prompts/cross-workflow.md) で確認し、上流の Workflow を先に実行してください。
 
@@ -146,10 +170,20 @@ Copilot が実行計画（plan）を提示します。**あなたは何も入力
 この計画で実行してください。
 ```
 
-- Copilot が plan SHA-256 を添えて実行します。**あなたが 64 桁の値を打つ必要はありません。**
+- Copilot が plan SHA-256 を添えて実行します。**あなたが 64 桁の値を手入力・転記する必要はありません。**
 - 「いいね」「たぶん大丈夫」のような曖昧な返事は承認として扱われず、Copilot が確認し直します
-- 依頼文や設定、HEAD が変わって計画が変わった → 「stale」として実行されません。Copilot が計画を作り直して再提示します
+- 依頼文や設定、HEAD が変わって計画が変わった → 「stale」として実行されません。Copilot が新しい計画内容と plan SHA-256 を再提示し、別 turn の明示承認を得てから実行します。古い承認を流用しません
+- 最初のモデル送信前に、実効選択 MCP がある場合の初期化・readiness と、必要な options 更新の ACK を確認します。gate の成功または許可された optional disable の完了後だけ送信します。条件の詳細は [CLI ガイドの SDK ResourceSnapshot routing](hve-cli-orchestrator-guide.md#sdk-resourcesnapshot-routing現行-runtime) を参照してください
 - 複数 Workflow のうち 1 つが失敗した → 後続の Workflow は開始しません。成功済み Workflow は自動で取り消されません
+
+短く覚えるなら、次の境界だけ確認してください。
+
+- 承認対象は提示済みの plan / resume plan ごとで、別 turn の明示承認が必要です。
+- Copilot は hash を渡すだけで、HVE が実行直前に plan を再計算して照合します。
+- resume は CAS 成功後だけ既存経路を起動し、実行は承認済み Workflow / Step の最初の失敗で止まります。
+- `output_paths` の存在は品質保証でも、今回更新された証拠でもありません。
+
+依頼・設定・HEAD の変更や resource drift により実行条件を見直す場合は、再plan・内容と hash の再提示・再承認が必要です。変更や drift がなければ再planは不要で、承認済み計画を実行できます。実行時の hash 照合と runtime 確認は省略しません。
 
 ---
 
@@ -240,6 +274,8 @@ hash の不一致または CAS の競合で計画が **stale** になった場�
   位置を復元する checkpoint ではありません
 - hash、CAS、lease、fencing は HVE 内の競合や重複再開を抑止・検出するための制御です。外部サービスへ
   既に行われた副作用の exactly-once までは保証しません
+- cold resume では caller と route の除外を `disabled_mcp_servers` で起動前に渡すため、除外サーバーを起動しません。ただし resident session の既に起動済みのプロセスを取り消すことはできません。再開後も送信前の runtime gate を通します。
+- SDK 1.0.11 の `disabled_skills=[]` は `disabledSkills` の wire payload では省略されます。空リスト指定だけでは保存済み Skill 除外の解除を保証できません。required Skill は runtime で確認し、不成立なら最初の送信前に fail-closed で停止します。
 
 ---
 
@@ -276,8 +312,12 @@ Copilot が代行するため入力は不要ですが、何が起きているか
 | `別名の実ファイルが存在しません` | 入力別名の実ファイルパスが違う | リポジトリ内の相対パスで、実在する通常ファイルを依頼文で伝える |
 | `計画が承認時と一致しません（stale）` | 依頼内容 / GUI 設定 / HEAD が変わった | Copilot が自動で計画を作り直して再提示するので、内容を確認して改めて承認する |
 | `dry-run が失敗したため計画を提示しません` | 引数の組合せが不正など、`orchestrate` 自体が非 0 で終了した | 直前に表示された `orchestrate` のエラーを確認する |
-| 計画は出たが実行が途中で失敗する | 上流成果物が無い（`--dry-run` では検出されない） | 上流の Workflow を先に実行する。依存は [prompts/cross-workflow.md](prompts/cross-workflow.md) を参照 |
+| `Prompt durable execution の登録に失敗しました` | 承認済み計画の実行順序を保存する durable 登録が失敗した。子プロセスは 1 つも起動していない | 保存設定・request の値を見直して Step 2 から再度計画を作り直す。原因を示す flag 名は安全のため表示されない |
+| 計画は出たが実行が途中で失敗する | 上流成果物の不足だけとは限りません。runtime 初期化・接続・tool 公開・ACK・query の失敗もありうる | 失敗した段階を確認する。上流不足なら [Workflow 間の依存](prompts/cross-workflow.md)、runtime なら [Plugin / MCP 認証ガイド](plugin-mcp-auth.md) を参照 |
+| `MCP host not initialized` / `needs-auth` | 前者は初期化未完了、後者は認証が必要な状態であり、同じ原因とは断定しない | HVE 内で認証を再試行せず、必要な認証は Copilot CLI の `/mcp` 側で行う。required resource や caller filter を確認できなければ fail-closed。実行条件を変更する場合は Step 4 の再plan・再提示・明示承認へ戻る |
 | Copilot がコマンドの実行をあなたに依頼してくる | Skill の規約が適用されていない | 「コマンドはあなたが実行してください」と伝える。規約の正本は [.github/skills/hve-prompt-edition/SKILL.md](../.github/skills/hve-prompt-edition/SKILL.md) |
+
+静的チェックは、実接続・実 query・Prompt 実行の実測ではありません。文書契約の確認結果を、採用成功や本番相当の動作実績へ読み替えません。
 
 より一般的なトラブルは [troubleshooting.md](troubleshooting.md) を参照してください。
 

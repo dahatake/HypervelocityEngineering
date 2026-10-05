@@ -224,12 +224,25 @@ def test_setup_scripts_read_copilot_version_only_with_no_auto_update() -> None:
 def test_copilot_sdk_lock_pins_an_exact_version() -> None:
     """SDK 版は lock で固定する。setup 実行日でマシンごとに版が変わるのを防ぐため。"""
     text = _COPILOT_SDK_LOCK.read_text(encoding="utf-8")
+    dependencies = tomllib.loads(_PYPROJECT.read_text(encoding="utf-8"))["project"]["dependencies"]
 
     assert re.search(r"(?m)^github-copilot-sdk==\S+$", text)
     assert re.search(r"(?m)^# pinned Copilot CLI runtime: \S+$", text)
+    assert "github-copilot-sdk==1.0.11" in text
+    assert "# pinned Copilot CLI runtime: 1.0.79" in text
+    assert [item for item in dependencies if item.startswith("github-copilot-sdk")] == [
+        "github-copilot-sdk>=1.0.11"
+    ]
     assert not text.startswith("\ufeff")
     # `Path.read_text(newline=...)` は 3.13 以降にしか無いため、生バイトで判定する。
     assert b"\r\n" not in _COPILOT_SDK_LOCK.read_bytes()
+
+
+def test_node_setup_prerequisite_is_not_workiq_specific() -> None:
+    """Work IQ runtimeはSDK/CLI設定が所有し、Node.jsは一般MCP/npx用途に限定する。"""
+    for path in (_SETUP_PS1, _SETUP_SH):
+        script = path.read_text(encoding="utf-8")
+        assert "MCP Server / Work IQ / npx skills" not in script, path.name
 
 
 def test_setup_pins_the_copilot_sdk_only_behind_an_explicit_flag() -> None:
@@ -676,7 +689,13 @@ def _instrument_powershell_venv_python(source: str) -> str:
         "PowerShell harness must instrument exactly one $venvPy assignment; "
         f"found {replacements}"
     )
-    return instrumented
+    root_preference = "$ErrorActionPreference = 'Stop'"
+    assert instrumented.count(root_preference) == 1
+    return instrumented.replace(
+        root_preference,
+        root_preference + "\n[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
+        1,
+    )
 
 
 def _run_powershell_setup(
@@ -756,6 +775,7 @@ def _run_powershell_setup(
         check=False,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=45,
     )
     return _SetupRun(
@@ -1230,3 +1250,49 @@ def test_ci_checks_the_sdk_lock_contract_on_every_supported_os() -> None:
         "hve/tests/test_dev_task_environment_contract.py::"
         "test_copilot_sdk_lock_pins_an_exact_version" in steps
     )
+
+
+def test_dev_dataflow_service_coding_prompt_uses_python_logging_and_current_data_model() -> None:
+    """FR-WF-ADFDV-03: Python Prompt に .NET logger と旧モデル名を残さない。"""
+    prompt = (
+        _REPO_ROOT / ".github" / "prompts" / "Dev-Dataflow-ServiceCoding.prompt.md"
+    ).read_text(encoding="utf-8")
+
+    assert "実装言語: **Python**" in prompt
+    assert "`logging`" in prompt or "Python 標準 logging" in prompt
+    assert "ILogger<T>" not in prompt
+    assert "batch-data-model.md" not in prompt
+    assert "docs/dataflow/dataflow-data-model.md" in prompt
+
+
+def test_dev_dataflow_service_coding_prompt_separates_compileall_from_import_smoke() -> None:
+    """compileall 成功を import 可能の証拠として扱わない。"""
+    prompt = (
+        _REPO_ROOT / ".github" / "prompts" / "Dev-Dataflow-ServiceCoding.prompt.md"
+    ).read_text(encoding="utf-8")
+
+    assert "`python -m compileall`" in prompt
+    assert "compileall は構文チェックであり import 成功の証拠ではない" in prompt
+    assert "import smoke" in prompt
+    assert "import 可能（依存定義を導入した状態で `python -m compileall` が成功）" not in prompt
+
+
+def test_dev_dataflow_service_coding_prompt_reuses_same_green_build_test_slice() -> None:
+    """同一 build/test 断面は GREEN 後に再実行を要求せず結果を再利用できる。"""
+    prompt = (
+        _REPO_ROOT / ".github" / "prompts" / "Dev-Dataflow-ServiceCoding.prompt.md"
+    ).read_text(encoding="utf-8")
+
+    assert "固定スキーマ" in prompt
+    assert "最大 `tdd_max_retries` 回、既定 5" in prompt
+    assert "実接続するテストへ変更しない" in prompt
+    assert "対象は **1ジョブ分のみ**" in prompt
+    assert "同一 build/test 断面" in prompt
+    assert "再実行せず" in prompt
+    assert "再利用" in prompt
+    assert re.search(r"再利用は[^\n。]*同一 build/test 断面(?:だけ|のみ|に限)", prompt)
+    assert re.search(
+        r"入力・生成物・テスト・コマンドが(?:変わった|変更された)場合には?再検証する",
+        prompt,
+    )
+    assert "repo 標準のコマンドで build/test を実行し、成功/失敗とコマンドを作業ログに残す。" not in prompt

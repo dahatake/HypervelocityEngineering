@@ -12,12 +12,12 @@
 
 | Workflow | やること | 前提 |
 |---|---|---|
-| `aag` | AI Agent の設計書を作る | `aas` の `docs/catalog/service-catalog.md`、`aad-web` の `docs/screen/*.md` / `docs/services/*.md` / `docs/test-specs/*-test-spec.md` |
+| `aag` | AI Agent の設計書を作る | `ard` / `aas` / `ada` の成果物（`docs/catalog/app-catalog.md` / `use-case-catalog.md` / `service-catalog.md` / `data-model.md` / `data-catalog.md` / `persona-catalog.md` / `unstructured-data-catalog.md`、`docs/services/*.md`、`src/data/sample-data.json`） |
 | `aagd` | AI Agent を実装・デプロイする | `aag` の `docs/agent/*.md`（hard）、`asdw-web`（soft） |
-| `aar` | 既存サービスへ Agentic Retrieval を後付けする | `ard` の `docs/catalog/app-catalog.md` / `docs/catalog/use-case-catalog.md` / `docs/architectural-requirements-app-*.md` |
+| `aar` | 既存サービスへ Agentic Retrieval を後付けする | `docs/catalog/app-catalog.md` / `docs/catalog/domain-analytics.md` / `docs/catalog/service-catalog.md` / `docs/services/{serviceId}-description.md` |
 
 Azure / Microsoft Foundry のリソース名やモデル名は **推測で埋めないでください**。
-未確定の値は書かずに残せば、Copilot が質問し、既存の preflight が検証します。
+未確定の値は書かずに残し、Prompt Edition の request 作成前ゲートで必要な不足値だけを確認します。
 
 ---
 
@@ -49,6 +49,8 @@ HVE の Prompt 版で作業してください。
 主な成果物: `docs/agent/` / `src/test/agent/` / Azure Agent 関連成果物
 
 Step ID: `1`, `2.1`, `2.2`, `2.3`, `3`, `4`, `5`, `6`, `7`
+
+> AAGD Step `1` は AAG Step `1` と同じ `Arch-AIAgentDesign-Step1` を使い、既存の `docs/agent/agent-application-definition.md` がある場合は Azure 設計や対象ユースケースで変わる点だけを差分追記します。
 
 ### 実装だけを行う
 

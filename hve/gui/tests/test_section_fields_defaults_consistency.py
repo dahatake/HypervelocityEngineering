@@ -8,10 +8,9 @@
        bool 値の round-trip が壊れる（"false" 文字列 → bool("false")=True 反転）。
   2. _SECTION_FIELDS の opt_key が _OBSOLETE_KEYS と排他であること
      → UI に残置しつつ obsolete 指定すると保存しても次回ロードで削除される。
-  3. C4 _C4WorkIQ の bool 値 (workiq, workiq_draft) の round-trip
+  3. C4 _C4WorkIQ の bool 値 (workiq) と知識源欄 (knowledge_sources) の round-trip
      save → load → apply で False が False を維持すること（B2 root-cause 回帰防止）。
-  4. C4 _C4WorkIQ.workiq_prompt_review の文字列 round-trip
-     （B1 回帰防止: _SECTION_FIELDS["C4"] への登録漏れ検出）。
+  4. 廃止済みWork IQ runtime設定がdefaults/永続化表へ戻らないこと。
   5. C5 enable_auto_merge の bool round-trip（横展開バグ回帰防止）。
 """
 
@@ -157,7 +156,7 @@ def _save_then_reload_via_widget(
 
 
 def test_c4_workiq_bool_roundtrip_false(tmp_settings: Path, qapp) -> None:
-    """workiq=False, workiq_draft=False が save→load で False を維持する。
+    """workiq=False と knowledge_sources が save→load で維持される。
 
     B2 root-cause 回帰: defaults 未登録時に _coerce が "false" 文字列を返し
     bool("false")=True で反転していた。
@@ -167,32 +166,39 @@ def test_c4_workiq_bool_roundtrip_false(tmp_settings: Path, qapp) -> None:
     collected = _save_then_reload_via_widget(
         "C4",
         _C4WorkIQ,
-        {"workiq": False, "workiq_draft": False},
+        {"workiq": False, "knowledge_sources": "confluence,jira"},
     )
     assert collected["workiq"] is False, (
         f"workiq=False が round-trip 後に {collected['workiq']!r} に反転"
     )
-    assert collected["workiq_draft"] is False, (
-        f"workiq_draft=False が round-trip 後に {collected['workiq_draft']!r} に反転"
-    )
+    assert collected["knowledge_sources"] == "confluence,jira"
 
 
-def test_c4_workiq_prompt_review_roundtrip(tmp_settings: Path, qapp) -> None:
-    """workiq_prompt_review の文字列値が save→load で保持される。
+def test_removed_workiq_runtime_settings_are_absent() -> None:
+    removed = {
+        "workiq_tenant_id",
+        "workiq_request_timeout",
+        "workiq_prompt_review",
+        # FR-KD-10
+        "workiq_draft",
+        "workiq_akm_review",
+        "workiq_akm_ingest",
+        "workiq_dxx",
+        "workiq_draft_output_dir",
+        "workiq_prompt_qa",
+        "workiq_prompt_km",
+        "workiq_per_question_timeout",
+    }
+    defaults = settings_store.defaults()["options"]
+    persisted = {
+        key
+        for fields in settings_apply._SECTION_FIELDS.values()
+        for key in fields
+    }
 
-    B1 回帰防止: _SECTION_FIELDS["C4"] への登録漏れ検出。
-    """
-    from hve.gui.page_options import _C4WorkIQ
-
-    expected = "カスタムレビュー用プロンプト本文"
-    collected = _save_then_reload_via_widget(
-        "C4",
-        _C4WorkIQ,
-        {"workiq_prompt_review": expected},
-    )
-    assert collected.get("workiq_prompt_review") == expected, (
-        f"workiq_prompt_review が保存→ロード後に欠落: {collected.get('workiq_prompt_review')!r}"
-    )
+    assert removed.isdisjoint(defaults)
+    assert removed.isdisjoint(persisted)
+    assert removed <= settings_store._OBSOLETE_KEYS["options"]
 
 
 def test_c5_enable_auto_merge_bool_roundtrip_false(tmp_settings: Path, qapp) -> None:
@@ -215,7 +221,6 @@ def test_c5_enable_auto_merge_bool_roundtrip_false(tmp_settings: Path, qapp) -> 
 # _FilePickerWidget は QWidget サブクラスで text()/setText() を duck-type 公開する。
 # 旧 _get/_set は isinstance(QLineEdit) で判定しており FilePicker をスルーしていた
 # ため、以下のキーが保存・復元されない隠れバグがあった。
-#   - workiq_draft_output_dir (C4)
 #   - target_files / custom_source_dir (C11)
 #   - target_scope (C17)
 #   - target_dirs (C13)
@@ -224,7 +229,6 @@ def test_c5_enable_auto_merge_bool_roundtrip_false(tmp_settings: Path, qapp) -> 
 @pytest.mark.parametrize(
     "section_key,widget_factory_name,option_key,expected",
     [
-        ("C4", "_C4WorkIQ", "workiq_draft_output_dir", "some/test/path/workiq"),
         ("C11", "_C11AKM", "target_files", "some/test/path/targets"),
         ("C11", "_C11AKM", "custom_source_dir", "some/test/path/custom"),
         ("C17", "_C17ADI", "target_scope", "docs-original/specs"),

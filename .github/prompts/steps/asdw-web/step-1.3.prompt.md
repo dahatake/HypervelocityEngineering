@@ -31,15 +31,12 @@ Word / docx / chart 作成、TODO / todos SQL query、docs 構成整理、README
 
 ## HVE-owned producer contract (Agent read-only)
 
-- 詳細な生成・検証・実行契約は `.github/skills/azure-skills/azure-cli-deploy-scripts/references/asdw-data-verifier-contract.md` を正本とする。
+- 詳細な生成・検証・実行契約は `.github/skills/azure-cli-deploy-scripts/references/asdw-data-verifier-contract.md` を正本とする。
 - HVE 管理の producer は read-only とする。Agent の責務は read-only inspection と、HVE が生成した証跡の参照に限定する。`prep → create → registration → verify` は HVE-owned fixed pipeline が sanitized launcher environment で実行し、Agent は launcher stage を要求しない。
 - launcher current-validation rejection は HVE が記録する。Agent は producer を編集せず、別経路へフォールバックしない。
 - private implementation / test fixture / canonical payload は参照・復元しない。
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の `work-status.md` または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 ## Azure Policy pre-flight（最初の Azure write より前）
 
@@ -51,12 +48,12 @@ Word / docx / chart 作成、TODO / todos SQL query、docs 構成整理、README
 
 ## ASDW DataDeploy network contract
 
-Skill `azure-cli-deploy-scripts` の `.github/skills/azure-skills/azure-cli-deploy-scripts/references/asdw-data-verifier-contract.md` にある Step 1.3 DataDeploy 契約を適用する。
+Skill `azure-cli-deploy-scripts` の `.github/skills/azure-cli-deploy-scripts/references/asdw-data-verifier-contract.md` にある Step 1.3 DataDeploy 契約を適用する。
 
 ## Launcher environment delegation
 network / resource / image値は共有`asdw-data-verifier-contract.md`を正本とし、全stageへ同じsanitized launcher environmentで渡す。中間environment fileを作成・読込・修復しない。契約不整合はAgentが補正せず、HVE evidence がBLOCKED証跡へ記録する。
 
-## Pre-flight（必須）
+## Pre-flight
 
 - Azure writeより前に、`az --version`、`az account show -o tsv`、`gh --version`、`gh auth status`を順に、それぞれ単独のshell要求として実行する。
 - 任意のMarkdown横断探索、`git status`、`Set-Location`を含む複合shellは本Stepのshell境界外である。宣言済み入力はread/search toolで確認する。
@@ -70,9 +67,9 @@ network / resource / image値は共有`asdw-data-verifier-contract.md`を正本�
 
 {existing_artifact_policy}
 
-## デプロイ TDD GREEN フロー（必須）
+## デプロイ TDD GREEN フロー
 1. HVE-managed producer 3本とStep.1.2 verifierをread-only inspectionする。作成・変更・修復しない。`data-registration-script.sh`はAuditRecord専用、他11エンティティは`create-azure-data-resources.sh`が担当し、END marker後へ任意shellを追加しない。
-2. `work-status.md`、`ac-verification.md`、および TDD テスト結果レポート `tdd-test-report.md`（出力先は「## TDD テスト結果レポート（必須）」節）は HVE evidence が StageResult だけを根拠に生成する。`ac-verification.md` の AC-1 を `✅`/`❌`、`tdd-test-report.md` の `TDD-Judgement` を `PASS`（GREEN）/`BLOCKED`（未達, `Evidence-Status: EXECUTED`）へ確定するのは HVE であり、Agent はこれらを新規作成・上書き・訂正しない
+2. `work-status.md`、`ac-verification.md`、および TDD テスト結果レポート `tdd-test-report.md`（出力先は「## TDD テスト結果レポート」節）は HVE evidence が StageResult だけを根拠に生成する。`ac-verification.md` の AC-1 を `✅`/`❌`、`tdd-test-report.md` の `TDD-Judgement` を `PASS`（GREEN）/`BLOCKED`（未達, `Evidence-Status: EXECUTED`）へ確定するのは HVE であり、Agent はこれらを新規作成・上書き・訂正しない
 3. HVE-owned fixed pipeline によるデプロイスクリプトの実行（リソース作成 + 非Auditデータ登録 → Audit専用registration）
 	- prep/create/registration/verifierの実行は、HVEが安定読取した同一bytesをvalidatorへ渡してからBashへ入力するHVE-owned fixed pipelineだけが行う。順序は `prep` → `create` → `registration` → `verify` に固定する。`bash` / `./`による4スクリプトの直接実行、script間のchild実行、`source`、wrapper、変数・glob・alias、同一要求内の書換えを使用しない。
 	- Agent は launcher stage を要求せず、launcher モジュール／スクリプトの**ファイル存在を shell で probe しない**（`Get-ChildItem` / `Test-Path` / `ls` / `dir` 等を発行しない）。pipeline がモジュール不在・run-id / 環境変数不足・契約エラー等のいずれで失敗しても、`bash` / `./` 直接実行や手動 `az` 代替検証へフォールバックせず、HVE が AC-1 `❌` / `tdd-test-report.md` `TDD-Judgement: BLOCKED` で証跡付き fail として終了する。
@@ -92,7 +89,7 @@ network / resource / image値は共有`asdw-data-verifier-contract.md`を正本�
 - HVE-owned evidence outputs が HVE evidence により作成・確定されている（Agent は著作しない）
 - Step.1.2 生成の検証スクリプトで全項目 PASS（GREEN）し、`ac-verification.md` の AC-1 が `✅` であり、`tdd-test-report.md` が `TDD-Judgement: PASS`・`Evidence-Status: EXECUTED` で作成済みであること
 - ただし最大5回で GREEN 未達の場合は、`work-status.md`、`ac-verification.md`、`tdd-test-report.md`（`TDD-Judgement: BLOCKED`）を必ず作成し、AC-1 を `❌` として最終 verify 結果 / 未達リソース / ブロッカー理由を記録済みであること（この場合は Orchestrator の deploy AC gate で Step fail になるが、timeout ではなく証跡付き fail とする）
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 - 出力先: `tests/run/<run-id>/asdw-web/step-1-3/<target-app-id>/GREEN/tdd-test-report.md`
 - 固定メタデータ: `Workflow: asdw-web`、`Step: 1.3`、`Phase: GREEN`
 - 必須ラベル: `Schema-Version`, `Evidence-Status`, `TDD-Judgement`, `Secret-Redaction`, `Test-Files-Changed`

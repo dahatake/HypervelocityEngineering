@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, Optional
@@ -114,6 +115,11 @@ class CopilotPricing:
         norm = model_id.strip().lower()
         if norm in self.models:
             return self.models[norm]
+        # SDK は ``claude-opus-5.5``、保存キーは ``claude-opus-5-5`` のため記号を正規化して再照合
+        dashed = re.sub(r"[^a-z0-9]+", "-", norm).strip("-")
+        if dashed in self.models:
+            return self.models[dashed]
+        norm = dashed
         # prefix 部分一致（例: "claude-sonnet-4-20250101" -> "claude-sonnet-4"）
         for k, v in self.models.items():
             if norm.startswith(k) or k.startswith(norm):

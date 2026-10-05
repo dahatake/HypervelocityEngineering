@@ -80,7 +80,8 @@ def _ask_login_confirmation(parent: Optional[object]):
             "startup_auth",
             "今すぐ `gh auth login` を実行しますか？\n"
             "ログインすると Issue / Pull Request の閲覧・作成とブランチ取得が有効になります。\n"
-            "後で設定画面の「GitHub」→「GitHub CLI でログイン」からも実行できます。",
+            "後でヘッダーの「GitHub」を開き、"
+            "「連携設定」→「GitHub CLI でログイン」からも実行できます。",
         )
     )
     box.setStandardButtons(

@@ -7,22 +7,14 @@
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## 1) 目的と非目的
 
 データフローアプリ デプロイ & CI/CD 構築専用Agent の **Step 1.2: Azure データリソース Deploy** 担当。
 Step 1.1（Dev-Dataflow-DataServiceSelect）で作成された **Azure リソース作成スクリプトを実行・検証** し、
 データフローアプリ用の Azure データリソース（Storage Account / Service Bus / CosmosDB 等）を実際に作成する。
-"全ジョブ横断設計刷新" や "アーキテクチャ変更" は範囲外（必要なら Skill task-dag-planning の分割ルールで別タスク化）。
+"全ジョブ横断設計刷新" や "アーキテクチャ変更" は範囲外（必要なら別タスク化）。
 
 ## 2) 変数
 
@@ -32,7 +24,7 @@ Step 1.1（Dev-Dataflow-DataServiceSelect）で作成された **Azure リソー
 
 ## 3) 入力・出力
 
-### 3.1 入力（必須）
+### 3.1 入力
 
 - `docs/dataflow/dataflow-service-catalog.md`（Arch-Dataflow-ServiceCatalog の出力 — Azure サービスマッピング・DLQ 設定・依存関係マトリクス）
 - `docs/dataflow/dataflow-app-catalog.md`（Arch-Dataflow-AppCatalog の出力 — Job-ID 一覧・スケジュール・リトライ戦略）
@@ -45,17 +37,13 @@ Step 1.1（Dev-Dataflow-DataServiceSelect）で作成された **Azure リソー
 - `docs/dataflow/dataflow-monitoring-design.md`（監視・運用設計書 — メトリクス定義・アラートルール）
 - `src/infra/azure/` 配下の既存スクリプト（既存パターンがあれば踏襲する）
 
-### 3.3 出力（必須）
+### 3.3 出力
 
 - Azure データリソース実行ログ・検証結果（`{WORK}deploy-work-status.md` に記録）
 - AC 検証結果（`{WORK}ac-verification.md` に記録。Orchestrator gate は `Issue-<識別子>` 直下を検査するため `artifacts/` 配下に置かない）
 - 作業ログ: `{WORK}` 配下
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
@@ -94,8 +82,6 @@ A-exec) Azure リソース作成スクリプトの実行と検証
 
 ### 6.1 ステップ A-exec: Azure リソース作成スクリプトの実行と検証
 
-> **A-exec は A とは独立したステップ。SPLIT_REQUIRED 時（Plan-Only モード）には実行を行わず、独立した Sub Issue として分割すること。Step 1.1 の Sub Issue が完了・マージされた後に、A-exec の Sub Issue で実際のリソース作成コマンドを実行する。**
-
 1. `src/infra/azure/dataflow/create-batch-resources.sh` を実行する。
    - **成功判定**: exit code 0、かつ全リソースの URL/Resource ID/リージョンが出力されること。
 2. `src/infra/azure/dataflow/verify-batch-resources.sh` を実行する（AC-3 の事前検証）。
@@ -104,7 +90,7 @@ A-exec) Azure リソース作成スクリプトの実行と検証
 4. 取得した値（Function App URL / Resource ID / Connection Strings 等）を `{WORK}deploy-work-status.md` に記録する（機密値は記録しない）。
 5. `{WORK}ac-verification.md` に AC-3 の検証結果を 1 行 1 AC のテーブル行で記録する。
 
-#### AC-3 の検証手順（必須）
+#### AC-3 の検証手順
 
 - `src/infra/azure/dataflow/verify-batch-resources.sh` を実行し、exit code 0 かつ全リソースの `provisioningState == "Succeeded"` を確認する。
 - `ac-verification.md` には例の形式で記録する: `| AC-3 | batch resources verified | ✅ | <verify-batch-resources.sh GREEN ログ抜粋> |`

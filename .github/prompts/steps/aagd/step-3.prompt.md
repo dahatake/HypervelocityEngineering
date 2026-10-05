@@ -22,10 +22,7 @@ AI Agent を Azure AI Foundry Agent Service へデプロイし、GitHub Actions 
 
 - `.github/io-contracts/Dev-Microservice-Azure-AgentDeploy--aagd--3.yaml`
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードに加え、Section 7.0 / 7.3のsearch / MCP providerの接続・認証・権限・availabilityを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項 / 確認日** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 {existing_artifact_policy}
 
@@ -37,7 +34,7 @@ AI Agent を Azure AI Foundry Agent Service へデプロイし、GitHub Actions 
 - Project が無い場合は、account / Project 名を示して ASDW-WEB Step.2.2 (AddServiceDeploy) の先行実行を案内し、`aagd:blocked` で停止する。
 - Project endpoint を取得できない場合、**親 account endpoint を Project endpoint の代用にしない**。値を推測・合成せず停止する。
 
-## デプロイ TDD フロー（必須）
+## デプロイ TDD フロー
 1. デプロイテスト仕様書の生成: `docs/test-specs/deploy-step2-agent-test-spec.md`
 2. 検証スクリプトの生成: `src/infra/azure/verify-agent-resources.sh`（exit code: 0=全PASS, 非0=FAILあり）
 3. Agent詳細設計Section 7.0 / 7.3から選択providerを確定し、Custom Agent Promptの`A-cap-plan`でavailability、permission、data boundary、fallbackとdeploy前inventoryを審査する

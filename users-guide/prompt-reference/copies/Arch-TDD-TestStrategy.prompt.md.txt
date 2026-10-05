@@ -10,15 +10,7 @@ TDDテスト戦略専用Agent。
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## 役割分離ルール（必読）
 
@@ -38,7 +30,7 @@ TDDテスト戦略専用Agent。
 - **TestSpec を残し、TestStrategy 側からはリンクのみ**を残す。
 
 ## Agent 固有の Skills 依存
-- `test-strategy-template`：テスト戦略の共通テンプレート（§1 テストピラミッド定義・§2 テストダブル選択基準・§3 テストデータ戦略・§4 カバレッジ方針）を参照する。
+- `tdd-red-green-reality`：HVE 生成テスト方針の正本（`.github/skills/tdd-red-green-reality/SKILL.md` §1.7「テストピラミッド定義」「テストダブル選択基準」「テストデータ戦略」「カバレッジ方針」）を参照する。
   - 特に実行環境分類（Unit / 実装コード向け TDD RED/GREEN はローカル実行可能、Integration / Post-deploy / E2E は構成済み外部サービスを環境変数・設定ファイルで接続）を反映する。
 
 # 1) 目的
@@ -70,7 +62,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 
 # 4) 出力（生成/更新するファイル）
 - 主要成果物（必須）: `docs/catalog/test-strategy.md`
-- 分割時のみ（必須）: `{WORK}plan.md` と `{WORK}subissues.md`
+- 分割時に使用: `{WORK}plan.md` と `{WORK}subissues.md`
 
 # 5) 依存確認（必須・最初に実行）
 入力ファイルを `read` で確認し、以下の条件を満たさない場合は **即座に停止** する：
@@ -100,24 +92,11 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 12. `docs/catalog/data-catalog.md` が存在する場合、PII列・暗号化要否・データストア種別ごとのテーブル一覧を抽出する（Polyglot Persistence テスト方針の精緻化に使用）。
 
 ## 6.3 計画・分割
-- Skill task-dag-planning に従う。
-- **plan.md 作成時の必須手順（省略禁止）**:
-  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
-  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
-     ```
-     <!-- task_scope: single|multi -->
-     <!-- context_size: small|medium|large -->
-     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
-     <!-- subissues_count: N -->
-     <!-- implementation_files: true or false -->
-     ```
-  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/task-dag-planning/references/plan-template.md` を参照）
-  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
+- 計画を書く場合は Skill `task-dag-planning` に従う。
 - `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 - 固有の分割粒度: 「出力セクション単位」で分割（§9 の `##` トップレベル見出し7セクション: `## 1. 概要` 〜 `## 7. 網羅性チェック` を各1単位とする）
 
 ## 6.4 生成（test-strategy.md）
-13. task_scope=single かつ context_size ≤ medium で完了できる見込みがある場合のみ、§9 の **固定スキーマ** で `docs/catalog/test-strategy.md` を生成/更新する。
     - 出典・TBD の扱いは `docs-output-format` Skill §1 参照
 
 # 7) 書き込み安全策（空ファイル/欠落対策）
@@ -144,13 +123,13 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 
 > **注**: UI 固有のテスト種別（Component Test / Visual Regression Test / Accessibility Test 等）がプロジェクトに該当する場合は、上記テーブルに追加すること。
 
-> **テストピラミッド方針**: `test-strategy-template` Skill §1 参照。プロジェクトの特性に応じてカスタマイズすること（根拠を出典に記載）。
+> **テストピラミッド方針**: `.github/skills/tdd-red-green-reality/SKILL.md` §1.7「テストピラミッド定義」参照。プロジェクトの特性に応じてカスタマイズすること（根拠を出典に記載）。
 
 ## 3. サービス別テスト対象サマリ（表）
 | サービスID | サービス名 | 主要API数 | Unit | Integration | Contract | E2E | Component | 既存テストプロジェクト | 特記事項 | 出典(ファイル#見出し) |
 |---|---|---|---|---|---|---|---|---|---|---|
 
-### 3.1 AI Agent テストカテゴリサマリ（必須）
+### 3.1 AI Agent テストカテゴリサマリ
 > 各セルは Agent が実行時に具体値を記入するプレースホルダ。
 
 | カテゴリ | 目的 | 主要観点 | 例 | 関連 Tool / Library |
@@ -163,7 +142,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 
 ## 4. テストダブル戦略
 
-依存パターンごとの選択基準（`test-strategy-template` Skill §2 参照。`service-catalog.md` Table C の依存欄から導出）:
+依存パターンごとの選択基準（`.github/skills/tdd-red-green-reality/SKILL.md` §1.7「テストダブル選択基準」参照。`service-catalog.md` Table C の依存欄から導出）:
 
 | 依存パターン | テストダブル種別 | 使用場面 | 出典(ファイル#見出し) |
 |---|---|---|---|
@@ -180,7 +159,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
   - SQL DB（Azure SQL）: トランザクション・ロールバック方針
   - NoSQL（Cosmos DB）: 結果整合性テストの方針
   - Blob Storage: ファイル操作のテスト方針
-- テスト用データストア（In-Memory / Testcontainers / エミュレータ）の選択基準（`test-strategy-template` Skill §2 参照）
+- テスト用データストア（In-Memory / Testcontainers / エミュレータ）の選択基準（`.github/skills/tdd-red-green-reality/SKILL.md` §1.7「テストダブル選択基準」参照）
 
 ## 5.1 バッチ／データフロー処理テスト方針（該当 SVC のみ）
 `service-catalog-matrix.md` Table C の `種別=非同期ジョブ` に該当する SVC が 1 件以上ある場合のみ記載する（Web 系のみのプロジェクトでは「該当なし」と明記）：
@@ -206,11 +185,11 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 - Q2 ...
 - Q3 ...
 
-# 10) 最終品質レビュー（単回インライン・セルフチェック）
+# 10) 受入観点（完了条件の補足）
 
-## 10.1 セルフチェック契約
+## 10.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ## 10.2 ドメイン固有観点
 - **機能完全性・要件達成度**：各行に出典がある / 推測が混じっていない / `TBD` が妥当か / §9 の全セクションが揃っているか
@@ -222,7 +201,7 @@ Step 7.3（テスト仕様書）の直接の入力文書となる。
 - **保守性・拡張性・堅牢性**：新サービス追加時に戦略書を拡張できるか / `src/test/api/` との対応が明示されているか / Questions が明確か
 
 ## 10.3 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 # 11) 完了条件
 - `docs/catalog/test-strategy.md` が §9 のスキーマで生成/更新され、

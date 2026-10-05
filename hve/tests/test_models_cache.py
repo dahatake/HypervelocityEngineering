@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -20,7 +22,6 @@ from hve.models_cache import (
     save,
     save_entries,
 )
-
 
 # =====================================================================
 # get_cache_path
@@ -249,6 +250,115 @@ class TestSaveEntriesV2:
         assert isinstance(data["entries"], list)
         assert data["entries"][0]["id"] == "m1"
         assert data["entries"][0]["max_context_window_tokens"] == 128000
+
+    def test_writers_use_independent_temporary_files(
+        self, tmp_path, monkeypatch
+    ):
+        path = tmp_path / "v2.json"
+        replace_sources: list[Path] = []
+
+        def capture_replace(src, _dst):
+            replace_sources.append(Path(src))
+
+        monkeypatch.setattr("hve.models_cache.os.replace", capture_replace)
+        save_entries([ModelEntry(id="first", name="first")], path=path)
+        save_entries([ModelEntry(id="second", name="second")], path=path)
+        assert len(set(replace_sources)) == 2
+        assert list(tmp_path.glob("*.tmp")) == []
+
+    def test_concurrent_writers_serialize_target_replacement(
+        self, tmp_path, monkeypatch
+    ):
+        from hve import models_cache as cache_module
+
+        path = tmp_path / "v2.json"
+        original_replace = cache_module.os.replace
+        state_lock = threading.Lock()
+        active_replacements = 0
+        max_active_replacements = 0
+        errors: list[OSError] = []
+
+        def monitored_replace(src, dst):
+            nonlocal active_replacements, max_active_replacements
+            with state_lock:
+                active_replacements += 1
+                max_active_replacements = max(
+                    max_active_replacements,
+                    active_replacements,
+                )
+            try:
+                time.sleep(0.05)
+                return original_replace(src, dst)
+            finally:
+                with state_lock:
+                    active_replacements -= 1
+
+        monkeypatch.setattr(cache_module.os, "replace", monitored_replace)
+
+        def writer(model_id: str) -> None:
+            try:
+                save_entries([ModelEntry(id=model_id, name=model_id)], path=path)
+            except OSError as exc:  # test records expected writer failures
+                errors.append(exc)
+
+        threads = [
+            threading.Thread(target=writer, args=("first",)),
+            threading.Thread(target=writer, args=("second",)),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=5)
+
+        assert all(not thread.is_alive() for thread in threads)
+        assert errors == []
+        assert max_active_replacements == 1
+        cached = load(path=path, allow_stale=True)
+        assert cached is not None
+        assert cached.models in (["first"], ["second"])
+
+    def test_replace_failure_preserves_cache_and_removes_temporary_file(
+        self, tmp_path, monkeypatch
+    ):
+        path = tmp_path / "v2.json"
+        save_entries([ModelEntry(id="cached", name="Cached")], path=path)
+        monkeypatch.setattr(
+            "hve.models_cache.os.replace",
+            Mock(side_effect=PermissionError("synthetic replace failure")),
+        )
+
+        with pytest.raises(PermissionError, match="synthetic replace failure"):
+            save_entries([ModelEntry(id="fresh", name="Fresh")], path=path)
+
+        cached = load(path=path, allow_stale=True)
+        assert cached is not None
+        assert cached.models == ["cached"]
+        assert list(tmp_path.glob("*.tmp")) == []
+
+    def test_transient_replace_permission_error_is_retried(
+        self, tmp_path, monkeypatch
+    ):
+        from hve import models_cache as cache_module
+
+        path = tmp_path / "v2.json"
+        original_replace = cache_module.os.replace
+        calls = 0
+
+        def transient_replace(src, dst):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise PermissionError("synthetic transient target contention")
+            return original_replace(src, dst)
+
+        monkeypatch.setattr(cache_module.os, "replace", transient_replace)
+        save_entries([ModelEntry(id="fresh", name="Fresh")], path=path)
+
+        cached = load(path=path, allow_stale=True)
+        assert calls == 2
+        assert cached is not None
+        assert cached.models == ["fresh"]
+        assert list(tmp_path.glob("*.tmp")) == []
 
 
 class TestV1BackwardCompat:

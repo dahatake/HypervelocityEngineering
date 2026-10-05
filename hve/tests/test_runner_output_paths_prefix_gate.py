@@ -18,7 +18,7 @@ from hve.runner import _check_output_paths_gate  # noqa: E402
 
 
 class _Ctx:
-    split_fork_enabled = False
+    pass
 
 
 class _Workflow:
@@ -196,26 +196,6 @@ def test_shared_helper_treats_glob_metacharacters_as_literal_prefix(
 
     (services / "[AB]-literal.md").write_text("literal", encoding="utf-8")
     assert find_missing_output_paths(tmp_path, (), (prefix,)) == []
-
-
-def test_gate_is_skipped_in_fleet_mode(tmp_path: Path) -> None:
-    """fleet mode では FR-WF-OUT-01 と同様に prefix ゲートも適用しない。"""
-
-    class _FleetCtx:
-        split_fork_enabled = True
-
-    step = _child(
-        "2.2/SVC-01",
-        [],
-        ["docs/services/{serviceId}-{serviceNameSlug}-description.md"],
-        "SVC-01",
-    )
-
-    missing = _check_output_paths_gate(
-        _FleetCtx(), _Workflow([step]), "2.2/SVC-01", tmp_path
-    )
-
-    assert missing == []
 
 
 def test_gate_is_skipped_in_standalone_mode(tmp_path: Path) -> None:

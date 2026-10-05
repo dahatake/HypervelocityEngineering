@@ -534,8 +534,7 @@ class TestReplaySanitization:
         sentinels = {
             "PROMPT-SENTINEL-7f4d",
             "TITLE-SENTINEL-1e2a",
-            "WORKIQ-SENTINEL-98bd",
-            "MCP-PATH-SENTINEL-331c",
+            "DOCPURPOSE-SENTINEL-98bd",
             "https://credential.example.invalid/SENTINEL",
         }
         raw_argv = (
@@ -552,10 +551,8 @@ class TestReplaySanitization:
             "PROMPT-SENTINEL-7f4d",
             "--issue-title",
             "TITLE-SENTINEL-1e2a",
-            "--workiq-prompt-qa",
-            "WORKIQ-SENTINEL-98bd",
-            "--mcp-config",
-            "MCP-PATH-SENTINEL-331c",
+            "--doc-purpose",
+            "DOCPURPOSE-SENTINEL-98bd",
             "--cli-url",
             "https://credential.example.invalid/SENTINEL",
         )
@@ -579,6 +576,124 @@ class TestReplaySanitization:
         assert "additional_prompt" in missing_replay_keys
         assert all(re.fullmatch(r"[a-z][a-z0-9_]*", key) for key in missing_replay_keys)
         assert not any(sentinel in serialized for sentinel in sentinels)
+
+    def test_sanitize_argv_keeps_default_ignore_paths_but_not_custom(
+        self, tmp_path: Path
+    ) -> None:
+        api = _api("F-02 default ignore_paths replay", "ResumeService")
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        service = api.ResumeService(_RecordingStore(), repo_root)
+        defaults = ("docs", "images", "qa", "src", "work")
+
+        safe, missing = service.sanitize_argv(
+            ("orchestrate", "--workflow", "aas", "--ignore-paths", *defaults, "--strict")
+        )
+        assert "ignore_paths" not in missing
+        index = safe.index("--ignore-paths")
+        assert tuple(safe[index + 1 : index + 6]) == defaults
+        assert safe[-1] == "--strict"
+
+        safe, missing = service.sanitize_argv(
+            ("orchestrate", "--workflow", "aas", "--ignore-paths", "tmp", "build")
+        )
+        assert "ignore_paths" in missing
+        assert "--ignore-paths" not in safe
+
+    def test_sanitize_argv_keeps_execution_policy_flags(self, tmp_path: Path) -> None:
+        # N-12 / FR-PROMPT-13: prompt run が子へ渡す事前承認 flag で durable 登録が失敗しない。
+        api = _api("FR-PROMPT-13 execution policy replay", "ResumeService")
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        service = api.ResumeService(_RecordingStore(), repo_root)
+
+        safe, missing = service.sanitize_argv(
+            (
+                "orchestrate",
+                "--workflow",
+                "asdw-web",
+                "--unattended",
+                "--pre-approved-operation",
+                "azure_deploy",
+                "--allow-public-exposure",
+                "--budget-note",
+                "月 5,000 円以内",
+            )
+        )
+        assert "--pre-approved-operation" in safe
+        assert safe[safe.index("--pre-approved-operation") + 1] == "azure_deploy"
+        assert "--allow-public-exposure" in safe
+        assert "--budget-note" not in safe
+        assert "budget_note" in missing
+
+    def test_sanitize_argv_rejects_removed_mcp_config_flag(
+        self, tmp_path: Path
+    ) -> None:
+        api = _api("FR-CLI-90 removed mcp-config replay option", "ResumeService")
+        state_api = _state_api("FR-CLI-90 removed mcp-config replay option")
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        service = api.ResumeService(_RecordingStore(), repo_root)
+
+        with pytest.raises(state_api.DurableStateError, match="unsupported replay option"):
+            service.sanitize_argv(
+                (
+                    "orchestrate",
+                    "--workflow",
+                    "aas",
+                    "--mcp-config",
+                    "legacy.json",
+                )
+            )
+
+    @pytest.mark.parametrize(
+        "flag,sample_value",
+        [
+            ("--model", "claude-opus-4.7"),
+            ("--review-model", "claude-opus-4.7"),
+            ("--qa-model", "claude-opus-4.7"),
+            ("--akm-model", "claude-opus-4.7"),
+            ("--reasoning-effort", "high"),
+            ("--review-reasoning-effort", "high"),
+            ("--qa-reasoning-effort", "high"),
+            ("--akm-reasoning-effort", "high"),
+            ("--context-tier", "default"),
+            ("--akm-context-tier", "default"),
+            ("--max-parallel", "3"),
+            ("--timeout", "3600"),
+            ("--review-timeout", "1800"),
+            ("--auto-qa", None),
+            ("--auto-contents-review", None),
+            ("--verbosity", "compact"),
+            ("--branch", "main"),
+            ("--strict", None),
+            ("--enable-agentic-retrieval", "yes"),
+            ("--agentic-data-source-modes", "indexer"),
+            ("--foundry-mcp-integration", None),
+            ("--agentic-data-sources-hint", "APP-009"),
+            ("--agentic-existing-design-diff-only", None),
+            ("--foundry-sku-fallback-policy", "standard_allowed"),
+            ("--enable-tool-search", "yes"),
+            ("--tool-search-defer-threshold", "1"),
+            ("--cloud-session-branch", "main"),
+        ],
+    )
+    def test_all_27_shared_settings_are_classified_not_unsupported(
+        self, tmp_path: Path, flag: str, sample_value: str | None
+    ) -> None:
+        """FR-LOCAL-SURFACE-01 (a): 全27共有keyがsanitize_argvで安全な永続値
+        またはkey-only gapへ分類され、`unsupported replay option`にならない
+        ことを表駆動で確認する（D-02回帰の網羅確認）。"""
+        api = _api("FR-LOCAL-SURFACE-01 (a) shared setting replay classification", "ResumeService")
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        service = api.ResumeService(_RecordingStore(), repo_root)
+        argv: tuple[str, ...] = ("orchestrate", "--workflow", "aas", flag)
+        if sample_value is not None:
+            argv = argv + (sample_value,)
+
+        # 例外を送出しないこと自体がこの検証の合格条件。
+        service.sanitize_argv(argv)
 
     def test_registration_persists_missing_key_names_but_not_values(
         self, tmp_path: Path
@@ -682,7 +797,6 @@ class TestReplaySanitization:
         service = api.ResumeService(_RecordingStore(), repo_root)
         sentinels = (
             "C:\\private\\repository",
-            "/private/self-improve/root",
         )
 
         safe, missing = service.sanitize_argv(
@@ -692,8 +806,6 @@ class TestReplaySanitization:
                 "adi",
                 "--target-scope",
                 sentinels[0],
-                "--self-improve-target-scope",
-                sentinels[1],
             )
         )
 
@@ -701,7 +813,6 @@ class TestReplaySanitization:
             {"argv": list(safe), "missing_replay_keys": list(missing)}
         )
         assert "target_scope" in missing
-        assert "self_improve_target_scope" in missing
         assert all(sentinel not in serialized for sentinel in sentinels)
 
     def test_prompt_cloud_and_fleet_options_use_safe_persistence_boundary(

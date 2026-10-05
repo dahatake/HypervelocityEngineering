@@ -42,9 +42,9 @@ def _resolve_report_base_dir(base_dir: Optional[_PathLike]) -> Path:
     if base_dir is not None:
         return Path(base_dir)
     try:
-        from hve.split_fork import resolve_work_root
+        from hve.run_paths import resolve_work_root
     except ImportError:  # pragma: no cover - script execution path
-        from split_fork import resolve_work_root  # type: ignore[import-not-found,no-redef]
+        from run_paths import resolve_work_root  # type: ignore[import-not-found,no-redef]
     return resolve_work_root()
 
 

@@ -45,15 +45,13 @@ class TestIssueTemplateQaControls(unittest.TestCase):
             with self.subTest(template=template):
                 self.assertNotIn("id: enable_qa", self._read_template(template))
 
-    def test_agent_templates_keep_qa_control_but_remove_self_improve_enable(self) -> None:
-        """AAG/AAGDはQA任意制御を維持し、Post-DAG Self-ImproveだけCloud必須にする。"""
+    def test_agent_templates_keep_qa_control_without_self_improve_fields(self) -> None:
+        """AAG/AAGDはQA任意制御を維持し、自己改善の入力欄を持たない。"""
         for template in ("ai-agent-design.yml", "ai-agent-dev.yml"):
             with self.subTest(template=template):
                 content = self._read_template(template)
                 self.assertIn("id: enable_qa", content)
-                self.assertNotIn("id: enable_self_improve", content)
-                self.assertIn("id: self_improve_max_iterations", content)
-                self.assertIn("id: self_improve_quality_threshold", content)
+                self.assertNotIn("self_improve", content)
 
 
 class TestWorkflowAutoQaParity(unittest.TestCase):

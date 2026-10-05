@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -32,6 +33,7 @@ _IO_CONTRACTS_DIR = _REPO_ROOT / ".github" / "io-contracts"
 _EXCEPTIONS_FILE = _REPO_ROOT / ".github" / "io-contract-exceptions.yaml"
 
 sys.path.insert(0, str(_REPO_ROOT / "hve"))
+from hve.fanout_expander import expand_workflow_fanout  # type: ignore[import]
 from workflow_registry import get_root_steps, get_step, get_workflow  # type: ignore[import]
 
 
@@ -52,6 +54,97 @@ _EXISTING_STEPS: dict[str, tuple[str, list[str], list[str]]] = {
     "2": ("Arch-Dataflow-MonitoringDesign", ["docs/dataflow/dataflow-monitoring-design.md"], []),
     "3": ("Arch-Dataflow-TDD-TestSpec", [], ["docs/test-specs/{key}-test-spec.md"]),
 }
+
+
+class TestAdfdSelectedJobScopeContract(unittest.TestCase):
+    """T07: ADFD Step 1/3 の APP 単位 fan-out と APP 内ジョブの網羅を固定する。"""
+
+    def _section(self, text: str, start: str, end: str) -> str:
+        return text[text.index(start):text.index(end, text.index(start))]
+
+    def test_tdd_prompt_uses_current_step_ids_and_single_job_input(self) -> None:
+        text = (_PROMPTS_DIR / "Arch-Dataflow-TDD-TestSpec.prompt.md").read_text(encoding="utf-8")
+        retired = [s for s in ("Step 4.5", "Step 5.1", "Step 5.2", "Step 6.1", "Step 6.2") if s in text]
+        self.assertEqual(retired, [])
+
+        step3 = get_step("adfd", "3")
+        self.assertIsNotNone(step3)
+        assert step3 is not None
+        self.assertEqual(step3.fanout_parser, "dataflow_catalog")
+        self.assertEqual(step3.required_input_paths, [
+            "docs/catalog/test-strategy.md",
+            "docs/catalog/service-catalog-matrix.md",
+            "docs/dataflow/apps/{key}-spec.md",
+            "docs/dataflow/dataflow-monitoring-design.md",
+        ])
+        survey = self._section(text, "### 5.1 調査", "### 5.2 抽出")
+        self.assertTrue(any(p in survey for p in (
+            "docs/dataflow/apps/{appId}-spec.md",
+            "docs/dataflow/apps/{key}-spec.md",
+            "docs/dataflow/apps/{{key}}-spec.md",
+        )))
+        self.assertNotRegex(survey, r"`?docs/dataflow/apps/`?\s*配下の全\s*`?\*\.md`?")
+
+    def test_adfd_fanout_addendum_renders_current_step_ids_per_key(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            catalog = root / "docs" / "catalog" / "app-catalog.md"
+            catalog.parent.mkdir(parents=True)
+            catalog.write_text(
+                "# App Catalog\n\n| APP-ID | 名称 |\n|---|---|\n| APP-004 | dataflow-a |\n| APP-009 | dataflow-b |\n",
+                encoding="utf-8",
+            )
+            wf = get_workflow("adfd")
+            self.assertIsNotNone(wf)
+            assert wf is not None
+            expanded = expand_workflow_fanout(wf, root)
+
+        self.assertEqual(expanded.fanout_map["1"], ["1/APP-004", "1/APP-009"])
+        self.assertEqual(expanded.fanout_map["3"], ["3/APP-004", "3/APP-009"])
+        self.assertNotIn("6.1", expanded.fanout_map)
+        self.assertNotIn("6.3", expanded.fanout_map)
+
+        common = (_REPO_ROOT / ".github" / "prompts" / "fanout" / "adfd" / "_common.prompt.md").read_text(encoding="utf-8")
+        for key, other in (("APP-004", "APP-009"), ("APP-009", "APP-004")):
+            rendered = common.replace("{{key}}", key)
+            self.assertIn(key, rendered)
+            self.assertNotIn(other, rendered)
+            self.assertIn("Step 1", rendered)
+            self.assertIn("Step 3", rendered)
+            self.assertNotIn("Step 6.1", rendered)
+            self.assertNotIn("Step 6.3", rendered)
+            self.assertIn("他ジョブのファイルに書き込まない", rendered)
+
+    def test_step3_template_completion_targets_selected_job_child_only(self) -> None:
+        step3 = get_step("adfd", "3")
+        self.assertIsNotNone(step3)
+        assert step3 is not None
+        self.assertEqual(step3.output_paths_template, ["docs/test-specs/{key}-test-spec.md"])
+
+        template = (_TEMPLATES_DIR / "step-3.prompt.md").read_text(encoding="utf-8")
+        completion = self._section(template, "## 完了条件", "{completion_instruction}")
+        self.assertIn("対象", completion)
+        self.assertNotIn("全ジョブ分", completion)
+        self.assertTrue("{key}" in template or "{appId}" in template or "{{key}}" in template)
+
+    def test_selected_app_prompt_covers_every_job_without_equating_app_and_job_ids(self) -> None:
+        prompt = (_PROMPTS_DIR / "Arch-Dataflow-TDD-TestSpec.prompt.md").read_text(encoding="utf-8")
+        template = (_TEMPLATES_DIR / "step-3.prompt.md").read_text(encoding="utf-8")
+        survey = self._section(prompt, "### 5.1 調査", "### 5.2 抽出")
+        completion = self._section(template, "## 完了条件", "{completion_instruction}")
+        self.assertNotIn("対象1ジョブ", survey)
+        self.assertNotIn("`{jobId}` と同義", template)
+        self.assertNotIn("- ジョブID: {appId}", prompt)
+        for scope in (survey, completion):
+            self.assertIn("対象 APP", scope)
+            self.assertIn("すべてのジョブ", scope)
+        self.assertIn("Job-ID", prompt)
+        self.assertIn("暫定識別子", prompt)
+        overview = self._section(prompt, "### 1. 概要", "### 2. テストケース表")
+        self.assertIn("- APP-ID: {appId}", overview)
+        self.assertIn("- ジョブID:", overview)
+        self.assertIn("TBD", overview)
+        self.assertIn("暫定識別子", overview)
 
 
 class TestAdfdDataflowDesignPrompts(unittest.TestCase):

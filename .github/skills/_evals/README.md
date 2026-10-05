@@ -4,6 +4,8 @@
 
 `.github/skills/_evals/` には、各 Skill の **発動正確性テストケース** を YAML 形式で格納する。
 
+ここではリポジトリ同梱 Skill の契約を検証する。外部 Skill の旧同梱版に対する評価は保持せず、外部 Skill 自体の現行定義・評価へ委ねる。HVE 側の required / optional 境界は既存の routing 契約テストで検証する。
+
 ## 用途
 
 - Skill の `description` / `WHEN:` 変更時に、既存のトリガーパターンが壊れていないかのリグレッション確認
@@ -72,14 +74,14 @@ test_cases:
 | dataflow-design-guide | 6 | 2026-04-10 |
 | input-file-validation | 6 | 2026-04-10 |
 | knowledge-management | 6 | 2026-04-10 |
-| mcp-server-design | 6 | 2026-04-10 |
 | microservice-design-guide | 6 | 2026-04-10 |
-| docs-output-format | 6 | 2026-04-10 |
-| svg-renderer | 6 | 2026-04-10 |
+| docs-output-format | 6 | 2026-09-11 |
 | github-actions-cicd | 6 | 2026-04-10 |
-| test-strategy-template | 6 | 2026-04-10 |
 | repo-onboarding-fast | 6 | 2026-04-10 |
-| ai-agent-capability-contract | 9 | 2026-07-10 |
-| azure-deploy | 7 | 2026-04-13 |
-| azure-prepare | 7 | 2026-04-13 |
-| azure-validate | 7 | 2026-04-13 |
+| ai-agent-capability-contract | 9 | 2026-09-11 |
+| hve-prompt-edition | 33 | 2026-09-12 |
+
+## 判定結果の読み方
+
+- `NOT RUN` は未実施を示す。静的 schema / 参照検査の PASS は、実モデルの Skill 発動・完了確認の代替ではない。
+- 1024 文字は Skill の `description` の仕様上限であり、評価ケースの入力文字数の制限や、実モデルでの動作保証ではない。

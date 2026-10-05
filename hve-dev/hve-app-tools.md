@@ -93,9 +93,10 @@ CHANGELOG への追記は、変更を加えた当人がソース変更とあわ�
 
 ### 1.2 `hve` における配布チャネル
 
-`hve` は **PyPI 公開を行わない** 社内ツールである（[§0.3](#03-前提とする運用形態)）。そのため一般的な Python パッケージで使われる `python -m build` / `twine upload` の経路は本書のスコープ外であり、配布は以下の経路のみで成立する。
+`hve` は **PyPI 公開を行わない** 社内ツールである（[§0.3](#03-前提とする運用形態)）。通常の開発配布は clone＋setup であり、private trial の OS-only 起動では、レビュー済み source ZIP と OS 別 launcher を追加で使用する。installer、単体 exe / `.app`、署名・公証、匿名公開は本変更の対象外である。
 
 - **初回導入**: 利用者が `git clone` 後、`hve/setup-hve.{ps1,sh,cmd}` を実行して `.venv` を作成し `pip install -e .` を実行
+- **OS-only private trial**: 認証済み利用者が source ZIP を展開し、Windows は `Start-HVE.cmd`、macOS は `Start-HVE.command` を1回起動する。取得・展開、OS の直接確認、GUI 表示後の認証は1操作から除外する。詳細は [hve-one-operation-start.md](../users-guide/hve-one-operation-start.md) を参照
 - **更新**: 利用者が `git pull` を実行（editable install のため再インストール不要。コードは即反映）
 - **バージョン番号の意味**: PyPI 等の外部依存解決経路には現れないが、`hve.__version__` / `pip show hve` で確認可能な「変更履歴との対応」を示すラベルとして機能する
 
@@ -418,15 +419,15 @@ GUI から ARD 等の Workflow を実行中に、過去タスク（例: `Issue-g
 
 ## 5. バージョンアップ手順（`bump-my-version`）
 
-本章はリリース担当者向けの操作手順である。背景と規約（何をどう判定するか）は [§3 バージョンニング規約](#3-バージョンニング規約semver--pep-440) と [§4 CHANGELOG.md の書き方](#4-changelogmd-の書き方) を先に参照すること。
+本章はリリース担当者向けの操作手順である。背景と規約（何をどう判定するか）は [§3 バージョニング規約](#3-バージョニング規約semver--pep-440) と [§4 CHANGELOG.md の書き方](#4-changelogmd-の書き方) を先に参照すること。
 
-`hve` のバージョン番号は [§2.2](#22-バージョン番号の保持箱所) に示す 3 箱所にハードコードされている。加えてリリース時には [CHANGELOG.md](../CHANGELOG.md) の `## [Unreleased]` 見出しを新バージョン見出しに昭格する必要がある（[§4.3](#43-bump-my-version-による自動昭格)）。
+`hve` のバージョン番号は [§2.2](#22-バージョン番号の保持箱所) に示す 3 箱所にハードコードされている。加えてリリース時には [CHANGELOG.md](../CHANGELOG.md) の `## [Unreleased]` 見出しを新バージョン見出しに昇格する必要がある（[§4.3](#43-bump-my-version-による自動昇格)）。
 
 これらを **1 コマンドで同時更新 + commit + Git タグ作成** するため、`bump-my-version` を採用している。設定は [pyproject.toml](../pyproject.toml) の `[tool.bumpversion]` セクションに記述済み。
 
 ### 5.1 前提条件
 
-- リポジトリ直下にいる（`C:\GitHub\RoyalytyService2ndGen` 等）
+- リポジトリ直下にいる
 - `.venv` 構築済み（未構築なら `hve\setup-hve.cmd` または `./hve/setup-hve.sh`）
 - `git status` がクリーンであること（未コミットの変更があると失敗する）
 - Windows PowerShell の場合、Rich の Unicode 出力でエラーが出ないよう `PYTHONIOENCODING=utf-8` を推奨
@@ -559,14 +560,14 @@ git push
 | # | ファイル | 現在の値 | 用途 |
 |---|---|---|---|
 | 1 | [cq/\_\_init\_\_.py](../cq/__init__.py) | `__version__ = "0.4.0"` | Code Query engine |
-| 2 | [.github/skills/code-query/SKILL.md](../.github/skills/code-query/SKILL.md) | `version: 0.4.1` | Code Query Skill |
+| 2 | [.github/skills/code-query/SKILL.md](../.github/skills/code-query/SKILL.md) | `version: 0.4.2` | Code Query Skill |
 | 3 | [tools/skills/code_query/pyproject.toml](../tools/skills/code_query/pyproject.toml) | `version = "0.3.0"` | `code-query-gui` distribution |
-| 4 | [tools/for-other-repo/code-query/package.toml](../tools/for-other-repo/code-query/package.toml) | `version = "1.3.0"` | Code Query 移植用キット |
+| 4 | [tools/for-other-repo/code-query/package.toml](../tools/for-other-repo/code-query/package.toml) | `version = "1.3.1"` | Code Query 移植用キット |
 | 5 | [mdq/\_\_init\_\_.py](../mdq/__init__.py) | `__version__ = "0.8.0"` | Markdown Query engine |
-| 6 | [.github/skills/markdown-query/SKILL.md](../.github/skills/markdown-query/SKILL.md) | `version: 0.8.1` | Markdown Query Skill |
+| 6 | [.github/skills/markdown-query/SKILL.md](../.github/skills/markdown-query/SKILL.md) | `version: 0.8.2` | Markdown Query Skill |
 | 7 | [tools/skills/markdown_query/pyproject.toml](../tools/skills/markdown_query/pyproject.toml) | `version = "0.3.0"` | `markdown-query-gui` distribution |
-| 8 | [tools/for-other-repo/markdown-query/package.toml](../tools/for-other-repo/markdown-query/package.toml) | `version = "1.3.0"` | Markdown Query 移植用キット |
-| 9 | [tools/for-other-repo/tool-search/package.toml](../tools/for-other-repo/tool-search/package.toml) | `version = "1.3.0"` | Tool Search 移植用キット |
+| 8 | [tools/for-other-repo/markdown-query/package.toml](../tools/for-other-repo/markdown-query/package.toml) | `version = "1.3.1"` | Markdown Query 移植用キット |
+| 9 | [tools/for-other-repo/tool-search/package.toml](../tools/for-other-repo/tool-search/package.toml) | `version = "1.3.1"` | Tool Search 移植用キット |
 
 > **注**: `tools/skills/*/vendor/` と `tools/skills/*/skill/` は正本から生成する。版数変更時も直接編集せず、各キットの `sync-vendor` を実行して同期する。
 

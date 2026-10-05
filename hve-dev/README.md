@@ -36,6 +36,7 @@
 | ファイル | 位置付け |
 |---|---|
 | `requirement-definition.md` | HVE Cloud Agent Orchestrator / HVE CLI Orchestrator の要求定義・機能要件書。 |
+| `requirement-definition-history.md` | 要求定義書の改訂履歴（§1.3 の履歴情報。現行要件として適用しない）。改訂行はここへ追記します。 |
 | `requirement-test-mapping.md` | 要求定義と既存テストコードの対応表。 |
 | `hve-tdd-change-policy.md` | 今後の `hve` 限定 TDD 運用ルール。 |
 | `hve-test-inventory.csv` | 既存テストコードの棚卸し。分類、ファイル、行番号、関数/ケース名、仕様根拠、証跡を含みます。 |

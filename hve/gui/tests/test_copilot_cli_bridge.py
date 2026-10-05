@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from hve.gui.copilot_cli_bridge import CopilotCliBridge, PluginInfo
+from hve.gui.copilot_cli_bridge import CopilotCliBridge
 
 
 _FAKE_EXE = "/fake/bin/copilot"
@@ -39,141 +39,29 @@ class TestFindBinary:
 
 
 # ---------------------------------------------------------------------------
-# list_mcp_servers
+# FR-GUI-51 / FR-MAINT-07: Plugin / MCP 一覧は SDK discovery の単一実装だけ
 # ---------------------------------------------------------------------------
-class TestListMcpServers:
-    def test_returns_empty_when_binary_missing(self) -> None:
-        with patch.object(CopilotCliBridge, "find_binary", return_value=None):
-            assert CopilotCliBridge.list_mcp_servers() == {}
-
-    def test_parses_real_json_schema(self) -> None:
-        stdout = json.dumps(
-            {
-                "mcpServers": {
-                    "azure-mcp": {
-                        "tools": ["*"],
-                        "type": "local",
-                        "command": "npx",
-                        "args": ["-y", "@azure/mcp@latest", "server", "start"],
-                        "source": "user",
-                    },
-                    "github": {
-                        "type": "http",
-                        "url": "https://api.githubcopilot.com/mcp/",
-                        "source": "builtin",
-                    },
-                }
-            }
-        )
-        with patch.object(CopilotCliBridge, "find_binary", return_value=_FAKE_EXE), \
-             patch("subprocess.run", return_value=_mock_completed(stdout=stdout)):
-            servers = CopilotCliBridge.list_mcp_servers()
-        assert set(servers.keys()) == {"azure-mcp", "github"}
-        assert servers["azure-mcp"]["command"] == "npx"
-        assert servers["azure-mcp"]["source"] == "user"
-        assert servers["github"]["url"].endswith("/mcp/")
-
-    def test_invalid_json_returns_empty(self) -> None:
-        with patch.object(CopilotCliBridge, "find_binary", return_value=_FAKE_EXE), \
-             patch("subprocess.run", return_value=_mock_completed(stdout="not json")):
-            assert CopilotCliBridge.list_mcp_servers() == {}
-
-    def test_nonzero_returncode_returns_empty(self) -> None:
-        with patch.object(CopilotCliBridge, "find_binary", return_value=_FAKE_EXE), \
-             patch("subprocess.run", return_value=_mock_completed(returncode=1, stderr="boom")):
-            assert CopilotCliBridge.list_mcp_servers() == {}
-
-    def test_timeout_returns_empty(self) -> None:
-        def _raise(*_a, **_kw):
-            raise subprocess.TimeoutExpired(cmd="copilot", timeout=1)
-        with patch.object(CopilotCliBridge, "find_binary", return_value=_FAKE_EXE), \
-             patch("subprocess.run", side_effect=_raise):
-            assert CopilotCliBridge.list_mcp_servers(timeout=1.0) == {}
-
-    def test_missing_mcpservers_key_returns_empty(self) -> None:
-        with patch.object(CopilotCliBridge, "find_binary", return_value=_FAKE_EXE), \
-             patch("subprocess.run", return_value=_mock_completed(stdout="{}")):
-            assert CopilotCliBridge.list_mcp_servers() == {}
+@pytest.mark.parametrize(
+    "removed",
+    [
+        "list_plugin_resources",
+        "parse_plugin_resources_json",
+        "list_mcp_servers",
+        "mcp_servers_from_resources",
+        "get_mcp_server",
+        "list_plugins",
+        "plugins_from_resources",
+    ],
+)
+def test_cli_resource_listing_is_not_duplicated(removed: str) -> None:
+    assert not hasattr(CopilotCliBridge, removed)
 
 
-# ---------------------------------------------------------------------------
-# get_mcp_server
-# ---------------------------------------------------------------------------
-class TestGetMcpServer:
-    def test_parses_real_json_schema(self) -> None:
-        stdout = json.dumps(
-            {
-                "azure-mcp": {
-                    "tools": ["*"],
-                    "type": "local",
-                    "command": "npx",
-                    "args": ["-y", "@azure/mcp@latest", "server", "start"],
-                    "source": "user",
-                }
-            }
-        )
-        with patch.object(CopilotCliBridge, "find_binary", return_value=_FAKE_EXE), \
-             patch("subprocess.run", return_value=_mock_completed(stdout=stdout)) as mrun:
-            defn = CopilotCliBridge.get_mcp_server("azure-mcp")
-        assert defn is not None
-        assert defn["command"] == "npx"
-        # argv チェック: copilot mcp get azure-mcp --json
-        argv = mrun.call_args.args[0]
-        assert argv[1:] == ["mcp", "get", "azure-mcp", "--json"]
+def test_cli_bridge_does_not_export_plugin_info() -> None:
+    import hve.gui.copilot_cli_bridge as bridge
 
-    def test_returns_none_for_empty_name(self) -> None:
-        assert CopilotCliBridge.get_mcp_server("") is None
-
-    def test_returns_none_when_unknown(self) -> None:
-        with patch.object(CopilotCliBridge, "find_binary", return_value=_FAKE_EXE), \
-             patch("subprocess.run", return_value=_mock_completed(returncode=1)):
-            assert CopilotCliBridge.get_mcp_server("nope") is None
-
-
-# ---------------------------------------------------------------------------
-# list_plugins
-# ---------------------------------------------------------------------------
-class TestListPlugins:
-    # 実機 stdout サンプル (T00 調査結果より)。bullet は U+2022。
-    _REAL_STDOUT = (
-        "Installed plugins:\n"
-        "  \u2022 workiq@work-iq (v1.0.0)\n"
-        "  \u2022 microsoft-365-agents-toolkit@work-iq (v1.3.0)\n"
-        "  \u2022 workiq-productivity@work-iq (v1.0.0)\n"
-    )
-
-    def test_parses_real_text_format(self) -> None:
-        with patch.object(CopilotCliBridge, "find_binary", return_value=_FAKE_EXE), \
-             patch("subprocess.run", return_value=_mock_completed(stdout=self._REAL_STDOUT)):
-            plugins = CopilotCliBridge.list_plugins()
-        assert plugins == [
-            PluginInfo(name="workiq", source="work-iq", version="1.0.0"),
-            PluginInfo(name="microsoft-365-agents-toolkit", source="work-iq", version="1.3.0"),
-            PluginInfo(name="workiq-productivity", source="work-iq", version="1.0.0"),
-        ]
-
-    def test_tolerates_other_bullet_chars(self) -> None:
-        # Windows コンソールのコードページによっては bullet が "*" / "-" 等に化ける
-        stdout = (
-            "Installed plugins:\n"
-            "  * workiq@work-iq (v1.0.0)\n"
-            "  - other@other (v2.0.0)\n"
-        )
-        with patch.object(CopilotCliBridge, "find_binary", return_value=_FAKE_EXE), \
-             patch("subprocess.run", return_value=_mock_completed(stdout=stdout)):
-            plugins = CopilotCliBridge.list_plugins()
-        names = [p.name for p in plugins]
-        assert "workiq" in names
-        assert "other" in names
-
-    def test_empty_when_binary_missing(self) -> None:
-        with patch.object(CopilotCliBridge, "find_binary", return_value=None):
-            assert CopilotCliBridge.list_plugins() == []
-
-    def test_ignores_non_matching_lines(self) -> None:
-        with patch.object(CopilotCliBridge, "find_binary", return_value=_FAKE_EXE), \
-             patch("subprocess.run", return_value=_mock_completed(stdout="No plugins installed\n")):
-            assert CopilotCliBridge.list_plugins() == []
+    assert "PluginInfo" not in bridge.__all__
+    assert not hasattr(bridge, "PluginInfo")
 
 
 # ---------------------------------------------------------------------------

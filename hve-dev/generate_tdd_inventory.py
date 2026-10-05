@@ -20,10 +20,23 @@ from typing import Iterable
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+SCRIPTS_DIR = ROOT / ".github" / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
 
 from cq import surface_export  # noqa: E402  面横断索引の抽出アルゴリズムは単一実装
 from cq.surface_export import SURFACE_FIELDNAMES  # noqa: E402
 from cq.traces import FEATURE_ID_RE  # noqa: E402  規範 ID の抽出パターンは単一定義
+from hve_requirement_mapping import (  # noqa: E402
+    ALLOWED_TEST_PREFIXES,
+    definition_ids_in_line,
+    GATE_ID_RE,
+    iter_requirement_definitions,
+    mapping_ids_from_text as _shared_mapping_ids_from_text,
+    parse_requirement_mapping,
+    requirement_status_for_line,
+    resolve_allowed_test_path,
+)
 
 OUT_DIR = ROOT / "hve-dev"
 TEST_CSV = OUT_DIR / "hve-test-inventory.csv"
@@ -33,7 +46,6 @@ POLICY_MD = OUT_DIR / "hve-tdd-change-policy.md"
 SURFACE_CSV = OUT_DIR / "hve-surface-inventory.csv"
 REQ_DEF = OUT_DIR / "requirement-definition.md"
 REQ_MAP = OUT_DIR / "requirement-test-mapping.md"
-GATE_ID_RE = r"G-[A-Z]+"
 
 # copilot-instructions.md / Skill のルールを機械判定するために実装が直接参照する固定文字列。
 # FR-MAINT-06 は推測での追加を禁じるため、実在を確認した語だけを列挙する。
@@ -96,22 +108,24 @@ def git_files() -> list[str]:
 
 
 def category_for_test_path(path: str) -> tuple[str, str] | None:
-    if re.search(r"(^|/)hve/tests/.*\.py$", path):
+    if re.search(r"^hve/tests/.*\.py$", path):
         return "core-python", "hve-cli-orchestrator"
-    if re.search(r"(^|/)hve/gui/tests/.*\.py$", path):
+    if re.search(r"^hve/gui/tests/.*\.py$", path):
         return "gui-python", "hve-gui-orchestrator"
-    if re.search(r"(^|/)\.github/scripts/python/tests/.*\.py$", path):
+    if re.search(r"^\.github/scripts/python/tests/.*\.py$", path):
         return "github-script-python", "cloud-orchestrator-scripts"
-    if re.search(r"(^|/)\.github/scripts/powershell/tests/.*\.ps1$", path):
+    if re.search(r"^\.github/scripts/powershell/tests/.*\.ps1$", path):
         return "github-script-powershell", "cloud-orchestrator-scripts"
-    if re.search(r"(^|/)\.github/scripts/tests/.*\.(sh|ps1|py)$", path):
+    if re.search(r"^\.github/scripts/tests/.*\.(sh|ps1|py)$", path):
         return "github-script-shell", "cloud-orchestrator-scripts"
-    if re.search(r"(^|/)mdq/tests/.*\.py$", path):
+    if re.search(r"^mdq/tests/.*\.py$", path):
         return "mdq-support-python", "hve-mdq-support"
-    if re.search(r"(^|/)cq/tests/.*\.py$", path):
+    if re.search(r"^cq/tests/.*\.py$", path):
         return "cq-support-python", "hve-cq-support"
-    if re.search(r"(^|/)mdq/gui/tests/.*\.py$", path):
+    if re.search(r"^mdq/gui/tests/.*\.py$", path):
         return "markdown-query-gui-support-python", "hve-mdq-support"
+    if re.search(r"^tests/bats/.*\.bats$", path):
+        return "bats-shell", "hve-shell-launchers"
     return None
 
 
@@ -485,6 +499,37 @@ def parse_shell_test(path_rel: str, category: str, subsystem: str) -> list[dict[
     return rows
 
 
+def parse_bats_test(path_rel: str, category: str, subsystem: str) -> list[dict[str, object]]:
+    path = ROOT / path_rel
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    rows: list[dict[str, object]] = []
+    for i, line in enumerate(lines, start=1):
+        match = re.match(r"\s*@test\s+(['\"])(?P<name>.+?)\1\s*\{\s*$", line)
+        if match is None:
+            continue
+        name = match.group("name")
+        rows.append(
+            {
+                "category": category,
+                "subsystem": subsystem,
+                "file": path_rel,
+                "line": i,
+                "kind": "bats-test",
+                "class_or_scope": "module",
+                "function_or_case": name,
+                "async": "no",
+                "decorators_or_context": "@test",
+                "spec_source": "bats-test-literal",
+                "specification": name,
+                "evidence": compact(line.strip(), 240),
+                "markers": "",
+                "parametrize": "",
+                "nodeid_hint": f"{path_rel}::{name}",
+            }
+        )
+    return rows
+
+
 def collect_tests(files: list[str]) -> tuple[list[dict[str, object]], list[str]]:
     rows: list[dict[str, object]] = []
     selected_files: list[str] = []
@@ -500,6 +545,8 @@ def collect_tests(files: list[str]) -> tuple[list[dict[str, object]], list[str]]
             rows.extend(parse_powershell_test(path, category_name, subsystem))
         elif path.endswith(".sh"):
             rows.extend(parse_shell_test(path, category_name, subsystem))
+        elif path.endswith(".bats"):
+            rows.extend(parse_bats_test(path, category_name, subsystem))
     rows.sort(key=lambda r: (str(r["category"]), str(r["file"]), row_line_number(r), str(r["function_or_case"])))
     return rows, selected_files
 
@@ -518,11 +565,7 @@ def section_from_heading(line: str) -> str | None:
 
 
 def active_status_for_text(text: str) -> str:
-    if "~~" in text or "→ **廃止" in text or "→ 廃止" in text:
-        return "deprecated-or-removed"
-    if "未対応" in text or "✗" in text:
-        return "partial-or-not-supported"
-    return "active-or-described"
+    return requirement_status_for_line(text)
 
 
 def unique_in_order(values: Iterable[str]) -> list[str]:
@@ -541,40 +584,25 @@ def defined_feature_ids_in_line(line: str) -> list[str]:
 
     Plain prose references such as "...（NFR-COMP-01）" are intentionally ignored.
     """
-    ids: list[str] = []
-    ids.extend(re.findall(rf"\*\*({FEATURE_ID_RE})(?:（[^）]+）)?\*\*", line))
-    if m := re.match(rf"\s*\|\s*(?:~~)?({FEATURE_ID_RE})(?:（[^）]+）)?(?:[^|]*?)(?:~~)?\s*\|", line):
-        ids.append(m.group(1))
-    if m := re.match(rf"\s*-\s*(?:~~)?({FEATURE_ID_RE})\s*:", line):
-        ids.append(m.group(1))
-    return unique_in_order(ids)
+    return [identifier for identifier in definition_ids_in_line(line) if not identifier.startswith("G-")]
 
 
 def defined_gate_ids_in_line(line: str) -> list[str]:
-    ids: list[str] = []
-    ids.extend(re.findall(rf"\*\*({GATE_ID_RE})\*\*", line))
-    if m := re.match(rf"\s*\|\s*({GATE_ID_RE})(?:[^|]*?)\s*\|", line):
-        ids.append(m.group(1))
-    return unique_in_order(ids)
+    return [identifier for identifier in definition_ids_in_line(line) if identifier.startswith("G-")]
 
 
 def collect_features_from_requirement_definition() -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     if not REQ_DEF.exists():
         return rows
-    current_section = ""
-    for i, line in enumerate(REQ_DEF.read_text(encoding="utf-8-sig").splitlines(), start=1):
-        if heading := section_from_heading(line):
-            current_section = heading
-        if current_section.startswith(("11.", "12.", "14.")):
-            continue
-
-        for feature_id in defined_feature_ids_in_line(line):
+    text = REQ_DEF.read_text(encoding="utf-8-sig")
+    for i, current_section, identifier, active_status, line in iter_requirement_definitions(text):
+        if identifier.startswith("G-"):
             rows.append(
                 {
-                    "feature_kind": feature_id.split("-")[0],
-                    "feature_id": feature_id,
-                    "active_status": active_status_for_text(line),
+                    "feature_kind": "GATE",
+                    "feature_id": identifier,
+                    "active_status": active_status,
                     "section": current_section,
                     "title_or_summary": compact(line, 600),
                     "source": "hve-dev/requirement-definition.md",
@@ -582,12 +610,12 @@ def collect_features_from_requirement_definition() -> list[dict[str, object]]:
                     "details": compact(line, 1000),
                 }
             )
-        for gate_id in defined_gate_ids_in_line(line):
+        else:
             rows.append(
                 {
-                    "feature_kind": "GATE",
-                    "feature_id": gate_id,
-                    "active_status": active_status_for_text(line),
+                    "feature_kind": identifier.split("-")[0],
+                    "feature_id": identifier,
+                    "active_status": active_status,
                     "section": current_section,
                     "title_or_summary": compact(line, 600),
                     "source": "hve-dev/requirement-definition.md",
@@ -673,49 +701,111 @@ def collect_features() -> list[dict[str, object]]:
 def parse_mapping_ids() -> dict[str, dict[str, object]]:
     if not REQ_MAP.exists():
         return {}
-    mapping: dict[str, dict[str, object]] = {}
-    current = ""
-    for i, line in enumerate(REQ_MAP.read_text(encoding="utf-8-sig").splitlines(), start=1):
-        if heading := re.match(r"#{2,6}\s+(.+)", line):
-            title = heading.group(1)
-            ids = mapping_ids_from_text(title)
-            if ids:
-                current = ids[0]
-                for mapping_id in ids:
-                    mapping.setdefault(
-                        mapping_id,
-                        {"line": i, "title": compact(title, 300), "judgment": "", "tests": []},
-                    )
-                continue
-        if row := re.match(rf"\s*\|\s*({GATE_ID_RE})(?:[^|]*?)\s*\|", line):
-            current = row.group(1)
-            mapping.setdefault(
-                current,
-                {"line": i, "title": compact(line, 300), "judgment": "", "tests": []},
-            )
-            continue
-        if current:
-            if m := re.match(r"\s*-\s*判定:\s*(.*)", line):
-                mapping[current]["judgment"] = compact(m.group(1), 200)
-            if "hve/tests/" in line or ".github/scripts/" in line or "hve/gui/tests/" in line:
-                tests_value = mapping[current]["tests"]
-                if isinstance(tests_value, list):
-                    tests_value.append(compact(line, 500))
-    return mapping
+    return parse_requirement_mapping(REQ_MAP.read_text(encoding="utf-8-sig"))
 
 
 def mapping_ids_from_text(text: str) -> list[str]:
-    ids = re.findall(rf"{FEATURE_ID_RE}|{GATE_ID_RE}|§[0-9.]+", text)
-    for match in re.finditer(r"((?:FR|NFR)-[A-Z0-9-]+-)(\d+)((?:\s*/\s*\d+)+)", text):
-        prefix, first_number, tail = match.groups()
-        width = len(first_number)
-        for number in re.findall(r"\d+", tail):
-            ids.append(f"{prefix}{number.zfill(width)}")
-    return unique_in_order(ids)
+    return _shared_mapping_ids_from_text(text)
 
 
 def canonical_feature_id(feature_id: str) -> str:
     return re.sub(r"-§[0-9.]+$", "", feature_id)
+
+
+def mapping_integrity_errors(
+    feature_rows: list[dict[str, object]],
+    mapping: dict[str, dict[str, object]],
+    *,
+    test_rows: list[dict[str, object]] | None = None,
+    root: pathlib.Path | None = None,
+) -> list[str]:
+    """Return deterministic active requirement-to-test mapping errors."""
+    root = ROOT if root is None else root
+    active_rows: dict[str, list[dict[str, object]]] = defaultdict(list)
+    for row in feature_rows:
+        if (
+            str(row.get("feature_kind")) in {"FR", "NFR", "GATE"}
+            and str(row.get("active_status")) == "active-or-described"
+        ):
+            feature_id = canonical_feature_id(str(row.get("feature_id", "")))
+            if feature_id:
+                active_rows[feature_id].append(row)
+
+    mapping_by_id: dict[str, list[tuple[str, dict[str, object]]]] = defaultdict(list)
+    for mapping_id, entry in mapping.items():
+        if mapping_id.startswith(("FR-", "NFR-", "G-")):
+            mapping_by_id[canonical_feature_id(mapping_id)].append((mapping_id, entry))
+
+    errors: list[str] = []
+    active_linked_paths: list[tuple[str, str]] = []
+    test_files_with_test_rows = (
+        {
+            str(row.get("file", ""))
+            for row in test_rows
+            if str(row.get("kind", ""))
+            in {"test", "pester-it", "shell-case", "bats-test"}
+        }
+        if test_rows is not None
+        else None
+    )
+    for feature_id in sorted(active_rows):
+        rows = active_rows[feature_id]
+        if len(rows) != 1:
+            errors.append(
+                f"duplicate active requirement ID: {feature_id} ({len(rows)} rows)"
+            )
+
+        entries = mapping_by_id.get(feature_id, [])
+        if not entries:
+            errors.append(f"active requirement is missing mapping: {feature_id}")
+            continue
+        if len(entries) != 1:
+            mapping_ids = ", ".join(mapping_id for mapping_id, _entry in entries)
+            errors.append(
+                f"active requirement has multiple mappings: {feature_id} ({mapping_ids})"
+            )
+        entry = entries[0][1]
+        occurrence_lines = entry.get("lines", [entry.get("line")])
+        if isinstance(occurrence_lines, list) and len(occurrence_lines) != 1:
+            errors.append(
+                f"active requirement has duplicate mapping declarations: "
+                f"{feature_id} ({occurrence_lines})"
+            )
+        if not str(entry.get("judgment", "")).strip():
+            errors.append(f"active requirement mapping has blank judgment: {feature_id}")
+
+        raw_tests = entry.get("tests", [])
+        tests = (
+            [str(path) for path in raw_tests] if isinstance(raw_tests, list) else []
+        )
+        allowed_tests = sorted(
+            {
+                path
+                for path in tests
+                if path.startswith(ALLOWED_TEST_PREFIXES)
+            }
+        )
+        if (
+            test_files_with_test_rows is not None
+            and not any(path in test_files_with_test_rows for path in allowed_tests)
+        ):
+            errors.append(
+                "active requirement mapping has no test row: "
+                f"{feature_id}"
+            )
+        active_linked_paths.extend((feature_id, path) for path in allowed_tests)
+
+    paths_to_check = [(feature_id, path, True) for feature_id, path in active_linked_paths]
+    for feature_id, test_path, require_file in sorted(
+        paths_to_check, key=lambda item: (item[1], item[0])
+    ):
+        try:
+            resolve_allowed_test_path(root, test_path)
+        except ValueError:
+            owner = f"{feature_id}: " if feature_id else ""
+            errors.append(f"linked allowed test path is missing: {owner}{test_path}")
+            continue
+    return errors
 
 
 def write_csv(path: pathlib.Path, rows: list[dict[str, object]], fieldnames: list[str]) -> None:
@@ -811,6 +901,11 @@ def write_policy() -> None:
     )
 
 
+def canonical_artifact_label(path: pathlib.Path) -> str:
+    """Return the stable repository label used inside generated reports."""
+    return (pathlib.PurePosixPath("hve-dev") / path.name).as_posix()
+
+
 def _generation_timestamp() -> str:
     """Return a reproducible UTC timestamp when SOURCE_DATE_EPOCH is set."""
     source_date_epoch = os.environ.get("SOURCE_DATE_EPOCH")
@@ -856,22 +951,19 @@ def write_crosswalk(test_rows: list[dict[str, object]], feature_rows: list[dict[
     deprecated_features = sorted(
         {str(r["feature_id"]) for r in feature_rows if r["active_status"] == "deprecated-or-removed"}
     )
-    now = _generation_timestamp()
-
     lines = [
         "# HVE TDD ベースライン突合サマリー",
         "",
-        f"- 生成日時 (UTC): `{now}`",
         "- 対象: `hve` アプリケーションのみ（HVE CLI / GUI / Cloud Agent Orchestrator 関連）。他アプリ開発には適用しない。",
         "- 捏造防止: テスト仕様欄は docstring / 関数名 / assert・raises・Pester `Should` / shell `pass` ラベル等、実在コードから機械抽出した。",
         "",
         "## 生成物",
         "",
-        f"- `{TEST_CSV.relative_to(ROOT).as_posix()}` — 既存テストコードの全関数/ケース棚卸し。",
-        f"- `{FEATURE_CSV.relative_to(ROOT).as_posix()}` — 要求定義 ID と実コード Workflow/Step の機能一覧。",
-        f"- `{SURFACE_CSV.relative_to(ROOT).as_posix()}` — HVE 対象の実装シンボルと実行面の一覧。",
-        f"- `{CROSSWALK_MD.relative_to(ROOT).as_posix()}` — 要求定義・テストマッピング・生成inventoryの突合サマリー。",
-        f"- `{POLICY_MD.relative_to(ROOT).as_posix()}` — 今後の hve 限定 TDD 運用ルール。",
+        f"- `{canonical_artifact_label(TEST_CSV)}` — 既存テストコードの全関数/ケース棚卸し。",
+        f"- `{canonical_artifact_label(FEATURE_CSV)}` — 要求定義 ID と実コード Workflow/Step の機能一覧。",
+        f"- `{canonical_artifact_label(SURFACE_CSV)}` — HVE 対象の実装シンボルと実行面の一覧。",
+        f"- `{canonical_artifact_label(CROSSWALK_MD)}` — 要求定義・テストマッピング・生成inventoryの突合サマリー。",
+        f"- `{canonical_artifact_label(POLICY_MD)}` — 今後の hve 限定 TDD 運用ルール。",
         "",
         "## 対象範囲",
         "",
@@ -943,16 +1035,26 @@ def main() -> int:
     feature_rows = collect_features()
     surface_rows = collect_surface_symbols(files)
     mapping = parse_mapping_ids()
+    integrity_errors = mapping_integrity_errors(
+        feature_rows,
+        mapping,
+        test_rows=test_rows,
+    )
+    if integrity_errors:
+        print("requirement mapping integrity validation failed:", file=sys.stderr)
+        for error in integrity_errors:
+            print(f"- {error}", file=sys.stderr)
+        return 1
     write_csv(TEST_CSV, test_rows, TEST_FIELDNAMES)
     write_csv(FEATURE_CSV, feature_rows, FEATURE_FIELDNAMES)
     write_csv(SURFACE_CSV, surface_rows, SURFACE_FIELDNAMES)
     write_policy()
     write_crosswalk(test_rows, feature_rows, mapping)
-    print(f"wrote {TEST_CSV.relative_to(ROOT)} rows={len(test_rows)} files={len(set(r['file'] for r in test_rows))}")
-    print(f"wrote {FEATURE_CSV.relative_to(ROOT)} rows={len(feature_rows)}")
-    print(f"wrote {SURFACE_CSV.relative_to(ROOT)} rows={len(surface_rows)}")
-    print(f"wrote {CROSSWALK_MD.relative_to(ROOT)}")
-    print(f"wrote {POLICY_MD.relative_to(ROOT)}")
+    print(f"wrote {canonical_artifact_label(TEST_CSV)} rows={len(test_rows)} files={len(set(r['file'] for r in test_rows))}")
+    print(f"wrote {canonical_artifact_label(FEATURE_CSV)} rows={len(feature_rows)}")
+    print(f"wrote {canonical_artifact_label(SURFACE_CSV)} rows={len(surface_rows)}")
+    print(f"wrote {canonical_artifact_label(CROSSWALK_MD)}")
+    print(f"wrote {canonical_artifact_label(POLICY_MD)}")
     print(f"selected_test_files={len(selected_test_files)}")
     return 0
 

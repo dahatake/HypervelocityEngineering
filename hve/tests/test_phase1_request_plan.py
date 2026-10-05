@@ -91,6 +91,7 @@ class TestPlanPhase1Request(unittest.TestCase):
             step_prompt="main",
             pre_qa_context="事前確認",
             execution_mode_suffix="\n\nmode",
+            runtime_guidance_suffix="\n\nguidance",
             tdd_suffix="\n\ntdd",
             review_suffix="\n\nreview",
         )
@@ -112,6 +113,7 @@ class TestPlanPhase1Request(unittest.TestCase):
                 "main_task_heading",
                 "step_prompt",
                 "execution_mode_suffix",
+                "runtime_guidance_suffix",
                 "tdd_suffix",
                 "review_suffix",
             ],

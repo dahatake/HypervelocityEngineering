@@ -8,7 +8,8 @@ BeforeAll {
 
 Describe 'validate-plan.ps1' {
     BeforeAll {
-        $TmpDir = Join-Path ([System.IO.Path]::GetTempPath()) "ps-test-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+        $TmpRoot = Join-Path $PSScriptRoot '.tmp'
+        $TmpDir = Join-Path $TmpRoot "ps-test-$([guid]::NewGuid().ToString('N').Substring(0,8))"
         New-Item -ItemType Directory -Path $TmpDir -Force | Out-Null
         $ScriptPath = "$PSScriptRoot/../validate-plan.ps1"
     }
@@ -17,293 +18,36 @@ Describe 'validate-plan.ps1' {
         if (Test-Path $TmpDir) { Remove-Item $TmpDir -Recurse -Force }
     }
 
-    It 'passes for valid PROCEED plan' {
+    It 'passes for valid plan with 完了条件' {
         $planContent = @"
-<!-- task_scope: single -->
-<!-- context_size: small -->
-<!-- estimate_total: 10 -->
-<!-- split_decision: PROCEED -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
 # Test Plan
 
-## 分割判定
+## 完了条件
 
-- 見積合計: 10 分
-- 判定結果: PROCEED
+- [ ] validate-plan が PASS する
 "@
-        $planPath = Join-Path $TmpDir 'plan-proceed.md'
+        $planPath = Join-Path $TmpDir 'plan-valid.md'
         Set-Content -Path $planPath -Value $planContent
         $output = & $ScriptPath -Path $planPath *>&1 | Out-String
         $output | Should -Match 'PASS'
     }
 
-    It 'passes when optional estimate_total is omitted' {
+    It 'passes without metadata and without 分割判定 when 完了条件 has content' {
         $planContent = @"
-<!-- task_scope: single -->
-<!-- context_size: small -->
-<!-- split_decision: PROCEED -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
 # Test Plan
 
-## 分割判定
+## 概要
+
+No metadata comments are required.
+
+## 完了条件
+
+- [ ] validate-plan が PASS する
 "@
-        $planPath = Join-Path $TmpDir 'plan-no-estimate.md'
+        $planPath = Join-Path $TmpDir 'plan-metadata-free.md'
         Set-Content -Path $planPath -Value $planContent
         $output = & $ScriptPath -Path $planPath *>&1 | Out-String
         $output | Should -Match 'PASS'
-    }
-
-    It 'fails for missing split_decision' {
-        $planContent = @"
-<!-- task_scope: single -->
-<!-- context_size: small -->
-<!-- estimate_total: 10 -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
-# Test Plan
-
-## 分割判定
-"@
-        $planPath = Join-Path $TmpDir 'plan-no-decision.md'
-        Set-Content -Path $planPath -Value $planContent
-        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
-        $output | Should -Match 'missing required metadata.*split_decision'
-    }
-
-    It 'fails for missing task_scope' {
-        $planContent = @"
-<!-- context_size: small -->
-<!-- split_decision: PROCEED -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
-# Test Plan
-
-## 分割判定
-"@
-        $planPath = Join-Path $TmpDir 'plan-no-task-scope.md'
-        Set-Content -Path $planPath -Value $planContent
-        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
-        $output | Should -Match 'missing required metadata.*task_scope'
-    }
-
-    It 'fails for invalid task_scope' {
-        $planContent = @"
-<!-- task_scope: broad -->
-<!-- context_size: small -->
-<!-- split_decision: PROCEED -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
-# Test Plan
-
-## 分割判定
-"@
-        $planPath = Join-Path $TmpDir 'plan-invalid-task-scope.md'
-        Set-Content -Path $planPath -Value $planContent
-        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
-        $output | Should -Match "invalid task_scope='broad'"
-    }
-
-    It 'fails for missing context_size' {
-        $planContent = @"
-<!-- task_scope: single -->
-<!-- split_decision: PROCEED -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
-# Test Plan
-
-## 分割判定
-"@
-        $planPath = Join-Path $TmpDir 'plan-no-context-size.md'
-        Set-Content -Path $planPath -Value $planContent
-        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
-        $output | Should -Match 'missing required metadata.*context_size'
-    }
-
-    It 'fails for invalid context_size' {
-        $planContent = @"
-<!-- task_scope: single -->
-<!-- context_size: huge -->
-<!-- split_decision: PROCEED -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
-# Test Plan
-
-## 分割判定
-"@
-        $planPath = Join-Path $TmpDir 'plan-invalid-context-size.md'
-        Set-Content -Path $planPath -Value $planContent
-        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
-        $output | Should -Match "invalid context_size='huge'"
-    }
-
-    It 'fails for missing implementation_files' {
-        $planContent = @"
-<!-- task_scope: single -->
-<!-- context_size: small -->
-<!-- estimate_total: 10 -->
-<!-- split_decision: PROCEED -->
-<!-- subissues_count: 0 -->
-
-# Test Plan
-
-## 分割判定
-"@
-        $planPath = Join-Path $TmpDir 'plan-no-impl.md'
-        Set-Content -Path $planPath -Value $planContent
-        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
-        $output | Should -Match 'missing required metadata.*implementation_files'
-    }
-
-    It 'does not use optional estimate_total to override scope-based PROCEED' {
-        $planContent = @"
-<!-- task_scope: single -->
-<!-- context_size: small -->
-<!-- estimate_total: 20 -->
-<!-- split_decision: PROCEED -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
-# Test Plan
-
-## 分割判定
-"@
-        $planPath = Join-Path $TmpDir 'plan-over15-proceed.md'
-        Set-Content -Path $planPath -Value $planContent
-        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
-        $output | Should -Match 'PASS'
-    }
-
-    It 'fails when task_scope is multi but decision is PROCEED' {
-        $planContent = @"
-<!-- task_scope: multi -->
-<!-- context_size: small -->
-<!-- split_decision: PROCEED -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
-# Test Plan
-
-## 分割判定
-"@
-        $planPath = Join-Path $TmpDir 'plan-multi-proceed.md'
-        Set-Content -Path $planPath -Value $planContent
-        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
-        $output | Should -Match 'task_scope=multi.*split_decision=PROCEED'
-    }
-
-    It 'fails when context_size is large but decision is PROCEED' {
-        $planContent = @"
-<!-- task_scope: single -->
-<!-- context_size: large -->
-<!-- split_decision: PROCEED -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
-# Test Plan
-
-## 分割判定
-"@
-        $planPath = Join-Path $TmpDir 'plan-large-proceed.md'
-        Set-Content -Path $planPath -Value $planContent
-        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
-        $output | Should -Match 'context_size=large.*split_decision=PROCEED'
-    }
-
-    It 'fails when SPLIT_REQUIRED but implementation_files=true' {
-        $subContent = "<!-- subissue -->`n<!-- title: Sub 1 -->`nBody"
-        $subPath = Join-Path $TmpDir 'subissues.md'
-        Set-Content -Path $subPath -Value $subContent
-
-        $planContent = @"
-<!-- task_scope: multi -->
-<!-- context_size: small -->
-<!-- estimate_total: 20 -->
-<!-- split_decision: SPLIT_REQUIRED -->
-<!-- subissues_count: 1 -->
-<!-- implementation_files: true -->
-
-# Test Plan
-
-## 分割判定
-"@
-        $planPath = Join-Path $TmpDir 'plan-split-impl.md'
-        Set-Content -Path $planPath -Value $planContent
-        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
-        $output | Should -Match 'SPLIT_REQUIRED but implementation_files=true'
-    }
-
-    It 'fails for missing 分割判定 section' {
-        $planContent = @"
-<!-- task_scope: single -->
-<!-- context_size: small -->
-<!-- estimate_total: 10 -->
-<!-- split_decision: PROCEED -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
-# Test Plan
-"@
-        $planPath = Join-Path $TmpDir 'plan-no-bunkatsu.md'
-        Set-Content -Path $planPath -Value $planContent
-        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
-        $output | Should -Match "missing required section.*分割判定"
-    }
-
-    It 'validates SPLIT_REQUIRED with matching subissues_count' {
-        $subDir = Join-Path $TmpDir 'split-ok'
-        New-Item -ItemType Directory -Path $subDir -Force | Out-Null
-
-        $subContent = "<!-- subissue -->`n<!-- title: Sub 1 -->`nBody 1`n---`n<!-- subissue -->`n<!-- title: Sub 2 -->`nBody 2"
-        Set-Content -Path (Join-Path $subDir 'subissues.md') -Value $subContent
-
-        $planContent = @"
-<!-- task_scope: multi -->
-<!-- context_size: large -->
-<!-- estimate_total: 20 -->
-<!-- split_decision: SPLIT_REQUIRED -->
-<!-- subissues_count: 2 -->
-<!-- implementation_files: false -->
-
-# Test Plan
-
-## 分割判定
-"@
-        Set-Content -Path (Join-Path $subDir 'plan.md') -Value $planContent
-        $output = & $ScriptPath -Path (Join-Path $subDir 'plan.md') *>&1 | Out-String
-        $output | Should -Match 'PASS'
-    }
-
-    It 'fails when subissues_count does not match actual count' {
-        $subDir = Join-Path $TmpDir 'split-mismatch'
-        New-Item -ItemType Directory -Path $subDir -Force | Out-Null
-
-        $subContent = "<!-- subissue -->`n<!-- title: Sub 1 -->`nBody 1"
-        Set-Content -Path (Join-Path $subDir 'subissues.md') -Value $subContent
-
-        $planContent = @"
-<!-- task_scope: multi -->
-<!-- context_size: large -->
-<!-- estimate_total: 20 -->
-<!-- split_decision: SPLIT_REQUIRED -->
-<!-- subissues_count: 3 -->
-<!-- implementation_files: false -->
-
-# Test Plan
-
-## 分割判定
-"@
-        Set-Content -Path (Join-Path $subDir 'plan.md') -Value $planContent
-        $output = & $ScriptPath -Path (Join-Path $subDir 'plan.md') *>&1 | Out-String
-        $output | Should -Match 'subissues_count=3 but subissues.md has 1'
     }
 
     It 'validates directory mode' {
@@ -311,45 +55,50 @@ Describe 'validate-plan.ps1' {
         New-Item -ItemType Directory -Path $dirMode -Force | Out-Null
 
         $planContent = @"
-<!-- task_scope: single -->
-<!-- context_size: small -->
-<!-- estimate_total: 5 -->
-<!-- split_decision: PROCEED -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
 # Test
 
-## 分割判定
+## 完了条件
+
+- [ ] validate-plan が PASS する
 "@
         Set-Content -Path (Join-Path $dirMode 'plan.md') -Value $planContent
         $output = & $ScriptPath -Directory $dirMode *>&1 | Out-String
         $output | Should -Match 'PASS'
     }
 
-    It 'fails for invalid split_decision value' {
+    It 'fails for missing 完了条件 section' {
+        # FR-DOD-02
         $planContent = @"
-<!-- task_scope: single -->
-<!-- context_size: small -->
-<!-- estimate_total: 10 -->
-<!-- split_decision: INVALID -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
 # Test Plan
 
-## 分割判定
+## 概要
+
+No completion criteria are present.
 "@
-        $planPath = Join-Path $TmpDir 'plan-invalid-decision.md'
+        $planPath = Join-Path $TmpDir 'plan-missing-dod.md'
         Set-Content -Path $planPath -Value $planContent
         $output = & $ScriptPath -Path $planPath *>&1 | Out-String
-        $output | Should -Match "invalid split_decision='INVALID'"
+        $output | Should -Match "missing required section '## 完了条件'"
+    }
+
+    It 'fails for empty 完了条件 section' {
+        # FR-DOD-02
+        $planContent = @"
+# Test Plan
+
+## 完了条件
+"@
+        $planPath = Join-Path $TmpDir 'plan-empty-dod.md'
+        Set-Content -Path $planPath -Value $planContent
+        $output = & $ScriptPath -Path $planPath *>&1 | Out-String
+        $output | Should -Match "section '## 完了条件' has no non-placeholder content"
     }
 }
 
 Describe 'validate-subissues.ps1' {
     BeforeAll {
-        $TmpDir = Join-Path ([System.IO.Path]::GetTempPath()) "ps-test-sub-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+        $TmpRoot = Join-Path $PSScriptRoot '.tmp'
+        $TmpDir = Join-Path $TmpRoot "ps-test-sub-$([guid]::NewGuid().ToString('N').Substring(0,8))"
         New-Item -ItemType Directory -Path $TmpDir -Force | Out-Null
         $ScriptPath = "$PSScriptRoot/../validate-subissues.ps1"
     }
@@ -364,9 +113,17 @@ Describe 'validate-subissues.ps1' {
 <!-- title: Sub 1 -->
 Body 1
 
+## 完了条件
+
+- [ ] done 1
+
 <!-- subissue -->
 <!-- title: Sub 2 -->
 Body 2
+
+## 完了条件
+
+- [ ] done 2
 "@
         $subPath = Join-Path $TmpDir 'subissues-valid.md'
         Set-Content -Path $subPath -Value $subContent
@@ -396,6 +153,71 @@ Body
         Set-Content -Path $subPath -Value $subContent
         $output = & $ScriptPath -Path $subPath *>&1 | Out-String
         $output | Should -Match '空値ブロック'
+    }
+
+    It 'fails when 完了条件 section is missing' {
+        # FR-DOD-01
+        $subContent = @"
+<!-- subissue -->
+<!-- title: Sub 1 -->
+## Sub-001
+- 対象: X
+"@
+        $subPath = Join-Path $TmpDir 'subissues-missing-dod.md'
+        Set-Content -Path $subPath -Value $subContent
+        $output = & $ScriptPath -Path $subPath *>&1 | Out-String
+        $output | Should -Match "'## 完了条件' 欠落ブロック"
+    }
+
+    It 'fails when 完了条件 section is empty' {
+        # FR-DOD-01
+        $subContent = @"
+<!-- subissue -->
+<!-- title: Sub 1 -->
+## Sub-001
+- 対象: X
+
+## 完了条件
+"@
+        $subPath = Join-Path $TmpDir 'subissues-empty-dod.md'
+        Set-Content -Path $subPath -Value $subContent
+        $output = & $ScriptPath -Path $subPath *>&1 | Out-String
+        $output | Should -Match "'## 完了条件' 空値・プレースホルダブロック"
+    }
+
+    It 'fails when 完了条件 contains only a REPLACE_ME placeholder' {
+        # FR-DOD-01
+        $subContent = @"
+<!-- subissue -->
+<!-- title: Sub 1 -->
+## Sub-001
+- 対象: X
+
+## 完了条件
+- [ ] {REPLACE_ME_DOD}
+"@
+        $subPath = Join-Path $TmpDir 'subissues-placeholder-dod.md'
+        Set-Content -Path $subPath -Value $subContent
+        $output = & $ScriptPath -Path $subPath *>&1 | Out-String
+        $output | Should -Match "'## 完了条件' 空値・プレースホルダブロック"
+    }
+
+    It 'does not accept a horizontal rule alone as 完了条件 content' {
+        # FR-DOD-01: subissues.md はブロック区切りに `---` を使うため、水平線だけでは内容と認めない。
+        $subContent = @"
+<!-- subissue -->
+<!-- title: Sub 1 -->
+## Sub-001
+- 対象: X
+
+## 完了条件
+
+---
+"@
+        $subPath = Join-Path $TmpDir 'subissues-hr-only-dod.md'
+        Set-Content -Path $subPath -Value $subContent
+        $output = & $ScriptPath -Path $subPath *>&1 | Out-String
+        $output | Should -Match "'## 完了条件' 空値・プレースホルダブロック"
     }
 }
 
@@ -441,7 +263,8 @@ Describe 'orchestrate.ps1' {
 
 Describe 'create-subissues.ps1' {
     BeforeAll {
-        $TmpDir = Join-Path ([System.IO.Path]::GetTempPath()) "ps-test-cs-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+        $TmpRoot = Join-Path $PSScriptRoot '.tmp'
+        $TmpDir = Join-Path $TmpRoot "ps-test-cs-$([guid]::NewGuid().ToString('N').Substring(0,8))"
         New-Item -ItemType Directory -Path $TmpDir -Force | Out-Null
         $ScriptPath = "$PSScriptRoot/../create-subissues.ps1"
     }
@@ -491,7 +314,8 @@ Body for beta.
     }
 
     It 'handles missing file' {
-        $output = & $ScriptPath -File '/tmp/nonexistent-file.md' -DryRun *>&1 | Out-String
+        $missingFile = Join-Path $TmpDir 'nonexistent-file.md'
+        $output = & $ScriptPath -File $missingFile -DryRun *>&1 | Out-String
         $output | Should -Match 'not found'
     }
 
@@ -522,19 +346,16 @@ Describe 'run-workflow.ps1' {
     }
 
     It 'dispatches validate-plan action' {
-        $TmpPlan = [System.IO.Path]::GetTempFileName()
+        $tmpRoot = Join-Path $PSScriptRoot '.tmp'
+        New-Item -ItemType Directory -Path $tmpRoot -Force | Out-Null
+        $TmpPlan = Join-Path $tmpRoot "run-workflow-plan-$([guid]::NewGuid().ToString('N')).md"
         try {
             $planContent = @"
-<!-- task_scope: single -->
-<!-- context_size: small -->
-<!-- estimate_total: 5 -->
-<!-- split_decision: PROCEED -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
 # Test
 
-## 分割判定
+## 完了条件
+
+- [ ] validate-plan が PASS する
 "@
             Set-Content -Path $TmpPlan -Value $planContent
             $ScriptPath = "$PSScriptRoot/../run-workflow.ps1"
@@ -547,12 +368,18 @@ Describe 'run-workflow.ps1' {
     }
 
     It 'dispatches validate-subissues action' {
-        $tmpSub = [System.IO.Path]::GetTempFileName()
+        $tmpRoot = Join-Path $PSScriptRoot '.tmp'
+        New-Item -ItemType Directory -Path $tmpRoot -Force | Out-Null
+        $tmpSub = Join-Path $tmpRoot "run-workflow-sub-$([guid]::NewGuid().ToString('N')).md"
         try {
             $subContent = @"
 <!-- subissue -->
 <!-- title: Sub 1 -->
 Body
+
+## 完了条件
+
+- [ ] done
 "@
             Set-Content -Path $tmpSub -Value $subContent
             $ScriptPath = "$PSScriptRoot/../run-workflow.ps1"

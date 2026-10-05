@@ -98,10 +98,10 @@
     <text x="800" y="504">14. 応答テキスト / 成果物パス</text>
 
     <path class="arr" d="M790,540 L790,540"/>
-    <text x="620" y="534">15. artifact_validation: output_paths の存在確認</text>
+    <text x="620" y="534">15. artifact_validation: output_paths を確認。不足時は同じ main session へ継続依頼</text>
 
     <path class="ret" d="M790,570 L610,570"/>
-    <text x="620" y="564">16. ステップ完了 (success / failed)</text>
+    <text x="620" y="564">16. ステップ完了 / step-timeout による失敗判定</text>
 
     <path class="arr" d="M610,600 L610,600"/>
     <text x="450" y="594">17. 失敗時: HVE_FORK_ON_RETRY=true なら新 session_id で 1 回再試行</text>

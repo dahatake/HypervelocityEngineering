@@ -16,8 +16,6 @@ body:
         | **Step.2** | AI Agent 粒度設計 |
         | **Step.3** | AI Agent 詳細設計 |
 
-        全設計ステップ完了後、AAG成果物を対象とする Post-DAG Self-Improve が必ず実行されます。
-
         ⚠️ **前提条件**:
         - Architecture Design (AAS) が完了していること
         - Web App Design (AAD-WEB) が完了していること
@@ -39,6 +37,24 @@ body:
         対象とする APP-ID をカンマ区切りで指定してください。
         未指定の場合は全アプリケーションを対象に実行します。
       placeholder: "例: APP-01, APP-02"
+    validations:
+      required: false
+
+  - type: textarea
+    id: step_input_files
+    attributes:
+      label: "Step Input Files"
+      description: "対象branchに存在する追加・代替資料のbranch-relative pathを1行1件で指定します。ドラッグ＆ドロップのupload linkは現在未対応（Cloud upload unavailable）です。"
+      placeholder: "docs-original/example.md"
+    validations:
+      required: false
+
+  - type: textarea
+    id: step_input_bindings
+    attributes:
+      label: "Step Input Bindings"
+      description: "1行1 JSONでStep・role・上のfile番号を指定します。additionalのcanonicalは省略できます。"
+      placeholder: '{"step_id":"1","role":"additional","file":1}'
     validations:
       required: false
 
@@ -102,6 +118,7 @@ body:
         ※ `HVE_MODEL_OVERRIDE` 環境変数が設定されている場合はそちらが優先されます。
       options:
         - "Auto"
+        - "claude-opus-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "gpt-5.5"
@@ -118,6 +135,7 @@ body:
         `Auto` を選ぶと Copilot が最適モデルを自動選択します。明示指定でモデルを固定できます。
       options:
         - "Auto"
+        - "claude-opus-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "gpt-5.5"
@@ -135,6 +153,7 @@ body:
         `Auto` を選ぶと Copilot が最適モデルを自動選択します。明示指定でモデルを固定できます。
       options:
         - "Auto"
+        - "claude-opus-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "gpt-5.5"
@@ -152,6 +171,7 @@ body:
         実行前 QA が有効なときだけ使われます。`Auto` を選ぶと Copilot が最適モデルを自動選択します。
       options:
         - "Auto"
+        - "claude-opus-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "gpt-5.5"
@@ -190,32 +210,6 @@ body:
         詳細: `docs/operations/auto-qa-skip-if-existing.md` を参照してください。
       options:
         - label: "実行前 QA を実施する（チェックすると auto-qa ラベルが付与され、ステップ実行前に質問票が作成されます）"
-
-  - type: dropdown
-    id: self_improve_max_iterations
-    attributes:
-      label: "自己改善 最大イテレーション数"
-      description: "全設計ステップ完了後に必ず実行されるPost-DAG Self-Improveの最大繰り返し回数"
-      options:
-        - "1"
-        - "2"
-        - "3 (デフォルト)"
-      default: 2
-    validations:
-      required: false
-
-  - type: dropdown
-    id: self_improve_quality_threshold
-    attributes:
-      label: "自己改善 品質スコア目標値"
-      description: "required criterionと検証が全てPASSしたうえで、この値に達した時点で改善完了とみなします"
-      options:
-        - "70（最低基準）"
-        - "80（標準）"
-        - "90（高品質）"
-      default: 1
-    validations:
-      required: false
 
   - type: dropdown
     id: enable_auto_merge

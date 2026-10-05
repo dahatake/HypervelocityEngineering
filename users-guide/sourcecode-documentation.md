@@ -39,9 +39,9 @@
 
 ## 概要（4層構造）
 
-`adoc` ワークフローは、Context Window を小さく保つために、前段の要約のみを後段へ渡す 4 層構造で実行します。`src/` 相当の既存コードを入力に技術文書（`docs-generated/`）を生成し、`knowledge/` との整合確認を進める際の補助資料として活用できます。
+`adoc` ワークフローは、Context Window を小さく保つために、前段の要約のみを後段へ渡す 4 層構造で実行します。`src/` 相当の既存コードを入力に技術文書（`docs-generated/`）を生成し、`knowledge/` との整合確認を進める際の補助資料として活用できます。加えて、`docs-original/`・`qa/`・Work IQ などの知識源との接続関係は次の図のとおりです。
 
-![3つの情報源をもとに3つのワークフローが連携し、レイヤー1のファイルインベントリとファイル単位サマリーから、レイヤー2のコンポーネント分析、レイヤー2.5のインデックス、レイヤー3から4の横断分析と目的特化ドキュメント生成へ段階的に進む adoc の4層構造図](./images/knowledge-interface-flow.svg)
+![docs-original/・qa/・src/・Work IQ などの知識源から、adi / akm / adoc が knowledge/ と docs-generated/ を更新し、下流ワークフローが knowledge/ を業務コンテキストとして参照する連携図](./images/knowledge-interface-flow.svg)
 
 ![ADOC アーキテクチャ。src の既存コードを入力として auto-app-documentation ワークフローを実行し、Wave 1〜6 の4層スイムレーンで Doc-FileInventory から Doc-Migration までの Doc-* Agent が並列/合流しながら段階的に処理して、docs-generated 配下の inventory/files/components/architecture/guides を生成する。](./images/infographic-adoc.svg)
 
@@ -79,7 +79,7 @@
 
 1. Issue/Sub-issue を作成する
 2. Step ごとに対応する `Doc-*` Prompt を選択して実行する
-3. 各 Step 完了後に `adoc:done` ラベルが付与されることを確認する
+3. 各 Step 完了後に対応する `docs-generated/` 配下の成果物が増えていることを確認する
 
 ---
 

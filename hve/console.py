@@ -41,12 +41,6 @@ try:
 except ImportError:  # pragma: no cover - script 実行経路
     import runtime_observability as _rto  # type: ignore[no-redef]
 
-try:
-    from .workiq import WORKIQ_MCP_SERVER_NAME as _WORKIQ_SERVER
-except ImportError:  # pragma: no cover - script 実行経路
-    from workiq import WORKIQ_MCP_SERVER_NAME as _WORKIQ_SERVER  # type: ignore[no-redef]
-
-
 def timestamp_prefix() -> str:
     """現在時刻のプレフィックス文字列を返す。"""
     return f"[{datetime.now().strftime('%H:%M:%S')}]"
@@ -78,8 +72,6 @@ def _format_elapsed_ja(seconds: float) -> str:
 _SPINNER_UPDATE_THROTTLE_SECONDS: float = 0.1  # スピナーメッセージ更新の最小間隔
 _SPINNER_PAUSE_TIMEOUT_SECONDS: float = 0.2    # スピナー一時停止の同期タイムアウト
 _CONTEXT_WARNING_THRESHOLD_PCT: float = 80.0   # コンテキスト使用率警告閾値
-_PROMPT_DISPLAY_TRUNCATE_NORMAL: int = 800      # normal(2): プロンプト最大表示文字数
-_PROMPT_DISPLAY_TRUNCATE_VERBOSE: int = 10_000  # verbose(3): プロンプト最大表示文字数
 
 # ツール名 → Copilot CLI スタイルのアクション表示名マッピング
 _ACTION_DISPLAY: Dict[str, str] = {
@@ -246,6 +238,8 @@ class Console:
         self.show_reasoning = show_reasoning
         self._start_time = time.time()
         self._is_tty = sys.stdout.isatty()
+        # stdin が EOF で閉じていた場合 True。wizard は既定値の自動受理で実行を始めない。
+        self.input_eof = False
 
         # PySide GUI からサブプロセス起動された場合の検出（env 経由）。
         # GUI は stdout をパイプ受信し、行頭 ``[hve:ctx:<step_id>]`` マーカーで
@@ -722,7 +716,8 @@ class Console:
         while True:
             try:
                 answer = input(f"  {s.GREEN}>{s.RESET} ").strip()
-            except (EOFError, KeyboardInterrupt):
+            except (EOFError, KeyboardInterrupt) as exc:
+                self.input_eof = self.input_eof or isinstance(exc, EOFError)
                 self._print("", ts=False)
                 if default_index is not None:
                     return default_index
@@ -745,7 +740,8 @@ class Console:
         while True:
             try:
                 answer = input(f"  {s.GREEN}?{s.RESET} {label}{req}{suffix}: ").strip()
-            except (EOFError, KeyboardInterrupt):
+            except (EOFError, KeyboardInterrupt) as exc:
+                self.input_eof = self.input_eof or isinstance(exc, EOFError)
                 self._print("", ts=False)
                 return default
             if not answer:
@@ -761,7 +757,8 @@ class Console:
         hint = f"{s.BOLD}Y{s.RESET}/{s.DIM}n{s.RESET}" if default else f"{s.DIM}y{s.RESET}/{s.BOLD}N{s.RESET}"
         try:
             answer = input(f"  {s.GREEN}?{s.RESET} {label} [{hint}]: ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
+        except (EOFError, KeyboardInterrupt) as exc:
+            self.input_eof = self.input_eof or isinstance(exc, EOFError)
             self._print("", ts=False)
             return default
         if not answer:
@@ -800,7 +797,8 @@ class Console:
         while True:
             try:
                 answer = input(f"  {s.GREEN}>{s.RESET} ").strip()
-            except (EOFError, KeyboardInterrupt):
+            except (EOFError, KeyboardInterrupt) as exc:
+                self.input_eof = self.input_eof or isinstance(exc, EOFError)
                 self._print("", ts=False)
                 return list(default_indices or [])
             if not answer:
@@ -1106,24 +1104,31 @@ class Console:
         server: str,
         tool: str,
         *,
-        tool_call_id: str,
+        tool_call_id: object,
         step_id: str = "",
         arguments: Any = None,
     ) -> None:
         if self._mcp_io_logger is None:
             return
         try:
-            self._mcp_io_logger.record_tool_request(
-                server, tool, tool_call_id=tool_call_id,
-                step_id=step_id, arguments=arguments,
-            )
+            observe = getattr(self._mcp_io_logger, "observe_tool_start", None)
+            if callable(observe):
+                observe(
+                    server, tool, tool_call_id=tool_call_id,
+                    step_id=step_id, arguments=arguments,
+                )
+            elif server:
+                self._mcp_io_logger.record_tool_request(
+                    server, tool, tool_call_id=tool_call_id,
+                    step_id=step_id, arguments=arguments,
+                )
         except Exception:
             pass
 
     def mcp_tool_response(
         self,
         *,
-        tool_call_id: str,
+        tool_call_id: object,
         success: bool,
         content: str = "",
         error: str = "",
@@ -1156,18 +1161,6 @@ class Console:
                 server, status=status, error=error, plugin_name=plugin_name,
                 transport=transport, source=source,
             )
-        except Exception:
-            pass
-
-    def _record_workiq_io(self, kind: str, label: str, text: str) -> None:
-        """FR-MCPLOG-01: 表示の切り詰め・抑止とは独立に全文を記録する。"""
-        if self._mcp_io_logger is None:
-            return
-        try:
-            if kind == "prompt":
-                self._mcp_io_logger.record_session_prompt(_WORKIQ_SERVER, label, text)
-            else:
-                self._mcp_io_logger.record_session_response(_WORKIQ_SERVER, label, text)
         except Exception:
             pass
 
@@ -1280,72 +1273,6 @@ class Console:
         if self.final_only:
             return
         self._emit(msg, always=True)
-
-    def workiq_prompt(self, prompt: str, label: str = "Work IQ プロンプト") -> None:
-        """Work IQ に投入するプロンプトをターミナルへ出力する。
-
-        verbosity に応じた制御:
-          0 (quiet)  : 非表示
-          1 (compact): スピナー更新のみ（先頭 80 文字）
-          2 (normal) : 先頭 800 文字を確定行表示（超過分は省略記号付き）
-          3 (verbose): 先頭 10,000 文字を確定行表示（超過分は省略記号付き）
-
-        _emit() を 1 回のみ呼び出し、スピナー pause/resume コストを最小化する。
-        """
-        self._record_workiq_io("prompt", label, prompt)
-        if self._verbosity == 0 or not prompt:
-            return
-        s = self.s
-        if self._verbosity == 1:
-            self._update_spinner_msg(f"{label}: {prompt[:80]}")
-            return
-        # verbosity >= 2: 確定行表示
-        truncate_at = (
-            _PROMPT_DISPLAY_TRUNCATE_VERBOSE if self._verbosity >= 3
-            else _PROMPT_DISPLAY_TRUNCATE_NORMAL
-        )
-        display_text = prompt[:truncate_at]
-        omit_count = len(prompt) - truncate_at
-        lines = [f"  {s.DIM}┊{s.RESET} {s.BOLD}{label}{s.RESET}"]
-        for line in display_text.splitlines():
-            lines.append(f"  {s.DIM}┊  {s.RESET}{line}")
-        if omit_count > 0:
-            lines.append(f"  {s.DIM}┊  {s.RESET}…（以降 {omit_count} 文字省略）")
-        # _emit() を 1 回だけ呼び出してロック取得・スピナー停止を最小化
-        self._emit("\n".join(lines), ts=False)
-
-    def workiq_response(self, response: str, label: str = "Work IQ 応答") -> None:
-        """Work IQ から返された応答テキストをターミナルへ出力する。
-
-        verbosity に応じた制御:
-          0 (quiet)  : 非表示
-          1 (compact): スピナー更新のみ（先頭 80 文字）
-          2 (normal) : 先頭 800 文字を確定行表示（超過分は省略記号付き）
-          3 (verbose): 先頭 10,000 文字を確定行表示（超過分は省略記号付き）
-
-        workiq_prompt() と対称の設計。_emit() を 1 回のみ呼び出す。
-        空文字・空白のみの場合は出力しない。
-        """
-        self._record_workiq_io("response", label, response)
-        if self._verbosity == 0 or not response or not response.strip():
-            return
-        s = self.s
-        if self._verbosity == 1:
-            self._update_spinner_msg(f"{label}: {response[:80]}")
-            return
-        # verbosity >= 2: 確定行表示
-        truncate_at = (
-            _PROMPT_DISPLAY_TRUNCATE_VERBOSE if self._verbosity >= 3
-            else _PROMPT_DISPLAY_TRUNCATE_NORMAL
-        )
-        display_text = response[:truncate_at]
-        omit_count = len(response) - truncate_at
-        lines = [f"  {s.DIM}┊{s.RESET} {s.BOLD}{label}{s.RESET}"]
-        for line in display_text.splitlines():
-            lines.append(f"  {s.DIM}┊  {s.RESET}{line}")
-        if omit_count > 0:
-            lines.append(f"  {s.DIM}┊  {s.RESET}…（以降 {omit_count} 文字省略）")
-        self._emit("\n".join(lines), ts=False)
 
     # ------------------------------------------------------------------
     # 公開メソッド — ツール

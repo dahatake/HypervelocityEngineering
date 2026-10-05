@@ -457,10 +457,11 @@ class TestOptionsPageDefaults(_GuiTestBase):
         from hve.gui.page_options import OptionsPage
 
         page = OptionsPage()
-        # Auto を選択（デフォルト）
+        # 初期選択は DEFAULT_MODEL（FR-MODEL-01）
+        from hve.config import DEFAULT_MODEL
         args = OrchestrateArgs(workflow="akm")
         page.c1.to_args(args)
-        self.assertEqual(args.model, "Auto")
+        self.assertEqual(args.model, DEFAULT_MODEL)
 
         # claude-opus-4.7 を選択
         idx = page.c1.model.findData("claude-opus-4.7")

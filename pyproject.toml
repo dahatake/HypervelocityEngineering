@@ -4,16 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hve"
-version = "0.8.101"
+version = "0.8.198"
 description = "HVE CLI Orchestrator package"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 dependencies = [
-  # 具体的な導入版は hve/copilot-sdk.lock（唯一の情報源）で固定し、setup-hve.{sh,ps1}
-  # がそこから導入する。ここの下限は API 互換の床であって「最新に追従してよい」という
-  # 意味ではない。更新は setup を --upgrade-sdk / -UpgradeSdk 付きで実行して lock を
-  # 書き換え、その差分をコミットする。
-  "github-copilot-sdk>=1.0.0",
+  # ここの下限は HVE が使用する公開 API の互換床。setup-hve.{sh,ps1} の既定経路は
+  # 最新版へ追従し、hve/copilot-sdk.lock は --pin-sdk / -PinSdk の明示時だけ使用する。
+  # チーム基準版の更新は --upgrade-sdk / -UpgradeSdk で lock と同時に行う。
+  "github-copilot-sdk>=1.0.11",
   # pydantic / pydantic-core はペアで固定する。github-copilot-sdk は pydantic を
   # 非固定 (`pydantic`) で要求するため、`pip install -U github-copilot-sdk` 等で
   # pip resolver が pydantic-core を最新 (例: 2.47.0) へ引き上げると、pydantic
@@ -200,8 +199,8 @@ gui-docconvert = [
 ]
 
 [project.scripts]
-# `python -m hve` と同じ .venv 再 exec ガードを通すため、main ではなく _console_main を指す。
-hve = "hve.__main__:_console_main"
+# 重い `hve.__main__` より先に .venv 正規化と version check を行う軽量 bootstrap。
+hve = "hve.startup_version:console_main"
 hve-mdq = "mdq.cli:main"
 mdq = "mdq.cli:main"
 
@@ -238,13 +237,38 @@ exclude = ["hve.tests*"]
 ]
 
 # ---------------------------------------------------------------------------
+# pytest 設定（リポジトリルートから起動したときの収集範囲）
+# 各スイートの設定は従来どおり近い側の ini が優先される（例: `pytest hve/tests`
+# は hve/pytest.ini を使う）。ここではルート起動時に作業成果物を収集しないこと
+# だけを定める。tests/run と work は成果物置き場であり、テスト対象ではない。
+# norecursedirs は指定すると pytest の既定値を上書きするため、既定値を明示して
+# から追加する（既定値を落とすと .github などが新たに収集対象になる）。
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+norecursedirs = [
+  # pytest の既定値（上書きによる消失を防ぐため明示）
+  "*.egg",
+  ".*",
+  "_darcs",
+  "build",
+  "CVS",
+  "dist",
+  "node_modules",
+  "venv",
+  "{arch}",
+  # 本リポジトリ固有の追加除外（作業成果物でありテスト対象ではない）
+  "tests/run",
+  "work",
+]
+
+# ---------------------------------------------------------------------------
 # bump-my-version 設定（バージョンアップ自動化）
 # 使い方は hve-dev/hve-app-tools.md を参照。
 # 対象: pyproject.toml (本ファイル) / hve/__init__.py / CHANGELOG.md
 # 連動対象外: cq / mdq engine、各 Skill / GUI / 移植用キット（独立ライフサイクル）
 # ---------------------------------------------------------------------------
 [tool.bumpversion]
-current_version = "0.8.101"
+current_version = "0.8.198"
 commit = true
 tag = true
 tag_name = "v{new_version}"

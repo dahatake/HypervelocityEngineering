@@ -31,7 +31,7 @@ def _read(rel: str) -> str:
 # registration marker SSOT（validator 定数 ↔ 生成側 Skill contract）
 # ---------------------------------------------------------------------------
 _VERIFIER_CONTRACT = (
-    ".github/skills/azure-skills/azure-cli-deploy-scripts/references/"
+    ".github/skills/azure-cli-deploy-scripts/references/"
     "asdw-data-verifier-contract.md"
 )
 

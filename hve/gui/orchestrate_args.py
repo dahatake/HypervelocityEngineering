@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields
+from dataclasses import MISSING, dataclass, field, fields
 from pathlib import Path
 from typing import Any, List, Mapping, Optional, Sequence, Tuple
 
@@ -84,7 +84,8 @@ class OrchestrateArgs:
     # ------------------------------------------------------------------
     # C3: QA (質問票) / Knowledge Management / レビュー (L711-L747)
     # ------------------------------------------------------------------
-    auto_qa: bool = False
+    # FR-KD-11: CLI の既定（有効）に合わせ、to_argv() は常に明示フラグを出す。
+    auto_qa: bool = True
     # QA 回答を knowledge/ へバックグラウンドでマージするか（FR-QA-05、既定: 無効）。
     qa_akm_background_merge: bool = False
     auto_contents_review: bool = False
@@ -99,27 +100,12 @@ class OrchestrateArgs:
     steering_ipc_dir: Optional[str] = None  # Steering（実行中ワークフローへの割り込み送信）用 IPC ディレクトリパス
 
     # ------------------------------------------------------------------
-    # C4: Work IQ — GUI / CLI 両対応 (L748-L824)
+    # C4: 知識源（FR-KD-01）— GUI / CLI 両対応
     # ------------------------------------------------------------------
-    # 実装状況:
-    #   - dataclass: 以下の 12 フィールド を保持
-    #   - CLI:  hve/__main__.py `--workiq*` オプション群 で 12 フィールドすべて受付可能
-    #   - GUI:  hve/gui/page_options.py `_C4WorkIQ` クラスが 11 フィールドのフォームを提供。
-    #           `workiq_tenant_id` は GUI 入力経路を廃止済みで（同クラスに明記、
-    #           settings_store._OBSOLETE_KEYS へ登録済み）、GUI からは常に None が入る。
-    #   - to_argv() は 12 フィールドすべてを --workiq* 引数に変換可能。
-    workiq: bool = False
-    workiq_akm_review: TriState = None  # BooleanOptionalAction
-    workiq_akm_ingest: TriState = None  # BooleanOptionalAction
-    workiq_dxx: Optional[str] = None
-    workiq_draft: bool = False
-    workiq_draft_output_dir: Optional[str] = None
-    workiq_tenant_id: Optional[str] = None
-    workiq_prompt_qa: Optional[str] = None
-    workiq_prompt_km: Optional[str] = None
-    workiq_prompt_review: Optional[str] = None
-    workiq_per_question_timeout: Optional[float] = None
-    workiq_request_timeout: Optional[float] = None
+    # MCP の接続・設定・認証はCopilot CLIが所有する。ここでは知識探索に使う
+    # 知識源（Work IQ と任意の MCP server 名）だけを保持する。
+    workiq: bool = True  # FR-KD-11: 既定は有効
+    knowledge_sources: Optional[str] = None  # カンマ区切りの MCP server 名
 
     # ------------------------------------------------------------------
     # C5: Issue / PR 作成 (L827-L857)
@@ -152,9 +138,8 @@ class OrchestrateArgs:
     final_only: bool = False
 
     # ------------------------------------------------------------------
-    # C7: MCP / CLI 接続 (L929-L948)
+    # C7: CLI 接続 (L929-L948)
     # ------------------------------------------------------------------
-    mcp_config: Optional[str] = None
     cli_path: Optional[str] = None
     cli_url: Optional[str] = None
 
@@ -193,6 +178,10 @@ class OrchestrateArgs:
     # FR-PROMPT-08: Prompt 版の実行時入力別名（canonical, actual）。
     # canonical 契約を変えず、その run に限って実ファイルへ読み替える。
     input_aliases: List[Tuple[str, str]] = field(default_factory=list)
+    # FR-INPUT-04: run-scoped文書（step_id, role, canonical-or-dash, source）。
+    # GUI設定へは永続化せず、当該subprocess argvだけへ渡す。
+    step_inputs: List[Tuple[str, str, Optional[str], str]] = field(default_factory=list)
+    step_input_mcp_consent: TriState = None
 
     # ------------------------------------------------------------------
     # C10: アプリ ID 系 (L983-L1020)
@@ -271,11 +260,6 @@ class OrchestrateArgs:
     # C16: 実行制御 / 拡張機能 (L1204-L1258)
     # ------------------------------------------------------------------
     dry_run: bool = False
-    self_improve: bool = False
-    no_self_improve: bool = False
-    self_improve_max_iterations: Optional[int] = None
-    self_improve_target_scope: Optional[str] = None
-    self_improve_goal: Optional[str] = None
     mdq_watch: TriState = None  # BooleanOptionalAction (--mdq-watch / --no-mdq-watch)
     mdq_watch_debounce_ms: Optional[int] = None
     cq_watch: TriState = None  # BooleanOptionalAction (--cq-watch / --no-cq-watch)
@@ -284,6 +268,8 @@ class OrchestrateArgs:
     tool_search: TriState = None  # BooleanOptionalAction (--tool-search / --no-tool-search)
     # tool_search 有効時のランキング実装。"sdk" | "hve"。None は CLI へ渡さない。
     tool_search_ranking: Optional[str] = None
+    # tool_search 有効時に SDK へ渡す defer_threshold。None / 0 以下は CLI へ渡さない。
+    tool_search_defer_threshold: Optional[int] = None
 
     # ------------------------------------------------------------------
     # GUI 内部利用（CLI には渡らない）
@@ -360,8 +346,7 @@ class OrchestrateArgs:
             argv += ["--max-parallel", str(self.max_parallel)]
 
         # --- C3 ---
-        if self.auto_qa:
-            argv.append("--auto-qa")
+        argv.append("--auto-qa" if self.auto_qa else "--no-auto-qa")
         if self.qa_akm_background_merge:
             argv.append("--qa-akm-background-merge")
         if self.auto_contents_review:
@@ -377,29 +362,10 @@ class OrchestrateArgs:
         if self.steering_ipc_dir:
             argv += ["--steering-ipc-dir", self.steering_ipc_dir]
 
-        # --- C4: Work IQ ---
-        if self.workiq:
-            argv.append("--workiq")
-        _append_tristate(argv, "--workiq-akm-review", "--no-workiq-akm-review", self.workiq_akm_review)
-        _append_tristate(argv, "--workiq-akm-ingest", "--no-workiq-akm-ingest", self.workiq_akm_ingest)
-        if self.workiq_dxx:
-            argv += ["--workiq-dxx", self.workiq_dxx]
-        if self.workiq_draft:
-            argv.append("--workiq-draft")
-        if self.workiq_draft_output_dir:
-            argv += ["--workiq-draft-output-dir", self.workiq_draft_output_dir]
-        if self.workiq_tenant_id:
-            argv += ["--workiq-tenant-id", self.workiq_tenant_id]
-        if self.workiq_prompt_qa:
-            argv += ["--workiq-prompt-qa", self.workiq_prompt_qa]
-        if self.workiq_prompt_km:
-            argv += ["--workiq-prompt-km", self.workiq_prompt_km]
-        if self.workiq_prompt_review:
-            argv += ["--workiq-prompt-review", self.workiq_prompt_review]
-        if self.workiq_per_question_timeout is not None:
-            argv += ["--workiq-per-question-timeout", str(self.workiq_per_question_timeout)]
-        if self.workiq_request_timeout is not None:
-            argv += ["--workiq-request-timeout", str(self.workiq_request_timeout)]
+        # --- C4: 知識源（FR-KD-01 / FR-KD-11）---
+        argv.append("--workiq" if self.workiq else "--no-workiq")
+        if self.knowledge_sources and self.knowledge_sources.strip():
+            argv += ["--knowledge-source", self.knowledge_sources.strip()]
 
         # --- C5 ---
         if self.strict:
@@ -448,8 +414,6 @@ class OrchestrateArgs:
             argv.append("--final-only")
 
         # --- C7 ---
-        if self.mcp_config:
-            argv += ["--mcp-config", self.mcp_config]
         if self.cli_path:
             argv += ["--cli-path", self.cli_path]
         if self.cli_url:
@@ -486,8 +450,20 @@ class OrchestrateArgs:
             argv += ["--branch", self.branch]
         if self.steps:
             argv += ["--steps", self.steps]
-        for canonical, actual in self.input_aliases:
-            argv += ["--input-alias", canonical, actual]
+        for alias_canonical, alias_actual in self.input_aliases:
+            argv += ["--input-alias", alias_canonical, alias_actual]
+        for step_input in self.step_inputs:
+            step_id = step_input[0]
+            role = step_input[1]
+            step_canonical = step_input[2]
+            source = step_input[3]
+            argv += ["--step-input", step_id, role, step_canonical or "-", source]
+        _append_tristate(
+            argv,
+            "--step-input-mcp-consent",
+            "--no-step-input-mcp-consent",
+            self.step_input_mcp_consent,
+        )
         if self.resume_run and self.resume_run.strip():
             argv += ["--resume-run", self.resume_run.strip()]
 
@@ -577,16 +553,6 @@ class OrchestrateArgs:
         # --- C16 ---
         if self.dry_run:
             argv.append("--dry-run")
-        if self.self_improve:
-            argv.append("--self-improve")
-        if self.no_self_improve:
-            argv.append("--no-self-improve")
-        if self.self_improve_max_iterations is not None:
-            argv += ["--self-improve-max-iterations", str(self.self_improve_max_iterations)]
-        if self.self_improve_target_scope:
-            argv += ["--self-improve-target-scope", self.self_improve_target_scope]
-        if self.self_improve_goal:
-            argv += ["--self-improve-goal", self.self_improve_goal]
         _append_tristate(argv, "--mdq-watch", "--no-mdq-watch", self.mdq_watch)
         if self.mdq_watch_debounce_ms is not None:
             argv += ["--mdq-watch-debounce-ms", str(self.mdq_watch_debounce_ms)]
@@ -597,6 +563,12 @@ class OrchestrateArgs:
         _append_tristate(argv, "--tool-search", "--no-tool-search", self.tool_search)
         if self.tool_search_ranking:
             argv += ["--tool-search-ranking", self.tool_search_ranking]
+        # FR-MODEL-04: 正の整数のときだけ CLI へ渡し、それ以外は SDK 既定へ委譲する。
+        if self.tool_search_defer_threshold is not None and self.tool_search_defer_threshold > 0:
+            argv += [
+                "--tool-search-defer-threshold",
+                str(self.tool_search_defer_threshold),
+            ]
 
         # --- GUI 強制 (設計書 §8.3) ---
         # GUI モードでは Rich Live のターミナル Workbench を無効化する。
@@ -620,8 +592,8 @@ class OrchestrateArgs:
             value = getattr(self, f.name)
             # 既定値と等しい場合はスキップ
             default = f.default
-            if callable(getattr(f, "default_factory", None)) and f.default_factory is not None:  # type: ignore[truthy-function]
-                default = f.default_factory()  # type: ignore[call-arg]
+            if f.default_factory is not MISSING:
+                default = f.default_factory()
             if value == default:
                 continue
             lines.append(f"- {f.name}: {value!r}")
@@ -658,12 +630,12 @@ _RUNTIME_OWNED_FIELDS = frozenset(
         "steps",
         "dry_run",
         "input_aliases",
+        "step_inputs",
+        "step_input_mcp_consent",
         "repo_root",
         "stop_on_fatal",
         "qa_ipc_dir",
         "steering_ipc_dir",
-        "self_improve",
-        "no_self_improve",
         "sources",
         "target_files",
         "force_refresh",
@@ -676,7 +648,6 @@ _RUNTIME_OWNED_FIELDS = frozenset(
 _SPECIAL_SETTINGS_KEYS = frozenset(
     {
         "auto_qa",
-        "self_improve",
         "qa_answer_mode",
         "issue_number",
         "sources_qa",
@@ -703,11 +674,11 @@ _ZERO_MEANS_UNSET = frozenset(
     {
         "context_max_chars",
         "max_file_lines",
-        "workiq_per_question_timeout",
         "mdq_watch_debounce_ms",
         "cq_watch_debounce_ms",
         "survey_period_years",
         "cloud_session_max_concurrency",
+        "tool_search_defer_threshold",
     }
 )
 
@@ -820,11 +791,8 @@ def args_from_settings(
         setattr(args, field_name, _coerce_for_field(f, value))
 
     # --- 個別変換 ---
-    args.auto_qa = _coerce_tristate(options.get("auto_qa")) is True
-
-    self_improve = _coerce_tristate(options.get("self_improve"))
-    args.self_improve = self_improve is True
-    args.no_self_improve = self_improve is False
+    # FR-KD-11: 未選択（""・キーなし）は CLI の既定と同じ有効、"off" だけ無効。
+    args.auto_qa = _coerce_tristate(options.get("auto_qa")) is not False
 
     issue_number = str(options.get("issue_number") or "").strip()
     args.issue_number = int(issue_number) if issue_number.isdigit() else None
@@ -845,11 +813,6 @@ def args_from_settings(
         args.custom_source_dir = _split_whitespace_list(
             options.get("custom_source_dir")
         )
-
-    if not args.self_improve:
-        args.self_improve_max_iterations = None
-        args.self_improve_target_scope = None
-        args.self_improve_goal = None
 
     if options.get("tool_search_ranking") == "hve":
         args.tool_search_ranking = "hve"

@@ -7,15 +7,7 @@
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 
@@ -32,20 +24,16 @@
 本書は ADFDV Step 1.1 / 1.2 / 2.1 / 2.2 / 3 が「Azure サービスマッピング・DLQ 設定・依存関係マトリクス」を読み取る唯一の参照先であり、依存確認で **「2. ジョブ → Azure サービスマッピング表」の見出しの存在**が停止条件として検査される。
 Azure リソースの実作成・デプロイスクリプト作成は範囲外（ADFDV Step 1.1 / 1.2 が担当）。監視メトリクス・アラート定義も範囲外（ADFD Step 2 = `Arch-Dataflow-MonitoringDesign` が担当）。
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-
-- Azure サービス選定 / SKU / 制約 / 状態プロパティを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログまたは成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 ## 2) 入力・出力
 
-### 2.1 入力（必須）
+### 2.1 入力
 
 - `docs/dataflow/dataflow-app-catalog.md`（ADFD Step 0.2 の出力 — Job-ID 一覧・依存 DAG・スケジュール・リトライ戦略）
 - `docs/catalog/service-catalog-matrix.md`（AAS の SoT — サービス × 連携・依存関係・非機能要件）
 
-### 2.2 出力（必須）
+### 2.2 出力
 
 - `docs/dataflow/dataflow-service-catalog.md`
 
@@ -73,23 +61,11 @@ Azure リソースの実作成・デプロイスクリプト作成は範囲外�
   - `docs/catalog/service-catalog-matrix.md` から：既存 Azure サービス構成・依存関係・非機能要件（可用性 / 性能 / セキュリティ）
 
 ### 3.2 計画・分割
+- 計画を書く場合は Skill `task-dag-planning` に従う。
 
-- Skill task-dag-planning に従う。
-- **plan.md 作成時の必須手順（省略禁止）**:
-  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
-  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
-     ```
-     <!-- task_scope: single|multi -->
-     <!-- context_size: small|medium|large -->
-     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
-     <!-- subissues_count: N -->
-     <!-- implementation_files: true or false -->
-     ```
-  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/task-dag-planning/references/plan-template.md` を参照）
-  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 - `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 
-### 3.3 Execution（Split Mode でない場合のみ）
+### 3.3 Execution
 
 1. 入力2ファイルを `read` する。
 2. 出力ディレクトリ `docs/dataflow/` が存在しない場合は作成する。
@@ -132,11 +108,11 @@ Azure リソースの実作成・デプロイスクリプト作成は範囲外�
 
 `large-output-chunking` Skill §3 に従う（具体的なセクション順: 概要→サービスマッピング→DLQ 設定→依存関係マトリクス→参照）。分割粒度: §5 の出力セクション単位。
 
-## 7) 最終品質レビュー（単回インライン・セルフチェック）
+## 7) 受入観点（完了条件の補足）
 
-### 7.1 セルフチェック契約
+### 7.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ### 7.2 ドメイン固有観点
 
@@ -145,7 +121,7 @@ Azure リソースの実作成・デプロイスクリプト作成は範囲外�
 - **保守性・拡張性・安全性**：Microsoft Learn 未確認のサービス／SKU を断定していないか。接続文字列・キー等の秘密情報を含めていないか。TBD の運用が適切か。
 
 ### 7.3 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 <output_contract>
 - 出力先パス:

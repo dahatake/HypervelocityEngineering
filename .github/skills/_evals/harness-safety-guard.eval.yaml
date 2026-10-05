@@ -5,7 +5,7 @@
 # - CI や手動レビューでの Skill ルーティング検証に使用
 
 skill: harness-safety-guard
-skill_path: .github/skills/harness/harness-safety-guard/SKILL.md
+skill_path: .github/skills/harness-safety-guard/SKILL.md
 description: 破壊的操作を事前に検出・阻止する安全ガードのスキル。危険操作パターン一覧と CRITICAL/HIGH/MEDIUM レベルの判定フローを提供する。
 
 test_cases:

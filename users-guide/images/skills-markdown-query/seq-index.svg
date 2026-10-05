@@ -67,7 +67,7 @@
 
   <!-- 2. cli → store open -->
   <path d="M290,150 L856,150" class="msg" marker-end="url(#ar)"/>
-  <text x="295" y="145" class="sm">② store.open_store(db_path_for(lang, strategy)) ＋ _migrate(v1→v5)</text>
+  <text x="295" y="145" class="sm">② store.open_store(db_path_for(lang, strategy)) ＋ _migrate(v1→v7)</text>
 
   <!-- 3. cli → indexer.build_index -->
   <path d="M290,185 L466,185" class="msg" marker-end="url(#ar)"/>

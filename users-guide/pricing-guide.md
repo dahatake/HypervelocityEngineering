@@ -22,8 +22,9 @@ hve は GitHub Copilot CLI 実行中の **コンテキスト使用量・経過�
 |---|---|---|---|
 | Context Window 使用率 | ✅ | ✅ | ✅ |
 | Workflow / Step 経過時間 | ✅ | ✅ | ✅ |
-| SDK AIU / Premium Requests 相当値 | ✅ | ✅ | ✅ |
-| pricing 計算の累積コスト (USD / JPY) | ✅ | ✅ | ✅ |
+| AI Credit（SDK 直接値） | ✅ | ✅ | ✅ |
+| Premium Requests / quota 差分 | ✅ | ✅ | ✅ |
+| pricing 計算の累積コスト (USD / JPY) | AI Credit 欄に併記または fallback | ✅ | ✅ |
 | 計算方式 / 料金表メタ | – | ✅ | – |
 
 更新間隔: GUI / CUI とも **1 Hz** (1 秒に 1 回)。
@@ -35,7 +36,7 @@ hve は GitHub Copilot CLI 実行中の **コンテキスト使用量・経過�
 ### 2.1 取得元と公式料金体系の違い
 
 - **現行実装の取得元**:
-  - **モデル multiplier**: [hve/pricing/crawler.py](../hve/pricing/crawler.py) の `DOCS_URL`（GitHub Docs）
+  - **モデル別料金**: [hve/pricing/crawler.py](../hve/pricing/crawler.py) の `DOCS_URL`（[Models and pricing for GitHub Copilot](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing)。100 万 token あたりの Input / Output 単価。同一モデルに Tier が複数ある場合は先頭行（Default）を採用）。旧形式の `Model` / `Multiplier` 表があればその値も取り込みます
   - **プラン定義**: [hve/pricing/crawler.py](../hve/pricing/crawler.py) の `PRICING_URL`（`https://github.com/pricing`）
 - **公式の現行課金**:
   - 通常の Copilot プランは GitHub AI Credits を使う使用量課金です（1 AI credit = $0.01 USD）。
@@ -43,7 +44,7 @@ hve は GitHub Copilot CLI 実行中の **コンテキスト使用量・経過�
 
 取得できた内容だけを `~/.hve/pricing/copilot-pricing.json` に JSON でキャッシュします。取得・解析できない値は `None` / `-` のまま扱い、推定で補完しません。
 
-> **要確認**: [hve/pricing/crawler.py](../hve/pricing/crawler.py) の `DOCS_URL` は legacy 移行後の公式ページ構成とずれている可能性があります。`hve pricing refresh` が失敗した場合は、公式の [Models and pricing for GitHub Copilot](https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing) または legacy multiplier ページを確認してください。
+> **注意**: `PRICING_URL`（`https://github.com/pricing`）のプラン定義は、現行ページでは解析できない場合があります（`plans=0`、`status=partial`）。この場合もモデル別料金だけで `hve pricing refresh` は終了コード 0 で完了し、プラン定義は推定で補完しません。両ソースとも取得できないときだけ終了コード 1 になります。
 
 ### 2.2 キャッシュパス
 
@@ -71,7 +72,7 @@ $Env:HVE_PRICING_CACHE_PATH = "C:\path\to\custom\copilot-pricing.json"
 hve pricing show
 ```
 
-現在キャッシュされている料金表 (モデル multiplier・プラン定義・取得日時・status) を表示します。
+現在キャッシュされている料金表 (モデル別の multiplier / 100 万 token あたり Input・Output 単価、プラン定義、取得日時、status) を表示します。
 
 ### 3.2 料金表の強制更新
 
@@ -128,7 +129,7 @@ GitHub Docs / Pricing ページから最新を取得しキャッシュを上書�
 
 ```
 Context: 12,345 / 200,000 (6%) | Model: claude-sonnet-4 | Elapsed: 00:01:23
- | Step prep: 00:00:42 | Cost: $0.4000 (¥60) | Reqs: 10
+ | Step prep: 00:00:42 | AI Credit: 0.4000 AIU ($0.4000 (¥60)) | Reqs: 10
  | Tools (Step): read_file×3 | Skills (Step): -
 ```
 
@@ -139,8 +140,10 @@ Context: 12,345 / 200,000 (6%) | Model: claude-sonnet-4 | Elapsed: 00:01:23
 
 Footer の **「📊 統計情報」** ボタンで表示。タブ:
 
-- **スナップショット**: System / User Context / Reasoning & Cache / Latency / Step Activity / Compaction / Permission / **Cost (pricing 計算)** / **Elapsed** / その他 (1Hz 再構築)
-  - Cost セクション項目: 累積コスト (pricing 計算) / Premium Requests 累積 / 計算方式 / USD/JPY レート / 料金表 取得日時 / 料金表 ステータス / 未計算理由 (該当時のみ)
+- **スナップショット**: System / User Context / Reasoning & Cache / Latency / Step Activity / Compaction / Permission / **AI Credit (SDK 直接)** / **Quota Snapshot** / **Cost (pricing 計算)** / **Elapsed** / その他 (1Hz 再構築)
+  - AI Credit セクション項目: 累積 AI Credit (AIU) / 累積 Nano AIU / 累積 Multiplier Cost / API call 件数 / 未取得理由 (該当時のみ)
+  - Quota Snapshot セクション項目: quota ごとの used / entitlement / remaining / overage / Δ、および全 quota Δ 合計
+  - Cost セクション項目: 累積コスト (pricing 計算) / Premium Requests (shutdown) / 計算方式 / USD/JPY レート / 料金表 取得日時 / 料金表 ステータス / 未計算理由 (該当時のみ)
   - Elapsed セクション項目: Workflow 経過 / Step 経過
 - **今回の実行履歴**: 既存履歴ビュー
 
@@ -153,7 +156,7 @@ Footer の **「📊 統計情報」** ボタンで表示。タブ:
 ### 6.1 表示例
 
 ```
-[hve] WF 00:01:23 | Step prep 00:00:42 | Sub impl 00:00:11 | ctx 12,345/200,000 (6%) | cost $0.4000 (¥60) | reqs 10
+[hve] WF 00:01:23 | Step prep 00:00:42 | Sub impl 00:00:11 | ctx 12,345/200,000 (6%) | 0.4000 AIU | cost $0.4000 (¥60) | reqs 10
 ```
 
 - 1Hz で `\r\x1b[2K` を使い同一行を上書き
@@ -190,13 +193,13 @@ with StatusLine(interval=1.0) as sl:
 
 ## 7. トラブルシュート
 
-### Q1. Cost が `-` のまま表示されない
+### Q1. AI Credit / cost の表示が期待どおり出ない
 
 主な原因:
 
-1. 料金表未取得 → `hve pricing refresh` を実行
-2. モデル multiplier が料金表に無い → ポップアップ「Cost (pricing 計算)」セクションの **未計算理由** を確認 (`model_not_found` 等)
-3. プラン未指定で additional_request_usd が解決できない → 料金表 `status` を確認
+1. SDK が AIU を返せない → GUI Footer は `N/A (AIU unavailable)`、または `mc: <値>` を表示する
+2. 料金表未取得 → `hve pricing refresh` を実行
+3. モデル multiplier またはプラン情報が解決できない → ポップアップ「Cost (pricing 計算)」セクションの **未計算理由** を確認する
 
 **捏造禁止ポリシー**: 不明値を埋めずに `-` 表示するのは仕様です。
 
@@ -224,7 +227,7 @@ with StatusLine(interval=1.0) as sl:
 - `hve/gui/stats_detail_popup.py` — 統計ポップアップ
 - `hve/gui/settings_pricing_tab.py` — GUI 設定タブ（**未配線**：settings_window から import されていない）
 - `hve/statusline.py` — CUI StatusLine（**配線済み**：[hve/orchestrator.py](../hve/orchestrator.py) の `_attach_runtime_statusline()` から起動）
-- `hve/tests/pricing/` — 全 67 件のテスト
+- `hve/tests/pricing/` — pricing / statusline / text_kinsoku / AI Credit 系テスト
 - 表示先の操作ガイド: [hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md)（GUI）/ [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md)（CLI）
 
 ---

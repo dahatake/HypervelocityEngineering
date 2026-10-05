@@ -4,14 +4,20 @@ description: >
   work/ 配下の作業ディレクトリ構造を、後続タスクが確実に参照できるよう整備するスキル。 USE FOR: work/ structure, artifacts path, qa/ structure, temporary file location, scratch script placement, debug output placement. DO NOT USE FOR: docs/ format (use docs-output-format). WHEN: work/ 配下にファイルを作成したい、作業ディレクトリを整備したい、一時ファイルや調査スクリプトの置き場所を決めたい。
 metadata:
   origin: user
-  version: 2.1.0
+  version: 2.1.1
 ---
 
 # work-artifacts-layout
 
 ## 目的
 - 後続Sub/別PRが確実に参照できるよう、`work/run/<run-id>/<task>/` を「入口つき」で整理する。
-  `<run-id>` は `hve.split_fork.resolve_run_id()` が採番し、env `HVE_WORK_ROOT` / `HVE_RUN_ID` で GUI/CLI/Cloud に伝播される。
+  `<run-id>` は `hve.run_paths.resolve_run_id()` が採番し、env `HVE_WORK_ROOT` / `HVE_RUN_ID` で GUI/CLI/Cloud に伝播される。
+
+## 自己テスト限定の例外（FR-MAINT-12）
+
+HVE 自己テストでは、本 Skill と参照先の `work/` 配置・delete→create・使い捨て規約より [tests/README.md](../../../tests/README.md) を優先する。
+全 controller 生成物は、controller 指定の元リポジトリの `tests/run/<run-id>/<task>/` に最初から保持し、子 session へ引き継ぐ。元リポジトリの `work/` への新規出力は禁止する。
+以下の通常作業規約と lane 内の通常 `work/`・canonical output は維持し、自己テストの隔離・保持・cleanup の詳細は同 README に委ねる。
 
 ## Non-goals
 
@@ -45,8 +51,7 @@ metadata:
 
 - **Web UI 方式**: Issue 番号を run-id に流用（`work/run/issue-<N>/Issue-<N>/`）
 - **CLI SDK 方式**: `<run-id>` = `<タイムスタンプ-UUID>` で分離
-  - 例: `work/run/20260413T143022-a1b2c3/self-improve/step-1.1/`
-- ロックファイル（`.self-improve-lock`）は run_id ディレクトリ内に配置
+  - 例: `work/run/20260413T143022-a1b2c3/Issue-1/`
 - `<run-id>` は `resolve_run_id()` が env > Cloud 検出 > 新規採番の順で解決
 
 ---
@@ -63,7 +68,6 @@ metadata:
 
 **法則外パス**:
 - `work/run/<run-id>/kpi/fork-kpi.jsonl` — KPI ロガーの出力先
-- `work/run/<run-id>/self-improve/` — Self-Improve ループの作業 dir
 - `work/archive/<run-id>.zip` — GUI cleanup_policy=archive 時のアーカイブ先（runs/ の sibling）
 
 ---
@@ -76,7 +80,7 @@ metadata:
 - **理由**: 作業ディレクトリの `Issue-<識別子>` はモード/Agent により命名が一定でない場合があり（root-issue 番号 / APP-ID 等）、他 Step のパスを推測すると `Path does not exist` で失敗する。
 - **例外**: SPLIT / Fleet サブタスクは、コードが明示注入する `dependency_completion_reports` の絶対パスのみを参照する（パスの自力推測は禁止）。
 
-根拠: `.github/copilot-instructions.md` §0「work/run 横断参照の禁止（絶対）」。
+根拠: 本 Skill の「work/run 横断参照の禁止（入力側の絶対ルール）」。
 
 ---
 
@@ -96,7 +100,7 @@ metadata:
 - ルート直下へ新規ファイル／ディレクトリを追加してよいのは、許可リストに載るリポジトリ標準ファイルのみ。許可リストの正本は `.github/workflows/protect-readonly-paths.yml` の `ROOT_FILE_ALLOWLIST` / `ROOT_DIR_ALLOWLIST` で、`check-root-temp-files` ジョブが PR で違反を fail させる。正当な追加が必要な場合は同じ PR で許可リストも更新する。
 - テストやツールが cwd 依存でファイルを書く場合は、`tmp_path` 等で出力先を明示し、ルート直下へ書かせないこと（`unittest.mock` の `MagicMock` をパスとして扱うと `MagicMock/` ディレクトリが生成される事故が起きる）。
 
-根拠: `.github/copilot-instructions.md` §0「一時作業ファイルは `work/` 配下に限定（絶対）」。
+根拠: 本 Skill の「一時作業ファイルの配置先（ルート直下作成の禁止）」。
 
 ---
 

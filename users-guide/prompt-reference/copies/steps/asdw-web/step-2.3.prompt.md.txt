@@ -13,10 +13,7 @@ TDD RED フェーズ（追加サービス枠）: Step.2.1（追加 Azure サー�
 ## 出力
 - `src/test/integration/add-service/` 配下に追加サービス向け統合テストプロジェクト（テストコードのみ）
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 ## 生成テストの実行環境
 - 生成する integration test は、追加 Azure サービスが正しくデプロイ済み・構成済みである場合に、ローカル端末 / CI / デプロイ先のいずれでも `dotnet test` で実行できる構造にする。
@@ -29,7 +26,7 @@ TDD RED フェーズ（追加サービス枠）: Step.2.1（追加 Azure サー�
 ## Custom Agent
 `Dev-Microservice-Azure-AddServiceTestCoding` を使用
 
-## テスト生成・確認手順（必須）
+## テスト生成・確認手順
 1. 生成したテストプロジェクトに移動し、ビルド成功を確認する
 2. テスト実行コマンドを実行し、現状の PASS / FAIL 件数を記録する（本 Step は Deploy 前のためリソース未作成による FAIL が正常な RED。FAIL を避ける目的で検証を弱めず、恒真式アサーションも使わない）
 3. 確認結果（テスト実行ログ）を Issue コメントに記録する
@@ -43,7 +40,7 @@ TDD RED フェーズ（追加サービス枠）: Step.2.1（追加 Azure サー�
 - 追加サービス向けテストコードが生成されている（接続性 / 権限境界 / 基本 I/O / 設定整合性の 4 カテゴリを各 1 件以上）
 - Foundry 採用時は Project 子リソースとモデル deployment を別テストで検証し、未存在を PASS にしない
 - ビルドが成功し、テストが実行可能である（PASS/FAIL 件数を記録。Deploy 前の FAIL を RED として記録し、恒真式アサーションを使わない）
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 - 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - 必須ラベル: `Schema-Version`, `Evidence-Status`, `TDD-Judgement`, `Secret-Redaction`, `Test-Files-Changed`
 - `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とする。

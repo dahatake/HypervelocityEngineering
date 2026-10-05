@@ -2,7 +2,7 @@
 
 > **WORK**: `work/run/<run-id>/Dev-Dataflow-ServiceCoding/Issue-<識別子>/`
 
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 
 - 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とし、実行ログを `docs/` / `src/` に追記しない。
@@ -47,15 +47,7 @@
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## 1) 目的と非目的
 
@@ -63,13 +55,14 @@
 データフローアプリ詳細仕様書（`docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md`）と
 TDD テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）を根拠に、
 **定義書どおりに動く最小の本実装** と **CIで決定的に通るテスト** を生成することに特化する。
-"全ジョブ対応""設計刷新""横断リファクタ"は範囲外（必要なら Skill task-dag-planning の分割ルールで別タスク化）。
+"全ジョブ対応""設計刷新""横断リファクタ"は範囲外（必要なら別タスク化）。
 対象は **1ジョブ分のみ**：`{jobId}-{jobNameSlug}`。
 
 ## 1.5) 生成テストの実行環境
 
 - `src/test/dataflow/{jobId}-{jobNameSlug}.Tests/` のテストは **ローカル端末 / CI で `pytest` により決定的に PASS** すること。
 - GREEN 化のために Azure Storage / SQL / Cosmos DB / Service Bus 等へ実接続するテストへ変更しない。外部 I/O は Azurite / Testcontainers / Mock / Stub に切り分ける。
+- `import smoke` はテスト仕様で明示された範囲だけを対象にする。SDK/module の import 自体は禁止しないが、bare import 時にクライアント生成・認証・ネットワーク接続・モデル呼出しを開始しない。必要な接続は設定注入または Mock / Stub / Test doubles に分離する。
 - 実装コードは Azure Functions としてデプロイ可能にしつつ、接続先・認証・キュー名・コンテナ名・リソース名は環境変数または設定ファイルから読み込む。
 - 接続文字列・アカウントキー・SAS・Bearer token 等の秘密情報をコード、README、ログにハードコードしない。README にはローカル実行コマンドとデプロイ先で使う設定キー名を記載する。
 
@@ -83,7 +76,7 @@ TDD テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）を根拠に�
 
 ## 3) 入力・出力
 
-### 3.1 入力（必須）
+### 3.1 入力
 
 - `docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md`（ジョブ詳細仕様書 — Arch-Dataflow-AppSpec の出力）
 - `docs/test-specs/{jobId}-test-spec.md`（TDD テスト仕様書 — Arch-Dataflow-TDD-TestSpec の出力）
@@ -96,7 +89,7 @@ TDD テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）を根拠に�
 - `docs/dataflow/dataflow-monitoring-design.md`（メトリクス定義・アラートルール）
 - `src/test/dataflow/{jobId}-{jobNameSlug}.Tests/`（`Dev-Dataflow-TestCoding` の出力 — 存在すれば読む）
 
-### 3.3 出力（必須）
+### 3.3 出力
 
 - `src/dataflow/{jobId}-{jobNameSlug}/`（Azure Functions データフローアプリ実装）
   - Azure Functions トリガー（Timer/Queue/ServiceBus/BlobTrigger — ジョブ仕様書の設定値一覧から確定）
@@ -137,7 +130,7 @@ TDD テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）を根拠に�
 - Python のバージョン、依存定義の形式（`requirements.txt` / `pyproject.toml`）、実行基盤（Azure Functions / Spark / Fabric / Databricks）は既存コード・設定から確定する。見つからなければ Questions に記載する。
 - 設定読み込み・ログ構造は既存型から踏襲する（見つからなければ標準ライブラリの `logging` と環境変数読み込みを使用）。
 
-### 5.2 仕様要約の確定（必須）
+### 5.2 仕様要約の確定
 
 以下を「仕様要約」として短く確定し、作業ログ（`{WORK}spec-summary.md`）に記録する：
 - トリガー種別・トリガー設定（スケジュール/キュー名/トピック名 等）
@@ -160,22 +153,23 @@ TDD テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）を根拠に�
 - テスト仕様書のテストケースを GREEN にするための最小実装を行う。
 - **秘密情報のハードコード禁止**。設定は環境変数（＋可能なら Key Vault 参照）で受ける。
 - **外部 I/O にはタイムアウトを必ず設定**し、無限リトライ禁止（必要なら上限付き・対象は外部 I/O のみ）。
-- **構造化ログ**（`ILogger<T>` を使用）と**相関 ID**（バッチ実行単位）を入れる。
-- **冪等性保証**：冪等性キーに基づく重複排除ロジックを必ず実装する（根拠: `batch-data-model.md` の冪等性キー設計）。
+- **構造化ログ**（既存の Python 標準 `logging` / structured logging と correlation ID 形式を踏襲）と**相関 ID**（バッチ実行単位）を入れる。
+- **冪等性保証**：冪等性キーに基づく重複排除ロジックを必ず実装する（根拠: `docs/dataflow/dataflow-data-model.md` の冪等性キー設計）。
 - **DLQ 送信**：バリデーション/変換エラー時は仕様書「6. エラーハンドリング詳細」に従って DLQ に送信する。
 - **チェックポイント/リスタート**：ジョブ仕様書に再実行仕様がある場合は、中断→再開時のデータ整合性を保証する実装を含める。
 - **メトリクス送信**：`docs/dataflow/dataflow-monitoring-design.md` の「監視メトリクス定義」に記載の `duration_ms`・`records_processed`・`error_rate` を Application Insights に送信する。
 
 ### 5.5 GREEN 確認（TDD GREEN フェーズ）
 
-- `pytest` を実行し、全テストが **PASS** であることを確認する。
+- `pytest src/test/dataflow/{jobId}-{jobNameSlug}.Tests/` を実行し、対象テストが **PASS** であることを確認する。反復中は対象テストのみを実行し、引数なしの全件実行は行わない。全件回帰は PR の CI で 1 回だけ確認する。
 - PASS しないテストがある場合は実装を修正する（テストコード自体は原則変更しない）。
 - **リトライ戦略（Skill `tdd-green-retry-strategy` 準拠）**: GREEN 化の反復（最大 `tdd_max_retries` 回、既定 5）は、各回で前回と**異なるアプローチ**を選ぶ（同一の修正を単純に繰り返さない）。各 FAIL 時は失敗の実出力（テスト名・トレースバック・例外）から根本原因を特定し、次の修正を決める前に **Microsoft Learn MCP**（Python / Azure Functions / Azure SDK for Python / Fabric / Databricks / API）で正しい API・構文・パターンを確認する。Web 検索は MCP で解決できない場合のみ用いる。参照した Microsoft Learn の URL を作業ログに記録する。
 - GREEN 確認結果を作業ログに記録する。
 
 ### 5.6 ビルド/テストの実行と記録
 
-- repo 標準のコマンドで build/test を実行し、成功/失敗とコマンドを作業ログに残す。
+- GREEN 確認済みの `pytest` 結果と同一 build/test 断面（入力・生成物・テスト・コマンドが同じ）の build/test は、再実行せずに結果とコマンドを作業ログへ再利用できる。再利用は同一 build/test 断面だけ。
+- 入力・生成物・テスト・コマンドが変更された場合には再検証する（= 入力・生成物・テスト・コマンドが変わった場合は再検証する）。
 
 ## 6) 書き込み安全策（空ファイル/欠落対策）
 
@@ -192,7 +186,8 @@ TDD テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）を根拠に�
 
 ## 7) 完了条件
 
-- `src/dataflow/{jobId}-{jobNameSlug}/` が import 可能（依存定義を導入した状態で `python -m compileall` が成功）。
+- `src/dataflow/{jobId}-{jobNameSlug}/` は `python -m compileall` が成功している（compileall は構文チェックであり import 成功の証拠ではない）。
+- `src/dataflow/{jobId}-{jobNameSlug}/` の `import smoke` が成功している。bare import で外部接続を開始せず、必要な接続は設定注入または Mock / Stub / Test doubles により切り分けられている。
 - `src/test/dataflow/{jobId}-{jobNameSlug}.Tests/` の全テストが **PASS**（TDD GREEN 確認済み）。
 - テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）のテストケース表（§2, §3）の全行に対するテストがすべて PASS している。
 - 冪等性保証・DLQ 送信・構造化ログ・メトリクス送信が実装されている。
@@ -200,11 +195,11 @@ TDD テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）を根拠に�
 - 秘密情報がコードにハードコードされていない。
 - 作業ログが更新されている。
 
-## 9) 最終品質レビュー（単回インライン・セルフチェック）
+## 9) 受入観点（完了条件の補足）
 
-### 9.1 セルフチェック契約
+### 9.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ### 9.2 ドメイン固有観点
 
@@ -213,7 +208,7 @@ TDD テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）を根拠に�
 - **保守性・堅牢性・スケーラビリティ**：コードの可読性と既存型への一貫性、設定の外部化とキー管理、ログ出力の品質と監査可能性、新ジョブ追加時の変更容易性、他ジョブへの波及リスク（スコープは1ジョブのみか）
 
 ### 9.3 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 ## Agent 固有の Skills 依存
 
@@ -222,4 +217,3 @@ TDD テスト仕様書（`docs/test-specs/{jobId}-test-spec.md`）を根拠に�
 - `harness-verification-loop` — Build/Lint/Test/Security/Diff の 5 段階検証
 - `harness-error-recovery` — ビルド・テスト失敗時の E-01〜E-05 リカバリ
 - `harness-safety-guard` — ツール実行時の破壊的操作検出と中断
-- `karpathy-guidelines` — 実装時の LLM 共通ミス防止指針

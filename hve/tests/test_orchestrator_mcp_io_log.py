@@ -1,7 +1,6 @@
 """FR-MCPLOG-01 / 02: orchestrator から MCP 通信ログを生成・結線・終了する。
 
-RED 先行。`_attach_mcp_io_logging` および Work IQ セッションへの
-`attach_mcp_io_event_logger` 結線は本テスト作成時点で未実装。
+知識探索セッション（FR-KD-03）の MCP イベントも同じ記録器へ渡す。
 """
 
 from __future__ import annotations
@@ -17,15 +16,6 @@ from hve.config import SDKConfig
 from hve.console import Console
 
 _ORCHESTRATOR_SOURCE = Path(orchestrator.__file__)
-
-# `build_workiq_mcp_config` で Work IQ MCP を接続するセッションを持つ関数。
-_WORKIQ_SESSION_FUNCTIONS = (
-    "_prefetch_workiq_detailed",
-    "_run_akm_workiq_verification",
-    "_run_akm_workiq_ingest",
-    "_run_ard_workiq_usecase",
-)
-
 
 def _function_sources() -> dict:
     source = _ORCHESTRATOR_SOURCE.read_text(encoding="utf-8")
@@ -80,7 +70,7 @@ class TestAttachMcpIoLogging:
         logger = orchestrator._attach_mcp_io_logging(console, SDKConfig())
         assert logger is not None
         logger._max_bytes = 1
-        console.workiq_prompt("本文", label="L")
+        console.mcp_tool_request("workiq", "ask", tool_call_id="c1", arguments={"q": "本文"})
         logger.close()
         assert seen and "MCP 通信ログ" in seen[0]
 
@@ -95,20 +85,24 @@ class TestRunWorkflowLifecycle:
         assert "_mcp_io_logger.close()" in source
 
 
-class TestWorkIQSessionWiring:
-    """FR-MCPLOG-01: StepRunner を経由しない Work IQ セッションにも結線する。"""
+class TestKnowledgeDiscoverySessionWiring:
+    """FR-MCPLOG-01 / FR-KD-03: StepRunner を経由しない知識探索セッションにも結線する。"""
 
-    @pytest.mark.parametrize("name", _WORKIQ_SESSION_FUNCTIONS)
-    def test_session_is_wired_to_the_io_logger(self, name: str) -> None:
-        source = _function_sources()[name]
-        assert "attach_mcp_io_event_logger(" in source, (
-            f"{name} が MCP 通信ログへ結線されていない"
-        )
+    def test_discovery_session_events_reach_the_io_logger(self) -> None:
+        source = _function_sources()["_run_orchestrator_knowledge_discovery"]
+        assert 'logger.handle_event(event, step_id="orchestrator")' in source
+        assert "event_sink=_sink" in source
+        assert "attach_mcp_io_event_logger(" not in source
 
-    def test_ard_usecase_records_its_prompt(self) -> None:
-        """ARD 経路だけ `console.workiq_prompt` を欠いていたため対称化する。"""
-        source = _function_sources()["_run_ard_workiq_usecase"]
-        assert "console.workiq_prompt(" in source
+    def test_workiq_specific_session_helpers_are_removed(self) -> None:
+        sources = _function_sources()
+        for name in (
+            "_create_orchestrator_workiq_session",
+            "_run_akm_workiq_verification",
+            "_run_akm_workiq_ingest",
+            "_run_ard_workiq_usecase",
+        ):
+            assert name not in sources
 
 
 class TestSharedHelperIsUsed:

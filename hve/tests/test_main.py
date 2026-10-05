@@ -28,10 +28,10 @@ _spec.loader.exec_module(_main_mod)
 _build_parser = _main_mod._build_parser
 _build_params = _main_mod._build_params
 _build_config = _main_mod._build_config
-_load_mcp_config = _main_mod._load_mcp_config
+_load_mcp_config = getattr(_main_mod, "_load_mcp_config", None)
 _validate_auto_coding_agent_review = _main_mod._validate_auto_coding_agent_review
 _run_copilot_auth_preflight = _main_mod._run_copilot_auth_preflight
-_run_workiq_auth_preflight = _main_mod._run_workiq_auth_preflight
+_run_workiq_capability_preflight = _main_mod._run_workiq_capability_preflight
 _run_azure_auth_preflight = _main_mod._run_azure_auth_preflight
 _resolve_model = _main_mod._resolve_model
 _prompt_valid_doc_purpose = _main_mod._prompt_valid_doc_purpose
@@ -117,8 +117,9 @@ class TestParserBasic(unittest.TestCase):
         self.assertIsNone(args.max_file_lines)
         self.assertIsNone(args.cli_path)
         self.assertIsNone(args.cli_url)
-        self.assertIsNone(args.mcp_config)
-        self.assertIsNone(args.workiq_akm_review)
+        self.assertFalse(hasattr(args, "mcp_config"))
+        self.assertFalse(args.workiq)
+        self.assertIsNone(args.knowledge_source)
         self.assertEqual(args.timeout, 21600.0)
         self.assertEqual(args.log_level, "error")
         self.assertIsNone(args.context_max_chars)
@@ -166,22 +167,34 @@ class TestParserBasic(unittest.TestCase):
     def test_workiq_flags(self) -> None:
         args = _parse([
             "orchestrate", "-w", "aas", "--workiq",
-            "--workiq-draft",
-            "--workiq-draft-output-dir", "qa-drafts",
-            "--workiq-tenant-id", "tenant-x",
-            "--workiq-prompt-qa", "qa",
-            "--workiq-prompt-km", "km",
-            "--workiq-prompt-review", "review",
-            "--workiq-akm-review",
+            "--knowledge-source", "docs-mcp,crm",
+            "--knowledge-source", "wiki",
         ])
         self.assertTrue(args.workiq)
-        self.assertTrue(args.workiq_akm_review)
-        self.assertTrue(args.workiq_draft)
-        self.assertEqual(args.workiq_draft_output_dir, "qa-drafts")
-        self.assertEqual(args.workiq_tenant_id, "tenant-x")
-        self.assertEqual(args.workiq_prompt_qa, "qa")
-        self.assertEqual(args.workiq_prompt_km, "km")
-        self.assertEqual(args.workiq_prompt_review, "review")
+        self.assertEqual(args.knowledge_source, [["docs-mcp", "crm"], ["wiki"]])
+
+    def test_removed_workiq_options_are_rejected(self) -> None:
+        for option, value in (
+            ("--workiq-tenant-id", "tenant"),
+            ("--workiq-request-timeout", "30"),
+            ("--workiq-prompt-review", "review"),
+            ("--workiq-prompt-qa", "qa"),
+            ("--workiq-prompt-km", "km"),
+            ("--workiq-draft-output-dir", "qa-drafts"),
+            ("--workiq-per-question-timeout", "30"),
+            ("--workiq-dxx", "D01"),
+        ):
+            with self.subTest(option=option):
+                with self.assertRaises(SystemExit):
+                    _parse(["orchestrate", "-w", "aas", option, value])
+        for flag in ("--workiq-draft", "--workiq-akm-review", "--workiq-akm-ingest", "--no-workiq-akm-ingest"):
+            with self.subTest(option=flag):
+                with self.assertRaises(SystemExit):
+                    _parse(["orchestrate", "-w", "aas", flag])
+
+    def test_removed_mcp_config_option_is_rejected(self) -> None:
+        with self.assertRaises(SystemExit):
+            _parse(["orchestrate", "-w", "aas", "--mcp-config", "legacy.json"])
 
     def test_create_issues_flag(self) -> None:
         """--create-issues フラグのテスト。"""
@@ -625,11 +638,19 @@ class TestBuildParams(unittest.TestCase):
             config = _build_config(args)
             self.assertEqual(config.model, "claude-opus-4.6")
 
-    def test_default_model_auto_used_when_cli_and_env_missing(self) -> None:
+    def test_default_model_used_when_cli_and_env_missing(self) -> None:
+        """FR-MODEL-01: --model と MODEL が未指定なら DEFAULT_MODEL を使う。"""
         with mock.patch.dict(os.environ, {}, clear=True):
             args = _parse(["orchestrate", "-w", "aas"])
             config = _build_config(args)
-            self.assertEqual(config.model, "Auto")
+            self.assertEqual(config.model, _main_mod.DEFAULT_MODEL)
+
+    def test_wizard_initial_model_is_default_model(self) -> None:
+        """FR-MODEL-01: ウィザードの初期選択は DEFAULT_MODEL（一覧に無ければ先頭）。"""
+        options = _main_mod._wizard_model_options(object())
+        index = _main_mod._wizard_default_model_index(options)
+        self.assertEqual(options[index], _main_mod.DEFAULT_MODEL)
+        self.assertEqual(_main_mod._wizard_default_model_index(["Auto", "gpt-5.5"]), 0)
 
     def test_cli_explicit_default_model_overrides_env_model(self) -> None:
         with mock.patch.dict(os.environ, {"MODEL": "claude-opus-4.6"}, clear=False):
@@ -660,6 +681,26 @@ class TestBuildParams(unittest.TestCase):
     def test_durable_replay_unattended_control_is_hidden_from_help(self) -> None:
         parser = _main_mod._build_parser()
         self.assertNotIn("--unattended", parser.format_help())
+
+    def test_execution_policy_controls_reach_config(self) -> None:
+        """FR-PROMPT-13: Prompt 版の宣言範囲を子 orchestrate の config へ渡す。"""
+        args = _parse([
+            "orchestrate", "-w", "asdw-web", "--unattended",
+            "--pre-approved-operation", "azure_deploy",
+            "--allow-public-exposure", "--budget-note", "検証用",
+        ])
+        config = _build_config(args)
+        self.assertTrue(config.unattended)
+        self.assertEqual(config.pre_approved_operations, ("azure_deploy",))
+        self.assertTrue(config.allow_public_exposure)
+        self.assertEqual(config.budget_note, "検証用")
+        help_text = _main_mod._build_parser().format_help()
+        for flag in ("--pre-approved-operation", "--allow-public-exposure", "--budget-note"):
+            self.assertNotIn(flag, help_text)
+
+    def test_execution_policy_rejects_unknown_operation(self) -> None:
+        with self.assertRaises(SystemExit):
+            _parse(["orchestrate", "-w", "aas", "--pre-approved-operation", "delete_all"])
 
     def test_tool_search_default_true(self) -> None:
         """FR-MODEL-04: 未指定時は既定 (True) のまま。"""
@@ -693,87 +734,31 @@ class TestBuildParams(unittest.TestCase):
         self.assertFalse(cfg_off.delete_local_merged_branch)
 
     def test_build_config_workiq(self) -> None:
-        args = _parse([
-            "orchestrate", "-w", "aas", "--workiq",
-            "--workiq-draft",
-            "--workiq-draft-output-dir", "qa-drafts",
-            "--workiq-tenant-id", "tenant-x",
-            "--workiq-prompt-qa", "qa",
-            "--workiq-prompt-km", "km",
-            "--workiq-prompt-review", "review",
-        ])
-        cfg = _build_config(args)
+        with mock.patch.dict(os.environ, {}, clear=True):
+            args = _parse([
+                "orchestrate", "-w", "aas", "--workiq",
+                "--knowledge-source", "docs-mcp", "--knowledge-source", "crm,docs-mcp",
+            ])
+            cfg = _build_config(args)
         self.assertTrue(cfg.workiq_enabled)
-        self.assertTrue(cfg.is_workiq_qa_enabled())
-        self.assertTrue(cfg.is_workiq_akm_review_enabled())
-        self.assertEqual(cfg.workiq_tenant_id, "tenant-x")
-        self.assertEqual(cfg.workiq_prompt_qa, "qa")
-        self.assertEqual(cfg.workiq_prompt_km, "km")
-        self.assertEqual(cfg.workiq_prompt_review, "review")
-        self.assertTrue(cfg.workiq_draft_mode)
-        self.assertEqual(cfg.workiq_draft_output_dir, "qa-drafts")
+        self.assertEqual(cfg.knowledge_sources, ["docs-mcp", "crm"])
+        self.assertEqual(cfg.effective_knowledge_sources(), ["workiq", "docs-mcp", "crm"])
 
     def test_build_config_context_max_chars_override(self) -> None:
         args = _parse(["orchestrate", "-w", "aas", "--context-max-chars", "18000"])
         cfg = _build_config(args)
         self.assertEqual(cfg.context_injection_max_chars, 18000)
 
-    def test_build_config_workiq_akm_review_can_be_enabled_without_qa(self) -> None:
-        with mock.patch.dict(os.environ, {}, clear=True):
-            args = _parse(["orchestrate", "-w", "akm", "--workiq-akm-review"])
-            cfg = _build_config(args)
+    def test_build_config_knowledge_sources_from_environment(self) -> None:
+        with mock.patch.dict(os.environ, {"HVE_KNOWLEDGE_SOURCES": "env-src"}, clear=True):
+            cfg = _build_config(_parse(["orchestrate", "-w", "aas"]))
+        # FR-KD-11（v3.42）: WORKIQ_ENABLED 未設定は Work IQ 有効。
         self.assertTrue(cfg.workiq_enabled)
-        self.assertFalse(cfg.is_workiq_qa_enabled())
-        self.assertTrue(cfg.is_workiq_akm_review_enabled())
-
-    def test_build_config_workiq_draft_output_dir_not_overridden_when_cli_omitted(self) -> None:
-        env_backup = os.environ.copy()
-        try:
-            os.environ["WORKIQ_DRAFT_OUTPUT_DIR"] = "env-drafts"
-            args = _parse(["orchestrate", "-w", "aas", "--workiq-draft"])
-            cfg = _build_config(args)
-            self.assertEqual(cfg.workiq_draft_output_dir, "env-drafts")
-        finally:
-            os.environ.clear()
-            os.environ.update(env_backup)
-
-
-class TestSelfImproveCLI(unittest.TestCase):
-    """--self-improve / --no-self-improve / HVE_AUTO_SELF_IMPROVE のテスト。"""
-
-    def test_self_improve_flag_enables(self) -> None:
-        """--self-improve で cfg.auto_self_improve == True になることを確認。"""
-        args = _parse(["orchestrate", "-w", "aas", "--self-improve"])
-        cfg = _build_config(args)
-        self.assertTrue(cfg.auto_self_improve)
-        self.assertFalse(cfg.self_improve_skip)
-
-    def test_no_self_improve_flag_sets_skip(self) -> None:
-        """--no-self-improve で cfg.self_improve_skip == True になることを確認。"""
-        args = _parse(["orchestrate", "-w", "aas", "--no-self-improve"])
-        cfg = _build_config(args)
-        self.assertTrue(cfg.self_improve_skip)
-
-    def test_no_self_improve_overrides_self_improve(self) -> None:
-        """--no-self-improve が --self-improve より優先されることを確認。"""
-        args = _parse(["orchestrate", "-w", "aas", "--self-improve", "--no-self-improve"])
-        cfg = _build_config(args)
-        self.assertTrue(cfg.self_improve_skip)
-
-    def test_env_var_enables_self_improve(self) -> None:
-        """HVE_AUTO_SELF_IMPROVE=true で有効化されることを確認。"""
-        with mock.patch.dict(os.environ, {"HVE_AUTO_SELF_IMPROVE": "true"}, clear=False):
-            args = _parse(["orchestrate", "-w", "aas"])
-            cfg = _build_config(args)
-            self.assertTrue(cfg.auto_self_improve)
-
-    def test_default_self_improve_is_false(self) -> None:
-        """CLI 未指定・環境変数未指定では auto_self_improve==False になることを確認。"""
-        with mock.patch.dict(os.environ, {k: v for k, v in os.environ.items() if "SELF_IMPROVE" not in k}, clear=True):
-            args = _parse(["orchestrate", "-w", "aas"])
-            cfg = _build_config(args)
-            self.assertFalse(cfg.auto_self_improve)
-            self.assertFalse(cfg.self_improve_skip)
+        self.assertEqual(cfg.effective_knowledge_sources(), ["workiq", "env-src"])
+        with mock.patch.dict(os.environ, {"HVE_KNOWLEDGE_SOURCES": "env-src"}, clear=True):
+            cfg = _build_config(_parse(["orchestrate", "-w", "aas", "--no-workiq"]))
+        self.assertFalse(cfg.workiq_enabled)
+        self.assertEqual(cfg.effective_knowledge_sources(), ["env-src"])
 
 
 class TestPromptAkmParamsEnableAutoMerge(unittest.TestCase):
@@ -979,9 +964,9 @@ class TestReviewModelCLI(unittest.TestCase):
             os.environ.clear()
             os.environ.update(env_backup)
 
-    def test_qa_merge_default_model_is_opus_4_7(self) -> None:
+    def test_qa_merge_default_model_is_opus_5_5(self) -> None:
         args = _parse(["qa-merge", "--qa-file", "qa/sample.md"])
-        self.assertEqual(args.model, "claude-opus-4.7")
+        self.assertEqual(args.model, "claude-opus-5.5")
 
     def test_qa_merge_auto_not_resolved_to_fixed_model(self) -> None:
         args = _parse(["qa-merge", "--qa-file", "qa/sample.md", "--model", "Auto"])
@@ -1168,8 +1153,9 @@ class _WizardHarness:
         mock_orch_mod = mock.MagicMock()
         mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
         mock_workiq_mod = mock.MagicMock()
-        mock_workiq_mod.is_workiq_available = mock.MagicMock(return_value=False)
-        mock_workiq_mod.workiq_login = mock.MagicMock(return_value=False)
+        mock_workiq_mod.probe_workiq_plugin_capability = mock.MagicMock(
+            return_value=mock.Mock(state="not-configured")
+        )
 
         with mock.patch.dict("sys.modules", {
             "console": mock_console_mod,
@@ -1179,7 +1165,7 @@ class _WizardHarness:
             "orchestrator": mock_orch_mod,
             "workiq": mock_workiq_mod,
         }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
-                mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
+            mock.patch.object(_main_mod, "_run_workiq_capability_preflight", return_value=True), \
                 mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=True):
             _main_mod._cmd_run_interactive()
 
@@ -1343,102 +1329,15 @@ class TestEmitPromptCommand(unittest.TestCase):
         self.assertEqual(buf.getvalue(), render_pre_execution_qa_comment_body())
 
 
-class TestLoadMCPConfig(unittest.TestCase):
-    """_load_mcp_config() のテスト。"""
+class TestLegacyMcpConfigSurfaceRemoved(unittest.TestCase):
+    """FR-CLI-76 / FR-CLI-90: HVE 所有の `--mcp-config` surface は撤去済み。"""
 
-    def test_none_when_no_path(self) -> None:
-        """パスが None の場合 None を返すことを確認。"""
-        result = _load_mcp_config(None)
-        self.assertIsNone(result)
+    def test_loader_helper_is_not_exported_anymore(self) -> None:
+        self.assertIsNone(_load_mcp_config)
 
-    def test_loads_valid_json(self) -> None:
-        """有効な JSON ファイルを読み込めることを確認。"""
-        mcp_data = {
-            "filesystem": {
-                "type": "local",
-                "command": "npx",
-                "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
-                "tools": ["*"],
-            }
-        }
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False, encoding="utf-8"
-        ) as f:
-            json.dump(mcp_data, f)
-            tmp_path = f.name
-
-        try:
-            result = _load_mcp_config(tmp_path)
-            self.assertEqual(result, mcp_data)
-        finally:
-            pathlib.Path(tmp_path).unlink()
-
-    def test_unwraps_mcpservers_wrapper(self) -> None:
-        """.github/.mcp.json 形式の mcpServers wrapper を SDK 用 map に変換する。"""
-        servers = {
-            "azure": {
-                "command": "npx",
-                "args": ["-y", "@azure/mcp@latest", "server", "start"],
-            }
-        }
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False, encoding="utf-8"
-        ) as f:
-            json.dump({"mcpServers": servers}, f)
-            tmp_path = f.name
-
-        try:
-            result = _load_mcp_config(tmp_path)
-            self.assertEqual(result, servers)
-        finally:
-            pathlib.Path(tmp_path).unlink()
-
-    def test_none_when_file_not_found(self) -> None:
-        """存在しないファイルの場合 None を返すことを確認。"""
-        result = _load_mcp_config("/tmp/nonexistent_mcp_config_xyz.json")
-        self.assertIsNone(result)
-
-    def test_none_when_invalid_json(self) -> None:
-        """無効な JSON の場合 None を返すことを確認。"""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False, encoding="utf-8"
-        ) as f:
-            f.write("{ invalid json }")
-            tmp_path = f.name
-
-        try:
-            result = _load_mcp_config(tmp_path)
-            self.assertIsNone(result)
-        finally:
-            pathlib.Path(tmp_path).unlink()
-
-    def test_none_when_json_root_is_not_object(self) -> None:
-        """JSON root が object でない場合 None を返すことを確認。"""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False, encoding="utf-8"
-        ) as f:
-            json.dump(["not", "object"], f)
-            tmp_path = f.name
-
-        try:
-            result = _load_mcp_config(tmp_path)
-            self.assertIsNone(result)
-        finally:
-            pathlib.Path(tmp_path).unlink()
-
-    def test_none_when_mcpservers_is_not_object(self) -> None:
-        """mcpServers が object でない場合 None を返すことを確認。"""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False, encoding="utf-8"
-        ) as f:
-            json.dump({"mcpServers": []}, f)
-            tmp_path = f.name
-
-        try:
-            result = _load_mcp_config(tmp_path)
-            self.assertIsNone(result)
-        finally:
-            pathlib.Path(tmp_path).unlink()
+    def test_help_does_not_mention_removed_flag(self) -> None:
+        parser = _build_parser()
+        self.assertNotIn("--mcp-config", parser.format_help())
 
 
 class TestMainDryRun(unittest.TestCase):
@@ -1721,6 +1620,25 @@ class TestCopilotAuthPreflight(unittest.TestCase):
         with mock.patch.object(auth_mod, "ensure_authenticated", return_value=auth_mod.AuthInfo(is_authenticated=True)):
             self.assertTrue(_run_copilot_auth_preflight(args, cfg))
 
+    def test_configured_cli_connection_is_forwarded_to_auth_check(self) -> None:
+        import auth as auth_mod  # type: ignore[import-untyped]
+
+        args, cfg = self._make_config()
+        cfg.cli_path = "configured-copilot"
+        cfg.cli_url = "tcp://127.0.0.1:4321"
+        with mock.patch.object(
+            auth_mod,
+            "ensure_authenticated",
+            return_value=auth_mod.AuthInfo(is_authenticated=True),
+        ) as ensure_mock:
+            self.assertTrue(_run_copilot_auth_preflight(args, cfg))
+
+        ensure_mock.assert_called_once_with(
+            interactive=False,
+            cli_path="configured-copilot",
+            cli_url="tcp://127.0.0.1:4321",
+        )
+
     def test_non_interactive_unauthenticated_returns_false(self) -> None:
         import auth as auth_mod  # type: ignore[import-untyped]
         args, cfg = self._make_config()
@@ -1758,138 +1676,6 @@ class TestCopilotAuthPreflight(unittest.TestCase):
         self.assertEqual(exit_code, 1)
 
 
-class TestWorkIQAuthPreflight(unittest.TestCase):
-    """Work IQ 使用時 preflight のテスト。"""
-
-    def _make_config(self, argv: list[str]):
-        args = _parse(argv)
-        cfg = _build_config(args)
-        return args, cfg
-
-    def test_dry_run_skips_workiq_login(self) -> None:
-        args, cfg = self._make_config(["orchestrate", "-w", "aas", "--workiq", "--dry-run"])
-        with mock.patch("workiq.workiq_login") as login_mock:
-            self.assertTrue(_run_workiq_auth_preflight(args, cfg))
-        login_mock.assert_not_called()
-
-    def test_not_requested_skips_workiq_login(self) -> None:
-        args, cfg = self._make_config(["orchestrate", "-w", "aas"])
-        with mock.patch("workiq.workiq_login") as login_mock:
-            self.assertTrue(_run_workiq_auth_preflight(args, cfg))
-        login_mock.assert_not_called()
-
-    def test_success_returns_true(self) -> None:
-        args, cfg = self._make_config(["orchestrate", "-w", "aas", "--workiq"])
-        with mock.patch("workiq.workiq_login", return_value=True):
-            self.assertTrue(_run_workiq_auth_preflight(args, cfg))
-
-    def test_non_interactive_failure_disables_workiq_and_continues(self) -> None:
-        """FR-CLI-81: 非対話での認証失敗は停止させず、Work IQ を無効化して続行する。"""
-        args, cfg = self._make_config(["orchestrate", "-w", "aas", "--workiq"])
-        with mock.patch("workiq.workiq_login", return_value=False), \
-             mock.patch("sys.stdin.isatty", return_value=False):
-            self.assertTrue(_run_workiq_auth_preflight(args, cfg))
-
-    def test_non_interactive_failure_clears_all_workiq_flags(self) -> None:
-        """FR-CLI-81: 無効化は Work IQ 関連 5 フラグすべてを対象とする。"""
-        args, cfg = self._make_config(
-            [
-                "orchestrate", "-w", "akm",
-                "--workiq", "--workiq-draft", "--workiq-akm-review",
-                "--sources", "qa,workiq",
-            ]
-        )
-        # 無効化前に 5 フラグすべてが有効であることを確認し、assertion の空振りを防ぐ。
-        self.assertTrue(cfg.workiq_enabled)
-        self.assertTrue(cfg.is_workiq_qa_enabled())
-        self.assertTrue(cfg.is_workiq_akm_review_enabled())
-        self.assertTrue(cfg.is_workiq_akm_ingest_enabled())
-        self.assertTrue(cfg.workiq_draft_mode)
-        with mock.patch("workiq.workiq_login", return_value=False), \
-             mock.patch("sys.stdin.isatty", return_value=False):
-            self.assertTrue(_run_workiq_auth_preflight(args, cfg))
-        self.assertFalse(cfg.workiq_enabled)
-        self.assertFalse(cfg.workiq_qa_enabled)
-        self.assertFalse(cfg.workiq_akm_review_enabled)
-        self.assertFalse(cfg.workiq_akm_ingest_enabled)
-        self.assertFalse(cfg.workiq_draft_mode)
-
-    def test_non_interactive_failure_strips_workiq_from_params(self) -> None:
-        """FR-CLI-81: `params` の Work IQ 由来の値も同時にクリアする。"""
-        args, cfg = self._make_config(
-            ["orchestrate", "-w", "akm", "--workiq", "--sources", "qa,workiq,original-docs"]
-        )
-        params = {
-            "sources": "qa,workiq,original-docs",
-            "workiq_akm_ingest_dxx": ["D01"],
-            "ard_workiq_enabled": True,
-        }
-        with mock.patch("workiq.workiq_login", return_value=False), \
-             mock.patch("sys.stdin.isatty", return_value=False):
-            self.assertTrue(_run_workiq_auth_preflight(args, cfg, params))
-        self.assertEqual(params["sources"], "qa,original-docs")
-        self.assertEqual(params["workiq_akm_ingest_dxx"], [])
-        self.assertFalse(params["ard_workiq_enabled"])
-
-    def test_non_interactive_failure_reports_request_source(self) -> None:
-        """FR-CLI-81: 無効化時に Work IQ を要求した設定名を出力する。"""
-        args, cfg = self._make_config(["orchestrate", "-w", "aas", "--workiq"])
-        buf = io.StringIO()
-        with mock.patch("workiq.workiq_login", return_value=False), \
-             mock.patch("sys.stdin.isatty", return_value=False), \
-             contextlib.redirect_stderr(buf):
-            self.assertTrue(_run_workiq_auth_preflight(args, cfg))
-        stderr_text = buf.getvalue()
-        self.assertIn("workiq_enabled", stderr_text)
-        self.assertIn("workiq_qa_enabled", stderr_text)
-
-    def test_akm_ingest_only_skips_preflight_for_non_akm(self) -> None:
-        """非 AKM Workflow では workiq_akm_ingest だけで preflight を起動しない。"""
-        args, cfg = self._make_config(
-            ["orchestrate", "-w", "ard", "--sources", "qa,workiq"]
-        )
-        self.assertTrue(cfg.is_workiq_akm_ingest_enabled())
-        with mock.patch("workiq.workiq_login") as login_mock:
-            self.assertTrue(_run_workiq_auth_preflight(args, cfg))
-        login_mock.assert_not_called()
-
-    def test_akm_ingest_triggers_preflight_for_akm(self) -> None:
-        """AKM Workflow では workiq_akm_ingest で preflight を起動する。"""
-        args, cfg = self._make_config(
-            ["orchestrate", "-w", "akm", "--sources", "qa,workiq"]
-        )
-        with mock.patch("workiq.workiq_login", return_value=True) as login_mock:
-            self.assertTrue(_run_workiq_auth_preflight(args, cfg))
-        login_mock.assert_called_once()
-
-    def test_interactive_failure_can_disable_workiq_and_continue(self) -> None:
-        args, cfg = self._make_config(["orchestrate", "-w", "aas", "--workiq", "--workiq-draft"])
-        cfg.force_interactive = True
-        params = {"sources": "qa,workiq,original-docs", "workiq_akm_ingest_dxx": ["D01"]}
-        with mock.patch("workiq.workiq_login", return_value=False), \
-             mock.patch("builtins.input", return_value="y"):
-            self.assertTrue(_run_workiq_auth_preflight(args, cfg, params))
-        self.assertFalse(cfg.workiq_enabled)
-        self.assertFalse(cfg.workiq_draft_mode)
-        self.assertEqual(params["sources"], "qa,original-docs")
-        self.assertEqual(params["workiq_akm_ingest_dxx"], [])
-
-    def test_interactive_failure_declined_stops_the_run(self) -> None:
-        """FR-CLI-81: 対話端末で拒否された場合は従来どおり停止する。"""
-        args, cfg = self._make_config(["orchestrate", "-w", "aas", "--workiq"])
-        cfg.force_interactive = True
-        with mock.patch("workiq.workiq_login", return_value=False), \
-             mock.patch("builtins.input", return_value="n"):
-            self.assertFalse(_run_workiq_auth_preflight(args, cfg))
-        self.assertTrue(cfg.workiq_enabled)
-
-    def test_cmd_orchestrate_stops_when_workiq_preflight_fails(self) -> None:
-        with mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
-             mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=False):
-            exit_code = main(["orchestrate", "--workflow", "aas", "--workiq", "--quiet"])
-        self.assertEqual(exit_code, 1)
-
-
 class TestAzureAuthPreflight(unittest.TestCase):
     """Azure 利用時 preflight のテスト。"""
 
@@ -1910,11 +1696,12 @@ class TestAzureAuthPreflight(unittest.TestCase):
         with mock.patch.object(_main_mod, "_azure_account_available", return_value=True):
             self.assertTrue(_run_azure_auth_preflight(args, cfg, params))
 
-    def test_azure_mcp_server_requests_azure_check(self) -> None:
+    def test_legacy_mcp_config_does_not_request_azure_check(self) -> None:
         args, cfg, params = self._make_config(["orchestrate", "-w", "aas"])
         cfg.mcp_servers = {"azure": {}}
-        with mock.patch.object(_main_mod, "_azure_account_available", return_value=True):
+        with mock.patch.object(_main_mod, "_azure_account_available") as account_mock:
             self.assertTrue(_run_azure_auth_preflight(args, cfg, params))
+        account_mock.assert_not_called()
 
     def test_non_interactive_missing_azure_returns_false(self) -> None:
         args, cfg, params = self._make_config(["orchestrate", "-w", "asdw-web", "--resource-group", "rg"])
@@ -1945,7 +1732,7 @@ class TestAzureAuthPreflight(unittest.TestCase):
 
     def test_cmd_orchestrate_stops_when_azure_preflight_fails(self) -> None:
         with mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
-             mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
+             mock.patch.object(_main_mod, "_run_workiq_capability_preflight", return_value=True), \
              mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=False):
             exit_code = main(["orchestrate", "--workflow", "asdw-web", "--resource-group", "rg", "--quiet"])
         self.assertEqual(exit_code, 1)
@@ -2032,11 +1819,10 @@ class TestCreateIssuesNewFlow(unittest.TestCase):
         config = _build_config(args)
         self.assertEqual(config.ignore_paths, ["tmp", "build"])
 
-    def test_ignore_paths_auto_remove_qa_when_workiq_draft_and_create_pr(self) -> None:
-        args = _parse(["orchestrate", "-w", "aas", "--workiq-draft", "--create-pr"])
+    def test_ignore_paths_auto_remove_qa_when_knowledge_source_and_create_pr(self) -> None:
+        args = _parse(["orchestrate", "-w", "aas", "--workiq", "--create-pr"])
         config = _build_config(args)
         self.assertTrue(config.create_pr)
-        self.assertTrue(config.workiq_draft_mode)
         self.assertNotIn("qa", config.ignore_paths)
 
 
@@ -2083,7 +1869,6 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         # 5. Code Review Agent → code_review (Phase E-4)
         # 6. (code_review=True 時のみ) 自動承認 → auto_approval (Phase E-4 内)
         # 7. (auto_review or code_review 時のみ) use_different_review_model (Phase E-5)
-        # 8. 自己改善 → False (Phase E-6)
         # 9. Issue 作成 → create_issues (Phase F)
         # 10. PR 作成 → create_pr (create_issues=False 時のみ呼ばれる) (Phase F)
         # 11. ドライラン → False (Phase G)
@@ -2099,7 +1884,6 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
             yes_no_answers.append(auto_approval)
         if auto_review or code_review:
             yes_no_answers.append(use_different_review_model)
-        yes_no_answers.append(False)  # auto_self_improve
         yes_no_answers.append(create_issues)
         if not create_issues:
             yes_no_answers.append(create_pr)
@@ -2182,8 +1966,9 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         mock_orch_mod = mock.MagicMock()
         mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
         mock_workiq_mod = mock.MagicMock()
-        mock_workiq_mod.is_workiq_available = mock.MagicMock(return_value=False)
-        mock_workiq_mod.workiq_login = mock.MagicMock(return_value=False)
+        mock_workiq_mod.probe_workiq_plugin_capability = mock.MagicMock(
+            return_value=mock.Mock(state="not-configured")
+        )
 
         with mock.patch.dict("sys.modules", {
             "console": mock_console_mod,
@@ -2193,7 +1978,7 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
             "orchestrator": mock_orch_mod,
             "workiq": mock_workiq_mod,
            }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
-               mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
+               mock.patch.object(_main_mod, "_run_workiq_capability_preflight", return_value=True), \
                mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=True):
             _cmd_run_interactive = _main_mod._cmd_run_interactive
             _cmd_run_interactive()
@@ -2205,12 +1990,6 @@ class TestInteractiveModeCodeReview(unittest.TestCase):
         cfg = self._run_interactive_with_inputs(code_review=True)
         self.assertIsNotNone(cfg)
         self.assertTrue(cfg.auto_coding_agent_review)
-
-    def test_interactive_self_improve_no_sets_explicit_skip(self) -> None:
-        cfg = self._run_interactive_with_inputs()
-        self.assertIsNotNone(cfg)
-        self.assertFalse(cfg.auto_self_improve)
-        self.assertTrue(cfg.self_improve_skip)
 
     def test_interactive_auto_approval_sets_config(self) -> None:
         """auto_approval=True が SDKConfig に反映される。"""
@@ -2349,7 +2128,6 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
             # Phase 再編後の yes_no 順:
             #   Phase E: QA自動→False, Review自動→False, Code Review→auto_coding_agent_review,
             #            (auto_coding_agent_review=True のとき) use_different_review_model→False,
-            #            自己改善→False
             #   Phase F: Issue→False, PR→False
             #   Phase G: dry_run→False
             #   Phase H: enable_workbench
@@ -2357,7 +2135,6 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
             yes_no_answers = [False, False, auto_coding_agent_review]
             if auto_coding_agent_review:
                 yes_no_answers.append(False)  # use_different_review_model
-            yes_no_answers += [False]   # auto_self_improve
             yes_no_answers += [False, False]  # create_issues, create_pr
             yes_no_answers += [False, enable_workbench, True]   # dry_run, enable_workbench, 実行確認
             con.prompt_yes_no.side_effect = yes_no_answers
@@ -2383,8 +2160,9 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
         mock_orch_mod = mock.MagicMock()
         mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
         mock_workiq_mod = mock.MagicMock()
-        mock_workiq_mod.is_workiq_available = mock.MagicMock(return_value=False)
-        mock_workiq_mod.workiq_login = mock.MagicMock(return_value=False)
+        mock_workiq_mod.probe_workiq_plugin_capability = mock.MagicMock(
+            return_value=mock.Mock(state="not-configured")
+        )
 
         with mock.patch.dict("sys.modules", {
             "console": mock_console_mod,
@@ -2394,7 +2172,7 @@ class TestInteractiveModeAutoExecModes(unittest.TestCase):
             "orchestrator": mock_orch_mod,
             "workiq": mock_workiq_mod,
            }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
-               mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
+               mock.patch.object(_main_mod, "_run_workiq_capability_preflight", return_value=True), \
                mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=True):
             _cmd_run_interactive = _main_mod._cmd_run_interactive
             _cmd_run_interactive()
@@ -2487,7 +2265,7 @@ class TestInteractiveModeQaAutoDefaults(unittest.TestCase):
         # Phase 再編後の yes_no 順:
         #   Phase E: auto_qa=True, (auto_qa=Trueなので) use_different_qa_model=False,
         #            AKM 専用実行品質=False(FR-QA-04),
-        #            auto_review=False, code_review=False, self_improve=False
+        #            auto_review=False, code_review=False
         #   Phase F: create_issues=False, create_pr=False
         #   Phase G: dry_run=False / Phase H: enable_workbench=True / 実行確認=True
         con.prompt_yes_no.side_effect = [True, False, False, False, False, False, False, False, False, True, True]
@@ -2508,8 +2286,9 @@ class TestInteractiveModeQaAutoDefaults(unittest.TestCase):
         mock_orch_mod = mock.MagicMock()
         mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
         mock_workiq_mod = mock.MagicMock()
-        mock_workiq_mod.is_workiq_available = mock.MagicMock(return_value=False)
-        mock_workiq_mod.workiq_login = mock.MagicMock(return_value=False)
+        mock_workiq_mod.probe_workiq_plugin_capability = mock.MagicMock(
+            return_value=mock.Mock(state="not-configured")
+        )
 
         with mock.patch.dict("sys.modules", {
             "console": mock_console_mod,
@@ -2519,7 +2298,7 @@ class TestInteractiveModeQaAutoDefaults(unittest.TestCase):
             "orchestrator": mock_orch_mod,
             "workiq": mock_workiq_mod,
            }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
-               mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
+               mock.patch.object(_main_mod, "_run_workiq_capability_preflight", return_value=True), \
                mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=True):
             _cmd_run_interactive = _main_mod._cmd_run_interactive
             _cmd_run_interactive()
@@ -2535,7 +2314,7 @@ class TestInteractiveModeQaAutoDefaults(unittest.TestCase):
 
 class TestInteractiveModeAkmQaFlow(unittest.TestCase):
     def test_manual_mode_akm_without_auto_qa_keeps_workiq_disabled(self) -> None:
-        """AKM は QA と実行後レビュー Work IQ を別々に表示し、拒否すれば無効のまま。"""
+        """AKM は QA と知識探索の Work IQ 利用を別々に表示し、拒否すれば無効のまま。"""
         import unittest.mock as mock
 
         captured = {}
@@ -2557,8 +2336,8 @@ class TestInteractiveModeAkmQaFlow(unittest.TestCase):
         # Phase 再編後の menu_select 順: workflow(akm), exec_mode(手動), model, AKM sources(Phase A'), verbosity(Phase D)
         con.menu_select.side_effect = [0, 2, 0, 0, 1]
         # Phase 再編後の yes_no 順:
-        #   force_refresh=False(Phase A' AKM, 差分マージが既定), AKM QA=False, WorkIQ review=False,
-        #   CodeReview=False, auto_self_improve=False,
+        #   force_refresh=False(Phase A' AKM, 差分マージが既定), AKM QA=False, 知識探索 Work IQ=False,
+        #   CodeReview=False,
         #   Issue=False, PR=False, dry_run=False, enable_workbench=True, confirm=True
         con.prompt_yes_no.side_effect = [False, False, False, False, False, False, False, False, True, True]
         # Phase 再編後の input 順:
@@ -2586,9 +2365,9 @@ class TestInteractiveModeAkmQaFlow(unittest.TestCase):
         mock_orch_mod = mock.MagicMock()
         mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
         mock_workiq_mod = mock.MagicMock()
-        mock_workiq_mod.is_workiq_available = mock.MagicMock(return_value=True)
-        mock_workiq_mod.workiq_login = mock.MagicMock(return_value=True)
-        mock_workiq_mod.get_workiq_prompt_template = mock.MagicMock(side_effect=lambda mode: f"default-{mode}")
+        mock_workiq_mod.probe_workiq_plugin_capability = mock.MagicMock(
+            return_value=mock.Mock(state="ready")
+        )
 
         with mock.patch.dict("sys.modules", {
             "console": mock_console_mod,
@@ -2597,8 +2376,8 @@ class TestInteractiveModeAkmQaFlow(unittest.TestCase):
             "template_engine": mock_te_mod,
             "orchestrator": mock_orch_mod,
             "workiq": mock_workiq_mod,
-           }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
-               mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
+         }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
+             mock.patch.object(_main_mod, "_run_workiq_capability_preflight", return_value=True), \
                mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=True):
             _main_mod._cmd_run_interactive()
 
@@ -2606,9 +2385,7 @@ class TestInteractiveModeAkmQaFlow(unittest.TestCase):
         self.assertIsNotNone(cfg)
         self.assertFalse(cfg.auto_qa)
         self.assertFalse(cfg.workiq_enabled)
-        self.assertFalse(cfg.is_workiq_qa_enabled())
-        self.assertFalse(cfg.is_workiq_akm_review_enabled())
-        mock_workiq_mod.workiq_login.assert_not_called()
+        self.assertEqual(cfg.effective_knowledge_sources(), [])
         prompts = [c.args[0] for c in con.prompt_yes_no.call_args_list if c.args]
         self.assertTrue(any("AKM 実行前に QA" in str(p) for p in prompts))
         self.assertTrue(any("Work IQ" in str(p) and "knowledge/" in str(p) for p in prompts))
@@ -2643,7 +2420,7 @@ class TestInteractiveAdocParamsValidation(unittest.TestCase):
             #   (Phase A' でワークフロー固有パラメータを収集 → Phase C でモデル選択)
             con.menu_select.side_effect = [0, 2, 1, 0, 0, 1]
             # Phase 再編後の yes_no 順:
-            #   Phase E: auto_qa=False, auto_review=False, code_review=False, self_improve=False
+            #   Phase E: auto_qa=False, auto_review=False, code_review=False
             #   Phase F: create_issues=False, create_pr=False
             #   Phase G: dry_run=False / Phase H: enable_workbench=True / 実行確認=True
             con.prompt_yes_no.side_effect = [False, False, False, False, False, False, False, True, True]
@@ -2663,8 +2440,9 @@ class TestInteractiveAdocParamsValidation(unittest.TestCase):
         mock_orch_mod = mock.MagicMock()
         mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
         mock_workiq_mod = mock.MagicMock()
-        mock_workiq_mod.is_workiq_available = mock.MagicMock(return_value=False)
-        mock_workiq_mod.workiq_login = mock.MagicMock(return_value=False)
+        mock_workiq_mod.probe_workiq_plugin_capability = mock.MagicMock(
+            return_value=mock.Mock(state="not-configured")
+        )
 
         with mock.patch.dict("sys.modules", {
             "console": mock_console_mod,
@@ -2673,8 +2451,8 @@ class TestInteractiveAdocParamsValidation(unittest.TestCase):
             "template_engine": mock_te_mod,
             "orchestrator": mock_orch_mod,
             "workiq": mock_workiq_mod,
-           }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
-               mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
+         }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
+             mock.patch.object(_main_mod, "_run_workiq_capability_preflight", return_value=True), \
                mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=True):
             _main_mod._cmd_run_interactive()
 
@@ -2724,7 +2502,7 @@ class TestInteractiveWorkflowParamPrompts(unittest.TestCase):
             # Phase 再編後: workflow, exec_mode(2=手動), model, verbosity
             con.menu_select.side_effect = [0, 2, 0, 1]
             # Phase 再編後の yes_no 順:
-            #   Phase E: auto_qa=False, auto_review=False, code_review=False, self_improve=False
+            #   Phase E: auto_qa=False, auto_review=False, code_review=False
             #   Phase F: create_issues=False, create_pr=False
             #   Phase G: dry_run=False / Phase H: enable_workbench=True / 実行確認=True
             con.prompt_yes_no.side_effect = [False, False, False, False, False, False, False, True, True]
@@ -2746,8 +2524,9 @@ class TestInteractiveWorkflowParamPrompts(unittest.TestCase):
         mock_orch_mod = mock.MagicMock()
         mock_orch_mod.run_workflow = mock.MagicMock(side_effect=_fake_run_workflow)
         mock_workiq_mod = mock.MagicMock()
-        mock_workiq_mod.is_workiq_available = mock.MagicMock(return_value=False)
-        mock_workiq_mod.workiq_login = mock.MagicMock(return_value=False)
+        mock_workiq_mod.probe_workiq_plugin_capability = mock.MagicMock(
+            return_value=mock.Mock(state="not-configured")
+        )
 
         with mock.patch.dict("sys.modules", {
             "console": mock_console_mod,
@@ -2756,8 +2535,8 @@ class TestInteractiveWorkflowParamPrompts(unittest.TestCase):
             "template_engine": mock_te_mod,
             "orchestrator": mock_orch_mod,
             "workiq": mock_workiq_mod,
-           }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
-               mock.patch.object(_main_mod, "_run_workiq_auth_preflight", return_value=True), \
+         }), mock.patch.object(_main_mod, "_run_copilot_auth_preflight", return_value=True), \
+             mock.patch.object(_main_mod, "_run_workiq_capability_preflight", return_value=True), \
                mock.patch.object(_main_mod, "_run_azure_auth_preflight", return_value=True):
             _main_mod._cmd_run_interactive()
 
@@ -2967,112 +2746,6 @@ class TestMaxFileLinesPrompt(unittest.TestCase):
         val = _prompt_valid_max_file_lines(con)
         self.assertEqual(val, 500)
         self.assertIsInstance(val, int)
-
-
-class TestWorkIQDoctorSdkProbeArgs(unittest.TestCase):
-    """Phase 3: workiq-doctor --sdk-probe の引数パーステスト。"""
-
-    def test_sdk_probe_arg_parsed(self) -> None:
-        args = _parse(["workiq-doctor", "--sdk-probe"])
-        self.assertTrue(args.sdk_probe)
-
-    def test_sdk_probe_default_false(self) -> None:
-        args = _parse(["workiq-doctor"])
-        self.assertFalse(args.sdk_probe)
-
-    def test_skip_mcp_probe_and_sdk_probe_combined(self) -> None:
-        args = _parse(["workiq-doctor", "--skip-mcp-probe", "--sdk-probe"])
-        self.assertTrue(args.skip_mcp_probe)
-        self.assertTrue(args.sdk_probe)
-
-    def test_sdk_probe_timeout_default(self) -> None:
-        args = _parse(["workiq-doctor", "--sdk-probe"])
-        self.assertEqual(args.sdk_probe_timeout, 30.0)
-
-    def test_sdk_probe_timeout_custom(self) -> None:
-        args = _parse(["workiq-doctor", "--sdk-probe", "--sdk-probe-timeout", "60.0"])
-        self.assertEqual(args.sdk_probe_timeout, 60.0)
-
-    def test_sdk_tool_probe_args_parsed(self) -> None:
-        args = _parse([
-            "workiq-doctor",
-            "--event-extractor-self-test",
-            "--sdk-tool-probe",
-            "--sdk-tool-probe-timeout", "90.0",
-            "--sdk-event-trace",
-            "--sdk-tool-probe-tools-all",
-        ])
-        self.assertTrue(args.event_extractor_self_test)
-        self.assertTrue(args.sdk_tool_probe)
-        self.assertEqual(args.sdk_tool_probe_timeout, 90.0)
-        self.assertTrue(args.sdk_event_trace)
-        self.assertTrue(args.sdk_tool_probe_tools_all)
-
-    def test_qa_integration_probe_default_false(self) -> None:
-        args = _parse(["workiq-doctor"])
-        self.assertFalse(args.qa_integration_probe)
-
-    def test_qa_integration_probe_arg_parsed(self) -> None:
-        args = _parse(["workiq-doctor", "--qa-integration-probe"])
-        self.assertTrue(args.qa_integration_probe)
-
-    def test_cmd_workiq_doctor_passes_sdk_probe_to_diagnostics(self) -> None:
-        import workiq as _workiq_mod
-        mock_report = _workiq_mod.WorkIQDiagnosticReport(checks=[
-            _workiq_mod.WorkIQDiagnosticCheck(name="os_info", status="PASS", detail="ok"),
-        ])
-        args = mock.Mock()
-        args.tenant_id = None
-        args.skip_mcp_probe = True
-        args.timeout = 5.0
-        args.json = False
-        args.sdk_probe = True
-        args.sdk_probe_timeout = 30.0
-        args.event_extractor_self_test = False
-        args.sdk_tool_probe = False
-        args.sdk_tool_probe_timeout = 60.0
-        args.sdk_event_trace = False
-        args.sdk_tool_probe_tools_all = False
-        with mock.patch.object(_workiq_mod, "run_workiq_diagnostics", return_value=mock_report) as mock_diag:
-            import io
-            from contextlib import redirect_stdout
-            buf = io.StringIO()
-            with redirect_stdout(buf):
-                _main_mod._cmd_workiq_doctor(args)
-        self.assertTrue(mock_diag.called)
-        call_kwargs = mock_diag.call_args.kwargs
-        self.assertTrue(call_kwargs.get("sdk_probe"))
-        self.assertEqual(call_kwargs.get("sdk_probe_timeout"), 30.0)
-
-    def test_cmd_workiq_doctor_passes_sdk_tool_probe_options(self) -> None:
-        import workiq as _workiq_mod
-        mock_report = _workiq_mod.WorkIQDiagnosticReport(checks=[
-            _workiq_mod.WorkIQDiagnosticCheck(name="os_info", status="PASS", detail="ok"),
-        ])
-        args = mock.Mock()
-        args.tenant_id = None
-        args.skip_mcp_probe = True
-        args.timeout = 5.0
-        args.json = False
-        args.sdk_probe = False
-        args.sdk_probe_timeout = 30.0
-        args.event_extractor_self_test = True
-        args.sdk_tool_probe = True
-        args.sdk_tool_probe_timeout = 90.0
-        args.sdk_event_trace = True
-        args.sdk_tool_probe_tools_all = True
-        with mock.patch.object(_workiq_mod, "run_workiq_diagnostics", return_value=mock_report) as mock_diag:
-            import io
-            from contextlib import redirect_stdout
-            buf = io.StringIO()
-            with redirect_stdout(buf):
-                _main_mod._cmd_workiq_doctor(args)
-        call_kwargs = mock_diag.call_args.kwargs
-        self.assertTrue(call_kwargs.get("event_extractor_self_test"))
-        self.assertTrue(call_kwargs.get("sdk_tool_probe"))
-        self.assertEqual(call_kwargs.get("sdk_tool_probe_timeout"), 90.0)
-        self.assertTrue(call_kwargs.get("sdk_event_trace"))
-        self.assertTrue(call_kwargs.get("sdk_tool_probe_tools_all"))
 
 
 # -----------------------------------------------------------------------

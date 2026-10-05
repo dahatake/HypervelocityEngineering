@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import subprocess
 import sys
-import types
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -222,6 +221,25 @@ class TestGetAuthStatus:
         assert info.is_authenticated is True
         assert info.status_message == "camel"
 
+    def test_custom_cli_connection_uses_shared_client_factory(self):
+        fake = _make_fake_client(is_auth=True)
+        with patch(
+            "hve.copilot_client_factory.create_copilot_client",
+            return_value=fake,
+        ) as factory:
+            info = get_auth_status(
+                timeout=5.0,
+                cli_path="configured-copilot",
+                cli_url=None,
+            )
+
+        assert info.is_authenticated is True
+        factory.assert_called_once_with(
+            cli_path="configured-copilot",
+            cli_url=None,
+            log_level="error",
+        )
+
 
 class TestIsAuthenticated:
     def test_true(self):
@@ -271,6 +289,38 @@ class TestEnsureAuthenticated:
         assert result.is_authenticated is False
         assert result.status_message == "copilot login exited with 2"
 
+    def test_interactive_login_uses_explicit_runtime_binary(self):
+        before = AuthInfo(is_authenticated=False)
+        after = AuthInfo(is_authenticated=True)
+        with patch("hve.auth.get_auth_status", side_effect=[before, after]), patch(
+            "hve.auth.run_login", return_value=0
+        ) as login_mock:
+            result = ensure_authenticated(
+                interactive=True,
+                cli_path="configured-copilot",
+            )
+
+        assert result is after
+        login_mock.assert_called_once_with(
+            host="https://github.com",
+            binary="configured-copilot",
+            timeout=None,
+        )
+
+    def test_external_runtime_does_not_login_a_different_local_cli(self):
+        before = AuthInfo(is_authenticated=False)
+        with patch("hve.auth.get_auth_status", return_value=before), patch(
+            "hve.auth.run_login"
+        ) as login_mock:
+            result = ensure_authenticated(
+                interactive=True,
+                cli_url="tcp://127.0.0.1:4321",
+            )
+
+        assert result.is_authenticated is False
+        assert "server-side authentication" in str(result.status_message)
+        login_mock.assert_not_called()
+
 
 # =====================================================================
 # find_copilot_binary
@@ -278,71 +328,46 @@ class TestEnsureAuthenticated:
 
 
 class TestFindCopilotBinary:
-    @staticmethod
-    def _exe_name() -> str:
-        return "copilot.exe" if sys.platform.startswith("win") else "copilot"
-
-    @staticmethod
-    def _stub_bundle(monkeypatch, bin_dir) -> None:
-        """``copilot.bin`` を差し替える。親モジュール属性も同時に差し替える。"""
-        fake_bin = types.ModuleType("copilot.bin")
-        fake_bin.__file__ = str(bin_dir / "__init__.py")
-        monkeypatch.setitem(sys.modules, "copilot.bin", fake_bin)
-        import copilot as copilot_pkg
-
-        monkeypatch.setattr(copilot_pkg, "bin", fake_bin, raising=False)
-
-    def test_returns_path_when_bundled_exists(self, monkeypatch, tmp_path):
-        bin_dir = tmp_path / "copilot" / "bin"
-        bin_dir.mkdir(parents=True)
-        bundled = bin_dir / self._exe_name()
-        bundled.write_text("", encoding="utf-8")
-        self._stub_bundle(monkeypatch, bin_dir)
-
-        assert find_copilot_binary() == str(bundled)
-
-    def test_falls_back_to_the_runtime_cache_when_bundle_and_path_are_missing(
-        self, monkeypatch, tmp_path
-    ):
-        # SDK は同梱をやめ、`download-runtime` がキャッシュへ展開する構成になった。
-        self._stub_bundle(monkeypatch, tmp_path / "nonexistent")
-        cached = tmp_path / "cli" / "1.0.79" / self._exe_name()
-        cached.parent.mkdir(parents=True)
-        cached.write_text("", encoding="utf-8")
+    def test_environment_override_wins(self, monkeypatch):
+        monkeypatch.setenv("COPILOT_CLI_PATH", "/configured/copilot")
         import copilot._cli_download as cli_download
 
-        monkeypatch.setattr(
-            cli_download, "get_cached_cli_path", lambda version=None: str(cached)
-        )
+        monkeypatch.setattr(cli_download, "get_cached_cli_path", lambda: "/sdk/copilot")
+        assert find_copilot_binary() == "/configured/copilot"
 
-        with patch("shutil.which", return_value=None):
-            assert find_copilot_binary() == str(cached)
-
-    def test_returns_none_when_bundle_path_and_runtime_cache_are_all_missing(
-        self, monkeypatch, tmp_path
-    ):
-        self._stub_bundle(monkeypatch, tmp_path / "nonexistent")
+    def test_returns_sdk_runtime_path(self, monkeypatch):
+        monkeypatch.delenv("COPILOT_CLI_PATH", raising=False)
         import copilot._cli_download as cli_download
 
-        monkeypatch.setattr(
-            cli_download, "get_cached_cli_path", lambda version=None: None
-        )
+        monkeypatch.setattr(cli_download, "get_cached_cli_path", lambda: "/sdk/copilot")
+        assert find_copilot_binary() == "/sdk/copilot"
 
-        with patch("shutil.which", return_value=None):
+    def test_returns_none_when_sdk_runtime_is_unavailable(self, monkeypatch):
+        monkeypatch.delenv("COPILOT_CLI_PATH", raising=False)
+        import copilot._cli_download as cli_download
+
+        monkeypatch.setattr(cli_download, "get_cached_cli_path", lambda: None)
+        assert find_copilot_binary() is None
+
+    def test_does_not_fallback_to_a_different_path_cli(self, monkeypatch):
+        monkeypatch.delenv("COPILOT_CLI_PATH", raising=False)
+        import copilot._cli_download as cli_download
+
+        monkeypatch.setattr(cli_download, "get_cached_cli_path", lambda: None)
+        with patch("shutil.which", side_effect=AssertionError("PATH must not be used")):
             assert find_copilot_binary() is None
 
-    def test_falls_back_to_which_when_bundle_missing(self, monkeypatch, tmp_path):
-        # copilot.bin の __file__ を非存在パスに差し替えて同梱バイナリ未検出を再現
-        fake_bin = types.ModuleType("copilot.bin")
-        fake_bin.__file__ = str(tmp_path / "nonexistent" / "__init__.py")
-        monkeypatch.setitem(sys.modules, "copilot.bin", fake_bin)
-        # parent module の属性も差し替え (import copilot.bin as _bin は親属性経由)
-        import copilot as copilot_pkg
+    def test_does_not_download_runtime_during_capability_resolution(self, monkeypatch):
+        monkeypatch.delenv("COPILOT_CLI_PATH", raising=False)
+        import copilot._cli_download as cli_download
 
-        monkeypatch.setattr(copilot_pkg, "bin", fake_bin, raising=False)
-        with patch("shutil.which", return_value="/usr/bin/copilot"):
-            result = find_copilot_binary()
-        assert result == "/usr/bin/copilot"
+        monkeypatch.setattr(cli_download, "get_cached_cli_path", lambda: None)
+        monkeypatch.setattr(
+            cli_download,
+            "get_or_download_cli",
+            lambda: (_ for _ in ()).throw(AssertionError("must not download")),
+        )
+        assert find_copilot_binary() is None
 
 
 # =====================================================================

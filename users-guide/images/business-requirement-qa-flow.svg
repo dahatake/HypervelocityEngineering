@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 820" font-family="system-ui, -apple-system, sans-serif">
-  <title>Step.4.2 全体フロー図: 事業分析ドキュメントから knowledge/ 生成までのフロー</title>
+  <title>Step.5.2 全体フロー図: qa/ 質問票から knowledge/ 差分更新までのフロー</title>
   <defs>
     <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
       <polygon points="0 0, 10 3.5, 0 7" fill="#586069"/>
@@ -14,8 +14,8 @@
   <rect width="800" height="820" fill="#f6f8fa" rx="12"/>
 
   <!-- Title -->
-  <text x="400" y="36" text-anchor="middle" font-size="16" font-weight="bold" fill="#24292e">Step.4.2 全体フロー図</text>
-  <text x="400" y="55" text-anchor="middle" font-size="12" fill="#586069">事業分析ドキュメントから knowledge/ 生成までのフロー</text>
+  <text x="400" y="36" text-anchor="middle" font-size="16" font-weight="bold" fill="#24292e">Step.5.2 全体フロー図</text>
+  <text x="400" y="55" text-anchor="middle" font-size="12" fill="#586069">qa/ 質問票から knowledge/ 差分更新までのフロー</text>
 
   <!-- Node A: Step.1 (orange workflow) - top center -->
   <rect x="250" y="80" width="300" height="75" rx="8" fill="#fff8e6" stroke="#e36209" stroke-width="2"/>
@@ -32,9 +32,9 @@
   <!-- Arrow A→B (diagonal) -->
   <line x1="330" y1="155" x2="255" y2="240" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
 
-  <!-- Node C: Step.4 (orange workflow) - center -->
+  <!-- Node C: Step.5 (orange workflow) - center -->
   <rect x="250" y="400" width="300" height="75" rx="8" fill="#fff8e6" stroke="#e36209" stroke-width="2"/>
-  <text x="400" y="426" text-anchor="middle" font-size="12" font-weight="bold" fill="#24292e">Step.4</text>
+  <text x="400" y="426" text-anchor="middle" font-size="12" font-weight="bold" fill="#24292e">Step.5</text>
   <text x="400" y="442" text-anchor="middle" font-size="11" fill="#24292e">qa/ 質問票の作成</text>
   <text x="400" y="458" text-anchor="middle" font-size="10" fill="#586069">(auto-qa / Issue / VS Code)</text>
 
@@ -58,8 +58,8 @@
 
   <!-- Node E: KnowledgeManager (purple agent) -->
   <rect x="200" y="670" width="400" height="65" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
-  <text x="400" y="695" text-anchor="middle" font-size="12" font-weight="bold" fill="#24292e">KnowledgeManager</text>
-  <text x="400" y="713" text-anchor="middle" font-size="11" fill="#24292e">D01-D21 分類・ステータス生成</text>
+  <text x="400" y="695" text-anchor="middle" font-size="12" font-weight="bold" fill="#24292e">AKM / KnowledgeManager</text>
+  <text x="400" y="713" text-anchor="middle" font-size="11" fill="#24292e">D01-D21 分類・knowledge/ 差分更新</text>
 
   <!-- Arrow D→E -->
   <line x1="400" y1="605" x2="400" y2="670" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>
@@ -68,8 +68,8 @@
   <!-- Actually, let me restructure: F should be at y~755 -->
   <!-- Node F: Output artifact (green) -->
   <rect x="200" y="755" width="400" height="50" rx="8" fill="#d4edda" stroke="#28a745" stroke-width="2"/>
-  <text x="400" y="777" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">カバレッジギャップの特定</text>
-  <text x="400" y="793" text-anchor="middle" font-size="10" fill="#586069">不足ドキュメント作成</text>
+  <text x="400" y="777" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">knowledge/ の更新</text>
+  <text x="400" y="793" text-anchor="middle" font-size="10" fill="#586069">D01〜D21 と status の差分反映</text>
 
   <!-- Arrow E→F -->
   <line x1="400" y1="735" x2="400" y2="755" stroke="#586069" stroke-width="1.5" marker-end="url(#arr)"/>

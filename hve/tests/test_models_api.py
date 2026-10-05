@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -210,6 +211,34 @@ class TestFetchModelEntries:
             with pytest.raises(ModelsAPIError) as exc_info:
                 fetch_model_entries(timeout=0.1)
         assert "timeout" in str(exc_info.value).lower()
+
+    def test_timeout_remains_bounded_when_client_stop_hangs(self, monkeypatch):
+        from hve import models_api
+
+        async def _noop():
+            return None
+
+        async def _hang():
+            await asyncio.Future()
+
+        fake = MagicMock()
+        fake.start = _noop
+        fake.list_models = _hang
+        fake.stop = _hang
+        monkeypatch.setattr(
+            models_api,
+            "_MODEL_CLIENT_STOP_TIMEOUT_SECONDS",
+            0.01,
+        )
+
+        started = time.monotonic()
+        with (
+            patch("copilot.CopilotClient", return_value=fake),
+            pytest.raises(ModelsAPIError, match="timeout"),
+        ):
+            fetch_model_entries(timeout=0.02)
+
+        assert time.monotonic() - started < 0.5
 
 
 # =====================================================================

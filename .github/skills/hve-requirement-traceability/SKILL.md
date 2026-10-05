@@ -1,7 +1,7 @@
 ---
 name: hve-requirement-traceability
 description: >
-  HVE application maintenance requirement traceability. USE FOR: HVE application maintenance, bugfix, requirement traceability. DO NOT USE FOR: generated app or non-HVE application changes. WHEN: HVE, mdq, cq, or hve-dev paths change.
+  HVE application maintenance requirement traceability. USE FOR: HVE application maintenance, bugfix, requirement traceability. DO NOT USE FOR: generated app or non-HVE application changes. WHEN: HVE/mdq/cq/hve-dev/関連HVEカスタマイズの変更または不具合調査。
 metadata:
   origin: user
   version: 1.0.0
@@ -50,13 +50,7 @@ HVE 対象パスへ新規の判定・生成・検証ロジックを追加する�
 
 ## 新規要件 ID の bootstrap
 
-1. 要求定義へ active 要件を追加または改訂する。
-2. 要求テストマッピングへ受入テストを追加し、未実装なら `要追加` と記録する。
-3. 同じ対象テストを作成して RED を確認する。
-4. `hve-dev/hve-feature-inventory.csv` と `hve-dev/hve-test-inventory.csv` を再生成し、新規 ID・source・status・テストパスを照合する。
-5. 実装する。
-6. 同じ対象テストで GREEN を確認する。
-7. 要求テストマッピングへ実結果を反映する。
+- [feature の TDD 順序](#feature-の-tdd-順序) を共通の TDD 順序として参照する。
 - 索引照合では `source=hve-dev/requirement-definition.md`、`active-or-described`、テストパスを確認する。
 - 新規 ID は要求定義書の定義行を一次情報とする。
 - 新規 ID は同一変更セット内だけで暫定規範として扱う。

@@ -28,6 +28,7 @@ import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
+from urllib.parse import urlsplit
 
 PACKAGES_DIR = Path(__file__).resolve().parent
 REPO_ROOT = PACKAGES_DIR.parent.parent
@@ -43,6 +44,9 @@ ALWAYS_DROP_DIRS = frozenset(
 ALWAYS_DROP_SUFFIXES = frozenset({".pyc", ".pyo", ".pyd"})
 
 _VERSION_RE = re.compile(r"^\s*__version__\s*=\s*[\"']([^\"']+)[\"']", re.MULTILINE)
+_GITHUB_REPOSITORY_PATH_RE = re.compile(
+    r"(?P<owner>[A-Za-z0-9_.-]+)/(?P<repository>[A-Za-z0-9_.-]+)"
+)
 
 
 class PackageError(RuntimeError):
@@ -198,12 +202,105 @@ def source_commit() -> str | None:
     return result.stdout.strip() or None if result.returncode == 0 else None
 
 
+def resolve_source_repo(repo_root: Path | None = None) -> str | None:
+    """GitHub の origin URL を安全な ``owner/repository`` へ正規化する。"""
+    root = REPO_ROOT if repo_root is None else Path(repo_root)
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+
+    # git が付ける末尾 LF だけを分離する。urlsplit は TAB / CR / LF や
+    # 先頭の C0 制御文字・空白を除去し、空の query / fragment delimiter も
+    # 結果から識別できないため、解析前の値で明示的に拒否する。
+    remote = result.stdout[:-1] if result.stdout.endswith("\n") else result.stdout
+    if (
+        not remote
+        or "?" in remote
+        or "#" in remote
+        or any(
+            ord(char) < 0x20 or ord(char) == 0x7F or char.isspace()
+            for char in remote
+        )
+    ):
+        return None
+
+    ssh_match = re.fullmatch(
+        r"git@github\.com:(?P<path>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)",
+        remote,
+        re.IGNORECASE,
+    )
+    if ssh_match:
+        repository_path = ssh_match.group("path")
+    else:
+        try:
+            parsed = urlsplit(remote)
+            port = parsed.port
+        except ValueError:
+            return None
+        if parsed.query or parsed.fragment or parsed.hostname is None:
+            return None
+
+        scheme = parsed.scheme.lower()
+        hostname = parsed.hostname.lower()
+        if scheme == "https":
+            if (
+                hostname != "github.com"
+                or parsed.netloc.lower() != "github.com"
+                or parsed.username is not None
+                or parsed.password is not None
+                or port is not None
+            ):
+                return None
+        elif scheme == "ssh":
+            if (
+                hostname != "github.com"
+                or parsed.netloc.lower() != "git@github.com"
+                or parsed.username != "git"
+                or parsed.password is not None
+                or port is not None
+            ):
+                return None
+        else:
+            return None
+        if not parsed.path.startswith("/"):
+            return None
+        repository_path = parsed.path[1:]
+
+    if repository_path.lower().endswith(".git"):
+        repository_path = repository_path[:-4]
+    match = _GITHUB_REPOSITORY_PATH_RE.fullmatch(repository_path)
+    if not match:
+        return None
+    owner = match.group("owner")
+    repository = match.group("repository")
+    if owner in (".", "..") or repository in (".", ".."):
+        return None
+    return f"{owner}/{repository}"
+
+
 def engine_version(staging: Path, engine: str, fallback: str) -> str:
-    init = staging / "vendor" / engine / "__init__.py"
-    if init.is_file():
-        found = _VERSION_RE.search(init.read_text(encoding="utf-8", errors="replace"))
-        if found:
-            return found.group(1)
+    # vendor/ を持つキットは vendor 配下、持たないキットは staging 直下に
+    # エンジン本体が来る（現状は全キットが vendor/ を使う。将来 vendor/ を
+    # 持たないキットが増えても解決できるよう両経路を残す）。
+    # どちらも見つからない場合だけ配布版で代替する。
+    for init in (
+        staging / "vendor" / engine / "__init__.py",
+        staging / engine / "__init__.py",
+    ):
+        if init.is_file():
+            found = _VERSION_RE.search(init.read_text(encoding="utf-8", errors="replace"))
+            if found:
+                return found.group(1)
     return fallback
 
 
@@ -228,7 +325,7 @@ def build_manifest(
         "engine_version": engine_version(staging, package["engine"], package["version"]),
         "summary": package.get("summary", ""),
         "post_install_note": package.get("post_install_note", ""),
-        "source_repo": package.get("source_repo", "dahatake/RoyalytyService2ndGen"),
+        "source_repo": resolve_source_repo(),
         "source_commit": source_commit(),
         "copied_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "file_count": len(hashes),
@@ -504,8 +601,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"{label} 書き込み {written} / 削除 {removed} / 温存 {len(kept)}")
         for rel in kept:
             print(f"    温存: {rel}")
-        entry = "install.ps1" if sys.platform == "win32" else "install.sh"
-        print(f"{label} 次の手順: コピー先リポジトリのルートで {package_root / entry} を実行")
+        # 共通セットアップ実装（kit.toml）を持つキットだけが install.* を必要とする。
+        # 持たないキットで案内すると、kit.toml 不在のエラーで終了し、
+        # 配布物が壊れていると誤認させる（現状は全キットが kit.toml を持つが、
+        # 将来 kit.toml を持たないキットが増えても誤案内しないよう判定は残す）。
+        if (package_root / "kit.toml").is_file():
+            entry = "install.ps1" if sys.platform == "win32" else "install.sh"
+            print(f"{label} 次の手順: コピー先リポジトリのルートで {package_root / entry} を実行")
+        note = (package.get("post_install_note") or "").strip()
+        if note:
+            for line in note.splitlines():
+                print(f"{label} {line}")
 
     return exit_code
 

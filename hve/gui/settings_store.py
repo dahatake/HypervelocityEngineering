@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Optional
 
+from hve.config import DEFAULT_MODEL
 from mdq.gui import settings_store as _mdq_settings_store
 
 _logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ def defaults() -> Dict[str, Dict[str, Any]]:
     return {
         "options": {
             # C1 基本
-            "model": "Auto",
+            "model": DEFAULT_MODEL,
             "review_model": "",  # 空 = 継承
             "qa_model": "",
             # reasoning_effort (空 = 未指定)
@@ -89,14 +90,13 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             # GUI 表示言語 ("auto" | "ja_JP" | "en_US"). "auto" = OS ロケールから判定。
             "language": "auto",
             # C7 CLI 接続（設定パネル専用）
-            # ※ mcp_config / workiq_tenant_id は Copilot CLI 側で管理されるため廃止済み (Wave 3 / Q9=b)。
+            # ※ MCP設定とWork IQのtenant/request-timeout/review-promptは
+            # Copilot CLI側またはSDK既定が所有するためHVE設定には保持しない。
             "cli_path": "",
             "cli_url": "",
             # C8 タイムアウト
             "timeout": 21600.0,
             "review_timeout": 7200.0,
-            "workiq_per_question_timeout": 0.0,  # 0 = 未指定 (既定 1200)
-            "workiq_request_timeout": 300.0,  # Work IQ MCP ツール呼び出し 1 回あたりのタイムアウト秒数（既定 5 分）
             # C9 ブランチ
             "branch": "main",
             # FR-GUI-38: 進捗を引き継ぐ再実行の run-id（空欄 = 通常実行）
@@ -105,13 +105,6 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "additional_prompt": "",
             "context_max_chars": 0,
             # C16
-            "self_improve": "",
-            # self_improve_* は _SECTION_FIELDS["SELFIMPROVE"] 登録済みだが defaults 未登録だった。
-            # _coerce(default=None) フォールバックでの型喪失を防ぐため明示既定値を置く
-            # (page_options の QSpinBox=3 / QLineEdit="" / QPlainTextEdit="" と整合)。
-            "self_improve_max_iterations": 3,
-            "self_improve_target_scope": "",
-            "self_improve_goal": "",
             "mdq_watch": "",  # 空 = 未指定
             "mdq_watch_debounce_ms": 0,
             # cq リアルタイム索引更新（FR-GUI-04）。mdq 系と同じく
@@ -125,21 +118,11 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "sources_qa": True,
             "sources_original_docs": True,
             "sources_workiq": False,
-            # C4 (Work IQ) 既定値。`_SECTION_FIELDS` に登録済みだが
-            # `defaults()` に未登録だったため、_coerce(default=None) フォールバックで
-            # 文字列 "false" が QCheckBox に渡り bool("false")=True で反転していた。
-            # 明示既定値で型情報を確保する（_C4WorkIQ の初期値と整合）。
+            # C4（知識源、FR-KD-01）既定値。明示既定値で QCheckBox / QLineEdit の型を確保する。
             # セクション C4 / C5 / C10 以下は UI グルーピング名で、
             # 保存先は全て [options] セクションとなる（collect_from_widgets の仕様）。
-            "workiq": False,
-            "workiq_draft": False,
-            "workiq_akm_review": "",  # tri-state: "" = 未指定 / "on" / "off"
-            "workiq_akm_ingest": "",
-            "workiq_dxx": "",
-            "workiq_draft_output_dir": "",
-            "workiq_prompt_qa": "",
-            "workiq_prompt_km": "",
-            "workiq_prompt_review": "",
+            "workiq": True,  # FR-KD-11: 既定は有効
+            "knowledge_sources": "",  # カンマ区切りの MCP server 名
             # C5 (Issue/PR) 追加既定値。_SECTION_FIELDS 登録済みだが defaults 未登録だった。
             "enable_auto_merge": False,
             "delete_local_merged_branch": True,
@@ -197,7 +180,12 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             "tool_search": True,
             # 上記を有効にしたときのランキング実装（FR-TS-01）。
             # "sdk"（既定）: SDK 組み込み。"hve": HVE 実装へ差し替え、統計も収集する。
-            "tool_search_ranking": "sdk",            # FR-LOCAL-SURFACE-01 (a): Agentic Retrieval の shared setting 6 項目。
+            "tool_search_ranking": "sdk",
+            # tool_search 有効時に SDK へ渡す defer_threshold（FR-MODEL-04）。
+            # 0（既定）: 未指定として CLI へ渡さず SDK 既定へ委譲する。
+            # 正の整数: `--tool-search-defer-threshold N` を subprocess へ伝搬する。
+            "tool_search_defer_threshold": 0,
+            # FR-LOCAL-SURFACE-01 (a): Agentic Retrieval の shared setting 6 項目。
             # 値は `page_options._CAgenticRetrieval` の userData と同じ文字列表現を
             # そのまま保存する（空文字 = 「既定に従う」= CLI へ渡さない）。
             "enable_agentic_retrieval": "auto",
@@ -214,7 +202,7 @@ def defaults() -> Dict[str, Dict[str, Any]]:
             # False（既定）: local 実行モードの continue-on-precheck を維持する。
             "strict": False,
             # Fleet mode（GitHub Copilot SDK 1.0.0+）。既定 OFF。
-            # SPLIT_REQUIRED ではなく、複数 Step の DAG wave を対象にする。
+            # 複数 Step の DAG wave を対象にする。
             "fleet_mode_enabled": "",
             # Cloud Sessions（GitHub Copilot SDK 1.0.0+）。既定 OFF。
             "cloud_session_enabled": False,
@@ -277,6 +265,17 @@ _OBSOLETE_KEYS: Dict[str, set[str]] = {
     "options": {
         "mcp_config",
         "workiq_tenant_id",
+        "workiq_request_timeout",
+        "workiq_prompt_review",
+        # FR-KD-10: Work IQ 専用の調整項目は知識探索への置換で廃止した。
+        "workiq_draft",
+        "workiq_akm_review",
+        "workiq_akm_ingest",
+        "workiq_dxx",
+        "workiq_draft_output_dir",
+        "workiq_prompt_qa",
+        "workiq_prompt_km",
+        "workiq_per_question_timeout",
         # FR-WF-ASDW-02: GUI 入力欄を廃止した ASDW-WEB Step 1.3 の既定値付きパラメータ。
         # 保存値を残すと UI から修正できないままレジストリ既定値を上書きし続ける。
         "data_location",
@@ -309,6 +308,12 @@ _OBSOLETE_KEYS: Dict[str, set[str]] = {
         "banner",
         "screen_reader",
         "final_only",
+        # 自己改善（Self-Improve）機能の削除に伴い廃止した。
+        "self_improve",
+        "no_self_improve",
+        "self_improve_max_iterations",
+        "self_improve_target_scope",
+        "self_improve_goal",
     },
 }
 
@@ -386,52 +391,13 @@ def _migrate_legacy_explorer_roots(cp: configparser.ConfigParser) -> bool:
     return changed
 
 
-def _migrate_self_improve_tristate(cp: configparser.ConfigParser) -> bool:
-    """旧boolean pairを ``self_improve = on/off/''`` へ移行する。
-
-    優先順位はCLIと同じく旧 ``no_self_improve=true`` が最優先。新形式の
-    ``on`` / ``off`` / 空値は保持し、旧キーだけを削除する。
-    """
-    if "options" not in cp:
-        return False
-    options = cp["options"]
-    if "self_improve" not in options and "no_self_improve" not in options:
-        return False
-
-    raw_enabled = options.get("self_improve", "").strip().lower()
-    raw_disabled = options.get("no_self_improve", "").strip().lower()
-    truthy = {"1", "true", "yes", "on"}
-    legacy_boolean = raw_enabled in {
-        "1", "0", "true", "false", "yes", "no",
-    }
-
-    if raw_disabled in truthy:
-        normalized = "off"
-    elif raw_enabled in truthy:
-        normalized = "on"
-    elif legacy_boolean or raw_enabled in {"", "inherit"}:
-        normalized = ""
-    elif raw_enabled == "off":
-        normalized = "off"
-    else:
-        # 不明値は既定継承へ縮退し、暗黙の変更実行を避ける。
-        normalized = ""
-
-    changed = options.get("self_improve", "") != normalized
-    options["self_improve"] = normalized
-    if "no_self_improve" in options:
-        del options["no_self_improve"]
-        changed = True
-    return changed
-
-
 # ---------------------------------------------------------------------------
 # I/O
 # ---------------------------------------------------------------------------
 def load() -> Dict[str, Dict[str, Any]]:
     """設定を読み込む。ファイル無し/壊れている場合は defaults() を返す。
 
-    読み込み時に廃止キー (mcp_config / workiq_tenant_id) を検出したら
+    読み込み時に廃止キーを検出したら
     自動マイグレーション（ファイルから削除して再保存）を実行する。
     """
     base = defaults()
@@ -453,8 +419,6 @@ def load() -> Dict[str, Dict[str, Any]]:
     if _migrate_renamed_keys(cp):
         changed = True
     if _migrate_legacy_explorer_roots(cp):
-        changed = True
-    if _migrate_self_improve_tristate(cp):
         changed = True
     if changed:
         try:
@@ -482,7 +446,12 @@ def save(settings: Dict[str, Dict[str, Any]]) -> None:
     """設定をアトミックに保存する。"""
     cp = configparser.ConfigParser()
     for section, vals in settings.items():
-        cp[section] = {k: _to_str(v) for k, v in vals.items()}
+        obsolete = _OBSOLETE_KEYS.get(section, set())
+        cp[section] = {
+            key: _to_str(value)
+            for key, value in vals.items()
+            if key not in obsolete
+        }
 
     path = settings_path()
     path.parent.mkdir(parents=True, exist_ok=True)

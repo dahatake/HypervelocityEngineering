@@ -16,7 +16,8 @@ import asyncio
 import time
 import traceback
 from datetime import datetime
-from typing import Any, Awaitable, Callable, Coroutine, Dict, List, Optional, Set
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, Awaitable, Callable, Coroutine, Dict, List, Mapping, Optional, Set, Tuple
 
 # Fork-integration (M12): ホットパスでの動的 import を避けるため、モジュールトップで一度だけ解決する
 try:
@@ -39,6 +40,11 @@ try:
     from .run_state_store import DurableStateError  # type: ignore
 except ImportError:  # pragma: no cover - script execution path
     from run_state_store import DurableStateError  # type: ignore[no-redef]
+
+try:
+    from .dag_readiness import select_ready_ids  # type: ignore
+except ImportError:  # pragma: no cover - script execution path
+    from dag_readiness import select_ready_ids  # type: ignore[no-redef]
 
 
 class StepResult:
@@ -75,6 +81,47 @@ class StepResult:
             f"success={self.success}, skipped={self.skipped}, state={self.state!r}, "
             f"elapsed={self.elapsed:.1f}s, retry_count={self.retry_count})"
         )
+
+
+def ownership_prefixes(
+    step: Any,
+    ledger_prefixes: Mapping[str, Tuple[str, ...]],
+    base_templates: Optional[List[str]] = None,
+) -> Optional[Tuple[str, ...]]:
+    """FR-IDL-02: fan-out 子の所有範囲（書込みパス接頭辞）を返す。排他実行なら None。
+
+    ``base_templates`` は親 Step の ``output_paths_template`` / ``output_paths``。
+    プレースホルダを含まずディレクトリでもない宣言は全ての子が書く共有ファイルとみなす。
+    """
+    key = str(getattr(step, "fanout_key", "") or "")
+    if not key:
+        return None
+    declared = [str(p) for p in (getattr(step, "output_paths", None) or [])]
+    templates = [str(p) for p in (base_templates or [])]
+    shared_files = [
+        path for path in (*declared, *templates)
+        if key not in path and "{" not in path and not path.endswith("/")
+    ]
+    if shared_files:
+        # 共有ファイルを書く子は他の子と同時に動かせない
+        return None
+    try:
+        from .fanout_expander import resolve_output_path_prefix_gates
+    except ImportError:  # pragma: no cover - script execution path
+        from fanout_expander import resolve_output_path_prefix_gates  # type: ignore[no-redef]
+    try:
+        gates = [str(g) for g in resolve_output_path_prefix_gates(step)]
+    except Exception:
+        gates = []
+    owned: List[str] = []
+    for path in [*declared, *gates, *ledger_prefixes.get(key, ())]:
+        if (key in path or path in ledger_prefixes.get(key, ())) and path not in owned:
+            owned.append(path)
+    return tuple(owned) or None
+
+
+def _prefixes_overlap(left: Tuple[str, ...], right: Tuple[str, ...]) -> bool:
+    return any(a.startswith(b) or b.startswith(a) for a in left for b in right)
 
 
 class DAGExecutor:
@@ -189,6 +236,14 @@ class DAGExecutor:
         self.active_step_ids = set(getattr(dag_plan, "active_step_ids", active_step_ids))
         plan_max_parallel = getattr(dag_plan, "max_parallel", max_parallel)
         self._semaphore = asyncio.Semaphore(max(1, plan_max_parallel))
+        # FR-IDL-02: 所有範囲が重ならない fan-out の子だけを並列化する上限（0 = 無効）。
+        self._ownership_parallel: int = max(0, int(getattr(workflow, "ownership_parallel", 0) or 0))
+        self._ownership_cond: Optional[asyncio.Condition] = None
+        self._ownership_running: Dict[str, Optional[Tuple[str, ...]]] = {}
+        self._ownership_exclusive_waiting = 0
+        self._ledger_prefixes: Dict[str, Tuple[str, ...]] = {}
+        if self._ownership_parallel:
+            self._ledger_prefixes = self._load_ledger_prefixes(repo_root)
         self.console = console
         self._step_prompts: Dict[str, str] = self._freeze_prompts(step_prompts, dag_plan)
         self._workflow_step_index: Dict[str, Any] = {
@@ -920,13 +975,80 @@ class DAGExecutor:
             )
         return await self.run_step_fn(**_kwargs)
 
+    @staticmethod
+    def _load_ledger_prefixes(repo_root: Optional[Any]) -> Dict[str, Tuple[str, ...]]:
+        """FR-IDL-01 の台帳から active 行の書込みパス接頭辞を読む（台帳が無ければ空）。"""
+        from pathlib import Path as _Path
+        try:
+            from .catalog_parsers import parse_id_ledger
+        except ImportError:  # pragma: no cover - script execution path
+            from catalog_parsers import parse_id_ledger  # type: ignore[no-redef]
+        root = _Path(repo_root) if repo_root is not None else _Path.cwd()
+        try:
+            entries = parse_id_ledger(root)
+        except Exception:
+            return {}
+        return {e.id: e.write_prefixes for e in entries if e.state == "active" and e.write_prefixes}
+
+    def _base_step(self, step: Any) -> Any:
+        base_id = str(getattr(step, "base_step_id", "") or "")
+        if not base_id:
+            return None
+        for candidate in getattr(self.workflow, "steps", []) or []:
+            if getattr(candidate, "id", None) == base_id:
+                return candidate
+        return None
+
+    def _ownership_admissible(self, owned: Optional[Tuple[str, ...]]) -> bool:
+        running = self._ownership_running
+        if not running:
+            return True
+        if owned is None or any(value is None for value in running.values()):
+            return False
+        if self._ownership_exclusive_waiting or len(running) >= self._ownership_parallel:
+            return False
+        return not any(_prefixes_overlap(owned, other) for other in running.values() if other)
+
+    @asynccontextmanager
+    async def _admission(self, step: Any) -> AsyncIterator[None]:
+        """FR-DAG-03 の上限、または FR-IDL-02 の所有範囲による並列の枠を取る。"""
+        if not self._ownership_parallel:
+            async with self._semaphore:
+                yield
+            return
+        if self._ownership_cond is None:
+            self._ownership_cond = asyncio.Condition()
+        cond = self._ownership_cond
+        base = self._base_step(step)
+        base_templates = [
+            *(getattr(base, "output_paths_template", None) or []),
+            *(getattr(base, "output_paths", None) or []),
+        ] if base is not None else []
+        owned = ownership_prefixes(step, self._ledger_prefixes, base_templates)
+        async with cond:
+            if owned is None:
+                self._ownership_exclusive_waiting += 1
+                try:
+                    await cond.wait_for(lambda: not self._ownership_running)
+                finally:
+                    self._ownership_exclusive_waiting -= 1
+            else:
+                await cond.wait_for(lambda: self._ownership_admissible(owned))
+            self._ownership_running[step.id] = owned
+        try:
+            yield
+        finally:
+            async with cond:
+                self._ownership_running.pop(step.id, None)
+                cond.notify_all()
+
     async def _run_with_semaphore(self, step: Any) -> StepResult:
-        """Semaphore で並列数を制御しつつ 1 ステップを実行する。
+        """並列の枠を取りつつ 1 ステップを実行する（FR-DAG-03 / FR-IDL-02）。
 
         Fork-integration (T2.5): `fork_on_retry=True` かつ初回失敗時、`on_fork_retry`
         フックで runner にフォーク回数を通知してから `run_step_fn` を 1 回だけ再実行する。
         """
-        async with self._semaphore:
+        async with self._admission(step):
             # ログプリフィックスのインラインマーカー用に、本タスク (= 1 child step)
             # の ContextVar を確定させる。asyncio.create_task は親 context を
             # コピーするため、ここでの set は本タスクスコープに閉じる。
@@ -1143,42 +1265,37 @@ class DAGExecutor:
             # ADR-0002: fan-out 展開済みステップから次に起動可能なものを返す
             return self._get_next_steps_from_expanded(completed_step_ids, skipped_step_ids)
 
-        completed = set(completed_step_ids)
-        skipped = set(skipped_step_ids or [])
-        effective_done = completed | skipped
-        existing_ids = {node.id for node in getattr(self.dag_plan, "nodes", ())}
-        result: List[Any] = []
-        for node in getattr(self.dag_plan, "nodes", ()):
-            if node.is_container:
-                continue
-            if node.id in completed or node.id in skipped or node.id in self.failed or node.id in self.blocked:
-                continue
-            if any(dep not in completed for dep in getattr(node, "block_unless", ())):
-                continue
-            deps_satisfied = all(
-                dep in effective_done or dep not in existing_ids
-                for dep in getattr(node, "depends_on", ())
-            )
-            if deps_satisfied:
-                result.append(self._step_for_id(node.id))
-
-        # T-D2: ランタイム動的展開された fan-out 子の overlay
-        # dag_plan.nodes には含まれないため、本ループで明示的に解決する。
-        if self._dynamic_child_ids:
-            for cid in self._dynamic_child_ids:
-                if cid in completed or cid in skipped or cid in self.failed or cid in self.blocked or cid in self.running:
-                    continue
-                step = self._workflow_step_index.get(cid)
-                if step is None:
-                    continue
-                deps = list(getattr(step, "depends_on", []) or [])
-                deps_satisfied = all(
-                    dep in effective_done or dep not in existing_ids
-                    for dep in deps
-                )
-                if deps_satisfied:
-                    result.append(step)
-        return result
+        # FR-DAG-10: 判定は dag_readiness の単一実装へ委譲する。HVE 固有の差は引数で渡す。
+        plan_nodes = list(getattr(self.dag_plan, "nodes", ()))
+        # T-D2: ランタイム動的展開された fan-out 子の overlay（dag_plan.nodes には含まれない）
+        dynamic_steps = {
+            cid: self._workflow_step_index[cid]
+            for cid in self._dynamic_child_ids
+            if cid in self._workflow_step_index
+        }
+        nodes = [
+            {
+                "id": node.id,
+                "deps": list(getattr(node, "depends_on", ())),
+                "block_unless": list(getattr(node, "block_unless", ())),
+                "container": node.is_container,
+            }
+            for node in plan_nodes
+        ] + [
+            {"id": cid, "deps": list(getattr(step, "depends_on", []) or []), "block_unless": [], "container": False}
+            for cid, step in dynamic_steps.items()
+        ]
+        ready = set(select_ready_ids(
+            nodes,
+            known_ids={node.id for node in plan_nodes},
+            completed=completed_step_ids,
+            skipped=skipped_step_ids or [],
+            # 実行中の plan ノードは除外しない（動的な子だけを除外する）
+            excluded=self.failed | self.blocked | (self.running & self._dynamic_child_ids),
+        ))
+        return [self._step_for_id(node.id) for node in plan_nodes if node.id in ready] + [
+            step for cid, step in dynamic_steps.items() if cid in ready
+        ]
 
     def _mark_unresolved_active_steps(self) -> None:
         if self.dag_plan is None:
@@ -1229,29 +1346,24 @@ class DAGExecutor:
         completed_step_ids: List[str],
         skipped_step_ids: Optional[List[str]] = None,
     ) -> List[Any]:
-        completed = set(completed_step_ids)
-        skipped = set(skipped_step_ids or [])
-        effective_done = completed | skipped
-        existing_ids = set(self._workflow_step_index.keys())
-
-        result: List[Any] = []
-        for step in self._expanded_steps:
-            if getattr(step, "is_container", False):
-                continue
-            sid = step.id
-            if sid in completed or sid in skipped or sid in self.failed or sid in self.blocked:
-                continue
-            deps = list(getattr(step, "depends_on", []) or [])
-            if not deps:
-                result.append(step)
-                continue
-            deps_satisfied = all(
-                dep in effective_done or dep not in existing_ids
-                for dep in deps
-            )
-            if deps_satisfied:
-                result.append(step)
-        return result
+        # FR-DAG-10: 判定は dag_readiness の単一実装へ委譲する。
+        steps = list(self._expanded_steps)
+        ready = set(select_ready_ids(
+            [
+                {
+                    "id": step.id,
+                    "deps": list(getattr(step, "depends_on", []) or []),
+                    "block_unless": [],
+                    "container": getattr(step, "is_container", False),
+                }
+                for step in steps
+            ],
+            known_ids=set(self._workflow_step_index.keys()),
+            completed=completed_step_ids,
+            skipped=skipped_step_ids or [],
+            excluded=self.failed | self.blocked,
+        ))
+        return [step for step in steps if step.id in ready]
 
     @staticmethod
     def _freeze_prompts(step_prompts: Optional[Dict[str, str]], dag_plan: Any = None) -> Dict[str, str]:

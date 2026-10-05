@@ -8,19 +8,13 @@ metadata:
 ---
 # knowledge-lookup
 
-## 目的
-- knowledge-lookup の適用判断と実行フローを定義する。
+## 適用判断
 
-## トリガー
-- この Skill の適用判断は frontmatter `description`（USE FOR / DO NOT USE FOR / WHEN）に従う。
-- 詳細な手順・コマンド例・トラブルシューティングが必要になった時点で `references/` を参照する。
+入力に十分な情報があれば参照不要。不明瞭・欠落・矛盾が残る箇所だけを調べる。判断に迷う場合は [不明瞭の判断基準](references/detail.md#不明瞭の判断基準) を参照する。
 
-## 手順サマリ
-1. 要件を確認し、対象範囲と非対象を明確化する。
-2. `references/detail.md` を起点に、必要に応じて既存の `references/` 個別資料を併読する。
-3. 前提条件・権限・安全条件を満たしたうえで実施する。
-4. 実施後は検証結果と既知制約を記録し、後続 Skill へ必要事項を引き継ぐ。
+## 参照と採用
 
-## 詳細ガイド（Progressive Disclosure）
-- 移設した詳細本文: [references/detail.md](references/detail.md)
-- 追加の詳細資料: `references/` 配下
+1. Agent が指定した D 番号の直接参照を優先する。未指定なら `knowledge/business-requirement-document-status.md` または [D01〜D21 カテゴリ参照ガイド](references/detail.md#d01d21-カテゴリ参照ガイド) で絞り込む。
+2. 該当する `knowledge/D{NN}-*.md` を [参照手順](references/detail.md#参照手順) に従って読む。`knowledge/` は読み取り専用とし、全件読込や自動更新は行わない。
+3. 状態ラベルがあれば Confirmed を採用し、Tentative / Unknown / Conflict は未確定として扱う。ラベルがない場合は記載を参照できるが、TBD は未確定のまま保持する。
+4. 根拠不足・該当情報なしの場合は [既存の停止・TBD 分岐](references/detail.md#step-5-情報が見つからなかった場合の振る舞い段階的ルール) に従う。情報のない箇所を推測で埋めない。

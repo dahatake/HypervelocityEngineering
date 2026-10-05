@@ -45,7 +45,7 @@ _SECRET_ASSIGNMENT_RE = re.compile(
     r"(?i)(?:^|[\s,;])(?:gh_token|copilot_pat|token|password|passwd|secret|"
     r"accountkey|connectionstring|credential|api_key)\s*[=:]"
 )
-_PHASES = frozenset({"pre-qa", "main", "split-fork", "review", "self-improve"})
+_PHASES = frozenset({"pre-qa", "main", "split-fork", "review"})
 _PHASE_STATES = frozenset(
     {"pending", "started", "running", "completed", "succeeded", "failed", "skipped", "blocked"}
 )

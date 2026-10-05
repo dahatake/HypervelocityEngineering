@@ -1,10 +1,3 @@
-<!-- task_scope: single -->
-<!-- context_size: medium -->
-<!-- estimate_total: 6 -->
-<!-- split_decision: PROCEED -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
 # Sample Plan
 
 ## 概要
@@ -17,10 +10,6 @@
 S1(調査:2min) → S2(実装:3min) → S3(検証:1min)
 ```
 
-## 分割判定
+## 完了条件
 
-- task_scope: single
-- context_size: medium（参照ファイル: 5件）
-- 判定結果: PROCEED
-- 判定根拠: task_scope=single かつ context_size=medium → PROCEED（上記いずれも非該当）
-- 実装に進む理由: task_scope=single、context_size=medium
+- [ ] validate-plan の dry-run テストが PASS する

@@ -47,25 +47,3 @@ metadata:
 | `work-artifacts-layout` | 出力先 | サービス定義書の docs/usecase/... 配下への保存先 |
 | `task-dag-planning` | 先行 | マイクロサービス設計作業の計画 |
 | `architecture-questionnaire` | 先行 | アーキテクチャ選定後にサービス設計へ遷移 |
-
-## 入出力例
-
-※ 以下は説明用の架空例です。
-
-### 例1: 新規マイクロサービス設計ケース
-
-**入力**: ポイント還元サービス（SVC-03）のマイクロサービス設計書を作成してほしい。UC-05（ポイント付与）を担当する。
-
-**出力**:
-- テンプレート: `references/microservice-definition.md` を参照
-- 作成ファイル: `docs/usecase/UC-05/services/SVC-03-point-royalty-service-description.md`
-- 含む内容: サービスメタ情報・REST API エンドポイント定義・ドメインイベント・データストア・セキュリティ要件
-
-### 例2: 既存サービスへの API 追加設計ケース
-
-**入力**: 会員サービス（SVC-01）に新しいエンドポイント `GET /members/{id}/points` を追加したい。
-
-**出力**:
-- 更新ファイル: `docs/usecase/UC-01/services/SVC-01-membership-service-description.md`
-- 追加内容: 新エンドポイントの定義（パス・メソッド・リクエスト/レスポンス仕様・認可要件）
-- TBD 項目: データストア連携の詳細は `TBD（要確認: SVC-01 担当者）` と明記

@@ -80,7 +80,7 @@ Cloud では Issue Template **Agentic Retrieval Add-on**（`agentic-retrieval.ym
 `auto-agentic-retrieval` ラベルを dispatcher が検出し、Step.1〜7 を順次実行します。
 
 > **Cloud の機能差**: Cloud の AAR は Step の逐次実行に特化しており、ASDW-WEB 等が持つ
-> QA ジョブ・敌対的レビュー・自動マージ・Self-Improve・モデル選択を含みません。
+> QA ジョブ・敌対的レビュー・自動マージ・モデル選択を含みません。
 > また Step.7 完了後の Step / Root Issue の自動クローズも行いません（Root に `aar:done` を付与して完了を通知します）。
 > これらが必要な場合は CLI / GUI を使ってください。
 
@@ -219,5 +219,5 @@ AR-CAP 側と TB-CAP 側で `Connection topology` が食い違うと検証で FA
 
 - SKU / モデル名 / API バージョン / 対応データソース一覧は固定値を書かない
 - Microsoft Learn MCP / 公式 Learn URL を都度参照する
-- 入力項目 Q1〜Q6 は収集されるが、現時点では実行に影響しない
+- 入力項目 Q1〜Q6 は実装済みで、少なくとも Q1（`enable_agentic_retrieval`）は Step の生成有無に影響します。Q2〜Q6 も設計・Deploy Prompt の文脈と設定正規化に使われます
 - 参照導線としてのみ利用し、ルート `/README.md` は変更していません

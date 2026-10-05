@@ -57,7 +57,7 @@
   <text x="410" y="354">hve.orchestrator / dag_planner / dag_executor / runner.StepRunner</text>
   <text x="410" y="372">workflow_registry (WorkflowDef + StepDef DAG) / prompt_loader / skill_resolver</text>
   <text x="410" y="390">prompt_request / prompt_execution / run_state / qa_merger / template_engine</text>
-  <text x="410" y="408">並列制御: asyncio.Semaphore(max_parallel) / Fan-out 展開 / Fork-on-Retry</text>
+  <text x="410" y="408">並列制御: max_parallel / ownership_parallel / Fork-on-Retry</text>
 
   <!-- Cloud-specific path (bash) -->
   <rect class="box cloud" x="30" y="310" width="320" height="110" rx="6"/>
@@ -78,13 +78,13 @@
   <text class="h" x="50" y="604">外部プロセス: GitHub Copilot CLI（`copilot`）</text>
   <text x="50" y="624">モデル選択・推論呼び出し・MCP 管理・Plugin 管理</text>
   <text x="50" y="642">認証ストア: OS Credential Manager / Keychain / Secret Service</text>
-  <text x="50" y="660">`copilot mcp list` / `copilot plugin list` / `copilot login`</text>
+  <text x="50" y="660">SDK discovery / SDK list_models() / `copilot login`</text>
 
   <!-- MCP / Plugin / Skills (Copilot-managed) -->
   <rect class="box ext" x="550" y="580" width="520" height="100" rx="6"/>
   <text class="h" x="570" y="604">Copilot CLI 管理リソース（HVE は透過利用）</text>
   <text x="570" y="624">MCP Server: azure-mcp / github / workiq / 任意</text>
-  <text x="570" y="642">Plugin: workiq@work-iq / 任意</text>
+  <text x="570" y="642">Plugin または MCP Server: exact `workiq` / 任意</text>
   <text x="570" y="660">Skills: .github/skills/*/SKILL.md（マニフェストで検索）</text>
 
   <!-- HVE-managed agents/workflows/skills -->

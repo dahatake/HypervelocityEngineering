@@ -56,7 +56,7 @@ jobs:
     runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
     timeout-minutes: 360
     # AAG/AAGD共有のrepository-wide FIFO。イベント発生順そのものは保証せず、
-    # Cloud state mutationと同一branchへのSelf-Improve pushを完全直列化する。
+    # Cloud state mutation と同一 branch への更新を直列化する。
     concurrency:
       group: ai-agent-root-state-${{ github.repository }}
       queue: max
@@ -166,7 +166,7 @@ jobs:
           has_init=$(echo "${ISSUE_LABELS}" | python3 /dev/fd/3 3<<'PY'
           import sys, json
           labels = json.load(sys.stdin)
-          skip_labels = {'aag:initialized', 'aag:ready', 'aag:running', 'aag:done', 'aag:blocked', 'aag:qa-ready', 'aag:self-improve-ready'}
+          skip_labels = {'aag:initialized', 'aag:ready', 'aag:running', 'aag:done', 'aag:blocked', 'aag:qa-ready'}
           print('true' if any(l in skip_labels for l in labels) else 'false')
           PY
           )
@@ -225,7 +225,6 @@ jobs:
           create_label "aag:running"       "E4E669" ""
           create_label "aag:done"          "0E8A16" ""
           create_label "aag:blocked"       "D73A4A" ""
-          create_label "aag:self-improve-ready" "FBCA04" "AAG DAG完了・Post-DAG Self-Improve待ち"
           create_label "adversarial-review" "B60205" "explicit adversarial review trigger for Copilot review workflow"
           create_label "auto-qa"             "BFD4F2" "auto QA trigger for copilot-auto-qa workflow"
           create_label "auto-approve-ready" "1D76DB" "trigger auto-approve and auto-merge for PR (added by orchestrators when auto-merge is enabled)"
@@ -304,6 +303,12 @@ jobs:
             "https://api.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}" \
             | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
           export ISSUE_BODY
+          ISSUE_BODY_FILE="${RUNNER_TEMP}/aag-root-issue-body.md"
+          printf '%s' "${ISSUE_BODY}" > "${ISSUE_BODY_FILE}"
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/step-inputs.sh"
+          # The shared adapter renders instructions for `python3 -m hve.step_inputs cloud-manifest`;
+          # the assigned Agent consumes the `step-input-manifest` or reports `Cloud upload unavailable`.
+          CLOUD_STEP_INPUT_SECTION=$(render_cloud_step_input_section "aag" "${ISSUE_BODY_FILE}")
 
           if [[ -z "${COPILOT_PAT}" ]]; then
             echo "WARNING: COPILOT_PAT が設定されていません。Copilot アサインは全てスキップされます。" >&2
@@ -455,22 +460,6 @@ jobs:
                       if normalized not in app_ids_list:
                           app_ids_list.append(normalized)
 
-          self_improve_max_iterations = "3"
-          m = re.search(r"###\s*自己改善\s*最大イテレーション数.*?\n+(.+)", body)
-          if m:
-              val = m.group(1).strip()
-              n = re.match(r"(\d+)", val)
-              if n:
-                  self_improve_max_iterations = n.group(1)
-
-          self_improve_quality_threshold = "80"
-          q = re.search(r"###\s*自己改善\s*品質スコア(?:目標値|閾値).*?\n+(.+)", body)
-          if q:
-              val = q.group(1).strip()
-              n = re.match(r"(\d+)", val)
-              if n:
-                  self_improve_quality_threshold = n.group(1)
-
           tool_search_policy = "auto"
           t = re.search(r"###\s*生成する\s*AI Agent\s*の\s*Tool Search\s*方針[^\n]*\n+(.+)", body)
           if t:
@@ -478,7 +467,7 @@ jobs:
               if val and val != "_No response_":
                   tool_search_policy = re.split(r"[（(\s]", val, 1)[0].strip().lower()
 
-          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "adversarial_review": adversarial_review, "auto_qa": auto_qa, "auto_merge": auto_merge, "app_ids": app_ids_list, "self_improve_max_iterations": self_improve_max_iterations, "self_improve_quality_threshold": self_improve_quality_threshold, "tool_search_policy": tool_search_policy}
+          result = {"branch": branch, "skip_steps": list(skip_steps), "additional_comment": additional_comment, "adversarial_review": adversarial_review, "auto_qa": auto_qa, "auto_merge": auto_merge, "app_ids": app_ids_list, "tool_search_policy": tool_search_policy}
           print(json.dumps(result))
           PYEOF
           )
@@ -493,8 +482,6 @@ jobs:
             AUTO_QA="false"
           fi
           AUTO_MERGE=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print('true' if d.get('auto_merge') else 'false')")
-          SELF_IMPROVE_MAX_ITER=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_max_iterations','3'))")
-          SELF_IMPROVE_QUALITY_THRESHOLD=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('self_improve_quality_threshold','80'))")
           TOOL_SEARCH_POLICY=$(echo "${PARSED}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tool_search_policy','auto'))")
           case "${TOOL_SEARCH_POLICY}" in
             auto|yes|no) ;;
@@ -576,24 +563,20 @@ jobs:
           fi
 
           REVIEW_TAG_FILE=$(mktemp)
-          python3 - "${ADVERSARIAL_REVIEW}" "${AUTO_MERGE}" "${BRANCH}" "${SELF_IMPROVE_MAX_ITER}" "${SELF_IMPROVE_QUALITY_THRESHOLD}" "${TOOL_SEARCH_POLICY}" "${REVIEW_TAG_FILE}" <<'PYMERGE'
+          python3 - "${ADVERSARIAL_REVIEW}" "${AUTO_MERGE}" "${BRANCH}" "${TOOL_SEARCH_POLICY}" "${REVIEW_TAG_FILE}" <<'PYMERGE'
           import sys, os, re, json
 
           body = os.environ.get("ISSUE_BODY", "")
           adversarial_review = sys.argv[1]
           auto_merge = sys.argv[2]
           branch = sys.argv[3]
-          si_max_iter = sys.argv[4]
-          si_quality_threshold = sys.argv[5]
-          tool_search_policy = sys.argv[6]
-          output_file = sys.argv[7]
+          tool_search_policy = sys.argv[4]
+          output_file = sys.argv[5]
 
           tags = [
               ("adversarial-review", adversarial_review),
               ("auto-merge", auto_merge),
               ("branch", branch),
-              ("self-improve-max-iterations", si_max_iter),
-              ("self-improve-quality-threshold", si_quality_threshold),
               ("tool-search-policy", tool_search_policy),
           ]
 
@@ -612,7 +595,7 @@ jobs:
           api_call PATCH \
             "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
             "$(cat "${REVIEW_TAG_FILE}")" > /dev/null \
-            && echo "Root Issue #${ROOT_ISSUE} に adversarial-review / auto-merge / branch / Self-Improve上限タグを埋め込みました。" \
+            && echo "Root Issue #${ROOT_ISSUE} に adversarial-review / auto-merge / branch / tool-search-policy タグを埋め込みました。" \
             || echo "WARNING: Root Issue body のタグ埋め込みに失敗しました。" >&2
 
           rm -f "${REVIEW_TAG_FILE}"
@@ -665,12 +648,13 @@ jobs:
             "${ROOT_ISSUE}" "${BRANCH}" "${APP_IDS_TAG}" "${ADVERSARIAL_REVIEW}" "${AUTO_QA}" "${AUTO_MERGE}")
 
           # 追加コンテキスト参照セクション（QA/Review 反映ルール — Phase 3 追加）
-          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- Self-Improve 結果または改善計画（存在する場合のみ）\n- `## 入力` に記載された前 Step 成果物（`docs/` 成果物経由のみ。他 Step の `work/run/<run-id>/...` 配下の作業ファイルは入力として読まないこと）\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review / Self-Improve の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。\n\n## 検証結果（PR本文に必須）\n<!-- validation-confirmed -->\n- 検証: 実行したテスト/ビルド/静的解析と結果を記載してください。')
+          QA_REVIEW_SECTION=$(printf '\n\n## 追加コンテキストの参照\n\n以下が存在する場合は必ず参照してください。存在しない情報は推測せず、必要に応じて不足事項として記録してください。\n\n- `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答\n- この PR または関連 Issue のレビュー指摘\n- `## 入力` に記載された前 Step 成果物（`docs/` 成果物経由のみ。他 Step の `work/run/<run-id>/...` 配下の作業ファイルは入力として読まないこと）\n- 追加で注入された既存成果物・reuse context\n\n参照した QA / Review の内容は、成果物へ反映してください。反映しない場合は理由を完了コメントまたは成果物内に記録してください。\n\n## 検証結果（PR本文に必須）\n<!-- validation-confirmed -->\n- 検証: 実行したテスト/ビルド/静的解析と結果を記載してください。')
           if [[ -n "${ADDITIONAL_COMMENT}" ]]; then
             ADDITIONAL_SECTION="${QA_REVIEW_SECTION}$(printf '\n\n## 追加コメント\n%s' "${ADDITIONAL_COMMENT}")"
           else
             ADDITIONAL_SECTION="${QA_REVIEW_SECTION}"
           fi
+          ADDITIONAL_SECTION+="${CLOUD_STEP_INPUT_SECTION}"
 
           if [[ -n "${APP_IDS}" ]]; then
             FORMATTED_APP_IDS=$(printf '%s' "${APP_IDS}" | sed -E 's/[[:space:]]*,[[:space:]]*/,/g; s/^ *//; s/ *$//' | sed 's/,/`, `/g; s/^/`/; s/$/`/')
@@ -1008,45 +992,12 @@ jobs:
           PY
           }
 
-          mark_root_self_improve_ready() {
-            # Rootの最終完了は必須Post-DAG Self-Improve成功後だけ付与する。
-            _si_issue_json=$(gh api "/repos/${REPO}/issues/${ROOT_ISSUE}")
-            _si_current_body=$(printf '%s' "${_si_issue_json}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('body','') or '')")
-            _si_current_status=$(printf '%s' "${_si_current_body}" | sed -n 's/^.*<!-- aag-self-improve-status: *\([^>]*\) *-->.*$/\1/p' | head -1 | tr '[:upper:]' '[:lower:]' | xargs || true)
-            _si_has_ready=$(printf '%s' "${_si_issue_json}" | python3 -c "
-          import sys, json
-          labels = [item.get('name', '') for item in json.load(sys.stdin).get('labels', [])]
-          print('true' if 'aag:self-improve-ready' in labels else 'false')
-          ")
-            if [[ "${_si_current_status}" =~ ^(running|finalizing|completed)$ ]]; then
-              echo "Root Issue #${ROOT_ISSUE}: status=${_si_current_status} のためpendingへ戻しません。"
-              return 0
-            fi
-            if [[ "${_si_current_status}" == "pending" && "${_si_has_ready}" == "true" ]]; then
-              echo "Root Issue #${ROOT_ISSUE}: Self-Improve pending/ready済みです。"
-              return 0
-            fi
-            gh issue edit "${ROOT_ISSUE}" --repo "${REPO}" --remove-label "aag:done" >/dev/null 2>&1 || true
+          mark_root_done() {
             gh issue edit "${ROOT_ISSUE}" --repo "${REPO}" --remove-label "aag:blocked" >/dev/null 2>&1 || true
-            _si_body_file=$(mktemp)
-            _si_payload_file=$(mktemp)
-            printf '%s' "${_si_current_body}" > "${_si_body_file}"
-            python3 - "${_si_body_file}" "${_si_payload_file}" <<'PY'
-          import json, re, sys
-          body = open(sys.argv[1], encoding='utf-8').read()
-          tag = '<!-- aag-self-improve-status: pending -->'
-          pattern = re.compile(r'<!--\s*aag-self-improve-status\s*:[^>]*-->')
-          body = pattern.sub(tag, body, count=1) if pattern.search(body) else body.rstrip() + '\n' + tag + '\n'
-          with open(sys.argv[2], 'w', encoding='utf-8') as handle:
-              json.dump({'body': body}, handle, ensure_ascii=False)
-          PY
-            gh api --method PATCH "/repos/${REPO}/issues/${ROOT_ISSUE}" --input "${_si_payload_file}" >/dev/null
-            rm -f "${_si_body_file}" "${_si_payload_file}"
-            add_label "${ROOT_ISSUE}" "aag:self-improve-ready"
-            post_comment "${ROOT_ISSUE}" \
-              "⏳ AAGの全設計Stepが完了しました。必須のPost-DAG Self-Improveを実行してから最終完了へ遷移します。" \
-              || true
-            echo "Root Issue #${ROOT_ISSUE} をaag:self-improve-readyへ遷移しました。"
+            add_label "${ROOT_ISSUE}" "aag:done"
+            echo "Root Issue #${ROOT_ISSUE} に aag:done を付与しました。"
+            post_comment "${ROOT_ISSUE}" "🎉 全てのAI Agent設計ステップが完了しました！Root Issue #${ROOT_ISSUE} のワークフローが正常に終了しました。"
+            echo "Root Issue #${ROOT_ISSUE} に完了コメントを投稿しました。"
           }
 
           # ---- 依存関係マップに基づき次 Step を特定 & 起動 ----
@@ -1063,7 +1014,7 @@ jobs:
                   activate_issue "${S3_NUM}"
                   echo "Step.2 スキップ: Step.3 (#${S3_NUM}) を起動しました。"
                 else
-                  mark_root_self_improve_ready
+                  mark_root_done
                 fi
               fi
               ;;
@@ -1075,13 +1026,13 @@ jobs:
                 activate_issue "${S3_NUM}"
                 echo "Step.2 完了: Step.3 (#${S3_NUM}) を起動しました。"
               else
-                mark_root_self_improve_ready
+                mark_root_done
               fi
               ;;
 
             "3")
-              # Step.3 完了 → AAG の最終 Step。必須 Self-Improve 待ちへ
-              mark_root_self_improve_ready
+              # Step.3 完了 → Root Issue を完了
+              mark_root_done
               ;;
 
             *)
@@ -1110,7 +1061,8 @@ jobs:
               auto_close_container_if_done "${_AC_CONTAINER_NUM}" "${REPO}" || true
             fi
 
-            echo "Root Issue #${ROOT_ISSUE} の自動クローズは必須Self-Improve成功後まで延期します。"
+            echo "=== Root Issue #${ROOT_ISSUE} の自動クローズ判定 ==="
+            auto_close_root_if_all_done "${ROOT_ISSUE}" "${REPO}" || true
           fi
 
       # ----------------------------------------------------------------
@@ -1175,464 +1127,7 @@ jobs:
             echo "コンテナ Issue が特定できないためスキップ。"
           fi
 
-          # Root Issue の自動クローズは必須Self-Improve成功後にのみ行う。
-          echo "Root Issue #${ROOT_ISSUE} の自動クローズはSelf-Improve完了待ちです。"
+          # ── Root Issue の自動クローズ判定 ──
+          echo "=== Root Issue #${ROOT_ISSUE} の自動クローズ判定 ==="
+          auto_close_root_if_all_done "${ROOT_ISSUE}" "${REPO}" || true
 
-  self-improve:
-    needs: orchestrate
-    if: needs.orchestrate.result == 'success'
-    runs-on: ${{ fromJSON(inputs.runner_type == 'self-hosted' && '["self-hosted","linux","x64","aca"]' || '["ubuntu-latest"]') }}
-    timeout-minutes: 180
-    # AAGDを含む共有queueでCloud state mutationとbranch pushを完全直列化する。
-    concurrency:
-      group: ai-agent-root-state-${{ github.repository }}
-      queue: max
-      cancel-in-progress: false
-    steps:
-      - name: Resolve completed Root Issue and Self-Improve settings
-        id: parse
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          ISSUE_NUMBER: ${{ inputs.issue_number }}
-        run: |
-          set -euo pipefail
-          current_body=$(gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""')
-          root_issue=$(printf '%s' "${current_body}" | sed -n 's/^.*<!-- root-issue: #\([0-9][0-9]*\) -->.*$/\1/p' | head -1)
-          [[ -z "${root_issue}" ]] && root_issue="${ISSUE_NUMBER}"
-
-          root_json=$(gh api "/repos/${REPO}/issues/${root_issue}")
-          body=$(printf '%s' "${root_json}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('body','') or '')")
-          root_ready=$(printf '%s' "${root_json}" | python3 -c "
-          import sys, json
-          labels = [item.get('name', '') for item in json.load(sys.stdin).get('labels', [])]
-          print('true' if 'aag:self-improve-ready' in labels else 'false')
-          ")
-          status=$(printf '%s' "${body}" | sed -n 's/^.*<!-- aag-self-improve-status: *\([^>]*\) *-->.*$/\1/p' | head -1 | tr '[:upper:]' '[:lower:]' | xargs || true)
-          ready="false"
-          # このjobはAAG全体のFIFO concurrency lock取得後に実行される。
-          # したがって completed以外のrunning/finalizingは、前runのcancel/timeoutで
-          # 残ったstale leaseとして安全に再claimできる。
-          if [[ "${status}" != "completed" ]] && {
-            [[ "${root_ready}" == "true" ]] || [[ "${status}" =~ ^(running|finalizing)$ ]]
-          }; then
-            ready="true"
-          fi
-
-          max_iter=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-max-iterations: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
-          branch=$(printf "%s" "${body}" | sed -n 's/^.*<!-- branch: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
-          quality_threshold=$(printf '%s' "${body}" | sed -n 's/^.*<!-- self-improve-quality-threshold: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
-          if [[ -z "${max_iter}" ]]; then
-            max_iter=$(printf '%s' "${body}" | python3 -c "
-          import sys, re
-          body = sys.stdin.read()
-          m = re.search(r'###\s*自己改善\s*最大イテレーション数.*?\n+(.+)', body)
-          if m:
-              n = re.match(r'(\d+)', m.group(1).strip())
-              print(n.group(1) if n else '3')
-          else:
-              print('3')
-          " 2>/dev/null || echo "3")
-          fi
-          if [[ -z "${quality_threshold}" ]]; then
-            quality_threshold=$(printf '%s' "${body}" | python3 -c "
-          import sys, re
-          body = sys.stdin.read()
-          m = re.search(r'###\s*自己改善\s*品質スコア(?:目標値|閾値).*?\n+(.+)', body)
-          if m:
-              n = re.match(r'(\d+)', m.group(1).strip())
-              print(n.group(1) if n else '80')
-          else:
-              print('80')
-          " 2>/dev/null || echo "80")
-          fi
-          if [[ -z "${branch}" ]]; then
-            branch=$(printf '%s' "${body}" | python3 -c "
-          import sys, re
-          body = sys.stdin.read()
-          m = re.search(r'###\s*対象ブランチ.*?\n+(.+)', body)
-          if m:
-              val = m.group(1).strip()
-              print(val if val and val != '_No response_' else 'main')
-          else:
-              print('main')
-          " 2>/dev/null || echo "main")
-          fi
-          [[ -z "${max_iter}" ]] && max_iter="3"
-          [[ -z "${quality_threshold}" ]] && quality_threshold="80"
-          [[ -z "${branch}" ]] && branch="main"
-          tool_search_policy=$(printf '%s' "${body}" | sed -n 's/^.*<!-- tool-search-policy: *\([^>]*\) *-->.*$/\1/p' | head -1 | xargs || true)
-          case "${tool_search_policy}" in
-            auto|yes|no) ;;
-            "") tool_search_policy="auto" ;;
-            *)
-              echo "::error::Invalid tool search policy: ${tool_search_policy}" >&2
-              exit 1
-              ;;
-          esac
-          echo "ready=${ready}" >> "$GITHUB_OUTPUT"
-          echo "root_issue=${root_issue}" >> "$GITHUB_OUTPUT"
-          echo "max_iter=${max_iter}" >> "$GITHUB_OUTPUT"
-          echo "quality_threshold=${quality_threshold}" >> "$GITHUB_OUTPUT"
-          echo "branch=${branch}" >> "$GITHUB_OUTPUT"
-          echo "tool_search_policy=${tool_search_policy}" >> "$GITHUB_OUTPUT"
-          if [[ "${ready}" == "true" ]]; then
-            git check-ref-format --branch "${branch}" >/dev/null 2>&1 || {
-              echo "::error::Invalid AAG target branch: ${branch}" >&2
-              exit 1
-            }
-            encoded_branch=$(python3 -c "import sys,urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=''))" "${branch}")
-            gh api "/repos/${REPO}/git/ref/heads/${encoded_branch}" >/dev/null 2>&1 || {
-              echo "::error::AAG target branch does not exist as refs/heads/${branch}" >&2
-              exit 1
-            }
-            claim_payload=$(mktemp)
-            printf '%s' "${body}" | python3 -c "
-          import json, re, sys
-          body = sys.stdin.read()
-          tag = '<!-- aag-self-improve-status: running -->'
-          pattern = re.compile(r'<!--\\s*aag-self-improve-status\\s*:[^>]*-->')
-          body = pattern.sub(tag, body, count=1) if pattern.search(body) else body.rstrip() + '\\n' + tag + '\\n'
-          json.dump({'body': body}, open(sys.argv[1], 'w', encoding='utf-8'), ensure_ascii=False)
-          " "${claim_payload}"
-            gh api --method PATCH "/repos/${REPO}/issues/${root_issue}" --input "${claim_payload}" >/dev/null
-            rm -f "${claim_payload}"
-          fi
-          echo "AAG Post-DAG Self-Improve: ready=${ready}, root=#${root_issue}, branch=${branch}"
-
-      - uses: actions/checkout@v4
-        if: steps.parse.outputs.ready == 'true'
-        with:
-          ref: ${{ steps.parse.outputs.branch }}
-
-      - name: Verify checked out AAG branch
-        if: steps.parse.outputs.ready == 'true'
-        env:
-          BRANCH: ${{ steps.parse.outputs.branch }}
-        run: |
-          set -euo pipefail
-          current=$(git symbolic-ref --short HEAD)
-          if [[ "${current}" != "${BRANCH}" ]]; then
-            echo "::error::Expected branch ${BRANCH}, got ${current:-detached HEAD}" >&2
-            exit 1
-          fi
-
-      - name: Skip until AAG Root completion or after completed run
-        if: steps.parse.outputs.ready != 'true'
-        run: |
-          echo "AAG Rootが未完了、またはPost-DAG Self-Improve完了済みのため実行しません。"
-      - uses: actions/setup-python@v5
-        if: steps.parse.outputs.ready == 'true'
-        with:
-          python-version: "3.12"
-      - uses: actions/setup-node@v4
-        if: steps.parse.outputs.ready == 'true'
-        with:
-          node-version: "20"
-      - name: Install dependencies
-        if: steps.parse.outputs.ready == 'true'
-        run: |
-          set -euo pipefail
-          test -z "$(git status --porcelain)" || {
-            echo "::error::AAG branch is dirty before dependency installation." >&2
-            git status --short >&2
-            exit 1
-          }
-          pip install . ruff pytest pytest-cov
-          npm install -g markdownlint-cli
-          test -z "$(git status --porcelain)" || {
-            echo "::error::Dependency installation modified repository files." >&2
-            git status --short >&2
-            exit 1
-          }
-      - name: Validate AI Agent design contracts
-        if: steps.parse.outputs.ready == 'true'
-        env:
-          TOOL_SEARCH_POLICY: ${{ steps.parse.outputs.tool_search_policy }}
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          designs=(docs/agent/agent-detail-*.md)
-          if [[ ${#designs[@]} -eq 0 ]]; then
-            echo "AAG design artifacts not found; skipping capability validation."
-            exit 0
-          fi
-          failed=0
-          for design in "${designs[@]}"; do
-            python3 .github/skills/ai-agent-capability-contract/scripts/validate-agent-contract.py \
-              --workflow aag \
-              --design "${design}" \
-              --tool-search-policy "${TOOL_SEARCH_POLICY:-auto}" || failed=1
-          done
-          if [[ "${failed}" -ne 0 ]]; then
-            echo "::error::AI Agent design contract validation failed before Self-Improve." >&2
-            exit 1
-          fi
-      - name: Run mandatory AAG Post-DAG Self-Improve
-        id: self_improve
-        if: steps.parse.outputs.ready == 'true'
-        env:
-          MAX_ITERATIONS: ${{ steps.parse.outputs.max_iter }}
-          QUALITY_THRESHOLD: ${{ steps.parse.outputs.quality_threshold }}
-          ROOT_ISSUE: ${{ steps.parse.outputs.root_issue }}
-          GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
-          SELF_IMPROVE_RESULT_PATH: ${{ runner.temp }}/aag-self-improve-result.json
-          HVE_WORK_ROOT: ${{ runner.temp }}/hve-work
-        run: |
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          from hve.config import SDKConfig
-          from hve.orchestrator import (
-              _agent_fanout_scope_precondition_error,
-              _self_improve_result_succeeded,
-              collect_workflow_output_paths,
-          )
-          from hve.self_improve import discover_task_goal_from_docs, run_improvement_loop
-
-          repo_root = Path.cwd().resolve()
-          output_paths = collect_workflow_output_paths('aag', repo_root=repo_root)
-          precondition_error = _agent_fanout_scope_precondition_error(
-              'aag', output_paths, repo_root
-          )
-          task_goal = discover_task_goal_from_docs(
-              workflow_id='aag',
-              repo_root=str(repo_root),
-          )['task_goal']
-
-          config = SDKConfig.from_env()
-          config.auto_self_improve = True
-          config.self_improve_skip = False
-          config.self_improve_scope = "workflow"
-          config.self_improve_target_scope = ""
-          config.self_improve_max_iterations = int(os.environ.get('MAX_ITERATIONS', '3'))
-          config.self_improve_quality_threshold = int(os.environ.get('QUALITY_THRESHOLD', '80'))
-          config.run_id = f"cloud-aag-{os.environ['ROOT_ISSUE']}-{os.environ.get('GITHUB_RUN_ID', 'run')}"
-          config.workflow_id = 'aag'
-          config._resolved_step_output_paths = output_paths
-          config._resolved_workflow_default = ''
-          config._resolved_scope_ceiling_paths = output_paths
-          config._resolved_scope_precondition_error = precondition_error
-
-          result = run_improvement_loop(
-              config=config,
-              repo_root=str(repo_root),
-              work_dir=Path(os.environ['HVE_WORK_ROOT']) / 'self-improve',
-              task_goal=task_goal,
-          )
-          Path(os.environ['SELF_IMPROVE_RESULT_PATH']).write_text(
-              json.dumps(result, ensure_ascii=False, indent=2),
-              encoding='utf-8',
-          )
-          print(f'Self-Improve: {result["stopped_reason"]} (score={result["final_score"]})')
-          if not _self_improve_result_succeeded(result, task_goal):
-              raise SystemExit(
-                  'AAG Post-DAG Self-Improve failed: '
-                  f'{result["stopped_reason"]} / {result.get("blocked_reason", "")}'
-              )
-          PY
-      - name: Commit improvements
-        if: steps.parse.outputs.ready == 'true' && success()
-        env:
-          BRANCH: ${{ steps.parse.outputs.branch }}
-          SELF_IMPROVE_RESULT_PATH: ${{ runner.temp }}/aag-self-improve-result.json
-        run: |
-          set -euo pipefail
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          branch="${BRANCH}"
-
-          git check-ref-format --branch "${branch}" >/dev/null 2>&1 || {
-            echo "::error::Invalid branch name: ${branch}" >&2
-            exit 1
-          }
-
-          python3 - <<'PY'
-          import json, os, subprocess
-          from pathlib import Path
-
-          result = json.loads(
-              Path(os.environ['SELF_IMPROVE_RESULT_PATH']).read_text(encoding='utf-8')
-          )
-          allowed = {
-              path
-              for record in result.get('records', [])
-              for path in record.get('changed_files', [])
-              if isinstance(path, str) and path
-          }
-
-          def names(*args):
-              output = subprocess.check_output(
-                  ['git', '-c', 'core.quotepath=false', *args],
-              )
-              return {
-                  item.decode('utf-8', errors='surrogateescape').replace('\\', '/')
-                  for item in output.split(b'\0') if item
-              }
-
-          actual = names('diff', '--name-only', '-z', 'HEAD', '--')
-          actual |= names('ls-files', '--others', '--exclude-standard', '-z', '--')
-          outside = sorted(actual - allowed)
-          if outside:
-              raise SystemExit(
-                  'Refusing to stage scope-external Self-Improve changes: '
-                  + ', '.join(outside)
-              )
-          for path in sorted(actual):
-              subprocess.run(['git', 'add', '--', path], check=True)
-          PY
-
-          if git diff --cached --quiet; then
-            echo "No Self-Improve changes to commit."
-            exit 0
-          fi
-
-          git commit -m "[Self-Improve] 自動品質改善"
-
-          git fetch origin "${branch}"
-          if ! git merge-base --is-ancestor "origin/${branch}" HEAD; then
-            echo "::error::origin/${branch} advanced during Self-Improve. Refusing unverified rebase/push; rerun from the latest branch." >&2
-            exit 1
-          fi
-          git push origin "HEAD:refs/heads/${branch}"
-
-      - name: Record successful AAG Self-Improve completion
-        if: steps.parse.outputs.ready == 'true' && success()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          ROOT_ISSUE: ${{ steps.parse.outputs.root_issue }}
-          SELF_IMPROVE_RESULT_PATH: ${{ runner.temp }}/aag-self-improve-result.json
-        run: |
-          set -euo pipefail
-          has_label() {
-            gh issue view "${ROOT_ISSUE}" --repo "${REPO}" --json labels \
-              --jq '.labels[].name' | grep -Fxq "$1"
-          }
-          ensure_label() {
-            local label="$1"
-            has_label "${label}" || gh issue edit "${ROOT_ISSUE}" --repo "${REPO}" --add-label "${label}" >/dev/null
-            has_label "${label}" || { echo "::error::Failed to add ${label}" >&2; return 1; }
-          }
-          ensure_no_label() {
-            local label="$1"
-            if has_label "${label}"; then
-              gh issue edit "${ROOT_ISSUE}" --repo "${REPO}" --remove-label "${label}" >/dev/null
-            fi
-            ! has_label "${label}" || { echo "::error::Failed to remove ${label}" >&2; return 1; }
-          }
-          body_file=$(mktemp)
-          payload_file=$(mktemp)
-          gh api "/repos/${REPO}/issues/${ROOT_ISSUE}" --jq '.body // ""' > "${body_file}"
-          python3 - "${body_file}" "${payload_file}" <<'PY'
-          import json, re, sys
-          body = open(sys.argv[1], encoding='utf-8').read()
-          tag = '<!-- aag-self-improve-status: finalizing -->'
-          pattern = re.compile(r'<!--\s*aag-self-improve-status\s*:[^>]*-->')
-          body = pattern.sub(tag, body, count=1) if pattern.search(body) else body.rstrip() + '\n' + tag + '\n'
-          with open(sys.argv[2], 'w', encoding='utf-8') as handle:
-              json.dump({'body': body}, handle, ensure_ascii=False)
-          PY
-          gh api --method PATCH "/repos/${REPO}/issues/${ROOT_ISSUE}" --input "${payload_file}" >/dev/null
-
-          result_summary=$(python3 - <<'PY'
-          import json, os
-          from pathlib import Path
-          result = json.loads(Path(os.environ['SELF_IMPROVE_RESULT_PATH']).read_text(encoding='utf-8'))
-          print(f"reason={result['stopped_reason']}, score={result['final_score']}, iterations={result['iterations_completed']}")
-          PY
-          )
-          gh issue comment "${ROOT_ISSUE}" --repo "${REPO}" \
-            --body "✅ AAG Post-DAG Self-Improve 完了: ${result_summary}" || true
-
-          ensure_no_label "aag:blocked"
-          ensure_label "aag:done"
-          ensure_no_label "aag:self-improve-ready"
-
-          if [[ -f "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/auto-close.sh" ]]; then
-            source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/auto-close.sh"
-            root_json=$(gh api "/repos/${REPO}/issues/${ROOT_ISSUE}")
-            auto_merge_enabled=$(_is_auto_merge_enabled "${root_json}" || true)
-            auto_close_root_if_all_done "${ROOT_ISSUE}" "${REPO}"
-            if [[ "${auto_merge_enabled}" == "true" ]]; then
-              state=$(gh issue view "${ROOT_ISSUE}" --repo "${REPO}" --json state --jq '.state')
-              [[ "${state}" == "CLOSED" ]] || {
-                echo "::error::AAG Root auto-close was required but state=${state}" >&2
-                exit 1
-              }
-            fi
-          fi
-
-          gh api "/repos/${REPO}/issues/${ROOT_ISSUE}" --jq '.body // ""' > "${body_file}"
-          python3 - "${body_file}" "${payload_file}" <<'PY'
-          import json, re, sys
-          body = open(sys.argv[1], encoding='utf-8').read()
-          tag = '<!-- aag-self-improve-status: completed -->'
-          pattern = re.compile(r'<!--\s*aag-self-improve-status\s*:[^>]*-->')
-          body = pattern.sub(tag, body, count=1)
-          with open(sys.argv[2], 'w', encoding='utf-8') as handle:
-              json.dump({'body': body}, handle, ensure_ascii=False)
-          PY
-          gh api --method PATCH "/repos/${REPO}/issues/${ROOT_ISSUE}" --input "${payload_file}" >/dev/null
-          rm -f "${body_file}" "${payload_file}"
-
-      - name: Mark AAG Root blocked when mandatory Self-Improve fails
-        if: ${{ always() && steps.parse.outputs.ready == 'true' && (failure() || cancelled()) }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          ROOT_ISSUE: ${{ steps.parse.outputs.root_issue }}
-          SELF_IMPROVE_OUTCOME: ${{ steps.self_improve.outcome }}
-        run: |
-          set -euo pipefail
-          has_label() {
-            gh issue view "${ROOT_ISSUE}" --repo "${REPO}" --json labels \
-              --jq '.labels[].name' | grep -Fxq "$1"
-          }
-          ensure_label() {
-            local label="$1"
-            has_label "${label}" || gh issue edit "${ROOT_ISSUE}" --repo "${REPO}" --add-label "${label}" >/dev/null
-            has_label "${label}" || { echo "::error::Failed to add ${label}" >&2; return 1; }
-          }
-          ensure_no_label() {
-            local label="$1"
-            if has_label "${label}"; then
-              gh issue edit "${ROOT_ISSUE}" --repo "${REPO}" --remove-label "${label}" >/dev/null
-            fi
-            ! has_label "${label}" || { echo "::error::Failed to remove ${label}" >&2; return 1; }
-          }
-          state=$(gh issue view "${ROOT_ISSUE}" --repo "${REPO}" --json state --jq '.state')
-          if [[ "${state}" != "OPEN" ]]; then
-            gh issue reopen "${ROOT_ISSUE}" --repo "${REPO}" >/dev/null
-          fi
-          state=$(gh issue view "${ROOT_ISSUE}" --repo "${REPO}" --json state --jq '.state')
-          [[ "${state}" == "OPEN" ]] || { echo "::error::Failed to reopen Root" >&2; exit 1; }
-          ensure_no_label "aag:done"
-          ensure_label "aag:self-improve-ready"
-          ensure_label "aag:blocked"
-          if [[ "${SELF_IMPROVE_OUTCOME}" == "success" ]]; then
-            failure_message="❌ AAG Post-DAG Self-Improve本体は成功しましたが、commit/pushまたはRoot最終化に失敗しました。Actionsログを確認し、このworkflow runを手動Re-runしてください。"
-          else
-            failure_message="❌ 必須のAAG Post-DAG Self-Improveが成功条件を満たしませんでした。Actionsログの停止理由とcriteria evidenceを確認し、このworkflow runを手動Re-runしてください。cancel/timeout/runner lossでstale statusが残った場合も、Re-runが同一queue内で再claimします。"
-          fi
-          gh issue comment "${ROOT_ISSUE}" --repo "${REPO}" \
-            --body "${failure_message}" || true
-
-          body_file=$(mktemp)
-          payload_file=$(mktemp)
-          gh api "/repos/${REPO}/issues/${ROOT_ISSUE}" --jq '.body // ""' > "${body_file}"
-          python3 - "${body_file}" "${payload_file}" <<'PY'
-          import json, re, sys
-          body = open(sys.argv[1], encoding='utf-8').read()
-          tag = '<!-- aag-self-improve-status: pending -->'
-          pattern = re.compile(r'<!--\s*aag-self-improve-status\s*:[^>]*-->')
-          body = pattern.sub(tag, body, count=1) if pattern.search(body) else body.rstrip() + '\n' + tag + '\n'
-          with open(sys.argv[2], 'w', encoding='utf-8') as handle:
-              json.dump({'body': body}, handle, ensure_ascii=False)
-          PY
-          gh api --method PATCH "/repos/${REPO}/issues/${ROOT_ISSUE}" --input "${payload_file}" >/dev/null
-          rm -f "${body_file}" "${payload_file}"

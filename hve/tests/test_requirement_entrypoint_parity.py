@@ -10,7 +10,10 @@
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
+
+import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _REQUIREMENT_DEFINITION = _REPO_ROOT / "hve-dev" / "requirement-definition.md"
@@ -22,6 +25,27 @@ def _requirement_line(requirement_id: str) -> str:
         if line.lstrip("- ").startswith(f"**{requirement_id}**"):
             return line
     raise AssertionError(f"{requirement_id} が要求定義書に見つからない")
+
+
+def _use_case_line(use_case_id: str) -> str:
+    marker = f"- {use_case_id}:"
+    matches = [
+        line
+        for line in _REQUIREMENT_DEFINITION.read_text(
+            encoding="utf-8-sig"
+        ).splitlines()
+        if line.startswith(marker)
+    ]
+    assert len(matches) == 1, f"{use_case_id} が {len(matches)} 件見つかった"
+    return matches[0]
+
+
+def _assert_uc_03_contract(line: str) -> None:
+    expected = (
+        "利用者が `python -m hve` を引数なしで実行すると GUI Orchestrator を既定として起動し、"
+        "PySide6 が未導入の場合に限り CLI 対話 wizard へフォールバックする"
+    )
+    assert expected in line, "UC-03 が canonical な既定起動と fallback の方向を宣言していない"
 
 
 def _no_args_branch_source() -> str:
@@ -48,6 +72,22 @@ def _no_args_branch_source() -> str:
 
 
 class TestEntrypointParity:
+    def test_uc_03_declares_gui_default_and_pyside6_only_cli_fallback(self) -> None:
+        _assert_uc_03_contract(_use_case_line("UC-03"))
+
+    def test_uc_03_oracle_rejects_the_inverted_default_and_fallback(self) -> None:
+        invalid = (
+            "- UC-03: 利用者が `python -m hve` を引数なしで実行すると CLI wizard を既定とし、"
+            "PySide6 が未導入の場合に限り GUI へフォールバックする",
+            "- UC-03: 利用者が `python -m hve` を引数なしで実行すると GUI Orchestrator は既定ではない。"
+            "PySide6 が未導入の場合に限り CLI 対話 wizard へフォールバックする",
+            "- UC-03: 利用者が `python -m hve` を引数なしで実行すると GUI Orchestrator を既定として起動し、"
+            "PySide6 が未導入の場合に限り CLI 対話 wizard へフォールバックしない",
+        )
+        for line in invalid:
+            with pytest.raises(AssertionError):
+                _assert_uc_03_contract(line)
+
     def test_requirement_declares_gui_as_the_no_args_default(self) -> None:
         line = _requirement_line("FR-CLI-10")
         assert "GUI" in line, "FR-CLI-10 が引数なし起動の既定を GUI と宣言していない"

@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_SKILL = _REPO_ROOT / ".github" / "skills" / "testing" / "tdd-red-green-reality" / "SKILL.md"
+_SKILL = _REPO_ROOT / ".github" / "skills" / "tdd-red-green-reality" / "SKILL.md"
 _COMMON_PREAMBLE = _REPO_ROOT / ".github" / "skills" / "agent-common-preamble" / "SKILL.md"
 _ROUTING = _REPO_ROOT / ".github" / "skills" / "_routing" / "README.md"
 _PROMPTS_DIR = _REPO_ROOT / ".github" / "prompts"
@@ -64,7 +64,12 @@ def test_azure_microsoft_learn_mcp_rule_is_common_and_strict() -> None:
 
 def test_common_preamble_retries_safe_microsoft_learn_redirect_once() -> None:
     """Learn Web fallbackは同一HTTPS hostの最終URLへ一度だけ再試行する。"""
-    text = _COMMON_PREAMBLE.read_text(encoding="utf-8")
+    root = _COMMON_PREAMBLE.read_text(encoding="utf-8")
+    reference = "references/agent-playbook.md"
+    assert f"({reference}#microsoft-learn-web-redirect-の単回再試行)" in root
+    detail = _COMMON_PREAMBLE.parent / reference
+    assert detail.is_file(), "preamble の redirect 規約参照先が存在しない"
+    text = detail.read_text(encoding="utf-8")
     section = text.split(
         "### Microsoft Learn Web redirect の単回再試行",
         1,
@@ -112,7 +117,7 @@ def test_skill_defines_standard_tdd_report_path() -> None:
 def test_skill_referenced_in_routing() -> None:
     """skill が routing 表に登録されている（CI の routing 整合に必要）。"""
     text = _ROUTING.read_text(encoding="utf-8")
-    assert "testing/tdd-red-green-reality/SKILL.md" in text
+    assert ".github/skills/tdd-red-green-reality/SKILL.md" in text
 
 
 def test_tdd_agents_reference_skill() -> None:

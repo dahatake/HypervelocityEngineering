@@ -1,9 +1,5 @@
 # §1.2 非PR連携モード コンテキスト収集プロトコル
 
-> 本ファイルは `task-questionnaire/SKILL.md` の §1.2 非PR連携モード詳細を収容する参照資料です。
-
----
-
 ## Prompt Edition request preflight 例外
 
 HVE の `hve-prompt-edition` Skill が request v1 作成前に不足する Workflow / Step / APP-ID /
@@ -34,15 +30,15 @@ resource group / input path だけを確認する **Prompt Edition request prefl
 
 コンテキスト不足と判定した場合、**または `<!-- auto-context-review: true -->` が指定されている場合**は、`qa/` 配下に質問票ファイルを作成する（Skill `work-artifacts-layout` §4.1 準拠: 削除→新規作成）。
 
-> ⚠️ **事前ディレクトリ確認の禁則事項**: 既存 qa/ ファイルの有無を確認する目的で `rg qa` / `ls qa` / `find qa` 等を実行してはならない。`qa/` ディレクトリが未作成の場合 ripgrep が `os error 2`（指定されたファイルが見つかりません）を返し、Agent 実行が「ツール失敗」で中断される。存在確認は Test-Path / `os.path.isdir` / `pathlib.Path.exists` で行い、未作成の場合は「既存質問票なし」とみなして本ステップの新規作成手順へ進むこと（必要に応じて `mkdir -p qa` で先にディレクトリを作成する）。詳細は `work-artifacts-layout` §4.1 参照。
+> ⚠️ **事前ディレクトリ確認の禁則事項**: 既存 qa/ ファイル確認のために `rg qa` / `ls qa` / `find qa` 等で未作成の `qa/` を直接参照してはならない。存在確認は Test-Path / `os.path.isdir` / `pathlib.Path.exists` で行い、未作成時は「既存質問票なし」とみなして本ステップの新規作成へ進むこと（必要に応じて `mkdir -p qa` を先行実行）。詳細は `work-artifacts-layout` §4.1 参照。
 
 #### qa/ ファイル命名規則（3パターン）
 
-| 優先順位 | 条件 | ファイル名パターン | 例 |
+| 優先順位 | 条件 | ファイル名パターン | 形式例 |
 |---------|------|-----------------|-----|
-| 1 | Custom Agent 経由かつ Issue 番号がある | `<Agent名>-Issue-<番号>.md` | `Arch-DataModeling-Issue-58.md` |
-| 2 | Issue 番号がある（非 Custom Agent） | `Issue-<番号>-<簡潔な説明>.md` | `Issue-42-context-review.md` |
-| 3 | Issue 番号が不明 | `<タスク内容の簡潔な要約>.md` | `batch-design-qa.md` |
+| 1 | Custom Agent 経由かつ Issue 番号がある | `<Agent名>-Issue-<番号>.md` | `<Agent>-Issue-<番号>.md` |
+| 2 | Issue 番号がある（非 Custom Agent） | `Issue-<番号>-<簡潔な説明>.md` | `Issue-<番号>-context.md` |
+| 3 | Issue 番号が不明 | `<タスク内容の簡潔な要約>.md` | `<task-summary>.md` |
 
 > ファイル名にはパスセーフな文字のみ使用する（英数字・ハイフン・アンダースコア。日本語は避ける）
 

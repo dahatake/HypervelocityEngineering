@@ -148,7 +148,7 @@ class TestRequirementIsDeclared:
 
 
 class TestDeclineRecordsWaveIndex:
-    """FR-CLI-87: 承認・拒否の記録は `approval:<wave_index>` とする。
+    """FR-CLI-87: 承認・拒否の記録は `approval-<wave_index>` とする。
 
     拒否経路だけが wave 番号を捨てると、どの Wave で停止したかを
     FR-STATE-04 の進捗ストアから復元できない。
@@ -176,7 +176,15 @@ class TestDeclineRecordsWaveIndex:
 
     def test_requirement_declares_the_record_key(self) -> None:
         block = _requirement_block("FR-CLI-87")
-        assert "approval:<wave_index>" in block
+        assert "approval-<wave_index>" in block
+
+    def test_approval_step_id_is_accepted_by_the_durable_validator(self) -> None:
+        # N-09: `approval:<n>` は URI scheme 判定に一致し、記録が常に失敗していた。
+        from hve.run_state_store import reject_sensitive_persisted_text
+
+        for wave_index in (1, 7, 12):
+            value = f"approval-{wave_index}"
+            assert reject_sensitive_persisted_text(value, "step_id") == value
 
 
 class TestDeclineIntegration:

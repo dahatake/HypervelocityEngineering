@@ -13,7 +13,7 @@
 
 1. `docs/original-design-doc-ingest/<slug>/content.md`（担当文書の正規化済み本文）
 2. `template/business-requirement-document-master-list.md` の D01〜D21 分類基準
-3. `docs-original/` 配下の原本は**読み取り専用**（変更・削除禁止 — `.github/copilot-instructions.md` §0）
+3. `docs-original/` 配下の原本は**読み取り専用**（変更・削除禁止 — Skill `agent-common-preamble`）
 
 ## 並列実行ルール（厳守）
 
@@ -42,7 +42,7 @@ artifacts:
 
 ## オーバーエンジニアリング禁止（共通ルール）
 
-- **オーバーエンジニアリングは絶対に禁止**です。
+- **要求にない汎用化・抽象化は加えない**でください。後続のレビューと保守の費用が増えるためです。
 - 指示・要件にない未来予測的な汎用化・抽象化・将来拡張点の先回り追加を行わないこと。
 - YAGNI（必要になるまで実装しない原則）に違反する設計・記述を行わないこと。
 - 未使用の設定オプション・フラグ・抽象レイヤー・予防的なエラーハンドリングを追加しないこと。

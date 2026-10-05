@@ -5,18 +5,9 @@
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
-
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 
@@ -25,11 +16,7 @@
 - `app-scope-resolution`: 対象 APP-ID 単位の Azure 依存を `docs/catalog/app-catalog.md` から特定
 - `work-artifacts-layout`: 監査結果を `work/run/<run-id>/QA-AzureDependencyReview/Issue-<識別子>/` に保存
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 ## スコープ（このエージェントの専門）
 - **サービスカタログ（docs/usecase/<usecase>/service-catalog.md）を一次情報**として、コード/設定/IaC/CI が Azure リソースを **正しく参照**しているかを点検する。
@@ -63,21 +50,9 @@
   - 例外：明らかな誤参照（typo/古いRG/存在しないキー名など）で、影響が局所・検証可能なら、自動修正してよい（ただし変更理由と検証を必ず記載）。
 
 ## 手順（Azure依存レビューの最短ループ）
-### 1) 事前計画（Skill task-dag-planning に従いDAG+見積）
+### 1) 事前計画
+- 計画を書く場合は Skill `task-dag-planning` に従う。
 - まず `{WORK}plan.md` に、調査→抽出→照合→レポート→（必要なら）最小修正→検証 のDAGと見積を作る。
-- **plan.md 作成時の必須手順（省略禁止）**:
-  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
-  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
-     ```
-     <!-- task_scope: single|multi -->
-     <!-- context_size: small|medium|large -->
-     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
-     <!-- subissues_count: N -->
-     <!-- implementation_files: true or false -->
-     ```
-  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/task-dag-planning/references/plan-template.md` を参照）
-  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
-- **task_scope=multi または context_size=large なら分割**し、`{WORK}subissues.md` を出力して停止（Skill task-dag-planning 準拠）。
 
 ### 2) “期待される依存” を確定（Expected）
 - `service-catalog.md` から対象 Azure リソースを一覧化し、各リソースに対して「期待参照」を整理する：
@@ -116,7 +91,7 @@
 |---|---|---|---|---|---|
 
 - Evidence は必ず具体（`path:line` か ドキュメント見出し）。
-- **Evidence に記載するパスは `read` で実在確認すること（copilot-instructions.md §0 捏造禁止準拠）。実在確認できないパスは `TBD（未確認）` と明記する。**
+- **Evidence に記載するパスは `read` で実在確認すること（存在しないパスを根拠にしないため）。実在確認できないパスは `TBD（未確認）` と明記する。**
 - 値が不明なら `null`。推測は禁止。
 
 3. Fixes Applied（修正した場合のみ）
@@ -128,11 +103,11 @@
 
 ※最終出力は **レポートファイルの内容のみ**（途中の草稿・内部メモは出さない）。
 
-## 最終品質レビュー（単回インライン・セルフチェック）
+## 受入観点（完了条件の補足）
 
-### 1) セルフチェック契約
+### 1) 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ### 2) ドメイン固有観点
 - **レビュー完全性・妥当性**：service-catalog に記載されたすべての Azure 依存が漏らさず抽出されているか、Expected vs Actual の照合が正確か、Severity の付与（Blocker/High/Medium/Low）が正当か、Evidence（参照元の具体的パス/行番号/ドキュメント見出し）は十分か、秘密値を含めず参照情報のみが記録されているか
@@ -140,7 +115,7 @@
 - **保守性・安全性・再現性**：秘密情報（接続文字列・キー・シークレット値）が混入していないか、推測や根拠なき判断が入っていないか、修正が最小差分で影響範囲が明確か、検証方法は再現可能か、Azure 実環境への非破壊操作に限定されているか、将来の依存追加時の更新方法は明確か
 
 ### 3) 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

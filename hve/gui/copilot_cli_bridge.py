@@ -1,47 +1,25 @@
 """hve.gui.copilot_cli_bridge — GitHub Copilot CLI 薄いラッパ。
 
 GUI Orchestrator が GitHub Copilot CLI を **唯一の信頼ソース** として扱うための
-ブリッジ層。CLI のサブコマンド (``copilot mcp list`` / ``copilot mcp get`` /
-``copilot plugin list`` / ``copilot login``) を呼び出し、stdout を解析して
-構造化データを返す。
+ブリッジ層。バイナリの解決と ``copilot login`` の実行を担う。
+Plugin / MCP / Skill の一覧は SDK discovery（``hve.toolsearch.resource_inventory``）
+が単一実装であり、本モジュールは CLI subprocess による列挙を持たない（FR-GUI-51）。
 
 設計方針:
-    - 例外を呼び出し側に伝播させない（失敗時は空 dict / None / False）。
+    - 例外を呼び出し側に伝播させない（失敗時は None / False / 負の終了コード）。
     - サブプロセス起動は同期 (subprocess.run, timeout 付き)。
     - GUI/UI スレッドからは ``QThread`` 等で包んで呼ぶこと（本モジュールは UI 非依存）。
-    - JSON 出力可能なコマンドは必ず ``--json`` を使う（text 解析は最小化）。
-    - ``copilot plugin list`` のみ ``--json`` 未対応のため行ベース正規表現で解析。
 
 参考: ``work/copilot-cli-bridge/T00-cli-survey.md`` （実機調査結果）
 """
 
 from __future__ import annotations
 
-import json
-import re
+import os
 import subprocess
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-__all__ = ["CopilotCliBridge", "PluginInfo"]
-
-
-# ``copilot plugin list`` 1 行の形式:
-#   "  • <plugin-name>@<source> (v<version>)"
-# bullet 記号は環境エンコーディング次第で文字化けし得るため、
-# 行頭の英数字以外の任意 1 文字以上をスキップして name@source 部を捕捉する。
-_PLUGIN_LINE_RE = re.compile(
-    r"^\s*[^\w\s]+\s+(?P<name>[A-Za-z0-9_.\-]+)@(?P<source>[A-Za-z0-9_.\-]+)\s+\(v(?P<version>[^)]+)\)\s*$"
-)
-
-
-@dataclass(frozen=True)
-class PluginInfo:
-    """``copilot plugin list`` の 1 エントリ。"""
-
-    name: str
-    source: str
-    version: str
+__all__ = ["CopilotCliBridge"]
 
 
 class CopilotCliBridge:
@@ -56,10 +34,7 @@ class CopilotCliBridge:
     # ------------------------------------------------------------
     @staticmethod
     def find_binary() -> Optional[str]:
-        """``copilot`` 実行ファイル絶対パスを返す。見つからなければ ``None``。
-
-        既存 ``hve.auth.find_copilot_binary`` を再利用 (SDK 同梱 → PATH → ランタイムキャッシュ)。
-        """
+        """SDKが実セッションで選ぶ``copilot`` runtime pathを返す。"""
         try:
             from hve.auth import find_copilot_binary
         except ImportError:
@@ -79,7 +54,7 @@ class CopilotCliBridge:
     # ------------------------------------------------------------
     @staticmethod
     def _run(
-        argv: List[str], *, timeout: float
+        argv: List[str], *, timeout: float, cwd: Optional[str] = None
     ) -> tuple[int, str, str]:
         """``subprocess.run`` を ``capture_output=True, text=True`` で実行。
 
@@ -90,11 +65,17 @@ class CopilotCliBridge:
         try:
             proc = subprocess.run(
                 argv,
+                cwd=cwd,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
                 encoding="utf-8",
                 errors="replace",
+                creationflags=(
+                    getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                    if os.name == "nt"
+                    else 0
+                ),
             )
         except subprocess.TimeoutExpired:
             return -1, "", f"timeout after {timeout}s"
@@ -103,91 +84,6 @@ class CopilotCliBridge:
         except Exception as exc:  # pragma: no cover - 防御的
             return -1, "", f"{type(exc).__name__}: {exc}"
         return proc.returncode, proc.stdout or "", proc.stderr or ""
-
-    # ------------------------------------------------------------
-    # MCP server 列挙
-    # ------------------------------------------------------------
-    @classmethod
-    def list_mcp_servers(cls, *, timeout: float = 15.0) -> Dict[str, Dict[str, Any]]:
-        """``copilot mcp list --json`` を実行し ``{name: <ServerDef>}`` を返す。
-
-        失敗時は空 dict を返す。
-        """
-        exe = cls.find_binary()
-        if not exe:
-            return {}
-        rc, out, _err = cls._run([exe, "mcp", "list", "--json"], timeout=timeout)
-        if rc != 0 or not out.strip():
-            return {}
-        try:
-            data = json.loads(out)
-        except json.JSONDecodeError:
-            return {}
-        servers = data.get("mcpServers") if isinstance(data, dict) else None
-        if not isinstance(servers, dict):
-            return {}
-        out_dict: Dict[str, Dict[str, Any]] = {}
-        for name, defn in servers.items():
-            if isinstance(name, str) and isinstance(defn, dict):
-                out_dict[name] = defn
-        return out_dict
-
-    @classmethod
-    def get_mcp_server(
-        cls, name: str, *, timeout: float = 15.0
-    ) -> Optional[Dict[str, Any]]:
-        """``copilot mcp get <name> --json`` を実行し ``<ServerDef>`` を返す。
-
-        失敗 / 未登録時は ``None``。
-        """
-        if not name:
-            return None
-        exe = cls.find_binary()
-        if not exe:
-            return None
-        rc, out, _err = cls._run(
-            [exe, "mcp", "get", name, "--json"], timeout=timeout
-        )
-        if rc != 0 or not out.strip():
-            return None
-        try:
-            data = json.loads(out)
-        except json.JSONDecodeError:
-            return None
-        if not isinstance(data, dict):
-            return None
-        defn = data.get(name)
-        return defn if isinstance(defn, dict) else None
-
-    # ------------------------------------------------------------
-    # Plugin 列挙 (text 解析)
-    # ------------------------------------------------------------
-    @classmethod
-    def list_plugins(cls, *, timeout: float = 15.0) -> List[PluginInfo]:
-        """``copilot plugin list`` を実行し ``PluginInfo`` のリストを返す。
-
-        ``--json`` 未対応（v1.0.48 時点）のため行ベース正規表現で解析する。
-        失敗時は空リストを返す。
-        """
-        exe = cls.find_binary()
-        if not exe:
-            return []
-        rc, out, _err = cls._run([exe, "plugin", "list"], timeout=timeout)
-        if rc != 0:
-            return []
-        plugins: List[PluginInfo] = []
-        for line in out.splitlines():
-            m = _PLUGIN_LINE_RE.match(line)
-            if not m:
-                continue
-            plugins.append(
-                PluginInfo(
-                    name=m.group("name"),
-                    source=m.group("source"),
-                    version=m.group("version"),
-                )
-            )
-        return plugins
 
     # ------------------------------------------------------------
     # 認証関連 (既存 hve.auth へ委譲)

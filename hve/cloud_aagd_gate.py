@@ -1,8 +1,7 @@
 """AAGD Cloud workflow completion gate.
 
 The gate is intentionally independent from the GitHub Actions shell script so the
-same recursive rules run both when the Root becomes Self-Improve-ready and again
-immediately before Post-DAG mutation.
+same recursive rules run when the Root becomes ready for completion.
 """
 
 from __future__ import annotations
@@ -67,7 +66,6 @@ def validate_aagd_issue_tree(
     fetch_issue: Callable[[int], Dict[str, Any]],
     fetch_children: Callable[[int], Iterable[Dict[str, Any]]],
     *,
-    allow_root_self_improve_blocked: bool = False,
     repo_root: "Path | str | None" = None,
     tool_search_policy: str = "auto",
 ) -> List[str]:
@@ -75,9 +73,7 @@ def validate_aagd_issue_tree(
 
     Every existing descendant must have ``aagd:done`` and must not carry a
     blocking label. Explicitly skipped steps are not created, so they do not
-    appear in the tree. The Root may retain ``aagd:blocked`` only while retrying
-    a previously failed Post-DAG Self-Improve run; descendants never receive
-    that exception.
+    appear in the tree.
 
     When ``repo_root`` is given, the checked out AI Agent artifacts are
     revalidated as well, so an all-green label tree alone cannot pass the gate.
@@ -101,8 +97,6 @@ def validate_aagd_issue_tree(
             if isinstance(item, dict)
         }
         blocking = set(labels & _BLOCKING_LABELS)
-        if is_root and allow_root_self_improve_blocked:
-            blocking.discard("aagd:blocked")
         if blocking:
             violations.append(
                 f"#{issue_number}:blocking-labels={','.join(sorted(blocking))}"
@@ -175,11 +169,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo", required=True, help="owner/repository")
     parser.add_argument("--root", required=True, type=int, help="Root Issue number")
     parser.add_argument(
-        "--allow-root-self-improve-blocked",
-        action="store_true",
-        help="Allow Root aagd:blocked while retrying Post-DAG Self-Improve",
-    )
-    parser.add_argument(
         "--repo-root",
         type=Path,
         help="Checked out repository root; enables AI Agent artifact revalidation",
@@ -200,13 +189,12 @@ def main(argv: list[str] | None = None) -> int:
         args.root,
         reader.fetch_issue,
         reader.fetch_children,
-        allow_root_self_improve_blocked=args.allow_root_self_improve_blocked,
         repo_root=args.repo_root,
         tool_search_policy=args.tool_search_policy,
     )
     if violations:
         print(
-            "AAGD TDD/Deploy gate failure prevents Self-Improve: "
+            "AAGD TDD/Deploy gate failure: "
             + "; ".join(violations)
         )
         return 1

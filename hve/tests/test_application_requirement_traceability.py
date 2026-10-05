@@ -73,16 +73,16 @@ def test_application_requirement_context_representative_output_is_exact(tmp_path
     )
     assert context == "\n".join(
         [
-            "## APP要求トレーサビリティ（必須）",
+            "## APP要求トレーサビリティ",
             "- 対象 APP-ID: APP-001",
             "- 必須要求定義書:",
             "  - `docs/architectural-requirements-app-001.md`",
             "- 要求書全文は注入していません。必要箇所だけを `markdown-query` で選択取得してください。",
-            "- 完了報告には application-requirement-traceability Skill の trace block を1つ記録してください。",
+            "- 完了報告には application-requirement-traceability Skill の trace block を1つ記録してください。`Requirement-IDs` と `Unresolved-Blockers` には Requirement ID か `none` だけを書き、理由・説明は block の外へ書いてください。",
         ]
     )
     assert hashlib.sha256(context.encode("utf-8")).hexdigest() == (
-        "8f7b33fba77012e608fcf91743d78633174e07ca36fd093f91f2ae1c4809f968"
+        "4d3e62e2d975dee606a8b76563926f594f40053851dc1e04922531715f6836b3"
     )
 
 
@@ -218,6 +218,19 @@ def test_trace_block_accepts_real_non_tbd_ids(tmp_path: Path) -> None:
         block, repo_root=tmp_path, expected_app_ids=("APP-001",)
     ) == []
 
+
+def test_trace_block_accepts_none_with_annotation(tmp_path: Path) -> None:
+    api = _api()
+    _write_fixture(tmp_path)
+    block = """<!-- app-requirements:start -->
+- APP-IDs: APP-001
+- Requirement-IDs: none (推薦根拠に使用した要求IDなし)
+- Requirement-Documents: docs/architectural-requirements-app-001.md
+- Unresolved-Blockers: APP-001〜APP-014の必須入力が未確認。Blocker は未確認
+<!-- app-requirements:end -->"""
+    assert api.validate_application_requirement_trace_block(
+        block, repo_root=tmp_path, expected_app_ids=("APP-001",)
+    ) == []
 
 def test_trace_block_rejects_unknown_or_tbd_ids(tmp_path: Path) -> None:
     api = _api()

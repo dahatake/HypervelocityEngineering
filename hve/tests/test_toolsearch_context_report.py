@@ -139,6 +139,24 @@ class TestBuildReport(unittest.TestCase):
         self.assertEqual(payload["mcp_tools_tokens"], 17217)
         self.assertEqual(payload["system_tokens"], 15168)
 
+    def test_report_exposes_step_resource_scope_without_estimation(self) -> None:
+        report = _report(
+            workflow_id="aagd",
+            step_id="2.3",
+            required_mcp_servers=("tenant-foundry",),
+            required_skills=("microsoft-foundry",),
+        )
+        payload = json.loads(render_json(report))
+
+        self.assertEqual(payload["workflow_id"], "aagd")
+        self.assertEqual(payload["step_id"], "2.3")
+        self.assertEqual(payload["required_mcp_servers"], ["tenant-foundry"])
+        self.assertEqual(payload["required_skills"], ["microsoft-foundry"])
+        text = render_text(report)
+        self.assertIn("aagd", text)
+        self.assertIn("2.3", text)
+        self.assertIn("tenant-foundry", text)
+
 
 class TestSourceContract(unittest.TestCase):
     """推定トークンを使わず、収集経路でプロンプトを送らない。"""
@@ -160,6 +178,12 @@ class TestSourceContract(unittest.TestCase):
         code = "\n".join(line.split("#", 1)[0] for line in self.source.splitlines())
         self.assertIn("session_options(config)", code)
         self.assertNotIn('_create_session_with_auto_reasoning_fallback(client, {"streaming": True})', code)
+
+    def test_collect_requires_an_explicit_workflow_id_for_resource_routing(self) -> None:
+        code = "\n".join(line.split("#", 1)[0] for line in self.source.splitlines())
+        self.assertIn("async def collect", code)
+        self.assertIn("workflow_id", code)
+        self.assertIn("resolve_resource_route(", code)
 
 
 class TestSessionOptions(unittest.TestCase):

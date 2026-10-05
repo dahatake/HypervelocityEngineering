@@ -1,4 +1,4 @@
-"""hve/runner.py の SPLIT_REQUIRED ガード（T4 + T5）の単体テスト。
+"""hve/runner.py の実行モード制約と成果物ゲート（T4 + T5）の単体テスト。
 
 T4: `_build_execution_mode_constraint_suffix` — prompt 末尾に注入する制約文
 T5: `_check_output_paths_gate` — output_paths の欠落で Step を fail 化
@@ -43,19 +43,43 @@ class TestBuildExecutionModeConstraintSuffix(unittest.TestCase):
         # 単独実行モード（Agent 直接起動）では何も注入しない
         self.assertEqual(_build_execution_mode_constraint_suffix(None), "")
 
-    def test_returns_empty_when_fleet_mode_enabled(self) -> None:
-        # fleet mode (split_fork_enabled=True) では SPLIT を許容するため注入しない
-        ctx = OrchestratorContext(split_fork_enabled=True)
-        self.assertEqual(_build_execution_mode_constraint_suffix(ctx), "")
-
     def test_injects_constraint_for_cli_gui_default(self) -> None:
-        # CLI/GUI Orchestrator 配下（既定: split_fork_enabled=False）では注入
+        # CLI/GUI Orchestrator 配下では注入する
         ctx = OrchestratorContext()
         suffix = _build_execution_mode_constraint_suffix(ctx)
         self.assertIn("## 実行モード制約", suffix)
-        self.assertIn("SPLIT_REQUIRED", suffix)
         self.assertIn("output_paths", suffix)
+        self.assertNotIn("SPLIT_REQUIRED", suffix)
+        self.assertNotIn("**", suffix, "強調表現を使わず理由付きの 1 文で伝える")
         self.assertTrue(suffix.startswith("\n\n"), "prompt 末尾追加用に先頭は改行で始まる")
+
+
+class TestSplitForkPathRemoved(unittest.TestCase):
+    """FR-PLAN-01: CLI / GUI は subissues.md を実行時に fork しない。"""
+
+    def test_orchestrator_context_has_no_split_fork_fields(self) -> None:
+        fields = set(OrchestratorContext.__dataclass_fields__)
+        self.assertFalse(
+            {"split_fork_enabled", "split_fork_depth", "split_fork_max_depth"} & fields
+        )
+
+    def test_split_fork_module_is_removed(self) -> None:
+        import importlib.util
+
+        self.assertIsNone(importlib.util.find_spec("hve.split_fork"))
+
+    def test_runner_has_no_split_fork_phase(self) -> None:
+        import runner  # type: ignore[import-not-found]
+
+        self.assertFalse(hasattr(runner.StepRunner, "_maybe_run_split_fork"))
+
+    def test_split_fork_prompts_are_removed(self) -> None:
+        # FR-PROMPT-SRC-01 従属項目: production caller を失った Prompt を保持しない。
+        fleet_dir = Path(__file__).resolve().parents[2] / ".github" / "prompts" / "runtime" / "fleet"
+        for name in ("subtask.prompt.md", "split-fleet.prompt.md", "split-fleet-todo.prompt.md"):
+            self.assertFalse((fleet_dir / name).exists(), name)
+        for name in ("dag-wave.prompt.md", "dag-wave-task.prompt.md"):
+            self.assertTrue((fleet_dir / name).is_file(), name)
 
 
 class TestCheckOutputPathsGate(unittest.TestCase):
@@ -82,12 +106,6 @@ class TestCheckOutputPathsGate(unittest.TestCase):
         # 単独実行モードは従来通り pass（本ゲートを通さない）
         wf = _wf(("1", ["docs/catalog/app-catalog.md"]))
         self.assertEqual(_check_output_paths_gate(None, wf, "1", self._tmp), [])
-
-    def test_pass_when_fleet_mode_enabled(self) -> None:
-        # fleet mode は SPLIT 許容のため本ゲートを通さない
-        ctx = OrchestratorContext(split_fork_enabled=True)
-        wf = _wf(("1", ["docs/catalog/app-catalog.md"]))
-        self.assertEqual(_check_output_paths_gate(ctx, wf, "1", self._tmp), [])
 
     def test_pass_when_no_output_paths_declared(self) -> None:
         # output_paths が空の Step は従来通り pass

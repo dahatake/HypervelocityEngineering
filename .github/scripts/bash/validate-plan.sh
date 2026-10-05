@@ -1,15 +1,8 @@
 #!/usr/bin/env bash
-# validate-plan.sh — plan.md 分割判定メタデータ検証
-#
-# Ported from: .github/cli/validate_plan.py
+# validate-plan.sh — plan.md 完了条件検証
 #
 # Validates:
-#   1. Required metadata presence (task_scope, context_size, split_decision, implementation_files)
-#   2. task_scope/context_size vs split_decision consistency
-#   3. SPLIT_REQUIRED + implementation_files incompatibility
-#   4. SPLIT_REQUIRED → subissues.md existence
-#   5. subissues_count vs actual <!-- subissue --> block count
-#   6. ## 分割判定 section presence
+#   1. ## 完了条件 section presence and non-placeholder content (FR-DOD-02)
 #
 # Usage:
 #   ./validate-plan.sh --path work/Issue-123/plan.md
@@ -17,28 +10,10 @@
 
 set -euo pipefail
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-_extract_int() {
-  local content="$1" key="$2"
-  local val
-  val=$(echo "${content}" | grep -oP "<!--\s*${key}:\s*\K\d+(?=\s*-->)" | head -1) || true
-  echo "${val:-0}"
-}
-
-_extract_str() {
-  local content="$1" key="$2"
-  local val
-  val=$(echo "${content}" | grep -oP "<!--\s*${key}:\s*\K\S+(?=\s*-->)" | head -1) || true
-  echo "${val:-}"
-}
-
-_count_subissue_blocks() {
-  local file="$1"
-  grep -cP '<!--\s*subissue\s*-->' "${file}" 2>/dev/null || echo "0"
-}
+# FR-DOD-02: `## 完了条件` の「空とみなす文字」クラス（ブラケット式の中身のみ）。
+# glibc の C.UTF-8 では `[[:space:]]` が NO-BREAK SPACE (U+00A0) を空白と見なさず、
+# .NET / Python の `\s` とは判定が割れる。両者を一致させるため明示的に追加する。
+_BLANK_CLASS="[:space:]$(printf '\u00a0')"
 
 # ---------------------------------------------------------------------------
 # validate — validate a single plan.md
@@ -56,88 +31,21 @@ validate() {
   local content
   content=$(cat "${plan_path}")
 
-  local task_scope context_size decision impl_files subissues_count
-  task_scope=$(_extract_str "${content}" "task_scope")
-  context_size=$(_extract_str "${content}" "context_size")
-  decision=$(_extract_str "${content}" "split_decision")
-  impl_files=$(_extract_str "${content}" "implementation_files")
-  subissues_count=$(_extract_int "${content}" "subissues_count")
-  # estimate_total は任意（参考情報）として extract のみ行い判定には使用しない
-  local estimate
-  estimate=$(_extract_int "${content}" "estimate_total")
-
-  # Default decision to MISSING if empty
-  if [[ -z "${decision}" ]]; then
-    decision="MISSING"
-  fi
-  # Default impl_files to MISSING if empty
-  if [[ -z "${impl_files}" ]]; then
-    impl_files="MISSING"
-  fi
-
   echo "Checking: ${plan_path}"
-  echo "  task_scope: ${task_scope} | context_size: ${context_size} | Decision: ${decision} | Impl files: ${impl_files} | Subissues count: ${subissues_count}"
 
-  # Rule 0: required metadata must exist and have valid values
-  if [[ "${decision}" == "MISSING" ]]; then
-    errors+=("${plan_path}: missing required metadata <!-- split_decision: ... -->. See Skill task-dag-planning §2.1.2 for required plan.md metadata format")
-  elif [[ "${decision}" != "PROCEED" && "${decision}" != "SPLIT_REQUIRED" ]]; then
-    errors+=("${plan_path}: invalid split_decision='${decision}'. Must be PROCEED or SPLIT_REQUIRED")
-  fi
-
-  if [[ -z "${task_scope}" ]]; then
-    errors+=("${plan_path}: missing required metadata <!-- task_scope: ... -->. Must be single or multi. See Skill task-dag-planning §2.1.2")
-  elif [[ "${task_scope}" != "single" && "${task_scope}" != "multi" ]]; then
-    errors+=("${plan_path}: invalid task_scope='${task_scope}'. Must be single or multi")
-  fi
-
-  if [[ -z "${context_size}" ]]; then
-    errors+=("${plan_path}: missing required metadata <!-- context_size: ... -->. Must be small, medium, or large. See Skill task-dag-planning §2.1.2")
-  elif [[ "${context_size}" != "small" && "${context_size}" != "medium" && "${context_size}" != "large" ]]; then
-    errors+=("${plan_path}: invalid context_size='${context_size}'. Must be small, medium, or large")
-  fi
-
-  if [[ "${impl_files}" == "MISSING" ]]; then
-    errors+=("${plan_path}: missing required metadata <!-- implementation_files: ... -->. See Skill task-dag-planning §2.1.2 for required plan.md metadata format")
-  elif [[ "${impl_files}" != "true" && "${impl_files}" != "false" ]]; then
-    errors+=("${plan_path}: invalid implementation_files='${impl_files}'. Must be true or false")
-  fi
-
-  # Rule 1a: task_scope=multi must be SPLIT_REQUIRED
-  if [[ "${task_scope}" == "multi" && "${decision}" == "PROCEED" ]]; then
-    errors+=("${plan_path}: task_scope=multi but split_decision=PROCEED. Must be SPLIT_REQUIRED per Skill task-dag-planning §2.2")
-  fi
-
-  # Rule 1b: context_size=large must be SPLIT_REQUIRED
-  if [[ "${context_size}" == "large" && "${decision}" == "PROCEED" ]]; then
-    errors+=("${plan_path}: context_size=large but split_decision=PROCEED. Must be SPLIT_REQUIRED per Skill task-dag-planning §2.2")
-  fi
-
-  # Rule 2: SPLIT_REQUIRED must not have implementation files
-  if [[ "${decision}" == "SPLIT_REQUIRED" && "${impl_files}" == "true" ]]; then
-    errors+=("${plan_path}: split_decision=SPLIT_REQUIRED but implementation_files=true. Per Skill task-dag-planning §2.3, implementation files are prohibited in split mode.")
-  fi
-
-  # Rule 3: SPLIT_REQUIRED must have subissues.md in same directory
-  if [[ "${decision}" == "SPLIT_REQUIRED" ]]; then
-    local plan_dir
-    plan_dir=$(dirname "${plan_path}")
-    local subissues_path="${plan_dir}/subissues.md"
-    if [[ ! -f "${subissues_path}" ]]; then
-      errors+=("${plan_path}: split_decision=SPLIT_REQUIRED but subissues.md not found in ${plan_dir}")
-    else
-      # Rule 4: subissues_count should match actual block count
-      local actual_count
-      actual_count=$(_count_subissue_blocks "${subissues_path}")
-      if [[ "${subissues_count}" != "${actual_count}" ]]; then
-        errors+=("${plan_path}: subissues_count=${subissues_count} but subissues.md has ${actual_count} <!-- subissue --> blocks")
-      fi
+  # FR-DOD-02: 完了条件 section should exist and have non-placeholder content.
+  if ! echo "${content}" | grep -q "## 完了条件"; then
+    errors+=("${plan_path}: missing required section '## 完了条件'. See .github/skills/_hve-plan-artifacts/plan-template.md for the required section format")
+  else
+    local dod_lines
+    dod_lines=$(echo "${content}" | awk '
+      /^[[:space:]]*##[[:space:]]+完了条件/ { inside = 1; next }
+      inside && /^[[:space:]]*##[[:space:]]/ { inside = 0 }
+      inside { print }
+    ' | grep -vE "^[${_BLANK_CLASS}]*(-{3,})?[${_BLANK_CLASS}]*$" | grep -viE 'REPLACE_ME' || true)
+    if [[ -z "${dod_lines}" ]]; then
+      errors+=("${plan_path}: section '## 完了条件' has no non-placeholder content. Add at least one verifiable completion condition")
     fi
-  fi
-
-  # Rule 5: 分割判定 section should exist
-  if ! echo "${content}" | grep -q "## 分割判定"; then
-    errors+=("${plan_path}: missing required section '## 分割判定'. See Skill task-dag-planning §2.1.2 for the required plan.md metadata/section format")
   fi
 
   if (( ${#errors[@]} > 0 )); then

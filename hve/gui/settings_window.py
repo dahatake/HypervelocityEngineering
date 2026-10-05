@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QCloseEvent
@@ -49,7 +49,6 @@ from .page_options import (
     _CKnowledgeManagement,
     _CQaPrompt,
     _CReviewPrompt,
-    _CSelfImprove,
     _C4WorkIQ,
     _C7Connection,
     _C10AppId,
@@ -362,7 +361,6 @@ _CATEGORY_TREE: List[Tuple[str, List[Tuple[str, str]]]] = [
             ("QA (質問票)", "QA"),
             ("レビュー", "REVIEW"),
             ("Knowledge Management", "KM"),
-            ("自己改善 (Self Improve)", "SELFIMPROVE"),
             ("Autopilot", "AUTOPILOT"),
             ("言語 / Language", "LANG"),
             ("エクスプローラー", "EXPLORER"),
@@ -376,7 +374,7 @@ _CATEGORY_TREE: List[Tuple[str, List[Tuple[str, str]]]] = [
             ("Azure", "AZURE"),
             ("Agentic Retrieval", "AGENTIC"),
             ("MCP / CLI 接続", "C7"),
-            ("Work IQ", "C4"),
+            ("知識源", "C4"),
         ],
     ),
     # 「ワークフロー固有設定」(C10/C11/C13/C17) は Step 1 右ペインのワークフロー枠で
@@ -430,6 +428,11 @@ class SettingsWindow(QMainWindow):
         self._sections: Dict[str, QWidget] = {}
         self._tree_items: List[QTreeWidgetItem] = []
         self._stack_index_by_key: Dict[str, int] = {}
+        self._resource_snapshot: object = None
+        self._resource_snapshot_initialized = False
+        self._resource_refresh_callback: Optional[Callable[[bool], bool]] = None
+        self._workiq_capability: object = None
+        self._workiq_capability_initialized = False
 
         self.setWindowTitle(self.tr("HVE 設定"))
         self.resize(1000, 700)
@@ -536,14 +539,12 @@ class SettingsWindow(QMainWindow):
             return _CReviewPrompt()
         if key == "KM":
             return _CKnowledgeManagement()
-        if key == "SELFIMPROVE":
-            return _CSelfImprove()
         if key == "C4":
             return _C4WorkIQ()
         # FR-GUI-35: C5（GitHub）の可視 owner は GitHub Hub だけのため、
         # 本画面ではセクションを生成しない。
         if key == "C7":
-            return _C7Connection()
+            return _C7Connection(repo_root=self._repo_root)
         if key == "AZURE":
             return _CAzure()
         if key == "AGENTIC":
@@ -601,6 +602,59 @@ class SettingsWindow(QMainWindow):
                 except Exception:
                     pass
 
+    def set_workiq_capability(self, capability: object) -> None:
+        """MainWindowと同じGUI process snapshotをC4/C11へ反映する。"""
+        self._workiq_capability = capability
+        self._workiq_capability_initialized = True
+        c4 = self._sections.get("C4")
+        c11 = self._sections.get("C11")
+        options = getattr(self, "_settings", {}).get("options", {})
+        saved_requested = bool(
+            options.get("sources_workiq") if isinstance(options, dict) else False
+        )
+        if isinstance(c4, _C4WorkIQ):
+            saved_requested = saved_requested or c4.workiq.isChecked()
+        if isinstance(c11, _C11AKM):
+            saved_requested = saved_requested or c11.sources_workiq.isChecked()
+            c11.set_workiq_capability(capability)
+        if isinstance(c4, _C4WorkIQ):
+            c4.set_workiq_capability(
+                capability,
+                saved_requested=saved_requested,
+            )
+
+    def set_resource_snapshot(self, snapshot: object) -> None:
+        """MainWindow と同じ resource snapshot を各 section へ共有する。"""
+        from ..workiq import workiq_capability_from_snapshot
+
+        self._resource_snapshot = snapshot
+        self._resource_snapshot_initialized = True
+
+        c7 = self._sections.get("C7")
+        if isinstance(c7, _C7Connection):
+            c7.set_resource_snapshot(snapshot)
+
+        toolsearch = self._sections.get("TOOLSEARCH")
+        if isinstance(toolsearch, ToolSearchSection):
+            toolsearch.set_resource_snapshot(snapshot)
+
+        self.set_workiq_capability(
+            None if snapshot is None else workiq_capability_from_snapshot(snapshot)
+        )
+
+    def set_resource_refresh_callback(
+        self,
+        callback: Optional[Callable[[bool], bool]],
+    ) -> None:
+        """resource snapshot の再検出 callback を C7 / Tool-Search へ配線する。"""
+        self._resource_refresh_callback = callback
+        c7 = self._sections.get("C7")
+        if isinstance(c7, _C7Connection):
+            c7.set_resource_refresh_callback(callback)
+        toolsearch = self._sections.get("TOOLSEARCH")
+        if isinstance(toolsearch, ToolSearchSection):
+            toolsearch.set_resource_refresh_callback(callback)
+
     def _on_widget_changed(self) -> None:
         from . import settings_apply
 
@@ -626,6 +680,10 @@ class SettingsWindow(QMainWindow):
         if _tz:
             import os as _os
             _os.environ["HVE_RUN_ID_TZ"] = str(_tz)
+        if self._resource_snapshot_initialized:
+            self.set_resource_snapshot(self._resource_snapshot)
+        elif self._workiq_capability_initialized:
+            self.set_workiq_capability(self._workiq_capability)
         self.settings_changed.emit(self._settings)
 
     # ----------------------------------------------------------

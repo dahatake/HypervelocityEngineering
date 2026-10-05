@@ -632,7 +632,7 @@ jobs:
           fi
 
           # 検証マーカーチェック（auto-approve-ready 付与前）
-          # 判定ロジックは hve/split_fork.py の単一実装（FR-MAINT-06）へ委譲する
+          # 判定ロジックは hve/run_paths.py の単一実装（FR-MAINT-06）へ委譲する
           VALIDATION_MISSING_MARKER='<!-- auto-qa-to-review-validation-missing -->'
 
           # PR body を取得

@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import inspect
 import sys
 import types
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Iterator
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from hve.config import SDKConfig
 from hve.console import Console
@@ -20,18 +21,6 @@ from hve.workflow_registry import get_workflow
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _MANIFEST = _REPO_ROOT / "hve" / "skill_manifest.json"
-_PINNED_AZURE = {
-    "tools": ["*"],
-    "command": "npx",
-    "args": ["-y", "@azure/mcp@latest", "server", "start"],
-}
-_PINNED_LEARN = {
-    "type": "http",
-    "url": "https://learn.microsoft.com/api/mcp",
-    "tools": ["*"],
-}
-
-
 class _Mcp:
     def __init__(self, servers, events: list[str]) -> None:
         self._servers = servers
@@ -129,7 +118,6 @@ def _runner(*, mcp_servers: dict | None = None) -> StepRunner:
             model="claude-opus-4.7",
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
             run_id="20260720T000000-integration",
             mcp_servers=mcp_servers or {},
         ),
@@ -157,10 +145,12 @@ def _patched_runtime(
     client: _Client,
     external_root: Path,
     work_dir: Path,
-) -> Iterator[None]:
+) -> Iterator[AsyncMock]:
     """Run one Step through the SDK boundary without starting a real client."""
     copilot, copilot_session = _fake_copilot_modules(client)
     gates = _gate_patches(runner)
+    routed_session = _Session(client._servers)
+    routed_factory = AsyncMock(return_value=routed_session)
     with ExitStack() as stack:
         stack.enter_context(
             patch.dict(
@@ -181,6 +171,18 @@ def _patched_runtime(
             )
         )
         stack.enter_context(
+            patch("hve.runner.discover_sdk_resources", return_value=object())
+        )
+        stack.enter_context(
+            patch(
+                "hve.runner.ToolSearchPolicy",
+                new=types.SimpleNamespace(load=lambda **_kwargs: object()),
+            )
+        )
+        stack.enter_context(
+            patch("hve.runner.create_routed_session", new=routed_factory)
+        )
+        stack.enter_context(
             patch("hve.prompt_loader.load_prompt", return_value="")
         )
         stack.enter_context(
@@ -188,14 +190,14 @@ def _patched_runtime(
         )
         for gate in gates:
             stack.enter_context(gate)
-        yield
+        yield routed_factory
 
 
 def test_aagd_foundry_required_step_connects_manifest_skill_prompt_and_mcp_layers(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    """AAGD 2.3はexact Skill、Prompt guard、pinned MCPを一つのsessionへ統合する。"""
+    """AAGD 2.3はexact SkillとPrompt guardをshared routingへ統合する。"""
     monkeypatch.chdir(_REPO_ROOT)
     external_root = tmp_path / "skills"
     foundry = _write_external_skill(external_root, "microsoft-foundry")
@@ -213,7 +215,7 @@ def test_aagd_foundry_required_step_connects_manifest_skill_prompt_and_mcp_layer
     client = _Client(
         [_server("azure"), _server("microsoft-learn"), _server("context7")]
     )
-    with _patched_runtime(runner, client, external_root, tmp_path / "work" / "step"):
+    with _patched_runtime(runner, client, external_root, tmp_path / "work" / "step") as routed_factory:
         result = asyncio.run(
             runner.run_step(
                 "2.3",
@@ -225,26 +227,40 @@ def test_aagd_foundry_required_step_connects_manifest_skill_prompt_and_mcp_layer
         )
 
     assert result is True
-    assert len(client.create_session_kwargs) == 1
-    options = client.create_session_kwargs[0]
+    assert client.create_session_kwargs == []
+    routed_call = routed_factory.await_args
+    assert routed_call is not None
+    kwargs = routed_call.kwargs
+    options = kwargs["session_options"]
     directories = options["skill_directories"]
     assert str(foundry) in directories
     assert str(external_root) not in directories
     assert str(unrelated) not in directories
     assert str(duplicate_repository_skill) not in directories
-    assert options["mcp_servers"] == {
-        "context7": {"command": "integration-context7"},
-        "azure": _PINNED_AZURE,
-        "microsoft-learn": _PINNED_LEARN,
-    }
-    assert client.sessions[0].events == ["mcp.list", "send_and_wait"]
-    prompt = client.sessions[0].prompts[0]
+    assert kwargs["required_mcp_servers"] is None
+    assert "microsoft-foundry" in kwargs["required_skills"]
+    assert "mcp_servers" not in options
+    assert client.sessions == []
+    routed_session = routed_factory.return_value
+    assert routed_session.events == ["send_and_wait"]
+    prompt = routed_session.prompts[0]
     assert "このステップで必須の skill 名" in prompt
     assert "`microsoft-foundry`" in prompt
     assert "条件付き候補 skill 名" in prompt
     assert "`azure-ai`" in prompt
     assert "`entra-agent-id`" in prompt
     assert "`azure-storage`" not in prompt
+
+
+def test_aagd_foundry_runner_source_uses_policy_routing_not_fixed_mcp_names() -> None:
+    import hve.runner as runner_module
+
+    source = inspect.getsource(runner_module)
+
+    assert "_FOUNDRY_REQUIRED_AZURE_MCP_CONFIG" not in source
+    assert "_FOUNDRY_REQUIRED_MCP_SERVERS" not in source
+    assert "_verify_foundry_required_session_mcp_servers" not in source
+    assert ".mcp.json" not in source
 
 
 def test_aagd_foundry_required_step_stops_before_session_when_exact_skill_is_missing(
@@ -393,20 +409,32 @@ def test_asdw_data_deploy_keeps_external_skill_and_azure_mcp_out_of_main_session
     }
     client = _Client([_server("microsoft-learn")])
 
-    with _patched_runtime(runner, client, external_root, tmp_path / "work" / "step"), patch.object(
+    with _patched_runtime(runner, client, external_root, tmp_path / "work" / "step") as routed_factory, patch.object(
         runner,
         "_build_step_permission_handler",
         return_value="permission-handler",
     ), patch(
+        "hve.runner._resolve_asdw_data_deploy_subscription_id",
+        return_value="00000000-0000-0000-0000-000000000001",
+    ) as subscription_resolver, patch(
+        "hve.runner.subprocess.run",
+        side_effect=AssertionError("native ASDW test must not run external subprocesses"),
+    ) as subprocess_run, patch(
+        "hve.copilot_client_factory.create_copilot_client",
+        side_effect=AssertionError("native ASDW must not create an SDK client"),
+    ) as sdk_factory, patch(
         "hve.runner._validate_asdw_data_deploy_runtime_context",
         return_value=[],
     ), patch(
         "hve.runner._build_asdw_data_deploy_environment_snapshot",
         return_value={},
     ), patch(
+        "hve.runner.ensure_asdw_data_producers",
+        return_value=types.SimpleNamespace(status="reused", audit_mode="sql-ledger-digest"),
+    ) as producer, patch(
         "hve.runner.execute_pipeline",
         return_value=(),
-    ):
+    ) as pipeline:
         result = asyncio.run(
             runner.run_step(
                 "1.3",
@@ -420,9 +448,16 @@ def test_asdw_data_deploy_keeps_external_skill_and_azure_mcp_out_of_main_session
     # stage 結果が空なので Step は失敗するが、重要なのは
     # external Skill / Azure MCP を持つ main session が一切作られないこと。
     assert result is False
-    # 隔離の前提（注入元）が実在することを固定し、主張を空虚化させない:
-    # Azure MCP は runner config に存在し、Foundry external Skill も disk 上に在る。
-    assert "azure" in runner.config.mcp_servers
+    subscription_resolver.assert_called_once_with()
+    subprocess_run.assert_not_called()
+    sdk_factory.assert_not_called()
+    producer.assert_called_once_with(_REPO_ROOT)
+    pipeline.assert_called_once()
+    routed_factory.assert_not_awaited()
+    # Legacy raw MCP configはruntime fieldとして保持されず、Foundry external Skill
+    # だけがdisk上に存在する。それでもnative Stepにsession注入先は生じない。
+    assert "mcp_servers" not in vars(runner.config)
+    assert getattr(runner.config, "mcp_servers", None) is None
     assert foundry.exists()
     # それでも main session は 1 つも生成されない = 注入先が存在しない（より強い隔離）。
     assert client.create_session_kwargs == []

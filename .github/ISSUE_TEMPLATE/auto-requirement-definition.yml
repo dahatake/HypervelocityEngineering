@@ -105,6 +105,7 @@ body:
       label: "使用するモデル"
       options:
         - "Auto"
+        - "claude-opus-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "gpt-5.5"
@@ -117,6 +118,7 @@ body:
       label: "レビュー用モデル（任意）"
       options:
         - "Auto"
+        - "claude-opus-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "gpt-5.5"
@@ -129,6 +131,7 @@ body:
       label: "QA 用モデル（任意）"
       options:
         - "Auto"
+        - "claude-opus-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "gpt-5.5"
@@ -141,6 +144,7 @@ body:
       label: "AKM 用モデル（任意）"
       options:
         - "Auto"
+        - "claude-opus-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "gpt-5.5"
@@ -179,3 +183,21 @@ body:
     id: additional_comment
     attributes:
       label: "追加コメント（任意）"
+
+  - type: textarea
+    id: step_input_files
+    attributes:
+      label: "Step Input Files"
+      description: "対象branchに存在する追加・代替資料のbranch-relative pathを1行1件で指定します。ドラッグ＆ドロップのupload linkは現在未対応（Cloud upload unavailable）です。"
+      placeholder: "docs-original/example.md"
+    validations:
+      required: false
+
+  - type: textarea
+    id: step_input_bindings
+    attributes:
+      label: "Step Input Bindings"
+      description: "1行1 JSONでStep・role・上のfile番号を指定します。additionalのcanonicalは省略できます。"
+      placeholder: '{"step_id":"2","role":"additional","file":1}'
+    validations:
+      required: false

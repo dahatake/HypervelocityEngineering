@@ -39,7 +39,7 @@
 
 ## 次のステップ
 
-- 生成した目録をもとに質問票を作る処理は、本ガイドの Step 1.1 / 1.2 に含まれます
+- 生成した目録をもとに質問票を作る処理は、本ガイドの Step 1.1 / 1.2 に含まれます。**ただし Step 1.1 / 1.2 は既定選択に含まれず、必要時だけ明示選択します。**
 - `knowledge/` への統合は [km-guide.md](./km-guide.md) を参照
 - 取り込みが済んだら、標準の進行順（要求定義）は [01-business-requirement.md](./01-business-requirement.md) を参照
 
@@ -130,6 +130,8 @@ flowchart LR
 
 Step 1.1 の21子は同一waveで並列実行され、全件完了後にStep 1.2がjoinします。
 Step 5.1 / 5.2 / 5.3 は書き込み先が重ならないため**並列実行**されます。
+CLI / GUI / Prompt で Step を省略した既定実行では、`selected_by_default=False` の Step 1.1 / 1.2 は選択されません。
+既定選択は Step 1 / 2 / 3 / 4 / 5.1 / 5.2 / 5.3 です。
 
 ### トリアージの判定ラベル
 
@@ -157,7 +159,7 @@ Step 5.1 / 5.2 / 5.3 は書き込み先が重ならないため**並列実行**�
 
 - `python -m hve ingest-docs` が終了コード 0 で完了している
 - `docs/catalog/design-doc-inventory.md` が生成されている（第 1 列が `doc_id`）
-- `qa/D01〜D21-docs-original-questionnaire.md` の21ファイルと `qa/docs-original-cross-questionnaire.md` が生成されている
+- Step 1.1 / 1.2 を選択した場合は、`qa/D01〜D21-docs-original-questionnaire.md` の21ファイルと `qa/docs-original-cross-questionnaire.md` が生成されている
 - 質問が0件の質問票は、サマリーに `総質問数: 0` と `質問なし` の両方がある
 - Step 5.x の反映先 5 ファイルに `## 設計書由来の候補（ADI）` セクションがある（0 件の場合も `なし` と明記）
 - 候補行に出典 `doc_id` があり、採番済み ID が含まれていない
@@ -168,10 +170,10 @@ Step 5.1 / 5.2 / 5.3 は書き込み先が重ならないため**並列実行**�
 | 軸 | 内容 |
 |---|---|
 | **前提** | `docs-original/` に 1 件以上のファイルがあること。PDF / Office を扱う場合は `pip install -e .[gui-docconvert]` が済んでいること。GitHub Copilot が有効なこと |
-| **操作** | CLI: `python -m hve orchestrate --workflow adi --purpose "<目的>"`。GUI: Step 1 で `adi`（**既存ドキュメントのインポート** カテゴリ）を選び、Step 2 の「ADI 固有」枠に目的を入力する。**Cloud（Issue Template）経路は未対応** |
+| **操作** | CLI: `python -m hve orchestrate --workflow adi --purpose "<目的>"`。GUI: Step 1 で `adi`（**既存ドキュメントのインポート** カテゴリ）を選び、Step 2 の「ADI 固有」枠に目的を入力する。Step を省略した既定実行では 1.1 / 1.2 は含まれません。**Cloud（Issue Template）経路は未対応** |
 | **入力** | `purpose`（任意）/ `target_scope`（既定 `docs-original/`）/ `depth`（`standard` / `lightweight`）/ `focus_areas`（任意）/ `docs-original/` 配下の原本（読み取り専用） |
-| **出力** | 上記「出力」のファイル群（`index.json` / `content.md` / 原本質問票22ファイル / `card.md` / 目録 / カタログ / ルーティング表） |
-| **完了確認** | `qa/docs-original-cross-questionnaire.md` とD01〜D21の21質問票がそろい、`docs/catalog/design-doc-routing.md` まで生成されていること。`design-doc-catalog.md` の件数サマリ（must / should / may / out / excluded）の合計が目録の総数と一致していること。`git status` で `docs-original/` に変更が無いこと |
+| **出力** | 上記「出力」のファイル群（`index.json` / `content.md` / `card.md` / 目録 / カタログ / ルーティング表、および Step 1.1 / 1.2 を選択した場合の原本質問票22ファイル） |
+| **完了確認** | 既定実行では `docs/catalog/design-doc-routing.md` まで生成されていること。Step 1.1 / 1.2 を選択した場合は、追加で `qa/docs-original-cross-questionnaire.md` と D01〜D21 の21質問票がそろっていること。`design-doc-catalog.md` の件数サマリ（must / should / may / out / excluded）の合計が目録の総数と一致していること。`git status` で `docs-original/` に変更が無いこと |
 | **失敗時対応** | まず `python -m hve ingest-docs` を単体で実行して前処理だけを切り分ける（Agent を起動しないので安価）。除外・変換失敗は下記「セットアップ・トラブルシューティング」を参照。共通の切り分けは [troubleshooting.md](./troubleshooting.md) |
 
 > `docs-original/` は**読み取り専用**です。ADI は読むだけで変更しません（CI ジョブ `check-docs-original` が変更を拒否します）。
@@ -214,7 +216,8 @@ python -m hve ingest-docs --source-dir docs-original --out-dir docs/original-des
 
 1. Step 1 でワークフロー `adi`（**既存ドキュメントのインポート** カテゴリ）を選択します。
 2. Step 1右ペインの「ADI 固有」枠で **選別の目的** / **対象設計書フォルダ** / **分析の深さ** / **分析の観点** を設定します。
-3. 実行します。
+3. 必要に応じて Step 1.1 / 1.2 を追加選択します（既定は OFF）。
+4. 実行します。
 
 ## `adi` と `akm` の関係
 
@@ -338,5 +341,4 @@ pip install -e .[gui-docconvert]
 - 変換は `markitdown` の `convert_local()` のみを使用します（URL / ストリーム経路は使いません）。
   なお PDF や Office のテキスト抽出はローカルで完結しますが、**Agent が `content.md` を読む時点で内容は Copilot へ送信されます**。
   機密資料を扱う場合はこの点を確認してください。
-- 派生物は `docs/` 配下に置かれるため、**`--self-improve-target-scope "*"` の走査対象に含まれます**（`hve/config.py` の `SELF_IMPROVE_WILDCARD_PATHS` に `docs` が含まれるため）。原本の件数が多い場合は `*` ではなく具体的なパスを指定してください。
 - 同じ理由で、ADI 実行後は `docs/` 配下のファイル数が原本の件数分だけ増えます。`docs/` は `.gitignore` 対象外のため、コミットすると差分が大きくなります。

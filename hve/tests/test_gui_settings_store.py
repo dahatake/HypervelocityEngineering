@@ -7,6 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from hve.config import DEFAULT_MODEL
 from hve.gui import settings_store
 
 
@@ -15,7 +16,7 @@ class TestSettingsStore(unittest.TestCase):
         with TemporaryDirectory() as d:
             with patch.object(settings_store, "_SETTINGS_PATH", Path(d) / ".settings.txt"):
                 loaded = settings_store.load()
-                self.assertEqual(loaded["options"]["model"], "Auto")
+                self.assertEqual(loaded["options"]["model"], DEFAULT_MODEL)
                 self.assertEqual(loaded["options"]["max_parallel"], 15)
 
     def test_save_then_load_roundtrip(self) -> None:
@@ -41,7 +42,7 @@ class TestSettingsStore(unittest.TestCase):
             p.write_text("[[[broken", encoding="utf-8")
             with patch.object(settings_store, "_SETTINGS_PATH", p):
                 loaded = settings_store.load()
-                self.assertEqual(loaded["options"]["model"], "Auto")
+                self.assertEqual(loaded["options"]["model"], DEFAULT_MODEL)
 
     def test_theme_default_is_light(self) -> None:
         d = settings_store.defaults()

@@ -33,7 +33,7 @@ TDD テスト仕様書を根拠に、データフローアプリの失敗する�
 
 ## 完了条件
 - テストコードが作成され、`pytest` で失敗（TDD RED）が確認されている
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 - 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - 必須ラベル: `Schema-Version`, `Evidence-Status`, `TDD-Judgement`, `Secret-Redaction`, `Test-Files-Changed`
 - `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とする。

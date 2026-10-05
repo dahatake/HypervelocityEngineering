@@ -9,15 +9,7 @@ Azure AI Foundry Agent Service への AI Agent デプロイ・CI/CD 構築専用
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 - `azure-cli-deploy-scripts`：Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
@@ -28,13 +20,9 @@ Azure AI Foundry Agent Service への AI Agent デプロイ・CI/CD 構築専用
 - `agentic-retrieval-contract`：Foundry IQ / Azure AI Search Agentic Retrieval を選択した場合に、AR-CAP-01〜05 の設計値と実 knowledge base 設定の一致を検証する。
 - `foundry-toolbox-contract`：詳細設計に TB-CAP-01〜05 がある場合に、実 Toolbox の tool search / pin / limit / version が設計値と一致することを検証する。
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードに加え、Microsoft 365 / Work IQ MCP / Fabric IQ / Azure AI Search / Foundry IQ / Web IQ / Foundry Agent Service の接続・認証・権限・availabilityを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項 / 確認日** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
-
-### Microsoft Foundry required meta skill workflow（必須）
+### Microsoft Foundry required meta skill workflow
 
 - AAGD Step.3 は Foundry-required Step である。session で公開済みの `microsoft-foundry` meta skillを必ず最初に読む。以後はその指示に従う。
 1. deployを開始する前に、repository-pinned Azure MCP の利用可能な Foundry関連toolを最初に発見する。server名・tool名を推測しない。MCP server を新規追加・接続構成変更しない。既に接続済みの official MCP だけを discovery 対象とする。
@@ -98,10 +86,9 @@ A) スクリプト作成（prep + create + verify）
   → D) デプロイテスト仕様書生成
 → E) 進捗ログ（随時更新）
 → AC 検証（全ステップ完了後）
-→ 最終品質レビュー（AC 検証完了後）
 ```
 
-## A-pre) Pre-flight（必須）
+## A-pre) Pre-flight
 以下を順に実行し、すべて成功した場合のみ A-cap-plan に進む。いずれか失敗時は `{WORK}completion-report.md` に `<!-- fatal: pre-flight-failed: {理由} -->` を記載し、非ゼロ exit で Step を fail させる（`NEEDS-VERIFICATION` で逃げることは**禁止**）。
 - `command -v az` / `az account show -o tsv`
 - `command -v gh` / `gh auth status`
@@ -248,7 +235,7 @@ Toolbox は managed resource であり、Agent コードを変えずに Tool の
 - GitHub Actions が実行中に取得するaccess token、deployment token、connection secret等は、取得直後かつ他のcommandへ渡す前に `echo "::add-mask::${VALUE}"` でmaskする。値をecho、artifact、step output、job summaryへ出力しない。GitHub Secretsの既定maskだけを、動的取得値の保護として代用しない。
 - **デプロイ保護**: `environment: production` を設定し、承認を要求（推奨）
 
-# 8) AC 検証（必須）
+# 8) AC 検証
 
 > AC 検証結果の記録は `azure-ac-verification` Skill §1 のテンプレートに従う。完了判定は §2 の統一ステータス名（PASS / NEEDS-VERIFICATION / FAIL）に従う。Azure リソース存在確認は §3 のパターンに従う。Azure CLI 利用不可時は §4 に従う。
 
@@ -267,7 +254,7 @@ Toolbox は managed resource であり、Agent コードを変えずに Tool の
 | AC-9 | Key Vault Secret 依存がある場合、期限検出が実装されている（依存なしは N/A） | `verify-agent-resources.sh` から `src/infra/azure/verify-secrets-expiry.sh` を呼び出し、`SECRET_EXPIRY_WARN_DAYS` 未満は警告、期限切れは FAIL として扱う |
 | AC-10 | verify 項目と TestSpec が AC-ID ↔ Test-ID で双方向に追跡できる | TestSpec の AC-ID 列付きマトリクスと逆引き表（`docs/templates/traceability-matrix-template.md` 準拠）を確認 |
 
-## `ac-verification.md` のフォーマット要件（必須）
+## `ac-verification.md` のフォーマット要件
 
 - 各 AC は 1 行 1 AC のテーブル行で記録（例: `| AC-1 | Azure AI Foundry プロジェクト存在 | ✅ | <verify GREEN ログ抜粋> |`）
 - 状態欄: `✅` / `❌` / `⏳`。実在系 **AC-1 / AC-2 / AC-3 は `✅` のみ許容**（`❌` / `⏳ NEEDS-VERIFICATION` のまま完了は Orchestrator gate で fail に降格）。
@@ -302,11 +289,11 @@ Toolbox は managed resource であり、Agent コードを変えずに Tool の
 - `docs/test-specs/deploy-step2-agent-test-spec.md` が作成されている。
 - 作業ログと README が更新されている。
 
-# 13) 最終品質レビュー（単回インライン・セルフチェック）
+# 13) 受入観点（完了条件の補足）
 
-## 13.1 セルフチェック契約
+## 13.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ## 13.2 ドメイン固有観点
 - **デプロイ完全性・AC 達成度**：実在系AC-1/2/3を含む全AC、Agent endpoint、代表query、CI/CD、選択providerのpre-flight/smoke/inventory差分が実証済みか
@@ -314,7 +301,7 @@ Toolbox は managed resource であり、Agent コードを変えずに Tool の
 - **運用性・保守性**：verifyが全ACと選択routeをカバーし、rollback正本の4必須セクション、NFR/secret期限、AC↔Testトレーサビリティ、有限retryとblocked報告が最新か
 
 ## 13.3 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 > **ロールバック手順の正本**: デプロイ失敗時のロールバック手順詳細は [`src/infra/azure/rollback/agent-foundry-rollback.md`](../../src/infra/azure/rollback/agent-foundry-rollback.md) を参照。
 > 本セクション（§13）は正本 README へのリンクとサマリとして機能する。新規サービス/リソース追加時は正本 README も更新すること。

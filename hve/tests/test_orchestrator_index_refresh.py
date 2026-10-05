@@ -140,7 +140,7 @@ class TestEntryCommands(unittest.TestCase):
         from hve.__main__ import INDEX_REFRESH_COMMANDS
 
         for command in ("gui", "login", "pricing", "toolsearch",
-                        "qa-merge", "workiq-doctor", "emit-prompt", "ingest-docs"):
+                        "qa-merge", "emit-prompt", "ingest-docs"):
             self.assertNotIn(command, INDEX_REFRESH_COMMANDS)
 
     def test_default_gui_launch_is_left_to_the_gui(self) -> None:

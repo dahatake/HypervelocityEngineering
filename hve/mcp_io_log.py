@@ -3,7 +3,7 @@
 Copilot SDK セッションで観測した MCP の入出力を、表示用の切り詰めを行わずに
 `work/run/<run-id>/mcp-<サーバー名>.log` へ全文で追記する。実行時 Observability
 （`hve/runtime_observability.py`）とは別チャネルであり、FR-RTO-04 の allowlist は
-適用しない。認証情報のマスクは `hve/workiq.py` の既存実装へ委譲する（FR-MAINT-07）。
+適用しない。認証情報のマスクは `hve/security.py` の共通実装へ委譲する（FR-MAINT-07）。
 """
 
 from __future__ import annotations
@@ -22,15 +22,11 @@ except ImportError:  # pragma: no cover - script 実行経路
     import runtime_observability as _rto  # type: ignore[no-redef]
 
 try:
-    from .workiq import (
-        _sanitize_diagnostic_text as _sanitize,
-        extract_tool_metadata_from_event,
-    )
+    from .security import sanitize_diagnostic_text as _sanitize
+    from .workiq import extract_tool_metadata_from_event
 except ImportError:  # pragma: no cover - script 実行経路
-    from workiq import (  # type: ignore[no-redef]
-        _sanitize_diagnostic_text as _sanitize,
-        extract_tool_metadata_from_event,
-    )
+    from security import sanitize_diagnostic_text as _sanitize  # type: ignore[no-redef]
+    from workiq import extract_tool_metadata_from_event  # type: ignore[no-redef]
 
 DEFAULT_MAX_BYTES = 32 * 1024 * 1024
 
@@ -58,6 +54,64 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+class McpToolCallCorrelator:
+    """call IDでMCP tool開始と完了を相関する、I/O非依存の状態保持器。"""
+
+    def __init__(self) -> None:
+        self._pending: Dict[Tuple[str, str], Tuple[str, str]] = {}
+        self._ambiguous: set[Tuple[str, str]] = set()
+        self._lock = threading.Lock()
+
+    def register(
+        self,
+        server: str,
+        tool: str,
+        *,
+        tool_call_id: object,
+        scope: str = "",
+    ) -> bool:
+        if (
+            type(tool_call_id) is not str
+            or not tool_call_id
+            or tool_call_id != tool_call_id.strip()
+        ):
+            return False
+        call_id = tool_call_id
+        key = (scope, call_id)
+        with self._lock:
+            if key in self._pending or key in self._ambiguous:
+                self._pending.pop(key, None)
+                self._ambiguous.add(key)
+                return False
+            self._pending[key] = (str(server), str(tool or ""))
+        return True
+
+    def pop(
+        self,
+        *,
+        tool_call_id: object,
+        scope: str = "",
+    ) -> Optional[Tuple[str, str]]:
+        if (
+            type(tool_call_id) is not str
+            or not tool_call_id
+            or tool_call_id != tool_call_id.strip()
+        ):
+            return None
+        call_id = tool_call_id
+        key = (scope, call_id)
+        with self._lock:
+            if key in self._ambiguous:
+                self._pending.pop(key, None)
+                return None
+            return self._pending.pop(key, None)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._pending.clear()
+            self._ambiguous.clear()
+
+
 class McpIoLogger:
     """MCP サーバーごとの追記ロガー。書き込み失敗を実行へ波及させない。"""
 
@@ -78,8 +132,7 @@ class McpIoLogger:
         self._paths: Dict[str, Path] = {}
         self._written: Dict[str, int] = {}
         self._capped: set[str] = set()
-        # (step_id, tool_call_id) -> (server, tool)。完了イベントの帰属に使う。
-        self._pending: Dict[Tuple[str, str], Tuple[str, str]] = {}
+        self._correlator = McpToolCallCorrelator()
         self._closed = False
         self._enabled = work_root is not None and not dry_run
         self._pid_suffix = _rto.is_child_process()
@@ -112,12 +165,48 @@ class McpIoLogger:
 
     # -- 記録 -----------------------------------------------------------
 
+    def handle_event(self, event: Any, *, step_id: str = "") -> None:
+        """SDK イベントを記録し、ログ処理の失敗を実行へ波及させない。"""
+        if not self.enabled:
+            return
+        try:
+            _record_event(self, event, step_id=step_id)
+        except Exception:
+            return
+
+    def observe_tool_start(
+        self,
+        server: str,
+        tool: str,
+        *,
+        tool_call_id: object,
+        step_id: str = "",
+        arguments: Any = None,
+    ) -> bool:
+        """全tool開始を相関し、MCP requestだけをログへ書き込む。"""
+        if server:
+            return self.record_tool_request(
+                server,
+                tool,
+                tool_call_id=tool_call_id,
+                step_id=step_id,
+                arguments=arguments,
+            )
+        if not self.enabled:
+            return False
+        return self._correlator.register(
+            "",
+            tool,
+            tool_call_id=tool_call_id,
+            scope=step_id or "",
+        )
+
     def record_tool_request(
         self,
         server: str,
         tool: str,
         *,
-        tool_call_id: str,
+        tool_call_id: object,
         step_id: str = "",
         arguments: Any = None,
     ) -> bool:
@@ -127,42 +216,45 @@ class McpIoLogger:
             [("tool", tool), ("call_id", tool_call_id), ("step", step_id)],
             _format_arguments(arguments),
         )
-        if written and tool_call_id:
-            with self._lock:
-                self._pending[(step_id or "", str(tool_call_id))] = (
-                    str(server),
-                    str(tool or ""),
-                )
+        if written:
+            self._correlator.register(
+                server,
+                tool,
+                tool_call_id=tool_call_id,
+                scope=step_id or "",
+            )
         return written
 
     def record_tool_response(
         self,
         *,
-        tool_call_id: str,
+        tool_call_id: object,
         success: bool,
         content: str = "",
         error: str = "",
         step_id: str = "",
     ) -> bool:
-        with self._lock:
-            correlated = self._pending.pop(
-                (step_id or "", str(tool_call_id or "")), None
-            )
-        if correlated is None:
+        correlated = self._correlator.pop(
+            tool_call_id=tool_call_id,
+            scope=step_id or "",
+        )
+        if correlated is None or not correlated[0]:
             # SDK の完了イベントは MCP サーバー名を持たないため、相関できない完了は
-            # MCP 由来か組み込みツール由来かを判別できない（FR-MCPLOG-01）。
+            # MCP 由来か組み込みツール由来かを判別できない。組み込みtoolとして
+            # 相関できた完了もMCPログの対象外とする（FR-MCPLOG-01）。
             return False
         server, tool = correlated
+        confirmed_success = success is True
         return self._write(
             server,
             _RECORD_MCP_RESPONSE,
             [
                 ("tool", tool),
                 ("call_id", tool_call_id),
-                ("success", "true" if success else "false"),
+                ("success", "true" if confirmed_success else "false"),
                 ("step", step_id),
             ],
-            content if success else (error or content),
+            content if confirmed_success else (error or content),
         )
 
     def record_server_status(
@@ -202,6 +294,7 @@ class McpIoLogger:
         )
 
     def close(self) -> None:
+        self._correlator.clear()
         with self._lock:
             self._closed = True
             handles = list(self._handles.values())
@@ -337,7 +430,7 @@ def attach_mcp_io_event_logger(
 
     def _handler(event: Any) -> None:
         try:
-            _record_event(logger, event, step_id=step_id)
+            logger.handle_event(event, step_id=step_id)
         except Exception:
             return
 
@@ -351,13 +444,13 @@ def _record_event(logger: McpIoLogger, event: Any, *, step_id: str) -> None:
     etype = _event_type(event)
     if etype == "tool.execution_start":
         metadata = extract_tool_metadata_from_event(event)
-        if metadata is None or not metadata.mcp_server_name:
+        if metadata is None:
             return
         data = _event_data(event)
-        logger.record_tool_request(
-            metadata.mcp_server_name,
+        logger.observe_tool_start(
+            metadata.mcp_server_name or "",
             metadata.tool_name or "",
-            tool_call_id=_text(data, "tool_call_id", "toolCallId"),
+            tool_call_id=_value(data, "tool_call_id", "toolCallId"),
             step_id=step_id,
             arguments=_value(data, "arguments"),
         )
@@ -366,8 +459,8 @@ def _record_event(logger: McpIoLogger, event: Any, *, step_id: str) -> None:
     if etype == "tool.execution_complete":
         data = _event_data(event)
         logger.record_tool_response(
-            tool_call_id=_text(data, "tool_call_id", "toolCallId"),
-            success=bool(_value(data, "success")),
+            tool_call_id=_value(data, "tool_call_id", "toolCallId"),
+            success=_value(data, "success") is True,
             content=_text(_value(data, "result"), "content"),
             error=_error_message(_value(data, "error")),
             step_id=step_id,
@@ -438,6 +531,7 @@ def _error_message(error: Any) -> str:
 __all__ = [
     "DEFAULT_MAX_BYTES",
     "McpIoLogger",
+    "McpToolCallCorrelator",
     "attach_mcp_io_event_logger",
     "sanitize_server_name",
 ]

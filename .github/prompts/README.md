@@ -1,6 +1,8 @@
 # `.github/prompts/`
 
-HVE がモデル / Copilot Coding Agent / Copilot SDK へ送る固定 Prompt 本文の単一正本（FR-PROMPT-SRC-01）。
+HVE loader がモデル / Copilot Coding Agent / Copilot SDK へ送る固定 Prompt 本文の単一正本（FR-PROMPT-SRC-01）。
+ここに置く Prompt は HVE が安全に読む plain Markdown であり、VS Code Copilot Chat の slash prompt や
+migration メモとは区別する。VS Code 固有の frontmatter / include / migration 指示を HVE loader 対象の本文へ混在させない。
 Python / Workflow / shell / PowerShell は Prompt の選択・安全な読込・動的値の差し込みだけを担う。
 
 ## レイアウト
@@ -10,7 +12,7 @@ Python / Workflow / shell / PowerShell は Prompt の選択・安全な読込・
 | `<AgentName>.prompt.md` | Agent 本文（flat。`load_prompt(agent_name)` 互換のため階層化しない） |
 | `steps/<workflow>/step-<id>.prompt.md` | registry が参照する active Step body |
 | `fanout/<workflow>/*.prompt.md` | fan-out 子 Step へ注入する追加本文 |
-| `runtime/**` | QA / Review / Self-Improve / Work IQ / orchestrator / runner / GUI 等の内部 Prompt |
+| `runtime/**` | QA / Review / 知識探索 / orchestrator / runner / GUI 等の内部 Prompt |
 | `cloud/*.prompt.md` | Workflow から `@copilot` へ投稿する固定実行指示 |
 
 ## ファイル形式
@@ -19,6 +21,13 @@ Python / Workflow / shell / PowerShell は Prompt の選択・安全な読込・
   （既存の flat Agent Prompt には BOM 付きファイルが残っており、本規定はそれらの一斉変換を要求しない）
 - ファイル名は `.prompt.md` で終わること（loader が強制）。
 - placeholder 記法は呼出し側の既存契約を維持する（Step body は `{name}`、fan-out は `{{key}}`）。
+- HVE loader の契約として `include` / `@include` / nested prompt import の新 API は導入しない。
+
+## 本文の書き方
+
+- 先頭から **目的 / 対象 / 入力 / 出力 / 境界 / 完了証拠** が追える構成を優先する。
+- 共通計画 metadata は本文へ固定一覧として複写しない。必要な Prompt では計画作成ルールを本文へ複写しない。
+- validator や下流 parser が参照する fixed schema（見出し、表、field 名、順序）は保持する。ASDW 系で intentional duplicate / preserve として残す本文は、共通化・削除・要約で崩さない。
 
 ## 利用箇所
 

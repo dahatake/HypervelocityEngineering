@@ -124,6 +124,16 @@ def _load_workflow_steps(wf_id: str) -> List[Tuple[str, str, List[str]]]:
         return []
 
 
+def _load_default_step_ids(wf_id: str) -> Tuple[str, ...]:
+    """registry の既定の選択（空 = 全 Step 既定）。取得不能時は全 Step を既定にする。"""
+    try:
+        from hve.workflow_registry import default_step_ids
+
+        return tuple(default_step_ids(wf_id))
+    except Exception:
+        return ()
+
+
 def _load_ard_default_group_ids() -> Optional[Tuple[str, ...]]:
     """ARD既定グループをregistryから取得する。取得不能時は縮退表示用にNoneを返す。"""
     try:
@@ -193,7 +203,10 @@ class _WorkflowStepsGroup(QWidget):
             }
         else:
             self._steps = steps  # (id, title, depends_on)
-            self._default_on = {sid: True for sid, _, _ in steps}
+            defaults = _load_default_step_ids(workflow_id)
+            self._default_on = {
+                sid: (not defaults or sid in defaults) for sid, _, _ in steps
+            }
         self._checkboxes: Dict[str, QCheckBox] = {}
         self._cloud_override_combos: Dict[str, QComboBox] = {}
         # ARD の旧 hidden ステップ（"1.1" 選択時に Step "1" を自動付与）仕様は撤廃。

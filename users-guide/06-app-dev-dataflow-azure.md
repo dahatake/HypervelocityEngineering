@@ -2,10 +2,17 @@
 
 ← [README](../README.md)
 
-> ⚠️ **移行ノート（AAS 共通化対応）**: 本ワークフロー（ADFDV）の上流である ADFD（Architecture Design - Dataflow）は、旧 9 ステップ構成から **Step.1〜3（per-job 詳細・監視・テスト仕様）の 3 ステップのみ**へ再設計され、共通カタログは AAS が `docs/catalog/*` として SoT を提供します。
-> - 旧 `docs/dataflow/dataflow-domain-analytics.md` / `dataflow-data-source-analysis.md` / `dataflow-data-model.md` / `dataflow-app-catalog.md` / `dataflow-service-catalog.md` / `dataflow-test-strategy.md` の生成は廃止されました。
-> - ADFDV ワークフローは現状これらを依存に持つ記述が残っています（`hve/workflow_registry.py` の `adfdv` 依存定義を含む）。AAS の `docs/catalog/*` を参照する形への追従修正は別タスクで実施予定です（[CHANGELOG](../CHANGELOG.md) の Known Issues 参照）。
-> - 以下の表中の `docs/dataflow/dataflow-*.md` への参照は、現時点では追従未完了のため旧記述のままです。
+> [!IMPORTANT]
+> 本文の Step ID・依存・入出力は、現行 [`hve/workflow_registry.py`](../hve/workflow_registry.py) の
+> `ADFDV` 定義を正本とします。ADFDV は `1.1` / `1.2` / `2.1` / `2.2` / `3` / `4.1` / `4.2` / `4.3`
+> の **8 Step** で、Step `4.3`（要件適合実測）までが現行完了条件です。
+>
+> - 上流の ADFD は現行 7 Step で、`docs/dataflow/dataflow-data-model.md`、`dataflow-app-catalog.md`、
+>   `dataflow-service-catalog.md`、`dataflow-test-strategy.md`、`apps/{APP-ID}-spec.md`、
+>   `dataflow-monitoring-design.md`、`docs/test-specs/{APP-ID}-test-spec.md` を生成します。
+> - Cloud の Issue Form は Step.1〜4 の**グループ**で選択させますが、実際の実行単位は registry の
+>   `1.1`〜`4.3` です。
+> - `jobId` / `jobNameSlug` を含む旧表記が Prompt や成果物例に残る箇所がありますが、registry の fan-out キーは APP-ID です。
 
 ---
 
@@ -61,18 +68,19 @@
 
 | ファイル | 作成元ワークフロー | 用途 |
 |---|---|---|
-| `docs/catalog/use-case-catalog.md` | 手動作成（PM / 要件定義） | Step.1.1 / Step.1.2 の入力 |
-| `docs/dataflow/dataflow-domain-analytics.md` | Step.1.1: `Arch-Dataflow-DomainAnalytics` | Step.2 以降の入力 |
-| `docs/dataflow/dataflow-data-source-analysis.md` | Step.1.2: `Arch-Dataflow-DataSourceAnalysis` | Step.2 以降の入力 |
-| `docs/dataflow/dataflow-data-model.md` | Step.2: `Arch-Dataflow-DataModel` | Step.3 以降の入力 |
-| `docs/dataflow/dataflow-app-catalog.md` | Step.3: `Arch-Dataflow-AppCatalog` | Step.4 以降の入力 |
-| `docs/dataflow/dataflow-service-catalog.md` | Step.4: `Arch-Dataflow-ServiceCatalog` | Step.4.5・Step.5.1/5.2 の入力 |
-| `docs/dataflow/dataflow-test-strategy.md` | Step.4.5: `Arch-Dataflow-TestStrategy` | Step.5.3 の入力 |
+| `docs/catalog/app-catalog.md` | AAS / ARD | APP スコープ解決、Step 4.1 / 4.2 の入力 |
+| `docs/catalog/service-catalog-matrix.md` | AAS | Step 4.1 / 4.2 の入力 |
+| `docs/catalog/use-case-catalog.md` | ARD | Step 4.1 の入力 |
+| `docs/dataflow/dataflow-data-model.md` | ADFD Step `0.1` | Step 2.1 / 2.2 の入力 |
+| `docs/dataflow/dataflow-app-catalog.md` | ADFD Step `0.2` | Step 1.1 / 1.2 / 2.2 / 3 / 4.3 の入力 |
+| `docs/dataflow/dataflow-service-catalog.md` | ADFD Step `4` | Step 1.1 / 1.2 / 2.1 / 2.2 / 3 の入力 |
+| `docs/dataflow/dataflow-test-strategy.md` | ADFD Step `5` | Step 2.1 の入力 |
+| `docs/dataflow/apps/{APP-ID}-spec.md` | ADFD Step `1` | Step 1.1 / 1.2 / 2.1 / 2.2 / 3 の入力 |
+| `docs/dataflow/dataflow-monitoring-design.md` | ADFD Step `2` | Step 1.1 / 1.2 / 2.2 / 3 の入力 |
+| `docs/test-specs/{APP-ID}-test-spec.md` | ADFD Step `3` | Step 2.1 / 2.2 の入力 |
 
 > ❗ 上記ファイルがまだ存在しない場合は、先に「設計フェーズ」チュートリアルを完了してください。  
 > → 参照: [`users-guide/04-app-design-dataflow.md`](./04-app-design-dataflow.md)
->
-> AAS 共通化への追従が完了するまでは、ADFDV の `required_input_paths` が旧パスを要求します。該当ファイルがない場合は、入力を推測で作成せず、前段の設計成果物と `hve/workflow_registry.py` の `adfdv` 定義を確認して blocked としてください。
 
 セットアップ・トラブルシューティングは → [Cloud](./hve-cloud-getting-started.md) / [CLI](./hve-cli-getting-started.md) / [GUI](./hve-gui-getting-started.md)
 
@@ -83,7 +91,7 @@
 以下の図は、このワークフローで使用される Prompt がファイルの入出力を介してどのように連鎖するかを示します。
 
 
-![ADFDV: Dev-Dataflow-DataServiceSelect → QA-AzureDependencyReview の7ステップチェーン（並列1箇所含む）](./images/chain-adfdv.svg)
+![ADFDV: Dev-Dataflow-DataServiceSelect から QA-RequirementsConformanceEval までの 8 Step チェーン（4.1 / 4.2 並列、4.3 合流）](./images/chain-adfdv.svg)
 
 
 ## 全体フロー概観
@@ -135,14 +143,9 @@ step-1.1 ──► step-1.2 ──► step-2.1 ──► step-2.2 ──► step
 | QA 用モデル | 実行前 QA 用モデル（任意） | `Auto` |
 | レビュー設定 | セルフレビュー（auto-context-review）有効化（任意） | チェックなし（デフォルト） |
 | 質問票設定 | 実行前 QA 質問票の有効化（任意） | チェックなし（デフォルト） |
-| 自己改善ループ設定 | 全 Step 完了後の自動改善有効化（任意） | チェックなし（デフォルト） |
-| 自己改善 最大イテレーション数 | 自己改善ループの最大繰り返し回数（任意） | `3` |
-| 自己改善 品質スコア目標値 | 改善完了とみなす品質スコア（任意） | `80（標準）` |
 | TDD GREEN リトライ最大回数 | TDD GREEN フェーズの再試行上限（任意） | `5` |
 | PR 完全自動化設定 | Approve & Auto-merge 有効化（任意・注意要） | チェックなし（デフォルト） |
 | 追加コメント | データソース・スケジュール・Azure サービス等の補足（任意） | `S3互換ストレージから日次バッチ` |
-
-> **自己改善の完了条件**: ADFDV の自己改善ループは、品質スコア目標値に加えて **テストカバレッジ 70% 以上** を完了条件として判定します（FR-CLI-65）。テストが 1 件も実行されなかった場合はカバレッジを測定できないため、未達（失敗）ではなく `blocked` として停止します。
 
 ### 1-3. Issue を Submit する
 
@@ -166,12 +169,12 @@ Bootstrap ジョブが完了すると、以下が自動で行われます。
 
 ```
 親 Issue のコメント:
-  ✅ Sub Issue 一覧 (step-1.1 〜 step-4.2)
+  ✅ Sub Issue 一覧 (step-1.1 〜 step-4.3)
   ✅ step-1.1 に Copilot アサイン済み
 
 Sub Issue の状態:
   step-1.1: adfdv:running ラベル付き / Copilot アサイン済み
-  step-1.2〜step-4.2: ラベルなし（依存先の完了待ち）
+  step-1.2〜step-4.3: ラベルなし（依存先の完了待ち）
 ```
 
 > 💡 Sub Issue が作成されない場合は [よくある失敗例と対処法](#よくある失敗例と対処法) を参照してください。
@@ -186,21 +189,23 @@ Sub Issue の状態:
 
 | Step | Prompt | 入力ファイル | 成果物 |
 |---|---|---|---|
-| step-1.1 | [`Dev-Dataflow-DataServiceSelect`](../.github/prompts/Dev-Dataflow-DataServiceSelect.prompt.md) | `docs/dataflow/dataflow-service-catalog.md`, `docs/dataflow/dataflow-app-catalog.md` | `src/infra/azure/dataflow/create-batch-resources.sh`, `src/infra/azure/dataflow/verify-batch-resources.sh` |
-| step-1.2 | [`Dev-Dataflow-DataDeploy`](../.github/prompts/Dev-Dataflow-DataDeploy.prompt.md) | `docs/dataflow/dataflow-service-catalog.md`, `docs/dataflow/dataflow-app-catalog.md`, `src/infra/azure/dataflow/create-batch-resources.sh`, `src/infra/azure/dataflow/verify-batch-resources.sh` | Azure データリソース実行ログ・検証結果（`work/` 配下） |
-| step-2.1 | [`Dev-Dataflow-TestCoding`](../.github/prompts/Dev-Dataflow-TestCoding.prompt.md) | `docs/test-specs/{jobId}-test-spec.md` | `src/test/dataflow/{jobId}-{jobNameSlug}.Tests/` |
-| step-2.2 | [`Dev-Dataflow-ServiceCoding`](../.github/prompts/Dev-Dataflow-ServiceCoding.prompt.md) | `docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md`, step-2.1 成果物 | `src/dataflow/` 実装コード |
+| step-1.1 | [`Dev-Dataflow-DataServiceSelect`](../.github/prompts/Dev-Dataflow-DataServiceSelect.prompt.md) | `docs/dataflow/apps/{APP-ID}-spec.md`, `docs/dataflow/dataflow-app-catalog.md`, `docs/dataflow/dataflow-monitoring-design.md`, `docs/dataflow/dataflow-service-catalog.md` | `src/infra/azure/dataflow/create-batch-resources.sh`, `src/infra/azure/dataflow/verify-batch-resources.sh` |
+| step-1.2 | [`Dev-Dataflow-DataDeploy`](../.github/prompts/Dev-Dataflow-DataDeploy.prompt.md) | Step 1.1 成果物 + 同じ ADFD 成果物 | Azure データリソース実行ログ・検証結果（`work/` 配下） |
+| step-2.1 | [`Dev-Dataflow-TestCoding`](../.github/prompts/Dev-Dataflow-TestCoding.prompt.md) | `docs/dataflow/apps/{APP-ID}-spec.md`, `docs/dataflow/dataflow-data-model.md`, `docs/dataflow/dataflow-service-catalog.md`, `docs/dataflow/dataflow-test-strategy.md`, `docs/test-specs/{APP-ID}-test-spec.md` | `src/test/dataflow/` |
+| step-2.2 | [`Dev-Dataflow-ServiceCoding`](../.github/prompts/Dev-Dataflow-ServiceCoding.prompt.md) | `docs/dataflow/apps/{APP-ID}-spec.md`, `docs/dataflow/dataflow-app-catalog.md`, `docs/dataflow/dataflow-data-model.md`, `docs/dataflow/dataflow-monitoring-design.md`, `docs/dataflow/dataflow-service-catalog.md`, step-2.1 成果物 | `src/dataflow/` 実装コード |
+| step-3 | [`Dev-Dataflow-FunctionsDeploy`](../.github/prompts/Dev-Dataflow-FunctionsDeploy.prompt.md) | `docs/dataflow/apps/{APP-ID}-spec.md`, `docs/dataflow/dataflow-app-catalog.md`, `docs/dataflow/dataflow-monitoring-design.md`, `docs/dataflow/dataflow-service-catalog.md`, `src/dataflow/` | `.github/workflows/deploy-batch-functions.yml`, `src/infra/azure/dataflow/README.md` |
+| step-4.1 | [`QA-AzureArchitectureReview`](../.github/prompts/QA-AzureArchitectureReview.prompt.md) | `docs/azure/azure-services-data.md`, `docs/azure/azure-services-compute.md`, `docs/azure/azure-services-additional.md`, `docs/catalog/app-catalog.md`, `docs/catalog/service-catalog-matrix.md`, `docs/catalog/use-case-catalog.md` | `docs/azure/waf-review.md` |
+| step-4.2 | [`QA-AzureDependencyReview`](../.github/prompts/QA-AzureDependencyReview.prompt.md) | `docs/azure/azure-services-data.md`, `docs/azure/azure-services-compute.md`, `docs/catalog/app-catalog.md`, `docs/catalog/service-catalog-matrix.md`, `src/api/`, `src/app/` | `docs/azure/dependency-review.md` |
+| step-4.3 | [`QA-RequirementsConformanceEval`](../.github/prompts/QA-RequirementsConformanceEval.prompt.md) | step-4.1 / step-4.2 成果物, `docs/dataflow/dataflow-app-catalog.md` | `docs/dataflow/requirements-conformance-report.md` |
 
 > [!NOTE]
 > **実装言語は Python、テストは pytest が既定です**（FR-WF-ADFDV-03）。
 > 選定理由は、データフロー処理の実行基盤として **Apache Spark** / **Microsoft Fabric** / **Databricks** を選択できる言語だからです。Azure Functions も Python ランタイムをサポートします。
 > データ規模に応じて、単一ノードで足りる場合は標準ライブラリ / pandas、分散処理が必要な場合は PySpark を選択し、その根拠を README へ記録します。
-| step-3 | [`Dev-Dataflow-FunctionsDeploy`](../.github/prompts/Dev-Dataflow-FunctionsDeploy.prompt.md) | `src/dataflow/`, `docs/dataflow/dataflow-service-catalog.md`, `docs/dataflow/dataflow-app-catalog.md` | `.github/workflows/deploy-batch-functions.yml`, `src/infra/azure/dataflow/README.md` |
-| step-4.1 | [`QA-AzureArchitectureReview`](../.github/prompts/QA-AzureArchitectureReview.prompt.md) | step-3 成果物, `docs/dataflow/dataflow-service-catalog.md` | `docs/azure/waf-review.md` |
-| step-4.2 | [`QA-AzureDependencyReview`](../.github/prompts/QA-AzureDependencyReview.prompt.md) | step-3 成果物, `docs/dataflow/dataflow-service-catalog.md` | `docs/azure/dependency-review.md` |
-| step-4.3 | [`QA-RequirementsConformanceEval`](../.github/prompts/QA-RequirementsConformanceEval.prompt.md) | step-4.1 / step-4.2 成果物, `docs/dataflow/dataflow-app-catalog.md`, `src/test/dataflow/` | `docs/dataflow/requirements-conformance-report.md` |
 
-各 Step の正本は `hve/workflow_registry.py` の `adfdv` 定義です。表の旧 `docs/dataflow/dataflow-*.md` 入力は移行ノートの制約を受けます。Prompt または表だけを変更して入力・出力を拡張せず、必要な変更は registry・Prompt・I/O 契約・回帰テストを同時に確認してください。
+各 Step の正本は `hve/workflow_registry.py` の `adfdv` 定義です。`jobId` / `jobNameSlug` を含む旧表記は
+Prompt / 実装例として残ることがありますが、Workflow の fan-out キーは APP-ID です。Prompt または表だけを変更して
+入力・出力を拡張せず、必要な変更は registry・Prompt・I/O 契約・回帰テストを同時に確認してください。
 
 ### Prompt を手動でアサインする場合
 
@@ -229,8 +234,8 @@ Prompt が成果物を生成すると、リポジトリに **PR（Pull Request�
 
 □ 前段の設計ドキュメントを正しく参照しているか
 
-□ work/ 配下の plan.md に split_decision が記載されているか
-  → `PROCEED` は単一・小中規模タスクとして続行可能、`SPLIT_REQUIRED` は分割が必要な判定です。後者の場合、実装ファイルが混入していないか確認
+□ TDD / Deploy / QA の実行証跡が、対象 Step の成果物と矛盾していないか
+  → 例: `tests/run/` の TDD レポート、`work/` 配下の deploy / verify ログ、`docs/azure/` / `docs/dataflow/` のレビュー成果物
 ```
 
 ### 4-2. PR の自動チェック
@@ -239,7 +244,7 @@ PR 作成時に以下のワークフローが自動実行されます。
 
 | Workflow | 確認内容 |
 |---|---|
-| [`plan-validation-and-labeling.yml`](../.github/workflows/plan-validation-and-labeling.yml) | `plan.md` の検証（split判定/実装ファイル混入チェック）と split-mode ラベル付与を実行 |
+| [`plan-validation-and-labeling.yml`](../.github/workflows/plan-validation-and-labeling.yml) | `plan.md` / `subissues.md` の構造検証と、計画成果物だけを含む PR のラベル付与を実行 |
 
 > ⚠️ これらの自動チェックが失敗している PR はマージしないでください。
 
@@ -260,7 +265,7 @@ PR がマージされると：
 
 ## ADFDV ワークフローステップ（step-1.1〜step-4.*）の完了を確認する
 
-全 Step（step-1.1 〜 step-4.2）が完了すると：
+全 Step（step-1.1 〜 step-4.3）が完了すると：
 
 1. 親 Issue に **完了通知コメント** が投稿される
 2. 実行した Sub Issue が `adfdv:done` になっていることを確認する
@@ -271,6 +276,7 @@ PR がマージされると：
    - step-2.2: `src/dataflow/` 実装コード
    - step-3: `.github/workflows/deploy-batch-functions.yml`, `src/infra/azure/dataflow/README.md`
    - step-4.1 / step-4.2: `docs/azure/` 配下のレビュー結果
+   - step-4.3: `docs/dataflow/requirements-conformance-report.md`
 
 > 💡 実行ステップを限定していた場合は、未実行ステップを再度 Dataflow Dev Issue で起動して補完できます。
 
@@ -384,14 +390,14 @@ ADFDV 完了後は、必要に応じて運用改善・追加ジョブ実装・�
 
 ---
 
-### ❌ plan.md の split-mode チェックが失敗する
+### ❌ `plan-validation-and-labeling.yml` が失敗する
 
-**原因**: `plan.md` の `split_decision: SPLIT_REQUIRED` と判定されたにもかかわらず、実装ファイルが PR に混入している。
+**原因**: `plan.md` / `subissues.md` の構造不備、または計画成果物だけを含む PR に想定外の実装ファイルが混入している。
 
 **対処**:
-1. PR の差分を確認し、`work/` 配下以外の実装ファイルをコミットから除去する
-2. `plan.md` の `task_scope` と `context_size` が `split_decision` と整合するか確認する（Skill: task-dag-planning 参照）
-3. 必要であれば作業を Sub Issue に分割して再 PR する
+1. Actions ログで失敗した検査名を確認する
+2. `plan.md` / `subissues.md` の見出し・必須項目・完了条件を修正する
+3. 計画専用 PR の場合は、`work/` 配下以外の実装ファイルが混入していないか確認する
 
 ---
 

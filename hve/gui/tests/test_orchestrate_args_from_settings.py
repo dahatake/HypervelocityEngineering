@@ -71,19 +71,11 @@ class TestTriState:
         args = args_from_settings(_settings(cq_watch=raw), workflow="ard")
         assert args.cq_watch is expected
 
-    @pytest.mark.parametrize(("raw", "expected"), [("", False), ("on", True), ("off", False)])
+    # FR-KD-11（v3.42）: 未選択 "" は CLI 既定と同じ有効。
+    @pytest.mark.parametrize(("raw", "expected"), [("", True), ("on", True), ("off", False)])
     def test_auto_qa_is_a_plain_bool_on_args(self, raw, expected):
         args = args_from_settings(_settings(auto_qa=raw), workflow="ard")
         assert args.auto_qa is expected
-
-    @pytest.mark.parametrize(
-        ("raw", "self_improve", "no_self_improve"),
-        [("", False, False), ("on", True, False), ("off", False, True)],
-    )
-    def test_self_improve_tristate_maps_to_two_flags(self, raw, self_improve, no_self_improve):
-        args = args_from_settings(_settings(self_improve=raw), workflow="ard")
-        assert args.self_improve is self_improve
-        assert args.no_self_improve is no_self_improve
 
 
 class TestAkmSources:
@@ -190,38 +182,7 @@ class TestConditionalSettings:
             "has_flag": expected_mode is not None,
         }
 
-    @pytest.mark.parametrize("state", ["", "off"])
-    def test_self_improve_inactive_omits_dependent_settings(self, state):
-        args = args_from_settings(
-            _settings(
-                self_improve=state,
-                self_improve_max_iterations=7,
-                self_improve_target_scope="hve",
-                self_improve_goal="設定面を改善する",
-            ),
-            workflow="aag",
-        )
-
-        argv = args.to_argv()
-        assert {
-            "self_improve": args.self_improve,
-            "max_iterations": args.self_improve_max_iterations,
-            "target_scope": args.self_improve_target_scope,
-            "goal": args.self_improve_goal,
-            "has_max_iterations_flag": "--self-improve-max-iterations" in argv,
-            "has_target_scope_flag": "--self-improve-target-scope" in argv,
-            "has_goal_flag": "--self-improve-goal" in argv,
-        } == {
-            "self_improve": False,
-            "max_iterations": None,
-            "target_scope": None,
-            "goal": None,
-            "has_max_iterations_flag": False,
-            "has_target_scope_flag": False,
-            "has_goal_flag": False,
-        }
-
-    def test_self_improve_on_keeps_dependent_settings(self):
+    def test_legacy_self_improve_settings_are_ignored(self):
         args = args_from_settings(
             _settings(
                 self_improve="on",
@@ -232,10 +193,7 @@ class TestConditionalSettings:
             workflow="aag",
         )
 
-        assert args.self_improve is True
-        assert args.self_improve_max_iterations == 7
-        assert args.self_improve_target_scope == "hve"
-        assert args.self_improve_goal == "設定面を改善する"
+        assert not [flag for flag in args.to_argv() if "self-improve" in flag]
 
     def test_sdk_tool_search_ranking_omits_the_default_flag(self):
         args = args_from_settings(
@@ -258,8 +216,15 @@ class TestConditionalSettings:
 
 class TestNumericAndListCoercion:
     def test_zero_timeout_means_unspecified(self):
-        args = args_from_settings(_settings(workiq_per_question_timeout=0.0), workflow="ard")
-        assert args.workiq_per_question_timeout is None
+        args = args_from_settings(_settings(context_max_chars=0), workflow="ard")
+        assert args.context_max_chars is None
+
+    def test_knowledge_sources_are_passed_to_argv(self):
+        """FR-KD-01: GUI 設定の知識源欄が --knowledge-source として子プロセスへ渡る。"""
+        args = args_from_settings(_settings(workiq=True, knowledge_sources="jira"), workflow="ard")
+        argv = args.to_argv()
+        assert "--workiq" in argv
+        assert argv[argv.index("--knowledge-source") + 1] == "jira"
 
     def test_issue_number_blank_is_none(self):
         args = args_from_settings(_settings(issue_number=""), workflow="ard")

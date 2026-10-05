@@ -29,7 +29,7 @@ applyTo: "docs/**/batch-*.md, src/**/batch/**"
 - 依存チェック方式（前提ジョブの完了確認方法）
 
 ### 任意
-- オーケストレーションツールの候補（概念レベル。特定製品を断定しない）
+- 必要に応じた概念レベルのツール候補
 
 ---
 
@@ -86,9 +86,7 @@ applyTo: "docs/**/batch-*.md, src/**/batch/**"
 ### 例
 | 構成キー | 用途 | 環境依存 |
 |---------|------|---------|
-| batchTimeoutMs | ジョブタイムアウト | Yes |
-| maxParallelJobs | 最大並列実行数 | Yes |
-| enableCDC | CDC機能フラグ | Yes |
+| batchTimeoutMs | タイムアウト | Yes |
 
 ---
 

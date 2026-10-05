@@ -128,6 +128,11 @@ DAG 上は独立して完了します。
 | 2.6 Agentic Retrieval 機能要件 | `Arch-AgenticRetrieval-Detail` | service catalog / サービス定義 / domain | `docs/services/{serviceId}-agentic-retrieval-spec.md` | 2.2。サービス単位 fan-out、設定で無効化可 |
 | 3 画面↔サービス整合性レビュー | `QA-DocConsistency` | 画面・サービス・両 TDD 仕様・matrix | `docs/catalog/screen-service-consistency-report.md` | 2.1 / 2.2 / 2.3 / 2.4 |
 
+Step 2.5 は、後段の ASDW-WEB Step 2.1 と同じ Custom Agent・同じ成果物
+`docs/azure/azure-services-additional.md` を共有します。AAD-WEB で先に生成済みの成果物がある場合、
+ASDW-WEB 側はそれを読み、本 Workflow で確定した Azure のデータ層・コンピュートを反映して
+**差分だけを追記**します。AAD-WEB 側の設計書を全面的に作り直す契約ではありません（FR-WF-ASDW-06）。
+
 `{screenNameSlug}` / `{serviceNameSlug}` のように catalog parser だけでは確定できない値は、
 registry の `output_paths_template` では成果物 gate 用の確定パスへ展開されません。
 実名は各 Prompt と catalog の命名契約で決まります。

@@ -9,6 +9,7 @@
 - [HVE Prompt 全文リファレンス](#hve-prompt-全文リファレンス)
 - [前提・次のステップ](#前提次のステップ)
 - [現行実装との対応](#現行実装との対応)
+- [タスク起動プロンプト](#タスク起動プロンプト)
 - [敵対的レビュー（Adversarial Review）](#敵対的レビューadversarial-review)
 - [質問票作成](#質問票作成)
 - [Copilot cloud agent エラー対応](#copilot-cloud-agent-エラー対応)
@@ -52,10 +53,52 @@ HVE が使用する固定 Prompt の全文を確認・比較・デバッグす�
 | 敵対的再レビュー Prompt | 実装済 | `.github/prompts/runtime/review/adversarial-recheck.prompt.md`（`ADVERSARIAL_RECHECK_PROMPT`）。最大2サイクルの再確認用。 |
 | 事前質問票 Prompt | 実装済 | `.github/prompts/runtime/qa/pre-execution.prompt.md`（`PRE_EXECUTION_QA_PROMPT_V2`）。成果物作成前の質問票用。 |
 | 事後質問票 Prompt | 実装済 | `.github/prompts/runtime/qa/post-execution.prompt.md`（`QA_PROMPT_V2`）。成果物に対する質問票用。 |
-| Agent Prompt | 実装済 | `.github/prompts/<Agent名>.prompt.md` を `hve/prompt_loader.py` が読む。ファイルが無い場合、互換 facade の `load_prompt()` は空文字を返し、現行 `hve/runner.py` は Agent prefix を付けずに続行する（警告は出さない）。 |
+| Agent Prompt | 実装済 | `.github/prompts/<Agent名>.prompt.md` を `hve/prompt_loader.py` が読む。互換 facade の `load_prompt()` は欠損時に空文字を返し、呼び出し側が warning と継続可否を判断する。 |
 | 旧 `QA_APPLY_PROMPT` | 廃止 | `hve/prompts.py` のコメント通り post-QA フェーズ廃止に伴い削除済み。 |
 
 > **変更時の注意**: Prompt 本文の正本は上表の `.github/prompts/**` のファイルです。本ガイドの例を変更しても HVE の振る舞いは変わりません。Prompt ファイルを編集した場合、反映されるのは次回の process / session からです（hot reload なし）。`{}` 形式の placeholder を壊すと読み込み後の補間が壊れるため、記法を変えないでください。
+
+---
+
+## タスク起動プロンプト
+
+長時間化しやすいタスクを 1〜2 時間に収めるための定型文です。完了条件・テスト範囲・停止条件の 3 点を、作業を始める前に確定させることを目的とします。
+
+`<...>` は毎回置き換えるプレースホルダです。コマンド例は対象リポジトリの実行環境に合わせて差し替えてください。
+
+```text
+## 目的
+<1文。作る/直す対象を1つだけ書く>
+
+## 完了条件（DoD）
+検証コマンド: <exit 0 で判定できるコマンド1つ>
+   例: <テストランナー> <対象テストパス>
+判定: 上記が exit 0。着手時 baseline に既存 FAIL を含む場合は、baseline に無い新規 FAIL が 0 件であること。
+
+## テスト範囲
+- 上記の対象テストのみを反復実行する。引数なしの全件実行はローカルで行わない。
+- 全件回帰は PR 作成後に CI で 1 回だけ確認する。
+- 着手時に既に失敗しているテストは修正対象外。baseline として記録し、増やさないことだけを守る。
+
+## 時間・停止条件
+- 上限 <n> 分。超過したら「完了したID / 未着手ID / 次に実行する検証コマンド」を報告して停止する。
+- リトライは既存規範に従う（Skill `tdd-green-retry-strategy`、既定 `tdd_max_retries`）。
+  同一アプローチの単純反復は禁止。失敗の都度に根本原因を特定してから次の手を変える。
+
+## 今回やらないこと
+- <スコープ外を1〜3行>
+- 無関係な既存失敗の修正、リファクタ、ドキュメントの一括更新
+```
+
+### 着手直後に実行する 3 コマンド（baseline 取得）
+
+```text
+git --no-pager status --porcelain        # 空でなければ stash / commit するか baseline を明示取得
+git --no-pager rev-parse --short HEAD    # 基準 HEAD を記録
+<テストランナー> <対象テストパス>        # 着手前の PASS / FAIL を記録
+```
+
+> **注意**: HVE 自身のワークフロー実行中は HVE 自身のテストスイートを実行しません（[harness-verification-loop](../.github/skills/harness-verification-loop/SKILL.md)）。検証コマンドには、対象タスクが変更するコードのテストパスを指定してください。
 
 ---
 
@@ -105,14 +148,14 @@ HVE が使用する固定 Prompt の全文を確認・比較・デバッグす�
 - 修正完了後、修正内容の概要を箇条書きで報告してください。
 
 ## 重要
-- **オーバーエンジニアリングは絶対に禁止**です。以下を「オーバーエンジニアリング」とみなします:
+- **要求にない汎用化・抽象化は加えない**でください。後続のレビューと保守の費用が増えるためです。以下を「オーバーエンジニアリング」とみなします:
   - 指示・要件にない汎用化・抽象化・将来予測による拡張点の先回り追加
   - YAGNI 違反（必要になるまで実装しない原則の逸脱）
   - 未使用の設定オプション・フラグ・抽象レイヤーの導入
   - 単発用途に対する Strategy/Factory 等のデザインパターン濫用
   - 過剰なログ出力・過剰なエラーハンドリングの予防的追加
   - 既存の最小実装で十分な箇所への不要な依存導入
-- **捏造は絶対に禁止です。** 存在しない問題を指摘してはいけません。
+- **根拠（ファイルパス・行、ツールの実行結果）を示せる内容だけを書き、捏造しないでください。根拠のない内容は確認と修正の手間を増やし、結果の信頼を損なうためです。** 存在しない問題を指摘してはいけません。
 ```
 
 > **注意**: 敵対的レビューの明示トリガーは `adversarial-review` ラベル、`<!-- adversarial-review: true -->`、ユーザーの明示依頼、または HVE CLI / GUI の `auto_contents_review=true` です。`auto-context-review` は敵対的レビューの実行条件ではありません。
@@ -123,6 +166,8 @@ HVE が使用する固定 Prompt の全文を確認・比較・デバッグす�
 
 タスクの依頼内容に対して、Copilot に目的達成に必要な確認事項を整理し、重要度分類・既定値候補付きの優先順位付き質問票を作成してもらうためのプロンプトです。
 以下は手動依頼用の例です。HVE の実行前質問票は [正本](../.github/prompts/runtime/qa/pre-execution.prompt.md) または [byte-for-byte コピー](./prompt-reference/copies/runtime/qa/pre-execution.prompt.md.txt) を確認してください。
+
+> **現行実装との差分に注意**: HVE の固定 Prompt は、質問票の正本を `qa/` 配下に保存し、Issue / PR コメントにはそのファイルへのリンクと質問数・未回答数の要約だけを投稿します（FR-QA-11）。以下の文章は手動依頼用の汎用例です。
 
 ```text
 あなたは、私の依頼を実行する前に、目的達成に必要な確認事項を整理し、優先順位付きの質問票を作るアシスタントです。

@@ -5,25 +5,15 @@
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
-
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 
 - `microservice-design-guide`: DDD 観点のドメイン分析テンプレート
 - `knowledge-lookup`: 業務要件 D05/D07/D09 のドメインルール参照
 - `markdown-query`: ユースケース文書を `python -m mdq search` で横断検索
-- `task-dag-planning`: 大規模ドメインの分割判定
 - `work-artifacts-layout`: 中間成果物の格納先
 
 ## 1) 目的と非目的
@@ -32,14 +22,14 @@
 コード実装やリファクタは行わな い（例外：work/run/<run-id>/<task>/ 配下の計画・分割メモ作成は可）。
 
 ## 2) 入力・出力
-### 2.1 入力（必須）
+### 2.1 入力
 - ユースケース文書: `docs/catalog/use-case-catalog.md`
 
 ### 2.2 参照（任意・必要最小限）
 - 上記と同ディレクトリ内（docs/usecase/）の関連資料のみ
   - 例：用語集、業務フロー、API仕様、既存の設計メモ
 
-### 2.3 出力（必須）
+### 2.3 出力
 - `docs/catalog/domain-analytics.md`
 
 ### knowledge/ 参照（任意・存在する場合のみ）
@@ -54,22 +44,10 @@
 - 主文書が存在しない/読めない場合：実行を止め、必要な情報（ファイルパスやID）を1〜3問で確認する。
 
 ### 3.2 計画・分割
-- Skill task-dag-planning に従う。
-- **plan.md 作成時の必須手順（省略禁止）**:
-  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
-  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
-     ```
-     <!-- task_scope: single|multi -->
-     <!-- context_size: small|medium|large -->
-     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
-     <!-- subissues_count: N -->
-     <!-- implementation_files: true or false -->
-     ```
-  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/task-dag-planning/references/plan-template.md` を参照）
-  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
+- 計画を書く場合は Skill `task-dag-planning` に従う。
 - `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 
-### 3.3 生成（task_scope=single かつ context_size ≤ medium の場合のみ）
+### 3.3 生成
 1. 主文書を read し、根拠として扱う。
 2. 出力ファイル `docs/catalog/domain-analytics.md` を作成する。
 3. 章立て（後述）を **順番どおり** に埋める。空欄放置は禁止。不明は「不明/要確認」。
@@ -116,11 +94,11 @@
 14. 参照（必須）
     - 読んだファイルのパス一覧（例：docs/usecase/...）
 
-## 6) 最終品質レビュー（単回インライン・セルフチェック）
+## 6) 受入観点（完了条件の補足）
 
-### 6.1 セルフチェック契約
+### 6.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ### 6.2 ドメイン固有観点
 - **機能完全性・要件達成度**：DDD 14 概念（Entity/VO/Aggregate/Domain Service/Repository/Factory/BC/CE/Event等）がすべて適切に記述され、根拠ドキュメントと対応しているか
@@ -128,4 +106,4 @@
 - **保守性・拡張性・堅牢性**：TBD 運用が妥当で、参照が完全で、出力見出しが欠落なく、再実行に耐えられるか
 
 ### 6.3 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。

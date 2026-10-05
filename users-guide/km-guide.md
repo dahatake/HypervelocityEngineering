@@ -45,12 +45,28 @@ AKM は `qa` / `docs-original` / `workiq` をカンマ区切りでマルチ選�
 
 - **入力ソース**: `qa` / `docs-original` / `workiq`（複数選択可、既定 `qa,docs-original`）
 - **後方互換**: 旧値 `qa` / `docs-original` / `both` もそのまま受理される（`both` → `qa,docs-original` として正規化）
-- **`workiq` 選択時**: AKM メイン DAG の **前段** で Work IQ 取り込みフェーズが走り、`knowledge/Dxx-*.md` を Work IQ 由来の情報で起票・差分更新した上で、後段で `qa` / `docs-original` が順次差分マージします。
-- **HVE Cloud Agent は未対応**: 本機能は `hve` ローカル CLI のみで利用可能です。Issue Template 経由の Cloud 実行（`auto-knowledge-management-reusable.yml`）は従来通り `qa` / `docs-original` / `both` の単一選択となります。
+- **`workiq` 選択時**: DAG 前に「AKM 知識探索」を 1 回だけ実行します。知識探索エージェントが Work IQ などの usable な知識源と `qa/` / `docs-original/` を参照し、`hve_knowledge_write` 経由で D 文書と status 文書を安全に更新します。
+- **HVE Cloud Agent は未対応**: OAuth remote MCP を扱えないため、Issue Template 経由の Cloud 実行では利用できない前提です。Work IQ 入力は使用できません。Work IQ 連携が必要な場合はローカル CLI / GUI / Prompt 版を使用してください。
 
-![AKM の知識統合フロー。Issue Template から auto-knowledge-management ワークフローが起動し、sources に応じて qa、docs-original、または両方を処理して KnowledgeManager に渡し、knowledge 配下のステータスファイルと D01〜D21 を生成・更新する。](./images/knowledge-interface-flow.svg)
+Work IQを選ぶ前に、Copilot CLIへexact `workiq`名のPlugin または MCP Serverを事前設定・認証してください。HVEはSDK discoveryで利用可否を確認します。
 
-![AKM アーキテクチャ。sources に応じて qa、docs-original、workiq のいずれかまたは複数を入力とし、workiq 選択時は Work IQ 取り込みフェーズが先行して knowledge/Dxx を生成・更新した後、auto-knowledge-management ワークフローで KnowledgeManager が統合処理を実行し、knowledge 配下の D01〜D21 とステータスファイルを差分更新する。反復精緻化ループで再取り込みしていく。](./images/infographic-akm.svg)
+- `not-configured`または`unverified`の場合、HVEは実効知識源から`workiq` だけを除去します。他の source が残れば継続します。他の知識源が残る場合も継続し、保存済み設定は変更しません。
+- `--sources workiq`の単独指定で利用不能な場合、`qa`や`docs-original`へ暗黙補正せず開始を拒否します。
+- runtimeで`connected`状態または allowlist tool の公開を確認できない場合、HVE は OAuth を実行せず当該知識源を除外し、Copilot CLIの`/mcp`確認を案内します。
+- 既定の `workiq` allowlist は `retrieve` / `ask` / `fetch` / `search_paths` / `get_schema` / `list_agents` で、書込み系 tool は公開しません。
+
+### AKM 知識探索の更新根拠と fail-closed 境界
+
+知識探索エージェントは、同じ SDK session 内の成功した MCP call 応答に locator が含まれる出典だけを検証済みとして扱います。`Confirmed` は 1 件以上の検証済み出典を必要とし、違反した書込み tool call は失敗して `knowledge/` を変更しません。`Tentative` は回答候補として扱えますが、引用した出典はすべて検証済みである必要があります。
+
+`knowledge/` の書込みは `hve_knowledge_write` だけが行います。対象ファイルごとの `.hve/locks/` OS ロック、SHA-256 楽観ロック、atomic replace により、複数ジョブが同時に動いても差分を失いません。D 文書は `.github/scripts/validate-knowledge-files.py` の main schema を通過した場合だけ更新され、成功時は該当 D の ChangeLog `## 知識探索による更新履歴` へ 1 行追記されます。
+
+> [!CAUTION]
+> live Microsoft 365 本文、個人情報、秘密情報を、検証記録やリポジトリへ貼り付けたり commit したりしないでください。raw report / MCP log はアクセス制御・保存先・保持期間を確認した診断用途に限定し、本文を恒久文書の出典として引用しません。本ガイドの静的検証では live Work IQ を実行しません。
+
+![AKM の知識統合フロー。docs-original/、qa/、src/、Work IQ などの知識源を入力に adi / akm / adoc が連携し、knowledge/ と docs-generated/ を更新する。akm は sources=qa,docs-original,workiq のマルチ選択に対応し、workiq を含む場合は DAG 前の知識探索 phase を経由する。](./images/knowledge-interface-flow.svg)
+
+![AKM アーキテクチャ。sources に応じて qa、docs-original、workiq のいずれかまたは複数を入力とし、workiq 選択時は AKM 知識探索が先行して knowledge/Dxx を生成・更新した後、auto-knowledge-management ワークフローで KnowledgeManager が統合処理を実行し、knowledge 配下の D01〜D21 とステータスファイルを差分更新する。反復精緻化ループで再探索していく。](./images/infographic-akm.svg)
 
 AKM は 1 回実行して終わりではなく、ADI Step 1.1 / 1.2で生成した原本質問票を `qa/` に蓄積し、再度 `akm` で統合する反復精緻化ループを前提に運用します。
 
@@ -102,7 +118,7 @@ Prompt の入出力ファイルを示します（`hve/workflow_registry.py` の 
 
 AKM は一度きりではなく、初回作成 → 不足補完 → 開発中の気づき反映 → 既存資産取り込みを繰り返して `knowledge/` を継続的に精緻化します。全体像は [README.md](../README.md) を参照してください。
 
-hve CLI の Work IQ 取り込みステージを使うと、Microsoft 365 側のメール / チャット / 会議 / ファイルを一次情報として `knowledge/Dxx` を起票できるため、初回セットアップ時の初回作成そのものを省力化できます。後段の `qa` / `docs-original` ステージが同一ファイルを差分マージします。
+hve CLI / GUI の AKM 知識探索を使うと、Microsoft 365 側のメール / チャット / 会議 / ファイルを含む知識源から `knowledge/Dxx` を起票できるため、初回セットアップ時の初回作成そのものを省力化できます。後段の `qa` / `docs-original` ステージが同一ファイルを差分マージします。
 
 ## Issue Template 入力
 
@@ -114,7 +130,7 @@ hve CLI の Work IQ 取り込みステージを使うと、Microsoft 365 側の�
 - `target_files`: サブセット指定（任意）
 - `additional_comment`: `custom_source_dir: <path>` を 1 行ずつ指定可
 - `force_refresh`: 完全再生成
-- `enable_review` / `enable_qa` / `enable_self_improve` / `enable_auto_merge`
+- `enable_review` / `enable_qa` / `enable_auto_merge`
 - `model` / `review_model` / `qa_model`
 
 ## QA 回答から起動する Knowledge Management のマージ設定とモデル指定
@@ -173,12 +189,10 @@ python -m hve orchestrate --workflow akm --sources docs-original
 python -m hve orchestrate --workflow akm --sources both
 python -m hve orchestrate --workflow akm --sources qa --custom-source-dir docs/specs
 
-# Work IQ 入力を追加（hve ローカル CLI でのみ利用可能）
-python -m hve orchestrate --workflow akm --sources qa,docs-original,workiq
-python -m hve orchestrate --workflow akm --sources workiq                       # Work IQ 単独モード
-python -m hve orchestrate --workflow akm --sources workiq --workiq-dxx D01,D04   # 対象 Dxx を絞り込み
-# `--workiq-akm-ingest` で明示制御可（未指定時は --sources に workiq が含まれるかで自動判定）
-python -m hve orchestrate --workflow akm --sources qa,docs-original --workiq-akm-ingest
+# Work IQ を知識源として追加（hve ローカル CLI / GUI / Prompt 版で利用可能）
+python -m hve orchestrate --workflow akm --sources qa,docs-original,workiq --workiq
+python -m hve orchestrate --workflow akm --sources workiq --workiq
+python -m hve orchestrate --workflow akm --sources qa,docs-original --knowledge-source confluence
 ```
 
 ## 状態判定
@@ -191,7 +205,7 @@ python -m hve orchestrate --workflow akm --sources qa,docs-original --workiq-akm
 |---|---|
 | **前提** | `qa/` または `docs-original/` に対象ファイルがあること。GitHub Copilot が有効なこと。CLI で実行する場合は [hve-cli-getting-started.md](./hve-cli-getting-started.md) のセットアップが済んでいること |
 | **操作** | Cloud: Issue Template **Knowledge Management** を起票 → ラベル `knowledge-management` で `auto-orchestrator-dispatcher.yml` が起動。CLI: 上の「CLI 例」のコマンドを実行 |
-| **入力** | `sources`（CLI 既定 `qa,docs-original`）/ `target_files` / `custom_source_dir` / `force_refresh`。`workiq` は CLI のみ。**`target_files` の既定は `sources` に依存**する（`hve/orchestrator.py` の `_default_akm_target_files()`）: 非 Work IQ ソースが **1 種類**なら `workiq` 併用時もその glob になる（`qa` / `qa,workiq` → `qa/*.md`、`docs-original` / `docs-original,workiq` → `docs-original/*`）。**`workiq` 単独、または `qa` と `docs-original` を併用した場合（CLI 既定の `qa,docs-original` を含む）は既定パターンなし（空）**＝固定 glob で絞り込まない。Cloud の Issue Template は `target_files` を空欄のまま起票できる |
+| **入力** | `sources`（CLI 既定 `qa,docs-original`）/ `target_files` / `custom_source_dir` / `force_refresh`。`workiq` はローカル実行の知識源トリガーです。**`target_files` の既定は `sources` に依存**する（`hve/orchestrator.py` の `_default_akm_target_files()`）: 非 Work IQ ソースが **1 種類**なら `workiq` 併用時もその glob になる（`qa` / `qa,workiq` → `qa/*.md`、`docs-original` / `docs-original,workiq` → `docs-original/*`）。**`workiq` 単独、または `qa` と `docs-original` を併用した場合（CLI 既定の `qa,docs-original` を含む）は既定パターンなし（空）**＝固定 glob で絞り込まない。Cloud の Issue Template は `target_files` を空欄のまま起票できる |
 | **出力** | `knowledge/business-requirement-document-status.md` と `knowledge/D01〜D21-*.md`（および `-ChangeLog.md`） |
 | **完了確認** | 上記「完了条件」を満たすこと。Cloud ではラベルが `akm:done` に遷移すること |
 | **失敗時対応** | ラベルが `akm:blocked` の場合は Issue のコメントを確認。切り分けは [troubleshooting.md](./troubleshooting.md)。`knowledge/` が中途半端な場合は `force_refresh` で再生成 |
@@ -229,7 +243,7 @@ python -m hve orchestrate --workflow akm --sources qa,docs-original --workiq-akm
 | Step 本文テンプレート | `.github/prompts/steps/akm/step-1.prompt.md` / `step-2.prompt.md`、fanout 共通は `.github/prompts/fanout/akm/_common.prompt.md` | 出力先パスの表記を変えるときは registry の `output_paths_template` と揃える | `python -m pytest hve/tests/test_e2e_akm_fanout_dryrun.py -q` |
 | Agent の振る舞い | `.github/prompts/KnowledgeManager.prompt.md` / `.github/prompts/QA-DocConsistency.prompt.md` | 入出力契約は `.github/io-contracts/KnowledgeManager--akm--1.yaml` / `QA-DocConsistency--akm--2.yaml` と対で更新する | `python -m pytest hve/tests/test_knowledge_source_creation_contract.py -q` |
 | `sources` の受理値と正規化 | `hve/` の AKM 入力正規化 | 旧値 `qa` / `docs-original` / `both` の後方互換を壊さない | `python -m pytest hve/tests/test_akm_sources_normalization.py -q` |
-| Work IQ 取り込み | `hve/` の Work IQ 取り込みフェーズ | Cloud 実行では利用できない前提を維持する | `python -m pytest hve/tests/test_akm_workiq_ingest.py hve/tests/test_akm_workiq_phase.py -q` |
+| AKM 知識探索 | `hve/` の知識探索エージェント / knowledge file 書込み | Cloud 実行では OAuth remote MCP を扱えない前提を維持する | `python -m pytest hve/tests/test_orchestrator_knowledge_discovery.py hve/tests/test_knowledge_files.py -q` |
 | Cloud の入力欄 | `.github/ISSUE_TEMPLATE/knowledge-management.yml` | 呼び出し先 `.github/workflows/auto-knowledge-management-reusable.yml` の `inputs` と対で更新する | Issue Template から 1 度実行して確認 |
 
 **互換性・安全性で壊してはならない境界**
@@ -237,7 +251,7 @@ python -m hve orchestrate --workflow akm --sources qa,docs-original --workiq-akm
 - `docs-original/` は**読み取り専用**。AKM は参照するだけで変更しない。
 - `knowledge/` の更新は差分マージ。手動作成した `knowledge/D{NN}-*.md` を完全上書きしない（変更履歴は `-ChangeLog.md`）。
 - `sources` の旧値 `both` は `qa,docs-original` へ正規化する後方互換を維持する。
-- `workiq` は CLI 専用。Cloud の Issue Template に `workiq` を足すと実行時に解決できない。
+- `workiq` はローカル実行専用。Cloud の Issue Template に `workiq` を足すと実行時に解決できない。
 
 ## セットアップ・トラブルシューティング
 

@@ -83,7 +83,7 @@ def test_guess_repo_from_git_remote_returns_none_on_failure(monkeypatch) -> None
 @pytest.mark.parametrize(
     ("repo", "expected"),
     [
-        ("dahatake/RoyalytyService2ndGen", ("dahatake", "RoyalytyService2ndGen")),
+        ("owner/example-repository", ("owner", "example-repository")),
         (" owner / repo ", ("owner", "repo")),
         ("owner", (None, None)),
         ("owner/repo/extra", (None, None)),

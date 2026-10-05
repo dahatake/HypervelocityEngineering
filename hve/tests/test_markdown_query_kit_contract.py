@@ -80,3 +80,26 @@ class TestReportOutputIsRepositoryLocal:
 
         out = usage_report.default_output_dir(tmp_path)
         assert out == (tmp_path / ".mdq" / "usage-report").resolve()
+
+
+class TestSkillPortability:
+    """FR-KIT-02: measured HVE data stays in optional, excluded references."""
+
+    @pytest.mark.parametrize("relative", ["SKILL.md", "examples/prompt-snippets.md"])
+    def test_hve_measurements_are_isolated_from_portable_guidance(self, relative: str) -> None:
+        canonical = _REPO_ROOT / ".github/skills/markdown-query"
+        portable = _read(canonical / relative)
+        hve_reference = _read(canonical / "references/repo-specific/hve-integration.md")
+        for measured_value in ("250,823", "480.8", "323.2", "99.81", "99.87"):
+            assert measured_value not in portable
+            assert measured_value in hve_reference
+        assert "自リポジトリ" in portable
+
+    def test_cli_guidance_does_not_assume_an_hve_background_watcher(self) -> None:
+        canonical = _REPO_ROOT / ".github/skills/markdown-query"
+        reference = _read(canonical / "references/cli-reference.md")
+        assert "通常は本コマンドを手動起動する必要はない" not in reference
+        assert "HVE リポジトリでの宣言例は" not in reference
+        assert "--root" in reference
+        assert "--initial-index" in reference
+        assert "Ctrl+C" in reference

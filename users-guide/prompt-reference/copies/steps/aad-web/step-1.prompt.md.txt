@@ -30,6 +30,9 @@
 `docs/catalog/persona-screen-catalog.md` が存在する場合は参照し、当該カタログに記載された共通画面骨格を本 APP 用に再定義しない。担当 APP の画面カタログには、共通画面については `notes` 列に `common_ref: PSC-XXX`（`persona-screen-catalog.md` で採番された `persona_screen_id`）を記載し、APP 固有差分がある場合のみ短く追記する。共通画面骨格自体を再生成・上書きしてはならない。詳細な画面定義は AAD-WEB Step.2.1（Arch-UI-Detail）で行う。
 `persona-screen-catalog.md` が存在しない場合は従来通り独自に画面一覧を生成する。
 
+## ID 台帳
+- カタログを書き終えたら `python .github/scripts/check-id-ledger.py --bootstrap --warn-only` を実行し、`docs/catalog/id-ledger.md` をカタログから作り直す（FR-IDL-01）。台帳を手で編集しない。並列に動く他の Step と同じ結果になるよう、台帳はカタログから決定的に生成するためである。表示された違反は作業ログに記録する。
+
 ## 完了条件
 - `docs/catalog/screen-catalog-{担当 APP-ID}.md` が作成されている
 {completion_instruction}{additional_section}

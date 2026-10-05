@@ -32,7 +32,7 @@ if 対象ファイルが既に存在する:
 else:
     → 新規ファイルを作成する（Git 上の create 操作）
 
-→ 作成後、ファイルが空でないことを copilot-instructions.md §0 の書き込み失敗対策に従って確認する
+→ 作成後、ファイルが空でないことを Skill `large-output-chunking` の書き込み確認手順に従って確認する
 ```
 
 ※ 1コミット内での delete + create 同時実行は許可。edit/update は不可。
@@ -60,10 +60,9 @@ else:
 
 - **Web UI 方式**: Issue 番号を run-id に流用（`work/run/issue-<N>/Issue-<N>/`）
 - **CLI SDK 方式**:
-  - `work` ディレクトリ: `work/run/<run-id>/self-improve/step-{step_id}/`
+  - `work` ディレクトリ: `work/run/<run-id>/<Agent名>/Issue-<識別子>/`
     - `qa` ファイル: `qa/{run_id}-{step_id}-execution-qa-merged.md`（HVE 実行補助 QA の回答マージ。ADI の workflow 本体成果物 `qa/{key}-original-docs-questionnaire.md` / `qa/original-docs-cross-questionnaire.md` とは別物）
   - `qa-merged.md`（`execution-` なし）: **非推奨**（v2 以前の出力形式、新規生成は `execution-qa-merged.md` を使用）
-  - ロックファイル: `work/run/<run-id>/self-improve/.self-improve-lock`
 
 ### ディレクトリ構造（CLI SDK 方式）
 
@@ -76,14 +75,6 @@ work/
         │   ├── plan.md
         │   ├── contracts/
         │   └── artifacts/
-        ├── self-improve/                  ← Self-Improve
-        │   ├── .self-improve-lock         ← ロックファイル
-        │   ├── step-1.1/                  ← step_id で分離
-        │   │   └── artifacts/
-        │   │       └── learning-001.md
-        │   └── step-2.3/
-        │       └── artifacts/
-        │           └── learning-001.md
         └── kpi/
             └── fork-kpi.jsonl             ← Fork KPI ログ
 ```
@@ -111,7 +102,7 @@ def generate_run_id() -> str:
 
 ---
 
-質問票（QA）および Work IQ 補助レポートのファイル出力先は `qa/` 配下とする（`work/` には保存しない）。
+質問票（QA）および知識探索（HVE FR-KD）の調査票のファイル出力先は `qa/` 配下とする（`work/` には保存しない）。
 
 **構造**: `qa/` 直下にフラットにファイルを配置する（サブディレクトリは作成しない）。
 
@@ -124,15 +115,14 @@ def generate_run_id() -> str:
 - ファイル名にはパスセーフな文字のみ使用する（英数字・ハイフン・アンダースコア。日本語は避ける）
 
 **適用対象**:
-- copilot-instructions.md §0.2 ステップ3 で作成する質問票（非PR連携時のコンテキスト収集）
+- Skill `task-questionnaire` で作成する質問票（非PR連携時のコンテキスト収集）
 - `copilot-auto-qa.yml` や類似のトリガーによる質問票作成依頼の応答として出力するファイル
-- `*-workiq-*.md` 形式の Work IQ 補助レポート
-- `*-workiq-*.jsonl` 形式の Work IQ 事前問い合わせトレース
+- `*-knowledge-discovery-qa*.md` 形式の知識探索の調査票（HVE が `<run_id>-<label>-` を接頭辞に作成する）
 - PR コメントやチャットでの回答はファイル出力ではないため対象外
 
 **書き込みルール**: §4.1 の適用範囲に `qa/` 配下が含まれるため、削除→新規作成ルールが同等に適用される。
 
-> **注意**: `qa/` 配下には質問票ファイル、`*-workiq-*.md` 形式の Work IQ 補助レポート、`*-workiq-*.jsonl` 形式の Work IQ 事前問い合わせトレースのみを配置する。`plan.md`、`subissues.md` 等の計画ファイルは従来通り `work/` 配下に保存する。
+> **注意**: `qa/` 配下には質問票ファイルと `*-knowledge-discovery-qa*.md` 形式の知識探索の調査票のみを配置する（旧 `*-workiq-*` 形式の補助レポートは HVE v3.38 で生成を廃止した）。`plan.md`、`subissues.md` 等の計画ファイルは従来通り `work/` 配下に保存する。
 
 ---
 

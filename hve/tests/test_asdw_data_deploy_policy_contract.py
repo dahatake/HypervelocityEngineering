@@ -16,7 +16,6 @@ _AZURE_CLI_SKILL = (
     _REPO_ROOT
     / ".github"
     / "skills"
-    / "azure-skills"
     / "azure-cli-deploy-scripts"
     / "SKILL.md"
 )
@@ -26,7 +25,7 @@ _SHARED_CONTRACT = (
     / "asdw-data-verifier-contract.md"
 )
 _SHARED_CONTRACT_REPO_PATH = (
-    ".github/skills/azure-skills/azure-cli-deploy-scripts/"
+    ".github/skills/azure-cli-deploy-scripts/"
     "references/asdw-data-verifier-contract.md"
 )
 _DEPLOY_HEADING = "## Step 1.3 DataDeploy network contract"

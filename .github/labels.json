@@ -55,11 +55,6 @@
     "description": "run Agentic Retrieval add-on workflow"
   },
   {
-    "name": "self-improve",
-    "color": "0E8A16",
-    "description": "run self-improvement loop (code quality scan, fix, verify)"
-  },
-  {
     "name": "auto-context-review",
     "color": "1D76DB",
     "description": "force context questionnaire and design clarification"
@@ -92,7 +87,7 @@
   {
     "name": "split-mode",
     "color": "D93F0B",
-    "description": "split mode PR (copilot-instructions.md §2 SPLIT_REQUIRED)"
+    "description": "PR that splits work into Sub-Issues via subissues.md"
   },
   {
     "name": "plan-only",
@@ -113,6 +108,11 @@
     "name": "model/claude-opus-4.7",
     "color": "6f42c1",
     "description": "Copilot cloud agent モデル指定: claude-opus-4.7"
+  },
+  {
+    "name": "model/claude-opus-5.5",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent モデル指定: claude-opus-5.5"
   },
   {
     "name": "model/claude-opus-4.6",
@@ -145,6 +145,11 @@
     "description": "Copilot cloud agent レビュー用モデル指定: claude-opus-4.7"
   },
   {
+    "name": "review-model/claude-opus-5.5",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent レビュー用モデル指定: claude-opus-5.5"
+  },
+  {
     "name": "review-model/claude-opus-4.6",
     "color": "6f42c1",
     "description": "Copilot cloud agent レビュー用モデル指定: claude-opus-4.6"
@@ -168,6 +173,11 @@
     "name": "qa-model/claude-opus-4.7",
     "color": "6f42c1",
     "description": "Copilot cloud agent QA 用モデル指定: claude-opus-4.7"
+  },
+  {
+    "name": "qa-model/claude-opus-5.5",
+    "color": "6f42c1",
+    "description": "Copilot cloud agent QA 用モデル指定: claude-opus-5.5"
   },
   {
     "name": "qa-model/claude-opus-4.6",

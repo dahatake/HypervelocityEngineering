@@ -26,7 +26,6 @@ CODING_BASE = [
     ("harness-verification-loop", "Build/Lint/Test/Security/Diff の 5 段階検証"),
     ("harness-error-recovery", "ビルド・テスト失敗時の E-01〜E-05 リカバリ"),
     ("harness-safety-guard", "ツール実行時の破壊的操作検出と中断"),
-    ("karpathy-guidelines", "実装時の LLM 共通ミス防止指針"),
 ]
 
 # Agent -> Skills 一覧（責務に応じて DESIGN_BASE / CODING_BASE に追加スキルを足す）
@@ -67,12 +66,6 @@ MAP: dict[str, list[tuple[str, str]]] = {
     "Arch-DataCatalog": DESIGN_BASE,
     "Arch-DataModeling": DESIGN_BASE,
     # Self-improve
-    "Arch-ImprovementPlanner": [
-        ("task-dag-planning", "改善タスクの DAG 分解・見積・分割判定"),
-        ("work-artifacts-layout", "`work/` 配下に改善計画を出力"),
-        ("task-questionnaire", "改善方針の不明点を優先度付き質問票として整理"),
-        ("karpathy-guidelines", "計画策定時の LLM 共通ミス防止指針"),
-    ],
     # Microservice 設計
     "Arch-Microservice-ServiceCatalog": [
         ("microservice-design-guide", "サービス定義・API 設計・境界コンテキスト対応の手順"),

@@ -122,28 +122,32 @@ def _assert_fixed_tdd_report_schema(text: str, source: str) -> None:
 
 
 def test_tdd_reality_skill_defines_test_report_path_and_schema() -> None:
-    text = (_SKILLS_DIR / "testing" / "tdd-red-green-reality" / "SKILL.md").read_text(encoding="utf-8")
+    text = (_SKILLS_DIR / "tdd-red-green-reality" / "SKILL.md").read_text(encoding="utf-8")
     assert _REPORT_PATH in text
     for token in _REQUIRED_SCHEMA_TOKENS:
         assert token in text, f"tdd-red-green-reality skill missing {token!r}"
 
 
 def test_tdd_reality_skill_defines_fixed_markdown_report_template() -> None:
-    text = (_SKILLS_DIR / "testing" / "tdd-red-green-reality" / "SKILL.md").read_text(encoding="utf-8")
-    _assert_fixed_tdd_report_schema(text, "tdd-red-green-reality skill")
+    text = (
+        _SKILLS_DIR
+        / "tdd-red-green-reality"
+        / "references"
+        / "tdd-test-report.md"
+    ).read_text(encoding="utf-8")
+    _assert_fixed_tdd_report_schema(text, "tdd-red-green-reality report reference")
 
 
 def test_tdd_green_retry_skill_records_retry_to_tdd_report() -> None:
-    text = (_SKILLS_DIR / "testing" / "tdd-green-retry-strategy" / "SKILL.md").read_text(encoding="utf-8")
+    text = (_SKILLS_DIR / "tdd-green-retry-strategy" / "SKILL.md").read_text(encoding="utf-8")
     assert _REPORT_PATH in text
-    assert "異なるアプローチ" in text
     assert "Root-Cause" in text or "root cause" in text or "根本原因" in text
+    assert "tdd_max_retries" in text
 
 
 def test_harness_verification_loop_distinguishes_tdd_report_from_verification_report() -> None:
     text = (
         _SKILLS_DIR
-        / "harness"
         / "harness-verification-loop"
         / "references"
         / "verification-commands.md"

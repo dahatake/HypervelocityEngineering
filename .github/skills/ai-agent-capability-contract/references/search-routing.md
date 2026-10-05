@@ -160,7 +160,7 @@ Knowledge BaseのMCP endpointをAgentから使う場合はAG-CAP-05にも記録�
 ## 7. Work IQ
 
 - Microsoft 365範囲の検索はWork IQを使用する。
-- HVE自身のQA-only Work IQ経路と、生成Agentが実行時に使用するWork IQ Toolを区別する。
+- HVE自身の知識探索（事前 QA / AKM / ARD で Work IQ を読み取り専用の知識源として使う経路）と、生成Agentが実行時に使用するWork IQ Toolを区別する。
 - 生成Agentではsigned-in userの権限を超えるsourceを取得しない。
 - consent、Tool公開、tenant policy、接続をruntime probeで確認する。
 - 未承認時にWeb Searchや一般LLM知識でM365情報を補完しない。blockedとしてHandoffする。

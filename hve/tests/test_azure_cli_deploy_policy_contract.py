@@ -10,7 +10,6 @@ _SKILL = (
     _REPO_ROOT
     / ".github"
     / "skills"
-    / "azure-skills"
     / "azure-cli-deploy-scripts"
     / "SKILL.md"
 )

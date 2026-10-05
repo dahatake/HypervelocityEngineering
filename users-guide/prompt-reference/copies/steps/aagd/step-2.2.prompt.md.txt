@@ -17,17 +17,14 @@ build/collection成功後、未実装production behaviorのテストが1件以�
 - RED フェーズでは Azure AI Foundry Agent Service、Azure OpenAI、外部 Tool API へ実接続しない。Agent / Tool / RAG / HTTP 呼び出しは mock/stub に置き換える。
 - テストコードは環境変数またはテスト設定ファイルで設定キーだけを扱い、Endpoint URL、接続文字列、API キー、Bearer token 等の秘密情報をハードコードしない。
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 {existing_artifact_policy}
 
 ## Custom Agent
 `Dev-Microservice-Azure-AgentTestCoding` を使用
 
-## TDD RED 確認手順（必須）
+## TDD RED 確認手順
 1. build/collection成功後にテストを実行し、未実装production behaviorのテストが1件以上FAILしてsuite全体がREDであることを確認する
 2. RED 確認結果（テスト実行ログ）を Issue コメントに記録する
 
@@ -37,7 +34,7 @@ build/collection成功後、未実装production behaviorのテストが1件以�
 ## 完了条件
 - `src/test/agent/{key}.Tests/` 配下にテストコードが生成されている
 - build/collection成功かつ未実装production behaviorのテストが1件以上FAILしてsuite全体がREDであることが確認されている
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 - 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - 必須ラベル: `Schema-Version`, `Evidence-Status`, `TDD-Judgement`, `Secret-Redaction`, `Test-Files-Changed`
 - `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とする。

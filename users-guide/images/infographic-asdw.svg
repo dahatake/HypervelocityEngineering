@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="920" viewBox="0 0 1600 920" role="img" aria-labelledby="title desc">
   <title id="title">ASDW-WEB インフォグラフィック</title>
-  <desc id="desc">入力ファイル、Workflow、Promptタスク、出力ファイルの関係を示す。</desc>
+  <desc id="desc">ASDW-WEB の current registry に基づく入力、Workflow、主要 Prompt タスク、出力ファイルの関係を示す。</desc>
   <style>
     text { font-family: "Trebuchet MS", Verdana, Arial, sans-serif; fill: #1f2937; }
     .title { font-size: 28px; font-weight: 700; }
@@ -40,23 +40,23 @@
 
   <rect class="task" x="520" y="360" width="520" height="310"/>
   <text x="550" y="402" class="head">Prompt タスク（抜粋）</text>
-  <text x="550" y="438" class="item">1) Dev-Microservice-Azure-DataDesign / DataDeploy</text>
-  <text x="550" y="466" class="item">2) ComputeDesign / AddServiceDesign / AddServiceDeploy</text>
-  <text x="550" y="494" class="item">3) Arch-TDD-TestSpec → ServiceTestCoding → ServiceCoding</text>
-  <text x="550" y="522" class="item">4) UITestCoding → UICoding → UIDeploy → E2ETesting</text>
-  <text x="550" y="550" class="item">5) QA-AzureArchitectureReview / QA-AzureDependencyReview</text>
+  <text x="550" y="438" class="item">1) Data: DataDesign → DataTestCoding → DataDeploy</text>
+  <text x="550" y="466" class="item">2) Additional / Retrieval: AddServiceDesign → AddServiceDeploy → AddServiceTesting → AgenticRetrieval*</text>
+  <text x="550" y="494" class="item">3) Compute: ComputeDesign → ServiceTestCoding → ServiceCoding → ComputeDeploy → PostDeployTest</text>
+  <text x="550" y="522" class="item">4) UI: UITestCoding → UICoding → UIDeploy → E2ETesting</text>
+  <text x="550" y="550" class="item">5) Review: QA-AzureArchitectureReview / QA-AzureDependencyReview → QA-RequirementsConformanceEval</text>
   <text x="550" y="594" class="small">※ Prompt = 各 Step の実行タスク</text>
-  <text x="550" y="620" class="small">※ Step.4.1 と Step.4.2 は Step.3.3 後に並列</text>
+  <text x="550" y="620" class="small">※ Step.5.1 と Step.5.2 は Step.4.4 後に並列、Step.5.3 が合流</text>
 
   <rect class="panel" x="1100" y="120" width="460" height="620"/>
   <text x="1130" y="160" class="head">出力（主な成果物）</text>
   <text x="1130" y="200" class="item">• docs/azure/azure-services-data.md</text>
   <text x="1130" y="230" class="item">• src/api/{serviceId}-*/</text>
   <text x="1130" y="260" class="item">• src/app/</text>
-  <text x="1130" y="290" class="item">• .github/workflows/azure-static-web-apps-*.yml</text>
+  <text x="1130" y="290" class="item">• docs/azure/agentic-retrieval/{serviceId}-design.md</text>
   <text x="1130" y="320" class="item">• docs/azure/azure-architecture-review-report.md</text>
   <text x="1130" y="350" class="item">• docs/azure/dependency-review-report.md</text>
-  <text x="1130" y="380" class="item">• E2E 実行結果（artifact）</text>
+  <text x="1130" y="380" class="item">• docs/azure/requirements-conformance-report.md</text>
 
   <path class="arrow" d="M460 270 L520 260"/>
   <path class="arrow" d="M1040 260 L1100 260"/>

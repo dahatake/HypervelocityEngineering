@@ -27,13 +27,14 @@ class TestSDKConfigDefaults(unittest.TestCase):
         self.cfg = SDKConfig()
 
     def test_model_default(self) -> None:
-        self.assertEqual(self.cfg.model, "claude-opus-4.7")
+        self.assertEqual(self.cfg.model, "claude-opus-5.5")
 
-    def test_default_model_is_opus_4_7(self) -> None:
-        self.assertEqual(SDKConfig().model, "claude-opus-4.7")
+    def test_default_model_is_opus_5_5(self) -> None:
+        self.assertEqual(SDKConfig().model, "claude-opus-5.5")
 
     def test_model_choices_contains_both_46_and_47(self) -> None:
         self.assertNotIn("claude-opus-4-7", MODEL_CHOICES)
+        self.assertIn("claude-opus-5.5", MODEL_CHOICES)
         self.assertIn("claude-opus-4.7", MODEL_CHOICES)
         self.assertIn("claude-opus-4.6", MODEL_CHOICES)
 
@@ -44,7 +45,7 @@ class TestSDKConfigDefaults(unittest.TestCase):
         self.assertLess(MODEL_CHOICES.index("claude-opus-4.7"), MODEL_CHOICES.index("gpt-5.5"))
 
     def test_default_model_constant(self) -> None:
-        self.assertEqual(DEFAULT_MODEL, "claude-opus-4.7")
+        self.assertEqual(DEFAULT_MODEL, "claude-opus-5.5")
 
     def test_normalize_model_current(self) -> None:
         self.assertEqual(normalize_model("claude-opus-4.7"), "claude-opus-4.7")
@@ -125,7 +126,20 @@ class TestSDKConfigDefaults(unittest.TestCase):
         self.assertFalse(self.cfg.quiet)
 
     def test_mcp_servers_default(self) -> None:
-        self.assertIsNone(self.cfg.mcp_servers)
+        self.assertNotIn("mcp_servers", vars(self.cfg))
+
+    def test_legacy_mcp_servers_input_is_not_retained_at_runtime(self) -> None:
+        cfg = SDKConfig(mcp_servers={"legacy": {"command": "forbidden"}})
+
+        self.assertNotIn("mcp_servers", vars(cfg))
+
+    def test_legacy_mcp_servers_discard_is_documented(self) -> None:
+        class_doc = SDKConfig.__doc__ or ""
+        post_init_doc = SDKConfig.__post_init__.__doc__ or ""
+
+        self.assertIn("mcp_servers", class_doc)
+        self.assertIn("required_mcp_servers", post_init_doc)
+        self.assertIn("破棄", post_init_doc)
 
     def test_dry_run_default(self) -> None:
         self.assertFalse(self.cfg.dry_run)
@@ -135,31 +149,33 @@ class TestSDKConfigDefaults(unittest.TestCase):
 
     def test_workiq_default_disabled(self) -> None:
         self.assertFalse(self.cfg.workiq_enabled)
-        self.assertFalse(self.cfg.is_workiq_qa_enabled())
-        self.assertFalse(self.cfg.is_workiq_akm_review_enabled())
+        self.assertEqual(self.cfg.knowledge_sources, [])
+        self.assertEqual(self.cfg.effective_knowledge_sources(), [])
 
-    def test_workiq_explicit_flags_override_legacy(self) -> None:
-        cfg = SDKConfig(
-            workiq_enabled=True,
-            workiq_qa_enabled=False,
-            workiq_akm_review_enabled=True,
-        )
-        self.assertFalse(cfg.is_workiq_qa_enabled())
-        self.assertTrue(cfg.is_workiq_akm_review_enabled())
-
-    def test_workiq_legacy_flag_enables_both_explicit_scopes_by_default(self) -> None:
-        cfg = SDKConfig(workiq_enabled=True)
-        self.assertTrue(cfg.is_workiq_qa_enabled())
-        self.assertTrue(cfg.is_workiq_akm_review_enabled())
+    def test_effective_knowledge_sources_order_and_dedup(self) -> None:
+        cfg = SDKConfig(workiq_enabled=True, knowledge_sources=["docs-mcp", "workiq"])
+        self.assertEqual(cfg.effective_knowledge_sources("crm", "docs-mcp"), ["workiq", "docs-mcp", "crm"])
 
     def test_show_reasoning_default_true(self) -> None:
         self.assertTrue(self.cfg.show_reasoning)
 
-    def test_workiq_draft_defaults(self) -> None:
-        self.assertFalse(self.cfg.workiq_draft_mode)
-        self.assertEqual(self.cfg.workiq_draft_output_dir, "qa")
-        self.assertEqual(self.cfg.workiq_per_question_timeout, 1200.0)
-        self.assertEqual(self.cfg.workiq_max_draft_questions, 10)  # Wave 2: 30→10 に削減
+    def test_removed_workiq_runtime_fields_are_rejected(self) -> None:
+        for field_name, value in (
+            ("workiq_tenant_id", "tenant"),
+            ("workiq_request_timeout", 300.0),
+            ("workiq_prompt_review", "review"),
+            ("workiq_qa_enabled", True),
+            ("workiq_akm_review_enabled", True),
+            ("workiq_prompt_qa", "qa"),
+            ("workiq_prompt_km", "km"),
+            ("workiq_draft_mode", True),
+            ("workiq_draft_output_dir", "qa"),
+            ("workiq_per_question_timeout", 1200.0),
+            ("workiq_max_draft_questions", 10),
+        ):
+            with self.subTest(field_name=field_name):
+                with self.assertRaises(TypeError):
+                    SDKConfig(**{field_name: value})
 
     def test_max_diff_chars_default(self) -> None:
         self.assertEqual(self.cfg.max_diff_chars, 80_000)
@@ -227,95 +243,53 @@ class TestSDKConfigFromEnv(unittest.TestCase):
             os.environ.clear()
             os.environ.update(env_backup)
 
-    def test_from_env_reads_workiq_options(self) -> None:
+    def test_from_env_reads_knowledge_source_options(self) -> None:
         env_backup = os.environ.copy()
         try:
             os.environ["WORKIQ_ENABLED"] = "true"
-            os.environ["WORKIQ_QA_ENABLED"] = "false"
-            os.environ["WORKIQ_AKM_REVIEW_ENABLED"] = "true"
-            os.environ["WORKIQ_TENANT_ID"] = "tenant-001"
+            os.environ["HVE_KNOWLEDGE_SOURCES"] = "docs-mcp, crm,,bad name"
             os.environ["WORKIQ_PROMPT_QA"] = "qa"
-            os.environ["WORKIQ_PROMPT_KM"] = "km"
-            os.environ["WORKIQ_PROMPT_REVIEW"] = "review"
             os.environ["WORKIQ_DRAFT_MODE"] = "true"
-            os.environ["WORKIQ_DRAFT_OUTPUT_DIR"] = "qa-drafts"
-            os.environ["WORKIQ_PER_QUESTION_TIMEOUT"] = "45"
-            os.environ["WORKIQ_MAX_DRAFT_QUESTIONS"] = "12"
             cfg = SDKConfig.from_env()
             self.assertTrue(cfg.workiq_enabled)
-            self.assertFalse(cfg.is_workiq_qa_enabled())
-            self.assertTrue(cfg.is_workiq_akm_review_enabled())
-            self.assertEqual(cfg.workiq_tenant_id, "tenant-001")
-            self.assertEqual(cfg.workiq_prompt_qa, "qa")
-            self.assertEqual(cfg.workiq_prompt_km, "km")
-            self.assertEqual(cfg.workiq_prompt_review, "review")
-            self.assertTrue(cfg.workiq_draft_mode)
-            self.assertEqual(cfg.workiq_draft_output_dir, "qa-drafts")
-            self.assertEqual(cfg.workiq_per_question_timeout, 45.0)
-            self.assertEqual(cfg.workiq_max_draft_questions, 12)
+            self.assertEqual(cfg.knowledge_sources, ["docs-mcp", "crm"])
+            self.assertEqual(cfg.effective_knowledge_sources(), ["workiq", "docs-mcp", "crm"])
+            self.assertFalse(hasattr(cfg, "workiq_prompt_qa"))
+            self.assertFalse(hasattr(cfg, "workiq_draft_mode"))
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
 
-    def test_from_env_workiq_per_question_timeout_default_is_1200(self) -> None:
-        """環境変数 WORKIQ_PER_QUESTION_TIMEOUT 未設定時の既定値が 1200.0（20 分）であること。"""
+    def test_from_env_ignores_removed_workiq_runtime_environment(self) -> None:
         env_backup = os.environ.copy()
         try:
-            os.environ.pop("WORKIQ_PER_QUESTION_TIMEOUT", None)
-            cfg = SDKConfig.from_env()
-            self.assertEqual(cfg.workiq_per_question_timeout, 1200.0)
-        finally:
-            os.environ.clear()
-            os.environ.update(env_backup)
-
-    def test_from_env_workiq_request_timeout_default_is_300(self) -> None:
-        """環境変数 WORKIQ_REQUEST_TIMEOUT 未設定時の既定値が 300.0（5 分）であること。"""
-        env_backup = os.environ.copy()
-        try:
-            os.environ.pop("WORKIQ_REQUEST_TIMEOUT", None)
-            cfg = SDKConfig.from_env()
-            self.assertEqual(cfg.workiq_request_timeout, 300.0)
-        finally:
-            os.environ.clear()
-            os.environ.update(env_backup)
-
-    def test_from_env_workiq_request_timeout_reads_env(self) -> None:
-        """環境変数 WORKIQ_REQUEST_TIMEOUT が設定されていれば値が反映されること。"""
-        env_backup = os.environ.copy()
-        try:
+            os.environ["WORKIQ_TENANT_ID"] = "tenant-001"
             os.environ["WORKIQ_REQUEST_TIMEOUT"] = "600"
+            os.environ["WORKIQ_PROMPT_REVIEW"] = "review"
             cfg = SDKConfig.from_env()
-            self.assertEqual(cfg.workiq_request_timeout, 600.0)
+            self.assertFalse(hasattr(cfg, "workiq_tenant_id"))
+            self.assertFalse(hasattr(cfg, "workiq_request_timeout"))
+            self.assertFalse(hasattr(cfg, "workiq_prompt_review"))
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
 
-    def test_from_env_uses_auto_when_model_unset(self) -> None:
+    def test_from_env_uses_default_model_when_model_unset(self) -> None:
         env_backup = os.environ.copy()
         try:
             os.environ.pop("MODEL", None)
             cfg = SDKConfig.from_env()
-            self.assertEqual(cfg.model, MODEL_AUTO_VALUE)
+            self.assertEqual(cfg.model, DEFAULT_MODEL)
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
 
-    def test_from_env_uses_auto_when_model_empty(self) -> None:
+    def test_from_env_uses_default_model_when_model_empty(self) -> None:
         env_backup = os.environ.copy()
         try:
             os.environ["MODEL"] = ""
             cfg = SDKConfig.from_env()
-            self.assertEqual(cfg.model, MODEL_AUTO_VALUE)
-        finally:
-            os.environ.clear()
-            os.environ.update(env_backup)
-
-    def test_from_env_hve_auto_self_improve_true(self) -> None:
-        env_backup = os.environ.copy()
-        try:
-            os.environ["HVE_AUTO_SELF_IMPROVE"] = "true"
-            cfg = SDKConfig.from_env()
-            self.assertTrue(cfg.auto_self_improve)
+            self.assertEqual(cfg.model, DEFAULT_MODEL)
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
@@ -326,30 +300,6 @@ class TestSDKConfigFromEnv(unittest.TestCase):
             os.environ["SHOW_REASONING"] = "false"
             cfg = SDKConfig.from_env()
             self.assertFalse(cfg.show_reasoning)
-        finally:
-            os.environ.clear()
-            os.environ.update(env_backup)
-
-    def test_from_env_hve_auto_self_improve_true_variants(self) -> None:
-        env_backup = os.environ.copy()
-        try:
-            for value in ("true", "1", "yes"):
-                with self.subTest(value=value):
-                    os.environ["HVE_AUTO_SELF_IMPROVE"] = value
-                    cfg = SDKConfig.from_env()
-                    self.assertTrue(cfg.auto_self_improve)
-        finally:
-            os.environ.clear()
-            os.environ.update(env_backup)
-
-    def test_from_env_hve_auto_self_improve_false_variants(self) -> None:
-        env_backup = os.environ.copy()
-        try:
-            for value in ("false", "0", "no", ""):
-                with self.subTest(value=value):
-                    os.environ["HVE_AUTO_SELF_IMPROVE"] = value
-                    cfg = SDKConfig.from_env()
-                    self.assertFalse(cfg.auto_self_improve)
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
@@ -530,9 +480,6 @@ class TestSDKConfigArtifactImprovementDefaults(unittest.TestCase):
     def test_apply_review_improvements_to_main_default_true(self) -> None:
         self.assertTrue(self.cfg.apply_review_improvements_to_main)
 
-    def test_apply_self_improve_to_main_default_true(self) -> None:
-        self.assertTrue(self.cfg.apply_self_improve_to_main)
-
 
 class TestSDKConfigArtifactImprovementFromEnv(unittest.TestCase):
     """apply_*_improvements_to_main 環境変数読み取りの検証。"""
@@ -564,25 +511,10 @@ class TestSDKConfigArtifactImprovementFromEnv(unittest.TestCase):
         cfg = SDKConfig.from_env()
         self.assertTrue(cfg.apply_review_improvements_to_main)
 
-    def test_apply_self_improve_disabled_by_env(self) -> None:
-        os.environ["HVE_APPLY_SELF_IMPROVE_TO_MAIN"] = "false"
-        cfg = SDKConfig.from_env()
-        self.assertFalse(cfg.apply_self_improve_to_main)
-
-    def test_apply_self_improve_default_true_when_unset(self) -> None:
-        os.environ.pop("HVE_APPLY_SELF_IMPROVE_TO_MAIN", None)
-        cfg = SDKConfig.from_env()
-        self.assertTrue(cfg.apply_self_improve_to_main)
-
     def test_apply_review_improvements_disabled_by_zero(self) -> None:
         os.environ["HVE_APPLY_REVIEW_IMPROVEMENTS_TO_MAIN"] = "0"
         cfg = SDKConfig.from_env()
         self.assertFalse(cfg.apply_review_improvements_to_main)
-
-    def test_apply_self_improve_disabled_by_no(self) -> None:
-        os.environ["HVE_APPLY_SELF_IMPROVE_TO_MAIN"] = "no"
-        cfg = SDKConfig.from_env()
-        self.assertFalse(cfg.apply_self_improve_to_main)
 
     def test_apply_review_improvements_enabled_by_yes(self) -> None:
         os.environ["HVE_APPLY_REVIEW_IMPROVEMENTS_TO_MAIN"] = "yes"
@@ -593,54 +525,6 @@ class TestSDKConfigArtifactImprovementFromEnv(unittest.TestCase):
         os.environ["HVE_APPLY_REVIEW_IMPROVEMENTS_TO_MAIN"] = ""
         cfg = SDKConfig.from_env()
         self.assertFalse(cfg.apply_review_improvements_to_main)
-
-
-class TestSelfImproveWorkflowSdkConfig(unittest.TestCase):
-    """Issue Template 起動の self-improve ジョブで SDKConfig.from_env() を使う際の
-    github_token / cli_path / model 等が正しく渡されることを検証する。"""
-
-    def setUp(self):
-        self._env_backup = os.environ.copy()
-
-    def tearDown(self):
-        os.environ.clear()
-        os.environ.update(self._env_backup)
-
-    def test_from_env_provides_github_token_for_self_improve(self) -> None:
-        """GH_TOKEN が set されている場合、from_env() が github_token を取得すること。"""
-        os.environ["GH_TOKEN"] = "ghp_test_token"
-        os.environ.pop("GITHUB_TOKEN", None)
-        cfg = SDKConfig.from_env()
-        cfg.auto_self_improve = True
-        cfg.self_improve_max_iterations = 3
-        self.assertEqual(cfg.github_token, "ghp_test_token")
-        self.assertTrue(cfg.auto_self_improve)
-        self.assertEqual(cfg.self_improve_max_iterations, 3)
-
-    def test_from_env_provides_cli_path_for_self_improve(self) -> None:
-        """COPILOT_CLI_PATH が set されている場合、from_env() が cli_path を取得すること。"""
-        os.environ["COPILOT_CLI_PATH"] = "/usr/local/bin/copilot"
-        cfg = SDKConfig.from_env()
-        cfg.auto_self_improve = True
-        self.assertEqual(cfg.cli_path, "/usr/local/bin/copilot")
-
-    def test_from_env_provides_model_for_self_improve(self) -> None:
-        """MODEL が set されている場合、from_env() が model を取得すること。"""
-        os.environ["MODEL"] = "claude-opus-4.6"
-        cfg = SDKConfig.from_env()
-        cfg.auto_self_improve = True
-        self.assertEqual(cfg.model, "claude-opus-4.6")
-
-    def test_from_env_with_quality_threshold_override(self) -> None:
-        """from_env() + quality_threshold 上書きが正しく動作すること。"""
-        os.environ["GH_TOKEN"] = "ghp_test"
-        cfg = SDKConfig.from_env()
-        cfg.auto_self_improve = True
-        cfg.self_improve_max_iterations = 5
-        cfg.self_improve_quality_threshold = 90
-        self.assertEqual(cfg.self_improve_quality_threshold, 90)
-        self.assertEqual(cfg.self_improve_max_iterations, 5)
-        self.assertEqual(cfg.github_token, "ghp_test")
 
 
 class TestNormalizeModelWithWarning(unittest.TestCase):
@@ -669,6 +553,19 @@ class TestNormalizeModelWithWarning(unittest.TestCase):
                 result = self._normalize(model)
             self.assertEqual(result, model, f"{model} should pass through")
             self.assertEqual(len(w), 0, f"{model} should not warn")
+
+    def test_normalize_model_with_warning_accepts_live_catalog_model(self) -> None:
+        """FR-MODEL-03（v3.30）: SDK の model catalog（キャッシュ）にある ID は Auto へ丸めない。"""
+        import warnings
+        from unittest import mock
+        import config as config_mod  # type: ignore
+
+        with mock.patch.object(config_mod, "_catalog_model_ids", return_value=frozenset({"gpt-6-luna"})):
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                self.assertEqual(self._normalize("gpt-6-luna"), "gpt-6-luna")
+                self.assertEqual(self._normalize("claude-sonnet-4.6"), MODEL_AUTO_VALUE)
+        self.assertEqual(len(w), 1)
 
     def test_normalize_model_with_warning_passes_through_auto(self) -> None:
         """Auto はそのまま返すこと。"""

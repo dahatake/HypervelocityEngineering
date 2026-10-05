@@ -61,14 +61,14 @@ class TestTransitionChain:
         assert "activate_issue" in section
 
     def test_4_ends_the_workflow(self, text):
-        """最終 Step が Self-Improve へ渡らないと Root が閉じない。"""
+        """最終 Step が通常の Root 完了へ進むこと。"""
         section = _case_body(text, "4")
-        assert "mark_root_self_improve_ready" in section
+        assert "mark_root_done" in section
 
     def test_3_falls_back_when_4_absent(self, text):
         """skip 等で Step.4 が無い場合に停止しない。"""
         section = _case_body(text, "3")
-        assert "mark_root_self_improve_ready" in section
+        assert "mark_root_done" in section
 
     def test_step_2_container_is_closed_by_2_3(self, text):
         section = _case_body(text, "2.3")
@@ -84,7 +84,7 @@ class TestTransitionChain:
         helper = helper.split("\n          }", 1)[0]
         assert r"\[AAGD\] Step\.3:" in helper
         assert r"\[AAGD\] Step\.4:" in helper
-        assert "mark_root_self_improve_ready" in helper
+        assert "mark_root_done" in helper
 
 
 class TestRegistryParity:
@@ -197,7 +197,7 @@ class TestToolSearchPolicyPropagation:
 
 
 class TestPostDagArtifactRevalidation:
-    """FR-WF-AAGD-04: label が全 done でも artifact が不正なら Self-Improve へ進ませない。"""
+    """FR-WF-AAGD-04: label が全 done でも artifact が不正なら Root を完了させない。"""
 
     def test_gate_receives_the_checked_out_repo_root(self, text):
         assert "--repo-root" in text
@@ -208,7 +208,11 @@ class TestPostDagArtifactRevalidation:
     def test_post_dag_parse_reads_the_policy_tag(self, text):
         assert "tool_search_policy=" in text
 
-    def test_gate_runs_before_self_improve(self, text):
-        gate = text.index("Revalidate AAGD TDD and Deploy gates before mutation")
-        self_improve = text.index("Run mandatory AAGD Post-DAG Self-Improve")
-        assert gate < self_improve
+    def test_gate_runs_before_root_completion(self, text):
+        gate = text.index("python3 -m hve.cloud_aagd_gate")
+        root_done = text.index('add_label "${ROOT_ISSUE}" "aagd:done"')
+        assert gate < root_done
+
+    def test_no_self_improve_logic_remains(self, text):
+        assert "self-improve" not in text
+        assert "Self-Improve" not in text

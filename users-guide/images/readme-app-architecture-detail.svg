@@ -31,7 +31,7 @@
 
   <rect x="0" y="0" width="1340" height="1010" fill="#ffffff"/>
   <text x="28" y="44" class="title">HVE アプリケーションアーキテクチャ（カスタマイズ／パラメータ観点）</text>
-  <text x="28" y="68" class="subtitle">Orchestrator は Cloud / CLI / GUI の 3 つ。Prompt 版は plan SHA-256 の一致後に CLI へ委譲する利用面。★ = 編集・設定する拡張点。</text>
+  <text x="28" y="68" class="subtitle">Orchestrator は Cloud / CLI / GUI の 3 つ。Prompt 版は request v1 の execution_policy / plan SHA-256 を再検証して CLI へ委譲する利用面。★ = 編集・設定する拡張点。</text>
 
   <!-- ===== Main pipeline (left ~74%) ===== -->
   <!-- Lane 1: Entry -->
@@ -81,8 +81,8 @@
 
   <rect x="510" y="316" width="430" height="78" class="card core"/>
   <text x="526" y="340" class="label">hve/dag_executor.py — DAGExecutor</text>
-  <text x="526" y="360" class="small">asyncio.Semaphore(max_parallel) で並列実行</text>
-  <text x="526" y="378" class="small">依存解決 / Fork-on-Retry（1 回限定）</text>
+  <text x="526" y="360" class="small">asyncio.Semaphore(max_parallel) + ownership_parallel で並列制御</text>
+  <text x="526" y="378" class="small">依存解決 / 所有範囲で fan-out 子を並列 / Fork-on-Retry</text>
 
   <path class="arrow" d="M275 394 L275 414"/>
   <path class="arrow" d="M725 394 L725 600"/>
@@ -140,7 +140,7 @@
 
   <rect x="1000" y="166" width="296" height="48" class="card param"/>
   <text x="1010" y="184" class="mono">--model / --review-model / --qa-model</text>
-  <text x="1010" y="204" class="small">本実行・レビュー・QA 各 Agent のモデル</text>
+  <text x="1010" y="204" class="small">既定 claude-opus-5.5。`--akm-model` と SDK `list_models()` の ID も可</text>
 
   <rect x="1000" y="220" width="296" height="44" class="card param"/>
   <text x="1010" y="238" class="mono">--max-parallel（既定 15）</text>
@@ -148,15 +148,15 @@
 
   <rect x="1000" y="270" width="296" height="44" class="card param"/>
   <text x="1010" y="288" class="mono">--steps</text>
-  <text x="1010" y="306" class="small">実行ステップの絞り込み（部分実行）</text>
+  <text x="1010" y="306" class="small">部分実行。ADI 1.1 / 1.2 は既定で未選択</text>
 
   <rect x="1000" y="320" width="296" height="44" class="card param"/>
-  <text x="1010" y="338" class="mono">--mcp-config</text>
-  <text x="1010" y="356" class="small">MCP Server を SDK セッションへ注入</text>
+  <text x="1010" y="338" class="mono">request v1.execution_policy</text>
+  <text x="1010" y="356" class="small">unattended / azure_deploy / budget_note を再検証</text>
 
   <rect x="1000" y="370" width="296" height="44" class="card param"/>
-  <text x="1010" y="388" class="mono">--self-improve / HVE_AUTO_SELF_IMPROVE</text>
-  <text x="1010" y="406" class="small">完了後の自己改善ループ起動</text>
+  <text x="1010" y="388" class="mono">--tdd-max-retries / HVE_TDD_MAX_RETRIES</text>
+  <text x="1010" y="406" class="small">TDD GREEN フェーズの再試行上限</text>
 
   <rect x="1000" y="420" width="296" height="44" class="card param"/>
   <text x="1010" y="438" class="mono">HVE_FORK_ON_RETRY=true</text>
@@ -170,8 +170,8 @@
   <text x="1010" y="538" class="mono">--dry-run</text>
   <text x="1010" y="556" class="small">DAG/プロンプトを生成のみ（実行しない）</text>
 
-  <text x="1000" y="584" class="small">Prompt gate: plan SHA-256 = --expected-sha256</text>
-  <text x="1000" y="602" class="small">（一致時だけ `prompt run` が orchestrate を起動）</text>
+  <text x="1000" y="584" class="small">Prompt gate: execution_policy + plan SHA-256</text>
+  <text x="1000" y="602" class="small">（再検証に合格した場合だけ `prompt run` が orchestrate を起動）</text>
   <text x="1000" y="624" class="small">完全な一覧: python -m hve orchestrate --help</text>
   <text x="1000" y="642" class="small">詳細: users-guide/hve-technical-architecture.md</text>
 

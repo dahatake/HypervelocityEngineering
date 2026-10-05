@@ -1,72 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 520" role="img" aria-labelledby="title desc">
-  <title id="title">ADFD インフォグラフィック（3 ステップ）</title>
-  <desc id="desc">ADFD（Dataflow Design）の入力（AAS 出力の docs/catalog/*）、auto-dataflow-design ワークフローの 3 ステップ（step-1 ジョブ詳細仕様書 と step-2 監視・運用設計書 を並列実行し、AND 合流して step-3 TDD テスト仕様書）、出力成果物を示す図。</desc>
-  <defs>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L10,5 L0,10 z" fill="#334155"/></marker>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">ADFD インフォグラフィック</title>
+  <desc id="desc">ADFD の現行 7 Step と主成果物。0.1 から 5 までの producer を直列で進み、Step 1 と Step 2 を並列実行した後、Step 3 で APP-ID ごとの TDD テスト仕様を生成する。</desc>
   <style>
-    text { font-family: "Noto Sans CJK JP", "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif; fill: #0f172a; }
+    text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #0f172a; }
     .zone { stroke: #94a3b8; stroke-width: 1.5; rx: 10; ry: 10; }
     .inputZone { fill: #f8fafc; } .processZone { fill: #eff6ff; } .outputZone { fill: #f0fdf4; }
     .zoneTitle { font-size: 18px; font-weight: 700; }
     .file { fill: #fff; stroke: #64748b; stroke-width: 1.5; rx: 8; ry: 8; }
     .workflow { fill: #dbeafe; stroke: #1d4ed8; stroke-width: 2; rx: 10; ry: 10; }
     .step { fill: #e0ecff; stroke: #1d4ed8; stroke-width: 1.5; rx: 8; ry: 8; }
-    .agent { fill: #ede9fe; stroke: #7c3aed; stroke-width: 1.2; rx: 10; ry: 10; }
     .node { font-size: 12px; font-weight: 600; }
     .tiny { font-size: 10.5px; fill: #475569; }
-    .arrow { stroke: #334155; stroke-width: 2; fill: none; marker-end: url(#arrow); }
-    .join { fill: #334155; }
-    .label { rx: 12; ry: 12; }
-    .labelText { font-size: 12px; font-weight: 700; fill: #fff; text-anchor: middle; dominant-baseline: middle; }
   </style>
-  <rect x="20" y="20" width="320" height="480" class="zone inputZone"/>
-  <rect x="360" y="20" width="700" height="480" class="zone processZone"/>
-  <rect x="1080" y="20" width="300" height="480" class="zone outputZone"/>
-  <text x="40" y="52" class="zoneTitle" fill="#64748b">INPUT（AAS 出力）</text>
-  <text x="380" y="52" class="zoneTitle" fill="#1d4ed8">PROCESS</text>
-  <text x="1100" y="52" class="zoneTitle" fill="#15803d">OUTPUT</text>
 
-  <g id="input-zone">
-    <rect x="40" y="90" width="280" height="70" class="file"/><text x="54" y="120" class="node">docs/catalog/app-catalog.md</text><text x="54" y="140" class="tiny">アプリカタログ（必須）</text>
-    <rect x="40" y="172" width="280" height="70" class="file"/><text x="54" y="202" class="node">docs/catalog/data-model.md</text><text x="54" y="222" class="tiny">データモデル（step-1）</text>
-    <rect x="40" y="254" width="280" height="70" class="file"/><text x="54" y="284" class="node">docs/catalog/service-catalog-matrix.md</text><text x="54" y="304" class="tiny">サービスカタログ（step-1/2/3）</text>
-    <rect x="40" y="336" width="280" height="70" class="file"/><text x="54" y="366" class="node">docs/catalog/test-strategy.md</text><text x="54" y="386" class="tiny">テスト戦略（step-3）</text>
-  </g>
+  <rect x="20" y="20" width="280" height="380" class="zone inputZone"/>
+  <rect x="320" y="20" width="560" height="380" class="zone processZone"/>
+  <rect x="900" y="20" width="280" height="380" class="zone outputZone"/>
+  <text x="40" y="52" class="zoneTitle" fill="#64748b">INPUT（AAS / ARD）</text>
+  <text x="340" y="52" class="zoneTitle" fill="#1d4ed8">PROCESS</text>
+  <text x="920" y="52" class="zoneTitle" fill="#15803d">OUTPUT</text>
 
-  <g id="process-zone">
-    <rect x="380" y="80" width="660" height="400" class="workflow"/>
-    <text x="402" y="108" class="node" fill="#1d4ed8">Workflow: auto-dataflow-design（= Custom Agent タスク群）</text>
+  <rect x="40" y="90" width="240" height="152" class="file"/>
+  <text x="54" y="118" class="node">docs/catalog/app-catalog.md</text>
+  <text x="54" y="138" class="node">docs/catalog/data-model.md</text>
+  <text x="54" y="158" class="node">docs/catalog/service-catalog-matrix.md</text>
+  <text x="54" y="178" class="node">docs/catalog/test-strategy.md</text>
+  <text x="54" y="198" class="node">docs/catalog/domain-analytics.md</text>
+  <text x="54" y="218" class="node">docs/catalog/use-case-catalog.md</text>
 
-    <!-- step-1 and step-2 parallel -->
-    <rect x="404" y="140" width="280" height="92" class="step"/><text x="418" y="160" class="node">step-1: ジョブ詳細仕様書（per-job fanout）</text><rect x="418" y="168" width="252" height="24" class="agent"/><text x="424" y="184" class="tiny">Arch-Dataflow-AppSpec</text><text x="418" y="214" class="tiny">→ docs/dataflow/apps/{jobId}-…-spec.md</text>
-    <rect x="404" y="248" width="280" height="78" class="step"/><text x="418" y="268" class="node">step-2: 監視・運用設計書</text><rect x="418" y="276" width="252" height="24" class="agent"/><text x="424" y="292" class="tiny">Arch-Dataflow-MonitoringDesign</text><text x="418" y="320" class="tiny">→ dataflow-monitoring-design.md</text>
+  <rect x="350" y="88" width="500" height="260" class="workflow"/>
+  <text x="372" y="116" class="node" fill="#1d4ed8">Workflow: adfd（0.1 → 0.2 → 4 → 5 → (1 ∥ 2) → 3）</text>
+  <text x="372" y="150" class="tiny">0.1 データモデル定義書 / 0.2 データフローアプリカタログ / 4 サービスカタログ / 5 テスト戦略書</text>
+  <text x="372" y="176" class="tiny">1 ジョブ詳細仕様書（APP-ID fan-out） / 2 監視・運用設計書 / 3 TDD テスト仕様書（APP-ID fan-out）</text>
+  <text x="372" y="214" class="tiny">Cloud の Issue Form / reusable workflow は旧 3 Step 表示のため、完全実行は CLI / GUI の current registry を使用</text>
+  <text x="372" y="252" class="tiny">fan-out キー: dataflow_catalog parser が返す APP-ID</text>
+  <text x="372" y="278" class="tiny">Step 3 は Step 1 と Step 2 の両方を待って起動</text>
 
-    <text x="404" y="356" class="tiny" fill="#1d4ed8">step-1 と step-2 は並列開始（ともに root）</text>
-
-    <!-- AND join -->
-    <circle cx="730" cy="233" r="7" class="join"/>
-    <text x="708" y="220" class="tiny" fill="#334155">AND</text>
-    <path class="arrow" d="M684 186 L723 226"/>
-    <path class="arrow" d="M684 287 L723 240"/>
-
-    <!-- step-3 -->
-    <rect x="756" y="186" width="270" height="96" class="step"/><text x="770" y="206" class="node">step-3: TDD テスト仕様書（per-job fanout）</text><rect x="770" y="214" width="242" height="24" class="agent"/><text x="776" y="230" class="tiny">Arch-Dataflow-TDD-TestSpec</text><text x="770" y="258" class="tiny">depends: step-1 AND step-2</text><text x="770" y="274" class="tiny">→ docs/test-specs/{jobId}-test-spec.md</text>
-    <path class="arrow" d="M737 233 L752 233"/>
-
-    <!-- labels -->
-    <rect x="404" y="412" width="96" height="26" fill="#64748b" class="label"/><text x="452" y="425" class="labelText">adfd:ready</text>
-    <rect x="514" y="412" width="112" height="26" fill="#1d4ed8" class="label"/><text x="570" y="425" class="labelText">adfd:running</text>
-    <rect x="640" y="412" width="96" height="26" fill="#15803d" class="label"/><text x="688" y="425" class="labelText">adfd:done</text>
-  </g>
-
-  <g id="output-zone">
-    <rect x="1100" y="120" width="260" height="80" class="file"/><text x="1114" y="150" class="node">docs/dataflow/apps/</text><text x="1114" y="170" class="tiny">{jobId}-{jobNameSlug}-spec.md</text><text x="1114" y="188" class="tiny">（ジョブ詳細仕様・per-job）</text>
-    <rect x="1100" y="216" width="260" height="64" class="file"/><text x="1114" y="244" class="node">docs/dataflow/</text><text x="1114" y="264" class="tiny">dataflow-monitoring-design.md</text>
-    <rect x="1100" y="296" width="260" height="80" class="file"/><text x="1114" y="324" class="node">docs/test-specs/</text><text x="1114" y="344" class="tiny">{jobId}-test-spec.md</text><text x="1114" y="362" class="tiny">（TDD テスト仕様・per-job）</text>
-  </g>
-
-  <!-- zone arrows -->
-  <path class="arrow" d="M324 233 L378 233"/>
-  <path class="arrow" d="M1042 233 L1098 233"/>
+  <rect x="920" y="90" width="240" height="208" class="file"/>
+  <text x="934" y="118" class="node">docs/dataflow/dataflow-data-model.md</text>
+  <text x="934" y="138" class="node">docs/dataflow/dataflow-app-catalog.md</text>
+  <text x="934" y="158" class="node">docs/dataflow/dataflow-service-catalog.md</text>
+  <text x="934" y="178" class="node">docs/dataflow/dataflow-test-strategy.md</text>
+  <text x="934" y="198" class="node">docs/dataflow/apps/{APP-ID}-spec.md</text>
+  <text x="934" y="218" class="node">docs/dataflow/dataflow-monitoring-design.md</text>
+  <text x="934" y="238" class="node">docs/test-specs/{APP-ID}-test-spec.md</text>
 </svg>

@@ -34,7 +34,6 @@ _STEP_1_3 = (
     / "asdw-web"
     / "step-1.3.prompt.md"
 )
-_COPILOT_INSTRUCTIONS = _REPO_ROOT / ".github" / "copilot-instructions.md"
 _STEP_1_2 = (
     _REPO_ROOT
     / ".github"
@@ -75,7 +74,6 @@ _SHARED_NETWORK_CONTRACT = (
     _REPO_ROOT
     / ".github"
     / "skills"
-    / "azure-skills"
     / "azure-cli-deploy-scripts"
     / "references"
     / "asdw-data-verifier-contract.md"
@@ -278,11 +276,10 @@ def test_data_deploy_skill_limits_gui_powershell_to_the_canonical_transport() ->
 
 def test_data_deploy_shell_restriction_exempts_mdq_cli_requirement() -> None:
     """A shell-constrained Step must not be ordered to invoke disallowed mdq CLI."""
-    text = _COPILOT_INSTRUCTIONS.read_text(encoding="utf-8")
+    text = _PROMPT.read_text(encoding="utf-8")
 
-    assert "fail-closed shell allowlist" in text
-    assert "markdown-query CLI" in text
-    assert "read/search tool" in text
+    assert "fail-closed allowlistは `python -m mdq`" in text
+    assert "read/search toolで行い" in text
 
 
 def test_data_deploy_prompt_and_template_delegate_strict_details_to_shared_contract() -> None:

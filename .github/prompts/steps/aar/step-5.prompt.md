@@ -21,16 +21,13 @@ Step.2 の設計書どおりに Knowledge Base / Knowledge Source を Azure CLI 
 - スクリプトは冪等（再実行しても壊れない）にする。
 - 既存の API / データストアは**変更しない**。接続設定のみを追加する。
 
-## AC 検証（必須）
+## AC 検証
 - `AC4B-1`: 全リソースが `Succeeded`
 - `AC4B-14`: 実 KB の reasoning effort が設計値と一致
 - `AC4B-15`: 実 KB の Knowledge Source 集合が設計値と一致
 - `AC4B-18`: 全 Knowledge Source を横断する smoke retrieve が成功
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 {existing_artifact_policy}
 

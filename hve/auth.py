@@ -88,14 +88,31 @@ def resolve_token_env() -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 
-async def _get_auth_status_async() -> AuthInfo:
+async def _get_auth_status_async(
+    *,
+    cli_path: Optional[str] = None,
+    cli_url: Optional[str] = None,
+) -> AuthInfo:
     """SDK CopilotClient を起動して認証状態を取得する (内部 async 実装)。"""
-    try:
-        from copilot import CopilotClient  # type: ignore[import-not-found]
-    except ImportError as e:  # pragma: no cover - SDK 必須
-        raise AuthError(f"github-copilot-sdk が import できません: {e}") from e
-
-    client = CopilotClient()
+    if cli_path or cli_url:
+        try:
+            from .copilot_client_factory import create_copilot_client
+        except ImportError:
+            try:
+                from copilot_client_factory import create_copilot_client  # type: ignore[import-not-found,no-redef]
+            except ImportError as e:  # pragma: no cover - SDK 必須
+                raise AuthError(f"github-copilot-sdk が import できません: {e}") from e
+        client = create_copilot_client(
+            cli_path=cli_path,
+            cli_url=cli_url,
+            log_level="error",
+        )
+    else:
+        try:
+            from copilot import CopilotClient  # type: ignore[import-not-found]
+        except ImportError as e:  # pragma: no cover - SDK 必須
+            raise AuthError(f"github-copilot-sdk が import できません: {e}") from e
+        client = CopilotClient()
     try:
         await client.start()
         status = await client.get_auth_status()
@@ -126,11 +143,18 @@ async def _get_auth_status_async() -> AuthInfo:
             pass
 
 
-def get_auth_status(timeout: float = 30.0) -> AuthInfo:
+def get_auth_status(
+    timeout: float = 30.0,
+    *,
+    cli_path: Optional[str] = None,
+    cli_url: Optional[str] = None,
+) -> AuthInfo:
     """認証状態を同期的に取得する。
 
     Args:
         timeout: SDK 起動 + ステータス取得のタイムアウト秒。
+        cli_path: 状態確認に使うlocal Copilot CLI runtimeの明示path。
+        cli_url: 状態確認に使う既存Copilot CLI server URL。
 
     Returns:
         AuthInfo。SDK 起動失敗時は is_authenticated=False の AuthInfo を返し、
@@ -138,7 +162,10 @@ def get_auth_status(timeout: float = 30.0) -> AuthInfo:
     """
     try:
         return asyncio.run(
-            asyncio.wait_for(_get_auth_status_async(), timeout=timeout)
+            asyncio.wait_for(
+                _get_auth_status_async(cli_path=cli_path, cli_url=cli_url),
+                timeout=timeout,
+            )
         )
     except asyncio.TimeoutError:
         return AuthInfo(
@@ -154,9 +181,18 @@ def get_auth_status(timeout: float = 30.0) -> AuthInfo:
         )
 
 
-def is_authenticated(timeout: float = 30.0) -> bool:
+def is_authenticated(
+    timeout: float = 30.0,
+    *,
+    cli_path: Optional[str] = None,
+    cli_url: Optional[str] = None,
+) -> bool:
     """認証済みかどうかの便利関数。"""
-    return get_auth_status(timeout=timeout).is_authenticated
+    return get_auth_status(
+        timeout=timeout,
+        cli_path=cli_path,
+        cli_url=cli_url,
+    ).is_authenticated
 
 
 def ensure_authenticated(
@@ -165,6 +201,8 @@ def ensure_authenticated(
     host: str = "https://github.com",
     status_timeout: float = 30.0,
     login_timeout: Optional[float] = None,
+    cli_path: Optional[str] = None,
+    cli_url: Optional[str] = None,
 ) -> AuthInfo:
     """GitHub Copilot 認証状態を確認し、必要ならログインを実行する。
 
@@ -174,22 +212,37 @@ def ensure_authenticated(
         host: ``copilot login`` に渡す GitHub ホスト URL。
         status_timeout: 認証状態確認のタイムアウト秒。
         login_timeout: ``copilot login`` のタイムアウト秒。None で無制限。
+        cli_path: 状態確認と対話loginに使うlocal runtimeの明示path。
+        cli_url: 状態確認に使う外部runtime。未認証時のlocal login代替は行わない。
 
     Returns:
         最終的な AuthInfo。ログインコマンドが非 0 で終了した場合は
         ``is_authenticated=False`` とし、``status_message`` に終了コードを入れる。
     """
-    info = get_auth_status(timeout=status_timeout)
+    info = get_auth_status(
+        timeout=status_timeout,
+        cli_path=cli_path,
+        cli_url=cli_url,
+    )
     if info.is_authenticated or not interactive:
         return info
 
-    rc = run_login(host=host, timeout=login_timeout)
+    if cli_url:
+        return AuthInfo(
+            is_authenticated=False,
+            status_message="external Copilot CLI server requires server-side authentication",
+        )
+    rc = run_login(host=host, binary=cli_path, timeout=login_timeout)
     if rc != 0:
         return AuthInfo(
             is_authenticated=False,
             status_message=f"copilot login exited with {rc}",
         )
-    return get_auth_status(timeout=status_timeout)
+    return get_auth_status(
+        timeout=status_timeout,
+        cli_path=cli_path,
+        cli_url=cli_url,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -198,39 +251,18 @@ def ensure_authenticated(
 
 
 def find_copilot_binary() -> Optional[str]:
-    """SDK 同梱の copilot 実行ファイル絶対パスを返す。
+    """SDK実セッションと同じ解決順でCopilot CLI runtimeを返す。"""
+    configured = os.environ.get("COPILOT_CLI_PATH")
+    if configured:
+        return configured
 
-    見つからない場合は PATH 上の `copilot`、次に SDK が `download-runtime` で
-    展開したランタイムキャッシュを探し、いずれも無ければ None。
-    """
-    # 1) SDK 同梱バイナリ (copilot/bin/copilot{.exe})
-    try:
-        import copilot.bin as _bin  # type: ignore[import-not-found]
-
-        bin_dir = os.path.dirname(_bin.__file__)
-        exe_name = "copilot.exe" if sys.platform.startswith("win") else "copilot"
-        candidate = os.path.join(bin_dir, exe_name)
-        if os.path.isfile(candidate):
-            return candidate
-    except ImportError:
-        pass
-
-    # 2) PATH フォールバック
-    from shutil import which
-
-    on_path = which("copilot")
-    if on_path:
-        return on_path
-
-    # 3) SDK ランタイムキャッシュ。SDK はバイナリを同梱せず `download-runtime`
-    #    でキャッシュへ展開するため、キャッシュ位置は SDK 側の解決関数に委ねる。
     try:
         from copilot._cli_download import get_cached_cli_path
     except ImportError:
         return None
     try:
         return get_cached_cli_path()
-    except (OSError, RuntimeError):
+    except Exception:
         return None
 
 

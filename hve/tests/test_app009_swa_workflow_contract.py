@@ -7,6 +7,8 @@ import re
 
 import yaml
 
+from hve.prompt_loader import load_prompt_file
+
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "azure-static-web-apps-app009.yml"
@@ -79,7 +81,9 @@ def test_hard_coded_target_and_pull_request_paths_are_absent() -> None:
 
 def test_step_prompt_matches_the_manual_workflow_contract() -> None:
     prompt = _PROMPT.read_text(encoding="utf-8")
-    assert _PROMPT_MIRROR.read_bytes() == _PROMPT.read_bytes()
+    assert _PROMPT_MIRROR.read_text(encoding="utf-8") == load_prompt_file(
+        "Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps.prompt.md"
+    )
     assert "trigger は `workflow_dispatch` だけ" in prompt
     assert "`push` / `pull_request` trigger と PR close job を追加しない" in prompt
     assert '-f resource_group="${RESOURCE_GROUP}"' in prompt

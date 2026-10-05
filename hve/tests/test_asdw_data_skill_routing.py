@@ -196,7 +196,6 @@ def _capture_runner_main_prompt(workflow_id: str, step_id: str) -> str:
         model="claude-opus-4.7",
         auto_qa=False,
         auto_contents_review=False,
-        auto_self_improve=False,
         run_id=f"t04-{workflow_id}-{step_id.replace('.', '-')}",
     )
     runner = StepRunner(
@@ -204,6 +203,12 @@ def _capture_runner_main_prompt(workflow_id: str, step_id: str) -> str:
         console=Console(verbose=False, quiet=True),
         workflow_params={"resource_group": "test-resource-group"},
     )
+
+    async def _create_routed_prompt_session(*, client, session_options, **_kwargs):
+        # Resource route自体はtest_sdk_resource_routing.pyが検証する。本テストは
+        # final promptのSkill guardだけを観測するため、解決済みroute境界から
+        # 既存fake clientへ委譲する。
+        return await client.create_session(**session_options)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         with patch.dict(
@@ -216,6 +221,15 @@ def _capture_runner_main_prompt(workflow_id: str, step_id: str) -> str:
         ), patch(
             "hve.copilot_client_factory.create_copilot_client",
             return_value=fake_client,
+        ), patch(
+            "hve.runner.discover_sdk_resources",
+            return_value=object(),
+        ), patch(
+            "hve.runner.ToolSearchPolicy",
+            new=types.SimpleNamespace(load=lambda **_kwargs: object()),
+        ), patch(
+            "hve.runner.create_routed_session",
+            side_effect=_create_routed_prompt_session,
         ), patch(
             "hve.prompt_loader.load_prompt",
             return_value="",

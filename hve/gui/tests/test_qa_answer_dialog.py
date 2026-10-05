@@ -15,12 +15,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QCoreApplication, QEvent, Qt
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication
 
 from hve.qa_merger import Choice, QADocument, QAMerger, QAQuestion
-from hve.workiq import get_workiq_prompt_template
 from hve.gui.qa_answer_dialog import (
     QAAnswerDialog,
     _COL_ANSWER,
@@ -38,6 +37,20 @@ def _get_app() -> QApplication:
     if _app is None:
         _app = QApplication.instance() or QApplication([])
     return _app
+
+
+def tearDownModule() -> None:
+    app = QApplication.instance()
+    if not isinstance(app, QApplication):
+        return
+    clipboard = QGuiApplication.clipboard()
+    if clipboard is not None:
+        clipboard.clear()
+    for widget in list(app.topLevelWidgets()):
+        widget.close()
+        widget.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    app.processEvents()
 
 
 def _make_doc_with_choices() -> QADocument:
@@ -451,30 +464,24 @@ class TestQAAnswerDialogDepthColumns(unittest.TestCase):
 
 
 class TestQuestionnaireCopyButtons(unittest.TestCase):
-    """FR-GUI-29: 2 つのコピー操作が存在し、視覚的に区別できること。"""
+    """FR-GUI-29（v3.38）: 質問票のコピー操作は 1 つだけで、Work IQ 用プロンプトのコピーは無い。"""
 
     def setUp(self) -> None:
         _get_app()
 
-    def test_both_copy_buttons_exist(self) -> None:
+    def test_only_questionnaire_copy_button_exists(self) -> None:
         dlg = QAAnswerDialog(_make_doc_with_choices())
         self.assertIsNotNone(dlg._copy_questionnaire_btn)
-        self.assertIsNotNone(dlg._copy_workiq_prompt_btn)
+        self.assertFalse(hasattr(dlg, "_copy_workiq_prompt_btn"))
+        self.assertFalse(hasattr(dlg, "set_workiq_capability"))
         dlg.close()
 
-    def test_buttons_are_not_icon_only(self) -> None:
-        """CopyButton の既定は ToolButtonIconOnly で、そのままでは 2 個を識別できない。"""
+    def test_button_is_not_icon_only(self) -> None:
         dlg = QAAnswerDialog(_make_doc_with_choices())
-        for btn in (dlg._copy_questionnaire_btn, dlg._copy_workiq_prompt_btn):
-            self.assertNotEqual(
-                btn.toolButtonStyle(), Qt.ToolButtonStyle.ToolButtonIconOnly
-            )
-            self.assertTrue(btn.text().strip())
-            self.assertTrue(btn.accessibleName().strip())
-        self.assertNotEqual(
-            dlg._copy_questionnaire_btn.text(),
-            dlg._copy_workiq_prompt_btn.text(),
-        )
+        btn = dlg._copy_questionnaire_btn
+        self.assertNotEqual(btn.toolButtonStyle(), Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self.assertTrue(btn.text().strip())
+        self.assertTrue(btn.accessibleName().strip())
         dlg.close()
 
     def test_shared_copy_button_default_style_is_unchanged(self) -> None:
@@ -504,28 +511,11 @@ class TestQuestionnaireCopyContent(unittest.TestCase):
         self.assertEqual(self._clipboard.text(), QAMerger.render_merged(doc))
         dlg.close()
 
-    def test_workiq_copy_embeds_questionnaire_into_default_template(self) -> None:
-        doc = _make_doc_with_choices()
-        dlg = QAAnswerDialog(doc)
-        dlg._copy_workiq_prompt_btn.click()
-        expected = get_workiq_prompt_template("qa").format(
-            target_content=QAMerger.render_merged(doc)
-        )
-        self.assertEqual(self._clipboard.text(), expected)
-        dlg.close()
-
-    def test_workiq_copy_is_not_wrapped_in_code_fence(self) -> None:
-        dlg = QAAnswerDialog(_make_doc_with_choices())
-        dlg._copy_workiq_prompt_btn.click()
-        self.assertNotIn("```", self._clipboard.text())
-        dlg.close()
-
     def test_copy_does_not_write_error_text(self) -> None:
         """CopyButton の例外捕捉文字列が貼り付け先へ渡らないこと。"""
         dlg = QAAnswerDialog(_make_doc_with_choices())
-        for btn in (dlg._copy_questionnaire_btn, dlg._copy_workiq_prompt_btn):
-            btn.click()
-            self.assertNotIn("[CopyButton]", self._clipboard.text())
+        dlg._copy_questionnaire_btn.click()
+        self.assertNotIn("[CopyButton]", self._clipboard.text())
         dlg.close()
 
     def test_copy_does_not_include_pending_user_input(self) -> None:
@@ -558,21 +548,19 @@ class TestQuestionnaireCopyIsolation(unittest.TestCase):
         dlg.cancelled.connect(lambda: events.append("cancelled"))
         dlg.adopt_all_defaults.connect(lambda: events.append("defaults"))
         dlg._copy_questionnaire_btn.click()
-        dlg._copy_workiq_prompt_btn.click()
         self.assertEqual(events, [])
         dlg.close()
 
 
 class TestQuestionnaireCopyEmptyDocument(unittest.TestCase):
-    """FR-GUI-29: 質問 0 件時は両操作を無効化すること。"""
+    """FR-GUI-29: 質問 0 件時は操作を無効化すること。"""
 
     def setUp(self) -> None:
         _get_app()
 
-    def test_buttons_disabled_without_questions(self) -> None:
+    def test_button_disabled_without_questions(self) -> None:
         dlg = QAAnswerDialog(QADocument(questions=[]))
         self.assertFalse(dlg._copy_questionnaire_btn.isEnabled())
-        self.assertFalse(dlg._copy_workiq_prompt_btn.isEnabled())
         dlg.close()
 
 

@@ -24,7 +24,7 @@ TDD RED フェーズ: テスト仕様書（`docs/test-specs/{serviceId}-test-spe
 ## Custom Agent
 `Dev-Microservice-Azure-ServiceTestCoding` を使用
 
-## TDD RED 確認手順（必須）
+## TDD RED 確認手順
 1. `cd src/test/api/{サービス名}.Tests` のように、生成したテストプロジェクトのディレクトリに移動する
 2. 移動先ディレクトリで `dotnet build` を実行し、コンパイル成功を確認する
 3. 同じディレクトリで `dotnet test` を実行し、そのテストプロジェクト内の全テストが FAIL であることを確認する（RED 状態）
@@ -36,7 +36,7 @@ TDD RED フェーズ: テスト仕様書（`docs/test-specs/{serviceId}-test-spe
 ## 完了条件
 - `src/test/api/{サービス名}.Tests/` 配下にテストコードが生成されている
 - `dotnet test` で全テストが FAIL（RED 状態）であることが確認されている
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 - 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - 必須ラベル: `Schema-Version`, `Evidence-Status`, `TDD-Judgement`, `Secret-Redaction`, `Test-Files-Changed`
 - `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とする。

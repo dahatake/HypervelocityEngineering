@@ -258,6 +258,22 @@ class TestAkmCloudParity:
         for agent in expected:
             assert agent in text, f"{self._WORKFLOW_FILE} に {agent} が無い"
 
+    def test_fr_cloud_24_defers_to_fr_cloud_06_two_step_contract(self) -> None:
+        """FR-CLOUD-24 が Cloud AKM を単一 Step として再定義しないこと。"""
+        text = _REQUIREMENTS.read_text(encoding="utf-8")
+        fr_cloud_24 = text.split("- **FR-CLOUD-24**:", 1)[1].split(
+            "- **FR-CLOUD-25**:", 1
+        )[0]
+
+        canonical = "Cloud の AKM Step 構成は FR-CLOUD-06 の 2 Step 契約に従う。"
+        assert fr_cloud_24.count(canonical) == 1, (
+            "AKM の 2-Step 契約を FR-CLOUD-06 へ canonical 文で委譲していない"
+        )
+        assert "現行の単一 Step" not in fr_cloud_24, "Cloud AKM を単一 Step と誤記している"
+        assert "Step 2 横断整合性レビュー追加は本要件の対象外" not in fr_cloud_24, (
+            "registry の AKM Step 2 を Cloud 契約から除外している"
+        )
+
     def test_step1_completion_starts_step2(self) -> None:
         """Step.1 完了で Root を done にせず Step.2 を起動すること。"""
         text = self._text()
@@ -317,9 +333,10 @@ class TestAagStepContents:
         assert r"\[AAG\] Step\.3:" in text
 
     def test_step_3_ends_the_workflow(self, text):
-        """最終 Step が Self-Improve へ渡らないと Root が閉じない。"""
+        """最終 Step の完了で Root が done へ遷移する。"""
         body = text.split('            "3")', 1)[1].split("\n              ;;", 1)[0]
-        assert "mark_root_self_improve_ready" in body
+        assert "self_improve" not in body
+        assert "mark_root_done" in body
 
     def test_step_1_is_the_entry_point(self, text):
         """起動対象が Step.1 であること。"""

@@ -22,9 +22,7 @@ SKILL_FILE_NAME = "SKILL.md"
 
 # Intentionally minimal: add an exception only when a repository-local Skill is
 # deliberately not routed. External ~/.agents references do not belong here.
-UNREFERENCED_ALLOWLIST: set[str] = {
-    ".github/skills/karpathy-guidelines/SKILL.md",
-}
+UNREFERENCED_ALLOWLIST: set[str] = set()
 
 SKILL_PATH_PATTERN = re.compile(r"`(?P<path>[^`\r\n]+/SKILL\.md)`")
 EXTERNAL_SKILL_PATH_PATTERN = re.compile(

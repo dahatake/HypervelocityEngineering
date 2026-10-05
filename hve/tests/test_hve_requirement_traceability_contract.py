@@ -11,6 +11,7 @@ import re
 import shlex
 from pathlib import Path
 
+import pytest
 import yaml  # type: ignore[import-untyped]
 
 
@@ -77,8 +78,11 @@ _BEFORE_EDIT_LINES = (
     "- 適用してよいのは規範要件（`FR-*` / `NFR-*` / `G-*` の定義行と、当該要件が明示的に参照する従属表・箇条書き・スキーマ）だけとする。逆抽出の表・構成・確認時点の記述は説明的基線、改訂履歴・解消済み TBD・`deprecated-or-removed` は履歴情報であり、現行要件として適用しない。",
     "- 現行コードと規範要件が矛盾する場合、コードを正解として要件を上書きせず、バグ修正か仕様変更かを明示して解消する。仕様変更なら実装前に規範要件を改訂する。",
 )
-_BOOTSTRAP_LINES = (
-    *(f"{index}. {step}" for index, step in enumerate(_FEATURE_STEPS, 1)),
+_FEATURE_TDD_ANCHOR = "[feature の TDD 順序](#feature-の-tdd-順序)"
+_BOOTSTRAP_REFERENCE_FIXTURE_LINE = (
+    f"- {_FEATURE_TDD_ANCHOR} を共通の TDD 順序として参照する。"
+)
+_BOOTSTRAP_SPECIFIC_LINES = (
     f"- 索引照合では `source={_REQUIREMENT_DEFINITION}`、`active-or-described`、テストパスを確認する。",
     "- 新規 ID は要求定義書の定義行を一次情報とする。",
     "- 新規 ID は同一変更セット内だけで暫定規範として扱う。",
@@ -341,10 +345,54 @@ def _visible_markdown_lines(text: str) -> tuple[tuple[int, str], ...]:
     return tuple(visible)
 
 
+def _visible_nonempty_lines(text: str) -> tuple[str, ...]:
+    return tuple(line for _line_number, line in _visible_markdown_lines(text))
+
+
 def _section_exact(text: str, title: str) -> str:
     matches = [body for heading, body in _h2_sections(text) if heading == title]
     assert len(matches) == 1, f"expected one section {title!r}, found {len(matches)}"
     return matches[0]
+
+
+def _with_existing_section_exact(
+    text: str, title: str, replacement_lines: tuple[str, ...]
+) -> str:
+    heading_pattern = re.compile(
+        rf"(?m)^ {{0,3}}##(?!#)\s+{re.escape(title)}\s*$"
+    )
+    matches = list(heading_pattern.finditer(text))
+    assert len(matches) == 1, f"expected one section {title!r}, found {len(matches)}"
+    heading = matches[0]
+    body_start = heading.end()
+    if body_start < len(text) and text[body_start] == "\n":
+        body_start += 1
+    next_heading = re.search(r"(?m)^ {0,3}##(?!#)\s+.+?\s*$", text[body_start:])
+    body_end = body_start + next_heading.start() if next_heading else len(text)
+    replacement = "\n" + "\n".join(replacement_lines) + "\n\n"
+    updated = text[:body_start] + replacement + text[body_end:]
+    assert _nonempty_lines(_section_exact(updated, title)) == replacement_lines
+    return updated
+
+
+def _assert_bootstrap_references_feature_tdd_order(skill: str) -> None:
+    bootstrap_lines = _visible_nonempty_lines(
+        _section_exact(skill, "新規要件 ID の bootstrap")
+    )
+    assert bootstrap_lines, "bootstrap section must contain visible content"
+    reference_line = bootstrap_lines[0]
+    assert reference_line.count(_FEATURE_TDD_ANCHOR) == 1, (
+        "bootstrap must start with one visible same-file feature TDD anchor"
+    )
+    assert tuple(bootstrap_lines[1:]) == _BOOTSTRAP_SPECIFIC_LINES, (
+        "bootstrap-specific bullets must follow the anchor exactly without "
+        "duplicated feature steps"
+    )
+    feature_lines = _visible_nonempty_lines(_section_exact(skill, "feature の TDD 順序"))
+    assert feature_lines == _FEATURE_LINES, (
+        "feature TDD section must preserve the exact seven-step sequence and "
+        "N/A boundaries"
+    )
 
 
 def test_skill_is_discoverable_and_routed_for_hve_maintenance() -> None:
@@ -368,6 +416,8 @@ def test_skill_is_discoverable_and_routed_for_hve_maintenance() -> None:
     assert re.search(r"generated app|non-HVE|他アプリ", do_not_use_for, re.I)
     assert not re.search(r"maintenance|bugfix|bug fix|HVE core|HVE 保守", do_not_use_for, re.I)
     assert re.search(r"HVE|hve|mdq|hve-dev", when)
+    assert re.search(r"change|変更", when, re.I)
+    assert re.search(r"investigation|調査", when, re.I)
     assert not re.search(r"generated app|non-HVE|他アプリ", when, re.I)
     assert not re.search(r"ignore|除外|使用しない", when, re.I)
     metadata = frontmatter.get("metadata")
@@ -420,8 +470,40 @@ def test_skill_checks_inventory_requirement_and_mapping_before_editing() -> None
 
 def test_skill_defines_bootstrap_before_implementation() -> None:
     skill = _read_required(_SKILL)
-    bootstrap = _section_exact(skill, "新規要件 ID の bootstrap")
-    assert _nonempty_lines(bootstrap) == _BOOTSTRAP_LINES
+    _assert_bootstrap_references_feature_tdd_order(skill)
+
+
+def test_bootstrap_reference_oracle_rejects_hidden_or_broken_feature_order() -> None:
+    skill = _with_existing_section_exact(
+        _read_required(_SKILL),
+        "新規要件 ID の bootstrap",
+        (_BOOTSTRAP_REFERENCE_FIXTURE_LINE, *_BOOTSTRAP_SPECIFIC_LINES),
+    )
+    _assert_bootstrap_references_feature_tdd_order(skill)
+
+    missing_anchor = _with_existing_section_exact(
+        skill,
+        "新規要件 ID の bootstrap",
+        (f"<!-- {_FEATURE_TDD_ANCHOR} -->", *_BOOTSTRAP_SPECIFIC_LINES),
+    )
+    with pytest.raises(AssertionError, match="visible same-file feature TDD anchor"):
+        _assert_bootstrap_references_feature_tdd_order(missing_anchor)
+
+    missing_step = _with_existing_section_exact(
+        skill,
+        "feature の TDD 順序",
+        (*_FEATURE_LINES[:3], *_FEATURE_LINES[4:]),
+    )
+    with pytest.raises(AssertionError, match="exact seven-step sequence"):
+        _assert_bootstrap_references_feature_tdd_order(missing_step)
+
+    order_tamper = _with_existing_section_exact(
+        skill,
+        "feature の TDD 順序",
+        (*_FEATURE_LINES[:2], _FEATURE_LINES[3], _FEATURE_LINES[2], *_FEATURE_LINES[4:]),
+    )
+    with pytest.raises(AssertionError, match="exact seven-step sequence"):
+        _assert_bootstrap_references_feature_tdd_order(order_tamper)
 
 
 def test_skill_defines_cross_surface_reuse_check() -> None:

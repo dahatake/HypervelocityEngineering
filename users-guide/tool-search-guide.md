@@ -179,6 +179,14 @@ sequenceDiagram
 初期 `tools/list` トークン数 / 1 ターンあたり総入力トークン / Tool 選択正解率 /
 `tool_search` 呼び出し回数 / 追加レイテンシ（p50・p95）/ 過剰呼び出し率
 
+### 手作業で比較するときの注意
+
+- Tool description の短縮は、まず同一カタログで bytes / chars を静的に比較する。これは読みやすさと索引品質の確認であり、モデル可視の Tool 定義トークン、実際の `tool_search` 呼び出し、課金はそれぞれ別に測る。
+- offline BM25 の Recall / MRR は [hve/tests/test_toolsearch_eval.py](../hve/tests/test_toolsearch_eval.py) の契約を出典とし、Recall@10 ≥ 0.85 を合格基準として扱う。Recall@5 と MRR は報告値として併記し、同じ catalog / pinning policy / version / model / context tier / Skill / MCP selected root で比較する。条件が変わった結果を横並びにしない。
+- 過去 run のトークン数などの値は、日付付きの履歴値としてだけ扱う。現在または将来の削減率として再利用せず、未実測値を比較表に補完しない。
+- この比較は判断材料であり、Token 削減や課金削減を保証しない。比較結果だけで Tool Search の既定設定や公開状態が自動的に変わるものではない。
+- 利用者向けの比較表には、評価条件・出典・観測日・指標名を明記する。作業中の内部メモや一時的な状態は含めず、未計測の項目は未計測と明記する。
+
 ### 判定
 
 | 観測 | 次にやること |

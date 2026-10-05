@@ -72,7 +72,7 @@
   <!-- External Copilot CLI -->
   <rect class="box ext" x="30" y="580" width="500" height="100" rx="6"/>
   <text class="h" x="50" y="604">外部プロセス: `copilot` (GitHub Copilot CLI)</text>
-  <text x="50" y="624">モデル選択（hve/models_api.py で `copilot model list --json` 呼出）</text>
+  <text x="50" y="624">モデル選択（hve/models_api.py が SDK `list_models()` を利用）</text>
   <text x="50" y="642">Prompt 解釈 / MCP 呼出 / Skill 検索</text>
   <text x="50" y="662">認証: copilot login（OS 認証ストアに格納、HVE は触らない）</text>
 

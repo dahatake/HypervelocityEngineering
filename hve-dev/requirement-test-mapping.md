@@ -33,6 +33,104 @@
 - 中: パラメータ、非機能、AAS/ADOC（テンプレ整合性レベル）、ARD v2.43 改訂契約（B1〜B3のRED待ち）
 - 弱: Cloud Orchestrator dispatcher 周辺、ABDV/AAGD、ゲート完了判定（G-OUT/G-LBL/G-DIFF）
 
+## Work IQ SDK-only 移行証跡（v2.88）
+
+本節は、後段に残る v2.83 / v2.85 の実装実績を履歴として保持したまま、SDK-only移行で追加・改訂した受入証跡をまとめる。同一IDのcanonical mapping見出しは後段に1つだけ保持し、本節のCLI subprocess probe、remote MCP config、OAuth/browser、doctor、legacy aliasに関する旧GREEN実績は現行合否に使用しない。
+
+**FR-QA-03 — exact `workiq` / `ask` の実行証拠と回答統合**
+- 判定: ✓（SDK-only契約GREEN）
+- T20 R1 回帰（オフライン GREEN 48 件）: [hve/tests/test_runner_pre_qa_mcp_scope.py](hve/tests/test_runner_pre_qa_mcp_scope.py) — 実 AAGD 2.3 / 3 manifest・policy を使う質問票／問い合わせ分離、同意・空質問・Work IQ 不可時の追加 session 不在、失敗時の QA 継続と借用 client の保持。修正前は required/disabled 衝突による 20 RED・対照 6 PASS、補足 22 ケースは修正後に検証。既存 query checkpoint・exact 完了・schema の回帰も維持。
+- 直接対応テスト:
+  - [hve/tests/test_workiq.py](hve/tests/test_workiq.py) — exact server/tool だけを実行証拠として受理し、alias・write/admin tool を受理しない
+  - [hve/tests/test_runner_pre_qa.py](hve/tests/test_runner_pre_qa.py) — `FOUND` / `PARTIAL` と exact event の両条件、未確認結果の draft 限定
+- 受入ケース: `_hve_workiq` / `workiq-preview` / doctor用の別 tool 集合を削除しても、QA保存・再解析・AKM同期を維持する。
+
+**FR-QA-06 — SDK event 未確認時の警告**
+- 判定: ✓（SDK-only契約GREEN）
+- 直接対応テスト:
+  - [hve/tests/test_workiq.py](hve/tests/test_workiq.py) — exact pair未確認、観測名、Copilot CLI `/mcp` 案内、機微本文非混入
+  - [hve/tests/test_runner_pre_qa.py](hve/tests/test_runner_pre_qa.py) — 0件統合のwarningと正常statusの非警告
+- 受入ケース: 廃止する`workiq-doctor`やHVE OAuthを案内せず、全実働Work IQ経路が単一formatterを使う。
+
+**FR-QA-08 — HVE専用Work IQ診断**
+- 判定: deprecated-or-removed（v2.88。active受入テスト対象外）
+- 削除確認テスト:
+  - [hve/tests/test_requirement_subcommand_parity.py](hve/tests/test_requirement_subcommand_parity.py) — parserと§5.1の双方から`workiq-doctor`が消える
+  - [hve/tests/test_workiq.py](hve/tests/test_workiq.py) — doctor DTO/probe/モデルquery経路のproduction不在
+- 根拠: 設定・認証・診断をCopilot CLI / SDKへ一元化し、HVE独自の診断queryを残さない。
+
+**§5.1 サブコマンド体系 — doctor削除後のparity**
+- 判定: ✓（削除・parity契約GREEN）
+- 直接対応テスト:
+  - [hve/tests/test_requirement_subcommand_parity.py](hve/tests/test_requirement_subcommand_parity.py) — `_build_parser()`と要求定義§5.1の集合が一致し、`workiq-doctor`が双方に存在しない
+- 適用要件: FR-CLI-91（HVE-owned `workiq-doctor`の非公開化）。deprecated FR-QA-08をactive要件として適用しない。
+
+**FR-MCPLOG-03 — Work IQ非依存の診断サニタイザ**
+- 判定: ✓（単一実装移設契約GREEN）
+- 直接対応テスト:
+  - [hve/tests/test_mcp_io_log.py](hve/tests/test_mcp_io_log.py) —既存マスク出力を維持し、[hve/security.py](hve/security.py)の単一実装へ委譲する
+- 受入ケース: MCP logとGitHub progressが`hve/workiq.py`へ逆依存せず、regex/output互換を維持する。
+
+**FR-PROMPT-SRC-01 — 実働Work IQ promptだけを保持**
+- 判定: ✓（dead prompt削除契約GREEN）
+- 直接対応テスト:
+  - [hve/tests/test_prompt_source_contract.py](hve/tests/test_prompt_source_contract.py) — `context-injection.prompt.md` / `review-task.prompt.md`とproduction参照の不在、QA/KM/AKM/ARD promptの維持
+- 受入ケース: dead Work IQ promptの削除はFR-PROMPT-SRC-01の従属契約として検証し、FR-PROMPT-SRC-03の非規範リファレンスはQA/KMの実働2テンプレートだけを生成する。
+
+**FR-CLI-02 — Work IQ公開optionの縮小**
+- 判定: ✓（parser拒否契約GREEN）
+- 直接対応テスト:
+  - [hve/tests/test_main.py](hve/tests/test_main.py) — tenant / MCP request timeout / Review promptを拒否し、QA/KM prompt・質問単位timeoutを維持する
+- 受入ケース: 旧optionをno-opで受理せず、新しいoptionを追加しない。
+
+**FR-CLI-13 — wizardのSDK discovery連動**
+- 判定: ✓（SDK-only契約GREEN）
+- 直接対応テスト:
+  - [hve/tests/test_workiq_startup_entrypoints.py](hve/tests/test_workiq_startup_entrypoints.py) — ready時だけ`workiq`を表示し、not-configured/unverified時は従属質問も除外する
+  - [hve/tests/test_main.py](hve/tests/test_main.py) — source 0件のfail-closedと保存値非変更
+- 受入ケース: wizardはPlugin / MCPのinstall・enable・configure・authを実行しない。
+
+**FR-CLI-76 — Work IQ専用SDK session隔離**
+- 判定: ✓（SDK-only契約GREEN）
+- T20 R1/R2 回帰（オフライン GREEN）: [hve/tests/test_runner_pre_qa_mcp_scope.py](hve/tests/test_runner_pre_qa_mcp_scope.py) の実 required/disabled 衝突拒否と分離経路 48 件、および [hve/tests/test_runner_resource_readiness.py](hve/tests/test_runner_resource_readiness.py) の create/init 中 `session.error` / `session.log` を既存 sanitizer で Console 前に伏字化する 8 RED → 同じ 8 GREEN。関連 6 ファイル 365 PASS・20 subtests PASS、ガイド契約 28 PASS。live は未実施。
+- 直接対応テスト:
+  - `hve/tests/test_workiq_plugin_runtime.py`（v3.38 で削除、FR-KD-10） — explicit `mcp_servers`不在、discovery有効、他MCP disabled、`available_tools=["mcp:workiq-ask"]`、`MCPListToolsRequest(server_name="workiq")`
+  - [hve/tests/test_runner_pre_qa_mcp_scope.py](hve/tests/test_runner_pre_qa_mcp_scope.py) — pre-QAだけをSDK discovery sessionへ移行する
+  - [hve/tests/test_orchestrator_session_mcp_scope.py](hve/tests/test_orchestrator_session_mcp_scope.py) — AKM/ARD実働経路の同一session契約
+- 受入ケース: connected+askの場合だけqueryし、needs-auth/failed/tool欠落ではOAuthせずphaseをskipする。一般MCPのrepository縮約は非退行とする。
+
+**FR-CLI-81 — discovery unavailable時の実行単位無効化**
+- 判定: ✓（SDK-only契約GREEN）
+- 直接対応テスト:
+  - [hve/tests/test_workiq_startup_entrypoints.py](hve/tests/test_workiq_startup_entrypoints.py) — not-configured/unverifiedの共通normalizer、対話質問0、保存値非変更
+  - [hve/tests/test_main.py](hve/tests/test_main.py) — dry-run/非要求時のprobe 0件、Work IQ-only AKMの開始拒否
+- 受入ケース: auth-failedをstatic reasonにせず、ready後のruntime失敗は各phaseのwarning/skipへ委ねる。
+
+**FR-PROMPT-12 — plan単位のSDK discovery warning/hash**
+- 判定: ✓（SDK-only契約GREEN）
+- 直接対応テスト:
+  - [hve/tests/test_prompt_workiq_capability.py](hve/tests/test_prompt_workiq_capability.py) — 1 plan 1 discovery、reason 2値、comment 1件、OAuth/model/query 0件
+  - [hve/tests/test_prompt_cli.py](hve/tests/test_prompt_cli.py) — ready↔unavailable両方向のhash driftでchild 0件
+- 受入ケース: commentはhash外、無効化後argvだけをhash対象とし、AKM source 0件はfail-closedとする。
+
+**FR-CLI-91 — Work IQ SDK discovery capability**
+- 判定: ✓（SDK discovery契約GREEN）
+- 直接対応テスト:
+  - [hve/tests/test_workiq_plugin_capability.py](hve/tests/test_workiq_plugin_capability.py) — SDK start/discover/stop、exact enabled name、source非限定、not-configured/unverified、raw config非保持
+  - `hve/tests/test_workiq_plugin_runtime.py`（v3.38 で削除、FR-KD-10） — runtime status/list_toolsとsession isolation
+  - [hve/tests/test_workiq_startup_entrypoints.py](hve/tests/test_workiq_startup_entrypoints.py) — GUI/CLI/Prompt共通normalizerとauthoritative child preflight
+  - [hve/tests/test_requirement_subcommand_parity.py](hve/tests/test_requirement_subcommand_parity.py) — parserと§5.1からHVE-owned doctorを同時に除去
+- 受入ケース: CLI subprocess、raw MCP設定、OAuth/browser、doctor、tenant/request-timeout/review-prompt、legacy aliasをproductionから除去する。
+
+**FR-GUI-51 — GUI process-wide SDK discovery**
+- 判定: ✓（worker・UI削除契約GREEN）
+- 直接対応テスト:
+  - [hve/gui/tests/test_app_startup_workiq.py](hve/gui/tests/test_app_startup_workiq.py) — nonblocking worker 1回、snapshot共有、起動失敗復旧、thread cleanup、OAuth worker不在
+  - [hve/gui/tests/test_qa_answer_dialog.py](hve/gui/tests/test_qa_answer_dialog.py) — unavailable時のvisible-disabledと非Work IQ操作の非退行
+- 受入ケース: auth button/signal/browser flowを削除し、C7の一般Plugin/MCP一覧は維持する。
+
+- 2026-09-03 最終証跡: Work IQ checkpointのcore/runtime/startup/Runner/Prompt/GUI/docs focused回帰は **227 passed**。残存7文書の契約は修正前 **7 failed / 2 passed**、修正後 **9 passed**。競合解決後の削除済みsession fieldと文書契約は **10 passed**。Prompt referenceは **318 copies / 2 composed templates**で同期し、TDD inventory 5成果物は同じ`SOURCE_DATE_EPOCH`で2回生成してSHA-256不変を確認した。統合回帰は利用者指示により実施対象外とした。
+
 ---
 
 ## §A 共通機能（§3）
@@ -150,7 +248,7 @@
 - 判定: ✓（T14/T18/T20/T25/T30 GREEN。）
 - 直接対応テスト:
   - [hve/tests/test_resume_service.py](hve/tests/test_resume_service.py) :: `TestExecutionRegistration` — parentだけのexecution ID生成、ordered planの1 transaction登録、instance key、canonical status変換、attempt/run identity分離を固定する。
-  - [hve/tests/test_orchestrator_durable_resume.py](hve/tests/test_orchestrator_durable_resume.py) :: `TestDurableTransitions` / `TestApprovalRecords` — Step開始/完了/Workflow finalと`approval:<wave>` pseudo-row、承認本文非保存を固定する。
+  - [hve/tests/test_orchestrator_durable_resume.py](hve/tests/test_orchestrator_durable_resume.py) :: `TestDurableTransitions` / `TestApprovalRecords` — Step開始/完了/Workflow finalと`approval-<wave>` pseudo-row、承認本文非保存を固定する。
   - [hve/tests/test_resume_service.py](hve/tests/test_resume_service.py) :: `TestOutputReconciliation` — succeeded Stepの既存output存在判定、missing output時の当該Stepとtransitive descendants無効化、content hash非生成を固定する。
   - [hve/tests/test_orchestrator_durable_resume.py](hve/tests/test_orchestrator_durable_resume.py) :: `TestFanoutOutputInvalidation` — runtimeで成功childを個別skipし、missing outputの当該childとactive transitive descendantsだけを再実行する。
   - [hve/tests/test_resume_cli.py](hve/tests/test_resume_cli.py) :: `TestCandidateSelectionAndInteraction` — earliest incompleteからordinal順に進み、最初の非0 childで停止する。
@@ -163,6 +261,7 @@
   - [hve/tests/test_resume_crash_injection.py](hve/tests/test_resume_crash_injection.py) — barrier同期したWindows/NTFS実process killでack済みstate欠落0、最大heartbeat age 10秒以下、`quick_check=ok`、GUI graceful最初の3秒内finalizeを実測する。
 - 実装後実績: Windows/NTFSで **3 passed**。hard kill直前のheartbeat ageは **0.016193秒**、`quick_check=ok`、graceful finalizationは親観測 **0.044192秒** / 子 **0.042204秒**で、10秒freshnessと3秒graceを満たした。model/output progressとOS power lossは成功条件に含めない。
 - 正式受入実績（2026-08-31）: Windows 11 / NTFS / fixed driveで4 processを同一SQLite databaseへ接続した **1,800秒** resilience soakを実行し、soak **1,800.009秒**、event span **1,810.407秒**、event **1,453件**を観測した。全caseの最大heartbeat gapは **5.113秒未満**、checkpoint ageは **5.015秒以下**、`quick_check=ok`、active takeover拒否、expiry後の旧owner操作各4件拒否、generation 2 takeover、最終`suspended`を確認した。child exit 0、Windows keep-awakeの取得・解除、repository/source snapshot不変、event hash chain、固定evidence SHA-256を別process verifierがPASSと判定した。
+- v3.41 追加（bugfix、システムテスト N-03 / N-06）: [hve/tests/test_systemtest_20261002_fixes.py](hve/tests/test_systemtest_20261002_fixes.py) :: `test_ctrl_break_runs_finally_blocks_and_exits_with_one`（実 process に `CTRL_BREAK_EVENT` を送り、`finally` 実行と exit code 1 を固定。Windows のみ）、`test_break_handler_installation_is_a_noop_without_sigbreak`。[hve/tests/test_resume_cli.py](hve/tests/test_resume_cli.py) :: `TestExecutionRegistration.test_keyboard_interrupt_in_orchestrate_exits_one_with_a_message`。
 
 ### NFR-CONC-02 — state version CASとfenced lease（v2.81 改訂）
 - 判定: ✓（T12/T18/T25/T33 GREEN。）
@@ -174,13 +273,38 @@
   - [hve/tests/test_resume_concurrency.py](hve/tests/test_resume_concurrency.py) — 2 process resumeのwinner 1件、takeoverの明示action、stale plan拒否、旧owner更新0件を固定する。
   - [hve/tests/test_resume_cli.py](hve/tests/test_resume_cli.py) :: `TestHiddenDurableIdentity` / `TestCandidateSelectionAndInteraction` — parent取得tokenのowner/generationをchildへ渡し、child終了後にparentがreleaseする順序を固定する。
 - 実装後実績: state version CAS、generation/owner fencing、非pending instanceの明示action、parent tokenの採用、最新tokenでのtransition/releaseを確認した。T33のspawned 2-process競合は **3 passed**、同一CASのwinner 1/loser 1、明示takeover、旧token更新0、提示後stale拒否を実測した。
+- v3.41 追加（bugfix、システムテスト N-01）: [hve/tests/test_resume_cli.py](hve/tests/test_resume_cli.py) :: `TestResumeIntegrityAndConcurrency` 配下 `test_parent_lease_heartbeat_spans_the_child_run` — 親が child の実行中に heartbeat を開始し、child 終了後・lease 解放前に停止する順序を固定する。
 
-### FR-MODEL-01 — 既定モデル `claude-opus-4.7`、MODEL_CHOICES 4 値
-- 判定: ✓
+### FR-MODEL-01 — 既定モデル `claude-opus-5.5`、MODEL_CHOICES 5 値、モデル未指定時は全ローカル面で `DEFAULT_MODEL`（v3.05 / v3.06 で改訂。旧: `claude-opus-4.7` / 4 値 / `hve orchestrate` 等は `Auto`）
+- 判定: ✓（RED を実出力で確認した後に実装し GREEN。改善プラン P3-T56 / T57、v3.06 は 2026-09-24 に RED 6 件 → GREEN）
 - 直接対応テスト:
+  - [hve/tests/test_model_default_contract.py](hve/tests/test_model_default_contract.py) :: `test_default_model_matches_verified_id` — `DEFAULT_MODEL` と `MODEL_CHOICES[0]` が SDK 実応答で確認した `claude-opus-5.5`
+  - [hve/tests/test_model_default_contract.py](hve/tests/test_model_default_contract.py) :: `test_cloud_model_surfaces_accept_verified_id` — ラベル・Cloud 抽出スクリプト・`auto-akm-after-qa.yml` の許可リスト
+  - [hve/tests/test_model_default_contract.py](hve/tests/test_model_default_contract.py) :: `test_guide_states_default_model_for_unspecified_model` — 利用者ガイドの既定モデル表記
+  - [hve/tests/test_model_default_contract.py](hve/tests/test_model_default_contract.py) :: `test_unspecified_model_uses_default_model_on_local_surfaces` — `SDKConfig.from_env()`（未設定・空）、`SDKConfig(model="")`、GUI 設定の既定値、ヘルプ文
+  - [hve/tests/test_main.py](hve/tests/test_main.py) :: `TestBuildParams.test_default_model_used_when_cli_and_env_missing`、`test_wizard_initial_model_is_default_model` — `hve orchestrate` の未指定時とウィザードの初期選択
+  - [hve/tests/test_gui_pages.py](hve/tests/test_gui_pages.py) :: `test_c1_model_round_trip_to_args` — GUI の初期選択
+  - [hve/tests/test_gui_settings_store.py](hve/tests/test_gui_settings_store.py) :: `test_load_returns_defaults_when_file_missing`、`test_corrupt_file_falls_back_to_defaults`
   - [hve/tests/test_config.py](hve/tests/test_config.py) :: `TestSDKConfigDefaults.test_model_choices_contains_both_46_and_47`、`test_model_choices_contains_gpt_5_5`、`test_model_choices_gpt_5_5_before_claude`
   - [hve/tests/test_config.py](hve/tests/test_config.py) :: `TestSDKConfigModelResolution`、`TestSDKConfigModelOverride`
   - [hve/tests/test_phase6_option_parity.py](hve/tests/test_phase6_option_parity.py) :: `TestModelDropdown.test_model_choices_parity_with_templates`
+
+### FR-MODEL-09 — 既定モデル更新時のハーネス再評価チェックリスト
+- 判定: ✓（RED → GREEN。改善プラン P3-T55 / T56）
+- 直接対応テスト:
+  - [hve/tests/test_model_upgrade_checklist_contract.py](hve/tests/test_model_upgrade_checklist_contract.py) :: `test_checklist_lists_harness_components`
+
+### FR-MODEL-10 — ローカル session の作成・再開で `request_extensions=False` を渡す（v3.07 新規。E-1）
+- 判定: ✓（RED → GREEN。2026-09-24。RED は下記テストの新規・変更分が実装前に失敗することを確認し、GREEN 後に残った失敗は着手時 baseline の既存失敗だけ）
+- 直接対応テスト:
+  - [hve/tests/test_runner.py](hve/tests/test_runner.py) :: `test_local_create_defaults_request_extensions_false`、`test_cloud_create_does_not_request_extensions`、`test_preserves_explicit_request_extensions`、`test_strips_request_extensions_on_typeerror`
+  - [hve/tests/test_orchestrator.py](hve/tests/test_orchestrator.py) :: 同名の 4 テスト（orchestrator 側の同名関数）
+  - [hve/tests/test_sdk_resource_routing.py](hve/tests/test_sdk_resource_routing.py) :: `test_build_routed_session_options_applies_route_and_tool_search_directly`、`test_build_routed_session_options_keeps_caller_request_extensions`、`test_create_session_from_route_reuses_the_resolved_route_object`
+  - [hve/tests/test_runner_resume.py](hve/tests/test_runner_resume.py) :: `test_unrouted_resume_preserves_explicit_false_and_empty_resource_options` — resume で引き継ぐ session 引数
+  - [hve/tests/test_sdk_resource_inventory.py](hve/tests/test_sdk_resource_inventory.py) :: `test_uses_server_scoped_sdk_apis_and_one_no_prompt_all_mcp_disabled_session` — inventory probe session
+  - [hve/tests/test_cloud_session_runtime.py](hve/tests/test_cloud_session_runtime.py) :: `test_runner_helper_non_policy_cloud_error_falls_back_to_local`、[hve/tests/test_cloud_session.py](hve/tests/test_cloud_session.py) :: `test_cloud_session_readiness_timeout_falls_back_to_local` — Cloud Session から local session へのフォールバック（敵対的レビューで追加。RED 2 件 → GREEN）
+- 実機確認（2026-09-24）: 同じ環境で `enable_config_discovery=True` かつ `request_extensions` 未指定の session 作成は `extensionSdkPath is required when standalone extensions are requested` で失敗し、`request_extensions=False` では作成できた。`enable_config_discovery=False` では未指定でも作成できた。
+- 未検証: Step 実行全体（`hve orchestrate`）での live 確認（残タスク N-A7）
 
 ### FR-MODEL-02 — Auto 時は `model="auto"` を SDK へ送り Auto Model Selection に委譲（reasoning_effort は付与しない）
 - 判定: ✓
@@ -193,25 +317,29 @@
 ### FR-MODEL-03 — `_normalize_model_with_warning` で Auto 返却
 - 判定: ✓
 - 直接対応テスト:
-  - [hve/tests/test_config.py](hve/tests/test_config.py) :: `TestNormalizeModelWithWarning`
+  - [hve/tests/test_config.py](hve/tests/test_config.py) :: `TestNormalizeModelWithWarning`（v3.30: `test_normalize_model_with_warning_accepts_live_catalog_model`。RED: 1 failed → GREEN）
 
 ### FR-MODEL-04 — SDK `tool_search` を CLI / GUI から設定可能にし、全セッション経路へ同一値を伝搬
 - 判定: ✓
 - 直接対応テスト:
   - [hve/tests/test_config.py](hve/tests/test_config.py) :: `TestSDKConfigToolSearch` — 既定 `True`、env 未指定時 `True`、`HVE_TOOL_SEARCH` の truthy / falsy 読み取り
-  - [hve/tests/test_runner.py](hve/tests/test_runner.py) :: `TestAvailableExcludedToolsPropagation.test_main_session_includes_tool_search_when_enabled` — メインセッションへの伝搬
-  - [hve/tests/test_runner.py](hve/tests/test_runner.py) :: `TestAvailableExcludedToolsPropagation.test_sub_session_opts_includes_tool_search` — サブセッションへの伝搬
-  - [hve/tests/test_self_improve.py](hve/tests/test_self_improve.py) :: `TestRunImprovementLoopRedContracts.test_mutation_session_includes_tool_search_when_enabled` — Self-Improve セッションへの伝搬
+  - [hve/tests/test_runner.py](hve/tests/test_runner.py) :: `TestAvailableExcludedToolsPropagation.test_main_session_includes_tool_search_when_enabled` / `test_main_session_includes_defer_threshold` — メインセッションへの伝搬
+  - [hve/tests/test_runner.py](hve/tests/test_runner.py) :: `TestAvailableExcludedToolsPropagation.test_sub_session_opts_includes_tool_search` / `test_sub_session_opts_includes_defer_threshold` / `test_sub_session_opts_omits_defer_threshold_when_disabled` — サブセッションへの伝搬
+  - [hve/tests/test_sdk_resource_session_wiring.py](hve/tests/test_sdk_resource_session_wiring.py) :: `TestConfigDeferThreshold` / `TestConfigDeferThresholdFromEnv` / `TestCliDeferThreshold` / `TestGuiDeferThreshold` / `TestOrchestratorSessionDeferThreshold` / `TestFleetParentSessionDeferThreshold` — 正の整数検証、未指定時のキー省略、ARD 補助 / Fleet 親 / Code Review への伝搬、Cloud Session への非伝搬
   - [hve/tests/test_main.py](hve/tests/test_main.py) :: `TestBuildParams.test_tool_search_cli_enabled` / `test_tool_search_cli_disabled` — `--tool-search` / `--no-tool-search` のパースと `SDKConfig` 反映
   - [hve/gui/tests/test_orchestrate_args.py](hve/gui/tests/test_orchestrate_args.py) :: `TestToolSearchToArgv` — GUI → CLI argv へのフラグ出力
-- 根拠: 削減効果そのものは本要件の受入対象外（FR-MODEL-04 本文）。受入は設定の伝搬に限定するため、テストも伝搬の検証に限定する。Fleet mode 親セッションは FR-MODEL-04 の対象外のためテストを設けない。GUI の設定保存・画面登録（`settings_store.py` / `settings_window.py` / `settings_apply.py`）は既存 `auto_compaction` と同型の登録のみで判定ロジックを持たないため、argv 変換テストでカバーする。
+  - [hve/gui/tests/test_toolsearch_settings_section.py](hve/gui/tests/test_toolsearch_settings_section.py) :: `test_settings_apply_maps_this_section` / `test_defaults_include_the_defer_threshold_key` — GUI 設定ストアと永続化セクションの登録
+- 根拠: 削減効果そのものは本要件の受入対象外（FR-MODEL-04 本文）。受入は設定の伝搬に限定するため、テストも伝搬の検証に限定する。`tool_search` dict の組み立ては [hve/config.py](hve/config.py) `SDKConfig.tool_search_session_option()` の単一実装へ集約し（FR-MAINT-07）、各セッション経路はその戻り値を載せるだけとする。Fleet 親セッションは Cloud Session 注入を避けるため共通ヘルパーへ `config=None` を渡す実装であり、呼び出し側で明示注入する。当該注入は `_build_fleet_wave_runner` 内のクロージャで SDK Fleet backend を実体化せずに実行できないため、既存 [hve/tests/test_orchestrator_fanout_repo_root.py](hve/tests/test_orchestrator_fanout_repo_root.py) と同じ AST 検査で実在を確認する。
+- 2026-09-21 bugfix（HVE `0.8.134`）: `tool_search_defer_threshold`（FR-LOCAL-SURFACE-01 (a) の 27 共有 key の一つ）を Prompt durable 実行の replay 許可リスト（[hve/resume_service.py](hve/resume_service.py) `_REPLAY_VALUE_FLAGS`）へ追加した。保存設定・request override のいずれで指定しても `unsupported replay option` により durable 登録が必ず失敗していた既存の欠落を復旧するもので、規範要件・値域・0/未指定時の SDK 既定委譲は変更していない。
+  - 変更した直接対応テスト: [hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py) :: `TestDurableRegistrationCompatibility.test_saved_tool_search_defer_threshold_registers_with_real_boundary` — real `RunStateStore` / real `ResumeService.sanitize_argv` を用いた durable 登録の RED/GREEN。[hve/tests/test_resume_service.py](hve/tests/test_resume_service.py) :: `TestReplaySanitization.test_all_27_shared_settings_are_classified_not_unsupported` — FR-LOCAL-SURFACE-01 (a) の全 27 共有 key が `unsupported replay option` にならないことを表駆動で確認し、本 key 以外に欠落が無いことを固定する。
+  - RED/GREEN実績: 追加した real-boundary テストは既存コードに対し **1 failed**（`unsupported replay option: --tool-search-defer-threshold`）を再現し、1 行追加後 **2 passed**。関連 6 ファイル合同回帰は **253 passed**。表駆動テストを含む `TestReplaySanitization` は **36 passed**。
 
 ### FR-MODEL-06 — 既定有効化が明示的な無効化を上書きしない
 - 判定: ✓
 - 直接対応テスト:
   - [hve/tests/test_config.py](hve/tests/test_config.py) :: `HVE_TOOL_SEARCH` falsy で `False` — `TestSDKConfigToolSearch`
   - [hve/tests/test_main.py](hve/tests/test_main.py) :: `--no-tool-search` で `False` — `TestBuildParams.test_tool_search_cli_disabled`
-  - [hve/tests/test_runner.py](hve/tests/test_runner.py) / [hve/tests/test_self_improve.py](hve/tests/test_self_improve.py) :: `tool_search=False` の 3 経路で引数を渡さない
+  - [hve/tests/test_runner.py](hve/tests/test_runner.py) :: `tool_search=False` の経路で引数を渡さない
   - [hve/gui/tests/test_toolsearch_settings_section.py](hve/gui/tests/test_toolsearch_settings_section.py) :: 新規プロファイル既定 `True` / 保存済み `false` の保持
   - [hve/tests/test_toolsearch_wiring.py](hve/tests/test_toolsearch_wiring.py) :: `tool_search_ranking` 既定が `sdk` のまま — `TestConfigField.test_default_is_sdk`
 - 根拠: 保存済み `false` が利用者の明示指定か旧既定かを実行時に区別できないため、移行処理を持たず新規プロファイルの初期値だけを変更する。
@@ -335,25 +463,65 @@
   - [hve/tests/test_toolsearch_dashboard.py](hve/tests/test_toolsearch_dashboard.py) :: `TestTokenReductionValidity` — `deferral_inactive_rate` が 1.0 のとき、テキスト / HTML で `token_reduction` を削減率として表示せず無効理由を出すこと、JSON は値を残しつつ無効フラグを併記すること、クエリ 0 件（`deferral_inactive_rate` が None）を無効判定にしないことを固定
 
 ### FR-TS-11 — コンテキスト内訳の実測 CLI
-- 判定: ✓
-- 直接対応テスト（計画）:
-  - [hve/tests/test_toolsearch_context_report.py](hve/tests/test_toolsearch_context_report.py) :: `test_renders_layers_from_the_runtime_snapshot` — システムプロンプト / 組み込み / MCP サーバー別の実トークン量とツール数を描画する
-  - [hve/tests/test_toolsearch_context_report.py](hve/tests/test_toolsearch_context_report.py) :: `test_groups_tool_definitions_by_server` / `test_counts_builtin_tools_separately` — ツール定義を `mcp_server_name` で層へ束ね、組み込みを別枠で数える
-  - [hve/tests/test_toolsearch_context_report.py](hve/tests/test_toolsearch_context_report.py) :: `test_includes_the_model_name_used_for_tokenization` — `contextInfo.modelName` を必ず含める
-  - [hve/tests/test_toolsearch_context_report.py](hve/tests/test_toolsearch_context_report.py) :: `test_reports_declared_but_unconnected_servers` / `test_unconnected_server_is_not_reported_as_zero_tokens` — 宣言済みだが接続しなかった MCP サーバーを 0 と混同せず未接続として示す
-  - [hve/tests/test_toolsearch_context_report.py](hve/tests/test_toolsearch_context_report.py) :: `test_tool_definitions_missing_from_metadata_are_not_dropped` — `getCurrentMetadata` に現れないツール（実測: `web_search`）を層別集計から欠落させない
-  - [hve/tests/test_toolsearch_context_report.py](hve/tests/test_toolsearch_context_report.py) :: `test_json_exposes_the_runtime_totals` — 合計値はランタイムの `contextInfo` を正とし、attribution 集計で上書きしない
-  - [hve/tests/test_toolsearch_context_report.py](hve/tests/test_toolsearch_context_report.py) :: `test_does_not_use_estimated_tokens` — `hve/toolsearch/eval.py` の推定を使わない
-  - [hve/tests/test_toolsearch_context_report.py](hve/tests/test_toolsearch_context_report.py) :: `test_collect_never_sends_a_prompt` — 収集経路が `session.send` を呼ばない
-  - [hve/tests/test_toolsearch_context_cli.py](hve/tests/test_toolsearch_context_cli.py) :: `test_context_subcommand_is_registered` / `test_context_accepts_the_json_flag` / `test_json_flag_outputs_machine_readable_payload` — `hve toolsearch context` の登録と `--json`
-  - [hve/tests/test_toolsearch_context_cli.py](hve/tests/test_toolsearch_context_cli.py) :: `test_text_output_renders_the_report` — 既定はテキスト描画で、CLI 側で再集計しない
-  - [hve/tests/test_toolsearch_context_cli.py](hve/tests/test_toolsearch_context_cli.py) :: `test_measurement_failure_exits_non_zero_with_a_reason` — 測定失敗時に非 0 終了と理由を返し、推定値で埋めない
-  - [hve/tests/test_toolsearch_context_report.py](hve/tests/test_toolsearch_context_report.py) :: `TestSessionOptions` — 測定セッションを Step 実行と同じ設定モデル / `context_tier` で生成する
-  - [hve/tests/test_toolsearch_context_report.py](hve/tests/test_toolsearch_context_report.py) :: `test_collect_builds_its_session_from_session_options` — `collect()` が当該 options を使う配線を固定する
-  - [hve/tests/test_toolsearch_context_report.py](hve/tests/test_toolsearch_context_report.py) :: `test_reports_the_model_that_was_requested_for_the_session` / `test_requested_model_is_explicit_when_not_configured` — セッションへ渡した設定モデルを併記する
-- 実測に基づく注記（v2.40）:
+- 判定: ✓（同一 snapshot / model / context tier / policy route の OFF / ON実測とStep固有route GREEN）
+- 直接対応テスト:
+  - [hve/tests/test_toolsearch_context_comparison.py](hve/tests/test_toolsearch_context_comparison.py) :: `TestMeasureOnce.test_connected_mcp_reuses_shared_readiness` / `test_disabled_optional_mcp_keeps_original_declaration_without_rewaiting` / `test_zero_mcp_initializes_builtin_context_once` / `test_off_on_runtime_drift_survives_shared_readiness` — 2026-09-06 のオフライン回帰。共有 creator 後の二重初期化・再待機を避け、optional disable 後の元の宣言集合、0 MCP の builtin context 初期化、OFF / ON の runtime drift による比較不能を固定する。
+  - [hve/tests/test_toolsearch_context_report.py](hve/tests/test_toolsearch_context_report.py) :: `TestBuildReport` / `TestSourceContract.test_collect_never_sends_a_prompt` / `TestSessionOptions` — ランタイム snapshot の層別描画、`contextInfo.modelName` の併記、prompt 非送信、測定セッション options の共有を固定する
+  - [hve/tests/test_toolsearch_context_cli.py](hve/tests/test_toolsearch_context_cli.py) :: `TestParser.test_context_requires_workflow` / `test_context_accepts_an_optional_step` / `TestCommand.test_step_is_forwarded_to_collection` / `test_compare_json_outputs_machine_readable_payload` / `test_compare_side_failure_prints_payload_and_exits_non_zero` — Workflow必須、任意Step、JSON、片側失敗時の非0終了と実測payload保持を固定する
+  - [hve/tests/test_toolsearch_context_comparison.py](hve/tests/test_toolsearch_context_comparison.py) :: `TestBuildComparison.test_runtime_resources_match_before_reduction_is_reported` / `test_incomparable_text_reports_not_calculated_without_none_values` / `test_comparable_zero_savings_remains_an_explicit_zero` / `TestCollectComparison.test_snapshot_policy_and_route_are_resolved_once_and_reused` / `test_step_scope_resolves_registry_skills_before_session_creation` / `test_unknown_step_fails_before_resource_discovery` / `test_container_step_has_a_distinct_error_before_resource_discovery` / `TestMeasureOnce.test_runtime_exception_is_sanitized_before_comparison_output` — 同一route再利用、base Stepのrequired / optional SkillとSkill依存required MCP、未知／container Stepの事前拒否、比較不能nullと削減0の区別、診断サニタイズを固定する
+  - [hve/gui/tests/test_toolsearch_settings_section.py](hve/gui/tests/test_toolsearch_settings_section.py) :: `test_context_step_selector_defaults_to_workflow_scope` / `test_context_workflow_change_rebuilds_step_selector` / `test_context_cli_argv_includes_selected_step` — GUIのWorkflow全体既定、非コンテナStep一覧、`--step` argv伝播を固定する
+- 実測に基づく注記:
   - `contextInfo.modelName` はセッションモデルを反映せず、3 条件の実測すべてで `claude-sonnet-4.5` を返した。一方 `contextAttribution` 由来の層別内訳はセッションモデルに依存して変化した（`MODEL=claude-opus-4.7` で azure 15,047 → 18,047 tokens、`contextInfo.mcpToolsTokens` は 17,302 で不変）。両者は異なるトークナイザで計測されているため、差分を欠損として提示しない。
   - `system_prompt_tokens` は 3 条件すべてで `null`。repository instructions が `systemTokens` に含まれるかは未確定。
+  - 比較は CLI / GUI の明示操作時だけ実行し、通常 Workflow のために追加セッションを作成してはならない。
+  - 2026-09-06 改訂後の追加 metadata 実験は未実施（NOT RUN）。上記の改訂前実測や fake RPC の GREEN を live metadata / E2E の検証済み証拠へ読み替えない。
+
+### FR-TS-12 — SDK read-only resource snapshot
+- 判定: ✓
+- 直接対応テスト:
+  - [hve/tests/test_sdk_resource_inventory.py](hve/tests/test_sdk_resource_inventory.py) — 既存client factoryからserver-scoped discover/listと、全MCPをdisabledにしたno-prompt inventory sessionの`plugins.list` / `skills.list`だけを呼び、prompt / MCP接続・tool / install / enable / config / authを呼ばず必ずsessionとclientを停止する
+  - 同ファイル — Plugin / MCP / Skillのpartial failureをkind別`unverified`として保持し、失敗を0件へ変換しない
+  - 同ファイル — snapshotがname / enabled / source kind / Plugin marketplace / owner Plugin / version / Skill description以外のdirect source ID・raw config・path・command・URL・args・env・header・credential・例外本文を保持しない
+  - 同ファイル — 全RPC / inventory session / cleanupを共有45秒deadline（v3.41: 15秒から変更）に収め、期限切れで欠けたsnapshotはcacheしない（`test_deadline_expired_snapshot_is_not_cached_so_a_later_caller_can_retry`）、runtime path × working directoryのprocess cacheと明示`force_refresh`を単一実装で扱い、disk cache / watcherを作らない
+  - 同ファイル — SDKが返さないPlugin ownershipと同名Pluginの曖昧なownershipをname / path / descriptionから推測せず、session補完失敗時もserver-scoped取得済みresourceを保持する
+  - [hve/tests/test_workiq_resource_adapter.py](hve/tests/test_workiq_resource_adapter.py) :: `TestPreservedFailClosedContracts` — `servers` が list でない応答と `enabled` の型崩れを「0 件」と混同せず `unverified` のままにする（取得失敗を 0 件と表示しない契約）
+  - [hve/tests/test_workiq_plugin_capability.py](hve/tests/test_workiq_plugin_capability.py) — `cli_path` / `cli_url` / `github_token` / `log_level` を単一実装から既存 client factory へ委譲し、`cli_url` 違いを process cache で混同しない
+
+### FR-TS-13 — Knowledge / Software Engineering resource分類とsession routing
+- 判定: ✓（2026-09-06 session resource readiness のオフライン契約 GREEN。T21〜T25 の live 検証は NOT RUN）
+- 2026-09-30 bugfix: [hve/tests/test_sdk_resource_readiness.py](hve/tests/test_sdk_resource_readiness.py) :: `test_optional_server_that_blocks_initialization_is_disabled_within_the_budget` / `test_initialization_hang_with_all_servers_connected_still_times_out` / `test_slow_initialization_with_connected_servers_gets_the_rest_of_the_budget`（0.8.180 の打ち切りが、負荷で初期化が 20 秒を超えただけの Step を失敗させていたため追加。RED: 1 failed → GREEN）/ `test_pending_server_at_the_reserve_is_disabled_only_when_optional`（v3.34。旧 `test_pending_deadline_exhaustion_never_gets_a_new_disable_budget` を置き換え。RED: 1 failed → GREEN）/ `test_pending_optional_server_is_disabled_once_it_needs_auth`（並行 15 セッションの実測で、打ち切り時にまだ pending の server があり失敗したため追加。RED: 1 failed → GREEN）— 認証待ちの optional server が初期化を止めても、その server を disable して続け、原因の見えない停止は失敗のままにする（RED: 2 failed → GREEN: 132 passed）
+- 2026-09-24 改訂（v3.07、E-2 / E-3）: 判定 ✓（E-2 / E-3 (b) は RED → GREEN）。`needs-auth` を待たずに失敗分岐へ送ること、最終集合外の MCP identity で停止する前に 1 回だけ再初期化すること、Azure の許可ツール名を `group_list` とすること（E-3 (a)、bugfix）。
+  - 直接対応テスト: [hve/tests/test_sdk_resource_readiness.py](hve/tests/test_sdk_resource_readiness.py) :: `test_required_needs_auth_stops_without_polling`、`test_pending_is_polled_until_connected_without_auth`、`test_nonconnected_server_is_disabled_or_stops_required_route`（`needs-auth` を追加）、`test_post_filter_metadata_refreshes_once_for_a_disabled_optional_server`、`test_post_filter_metadata_rejects_malformed_duplicate_or_unselected_identity`（`unselected` は 1 回再初期化後に停止）。[hve/tests/test_sdk_resource_routing.py](hve/tests/test_sdk_resource_routing.py) :: `test_builtin_extra_metadata_still_fails_after_one_refresh`。
+  - E-3 (a) の単体テストは N/A: 正しいツール名は外部 Plugin の実 metadata に依存し、オフラインの fake metadata では正誤を判定できない。代わりに 2026-09-24 に実機の `mcp.list_tools(azure)` で 71 件中に `group_list` があり `azmcp_group_list` が無いことを確認した（Plugin の版が変わると再確認が必要）。
+- 改訂前実績: ✓（policy / routing / aggregate runtime enforcement / session wiring / legacy config removal GREEN。本改訂の検証証跡には流用しない）
+- 2026-09-21 bugfix（HVE `0.8.134`）: `resolve_resource_route` / `build_resource_route`（[hve/toolsearch/resource_routing.py](hve/toolsearch/resource_routing.py)）が caller の `excluded_tools` を per-server allowlist の enable/disable 判定へ一切反映していなかった不整合を修正した。利用者が明示した `available_tools` / `excluded_tools` を分類 routing が拡張してはならず積集合を維持しなければならないという既存契約への復旧であり、enable/disable 自体の判定基準（available_tools と policy の積集合）は変更していない。あわせて、[hve/toolsearch/resource_inventory.py](hve/toolsearch/resource_inventory.py) の process cache が、client 接続自体の一時的な失敗（fan-out 並行実行時の resource contention を想定）を含む unverified snapshot を無条件に永続化し、同一 (runtime, working directory) キーの以後すべての呼び出しへ失敗を伝播させていた欠陥を、client 未接続時だけ cache 書き込みを抑止するよう修正した。client 接続後に判明した個別 kind の unverified（環境固有の安定した特性）は既存どおり cache する。MCP tool metadata が申請済み route 外の tool を検出する事象そのものの根本原因が SDK runtime 側の契約に起因するか否かは、本修正では特定できておらず live 環境での再現が必要なため未解決のまま残す（fail-closed gate 自体は削除・弱体化していない）。
+  - 変更した直接対応テスト: [hve/tests/test_sdk_resource_routing.py](hve/tests/test_sdk_resource_routing.py) :: `test_caller_excluded_tool_narrows_policy_allowlist_without_available_tools_override` — available_tools 無指定でも excluded_tools だけで policy allowlist が狭まることを固定する。[hve/tests/test_sdk_resource_inventory.py](hve/tests/test_sdk_resource_inventory.py) :: `test_unverified_snapshot_is_not_negatively_cached_so_later_callers_can_retry` — client 接続自体が失敗しても同一キーの後続 caller が独立に再 discovery できることを固定する。
+  - RED/GREEN実績: routing 側は既存コードに対し **1 failed**（`assert ('search', 'read') == ('search',)`）→ 修正後 **137 passed**。inventory 側は **1 failed**（`start_calls == 0`）→ 修正後 **27 passed**。関連8ファイル + Work IQ adapter の合同回帰は **482 passed, 11 subtests passed**。初回実装で `excluded_tools` により tools が空集合になった server を無条件で disabled へ回した結果 `test_user_excluded_tool_wins_when_the_same_tool_is_available` を破壊（1 failed）したため、enable/disable 判定は available_tools/policy の積集合のみで決め、excluded_tools は公開 allowlist を絞るだけへ設計を修正した。同様に inventory 側も、両 kind が ready の場合だけ cache する初回実装が `test_workiq_resource_adapter.py::test_capability_reuses_the_shared_process_snapshot` を破壊した（1 failed）ため、cache 抑止条件を `client.start()` 自体の成功可否へ限定した。
+- 2026-09-18 bugfix（HVE `0.8.129`）: 最終集合外の MCP identity を決定的順序の exact server / tool としてエラーへ含める。説明・引数・応答本文は出力しない。[hve/tests/test_sdk_resource_routing.py](hve/tests/test_sdk_resource_routing.py) の初回 metadata / 再初期化後の両経路で RED を確認後、同ファイルを含む直接3ファイルの回帰は **236 passed**。敵対的レビュー反映で identity 整形を module 内の単一 helper へ集約し、2 つの失敗経路で書式が分岐する余地を除いた。
+- 2026-09-16 bugfix（HVE `0.8.128`）: 未発見の暗黙 GitHub MCP を、検証済み enabled route に含まれる場合を除き共通 create / resume 経路で除外する。既存 FR-TS-13 の除外契約への復旧であり、規範要件・exact metadata 照合・fail-closed 条件は変更していない。
+  - 変更した直接対応テスト4件: [hve/tests/test_sdk_resource_routing.py](hve/tests/test_sdk_resource_routing.py)、[hve/tests/test_runner_resume.py](hve/tests/test_runner_resume.py)、[hve/tests/test_sdk_resource_session_wiring.py](hve/tests/test_sdk_resource_session_wiring.py)、[hve/tests/test_orchestrator_session_mcp_scope.py](hve/tests/test_orchestrator_session_mcp_scope.py)。builtin 除外と検証済み enabled の例外、caller 除外保持、create / resume / local helper の除外期待を固定する。
+  - 保存済み同一対象 `hve/tests/test_sdk_resource_routing.py -k builtin`: RED **10 failed / 13 passed** → GREEN **23 passed**（各112 deselected）。証跡: [RED](../tests/run/20260916T083211/mcp-route-recovery/artifacts/tdd/red-01.stdout.log) / [GREEN](../tests/run/20260916T083211/mcp-route-recovery/artifacts/tdd/green-builtin-01.stdout.log)。
+  - 最終 focused は上記4件と `hve/tests/test_sdk_resource_readiness.py` / `hve/tests/test_runner_resource_readiness.py` / `hve/tests/test_mcp_config_removal.py` の7ファイルで **437 passed / 11 subtests passed**。実行別件数は合算しない。[実行条件・source/log hash](../tests/run/20260916T083211/mcp-route-recovery/artifacts/tdd/expectations-reviewed-test-20260916T004322259915Z.result.json) / [stdout](../tests/run/20260916T083211/mcp-route-recovery/artifacts/tdd/expectations-reviewed-test-20260916T004322259915Z.stdout.log)。
+  - [live no-send candidate](../tests/run/20260916T083211/mcp-route-recovery/artifacts/live-route-5-candidate.json) は caller override なしで期待／実測 MCP metadata が `workiq::ask` のみと完全一致し、unexpected / missing とも0、`PASS_NO_SEND`。当該 candidate の無送信確認に限り、実 tool 呼び出し・実モデル・Workflow・フルシステムテストの成功を示さず、上記 T21〜T25 の判定も昇格しない。今回の文書・版管理作業では再実行していない。
+- 本改訂の直接対応テスト（実装済み・オフライン GREEN）:
+  - [hve/tests/test_sdk_resource_readiness.py](hve/tests/test_sdk_resource_readiness.py) — required Skill → initialize_and_validate → connected → tools/list → 集約 ACK の順序、初期化 API 不在 / 未サポート / no-op と readiness の区別、schema 不正・重複 exact 名・未知 status の拒否を固定する。
+  - [hve/tests/test_sdk_resource_readiness.py](hve/tests/test_sdk_resource_readiness.py) — 全 RPC を含む共有 60 秒、0.5 秒 poll、正の残時間、caller の短い deadline、期限内 optional disable、deadline 枯渇 / cancel 非継続、0 MCP の Skill / filter 検査、disk 保持と bounded disconnect を固定する。
+  - [hve/tests/test_sdk_resource_routing.py](hve/tests/test_sdk_resource_routing.py) — caller / route 除外の exact 和集合と required 衝突、同じ実効集合の runtime 適用、ACK 非成功時の required / optional / caller filter 分岐と caller filter 非拡張を固定する。
+  - [hve/tests/test_runner_resource_readiness.py](hve/tests/test_runner_resource_readiness.py) — 旧 T02 の計画名を実在パスへ登録。Main / Pre-QA / Review の create / init 前 callback、二重登録なし、初期化失敗時の send 不在と安全な観測を固定する。
+  - [hve/tests/test_runner_resume.py](hve/tests/test_runner_resume.py) — resume 前の実効除外、required 衝突、同じ apply gate、残 deadline、cancel と cleanup、fake transport による実 SDK wire と required Skill 検証を固定する。
+  - [hve/tests/test_toolsearch_context_comparison.py](hve/tests/test_toolsearch_context_comparison.py) — context 計測が共有 readiness 後に MCP を再初期化・再待機せず、optional disable と runtime drift を保持することを固定する。
+- 本改訂の RED / GREEN 件数は FR-MAINT-03 の実行単位別記録を参照する。要件ごとの件数や重複除去済み総数へ換算しない。
+- 直接対応テスト:
+  - [hve/tests/test_sdk_resource_policy.py](hve/tests/test_sdk_resource_policy.py) :: `test_required_mcp_servers_by_skill_rejects_non_exact_or_empty_values` / `test_required_mcp_servers_by_skill_resolves_exact_names_in_declaration_order` / `test_mcp_dependent_required_skill_without_mapping_fails_closed` / `test_resource_routing_metadata_round_trips_without_loss` / `test_bundled_policy_routes_required_skill_mcp_dependencies` / `test_repository_policy_can_replace_required_skill_mcp_server_names` / `test_bundled_policy_classifies_every_resource_it_pins` — 4分類・allowlistに加え、required Skill→exact MCP schema、順序維持・重複除去、mapping欠落fail-closed、local policy round-tripと環境別server名差替えを固定する
+  - [hve/tests/test_sdk_resource_routing.py](hve/tests/test_sdk_resource_routing.py) :: `test_resolve_route_merges_explicit_and_required_skill_mcp_dependencies` / `test_required_skill_mcp_dependency_does_not_elevate_workflow_category` / `test_two_servers_apply_one_aggregate_options_update` / `test_empty_enabled_mcp_route_still_applies_caller_filters_once` / `test_longest_exact_server_prefix_owns_explicit_tool_id` / `test_optional_verification_failure_removes_its_caller_available_tools` / `test_missing_required_tools_error_lists_exact_names` / `test_create_session_from_route_reuses_the_resolved_route_object` — explicit / Skill依存requiredの統合、category非昇格、最長server prefix、options update最大1回、0 MCP時のcaller filter、optional disable後のfilter整合、missing exact tool診断、create→applyを固定する
+  - [hve/tests/test_runner_foundry_mcp_routing.py](hve/tests/test_runner_foundry_mcp_routing.py) / [hve/tests/test_azure_external_skill_integration.py](hve/tests/test_azure_external_skill_integration.py) — runner内のfixed MCP server名と重複runtime gateが無く、required Skillをshared routeへ委譲してroute失敗時は最初のsend前に停止することを固定する
+  - [hve/tests/test_sdk_resource_session_wiring.py](hve/tests/test_sdk_resource_session_wiring.py) :: `TestConfigDeferThreshold` / `TestConfigDeferThresholdFromEnv` / `TestCliDeferThreshold` / `TestGuiDeferThreshold` / `TestOrchestratorSessionDeferThreshold` / `TestOrchestratorSessionResourceRouting` / `TestFleetParentSessionDeferThreshold` / `TestCodeReviewSessionRouting` — local session へ `enable_config_discovery=True` / `enable_skills=True` / `disabled_mcp_servers` / `disabled_skills` を渡し、raw `mcp_servers` を渡さない wiring を固定する
+  - [hve/tests/test_sdk_resource_session_wiring.py](hve/tests/test_sdk_resource_session_wiring.py) :: `TestCloudToLocalResourceRoutingFallback` — Cloud Session が未サポートまたは準備失敗でlocalへfallbackした場合も、初回local attemptの前にsnapshot / policyを1回だけ解決し、shared resource routeを適用することを固定する
+  - [hve/tests/test_mcp_config_removal.py](hve/tests/test_mcp_config_removal.py) :: `test_runner_local_session_uses_shared_resource_routing_runtime` / `test_runner_local_session_helper_no_longer_calls_legacy_repository_mcp_scope` / `test_runner_local_session_helper_exposes_use_resource_routing_as_a_keyword_parameter` / `test_orchestrator_local_session_helper_no_longer_calls_legacy_repository_mcp_scope` / `test_context_report_no_longer_uses_legacy_repository_mcp_config_loader` / `test_sdkconfig_no_longer_exposes_runtime_mcp_servers_field` / `test_repository_pinned_mcp_config_file_has_been_deleted` — `.github/.mcp.json` / `--mcp-config` / legacy config writer / runtime field の撤去と shared routing への統合を固定する
+- 実測 / 契約注記:
+  - `knowledge` は registry 全 13 Workflow、`software-engineering` は `aas` / `ada` / `aad-web` / `asdw-web` / `adfd` / `adfdv` / `aag` / `aagd` / `aar` / `adoc` のみを対象とし、unknown Workflow は fail-closed する。
+  - `mcp` / `skill` snapshot が `unverified` の場合は ambient resource 漏洩を避けるため session 作成前に fail-closed とし、Plugin / ownership だけの `unverified` では exact classification だけで続行する。
+  - Step の required Skill は分類より優先して候補へ残す。Skill には tool allowlist が無いため、fail-closed 条件は未登録・disabled・session runtime 不在の 3 つに限る。required MCP は allowlist が空のとき従来どおり session 作成前に失敗させる。
 
 ### NFR-SEC-01 — 秘密情報を Issue body / 標準出力に含めない
 - 判定: ✓（既存経路とdurable resume拡張をGREEN確認。）
@@ -396,8 +564,8 @@
   - FR-WF-ADI-15（ID 採番禁止）: 同 :: `test_numbered_id_in_candidate_column_is_reported`
   - FR-WF-ADI-16（自動起動しない）: [hve/tests/test_adi.py](hve/tests/test_adi.py) :: `test_adi_is_not_registered_as_meta_dependency`
   - FR-WF-ADI-17（Step 1.1 の入出力・21 fan-out・0件質問）: [hve/tests/test_adi.py](hve/tests/test_adi.py) :: `test_adi_questionnaire_steps_contract` / [hve/tests/test_fanout.py](hve/tests/test_fanout.py) :: `test_adi_questionnaire_fanout_produces_21_children` / [hve/tests/test_adi_validation.py](hve/tests/test_adi_validation.py) :: `test_explicit_zero_questionnaire_is_valid` / `test_silent_zero_questionnaire_is_invalid` / `test_questionnaire_run_detects_step_outputs` / [hve/tests/test_orchestrator.py](hve/tests/test_orchestrator.py) :: `TestNormalizeAdiTargetScope`
-  - FR-WF-ADI-18（Step 1.2 join・Step 2順序・main成果物検証）: [hve/tests/test_adi.py](hve/tests/test_adi.py) :: `test_adi_questionnaire_steps_contract` / `test_adi_step_dependencies_are_serial` / [hve/tests/test_workflow_registry.py](hve/tests/test_workflow_registry.py) :: `TestADIQuestionnaireWorkflow.test_adi_questionnaire_steps` / [hve/tests/test_orchestrator.py](hve/tests/test_orchestrator.py) :: `TestAdiQuestionnairePostDag`
-- ワークフロー定義の契約: [hve/tests/test_adi.py](hve/tests/test_adi.py) :: `test_adi_workflow_registered` / `test_adi_params_are_minimal` / `test_adi_max_parallel_matches_existing_convention` / `test_adi_has_expected_steps` / `test_adi_questionnaire_steps_contract` / `test_adi_step1_contract` / `test_adi_fanout_uses_inventory_parser` / `test_adi_step_dependencies_are_serial` / `test_adi_self_improve_scope` / `test_adi_owns_integrated_questionnaire_self_improve_context` / `test_adi_registered_in_skill_manifest` / `test_adi_display_name_registered` / `test_adi_cli_purpose_defaults_to_empty` / `test_adi_cli_questionnaire_params_default` / `test_adi_cli_purpose_is_passed_through` / `test_adi_non_interactive_defaults`
+  - FR-WF-ADI-18（Step 1.2 join・Step 2順序・main成果物検証、v3.29 で 1.1 / 1.2 を任意化）: [hve/tests/test_adi.py](hve/tests/test_adi.py) :: `test_adi_questionnaire_steps_can_be_skipped`（RED: 1 failed → GREEN）/ `test_adi_questionnaire_steps_are_not_selected_by_default` / `test_cli_without_steps_uses_the_registry_default_selection` / [hve/gui/tests/test_page_workflow_select_ard_defaults.py](hve/gui/tests/test_page_workflow_select_ard_defaults.py) :: `test_adi_questionnaire_steps_are_unchecked_by_default` / [hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py) :: `TestDefaultSelection`（v3.33。RED: 3 failed → GREEN）/ `test_adi_questionnaire_steps_contract` / `test_adi_step_dependencies_are_serial` / [hve/tests/test_workflow_registry.py](hve/tests/test_workflow_registry.py) :: `TestADIQuestionnaireWorkflow.test_adi_questionnaire_steps` / [hve/tests/test_orchestrator.py](hve/tests/test_orchestrator.py) :: `TestAdiQuestionnairePostDag`
+- ワークフロー定義の契約: [hve/tests/test_adi.py](hve/tests/test_adi.py) :: `test_adi_workflow_registered` / `test_adi_params_are_minimal` / `test_adi_max_parallel_matches_existing_convention` / `test_adi_has_expected_steps` / `test_adi_questionnaire_steps_contract` / `test_adi_step1_contract` / `test_adi_fanout_uses_inventory_parser` / `test_adi_step_dependencies_are_serial` / `test_adi_registered_in_skill_manifest` / `test_adi_display_name_registered` / `test_adi_cli_purpose_defaults_to_empty` / `test_adi_cli_questionnaire_params_default` / `test_adi_cli_purpose_is_passed_through` / `test_adi_non_interactive_defaults`
 - 補足: NFR-SEC-ADI-01（`convert_local()` 限定）は [hve/gui/doc_convert.py](hve/gui/doc_convert.py) の実装制約であり、[hve/tests/test_gui_doc_convert.py](hve/tests/test_gui_doc_convert.py) が既存の変換経路を検証する。ADI 側からの追加検証は未実施のため判定は間接。
 
 ### FR-WF-ADFDV-03 — データフロー実装の既定言語（Python / pytest）
@@ -405,11 +573,13 @@
 - 直接対応テスト: [hve/tests/test_adfdv_deploy_contract.py](hve/tests/test_adfdv_deploy_contract.py) :: `test_dataflow_default_language_is_python` / `test_dataflow_test_coding_uses_pytest` / `test_dataflow_language_rationale_names_target_platforms` / `test_no_dotnet_tokens_remain_in_dataflow_contracts`
 - 検証範囲: Prompt 3 件（`Dev-Dataflow-ServiceCoding` / `Dev-Dataflow-TestCoding` / `Dev-Dataflow-FunctionsDeploy`）、body テンプレート 2 件（`.github/prompts/steps/adfdv/step-2.1.prompt.md` / `step-2.2.prompt.md`）、Cloud reusable workflow 1 件（`auto-dataflow-dev-reusable.yml`）。`.NET` 固有トークン（`dotnet` / `xUnit` / `.csproj` / `C#` / `NuGet`）の残存 0 件を機械検証する。
 - 補足: 実行プラットフォーム（Spark / Microsoft Fabric / Databricks）の記載は Prompt 本文で検証する。デプロイ先は Azure Functions（Python ランタイム）のまま変更していない。
+- 追加受入（2026-09-12静的回帰確認）:
+  - [hve/tests/test_dev_task_environment_contract.py](hve/tests/test_dev_task_environment_contract.py) — T08。Python 実装へ .NET logger を強制せず、構文検査と import 成功を区別し、本要件の Python / pytest 既定を保持する契約を追加済。実モデル動作の検証済み証跡にはしない。
 
 ### NFR-SEC-03 — `git add` の pathspec 除外（shell インジェクション対策）
 - 判定: △
 - 間接対応テスト:
-  - [hve/tests/test_main.py](hve/tests/test_main.py) :: `test_ignore_paths_default_in_config`、`test_ignore_paths_cli_override`、`test_ignore_paths_auto_remove_qa_when_workiq_draft_and_create_pr`
+  - [hve/tests/test_main.py](hve/tests/test_main.py) :: `test_ignore_paths_default_in_config`、`test_ignore_paths_cli_override`、`test_ignore_paths_auto_remove_qa_when_knowledge_source_and_create_pr`（v3.38: 知識源と PR 作成の併用で `qa` を commit 対象に残す）
 - 根拠: `_git_add_commit_push` の pathspec リスト渡しを直接検証するテストは未確認。
 - 訂正（2026-07-28）: 旧記述は [hve/tests/test_security.py](hve/tests/test_security.py) を本要件の間接根拠としていたが、同テストが検証する `hve/security.py::sanitize_user_input` はプロンプトへ埋め込む自由記述入力のサニタイズであり、`git add` の pathspec 除外とは無関係のため削除した。
 
@@ -437,6 +607,8 @@
   - bootstrap では要求定義・マッピング・RED テストの追加後、実装前に索引を再生成し、新規 ID の `source=hve-dev/requirement-definition.md`、`status=active-or-described`、マッピング上の test path を照合する。
   - 既存 ID で索引と要求定義が矛盾する場合は、推測せず不整合を解消するまで実装へ進まない。
   - `hve-requirement-traceability` Skill が §1.3 の 3 層優先順位（規範要件 / 説明的基線 / 履歴情報）と §3.7 の変更種別判定規則（`feature` / `bugfix` / `maintenance`）を保持し、要求定義書本文を追加取得せずに適用可否と変更種別を判定できる。
+- 追加受入（2026-09-12静的回帰確認）:
+  - [hve/tests/test_hve_requirement_traceability_contract.py](hve/tests/test_hve_requirement_traceability_contract.py) — T02。bootstrap と feature の共通手順を同一 Skill 内の参照へ整理した場合も、参照先の実在と既存の要件・mapping・RED・索引・実装・GREEN の順序を保持する契約を追加済。
 
 #### FR-MAINT-02 — 関連チャンクの選択取得と段階的 fallback
 - 判定: ✓（T03 GREEN）
@@ -451,13 +623,38 @@
   - 索引欠損・stale・検索 CLI 障害時は、特定済みの要件 ID または見出しの限定範囲だけを read / grep で取得し、要求書全文へ自動 fallback しない。
   - HVE 要件検索では本規則を汎用 Markdown 検索 fallback より優先し、汎用 fallback が先に全文を取得する経路を認めない。
   - 全文取得はユーザーの明示要求、要求定義書自体の横断改訂、または章単位で解消できない複数章の矛盾に限定する。
+- 追加受入（2026-09-12静的回帰確認）:
+  - [hve/tests/test_hve_requirement_traceability_contract.py](hve/tests/test_hve_requirement_traceability_contract.py) — T02。既知 ID の直引きと限定参照を保ち、同一文書参照の重複手順が要求書全文ロードへ退行しないことを追加済。
 
 #### FR-MAINT-03 — feature の要求 → mapping → RED → 索引 → 実装 → GREEN 順序
-- 判定: △（T03 / T04 GREEN。initial bootstrap PRのマージとtrusted check有効化が残作業）
+- 判定: ✓（2026-09-06 session resource readiness の実装前 RED / 実装後オフライン GREEN を反映。T20 は対応表・索引同期の準備であり、live / 全 E2E 完了ではない）
+- 改訂前実績: △（T03 / T04 GREEN。initial bootstrap PRのマージとtrusted check有効化が残作業）
+- 本改訂の feature 受入テスト（実装済み・オフライン GREEN）:
+  - [hve/tests/test_sdk_resource_readiness.py](hve/tests/test_sdk_resource_readiness.py) / [hve/tests/test_sdk_resource_routing.py](hve/tests/test_sdk_resource_routing.py) / [hve/tests/test_runner_resource_readiness.py](hve/tests/test_runner_resource_readiness.py) / [hve/tests/test_runner_resume.py](hve/tests/test_runner_resume.py) — 共有待機・deadline・早期 callback・create / resume の runtime gate を実在テストへ対応付ける。旧 T02 の reader 計画名は実在パスへ置換し、resume 固有ケースは実際の配置先を記録する。
+- 本改訂の検証履歴（2026-09-06、親タスクから引き継いだ実行結果）:
+  - T01〜T19 のオフライン作業・レビュー PASS を引き継ぐ。以下は各実行時点の suite 結果であり、T20 での再実行結果でも、各要件 ID / 各ファイルの単独件数でもない。重複する suite / subtests を合算せず、改訂前の実績とも混同しない。
+
+| 実行単位 | 代表テスト・検証対象 | 結果 |
+|---|---|---|
+| T03 / T04 実装前 | 共有 readiness / routing の RED 契約 | **112 failed / 107 passed**（製品実装前の RED） |
+| 共有 suite | `test_sdk_resource_readiness.py` / `test_sdk_resource_routing.py` | **304 passed**（オフライン GREEN） |
+| T10 / T14 / T15 合同 | `test_runner_resource_readiness.py` / `test_mcp_io_log.py` / `test_orchestrator_mcp_io_log.py` などの Main・共通ログ・orchestrator 結線 | **160 passed**（オフライン GREEN） |
+| T11 合同 | `test_runner_resource_readiness.py` / `test_runner_pre_qa.py` の Pre-QA・query checkpoint 関連 | **54 passed / 20 subtests passed**（オフライン GREEN） |
+| T12 関連 suite | `test_runner_resource_readiness.py` の Review と Runner / routing 関連 | **131 passed / 20 subtests passed**（オフライン GREEN） |
+| T12 Cloud 境界 | `test_sdk_resource_session_wiring.py` の fake Cloud / local fallback | **7 passed**（オフライン GREEN、live Cloud 実行ではない） |
+| T13 resume | `test_runner_resume.py` の resume / wire / deadline / cleanup | **48 passed**（オフライン GREEN） |
+| T13 時点の共有 suite | 共有 readiness / routing 回帰 | **295 passed**（オフライン GREEN、304 件の実行とは別記録） |
+| T16 corrected 合同 | `test_sdk_resource_session_wiring.py` / `test_azure_external_skill_integration.py` など既存9ファイルの隔離・回帰 | **240 passed / 31 subtests passed**（オフライン GREEN） |
+| T17 Prompt | `test_prompt_workiq_capability.py` / `test_prompt_cli.py` の plan 非実行境界 | **43 passed**（オフライン GREEN） |
+| T18 / T19 docs | `test_sdk_resource_docs_contract.py` / `test_workiq_sdk_only_docs.py` などの文書契約 | **152 passed**（オフライン GREEN） |
+| T21〜T25 | live SDK / auth / model を伴う検証 | **NOT RUN** |
+
+- 残件: 追加 metadata 実験は未実施（NOT RUN）。T20 の対応表・索引同期後、親タスクが広範囲オフライン suite、レビュー、版番号 / CHANGELOG の最終整合を扱う。既存の導入ゲートや live 受入をこの記録だけで完了扱いにしない。
 - 対応テスト:
   - [hve/tests/test_hve_requirement_traceability_contract.py](hve/tests/test_hve_requirement_traceability_contract.py) — GREEN（12 passed）。Skill / instructions が feature の必須順序と N/A 禁止を保持する静的契約
 - 対応テスト:
   - [.github/scripts/tests/test_validate_hve_requirement_traceability.py](.github/scripts/tests/test_validate_hve_requirement_traceability.py) — GREEN（76 passed、2 skipped）。feature の必須差分、要件 ID、テストパス、RED / GREEN 証跡と導入ゲートを検証する validator / workflow 契約
+  - [.github/scripts/tests/test_hve_requirement_mapping.py](.github/scripts/tests/test_hve_requirement_mapping.py) — 既存の compact 見出し・表・判定・テストリンクを単一 parser で解釈し、不正 ID、非表示 Markdown、重複宣言を fail-closed にする契約
 - 受入ケース:
   - feature では要求定義 → テストマッピング → 同じ対象の失敗するテストと RED 確認 → 索引再生成と照合 → 実装 → 同じ対象テストの GREEN 確認 → マッピングへの実結果反映、の順に進める。
   - feature の要件 ID、実在テストパス、RED / GREEN 証跡を省略できない。
@@ -465,11 +662,14 @@
   - `hve-dev/hve-tdd-change-policy.md` またはその生成元が §3.7 と矛盾する場合は §3.7 を正とし、同一変更で同期する。
   - 初回導入では要求テストマッピング、RED 契約テスト、TDD policy の生成元、機能・テスト索引、PR validator / workflow を同一変更セットで同期し、全契約テストが GREEN になるまで完了を宣言しない。
   - bootstrap 中の新規 ID が索引にないことを理由に、既存要件へ偽装しない。
+- 追加受入（2026-09-12静的回帰確認）:
+  - [hve/tests/test_hve_requirement_traceability_contract.py](hve/tests/test_hve_requirement_traceability_contract.py) — T02。共通手順の参照先で feature の TDD 順序を検査し、参照欠損・順序欠落・N/A 境界の消失を拒否する契約を追加済。
 
 #### FR-MAINT-04 — PR トレーサビリティの決定論的検証
 - 判定: ✓（validator・trusted check・required contextsと承認レビューを維持し、Code Ownerレビュー必須化と管理者への保護適用を解除）
 - 対応テスト:
   - [.github/scripts/tests/test_validate_hve_requirement_traceability.py](.github/scripts/tests/test_validate_hve_requirement_traceability.py) — RED: 1 failed / 81 passed（`###` 見出しの節を束縛できなかった）。GREEN: 82 passed / 2 skipped。対象パス、8 キー schema、ID / test path / mapping、変更種別ごとの組合せ、workflow / branch protection を検証する契約。2026-08-28 の保護強化では `require_code_owner_reviews=false` により focused test が **1 failed**、設定同期後に **1 passed**。2026-08-31 の保護緩和では旧 `true` 設定に対して focused test が **1 failed**、`require_code_owner_reviews=false` と `enforce_admins=false` の同期後に **1 passed**
+  - [.github/scripts/tests/test_hve_requirement_mapping.py](.github/scripts/tests/test_hve_requirement_mapping.py) — generator と PR validator が共有する authoring parser の範囲、省略記法、表、可視性、重複、許可 test root を固定する
   - [hve/tests/test_hve_surface_inventory.py](hve/tests/test_hve_surface_inventory.py) — GREEN。共有スコープ判定モジュールの対象 / 対象外サンプルと、対象外パスが surface 索引に混入しないことを検証する契約
 - 受入ケース:
   - §3.7 の対象境界表を parameterized contract として固定し、対象判定を単一 validator に集約する。パスは `/` 区切りのリポジトリ相対形式へ正規化し、絶対パス、空・`.`・`..` セグメント、リポジトリ外を拒否する。
@@ -494,11 +694,16 @@
   - path-specific instructions の自動適用は `hve/**`, `mdq/**`, `cq/**`, `hve-dev/**`, `tools/skills/markdown_query/**`, `tools/skills/code_query/**` に限定し、それ以外の HVE 対象は repository-wide ルーターから同じ Skill へ委譲する。
   - 要求定義書本文を repository-wide instructions へ複製しない。
   - 初回最大 5 チャンク / 800 tokens と、FR-MAINT-02 の段階的拡張を維持する。
+- 追加受入（2026-09-12静的回帰確認）:
+  - [hve/tests/test_hve_requirement_traceability_contract.py](hve/tests/test_hve_requirement_traceability_contract.py) — T02。repository-wide ルーターへ新しい手順本文や要件本文を増やさず、既存 Skill / path-specific instructions への委譲に留めることを追加済。
 
 #### FR-MAINT-05 — HVE 実装シンボル索引の生成と純度
 - 判定: ✓（GREEN。87 passed）
 - 対応テスト:
   - [hve/tests/test_hve_surface_inventory.py](hve/tests/test_hve_surface_inventory.py) — GREEN。87 passed。共有スコープ判定の単一宣言、境界表代表パス 42 件、面判定、決定性、対象外パス非混入、テスト非混入、CSV の stale 検知
+- 2026-09-12 敵対的レビュー追補（上記 87 件は従来の実行記録）:
+  - 同ファイルの `TestSurfaceInventory.test_category_for_test_path_classifies_canonical_root` / `test_category_for_test_path_rejects_nested_lookalikes` / `test_collect_tests_only_selects_repository_root_tests` で、root 相対の正規テストだけを分類し、作業・vendor 配下の同名ディレクトリをテスト索引へ混入させないことを検証する。既存 `category_for_test_path` の正規表現を先頭一致へ限定し、第 2 のスコープ判定器は追加しない。
+  - 修正前は nested path と収集結果の反例が失敗し、修正後の当該 15 ケースは同梱 Skills レビューの限定合同実行 **28 passed / 23 subtests passed** に含めて GREEN を確認した。実装シンボル索引とテスト索引を混同せず、生成物の再生成一致は別途検証する。
 - 受入ケース:
   - 索引 `hve-dev/hve-surface-inventory.csv` を生成スクリプトから機械生成し、同一入力に対して 2 回実行した出力が一致する。
   - 索引対象は §3.7 対象境界の判定に一致するパスだけとし、対象判定は既存の単一 validator の実装を再利用する。索引生成側に対象境界判定を二重実装しない。
@@ -593,6 +798,61 @@
   - 新しい外部 Action、別 Workflow、利用者向け無効化 flag を追加しない。
   - `full` scope は未実行。実施する場合は `smoke` の実測値をもとに見積りを再計算し、別の費用提示と明示承認を得る。
 
+#### FR-MAINT-12 — HVE 自己テストの品質証跡の tests 集約・保持
+- 判定: 実装済み・ローカル契約 GREEN（2026-09-15）。実システムテスト・実 GUI / Azure live 検証は未実施。
+- 2026-09-18 maintenance（HVE `0.8.129`）: cleanup の有無にかかわらず完了報告前に report / manifest の全 run-scoped 参照先を検証し、Prompt 版フルシステムテストのホスト上限測定方法を Phase 0 で明示する契約を追加した。[hve/tests/test_selftest_evidence_paths.py](hve/tests/test_selftest_evidence_paths.py) で両契約の RED を確認後、同ファイルを含む直接3ファイルの回帰は **236 passed**。CI 選別側の対応テスト [hve/tests/test_required_hve_check_reporting.py](hve/tests/test_required_hve_check_reporting.py) も実行し、`test_venv_reexec.py` との合同で **126 passed**（別実行のため 236 / 463 とは合算しない）。
+- 対応テスト:
+  - 機械照合用repo-root参照: [hve/tests/test_selftest_evidence_paths.py](hve/tests/test_selftest_evidence_paths.py)（閲覧用: [ソース](../hve/tests/test_selftest_evidence_paths.py)）— 能動12文書と共通入口の保存先、controller 全出力の文書契約、lane 分離、実 fixture の cleanup 非破壊、実 Git による安全証跡の選別を検証する。
+  - 機械照合用repo-root参照: [hve/tests/test_required_hve_check_reporting.py](hve/tests/test_required_hve_check_reporting.py)（閲覧用: [ソース](../hve/tests/test_required_hve_check_reporting.py)）— 能動12文書と `tests/README.md` の変更を push / PR の検査へ接続し、`tests/run/**` の証跡だけでは heavy job を選択しないこと、既存 required check / fail-closed の維持を検証する。
+- 受入ケース（文書契約とオフライン検証。実モデルの保存先遵守を証明するものではない）:
+  - 元リポジトリの `tests/run/<run-id>/<task>/` に request / plan / status / review / stdout / stderr / 画像 / manifest / 測定 / report を含む全 controller 生成物を配置する。copyable Prompt、暗黙の相対パス、子 Agent の出力も同じルートへ束縛する。
+  - lane は同ルート内で品質証跡の兄弟とし、内部の通常 `work/` と canonical outputs を許容する。通常 runtime の既定値を変えず、GUI が環境変数 override を上書きする既存動作を隠さない。
+  - pytest 等の前に親証跡 run を確保し、fixture の新規 run 除去と区別する。cleanup 前に必要な安全な証跡を lane 外へ退避して一覧・存在・必要な非空・リンク・必要な hash を確認し、欠損時は削除を止める。正常な空 stderr は捏造せず記録する。
+  - 完了・failed / blocked / interrupted の品質証跡を保持し、自動削除・旧証跡の上書き・過去履歴改変を禁止する。稼働中 checkpoint の既存更新方式と再実行時の新 run / attempt 分離を両立する。
+  - 秘密を含まない report / JSON / 画像 / ログ等だけが Git 管理対象として選別可能で、lane / fixture / 秘密 / 設定原本 / キャッシュは除外される。無制限 ignore 解除・自動 commit を要求しない。
+  - 能動指示の変更と履歴証跡だけの変更を CI が区別し、FR-MAINT-11 の required check を維持する。新設定・新エンジン・schema 変更・全 CI ログ移行を追加せず、既存承認ゲートを迂回しない。
+- RED / GREEN 証跡: 初回は環境上の basetemp 親不足・Windows Bash 選択を含む `99 failed / 51 passed / 4 errors`。環境修正後、製品文書・ignore・CI 実装前の同じ2ファイルで **59 failed / 95 passed / 0 errors** を確認してから索引を再生成した。実装・レビュー反映後、その2ファイルを含む10ファイルの focused 回帰は **441 passed**。過去の GREEN と加算せず、各実行を別証跡として保持する。[実行証跡](../tests/run/20260915T103306-selftest-evidence/Issue-hve-test-evidence/artifacts/)（`red.log` / `red2.log` / `final-green.log` と各 XML）。T01時点の「要追加」から実在テスト・実結果へ更新した。
+- 根拠: FR-MAINT-12 の利用者依頼・保存指定・conftest cleanup・GUI override の出典に対応する。静的契約の成功だけを実 GUI / モデル / Azure live 検証の成功へ拡張しない。
+
+#### FR-MAINT-13 — Coding Agent 長時間タスクの有界実行
+- 判定: 要追加（実装前 RED を確認後に更新する）。
+- 対応テスト:
+  - [hve/tests/test_copilot_bounded_task_contract.py](hve/tests/test_copilot_bounded_task_contract.py) — repository Skill の直接配置、terminal 出力の会話外処理、session 上限による停止規則が無いこと、停止境界の限定、実出力と exit code による判定を静的検証する。
+- 受入ケース:
+  - 対象13 Skill が `.github/skills/<name>/SKILL.md` で発見可能で、旧カテゴリ配下に重複しない。
+  - 長い terminal 出力を全文会話へ注入せず、限定抽出または実行専用 subagent の要約へ退避する。
+  - 時間・成果物数・同じ質問の回数・tool 実行回数を理由に停止せず、着手前の承認ゲートを持たない（v3.14）。
+  - 宣言範囲の操作は承認済みとし、4 つの早期終了の形を避け、曖昧な HVE 依頼では一意に決まる値を選び資格情報と未宣言の範囲だけを確認する（v3.25。`test_declared_scope_and_turn_ending_rules_are_in_instructions` / `test_ambiguous_hve_requests_confirm_only_undeclared_scope`。RED: 2 failed → GREEN: 7 passed）。
+  - 停止は明示承認境界（破壊的・不可逆・外部公開の操作）と資格情報の不足だけに限り、それ以外の不明点は判断を記録して続行する（v3.14）。
+  - 合否は実出力と exit code に基づき、既存の安全・承認・偽 PASS 禁止を維持する。
+  - 2026-09-25 改訂（履歴。v3.14 で次項に置き換え、対応テストは削除）: 無人実行では3項目の提示で停止せず、依頼文の値または既定値で確定して完了報告へ記録し続行する。明示承認境界と 90 分・1成果物の上限では停止する（旧 `test_completion_gate_does_not_stall_unattended_runs`。RED: 1 failed → GREEN: 同ファイル全 PASS）。
+  - 2026-09-26 改訂（v3.14、上記の 90 分・1成果物・同じ質問2回目の停止と 3 項目承認ゲートを置き換える）: 承認済みの計画は要求定義とし、完了条件を要求定義から導き、判断を記録して続行する。停止は明示承認境界と資格情報の不足だけで、時間・成果物数・tool 実行回数・同じ質問の回数では停止しない（`test_repository_instructions_do_not_stop_on_session_limits`・`test_stop_boundary_is_limited_to_approval_and_credentials`・`test_completion_gate_is_evidence_based`）。RED: 対象 6 ファイルで 7 failed / 16 passed（実装前）→ GREEN: 23 passed（2026-09-26）。
+#### FR-MAINT-14 — モデル・context・subagent・承認の効率化
+- 判定: 実装済み（RED: 5 failed。GREEN: 5 passed。関連契約回帰: 57 passed）。
+- 対応テスト:
+  - [hve/tests/test_copilot_efficiency_contract.py](hve/tests/test_copilot_efficiency_contract.py) — 3段階model routing、request 予算による session 分割が無いことと `chat.agent.maxRequests` の下限、forked Skill、read-only terminal allowlistとdeny rule維持を静的検証する。
+- 受入ケース:
+  - Agentがmodel pickerを変更したと偽らず、routine／lightweight／deepの用途を判断する。モデルの提案は利用者が尋ねたときか deep reasoning と判断したときだけ行う（2026-09-25 改訂、`test_model_suggestion_is_limited_to_request_or_deep_reasoning`。RED: 1 failed → GREEN: 同ファイル全 PASS）。
+  - `chat.agent.maxRequests` が200以上で、token 数・request 数を理由に session を分割しない（v3.14）。
+  - 多ファイル調査と長いcommandをsubagentへ隔離し、重い3 Skillをfork contextで実行する。
+  - terminal auto-approvalはread-only allowlistだけを許可し、write／Git変更／cloud／test実行を自動承認しない。
+- RED / GREEN 証跡: 実装前の同一テストは **5 failed**（model routing、30 request上限、forked Skill、subagent方針、terminal allowlistを各1件検出）。実装後は **5 passed**。同テストとFR-MAINT-13、Skill frontmatter、Tool Search Skill発見、要件トレーサビリティを含む5ファイルの関連回帰は **57 passed**。静的契約の成功を実モデルの速度改善または100k token未満の実測へ拡張しない。
+- 2026-09-26 改訂（v3.14）: 100k token 目標・30 request 上限・session 分割を削除し、`chat.agent.maxRequests` を 200 以上にする（`test_context_is_not_split_by_request_budget`）。RED: 対象 6 ファイルで 7 failed / 16 passed（実装前）→ GREEN: 23 passed（2026-09-26）。
+
+#### FR-MAINT-15 — 検索 golden 評価の CI ゲート
+- 判定: 実装済み・ローカル契約 GREEN（2026-09-25）。PR の CI での実行は未確認。
+- 直接対応テスト:
+  - [hve/tests/test_golden_ci_gate_contract.py](hve/tests/test_golden_ci_gate_contract.py) — `mdq index smoke test` と `cq Python Tests` に golden 評価の step があり、要件の下限と同じ数値で失敗を判定することを検証する。
+  - [hve/tests/test_required_hve_check_reporting.py](hve/tests/test_required_hve_check_reporting.py) — 追加した変更パス（`mdq/`、`tools/skills/markdown_query/`、`mdq.toml`、`cq.toml`）で重いテストが選ばれることを検証する。
+- 受入ケース:
+  - top-k の正解数が下限を下回ると、その job が失敗する。
+  - 判定は benchmark の出力だけを使い、CI に別の判定を実装しない。
+  - FR-MAINT-11 の required 2 job の報告規則と、検出失敗時の fail-closed を変えない。
+- RED / GREEN 証跡:
+  - RED（2026-09-25）: Workflow の変更前に `pytest hve/tests/test_golden_ci_gate_contract.py hve/tests/test_required_hve_check_reporting.py` が exit 1、**12 failed / 111 passed**（golden の step が 0 件で 2 件、追加した 5 パスが push の paths と変更パス検出の両方で選ばれず 10 件）。
+  - GREEN（2026-09-25）: 同じ 2 ファイルと `hve/tests/test_hve_surface_inventory.py` で **288 passed**、exit 0。
+  - 実行確認（2026-09-25）: 追加した 2 つの step の `run:` を、クリーンな clone（`763f617f9`）で Git Bash から実行し、どちらも exit 0（mdq 31/40、cq hve 21/31、cq app 22/25）。下限を実測値 + 1 問に書き換えると、どちらも exit 1。書き換えは戻し、`git diff --exit-code` が 0 であることを確認した。
+
 ### markdown-query 検索品質の回帰計測（§3.8）
 
 #### FR-MDQ-01 — ゴールデンクエリによる top-1 / top-k 正解率の機械算出
@@ -618,9 +878,10 @@
   - コーパスの変化によるもので検索実装の退行ではないため、**ゴールデンクエリ集は変更していない**。
 
 #### FR-MDQ-02 — 表形式ファイル（CSV / TSV）の行単位索引
-- 判定: ✓（RED：実装前は `TypeError: build_index() got an unexpected keyword argument 'tabular_globs'` 他で 25 failed。GREEN：25 passed）
+- 判定: △（現存する回帰テストは CSV 行索引と識別子タグ優先の一部だけを直接検証する）
 - 対応テスト:
-  - [mdq/tests/test_tabular_index.py](mdq/tests/test_tabular_index.py) — GREEN、25 passed。設定未宣言時の非索引、1 データ行 = 1 チャンク、ヘッダ行除外、物理行番号、引用符内改行、文脈ヘッダ生成、`列名: 値` 本文、タグ生成と絞り込み、strategy 非依存、増分更新と prune、空 / ヘッダのみ / 列数不足の頑健性
+  - [mdq/tests/test_search_tag_ranking.py](mdq/tests/test_search_tag_ranking.py) — `build_index(..., tabular_globs=[...])` による CSV 行索引と、`feature_id` タグを使う BM25 / FTS5 / grep の識別子優先を検証する。
+- 既知の未確認範囲: 下記受入ケースのうち、上記テストが直接検証する単一 CSV の行索引と識別子タグ優先を除く全項目（TSV、設定未宣言時の非索引、データ行数とchunk数、ヘッダ除外、物理行番号、引用符内改行、`heading_path` / `text` / `tags` の全形式、`--tags` 絞り込み、strategy 非依存、増分更新 / prune、空 / ヘッダのみ / 列数不足）は未確認。旧記録が参照していた `mdq/tests/test_tabular_index.py` は現行作業ツリーと Git 履歴に実在を確認できないため、GREEN の根拠に使用しない。
 - 受入ケース:
   - `[index].tabular` が未宣言なら CSV / TSV を 1 行も索引しない。
   - 宣言すると、対象ファイルのデータ行数と同数のチャンクが生成される（ヘッダ行はチャンクにしない）。
@@ -1044,6 +1305,8 @@
   - Skill 定義がルーティング表へ登録される。→ ✓
   - `mdq` / `cq` の Skill 定義が相互に適用範囲を参照し、選択が一意に決まる。→ ✓（`mdq` の DO NOT USE FOR に「use code-query instead」、`cq` の Non-goals に「`markdown-query` を使う」）
   - `cq` 導入の前後で FR-MDQ-01 のゴールデンクエリ正解率が低下しない。→ ✓（20 queries、`auto`、k=5。baseline / candidate とも top-1 **0.45**、top-k **0.75**、query-level regressions **0**）
+- 追加受入（2026-09-12静的回帰確認）:
+  - [hve/tests/test_code_query_skill_wiring.py](hve/tests/test_code_query_skill_wiring.py) — T04。`args` / `match` / `freshness` / `profile` の案内を root または既存 `references/` に保持し、Docs / Code の相互除外を root でも維持する契約を追加済。T04 は pre-change GREEN preservation であり、既存 parser の quote 表現を製品不具合や修正前 RED として扱わない。
 - 実測:
 
 | profile | 手法 | top-1 | 平均トークン | 平均レイテンシ |
@@ -1069,12 +1332,12 @@
 #### FR-CQ-14 — `cq` 利用ログ（`.cq/usage.jsonl`）
 - 判定: ✓（RED: `cq.usage_log` 不在による collection error 1 件。GREEN: 9 passed。cq / Tool Search の focused suite: 962 passed）
 - 対応テスト:
-  - `hve/tests/test_cq_usage_log.py` :: `test_append_record_writes_jsonl` / `test_append_record_appends_multiple` — `.cq/usage.jsonl` へ 1 行 1 レコードで追記される
-  - `hve/tests/test_cq_usage_log.py` :: `test_context_env_vars_captured` / `test_context_omitted_when_no_env_vars` — 実行文脈は設定済みの項目だけを含め、`null` で埋めない
-  - `hve/tests/test_cq_usage_log.py` :: `test_append_record_swallows_write_errors` — 書き込み失敗を呼び出し元へ伝搬しない
-  - `hve/tests/test_cq_usage_log.py` :: `test_cmd_stats_writes_usage_log` / `test_cmd_search_writes_usage_log` — CLI 経由でレコードが書かれる
-  - `hve/tests/test_cq_usage_log.py` :: `test_failed_command_is_recorded_with_its_exit_code` — 失敗経路も終了コード付きで記録される
-  - `hve/tests/test_cq_usage_log.py` :: `test_usage_log_path_is_separate_from_mdq` — `.mdq/usage.jsonl` と同一ファイルへ混在させない
+  - [hve/tests/test_cq_usage_log.py](hve/tests/test_cq_usage_log.py) :: `test_append_record_writes_jsonl` / `test_append_record_appends_multiple` — `.cq/usage.jsonl` へ 1 行 1 レコードで追記される
+  - [hve/tests/test_cq_usage_log.py](hve/tests/test_cq_usage_log.py) :: `test_context_env_vars_captured` / `test_context_omitted_when_no_env_vars` — 実行文脈は設定済みの項目だけを含め、`null` で埋めない
+  - [hve/tests/test_cq_usage_log.py](hve/tests/test_cq_usage_log.py) :: `test_append_record_swallows_write_errors` — 書き込み失敗を呼び出し元へ伝搬しない
+  - [hve/tests/test_cq_usage_log.py](hve/tests/test_cq_usage_log.py) :: `test_cmd_stats_writes_usage_log` / `test_cmd_search_writes_usage_log` — CLI 経由でレコードが書かれる
+  - [hve/tests/test_cq_usage_log.py](hve/tests/test_cq_usage_log.py) :: `test_failed_command_is_recorded_with_its_exit_code` — 失敗経路も終了コード付きで記録される
+  - [hve/tests/test_cq_usage_log.py](hve/tests/test_cq_usage_log.py) :: `test_usage_log_path_is_separate_from_mdq` — `.mdq/usage.jsonl` と同一ファイルへ混在させない
 - 受入ケース:
   - 保存先は `--repo-root` で解決した `<repo-root>/.cq/usage.jsonl` とし、`.mdq/usage.jsonl` と分離されている。
   - 長時間常駐する `watch` は記録対象外。自動テストは置かず、`cq/cli.py` の `watch` 分岐に記録呼び出しを配置しないことで担保する（`watch` はブロッキングのため CLI 経由テストが成立しない）。
@@ -1170,7 +1433,7 @@
   - 任意階層の `tests` ディレクトリが同梱物へ混入しない。→ ✓
 
 #### FR-KIT-02 — Skill 定義の単一正本化
-- 判定: ✓（RED：`skill/` 不在と `skill-template` 二重管理で 10 failed。GREEN：13 passed）
+- 判定: ✓（RED：`skill/` 不在と `skill-template` 二重管理で 10 failed。GREEN：14 passed）
 - 対応テスト:
   - [hve/tests/test_skill_bundle_sync.py](hve/tests/test_skill_bundle_sync.py) — GREEN。両 Skill の正本と配布コピーの byte 一致、余剰ファイル不在、`references/repo-specific/` 非同梱、正本側にリポジトリ固有付録が隔離されていること、`skill-template` の削除、Skill 配置判断が共有実装 1 箇所にあること
   - [hve/tests/test_code_query_skill_wiring.py](hve/tests/test_code_query_skill_wiring.py) — GREEN。汎用化後も frontmatter マーカー、参照資料の実在、`def` / `refs` の `--symbol` 引数、掲載識別子の実在が保たれること
@@ -1180,6 +1443,9 @@
   - `markdown-query` にも Skill 定義の配布経路が存在する。→ ✓
 - 既知の制約:
   - `references/cli-reference.md` にはリポジトリ固有の呼び出し例が残る。`test_code_query_skill_wiring.py::test_documented_symbols_actually_exist` が捧造防止のために実在識別子の掲載を要求しており、完全な汎用化と両立しない。契約変更を伴うため本件では未解消。
+- 追加受入（2026-09-12静的回帰確認）:
+  - [hve/tests/test_code_query_skill_wiring.py](hve/tests/test_code_query_skill_wiring.py) — T04。Skill 正本の既存 path と参照資料を維持し、新規 reference を追加する場合は既存本文へ到達させ、別文面の Skill 定義を増やさない契約を追加済。
+  - [hve/tests/test_markdown_query_kit_contract.py](hve/tests/test_markdown_query_kit_contract.py) — `TestSkillPortability`。汎用入口・組み込み例から HVE 限定測定値を隔離して専用参照資料に保持し、CLI 案内が HVE の常駐 watcher を前提にしないこと。修正前 RED は 3 failed、修正後は当該ファイル・Code Query 配線・Skill 整理契約の 3 ファイルで 55 passed。独立敵対的レビューの指摘は 0 件。存在する環境だけで読む任意の repo-specific 参照は禁止対象にしない。配布一致は `test_skill_bundle_sync.py` の別検査で確認する。
 
 #### FR-KIT-03 — セットアップ・同期判断ロジックの単一化
 - 判定: ✓（`.mypy_cache` 除外の追加契約は RED：1 failed → GREEN：17 passed。両 vendor 回帰を含め 115 passed）
@@ -1204,6 +1470,8 @@
 - 既知の制約:
   - E2E は `--no-venv` で実行するため、venv 作成と `pip install` の経路は未検証（ネットワークと実行時間への依存を避ける意図的な限定）。
   - GUI 任意依存未導入時の fail-closed 経路は静的検査のみ（実行環境を壊さずに再現できないため）。
+- 追加受入（2026-09-12静的回帰確認）:
+  - [hve/tests/test_code_query_skill_wiring.py](hve/tests/test_code_query_skill_wiring.py) — T04。配布後も上流固有 profile 名や未同期 reference に依存せず、root / 既存 reference の案内から実 CLI 引数へ到達できることを追加済。
 
 #### FR-KIT-05 — 配布物からの上流依存禁止
 - 判定: ✓（RED：実行時 `sys.modules` に `hve*` が 21 モジュール。GREEN：`[]`）
@@ -1215,23 +1483,25 @@
   - 上流パッケージの有無を実行時に判定して分岐する経路が存在しない。→ ✓（`_try_hve_settings_store()` を除去し、`SettingsBackend` 注入へ置換）
 
 #### FR-KIT-06 — 配布同期の宣言単一化と版管理
-- 判定: ✓（GREEN：57 passed）
+- 判定: ✓（T3 RED：17 failed / 57 passed、exit 1 → GREEN：74 passed、exit 0。敵対的レビュー RED：14 failed / 94 passed、exit 1 → GREEN：108 passed、exit 0。parser Critical RED：3 failed / 108 passed、exit 1 → 最終 GREEN：111 passed、exit 0）
 - RED / GREEN 証跡（正確に記録する）:
+  - **2026-09-02 T3 repository portability の実測**: 同一 focused test で、実装前は **17 failed / 57 passed、exit 1**、初回実装後は **74 passed、exit 0**。敵対的レビュー回帰の追加後は実装前に **14 failed / 94 passed、exit 1**、レビュー反映後に **108 passed、exit 0** を確認した。
+  - **2026-09-03 parser Critical の実測**: 空の query / fragment delimiter を持つ remote 3 件の回帰追加後は **3 failed / 108 passed、exit 1**、raw remote の解析前ガード反映後は **111 passed、exit 0** を確認した。
   - **RED を確認した受入ケース1**: 「利用者が編集する前提のファイルを改変検出の対象外とする」。テスト追加時点の実装は `preserve` 対象（`tool-search` の `policy.json`）を改変として報告し、`test_preserved_files_are_not_reported_as_drift` が FAIL した。マニフェストへ `preserved` を追加して GREEN。
   - **RED を確認した受入ケース2**: 「上流パッケージへ依存しない」（FR-KIT-05 との連携）。配布先を cwd として `python -m toolsearch eval` を実行し、`ModuleNotFoundError: No module named 'mdq.search'` を実測した。`toolsearch/ranking.py` の既定 BM25 実装が `mdq.search._MiniBM25` であり、`mdq/tokenize.py` しか同梱していなかった。`mdq/search.py` を同梱対象へ追加して GREEN。
     - **偽 green の原因**: 当初の可搬性テストは `cwd=上流リポジトリ` で subprocess を起動しており、`-m` 実行で cwd が `sys.path` へ入るため `mdq` が上流側へ解決されていた。テストの cwd を配布先へ固定し、遅延 import を静的に拾って同梱漏れを検出する回帰テストを追加した。
   - **RED を確認した受入ケース3（実 Linux）**: Ubuntu 24.04 / WSL2 で 3 パッケージとも `subprocess.CalledProcessError: ... '-m', 'venv' ... returned non-zero exit status 1` で導入不能だった。`install.sh` が Python インタプリタの有無しか見ておらず、Debian 系の `python3-venv`（ensurepip）不在を検知できていなかった。ensurepip の個別確認と自動導入を入れて GREEN。
   - **RED を確認した受入ケース4（素の Windows）**: Windows Sandbox（pwsh / python / py / git / winget / choco が一つも無い素の Windows 11 + PowerShell 5.1）で `install.ps1` が **実行前に構文エラー**となった。5.1 は `.ps1` を ANSI として読むため、UTF-8（BOM 無し）の非 ASCII を含むスクリプトはパースできない。配布される `.ps1` を ASCII のみへ揃えて GREEN（全 `.ps1` が 5.1 で parse-errors=0、パッケージマネージャ不在を検知して exit 3）。同じ欠陥が `tools/skills/*/{setup,sync-vendor,mdq,cq}.ps1` にもあったため併せて修正した。
-  - **RED を確認していない受入ケース**: 上記以外。配布機構の実装が先行し、本要件はその契約を事後に規定したものであるため、RED 証跡は存在しない。**bugfix / maintenance ではなく feature の追加であり、TDD 順序を満たしていない**。この逸脱は意図的に記録するものであり、以後の FR-KIT-06 改訂では RED を先行させる。
+  - **初回 feature 追加時に RED を確認していない受入ケース**: 当時の上記4件以外。配布機構の実装が先行し、本要件はその契約を事後に規定したものであるため、初回追加時の RED 証跡は存在しない。**bugfix / maintenance ではなく feature の追加であり、TDD 順序を満たしていない**。この逸脱は意図的に記録する。2026-09-02 の T3 改訂は前項の RED / GREEN を実測済み。
 - 対応テスト:
-  - [hve/tests/test_for_other_repo_sync.py](hve/tests/test_for_other_repo_sync.py) — GREEN。48 件。`copy_to_repo.py` が**実際に生成した成果物**を対象に、宣言の健全性（必須キー・参照先実在・エンジン実体を宣言側へ複製していないこと）、配布物へのビルド生成物混入なし、リポジトリ固有データの除外、ドキュメントと画像の同梱、版マニフェストの記録内容、版判定 4 値、同版・降格の既定拒否と `--force`、`preserve` の温存と改変検出除外、旧配布ファイルの削除、配布外ファイル（venv）の生存、コピー先単独での `--version` / `--verify`、**配布先を cwd とした** `python -m toolsearch` の `policy` / `skills` / `eval`、配布エンジンに `hve` import が無いこと、**配布エンジンが参照する `mdq.*` モジュールがすべて同梱されていること**、`kit.toml` の必須キーを検証
+  - [hve/tests/test_for_other_repo_sync.py](hve/tests/test_for_other_repo_sync.py) — GREEN。111 件（2026-09-03 parser Critical 反映後）。`copy_to_repo.py` が**実際に生成した成果物**を対象に、宣言の健全性（必須キー・参照先実在・エンジン実体を宣言側へ複製していないこと）、配布物へのビルド生成物混入なし、リポジトリ固有データの除外、ドキュメントと画像の同梱、版マニフェストの記録内容、版判定 4 値、旧版 manifest からの通常同期と再実行時の同版拒否、降格の既定拒否と `--force`、GitHub origin remote の導出、URL parser 前の ASCII 制御文字・Unicode / ASCII 空白・空の query / fragment delimiter 拒否、userinfo / password / query / fragment / port / 非 GitHub host / extra path / traversal / percent encoding / 空値の fail-closed、`preserve` の温存と改変検出除外、旧配布ファイルの削除、配布外ファイル（venv）の生存、コピー先単独での `--version` / `--verify`、**配布先を cwd とした** `python -m toolsearch` の `policy` / `skills` / `eval`、配布エンジンに `hve` import が無いこと、**配布エンジンが参照する `mdq.*` モジュールがすべて同梱されていること**、`kit.toml` の必須キーを検証
 - 受入ケース:
   - 宣言が単一の出所であり、同期スクリプトが収集対象を再宣言しない。→ ✓
   - エンジン実体・Skill 定義・共通セットアップ実装を宣言側へ複製しない。→ ✓（`tools/for-other-repo/<package>/vendor/` が存在しないことを検証）
   - 版マニフェストが配布版・エンジン版・上流 commit・同期時刻・全ファイルのハッシュを記録する。→ ✓
   - 同版・降格は既定で拒否し、明示指定でのみ上書きする。→ ✓
   - 旧配布ファイルを削除し、配布物以外を削除しない。→ ✓
-  - 利用者が編集する前提のファイルを温存し、改変検出の対象外とする。→ ✓（唯一の RED → GREEN）
+  - 利用者が編集する前提のファイルを温存し、改変検出の対象外とする。→ ✓（初回 feature 追加時の RED → GREEN）
   - コピー先だけで版と改変・欠落を確認できる。→ ✓（`install.py --version` / `--verify`）
   - 上流 extras 相当の任意依存を同期宣言から導入できる。→ ✓（`install-extras.json`）
 - 実測（2026-08-05）: 配布ファイル数は markdown-query 81 / code-query 72 / tool-search 29。**3 つの実環境**で導入を確認した: (1) Windows 11 / Python 3.14 — 3 パッケージとも exit 0、`mdq` 39 ファイル 402 chunk、`cq` 32 ファイル 0 errors（`.ps1` は tree-sitter）。(2) Ubuntu 24.04 / Python 3.12（WSL2）— 3 パッケージとも exit 0、`CQ_PROFILE` 未設定で検索成立。(3) Windows Sandbox（前提ソフトウェアゼロ + PowerShell 5.1）— 全 `.ps1` が parse-errors=0、パッケージマネージャ不在を検知して exit 3 と導入先 URL。配布先を cwd とした `toolsearch eval` は 73 entries / 42 queries で recall@5 0.869 / MRR 0.807 / トークン削減 91.3%。
@@ -1389,6 +1659,195 @@
   - [hve/tests/test_runtime_observability_store.py](hve/tests/test_runtime_observability_store.py) :: `TestFailureIsolation::test_write_error_is_swallowed_and_disables_recorder` — 書込失敗を握り潰し以後無効化
   - [hve/tests/test_workbench_observability.py](hve/tests/test_workbench_observability.py) :: `TestStateHoldsMetrics::test_snapshot_survives_broken_registry` — 集計取得失敗時も表示側が落ちない
 
+### §3.16 計画成果物のタスク完了条件（DoD）
+
+#### FR-PLAN-01 — 計画の分割はモデルが判断し、機械的な強制規則を置かない
+- 判定: ✓（v3.22。RED: 新規契約テスト 28 failed → GREEN: 全件 PASS）
+- 直接対応テスト:
+  - [hve/tests/test_prompt_planning_reference_contract.py](hve/tests/test_prompt_planning_reference_contract.py) :: `test_no_mechanical_split_rules_in_skills_prompts_and_instructions` — `.github/skills/**`・`.github/prompts/**`・`copilot-instructions.md` に `SPLIT_REQUIRED` / `split_decision` / 「裁量で判定を覆さない」/ `## 分割判定` などが無いこと
+  - 同 :: `test_plan_template_keeps_completion_criteria_without_split_metadata` / `test_task_dag_skill_keeps_the_three_minimal_rules` / `test_planning_prompts_delegate_with_one_sentence` — テンプレートは `## 完了条件` だけを残し、Skill は 3 点の規約を持ち、計画を書く 25 Prompt は 1 文で Skill へ委譲すること
+  - [hve/tests/test_cloud_subissue_workflows.py](hve/tests/test_cloud_subissue_workflows.py) :: `test_plan_validation_labels_are_driven_by_changed_subissues` / `test_subissue_workflows_still_exist` — Cloud のラベル付けは `subissues.md` の有無で決まり、Sub-Issue 経路の 4 Workflow は維持されること
+  - [hve/tests/test_prompt_edition_docs_contract.py](hve/tests/test_prompt_edition_docs_contract.py) :: `TestLiveA3DeterministicMultiFixture::test_two_independent_outputs_are_planned_without_forced_split` — Prompt 版の A3 fixture が分割の強制を前提にしないこと
+  - [hve/tests/test_prompt_planning_reference_contract.py](hve/tests/test_prompt_planning_reference_contract.py) :: `test_gui_text_does_not_mention_removed_split_required` — v3.36: `hve/gui/**` の `.py` と `.ts`（`hve/gui/tests/**` を除く）が `SPLIT_REQUIRED` に言及しないこと（RED: `page_options.py`・`settings_store.py`・`hve_gui_en_US.ts` の 3 件 → GREEN）
+
+#### FR-DOD-01 — `subissues.md` 各ブロックの `## 完了条件` 構造検査
+- 判定: ✓（RED: bash 5 件 / Pester 5 件 / pytest 5 件 失敗 → GREEN: bash 43 passed 0 failed、Pester 39 passed 0 failed、pytest 197 passed）
+- 直接対応テスト:
+  - [.github/scripts/tests/test-bash.sh](.github/scripts/tests/test-bash.sh) — `validate-subissues: detects missing 完了条件 section` / `validate-subissues: detects empty 完了条件 section` / `validate-subissues: detects REPLACE_ME placeholder in 完了条件` / `validate-subissues: horizontal rule alone is not 完了条件 content` / `validate-subissues: NO-BREAK SPACE alone is not 完了条件 content` — セクション欠落 / 空 / placeholder 残存 / 水平線のみ / NBSP のみ を bash 版が非 0 で拒否すること
+  - [.github/scripts/powershell/tests/commands.Tests.ps1](.github/scripts/powershell/tests/commands.Tests.ps1) :: `Describe 'validate-subissues.ps1'` — bash 版と同一ケースを PowerShell 版でも拒否すること（両実装の判定同値）
+- 注記: 上記 2 ファイルの対応テストは本改訂で新規追加した。RED を実出力で確認した後に実装し、GREEN を確認済み。v3.21 で CLI / GUI の runtime split-fork を撤去し、Python 側の検査経路（旧 `hve/split_fork.py`）と `hve/tests/test_split_fork.py` を削除した。
+- 根拠: placeholder 判定は既存 `<!-- title: -->` と同じ部分一致・大文字小文字不問。`subissues.md` はブロック区切りに `---` を使うため、水平線だけの状態は記述として数えない。NO-BREAK SPACE (U+00A0) は glibc の `C.UTF-8` で `[[:space:]]` に含まれず bash だけ判定が割れるため、bash 実装の空白クラスへ明示的に加えて 3 実装の判定を一致させた（Linux bash / Git Bash / PowerShell / Python で実測一致）。検査は全ブロック解析後に行い、既存の title 空値・プレースホルダ・`depends_on` 前方参照の診断を優先する。
+
+#### FR-DOD-02 — `plan.md` の `## 完了条件` セクション検査
+- 判定: ✓（RED → GREEN を実出力で確認。bash / PowerShell 両実装とも exit 0）
+- 直接対応テスト:
+  - [.github/scripts/tests/test-bash.sh](.github/scripts/tests/test-bash.sh) — `validate-plan: detects missing 完了条件 section` / `validate-plan: detects empty 完了条件 section` / `validate-plan: horizontal rule alone is not 完了条件 content` / `validate-plan: NO-BREAK SPACE alone is not 完了条件 content` — `## 完了条件` の欠落、非空記述 0 行、水平線のみ、NBSP のみを bash 版が非 0 で拒否すること
+  - [.github/scripts/powershell/tests/commands.Tests.ps1](.github/scripts/powershell/tests/commands.Tests.ps1) :: `Describe 'validate-plan.ps1'` — `fails for missing 完了条件 section` / `fails for empty 完了条件 section` を PowerShell 版でも拒否すること
+- 注記: 上記 2 ファイルの対応テストは本改訂で新規追加した。RED（両実装とも失敗）を実出力で確認した後に実装し、GREEN を確認済み。
+- v3.22 改訂（FR-PLAN-01）: validator は `## 完了条件` だけを検査する。[.github/scripts/tests/test-bash.sh](.github/scripts/tests/test-bash.sh) :: `validate-plan: metadata-free plan without 分割判定 passes` と [.github/scripts/powershell/tests/commands.Tests.ps1](.github/scripts/powershell/tests/commands.Tests.ps1) :: `passes without metadata and without 分割判定 when 完了条件 has content` で、冒頭メタデータと `## 分割判定` が無い plan.md が PASS することを固定した（RED: 変更前の validator は `split_decision` 等の欠落で exit 1 → GREEN: bash 44 passed / Pester 25 passed）。
+- 根拠: 同 `::error::` 形式。適用範囲は validator へ渡されたファイルのみで、CI は PR で変更された `work/**/plan.md` だけを渡す。正常系 fixture [.github/scripts/tests/fixtures/sample-plan.md](.github/scripts/tests/fixtures/sample-plan.md) は新セクションを含み PASS すること（fixture はテストではないため対応テストには算入しない）。
+
+#### FR-DOD-03 — Prompt 版 plan 提示への完了条件（宣言 `output_paths`）表示
+- 判定: ✓（RED: 表示 2 件失敗 / hash 不変ガードは当初から PASS → GREEN: pytest 全件 PASS）
+- 直接対応テスト:
+  - [hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py) :: `test_format_plan_lists_declared_output_paths_as_completion_criteria` — `format_plan` 出力に完了条件と宣言 `output_paths` が現れること
+  - [hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py) :: `test_format_plan_marks_steps_without_declared_output_paths` — 宣言 0 件の Step では値を推測せず `(宣言なし)` と表示すること
+  - [hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py) :: `test_completion_criteria_display_does_not_change_plan_hash` — `canonical_plan_json` / `plan.sha256` が本変更で不変であること（FR-PROMPT-04 の承認 hash 非破壊）
+- 注記: 上記の対応テストは本改訂で新規追加した。表示 2 件の RED を実出力で確認した後に実装し、GREEN を確認済み。hash 不変ガードは変更前後とも PASS。
+
+#### FR-CLI-92 — Phase 3 の評価を常に新しいセッションで行う
+- 判定: ✓（RED を実出力で確認した後に実装し GREEN。改善プラン P1 / P2）
+- 直接対応テスト:
+  - [hve/tests/test_review_session_isolation_contract.py](hve/tests/test_review_session_isolation_contract.py) :: `test_review_always_uses_sub_session` — `review_model` がメインモデルと同一でも評価用サブセッションを使うこと
+  - [hve/tests/test_runner_resource_readiness.py](hve/tests/test_runner_resource_readiness.py) :: `test_review_same_model_still_uses_review_sub_session` — 同一モデルでも評価用サブセッションを作成し、メインセッションで評価しないこと（旧 `test_review_main_reuse_keeps_single_existing_subscription` を FR-CLI-92 へ改訂）
+  - [hve/tests/test_review_docs_contract.py](hve/tests/test_review_docs_contract.py) :: `test_guides_describe_review_session_isolation` — 利用者ガイドが評価分離と評価者の責務を説明すること
+- 注記: `hve/tests/test_runner.py` の旧仕様テスト（同一モデルならメインセッション再利用）4 件は、判定ヘルパー `_should_use_review_sub_session` の削除に伴い削除した。
+- 根拠: `review_model` はモデル選択だけを表す。Phase 3 の既定（無効）は変更しない。
+
+#### FR-CLI-93 — 評価セッションへの入力を宣言 `output_paths` に絞る
+- 判定: ✓（RED を実出力で確認した後に実装し GREEN。改善プラン P1 / P2）
+- 直接対応テスト:
+  - [hve/tests/test_review_input_contract.py](hve/tests/test_review_input_contract.py) :: `test_review_input_is_artifact_paths` — 宣言 `output_paths` がある Step では Step ID・タイトル・パス一覧を渡し、メイン応答の切り詰め注入をしないこと
+- 根拠: 宣言 0 件の Step は従来の切り詰め注入へ縮退する。宣言の解決は `_resolve_step_output_paths` を再利用する（FR-MAINT-07）。
+
+#### FR-CLI-94 — 評価 Prompt から修正指示を外し、校正文言を持たせる
+- 判定: ✓（RED を実出力で確認した後に実装し GREEN。改善プラン P1 / P2）
+- 直接対応テスト:
+  - [hve/tests/test_review_prompt_contract.py](hve/tests/test_review_prompt_contract.py) :: `test_review_prompt_reports_every_finding_and_leaves_filtering_to_hve` — v3.26（W14）。重大度に関係なく根拠付きで全件報告し、絞り込みは HVE が行うこと（RED: 1 failed → GREEN）
+  - [hve/tests/test_review_prompt_contract.py](hve/tests/test_review_prompt_contract.py) :: `test_review_prompt_has_no_fix_directive` — 修正指示が無く、軽微扱いによる承認の禁止・スタブの Critical 候補化・判定例 2 件があること
+  - [hve/tests/test_review_prompt_contract.py](hve/tests/test_review_prompt_contract.py) :: `test_review_fix_traceability_moves_to_main_improvement_prompt` — 反映証跡（敵対的レビュー修正内容の表）はメインセッション側の改善 Prompt が求めること
+  - [hve/tests/test_review_recheck_contract.py](hve/tests/test_review_recheck_contract.py) :: `test_recheck_prompt_has_no_fix_directive` — 再レビュー Prompt にも修正指示が無いこと
+  - [hve/tests/test_review_recheck_contract.py](hve/tests/test_review_recheck_contract.py) :: `test_recheck_is_skipped_when_improvements_are_not_applied` — `apply_review_improvements_to_main=False` では再レビューせず初回の判定で確定すること
+- 根拠: 指摘の反映はメイン Step セッションの `_apply_main_artifact_improvements` に限る。
+
+#### FR-CLI-95 — 再レビューで未修正 Critical の FAIL を維持する
+- 判定: ✓（RED を実出力で確認した後に実装し GREEN。改善プラン P1 / P2）
+- 直接対応テスト:
+  - [hve/tests/test_review_recheck_contract.py](hve/tests/test_review_recheck_contract.py) :: `test_recheck_keeps_fail_for_unfixed_critical` — 反論の有無に依らず未修正 Critical で FAIL を維持し、根拠なく重大度を下げないこと
+- 根拠: 合否基準（Critical = 0 なら PASS）は変更しない。
+
+#### FR-ATG-01 — ATG Skill 文書の境界・分割・受入分離・実行ループの明記（deprecated-or-removed）
+- 判定: deprecated-or-removed（v3.18。ATG の Skill・エンジン・配布キット・フックを削除したため active 受入テスト対象外。対応テストも同じ変更で削除した）
+
+#### FR-ATG-02 — `node finish` の `evidence_path` 検査（deprecated-or-removed）
+- 判定: deprecated-or-removed（v3.18。ATG の Skill・エンジン・配布キット・フックを削除したため active 受入テスト対象外。対応テストも同じ変更で削除した）
+
+#### FR-ATG-03 — 判断待ちの保存とレポート出力（deprecated-or-removed）
+- 判定: deprecated-or-removed（v3.18。ATG の Skill・エンジン・配布キット・フックを削除したため active 受入テスト対象外。対応テストも同じ変更で削除した）
+
+#### FR-ATG-04 — `waiting` 状態・`environment` クラス・`node resume`（deprecated-or-removed）
+- 判定: deprecated-or-removed（v3.18。ATG の Skill・エンジン・配布キット・フックを削除したため active 受入テスト対象外。対応テストも同じ変更で削除した）
+
+#### FR-ATG-05 — ルート契約 `escalation_limits`・ノード契約 `capabilities`（deprecated-or-removed）
+- 判定: deprecated-or-removed（v3.18。ATG の Skill・エンジン・配布キット・フックを削除したため active 受入テスト対象外。対応テストも同じ変更で削除した）
+
+#### FR-ATG-06 — `capsule check` の決定的な検査（deprecated-or-removed）
+- 判定: deprecated-or-removed（v3.18。ATG の Skill・エンジン・配布キット・フックを削除したため active 受入テスト対象外。対応テストも同じ変更で削除した）
+
+#### FR-ATG-07 — カプセルの手順の参照文書（許可リスト・取込みの検査・I-10）（deprecated-or-removed）
+- 判定: deprecated-or-removed（v3.18。ATG の Skill・エンジン・配布キット・フックを削除したため active 受入テスト対象外。対応テストも同じ変更で削除した）
+
+#### FR-ATG-08 — 自律実行モード（手順・独立レビュー・フック雛形）（deprecated-or-removed）
+- 判定: deprecated-or-removed（v3.18。ATG の Skill・エンジン・配布キット・フックを削除したため active 受入テスト対象外。対応テストも同じ変更で削除した）
+
+#### FR-ATG-09 — `run begin --autonomous` と `hook stop`（deprecated-or-removed）
+- 判定: deprecated-or-removed（v3.18。ATG の Skill・エンジン・配布キット・フックを削除したため active 受入テスト対象外。対応テストも同じ変更で削除した）
+
+- 適用要件: 計画の分割判定・粒度・見積・完了条件の規約は Skill `task-dag-planning`（[.github/skills/task-dag-planning/SKILL.md](.github/skills/task-dag-planning/SKILL.md)）へ戻した。deprecated FR-ATG-01〜09 を active 要件として適用しない。
+
+#### FR-QA-09 — 不明点の解決梯子と人へ尋ねる 3 条件
+- 判定: ✓（要求定義の文言と事前 QA Prompt を、それぞれ RED を実出力で確認した後に追加し GREEN。Skill `task-questionnaire` の反映は `hve/tests/test_prompts.py` の PASS で確認。改善プラン E1-T2 / E3-T3 / E4-T1）
+- 直接対応テスト:
+  - [hve/tests/test_autonomy_requirements_contract.py](hve/tests/test_autonomy_requirements_contract.py) :: `test_requirement_defines_unknown_resolution_ladder_and_gate`
+  - [hve/tests/test_pre_qa_repository_first_contract.py](hve/tests/test_pre_qa_repository_first_contract.py) :: `test_pre_execution_qa_prompt_requires_repository_first_l1_search`
+
+#### FR-QA-11 — 質問票をコメントへ二重に投稿しない
+- 判定: ✓（RED: 2 failed → GREEN: 4 passed）
+- 直接対応テスト:
+  - [hve/tests/test_qa_comment_posting_contract.py](hve/tests/test_qa_comment_posting_contract.py) — 2 つの QA Prompt が全文の投稿を求めず、ファイルへのリンクと質問数・未回答数の要約だけを求め、`qa/` のファイルを正本とすること
+
+#### FR-QA-10 — 既定値の較正ログ
+- 判定: ✓（要求定義の文言と記録の実装を、それぞれ RED を実出力で確認した後に追加し GREEN。改善プラン E1-T2 / E4-T2）
+- 直接対応テスト:
+  - [hve/tests/test_autonomy_requirements_contract.py](hve/tests/test_autonomy_requirements_contract.py) :: `test_requirement_defines_default_calibration_log`
+  - [hve/tests/test_qa_calibration_log.py](hve/tests/test_qa_calibration_log.py) :: `test_append_calibration_log_records_only_explicit_answers` / `test_append_calibration_log_with_defaults_records_nothing` / `test_append_calibration_log_masks_secret_like_free_text` / `test_runner_persists_calibration_log_relative_to_cwd` / `test_runner_use_defaults_records_no_calibration_log`
+
+#### FR-CLI-98 — 言語指示は出力言語だけを指定する
+- 判定: ✓（RED を実出力で確認した後に実装し GREEN。改善プラン P3-T52 / T53。根拠計測: `work/run/20260923-2130-longtime-improvement/p3/artifacts/language-directive-ab.md`）
+- 直接対応テスト:
+  - [hve/tests/test_language_directive_contract.py](hve/tests/test_language_directive_contract.py) :: `test_directive_limits_to_output_language`
+  - [hve/tests/test_language_directive_contract.py](hve/tests/test_language_directive_contract.py) :: `test_preamble_does_not_direct_internal_reasoning_language`
+
+#### FR-CLI-99 — OE 禁止・捏造禁止を理由付きの肯定形で指示する
+- 判定: ✓（2026-09-25。RED: `test_prompts.py` 7 failed / 75 passed → GREEN: 86 passed（`test_completion_report_contract.py` を含む）。`work/run/20260925-opus55-audit/r1-r7/artifacts/`）
+- 直接対応テスト:
+  - [hve/tests/test_prompts.py](hve/tests/test_prompts.py) :: `TestOverEngineeringBan` — `OE_MARKER` を「要求にない汎用化・抽象化は加えない」へ変更し、理由の併記と旧絶対表現の不在を検証する
+  - [hve/tests/test_prompts.py](hve/tests/test_prompts.py) :: `TestYamlWorkflowPromptDrift.test_yaml_review_no_fabrication_rule` — YAML と参照先 cloud Prompt が根拠の肯定形と理由を持ち、旧絶対表現を持たないこと
+  - [hve/tests/test_prompts.py](hve/tests/test_prompts.py) :: `TestAbsoluteBanWording.test_prompts_and_skills_have_no_reasonless_absolute_ban` — `.github/prompts/` と対象 Skill に旧絶対表現が無いこと
+
+#### FR-CLI-100 — Prompt 見出しに「（必須）」の強調を付けない
+- 判定: ✓（2026-09-25。RED は変更前 HEAD の worktree で同じテストを実行し 1 failed（`r3-r4-r7-red-at-HEAD.txt`）→ GREEN: 関連 6 ファイル 172 passed。注: 本件は文言変更をテスト作成より先に適用したため、RED は変更前の HEAD で取得した）
+- 直接対応テスト:
+  - [hve/tests/test_prompts.py](hve/tests/test_prompts.py) :: `TestPromptHeadingEmphasis.test_prompt_headings_have_no_required_suffix` — コードフェンス外の見出しに「（必須）」が無いこと
+  - [hve/tests/test_aagd_foundry_skill_contract.py](hve/tests/test_aagd_foundry_skill_contract.py)、[hve/tests/test_application_requirement_traceability.py](hve/tests/test_application_requirement_traceability.py) — 見出し文言の期待値を「（必須）」なしへ更新
+
+#### FR-CLI-101 — Prompt の検証ステップを完了条件・受入観点へ統合する
+- 判定: ✓（2026-09-25。RED: 67 failed / 1 passed（`r1-red.txt`）→ GREEN: 67 passed / 1 failed。残る 1 件 `test_review_prompt_inventory_is_complete_and_non_overlapping` は着手前 baseline の既存 FAIL（`Arch-Dataflow-*` 4 件の一覧差分）で、差分の内容は変わらない。2026-10-01: 4 件は正規文と「受入観点」節を持ち、(2) の形に適合していたため、Prompt は変えずに一覧の `adfd-design` へ加えて解消した（GREEN: r03 全体 73 passed / exit 0））
+- 直接対応テスト:
+  - [hve/tests/r03_prompt_review_inline_contract.py](hve/tests/r03_prompt_review_inline_contract.py) :: `test_prompt_review_section_is_single_inline_check_not_activation` — 正規文と「受入観点」節の配置
+  - [hve/tests/r03_prompt_review_inline_contract.py](hve/tests/r03_prompt_review_inline_contract.py) :: `test_prompts_have_no_standalone_verification_step` — 出力前の独立した検証節の見出しが無いこと
+  - [hve/tests/r03_prompt_review_inline_contract.py](hve/tests/r03_prompt_review_inline_contract.py) :: `test_self_check_items_are_merged_into_completion_criteria` — 旧セルフチェック節を持っていた 23 Prompt が「完了条件」節を 1 つだけ持つこと
+  - 同 :: `test_prompts_do_not_instruct_a_separate_self_review` — 2026-09-30 bugfix（N4-2）。存在しない「最終品質レビュー」節への参照、独立した「セルフレビュー」節、Work IQ 役割 Prompt の出力前自己レビュー、ARD の内部思考用チェックリストが残らないこと。HVE が実行時に付与する単回インライン確認の指示文は対象外（RED: 1 failed → GREEN）。[hve/tests/test_workiq.py](hve/tests/test_workiq.py) :: `test_default_prompts_state_what_the_answer_includes` を同時に改めた
+  - [hve/tests/test_runner_review_activation.py](hve/tests/test_runner_review_activation.py) :: `test_review_suffix_disables_subagents_when_hve_review_is_off` — v3.26（N4-7）。実行時のレビュー所有権の指示文にセルフチェックを含めず、Review Sub-agent と敵対的レビューを起動しない指示だけを残すこと（RED: 2 failed → GREEN）
+
+#### FR-CLI-102 — Phase 1 の共通実行指示
+- 判定: ✓（AC-002。RED: 新規 helper import 不在で collection error / exit 1。GREEN: 対象 27 passed / exit 0）
+- 直接対応テスト:
+  - [hve/tests/test_phase1_request_plan.py](hve/tests/test_phase1_request_plan.py) — 共通指示を独立した構成要素として byte 予算へ算入
+  - [hve/tests/test_runner_output_continuation.py](hve/tests/test_runner_output_continuation.py) — 300 行上限・広い入力確認・埋め草禁止は全 Step、無人停止境界は `unattended=True` だけへ注入
+  - 同 :: `test_step_time_limit_is_added_to_common_guidance_when_enabled` — v3.24。上限時間が有効なときだけ分単位の 1 行を加える（RED: 2 failed → GREEN）
+
+#### FR-CLI-104 — 自己改善（Self-Improve）機能の全版削除
+- 判定: ✓
+- 直接対応テスト:
+  - [hve/tests/test_self_improve_removed.py](hve/tests/test_self_improve_removed.py) — `hve/self_improve.py` の不在、旧 CLI フラグの拒否（exit 2）、`SDKConfig` 項目・環境変数の不在、runner / orchestrator / prompts の参照ゼロ、専用 Prompt ディレクトリの不在
+  - [hve/tests/test_phase6_option_parity.py](hve/tests/test_phase6_option_parity.py) :: `TestSelfImproveRemoved` — Issue Template と reusable workflow が自己改善の入力欄・ジョブを持たない
+  - [hve/gui/tests/test_settings_store_migration.py](hve/gui/tests/test_settings_store_migration.py) :: `TestSelfImproveSettingsRemoval` — 保存済み `self_improve*` キーの削除
+  - [hve/gui/tests/test_settings_group_split.py](hve/gui/tests/test_settings_group_split.py) / [hve/gui/tests/test_orchestrate_args_from_settings.py](hve/gui/tests/test_orchestrate_args_from_settings.py) — GUI / Prompt 版が自己改善の設定ノード・引数を持たない
+- 削除した要求: FR-CLI-60〜FR-CLI-65（ID は再利用しない）
+
+#### FR-CLI-103 — Prompt と Skill に利用者への質問・回答待ちの停止を指示させない
+- 判定: ✓（RED: 2 failed → GREEN: 2 passed）
+- 直接対応テスト:
+  - [hve/tests/test_prompt_no_user_stop_contract.py](hve/tests/test_prompt_no_user_stop_contract.py) :: `test_prompts_and_skills_do_not_stop_for_user_answers` — `.github/prompts/**` と `.github/skills/**` に質問・回答待ちの停止指示が無いこと（例外は allowlist と理由）
+  - 同 :: `test_required_prompt_rewrites_are_present` — `QA-DocConsistency`・`Dev-Microservice-Azure-ComputeDesign`・`Dev-Microservice-Azure-AgentTestCoding`・`cloud/step-inputs` の書き直しが入っていること
+- 分類表: [work/run/20260930-dag-review-plan/n4-3/artifacts/stop-question-classification.md](work/run/20260930-dag-review-plan/n4-3/artifacts/stop-question-classification.md)
+
+#### FR-E2E-01 — 依頼 1 回での無人の一気通貫実行（規範目標）
+- 判定: 要追加（AC-003。v3.35: 比較実測 N5-4 を 2026-10-01 に時間枠で打ち切った。P0（`hve orchestrate`）は `aad-web` 37/37 成功後、`asdw-web` 8/44 Step で未完了のため、HVE の `full-pipeline` 実行としての合格 run はまだ無い。P2（1 セッション）は 3/3 がデプロイ後テスト exit 0。[results.md](work/run/20260930-dag-review-plan/measurement/artifacts/results.md)）。規範目標の停止境界と AC-003 の対応は契約テストで固定する（GREEN: 3 passed）
+- 直接対応テスト:
+  - [hve/tests/test_e2e_goal_contract.py](hve/tests/test_e2e_goal_contract.py) — FR-E2E-01 の停止境界 2 条件、AC-003 の対応、無人実行の指示（FR-CLI-102）の停止境界との一致
+
+#### FR-CLI-96 — UI Prompt の視覚デザイン基準と除外スタイル一覧
+- 判定: ✓（RED を実出力で確認した後に実装し GREEN。改善プラン P4）
+- 直接対応テスト:
+  - [hve/tests/test_ui_design_prompt_contract.py](hve/tests/test_ui_design_prompt_contract.py) :: `test_ui_prompts_declare_excluded_styles` — 2 つの UI Prompt が業務 UI 基準のキーワードと 3 件以上の除外スタイルを持つこと
+  - [hve/tests/test_ui_design_prompt_contract.py](hve/tests/test_ui_design_prompt_contract.py) :: `test_asdw_guide_describes_ui_criteria_rework_and_deny_layer` — ASDW-WEB ガイドが UI 基準・差戻し宣言の現状・CRITICAL 拒否を案内すること
+
+#### FR-CLI-97 — 完了報告の判断待ち先頭化・Code Review の絞り込み・続行規則
+- 判定: ✓（RED を実出力で確認した後に実装し GREEN。改善プラン P4）
+- 直接対応テスト:
+  - [hve/tests/test_completion_report_contract.py](hve/tests/test_completion_report_contract.py) :: `test_completion_report_blocked_first`
+  - [hve/tests/test_completion_report_contract.py](hve/tests/test_completion_report_contract.py) :: `test_code_review_merge_blocking_findings_include_failure_evidence` — 2026-09-25 改訂: 重大度で絞らず全件を Blocker / Major / Minor 付きで報告させ、合格判定は Blocker 件数だけで決めること
+  - [hve/tests/test_completion_report_contract.py](hve/tests/test_completion_report_contract.py) :: `test_code_review_fix_targets_only_blockers` — 2026-09-25 追加。RED: 2 failed（本テストと上記改訂テスト）→ GREEN: 4 passed。修正 Prompt が Blocker だけを修正対象とすること
+  - [hve/tests/test_completion_report_contract.py](hve/tests/test_completion_report_contract.py) :: `test_continue_rule_two_line_marker`
+
+#### NFR-SEC-04 — Step セッションでの CRITICAL 操作の実行前拒否
+- 判定: ✓（RED を実出力で確認した後に実装し GREEN。改善プラン P4）
+- 直接対応テスト:
+  - [hve/tests/test_destructive_deny_contract.py](hve/tests/test_destructive_deny_contract.py) :: `test_only_critical_patterns_are_denied` — SDK のシェル権限要求（`full_command_text`）が CRITICAL に一致すれば拒否・記録し、HIGH 以下とシェル以外は委譲すること。記録にコマンド本文を含めないこと
+  - [hve/tests/test_destructive_deny_contract.py](hve/tests/test_destructive_deny_contract.py) :: `test_step_sessions_use_critical_deny_handler` — `StepRunner._build_step_permission_handler` が本ハンドラを返すこと
+
 ---
 
 ## §B Cloud Orchestrator（§4）
@@ -1411,7 +1870,9 @@
 - 根拠: dispatcher 自体の opened 限定ガードを直接検証するテストは未確認。
 
 ### FR-CLOUD-04 — `closed` でタイトルプレフィックス判定（`[AAS]` 等）
-- 判定: ✗
+- 判定: ✓
+- 直接対応テスト:
+  - [hve/tests/test_cloud_dispatcher_asdw_dispatch.py](hve/tests/test_cloud_dispatcher_asdw_dispatch.py) :: `TestAsdwWebCloudDispatchEnabled.test_asdw_web_resolves_as_dispatch_target` / `TestOtherCloudWorkflowsUnchanged.test_other_closed_prefixes_still_resolve` — closed title prefixを実detect scriptへ入力しtarget / modeを検証する。
 
 ### FR-CLOUD-05 — `setup-labels` 特例ルーティング
 - 判定: △
@@ -1426,6 +1887,7 @@
   - [hve/tests/test_cloud_reusable_workflow_parity.py](hve/tests/test_cloud_reusable_workflow_parity.py) :: `test_asdw_web_state_transition_dependencies_match_registry` — Cloud 状態遷移依存を registry と照合
   - [hve/tests/test_cloud_reusable_workflow_parity.py](hve/tests/test_cloud_reusable_workflow_parity.py) :: `TestAkmCloudParity` — AKM の生成 Step ID / Custom Agent を hve registry と照合し、Step.1 完了→Step.2 起動 / Step.2 完了のみ Root `akm:done` を固定
   - [hve/tests/test_cloud_dispatcher_asdw_dispatch.py](hve/tests/test_cloud_dispatcher_asdw_dispatch.py) :: `TestAsdwWebCloudDispatchEnabled` — opened / labeled / done / closed の dispatch と reusable job を固定
+  - [hve/tests/test_workflow_registry_sh_generated.py](hve/tests/test_workflow_registry_sh_generated.py) :: `test_bash_registry_matches_generated_output` — `workflow-registry.sh` の heredoc JSON が [hve-dev/generate_workflow_registry_sh.py](hve-dev/generate_workflow_registry_sh.py) の生成結果と一致することを固定（v3.13。RED: 生成器不在で FAIL → 生成器追加後も `params` 2 行差で FAIL → 再生成後 GREEN。証跡: [RED](../work/run/20260925-0446-w4/W4/T41/artifacts/red.txt)、[生成器追加後の RED](../work/run/20260925-0446-w4/W4/T42/artifacts/red-after-generator.txt)、[GREEN](../work/run/20260925-0446-w4/W4/T43/artifacts/green.txt)）
 
 ### FR-CLOUD-07 — AAR の Cloud 対応
 - 判定: ✓
@@ -1512,7 +1974,9 @@
   - 抽出スクリプトは `sys.stdin.buffer` から UTF-8 で直接デコードする。locale 依存で見出しが化けると常に `false` へ倒れ、利用者の選択を無視するため。
 
 ### FR-CLOUD-30 — `state_transition` 時の次候補 Issue コメント
-- 判定: ✗（`suggest-next` ジョブ検証なし）
+- 判定: ✓
+- 直接対応テスト:
+  - [hve/tests/test_cloud_dispatcher_asdw_dispatch.py](hve/tests/test_cloud_dispatcher_asdw_dispatch.py) :: `test_suggest_next_posts_only_the_declared_candidates` / `test_suggest_next_does_not_post_for_terminal_or_unknown_workflows` — suggest-nextの実heredocを実行し、4つのchainと終端 / unknown非投稿を検証する。
 
 ### FR-CLOUD-40 — `runner_type` 入力による Runner ラベル選択
 - 判定: ✓
@@ -1567,7 +2031,7 @@
 - 直接対応テスト（モデル）: `TestParserBasic.test_model_option`、`test_model_option_gpt_5_5`、`TestReviewModelCLI`（test_main.py）
 - 並列制御: `TestParserBasic.test_max_parallel_option`
 - 自動レビュー: `test_auto_qa_flag`、`test_auto_contents_review_flag`、`test_auto_coding_agent_review_flag`、`test_auto_coding_agent_review_auto_approval_flag`
-- Work IQ: `test_workiq_flags`、`TestBuildParams.test_build_config_workiq`、`test_build_config_workiq_akm_review_can_be_enabled_without_qa`、`test_build_config_workiq_draft_output_dir_not_overridden_when_cli_omitted`
+- 知識源（v3.38、FR-KD-01）: `test_workiq_flags`、`test_removed_workiq_options_are_rejected`、`TestBuildParams.test_build_config_workiq`、`test_build_config_knowledge_sources_from_environment`
 - Work IQ タイムアウトの伝搬: [hve/tests/test_runner_foundry_mcp_routing.py](hve/tests/test_runner_foundry_mcp_routing.py) :: `test_pre_qa_sub_session_applies_the_configured_workiq_timeout` — `--workiq-request-timeout` / `WORKIQ_REQUEST_TIMEOUT` / GUI C4 で設定した値が、事前 QA サブセッションの Work IQ MCP 設定（`MCPServerConfigLocal.timeout`、ミリ秒）へ届くこと
   - 2026-08-20 の実測: RED は `KeyError: 'timeout'`（1 failed / 12 passed）。[hve/runner.py](hve/runner.py) の `_build_sub_session_opts` が `build_workiq_mcp_config` へ `request_timeout` を渡しておらず、設定値が SDK 既定値に置き換わっていた。[hve/orchestrator.py](hve/orchestrator.py) の Work IQ 経路 4 箇所は渡していたため、runner だけが非対称だった。GREEN は 230 passed / 47 subtests、影響範囲 423 passed / 95 subtests。
 - Git/PR: `test_create_issues_flag`、`test_create_pr_flag`、`test_branch_option`、`test_repo_option`、`TestCreateIssuesNewFlow`
@@ -1580,7 +2044,6 @@
 - ADOC 固有: `test_adoc_target_dirs_option`、`test_adoc_exclude_patterns_option`、`test_adoc_doc_purpose_option`、`test_adoc_max_file_lines_option`、`TestBuildParams.test_adoc_params_*`
 - ARD 固有: [hve/tests/test_main_ard.py](hve/tests/test_main_ard.py) — ARD CLI 引数を網羅
 - 追加: `test_context_max_chars_option`
-- 自己改善: `TestSelfImproveCLI`
 - 検証: `test_dry_run_flag`、`TestMainDryRun`
 
 ### FR-CLI-10 — 引数なし起動の既定（GUI）と PySide6 未導入時のフォールバック
@@ -1603,11 +2066,18 @@
 - 根拠: 進捗記録が無いrun-idを無視して全Stepを再実行すると重複操作を行い得る一方、新旧IDを同じfieldで解釈すると誤executionを再開し得る。
 
 ### FR-CLI-90 — `hve resume`の選択・recovery action・ordered実行（v2.81 改訂）
-- 判定: ✓（T14/T24/T25/T33と最終敵対的レビュー反映後にGREEN。）
+- 判定: ✓（2026-09-06 resume / wire / readiness のオフライン GREEN。T21〜T25 の live 検証は NOT RUN）
+- 改訂前実績: ✓（T14/T24/T25/T33と最終敵対的レビュー反映後にGREEN。本改訂の検証証跡には流用しない）
+- 本改訂の直接対応テスト（実装済み・オフライン GREEN）:
+  - [hve/tests/test_runner_resume.py](hve/tests/test_runner_resume.py) :: `test_resume_pre_rpc_kwargs_and_apply_share_caller_restrictions` / `test_resume_required_caller_disabled_collision_stops_before_rpc` / `test_routed_resume_active_guard_precedes_apply_and_send` / `test_resume_apply_inherits_the_original_five_second_deadline` / `test_resume_hung_routing_is_cancelled_within_remaining_budget` / `test_resume_external_cancellation_propagates_after_shared_cleanup` — 実効除外、required 衝突、active guard、残 deadline、send 前の gate と cleanup を固定する。
+  - [hve/tests/test_runner_resume.py](hve/tests/test_runner_resume.py) :: `test_sdk_resume_empty_disabled_wire_still_checks_required_skills` / `test_sdk_resume_nonempty_caller_disables_are_emitted` / `test_sdk_generated_routing_requests_use_public_timeout_signatures` — fake transport を使う実 SDK wire 検証。`disabled_skills=[]` を kwargs に渡すだけでは保存済み無効化の解除を保証できず、required Skill の runtime 有効性を確認する境界を固定する。live resident MCP の起動済み副作用を取り消せた証拠ではない。
+  - [hve/tests/test_runner_resource_readiness.py](hve/tests/test_runner_resource_readiness.py) — 比較対象の create 側で早期 callback と共有 helper を検証する。resume 固有ケースの配置先は上記 `test_runner_resume.py` であり、旧 T02 の計画名へ誤帰属させない。
+- 本改訂の実行件数は FR-MAINT-03 の T13 記録を参照する。過去の durable 全回帰件数を今回の検証数へ加算しない。
 - 直接対応テスト:
+  - v3.41 追加（bugfix、システムテスト N-02）: [hve/tests/test_runner_resume.py](hve/tests/test_runner_resume.py) :: `test_resume_deadline_starts_after_slow_resource_discovery` / `test_resume_expired_deadline_never_creates_an_unawaited_rpc_coroutine` — reuse-session の deadline が resource 探索後に始まり、期限切れで未 await の coroutine を残さないことを固定する。
   - [hve/tests/test_resume_cli.py](hve/tests/test_resume_cli.py) — candidate 0/1/multiple、TTY/non-TTY、`--latest`/ID相互排他、risk action不足、HEAD取得不能・承認後drift、stale CAS、unsupported modeのchild 0件、GUI supplied expected hash/replay value、fenced token owner/generation、parent releaseに加え、後続`ResumePlan`のcontroller再承認、TTYでのaction再選択、TTY確認後のhash再計算、先行planのreplay平文破棄、空argv時のchild 0件とfenced完了を固定する。
   - [hve/tests/test_resume_service.py](hve/tests/test_resume_service.py) — launch/resume hashの入力分離、missing replay keys、ordinal順のearliest non-succeededとfail-fast、およびoutput再調停済みinstanceを取得済みleaseで`succeeded`へ確定する`complete_reconciled()`を固定する。
-  - [hve/tests/test_runner_resume.py](hve/tests/test_runner_resume.py) — Mainだけのreuse/restart、`continue_pending_work=False`、active/in-use拒否、silent fallback 0件に加え、無効なlegacy split-forkがMain checkpointを上書きせず、明示有効時だけ`split-fork` phaseを記録することをfake SDKで固定する。
+  - [hve/tests/test_runner_resume.py](hve/tests/test_runner_resume.py) — Mainだけのreuse/restart、`continue_pending_work=False`、active/in-use拒否、silent fallback 0件に加え、繰り返し Step で Main checkpoint が保持され`split-fork` phaseを記録しないことをfake SDKで固定する（v3.21 で legacy split-fork を撤去）。
   - [hve/tests/test_run_state_store.py](hve/tests/test_run_state_store.py) :: `TestLeaseAndCas.test_status_only_transition_preserves_committed_main_checkpoint` — status-only callbackが既存のMain phase/phase state/session IDを消去せず、statusとerror typeだけを更新することを固定する。
   - [hve/tests/test_orchestrator_durable_resume.py](hve/tests/test_orchestrator_durable_resume.py) — `orchestrate`/対話`run`/`cli`のpreflight前登録、dry-run/unsupported mode登録0件、internal context照合を固定する。
   - [hve/tests/test_resume_service.py](hve/tests/test_resume_service.py) :: `TestReplaySanitization.test_prompt_cloud_and_fleet_options_use_safe_persistence_boundary` — Prompt controllerが事前登録するCloud/Fleet planを安全にsanitizeし、機密性のある値はkey-only gapとして保持する。
@@ -1623,12 +2093,12 @@
   - [hve/tests/test_approval_gate.py](hve/tests/test_approval_gate.py) :: `TestExecutorPropagatesDecline` — `dag_executor` の汎用 except と `run_workflow` の `except BaseException` の**いずれよりも前**で承認拒否を扱うこと
   - [hve/tests/test_approval_gate.py](hve/tests/test_approval_gate.py) :: `TestCliWiring` / `TestDeclaredGates` — `--approval-gates` の登録と既定 `False`、宣言済み Step の存在
 - 根拠: `on_wave_start` は全例外を警告へ降格し、`run_workflow` は `except BaseException` で continue_on_error の fatal 縮退（残ステップ skip → exit 0）へ落とす。いずれかを先に通すと承認拒否が成功扱いになるため、順序を契約として固定した。
-- 追加契約（v2.63 bugfix）: 承認拒否も `approval:<wave_index>` で記録する
+- 追加契約（v2.63 bugfix）: 承認拒否も `approval-<wave_index>` で記録する
   - 判定: ✓（RED: 例外の wave 搬送とリテラル除去が未実装で 2 failed → GREEN。durable resume移行後はSQLite pseudo-rowとLegacy JSONL write 0を合同検証。）
   - [hve/tests/test_approval_gate.py](hve/tests/test_approval_gate.py) :: `TestDeclineRecordsWaveIndex` — 拒否時の進捗ストア記録が `approval:declined` ではなく wave 番号を保つこと、および `ApprovalDeclined` が wave 番号を搬送すること
-  - [hve/tests/test_orchestrator_durable_resume.py](hve/tests/test_orchestrator_durable_resume.py) :: `TestApprovalRecords` — durable contextで承認/拒否を`approval:<wave_index>`の`succeeded`/`failed` pseudo-rowとして記録し、承認者名・自由記述・本文を保存しないことを固定する。
+  - [hve/tests/test_orchestrator_durable_resume.py](hve/tests/test_orchestrator_durable_resume.py) :: `TestApprovalRecords` — durable contextで承認/拒否を`approval-<wave_index>`の`succeeded`/`failed` pseudo-rowとして記録し、承認者名・自由記述・本文を保存しないことを固定する。
   - [hve/tests/test_approval_gate.py](hve/tests/test_approval_gate.py) :: `TestDeclineIntegration::test_run_workflow_blocks_without_legacy_jsonl_write` — contextを持たない内部直接呼出しも拒否を`blocked`/`error`で返し、Legacy JSONLへdual-writeしないことを固定する。
-  - 根拠: FR-CLI-87 は「承認・拒否の記録は…`approval:<wave_index>` を step_id として残し」と規定するが、拒否経路だけが `approval:declined` を記録し、どの Wave で拒否されたかを進捗ストアから復元できなかった
+  - 根拠: FR-CLI-87 は「承認・拒否の記録は…`approval-<wave_index>` を step_id として残し」と規定するが、拒否経路だけが `approval:declined` を記録し、どの Wave で拒否されたかを進捗ストアから復元できなかった
 
 ### FR-DAG-09 — DAG 外のフィードバックループ（差戻しの決定層、v2.61 新規）
 - 判定: ✓（RED: `StepDef.rework_targets` と FR-DAG-09 未定義で 5 failed / 10 passed → GREEN: **15 passed**）
@@ -1643,11 +2113,19 @@
   - [hve/tests/test_rework_loop.py](hve/tests/test_rework_loop.py) :: `TestReworkPresentationWiring` — `run_workflow` が DAG 実行後に `resolve_rework_targets` を呼び、非空のときだけ `console.event` へ `--steps` 提案を 1 回出力すること
   - 根拠: 決定層の実装と単体テストは存在したが、宣言 Step が 0 件で実行経路からの呼び出しも無く、利用者のフローで発火しない状態だった
 
-### FR-CLI-88 — PR / Issue 参照の MCP 宣言と参照系 allowlist（v2.61 新規）
-- 判定: ✓（RED: FR-CLI-88 未宣言で 2 failed / 3 passed → GREEN: **5 passed**）
+### FR-DAG-10 — 起動可能判定を `hve/dag_readiness.py` へ単一化（v3.12 新規、v3.18 改訂）
+- 判定: ✓（v3.12 で RED → GREEN。v3.18 で ATG 削除に伴い単一実装を `hve/dag_readiness.py` へ移し、同じ期待値の表で GREEN）
 - 直接対応テスト:
-  - [hve/tests/test_mcp_declaration_contract.py](hve/tests/test_mcp_declaration_contract.py) :: `TestDeclarationFile` / `TestGithubServerIsReadOnly` — 全サーバの `tools` 宣言、GitHub 系サーバへの `tools: ["*"]` 禁止、書き込み系ツール名の混入禁止
-- 根拠: FR-CLI-76 が自動探索を停止しているため、プラグイン登録だけでは Step 実行セッションへ届かない。サーバー定義自体は利用者環境依存のため本リポジトリでは確定せず、宣言時の allowlist だけを固定する。
+  - [hve/tests/test_dag_readiness_parity.py](hve/tests/test_dag_readiness_parity.py) :: 現行 3 関数の出力を固定した期待値の表に、現行実装と単一実装が一致すること（C1〜C12、C14）と、3 関数が単一実装を呼ぶこと（C13）
+
+### FR-CLI-88 — PR / Issue 参照のSDK resource routingと参照系 allowlist（v2.61 新規）
+- 判定: ✓（FR-TS-12 / FR-TS-13への移行GREEN）
+- 直接対応テスト:
+  - [hve/tests/test_sdk_resource_policy.py](hve/tests/test_sdk_resource_policy.py) :: `test_required_mcp_servers_by_skill_resolves_exact_names_in_declaration_order` / `test_repository_policy_can_replace_required_skill_mcp_server_names` / `test_resource_routing_metadata_round_trips_without_loss` — exact server名をrunnerに固定せずlocal policyで差し替え、検証済みmetadataだけをround-tripする契約
+  - [hve/tests/test_mcp_declaration_contract.py](hve/tests/test_mcp_declaration_contract.py) :: `TestSdkResourceRouting` / `TestRequirementIsDeclared` — repository-owned MCP config不在、Knowledge allowlistのbare exact名・wildcard不在・状態変更tool不在、FR-MDQ-02 / FR-CQ-01境界を固定する
+  - [hve/tests/test_mcp_config_removal.py](hve/tests/test_mcp_config_removal.py) :: `test_repository_pinned_mcp_config_file_has_been_deleted` / `test_sdkconfig_no_longer_exposes_runtime_mcp_servers_field` — `.github/.mcp.json` とraw runtime fieldの撤去を固定する
+  - [hve/tests/test_sdk_resource_routing.py](hve/tests/test_sdk_resource_routing.py) —分類済みresourceのexact allowlistだけをruntime照合し、許可外toolをsource-qualified除外へ入れるFR-TS-13境界を固定する
+- RED / GREEN証跡: 旧テストは削除済み`.github/.mcp.json`を3件で読み込み **3 failed**。SDK routing契約へ移行後、`test_mcp_declaration_contract.py` / `test_mcp_config_removal.py` / `test_sdk_resource_routing.py` は **44 passed**。
 
 ### FR-CLI-89 — CLI から Copilot cloud agent へ Root Issue を割り当てる
 - 判定: ✓（変更種別 `feature`）
@@ -1668,6 +2146,7 @@
 - 直接対応テスト:
   - [hve/tests/test_prompt_request.py](hve/tests/test_prompt_request.py) — `schema_version` 固定、unknown field / 重複 key / 空 `workflows` / 重複 Workflow の拒否、未知 Workflow ID・未知 Step ID の拒否、`params` / `settings_overrides` allowlist、credential 系 key の拒否、`dry_run` / plan hash / 実行順 / `workbench` の上書き拒否
   - [hve/tests/test_prompt_request_integration_contract.py](hve/tests/test_prompt_request_integration_contract.py) — B1〜B13 の 30 invalid request を実ファイルから Prompt CLI へ渡し、全件が non-zero・actionable stderr・plan hash 非提示・子 `orchestrate` runner 呼び出し 0 であることを検査する。C1 の手動統合オラクルが registry 宣言済み param を誤って拒否期待へ戻さないことも固定する
+  - [hve/tests/test_prompt_request.py](hve/tests/test_prompt_request.py) :: `test_goal_is_optional` / `test_rejects_null_goal`、[hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py) :: `test_empty_goal_omits_additional_prompt` — v3.39 明確化: `goal` 省略時は `""`、空のとき argv に `--additional-prompt` を付けない、`null` は拒否する（システムテスト O-01）
 - 根拠: 自然言語生成物を信用せず、registry と allowlist で再検証する境界を固定する。
 - RED / GREEN 証跡: RED を実測後に実装し、2026-08-26 に上記テストの GREEN を実測（`python -m pytest` の focused 実行）。
 
@@ -1722,15 +2201,23 @@
 - RED / GREEN 証跡: RED を実測後に実装し、2026-08-26 に上記テストの GREEN を実測（`python -m pytest` の focused 実行）。CLI 経路の拒否は敵対的レビューで検出した実欠陥（repo 外パスが Step Prompt へ注入されていた）の修正として追加した。
 
 ### FR-PROMPT-10 — Agent Skill と利用者文書の coverage（v2.67 新規 / v2.77・v2.78 改訂）
-- 判定: 静的契約 GREEN / live behavior FAIL（Major）
+- 判定: 実装済み・静的契約 GREEN・fresh live behavior GREEN
 - 直接対応テスト:
+  - v3.41 追加（bugfix、システムテスト N-08）: [hve/tests/test_systemtest_20261002_fixes.py](hve/tests/test_systemtest_20261002_fixes.py) :: `test_prompt_edition_skill_forbids_adopting_registry_constant_as_app_id` — 値の選択を任された場合に registry 定数を APP-ID として採用しない規則が Skill に明記されていることを固定する（Skill の自然言語挙動そのものの再測定は NOT RUN）。
   - [hve/tests/test_prompt_edition_docs_contract.py](hve/tests/test_prompt_edition_docs_contract.py) — Skill の実在、Quick Start の実在、registry の全 Workflow に対する copyable Prompt 例の存在、複数 Workflow 横断例と非 canonical 入力名例の存在、各例の plan-before-run 明記、相対リンクの解決、固定件数記述の不在
+  - [hve/tests/test_systemtest_screenshot_prompt_contract.py](hve/tests/test_systemtest_screenshot_prompt_contract.py) — GUI / CLI / Prompt 版フルシステムテスト Prompt の実在、適時の画面取得、case-local な画像・manifest、実測結果直後の相対リンク、機微情報保護、取得不能時の fail-closed 判定、既存実行証跡を代替しないこと
+  - [hve/tests/test_prompt_edition_docs_contract.py](hve/tests/test_prompt_edition_docs_contract.py) :: `TestOutOfScopeTerminalRejection` / `TestRegistryFirstPreflight` / `TestLiveD2SameSessionApprovalBoundary` / `TestLiveD4CredentialRequestBoundary` / `TestLiveEInputAliasEvidenceBoundary` / `TestLiveA3DeterministicMultiFixture` — C2/C3/D2/D4/D6/E/A3 の再発防止契約を固定する
   - [hve/tests/test_prompt_edition_docs_contract.py](hve/tests/test_prompt_edition_docs_contract.py) :: `TestApprovedFullExecutionContract` — Prompt 版を仲介する Agent が、承認前は plan 提示だけに留まり、提示済み計画への明示承認と SHA-256 一致後は multi / large でも対象成果物を直接編集せず `hve prompt run` へ委譲すること、および委譲後の Step が plan-only で終了せず既存 gate を維持することを Skill・最上位 instruction・task-dag 規約・Quick Start の横断契約として固定する
   - [hve/tests/test_prompt_cli.py](hve/tests/test_prompt_cli.py) — plan / run の HEAD fail-closed、expected SHA-256、`orchestrate` 子プロセス非起動、一致時実行、fail-fast
   - [hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py) — canonical hash、依存順、未選択 Workflow 非追加、argv 配列 + `shell=False`、子 `orchestrate` 委譲、fail-fast
   - [hve/tests/test_runner_split_required_guard.py](hve/tests/test_runner_split_required_guard.py) — CLI / GUI Orchestrator 配下の実行モード制約注入と FR-WF-OUT-01 の存在ゲート
   - [tests/prompt-version/06-agent-skill-behavior.md](tests/prompt-version/06-agent-skill-behavior.md) — 自然言語からのrequest生成、plan-before-run、曖昧入力、未登録Workflow/Step、禁止操作、入力別名をfresh Copilot CLI sessionで評価するlive behavior手順
+- 追加受入（2026-09-12静的回帰確認）:
+  - [hve/tests/test_prompt_edition_docs_contract.py](hve/tests/test_prompt_edition_docs_contract.py) — T03。no-load 拒否条件は description、資格情報・承認 gate は root 側に残し、2 つの reference field / 順序を検査する契約を追加済。body だけに拒否文がある状態を no-load 合格にしない。
+  - V01 / V02 の実モデル比較・19 入力 live 再測定は **NOT RUN**。Astra の利用可能性は確認したが、委譲先を含む費用上限を既存手段で保証できない。利用者の自律判断委任を受け、無制限の費用消費を避けて保留した。この静的回帰確認を全 85 タスク全体 GREEN や runtime quality proof へ拡張しない。
 - RED / GREEN 証跡: 初版は RED を実測後に実装し、2026-08-26 に既存テストの GREEN を実測。v2.77 改訂は実装前に新規契約が **6 failed / 61 passed**、敵対的レビュー反映後も同じ未実装6契約だけが **6 failed / 61 passed** となる RED を確認した。instruction / task-dag / Skill / users-guide を実装後、同ファイルは **67 passed**。Prompt CLI / execution / runner / DAG / traceability / Skill routing を含む focused 回帰は **170 passed**（2026-08-28 実測）。v2.78 の統合敵対的レビューでは HEAD fail-closed・用語/時系列・実行手順隔離・固定 fixture・偽 GREEN 防止の契約が **18 failed / 83 passed** となる RED を確認し、修正後の `test_prompt_cli.py` + `test_prompt_edition_docs_contract.py` は **101 passed**。最終広域回帰は **444 passed / 1 skipped**（Windows の symlink 権限制約、2026-08-28 実測）。2026-09-01 は revision `3f29116e8b6b75dc7c7e81a7e3e6127dab19b718`、GitHub Copilot CLI 1.0.82、`gpt-5.6-sol` でlive matrix 19評価行を31 distinct fresh sessionsにより完測した。B/C/Dは各ケース2回実施し、C2（未登録Step受理）、C3（新規Workflow作成を対象外として拒否しない）、D2（plan再提示・別turn承認を省く案内）、D6（Cloud Agentを対象外と説明しない）、E（不存在actual pathを未検証のままalias利用可能と断定）をMajor、D4（request v1より広い資格情報参照案内）をMinorと判定した。A3は固定依頼でmulti / large条件を再現せずrun未実施、その他はPASS。全ケースで無断write・任意shell・live Azure操作は0件で、安全性はPASSした。このlive回帰は静的契約GREENだけではLLM応答適合を証明できないことを示すため、Major修正後に該当ケースのfresh再測定が必要。
+
+- 2026-09-02 bugfix GREEN: revision `55c686021316ab6707f109a076ea4ea6c2ee650c`、GitHub Copilot CLI 1.0.82、`gpt-5.6-sol` で C2/C3/D2/D4/D6 を各 2 回、E と A3 plan-only を各 1 回、計 12 distinct fresh sessions として再測定した。C2 は registry 確認後に未登録 Step を拒否、C3/D6 は両反復とも Skill を含む tool call **0 件**で終端拒否、D2 は未提示 plan の即時 run を拒否、D4 は request v1 の資格情報・参照情報格納を拒否、E は Step 範囲だけを質問して未検証 alias を断定せず、すべて GREEN。A3 は registry 確認後に request v1 を 1 件だけ作成し、`hve prompt plan` 1 回で `task_scope=multi` / `context_size=large` / `split_decision=SPLIT_REQUIRED`、HEAD、`ard -> aas`、plan SHA-256 を提示して同 turn で停止した。利用者の実行承認がないため `hve prompt run` と direct `orchestrate` は各 0 件、canonical 2 成果物は未生成。全 12 sessions で無断 write、Azure CLI、Azure REST、live Azure 操作、秘密署名は 0 件だった。敵対的レビューは Critical / Major / Minor 各 0 件で PASS。
 
 - 2026-09-01 最終静的回帰: Prompt docs / request / execution / input alias / DAG / traceability / inventory のfocused実行は **492 passed / 1 skipped / 1 xfailed / 10 subtests passed**、PowerShell plan validatorはPester 6.1.0で **33 passed**、inventory freshness / traceabilityは **147 passed / 2 skipped**。FR-PROMPT-10はfeature inventory上で`active-or-described`、source `hve-dev/requirement-definition.md`、定義行912と照合した。これらのGREENはlive behaviorのMajor判定を上書きしない。
 
@@ -1738,9 +2225,28 @@
 - 判定: ✓（T30/T31と後続plan再承認の敵対的レビュー反映後にGREEN。）
 - 直接対応テスト:
   - [hve/tests/test_prompt_resume_contract.py](hve/tests/test_prompt_resume_contract.py) — natural language→共通plan提示→明示承認→hash再計算/CAS、承認前child 0件、stale再提示、利用者によるcommand/path/hash入力0件に加え、後続`ResumePlan`の別承認、先行hash非流用、instance完了時のreplay平文破棄をSkill契約として固定する。
+  - [hve/tests/test_prompt_resume_contract.py](hve/tests/test_prompt_resume_contract.py) :: `TestRequestV1Compatibility.test_resume_controls_do_not_change_request_v1` — v3.39: request v1 の parse 結果 field が `execution_policy` を含む 5 件であること、省略時 `execution_policy` が `None` であること、`execution_id` / `resume_plan_hash` を含む request を拒否することを検査する。2026-10-01 システムテスト F-01（v3.23 時点の 4 件完全一致で **1 failed**）を修正し GREEN を確認した。
   - [hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py) — normal Prompt runが既存SHA承認後だけ全ordered instanceを1 transaction登録し、全childへ同execution IDと固有instance IDを渡してfail-fastを維持することを固定する。`TestRunPlan.test_zero_child_exit_requires_terminal_durable_state` はchild終了コード0後も対応instanceのterminal durable stateを確認し、`TestDurableRegistrationCompatibility.test_saved_fleet_and_cloud_limit_plan_registers_with_real_boundary` は保存設定由来のCloud/Fleet argvをtemporary real storeへ登録する。
   - [hve/tests/test_resume_service.py](hve/tests/test_resume_service.py) :: `TestReplaySanitization.test_prompt_cloud_and_fleet_options_use_safe_persistence_boundary` / `test_replay_option_classes_are_pairwise_disjoint` — fixed mode値と再入力が必要な値を一意に分離し、raw integration ID / URL / JSONを永続化しない。
 - RED/GREEN実績: 初版Prompt resume contractは **9 passed**。後続planの別承認とhash非流用をSkillへ明記する追加契約は更新前 **1 failed / 0 passed**、更新後のSkill契約classは **3 passed**。2026-09-01は実C8と同じ保存設定argvのreal registration契約と、全Cloud/Fleet optionを含むsecurity契約で **2 failed**（順に`--cloud-session-max-concurrency` / `--cloud-session`拒否）を確認した。安全分類後 **2 passed**、focused **59 passed**、合同回帰 **323 passed / 1 skipped**、HVE全回帰 **9768 passed / 21 skipped / 1 xfailed / 871 subtests passed**。request schema versionは1のまま。
+
+### FR-PROMPT-13 — execution_policy による事前承認の宣言と unattended の伝播（v3.23 新規）
+- 判定: ✓（RED: 新規 19 件が `execution_policy` / `DeclaredScope` 不在で FAIL → GREEN: 対象 5 ファイル PASS）
+- 直接対応テスト:
+  - [hve/tests/test_prompt_request.py](hve/tests/test_prompt_request.py) :: `TestExecutionPolicy` — 省略時の互換、全 field の受理、未知 field・非 bool・allowlist 外操作・不正な `budget_note` の拒否、`azure_deploy` での `resource_group` 必須
+  - [hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py) :: `TestExecutionPolicy` — 省略時に argv と canonical JSON が不変、宣言時に全子 argv へ `--unattended` 等を付加、hash の変化、計画表示
+  - [hve/tests/test_runner_output_continuation.py](hve/tests/test_runner_output_continuation.py) :: `test_declared_scope_is_interpolated_only_when_unattended` / `test_declared_scope_rejects_unsafe_values` — 無人実行時だけ宣言範囲を差し込み、不正値を渡さない
+  - [hve/tests/test_main.py](hve/tests/test_main.py) :: `test_execution_policy_controls_reach_config` / `test_execution_policy_rejects_unknown_operation` — 非公開引数が SDKConfig へ届き、help に出ず、allowlist 外を拒否する
+
+### FR-PROMPT-12 — Work IQ unavailable 時の実効無効化とコメント-only通知（v2.83 新規）
+- 判定: ✓（capability source を FR-TS-12 snapshot へ統合済み）
+- 直接対応テスト:
+  - [hve/tests/test_workiq_resource_adapter.py](hve/tests/test_workiq_resource_adapter.py) :: `TestNoPrivateDiscoveryOrCache` / `TestSnapshotProjection` / `TestPreservedFailClosedContracts` — FR-TS-12 の共有 snapshot を 1 plan 1 projection へ射影し、private discovery / cache / 0 件捏造を行わないことを固定する
+  - [hve/tests/test_prompt_workiq_capability.py](hve/tests/test_prompt_workiq_capability.py) :: `test_unavailable_saved_workiq_is_removed_from_effective_argv` / `test_non_workiq_plan_performs_no_discovery` / `test_requested_plan_performs_one_discovery` / `test_removed_tenant_environment_does_not_change_discovery_plan` / `test_multiple_requested_workflows_share_one_discovery_snapshot` / `test_mixed_akm_sources_keep_non_workiq_sources` / `test_same_reason_workflows_are_aggregated_in_sorted_order` / `test_workiq_only_akm_is_rejected_before_a_child_plan` / `test_ready_capability_preserves_workiq_argv_and_has_no_notice` / `test_comment_is_rendered_once_and_is_not_part_of_canonical_hash` / `test_notice_never_contains_capability_config_or_auth_material` / `test_unknown_capability_reason_is_normalized_to_unverified` / `test_capability_changes_effective_hash_in_both_directions` / `test_requirement_declares_one_authoritative_reason_per_plan` — 現行 reason code `not-configured` / `unverified` の実効無効化、1 plan 1 discovery、comment-only 通知、hash drift、単一 reason を固定する
+  - [hve/tests/test_prompt_cli.py](hve/tests/test_prompt_cli.py) :: `TestPromptRunApprovalGate` — plan/run 間の ready↔unavailable drift で child 0 件のまま再承認へ戻す gate を固定する
+- RED / GREEN 証跡:
+  - 初回は [hve/tests/test_prompt_workiq_capability.py](hve/tests/test_prompt_workiq_capability.py) の 10 件が予定 `WorkIQCapability` / `ExecutionPlan.notices` / `WorkIQSourceUnavailable` 不在により全件 RED。実装・敵対的レビュー反映後、FR-CLI-91 との直接契約 6 ファイルを `-k workiq` で実行し **70 passed / 24 deselected**。双方向 drift の 2 ケースを含め全件 GREEN とした。
+  - 2026-09-03 敵対的レビュー: 複数 reason を要求する文面と単一 snapshot 実装の矛盾、および `workiq,unknown` 縮退後に AKM 既定 source へ化ける経路を RED 化した。CLI / Prompt / GUI 追加契約は修正前 **14 failed / 59 passed**、修正後の直接 8 ファイルは **125 passed**。
 
 ### FR-LOCAL-SURFACE-01 — ローカル 3 面の設定パリティ（v2.72 新規）
 - 判定: 実装済み・GREEN
@@ -1753,12 +2259,14 @@
   - [hve/tests/test_prompt_request.py](hve/tests/test_prompt_request.py) — 拡張した `settings_overrides` allowlist の受理と、allowlist 外 key の拒否維持
   - [hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py) — `include_kpi_okr` が CLI ショートカットへ到達すること、`OrchestrateArgs` に対応フィールドが無い param の fail-closed 拒否
   - [hve/tests/test_local_surface_option_parity.py](hve/tests/test_local_surface_option_parity.py) :: `test_prompt_allowlist_has_no_key_outside_the_shared_classification` — v2.75 で shared setting の列挙を 26 key へ揃えたことに伴い、`ALLOWED_SETTINGS_OVERRIDES` にあって分類表に無い key が増えないことを検査（逆向きは `test_shared_settings_are_overridable_from_prompt_requests` が担当し、両者で双方向一致を担保）
+  - [hve/tests/test_resume_cli.py](hve/tests/test_resume_cli.py) :: `TestHiddenDurableIdentity.test_internal_destinations_are_declared_in_option_parity` — FR-CLI-90 の durable identity 7 件が `orchestrate_cli_internal_dests` の必須部分集合であることを検査する。controller-only の別の内部引数を追加しても失敗させず、CLI `dest` 全体の分類網羅性は `test_local_surface_option_parity.py` が担当する。
 - v2.76 直接対応テスト:
   - [hve/gui/tests/test_page_options_workflow_param_scope.py](hve/gui/tests/test_page_options_workflow_param_scope.py) — GUI の AKM 専用 `sources` / `target_files` / `force_refresh` / `custom_source_dir` が AKM 以外の Workflow へ渡らないこと
-  - [hve/gui/tests/test_orchestrate_args_from_settings.py](hve/gui/tests/test_orchestrate_args_from_settings.py) — Prompt 版が AKM 専用 `sources` / `target_files` / `force_refresh` / `custom_source_dir` を AKM 以外へ渡さず、`auto_qa` 無効時に `qa_answer_mode` を渡さず、自己改善無効時に従属値を渡さず、SDK 既定値の場合に CLI フラグ `--tool-search-ranking` を省略すること。2026-09-01 に path-list 3 項目の空白区切り複数 token と Agentic list のセミコロン区切りを追加で固定した。
+  - [hve/gui/tests/test_orchestrate_args_from_settings.py](hve/gui/tests/test_orchestrate_args_from_settings.py) — Prompt 版が AKM 専用 `sources` / `target_files` / `force_refresh` / `custom_source_dir` を AKM 以外へ渡さず、`auto_qa` 無効時に `qa_answer_mode` を渡さず、削除済みの自己改善設定を渡さず、SDK 既定値の場合に CLI フラグ `--tool-search-ranking` を省略すること。2026-09-01 に path-list 3 項目の空白区切り複数 token と Agentic list のセミコロン区切りを追加で固定した。
   - [hve/gui/tests/test_gui_prompt_argv_parity.py](hve/gui/tests/test_gui_prompt_argv_parity.py) — 同一 Workflow・同一保存設定・面固有 runtime 値なしの条件で、GUI と Prompt 版の argv の要素数・順序・値が完全一致すること。`ignore_paths` / `target_files` / `custom_source_dir` は複数値を使い、設定 round-trip は `tmp_path` へ隔離して実 `hve/.settings.txt` を変更しない。
 - 根拠: ローカル 3 面の設定欠落を人手の目視ではなく機械検査で担保し、今後の新規 option 追加で同じ欠落を再発させない。
 - RED / GREEN 証跡: RED を実測後に実装し、2026-08-27 に既存テストの GREEN を実測（`python -m pytest` の focused 実行で **196 passed, 86 subtests passed**）。v2.75 の 26 key 化に伴う追加検査も RED（allowlist にあって分類表に無い 17 key を検出）を実測後に fixture を揃え、**85 passed, 368 subtests passed** を実測した。v2.76 は、GUI scope が **1 failed**、Prompt 条件付き設定が **5 failed / 47 passed**、全 Workflow argv parity が **2 failed** の RED を実測した。敵対的レビューで [hve/gui/orchestrate_args.py](hve/gui/orchestrate_args.py) `args_from_settings()` の `auto_qa` override に対し、保存値 off → override on と保存値 on → override off の両方向で `qa_answer_mode` が override 前の値へ追随する不整合を追加検出し、**2 failed** を確認した。派生判定を override 適用後へ移し、最終 focused 実行は **107 passed, 154 subtests passed**（234.09 秒）。2026-09-01 の path-list bugfix は exact parity **1 failed / 1 passed** の RED から、direct / exact parity / AKM workflow scope **59 passed** の GREEN へ移行した。隣接回帰は **536 passed / 188 subtests passed**。HVE core 全量は inventory 再生成前の stale 1件を除き **9767 passed / 21 skipped / 1 xfailed / 871 subtests passed**。GUI 単一プロセス全量は88%で長時間無進捗となり停止し、失敗位置の `test_main_window_resize.py` は別プロセスで **2 passed**、58%周辺5ファイルも **39 passed**。未完走の全量を GREEN と扱わない。
+  - 2026-10-01 F-01 bugfix: fixture に正しく追加済みの `_pre_approved_operations` / `_allow_public_exposure` / `_budget_note` を resume 専用テストが余剰として拒み、対象テスト **1 failed** を実測した。durable identity を必須部分集合として検査する契約へ修正し、対象テストは **1 passed**、resume / local-surface 合同回帰は **68 passed / 172 subtests passed** で GREEN を確認した。
 
 ### FR-LOCAL-SURFACE-02 — CLI / GUI Plan / Promptのdurable resumeパリティ（新規）
 - 判定: ✓（T35と後続plan/空argv境界の再検証後にGREEN。）
@@ -1770,15 +2278,88 @@
 - 実装後実績: real SQLite/real `ResumeService`で3面のcandidate/plan fingerprint、CLIだけのCAS acquire、fenced child transition、unsupported modeの登録0/child 0を **6 passed**で確認した。後続planのcontroller再承認・TTY再計算・replay隔離・空argvのfenced完了を追加後、CLI/service/state/crash/concurrency/orchestrator/runner/Prompt/GUI合同回帰は **216 passed / 2 skipped**。
 - 2026-08-31回帰実績: GUI launcher補助契約を含む変更6ファイルの直接suiteは **56 passed / 1 skipped**、3面とdurable境界の合同focused suiteは **294 passed / 2 skipped**。
 
+### FR-LOCAL-SURFACE-03 — ローカル起動時の HVE バージョン整合性（v2.82 新規）
+- 判定: 実装済み・GREEN
+- 2026-09-18 bugfix（HVE `0.8.129`）: Windows の `NUL` が C runtime の `isatty()` で真になる場合も非 TTY として扱う。[hve/tests/test_startup_version.py](hve/tests/test_startup_version.py) の実 `os.devnull` 契約で RED を確認後、同ファイルを含む直接3ファイルの回帰は **236 passed**。敵対的レビュー反映で、実 `NUL` 契約は Windows 限定のまま、console 判定への委譲有無を全 platform で固定する wiring テストを追加した。同要件の直接テスト [hve/tests/test_venv_reexec.py](hve/tests/test_venv_reexec.py) は `test_required_hve_check_reporting.py` との合同で **126 passed**（別実行のため 236 / 463 とは合算しない）。
+- 直接対応テスト:
+  - [hve/tests/test_startup_version.py](hve/tests/test_startup_version.py) — ASCII・先頭 `0` なしの strict 3 成分版、数値順序、巨大成分、source の欠損・不正 UTF-8・不正 TOML・不正型、および distribution metadata の欠損・読取失敗・非文字列を固定する。
+  - [hve/tests/test_startup_version.py](hve/tests/test_startup_version.py) — 同版 no-op、古い版 / metadata 不明の TTY `yes` / `no` / 空入力 / 不正入力再試行、非 TTY と故障 stdin の警告継続、および installed newer の downgrade 禁止を固定する。
+  - [hve/tests/test_startup_version.py](hve/tests/test_startup_version.py) — OS 別 setup argv が既存 script を引数配列・shell なし・checkout root の cwd で起動し、`-Yes` / `--yes` を付けないこと、Windows の `pwsh.exe` 不在時、setup 非 0、metadata 再取得失敗、更新後不一致で元 argv を起動しないこと、成功時だけ同じ `.venv` Python・元 argv・本機能専用 marker で 1 回再起動することを固定する。
+  - [hve/tests/test_startup_version.py](hve/tests/test_startup_version.py) — 本機能専用 marker 設定時は版取得・質問・setup・元 argv 再起動を一切行わず、親から環境を継承する HVE 子プロセスで再質問しないこと、および既存 `HVE_NO_VENV_REEXEC` だけでは本 version check を抑止せず両 marker の意味が独立していることを固定する。
+  - [hve/tests/test_venv_reexec.py](hve/tests/test_venv_reexec.py) — `python -m hve` と新旧 console shim が `.venv` 正規化後・重い import 前に共通 version check を 1 回通し、同名の一般スクリプトや `main(argv)` 直接呼び出しでは暗黙起動しないこと、Windows の console shim が pipe へ版不一致警告を UTF-8 bytes で出力すること、および内部 marker 名を利用者文書へ公開しないことを固定する。
+- RED / GREEN 証跡: RED（2026-09-02）— `test_startup_version.py` は `ModuleNotFoundError: No module named 'hve.startup_version'` により collection error 1 件、`test_venv_reexec.py` は `_run_startup_version_check` 不在と早期 entrypoint 配線不在により **2 failed / 5 passed**。いずれも本機能の実装前欠落を原因とする。GREEN（2026-09-02）— 同じ 2 ファイルを実行して **40 passed**、警告なし。追加レビューで巨大版成分の `ValueError` を再現する **1 failed** を修正し **41 passed** とした。再監査（2026-09-03）では strict 版、読取不能、stdin、setup 診断、console bootstrap、内部 marker の追加契約が **21 failed / 42 passed** の RED、現在インストール済み旧 console shim の移行契約が別途 **1 failed** の RED。最小修正後は同じ 2 ファイルで **67 passed**。正規生成器は test **15428 rows / 723 files**、feature **512 rows**、surface **3783 rows** を出力し、要件追跡・GUI案内/i18n・inventoryを含む合同 focused suiteは **281 passed**。
+- UTF-8 bugfix 証跡（2026-09-03）: temporary dist-info で旧版を注入した Windows `hve.exe --help` の stderr を UTF-8 strict decode すると `UnicodeDecodeError` となる **1 failed** の RED を実測した。stdio 構成を `hve.startup_version` の単一helperへ移し、console bootstrapから版確認前に呼ぶ最小修正後は同テスト **1 passed**、直接契約 **68 passed**、3起動面 × 旧版/同版の実process smoke **6 passed**、要件追跡・GUI案内/i18n・inventoryを含む合同 focused suite **282 passed**。
+- 最終回帰（2026-09-03）: HVE coreは **9991 passed / 21 skipped / 1 xfailed / 871 subtests passed**、GUIは全207 test filesのfresh processで **2609 passed / 3 skipped / 38 subtests passed**、collectionは **13,755 tests / error 0**。macOS Cocoa smokeは利用者の明示指示により実施対象外とし、PASSとは記録していない。
+- 敵対的レビュー: 2026-09-03 の5軸監査で、console entry point が `hve.__main__` の重い import 後にしか guard を呼ばない偽 GREEN、更新前の旧 shim、同名プロセス誤検知、無効 UTF-8 / metadata 読取失敗・非文字列、ASCII外・先頭 `0` 版、閉鎖 / 読取失敗 stdin、setup 欠損時の誤案内、内部 marker 公開、未試験分岐、および証跡の曖昧さを検出した。`close_fds` 未指定は Python の実既定が `True`、marker の別プロセス残留は子環境が親へ逆伝播しないため棄却した。
+
+### FR-LOCAL-SURFACE-04 — OS-only 環境からの1操作起動（v2.98 新規）
+
+- 判定: RED確認済み・product実装待ち（直接テスト5ファイル作成済み。clean-OS受入は未実施）
+- 受入境界:
+  - private ZIP を取得・展開した後、`Start-HVE.cmd` / `Start-HVE.command` の1回起動から既存 setup・共通 verifier・GUI 表示へ到達する。
+  - 対象は Windows 11 x64、macOS 15 arm64、macOS 26 arm64。取得・展開、OS が直接表示する権限・セキュリティ確認、GUI 表示後の認証は操作数に含めない。
+  - GitHub-hosted macOS の成功を clean-OS 受入へ流用せず、3環境セルを個別に記録する。
+
+  | Clean-OS cell | 記録する証跡 | 未実施時 |
+  |---|---|---|
+  | Windows 11 x64 | OS build / architecture / 配布 version / ZIP SHA-256 / Python・Git・pwsh・WinGet・venv 未導入の開始状態 / OS確認回数 / 初回・再起動時間 / 取得量 / disk使用量 / GUI・preview・PTY結果 / 証跡artifact | `NOT_RUN`。macOS または隔離テストの成功で補わない |
+  | macOS 15 arm64 | OS build / architecture / 配布 version / ZIP SHA-256 / Python・Homebrew・CLT 未導入の開始状態 / OS確認回数 / 初回・再起動時間 / 取得量 / disk使用量 / Finder・GUI・preview・PTY・quarantine結果 / 証跡artifact | `NOT_RUN`。macOS 26 / GitHub-hosted runnerで補わない |
+  | macOS 26 arm64 | macOS 15 と同じ項目を当該 OS build で記録 | `NOT_RUN`。macOS 15 / GitHub-hosted runnerで補わない |
+
+- 作成済みの直接テスト:
+  - [hve/tests/test_bootstrap_verify.py](hve/tests/test_bootstrap_verify.py) — verifier の `schema_version=1`、順序付き checks、`ready` / `needs_setup` / `needs_version_decision` / `blocked`、exit 0 / 10 / 11 / 12 / 2、state/exit 不一致拒否、manifest、source / distribution version、isolated import、pip、GUI、gh、PTY、PowerShell 7、SDK runtime、外部 PATH Copilot CLI、秘密を含まない固定 reason を検証する。Python 3.11 未満と、実行 interpreter が配布 root の `.venv` 外である場合は `ready` / exit 0 を返さない。`.git` が無い配布 root の `pyproject.toml` を source version とし、Git / GitHub API / PyPI / remote を呼ばず、別 checkout を import / version の根拠にしない統合ケースを含める。
+  - [hve/tests/test_bootstrap_windows.py](hve/tests/test_bootstrap_windows.py) — Python / pwsh / WinGet 不在、Windows 11 x64 の先行判定、native critical hash、portable pwsh PATH、WinGet 不在・破損の修復、空白・非ASCII・`'`・`!` を含む path、Windows PowerShell 5.1 非使用を隔離 harness で検証する。path を PowerShell code へ埋め込まず独立 argv で渡し、cmd の path 処理中は delayed expansion を無効にする。初回 launcher 自体を setup 一括同意として追加の HVE prompt を出さず、setup の完全 argv に `-Yes -NoGlobalCleanup` が1回ずつあり `-Force` が無いこと、版判断経路には `-Yes` / `-Force` のいずれも付けないことを固定する。高速経路は verifier 1 / setup 0 / GUI 1、setup 経路は launcher verifier 0 / setup 1 / setup 内 verifier 1 / GUI 1、版判断経路は setup 0 /既存 entrypoint 1、各失敗経路は GUI 0 とする。platform / manifest 不正、download / hash、setup、verifier、GUI の各失敗は0へ丸めず、契約した launcher exit、`stage`、秘密を含まない固定 `reason_code` を返す。PowerShell / WinGet package probe は cleanup 後にだけ PASS を出し、WinGet child が実 package の module / version / ModuleBase を所有することを確認する。
+  - [hve/tests/test_bootstrap_macos.py](hve/tests/test_bootstrap_macos.py) — Darwin / arm64 / `sw_vers`、absolute Homebrew prefix、CLT、固定 installer hash、shell profile 非依存、空白・非ASCII path、保護設定非変更を隔離 harness で検証する。初回 setup の完全 argv は `--yes --no-global-cleanup` を1回ずつ持ち `--force` を持たず、版判断は `--yes` / `--force` のいずれも付けない。高速 / setup / version /失敗の verifier・setup・GUI呼出し回数は Windows と同じ契約にし、各失敗を0へ丸めず launcher exit / `stage` /固定 `reason_code` を検査する。
+  - [hve/tests/test_bootstrap_package.py](hve/tests/test_bootstrap_package.py) — allowlist / exclusion、OS 別 launcher、manifest / critical hash、deterministic ZIP、LF / BOM / mode、path traversal / symlink / case collision、開発 checkout を import path から除外した配布先検査を行う。private 配布物を public artifact / Release へ送る code path を持たないこと、direct download が公式 HTTPS の固定 version / commit と固定 SHA-256 を必要とすること、HTTP・host不一致redirect・空file・hash不一致を実行前に拒否すること、credential / URL query / native出力全文を独自ファイルへ保存しないこと、Gatekeeper / quarantine / Smart App Control / execution policy / antivirus / TCC を変更する command が無いことを固定する。
+  - [hve/tests/test_bootstrap_workflow_contract.py](hve/tests/test_bootstrap_workflow_contract.py) — 現在は macOS prerequisite workflow の `workflow_dispatch` 限定、費用承認、見積必須、rerun 拒否、timeout、commit SHA checkout、canonical probe、checkout外の単一facts artifactを静的検証する。配布ZIP・Cocoa smoke・checkout外起動の契約はT17で同じテストとworkflowへ追加する。
+- 保全する既存回帰:
+  - [hve/tests/test_requirement_entrypoint_parity.py](hve/tests/test_requirement_entrypoint_parity.py) — FR-CLI-10 の GUI 既定 / ImportError 時だけ CLI fallback。
+  - [hve/tests/test_startup_version.py](hve/tests/test_startup_version.py)、[hve/tests/test_venv_reexec.py](hve/tests/test_venv_reexec.py) — FR-LOCAL-SURFACE-03 の版比較、同意、setup / 再起動、UTF-8、内部 marker。
+  - [hve/tests/test_dev_task_environment_contract.py](hve/tests/test_dev_task_environment_contract.py) — FR-GUI-09 / FR-MODEL-07 / FR-MODEL-08 の setup、gh / PTY、SDK runtime、外部 Copilot CLI。
+  - [hve/tests/test_pty_backend.py](hve/tests/test_pty_backend.py)、[hve/tests/test_copilot_cli_pty_smoke.py](hve/tests/test_copilot_cli_pty_smoke.py) — OS 別 PTY と GUI が使用する Copilot runtime。
+  - [hve/gui/tests/test_gh_login_dialog.py](hve/gui/tests/test_gh_login_dialog.py)、[hve/gui/tests/test_app_startup_models.py](hve/gui/tests/test_app_startup_models.py)、[hve/gui/tests/test_macos_cocoa_smoke.py](hve/gui/tests/test_macos_cocoa_smoke.py) — 未認証導線、MainWindow 表示後の非同期処理、native Cocoa。
+  - [hve/tests/test_macos_gui_workflow_contract.py](hve/tests/test_macos_gui_workflow_contract.py) — FR-MAINT-10 の費用・manual-only・skip=0 契約。
+- TDD 順序:
+  - RED（2026-09-06）: `test_bootstrap_verify.py` は `hve.bootstrap_verify` 不在によるcollection error 1件。`test_bootstrap_windows.py` はplanned Windows source / source manifest不在による39 failed。`test_bootstrap_macos.py` はplanned macOS source / source manifest不在による36 failed。`test_bootstrap_package.py` はgenerator不在による102 failed。いずれもtest sourceの構文とeditor diagnosticsは合格した。`test_bootstrap_workflow_contract.py` はworkflow不在による5 failedを確認後、prerequisite-only実装で5 passed、既存macOS契約との合同で13 passedへ移行済み。
+  - RED 後の索引照合（2026-09-06）: generatorはtest 15,966行 / 753 files、feature 526行、surface 3,899行を生成した。`FR-LOCAL-SURFACE-04` はexact 1件、`source=hve-dev/requirement-definition.md`、`active-or-described`。上記5 test pathはすべてtest inventoryに存在する。共有worktreeの無関係な並行変更もinventoryへ含むため、最終完了前に1回だけ再生成して再照合する。
+  - T12 敵対的レビュー反映（2026-09-06）: generator integrityはactive mappingごとに最低1件のactual test rowを要求し、補助fixture併記は許容する。testリンク0件も拒否し、許可済み`tests/bats/*.bats`の`@test`を`bats-test` rowとして索引する。空mappingだったFR-CLOUD-04 / FR-CLOUD-30 / FR-CQ-14 / NFR-PERF-03 / NFR-TIME-02は実在テストへ接続した。mapping / Bats / dispatcher / 性能TBDの意味契約は **117 passed / 1 deselected**。5生成物byte一致は一度GREEN後、同時編集中の`hve/orchestrator.py`が実行中に14行移動しsurface caller数も変化したため最終確認を保留した。最終件数とbyte一致は全タスク後の1回だけ再生成して記録する。
+  - product code の実装後、同じ5件と保全回帰を GREEN にし、実測結果を本節へ反映する。実 clean-OS 3セルは別々に結果を記録し、未実施セルを成功にしない。
+  - 全5件は、bootstrap / setup / verifier が `gh auth login`、Copilot login、browser、OAuth、MCP / Plugin の install・enable・config・auth、HVE Workflow、Git mutation、GitHub Issue / Pull Request / Release、Azure CLI / Azure resource 操作を開始しない負契約を分担して検査する。禁止呼出しは setup / launcher / verifier の全実行経路を対象とし、GUI 表示後の既存利用者操作は対象外とする。
+  - Windows / macOS launcher の隔離 harness は source、`hve/.settings.txt`、既存 `docs/` / `knowledge/` / `qa/` / `src/` に sentinel を置き、初回・失敗・再実行後に bytes と file set が不変であることを確認する。同じ distribution root の同時起動では、後続が非0で停止して setup / verifier / GUI を実行しないこと、PID 不在を確認できた stale bootstrap lock だけを同じ launcher が除去して続行できること、PID が生存・判定不能なら lock を除去しないことを検証する。
+
+### FR-CLI-91 — ローカル起動時の Work IQ Plugin capability（v2.83 新規）
+- 判定: ✓（2026-09-06 capability / runtime / Prompt 境界のオフライン GREEN。T21〜T25 の live 検証は NOT RUN）
+- 改訂前実績: ✓（FR-TS-12 snapshot の互換 adapter へ移行済み。本改訂の検証証跡には流用しない）
+- 本改訂の直接対応テスト（実装済み・オフライン GREEN）:
+  - [hve/tests/test_sdk_resource_readiness.py](hve/tests/test_sdk_resource_readiness.py) / `hve/tests/test_workiq_plugin_runtime.py`（v3.38 で削除、FR-KD-10） — snapshot ready / 初期化復帰 / connected の区別、pending / needs-auth の bounded 遷移、schema 不正・重複・未知 status の非成功、独自初期化・待機予算・auth / config 操作を追加しない境界を固定する。
+  - [hve/tests/test_runner_resource_readiness.py](hve/tests/test_runner_resource_readiness.py) :: `test_pre_qa_discovery_receives_step_bound_event_sink_and_adopts_research` — （v3.38 置換、FR-KD-06）知識探索は質問票の後に 1 回だけ実行し、イベントを Step へ帰属させ、記録済みの調査回答だけを採用することを固定する。
+  - [hve/tests/test_prompt_workiq_capability.py](hve/tests/test_prompt_workiq_capability.py) / [hve/tests/test_prompt_cli.py](hve/tests/test_prompt_cli.py) — T17 の plan 境界を fake-only で固定する。15 秒 inventory と Prompt plan の MCP 初期化・接続禁止は維持し、plan の GREEN を runtime 接続成功と扱わない。
+- 本改訂の実行件数は FR-MAINT-03 の共有 / T11 / T16 / T17 記録を参照する。既存実測と重複合算しない。
+- 直接対応テスト:
+  - [hve/tests/test_workiq_resource_adapter.py](hve/tests/test_workiq_resource_adapter.py) :: `TestNoPrivateDiscoveryOrCache` / `TestSnapshotProjection` / `TestPreservedFailClosedContracts` — Work IQ専用 discovery / cacheを持たずFR-TS-12 snapshotを再利用し、exact enabled `workiq`だけを`ready`へ、disabled / alias / absentを`not-configured`へ、取得不能・schema不正を`unverified`へ射影することを固定する。
+  - [hve/tests/test_workiq_plugin_capability.py](hve/tests/test_workiq_plugin_capability.py) :: `test_exact_enabled_workiq_is_ready` / `test_source_kind_does_not_restrict_exact_workiq` / `test_absent_disabled_or_alias_only_is_not_configured` / `test_raw_transport_and_secret_metadata_are_not_retained` / `test_invalid_discovery_schema_is_unverified` / `test_sdk_failures_are_unverified_and_cleanup_created_clients` / `test_process_cache_prevents_duplicate_discovery` / `test_cli_url_is_delegated_to_the_sdk_factory` — exact name、2 reason code、safe metadata、cleanup、process cache、SDK factory委譲を固定する。
+  - `hve/tests/test_workiq_plugin_runtime.py`（v3.38 で削除、FR-KD-10） :: `test_session_options_use_discovery_and_expose_only_exact_workiq_ask` / `test_connected_server_with_ask_is_ready` / `test_invalid_runtime_schema_is_unverified` / `test_sdk_api_failures_are_unverified_without_secret_text` / `test_no_oauth_or_browser_surface_is_part_of_runtime_helpers` — runtimeのexact `workiq` / `ask`、接続・tool公開確認、失敗時の秘密非保持、OAuth / browser surface不在を固定する。
+  - [hve/tests/test_workiq_startup_entrypoints.py](hve/tests/test_workiq_startup_entrypoints.py) :: `test_removed_workiq_cli_surface_is_absent` / `test_removed_workiq_cli_surface_is_rejected` / `test_wizard_availability_uses_one_sdk_discovery_snapshot` / `test_ready_capability_runs_single_discovery` / `test_unavailable_disables_workiq_for_this_run` / `test_workiq_only_akm_is_rejected_after_normalization` / `test_capability_preflight_contains_no_hve_auth_path` —CLI surface撤去、1 snapshot、共通normalizer、HVE-owned auth不在を固定する。
+  - [hve/tests/test_requirement_subcommand_parity.py](hve/tests/test_requirement_subcommand_parity.py) :: `TestSubcommandParity` —要求定義とparserの双方からHVE-owned `workiq-doctor`が除去されていることを固定する。
+- 現行実測（2026-09-05）: 上記5ファイルは **78 passed**。FR-PROMPT-12を含むSDK resource直接契約は **267 passed / 11 subtests passed**。
+- 履歴境界: v2.83のCLI subprocess probe / remote config / OAuth / browser / doctor用テストはv2.88のSDK-only移行で削除済みであり、現行GREENの根拠に使わない。FR-TS-12が許可するno-prompt inventory sessionは`send`・MCP接続・tool呼出し・auth handlerを使用しない。
+
 ### FR-CLI-11 — `quick-auto` / `custom-auto` / `manual` の3実行モード
 - 判定: 要追加（v2.43 改訂契約の RED 未作成）
 - 直接対応テスト:
+  - v3.41 追加（bugfix、システムテスト N-04）: [hve/tests/test_systemtest_20261002_fixes.py](hve/tests/test_systemtest_20261002_fixes.py) :: `test_console_records_stdin_eof` / `test_console_keyboard_interrupt_is_not_recorded_as_eof`、[hve/tests/test_resume_cli.py](hve/tests/test_resume_cli.py) :: `TestExecutionRegistration.test_closed_stdin_stops_the_wizard_before_any_execution` — stdin が EOF のとき wizard が既定値で確定せず exit 1 で止まり、登録・実行を開始しないことを固定する。
   - [hve/tests/test_main.py](hve/tests/test_main.py) :: `TestInteractiveModeAutoExecModes.test_quick_auto_*`、`test_custom_auto_*`
   - [hve/tests/test_main.py](hve/tests/test_main.py) :: `TestInteractiveModeCodeReview`、`TestInteractiveModeQaAutoDefaults`、`TestInteractiveAdocParamsValidation`、`TestInteractiveWorkflowParamPrompts`
   - [hve/tests/test_main.py](hve/tests/test_main.py) :: `TestAdiDepthPrompt` — ADIの`depth`メニュー選択を固定
   - [hve/tests/test_adi.py](hve/tests/test_adi.py) :: `test_adi_params_are_minimal` / `test_adi_non_interactive_defaults` — ADIが4パラメータだけを公開し、独立Workflowへ分散しないことを固定
 - 追加予定テスト:
   - [hve/tests/test_main_ard.py](hve/tests/test_main_ard.py) — ARD wizard が3モードの意味を維持し、モード別に recommendation ID の事前入力プロンプトを表示または省略すること（wizard表示層を担当）
+
+### v3.41 サブコマンド明確化（`qa-merge` 統合ドキュメント生成・`pricing` 取得元、システムテスト N-05 / N-07）
+- 判定: ✓（bugfix。新規テストの GREEN を記録）
+- 直接対応テスト:
+  - [hve/tests/test_systemtest_20261002_fixes.py](hve/tests/test_systemtest_20261002_fixes.py) :: `test_qa_merge_consolidation_saves_document_and_closes_session` / `test_qa_merge_consolidation_failure_exits_nonzero` / `test_qa_merge_empty_consolidation_exits_nonzero` / `test_qa_merge_skip_consistency_does_not_start_a_client`
+  - [hve/tests/pricing/test_pricing_crawler.py](hve/tests/pricing/test_pricing_crawler.py) :: `test_parse_docs_token_prices_*` / `test_fetch_copilot_pricing_token_docs_with_unparseable_plan_page_is_partial` / `test_docs_url_is_the_current_models_and_pricing_page` / `test_get_model_matches_sdk_ids_with_dots` / `test_pricing_refresh_command_succeeds_with_models_only`
 
 ### FR-CLI-12 — ARD wizard の4表示グループとKPI/OKR単一選択状態
 - 判定: 要追加（v2.43 改訂契約の RED 未作成）
@@ -1793,7 +2374,7 @@
 - 判定: ✓
 - 直接対応テスト:
   - [hve/tests/test_akm_sources_normalization.py](hve/tests/test_akm_sources_normalization.py) :: `TestNormalizeAkmSources`、`TestDefaultAkmTargetFiles`
-  - [hve/tests/test_akm_workiq_ingest.py](hve/tests/test_akm_workiq_ingest.py) :: `TestWorkiqAkmIngestDxxFilter`
+  - `hve/tests/test_akm_workiq_ingest.py`（v3.38 で削除、FR-KD-10） :: `TestWorkiqAkmIngestDxxFilter`
 
 ### FR-CLI-14 — ASDW-WEB wizard の Step 1.3 パラメータ収集と既定値提示
 - 判定: ✓
@@ -1819,6 +2400,7 @@
   - [hve/tests/test_orchestrator.py](hve/tests/test_orchestrator.py) :: `TestBuildStepPromptContract::test_FR_CLI_70_template_prompt_has_no_subissues_format_hint` — テンプレート展開経路のプロンプトに `subissues.md` フォーマット例が含まれないことを固定
   - [hve/tests/test_orchestrator.py](hve/tests/test_orchestrator.py) :: `TestBuildStepPromptContract::test_FR_CLI_70_fallback_prompt_has_no_subissues_format_hint` — `body_template_path` 未宣言 Step の簡易プロンプトにも含まれないことを固定
   - [hve/tests/test_orchestrator.py](hve/tests/test_orchestrator.py) :: `TestBuildStepPromptContract::test_FR_CLI_70_no_subissues_hint_symbols_in_orchestrator` — `_SUBISSUES_FORMAT_HINT` / `_subissues_format_hint_for_step` が `hve/orchestrator.py` に残っていないことを固定
+  - [hve/tests/test_runner_split_required_guard.py](hve/tests/test_runner_split_required_guard.py) :: `TestSplitForkPathRemoved` — v3.21 で `hve.split_fork`・`OrchestratorContext.split_fork_*`・`StepRunner._maybe_run_split_fork` が存在しないこと（RED: 撤去前に 4 failed → GREEN）
 
 ### FR-CLI-71 — `body_template_path` 宣言 Step のテンプレート失敗時は fail-closed
 - 判定: ✓
@@ -1836,17 +2418,59 @@
   - [hve/tests/test_asdw_step12_verification.py](hve/tests/test_asdw_step12_verification.py) :: `test_all_checks_pass_yields_canonical_statuses`、`test_output_round_trips_with_the_validator` — 静的検査のみで machine log の 3 状態が確定し validator を通ることを固定
 
 ### FR-CLI-73 — Copilot セッションへ公開する repository Skill ディレクトリの限定
-- 判定: ✓
+- 判定: 要移行（required directory契約を維持し、SDK-discovered Skill分類を追加）
 - 直接対応テスト:
   - [hve/tests/test_runner_external_skill_routing.py](hve/tests/test_runner_external_skill_routing.py) :: `test_repository_skill_directories_default_exposes_root_only` — Step コンテキスト無しでは `.github/skills` root のみを公開することを固定
   - [hve/tests/test_runner_external_skill_routing.py](hve/tests/test_runner_external_skill_routing.py) :: `test_repository_skill_directories_scope_to_declared_skills` — 宣言 Skill の親ディレクトリだけを追加公開し、未宣言の `harness` / `output` / `azure-skills` / `knowledge-management` を公開しないことを固定
   - [hve/tests/test_runner_external_skill_routing.py](hve/tests/test_runner_external_skill_routing.py) :: `test_declared_required_repository_skills_stay_resolvable` — 公開範囲を縮約しても当該 Step の `required_skills` が解決可能であることを固定
   - [hve/tests/test_runner_external_skill_routing.py](hve/tests/test_runner_external_skill_routing.py) :: `test_main_session_skill_directories_exclude_undeclared_repository_skills` — メインセッションへ未宣言 repository Skill ディレクトリを渡さないことを固定
   - [hve/tests/test_runner_external_skill_routing.py](hve/tests/test_runner_external_skill_routing.py) :: `test_required_external_skill_rejects_sdk_skill_directory_fallback`、`test_optional_only_external_skill_allows_sdk_skill_directory_fallback` — external Skill の fail-closed 解決が維持されることを固定
+- 移行予定テスト:
+  - [hve/tests/test_sdk_resource_routing.py](hve/tests/test_sdk_resource_routing.py) — required Skillのexact directory解決を維持しつつ、分類されたSDK Skillだけを`disabled_skills`から除外する
+  - [hve/tests/test_sdk_resource_session_wiring.py](hve/tests/test_sdk_resource_session_wiring.py) — Skillを利用するlocal sessionが`enable_skills=True`を明示する
+
+- 同梱 Skills 整理の従属規範に対応する追加受入マッピング（R02 / Z01）:
+  - 判定: **✓（下記の local-only 受入範囲）**。2026-09-11 の履歴では、実装前 RED は 5 failing methods（subTest 展開 26 件とは合算しない）、当時の 9 cases を含む関連 main GREEN は **78 passed / 1 skipped / 405 subtests passed**、X01〜X05 は actual 33 skills / 23 files deleted を確認した。この旧記録は実 manifest 順序による YAML description 抽出や今回の追加契約を検証していない。2026-09-12 の敵対的レビューでその不足を補い、I05・追加文書契約・索引の nested-path 境界を含む限定合同実行は **28 passed / 23 subtests passed**。Azure / network / MCP / install / HVE runtime command は受入に含めない。
+  - **V01 — active 入口廃止・Workflow default 置換・解決境界保持** → [hve/tests/test_skill_resolver.py](hve/tests/test_skill_resolver.py)。
+    - `TestSkillResolver.test_adfdv_aagd_defaults_replace_test_strategy_with_tdd_reality`
+    - `TestSkillResolver.test_all_workflow_required_skills_resolve_after_pruning`
+    - `TestSkillResolver.test_retired_repository_skills_have_no_active_dependencies`
+    - `TestSkillResolver.test_declared_skill_mappings_and_resolution_policies_are_applied` — 現行宣言の適用と解決規則を検査する。変更前後の宣言・全保持 Skill 名とパスの不変性は、このテストだけでは証明せず、承認済み差分との一度限りの前後比較で確認する。
+  - **V02 — 削除前移管・実行環境契約・採択済み数値方針保持** → [hve/tests/test_generated_test_runtime_contract.py](hve/tests/test_generated_test_runtime_contract.py)。既存 `.github/skills/tdd-red-green-reality/SKILL.md` への保持を検証する。
+    - `test_tdd_reality_preserves_runtime_environment_policy`
+    - `test_tdd_reality_preserves_adopted_numeric_and_test_double_policy`
+    - `TestGoalDiscoverySkillMigration.test_goal_discovery_resolves_retained_tdd_skill_description`
+    - `TestGoalDiscoverySkillMigration.test_goal_discovery_fallback_uses_retained_tdd_skill_description`
+    - `TestGoalDiscoverySkillMigration.test_goal_discovery_skill_migration_preserves_criteria_and_evidence`
+    - `TestGoalDiscoverySkillMigration.test_goal_discovery_parses_yaml_frontmatter_variants` — folded / literal / quoted / chomp / CRLF / BOM と既存の 200 文字上限。
+    - `TestGoalDiscoverySkillMigration.test_goal_discovery_rejects_invalid_frontmatter_descriptions` — 不正 YAML・非文字列・空欄・欠損・不正 delimiter を goal にしない。
+  - **追加文書契約** → [hve/tests/test_skill_pruning_review_contract.py](hve/tests/test_skill_pruning_review_contract.py)。eval の実在参照、APP 要求 Skill の routing、description と Non-goals / write-safety trigger の一致、廃止 MCP 設定への非依存、dataflow の未承認必須条項の除去、到達可能な戦略見出し、抜粋一覧の表示を検査する。LLM の実際の選択精度や生成結果の品質を証明するものではない。
+  - **共通保持境界**: 混在 Skill は同じ既存パスで縮約し、全 HVE 固有契約・数値 / 安全ポリシー、core Skill と FR-KIT-02 の正本、TDD report schema・RED/GREEN 証跡・reality gate・Step 固有契約を保持する。新しい flag・loader・resolver・包括 Skill や恒久固定の同梱件数を導入しない。本記録は上記 local-only 検証範囲に限定し、既知の利用者 copilot-instructions 関連既存失敗を含む全体 GREEN は主張しない。
+  - **R02 / Z01 追加受入（2026-09-12静的回帰確認）**:
+    - 検証境界は source-only の静的契約に限定する。`contracts-green-v1` は 10 files / 463 passed で T01〜T10 の契約を確認した。新規 run-scoped evidence は `approval-builtin.json`（5 files / 152 passed）、`skills-guides.json`（8 files / 255 passed）、`app-jobs-green.json`（4 files / 187 passed）で、APP vs Job の回帰 RED は `app-jobs-red` の 1 fail として確認した。これらを重複合算せず、work/run 配下の証跡を恒久文書からリンクしない。
+    - T01: [hve/tests/test_skill_pruning_review_contract.py](hve/tests/test_skill_pruning_review_contract.py) — `TestAstraT01SkillPruningReviewContract.test_astra_s01_contributing_treats_1024_as_known_copilot_guidance` / `test_astra_s07_knowledge_lookup_root_uses_real_guide_conditionally` / `test_astra_s08_knowledge_management_root_links_real_synthesis_guide` / `test_astra_s09_input_description_prioritizes_agent_override` / `test_astra_s10_questionnaire_description_keeps_control_markers`。同じ既存 Skill path と現行 frontmatter 境界を保持し、S13 の description text / external root 比較は静的比較に限る。
+    - T02: [hve/tests/test_hve_requirement_traceability_contract.py](hve/tests/test_hve_requirement_traceability_contract.py) — `test_skill_defines_bootstrap_before_implementation` / `test_bootstrap_reference_oracle_rejects_hidden_or_broken_feature_order` / `test_skill_uses_bounded_mdq_retrieval_and_staged_expansion` / `test_repository_wide_router_is_short_and_does_not_embed_requirements`。bootstrap / feature TDD 順序、限定 read、router 最小化を追加済。
+    - T03: [hve/tests/test_prompt_edition_docs_contract.py](hve/tests/test_prompt_edition_docs_contract.py) — `TestOutOfScopeTerminalRejection.test_frontmatter_prioritizes_no_load_rejection_before_positive_routing` / `test_frontmatter_exposes_terminal_rejection_before_skill_loading` / `TestLiveD4CredentialRequestBoundary.test_frontmatter_routes_exact_and_spelling_variant_to_prompt_edition` / `TestAstraPromptEditionReferenceSplit.test_selected_reference_is_linked_from_root_and_contains_core_contract`。no-load 条件、資格情報配置拒否、承認・resume 境界、selected reference 2 件を追加済。
+    - T04: [hve/tests/test_code_query_skill_wiring.py](hve/tests/test_code_query_skill_wiring.py) — `TestSkillDefinition.test_root_selection_contract_keeps_source_markdown_boundary` / `test_reference_examples_for_def_and_refs_use_symbol_arguments` / `test_filter_match_profile_and_freshness_guidance_survives_reference_split`。pre-change GREEN preservation であり、既存 parser の quote 表現を製品不具合や修正前 RED として扱わない。
+    - T05: [hve/tests/test_harness_verification_scope_contract.py](hve/tests/test_harness_verification_scope_contract.py) — `test_build_reference_uses_dedicated_json_and_yaml_rows` / `test_python_lint_and_test_commands_are_scoped_to_explicit_targets` / `test_security_scan_avoids_raw_recursive_grep_pipeline` / `test_security_reporting_requires_value_redaction_not_zero_hit_only_pass` / `test_core_pipeline_report_schema_retry_and_missing_tool_skip_stay_visible` / `test_missing_external_endpoint_blocks_instead_of_passing`。JSON / YAML 区別、明示 path、secret 非表示、環境 blocker / scan 失敗の非 PASS を追加済。
+    - T06: [hve/tests/test_prompt_planning_reference_contract.py](hve/tests/test_prompt_planning_reference_contract.py) — `test_planning_contract_helper_accepts_minimal_canonical_links` / `test_planning_contract_helper_rejects_invalid_sections` / `test_planning_section_locator_ignores_fenced_heading_tokens` / `test_task_dag_canonical_template_declares_current_plan_metadata` / `test_p01_p25_planning_sections_delegate_to_canonical_sources`。flat Agent prompt の計画メタデータ委譲を追加済。
+    - T07: [hve/tests/test_adfd_dataflow_design_agents.py](hve/tests/test_adfd_dataflow_design_agents.py) — `TestAdfdSelectedJobScopeContract.test_tdd_prompt_uses_current_step_ids_and_single_job_input` / `test_adfd_fanout_addendum_renders_current_step_ids_per_key` / `test_step3_template_completion_targets_selected_job_child_only` / `test_selected_app_prompt_covers_every_job_without_equating_app_and_job_ids`。P08 / P27 のレビュー訂正として fan-out key は jobId ではなく APP-ID とし、1 APP ファイル内の全ジョブを対象に含め、TBD 暫定識別子を明示し、SDK command 実行を追加しない。
+    - T08: [hve/tests/test_dev_task_environment_contract.py](hve/tests/test_dev_task_environment_contract.py) — `test_dev_dataflow_service_coding_prompt_uses_python_logging_and_current_data_model` / `test_dev_dataflow_service_coding_prompt_separates_compileall_from_import_smoke` / `test_dev_dataflow_service_coding_prompt_reuses_same_green_build_test_slice`。Python logging、compile / import 分離、同一 build/test 断面の再利用条件を追加済。
+    - T09: [hve/tests/test_prompts.py](hve/tests/test_prompts.py) — `TestQaPromptV2.test_qa_prompt_v2_intro_is_post_execution` / `test_qa_prompt_v2_requires_background_field` / `test_qa_prompt_v2_requires_viewpoints_field` / `test_qa_prompt_v2_requires_depth_rules` / `TestPreExecutionQaPromptV2.test_contains_pre_execution_specific_text` / `test_requires_background_field` / `test_requires_viewpoints_field` / `test_requires_depth_rules`。pre / post の役割差と field / depth / marker 境界を追加済。
+    - T10: [hve/tests/test_template_engine.py](hve/tests/test_template_engine.py) — `TestBuildCompletionInstruction.test_completion_local_template_source_requires_p30_completion_evidence` / `test_completion_instruction_local_renders_p30_contract_without_done_label`。local completion の selected output / validation / incomplete を区別し、FR-WF-OUT-01 の実行完了時点の存在ゲートと FR-CLI-72 の製品 run 中 HVE 自己テスト禁止を保持する契約を追加済。
+    - V01 / V02 の 19 入力 live 再測定は FR-PROMPT-10 側で **NOT RUN** として保持する。全 85 タスク全体 GREEN、runtime quality proof、Azure / network / MCP / install / HVE runtime command の成功証明へ読み替えない。
 
 ### FR-CLI-76 — Step 実行セッション・QA サブセッション・orchestrator セッションへ公開する MCP サーバをリポジトリ宣言分に限定
-- 判定: ✓
-- 直接対応テスト:
+- 判定: ✓（SDK routing 上書き規定と 2026-09-06 session resource readiness のオフライン GREEN。T21〜T25 の live 検証は NOT RUN）
+- 改訂前記録: repository 縮約の履歴は FR-TS-12 / FR-TS-13 の SDK routing へ移行済み。下記の旧テスト名・旧実績を本改訂の現行カバレッジとして数えない。
+- 本改訂の直接対応テスト（実装済み・オフライン GREEN）:
+  - [hve/tests/test_runner_resource_readiness.py](hve/tests/test_runner_resource_readiness.py) — Main / Pre-QA / Review の create / init 前 callback と Step への束縛、返却後の二重登録なし、既存 state・caller filter・権限の保持、失敗時の send 不在と安全な診断を固定する。
+  - [hve/tests/test_runner_resume.py](hve/tests/test_runner_resume.py) / [hve/tests/test_sdk_resource_readiness.py](hve/tests/test_sdk_resource_readiness.py) — create / resume の共有 gate、短い deadline、cancel と cleanup の境界を固定する。
+  - [hve/tests/test_orchestrator_mcp_io_log.py](hve/tests/test_orchestrator_mcp_io_log.py) / [hve/tests/test_orchestrator_session_mcp_scope.py](hve/tests/test_orchestrator_session_mcp_scope.py) / `hve/tests/test_workiq_lifecycle_safety.py`（v3.38 で削除、FR-KD-10） — orchestrator の早期 callback・query checkpoint と Work IQ lifecycle、AKM 更新 session の MCP 非公開・権限・本文更新判定の維持を固定する。
+- 本改訂の実行件数は FR-MAINT-03 の T10〜T16 記録を参照する。一般 Main を Work IQ 専用 policy へ拡張したことや live 接続成功を意味しない。
+- SDK resource routing移行後の直接対応テスト:
+  - [hve/tests/test_config.py](hve/tests/test_config.py) :: `TestSDKConfigDefaults.test_legacy_mcp_servers_input_is_not_retained_at_runtime` / `test_legacy_mcp_servers_discard_is_documented` — legacy `SDKConfig(mcp_servers=...)` はコンストラクタ互換のためだけに受理し、runtime stateへ保持せず、移行先をdocstringで説明することを固定する
+- 旧 repository 縮約テストの履歴（現行 SDK routing の検証証跡ではない）:
   - [hve/tests/test_runner_session_mcp_scope.py](hve/tests/test_runner_session_mcp_scope.py) :: `test_repository_mcp_servers_are_injected_when_caller_omits_them` — `mcp_servers` 未指定のセッション生成で `.github/.mcp.json` の `mcpServers` が渡ることを固定
   - [hve/tests/test_runner_session_mcp_scope.py](hve/tests/test_runner_session_mcp_scope.py) :: `test_config_discovery_is_disabled_when_repository_mcp_is_injected` — 同時に `enable_config_discovery=False` が渡ることを固定
   - [hve/tests/test_runner_session_mcp_scope.py](hve/tests/test_runner_session_mcp_scope.py) :: `test_explicit_mcp_servers_are_not_overridden` — 呼び出し側が `mcp_servers` を明示した場合に上書きしないことを固定
@@ -1873,9 +2497,16 @@
   - [hve/tests/test_orchestrator_session_mcp_scope.py](hve/tests/test_orchestrator_session_mcp_scope.py) :: `test_reduction_is_implemented_once` — 縮約実装が [hve/runner.py](hve/runner.py) の単一ヘルパーだけであり、orchestrator 側が `_read_repository_mcp_config` / `_filter_mcp_servers_for_session` を直接呼ばないことを AST で固定（FR-MAINT-07）
   - [hve/tests/test_orchestrator_session_mcp_scope.py](hve/tests/test_orchestrator_session_mcp_scope.py) :: `test_workiq_session_paths_apply_the_shared_scope_helper` — Work IQ 専用 4 関数が共有ヘルパー `_apply_repository_mcp_scope` を呼ぶことを AST で固定
   - [hve/tests/test_runner.py](hve/tests/test_runner.py) :: `TestAzureFreeWorkflowMcpFilter::test_the_filter_is_wired_into_the_repository_mcp_injection` — v2.51 のヘルパー抽出に合わせ、呼び出し側（`_apply_repository_mcp_scope(..., workflow_id=workflow_id)`）とヘルパー内部（`_filter_mcp_servers_for_session(..., workflow_id=workflow_id)`）の両方を検査するよう更新
-- RED / GREEN 証跡（v2.51 追加分）:
+- RED / GREEN 証跡（v2.51 の履歴、本改訂には流用しない）:
   - RED（実装前）: `ImportError: cannot import name '_apply_repository_mcp_scope' from 'hve.runner'`（実測。collection error で 1 error）。
   - GREEN: `test_orchestrator_session_mcp_scope.py` / `test_runner_session_mcp_scope.py` / `test_runner_pre_qa_mcp_scope.py` / `test_main.py::TestWorkIQAuthPreflight` で **47 passed**。`test_runner.py` / `test_runner_pre_qa.py` / `test_fleet_mode.py` で **284 passed / 22 subtests**。
+- SDK routing 移行済みテスト:
+  - [hve/tests/test_sdk_resource_session_wiring.py](hve/tests/test_sdk_resource_session_wiring.py) — main / sub / ARD補助 / Fleet親 / Code Reviewが同じ分類routerを使用し、`enable_config_discovery=True`と選択外resourceのdisabled集合を渡す
+  - [hve/tests/test_mcp_config_removal.py](hve/tests/test_mcp_config_removal.py) — repository MCP読取・raw `mcp_servers`注入・欠落fallbackをproductionから削除する
+  - [hve/tests/test_workiq_resource_adapter.py](hve/tests/test_workiq_resource_adapter.py) — Work IQ専用sessionは共通snapshotを使い、exact `workiq` / `ask` runtime検査を維持する
+- v2.97 追加の直接対応テスト:
+  - `hve/tests/test_workiq_lifecycle_safety.py`（v3.38 で削除、FR-KD-10） — AKMのask-only問い合わせsessionとMCP非公開更新sessionを分離し、resource routing / Cloud注入を更新sessionへ再適用せず、現在送信中のDxx 1件だけを同期permission scopeで許可することを固定する。
+  - 同テストのpath / snapshot群 — `knowledge/`直下、Dxx一致、Markdown、symlink / hard link / ADS拒否と、非空UTF-8の実byte変更または新規本文1件だけを成功とする境界を固定する。
 
 ### FR-CLI-74 — run 開始時に HVE ソースの未コミット変更を一括報告して停止
 - 判定: ✓
@@ -1922,7 +2553,7 @@
 ### FR-CLI-33 — `--ignore-paths` を pathspec 除外として扱う
 - 判定: ✓
 - 直接対応テスト:
-  - [hve/tests/test_main.py](hve/tests/test_main.py) :: `test_ignore_paths_default_in_config`、`test_ignore_paths_cli_override`、`test_ignore_paths_auto_remove_qa_when_workiq_draft_and_create_pr`
+  - [hve/tests/test_main.py](hve/tests/test_main.py) :: `test_ignore_paths_default_in_config`、`test_ignore_paths_cli_override`、`test_ignore_paths_auto_remove_qa_when_knowledge_source_and_create_pr`（v3.38: 知識源と PR 作成の併用で `qa` を commit 対象に残す）
 
 ### FR-CLI-34 — `--delete-local-merged-branch`（既定有効）でマージ済みローカル作業ブランチを削除
 - 判定: ✓（FR-GUI-37 との共通 core 化を含む）
@@ -1954,11 +2585,14 @@
   - 自動削除の待機は現行実装では `enable_auto_merge` 経路だけで最大 600 秒。GUI 起動中の監視は FR-GUI-37 が担当する。
   - core は `git branch -D -- <branch>` として branch 名がオプションと誤解釈される経路を閉じる。
 
-### §5.1 サブコマンド体系（run/orchestrate/qa-merge/workiq-doctor/emit-prompt）
-- 判定: ✓
+### §5.1 サブコマンド体系（現行 parser / 要求定義 parity）
+- 判定: ✓（SDK-only契約GREEN）
 - 直接対応テスト:
-  - [hve/tests/test_main.py](hve/tests/test_main.py) :: `TestEmitPromptCommand`、`TestWorkIQDoctorSdkProbeArgs`
-  - [hve/tests/test_qa_merger.py](hve/tests/test_qa_merger.py) — qa-merge 全体
+  - [hve/tests/test_requirement_subcommand_parity.py](hve/tests/test_requirement_subcommand_parity.py) :: `TestSubcommandParity` — §5.1 の表と `_build_parser()` のトップレベルサブコマンド集合の一致
+  - [hve/tests/test_workiq_startup_entrypoints.py](hve/tests/test_workiq_startup_entrypoints.py) :: `test_removed_workiq_cli_surface_is_absent` / `test_removed_workiq_cli_surface_is_rejected` — HVE-owned `workiq-doctor` と削除済み Work IQ option の不在・拒否
+  - [hve/tests/test_main.py](hve/tests/test_main.py) :: `TestEmitPromptCommand` — `emit-prompt` の現行経路
+  - [hve/tests/test_qa_merger.py](hve/tests/test_qa_merger.py) — `qa-merge` 全体
+- 受入ケース: deprecated FR-QA-08 を active coverage として扱わず、HVE-owned `workiq-doctor` を parser へ復活させない。
 
 ---
 
@@ -1989,57 +2623,6 @@
 - 判定: ✓
 - 直接対応テスト:
   - [hve/tests/test_orchestrator.py](hve/tests/test_orchestrator.py) :: `TestInferStepKind`
-
-### FR-CLI-60 — `--self-improve` / `HVE_AUTO_SELF_IMPROVE` 有効化、`--no-self-improve` 最優先
-- 判定: ✓
-- 直接対応テスト:
-  - [hve/tests/test_main.py](hve/tests/test_main.py) :: `TestSelfImproveCLI.test_self_improve_flag_enables`、`test_no_self_improve_flag_sets_skip`、`test_no_self_improve_overrides_self_improve`、`test_env_var_enables_self_improve`、`test_default_self_improve_is_false`
-  - [hve/tests/test_self_improve.py](hve/tests/test_self_improve.py) :: `TestSDKConfigSelfImproveDefaults`、`TestRunImprovementLoopAutoFalse`、`TestRunImprovementLoopDisabledScope`
-
-### FR-CLI-61 — Self-Improve スコープ 4 値
-- 判定: ✓
-- 直接対応テスト:
-  - [hve/tests/test_self_improve.py](hve/tests/test_self_improve.py) :: `TestSelfImproveScopeConfig`、`TestResolveTargetScopePaths`
-  - [hve/tests/test_config.py](hve/tests/test_config.py) :: `TestSelfImproveWorkflowSdkConfig`、`TestSDKConfigArtifactImprovementDefaults`、`TestSDKConfigArtifactImprovementFromEnv`
-
-### FR-CLI-62 — ワイルドカード `*` 展開先（`work/` 除外）
-- 判定: ✓
-- 直接対応テスト:
-  - [hve/tests/test_self_improve.py](hve/tests/test_self_improve.py) :: `TestResolveTargetScopePaths`
-
-### FR-CLI-63 — step-level Self-Improve の検証結果を決定的実装へ委譲
-
-- 判定: ✓（実測 GREEN / 2026-08-25）
-- 受入テスト:
-  - [hve/tests/test_runner.py](hve/tests/test_runner.py) :: `TestPhase4DeterministicVerification.test_verification_is_derived_from_scan` — `_build_verification_result()` の結果がそのまま `after_quality_score` / `degraded` / `verification_phases` になること — ✓
-  - [hve/tests/test_runner.py](hve/tests/test_runner.py) :: `TestPhase4DeterministicVerification.test_llm_json_does_not_override_verification` — LLM 応答 JSON の `after_quality_score` / `degraded` / `verification_phases` が反映されないこと — ✓
-  - [hve/tests/test_runner.py](hve/tests/test_runner.py) :: `TestPhase4DeterministicVerification.test_notes_keep_llm_text_and_parse_error_prefix` — LLM 応答が `notes` にのみ反映され、`[json_parse_error=...]` が前置されること — ✓
-  - [hve/tests/test_runner.py](hve/tests/test_runner.py) :: `TestPhase4DeterministicVerification.test_phase4_does_not_reimplement_judgement` — Phase 4d に LLM 値での上書き実装が残っていないこと — ✓
-  - [hve/tests/test_runner.py](hve/tests/test_runner.py) :: `TestVerifyJsonParseWarning` — 既存。パース失敗・JSON 不在の警告文言を固定（実装変更後も非回帰）— ✓
-- 実測結果: `python -m pytest hve/tests/test_self_improve.py hve/tests/test_runner.py -q` → 393 passed, 69 subtests passed（実装前は新規 4 件が RED）
-
-### FR-CLI-64 — `scan_codebase()` による `security_status` の設定
-
-- 判定: ✓（実測 GREEN / 2026-08-25）
-- 受入テスト:
-  - [hve/tests/test_self_improve.py](hve/tests/test_self_improve.py) :: `TestScanSecurityStatus.test_security_status_pass_without_secret` — scope 内に秘密情報パターンがないとき `PASS` — ✓
-  - [hve/tests/test_self_improve.py](hve/tests/test_self_improve.py) :: `TestScanSecurityStatus.test_security_status_fail_on_secret_in_scope_file` — scope 内ファイルにパターンがあるとき `FAIL` — ✓
-  - [hve/tests/test_self_improve.py](hve/tests/test_self_improve.py) :: `TestScanSecurityStatus.test_security_status_ignores_out_of_scope_file` — scope 外のパターンを停止理由にしないこと — ✓
-  - [hve/tests/test_self_improve.py](hve/tests/test_self_improve.py) :: `TestScanSecurityStatus.test_empty_scan_result_security_status_is_skip` — 未検査を `PASS` としないこと — ✓
-  - [hve/tests/test_self_improve.py](hve/tests/test_self_improve.py) :: `TestRunImprovementLoopRedContracts.test_security_failure_prevents_success` — 既存。gate 側の振る舞いを固定（非回帰）— ✓
-- 実測結果: 同上の pytest 実行で GREEN（実装前は新規 4 件が RED）
-
-### FR-CLI-65 — coverage 成功条件の criterion 化
-
-- 判定: ✓（実測 GREEN / 2026-08-25）
-- 受入テスト:
-  - [hve/tests/test_self_improve.py](hve/tests/test_self_improve.py) :: `TestCoverageCriterion.test_asdw_web_and_adfdv_declare_coverage_criterion` — `_WORKFLOW_TASK_GOALS` の 2 ワークフローが `coverage_pct` `gte` 70 の required criterion を持つこと — ✓
-  - [hve/tests/test_self_improve.py](hve/tests/test_self_improve.py) :: `TestCoverageCriterion.test_coverage_criterion_passes_at_threshold` — 70% ちょうどで `PASS` — ✓
-  - [hve/tests/test_self_improve.py](hve/tests/test_self_improve.py) :: `TestCoverageCriterion.test_coverage_criterion_fails_below_threshold` — 70% 未満で `FAIL` — ✓
-  - [hve/tests/test_self_improve.py](hve/tests/test_self_improve.py) :: `TestCoverageCriterion.test_coverage_criterion_blocked_when_tests_not_executed` — test 未実行時は `FAIL` ではなく `BLOCKED` — ✓
-  - [hve/tests/test_self_improve.py](hve/tests/test_self_improve.py) :: `TestCoverageCriterion.test_scan_codebase_sets_coverage_metric_status` — `metric_status.coverage_pct` が test ツール状態を反映すること — ✓
-- 実測結果: 同上の pytest 実行で GREEN（実装前は新規 5 件が RED）
-- 注記: 本契約により `asdw-web` / `adfdv` の Self-Improve は required criterion を持つようになり、test 未実行時は `blocked` で停止する。
 
 ### FR-CLI-77 — 起動時の索引差分更新と watcher 起動の直列化
 
@@ -2087,7 +2670,7 @@
 
 ### FR-CLI-79 — Azure を利用しない Workflow の MCP 縮約
 
-- 判定: 実装済み
+- 判定: 要移行（固定server名の除外をFR-TS-13分類へ統合）
 - 受入テスト:
   - [hve/tests/test_runner.py](hve/tests/test_runner.py) :: `TestAzureFreeWorkflowMcpFilter` — allowlist の Workflow で `azure` を除外し `microsoft-learn` を残すこと、他の Workflow では除外しないこと、`workflow_id` が None / 空 / 未知のとき全サーバを渡すこと、allowlist が registry に実在すること、allowlist の全 Step のプロンプトが Azure に言及しないこと、`.github/.mcp.json` に除外対象名が実在すること、フィルタが FR-CLI-76 の注入経路と `run_step` の呼び出しに配線されていること
   - （v2.41 追加）[hve/tests/test_runner_pre_qa_mcp_scope.py](hve/tests/test_runner_pre_qa_mcp_scope.py) :: `test_pre_qa_sub_session_applies_azure_free_workflow_filter` — FR-CLI-76 の受入範囲へ移った事前 QA サブセッションにも Azure 除外が適用されることを固定
@@ -2106,6 +2689,9 @@
 - 既知の制約:
   - Step 単位の絞り込みは行っていない。`aas`（10 中 1 Step）/ `aad-web`（8 中 5 Step）のような混在 Workflow は対象外。
   - 判定根拠は Custom Agent プロンプト中の文字列一致であり、Workflow 単位へ粒度を上げることで誤判定の影響を避けている。
+- 移行予定テスト:
+  - [hve/tests/test_sdk_resource_policy.py](hve/tests/test_sdk_resource_policy.py) — Software Engineering対象10 Workflowを単一定数で固定しregistry driftを検出する
+  - [hve/tests/test_sdk_resource_routing.py](hve/tests/test_sdk_resource_routing.py) — `azure` / `microsoft-learn`等のprovider名特例を持たず分類から選択し、required exact MCPだけを優先する
 
 ### FR-CLI-80 — CLI Autopilot の lane 経過時間観測
 
@@ -2131,7 +2717,7 @@
 - 判定: 実装済み（v2.51 新規）
 - 受入テスト:
   - [hve/tests/test_main.py](hve/tests/test_main.py) :: `TestWorkIQAuthPreflight::test_non_interactive_failure_disables_workiq_and_continues` — 非対話 + 認証失敗で `True` を返し実行を継続することを固定
-  - [hve/tests/test_main.py](hve/tests/test_main.py) :: `TestWorkIQAuthPreflight::test_non_interactive_failure_clears_all_workiq_flags` — `workiq_enabled` / `workiq_qa_enabled` / `workiq_akm_review_enabled` / `workiq_akm_ingest_enabled` / `workiq_draft_mode` が全て無効化されることを固定
+  - [hve/tests/test_workiq_startup_entrypoints.py](hve/tests/test_workiq_startup_entrypoints.py) :: `test_unavailable_disables_workiq_for_this_run` — （v3.38 更新）`workiq_enabled`、`knowledge_sources` 中の `workiq`、`sources` の `workiq` トークン、`ard_workiq_enabled` が当該実行に限り無効化されることを固定（旧記載の `TestWorkIQAuthPreflight::test_non_interactive_failure_clears_all_workiq_flags` は実在しないため置換）
   - [hve/tests/test_main.py](hve/tests/test_main.py) :: `TestWorkIQAuthPreflight::test_non_interactive_failure_strips_workiq_from_params` — `params["sources"]` から `workiq` が除去され、`workiq_akm_ingest_dxx` と `ard_workiq_enabled` がクリアされることを固定
   - [hve/tests/test_main.py](hve/tests/test_main.py) :: `TestWorkIQAuthPreflight::test_non_interactive_failure_reports_request_source` — 無効化時に Work IQ を要求した設定名が stderr へ 1 行出ることを固定（v2.51 で期待値を `assertFalse` から更新）
   - [hve/tests/test_main.py](hve/tests/test_main.py) :: `TestWorkIQAuthPreflight::test_interactive_failure_can_disable_workiq_and_continue` — 対話端末での確認経路が変わらないことを固定（既存、変更なし）
@@ -2148,6 +2734,9 @@
   - GREEN: 同クラスを含む 4 ファイルで **47 passed**。`hve/tests/test_main.py` 全体を含むバッチで **533 passed / 1 xfailed / 122 subtests**。
 - 既知の制約:
   - 保証範囲は認証確認の実行時点まで。確認通過後の認証失効は FR-QA-06 の実行中警告に委ねる。
+- v2.83 改訂の直接対応テスト:
+  - [hve/tests/test_workiq_startup_entrypoints.py](hve/tests/test_workiq_startup_entrypoints.py) — static unavailable と OAuth 取消・失敗・timeout が対話可否にかかわらず質問0回で実行単位無効化へ到達し、保存設定を変更せず、要求元と reason code を通知することを固定する。
+  - GREEN: FR-CLI-91 / FR-PROMPT-12との直接契約6ファイルで **70 passed / 24 deselected**。
 
 ### FR-CLI-82 — ローカル起動時の設定整合性 preflight
 
@@ -2400,7 +2989,7 @@
 
 ### FR-GUI-07 — GUI 設定画面の Tool-Search セクション
 
-- 判定: ✓（`policy.json` の GUI 編集分は RED: 保存 API 7 failed / GUI 16 failed の計 23 failed。GREEN: 対象 2 ファイル 99 passed、Tool Search 全体 354 passed）
+- 判定: 要追加（既存機能の過去GREENにthreshold / 同一resource A/B比較を追加）
 - 直接対応テスト:
   - [hve/gui/tests/test_toolsearch_settings_section.py](hve/gui/tests/test_toolsearch_settings_section.py) — タブ構成、`settings_apply` が束ねる `tool_search` / `tool_search_ranking` の公開、skills レジストリへの登録
   - [hve/gui/tests/test_toolsearch_settings_section.py](hve/gui/tests/test_toolsearch_settings_section.py) :: `test_autopilot_section_no_longer_owns_tool_search` / `test_step1_pane_has_no_duplicate_input` — 入力欄の単独所有（FR-MAINT-07）
@@ -2457,6 +3046,9 @@
 - 既知の制約:
   - GUI から保存すると `policy.json` 内の空行が失われる。JSON に空行を表現する構文が無いためで、値と未知キーは保持される。空行を含む整形を保ちたい場合はファイルを直接編集する。
   - `hve/gui/tests/test_settings_window_mdq_tabs.py` は本変更以前から単独実行でもプロセスが異常終了する（`MdqIndexSection` 単体構築で `QThread: Destroyed while thread '' is still running` を実測）。本要件の範囲外のため未修正。GUI 全体の実行結果は当該ファイルを除外して計測した。
+- SDK resource routing拡張の予定テスト:
+  - [hve/gui/tests/test_sdk_resource_settings.py](hve/gui/tests/test_sdk_resource_settings.py) — thresholdの未指定/正整数、OFF / ON比較は明示操作時だけ、比較不能理由と実測値だけを描画する
+  - [hve/gui/tests/test_toolsearch_settings_section.py](hve/gui/tests/test_toolsearch_settings_section.py) — resource分類表を別セクションへ複製せず、FR-GUI-53の単一所有とする
 
 ### FR-GUI-08 — GUI 質問票の「その他」回答
 
@@ -2719,13 +3311,13 @@
   - [hve/gui/tests/test_page_options_km_background_merge.py](hve/gui/tests/test_page_options_km_background_merge.py) :: `TestKmMergeVisibleInRightPane`
   - [hve/tests/test_gui_step2_refactor.py](hve/tests/test_gui_step2_refactor.py) :: `test_additional_prompt_pinned_top_for_all_workflows`
 - 受入ケース:
-  - 「一般」カテゴリに「自動プロンプト」ノードが存在せず、`QA (質問票)` / `レビュー` / `Knowledge Management` / `自己改善 (Self Improve)` が存在する。→ ✓
+  - 「一般」カテゴリに「自動プロンプト」ノードが存在せず、`QA (質問票)` / `レビュー` / `Knowledge Management` が存在する（自己改善ノードは FR-CLI-104 で削除）。→ ✓
   - `追加プロンプト` / `コンテキスト最大文字数` が `基本設定`（`C1`）へ属する。→ ✓
   - `qa_akm_background_merge` が設定画面の `KM` ノードと Step 1 右ペインの共通枠の双方にあり、既定が未チェックである。→ ✓
   - 共通枠の可視項目が FR-GUI-20 規定の 6 項目・規定順である。→ ✓
   - 表示ラベルが `QA (質問票)` / `Knowledge Management` 表記である。→ ✓
 - 実装後の判断（FR-MAINT-07 面横断の再利用）:
-  - `_C3AutoPrompt` を `_CQaPrompt` / `_CReviewPrompt` / `_CKnowledgeManagement` / `_CSelfImprove` へ分割し、`_C3AutoPrompt` は 4 セクションを合成して属性を再公開するだけにした。ウィジェット構築コードを設定画面と右ペインで 2 重に持たないため。
+  - `_C3AutoPrompt` を `_CQaPrompt` / `_CReviewPrompt` / `_CKnowledgeManagement` へ分割し、`_C3AutoPrompt` は 3 セクションを合成して属性を再公開するだけにした。ウィジェット構築コードを設定画面と右ペインで 2 重に持たないため。
   - `auto_qa` は `_CQaPrompt` が所有し、Knowledge Management の活性判定は `_CKnowledgeManagement._refresh_enabled()` の 1 箇所だけに置いた。両面は `wire_auto_qa_to_knowledge_management()` で同じ配線を共有する。
   - 設定画面はカテゴリヘルプボタンを描画しないため、新ノードに `_CATEGORY_HELP` エントリを追加しない（不要な定義を増やさない）。
 - 既知の制約:
@@ -2809,6 +3401,7 @@
 - 判定: 実装済み
 - 受入テスト:
   - [hve/gui/tests/test_startup_auth.py](hve/gui/tests/test_startup_auth.py) :: `TestResolveStartupToken` — 環境変数トークンがあるとき `gh` を起動しないこと、無いとき `capture_gh_token` の結果を `GH_TOKEN` へ注入すること、取得失敗時にログイン導線の提示を要求すること
+  - [hve/gui/tests/test_startup_auth.py](hve/gui/tests/test_startup_auth.py) :: `TestNoAutomaticGhAuthLogin.test_login_guidance_points_to_the_github_hub` — 後続ログインの案内が廃止済み設定画面ではなく、ヘッダーの `GitHub` → `連携設定` → `GitHub CLI でログイン` という現行の可視 owner を指すこと
   - [hve/gui/tests/test_app_startup_auth.py](hve/gui/tests/test_app_startup_auth.py) :: `TestRunAppStartupAuth` — `run_app` が起動時に認証解決を 1 回だけ呼ぶこと、拒否しても MainWindow が開くこと
 - 受入ケース:
   - `GH_TOKEN` / `GITHUB_TOKEN` のいずれかが設定済みなら `gh` を起動しない。→ ✓
@@ -2819,6 +3412,8 @@
 - RED / GREEN 証跡:
   - RED（実装前）: `hve.gui.startup_auth` が存在せず、両テストファイルが import 時点で collection error となる。
   - GREEN（実測）: `hve/gui/tests/test_startup_auth.py` **10 passed**、`hve/gui/tests/test_app_startup_auth.py` **6 passed**。
+  - 2026-09-02 bugfix RED / GREEN: 現行 Hub 導線のテストは旧「設定画面の GitHub」案内に対して **1 failed**。実装文言・英訳・`.qm` を同期後、`test_startup_auth.py` と `test_i18n.py` は **40 passed**、`pyside6-lrelease` は **1182 finished / 0 unfinished**。敵対的レビューで可視ラベル外の `GitHub Hub` 語とテストの副作用付き lambda を除去し、再レビュー PASS を確認した。
+  - 2026-09-02 compiled catalog runtime canary: `.qm` を実ロードする追加テストが、`.ts` の source key に混入した先頭空白を検出して **1 failed / 40 passed**。source key を実装リテラルと一致させて `.qm` を再生成後、同じ 2 ファイルは **41 passed**、`pyside6-lrelease` は **1182 finished / 0 unfinished**。
 - 実装後の判断（FR-MAINT-07 面横断の再利用）:
   - トークン捕捉・注入は [hve/gui/gh_cli.py](hve/gui/gh_cli.py)、ログイン端末は [hve/gui/gh_login_dialog.py](hve/gui/gh_login_dialog.py) を再利用し、起動経路向けの別実装を作らない。
 - 既知の制約:
@@ -3081,6 +3676,7 @@
 - 判定: ✓
 - 受入テスト:
   - [hve/gui/tests/test_github_hub_contract.py](hve/gui/tests/test_github_hub_contract.py) :: `TestSingleVisibleOwner` — Hub の3面、C5設定所有、Settings GitHub node と重複 repo 欄の撤去
+  - [hve/gui/tests/test_startup_auth.py](hve/gui/tests/test_startup_auth.py) :: `TestNoAutomaticGhAuthLogin.test_login_guidance_points_to_the_github_hub` — 起動時の後続ログイン案内が単一可視 owner のヘッダー `GitHub` と `連携設定` を指し、撤去済み Settings GitHub node を案内しないこと
   - [hve/gui/tests/test_github_hub_contract.py](hve/gui/tests/test_github_hub_contract.py) :: `TestSettingsPropagation` — 保存時の `settings_changed` 通知、close 時の保存、再オープン時の復元
   - [hve/gui/tests/test_github_issue_panel.py](hve/gui/tests/test_github_issue_panel.py) :: `TestIssueCreation` — title / 共通 Markdown editor、作成 API 呼び出し、成功後更新、空入力と失敗時の保持
   - [hve/gui/tests/test_github_window.py](hve/gui/tests/test_github_window.py) :: `TestGitHubWindow` / `TestInitialLoad` — 3 タブ構成、`settings_section.repo` を唯一の入力とする伝搬、FR-GUI-31 の 1 回取得の非回帰
@@ -3210,6 +3806,8 @@
 - 既知の制約:
   - 各フィールドの値を 1 行に限定しているのは、[hve/qa_merger.py](hve/qa_merger.py) の行単位フィールド解析が継続行を取り込まないためである。複数行で出力された場合は 2 行目以降が無視される。プロンプト側の指示で担保しており、解析側の強制は行っていない。
   - LLM が実際に十分な深さを出力するかはプロンプト遵守に依存する。本テストはプロンプトの指示内容を固定するものであり、生成結果の品質を検証するものではない。
+- 追加受入（2026-09-12静的回帰確認）:
+  - [hve/tests/test_prompts.py](hve/tests/test_prompts.py) — T09。事前 QA は実行前、事後 QA は成果物に対する質問である役割差を保ちつつ、FR-QA-01 の説明項目を pre / post 双方へ適用する契約を追加済。
 
 ### FR-QA-02 — QA 質問票パイプラインでの説明項目の保持と提示
 
@@ -3249,6 +3847,7 @@
   - （v2.35 追加）[hve/tests/test_runner.py](hve/tests/test_runner.py) :: `TestMcpServerFiltering.test_excludes_preview_plugin_alias` — `workiq-preview` をメインコーディングセッションから除外し、Work IQ 専用フェーズでは保持すること
   - [hve/tests/test_runner_pre_qa.py](hve/tests/test_runner_pre_qa.py) :: `TestPreQaAkmDispatch` — 保存検証成功後のファイル単位 dispatch、0 問スキップ、AKM 再帰防止、原本質問票処理を含む対象 workflow への適用
   - [hve/tests/test_runner_pre_qa.py](hve/tests/test_runner_pre_qa.py) :: `TestPreQaWorkiqRoundTrip` — verified `FOUND` / `PARTIAL` だけを統合し、未確認応答は draft のみに保持
+  - `hve/tests/test_workiq_lifecycle_safety.py`（v3.38 で削除、FR-KD-10） — exact `workiq` / `ask` startだけでは統合証拠とせず、同じcanonical call IDの厳密な成功完了までをRunner／orchestratorの両consumerで要求する。完了欠落、失敗、非bool成功、ID不一致・不正・衝突、legacy identityをfail closedに固定する。
   - [hve/tests/test_orchestrator.py](hve/tests/test_orchestrator.py) :: `TestQaAkmBackgroundCoordinator` — 親 DAG 非待機、FIFO 順序と同時起動 1 件の維持、明示 AKM との repository lock 排他、Git 境界 drain、検証済み QA だけの stage、cross-process lock
   - （v2.31 追加・v2.32 改訂）[hve/tests/test_qa_akm_child_parallelism.py](hve/tests/test_qa_akm_child_parallelism.py) :: `TestChildFanoutParallelism` — 子 argv が並列度を固定せず、AKM の宣言値を FR-DAG-03 の解決順序が適用すること
   - （v2.31 追加）[hve/tests/test_qa_akm_batching.py](hve/tests/test_qa_akm_batching.py) :: `TestQaAkmBatching` — 滞留登録のバッチ化、`target_files` への FIFO 順展開、ファイル単位の結果報告、同時 Popen ≦ 1、バッチ失敗の全ファイルへの伝搬、単一登録時の非バッチ化
@@ -3256,7 +3855,7 @@
   - [hve/tests/test_adi_validation.py](hve/tests/test_adi_validation.py) :: `test_explicit_zero_questionnaire_is_valid` / `test_silent_zero_questionnaire_is_invalid` — 質問 0 件は「総質問数: 0」と「質問なし」の明示があるときだけ有効
   - [hve/gui/tests/test_qa_ipc_flow.py](hve/gui/tests/test_qa_ipc_flow.py) — GUI ユーザー回答 IPC が同じ保存検証・dispatch 経路へ到達し、GUI cleanup 前に worker が cancel / join されること
   - [hve/tests/test_runner_atomic_write.py](hve/tests/test_runner_atomic_write.py) :: `TestAtomicWriteText` / `TestIpcWriterUsesTheHelper` — IPC 書き込みが宛先ロック由来の `PermissionError` を再試行し、他の `OSError` は再試行しないこと
-  - （v2.37 追加）[hve/tests/test_qa_merger.py](hve/tests/test_qa_merger.py) :: `TestMergeWorkiqResultsStatusSkip.test_partial_with_unperformed_search_note_is_merged` — `PARTIAL` 応答の本文に「未実施」が非エラー文脈で含まれても統合されること
+  - （v3.38 置換、FR-KD-06）[hve/tests/test_qa_merger.py](hve/tests/test_qa_merger.py) :: `TestAdoptResearchAnswers` — `Confirmed` / `Tentative` で空でない調査回答だけを採用し、旧 Work IQ 列を調査列として読むこと（旧 `TestMergeWorkiqResultsStatusSkip` は `merge_workiq_results` の削除に伴い削除）
   - （v2.37 追加）[hve/tests/test_fleet_mode.py](hve/tests/test_fleet_mode.py) :: `test_skipped_phases_warning_*` / `test_orchestrator_emits_skipped_phases_warning_after_fleet_start` — Fleet wave で実行されないフェーズの警告文と発火位置
 - 受入ケース:
   - `auto_qa=false` と `workflow_id=akm` では dispatch しない。→ ✓
@@ -3286,6 +3885,7 @@
   - Work IQ 実行確認は `_hve_workiq` / `workiq` / `workiq-preview` の 3 server と、`@microsoft/workiq` が公開する参照系ツール（`ask` / `retrieve` / `fetch` / `fetch_blob` / `get_schema` / `search_paths`）の組で行い、server 名を持たない tool event は Work IQ として扱わない。**（v2.35 改訂）** 対象 server は `hve/workiq.py` の `WORKIQ_MCP_SERVER_NAMES` を単一の正本とし、`hve/runner.py` のメインセッション分離もそこから導出する（FR-MAINT-07）。**（v2.33 改訂）** 従来は両 server とも `ask` だけを許可していたが、自動探索で併存する公式 `workiq` サーバー経由で `retrieve` が呼ばれた場合に実行確認が成立せず、`FOUND` 応答でも統合が 0 件になった（実測: `work/2026-08-19-qa_workiq_dryrun.md`。`retrieve` 10 回に対し Work IQ 判定は 0 件）。公開ツール名は `tools=["*"]` での実測 14 件（`accept_eula` / `ask` / `call_function` / `create_entity` / `delete_entity` / `do_action` / `fetch` / `fetch_blob` / `get_debug_link` / `get_schema` / `list_agents` / `retrieve` / `search_paths` / `update_entity`）を根拠とし、うち書き込み系・EULA・デバッグリンク・`call_function` / `list_agents` は M365 データ参照の証拠にならないため実行確認集合へ入れない。MCP へ公開する allowlist（`WORKIQ_MCP_TOOL_NAMES` = `ask` のみ）は最小権限のため据え置き、実行確認集合（`WORKIQ_MCP_QUERY_TOOL_NAMES`）と分離した。
   - **（v2.33）** 許可集合をセッションの `session.rpc.mcp.list()` から動的構築する案は採らなかった。実測（`work/run/20260818T092911-0ede91/Issue-WorkIQQueryModeExperiment/artifacts/probe_mcp_tools.log`）で server オブジェクトの属性は `error` / `from_dict` / `name` / `source` / `source_plugin` / `source_plugin_version` / `status` / `to_dict` だけで tools を公開せず、`session.rpc.tools` にも一覧取得 API が無いため実装不能である。**（v2.34 再実測）** 2026-08-19 時点の SDK で同じプローブを再実行したが、server 属性は同一で tools は現れず、`session.rpc.tools` は `get_current_metadata` / `handle_pending_tool_call` / `initialize_and_validate` / `update_subagent_settings` のみだった。判定は維持する。SDK が tools を公開するようになった時点で再検討する。
   - focused GREEN は QA / Work IQ / Pre-QA / Runner event tracking の 334 tests + 7 subtests で確認した。
+  - v2.97の枝統合レビューでは、旧start-only実装に対して保存枝のlifecycle反例が **5 failed / 8 passed** となるREDを確認した。成功完了相関と現行schema fixtureを復元後、Runner/content/loggingは **192 passed / 20 subtests passed**、共通lifecycle安全境界は **36 passed**。
   - ツール名を `ask` へ修正した変更では、`test_workiq.py` / `test_runner.py` / `test_runner_pre_qa.py` / `test_orchestrator.py` の 4 ファイルで **594 passed + 99 subtests** を確認した。同時に失敗した `TestRunWorkflowFanout::test_aad_web_fanout_meta_is_forwarded_to_step_runner` は本変更とは無関係の別事象で、後日テスト側の欠陥として解消した。原因はテストが `service_catalog` を合成キー `SVC-FANOUT-TEST` へ差し替えていた一方、後から入った APP-ID fan-out フィルタが選択 APP に紐づかないキーを除外し、Step 2.2 が `fanout-empty` で skip されていたこと（実測: 合成キーで子 0 件 / 実キーで子 24 件）。実キーを使う形へテストを修正して GREEN 化した。
   - **（v2.37 ・ bugfix）** [hve/qa_merger.py](hve/qa_merger.py) `merge_workiq_results` の `_error_indicators`（部分文字列一致）を削除した。統合可否の正本は [hve/workiq.py](hve/workiq.py) `is_workiq_result_mergeable` であり、呼び出し元 [hve/runner.py](hve/runner.py) は既に絞り込んだ結果だけを渡すため、同メソッド内のエラー語フィルタは二重フィルタで偽陰性しか生まない。STATUS 判定と「関連情報なし」完全一致判定は既存テスト 3 件が依存するため残した。なお [hve/workiq.py](hve/workiq.py) の `_WORKIQ_ERROR_INDICATORS` は STATUS が `FOUND` / `PARTIAL` / `NOT_FOUND` のとき早期返却するガードを持つ別実装であり、本修正の対象外である。
   - **（v2.37）** Fleet wave で事前 QA を実行させる案は採らなかった。事前 QA は Step ごとに session を分けて QA サブセッションを作る設計で、Fleet（1 セッションで複数 worker を起動）と構造的に噂み合わないため。利用者の明示設定が無言で失われる問題は警告 1 行で可視化する。また Fleet 使用時に `auto_qa` が有効なら Fleet を無言で無効化する案も採らなかった（別の無言の設定無効化を作るため）。
@@ -3348,6 +3948,7 @@
 
 ### FR-QA-06 — Work IQ tool 実行未確認の警告通知
 
+- **廃止（v3.38）**: 本要件は FR-KD-10 で廃止した。以下は履歴であり、現行カバレッジに算入しない。対応テストは削除した。
 - 判定: 実装済み
 - 直接対応テスト:
   - [hve/tests/test_workiq.py](hve/tests/test_workiq.py) :: `TestWorkIQToolNotInvokedWarning` — 共有ヘルパーの文言（未確認の明示・観測ツール名・診断コマンド）と機微情報の非混入
@@ -3361,6 +3962,7 @@
   - 応答 status が判明している場合は警告へ status を明示する。→ ✓ (`test_warning_reports_status_when_given`)
   - 統合 0 件かつ Work IQ 応答が 1 件以上のサマリーは `✅` ではなく警告で出す。→ ✓ (`test_zero_merge_summary_is_warning`)
   - 統合 1 件以上のサマリーは従来どおり `✅` の status で出す。→ ✓ (`test_nonzero_merge_summary_stays_status`)
+  - start-only、完了失敗、call ID不一致・不正・衝突、非boolean successはexact event未確認として同じ警告経路へ入る。→ ✓（`hve/tests/test_workiq_lifecycle_safety.py`（v3.38 で削除、FR-KD-10））
   - 警告文の生成は `hve/workiq.py` の単一ヘルパーだけが行い、prefetch 経路も同一実装を使う。→ ✓ (`TestWorkIQToolNotInvokedWarning.test_prefetch_path_uses_shared_helper`)
 - 実装後の判断:
   - 警告文の生成を [hve/workiq.py](hve/workiq.py) `format_workiq_tool_not_invoked_warning()` へ寄せ、`hve/orchestrator.py` の prefetch 経路が持っていた同一文言の直書きを置き換えた（FR-MAINT-07）。新規に 2 面目の実装を追加していない。
@@ -3404,38 +4006,139 @@
   - `child-stdio.log` は `errors="replace"` で開く。子は Windows 日本語環境でロケール既定エンコーディングの出力を混在させ得るため、decode 失敗で親スレッドを落とさない。
   - 失敗報告は `log_path` 単位でまとめる。バッチ実行では複数の QA ファイルが同一の子実行・同一の `returncode` を共有するため、ファイル単位で 1 行ずつ出すと同じ情報が反復するだけになる。
 
-### FR-QA-08 — 事前 QA 統合可否の軽量診断
+### FR-QA-08 — HVE 専用 Work IQ 診断（deprecated-or-removed）
 
-- 判定: 実装済み
-- 直接対応テスト:
-  - [hve/tests/test_workiq.py](hve/tests/test_workiq.py) :: `TestWorkIQMergeDecision` — 統合可否判定の単一実装と真理値表、runner からの参照
-  - [hve/tests/test_workiq.py](hve/tests/test_workiq.py) :: `TestWorkIQQaIntegrationDecisionCheck` — 診断チェックの PASS / FAIL / WARN と観測ツール名・診断コマンドの付与、応答本文の非混入
-  - [hve/tests/test_main.py](hve/tests/test_main.py) :: `TestWorkIQDoctorSdkProbeArgs.test_qa_integration_probe_arg_parsed` / `test_qa_integration_probe_default_false` — CLI フラグの解釈と既定値
-- 受入ケース:
-  - tool 実行確認あり + `FOUND` / `PARTIAL` は `PASS` を返す。→ ✓
-  - tool 実行未確認は `FAIL` を返し、観測ツール名と診断コマンドを含む。→ ✓
-  - tool 実行確認あり + `NOT_FOUND` 等は `WARN` を返し、正常な場合があることを明示する。→ ✓
-  - 判定は事前 QA 本体と同一の `is_workiq_result_mergeable()` を使う。→ ✓ (`TestWorkIQMergeDecision.test_runner_uses_the_shared_helper`)
-  - `--qa-integration-probe` の既定は無効。→ ✓
-- 実装後の判断:
-  - 診断は既存の `probe_workiq_copilot_tool_invocation()` へ引数で分岐させ、セッション生成・MCP 状態確認・イベント購読を再利用した。新規に 2 つ目の probe 関数を作ると同一手続きが 2 面へ複製される。
-  - 問い合わせは `query_workiq_detailed()` を使う。本番の事前 QA と同じ応答抽出・サニタイズ経路を通さないと、statusの抽出結果が本番と一致しない可能性がある。
-  - 統合可否判定を `hve/runner.py` のインラインから `hve/workiq.py` へ抽出した。抽出しないと診断側が同じ条件を二重実装することになる（FR-MAINT-07）。
-- 既知の制約:
-  - 本診断は `workiq-doctor` が構成するセッション上で動く。利用者の MCP 設定に公式 `workiq` サーバーが登録されている場合の併存条件までは再現しない。統合 0 件が本番だけで再現する場合は、本診断が `PASS` でも FR-QA-06 の実行時警告で切り分ける必要がある。
+- 判定: deprecated-or-removed（v2.88。active現行coverageへ算入しない）
+- 削除確認テスト:
+  - [hve/tests/test_requirement_subcommand_parity.py](hve/tests/test_requirement_subcommand_parity.py) :: `TestSubcommandParity` — 要求定義 §5.1 と parser の双方に HVE-owned `workiq-doctor` が存在しない
+  - [hve/tests/test_workiq_startup_entrypoints.py](hve/tests/test_workiq_startup_entrypoints.py) :: `test_removed_workiq_cli_surface_is_absent` / `test_removed_workiq_cli_surface_is_rejected` — `workiq-doctor` と削除済み option の不在・拒否
+- 履歴境界: 要求定義の v2.34 改訂履歴には旧診断契約を導入した事実だけを保持する。現行 mapping は active coverage、削除済みの旧テスト名、旧 GREEN 実績を保持しない。削除済み診断 class や `--qa-integration-probe` を現行 GREEN テストとして扱わず、HVE 独自 doctor を復活させない。
+
+### FR-KD-01〜FR-KD-10 / NFR-KD-01 — 知識探索エージェント（v3.38 新規）
+
+| 要件 | 判定 | 対応テスト | 根拠 |
+|---|---|---|---|
+| FR-KD-01 | ✓ | [hve/tests/test_knowledge_discovery_config.py](hve/tests/test_knowledge_discovery_config.py) | AC-004: 実効知識源の順序・重複除去、環境変数の不正トークン無視、CLI の不正名 exit 2 |
+| FR-KD-02 | ✓ | [hve/tests/test_knowledge_discovery.py](hve/tests/test_knowledge_discovery.py) | AC-005: snapshot 判定 4 値、runtime 除外、既定 `workiq` 許可リスト 6 件 |
+| FR-KD-03 | ✓ | [hve/tests/test_knowledge_discovery.py](hve/tests/test_knowledge_discovery.py)、[hve/tests/test_sdk_resource_session_wiring.py](hve/tests/test_sdk_resource_session_wiring.py)、[hve/tests/test_runner_foundry_mcp_routing.py](hve/tests/test_runner_foundry_mcp_routing.py) | AC-006: session options、permission handler、指示文、MCP host 初期化後の runtime 検査と `pending` の再取得、1 セッション・MCP 構成の非復元 |
+| FR-KD-04 | ✓ | [hve/tests/test_knowledge_discovery.py](hve/tests/test_knowledge_discovery.py) | AC-007: イベント相関、出典の検証規則と理由コード |
+| FR-KD-05 | ✓ | [hve/tests/test_knowledge_files.py](hve/tests/test_knowledge_files.py)、[hve/tests/test_run_id_sanitizer_single_impl.py](hve/tests/test_run_id_sanitizer_single_impl.py) | AC-008: 8 プロセス同時更新で差分喪失 0、ロック、SHA-256 照合、パス拒否、FR-WF-AKM-01 schema、QA ファイル名の run_id は共通の無害化規則 |
+| FR-KD-06 | ✓ | [hve/tests/test_runner_pre_qa_knowledge_discovery.py](hve/tests/test_runner_pre_qa_knowledge_discovery.py)、[hve/tests/test_runner_pre_qa_mcp_scope.py](hve/tests/test_runner_pre_qa_mcp_scope.py)、[hve/tests/test_runner_resource_readiness.py](hve/tests/test_runner_resource_readiness.py)、[hve/tests/test_qa_merger.py](hve/tests/test_qa_merger.py) | AC-009: 調査回答の採用、人待ちなし、失敗時の既定値、shipped AAGD Step での質問票 session と知識探索 session の分離（質問票 session は `workiq` と知識源を外す）、FR-INPUT-05 の同意前に問い合わせない、session の bounded cleanup と cancel |
+| FR-KD-07 | ✓ | [hve/tests/test_orchestrator_knowledge_discovery.py](hve/tests/test_orchestrator_knowledge_discovery.py) | AC-010: AKM 知識探索 phase |
+| FR-KD-08 | ✓ | [hve/tests/test_orchestrator_knowledge_discovery.py](hve/tests/test_orchestrator_knowledge_discovery.py) | AC-010: ARD コメントの書式と投稿条件 |
+| FR-KD-09 | ✓ | [hve/tests/test_knowledge_discovery.py](hve/tests/test_knowledge_discovery.py) | AC-011: 修復の指示、Unknown 補完、サマリ行 |
+| FR-KD-10 | ✓ | [hve/tests/test_knowledge_discovery_removal.py](hve/tests/test_knowledge_discovery_removal.py)、[hve/tests/test_knowledge_discovery_config.py](hve/tests/test_knowledge_discovery_config.py) | AC-012 / AC-004: 削除物の不在、旧列名の読込、GUI 設定の削除済みキー |
+| NFR-KD-01 | ✓ | [hve/tests/test_knowledge_discovery.py](hve/tests/test_knowledge_discovery.py)、[hve/tests/test_knowledge_files.py](hve/tests/test_knowledge_files.py) | AC-007 / AC-008: 応答本文を失敗メッセージ・QA・ChangeLog へ書かない、ロックの内容 |
+
+### FR-KD-11〜FR-KD-14 / FR-KD-02 追補 — 既定有効化・除外理由の記録・実行後の不明点調査・Prompt 上書き（v3.42 新規）
+
+| 要件 | 判定 | 対応テスト | 根拠 |
+|---|---|---|---|
+| FR-KD-11 | ✓ | [hve/tests/test_knowledge_discovery_defaults.py](hve/tests/test_knowledge_discovery_defaults.py)、[hve/tests/test_main.py](hve/tests/test_main.py)、[hve/tests/test_knowledge_discovery_config.py](hve/tests/test_knowledge_discovery_config.py)、[hve/gui/tests/test_orchestrate_args_from_settings.py](hve/gui/tests/test_orchestrate_args_from_settings.py)、[hve/gui/tests/test_page_options_auto_qa_required.py](hve/gui/tests/test_page_options_auto_qa_required.py)、[hve/gui/tests/test_gui_prompt_argv_parity.py](hve/gui/tests/test_gui_prompt_argv_parity.py) | AC-014: CLI 既定・`--no-*`・`WORKIQ_ENABLED`、`to_argv` の明示フラグ、Prompt / GUI の未選択値、AKM 子 argv、resume replay |
+| FR-KD-12 | ✓ | [hve/tests/test_knowledge_discovery_defaults.py](hve/tests/test_knowledge_discovery_defaults.py) | AC-015: `needs-auth` の案内、`DiscoveryResult.excluded` / `usable`、`## 知識探索の状況` 節（除外・利用・not-reported・discovery-error） |
+| FR-KD-13 | ✓ | [hve/tests/test_runner_post_execution_discovery.py](hve/tests/test_runner_post_execution_discovery.py) | AC-017: 実行後の質問票の保存・知識探索・回答採用・知識源なしの既定値・`質問なし`・失敗時の警告・実行条件・phase 位置 |
+| FR-KD-14 | ✓ | [hve/tests/test_knowledge_discovery_defaults.py](hve/tests/test_knowledge_discovery_defaults.py)、[hve/tests/test_local_surface_option_parity.py](hve/tests/test_local_surface_option_parity.py) | AC-018: `settings_overrides` の `workiq` / `knowledge_sources`、不正値の fail-closed、shared setting 29 key |
+
+- FR-KD-02（v3.42 追補）の既定許可リスト（`microsoft-learn` 3 tool。`workiq-preview` は空）は AC-016（`hve/tests/test_knowledge_discovery_defaults.py -k allowlist`）で検証する。
+- RED（実装前、2026-10-02）: `python -m pytest -q hve/tests/test_knowledge_discovery_defaults.py hve/tests/test_runner_post_execution_discovery.py` が 30 failed / 13 passed（exit 1）。passed 13 件は、実装前は `settings_overrides` のキー自体が拒否されるため不正値ケースが先に通るもの、`WORKIQ_ENABLED` が明示的に真のケース、既存の除外文面など。
+- GREEN（2026-10-02）: 同コマンドが 43 passed（exit 0）。
+
+- RED（実装前）: `python -m pytest -q hve/tests/test_knowledge_files.py -x` は対象モジュール未作成のため collection error（exit 2）。
+- GREEN（2026-10-01）: `.venv\Scripts\python.exe -m pytest -q hve/tests/test_knowledge_files.py hve/tests/test_knowledge_discovery.py hve/tests/test_knowledge_discovery_config.py hve/tests/test_runner_pre_qa_knowledge_discovery.py hve/tests/test_orchestrator_knowledge_discovery.py hve/tests/test_knowledge_discovery_removal.py` が exit 0。
+- FR-KD-05 の並行更新（8 プロセス）は、当初の `O_EXCL` + stale 判定の実装で 12 回中 3 回の差分喪失を再現し、OS のロックへ改めた後に 15 回連続で喪失 0 を確認した。
+- FR-KD-03 の runtime 検査: SDK と同じく初期化前は MCP host の状態を空で返す fake で、`initialize_and_validate` を呼ばない実装は 4 件 FAIL（RED）。初期化と `pending` の再取得を実装後に GREEN（`hve/tests/test_knowledge_discovery.py -k runtime_inspection` exit 0）。
+- FR-KD-06 の質問票 session: Work IQ 無効でも `workiq` を外す規則は shipped AAGD harness（`hve/tests/test_runner_pre_qa_mcp_scope.py::test_t20r1_questionnaire_blocks_workiq_without_consent[workiq-off-*]`）で固定した。
+
+### FR-WIQ-01 — QA / KM の取得内容・情報源対応 schema
+
+- **廃止（v3.38）**: 本要件は FR-KD-10 で廃止した。以下は履歴であり、現行カバレッジに算入しない。対応テストは削除した。
+- 判定: ✓（active要件 bootstrap の RED→GREENを同じテスト群で確認）
+- 作成済み RED テスト:
+  - `hve/tests/test_workiq_content_contract.py`（v3.38 で削除、FR-KD-10） — **RED確認済み（T03新規）**: FOUND / PARTIAL の次の valid / invalid 境界を固定する。
+    - valid: 2 heading が各 exact 1 回かつ順序固定、取得内容が 1〜5 件の単一物理行 `- ` 箇条書き、本文非空、各行に 1 件以上の `[S1]`〜`[S5]` 参照を持つ。
+    - valid: 情報源表が exact 6 列 header と exact delimiter を持ち、直後に 1〜5 物理行、全 cell 非空、`[S1]` からの重複なし連番、内容と表の双方向参照を満たす。
+    - valid: source に日時・パス／場所等の metadata 値が無い場合だけ exact `不明（取得結果に値なし）` を使用し、cell 内の literal pipe を `\|`、改行を `<br>` として 1 physical row を維持する。
+    - invalid: heading の欠落・重複・逆順、0 件・6 件、複数物理行の内容項目または表 row、`- ` 本文空、引用なし、未知・欠番・重複 ID、未参照 row、空 cell、推測値・`N/A`・空欄・別の不明 marker、未escape pipeを拒否する。
+    - validator は規定 2 節の物理行構造と相互参照だけを検証し、補足 Markdown を解析対象へ広げない。QA / KM の mode別内容、metadata-only拒否、NOT_FOUND / UNAVAILABLE互換も固定する。
+  - [hve/tests/test_prompt_reference_contract.py](hve/tests/test_prompt_reference_contract.py) — **RED確認済み（T06既存へ追加）**: QA / KM の composed reference 2件だけが新schemaとruntime既定値へ一致し、削除済みReview referenceが復活しないこと
+- 実測（実装前）:
+  - T03: `test_workiq_content_contract.py test_workiq.py -q --tb=no` は exit 1、**70 failed, 101 passed, 46 subtests passed in 13.33s**。collection / import / fixture error は 0。失敗は Prompt 旧 schema、未実装 validator / warning / 3条件 merge contract による意図的 RED であり、missing API を `pytest.fail` で表す case も含む。
+  - T06: `test_prompt_reference_contract.py` は exit 1、**2 failed, 11 passed in 165.72s**。collection / import / fixture error は 0。新 schema の composed QA / KM 2件だけが意図的 RED。
+- 実測（実装後、2026-09-04）:
+  - T03: 同じ `test_workiq_content_contract.py test_workiq.py -q --tb=short` は exit 0、**171 passed, 46 subtests passed in 10.88s**。実装前の 70 RED と既存 101 GREEN の全件が GREEN になった。
+  - T06: 同じ `test_prompt_reference_contract.py -q --tb=short` は exit 0、**13 passed in 134.24s**。実装前の新 schema 2 RED と既存 11 GREEN の全件が GREEN になった。
+- T20a 敵対的レビュー追補（2026-09-04）:
+  - metadata-only の存在言い換え、ラベル付き `N/A`、日時末尾の明示的な推測表現が共通 validator・Runner・AKM ingest / verificationを通過する10ケースを再現し、**10 failed / 112 deselected** のREDを確認した。
+  - 単一parserの限定判定を修正後、同じ反例と正当な近接例は **12 passed / 110 deselected**。共通Work IQ回帰は **176 passed / 46 subtests passed**、Runner回帰は **31 passed**、AKM / ARD回帰は **82 passed**。
+  - 独立再レビューで追加確認した存在確認の別構文3件、句読点付きmissing marker 3件、`推測値`表記2件をcaller-levelへ追加し、修正前は新規15件だけが失敗して **15 failed / 122 passed**。限定matcherを追補後は同じ3ファイルが **137 passed**、広域回帰は共通 **184 passed / 46 subtests passed**、Runner **32 passed**、AKM / ARD **88 passed**。
+  - 第三レビューでは、存在確認2構文と推測値の空白／等号区切りを受理する一方、具体的事実や情報ソース／根拠要約中の一般語を誤拒否する12ケースを再現し、修正前は **12 failed / 137 passed**。存在だけの記述を限定判定し、推測値検査を日時・パス／場所のmetadata cellへ限定した後、同じ3ファイルは **149 passed**。
+- R02最終敵対的レビュー（2026-09-05）:
+  - metadata-only 9変種、canonical以外のmissing marker 7変種、推測metadata 9変種の計25件が共通validatorを通過し、正当な漢字否定1件が誤拒否されることを再現した。初回REDは共通／AKM **29 failed / 8 passed / 49 deselected**、Runner **3 failed / 1 passed**、追加再レビューREDは **3 failed / 22 passed**。collection / import / fixture errorは0。
+  - 既存の単一parser内のmatcherだけを限定修正し、同じinvalid 25件とpositive near-neighborをGREEN化した。最終6ファイル回帰は **349 passed / 62 subtests passed**、入力hashは実行前後一致、独立再レビューはCritical / Major / Minor **0 / 0 / 0**。
+- T20a統合敵対的レビュー追補（2026-09-05）:
+  - `関連仕様書を参照しました`がmetadata-onlyでもtrustedとなり、正確な場所`約款/契約条件.md`が推測値として誤拒否される2件を **2 failed / 26 deselected**、Runnerのtrusted到達を **1 failed / 3 subtests passed** で再現した。
+  - 文書名直後の参照だけをmetadata-onlyへ追加し、概算の`約`を数値表現の直前へ限定した。数値概算の拒否と具体的事実を伴う参照文のvalidを同じテストで固定し、最終6ファイル回帰は **353 passed / 63 subtests passed**。
+  - 修正後再レビューでは、`参照済みです`、`情報はありません`、`推測値は...`／`推測で...`の4漏れと、正確なパス`多分岐/設計.md`／`SharePoint/売上見込み`の2誤拒否を **6 failed / 2 passed / 27 deselected** で再現した。活用・助詞をwhole-value判定へ限定追加し、`多分`を数値前、bare見込みを日時・数量表現へ限定した後、同じ正負境界とRunner代表は **35 passed / 4 subtests passed**。
+- T20b最終敵対的レビュー追補（2026-09-05）:
+  - `関連仕様書を閲覧しました`、日時`データなし`、日時`推測すると2026-09`が共通validator・Runner・AKM ingest / verificationの全境界を通過することを、**12 failed / 1 passed / 87 deselected / 4 subtests passed**で再現した。
+  - 既存matcherへ閲覧・データ・推測条件形だけを限定追加し、同じ共通／Runner／AKM両phase回帰は **10 passed / 87 deselected / 7 subtests passed**。新しい設定・依存・flag・抽象層は追加していない。
+  - 修正後再レビューでは、反推測の確定文`推測すると誤るため、2026-09-04が確定値`と、推測語を名前に含む正確な場所4件が誤拒否されるMajor 2根因を再現した。`すると`を数値直前へ限定し、slashまたは拡張子を持つ場所値を自然言語guess判定から除外した。同じinvalid群・確定文・正確なpath群は **50 passed**。
+  - post-release focused再実行で、path例外が明示推測wrapper`推測（Outlook/架空）`まで許可する退行を **1 failed / 871 passed / 2 skipped / 233 subtests passed**として検出した。括弧・コロン・等号で明示した推測wrapperを例外から除き、既存推測場所と新しい正負path境界は **52 passed**。
+- 現時点: Prompt、共通validator、QA / KM composed referenceを含むFR-WIQ-01の対応テストはGREEN確認済み。
+
+### FR-WIQ-02 — Work IQ trusted採用境界とcaller適用範囲
+
+- **廃止（v3.38）**: 本要件は FR-KD-10 で廃止した。以下は履歴であり、現行カバレッジに算入しない。対応テストは削除した。
+- 判定: ✓（active要件 bootstrap の RED→GREENを同じテスト群で確認）
+- 作成済み対象テスト（RED / positive・非回帰境界）:
+  - `hve/tests/test_workiq_content_contract.py`（v3.38 で削除、FR-KD-10） — **RED確認済み（T03新規）**: exact SDK event・FOUND / PARTIAL・FR-WIQ-01構造validのANDと、default QA / default KM / full custom QA・KM overrideへの同一validator適用を固定する。FOUND / PARTIALでevent未確認の場合はFR-QA-06の単一formatterがevent未確認、観測server/tool名または`観測なし`、status、`/mcp`を出し、prompt・tool args・M365本文を出さないことを固定する。event確認済みでschema invalidの場合は共通content validator／警告helperがstatus、構造違反項目名、`/mcp`だけを必ず警告し、M365本文を出さずFR-QA-06の未確認警告と混同しないことを固定する。
+  - [hve/tests/test_runner_pre_qa.py](hve/tests/test_runner_pre_qa.py) — **RED確認済み（T04既存へ追加）**: valid結果だけを回答済みQA / Phase 1 trusted contextへ入れ、invalid / unverifiedはraw draft限定とする境界
+  - `hve/tests/test_akm_workiq_content.py`（v3.38 で削除、FR-KD-10） — **RED確認済み（T05新規）**: AKM ingest / verificationのquery区間別tool証拠、valid取得内容だけを更新promptへ渡す境界
+  - `hve/tests/test_ard_workiq_content.py`（v3.38 で削除、FR-KD-10） — **作成・GREEN確認済みの非回帰／positive境界（T05新規）**: ARD usecaseは共通content validatorの対象外であり、既存の別prompt `ARD_WORKIQ_USECASE_PROMPT`、`_run_ard_workiq_usecase` consumer、利用条件未充足・空応答・エラー応答・query／comment失敗時のgraceful degradationを維持し、FR-WIQ-01 schemaへの変換・拒否を行わないことを固定する。旧 `TestARDPromptConstant.test_workiq_usecase_prompt_exists`、旧 `TestWorkIQSessionWiring.test_ard_usecase_records_its_prompt`（いずれも v3.38 で置換）、[hve/tests/test_orchestrator_session_mcp_scope.py](hve/tests/test_orchestrator_session_mcp_scope.py) `test_shared_workiq_helper_closes_unusable_runtime` は個別のprompt／log／session境界だけを検証するため、この非回帰を製品実装のGREEN済みとは扱わない。
+  - [hve/tests/test_prompt_reference_contract.py](hve/tests/test_prompt_reference_contract.py) — **RED確認済み（T06既存へ追加）**: dead prompt / production symbol / copy / composed referenceとHVE-owned doctorの非復活
+  - `hve/tests/test_workiq_lifecycle_safety.py`（v3.38 で削除、FR-KD-10） — v2.97: exact startと同一canonical call IDの厳密な成功完了、query checkpoint、Runner／AKM両consumer、MCP非公開更新session、現在Dxx単位のpermission scope、safe path・snapshot・実変更成功条件を固定する。
+- 実測（実装前）:
+  - T03: `test_workiq_content_contract.py test_workiq.py -q --tb=no` は exit 1、**70 failed, 101 passed, 46 subtests passed in 13.33s**。collection / import / fixture error は 0。失敗は Prompt 旧 schema、未実装 validator / warning / 3条件 merge contract による意図的 RED であり、missing API を `pytest.fail` で表す case も含む。
+  - T04: `test_runner_pre_qa.py` は exit 1、**6 failed, 18 passed in 7.68s**。collection / import / fixture error は 0。6件は期待した Runner assertion による意図的 RED。
+  - T05: `test_akm_workiq_content.py test_ard_workiq_content.py` は exit 1、**14 failed, 9 passed in 5.78s**。collection / import / fixture error は 0。AKM 14件は意図的 RED、AKM positive control 2件と ARD 非回帰 7件は GREEN。
+  - T06: `test_prompt_reference_contract.py` は exit 1、**2 failed, 11 passed in 165.72s**。collection / import / fixture error は 0。新 schema の composed QA / KM 2件だけが意図的 RED。
+- 実測（実装後、2026-09-04）:
+  - T03: 同じ `test_workiq_content_contract.py test_workiq.py -q --tb=short` は exit 0、**171 passed, 46 subtests passed in 10.88s**。
+  - T04: 同じ `test_runner_pre_qa.py -q --tb=short` は exit 0、**24 passed in 4.07s**。
+  - T05: 同じ `test_akm_workiq_content.py test_ard_workiq_content.py -q --tb=short` は exit 0、**23 passed in 4.99s**。AKMの実装前14 REDがGREENとなり、positive control 2件とARD非回帰7件も維持した。
+  - T06: 同じ `test_prompt_reference_contract.py -q --tb=short` は exit 0、**13 passed in 134.24s**。
+- T20a 敵対的レビュー追補（2026-09-04）:
+  - exact eventと`FOUND`を伴う3種のschema-invalid応答がtrusted consumerへ到達する実経路を、共通gate 3件・Runner 1件・AKM ingest / verification 6件でRED化した（合計 **10 failed**）。
+  - 修正後は同じcaller-level反例を含む限定実行 **12 passed**、共通gate **176 passed / 46 subtests passed**、Runner **31 passed**、AKM / ARD **82 passed**。invalid応答はraw保存だけを維持し、回答済みQA・Phase 1・AKM更新promptへ入らない。
+  - 独立再レビューの8反例を共通gate、Runner、AKM両phaseへ追加すると、新規caller-level **15 failed / 122 passed**。追補後は3ファイル **137 passed**、共通gate **184 passed / 46 subtests passed**、Runner **32 passed**、AKM / ARD **88 passed**となり、各invalid応答のtrusted consumer到達は0件。
+  - 第三レビューの12件は修正前にtrusted判定またはraw-only境界の誤判定を再現し、**12 failed / 137 passed**。共通parserの限定修正後は **149 passed**となり、invalid応答のtrusted consumer到達0件と正当な具体的事実の採用を両立した。
+- R02最終敵対的レビュー（2026-09-05）:
+  - 新規invalid 25件のうち代表3カテゴリがRunnerの回答済みQA／Phase 1へ到達し、AKM ingest / verificationの6経路が更新promptを生成することをREDで確認した。
+  - 修正後は代表3カテゴリがRunnerでraw-onlyとなり、AKM両phaseの更新prompt生成は0件。exact event・status・schemaの3条件、custom Prompt、警告本文非漏洩、ARD除外を含む最終回帰は **349 passed / 62 subtests passed**。
+- T20a統合敵対的レビュー追補（2026-09-05）:
+  - 参照だけのmetadata-only応答がRunnerの回答済みQAへ到達することをREDで確認し、共通matcher修正後はraw-onlyへ戻した。統合レビューの版／CHANGELOG指摘はT20a後のT19所有であり、T20a内では早期bumpせずT19開始条件として保持した。
+  - 修正後再レビューの`参照済みです`もRunnerのtrusted境界へ追加し、共通matcher修正後はraw-onlyへ戻した。第二レビューで再現したCritical 3根因・Major 1根因はすべて反映し、targetedは **35 passed / 4 subtests passed**。
+- T20b最終敵対的レビュー追補（2026-09-05）:
+  - 閲覧だけのcontent、`データなし`、`推測すると...`の3カテゴリがRunner回答済みQAとAKM両phase更新promptへ到達することをREDで確認し、修正後は全経路raw-onlyへ戻した。
+  - 修正後再レビューのMajor 2件は正当値の過剰拒否であり、3条件gateを緩和せずmetadata cellの分類だけを修正した。invalidのtrusted到達を再導入せず、共通正負境界 **50 passed**を確認した。
+- 現時点: exact start＋同一call IDの厳密な成功完了・status・schemaの3条件gate、Runner trusted context、AKM query区間別gateと問い合わせ／更新session分離、ARD除外、QA / KM referenceを含むFR-WIQ-02の対応テストはGREEN確認済み。v2.97統合後はAKM/ARD/routing/logging **104 passed**、lifecycle安全境界 **36 passed**。
 
 ---
 
 ### FR-MCPLOG-01 — MCP 入出力の全文記録
 
 - 判定: ✓
+- 2026-09-06 追補: 早期イベント結線はオフライン GREEN。実行件数は FR-MAINT-03 の T10 / T14 / T15 合同、T11、T12 を参照し、T21〜T25 の live 検証は NOT RUN とする。
 - 直接対応テスト:
+  - [hve/tests/test_runner_resource_readiness.py](hve/tests/test_runner_resource_readiness.py) — Main / Pre-QA / Review の create / init 中の status・permission・tool イベントを失わず、二重 callback 登録を避け、query checkpoint 前のイベントを問い合わせ成功へ誤帰属させないことを固定する。
+  - [hve/tests/test_mcp_io_log.py](hve/tests/test_mcp_io_log.py) :: `TestMcpIoLoggerHandleEvent` — 作成前 callback から呼べる共通 `handle_event()` と、既存 attach wrapper の単一委譲・非重複を固定する。
   - [hve/tests/test_mcp_io_log.py](hve/tests/test_mcp_io_log.py) :: `TestMcpIoLoggerRecords` — MCP request / response / server status / session prompt の各レコードが全文で追記されること
   - [hve/tests/test_mcp_io_log.py](hve/tests/test_mcp_io_log.py) :: `TestMcpIoLoggerCorrelation` — `tool_call_id` 相関でサーバーを特定し、相関できない完了イベントを記録しないこと
   - [hve/tests/test_mcp_io_log.py](hve/tests/test_mcp_io_log.py) :: `TestAttachMcpIoEventLogger` — SDK セッション結線ヘルパーが MCP 往復・サーバー状態を記録し、組み込みツールを無視すること
   - [hve/tests/test_runner_mcp_io_log.py](hve/tests/test_runner_mcp_io_log.py) :: `TestRunnerMcpToolRecords` / `TestRunnerMcpServerStatusRecords` / `TestRunnerWithoutLogger` — 各イベント分岐からロガーが呼ばれること、`mcp_server_name` を持たない組み込みツールを記録しないこと、ロガー未接続でも例外を出さないこと
-  - [hve/tests/test_console_mcp_io_log.py](hve/tests/test_console_mcp_io_log.py) :: `TestConsoleToolRecords` / `TestConsoleWorkIQPersistence` — `workiq_prompt` / `workiq_response` が verbosity 0（quiet）・`final_only` でも全文を記録すること、表示側の切り詰め（800 / 10,000 文字）がログへ波及しないこと
-  - [hve/tests/test_orchestrator_mcp_io_log.py](hve/tests/test_orchestrator_mcp_io_log.py) :: `TestWorkIQSessionWiring` — Work IQ 専用セッション 4 件（prefetch / AKM verification / AKM ingest / ARD usecase）へイベントロガーが結線されること
+  - `hve/tests/test_workiq_lifecycle_safety.py`（v3.38 で削除、FR-KD-10） — canonical call IDの成功完了だけをtrusted evidenceにし、非bool success、MCP／組み込みtoolのID衝突、legacy identityを成功へ誤帰属させないことをRunner／orchestrator両面で固定する。
+  - [hve/tests/test_console_mcp_io_log.py](hve/tests/test_console_mcp_io_log.py) :: `TestConsoleToolRecords` / `TestConsoleKnowledgeSourcePersistence` — （v3.38）知識源（Work IQ を含む）の MCP 通信が verbosity 0（quiet）・`final_only` でも汎用 MCP 記録で全文を残すこと、Work IQ 専用の `workiq_prompt` / `workiq_response` が無いこと
+  - [hve/tests/test_orchestrator_mcp_io_log.py](hve/tests/test_orchestrator_mcp_io_log.py) :: `TestKnowledgeDiscoverySessionWiring` — （v3.38）知識探索セッション（FR-KD-03）のイベントが記録器へ渡り、Work IQ 専用セッションの helper が無いこと
 - 受入ケース:
   - `mcp_server_name` を持つ `tool.execution_start` の `arguments` が切り詰めなしで記録される。→ ✓ (`test_arguments_are_not_truncated`)
   - `mcp_server_name` を持たない `tool.execution_start`（組み込みツール）は記録されない。→ ✓ (`test_builtin_tool_without_mcp_server_is_not_recorded`)
@@ -3445,7 +4148,7 @@
 - 実装後の判断:
   - `report_intent` / `task` の早期 return より前に MCP 記録を行う。後ろに置くと、同名の MCP ツールが公開された場合にレコードが無言で欠落する。
   - 完了イベントの帰属は `(step_id, tool_call_id)` の相関のみとした。SDK 1.0.9 の `ToolExecutionCompleteData` は `mcp_server_name` を持たないため、相関なしでは MCP 由来か組み込みツール由来かを判別できない。
-  - orchestrator 側の Work IQ セッションは `StepRunner._handle_session_event` を通らないため、共有ヘルパー `attach_mcp_io_event_logger()` を 4 箇所で再利用した（FR-MAINT-07）。
+  - orchestrator 側の Work IQ セッションは `StepRunner._handle_session_event` を通らない。改訂前は返却済み session へ `attach_mcp_io_event_logger()` を結線していたが、2026-09-06 改訂では create 前 callback から共通 `McpIoLogger.handle_event()` へ委譲し、初期化中のイベントと query 単位の成功証拠を分離する（FR-MAINT-07）。
 - 既知の制約:
   - MCP サーバープロセスは Copilot CLI ランタイムが起動するため、生の JSON-RPC フレームは取得できない。記録範囲は SDK イベントが公開する 5 レコード種別に限られる。
   - `ToolExecutionCompleteResult` からは `content` のみを記録する（`detailed_content` / `structured_content` は対象外）。
@@ -3474,6 +4177,7 @@
 
 - 判定: ✓
 - 直接対応テスト:
+  - [hve/tests/test_runner_resource_readiness.py](hve/tests/test_runner_resource_readiness.py) :: `test_main_masks_mcp_error_diagnostics_before_console` / `test_review_initialization_failure_retains_early_diagnostics_and_cleanup` — create / init 中の failed / needs-auth 診断も Console 引数へ渡す前にマスクし、初期化失敗時の観測と cleanup を維持するオフライン回帰。
   - [hve/tests/test_mcp_io_log.py](hve/tests/test_mcp_io_log.py) :: `TestMcpIoLoggerSanitize` — `Authorization: Bearer` / `api_key=` / JWT がマスクされること、マスクが `hve/workiq.py` の既存実装へ委譲されていること
 - 受入ケース:
   - 認証情報パターンが `[REDACTED]` へ置換される。→ ✓ (`test_masks_bearer_token_and_jwt`)
@@ -3487,8 +4191,15 @@
 - 直接対応テスト:
   - [hve/tests/test_prompt_source_contract.py](hve/tests/test_prompt_source_contract.py) — flat Agent と nested `steps/` / `fanout/` / `cloud/`、developer / evaluation harness を含む用途別 `runtime/` の固定 model-facing prompt が `.github/prompts/**` だけを正本とすること、Python / Workflow / shell / PowerShell へ固定本文を重複定義しないこと、実行時の補間済み payload と対象外（利用者入力・動的データ・UI 文言・ログ／エラー・fixture・生成アプリ・third-party prompt）を誤検知しないこと
   - 同 :: `test_fr_prompt_src_01_cloud_surfaces_resolve_the_same_prompt_files` — Bash / PowerShell orchestrator の template 基底パスが registry のリポジトリ相対パスと結合して実在ファイルを指すこと（path 文字列の一致ではなく実効解決を検証）
+  - [hve/tests/test_runner_split_required_guard.py](hve/tests/test_runner_split_required_guard.py) :: `TestSplitForkPathRemoved::test_split_fork_prompts_are_removed` — v3.21 の従属項目。legacy split-fork 撤去で caller を失った `runtime/fleet/subtask` / `split-fleet` / `split-fleet-todo` を保持せず、DAG Wave 用の 2 件は維持すること（RED: 撤去前に FAIL → GREEN）
 - RED / GREEN 証跡: RED は移行前に 5 failed。移行後は Step body 122 ファイルと fan-out 31 参照（実ファイル 13 件）の SHA-256 完全一致を確認し、関連契約テスト 9 ファイルで **764 passed, 2 skipped, 1 xfailed**。
 - 既知の制約: Windows の既定環境では symlink 作成権限がないため symlink escape 検証が 1 件 skip される（`[WinError 1314]`）。junction 版の代替テストで escape 拒否を検証する。
+- 追加受入（2026-09-12静的回帰確認）:
+  - [hve/tests/test_prompt_planning_reference_contract.py](hve/tests/test_prompt_planning_reference_contract.py) — T06。flat Agent prompt の計画メタデータ案内を既存 `task-dag-planning` Skill root、`.github/skills/_hve-plan-artifacts/hve-binding.md` の canonical 5 comment metadata、`.github/skills/_hve-plan-artifacts/plan-template.md` へ条件付き委譲し、25 件などの観測ファイル数を恒久件数にしない契約を追加済。条件付き reference は対象 body ごとに既存本文へ束縛し、各 Prompt body へ schema 全文を常時展開しない。
+  - [hve/tests/test_adfd_dataflow_design_agents.py](hve/tests/test_adfd_dataflow_design_agents.py) — T07。ADFD の現行 Step ID と selected job の入力・出力・他 job 書込禁止を、Prompt source 整理後も保持する契約を追加済。fan-out key は APP-ID であって jobId ではなく、対象 APP ファイル内の全ジョブを扱う。TBD は暫定識別子として明示し、SDK command 実行は追加しない。Python 実装の既定は T08 が別に検査する。
+  - [hve/tests/test_dev_task_environment_contract.py](hve/tests/test_dev_task_environment_contract.py) — T08。Python 実装へ .NET logger を強制せず、compile / import の区別、検証再利用条件、製品 run 中に HVE 自身のテストを起動しない FR-CLI-72 境界を保持する契約を追加済。
+  - [hve/tests/test_prompts.py](hve/tests/test_prompts.py) — T09。pre は実行前、post は成果物に対する QA である役割差と、field / depth / marker の既存境界を保持する契約を追加済。
+  - [hve/tests/test_template_engine.py](hve/tests/test_template_engine.py) — T10。local completion で selected output / 検証 / 未完了を区別し、FR-WF-OUT-01 の完了時存在ゲートと FR-CLI-72 の製品 run 中 HVE 自己テスト禁止を保持する契約を追加済。
 
 ### FR-PROMPT-SRC-02 — `hve.prompt_loader` による安全な単一路線の prompt 解決
 
@@ -3498,6 +4209,68 @@
   - [hve/tests/test_prompt_loader.py](hve/tests/test_prompt_loader.py) — path 正規化と containment の境界入力
   - [hve/tests/test_template_engine.py](hve/tests/test_template_engine.py) :: `TestLoadTemplate` — Step body の欠損が `FileNotFoundError` として fail-closed になること
 - RED / GREEN 証跡: `_load_template` は旧実装で「警告して空文字列」を返していた。単一 loader へ寄せたことで例外送出へ変わり、`render_template` の到達不能な空文字列分岐を削除した。path 正規化を loader へ一本化し、`template_engine` 側の二重実装を除去した。
+
+### FR-PROMPT-SRC-03 — Prompt デバッグ用リファレンスと runtime 文字列の一致
+
+- 判定: ✓
+- 直接対応テスト:
+  - [hve/tests/test_prompt_reference_contract.py](hve/tests/test_prompt_reference_contract.py) — 要件・mapping・feature inventory の一意な登録、`sync.py` が算出する生成 tree と catalog、全コピーと `load_prompt_file()` の runtime text 一致、CRLF / LF に依存しない同期判定、Work IQ の QA / KM 用合成済みテンプレートと `get_workiq_prompt_template()` の既定値一致、ルート `README.md` の節内導線、および利用者文書の手動デバッグ境界を検証する
+  - [hve/tests/test_app009_swa_workflow_contract.py](hve/tests/test_app009_swa_workflow_contract.py) :: `test_step_prompt_matches_the_manual_workflow_contract` — APP-009 SWA Prompt mirror の既存同期検査を runtime text 契約へ揃え、FR-WF-ASDW-04 の manual-only 契約を維持する
+- 受入ケース:
+  - コピー対象は結線済み・module load のみ・[users-guide/prompt-reference/sync.py](users-guide/prompt-reference/sync.py) `MIRROR_WHILE_UNWIRED` に明示された未結線移行例外から動的に算出し、固定件数をテストへ埋め込まない。移行例外の catalog 状態は `未結線` のまま表示する。
+  - 各コピー本文は `load_prompt_file()` の戻り値と一致し、同じ論理本文の CRLF / LF 差だけで同期検査を失敗させない。
+  - [users-guide/prompt-reference/composed/workiq-qa.prompt.txt](users-guide/prompt-reference/composed/workiq-qa.prompt.txt) と [workiq-km.prompt.txt](users-guide/prompt-reference/composed/workiq-km.prompt.txt) は `config_override` なしの各 runtime 既定値と完全一致し、削除済みReview用テンプレートを再生成しない。
+  - ルート `README.md` の「Prompt の見方」節内に、正本・非規範コピー・手動デバッグの位置付けと `users-guide/prompt-reference/README.md` へのリンクが共存し、別節に同じリンクがあるだけでは合格にしない。
+  - [users-guide/prompt-reference/README.md](users-guide/prompt-reference/README.md) は GitHub Copilot / Microsoft 365 Copilot Chat / Work IQ の適用範囲、placeholder、固定コピーと最終 payload の差、Tool 実行・出典の確認、および機微情報を保存しない境界を説明する。
+  - HVE runtime の Autopilot、CLI / GUI / API / 設定、prompt 自動送信、外部応答の自動評価・保存を変更しない。
+- RED / GREEN 証跡:
+  - RED（2026-09-03）: レビュー反映後の [hve/tests/test_prompt_reference_contract.py](hve/tests/test_prompt_reference_contract.py) は **6 failed / 3 passed**。失敗は (1) feature inventory 未再生成、(2) raw working-tree bytes 基準による 89 コピーの不一致と stale catalog、(3) `Dev-Microservice-Azure-AgenticRetrievalDeploy.prompt.md.txt` の実内容 drift、(4) CRLF 入力が同期処理で未正規化、(5) ルート `README.md` の「Prompt の見方」節内導線不足、(6) 手動デバッグ使い分け節の未実装であり、既知ギャップと一致した。未結線移行例外、Work IQ 合成済み3テンプレート、既存リンクの3件は実装前から PASS した。
+  - GREEN（2026-09-03）: 同じ新規契約ファイルは **9 passed**。`test_prompt_source_contract.py` / `test_app009_swa_workflow_contract.py` / `test_workiq.py` との合同回帰は **239 passed / 1 skipped / 47 subtests passed**。skip は Windows の symlink 作成権限不足（`[WinError 1314]`）で、同じ escape 境界の NTFS junction テストは PASS した。`sync.py --check` は **320 Prompt copies / 3 composed Work IQ templates / catalog match** で PASS した。
+
+### FR-INPUT-01 — Step別入力契約の解決
+
+- 判定: ✓（実装前REDと実装後GREENを確認）
+- 直接対応テスト:
+  - [hve/tests/test_step_inputs.py](hve/tests/test_step_inputs.py) — 13 local Workflow の non-container Step と現行 12 Cloud Workflowを対象に、Step別 io-contractのrequired/optional/kind/path読込、containerの子入力集約、document入力の限定を固定する。
+
+### FR-INPUT-02 — bundleとmaterialize
+
+- 判定: ✓（実装前REDと実装後GREENを確認）
+- 直接対応テスト:
+  - [hve/tests/test_step_inputs.py](hve/tests/test_step_inputs.py) — 追加/代替の検証、複数順序、source非変更、既存MarkItDown経路によるrun-scoped Markdown化、SHA-256再検証を固定する。
+
+### FR-INPUT-03 — docs-original候補の提示
+
+- 判定: ✓（実装前REDと実装後GREENを確認）
+- 直接対応テスト:
+  - [hve/tests/test_input_candidates.py](hve/tests/test_input_candidates.py) — `docs-original/**` 限定の既存mdq検索、ファイル名優先、最大10件、同順位とfallbackのrepository-relative POSIX path順、候補0件、自動選択なしを固定する。
+
+### FR-INPUT-04 — GUI / CLI / Prompt / Cloud の選択面
+
+- 判定: ✓（4面の選択・materialize・Cloud縮退をGREEN確認）
+- 直接対応テスト:
+  - [hve/gui/tests/test_step_input_pane.py](hve/gui/tests/test_step_input_pane.py) — GUI右ペインのWorkflow/Step別表示、required/optional、canonical path、kind、存在状態、既存名、追加/代替、複数選択、MarkItDown変換結果、設定非永続化を固定する。
+  - [hve/tests/test_step_input_surfaces.py](hve/tests/test_step_input_surfaces.py) — CLI wizard / non-interactive / Prompt / Cloudが契約読込、候補解決、materialize、bundle検証、Prompt構築の同じcoreを使うことを固定する。Cloudは現行12 Workflowだけを対象とし、Markdown資料とmanifestのbranch保存、既存Step bodyへのmanifest path、upload不能時のbranch指定と非対応表示も検査する。
+
+### FR-INPUT-05 — 事前QAとWork IQ補填の同意境界
+
+- 判定: ✓（QA同意境界をGREEN確認）
+- 直接対応テスト:
+  - [hve/tests/test_step_input_qa.py](hve/tests/test_step_input_qa.py) — custom input時の事前QA、質問0件の継続、質問あり時のMCP同意、同意前query 0件、exact `workiq` / `ask` とFR-WIQ-01/02合格結果だけの統合、Cloud非対応時の手動QAを固定する。
+
+### FR-INPUT-06 — 4面共通core、Prompt hash、互換性、文書
+
+- 判定: ✓（Prompt stale gate、文書契約をGREEN確認）
+- 直接対応テスト:
+  - [hve/tests/test_prompt_request.py](hve/tests/test_prompt_request.py) — 任意`step_inputs`の後方互換とlegacy `input_aliases`との競合拒否を固定する。
+  - [hve/tests/test_prompt_execution.py](hve/tests/test_prompt_execution.py) — bundle全体のplan hash、変更時の再承認、`cwd`省略時を含む承認後digest再検証を固定する。
+  - [hve/tests/test_step_input_docs.py](hve/tests/test_step_input_docs.py) — ルートREADMEとusers-guideが4面、複数選択、変換、QA/MCP同意、Cloud制約を説明することを固定する。
+- 非追加制約: 新しい永続設定、環境変数、外部依存、Strategy / Factory、検索エンジン、Workflow / Step、io-contract fieldを追加しない。
+- RED / GREEN 証跡:
+  - RED（2026-09-04）: 実装前の対象テストは `hve.step_inputs` / `hve.gui.step_input_pane` 未実装により **4件のcollection error**。
+  - GREEN（2026-09-04）: Step入力の新規契約群とPrompt契約の合同回帰は **128 passed / 2 skipped**。skipはWindowsでsymlink作成権限が無い2ケースで、同じrepository包含境界のOS非依存テストはPASS。fail-open修正後のPrompt request / executionは **97 passed**。GUI関連は **65 passed**。Prompt mirrorは **319 copies / 2 composed Work IQ templates / catalog一致**。
+  - 保守RED / GREEN（2026-09-04）: 非GUI全回帰で、top-level互換の `orchestrator` が `step_inputs` をflat importした際に同moduleの相対importが失敗し、後続の観測ファイルcleanupも連鎖して **70 failed / 10,221 passed / 23 skipped / 1 xfailed / 852 subtests passed**。同時にCLI dest `step_input`が未分類だった。`step_inputs`を既存moduleと同じflat-import互換へ揃え、`step_input`を`OrchestrateArgs.step_inputs`へのsemantic aliasとして登録後、Step入力／local-surface契約は **31 passed / 2 skipped / 167 subtests passed**、Orchestrator回帰は **198 passed / 85 subtests passed**。
+  - 最終敵対的レビューRED / GREEN（2026-09-05）: 既存subprocessはtop-level import後に相対importを使わないAPIしか呼ばず、`load_step_input_slots()`が`gui.doc_convert`の相対importで停止することを **1 failed** で再現した。全lazy importをpackage / flatの明示分岐へ揃え、同じsubprocessでslot読込とCloud section生成まで **1 passed**。Step入力／Prompt／local-surface回帰は **139 passed / 2 skipped / 167 subtests passed**、option parity登録簿は **50 passed / 206 subtests passed**、独立再レビューは全severity 0。
 
 ### FR-GUI-38 — GUIからのLegacy進捗再実行（durable resume改訂）
 - 判定: ✓（既存argv/persistenceとLegacy/新execution分離をGREEN確認。）
@@ -3672,6 +4445,46 @@
   - [hve/gui/tests/test_page_workbench_process_exit.py](hve/gui/tests/test_page_workbench_process_exit.py) :: `TestQueueCompletion` / `test_nonzero_exit_is_displayed_as_failed` / `test_completed_reader_and_qa_manager_are_scheduled_for_deletion` — 先行非0の保持、失敗表示、reader/QA QObject cleanupを固定する。
 - RED/GREEN実績: dialog/Skill未実装時は該当合同で **10 failed**。dialog、queue登録、Workbench合流、英語翻訳を実装・レビュー反映後、GUI/Prompt/CLI関連は **53 passed**、i18nは **29 passed**、TS/QMはactive 1171 / unfinished 0。
 
+### FR-GUI-51 — GUI 起動時の Work IQ capability（v2.83 新規）
+- 判定: ✓（generic process-wide snapshot worker GREEN）
+- 直接対応テスト:
+  - [hve/gui/tests/test_sdk_resource_startup.py](hve/gui/tests/test_sdk_resource_startup.py) :: `test_resource_snapshot_worker_failure_shares_one_unverified_snapshot` / `test_additional_window_receives_shared_snapshot_object_identity` / `test_main_window_passes_same_snapshot_and_refresh_callback_to_settings` / `test_shutdown_interrupts_resource_and_context_workers_before_waiting` / `test_startup_surface_has_only_generic_resource_names` / `test_run_app_uses_generic_resource_startup_before_github_auth` — GUI process につき worker 1 回、snapshot 共有、start 失敗の unverified 扱い、generic resource 名のみ、blocking GitHub auth より前の開始を固定する
+  - [hve/gui/tests/test_mcp_server_list_display.py](hve/gui/tests/test_mcp_server_list_display.py) :: `test_snapshot_resources_are_displayed_as_read_only_lists_without_auth_buttons` / `test_initial_construction_does_not_run_copilot_cli` / `test_refresh_uses_one_app_level_callback_with_force_refresh_true` / `test_refresh_failure_is_not_reported_as_empty_configuration` — C7 再列挙を単一 callback / `force_refresh` に限定し、失敗を 0 件と表示しないことを固定する
+  - [hve/gui/tests/test_copilot_cli_bridge.py](hve/gui/tests/test_copilot_cli_bridge.py) :: `test_cli_resource_listing_is_not_duplicated` / `test_cli_bridge_does_not_export_plugin_info` — 2026-09-30 bugfix（N7-2）。本要件で廃止した CLI subprocess の Plugin / MCP 列挙（`copilot plugins list` / `copilot mcp get`）が `CopilotCliBridge` に残っていたため削除し、SDK discovery を単一実装にした（RED: 9 failed → GREEN: 19 passed）
+- 実測 / 歴史メモ:
+  - 初回は [hve/gui/tests/test_app_startup_workiq.py](hve/gui/tests/test_app_startup_workiq.py) の 10 件が C4 / C11 / QA dialog / OptionsPage の capability API、startup worker、process snapshot 共有の不在により全件 RED。実装・敵対的レビュー反映後、startup / visible-disabled / OAuth 再試行 / effective argv / i18n の直接 5 ファイルは **84 passed**。翻訳生成は **1187 finished / 0 unfinished**。
+  - 2026-09-03 敵対的レビュー: worker 開始が blocking GitHub 認証 dialog 後、`QThread.start()` 例外時の永久確認中、完了 thread 参照残留、C7 の UI thread 最大 30 秒停止・二重列挙・失敗を 0 件表示する経路を RED 化した。修正後、GUI Work IQ / C7 / i18n / 設定パリティは **88 passed / 161 subtests passed**、直接 8 ファイル合同は **125 passed**。
+  - 最終回帰（2026-09-03）: GUI 全 207 テストファイルを 1 ファイル 1 fresh process で実行し、**2609 passed / 3 skipped / 38 subtests passed**、失敗 0。
+
+### FR-GUI-53 — SDK resource一覧・分類編集
+- 判定: ✓（safe columns / policy round-trip / i18n GREEN）
+- 直接対応テスト:
+  - [hve/gui/tests/test_sdk_resource_settings.py](hve/gui/tests/test_sdk_resource_settings.py) :: `test_toolsearch_section_adds_sdk_resources_tab_and_safe_columns_only` / `test_resource_tab_exposes_only_classification_allowlists_and_read_only_refresh` / `test_resource_editor_uses_owner_plugin_fallback_until_exact_override_is_set` / `test_unverified_plugin_ownership_is_not_used_for_effective_category` / `test_unverified_kinds_are_shown_as_unconfirmed_not_empty` / `test_resource_tab_explains_plugin_limit_cloud_boundary_and_next_session` / `test_save_policy_preserves_extra_and_nested_step_override_metadata` / `test_policy_reload_refreshes_effective_and_override_columns_for_all_rows` / `test_resource_refresh_button_uses_app_level_callback_with_force_refresh_true` / `test_resource_refresh_button_is_disabled_until_snapshot_arrives` / `test_settings_window_shares_same_snapshot_object_with_c7_and_toolsearch_sections` — safe 8 field、個別分類と2 exact allowlistだけの編集面、kind別未確認、Cloud境界、次session反映、snapshot確認中のrefresh無効化、ready/unverified到着後の再試行、force_refresh共有を固定する
+  - [hve/gui/tests/test_mcp_server_list_display.py](hve/gui/tests/test_mcp_server_list_display.py) :: `test_snapshot_resources_are_displayed_as_read_only_lists_without_auth_buttons` — C7にraw config / OAuth /認証操作を表示せず、再検出だけを提供することを固定する
+  - [hve/gui/tests/test_toolsearch_settings_section.py](hve/gui/tests/test_toolsearch_settings_section.py) :: `test_policy_tab_shows_the_source_path` / `test_invalid_key_is_not_saved_and_reports_why` / `test_save_is_blocked_while_the_policy_is_unreadable` / `test_save_preserves_unknown_top_level_keys` / `test_save_result_states_when_it_takes_effect` —既存policy editorとの同居、表示先への保存、unknown key保持、保存失敗、反映時点を固定する（一般の検索policy項目をFR-GUI-53固有の編集対象とは扱わない）
+  - [hve/tests/test_toolsearch_policy.py](hve/tests/test_toolsearch_policy.py) :: `TestSave.test_to_dict_round_trips_through_from_dict` / `test_round_trip_preserves_every_field` / `test_preserves_unknown_top_level_keys` / `test_writes_lf_without_bom` / `test_invalid_payload_raises_and_leaves_the_file_untouched` — `ToolSearchPolicy.save()` のround-trip、unknown key、LF / BOM、fail-closedを固定する
+  - [hve/gui/tests/test_i18n.py](hve/gui/tests/test_i18n.py) :: `TestAssets.test_translations_pro_exists` / `test_ts_exists_with_messages` / `test_all_finished_ts_messages_match_compiled_catalog` / `test_deferred_model_close_status_is_translated` — 新規表示文字列と compiled catalog の整合を固定する
+- 実測 / 契約注記:
+  - `path` / `direct source ID` / `raw config` / `URL` / `command` / `header` / `credential` / `例外本文` を表示せず、Plugin / MCP / Skill の install / update / enable / disable / config / auth / OAuth / browser 操作を提供しない。
+  - 保存は既存 `ToolSearchPolicy.save()` の validation / unknown top-level key / LF-BOM 契約を再利用し、変更は次に開始する local session から反映する。
+  - Plugin 分類は提供元が SDK 応答で確認できる MCP / Skill の既定値であり、hook / agent / instruction 全体の無効化制御ではないことを表示する。
+
+### FR-GUI-52 — GUI 起動時の利用可能モデル一覧更新（v2.90 新規、v2.91改訂）
+- 判定: 実装済み・GREEN（敵対的再レビュー修正は変更種別 `bugfix`、Windows local）
+- 受入テスト:
+  - [hve/gui/tests/test_app_startup_models.py](hve/gui/tests/test_app_startup_models.py) — 通常起動の `_open_first_window()` が `win.show()` の後に既存のモデル取得ハンドラーを1回だけ呼ぶこと、追加 `MainWindow` と `--autopilot-child` では自動取得しないこと、worker開始・busy・完了解放・close延期、および取得結果のcache／surface反映を固定する。
+  - [hve/gui/tests/test_i18n.py](hve/gui/tests/test_i18n.py) — 取得中closeの利用者向けstatusが英語カタログに収載され、コンパイル済みQMから解決できることを固定する。
+  - [hve/tests/test_models_api.py](hve/tests/test_models_api.py) — SDK取得timeout後に`CopilotClient.stop()`が停止してもcleanupを5秒で打ち切り、同期APIとGUI workerを無期限に阻害しないことを固定する。
+  - [hve/tests/test_models_cache.py](hve/tests/test_models_cache.py) — writer固有一時ファイル、同一process内の置換直列化、短いプロセス間競合の再試行、置換失敗時の既存cache保持と一時ファイル清掃を固定する。
+  - [hve/gui/tests/test_main_window_settings_fetch_wiring.py](hve/gui/tests/test_main_window_settings_fetch_wiring.py)、[hve/gui/tests/test_model_reload.py](hve/gui/tests/test_model_reload.py)、[hve/tests/test_get_model_choices.py](hve/tests/test_get_model_choices.py)、[hve/tests/test_models_api.py](hve/tests/test_models_api.py) — 既存ハンドラーから SDK `list_models()`、キャッシュ、モデル選択欄更新、失敗時縮退までの共有処理を回帰確認する。起動専用の重複テスト・重複実装は追加しない。
+- RED / GREEN 証跡: 実装前に [hve/gui/tests/test_app_startup_models.py](hve/gui/tests/test_app_startup_models.py) を実行し **1 failed / 2 passed / 0 errors / 0 skipped**。失敗は `test_first_window_starts_existing_model_refresh_once_after_show` の期待イベント `capability, show, models` に対して実値が `capability, show` であり、追加 `MainWindow` と `--autopilot-child` の対象外境界は GREEN。実装後は同じ3件が **3 passed**。最終敵対的レビューで追加したキャッシュ保存失敗テストは、修正前に既存キャッシュの期待値に対して実値 `None` で **1 failed**、先行 `clear()` の削除後にGREEN。モデル取得・キャッシュ関連7ファイルは **68 passed / 0 failed / 0 errors / 0 skipped**。
+- 2026-09-04 敵対的再レビューRED: worker開始失敗、両ボタンのbusy同期、取得中に開く設定画面、完了thread解放、取得中close、surface独立再読込、writer固有一時ファイル、置換失敗後の一時ファイル清掃を追加し、[hve/gui/tests/test_app_startup_models.py](hve/gui/tests/test_app_startup_models.py) と [hve/tests/test_models_cache.py](hve/tests/test_models_cache.py) の合同で **8 failed / 30 passed**。後続境界もclose拒否後のwindow無効化 **1 failed**、cache置換非直列 **1 failed**、close拒否後の取得結果欠落と索引status上書き **2 failed**。別processでは取得中close後に `QThread: Destroyed while thread is still running` と終了コード `-1073740791`、SDK stop停止時は外側timeout 50ms後も1秒で終了せず、未修正 `save_entries()` の同一process並行50試行では **30 exceptions / 18 unreadable caches**、独立process 25組では **1 exception** を実測した。
+- 2026-09-04 敵対的再レビューGREEN: GUI worker／SDK cleanup／cache／macOS収集の直接契約は **61 passed / 1 skipped**。取得中closeの実イベントループは exit 0、window非表示、thread参照なし。SDK stop停止probeはcleanup上限後の約5.98秒で`ModelsAPIError`終了。同一process 50組と独立process 25組のcache並行probeはいずれも **exceptions 0 / unreadable caches 0**。モデル・起動・設定・closeEventの隣接19ファイルを1ファイル1fresh processで実行し、**198 passed / 1 skipped / 3 subtests passed / failed 0**。実GitHub Copilot SDK経路は **25 models / exit 0**。
+- 2026-09-04 最終証跡レビュー: 取得中closeの新規statusが英語TS/QMに未収載であり、`QTranslator.translate()` が空文字を返す **1 failed** を確認した。`MainWindow` contextへ英訳を追加しQMを再生成後、同契約は **1 passed**、翻訳生成は **1183 finished / 0 unfinished**。
+- 初版回帰（0.8.114）: 通常GUI起動、認証、Work IQ、索引更新、モデル取得・キャッシュ、利用者文書、inventory / traceability、起動時版確認を含む18ファイルは **415 passed / 0 failed / 0 errors / 0 skipped**。inventory / traceability直接回帰は **211 passed**。当時の索引は feature **516行**、test **15,302行**、surface **3,774行**で、`FR-GUI-52` と受入テスト4件を含んだ。
+- 実装境界: [hve/gui/app.py](hve/gui/app.py) の通常初回ウィンドウ起動経路から既存ハンドラー全体を無条件で1回だけ直接呼ぶ。取得・UI反映は既存経路を複製せず、[hve/gui/main_window.py](hve/gui/main_window.py) は原子的な `save_entries()` の前に既存キャッシュを削除しない。CLI wizard、直接 `orchestrate`、Prompt 版は GUI プロセスと `_open_first_window()` を通らないため、起動配線テストの対象外とする。新しい設定・CLIフラグ・環境変数・依存は追加しない。
+- 敵対的レビュー: 初回レビューの Critical 0 / Major 0 判定は、worker開始失敗・取得中close・両ボタン経由の重複取得・cache多重writerを実行しておらず不十分だった。上記REDと隔離process probeで再現し、汎用worker抽象を追加せず、FR-GUI-52の既存経路に限定して修正した。
+
 ---
 
 ## §F 非機能（§7）/ インタフェース（§8）
@@ -3691,7 +4504,9 @@
 - 根拠: 50/30 のハードコード値の境界テストは未確認。
 
 ### NFR-PERF-03 — 性能 KPI 未定義（要件側 TBD）
-- 判定: ✗
+- 判定: ✓（未定義であることを固定し、測定値を捏造しない）
+- 直接対応テスト:
+  - [hve/tests/test_requirement_definition_integrity.py](hve/tests/test_requirement_definition_integrity.py) :: `test_nfr_perf_03_remains_explicitly_undefined_until_tbd_09_is_resolved` — NFR-PERF-03のKPI/SLA未定義とTBD-09の保留を同時に固定する。
 
 ### NFR-OBS-01 — Wave 2 コンテキスト注入計測の Console/stderr 出力
 - 判定: ✓
@@ -3769,7 +4584,10 @@
   - [hve/tests/test_main.py](hve/tests/test_main.py) :: `TestParserBasic.test_timeout_option`、`test_review_timeout_default`、`test_review_timeout_option`、`TestBuildConfigReviewTimeout`
 
 ### NFR-TIME-02 — Cloud AKM 360 分 / detect・suggest-next 15 分
-- 判定: ✗
+- 判定: ✓
+- 直接対応テスト:
+  - [hve/tests/test_workflow_registry_agentic.py](hve/tests/test_workflow_registry_agentic.py) :: `test_job_timeout_is_360_minutes` — Cloud AKM主要jobの360分を固定する。
+  - [hve/tests/test_cloud_dispatcher_asdw_dispatch.py](hve/tests/test_cloud_dispatcher_asdw_dispatch.py) :: `test_detect_and_suggest_next_jobs_have_15_minute_timeouts` — dispatcher detect / suggest-nextの15分を固定する。
 
 ### NFR-A11Y-01 — `--screen-reader` / `NO_COLOR` / スピナー無効化
 - 判定: ✓
@@ -3794,7 +4612,7 @@
 ### Run ID（`generate_run_id`）
 - 判定: ✓
 - 直接対応テスト:
-  - [hve/tests/test_self_improve.py](hve/tests/test_self_improve.py) :: `TestGenerateRunId`、`TestRunImprovementLoopRunId`
+  - [hve/tests/test_config_run_id_tz.py](hve/tests/test_config_run_id_tz.py)
 - 間接対応テスト:
   - [hve/tests/test_session_id.py](hve/tests/test_session_id.py) :: `TestSafeRunIdComponent`
 
@@ -3813,13 +4631,15 @@
   - [hve/tests/test_runner_split_required_guard.py](hve/tests/test_runner_split_required_guard.py) :: `TestCheckOutputPathsGate::test_fail_when_one_declared_output_is_missing` — 1 件でも欠落すれば `_check_output_paths_gate` が欠落パスを返す（Step を failed 化する）ことを固定
   - [hve/tests/test_runner_split_required_guard.py](hve/tests/test_runner_split_required_guard.py) :: `TestCheckOutputPathsGate::test_fail_reports_only_missing_paths` — 宣言 3 件のうち一部欠落時、報告対象を欠落パスのみに限定することを固定
   - [hve/tests/test_runner_split_required_guard.py](hve/tests/test_runner_split_required_guard.py) :: `TestCheckOutputPathsGate::test_fail_when_all_outputs_missing`、`test_pass_when_all_declared_outputs_exist` — 全欠落 / 全存在の境界を固定
-  - [hve/tests/test_runner_split_required_guard.py](hve/tests/test_runner_split_required_guard.py) :: `TestCheckOutputPathsGate::test_pass_when_ctx_is_none`、`test_pass_when_fleet_mode_enabled`、`test_pass_when_no_output_paths_declared`、`test_pass_when_unknown_step_id`、`test_pass_when_workflow_is_none` — 単独実行モード / fleet mode / 宣言なし Step / 未解決 step_id / workflow=None を適用外とする適用範囲を固定
+  - [hve/tests/test_runner_split_required_guard.py](hve/tests/test_runner_split_required_guard.py) :: `TestCheckOutputPathsGate::test_pass_when_ctx_is_none`、`test_pass_when_no_output_paths_declared`、`test_pass_when_unknown_step_id`、`test_pass_when_workflow_is_none` — 単独実行モード / 宣言なし Step / 未解決 step_id / workflow=None を適用外とする適用範囲を固定
 - 注記: 旧 `hve/tests/test_runner_output_paths_gate.py` は上記クラスと同一対象・同一ケースの重複だったため 2026-07-28 に削除し、固有だった 3 宣言の部分欠落ケースのみ `test_fail_reports_only_missing_paths` として統合先へ移設した。
 - 間接対応テスト:
   - [hve/tests/test_workflow_registry.py](hve/tests/test_workflow_registry.py) :: `TestOutputPathsExplicit`
   - [hve/tests/test_collect_workflow_output_paths.py](hve/tests/test_collect_workflow_output_paths.py) :: `TestCollectWorkflowOutputPaths`
 - v2.43直接対応テスト:
   - [hve/tests/test_data_model_split_contract.py](hve/tests/test_data_model_split_contract.py) — Data Model親だけが固定`output_paths`、条件付きsidecarが実行時G-OUTへ混入しないこと
+- 追加受入（2026-09-12静的回帰確認）:
+  - [hve/tests/test_template_engine.py](hve/tests/test_template_engine.py) — T10。local completion の selected output / validation / incomplete を区別し、`output_paths` は実行完了時点の存在ゲートであって既存ファイルの更新証明ではないこと、HVE 自身のテスト起動を完了条件へ混ぜないことを追加済。
 
 #### FR-WF-OUT-02 — `output_paths_template` のキー別名プレースホルダ置換、空集合時 failed
 - 判定: ✓
@@ -3843,7 +4663,7 @@
   - [hve/tests/test_runner_split_required_guard.py](hve/tests/test_runner_split_required_guard.py) :: `TestCheckOutputPathsGate::test_pass_when_no_output_paths_declared`（`output_paths` 未宣言 Step はゲート対象外）
   - [hve/tests/test_collect_workflow_output_paths.py](hve/tests/test_collect_workflow_output_paths.py) :: `TestCollectWorkflowOutputPaths`
 - v2.43直接対応テスト:
-  - [hve/tests/test_data_model_split_contract.py](hve/tests/test_data_model_split_contract.py) — AAS/ADAの非fan-out sidecar宣言がG-OUT / Self-Improve scope外であること
+  - [hve/tests/test_data_model_split_contract.py](hve/tests/test_data_model_split_contract.py) — AAS/ADAの非fan-out sidecar宣言がG-OUT外であること
 
 #### FR-WF-OUT-03 — `required_input_paths` 不足時の挙動
 - 判定: ✓ — §3.3 FR-DAG-06 と同等
@@ -3905,6 +4725,12 @@
 - 実測: 検査導入時点で 8 件を検出（`knowledge/D05` / `knowledge/D09` の区切り文字ゆれ 6 件、`knowledge/D15` のファイル名断片 1 件、未生成の生成対象 workflow 1 件）。前 7 件は宣言側を実体へ修正し、最後の 1 件は生成タイミング依存のため `static_paths` へ除外登録した。GREEN 後は `21 passed`（`test_phase8_s4_reinforcement.py`）/ validator `Integrity errors: 0`。
 - 補足: FR-WF-OUT-05 の `check_registry_mismatch()` は `required: true` かつ `kind: agent_artifact` の入力しか照合しないため、`kind: static` は本検査だけが対象にする。
 
+#### FR-WF-OUT-12 — 欠落成果物への同一セッション継続
+- 判定: ✓（AC-001。RED: 新規 helper import 不在で collection error / exit 1。GREEN: 対象 27 passed / exit 0）
+- 直接対応テスト:
+  - [hve/tests/test_runner_output_continuation.py](hve/tests/test_runner_output_continuation.py) — 初回 pass の 0 回送信、1 回目 / 2 回目で生成、2 回後も欠落、欠落パス限定、適用外 context、SDK 例外の伝播、および main session と既存 contract gate の間への wiring
+  - 同 :: `test_continuation_message_reports_elapsed_and_limit` / `test_continuation_message_omits_time_without_limit` — v3.24。上限が有効なときだけ継続メッセージに「経過 X 分 / 上限 N 分」を示す
+
 #### FR-WF-DM-01 — AAS/ADA Data Modelの親required + canonical 3 sidecar契約
 - 判定: ✓（RED: 11 failed → GREEN: 25 passed）
 - 直接対応テスト:
@@ -3952,6 +4778,12 @@
 - 間接対応テスト:
   - [hve/tests/test_aas_template_parity.py](hve/tests/test_aas_template_parity.py) :: `TestAasTemplateDependencyStepNumbers`（Step 7/8 を含む `## 依存` の番号整合）
 - （追記・AAS Step.1 起点化）旧 Step "2"（root）を新 Step "1" へ昇格させ、以降の全 Step ID を 1 つ繰り上げた（詳細は `hve-dev/requirement-definition.md` §13.1 FR-WF-AAS-03）。本表の Step 番号・テスト内の Step ID 期待値は全て新番号へ更新済み。
+
+#### FR-WF-AAS-03 — AAS Step 1 起点化と一度限りの再採番
+- 判定: ✓
+- 直接対応テスト:
+  - [hve/tests/test_application_requirement_workflow.py](hve/tests/test_application_requirement_workflow.py) :: `test_aas_starts_at_step_1_after_renumbering` — AAS の全 Step ID と root Step 1 の非 fan-out・入力契約を固定する
+  - [hve/tests/test_requirement_section13_parity.py](hve/tests/test_requirement_section13_parity.py) — §13.1 の Step ID / title と registry の strict parity を全 AAS Step で検証する
 
 ### §13.2 AAD-WEB — Web App Design
 
@@ -4083,11 +4915,10 @@
   - [hve/tests/test_powershell_workflow_registry_parity.py](hve/tests/test_powershell_workflow_registry_parity.py) — AAS / ADFD / ADFDV のparams、Step順、title、Custom Agent、依存、fallback、templateをPython正本と完全比較（3 passed）
 - 補足: [hve/tests/test_workflow_registry.py](hve/tests/test_workflow_registry.py) の `EXPECTED_STEP_COUNTS["adfd"]` / `test_abd_roots` / `test_abd_step61_and_step62_are_parallel` / `test_and_join` は 7 Step 新構造（根 = `0.1`、Step 1 / 2 は `depends_on=["5"]`）へ更新済み。並列性と AND join の意図は、共通上流 Step 5 完了時点を起点として検証する形で維持している。
 
-#### FR-WF-ADFD-03 — 4 Step の `output_paths` 宣言により Self-Improve scope の path 直指定を維持
+#### FR-WF-ADFD-03 — 4 Step の `output_paths` 宣言（確定ファイル 1 件ずつ）
 - 判定: ✓
 - 直接対応テスト:
-  - [hve/tests/test_orchestrator.py](hve/tests/test_orchestrator.py) :: `TestRunWorkflowSelfImprove::test_self_improve_default_scope_per_workflow`（`adfd` の期待 scope = `""`）
-  - [hve/tests/test_orchestrator.py](hve/tests/test_orchestrator.py) :: `TestRunWorkflowSelfImprove::test_declared_workflows_keep_path_directed_scope`（`adfd` が covered=True）
+  - [hve/tests/test_adfd_dataflow_design_agents.py](hve/tests/test_adfd_dataflow_design_agents.py) — 4 Step の `output_paths` が確定パスと一致すること
 
 #### FR-WF-ADFD-04 — 消費側が文字列一致で検査する見出しの固定
 - 判定: △
@@ -4095,7 +4926,7 @@
   - [hve/tests/test_adfd_dataflow_design_agents.py](hve/tests/test_adfd_dataflow_design_agents.py) :: `TestAdfdDataflowDesignPrompts::test_prompt_declares_single_output_path_in_output_contract` — Prompt 側 `<output_contract>` の出力パス固定のみ
 - 補足: 生成後ドキュメントの見出し実体検査（`## 1. ジョブ一覧表` 等）は未実装。ADFD 実行後の成果物検証で担保する必要がある。
 
-### §13.5 ABDV — Batch Dev
+### §13.5 ADFDV — Dataflow Dev
 
 | Step | 判定 | 主な対応テスト |
 |---|---|---|
@@ -4106,6 +4937,18 @@
 | 3 Functions/コンテナ Deploy | ✗ | — |
 | 4.1 WAF レビュー | ✗ | — |
 | 4.2 整合性チェック | ✗ | — |
+
+#### FR-WF-ADFDV-01 — dataflow fan-out のキー元
+- 判定: ✓
+- 直接対応テスト:
+  - [hve/tests/test_requirement_definition_adfdv_section.py](hve/tests/test_requirement_definition_adfdv_section.py) — §13.5 の fan-out parserと、`app-arch-catalog.md`優先・`app-catalog.md` fallbackのキー元契約を実装へ照合する
+  - [hve/tests/test_catalog_parsers_input_paths.py](hve/tests/test_catalog_parsers_input_paths.py) — deferred展開とfallbackに使う入力pathを `docs/catalog/app-catalog.md` として固定する
+  - [hve/tests/test_fanout.py](hve/tests/test_fanout.py) — `app-arch-catalog.md`のデータフロー推薦APP優先、該当なし／未生成時の`app-catalog.md` fallback、両入力欠損時の空結果を検証する
+
+#### FR-WF-ADFDV-02 — 未解決 slug の fail-closed drop
+- 判定: ✓
+- 直接対応テスト:
+  - [hve/tests/test_output_paths_template_resolvability.py](hve/tests/test_output_paths_template_resolvability.py) — ADFDV Step 2.1 / 2.2 の `{jobId}` / `{jobNameSlug}` が解決不能な宣言を理由付き allowlist として固定し、無言で新しい空ゲートが増えることを拒否する
 
 ### §13.6 AAG — AI Agent Design
 
@@ -4262,7 +5105,7 @@
 | 2 横断整合性レビュー (join) | ✓ | [test_fanout.py](hve/tests/test_fanout.py) :: `test_akm_has_review_join_step` |
 
 横断（AKM 全体）:
-- WorkIQ 連携: [test_akm_workiq_phase.py](hve/tests/test_akm_workiq_phase.py)（全関数）、[test_akm_workiq_ingest.py](hve/tests/test_akm_workiq_ingest.py)（全クラス）、[test_phase6_option_parity.py](hve/tests/test_phase6_option_parity.py) :: `TestAkmWorkflowEnableReview`、`TestEnableAutoMerge`
+- WorkIQ 連携: `hve/tests/test_akm_workiq_phase.py`（v3.38 で削除、FR-KD-10）（全関数）、`hve/tests/test_akm_workiq_ingest.py`（v3.38 で削除、FR-KD-10）（全クラス）、[test_phase6_option_parity.py](hve/tests/test_phase6_option_parity.py) :: `TestAkmWorkflowEnableReview`、`TestEnableAutoMerge`
 
 #### FR-WF-AKM-01 — knowledge本文とChangeLogの2-schema検証
 - 判定: ✓
@@ -4285,11 +5128,11 @@
 
 ### §13.10 ADI — Auto Design-doc Ingestion（統合後）
 
-| 要件 | 判定 | 主な対応テスト |
+| 補足対象 | 現行確認 | 主な対応テスト |
 |---|---|---|
-| FR-WF-ADI-12 — AKM が routing を優先し、ADI 1.1 / 1.2 は正規化済み入力を使う | ✓ | [hve/tests/test_adi_downstream_contract.py](hve/tests/test_adi_downstream_contract.py) :: `test_fanout_common_references_routing_table` / `test_fanout_common_declares_backward_compatible_fallback` / `test_adi_questionnaire_fanout_reads_normalized_content_without_routing` |
-| FR-WF-ADI-17 — Step 1.1 の入出力・scope・0件質問 | ✓ | [hve/tests/test_adi.py](hve/tests/test_adi.py) :: `test_adi_questionnaire_steps_contract`<br>[hve/tests/test_fanout.py](hve/tests/test_fanout.py) :: `test_adi_questionnaire_fanout_produces_21_children`<br>[hve/tests/test_adi_validation.py](hve/tests/test_adi_validation.py) :: `test_explicit_zero_questionnaire_is_valid` / `test_silent_zero_questionnaire_is_invalid`<br>[hve/tests/test_orchestrator.py](hve/tests/test_orchestrator.py) :: `TestNormalizeAdiTargetScope` |
-| FR-WF-ADI-18 — Step 1.2 join・Step 2 順序・main成果物検証 | ✓ | [hve/tests/test_adi.py](hve/tests/test_adi.py) :: `test_adi_questionnaire_steps_contract` / `test_adi_step_dependencies_are_serial`<br>[hve/tests/test_orchestrator.py](hve/tests/test_orchestrator.py) :: `TestAdiQuestionnairePostDag`<br>[hve/tests/test_main.py](hve/tests/test_main.py) :: `TestBuildParams.test_adi_params_defaults` / `test_adi_params_custom_values` |
+| 補足（FR-WF-ADI-12）— AKM が routing を優先し、ADI 1.1 / 1.2 は正規化済み入力を使う | ✓ | [hve/tests/test_adi_downstream_contract.py](hve/tests/test_adi_downstream_contract.py) :: `test_fanout_common_references_routing_table` / `test_fanout_common_declares_backward_compatible_fallback` / `test_adi_questionnaire_fanout_reads_normalized_content_without_routing` |
+| 補足（FR-WF-ADI-17）— Step 1.1 の入出力・scope・0件質問 | ✓ | [hve/tests/test_adi.py](hve/tests/test_adi.py) :: `test_adi_questionnaire_steps_contract`<br>[hve/tests/test_fanout.py](hve/tests/test_fanout.py) :: `test_adi_questionnaire_fanout_produces_21_children`<br>[hve/tests/test_adi_validation.py](hve/tests/test_adi_validation.py) :: `test_explicit_zero_questionnaire_is_valid` / `test_silent_zero_questionnaire_is_invalid`<br>[hve/tests/test_orchestrator.py](hve/tests/test_orchestrator.py) :: `TestNormalizeAdiTargetScope` |
+| 補足（FR-WF-ADI-18）— Step 1.2 join・Step 2 順序・main成果物検証 | ✓ | [hve/tests/test_adi.py](hve/tests/test_adi.py) :: `test_adi_questionnaire_steps_contract` / `test_adi_step_dependencies_are_serial`<br>[hve/tests/test_orchestrator.py](hve/tests/test_orchestrator.py) :: `TestAdiQuestionnairePostDag` |
 
 ### §13.11 ADOC — Source Code → Documentation
 
@@ -4337,7 +5180,7 @@
 #### FR-WF-ARD-02 — ユーザー提供資料の一次情報優先明示
 - 判定: ✓
 - 直接対応テスト:
-  - [hve/tests/test_ard_attached_docs_priority.py](hve/tests/test_ard_attached_docs_priority.py) :: `TestArdAttachedDocsPriority` — Untargeted / Targeted Prompt と Step 1 / Step 2 Body テンプレートが最優先参照規定を保持すること、Step 2 の入力節と完了条件が添付資料・指定資料の両方を対象にすること、および `{attached_docs}` / `{target_business}` が保たれていること
+  - [hve/tests/test_ard_attached_docs_priority.py](hve/tests/test_ard_attached_docs_priority.py) :: `TestArdAttachedDocsPriority` — Untargeted / Targeted Prompt と Step 1 / Step 2 Body テンプレートが最優先参照規定を保持すること、Step 2 の入力節と完了条件が添付資料・指定資料の両方を対象にすること、`{attached_docs}` / `{target_business}` が保たれていること、および Targeted Prompt が実装済みのパス参照フローを未実装と記述せず、本文非埋込み・相対パス一覧・読み取りツールを明示すること
 - 追加受入テスト（v2.57 改訂分）:
   - [hve/tests/test_ard_target_business_resolver.py](hve/tests/test_ard_target_business_resolver.py) — `to_context_text()` がファイル本文・絶対パス・外部 basename・例外本文を含めず、相対パス一覧・件数・合計バイト数・有界な `skipped` / `errors` を返すこと。unsafe symlink の列挙前拒否と symlink cycle の `RuntimeError` 降格も検証する
   - [hve/tests/test_orchestrator_ard.py](hve/tests/test_orchestrator_ard.py) — パス指定 `target_business` の Step 2 プロンプトへファイル本文が入らないこと
@@ -4353,6 +5196,7 @@
   - RED（2026-08-25）: 3 ファイル焦点実行で **3 failed, 49 passed, 2 skipped**。`to_context_text()` が fenced code block でファイル本文を埋め込んでおり、`step-2.md` が `{target_business}` を 2 箇所展開していたため。
   - GREEN（2026-08-25）: パス参照化とテンプレート 1 箇所化後、ARD 関連 6 ファイルを含む統合実行で **329 passed, 2 skipped, 85 subtests passed**。
   - 敵対的レビュー反映（2026-08-26）: absolute path / errors 非伝達、unsafe symlink の列挙順、外部 basename、診断無制限、symlink loop の例外漏れを順に RED 化して修正した。最終レビューでは Step 2 入力節と完了条件の優先度が規範語句「一次情報として最優先」より弱いことを検出し、入力節は **1 failed / 5 passed**、完了条件は **1 failed / 6 passed** の RED 後に修正した。最終焦点実行は **60 passed / 2 skipped**、再レビューの未解決指摘は 0 件。
+  - RED / GREEN（2026-09-03）: Targeted Prompt に残存した `後続 PR で実装予定` を拒否し、本文非埋込み・相対パス一覧・読み取りツールの明示を要求する `test_targeted_prompt_documents_implemented_path_reference_flow` を追加した。修正前は同ケースが **1 failed**、Prompt を既存 FR-WF-ARD-02 へ同期した後は ARD 関連 4 ファイルで **67 passed / 2 skipped**。skip 2 件は Windows で symlink 作成を利用できない既存ケース。本変更は Prompt 契約の不整合修正であり、証拠を取得できない Mac 実行の排他的根本原因を確定または解消したとは扱わない。
 
 #### FR-WF-ARD-03 — ARDの5表示グループ・10実Step・既定tuple・recommendation伝搬
 - 判定: ✓（RED: 既存4グループ / 8 Step契約はGREEN、新規5グループ / 10 Step契約は失敗 → GREEN: 3ファイル合計 **75 passed**）
@@ -4405,7 +5249,7 @@
 | G-OUT（実行時解決済み必須成果物だけの存在） | ✓ | [test_workflow_gate_scope_contract.py](hve/tests/test_workflow_gate_scope_contract.py)（non-fanout宣言専用面の除外）、[test_data_model_split_contract.py](hve/tests/test_data_model_split_contract.py)（optional sidecar宣言と実行時除外。REDは同ファイル内11 failed → GREEN 25 passed）、[test_runner_split_required_guard.py](hve/tests/test_runner_split_required_guard.py) :: `TestCheckOutputPathsGate`（固定output_pathsゲート） |
 | G-IN（required_input_paths 充足） | ✓ | [test_input_artifact_check.py](hve/tests/test_input_artifact_check.py) 全クラス |
 | G-LBL（Cloud完了判定だけのdone/running/blocked状態） | ✓ | [test_workflow_gate_scope_contract.py](hve/tests/test_workflow_gate_scope_contract.py)（Cloudのcleanup-before-done、API/JSON/競合時fail-closed、close前後の再検証、全prefix。B4 RED 1 failed → 同ファイル GREEN 14 passed）、[test_workflow_registry_agentic.py](hve/tests/test_workflow_registry_agentic.py) :: `TestLabelStateMachineFixWorkflows`（既存状態機械の非回帰）、[test_template_engine.py](hve/tests/test_template_engine.py)（local done指示なし）。[test_orchestrator.py](hve/tests/test_orchestrator.py) :: `TestDoneLabeling` はCLI `--create-issues`の補助通知を検証するだけで、本ゲートの根拠には用いない |
-| G-CONS（AKMだけの21ドキュメント一貫性） | △ | [test_workflow_gate_scope_contract.py](hve/tests/test_workflow_gate_scope_contract.py)（固定/テンプレート両宣言面のAKM限定characterization）、[test_akm_workiq_phase.py](hve/tests/test_akm_workiq_phase.py) 全関数（既存の間接的整合性レビュー） |
+| G-CONS（AKMだけの21ドキュメント一貫性） | △ | [test_workflow_gate_scope_contract.py](hve/tests/test_workflow_gate_scope_contract.py)（固定/テンプレート両宣言面のAKM限定characterization）、`hve/tests/test_akm_workiq_phase.py`（v3.38 で削除、FR-KD-10） 全関数（既存の間接的整合性レビュー） |
 | G-DIFF（実際にPRが作成されたrunだけの差分品質） | ✓ | [test_workflow_diff_gate.py](hve/tests/test_workflow_diff_gate.py)（exact / directory / segment-aware glob / fan-out / prefix / optional template / constrained placeholder、全13 Workflow policy、HVE scope遮断、path/status/rename/copy、identity、決定性・provenance）、[test_github_api.py](hve/tests/test_github_api.py) :: `TestListPullRequestFiles`（全ページ、3,000 files上限、metadata件数照合、途中失敗、非list、rename/copy、patch破棄）、[test_validate_workflow_diff.py](.github/scripts/tests/test_validate_workflow_diff.py)（PASS / BLOCKED / N/A、UTF-8/BOM、malformed JSON、root/symlink confinement、trusted import）、[test_workflow_diff_gate_cloud.py](hve/tests/test_workflow_diff_gate_cloud.py)（trusted二重checkout、subject code非実行、Cloud synthetic fixture、auto-approve直接gate、required context）、[test_orchestrator.py](hve/tests/test_orchestrator.py) :: `TestCreatePrIfNeeded` / `TestDeleteLocalMergedBranch`（marker、実PR差分、label順序、BLOCKED伝播）。実測: core統合145 passed、CLI/validator 138 passed・2 symlink tests skipped（Windows権限制約）、Cloud/auto-approve 80 passed、local PR回帰56 passed |
 
 ### §13.14 要件適合実測（FR-WF-CONF）
@@ -4471,6 +5315,25 @@
 
 ---
 
+#### FR-WF-ASDW-07 — Step 1.3 の失敗 stage は stderr 末尾の要約を秘密値マスク付きで `work-status.md` へ残す
+- 判定: ✓
+- 直接対応テスト:
+  - [hve/tests/test_asdw_data_failure_summary.py](hve/tests/test_asdw_data_failure_summary.py) — 要約がエラー文を保持し、GUID・URL・認証値・メール・絶対パス・長い不透明文字列をマスクし、20 行・2,000 文字以内で fence 文字を含まないこと、stage runner が stderr を端末へ流しつつ末尾を保持すること、`work-status.md` の `Failure summary` 節が失敗 stage だけに出ること
+#### FR-WF-ASDW-06 / FR-WF-AAGD-10 — 同じ Agent・同じ出力の後段 Step は差分追記に絞る
+- 判定: ✓（RED: 2 failed → GREEN: 4 passed）
+- 直接対応テスト:
+  - [hve/tests/test_duplicate_step_update_contract.py](hve/tests/test_duplicate_step_update_contract.py) — 2 組（AAD-WEB 2.5 / ASDW-WEB 2.1、AAG 1 / AAGD 1）が同じ Agent・同じ出力のままで、後段の本文が既存成果物を読んで差分だけを追記し、既存の記述を削除・再生成しないこと
+
+#### FR-IDL-01 — ID 台帳と相互参照の決定的検査
+- 判定: ✓（RED: collection error（`hve.id_ledger` 不在）→ GREEN: 15 passed。実リポジトリの `--bootstrap` で既存ドリフト 6 件（テスト ID の命名）を検出。TBD-39）
+- 直接対応テスト:
+  - [hve/tests/test_id_ledger.py](hve/tests/test_id_ledger.py) — 検査規則 (1)〜(9)、台帳不在時の成功、`--warn-only`、`--bootstrap`、既存ドリフト（画面 ID `TBD`、テスト ID の命名の不統一）の検出
+
+#### FR-IDL-02 — 所有範囲が重ならない fan-out の子の並列化
+- 判定: ✓（RED: collection error（`ownership_prefixes` 不在）→ GREEN: 9 passed。実定義で 3.2 / 4.1 の子が所有範囲を持ち、3.3 / 4.2 の子が共有ファイルのため排他になることを確認。実行時間の短縮効果は未測定）
+- 直接対応テスト:
+  - [hve/tests/test_ownership_parallel.py](hve/tests/test_ownership_parallel.py) — 所有範囲の算出（キーを含む宣言・接頭辞ゲート・台帳）、共有ファイルを宣言する子の排他、重なる子の直列化、上限、排他 Step の待機、`ownership_parallel=0` の従来動作、`asdw-web` の宣言値
+
 ## §H 補助テストファイル（FR への直接寄与は薄いが品質保証に寄与）
 
 | テストファイル | 主な役割 | 関連 FR |
@@ -4482,13 +5345,11 @@
 | [test_runner.py](hve/tests/test_runner.py) | StepRunner 詳細 | FR-MODEL-02 / NFR-SEC-01 |
 | [test_runner_file_tracking.py](hve/tests/test_runner_file_tracking.py) | 生成ファイルトラッキング | FR-WF-OUT-01 周辺 |
 | [test_runner_pre_qa.py](hve/tests/test_runner_pre_qa.py) | Pre-QA フェーズ | FR-CLI-02（--auto-qa） |
-| [test_runner_qa_phase.py](hve/tests/test_runner_qa_phase.py) | QA フェーズ（AKM/ADI関連/通常） | AKM/ADI 系 |
 | [test_startup_token_tools.py](hve/tests/test_startup_token_tools.py) | 起動時トークン計測 | NFR-OBS 周辺 |
 | [test_streaming_token_chunk.py](hve/tests/test_streaming_token_chunk.py) | ストリーミング出力 | NFR-OBS-03 |
 | [test_template_engine.py](hve/tests/test_template_engine.py) | Issue 本文テンプレ生成（29 クラス） | FR-CLOUD-10、FR-CLI-30 |
 | [test_template_engine_agentic.py](hve/tests/test_template_engine_agentic.py) | Issue Form の Agentic Retrieval | FR-CLOUD-10〜11 |
 | [test_issue_template_qa_parity.py](hve/tests/test_issue_template_qa_parity.py) | Issue Template ↔ Workflow QA 整合性 | FR-CLOUD-10 周辺 |
-| [test_self_improve_completeness.py](hve/tests/test_self_improve_completeness.py) | Self-Improve 設定の Issue Template/Reusable 整合性 | FR-CLI-60 |
 | [test_workflow_detect_qa_questionnaire_pr.py](hve/tests/test_workflow_detect_qa_questionnaire_pr.py) | QA 質問票 PR 検出 workflow | FR-STATE-02 周辺 |
 | [test_workflow_restore_auto_qa_label.py](hve/tests/test_workflow_restore_auto_qa_label.py) | auto-qa ラベル復元 workflow | FR-STATE-02 周辺 |
 | [test_workiq.py](hve/tests/test_workiq.py) | WorkIQ MCP / Copilot Session（30+ クラス） | AKM/ADI 関連の WorkIQ 連携 |
@@ -4503,7 +5364,6 @@
 - [.github/scripts/tests/test-powershell.ps1](.github/scripts/tests/test-powershell.ps1) — PowerShell スクリプト dry-run（Pester 6.1.0で9 passed / 0 failed）
 - [.github/scripts/powershell/tests/](.github/scripts/powershell/tests/) — PowerShell registry / command / GitHub API / Issue parser / Copilot assign（Pester 6.1.0で82 passed / 0 failed）
 - [.github/workflows/test-cli-scripts.yml](.github/workflows/test-cli-scripts.yml) — Windows / Ubuntuの双方でPester 5+とPSScriptAnalyzer 1.20+を導入し、PowerShell registry群とdry-runを実行。PowerShell 7+専用のためBOM規則だけを除外し、その他のWarning / Errorはテストファイルを含めて検査する（ローカルPSScriptAnalyzer 1.25.0: 0件）
-- [.github/scripts/tests/test-validate-agents.py](.github/scripts/tests/test-validate-agents.py) — Agent 定義検証
 - [.github/scripts/tests/test_validate_skill_routing.py](.github/scripts/tests/test_validate_skill_routing.py) — Skill ルーティング検証
 
 ---

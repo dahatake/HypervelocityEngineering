@@ -151,12 +151,6 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
         "akm_reasoning_effort": "akm_effort",
         "akm_context_tier": "akm_context_tier",
     },
-    "SELFIMPROVE": {
-        "self_improve": "self_improve",
-        "self_improve_max_iterations": "self_improve_max_iterations",
-        "self_improve_target_scope": "self_improve_target_scope",
-        "self_improve_goal": "self_improve_goal",
-    },
     "C5": {
         "create_issues": "create_issues",
         "create_pr": "create_pr",
@@ -194,17 +188,7 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
     },
     "C4": {
         "workiq": "workiq",
-        "workiq_dxx": "workiq_dxx",
-        "workiq_draft": "workiq_draft",
-        "workiq_draft_output_dir": "workiq_draft_output_dir",
-        "workiq_prompt_qa": "workiq_prompt_qa",
-        "workiq_prompt_km": "workiq_prompt_km",
-        "workiq_prompt_review": "workiq_prompt_review",
-        "workiq_per_question_timeout": "workiq_per_question_timeout",
-        "workiq_request_timeout": "workiq_request_timeout",
-        # tri-state: workiq_akm_review / workiq_akm_ingest
-        "workiq_akm_review": "workiq_akm_review",
-        "workiq_akm_ingest": "workiq_akm_ingest",
+        "knowledge_sources": "knowledge_sources",
     },
     "C10": {
         "app_ids": "app_ids",
@@ -262,11 +246,12 @@ _SECTION_FIELDS: Dict[str, Dict[str, str]] = {
         "autopilot_app_id_picker_timeout_sec": "autopilot_app_id_picker_timeout_sec",
         "auto_compaction": "auto_compaction",
     },
-    # TOOLSEARCH: FR-GUI-07。この 2 キーの入力欄は本セクションが単独で所有する
+    # TOOLSEARCH: FR-GUI-07。この 3 キーの入力欄は本セクションが単独で所有する
     # （Step 1 右ペインと二重に持たない。FR-MAINT-07）。
     "TOOLSEARCH": {
         "tool_search": "tool_search",
         "tool_search_ranking": "tool_search_ranking",
+        "tool_search_defer_threshold": "tool_search_defer_threshold",
     },
     # AGENTIC: FR-LOCAL-SURFACE-01 (a)。`_CAgenticRetrieval` の 6 項目を
     # 永続化する。QComboBox の userData はすべて往復可能な文字列で、

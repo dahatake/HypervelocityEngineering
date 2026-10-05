@@ -21,6 +21,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import threading
 import re
 import secrets
 from dataclasses import dataclass
@@ -160,6 +161,132 @@ class StageResult:
     exit_code: int
     reached: bool
     evidence: str
+
+
+_STDERR_TAIL_BYTES = 16384
+_FAILURE_SUMMARY_MAX_LINES = 20
+_FAILURE_SUMMARY_MAX_LINE_CHARS = 300
+_FAILURE_SUMMARY_MAX_CHARS = 2000
+_REDACTED = "<redacted>"
+_FAILURE_REDACTIONS = (
+    re.compile(r"\b[a-z][a-z0-9+.-]*://\S+", re.IGNORECASE),
+    re.compile(
+        r"\b(?:password|passwd|pwd|secret|token|key|sas|sig|signature|"
+        r"connection[-_ ]?string|authorization)\b\s*[=:]\s*\S+",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\bBearer\s+\S+", re.IGNORECASE),
+    re.compile(
+        r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b"),
+    re.compile(r"\b[A-Za-z]:[\\/]\S*"),
+    re.compile(r"(?<![\w:.])/(?:[\w.@-]+/)+[\w.@-]*"),
+    re.compile(r"\b[A-Za-z0-9+/_=-]{32,}\b"),
+)
+
+
+def summarize_stage_failure(stderr_tail: object) -> str:
+    """Return a bounded, secret-masked, single-block summary of stage stderr.
+
+    Only the last lines are kept. URLs, credential-like assignments, GUIDs
+    (subscription/tenant/principal IDs), e-mail addresses, absolute paths, and
+    long opaque tokens are masked, and control characters and Markdown fence
+    characters are removed, so the text is safe to record in HVE evidence.
+    """
+    if isinstance(stderr_tail, (bytes, bytearray)):
+        text = bytes(stderr_tail).decode("utf-8", errors="replace")
+    elif isinstance(stderr_tail, str):
+        text = stderr_tail
+    else:
+        return ""
+    lines: list[str] = []
+    for raw_line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        line = "".join(
+            ch if ch == "\t" or (ord(ch) >= 0x20 and ord(ch) != 0x7F) else " "
+            for ch in raw_line
+        ).replace("`", "'").strip()
+        if not line:
+            continue
+        for pattern in _FAILURE_REDACTIONS:
+            line = pattern.sub(_REDACTED, line)
+        if len(line) > _FAILURE_SUMMARY_MAX_LINE_CHARS:
+            line = line[:_FAILURE_SUMMARY_MAX_LINE_CHARS] + "..."
+        lines.append(line)
+    summary = "\n".join(lines[-_FAILURE_SUMMARY_MAX_LINES:])
+    if len(summary) > _FAILURE_SUMMARY_MAX_CHARS:
+        summary = "..." + summary[-_FAILURE_SUMMARY_MAX_CHARS:]
+    return summary
+
+
+def _run_stage_process(
+    command: Sequence[str],
+    *,
+    cwd: str,
+    env: Mapping[str, str],
+    input: bytes,
+    text: bool = False,
+    check: bool = False,
+) -> subprocess.CompletedProcess:
+    """Run a stage, echoing stderr live while keeping a bounded tail of it."""
+    del text, check  # fixed: binary stdin, exit code is inspected by the caller
+    process = subprocess.Popen(
+        list(command),
+        cwd=cwd,
+        env=dict(env),
+        stdin=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    tail = bytearray()
+
+    def _feed_stdin() -> None:
+        try:
+            assert process.stdin is not None
+            process.stdin.write(input)
+        except OSError:
+            pass
+        finally:
+            try:
+                assert process.stdin is not None
+                process.stdin.close()
+            except OSError:
+                pass
+
+    def _tee_stderr() -> None:
+        assert process.stderr is not None
+        sink = getattr(sys.stderr, "buffer", None)
+        while True:
+            chunk = process.stderr.read1(4096)  # type: ignore[attr-defined]
+            if not chunk:
+                break
+            tail.extend(chunk)
+            del tail[:-_STDERR_TAIL_BYTES]
+            try:
+                if sink is not None:
+                    sink.write(chunk)
+                    sink.flush()
+            except (OSError, ValueError):
+                pass
+
+    threads = [
+        threading.Thread(target=_feed_stdin, daemon=True),
+        threading.Thread(target=_tee_stderr, daemon=True),
+    ]
+    for thread in threads:
+        thread.start()
+    try:
+        returncode = process.wait()
+    except BaseException:
+        process.kill()
+        process.wait()
+        raise
+    finally:
+        for thread in threads:
+            thread.join(timeout=5)
+    return subprocess.CompletedProcess(
+        list(command), returncode, stdout=None, stderr=bytes(tail)
+    )
 
 
 def _validate_direct_repo_directory(repo_root: Path, directory: Path, label: str) -> Path:
@@ -848,8 +975,9 @@ def execute_stage(
     *,
     repo_root: Optional[Path] = None,
     environment: Optional[Mapping[str, str]] = None,
-    process_runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    process_runner: Callable[..., subprocess.CompletedProcess[str]] = _run_stage_process,
     _held_pipeline_lock: Optional[_StageExecutionLock] = None,
+    _failure_summary_sink: Optional[list[str]] = None,
 ) -> int:
     """Validate and execute exactly one stage from the captured script bytes."""
     if stage not in _STAGES:
@@ -939,6 +1067,10 @@ def execute_stage(
         )
         return_code = int(result.returncode)
         stage_return_code = return_code
+        if _failure_summary_sink is not None and return_code != 0:
+            _failure_summary_sink.append(
+                summarize_stage_failure(getattr(result, "stderr", None))
+            )
         if stage in _STAGE_SUCCESS_MARKERS and stage_markers is not None and return_code == 0:
             _write_stage_success_marker(
                 stage_markers[stage],
@@ -964,7 +1096,7 @@ def execute_pipeline(
     *,
     repo_root: Optional[Path] = None,
     environment: Optional[Mapping[str, str]] = None,
-    process_runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    process_runner: Callable[..., subprocess.CompletedProcess[str]] = _run_stage_process,
 ) -> tuple[StageResult, ...]:
     """Run the fixed Step 1.3 sequence and its idempotency pass under one lock."""
     root = (repo_root or Path.cwd()).resolve()
@@ -994,12 +1126,14 @@ def execute_pipeline(
             ("verify", 2),
         ):
             last_stage = stage
+            failure_summary: list[str] = []
             exit_code = execute_stage(
                 stage,
                 repo_root=root,
                 environment=parent_environment,
                 process_runner=process_runner,
                 _held_pipeline_lock=pipeline_lock,
+                _failure_summary_sink=failure_summary,
             )
             last_return_code = exit_code
             results.append(
@@ -1008,7 +1142,14 @@ def execute_pipeline(
                     attempt=attempt,
                     exit_code=exit_code,
                     reached=True,
-                    evidence=f"process-exit={exit_code}",
+                    evidence=(
+                        f"process-exit={exit_code}"
+                        + (
+                            "\n" + failure_summary[0]
+                            if failure_summary and failure_summary[0]
+                            else ""
+                        )
+                    ),
                 )
             )
             if exit_code != 0:

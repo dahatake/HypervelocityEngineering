@@ -21,19 +21,14 @@ from config import DEFAULT_CONTEXT_INJECTION_MAX_CHARS, SDKConfig
 from console import Console
 from runner import (
     StepRunner,
-    _AZURE_FREE_WORKFLOWS,
-    _AZURE_MCP_SERVER_NAME,
     _ensure_step_work_dir,
     _extract_safe_qa_artifact_paths,
-    _filter_mcp_servers_for_session,
     _is_review_fail,
     _parse_qa_content_with_artifact_fallback,
     _truncate_context,
     _work_identifier_for_step,
     _step_work_dir,
 )
-from workflow_registry import get_workflow, list_workflows  # type: ignore[import-untyped]
-from workiq import WORKIQ_MCP_SERVER_NAME  # type: ignore[import-untyped]
 
 # Sentinel for distinguishing "key absent" vs. "key present with None value" in sys.modules.
 # Used in test_returns_false_when_sdk_missing to correctly restore sys.modules after the test.
@@ -112,13 +107,6 @@ class TestStepRunnerDryRun(unittest.TestCase):
             result = _run(runner.run_step("1.1", "テストステップ", "テストプロンプト"))
         self.assertTrue(result)
 
-    def test_dry_run_resets_workiq_tool_called_flag(self) -> None:
-        runner = self._make_runner()
-        runner._workiq_tool_called = True
-        with _CaptureOutput():
-            result = _run(runner.run_step("1.1", "テストステップ", "テストプロンプト"))
-        self.assertTrue(result)
-        self.assertFalse(runner._workiq_tool_called)
 
 
 class TestWorkIdentifierForStep(unittest.TestCase):
@@ -401,10 +389,6 @@ class TestStepWorkDirectory(unittest.TestCase):
                     side_effect=fake_send.__get__(runner, StepRunner),
                 ), unittest.mock.patch.object(
                     runner,
-                    "_maybe_run_split_fork",
-                    return_value=True,
-                ), unittest.mock.patch.object(
-                    runner,
                     "_run_asdw_data_verify_contract_gate",
                     return_value=[],
                 ), unittest.mock.patch.object(
@@ -492,140 +476,37 @@ class TestStepWorkDirectory(unittest.TestCase):
             )
 
 
-class TestMcpServerFiltering(unittest.TestCase):
-    """main session に Work IQ MCP alias を誤接続しないためのフィルタ。"""
-
-    def test_excludes_hve_and_plain_workiq_aliases_by_default(self) -> None:
-        servers = {
-            WORKIQ_MCP_SERVER_NAME: {"command": "npx"},
-            "workiq": {"command": "npx"},
-            " WorkIQ ": {"command": "npx"},
-            "azure": {"command": "azmcp"},
-        }
-
-        filtered = _filter_mcp_servers_for_session(servers)
-
-        self.assertEqual(filtered, {"azure": {"command": "azmcp"}})
-
-    def test_include_workiq_keeps_aliases_for_dedicated_workiq_phase(self) -> None:
-        servers = {
-            WORKIQ_MCP_SERVER_NAME: {"command": "npx"},
-            "workiq": {"command": "npx"},
-            " WorkIQ ": {"command": "npx"},
-            "azure": {"command": "azmcp"},
-        }
-
-        filtered = _filter_mcp_servers_for_session(servers, include_workiq=True)
-
-        self.assertEqual(filtered, servers)
-
-    def test_excludes_preview_plugin_alias(self) -> None:
-        """`workiq-preview` も同じ Work IQ サービスなのでメインセッションから除外する。"""
-        servers = {
-            "workiq-preview": {"type": "http"},
-            "azure": {"command": "azmcp"},
-        }
-
-        self.assertEqual(
-            _filter_mcp_servers_for_session(servers),
-            {"azure": {"command": "azmcp"}},
-        )
-        self.assertEqual(
-            _filter_mcp_servers_for_session(servers, include_workiq=True), servers,
-        )
 
 
-class TestAzureFreeWorkflowMcpFilter(unittest.TestCase):
-    """FR-CLI-79: Azure を利用しない Workflow には azure MCP を渡さない。"""
+class TestSharedResourceRoutingWiring(unittest.TestCase):
+    """runner は raw repo MCP config helper ではなく shared routing を使う。"""
 
-    SERVERS = {
-        "azure": {"command": "azmcp", "tools": ["*"]},
-        "microsoft-learn": {"type": "http", "tools": ["*"]},
-    }
-
-    def test_drops_azure_for_declared_azure_free_workflows(self) -> None:
-        for workflow_id in sorted(_AZURE_FREE_WORKFLOWS):
-            with self.subTest(workflow_id=workflow_id):
-                filtered = _filter_mcp_servers_for_session(
-                    self.SERVERS, workflow_id=workflow_id
-                )
-                self.assertNotIn("azure", filtered)
-                self.assertIn("microsoft-learn", filtered)
-
-    def test_keeps_azure_for_every_other_workflow(self) -> None:
-        for workflow in list_workflows():
-            if workflow.id in _AZURE_FREE_WORKFLOWS:
-                continue
-            with self.subTest(workflow_id=workflow.id):
-                filtered = _filter_mcp_servers_for_session(
-                    self.SERVERS, workflow_id=workflow.id
-                )
-                self.assertIn("azure", filtered)
-
-    def test_unknown_or_missing_workflow_id_keeps_every_server(self) -> None:
-        for workflow_id in (None, "", "not-a-workflow"):
-            with self.subTest(workflow_id=workflow_id):
-                self.assertEqual(
-                    _filter_mcp_servers_for_session(self.SERVERS, workflow_id=workflow_id),
-                    self.SERVERS,
-                )
-
-    def test_allowlist_entries_exist_in_the_registry(self) -> None:
-        self.assertLessEqual(_AZURE_FREE_WORKFLOWS, {w.id for w in list_workflows()})
-
-    def test_allowlist_workflows_never_mention_azure_in_their_prompts(self) -> None:
-        """allowlist が実装から取り残されると、Azure を使う Step が壊れる。"""
-        prompts = Path(__file__).resolve().parents[2] / ".github" / "prompts"
-        offenders = []
-        for workflow_id in sorted(_AZURE_FREE_WORKFLOWS):
-            for step in get_workflow(workflow_id).steps:
-                if not step.custom_agent:
-                    continue
-                prompt = prompts / f"{step.custom_agent}.prompt.md"
-                if not prompt.exists():
-                    continue
-                if "azure" in prompt.read_text(encoding="utf-8").lower():
-                    offenders.append(f"{workflow_id}:{step.id}:{step.custom_agent}")
-        self.assertEqual(offenders, [])
-
-    def test_excluded_server_name_exists_in_the_repository_mcp_config(self) -> None:
-        """サーバ名が改名されると縮約が無言で効かなくなる。"""
-        config = json.loads(
-            (Path(__file__).resolve().parents[2] / ".github" / ".mcp.json").read_text(
-                encoding="utf-8"
-            )
-        )
-        self.assertIn(_AZURE_MCP_SERVER_NAME, config.get("mcpServers", {}))
-
-    def test_the_filter_is_wired_into_the_repository_mcp_injection(self) -> None:
-        """フィルタ自体が正しくても、配線が外れれば削減は効かない。"""
+    def test_session_creation_helper_uses_shared_resource_routing(self) -> None:
         import inspect
 
-        from runner import (
-            _apply_repository_mcp_scope,
-            _create_session_with_auto_reasoning_fallback,
-        )
+        from runner import _create_session_with_auto_reasoning_fallback
 
-        self.assertIn(
-            "workflow_id",
-            inspect.signature(_create_session_with_auto_reasoning_fallback).parameters,
-        )
+        params = inspect.signature(_create_session_with_auto_reasoning_fallback).parameters
+        self.assertIn("workflow_id", params)
+        self.assertIn("required_mcp_servers", params)
+        self.assertIn("required_skills", params)
         source = inspect.getsource(_create_session_with_auto_reasoning_fallback)
         code = "\n".join(line.split("#", 1)[0] for line in source.splitlines())
-        block = code[code.index("_apply_repository_mcp_scope"):]
-        self.assertIn("workflow_id=workflow_id", block)
+        self.assertIn("create_routed_session(", code)
+        self.assertIn("required_mcp_servers=required_mcp_servers", code)
+        self.assertIn("required_skills=required_skills", code)
+        self.assertIn("optional_skills=optional_skills", code)
+        self.assertNotIn("_apply_repository_mcp_scope", code)
 
-        # 縮約の単一実装（FR-MAINT-07）側でフィルタが適用されていること。
-        helper = "\n".join(
-            line.split("#", 1)[0]
-            for line in inspect.getsource(_apply_repository_mcp_scope).splitlines()
-        )
-        self.assertIn("_filter_mcp_servers_for_session(", helper)
-        self.assertIn("workflow_id=workflow_id", helper)
+    def test_run_step_forwards_required_resources_to_main_session(self) -> None:
+        import inspect
 
         run_step_source = inspect.getsource(StepRunner.run_step)
         call = run_step_source[run_step_source.index("self._create_main_session("):]
-        self.assertIn("workflow_id=workflow_id", call[:400])
+        self.assertIn("workflow_id=workflow_id", call[:500])
+        self.assertIn("required_mcp_servers=None", call[:800])
+        self.assertIn("required_skills=_required_skills_for_step", call[:900])
+        self.assertNotIn("_required_mcp_servers_for_step", run_step_source)
 
 
 class TestStepRunnerNonDryRunNoSDK(unittest.TestCase):
@@ -1044,37 +925,8 @@ class TestStepRunnerStreamEvents(unittest.TestCase):
             runner._handle_session_event(event)
         self.assertIn("grep", cap.stdout)
 
-    def test_tool_event_without_server_name_does_not_set_called_flag(self) -> None:
-        runner = self._make_runner(show_stream=False, verbose=True)
-        self.assertFalse(runner._workiq_tool_called)
-        event = _FakeEvent("tool.execution_start", _FakeEventData(tool_name="ask"))
-        with _CaptureOutput():
-            runner._handle_session_event(event)
-        self.assertFalse(runner._workiq_tool_called)
 
-    def test_workiq_mcp_tool_event_sets_called_flag(self) -> None:
-        runner = self._make_runner(show_stream=False, verbose=True)
-        self.assertFalse(runner._workiq_tool_called)
-        event = _FakeEvent(
-            "tool.execution_start",
-            _FakeEventData(mcp_tool_name="ask", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
-        )
-        with _CaptureOutput() as cap:
-            runner._handle_session_event(event)
-        self.assertIn("Work IQ ツール 'ask' が呼び出されました", cap.stdout)
-        self.assertTrue(runner._workiq_tool_called)
-        self.assertEqual(runner._workiq_called_tools, ["ask"])
 
-    def test_other_mcp_server_tool_does_not_set_workiq_flag(self) -> None:
-        runner = self._make_runner(show_stream=False, verbose=True)
-        event = _FakeEvent(
-            "tool.execution_start",
-            _FakeEventData(mcp_tool_name="ask", mcp_server_name="other_server"),
-        )
-        with _CaptureOutput():
-            runner._handle_session_event(event)
-        self.assertFalse(runner._workiq_tool_called)
-        self.assertEqual(runner._workiq_called_tools, [])
 
     def test_tool_execution_complete_success(self) -> None:
         runner = self._make_runner(show_stream=False, verbose=True)
@@ -1594,7 +1446,6 @@ class TestStepRunnerStreamEvents(unittest.TestCase):
                     dry_run=False,
                     auto_qa=False,
                     auto_contents_review=False,
-                    auto_self_improve=False,
                 ),
                 console=Console(verbose=False, quiet=True),
             )
@@ -1663,10 +1514,6 @@ class TestStepRunnerStreamEvents(unittest.TestCase):
                 runner,
                 "_run_asdw_data_verify_contract_gate",
                 return_value=[],
-            ), unittest.mock.patch.object(
-                runner,
-                "_maybe_run_split_fork",
-                return_value=True,
             ), unittest.mock.patch(
                 "runner._extract_text",
                 return_value="",
@@ -1927,7 +1774,7 @@ class TestStepRunnerStreamEvents(unittest.TestCase):
         self.assertIn("ask_work_iq: timeout", cap.stdout)
 
     def test_tool_execution_complete_failure_mcp_takes_priority_over_legacy(self) -> None:
-        """T-M5: workiq.py:689 と同じく MCP ツール名が legacy より優先される。"""
+        """T-M5: workiq.extract_tool_metadata_from_event と同じく MCP ツール名が legacy より優先される。"""
         runner = self._make_runner(show_stream=False, verbose=True)
         event = _FakeEvent(
             "tool.execution_complete",
@@ -2518,61 +2365,6 @@ class TestTrackToolFiles(unittest.TestCase):
         mock_bash.assert_not_called()
 
 
-class TestWorkIQToolNamesConsistency(unittest.TestCase):
-    """Phase 1: runner.py の _WORKIQ_TOOL_NAMES が workiq.py の定数と一致することを確認。"""
-
-    def test_workiq_tool_names_matches_workiq_module(self) -> None:
-        import workiq as _workiq_mod
-        from runner import _WORKIQ_TOOL_NAMES
-        self.assertEqual(_WORKIQ_TOOL_NAMES, frozenset(_workiq_mod.WORKIQ_MCP_TOOL_NAMES))
-
-    def test_workiq_tool_names_contains_expected_tools(self) -> None:
-        from runner import _WORKIQ_TOOL_NAMES
-        expected = {"ask"}
-        self.assertEqual(_WORKIQ_TOOL_NAMES, frozenset(expected))
-
-    def test_tool_execution_start_ask_detected(self) -> None:
-        """tool.execution_start イベントで `_hve_workiq` の `ask` が Work IQ ツールとして検出されること。"""
-        cfg = SDKConfig(dry_run=True, workiq_enabled=True)
-        console = Console(verbose=False, quiet=True)
-        step_runner = StepRunner(config=cfg, console=console)
-
-        event = _FakeEvent(
-            "tool.execution_start",
-            _FakeEventData(mcp_tool_name="ask", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
-        )
-        step_runner._handle_session_event(event)
-        self.assertTrue(step_runner._workiq_tool_called)
-
-    def test_old_search_tool_name_not_detected(self) -> None:
-        """旧 Work IQ tool 名は現行 MCP tool として扱わないこと。"""
-        cfg = SDKConfig(dry_run=True, workiq_enabled=True)
-        console = Console(verbose=False, quiet=True)
-        step_runner = StepRunner(config=cfg, console=console)
-
-        event = _FakeEvent("tool.execution_start", _FakeEventData(tool_name="search_emails"))
-        step_runner._handle_session_event(event)
-        self.assertFalse(step_runner._workiq_tool_called)
-
-    def test_tool_execution_start_non_workiq_not_detected(self) -> None:
-        """Work IQ 以外のツールでは _workiq_tool_called が True にならないこと。"""
-        cfg = SDKConfig(dry_run=True, workiq_enabled=True)
-        console = Console(verbose=False, quiet=True)
-        step_runner = StepRunner(config=cfg, console=console)
-
-        event = _FakeEvent("tool.execution_start", _FakeEventData(tool_name="edit_file"))
-        step_runner._handle_session_event(event)
-        self.assertFalse(step_runner._workiq_tool_called)
-
-
-# NOTE: TestWorkIQCustomAgentToolsWarning (Phase 1 以前の Work IQ + Custom Agent
-# tools 警告テストクラス) は Phase 8 S-2 で全テストメソッドとクラス本体を
-# 削除した（custom_agents_config フィールド廃止に伴う dead test）。
-
-
-# ---------------------------------------------------------------------------
-# Phase 2: SDK セッション ID 安定化（Resume の前提条件）
-# ---------------------------------------------------------------------------
 
 class TestSessionIdPropagation(unittest.TestCase):
     """`StepRunner.run_step()` 内の `client.create_session()` 呼び出しが
@@ -2671,7 +2463,6 @@ class TestSessionIdPropagation(unittest.TestCase):
             model="claude-opus-4.7",
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
             run_id="20260507T100000-test01",
         )
         console = Console(verbose=False, quiet=True)
@@ -2699,7 +2490,6 @@ class TestSessionIdPropagation(unittest.TestCase):
             model="claude-opus-4.7",
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
             run_id="20260720T000000-external-skill",
         )
         runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
@@ -2714,6 +2504,9 @@ class TestSessionIdPropagation(unittest.TestCase):
                 encoding="utf-8",
             )
 
+            async def _fake_create_routed_session(**kwargs):
+                return await fake_client.create_session(**kwargs["session_options"])
+
             with unittest.mock.patch.dict(
                 sys.modules,
                 {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
@@ -2723,6 +2516,15 @@ class TestSessionIdPropagation(unittest.TestCase):
             ), unittest.mock.patch(
                 "skill_resolver._external_skills_root",
                 return_value=external_root,
+            ), unittest.mock.patch(
+                "runner.discover_sdk_resources",
+                return_value=object(),
+            ), unittest.mock.patch(
+                "runner.ToolSearchPolicy",
+                new=types.SimpleNamespace(load=lambda **_kwargs: object()),
+            ), unittest.mock.patch(
+                "runner.create_routed_session",
+                side_effect=_fake_create_routed_session,
             ), unittest.mock.patch(
                 "prompt_loader.load_prompt",
                 return_value="",
@@ -2768,7 +2570,6 @@ class TestSessionIdPropagation(unittest.TestCase):
             model="claude-opus-4.7",
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
             run_id="20260720T000000-external-skill-reject",
         )
         runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
@@ -2785,6 +2586,9 @@ class TestSessionIdPropagation(unittest.TestCase):
                 encoding="utf-8",
             )
 
+            async def _fake_create_routed_session(**kwargs):
+                return await fake_client.create_session(**kwargs["session_options"])
+
             with unittest.mock.patch.dict(
                 sys.modules,
                 {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
@@ -2794,6 +2598,15 @@ class TestSessionIdPropagation(unittest.TestCase):
             ), unittest.mock.patch(
                 "skill_resolver._external_skills_root",
                 return_value=external_root,
+            ), unittest.mock.patch(
+                "runner.discover_sdk_resources",
+                return_value=object(),
+            ), unittest.mock.patch(
+                "runner.ToolSearchPolicy",
+                new=types.SimpleNamespace(load=lambda **_kwargs: object()),
+            ), unittest.mock.patch(
+                "runner.create_routed_session",
+                side_effect=_fake_create_routed_session,
             ), unittest.mock.patch(
                 "prompt_loader.load_prompt",
                 return_value="",
@@ -2822,7 +2635,6 @@ class TestSessionIdPropagation(unittest.TestCase):
             model="claude-opus-4.7",
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
             run_id="20260720T000000-external-skill-resolver-error",
         )
         runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
@@ -2855,7 +2667,6 @@ class TestSessionIdPropagation(unittest.TestCase):
             model="claude-opus-4.7",
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
             run_id="run-determ-001",
         )
         console = Console(verbose=False, quiet=True)
@@ -2880,7 +2691,6 @@ class TestSessionIdPropagation(unittest.TestCase):
             model="claude-opus-4.7",
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
             run_id="run-prefix-001",
             session_id_prefix="myapp",
         )
@@ -3036,6 +2846,85 @@ class TestSubSessionOptsReasoningEffort(unittest.TestCase):
 class TestCreateSessionAutoReasoningFallback(unittest.IsolatedAsyncioTestCase):
     """_create_session_with_auto_reasoning_fallback の TypeError 時挙動を検証する。"""
 
+    async def test_local_create_defaults_request_extensions_false(self) -> None:
+        from runner import _create_session_with_auto_reasoning_fallback
+
+        calls: list[dict] = []
+
+        class _FakeClient:
+            async def create_session(self, **kwargs):
+                calls.append(kwargs)
+                return "ok-session"
+
+        result = await _create_session_with_auto_reasoning_fallback(
+            _FakeClient(), {"model": "Auto"}
+        )
+        self.assertEqual(result, "ok-session")
+        self.assertIs(calls[0]["request_extensions"], False)
+
+    async def test_cloud_create_does_not_request_extensions(self) -> None:
+        import runner as runner_module
+        from runner import _create_session_with_auto_reasoning_fallback
+
+        calls: list[dict] = []
+
+        class _FakeClient:
+            async def create_session(self, **kwargs):
+                calls.append(kwargs)
+                return object()
+
+        with unittest.mock.patch.object(
+            runner_module,
+            "attach_cloud_session_event_logger",
+            new=lambda *_args, **_kwargs: None,
+        ), unittest.mock.patch.object(
+            runner_module,
+            "wait_for_cloud_session_ready",
+            new=unittest.mock.AsyncMock(),
+        ):
+            await _create_session_with_auto_reasoning_fallback(
+                _FakeClient(), {"cloud": {"enabled": True}}
+            )
+        self.assertNotIn("request_extensions", calls[0])
+
+    async def test_preserves_explicit_request_extensions(self) -> None:
+        from runner import _create_session_with_auto_reasoning_fallback
+
+        calls: list[dict] = []
+
+        class _FakeClient:
+            async def create_session(self, **kwargs):
+                calls.append(kwargs)
+                return "ok-session"
+
+        result = await _create_session_with_auto_reasoning_fallback(
+            _FakeClient(), {"request_extensions": True}
+        )
+        self.assertEqual(result, "ok-session")
+        self.assertIs(calls[0]["request_extensions"], True)
+
+    async def test_strips_request_extensions_on_typeerror(self) -> None:
+        from runner import _create_session_with_auto_reasoning_fallback
+
+        calls: list[dict] = []
+
+        class _FakeClient:
+            async def create_session(self, **kwargs):
+                calls.append(kwargs)
+                if "request_extensions" in kwargs:
+                    raise TypeError(
+                        "create_session() got an unexpected keyword argument 'request_extensions'"
+                    )
+                return "ok-session"
+
+        result = await _create_session_with_auto_reasoning_fallback(
+            _FakeClient(), {"request_extensions": False}
+        )
+        self.assertEqual(result, "ok-session")
+        self.assertEqual(len(calls), 2)
+        self.assertIn("request_extensions", calls[0])
+        self.assertNotIn("request_extensions", calls[1])
+
     async def test_strips_reasoning_effort_on_typeerror(self) -> None:
         from runner import _create_session_with_auto_reasoning_fallback
 
@@ -3108,155 +2997,8 @@ class TestCreateSessionAutoReasoningFallback(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("tool_search", calls[1])
 
 
-class TestWorkIQCalledToolsTracking(unittest.TestCase):
-    """Phase 2: _workiq_called_tools 履歴が _handle_session_event で蓄積されることを確認。"""
-
-    def _make_runner(self) -> StepRunner:
-        cfg = SDKConfig(dry_run=True, workiq_enabled=True)
-        console = Console(verbose=False, quiet=True)
-        runner = StepRunner(config=cfg, console=console)
-        runner._current_step_id = "1"
-        return runner
-
-    def test_tool_without_server_name_not_appended(self) -> None:
-        """server 名を持たない tool event は _workiq_called_tools へ追加されない。"""
-        runner = self._make_runner()
-        self.assertEqual(runner._workiq_called_tools, [])
-        event = _FakeEvent("tool.execution_start", _FakeEventData(tool_name="ask"))
-        runner._handle_session_event(event)
-        self.assertEqual(runner._workiq_called_tools, [])
-
-    def test_mcp_workiq_tool_appended_to_called_tools(self) -> None:
-        """mcp_tool_name 形式でも _workiq_called_tools にツール名が追加される。"""
-        runner = self._make_runner()
-        event = _FakeEvent(
-            "tool.execution_start",
-            _FakeEventData(mcp_tool_name="ask", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
-        )
-        runner._handle_session_event(event)
-        self.assertEqual(runner._workiq_called_tools, ["ask"])
-
-    def test_workiq_tool_multiple_calls_all_appended(self) -> None:
-        """複数回呼び出した場合、すべて _workiq_called_tools に追記される。"""
-        runner = self._make_runner()
-        for _ in range(2):
-            event = _FakeEvent(
-                "tool.execution_start",
-                _FakeEventData(mcp_tool_name="ask", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
-            )
-            runner._handle_session_event(event)
-        self.assertEqual(runner._workiq_called_tools, ["ask", "ask"])
-
-    def test_non_workiq_tool_not_appended(self) -> None:
-        """Work IQ 以外のツールは _workiq_called_tools に追加されない。"""
-        runner = self._make_runner()
-        event = _FakeEvent("tool.execution_start", _FakeEventData(tool_name="edit_file"))
-        runner._handle_session_event(event)
-        self.assertEqual(runner._workiq_called_tools, [])
-
-    def test_workiq_called_tools_reset_on_run_step(self) -> None:
-        """run_step() 開始時に _workiq_called_tools がリセットされる。"""
-        runner = self._make_runner()
-        runner._workiq_called_tools = ["ask"]
-        with _CaptureOutput():
-            _run(runner.run_step("1", "テスト", "プロンプト"))
-        # dry_run では run_step() 終了後に _workiq_called_tools が [] にリセットされている
-        self.assertEqual(runner._workiq_called_tools, [])
-
-    def test_diff_based_tool_detection(self) -> None:
-        """呼び出し前後の差分でツール呼び出しを検出できる。"""
-        runner = self._make_runner()
-        runner._workiq_called_tools = ["ask"]  # 事前に1件追加
-        before = len(runner._workiq_called_tools)
-        # 新たに ask が呼ばれた
-        event = _FakeEvent(
-            "tool.execution_start",
-            _FakeEventData(mcp_tool_name="ask", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
-        )
-        runner._handle_session_event(event)
-        after_tools = runner._workiq_called_tools[before:]
-        self.assertTrue(bool(after_tools))
-        self.assertEqual(after_tools, ["ask"])
 
 
-class TestIsWorkIQToolNameHelperInRunner(unittest.TestCase):
-    """runner.py が workiq の server/tool 判定経由で Work IQ ツールを検出すること。"""
-
-    def _make_runner(self) -> StepRunner:
-        cfg = SDKConfig(dry_run=True, workiq_enabled=True)
-        console = Console(verbose=False, quiet=True)
-        return StepRunner(config=cfg, console=console)
-
-    def test_is_workiq_tool_name_helper_accessible(self) -> None:
-        """runner.py が workiq.is_workiq_tool_name をインポートできること。"""
-        from workiq import is_workiq_tool_name
-        self.assertTrue(is_workiq_tool_name("ask"))
-        self.assertFalse(is_workiq_tool_name("edit_file"))
-
-    def test_handle_session_event_detects_workiq_mcp_tool(self) -> None:
-        """_handle_session_event が server/tool の組で判定し、
-        Work IQ ツールは _workiq_called_tools に追加されること。"""
-        runner = self._make_runner()
-        for tool in ("ask",):
-            runner._workiq_called_tools = []
-            event = _FakeEvent(
-                "tool.execution_start",
-                _FakeEventData(mcp_tool_name=tool, mcp_server_name=WORKIQ_MCP_SERVER_NAME),
-            )
-            runner._handle_session_event(event)
-            self.assertIn(tool, runner._workiq_called_tools, f"{tool} は _workiq_called_tools に追加されるべき")
-
-    def test_phase1_tool_count_does_not_affect_qa_diff_detection(self) -> None:
-        """Phase 1 で Work IQ が呼ばれていても QA の差分検出に影響しないこと。
-
-        QA フェーズでは _before_count を snapshot して差分を取るため、
-        Phase 1 の _workiq_called_tools は影響しない。
-        """
-        runner = self._make_runner()
-        # Phase 1: ask が2回呼ばれた
-        for _ in range(2):
-            event = _FakeEvent(
-                "tool.execution_start",
-                _FakeEventData(mcp_tool_name="ask", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
-            )
-            runner._handle_session_event(event)
-        self.assertEqual(len(runner._workiq_called_tools), 2)
-
-        # QA フェーズ開始前の snapshot
-        before_qa = len(runner._workiq_called_tools)
-
-        # QA フェーズ: ask が呼ばれた
-        event = _FakeEvent(
-            "tool.execution_start",
-            _FakeEventData(mcp_tool_name="ask", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
-        )
-        runner._handle_session_event(event)
-
-        after_qa_tools = runner._workiq_called_tools[before_qa:]
-        self.assertEqual(after_qa_tools, ["ask"], "QA フェーズの差分は Phase 1 の呼び出しを含まないこと")
-
-    def test_qa_tool_not_called_when_no_events_after_snapshot(self) -> None:
-        """QA フェーズで Work IQ ツールが呼ばれなかった場合、差分は空になること。"""
-        runner = self._make_runner()
-        # Phase 1: ask が呼ばれた
-        event = _FakeEvent(
-            "tool.execution_start",
-            _FakeEventData(mcp_tool_name="ask", mcp_server_name=WORKIQ_MCP_SERVER_NAME),
-        )
-        runner._handle_session_event(event)
-
-        # QA フェーズ開始前の snapshot
-        before_qa = len(runner._workiq_called_tools)
-
-        # QA フェーズ: ツールは呼ばれなかった
-        after_qa_tools = runner._workiq_called_tools[before_qa:]
-        self.assertEqual(after_qa_tools, [], "QA ツール未呼び出しの場合、差分は空であること")
-        self.assertFalse(bool(after_qa_tools), "ツール未観測を正しく検出できること")
-
-
-# ---------------------------------------------------------------------------
-# _apply_main_artifact_improvements テスト
-# ---------------------------------------------------------------------------
 
 class TestApplyMainArtifactImprovements(unittest.TestCase):
     """StepRunner._apply_main_artifact_improvements の動作を検証する。"""
@@ -3352,7 +3094,7 @@ class TestApplyMainArtifactImprovements(unittest.TestCase):
             custom_agent=None,
             original_prompt="prompt",
             main_output="output",
-            source_phase="Phase 4",
+            source_phase="Phase 3 Adversarial Review",
             improvement_context="plan content",
             timeout=10.0,
         ))
@@ -3360,7 +3102,7 @@ class TestApplyMainArtifactImprovements(unittest.TestCase):
 
 
 class TestApplyMainArtifactImprovementsInspection(unittest.TestCase):
-    """Phase 3 / 4 の共通ヘルパー呼び出し確認（ソースインスペクション）。
+    """Phase 3 の共通ヘルパー呼び出し確認（ソースインスペクション）。
     Phase 2c (post-QA) は廃止済みのため該当テストは削除された。"""
 
     def test_phase3_calls_helper_when_fail(self) -> None:
@@ -3370,15 +3112,8 @@ class TestApplyMainArtifactImprovementsInspection(unittest.TestCase):
         self.assertIn("apply_review_improvements_to_main", source)
         self.assertIn("Phase 3 Adversarial Review", source)
 
-    def test_phase4_calls_helper_when_enabled(self) -> None:
-        """Phase 4: apply_self_improve_to_main=True のとき _apply_main_artifact_improvements が呼ばれる。"""
-        import inspect
-        source = inspect.getsource(StepRunner.run_step)
-        self.assertIn("apply_self_improve_to_main", source)
-        self.assertIn("Phase 4 Self-Improve iteration", source)
-
-    def test_phase3_and_4_are_workflow_independent(self) -> None:
-        """Phase 3 / Phase 4 の _apply_main_artifact_improvements 呼び出しに workflow_id 条件分岐がないこと。
+    def test_phase3_is_workflow_independent(self) -> None:
+        """Phase 3 の _apply_main_artifact_improvements 呼び出しに workflow_id 条件分岐がないこと。
 
         これは全オーケストレーター共通処理として実装されていることを確認する。
         """
@@ -3389,11 +3124,11 @@ class TestApplyMainArtifactImprovementsInspection(unittest.TestCase):
         # 簡略化: ソース中に "if workflow_id" の後に "apply_review" が出てこないことを確認
         lines = source.splitlines()
         for i, line in enumerate(lines):
-            if "apply_review_improvements_to_main" in line or "apply_self_improve_to_main" in line:
+            if "apply_review_improvements_to_main" in line:
                 # 直前の数行に workflow_id == で始まる条件がないことを確認
                 context = "\n".join(lines[max(0, i - 3):i])
                 self.assertNotIn('workflow_id == "', context,
-                                 f"Phase 3/4 should not be gated by workflow_id check near line {i}")
+                                 f"Phase 3 should not be gated by workflow_id check near line {i}")
 
 
 # ---------------------------------------------------------------------------
@@ -3453,7 +3188,7 @@ class TestCheckDiffAfterImprovement(unittest.TestCase):
         """subprocess.run が例外を出した場合、空リストを返すこと（処理を継続）。"""
         runner = self._make_runner()
         with unittest.mock.patch("subprocess.run", side_effect=OSError("git not found")):
-            changed = runner._check_diff_after_improvement("step-1", "Phase 4 Self-Improve")
+            changed = runner._check_diff_after_improvement("step-1", "Phase 3 Adversarial Review")
         self.assertEqual(changed, [])
 
     def test_source_inspection_calls_diff_check_in_phase3(self) -> None:
@@ -3462,13 +3197,6 @@ class TestCheckDiffAfterImprovement(unittest.TestCase):
         source = inspect.getsource(StepRunner.run_step)
         self.assertIn("_check_diff_after_improvement", source)
         self.assertIn("Phase 3 Adversarial Review", source)
-
-    def test_source_inspection_calls_diff_check_in_phase4(self) -> None:
-        """Phase 4 Self-Improve で _check_diff_after_improvement が呼ばれること（ソースインスペクション）。"""
-        import inspect
-        source = inspect.getsource(StepRunner.run_step)
-        self.assertIn("Phase 4 Self-Improve", source)
-
 
 # ---------------------------------------------------------------------------
 # Phase 6: サブセッション要否判定ヘルパーのテスト
@@ -3484,14 +3212,14 @@ class TestShouldUseSubSession(unittest.TestCase):
 
     # --- Pre-QA ---
 
-    def test_pre_qa_same_model_no_workiq_uses_main_session(self) -> None:
-        """qa_model == main_model かつ WorkIQ 無効 → サブセッション不要。"""
+    def test_pre_qa_same_model_no_discovery_uses_main_session(self) -> None:
+        """qa_model == main_model かつ知識探索なし → サブセッション不要。"""
         runner = self._make_runner(model="claude-opus-4.7")
         # qa_model 未設定 → get_qa_model() は model を返す
         self.assertFalse(
             runner._should_use_pre_qa_sub_session(
                 qa_model=runner.config.get_qa_model(),
-                workiq_available=False,
+                knowledge_discovery_requested=False,
             )
         )
 
@@ -3501,17 +3229,17 @@ class TestShouldUseSubSession(unittest.TestCase):
         self.assertTrue(
             runner._should_use_pre_qa_sub_session(
                 qa_model=runner.config.get_qa_model(),
-                workiq_available=False,
+                knowledge_discovery_requested=False,
             )
         )
 
-    def test_pre_qa_workiq_enabled_creates_sub_session_even_if_same_model(self) -> None:
-        """WorkIQ 有効 → モデルが同一でもサブセッション作成（WorkIQ は QA 専用）。"""
+    def test_pre_qa_discovery_creates_sub_session_even_if_same_model(self) -> None:
+        """知識探索あり → モデルが同一でもサブセッション作成（質問票から知識源を外すため）。"""
         runner = self._make_runner(model="claude-opus-4.7")
         self.assertTrue(
             runner._should_use_pre_qa_sub_session(
                 qa_model=runner.config.get_qa_model(),
-                workiq_available=True,
+                knowledge_discovery_requested=True,
             )
         )
 
@@ -3523,7 +3251,7 @@ class TestShouldUseSubSession(unittest.TestCase):
         self.assertFalse(
             runner._should_use_pre_qa_sub_session(
                 qa_model=runner.config.get_qa_model(),
-                workiq_available=False,
+                knowledge_discovery_requested=False,
             )
         )
 
@@ -3534,19 +3262,19 @@ class TestShouldUseSubSession(unittest.TestCase):
         self.assertTrue(
             runner._should_use_pre_qa_sub_session(
                 qa_model=runner.config.get_qa_model(),
-                workiq_available=False,
+                knowledge_discovery_requested=False,
             )
         )
 
     # --- Post-QA ---
 
-    def test_post_qa_same_model_no_workiq_uses_main_session(self) -> None:
-        """Post-QA: qa_model == main_model かつ WorkIQ 無効 → サブセッション不要。"""
+    def test_post_qa_same_model_no_discovery_uses_main_session(self) -> None:
+        """Post-QA: qa_model == main_model かつ知識探索なし → サブセッション不要。"""
         runner = self._make_runner(model="claude-opus-4.7")
         self.assertFalse(
             runner._should_use_qa_sub_session(
                 qa_model=runner.config.get_qa_model(),
-                workiq_available=False,
+                knowledge_discovery_requested=False,
             )
         )
 
@@ -3556,17 +3284,17 @@ class TestShouldUseSubSession(unittest.TestCase):
         self.assertTrue(
             runner._should_use_qa_sub_session(
                 qa_model=runner.config.get_qa_model(),
-                workiq_available=False,
+                knowledge_discovery_requested=False,
             )
         )
 
-    def test_post_qa_workiq_enabled_creates_sub_session(self) -> None:
-        """Post-QA: WorkIQ 有効 → サブセッション作成。"""
+    def test_post_qa_discovery_creates_sub_session(self) -> None:
+        """Post-QA: 知識探索あり → サブセッション作成。"""
         runner = self._make_runner(model="claude-opus-4.7")
         self.assertTrue(
             runner._should_use_qa_sub_session(
                 qa_model=runner.config.get_qa_model(),
-                workiq_available=True,
+                knowledge_discovery_requested=True,
             )
         )
 
@@ -3577,50 +3305,13 @@ class TestShouldUseSubSession(unittest.TestCase):
         self.assertFalse(
             runner._should_use_qa_sub_session(
                 qa_model=runner.config.get_qa_model(),
-                workiq_available=False,
+                knowledge_discovery_requested=False,
             )
         )
 
     # --- Review ---
-
-    def test_review_same_model_uses_main_session(self) -> None:
-        """Review: review_model == main_model → サブセッション不要。"""
-        runner = self._make_runner(model="claude-opus-4.7")
-        # review_model 未設定 → get_review_model() は model を返す
-        self.assertFalse(
-            runner._should_use_review_sub_session(
-                review_model=runner.config.get_review_model(),
-            )
-        )
-
-    def test_review_different_model_creates_sub_session(self) -> None:
-        """Review: review_model != main_model → サブセッション作成。"""
-        runner = self._make_runner(model="claude-opus-4.7", review_model="gpt-5.4")
-        self.assertTrue(
-            runner._should_use_review_sub_session(
-                review_model=runner.config.get_review_model(),
-            )
-        )
-
-    def test_review_auto_model_same_no_sub_session(self) -> None:
-        """Review: review_model=Auto かつ main_model=Auto → サブセッション不要。"""
-        from config import MODEL_AUTO_VALUE
-        runner = self._make_runner(model=MODEL_AUTO_VALUE)
-        self.assertFalse(
-            runner._should_use_review_sub_session(
-                review_model=runner.config.get_review_model(),
-            )
-        )
-
-    def test_review_auto_model_differs_from_fixed_creates_sub_session(self) -> None:
-        """Review: review_model=Auto、main_model=固定モデル → サブセッション作成。"""
-        from config import MODEL_AUTO_VALUE
-        runner = self._make_runner(model="claude-opus-4.7", review_model=MODEL_AUTO_VALUE)
-        self.assertTrue(
-            runner._should_use_review_sub_session(
-                review_model=runner.config.get_review_model(),
-            )
-        )
+    # FR-CLI-92: Review は review_model に依らず常にサブセッションで評価するため、
+    # 判定ヘルパーは持たない（hve/tests/test_review_session_isolation_contract.py）。
 
 
 # ---------------------------------------------------------------------------
@@ -3656,7 +3347,6 @@ class TestSubSessionsCreatedCounter(unittest.TestCase):
         runner = self._make_runner()
         self.assertTrue(callable(getattr(runner, "_should_use_pre_qa_sub_session", None)))
         self.assertTrue(callable(getattr(runner, "_should_use_qa_sub_session", None)))
-        self.assertTrue(callable(getattr(runner, "_should_use_review_sub_session", None)))
         self.assertTrue(callable(getattr(runner, "_log_sub_session_reason", None)))
         self.assertTrue(callable(getattr(runner, "_log_main_session_reuse", None)))
 
@@ -3670,7 +3360,7 @@ class TestSubSessionsCreatedCounter(unittest.TestCase):
         runner._log_sub_session_reason(
             "1.1", "Pre-QA",
             qa_model="gpt-5.4",
-            workiq_available=True,
+            knowledge_discovery_requested=True,
         )
         runner.console.event = original_event
 
@@ -3678,8 +3368,8 @@ class TestSubSessionsCreatedCounter(unittest.TestCase):
         msg = captured_events[0]
         # モデル名は含んでよい（公開情報）
         self.assertIn("gpt-5.4", msg)
-        # WorkIQ 有効の旨が含まれること
-        self.assertIn("WorkIQ", msg)
+        # 知識探索の旨が含まれること
+        self.assertIn("知識探索", msg)
         # 秘密情報キーワードが含まれないこと
         for secret_token in ("token", "secret", "password", "api_key", "bearer", "credential"):
             self.assertNotIn(secret_token, msg.lower(), f"'{secret_token}' は出力に含まれてはならない")
@@ -3701,7 +3391,7 @@ class TestSubSessionsCreatedCounter(unittest.TestCase):
         runner._log_sub_session_reason(
             "1.1", "Pre-QA",
             qa_model="gpt-5.4",
-            workiq_available=False,
+            knowledge_discovery_requested=False,
         )
 
         for msg in captured_events:
@@ -3749,12 +3439,12 @@ class TestSubSessionsCreatedCounter(unittest.TestCase):
         source = inspect.getsource(StepRunner._run_pre_execution_qa)
         self.assertIn("_should_use_pre_qa_sub_session", source)
 
-    def test_source_inspection_uses_helper_methods_in_run_step(self) -> None:
-        """run_step が _should_use_review_sub_session を使用することをソース検査。
+    def test_source_inspection_review_does_not_branch_on_review_model(self) -> None:
+        """FR-CLI-92: run_step は review_model でサブセッション要否を切り替えない。
         Post-QA 廃止に伴い _should_use_qa_sub_session は run_step で使用されなくなった。"""
         import inspect
         source = inspect.getsource(StepRunner.run_step)
-        self.assertIn("_should_use_review_sub_session", source)
+        self.assertNotIn("_should_use_review_sub_session", source)
 
     def test_source_inspection_log_methods_called_in_pre_qa(self) -> None:
         """_run_pre_execution_qa でサブセッション作成/再利用ログが呼ばれること。"""
@@ -3764,11 +3454,10 @@ class TestSubSessionsCreatedCounter(unittest.TestCase):
         self.assertIn("_log_main_session_reuse", source)
 
     def test_source_inspection_log_methods_called_in_run_step(self) -> None:
-        """run_step で Review のサブセッション作成/再利用ログが呼ばれること。オフ）Post-QAは廃止された。"""
+        """run_step で Review のサブセッション作成ログが呼ばれること（FR-CLI-92: メインセッション再利用は無い）。"""
         import inspect
         source = inspect.getsource(StepRunner.run_step)
         self.assertIn("_log_sub_session_reason", source)
-        self.assertIn("_log_main_session_reuse", source)
 
 
 # ---------------------------------------------------------------------------
@@ -3838,7 +3527,6 @@ class TestAvailableExcludedToolsPropagation(unittest.TestCase):
             model="claude-opus-4.7",
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
             run_id="20260507T100000-tools01",
             available_tools=["str_replace_editor", "bash"],
             excluded_tools=["web_search"],
@@ -3865,7 +3553,6 @@ class TestAvailableExcludedToolsPropagation(unittest.TestCase):
             model="claude-opus-4.7",
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
             run_id="20260507T100000-tools02",
         )
         runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
@@ -3942,13 +3629,42 @@ class TestAvailableExcludedToolsPropagation(unittest.TestCase):
             opts = runner._build_sub_session_opts("claude-opus-4.7")
         self.assertNotIn("tool_search", opts)
 
+    def test_sub_session_opts_includes_defer_threshold(self) -> None:
+        """FR-MODEL-04: defer_threshold もメインと同一値をサブへ伝搬する。"""
+        cfg = SDKConfig(
+            model="claude-opus-4.7",
+            tool_search=True,
+            tool_search_defer_threshold=30,
+        )
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        with unittest.mock.patch.dict(
+            sys.modules, {"copilot.session": self._fake_permission_module()}
+        ):
+            opts = runner._build_sub_session_opts("claude-opus-4.7")
+        self.assertEqual(
+            opts.get("tool_search"), {"enabled": True, "defer_threshold": 30}
+        )
+
+    def test_sub_session_opts_omits_defer_threshold_when_disabled(self) -> None:
+        """FR-MODEL-06: tool_search 無効時は閾値指定でもキーを送らない。"""
+        cfg = SDKConfig(
+            model="claude-opus-4.7",
+            tool_search=False,
+            tool_search_defer_threshold=30,
+        )
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        with unittest.mock.patch.dict(
+            sys.modules, {"copilot.session": self._fake_permission_module()}
+        ):
+            opts = runner._build_sub_session_opts("claude-opus-4.7")
+        self.assertNotIn("tool_search", opts)
+
     def test_main_session_includes_infinite_sessions_when_auto_compaction(self) -> None:
         cfg = SDKConfig(
             dry_run=False,
             model="claude-opus-4.7",
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
             run_id="20260507T100000-compact01",
             auto_compaction=True,
         )
@@ -3969,7 +3685,6 @@ class TestAvailableExcludedToolsPropagation(unittest.TestCase):
             model="claude-opus-4.7",
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
             run_id="20260507T100000-compact02",
         )
         runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
@@ -3990,7 +3705,6 @@ class TestAvailableExcludedToolsPropagation(unittest.TestCase):
             model="claude-opus-4.7",
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
             run_id="20260507T100000-toolsearch01",
             tool_search=True,
         )
@@ -4005,6 +3719,30 @@ class TestAvailableExcludedToolsPropagation(unittest.TestCase):
         kw = fake_client.create_session_kwargs[0]
         self.assertEqual(kw.get("tool_search"), {"enabled": True})
 
+    def test_main_session_includes_defer_threshold(self) -> None:
+        """FR-MODEL-04: defer_threshold をメインセッションへ伝搬する。"""
+        cfg = SDKConfig(
+            dry_run=False,
+            model="claude-opus-4.7",
+            auto_qa=False,
+            auto_contents_review=False,
+            run_id="20260507T100000-toolsearch03",
+            tool_search=True,
+            tool_search_defer_threshold=30,
+        )
+        runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
+        fake_client, fake_copilot, fake_copilot_session = self._build_fake_sdk()
+        with unittest.mock.patch.dict(
+            sys.modules,
+            {"copilot": fake_copilot, "copilot.session": fake_copilot_session},
+        ):
+            ok = asyncio.run(runner.run_step("1.1", "t", "p"))
+        self.assertTrue(ok)
+        kw = fake_client.create_session_kwargs[0]
+        self.assertEqual(
+            kw.get("tool_search"), {"enabled": True, "defer_threshold": 30}
+        )
+
     def test_main_session_includes_tool_search_by_default(self) -> None:
         """FR-MODEL-04: 既定（有効）でメインセッションへ enabled を渡す。"""
         cfg = SDKConfig(
@@ -4012,7 +3750,6 @@ class TestAvailableExcludedToolsPropagation(unittest.TestCase):
             model="claude-opus-4.7",
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
             run_id="20260507T100000-toolsearch02",
         )
         runner = StepRunner(config=cfg, console=Console(verbose=False, quiet=True))
@@ -4033,7 +3770,6 @@ class TestAvailableExcludedToolsPropagation(unittest.TestCase):
             model="claude-opus-4.7",
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
             run_id="20260507T100000-toolsearch03",
             tool_search=False,
         )
@@ -4096,28 +3832,6 @@ class TestStartClientWithRetry(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(RuntimeError):
                 await _start_client_with_retry(c)
             self.assertEqual(c.calls, 3)
-
-
-# ---------------------------------------------------------------------------
-# G-7: Phase 4 verify JSON parse failure visibility (T-14)
-# ---------------------------------------------------------------------------
-
-class TestVerifyJsonParseWarning(unittest.TestCase):
-    """Phase 4 verify の JSON パース失敗時に Console.warning が呼ばれること、
-    および notes に [json_parse_error=...] プレフィックスが付くことを検証する。
-
-    runner.py 内のロジック実装はインライン展開されているため、ソース上の
-    マーカー文字列で実装存在を検証する（非実行検証）。
-    """
-
-    def test_runner_source_contains_warning_branch(self) -> None:
-        from pathlib import Path
-        src = Path(__file__).resolve().parent.parent / "runner.py"
-        text = src.read_text(encoding="utf-8")
-        # T-13 で追加した文言
-        self.assertIn("json_parse_error", text)
-        self.assertIn("LLM JSON のパースに失敗", text)
-        self.assertIn("LLM 応答に JSON ブロックが見つかりません", text)
 
 
 # ---------------------------------------------------------------------------
@@ -4218,106 +3932,6 @@ class TestSubSessionOptsCustomAgent(unittest.TestCase):
                 "claude-opus-4.7", custom_agent="",
             )
         self.assertNotIn("custom_agent", opts)
-
-
-# ---------------------------------------------------------------------------
-# FR-CLI-63: Phase 4d の検証結果を決定的実装へ委譲
-# ---------------------------------------------------------------------------
-
-
-class TestPhase4DeterministicVerification(unittest.TestCase):
-    """step-level Self-Improve の検証結果が scan 実測値だけから導出され、
-    LLM 応答 JSON で上書きされないことを検証する（FR-CLI-63）。
-    """
-
-    @staticmethod
-    def _scan(
-        quality_score: int,
-        *,
-        lint_errors: int = 0,
-        test_failures: int = 0,
-        raw_output: str = "",
-    ):
-        return {
-            "quality_score": quality_score,
-            "issues": [],
-            "summary": {
-                "lint_errors": lint_errors,
-                "test_failures": test_failures,
-                "coverage_pct": 0.0,
-                "doc_issues": 0,
-            },
-            "raw_output": raw_output,
-            "tool_status": {
-                "ruff": "PASS",
-                "pytest": "FAIL" if test_failures else "PASS",
-                "dotnet_build": "SKIP",
-                "dotnet_test": "NO_TESTS",
-                "markdownlint": "PASS",
-                "lint": "PASS",
-                "test": "FAIL" if test_failures else "PASS",
-                "documentation": "PASS",
-            },
-        }
-
-    def test_verification_is_derived_from_scan(self) -> None:
-        """scan 実測値と `_build_verification_result()` の結果が一致する。"""
-        from runner import _build_phase4_verification
-        from self_improve import _build_verification_result
-
-        after_scan = self._scan(70)
-        expected = _build_verification_result(after_scan, 90)
-        actual = _build_phase4_verification(after_scan, 90, "", None)
-
-        self.assertEqual(actual["after_quality_score"], expected["after_quality_score"])
-        self.assertEqual(actual["degraded"], expected["degraded"])
-        self.assertEqual(
-            actual["verification_phases"], expected["verification_phases"]
-        )
-        self.assertEqual(actual["overall"], expected["overall"])
-
-    def test_llm_json_does_not_override_verification(self) -> None:
-        """LLM が degraded=false / 高スコア / 全 PASS を返しても反映しない。"""
-        from runner import _build_phase4_verification
-
-        after_scan = self._scan(40, test_failures=3)
-        llm_text = (
-            "```json\n"
-            '{"after_quality_score": 100, "degraded": false, '
-            '"verification_phases": {"build": "PASS", "lint": "PASS", '
-            '"test": "PASS", "security": "PASS", "diff": "PASS"}}\n'
-            "```"
-        )
-        result = _build_phase4_verification(after_scan, 90, llm_text, None)
-
-        self.assertEqual(result["after_quality_score"], 40)
-        self.assertTrue(result["degraded"])
-        self.assertEqual(result["verification_phases"]["test"], "FAIL")
-        self.assertEqual(result["overall"], "FAIL")
-
-    def test_notes_keep_llm_text_and_parse_error_prefix(self) -> None:
-        """LLM 応答は notes にのみ反映し、パース失敗は前置される。"""
-        from runner import _build_phase4_verification
-
-        after_scan = self._scan(95)
-        ok = _build_phase4_verification(after_scan, 90, "LLM の所見", None)
-        self.assertEqual(ok["notes"], "LLM の所見")
-
-        ng = _build_phase4_verification(
-            after_scan, 90, "LLM の所見", "no_json_block_found"
-        )
-        self.assertTrue(ng["notes"].startswith("[json_parse_error=no_json_block_found]"))
-        self.assertIn("LLM の所見", ng["notes"])
-
-    def test_phase4_does_not_reimplement_judgement(self) -> None:
-        """Phase 4d に LLM 値での上書き実装が残っていない（FR-MAINT-07）。"""
-        from pathlib import Path
-        src = Path(__file__).resolve().parent.parent / "runner.py"
-        text = src.read_text(encoding="utf-8")
-        self.assertNotIn('_parsed.get("after_quality_score"', text)
-        self.assertNotIn('_parsed.get("degraded"', text)
-        self.assertNotIn('_parsed.get("verification_phases"', text)
-        self.assertIn("_build_phase4_verification(", text)
 
 
 if __name__ == "__main__":

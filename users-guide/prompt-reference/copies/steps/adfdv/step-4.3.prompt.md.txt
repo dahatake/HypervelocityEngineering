@@ -34,10 +34,7 @@ Step.4.1（WAF レビュー）と Step.4.2（整合性チェック）は設計�
 - 結論: `- Conclusion:` と `- Rationale:`
 - 簡素化候補: `- Simplification-Candidate:`（該当なしは `none`）
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-- Azure サービス / CLI / SDK / SKU / メトリクス定義を扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログへ記録する。
-- 利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 ## 禁止事項
 - 測定していない数値を書かない。実行できなかった指標は `NOT_MEASURED` と理由を記す。

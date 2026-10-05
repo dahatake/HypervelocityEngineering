@@ -30,17 +30,17 @@ def qapp():
 def test_format_git_status_text_uses_repo_name_and_local_branch() -> None:
     from hve.gui.main_window import _format_git_status_text
 
-    text = _format_git_status_text(Path("C:/work/RoyalytyService2ndGen"), "feature/local")
+    text = _format_git_status_text(Path("C:/work/ExampleRepository"), "feature/local")
 
-    assert text == "Git: RoyalytyService2ndGen @ feature/local"
+    assert text == "Git: ExampleRepository @ feature/local"
 
 
 def test_format_git_status_text_uses_unknown_when_branch_missing() -> None:
     from hve.gui.main_window import _format_git_status_text
 
-    text = _format_git_status_text(Path("C:/work/RoyalytyService2ndGen"), None)
+    text = _format_git_status_text(Path("C:/work/ExampleRepository"), None)
 
-    assert text == "Git: RoyalytyService2ndGen @ 不明"
+    assert text == "Git: ExampleRepository @ 不明"
 
 
 def test_resolve_local_git_branch_reads_local_branch_only(monkeypatch, tmp_path) -> None:
@@ -120,7 +120,7 @@ def test_main_window_status_bar_contains_git_repo_and_local_branch(
     from hve.gui import settings_store
     from hve.gui import main_window
 
-    repo_root = tmp_path / "RoyalytyService2ndGen"
+    repo_root = tmp_path / "ExampleRepository"
     repo_root.mkdir()
     monkeypatch.setattr(
         settings_store,
@@ -141,7 +141,7 @@ def test_main_window_status_bar_contains_git_repo_and_local_branch(
         win.deleteLater()
 
     git_labels = [text for text in labels if text.startswith("Git:")]
-    assert git_labels == ["Git: RoyalytyService2ndGen @ feature/local"]
+    assert git_labels == ["Git: ExampleRepository @ feature/local"]
     assert "origin/" not in git_labels[0]
 
 
@@ -153,7 +153,7 @@ def test_refresh_git_status_label_updates_branch_text(
     from hve.gui import settings_store
     from hve.gui import main_window
 
-    repo_root = tmp_path / "RoyalytyService2ndGen"
+    repo_root = tmp_path / "ExampleRepository"
     repo_root.mkdir()
     monkeypatch.setattr(
         settings_store,
@@ -169,11 +169,11 @@ def test_refresh_git_status_label_updates_branch_text(
 
     win = main_window.MainWindow(repo_root=repo_root)
     try:
-        assert win._git_status_label.text() == "Git: RoyalytyService2ndGen @ feature/old"
+        assert win._git_status_label.text() == "Git: ExampleRepository @ feature/old"
 
         win._refresh_git_status_label()
 
-        assert win._git_status_label.text() == "Git: RoyalytyService2ndGen @ feature/new"
+        assert win._git_status_label.text() == "Git: ExampleRepository @ feature/new"
     finally:
         win.close()
         win.deleteLater()

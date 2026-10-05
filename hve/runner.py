@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import copy
+import inspect
 import json
-import ntpath
 import os
 import re
+from dataclasses import dataclass
 import stat
 import subprocess
 import sys
@@ -16,7 +16,7 @@ import threading
 import time
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, Tuple
 
 try:
     from .prompt_loader import load_prompt_file
@@ -38,13 +38,18 @@ if __package__:
         ScriptLauncherError,
         execute_pipeline,
         resolve_azure_cli_executable,
+        summarize_stage_failure,
     )
     from .asdw_data_runtime_context import (
         AsdwDataDeployContextError,
         build_asdw_data_deploy_bootstrap_context,
     )
     from .fanout_expander import resolve_output_path_prefix_gates
-    from .runtime_observability import extract_usage_credit_fields, is_plain_repo_path_token
+    from .runtime_observability import (
+        extract_usage_credit_fields,
+        is_plain_repo_path_token,
+    )
+    from .security import sanitize_diagnostic_text
     from .workflow_registry import (
         ASDW_DATA_DEPLOY_SUPPORTED_APP_ID as _ASDW_SUPPORTED_APP_ID,
     )
@@ -63,6 +68,7 @@ else:  # pragma: no cover - top-level runner compatibility
         ScriptLauncherError,
         execute_pipeline,
         resolve_azure_cli_executable,
+        summarize_stage_failure,
     )
     from asdw_data_runtime_context import (  # type: ignore[import-not-found,no-redef]
         AsdwDataDeployContextError,
@@ -75,6 +81,7 @@ else:  # pragma: no cover - top-level runner compatibility
         extract_usage_credit_fields,
         is_plain_repo_path_token,
     )
+    from security import sanitize_diagnostic_text  # type: ignore[import-not-found,no-redef]
     from workflow_registry import (  # type: ignore[import-not-found,no-redef]
         ASDW_DATA_DEPLOY_SUPPORTED_APP_ID as _ASDW_SUPPORTED_APP_ID,
     )
@@ -97,13 +104,12 @@ def _safe_run_id(run_id: str) -> str:
     """run_id を安全なパスコンポーネントに正規化する。
 
     - 空の場合は generate_run_id() で自動生成（StepRunner 単独使用への対応）
-    - 許可文字: 英数字・ハイフン・アンダースコアのみ（`/` や `..` 等のパストラバーサル文字を除去）
+    - 許可文字の規則は `hve/run_state.py` の `_safe_run_id_component` に従う
     """
-    rid = run_id or generate_run_id()
-    # 安全でない文字を除去（英数字・ハイフン・アンダースコア以外）
-    rid = re.sub(r"[^A-Za-z0-9\-_]", "", rid)
-    # 除去の結果が空になった場合もフォールバック生成
-    return rid or generate_run_id()
+    try:
+        return _safe_run_id_component(run_id or generate_run_id())
+    except ValueError:
+        return generate_run_id()
 
 
 def _work_identifier_for_step(step_id: str, fanout_meta: Optional[Dict[str, Any]]) -> str:
@@ -134,17 +140,15 @@ def _safe_work_path_component(value: str, label: str) -> str:
     ):
         raise ValueError(f"unsafe {label} work path component: {value!r}")
     return component
-
-
 def _step_work_dir(
     custom_agent: Optional[str],
     identifier: str,
 ) -> Path:
     """Return the run-scoped work directory for one Step without creating it."""
     try:
-        from .split_fork import resolve_work_root
+        from .run_paths import resolve_work_root
     except ImportError:  # pragma: no cover
-        from split_fork import resolve_work_root  # type: ignore[no-redef]
+        from run_paths import resolve_work_root  # type: ignore[no-redef]
 
     safe_identifier = _safe_work_path_component(identifier, "identifier")
     work_root = resolve_work_root().resolve()
@@ -243,9 +247,8 @@ def _repository_skill_directories(
     Skill（`required_skills` / インストール済み optional）のディレクトリだけ。
     root 直下の全ディレクトリを無条件に公開してはならない。
 
-    CLI のスキル発見は深さ 1 (`<dir>/<name>/SKILL.md`) のみ走査するため、
-    `azure-skills/azure-cli-deploy-scripts` のようなネスト配置 Skill は
-    その親ディレクトリ (`<root>/azure-skills`) を公開して発見可能にする。
+    repository Skill は `<root>/<name>/SKILL.md` に直接配置する。外部 Skill 等の
+    別ルートが返る場合だけ、その宣言済み Skill の親ディレクトリを追加公開する。
     """
     skills_dir = Path.cwd() / ".github" / "skills"
     if not skills_dir.is_dir():
@@ -363,213 +366,20 @@ _ASDW_DATA_DEPLOY_PIPELINE_SEQUENCE = (
     ("registration", 2),
     ("verify", 2),
 )
-_ASDW_DATA_DEPLOY_MICROSOFT_LEARN_SERVER = "microsoft-learn"
-_ASDW_DATA_DEPLOY_MICROSOFT_LEARN_CONFIG = {
-    "type": "http",
-    "url": "https://learn.microsoft.com/api/mcp",
-    "tools": ["*"],
-}
-_FOUNDRY_REQUIRED_AZURE_MCP_SERVER = "azure"
-_FOUNDRY_REQUIRED_AZURE_MCP_CONFIG = {
-    "tools": ["*"],
-    "command": "npx",
-    "args": ["-y", "@azure/mcp@latest", "server", "start"],
-}
-_FOUNDRY_REQUIRED_MCP_SERVERS = {
-    _FOUNDRY_REQUIRED_AZURE_MCP_SERVER: _FOUNDRY_REQUIRED_AZURE_MCP_CONFIG,
-    _ASDW_DATA_DEPLOY_MICROSOFT_LEARN_SERVER: _ASDW_DATA_DEPLOY_MICROSOFT_LEARN_CONFIG,
-}
-def _permission_path_has_reparse_point(path_stat: os.stat_result) -> bool:
-    reparse_flag = int(getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x0400))
-    return bool(int(getattr(path_stat, "st_file_attributes", 0)) & reparse_flag)
-
-
-def _permission_path_has_windows_alias(raw_path: str) -> bool:
-    """Reject ADS, reserved devices, and Win32 trailing-dot/space aliases."""
-    drive, drive_tail = ntpath.splitdrive(raw_path)
-    if drive and not drive_tail.startswith(("\\", "/")):
-        return True
-    candidate = Path(raw_path)
-    reserved = re.compile(
-        r"^(?:CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|"
-        r"COM[1-9¹²³]|LPT[1-9¹²³])(?:\..*)?$",
-        re.IGNORECASE,
-    )
-    for index, part in enumerate(candidate.parts):
-        if index == 0 and part == candidate.anchor:
-            continue
-        if not part or part.endswith((".", " ")):
-            return True
-        if (
-            ":" in part
-            or reserved.fullmatch(part)
-            or (
-                hasattr(ntpath, "isreserved")
-                and ntpath.isreserved(part)
-            )
-        ):
-            return True
-    return False
-
-
-def _permission_repo_relative_path(
-    path: Any,
-    *,
-    require_exists: bool = False,
-    require_regular_file: bool = False,
-) -> Optional[str]:
-    """Return a direct repository-relative path, rejecting aliases and escapes."""
-    raw_path = str(path or "")
-    if (
-        not raw_path
-        or raw_path != raw_path.strip()
-        or "\x00" in raw_path
-        or _permission_path_has_windows_alias(raw_path)
-        or any(
-            part in {".", ".."}
-            for part in raw_path.replace("\\", "/").split("/")
-        )
-    ):
-        return None
-    try:
-        repo_root = Path.cwd().resolve()
-        candidate = Path(raw_path)
-        if not candidate.is_absolute():
-            candidate = Path.cwd() / candidate
-        lexical = Path(os.path.abspath(candidate))
-        if require_exists and not lexical.exists():
-            return None
-        resolved = candidate.resolve(strict=False)
-        lexical_relative = lexical.relative_to(repo_root)
-        resolved_relative = resolved.relative_to(repo_root)
-        if os.path.normcase(os.path.normpath(lexical)) != os.path.normcase(
-            os.path.normpath(resolved)
-        ):
-            return None
-        if os.path.normcase(os.path.normpath(lexical_relative)) != os.path.normcase(
-            os.path.normpath(resolved_relative)
-        ):
-            return None
-
-        current = repo_root
-        for part in lexical_relative.parts:
-            current = current / part
-            if not current.exists():
-                break
-            current_stat = os.lstat(current)
-            if stat.S_ISLNK(current_stat.st_mode) or _permission_path_has_reparse_point(
-                current_stat
-            ):
-                return None
-        if lexical.exists():
-            final_stat = os.lstat(lexical)
-            if require_regular_file and not stat.S_ISREG(final_stat.st_mode):
-                return None
-            if stat.S_ISREG(final_stat.st_mode) and final_stat.st_nlink != 1:
-                return None
-        return resolved_relative.as_posix()
-    except (OSError, RuntimeError, ValueError):
-        return None
-
-
-def _read_repository_mcp_config(repo_root: Path) -> Dict[str, Any]:
-    """Return the `mcpServers` map declared in the repository-pinned MCP config."""
-    if repo_root.resolve() != Path.cwd().resolve():
-        return {}
-    config_relative = _permission_repo_relative_path(
-        ".github/.mcp.json",
-        require_exists=True,
-        require_regular_file=True,
-    )
-    if config_relative is None:
-        return {}
-    try:
-        payload = json.loads((repo_root / config_relative).read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValueError, TypeError):
-        return {}
-    servers = payload.get("mcpServers") if isinstance(payload, dict) else None
-    return servers if isinstance(servers, dict) else {}
-
-
-def _load_repository_pinned_mcp_servers(
-    repo_root: Path,
-    expected_servers: Dict[str, Any],
-) -> Dict[str, Any]:
-    """Load an exact named subset from the repository-pinned MCP config."""
-    servers = _read_repository_mcp_config(repo_root)
-    if not servers:
-        return {}
-    configured = {name: servers.get(name) for name in expected_servers}
-    if configured != expected_servers:
-        return {}
-    return copy.deepcopy(expected_servers)
-
-
-def _load_trusted_asdw_data_deploy_mcp_servers(
-    repo_root: Path,
-) -> Dict[str, Any]:
-    """Load only the repository-pinned official Microsoft Learn MCP endpoint."""
-    return _load_repository_pinned_mcp_servers(
-        repo_root,
-        {
-            _ASDW_DATA_DEPLOY_MICROSOFT_LEARN_SERVER: (
-                _ASDW_DATA_DEPLOY_MICROSOFT_LEARN_CONFIG
-            )
-        },
-    )
-
-
-def _load_trusted_foundry_mcp_servers(repo_root: Path) -> Dict[str, Any]:
-    """Load the exact Azure and Microsoft Learn MCP servers for Foundry Steps."""
-    return _load_repository_pinned_mcp_servers(
-        repo_root,
-        _FOUNDRY_REQUIRED_MCP_SERVERS,
-    )
-
-
-def _require_trusted_asdw_data_deploy_mcp_servers(
-    repo_root: Path,
-) -> Dict[str, Any]:
-    """Return the one pinned server or fail before a DataDeploy session starts."""
-    servers = _load_trusted_asdw_data_deploy_mcp_servers(repo_root)
-    expected = {
-        _ASDW_DATA_DEPLOY_MICROSOFT_LEARN_SERVER: dict(
-            _ASDW_DATA_DEPLOY_MICROSOFT_LEARN_CONFIG
-        )
-    }
-    if servers != expected:
-        raise RuntimeError(
-            "ASDW Step 1.3 requires the repository-pinned Microsoft Learn "
-            "MCP server before session creation."
-        )
-    return servers
-
-
-def _require_trusted_foundry_mcp_servers(repo_root: Path) -> Dict[str, Any]:
-    """Return the pinned Foundry MCP subset or fail before session creation."""
-    servers = _load_trusted_foundry_mcp_servers(repo_root)
-    if servers != _FOUNDRY_REQUIRED_MCP_SERVERS:
-        raise RuntimeError(
-            "Foundry-required Step requires repository-pinned Azure and "
-            "Microsoft Learn MCP servers before session creation."
-        )
-    return servers
-
-
 def _validate_asdw_data_deploy_runtime_context(
     validated_run_id: str,
     repo_root: Path,
 ) -> List[str]:
-    """Validate the exact run root and pinned documentation server pre-session."""
+    """Validate the exact run root pre-session."""
     errors: List[str] = []
     resolved_repo_root = repo_root.resolve()
     expected_work_root = (
         resolved_repo_root / "work" / "run" / validated_run_id
     ).resolve()
     try:
-        from .split_fork import resolve_run_id, resolve_work_root
+        from .run_paths import resolve_run_id, resolve_work_root
     except ImportError:  # pragma: no cover
-        from split_fork import resolve_run_id, resolve_work_root  # type: ignore[no-redef]
+        from run_paths import resolve_run_id, resolve_work_root  # type: ignore[no-redef]
 
     if (
         not validated_run_id
@@ -606,11 +416,6 @@ def _validate_asdw_data_deploy_runtime_context(
         errors.append(
             "ASDW Step 1.3 resolved work root must match work/run/<validated-run-id>."
         )
-
-    try:
-        _require_trusted_asdw_data_deploy_mcp_servers(resolved_repo_root)
-    except RuntimeError as exc:
-        errors.append(str(exc))
     return errors
 
 
@@ -620,17 +425,7 @@ def _build_asdw_data_deploy_environment_snapshot(
     audit_mode: object,
     bootstrap_context: Optional[Mapping[str, str]] = None,
 ) -> Mapping[str, str]:
-    """Freeze the complete non-secret Step 1.3 input contract.
-
-    ``RESOURCE_GROUP`` has one authoritative source: the workflow parameter.
-    The already-validated bootstrap context overrides matching process values;
-    remaining declared values are explicit process inputs. HVE-owned payloads
-    and stage run IDs are removed so the byte-pinned launcher can provision
-    them from stable files for each stage. ``audit_mode`` is accepted as an
-    untrusted object and validated here so an invalid generator result fails
-    closed. The returned mapping is immutable and is passed to the locally
-    spawned Copilot runtime before session start.
-    """
+    """Freeze the complete non-secret Step 1.3 input contract."""
     if not isinstance(audit_mode, str) or audit_mode not in (
         _ASDW_AUDIT_MODE_SQL_LEDGER_DIGEST,
         _ASDW_AUDIT_MODE_ACL_DIRECT,
@@ -664,8 +459,6 @@ def _build_asdw_data_deploy_environment_snapshot(
         if key == "RESOURCE_GROUP":
             continue
         if key == _ASDW_DATA_DEPLOY_READ_BACK_KEY:
-            # Azure assigns this value when the prep stage creates the
-            # identity, so the launcher reads it back between stages.
             continue
         value = (
             bootstrap_context.get(key)
@@ -791,6 +584,7 @@ def _write_asdw_data_deploy_evidence(
     if not isinstance(pipeline_results, tuple):
         return ["ASDW native data pipeline evidence requires an immutable result tuple."]
     rows: list[tuple[str, int, int, bool]] = []
+    failure_summaries: list[tuple[str, int, str]] = []
     for result in pipeline_results:
         stage = getattr(result, "stage", None)
         attempt = getattr(result, "attempt", None)
@@ -804,6 +598,12 @@ def _write_asdw_data_deploy_evidence(
         ):
             return ["ASDW native data pipeline evidence received an invalid StageResult."]
         rows.append((stage, attempt, exit_code, reached))
+        evidence = getattr(result, "evidence", "")
+        if exit_code != 0 and type(evidence) is str:
+            # 失敗した stage の stderr 末尾だけを、再度マスクしたうえで記録する。
+            summary = summarize_stage_failure(evidence.partition("\n")[2])
+            if summary:
+                failure_summaries.append((stage, attempt, summary))
 
     is_complete_success = (
         tuple((stage, attempt) for stage, attempt, _exit, _reached in rows)
@@ -842,6 +642,10 @@ def _write_asdw_data_deploy_evidence(
         f"| {stage} | {attempt} | {exit_code} | {'reached' if reached else 'not-reached'} |"
         for stage, attempt, exit_code, reached in rows
     ) or "| none | 0 | 1 | not-reached |"
+    failure_section = "".join(
+        f"\n## Failure summary: {stage} (attempt {attempt})\n\n```text\n{summary}\n```\n"
+        for stage, attempt, summary in failure_summaries
+    )
     timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     work_status_path, ac_report_path, tdd_report_path = _asdw_data_deploy_evidence_paths(
         repo_root,
@@ -855,6 +659,7 @@ def _write_asdw_data_deploy_evidence(
             "| Stage | Attempt | Exit code | Reached |\n"
             "| --- | ---: | ---: | --- |\n"
             f"{stage_lines}\n"
+            f"{failure_section}"
         ),
         ac_report_path: (
             "# HVE-owned ASDW DataDeploy AC verification\n\n"
@@ -977,7 +782,6 @@ try:
     from .config import (
         SDKConfig,
         generate_run_id,
-        SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS,
         DEFAULT_CONTEXT_INJECTION_MAX_CHARS,
         to_wire_model,
     )
@@ -985,33 +789,32 @@ try:
     from .prompts import (
         REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
         QA_PROMPT_V2,
-        SELF_IMPROVE_SCAN_PROMPT, SELF_IMPROVE_PLAN_PROMPT, SELF_IMPROVE_VERIFY_PROMPT,
         PRE_EXECUTION_QA_PROMPT_V2, MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT,
     )
     from .qa_merger import QADocument, QAMerger
-    from .run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id
+    from .run_state import DEFAULT_SESSION_ID_PREFIX, _safe_run_id_component, make_session_id
     from .run_state_store import (
         DurableStateError,
         LeaseToken,
         RunStateStore,
         default_state_path,
     )
-    from .self_improve import (
-        scan_codebase, record_learning, get_learning_summary,
-        _build_verification_result,
-        ImprovementRecord, ScanResult, VerificationResult,
-        DEFAULT_QUALITY_THRESHOLD, LEARNING_SUMMARY_MAX_LENGTH,
+    from .toolsearch.policy import ToolSearchPolicy
+    from .toolsearch.resource_inventory import discover_sdk_resources
+    from .toolsearch.resource_routing import (
+        apply_resource_route,
+        build_routed_session_options,
+        create_routed_session,
+        resolve_resource_route,
+        restrict_resource_route,
     )
-    from .workiq import (
-        is_workiq_available, build_workiq_mcp_config,
-        query_workiq, query_workiq_detailed,
-        get_workiq_prompt_template, save_workiq_result,
-        WORKIQ_MCP_SERVER_NAME, WORKIQ_MCP_SERVER_NAMES, WORKIQ_MCP_TOOL_NAMES,
-        extract_workiq_status,
-        is_workiq_tool_name, extract_tool_name_from_event,
-        extract_workiq_tool_name_from_event,
-        format_workiq_tool_not_invoked_warning,
-        is_workiq_result_mergeable,
+    from .workiq import extract_tool_name_from_event
+    from . import knowledge_files
+    from .knowledge_discovery import (
+        QA_STATUS_SECTION,
+        DiscoveryRequest,
+        build_status_section,
+        run_knowledge_discovery,
     )
     from .orchestrator_context import OrchestratorContext
     from .phase1_request_plan import plan_phase1_request
@@ -1029,7 +832,6 @@ except ImportError:
     from config import (  # type: ignore[no-redef]
         SDKConfig,
         generate_run_id,
-        SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS,
         DEFAULT_CONTEXT_INJECTION_MAX_CHARS,
         to_wire_model,
     )
@@ -1037,12 +839,11 @@ except ImportError:
     from prompts import (  # type: ignore[no-redef]
         REVIEW_PROMPT, ADVERSARIAL_RECHECK_PROMPT,
         QA_PROMPT_V2,
-        SELF_IMPROVE_SCAN_PROMPT, SELF_IMPROVE_PLAN_PROMPT, SELF_IMPROVE_VERIFY_PROMPT,
         PRE_EXECUTION_QA_PROMPT_V2, MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT,
     )
     from qa_merger import QADocument, QAMerger  # type: ignore[no-redef]
     from phase1_request_plan import plan_phase1_request  # type: ignore[no-redef]
-    from run_state import DEFAULT_SESSION_ID_PREFIX, make_session_id  # type: ignore[no-redef]
+    from run_state import DEFAULT_SESSION_ID_PREFIX, _safe_run_id_component, make_session_id  # type: ignore[no-redef]
     # Durable state types must keep one class identity even when ``runner`` is
     # imported through the legacy flat-module compatibility path.  The flat
     # orchestrator delegates durable planning/storage to the canonical package
@@ -1054,22 +855,22 @@ except ImportError:
         RunStateStore,
         default_state_path,
     )
-    from self_improve import (  # type: ignore[no-redef]
-        scan_codebase, record_learning, get_learning_summary,
-        _build_verification_result,
-        ImprovementRecord, ScanResult, VerificationResult,
-        DEFAULT_QUALITY_THRESHOLD, LEARNING_SUMMARY_MAX_LENGTH,
+    from toolsearch.policy import ToolSearchPolicy  # type: ignore[no-redef]
+    from toolsearch.resource_inventory import discover_sdk_resources  # type: ignore[no-redef]
+    from toolsearch.resource_routing import (  # type: ignore[no-redef]
+        apply_resource_route,
+        build_routed_session_options,
+        create_routed_session,
+        resolve_resource_route,
+        restrict_resource_route,
     )
-    from workiq import (  # type: ignore[no-redef]
-        is_workiq_available, build_workiq_mcp_config,
-        query_workiq, query_workiq_detailed,
-        get_workiq_prompt_template, save_workiq_result,
-        WORKIQ_MCP_SERVER_NAME, WORKIQ_MCP_SERVER_NAMES, WORKIQ_MCP_TOOL_NAMES,
-        extract_workiq_status,
-        is_workiq_tool_name, extract_tool_name_from_event,
-        extract_workiq_tool_name_from_event,
-        format_workiq_tool_not_invoked_warning,
-        is_workiq_result_mergeable,
+    from workiq import extract_tool_name_from_event  # type: ignore[no-redef]
+    import knowledge_files  # type: ignore[no-redef]
+    from knowledge_discovery import (  # type: ignore[no-redef]
+        QA_STATUS_SECTION,
+        DiscoveryRequest,
+        build_status_section,
+        run_knowledge_discovery,
     )
     from orchestrator_context import OrchestratorContext  # type: ignore[no-redef]
     from cloud_session import (  # type: ignore[no-redef]
@@ -1083,121 +884,44 @@ except ImportError:
         wait_for_cloud_session_ready,
     )
 
-# Phase 4 プロンプト長の上限（長い出力を切り詰めてトークン消費を制御する）
-_MAX_SCAN_OUTPUT_LENGTH: int = 8000
-_MAX_PLAN_SCAN_LENGTH: int = 4000
-_MAX_LEARNING_SUMMARY_LENGTH: int = 2000
 _ACTION_DETAIL_MAX_LENGTH: int = 120
 _ACTION_RESULT_SINGLE_LINE_MAX_LENGTH: int = 100
 _MODEL_CALL_FAILURE_THRESHOLD: int = 3
 
-# Wave 2-6: Work IQ 優先度フィルタで優先扱いする重要度値
-# priority_filter=True 時は "最重要"/"高" を先頭に寄せ、不足分は残りで補填して max 件に収める
-_WORKIQ_HIGH_PRIORITY_VALUES: frozenset[str] = frozenset(["最重要", "高"])
-_WORKIQ_MCP_SERVER_ALIASES: frozenset[str] = frozenset(
-    name.lower() for name in WORKIQ_MCP_SERVER_NAMES
-)
+def _is_knowledge_source_server(name: Any, config: Any) -> bool:
+    """MCP 接続失敗を非致命として扱う知識源か（`workiq` と実効知識源。FR-KD-02）。"""
+    if name == "workiq":
+        return True
+    try:
+        return name in config.effective_knowledge_sources()
+    except Exception:
+        return False
 
-
-def _is_workiq_mcp_server_name(name: Any) -> bool:
-    return str(name or "").strip().lower() in _WORKIQ_MCP_SERVER_ALIASES
-
-
-_AZURE_MCP_SERVER_NAME = "azure"
-
-# FR-CLI-79: 全 Step の Custom Agent プロンプトが Azure に言及しない Workflow。
-# 未登録の Workflow は従来どおり全サーバを受け取る（宣言漏れを機能破壊にしない）。
-_AZURE_FREE_WORKFLOWS = frozenset({"ard", "akm", "adi", "adoc"})
-
-
-def _filter_mcp_servers_for_session(
-    mcp_servers: Optional[Dict[str, Any]],
-    *,
-    include_workiq: bool = False,
-    workflow_id: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Return MCP servers for a session, excluding Work IQ aliases by default.
-
-    HVE uses `_hve_workiq` internally, while user-level MCP config can expose a
-    server named `workiq`. Main coding sessions should not connect either alias
-    unless a dedicated Work IQ phase explicitly opts in.
-
-    FR-CLI-79: Azure を使わない Workflow では `azure` サーバも外す。
-    """
-    if not mcp_servers:
-        return {}
-    _drop_azure = str(workflow_id or "").strip().lower() in _AZURE_FREE_WORKFLOWS
-    return {
-        _k: _v
-        for _k, _v in mcp_servers.items()
-        if (include_workiq or not _is_workiq_mcp_server_name(_k))
-        and not (_drop_azure and str(_k).strip().lower() == _AZURE_MCP_SERVER_NAME)
-    }
-
-
-def _apply_repository_mcp_scope(
-    opts: Dict[str, Any],
-    *,
-    include_workiq: bool = False,
-    workflow_id: Optional[str] = None,
-) -> None:
-    """FR-CLI-76: リポジトリ宣言の MCP サーバだけを公開し、自動探索を止める。
-
-    既に `opts["mcp_servers"]` がある場合はそれを優先して宣言分を併合する。
-    宣言が存在しない / 読み取れない / 空の場合は何もしない（呼び出し側の
-    `enable_config_discovery` を従来どおり `True` のまま残すため）。
-    """
-    declared = _filter_mcp_servers_for_session(
-        copy.deepcopy(_read_repository_mcp_config(Path.cwd())),
-        include_workiq=include_workiq,
-        workflow_id=workflow_id,
-    )
-    if not declared:
-        return
-    merged = dict(opts.get("mcp_servers") or {})
-    for _name, _server in declared.items():
-        merged.setdefault(_name, _server)
-    opts["mcp_servers"] = merged
-    opts["enable_config_discovery"] = False
-
-
-def _filter_workiq_questions(
-    questions: "List[Any]",
-    max_questions: int,
-    priority_filter: bool,
-) -> "List[Any]":
-    """Work IQ クエリ対象の質問を絞り込む。
-
-    priority_filter=True の場合、重要度が "最重要"/"高" の質問を優先して先頭に寄せ、
-    不足分は残りの質問で補填した上で max_questions 件に収める。
-    priority_filter=False の場合は元の順番のまま max_questions 件を返す。
-    max_questions が負の値の場合は 0 として扱う。
-    """
-    normalized_max = max(0, max_questions)
-    if not priority_filter:
-        return list(questions)[:normalized_max]
-
-    high = [q for q in questions if getattr(q, "priority", "") in _WORKIQ_HIGH_PRIORITY_VALUES]
-    rest = [q for q in questions if getattr(q, "priority", "") not in _WORKIQ_HIGH_PRIORITY_VALUES]
-    combined = high + rest
-    return combined[:normalized_max]
-
-# ---------------------------------------------------------------------------
-# Self-Improve スコープ解決ヘルパー
-# ---------------------------------------------------------------------------
-
-# SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS は config.py からインポート済み
-# （_SI_SCOPE_DEFAULTS として後方互換エイリアスを公開）
-_SI_SCOPE_DEFAULTS = SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS
 
 _RUNNER_EXECUTION_MODE_CONSTRAINT_SUFFIX = load_prompt_file(
     "runtime/runner/execution-mode-constraint-suffix.prompt.md"
 )
+_RUNNER_RUNTIME_GUIDANCE_SUFFIX = load_prompt_file(
+    "runtime/runner/runtime-guidance-suffix.prompt.md"
+)
+_RUNNER_UNATTENDED_GUIDANCE_SUFFIX = load_prompt_file(
+    "runtime/runner/unattended-guidance-suffix.prompt.md"
+)
+_RUNNER_UNATTENDED_DECLARED_SCOPE_TEMPLATE = load_prompt_file(
+    "runtime/runner/unattended-declared-scope.prompt.md"
+)
+_RUNNER_STEP_TIME_LIMIT_TEMPLATE = load_prompt_file(
+    "runtime/runner/step-time-limit.prompt.md"
+)
+_RUNNER_OUTPUT_CONTINUATION_TEMPLATE = load_prompt_file(
+    "runtime/runner/output-continuation.prompt.md"
+)
+_MAX_OUTPUT_CONTINUATION_ATTEMPTS = 2
 _RUNNER_REVIEW_OWNERSHIP_AUTO_CONTENTS_REVIEW_SUFFIX = load_prompt_file(
     "runtime/runner/review-ownership-auto-contents-review.prompt.md"
 )
-_RUNNER_REVIEW_OWNERSHIP_INLINE_SELF_CHECK_SUFFIX = load_prompt_file(
-    "runtime/runner/review-ownership-inline-self-check.prompt.md"
+_RUNNER_REVIEW_OWNERSHIP_MAIN_TASK_SUFFIX = load_prompt_file(
+    "runtime/runner/review-ownership-main-task.prompt.md"
 )
 _RUNNER_PHASE1_AGENT_PREFIX_TEMPLATE = load_prompt_file(
     "runtime/runner/phase1-agent-prefix.prompt.md"
@@ -1216,7 +940,8 @@ _RUNNER_TDD_REPORT_INSTRUCTION_SUFFIX_TEMPLATE = load_prompt_file(
 _RUNNER_RESUME_RECOVERY_PROMPT_PATH = (
     "runtime/runner/resume-recovery.prompt.md"
 )
-_RUNNER_RESUME_EVENT_TIMEOUT_SECONDS = 5.0
+# 実 SDK の resume_session RPC は単体で約 5 秒かかる（2026-10-02 実測）。resource route 適用の共有 60 秒（FR-TS-13）に合わせる。
+_RUNNER_RESUME_EVENT_TIMEOUT_SECONDS = 60.0
 _RUNNER_CLEANUP_TIMEOUT_SECONDS = 5.0
 _RUNNER_FORCE_STOP_TIMEOUT_SECONDS = 2.0
 
@@ -1248,7 +973,9 @@ async def _stop_client_bounded(client: Any, console: Any) -> None:
     except TimeoutError:
         console.warning("[cleanup] client.stop() timed out; forcing shutdown")
     except Exception as cleanup_exc:
-        console.warning(f"[cleanup] client.stop() failed: {cleanup_exc}")
+        console.warning(
+            sanitize_diagnostic_text(f"[cleanup] client.stop() failed: {cleanup_exc}")
+        )
 
     force_stop = getattr(client, "force_stop", None)
     if not callable(force_stop):
@@ -1261,7 +988,9 @@ async def _stop_client_bounded(client: Any, console: Any) -> None:
     except TimeoutError:
         console.warning("[cleanup] client.force_stop() timed out")
     except Exception as cleanup_exc:
-        console.warning(f"[cleanup] client.force_stop() failed: {cleanup_exc}")
+        console.warning(
+            sanitize_diagnostic_text(f"[cleanup] client.force_stop() failed: {cleanup_exc}")
+        )
 
 
 def _resolve_step_output_paths(workflow: Any, step_id: str) -> List[str]:
@@ -1282,12 +1011,11 @@ def _resolve_step_output_paths(workflow: Any, step_id: str) -> List[str]:
 
 
 def _build_execution_mode_constraint_suffix(ctx: Any) -> str:
-    """CLI/GUI Orchestrator 配下 (fleet mode 以外) のとき prompt 末尾に付与する制約文を返す。
+    """CLI/GUI Orchestrator 配下のとき prompt 末尾に付与する制約文を返す。
 
-    `ctx` が `None`（単独実行モード）または `split_fork_enabled=True`（fleet mode）の
-    場合は空文字を返す。詳細は copilot-instructions.md §0。
+    `ctx` が `None`（単独実行モード）の場合は空文字を返す（FR-WF-OUT-01）。
     """
-    if ctx is None or getattr(ctx, "split_fork_enabled", False):
+    if ctx is None:
         return ""
     return _RUNNER_EXECUTION_MODE_CONSTRAINT_SUFFIX
 
@@ -1296,7 +1024,72 @@ def _build_review_ownership_suffix(auto_contents_review: bool) -> str:
     """メインタスクと敵対的レビューの所有権を明示する末尾指示を返す。"""
     if auto_contents_review:
         return _RUNNER_REVIEW_OWNERSHIP_AUTO_CONTENTS_REVIEW_SUFFIX
-    return _RUNNER_REVIEW_OWNERSHIP_INLINE_SELF_CHECK_SUFFIX
+    return _RUNNER_REVIEW_OWNERSHIP_MAIN_TASK_SUFFIX
+
+
+@dataclass(frozen=True)
+class DeclaredScope:
+    """FR-PROMPT-13: 無人実行の指示へ差し込む事前承認の範囲。"""
+
+    resource_group: str = ""
+    pre_approved_operations: Tuple[str, ...] = ()
+    allow_public_exposure: bool = False
+    budget_note: str = ""
+
+
+# Azure resource group 名の規則（英数字・`-`・`_`・`.`・`(`・`)`、90 文字以内）。
+_RESOURCE_GROUP_RE = re.compile(r"^[-\w.()]{1,90}$")
+_SCOPE_TEXT_MAX_CHARS = 200
+
+
+def _safe_scope_text(value: str, pattern: "Optional[re.Pattern[str]]" = None) -> str:
+    """モデルへ渡す前に宣言値の長さと文字種を検証し、不正なら未指定として扱う。"""
+    text = str(value or "").strip()
+    if not text or len(text) > _SCOPE_TEXT_MAX_CHARS:
+        return ""
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in text):
+        return ""
+    if pattern is not None and not pattern.fullmatch(text):
+        return ""
+    return text
+
+
+def _format_declared_scope(scope: DeclaredScope) -> str:
+    operations = [
+        op for op in scope.pre_approved_operations if _safe_scope_text(op, re.compile(r"^[a-z_]{1,40}$"))
+    ]
+    resource_group = _safe_scope_text(scope.resource_group, _RESOURCE_GROUP_RE)
+    budget_note = _safe_scope_text(scope.budget_note)
+    return _RUNNER_UNATTENDED_DECLARED_SCOPE_TEMPLATE.format(
+        operations=", ".join(operations) or "(なし)",
+        resource_group=f"`{resource_group}`" if resource_group else "(未宣言)",
+        public_exposure="許可" if scope.allow_public_exposure else "許可しない",
+        budget_note=budget_note or "(なし)",
+    )
+
+
+def _limit_minutes(limit_seconds: Optional[float]) -> Optional[int]:
+    """有効な上限秒を分へ丸める。無効（None / 0 以下）なら None。"""
+    if not limit_seconds or limit_seconds <= 0:
+        return None
+    return max(1, round(limit_seconds / 60))
+
+
+def _build_runtime_guidance_suffix(
+    unattended: bool,
+    scope: Optional[DeclaredScope] = None,
+    step_timeout_seconds: Optional[float] = None,
+) -> str:
+    """Build shared Phase 1 guidance, adding stop boundaries only when unattended."""
+    text = _RUNNER_RUNTIME_GUIDANCE_SUFFIX
+    limit_minutes = _limit_minutes(step_timeout_seconds)
+    if limit_minutes is not None:
+        text += _RUNNER_STEP_TIME_LIMIT_TEMPLATE.format(limit_minutes=limit_minutes)
+    if unattended:
+        text += _RUNNER_UNATTENDED_GUIDANCE_SUFFIX
+        if scope is not None:
+            text += _format_declared_scope(scope)
+    return text
 
 
 def _compose_phase1_prompt(
@@ -1305,6 +1098,7 @@ def _compose_phase1_prompt(
     step_prompt: str,
     pre_qa_context: str,
     execution_mode_suffix: str,
+    runtime_guidance_suffix: str,
     tdd_suffix: str,
     review_suffix: str,
 ) -> Tuple[str, Tuple[Tuple[str, str], ...]]:
@@ -1328,6 +1122,7 @@ def _compose_phase1_prompt(
     components.append(("step_prompt", step_prompt))
     for name, suffix in (
         ("execution_mode_suffix", execution_mode_suffix),
+        ("runtime_guidance_suffix", runtime_guidance_suffix),
         ("tdd_suffix", tdd_suffix),
         ("review_suffix", review_suffix),
     ):
@@ -1350,7 +1145,7 @@ def _check_output_paths_gate(
       - 空リスト: ゲート pass（条件不該当、宣言なし、または全て存在）
       - 非空リスト: 欠落した path 群（fail 用。存在する宣言 path は含めない）
     """
-    if ctx is None or getattr(ctx, "split_fork_enabled", False):
+    if ctx is None:
         return []
     step = next(
         (s for s in getattr(workflow, "steps", []) if getattr(s, "id", None) == step_id),
@@ -1362,10 +1157,42 @@ def _check_output_paths_gate(
     )
     return find_missing_output_paths(repo_root, declared, prefix_gates)
 
+
+async def _continue_for_missing_outputs(
+    session: Any,
+    *,
+    ctx: Any,
+    workflow: Any,
+    step_id: str,
+    repo_root: Path,
+    send: Callable[[Any, str], Awaitable[Any]],
+    started_at: Optional[float] = None,
+    limit_seconds: Optional[float] = None,
+    clock: Callable[[], float] = time.time,
+) -> List[str]:
+    """Ask the active main session to finish missing declared outputs at most twice."""
+    missing = _check_output_paths_gate(ctx, workflow, step_id, repo_root)
+    limit_minutes = _limit_minutes(limit_seconds)
+    for _attempt in range(_MAX_OUTPUT_CONTINUATION_ATTEMPTS):
+        if not missing:
+            break
+        time_status = ""
+        if started_at is not None and limit_minutes is not None:
+            elapsed_minutes = max(0, int((clock() - started_at) // 60))
+            time_status = f"（経過 {elapsed_minutes} 分 / 上限 {limit_minutes} 分）\n"
+        prompt = _RUNNER_OUTPUT_CONTINUATION_TEMPLATE.format(
+            missing_paths="\n".join(f"- {path}" for path in missing),
+            time_status=time_status,
+        )
+        await send(session, prompt)
+        missing = _check_output_paths_gate(ctx, workflow, step_id, repo_root)
+    return missing
+
 # Auto-QA マージファイルのサフィックス（HVE 実行補助 QA。ADI 原本質問票のmain成果物とは別物）
 _EXECUTION_QA_MERGED_SUFFIX: str = "execution-qa-merged.md"
 # 事前実行 QA ファイルのサフィックス（メインタスク実行前の質問票）
 _PRE_EXECUTION_QA_SUFFIX: str = "pre-execution-qa.md"
+_POST_EXECUTION_QA_SUFFIX: str = "post-execution-qa.md"
 
 # LLM が本文ではなく「成果物サマリー + artifacts: qa/foo.md」だけを返す場合の再パース用。
 # セキュリティ上、相対 `qa/*.md` のみを許可し、絶対パスや `..` は読まない。
@@ -1445,6 +1272,10 @@ async def _create_session_with_auto_reasoning_fallback(
     subtask_kind: Optional[str] = None,
     console: Optional[Any] = None,
     requires_external_skill_directories: bool = False,
+    use_resource_routing: bool = True,
+    required_mcp_servers: Optional[List[str]] = None,
+    required_skills: Optional[List[str]] = None,
+    optional_skills: Optional[List[str]] = None,
 ) -> Any:
     """create_session を呼び出し、SDK が reasoning_effort を未サポートの場合は除外して再試行する。
 
@@ -1504,25 +1335,56 @@ async def _create_session_with_auto_reasoning_fallback(
         _repository_skill_dirs = _repository_skill_directories()
         if _repository_skill_dirs:
             _opts_with_skills["skill_directories"] = _repository_skill_dirs
-    # FR-CLI-76: 呼び出し側が MCP を指定していないときは、リポジトリ宣言分だけを公開し
-    # ワークスペース / ユーザースコープ / プラグイン由来の自動探索を止める。
-    if (
-        "mcp_servers" not in _opts_with_skills
-        and "enable_config_discovery" not in _opts_with_skills
-    ):
-        # include_workiq=True: 本経路は従来 workiq を落としていないので挙動を変えない。
-        _apply_repository_mcp_scope(
-            _opts_with_skills, include_workiq=True, workflow_id=workflow_id
-        )
     if "enable_config_discovery" not in _opts_with_skills:
         _opts_with_skills["enable_config_discovery"] = True
+    if "cloud" not in _opts_with_skills:
+        _opts_with_skills.setdefault("request_extensions", False)
+
+    _resource_routing_enabled = bool(
+        use_resource_routing
+        and config is not None
+        and workflow_id
+        and "mcp_servers" not in _opts_with_skills
+    )
+    _resource_snapshot: Any = None
+    _resource_policy: Any = None
+
+    async def _resolve_resource_routing() -> tuple[Any, Any]:
+        """Local attempt時だけsnapshot/policyを1回解決する。"""
+        nonlocal _resource_snapshot, _resource_policy
+        if _resource_snapshot is not None and _resource_policy is not None:
+            return _resource_snapshot, _resource_policy
+        assert config is not None
+        _resource_snapshot = discover_sdk_resources(
+            working_directory=Path.cwd(),
+            cli_path=config.cli_path,
+            cli_url=config.cli_url,
+            github_token=config.resolve_token(),
+        )
+        if inspect.isawaitable(_resource_snapshot):
+            _resource_snapshot = await _resource_snapshot
+        _resource_policy = ToolSearchPolicy.load(repo_root=Path.cwd())
+        return _resource_snapshot, _resource_policy
 
     async def _attempt(opts: Dict[str, Any]) -> Any:
         limiter = None
         try:
             if "cloud" in opts and config is not None:
                 limiter = await acquire_cloud_session_slot(config)
-            session = await client.create_session(**opts)
+            if _resource_routing_enabled and "cloud" not in opts:
+                snapshot, policy = await _resolve_resource_routing()
+                session = await create_routed_session(
+                    client=client,
+                    session_options=opts,
+                    snapshot=snapshot,
+                    policy=policy,
+                    workflow_id=str(workflow_id),
+                    required_mcp_servers=required_mcp_servers,
+                    required_skills=required_skills,
+                    optional_skills=optional_skills,
+                )
+            else:
+                session = await client.create_session(**opts)
             if "cloud" in opts:
                 attach_cloud_session_event_logger(
                     session,
@@ -1540,7 +1402,7 @@ async def _create_session_with_auto_reasoning_fallback(
             msg = str(exc)
             if "unexpected keyword argument" not in msg:
                 raise
-            for _kw in ("skill_directories", "enable_config_discovery", "disabled_skills", "custom_agent", "cloud", "context_tier", "tool_search"):
+            for _kw in ("skill_directories", "enable_config_discovery", "disabled_skills", "custom_agent", "cloud", "context_tier", "tool_search", "request_extensions"):
                 if _kw in msg and _kw in opts:
                     if (
                         _kw == "skill_directories"
@@ -1579,6 +1441,8 @@ async def _create_session_with_auto_reasoning_fallback(
                             _stripped["streaming"] = _streaming_before_cloud
                         else:
                             _stripped.pop("streaming", None)
+                    if _kw == "cloud":
+                        _stripped.setdefault("request_extensions", False)
                     return await _attempt(_stripped)
             if "reasoning_effort" in msg and "reasoning_effort" in opts:
                 _stripped = {k: v for k, v in opts.items() if k != "reasoning_effort"}
@@ -1604,6 +1468,7 @@ async def _create_session_with_auto_reasoning_fallback(
                     except Exception:
                         pass
                 stripped = {k: v for k, v in opts.items() if k != "cloud"}
+                stripped.setdefault("request_extensions", False)
                 if _had_streaming_before_cloud:
                     stripped["streaming"] = _streaming_before_cloud
                 else:
@@ -1649,6 +1514,43 @@ def _truncate_context_with_warn(
             # console が None / warning 未実装でも切詰め自体は実施する
             pass
     return _truncate_context(text, max_length)
+
+
+def _build_phase3_review_prompt(
+    *,
+    step_id: str,
+    title: str,
+    output_paths: List[str],
+    main_output: str,
+    max_chars: int,
+    console: Any,
+) -> str:
+    """Phase 3 の評価サブセッションへ送る Prompt を組み立てる（FR-CLI-93）。
+
+    宣言 `output_paths` がある Step は、成果物パスだけを渡して評価者にファイルを読ませる。
+    宣言が 0 件の Step に限り、メイン出力の切り詰め注入へ縮退する。
+    """
+    if output_paths:
+        path_lines = "\n".join(f"- {p}" for p in output_paths)
+        return (
+            f"レビュー対象: Step {step_id} {title}\n"
+            "以下は当該 Step が宣言した成果物（完了条件）です。"
+            "各ファイルを読み、成果物そのものをレビューしてください。\n\n"
+            f"=== 成果物パス ===\n{path_lines}\n=== 成果物パスここまで ===\n\n"
+            f"{REVIEW_PROMPT}"
+        )
+    review_context = _truncate_context_with_warn(
+        main_output, max_chars,
+        label="Phase 3 Review main_output", console=console,
+    )
+    return (
+        "以下は同一ステップのメインタスク出力です。"
+        "この内容を前提としてレビューしてください。\n\n"
+        f"=== メインタスク出力（最大{max_chars:,}文字） ===\n"
+        f"{review_context}\n"
+        "=== メインタスク出力ここまで ===\n\n"
+        f"{REVIEW_PROMPT}"
+    )
 
 
 _CLIENT_START_MAX_ATTEMPTS: int = 3
@@ -2079,10 +1981,35 @@ def _should_run_pre_execution_qa(
     workflow_id: Optional[str],
     custom_agent: Optional[str],
     prompt: str,
+    has_step_inputs: bool = False,
 ) -> bool:
     """FR-QA-03: auto_qa 有効時はワークフロー共通の事前 QA を実行する。"""
     del workflow_id, custom_agent, prompt
-    return bool(auto_qa)
+    return bool(auto_qa or has_step_inputs)
+
+
+def _should_run_post_execution_discovery(
+    *,
+    auto_qa: bool,
+    dry_run: bool,
+    reuse_session: bool,
+) -> bool:
+    """FR-KD-13: 実行後の不明点調査を行うか（メインタスク成功は呼出し側で判定する）。"""
+    return bool(auto_qa) and not dry_run and not reuse_session
+
+
+def _has_step_input_bundle(
+    workflow_params: Mapping[str, Any], step_id: str
+) -> bool:
+    """fan-out base IDを含め、当該Stepにcustom inputがあるか返す。"""
+    bundles = workflow_params.get("step_input_bundles")
+    if not bundles:
+        return False
+    if __package__:
+        from .step_inputs import bundle_for_step
+    else:  # pragma: no cover - legacy flat-load compatibility
+        from hve.step_inputs import bundle_for_step
+    return bundle_for_step(bundles, step_id) is not None
 
 
 def _persist_answered_qa_and_dispatch(
@@ -2093,15 +2020,26 @@ def _persist_answered_qa_and_dispatch(
     output_path: Path,
     workflow_id: Optional[str],
     dispatcher: Optional[Callable[[Path], None]],
+    research_answers: bool = False,
 ) -> str:
-    """回答済み QA を保存・再検証し、AKM 登録キューへ非待機で渡す。"""
+    """回答済み QA を保存・再検証し、AKM 登録キューへ非待機で渡す。
+
+    ``research_answers=True``（FR-KD-06）は知識探索の調査回答または既定値候補を採用し、
+    明示回答ではないため較正ログ（FR-QA-10）へ記録しない。
+    """
     if not doc.questions:
         return ""
-    answers = {} if use_defaults else QAMerger.parse_answers(user_answers_raw)
-    merged = QAMerger.merge_answers(doc, answers, use_defaults=use_defaults)
+    if research_answers:
+        answers: Dict[int, str] = {}
+        merged, _adopted = QAMerger.adopt_research_answers(doc)
+    else:
+        answers = {} if use_defaults else QAMerger.parse_answers(user_answers_raw)
+        merged = QAMerger.merge_answers(doc, answers, use_defaults=use_defaults)
     content = QAMerger.render_merged(merged)
-    if not QAMerger.save_merged(content, output_path):
-        raise RuntimeError(f"回答済み QA を保存できませんでした: {output_path}")
+    try:
+        knowledge_files.save_qa_text(output_path, content)
+    except (OSError, knowledge_files.KnowledgeFileError) as exc:
+        raise RuntimeError(f"回答済み QA を保存できませんでした: {output_path}") from exc
     errors = QAMerger.validate_answered_file(
         output_path,
         expected_content=content,
@@ -2110,6 +2048,12 @@ def _persist_answered_qa_and_dispatch(
     if errors:
         raise RuntimeError(
             "回答済み QA の保存検証に失敗しました: " + " / ".join(errors)
+        )
+    if not research_answers:
+        QAMerger.append_calibration_log(
+            doc,
+            answers,
+            Path("work") / "learning" / "qa-calibration.jsonl",
         )
     if workflow_id != "akm" and dispatcher is not None:
         dispatcher(output_path)
@@ -2144,19 +2088,8 @@ _SKIP_TOOLS: frozenset = frozenset({
     "glob", "search", "grep", "rg",
 })
 
-# Work IQ ツール名（workiq.py の WORKIQ_MCP_TOOL_NAMES と同一）
-_WORKIQ_TOOL_NAMES: frozenset = frozenset(WORKIQ_MCP_TOOL_NAMES)
-
-# QA Draft の Work IQ 質問間隔（workiq._WORKIQ_QUERY_INTERVAL_SECONDS と同値のローカル定数）
-_WORKIQ_DRAFT_QUERY_INTERVAL_SECONDS: float = 2.0
-
 # FR-GUI-12: GUI からのジョブ対話 IPC を監視する間隔。
 _STEERING_POLL_INTERVAL_SECONDS: float = 1.0
-
-# QA Draft の Work IQ 結果マーカー文字列
-# _clean_results フィルタとの一貫性を保つために定数化する
-_WORKIQ_RESULT_NO_DATA = "関連情報なし"
-_WORKIQ_RESULT_UNINVESTIGATED_PREFIX = "未調査"
 
 _INTENT_DIAG_MAX_VALUE_LENGTH = 180
 _INTENT_DIAG_MAX_ATTRS = 20
@@ -2181,7 +2114,7 @@ class StepRunner:
     │    0a: session.send_and_wait(PRE_EXECUTION_QA_PROMPT_V2)│
     │       → Agent が実行前質問票を生成（成果物なし）    │
     │    0b: CLI stdin で複数行回答入力                   │
-    │    0c: [Work IQ 有効時] query_workiq_detailed()    │
+    │    0c: [知識源 有効時] 知識探索（FR-KD-06）        │
     │    0d: qa/{run_id}-{step_id}-pre-execution-qa.md 保存   │
     │       pre_qa_context 文字列を組み立てる             │
     │                                                    │
@@ -2195,18 +2128,9 @@ class StepRunner:
     │     旧post-QA制御は削除されました。                 │
     │                                                    │
     │  [auto_contents_review=True の場合]                 │
-    │  Phase 3: session.send_and_wait(REVIEW_PROMPT)     │
+    │  Phase 3: 評価用サブセッション.send_and_wait(...)   │
     │    → 敵対的レビュー（6軸検証 + PASS/FAIL判定）       │
-    │    → FAIL時: 再レビューサイクル（最大2回）            │
-    │                                                    │
-    │  [auto_self_improve=True の場合]                    │
-    │  Phase 4: 自己改善ループ（最大 N イテレーション）     │
-    │    → 4a: scan_codebase()  ruff+pytest+markdownlint │
-    │    → 4b: LLM 統合評価 + 改善計画生成                 │
-    │    → 4c: session 内で改善実行                        │
-    │    → 4d: 検証（Verification Loop §10.1）            │
-    │    → 4e: record_learning() 学習ログ記録              │
-    │    → 4f: デグレード検知（スコア悪化 or FAIL で停止） │
+    │    → FAIL時: メインで反映→再レビュー（最大2回）      │
     │                                                    │
     │  session.disconnect()                              │
     └──────────────────────────────────────────────────┘
@@ -2224,8 +2148,8 @@ class StepRunner:
         self.config = config
         self.console = console
         # Orchestrator 実行コンテキスト（`HVE_ORCHESTRATOR_ACTIVE` 環境変数の置換）。
-        # None == 単独実行モード（Split fork 無効、Agent は plan.md/subissues.md 生成で停止）。
-        # 非 None == Orchestrator 配下（Split 検出時に subissues.md からサブタスクを並列 fork）。
+        # None == 単独実行モード（成果物ゲートを適用しない）。
+        # 非 None == CLI / GUI Orchestrator 配下（FR-WF-OUT-01 の成果物ゲートを適用する）。
         self._orchestrator_ctx = orchestrator_ctx
         # Prompt renderingとruntimeで同じeffective workflow parametersを使う。
         # 呼出側の後続mutationがAzure実行境界へ影響しないようshallow copyを固定する。
@@ -2233,8 +2157,6 @@ class StepRunner:
             dict(workflow_params or {})
         )
         self._qa_akm_dispatcher = qa_akm_dispatcher
-        self._workiq_tool_called = False
-        self._workiq_called_tools: List[str] = []
         # FR-TS-07: 自動 pin の学習材料。Step 終了時に id へ解決して記録する。
         self._toolsearch_called_tools: List[str] = []
         self._toolsearch_context: Any = None
@@ -2390,7 +2312,6 @@ class StepRunner:
         self,
         model: str,
         *,
-        include_workiq: bool = False,
         step_id: Optional[str] = None,
         suffix: str = "",
         custom_agent: Optional[str] = None,
@@ -2399,17 +2320,13 @@ class StepRunner:
         """レビュー/QA 用の別セッション構築オプションを生成する。
 
         メインセッションの custom_agent / custom_agents を除外した
-        最小限のオプションセットを返す。Work IQ は QA フェーズ専用で、
-        include_workiq=True の場合だけ追加する。
+        最小限のオプションセットを返す。知識源は知識探索セッション（FR-KD-03）だけが使う。
 
         Phase 2 (Resume): step_id + suffix が指定された場合は決定論的 session_id を
         付与する（make_session_id で生成）。後方互換のため step_id=None の場合は
         session_id を付与しない（SDK 側で自動生成）。
 
-        SPLIT-fork 拡張 (custom_agent): SPLIT_REQUIRED 分割サブタスクの実行では
-        親 Step と **同じ Custom Agent** を継承する必要があるため、`custom_agent`
-        引数が指定された場合のみ ``opts["custom_agent"]`` に設定する。QA/Review
-        の既存呼び出しは ``custom_agent=None`` (省略) で従来挙動を維持する。
+        ``custom_agent`` は permission handler の判定にだけ使う。
         """
         opts: Dict[str, Any] = {
             "on_permission_request": self._build_step_permission_handler(
@@ -2419,50 +2336,20 @@ class StepRunner:
             "streaming": True,
         }
         # Q1=C / Q3=a: SDK へ `custom_agent` / `custom_agents` キーは渡さない。
-        # SPLIT-fork 用の Agent 識別子継承は呼び出し側で Prompt 前置として実現する。
         # Auto 経路: model="auto" を SDK へ渡し、サーバ側 Auto Model Selection に委譲する。
         _wire_model = to_wire_model(model)
         if _wire_model:
             opts["model"] = _wire_model
-        _mcp = _filter_mcp_servers_for_session(
-            self.config.mcp_servers,
-            include_workiq=include_workiq,
-        )
-
-        # Work IQ MCP Server は QA フェーズ専用のサブセッションにだけ追加する。
-        if (
-            include_workiq
-            and self.config.is_workiq_qa_enabled()
-            and is_workiq_available()
-        ):
-            _workiq_mcp = build_workiq_mcp_config(
-                tenant_id=self.config.workiq_tenant_id,
-                request_timeout=self.config.workiq_request_timeout,
-            )
-            for _k, _v in _workiq_mcp.items():
-                if _k not in _mcp:
-                    _mcp[_k] = _v
-            # FR-CLI-76 (v2.41): `mcp_servers` を明示すると共通経路の縮約が効かず自動探索が
-            # 残るため、プラグイン由来の `workiq` が tools:["*"] で併存し `_hve_workiq` の
-            # 最小権限 allowlist を迂回できてしまう。宣言分（Work IQ 別名を除く）を併合して
-            # 自動探索を止める。宣言が無い場合は従来どおり自動探索を残す。
-            opts["mcp_servers"] = _mcp
-            _apply_repository_mcp_scope(opts, workflow_id=workflow_id)
-            _mcp = opts["mcp_servers"]
-
-        if _mcp:
-            opts["mcp_servers"] = _mcp
-
-        # G-1: SDK の available_tools / excluded_tools をサブセッションへ伝搬する
-        # （メインセッションと同じ制限をサブにも適用）
         if self.config.available_tools:
             opts["available_tools"] = list(self.config.available_tools)
         if self.config.excluded_tools:
             opts["excluded_tools"] = list(self.config.excluded_tools)
 
-        # FR-MODEL-04: ツール定義遅延ロードもメインと同一値をサブへ伝搬する。
-        if self.config.tool_search:
-            opts["tool_search"] = {"enabled": True}
+        # FR-MODEL-04: ツール定義遅延ロードもメインと同一値をサブへ伝搬する
+        # （defer_threshold を含む）。
+        _tool_search_opt = self.config.tool_search_session_option()
+        if _tool_search_opt is not None:
+            opts["tool_search"] = _tool_search_opt
 
         # Phase 2: 決定論的 session_id を付与（step_id + suffix が指定された場合のみ）
         if step_id:
@@ -2475,51 +2362,49 @@ class StepRunner:
         step_id: Optional[str],
         custom_agent: Optional[str],
     ) -> Callable[[Any, Dict[str, str]], Any]:
-        """Return the default SDK permission handler for an Agent session."""
+        """Return the SDK permission handler for an Agent session.
+
+        NFR-SEC-04: CRITICAL なシェル操作だけを実行前に拒否し、それ以外は approve_all へ委譲する。
+        """
         from copilot.session import PermissionHandler
 
-        return PermissionHandler.approve_all
+        try:
+            from .permission_handler import build_step_permission_handler
+        except ImportError:
+            from permission_handler import build_step_permission_handler  # type: ignore[import-not-found,no-redef]
+
+        return build_step_permission_handler(
+            PermissionHandler.approve_all,
+            warn=lambda message: self.console.warning(f"  ⛔ [{step_id}] {message}"),
+        )
 
     # ------------------------------------------------------------------
     # Phase 6: サブセッション要否の判定ヘルパー（テスト容易性のために分離）
     # ------------------------------------------------------------------
 
-    def _should_use_pre_qa_sub_session(self, qa_model: str, workiq_available: bool) -> bool:
+    def _should_use_pre_qa_sub_session(self, qa_model: str, knowledge_discovery_requested: bool) -> bool:
         """事前 QA にサブセッションが必要かを判定する。
 
         以下のいずれかが True の場合にサブセッションを作成する:
         - qa_model が main_model と異なる（同じ "Auto" 同士なら同一とみなす）
-        - WorkIQ MCP が利用可能（QA 専用セッションに WorkIQ を含める必要があるため）
+        - 知識探索を行う（質問票の生成から知識源の MCP を外すため。FR-KD-06）
         """
-        return (qa_model != self.config.model) or workiq_available
+        return (qa_model != self.config.model) or knowledge_discovery_requested
 
-    def _should_use_qa_sub_session(self, qa_model: str, workiq_available: bool) -> bool:
-        """事後 QA にサブセッションが必要かを判定する。
-
-        事前 QA と同一条件:
-        - qa_model が main_model と異なる
-        - WorkIQ MCP が利用可能
-        """
-        return (qa_model != self.config.model) or workiq_available
-
-    def _should_use_review_sub_session(self, review_model: str) -> bool:
-        """敵対的レビューにサブセッションが必要かを判定する。
-
-        review_model が main_model と異なる場合にのみサブセッションを作成する。
-        Review フェーズでは WorkIQ は使用しないためモデル差異のみを判定する。
-        """
-        return review_model != self.config.model
+    def _should_use_qa_sub_session(self, qa_model: str, knowledge_discovery_requested: bool) -> bool:
+        """事後 QA にサブセッションが必要かを判定する（事前 QA と同一条件）。"""
+        return (qa_model != self.config.model) or knowledge_discovery_requested
 
     def _log_sub_session_reason(
         self,
         step_id: str,
         phase: str,
         qa_model: Optional[str] = None,
-        workiq_available: bool = False,
+        knowledge_discovery_requested: bool = False,
     ) -> None:
         """サブセッション作成理由を console.event() で記録する（secrets 非出力）。
 
-        呼び出し元は必ずサブセッション作成条件（モデル差異 or WorkIQ 有効）が
+        呼び出し元は必ずサブセッション作成条件（Review、モデル差異 or 知識探索）が
         True のときのみ呼び出すこと。条件が全て False の状態で呼ばれた場合は
         "(内部エラー: 理由不明)" と記録する（呼び出しバグの早期検知用）。
 
@@ -2527,15 +2412,18 @@ class StepRunner:
             step_id: ステップ識別子（ログ識別用）
             phase: フェーズ名（"Pre-QA" / "Post-QA" / "Review"）
             qa_model: QA/Review 用モデル名（Noneの場合はモデル差異ログを省略）
-            workiq_available: WorkIQ が有効かどうか
+            knowledge_discovery_requested: 知識探索を行うかどうか
         """
         _reasons: List[str] = []
+        if phase == "Review":
+            # FR-CLI-92: Review はモデル差異に依らず常に評価分離のためサブセッションを使う
+            _reasons.append("評価分離")
         if qa_model is not None and qa_model != self.config.model:
             _reasons.append(
                 f"モデル差異 (sub={qa_model!r}, main={self.config.model!r})"
             )
-        if workiq_available:
-            _reasons.append("WorkIQ 有効")
+        if knowledge_discovery_requested:
+            _reasons.append("知識探索 有効")
         # 呼び出し元の責務: _reasons が空になるのは呼び出し側のバグ
         _reason_str = "、".join(_reasons) if _reasons else "(内部エラー: 理由不明)"
         self.console.event(
@@ -2724,6 +2612,9 @@ class StepRunner:
         step_id: str,
         workflow_id: Optional[str] = None,
         requires_external_skill_directories: bool = False,
+        required_mcp_servers: Optional[List[str]] = None,
+        required_skills: Optional[List[str]] = None,
+        optional_skills: Optional[List[str]] = None,
     ) -> Any:
         """メインセッションを create_session で構築する。"""
         return await _create_session_with_auto_reasoning_fallback(
@@ -2735,6 +2626,9 @@ class StepRunner:
             subtask_kind="main",
             console=self.console,
             requires_external_skill_directories=requires_external_skill_directories,
+            required_mcp_servers=required_mcp_servers,
+            required_skills=required_skills,
+            optional_skills=optional_skills,
         )
 
     @staticmethod
@@ -2883,45 +2777,8 @@ class StepRunner:
         session_opts["skill_directories"] = directories
         return available_names
 
-    @staticmethod
-    def _is_foundry_required_step(required_skills: List[str]) -> bool:
-        """Return whether this Step requires the external Foundry meta Skill."""
-        return "microsoft-foundry" in required_skills
-
-    async def _verify_foundry_required_session_mcp_servers(
-        self,
-        session: Any,
-    ) -> None:
-        """Require Azure and Microsoft Learn MCP servers to be connected.
-
-        Unlike ASDW Step 1.3, this is a subset check: normal config discovery
-        can load additional non-Foundry MCP servers without weakening the two
-        required Foundry capabilities.
-        """
-        try:
-            mcp_list = await session.rpc.mcp.list()
-        except Exception as exc:
-            raise RuntimeError(
-                "Foundry-required MCP server list is unavailable after session creation."
-            ) from exc
-
-        connected: set[str] = set()
-        for server in getattr(mcp_list, "servers", []) or []:
-            name = str(getattr(server, "name", "") or "")
-            status = getattr(server, "status", None)
-            status_value = getattr(status, "value", status)
-            if str(status_value or "").casefold() == "connected":
-                connected.add(name)
-
-        missing = set(_FOUNDRY_REQUIRED_MCP_SERVERS) - connected
-        if missing:
-            raise RuntimeError(
-                "Foundry-required MCP servers are unavailable or disconnected: "
-                + ", ".join(sorted(missing))
-            )
-
     # ------------------------------------------------------------------
-    # メインタスク成果物改善ヘルパー（Phase 2c / Phase 3 / Phase 4 共通）
+    # メインタスク成果物改善ヘルパー（Phase 2c / Phase 3 共通）
     # ------------------------------------------------------------------
 
     async def _apply_main_artifact_improvements(
@@ -3045,9 +2902,9 @@ class StepRunner:
     def _resolve_run_id_safely(self) -> str:
         """run_id を取得する。解決できなくても呼び出し元を落とさない。"""
         try:
-            from .split_fork import resolve_run_id
+            from .run_paths import resolve_run_id
         except ImportError:  # pragma: no cover - script execution
-            from split_fork import resolve_run_id  # type: ignore[no-redef]
+            from run_paths import resolve_run_id  # type: ignore[no-redef]
         try:
             return str(resolve_run_id())
         except Exception:
@@ -3427,6 +3284,86 @@ class StepRunner:
     # 公開 API
     # ------------------------------------------------------------------
 
+    async def _run_pre_qa_knowledge_discovery(
+        self,
+        client: Any,
+        *,
+        step_id: str,
+        workflow_id: Optional[str],
+        doc: "QADocument",
+        qa_model: str,
+        qa_path: Path,
+        original_prompt: str,
+        sources: List[str],
+        goal_intro: str = (
+            "これから実行するタスクの前に、事前 QA の質問票の各質問への答えを、"
+            "知識源とリポジトリ内の資料から調べる。"
+        ),
+        session_suffix: str = "pre-qa-discovery",
+    ) -> Any:
+        """FR-KD-06 / FR-KD-13: 未回答の質問票を書き、探索モード ``qa`` の知識探索を 1 回実行する。"""
+        repo_root = Path.cwd()
+        knowledge_files.save_qa_text(qa_path, QAMerger.render_merged(doc), repo_root=repo_root)
+        snapshot = discover_sdk_resources(
+            working_directory=repo_root,
+            cli_path=self.config.cli_path,
+            cli_url=self.config.cli_url,
+            github_token=self.config.resolve_token(),
+        )
+        if inspect.isawaitable(snapshot):
+            snapshot = await snapshot
+        policy = ToolSearchPolicy.load(repo_root=repo_root)
+        base: Dict[str, Any] = {
+            "session_id": self._make_step_session_id(step_id, suffix=session_suffix),
+        }
+        wire_model = to_wire_model(qa_model)
+        if wire_model:
+            base["model"] = wire_model
+        max_chars = self._get_context_injection_max_chars()
+        task_context = _truncate_context_with_warn(
+            original_prompt, max_chars,
+            label="Phase 0 knowledge discovery original_prompt", console=self.console,
+        )
+        goal = (
+            f"{goal_intro}\n\n"
+            f"=== タスクの内容（最大{max_chars:,}文字） ===\n{task_context}\n=== タスクの内容ここまで ==="
+        )
+
+        async def _create(opts: Dict[str, Any]) -> Any:
+            session = await _create_session_with_auto_reasoning_fallback(
+                client,
+                opts,
+                config=None,
+                step_id=step_id,
+                workflow_id=workflow_id,
+                subtask_kind="pre_qa_knowledge_discovery",
+                console=self.console,
+                use_resource_routing=False,
+            )
+            self._sub_sessions_created += 1
+            return session
+
+        return await run_knowledge_discovery(
+            DiscoveryRequest(
+                mode="qa",
+                repo_root=repo_root,
+                run_id=self.config.run_id or "run",
+                label=step_id,
+                goal=goal,
+                sources=sources,
+                qa_path=qa_path.as_posix(),
+            ),
+            snapshot=snapshot,
+            allowlist_for=lambda name: policy.tool_allowlist_for("knowledge", name),
+            base_session_options=base,
+            create_session=_create,
+            disconnect=_disconnect_session_bounded,
+            warn=self.console.warning,
+            status=self.console.status,
+            timeout=self.config.timeout_seconds,
+            event_sink=lambda event, sid=step_id: self._handle_session_event_for_step(event, sid),
+        )
+
     async def _run_pre_execution_qa(
         self,
         session: Any,
@@ -3439,7 +3376,7 @@ class StepRunner:
         total_phases: int,
         main_session_id: Optional[str] = None,
     ) -> str:
-        """Phase 0: 事前 QA 質問票生成・回答収集・Work IQ (optional)。
+        """Phase 0: 事前 QA 質問票生成・知識探索（FR-KD-06）または回答収集。
 
         PRE_EXECUTION_QA_PROMPT_V2 を使用し、メインタスク実行前に不明点を確認する。
         全 Workflow で実行する。AKM 自身では回答済み QA を保存するが、
@@ -3454,26 +3391,20 @@ class StepRunner:
         effective_main_session_id = (
             main_session_id or self._make_step_session_id(step_id)
         )
+        _has_step_inputs = _has_step_input_bundle(
+            self._workflow_params, step_id
+        )
 
         _qa_model = self.config.get_qa_model()
-        _qa_workiq_requested = (
-            self.config.is_workiq_qa_enabled()
-            and not _is_asdw_data_deploy_step(step_id, custom_agent)
+        # FR-KD-06: 実効知識源が 1 件以上あれば、質問票の回答を知識探索で行う。
+        _kd_sources = (
+            []
+            if _is_asdw_data_deploy_step(step_id, custom_agent)
+            else self.config.effective_knowledge_sources()
         )
-        _qa_workiq_configured = any(
-            _is_workiq_mcp_server_name(_name)
-            for _name in (self.config.mcp_servers or {})
-        )
-        _qa_workiq_available = (
-            _qa_workiq_requested
-            and (_qa_workiq_configured or is_workiq_available())
-        )
-        if _qa_workiq_requested and not _qa_workiq_available:
-            self.console.warning(
-                "Work IQ が検出できません。事前 QA フェーズの Work IQ 連携をスキップします。"
-            )
+        _kd_requested = bool(_kd_sources) and not getattr(self.config, "dry_run", False)
 
-        _use_pre_qa_sub_session = self._should_use_pre_qa_sub_session(_qa_model, _qa_workiq_available)
+        _use_pre_qa_sub_session = self._should_use_pre_qa_sub_session(_qa_model, _kd_requested)
         _pre_qa_session = None
         pre_qa_context = ""
         try:
@@ -3493,19 +3424,32 @@ class StepRunner:
                 f"{PRE_EXECUTION_QA_PROMPT_V2}"
             )
 
-            if _use_pre_qa_sub_session:
-                self._log_sub_session_reason(
-                    step_id, "Pre-QA",
-                    qa_model=_qa_model,
-                    workiq_available=_qa_workiq_available,
-                )
+            if _use_pre_qa_sub_session or _has_step_inputs:
+                if _use_pre_qa_sub_session:
+                    self._log_sub_session_reason(
+                        step_id, "Pre-QA",
+                        qa_model=_qa_model,
+                        knowledge_discovery_requested=_kd_requested,
+                    )
+                else:
+                    self.console.event(
+                        f"  ▶ [{step_id}] Pre-QA サブセッション作成 — "
+                        "理由: custom Step入力のMCP同意境界"
+                    )
                 _pre_qa_session_opts = self._build_sub_session_opts(
                     _qa_model,
-                    include_workiq=_qa_workiq_available,
                     step_id=step_id,
                     suffix="pre-qa",
                     custom_agent=custom_agent,
                     workflow_id=workflow_id,
+                )
+                # FR-INPUT-05 / FR-KD-06: 知識源は質問票の生成には使わない。
+                # Step の resource は維持し、`workiq` と知識源の MCP だけを外す
+                # （Work IQ 無効時も、利用者設定の `workiq` を同意前に呼ばせない）。
+                _pre_qa_session_opts["disabled_mcp_servers"] = sorted(
+                    set(_pre_qa_session_opts.get("disabled_mcp_servers") or ())
+                    | {"workiq"}
+                    | set(_kd_sources)
                 )
                 self._commit_durable_checkpoint(
                     step_id=step_id,
@@ -3517,40 +3461,37 @@ class StepRunner:
                     step_id,
                     None,
                 )
+                _pre_qa_optional_skills = self._get_optional_skills_for_step(
+                    workflow_id,
+                    step_id,
+                )
                 _pre_qa_requires_external_skills = (
                     self._add_required_external_skill_directories(
                         _pre_qa_session_opts,
                         _pre_qa_required_skills,
                     )
                 )
+                # FR-MCPLOG-01: Pre-QA の create/init も Step 固定で捕捉する。
+                _pre_qa_session_opts["on_event"] = (
+                    lambda event, sid=step_id:
+                    self._handle_session_event_for_step(event, sid)
+                )
                 _pre_qa_session = await _create_session_with_auto_reasoning_fallback(
                     client,
                     _pre_qa_session_opts,
                     config=self.config,
                     step_id=step_id,
+                    workflow_id=workflow_id,
                     subtask_kind="pre_qa",
                     console=self.console,
                     requires_external_skill_directories=
                     _pre_qa_requires_external_skills,
-                )
-                _pre_qa_session.on(
-                    lambda event, sid=step_id:
-                    self._handle_session_event_for_step(event, sid)
+                    required_skills=_pre_qa_required_skills,
+                    optional_skills=_pre_qa_optional_skills,
                 )
                 _effective_pre_qa_session = _pre_qa_session
                 self._sub_sessions_created += 1
-                _qa_workiq_mcp_enabled = False  # デフォルト False: loop で server が見つかれば True に更新
-                if _qa_workiq_available:
-                    try:
-                        _mcp_list = await _pre_qa_session.rpc.mcp.list()
-                        for _srv in _mcp_list.servers:
-                            if getattr(_srv, "name", "") == WORKIQ_MCP_SERVER_NAME:
-                                _qa_workiq_mcp_enabled = True
-                                break
-                    except Exception:
-                        _qa_workiq_mcp_enabled = False
             else:
-                _qa_workiq_mcp_enabled = False
                 self._log_main_session_reuse(step_id, "Pre-QA")
                 self._commit_durable_checkpoint(
                     step_id=step_id,
@@ -3597,163 +3538,118 @@ class StepRunner:
                     f"事前 QA スキップ (step={step_id}): {_pre_qa_skip_reason}"
                 )
 
-            # Phase 0b: 回答収集
+            # Phase 0b: custom Step 入力の MCP 補填同意（FR-INPUT-05）
+            _has_questions = bool(_parse_succeeded and parsed_pre_qa.questions)
+            _step_input_mcp_allowed = True
+            if _has_step_inputs and _kd_requested and _has_questions:
+                if __package__:
+                    from .step_inputs import (
+                        STEP_INPUT_MCP_CONSENT_PROMPT,
+                        should_offer_step_input_mcp,
+                    )
+                else:  # pragma: no cover - legacy flat-load compatibility
+                    from hve.step_inputs import (
+                        STEP_INPUT_MCP_CONSENT_PROMPT,
+                        should_offer_step_input_mcp,
+                    )
+                _raw_consent = self._workflow_params.get(
+                    "step_input_mcp_consent"
+                )
+                _consent = _raw_consent if isinstance(_raw_consent, bool) else None
+                if should_offer_step_input_mcp(
+                    has_step_inputs=True,
+                    question_count=len(parsed_pre_qa.questions),
+                    adapter_ready=True,
+                    consent=_consent,
+                ):
+                    _can_prompt = bool(
+                        getattr(self.config, "force_interactive", False)
+                        or getattr(self.console, "_is_tty", False)
+                    ) and self.config.qa_answer_mode not in {
+                        "autopilot",
+                        "gui-file",
+                    }
+                    if _can_prompt:
+                        _consent = self.console.prompt_yes_no(
+                            STEP_INPUT_MCP_CONSENT_PROMPT,
+                            default=False,
+                        )
+                    else:
+                        _consent = False
+                        self.console.warning(
+                            "custom Step入力のMCP補填へ安全な対話同意を取得できないため、"
+                            "知識探索を行わず手動QAへ戻します。"
+                        )
+                _step_input_mcp_allowed = _consent is True
+
+            # Phase 0c: 知識探索（FR-KD-06）。実行した場合は人の回答を待たない。
+            _pre_qa_file_path = Path(
+                f"qa/{self.config.run_id}-{step_id}-{_PRE_EXECUTION_QA_SUFFIX}"
+            )
+            _pre_qa_old_content = ""
+            if _has_questions and _pre_qa_file_path.exists():
+                try:
+                    _pre_qa_old_content = _pre_qa_file_path.read_text(encoding="utf-8")
+                except OSError as _e:
+                    self.console.warning(f"事前 QA ファイルの旧コンテンツ読み込みに失敗しました ({_pre_qa_file_path}): {_e}。diff は全行追加として表示されます。")
+            _discovered = False
+            _kd_status_result: Any = None
+            self.__dict__.setdefault("_kd_consent_by_step", {})[step_id] = _step_input_mcp_allowed
+            if _kd_requested and _has_questions and _step_input_mcp_allowed:
+                try:
+                    _kd_result = await self._run_pre_qa_knowledge_discovery(
+                        client,
+                        step_id=step_id,
+                        workflow_id=workflow_id,
+                        doc=parsed_pre_qa,
+                        qa_model=_qa_model,
+                        qa_path=_pre_qa_file_path,
+                        original_prompt=original_prompt,
+                        sources=_kd_sources,
+                    )
+                    _kd_status_result = _kd_result
+                    _discovered = bool(getattr(_kd_result, "ran", False))
+                except Exception as _kd_exc:
+                    _discovered = _pre_qa_file_path.exists()
+                    self.console.warning(sanitize_diagnostic_text(
+                        f"知識探索 [{step_id}] を開始できませんでした（{type(_kd_exc).__name__}）。"
+                        + ("記録済みの調査結果と既定値候補を採用します。" if _discovered else "")
+                    ))
+                if _discovered:
+                    try:
+                        parsed_pre_qa = QAMerger.parse_qa_file(_pre_qa_file_path)
+                    except (OSError, ValueError) as _reload_exc:
+                        self.console.warning(sanitize_diagnostic_text(
+                            f"知識探索後の質問票を読み込めないため既定値候補を採用します: {_reload_exc}"
+                        ))
+
+            # Phase 0b': 回答収集（知識探索を行わなかった場合だけ人へ尋ねる）
             user_answers_raw = ""
             skip_input = True
-            if _parse_succeeded and parsed_pre_qa.questions:
+            if _has_questions and not _discovered:
                 user_answers_raw, skip_input = await _collect_qa_answers(
                     self.console, parsed_pre_qa, step_id, self.config
                 )
 
-            # Phase 0c: Work IQ（有効かつ質問が存在する場合）
-            _workiq_pre_qa_context = ""
-            if (
-                _qa_workiq_available
-                and _qa_workiq_mcp_enabled
-                and _parse_succeeded
-                and parsed_pre_qa.questions
-            ):
-                self.console.status("🔍 Work IQ: 事前 QA の質問ごとに M365 調査を開始します...")
-                self.console.spinner_start("Work IQ 問い合わせ中...")
-                try:
-                    _wiq_template = get_workiq_prompt_template(
-                        "qa", self.config.workiq_prompt_qa
-                    )
-                    # Wave 2-6: 重要度フィルタ + 上限適用でクエリ数を削減
-                    _filtered_questions = _filter_workiq_questions(
-                        parsed_pre_qa.questions,
-                        self.config.workiq_max_draft_questions,
-                        getattr(self.config, "workiq_priority_filter", True),
-                    )
-                    _question_items = [(q.no, q.question) for q in _filtered_questions]
-
-                    _per_question_results: Dict[int, str] = {}
-                    _mergeable_results: Dict[int, str] = {}
-                    _workiq_response_count = 0
-                    for _q_no, _q_text in _question_items:
-                        _before_count = len(self._workiq_called_tools)
-                        _before_any_tools = len(self._toolsearch_called_tools)
-                        try:
-                            # F6: 検索精度向上のため構造化（QAQuestion の category/priority/default_answer を活用）
-                            _q_obj = next((q for q in parsed_pre_qa.questions if q.no == _q_no), None)
-                            _meta_lines = [f"- No: Q{_q_no}", f"- 質問: {_q_text}"]
-                            if _q_obj and getattr(_q_obj, "category", ""):
-                                _meta_lines.append(f"- 分類: {_q_obj.category}")
-                            if _q_obj and getattr(_q_obj, "priority", ""):
-                                _meta_lines.append(f"- 重要度: {_q_obj.priority}")
-                            if _q_obj and getattr(_q_obj, "default_answer", ""):
-                                _meta_lines.append(f"- 既定値候補: {_q_obj.default_answer}")
-                            _target_content = "\n".join(_meta_lines)
-                            _query = _wiq_template.format(target_content=_target_content)
-                            self.console.workiq_prompt(_query, label=f"Work IQ プロンプト [Q{_q_no}]")
-                            _detail_result = await query_workiq_detailed(
-                                _effective_pre_qa_session,
-                                _query,
-                                timeout=self.config.workiq_per_question_timeout,
-                            )
-                            if not self.console.show_stream:
-                                self.console.workiq_response(
-                                    _detail_result.content or "",
-                                    label=f"Work IQ 応答 [Q{_q_no}]",
-                                )
-                            _after_tools = self._workiq_called_tools[_before_count:]
-                            if _detail_result.error:
-                                _per_question_results[_q_no] = (
-                                    f"Work IQ 失敗: {_detail_result.error}"
-                                )
-                            else:
-                                _raw_content = _detail_result.content or ""
-                                _workiq_response_count += 1
-                                _status = extract_workiq_status(_raw_content)
-                                if is_workiq_result_mergeable(
-                                    tool_confirmed=bool(_after_tools),
-                                    status=_status,
-                                ):
-                                    _per_question_results[_q_no] = _raw_content
-                                    _mergeable_results[_q_no] = _raw_content
-                                elif _after_tools:
-                                    _status_label = _status or "不明"
-                                    _per_question_results[_q_no] = (
-                                        f"（QA未統合: status={_status_label}）\n{_raw_content}"
-                                    )
-                                else:
-                                    _per_question_results[_q_no] = (
-                                        "（Work IQ: ツール呼び出しなし）\n"
-                                        "（QA未統合: tool実行未確認）\n"
-                                        f"{_raw_content}"
-                                    )
-                                    if _status in ("FOUND", "PARTIAL"):
-                                        # FR-QA-06: 一次情報ありと申告された応答が
-                                        # 統合されないのは検出漏れの疑いがあるため警告する。
-                                        self.console.warning(
-                                            format_workiq_tool_not_invoked_warning(
-                                                f"Q{_q_no}",
-                                                observed_tools=self._toolsearch_called_tools[
-                                                    _before_any_tools:
-                                                ],
-                                                status=_status,
-                                            )
-                                        )
-                        except Exception as _wiq_exc:
-                            _per_question_results[_q_no] = f"Work IQ エラー: {_wiq_exc}"
-
-                    # 結果をマージ
-                    parsed_pre_qa = QAMerger.merge_workiq_results(
-                        parsed_pre_qa,
-                        _mergeable_results,
-                    )
-                    _workiq_output_dir = self.config.workiq_draft_output_dir or "qa"
-                    _raw_lines: List[str] = []
-                    for q in parsed_pre_qa.questions[:self.config.workiq_max_draft_questions]:
-                        _ctx = _per_question_results.get(
-                            q.no,
-                            "（Work IQ 未実行）",
-                        )
-                        _raw_lines.extend([f"### Q{q.no}: {q.question}", _ctx, ""])
-                    save_workiq_result(
-                        self.config.run_id, step_id, "pre-qa-draft",
-                        "\n".join(_raw_lines).strip(),
-                        base_dir=_workiq_output_dir,
-                    )
-                    _workiq_pre_qa_context = "\n".join(_raw_lines).strip()
-                    _merged_count = sum(
-                        1 for q in parsed_pre_qa.questions if q.workiq_answer
-                    )
-                    if _merged_count == 0 and _workiq_response_count > 0:
-                        # FR-QA-06: 応答があるのに統合 0 件は異常の可能性が高い。
-                        self.console.warning(
-                            f"Work IQ: {_workiq_response_count} 件の応答を得ましたが、"
-                            "0 件の質問にしか回答案を統合できませんでした。"
-                            "検証済み一次情報として扱える結果がありません。"
-                        )
-                    else:
-                        self.console.status(
-                            f"✅ Work IQ: {_merged_count} 件の質問に回答案を統合しました"
-                        )
-                except Exception as draft_exc:
-                    self.console.warning(f"Work IQ 事前 QA 連携に失敗しました: {draft_exc}")
-                finally:
-                    self.console.spinner_stop()
-
             # Phase 0d: QA 回答マージ + qa/ ファイル保存
-            if _parse_succeeded and parsed_pre_qa.questions:
-                _pre_qa_file_path = Path(
-                    f"qa/{self.config.run_id}-{step_id}-{_PRE_EXECUTION_QA_SUFFIX}"
-                )
-                _pre_qa_old_content = ""
-                if _pre_qa_file_path.exists():
-                    try:
-                        _pre_qa_old_content = _pre_qa_file_path.read_text(encoding="utf-8")
-                    except OSError as _e:
-                        self.console.warning(f"事前 QA ファイルの旧コンテンツ読み込みに失敗しました ({_pre_qa_file_path}): {_e}。diff は全行追加として表示されます。")
-                merged_content = _persist_answered_qa_and_dispatch(
+            if _has_questions:
+                if _kd_requested:
+                    # FR-KD-12: 知識源ごとの利用・除外の理由を QA に残す。
+                    parsed_pre_qa.raw_sections[QA_STATUS_SECTION] = build_status_section(
+                        _kd_sources,
+                        _kd_status_result,
+                        consent_denied=not _step_input_mcp_allowed,
+                    )
+                _persist_answered_qa_and_dispatch(
                     doc=parsed_pre_qa,
                     user_answers_raw=user_answers_raw,
                     use_defaults=skip_input,
                     output_path=_pre_qa_file_path,
                     workflow_id=workflow_id,
                     dispatcher=self._qa_akm_dispatcher,
+                    research_answers=_discovered,
                 )
+                merged_content = _pre_qa_file_path.read_text(encoding="utf-8")
                 self.console.status(
                     f"✅ 事前 QA 質問票を保存・検証しました ({_pre_qa_file_path.as_posix()})"
                 )
@@ -3764,19 +3660,19 @@ class StepRunner:
                     merged_content,
                 )
 
-                # pre_qa_context を組み立てる
-                _context_lines = [
-                    "## 事前 QA 確認済み情報\n",
-                    merged_content,
-                ]
-                if _workiq_pre_qa_context:
-                    _context_lines.append("\n\n## Work IQ による補足情報\n")
-                    _context_lines.append(_workiq_pre_qa_context)
-                pre_qa_context = "\n".join(_context_lines)
+                # Phase 1 には保存・再読込済みの回答済み QA だけを渡す。
+                pre_qa_context = "## 事前 QA 確認済み情報\n\n" + merged_content
 
         finally:
+            # The shared client and Main session are borrowed. Each returned
+            # auxiliary session is owned here; failed creation cleans itself up.
             if _pre_qa_session is not None:
-                await _pre_qa_session.disconnect()
+                try:
+                    await _disconnect_session_bounded(_pre_qa_session)
+                except Exception as cleanup_exc:
+                    self.console.warning(sanitize_diagnostic_text(
+                        f"[cleanup] Pre-QA disconnect failed: {cleanup_exc}"
+                    ))
 
         self.console.step_phase_end(
             step_id, current_phase, total_phases, "事前 QA",
@@ -3784,356 +3680,109 @@ class StepRunner:
         )
         return pre_qa_context
 
-    # ------------------------------------------------------------------
-    # Phase 1.5: legacy SPLIT_REQUIRED runtime fork
-    # ------------------------------------------------------------------
-
-    async def _maybe_run_split_fork(
+    async def _run_post_execution_discovery(
         self,
-        *,
         session: Any,
+        client: Any,
         step_id: str,
+        original_prompt: str,
         custom_agent: Optional[str],
-    ) -> bool:
-        """Legacy opt-in: SPLIT_REQUIRED の subissues.md を検出し、Fleet mode を起動する。
+        workflow_id: Optional[str],
+        current_phase: int,
+        total_phases: int,
+    ) -> None:
+        """FR-KD-13: 実行中に仮定を置いた点を質問票にし、知識源で調べて ``qa/`` に保存する。
 
-        CLI / GUI 標準経路では `OrchestratorContext.split_fork_enabled=False` のため
-        動作しない。Cloud 版の正式な SPLIT_REQUIRED 処理は GitHub Actions の
-        `create-subissues-from-pr.yml` / `advance-subissues.yml` による Sub-Issue
-        作成・Copilot Cloud Agent アサインで行う。
-
-        本メソッドは legacy / 実験用途として、明示的に
-        `split_fork_enabled=True` を渡した場合のみ動作する。単独実行モードでは
-        常に True を返して素通しする。
-
-        サブタスクは `depends_on` と出力先を Fleet prompt に明記し、Copilot SDK
-        の parent session 内 fleet mode へ委譲する。
-
-        Args:
-            session: 親 Step のメイン CopilotSession
-            step_id: 親 Step ID
-            custom_agent: 親 Step の Custom Agent 名
-
-        Returns:
-            True: 全サブタスク成功 / SPLIT 未発生 / Orchestrator 未配下 /
-                legacy split-fork 無効のため標準経路へ継続可能
-            False: 1 件以上のサブタスクが失敗、または再帰深度上限到達
+        人への回答待ちを行わず、失敗しても警告だけで Step の成否を変えない。
         """
-        ctx = self._orchestrator_ctx
-        # 単独実行モード or 機能無効 → 素通し（従来挙動）
-        # 観測性: なぜ fork が走らないかを必ず journal/console に残す（無音 return 禁止）
-        if ctx is None:
-            self.console.event(
-                f"  ⏭ [{step_id}] split-fork: 単独実行モード (orchestrator_ctx=None) — fork スキップ"
-            )
-            return True
-        if not ctx.split_fork_enabled:
-            # CLI / GUI 標準経路では split_fork_enabled=False が正常値のため、WARN ではなく
-            # event（低重大度・GUI「実行中の課題」非対象）で記録する。上の ctx is None 分岐と同じ扱い。
-            self.console.event(
-                f"  ⏭ [{step_id}] legacy split-fork は無効です "
-                f"(split_fork_enabled=False)。subissues.md を GitHub Sub-Issue として"
-                f"実行する場合は Cloud Agent Orchestrator の create-subissues 経路を使い、"
-                f"CLI / GUI では workflow DAG / fan-out として分割してください。"
-            )
-            return True
-
+        self.console.step_phase_start(step_id, current_phase, total_phases, "実行後の不明点調査")
+        phase_start = time.time()
         try:
-            from .split_fork import (
-                SubIssuesParseError,
-                build_subtask_prompt,
-                check_subtask_completion,
-                compute_waves,
-                discover_subissues_md_verbose,
-                make_subtask_work_subdir,
-                parse_subissues_md,
-                resolve_work_root,
+            prompt = (
+                "直前に完了したこのタスクの実行中に、不明・曖昧なため仮定を置いて進めた点と、"
+                "確認できなかった前提だけを対象に、以下の形式で質問票を作成してください。"
+                "対象が無い場合は質問票を作らず `質問なし` とだけ回答してください。\n\n"
+                f"{QA_PROMPT_V2}"
             )
-        except ImportError:  # pragma: no cover - script execution path
-            from split_fork import (  # type: ignore[no-redef]
-                SubIssuesParseError,
-                build_subtask_prompt,
-                check_subtask_completion,
-                compute_waves,
-                discover_subissues_md_verbose,
-                make_subtask_work_subdir,
-                parse_subissues_md,
-                resolve_work_root,
+            response = await session.send_and_wait(prompt, timeout=self.config.timeout_seconds)
+            raw = _extract_text(response)
+            doc = QADocument(questions=[])
+            if raw and raw.strip() and raw.strip() != "質問なし":
+                doc, _ = _parse_qa_content_with_artifact_fallback(raw, base_dir=".")
+            if not doc.questions:
+                self.console.status(f"[{step_id}] 実行後の不明点はありません。")
+                return
+
+            qa_path = Path(f"qa/{self.config.run_id}-{step_id}-{_POST_EXECUTION_QA_SUFFIX}")
+            sources = (
+                []
+                if _is_asdw_data_deploy_step(step_id, custom_agent)
+                else self.config.effective_knowledge_sources()
             )
-        try:
-            from .fleet_mode import FleetEventCollector, build_split_fleet_prompt, start_fleet
-        except ImportError:  # pragma: no cover
-            from fleet_mode import FleetEventCollector, build_split_fleet_prompt, start_fleet  # type: ignore[no-redef]
-
-        # custom_agent 欠落は致命ではないが SPLIT_REQUIRED 検出精度を下げるため警告。
-        if not custom_agent:
-            self.console.event(
-                f"  ⚠ [{step_id}] split-fork: custom_agent 未指定 — "
-                f"agent-scoped 探索をスキップし fallback-glob に依存します"
-            )
-
-        work_root = resolve_work_root()
-        # GUI セッション隔離 (Issue-gui-session-workdir-isolation T1):
-        # run_id / step_id を伝播してスコープ外の subissues.md 誤検出を防ぐ。
-        # self.config.run_id は generate_run_id() で必ず生成されているが、
-        # 防御的に空文字を None に正規化する。
-        _scope_run_id = self.config.run_id or None
-        discover_result = discover_subissues_md_verbose(
-            work_root=work_root,
-            custom_agent=custom_agent,
-            parent_step_id=step_id,
-            run_id=_scope_run_id,
-            step_id=step_id,
-        )
-        subissues_path = discover_result.path
-        if subissues_path is None:
-            # SPLIT 未発生 — ただし「実際に subissues.md が存在するのに発見できない」
-            # ケースを後追いできるよう、探索条件を必ず journal/console に残す。
-            try:
-                _cwd = str(Path.cwd())
-            except Exception:
-                _cwd = "<unknown>"
-
-            # F2-5: 整合性チェック — plan.md が SPLIT_REQUIRED を宣言しているのに
-            # subissues.md が存在しないケースは Agent 仕様違反 (§0)。Step を失敗化する。
-            # Issue-gui-session-workdir-isolation Critical#1:
-            # 過去 run の plan.md が残存しているとここで誤検出されるため、
-            # discover_subissues_md_verbose と同じ run_id スコープでフィルタする。
-            # T-C1.2: 同 run 内の別 Agent の plan.md による誤検出を防ぐため、
-            # custom_agent 指定時は当該 Agent ディレクトリ配下のみに限定する。
-            # work_root 自体が run-id を含む場合、parent.name の run スコープ
-            # フィルタは過剰（Issue-0 形式で常に弾かれる）なので skip する。
-            try:
-                from .split_fork import (
-                    is_failed_dir,
-                    matches_run_scope as _matches_run_scope,
-                    matches_step_scope as _matches_step_scope,
-                    work_root_contains_run_id as _work_root_contains_run_id,
-                )
-            except ImportError:  # pragma: no cover
-                from split_fork import (  # type: ignore[no-redef]
-                    is_failed_dir,
-                    matches_run_scope as _matches_run_scope,
-                    matches_step_scope as _matches_step_scope,
-                    work_root_contains_run_id as _work_root_contains_run_id,
-                )
-            _skip_run_scope_filter = _work_root_contains_run_id(
-                work_root, _scope_run_id
-            )
-            inconsistent_plans: List[Path] = []
-            try:
-                if work_root.is_dir():
-                    if custom_agent:
-                        plan_globs = [
-                            (work_root / custom_agent).glob("Issue-*/plan.md"),
-                        ]
-                    else:
-                        plan_globs = [
-                            work_root.glob("Issue-*/plan.md"),
-                            work_root.glob("*/Issue-*/plan.md"),
-                        ]
-                    seen_plans: set = set()
-                    for g in plan_globs:
-                        for plan_path in g:
-                            if plan_path in seen_plans:
-                                continue
-                            seen_plans.add(plan_path)
-                            # `.failed-*` 退避済みディレクトリ配下の plan.md は除外。
-                            # discover_subissues_md_verbose と同じルールに揃える。
-                            if is_failed_dir(plan_path.parent.name):
-                                continue
-                            # run_id スコープに合致しない過去 run の plan.md は除外
-                            # （work_root が run_id を含む場合は work_root スコープで成立済み）
-                            if not _skip_run_scope_filter:
-                                if not _matches_run_scope(
-                                    plan_path.parent.name, _scope_run_id
-                                ):
-                                    continue
-                            # step_id スコープ: Issue-0 形式では常に True、
-                            # Issue-<run_id>-step-<id> 形式では絞り込みが効く
-                            if not _matches_step_scope(plan_path.parent.name, step_id):
-                                continue
-                            try:
-                                head = plan_path.read_text(
-                                    encoding="utf-8", errors="replace"
-                                )[:2048]
-                            except OSError:
-                                continue
-                            if "split_decision: SPLIT_REQUIRED" in head:
-                                inconsistent_plans.append(plan_path)
-            except Exception:  # pragma: no cover - 防御的: 整合性チェックで例外起こさない
-                inconsistent_plans = []
-
-            if inconsistent_plans:
-                self.console.error(
-                    f"  ✗ [{step_id}] split-fork 整合性違反: "
-                    f"plan.md が SPLIT_REQUIRED を宣言しているが subissues.md が未検出 "
-                    f"(plans={[str(p) for p in inconsistent_plans]}, "
-                    f"work_root={work_root}, custom_agent={custom_agent!r})"
-                )
-                return False
-
-            self.console.event(
-                f"  ⏭ [{step_id}] split-fork: subissues.md 未検出 — fork スキップ "
-                f"(work_root={work_root}, custom_agent={custom_agent!r}, "
-                f"work_root_exists={work_root.is_dir()}, cwd={_cwd})"
-            )
-            return True
-
-        # 観測性: どの glob パターンでヒットしたかを残す（fallback-glob 経由なら要注意）
-        self.console.event(
-            f"  🔍 [{step_id}] split-fork: subissues.md 検出 "
-            f"(pattern={discover_result.matched_pattern}, "
-            f"candidates={discover_result.candidates_examined}, path={subissues_path})"
-        )
-
-        depth = ctx.split_fork_depth
-        max_depth = ctx.split_fork_max_depth
-        if depth >= max_depth:
-            self.console.error(
-                f"  ✗ [{step_id}] SPLIT fork 深度上限到達 (depth={depth}, max={max_depth}) "
-                f"— subissues.md 発見も実行をスキップして Step failed 化"
-            )
-            return False
-
-        try:
-            subissues = parse_subissues_md(subissues_path)
-        except SubIssuesParseError as exc:
-            self.console.error(
-                f"  ✗ [{step_id}] subissues.md パース失敗: {exc}"
-            )
-            try:
-                failed_dir = subissues_path.parent.with_name(
-                    f"{subissues_path.parent.name}.failed-{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
-                )
-                subissues_path.parent.rename(failed_dir)
-                self.console.event(
-                    f"  ↪ [{step_id}] 失敗した split-fork work dir を退避: {failed_dir}"
-                )
-            except Exception as rename_exc:
-                self.console.warning(
-                    f"split-fork parse failure work dir の退避に失敗しました: {rename_exc}"
-                )
-            return False
-
-        try:
-            waves = compute_waves(subissues)
-        except SubIssuesParseError as exc:
-            self.console.error(
-                f"  ✗ [{step_id}] subissues.md depends_on 解決失敗: {exc}"
-            )
-            return False
-
-        self.console.event(
-            f"  🔀 [{step_id}] SPLIT_REQUIRED 検出 ({subissues_path}) "
-            f"— {len(subissues)} サブタスクを {len(waves)} wave で並列 fork "
-            f"(depth={depth}/{max_depth}, max_parallel={ctx.max_parallel_subtasks})"
-        )
-
-        # parent_work_identifier を subissues.md のパスから推定する
-        # 例: work/Arch-UI-Detail/Issue-screen-detail/subissues.md
-        #     → parent_work_identifier = "screen-detail"
-        parent_dir_name = subissues_path.parent.name
-        if parent_dir_name.startswith("Issue-"):
-            parent_identifier = parent_dir_name[len("Issue-"):]
-        else:
-            parent_identifier = parent_dir_name
-
-        if len(subissues) == 1:
-            sub = subissues[0]
-            self.console.event(
-                f"  ▶ [{step_id}/sub-{sub.index:03d}] 単一サブタスクのため Fleet mode を使わず parent session で実行"
-            )
-            work_subdir = make_subtask_work_subdir(
-                parent_custom_agent=custom_agent,
-                parent_work_identifier=parent_identifier,
-                subissue_index=sub.index,
-            )
-            sub_prompt = build_subtask_prompt(
-                subissue=sub,
-                parent_step_id=step_id,
-                parent_custom_agent=custom_agent,
-                work_subdir=work_subdir,
-                repo_root=Path.cwd(),
-                work_root=work_root,
-            )
-            try:
-                sub_response = await session.send_and_wait(
-                    sub_prompt,
-                    timeout=self.config.timeout_seconds,
-                )
-                _ = _extract_text(sub_response)
-            except Exception as exc:
-                self.console.error(
-                    f"  ✗ [{step_id}/sub-{sub.index:03d}] parent session 実行中にエラー: {exc}"
-                )
-                return False
-
-            ok, reason = check_subtask_completion(work_root, work_subdir)
-            if ok:
-                self.console.event(f"  ✓ [{step_id}/sub-{sub.index:03d}] 成功")
-                return True
-            self.console.error(
-                f"  ✗ [{step_id}/sub-{sub.index:03d}] 完了判定 FAIL: {reason}"
-            )
-            return False
-
-        fleet_plan = build_split_fleet_prompt(
-            subissues=subissues,
-            parent_step_id=step_id,
-            parent_custom_agent=custom_agent,
-            parent_identifier=parent_identifier,
-            repo_root=Path.cwd(),
-            work_root=work_root,
-        )
-        collector = FleetEventCollector()
-        unsubscribe = session.on(collector.handle_event)
-        try:
-            outcome = await start_fleet(session, fleet_plan.prompt)
-        finally:
-            if callable(unsubscribe):
+            kd_requested = bool(sources) and not getattr(self.config, "dry_run", False)
+            consent = self.__dict__.get("_kd_consent_by_step", {}).get(step_id, True) is not False
+            status_result: Any = None
+            if kd_requested and consent:
                 try:
-                    unsubscribe()
-                except Exception:
-                    pass
-
-        if not outcome.started:
-            self.console.error(
-                f"  ✗ [{step_id}] fleet mode 起動失敗: {outcome.reason}"
-            )
-            return False
-
-        deadline = time.monotonic() + max(1.0, float(self.config.timeout_seconds or 1))
-        poll_interval = 0.5
-        completion_state: Dict[int, tuple[bool, str]] = {}
-        while True:
-            completion_state = {
-                sub.index: check_subtask_completion(work_root, fleet_plan.work_subdirs[sub.index])
-                for sub in subissues
-            }
-            if all(ok for ok, _reason in completion_state.values()):
-                break
-            if collector.has_failed:
-                break
-            if time.monotonic() >= deadline:
-                break
-            await asyncio.sleep(poll_interval)
-
-        all_success = all(ok for ok, _reason in completion_state.values())
-        for sub in subissues:
-            ok, reason = completion_state[sub.index]
-            if ok:
-                self.console.event(f"  ✓ [{step_id}/sub-{sub.index:03d}] 成功")
-            else:
-                self.console.error(
-                    f"  ✗ [{step_id}/sub-{sub.index:03d}] 完了判定 FAIL: {reason}"
+                    status_result = await self._run_pre_qa_knowledge_discovery(
+                        client,
+                        step_id=step_id,
+                        workflow_id=workflow_id,
+                        doc=doc,
+                        qa_model=self.config.get_qa_model(),
+                        qa_path=qa_path,
+                        original_prompt=original_prompt,
+                        sources=sources,
+                        goal_intro=(
+                            "直前に完了したタスクの実行中に生じた不明点への答えを、"
+                            "知識源とリポジトリ内の資料から調べる。"
+                        ),
+                        session_suffix="post-qa-discovery",
+                    )
+                except Exception as kd_exc:
+                    self.console.warning(sanitize_diagnostic_text(
+                        f"知識探索 [{step_id}] を開始できませんでした（{type(kd_exc).__name__}）。"
+                        "記録済みの調査結果と既定値候補を採用します。"
+                    ))
+                if qa_path.exists():
+                    doc = QAMerger.parse_qa_file(qa_path)
+            if kd_requested:
+                doc.raw_sections[QA_STATUS_SECTION] = build_status_section(
+                    sources, status_result, consent_denied=not consent,
                 )
+            _persist_answered_qa_and_dispatch(
+                doc=doc,
+                user_answers_raw="",
+                use_defaults=True,
+                output_path=qa_path,
+                workflow_id=workflow_id,
+                dispatcher=self._qa_akm_dispatcher,
+                research_answers=True,
+            )
+            self.console.status(f"✅ 実行後の QA 質問票を保存・検証しました ({qa_path.as_posix()})")
+        except Exception as exc:
+            self.console.warning(
+                f"実行後の不明点調査 [{step_id}] を完了できませんでした（{type(exc).__name__}）。"
+            )
+        finally:
+            self.console.step_phase_end(
+                step_id, current_phase, total_phases, "実行後の不明点調査",
+                elapsed=time.time() - phase_start,
+            )
 
-        if collector.has_failed:
-            all_success = False
-            self.console.error(f"  ✗ [{step_id}] fleet sub-agent 失敗: {collector.failed}")
-
-        return all_success
+    def _declared_scope(self) -> Optional[DeclaredScope]:
+        """FR-PROMPT-13: execution_policy の宣言を無人実行の指示へ渡す形にする。"""
+        operations = tuple(getattr(self.config, "pre_approved_operations", ()) or ())
+        allow_public = bool(getattr(self.config, "allow_public_exposure", False))
+        budget_note = str(getattr(self.config, "budget_note", "") or "")
+        if not (operations or allow_public or budget_note):
+            return None
+        return DeclaredScope(
+            resource_group=str(self._workflow_params.get("resource_group", "") or ""),
+            pre_approved_operations=operations,
+            allow_public_exposure=allow_public,
+            budget_note=budget_note,
+        )
 
     async def run_step(
         self,
@@ -4201,8 +3850,7 @@ class StepRunner:
         except Exception:
             pass
 
-        # workflow オブジェクトを 1 回だけ resolve（Phase 4 自己改善ループ内および
-        # run_step 終端の output_paths gate で共有する）。StepRunner.__init__ には
+        # workflow オブジェクトを 1 回だけ resolve（run_step 終端の output_paths gate で共有する）。StepRunner.__init__ には
         # workflow が注入されていないため registry 経由で都度引く（O(1) dict lookup）。
         try:
             from .workflow_registry import get_workflow as _get_workflow
@@ -4230,8 +3878,6 @@ class StepRunner:
             self._current_fanout_meta = fanout_meta
         else:
             self._current_fanout_meta = None
-        self._workiq_tool_called = False
-        self._workiq_called_tools = []
         # Phase 6: サブセッション作成回数カウンターをリセット
         self._sub_sessions_created = 0
 
@@ -4607,9 +4253,6 @@ class StepRunner:
                 step_id,
                 _resolved_workflow,
             )
-            _is_foundry_required = self._is_foundry_required_step(
-                _required_skills_for_step
-            )
             _requires_external_skill_directories = (
                 self._add_required_external_skill_directories(
                 session_opts,
@@ -4635,63 +4278,6 @@ class StepRunner:
             if _wire_model:
                 session_opts["model"] = _wire_model
 
-            # Step 1.3 は repository-pinned Microsoft Learn MCP だけを使用し、
-            # user-supplied server の同名偽装や Azure write tool を接続しない。
-            if _is_asdw_data_deploy_step(step_id, custom_agent):
-                _main_mcp_servers = _require_trusted_asdw_data_deploy_mcp_servers(
-                    Path.cwd()
-                )
-                if _main_mcp_servers:
-                    session_opts["mcp_servers"] = copy.deepcopy(
-                        _main_mcp_servers
-                    )
-            elif _is_foundry_required:
-                _foundry_mcp_servers = _require_trusted_foundry_mcp_servers(
-                    Path.cwd()
-                )
-                _main_mcp_servers = {
-                    _k: copy.deepcopy(_v)
-                    for _k, _v in _filter_mcp_servers_for_session(
-                        self.config.mcp_servers,
-                        include_workiq=False,
-                    ).items()
-                }
-                _main_mcp_servers.update(copy.deepcopy(_foundry_mcp_servers))
-                session_opts["mcp_servers"] = _main_mcp_servers
-            elif self.config.mcp_servers:
-                _main_mcp_servers = {
-                    _k: copy.deepcopy(_v)
-                    for _k, _v in _filter_mcp_servers_for_session(
-                        self.config.mcp_servers,
-                        include_workiq=False,
-                    ).items()
-                }
-                if _main_mcp_servers:
-                    session_opts["mcp_servers"] = _main_mcp_servers
-
-            # ADR-0002 (T3A/E-4): fan-out 子ステップでは per-key MCP を上書きマージ
-            _fmeta = getattr(self, "_current_fanout_meta", None)
-            if _fmeta and not _is_asdw_data_deploy_step(step_id, custom_agent):
-                _per_key = _fmeta.get("per_key_mcp_servers") or {}
-                _key_servers = _per_key.get(_fmeta.get("fanout_key", "")) or {}
-                if _key_servers:
-                    _merged = dict(session_opts.get("mcp_servers") or {})
-                    for _k, _v in _key_servers.items():
-                        _merged[_k] = copy.deepcopy(_v)
-                    if _is_foundry_required:
-                        _merged.update(
-                            copy.deepcopy(
-                                _require_trusted_foundry_mcp_servers(Path.cwd())
-                            )
-                        )
-                    session_opts["mcp_servers"] = _merged
-                    try:
-                        self.console.event(
-                            f"  🔌 [{step_id}] per-key MCP {sorted(_key_servers.keys())} を適用"
-                        )
-                    except Exception:
-                        pass
-
             # G-1: SDK の available_tools / excluded_tools をメインセッションへ伝搬する
             # SDK 0.1.0: create_session(..., available_tools=None, excluded_tools=None, ...)
             if self.config.available_tools:
@@ -4703,9 +4289,11 @@ class StepRunner:
             if self.config.auto_compaction:
                 session_opts["infinite_sessions"] = {"enabled": True}
 
-            # FR-MODEL-04: SDK のツール定義遅延ロードをメインセッションへ伝搬する。
-            if self.config.tool_search:
-                session_opts["tool_search"] = {"enabled": True}
+            # FR-MODEL-04: SDK のツール定義遅延ロードをメインセッションへ伝搬する
+            # （defer_threshold を含む）。
+            _main_tool_search_opt = self.config.tool_search_session_option()
+            if _main_tool_search_opt is not None:
+                session_opts["tool_search"] = _main_tool_search_opt
 
                 # FR-TS-01 / 06 / 07: tool_search_ranking="hve" のときだけ
                 # `tool_search_tool` を HVE 実装へ差し替え、Skill もカタログへ合流させる。
@@ -4771,9 +4359,9 @@ class StepRunner:
             # resolve_work_root() の <run-id> と一致させるため resolve_run_id() を使う。
             if _agent_prompt_body:
                 try:
-                    from .split_fork import resolve_run_id
+                    from .run_paths import resolve_run_id
                 except ImportError:  # pragma: no cover
-                    from split_fork import resolve_run_id  # type: ignore[no-redef]
+                    from run_paths import resolve_run_id  # type: ignore[no-redef]
                 _agent_prompt_body = substitute_work_placeholders(
                     _agent_prompt_body,
                     run_id=resolve_run_id(),
@@ -4826,6 +4414,11 @@ class StepRunner:
             _execution_mode_suffix = _build_execution_mode_constraint_suffix(
                 self._orchestrator_ctx
             )
+            _runtime_guidance_suffix = _build_runtime_guidance_suffix(
+                self.config.unattended,
+                self._declared_scope(),
+                getattr(self.config, "step_timeout_seconds", None),
+            )
             _tdd_suffix = self._build_tdd_report_instruction_suffix(
                 step_id=step_id,
                 custom_agent=custom_agent,
@@ -4842,9 +4435,12 @@ class StepRunner:
                     raise RuntimeError(
                         "durable Main recovery prompt is empty"
                     )
-                _pre_qa_free_prompt = _recovery_prompt
+                _pre_qa_free_prompt = (
+                    _recovery_prompt + _runtime_guidance_suffix
+                )
                 _pre_qa_free_components = (
                     ("recovery_prompt", _recovery_prompt),
+                    ("runtime_guidance_suffix", _runtime_guidance_suffix),
                 )
             else:
                 _pre_qa_free_prompt, _pre_qa_free_components = _compose_phase1_prompt(
@@ -4852,6 +4448,7 @@ class StepRunner:
                     step_prompt=prompt,
                     pre_qa_context="",
                     execution_mode_suffix=_execution_mode_suffix,
+                    runtime_guidance_suffix=_runtime_guidance_suffix,
                     tdd_suffix=_tdd_suffix,
                     review_suffix=_review_suffix,
                 )
@@ -4872,10 +4469,7 @@ class StepRunner:
             if _reuse_session_id is not None:
                 _main_session_id = _reuse_session_id
                 _resume_event_received = asyncio.Event()
-                _resume_deadline = (
-                    asyncio.get_running_loop().time()
-                    + _RUNNER_RESUME_EVENT_TIMEOUT_SECONDS
-                )
+                import time as _dbg_t, sys as _dbg_s; _dbg0 = _dbg_t.time(); print('DBG resume-start', file=_dbg_s.stderr)
 
                 def _handle_resume_event(event: Any) -> None:
                     event_type = getattr(
@@ -4902,12 +4496,58 @@ class StepRunner:
                     phase="main",
                     session_id=_main_session_id,
                 )
+                _resume_route = None
+                if workflow_id and "mcp_servers" not in session_opts:
+                    _resume_snapshot = discover_sdk_resources(
+                        working_directory=Path.cwd(),
+                        cli_path=self.config.cli_path,
+                        cli_url=self.config.cli_url,
+                        github_token=self.config.resolve_token(),
+                    )
+                    if inspect.isawaitable(_resume_snapshot):
+                        _resume_snapshot = await _resume_snapshot
+                    _resume_policy = ToolSearchPolicy.load(repo_root=Path.cwd())
+                    _resume_route = resolve_resource_route(
+                        snapshot=_resume_snapshot,
+                        policy=_resume_policy,
+                        workflow_id=str(workflow_id),
+                        required_mcp_servers=None,
+                        required_skills=_required_skills_for_step,
+                        optional_skills=_optional_skills_for_step,
+                        available_tools=session_opts.get("available_tools"),
+                        excluded_tools=session_opts.get("excluded_tools"),
+                    )
+                    _resume_route = restrict_resource_route(
+                        route=_resume_route,
+                        session_options=session_opts,
+                    )
+                _resume_options = build_routed_session_options(
+                    session_options=session_opts,
+                    route=_resume_route,
+                )
+                # FR-CLI-90 / FR-TS-13: reapply resource policy before resume,
+                # not a new model/provider or arbitrary create-only options.
+                # Preserve explicit False/[]; required Skill runtime checks
+                # still fail closed if the SDK omits disabled_skills=[].
                 _resume_local_options = {
-                    key: session_opts[key]
-                    for key in ("tools",)
-                    if session_opts.get(key)
+                    key: _resume_options[key]
+                    for key in (
+                        "tools", "enable_config_discovery", "enable_skills",
+                        "skill_directories", "disabled_skills", "disabled_mcp_servers",
+                        "available_tools", "excluded_tools", "tool_search",
+                        "request_extensions",
+                    )
+                    if key in _resume_options
                 }
+                # The deadline starts after resource discovery so that discovery
+                # time cannot consume the resume RPC budget.
+                _resume_deadline = (
+                    asyncio.get_running_loop().time()
+                    + _RUNNER_RESUME_EVENT_TIMEOUT_SECONDS
+                )
                 try:
+                    _resume_rpc_timeout = _remaining_deadline_seconds(_resume_deadline)
+                    print('DBG after-discovery', _dbg_t.time()-_dbg0, _resume_rpc_timeout, file=_dbg_s.stderr)
                     session = await asyncio.wait_for(
                         client.resume_session(
                             _main_session_id,
@@ -4918,13 +4558,15 @@ class StepRunner:
                             continue_pending_work=False,
                             **_resume_local_options,
                         ),
-                        timeout=_remaining_deadline_seconds(_resume_deadline),
+                        timeout=_resume_rpc_timeout,
                     )
+                    print('DBG rpc-done', _dbg_t.time()-_dbg0, file=_dbg_s.stderr)
                     await asyncio.wait_for(
                         _resume_event_received.wait(),
                         timeout=_remaining_deadline_seconds(_resume_deadline),
                     )
                 except TimeoutError as exc:
+                    print('DBG timeout', _dbg_t.time()-_dbg0, file=_dbg_s.stderr)
                     resume_error = RuntimeError(
                         "durable SDK session resume did not complete within deadline"
                     )
@@ -4953,6 +4595,16 @@ class StepRunner:
                     finally:
                         session = None
                     raise resume_error
+                if _resume_route is not None:
+                    _resume_route_timeout = _remaining_deadline_seconds(_resume_deadline)
+                    await asyncio.wait_for(
+                        apply_resource_route(
+                            session=session,
+                            route=_resume_route,
+                            deadline=_resume_deadline,
+                        ),
+                        timeout=_resume_route_timeout,
+                    )
             else:
                 # restart-step intentionally follows this path: the saved
                 # session ID is never copied, and the current attempt's run ID
@@ -4966,6 +4618,14 @@ class StepRunner:
                     session_id=_main_session_id,
                 )
 
+                # FR-MCPLOG-01: create/init 中のイベントも生成前の登録で捕捉する。
+                # DataDeploy の既存 on_event は保持し、二重購読しない。
+                session_opts.setdefault(
+                    "on_event",
+                    lambda event, sid=step_id:
+                    self._handle_session_event_for_step(event, sid),
+                )
+
                 session = await self._create_main_session(
                     client=client,
                     session_opts=session_opts,
@@ -4973,13 +4633,9 @@ class StepRunner:
                     workflow_id=workflow_id,
                     requires_external_skill_directories=
                     _requires_external_skill_directories,
-                )
-
-                if _is_foundry_required:
-                    await self._verify_foundry_required_session_mcp_servers(session)
-                session.on(
-                    lambda event, sid=step_id:
-                    self._handle_session_event_for_step(event, sid)
+                    required_mcp_servers=None,
+                    required_skills=_required_skills_for_step,
+                    optional_skills=_optional_skills_for_step,
                 )
 
             # ストリーム表示の開始マーカー
@@ -4992,6 +4648,9 @@ class StepRunner:
                 workflow_id=workflow_id,
                 custom_agent=custom_agent,
                 prompt=prompt,
+                has_step_inputs=_has_step_input_bundle(
+                    self._workflow_params, step_id
+                ),
             ) and _reuse_session_id is None
 
             # 事後 QA (post-QA モード) は廃止されました。
@@ -4999,11 +4658,15 @@ class StepRunner:
             total_phases = 1  # Phase 1: メインタスク
             if _run_pre_qa:
                 total_phases += 1
-            if self.config.auto_contents_review:
+            # FR-KD-13: 実行後の不明点調査（メインタスクが失敗しなかった場合だけ実行する）。
+            _run_post_discovery = _should_run_post_execution_discovery(
+                auto_qa=self.config.auto_qa,
+                dry_run=bool(getattr(self.config, "dry_run", False)),
+                reuse_session=_reuse_session_id is not None,
+            )
+            if _run_post_discovery:
                 total_phases += 1
-            _si_scope = self.config.self_improve_scope
-            _step_si_allowed = _si_scope in ("", "step")
-            if self.config.auto_self_improve and not self.config.self_improve_skip and _step_si_allowed:
+            if self.config.auto_contents_review:
                 total_phases += 1
             current_phase = 0
 
@@ -5033,14 +4696,20 @@ class StepRunner:
 
             if _reuse_session_id is not None:
                 assert _recovery_prompt is not None
-                _injected_prompt = _recovery_prompt
-                _final_components = (("recovery_prompt", _recovery_prompt),)
+                _injected_prompt = (
+                    _recovery_prompt + _runtime_guidance_suffix
+                )
+                _final_components = (
+                    ("recovery_prompt", _recovery_prompt),
+                    ("runtime_guidance_suffix", _runtime_guidance_suffix),
+                )
             else:
                 _injected_prompt, _final_components = _compose_phase1_prompt(
                     agent_prefix=_agent_prefix,
                     step_prompt=prompt,
                     pre_qa_context=pre_qa_context,
                     execution_mode_suffix=_execution_mode_suffix,
+                    runtime_guidance_suffix=_runtime_guidance_suffix,
                     tdd_suffix=_tdd_suffix,
                     review_suffix=_review_suffix,
                 )
@@ -5089,6 +4758,27 @@ class StepRunner:
                 elapsed=time.time() - phase1_start,
             )
 
+            async def _send_output_continuation(
+                active_session: Any, continuation_prompt: str
+            ) -> Any:
+                return await self._send_and_wait_with_model_call_failure_guard(
+                    active_session,
+                    continuation_prompt,
+                    timeout=self.config.timeout_seconds,
+                    step_id=step_id,
+                )
+
+            await _continue_for_missing_outputs(
+                session,
+                ctx=self._orchestrator_ctx,
+                workflow=_resolved_workflow,
+                step_id=step_id,
+                repo_root=Path.cwd(),
+                send=_send_output_continuation,
+                started_at=start,
+                limit_seconds=getattr(self.config, "step_timeout_seconds", None),
+            )
+
             preflight_failure_errors = (
                 self._run_asdw_data_deploy_preflight_failure_gate(
                     step_id,
@@ -5103,7 +4793,7 @@ class StepRunner:
                 return False
 
             # Step.1.3 の registration script はこのメインタスク自身が producer
-            # である。後続の split-fork / review が早期終了しても未検証の登録
+            # である。後続の review が早期終了しても未検証の登録
             # スクリプトを通過させないよう、生成直後に registration 込みで検査する。
             # session_start を渡し、当 step で再生成された producer script のみ検査
             # する（stale な commit 済みスクリプトで真因をマスクしない。memo §20）。
@@ -5126,46 +4816,22 @@ class StepRunner:
                 self.console.step_end(step_id, "failed", elapsed=elapsed)
                 return False
 
-            # Phase 1.5 (legacy SPLIT-fork): Agent が SPLIT_REQUIRED 判定で
-            # subissues.md を出力した場合の runtime fork は CLI / GUI 標準経路では
-            # 無効。Cloud 版は GitHub Actions 側で Sub-Issue を生成する。
-            # 明示 opt-in (split_fork_enabled=True) 時のみ legacy 経路として動く。
-            # T-C1.2: stats_event は always=True で stdout 確定出力されるため
-            # verbosity=0 でも観測可能 (Console.event は verbosity=0 で抑制)。
-            self.console.event(f"  🔀 [{step_id}] split-fork 判定開始")
-            self.console.stats_event(
-                "split_fork_phase", step_id=step_id, phase="enter"
-            )
-            if (
-                self._orchestrator_ctx is not None
-                and self._orchestrator_ctx.split_fork_enabled
-            ):
-                self._commit_durable_checkpoint(
-                    step_id=step_id,
-                    phase="split-fork",
-                    session_id=_main_session_id,
-                )
-            _split_fork_ok = await self._maybe_run_split_fork(
-                session=session,
-                step_id=step_id,
-                custom_agent=custom_agent,
-            )
-            self.console.event(
-                f"  🔀 [{step_id}] split-fork 判定完了 (ok={_split_fork_ok})"
-            )
-            self.console.stats_event(
-                "split_fork_phase", step_id=step_id, phase="exit",
-                ok=_split_fork_ok,
-            )
-            if not _split_fork_ok:
-                # サブタスクのいずれかが失敗 → Step failed として早期 return
-                self.console.step_io_summary(step_id)
-                elapsed = time.time() - start
-                self.console.step_end(step_id, "failed", elapsed=elapsed)
-                return False
-
             # Phase 2 (post-QA / 事後 QA) は廃止されました。
             # 旧 post-QA 制御とCLIオプションは削除済み。
+
+            # Phase 2: 実行後の不明点調査（FR-KD-13。人への回答待ちなし、失敗は警告だけ）
+            if _run_post_discovery:
+                current_phase += 1
+                await self._run_post_execution_discovery(
+                    session=session,
+                    client=client,
+                    step_id=step_id,
+                    original_prompt=prompt,
+                    custom_agent=custom_agent,
+                    workflow_id=workflow_id,
+                    current_phase=current_phase,
+                    total_phases=total_phases,
+                )
 
             # Phase 3: 敵対的レビュー（auto_contents_review=True の場合）
             if self.config.auto_contents_review:
@@ -5173,74 +4839,68 @@ class StepRunner:
                 phase3_start = time.time()
                 self.console.step_phase_start(step_id, current_phase, total_phases, "敵対的レビュー")
                 _review_model = self.config.get_review_model()
-                _use_review_sub_session = self._should_use_review_sub_session(_review_model)
                 _review_session = None
                 try:
-                    _effective_review_session = session
-                    _effective_review_prompt = REVIEW_PROMPT
-                    if _use_review_sub_session:
-                        self._log_sub_session_reason(
-                            step_id, "Review",
-                            qa_model=_review_model,
-                        )
-                        _review_session_opts = self._build_sub_session_opts(
-                            _review_model,
-                            step_id=step_id,
-                            suffix="review",
-                            custom_agent=custom_agent,
-                        )
-                        self._commit_durable_checkpoint(
-                            step_id=step_id,
-                            phase="review",
-                            session_id=_review_session_opts["session_id"],
-                        )
-                        _review_required_skills = self._get_required_skills_for_step(
-                            workflow_id,
-                            step_id,
-                            _resolved_workflow,
-                        )
-                        _review_requires_external_skills = (
-                            self._add_required_external_skill_directories(
-                                _review_session_opts,
-                                _review_required_skills,
-                            )
-                        )
-                        _review_session = await _create_session_with_auto_reasoning_fallback(
-                            client,
+                    # FR-CLI-92: review_model に依らず、常に新しいサブセッションで評価する。
+                    self._log_sub_session_reason(
+                        step_id, "Review",
+                        qa_model=_review_model,
+                    )
+                    _review_session_opts = self._build_sub_session_opts(
+                        _review_model,
+                        step_id=step_id,
+                        suffix="review",
+                        custom_agent=custom_agent,
+                    )
+                    self._commit_durable_checkpoint(
+                        step_id=step_id,
+                        phase="review",
+                        session_id=_review_session_opts["session_id"],
+                    )
+                    _review_required_skills = self._get_required_skills_for_step(
+                        workflow_id,
+                        step_id,
+                        _resolved_workflow,
+                    )
+                    _review_optional_skills = self._get_optional_skills_for_step(
+                        workflow_id,
+                        step_id,
+                    )
+                    _review_requires_external_skills = (
+                        self._add_required_external_skill_directories(
                             _review_session_opts,
-                            config=self.config,
-                            step_id=step_id,
-                            subtask_kind="review",
-                            console=self.console,
-                            requires_external_skill_directories=
-                            _review_requires_external_skills,
+                            _review_required_skills,
                         )
-                        _review_session.on(
-                            lambda event, sid=step_id:
-                            self._handle_session_event_for_step(event, sid)
-                        )
-                        self._sub_sessions_created += 1
-                        _max_context_chars = self._get_context_injection_max_chars()
-                        _review_context = _truncate_context_with_warn(
-                            main_output or "", _max_context_chars,
-                            label="Phase 3 Review main_output", console=self.console,
-                        )
-                        _effective_review_prompt = (
-                            "以下は同一ステップのメインタスク出力です。"
-                            "この内容を前提としてレビューしてください。\n\n"
-                            f"=== メインタスク出力（最大{_max_context_chars:,}文字） ===\n"
-                            f"{_review_context}\n"
-                            "=== メインタスク出力ここまで ===\n\n"
-                            f"{REVIEW_PROMPT}"
-                        )
-                        _effective_review_session = _review_session
-                    else:
-                        self._log_main_session_reuse(step_id, "Review")
-                        self._commit_durable_checkpoint(
-                            step_id=step_id,
-                            phase="review",
-                            session_id=_main_session_id,
-                        )
+                    )
+                    # FR-MCPLOG-01: Review の create/init も Step 固定で捕捉する。
+                    _review_session_opts["on_event"] = (
+                        lambda event, sid=step_id:
+                        self._handle_session_event_for_step(event, sid)
+                    )
+                    _review_session = await _create_session_with_auto_reasoning_fallback(
+                        client,
+                        _review_session_opts,
+                        config=self.config,
+                        step_id=step_id,
+                        workflow_id=workflow_id,
+                        subtask_kind="review",
+                        console=self.console,
+                        requires_external_skill_directories=
+                        _review_requires_external_skills,
+                        required_skills=_review_required_skills,
+                        optional_skills=_review_optional_skills,
+                    )
+                    self._sub_sessions_created += 1
+                    # FR-CLI-93: 評価者への入力は宣言 output_paths（無ければメイン出力へ縮退）。
+                    _effective_review_prompt = _build_phase3_review_prompt(
+                        step_id=step_id,
+                        title=title,
+                        output_paths=_resolve_step_output_paths(_resolved_workflow, step_id),
+                        main_output=main_output or "",
+                        max_chars=self._get_context_injection_max_chars(),
+                        console=self.console,
+                    )
+                    _effective_review_session = _review_session
 
                     # 1回目: 敵対的レビュー実行
                     review_response = await _effective_review_session.send_and_wait(
@@ -5262,32 +4922,35 @@ class StepRunner:
                         # 再レビューサイクル（最大2回）
                         review_passed = False
                         for cycle in range(1, 3):  # cycle 1, 2
+                            # FR-CLI-94: 評価者は修正しないため、反映しない設定では成果物が
+                            # 変わらず、再レビューしても判定は変わらない。
+                            if not self.config.apply_review_improvements_to_main:
+                                break
                             self.console.status(
                                 f"❌ 敵対的レビュー FAIL — 再レビューサイクル {cycle}/2 を実行"
                             )
-                            # FAIL 時: メイン成果物改善（設定有効時）
-                            if self.config.apply_review_improvements_to_main:
-                                _phase3_result = await self._apply_main_artifact_improvements(
-                                    session=session,
-                                    step_id=step_id,
-                                    title=title,
-                                    workflow_id=workflow_id,
-                                    custom_agent=custom_agent,
-                                    original_prompt=(
-                                        _recovery_prompt
-                                        if _reuse_session_id is not None
-                                        else prompt
-                                    ),
-                                    main_output=main_output or "",
-                                    source_phase="Phase 3 Adversarial Review",
-                                    improvement_context=review_content,
-                                    timeout=self.config.timeout_seconds,
-                                )
-                                if _phase3_result and _phase3_result.strip():
-                                    final_response_text = _phase3_result
-                                self._check_diff_after_improvement(
-                                    step_id, "Phase 3 Adversarial Review"
-                                )
+                            # FAIL 時: メイン成果物改善
+                            _phase3_result = await self._apply_main_artifact_improvements(
+                                session=session,
+                                step_id=step_id,
+                                title=title,
+                                workflow_id=workflow_id,
+                                custom_agent=custom_agent,
+                                original_prompt=(
+                                    _recovery_prompt
+                                    if _reuse_session_id is not None
+                                    else prompt
+                                ),
+                                main_output=main_output or "",
+                                source_phase="Phase 3 Adversarial Review",
+                                improvement_context=review_content,
+                                timeout=self.config.timeout_seconds,
+                            )
+                            if _phase3_result and _phase3_result.strip():
+                                final_response_text = _phase3_result
+                            self._check_diff_after_improvement(
+                                step_id, "Phase 3 Adversarial Review"
+                            )
                             recheck_prompt = ADVERSARIAL_RECHECK_PROMPT.format(cycle=cycle)
                             recheck_response = await _effective_review_session.send_and_wait(
                                 recheck_prompt, timeout=self.config.timeout_seconds
@@ -5312,7 +4975,7 @@ class StepRunner:
                                 elapsed=time.time() - phase3_start, result="FAIL",
                             )
                             self.console.status(
-                                "⚠️ 最大再レビューサイクル到達 — Critical が残存しています"
+                                "⚠️ 敵対的レビュー FAIL 確定 — Critical が残存しています"
                             )
                             # Critical が残存している場合はステップ失敗として扱う
                             raise RuntimeError(
@@ -5322,197 +4985,10 @@ class StepRunner:
                     if _review_session is not None:
                         await _review_session.disconnect()
 
-            # Phase 4: 自己改善ループ（auto_self_improve=True かつ skip でない場合）
-            # scope が "" または "step" の場合のみ実行。"workflow" / "disabled" の場合はスキップ。
-            _si_scope = self.config.self_improve_scope
-            _step_si_allowed = _si_scope in ("", "step")
-            if self.config.auto_self_improve and not self.config.self_improve_skip and not _step_si_allowed:
-                self.console.event(
-                    f"  ⏭️ [{step_id}] Phase 4 自己改善ループをスキップ "
-                    f"(self_improve_scope={_si_scope!r} — step-level は実行しない)"
-                )
-            if self.config.auto_self_improve and not self.config.self_improve_skip and _step_si_allowed:
-                current_phase += 1
-                phase4_start = time.time()
-                self.console.step_phase_start(step_id, current_phase, total_phases, "自己改善ループ")
-                self._commit_durable_checkpoint(
-                    step_id=step_id,
-                    phase="self-improve",
-                    session_id=_main_session_id,
-                )
-
-                # _work_dir は ステップ ID で分離されたパスを使用する（並列安全性）
-                # `work/run/<run-id>/self-improve/step-<step_id>/`
-                from .split_fork import resolve_work_root as _rwr
-                _work_dir = _rwr() / "self-improve" / f"step-{step_id}"
-                _max_iter = self.config.self_improve_max_iterations
-
-                for _iteration in range(1, _max_iter + 1):
-                    _iter_start = time.time()
-
-                    # Phase 4a: コードベーススキャン（subprocess）
-                    self.console.event(
-                        f"  🔍 [{step_id}] 自己改善 {_iteration}/{_max_iter}: コードベーススキャン中..."
-                    )
-                    _step_outputs = _resolve_step_output_paths(_resolved_workflow, step_id)
-                    _workflow_default = _SI_SCOPE_DEFAULTS.get(_resolved_workflow.id, "") if _resolved_workflow is not None else ""
-                    _scan = scan_codebase(
-                        target_scope=self.config.self_improve_target_scope,
-                        step_output_paths=_step_outputs,
-                        workflow_default=_workflow_default,
-                    )
-                    _before_score = _scan["quality_score"]
-                    self.console.event(
-                        f"  📊 [{step_id}] quality_score: {_before_score} "
-                        f"(lint={_scan['summary']['lint_errors']}, "
-                        f"test_fail={_scan['summary']['test_failures']}, "
-                        f"coverage={_scan['summary']['coverage_pct']:.1f}%)"
-                    )
-
-                    # スコアが十分高く問題なし → 改善不要で終了
-                    if _before_score >= DEFAULT_QUALITY_THRESHOLD and not _scan["summary"]["test_failures"]:
-                        self.console.status(
-                            f"✅ 自己改善ループ: quality_score={_before_score} ≥ {DEFAULT_QUALITY_THRESHOLD} — 改善不要"
-                        )
-                        break
-
-                    # Phase 4b: LLM 統合評価 + 改善計画生成
-                    _previous_learning = get_learning_summary(_work_dir, _iteration - 1)
-                    _scan_prompt = SELF_IMPROVE_SCAN_PROMPT.format(
-                        target_scope=self.config.self_improve_target_scope or "全体",
-                        scan_output=_scan["raw_output"][:_MAX_SCAN_OUTPUT_LENGTH],
-                    )
-                    _scan_response = await session.send_and_wait(
-                        _scan_prompt, timeout=self.config.timeout_seconds
-                    )
-                    _scan_content = _extract_text(_scan_response)
-
-                    _plan_prompt = SELF_IMPROVE_PLAN_PROMPT.format(
-                        iteration=_iteration,
-                        scan_result_json=_scan_content[:_MAX_PLAN_SCAN_LENGTH],
-                        previous_learning=_previous_learning[:_MAX_LEARNING_SUMMARY_LENGTH] if _previous_learning else "(初回)",
-                    )
-                    _plan_response = await session.send_and_wait(
-                        _plan_prompt, timeout=self.config.timeout_seconds
-                    )
-                    _plan_content = _extract_text(_plan_response)
-
-                    if "IMPROVEMENT_NOT_NEEDED" in _plan_content:
-                        self.console.status(
-                            "✅ 自己改善ループ: 改善不要と判定されました"
-                        )
-                        break
-
-                    # Phase 4c: セッション内で改善実行
-                    # 計画内容（_plan_content）を実行指示としてセッションに送信する
-                    self.console.event(
-                        f"  🔧 [{step_id}] 自己改善 {_iteration}/{_max_iter}: 改善実行中..."
-                    )
-                    if self.config.apply_self_improve_to_main:
-                        _phase4_result = await self._apply_main_artifact_improvements(
-                            session=session,
-                            step_id=step_id,
-                            title=title,
-                            workflow_id=workflow_id,
-                            custom_agent=custom_agent,
-                            original_prompt=(
-                                _recovery_prompt
-                                if _reuse_session_id is not None
-                                else prompt
-                            ),
-                            main_output=main_output or "",
-                            source_phase=f"Phase 4 Self-Improve iteration {_iteration}",
-                            improvement_context=_plan_content[:_MAX_PLAN_SCAN_LENGTH],
-                            timeout=self.config.timeout_seconds,
-                        )
-                        if _phase4_result and _phase4_result.strip():
-                            final_response_text = _phase4_result
-                        self._check_diff_after_improvement(
-                            step_id, f"Phase 4 Self-Improve iteration {_iteration}"
-                        )
-                    else:
-                        _exec_prompt = (
-                            f"以下の改善計画を実行してください。\n\n{_plan_content[:_MAX_PLAN_SCAN_LENGTH]}"
-                        )
-                        await session.send_and_wait(
-                            _exec_prompt, timeout=self.config.timeout_seconds
-                        )
-
-                    # Phase 4d: 改善後検証（Verification Loop §10.1 準拠）
-                    _after_scan = scan_codebase(
-                        target_scope=self.config.self_improve_target_scope,
-                        step_output_paths=_step_outputs,
-                        workflow_default=_workflow_default,
-                    )
-                    _verify_prompt = SELF_IMPROVE_VERIFY_PROMPT.format(
-                        before_score=_before_score,
-                        after_scan_output=_after_scan["raw_output"][:_MAX_SCAN_OUTPUT_LENGTH],
-                    )
-                    _verify_response = await session.send_and_wait(
-                        _verify_prompt, timeout=self.config.timeout_seconds
-                    )
-                    _verify_content = _extract_text(_verify_response)
-
-                    # 検証結果は scan 実測値だけから決定的に導出する（FR-CLI-63）。
-                    # LLM 応答は notes の説明としてのみ使用し、判定へ反映しない。
-                    _json_parse_error: Optional[str] = None
-                    _json_match = _extract_json_block(_verify_content)
-                    if _json_match:
-                        try:
-                            json.loads(_json_match)
-                        except (json.JSONDecodeError, ValueError, TypeError) as _exc:
-                            # G-7: JSON パース失敗を可観測化（黙示フォールバックの抑止）
-                            _json_parse_error = f"{type(_exc).__name__}: {_exc}"
-                            self.console.warning(
-                                f"  ⚠️ [{step_id}] Phase 4 verify: LLM JSON のパースに失敗しました "
-                                f"({_json_parse_error}) — 判定は scan 実測値のみを使用します"
-                            )
-                    else:
-                        _json_parse_error = "no_json_block_found"
-                        self.console.warning(
-                            f"  ⚠️ [{step_id}] Phase 4 verify: LLM 応答に JSON ブロックが見つかりません — "
-                            "判定は scan 実測値のみを使用します"
-                        )
-
-                    _verification: VerificationResult = _build_phase4_verification(
-                        _after_scan, _before_score, _verify_content, _json_parse_error,
-                    )
-                    _after_score = _verification["after_quality_score"]
-                    _degraded = _verification["degraded"]
-
-                    # Phase 4e: 学習ログ記録
-                    _record: ImprovementRecord = {
-                        "iteration": _iteration,
-                        "before_score": _before_score,
-                        "after_score": _after_score,
-                        "degraded": _degraded,
-                        "plan_summary": _plan_content[:_MAX_PLAN_SCAN_LENGTH],
-                        "verification": _verification,
-                        "elapsed_seconds": time.time() - _iter_start,
-                    }
-                    record_learning(_work_dir, _iteration, _record)
-
-                    self.console.event(
-                        f"  📈 [{step_id}] 自己改善 {_iteration}/{_max_iter}: "
-                        f"score {_before_score} → {_after_score} "
-                        f"({'⚠️ デグレード' if _degraded else '✅ 改善'})"
-                    )
-
-                    # Phase 4f: デグレード検知 → 即時停止
-                    if _degraded:
-                        self.console.status(
-                            f"⚠️ 自己改善ループ: デグレード検知 — イテレーション {_iteration} で停止"
-                        )
-                        break
-
-                self.console.step_phase_end(
-                    step_id, current_phase, total_phases, "自己改善ループ",
-                    elapsed=time.time() - phase4_start,
-                )
-
         except DurableStateError:
             raise
         except Exception as exc:
+            import traceback as _tb, sys as _s2; _tb.print_exception(exc, file=_s2.stderr)
             self.console.error(
                 f"Step.{step_id} 実行中にエラーが発生しました: {format_exception_for_log(exc)}"
             )
@@ -6453,9 +5929,9 @@ class StepRunner:
             return ""
 
         try:
-            from hve.split_fork import resolve_run_id
+            from hve.run_paths import resolve_run_id
         except ImportError:  # pragma: no cover - script execution path
-            from split_fork import resolve_run_id  # type: ignore[no-redef]
+            from run_paths import resolve_run_id  # type: ignore[no-redef]
 
         run_id = resolve_run_id()
         step_dir = self._safe_tdd_step_dir(base_step_id)
@@ -6502,7 +5978,7 @@ class StepRunner:
             return []
 
         try:
-            from hve.split_fork import resolve_run_id
+            from hve.run_paths import resolve_run_id
             from hve.artifact_validation import (
                 _extract_markdown_label,
                 validate_tdd_test_report,
@@ -6668,7 +6144,7 @@ class StepRunner:
         # run スコープ外の legacy `work/` は探索しない。
         identifier = "step-" + str(step_id).replace(".", "-")
         try:
-            from hve.split_fork import resolve_work_root
+            from hve.run_paths import resolve_work_root
             work_root = resolve_work_root()
         except Exception as _rwr_exc:
             self.console.warning(
@@ -7168,8 +6644,11 @@ class StepRunner:
         if etype == "tool.execution_start":
             tool_name = extract_tool_name_from_event(event) or _get(data, "tool_name", "toolName", "name", default="unknown")
             args = _get(data, "arguments", default=None)
+            raw_tool_call_id = _get(
+                data, "tool_call_id", "toolCallId", default=None
+            )
             tool_call_id = str(
-                _get(data, "tool_call_id", "toolCallId", default="") or ""
+                raw_tool_call_id or ""
             )
             start_info = (
                 str(tool_name or ""),
@@ -7206,17 +6685,18 @@ class StepRunner:
                         1,
                     )
 
-            # FR-MCPLOG-01: MCP 由来の tool は全件全文をログへ残す。
-            # 後続の `report_intent` / `task` の早期 return より前で行うこと。
+            # FR-MCPLOG-01: 全 tool start を相関器へ通知し、MCP 由来だけを記録する。
+            # 組み込み tool が同じ call ID を使った場合は相関を曖昧化し、後続完了を
+            # MCP response へ誤帰属させない。`report_intent` / `task` の早期 return
+            # より前で行うこと。
             mcp_server_name = _get(data, "mcp_server_name", "mcpServerName", default="")
-            if mcp_server_name:
-                self.console.mcp_tool_request(
-                    str(mcp_server_name),
-                    str(_get(data, "mcp_tool_name", "mcpToolName", default="") or tool_name or ""),
-                    tool_call_id=tool_call_id,
-                    step_id=step_id or "",
-                    arguments=args,
-                )
+            self.console.mcp_tool_request(
+                str(mcp_server_name or ""),
+                str(_get(data, "mcp_tool_name", "mcpToolName", default="") or tool_name or ""),
+                tool_call_id=raw_tool_call_id,
+                step_id=step_id or "",
+                arguments=args,
+            )
 
             # report_intent ツールは Thinking として表示する（通常のアクション表示をスキップ）
             if tool_name == "report_intent":
@@ -7270,14 +6750,6 @@ class StepRunner:
             if tool_name:
                 # FR-TS-07: 自動 pin の学習材料。id への解決は Step 終了時に行う。
                 self._toolsearch_called_tools.append(str(tool_name))
-            workiq_tool_name = extract_workiq_tool_name_from_event(event)
-            if workiq_tool_name:
-                self._workiq_called_tools.append(workiq_tool_name)
-                if not self._workiq_tool_called:
-                    self._workiq_tool_called = True
-                    self.console.status(
-                        f"🔍 Work IQ ツール '{workiq_tool_name}' が呼び出されました"
-                    )
             self.console.action_start(step_id, action_name, detail)
             # GUI 用構造化イベント：tool_name を集計キーとして送出。
             # action_name は表示用の整形済み文字列 (Run (PowerShell) 等)。
@@ -7300,16 +6772,19 @@ class StepRunner:
             return
 
         if etype == "tool.execution_complete":
-            success = _get(data, "success", default=False)
+            success = _get(data, "success", default=False) is True
             error = _get(data, "error", default=None)
+            raw_tool_call_id = _get(
+                data, "tool_call_id", "toolCallId", default=None
+            )
             tool_call_id = str(
-                _get(data, "tool_call_id", "toolCallId", default="") or ""
+                raw_tool_call_id or ""
             )
             # FR-MCPLOG-01: 完了イベントは MCP サーバー名を持たないため、
             # ロガ側の `tool_call_id` 相関だけが帰属を決める。
             self.console.mcp_tool_response(
-                tool_call_id=tool_call_id,
-                success=bool(success),
+                tool_call_id=raw_tool_call_id,
+                success=success,
                 content=str(_get(_get(data, "result", default=None), "content", default="") or ""),
                 error=str(_get(error, "message", default=error) or "") if error else "",
                 step_id=step_id or "",
@@ -7372,7 +6847,7 @@ class StepRunner:
                 # T-M5: ツール失敗ログにツール名を前置（特に timeout のような汎用エラーの真因特定支援）
                 # extract_tool_name_from_event は tool.execution_start 専用のため、
                 # tool.execution_complete.data から直接 tool_name を抽出する。
-                # workiq.py:689 と同じく MCP 系を legacy より優先する。
+                # workiq.extract_tool_metadata_from_event と同じく MCP 系を legacy より優先する。
                 mcp_tool_name = _get(data, "mcp_tool_name", "mcpToolName", default="")
                 legacy_tool_name = _get(data, "tool_name", "toolName", "name", default="")
                 failed_tool_name = mcp_tool_name or legacy_tool_name
@@ -7852,8 +7327,8 @@ class StepRunner:
 
         # --- セッション ---
         if etype == "session.error":
-            err_type = _get(data, "error_type", "errorType") or ""
-            message = _get(data, "message") or ""
+            err_type = sanitize_diagnostic_text(str(_get(data, "error_type", "errorType") or ""))
+            message = sanitize_diagnostic_text(str(_get(data, "message") or ""))
             self.console.session_error(err_type, message)
             return
 
@@ -7861,7 +7336,7 @@ class StepRunner:
             level = _get(data, "level") or "info"
             message = _get(data, "message") or ""
             if message:
-                self.console.cli_log(step_id, f"[{level}] {message}")
+                self.console.cli_log(step_id, sanitize_diagnostic_text(f"[{level}] {message}"))
             return
 
         if etype == "session.usage_info":
@@ -7974,13 +7449,13 @@ class StepRunner:
                 name = _get(srv, "name", default="?")
                 status_obj = _get(srv, "status", default=None)
                 status = getattr(status_obj, "value", str(status_obj)) if status_obj else "unknown"
-                error = _get(srv, "error", default=None)
+                error = sanitize_diagnostic_text(str(_get(srv, "error", default="") or ""))
                 transport_obj = _get(srv, "transport", default=None)
                 source_obj = _get(srv, "source", default=None)
                 self.console.mcp_server_status(
                     str(name),
                     status=str(status),
-                    error=str(error) if error else "",
+                    error=error,
                     plugin_name=str(_get(srv, "plugin_name", "pluginName", default="") or ""),
                     transport=str(getattr(transport_obj, "value", transport_obj) or "") if transport_obj else "",
                     source=str(getattr(source_obj, "value", source_obj) or "") if source_obj else "",
@@ -7988,10 +7463,10 @@ class StepRunner:
                 if status == "connected":
                     self.console.status(f"✅ MCP サーバー '{name}' 接続成功")
                 elif status in ("failed", "needs-auth"):
-                    # Work IQ だけが best-effort（FR-QA-03 / FR-QA-06）。他サーバーは fail-closed ガード（FR-TS-03）を持つ。
+                    # 知識源だけが best-effort（FR-KD-02）。他サーバーは fail-closed ガード（FR-TS-03）を持つ。
                     _non_fatal = (
-                        "。Work IQ は補助的な情報源のため実行は継続します"
-                        if _is_workiq_mcp_server_name(name)
+                        "。知識源は補助的な情報源のため実行は継続します"
+                        if _is_knowledge_source_server(name, self.config)
                         else ""
                     )
                     self.console.warning(
@@ -8007,15 +7482,19 @@ class StepRunner:
             server_name = _get(data, "server_name", "serverName", default="?")
             status_obj = _get(data, "status", default=None)
             status = getattr(status_obj, "value", str(status_obj)) if status_obj else "unknown"
+            error = sanitize_diagnostic_text(str(_get(data, "error", default="") or ""))
             self.console.mcp_server_status(
                 str(server_name),
                 status=str(status),
-                error=str(_get(data, "error", default="") or ""),
+                error=error,
             )
-            if status in ("failed", "needs-auth") and server_name == WORKIQ_MCP_SERVER_NAME:
+            if (
+                status in ("failed", "needs-auth")
+                and _is_knowledge_source_server(server_name, self.config)
+            ):
                 self.console.warning(
-                    f"❌ Work IQ MCP サーバー接続状態変更: {status}"
-                    "。Work IQ は補助的な情報源のため実行は継続します"
+                    f"❌ 知識源 MCP サーバー '{server_name}' 接続状態変更: {status}"
+                    "。知識源は補助的な情報源のため実行は継続します"
                 )
             else:
                 self.console.event(f"MCP '{server_name}' → {status}")
@@ -8147,64 +7626,3 @@ def _extract_text(response: Any) -> str:
             return str(val)
     # 未知の型の場合はフォールバックで空文字を返す（repr 文字列の混入を防止）
     return ""
-
-
-def _extract_json_block(text: str) -> Optional[str]:
-    """テキストから最初の JSON オブジェクト（`{...}`）を抽出して返す。
-
-    LLM の検証レスポンスに含まれる JSON を取り出すために使用する。
-    ネストされたオブジェクトも正しく処理するために、文字の深さカウントを使用する。
-
-    Returns:
-        JSON 文字列（抽出できない場合は None）。
-    """
-    # ```json ... ``` フェンス内を先に探す（フェンスの開始 `{` から深さカウント）
-    _fence_start = re.compile(r"```(?:json)?\s*\n?")
-    m = _fence_start.search(text)
-    search_text = text[m.end():] if m else text
-
-    # `{` から始まる最初の JSON オブジェクトを深さカウントで抽出
-    start = search_text.find("{")
-    if start == -1:
-        return None
-    depth = 0
-    in_string = False
-    escape_next = False
-    for i, ch in enumerate(search_text[start:], start):
-        if escape_next:
-            escape_next = False
-            continue
-        if ch == "\\" and in_string:
-            escape_next = True
-            continue
-        if ch == '"':
-            in_string = not in_string
-            continue
-        if in_string:
-            continue
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                return search_text[start : i + 1]
-    return None
-
-
-def _build_phase4_verification(
-    after_scan: "ScanResult",
-    before_score: int,
-    verify_content: str,
-    json_parse_error: Optional[str],
-) -> "VerificationResult":
-    """Phase 4d の検証結果を scan 実測値だけから決定的に構築する（FR-CLI-63）。
-
-    判定は `self_improve._build_verification_result()` を単一の実装とし、
-    LLM 応答は `notes` の説明としてのみ保持する。
-    """
-    verification = _build_verification_result(after_scan, before_score)
-    notes = verify_content[:LEARNING_SUMMARY_MAX_LENGTH]
-    if json_parse_error:
-        notes = f"[json_parse_error={json_parse_error}] " + notes
-    verification["notes"] = notes
-    return verification

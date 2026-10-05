@@ -15,7 +15,7 @@ class ApprovalDeclined(Exception):
 
     def __init__(self, message: str, *, wave_index: Optional[int] = None) -> None:
         super().__init__(message)
-        # FR-CLI-87: 拒否も `approval:<wave_index>` で記録するため、例外が wave を搬送する。
+        # FR-CLI-87: 拒否も `approval-<wave_index>` で記録するため、例外が wave を搬送する。
         self.wave_index = wave_index
 
 

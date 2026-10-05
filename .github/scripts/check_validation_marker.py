@@ -1,6 +1,6 @@
 """Expose the single validation-marker decision to the cloud surface (FR-MAINT-06).
 
-`hve/split_fork.py` owns the decision. This entrypoint only adapts it to a shell
+`hve/run_paths.py` owns the decision. This entrypoint only adapts it to a shell
 caller, so GitHub Actions workflows never re-implement the marker patterns.
 
 Exit code 0 when a marker is present, 1 when it is absent, 2 on usage errors.
@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 from typing import Callable
 
-_DECISION_MODULE = Path(__file__).resolve().parents[2] / "hve" / "split_fork.py"
+_DECISION_MODULE = Path(__file__).resolve().parents[2] / "hve" / "run_paths.py"
 
 
 def _load_decision() -> Callable[..., bool]:

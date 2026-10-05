@@ -4,7 +4,7 @@
 `markdown-query` のソースコード版で、**別パッケージ・別 DB** で動作する
 （`.md` は `mdq`、ソースコードは `cq` という排他分担）。
 
-このフォルダは上流リポジトリ（`dahatake/RoyalytyService2ndGen`）の
+このフォルダは配布元リポジトリの
 `tools/skills/code_query/` を `tools/for-other-repo/copy_to_repo.py` でコピーしたもの。
 同梱の版情報は [`KIT-VERSION.json`](./KIT-VERSION.json) にある。
 

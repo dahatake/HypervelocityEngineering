@@ -42,29 +42,78 @@ class TestObsoleteKeyMigration:
         assert "mcp_config" not in on_disk
         assert "create_issues" in on_disk
 
-    def test_removes_workiq_tenant_id_from_options(self, tmp_settings: Path) -> None:
+    @pytest.mark.parametrize(
+        "key,value",
+        (
+            ("workiq_tenant_id", "some-tenant"),
+            ("workiq_request_timeout", "300"),
+            ("workiq_prompt_review", "legacy review"),
+        ),
+    )
+    def test_removes_obsolete_workiq_runtime_key_from_options(
+        self,
+        tmp_settings: Path,
+        key: str,
+        value: str,
+    ) -> None:
         _write(
             tmp_settings,
-            "[options]\nworkiq_tenant_id = some-tenant\n",
+            f"[options]\n{key} = {value}\n",
         )
         merged = settings_store.load()
-        assert "workiq_tenant_id" not in merged["options"]
+        assert key not in merged["options"]
         on_disk = tmp_settings.read_text(encoding="utf-8")
-        assert "workiq_tenant_id" not in on_disk
+        assert key not in on_disk
 
-    def test_removes_both_keys_in_one_pass(self, tmp_settings: Path) -> None:
+    def test_removes_all_obsolete_workiq_keys_in_one_pass(self, tmp_settings: Path) -> None:
         _write(
             tmp_settings,
-            "[options]\nmcp_config = /tmp/x.json\nworkiq_tenant_id = t1\nrepo = owner/r\n",
+            "[options]\n"
+            "mcp_config = /tmp/x.json\n"
+            "workiq_tenant_id = t1\n"
+            "workiq_request_timeout = 300\n"
+            "workiq_prompt_review = review\n"
+            "repo = owner/r\n",
         )
         merged = settings_store.load()
-        assert "mcp_config" not in merged["options"]
-        assert "workiq_tenant_id" not in merged["options"]
+        for key in (
+            "mcp_config",
+            "workiq_tenant_id",
+            "workiq_request_timeout",
+            "workiq_prompt_review",
+        ):
+            assert key not in merged["options"]
         assert merged["options"]["repo"] == "owner/r"
         on_disk = tmp_settings.read_text(encoding="utf-8")
-        assert "mcp_config" not in on_disk
-        assert "workiq_tenant_id" not in on_disk
+        for key in (
+            "mcp_config",
+            "workiq_tenant_id",
+            "workiq_request_timeout",
+            "workiq_prompt_review",
+        ):
+            assert key not in on_disk
         assert "repo" in on_disk
+
+    def test_save_does_not_reintroduce_obsolete_workiq_keys(
+        self,
+        tmp_settings: Path,
+    ) -> None:
+        settings_store.save(
+            {
+                "options": {
+                    "repo": "owner/repo",
+                    "workiq_tenant_id": "tenant",
+                    "workiq_request_timeout": 300,
+                    "workiq_prompt_review": "review",
+                }
+            }
+        )
+
+        on_disk = tmp_settings.read_text(encoding="utf-8")
+        assert "repo = owner/repo" in on_disk
+        assert "workiq_tenant_id" not in on_disk
+        assert "workiq_request_timeout" not in on_disk
+        assert "workiq_prompt_review" not in on_disk
 
     def test_removes_data_verify_aci_image_from_options(
         self, tmp_settings: Path
@@ -89,59 +138,34 @@ class TestObsoleteKeyMigration:
         assert "resource_group" in on_disk
 
 
-class TestSelfImproveTriStateMigration:
-    @pytest.mark.parametrize(
-        ("legacy_enabled", "legacy_disabled", "expected"),
-        [
-            ("true", "false", "on"),
-            ("false", "true", "off"),
-            ("false", "false", ""),
-        ],
-    )
-    def test_migrates_legacy_boolean_pair(
+class TestSelfImproveSettingsRemoval:
+    def test_removed_self_improve_keys_are_dropped_from_settings(
         self,
         tmp_settings: Path,
-        legacy_enabled: str,
-        legacy_disabled: str,
-        expected: str,
     ) -> None:
         _write(
             tmp_settings,
             "[options]\n"
-            f"self_improve = {legacy_enabled}\n"
-            f"no_self_improve = {legacy_disabled}\n",
+            "self_improve = on\n"
+            "no_self_improve = true\n"
+            "self_improve_max_iterations = 7\n"
+            "self_improve_target_scope = hve\n"
+            "self_improve_goal = x\n"
+            "repo = owner/r\n",
         )
 
         merged = settings_store.load()
 
-        assert merged["options"]["self_improve"] == expected
-        assert "no_self_improve" not in merged["options"]
         on_disk = tmp_settings.read_text(encoding="utf-8")
+        assert "self_improve" not in on_disk
         assert "no_self_improve" not in on_disk
-        assert f"self_improve = {expected}" in on_disk
+        assert not [key for key in merged["options"] if "self_improve" in key]
+        assert merged["options"]["repo"] == "owner/r"
 
-    @pytest.mark.parametrize("value", ["on", "off"])
-    def test_preserves_new_tristate_value(
-        self,
-        tmp_settings: Path,
-        value: str,
-    ) -> None:
-        _write(tmp_settings, f"[options]\nself_improve = {value}\n")
-        before = tmp_settings.read_text(encoding="utf-8")
-
-        merged = settings_store.load()
-
-        assert merged["options"]["self_improve"] == value
-        assert tmp_settings.read_text(encoding="utf-8") == before
-
-    def test_missing_settings_uses_inherit_without_legacy_key(
-        self,
-        tmp_settings: Path,
-    ) -> None:
+    def test_missing_settings_has_no_self_improve_keys(self, tmp_settings: Path) -> None:
         assert not tmp_settings.exists()
         merged = settings_store.load()
-        assert merged["options"]["self_improve"] == ""
-        assert "no_self_improve" not in merged["options"]
+        assert not [key for key in merged["options"] if "self_improve" in key]
 
     def test_no_migration_when_keys_absent(self, tmp_settings: Path) -> None:
         original = "[options]\nrepo = owner/r\n"

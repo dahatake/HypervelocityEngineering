@@ -25,20 +25,18 @@ TDD GREEN フェーズ: テスト仕様書 (`docs/test-specs/`) を参照しな�
 - GREEN 化のために Azure や外部 HTTP API へ実接続するテストへ変更しない。外部 I/O は interface / wrapper / Mock / Stub / Emulator / Testcontainers に切り分ける。
 - 実装コードは Azure Functions としてデプロイ可能にしつつ、接続先・認証・base URL・リソース名は環境変数または設定ファイルから読み込む。秘密情報をコード、README、ログにハードコードしない。
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 {existing_artifact_policy}
 
 ## TDD GREEN フロー（反復）
-1. `dotnet test` で全テスト FAIL（RED 状態）を確認する
+1. `dotnet test src/test/api/{サービス名}.Tests/` で対象テストが FAIL（RED 状態）であることを確認する
 2. テストケースを GREEN にするための最小実装を作成する
-3. `dotnet test` を実行する
-4. 全テスト PASS なら REFACTOR へ進む。FAIL があれば実装を修正して手順3に戻る
+3. `dotnet test src/test/api/{サービス名}.Tests/` を実行する（反復中は対象テストプロジェクトのみを実行し、引数なしの全件実行は行わない）
+4. 対象テストが PASS なら REFACTOR へ進む。FAIL があれば実装を修正して手順3に戻る
 5. 最大 {tdd_max_retries} 回反復する（Skill `tdd-green-retry-strategy` 準拠：各回は前回と異なるアプローチを選び、失敗の都度に根本原因を特定し Microsoft Learn MCP（C# / .NET / Azure Functions / SDK）で解決策を確認してから次手を決める）
 6. {tdd_max_retries} 回で全 PASS にならない場合: `asdw-web:blocked` ラベルを付与し、未 PASS テスト一覧を Issue コメントで報告する
+7. 手順4が PASS した後に 1 回だけ、変更したサービスの依存範囲のテストを実行する。リポジトリ全体の回帰は PR の CI で 1 回だけ確認する
 
 ## テストコード保護ルール
 - GREEN フェーズでは実装コードのみを修正する（`src/test/api/` のテストコードは原則変更禁止）
@@ -51,8 +49,8 @@ TDD GREEN フェーズ: テスト仕様書 (`docs/test-specs/`) を参照しな�
 
 ## 完了条件
 - `src/api/` 配下に Azure Functions が実装されている
-- `dotnet test` の全テストが PASS であること（TDD GREEN 確認）
-## TDD テスト結果レポート（必須）
+- `dotnet test src/test/api/{サービス名}.Tests/` の対象テストが PASS であること（TDD GREEN 確認）。着手時 baseline に無い新規 FAIL が 0 件であること
+## TDD テスト結果レポート
 - 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - 必須ラベル: `Schema-Version`, `Evidence-Status`, `TDD-Judgement`, `Secret-Redaction`, `Test-Files-Changed`
 - `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とする。

@@ -1,10 +1,10 @@
 """Synchronize and verify the non-canonical users-guide Prompt mirror.
 
 The only Prompt source of truth is ``.github/prompts/**``. This helper catalogs
-every source file, copies files referenced by an execution or module-load path
-byte-for-byte with an added ``.txt`` suffix, emits three composed Work IQ
-templates for manual testing, and regenerates the SHA-256 catalog. ``--check``
-performs no writes.
+every source file, copies the runtime-loader text referenced by an execution or
+module-load path with an added ``.txt`` suffix, and regenerates the SHA-256
+catalog. The Work IQ composed templates were removed with HVE FR-KD-10 (the
+knowledge discovery agent composes its own queries). ``--check`` performs no writes.
 """
 
 from __future__ import annotations
@@ -55,40 +55,20 @@ LOADED_ONLY_SYMBOLS = {
 }
 LOADED_ONLY = frozenset(LOADED_ONLY_SYMBOLS)
 
-# Runtime wiring is intentionally owned by T24. Mirror this fixed recovery
-# Prompt while it is unwired without misreporting it as a production consumer.
-# Once wired, the normal consumer-based rule keeps the copy eligible.
-MIRROR_WHILE_UNWIRED = frozenset(
-    {
-        "runtime/runner/resume-recovery.prompt.md",
-    }
-)
-
-WORKIQ_COMPOSITIONS = {
-    "workiq-qa.prompt.txt": (
-        "runtime/workiq/qa-task.prompt.md",
-        "質問一覧",
-    ),
-    "workiq-km.prompt.txt": (
-        "runtime/workiq/km-task.prompt.md",
-        "Knowledge 項目",
-    ),
-    "workiq-review.prompt.txt": (
-        "runtime/workiq/review-task.prompt.md",
-        "ドキュメント概要",
-    ),
-}
-WORKIQ_SHARED_COMPONENTS = (
-    "runtime/workiq/role.prompt.md",
-    "runtime/workiq/output-schema.prompt.md",
-    "runtime/workiq/fewshot.prompt.md",
-)
-
+# Temporary migration exceptions belong here only while no production consumer
+# exists. Once wired, the normal consumer-based rule keeps the copy eligible.
+MIRROR_WHILE_UNWIRED: frozenset[str] = frozenset()
 
 def _copy_relative_path(source_relative: Path) -> Path:
     if not source_relative.name.endswith(".prompt.md"):
         raise ValueError(f"Unexpected Prompt filename: {source_relative}")
     return source_relative.with_name(source_relative.name + ".txt")
+
+
+def _runtime_prompt_bytes(path: Path) -> bytes:
+    """Encode the text returned by the runtime's single Prompt loader."""
+    relative = path.relative_to(SOURCE_ROOT).as_posix()
+    return _read_prompt(relative).encode("utf-8")
 
 
 def _source_files() -> list[Path]:
@@ -272,7 +252,7 @@ def _expected_copies(
     source_files: list[Path], usage: dict[str, tuple[str, ...]]
 ) -> dict[Path, bytes]:
     return {
-        _copy_relative_path(source.relative_to(SOURCE_ROOT)): source.read_bytes()
+        _copy_relative_path(source.relative_to(SOURCE_ROOT)): _runtime_prompt_bytes(source)
         for source in source_files
         if _should_copy(
             relative := source.relative_to(SOURCE_ROOT).as_posix(),
@@ -282,27 +262,16 @@ def _expected_copies(
 
 
 def _read_prompt(relative: str) -> str:
-    return (SOURCE_ROOT / PurePosixPath(relative)).read_text(encoding="utf-8")
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+    from hve.prompt_loader import load_prompt_file
+
+    return load_prompt_file(relative, prompts_dir=SOURCE_ROOT)
 
 
 def _expected_composed_workiq() -> dict[Path, bytes]:
-    role, output_schema, fewshot = (
-        _read_prompt(relative) for relative in WORKIQ_SHARED_COMPONENTS
-    )
-    composed: dict[Path, bytes] = {}
-    for filename, (task_path, target_label) in WORKIQ_COMPOSITIONS.items():
-        task_directive = _read_prompt(task_path)
-        text = (
-            role
-            + output_schema
-            + fewshot
-            + "\n"
-            + task_directive
-            + f"\n\n### {target_label}\n"
-            + "{target_content}\n"
-        )
-        composed[Path(filename)] = text.encode("utf-8")
-    return composed
+    """FR-KD-10: 合成済みテンプレートは無い（既存の ``composed/`` は stale として削除する）。"""
+    return {}
 
 
 def _markdown_href(relative: str) -> str:
@@ -343,7 +312,7 @@ def _render_catalog(
         "",
         "> [!IMPORTANT]",
         "> この一覧と `copies/**` は `.github/prompts/**/*.prompt.md` から作成した非規範コピーです。編集先は正本だけです。",
-        "> コピーは Markdown 検索への重複登録を避けるため、正本の相対パス末尾に `.txt` を付けています。本文 bytes は正本と同一です。",
+        "> コピーは Markdown 検索への重複登録を避けるため、正本の相対パス末尾に `.txt` を付けています。本文は `load_prompt_file()` が返す UTF-8 text と同一です。",
         "",
         f"- Prompt 正本: **{len(source_files)} 件**",
         f"- 閲覧用コピー: **{copy_count} 件**",
@@ -351,7 +320,7 @@ def _render_catalog(
         f"- module load のみ（送信参照なし）: **{status_counts['ロードのみ（送信参照なし）']} 件**",
         f"- 未結線: **{status_counts['未結線']} 件**",
         f"- Registry 参照: Agent 割当 **{registry_stats['agent_assignments']}** / Step 本文 **{registry_stats['step_body_references']}** / fan-out **{registry_stats['fanout_references']}**",
-        "- SHA-256: 正本と byte-for-byte コピーに共通する、小文字 64 桁 hex",
+        "- SHA-256: runtime text を UTF-8 bytes 化した値に対する、小文字 64 桁 hex",
         "- 参照元: Agent / Step / fan-out は Registry 割当、runtime / Cloud は固定本文を直接読む loader / Workflow。完全な downstream call graph ではありません",
         "- 再生成・検証: [`sync.py`](./sync.py)",
         "",
@@ -373,7 +342,7 @@ def _render_catalog(
             consumers = usage.get(rel, ())
             status = _status(rel, consumers)
             usage_cell = "<br>".join(f"`{consumer}`" for consumer in consumers) or "—"
-            digest = sha256((SOURCE_ROOT / relative).read_bytes()).hexdigest()
+            digest = sha256(_runtime_prompt_bytes(SOURCE_ROOT / relative)).hexdigest()
             copy_cell = (
                 f"[`copies/{copy_rel}`](copies/{_markdown_href(copy_rel)})"
                 if _should_copy(rel, consumers)
@@ -387,25 +356,6 @@ def _render_catalog(
             )
         lines.append("")
 
-    lines.extend(
-        [
-            "## Work IQ 合成済みデバッグ用 Prompt（3 件）",
-            "",
-            "`hve/workiq.py::_compose_default_workiq_prompt()` と同じ順序・区切りで生成した既定テンプレートです。`config_override` を指定した実行には一致しません。",
-            "",
-            "| 用途 | 合成済みテンプレート | 構成元 | SHA-256 |",
-            "|---|---|---|---|",
-        ]
-    )
-    for filename, (task_path, _target_label) in WORKIQ_COMPOSITIONS.items():
-        components = (*WORKIQ_SHARED_COMPONENTS, task_path)
-        component_cell = "<br>".join(f"`{component}`" for component in components)
-        data = composed[Path(filename)]
-        lines.append(
-            f"| `{filename.removesuffix('.prompt.txt')}` | "
-            f"[`composed/{filename}`](composed/{_markdown_href(filename)}) | "
-            f"{component_cell} | `{sha256(data).hexdigest()}` |"
-        )
     lines.append("")
     return "\n".join(lines)
 
@@ -537,7 +487,7 @@ def main() -> int:
             return 1
         print(
             f"PASS: {len(expected_copies)} Prompt copies, "
-            f"{len(expected_composed)} composed Work IQ templates, and catalog match"
+            f"{len(expected_composed)} composed templates, and catalog match"
         )
         return 0
 

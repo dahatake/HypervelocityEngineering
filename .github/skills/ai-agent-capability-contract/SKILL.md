@@ -1,7 +1,7 @@
 ---
 name: ai-agent-capability-contract
 description: >
-  AAG / AAGD で生成する AI Agent の Goal Loop、検索ルーティング、REST Tool、MCP、Agent Skill、Identity、Observability、配布、評価の必須契約を提供する。 USE FOR: AI agent design, AI agent implementation, goal loop, agentic retrieval routing, REST tools, MCP integration, agent skills, agent identity, agent observability, agent plugin packaging, agent evaluation. DO NOT USE FOR: general web app implementation, generic MCP server development, non-agent workflow. WHEN: AAG または AAGD で AI Agent を設計・テスト・実装・デプロイするとき。
+  AAG/AAGD AI Agent contracts for goal loop, tools, identity, observability, packaging, evals. USE FOR: agent design/test/impl/deploy with REST/MCP/tools and evals. DO NOT USE FOR: non-agent apps or generic workflows. WHEN: AAG/AAGD Agent scope is selected.
 metadata:
   origin: user
   version: 1.0.0
@@ -11,13 +11,13 @@ metadata:
 
 ## 目的
 
-AAG / AAGD の各Stepが、ユーザー目的、Read-only検索、REST mutation、MCP、Agent別Skill、自己改善を同じ契約IDで設計・実装・検証できるようにする。
+AAG / AAGD の各Stepが、ユーザー目的、Read-only検索、REST mutation、MCP、Agent別Skillを同じ契約IDで設計・実装・検証できるようにする。
 
 ## Non-goals（このスキルの範囲外）
 
 - **全 Custom Agent への横断適用** — AAG / AAGD だけを対象とする。
 - **特定providerのAPI実装リファレンス** — 実装時に公式技術情報を参照する。
-- **MCP Serverの汎用実装** — API側Remote MCPは既存Web/API workflowの責務を再利用する。
+- **一般MCP設計・汎用実装** — 既存の公式情報参照規約に従い、本 Skill は AG-CAP-05 の HVE-specific MCP 契約だけを扱う。
 - **Agent別Skillの無条件生成** — 3回ルールまたは明確な再利用要件がある場合だけ作成する。
 - **hook / provider registry / Strategy / Factoryの追加** — 具体的要件がない限り作成しない。
 
@@ -33,14 +33,14 @@ AAG / AAGD の各Stepが、ユーザー目的、Read-only検索、REST mutation�
 
 | 対象 | 読むreference | 用途 |
 |---|---|---|
-| AAG Step 1 | `capability-contract.md`, `goal-self-improvement.md` | Mission、Mutation Intent、成功条件 |
+| AAG Step 1 | `capability-contract.md`, `goal-contract.md` | Mission、Mutation Intent、成功条件 |
 | AAG Step 2 | `capability-contract.md`, `search-routing.md`, `tool-mcp-skill-packaging.md` | data / Tool / MCP / Agent境界 |
 | AAG Step 3 | 3 referenceすべて | AG-CAP-01〜10の詳細設計 |
 | AAGD Step 2.1 / 2.2 | 3 referenceすべて | 正常・境界・失敗テスト |
 | AAGD Step 2.3 | 3 referenceすべて | 選択能力の最小実装 |
 | AAGD Step 3 | `capability-contract.md`, `search-routing.md`, `tool-mcp-skill-packaging.md` | provider接続、認証、smoke test、配布物の公開 |
 | AAGD Deploy 以降 | `capability-contract.md`, `search-routing.md` | AG-CAP-10の候補経路実測とAG-CAP-09の公開 |
-| HVE Self-Improve / gate | `capability-contract.md`, `goal-self-improvement.md` | criterion、証跡、停止条件 |
+| HVE gate | `capability-contract.md`, `goal-contract.md` | criterion、証跡、停止条件 |
 
 ## 契約一覧
 
@@ -106,6 +106,6 @@ AAG / AAGD の各Stepが、ユーザー目的、Read-only検索、REST mutation�
 | `agentic-retrieval-contract` | 依存 | AG-CAP-03でFoundry IQ / Azure AI Search Agentic Retrievalを選んだときのAR-CAP-01〜05 |
 | `foundry-toolbox-contract` | 依存 | Tool総数が10〜15を超えたときのToolbox / tool search（TB-CAP-01〜05） |
 | `task-dag-planning` | 先行 | AAG/AAGDのStep分割と依存設計 |
-| `test-strategy-template` | 依存 | Agent capability testのテスト戦略 |
-| `mcp-server-design` | 補完 | API側Remote MCPとSkillの責務分離 |
+| `tdd-red-green-reality` | 参照 | `.github/skills/tdd-red-green-reality/SKILL.md` §1.7 — HVE テスト方針の正本 |
+| `AG-CAP-05` | 本契約 | HVE-specific MCP の統合境界 |
 | `harness-verification-loop` | 後続 | Build / Lint / Test / Security / Diff |

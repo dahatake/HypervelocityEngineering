@@ -28,6 +28,7 @@ SOURCES = ../app.py \
           ../page_intro.py \
           ../page_options.py \
           ../page_options_ard.py \
+          ../page_workiq.py \
           ../page_workbench.py \
           ../page_workflow_select.py \
           ../qa_answer_dialog.py \
@@ -35,6 +36,7 @@ SOURCES = ../app.py \
           ../session_menu.py \
           ../settings_apply.py \
           ../settings_window.py \
+          ../step_input_pane.py \
           ../startup_auth.py \
           ../stats_detail_popup.py \
           ../toolsearch_settings_section.py \

@@ -5,18 +5,9 @@
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
-
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 
@@ -142,7 +133,6 @@
   - Step 1 / 2から引き継いだMutation Intent、Required flag、Request class、owner、MCP、SkillのTBDを解消する。provider固有値を確認できない場合は`Design status: unknown`、確認日、確認した公式根拠、runtime probe、Blocked条件を確定し、値自体は推測しない
   - 完成判定チェック（15項目・後述）を実施する
   - `docs/agent/agent-detail-{key}.md`（`{key}` = `AG-*`、Agent 名はファイル名に含めない）を作成する
-- **量が多い場合の分割**: Agent 数が多い場合は Skill task-dag-planning の分割ルールに従い、Agent ごとに Sub Issue に分割する
 - **完成判定チェック（15項目・出力前に必ず実施）**:
   1. Missionが1文
   2. Doneが検証可能
@@ -188,7 +178,7 @@
 - アーキテクチャ設計: docs/agent/agent-architecture.md
 ```
 
-### 5.3 進捗ログ追記（必須）
+### 5.3 進捗ログ追記
 - `{WORK}ai-agent-design-work-status.md` に追記のみで記録する：
   - `YYYY-MM-DD: 何をした / 何が決まった / 次アクション`
 
@@ -197,14 +187,13 @@
   - A) 章単位で分割して順に出力する（今回の応答では「章1〜章6」など範囲を明示）
   - B) 先に分割実行用 Prompt を複数作る
 - 分割時も、各 Prompt は「どの入力を読むか・どの章を出すか・出力先ファイル」を明示し、単体で実行可能にする。
-- Step 全体として Skill task-dag-planning の粒度/コンテキスト分割判定を適用する（詳細は Skill `task-dag-planning` を参照）。
   - 分割時は各 Sub Issue に `## Custom Agent` セクションに `Arch-AIAgentDesign-Step3` を含める
 
 ## 7) 書き込み失敗/巨大出力への対策
 - まず `large-output-chunking` スキルのルールに従う。
 - 設計書が長い場合は見出し境界で分割して追記する。
 
-## 8) 最終品質レビュー（単回インライン・セルフチェック）
+## 8) 受入観点（完了条件の補足）
 
 ### 8.1 事前チェック
 - 全 3 Step の設計書が作成されている
@@ -215,7 +204,7 @@
 
 ### 8.2 ドメイン固有観点
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 - **設計の網羅性・整合性**
   - 全ユースケースがカバーされているか
@@ -238,4 +227,4 @@
   - ドキュメント保守性と見直し周期の妥当性
 
 ### 8.3 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。

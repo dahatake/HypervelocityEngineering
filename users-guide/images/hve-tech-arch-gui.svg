@@ -61,8 +61,8 @@
   <text class="h" x="50" y="404">認証導線（各 CLI へ委譲）</text>
   <text x="50" y="424">startup_auth.py: `gh auth token` を解決</text>
   <text x="50" y="442">明示操作時だけ埋め込み端末で `gh auth login`</text>
-  <text x="50" y="460">Work IQ 設定: EULA / Microsoft 365 認証確認</text>
-  <text x="50" y="478">MCP / Plugin: Copilot CLI の一覧・認証手順へ委譲</text>
+  <text x="50" y="460">Work IQ: exact `workiq` を discovery / session 観測で確認</text>
+  <text x="50" y="478">MCP / Plugin: ResourceSnapshot を読み取り専用表示</text>
   <text x="50" y="496">資格情報は HVE に永続保存しない</text>
 
   <!-- subprocess output -->

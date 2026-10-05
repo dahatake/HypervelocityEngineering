@@ -1,78 +1,45 @@
 # リポジトリオンボーディング 入出力例
 
-> 本ファイルは `repo-onboarding-fast/SKILL.md` の入出力例セクションを収容する参照資料です。
+> 本ファイルは `repo-onboarding-fast/SKILL.md` の最小成果物契約と簡潔な例を収容する参照資料です。
 
 ---
 
-## 入出力例
+## 成果物契約
 
-> ※ 以下は説明用の架空例です（本リポジトリ RoyaltyService2ndGen を対象とした例）
+- 出力先は `work/run/<run-id>/<task>/onboarding.md` に固定する。
+- 後続Subが再利用できるよう、作業開始に必要な短い事実だけを残す。
+- 必須フィールドは「入口」「境界」「参照元/踏襲元」「標準コマンド」「不明点」の5つ。
+- 同じ出力先に既存 `onboarding.md` がある場合は、直接編集せず削除→新規作成する。
 
-### 例1: 本リポジトリ（RoyaltyService2ndGen）を対象とした onboarding.md
+## 簡潔な出力例
 
-**入力（トリガー条件）:**
-- 新しい Custom Agent（例: Dev-Microservice-Azure-ServiceCoding-AzureFunctions）が本リポジトリに初めてアサインされた
-- 作業ディレクトリ: Issue #101
-
-**出力（`work/run/<run-id>/Dev-Microservice-Azure-ServiceCoding-AzureFunctions/Issue-101/onboarding.md`）:**
-
-```markdown
-# onboarding: RoyaltyService2ndGen リポジトリ
+````markdown
+# onboarding
 
 ## 入口（主要パス）
 
-| パス | 説明 |
-|------|------|
-| `docs/catalog/service-catalog.md` | 全サービス（SVC-01〜SVC-16）の概要・API 仕様・リソース一覧 |
-| `docs/domain-analytics.md` | DDD ドメイン分析（BC・集約・ドメインイベント） |
-| `AGENTS.md` | 全 Agent に適用される強制ルール（§1〜§10） |
-| `.github/agents/` | Custom Agent 定義（30+個） |
-| `.github/skills/` | Skill 定義（36+個） |
-| `src/api/` | Azure Functions 実装（SVC 単位のサブディレクトリ） |
-| `src/infra/azure/` | Azure リソース作成スクリプト（bash） |
-| `src/test/api/` | API テストコード（pytest / .NET） |
+- `<entry-path>` — `<why-this-is-an-entry>`
 
 ## 境界（API/データ/責務）
 
-| 境界 | 内容 |
-|------|------|
-| 公開 API | `src/api/{SVC-ID}-{service-name}/function_app.py` |
-| データ SoT | Cosmos DB（各 SVC 固有コンテナ）+ Azure SQL（SVC-12 専用） |
-| 認証・認可 | SVC-15 アクセス制御サービス（RBAC, Managed Identity） |
+- `<boundary-name>` — `<contract-or-responsibility>`
 
-## 踏襲元（類似実装パス）
+## 参照元/踏襲元（類似実装パス）
 
-src/api/SVC-10-ai-cs-support-service/ ← エンドポイント定義の参考
-src/infra/azure/create-azure-api-resources.sh ← リソース作成スクリプトの参考
-.github/workflows/deploy-api-svc10.yml ← CI/CD workflow の参考
+- `<reference-path>` — `<what-to-follow>`
 
 ## 標準コマンド
 
-```bash
-# Python テスト実行
-pytest src/test/api/ -x --tb=short
-
-# .NET テスト実行（SVC 例）
-dotnet test src/test/api/AICSSupportService.Tests/
-
-# デプロイ → .github/workflows/deploy-api-svc{NN}.yml を参照
-```
+- `<command>` — `<purpose>`
 
 ## 不明点と Spike 案
 
-- [ ] 外部ロイヤルティ API の最新仕様 → docs/catalog/service-catalog.md#SVC-03 を確認
-```
+- `<unknown>` — `<next-check>`
+````
 
----
+## 既存 onboarding.md がある場合
 
-### 例2: エッジケース（既存 onboarding.md がある場合の更新）
-
-**入力（トリガー条件）:**
-- 同じ Issue の別 Sub が再度アサインされ、既存の `onboarding.md` が存在する
-
-**出力（更新ルール）:**
-
-1. `work/run/<run-id>/<AgentName>/Issue-<N>/onboarding.md` が既に存在することを確認
-2. copilot-instructions.md §0（work/ 書き込みルール）に従い **既存ファイルを削除**
-3. 最新の調査結果を含む内容で **新規作成**
-4. 削除→作成後にファイルが空でないことを `read` で確認
+1. `work/run/<run-id>/<task>/onboarding.md` の存在を確認する。
+2. 存在する場合は既存ファイルを削除する。
+3. 最新の最小事実で新規作成する。
+4. 作成後、ファイルが空でないことを確認する。

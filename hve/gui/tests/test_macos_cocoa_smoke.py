@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
-
 
 pytestmark = pytest.mark.skipif(
     sys.platform != "darwin",
@@ -17,10 +16,15 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_hve_gui_starts_on_cocoa_without_qt_errors(monkeypatch, tmp_path) -> None:
-    from PySide6.QtCore import QCoreApplication, QtMsgType, QTimer, qInstallMessageHandler
+    from PySide6.QtCore import (
+        QCoreApplication,
+        QTimer,
+        QtMsgType,
+        qInstallMessageHandler,
+    )
     from PySide6.QtWidgets import QApplication
 
-    from hve import index_refresh
+    from hve import index_refresh, models_api
     from hve.gui import app as gui_app
     from hve.gui import startup_auth
 
@@ -58,6 +62,7 @@ def test_hve_gui_starts_on_cocoa_without_qt_errors(monkeypatch, tmp_path) -> Non
         refresh_stub,
     )
     monkeypatch.setattr(index_refresh, "is_running", lambda: False)
+    monkeypatch.setattr(models_api, "fetch_model_entries", list)
 
     def capture_and_close() -> None:
         nonlocal captured
@@ -71,7 +76,8 @@ def test_hve_gui_starts_on_cocoa_without_qt_errors(monkeypatch, tmp_path) -> Non
         finally:
             for window in list(gui_app._open_windows):
                 window.close()
-            application.quit()
+            # 最後のwindowが閉じるとQApplicationは通常どおり終了する。
+            # モデル取得中でもevent loopを強制終了してQThreadを破棄しない。
 
     try:
         QTimer.singleShot(1000, capture_and_close)

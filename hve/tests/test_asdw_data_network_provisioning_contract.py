@@ -205,3 +205,28 @@ def test_confidential_ledger_location_reaches_the_child_environment() -> None:
         "CONFIDENTIAL_LEDGER_LOCATION"
         in launcher._ASDW_DATA_DEPLOY_CHILD_CONTEXT_KEYS
     )
+
+
+def test_confidential_ledger_creation_declares_an_aad_administrator() -> None:
+    """N-11: Azure は管理者の AAD principal が無い台帳作成を拒否する。"""
+    create = _script_text(launcher._CREATE)
+    lines = [
+        line.strip()
+        for line in create.splitlines()
+        if "az confidentialledger create" in line
+    ]
+
+    assert lines, "create が Confidential Ledger を作成していない"
+    for line in lines:
+        assert "--aad-based-security-principals" in line
+        assert "ledger-role-name=Administrator" in line
+        assert 'principal-id="$ledger_admin_object_id"' in line
+        assert 'tenant-id="$ledger_tenant_id"' in line
+    assert "ledger_admin_object_id=" in create
+    assert create.index("ledger_admin_object_id=") < create.index("az confidentialledger create")
+
+
+def test_registry_build_waits_for_dns_after_registry_creation() -> None:
+    """N-10: 作成直後の ACR は名前解決できないため、build の前に待機する。"""
+    prep = _script_text(launcher._PREP)
+    assert prep.index("az acr create") < prep.index("sleep 30") < prep.index("az acr build")

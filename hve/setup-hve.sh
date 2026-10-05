@@ -513,7 +513,7 @@ install_os_tool git  'Git'         'repository operations / git diff' \
   'macOS: brew install git | Debian/Ubuntu: sudo apt-get install -y git | Fedora: sudo dnf install -y git' || true
 install_os_tool gh   'GitHub CLI'  'gh auth login / Issue / PR' \
   'see https://github.com/cli/cli#installation' || true
-install_os_tool node 'Node.js'     'MCP Server / Work IQ / npx skills' \
+install_os_tool node 'Node.js'     'MCP Server / npx skills' \
   'see https://nodejs.org/en/download (Node.js 20+ recommended)' || true
 install_os_tool az   'Azure CLI'   'Azure workflows (asdw-* / ADFD)' \
   'see https://learn.microsoft.com/cli/azure/install-azure-cli' || true
@@ -1068,6 +1068,20 @@ fi
 if command -v gh >/dev/null 2>&1; then
   if gh auth status >/dev/null 2>&1; then ok 'gh auth status'
   else warn 'gh not authenticated. Run: gh auth login'; fi
+fi
+
+# FR-LOCAL-SURFACE-04: only a normal GUI distribution owns this final gate.
+# Checkout / CheckOnly / NoGui / Minimal retain their existing behavior.
+# The top-level launcher consumes this exit status, without another verifier run.
+if [[ "$INSTALL_GUI" == true && -f "$REPO_ROOT/hve-bootstrap-manifest.json" ]]; then
+  step 'Verifying bootstrap distribution readiness'
+  if "$VENV_PY" -I -m hve.bootstrap_verify --root "$REPO_ROOT" --json; then
+    ok 'Bootstrap distribution ready'
+  else
+    BOOTSTRAP_VERIFY_EXIT=$?
+    printf '  [ERROR] Bootstrap distribution verification failed (exit %s).\n' "$BOOTSTRAP_VERIFY_EXIT" >&2
+    exit "$BOOTSTRAP_VERIFY_EXIT"
+  fi
 fi
 
 step 'Next steps'

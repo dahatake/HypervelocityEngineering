@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
+import inspect
 import sys
 import tempfile
 import types
@@ -16,11 +16,8 @@ from hve.config import SDKConfig
 from hve.console import Console
 from hve.runner import (
     StepRunner,
-    _load_trusted_foundry_mcp_servers,
-    _require_trusted_foundry_mcp_servers,
 )
-from hve.workiq import WORKIQ_MCP_SERVER_NAME
-
+from hve.toolsearch.resource_routing import ResourceRoutingError
 
 class _Mcp:
     def __init__(self, servers, events: list[str]) -> None:
@@ -121,7 +118,6 @@ def _runner() -> StepRunner:
             model="claude-opus-4.7",
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
             run_id="20260720T000000-foundry-mcp",
         ),
         console=Console(verbose=False, quiet=True),
@@ -138,96 +134,24 @@ def _gate_patches(runner: StepRunner):
     )
 
 
-def _write_foundry_mcp_config(root: Path, *, azure_config: dict | None = None) -> None:
-    config = root / ".github" / ".mcp.json"
-    config.parent.mkdir(parents=True)
-    config.write_text(
-        json.dumps(
-            {
-                "mcpServers": {
-                    "azure": azure_config
-                    or {
-                        "tools": ["*"],
-                        "command": "npx",
-                        "args": ["-y", "@azure/mcp@latest", "server", "start"],
-                    },
-                    "microsoft-learn": {
-                        "type": "http",
-                        "url": "https://learn.microsoft.com/api/mcp",
-                        "tools": ["*"],
-                    },
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
+def test_foundry_runner_source_no_longer_uses_repository_pinned_mcp_helpers() -> None:
+    import hve.runner as runner_module
+
+    source = inspect.getsource(runner_module)
+
+    assert "_load_trusted_foundry_mcp_servers" not in source
+    assert "_require_trusted_foundry_mcp_servers" not in source
+    assert "_FOUNDRY_REQUIRED_MCP_SERVERS" not in source
+    assert "_ASDW_DATA_DEPLOY_REQUIRED_MCP_SERVERS" not in source
+    assert "_verify_foundry_required_session_mcp_servers" not in source
+    assert ".mcp.json" not in source
 
 
-def test_foundry_mcp_loader_requires_exact_repository_pinned_servers(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    config = tmp_path / ".github" / ".mcp.json"
-    config.parent.mkdir()
-    config.write_text(
-        json.dumps(
-            {
-                "mcpServers": {
-                    "azure": {
-                        "tools": ["*"],
-                        "command": "npx",
-                        "args": ["-y", "@azure/mcp@latest", "server", "start"],
-                    },
-                    "microsoft-learn": {
-                        "type": "http",
-                        "url": "https://learn.microsoft.com/api/mcp",
-                        "tools": ["*"],
-                    },
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.chdir(tmp_path)
-
-    servers = _load_trusted_foundry_mcp_servers(tmp_path)
-
-    assert set(servers) == {"azure", "microsoft-learn"}
-    assert _require_trusted_foundry_mcp_servers(tmp_path) == servers
-
-
-def test_foundry_mcp_loader_rejects_missing_or_modified_server(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    config = tmp_path / ".github" / ".mcp.json"
-    config.parent.mkdir()
-    config.write_text(
-        json.dumps(
-            {
-                "mcpServers": {
-                    "azure": {"command": "wrong"},
-                    "microsoft-learn": {
-                        "type": "http",
-                        "url": "https://learn.microsoft.com/api/mcp",
-                        "tools": ["*"],
-                    },
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.chdir(tmp_path)
-
-    assert _load_trusted_foundry_mcp_servers(tmp_path) == {}
-    with pytest.raises(RuntimeError, match="repository-pinned Azure and Microsoft Learn"):
-        _require_trusted_foundry_mcp_servers(tmp_path)
-
-
-def test_foundry_required_main_session_injects_azure_and_learn_and_verifies_loaded_servers() -> None:
+def test_foundry_required_main_session_delegates_skill_to_shared_route() -> None:
     runner = _runner()
     client = _Client([_server("azure"), _server("microsoft-learn"), _server("context7")])
     copilot, copilot_session = _fake_copilot_modules(client)
+    routed_session = _Session([_server("azure"), _server("microsoft-learn"), _server("context7")])
 
     with tempfile.TemporaryDirectory() as temp_dir:
         external_root = Path(temp_dir) / "skills"
@@ -245,7 +169,16 @@ def test_foundry_required_main_session_injects_azure_and_learn_and_verifies_load
         ), patch(
             "hve.prompt_loader.load_prompt",
             return_value="",
-        ), gates[0], gates[1], gates[2], gates[3], gates[4]:
+        ), patch(
+            "hve.runner.discover_sdk_resources",
+            return_value=object(),
+        ), patch(
+            "hve.runner.ToolSearchPolicy",
+            new=types.SimpleNamespace(load=lambda **_kwargs: object()),
+        ), patch(
+            "hve.runner.create_routed_session",
+            new=AsyncMock(return_value=routed_session),
+        ) as create, gates[0], gates[1], gates[2], gates[3], gates[4]:
             result = asyncio.run(
                 runner.run_step(
                     "2.3",
@@ -257,49 +190,20 @@ def test_foundry_required_main_session_injects_azure_and_learn_and_verifies_load
             )
 
     assert result is True
-    options = client.create_session_kwargs[0]
-    assert options["mcp_servers"]["azure"] == {
-        "tools": ["*"],
-        "command": "npx",
-        "args": ["-y", "@azure/mcp@latest", "server", "start"],
-    }
-    assert options["mcp_servers"]["microsoft-learn"] == {
-        "type": "http",
-        "url": "https://learn.microsoft.com/api/mcp",
-        "tools": ["*"],
-    }
-    assert client.sessions[0].mcp.calls == 1
-    assert client.sessions[0].send_calls == 1
-    assert client.sessions[0].events == ["mcp.list", "send_and_wait"]
+    assert create.await_args is not None
+    kwargs = create.await_args.kwargs
+    assert kwargs["required_mcp_servers"] is None
+    assert "microsoft-foundry" in kwargs["required_skills"]
+    assert "mcp_servers" not in kwargs["session_options"]
+    assert client.create_session_kwargs == []
+    assert routed_session.mcp.calls == 0
+    assert routed_session.send_calls == 1
+    assert routed_session.events == ["send_and_wait"]
 
 
-@pytest.mark.parametrize(
-    "servers",
-    [
-        [_server("azure")],
-        [_server("azure"), _server("microsoft-learn", status="disconnected")],
-    ],
-)
-def test_foundry_required_session_rejects_missing_or_disconnected_server(servers) -> None:
+def test_foundry_required_run_step_stops_before_main_turn_when_shared_route_fails() -> None:
     runner = _runner()
-    session = _Session(servers)
-
-    with pytest.raises(RuntimeError, match="Foundry-required MCP"):
-        asyncio.run(runner._verify_foundry_required_session_mcp_servers(session))
-
-
-@pytest.mark.parametrize(
-    "servers",
-    [
-        [_server("azure")],
-        [_server("azure"), _server("microsoft-learn", status="disconnected")],
-    ],
-)
-def test_foundry_required_run_step_stops_before_main_turn_when_server_unavailable(
-    servers,
-) -> None:
-    runner = _runner()
-    client = _Client(servers)
+    client = _Client([])
     copilot, copilot_session = _fake_copilot_modules(client)
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -318,6 +222,19 @@ def test_foundry_required_run_step_stops_before_main_turn_when_server_unavailabl
         ), patch(
             "hve.prompt_loader.load_prompt",
             return_value="",
+        ), patch(
+            "hve.runner.discover_sdk_resources",
+            return_value=object(),
+        ), patch(
+            "hve.runner.ToolSearchPolicy",
+            new=types.SimpleNamespace(load=lambda **_kwargs: object()),
+        ), patch(
+            "hve.runner.create_routed_session",
+            new=AsyncMock(
+                side_effect=ResourceRoutingError(
+                    "required MCP server 'tenant-foundry' could not be applied"
+                )
+            ),
         ), gates[0], gates[1], gates[2], gates[3], gates[4]:
             result = asyncio.run(
                 runner.run_step(
@@ -330,16 +247,14 @@ def test_foundry_required_run_step_stops_before_main_turn_when_server_unavailabl
             )
 
     assert result is False
-    assert len(client.sessions) == 1
-    assert client.sessions[0].mcp.calls == 1
-    assert client.sessions[0].send_calls == 0
-    assert client.sessions[0].events == ["mcp.list"]
+    assert len(client.sessions) == 0
 
 
-def test_foundry_required_fanout_overrides_cannot_replace_pinned_servers() -> None:
+def test_foundry_required_fanout_overrides_cannot_replace_policy_dependency() -> None:
     runner = _runner()
     client = _Client([_server("azure"), _server("microsoft-learn")])
     copilot, copilot_session = _fake_copilot_modules(client)
+    routed_session = _Session([_server("azure"), _server("microsoft-learn")])
 
     with tempfile.TemporaryDirectory() as temp_dir:
         external_root = Path(temp_dir) / "skills"
@@ -357,7 +272,16 @@ def test_foundry_required_fanout_overrides_cannot_replace_pinned_servers() -> No
         ), patch(
             "hve.prompt_loader.load_prompt",
             return_value="",
-        ), gates[0], gates[1], gates[2], gates[3], gates[4]:
+        ), patch(
+            "hve.runner.discover_sdk_resources",
+            return_value=object(),
+        ), patch(
+            "hve.runner.ToolSearchPolicy",
+            new=types.SimpleNamespace(load=lambda **_kwargs: object()),
+        ), patch(
+            "hve.runner.create_routed_session",
+            new=AsyncMock(return_value=routed_session),
+        ) as create, gates[0], gates[1], gates[2], gates[3], gates[4]:
             result = asyncio.run(
                 runner.run_step(
                     "2.3/AGENT-1",
@@ -383,25 +307,18 @@ def test_foundry_required_fanout_overrides_cannot_replace_pinned_servers() -> No
             )
 
     assert result is True
-    options = client.create_session_kwargs[0]["mcp_servers"]
-    assert options["azure"] == {
-        "tools": ["*"],
-        "command": "npx",
-        "args": ["-y", "@azure/mcp@latest", "server", "start"],
-    }
-    assert options["microsoft-learn"] == {
-        "type": "http",
-        "url": "https://learn.microsoft.com/api/mcp",
-        "tools": ["*"],
-    }
-    assert options["context7"] == {"command": "per-key-context7"}
+    assert create.await_args is not None
+    kwargs = create.await_args.kwargs
+    assert kwargs["required_mcp_servers"] is None
+    assert "microsoft-foundry" in kwargs["required_skills"]
+    assert "mcp_servers" not in kwargs["session_options"]
+    assert client.create_session_kwargs == []
 
 
-def test_foundry_required_invalid_repository_mcp_config_stops_before_session(
+def test_foundry_required_without_repository_mcp_config_still_uses_shared_routing(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    _write_foundry_mcp_config(tmp_path, azure_config={"command": "attacker"})
     monkeypatch.chdir(tmp_path)
     runner = _runner()
     client = _Client([_server("azure"), _server("microsoft-learn")])
@@ -409,6 +326,7 @@ def test_foundry_required_invalid_repository_mcp_config_stops_before_session(
     external_root = tmp_path / "skills"
     _write_foundry_skill(external_root)
     gates = _gate_patches(runner)
+    routed_session = _Session([_server("azure"), _server("microsoft-learn")])
 
     with patch.dict(
         sys.modules,
@@ -425,7 +343,16 @@ def test_foundry_required_invalid_repository_mcp_config_stops_before_session(
     ), patch(
         "hve.runner._ensure_step_work_dir",
         return_value=tmp_path / "work" / "step",
-    ), gates[0], gates[1], gates[2], gates[3], gates[4]:
+    ), patch(
+        "hve.runner.discover_sdk_resources",
+        return_value=object(),
+    ), patch(
+        "hve.runner.ToolSearchPolicy",
+        new=types.SimpleNamespace(load=lambda **_kwargs: object()),
+    ), patch(
+        "hve.runner.create_routed_session",
+        new=AsyncMock(return_value=routed_session),
+    ) as create, gates[0], gates[1], gates[2], gates[3], gates[4]:
         result = asyncio.run(
             runner.run_step(
                 "2.3",
@@ -436,11 +363,14 @@ def test_foundry_required_invalid_repository_mcp_config_stops_before_session(
             )
         )
 
-    assert result is False
+    assert result is True
+    assert create.await_args is not None
+    assert create.await_args.kwargs["required_mcp_servers"] is None
+    assert "microsoft-foundry" in create.await_args.kwargs["required_skills"]
     assert client.create_session_kwargs == []
 
 
-def test_foundry_required_missing_repository_mcp_config_stops_before_session(
+def test_foundry_required_unknown_fanout_mcp_metadata_is_ignored_by_shared_routing(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -451,6 +381,7 @@ def test_foundry_required_missing_repository_mcp_config_stops_before_session(
     external_root = tmp_path / "skills"
     _write_foundry_skill(external_root)
     gates = _gate_patches(runner)
+    routed_session = _Session([_server("azure"), _server("microsoft-learn")])
 
     with patch.dict(
         sys.modules,
@@ -467,18 +398,40 @@ def test_foundry_required_missing_repository_mcp_config_stops_before_session(
     ), patch(
         "hve.runner._ensure_step_work_dir",
         return_value=tmp_path / "work" / "step",
-    ), gates[0], gates[1], gates[2], gates[3], gates[4]:
+    ), patch(
+        "hve.runner.discover_sdk_resources",
+        return_value=object(),
+    ), patch(
+        "hve.runner.ToolSearchPolicy",
+        new=types.SimpleNamespace(load=lambda **_kwargs: object()),
+    ), patch(
+        "hve.runner.create_routed_session",
+        new=AsyncMock(return_value=routed_session),
+    ) as create, gates[0], gates[1], gates[2], gates[3], gates[4]:
         result = asyncio.run(
             runner.run_step(
-                "2.3",
+                "2.3/AGENT-1",
                 "Foundry agent coding",
-                "T5 missing config probe",
+                "T5 fanout metadata ignore probe",
                 custom_agent="Dev-Microservice-Azure-AgentCoding",
                 workflow_id="aagd",
+                fanout_meta={
+                    "fanout_key": "AGENT-1",
+                    "base_step_id": "2.3",
+                    "per_key_mcp_servers": {
+                        "AGENT-1": {
+                            "context7": {"command": "ignored"},
+                        }
+                    },
+                },
             )
         )
 
-    assert result is False
+    assert result is True
+    assert create.await_args is not None
+    assert create.await_args.kwargs["required_mcp_servers"] is None
+    assert "microsoft-foundry" in create.await_args.kwargs["required_skills"]
+    assert "mcp_servers" not in create.await_args.kwargs["session_options"]
     assert client.create_session_kwargs == []
 
 
@@ -531,22 +484,6 @@ def test_asdw_data_deploy_never_opens_a_main_mcp_session(
     無効化する契約だったが、native 化により MCP 表面自体が存在しない
     （より強い隔離）。
     """
-    config = tmp_path / ".github" / ".mcp.json"
-    config.parent.mkdir()
-    config.write_text(
-        json.dumps(
-            {
-                "mcpServers": {
-                    "microsoft-learn": {
-                        "type": "http",
-                        "url": "https://learn.microsoft.com/api/mcp",
-                        "tools": ["*"],
-                    }
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
     monkeypatch.chdir(tmp_path)
     runner = _runner()
     monkeypatch.setenv("HVE_RUN_ID", runner.config.run_id)
@@ -613,27 +550,51 @@ def test_asdw_data_deploy_never_opens_a_main_mcp_session(
     assert client.create_session_kwargs == []
 
 
-def test_pre_qa_sub_session_applies_the_configured_workiq_timeout() -> None:
-    """事前 QA サブセッションに `workiq_request_timeout` が適用される。
-
-    `hve/orchestrator.py` の Work IQ 経路 4 箇所は `request_timeout` を渡すが、
-    runner の pre-qa サブセッションだけが渡しておらず、CLI `--workiq-request-timeout`
-    / GUI C4 / `WORKIQ_REQUEST_TIMEOUT` が Work IQ の主用途に届いていなかった。
-    """
-    config = SDKConfig(workiq_enabled=True, workiq_request_timeout=600.0)
+def test_pre_qa_sub_session_does_not_copy_deprecated_mcp_timeout() -> None:
+    """FR-KD-03: 事前 QA の sub-session は知識源を持たず、MCP request timeout も複製しない。"""
+    config = SDKConfig(workiq_enabled=True)
+    assert not hasattr(config, "workiq_request_timeout")
     runner = StepRunner(config=config, console=Console(verbose=False, quiet=True))
     with patch.object(
         runner,
         "_build_step_permission_handler",
         return_value="permission-handler",
-    ), patch("hve.runner.is_workiq_available", return_value=True):
+    ):
         options = runner._build_sub_session_opts(
             config.model,
-            include_workiq=True,
             step_id="1",
             suffix="pre-qa",
         )
 
-    server = options["mcp_servers"][WORKIQ_MCP_SERVER_NAME]
-    # Copilot SDK MCPServerConfigLocal.timeout はミリ秒 int。
-    assert server["timeout"] == 600_000
+    assert "mcp_servers" not in options
+    assert "timeout" not in options
+    assert not any("workiq" in str(tool) for tool in options.get("available_tools", []))
+
+
+def test_knowledge_discovery_session_uses_sdk_discovery_without_mcp_timeout() -> None:
+    """FR-KD-03: 知識探索セッションは SDK discovery を使い、HVE 独自の MCP 設定を作らない。"""
+    from hve import knowledge_discovery as kd
+
+    toolset = kd.DiscoveryToolset(
+        mode="qa", repo_root=Path.cwd(), run_id="r1", label="1",
+        usable=["workiq"], allowlists={"workiq": ["ask"]}, evidence=kd.SourceEvidence(),
+    )
+    options = kd.build_session_options(
+        base={"model": "m", "on_user_input_request": object()},
+        usable=["workiq"],
+        allowlists={"workiq": ["ask"]},
+        enabled_server_names=["workiq", "azure"],
+        toolset=toolset,
+        tools=[],
+        permission_handler=lambda *_: None,
+        on_event=lambda _event: None,
+    )
+
+    assert "mcp_servers" not in options
+    assert "timeout" not in options
+    assert "on_user_input_request" not in options
+    assert options["enable_config_discovery"] is True
+    assert options["disabled_mcp_servers"] == ["azure"]
+    assert "mcp:workiq-ask" in options["available_tools"]
+
+

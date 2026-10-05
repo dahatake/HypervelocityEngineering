@@ -43,10 +43,7 @@ Agent を Foundry へデプロイしただけでは、利用者のチャット�
 
 {existing_artifact_policy}
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-- Microsoft Foundry の Microsoft 365 公開手順・Bot Service 設定・Azure サービス / CLI / SDK / SKU を扱うため、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログとレポートへ記録する。
-- 利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 ## Custom Agent
 `Dev-Agent-M365Publish` を使用

@@ -218,7 +218,6 @@ async def _measure_cli_only(
 async def _measure_hve_config(
     client: Any,
     *,
-    repo_root: Path,
     permission_handler: Any,
     model: str,
     mcp_servers: Dict[str, Any],
@@ -226,26 +225,9 @@ async def _measure_hve_config(
     timeout: float,
     auto_qa: bool,
     auto_contents_review: bool,
-    workiq_enabled: bool,
-    workiq_tenant_id: Optional[str],
 ) -> Dict[str, Any]:
     phases: Dict[str, Any] = {}
-    non_fatal_warnings: List[str] = []
-
     main_mcp = dict(mcp_servers)
-    if workiq_enabled:
-        try:
-            if str(repo_root) not in sys.path:
-                sys.path.insert(0, str(repo_root))
-            from hve.workiq import build_workiq_mcp_config  # type: ignore[import]
-
-            workiq_mcp = build_workiq_mcp_config(tenant_id=workiq_tenant_id)
-            for key, value in workiq_mcp.items():
-                if key not in main_mcp:
-                    main_mcp[key] = value
-        except Exception as exc:
-            # Work IQ 設定の読み込みに失敗しても、計測自体は継続する。
-            non_fatal_warnings.append(f"workiq_mcp_setup_failed: {exc}")
 
     phases["main"] = await _measure_phase(
         client,
@@ -297,12 +279,9 @@ async def _measure_hve_config(
         "options": {
             "auto_qa": auto_qa,
             "auto_contents_review": auto_contents_review,
-            "auto_self_improve": False,
-            "workiq_enabled": workiq_enabled,
             "dry_run": False,
         },
         "phases": phases,
-        **({"warnings": non_fatal_warnings} if non_fatal_warnings else {}),
     }
     return result
 
@@ -336,7 +315,6 @@ async def _run_measurement(args: argparse.Namespace) -> Dict[str, Any]:
 
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
     model = args.model or os.environ.get("MODEL") or DEFAULT_MODEL
-    workiq_tenant_id = args.workiq_tenant_id or os.environ.get("WORKIQ_TENANT_ID")
 
     if args.cli_url:
         sdk_cfg = sdk_details["ExternalServerConfig"](url=args.cli_url)
@@ -378,7 +356,6 @@ async def _run_measurement(args: argparse.Namespace) -> Dict[str, Any]:
             try:
                 hve_configs["default"] = await _measure_hve_config(
                     client,
-                    repo_root=repo_root,
                     permission_handler=sdk_details["PermissionHandler"],
                     model=model,
                     mcp_servers=mcp_servers,
@@ -386,8 +363,6 @@ async def _run_measurement(args: argparse.Namespace) -> Dict[str, Any]:
                     timeout=args.timeout,
                     auto_qa=False,
                     auto_contents_review=False,
-                    workiq_enabled=False,
-                    workiq_tenant_id=workiq_tenant_id,
                 )
             except Exception as exc:
                 hve_configs["default"] = {"status": "measurement_failed", "error": str(exc)}
@@ -396,7 +371,6 @@ async def _run_measurement(args: argparse.Namespace) -> Dict[str, Any]:
             try:
                 hve_configs["all_features"] = await _measure_hve_config(
                     client,
-                    repo_root=repo_root,
                     permission_handler=sdk_details["PermissionHandler"],
                     model=model,
                     mcp_servers=mcp_servers,
@@ -404,8 +378,6 @@ async def _run_measurement(args: argparse.Namespace) -> Dict[str, Any]:
                     timeout=args.timeout,
                     auto_qa=True,
                     auto_contents_review=True,
-                    workiq_enabled=True,
-                    workiq_tenant_id=workiq_tenant_id,
                 )
             except Exception as exc:
                 hve_configs["all_features"] = {"status": "measurement_failed", "error": str(exc)}
@@ -436,7 +408,6 @@ def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("--cli-url", default=None)
     parser.add_argument("--mcp-config", default=None)
     parser.add_argument("--model", default=None)
-    parser.add_argument("--workiq-tenant-id", default=None)
     parser.add_argument("--prompt", default=LIGHTWEIGHT_PROMPT)
     parser.add_argument("--timeout", type=float, default=180.0)
     return parser.parse_args(argv)

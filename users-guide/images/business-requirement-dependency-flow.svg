@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 560" width="1400" height="560" role="img" aria-labelledby="title desc">
   <title id="title">要求定義ステップ依存フロー</title>
-  <desc id="desc">Step.1からStep.3の直列フローと、Step.4がStep.1以降に独立して並行実施可能な依存関係</desc>
+  <desc id="desc">Step.1からStep.3の直列フローと、Step.5（qa/ 質問票と AKM）がStep.1以降に独立して並行実施可能な依存関係</desc>
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
       <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
@@ -32,8 +32,8 @@
   <text class="white" x="940" y="170" text-anchor="middle" font-size="18">ユースケース</text>
 
   <rect class="node km" x="520" y="340" width="460" height="150"/>
-  <text class="dark" x="750" y="390" text-anchor="middle" font-size="24" font-weight="700">Step.4</text>
-  <text class="dark" x="750" y="425" text-anchor="middle" font-size="19">KnowledgeManager</text>
+  <text class="dark" x="750" y="390" text-anchor="middle" font-size="24" font-weight="700">Step.5</text>
+  <text class="dark" x="750" y="425" text-anchor="middle" font-size="19">qa/ 質問票 + AKM</text>
   <text class="dark" x="750" y="455" text-anchor="middle" font-size="16">（Step.1 以降に並行実施可能）</text>
 
   <line class="line" x1="340" y1="155" x2="430" y2="155"/>

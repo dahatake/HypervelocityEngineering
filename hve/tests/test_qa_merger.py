@@ -1204,9 +1204,9 @@ class TestRenderMergedMultilineCells(unittest.TestCase):
     """FR-QA-03: 複数行セルでも回答済み QA の往復構造を壊さない。"""
 
     @staticmethod
-    def _make_doc(workiq_answer: str) -> QADocument:
+    def _make_doc(research_answer: str) -> QADocument:
         doc = QADocument(
-            title="Work IQ 複数行テスト",
+            title="調査回答 複数行テスト",
             status="回答待ち",
             header_fields=[("状態", "回答待ち")],
             questions=[
@@ -1215,8 +1215,9 @@ class TestRenderMergedMultilineCells(unittest.TestCase):
                     no=2,
                     question="質問2",
                     default_answer="B. 回答2",
-                    workiq_answer=workiq_answer,
-                    workiq_reason="Work IQ 調査結果",
+                    research_answer=research_answer,
+                    research_status="Tentative",
+                    research_sources="S1, S2",
                 ),
                 QAQuestion(no=3, question="質問3", default_answer="C. 回答3"),
             ],
@@ -1234,9 +1235,9 @@ class TestRenderMergedMultilineCells(unittest.TestCase):
         )
         return [line for line in lines[header_index + 2:] if line]
 
-    def test_multiline_workiq_answer_keeps_one_physical_row_per_question(self) -> None:
+    def test_multiline_research_answer_keeps_one_physical_row_per_question(self) -> None:
         doc = self._make_doc(
-            "STATUS: FOUND\n| 種別 | 情報ソース |\n|---|---|\n| ファイル | 仕様書 |"
+            "調査結果\n| 種別 | 情報ソース |\n|---|---|\n| ファイル | 仕様書 |"
         )
 
         rendered = QAMerger.render_merged(doc)
@@ -1247,24 +1248,25 @@ class TestRenderMergedMultilineCells(unittest.TestCase):
             [line.split("|", 2)[1].strip() for line in body_lines],
             ["1", "2", "3"],
         )
-        self.assertIn("STATUS: FOUND", body_lines[1])
+        self.assertIn("調査結果", body_lines[1])
+        self.assertIn("| Tentative | S1, S2 |", body_lines[1])
 
     def test_crlf_cr_lf_and_pipe_are_safe_in_one_table_cell(self) -> None:
         """採用済み D1=A: 改行は `<br>`、pipe は entity へ変換する。"""
         doc = self._make_doc(
-            "STATUS: PARTIAL\r\nalpha\rbeta\ngamma | delta"
+            "部分的\r\nalpha\rbeta\ngamma | delta"
         )
 
         rendered = QAMerger.render_merged(doc)
         body_lines = self._table_body_lines(rendered)
 
         self.assertNotIn("\r", rendered)
-        self.assertIn("STATUS: PARTIAL<br>alpha<br>beta<br>gamma &#124; delta", body_lines[1])
+        self.assertIn("部分的<br>alpha<br>beta<br>gamma &#124; delta", body_lines[1])
         self.assertEqual(len(body_lines), 3)
 
     def test_render_save_parse_validate_round_trip_preserves_questions_and_answers(self) -> None:
         doc = self._make_doc(
-            "STATUS: FOUND\n| 種別 | 情報ソース |\n| ファイル | 要件定義書 |"
+            "調査結果\n| 種別 | 情報ソース |\n| ファイル | 要件定義書 |"
         )
         rendered = QAMerger.render_merged(doc)
 
@@ -1281,14 +1283,16 @@ class TestRenderMergedMultilineCells(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual([q.no for q in reparsed.questions], [1, 2, 3])
         self.assertTrue(all((q.user_answer or "").strip() for q in reparsed.questions))
-        self.assertIn("STATUS: FOUND", reparsed.questions[1].workiq_answer)
-        self.assertIn("<br>", reparsed.questions[1].workiq_answer)
-        self.assertIn("&#124;", reparsed.questions[1].workiq_answer)
-        self.assertIn("要件定義書", reparsed.questions[1].workiq_answer)
+        self.assertIn("調査結果", reparsed.questions[1].research_answer)
+        self.assertIn("<br>", reparsed.questions[1].research_answer)
+        self.assertIn("&#124;", reparsed.questions[1].research_answer)
+        self.assertIn("要件定義書", reparsed.questions[1].research_answer)
+        self.assertEqual(reparsed.questions[1].research_status, "Tentative")
+        self.assertEqual(reparsed.questions[1].research_sources, "S1, S2")
 
-    def test_render_parse_render_is_stable_for_multiline_workiq_answer(self) -> None:
+    def test_render_parse_render_is_stable_for_multiline_research_answer(self) -> None:
         rendered = QAMerger.render_merged(
-            self._make_doc("STATUS: FOUND\nline 1\nline 2 | value")
+            self._make_doc("調査結果\nline 1\nline 2 | value")
         )
 
         reparsed = QAMerger.parse_qa_content(rendered)
@@ -1296,71 +1300,57 @@ class TestRenderMergedMultilineCells(unittest.TestCase):
         self.assertEqual(QAMerger.render_merged(reparsed), rendered)
 
 
-class TestMergeWorkiqResultsStatusSkip(unittest.TestCase):
-    """STATUS: NOT_FOUND / UNAVAILABLE 応答は workiq_answer にセットされないこと。"""
+class TestAdoptResearchAnswers(unittest.TestCase):
+    """FR-KD-06: Confirmed / Tentative の調査回答だけを採用し、それ以外は既定値候補を使う。"""
 
     def _make_doc(self) -> QADocument:
-        return QADocument(questions=[
-            QAQuestion(no=1, question="質問1"),
-            QAQuestion(no=2, question="質問2"),
-            QAQuestion(no=3, question="質問3"),
-            QAQuestion(no=4, question="質問4"),
-        ])
+        return QADocument(
+            status="回答待ち",
+            header_fields=[("状態", "回答待ち")],
+            questions=[
+                QAQuestion(no=1, question="質問1", default_answer="A. 既定1",
+                           research_answer="確認済み回答", research_status="Confirmed", research_sources="S1"),
+                QAQuestion(no=2, question="質問2", default_answer="B. 既定2",
+                           research_answer="推測回答", research_status="Tentative", research_sources="S2"),
+                QAQuestion(no=3, question="質問3", default_answer="C. 既定3",
+                           research_answer="不明", research_status="Unknown"),
+                QAQuestion(no=4, question="質問4", default_answer="D. 既定4",
+                           research_answer="   ", research_status="Confirmed"),
+                QAQuestion(no=5, question="質問5", default_answer="E. 既定5"),
+            ],
+        )
 
-    def test_not_found_skipped(self) -> None:
+    def test_adopts_only_confirmed_or_tentative_non_empty_answers(self) -> None:
         doc = self._make_doc()
-        results = {1: "STATUS: NOT_FOUND\n関連情報なし"}
-        merged = QAMerger.merge_workiq_results(doc, results)
-        self.assertEqual(merged.questions[0].workiq_answer, "")
+        merged, adopted = QAMerger.adopt_research_answers(doc)
+        self.assertEqual(adopted, 2)
+        self.assertEqual(
+            [q.user_answer for q in merged.questions],
+            ["確認済み回答", "推測回答", "C. 既定3", "D. 既定4", "E. 既定5"],
+        )
+        self.assertEqual(merged.status, "回答済み")
+        self.assertEqual(dict(merged.header_fields)["状態"], "回答済み")
+        self.assertFalse(doc.questions[0].user_answer)
 
-    def test_unavailable_skipped(self) -> None:
-        doc = self._make_doc()
-        results = {2: "STATUS: UNAVAILABLE\nツール未接続"}
-        merged = QAMerger.merge_workiq_results(doc, results)
-        self.assertEqual(merged.questions[1].workiq_answer, "")
+    def test_inserts_status_header_when_missing(self) -> None:
+        doc = QADocument(questions=[QAQuestion(no=1, question="質問1", default_answer="A")])
+        merged, adopted = QAMerger.adopt_research_answers(doc)
+        self.assertEqual(adopted, 0)
+        self.assertEqual(merged.header_fields[0], ("状態", "回答済み"))
 
-    def test_found_sets_workiq_answer(self) -> None:
-        doc = self._make_doc()
-        results = {3: "STATUS: FOUND\n| メール | 件名: 議事録 | 2026-04-20 | Outlook | 関連あり |"}
-        merged = QAMerger.merge_workiq_results(doc, results)
-        self.assertNotEqual(merged.questions[2].workiq_answer, "")
+    def test_legacy_workiq_columns_are_read_as_research_columns(self) -> None:
+        content = (
+            "# QA\n\n## 質問項目\n\n"
+            "| No. | 質問 | 選択肢 | 既定値候補 | 既定値候補の理由 | Work IQ 回答案 | Work IQ 理由 | ユーザー回答 |\n"
+            "|-----|------|--------|-----------|----------------|----------------|--------------|------------|\n"
+            "| 1 | 質問1 | A) x | A | 理由 | 旧回答 | 旧理由 |  |\n"
+        )
+        doc = QAMerger.parse_qa_content(content)
+        self.assertEqual(doc.questions[0].research_answer, "旧回答")
+        self.assertEqual(doc.questions[0].research_sources, "旧理由")
 
-    def test_partial_sets_workiq_answer(self) -> None:
-        doc = self._make_doc()
-        results = {4: "STATUS: PARTIAL\n| メール | 件名: 部分的な結果 | 2026-04-21 | Outlook | 一部のみ |"}
-        merged = QAMerger.merge_workiq_results(doc, results)
-        self.assertNotEqual(merged.questions[3].workiq_answer, "")
-
-    def test_case_insensitive_not_found_skipped(self) -> None:
-        doc = self._make_doc()
-        results = {1: "status: not_found\n関連情報なし"}
-        merged = QAMerger.merge_workiq_results(doc, results)
-        self.assertEqual(merged.questions[0].workiq_answer, "")
-
-    def test_partial_with_unperformed_search_note_is_merged(self) -> None:
-        """本文に「未実施」を含む PARTIAL 応答も統合される（FR-QA-03）。
-
-        Work IQ が「どの追加検索を行わなかったか」を説明する文脈で「未実施」を
-        使うことがあり、これを Work IQ の利用不能と誤判定してはならない。
-        呼び出し元 (`hve/runner.py`) は `is_workiq_result_mergeable` で
-        tool 実行確認済み + status FOUND/PARTIAL の結果だけを渡している。
-        """
-        doc = self._make_doc()
-        results = {
-            4: (
-                "STATUS: PARTIAL\n"
-                "\n"
-                "| 種別 | 情報ソース | 日時 | パス/場所 | 関連観点 |\n"
-                "|---|---|---:|---|---|\n"
-                "| メール | 件名: 設計レビュー | 2026-07-10 | Outlook | 設計レビューの実施予定 |\n"
-                "\n"
-                "**補足**:\n"
-                "- 「構成図」等のキーワードでのファイル深掘り検索は今回未実施。"
-                "追加検索で設計書自体が見つかる可能性は残る。"
-            )
-        }
-        merged = QAMerger.merge_workiq_results(doc, results)
-        self.assertNotEqual(merged.questions[3].workiq_answer, "")
+    def test_merge_workiq_results_is_removed(self) -> None:
+        self.assertFalse(hasattr(QAMerger, "merge_workiq_results"))
 
 
 if __name__ == "__main__":

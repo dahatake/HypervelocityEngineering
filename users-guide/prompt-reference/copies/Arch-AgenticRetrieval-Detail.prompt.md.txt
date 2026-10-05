@@ -7,25 +7,15 @@
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 
 - `.github/skills/agent-common-preamble/SKILL.md`
-- `.github/skills/task-dag-planning/SKILL.md`
 - `.github/skills/work-artifacts-layout/SKILL.md`
 - `.github/skills/app-scope-resolution/SKILL.md`
-- `.github/skills/mcp-server-design/SKILL.md`
 - `.github/skills/task-questionnaire/SKILL.md`
-- `.github/skills/output/large-output-chunking/SKILL.md`
+- `.github/skills/large-output-chunking/SKILL.md`
 
 # 1) 参照順序（最優先の根拠）
 
@@ -49,7 +39,8 @@
   - columns: `serviceId | serviceName | status(Draft/Done) | docPath | notes | updatedAt(YYYY-MM-DD)`
   - 更新時は既存ファイルを削除してから新規作成する（追記・上書きは禁止）
 
-## 2.3 計画ファイル（必須）
+## 2.3 計画ファイル
+- 計画を書く場合は Skill `task-dag-planning` に従う。
 - `{WORK}plan.md`
   - 対象サービス一覧・判定根拠（参照ファイル + 抜粋）・判定キーワードヒット箇所を必ず記載
 
@@ -57,28 +48,14 @@
 - `{WORK}issue-prompt-<NNN>.md`
   - 各ファイルに「対象 serviceId 一覧」を必ず明記（重複防止）
 
-# 3) 実行フロー（task_scope/context_size 判定ベース）
+# 3) 実行フロー
 
 ## 3.1 準備
 1. `{WORK}` が無ければ作る（Skill `work-artifacts-layout` の規約に従う）。
 2. 参照ファイルを読み、サービス一覧（serviceId/serviceName）を確定する。
 3. 判定結果の根拠（どのファイルから確定したか）を `{WORK}plan.md` に残す。
 
-## 3.2 計画（plan.md メタデータ規約必須）
-- Skill `task-dag-planning` のフォーマットに従い、DAG+見積を `{WORK}plan.md` に作る。
-- **plan.md 作成時の必須手順（省略禁止）**:
-  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
-  2. plan.md の **1-5 行目** に以下の HTML コメントメタデータを記載する:
-     ```
-     <!-- task_scope: single|multi -->
-     <!-- context_size: small|medium|large -->
-     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
-     <!-- subissues_count: N -->
-     <!-- implementation_files: false -->
-     ```
-     （このエージェントは設計フェーズ専用のため `implementation_files` は常に `false`）
-  3. plan.md 本文に `## 分割判定` セクションを含める
-  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
+## 3.2 計画
 
 ## 3.3 自動判定（Q1=`auto` 時に実行、`yes`/`no` 時はスキップ可）
 
@@ -151,11 +128,11 @@
 - 前提不足や追加確認が必要な点
 - 10 件を超える場合は影響度（高/中/低）で優先順位付けし、上位 10 件のみ記載する。残りは `{WORK}plan.md` の「未決事項補足」セクションへ移す
 
-## 3.5 最終品質レビュー（単回インライン・セルフチェック）
+## 3.5 受入観点（完了条件の補足）
 
-### 3.5.1 セルフチェック契約
+### 3.5.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ### 3.5.2 ドメイン固有観点
 - **機能完全性・要件達成度** — 章立てが全 8 章揃い、判定根拠が記録されているか
@@ -163,9 +140,9 @@
 - **保守性・拡張性・堅牢性** — 根拠が明確で、重複行がなく、再実行に耐えられるか
 
 ### 3.5.3 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
-## 3.6 残作業の切り出し（必須）
+## 3.6 残作業の切り出し
 - 未処理サービスが残る場合:
   - `{WORK}issue-prompt-<NNN>.md` を作り、次バッチの「対象 serviceId 一覧」「読むべき根拠」「成果物パス」「完了条件」を短く書く。
   - その時点で作業を止める（1タスク=1PR の制約に従う）。

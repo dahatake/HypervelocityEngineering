@@ -1,68 +1,77 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 320" role="img" aria-label="AAD-WEB 5ステップチェーン図">
-  <desc>AAD-WEB（Web App Design）: 5ステップ。Step.1 Arch-UI-List → Step.2.1 Arch-UI-Detail（並列）+ Step.2.2 Arch-Microservice-ServiceDetail → Step.2.3 Arch-TDD-TestSpec（サービス）+ Step.2.4 Arch-TDD-TestSpec（画面）（並列）</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 420" role="img" aria-labelledby="title desc">
+  <title id="title">AAD-WEB チェーン図</title>
+  <desc id="desc">AAD-WEB の現行 8 Step。Step 1 から Step 2.1 / 2.2 へ分岐し、Step 2.3 / 2.4 を経て Step 3 へ合流する。Step 2.5 と 2.6 は Step 2.2 から独立して派生し、Step 3 の依存には含まれない。Step 2.6 は設定により無効化できる。</desc>
   <defs>
     <marker id="arr" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
-      <polygon points="0 0, 9 3.5, 0 7" fill="#555"/>
+      <polygon points="0 0, 9 3.5, 0 7" fill="#475569"/>
     </marker>
   </defs>
   <style>
-    text { font-family: "Segoe UI", "Noto Sans JP", Arial, sans-serif; }
-    .box  { fill: #4A90D9; stroke: #1f3a5a; stroke-width: 1.5; }
-    .par  { fill: #8B5CF6; stroke: #4a1d96; stroke-width: 1.5; }
-    .out  { fill: #E8A838; stroke: #8B5A00; stroke-width: 1.5; }
-    .ln   { stroke: #555; stroke-width: 1.5; fill: none; marker-end: url(#arr); }
-    .bt   { fill: white; font-weight: bold; font-size: 10px; }
-    .bs   { fill: white; font-size: 9px; }
-    .ttl  { font-size: 15px; font-weight: bold; fill: #1f3a5a; }
-    .note { font-size: 10px; fill: #666; font-style: italic; }
+    text { font-family: "Segoe UI", "Noto Sans JP", Arial, sans-serif; fill: #0f172a; }
+    .title { font-size: 18px; font-weight: 700; }
+    .note { font-size: 11px; fill: #475569; }
+    .box { rx: 8; ry: 8; stroke-width: 1.6; }
+    .root { fill: #dbeafe; stroke: #1d4ed8; }
+    .parallel { fill: #ede9fe; stroke: #7c3aed; }
+    .review { fill: #dcfce7; stroke: #15803d; }
+    .optional { fill: #fef3c7; stroke: #d97706; }
+    .text1 { font-size: 12px; font-weight: 700; }
+    .text2 { font-size: 10px; }
+    .line { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#arr); }
   </style>
-  <text x="400" y="28" text-anchor="middle" class="ttl">AAD-WEB — Web App Design（5ステップ、並列2箇所）</text>
-  <!-- Step 1 -->
-  <rect x="40" y="80" width="120" height="58" rx="5" class="box"/>
-  <text x="100" y="100" text-anchor="middle" class="bt">Step.1</text>
-  <text x="100" y="113" text-anchor="middle" class="bs">Arch-UI-List</text>
-  <text x="100" y="126" text-anchor="middle" class="bs">（画面一覧）</text>
-  <!-- Fork to 2.1 and 2.2 -->
-  <line x1="160" y1="109" x2="200" y2="90" class="ln"/>
-  <line x1="160" y1="109" x2="200" y2="145" class="ln"/>
-  <!-- Step 2.1 (parallel) -->
-  <rect x="200" y="62" width="130" height="55" rx="5" class="par"/>
-  <text x="265" y="81" text-anchor="middle" class="bt">Step.2.1（並列）</text>
-  <text x="265" y="94" text-anchor="middle" class="bs">Arch-UI-Detail</text>
-  <text x="265" y="107" text-anchor="middle" class="bs">（画面定義書）</text>
-  <!-- Step 2.2 (parallel) -->
-  <rect x="200" y="122" width="130" height="55" rx="5" class="par"/>
-  <text x="265" y="141" text-anchor="middle" class="bt">Step.2.2（並列）</text>
-  <text x="265" y="154" text-anchor="middle" class="bs">Arch-Microservice</text>
-  <text x="265" y="167" text-anchor="middle" class="bs">ServiceDetail</text>
-  <!-- Edges 2.1 → 2.4 (top) and 2.2 → 2.3 (bottom) -->
-  <line x1="330" y1="89" x2="370" y2="89" class="ln"/>
-  <line x1="330" y1="149" x2="370" y2="149" class="ln"/>
-  <!-- Step 2.4 (parallel, screen test-spec) -->
-  <rect x="370" y="62" width="130" height="55" rx="5" class="par"/>
-  <text x="435" y="81" text-anchor="middle" class="bt">Step.2.4（並列）</text>
-  <text x="435" y="94" text-anchor="middle" class="bs">Arch-TDD-TestSpec</text>
-  <text x="435" y="107" text-anchor="middle" class="bs">（画面 test-spec）</text>
-  <!-- Step 2.3 (parallel, service test-spec) -->
-  <rect x="370" y="122" width="130" height="55" rx="5" class="par"/>
-  <text x="435" y="141" text-anchor="middle" class="bt">Step.2.3（並列）</text>
-  <text x="435" y="154" text-anchor="middle" class="bs">Arch-TDD-TestSpec</text>
-  <text x="435" y="167" text-anchor="middle" class="bs">（サービス test-spec）</text>
-  <!-- Output (merge from 2.3 and 2.4) -->
-  <line x1="500" y1="89" x2="530" y2="120" class="ln"/>
-  <line x1="500" y1="149" x2="530" y2="138" class="ln"/>
-  <rect x="530" y="103" width="150" height="52" rx="5" class="out"/>
-  <text x="605" y="123" text-anchor="middle" class="bt" style="fill:white;">成果物</text>
-  <text x="605" y="136" text-anchor="middle" class="bs" style="fill:white;">docs/test-specs/</text>
-  <text x="605" y="149" text-anchor="middle" class="bs" style="fill:white;">{id}-test-spec.md</text>
-  <!-- Parallel note -->
-  <text x="265" y="205" text-anchor="middle" class="note">Step.2.1 / 2.2 は並列、Step.2.3 / 2.4 も並列</text>
-  <text x="265" y="220" text-anchor="middle" class="note">Step.2.4 ← Step.2.1（画面）、Step.2.3 ← Step.2.2（サービス）</text>
-  <!-- Legend -->
-  <rect x="40" y="255" width="14" height="14" rx="3" class="box"/>
-  <text x="60" y="266" style="font-size:11px;fill:#333;">直列 Prompt</text>
-  <rect x="200" y="255" width="14" height="14" rx="3" class="par"/>
-  <text x="220" y="266" style="font-size:11px;fill:#333;">並列 Prompt</text>
-  <rect x="360" y="255" width="14" height="14" rx="3" class="out"/>
-  <text x="380" y="266" style="font-size:11px;fill:#333;">成果物（出力）</text>
+
+  <text x="490" y="30" text-anchor="middle" class="title">AAD-WEB — Web App Design（現行 8 Step）</text>
+
+  <rect x="36" y="92" width="150" height="62" class="box root"/>
+  <text x="111" y="118" text-anchor="middle" class="text1">Step 1</text>
+  <text x="111" y="135" text-anchor="middle" class="text2">画面一覧と遷移図</text>
+  <text x="111" y="149" text-anchor="middle" class="text2">Arch-UI-List</text>
+
+  <rect x="240" y="54" width="170" height="62" class="box parallel"/>
+  <text x="325" y="80" text-anchor="middle" class="text1">Step 2.1</text>
+  <text x="325" y="97" text-anchor="middle" class="text2">画面定義書</text>
+  <text x="325" y="111" text-anchor="middle" class="text2">Arch-UI-Detail</text>
+
+  <rect x="240" y="132" width="170" height="62" class="box parallel"/>
+  <text x="325" y="158" text-anchor="middle" class="text1">Step 2.2</text>
+  <text x="325" y="175" text-anchor="middle" class="text2">マイクロサービス定義書</text>
+  <text x="325" y="189" text-anchor="middle" class="text2">Arch-Microservice-ServiceDetail</text>
+
+  <rect x="476" y="54" width="170" height="62" class="box parallel"/>
+  <text x="561" y="80" text-anchor="middle" class="text1">Step 2.4</text>
+  <text x="561" y="97" text-anchor="middle" class="text2">画面別 TDD テスト仕様</text>
+  <text x="561" y="111" text-anchor="middle" class="text2">Arch-TDD-TestSpec</text>
+
+  <rect x="476" y="132" width="170" height="62" class="box parallel"/>
+  <text x="561" y="158" text-anchor="middle" class="text1">Step 2.3</text>
+  <text x="561" y="175" text-anchor="middle" class="text2">サービス別 TDD テスト仕様</text>
+  <text x="561" y="189" text-anchor="middle" class="text2">Arch-TDD-TestSpec</text>
+
+  <rect x="476" y="228" width="170" height="62" class="box optional"/>
+  <text x="561" y="254" text-anchor="middle" class="text1">Step 2.5</text>
+  <text x="561" y="271" text-anchor="middle" class="text2">追加 Azure サービス選定</text>
+  <text x="561" y="285" text-anchor="middle" class="text2">Dev-Microservice-Azure-AddServiceDesign</text>
+
+  <rect x="476" y="306" width="170" height="62" class="box optional"/>
+  <text x="561" y="332" text-anchor="middle" class="text1">Step 2.6</text>
+  <text x="561" y="349" text-anchor="middle" class="text2">Agentic Retrieval 機能要件</text>
+  <text x="561" y="363" text-anchor="middle" class="text2">設定で無効化可</text>
+
+  <rect x="724" y="92" width="188" height="62" class="box review"/>
+  <text x="818" y="118" text-anchor="middle" class="text1">Step 3</text>
+  <text x="818" y="135" text-anchor="middle" class="text2">画面 ↔ サービス整合性レビュー</text>
+  <text x="818" y="149" text-anchor="middle" class="text2">QA-DocConsistency</text>
+
+  <path d="M186 122 L240 86" class="line"/>
+  <path d="M186 124 L240 164" class="line"/>
+  <path d="M410 86 L476 86" class="line"/>
+  <path d="M410 164 L476 164" class="line"/>
+  <path d="M410 164 L476 258" class="line"/>
+  <path d="M410 164 L476 336" class="line"/>
+  <path d="M646 86 L724 108" class="line"/>
+  <path d="M646 164 L724 138" class="line"/>
+
+  <text x="818" y="210" text-anchor="middle" class="note">Step 3 の依存は 2.1 / 2.2 / 2.3 / 2.4 のみ</text>
+  <text x="818" y="228" text-anchor="middle" class="note">Step 2.5 / 2.6 は Step 2.2 から独立して派生</text>
+  <text x="490" y="394" text-anchor="middle" class="note">主成果物: docs/screen/、docs/services/、docs/test-specs/、docs/azure/azure-services-additional.md、docs/services/{serviceId}-agentic-retrieval-spec.md、docs/catalog/screen-service-consistency-report.md</text>
 </svg>

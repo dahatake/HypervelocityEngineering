@@ -5,19 +5,10 @@
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
-
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
 - **Azure OpenAI Service の直接利用禁止**: AI/LLM カテゴリでチャットボット / Prompt 処理 / AI Agent 要件が検出された場合、Azure OpenAI を独立した第一候補・代替案として記載してはならない（§3.1 ルール）。Foundry resource 経由のモデル参照のみ許容。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 
@@ -43,13 +34,13 @@ Foundry Project は名前・location・作成方針を**定義するだけ**で�
   - `docs/azure/azure-services-data.md`
 
 ## APP-ID スコープ → Skill `app-scope-resolution` を参照
-# Outputs（必須）
+# Outputs
 - 追加サービス設計（本成果物）:
   - `docs/azure/azure-services-additional.md`
 - 進捗ログ（追記）:
   - `{WORK}additional-azureservices-design-work-status.md`
-- 分割が必要な場合（Skill task-dag-planning の方式に合わせる）:
   - `{WORK}plan.md`
+- 計画を書く場合は Skill `task-dag-planning` に従う。
   - `{WORK}subissues.md`
 
 # Workflow（このエージェント固有）
@@ -57,11 +48,7 @@ Foundry Project は名前・location・作成方針を**定義するだけ**で�
 - 不足情報は「要確認」と明記し、暫定案を作って進む（質問だけで停止しない）。
 - Microsoft Learn の URL が取れない場合は「要確認（要: Microsoft Learn確認）」と書く。
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 ### Microsoft Foundry 選定時の external meta skill 利用（AI/LLM 該当時のみ）
 
@@ -159,7 +146,7 @@ Foundry Project は名前・location・作成方針を**定義するだけ**で�
 - Model versions: https://learn.microsoft.com/azure/foundry/foundry-models/concepts/model-versions
 - Foundry IQ knowledge base 接続: https://learn.microsoft.com/azure/foundry/agents/how-to/foundry-iq-connect
 
-## 4) Microsoft Learn 根拠（必須）
+## 4) Microsoft Learn 根拠
 - 第一候補ごとに Microsoft Learn を最低1件参照し、以下を **短く**書く（3〜6行程度）：
   - 何ができるか（該当機能）
   - この要件にどう効くか（結び付け）
@@ -169,11 +156,11 @@ Foundry Project は名前・location・作成方針を**定義するだけ**で�
 ## 5) 成果物を作成（フォーマット固定）
 `docs/azure/azure-services-additional.md` は次の構造を崩さない：
 
-## 6) 最終品質レビュー（単回インライン・セルフチェック）
+## 6) 受入観点（完了条件の補足）
 
-### 6.1 セルフチェック契約
+### 6.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ### 6.2 ドメイン固有観点
 - **機能完全性・要件達成度**：全カテゴリのサービスが第一候補として選定され、既存採用済みとの重複がなく、Microsoft Learn 根拠が残っているか。AI/LLM・検索カテゴリは §3.1 の強制ルール、判定対象セクション、誤検知防止、live確認契約に準拠しているか
@@ -181,7 +168,7 @@ Foundry Project は名前・location・作成方針を**定義するだけ**で�
 - **保守性・拡張性・堅牢性**：URL が有効か、「要確認」マークが妥当か、未決事項が最小限か
 
 ### 6.3 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 # Azure 追加サービス設計（{ユースケースID}）
 

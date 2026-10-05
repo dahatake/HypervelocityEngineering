@@ -1,9 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="880" viewBox="0 0 1700 880" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 760" role="img" aria-labelledby="title desc">
   <title id="title">ASDW-WEB データフロー図</title>
-  <desc id="desc">入力ファイルからPromptタスクを経由して出力ファイルへ到達する関係を示す。</desc>
+  <desc id="desc">ASDW-WEB の代表的な current file flows。コンテナごとに主要な入力、Prompt、出力の例を示す。</desc>
   <style>
     text { font-family: "Trebuchet MS", Verdana, Arial, sans-serif; fill: #1f2937; }
-    .title { font-size: 28px; font-weight: 700; }
+    .title { font-size: 26px; font-weight: 700; }
     .subtitle { font-size: 15px; fill: #4b5563; }
     .col-title { font-size: 18px; font-weight: 700; }
     .card { rx: 9; ry: 9; stroke-width: 2; }
@@ -12,87 +12,56 @@
     .output { fill: #ede9fe; stroke: #6d28d9; }
     .label { font-size: 13px; }
     .step { font-size: 12px; fill: #334155; }
-    .arrow { stroke: #334155; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
-    .legend { fill: #fff7ed; stroke: #c2410c; stroke-width: 2; rx: 10; ry: 10; }
   </style>
-  <defs>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L9,3 z" fill="#334155"/>
-    </marker>
-  </defs>
+  <rect width="1500" height="760" fill="#ffffff"/>
+  <text x="40" y="48" class="title">ASDW-WEB データフロー（代表的な current file flows）</text>
+  <text x="40" y="76" class="subtitle">各行は 1 コンテナの代表 Step を示します。全 Step の依存は users-guide と workflow_registry.py を参照してください。</text>
+  <text x="120" y="126" class="col-title">入力ファイル</text>
+  <text x="700" y="126" class="col-title">Prompt（タスク）</text>
+  <text x="1180" y="126" class="col-title">出力ファイル</text>
 
-  <text x="40" y="50" class="title">ASDW-WEB データフロー（入力 → Agent → 出力）</text>
-  <text x="40" y="78" class="subtitle">読み順: 上から下。各行は「1 Step の代表的なファイルフロー」を示す。</text>
+  <rect class="card input" x="60" y="156" width="460" height="70"/>
+  <text class="label" x="80" y="184">docs/catalog/data-model.md / domain-analytics.md / service-catalog.md / app-catalog.md</text>
+  <rect class="card agent" x="620" y="156" width="330" height="70"/>
+  <text class="label" x="640" y="184">Step 1.1 — Dev-Microservice-Azure-DataDesign</text>
+  <text class="step" x="640" y="206">データストア選定</text>
+  <rect class="card output" x="1060" y="156" width="380" height="70"/>
+  <text class="label" x="1080" y="198">docs/azure/azure-services-data.md</text>
 
-  <text x="120" y="130" class="col-title">入力ファイル</text>
-  <text x="740" y="130" class="col-title">Prompt（タスク）</text>
-  <text x="1260" y="130" class="col-title">出力ファイル</text>
+  <rect class="card input" x="60" y="252" width="460" height="86"/>
+  <text class="label" x="80" y="280">docs/catalog/use-case-catalog.md / service-catalog.md / app-catalog.md</text>
+  <text class="label" x="80" y="302">docs/azure/azure-services-data.md / docs/azure/azure-services-compute.md</text>
+  <rect class="card agent" x="620" y="252" width="330" height="86"/>
+  <text class="label" x="640" y="280">Step 2.1 — Dev-Microservice-Azure-AddServiceDesign</text>
+  <text class="step" x="640" y="302">AAD-WEB 2.5 の成果物への差分追記</text>
+  <rect class="card output" x="1060" y="252" width="380" height="86"/>
+  <text class="label" x="1080" y="294">docs/azure/azure-services-additional.md</text>
 
-  <!-- Row 1 -->
-  <rect class="card input" x="60" y="170" width="500" height="72"/>
-  <text class="label" x="80" y="198">docs/catalog/data-model.md</text>
-  <text class="label" x="80" y="220">docs/catalog/service-catalog.md / domain-analytics.md</text>
-  <rect class="card agent" x="650" y="170" width="420" height="72"/>
-  <text class="label" x="670" y="198">Dev-Microservice-Azure-DataDesign</text>
-  <text class="step" x="670" y="220">Step.1.1</text>
-  <rect class="card output" x="1160" y="170" width="500" height="72"/>
-  <text class="label" x="1180" y="210">docs/azure/azure-services-data.md</text>
+  <rect class="card input" x="60" y="364" width="460" height="86"/>
+  <text class="label" x="80" y="392">docs/services/{serviceId}-*-description.md / docs/test-specs/{serviceId}-test-spec.md</text>
+  <text class="label" x="80" y="414">docs/catalog/service-catalog.md / service-catalog-matrix.md / app-catalog.md</text>
+  <rect class="card agent" x="620" y="364" width="330" height="86"/>
+  <text class="label" x="640" y="392">Step 3.2 / 3.3 — ServiceTestCoding → ServiceCoding-AzureFunctions</text>
+  <text class="step" x="640" y="414">サービス fan-out（ownership_parallel=4 対象）</text>
+  <rect class="card output" x="1060" y="364" width="380" height="86"/>
+  <text class="label" x="1080" y="392">src/test/api/{serviceId}.Tests/</text>
+  <text class="label" x="1080" y="414">src/api/{serviceId}-{serviceNameSlug}/</text>
 
-  <!-- Row 2 -->
-  <rect class="card input" x="60" y="270" width="500" height="72"/>
-  <text class="label" x="80" y="298">docs/test-specs/{serviceId}-test-spec.md</text>
-  <text class="label" x="80" y="320">docs/services/ / service-catalog-matrix.md</text>
-  <rect class="card agent" x="650" y="270" width="420" height="72"/>
-  <text class="label" x="670" y="298">Dev-Microservice-Azure-ServiceTestCoding</text>
-  <text class="step" x="670" y="320">Step.2.3TC</text>
-  <rect class="card output" x="1160" y="270" width="500" height="72"/>
-  <text class="label" x="1180" y="310">test/api/{ServiceName}.Tests/</text>
+  <rect class="card input" x="60" y="476" width="460" height="86"/>
+  <text class="label" x="80" y="504">src/app/package.json / Step 3.5 post-deploy 成果物 / 既存 SWA workflow</text>
+  <text class="label" x="80" y="526">resource_group / static_web_app_name</text>
+  <rect class="card agent" x="620" y="476" width="330" height="86"/>
+  <text class="label" x="640" y="504">Step 4.3 — UIDeploy-AzureStaticWebApps</text>
+  <text class="step" x="640" y="526">repository-managed workflow を実行</text>
+  <rect class="card output" x="1060" y="476" width="380" height="86"/>
+  <text class="label" x="1080" y="518">create / verify / switch / rollback の実行証跡</text>
 
-  <!-- Row 3 -->
-  <rect class="card input" x="60" y="370" width="500" height="72"/>
-  <text class="label" x="80" y="398">docs/catalog/service-catalog.md</text>
-  <text class="label" x="80" y="420">src/api/ / resource_group</text>
-  <rect class="card agent" x="650" y="370" width="420" height="72"/>
-  <text class="label" x="670" y="398">Dev-Microservice-Azure-ComputeDeploy-AzureFunctions</text>
-  <text class="step" x="670" y="420">Step.2.5</text>
-  <rect class="card output" x="1160" y="370" width="500" height="72"/>
-  <text class="label" x="1180" y="398">infra/azure/create-azure-api-resources-prep.sh</text>
-  <text class="label" x="1180" y="420">infra/azure/verify-api-resources.sh</text>
-
-  <!-- Row 4 -->
-  <rect class="card input" x="60" y="470" width="500" height="72"/>
-  <text class="label" x="80" y="498">src/app/ / service-catalog-matrix.md</text>
-  <text class="label" x="80" y="520">docs/test-specs/</text>
-  <rect class="card agent" x="650" y="470" width="420" height="72"/>
-  <text class="label" x="670" y="498">E2ETesting-Playwright</text>
-  <text class="step" x="670" y="520">Step.3.3</text>
-  <rect class="card output" x="1160" y="470" width="500" height="72"/>
-  <text class="label" x="1180" y="510">E2E 実行結果（artifact）</text>
-
-  <!-- Row 5 -->
-  <rect class="card input" x="60" y="570" width="500" height="72"/>
-  <text class="label" x="80" y="598">docs/catalog/service-catalog-matrix.md</text>
-  <text class="label" x="80" y="620">src/ / infra/</text>
-  <rect class="card agent" x="650" y="570" width="420" height="72"/>
-  <text class="label" x="670" y="598">QA-AzureDependencyReview</text>
-  <text class="step" x="670" y="620">Step.4.2</text>
-  <rect class="card output" x="1160" y="570" width="500" height="72"/>
-  <text class="label" x="1180" y="610">docs/azure/dependency-review-report.md</text>
-
-  <!-- Arrows per row -->
-  <path class="arrow" d="M560 206 L650 206"/>
-  <path class="arrow" d="M1070 206 L1160 206"/>
-  <path class="arrow" d="M560 306 L650 306"/>
-  <path class="arrow" d="M1070 306 L1160 306"/>
-  <path class="arrow" d="M560 406 L650 406"/>
-  <path class="arrow" d="M1070 406 L1160 406"/>
-  <path class="arrow" d="M560 506 L650 506"/>
-  <path class="arrow" d="M1070 506 L1160 506"/>
-  <path class="arrow" d="M560 606 L650 606"/>
-  <path class="arrow" d="M1070 606 L1160 606"/>
-
-  <rect class="legend" x="60" y="690" width="1600" height="150"/>
-  <text class="label" x="90" y="728">凡例: 灰=入力ファイル、緑=Prompt タスク、紫=出力ファイル</text>
-  <text class="label" x="90" y="758">色のセマンティクス: ファイルと実行主体を視覚的に分離し、監査時の差分確認を容易化</text>
-  <text class="label" x="90" y="788">読み順: 上から下へ。各行で「入力 → Agent → 出力」の関係を追跡する</text>
+  <rect class="card input" x="60" y="588" width="460" height="86"/>
+  <text class="label" x="80" y="616">docs/azure/waf-review.md / dependency-review.md / deployed endpoints</text>
+  <text class="label" x="80" y="638">既存テスト資産 / review outputs</text>
+  <rect class="card agent" x="620" y="588" width="330" height="86"/>
+  <text class="label" x="640" y="616">Step 5.3 — QA-RequirementsConformanceEval</text>
+  <text class="step" x="640" y="638">要件適合実測</text>
+  <rect class="card output" x="1060" y="588" width="380" height="86"/>
+  <text class="label" x="1080" y="630">docs/azure/requirements-conformance-report.md</text>
 </svg>

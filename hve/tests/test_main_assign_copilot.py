@@ -160,7 +160,7 @@ def test_assignment_failure_result_propagates_nonzero_cli_exit() -> None:
     ), mock.patch.object(
         hve_main, "_run_copilot_auth_preflight", return_value=True
     ), mock.patch.object(
-        hve_main, "_run_workiq_auth_preflight", return_value=True
+        hve_main, "_run_workiq_capability_preflight", return_value=True
     ), mock.patch.object(
         hve_main, "_run_azure_auth_preflight", return_value=True
     ), mock.patch.object(

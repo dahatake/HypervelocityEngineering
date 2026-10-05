@@ -329,6 +329,13 @@ class MainWindow(QMainWindow):
         self._repo_root = repo_root or Path.cwd()
         self._selected_workflow_ids: List[str] = []
         self._autopilot_controller: Optional[object] = None
+        self._resource_snapshot: object = None
+        self._resource_snapshot_initialized = False
+        self._workiq_capability: object = None
+        self._workiq_capability_initialized = False
+        self._fetch_models_thread: Optional[QThread] = None
+        self._close_after_model_fetch = False
+        self._pending_model_fetch_error: Exception | None = None
         self._durable_state_store: Optional[RunStateStore] = None
         self._resume_service: Optional[ResumeService] = None
         # Step 1 統合 precheck のプランレビュー反復回数。
@@ -1146,6 +1153,37 @@ class MainWindow(QMainWindow):
         ):
             args.issue_number = context.issue_number
 
+    def set_resource_snapshot(self, snapshot: object) -> None:
+        """GUI process の resource snapshot を保持し、各 surface へ共有する。"""
+        from ..workiq import workiq_capability_from_snapshot
+
+        self._resource_snapshot = snapshot
+        self._resource_snapshot_initialized = True
+        capability = None if snapshot is None else workiq_capability_from_snapshot(snapshot)
+        self._workiq_capability = capability
+        self._workiq_capability_initialized = True
+        self._page_options.set_workiq_capability(capability)
+        if self._settings_window is not None:
+            self._settings_window.set_resource_snapshot(snapshot)
+        self._refresh_navigation()
+
+    def set_workiq_capability(self, capability: object) -> None:
+        """互換 API: Work IQ capability のみを各 surface へ共有する。"""
+        self._workiq_capability = capability
+        self._workiq_capability_initialized = True
+        self._page_options.set_workiq_capability(capability)
+        if self._settings_window is not None:
+            self._settings_window.set_workiq_capability(capability)
+        self._refresh_navigation()
+
+    def _request_resource_snapshot_refresh(self, force_refresh: bool = True) -> bool:
+        from . import app as app_module
+
+        return app_module.request_resource_snapshot_refresh(
+            self._repo_root,
+            force_refresh=force_refresh,
+        )
+
     def _open_settings_window(self) -> None:
         if self._settings_window is None or not self._settings_window.isVisible():
             self._settings_window = SettingsWindow(
@@ -1161,6 +1199,26 @@ class MainWindow(QMainWindow):
             self._settings_window.fetch_models_requested.connect(
                 self._on_login_clicked
             )
+            if hasattr(self._settings_window, "set_resource_refresh_callback"):
+                self._settings_window.set_resource_refresh_callback(
+                    self._request_resource_snapshot_refresh
+                )
+            if getattr(self, "_resource_snapshot_initialized", False):
+                if hasattr(self._settings_window, "set_resource_snapshot"):
+                    self._settings_window.set_resource_snapshot(
+                        getattr(self, "_resource_snapshot", None)
+                    )
+                else:
+                    self._settings_window.set_workiq_capability(
+                        getattr(self, "_workiq_capability", None)
+                    )
+            else:
+                self._settings_window.set_workiq_capability(
+                    getattr(self, "_workiq_capability", None)
+                )
+        self._set_model_fetch_controls_enabled(
+            not self._model_fetch_is_active()
+        )
         self._settings_window.show()
         self._settings_window.raise_()
         self._settings_window.activateWindow()
@@ -1174,11 +1232,10 @@ class MainWindow(QMainWindow):
             settings_apply.apply_to_widgets(
                 {
                     "C1": self._page_options.c1,
-                    # 設定画面の 4 ノードは、右ペインでは 1 つの合成ウィジェットが属性を公開する。
+                    # 設定画面の 3 ノードは、右ペインでは 1 つの合成ウィジェットが属性を公開する。
                     "QA": self._page_options.c3,
                     "REVIEW": self._page_options.c3,
                     "KM": self._page_options.c3,
-                    "SELFIMPROVE": self._page_options.c3,
                     "C4": self._page_options.c4,
                     "C5": self._page_options.c5,
                     "C7": self._page_options.c7,
@@ -1237,6 +1294,10 @@ class MainWindow(QMainWindow):
             logging.getLogger(__name__).warning(
                 "explorer roots reload failed: %s", exc
             )
+        if self._resource_snapshot_initialized:
+            self.set_resource_snapshot(self._resource_snapshot)
+        elif self._workiq_capability_initialized:
+            self.set_workiq_capability(self._workiq_capability)
 
     def _setup_menu(self) -> None:
         # menuBar は廃止（ヘッダーアイコンに統合）
@@ -1262,8 +1323,8 @@ class MainWindow(QMainWindow):
         # 状況メッセージは central の _status_banner へ一本化する。
         # 認証ステータス表示は廃止（認証は GitHub Copilot CLI 側で完結）。
         # 「Copilot にログイン」ボタンは廃止（認証は GitHub Copilot CLI 側で完結するため）。
-        # 「利用できるモデルの取得」ボタンは常時有効。押下で
-        # models_api.fetch_model_entries() を実行しキャッシュへ保存する。
+        # 「利用できるモデルの取得」ボタンは常時表示し、モデル取得中だけ無効化する。
+        # 押下で models_api.fetch_model_entries() を実行しキャッシュへ保存する。
         self._git_status_label = QLabel()
         self._git_status_label.setTextFormat(Qt.TextFormat.PlainText)
         self._git_status_label.setMinimumWidth(0)
@@ -1360,8 +1421,9 @@ class MainWindow(QMainWindow):
         effort_value = c1.effort.currentData() if c1.effort.isEnabled() else None
 
         from . import settings_store as _ss
+        from hve.config import DEFAULT_MODEL
 
-        _ss.set_option("model", model_value if model_value else "Auto")
+        _ss.set_option("model", model_value if model_value else DEFAULT_MODEL)
         _ss.set_option("reasoning_effort", effort_value or "")
 
         if self._settings_window is not None and self._settings_window.isVisible():
@@ -1382,11 +1444,41 @@ class MainWindow(QMainWindow):
     # モデル一覧の取得
     # ----------------------------------------------------------
 
+    def _model_fetch_is_active(self) -> bool:
+        return self._fetch_models_thread is not None
+
+    def _set_model_fetch_controls_enabled(self, enabled: bool) -> None:
+        self._btn_login.setEnabled(enabled)
+        settings_window = self._settings_window
+        if settings_window is None:
+            return
+        c1 = settings_window._sections.get("C1")
+        button = getattr(c1, "fetch_models_button", None)
+        if button is not None:
+            button.setEnabled(enabled)
+
+    def _set_model_fetch_status(self, kind: StatusKind, message: str) -> None:
+        if self._is_any_execution_running():
+            return
+        if self._current_step() == _STEP_WORKFLOW:
+            from .. import index_refresh
+
+            if index_refresh.is_running() or self._page_options.is_workiq_check_pending():
+                self._refresh_navigation()
+                return
+        self._set_status(kind, message)
+
     def _on_login_clicked(self) -> None:
-        """「利用できるモデルの取得」押下時はモデル取得のみを行う。"""
-        self._btn_login.setEnabled(False)
-        self._set_status(StatusKind.RUNNING, self.tr("モデル一覧を取得中..."))
-        from PySide6.QtCore import QThread, Signal
+        """起動時または手動要求時に、1件だけモデル取得workerを開始する。"""
+        if self._model_fetch_is_active():
+            self._set_model_fetch_controls_enabled(False)
+            return
+        self._pending_model_fetch_error = None
+        self._set_model_fetch_controls_enabled(False)
+        self._set_model_fetch_status(
+            StatusKind.RUNNING,
+            self.tr("モデル一覧を取得中..."),
+        )
 
         class _FetchModelsThread(QThread):
             done = Signal(object)  # list[str] | Exception
@@ -1400,7 +1492,6 @@ class MainWindow(QMainWindow):
                     models = [e.id for e in entries]
                     if entries:
                         try:
-                            models_cache.clear()
                             models_cache.save_entries(entries)
                         except OSError as exc:
                             self.done.emit(exc)
@@ -1411,44 +1502,92 @@ class MainWindow(QMainWindow):
 
         thread = _FetchModelsThread(self)
         thread.done.connect(self._on_models_fetched)
-        self._fetch_models_thread = thread  # GC 防止
-        thread.start()
+        thread.finished.connect(self._on_model_fetch_thread_finished)
+        self._fetch_models_thread = thread
+        try:
+            thread.start()
+        except Exception as exc:  # noqa: BLE001 - GUI起動継続のためstart失敗を縮退
+            self._fetch_models_thread = None
+            thread.deleteLater()
+            self._on_models_fetched(exc)
+
+    @Slot()
+    def _on_model_fetch_thread_finished(self) -> None:
+        thread = self.sender()
+        if isinstance(thread, QThread):
+            if self._fetch_models_thread is thread:
+                self._fetch_models_thread = None
+            thread.deleteLater()
+        if self._close_after_model_fetch:
+            self._close_after_model_fetch = False
+            self.setEnabled(True)
+            QTimer.singleShot(0, self._complete_deferred_model_fetch_close)
+        else:
+            self._set_model_fetch_controls_enabled(True)
+
+    def _complete_deferred_model_fetch_close(self) -> None:
+        error = self._pending_model_fetch_error
+        self._pending_model_fetch_error = None
+        if self.close() or error is None:
+            return
+        QMessageBox.warning(
+            self,
+            self.tr("モデル取得失敗"),
+            self.tr("モデル一覧の取得に失敗しました: {err}").format(err=str(error)),
+        )
+        self._set_model_fetch_status(
+            StatusKind.ERROR,
+            self.tr("モデル取得失敗"),
+        )
 
     @Slot(object)
     def _on_models_fetched(self, result: object) -> None:
-        self._btn_login.setEnabled(True)
+        if not self._model_fetch_is_active():
+            self._set_model_fetch_controls_enabled(True)
         if isinstance(result, Exception):
+            if self._close_after_model_fetch:
+                self._pending_model_fetch_error = result
+                return
             QMessageBox.warning(
                 self,
                 self.tr("モデル取得失敗"),
                 self.tr("モデル一覧の取得に失敗しました: {err}").format(err=str(result)),
             )
-            self._set_status(StatusKind.ERROR, self.tr("モデル取得失敗"))
+            self._set_model_fetch_status(
+                StatusKind.ERROR,
+                self.tr("モデル取得失敗"),
+            )
             return
         # R2: Slot(object) のため result の静的型は object。実行時に iterable を期待。
         if result and hasattr(result, "__iter__"):
             models = list(result)  # type: ignore[call-overload]
         else:
             models = []
-        self._set_status(
+        self._set_model_fetch_status(
             StatusKind.SUCCESS,
             self.tr("モデル一覧を取得しました ({n} 件)").format(n=len(models)),
         )
         # 既存ウィジェットへ反映 (空配列時は既存リスト維持)
         if models:
-            try:
-                self._page_options.c1.reload_models()
-                self._page_options.c3.reload_models()
-            except Exception:
-                pass
+            reloaders = [
+                self._page_options.c1.reload_models,
+                self._page_options.c3.reload_models,
+            ]
             if (
                 self._settings_window is not None
                 and self._settings_window.isVisible()
             ):
+                reloaders.append(self._settings_window.reload_models)
+            for reload_models in reloaders:
                 try:
-                    self._settings_window.reload_models()
-                except Exception:
-                    pass
+                    reload_models()
+                except RuntimeError:
+                    import logging
+
+                    logging.getLogger(__name__).warning(
+                        "model surface reload failed",
+                        exc_info=True,
+                    )
 
     # ----------------------------------------------------------
     # ナビゲーション
@@ -1505,6 +1644,7 @@ class MainWindow(QMainWindow):
             self._btn_next.setEnabled(
                 len(self._page_workflow.selected_workflow_ids()) > 0
                 and not indexing
+                and not self._page_options.is_workiq_check_pending()
             )
         # 停止ボタン (Step 2 「実行」のみ)
         self._btn_stop.setVisible(step == _STEP_WORKBENCH)
@@ -1519,6 +1659,11 @@ class MainWindow(QMainWindow):
                     "索引 (markdown-query / code-query) の差分更新中です。"
                     "完了後に実行を開始できます。"
                 ),
+            )
+        elif step == _STEP_WORKFLOW and self._page_options.is_workiq_check_pending():
+            self._set_status(
+                StatusKind.RUNNING,
+                self.tr("Work IQ の起動時確認が完了するまで実行できません。"),
             )
         elif step == _STEP_WORKFLOW:
             wf_ids = self._page_workflow.selected_workflow_ids()
@@ -3719,6 +3864,15 @@ class MainWindow(QMainWindow):
             pass
 
     def closeEvent(self, event: QCloseEvent) -> None:  # type: ignore[override]
+        if self._model_fetch_is_active():
+            self._close_after_model_fetch = True
+            self.setEnabled(False)
+            self._set_status(
+                StatusKind.RUNNING,
+                self.tr("モデル一覧の取得完了後に終了します..."),
+            )
+            event.ignore()
+            return
         # gui-autopilot-stop-button: Autopilot 経路でも未確認終了を防ぐため
         # ``_is_any_execution_running`` で統合判定する（Plan モードと同じ確認 Dialog）。
         if self._is_any_execution_running():
@@ -3729,6 +3883,7 @@ class MainWindow(QMainWindow):
             )
             if ret != QMessageBox.StandardButton.Yes:
                 event.ignore()
+                self._refresh_navigation()
                 return
         # Phase D-4: Dock 表示状態の永続化
         self._persist_dock_visibility()

@@ -11,7 +11,7 @@ import re
 from typing import Any, Iterable, Mapping, Optional
 
 from hve.gui.github_comment_format import format_console_log_comment
-from hve.workiq import _sanitize_diagnostic_text
+from hve.security import sanitize_diagnostic_text
 
 __all__ = [
     "FINAL_STATUSES",
@@ -117,7 +117,7 @@ def format_progress_comment(
             [
                 "",
                 format_console_log_comment(
-                    _sanitize_diagnostic_text(console_text),
+                    sanitize_diagnostic_text(console_text),
                     run_id=None if run_id is None else str(run_id),
                     workflow_id=None if workflow_id is None else str(workflow_id),
                 ),

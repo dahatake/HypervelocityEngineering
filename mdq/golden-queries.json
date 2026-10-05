@@ -101,17 +101,17 @@
     },
     {
       "id": "DOC-03",
-      "q": "disable self improve web UI",
+      "q": "Cloud Local correspondence table first-time users",
       "group": "guides",
-      "paths": ["users-guide/web-ui-guide.md"],
-      "expected": [{"path": "users-guide/web-ui-guide.md", "anchor": "hve orchestrate -w aas --no-self-improve"}]
+      "paths": ["users-guide/workflow-reference.md"],
+      "expected": [{"path": "users-guide/workflow-reference.md", "anchor": "### Cloud / Local 対応表（初回ユーザー向け）"}]
     },
     {
       "id": "DOC-04",
-      "q": "self improve command environment variable workflow reference",
+      "q": "knowledge discovery Work IQ MCP knowledge sources",
       "group": "guides",
       "paths": ["users-guide/workflow-reference.md"],
-      "expected": [{"path": "users-guide/workflow-reference.md", "anchor": "> **hve CLI からの自己改善制御**:"}]
+      "expected": [{"path": "users-guide/workflow-reference.md", "anchor": "### 知識探索連携（Work IQ / MCP 知識源）"}]
     },
     {
       "id": "INV-01",
@@ -125,7 +125,7 @@
       "q": "resolve run id implementation surface",
       "group": "generated-inventory",
       "paths": ["hve-dev/hve-surface-inventory.csv"],
-      "expected": [{"path": "hve-dev/hve-surface-inventory.csv", "anchor": "core,function,resolve_run_id,hve/split_fork.py"}]
+      "expected": [{"path": "hve-dev/hve-surface-inventory.csv", "anchor": "core,function,resolve_run_id,hve/run_paths.py"}]
     },
     {
       "id": "INV-03",
@@ -143,10 +143,10 @@
     },
     {
       "id": "CAT-05",
-      "q": "APP-009 推薦アーキテクチャ Webフロントエンド クラウド",
+      "q": "APP-009 推薦アーキテクチャ 不足あり 判定中断",
       "group": "catalog",
       "paths": ["docs/catalog/app-arch-catalog.md"],
-      "expected": [{"path": "docs/catalog/app-arch-catalog.md", "anchor": "| APP-009 | 会員セルフサービス/サポート | Webフロントエンド + クラウド |"}]
+      "expected": [{"path": "docs/catalog/app-arch-catalog.md", "anchor": "| APP-009 | 会員セルフサービス/サポート | — | — | ⚠️不足あり（判定中断） |"}]
     },
     {
       "id": "CAT-06",

@@ -8,7 +8,7 @@ inputs:
   kind: agent_artifact
   producer: Doc-OriginalInventory--adi--1
 - path: qa/original-docs-cross-questionnaire.md
-  required: true
+  required: false
   kind: agent_artifact
   producer: QA-DocConsistency--adi--1.2
 - path: work/run/<run-id>/kpi/fork-kpi.jsonl

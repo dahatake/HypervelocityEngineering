@@ -15,7 +15,6 @@ import pytest
 from hve.config import SDKConfig
 from hve.console import Console
 from hve.runner import StepRunner
-from hve.workiq import WORKIQ_MCP_SERVER_NAMES
 
 NON_FATAL_MARKER = "実行は継続します"
 
@@ -59,16 +58,13 @@ def _failed_event(name: str, error: str | None = None) -> _FakeEvent:
 
 
 class TestWorkIQConnectionWarningIsMarkedNonFatal:
-    """Work IQ 系サーバーの接続失敗は非致命であることを警告文へ明示する。"""
+    """Exact Work IQサーバーの接続失敗は非致命と警告する。"""
 
-    @pytest.mark.parametrize("server_name", sorted(WORKIQ_MCP_SERVER_NAMES))
-    def test_every_workiq_alias_is_marked_non_fatal(
-        self, runner_and_warnings, server_name: str
-    ) -> None:
+    def test_exact_workiq_is_marked_non_fatal(self, runner_and_warnings) -> None:
         runner, warnings = runner_and_warnings
 
         runner._handle_session_event(
-            _failed_event(server_name, "MCP error -32001: Request timed out")
+            _failed_event("workiq", "MCP error -32001: Request timed out")
         )
 
         assert len(warnings) == 1
@@ -78,11 +74,11 @@ class TestWorkIQConnectionWarningIsMarkedNonFatal:
         runner, warnings = runner_and_warnings
 
         runner._handle_session_event(
-            _failed_event("_hve_workiq", "MCP error -32001: Request timed out")
+            _failed_event("workiq", "MCP error -32001: Request timed out")
         )
 
         assert "MCP error -32001: Request timed out" in warnings[0]
-        assert "_hve_workiq" in warnings[0]
+        assert "workiq" in warnings[0]
 
     def test_marker_is_applied_per_server_not_per_event(self, runner_and_warnings) -> None:
         """実 run と同じく `workiq` と `azure` が同一イベントに同居する場合の判定。
@@ -138,25 +134,25 @@ class TestWorkIQConnectionWarningIsMarkedNonFatal:
 class TestStatusChangedWarningIsMarkedNonFatal:
     """`session.mcp_server_status_changed` 側も同じ非致命の注記を出す。
 
-    判定対象は HVE 自身が注入する `_hve_workiq` のみ。他の Work IQ 別名を
+    判定対象は HVE 自身が注入するcanonical `workiq`のみ。他のWork IQ aliasを
     warning へ格上げすると、従来 `console.event` だったものが GUI の
     「実行中の課題」へ流れて警告ノイズが増えるため広げない。
     """
 
-    def test_hve_workiq_status_change_is_marked_non_fatal(self, runner_and_warnings) -> None:
+    def test_canonical_workiq_status_change_is_marked_non_fatal(self, runner_and_warnings) -> None:
         runner, warnings = runner_and_warnings
 
         runner._handle_session_event(
             _FakeEvent(
                 "session.mcp_server_status_changed",
-                _FakeEventData(server_name="_hve_workiq", status="failed"),
+                _FakeEventData(server_name="workiq", status="failed"),
             )
         )
 
         assert len(warnings) == 1
         assert NON_FATAL_MARKER in warnings[0], warnings[0]
 
-    def test_other_workiq_alias_stays_an_event_not_a_warning(
+    def test_legacy_workiq_alias_stays_an_event_not_a_warning(
         self, runner_and_warnings
     ) -> None:
         runner, warnings = runner_and_warnings
@@ -164,7 +160,7 @@ class TestStatusChangedWarningIsMarkedNonFatal:
         runner._handle_session_event(
             _FakeEvent(
                 "session.mcp_server_status_changed",
-                _FakeEventData(server_name="workiq", status="failed"),
+                _FakeEventData(server_name="_hve_workiq", status="failed"),
             )
         )
 

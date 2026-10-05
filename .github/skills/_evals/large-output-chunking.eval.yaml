@@ -5,7 +5,7 @@
 # - CI や手動レビューでの Skill ルーティング検証に使用
 
 skill: large-output-chunking
-skill_path: .github/skills/output/large-output-chunking/SKILL.md
+skill_path: .github/skills/large-output-chunking/SKILL.md
 description: 巨大出力の分割ルール。50,000文字超は分割必須、20,000文字以下が推奨上限。artifacts/<name>.index.md + artifacts/<name>.part-XXXX.md 形式で保存する。
 
 test_cases:

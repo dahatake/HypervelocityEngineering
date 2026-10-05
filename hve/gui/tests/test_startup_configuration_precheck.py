@@ -16,9 +16,6 @@ from hve.gui.orchestrate_args import OrchestrateArgs
 
 _PROMPT_FIELDS = {
     "additional_prompt",
-    "workiq_prompt_qa",
-    "workiq_prompt_km",
-    "workiq_prompt_review",
 }
 
 
@@ -154,10 +151,7 @@ def test_prompt_free_text_does_not_change_precheck_result_or_validator_inputs(
         "repo_root": tmp_path,
     }
     prompt_values = {
-        "additional_prompt": "repo=broken branch=invalid",
-        "workiq_prompt_qa": "token missing",
-        "workiq_prompt_km": "origin must not be inspected here",
-        "workiq_prompt_review": "feature..broken",
+        "additional_prompt": "repo=broken branch=invalid token missing origin must not be inspected here",
     }
 
     baseline = precheck_runner.run_step1_precheck(

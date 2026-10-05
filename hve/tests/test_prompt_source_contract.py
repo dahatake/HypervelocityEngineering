@@ -11,6 +11,7 @@ import ast
 import inspect
 import os
 import re
+import runpy
 import subprocess
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -26,6 +27,7 @@ _PROMPTS_ROOT = _REPO_ROOT / ".github" / "prompts"
 _REQUIREMENTS = _REPO_ROOT / "hve-dev" / "requirement-definition.md"
 _MAPPING = _REPO_ROOT / "hve-dev" / "requirement-test-mapping.md"
 _FEATURE_INVENTORY = _REPO_ROOT / "hve-dev" / "hve-feature-inventory.csv"
+_PROMPT_REFERENCE_ROOT = _REPO_ROOT / "users-guide" / "prompt-reference"
 _LEGACY_STEP_TEMPLATES = _REPO_ROOT / ".github" / "scripts" / "templates"
 _LEGACY_FANOUT_PROMPTS = _REPO_ROOT / "hve" / "prompt"
 _CLOUD_WORKFLOWS = {
@@ -52,17 +54,29 @@ _PROMPTS_RUNTIME_SYMBOLS = (
     "PRE_EXECUTION_QA_PROMPT_V2",
     "QA_PROMPT_V2",
     "MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT",
-    "ARD_WORKIQ_USECASE_PROMPT",
-    "AKM_WORKIQ_VERIFY_AND_UPDATE_PROMPT",
-    "AKM_WORKIQ_INGEST_PROMPT",
 )
-_WORKIQ_RUNTIME_SYMBOLS = (
+# FR-KD-03: Work IQ 専用の runtime prompt はすべて削除し、知識探索の prompt へ置き換えた。
+_REMOVED_WORKIQ_RUNTIME_SYMBOLS = (
     "_WORKIQ_ROLE_PROMPT",
     "_WORKIQ_OUTPUT_SCHEMA_PROMPT",
     "_WORKIQ_FEWSHOT_PROMPT",
     "DEFAULT_WORKIQ_QA_PROMPT",
     "DEFAULT_WORKIQ_KM_PROMPT",
     "DEFAULT_WORKIQ_REVIEW_PROMPT",
+    "_WORKIQ_REVIEW_TASK_PROMPT",
+)
+_REMOVED_PROMPTS_SYMBOLS = (
+    "ARD_WORKIQ_USECASE_PROMPT",
+    "AKM_WORKIQ_VERIFY_AND_UPDATE_PROMPT",
+    "AKM_WORKIQ_INGEST_PROMPT",
+    "WORKIQ_CONTEXT_INJECTION_PROMPT",
+)
+_KNOWLEDGE_DISCOVERY_RUNTIME_PROMPTS = (
+    "runtime/knowledge-discovery/common.prompt.md",
+    "runtime/knowledge-discovery/qa.prompt.md",
+    "runtime/knowledge-discovery/knowledge.prompt.md",
+    "runtime/knowledge-discovery/research.prompt.md",
+    "runtime/knowledge-discovery/repair.prompt.md",
 )
 
 _PROMPT_PRODUCER_INVENTORY: dict[str, dict[str, tuple[str, ...]]] = {
@@ -70,23 +84,13 @@ _PROMPT_PRODUCER_INVENTORY: dict[str, dict[str, tuple[str, ...]]] = {
         "must_call": ("load_prompt_file",),
         "must_not_inline": _PROMPTS_RUNTIME_SYMBOLS,
     },
-    "hve/workiq.py": {
-        "must_call": ("load_prompt_file",),
-        "must_not_inline": _WORKIQ_RUNTIME_SYMBOLS,
-    },
-    "hve/self_improve.py": {
-        "must_call": ("load_prompt_file",),
-        "must_not_inline": ("_LLM_GOAL_PROMPT_TEMPLATE",),
-    },
+    "hve/knowledge_discovery.py": {"must_call": ("load_prompt_file",)},
     "hve/repository_query.py": {"must_call": ("load_prompt_file",)},
     "hve/template_engine.py": {"must_call": ("load_prompt_file",)},
     "hve/orchestrator.py": {
         "must_import_from_prompts": (
             "CODE_REVIEW_AGENT_FIX_PROMPT",
             "CODE_REVIEW_CLI_PROMPT",
-            "AKM_WORKIQ_VERIFY_AND_UPDATE_PROMPT",
-            "AKM_WORKIQ_INGEST_PROMPT",
-            "ARD_WORKIQ_USECASE_PROMPT",
             "ARD_TARGET_BUSINESS_FROM_RECOMMENDATION_PROMPT",
         )
     },
@@ -95,9 +99,6 @@ _PROMPT_PRODUCER_INVENTORY: dict[str, dict[str, tuple[str, ...]]] = {
             "REVIEW_PROMPT",
             "ADVERSARIAL_RECHECK_PROMPT",
             "QA_PROMPT_V2",
-            "SELF_IMPROVE_SCAN_PROMPT",
-            "SELF_IMPROVE_PLAN_PROMPT",
-            "SELF_IMPROVE_VERIFY_PROMPT",
             "PRE_EXECUTION_QA_PROMPT_V2",
             "MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT",
         )
@@ -105,7 +106,6 @@ _PROMPT_PRODUCER_INVENTORY: dict[str, dict[str, tuple[str, ...]]] = {
     "hve/application_requirements.py": {"must_call": ("load_prompt_file",)},
     "hve/input_aliases.py": {"must_call": ("load_prompt_file",)},
     "hve/mdq_enforcement.py": {"must_call": ("load_prompt_file",)},
-    "hve/split_fork.py": {"must_call": ("load_prompt_file",)},
     "hve/fleet_mode.py": {"must_call": ("load_prompt_file",)},
     "hve/github_title_generator.py": {"must_call": ("load_prompt_file",)},
     "hve/gui/br_prompt_builder.py": {"must_call": ("load_prompt_file",)},
@@ -363,6 +363,41 @@ def test_fr_prompt_src_01_runtime_prompt_producers_have_explicit_inventory_evide
             )
 
     assert not errors, "\n".join(errors)
+
+
+def test_fr_prompt_src_01_dead_workiq_runtime_prompts_are_absent() -> None:
+    assert not (_PROMPTS_ROOT / "runtime" / "workiq").exists()
+
+    workiq_source = _read_text(_REPO_ROOT / "hve" / "workiq.py")
+    prompts_source = _read_text(_REPO_ROOT / "hve" / "prompts.py")
+    for symbol in _REMOVED_WORKIQ_RUNTIME_SYMBOLS:
+        assert symbol not in workiq_source, symbol
+    for symbol in _REMOVED_PROMPTS_SYMBOLS:
+        assert symbol not in prompts_source, symbol
+    assert "runtime/workiq/" not in workiq_source
+    assert "runtime/workiq/" not in prompts_source
+
+    for relative in _KNOWLEDGE_DISCOVERY_RUNTIME_PROMPTS:
+        assert _is_non_empty_utf8_markdown(_PROMPTS_ROOT / relative), relative
+
+
+def test_fr_prompt_src_01_workiq_reference_has_no_compositions() -> None:
+    namespace = runpy.run_path(str(_PROMPT_REFERENCE_ROOT / "sync.py"))
+    assert "WORKIQ_COMPOSITIONS" not in namespace
+
+    assert not (_PROMPT_REFERENCE_ROOT / "composed").exists()
+    assert not (_PROMPT_REFERENCE_ROOT / "copies" / "runtime" / "workiq").exists()
+
+    readme = _read_text(_PROMPT_REFERENCE_ROOT / "README.md")
+    for dead_reference in (
+        "workiq-review.prompt.txt",
+        "workiq-qa.prompt.txt",
+        "workiq-km.prompt.txt",
+        "review-task.prompt.md",
+        "context-injection.prompt.md",
+        "QA / KM / Review",
+    ):
+        assert dead_reference not in readme
 
 
 def test_fr_prompt_src_01_cloud_workflows_load_external_prompt_files_without_inline_prompt_bodies() -> None:

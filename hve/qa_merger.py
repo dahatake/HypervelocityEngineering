@@ -23,12 +23,18 @@ QA 質問票ファイル（`qa/` 配下）を解析し、ユーザー回答を�
 from __future__ import annotations
 
 import copy
+import json
 import os
 import re
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+try:
+    from .security import sanitize_diagnostic_text
+except ImportError:  # pragma: no cover - script 実行経路
+    from security import sanitize_diagnostic_text  # type: ignore[no-redef]
 
 
 # ---------------------------------------------------------------------------
@@ -64,8 +70,9 @@ class QAQuestion:
     impact_if_unanswered: str = "" # 未回答のまま進めた場合の影響
     background: str = ""           # 背景と根拠（なぜ不明点か）
     viewpoints: str = ""           # 判断の観点（回答で結論が変わる評価軸）
-    workiq_answer: str = ""        # Work IQ 調査結果に基づく回答案
-    workiq_reason: str = ""        # Work IQ 回答案の理由・情報ソース
+    research_answer: str = ""      # 知識探索の調査回答（FR-KD-05）
+    research_status: str = ""      # 調査状態（Confirmed / Tentative / Unknown）
+    research_sources: str = ""     # 調査出典 ID（例: "S1, S2"）
 
 
 @dataclass
@@ -200,9 +207,14 @@ class QAMerger:
             idx_background = col_map.get("背景と根拠")
             idx_viewpoints = col_map.get("判断の観点")
 
-            # Work IQ 列
-            idx_workiq_answer = _col_idx("Work IQ 回答案", "WorkIQ回答案")
-            idx_workiq_reason = _col_idx("Work IQ 理由", "WorkIQ理由")
+            # 調査列（FR-KD-05）。旧 Work IQ 列名は読込時だけ受け付ける（FR-KD-10）。
+            idx_research_answer = _col_idx("調査回答", "Work IQ 回答案")
+            if idx_research_answer is None:
+                idx_research_answer = col_map.get("WorkIQ回答案")
+            idx_research_status = col_map.get("調査状態")
+            idx_research_sources = _col_idx("調査出典", "Work IQ 理由")
+            if idx_research_sources is None:
+                idx_research_sources = col_map.get("WorkIQ理由")
 
             # No. と 質問 の両方が見つかった場合のみテーブルをパース
             if idx_no is not None and idx_question is not None:
@@ -252,8 +264,9 @@ class QAMerger:
                         impact_if_unanswered=_cell(idx_impact),
                         background=_cell(idx_background),
                         viewpoints=_cell(idx_viewpoints),
-                        workiq_answer=_cell(idx_workiq_answer),
-                        workiq_reason=_cell(idx_workiq_reason),
+                        research_answer=_cell(idx_research_answer),
+                        research_status=_cell(idx_research_status),
+                        research_sources=_cell(idx_research_sources),
                     ))
 
         # その他セクションを raw_sections に保存（## で始まるセクション）
@@ -548,48 +561,98 @@ class QAMerger:
 
         return merged
 
+    @staticmethod
+    def append_calibration_log(
+        doc: QADocument,
+        answers: Dict[int, str],
+        log_path: Path,
+    ) -> None:
+        """明示回答だけを較正 JSONL に追記する。
+
+        `matched` は最小決定的に判定する。最終回答と既定値候補が同じ選択肢ラベル
+        （`A) ...`、`A. ...`、`A`、または選択肢本文との完全一致）を指せば一致、
+        ラベルを特定できない場合は前後空白を除いた文字列完全一致だけを見る。
+        `default` / `final` は書き込み前に `sanitize_diagnostic_text` で代表的な
+        credential をマスクする（FR-QA-10。完全な秘密検出は保証しない）。
+        """
+        if not answers:
+            return
+
+        merged = QAMerger.merge_answers(doc, answers, use_defaults=False)
+        merged_by_no = {q.no: q for q in merged.questions}
+
+        def _choice_label(value: str, choices: List[Choice]) -> Optional[str]:
+            stripped = value.strip()
+            if not stripped:
+                return None
+            m = re.match(r"^([A-Za-z])(?:[).:]|\s*$)", stripped)
+            if m:
+                label = m.group(1).upper()
+                if not choices or any(c.label.upper() == label for c in choices):
+                    return label
+            for choice in choices:
+                if stripped in (
+                    choice.text.strip(),
+                    f"{choice.label}) {choice.text}".strip(),
+                    f"{choice.label}. {choice.text}".strip(),
+                ):
+                    return choice.label.upper()
+            return None
+
+        def _matched(final: str, default: str, choices: List[Choice]) -> bool:
+            final_label = _choice_label(final, choices)
+            default_label = _choice_label(default, choices)
+            if final_label is not None and default_label is not None:
+                return final_label == default_label
+            return final.strip() == default.strip()
+
+        records: List[Dict[str, object]] = []
+        for q in doc.questions:
+            if q.no not in answers:
+                continue
+            final = (merged_by_no[q.no].user_answer or "").strip()
+            records.append({
+                "category": q.category,
+                "priority": q.priority,
+                "default": sanitize_diagnostic_text(q.default_answer),
+                "final": sanitize_diagnostic_text(final),
+                "matched": _matched(final, q.default_answer, q.choices),
+            })
+        if not records:
+            return
+
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as f:
+            for record in records:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
     # ------------------------------------------------------------------
-    # Work IQ 統合
+    # 知識探索の調査回答の採用（FR-KD-06）
     # ------------------------------------------------------------------
 
     @staticmethod
-    def merge_workiq_results(
-        doc: QADocument,
-        per_question_results: Dict[int, str],
-    ) -> QADocument:
-        """Work IQ の質問別調査結果を QADocument の各質問に統合する。
-
-        統合可否の判定は呼び出し元（`hve/runner.py`）が
-        `hve/workiq.py` の `is_workiq_result_mergeable` で行う。本メソッドは
-        status が `NOT_FOUND` / `UNAVAILABLE` の応答と、内容が空または
-        「関連情報なし」だけの応答を除いて workiq_answer と workiq_reason を設定する。
-
-        Args:
-            doc: パース済みの QADocument。
-            per_question_results: {質問番号: Work IQ 応答テキスト} の辞書。
+    def adopt_research_answers(doc: QADocument) -> Tuple[QADocument, int]:
+        """調査状態が Confirmed / Tentative で調査回答が空でない質問は調査回答を、
+        それ以外は既定値候補を ``user_answer`` に採用する。
 
         Returns:
-            Work IQ 結果が統合された QADocument（新しいオブジェクト）。
+            (採用済み QADocument, 調査回答を採用した質問数)
         """
         merged = copy.deepcopy(doc)
-        if not per_question_results:
-            return merged
-
+        adopted = 0
         for q in merged.questions:
-            result = per_question_results.get(q.no, "").strip()
-            if not result:
-                continue
-            # STATUS ラベルがある場合は NOT_FOUND / UNAVAILABLE をスキップ
-            _status_m = re.match(r"^\s*STATUS\s*:\s*(\w+)", result, re.IGNORECASE)
-            if _status_m and _status_m.group(1).upper() in ("NOT_FOUND", "UNAVAILABLE"):
-                continue
-            # 「関連情報なし」のみの場合もスキップ
-            if result.strip() in ("関連情報なし", "関連情報は見つかりませんでした"):
-                continue
-            q.workiq_answer = result
-            q.workiq_reason = "Work IQ (Microsoft 365 Copilot) による自動調査結果"
-
-        return merged
+            if q.research_status in ("Confirmed", "Tentative") and q.research_answer.strip():
+                q.user_answer = q.research_answer.strip()
+                adopted += 1
+            else:
+                q.user_answer = q.default_answer
+        merged.status = "回答済み"
+        merged.header_fields = [
+            (k, merged.status if k == "状態" else v) for k, v in merged.header_fields
+        ]
+        if not any(k == "状態" for k, _ in merged.header_fields):
+            merged.header_fields.insert(0, ("状態", merged.status))
+        return merged, adopted
 
     # ------------------------------------------------------------------
     # レンダリング
@@ -643,23 +706,23 @@ class QAMerger:
                 or q.background or q.viewpoints
                 for q in doc.questions
             )
-            has_workiq = any(
-                q.workiq_answer or q.workiq_reason
+            has_research = any(
+                q.research_answer or q.research_status or q.research_sources
                 for q in doc.questions
             )
 
-            if use_extended and has_workiq:
-                # 13列テーブルヘッダー（Work IQ 列を含む）
-                lines.append("| No. | 重要度 | 分類項目 | 質問 | 背景と根拠 | 判断の観点 | 選択肢 | 既定値候補 | 既定値候補の理由 | 未回答のまま進めた場合の影響 | Work IQ 回答案 | Work IQ 理由 | ユーザー回答 |")
-                lines.append("|-----|--------|----------|------|------------|------------|--------|-----------|----------------|------------------------------|----------------|--------------|------------|")
+            if use_extended and has_research:
+                # 14列テーブルヘッダー（調査列を含む）
+                lines.append("| No. | 重要度 | 分類項目 | 質問 | 背景と根拠 | 判断の観点 | 選択肢 | 既定値候補 | 既定値候補の理由 | 未回答のまま進めた場合の影響 | 調査回答 | 調査状態 | 調査出典 | ユーザー回答 |")
+                lines.append("|-----|--------|----------|------|------------|------------|--------|-----------|----------------|------------------------------|----------|----------|----------|------------|")
             elif use_extended:
                 # 11列テーブルヘッダー
                 lines.append("| No. | 重要度 | 分類項目 | 質問 | 背景と根拠 | 判断の観点 | 選択肢 | 既定値候補 | 既定値候補の理由 | 未回答のまま進めた場合の影響 | ユーザー回答 |")
                 lines.append("|-----|--------|----------|------|------------|------------|--------|-----------|----------------|------------------------------|------------|")
-            elif has_workiq:
-                # 8列テーブルヘッダー（Work IQ 列を含む）
-                lines.append("| No. | 質問 | 選択肢 | 既定値候補 | 既定値候補の理由 | Work IQ 回答案 | Work IQ 理由 | ユーザー回答 |")
-                lines.append("|-----|------|--------|-----------|----------------|----------------|--------------|------------|")
+            elif has_research:
+                # 9列テーブルヘッダー（調査列を含む）
+                lines.append("| No. | 質問 | 選択肢 | 既定値候補 | 既定値候補の理由 | 調査回答 | 調査状態 | 調査出典 | ユーザー回答 |")
+                lines.append("|-----|------|--------|-----------|----------------|----------|----------|----------|------------|")
             else:
                 # 6列テーブルヘッダー
                 lines.append("| No. | 質問 | 選択肢 | 既定値候補 | 既定値候補の理由 | ユーザー回答 |")
@@ -687,17 +750,18 @@ class QAMerger:
                 reason = esc(q.reason)
                 user_ans = esc(q.user_answer or "")
 
-                wiq_answer = esc(q.workiq_answer)
-                wiq_reason = esc(q.workiq_reason)
+                research = (
+                    f"{esc(q.research_answer)} | {esc(q.research_status)} | {esc(q.research_sources)}"
+                )
 
-                if use_extended and has_workiq:
+                if use_extended and has_research:
                     priority = esc(q.priority)
                     category = esc(q.category)
                     impact = esc(q.impact_if_unanswered)
                     background = esc(q.background)
                     viewpoints = esc(q.viewpoints)
                     lines.append(
-                        f"| {no} | {priority} | {category} | {question} | {background} | {viewpoints} | {choices_str} | {default} | {reason} | {impact} | {wiq_answer} | {wiq_reason} | {user_ans} |"
+                        f"| {no} | {priority} | {category} | {question} | {background} | {viewpoints} | {choices_str} | {default} | {reason} | {impact} | {research} | {user_ans} |"
                     )
                 elif use_extended:
                     priority = esc(q.priority)
@@ -708,9 +772,9 @@ class QAMerger:
                     lines.append(
                         f"| {no} | {priority} | {category} | {question} | {background} | {viewpoints} | {choices_str} | {default} | {reason} | {impact} | {user_ans} |"
                     )
-                elif has_workiq:
+                elif has_research:
                     lines.append(
-                        f"| {no} | {question} | {choices_str} | {default} | {reason} | {wiq_answer} | {wiq_reason} | {user_ans} |"
+                        f"| {no} | {question} | {choices_str} | {default} | {reason} | {research} | {user_ans} |"
                     )
                 else:
                     lines.append(
@@ -863,7 +927,7 @@ class QAMerger:
     def find_qa_files(qa_dir: Path, pattern: str = "*.md") -> List[Path]:
         """qa/ ディレクトリから質問票ファイルをリストアップする。
 
-            `-consolidated.md` と Work IQ 補助レポート（`*-workiq-*.md`）は除外する。
+            `-consolidated.md` と旧 Work IQ 補助レポート（`*-workiq-*.md`、FR-KD-10 で生成を廃止）は除外する。
 
         Args:
             qa_dir: 検索対象ディレクトリ。

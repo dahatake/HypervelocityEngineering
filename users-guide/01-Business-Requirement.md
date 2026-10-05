@@ -154,7 +154,7 @@ ARD は、事業のアイディアや業務情報から要求定義文書を生�
 - `python -m hve` が実行できる環境（→ [hve-cli-getting-started.md](./hve-cli-getting-started.md) / [hve-gui-getting-started.md](./hve-gui-getting-started.md)）
 - GitHub Copilot CLI が認証済みであること。未認証時は `python -m hve login` を実行します
 - 実行グループに必要な入力ファイルが存在すること。`--attached-docs` とパス形式の `--target-business` は実在パスを指定します
-- （任意）Work IQ を使う場合だけ `@microsoft/workiq` と Microsoft 365 認証が必要です
+- （任意）Work IQを使う場合だけ、GitHub Copilot CLIへexact `workiq`名のPlugin または MCP Serverを事前設定・認証します
 
 ### 実行モード
 
@@ -314,13 +314,15 @@ python -m hve orchestrate --workflow ard \
 
 `--steps` 省略時は表示グループ `2,3,4` が選択されます。入力不足を避けるため、再現可能な実行では `--steps` と `--target-business` を明示してください。終了コードは成功時 `0`、blocked / error / failed 時 `1` です。
 
-### Work IQ 連携（任意）
+### ARD 知識探索（任意）
 
-- `--workiq` は既定無効です。有効時は実行前に Work IQ 認証確認が行われ、失敗時は `python -m hve workiq-doctor` が案内されます。
-- ARD の主 Step は `.github/prompts/Arch-ARD-*.prompt.md` を使います。`hve/prompts.py` の `ARD_WORKIQ_USECASE_PROMPT` は補助情報取得用、`ARD_TARGET_BUSINESS_FROM_RECOMMENDATION_PROMPT` は SR から `target_business` を生成する補助セッション用です。
-- Issue を作成しないローカル実行では、Work IQ の Issue コメント注入先が無いため補助結果はローカルログに表示されます。
+- ローカル CLI では Work IQ（`--workiq`）は既定で有効です（`--no-workiq` または `WORKIQ_ENABLED=false` で無効。FR-KD-11）。実行時はSDK discoveryでexact `workiq`が`ready`か確認し、`not-configured`または`unverified`ならそのrunだけからWork IQを除外します。HVEはWork IQの構成や認証を変更しません。
+- Work IQ 以外の MCP server を知識源にする場合は、`--knowledge-source NAME` または `HVE_KNOWLEDGE_SOURCES` を使います。
+- runtimeで`connected`状態または allowlist tool を確認できない場合は当該知識源を除外します。Copilot CLIの`/mcp`で状態を確認し、Copilot CLI 側で設定・認証してからHVE processを再起動してください。
+- ARD Step 2 が実行対象で usable な知識源がある場合、DAG 前に「ARD 知識探索」を実行します。`Confirmed` / `Tentative` の回答が 1 件以上あり、Issue 番号・repo・token が揃う場合だけ、Step 2 Issue に `## ARD 知識探索: ユースケース参照情報` コメントを 1 件投稿します。
+- Issue を作成しないローカル実行では、Issue コメント投稿先が無いため探索記録は `qa/` とローカルログで確認します。
 
-詳細セットアップ: [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md) の「Work IQ 連携」セクション
+詳細セットアップ: [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md) の「Work IQ Plugin / MCP Server 連携」セクション
 
 ### 出力ファイル
 
@@ -368,7 +370,7 @@ python -m hve orchestrate --workflow ard \
 | Step `3.2` の子が展開されない | `docs/catalog/use-case-skeleton.md` に `UC-*` があるか確認する |
 | KPI/OKR が生成されない | 表示グループ `3`、実 Step `2.1`、または `--include-kpi-okr` を選択したか確認する |
 | 出力が不足する | CLI の失敗 Step、`work directory ready:` のパス、該当 Step テンプレートの入力・完了条件を確認する |
-| Work IQ が使われない | `python -m hve workiq-doctor` で接続診断を行ってください |
+| Work IQ が使われない | Copilot CLIの`/mcp`でexact `workiq`の接続と`ask`公開を確認し、CLI側で設定・認証後にHVE processを再起動してください |
 | ARD 用 Issue Template / Actions が見つからない | 仕様どおりです。ARD は CLI / GUI 専用です |
 
 ### HVE カスタマイズ入口
@@ -4024,7 +4026,7 @@ Prompt:
 
 **qa/ プロセスの位置づけ**
 
-Vibe Coding ワークフローでは、Copilot Agent がコンテキスト不足を検知した際に選択式の質問票（15〜100個程度）を自動作成します。ユーザーが質問に回答することで要求仕様の曖昧さを排除し、`KnowledgeManager` Agent が回答内容を D01〜D21 の文書クラスに分類・レポートします。
+Vibe Coding ワークフローでは、Copilot Agent がコンテキスト不足を検知した際に選択式の質問票を自動作成します。ユーザーが質問に回答することで要求仕様の曖昧さを排除し、`KnowledgeManager` Agent が回答内容を D01〜D21 の文書クラスに分類・レポートします。
 
 **Step.2.1（手動 Prompt ベース）との使い分け**
 
@@ -4061,7 +4063,7 @@ Issue Template の「質問票設定」チェックボックスをオンにし�
 **フロー**:
 1. Issue を作成し、「実行前 QA を実施する」チェックボックスをオン
 2. Sub-Issue 作成時に `*:qa-ready` ラベルが付与される（Copilot アサインは保留）
-3. `copilot-auto-feedback.yml` が `*:qa-ready` ラベルを検知し、事前 QA 質問票を Issue コメントに投稿（質問票作成中は `*:qa-drafting`）
+3. `copilot-auto-feedback.yml` が `*:qa-ready` ラベルを検知し、事前 QA 質問票を `qa/` に作成し、Issue コメントにはそのファイルへのリンクと質問数・未回答数の要約を投稿する（質問票作成中は `*:qa-drafting`）
 4. ユーザー（または `auto-qa-default-answer.yml`）が質問票に回答
 5. `auto-issue-qa-ready-transition.yml` が回答コメントを回答済み QA として `qa/` へ保存し、Contents API の再取得と SHA 照合で検証する
 6. Knowledge Management 以外の Workflow では、続けて `auto-akm-after-qa.yml` を非同期 dispatch する（AKM の完了は待たない）
@@ -4069,6 +4071,7 @@ Issue Template の「質問票設定」チェックボックスをオンにし�
 8. Copilot が実行計画を立て、メインタスクを実行
 
 - **`auto-qa` ラベルの役割**: Issue に付与された状態で Sub-Issue が作成されると、事前 QA フローが起動します
+- 質問票の正本は `qa/` 配下の Markdown です。Issue コメントはリンクと要約のみで、同じ質問票本文を二重掲載しません
 - QA 完了後は自動的に `*:ready` に遷移し、Copilot がメインタスクを開始します
 - 既定値で回答する場合は `auto-qa-default-answer.yml` が自動応答します
 - Copilot の質問票生成 PR が open しただけではメインタスクは開始されず、`*:qa-drafting` → `*:qa-ready`（回答待ち）までの遷移に留まります
@@ -4080,7 +4083,7 @@ Issue Template の「質問票設定」チェックボックスをオンにし�
 1. GitHub.com で Issue を作成
 2. Issue の右側サイドバー「Copilot」セクションで「Select agent」から該当する Agent を選択
 3. Assignees に @copilot を設定
-4. Copilot がコンテキスト不足を検知した場合、`Skill: task-questionnaire` に従い選択式質問票を PR コメントに投稿します
+4. Copilot がコンテキスト不足を検知した場合、`Skill: task-questionnaire` に従い選択式質問票を `qa/` に保存し、Issue / PR コメントにはリンクと要約を投稿します
 
 出典: `Skill: task-questionnaire` ステップ2〜4
 
@@ -4120,9 +4123,11 @@ Issue Template の「質問票設定」チェックボックスをオンにし�
 **回答方法は2つ**
 
 1. **各質問に個別回答**:
-   - 1-a. PR コメントで各 No. に対して選択肢を回答する
+   - 1-a. Issue / PR コメントで各 No. に対して選択肢を回答する
    - 1-b. `qa/` ファイルを直接編集して Git push する
 2. **Copilot の推論で進める**: 「推論で進めてください」とリプライします。この場合、Copilot はデフォルト回答案を採用し、不確実な箇所に `TBD（推論: {根拠}）` と明記します
+
+`qa/` ファイルが正本で、コメントは回答導線と要約のために使います。
 
 出典: `Skill: task-questionnaire` ステップ3〜4
 

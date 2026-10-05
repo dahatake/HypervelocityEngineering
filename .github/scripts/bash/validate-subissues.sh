@@ -14,6 +14,11 @@
 
 set -euo pipefail
 
+# FR-DOD-01: `## 完了条件` の「空とみなす文字」クラス（ブラケット式の中身のみ）。
+# glibc の C.UTF-8 では `[[:space:]]` が NO-BREAK SPACE (U+00A0) を空白と見なさず、
+# .NET / Python の `\s` とは判定が割れる。両者を一致させるため明示的に追加する。
+_BLANK_CLASS="[:space:]$(printf '\u00a0')"
+
 validate() {
   local subissues_path="$1"
   local errors=()
@@ -22,7 +27,6 @@ validate() {
     echo "Error: ${subissues_path} not found" >&2
     return 1
   fi
-
   echo "Checking: ${subissues_path}"
 
   local tmp_dir
@@ -64,7 +68,7 @@ validate() {
       { consecutive = 0 }
       END { exit (found ? 0 : 1) }
     ' "${subissues_path}"; then
-      echo "::error::${subissues_path}: \`<!-- subissue -->\` ブロックが 0 件 だが Markdown テーブル形式が検出されました。テーブル形式は禁止です。各行を \`<!-- subissue -->\` ブロックに展開してください。規約: .github/skills/task-dag-planning/references/subissues-template.md" >&2
+      echo "::error::${subissues_path}: \`<!-- subissue -->\` ブロックが 0 件 だが Markdown テーブル形式が検出されました。テーブル形式は禁止です。各行を \`<!-- subissue -->\` ブロックに展開してください。規約: .github/skills/_hve-plan-artifacts/subissues-template.md" >&2
       return 1
     fi
     echo "  ⚠️ No <!-- subissue --> blocks found"
@@ -73,20 +77,36 @@ validate() {
 
   local missing_blocks=""
   local empty_title_blocks=""
-  local block_file block_idx title_line title_value
+  local missing_dod_blocks=""
+  local empty_dod_blocks=""
+  local block_file block_idx title_line title_value dod_lines
   while IFS= read -r block_file; do
     [[ -f "${block_file}" ]] || continue
     block_idx=$(basename "${block_file}" .txt | grep -oE '[0-9]+$')
     title_line=$(grep -m1 -E '<!--[[:space:]]*title:[[:space:]]*.*-->' "${block_file}" || true)
     if [[ -z "${title_line}" ]]; then
       missing_blocks="${missing_blocks}${missing_blocks:+,}${block_idx}"
+    else
+      title_value=$(printf '%s' "${title_line}" \
+        | sed -E 's/^[[:space:]]*<!--[[:space:]]*title:[[:space:]]*//; s/[[:space:]]*-->[[:space:]]*$//')
+      title_value=$(printf '%s' "${title_value}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')
+      if [[ -z "${title_value}" ]]; then
+        empty_title_blocks="${empty_title_blocks}${empty_title_blocks:+,}${block_idx}"
+      fi
+    fi
+
+    # FR-DOD-01: `## 完了条件` セクションと、その配下の非空・非プレースホルダ記述を検査する。
+    if ! grep -qE '^[[:space:]]*##[[:space:]]+完了条件' "${block_file}"; then
+      missing_dod_blocks="${missing_dod_blocks}${missing_dod_blocks:+,}${block_idx}"
       continue
     fi
-    title_value=$(printf '%s' "${title_line}" \
-      | sed -E 's/^[[:space:]]*<!--[[:space:]]*title:[[:space:]]*//; s/[[:space:]]*-->[[:space:]]*$//')
-    title_value=$(printf '%s' "${title_value}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')
-    if [[ -z "${title_value}" ]]; then
-      empty_title_blocks="${empty_title_blocks}${empty_title_blocks:+,}${block_idx}"
+    dod_lines=$(awk '
+      /^[[:space:]]*##[[:space:]]+完了条件/ { inside = 1; next }
+      inside && /^[[:space:]]*##[[:space:]]/ { inside = 0 }
+      inside { print }
+    ' "${block_file}" | grep -vE "^[${_BLANK_CLASS}]*(-{3,})?[${_BLANK_CLASS}]*$" | grep -viE 'REPLACE_ME' || true)
+    if [[ -z "${dod_lines}" ]]; then
+      empty_dod_blocks="${empty_dod_blocks}${empty_dod_blocks:+,}${block_idx}"
     fi
   done < <(printf '%s\n' "${block_files[@]}" | sort -V)
 
@@ -95,6 +115,12 @@ validate() {
   fi
   if [[ -n "${empty_title_blocks}" ]]; then
     errors+=("${subissues_path}: <!-- title: ... --> 空値ブロック = [${empty_title_blocks}]")
+  fi
+  if [[ -n "${missing_dod_blocks}" ]]; then
+    errors+=("${subissues_path}: '## 完了条件' 欠落ブロック = [${missing_dod_blocks}]")
+  fi
+  if [[ -n "${empty_dod_blocks}" ]]; then
+    errors+=("${subissues_path}: '## 完了条件' 空値・プレースホルダブロック = [${empty_dod_blocks}]")
   fi
 
   if (( ${#errors[@]} > 0 )); then

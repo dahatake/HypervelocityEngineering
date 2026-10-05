@@ -267,6 +267,87 @@ class TestMcpIoLoggerCorrelation:
         assert log.record_tool_response(tool_call_id="c1", success=True) is False
         log.close()
 
+    def test_direct_non_boolean_success_is_logged_as_failure(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        log = _logger(tmp_path)
+        log.record_tool_request("workiq", "ask", tool_call_id="c1")
+
+        assert log.record_tool_response(
+            tool_call_id="c1",
+            success=1,  # type: ignore[arg-type]
+            content="malformed",
+            error="invalid success schema",
+        ) is True
+        log.close()
+
+        text = _read(tmp_path / "mcp-workiq.log")
+        assert "success=false" in text
+        assert "invalid success schema" in text
+
+
+class TestMcpToolCallCorrelator:
+    """call ID相関は不正schemaを文字列化せずfail closedする。"""
+
+    @pytest.mark.parametrize(
+        "call_id",
+        [None, "", "   ", " c1 ", 42, True, object()],
+    )
+    def test_register_rejects_noncanonical_call_id(self, call_id: object) -> None:
+        correlator = mio.McpToolCallCorrelator()
+        assert correlator.register(
+            "workiq", "ask", tool_call_id=call_id
+        ) is False
+        assert correlator.pop(tool_call_id=call_id) is None
+
+    def test_non_string_pop_cannot_consume_string_call_id(self) -> None:
+        class _LooksLikeCallId:
+            def __str__(self) -> str:
+                return "c1"
+
+        correlator = mio.McpToolCallCorrelator()
+        assert correlator.register(
+            "workiq", "ask", tool_call_id="c1"
+        ) is True
+        assert correlator.pop(tool_call_id=_LooksLikeCallId()) is None
+        assert correlator.pop(tool_call_id="c1") == ("workiq", "ask")
+
+    def test_duplicate_pending_call_id_is_invalidated(self) -> None:
+        correlator = mio.McpToolCallCorrelator()
+
+        assert correlator.register(
+            "workiq", "ask", tool_call_id="c1"
+        ) is True
+        assert correlator.register(
+            "other", "retrieve", tool_call_id="c1"
+        ) is False
+
+        assert correlator.pop(tool_call_id="c1") is None
+        assert correlator.pop(tool_call_id="c1") is None
+
+    def test_ambiguous_call_id_stays_invalid_until_clear(self) -> None:
+        correlator = mio.McpToolCallCorrelator()
+
+        assert correlator.register(
+            "workiq", "ask", tool_call_id="c1"
+        ) is True
+        assert correlator.register(
+            "other", "retrieve", tool_call_id="c1"
+        ) is False
+        assert correlator.pop(tool_call_id="c1") is None
+
+        assert correlator.register(
+            "workiq", "ask", tool_call_id="c1"
+        ) is False
+        assert correlator.pop(tool_call_id="c1") is None
+
+        correlator.clear()
+        assert correlator.register(
+            "workiq", "ask", tool_call_id="c1"
+        ) is True
+        assert correlator.pop(tool_call_id="c1") == ("workiq", "ask")
+
 
 class TestMcpIoLoggerEncoding:
     """FR-MCPLOG-02: UTF-8 / LF / BOM なし。"""
@@ -340,9 +421,9 @@ class TestMcpIoLoggerSanitize:
         assert "[REDACTED]" in text
 
     def test_sanitizer_is_the_shared_workiq_helper(self) -> None:
-        from hve import workiq
+        from hve import security
 
-        assert mio._sanitize is workiq._sanitize_diagnostic_text
+        assert mio._sanitize is security.sanitize_diagnostic_text
 
 
 class TestMcpIoLoggerConcurrency:
@@ -410,6 +491,36 @@ class TestAttachMcpIoEventLogger:
         assert "hello" in text
         assert "answer" in text
 
+    def test_truthy_non_boolean_success_is_logged_as_failure(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        log = _logger(tmp_path)
+        handlers: list = []
+        session = SimpleNamespace(on=handlers.append)
+        mio.attach_mcp_io_event_logger(session, log)
+
+        handlers[0](
+            self._event(
+                "tool.execution_start",
+                tool_call_id="c1",
+                mcp_tool_name="ask",
+                mcp_server_name="workiq",
+            )
+        )
+        handlers[0](
+            self._event(
+                "tool.execution_complete",
+                tool_call_id="c1",
+                success=1,
+                result=SimpleNamespace(content="malformed"),
+                error=None,
+            )
+        )
+        log.close()
+
+        assert "success=false" in _read(tmp_path / "mcp-workiq.log")
+
     def test_ignores_builtin_tools_without_mcp_server(self, tmp_path: Path) -> None:
         log = _logger(tmp_path)
         handlers: list = []
@@ -422,6 +533,45 @@ class TestAttachMcpIoEventLogger:
         )
         log.close()
         assert list(tmp_path.glob("mcp-*.log")) == []
+
+    def test_builtin_collision_cannot_complete_an_mcp_request(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        log = _logger(tmp_path)
+        handlers: list = []
+        mio.attach_mcp_io_event_logger(SimpleNamespace(on=handlers.append), log)
+        handler = handlers[0]
+
+        handler(
+            self._event(
+                "tool.execution_start",
+                tool_call_id="shared",
+                mcp_tool_name="ask",
+                mcp_server_name="workiq",
+            )
+        )
+        handler(
+            self._event(
+                "tool.execution_start",
+                tool_call_id="shared",
+                tool_name="view",
+            )
+        )
+        handler(
+            self._event(
+                "tool.execution_complete",
+                tool_call_id="shared",
+                success=True,
+                result=SimpleNamespace(content="builtin result"),
+            )
+        )
+        log.close()
+
+        text = _read(tmp_path / "mcp-workiq.log")
+        assert "| mcp_request |" in text
+        assert "| mcp_response |" not in text
+        assert "builtin result" not in text
 
     def test_records_server_status_events(self, tmp_path: Path) -> None:
         log = _logger(tmp_path)
@@ -457,3 +607,170 @@ class TestAttachMcpIoEventLogger:
         mio.attach_mcp_io_event_logger(SimpleNamespace(on=handlers.append), log)
         handlers[0](object())
         log.close()
+
+
+class TestMcpIoLoggerHandleEvent:
+    """FR-MCPLOG-01 / 02: セッション登録と独立した既存記録経路への入口。"""
+
+    @staticmethod
+    def _event(etype: str, **fields):
+        return SimpleNamespace(
+            type=SimpleNamespace(value=etype), data=SimpleNamespace(**fields)
+        )
+
+    def test_records_server_status_changed_without_session(self, tmp_path: Path) -> None:
+        log = _logger(tmp_path)
+        assert log.handle_event(
+            self._event(
+                "session.mcp_server_status_changed",
+                server_name="workiq",
+                status=SimpleNamespace(value="failed"),
+                error="initialization failed",
+            )
+        ) is None
+        log.close()
+
+        text = _read(tmp_path / "mcp-workiq.log")
+        assert text.count("| mcp_server_status |") == 1
+        assert "status=failed" in text
+        assert "initialization failed" in text
+
+    def test_records_servers_loaded_without_session(self, tmp_path: Path) -> None:
+        log = _logger(tmp_path)
+        assert log.handle_event({
+            "type": "session.mcp_servers_loaded",
+            "data": {
+                "servers": [
+                    {
+                        "name": "workiq", "status": "connected",
+                        "pluginName": "workiq", "transport": "stdio", "source": "plugin",
+                    },
+                    {"name": "other", "status": "failed", "error": "unavailable"},
+                ],
+            },
+        }) is None
+        log.close()
+
+        text = _read(tmp_path / "mcp-workiq.log")
+        assert text.count("| mcp_server_status |") == 1
+        for field in ("status=connected", "plugin=workiq", "transport=stdio", "source=plugin"):
+            assert field in text
+        other = _read(tmp_path / "mcp-other.log")
+        assert other.count("| mcp_server_status |") == 1
+        assert "status=failed" in other
+        assert "unavailable" in other
+
+    @pytest.mark.parametrize("step_id", ["", "T09"], ids=["default-step", "explicit-step"])
+    def test_records_tool_round_trip_without_session(self, tmp_path: Path, step_id: str) -> None:
+        log = _logger(tmp_path)
+        kwargs = {"step_id": step_id} if step_id else {}
+        for event in (
+            self._event(
+                "tool.execution_start",
+                tool_call_id="c1",
+                mcp_tool_name="ask",
+                mcp_server_name="workiq",
+                arguments={"query": "検索質問"},
+            ),
+            self._event(
+                "tool.execution_complete",
+                tool_call_id="c1",
+                success=True,
+                result=SimpleNamespace(content="検索結果"),
+            ),
+        ):
+            assert log.handle_event(event, **kwargs) is None
+        log.close()
+
+        text = _read(tmp_path / "mcp-workiq.log")
+        assert text.count("| mcp_request |") == 1
+        assert text.count("| mcp_response |") == 1
+        assert "検索質問" in text
+        assert "検索結果" in text
+        assert "success=true" in text
+        if step_id:
+            assert text.count(f"step={step_id}") == 2
+        else:
+            assert "step=" not in text
+
+    @pytest.mark.parametrize("mode", ["no-root", "dry-run", "closed"])
+    def test_disabled_logger_does_not_dispatch(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
+    ) -> None:
+        log = mio.McpIoLogger(None if mode == "no-root" else tmp_path, dry_run=mode == "dry-run")
+        if mode == "closed":
+            log.close()
+        calls: list = []
+        monkeypatch.setattr(mio, "_record_event", lambda *args, **kwargs: calls.append((args, kwargs)))
+
+        assert log.handle_event(object(), step_id="T09") is None
+        log.close()
+
+        assert calls == []
+        assert list(tmp_path.iterdir()) == []
+
+    @pytest.mark.parametrize("error_type", [OSError, RuntimeError])
+    def test_dispatch_error_does_not_escape_or_disable_later_events(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error_type: type[Exception]
+    ) -> None:
+        log = _logger(tmp_path)
+        event = object()
+        calls: list = []
+
+        def fail(logger, observed_event, *, step_id):
+            calls.append((logger, observed_event, step_id))
+            raise error_type("logging failed")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(mio, "_record_event", fail)
+            assert log.handle_event(event, step_id="T09") is None
+        assert calls == [(log, event, "T09")]
+        assert log.enabled is True
+
+        assert log.handle_event(
+            self._event("session.mcp_server_status_changed", server_name="workiq", status="connected")
+        ) is None
+        log.close()
+        assert "status=connected" in _read(tmp_path / "mcp-workiq.log")
+
+    def test_process_control_exception_is_not_swallowed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        log = _logger(tmp_path)
+
+        def interrupt(*_args, **_kwargs):
+            raise KeyboardInterrupt()
+
+        monkeypatch.setattr(mio, "_record_event", interrupt)
+        try:
+            with pytest.raises(KeyboardInterrupt):
+                log.handle_event(object())
+        finally:
+            log.close()
+
+    def test_attach_delegates_once_without_duplicate_records(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        log = _logger(tmp_path)
+        original = log.handle_event
+        calls: list = []
+        handlers: list = []
+
+        def handle_event(event, *, step_id=""):
+            calls.append((event, step_id))
+            return original(event, step_id=step_id)
+
+        monkeypatch.setattr(log, "handle_event", handle_event)
+        assert mio.attach_mcp_io_event_logger(
+            SimpleNamespace(on=handlers.append), log, step_id="T09"
+        ) is None
+        assert len(handlers) == 1
+        assert calls == []
+        event = self._event(
+            "session.mcp_server_status_changed", server_name="workiq", status="connected"
+        )
+        handlers[0](event)
+        log.close()
+
+        assert calls == [(event, "T09")]
+        assert _read(tmp_path / "mcp-workiq.log").count("| mcp_server_status |") == 1

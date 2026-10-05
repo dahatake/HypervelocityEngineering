@@ -271,6 +271,14 @@ def prompt_runtime(
     monkeypatch.setattr(settings_store, "settings_path", lambda: settings_path)
     monkeypatch.setattr(prompt_execution, "resolve_head_commit", lambda _root: _HEAD_COMMIT)
     monkeypatch.setattr(prompt_execution, "_default_runner", _FakeRunner())
+    # Work IQ は既定で有効なため、SDK 探索（asyncio loop の socket 生成）を伴う実 probe を止める。
+    from hve import workiq as _workiq
+
+    monkeypatch.setattr(
+        _workiq,
+        "probe_workiq_plugin_capability",
+        lambda **_kwargs: _workiq.WorkIQCapability("ready", "ready", ("workiq",)),
+    )
     monkeypatch.setattr(
         prompt_execution,
         "_verify_durable_child_completion",
@@ -349,7 +357,9 @@ class TestRequestV1Compatibility:
             "goal",
             "workflows",
             "settings_overrides",
+            "execution_policy",
         ]
+        assert parsed.execution_policy is None
 
         with pytest.raises(prompt_request.PromptRequestError):
             prompt_request.parse_request(

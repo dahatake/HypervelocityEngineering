@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -294,6 +297,207 @@ class TestPromptRunApprovalGate:
         )
         assert code == 5
         assert len(recorder.calls) == 1
+
+    def test_saved_settings_drift_starts_no_child(
+        self, tmp_path: Path, isolated_settings: Path, monkeypatch, capsys
+    ):
+        """FR-PROMPT-04 / 05: 保存設定による実 argv の変更にも再承認が必要。"""
+        from hve.gui import settings_store
+        from hve.prompt_request import load_request
+
+        request = _write_request(tmp_path)
+        settings = settings_store.defaults()
+        settings_store.save(settings)
+        approved = prompt_execution.build_execution_plan(
+            load_request(request),
+            settings=settings_store.load(),
+            repo_root=Path.cwd(),
+            head_commit=prompt_execution.resolve_head_commit(Path.cwd()),
+        )
+        settings["options"]["model"] = "gpt-5.5"
+        settings_store.save(settings)
+        saved_bytes = settings_store.settings_path().read_bytes()
+        rebuilt = prompt_execution.build_execution_plan(
+            load_request(request),
+            settings=settings_store.load(),
+            repo_root=Path.cwd(),
+            head_commit=approved.head_commit,
+        )
+        assert rebuilt.workflows[0].argv != approved.workflows[0].argv
+        assert rebuilt.sha256 != approved.sha256
+        argv = rebuilt.workflows[0].argv
+        assert argv[argv.index("--model") + 1] == "gpt-5.5"
+        recorder = _Recorder([0])
+        monkeypatch.setattr(prompt_execution, "_default_runner", recorder)
+
+        code = hve_main.main(
+            [
+                "prompt", "run", "--request", str(request),
+                "--expected-sha256", approved.sha256,
+            ]
+        )
+
+        assert code == 2
+        assert "stale" in capsys.readouterr().err
+        assert recorder.calls == []
+        assert settings_store.settings_path().read_bytes() == saved_bytes
+
+    def test_approved_run_preserves_resource_routing_failure(
+        self, tmp_path: Path, isolated_settings: Path, monkeypatch
+    ):
+        """FR-PROMPT-04 / FR-TS-13: Fake child の routing 失敗を成功へ丸めない。"""
+        from hve import workiq
+        from hve.gui import settings_store
+        from hve.toolsearch import resource_routing
+
+        settings = settings_store.defaults()
+        settings["options"]["workiq"] = True
+        settings_store.save(settings)
+        saved_bytes = settings_store.settings_path().read_bytes()
+        monkeypatch.setattr(
+            workiq, "probe_workiq_plugin_capability",
+            lambda **_kwargs: workiq.WorkIQCapability("ready", "ready", ("workiq",)),
+        )
+        request = _write_request(
+            tmp_path, workflows=[{"workflow_id": "aas"}, {"workflow_id": "aad-web"}]
+        )
+        expected = self._plan_hash(tmp_path, request)
+        send = Mock(side_effect=AssertionError("routing failure must precede send"))
+        session = SimpleNamespace(
+            rpc=SimpleNamespace(
+                tools=SimpleNamespace(initialize_and_validate=AsyncMock()),
+                mcp=SimpleNamespace(
+                    list=AsyncMock(return_value=SimpleNamespace(
+                        host=SimpleNamespace(),
+                        servers=[SimpleNamespace(name="workiq", status="connected")],
+                    )),
+                    list_tools=AsyncMock(return_value=SimpleNamespace(
+                        tools=[SimpleNamespace(name="ask")],
+                    )),
+                ),
+                options=SimpleNamespace(update=AsyncMock(
+                    return_value=SimpleNamespace(success=False),
+                )),
+            ),
+            disconnect=AsyncMock(),
+            send=send,
+            send_and_wait=send,
+        )
+        client = SimpleNamespace(create_session=AsyncMock(return_value=session))
+        route = resource_routing.ResourceRoute(
+            enabled_mcp_servers=("workiq",),
+            required_mcp_servers=("workiq",),
+            mcp_tool_allowlists={"workiq": ("ask",)},
+        )
+        children: list[list[str]] = []
+
+        def failed_child(argv, **kwargs):
+            children.append(list(argv))
+            assert kwargs["shell"] is False
+            assert kwargs["cwd"] == str(Path.cwd())
+            assert "--dry-run" not in argv
+            assert "--workiq" in argv
+            # 実 child/SDK は起動しない。共有 routing だけを Fake SDK で実行する。
+            with pytest.raises(
+                resource_routing.ResourceRoutingError, match="required MCP servers: workiq"
+            ):
+                asyncio.run(resource_routing.create_session_from_route(
+                    client=client, session_options={"model": "fake"}, route=route,
+                ))
+            return subprocess.CompletedProcess(argv, 1)
+
+        completed = Mock(return_value=True)
+        monkeypatch.setattr(prompt_execution, "_default_runner", failed_child)
+        monkeypatch.setattr(prompt_execution, "_verify_durable_child_completion", completed)
+
+        code = hve_main.main(
+            ["prompt", "run", "--request", str(request), "--expected-sha256", expected]
+        )
+
+        assert code == 1
+        assert len(children) == 1
+        client.create_session.assert_awaited_once()
+        session.rpc.tools.initialize_and_validate.assert_awaited_once()
+        session.rpc.mcp.list.assert_awaited_once()
+        session.rpc.mcp.list_tools.assert_awaited_once()
+        session.rpc.options.update.assert_awaited_once()
+        session.disconnect.assert_awaited_once()
+        send.assert_not_called()
+        completed.assert_not_called()
+        assert settings_store.settings_path().read_bytes() == saved_bytes
+
+    @pytest.mark.parametrize(
+        ("approved_state", "runtime_state"),
+        [("ready", "not-configured"), ("not-configured", "ready")],
+    )
+    def test_workiq_capability_drift_starts_no_child(
+        self,
+        approved_state: str,
+        runtime_state: str,
+        tmp_path: Path,
+        isolated_settings: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys,
+    ):
+        from hve import workiq
+        from hve.gui import settings_store
+        from hve.prompt_request import load_request
+
+        def capability(state: str) -> workiq.WorkIQCapability:
+            return workiq.WorkIQCapability(
+                state=state,
+                reason_code=state,
+                enabled_server_names=("workiq",) if state == "ready" else (),
+            )
+
+        settings = settings_store.defaults()
+        settings["options"]["workiq"] = True
+        settings_store.save(settings)
+        saved_bytes = settings_store.settings_path().read_bytes()
+        request = _write_request(tmp_path)
+        approved = prompt_execution.build_execution_plan(
+            load_request(request),
+            settings=settings,
+            repo_root=Path.cwd(),
+            head_commit=prompt_execution.resolve_head_commit(Path.cwd()),
+            workiq_capability=capability(approved_state),
+        )
+
+        runtime_capability = capability(runtime_state)
+        rebuilt = prompt_execution.build_execution_plan(
+            load_request(request),
+            settings=settings,
+            repo_root=Path.cwd(),
+            head_commit=approved.head_commit,
+            workiq_capability=runtime_capability,
+        )
+        assert ("--workiq" in approved.workflows[0].argv) is (approved_state == "ready")
+        assert ("--workiq" in rebuilt.workflows[0].argv) is (runtime_state == "ready")
+        assert approved.workflows[0].argv != rebuilt.workflows[0].argv
+        assert approved.sha256 != rebuilt.sha256
+        monkeypatch.setattr(
+            workiq,
+            "probe_workiq_plugin_capability",
+            lambda **_kwargs: runtime_capability,
+        )
+        recorder = _Recorder([0])
+        monkeypatch.setattr(prompt_execution, "_default_runner", recorder)
+
+        code = hve_main.main(
+            [
+                "prompt",
+                "run",
+                "--request",
+                str(request),
+                "--expected-sha256",
+                approved.sha256,
+            ]
+        )
+
+        assert code == 2
+        assert "stale" in capsys.readouterr().err
+        assert recorder.calls == []
+        assert settings_store.settings_path().read_bytes() == saved_bytes
 
     @pytest.mark.parametrize("prompt_command", ["plan", "run"])
     def test_unknown_head_fails_before_orchestrate(

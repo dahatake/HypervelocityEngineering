@@ -2,7 +2,7 @@
 
 > **WORK**: `work/run/<run-id>/Dev-Microservice-Azure-AddServiceTesting/Issue-<識別子>/`
 
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 
 - 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とし、実行ログを `docs/` / `src/` に追記しない。
@@ -50,14 +50,8 @@ TDD GREEN フェーズ専用 Agent（追加 Azure サービス向け）。
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。
-
 - **捏造禁止**: 接続文字列 / リソース名 / リージョン / SKU を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタを行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` を含める。
-- **work/ 直接編集禁止**: §4.1 準拠。
-- **`docs-original/` 書き込み禁止**。
-- **ルート `README.md` 変更禁止**。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 - **秘密情報禁止**: 接続文字列 / アカウントキー / SAS / トークンを成果物（コード / README / 作業ログ）に含めない。
 - **テストコード変更禁止**（テスト保護ルール）: `src/test/integration/add-service/` のテストコード本体（`.cs` ファイル）は原則変更しない。許可される変更は以下のみ:
   - テストプロジェクトの環境変数読み込み用ヘルパー（テストロジック非依存）
@@ -71,7 +65,6 @@ TDD GREEN フェーズ専用 Agent（追加 Azure サービス向け）。
 - `harness-error-recovery` — テスト失敗時の E-01〜E-05 リカバリ
 - `harness-safety-guard` — リソース削除等の破壊的操作の検出と中断
 - `tdd-red-green-reality` — 実テスト実行で GREEN を証明・恒真式で誤魔化しない・プラットフォーム別 verify コマンドの確定
-- `karpathy-guidelines` — LLM 共通ミス防止
 
 ## 生成テストの実行環境
 
@@ -80,16 +73,12 @@ TDD GREEN フェーズ専用 Agent（追加 Azure サービス向け）。
 - 必須設定が未設定の場合は C1 接続設定不備または環境ブロッカーとして扱い、テストを弱めたり skip したりして PASS 扱いしない。
 - 接続文字列・アカウントキー・SAS・Bearer token 等の秘密情報をコード、README、ログにハードコードしない。
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 # 1) 目的（スコープ固定）
 
 - 対象は **Step.2.3 で生成された integration テストプロジェクト全件**。
-- 目的は「`dotnet test` を実行し、全テストを PASS（TDD GREEN）させる」こと。
+- 目的は「`dotnet test src/test/integration/add-service/` を実行し、対象テストを PASS（TDD GREEN）させる」こと。反復中は対象テストのみを実行し、引数なしの全件実行は行わない。
 - GREEN にならない場合の解決手段は以下に限定する（優先順位順）:
   1. **環境変数 / appsettings 設定の補完**（接続先・認証方式の指定）
   2. **`src/infra/azure/` 配下の bicep / azd 設定の最小修正**（IAM ロール追加 / コンテナ・インデックス・トピック等の追加リソース定義）+ 再デプロイ
@@ -155,7 +144,7 @@ TDD GREEN フェーズ専用 Agent（追加 Azure サービス向け）。
 
 > **リトライ戦略（Skill `tdd-green-retry-strategy` 準拠）**: 各反復は前回と**異なるアプローチ**を選ぶ（下記 C1〜C5 の原因分類が対応先の切り替え軸になる）。同一の手当てを単純に繰り返さない。各失敗時は根本原因を実出力から特定し、次の対応を決める前に **Microsoft Learn MCP**（Azure / C# / Azure CLI / SDK / REST API）で正しい構文・設定・前提を確認する。Web 検索は MCP で解決できない場合のみ用いる。
 
-1. **`dotnet test` 実行**: 全プロジェクトのテストを並列実行し、FAIL リストを取得する。
+1. **`dotnet test src/test/integration/add-service/` 実行**: 対象の integration テストプロジェクト群を並列実行し、FAIL リストを取得する（反復中は対象テストのみを実行し、引数なしの全件実行は行わない）。
 2. **失敗原因の分類**: 各 FAIL を以下のカテゴリに分類する:
    - **C1 接続設定不備**: エンドポイント / 認証情報の欠落 → 5.3 で対応
    - **C2 IAM 不足**: 401 / 403 / `RoleAssignmentNotFound` → 5.4 で対応
@@ -187,7 +176,7 @@ TDD GREEN フェーズ専用 Agent（追加 Azure サービス向け）。
 
 ## 5.5) 全 PASS 確認
 
-- `dotnet test` を最終実行し、全プロジェクトで PASS することを確認する。
+- `dotnet test src/test/integration/add-service/` を最終実行し、対象の integration テストプロジェクト群で PASS することを確認する。着手時 baseline に無い新規 FAIL が 0 件であること。リポジトリ全体の回帰は PR の CI で 1 回だけ確認する。
 - テスト実行ログ（コマンド出力含む）を `{WORK}/test-run.log` に保存する。
 
 # 6) 禁止事項（このタスク固有）
@@ -207,13 +196,13 @@ TDD GREEN フェーズ専用 Agent（追加 Azure サービス向け）。
 - テスト実行ログ（`{WORK}/test-run.log`）に最終実行結果（PASS 件数 / 0 FAIL）が記録されている。
 - インフラ修正を行った場合、`src/infra/azure/` の diff が最小差分で適用され、変更理由が作業ログに記録されている。
 - `tdd_max_retries` 反復で解決できなかった場合、`asdw-web:blocked` ラベル + 詳細レポートが提供されている。
-- 完了報告に検証マーカーを含める。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
-# 8) 最終品質レビュー（単回インライン・セルフチェック）
+# 8) 受入観点（完了条件の補足）
 
-## 8.1 セルフチェック契約
+## 8.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ## 8.2 ドメイン固有観点
 
@@ -223,7 +212,7 @@ TDD GREEN フェーズ専用 Agent（追加 Azure サービス向け）。
 
 ## 8.3 反映方法
 
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 

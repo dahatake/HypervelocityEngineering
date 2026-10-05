@@ -1,7 +1,7 @@
 ---
 name: agentic-retrieval-contract
 description: >
-  Foundry IQ / Azure AI Search Agentic Retrieval の Knowledge Base・Knowledge Source・検索予算・証跡・MCP 公開を AR-CAP-01〜05 の固定契約として設計・検証する。 USE FOR: agentic retrieval design, Foundry IQ knowledge base, knowledge source selection, retrieval reasoning effort, multi-source retrieval, subquery budget, knowledge base MCP exposure. DO NOT USE FOR: classic single-query search index tuning, vector index design only, non-search agent capabilities, generic Azure deployment scripting. WHEN: AI Agent または Web アプリの検索経路として Foundry IQ / Azure AI Search Agentic Retrieval を選択したとき。
+  Foundry IQ/Azure AI Search Agentic Retrieval の知識ベース・Knowledge Source・検索予算・証跡・MCP公開の契約。 USE FOR: multi-source retrieval, reasoning effort, budgets, MCP exposure, evidence. DO NOT USE FOR: classic single-query search or non-search workflows. WHEN: この経路を選んだ設計・検証。
 category: planning
 metadata:
   origin: user
@@ -22,6 +22,7 @@ Agentic Retrieval は「1 リクエストで Knowledge Base が全 Knowledge Sou
 - **クラシック検索（単一クエリ）のインデックス設計・チューニング** — Agentic Retrieval を採用しない場合は対象外。
 - **ベクトルインデックスの次元・アルゴリズム設計** — 索引側の設計は既存の検索設計に委ねる。
 - **Azure リソース作成スクリプトの記法** — `azure-cli-deploy-scripts` の責務。
+- **一般 MCP Server 設計・実装** — 既存の公式情報参照規約に従う。本 Skill は AR-CAP-05 の HVE-specific MCP 公開契約だけを扱う。
 - **AI Agent の Goal Loop / REST mutation / Skill 梱包** — `ai-agent-capability-contract`（AG-CAP-01〜10）の責務。
 - **provider 抽象化層・汎用コネクタ framework の新設** — 要件に根拠がある場合を除いて作らない。
 - **SKU / API version / model / region / tier 上限の固定** — 実行時に公式情報で確認する。
@@ -195,6 +196,6 @@ Knowledge Base を Toolbox へ載せる公式手順が存在する
 | `ai-agent-capability-contract` | 先行 | AG-CAP-03 で本 Skill を使う経路を選択する |
 | `azure-cli-deploy-scripts` | 後続 | KB / KS を作成する冪等スクリプトの記法 |
 | `azure-ac-verification` | 後続 | Deploy 後の AC 検証記法 |
-| `mcp-server-design` | 補完 | Remote MCP の責務分離（AR-CAP-05 と併用） |
+| `AR-CAP-05` | 本契約 | HVE-specific MCP の公開可否・認証・allowlist・権限伝播 |
 | `foundry-toolbox-contract` | 補完 | `Connection topology: via-toolbox` を選んだ場合の TB-CAP-01〜05 |
-| `test-strategy-template` | 依存 | AR-CAP 別テストの戦略 |
+| `tdd-red-green-reality` | 参照 | `.github/skills/tdd-red-green-reality/SKILL.md` §1.7 — AR-CAP 別テスト観点の正本 |

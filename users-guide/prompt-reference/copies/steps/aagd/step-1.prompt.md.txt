@@ -2,6 +2,8 @@
 ## 目的
 ユースケース記述を入力として、AI Agent のアプリケーション定義書を作成する（Step 1）。
 
+既存の `docs/agent/agent-application-definition.md` がある場合は読み、Azure の設計（`docs/azure/azure-services-data.md` / `docs/azure/azure-services-additional.md`）と対象ユースケースを反映して変わる点の差分だけを追記する。既存の記述を削除・再生成しない。AAG Step.1 が同じ Agent で同じ成果物を作っており、定義をやり直すと同じ内容を 2 回書くことになるためである。既存の成果物が無い場合は新規に作成する。
+
 ## 入力
 - ユースケースID: {usecase_id}
 - ユースケース記述: {usecase_path}

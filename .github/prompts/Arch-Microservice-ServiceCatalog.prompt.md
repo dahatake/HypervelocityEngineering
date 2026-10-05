@@ -10,15 +10,7 @@
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 
@@ -45,7 +37,7 @@
 
 # 4) 出力（生成/更新するファイル）
 - 主要成果物（必須）: `docs/catalog/service-catalog-matrix.md`
-- 分割時のみ（必須）: `{WORK}plan.md` と `{WORK}subissues.md`
+- 分割時に使用: `{WORK}plan.md` と `{WORK}subissues.md`
 
 # 5) 実行手順（必ずこの順で）
 ## 5.1 調査（read/search）
@@ -59,24 +51,11 @@
 6. **非同期ジョブの場合のみ**：`service-list` §B 詳細・dataflow 関連仕様（存在すれば）・シーケンス記述から、`スケジュール/DAG` と `リトライ戦略` の根拠を抽出する。不明は `TBD`（推測禁止）。
 
 ## 5.3 計画・分割
-- Skill task-dag-planning に従う。
-- **plan.md 作成時の必須手順（省略禁止）**:
-  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
-  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
-     ```
-     <!-- task_scope: single|multi -->
-     <!-- context_size: small|medium|large -->
-     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
-     <!-- subissues_count: N -->
-     <!-- implementation_files: true or false -->
-     ```
-  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/task-dag-planning/references/plan-template.md` を参照）
-  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
+- 計画を書く場合は Skill `task-dag-planning` に従う。
 - `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 - 固有の分割粒度: 「セクション単位」で分割
 
 ## 5.4 生成（service-catalog.md）
-7. task_scope=single かつ context_size ≤ medium で完了できる見込みがある場合のみ、以下の **固定スキーマ**で `service-catalog.md` を生成/更新する。
    - 出典・TBD の扱いは `docs-output-format` Skill §1 参照
 
 ## 5.5 成果物の分割ルール
@@ -131,11 +110,11 @@
 - Q2 ...
 - Q3 ...
 
-# 8) 最終品質レビュー（単回インライン・セルフチェック）
+# 8) 受入観点（完了条件の補足）
 
-## 8.1 セルフチェック契約
+## 8.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ## 8.2 ドメイン固有観点
 - **機能完全性・要件達成度**：各行に出典がある / 推測が混じっていない / `TBD` が妥当か
@@ -143,7 +122,7 @@
 - **保守性・拡張性・完全性**：screen-list の画面が Table A に全て現れる（未反映は明示）/ 新規追加時の対応が容易か / Questions が明確か
 
 ## 8.3 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 # 9) 完了条件
 - `docs/catalog/service-catalog-matrix.md` が上記スキーマで生成/更新され、

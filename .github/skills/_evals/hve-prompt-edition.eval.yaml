@@ -76,6 +76,14 @@ test_cases:
         detail: "`ResumeService.list_candidates()` が複数候補を返した場合、execution ID の手入力を求めず、execution・workflow・status・更新時刻を日本語で提示して利用者に選択を求める。回答が一意になるまで対象を推測せず、`build_plan()`、acquire、子プロセス起動へ進まない"
     reason: "複数候補をAgentが勝手に選ばず、自然言語だけで対象を確定するFR-PROMPT-11の非推測境界"
 
+  - id: resume-request-uses-controller-only-when-needed
+    input: "昨日止まった処理を再開したいだけです。新しい実行 request は作らず、必要なときだけ再開候補を確認してください"
+    expected_trigger: true
+    verify:
+      - type: action
+        detail: "自然言語 resume request として扱う。通常の request v1 を拡張せず、新規 workflow plan/run へ流さない。対象 execution が不足または複数なら `ResumeService.list_candidates()` で候補確認だけを行い、対象が一意になってから `build_plan()` を提示する。明示承認前は acquire / `hve resume` / 子プロセス起動を 0 件にする"
+    reason: "FR-PROMPT-11。resume は必要な場合だけ共通 resume controller へ入り、通常の request 作成や run に置き換えない"
+
   - id: input-alias-for-non-canonical-file
     input: "ユースケース一覧は inputs/my-use-cases.md にあります。この名前のまま aad-web を動かしてください"
     expected_trigger: true
@@ -102,6 +110,12 @@ test_cases:
     expected_trigger: false
     expected_skill: null
     reason: "FR-PROMPT-10 live C3。Prompt Edition の対象外と明示的に拒否して終端し、新規 Workflow / Step の定義用質問、request / plan / run / write へ進まない。別経路を案内しても Prompt Edition が実行すると誤認させない"
+
+  - id: new-workflow-addition-paraphrase-no-load
+    input: "HVE に `loyalty-v2` Workflow を新設して、作ったらそのまま実行してください"
+    expected_trigger: false
+    expected_skill: null
+    reason: "新規 Workflow / Step の追加・作成を含む依頼は Prompt Edition の対象外。description の DO NOT LOAD FOR に従い、SKILL.md を読み込む前に『Prompt Edition の対象外』として終端し、定義質問 / request / plan / run / write はすべて 0 件にする"
 
   - id: live-d6-cloud-agent-terminal-rejection
     input: "GitHub の Issue Template から Cloud Agent で回して"

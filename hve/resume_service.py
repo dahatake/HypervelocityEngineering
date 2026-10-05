@@ -17,6 +17,7 @@ import time
 from typing import Any, Mapping, Sequence
 import uuid
 
+from .config import DEFAULT_IGNORE_PATHS
 from .artifact_validation import find_missing_output_paths
 from .fanout_expander import resolve_output_path_prefix_gates
 from .run_state_store import (
@@ -53,6 +54,8 @@ _REPLAY_VALUE_FLAGS = frozenset(
         "--enable-agentic-retrieval",
         "--foundry-sku-fallback-policy",
         "--enable-tool-search",
+        # FR-MODEL-04 / FR-LOCAL-SURFACE-01 (a): 27共有key。正の整数。
+        "--tool-search-defer-threshold",
         "--model",
         "--review-model",
         "--qa-model",
@@ -66,9 +69,7 @@ _REPLAY_VALUE_FLAGS = frozenset(
         "--max-parallel",
         "--qa-answer-mode",
         "--tool-search-ranking",
-        "--workiq-dxx",
-        "--workiq-per-question-timeout",
-        "--workiq-request-timeout",
+        "--knowledge-source",
         "--issue-number",
         "--log-level",
         "--timestamp-style",
@@ -102,9 +103,10 @@ _REPLAY_VALUE_FLAGS = frozenset(
         "--target-recommendation-id",
         "--tdd-max-retries",
         "--context-max-chars",
-        "--self-improve-max-iterations",
         "--mdq-watch-debounce-ms",
         "--cq-watch-debounce-ms",
+        # FR-PROMPT-13: 固定列挙値 (azure_deploy) のみ。値は orchestrate の argparse choices が検証する。
+        "--pre-approved-operation",
     }
 )
 _REPLAY_MULTI_VALUE_FLAGS = frozenset({"--agentic-data-source-modes"})
@@ -112,15 +114,14 @@ _REPLAY_BOOLEAN_FLAGS = frozenset(
     {
         "--strict",
         "--auto-qa",
+        "--no-auto-qa",
         "--qa-akm-background-merge",
         "--force-interactive",
         "--auto-contents-review",
         "--auto-coding-agent-review",
         "--auto-coding-agent-review-auto-approval",
         "--workiq",
-        "--workiq-akm-review",
-        "--no-workiq-akm-review",
-        "--no-self-improve",
+        "--no-workiq",
         "--auto-compaction",
         "--no-auto-compaction",
         "--tool-search",
@@ -129,9 +130,6 @@ _REPLAY_BOOLEAN_FLAGS = frozenset(
         "--no-foundry-mcp-integration",
         "--agentic-existing-design-diff-only",
         "--no-agentic-existing-design-diff-only",
-        "--workiq-akm-ingest",
-        "--no-workiq-akm-ingest",
-        "--workiq-draft",
         "--create-issues",
         "--assign-copilot-agent",
         "--create-pr",
@@ -158,7 +156,6 @@ _REPLAY_BOOLEAN_FLAGS = frozenset(
         "--include-kpi-okr",
         "--create-remote-mcp-server",
         "--no-create-remote-mcp-server",
-        "--self-improve",
         "--mdq-watch",
         "--no-mdq-watch",
         "--cq-watch",
@@ -166,19 +163,16 @@ _REPLAY_BOOLEAN_FLAGS = frozenset(
         "--workbench-flush-on-exit",
         "--no-workbench-flush-on-exit",
         "--unattended",
+        "--allow-public-exposure",
     }
 )
 _MISSING_VALUE_FLAGS = frozenset(
     {
+        # FR-PROMPT-13: 自由記述のため保存せず、key-only の replay gap とする。
+        "--budget-note",
         "--agentic-data-sources-hint",
         "--qa-ipc-dir",
         "--steering-ipc-dir",
-        "--workiq-draft-output-dir",
-        "--workiq-tenant-id",
-        "--workiq-prompt-qa",
-        "--workiq-prompt-km",
-        "--workiq-prompt-review",
-        "--mcp-config",
         "--cli-path",
         "--cli-url",
         "--cloud-session-integration-id",
@@ -197,9 +191,7 @@ _MISSING_VALUE_FLAGS = frozenset(
         "--attached-docs",
         "--additional-prompt",
         "--issue-title",
-        "--self-improve-goal",
         "--target-scope",
-        "--self-improve-target-scope",
     }
 )
 _MISSING_MULTI_VALUE_FLAGS = frozenset(
@@ -234,14 +226,8 @@ _REPLAY_FLAG_BY_KEY = {
     "agentic_data_sources_hint": "--agentic-data-sources-hint",
     "qa_ipc_dir": "--qa-ipc-dir",
     "steering_ipc_dir": "--steering-ipc-dir",
-    "workiq_draft_output_dir": "--workiq-draft-output-dir",
-    "workiq_tenant_id": "--workiq-tenant-id",
     "additional_prompt": "--additional-prompt",
     "issue_title": "--issue-title",
-    "workiq_prompt_qa": "--workiq-prompt-qa",
-    "workiq_prompt_km": "--workiq-prompt-km",
-    "workiq_prompt_review": "--workiq-prompt-review",
-    "mcp_config": "--mcp-config",
     "cli_path": "--cli-path",
     "cli_url": "--cli-url",
     "cloud_session_integration_id": "--cloud-session-integration-id",
@@ -258,13 +244,12 @@ _REPLAY_FLAG_BY_KEY = {
     "target_region": "--target-region",
     "analysis_purpose": "--analysis-purpose",
     "attached_docs": "--attached-docs",
-    "self_improve_goal": "--self-improve-goal",
     "target_scope": "--target-scope",
-    "self_improve_target_scope": "--self-improve-target-scope",
     "ignore_paths": "--ignore-paths",
     "target_files": "--target-files",
     "custom_source_dir": "--custom-source-dir",
     "input_alias": "--input-alias",
+    "budget_note": "--budget-note",
 }
 _KEY_RE = re.compile(r"[a-z][a-z0-9_]*\Z")
 
@@ -616,9 +601,7 @@ def build_resolved_replay_argv(
         ("--enable-tool-search", getattr(config, "enable_tool_search", None)),
         ("--max-parallel", getattr(config, "max_parallel", None)),
         ("--tool-search-ranking", getattr(config, "tool_search_ranking", None)),
-        ("--workiq-dxx", ",".join(getattr(config, "workiq_akm_ingest_dxx", ()) or ())),
-        ("--workiq-per-question-timeout", getattr(config, "workiq_per_question_timeout", None)),
-        ("--workiq-request-timeout", getattr(config, "workiq_request_timeout", None)),
+        ("--knowledge-source", ",".join(getattr(config, "knowledge_sources", ()) or ())),
         ("--issue-number", getattr(config, "issue_number", None)),
         ("--log-level", getattr(config, "log_level", None)),
         ("--timestamp-style", getattr(config, "timestamp_style", None)),
@@ -627,34 +610,16 @@ def build_resolved_replay_argv(
         ("--branch", getattr(config, "base_branch", None)),
         ("--repo", getattr(config, "repo", None)),
         ("--context-max-chars", getattr(config, "context_injection_max_chars", None)),
-        ("--self-improve-max-iterations", getattr(config, "self_improve_max_iterations", None)),
-        ("--self-improve-target-scope", getattr(config, "self_improve_target_scope", None)),
         ("--mdq-watch-debounce-ms", getattr(config, "mdq_watch_debounce_ms", None)),
         ("--cq-watch-debounce-ms", getattr(config, "cq_watch_debounce_ms", None)),
         ("--agentic-data-sources-hint", getattr(config, "agentic_data_sources_hint", None)),
         ("--qa-ipc-dir", getattr(config, "qa_ipc_dir", None)),
         ("--steering-ipc-dir", getattr(config, "steering_ipc_dir", None)),
-        ("--workiq-draft-output-dir", getattr(config, "workiq_draft_output_dir", None)),
-        ("--workiq-tenant-id", getattr(config, "workiq_tenant_id", None)),
-        ("--workiq-prompt-qa", getattr(config, "workiq_prompt_qa", None)),
-        ("--workiq-prompt-km", getattr(config, "workiq_prompt_km", None)),
-        ("--workiq-prompt-review", getattr(config, "workiq_prompt_review", None)),
         ("--cli-path", getattr(config, "cli_path", None)),
         ("--cli-url", getattr(config, "cli_url", None)),
         ("--additional-prompt", getattr(config, "additional_prompt", None)),
-        ("--self-improve-goal", getattr(config, "self_improve_goal", None)),
     ):
         _append_resolved_replay_value(argv, flag, value)
-
-    mcp_config = getattr(args, "mcp_config", None) if args is not None else None
-    if mcp_config:
-        _append_resolved_replay_value(argv, "--mcp-config", mcp_config)
-    elif getattr(config, "mcp_servers", None):
-        # The configured payload may contain endpoints or credentials.  A fixed
-        # ephemeral sentinel causes sanitize_argv() to retain only the gap key.
-        _append_resolved_replay_value(
-            argv, "--mcp-config", "replay-value-required"
-        )
 
     _append_resolved_replay_value(
         argv,
@@ -678,7 +643,7 @@ def build_resolved_replay_argv(
         strict = not continue_on_error
     for enabled, enable_flag, disable_flag in (
         (strict, "--strict", None),
-        (getattr(config, "auto_qa", None), "--auto-qa", None),
+        (getattr(config, "auto_qa", None), "--auto-qa", "--no-auto-qa"),
         (getattr(config, "qa_akm_background_merge", None), "--qa-akm-background-merge", None),
         (getattr(config, "force_interactive", None), "--force-interactive", None),
         (getattr(config, "auto_contents_review", None), "--auto-contents-review", None),
@@ -700,9 +665,6 @@ def build_resolved_replay_argv(
         (getattr(config, "cloud_session_enabled", None), "--cloud-session", "--no-cloud-session"),
         (getattr(config, "enable_auto_merge", None), "--enable-auto-merge", None),
         (getattr(config, "delete_local_merged_branch", None), "--delete-local-merged-branch", "--no-delete-local-merged-branch"),
-        (getattr(config, "workiq_akm_review_enabled", None), "--workiq-akm-review", "--no-workiq-akm-review"),
-        (getattr(config, "workiq_akm_ingest_enabled", None), "--workiq-akm-ingest", "--no-workiq-akm-ingest"),
-        (getattr(config, "workiq_draft_mode", None), "--workiq-draft", None),
         (getattr(config, "mdq_watch", None), "--mdq-watch", "--no-mdq-watch"),
         (getattr(config, "cq_watch", None), "--cq-watch", "--no-cq-watch"),
         (getattr(config, "workbench_flush_on_exit", None), "--workbench-flush-on-exit", "--no-workbench-flush-on-exit"),
@@ -711,14 +673,12 @@ def build_resolved_replay_argv(
             argv, enabled, enable_flag, disable_flag
         )
 
-    if getattr(config, "workiq_qa_enabled", False):
-        argv.append("--workiq")
+    # FR-KD-11: CLI 既定（有効）に依存せず、元の実行の値を明示する。
+    _append_resolved_replay_switch(
+        argv, getattr(config, "workiq_enabled", None), "--workiq", "--no-workiq"
+    )
     if getattr(config, "unattended", False):
         argv.append("--unattended")
-    if getattr(config, "self_improve_skip", False):
-        argv.append("--no-self-improve")
-    elif getattr(config, "auto_self_improve", False):
-        argv.append("--self-improve")
     if getattr(config, "no_workbench", False):
         _append_resolved_replay_value(argv, "--workbench", "off")
     _append_resolved_replay_value(
@@ -809,6 +769,9 @@ def standard_execution_is_registerable(
                 and getattr(config, "assign_copilot_agent", False)
             ),
             bool(params.get("resume_run")),
+            # FR-INPUT-06: run-scoped文書path/内容はdurable stateへ保存しない。
+            # Resume契約を拡張せず、custom Step入力を持つ実行は登録対象外とする。
+            bool(params.get("step_input_bundles")),
             bool(existing_execution_id),
         )
     )
@@ -899,6 +862,7 @@ class ResumeService:
                         raise DurableStateError(f"replay option requires a value: {flag}")
                     index += 1
             elif flag in _MISSING_MULTI_VALUE_FLAGS:
+                start = index
                 value_count = 1 if inline_value else 0
                 index += 1
                 while index < len(values) and not values[index].startswith("-"):
@@ -906,6 +870,13 @@ class ResumeService:
                     index += 1
                 if value_count == 0:
                     raise DurableStateError(f"replay option requires values: {flag}")
+                # 既定値そのものは利用者入力ではないため保持し、再入力を要求しない。
+                if flag == "--ignore-paths" and inline_value is None:
+                    launch_values = tuple(values[start + 1 : index])
+                    if launch_values == DEFAULT_IGNORE_PATHS:
+                        safe.append(flag)
+                        safe.extend(launch_values)
+                        continue
             elif flag in _MISSING_PAIR_FLAGS:
                 value_count = 1 if inline_value else 0
                 index += 1

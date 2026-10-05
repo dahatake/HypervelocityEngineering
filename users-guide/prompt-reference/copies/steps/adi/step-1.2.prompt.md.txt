@@ -12,7 +12,7 @@ ADI Step 1.1 で生成された D01〜D21 の 21 成果物を join し、横断�
 
 `QA-DocConsistency`
 
-## 入力（必須）
+## 入力
 
 - `qa/D01-original-docs-questionnaire.md`
 - `qa/D02-original-docs-questionnaire.md`

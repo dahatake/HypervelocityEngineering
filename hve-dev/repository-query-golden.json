@@ -91,7 +91,7 @@
         {
           "source": "markdown",
           "path": ".github/copilot-instructions.md",
-          "anchor": "- **PowerShell は最新 `pwsh` 固定**: Windows の PowerShell 実行は `pwsh.exe`"
+          "anchor": "- Windows 自動化は最新の PowerShell 7+（`pwsh.exe -NoLogo -NoProfile`）を使う。"
         },
         {
           "source": "code",
@@ -117,12 +117,12 @@
         {
           "source": "markdown",
           "path": ".github/skills/markdown-query/SKILL.md",
-          "anchor": "1. `python -m mdq search` のヒットが 0 件 → 異なるキーワードで 1〜2 回再試行"
+          "anchor": "1. `python -m mdq search` のヒットが 0 件 → 存在しない証明にせず、`--paths` とキーワードを変えて 1〜2 回再試行"
         },
         {
           "source": "markdown",
           "path": ".github/skills/code-query/SKILL.md",
-          "anchor": "- 索引が存在しない場合、`cq` は 0 件を返さず**エラーで停止**して `cq index` を案内する。黙って空振りしない。"
+          "anchor": "- `--profile` は `cq.toml` の `[profiles.<name>]` を選ぶ。存在しない設定や索引は fail-closed で停止し、黙って空結果にしない。"
         }
       ]
     },

@@ -63,6 +63,17 @@ class TestArdAttachedDocsPriority:
         text = _TARGETED_PROMPT.read_text(encoding="utf-8")
         assert _PRIORITY_PHRASE in text, "Targeted Prompt の最優先参照規定が失われています"
 
+    def test_targeted_prompt_documents_implemented_path_reference_flow(self) -> None:
+        section = _section(_TARGETED_PROMPT, "## 2) 入力（必ず参照）")
+        for stale_phrase in ("後続 PR で実装予定", "パス指定対応は後続実装"):
+            assert stale_phrase not in section, (
+                f"Targeted Prompt に実装済み機能を未実装とする記述が残っています: {stale_phrase}"
+            )
+        for required_phrase in ("ファイル本文ではなく", "相対パス一覧", "読み取りツール"):
+            assert required_phrase in section, (
+                f"Targeted Prompt の入力節にパス参照フローの説明がありません: {required_phrase}"
+            )
+
     def test_step2_template_keeps_attached_docs(self) -> None:
         section = _section(_STEP2_TEMPLATE, "## 入力")
         assert "{attached_docs}" in section, "step-2.md の入力節に {attached_docs} がありません"

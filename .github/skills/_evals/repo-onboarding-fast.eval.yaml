@@ -47,5 +47,5 @@ test_cases:
     expected_trigger: true
     verify:
       - type: action
-        detail: "既存の onboarding.md を削除してから新規作成する（copilot-instructions.md §0 work/ 書き込みルール：delete→create）"
+        detail: "既存の onboarding.md を削除してから新規作成する（Skill work-artifacts-layout の work/ 書き込みルール：delete→create）"
     reason: "既存 onboarding.md がある場合の更新ルールのエッジケース。repo-onboarding-fast の範囲内"

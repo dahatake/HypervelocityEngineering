@@ -49,7 +49,7 @@ HVE 自身の Copilot SDK セッションに対して、**ツール定義を毎�
 > `toolDefinitionsTokens` は SDK 定義上 "excludes deferred tools" であるため、この一致は
 > 「遅延化されたツールが 0 件」であることを意味する。
 >
-> さらに `--tool-search-ranking hve` を有効にすると、`hve/toolsearch/` が Skill 73 件をツールとして
+> さらに `--tool-search-ranking hve` を有効にすると、`hve/toolsearch/` が Skill カタログをツールとして
 > 登録するのに deferral が働かないため、ツール定義が **47,115 → 59,275 tokens（+12,160）** に増えた。
 >
 > ### このページの読み方（実測を反映した運用方針）
@@ -57,7 +57,7 @@ HVE 自身の Copilot SDK セッションに対して、**ツール定義を毎�
 > | 目的 | すべきこと |
 > |---|---|
 > | **本番ワークフローを回す** | `tool_search_ranking` を **`sdk`（既定）のまま**にする。何も設定しない。本ページの §8 以降は読まなくてよい |
-> | **コンテキストを削る** | 本機能ではなく、公開する MCP サーバ自体を絞る（FR-CLI-76: Step 実行セッションは `.github/.mcp.json` の宣言分のみを公開する） |
+> | **コンテキストを削る** | 本機能だけに頼らず、local session が使う **SDK ResourceSnapshot の route** を絞る。現在の runtime は Plugin / MCP / Skill を `knowledge` / `software-engineering` / `both` / `unclassified` の 4 分類で扱い、編集できる allowlist は `Knowledge MCP allowlist` と `Software Engineering MCP allowlist` の 2 系統だけである |
 > | **実装を保守 / 将来の SDK で再評価する** | §8 の手順で `--tool-search-ranking hve` を有効化し、[tool-search-dashboard.md](tool-search-dashboard.md) で `deferral_inactive_rate` を見る。**1.0 のままなら本実測と同じ状態**で、削減効果は得られない |
 >
 > なお **明示指定する MCP サーバ設定には `tools` キーが必須**で、欠けているとそのサーバは起動されず
@@ -85,7 +85,7 @@ HVE 自身の Copilot SDK セッションに対して、**ツール定義を毎�
 | 入力 | `hve/toolsearch/policy.json`（ポリシー）、`.github/skills/**/SKILL.md`（Skill カタログ）、`hve/skill_manifest.json`（存在する場合の manifest pin） |
 | 出力 | モデルへ返る検索結果（可読サマリ + `tool_references`）、`＜repo-root＞/.toolsearch/events.jsonl`、`＜repo-root＞/.toolsearch/usage.jsonl` |
 | 完了確認 | `python -m hve toolsearch dashboard` で「検索回数」が 1 以上になること |
-| 失敗時対応 | 検索回数が 0 のままなら [tool-search-dashboard.md §4](tool-search-dashboard.md#4-検索回数が-0-のままの切り分け) の切り分けフローへ。`policy.json` が不正な場合は差し替えを行わず SDK 既定へフォールバックする（Step は落ちない。§8） |
+| 失敗時対応 | 検索回数が 0 のままなら [tool-search-dashboard.md §4](tool-search-dashboard.md#4-検索回数が-0-のままの切り分け) の切り分けフローへ。HVEランキング差し替えだけなら`policy.json`不正時にSDK既定へフォールバックする。ただし同じファイルを使うFR-TS-13 resource routingは権限境界のためfail-closedし、対象local Stepを開始しない（§8） |
 | 終了後 | 検証が終わったら `--tool-search-ranking` を外して既定の `sdk` へ戻す |
 
 ---
@@ -104,7 +104,7 @@ HVE では実測でこうなっている。
 | 登録ツール数とその定義トークン量 | **171 ツール / 54,865 tokens** | FR-MODEL-04 記録時 | `hve-dev/requirement-definition.md` FR-MODEL-04 |
 | うち実際に使われた分 | **10 種 / 9,108 tokens** | 同上 | 同上 |
 | 登録ツール数とその定義トークン量（再測） | **183 ツール / 52,756 tokens** | 2026-08-13 | 冲頭バナー（Copilot CLI 1.0.79 / SDK 1.0.7） |
-| リポジトリ内 Skill | **35 件** | 2026-08-13 | `.github/skills/**/SKILL.md` の実測（`*/SKILL.md` だけだと 20 件。`**` でサブディレクトリも数える） |
+| リポジトリ内 Skill | **33 件** | 2026-10-01 | `.github/skills/**/SKILL.md` の実測（`*/SKILL.md` だけだと 20 件。`**` でサブディレクトリも数える） |
 
 > ツール総数は接続する MCP サーバの顔ぶれで変わるため、**日付の違う値が並ぶのは正常**である。
 > 自環境の値は `python -m hve toolsearch context` で取る（§9）。
@@ -420,6 +420,11 @@ sequenceDiagram
 }
 ```
 
+> 同梱ポリシーは HVE runtime の実行契約に必要な Skill / MCP 依存だけを表す。
+> 廃止済みの一般 Skill は同梱 pin や required Skill に戻さない。
+> 外部 Skill / MCP を代替候補として足す場合も、既存 `policy.json` の分類・allowlist・required 依存の内側で扱い、
+> 自動的な権限拡張や未定義 route へのフォールバックはしない。
+
 不正な値は **`ToolSearchPolicy.load()` の時点で `PolicyError`** になる（起動後に静かに壊れない）。
 
 ### 6.1 キー形式（最重要）
@@ -694,7 +699,7 @@ Step 終了時には `StepRunner._record_toolsearch_usage()` が呼ばれ、
 - ランカーは安全境界ではない。呼び出し禁止は `excluded_tools` と MCP サーバー設定の `tools` allowlist が担う（§6.3）。
 - `policy.json` のキーは `{kind}:{server}:{name}` 形式のみ。ツール名だけのキーを許す変更を入れない（§6.1）。
 - `additional_search_text` は `ToolCard` に持たない。モデルへ返す経路へ足さない（§5）。
-- `ToolSearchPolicy.load()` の失敗時は差し替えを行わず SDK 既定へフォールバックする。Step を落とす変更を入れない。
+- HVEランキング差し替えの`ToolSearchPolicy.load()`失敗時は差し替えを行わずSDK既定へフォールバックする。一方、FR-TS-13 resource routingのpolicy読取／schema検証失敗はambient resource漏洩を避けるためfail-closedする。この2経路を同じfallbackとして扱わない。
 - 同点は `ToolEntry.id` 昇順で解決する決定論を維持する（§7.4）。順序が揺れると prompt cache の prefix が壊れる。
 
 ---
@@ -705,11 +710,15 @@ Step 終了時には `StepRunner._record_toolsearch_usage()` が呼ばれ、
 python -m pytest hve/tests/test_toolsearch_eval.py -q
 ```
 
-`hve/toolsearch/golden-tool-queries.json` に日本語クエリと正解ツール ID を書く。
+`hve/toolsearch/golden-tool-queries.json` に日本語クエリと正解ツール名を書く。
 
 ```jsonc
 { "query": "敵対的レビューをしたい", "expected": ["skill_adversarial-review"] }
 ```
+
+golden の `expected` は `ToolEntry.name`（Skill は `skill_<name>`）で照合する。`policy.json` の pin キーが使う `ToolEntry.id` とは区別する。
+現行 golden は評価 schema と Recall@10 ≥ 0.85 の受入基準を維持し、HVE 契約確認 5 件と既存 37 件の合計 42 件として扱う。
+データセット更新前後は同一母集団ではないため、全指標の単純比較で改善 / 悪化を主張しない。
 
 ### 計測結果
 
@@ -718,7 +727,7 @@ python -m pytest hve/tests/test_toolsearch_eval.py -q
 | 項目 | 値 |
 |---|---|
 | 取得日 | 2026-08-04（Recall / MRR / miss / カタログ件数は 2026-08-07 に再取得して同値を確認） |
-| 対象カタログ | `.github/skills` の Skill 35 件 + native 4 ツール = **39 件**（MCP ツールは接続しないと列挙できないため含まない） |
+| 対象カタログ | `.github/skills` の Skill **33 件** + native 4 ツール = **37 件**（2026-10-01 のリポジトリ実測。MCP ツールは接続しないと列挙できないため含まない） |
 | golden | `hve/toolsearch/golden-tool-queries.json` の **42 クエリ** |
 | ポリシー | `hve/toolsearch/policy.json`（`field_weights` をそのまま使用、`limit=10`） |
 | トークン推定 | `tiktoken`（`cl100k_base`）が導入されている環境の値。未導入環境では `文字数 // 4` の概算にフォールバックするため、絶対値は一致しない |
@@ -745,8 +754,9 @@ python -m pytest hve/tests/test_toolsearch_eval.py -q
 実際に何にトークンが使われているかは示さない。実測にはこちらを使う。
 
 ```bash
-python -m hve toolsearch context          # テキスト
-python -m hve toolsearch context --json   # 機械可読
+python -m hve toolsearch context --workflow ard             # Workflow 単位
+python -m hve toolsearch context --workflow aagd --step 2.3 # Step 単位
+python -m hve toolsearch context --workflow ard --json      # 機械可読
 ```
 
 | 項目 | 内容 |
@@ -757,13 +767,81 @@ python -m hve toolsearch context --json   # 機械可読
 | プロンプト送信 | **しない**（`send` を呼ばないためモデル推論も quota 消費も発生しない） |
 | 推定値 | **使わない**。`hve/toolsearch/eval.py` の推定トークンは参照しない |
 | MCP 接続待ち | 宣言済みサーバーの接続を最大 60 秒待ち、時間内に接続しなかったものは「未接続」として列挙する（0 トークンとして混ぜない） |
+| Step 指定 | `--step` は任意。指定時は registry / Skill manifest の required / optional Skill と、policy の required MCP 依存を反映する。fan-out 子（例: `2.3/AG-01`）は base Step で解決する |
 | 失敗時 | 理由を表示して非 0 終了する。数値を推定で埋めない |
 
 Step 実行と同じセッション生成経路（`_create_session_with_auto_reasoning_fallback`）を使うため、
 表示される内訳は Step が実際に消費するコンテキストと同じ構成になる。
 
 GUI からは 「設定 > Tool-Search > コンテキスト内訳」 タブの実測ボタンで同じ内容を表示できる
-（GUI は CLI の出力をそのまま描画し、再集計しない）。
+（GUI は CLI の出力をそのまま描画し、再集計しない）。Step 欄の既定値は「Workflow 全体」で、
+非コンテナ Step を選んだ場合だけ CLI へ `--step` を渡す。
+
+### OFF / ON 比較（same snapshot / no-prompt）
+
+Tool Search の ON/OFF 比較は、**同じ ResourceSnapshot・同じ model・同じ context tier・同じ policy route** を使う
+`no-prompt` 実測として行う。プロンプトは送らず、モデル推論は発生しない。
+
+```bash
+python -m hve toolsearch context --workflow ard
+python -m hve toolsearch context --workflow ard --compare
+```
+
+| 項目 | 契約 |
+|---|---|
+| 比較対象 | `tool_search` OFF と ON。どちらも同じ local session 前提で `ResourceSnapshot` を共有する |
+| Workflow 指定 | `--workflow` は必須。registry workflow ごとの policy route を固定するため |
+| no-prompt | `context` / `context --compare` はどちらも prompt を送らない |
+| 同一性条件 | model / context tier / policy route / runtime resource set が同一であること |
+| drift 時 | `runtime drift` があると `comparable: false` になり、テキスト出力では **比較不能** と表示する |
+| reduction | 比較不能または片側 failure のとき、削減率は 0 で捏造せず `null` のまま返す |
+
+テキスト出力は比較不能時に `None` を削減値として列挙せず「算出なし」と表示する。
+JSON は機械判定用に従来どおり `reduction` の各値を `null` とする。比較可能で削減が無い場合は `0` と表示する。
+
+### SDK ResourceSnapshot route の 4 分類
+
+local runtime の resource route は次の 4 分類を使う。
+
+| 分類 | 意味 |
+|---|---|
+| `knowledge` | 知識参照系の route。`Knowledge MCP allowlist` を適用する |
+| `software-engineering` | 実装・検証系の route。`Software Engineering MCP allowlist` を適用する |
+| `both` | 上の 2 allowlist を両方適用する |
+| `unclassified` | owner 不明または policy 未分類。既定では追加 route を与えない |
+
+### 未分類 resource は既定で無効になる
+
+`unclassified` は「追加 route を与えない」だけでなく、**その MCP サーバー / Skill を local session で無効化する**（`disabled_mcp_servers` / `disabled_skills` に入る）。SDK に登録済みでも、`policy.json` に分類が無ければ Step から使えない。
+
+症状と対処は次のとおり。
+
+| 症状 | 原因 | 対処 |
+|---|---|---|
+| Step 中に特定 MCP / Skill がまったく呼ばれない | `resource_classifications` に未登録 | 該当 kind へ exact 名と分類を追加する |
+| `required ... resource '<名前>' is not permitted` で Step が開始しない | required 指定の MCP サーバーに allowlist が無い、または空 | 対象 category の `*_tool_allowlists.<サーバー名>` に bare tool 名を追加する |
+| `required ... resource '<名前>' is unavailable` | SDK にその exact 名が登録されていない、または disabled | Copilot CLI / SDK 側で登録・有効化する（HVE は導入・認証を行わない） |
+
+編集は GUI の「Tool-Search」→ **SDK Resources** タブ、または `policy.json` を直接編集する。`policy.json` の分類・allowlistフィールドに加え、required Skill が要求する exact MCP 名を `required_mcp_servers_by_skill` で宣言できる。
+
+```jsonc
+"resource_classifications": {
+  "plugins":     { "<Plugin 名>": "knowledge" },
+  "mcp_servers": { "<サーバー名>": "software-engineering" },
+  "skills":      { "<Skill 名>": "knowledge" }
+},
+"knowledge_tool_allowlists":            { "<サーバー名>": ["<bare tool 名>"] },
+"software_engineering_tool_allowlists": { "<サーバー名>": ["<bare tool 名>"] },
+"required_mcp_servers_by_skill":        { "<required Skill 名>": ["<サーバー名>"] }
+```
+
+`required_mcp_servers_by_skill` のキーは required Skill の正規名（例: `microsoft-foundry`）に一致させる。
+カテゴリ名・説明語・旧別名では照合しない。
+`required_mcp_servers_by_skill` の値は環境ごとの `.toolsearch/policy.json` で差し替えられるため、runner は `azure` / `microsoft-learn` 等の名前を固定しない。required は権限昇格ではなく、対象 Workflow の category と exact tool allowlist を満たさない server は fail-closed する。
+
+**allowlist の tool 名は推測せず、実際の `mcp.list_tools` 応答から採る。** required サーバーでは、allowlist に挙げた tool が 1 つでも runtime に存在しないと、欠落した exact tool 名を示して session を破棄する。optional サーバーは当該 session 内で無効化する。HVE は runtime discovery で得た名前を policy へ自動保存・自動許可しない。出荷時の allowlist は最小集合であり、利用する tool は各環境の実 discovery 結果を確認して追加する。
+
+旧コードが `SDKConfig(mcp_servers=...)` を渡しても、引数はコンストラクタ互換のため受理されるだけで意図的に破棄される。raw MCP config は session state へ複製されないため、分類・allowlist・required Skill依存は policy へ移行する。
 
 ### チューニングの順序
 
@@ -786,7 +864,7 @@ GUI からは 「設定 > Tool-Search > コンテキスト内訳」 タブの実
 | C3 | `ToolEntry.id` に MCP の raw name ではなく model-facing name を使う | `tool_references` へ返す値と一致させるため |
 | C4 | トークン削減率の計測に MCP を含まない | 下限値として扱う |
 | C5 | 検索は BM25（スパース）のみ。ベクトル検索・再ランカーは持たない | Foundry の公開比較では、BM25 ベースの検索が GPU 再ランカー（BGE-reranker-v2-gemma）と Web / Code カテゴリで同等の Recall@10 を示している |
-| C6 | Step ごとに Skill ルート配下の `SKILL.md` を全文読み直す | キャッシュしていない。件数はリポジトリと外部 Skill ルートの構成で変わる（本リポジトリ内の `.github/skills/**/SKILL.md` は 2026-08-07 時点で 35 件）。実測でボトルネックになったら対応する |
+| C6 | Step ごとに Skill ルート配下の `SKILL.md` を全文読み直す | キャッシュしていない。件数はリポジトリと外部 Skill ルートの構成で変わる（本リポジトリ内の `.github/skills/**/SKILL.md` は 2026-10-01 時点で 33 件）。実測でボトルネックになったら対応する |
 | C7 | 履歴（`usage.jsonl`）は `--tool-search-ranking hve` のときだけ書かれる | 差し替えを使っていないのに履歴だけ貯めても意味がないため |
 
 ---
@@ -822,7 +900,7 @@ Copilot SDK を呼ぶアプリケーション側へ組み込むライブラリ�
 
 - `session.load_skill_manifest()` は上流固有の `hve/skill_manifest.json` を読む。他リポジトリでは
   存在しないため空として扱われ、`manifest_pins` は効かない（`policy.json` の `pins` は効く）。
-- 同梱の `policy.json` は上流の pin / 語彙が入ったまま。導入先の構成に合わせて書き換える
+- 同梱の `policy.json` は HVE runtime 契約用の pin / 語彙だけを含める。廃止済み一般 Skill は再同梱しない。導入先の構成に合わせて書き換える
   （再コピーしても上書きされない `preserve` 対象）。
 - 同梱の `golden-tool-queries.json` は上流のツール構成向け。`toolsearch eval --golden <自前>` で
   差し替える。

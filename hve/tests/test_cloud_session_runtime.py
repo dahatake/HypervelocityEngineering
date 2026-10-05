@@ -123,6 +123,7 @@ class TestRunnerCloudSessionRuntime(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(calls), 2)
         self.assertIn("cloud", calls[0])
         self.assertNotIn("cloud", calls[1])
+        self.assertIs(calls[1]["request_extensions"], False)
         self.assertTrue(console.warnings)
 
     async def test_runner_helper_waits_for_readiness_before_returning(self) -> None:

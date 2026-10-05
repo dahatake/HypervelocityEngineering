@@ -5,18 +5,9 @@
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
-
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 
@@ -106,7 +97,7 @@
 
 ### 5.0 入力確認とスコープ固定
 - Issue body から **ユースケースID** と **ユースケース記述ファイルのパス** を取得する。
-- 取得できない場合は、リポジトリ内の `docs/usecase/` を探索して候補を提示し、質問は最大1回に留める。
+- 取得できない場合は、リポジトリ内の `docs/usecase/` を探索して候補を提示し、安全な候補を既定値として選び、理由と影響を記録して続行する。
 - 受け入れ条件（AC）を定義する：
   - Step 1（定義）の設計書が作成されている
   - `docs/agent/agent-application-definition.md` が存在し、全セクションが埋まっている
@@ -129,7 +120,7 @@
   - 出力形式は §3 の固定見出し構成に従う
 - **完了判定**: Overview / Scope / Requirements / NFR / Security & Compliance / Dependencies / Ops & Monitoring / Open Questions の全セクションが埋まっている。Mission、各CriterionのDescription、既知criterionのEvaluator/Evidence、Failure/Partial/Handoffは根拠付きで確定する。Mutation Intent、Required flag、数値制約を確定できない場合だけ、Goal Contractの理由付きTBDと同じ`Q-GC-NNN`を持つOpen Questionの両方を必須とし、AAG Step 3までの解決事項にする
 
-### 5.2 進捗ログ追記（必須）
+### 5.2 進捗ログ追記
 - `{WORK}ai-agent-design-work-status.md` に追記のみで記録する：
   - `YYYY-MM-DD: 何をした / 何が決まった / 次アクション`
 
@@ -138,7 +129,6 @@
   - ユースケースが長大で、セクションごとの根拠抽出がこのターンで完了しない
   - 不明点が多く、Open Questions が 15 項目を超える見込み
   - 複数ユースケース / 複数システムが混在しており、分割しないと誤りリスクが高い
-- Step 全体として Skill task-dag-planning の粒度/コンテキスト分割判定を適用する（詳細は Skill `task-dag-planning` を参照）。
   - 分割時は各 Sub Issue に `## Custom Agent` セクションに `Arch-AIAgentDesign-Step1` を含める
 
 ## 7) 書き込み失敗/巨大出力への対策

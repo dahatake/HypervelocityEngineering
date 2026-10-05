@@ -38,7 +38,7 @@ def test_aagd_agent_coding_reads_meta_skill_then_discovers_tools_and_samples() -
     """AAGD GREEN codingはmeta skill、Azure MCP、Learn sampleを順に使う。"""
     text = _foundry_required_section(
         _CODING_PROMPT.read_text(encoding="utf-8"),
-        "Microsoft Foundry required meta skill workflow（必須）",
+        "Microsoft Foundry required meta skill workflow",
     )
 
     for required_text in (
@@ -66,7 +66,7 @@ def test_aagd_agent_deploy_reads_meta_skill_for_deploy_then_invoke_only() -> Non
     """AAGD Deployはmeta skillのdeploy/invoke guidanceだけを使い既存契約を守る。"""
     text = _foundry_required_section(
         _DEPLOY_PROMPT.read_text(encoding="utf-8"),
-        "Microsoft Foundry required meta skill workflow（必須）",
+        "Microsoft Foundry required meta skill workflow",
     )
 
     for required_text in (
@@ -95,7 +95,7 @@ def test_aagd_required_prompts_do_not_change_mcp_configuration_or_red_step_scope
     for path in (_CODING_PROMPT, _DEPLOY_PROMPT):
         text = _foundry_required_section(
             path.read_text(encoding="utf-8"),
-            "Microsoft Foundry required meta skill workflow（必須）",
+            "Microsoft Foundry required meta skill workflow",
         )
         assert "MCP server を新規追加・接続構成変更しない" in text
         assert "既に接続済みの official MCP だけを discovery 対象" in text

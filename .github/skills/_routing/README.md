@@ -1,9 +1,9 @@
 ---
 name: _routing
 description: >-
-  Skills 参照先のルーティング表。USE FOR: どのフェーズでどの Skill を参照するか判断するとき。
-  DO NOT USE FOR: 実装手順や詳細仕様の代替。
-  WHEN: C[...]
+  Skill / reference 選択のルーティング表。USE FOR: ルート共通 instructions から、どのフェーズでどの Skill / reference を必要時参照するか判断するとき。
+  DO NOT USE FOR: 実装手順、詳細仕様、manifest required/optional 集合の代替。
+  WHEN: 作業内容に応じた既存 Skill と適用範囲を確認するとき。
 metadata:
   version: 1.0.0
 ---
@@ -12,37 +12,42 @@ metadata:
 
 以下は `.github/copilot-instructions.md` から分離したルーティング一覧。
 
+- ルート共通 instructions は `.github/copilot-instructions.md` を正本とし、この表は必要な Skill / reference を選ぶためだけに使う。
+- Agent 作業開始時は `agent-common-preamble` で停止境界と対象範囲を確認し、必要条件に応じた Skill / reference だけ読む。
+- 表の説明は要約に留め、field 詳細、全 Skill 本文、manifest の `required_skills` / `optional_skills` 集合は各正本へ委譲する。
+
 **【共通 / planning】**
 
 | フェーズ / トリガー | 参照 Skill | パス | 説明 |
 |---|---|---|---|
 | HVE アプリケーション自体の保守 / 要求トレーサビリティ | `hve-requirement-traceability` | `.github/skills/hve-requirement-traceability/SKILL.md` | active 要件と実在テストを選択取得 |
-| 自然言語の Prompt から既存 Workflow を実行したい（Prompt 版） | `hve-prompt-edition` | `.github/skills/hve-prompt-edition/SKILL.md` | 自然言語 → request v1 → `hve prompt plan` → 明示承認 → `hve prompt run`。推測実行を禁止し、既存 `orchestrate` へ委譲 |
-| 曖昧な HVE 実行意図（「設計」「APP の Web アプリ」「バッチを実装」「Azure にデプロイ」だけで Workflow / Step / APP-ID / resource group が不足） | `hve-prompt-edition` | `.github/skills/hve-prompt-edition/SKILL.md` | request 作成前に不足値を inline で質問し、ファイルを変更しない。HVE を介さない direct `azd` / `azure.yaml` 操作が明示された場合だけ外部 Azure Skill へ委ねる |
-| Agent 作業開始（共通） | `agent-common-preamble` | `.github/skills/agent-common-preamble/SKILL.md` | 全 Agent 共通ルール・Skills 参照リスト一元管理 |
+| HVE 本体のシステムテストを台帳で増分実行したい（「HVE の残りのシステムテスト」。HVE 生成アプリのテストは対象外） | `hve-system-test` | `.github/skills/hve-system-test/SKILL.md` | `tests/system-test-ledger/ledger.py` の `status --brief` / `run` / `run --execute` を使い、未実施ケースを予算内で実行して台帳へ記録 |
+| 自然言語の Prompt から既存 Workflow を実行したい（Prompt 版） | `hve-prompt-edition` | `.github/skills/hve-prompt-edition/SKILL.md` | 登録済み Workflow の plan / run と自然言語 resume / request 事前ゲートの参照入口。対象外条件・field 詳細・9手順は Skill / references へ委譲 |
+| 曖昧な HVE 実行意図（「設計」「APP の Web アプリ」「バッチを実装」「Azure にデプロイ」だけで Workflow / Step / APP-ID / resource group が不足） | `hve-prompt-edition` | `.github/skills/hve-prompt-edition/SKILL.md` | Workflow / Step / APP-ID / resource group 等の不足確認だけを inline で返す。request / run / write は行わず、direct `azd` / `azure.yaml` は対象外 |
+| Agent 作業開始（共通） | `agent-common-preamble` | `.github/skills/agent-common-preamble/SKILL.md` | `.github/copilot-instructions.md` の共通境界を確認し、必要な Skill / reference だけを選ぶ入口 |
 | 入力ファイル確認 | `input-file-validation` | `.github/skills/input-file-validation/SKILL.md` | 必読ファイル確認・欠損時処理ルール |
 | APP-ID スコープ解決 | `app-scope-resolution` | `.github/skills/app-scope-resolution/SKILL.md` | APP-ID からサービス/画面/エンティティ特定 |
-| タスク開始 / 不明点あり | `task-questionnaire` | `.github/skills/task-questionnaire/SKILL.md` | 選択式質問票で要件を明確化 |
-| 計画 / DAG / 見積 | `task-dag-planning` | `.github/skills/task-dag-planning/SKILL.md` | 依存関係分解・粒度/コンテキスト分割判定 |
+| 生成アプリの APP 別要求選択・追跡 | `application-requirement-traceability` | `.github/skills/application-requirement-traceability/SKILL.md` | APP-ID に対応する要求・ブロッカーを検証し、Requirement ID と根拠を記録 |
+| タスク開始 / 不明点あり | `task-questionnaire` | `.github/skills/task-questionnaire/SKILL.md` | HVE の PR / standalone 質問票と Prompt Edition preflight 例外 |
+| 計画 / DAG / 見積 | `task-dag-planning` | `.github/skills/task-dag-planning/SKILL.md` | 依存関係分解・受入条件・完了条件・分割単位・見積。HVE 固有の plan.md / subissues.md フォーマットと実行面の選択は `.github/skills/_hve-plan-artifacts/hve-binding.md` が正本 |
 | work/ 配下の構造設計 / 一時ファイルの置き場所 | `work-artifacts-layout` | `.github/skills/work-artifacts-layout/SKILL.md` | 入口 README + contracts/artifacts、ルート直下作成禁止 |
-| リポジトリ初見 | `repo-onboarding-fast` | `.github/skills/repo-onboarding-fast/SKILL.md` | 高速オンボーディング（構造把握・規約確認） |
-| Karpathy ガイドライン参照 | `karpathy-guidelines` | `.github/skills/karpathy-guidelines/SKILL.md` | Karpathy の実装原則（最小変更・仮説明示・検証重視） |
+| リポジトリ初見 | `repo-onboarding-fast` | `.github/skills/repo-onboarding-fast/SKILL.md` | HVE 作業 run の onboarding 入口と後続参照用5項目 |
 
 **【ドメイン設計 / planning】**
 
 | フェーズ / トリガー | 参照 Skill | パス | 説明 |
 |---|---|---|---|
-| アーキテクチャ候補選定 | `architecture-questionnaire` | `.github/skills/architecture-questionnaire/SKILL.md` | Q1-Q26 質問票・適合度評価 |
+| アーキテクチャ候補選定 | `architecture-questionnaire` | `.github/skills/architecture-questionnaire/SKILL.md` | AAS の Q1-Q26・既定根拠・出力表構造 |
 | knowledge/ 管理 | `knowledge-management` | `.github/skills/knowledge-management/SKILL.md` | D01〜D21 分類・状態判定・ステータス管理 |
 | タスク実行中に業務要件が不明瞭 | `knowledge-lookup` | `.github/skills/knowledge-lookup/SKILL.md` | knowledge/ D01〜D21 の条件付き参照ルール |
-| MCP Server 設計 | `mcp-server-design` | `.github/skills/mcp-server-design/SKILL.md` | Skills と MCP Server の責務分離・API設計 |
-| AAG / AAGD の AI Agent 設計・実装 | `ai-agent-capability-contract` | `.github/skills/ai-agent-capability-contract/SKILL.md` | Goal Loop・検索・REST Tool・MCP・Agent Skill の共通契約 |
-| Agentic Retrieval 設計・検証 | `agentic-retrieval-contract` | `.github/skills/agentic-retrieval-contract/SKILL.md` | Foundry IQ / Azure AI Search の Knowledge Base・Knowledge Source・検索予算・証跡・MCP 公開（AR-CAP-01〜05） |
-| Toolbox / tool search 設計・検証 | `foundry-toolbox-contract` | `.github/skills/foundry-toolbox-contract/SKILL.md` | Tool 総数の算出と閾値判定、Toolbox 採否、pin、検索メタデータ、探索予算（TB-CAP-01〜05） |
-| データフロー処理設計 | `dataflow-design-guide` | `.github/skills/dataflow-design-guide/SKILL.md` | バッチ要件定義〜テスト仕様の統合ガイド |
-| マイクロサービス設計 | `microservice-design-guide` | `.github/skills/microservice-design-guide/SKILL.md` | サービス定義書テンプレート |
+| AAG / AAGD の AI Agent 設計・実装 | `ai-agent-capability-contract` | `.github/skills/ai-agent-capability-contract/SKILL.md` | AG-CAP-01〜10 の Goal Loop・Tool・Identity・評価契約 |
+| Agentic Retrieval 設計・検証 | `agentic-retrieval-contract` | `.github/skills/agentic-retrieval-contract/SKILL.md` | AR-CAP-01〜05 の検索予算・Knowledge Source・HVE-specific MCP 契約 |
+| Toolbox / tool search 設計・検証 | `foundry-toolbox-contract` | `.github/skills/foundry-toolbox-contract/SKILL.md` | TB-CAP-01〜05 の Toolbox 採否・pin・探索予算契約 |
+| データフロー処理設計 | `dataflow-design-guide` | `.github/skills/dataflow-design-guide/SKILL.md` | HVE ADFD / ADFDV の8成果物契約への入口 |
+| マイクロサービス設計 | `microservice-design-guide` | `.github/skills/microservice-design-guide/SKILL.md` | HVE サービス定義書の17章・必須フィールド契約 |
 | docs-original/ 取り込み | `knowledge-management` | `.github/skills/knowledge-management/SKILL.md` | docs-original/ → D01〜D21 分類・矛盾検出 |
-| Markdown 横断クエリ（ローカル） | `markdown-query` | `.github/skills/markdown-query/SKILL.md` | ローカル完結の Markdown 検索・該当チャンクのみ返却で Context 最小化。**対象が `.md` のみであれば `grep_search` より優先**。索引未作成時は `python -m mdq index` を先に実行。HVE CLI Orchestrator 実行中はリアルタイム索引更新が並走する（既定 ON、`--no-mdq-watch` で無効化、Cloud Agent では非対応） || ソースコード横断クエリ（ローカル） | `code-query` | `.github/skills/code-query/SKILL.md` | ローカル完結のソースコード検索（定義 / 参照 / 正規表現 / 俯瞰マップ / トレース）。**対象が `.md` 以外のソースであれば `grep_search` より優先**。`--profile hve`（HVE 本体）/ `--profile app`（`src/` の生成アプリ）を使い分ける。索引未作成時は `python -m cq index` を先に実行 |
+| Markdown 横断クエリ（ローカル） | `markdown-query` | `.github/skills/markdown-query/SKILL.md` | Markdown の所在・抜粋・必要チャンクを小さく取得する調査入口。`.md` 優先、完全 read-only 時の usage log / index / watch 副作用境界は Skill 本文へ委譲 |
+| ソースコード横断クエリ（ローカル） | `code-query` | `.github/skills/code-query/SKILL.md` | ソース定義・参照・要件/テスト ID trace の抜粋取得入口。`.md` 以外のソース優先、profile / fidelity / index / usage log 副作用は Skill 本文へ委譲 |
 **Workflow 一覧（Issue Template / hve）**
 - `ard`, `aas`, `aad-web`, `asdw-web`, `adfd`, `adfdv`, `aag`, `aagd`, `akm`, `adi`, `adoc`
 
@@ -50,18 +55,17 @@ metadata:
 
 | フェーズ / トリガー | 参照 Skill | パス | 説明 |
 |---|---|---|---|
-| 大量出力 / 50k超 | `large-output-chunking` | `.github/skills/output/large-output-chunking/SKILL.md` | index + part 分割 |
-| docs/ 成果物フォーマット | `docs-output-format` | `.github/skills/output/docs-output-format/SKILL.md` | 固定章立て・出典必須・Mermaid erDiagram |
-| SVG ダイアグラム生成 | `svg-renderer` | `.github/skills/output/svg-renderer/SKILL.md` | SVGコード生成・画面レンダリング |
+| 大量出力 / 書き込み確認 | `large-output-chunking` | `.github/skills/large-output-chunking/SKILL.md` | terminal output を会話へ全文注入しない扱いと、書き込み読み戻しリトライ |
+| docs/ 成果物フォーマット | `docs-output-format` | `.github/skills/docs-output-format/SKILL.md` | HVE docs 成果物の固定見出し・TBD・出典・Mermaid 規約 |
 
 **【ハーネス / harness】**
 
 | フェーズ / トリガー | 参照 Skill | パス | 説明 |
 |---|---|---|---|
-| 敵対的レビュー（marker / label / 明示依頼 / HVE Phase 3） | `adversarial-review` | `.github/skills/harness/adversarial-review/SKILL.md` | 6軸 敵対的レビュー。通常レビュー・品質確認は単回セルフチェックまたは `harness-verification-loop` |
-| ハーネス: 検証ループ | `harness-verification-loop` | `.github/skills/harness/harness-verification-loop/SKILL.md` | Build/Lint/Test/Security/Diff |
-| ハーネス: 安全ガード | `harness-safety-guard` | `.github/skills/harness/harness-safety-guard/SKILL.md` | 破壊的操作検出・停止 |
-| ハーネス: エラーリカバリ | `harness-error-recovery` | `.github/skills/harness/harness-error-recovery/SKILL.md` | 原因推定・再試行・停止宣言 |
+| 敵対的レビュー（marker / label / 明示依頼 / HVE Phase 3） | `adversarial-review` | `.github/skills/adversarial-review/SKILL.md` | HVE の明示発動時だけ行う6軸レビューと PASS/FAIL 出力。通常レビュー・品質確認は `harness-verification-loop` の対象検証とは別に扱う |
+| ハーネス: 検証ループ | `harness-verification-loop` | `.github/skills/harness-verification-loop/SKILL.md` | 要求定義から導いた対象コマンドの exit code と実出力による完了判定 |
+| ハーネス: 安全ガード | `harness-safety-guard` | `.github/skills/harness-safety-guard/SKILL.md` | HVE 作業時の危険操作レベル判定・停止/確認・白リスト |
+| ハーネス: エラーリカバリ | `harness-error-recovery` | `.github/skills/harness-error-recovery/SKILL.md` | HVE エラー時の原因・再試行条件・停止条件の記録 |
 
 **【Azure プラットフォーム / azure-skills】**
 
@@ -78,16 +82,16 @@ metadata:
 | optional external Skill | active workflow / Step の候補かつインストール済みの正確な directory だけを JIT 公開する。選定サービス・操作に一致しない candidate は読まない | 設計・read-only・review は Microsoft Learn MCP へfallbackし、Azure write は block |
 
 - repository と external で同名の Skill は repository を優先する。external Skill が未導入でも、ローカル Skill が存在するものとして扱わない。
-- `microsoft-foundry` は meta skill であり、HVE は sub-skill routing を複製しない。AAGD `2.3` / `3` では required external Skill とし、repository-pinned `azure` / `microsoft-learn` MCP が connected であることを main turn 前に確認する。
+- `microsoft-foundry` は meta skill であり、HVE は sub-skill routing を複製しない。AAGD `2.3` / `3` では required external Skill とし、repository-pinned `azure` と `microsoft-learn` MCP が connected であることを main turn 前に確認する。
 - `azure-prepare` と `azure-deploy` は現行 HVE の script / AC / CI lifecycle と二重化するため active optional candidate に入れない。`azure-validate` はread-only readiness reviewに限り `asdw-web:5.2` / `adfdv:4.2` のactive optional candidateとして許可し、deploy lifecycleまたはAzure writeの迂回経路に使わない。
 - 詳細な操作別missing policyは `agent-common-preamble` の「Azure External Skill の JIT ルーティング（必須）」に従う。
 
 | フェーズ / トリガー | 参照 Skill | パス | 説明 |
 |---|---|---|---|
-| Deploy後 AC 検証 | `azure-ac-verification` | `.github/skills/azure-skills/azure-ac-verification/SKILL.md` | PASS/NEEDS-VERIFICATION/FAIL 判定・Azure CLI フォールバック |
+| Deploy後 AC 検証 | `azure-ac-verification` | `.github/skills/azure-ac-verification/SKILL.md` | HVE Deploy 成果物の AC 判定・実在証跡・未検証扱い |
 | Azure AI サービス利用 | `azure-ai` | `~/.agents/skills/azure-ai/SKILL.md` | Azure AI Search / Speech / OpenAI / Document Intelligence（外部・任意） |
 | AI Gateway 設定 | `azure-aigateway` | `~/.agents/skills/azure-aigateway/SKILL.md` | APIM を AI Gateway として設定・セマンティックキャッシュ・トークン制御（外部・任意） |
-| Azure CLI デプロイスクリプト生成 | `azure-cli-deploy-scripts` | `.github/skills/azure-skills/azure-cli-deploy-scripts/SKILL.md` | prep/create/verify 3点セット・冪等性パターン |
+| Azure CLI デプロイスクリプト生成 | `azure-cli-deploy-scripts` | `.github/skills/azure-cli-deploy-scripts/SKILL.md` | HVE prep/create/verify スクリプトの冪等性・stage 責務・禁止 fallback |
 | クラウド間移行アセスメント | `azure-cloud-migrate` | `~/.agents/skills/azure-cloud-migrate/SKILL.md` | AWS/GCP→Azure 移行アセスメント・コード変換（外部・任意） |
 | コンプライアンス監査・セキュリティ評価 | `azure-compliance` | `~/.agents/skills/azure-compliance/SKILL.md` | ベストプラクティス評価・Key Vault 有効期限・リソース設定検証（外部・任意） |
 | VM サイズ・VMSS 選定 | `azure-compute` | `~/.agents/skills/azure-compute/SKILL.md` | VM サイズ推奨・VMSS 構成・コスト見積（外部・任意） |
@@ -101,7 +105,7 @@ metadata:
 | Azure デプロイ準備（IaC 生成） | `azure-prepare` | `~/.agents/skills/azure-prepare/SKILL.md` | Bicep/Terraform・azure.yaml・Dockerfile 生成・マネージド ID（外部・任意） |
 | Azure クォータ確認・管理 | `azure-quotas` | `~/.agents/skills/azure-quotas/SKILL.md` | クォータ確認・サービス制限・vCPU 上限・リージョン容量検証（外部・任意） |
 | Azure RBAC ロール選定・割り当て | `azure-rbac` | `~/.agents/skills/azure-rbac/SKILL.md` | 最小権限ロール選定・CLI コマンド/Bicep 生成（外部・任意） |
-| Azure リージョン選択ポリシー | `azure-region-policy` | `.github/skills/azure-skills/azure-region-policy/SKILL.md` | デプロイ時のリージョン選定・利用可能性確認・fallback 理由記録 |
+| Azure リージョン選択ポリシー | `azure-region-policy` | `.github/skills/azure-region-policy/SKILL.md` | HVE Azure 成果物の location 優先順位・非対応確認・例外理由記録 |
 | Azure リソース一覧・検索・確認 | `azure-resource-lookup` | `~/.agents/skills/azure-resource-lookup/SKILL.md` | 全 Azure リソース検索・Resource Graph（外部・任意） |
 | Azure リソース Mermaid 図生成 | `azure-resource-visualizer` | `~/.agents/skills/azure-resource-visualizer/SKILL.md` | リソースグループ分析・依存関係可視化・アーキテクチャ図（外部・任意） |
 | Azure Storage 操作 | `azure-storage` | `~/.agents/skills/azure-storage/SKILL.md` | Blob/Queue/Table/Data Lake・アクセス層・ライフサイクル管理（外部・任意） |
@@ -116,22 +120,15 @@ metadata:
 
 | フェーズ / トリガー | 参照 Skill | パス | 説明 |
 |---|---|---|---|
-| GitHub Actions CI/CD | `github-actions-cicd` | `.github/skills/cicd/github-actions-cicd/SKILL.md` | OIDC 認証・GitHub Actions CI/CD・シークレット管理 |
-
-**【オブザーバビリティ / observability】**
-
-| フェーズ / トリガー | 参照 Skill | パス | 説明 |
-|---|---|---|---|
-| Application Insights 計装 | `appinsights-instrumentation` | `.github/skills/observability/appinsights-instrumentation/SKILL.md` | App Insights SDK・自動/手動計装ガイド |
+| GitHub Actions CI/CD | `github-actions-cicd` | `.github/skills/github-actions-cicd/SKILL.md` | HVE Step 単位 CI/CD の branch / PR 境界・OIDC / secret-less 方針 |
 
 **【テスト / testing】**
 
 | フェーズ / トリガー | 参照 Skill | パス | 説明 |
 |---|---|---|---|
-| テスト戦略テンプレート | `test-strategy-template` | `.github/skills/testing/test-strategy-template/SKILL.md` | テストピラミッド・テストダブル・データ戦略・カバレッジ方針 |
-| TDD RED/GREEN リアリティ | `tdd-red-green-reality` | `.github/skills/testing/tdd-red-green-reality/SKILL.md` | 実出力で RED/GREEN を証明・恒真式禁止・プラットフォーム別 verify コマンド確定（Azure/AWS/GCP/Windows/iOS） |
-| TDD GREEN リトライ戦略 | `tdd-green-retry-strategy` | `.github/skills/testing/tdd-green-retry-strategy/SKILL.md` | GREEN 化ループの多層・異アプローチ・公式情報駆動リトライ。同一手段の単純反復を禁止し、失敗の都度に根本原因特定＋公式技術情報 MCP から解決策取得 |
-| 要件適合の実測 | `requirements-conformance-measurement` | `.github/skills/testing/requirements-conformance-measurement/SKILL.md` | デプロイ済み成果物を実行して機能・非機能要件への適合を実測し、目標との差・余裕度・証跡を記録する |
+| TDD RED/GREEN リアリティ | `tdd-red-green-reality` | `.github/skills/tdd-red-green-reality/SKILL.md` | 実出力で RED/GREEN を証明し、HVE 生成テストの実行環境・採用方針（§1.6/§1.7）を保持 |
+| TDD GREEN リトライ戦略 | `tdd-green-retry-strategy` | `.github/skills/tdd-green-retry-strategy/SKILL.md` | HVE GREEN 化ループの層別上限・異アプローチ・根本原因/出典記録 |
+| 要件適合の実測 | `requirements-conformance-measurement` | `.github/skills/requirements-conformance-measurement/SKILL.md` | HVE deploy 後の既存資産による要件適合・Headroom・証跡レポート |
 
 ## Skill Deprecation スキーマ（W6-2: 廃止予定 Skill の標準マーカー）
 
@@ -163,10 +160,10 @@ metadata:
 3. Skill 参照側（Agent / 他 Skill / copilot-instructions.md）は `replacement` への置換コミットを優先する。
 4. `validate-skills.yml` CI で deprecation メタデータの形式を検証する（実装は次サイクル）。
 
-### 現在の廃止予定 Skill（W6-2 時点）
+### 廃止予定 Skill の記録（W6-2 時点の履歴）
 
 | Skill | status | since | replacement | removal_planned |
 |---|---|---|---|---|
 | （該当なし） | - | - | - | - |
 
-> 過去の Phase 0 W7-14 で発見された参照頻度低 Skill（`svg-renderer`, `appinsights-instrumentation`, `input-file-validation`）は **意図的なニッチユースケース** のため非推奨化していない。削除判断には以下の「3 条件 AND」を適用する（過去 6 ヶ月 0 参照 AND 機能代替可能 AND deprecated 標記でユーザー影響なし）。
+> 当時の Phase 0 W7-14 では、参照頻度低 Skill（`svg-renderer`, `appinsights-instrumentation`, `input-file-validation`）を意図的なニッチユースケースとして保持し、「過去 6 ヶ月 0 参照 AND 機能代替可能 AND deprecated 標記でユーザー影響なし」を削除判断の条件としていた。これは当時の履歴であり、現行一覧ではない。2026-09-11 の明示承認による整理で前二者の同梱を終了した。現行の登録は上の routing 表、変更概要は `CHANGELOG.md` を参照する。

@@ -1,5 +1,5 @@
 skill: docs-output-format
-skill_path: .github/skills/output/docs-output-format/SKILL.md
+skill_path: .github/skills/docs-output-format/SKILL.md
 description: docs/ 成果物フォーマットの共通原則。固定章立て・不足は TBD・各表の各行に出典必須・Mermaid erDiagram 記法指針を提供する。
 
 test_cases:
@@ -38,8 +38,8 @@ test_cases:
   - id: not-for-test-spec-format
     input: "テスト仕様書のフォーマットテンプレートを教えてほしい"
     expected_trigger: false
-    expected_skill: "test-strategy-template"
-    reason: "DO NOT USE FOR: test specification format (use test-strategy-template) に該当する"
+    expected_skill: null
+    reason: "テスト仕様書フォーマットは個別Prompt側が所有し、docs-output-format は HVE test policy の TDD 1.6/1.7 参照に限定するため"
 
   # --- エッジケース ---
   - id: edge-erdiagram-split-by-service

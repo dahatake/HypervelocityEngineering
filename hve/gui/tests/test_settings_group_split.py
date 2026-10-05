@@ -1,7 +1,7 @@
 """test_settings_group_split.py — FR-GUI-20 の RED テスト。
 
 設定画面「一般」カテゴリの旧「自動プロンプト」ノードを廃止し、
-`QA (質問票)` / `レビュー` / `Knowledge Management` / `自己改善 (Self Improve)` へ
+`QA (質問票)` / `レビュー` / `Knowledge Management` へ
 再編したうえで、`追加プロンプト` / `コンテキスト最大文字数` を `基本設定` へ移すことを検証する。
 
 実装前は `_CATEGORY_TREE` と `_SECTION_FIELDS` が旧構成のため全件 RED となる。
@@ -50,14 +50,14 @@ class TestGeneralCategoryTree(unittest.TestCase):
         self.assertEqual(items.get("QA"), "QA (質問票)")
         self.assertEqual(items.get("REVIEW"), "レビュー")
         self.assertEqual(items.get("KM"), "Knowledge Management")
-        self.assertEqual(items.get("SELFIMPROVE"), "自己改善 (Self Improve)")
+        self.assertNotIn("SELFIMPROVE", items)
 
     def test_basic_settings_stays_first(self) -> None:
         self.assertEqual(_general_items()[0], ("基本設定", "C1"))
 
     def test_new_nodes_follow_basic_settings_in_order(self) -> None:
         keys = [key for _name, key in _general_items()]
-        self.assertEqual(keys[:5], ["C1", "QA", "REVIEW", "KM", "SELFIMPROVE"])
+        self.assertEqual(keys[:4], ["C1", "QA", "REVIEW", "KM"])
 
     def test_section_factory_returns_dedicated_widgets(self) -> None:
         _get_app()
@@ -65,7 +65,6 @@ class TestGeneralCategoryTree(unittest.TestCase):
             _CKnowledgeManagement,
             _CQaPrompt,
             _CReviewPrompt,
-            _CSelfImprove,
         )
         from hve.gui.settings_window import SettingsWindow
 
@@ -75,7 +74,6 @@ class TestGeneralCategoryTree(unittest.TestCase):
                 "QA": _CQaPrompt,
                 "REVIEW": _CReviewPrompt,
                 "KM": _CKnowledgeManagement,
-                "SELFIMPROVE": _CSelfImprove,
             }
             for key, cls in expected.items():
                 with self.subTest(key=key):
@@ -122,18 +120,10 @@ class TestSectionFieldsSplit(unittest.TestCase):
         self.assertEqual(km["akm_reasoning_effort"], "akm_effort")
         self.assertEqual(km["akm_context_tier"], "akm_context_tier")
 
-    def test_self_improve_section_owns_the_four_keys(self) -> None:
+    def test_self_improve_section_is_removed(self) -> None:
         from hve.gui.settings_apply import _SECTION_FIELDS
 
-        si = _SECTION_FIELDS["SELFIMPROVE"]
-        for key in (
-            "self_improve",
-            "self_improve_max_iterations",
-            "self_improve_target_scope",
-            "self_improve_goal",
-        ):
-            with self.subTest(key=key):
-                self.assertEqual(si[key], key)
+        self.assertNotIn("SELFIMPROVE", _SECTION_FIELDS)
 
     def test_basic_section_owns_the_two_moved_keys(self) -> None:
         from hve.gui.settings_apply import _SECTION_FIELDS

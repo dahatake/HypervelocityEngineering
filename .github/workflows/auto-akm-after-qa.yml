@@ -89,7 +89,7 @@ jobs:
           # FR-CLOUD-25: 許可リスト外・未指定は Auto へ丸める（失敗させない）。
           SELECTED_AKM_MODEL="Auto"
           case "${AKM_MODEL}" in
-            "Auto"|"claude-opus-4.7"|"claude-opus-4.6"|"gpt-5.5"|"gpt-5.4")
+            "Auto"|"claude-opus-5.5"|"claude-opus-4.7"|"claude-opus-4.6"|"gpt-5.5"|"gpt-5.4")
               SELECTED_AKM_MODEL="${AKM_MODEL}"
               ;;
             *)

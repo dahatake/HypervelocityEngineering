@@ -5,7 +5,7 @@ GitHub Copilot SDK のセッションに対して、**ツール定義を毎タ�
 差し替え、ランキング（日本語対応 BM25）・pin ポリシー・Skill のカタログ合流・
 利用統計を自前で持つ。
 
-このフォルダは上流リポジトリ（`dahatake/RoyalytyService2ndGen`）の
+このフォルダは配布元リポジトリの
 `hve/toolsearch/` と `mdq/tokenize.py` を `tools/for-other-repo/copy_to_repo.py` で
 まとめたもの。同梱の版情報は [`KIT-VERSION.json`](./KIT-VERSION.json) にある。
 

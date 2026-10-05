@@ -84,13 +84,6 @@ sdkconfig_internal_fields:
   - review_timeout_seconds          # レビュータイムアウト（タイムアウト）
   - run_id                          # 実行 ID（内部トラッキング）
   - screen_reader                   # スクリーンリーダーモード（アクセシビリティ）
-  - self_improve_goal               # SI タスクゴール（SI 詳細設定）
-  - self_improve_max_requests       # SI リクエスト上限（コストリミット）
-  - self_improve_max_tokens         # SI トークン上限（コストリミット）
-  - self_improve_scope              # SI 実行単位（SI 内部）
-  - self_improve_skip               # SI 無効フラグ（SI 内部）
-  - self_improve_success_criteria   # SI 成功基準（SI 内部）
-  - self_improve_target_scope       # SI 対象パス（SI 内部）
   - session_id_prefix               # Resume 用セッション prefix（内部）
   - show_banner                     # バナー表示制御（出力制御）
   - show_reasoning                  # 推論表示（出力制御）
@@ -101,6 +94,7 @@ sdkconfig_internal_fields:
   - timestamp_style                 # タイムスタンプ表示位置（出力制御）
   - tool_search                     # SDK ツール定義遅延ロード（FR-MODEL-04、CLI/GUI実行基盤）
   - tool_search_ranking             # tool_search_tool のランキング実装差し替え（FR-TS-01、HVE 自身の SDK セッション）
+  - tool_search_defer_threshold     # SDK Tool Search遅延ロード閾値（FR-MODEL-04、ローカル3面のshared setting）
   - unattended                      # 全自動モード（自動化用）
   - verbose                         # 詳細出力（レガシー互換）
   - verbosity                       # 出力レベル（出力制御）
@@ -108,33 +102,27 @@ sdkconfig_internal_fields:
   - workbench_body_lines            # Workbench body ペイン行数（出力制御、--workbench-body-lines）
   - workbench_flush_on_exit         # Workbench 終了時バッファフラッシュ（出力制御）
   - workbench_history               # Workbench RingBuffer 容量（出力制御）
-  - workiq_akm_ingest_dxx           # AKM Work IQ 取り込み Dxx フィルタ（内部、HVE_WORKIQ_AKM_INGEST_DXX）
-  - workiq_akm_ingest_enabled       # AKM Work IQ 取り込み有効フラグ（内部、HVE_WORKIQ_AKM_INGEST_ENABLED）
-  - workiq_request_timeout          # Work IQ MCP request timeout
 
 # Issue Form フィールド ID のカバレッジチェック除外リスト。
 # 以下はワークフロー固有パラメータ・UI 入力ゲート・テキスト入力で選択式オプションではない。
 issue_form_internal_fields:
   - additional_comment      # ユーザー向けテキスト補足（UI 用、web-app-dev.yml 等）
-  - additional_context      # self-improve.yml 専用テキスト補足
   - analysis_purpose        # ARD 専用パラメータ（auto-requirement-definition.yml）
   - app_ids                 # ワークフロー固有パラメータ（APP-ID 指定）
   - attached_docs           # ARD 専用パラメータ（添付資料パス）
   - job_ids                 # dataflow-dev.yml 固有パラメータ（BJ-* ジョブ ID 指定）
   - company_name            # ARD 専用パラメータ（対象企業名）
-  - confirmation            # self-improve.yml UI 確認ゲート
   - depth                   # ADI 専用パラメータ（CLI / GUI）
   - doc_purpose             # ADOC 専用パラメータ（sourcecode-to-documentation.yml）
   - exclude_patterns        # ADOC 専用パラメータ
   - focus_areas             # ADI 専用パラメータ
   - force_refresh           # AKM 専用パラメータ（knowledge-management.yml）
   - groups                  # ARD 専用パラメータ（表示グループ選択）
-  - improvement_targets     # self-improve.yml 専用
   - max_file_lines          # ADOC 専用パラメータ
-  - max_iterations          # self-improve.yml 専用（self_improve_max_iterations の別名）
-  - quality_threshold       # self-improve.yml 専用（self_improve_quality_threshold の別名）
   - resource_group          # ワークフロー固有パラメータ（Azure RG 名）
   - sources                 # AKM 専用パラメータ（knowledge-management.yml）
+  - step_input_bindings     # Step入力slotとファイルを結び付ける任意textarea
+  - step_input_files        # Step入力として取り込むファイル一覧の任意textarea
   - steps                   # ワークフロー固有パラメータ（ステップ選択）
   - survey_base_date        # ARD 専用パラメータ（調査基準日）
   - survey_period_years     # ARD 専用パラメータ（調査期間年数）
@@ -143,8 +131,7 @@ issue_form_internal_fields:
   - target_files            # AKM 専用パラメータ
   - target_recommendation_id # ARD 専用パラメータ（採用 SR-ID）
   - target_region           # ARD 専用パラメータ（対象地域）
-  - target_scope            # ADI / self-improve 専用パラメータ
-  - task_goal               # self-improve.yml 専用
+  - target_scope            # ADI 専用パラメータ
   - usecase_id              # ワークフロー固有パラメータ（APP-ID 系）
 
 # ============================================================================
@@ -190,8 +177,13 @@ local_surface_shared_settings:
   - agentic_existing_design_diff_only
   - foundry_sku_fallback_policy
   - enable_tool_search
+  # SDK Tool Search（FR-MODEL-04）
+  - tool_search_defer_threshold
   # Cloud Session
   - cloud_session_branch
+  # 知識源（FR-KD-14）
+  - workiq
+  - knowledge_sources
 
 # shared setting のうち、設定ストアの key 名が `OrchestrateArgs` と一致しないもの。
 # 値は `OrchestrateArgs` フィールド名 → 設定ストア key 名。
@@ -209,8 +201,10 @@ local_surface_workflow_params:
 #     値は解決先の `OrchestrateArgs` フィールド名。
 orchestrate_cli_dest_aliases:
   input_alias: input_aliases
+  step_input: step_inputs
   no_mdq_watch: mdq_watch
   no_cq_watch: cq_watch
+  knowledge_source: knowledge_sources
 
 # (d) internal: controller が child `orchestrate` へ渡す非公開 dest。
 #     GUI / Prompt / Issue Form の設定面へ露出せず、環境変数にも昇格しない。
@@ -222,6 +216,9 @@ orchestrate_cli_internal_dests:
   - _lease_owner
   - _lease_generation
   - _unattended
+  - _pre_approved_operations
+  - _allow_public_exposure
+  - _budget_note
 
 # (e) excluded: 意図的に面固有とする CLI dest。値は除外の根拠。
 local_surface_excluded_cli_dests:
@@ -321,36 +318,12 @@ options:
       dropdown index 0（有効）を既定とし、CLI/SDKConfigはFalseを既定として
       明示flagで有効化する意図的なroute差がある。
 
-  - option_key: enable_self_improve
-    issue_form_field_id: enable_self_improve
-    hve_config_attr: auto_self_improve
-    hve_cli_flag: "--self-improve"
-    applies_to: common
-    notes: >
-      自己改善ループ。一般Cloud workflowではenable_self_improve → auto_self_improve。
-      AAG/AAGD Cloudだけはcheckboxを持たずmandatory。CLI/SDKConfigではAAG/AAGDを
-      Orchestratorが既定ONにし、--no-self-improve / disabled scopeを緊急安全弁として維持する。
-
   - option_key: tdd_max_retries
     issue_form_field_id: tdd_max_retries
     hve_config_attr: tdd_max_retries
     hve_cli_flag: --tdd-max-retries
     applies_to: common
     notes: "TDD GREEN リトライ上限。FR-LOCAL-SURFACE-01 (b) の workflow param。優先順位は CLI 明示 > 環境変数 HVE_TDD_MAX_RETRIES > 既定 5。GUI は宣言した Workflow の Step 1 ワークフロー枠で指定する（全体設定へは永続化しない）。config.py:563"
-
-  - option_key: self_improve_max_iterations
-    issue_form_field_id: self_improve_max_iterations
-    hve_config_attr: self_improve_max_iterations
-    hve_cli_flag: --self-improve-max-iterations
-    applies_to: common
-    notes: "自己改善最大イテレーション数。CLI / Wizard / Issue タグのいずれからも指定できる。"
-
-  - option_key: self_improve_quality_threshold
-    issue_form_field_id: self_improve_quality_threshold
-    hve_config_attr: self_improve_quality_threshold
-    hve_cli_flag: null
-    applies_to: common
-    notes: "自己改善品質スコア目標値。CLI 直接フラグなし（Wizard / Issue タグ経由）。config.py:244"
 
   - option_key: enable_agentic_retrieval
     issue_form_field_id: enable_agentic_retrieval
@@ -431,13 +404,6 @@ options:
     applies_to: hve_only
     notes: "レビュー指摘をメイン成果物へ反映。環境変数 HVE_APPLY_REVIEW_IMPROVEMENTS_TO_MAIN。デフォルト True。config.py:285, diff-spec §3.1"
 
-  - option_key: apply_self_improve_to_main
-    issue_form_field_id: null
-    hve_config_attr: apply_self_improve_to_main
-    hve_cli_flag: null
-    applies_to: hve_only
-    notes: "Self-Improve 計画をメイン成果物へ反映。環境変数 HVE_APPLY_SELF_IMPROVE_TO_MAIN。デフォルト True。config.py:286, diff-spec §3.1"
-
   - option_key: reuse_context_filtering
     issue_form_field_id: null
     hve_config_attr: reuse_context_filtering
@@ -465,84 +431,14 @@ options:
     hve_config_attr: workiq_enabled
     hve_cli_flag: "--workiq"
     applies_to: hve_only
-    notes: "Work IQ 連携（hve 専用）。M365 データ参照。Issue Form 経路では選択肢なし。config.py:212, diff-spec §2"
+    notes: "FR-KD-01: Work IQ を知識探索の知識源へ加える（hve 専用）。環境変数 WORKIQ_ENABLED。Issue Form 経路では選択肢なし。"
 
-  - option_key: workiq_qa_enabled
+  - option_key: knowledge_sources
     issue_form_field_id: null
-    hve_config_attr: workiq_qa_enabled
-    hve_cli_flag: null
+    hve_config_attr: knowledge_sources
+    hve_cli_flag: "--knowledge-source"
     applies_to: hve_only
-    notes: "QA フェーズ用 Work IQ 明示フラグ。環境変数 WORKIQ_QA_ENABLED。config.py:213"
-
-  - option_key: workiq_akm_review_enabled
-    issue_form_field_id: null
-    hve_config_attr: workiq_akm_review_enabled
-    hve_cli_flag: "--workiq-akm-review"
-    applies_to: hve_only
-    notes: "AKM 実行後レビュー Work IQ。環境変数 WORKIQ_AKM_REVIEW_ENABLED。config.py:214"
-
-  - option_key: workiq_draft_mode
-    issue_form_field_id: null
-    hve_config_attr: workiq_draft_mode
-    hve_cli_flag: "--workiq-draft"
-    applies_to: hve_only
-    notes: "Work IQ 質問ごとの回答ドラフト生成モード。config.py:219"
-
-  - option_key: workiq_tenant_id
-    issue_form_field_id: null
-    hve_config_attr: workiq_tenant_id
-    hve_cli_flag: "--workiq-tenant-id"
-    applies_to: hve_only
-    notes: "Work IQ Entra テナント ID（任意）。config.py:215"
-
-  - option_key: workiq_prompt_qa
-    issue_form_field_id: null
-    hve_config_attr: workiq_prompt_qa
-    hve_cli_flag: "--workiq-prompt-qa"
-    applies_to: hve_only
-    notes: "Work IQ QA 用プロンプト上書き。config.py:216"
-
-  - option_key: workiq_prompt_km
-    issue_form_field_id: null
-    hve_config_attr: workiq_prompt_km
-    hve_cli_flag: "--workiq-prompt-km"
-    applies_to: hve_only
-    notes: "Work IQ KM 用プロンプト上書き。config.py:217"
-
-  - option_key: workiq_prompt_review
-    issue_form_field_id: null
-    hve_config_attr: workiq_prompt_review
-    hve_cli_flag: "--workiq-prompt-review"
-    applies_to: hve_only
-    notes: "Work IQ レビュー用プロンプト上書き。config.py:218"
-
-  - option_key: workiq_draft_output_dir
-    issue_form_field_id: null
-    hve_config_attr: workiq_draft_output_dir
-    hve_cli_flag: "--workiq-draft-output-dir"
-    applies_to: hve_only
-    notes: "Work IQ 補助レポート出力先ディレクトリ。config.py:220"
-
-  - option_key: workiq_per_question_timeout
-    issue_form_field_id: null
-    hve_config_attr: workiq_per_question_timeout
-    hve_cli_flag: "--workiq-per-question-timeout"
-    applies_to: hve_only
-    notes: "Work IQ 質問ごとのタイムアウト秒数（既定 1200 秒）。config.py:221"
-
-  - option_key: workiq_max_draft_questions
-    issue_form_field_id: null
-    hve_config_attr: workiq_max_draft_questions
-    hve_cli_flag: null
-    applies_to: hve_only
-    notes: "Work IQ ドラフト生成対象の最大質問数（既定 10）。環境変数 WORKIQ_MAX_DRAFT_QUESTIONS。config.py:222"
-
-  - option_key: workiq_priority_filter
-    issue_form_field_id: null
-    hve_config_attr: workiq_priority_filter
-    hve_cli_flag: null
-    applies_to: hve_only
-    notes: "Work IQ 高優先度質問を優先して抽出するフィルタ。環境変数 WORKIQ_PRIORITY_FILTER。デフォルト True。config.py:225"
+    notes: "FR-KD-01: 知識探索で使う追加の MCP server 名。環境変数 HVE_KNOWLEDGE_SOURCES（カンマ区切り）。GUI は C4 の知識源欄。"
 
   - option_key: enable_tool_search
     issue_form_field_id: enable_tool_search

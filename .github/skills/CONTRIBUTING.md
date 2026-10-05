@@ -24,15 +24,15 @@
 
 ### 必須項目
 
-- [ ] **フォルダ名は kebab-case**（例: `task-dag-planning`, `deploy-model`）。プロダクト名を含む場合はプロダクト名の表記規則に従う（例: `microsoft-foundry` はプロダクト名のまま）
+- [ ] **フォルダ名は kebab-case**（例: `dataflow-design-guide`, `deploy-model`）。プロダクト名を含む場合はプロダクト名の表記規則に従う（例: `microsoft-foundry` はプロダクト名のまま）
 - [ ] **`SKILL.md` に YAML frontmatter** を記載する（`name`, `description`, `metadata.version` の3フィールドは必須）
-- [ ] **`description` に以下を含む**（[§6](#6-description-統一フォーマット) 参照）:
-  - 200文字以下の日本語サマリー
-  - `USE FOR:` トリガーキーワード（英語）
-  - `DO NOT USE FOR:` 除外条件（英語）
-  - `WHEN:` 日本語での発動条件
+- [ ] **`description` 全体を GitHub Copilot / VS Code Agent Skills の現行仕様に合わせる**（[§3](#3-description-文字数の推奨), [§6](#6-description-統一フォーマット) 参照）:
+  - `description` 全体は 1〜1024 文字
+  - 冒頭サマリーは簡潔にし、200 文字以下を推奨
+  - `USE FOR:` / `DO NOT USE FOR:` / `WHEN:` の既存フォーマットを原則使う
+  - 既存互換の 1 行 `Use when:` 形式も不正扱いしない
 - [ ] **`## Non-goals（このスキルの範囲外）` セクション** を SKILL.md に記載する
-- [ ] **詳細手順が多い場合は `references/` への分離を推奨する**（SKILL.md は概要・ルーティング・入出力例を中心に簡潔に保つ）
+- [ ] **詳細手順が多い場合や条件別の補足が必要な場合は `references/` への分離を推奨する**（SKILL.md は概要・ルーティング・必要な参照先を中心に簡潔に保つ）
 - [ ] **`.github/skills/_routing/README.md` のルーティングテーブルに追加する**（既存カテゴリへの追加の場合は該当カテゴリテーブルを更新する）
 - [ ] **変更後に `python3 .github/scripts/validate-skill-routing.py` を実行する**（ルーティング整合・重複・frontmatter 必須項目の自動検証）
 
@@ -45,8 +45,8 @@
 ### frontmatter スキーマ（確定）
 
 - **必須**
-  - `name`
-  - `description`
+  - `name`（1〜64 文字）
+  - `description`（全体で 1〜1024 文字）
   - `metadata.version`（SemVer: `MAJOR.MINOR.PATCH`、例: `1.0.0`）
 - **推奨**
   - `category`
@@ -58,7 +58,7 @@
 
 ## 2. description 言語方針
 
-`.github/copilot-instructions.md` §0「出力は日本語」ルールに準拠し、
+Skill `agent-common-preamble` の出力言語ルールに準拠し、
 以下の方針を適用する。
 
 | 項目 | 言語 | 理由 |
@@ -69,26 +69,27 @@
 | `WHEN:` の値 | **日本語** | ユーザーの発話・コンテキストは日本語が主体 |
 | SKILL.md 本文 | **日本語** | §0 準拠 |
 
-> ⚠️ **プラットフォーム注意**: `USE FOR` / `DO NOT USE FOR` の英語キーワードが GitHub Copilot において Anthropic Claude と同一の精度でトリガーとして動作するかは未確認。現時点では「推奨」として記載し、断定しない。
+> ⚠️ **プラットフォーム注意**: `USE FOR` / `DO NOT USE FOR` の英語キーワードは GitHub Copilot 向けの説明補助として扱う。精度保証のために同義語を大量列挙するのではなく、用途・除外・発動条件を少数の明確な語で表す。
 
 ---
 
 ## 3. description 文字数の推奨
 
-- **サマリー部分（1行目）**: **200文字以下** を推奨する
-- `USE FOR` / `DO NOT USE FOR` / `WHEN` を含む `description` 全体の実質的な文字数上限は **未確定**
-  - GitHub Copilot のプラットフォーム固有の制限が判明次第、本ガイドを更新する
-  - 参考: Anthropic ガイドでは 1024 文字以下を推奨（ただし GitHub Copilot では未検証）
-- 既存の実例として `task-dag-planning`（約 300 文字）、`deploy-model`（約 500 文字）が実績あり
+- **description 全体**: GitHub Copilot / VS Code Agent Skills の現行公式仕様では **1〜1024 文字**。この範囲は `USE FOR` / `DO NOT USE FOR` / `WHEN` 等を含む `description` 全体に適用される
+- **サマリー部分（冒頭の用途説明）**: **200 文字以下** を推奨する。これは読みやすさの目安であり、受け入れ可否の hard gate ではない
+- `USE FOR` / `DO NOT USE FOR` / `WHEN` は、少数の明確なキーワードと条件で十分。5〜15 個、3〜8 個、3〜10 個といった個数目安を義務として扱わない
+- 既存 Skill の `description` が 1024 文字以内で用途・除外・発動条件を十分に伝えている場合、同義語を増やすためだけに書き換えない
 
 ---
 
 ## 4. ディレクトリ構造テンプレート
 
+既存 Skill は `.github/skills/<skill-name>/` 直下、または既存カテゴリ配下に置く。下図の `<category>/` はカテゴリ配下へ配置する場合だけ付ける。
+
 ```
 .github/skills/<category>/<skill-name>/
 ├── SKILL.md           ← 概要・ルーティング・入出力例（必須）
-├── references/        ← 詳細手順・ルールリファレンス（推奨）
+├── references/        ← 詳細手順・ルールリファレンス（条件別に必要な場合）
 │   ├── detail-1.md
 │   └── detail-2.md
 ├── scripts/           ← 実行スクリプト（必要な場合）
@@ -96,17 +97,18 @@
 └── assets/            ← テンプレート・フォーマット定義（必要な場合）
 ```
 
-### カテゴリ一覧（ルーティング対象 7 カテゴリ）
+### 現行の配置例
 
 | カテゴリ | 用途 | 例 |
 |---------|------|-----|
-| `planning/` | 計画・コンテキスト収集・設計ガイド | `task-dag-planning`, `dataflow-design-guide` |
+| `.github/skills/` 直下 | 計画・コンテキスト収集・設計ガイド等 | `task-dag-planning`, `dataflow-design-guide` |
 | `harness/` | 検証・安全ガード・エラーリカバリ | `harness-verification-loop`, `adversarial-review` |
-| `output/` | 出力フォーマット・分割・可視化 | `large-output-chunking`, `svg-renderer` |
-| `azure-skills/` | Azure サービス固有のリファレンス | `azure-deploy`, `microsoft-foundry` |
+| `output/` | 出力フォーマット・分割・可視化 | `large-output-chunking`, `docs-output-format` |
+| `azure-skills/` | HVE の Azure デプロイ・検証契約 | `azure-cli-deploy-scripts`, `azure-region-policy`, `azure-ac-verification` |
 | `cicd/` | GitHub Actions CI/CD | `github-actions-cicd` |
-| `observability/` | 監視・計装 | `appinsights-instrumentation` |
-| `testing/` | テスト戦略・テンプレート | `test-strategy-template` |
+| `testing/` | テスト戦略・テンプレート | `requirements-conformance-measurement`, `tdd-red-green-reality` |
+
+Skill の追加は、HVE 固有契約または本リポジトリの既存配布要件を文書化・運用する必要がある場合に限定する。汎用 SE 教材や単体 Tips は再同梱しない。外部の独立版 Skill や配布 kit 由来の Skill を参照する場合は、元の name/path/配置規約を保持し、リポジトリ内へ包括的な新 Skill として再定義しない。
 
 > 既存カテゴリに当てはまらない場合は、新カテゴリを作成して
 > `.github/skills/_routing/README.md` のルーティングテーブルに追加する。
@@ -117,10 +119,8 @@
   `README.md` でカテゴリ横断の参照先表を管理する。
 - `_evals/`: **カテゴリ外（評価専用）**。
   Eval ケース格納用で、`SKILL.md` は不要。
-- `karpathy-guidelines/`: **カテゴリ外（単独 Skill）**。
-  実体 Skill として存在し、`_routing` 表で参照する。
 
-> カテゴリ外ディレクトリは、カテゴリ一覧の件数（7カテゴリ）には含めない。
+> `_routing/` と `_evals/` は Skill 本体ではなく、登録・評価用の補助ディレクトリである。
 
 ---
 
@@ -131,7 +131,7 @@
 **ユーザーの意図によって処理フローが分岐する場合**に Sub-skill パターンを採用する。
 
 ```
-.github/skills/azure-skills/microsoft-foundry/models/deploy-model/
+~/.agents/skills/microsoft-foundry/models/deploy-model/
 ├── SKILL.md           ← ルーター（intent detection → Sub-skill へのルーティング）
 ├── preset/
 │   └── SKILL.md       ← クイックデプロイ
@@ -141,14 +141,14 @@
     └── SKILL.md       ← キャパシティ探索
 ```
 
-実例: `deploy-model`（`preset` / `customize` / `capacity` の 3 モード）
+外部 Skill の例: `deploy-model`（`preset` / `customize` / `capacity` の 3 モード）。実際の構成は導入済みの外部 Skill の版で確認し、リポジトリへ複製しない。
 
 ### 使わない場合 ❌
 
 **連続実行フロー**（ステップが固定順序で実行される）は分割しない。
 
 ```
-# NG: task-dag-planning の §2.1 → §2.2 → §2.3 を Sub-skill に分割しない
+# NG: task-dag-planning の §1 → §2 → §3 を Sub-skill に分割しない
 # → 固定フローなので 1 つの SKILL.md に手順として記載する
 ```
 
@@ -158,44 +158,49 @@
 |------|---------|
 | ユーザーの意図・入力によって分岐がある | **Sub-skill パターンを使う** |
 | 連続実行・固定順序のフロー | **1 つの SKILL.md に手順を記載** |
-| Skill が 100 行を超えて肥大化しているが分岐なし | **`references/` に詳細を分離** |
+| Skill が 100 行を超えて肥大化しているが分岐なし | **`references/` への詳細分離を検討**（100 行や 500 行などの行数は参考目安であり hard gate ではない） |
 
 ---
 
 ## 6. description 統一フォーマット
 
-新規 Skill の `description` は以下のフォーマットに従って記述する。
+新規 Skill の `description` は、原則として以下の既存フォーマットで記述する。ただし、既存互換の 1 行 `Use when:` 形式も有効な説明として扱い、形式だけを理由に不正としない。
 
 ### フォーマット（YAML ブロックスカラー形式）
 
 ```yaml
 description: >
-  [200文字以下の日本語サマリー。1文で Skill の目的を説明する。]
-  USE FOR: [英語トリガーキーワード1], [英語トリガーキーワード2], [英語トリガーキーワード3], ...
-  DO NOT USE FOR: [除外条件1（英語）], [除外条件2（英語）], ...
-  WHEN: [日本語での発動条件1]、[日本語での発動条件2]、[日本語での発動条件3]。
+  [簡潔な日本語サマリー。1文で Skill の目的を説明する。]
+  USE FOR: [英語トリガーキーワード1], [英語トリガーキーワード2], [英語トリガーキーワード3].
+  DO NOT USE FOR: [除外条件1（英語）], [除外条件2（英語）].
+  WHEN: [日本語での発動条件1]、[日本語での発動条件2]。
 ```
 
 ### 記述ガイドライン
 
-| セクション | 記述内容 | 文字数目安 |
-|-----------|---------|-----------|
-| サマリー | Skill の目的を 1 文で説明 | 200 文字以下 |
-| `USE FOR:` | このスキルを発動すべきキーワード（英語、コンマ区切り） | 5〜15 個程度 |
-| `DO NOT USE FOR:` | このスキルを使わないべきケース（誤発動防止） | 3〜8 個程度 |
-| `WHEN:` | 日本語でのトリガー発動条件（読点区切り） | 3〜10 個程度 |
+| セクション | 記述内容 | 目安 |
+|-----------|---------|------|
+| サマリー | Skill の目的を 1 文で説明 | 200 文字以下を推奨 |
+| `USE FOR:` | このスキルを発動すべき代表キーワード（英語、コンマ区切り） | 少数の明確な語で十分 |
+| `DO NOT USE FOR:` | このスキルを使わないべき代表ケース（誤発動防止） | 必要最小限 |
+| `WHEN:` | 日本語でのトリガー発動条件（読点区切り） | 主要条件のみ |
+
+> 個数や行数は読みやすさの参考値であり、validator の hard gate にしない。特に、同義語を大量に並べて 1024 文字上限へ近づけるより、用途・除外・WHEN を短く明確に書くことを優先する。
 
 ### 記述例
 
 ```yaml
 description: >
-  データモデルと物理テーブルのマッピングを記録するデータカタログを生成する。
-  USE FOR: data catalog, entity mapping, table definition, ER diagram generation,
-  data model documentation, physical table design, entity relationship.
-  DO NOT USE FOR: API design (use microservice-design-guide), batch job design
-  (use dataflow-design-guide), infrastructure deployment (use azure-deploy).
-  WHEN: データカタログを生成したい、エンティティとテーブルのマッピングを整理したい、
-  ER 図を作成したい、物理テーブル設計を文書化したい。
+  knowledge/ 配下の確定済みドメイン知識ドキュメントを参照する。
+  USE FOR: checking business rules, verifying glossary definitions, reviewing data model specifications.
+  DO NOT USE FOR: creating or updating knowledge files (use knowledge-management).
+  WHEN: タスク実行中に業務要件を確認したい、用語定義やデータモデル仕様を確認したい。
+```
+
+既存互換の 1 行説明も、用途が明確で 1024 文字以内であれば維持してよい。
+
+```yaml
+description: "Use when: generated application design or development must select, validate, cite, and trace APP-specific requirements without loading every requirement document."
 ```
 
 ---
@@ -269,7 +274,7 @@ SKILL.md に `## 入出力例` セクションを設けることを**推奨**す
 ---
 name: <skill-name>
 description: >
-  [200文字以下の日本語サマリー。]
+  [簡潔な日本語サマリー。]
   USE FOR: [英語キーワード1], [英語キーワード2], [英語キーワード3].
   DO NOT USE FOR: [除外条件1（英語）], [除外条件2（英語）].
   WHEN: [日本語での発動条件1]、[日本語での発動条件2]。
@@ -291,7 +296,7 @@ metadata:
 
 ## 手順 または 使用方法
 
-[手順が短い場合はここに直接記載する。長い場合は `references/` に分離して、ここには索引のみを記載する。]
+[手順が短い場合はここに直接記載する。長い場合や条件別の詳細が必要な場合は `references/` に分離して、ここには必要な参照先のみを記載する。]
 
 1. [ステップ1]
 2. [ステップ2]
@@ -333,14 +338,14 @@ metadata:
 
 新規 Skill を追加する前に、以下の既存パターンとの整合性を確認する。
 
-### 10.1 優先順位（`.github/copilot-instructions.md` §5）
+### 10.1 優先順位
 
 ```
 .github/copilot-instructions.md  ← 最優先（常に適用）
         ↓
 Custom Agent（.github/prompts/*.prompt.md）
         ↓
-Skills（.github/skills/*/SKILL.md）← 本ガイドが対象とする層
+Skills（.github/skills/**/SKILL.md）← 本ガイドが対象とする層
 ```
 
 - Skill の記述が `.github/copilot-instructions.md` と矛盾する場合は
@@ -372,6 +377,6 @@ Skills（.github/skills/*/SKILL.md）← 本ガイドが対象とする層
 ## 成果物サマリー
 
 - **status**: ガイドとして参照可能
-- **summary**: 新規 Skill 開発者が本ガイドに従うことで、既存 47 Skill と整合性のある Skill を作成できる
+- **summary**: 現行のルーティング表と同梱契約を確認して Skill を作成・保守する
 - **next_actions**: 新規 Skill を追加する場合は §1 チェックリストを起点とし、§9 テンプレートを使用する
 - **artifacts**: `.github/skills/CONTRIBUTING.md`（本ファイル）

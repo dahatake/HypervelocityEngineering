@@ -1,6 +1,6 @@
 """FR-MAINT-06: 規範リテラルごとの判定実装が単一であること。
 
-`.github/copilot-instructions.md` §0 が定める検証マーカー書式について、
+完了報告の検証マーカー書式について、
 判定ロジックが 1 実装へ集約され、他の実行面がそれを呼び出すことを固定する。
 """
 
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from hve.split_fork import has_validation_marker
+from hve.run_paths import has_validation_marker
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _ARTIFACT_VALIDATION = _REPO_ROOT / "hve" / "artifact_validation.py"
@@ -29,7 +29,7 @@ _BULLET_FORMS = ("- 検証: pytest 12 passed", "* Validation: ran pytest", "- **
 
 
 class TestValidationMarkerDecision:
-    """copilot-instructions.md §0 の 3 形式を単一実装が判定する。"""
+    """完了報告の検証マーカー 3 形式を単一実装が判定する。"""
 
     def test_html_comment_form_is_accepted(self) -> None:
         assert has_validation_marker(f"body\n{_HTML_MARKER}\n") is True
@@ -54,7 +54,7 @@ class TestSingleDecisionImplementation:
     def test_artifact_validation_delegates_instead_of_reimplementing(self) -> None:
         source = _ARTIFACT_VALIDATION.read_text(encoding="utf-8")
         assert f'"{_HTML_MARKER}" not in text' not in source, (
-            "TDD report validation must reuse hve.split_fork.has_validation_marker"
+            "TDD report validation must reuse hve.run_paths.has_validation_marker"
         )
         assert "has_validation_marker" in source
 

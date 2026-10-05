@@ -8,7 +8,7 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _PROMPTS_DIR = _REPO_ROOT / ".github" / "prompts"
 _TEMPLATES_DIR = _REPO_ROOT / ".github" / "prompts" / "steps" / "asdw-web"
-_CICD_SKILL = _REPO_ROOT / ".github" / "skills" / "cicd" / "github-actions-cicd"
+_CICD_SKILL = _REPO_ROOT / ".github" / "skills" / "github-actions-cicd"
 _WORKFLOWS_DIR = _REPO_ROOT / ".github" / "workflows"
 _IO_CONTRACTS_DIR = _REPO_ROOT / ".github" / "io-contracts"
 

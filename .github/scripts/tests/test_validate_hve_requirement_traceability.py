@@ -131,6 +131,7 @@ def _seed_repository(
     mappings: Mapping[str, Sequence[str]] | None = None,
     test_paths: Iterable[str] | None = None,
     mapping_heading_level: int = 4,
+    raw_mapping: str | None = None,
 ) -> None:
     rows = list(
         inventory
@@ -155,7 +156,11 @@ def _seed_repository(
         mapping_sections.append(
             f"{'#' * mapping_heading_level} {requirement_id} — fixture\n- 対応テスト:\n{links}\n"
         )
-    _write(root / REQUIREMENT_MAPPING, "# Fixture mapping\n\n" + "\n".join(mapping_sections))
+    generated_mapping = "# Fixture mapping\n\n" + "\n".join(mapping_sections)
+    _write(
+        root / REQUIREMENT_MAPPING,
+        raw_mapping if raw_mapping is not None else generated_mapping,
+    )
 
     inventory_path = root / FEATURE_INVENTORY
     inventory_path.parent.mkdir(parents=True, exist_ok=True)
@@ -493,13 +498,70 @@ def test_requirement_inventory_definition_and_mapping_must_agree(tmp_path: Path)
     _seed_repository(root)
     _write(root / FEATURE_INVENTORY, "feature_id,feature_id\nFR-TEST-01,FR-TEST-01\n")
     _rejects(_run_validator(root, body=_block(), changes="M\thve/runner.py\n", seed=False))
+
+
+@VALIDATOR_REQUIRED
+@pytest.mark.parametrize(
+    "hidden_definition",
+    (
+        "<!-- - **FR-TEST-01**: hidden -->\n",
+        "```markdown\n- **FR-TEST-01**: hidden\n```\n",
+        "    - **FR-TEST-01**: hidden\n",
+    ),
+    ids=("comment", "fence", "indented-code"),
+)
+def test_hidden_requirement_definition_cannot_satisfy_inventory_agreement(
+    tmp_path: Path, hidden_definition: str
+) -> None:
+    _seed_repository(tmp_path)
+    _write(tmp_path / REQUIREMENT_DEFINITION, hidden_definition)
+    _rejects(_run_validator(
+        tmp_path,
+        body=_block(),
+        changes="M\thve/runner.py\n",
+        seed=False,
+    ))
+
+
+@VALIDATOR_REQUIRED
+@pytest.mark.parametrize("history_section", ("11.", "12.", "14."))
+def test_history_only_requirement_definition_cannot_satisfy_inventory_agreement(
+    tmp_path: Path, history_section: str
+) -> None:
+    _seed_repository(tmp_path)
+    _write(
+        tmp_path / REQUIREMENT_DEFINITION,
+        f"## {history_section} History\n\n- **{REQUIREMENT_ID}**: historical only.\n",
+    )
+    _rejects(_run_validator(
+        tmp_path,
+        body=_block(),
+        changes="M\thve/runner.py\n",
+        seed=False,
+    ))
     root = tmp_path / "mismatched-mapping-link"
     _seed_repository(root)
     _write(
         root / REQUIREMENT_MAPPING,
-        f"#### {REQUIREMENT_ID} — fixture\n- 対応テスト:\n  - [{TEST_PATH}](https://example.invalid/test.py)\n",
+        f"#### {REQUIREMENT_ID} — fixture\n- 対応テスト:\n  - [different.py]({TEST_PATH})\n",
     )
     _rejects(_run_validator(root, body=_block(), changes="M\thve/runner.py\n", seed=False))
+
+
+@VALIDATOR_REQUIRED
+def test_mapping_link_label_may_be_the_exact_test_basename(tmp_path: Path) -> None:
+    _seed_repository(tmp_path)
+    _write(
+        tmp_path / REQUIREMENT_MAPPING,
+        f"#### {REQUIREMENT_ID} — fixture\n"
+        f"- 対応テスト:\n  - [{Path(TEST_PATH).name}]({TEST_PATH})\n",
+    )
+    _accepts(_run_validator(
+        tmp_path,
+        body=_block(),
+        changes="M\thve/runner.py\n",
+        seed=False,
+    ))
 
 
 @VALIDATOR_REQUIRED
@@ -509,6 +571,145 @@ def test_mapping_sections_bind_at_either_heading_level(tmp_path: Path) -> None:
         root = tmp_path / f"heading-{level}"
         _seed_repository(root, mapping_heading_level=level)
         _accepts(_run_validator(root, body=_block(), changes="M\thve/runner.py\n", seed=False))
+
+
+@VALIDATOR_REQUIRED
+@pytest.mark.parametrize(
+    ("case_name", "definition_ids", "raw_mapping"),
+    (
+        (
+            "same-prefix-slash",
+            (REQUIREMENT_ID, "FR-TEST-02"),
+            "# Fixture mapping\n\n"
+            "### FR-TEST-01 / 02 — fixture\n"
+            "- 判定: ✓\n"
+            "- 対応テスト:\n"
+            f"  - [{TEST_PATH}]({TEST_PATH})\n",
+        ),
+        (
+            "ascending-range",
+            (REQUIREMENT_ID, "FR-TEST-02", "FR-TEST-03"),
+            "# Fixture mapping\n\n"
+            "### FR-TEST-01〜03 — fixture\n"
+            "- 判定: ✓\n"
+            "- 対応テスト:\n"
+            f"  - [{TEST_PATH}]({TEST_PATH})\n",
+        ),
+        (
+            "middle-dot",
+            (REQUIREMENT_ID, "FR-TEST-02"),
+            "# Fixture mapping\n\n"
+            "### FR-TEST-01・02 — fixture\n"
+            "- 判定: ✓\n"
+            "- 対応テスト:\n"
+            f"  - [{TEST_PATH}]({TEST_PATH})\n",
+        ),
+        (
+            "table-row",
+            (REQUIREMENT_ID, "FR-TEST-02"),
+            "# Fixture mapping\n\n"
+            "| 要件 | 判定 | 主な対応テスト |\n"
+            "|---|---|---|\n"
+            f"| FR-TEST-02 — fixture | ✓ | [{TEST_PATH}]({TEST_PATH}) |\n",
+        ),
+    ),
+    ids=("same-prefix-slash", "ascending-range", "middle-dot", "table-row"),
+)
+def test_compact_mapping_forms_cover_the_expanded_requirement_id(
+    tmp_path: Path,
+    case_name: str,
+    definition_ids: tuple[str, ...],
+    raw_mapping: str,
+) -> None:
+    declared_id = definition_ids[1]
+    root = tmp_path / case_name
+    _seed_repository(
+        root,
+        inventory=[
+            (requirement_id, "active-or-described", REQUIREMENT_DEFINITION)
+            for requirement_id in definition_ids
+        ],
+        mappings={declared_id: (TEST_PATH,)},
+        raw_mapping=raw_mapping,
+    )
+    _accepts(_run_validator(
+        root,
+        body=_block(requirement_ids=declared_id),
+        changes="M\thve/runner.py\n",
+        seed=False,
+    ))
+
+
+@VALIDATOR_REQUIRED
+@pytest.mark.parametrize(
+    "malformed_heading",
+    (
+        "FR-TEST-01~02-EXTRA",
+        "FR-TEST-01 / 02.5",
+        "FR-TEST-01・02_extra",
+        "FR-TEST-01_extra",
+        "FR-TEST-01.5",
+    ),
+)
+def test_malformed_compact_mapping_does_not_partially_cover_an_id(
+    tmp_path: Path, malformed_heading: str
+) -> None:
+    root = tmp_path / re.sub(r"[^A-Za-z0-9]+", "-", malformed_heading)
+    _seed_repository(
+        root,
+        inventory=[
+            (REQUIREMENT_ID, "active-or-described", REQUIREMENT_DEFINITION),
+            ("FR-TEST-02", "active-or-described", REQUIREMENT_DEFINITION),
+        ],
+        mappings={"FR-TEST-02": (TEST_PATH,)},
+        raw_mapping=(
+            "# Fixture mapping\n\n"
+            f"### {malformed_heading} — malformed fixture\n"
+            "- 判定: ✓\n"
+            f"- [{TEST_PATH}]({TEST_PATH})\n"
+        ),
+    )
+    _rejects(_run_validator(
+        root,
+        body=_block(requirement_ids="FR-TEST-02"),
+        changes="M\thve/runner.py\n",
+        seed=False,
+    ))
+
+
+@VALIDATOR_REQUIRED
+@pytest.mark.parametrize(
+    "hidden_mapping",
+    (
+        "```markdown\n### FR-TEST-02 — hidden\n- 判定: ✓\n"
+        f"- [{TEST_PATH}]({TEST_PATH})\n```\n",
+        "<!--\n### FR-TEST-02 — hidden\n- 判定: ✓\n"
+        f"- [{TEST_PATH}]({TEST_PATH})\n-->\n",
+        "`### FR-TEST-02 — hidden`\n- 判定: ✓\n"
+        f"- [{TEST_PATH}]({TEST_PATH})\n",
+        "````markdown\n```\n### FR-TEST-02 — hidden\n- 判定: ✓\n"
+        f"- [{TEST_PATH}]({TEST_PATH})\n```\n````\n",
+        "```markdown\n~~~\n### FR-TEST-02 — hidden\n- 判定: ✓\n"
+        f"- [{TEST_PATH}]({TEST_PATH})\n~~~\n```\n",
+    ),
+    ids=("fenced", "comment", "inline-code", "short-inner-fence", "mixed-inner-fence"),
+)
+def test_hidden_markdown_cannot_satisfy_requirement_mapping(
+    tmp_path: Path, hidden_mapping: str
+) -> None:
+    root = tmp_path / "hidden-mapping"
+    _seed_repository(
+        root,
+        inventory=[("FR-TEST-02", "active-or-described", REQUIREMENT_DEFINITION)],
+        mappings={"FR-TEST-02": (TEST_PATH,)},
+        raw_mapping="# Fixture mapping\n" + hidden_mapping,
+    )
+    _rejects(_run_validator(
+        root,
+        body=_block(requirement_ids="FR-TEST-02"),
+        changes="M\thve/runner.py\n",
+        seed=False,
+    ))
 
 
 @VALIDATOR_REQUIRED
@@ -566,6 +767,24 @@ def test_test_path_symlink_cannot_target_an_internal_non_test_file(tmp_path: Pat
         os.symlink(target, link)
     except OSError as exc:
         pytest.skip(f"symlink creation is unavailable: {exc}")
+    body = _block(test_paths=path, evidence=f"RED={path} failed; GREEN={path} passed")
+    _rejects(_run_validator(tmp_path, body=body, changes="M\thve/runner.py\n", seed=False))
+
+
+@VALIDATOR_REQUIRED
+def test_test_path_parent_symlink_cannot_escape_the_allowed_test_root(tmp_path: Path) -> None:
+    path = "hve/tests/alias/runner.py"
+    _seed_repository(tmp_path, mappings={REQUIREMENT_ID: (path,)})
+    alias = tmp_path / "hve/tests/alias"
+    if alias.exists():
+        (alias / "runner.py").unlink()
+        alias.rmdir()
+    target = tmp_path / "hve"
+    _write(target / "runner.py", "def run():\n    return None\n")
+    try:
+        os.symlink(target, alias, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"directory symlink creation is unavailable: {exc}")
     body = _block(test_paths=path, evidence=f"RED={path} failed; GREEN={path} passed")
     _rejects(_run_validator(tmp_path, body=body, changes="M\thve/runner.py\n", seed=False))
 

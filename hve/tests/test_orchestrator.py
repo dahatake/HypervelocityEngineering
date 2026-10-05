@@ -24,6 +24,89 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+class TestCreateSessionAutoReasoningFallback(unittest.IsolatedAsyncioTestCase):
+    """orchestrator 側 create_session helper の session option 契約を検証する。"""
+
+    async def test_local_create_defaults_request_extensions_false(self) -> None:
+        from orchestrator import _create_session_with_auto_reasoning_fallback
+
+        calls: list[dict] = []
+
+        class _FakeClient:
+            async def create_session(self, **kwargs):
+                calls.append(kwargs)
+                return "ok-session"
+
+        result = await _create_session_with_auto_reasoning_fallback(
+            _FakeClient(), {"model": "Auto"}
+        )
+        self.assertEqual(result, "ok-session")
+        self.assertIs(calls[0]["request_extensions"], False)
+
+    async def test_cloud_create_does_not_request_extensions(self) -> None:
+        import orchestrator as orchestrator_module
+        from orchestrator import _create_session_with_auto_reasoning_fallback
+
+        calls: list[dict] = []
+
+        class _FakeClient:
+            async def create_session(self, **kwargs):
+                calls.append(kwargs)
+                return object()
+
+        with unittest.mock.patch.object(
+            orchestrator_module,
+            "attach_cloud_session_event_logger",
+            new=lambda *_args, **_kwargs: None,
+        ), unittest.mock.patch.object(
+            orchestrator_module,
+            "wait_for_cloud_session_ready",
+            new=unittest.mock.AsyncMock(),
+        ):
+            await _create_session_with_auto_reasoning_fallback(
+                _FakeClient(), {"cloud": {"enabled": True}}
+            )
+        self.assertNotIn("request_extensions", calls[0])
+
+    async def test_preserves_explicit_request_extensions(self) -> None:
+        from orchestrator import _create_session_with_auto_reasoning_fallback
+
+        calls: list[dict] = []
+
+        class _FakeClient:
+            async def create_session(self, **kwargs):
+                calls.append(kwargs)
+                return "ok-session"
+
+        result = await _create_session_with_auto_reasoning_fallback(
+            _FakeClient(), {"request_extensions": True}
+        )
+        self.assertEqual(result, "ok-session")
+        self.assertIs(calls[0]["request_extensions"], True)
+
+    async def test_strips_request_extensions_on_typeerror(self) -> None:
+        from orchestrator import _create_session_with_auto_reasoning_fallback
+
+        calls: list[dict] = []
+
+        class _FakeClient:
+            async def create_session(self, **kwargs):
+                calls.append(kwargs)
+                if "request_extensions" in kwargs:
+                    raise TypeError(
+                        "create_session() got an unexpected keyword argument 'request_extensions'"
+                    )
+                return "ok-session"
+
+        result = await _create_session_with_auto_reasoning_fallback(
+            _FakeClient(), {"request_extensions": False}
+        )
+        self.assertEqual(result, "ok-session")
+        self.assertEqual(len(calls), 2)
+        self.assertIn("request_extensions", calls[0])
+        self.assertNotIn("request_extensions", calls[1])
+
+
 def _declared_required_params(workflow_id: str) -> dict:
     """FR-DAG-07 宣言に基づく必須パラメータをテスト用に埋める。
 
@@ -60,7 +143,6 @@ class TestContextInjectionMetricsOutput(unittest.TestCase):
                     none_steps=1,
                     total_chars=240000,
                     max_chars=20000,
-                    self_improve_scope="workflow",
                     phase_breakdown={"1": 120000, "2": 120000},
                     console=console,
                 )
@@ -72,186 +154,6 @@ class TestContextInjectionMetricsOutput(unittest.TestCase):
             self.assertIn("## Wave2 Context Injection Metrics", summary)
             self.assertIn("- total_chars: 240000", summary)
             self.assertIn("- phase_breakdown: 1=120000, 2=120000", summary)
-
-class TestPrefetchWorkIQ(unittest.TestCase):
-    def test_returns_empty_when_copilot_sdk_missing(self) -> None:
-        from orchestrator import _prefetch_workiq
-
-        cfg = SDKConfig(dry_run=True)
-        console = unittest.mock.Mock()
-        with patch.dict(sys.modules, {"copilot": None}):
-            result = _run(_prefetch_workiq(cfg, "query", console, timeout=1))
-        self.assertEqual(result, "")
-        console.warning.assert_called_once()
-
-    def test_returns_query_result_when_successful(self) -> None:
-        from orchestrator import _prefetch_workiq
-
-        cfg = SDKConfig(dry_run=True, model="gpt-4.1")
-        console = unittest.mock.Mock()
-
-        class _FakeSession:
-            def __init__(self) -> None:
-                class _Srv:
-                    name = "_hve_workiq"
-                    status = "connected"
-                    error = None
-
-                class _Mcp:
-                    async def list(self):
-                        return types.SimpleNamespace(servers=[_Srv()])
-
-                class _Rpc:
-                    mcp = _Mcp()
-
-                self.rpc = _Rpc()
-
-            async def disconnect(self):
-                return None
-
-        class _FakeClient:
-            async def start(self):
-                return None
-
-            async def stop(self):
-                return None
-
-            async def create_session(self, **kwargs):
-                return _FakeSession()
-
-        fake_copilot = types.ModuleType("copilot")
-        fake_copilot.CopilotClient = lambda config=None: _FakeClient()
-        fake_copilot.SubprocessConfig = lambda **kwargs: object()
-        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
-
-        fake_copilot_session = types.ModuleType("copilot.session")
-
-        class _PermissionHandler:
-            @staticmethod
-            async def approve_all(*args, **kwargs):
-                return True
-
-        fake_copilot_session.PermissionHandler = _PermissionHandler
-
-        with patch.dict(sys.modules, {"copilot": fake_copilot, "copilot.session": fake_copilot_session}), \
-                patch("workiq.build_workiq_mcp_config", return_value={"_hve_workiq": {}}), \
-                patch("workiq.query_workiq", new=unittest.mock.AsyncMock(return_value="m365 context")):
-            result = _run(_prefetch_workiq(cfg, "query", console, timeout=1))
-
-        self.assertEqual(result, "m365 context")
-
-    def test_returns_empty_when_workiq_mcp_not_connected(self) -> None:
-        from orchestrator import _prefetch_workiq
-
-        cfg = SDKConfig(dry_run=True, model="gpt-4.1")
-        console = unittest.mock.Mock()
-
-        class _FakeSession:
-            def __init__(self) -> None:
-                class _Srv:
-                    name = "_hve_workiq"
-                    status = "disconnected"
-                    error = "connection failed"
-
-                class _Mcp:
-                    async def list(self):
-                        return types.SimpleNamespace(servers=[_Srv()])
-
-                class _Rpc:
-                    mcp = _Mcp()
-
-                self.rpc = _Rpc()
-
-            async def disconnect(self):
-                return None
-
-        class _FakeClient:
-            async def start(self):
-                return None
-
-            async def stop(self):
-                return None
-
-            async def create_session(self, **kwargs):
-                return _FakeSession()
-
-        fake_copilot = types.ModuleType("copilot")
-        fake_copilot.CopilotClient = lambda config=None: _FakeClient()
-        fake_copilot.SubprocessConfig = lambda **kwargs: object()
-        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
-
-        fake_copilot_session = types.ModuleType("copilot.session")
-
-        class _PermissionHandler:
-            @staticmethod
-            async def approve_all(*args, **kwargs):
-                return True
-
-        fake_copilot_session.PermissionHandler = _PermissionHandler
-
-        with patch.dict(sys.modules, {"copilot": fake_copilot, "copilot.session": fake_copilot_session}), \
-                patch("workiq.build_workiq_mcp_config", return_value={"_hve_workiq": {}}):
-            result = _run(_prefetch_workiq(cfg, "query", console, timeout=1))
-
-        self.assertEqual(result, "")
-        console.warning.assert_called()
-
-    def test_returns_empty_when_workiq_mcp_not_found(self) -> None:
-        from orchestrator import _prefetch_workiq
-
-        cfg = SDKConfig(dry_run=True, model="gpt-4.1")
-        console = unittest.mock.Mock()
-
-        class _FakeSession:
-            def __init__(self) -> None:
-                class _Srv:
-                    name = "other-server"
-                    status = "connected"
-                    error = None
-
-                class _Mcp:
-                    async def list(self):
-                        return types.SimpleNamespace(servers=[_Srv()])
-
-                class _Rpc:
-                    mcp = _Mcp()
-
-                self.rpc = _Rpc()
-
-            async def disconnect(self):
-                return None
-
-        class _FakeClient:
-            async def start(self):
-                return None
-
-            async def stop(self):
-                return None
-
-            async def create_session(self, **kwargs):
-                return _FakeSession()
-
-        fake_copilot = types.ModuleType("copilot")
-        fake_copilot.CopilotClient = lambda config=None: _FakeClient()
-        fake_copilot.SubprocessConfig = lambda **kwargs: object()
-        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
-
-        fake_copilot_session = types.ModuleType("copilot.session")
-
-        class _PermissionHandler:
-            @staticmethod
-            async def approve_all(*args, **kwargs):
-                return True
-
-        fake_copilot_session.PermissionHandler = _PermissionHandler
-
-        with patch.dict(sys.modules, {"copilot": fake_copilot, "copilot.session": fake_copilot_session}), \
-                patch("workiq.build_workiq_mcp_config", return_value={"_hve_workiq": {}}):
-            result = _run(_prefetch_workiq(cfg, "query", console, timeout=1))
-
-        self.assertEqual(result, "")
-        console.warning.assert_called()
-
 
 class TestRunWorkflowDryRun(unittest.TestCase):
     """run_workflow の dry_run=True テスト。
@@ -354,45 +256,6 @@ class TestRunWorkflowDryRun(unittest.TestCase):
                 ))
                 self.assertEqual(result["workflow_id"], wf_id, f"{wf_id} の workflow_id が不正")
                 self.assertNotIn("error", result, f"{wf_id} でエラーが発生: {result.get('error')}")
-
-    def test_workiq_prefetch_is_not_called_for_adi_or_akm(self) -> None:
-        """通常経路では ADI/AKM ともに Work IQ 事前フェッチを実行しない。"""
-        cfg = SDKConfig(dry_run=False, quiet=True, workiq_enabled=True)
-        mock_prefetch = unittest.mock.AsyncMock()
-
-        class FakeDAGExecutor:
-            def __init__(self):
-                self.completed = set()
-                self.failed = set()
-                self.skipped = set()
-
-            def compute_waves(self):
-                return []
-
-            async def execute(self):
-                return {"completed": [], "failed": [], "skipped": []}
-
-        with patch("orchestrator._prefetch_workiq_detailed", new=mock_prefetch), \
-             patch("orchestrator._run_akm_workiq_verification", new=unittest.mock.AsyncMock()), \
-             patch("orchestrator.DAGExecutor", side_effect=lambda *a, **k: FakeDAGExecutor()) as mock_dag_executor:
-            _run(run_workflow(
-                workflow_id="adi",
-                params={"branch": "main", "selected_steps": []},
-                config=cfg,
-            ))
-
-            _run(run_workflow(
-                workflow_id="akm",
-                params={"branch": "main", "selected_steps": []},
-                config=cfg,
-            ))
-
-            mock_prefetch.assert_not_awaited()
-            self.assertEqual(mock_dag_executor.call_count, 2)
-            self.assertEqual(mock_dag_executor.call_args_list[0].kwargs["workflow"].id, "adi")
-            self.assertEqual(mock_dag_executor.call_args_list[1].kwargs["workflow"].id, "akm")
-            self.assertIsNotNone(mock_dag_executor.call_args_list[0].kwargs["dag_plan"])
-            self.assertIsNotNone(mock_dag_executor.call_args_list[1].kwargs["dag_plan"])
 
     def test_fleet_mode_passes_wave_runner_to_dag_executor(self) -> None:
         """--fleet-mode 相当の設定時のみ DAGExecutor に fleet_wave_runner を渡す。"""
@@ -601,7 +464,7 @@ class TestRunWorkflowDryRun(unittest.TestCase):
                         return_value=types.SimpleNamespace(started=True, reason="")
                     ),
                 ), patch(
-                    "split_fork.check_subtask_completion",
+                    "fleet_mode.check_subtask_completion",
                     side_effect=fake_check_subtask_completion,
                 ), patch(
                     "orchestrator.asyncio.sleep",
@@ -1325,7 +1188,7 @@ class TestBuildStepPromptContract(unittest.TestCase):
         CLI / GUI Orchestrator 配下では workflow DAG / fan-out で分割を表現し、
         `subissues.md` runtime fork は legacy / 明示 opt-in であるため、
         常時注入は誤った作業指示になる。分割手順の参照が必要な場合は
-        Skill `task-dag-planning` に委ねる。
+        Skill `task-dag-planning` と `_hve-plan-artifacts/hve-binding.md` に委ねる。
         """
         from orchestrator import _build_step_prompt
 
@@ -2692,7 +2555,7 @@ class TestDoneLabeling(unittest.TestCase):
             token="ghp_test",
         )
 
-    def test_pr_body_includes_workiq_reports_when_enabled(self) -> None:
+    def _pr_body(self, wf_id: str, paths) -> str:
         from orchestrator import _create_pr_if_needed
         from console import Console
         from unittest.mock import MagicMock, patch as _patch
@@ -2704,7 +2567,6 @@ class TestDoneLabeling(unittest.TestCase):
             workiq_enabled=True,
             run_id="run-123",
         )
-        console = Console(quiet=True)
         captured_body: dict = {}
 
         def fake_create_pull_request(title, body, head, base, repo, token):
@@ -2712,73 +2574,40 @@ class TestDoneLabeling(unittest.TestCase):
             return 44
 
         wf = MagicMock()
-        wf.id = "akm"
-
+        wf.id = wf_id
         with _patch("orchestrator.create_pull_request", side_effect=fake_create_pull_request):
             pr_num = _create_pr_if_needed(
                 wf=wf,
-                head_branch="copilot-sdk/akm-abc12345",
+                head_branch=f"copilot-sdk/{wf_id}-abc12345",
                 base_branch="main",
                 config=cfg,
-                console=console,
+                console=Console(quiet=True),
                 root_issue_num=None,
-                workiq_report_paths=["qa/run-123-1-workiq-qa.md"],
+                knowledge_discovery_paths=paths,
             )
-
         self.assertEqual(pr_num, 44)
-        self.assertIn("## Work IQ レポート", captured_body.get("body", ""))
-        self.assertIn("qa/run-123-1-workiq-qa.md", captured_body.get("body", ""))
+        return captured_body.get("body", "")
 
-    def test_pr_body_uses_draft_output_dir_and_filters_ignored_paths(self) -> None:
-        from orchestrator import _create_pr_if_needed
-        from console import Console
-        from unittest.mock import MagicMock, patch as _patch
-
-        cfg = SDKConfig(
-            quiet=True,
-            github_token="ghp_test",
-            repo="owner/repo",
-            workiq_enabled=True,
-            run_id="run-abc",
-            workiq_draft_output_dir="qa",
-            ignore_paths=["work"],
+    def test_pr_body_lists_knowledge_discovery_questionnaires(self) -> None:
+        """FR-KD-07 / FR-KD-08: 知識探索の質問票を PR 本文へ 1 回ずつ、整列して列挙する。"""
+        body = self._pr_body("akm", [
+            "qa/run-123-akm-knowledge-discovery-qa.md",
+            "./qa/run-123-akm-knowledge-discovery-qa.md",
+            "qa/run-123-ard-knowledge-discovery-qa.md",
+            "work/run-123/not-a-questionnaire.md",
+        ])
+        self.assertIn("## 知識探索の記録", body)
+        self.assertEqual(body.count("`qa/run-123-akm-knowledge-discovery-qa.md`"), 1)
+        self.assertLess(
+            body.index("qa/run-123-akm-knowledge-discovery-qa.md"),
+            body.index("qa/run-123-ard-knowledge-discovery-qa.md"),
         )
-        console = Console(quiet=True)
-        captured_body: dict = {}
+        self.assertNotIn("not-a-questionnaire", body)
+        self.assertNotIn("Work IQ レポート", body)
 
-        def fake_create_pull_request(title, body, head, base, repo, token):
-            captured_body["body"] = body
-            return 45
-
-        wf = MagicMock()
-        wf.id = "adi"
-
-        with _patch("orchestrator.create_pull_request", side_effect=fake_create_pull_request), \
-             _patch("orchestrator._glob.glob", side_effect=[
-                 [
-                     "qa/run-abc-1-workiq-qa-draft.md",
-                     "qa/run-abc-1-workiq-qa.md",
-                 ],
-                 [
-                     "qa/run-abc-2-workiq-qa-draft.jsonl",
-                 ],
-             ]):
-            pr_num = _create_pr_if_needed(
-                wf=wf,
-                head_branch="copilot-sdk/adi-abc12345",
-                base_branch="main",
-                config=cfg,
-                console=console,
-                root_issue_num=None,
-                workiq_report_paths=["qa/run-abc-1-workiq-qa.md"],
-            )
-
-        self.assertEqual(pr_num, 45)
-        body = captured_body.get("body", "")
-        self.assertIn("qa/run-abc-1-workiq-qa-draft.md", body)
-        self.assertIn("qa/run-abc-1-workiq-qa.md", body)
-        self.assertIn("qa/run-abc-2-workiq-qa-draft.jsonl", body)
-        self.assertNotIn("work/run-abc/workiq-1-review.md", body)
+    def test_pr_body_omits_section_without_questionnaires(self) -> None:
+        body = self._pr_body("adi", [])
+        self.assertNotIn("## 知識探索の記録", body)
 
 
 class TestDetectExistingArtifacts(unittest.TestCase):
@@ -3451,459 +3280,8 @@ class TestCollectParamsNonInteractiveAppIds(unittest.TestCase):
         self.assertEqual(params["usecase_id"], "UC-100")
 
 
-class TestRunWorkflowSelfImprove(unittest.TestCase):
-    """run_workflow の Self-Improve フェーズテスト。"""
-
-    def setUp(self) -> None:
-        self._durable_patcher = patch(
-            "orchestrator._open_durable_workflow_lifecycle",
-            return_value=None,
-        )
-        self._durable_patcher.start()
-        self.addCleanup(self._durable_patcher.stop)
-
-    class _FakeDAGExecutor:
-        def __init__(self, *args, **kwargs):
-            self.completed = set()
-            self.failed = set()
-            self.skipped = set()
-
-        def compute_waves(self):
-            return []
-
-        async def execute(self):
-            return {"completed": [], "failed": [], "skipped": []}
-
-    @staticmethod
-    def _successful_si_result(task_goal, **overrides):
-        definitions = task_goal.get("criterion_definitions", []) if task_goal else []
-        criteria = [
-            {
-                "criterion_id": item["criterion_id"],
-                "required_for_done": item.get("required_for_done") is True,
-                "status": "PASS",
-                "evidence": [{"status": "PASS", "reference": "test-double"}],
-            }
-            for item in definitions
-            if item.get("criterion_id")
-        ]
-        result = {
-            "iterations_completed": 0,
-            "final_score": 100,
-            "records": [],
-            "stopped_reason": "no_improvement_needed",
-            "reward_history": [],
-            "final_goal_achievement_pct": 1.0,
-            "final_criterion_results": criteria,
-            "final_verification": {"overall": "PASS"},
-            "blocked_reason": "",
-        }
-        result.update(overrides)
-        return result
-
-    def _fake_arch_filter_result(self, workflow_id: str = "asdw-web"):
-        """テスト用のダミー AppArchFilterResult を返す。"""
-        from hve.app_arch_filter import AppArchFilterResult
-        return AppArchFilterResult(
-            workflow_id=workflow_id,
-            target_kind="web-cloud",
-            target_architectures=["Webフロントエンド + クラウド"],
-            requested_app_ids=None,
-            matched_app_ids=["APP-01"],
-        )
-
-    def _run_default_self_improve_case(
-        self,
-        workflow_id: str,
-        *,
-        self_improve_skip: bool = False,
-        self_improve_scope: str = "workflow",
-        success_criteria: list[str] | None = None,
-        goal_capture: dict | None = None,
-    ) -> bool:
-        cfg = SDKConfig(
-            dry_run=False,
-            quiet=True,
-            no_workbench=True,
-            mdq_watch=False,
-            auto_self_improve=False,
-            self_improve_skip=self_improve_skip,
-            self_improve_scope=self_improve_scope,
-            self_improve_success_criteria=success_criteria or [],
-            run_id=f"run-si-default-{workflow_id}",
-        )
-        called = {"value": False}
-        fake_loop = unittest.mock.MagicMock()
-        fake_loop.run_in_executor = unittest.mock.AsyncMock(
-            side_effect=lambda _pool, fn: fn()
-        )
-
-        def _fake_run_improvement_loop(**kwargs):
-            called["value"] = True
-            if goal_capture is not None:
-                goal_capture.update(kwargs["task_goal"])
-            return self._successful_si_result(kwargs.get("task_goal"))
-
-        with tempfile.TemporaryDirectory() as hve_work_root, \
-             patch.dict(os.environ, {"HVE_WORK_ROOT": hve_work_root}, clear=False), \
-             patch("orchestrator.Console", return_value=unittest.mock.MagicMock()), \
-             patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
-             patch(
-                 "orchestrator.resolve_app_arch_scope",
-                 return_value=self._fake_arch_filter_result(workflow_id),
-             ), \
-             patch(
-                 "orchestrator.DAGExecutor",
-                 side_effect=lambda *a, **k: self._FakeDAGExecutor(),
-             ), \
-             patch(
-                 "hve.self_improve.run_improvement_loop",
-                 side_effect=_fake_run_improvement_loop,
-             ), \
-             patch("asyncio.get_running_loop", return_value=fake_loop):
-            result = _run(run_workflow(
-                workflow_id=workflow_id,
-                params={
-                    "branch": "main",
-                    "selected_steps": [],
-                    **_declared_required_params(workflow_id),
-                },
-                config=cfg,
-            ))
-
-        self.assertIsNone(result.get("error"))
-        self.assertFalse(
-            cfg.auto_self_improve,
-            "workflow-specific default must not mutate the caller's config",
-        )
-        return called["value"]
-
-    def test_aag_and_aagd_enable_post_dag_self_improve_by_default(self) -> None:
-        for workflow_id in ("aag", "aagd"):
-            with self.subTest(workflow_id=workflow_id):
-                self.assertTrue(
-                    self._run_default_self_improve_case(workflow_id),
-                    f"{workflow_id} must enable Post-DAG Self-Improve by default",
-                )
-
-    def test_aag_and_aagd_explicit_skip_disables_default_self_improve(self) -> None:
-        for workflow_id in ("aag", "aagd"):
-            with self.subTest(workflow_id=workflow_id):
-                self.assertFalse(
-                    self._run_default_self_improve_case(
-                        workflow_id,
-                        self_improve_skip=True,
-                    )
-                )
-
-    def test_aag_and_aagd_disabled_scope_disables_default_self_improve(self) -> None:
-        for workflow_id in ("aag", "aagd"):
-            with self.subTest(workflow_id=workflow_id):
-                self.assertFalse(
-                    self._run_default_self_improve_case(
-                        workflow_id,
-                        self_improve_scope="disabled",
-                    )
-                )
-
-    def test_aag_and_aagd_criteria_override_preserves_definitions(self) -> None:
-        for workflow_id in ("aag", "aagd"):
-            with self.subTest(workflow_id=workflow_id):
-                observed_goal: dict = {}
-                self.assertTrue(
-                    self._run_default_self_improve_case(
-                        workflow_id,
-                        success_criteria=["operator override"],
-                        goal_capture=observed_goal,
-                    )
-                )
-                self.assertEqual(
-                    observed_goal.get("success_criteria"),
-                    ["operator override"],
-                )
-                definitions = observed_goal.get("criterion_definitions", [])
-                self.assertTrue(definitions)
-                self.assertTrue(all(
-                    item.get("required_for_done") is True
-                    for item in definitions
-                ))
-
-    def test_non_agent_workflow_remains_disabled_by_default(self) -> None:
-        from workflow_registry import list_workflows
-
-        non_agent_workflows = [
-            workflow.id
-            for workflow in list_workflows()
-            if workflow.id not in {"aag", "aagd"}
-        ]
-        self.assertTrue(non_agent_workflows)
-        for workflow_id in non_agent_workflows:
-            with self.subTest(workflow_id=workflow_id):
-                self.assertFalse(
-                    self._run_default_self_improve_case(workflow_id),
-                    f"{workflow_id} must retain its disabled default",
-                )
-
-    def test_self_improve_uses_run_in_executor_and_restores_scope(self) -> None:
-        cfg = SDKConfig(
-            dry_run=False,
-            quiet=True,
-            no_workbench=True,
-            mdq_watch=False,
-            auto_self_improve=True,
-            self_improve_skip=False,
-            run_id="run-si-test",
-        )
-        mock_console = unittest.mock.MagicMock()
-        fake_loop = unittest.mock.MagicMock()
-        fake_loop.run_in_executor = unittest.mock.AsyncMock(side_effect=lambda _pool, fn: fn())
-        observed_scope: dict = {}
-
-        def _fake_run_improvement_loop(*, config, work_dir, repo_root, task_goal=None):
-            observed_scope["value"] = config.self_improve_target_scope
-            return self._successful_si_result(task_goal)
-
-        with patch("orchestrator.Console", return_value=mock_console), \
-             patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
-             patch("orchestrator.resolve_app_arch_scope", return_value=self._fake_arch_filter_result()), \
-             patch("orchestrator.DAGExecutor", side_effect=lambda *a, **k: self._FakeDAGExecutor()), \
-             patch("hve.self_improve.run_improvement_loop", side_effect=_fake_run_improvement_loop), \
-             patch("asyncio.get_running_loop", return_value=fake_loop):
-            result = _run(run_workflow(
-                workflow_id="asdw-web",
-                params={
-                    "branch": "main",
-                    "selected_steps": [],
-                    **_declared_required_params("asdw-web"),
-                },
-                config=cfg,
-            ))
-
-        self.assertIsNone(result.get("error"))
-        # ASDW-WEB は固定 output_paths を持つため、scope文字列ではなく
-        # _resolved_step_output_paths の具体pathを使用する。
-        self.assertEqual(observed_scope.get("value"), "")
-        self.assertEqual(cfg.self_improve_target_scope, "")
-        fake_loop.run_in_executor.assert_awaited_once()
-        self.assertEqual(
-            result["self_improve_result"]["stopped_reason"],
-            "no_improvement_needed",
-        )
-        phase_names = [call.args[2] for call in mock_console.phase_start.call_args_list]
-        self.assertIn("自己改善ループ", phase_names)
-
-    def test_self_improve_phase_inserted_before_post_process(self) -> None:
-        cfg = SDKConfig(
-            dry_run=False,
-            quiet=True,
-            no_workbench=True,
-            mdq_watch=False,
-            auto_self_improve=True,
-            self_improve_skip=False,
-            create_pr=True,
-            repo="owner/repo",
-            github_token="test-token",
-            run_id="run-si-post-order",
-        )
-        mock_console = unittest.mock.MagicMock()
-        fake_loop = unittest.mock.MagicMock()
-        fake_loop.run_in_executor = unittest.mock.AsyncMock(side_effect=lambda _pool, fn: fn())
-
-        with patch("orchestrator.Console", return_value=mock_console), \
-             patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
-             patch("orchestrator._git_checkout_new_branch", return_value=True), \
-             patch("orchestrator._git_add_commit_push", return_value=False), \
-             patch("orchestrator.DAGExecutor", side_effect=lambda *a, **k: self._FakeDAGExecutor()), \
-             patch(
-                 "hve.self_improve.run_improvement_loop",
-                 side_effect=lambda **kwargs: self._successful_si_result(
-                     kwargs.get("task_goal")
-                 ),
-             ), \
-             patch("asyncio.get_running_loop", return_value=fake_loop):
-            _run(run_workflow(
-                workflow_id="aas",
-                params={"branch": "main", "selected_steps": []},
-                config=cfg,
-            ))
-
-        phase_names = [call.args[2] for call in mock_console.phase_start.call_args_list]
-        self.assertIn("自己改善ループ", phase_names)
-        self.assertIn("後処理 (git push + PR)", phase_names)
-        self.assertLess(
-            phase_names.index("自己改善ループ"),
-            phase_names.index("後処理 (git push + PR)"),
-        )
-
-    def test_self_improve_blocked_propagates_to_workflow_and_skips_push(self) -> None:
-        cfg = SDKConfig(
-            dry_run=False,
-            quiet=True,
-            no_workbench=True,
-            mdq_watch=False,
-            auto_self_improve=True,
-            self_improve_skip=False,
-            create_pr=True,
-            repo="owner/repo",
-            github_token="test-token",
-            run_id="run-si-blocked",
-        )
-        fake_loop = unittest.mock.MagicMock()
-        fake_loop.run_in_executor = unittest.mock.AsyncMock(
-            side_effect=lambda _pool, fn: fn()
-        )
-        blocked_result = {
-            "iterations_completed": 0,
-            "final_score": 100,
-            "records": [],
-            "stopped_reason": "blocked",
-            "reward_history": [],
-            "final_goal_achievement_pct": 1.0,
-            "final_criterion_results": [{
-                "criterion_id": "CRIT-REQUIRED",
-                "required_for_done": True,
-                "status": "BLOCKED",
-                "evidence": [{"status": "BLOCKED"}],
-            }],
-            "final_verification": {"overall": "BLOCKED"},
-            "blocked_reason": "required_tool_not_executed",
-        }
-
-        with patch("orchestrator.Console", return_value=unittest.mock.MagicMock()), \
-             patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
-             patch("orchestrator._git_checkout_new_branch", return_value=True), \
-             patch("orchestrator._git_add_commit_push") as mock_push, \
-             patch("orchestrator.DAGExecutor", side_effect=lambda *a, **k: self._FakeDAGExecutor()), \
-             patch("hve.self_improve.run_improvement_loop", return_value=blocked_result), \
-             patch("asyncio.get_running_loop", return_value=fake_loop):
-            result = _run(run_workflow(
-                workflow_id="aas",
-                params={"branch": "main", "selected_steps": []},
-                config=cfg,
-            ))
-
-        mock_push.assert_not_called()
-        self.assertIn("self-improve", result.get("blocked", []))
-        self.assertIn("Self-Improve", str(result.get("error", "")))
-        self.assertIsNone(result.get("pr_number"))
-        self.assertEqual(
-            result.get("self_improve_result", {}).get("stopped_reason"),
-            "blocked",
-        )
-
-    def test_self_improve_success_gate_requires_evidence_and_verification(self) -> None:
-        from orchestrator import _self_improve_result_succeeded
-
-        goal = {
-            "criterion_definitions": [{
-                "criterion_id": "CRIT-REQUIRED",
-                "required_for_done": True,
-            }],
-        }
-        valid = {
-            "stopped_reason": "threshold_reached",
-            "blocked_reason": "",
-            "final_criterion_results": [{
-                "criterion_id": "CRIT-REQUIRED",
-                "status": "PASS",
-                "evidence": [{"status": "PASS"}],
-            }],
-            "final_verification": {"overall": "PASS"},
-        }
-        self.assertTrue(_self_improve_result_succeeded(valid, goal))
-
-        for case, overrides in (
-            ("blocked-stop", {"stopped_reason": "blocked"}),
-            ("missing-evidence", {"final_criterion_results": []}),
-            ("failed-verification", {"final_verification": {"overall": "FAIL"}}),
-            ("missing-verification", {"final_verification": None}),
-            ("blocked-reason", {"blocked_reason": "scope_empty"}),
-        ):
-            with self.subTest(case=case):
-                candidate = dict(valid)
-                candidate.update(overrides)
-                self.assertFalse(
-                    _self_improve_result_succeeded(candidate, goal)
-                )
-
-    def test_dry_run_does_not_insert_self_improve_phase(self) -> None:
-        cfg = SDKConfig(
-            dry_run=True,
-            quiet=True,
-            auto_self_improve=True,
-            self_improve_skip=False,
-        )
-        mock_console = unittest.mock.MagicMock()
-        with patch("orchestrator.Console", return_value=mock_console):
-            result = _run(run_workflow(
-                workflow_id="aas",
-                params={"branch": "main", "selected_steps": []},
-                config=cfg,
-            ))
-
-        self.assertTrue(result.get("dry_run"))
-        phase_names = [call.args[2] for call in mock_console.phase_start.call_args_list]
-        self.assertNotIn("自己改善ループ", phase_names)
-
-    def test_self_improve_default_scope_per_workflow(self) -> None:
-        # workflows で output_paths が定義済みの場合、effective_si_scope は "" となり
-        # _resolved_step_output_paths にパス一覧が格納される（AAS が対象）。
-        # output_paths 未定義の workflow は SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS の値を使う。
-        expected_scopes = {
-            "aas": "",        # output_paths 定義済み → scope="" でパス直指定
-            "aad-web": "",    # Sub-7 (C-4): Step 3 で output_paths 定義済み → scope=""
-            "asdw-web": "",  # 固定 output_paths 定義済み → scope=""でパス直指定
-            "adfd": "",       # 固定 output_paths 定義済み → scope=""でパス直指定
-            "adfdv": ".",
-            "aag": "",       # output_paths 定義済み → docs/agent系をパス直指定
-            "aagd": "",      # output_paths 定義済み → AAGD成果物をパス直指定
-            "akm": "knowledge/",
-        }
-        for workflow_id, expected_scope in expected_scopes.items():
-            with self.subTest(workflow_id=workflow_id):
-                cfg = SDKConfig(
-                    dry_run=False,
-                    quiet=True,
-                    no_workbench=True,
-                    mdq_watch=False,
-                    auto_self_improve=True,
-                    self_improve_skip=False,
-                    run_id=f"run-si-scope-{workflow_id}",
-                )
-                observed_scope: dict = {}
-                fake_loop = unittest.mock.MagicMock()
-                fake_loop.run_in_executor = unittest.mock.AsyncMock(side_effect=lambda _pool, fn: fn())
-
-                def _fake_run_improvement_loop(*, config, work_dir, repo_root, task_goal=None):
-                    observed_scope["value"] = config.self_improve_target_scope
-                    observed_scope["resolved_paths"] = getattr(config, "_resolved_step_output_paths", None)
-                    return self._successful_si_result(task_goal)
-
-                _arch_result = self._fake_arch_filter_result(workflow_id)
-                with tempfile.TemporaryDirectory() as hve_work_root, \
-                     patch.dict(os.environ, {"HVE_WORK_ROOT": hve_work_root}, clear=False), \
-                     patch("orchestrator.Console", return_value=unittest.mock.MagicMock()), \
-                     patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
-                     patch("orchestrator.resolve_app_arch_scope", return_value=_arch_result), \
-                     patch("orchestrator.DAGExecutor", side_effect=lambda *a, **k: self._FakeDAGExecutor()), \
-                     patch("hve.self_improve.run_improvement_loop", side_effect=_fake_run_improvement_loop), \
-                     patch("asyncio.get_running_loop", return_value=fake_loop):
-                    result = _run(run_workflow(
-                        workflow_id=workflow_id,
-                        params={
-                            "branch": "main",
-                            "selected_steps": [],
-                            **_declared_required_params(workflow_id),
-                        },
-                        config=cfg,
-                    ))
-
-                self.assertIsNone(result.get("error"))
-                self.assertEqual(observed_scope.get("value"), expected_scope)
-                # output_paths 定義済みワークフローは _resolved_step_output_paths に非空リストが入る
-                if expected_scope == "":
-                    self.assertIsInstance(observed_scope.get("resolved_paths"), list)
-                    self.assertGreater(len(observed_scope.get("resolved_paths") or []), 0)
+class TestCollectWorkflowOutputPathsAgents(unittest.TestCase):
+    """collect_workflow_output_paths の AAG/AAGD fan-out 展開を検証する。"""
 
     @staticmethod
     def _workflow_with_step_outputs(workflow_id: str, overrides: dict):
@@ -3925,159 +3303,9 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
         ]
         return dataclasses.replace(wf, steps=steps)
 
-    def _capture_self_improve_scope(
-        self,
-        workflow_id: str,
-        *,
-        workflow_override=None,
-    ) -> dict:
-        """run_workflow を実行し Self-Improve へ渡された scope を観測する。"""
-        import workflow_registry as _workflow_registry
-
-        cfg = SDKConfig(
-            dry_run=False,
-            quiet=True,
-            no_workbench=True,
-            mdq_watch=False,
-            auto_self_improve=True,
-            self_improve_skip=False,
-            run_id=f"run-si-cover-{workflow_id}",
-        )
-        observed: dict = {}
-        fake_loop = unittest.mock.MagicMock()
-        fake_loop.run_in_executor = unittest.mock.AsyncMock(
-            side_effect=lambda _pool, fn: fn()
-        )
-
-        def _fake_run_improvement_loop(*, config, work_dir, repo_root, task_goal=None):
-            observed["scope"] = config.self_improve_target_scope
-            observed["resolved_paths"] = list(
-                getattr(config, "_resolved_step_output_paths", None) or []
-            )
-            return self._successful_si_result(task_goal)
-
-        _real_get_workflow = _workflow_registry.get_workflow
-
-        def _patched_get_workflow(requested_id: str):
-            if workflow_override is not None and requested_id == workflow_id:
-                return workflow_override
-            return _real_get_workflow(requested_id)
-
-        with tempfile.TemporaryDirectory() as hve_work_root, \
-             patch.dict(os.environ, {"HVE_WORK_ROOT": hve_work_root}, clear=False), \
-             patch("orchestrator.Console", return_value=unittest.mock.MagicMock()), \
-             patch("orchestrator.get_workflow", side_effect=_patched_get_workflow), \
-             patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
-             patch(
-                 "orchestrator.resolve_app_arch_scope",
-                 return_value=self._fake_arch_filter_result(workflow_id),
-             ), \
-             patch(
-                 "orchestrator.DAGExecutor",
-                 side_effect=lambda *a, **k: self._FakeDAGExecutor(),
-             ), \
-             patch(
-                 "hve.self_improve.run_improvement_loop",
-                 side_effect=_fake_run_improvement_loop,
-             ), \
-             patch("asyncio.get_running_loop", return_value=fake_loop):
-            result = _run(run_workflow(
-                workflow_id=workflow_id,
-                params={
-                    "branch": "main",
-                    "selected_steps": [],
-                    **_declared_required_params(workflow_id),
-                },
-                config=cfg,
-            ))
-
-        self.assertIsNone(result.get("error"))
-        return observed
-
-    def test_partial_output_paths_declaration_keeps_workflow_default_scope(self) -> None:
-        """部分的な output_paths 宣言で Self-Improve scope を縮小させない。"""
-        cases = {
-            "adfdv": (
-                ".",
-                {
-                    "4.1": {"output_paths": ["docs/azure/waf-review.md"]},
-                    "4.2": {"output_paths": ["docs/azure/dependency-review.md"]},
-                },
-            ),
-            "akm": (
-                "knowledge/",
-                {
-                    "2": {
-                        "output_paths": [
-                            "knowledge/business-requirement-document-status.md",
-                        ],
-                    },
-                },
-            ),
-        }
-        for workflow_id, (expected_scope, overrides) in cases.items():
-            with self.subTest(workflow_id=workflow_id):
-                observed = self._capture_self_improve_scope(
-                    workflow_id,
-                    workflow_override=self._workflow_with_step_outputs(
-                        workflow_id,
-                        overrides,
-                    ),
-                )
-                self.assertEqual(
-                    observed.get("scope"),
-                    expected_scope,
-                    f"{workflow_id}: 部分宣言で target scope が縮小した",
-                )
-
-    def test_complete_output_paths_declaration_switches_to_path_scope(self) -> None:
-        """全 root Step が宣言されたら具体 path 直指定へ切り替わる。"""
-        adfdv_observed = self._capture_self_improve_scope(
-            "adfdv",
-            workflow_override=self._workflow_with_step_outputs(
-                "adfdv",
-                {
-                    "1.1": {"output_paths": ["docs/azure/azure-services-data.md"]},
-                    "4.1": {"output_paths": ["docs/azure/waf-review.md"]},
-                    "4.2": {"output_paths": ["docs/azure/dependency-review.md"]},
-                },
-            ),
-        )
-        self.assertEqual(adfdv_observed.get("scope"), "")
-        self.assertIn(
-            "docs/azure/azure-services-data.md",
-            adfdv_observed.get("resolved_paths") or [],
-        )
-
-        akm_observed = self._capture_self_improve_scope(
-            "akm",
-            workflow_override=self._workflow_with_step_outputs(
-                "akm",
-                {
-                    "1": {
-                        "output_paths_template": ["knowledge/{key}-knowledge.md"],
-                    },
-                    "2": {
-                        "output_paths": [
-                            "knowledge/business-requirement-document-status.md",
-                        ],
-                    },
-                },
-            ),
-        )
-        self.assertEqual(akm_observed.get("scope"), "")
-        akm_paths = akm_observed.get("resolved_paths") or []
-        # AKM Step 1 は fanout_static_keys D01〜D21。collector が AAG/AAGD 以外でも
-        # fan-out 展開しなければ 21 件の具体 path は scope に載らない。
-        for key in (f"D{n:02d}" for n in range(1, 22)):
-            self.assertIn(f"knowledge/{key}-knowledge.md", akm_paths)
-
-    def test_fanout_expansion_failure_is_not_treated_as_complete_scope(self) -> None:
+    def test_fanout_expansion_failure_collects_only_fixed_paths(self) -> None:
         """fan-out 展開が失敗したら宣言と実 scope の不一致を許さない。"""
-        from orchestrator import (
-            collect_workflow_output_paths,
-            workflow_output_paths_cover_workflow,
-        )
+        from orchestrator import collect_workflow_output_paths
 
         override = self._workflow_with_step_outputs(
             "aagd",
@@ -4103,10 +3331,6 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
                         "docs/agent/m365-publish-report.md",
                     ],
                 )
-                self.assertFalse(
-                    workflow_output_paths_cover_workflow("aagd", repo_root=Path(repo)),
-                    "agent catalog 未生成のまま具体 path を scope として採用してはならない",
-                )
 
         with tempfile.TemporaryDirectory() as repo:
             catalog = Path(repo, "docs/agent/agent-architecture.md")
@@ -4115,40 +3339,9 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
             with patch("orchestrator.get_workflow", return_value=override):
                 collected = collect_workflow_output_paths("aagd", repo_root=Path(repo))
                 self.assertIn("docs/agent/agent-detail-AGT-01.md", collected)
-                self.assertTrue(
-                    workflow_output_paths_cover_workflow("aagd", repo_root=Path(repo))
-                )
 
-    def test_declared_workflows_keep_path_directed_scope(self) -> None:
-        """既存の宣言済み workflow は従来どおり具体 path 直指定を維持する。"""
-        from orchestrator import workflow_output_paths_cover_workflow
-
-        repo_root = Path(__file__).resolve().parent.parent.parent
-        for workflow_id in ("aas", "aad-web", "asdw-web", "adfd", "aag", "aagd"):
-            with self.subTest(workflow_id=workflow_id, covered=True):
-                self.assertTrue(
-                    workflow_output_paths_cover_workflow(
-                        workflow_id,
-                        repo_root=repo_root,
-                    )
-                )
-        for workflow_id in ("adfdv", "akm"):
-            with self.subTest(workflow_id=workflow_id, covered=False):
-                self.assertFalse(
-                    workflow_output_paths_cover_workflow(
-                        workflow_id,
-                        repo_root=repo_root,
-                    )
-                )
-
-        for workflow_id in ("aas", "asdw-web", "aag"):
-            with self.subTest(workflow_id=workflow_id, end_to_end=True):
-                observed = self._capture_self_improve_scope(workflow_id)
-                self.assertEqual(observed.get("scope"), "")
-                self.assertTrue(observed.get("resolved_paths"))
-
-    def test_aag_and_aagd_self_improve_scope_contains_declared_capability_artifacts(self) -> None:
-        """Sub-17 RED: collectorは実在fan-out成果物を具体pathで返す。"""
+    def test_aag_and_aagd_collect_declared_capability_artifacts(self) -> None:
+        """collectorは実在fan-out成果物を具体pathで返す。"""
         from orchestrator import collect_workflow_output_paths
 
         signature = inspect.signature(collect_workflow_output_paths)
@@ -4205,7 +3398,7 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
                     self.assertEqual(
                         actual,
                         expected_paths,
-                        f"{workflow_id} Self-Improve scope must exactly match "
+                        f"{workflow_id} collected paths must exactly match "
                         "the concrete paths declared by StepDef outputs",
                     )
                     self.assertFalse(
@@ -4213,196 +3406,8 @@ class TestRunWorkflowSelfImprove(unittest.TestCase):
                         actual,
                     )
 
-    def test_agent_fanout_scope_precondition_requires_concrete_artifacts(self) -> None:
-        from orchestrator import _agent_fanout_scope_precondition_error
 
-        key = "AGT-01"
-        with tempfile.TemporaryDirectory() as repo:
-            root = Path(repo)
-            aag_paths = [
-                "docs/agent/agent-application-definition.md",
-                "docs/agent/agent-architecture.md",
-                "docs/ai-agent-catalog.md",
-                f"docs/agent/agent-detail-{key}.md",
-            ]
-            self.assertIn(
-                "required_agent_fanout_incomplete",
-                _agent_fanout_scope_precondition_error("aag", aag_paths, root),
-            )
-            for relative in aag_paths:
-                artifact = root / relative
-                artifact.parent.mkdir(parents=True, exist_ok=True)
-                artifact.write_text("# Artifact\n", encoding="utf-8")
-            self.assertEqual(
-                _agent_fanout_scope_precondition_error("aag", aag_paths, root),
-                "",
-            )
-
-            aagd_paths = [
-                "docs/agent/agent-application-definition.md",
-                f"docs/test-specs/{key}-test-spec.md",
-                f"src/test/agent/{key}.Tests",
-                f"src/agent/{key}",
-            ]
-            self.assertIn(
-                "required_agent_fanout_incomplete",
-                _agent_fanout_scope_precondition_error("aagd", aagd_paths, root),
-            )
-            spec = root / f"docs/test-specs/{key}-test-spec.md"
-            spec.parent.mkdir(parents=True, exist_ok=True)
-            spec.write_text("# Test Spec\n", encoding="utf-8")
-            (root / f"src/test/agent/{key}.Tests").mkdir(parents=True)
-            (root / f"src/agent/{key}").mkdir(parents=True)
-            self.assertEqual(
-                _agent_fanout_scope_precondition_error("aagd", aagd_paths, root),
-                "",
-            )
-
-            with patch(
-                "self_improve._path_has_symlink_component",
-                return_value=True,
-            ):
-                self.assertIn(
-                    "required_agent_fanout_incomplete",
-                    _agent_fanout_scope_precondition_error(
-                        "aag",
-                        aag_paths,
-                        root,
-                    ),
-                )
-
-            second = "AGT-02"
-            incomplete_paths = [
-                *aagd_paths,
-                f"docs/test-specs/{second}-test-spec.md",
-                f"src/test/agent/{second}.Tests",
-                f"src/agent/{second}",
-            ]
-            (root / f"docs/test-specs/{second}-test-spec.md").write_text(
-                "# Test Spec\n",
-                encoding="utf-8",
-            )
-            (root / f"src/test/agent/{second}.Tests").mkdir(parents=True)
-            error = _agent_fanout_scope_precondition_error(
-                "aagd",
-                incomplete_paths,
-                root,
-            )
-            self.assertIn("required_agent_fanout_incomplete", error)
-            self.assertIn(f"src/agent/{second}", error)
-
-
-class TestRunWorkflowSelfImproveScope(unittest.TestCase):
-    """run_workflow の Self-Improve scope 制御テスト。"""
-
-    def setUp(self) -> None:
-        self._durable_patcher = patch(
-            "orchestrator._open_durable_workflow_lifecycle",
-            return_value=None,
-        )
-        self._durable_patcher.start()
-        self.addCleanup(self._durable_patcher.stop)
-
-    class _FakeDAGExecutor:
-        def __init__(self, *args, **kwargs):
-            self.completed = set()
-            self.failed = set()
-            self.skipped = set()
-
-        def compute_waves(self):
-            return []
-
-        async def execute(self):
-            return {"completed": [], "failed": [], "skipped": []}
-
-    def _fake_arch_filter_result(self, workflow_id: str = "aas"):
-        from hve.app_arch_filter import AppArchFilterResult
-        return AppArchFilterResult(
-            workflow_id=workflow_id,
-            target_kind="web-cloud",
-            target_architectures=["Webフロントエンド + クラウド"],
-            requested_app_ids=None,
-            matched_app_ids=["APP-01"],
-        )
-
-    def _run_with_scope(self, scope: str, workflow_id: str = "aas"):
-        """指定 scope で run_workflow を実行し (si_called, phase_names) を返す。"""
-        cfg = SDKConfig(
-            dry_run=False,
-            quiet=True,
-            no_workbench=True,
-            mdq_watch=False,
-            auto_self_improve=True,
-            self_improve_skip=False,
-            run_id=f"run-scope-{scope or 'default'}-{workflow_id}",
-            self_improve_scope=scope,
-        )
-        si_called = {"value": False}
-        fake_loop = unittest.mock.MagicMock()
-        fake_loop.run_in_executor = unittest.mock.AsyncMock(
-            side_effect=lambda _pool, fn: (si_called.__setitem__("value", True) or None) or fn()
-        )
-
-        def _fake_run_improvement_loop(*, config, work_dir, repo_root, **kwargs):
-            si_called["value"] = True
-            return {
-                "iterations_completed": 0,
-                "final_score": 100,
-                "stopped_reason": "no_improvement_needed",
-                "records": [],
-                "reward_history": [],
-                "final_goal_achievement_pct": 1.0,
-                "final_criterion_results": [],
-                "final_verification": {"overall": "PASS"},
-                "blocked_reason": "",
-            }
-
-        mock_console = unittest.mock.MagicMock()
-        with patch("orchestrator.Console", return_value=mock_console), \
-             patch("hve.workflow_registry.get_meta_dependencies", return_value=[]), \
-             patch("orchestrator.resolve_app_arch_scope",
-                   return_value=self._fake_arch_filter_result(workflow_id)), \
-             patch("orchestrator.DAGExecutor",
-                   side_effect=lambda *a, **k: self._FakeDAGExecutor()), \
-             patch("hve.self_improve.run_improvement_loop",
-                   side_effect=_fake_run_improvement_loop), \
-             patch("asyncio.get_running_loop", return_value=fake_loop):
-            result = _run(run_workflow(
-                workflow_id=workflow_id,
-                params={"branch": "main", "selected_steps": []},
-                config=cfg,
-            ))
-
-        phase_names = [call.args[2] for call in mock_console.phase_start.call_args_list]
-        return si_called["value"], phase_names
-
-    def test_scope_workflow_runs_post_dag(self) -> None:
-        """scope='workflow' のとき Post-DAG Self-Improve が実行される。"""
-        si_called, phase_names = self._run_with_scope("workflow")
-        self.assertTrue(si_called, "Post-DAG Self-Improve が呼ばれること")
-        self.assertIn("自己改善ループ", phase_names)
-
-    def test_scope_step_skips_post_dag(self) -> None:
-        """scope='step' のとき Post-DAG Self-Improve はスキップされる。"""
-        si_called, phase_names = self._run_with_scope("step")
-        self.assertFalse(si_called, "Post-DAG Self-Improve が呼ばれないこと")
-        self.assertNotIn("自己改善ループ", phase_names)
-
-    def test_scope_disabled_skips_post_dag(self) -> None:
-        """scope='disabled' のとき Post-DAG Self-Improve はスキップされる。"""
-        si_called, phase_names = self._run_with_scope("disabled")
-        self.assertFalse(si_called, "Post-DAG Self-Improve が呼ばれないこと")
-        self.assertNotIn("自己改善ループ", phase_names)
-
-    def test_scope_empty_runs_post_dag_backward_compat(self) -> None:
-        """scope='' (後方互換値) のとき Post-DAG Self-Improve が実行される。
-        Wave 2 以降のデフォルトは 'workflow' だが、'' を明示指定した場合は後方互換で動作する。"""
-        si_called, phase_names = self._run_with_scope("")
-        self.assertTrue(si_called, "後方互換: Post-DAG Self-Improve が呼ばれること")
-        self.assertIn("自己改善ループ", phase_names)
-
-
-
+class TestCollectParamsNonInteractiveAkmDefaults(unittest.TestCase):
     """_collect_params_non_interactive() の AKM デフォルト適用テスト。"""
 
     def _make_wf(self):
@@ -4726,357 +3731,6 @@ class TestAppArchFilterInOrchestrator(unittest.TestCase):
         mock_dag.assert_not_called()
 
 
-class TestPrefetchWorkIQDetailed(unittest.TestCase):
-    """Phase 4: _prefetch_workiq_detailed() のテスト。"""
-
-    def test_returns_empty_result_when_sdk_missing(self) -> None:
-        from orchestrator import _prefetch_workiq_detailed
-
-        cfg = SDKConfig(dry_run=True)
-        console = unittest.mock.Mock()
-        with patch.dict(sys.modules, {"copilot": None}):
-            result = _run(_prefetch_workiq_detailed(cfg, "query", console, timeout=1))
-        self.assertEqual(result.content, "")
-        self.assertFalse(result.success)
-        self.assertEqual(result.error_type, "sdk_import_failure")
-        console.warning.assert_called_once()
-
-    def test_returns_success_result_when_tool_called(self) -> None:
-        from orchestrator import _prefetch_workiq_detailed
-
-        cfg = SDKConfig(dry_run=True, model="gpt-4.1")
-        console = unittest.mock.Mock()
-
-        class _FakeSession:
-            def __init__(self) -> None:
-                class _Srv:
-                    name = "_hve_workiq"
-                    status = "connected"
-                    error = None
-
-                class _Mcp:
-                    async def list(self):
-                        return types.SimpleNamespace(servers=[_Srv()])
-
-                class _Rpc:
-                    mcp = _Mcp()
-
-                self.rpc = _Rpc()
-                self._handlers: list = []
-
-            def on(self, handler):
-                self._handlers.append(handler)
-
-            def _fire_tool_event(self, tool_name: str) -> None:
-                """登録済みハンドラーに tool.execution_start イベントを送る。"""
-                event = types.SimpleNamespace(
-                    type=types.SimpleNamespace(value="tool.execution_start"),
-                    data=types.SimpleNamespace(
-                        mcp_tool_name=tool_name,
-                        mcp_server_name="_hve_workiq",
-                    ),
-                )
-                for h in self._handlers:
-                    h(event)
-
-            async def disconnect(self):
-                return None
-
-        _session_ref: list = []
-
-        class _FakeClient:
-            async def start(self):
-                return None
-
-            async def stop(self):
-                return None
-
-            async def create_session(self, **kwargs):
-                s = _FakeSession()
-                _session_ref.append(s)
-                return s
-
-        fake_copilot = types.ModuleType("copilot")
-        fake_copilot.CopilotClient = lambda config=None: _FakeClient()
-        fake_copilot.SubprocessConfig = lambda **kwargs: object()
-        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
-
-        fake_copilot_session = types.ModuleType("copilot.session")
-
-        class _PermissionHandler:
-            @staticmethod
-            async def approve_all(*args, **kwargs):
-                return True
-
-        fake_copilot_session.PermissionHandler = _PermissionHandler
-
-        async def _fake_query_workiq(session, query, timeout=120.0):
-            # ツール呼び出しイベントをシミュレートしてから結果を返す
-            if _session_ref:
-                _session_ref[0]._fire_tool_event("ask")
-            return "m365 context"
-
-        with patch.dict(sys.modules, {"copilot": fake_copilot, "copilot.session": fake_copilot_session}), \
-                patch("workiq.build_workiq_mcp_config", return_value={"_hve_workiq": {}}), \
-                patch("workiq.query_workiq", new=_fake_query_workiq):
-            result = _run(_prefetch_workiq_detailed(cfg, "query", console, timeout=1))
-
-        self.assertEqual(result.content, "m365 context")
-        self.assertTrue(result.success)
-        self.assertTrue(result.tool_called)
-        self.assertTrue(result.safe_to_inject)
-        self.assertEqual(result.result_source, "tool_execution")
-        self.assertTrue(result.mcp_server_found)
-        self.assertEqual(result.mcp_status, "connected")
-
-    def test_returns_mcp_not_connected_result(self) -> None:
-        from orchestrator import _prefetch_workiq_detailed
-
-        cfg = SDKConfig(dry_run=True, model="gpt-4.1")
-        console = unittest.mock.Mock()
-
-        class _FakeSession:
-            def __init__(self) -> None:
-                class _Srv:
-                    name = "_hve_workiq"
-                    status = "disconnected"
-                    error = "connection failed"
-
-                class _Mcp:
-                    async def list(self):
-                        return types.SimpleNamespace(servers=[_Srv()])
-
-                class _Rpc:
-                    mcp = _Mcp()
-
-                self.rpc = _Rpc()
-
-            def on(self, handler):
-                pass
-
-            async def disconnect(self):
-                return None
-
-        class _FakeClient:
-            async def start(self): return None
-            async def stop(self): return None
-            async def create_session(self, **kwargs): return _FakeSession()
-
-        fake_copilot = types.ModuleType("copilot")
-        fake_copilot.CopilotClient = lambda config=None: _FakeClient()
-        fake_copilot.SubprocessConfig = lambda **kwargs: object()
-        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
-
-        fake_copilot_session = types.ModuleType("copilot.session")
-
-        class _PermissionHandler:
-            @staticmethod
-            async def approve_all(*args, **kwargs): return True
-
-        fake_copilot_session.PermissionHandler = _PermissionHandler
-
-        with patch.dict(sys.modules, {"copilot": fake_copilot, "copilot.session": fake_copilot_session}), \
-                patch("workiq.build_workiq_mcp_config", return_value={"_hve_workiq": {}}):
-            result = _run(_prefetch_workiq_detailed(cfg, "query", console, timeout=1))
-
-        self.assertEqual(result.content, "")
-        self.assertFalse(result.success)
-        self.assertEqual(result.error_type, "mcp_not_connected")
-        self.assertTrue(result.mcp_server_found)
-        self.assertEqual(result.mcp_status, "disconnected")
-        console.warning.assert_called()
-
-    def test_returns_mcp_not_found_result(self) -> None:
-        from orchestrator import _prefetch_workiq_detailed
-
-        cfg = SDKConfig(dry_run=True, model="gpt-4.1")
-        console = unittest.mock.Mock()
-
-        class _FakeSession:
-            def __init__(self) -> None:
-                class _Srv:
-                    name = "other-server"
-                    status = "connected"
-                    error = None
-
-                class _Mcp:
-                    async def list(self):
-                        return types.SimpleNamespace(servers=[_Srv()])
-
-                class _Rpc:
-                    mcp = _Mcp()
-
-                self.rpc = _Rpc()
-
-            def on(self, handler):
-                pass
-
-            async def disconnect(self): return None
-
-        class _FakeClient:
-            async def start(self): return None
-            async def stop(self): return None
-            async def create_session(self, **kwargs): return _FakeSession()
-
-        fake_copilot = types.ModuleType("copilot")
-        fake_copilot.CopilotClient = lambda config=None: _FakeClient()
-        fake_copilot.SubprocessConfig = lambda **kwargs: object()
-        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
-
-        fake_copilot_session = types.ModuleType("copilot.session")
-
-        class _PermissionHandler:
-            @staticmethod
-            async def approve_all(*args, **kwargs): return True
-
-        fake_copilot_session.PermissionHandler = _PermissionHandler
-
-        with patch.dict(sys.modules, {"copilot": fake_copilot, "copilot.session": fake_copilot_session}), \
-                patch("workiq.build_workiq_mcp_config", return_value={"_hve_workiq": {}}):
-            result = _run(_prefetch_workiq_detailed(cfg, "query", console, timeout=1))
-
-        self.assertEqual(result.content, "")
-        self.assertFalse(result.success)
-        self.assertEqual(result.error_type, "mcp_not_found")
-        self.assertFalse(result.mcp_server_found)
-        console.warning.assert_called()
-
-    def test_backward_compatible_prefetch_workiq_returns_str(self) -> None:
-        """後方互換ラッパー _prefetch_workiq() が str を返すことを確認。"""
-        from orchestrator import _prefetch_workiq
-
-        cfg = SDKConfig(dry_run=True)
-        console = unittest.mock.Mock()
-        with patch.dict(sys.modules, {"copilot": None}):
-            result = _run(_prefetch_workiq(cfg, "query", console, timeout=1))
-        self.assertIsInstance(result, str)
-        self.assertEqual(result, "")
-
-    def test_tool_not_invoked_returns_error_type(self) -> None:
-        from orchestrator import _prefetch_workiq_detailed
-
-        cfg = SDKConfig(dry_run=True, model="gpt-4.1")
-        console = unittest.mock.Mock()
-
-        class _FakeSession:
-            def __init__(self) -> None:
-                class _Srv:
-                    name = "_hve_workiq"
-                    status = "connected"
-                    error = None
-
-                class _Mcp:
-                    async def list(self):
-                        return types.SimpleNamespace(servers=[_Srv()])
-
-                class _Rpc:
-                    mcp = _Mcp()
-
-                self.rpc = _Rpc()
-
-            def on(self, handler):
-                pass
-
-            async def disconnect(self): return None
-
-        class _FakeClient:
-            async def start(self): return None
-            async def stop(self): return None
-            async def create_session(self, **kwargs): return _FakeSession()
-
-        fake_copilot = types.ModuleType("copilot")
-        fake_copilot.CopilotClient = lambda config=None: _FakeClient()
-        fake_copilot.SubprocessConfig = lambda **kwargs: object()
-        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
-
-        fake_copilot_session = types.ModuleType("copilot.session")
-
-        class _PermissionHandler:
-            @staticmethod
-            async def approve_all(*args, **kwargs): return True
-
-        fake_copilot_session.PermissionHandler = _PermissionHandler
-
-        with patch.dict(sys.modules, {"copilot": fake_copilot, "copilot.session": fake_copilot_session}), \
-                patch("workiq.build_workiq_mcp_config", return_value={"_hve_workiq": {}}), \
-                patch("workiq.query_workiq", new=unittest.mock.AsyncMock(return_value="")):
-            result = _run(_prefetch_workiq_detailed(cfg, "query", console, timeout=1))
-
-        # ツール未呼び出し + 空結果 → tool_not_invoked
-        self.assertFalse(result.success)
-        self.assertEqual(result.error_type, "tool_not_invoked")
-        self.assertFalse(result.tool_called)
-
-    def test_tool_not_invoked_but_llm_text_returned_is_not_safe_to_inject(self) -> None:
-        """MCP connected, send_and_wait が非空テキストを返すが tool.execution_start が発火しない場合:
-        - tool_called=False
-        - safe_to_inject=False
-        - result_source="llm_text"
-        - enrich_prompt_with_workiq() が呼ばれない（上位処理で安全注入されない）
-        """
-        from orchestrator import _prefetch_workiq_detailed
-
-        cfg = SDKConfig(dry_run=True, model="gpt-4.1")
-        console = unittest.mock.Mock()
-
-        class _FakeSession:
-            def __init__(self) -> None:
-                class _Srv:
-                    name = "_hve_workiq"
-                    status = "connected"
-                    error = None
-
-                class _Mcp:
-                    async def list(self):
-                        return types.SimpleNamespace(servers=[_Srv()])
-
-                class _Rpc:
-                    mcp = _Mcp()
-
-                self.rpc = _Rpc()
-
-            def on(self, handler):
-                # イベントハンドラーを登録するが、ツールイベントは発火しない
-                pass
-
-            async def disconnect(self): return None
-
-        class _FakeClient:
-            async def start(self): return None
-            async def stop(self): return None
-            async def create_session(self, **kwargs): return _FakeSession()
-
-        fake_copilot = types.ModuleType("copilot")
-        fake_copilot.CopilotClient = lambda config=None: _FakeClient()
-        fake_copilot.SubprocessConfig = lambda **kwargs: object()
-        fake_copilot.ExternalServerConfig = lambda **kwargs: object()
-
-        fake_copilot_session = types.ModuleType("copilot.session")
-
-        class _PermissionHandler:
-            @staticmethod
-            async def approve_all(*args, **kwargs): return True
-
-        fake_copilot_session.PermissionHandler = _PermissionHandler
-
-        # MCP connected + send_and_wait は非空テキストを返すが tool event は発火しない
-        llm_text = "Work IQ に接続できました。関連情報はありません。"
-        with patch.dict(sys.modules, {"copilot": fake_copilot, "copilot.session": fake_copilot_session}), \
-                patch("workiq.build_workiq_mcp_config", return_value={"_hve_workiq": {}}), \
-                patch("workiq.query_workiq", new=unittest.mock.AsyncMock(return_value=llm_text)):
-            result = _run(_prefetch_workiq_detailed(cfg, "query", console, timeout=1))
-
-        # tool.execution_start が未観測 → safe_to_inject=False
-        self.assertFalse(result.tool_called)
-        self.assertFalse(result.safe_to_inject)
-        self.assertEqual(result.result_source, "llm_text")
-        self.assertEqual(result.error_type, "tool_not_invoked")
-        # content は保持されるが注入しない
-        self.assertEqual(result.content, llm_text)
-        # 上位処理では safe_to_inject=False なのでプロンプト注入しない。
-        console.warning.assert_called()
-
-
 # ---------------------------------------------------------------------------
 # FR-QA-03: QA 保存後の非待機 AKM バックグラウンド連携 (RED)
 # 対象モジュール hve.qa_akm_dispatch は未実装。全テストが ModuleNotFoundError
@@ -5307,7 +3961,7 @@ class TestQaAkmBackgroundCoordinator(unittest.TestCase):
 
         argv_str = " ".join(str(a) for a in captured_args[0])
         for forbidden in (
-            "--auto-qa", "--create-pr", "--create-issues", "--self-improve",
+            "--auto-qa", "--create-pr", "--create-issues",
         ):
             self.assertNotIn(forbidden, argv_str, f"forbidden: {forbidden}")
 

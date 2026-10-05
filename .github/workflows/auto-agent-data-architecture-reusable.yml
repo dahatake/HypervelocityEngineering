@@ -125,6 +125,13 @@ jobs:
           ISSUE_BODY=$(api_call GET "https://api.github.com/repos/${REPO}/issues/${ROOT_ISSUE}" \
             | python3 -c "import sys,json; print(json.load(sys.stdin).get('body',''))")
           export ISSUE_BODY ROOT_ISSUE
+          ISSUE_BODY_FILE="${RUNNER_TEMP}/ada-root-issue-body.md"
+          printf '%s' "${ISSUE_BODY}" > "${ISSUE_BODY_FILE}"
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/step-inputs.sh"
+          # The shared adapter renders instructions for `python3 -m hve.step_inputs cloud-manifest`;
+          # the assigned Agent consumes the `step-input-manifest` or reports `Cloud upload unavailable`.
+          CLOUD_STEP_INPUT_SECTION=$(render_cloud_step_input_section "ada" "${ISSUE_BODY_FILE}")
+          export CLOUD_STEP_INPUT_SECTION
           PARSED=$(python3 - <<'PY'
           import json, os, re
           body = os.environ.get("ISSUE_BODY", "")
@@ -189,7 +196,7 @@ jobs:
               existing_artifact_policy=existing,
               completion_instruction="- 完了時に自身に `ada:done` ラベルを付与すること\n",
               app_id_section=("\n## 対象 APP-ID\n" + app_ids + "\n") if app_ids else "",
-              additional_section=("\n## 追加コメント\n" + os.environ["ADDITIONAL"] + "\n") if os.environ.get("ADDITIONAL") else "",
+                additional_section=(("\n## 追加コメント\n" + os.environ["ADDITIONAL"] + "\n") if os.environ.get("ADDITIONAL") else "") + os.environ.get("CLOUD_STEP_INPUT_SECTION", ""),
           )
           for sid, title, agent in steps:
               template = Path(f".github/prompts/steps/ada/step-{sid}.prompt.md").read_text(encoding="utf-8")

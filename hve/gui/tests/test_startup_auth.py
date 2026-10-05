@@ -123,9 +123,12 @@ class TestEnsureStartupAuthentication:
 
         monkeypatch.setattr(startup_auth.gh_cli, "capture_gh_token", lambda **_kw: None)
         prompts: List[Optional[object]] = []
-        monkeypatch.setattr(
-            startup_auth, "_prompt_login", lambda parent: prompts.append(parent) or False
-        )
+
+        def prompt_login(parent: Optional[object]) -> bool:
+            prompts.append(parent)
+            return False
+
+        monkeypatch.setattr(startup_auth, "_prompt_login", prompt_login)
 
         assert startup_auth.ensure_startup_authentication() is False
         assert len(prompts) == 1
@@ -182,6 +185,18 @@ class TestEnsureStartupAuthentication:
 
 
 class TestNoAutomaticGhAuthLogin:
+    def test_login_guidance_points_to_the_github_hub(self) -> None:
+        """FR-GUI-24/35: 後続ログインは現在の可視 owner を案内する。"""
+        import inspect
+
+        from hve.gui import startup_auth
+
+        source = inspect.getsource(startup_auth._ask_login_confirmation)
+        assert "ヘッダーの「GitHub」" in source
+        assert "連携設定" in source
+        assert "GitHub Hub" not in source
+        assert "後で設定画面" not in source
+
     def test_module_does_not_spawn_processes_itself(self) -> None:
         """`gh auth login` の自動実行を行わないこと（FR-GUI-24）。
 

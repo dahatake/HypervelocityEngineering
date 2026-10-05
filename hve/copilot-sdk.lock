@@ -20,5 +20,5 @@
 #   実行すると本ファイルが最新版で書き換わるので、差分をレビューしてコミットする。
 #   Copilot ランタイム版も同時に動くため、下記コメント行の変化も併せて確認すること。
 #
-# pinned Copilot CLI runtime: 1.0.73
-github-copilot-sdk==1.0.8
+# pinned Copilot CLI runtime: 1.0.79
+github-copilot-sdk==1.0.11

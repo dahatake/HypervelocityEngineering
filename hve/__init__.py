@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-__version__ = "0.8.101"
+__version__ = "0.8.198"
 
 # 公開属性 -> 実体を持つサブモジュール名。
 # 遅延解決にすることで `import hve` 自体が重い依存 (cq / copilot SDK / PySide6 等)
@@ -26,8 +26,6 @@ _LAZY_ATTRS: dict[str, str] = {
     "QA_CONSOLIDATE_PROMPT": "prompts",
     "PRE_EXECUTION_QA_PROMPT_V2": "prompts",
     "MAIN_ARTIFACT_IMPROVEMENT_APPLY_PROMPT": "prompts",
-    "is_workiq_available": "workiq",
-    "build_workiq_mcp_config": "workiq",
     "StepRunner": "runner",
     "QAMerger": "qa_merger",
     "QADocument": "qa_merger",
@@ -69,4 +67,3 @@ if TYPE_CHECKING:  # 型チェッカ / IDE 向けの静的な再エクスポー�
     )
     from .qa_merger import Choice, QADocument, QAMerger, QAQuestion
     from .runner import StepRunner
-    from .workiq import build_workiq_mcp_config, is_workiq_available

@@ -10,6 +10,9 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILL = REPO_ROOT / ".github/skills/code-query/SKILL.md"
+CLI_REFERENCE = SKILL.parent / "references/cli-reference.md"
+INDEXING_INTERNALS = SKILL.parent / "references/indexing-internals.md"
+HVE_INTEGRATION = SKILL.parent / "references/repo-specific/hve-integration.md"
 MDQ_SKILL = REPO_ROOT / ".github/skills/markdown-query/SKILL.md"
 ROUTING = REPO_ROOT / ".github/skills/_routing/README.md"
 INSTRUCTIONS = REPO_ROOT / ".github/copilot-instructions.md"
@@ -17,6 +20,10 @@ INSTRUCTIONS = REPO_ROOT / ".github/copilot-instructions.md"
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def _read_joined(*paths: Path) -> str:
+    return "\n".join(_read(path) for path in paths)
 
 
 def _imports_package(source: str, package: str) -> bool:
@@ -48,7 +55,7 @@ class TestSkillDefinition:
 
     def test_progressive_disclosure_references_exist(self) -> None:
         body = _read(SKILL)
-        for reference in ("references/cli-reference.md", "references/indexing-internals.md"):
+        for reference in ("references/cli-reference.md", "references/indexing-internals.md", "references/repo-specific/hve-integration.md"):
             assert reference in body
             assert (SKILL.parent / reference).is_file()
 
@@ -75,6 +82,38 @@ class TestSkillDefinition:
         for symbol in symbols:
             name = symbol.rpartition(".")[2]
             assert re.search(rf"\b(def|class)\s+{re.escape(name)}\b", repo_sources), symbol
+
+    def test_root_selection_contract_keeps_source_markdown_boundary(self) -> None:
+        """root の短縮後も、Code と Markdown の選択境界は frontmatter から読めること。"""
+        head = _read(SKILL).split("---", 2)[1]
+        prefer_clause = re.search(r"PREFER OVER(?P<clause>.*?)(?:DO NOT USE FOR:)", head, re.DOTALL)
+        assert prefer_clause is not None
+        assert all(token in prefer_clause.group("clause") for token in ("read_file", "grep_search", "source files"))
+        assert "markdown lookup (use markdown-query)" in head
+        assert "where something lives or what calls what" in head
+
+    def test_reference_examples_for_def_and_refs_use_symbol_arguments(self) -> None:
+        """root だけでなく、CLI / HVE-specific 例でも refs/def は --symbol を使う。"""
+        examples: list[str] = []
+        for path in (CLI_REFERENCE, HVE_INTEGRATION):
+            for line in _read(path).splitlines():
+                stripped = line.strip()
+                if stripped.startswith("python -m cq def") or stripped.startswith("python -m cq refs"):
+                    examples.append(stripped)
+                    assert "--symbol" in stripped, stripped
+                    assert "--q " not in stripped, stripped
+        assert any("python -m cq def" in example for example in examples)
+        assert any("python -m cq refs" in example for example in examples)
+
+    def test_filter_match_profile_and_freshness_guidance_survives_reference_split(self) -> None:
+        """root から詳細を逃がしても、Agent が必要な CLI 契約へ辿れること。"""
+        docs = _read_joined(SKILL, CLI_REFERENCE, INDEXING_INTERNALS, HVE_INTEGRATION)
+        for token in ("--profile", "--paths", "--max-tokens", "--return-unit"):
+            assert token in docs
+        for token in ("match", "or-fallback", "name-fallback", "stale", "--auto-reindex-limit"):
+            assert token in docs
+        for token in ("refs", "traces", "chunks_fts", "files"):
+            assert token in _read(INDEXING_INTERNALS)
 
 
 class TestRoutingRegistration:

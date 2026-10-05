@@ -52,7 +52,7 @@ TDD GREEN フェーズ: テスト仕様書 (`docs/test-specs/`) を参照しな�
 
 ## 完了条件
 - `src/app/` 配下にUI実装が完成している
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 - 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - 必須ラベル: `Schema-Version`, `Evidence-Status`, `TDD-Judgement`, `Secret-Redaction`, `Test-Files-Changed`
 - `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とする。

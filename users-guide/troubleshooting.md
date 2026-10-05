@@ -20,6 +20,7 @@
   - [7) Self-hosted runner（オプション）](#7-self-hosted-runnerオプション)
   - [8) HVE CLI Orchestrator Pythonアプリケーション](#8-hve-cli-orchestrator-pythonアプリケーション)
   - [8-1) `ModuleNotFoundError: No module named 'cq'` / `'config'`](#8-1-modulenotfounderror-no-module-named-cq--config)
+   - [8-2) 起動時の HVE バージョン整合性チェック](#8-2-起動時の-hve-バージョン整合性チェック)
   - [9) `GH_TOKEN` / `REPO` / `gh auth login`](#9-gh_token--repo--gh-auth-login)
   - [9-1) GUI の「GitHub CLI でログイン」で端末が開かない](#9-1-gui-のgithub-cli-でログインで端末が開かない)
   - [9-2) GUI の Copilot パネルが対話セッションを開始できない](#9-2-gui-の-copilot-パネルが対話セッションを開始できない)
@@ -40,6 +41,20 @@
 ---
 
 ## 初期セットアップで詰まったとき
+
+### OS-only の1操作起動
+
+まず [HVE の1操作起動](./hve-one-operation-start.md) の対象 OS・CPU・private ZIP の前提を確認してください。
+
+| 症状 | 確認 | 対応 |
+|---|---|---|
+| launcher が対象外 platform で終了する | Windows 11 x64、または Apple Silicon macOS 15 / 26 か | 対応対象へ移行する。Windows PowerShell 5.1、Intel Mac、Rosetta への自動フォールバックはありません。 |
+| critical file / ZIP hash で停止する | 配布 ZIP の SHA-256 と展開後ファイルを再確認する | 配布元から同じ candidate ZIP を再取得する。ファイルを手動編集して再実行しない。 |
+| setup 後に GUI が起動しない | 表示された `stage` / `reason_code`、`gh`、PTY、QtWebEngine の結果を確認する | 同じ launcher を再実行する。global Python、既存 `hve/.settings.txt`、生成成果物を削除しない。 |
+| GitHub / Copilot 認証を求められる | GUI 表示後の既存ログイン導線か確認する | setup が自動ログインする契約ではないため、必要な機能を利用するときだけ利用者が明示操作する。 |
+| 「起動成功」と表示されたが Workflow が動かない | GUI 表示と認証・Workflow 入力・Azure / MCP 権限を分離する | 起動成功は MainWindow / preview / PTY の準備を示すだけで、全 Workflow ready を意味しない。 |
+
+clean OS の Windows 11、macOS 15、macOS 26 の受入は各環境で実施するまで `NOT_RUN` です。GitHub-hosted macOS runner の成功を clean Mac の証拠に流用しません。
 
 HVE Cloud Agent Orchestrator と HVE CLI Orchestrator は、前提設定と認証情報が異なります。まず利用方式を切り分けてから確認してください。
 
@@ -127,9 +142,13 @@ HVE Cloud Agent Orchestrator と HVE CLI Orchestrator は、前提設定と認�
 ### 6) MCP Servers / GitHub Copilot Skills
 
 - HVE Cloud Agent Orchestrator の MCP Servers は GitHub UI の Settings → Copilot → Cloud agent → MCP Servers で設定します
-- HVE CLI Orchestrator の MCP は `--mcp-config`（または hve 側設定ファイル）で指定します
+- HVE CLI / GUI の local runtime は Copilot CLI 側で設定済みの Plugin / MCP / Skill を **SDK ResourceSnapshot + policy route** で読み取ります
 - Cloud と Local の MCP 設定は混同しないでください
 - GitHub Copilot Skills は Azure 関連タスクを効率化する推奨設定です。必要時に有効化状態を確認してください
+
+`unverified` は ResourceSnapshot 自体を安全に確認できなかった状態、`required resource failure` は policy route が必須 resource を満たせず fail-closed した状態です。Tool Search の OFF / ON 比較で runtime の resource 条件が揃わなかった場合は `runtime drift` として **比較不能** を返します。
+
+`MCP tool metadata exposes tools outside the applied route: <server>/<tool>, ...` は、session が route で許可していない exact MCP identity を公開したため、最初の prompt 送信前に停止したことを示します。無効化した optional server の tool は再初期化まで metadata に残るため、HVE は停止の前に 1 回だけ再初期化して metadata を取り直します。このエラーは、取り直した後も identity が残った場合に出ます。エラー末尾の server / tool を Copilot CLI の `/mcp` と HVE の有効な resource route で照合してください。required resource または caller filter を外して回避せず、SDK / Plugin の構成と HVE のバージョンを確認してから再実行します。エラーには tool の説明・引数・応答本文は含まれません。
 
 #### markdown-query Skill のトラブルシューティング
 
@@ -185,57 +204,71 @@ Self-hosted runner は **オプション** です。GitHub-hosted runner を使�
 4. `gh auth login` 済みで `gh auth status` が成功するか
 5. GitHub 書込み startup preflight 対象では `GH_TOKEN` または `GITHUB_TOKEN`、`REPO` / `--repo`、`origin` のベースブランチが設定されているか
 6. `GH_TOKEN` と Cloud 側の `COPILOT_PAT` を混同していないか
-7. Work IQ を使う場合は Node.js / npx / `@microsoft/workiq` が利用可能か
+7. Work IQを使う場合は Copilot CLI の `/mcp` で exact `workiq` が `connected` かつ読み取り用 tool を公開しているか
 8. MCP の入出力を見たい場合は `work/run/<run-id>/mcp-<サーバー名>.log` を確認（[MCP 通信ログ](./hve-cli-orchestrator-guide.md#mcp-通信ログ)）
 
 詳細は [hve-cli-orchestrator-guide.md 付録D](./hve-cli-orchestrator-guide.md#付録d-トラブルシューティング) も参照してください。
 
 ---
 
-### 8-0) Work IQ の回答案が QA へ 1 件も統合されない
+### 8-0) 知識探索の調査回答が QA へ 1 件も統合されない
 
-**症状**: 実行ログに次のような警告が出て、`qa/` の回答済み質問票に Work IQ 回答案が入らない。
+**症状**: `qa/` の質問票に `調査回答` が入らない、または Work IQ / 知識源を有効にしたつもりでも QA 統合が 0 件になる。
 
-```text
-⚠️ Work IQ [Q2]: Work IQ MCP ツール呼び出しを SDK イベント上で確認できませんでした。
-  応答 status: FOUND（一次情報ありと申告されています）
-  当該区間で観測されたツール: retrieve
-Work IQ: 3 件の応答を得ましたが、0 件の質問にしか回答案を統合できませんでした。
-```
+**確認ポイント**:
 
-**原因と対処**:
+1. GitHub Copilot CLI の対話セッションで `/mcp` を開き、server 名が exact `workiq` で `connected` か確認する。
+2. 同じ `/mcp` 表示で exact `workiq` が `retrieve` / `ask` / `fetch` / `search_paths` / `get_schema` / `list_agents` のいずれかを公開しているか確認する。
+3. `hve/toolsearch/policy.json` の `knowledge_tool_allowlists` に対象 server の読み取り用 tool があるか確認する。
+4. HVE を再実行し、同じ run の `qa/<run_id>-<step_id>-pre-execution-qa.md` と `work/run/<run-id>/mcp-workiq.log` を確認する。
 
-| 原因 | 確認方法 | 対処 |
-|---|---|---|
-| 実際に呼ばれたツールが HVE の実行確認集合に無い | 警告の「当該区間で観測されたツール」を見る | 参照系ツールなのに検出されない場合は不具合。ツール名を添えて報告してください |
-| LLM がツールを呼ばずに説明文だけ返した | 観測されたツールが空 | `python -m hve workiq-doctor --sdk-tool-probe --sdk-event-trace` で実呼び出しを確認 |
-| SDK のイベント形式が変わり抽出できない | `python -m hve workiq-doctor --event-extractor-self-test` | 自己診断が FAIL なら抽出ロジックの更新が必要 |
+**統合条件**:
 
-> 実際に送ったプロンプトと Work IQ の応答全文は `work/run/<run-id>/mcp-_hve_workiq.log` に残ります。`session_prompt` / `session_response` / `mcp_request` / `mcp_response` の各レコードを見ると、「プロンプトは送られたがツールが呼ばれていない」のか「ツールは呼ばれたが結果が空だった」のかを直接切り分けられます（[MCP 通信ログ](./hve-cli-orchestrator-guide.md#mcp-通信ログ)）。
+- usable な知識源が 1 件以上ある。
+- 探索 session で MCP source locator が同じ session の成功した MCP call 応答に含まれ、出典検証に通る。
+- `調査状態` が `Confirmed` または `Tentative` で、`調査回答` が空でない。
 
-> `STATUS: NOT_FOUND` の応答は「一次情報が見つからなかった」という正常な結果であり、この警告は出ません。統合 0 件でもすべて `NOT_FOUND` なら異常ではありません。
+`Confirmed` は 1 件以上の検証済み出典を必要とします。違反がある場合、`hve_qa_answer` は tool failure を返し、QA ファイルを変更しません。2 回の修復後も調査状態が埋まらない質問は `Unknown` として記録され、回答採用には使われません。
 
-**修正後の確認**: Workflow を丸ごと再実行せずに、次の診断で統合可否だけを確認できます。
+**対処**:
 
-```bash
-python -m hve workiq-doctor --skip-mcp-probe --qa-integration-probe --sdk-tool-probe-timeout 300
-```
-
-`workiq_qa_merge_decision` が `PASS` なら本番でも統合されます。`FAIL` の場合は同じチェックに観測されたツール名が出るため、上表で切り分けてください。
+- `/mcp` で exact `workiq` が見えない、または `connected` でない場合は、GitHub Copilot CLI 側の登録・認証を完了してから、意図した Workflow を再実行してください。
+- allowlist tool が公開されていない場合は、Copilot CLI 側の Plugin または MCP Server の設定と `knowledge_tool_allowlists` を見直してから再実行してください。
+- `調査状態=Unknown` ばかりの場合は、`## 調査出典` の locator と MCP log の成功応答を照合し、locator が応答本文に含まれる出典を使っているか確認してください。
+- `mcp-workiq.log` を確認する場合は、`mcp_request` / `mcp_response` と実行順を見てください。ログには **M365 の業務データが平文で含まれうる** ため、共有前に内容を確認してください。
 
 ---
 
-### 8-0-1) Work IQ の可用性判定が初回だけ失敗する
+### 8-0-1) Work IQが起動時に無効化される
 
-**症状**: npx キャッシュが無い環境で 1 回目の実行だけ Work IQ が無効化され、2 回目以降は有効になる。
+**症状**: GUI の Work IQ 項目が無効表示になる、CLI wizard で Work IQ の選択肢が出ない、直接 CLI 実行で該当知識源だけが除去される、または Prompt 計画に warning/comment が付く。
 
-**原因**: 初回は `npx -y @microsoft/workiq` が npm レジストリからパッケージを取得するため、可用性判定がタイムアウトすることがあります。
+**意味**: 起動時の SDK discovery の snapshot から、exact `workiq` が enabled であることを確認できませんでした。保存済み設定は変更されません。後続の実働 session での初期化・接続失敗とは別の判定です。
 
-**対処**: 現在の HVE はタイムアウトを「判定不能」として扱い、同一プロセス内で再試行します（不可用として恒久キャッシュしません）。それでも失敗する場合は、事前に次を実行してキャッシュを温めてください。
+discovery の `ready` は runtime の `connected` を意味しません。実効選択 MCP がある実働 session では、最初の `send` / query 前に **明示的な SDK 初期化 → 接続確認 → `list_tools`** を行います。`session.rpc.tools.initialize_and_validate()` を MCP の `list` / `status` / `list_tools` より先に呼び、`session.rpc.mcp.list()` で exact `workiq` の `connected`、続く `list_tools` で allowlist tool を確認します（[SDK v1.0.11 RPC 定義](https://github.com/github/copilot-sdk/blob/v1.0.11/python/copilot/generated/rpc.py)）。初期化の正常復帰だけでは接続済みと判定しません。Prompt plan と no-prompt inventory は MCP を初期化・接続しません。
 
-```bash
-npx -y @microsoft/workiq version
-```
+**確認順**:
+
+1. GitHub Copilot CLI の対話セッションで `/mcp` を開く。
+2. server 名が exact `workiq` で `connected` か確認する。
+3. exact `workiq` が allowlist tool を公開しているか確認する。
+4. 必要なら意図した Workflow を再実行する。
+5. なお不明点があれば `work/run/<run-id>/mcp-workiq.log` を確認する。
+
+**状態の見分け方**: `MCP host not initialized` は初期化未完了であり、登録の不存在や認証エラーを確定しません。`needs-auth` は認証が必要な状態を示します。HVE は認証を開始しないため、`needs-auth` を `pending` のように再確認せず、直ちに失敗として扱います（required の server は停止、optional の server は session 内で無効化して続行）。認証は GitHub Copilot CLI 側で行います。認証の後に再実行してください。対話セッションの `/mcp` で状態を確認してください。
+
+**除外の維持**: caller の `disabled_mcp_servers` / `disabled_skills` と route の除外は和集合にし、exact 名の順序を保って重複を除きます。required MCP / Skill と衝突すれば `create_session` / `resume_session` より前に停止し、caller が除外した optional resource は再有効化しません。実効 route の検証対象からも外します。除外は session 単位で、永続設定の変更ではありません（[SDK v1.0.11 MCP ガイド](https://github.com/github/copilot-sdk/blob/v1.0.11/docs/features/mcp.md#disabling-configured-servers-per-session)）。
+
+**待ち時間**: セッション取得後の `apply_resource_route` の入口から出口までに **routing の共有 60 秒**を適用します。required Skill 検証、初期化、接続確認、`list_tools`、options ACK、optional disable と poll 待機を含み、API / server ごとに予算を再付与しません。poll は 0.5 秒間隔（残時間が短ければ残時間まで）で、caller の deadline が短ければ早い方を使います。残時間がなくなった場合は optional でも続行しません。失敗時の `disconnect` は別枠の上限 5 秒で、disk 上の再開状態を保持します。client 起動・session 作成／再開・client 停止を含む run 全体の timeout ではありません。全体が 65 秒以内に終わる保証でもありません。
+
+**ACK 非成功時**: 必要な `session.rpc.options.update(...)` は全 server 分を集約した 1 回で、`success is True` だけを ACK 成功とします。`success=False`、不正・欠落応答、RPC 例外は更新失敗です。caller filter は `available_tools` / `excluded_tools` の非 `None` 指定（空リストも含む）で、route により許可を広げません。ACK 非成功時に required MCP または caller filter がある場合は fail-closed です。選択 MCP がすべて optional かつ caller filter がない場合は、共有 deadline の残時間内に全選択 MCP の disable が成功した場合だけ継続します。disable 失敗・期限切れ・cancel は停止し、追加予算や 2 回目の options 更新で救済しません。接続・tool 検証で optional server が失敗した場合も、期限内にその server を disable できた場合だけ除外して続行します。
+
+**補足**:
+
+- HVE は Work IQ の設定・認証を実行しません。
+- HVE は M365 の診断クエリを自動実行しません。
+- 新しい公開 flag・設定は追加しません。raw config の複製や別名への置換を復旧策にしません。
+- AKM の実効 source が Work IQ のみで、利用不可により 0 件になる場合は開始しません。
 
 ---
 
@@ -304,6 +337,27 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File hve\setup-hve.ps1              # �
 - **グローバル Python に対して `pip install -e .` を実行しない**。セットアップスクリプトは必ず `.venv` に導入します。
 - 起動はリポジトリ root の `.\hve.cmd`（Windows）/ `./hve.sh`（macOS / Linux）を使う。venv の activate 漏れに依存しません。
 - `PYTHONPATH` / `PYTHONHOME` / `PIP_TARGET` 等をシェルに設定しない。設定されているとセットアップが警告します。
+
+---
+
+### 8-2) 起動時の HVE バージョン整合性チェック
+
+`python -m hve`、`hve` console script、`hve.cmd`、`./hve.sh` の起動直後に版確認の警告またはエラーが出た場合は、固定部分を次の表で確認してください。版の比較は現在の checkout とインストール済み metadata の間だけで行い、Git remote、GitHub API、PyPI は参照しません。
+
+| ログの固定部分 | 意味と対応 |
+|---|---|
+| `標準入力が TTY ではないため自動アップグレードせず続行します。` | インストール済み版が古い非対話起動です。処理は継続します。対話端末から再起動して setup を承認するか、OS 別 setup を手動実行します。 |
+| `HVE のインストール済みバージョンを確認できません。` / `標準入力が TTY ではないため自動セットアップせず続行します。` | distribution metadata が無いか読み取れません。非対話起動では変更せず継続します。 |
+| `インストール済み HVE の方が checkout 版より新しいため downgrade しません` | 古い checkout を起動しています。HVE は自動 downgrade しません。意図した branch / checkout か確認します。 |
+| `checkout の HVE source version を確認できないため、起動時のバージョンチェックをスキップします。` | `pyproject.toml` の `[project].version` を読めないか、`MAJOR.MINOR.PATCH` 形式ではありません。値を推測せず、checkout のファイルを確認します。 |
+| `PowerShell 7+ (pwsh.exe) が見つかりません。` | Windows の自動 setup を開始できません。表示された `hve\setup-hve.cmd` を手動実行します。 |
+| `setup スクリプトが見つかりません:` | checkout に OS 対応の `hve/setup-hve.ps1` または `hve/setup-hve.sh` がありません。意図した完全な checkout か確認します。 |
+| `setup を起動できません (` | setup process の生成に失敗したため、元の HVE コマンドは開始されていません。実行ファイルの存在・権限・OS の実行制限を確認します。 |
+| `setup が失敗しました (exit=` | 既存 setup が非 0 で終了したため、元の HVE コマンドは開始されていません。直前の setup 出力を確認して復旧後に再実行します。 |
+| `setup 後の HVE バージョンが checkout 版と一致しません` | setup は終了しましたが metadata の再取得不能または別版のままで、安全のため元コマンドを開始していません。checkout と `.venv` が同じリポジトリを指すこと、および setup 出力を確認します。 |
+| `更新後の HVE を起動できません` | setup 後のリポジトリ `.venv` Python による再起動に失敗しました。`.venv` の Python とファイル権限を確認します。 |
+
+TTY で表示される確認では、`y` / `yes` の場合だけ既存 setup を通常モードで実行します。`n` / `no` / Enter は更新せず現在の起動を続けます。setup 内部で OS ツール導入等の追加確認が必要な場合、その確認は省略されません。
 
 ---
 
@@ -878,7 +932,7 @@ python -m hve orchestrate --workflow aas --resume-run <run-id>
 >
 > 診断にはバイト数などのメタデータだけが表示され、プロンプト本文、追加プロンプト本文、事前 QA 応答本文、認証情報は表示されません。問い合わせ時も本文を共有する必要はありません。
 >
-> **Work IQ との切り分け**: この停止判定は Phase 1 のメインタスクが対象であり、Work IQ の `ask` クエリを分割・再送する機能ではありません。Work IQ は QA フェーズでのみ使用されます（[QA フェーズにおける Work IQ の扱い](./hve-cli-orchestrator-guide.md#qa-フェーズにおける-work-iq-の扱い) 参照）。
+> **知識探索との切り分け**: この停止判定は Phase 1 のメインタスクが対象であり、知識源 MCP の query を分割・再送する機能ではありません。知識源は事前 QA / AKM / ARD の知識探索でのみ使用されます（[Work IQ Plugin / MCP Server 連携](./hve-cli-orchestrator-guide.md#work-iq-plugin--mcp-server-連携オプション) 参照）。
 
 ---
 

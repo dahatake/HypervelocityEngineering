@@ -50,6 +50,10 @@ class TestIssueForm:
     def test_yaml_is_parseable(self):
         assert yaml.safe_load(_FORM.read_text(encoding="utf-8"))["body"]
 
+    def test_self_improve_fields_are_absent(self, form_fields):
+        assert "self_improve_max_iterations" not in form_fields
+        assert "self_improve_quality_threshold" not in form_fields
+
 
 class TestWorkflowWiring:
     def test_yaml_is_parseable(self):
@@ -83,20 +87,17 @@ class TestWorkflowWiring:
 
 
 class TestPostDagDesignGate:
-    def test_runs_the_capability_validator(self, workflow):
-        assert "validate-agent-contract.py" in workflow
+    def test_post_dag_validator_job_is_removed(self, workflow):
+        assert "validate-agent-contract.py" not in workflow
+        assert "docs/agent/agent-detail-*.md" not in workflow
 
-    def test_passes_the_policy_to_the_validator(self, workflow):
-        assert "--tool-search-policy" in workflow
+    def test_no_self_improve_logic_remains(self, workflow):
+        assert "self-improve" not in workflow
+        assert "Self-Improve" not in workflow
 
-    def test_covers_every_design_artifact(self, workflow):
-        assert "docs/agent/agent-detail-*.md" in workflow
+    def test_root_completion_uses_normal_done_flow(self, workflow):
+        assert "mark_root_done()" in workflow
+        assert "auto_close_root_if_all_done" in workflow
 
-    def test_runs_before_self_improve(self, workflow):
-        """design が不正なまま Self-Improve が走ると誤った改善を積む。"""
-        gate = workflow.index("validate-agent-contract.py")
-        self_improve = workflow.index("Run mandatory AAG Post-DAG Self-Improve")
-        assert gate < self_improve
-
-    def test_reads_the_policy_from_the_root_tag(self, workflow):
-        assert "tool_search_policy=" in workflow
+    def test_post_dag_policy_reparse_is_removed(self, workflow):
+        assert "tool_search_policy=" not in workflow

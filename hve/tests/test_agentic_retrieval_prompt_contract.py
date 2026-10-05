@@ -1,8 +1,9 @@
-"""Agentic Retrieval 方針と検索契約の Prompt 側記述を固定する。
+"""Agentic Retrieval 方針・検索契約・Deploy AC 証跡パスを固定する。
 
 FR-WF-AAG-03 / FR-WF-AAG-04。
 注入された方針を Agent が解釈できること、および Knowledge Source の下限と
-索引契約が設計 Prompt に明示されていることを確認する。
+索引契約が設計 Prompt に明示されていることを確認する。AAR / ASDW が共有する
+Deploy Prompt の AC 証跡は Orchestrator gate が探索する Issue 直下へ出力させる。
 """
 
 from __future__ import annotations
@@ -24,8 +25,13 @@ def design_prompt() -> str:
 
 
 @pytest.fixture(scope="module")
-def deploy_prompt() -> str:
+def agent_deploy_prompt() -> str:
     return _read("Dev-Microservice-Azure-AgentDeploy.prompt.md")
+
+
+@pytest.fixture(scope="module")
+def agentic_retrieval_deploy_prompt() -> str:
+    return _read("Dev-Microservice-Azure-AgenticRetrievalDeploy.prompt.md")
 
 
 class TestDesignPromptPolicy:
@@ -51,9 +57,33 @@ class TestDesignPromptSearchContract:
 
 
 class TestDeployPromptPolicy:
-    def test_declares_the_injected_policy(self, deploy_prompt: str):
-        assert "Agentic Retrieval 方針" in deploy_prompt
+    def test_declares_the_injected_policy(self, agent_deploy_prompt: str):
+        assert "Agentic Retrieval 方針" in agent_deploy_prompt
 
-    def test_states_that_ar_cap_values_are_machine_verified(self, deploy_prompt: str):
-        assert "AR-CAP-01" in deploy_prompt
-        assert "Knowledge base name" in deploy_prompt
+    def test_states_that_ar_cap_values_are_machine_verified(
+        self, agent_deploy_prompt: str
+    ):
+        assert "AR-CAP-01" in agent_deploy_prompt
+        assert "Knowledge base name" in agent_deploy_prompt
+
+
+class TestDeployAcReportPath:
+    def test_agentic_retrieval_report_is_in_issue_root(
+        self, agentic_retrieval_deploy_prompt: str
+    ) -> None:
+        """AAR/ASDW の共有 Deploy prompt は gate が探索する Issue 直下へ出力する。"""
+        assert "{WORK}ac-verification.md" in agentic_retrieval_deploy_prompt
+        assert (
+            "{WORK}artifacts/ac-verification.md"
+            not in agentic_retrieval_deploy_prompt
+        )
+
+    def test_no_deploy_prompt_places_ac_report_under_artifacts(self) -> None:
+        """同じパスドリフトを他の Deploy prompt に再導入しない。"""
+        offenders = [
+            path.name
+            for path in sorted(_PROMPTS.rglob("*Deploy*.prompt.md"))
+            if "{WORK}artifacts/ac-verification.md"
+            in path.read_text(encoding="utf-8")
+        ]
+        assert offenders == [], f"Deploy prompts with nested AC reports: {offenders}"

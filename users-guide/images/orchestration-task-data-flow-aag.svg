@@ -22,8 +22,8 @@
   <text x="175" y="123" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/use-case-catalog.md</text>
   <text x="175" y="138" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/app-catalog.md</text>
   <text x="175" y="153" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/service-catalog-matrix.md</text>
-  <text x="175" y="168" text-anchor="middle" font-size="10" fill="#24292e">docs/domain-analytics.md</text>
-  <text x="175" y="183" text-anchor="middle" font-size="10" fill="#24292e">docs/data-model.md / docs/services/*.md</text>
+  <text x="175" y="168" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/domain-analytics.md</text>
+  <text x="175" y="183" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/data-model.md / docs/services/SVC-*.md</text>
   <rect x="430" y="120" width="270" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
   <text x="565" y="140" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-AIAgentDesign-Step1</text>
   <text x="565" y="156" text-anchor="middle" font-size="10" fill="#586069">AI Agent アプリケーション定義</text>
@@ -38,7 +38,7 @@
   <rect x="20" y="217" width="310" height="65" rx="8" fill="#e8f0fe" stroke="#0366d6" stroke-width="1.5"/>
   <text x="175" y="235" text-anchor="middle" font-size="10" fill="#24292e">docs/agent/agent-application-definition.md</text>
   <text x="175" y="250" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/service-catalog-matrix.md</text>
-  <text x="175" y="265" text-anchor="middle" font-size="10" fill="#24292e">docs/domain-analytics.md / data-model.md</text>
+  <text x="175" y="265" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/domain-analytics.md / docs/catalog/data-model.md</text>
   <text x="175" y="278" text-anchor="middle" font-size="10" fill="#24292e">docs/catalog/app-catalog.md</text>
   <rect x="430" y="227" width="270" height="48" rx="8" fill="#e8d5f5" stroke="#6f42c1" stroke-width="2"/>
   <text x="565" y="247" text-anchor="middle" font-size="11" font-weight="bold" fill="#24292e">Arch-AIAgentDesign-Step2</text>

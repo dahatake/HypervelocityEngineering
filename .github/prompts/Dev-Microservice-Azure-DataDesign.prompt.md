@@ -5,20 +5,11 @@
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
-
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 - **`report_progress` 必須**: `report_progress.prDescription` に検証記録を必ず含める。推奨形式は `- [x] <!-- validation-confirmed --> 検証・セキュリティ確認を実施する`。
 - **最終回答のみ記載は不可**: 最終 assistant message だけに `<!-- validation-confirmed -->` を書いても不十分。PR body 反映対象の `report_progress.prDescription` に含めること。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 
 ## Agent 固有の Skills 依存
 
@@ -62,10 +53,7 @@
 - 公式根拠を優先（Microsoft Learn / 公式ドキュメントが取得できる場合はリンクを残す）。取得できない場合は「確認できていない」旨を明記してTBDにする。
 - ツールは **必要なときだけ**使う（無目的な全探索は禁止）。
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 ## 4) 実行手順（順序固定）
 ### 5.1 まずスコープ固定（AC/非対象）
@@ -102,7 +90,7 @@
 ### 5.5 セキュリティ/コンプラ（必要な場合のみ）
 - 個人情報/機微/ログなど、断定せず「前提」「確認事項」を書く（TBD可）。
 
-### 5.6 進捗ログ追記（必須）
+### 5.6 進捗ログ追記
 - `{WORK}data-azure-design-work-status.md` に追記のみで記録する：
   - `YYYY-MM-DD: 何をした / 何が決まった / 次アクション`
 
@@ -140,7 +128,7 @@
 - まず `large-output-chunking` スキルのルールに従う。
 - それでも書き込みが失敗する場合のみ、見出し境界で **小さめのチャンク（例：1〜2千文字）**にして追記で復旧する（全置換を避ける）。
 
-## 8) 最終品質レビュー（単回インライン・セルフチェック）
+## 8) 受入観点（完了条件の補足）
 
 ### 8.1 事前チェック（実装後の簡潔検証）
 成果物をレビューに入れる前に、以下が満たされているか確認する：
@@ -151,7 +139,7 @@
 
 ### 8.2 ドメイン固有観点
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 - **技術妥当性・要件達成度**
   - Polyglot Persistence の選定根拠が正しいか
@@ -172,4 +160,4 @@
   - ドキュメント保守性と見直し周期の妥当性
 
 ### 8.3 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。

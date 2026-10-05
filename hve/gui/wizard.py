@@ -84,8 +84,7 @@ class WizardResult:
             argv.append("--dry-run")
         if self.quiet:
             argv.append("--quiet")
-        if self.auto_qa:
-            argv.append("--auto-qa")
+        argv.append("--auto-qa" if self.auto_qa else "--no-auto-qa")
         if self.app_id:
             argv.extend(["--app-id", self.app_id])
         # Step 1 のステップ選択を CLI に反映（Q5=B）

@@ -5,7 +5,7 @@
 
 設計判断:
 - Copilot SDK の CopilotClient セッションを章ごとに 1 本張る（合計 7 本）。
-  orchestrator.py `_run_akm_workiq_ingestion` と同じパターン。
+  orchestrator.py の補助セッションと同じパターン。
 - いずれかの章が失敗した場合、既存章本文があればそれを保持、無ければ
   `## {見出し}\n\n[要追加確認] 生成失敗\n` を入れる（捏造禁止のため空欄補完しない）。
 - 並列度 7 は AKM の D01〜D21 (21 並列) と比べて低く、レート制限・タイムアウトの
@@ -98,7 +98,7 @@ async def _generate_one_section(
     from copilot.session import PermissionHandler  # type: ignore
 
     # Late import to avoid hard dep at module import time
-    from ..config import to_wire_model
+    from ..config import SDKConfig, to_wire_model
     from ..orchestrator import _create_session_with_auto_reasoning_fallback  # type: ignore
     from ..runner import _extract_text  # type: ignore
 
@@ -120,8 +120,20 @@ async def _generate_one_section(
     if _wire_model:
         session_opts["model"] = _wire_model
 
+    runtime_config = SDKConfig(
+        model=config.model or "auto",
+        cli_path=config.cli_path,
+        cli_url=config.cli_url,
+        github_token=config.github_token or "",
+    )
+
     try:
-        session = await _create_session_with_auto_reasoning_fallback(client, session_opts)
+        session = await _create_session_with_auto_reasoning_fallback(
+            client,
+            session_opts,
+            config=runtime_config,
+            workflow_id="ard",
+        )
     except Exception as exc:  # セッション作成失敗
         text = existing_section_text or _placeholder_section(section, f"session 作成失敗: {exc}")
         result = SectionResult(section=section, ok=False, text=text, error=str(exc))

@@ -41,6 +41,26 @@ HVE CLI Orchestrator（`hve orchestrate`）実行中は、バックグラウン�
 - サンプルクエリ: `tools/skills/markdown_query/queries.sample.txt`
 - 詳細: `tools/skills/markdown_query/README.md`
 
+### 過去の実測値（他リポジトリへ外挿しない）
+
+以下は Skill 入口と組み込み例から移設した HVE 固有の過去記録であり、今回の変更の再測定結果ではない。索引対象規模・クエリ分布が異なる他リポジトリでは値が変わるため、自リポジトリで計測する。
+
+実測日: 2026-05-18 / 索引対象: 当時の HVE 既定 11 ルート（81 files, 1,003,418 chars）/ トークナイザ: `fallback(chars/4)` / クエリ 5 件 × 3 回 (n=15) / `--top-k 5 --max-tokens 800 --lang ja-jp --strategy heading`
+
+| 指標 | 値 |
+|---|---|
+| baseline_full（全 `.md` の合計トークン数） | 250,823 tokens |
+| mdq_bm25 平均レスポンストークン | **480.8 tokens / query** |
+| mdq_bm25 平均 Context 削減率 | **99.81 %** |
+| mdq_bm25 レイテンシ (mean / p50 / p95) | 139.6 ms / 140.7 ms / 147.6 ms |
+| mdq_grep 平均レスポンストークン | **323.2 tokens / query** |
+| mdq_grep 平均 Context 削減率 | **99.87 %** |
+| mdq_grep レイテンシ (mean / p50 / p95) | 13.4 ms / 12.6 ms / 19.4 ms |
+
+レポート: [bench-20260518T022346Z.md](../../../../../tools/skills/markdown_query/results/bench-20260518T022346Z.md)。同名 JSON も同ディレクトリに保存される。tiktoken 導入時は `cl100k_base` で再計測されるが、上記は `chars/4` フォールバックでの近似である。
+
+別の既存記録（ゴールデン 60 問）では、`--top-k 5 --max-tokens 1600` が平均 4.5〜4.8 件 / 1,234〜1,316 tokens、`--top-k 20 --max-tokens 800 --return-unit locations` が平均 6.7〜7.1 件 / 714〜756 tokens で、期待箇所への到達率は 4 スライスすべてで同等以上だった。旧入口に測定日の記載はなく、現在の性能や上記 2026-05-18 の測定と同一とは扱わない。
+
 ## 6. Related Skills（HVE 内の棲み分け）
 
 - `knowledge-lookup`: `knowledge/D01〜D21` の参照ルール（こちらが優先）

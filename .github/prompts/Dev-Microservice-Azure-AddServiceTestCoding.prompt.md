@@ -2,7 +2,7 @@
 
 > **WORK**: `work/run/<run-id>/Dev-Microservice-Azure-AddServiceTestCoding/Issue-<識別子>/`
 
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 
 - 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とし、実行ログを `docs/` / `src/` に追記しない。
@@ -54,14 +54,8 @@ Integration test ベースライン生成専用 Agent。
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
 - **捏造禁止**: ID / URL / 数値 / 固有名 / SKU / API バージョンを根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用。
-- **ルート `README.md` 変更禁止**。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 - **秘密情報禁止**: 接続文字列 / アカウントキー / SAS / トークンを成果物に含めない。すべて環境変数または Managed Identity 経由とする。
 - **実装本体の生成禁止**: `src/api/` 配下の自前サービス実装コードを作成・変更しない。
 
@@ -73,7 +67,6 @@ Integration test ベースライン生成専用 Agent。
 - `harness-error-recovery` — ビルド・テスト失敗時のリカバリ
 - `harness-safety-guard` — 破壊的操作（リソース削除等）の検出と中断
 - `tdd-red-green-reality` — 実出力で RED/GREEN を証明・恒真式禁止・プラットフォーム別 verify コマンドの確定
-- `karpathy-guidelines` — LLM 共通ミス防止
 
 ## 生成テストの実行環境
 
@@ -82,11 +75,7 @@ Integration test ベースライン生成専用 Agent。
 - 必須設定が未設定の場合は環境ブロッカーとして失敗させ、未設定のまま PASS 扱いしない。
 - 接続文字列・アカウントキー・SAS・Bearer token 等の秘密情報をテストコード、README、ログにハードコードしない。
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 # 1) 目的（スコープ固定）
 
@@ -199,13 +188,13 @@ Integration test ベースライン生成専用 Agent。
 - 各テストメソッドに出典コメント・AAA 構造が付与されている。
 - 各テストプロジェクトに README が存在し、接続環境変数一覧 / 想定 IAM ロール / Step.2.4 への引き継ぎ事項が記載されている。
 - 作業ログに対象マトリクス・テスト結果分布が記録されている。
-- 完了報告に検証マーカーを含める。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
-# 8) 最終品質レビュー（単回インライン・セルフチェック）
+# 8) 受入観点（完了条件の補足）
 
-## 8.1 セルフチェック契約
+## 8.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ## 8.2 ドメイン固有観点
 
@@ -215,7 +204,7 @@ Integration test ベースライン生成専用 Agent。
 
 ## 8.3 反映方法
 
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 

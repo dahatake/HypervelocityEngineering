@@ -427,7 +427,6 @@ def test_data_design_prompt_and_shared_contract_publish_same_canonical_values() 
         root
         / ".github"
         / "skills"
-        / "azure-skills"
         / "azure-cli-deploy-scripts"
         / "references"
         / "asdw-data-verifier-contract.md"

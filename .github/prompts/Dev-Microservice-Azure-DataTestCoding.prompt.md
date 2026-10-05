@@ -2,7 +2,7 @@
 
 > **WORK**: `work/run/<run-id>/Dev-Microservice-Azure-DataTestCoding/Issue-<識別子>/`
 
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 
 - 共通出力パス: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - 出力先: `tests/run/<run-id>/asdw-web/step-1-2/<target-app-id>/RED/tdd-test-report.md`
@@ -61,14 +61,8 @@ TDD RED フェーズ データ検証スクリプト生成専用 Agent。
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
 - **捏造禁止**: ID / URL / 数値 / 固有名 / SKU / API バージョンを根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用。
-- **ルート `README.md` 変更禁止**。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 - **秘密情報禁止**: 接続文字列 / アカウントキー / SAS / トークンを成果物に含めない。すべて環境変数または Managed Identity 経由とする。
 - **リソース作成・データ登録の禁止**: `az ... create` 等のリソース作成・変更・削除、およびデータ登録を行わない（これは Step.1.3 の責務）。
 
@@ -80,7 +74,6 @@ TDD RED フェーズ データ検証スクリプト生成専用 Agent。
 - `harness-safety-guard` — 破壊的操作（リソース削除・データ削除）の検出と中断
 - `tdd-red-green-reality` — 実出力で RED/GREEN を証明・恒真式禁止・プラットフォーム別 verify コマンドの確定
 - `azure-cli-deploy-scripts` — Azure Policy pre-flight と public / private / nsp / blocked のネットワーク経路契約
-- `karpathy-guidelines` — LLM 共通ミス防止
 
 ## 生成テストの実行環境
 
@@ -92,15 +85,11 @@ TDD RED フェーズ データ検証スクリプト生成専用 Agent。
 
 ## ASDW data network contract
 
-Skill `azure-cli-deploy-scripts` の `.github/skills/azure-skills/azure-cli-deploy-scripts/references/asdw-data-verifier-contract.md` を適用する。
+Skill `azure-cli-deploy-scripts` の `.github/skills/azure-cli-deploy-scripts/references/asdw-data-verifier-contract.md` を適用する。
 APP-009では `Member`, `ConsentRecord`, `DataRightsRequest`, `LoyaltyAccount`, `PointTransaction`, `Reward`, `RewardExchange`, `PaidMembershipContract`, `SupportCase`, `CaseResolution`, `VocRecord`, `AuditRecord` の対象エンティティ集合を過不足なく検証し、期待件数は `src/data/sample-data.json` から生成時に算出する。
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- **HVE アプリケーション開発の順守事項（本 Agent 自身の開発規約）**: 個々のデータストア（PostgreSQL / Cosmos DB / Storage / SQL Database / ADX 等）固有の az CLI コマンド名・引数名・クエリ構文は、本 prompt に個別ハードコードしない。対象データストアの変更や CLI/SDK のバージョンアップの都度 prompt 追記が必要になり保守不能（トークン増大）になるため、生成する各 `az ...` コマンドについてその都度 Microsoft Learn MCP で最新の正確な構文を確認する。**構造が類似する別サービスのコマンド（例: 別サービスの `... show` 系サブコマンド）の引数名を類推で流用してはならない**（サービスによって命名規則が異なる）。既存 `verify-data-resources.sh` を再利用・レビューする場合も、この構文確認を省略しない。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の `work-status.md` または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
+- 個々のデータストア（PostgreSQL / Cosmos DB / Storage / SQL Database / ADX 等）固有の az CLI コマンド名・引数名・クエリ構文は、本 prompt に個別ハードコードしない。生成する各 `az ...` コマンドについてその都度 Microsoft Learn MCP で最新の正確な構文を確認し、構造が類似する別サービスのコマンドの引数名を類推で流用してはならない。
 
 # 1) 目的（スコープ固定）
 
@@ -218,13 +207,13 @@ APP-009では `Member`, `ConsentRecord`, `DataRightsRequest`, `LoyaltyAccount`, 
 - `{WORK}ac-verification.md` に RED 状態が記録されている（リソース未作成での実行結果が FAIL、または実行不能なら `TBD（実行環境なし）`）。**スクリプト生成が完了していれば本ステップは成功（pass）とする**。
 - `static-verification.log` が実在し、`tdd-test-report.md` の `Raw-Log-Path` と一致する。controlled regenerationではAzure CLI / REST / live commandを実行していないことをraw logへ明記する。
 - 秘密情報（鍵・トークン・接続文字列等）が成果物・スクリプトログに含まれない。
-- 完了報告に検証マーカーを含める。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
-# 8) 最終品質レビュー（単回インライン・セルフチェック）
+# 8) 受入観点（完了条件の補足）
 
-## 8.1 セルフチェック契約
+## 8.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ## 8.2 ドメイン固有観点
 
@@ -234,7 +223,7 @@ APP-009では `Member`, `ConsentRecord`, `DataRightsRequest`, `LoyaltyAccount`, 
 
 ## 8.3 反映方法
 
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 

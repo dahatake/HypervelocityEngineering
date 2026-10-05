@@ -9,18 +9,17 @@ metadata:
 # knowledge-management
 
 ## 目的
-- knowledge-management の適用判断と実行フローを定義する。
+- `knowledge/` 配下のドメイン知識を、D01〜D21 分類・内容合成・差分マージ・整合性確認の 4 段階で管理する。
+- 主目的は `qa/` / `docs-original/` の断片を D クラス別の要求定義書ドラフトへ**内容合成**すること。単なるマッピング表作成ではなく、内容合成は省略不可。
 
 ## トリガー
 - この Skill の適用判断は frontmatter `description`（USE FOR / DO NOT USE FOR / WHEN）に従う。
-- 詳細な手順・コマンド例・トラブルシューティングが必要になった時点で `references/` を参照する。
+- `qa/` 作成、通常検証、実装・デプロイ・テストは範囲外。既存の非ゴール、SoT 優先順位、`qa/` / `docs-original/` 分岐は [`references/detail.md`](references/detail.md) を保持参照する。
 
 ## 手順サマリ
-1. 要件を確認し、対象範囲と非対象を明確化する。
-2. `references/detail.md` を起点に、必要に応じて既存の `references/` 個別資料を併読する。
-3. 前提条件・権限・安全条件を満たしたうえで実施する。
-4. 実施後は検証結果と既知制約を記録し、後続 Skill へ必要事項を引き継ぐ。
+1. **分類**: Primary / Contributing を [`§2 D01〜D21 分類マッピングルール`](references/knowledge-management-guide.md#2-d01d21-分類マッピングルール) と [`§9 docs-original/ → D01〜D21 マッピングルール`](references/knowledge-management-guide.md#9-docs-original--d01d21-マッピングルール) で決める。
+2. **内容合成**: [`§11 内容合成プロセス`](references/knowledge-management-guide.md#11-内容合成プロセスcontent-synthesis) に従い、Confirmed / Tentative を出典付き REQ へ統合し、Unknown は表で管理する。
+3. **差分マージ**: 既存 `knowledge/D??-*.md` は [`§12 差分マージ戦略`](references/knowledge-management-guide.md#12-差分マージ戦略incremental-merge) で追記・更新・全体再生成を判断する。
+4. **整合性確認**: 状態、カバー率、staleness、矛盾は [`§3`](references/knowledge-management-guide.md#3-状態判定ルール) / [`§5`](references/knowledge-management-guide.md#5-カバレッジ分析ルール) / [`§8`](references/knowledge-management-guide.md#8-staleness-check陳腐化検出) / [`§10`](references/knowledge-management-guide.md#10-矛盾検出ルール) で確認する。
 
-## 詳細ガイド（Progressive Disclosure）
-- 移設した詳細本文: [references/detail.md](references/detail.md)
-- 追加の詳細資料: `references/` 配下
+不明・Conflict は推測で解決せず、上記 guide の状態判定に従う。必要な段階の参照先だけを読み、guide 全文を毎回読み込まない。

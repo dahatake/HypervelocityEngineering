@@ -8,7 +8,7 @@ if not m:
     print("")
     sys.exit(0)
 val = m.group(1).strip()
-allowed = {"Auto", "claude-opus-4.7", "claude-opus-4.6", "gpt-5.5", "gpt-5.4"}
+allowed = {"Auto", "claude-opus-5.5", "claude-opus-4.7", "claude-opus-4.6", "gpt-5.5", "gpt-5.4"}
 if val == "GPT-5.5":
     val = "gpt-5.5"
 print(val if val in allowed else "")

@@ -19,6 +19,35 @@ FIXTURES="${SCRIPT_DIR}/fixtures"
 PASS=0
 FAIL=0
 ERRORS=()
+TMP_ROOT="${SCRIPT_DIR}/.tmp"
+tmpdir="${TMP_ROOT}/test-bash-$$"
+rm -rf "${tmpdir}"
+mkdir -p "${tmpdir}"
+trap 'rm -rf "${tmpdir}"' EXIT
+
+if ! command -v jq >/dev/null 2>&1 && command -v jq.exe >/dev/null 2>&1; then
+  jq() {
+    jq.exe "$@" | tr -d '\r'
+    return "${PIPESTATUS[0]}"
+  }
+  export -f jq
+fi
+
+if ! command -v shellcheck >/dev/null 2>&1 && command -v shellcheck.exe >/dev/null 2>&1; then
+  shellcheck() {
+    local converted=()
+    local arg
+    for arg in "$@"; do
+      if [[ -e "$arg" ]]; then
+        converted+=("$(wslpath -w "$arg")")
+      else
+        converted+=("$arg")
+      fi
+    done
+    shellcheck.exe "${converted[@]}"
+  }
+  export -f shellcheck
+fi
 
 pass() { PASS=$((PASS + 1)); echo "  ✅ PASS: $1"; }
 fail() { FAIL=$((FAIL + 1)); ERRORS+=("$1"); echo "  ❌ FAIL: $1"; }
@@ -57,73 +86,87 @@ fi
 echo ""
 echo "=== validate-plan.sh ==="
 
-# 2a. Valid PROCEED plan
+# 2a. Valid fixture
 output=$(bash "${BASH_DIR}/validate-plan.sh" --path "${FIXTURES}/sample-plan.md" 2>&1) || true
 if echo "${output}" | grep -q "PASS"; then
-  pass "validate-plan: valid PROCEED plan"
+  pass "validate-plan: valid fixture"
 else
-  fail "validate-plan: valid PROCEED plan — expected PASS, got: ${output}"
+  fail "validate-plan: valid fixture — expected PASS, got: ${output}"
 fi
 
-# 2b. Invalid plan (missing split_decision)
-tmpdir=$(mktemp -d)
-trap 'rm -rf "${tmpdir}"' EXIT
-
-cat > "${tmpdir}/plan-missing.md" <<'PLAN'
-<!-- estimate_total: 10 -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
+# 2b. Metadata-free plan without 分割判定 passes when 完了条件 has content (FR-PLAN-01 / FR-DOD-02)
+cat > "${tmpdir}/plan-metadata-free.md" <<'PLAN'
 # Test Plan
 
-## 分割判定
+## 概要
+
+No metadata comments are required.
+
+## 完了条件
+
+- [ ] validate-plan accepts this plan.
 PLAN
 
-output=$(bash "${BASH_DIR}/validate-plan.sh" --path "${tmpdir}/plan-missing.md" 2>&1) || true
-if echo "${output}" | grep -q "missing required metadata.*split_decision"; then
-  pass "validate-plan: detects missing split_decision"
+output=$(bash "${BASH_DIR}/validate-plan.sh" --path "${tmpdir}/plan-metadata-free.md" 2>&1) || true
+if echo "${output}" | grep -q "PASS"; then
+  pass "validate-plan: metadata-free plan without 分割判定 passes"
 else
-  fail "validate-plan: detects missing split_decision — got: ${output}"
+  fail "validate-plan: metadata-free plan without 分割判定 passes — expected PASS, got: ${output}"
 fi
 
-# 2c. context_size=large + PROCEED (should fail)
-cat > "${tmpdir}/plan-large-proceed.md" <<'PLAN'
-<!-- task_scope: single -->
-<!-- context_size: large -->
-<!-- split_decision: PROCEED -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
+# 2c. Missing '## 完了条件' section (FR-DOD-02)
+cat > "${tmpdir}/plan-missing-dod.md" <<'PLAN'
 # Test Plan
 
-## 分割判定
+## 概要
+
+No completion criteria are present.
 PLAN
 
-output=$(bash "${BASH_DIR}/validate-plan.sh" --path "${tmpdir}/plan-large-proceed.md" 2>&1) || true
-if echo "${output}" | grep -q "context_size=large.*PROCEED.*SPLIT_REQUIRED"; then
-  pass "validate-plan: rejects context_size=large + PROCEED"
+output=$(bash "${BASH_DIR}/validate-plan.sh" --path "${tmpdir}/plan-missing-dod.md" 2>&1) || true
+if echo "${output}" | grep -q "missing required section '## 完了条件'"; then
+  pass "validate-plan: detects missing 完了条件 section"
 else
-  fail "validate-plan: rejects context_size=large + PROCEED — got: ${output}"
+  fail "validate-plan: detects missing 完了条件 section — got: ${output}"
 fi
 
-# 2d. task_scope=multi + PROCEED (should fail)
-cat > "${tmpdir}/plan-multi-proceed.md" <<'PLAN'
-<!-- task_scope: multi -->
-<!-- context_size: small -->
-<!-- split_decision: PROCEED -->
-<!-- subissues_count: 0 -->
-<!-- implementation_files: false -->
-
+# 2d. Empty '## 完了条件' section (FR-DOD-02)
+cat > "${tmpdir}/plan-empty-dod.md" <<'PLAN'
 # Test Plan
 
-## 分割判定
+## 完了条件
 PLAN
 
-output=$(bash "${BASH_DIR}/validate-plan.sh" --path "${tmpdir}/plan-multi-proceed.md" 2>&1) || true
-if echo "${output}" | grep -q "task_scope=multi.*PROCEED.*SPLIT_REQUIRED"; then
-  pass "validate-plan: rejects task_scope=multi + PROCEED"
+output=$(bash "${BASH_DIR}/validate-plan.sh" --path "${tmpdir}/plan-empty-dod.md" 2>&1) || true
+if echo "${output}" | grep -q "section '## 完了条件' has no non-placeholder content"; then
+  pass "validate-plan: detects empty 完了条件 section"
 else
-  fail "validate-plan: rejects task_scope=multi + PROCEED — got: ${output}"
+  fail "validate-plan: detects empty 完了条件 section — got: ${output}"
+fi
+
+# 2e. '## 完了条件' followed only by a horizontal rule or a NO-BREAK SPACE (FR-DOD-02)
+# NBSP は glibc の C.UTF-8 で [[:space:]] に含まれないため、ロケール差で
+# PowerShell / Python と判定が割れないことをここで固定する。
+printf '%s\n' \
+  '# Test Plan' '' '## 完了条件' '' '---' \
+  > "${tmpdir}/plan-hr-dod.md"
+
+output=$(bash "${BASH_DIR}/validate-plan.sh" --path "${tmpdir}/plan-hr-dod.md" 2>&1) || true
+if echo "${output}" | grep -q "section '## 完了条件' has no non-placeholder content"; then
+  pass "validate-plan: horizontal rule alone is not 完了条件 content"
+else
+  fail "validate-plan: horizontal rule alone is not 完了条件 content — got: ${output}"
+fi
+
+printf '%s\n' \
+  '# Test Plan' '' '## 完了条件' "$(printf '\u00a0')" \
+  > "${tmpdir}/plan-nbsp-dod.md"
+
+output=$(bash "${BASH_DIR}/validate-plan.sh" --path "${tmpdir}/plan-nbsp-dod.md" 2>&1) || true
+if echo "${output}" | grep -q "section '## 完了条件' has no non-placeholder content"; then
+  pass "validate-plan: NO-BREAK SPACE alone is not 完了条件 content"
+else
+  fail "validate-plan: NO-BREAK SPACE alone is not 完了条件 content — got: ${output}"
 fi
 
 # ===========================================================================
@@ -152,6 +195,88 @@ if echo "${output}" | grep -q "欠落ブロック"; then
   pass "validate-subissues: detects missing title metadata"
 else
   fail "validate-subissues: detects missing title metadata — got: ${output}"
+fi
+
+# 3c. Missing '## 完了条件' section (FR-DOD-01)
+cat > "${tmpdir}/subissues-missing-dod.md" <<'SUBS'
+<!-- subissue -->
+<!-- title: Sub 1 -->
+## Sub-001
+- 対象: X
+SUBS
+
+output=$(bash "${BASH_DIR}/validate-subissues.sh" --path "${tmpdir}/subissues-missing-dod.md" 2>&1) || true
+if echo "${output}" | grep -q "'## 完了条件' 欠落ブロック"; then
+  pass "validate-subissues: detects missing 完了条件 section"
+else
+  fail "validate-subissues: detects missing 完了条件 section — got: ${output}"
+fi
+
+# 3d. Empty '## 完了条件' section (FR-DOD-01)
+cat > "${tmpdir}/subissues-empty-dod.md" <<'SUBS'
+<!-- subissue -->
+<!-- title: Sub 1 -->
+## Sub-001
+- 対象: X
+
+## 完了条件
+SUBS
+
+output=$(bash "${BASH_DIR}/validate-subissues.sh" --path "${tmpdir}/subissues-empty-dod.md" 2>&1) || true
+if echo "${output}" | grep -q "'## 完了条件' 空値・プレースホルダブロック"; then
+  pass "validate-subissues: detects empty 完了条件 section"
+else
+  fail "validate-subissues: detects empty 完了条件 section — got: ${output}"
+fi
+
+# 3e. '## 完了条件' contains only a REPLACE_ME placeholder (FR-DOD-01)
+cat > "${tmpdir}/subissues-placeholder-dod.md" <<'SUBS'
+<!-- subissue -->
+<!-- title: Sub 1 -->
+## Sub-001
+- 対象: X
+
+## 完了条件
+- [ ] {REPLACE_ME_DOD}
+SUBS
+
+output=$(bash "${BASH_DIR}/validate-subissues.sh" --path "${tmpdir}/subissues-placeholder-dod.md" 2>&1) || true
+if echo "${output}" | grep -q "'## 完了条件' 空値・プレースホルダブロック"; then
+  pass "validate-subissues: detects REPLACE_ME placeholder in 完了条件"
+else
+  fail "validate-subissues: detects REPLACE_ME placeholder in 完了条件 — got: ${output}"
+fi
+
+# 3f. '## 完了条件' followed only by a horizontal rule (FR-DOD-01)
+cat > "${tmpdir}/subissues-hr-only-dod.md" <<'SUBS'
+<!-- subissue -->
+<!-- title: Sub 1 -->
+## Sub-001
+- 対象: X
+
+## 完了条件
+
+---
+SUBS
+
+output=$(bash "${BASH_DIR}/validate-subissues.sh" --path "${tmpdir}/subissues-hr-only-dod.md" 2>&1) || true
+if echo "${output}" | grep -q "'## 完了条件' 空値・プレースホルダブロック"; then
+  pass "validate-subissues: horizontal rule alone is not 完了条件 content"
+else
+  fail "validate-subissues: horizontal rule alone is not 完了条件 content — got: ${output}"
+fi
+
+# 3g. '## 完了条件' followed only by a NO-BREAK SPACE (FR-DOD-01)
+printf '%s\n' \
+  '<!-- subissue -->' '<!-- title: Sub 1 -->' '## Sub-001' '- 対象: X' \
+  '' '## 完了条件' "$(printf '\u00a0')" \
+  > "${tmpdir}/subissues-nbsp-dod.md"
+
+output=$(bash "${BASH_DIR}/validate-subissues.sh" --path "${tmpdir}/subissues-nbsp-dod.md" 2>&1) || true
+if echo "${output}" | grep -q "'## 完了条件' 空値・プレースホルダブロック"; then
+  pass "validate-subissues: NO-BREAK SPACE alone is not 完了条件 content"
+else
+  fail "validate-subissues: NO-BREAK SPACE alone is not 完了条件 content — got: ${output}"
 fi
 
 # ===========================================================================

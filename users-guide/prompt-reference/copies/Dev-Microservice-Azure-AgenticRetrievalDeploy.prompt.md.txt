@@ -10,27 +10,18 @@
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 - `.github/skills/agent-common-preamble/SKILL.md`
-- `.github/skills/task-dag-planning/SKILL.md`
 - `.github/skills/work-artifacts-layout/SKILL.md`
 - `.github/skills/app-scope-resolution/SKILL.md`
 - `.github/skills/agentic-retrieval-contract/SKILL.md` — AR-CAP-01〜05 の設計値と実リソース設定の照合
-- `.github/skills/azure-skills/azure-cli-deploy-scripts/SKILL.md`
-- `.github/skills/azure-skills/azure-ac-verification/SKILL.md`
-- `.github/skills/azure-skills/azure-region-policy/SKILL.md`
-- `.github/skills/output/large-output-chunking/SKILL.md`
-- `.github/skills/harness/harness-verification-loop/SKILL.md`
+- `.github/skills/azure-cli-deploy-scripts/SKILL.md`
+- `.github/skills/azure-ac-verification/SKILL.md`
+- `.github/skills/azure-region-policy/SKILL.md`
+- `.github/skills/large-output-chunking/SKILL.md`
+- `.github/skills/harness-verification-loop/SKILL.md`
 
 ### 外部 Skill（ユーザー環境）
 > 以下はリポジトリ内には存在しない。ユーザー環境の `~/.agents/skills/` 配下にインストール済みの場合のみ参照可。未配備時は本 prompt 本文の指示のみで動作する。
@@ -70,11 +61,12 @@
 - `src/infra/azure/create-azure-agentic-retrieval/services/{serviceId}.sh`
 
 ### 計画・根拠・出力（work）
-- `{WORK}plan.md`（DAG + 見積 + AC + 検証 + 分割判定）
+- 計画を書く場合は Skill `task-dag-planning` に従う。
+- `{WORK}plan.md`（DAG + 見積 + AC + 検証）
 - `{WORK}contracts/agentic-retrieval-resources.md`
 - `{WORK}artifacts/created-resources.json`
 - `{WORK}artifacts/cli-evidence.md`
-- `{WORK}artifacts/ac-verification.md`（Execute 時のみ）
+- `{WORK}ac-verification.md`（Execute 時のみ。Orchestrator gate は `Issue-<識別子>` 直下を検査するため `artifacts/` 配下に置かない）
 
 ## 4) 実行フロー
 
@@ -86,17 +78,6 @@
 - 実行不可時は Execute せず、手動手順を `src/infra/README.md` と `{WORK}plan.md` に残す
 
 ### 4.2 Plan
-
-- `task-dag-planning` に従い `{WORK}plan.md` を作成
-- plan.md の先頭に、以下メタデータをこの順で必須記載:
-  ```html
-  <!-- task_scope: single|multi -->
-  <!-- context_size: small|medium|large -->
-  <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
-  <!-- subissues_count: N -->
-  <!-- implementation_files: true -->
-  ```
-- `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` で PASS を確認
 
 #### 4.2.1 デフォルト受け入れ条件（AC）
 | # | AC 項目 | 重要度 |
@@ -123,7 +104,7 @@
 
 AC 定義後の変更は禁止（追加・修正は Issue 本文更新時のみ）。
 
-### 4.3 Execute（PROCEED 判定時のみ）
+### 4.3 Execute
 
 #### 4.3.0 Pre-flight（TDD サイクル必須）
 
@@ -186,7 +167,7 @@ AC 定義後の変更は禁止（追加・修正は Issue 本文更新時のみ�
 - **実在系 AC4B-1 は `✅` のみ許容**。`❌` / `⏳ NEEDS-VERIFICATION` のまま完了した場合、Orchestrator gate が Step を fail に降格させる。
 - `ac-verification.md` は 1 行 1 AC のテーブル行で記録（例: `| AC4B-1 | リソース存在 | ✅ | <verify-*.sh GREEN ログ抜粋> |`）。
 
-## 5) Microsoft Learn 根拠（必須）
+## 5) Microsoft Learn 根拠
 既存 Design Agent と同パターンで、SKU / モデル / API バージョン / Indexer 対応データソースについて以下を `{WORK}artifacts/cli-evidence.md` に記録する。
 - URL
 - タイトル

@@ -9,15 +9,7 @@ Azure Functions 向けに、Azure リソース作成スクリプト・GitHub Act
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 - **HVE Step 単位 CI/CD の branch / PR 境界**: HVE GUI/CLI で ASDW-WEB Step.3.4 を実行する場合、Orchestrator が Step 専用ブランチを作成し、PR 作成・merge・base branch 復帰を担当する。Agent は新規 branch 作成・checkout・`gh pr create` を行わず、提供された `<branch>` を `gh workflow run ... --ref <branch>` に使用する。workflow_dispatch 前に GitHub 側へ反映が必要な場合でも、`git push origin HEAD` を実行しない。`main` または base branch へ push しない。push が不可欠な場合は `git branch --show-current` が提供された `<branch>` と一致することを確認し、許可される push は `git push origin HEAD:<branch>` のみに限定する。一致しない場合は push せず、ブロッカーとして `{WORK}` に記録する。
 
 ## Agent 固有の Skills 依存
@@ -29,11 +21,7 @@ Azure Functions 向けに、Azure リソース作成スクリプト・GitHub Act
 - `harness/harness-verification-loop` — Build / Lint / Test / Security / Diff の 5 段階検証
 - `cicd/github-actions-cicd` — GitHub Actions による CI/CD パイプライン構築
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 <when_to_invoke>
 - API系マイクロサービスを Azure Functions に実デプロイし、運用可能な CI/CD まで整備するとき
@@ -56,7 +44,7 @@ Azure Functions 向けに、Azure リソース作成スクリプト・GitHub Act
 
 <task>
 1. 計画
-   - Skill `task-dag-planning` に従い `{WORK}plan.md` を作成（必要時 `subissues.md`）。
+- 計画を書く場合は Skill `task-dag-planning` に従う。
 2. 実行順序（DAG）
    - A) スクリプト作成
    - **A-pre) Pre-flight（環境検出・必須）**: 下記コマンドを順に実行し、すべて成功した場合のみ A-exec へ進む。いずれか失敗時は `{WORK}completion-report.md` に `<!-- fatal: pre-flight-failed: {理由} -->` を記載し、非ゼロ exit で Step を fail させる（`NEEDS-VERIFICATION` で逃げることは**禁止**）。
@@ -71,7 +59,7 @@ Azure Functions 向けに、Azure リソース作成スクリプト・GitHub Act
    - D) テスト（自動スモーク + 手動UI）
    - E) 進捗ログ
    - F) README更新
-   - AC検証 → 最終品質レビュー
+   - AC検証
 3. 成果物実装
    - A: `src/infra/azure/create-azure-api-resources-prep.sh`, `create-azure-api-resources.sh`, `verify-azure-resources.sh`
    - A-exec: prep/create/verify 実行 + べき等性の再実行検証
@@ -83,13 +71,11 @@ Azure Functions 向けに、Azure リソース作成スクリプト・GitHub Act
 4. 記録
    - `{WORK}api-azure-deploy-work-status.md` に全ステップ記録
    - `{WORK}ac-verification.md` に AC 判定記録
-5. 最終品質レビュー
-  - 下記「最終品質レビュー」節の単回セルフチェックを実施する。
 </task>
 
-## 最終品質レビュー（単回インライン・セルフチェック）
+## 受入観点（完了条件の補足）
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 - **完全性**：A〜Fの成果物、RED→Deploy→GREEN、AC-1〜AC-17、特に実在系AC-3/AC-9とrollback文書が実証済みか。
 - **実行可能性**：pre-flight、Step専用branch境界、workflow dispatch/watch、冪等スクリプト、smoke testとAC証跡が再現可能か。

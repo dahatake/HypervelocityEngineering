@@ -21,11 +21,7 @@ _QUESTIONNAIRE_STANDALONE = Path(
 )
 _ROUTING = Path(".github/skills/_routing/README.md")
 _COPILOT_INSTRUCTIONS = Path(".github/copilot-instructions.md")
-_TASK_DAG_SKILL = Path(".github/skills/task-dag-planning/SKILL.md")
-_TASK_DAG_DETAIL = Path(".github/skills/task-dag-planning/references/detail.md")
-_TASK_DAG_RULES = Path(
-    ".github/skills/task-dag-planning/references/dag-rules-detail.md"
-)
+_HVE_PLAN_BINDING = Path(".github/skills/_hve-plan-artifacts/hve-binding.md")
 _SKILL_EVAL = Path(".github/skills/_evals/hve-prompt-edition.eval.yaml")
 _QUICK_START = Path("users-guide/hve-prompt-getting-started.md")
 _PROMPTS_DIR = Path("users-guide/prompts")
@@ -266,10 +262,27 @@ class TestOutOfScopeTerminalRejection:
     _D4_STAGE = "### live D4: 資格情報を request に格納しない"
     _REGISTRY_STAGE = "### 第1段階: Workflow / Step の registry 存在確認"
 
+    def test_frontmatter_prioritizes_no_load_rejection_before_positive_routing(self):
+        head = _read(_SKILL).split("---", 2)[1]
+        description = yaml.safe_load(head)["description"]
+        assert description.startswith("DO NOT LOAD FOR:")
+        assert description.index("DO NOT LOAD FOR:") < description.index("USE FOR:")
+        for exact_input in self._LIVE_CASES.values():
+            assert f'"{exact_input}"' in description
+        # D15: 常時 context に入る説明文に強い言い方を置かず、理由付きで伝える。
+        assert "NEVER" not in description
+        for token in (
+            "add or create-and-run workflows or steps",
+            "GitHub Issue Template or Cloud Agent runs",
+            "directly from this description without loading this Skill",
+            "because Prompt Edition cannot run those routes",
+        ):
+            assert token in description
+
     def test_frontmatter_exposes_terminal_rejection_before_skill_loading(self):
         head = _read(_SKILL).split("---", 2)[1]
         description = yaml.safe_load(head)["description"]
-        do_not_use = description.split("DO NOT USE FOR:", 1)[1].split("WHEN:", 1)[0]
+        no_load = description.split("USE FOR:", 1)[0]
         for token in (
             "add or create-and-run workflows or steps",
             "GitHub Issue Template or Cloud Agent runs",
@@ -278,7 +291,7 @@ class TestOutOfScopeTerminalRejection:
             "no request/plan/run/write",
             "alternate routes are not run by Prompt Edition",
         ):
-            assert token in do_not_use
+            assert token in no_load
 
     def test_skill_rejects_live_c3_and_d6_before_registry_or_follow_up(self):
         body = _h2_body(_SKILL, "request 作成前ゲート")
@@ -638,7 +651,7 @@ class TestLiveEInputAliasEvidenceBoundary:
     )
     _EVAL_ID = "input-alias-for-non-canonical-file"
     _LIVE_E_STAGE = "### live E: read-only 証拠を確認してから入力別名を案内する"
-    _NEXT_STAGE = "## 質問するとき / 止まるとき"
+    _NEXT_STAGE = "### 第1段階: Workflow / Step の registry 存在確認"
     _CANONICAL = "docs/catalog/use-case-catalog.md"
     _ACTUAL = "inputs/my-use-cases.md"
 
@@ -651,6 +664,22 @@ class TestLiveEInputAliasEvidenceBoundary:
         assert self._CANONICAL in step.required_input_paths
         assert not any(char in self._CANONICAL for char in "*?[{}")
         assert not self._CANONICAL.endswith("/")
+
+    def test_exact_input_stops_after_only_the_scope_question_before_alias_preflight(self):
+        gate = _h2_body(_SKILL, "request 作成前ゲート")
+        assert gate.index(self._LIVE_E_STAGE) < gate.index(self._NEXT_STAGE)
+
+        body = self._skill_contract()
+        for token in (
+            "exact input",
+            self._LIVE_E_INPUT,
+            "selected Step は未確定",
+            "実行範囲だけを質問",
+            "その turn で停止",
+            "`入力別名を利用します`",
+            "併記しない",
+        ):
+            assert token in body
 
     def test_skill_confirms_workflow_selected_step_and_canonical_before_alias_claim(self):
         body = self._skill_contract()
@@ -745,6 +774,53 @@ class TestLiveEInputAliasEvidenceBoundary:
         assert "FR-PROMPT-08/09/10 live E" in case["reason"]
 
 
+class TestAstraPromptEditionReferenceSplit:
+    """T03 — request / resume 詳細を selected references へ分離する RED 契約。"""
+
+    @pytest.mark.parametrize(
+        ("root_heading", "reference_path", "link_target", "tokens"),
+        [
+            (
+                "request v1",
+                Path(".github/skills/hve-prompt-edition/references/request-fields.md"),
+                "references/request-fields.md",
+                (
+                    "`schema_version`", "`goal`", "`workflow_id`", "`steps`",
+                    "`params`", "`settings_overrides`", "`input_aliases`",
+                    "`step_inputs`", "未知のフィールド", "fail-closed",
+                    "canonical", "actual", "glob", "placeholder", "symlink",
+                ),
+            ),
+            (
+                "durable resume controller 境界（FR-PROMPT-11）",
+                Path(".github/skills/hve-prompt-edition/references/resume-controller.md"),
+                "references/resume-controller.md",
+                (
+                    "request v1 は変更しない", "明示承認", "resume_plan_hash",
+                    "expected_state_version", "CAS", "stale", "ordinal", "replay",
+                ),
+            ),
+        ],
+        ids=("request-fields", "resume-controller"),
+    )
+    def test_selected_reference_is_linked_from_root_and_contains_core_contract(
+        self,
+        root_heading: str,
+        reference_path: Path,
+        link_target: str,
+        tokens: tuple[str, ...],
+    ):
+        root_section = _h2_body(_SKILL, root_heading)
+        link_pattern = rf"\[[^\]]+\]\({re.escape(link_target)}(?:#[^)]*)?\)"
+        assert re.search(link_pattern, root_section), (
+            f"{root_heading!r} must link to `{link_target}`"
+        )
+
+        reference = _read(reference_path)
+        for token in tokens:
+            assert token in reference
+
+
 class TestQuickStart:
     def test_exists_and_points_at_gui_settings(self):
         text = _read(_QUICK_START)
@@ -808,8 +884,7 @@ class TestApprovedFullExecutionContract:
         for token in (
             "明示承認",
             "`hve prompt run`",
-            "`task_scope=multi`",
-            "`context_size=large`",
+            "計画の規模や分割の有無を理由に",
             "対象成果物を直接実装・編集してはならない",
             "再plan・再提示・再承認",
             "`output_paths` gate",
@@ -817,55 +892,30 @@ class TestApprovedFullExecutionContract:
             assert token in body
         assert re.search(r"HVE が.*SHA-256.*一致を確認", body)
 
-    def test_task_dag_skill_routes_to_the_controller_exception(self):
-        body = _h2_body(_TASK_DAG_SKILL, "Prompt Edition controller 例外")
+    def test_hve_plan_binding_routes_to_the_controller_exception(self):
+        # 統合後、Prompt Edition controller 例外の正本は
+        # .github/skills/_hve-plan-artifacts/hve-binding.md §6 の 1 箇所のみ。
+        body = _h2_body(
+            _HVE_PLAN_BINDING, "6. Prompt Edition controller 例外（SHA-256 委譲）"
+        )
         for token in (
             "明示承認",
             "SHA-256",
             "`hve prompt run`",
-            "`task_scope=multi`",
-            "`context_size=large`",
-            "直接実装",
-            "`output_paths`",
-            "再plan",
-        ):
-            assert token in body
-
-    def test_task_dag_detail_explains_why_delegation_can_continue(self):
-        body = _h2_body(_TASK_DAG_DETAIL, "Prompt Edition controller 例外")
-        for token in (
-            "`task_scope=multi`",
-            "`context_size=large`",
-            "明示承認",
-            "`hve prompt run`",
+            "計画の規模が大きい、または分割を含む場合でも",
             "直接実装",
             "`output_paths`",
             "再plan",
         ):
             assert token in body
         assert re.search(r"HVE が.*SHA-256.*一致を確認", body)
-
-    def test_task_dag_rules_limit_the_exception_to_approved_delegation(self):
-        body = _h2_body(_TASK_DAG_RULES, "Prompt Edition controller 例外")
-        for token in (
-            "明示承認",
-            "SHA-256",
-            "`hve prompt run`",
-            "`task_scope=multi`",
-            "`context_size=large`",
-            "直接実装",
-            "`output_paths`",
-            "再plan",
-        ):
-            assert token in body
         assert "この 3 条件をすべて満たす" not in body
 
     def test_skill_continues_after_approval_even_for_multi_or_large_work(self):
         body = _h2_body(_SKILL, "承認後の完全実行")
         for token in (
             "明示承認",
-            "`task_scope=multi`",
-            "`context_size=large`",
+            "計画の規模が大きい、または分割を含む場合でも",
             "`hve prompt run`",
             "`output_paths`",
             "選択済み Workflow / Step",
@@ -925,7 +975,7 @@ class TestApprovedFullExecutionContract:
 class TestLiveA3DeterministicMultiFixture:
     """FR-PROMPT-10 live A3 — 登録済みの独立2成果物で multi を再現する。"""
 
-    _A3_START = "### A3. multi / large と判断される明示依頼"
+    _A3_START = "### A3. 独立した 2 成果物を含む明示依頼"
     _A3_END = "### B. 曖昧な依頼（質問すること）"
     _SELECTED_STEPS = {"ard": "1", "aas": "1"}
 
@@ -984,29 +1034,19 @@ class TestLiveA3DeterministicMultiFixture:
         assert "開始前に registry で" in body
         assert "相互に異なるパス" in body
 
-    def test_two_independent_outputs_force_multi_and_split_required(self):
+    def test_two_independent_outputs_are_planned_without_forced_split(self):
         body = self._body()
         request = self._request()
         for token in (
             "2 つの独立して検証可能な成果物",
             "`task-dag-planning`",
-            "`task_scope`",
-            "`context_size`",
-            "`split_decision`",
+            "完了条件",
         ):
             assert token in request
-        for token in (
-            "`task_scope=multi`",
-            "`split_decision=SPLIT_REQUIRED`",
-            "`context_size` は plan が算出した値",
-        ):
+        for token in ("計画の規模や分割の有無を理由に", "FR-PLAN-01"):
             assert token in body
-        assert re.search(
-            r"2 つの独立して検証可能な成果物.*"
-            r"`task_scope=multi`.*`split_decision=SPLIT_REQUIRED`",
-            body,
-            re.DOTALL,
-        )
+        for stale in ("SPLIT_REQUIRED", "split_decision", "task_scope=multi"):
+            assert stale not in body
 
     def test_fixture_forbids_registry_growth_and_run_before_approval(self):
         body = self._body()
@@ -1146,3 +1186,122 @@ class TestNaturalLanguageOnly:
     def test_quick_start_states_the_agent_runs_the_commands(self):
         text = _read(_QUICK_START)
         assert "コマンドを打つ必要はありません" in text
+
+
+class TestSkillBehaviorFullAcceptanceCoverage:
+    """FR-PROMPT-10 system test 06 — targeted subset を full acceptance と誤認しない。"""
+
+    _EXPECTED_INPUTS = (
+        "A（計画提示）",
+        "A2（同一セッション承認）",
+        "曖昧同意1: いいね",
+        "曖昧同意2: たぶん大丈夫",
+        "A3（multi/large 明示依頼）",
+        "B1",
+        "B2",
+        "B3",
+        "B4",
+        "C1",
+        "C2",
+        "C3",
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "D6",
+        "E（入力別名の案内）",
+    )
+
+    @staticmethod
+    def _full_acceptance_section() -> str:
+        return _between(
+            _SKILL_BEHAVIOR,
+            "- full acceptance必須集合（19評価入力）",
+            "````",
+        )
+
+    def test_doc_declares_mandatory_full_acceptance_input_set(self):
+        section = self._full_acceptance_section()
+        match = re.search(r"必須集合は\s*(?P<inputs>.*?)。", section, re.DOTALL)
+        assert match is not None, "full acceptance必須集合の列挙が見つからない"
+        inputs = tuple(
+            item.strip()
+            for item in match.group("inputs").replace("\n", " ").split("、")
+        )
+        assert inputs == self._EXPECTED_INPUTS
+        assert len(inputs) == len(set(inputs)) == 19
+
+    def test_doc_binds_full_acceptance_evidence_to_single_immutable_behavior_revision(self):
+        text = _read(_SKILL_BEHAVIOR)
+        for token in (
+            "single immutable behavior revision",
+            "同一の behavior revision",
+            "異なる behavior revision の session を混在させない",
+        ):
+            assert token in text
+
+    def test_doc_declares_required_turn_and_session_shapes_for_a_a2_ambiguity_a3_e(self):
+        text = _read(_SKILL_BEHAVIOR)
+        for token in (
+            "A / A2 は同一 session の連続2 user turns",
+            "曖昧同意2件（`いいね` / `たぶん大丈夫`）は各2 turns",
+            "A3 は plan 提示 turn と別 turn の明示承認",
+            "E は scope 質問 turn と selected Step/path 回答 turn の multi-turn",
+        ):
+            assert token in text
+
+    def test_doc_prepares_e_actual_file_as_a_harness_fixture_before_the_session(self):
+        body = _between(
+            _SKILL_BEHAVIOR,
+            "### E. 入力別名の案内",
+            "## 記録すること",
+        )
+        for token in (
+            "テストハーネス",
+            "開始前",
+            "`inputs/my-use-cases.md`",
+            "存在する通常ファイル",
+            "symlink / junction / reparse point ではない",
+        ):
+            assert token in body
+        assert re.search(r"Agent に\s*作成・コピー・移動させない", body)
+
+    def test_doc_keeps_b_c_d_two_fresh_sessions_each(self):
+        text = _read(_SKILL_BEHAVIOR)
+        assert "B / C / D は既存どおり各 2 fresh sessions" in text
+
+    def test_doc_requires_not_run_for_missing_required_evidence_and_forbids_full_pass(self):
+        text = _read(_SKILL_BEHAVIOR)
+        for token in (
+            "必須入力 / turn / session / evidence のいずれかが未測定なら NOT RUN",
+            "全体 PASS を宣言してはならない",
+        ):
+            assert token in text
+
+    def test_doc_labels_targeted_subset_only_as_targeted_pass(self):
+        text = self._full_acceptance_section()
+        for token in (
+            "targeted subset",
+            "targeted PASS",
+            "full PASS を名乗らない",
+        ):
+            assert token in text
+        contradictory = re.search(
+            r"targeted subset.{0,80}(?:でも|だけで).{0,80}"
+            r"(?:full PASS|全体 PASS).{0,40}(?:宣言できる|みなす|扱う)",
+            text,
+            re.DOTALL,
+        )
+        assert contradictory is None, (
+            "targeted subsetをfull acceptanceへ昇格させる相反記述がある"
+        )
+
+    def test_doc_preserves_existing_azure_mutating_and_adversarial_requirements(self):
+        text = _read(_SKILL_BEHAVIOR)
+        for token in (
+            "Azure へのデプロイはしない",
+            "A2 / A3 の mutating run は各 1 回",
+            "各ケース完了後に敵対的レビュー",
+        ):
+            assert token in text

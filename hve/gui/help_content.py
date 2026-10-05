@@ -163,7 +163,7 @@ _AUTOPILOT_HELP: Dict[str, str] = {
 # ----------------------------------------------------------------------
 
 _OPTIONS_FALLBACK: Dict[str, str] = {
-    "model": QT_TRANSLATE_NOOP("help_content", "使用するモデル名 (デフォルト: Auto)。Auto を指定すると GitHub が最適モデルを自動選択します。"),
+    "model": QT_TRANSLATE_NOOP("help_content", "使用するモデル名 (デフォルト: claude-opus-5.5)。Auto を指定すると GitHub が最適モデルを自動選択します。"),
     "review_model": QT_TRANSLATE_NOOP("help_content", "敵対的レビューおよび Code Review Agent で使用するモデル（省略時は --model と同じ）。"),
     "qa_model": QT_TRANSLATE_NOOP("help_content", "QA 質問票生成（--auto-qa）で使用するモデル（省略時は --model と同じ）。"),
     "akm_model": QT_TRANSLATE_NOOP("help_content", "QA 回答から起動する Knowledge Management 差分同期で使用するモデル（省略時は --model と同じ）。"),
@@ -176,14 +176,8 @@ _OPTIONS_FALLBACK: Dict[str, str] = {
     "auto_contents_review": QT_TRANSLATE_NOOP("help_content", "Review 自動投入を有効化 (デフォルト: 無効)。"),
     "auto_coding_agent_review": QT_TRANSLATE_NOOP("help_content", "Copilot CLI SDK でローカルにコードレビューを実行する (デフォルト: 無効)。"),
     "auto_coding_agent_review_auto_approval": QT_TRANSLATE_NOOP("help_content", "Code Review Agent の修正プランを全て自動承認 (デフォルト: 無効)。"),
-    "workiq": QT_TRANSLATE_NOOP("help_content", "Work IQ 経由の M365 データ参照を有効化する (@microsoft/workiq のインストールが必要)。"),
-    "workiq_dxx": QT_TRANSLATE_NOOP("help_content", "AKM Work IQ 取り込み対象 Dxx をカンマ区切りで指定（例: D01,D04）。"),
-    "workiq_draft": QT_TRANSLATE_NOOP("help_content", "QA フェーズで質問ごとに Work IQ 回答ドラフトを生成する。本項目を有効にすると Work IQ 連携全体が有効になる。"),
-    "workiq_prompt_qa": QT_TRANSLATE_NOOP("help_content", "Work IQ の QA 用プロンプトを上書きする。"),
-    "workiq_prompt_km": QT_TRANSLATE_NOOP("help_content", "Work IQ の KM 用プロンプトを上書きする。"),
-    "workiq_prompt_review": QT_TRANSLATE_NOOP("help_content", "Work IQ の文書レビュー用プロンプトを上書きする。"),
-    "workiq_per_question_timeout": QT_TRANSLATE_NOOP("help_content", "Work IQ: QA 質問ごとのクエリタイムアウト秒数。"),
-    "workiq_request_timeout": QT_TRANSLATE_NOOP("help_content", "Work IQ MCP サーバーへのツール呼び出し 1 回あたりのタイムアウト秒数（既定 5 分）。Copilot SDK の MCPServerConfigLocal.timeout へミリ秒として渡り、ツール呼び出しにのみ作用する（接続時のツール一覧取得には適用されない）。"),
+    "workiq": QT_TRANSLATE_NOOP("help_content", "Work IQ（Microsoft 365 データ）を知識源に加える。事前 QA と AKM / ARD の知識探索でエージェントが自分で問い合わせる。GitHub Copilot CLIで`workiq`名のPluginまたはMCP Serverを事前に設定・認証し、変更後はHVEを再起動する。"),
+    "knowledge_sources": QT_TRANSLATE_NOOP("help_content", "知識探索で使う MCP server 名（カンマ区切り）。読み取り専用 tool は Tool-Search 設定の knowledge 許可リストで決まる。"),
     "create_issues": QT_TRANSLATE_NOOP("help_content", "GitHub Issue を作成する。新規ブランチと PR が自動的に作成されます（--repo と GH_TOKEN が必要）。"),
     "create_pr": QT_TRANSLATE_NOOP("help_content", "ローカル実行後に GitHub PR を作成する（--repo と GH_TOKEN が必要）。"),
     "ignore_paths": QT_TRANSLATE_NOOP("help_content", "git add 時に除外するパス (スペース区切りで複数指定可)。"),
@@ -234,8 +228,6 @@ _OPTIONS_FALLBACK: Dict[str, str] = {
     "additional_prompt": QT_TRANSLATE_NOOP("help_content", "全 Custom Agent の prompt 末尾に追記する文字列 (省略可)。"),
     "context_max_chars": QT_TRANSLATE_NOOP("help_content", "各フェーズで注入するコンテキストの最大文字数（既定 20,000）。"),
     "dry_run": QT_TRANSLATE_NOOP("help_content", "ドライラン（実際の SDK 呼び出しをしない）。"),
-    "self_improve": QT_TRANSLATE_NOOP("help_content", "自己改善ループ（Phase 4）を有効化する。"),
-    "no_self_improve": QT_TRANSLATE_NOOP("help_content", "自己改善ループ（Phase 4）を無効化する。"),
     "mdq_watch": QT_TRANSLATE_NOOP("help_content", "Markdown ファイルの追加/更新/削除を OS イベントで検知し索引を逐次更新する（既定 ON）。"),
     "mdq_watch_debounce_ms": QT_TRANSLATE_NOOP("help_content", "mdq watcher のデバウンス間隔（ms、既定 500）。"),
     "cq_watch": QT_TRANSLATE_NOOP("help_content", "ソースファイルの追加/更新/削除を OS イベントで検知し cq 索引を逐次更新する（既定 ON）。cq 設定不在時は自動で無効化される。"),
@@ -266,16 +258,7 @@ _OPTIONS_GUIDE_HINT: Dict[str, str] = {
     "doc_purpose": "sourcecode-documentation.md",
     "max_file_lines": "sourcecode-documentation.md",
     "workiq": "workflow-reference.md",
-    "workiq_akm_review": "workflow-reference.md",
-    "workiq_akm_ingest": "workflow-reference.md",
-    "workiq_dxx": "workflow-reference.md",
-    "workiq_draft": "workflow-reference.md",
-    "workiq_draft_output_dir": "workflow-reference.md",
-    "workiq_prompt_qa": "workflow-reference.md",
-    "workiq_prompt_km": "workflow-reference.md",
-    "workiq_prompt_review": "workflow-reference.md",
-    "workiq_per_question_timeout": "workflow-reference.md",
-    "workiq_request_timeout": "workflow-reference.md",
+    "knowledge_sources": "workflow-reference.md",
 }
 
 _DEFAULT_OPTIONS_GUIDE = "hve-gui-orchestrator-guide.md"
@@ -294,11 +277,11 @@ _CATEGORY_HELP: Dict[str, HelpEntry] = {
         guide_path="hve-gui-orchestrator-guide.md",
     ),
     "C3": HelpEntry(
-        short=QT_TRANSLATE_NOOP("help_content", "QA (質問票) の自動投入と回答モード、回答を Knowledge Management へバックグラウンドでマージするかどうか、その実行品質、および全 Custom Agent への追加プロンプトを設定します。レビューと自己改善は設定画面で編集します。"),
+        short=QT_TRANSLATE_NOOP("help_content", "QA (質問票) の自動投入と回答モード、回答を Knowledge Management へバックグラウンドでマージするかどうか、その実行品質、および全 Custom Agent への追加プロンプトを設定します。レビューは設定画面で編集します。"),
         guide_path="hve-gui-orchestrator-guide.md",
     ),
     "C4": HelpEntry(
-        short=QT_TRANSLATE_NOOP("help_content", "Work IQ (Microsoft 365 データ参照) の有効化と詳細設定を行います。@microsoft/workiq のインストールが必要です。"),
+        short=QT_TRANSLATE_NOOP("help_content", "知識探索で使う知識源（Work IQ と MCP server）を設定します。MCP の設定・認証は GitHub Copilot CLI で事前に行い、変更後はHVEを再起動してください。"),
         guide_path="workflow-reference.md",
     ),
     "C5": HelpEntry(

@@ -227,7 +227,7 @@ class TestEnableAutoMerge(unittest.TestCase):
 class TestModelDropdown(unittest.TestCase):
     """model ドロップダウンが5種選択肢を持つことを検証する（Phase 9+ 更新）。"""
 
-    _EXPECTED_OPTIONS = ["Auto", "claude-opus-4.7", "claude-opus-4.6", "gpt-5.5", "gpt-5.4"]
+    _EXPECTED_OPTIONS = ["Auto", "claude-opus-5.5", "claude-opus-4.7", "claude-opus-4.6", "gpt-5.5", "gpt-5.4"]
 
     def _read_template(self, filename: str) -> str:
         return (_TEMPLATE_DIR / filename).read_text(encoding="utf-8")
@@ -300,7 +300,6 @@ class TestOptionParityFixtureCompleteness(unittest.TestCase):
         self.assertTrue({
             "apply_qa_improvements_to_main",
             "apply_review_improvements_to_main",
-            "apply_self_improve_to_main",
             "reuse_context_filtering",
             "auto_coding_agent_review",
         } <= hve_only)
@@ -327,90 +326,26 @@ class TestOptionParityFixtureCompleteness(unittest.TestCase):
         self.assertTrue(all(item["applies_to"] == "hve_only" for item in workiq_entries))
 
 
-class TestAgentSelfImproveRouteParity(unittest.TestCase):
-    """AAG/AAGD Cloud必須とCLI緊急opt-outの意図的な差分を固定する。"""
+class TestSelfImproveRemoved(unittest.TestCase):
+    """Self-Improve 機能の全面削除（Cloud / CLI）を固定する。"""
 
-    @staticmethod
-    def _load_template(filename: str) -> dict:
-        import yaml  # type: ignore[import-untyped]
+    def test_issue_templates_have_no_self_improve_fields(self) -> None:
+        for path in sorted(_TEMPLATE_DIR.glob("*.yml")):
+            with self.subTest(template=path.name):
+                content = path.read_text(encoding="utf-8")
+                self.assertNotIn("self_improve", content)
+                self.assertNotIn("自己改善", content)
 
-        return yaml.safe_load((_TEMPLATE_DIR / filename).read_text(encoding="utf-8"))
+    def test_cloud_workflows_have_no_self_improve_job(self) -> None:
+        for path in sorted(_WORKFLOW_DIR.glob("*.yml")):
+            with self.subTest(workflow=path.name):
+                content = path.read_text(encoding="utf-8").lower()
+                self.assertNotIn("self-improve", content)
+                self.assertNotIn("self_improve", content)
 
-    @classmethod
-    def _field(cls, filename: str, field_id: str) -> dict:
-        document = cls._load_template(filename)
-        return next(item for item in document["body"] if item.get("id") == field_id)
-
-    def test_agent_cloud_forms_are_mandatory_with_only_tuning_controls(self) -> None:
-        for filename in ("ai-agent-design.yml", "ai-agent-dev.yml"):
-            with self.subTest(filename=filename):
-                document = self._load_template(filename)
-                ids = {item.get("id") for item in document["body"]}
-                self.assertNotIn("enable_self_improve", ids)
-                self.assertIn("self_improve_max_iterations", ids)
-                self.assertIn("self_improve_quality_threshold", ids)
-
-                iterations = self._field(filename, "self_improve_max_iterations")
-                threshold = self._field(filename, "self_improve_quality_threshold")
-                self.assertEqual(
-                    iterations["attributes"]["options"][iterations["attributes"]["default"]],
-                    "3 (デフォルト)",
-                )
-                self.assertEqual(
-                    threshold["attributes"]["options"][threshold["attributes"]["default"]],
-                    "80（標準）",
-                )
-
-    def test_aagd_tdd_retry_is_distinct_from_self_improve_iteration(self) -> None:
-        tdd = self._field("ai-agent-dev.yml", "tdd_max_retries")
-        self_improve = self._field("ai-agent-dev.yml", "self_improve_max_iterations")
-        self.assertEqual(
-            tdd["attributes"]["options"][tdd["attributes"]["default"]],
-            "5 (デフォルト)",
-        )
-        self.assertEqual(
-            self_improve["attributes"]["options"][self_improve["attributes"]["default"]],
-            "3 (デフォルト)",
-        )
-        self.assertIn("TDD GREENリトライとは別", self_improve["attributes"]["description"])
-
-    def test_agent_self_improve_defaults_match_sdk_and_workflow_fallbacks(self) -> None:
-        from hve.config import SDKConfig
-
-        config = SDKConfig()
-        self.assertEqual(config.self_improve_max_iterations, 3)
-        self.assertEqual(config.self_improve_quality_threshold, 80)
-        for filename in (
-            "auto-ai-agent-design-reusable.yml",
-            "auto-ai-agent-dev-reusable.yml",
-        ):
-            content = (_WORKFLOW_DIR / filename).read_text(encoding="utf-8")
-            self.assertIn('self_improve_max_iterations = "3"', content)
-            self.assertIn('self_improve_quality_threshold = "80"', content)
-
-    def test_cloud_workflows_are_mandatory_without_enable_parser(self) -> None:
-        expectations = {
-            "auto-ai-agent-design-reusable.yml": "Run mandatory AAG Post-DAG Self-Improve",
-            "auto-ai-agent-dev-reusable.yml": "Run mandatory AAGD Post-DAG Self-Improve",
-        }
-        for filename, marker in expectations.items():
-            with self.subTest(filename=filename):
-                content = (_WORKFLOW_DIR / filename).read_text(encoding="utf-8")
-                self.assertIn(marker, content)
-                self.assertNotIn("enable-self-improve", content)
-                self.assertNotIn("outputs.enable", content)
-
-    def test_cli_keeps_explicit_emergency_opt_out(self) -> None:
+    def test_cli_has_no_self_improve_flags(self) -> None:
         flags = TestOptionParityMatrix._cli_option_strings()
-        self.assertIn("--self-improve", flags)
-        self.assertIn("--no-self-improve", flags)
-
-        orchestrator = (_REPO_ROOT / "hve" / "orchestrator.py").read_text(encoding="utf-8")
-        self.assertIn('workflow_id in {"aag", "aagd"}', orchestrator)
-        self.assertIn("and not config.self_improve_skip", orchestrator)
-        self.assertIn('config.self_improve_scope != "disabled"', orchestrator)
-        self.assertIn("config = copy.copy(config)", orchestrator)
-        self.assertIn("config.auto_self_improve = True", orchestrator)
+        self.assertFalse([flag for flag in flags if "self-improve" in flag])
 
 
 class TestRunnerTypeOptionParity(unittest.TestCase):
@@ -458,8 +393,8 @@ class TestRunnerTypeOptionParity(unittest.TestCase):
 
     def test_pr4_reusable_workflows_accept_runner_type_and_switch_all_jobs(self) -> None:
         expected_job_counts = {
-            "auto-app-documentation-reusable.yml": 2,
-            "auto-knowledge-management-reusable.yml": 2,
+            "auto-app-documentation-reusable.yml": 1,
+            "auto-knowledge-management-reusable.yml": 1,
         }
         for filename, expected_job_count in expected_job_counts.items():
             with self.subTest(workflow=filename):

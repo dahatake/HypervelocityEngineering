@@ -2,7 +2,7 @@
 
 > **WORK**: `work/run/<run-id>/Dev-Microservice-Azure-AgentTestCoding/Issue-<識別子>/`
 
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 
 - 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とし、実行ログを `docs/` / `src/` に追記しない。
@@ -48,18 +48,9 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
-
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 
@@ -68,7 +59,6 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 - `harness-error-recovery` — ビルド・テスト失敗時の E-01〜E-05 リカバリ
 - `harness-safety-guard` — ツール実行時の破壊的操作検出と中断
 - `tdd-red-green-reality` — 実出力で RED/GREEN を証明・恒真式禁止・プラットフォーム別 verify コマンドの確定
-- `karpathy-guidelines` — テストコード生成時の LLM 共通ミス防止指針
 - `ai-agent-capability-contract` — AG-CAP-01〜10 のREDテスト、test double、選択能力の境界
 
 ## 生成テストの実行環境
@@ -79,18 +69,14 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 - README にはローカル実行コマンド、必要な mock/stub、外部サービス実接続が不要であることを記載する。
 - `tdd-test-report.md` の `Expected Outcome` には、RED フェーズとしてローカルでテストを実行し、Agent 実装未完了により失敗することを明記する。
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードに加え、Microsoft 365 / Work IQ MCP / Fabric IQ / Azure AI Search / Foundry IQ / Foundry Agent Service の Tool・認証・権限・path・operation仕様を扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項 / 確認日** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 # 1) 目的（スコープ固定）
 - 対象は **1 Agent 分のみ**：`{key}`（canonical Agent ID。名称はAgent一覧から参照）。
 - 目的は「Agent テスト仕様書に基づく TDD RED フェーズのテストコード生成」。
 - テストは **コンパイル/collectionが通り、未実装production behaviorに対応する1件以上が失敗してsuite全体がRED** になることを目指す。既に成立する不在・禁止契約のテストはPASSを許容する。
 - 実装コード（`src/agent/` 配下）の作成・変更は **スコープ外**（これは後続の `Dev-Microservice-Azure-AgentCoding` が行う）。
-- "全 Agent 対応""設計刷新""横断リファクタ"は範囲外（必要なら Skill task-dag-planning の分割ルールで別タスク化）。
+- "全 Agent 対応""設計刷新""横断リファクタ"は範囲外（必要なら別タスク化）。
 
 # 2) 入力（優先順位順）
 必須:
@@ -174,7 +160,7 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 - テストケース表の各行をテストメソッドにマッピングする。
 - テストダブル設計に基づくモック/スタブのセットアップ方針を確認する。
 - 5種のテスト種別がどのテストケースに対応するかを整理する。
-- AG-CAP-01〜10のContract IDごとに、選択能力、理由付きN/A、期待Evidence、停止状態を対応付ける。設計が`TBD`の能力は推測でテストを作らず停止する。
+- AG-CAP-01〜10のContract IDごとに、選択能力、理由付きN/A、期待Evidence、停止状態を対応付ける。設計が`TBD`の能力は、テストを保留として理由とともに記録し、ほかの能力の作業を続けてください。
 
 ## 6.3) テストコード生成（RED 状態）
 - 未実装production behaviorに対応するテストを1件以上FAILさせてsuite全体をREDにする。既に成立する不在・禁止契約のテストはPASSを許容する。
@@ -217,11 +203,11 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 - 各テストメソッドが AAA パターンで構造化されている。
 - 作業ログと README が更新されている。
 
-# 9) 最終品質レビュー（単回インライン・セルフチェック）
+# 9) 受入観点（完了条件の補足）
 
-## 9.1 セルフチェック契約
+## 9.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ## 9.2 ドメイン固有観点
 - **テスト仕様書との整合性**：テストケース表の全行、5種のテスト種別、AG-CAP-01〜10の選択能力または理由付きN/A、Evidence・停止状態が決定的なtest doubleへ反映されているか
@@ -229,7 +215,7 @@ AI Agent TDD RED フェーズ テストコード生成専用Agent。
 - **保守性・拡張性・堅牢性**：テストコードの可読性、モック/スタブの再利用性、新テストケース追加時の変更容易性、未選択provider / MCP / Skillの不要fixtureがないか
 
 ## 9.3 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

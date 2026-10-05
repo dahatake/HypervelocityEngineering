@@ -79,18 +79,18 @@
   <!-- Zone C: CLI resources -->
   <rect class="zone c" x="610" y="250" width="550" height="240" rx="10"/>
   <text class="h" x="630" y="276">C. GitHub Copilot CLI 管理リソース（HVE は透過利用）</text>
-  <text class="note" x="630" y="296">MCP Server / Plugin / Skill / モデル選択 / 認証情報</text>
+  <text class="note" x="630" y="296">MCP Server / Plugin / Skill / model catalog / 認証情報</text>
   <rect class="box" x="630" y="310" width="250" height="60" rx="4"/>
   <text x="645" y="332">MCP Server</text>
-  <text x="645" y="350" class="note">copilot mcp add / list --json</text>
+  <text x="645" y="350" class="note">SDK discovery / CLI-owned config</text>
 
   <rect class="box" x="890" y="310" width="250" height="60" rx="4"/>
   <text x="905" y="332">Plugin</text>
-  <text x="905" y="350" class="note">copilot plugin list</text>
+  <text x="905" y="350" class="note">SDK plugin snapshot</text>
 
   <rect class="box" x="630" y="380" width="250" height="60" rx="4"/>
   <text x="645" y="402">モデル一覧</text>
-  <text x="645" y="420" class="note">copilot model list --json</text>
+  <text x="645" y="420" class="note">SDK list_models() / cache</text>
 
   <rect class="box" x="890" y="380" width="250" height="60" rx="4"/>
   <text x="905" y="402">認証ストア</text>

@@ -4,11 +4,17 @@
 # Migrated from:
 #   - .github/cli/lib/workflow_registry.py
 #
-# This registry is the single source of truth for workflow DAG definitions used
-# by Bash orchestration. Definitions are stored as JSON and queried with jq.
+# This registry holds the workflow DAG definitions used by Bash orchestration.
+# Definitions are stored as JSON and queried with jq.
+#
+# GENERATED: each _WORKFLOW_REGISTRY heredoc JSON is generated from
+# hve/workflow_registry.py (only "name" keeps the value in this file). Do not
+# edit the heredocs directly; run `python hve-dev/generate_workflow_registry_sh.py`.
+# hve/tests/test_workflow_registry_sh_generated.py detects direct edits.
 #
 # Registered workflow IDs:
 #   - aas   (App Architecture Design)       : step execution
+#   - ard   (Auto Requirement Definition)   : step execution
 #   - asdw-web (Web App Dev & Deploy)           : step execution (container + deploy step を含む)
 #   - adfd   (Dataflow Design)                  : step execution
 #   - adfdv  (Dataflow Dev)                     : step execution + QA/review feedback
@@ -202,7 +208,7 @@ _WORKFLOW_REGISTRY[adfdv]=$(cat <<'JSONEOF'
     "done": "adfdv:done",
     "blocked": "adfdv:blocked"
   },
-  "params": ["resource_group", "app_id"],
+  "params": ["app_ids", "app_id", "resource_group", "tdd_max_retries"],
   "steps": [
     {"id":"1.1","title":"データサービス選定","custom_agent":"Dev-Dataflow-DataServiceSelect","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":".github/prompts/steps/adfdv/step-1.1.prompt.md"},
     {"id":"1.2","title":"Azure データリソース Deploy","custom_agent":"Dev-Dataflow-DataDeploy","depends_on":["1.1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":".github/prompts/steps/adfdv/step-1.2.prompt.md"},
@@ -251,7 +257,7 @@ _WORKFLOW_REGISTRY[aagd]=$(cat <<'JSONEOF'
     "done": "aagd:done",
     "blocked": "aagd:blocked"
   },
-  "params": ["app_ids", "app_id", "resource_group", "usecase_id"],
+  "params": ["app_ids", "app_id", "resource_group", "usecase_id", "tdd_max_retries"],
   "steps": [
     {"id":"1","title":"AI Agent 構成設計","custom_agent":"Arch-AIAgentDesign-Step1","depends_on":[],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":".github/prompts/steps/aagd/step-1.prompt.md"},
     {"id":"2.1","title":"AI Agent テスト仕様書 (TDD RED)","custom_agent":"Arch-TDD-TestSpec","depends_on":["1"],"is_container":false,"skip_fallback_deps":[],"block_unless":[],"body_template_path":".github/prompts/steps/aagd/step-2.1.prompt.md"},

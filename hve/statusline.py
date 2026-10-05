@@ -1,6 +1,6 @@
 """hve.statusline — CUI 1Hz ステータスライン。
 
-GUI Footer (Wave 4) と同じ統計情報 (Workflow 経過 / Step 経過 / Context / Cost / Reqs)
+GUI Footer (Wave 4) と同じ統計情報 (Workflow 経過 / Step 経過 / Context / AI Credit / Cost / Reqs)
 を CUI でも 1Hz で更新表示する。
 
 設計方針:

@@ -26,6 +26,9 @@
 ## アプリケーション粒度
 📋 各テスト仕様書の「§1 概要」に「対象アプリケーション」（APP-ID）を記載すること。`docs/catalog/app-catalog.md` の「アプリ一覧（アーキタイプ）概要」を参照。
 
+## テスト ID
+- テスト ID は `TEST-{serviceId}-{種別}-{NNN}`（例: `TEST-SVC-09-UT-001`）とする（FR-IDL-01）。ID の相互参照をコードで検査するため、サービス ID を接頭辞に含める。
+
 ## 完了条件
 - テスト仕様書がサービスカタログに基づいて全サービス分作成されている
 {completion_instruction}{additional_section}

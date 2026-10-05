@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import html
 import os
+import re
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest import mock
 
@@ -19,7 +21,7 @@ import pytest
 # QApplication が必要な可能性があるため pytest-qt を使わない簡易テスト構成
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication, QTranslator
 
 from hve.gui import i18n, settings_store
 
@@ -109,6 +111,29 @@ class TestInstallTranslator:
             # install_translator(app, "ja_JP") は既存 translator を removeTranslator する。
             i18n.install_translator(self._app, "ja_JP")
 
+    def test_startup_auth_guidance_is_loaded_from_compiled_catalog(self) -> None:
+        """FR-GUI-24/35: 起動時認証の現行 Hub 導線を `.qm` から表示する。"""
+        qm_path = _I18N_DIR / "hve_gui_en_US.qm"
+        if not qm_path.exists():
+            pytest.skip(".qm not built; run setup-hve to compile")
+        source = (
+            "今すぐ `gh auth login` を実行しますか？\n"
+            "ログインすると Issue / Pull Request の閲覧・作成とブランチ取得が有効になります。\n"
+            "後でヘッダーの「GitHub」を開き、"
+            "「連携設定」→「GitHub CLI でログイン」からも実行できます。"
+        )
+        expected = (
+            "Run `gh auth login` now?\n"
+            "Signing in enables browsing and creating issues / pull requests and fetching branches.\n"
+            "You can also run it later from GitHub → Integration settings → "
+            "“Sign in with GitHub CLI”."
+        )
+        try:
+            assert i18n.install_translator(self._app, "en_US") is True
+            assert QCoreApplication.translate("startup_auth", source) == expected
+        finally:
+            i18n.install_translator(self._app, "ja_JP")
+
 
 # ---------------------------------------------------------------------------
 # 設定 / アセット
@@ -130,6 +155,48 @@ class TestAssets:
         content = ts_path.read_text(encoding="utf-8")
         assert '<source>' in content
         assert 'sourcelanguage="ja_JP"' in content or 'language="en_US"' in content
+
+    def test_all_finished_ts_messages_match_compiled_catalog(self) -> None:
+        """canary 外を含む全 finished message が `.qm` と一致すること。"""
+        ts_path = _I18N_DIR / "hve_gui_en_US.ts"
+        qm_path = _I18N_DIR / "hve_gui_en_US.qm"
+        if not qm_path.exists():
+            pytest.skip(".qm not built; run setup-hve to compile")
+
+        translator = QTranslator()
+        assert translator.load(str(qm_path)) is True
+        mismatches: list[tuple[str, str]] = []
+        for context in ET.parse(ts_path).getroot().findall("context"):
+            context_name = context.findtext("name") or ""
+            for message in context.findall("message"):
+                translation = message.find("translation")
+                if (
+                    message.get("numerus") == "yes"
+                    or translation is None
+                    or translation.get("type")
+                    in {"vanished", "obsolete", "unfinished"}
+                ):
+                    continue
+                source = message.findtext("source") or ""
+                comment = message.findtext("comment") or ""
+                expected = "".join(translation.itertext())
+                if translator.translate(context_name, source, comment) != expected:
+                    mismatches.append((context_name, source))
+
+        assert mismatches == []
+
+    def test_deferred_model_close_status_is_translated(self) -> None:
+        """FR-GUI-52: 取得完了待ちの終了案内を英語カタログから取得する。"""
+        qm_path = _I18N_DIR / "hve_gui_en_US.qm"
+        if not qm_path.exists():
+            pytest.skip(".qm not built; run setup-hve to compile")
+
+        translator = QTranslator()
+        assert translator.load(str(qm_path)) is True
+        assert translator.translate(
+            "MainWindow",
+            "モデル一覧の取得完了後に終了します...",
+        ) == "The window will close after the model list fetch completes..."
 
     def test_cq_settings_section_is_translated(self) -> None:
         """FR-GUI-04: Code-Query セクションの文字列が翻訳カタログに載っていること。"""
@@ -223,8 +290,63 @@ class TestAssets:
         assert '<context>\n    <name>QAAnswerDialog</name>' in content
         context = content.split("<name>QAAnswerDialog</name>", 1)[1].split("</context>", 1)[0]
         assert "<source>質問票をコピー</source>" in context
-        assert "<source>Work IQ 用プロンプトをコピー</source>" in context
         assert 'type="unfinished"' not in context
+        # FR-GUI-29（v3.38）: Work IQ 用プロンプトのコピーは廃止した（残る場合は vanished 扱い）。
+        for block in context.split("<message")[1:]:
+            if "<source>Work IQ 用プロンプトをコピー</source>" in block:
+                assert 'type="vanished"' in block or 'type="obsolete"' in block
+
+    def test_workiq_sdk_discovery_ui_is_translated_without_auth_residue(self) -> None:
+        content = (_I18N_DIR / "hve_gui_en_US.ts").read_text(encoding="utf-8")
+        c4 = content.split("<name>_C4WorkIQ</name>", 1)[1].split("</context>", 1)[0]
+        wizard = content.split("<name>WorkIQWizardPage</name>", 1)[1].split(
+            "</context>", 1
+        )[0]
+        help_context = content.split("<name>help_content</name>", 1)[1].split(
+            "</context>", 1
+        )[0]
+
+        for source in (
+            "Work IQ 利用状態",
+            "Work IQ: 確認中",
+            "設定済み",
+            "未設定",
+            "確認不能",
+            "Work IQ を知識源に加える",
+            "知識源 MCP サーバー",
+        ):
+            assert f"<source>{source}</source>" in c4
+        assert 'type="unfinished"' not in c4
+        wizard_sources = (
+            "知識探索で使う知識源（Work IQ と MCP server）を選びます。"
+            "MCP の設定・認証はGitHub Copilot CLIで事前に行い、変更後はHVEを再起動してください。",
+            "ℹ️ 前提: GitHub Copilot CLIで`workiq`名のPluginまたはMCP Serverが"
+            "設定・認証済みであること。",
+        )
+        help_sources = (
+            "Work IQ（Microsoft 365 データ）を知識源に加える。事前 QA と AKM / ARD の知識探索で"
+            "エージェントが自分で問い合わせる。GitHub Copilot CLIで`workiq`名のPluginまたはMCP Serverを"
+            "事前に設定・認証し、変更後はHVEを再起動する。",
+            "知識探索で使う知識源（Work IQ と MCP server）を設定します。"
+            "MCP の設定・認証は GitHub Copilot CLI で事前に行い、変更後はHVEを再起動してください。",
+        )
+        for source in wizard_sources:
+            assert wizard.count(f"<source>{source}</source>") == 1
+        for source in help_sources:
+            assert help_context.count(f"<source>{source}</source>") == 1
+        assert 'type="unfinished"' not in wizard
+        assert 'type="unfinished"' not in help_context
+        for stale in (
+            "Work IQ 認証確認",
+            "workiq-doctor",
+            "Work IQ Request Timeout",
+            "WORKIQ_REQUEST_TIMEOUT",
+            "canonical workiq@work-iq",
+            "Original Docs レビュー用プロンプト（互換値・現行runtime未使用）",
+            "既存設定の読み書き互換のため値を保持します。現行Work IQ runtimeでは使用しません。",
+            "既存設定との読み書き互換用。現行Work IQ runtimeでは使用しない。",
+        ):
+            assert stale not in content
 
     def test_resume_dialog_and_entry_action_are_translated(self) -> None:
         """FR-GUI-50: durable resume dialog and explicit entry labels are translated."""
@@ -330,7 +452,7 @@ class TestAssets:
         assert 'type="unfinished"' not in context
 
     def test_compiled_catalog_is_not_stale(self) -> None:
-        """`.ts` だけ更新して `.qm` を再生成し忘れると英語 UI に反映されない。"""
+        """主要UIの代表翻訳を runtime canary として固定する。"""
         from PySide6.QtWidgets import QApplication
 
         from hve.gui import help_content as hc
@@ -352,8 +474,17 @@ class TestAssets:
                 app.translate("QAAnswerDialog", "質問票をコピー") != "質問票をコピー"
             )
             assert (
-                app.translate("QAAnswerDialog", "Work IQ 用プロンプトをコピー")
-                != "Work IQ 用プロンプトをコピー"
+                app.translate("_C4WorkIQ", "知識源 MCP サーバー")
+                == "Knowledge source MCP servers"
+            )
+            assert (
+                app.translate("_C4WorkIQ", "Work IQ 利用状態")
+                == "Work IQ availability"
+            )
+            assert app.translate("_C4WorkIQ", "未設定") == "Not configured"
+            assert (
+                app.translate("_C4WorkIQ", "確認不能")
+                == "Unable to verify"
             )
             assert app.translate("GitHubCommentEditor", "プレビュー") == "Preview"
             assert app.translate("GitHubPickerDialog", "Issue を選択") == "Select an issue"
@@ -367,10 +498,53 @@ class TestAssets:
                 app.translate("_C5IssuePR", "連携する Pull Request 番号")
                 == "Pull request number to link"
             )
+            assert (
+                app.translate("ToolSearchSection", "SDK Resources を再検出")
+                == "Rediscover SDK Resources"
+            )
+            assert (
+                app.translate("ToolSearchSection", "OFF / ON を比較")
+                == "Compare OFF / ON"
+            )
+            assert app.translate("ToolSearchSection", "Workflow") == "Workflow"
+            assert app.translate("ToolSearchSection", "Step") == "Step"
+            assert (
+                app.translate("ToolSearchSection", "Workflow 全体")
+                == "Entire workflow"
+            )
             hint = hc._TOOLSEARCH_POLICY_HELP["limit"].short
             assert app.translate("help_content", hint) != hint
         finally:
             i18n.install_translator(app, "ja_JP")
+
+    def test_sdk_resource_snapshot_strings_are_translated_and_legacy_runtime_strings_are_absent(self) -> None:
+        content = (_I18N_DIR / "hve_gui_en_US.ts").read_text(encoding="utf-8")
+        context = content.split("<name>ToolSearchSection</name>", 1)[1].split(
+            "</context>", 1
+        )[0]
+
+        for source in (
+            "<b>SDK Resource Snapshot</b>",
+            "SDK Resources を再検出",
+            "OFF / ON を比較",
+            "Plugin 分類は、SDK が所有元を確認できた MCP / Skill の既定分類にだけ使います。"
+            "Plugin の hook / agent / instruction 全体を無効化する制御ではありません。"
+            "Cloud Session は未対応です。保存した変更は次に開始する local session から反映されます。",
+        ):
+            assert f"<source>{_escape(source)}</source>" in context, source
+
+        assert 'type="unfinished"' not in context
+        for stale in (
+            "登録済み MCP Server 一覧（実行で使用する場合は --mcp-config を指定）",
+            "認証手順...",
+            "`copilot plugins list --kind plugin --kind mcp --json` を実行して一覧を再取得します。",
+            "workiq-doctor",
+        ):
+            pattern = (
+                rf"<message>.*?<source>{re.escape(_escape(stale))}</source>"
+                rf"\s*<translation(?! type=\"vanished\")"
+            )
+            assert re.search(pattern, content, re.DOTALL) is None, stale
 
 
 class TestAvailableLanguages:

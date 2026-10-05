@@ -62,6 +62,10 @@ class StepDef:
     is_container: bool = False
     """True の場合、このステップは Sub-Issue を束ねるコンテナ Issue。"""
 
+    selected_by_default: bool = True
+    """False の場合、Step を明示しない実行（CLI の --steps 省略、ウィザードの Enter、
+    GUI の初期チェック、Prompt 版の steps 省略）で選択しない（FR-WF-ADI-18 v3.33）。"""
+
     skip_fallback_deps: List[str] = field(default_factory=list)
     """スキップフォールバック用メタデータ。"""
 
@@ -78,7 +82,7 @@ class StepDef:
     output_paths: List[str] = field(default_factory=list)
     """このステップが生成する成果物ファイルパスのリスト (リポジトリルート相対)。
     空リストの場合は workflow_default へフォールバック。
-    Self-Improve の target scope 解決および Wave 3 以降の入力チェックで利用される。
+    Wave 3 以降の入力チェックで利用される。
     """
 
     output_paths_template: Optional[List[str]] = None
@@ -240,6 +244,8 @@ class WorkflowDef:
     """ステップ定義のリスト (DAG ノード)。"""
 
     max_parallel: Optional[int] = None
+    # FR-IDL-02: 所有範囲が重ならない fan-out の子だけを同時に動かす上限（0 = 無効）。
+    ownership_parallel: int = 0
     """このワークフロー実行時の最大並列数。None なら DAGExecutor の既定値 (15) を使う。
     例: AKM は D01〜D21 を 21 並列で起動するため 21 を指定する (ADR-0002 C-2)。
     """
@@ -313,29 +319,16 @@ class WorkflowDef:
           - dep が skipped に含まれる → 解決済み
           - dep がレジストリに存在しない → 解決済み (自動スキップ)
         """
-        completed = set(completed_step_ids)
-        skipped = set(skipped_step_ids or [])
-        effective_done = completed | skipped
-        existing_ids = set(self._step_index.keys())
+        from hve.dag_readiness import select_ready_ids  # FR-DAG-10: 判定は dag_readiness の単一実装へ委譲する
 
-        result: List[StepDef] = []
-        for step in self.steps:
-            if step.is_container:
-                continue
-            if step.id in completed or step.id in skipped:
-                continue
-
-            if not step.depends_on:
-                result.append(step)
-            else:
-                deps_satisfied = all(
-                    dep in effective_done or dep not in existing_ids
-                    for dep in step.depends_on
-                )
-                if deps_satisfied:
-                    result.append(step)
-
-        return result
+        # block_unless は渡さない: 計画の Wave は block_unless を考慮しない（実行器だけが見る）
+        ready = set(select_ready_ids(
+            [{"id": s.id, "deps": list(s.depends_on), "container": s.is_container} for s in self.steps],
+            known_ids=set(self._step_index.keys()),
+            completed=completed_step_ids,
+            skipped=skipped_step_ids or [],
+        ))
+        return [step for step in self.steps if step.id in ready]
 
 
 @dataclass
@@ -431,7 +424,7 @@ AAS = WorkflowDef(
                 body_template_path=".github/prompts/steps/aas/step-3.1.prompt.md",
                 output_paths=["docs/catalog/data-model.md"],
                 # FR-WF-DM-01: 50,000文字超過時だけ生成する条件付きsidecar。
-                # 非fan-out宣言面のためruntime G-OUT / Self-Improve scopeには含めない。
+                # 非fan-out宣言面のためruntime G-OUTには含めない。
                 output_paths_template=[
                     "docs/catalog/data-model-service-stores.md",
                     "docs/catalog/data-model-consistency-events.md",
@@ -612,6 +605,8 @@ ASDW_WEB = WorkflowDef(
     # 完了させてから live deploy（1.3/2.2/2.4/3.4/3.5/4.3/4.4/5.x）へ進む。
     # 初期版は同一 worktree の true parallel を避けるため逐次実行に固定する。
     max_parallel=1,
+    # FR-IDL-02: 所有範囲が重ならない fan-out の子（3.2 / 4.1）だけを最大 4 並列にする。
+    ownership_parallel=4,
     local_checkpoint_step_id="4.2",
     steps=[
         # コンテナ
@@ -1011,8 +1006,7 @@ ADFDV = WorkflowDef(
         # 表記を揃える（io-contract の producer 解決は完全一致のみ）。
         StepDef(id="1.1", title="データサービス選定", custom_agent="Dev-Dataflow-DataServiceSelect", consumed_artifacts=["batch_domain_analytics", "batch_data_model", "dataflow_catalog", "batch_service_catalog"], body_template_path=".github/prompts/steps/adfdv/step-1.1.prompt.md",
                 # 根拠: .github/prompts/steps/adfdv/step-1.1.prompt.md `## 出力`。ADFDV の DAG 根に `output_paths` を
-                # 宣言すると Self-Improve の target scope が既定 `"."` からこの 2 件へ無言で縮小するため
-                # （`workflow_output_paths_cover_workflow` が True に反転する）、契約宣言のみの
+                # 宣言すると収集される具体 path がこの 2 件だけになるため、契約宣言のみの
                 # `output_paths_template` 側へ置く。
                 output_paths_template=[
                     "src/infra/azure/dataflow/create-batch-resources.sh",
@@ -1054,9 +1048,6 @@ ADFDV = WorkflowDef(
         # docs/azure/azure-services-data.md, batch-monitoring-design.md, azure-services-compute.md は既知 key なし → スキップ
         # 根拠: .github/prompts/steps/adfdv/step-4.1.prompt.md `## 出力` および
         # QA-AzureArchitectureReview.prompt.md §2 Step 別出力テーブル（adfdv 4.1 = waf-review.md）。
-        # ADFDV の DAG 根は Step 1.1 であり、根が具体 path を寄与しない限り
-        # `workflow_output_paths_cover_workflow` は False のままなので、本宣言で
-        # Self-Improve target scope は既定 `"."` のまま維持される。
         StepDef(id="4.1", title="WAF レビュー", custom_agent="QA-AzureArchitectureReview", depends_on=["3"], consumed_artifacts=["batch_service_catalog"], body_template_path=".github/prompts/steps/adfdv/step-4.1.prompt.md", output_paths=["docs/azure/waf-review.md"], required_input_paths=["docs/azure/azure-services-additional.md", "docs/azure/azure-services-compute.md", "docs/azure/azure-services-data.md", "docs/catalog/app-catalog.md", "docs/catalog/service-catalog-matrix.md", "docs/catalog/use-case-catalog.md"]),
         # 根拠: .github/prompts/steps/adfdv/step-4.2.prompt.md `## 出力` / `## 完了条件` および
         # QA-AzureDependencyReview.prompt.md Step 別出力テーブル（adfdv 4.2 = dependency-review.md）。
@@ -1120,7 +1111,7 @@ ADA = WorkflowDef(
                 body_template_path=".github/prompts/steps/ada/step-4.1.prompt.md",
                 output_paths=["docs/catalog/data-model.md"],
                 # FR-WF-DM-01: 50,000文字超過時だけ生成する条件付きsidecar。
-                # 非fan-out宣言面のためruntime G-OUT / Self-Improve scopeには含めない。
+                # 非fan-out宣言面のためruntime G-OUTには含めない。
                 output_paths_template=[
                     "docs/catalog/data-model-service-stores.md",
                     "docs/catalog/data-model-consistency-events.md",
@@ -1529,7 +1520,6 @@ AKM = WorkflowDef(
             # 根拠: .github/prompts/steps/akm/step-1.prompt.md `## 出力` と KnowledgeManager.prompt.md `## 出力`。
             # 3 件とも fan-out 子へは展開されない（status.md はキー別成果物ではなく、
             # 残り 2 件は glob）。これにより `collect_workflow_output_paths` は空のままで、
-            # Self-Improve の target scope は既定 `"knowledge/"` を維持する。
             output_paths_template=[
                 "knowledge/business-requirement-document-status.md",
                 "knowledge/{key}-*.md",
@@ -1545,7 +1535,6 @@ AKM = WorkflowDef(
             body_template_path=".github/prompts/steps/akm/step-2.prompt.md",
             # 根拠: .github/prompts/steps/akm/step-2.prompt.md `## 出力` の 2.。レビューレポート本体は
             # Issue コメントへの記録のため path を持たない。AKM の DAG 根は Step 1 であり、
-            # 根が具体 path を寄与しない限り Self-Improve scope は既定 `"knowledge/"` のまま。
             output_paths=["knowledge/business-requirement-document-status.md"],
             required_input_paths=["knowledge/{key}-*.md"]),
     ],
@@ -1587,6 +1576,8 @@ ADI = WorkflowDef(
             title="原本質問票生成",
             custom_agent="QA-DocConsistency",
             depends_on=["1"],
+            # 人に質問する工程のため、無人実行の既定の選択に含めない（N5-2）。
+            selected_by_default=False,
             consumed_artifacts=["knowledge"],
             required_skills=["knowledge-lookup"],
             body_template_path=".github/prompts/steps/adi/step-1.1.prompt.md",
@@ -1603,6 +1594,7 @@ ADI = WorkflowDef(
             title="原本質問票 join",
             custom_agent="QA-DocConsistency",
             depends_on=["1.1"],
+            selected_by_default=False,
             consumed_artifacts=["knowledge"],
             required_skills=["knowledge-lookup"],
             body_template_path=".github/prompts/steps/adi/step-1.2.prompt.md",
@@ -1614,6 +1606,8 @@ ADI = WorkflowDef(
             title="Doc Card 生成",
             custom_agent="Doc-OriginalDocCard",
             depends_on=["1.2"],
+            # FR-WF-ADI-18（v3.29）: 原本質問票（1.1 / 1.2）は任意。選ばない場合は Step 1 の後に進む。
+            skip_fallback_deps=["1"],
             consumed_artifacts=[],
             required_skills=["knowledge-lookup"],
             body_template_path=".github/prompts/steps/adi/step-2.prompt.md",
@@ -1625,7 +1619,6 @@ ADI = WorkflowDef(
             required_input_paths=[
                 "docs/catalog/design-doc-inventory.md",
                 "docs/original-design-doc-ingest/index.json",
-                "qa/original-docs-cross-questionnaire.md",
             ],
         ),
         StepDef(
@@ -2085,6 +2078,22 @@ def canonicalize_workflow_id(workflow_id: str) -> str:
 def get_workflow(workflow_id: str) -> Optional[WorkflowDef]:
     """ワークフロー ID からワークフロー定義を取得する。存在しない場合は None。"""
     return _REGISTRY.get(canonicalize_workflow_id(workflow_id))
+
+
+def default_step_ids(workflow_id: str) -> List[str]:
+    """Step を明示しない実行の既定の選択（FR-WF-ADI-18 v3.33）。
+
+    全 Step が既定で選択される Workflow は ``[]``（= 全ステップ）を返し、従来の
+    意味を変えない。``selected_by_default=False`` の Step がある場合だけ、既定で
+    選択される非コンテナ Step の ID を定義順に返す。
+    """
+    wf = get_workflow(workflow_id)
+    if wf is None:
+        return []
+    steps = [s for s in wf.steps if not s.is_container]
+    if all(s.selected_by_default for s in steps):
+        return []
+    return [s.id for s in steps if s.selected_by_default]
 
 
 def get_meta_dependencies(workflow_id: str) -> List[WorkflowDependency]:

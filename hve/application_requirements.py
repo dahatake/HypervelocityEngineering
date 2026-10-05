@@ -634,9 +634,18 @@ def build_application_requirement_context(
 
 def _parse_csv_value(value: str) -> tuple[str, ...]:
     stripped = value.strip()
-    if not stripped or stripped.casefold() in {"none", "なし", "n/a"}:
+    # "none (理由)" のように none の後ろへ注記を付けた場合も、IDなしとして扱う
+    if re.match(r"(?i)^(none|なし|n/a)(?:\s*[(（].*[)）])?$", stripped) or not stripped:
         return ()
     return tuple(item.strip().strip("`") for item in stripped.split(",") if item.strip())
+
+
+def _parse_requirement_id_field(value: str) -> tuple[str, ...]:
+    """ID 欄を解析する。説明文が混ざる場合は文中の Requirement ID だけを検証対象にする。"""
+    items = _parse_csv_value(value)
+    if all(re.fullmatch(r"[A-Za-z0-9._-]+", item) for item in items):
+        return items
+    return tuple(dict.fromkeys(re.findall(r"APP-\d{3}-[A-Z]+-\d+", value)))
 
 
 def validate_application_requirement_trace_block(
@@ -679,9 +688,9 @@ def validate_application_requirement_trace_block(
         )
 
     root = Path(repo_root)
-    requirement_ids = _parse_csv_value(values["Requirement-IDs"])
+    requirement_ids = _parse_requirement_id_field(values["Requirement-IDs"])
     document_paths = _parse_csv_value(values["Requirement-Documents"])
-    unresolved_ids = _parse_csv_value(values["Unresolved-Blockers"])
+    unresolved_ids = _parse_requirement_id_field(values["Unresolved-Blockers"])
     expected_paths = tuple(
         canonical_requirement_path(app_id).as_posix() for app_id in actual_app_ids
     )

@@ -24,6 +24,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from hve.gui import settings_apply, settings_store
 
+_REQUIREMENT_DEFINITION = (
+    Path(__file__).resolve().parents[3] / "hve-dev" / "requirement-definition.md"
+)
+
 
 @pytest.fixture
 def tmp_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -43,6 +47,23 @@ def qapp():
 def _required_input_values(page) -> Dict[str, str]:
     """必須入力キーごとに一意なテスト値を割り当てる。"""
     return {key: f"value-{key}" for key in page._banner_input_widgets()}
+
+
+def test_fr_gui_20_distinguishes_required_inputs_from_run_scoped_step_inputs() -> None:
+    """必須入力の永続化と run-scoped Step 入力の非永続化を混同しない。"""
+    text = _REQUIREMENT_DEFINITION.read_text(encoding="utf-8")
+    block = text.split("- **FR-GUI-20**:", 1)[1].split("- **FR-GUI-21**:", 1)[0]
+    assert "Step 1 右ペインの入力値はセッション限り" not in block, (
+        "FR-GUI-03/06 が永続化する必須入力までセッション限りとしている"
+    )
+    required_clause = (
+        "FR-GUI-03 / FR-GUI-06 の対象となる必須入力は設定ストアへ永続化し、"
+        "次回起動時に復元する。"
+    )
+    run_scoped_clause = "run-scoped Step 入力は永続化しない。"
+    assert block.count(required_clause) == 1
+    assert block.count(run_scoped_clause) == 1
+    assert block.index(required_clause) != block.index(run_scoped_clause)
 
 
 def test_every_required_input_key_has_a_persist_section(tmp_settings: Path, qapp) -> None:

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 760" role="img" aria-labelledby="title desc">
   <title id="title">HVE Workflow 間の接続</title>
-  <desc id="desc">原本処理はADIに統合され、Step 1.1でD01からD21の質問票を並列生成し、Step 1.2で横断統合する。qaはAKMを経由してknowledgeへ反映され、設計と実装の全Workflowから参照される。</desc>
+  <desc id="desc">原本処理はADIに統合され、Step 1.1でD01からD21の質問票を並列生成し、Step 1.2で横断統合する。Step 1.1 / 1.2 は既定選択外で、明示時だけ実行される。qaはAKMを経由してknowledgeへ反映され、設計と実装の全Workflowから参照される。</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M0 0 L10 5 L0 10Z" fill="#475569"/>
@@ -27,7 +27,7 @@
   <text x="66" y="184" class="label">docs-original/</text><text x="66" y="204" class="small">読み取り専用の原本</text>
   <rect x="278" y="144" width="250" height="92" rx="10" class="box wf"/>
   <text x="298" y="174" class="label">ADI — 9 Step</text>
-  <text x="298" y="196" class="small">Step 1: 目録・正規化</text><text x="298" y="214" class="small">Step 1.1: 21 fan-out → 1.2: join</text>
+  <text x="298" y="196" class="small">Step 1: 目録・正規化（既定）</text><text x="298" y="214" class="small">Step 1.1 / 1.2: 21 fan-out → join（任意・既定外）</text>
   <rect x="576" y="156" width="214" height="68" rx="10" class="box input"/>
   <text x="596" y="184" class="label">qa/（22成果物）</text><text x="596" y="204" class="small">D01〜D21 + 横断質問票</text>
   <rect x="838" y="156" width="184" height="68" rx="10" class="box wf"/>
@@ -49,7 +49,8 @@
   <rect x="440" y="486" width="150" height="58" rx="10" class="box wf"/>
   <text x="462" y="519" class="label">ADFD</text>
   <rect x="440" y="556" width="150" height="58" rx="10" class="box wf"/>
-  <text x="462" y="589" class="label">AAG</text>
+  <text x="456" y="583" class="label">ADA / AAG</text>
+  <text x="462" y="603" class="small">Agent データ設計 → 詳細設計</text>
   <rect x="646" y="416" width="156" height="58" rx="10" class="box wf"/>
   <text x="668" y="449" class="label">ASDW-WEB</text>
   <rect x="646" y="486" width="156" height="58" rx="10" class="box wf"/>

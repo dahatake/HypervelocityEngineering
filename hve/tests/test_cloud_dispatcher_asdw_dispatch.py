@@ -51,6 +51,18 @@ def _detect_script() -> str:
     return textwrap.dedent(match.group(1))
 
 
+def _suggest_script() -> str:
+    """suggest-next step の固定 Python heredoc 本文を返す。"""
+    run = next(
+        step
+        for step in _dispatcher_yaml()["jobs"]["suggest-next"]["steps"]
+        if step.get("name") == "Suggest next workflows"
+    )["run"]
+    match = re.search(r"python3 <<'PY'\n(.*?)\nPY\s*$", run, re.DOTALL)
+    assert match, "suggest-next stepからPython heredocを抽出できません"
+    return textwrap.dedent(match.group(1))
+
+
 def _run_detect(
     tmp_path: Path,
     *,
@@ -200,6 +212,59 @@ class TestOtherCloudWorkflowsUnchanged:
     def test_setup_labels_path_unchanged(self, tmp_path):
         setup = _run_detect(tmp_path, action="opened", labels=["setup-labels"])
         assert (setup["target"], setup["mode"]) == ("SETUP_LABELS", "initialize")
+
+    @pytest.mark.parametrize(
+        ("completed", "expected_ids"),
+        [
+            ("AAS", ["AAD-WEB", "ADFD", "AAG"]),
+            ("AAD-WEB", ["ASDW-WEB"]),
+            ("ADFD", ["ADFDV"]),
+            ("AAG", ["AAGD"]),
+        ],
+    )
+    def test_suggest_next_posts_only_the_declared_candidates(
+        self, completed, expected_ids
+    ):
+        calls: list[list[str]] = []
+
+        def fake_run(argv, *, check):
+            assert check is True
+            calls.append(list(argv))
+            return mock.Mock(returncode=0)
+
+        with mock.patch.dict(
+            os.environ,
+            {"COMPLETED_WF": completed, "ISSUE_NUMBER": "123"},
+            clear=False,
+        ), mock.patch("subprocess.run", side_effect=fake_run):
+            exec(compile(_suggest_script(), "<dispatcher-suggest-next>", "exec"), {})
+
+        assert len(calls) == 1
+        assert calls[0][0:4] == ["gh", "issue", "comment", "123"]
+        body = calls[0][calls[0].index("--body") + 1]
+        assert re.findall(r"\(`([A-Z-]+)`\)", body) == expected_ids
+
+    @pytest.mark.parametrize(
+        "completed",
+        ["ASDW-WEB", "ADFDV", "AAGD", "ADOC", "AKM", "AAR", ""],
+    )
+    def test_suggest_next_does_not_post_for_terminal_or_unknown_workflows(
+        self, completed
+    ):
+        with mock.patch.dict(
+            os.environ,
+            {"COMPLETED_WF": completed, "ISSUE_NUMBER": "123"},
+            clear=False,
+        ), mock.patch("subprocess.run") as run:
+            with pytest.raises(SystemExit) as stopped:
+                exec(compile(_suggest_script(), "<dispatcher-suggest-next>", "exec"), {})
+        assert stopped.value.code == 0
+        run.assert_not_called()
+
+    def test_detect_and_suggest_next_jobs_have_15_minute_timeouts(self):
+        jobs = _dispatcher_yaml()["jobs"]
+        assert jobs["detect"]["timeout-minutes"] == 15
+        assert jobs["suggest-next"]["timeout-minutes"] == 15
 
     def test_other_reusable_workflow_jobs_remain(self):
         """FR-CLOUD-06: reusable workflow 呼び出しジョブの集合を固定すること。"""

@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tomllib
@@ -20,7 +21,32 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _PACKAGES_DIR = _REPO_ROOT / "tools" / "for-other-repo"
 _MANIFEST = "KIT-VERSION.json"
-_PACKAGE_NAMES = ("markdown-query", "code-query", "tool-search")
+# 共通セットアップ実装（kit.toml + kit/kit_setup.py）へ委譲するキット。
+_SETUP_KIT_NAMES = ("markdown-query", "code-query", "tool-search")
+_PACKAGE_NAMES = _SETUP_KIT_NAMES
+# 版の固定値（1.x 系・1.3.0 → 1.3.1）を前提にする検査の対象。
+_V1_KIT_NAMES = ("markdown-query", "code-query", "tool-search")
+_LEGACY_REPOSITORY_PATTERN = re.compile(
+    r"royal(?:yty|ty)service2ndgen", re.IGNORECASE
+)
+
+
+def _init_git_repo(path: Path, remote: str | None = None) -> Path:
+    path.mkdir()
+    subprocess.run(
+        ["git", "init", str(path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    if remote is not None:
+        subprocess.run(
+            ["git", "-C", str(path), "remote", "add", "origin", remote],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    return path
 
 
 def _load_copy_module():
@@ -43,9 +69,15 @@ def packages() -> dict:
 
 @pytest.fixture(scope="module")
 def copied(tmp_path_factory) -> Path:
-    """3 パッケージを 1 度だけコピーして使い回す。"""
+    """全パッケージを 1 度だけコピーして使い回す。"""
     dest = tmp_path_factory.mktemp("for-other-repo")
-    assert copy_to_repo.main([str(dest)]) == 0
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(
+            copy_to_repo,
+            "resolve_source_repo",
+            lambda: "example-owner/example-repository",
+        )
+        assert copy_to_repo.main([str(dest)]) == 0
     return dest
 
 
@@ -69,12 +101,13 @@ class TestDeclarations:
     def test_every_expected_package_is_declared(self, packages: dict) -> None:
         assert set(packages) == set(_PACKAGE_NAMES)
 
-    @pytest.mark.parametrize("name", _PACKAGE_NAMES)
+    @pytest.mark.parametrize("name", _SETUP_KIT_NAMES)
     def test_required_keys_are_present(self, packages: dict, name: str) -> None:
         package = packages[name]
         for key in ("name", "version", "engine"):
             assert package.get(key), f"{name}: package.{key} is missing"
-        assert copy_to_repo.parse_version(package["version"]) >= (1,)
+        if name in _V1_KIT_NAMES:
+            assert copy_to_repo.parse_version(package["version"]) >= (1,)
 
     @pytest.mark.parametrize("name", _PACKAGE_NAMES)
     def test_declared_sources_exist(self, packages: dict, name: str) -> None:
@@ -93,6 +126,183 @@ class TestDeclarations:
             assert not (package_dir / "vendor").exists(), package_dir
 
 
+class TestSourceRepository:
+    @pytest.mark.parametrize("name", _PACKAGE_NAMES)
+    def test_declarations_do_not_pin_source_repository(
+        self, packages: dict, name: str
+    ) -> None:
+        assert "source_repo" not in packages[name]
+
+    def test_manifest_derives_source_repository_from_git_remote(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        repo = _init_git_repo(
+            tmp_path / "source",
+            "https://github.com/example-owner/example-repository.git",
+        )
+        monkeypatch.setattr(copy_to_repo, "REPO_ROOT", repo)
+        package = {
+            "name": "example-package",
+            "version": "1.0.0",
+            "engine": "example-engine",
+        }
+
+        first = copy_to_repo.build_manifest(package, tmp_path / "staging", {})
+        second = copy_to_repo.build_manifest(package, tmp_path / "staging", {})
+
+        assert first["source_repo"] == "example-owner/example-repository"
+        assert second["source_repo"] == first["source_repo"]
+
+    def test_https_and_ssh_remotes_resolve_to_the_same_repository(
+        self, tmp_path: Path
+    ) -> None:
+        https_repo = _init_git_repo(
+            tmp_path / "https",
+            "https://github.com/example-owner/example-repository.git",
+        )
+        ssh_repo = _init_git_repo(
+            tmp_path / "ssh",
+            "git@github.com:example-owner/example-repository.git",
+        )
+        ssh_url_repo = _init_git_repo(
+            tmp_path / "ssh-url",
+            "ssh://git@github.com/example-owner/example-repository.git",
+        )
+
+        resolved = [
+            copy_to_repo.resolve_source_repo(https_repo),
+            copy_to_repo.resolve_source_repo(ssh_repo),
+            copy_to_repo.resolve_source_repo(ssh_url_repo),
+        ]
+        assert resolved == ["example-owner/example-repository"] * 3
+
+    @pytest.mark.parametrize(
+        "remote",
+        [
+            None,
+            "https://gitlab.com/example-owner/example-repository.git",
+            "git@gitlab.com:example-owner/example-repository.git",
+            "https://github.com.evil.example/example-owner/example-repository.git",
+            "git://github.com/example-owner/example-repository.git",
+            "https://user@github.com/example-owner/example-repository.git",
+            "https://user:placeholder@github.com/example-owner/example-repository.git",
+            "ssh://user@github.com/example-owner/example-repository.git",
+            "ssh://git:placeholder@github.com/example-owner/example-repository.git",
+            "https://github.com/example-owner/example-repository.git?token=placeholder",
+            "https://github.com/example-owner/example-repository.git#fragment",
+            "https://github.com:443/example-owner/example-repository.git",
+            "https://github.com:/example-owner/example-repository.git",
+            "ssh://git@github.com:22/example-owner/example-repository.git",
+            "ssh://git@github.com:/example-owner/example-repository.git",
+            "https://github.com/example-owner/example-repository/extra.git",
+            "https://github.com/example-owner/../example-repository.git",
+            "https://github.com/./example-owner/example-repository.git",
+            "git@github.com:../example-repository.git",
+            "https://github.com/example%2Downer/example-repository.git",
+            "https://github.com/example-owner/example%2Drepository.git",
+            "https://github.com/%2e%2e/example-repository.git",
+            "https://github.com//example-repository.git",
+            "https://github.com/example-owner/.git",
+            "https://github.com/example-owner",
+            "not-a-remote",
+        ],
+    )
+    def test_unsupported_remotes_fail_closed(
+        self, tmp_path: Path, remote: str | None
+    ) -> None:
+        repo = _init_git_repo(tmp_path / "source", remote)
+        assert copy_to_repo.resolve_source_repo(repo) is None
+
+    @pytest.mark.parametrize(
+        "remote",
+        [
+            "",
+            "\thttps://github.com/example-owner/example-repository.git",
+            "https://git\thub.com/example-owner/example-repository.git",
+            "https://github.com/example-owner/example-repository.git\t",
+            "\rhttps://github.com/example-owner/example-repository.git",
+            "https://github.com/example-owner/example-repository.git\r",
+            "https://github.com/example-owner/\nexample-repository.git",
+            "https://git\x00hub.com/example-owner/example-repository.git",
+            "https://git\x1fhub.com/example-owner/example-repository.git",
+            "https://git\x7fhub.com/example-owner/example-repository.git",
+            "https://github.com/example owner/example-repository.git",
+            "https://github.com/example\u00a0owner/example-repository.git",
+            "https://github.com/example-owner/\u3000example-repository.git",
+        ],
+    )
+    def test_control_characters_and_whitespace_fail_before_url_parsing(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        remote: str,
+    ) -> None:
+        result = subprocess.CompletedProcess(
+            args=["git"],
+            returncode=0,
+            stdout=f"{remote}\n",
+            stderr="",
+        )
+        monkeypatch.setattr(
+            copy_to_repo.subprocess, "run", lambda *args, **kwargs: result
+        )
+
+        def fail_urlsplit(_remote: str):
+            pytest.fail("urlsplit must not receive a remote containing control or whitespace")
+
+        monkeypatch.setattr(copy_to_repo, "urlsplit", fail_urlsplit)
+        assert copy_to_repo.resolve_source_repo(tmp_path) is None
+
+    @pytest.mark.parametrize(
+        "remote",
+        [
+            "https://github.com/example-owner/example-repository.git?",
+            "https://github.com/example-owner/example-repository.git#",
+            "https://github.com/example-owner/example-repository.git?#",
+        ],
+    )
+    def test_query_and_fragment_delimiters_fail_before_url_parsing(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        remote: str,
+    ) -> None:
+        result = subprocess.CompletedProcess(
+            args=["git"],
+            returncode=0,
+            stdout=f"{remote}\n",
+            stderr="",
+        )
+        monkeypatch.setattr(
+            copy_to_repo.subprocess, "run", lambda *args, **kwargs: result
+        )
+
+        def fail_urlsplit(_remote: str):
+            pytest.fail("urlsplit must not receive a remote containing ? or #")
+
+        monkeypatch.setattr(copy_to_repo, "urlsplit", fail_urlsplit)
+        assert copy_to_repo.resolve_source_repo(tmp_path) is None
+
+    def test_manifest_does_not_store_credential_bearing_remote(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        repo = _init_git_repo(
+            tmp_path / "source",
+            "https://user:placeholder@github.com/example-owner/example-repository.git",
+        )
+        monkeypatch.setattr(copy_to_repo, "REPO_ROOT", repo)
+        package = {
+            "name": "example-package",
+            "version": "1.0.0",
+            "engine": "example-engine",
+        }
+
+        manifest = copy_to_repo.build_manifest(package, tmp_path / "staging", {})
+
+        assert manifest["source_repo"] is None
+        assert "placeholder" not in json.dumps(manifest)
+
+
 class TestStagedContent:
     """配布物に混ぜてはならないものが混ざらない。"""
 
@@ -106,7 +316,7 @@ class TestStagedContent:
             assert not any(part.startswith(".venv") for part in parts)
             assert path.suffix not in (".pyc", ".pyo")
 
-    @pytest.mark.parametrize("name", _PACKAGE_NAMES)
+    @pytest.mark.parametrize("name", _SETUP_KIT_NAMES)
     def test_setup_entrypoints_ship(self, copied: Path, name: str) -> None:
         for entry in ("install.py", "install.ps1", "install.sh", "kit/kit_setup.py"):
             assert (copied / name / entry).is_file(), f"{name}/{entry}"
@@ -133,6 +343,19 @@ class TestStagedContent:
                 assert payload["packages"] == packages[name]["extra_dependencies"]
             else:
                 assert not path.exists(), name
+
+    @pytest.mark.parametrize("name", _PACKAGE_NAMES)
+    def test_generated_package_has_no_legacy_repository_name(
+        self, copied: Path, name: str
+    ) -> None:
+        offenders = []
+        for path in (copied / name).rglob("*"):
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            if _LEGACY_REPOSITORY_PATTERN.search(text):
+                offenders.append(path.relative_to(copied / name).as_posix())
+        assert offenders == []
 
 
 class TestVersionManifest:
@@ -172,6 +395,47 @@ class TestVersionComparison:
 
 
 class TestVersionGate:
+    # 版の固定値（1.3.0 → 1.3.1）を前提にするため、1.x 系のキットに限定する。
+    @pytest.mark.parametrize("name", _V1_KIT_NAMES)
+    def test_previous_manifest_upgrades_then_same_version_skips(
+        self,
+        tmp_path: Path,
+        packages: dict,
+        capsys: pytest.CaptureFixture[str],
+        name: str,
+    ) -> None:
+        dest = tmp_path / "destination"
+        assert copy_to_repo.main([str(dest), "-p", name]) == 0
+        capsys.readouterr()
+
+        package_root = dest / name
+        manifest_path = package_root / _MANIFEST
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["version"] = "1.3.0"
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        marker = package_root / "GETTING-STARTED.md"
+        marker.write_text("stale distribution\n", encoding="utf-8")
+
+        assert copy_to_repo.main([str(dest), "-p", name]) == 0
+        upgraded_output = capsys.readouterr().out
+        assert "upgrade" in upgraded_output
+        assert packages[name]["version"] == "1.3.1"
+        assert (
+            json.loads(manifest_path.read_text(encoding="utf-8"))["version"]
+            == "1.3.1"
+        )
+        assert marker.read_text(encoding="utf-8") != "stale distribution\n"
+
+        marker.write_text("same version local edit\n", encoding="utf-8")
+        assert copy_to_repo.main([str(dest), "-p", name]) == 0
+        same_output = capsys.readouterr().out
+        assert "スキップ" in same_output
+        assert "(same)" in same_output
+        assert marker.read_text(encoding="utf-8") == "same version local edit\n"
+
     def test_same_version_is_skipped_without_force(self, copied: Path, capsys) -> None:
         marker = copied / "tool-search" / "GETTING-STARTED.md"
         marker.write_text("locally edited\n", encoding="utf-8")
@@ -392,7 +656,7 @@ class TestToolSearchPortability:
 
 
 class TestKitManifests:
-    @pytest.mark.parametrize("name", _PACKAGE_NAMES)
+    @pytest.mark.parametrize("name", _SETUP_KIT_NAMES)
     def test_kit_toml_declares_what_install_py_reads(self, copied: Path, name: str) -> None:
         kit = tomllib.loads((copied / name / "kit.toml").read_text(encoding="utf-8"))["kit"]
         for key in ("engine", "skill", "venv", "config"):
@@ -409,3 +673,19 @@ class TestKitManifests:
     @pytest.mark.parametrize("name", ("markdown-query", "code-query"))
     def test_search_kits_ship_their_skill_definition(self, copied: Path, name: str) -> None:
         assert (copied / name / "skill" / "SKILL.md").is_file()
+
+    @pytest.mark.parametrize("name", ("tool-search",))
+    def test_setup_kits_keep_the_setup_script_hint(
+        self, tmp_path: Path, capsys, name: str
+    ) -> None:
+        """共通セットアップを使うキットは install.* の実行案内を失わない。"""
+        with pytest.MonkeyPatch.context() as monkeypatch:
+            monkeypatch.setattr(
+                copy_to_repo,
+                "resolve_source_repo",
+                lambda: "example-owner/example-repository",
+            )
+            assert copy_to_repo.main([str(tmp_path), "-p", name]) == 0
+
+        output = capsys.readouterr().out
+        assert "install.ps1 を実行" in output or "install.sh を実行" in output

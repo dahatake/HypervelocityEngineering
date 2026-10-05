@@ -7,7 +7,7 @@
 # 一覧
 python tools/for-other-repo/copy_to_repo.py --list
 
-# 3 つ全部を D:\other-repo\tools\hve-kits\ へコピー
+# 4 つ全部を D:\other-repo\tools\hve-kits\ へコピー
 python tools/for-other-repo/copy_to_repo.py D:\other-repo\tools\hve-kits
 
 # 1 つだけ

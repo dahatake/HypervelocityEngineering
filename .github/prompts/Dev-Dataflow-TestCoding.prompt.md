@@ -2,7 +2,7 @@
 
 > **WORK**: `work/run/<run-id>/Dev-Dataflow-TestCoding/Issue-<識別子>/`
 
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 
 - 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とし、実行ログを `docs/` / `src/` に追記しない。
@@ -47,15 +47,7 @@
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## 1) 目的と非目的
 
@@ -82,7 +74,7 @@
 
 ## 3) 入力・出力
 
-### 3.1 入力（必須）
+### 3.1 入力
 
 - `docs/test-specs/{jobId}-test-spec.md`（データフロー処理 TDD テスト仕様書 — Arch-Dataflow-TDD-TestSpec の出力）
 - `docs/dataflow/dataflow-test-strategy.md`（バッチ固有テスト戦略書 — Arch-Dataflow-TestStrategy の出力）
@@ -94,7 +86,7 @@
 - `docs/dataflow/dataflow-service-catalog.md`（Azure サービスマッピング・依存関係）
 - `src/test/dataflow/` ディレクトリ構造（既存テストコードのパターン確認）
 
-### 3.3 出力（必須）
+### 3.3 出力
 
 - `src/test/dataflow/{jobId}-{jobNameSlug}.Tests/` 配下にテストコード（pytest + Python を既定とする。既存テストの慣習があればそれに従う）
   - テスト仕様書の「テストケース表」（§2）の各行に対応するテストメソッド
@@ -142,20 +134,8 @@
 - テストダブル設計（§5）をモック/スタブのセットアップコードにマッピングする。
 
 ### 5.3 計画・分割
+- 計画を書く場合は Skill `task-dag-planning` に従う。
 
-- Skill task-dag-planning に従う。
-- **plan.md 作成時の必須手順（省略禁止）**:
-  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
-  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
-     ```
-     <!-- task_scope: single|multi -->
-     <!-- context_size: small|medium|large -->
-     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
-     <!-- subissues_count: N -->
-     <!-- implementation_files: true or false -->
-     ```
-  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/task-dag-planning/references/plan-template.md` を参照）
-  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 - `work/` 構造: Skill work-artifacts-layout に従う（`{WORK}`）
 - 固有の分割粒度: テストケース種別単位（§2 通常テスト → §3.1 冪等性 → §3.2〜§3.6 その他バッチ固有）
 
@@ -197,11 +177,11 @@
 - 各テストメソッドに出典コメントが付与されている（トレーサビリティ）。
 - 作業ログと README が更新されている。
 
-## 9) 最終品質レビュー（単回インライン・セルフチェック）
+## 9) 受入観点（完了条件の補足）
 
-### 9.1 セルフチェック契約
+### 9.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ### 9.2 ドメイン固有観点
 
@@ -210,7 +190,7 @@
 - **保守性・拡張性・堅牢性**：テストコードの可読性、モック/スタブの再利用性、新テストケース追加時の変更容易性、既存テストプロジェクトとの一貫性、Azurite/Testcontainers の設定が再現可能か
 
 ### 9.3 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 ## Agent 固有の Skills 依存
 
@@ -220,4 +200,3 @@
 - `harness-error-recovery` — ビルド・テスト失敗時の E-01〜E-05 リカバリ
 - `harness-safety-guard` — ツール実行時の破壊的操作検出と中断
 - `tdd-red-green-reality` — 実出力で RED/GREEN を証明・恒真式禁止・プラットフォーム別 verify コマンドの確定
-- `karpathy-guidelines` — 実装時の LLM 共通ミス防止指針

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from hve import split_fork
+from hve import run_paths
 from hve.__main__ import _ensure_run_workdir_env
 from hve.gui.session_workdir import GuiSessionWorkdir
 
@@ -16,9 +16,9 @@ def _isolate_env(monkeypatch):
     monkeypatch.delenv("HVE_WORK_ROOT", raising=False)
     monkeypatch.delenv("HVE_RUN_ID", raising=False)
     monkeypatch.delenv("HVE_GUI_SESSION_ID", raising=False)
-    split_fork._reset_run_id_cache()
+    run_paths._reset_run_id_cache()
     yield
-    split_fork._reset_run_id_cache()
+    run_paths._reset_run_id_cache()
 
 
 class TestCLIEntrypoint:

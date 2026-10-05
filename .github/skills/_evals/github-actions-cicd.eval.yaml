@@ -1,5 +1,5 @@
 skill: github-actions-cicd
-skill_path: .github/skills/cicd/github-actions-cicd/SKILL.md
+skill_path: .github/skills/github-actions-cicd/SKILL.md
 description: GitHub Actions CI/CD ワークフローの共通仕様。OIDC 認証・workflow_dispatch トリガー・Copilot push 制約対応・シークレット管理・デプロイ保護の原則を提供する。
 
 test_cases:

@@ -67,7 +67,7 @@ function script:ValidateSubissues {
             Write-Warning ("::error::${SubissuesPath}: " +
                 '`<!-- subissue -->` ブロックが 0 件 だが Markdown テーブル形式が検出されました。' +
                 'テーブル形式は禁止です。各行を `<!-- subissue -->` ブロックに展開してください。' +
-                '規約: .github/skills/task-dag-planning/references/subissues-template.md')
+                '規約: .github/skills/_hve-plan-artifacts/subissues-template.md')
             return $false
         }
 
@@ -77,6 +77,8 @@ function script:ValidateSubissues {
 
     $missingBlocks = @()
     $emptyTitleBlocks = @()
+    $missingDodBlocks = @()
+    $emptyDodBlocks = @()
 
     for ($i = 0; $i -lt $blocks.Count; $i++) {
         $block = $blocks[$i]
@@ -85,12 +87,38 @@ function script:ValidateSubissues {
         $titleMatch = [regex]::Match($block, '<!--\s*title:\s*(.*?)\s*-->')
         if (-not $titleMatch.Success) {
             $missingBlocks += $blockIndex
-            continue
+        }
+        else {
+            $titleValue = $titleMatch.Groups[1].Value.Trim()
+            if (-not $titleValue) {
+                $emptyTitleBlocks += $blockIndex
+            }
         }
 
-        $titleValue = $titleMatch.Groups[1].Value.Trim()
-        if (-not $titleValue) {
-            $emptyTitleBlocks += $blockIndex
+        # FR-DOD-01: `## 完了条件` セクションと、その配下の非空・非プレースホルダ記述を検査する。
+        $blockLines = $block -split "\r?\n|\r"
+        $inDod = $false
+        $dodContentFound = $false
+        $dodHeadingFound = $false
+        foreach ($line in $blockLines) {
+            if ($line -match '^\s*##\s+完了条件') {
+                $dodHeadingFound = $true
+                $inDod = $true
+                continue
+            }
+            if ($inDod -and $line -match '^\s*##\s') {
+                $inDod = $false
+                continue
+            }
+            if ($inDod -and $line -notmatch '^\s*(-{3,})?\s*$' -and $line -notmatch '(?i)REPLACE_ME') {
+                $dodContentFound = $true
+            }
+        }
+        if (-not $dodHeadingFound) {
+            $missingDodBlocks += $blockIndex
+        }
+        elseif (-not $dodContentFound) {
+            $emptyDodBlocks += $blockIndex
         }
     }
 
@@ -99,6 +127,12 @@ function script:ValidateSubissues {
     }
     if ($emptyTitleBlocks.Count -gt 0) {
         $errors += "${SubissuesPath}: <!-- title: ... --> 空値ブロック = [$($emptyTitleBlocks -join ',')]"
+    }
+    if ($missingDodBlocks.Count -gt 0) {
+        $errors += "${SubissuesPath}: '## 完了条件' 欠落ブロック = [$($missingDodBlocks -join ',')]"
+    }
+    if ($emptyDodBlocks.Count -gt 0) {
+        $errors += "${SubissuesPath}: '## 完了条件' 空値・プレースホルダブロック = [$($emptyDodBlocks -join ',')]"
     }
 
     if ($errors.Count -gt 0) {

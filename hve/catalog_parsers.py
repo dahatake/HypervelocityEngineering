@@ -26,7 +26,8 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Callable, Dict, FrozenSet, List, Optional
+from dataclasses import dataclass
+from typing import Callable, Dict, FrozenSet, List, Optional, Tuple
 
 
 class CatalogParseError(Exception):
@@ -106,6 +107,69 @@ def _extract_ids_from_headings(text: str, *, id_pattern: str) -> List[str]:
 # ---------------------------------------------------------------------------
 # パーサ実装
 # ---------------------------------------------------------------------------
+
+# FR-IDL-01: ID 台帳（docs/catalog/id-ledger.md）
+ID_LEDGER_PATH = "docs/catalog/id-ledger.md"
+_ID_LEDGER_COLUMNS = ("ID", "種別", "名前", "親 ID", "状態", "詳細文書", "書込みパス接頭辞")
+_EMPTY_CELL = {"", "-", "—", "なし"}
+
+
+@dataclass(frozen=True)
+class LedgerEntry:
+    """ID 台帳の 1 行。"""
+
+    id: str
+    kind: str
+    name: str
+    parent_ids: Tuple[str, ...]
+    state: str
+    detail_doc: str
+    write_prefixes: Tuple[str, ...]
+    line: int = 0
+
+
+def _split_cell(cell: str, separators: str) -> Tuple[str, ...]:
+    values = re.split(separators, cell)
+    return tuple(v.strip().strip("`") for v in values if v.strip().strip("`") not in _EMPTY_CELL)
+
+
+def parse_id_ledger(repo_root: Path) -> List[LedgerEntry]:
+    """``docs/catalog/id-ledger.md`` の表を読み、行を順に返す（FR-IDL-01）。
+
+    ヘッダ行（``| ID | 種別 | ...``）の直後の表だけを対象にする。台帳が無い場合は空リスト。
+    """
+    text = _read_text(repo_root, ID_LEDGER_PATH)
+    if text is None:
+        return []
+    entries: List[LedgerEntry] = []
+    in_table = False
+    for number, line in enumerate(text.splitlines(), start=1):
+        s = line.strip()
+        if not s.startswith("|"):
+            in_table = False
+            continue
+        cols = [c.strip() for c in s.strip("|").split("|")]
+        if tuple(cols[: len(_ID_LEDGER_COLUMNS)]) == _ID_LEDGER_COLUMNS:
+            in_table = True
+            continue
+        if not in_table or re.match(r"^\|\s*[-:\s|]+\s*\|?$", s):
+            continue
+        cols += [""] * (len(_ID_LEDGER_COLUMNS) - len(cols))
+        detail = cols[5].strip().strip("`")
+        entries.append(
+            LedgerEntry(
+                id=cols[0].strip("`"),
+                kind=cols[1],
+                name=cols[2],
+                parent_ids=_split_cell(cols[3], r"[,、，;]"),
+                state=cols[4],
+                detail_doc="" if detail in _EMPTY_CELL else detail,
+                write_prefixes=_split_cell(cols[6], r"[;；]|<br\s*/?>"),
+                line=number,
+            )
+        )
+    return entries
+
 
 _APP_ID_PATTERN = r"APP-\d{2,3}"
 _SCREEN_LOCAL_ID_PATTERN = r"S\d{3,}"

@@ -32,12 +32,10 @@ _TABLES = ("executions", "workflow_instances", "step_instances")
 
 _REPLAY_INPUTS = (
     ("additional_prompt", "--additional-prompt", "prompt"),
-    ("workiq_prompt_qa", "--workiq-prompt-qa", "response"),
+    ("doc_purpose", "--doc-purpose", "response"),
     ("purpose", "--purpose", "reasoning"),
-    ("mcp_config", "--mcp-config", "tool_args"),
     ("attached_docs", "--attached-docs", "tool_results"),
     ("company_name", "--company-name", "environment"),
-    ("workiq_tenant_id", "--workiq-tenant-id", "token"),
     ("issue_title", "--issue-title", "credential"),
     ("cli_url", "--cli-url", "auth_url"),
     ("target_scope", "--target-scope", "raw_repository_path"),
@@ -454,7 +452,12 @@ class TestForbiddenStateValues:
 
                 if plan is not None:
                     transient_argv = "\0".join(plan.argv)
+                    exercised_categories = {
+                        category for _key, _flag, category in _REPLAY_INPUTS
+                    }
                     for category, sentinel in sentinels.items():
+                        if category not in exercised_categories:
+                            continue
                         if sentinel not in transient_argv:
                             violations.append(
                                 f"replay-input-not-exercised:{category}"
@@ -672,6 +675,47 @@ class TestMissingReplayValues:
         if external_call_guard:
             violations.append("external-call:unexpected")
         _fail_if_violations("FR-CLI-90 missing replay value", violations)
+
+
+class TestRemovedWorkIQRuntimeReplayOptions:
+    """FR-CLI-90: 廃止した runtime 設定を durable replay へ持ち込まない。"""
+
+    @pytest.mark.parametrize(
+        "flag",
+        (
+            "--workiq-tenant-id",
+            "--workiq-request-timeout",
+            "--workiq-prompt-review",
+            "--workiq-prompt-qa",
+            "--workiq-prompt-km",
+            "--workiq-draft-output-dir",
+            "--workiq-per-question-timeout",
+            "--workiq-dxx",
+            "--mcp-config",
+        ),
+    )
+    def test_removed_option_is_rejected(self, tmp_path: Path, flag: str) -> None:
+        resume_api, state_api = _apis("FR-CLI-90 removed Work IQ option")
+        service = resume_api.ResumeService(object(), tmp_path)
+
+        with pytest.raises(state_api.DurableStateError, match="unsupported replay option"):
+            service.sanitize_argv(
+                ("orchestrate", "--workflow", "aas", flag, "legacy-value")
+            )
+
+    def test_resolved_argv_omits_legacy_config_attributes(self) -> None:
+        resume_api, _ = _apis("FR-CLI-90 removed Work IQ option")
+
+        class LegacyConfig:
+            workiq_tenant_id = "tenant"
+            workiq_request_timeout = 300.0
+            workiq_prompt_review = "review"
+
+        argv = resume_api.build_resolved_replay_argv("aas", LegacyConfig(), {})
+
+        assert "--workiq-tenant-id" not in argv
+        assert "--workiq-request-timeout" not in argv
+        assert "--workiq-prompt-review" not in argv
 
 
 class TestStateIntegrity:

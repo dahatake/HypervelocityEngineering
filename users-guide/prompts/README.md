@@ -7,14 +7,14 @@
 **そのまま貼り付けて使える** 依頼文の索引です。
 使い方の全体像は [hve-prompt-getting-started.md](../hve-prompt-getting-started.md) を参照してください。
 
-HVE が内部で使用する Agent / Step / Work IQ / 質問票 / Review / Cloud Prompt の固定本文を確認する場合は、[HVE Prompt 全文リファレンス](../prompt-reference/README.md) を参照してください。本文の正本は `.github/prompts/**` で、リファレンス側はデバッグ用の生成コピーです。
+HVE が内部で使用する Agent / Step / 知識探索 / 質問票 / Review / Cloud Prompt の固定本文を確認する場合は、[HVE Prompt 全文リファレンス](../prompt-reference/README.md) を参照してください。本文の正本は `.github/prompts/**` で、リファレンス側はデバッグ用の生成コピーです。
 
 > **あなたがコマンドを打つ必要はありません。** 実行計画（plan）の取得と実行は Copilot が代行します。
 > 貼り付け用の完全な依頼文には、いずれも「まず実行計画だけを見せる。私が『実行してください』と
 > 書くまで実行しない」を含めています。この 2 文を消さないでください
 >（Step を絞る差分だけを示す断片例は除く）。
 
-> **共通契約:** 承認後は Prompt Edition controller がその場で成果物を直接編集せず、提示済み SHA-256 を渡して `hve prompt run` を起動します。HVE が再計算値との一致を確認した場合だけ、選択済みの Workflow / Step を `orchestrate` へ委譲します。`task_scope=multi` や `context_size=large` でも、この委譲自体は止めません。
+> **共通契約:** 承認後は Prompt Edition controller がその場で成果物を直接編集せず、提示済み SHA-256 を渡して `hve prompt run` を起動します。HVE が再計算値との一致を確認した場合だけ、選択済みの Workflow / Step を `orchestrate` へ委譲します。依頼に無人実行の意思と事前承認の範囲が明示されている場合だけ、その宣言が `execution_policy` として計画・実行へ渡されます。
 
 ---
 
@@ -38,11 +38,14 @@ HVE の Prompt 版で作業してください。
 - パラメータ: <name>=<value>          # Workflow が宣言している名前だけ
 - 入力: <canonical> は <実ファイル> にあります   # 省略可（入力別名）
 - 制約: <やってほしくないこと>
+- 実行ポリシー: <無人実行なら、事前承認済みの範囲を自然言語で明記>   # 省略可
 - 期待する成果物: <どのファイルが増えるか>
 
 まず実行計画だけを見せてください。
 私が「実行してください」と書くまで、実行はしないでください。
 ```
+
+`実行ポリシー` は、たとえば「計画提示後の確認待ちなしで最後まで実行してよい。`resource_group` は rg-xxx、外部公開はしない」のように、無人実行の意思と事前承認済みの境界を自然言語で添えるための欄です。通常は省略し、手動承認フローを使ってください。
 
 ---
 
@@ -52,11 +55,11 @@ HVE の Prompt 版で作業してください。
 |---|---|---|
 | `<workflow_id>` | `hve/workflow_registry.py` の canonical ID | request が拒否される |
 | `<step_id>` | 当該 Workflow に実在する Step ID | request が拒否される |
-| `APP-NNN` | `docs/catalog/app-catalog.md` の APP-ID | 対象が特定できず Copilot が質問する |
-| `<resource-group>` | Azure リソースグループ名 | デプロイ系 Step で質問される |
+| `APP-NNN` | `docs/catalog/app-catalog.md` の APP-ID | request 作成前ゲートで対象特定の確認が必要になる |
+| `<resource-group>` | Azure リソースグループ名 | デプロイ系 Step の request 作成前ゲートで確認が必要になる |
 | `<canonical>` / `<実ファイル>` | 入力別名の対応（[custom-inputs.md](custom-inputs.md)） | 別名が適用されない |
 
-**推測で埋めないでください。** 分からない項目は書かずに残せば、Copilot が質問します。
+**推測で埋めないでください。** 不足値は Prompt Edition の request 作成前ゲートで inline 確認されます。
 
 ---
 

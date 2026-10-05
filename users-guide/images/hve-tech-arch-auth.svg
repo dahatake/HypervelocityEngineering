@@ -26,8 +26,8 @@
   <text x="50" y="106" class="note">資格情報をディスクへ永続保存しない</text>
   <text x="50" y="128" class="note">- Copilot: `copilot login` / CLI 対話へ委譲</text>
   <text x="50" y="148" class="note">- GitHub: `gh auth token`、明示操作で `gh auth login`</text>
-  <text x="50" y="168" class="note">- Work IQ: 専用 CLI で EULA / M365 認証確認</text>
-  <text x="50" y="190" class="note">- MCP / Plugin: Copilot CLI の設定・手順へ委譲</text>
+  <text x="50" y="168" class="note">- Work IQ: exact `workiq` を discovery / runtime 観測で確認</text>
+  <text x="50" y="190" class="note">- MCP / Plugin: Copilot CLI の設定と認証へ委譲</text>
   <text x="50" y="212" class="note">- Prompt 版は利用中の Copilot 環境の認証を再利用</text>
 
   <!-- External authentication CLIs -->
@@ -35,7 +35,7 @@
   <text class="h" x="420" y="84">外部 CLI（認証の正本）</text>
   <text x="420" y="106" class="note">Copilot CLI: login / MCP / Plugin</text>
   <text x="420" y="128" class="note">GitHub CLI: gh auth login / token</text>
-  <text x="420" y="148" class="note">Work IQ CLI: EULA / Microsoft 365 認証</text>
+  <text x="420" y="148" class="note">Copilot CLI: `workiq` Plugin / MCP の認証状態を保持</text>
   <text x="420" y="170" class="note">各 CLI が認証フローと更新を担当</text>
   <text x="420" y="200" class="note">HVE は公開 CLI/API の結果だけを利用</text>
 
@@ -55,7 +55,7 @@
   <text x="50" y="356" class="note">各サーバが固有の認証フロー（OAuth / API Key / Device Code）</text>
   <text x="50" y="376" class="note">認証方式と保存先は各 CLI / MCP Server の仕様に従う</text>
   <text x="50" y="398" class="note">HVE は MCP Server に直接接続せず、Copilot CLI 経由で利用</text>
-  <text x="50" y="420" class="note">GUI は一覧と認証手順を示し、独自 OAuth を実装しない</text>
+  <text x="50" y="420" class="note">GUI は safe field の一覧だけを示し、独自 OAuth を実装しない</text>
 
   <!-- Notes / forbidden -->
   <rect class="box" x="560" y="290" width="490" height="160" rx="6"/>

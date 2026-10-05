@@ -5,18 +5,9 @@
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
-
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 
@@ -145,15 +136,14 @@
   - `docs/agent/agent-architecture.md` を作成する
 - **完了判定**: Agent 一覧表がある / AGC 分解表がある / Mermaid 図が2つ以上ある / 必須 JSON サンプル 8 種が掲載されている / 各AgentのCapability Boundary Matrixが全必須カラムと最小Decision sourceを持つ / Matrixと固定schemaの`RetrievalPlan`が1対1で一致する / Step 1 Mutation Intentとの矛盾がない
 
-### 5.2 進捗ログ追記（必須）
+### 5.2 進捗ログ追記
 - `{WORK}ai-agent-design-work-status.md` に追記のみで記録する：
   - `YYYY-MM-DD: 何をした / 何が決まった / 次アクション`
 
 ## 6) TIME-BOX / MODE SWITCH（分割ルール）
-- Step 5.1 をこの 1 回の応答で完走できない（分量・複雑さ・制約により）と判断したら、直ちに分割モードへ切り替える。
-  - 分割モードでは `docs/agent/agent-architecture.md` を出力しない。
+- Step 5.1 をこの 1 回の応答で完走できない（分量・複雑さ・制約により）と判断したら、直ちに分割時へ切り替える。
+  - 分割時では `docs/agent/agent-architecture.md` を出力しない。
   - 代わりに、分割実行用の Prompt を作成し、追記順序（1/3, 2/3 …）と推奨分割単位（目安 2,000〜4,000 字）を明記する。
-- Step 全体として Skill task-dag-planning の粒度/コンテキスト分割判定を適用する（詳細は Skill `task-dag-planning` を参照）。
   - 分割時は各 Sub Issue に `## Custom Agent` セクションに `Arch-AIAgentDesign-Step2` を含める
 
 ## 7) 書き込み失敗/巨大出力への対策

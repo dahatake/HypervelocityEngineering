@@ -8,13 +8,14 @@
 > Prompt 本文の正本は、常に [`.github/prompts/**`](../../.github/prompts/) です。
 > [`copies/`](./copies/) は動作確認・比較・デバッグのための **非規範な生成コピー**です。
 > コピーを編集しても HVE の動作は変わりません。Prompt を変更するときは正本だけを編集し、その後にコピーと [`catalog.md`](./catalog.md) を再生成してください。
+> 同期前の変更セットでは、`copies/**` / `catalog.md` を正本として扱わないでください。
 
 ## 目的
 
-HVE がモデル、Copilot Coding Agent、Copilot SDK、Work IQ へ渡す固定 Prompt を `users-guide` から確認できるようにします。
+HVE がモデル、Copilot Coding Agent、Copilot SDK へ渡す固定 Prompt を `users-guide` から確認できるようにします。
 
 - Prompt ごとの指示、禁止事項、出力形式を確認する
-- Work IQ が検索する情報源と返却形式を確認する
+- 知識探索エージェントへ渡す目的・出典の規則・終える条件を確認する
 - 事前・事後質問票で、どの質問と回答形式が要求されるか確認する
 - Agent、Step、fan-out、runtime、Cloud の Prompt を比較する
 - 正本とコピーの SHA-256 を照合し、コピーの取り違えや古い内容を検出する
@@ -23,7 +24,7 @@ HVE がモデル、Copilot Coding Agent、Copilot SDK、Work IQ へ渡す固定 
 
 ## 収録範囲
 
-`sync.py` 実行時点で実行経路に結線されている、または HVE module が読み込む `.github/prompts/**/*.prompt.md` を、相対パスの末尾へ `.txt` を付けて `copies/` へ byte-for-byte でコピーしています。例えば正本 `runtime/workiq/role.prompt.md` のコピーは `copies/runtime/workiq/role.prompt.md.txt` です。未結線 Prompt は原則として `catalog.md` にだけ掲載し、本文はコピーしません。ただし、production 結線前に固定本文を確認する必要がある移行中の Prompt は、`sync.py` の `MIRROR_WHILE_UNWIRED` に明示したものだけをコピーします。この例外でも状態は `未結線` のままであり、production からの送信を示しません。`.txt` にする理由は、`mdq.indexer.iter_markdown()` が再帰収集する `users-guide/**/*.md` へ Prompt 本文を重複登録しないためです。
+`sync.py` 実行時点で実行経路に結線されている、または HVE module が読み込む `.github/prompts/**/*.prompt.md` を、相対パスの末尾へ `.txt` を付けて `copies/` へコピーしています。コピー本文は `hve.prompt_loader.load_prompt_file()` が返す UTF-8 text と同一で、改行は LF です。例えば正本 `runtime/knowledge-discovery/common.prompt.md` のコピーは `copies/runtime/knowledge-discovery/common.prompt.md.txt` です。未結線 Prompt は原則として `catalog.md` にだけ掲載し、本文はコピーしません。ただし、production 結線前に固定本文を確認する必要がある移行中の Prompt は、`sync.py` の `MIRROR_WHILE_UNWIRED` に明示したものだけをコピーします。この例外でも状態は `未結線` のままであり、production からの送信を示しません。`.txt` にする理由は、`mdq.indexer.iter_markdown()` が再帰収集する `users-guide/**/*.md` へ Prompt 本文を重複登録しないためです。
 
 現在のファイル数、結線状態、Registry 参照数は、再生成のたびに実装から算出される [`catalog.md`](./catalog.md) 冒頭を確認してください。手書きの件数を本ページへ重複保持しません。
 
@@ -50,6 +51,23 @@ HVE がモデル、Copilot Coding Agent、Copilot SDK、Work IQ へ渡す固定 
 > [!CAUTION]
 > `copies/**` は固定本文の確認用です。HVE が実際に送る最終 payload には、Agent 本文、Step 本文、fan-out 追加本文、runtime fragment、利用者入力、QA 回答、Skill 指示、実行時メタデータなどが条件に応じて追加されます。単独のコピーだけで最終 payload 全体を再現したとは判断しないでください。
 
+## 手動デバッグでの使い分け
+
+固定 Prompt を外部セッションへ貼り付ける確認は、HVE の Autopilot 判定や実行状態を変更しない手動デバッグです。対象 Prompt が必要とする入力ファイルや Tool を、そのセッションから利用できる場合だけ production に近い条件になります。
+
+| 入力先 | 主に使うファイル | 確認すること |
+|---|---|---|
+| GitHub Copilot（CLI / VS Code Copilot Chat 等） | [`catalog.md`](./catalog.md) から選んだ `copies/**` | 必須入力の参照、該当する Tool / MCP の実行、禁止事項、出力契約 |
+| Microsoft 365 Copilot Chat | 調べたい問い（知識探索の Prompt は使わない） | 知識探索が同じ問いへ到達できる出典があるか。組織データへアクセスできない場合は同等条件とみなさない |
+| 知識源の MCP（Work IQ など）を使えるセッション | [`runtime/knowledge-discovery/`](./copies/runtime/knowledge-discovery/) の `common` + モード別 Prompt | Tool 実行イベント、出典の locator が応答に含まれること。`hve_*` tool は HVE のセッションにしか無いため、記録の操作は再現しない |
+
+1. `catalog.md` で状態が `結線済み`、`ロードのみ（送信参照なし）`、`未結線` のどれかを確認します。未結線の移行用コピーは production からの送信を示しません。
+2. `{name}`、`{{name}}`、`{target_content}` などの placeholder を、秘密情報を含まない試験値へ置換します。
+3. 利用可能な入力ファイル、Tool / MCP、モデル、実行日時を記録してから貼り付けます。
+4. 応答の内容だけでなく、入力参照、Tool 実行、出典、出力形式を期待条件と照合します。ホストが Tool 実行イベントを表示しない場合、応答の本文だけを実行証拠にせず、HVE と同等の実行と断定しません。
+
+Microsoft 365 の実データ、個人情報、秘密情報を、このリポジトリの検証記録へ保存しないでください。手動結果を `copies/**` へ書き戻さず、Prompt を変更する場合は正本だけを編集して再同期します。
+
 ## メインタスク Prompt の合成順
 
 `hve/runner.py::_compose_phase1_prompt()` は、条件を満たす要素だけを次の順序で連結します。
@@ -61,46 +79,23 @@ HVE がモデル、Copilot Coding Agent、Copilot SDK、Work IQ へ渡す固定 
 
 Agent prefix のラッパーと suffix は [`runtime/runner/`](./copies/runtime/runner/) にあります。利用者入力、Skill 利用ガード、Tool 方針、QA 回答などの動的部分は全文コピーの対象外です。
 
-## Work IQ の確認
+## 知識探索の確認
 
-QA / KM / Review の既定 Work IQ Prompt は、`hve/workiq.py::_compose_default_workiq_prompt()` が次の順序で組み立てます。
+事前 QA、AKM、ARD の知識探索（HVE 要求定義 FR-KD）は、目的だけを与えた 1 つのセッションに読み取り専用の知識源（Work IQ などの MCP）を渡し、問い合わせの文面・回数・順序をモデルに任せます。HVE が組み立てる固定 Prompt は次の 5 件だけです。
 
-1. [`runtime/workiq/role.prompt.md`](./copies/runtime/workiq/role.prompt.md.txt)
-2. [`runtime/workiq/output-schema.prompt.md`](./copies/runtime/workiq/output-schema.prompt.md.txt)
-3. [`runtime/workiq/fewshot.prompt.md`](./copies/runtime/workiq/fewshot.prompt.md.txt)
-4. モード別の [`qa-task.prompt.md`](./copies/runtime/workiq/qa-task.prompt.md.txt) / [`km-task.prompt.md`](./copies/runtime/workiq/km-task.prompt.md.txt) / [`review-task.prompt.md`](./copies/runtime/workiq/review-task.prompt.md.txt)
-5. 対象見出しと `{target_content}`
+1. [`runtime/knowledge-discovery/common.prompt.md`](./copies/runtime/knowledge-discovery/common.prompt.md.txt): 目的、使える知識源、出典の規則、終える条件（`{goal}` / `{sources}` / `{run_id}`）
+2. モード別の [`qa.prompt.md`](./copies/runtime/knowledge-discovery/qa.prompt.md.txt)（事前 QA、`{qa_path}`）/ [`knowledge.prompt.md`](./copies/runtime/knowledge-discovery/knowledge.prompt.md.txt)（AKM）/ [`research.prompt.md`](./copies/runtime/knowledge-discovery/research.prompt.md.txt)（ARD）
+3. 未記録の項目が残ったときの [`repair.prompt.md`](./copies/runtime/knowledge-discovery/repair.prompt.md.txt)（`{missing}`、最大 2 回）
 
-手動テストには、同じ連結順・改行で `sync.py` が生成した次のテンプレートを使えます。
+旧 Work IQ 専用 Prompt（`runtime/workiq/**`）と合成済みテンプレート（`composed/**`）は廃止しました。応答の `STATUS:` 行や表形式は要求しません。
 
-- [QA 用](./composed/workiq-qa.prompt.txt)
-- [KM 用](./composed/workiq-km.prompt.txt)
-- [Review 用](./composed/workiq-review.prompt.txt)
+動作確認では次を区別してください。
 
-各ファイルの `{target_content}` だけを試験対象へ置換します。これらは既定 Prompt の合成結果であり、`hve.workiq.get_workiq_prompt_template()` の `config_override` を指定した実行は再現しません。
+- 回答の `調査状態` が `Confirmed` / `Tentative` / `Unknown` のいずれかであること。`Confirmed` には、当該セッションで成功した MCP 呼出しの応答本文に locator が含まれる出典が 1 件以上必要です（HVE が照合し、照合できない書込みは失敗として返されます）。
+- 調べた結果は `qa/` の質問票の `調査回答` / `調査状態` / `調査出典` 列と `## 調査出典` 節に残ります（事前 QA は `qa/<run-id>-<step-id>-pre-execution-qa.md`、AKM / ARD は `qa/<run-id>-<label>-knowledge-discovery-qa.md`）。
+- コンソールの `知識探索 [<label>]: Confirmed=… Tentative=… Unknown=… 修復=… tool失敗=…` の行で結果を確認できます。
 
-`fewshot.prompt.md` 内の氏名・日時・文書名は出力形式を示す例であり、Work IQ が取得した証拠ではありません。動作確認結果へ転記したり、`FOUND` 判定の根拠として数えたりしないでください。
-
-Work IQ の取得結果がメインタスクへ渡される場合は、[`runtime/workiq/context-injection.prompt.md`](./copies/runtime/workiq/context-injection.prompt.md.txt) の `{context_type}` と `{workiq_context}` に差し込まれます。
-
-ARD / AKM の専用経路は、[`ard-usecase.prompt.md`](./copies/runtime/workiq/ard-usecase.prompt.md.txt)、[`akm-ingest.prompt.md`](./copies/runtime/workiq/akm-ingest.prompt.md.txt)、[`akm-verify-update.prompt.md`](./copies/runtime/workiq/akm-verify-update.prompt.md.txt) を使用します。
-
-動作確認では、少なくとも次を区別してください。
-
-- `STATUS: FOUND`: 関連する一次情報が見つかった
-- `STATUS: PARTIAL`: 一部の情報源だけを検索できた
-- `STATUS: NOT_FOUND`: 検索できたが関連情報がなかった
-- `STATUS: UNAVAILABLE`: Tool 未公開、認証失敗、タイムアウトなどで検索自体を実行できなかった
-
-最小の確認手順は次のとおりです。
-
-1. 検証したい質問、対象期間、期待する情報源を `{target_content}` に明記する。
-2. 対応する合成済みテンプレートを、Work IQ Tool を利用できるセッションへ入力する。
-3. Tool 呼び出しイベントの有無を確認する。
-4. 応答の先頭 STATUS、表の情報ソース・日時・パス/場所・関連観点を入力条件と照合する。
-5. 見つからない場合は `NOT_FOUND`、検索自体を実行できない場合は `UNAVAILABLE` として区別し、推測で補完しない。
-
-`FOUND` の本文だけで取得成功を判断してはいけません。事前 QA の production 経路では、`hve/runner.py` が `tool.execution_start` から Work IQ Tool 呼び出しを確認し、かつ先頭 STATUS が `FOUND` または `PARTIAL` の場合だけ回答案へ統合します。コンソールの `Work IQ プロンプト [Qn]` / `Work IQ 応答 [Qn]` / `Work IQ ツール` 表示と、既定では `qa/<run-id>-<step-id>-workiq-pre-qa-draft.md` に保存される結果を照合してください。保存先は `workiq_draft_output_dir` 設定で変更される場合があります。Microsoft 365 の実データや個人情報を、このリポジトリの検証記録へそのまま保存しないでください。
+live Microsoft 365 本文、個人情報、秘密情報を、このリポジトリの検証記録へ保存したり、MCP log から恒久文書へ転載したりしないでください。手動確認には架空データだけを使います。
 
 ## 質問票の確認
 
@@ -117,14 +112,16 @@ ARD / AKM の専用経路は、[`ard-usecase.prompt.md`](./copies/runtime/workiq
 
 質問票の出力を確認するときは、`[Qxx]`、重要度、選択肢、既定値候補、根拠、未回答時の影響が省略されていないかを正本の出力契約と照合してください。
 
+Post-QA の先頭行や完了検証の文言を更新する場合も、編集先は `.github/prompts/runtime/qa/post-execution.prompt.md` などの正本だけです。同期前のコピーは生成された非規範スナップショットなので、手で直さず `sync.py` の再生成で揃えます。
+
 ## 同期ルール
 
 - 編集先は `.github/prompts/**` だけです。
-- `copies/**` は正本の相対パスに `.txt` を付け、本文は正本と同じ bytes を保ちます。
+- `copies/**` は正本の相対パスに `.txt` を付け、本文は `load_prompt_file()` と同じ UTF-8 text（LF）を保ちます。
 - 正本を変更・追加・削除した場合は、コピーと `catalog.md` を同じ変更セットで再生成します。
-- `catalog.md` の SHA-256 はコピーの真正性署名ではなく、同じリポジトリ内で正本とコピーの不一致を検出するための値です。
+- `catalog.md` の SHA-256 はコピーの真正性署名ではなく、runtime text を UTF-8 bytes 化した値の不一致を同じリポジトリ内で検出するための値です。
 - `.github/prompts/README.md` は運用説明であり Prompt 本文ではないため、コピー対象外です。
-- 自動 CI には未接続です。Prompt を変更した変更セットでは、完了前に `sync.py --check` を実行してください。
+- `hve/tests/test_prompt_reference_contract.py` が既存の HVE test workflow から同期契約を検証します。Prompt を変更した変更セットでは、ローカルでも完了前に `sync.py --check` を実行してください。
 
 リポジトリルートで次を実行すると、正本からコピーとカタログを再生成できます。
 

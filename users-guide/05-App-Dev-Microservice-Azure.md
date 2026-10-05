@@ -110,6 +110,9 @@ full run では APP-ID を `APP-009` 1件にしてください。Step 1.3 は ru
 
 ASDW-WEB は `max_parallel=1` です。DAG 上で同時に ready になる Step があっても、
 初期実装は同一 worktree の競合を避けるため逐次実行します。
+ただし fan-out child のうち、所有範囲（書込みパス接頭辞）が重ならないものは
+`ownership_parallel=4` の範囲で並列化されます。現行実装では Step 3.2 と Step 4.1 の
+fan-out child がこの緩和対象です。
 
 ### local phase
 
@@ -148,7 +151,7 @@ auto-merge 対象外の draft PR として残せます。
 | local / Data | 1.1 データストア選定 | `Dev-Microservice-Azure-DataDesign` | AAS data / service / domain / app catalog | `docs/azure/azure-services-data.md` | なし |
 | local / Data RED | 1.2 verifier 生成 | `Dev-Microservice-Azure-DataTestCoding` | data design、app catalog、任意 sample data | `verify-data-resources.sh` + RED report + static log | 1.1 |
 | live / Data GREEN | 1.3 DataDeploy | `Dev-Microservice-Azure-DataDeploy` | design、matrix、sample data、verifier | HVE-owned `prep → create → registration → verify`、AC-1 GREEN | 1.2, 4.2 |
-| local / Additional | 2.1 追加サービス選定 | `Dev-Microservice-Azure-AddServiceDesign` | use case / service / data design、既存 compute design（既知 drift） | `docs/azure/azure-services-additional.md` | 1.1 |
+| local / Additional | 2.1 追加サービス選定 | `Dev-Microservice-Azure-AddServiceDesign` | use case / service / data design、既存 compute design（既知 drift） | `docs/azure/azure-services-additional.md`。既存成果物がある場合は差分追記 | 1.1 |
 | live / Additional | 2.2 追加サービス Deploy | `Dev-Microservice-Azure-AddServiceDeploy` | additional design、app catalog | prep/create scripts、reality AC | 1.3, 2.1 |
 | local / Additional RED | 2.3 テスト生成 | `Dev-Microservice-Azure-AddServiceTestCoding` | additional design、app catalog | `src/test/integration/add-service/` | 2.1 |
 | live / Additional GREEN | 2.4 テスト実施 | `Dev-Microservice-Azure-AddServiceTesting` | deployed service + integration tests | 実 integration test 結果 | 2.2, 2.3 |
@@ -167,10 +170,21 @@ auto-merge 対象外の draft PR として残せます。
 | live / Review | 5.2 dependency review | `QA-AzureDependencyReview` | catalogs + `src/api`, `src/app` | `docs/azure/dependency-review-report.md` | 4.4 |
 | live / Review | 5.3 requirements conformance measurement | `QA-RequirementsConformanceEval` | 5.1 / 5.2 reports + deployed endpoints + existing test assets | `docs/azure/requirements-conformance-report.md` | 5.1, 5.2 |
 
+Step 2.1 は AAD-WEB Step 2.5 と同じ Custom Agent / 同じ成果物
+`docs/azure/azure-services-additional.md` を共有します。AAD-WEB 側で既に生成済みの設計書がある場合、
+ASDW-WEB Step 2.1 はそれを読み、この Workflow で確定したデータ層・コンピュートとの差分だけを更新します
+（FR-WF-ASDW-06）。
+
 Step 3.5 のテンプレートには「Agent は最小スタブ」という古い注記が残っていますが、
 現行 [`Dev-Microservice-Azure-ComputePostDeployTest.prompt.md`](../.github/prompts/Dev-Microservice-Azure-ComputePostDeployTest.prompt.md)
 には実環境 smoke 契約が実装されています。Category 属性が Step 3.2 のテストに無い場合は、
 Prompt 契約どおり Step 3.5 を blocked とし、モックテストを実環境 PASS と偽りません。
+
+### UI の視覚デザイン基準・差戻し先・破壊的操作の拒否
+
+- Step 4.2 の UI 実装（[`Dev-Microservice-Azure-UICoding.prompt.md`](../.github/prompts/Dev-Microservice-Azure-UICoding.prompt.md)）と AAD-WEB の画面設計（[`Arch-UI-Detail.prompt.md`](../.github/prompts/Arch-UI-Detail.prompt.md)）は、業務 UI の視覚デザイン基準（一貫性・可読性・情報の階層・コントラスト）と「除外するスタイル」の一覧を持ちます（FR-CLI-96）。
+- Step 5.3 の要件適合実測が FAIL の場合、HVE は宣言済みの `rework_targets`（実装 Step `3.3` / `4.2`）を戻り先として提示するだけで、自動では再実行しません（FR-DAG-09）。他 Workflow の要件適合 Step には、測定実績を得るまで戻り先を宣言していません。
+- Step セッションのシェル実行は、Skill `harness-safety-guard` の CRITICAL パターン（`rm -rf /`、`az group delete` など）に一致する場合だけ実行前に拒否され、警告が記録されます（NFR-SEC-04）。CRITICAL 以外の操作は従来どおり許可されます。
 
 ## TDD RED / GREEN 契約
 
@@ -189,7 +203,7 @@ TDD Step は実行ごとに次へ記録します。
 - 秘密情報、接続文字列、SAS、Function Key、Bearer token をテスト・README・ログへ記録しません。
 
 固定スキーマの正本は
-[`tdd-red-green-reality`](../.github/skills/testing/tdd-red-green-reality/SKILL.md)、
+[`tdd-red-green-reality`](../.github/skills/tdd-red-green-reality/SKILL.md)、
 gate は [`hve/runner.py`](../hve/runner.py)、契約テストは
 [`test_runner_tdd_report_gate.py`](../hve/tests/test_runner_tdd_report_gate.py) です。
 
@@ -206,7 +220,7 @@ gate は [`hve/runner.py`](../hve/runner.py)、契約テストは
 
 ### API / UI
 
-- Step 3.2 → 3.3: ローカル xUnit の RED → Azure Functions 最小実装 → 同じ `dotnet test` の GREEN。
+- Step 3.2 → 3.3: ローカル xUnit の RED → Azure Functions 最小実装 → 同じ対象テストプロジェクト（`src/test/api/{サービス名}.Tests/`）に対する `dotnet test` の GREEN。反復中は対象テストのみを実行し、全件回帰は PR の CI で 1 回だけ確認します。
 - Step 4.1 → 4.2: Jest/jsdom 等の canonical UI tests → 最小 UI 実装 → 同じテストの GREEN。
    再実行時に実装が既存なら canonical suite が最初から PASS し得るため、RED 専用の捏造テストを追加しません。
 - Step 3.4 / 3.5 と Step 4.3 / 4.4 は外部環境検証です。endpoint / base URL / 認証が未設定なら
@@ -270,9 +284,9 @@ full completion 条件を満たせません。これらを無視した完了報�
 | Step 本文 | [`.github/prompts/steps/asdw-web/`](../.github/prompts/steps/asdw-web/) | [`hve/template_engine.py`](../hve/template_engine.py), template dependency tests |
 | Agent 行動、禁止、DoD | [`.github/prompts/`](../.github/prompts/) の `Dev-Microservice-Azure-*`, `E2ETesting-Playwright`, `QA-Azure*` | [`hve/prompt_loader.py`](../hve/prompt_loader.py), `hve/tests/test_prompt_loader.py` |
 | 座標別 input / output / producer | [`.github/io-contracts/`](../.github/io-contracts/) の `*--asdw-web--<step>.yaml` | `.github/scripts/validate-io-contract.py`, `hve/tests/test_tdd_report_io_contract.py` |
-| TDD report / reality gate | [`tdd-red-green-reality`](../.github/skills/testing/tdd-red-green-reality/SKILL.md), [`hve/runner.py`](../hve/runner.py), [`hve/artifact_validation.py`](../hve/artifact_validation.py) | `hve/tests/test_runner_tdd_report_gate.py`, deploy gate tests |
+| TDD report / reality gate | [`tdd-red-green-reality`](../.github/skills/tdd-red-green-reality/SKILL.md), [`hve/runner.py`](../hve/runner.py), [`hve/artifact_validation.py`](../hve/artifact_validation.py) | `hve/tests/test_runner_tdd_report_gate.py`, deploy gate tests |
 | Required / optional Skill | [`hve/skill_manifest.json`](../hve/skill_manifest.json) と Step の `required_skills` | [`hve/skill_resolver.py`](../hve/skill_resolver.py), `hve/tests/test_skill_resolver.py` |
-| Step 単位 remote CI/CD | [`hve/orchestrator.py`](../hve/orchestrator.py), [`github-actions-cicd`](../.github/skills/cicd/github-actions-cicd/SKILL.md) | `hve/tests/test_asdw_web_step_scoped_cicd_contract.py` |
+| Step 単位 remote CI/CD | [`hve/orchestrator.py`](../hve/orchestrator.py), [`github-actions-cicd`](../.github/skills/github-actions-cicd/SKILL.md) | `hve/tests/test_asdw_web_step_scoped_cicd_contract.py` |
 | Cloud parity / dispatch | [`auto-orchestrator-dispatcher.yml`](../.github/workflows/auto-orchestrator-dispatcher.yml), [`auto-app-dev-microservice-web-reusable.yml`](../.github/workflows/auto-app-dev-microservice-web-reusable.yml) | `hve/tests/test_cloud_reusable_workflow_parity.py`, `test_cloud_dispatcher_asdw_dispatch.py` |
 
 Runtime では [`hve/runner.py`](../hve/runner.py) が Step Prompt の先頭へ Agent Prompt を注入し、

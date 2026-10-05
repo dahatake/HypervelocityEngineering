@@ -23,7 +23,6 @@ _SKILL = (
     _REPO
     / ".github"
     / "skills"
-    / "testing"
     / "requirements-conformance-measurement"
     / "SKILL.md"
 )

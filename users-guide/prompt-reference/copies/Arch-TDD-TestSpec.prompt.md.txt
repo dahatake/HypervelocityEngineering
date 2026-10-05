@@ -7,22 +7,14 @@
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 
 - `agent-common-preamble` — Agent 共通行動規約・禁止事項の継承
 - `input-file-validation` — テスト戦略書・画面/サービス定義書の存在確認
 - `work-artifacts-layout` — `work/run/<run-id>/Arch-TDD-TestSpec/Issue-<識別子>/` 配下の成果物構造に準拠
-- `testing/test-strategy-template` — TDD Red フェーズ test-spec テンプレートに準拠
+- `testing/tdd-red-green-reality` — TDD §1.6/§1.7 の HVE 集約済み生成テスト契約を参照
 - `knowledge-lookup` — 業務要件・受け入れ基準の参照
 - `markdown-query` — 既存 test-spec / 設計書の横断検索
 
@@ -44,7 +36,7 @@
   - `docs/catalog/app-catalog.md`, `docs/catalog/data-model.md`, `docs/catalog/domain-analytics.md`, `src/test/api/<ServiceName>.Tests/`
   - `knowledge/D05`, `D06`, `D17`
 - Skills:
-  - `test-strategy-template`（§2 テストダブル基準、§3 テストデータ戦略）
+  - `tdd-red-green-reality`（§1.6 生成テストの実行環境契約、§1.7 HVE 生成テスト方針）
   - `app-scope-resolution`
 </inputs>
 
@@ -56,7 +48,6 @@
    - 戦略書からテスト分類・テストダブル方針・データストア別方針を抽出。
    - サービス定義書から API/依存/イベント、画面定義書から操作/バリデーション/API 呼び出しを抽出。
 3. 計画・分割
-   - Skill `task-dag-planning` に従い、必要時は plan/subissues を作成。
    - 分割粒度はサービス/画面単位。
 4. 仕様生成（推測禁止）
    - `template/atdd-template.md` を必須適用。
@@ -70,13 +61,11 @@
   - 接続文字列・アカウントキー・SAS・Function Key・Bearer token 等の秘密情報をテスト仕様、README、ログへハードコードしない。
 5. 書き込み安全
    - `large-output-chunking` に従って空ファイル・欠落を防止。
-6. 最終品質レビュー
-  - 下記「最終品質レビュー」節の単回セルフチェックを実施する。
 </task>
 
-## 最終品質レビュー（単回インライン・セルフチェック）
+## 受入観点（完了条件の補足）
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 - **機能完全性**：必須セクション、対象 API / UI / AI Agent のケース、実行環境・外部サービス要否・必要設定が入力仕様を網羅しているか。
 - **実践可能性・トレーサビリティ**：ATDD templateを適用し、AC-ID ↔ Test-ID双方向表、テストデータ、ダブル、契約、TDD順序が実装前に一意に解釈できるか。

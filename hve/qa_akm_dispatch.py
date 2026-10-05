@@ -6,7 +6,6 @@ FR-QA-03: source Workflow の DAG は待たせず、共有 ``knowledge/`` への
 
 from __future__ import annotations
 
-import json
 import os
 import queue
 import subprocess
@@ -24,20 +23,6 @@ except ImportError:  # pragma: no cover - top-level module compatibility
 _PROCESS_LOCKS_GUARD = threading.Lock()
 _PROCESS_LOCKS: Dict[str, threading.Lock] = {}
 _SENTINEL = object()
-
-
-def _scrub_and_remove(path: Path) -> None:
-    """一時的な秘密設定をゼロ埋めしてから削除する。"""
-    try:
-        size = path.stat().st_size
-    except FileNotFoundError:
-        return
-    with open(path, "r+b", buffering=0) as stream:
-        if size:
-            stream.write(b"\0" * size)
-            stream.flush()
-            os.fsync(stream.fileno())
-    path.unlink()
 
 
 def _process_lock_for(path: Path) -> threading.Lock:
@@ -300,14 +285,6 @@ class QaAkmCoordinator:
         env.pop("HVE_STATS_STREAM", None)
 
         argv = self._build_argv(qa_paths, work_root)
-        mcp_path: Optional[Path] = None
-        if self._config.mcp_servers:
-            mcp_path = work_root / "mcp-config.json"
-            descriptor = os.open(mcp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
-                json.dump({"mcpServers": self._config.mcp_servers}, stream, ensure_ascii=False)
-                stream.write("\n")
-            argv.extend(["--mcp-config", str(mcp_path)])
 
         returncode = -1
         error_type = ""
@@ -334,12 +311,6 @@ class QaAkmCoordinator:
         finally:
             with self._state_lock:
                 self._current_process = None
-            if mcp_path is not None:
-                try:
-                    _scrub_and_remove(mcp_path)
-                except OSError as exc:
-                    returncode = -1
-                    error_type = type(exc).__name__
             extra: Dict[str, Any] = {"log_path": relative_log}
             if error_type:
                 extra["error_type"] = error_type
@@ -363,6 +334,9 @@ class QaAkmCoordinator:
             "--target-files",
             *[str(path) for path in qa_paths],
             "--no-force-refresh",
+            # FR-QA-03 / FR-KD-11: AKM 子では事前 QA と Work IQ を使わない（CLI 既定は有効のため明示する）。
+            "--no-auto-qa",
+            "--no-workiq",
             "--workbench",
             "off",
         ]

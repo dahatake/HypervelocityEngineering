@@ -1,6 +1,6 @@
 [
   {"query": "resolve_run_id", "profile": "hve", "intent": "symbol",
-   "expected": [{"path": "hve/split_fork.py", "anchor": "def resolve_run_id"}]},
+   "expected": [{"path": "hve/run_paths.py", "anchor": "def resolve_run_id"}]},
   {"query": "MdqWatcher", "profile": "hve", "intent": "symbol",
    "expected": [{"path": "mdq/watcher.py", "anchor": "class MdqWatcher"}]},
   {"query": "db_path_for", "profile": "hve", "intent": "symbol",

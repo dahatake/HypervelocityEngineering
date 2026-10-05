@@ -20,7 +20,7 @@ import yaml  # type: ignore[import-untyped]
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _REVIEW_SKILL = (
-    _REPO_ROOT / ".github" / "skills" / "harness" / "adversarial-review" / "SKILL.md"
+    _REPO_ROOT / ".github" / "skills" / "adversarial-review" / "SKILL.md"
 )
 _REVIEW_RULES = _REVIEW_SKILL.parent / "references" / "review-activation-rules.md"
 _COMMON_PREAMBLE = (
@@ -125,7 +125,6 @@ _REVIEW_ROUTING_FILES = (
     _REPO_ROOT
     / ".github"
     / "skills"
-    / "output"
     / "large-output-chunking"
     / "SKILL.md",
     _REPO_ROOT
@@ -137,7 +136,6 @@ _REVIEW_ROUTING_FILES = (
     _REPO_ROOT
     / ".github"
     / "skills"
-    / "harness"
     / "harness-verification-loop"
     / "SKILL.md",
 )
@@ -177,11 +175,11 @@ def test_shared_skill_owns_review_activation_policy() -> None:
     assert _PROMPT_NOT_TRIGGER_POLICY in skill
 
 
-def test_common_preamble_uses_inline_check_as_the_default() -> None:
+def test_common_preamble_does_not_define_review_activation() -> None:
     preamble = _COMMON_PREAMBLE.read_text(encoding="utf-8")
-    assert _SHARED_INLINE_POLICY in preamble
-    assert _NO_SUBAGENT_POLICY in preamble
-    assert _HVE_PHASE3_POLICY in preamble
+    for removed in (_SHARED_INLINE_POLICY, _NO_SUBAGENT_POLICY, _HVE_PHASE3_POLICY):
+        assert removed not in preamble
+    assert "明示時のみの敵対的レビュー" in preamble
 
 
 def test_review_skill_metadata_and_references_do_not_broaden_activation() -> None:
@@ -238,10 +236,10 @@ def test_review_skill_eval_matches_activation_ssot() -> None:
         ),
         (
             _REVIEW_ROUTING_FILES[1],
-            ("通常レビュー・品質確認は単回セルフチェック", "harness-verification-loop"),
+            ("通常レビュー・品質確認は `harness-verification-loop`", "対象検証とは別に扱う"),
         ),
         (_REVIEW_ROUTING_FILES[2], ("明示的な敵対的レビューだけ", "単回セルフチェック")),
-        (_REVIEW_ROUTING_FILES[3], ("明示的な敵対的レビューだけ", "単回セルフチェック")),
+        (_REVIEW_ROUTING_FILES[3], ("明示的な敵対的レビュー時のみ使用", "通常の検証判定")),
         (_REVIEW_ROUTING_FILES[4], ("明示的な敵対的レビューだけ", "単回セルフチェック")),
         (_REVIEW_ROUTING_FILES[5], ("明示時のみの敵対的レビュー", "通常の自動検証")),
     ),
@@ -721,5 +719,3 @@ def test_dataflow_embedded_parser_separates_app_and_job_ids() -> None:
     parsed = json.loads(result.stdout)
     assert parsed["job_ids"] == "BJ-001, BJ-002"
     assert parsed["app_ids"] == ["APP-009", "APP-010"]
-
-

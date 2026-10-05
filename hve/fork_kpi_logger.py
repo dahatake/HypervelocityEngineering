@@ -17,11 +17,15 @@ Fork-integration (T2.4): `DAGExecutor` がステップ完了時に KPI 3 指標
 from __future__ import annotations
 
 import json
-import re as _re
 import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+try:
+    from hve.run_state import _safe_run_id_component
+except ImportError:  # pragma: no cover - script execution path
+    from run_state import _safe_run_id_component  # type: ignore[no-redef]
 
 
 # KPI ログの既定ディレクトリー名（`work_root` 相対）
@@ -32,20 +36,21 @@ KPI_FILENAME: str = "fork-kpi.jsonl"
 def _default_kpi_dir() -> Path:
     """起動時の ``work/run/<run-id>/kpi/`` を返す。遅延解決。"""
     try:
-        from hve.split_fork import resolve_work_root
+        from hve.run_paths import resolve_work_root
     except ImportError:  # pragma: no cover - script execution path
-        from split_fork import resolve_work_root  # type: ignore[no-redef]
+        from run_paths import resolve_work_root  # type: ignore[no-redef]
     return resolve_work_root() / KPI_DIRNAME
 
 
 def _sanitize_run_id(run_id: str) -> str:
     """run_id をパス安全な ASCII 文字列に正規化する。
 
-    `hve/run_state.py` の `_safe_run_id_component` と等価規則:
-    英数字 / ハイフン / アンダースコアのみを残す。空になった場合は "unknown" を返す。
+    `hve/run_state.py` の `_safe_run_id_component` の規則を使う。空になった場合は "unknown" を返す。
     """
-    rid = _re.sub(r"[^A-Za-z0-9\-_]", "", run_id or "")
-    return rid or "unknown"
+    try:
+        return _safe_run_id_component(run_id)
+    except ValueError:
+        return "unknown"
 
 
 class ForkKPILogger:

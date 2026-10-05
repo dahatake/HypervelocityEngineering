@@ -547,7 +547,11 @@ def _prompt_resume_contract() -> str:
     marker = "## durable resume controller 境界（FR-PROMPT-11）"
     start = text.index(marker)
     next_heading = text.find("\n## ", start + len(marker))
-    return text[start:] if next_heading < 0 else text[start:next_heading]
+    section = text[start:] if next_heading < 0 else text[start:next_heading]
+    # The section delegates its detailed steps to this reference.
+    reference = path.parent / "references" / "resume-controller.md"
+    assert "(references/resume-controller.md)" in section
+    return section + "\n" + reference.read_text(encoding="utf-8")
 
 
 def test_surfaces_import_and_call_the_shared_service_without_domain_forks() -> None:

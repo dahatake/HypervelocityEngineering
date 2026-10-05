@@ -53,6 +53,24 @@ body:
     validations:
       required: false
 
+  - type: textarea
+    id: step_input_files
+    attributes:
+      label: "Step Input Files"
+      description: "対象branchに存在する追加・代替資料のbranch-relative pathを1行1件で指定します。ドラッグ＆ドロップのupload linkは現在未対応（Cloud upload unavailable）です。"
+      placeholder: "docs-original/example.md"
+    validations:
+      required: false
+
+  - type: textarea
+    id: step_input_bindings
+    attributes:
+      label: "Step Input Bindings"
+      description: "1行1 JSONでStep・role・上のfile番号を指定します。additionalのcanonicalは省略できます。"
+      placeholder: '{"step_id":"1","role":"additional","file":1}'
+    validations:
+      required: false
+
   - type: input
     id: exclude_patterns
     attributes:
@@ -113,6 +131,7 @@ body:
         ※ `HVE_MODEL_OVERRIDE` 環境変数が設定されている場合はそちらが優先されます。
       options:
         - "Auto"
+        - "claude-opus-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "gpt-5.5"
@@ -129,6 +148,7 @@ body:
         `Auto` を選ぶと Copilot が最適モデルを自動選択します。明示指定でモデルを固定できます。
       options:
         - "Auto"
+        - "claude-opus-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "gpt-5.5"
@@ -146,6 +166,7 @@ body:
         `Auto` を選ぶと Copilot が最適モデルを自動選択します。明示指定でモデルを固定できます。
       options:
         - "Auto"
+        - "claude-opus-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "gpt-5.5"
@@ -163,6 +184,7 @@ body:
         実行前 QA が有効なときだけ使われます。`Auto` を選ぶと Copilot が最適モデルを自動選択します。
       options:
         - "Auto"
+        - "claude-opus-5.5"
         - "claude-opus-4.7"
         - "claude-opus-4.6"
         - "gpt-5.5"
@@ -201,44 +223,6 @@ body:
         詳細: `docs/operations/auto-qa-skip-if-existing.md` を参照してください。
       options:
         - label: "実行前 QA を実施する（チェックすると auto-qa ラベルが付与され、ステップ実行前に質問票が作成されます）"
-
-  - type: checkboxes
-    id: enable_self_improve
-    attributes:
-      label: "自己改善ループ設定"
-      description: |
-        チェックを入れると、全ステップ完了後に自己改善ループが実行されます。
-        ruff（lint）/ pytest（テスト+カバレッジ）/ markdownlint（ドキュメント品質）を
-        スキャンし、品質スコアが目標値に達するまで改善を繰り返します。
-        デフォルト（チェックなし）では自己改善は実行されません。
-      options:
-        - label: "自己改善ループを有効にする"
-
-  - type: dropdown
-    id: self_improve_max_iterations
-    attributes:
-      label: "自己改善 最大イテレーション数"
-      description: "自己改善ループを有効にした場合の最大繰り返し回数"
-      options:
-        - "1"
-        - "2"
-        - "3 (デフォルト)"
-      default: 2
-    validations:
-      required: false
-
-  - type: dropdown
-    id: self_improve_quality_threshold
-    attributes:
-      label: "自己改善 品質スコア目標値"
-      description: "この値に達した時点で改善完了とみなします"
-      options:
-        - "70（最低基準）"
-        - "80（標準）"
-        - "90（高品質）"
-      default: 1
-    validations:
-      required: false
 
   - type: dropdown
     id: enable_auto_merge

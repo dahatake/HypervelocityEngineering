@@ -126,7 +126,7 @@ class TestValidateAagdIssueTree(unittest.TestCase):
             ["#1:no-descendant-issues"],
         )
 
-    def test_root_self_improve_blocked_is_allowed_only_for_retry(self) -> None:
+    def test_root_blocking_label_is_reported(self) -> None:
         issues = {
             1: {"labels": [{"name": "aagd:blocked"}]},
             2: {"labels": [{"name": "aagd:done"}]},
@@ -135,18 +135,8 @@ class TestValidateAagdIssueTree(unittest.TestCase):
             issues,
             {1: [{"number": 2}]},
         )
-        self.assertTrue(
-            validate_aagd_issue_tree(1, fetch_issue, fetch_children)
-        )
-        self.assertEqual(
-            validate_aagd_issue_tree(
-                1,
-                fetch_issue,
-                fetch_children,
-                allow_root_self_improve_blocked=True,
-            ),
-            [],
-        )
+        violations = validate_aagd_issue_tree(1, fetch_issue, fetch_children)
+        self.assertIn("#1:blocking-labels=aagd:blocked", violations)
 
     def test_cycle_is_deduplicated(self) -> None:
         issues = {

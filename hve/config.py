@@ -5,12 +5,12 @@ from __future__ import annotations
 import sys
 import time
 import uuid
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from dataclasses import InitVar, dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
 
 from cq.watcher import DEFAULT_DEBOUNCE_MS as _CQ_DEFAULT_DEBOUNCE_MS
 
-DEFAULT_MODEL: str = "claude-opus-4.7"
+DEFAULT_MODEL: str = "claude-opus-5.5"
 DEFAULT_CONTEXT_INJECTION_MAX_CHARS: int = 20_000
 
 # --- Phase 8 S-3: 旧 Custom Agent の tools frontmatter audit 記録用定数 ---
@@ -34,37 +34,6 @@ DEFAULT_AVAILABLE_TOOL_CATEGORIES: tuple[str, ...] = (
     "todo",
     "web",
 )
-
-# --- Self-Improve scope 定数 ---
-# self_improve_scope の許可値。
-# ""         : デフォルト（後方互換）。auto_self_improve=True 時に Step-level と Post-DAG の両方が実行される。
-# "disabled" : auto_self_improve の値に関係なく Self-Improve を一切実行しない。
-# "step"     : Step-level（runner.py Phase 4）のみ実行する。Post-DAG はスキップ。
-# "workflow" : Post-DAG（orchestrator.py）のみ実行する。Step-level はスキップ。
-#              Issue Template 経路（GitHub Actions `self-improve` ジョブ）推奨値。
-VALID_SELF_IMPROVE_SCOPES: tuple[str, ...] = ("", "disabled", "step", "workflow")
-
-# --- Self-Improve 対象パス定数 ---
-# self_improve_target_scope の "*" 展開先。
-# ⚠️ docs-generated はリポジトリに存在しない可能性あり。
-# 実装側で「存在するパスのみ採用、非存在は警告ログを出してスキップ」とする。
-SELF_IMPROVE_WILDCARD_PATHS: List[str] = [
-    "data", "docs", "docs-generated", "knowledge", "src",
-]
-
-# Self-Improve 対象パスの常時除外ディレクトリ（先頭セグメント一致）
-SELF_IMPROVE_EXCLUDED_TOP_DIRS: List[str] = ["work"]
-
-# 新スコープ解決器のフィーチャーフラグ環境変数名
-SELF_IMPROVE_NEW_SCOPE_RESOLVER_ENV: str = "HVE_SELF_IMPROVE_NEW_SCOPE_RESOLVER"
-
-# ワークフロー種別に応じたデフォルト target_scope（フィーチャーフラグ ON 時のフォールバック用）
-SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS: Dict[str, str] = {
-    "aas": "docs/", "aad-web": "docs/", "asdw-web": ".",
-    "adfd": "docs/", "adfdv": ".",
-    "aag": "docs/", "aagd": ".",
-    "akm": "knowledge/", "adi": "docs/original-design-doc-ingest/", "adoc": "docs/",
-}
 
 MODEL_AUTO_VALUE: str = "Auto"
 """hve 内部センチネル（UI 表示・既存 Issue/PR/CLI 引数の後方互換）。"""
@@ -93,6 +62,7 @@ def to_wire_model(model: Optional[str]) -> Optional[str]:
 
 
 MODEL_CHOICES: tuple[str, ...] = (
+    "claude-opus-5.5",
     "claude-opus-4.7",
     "claude-opus-4.6",
     "gpt-5.5",
@@ -178,10 +148,26 @@ def normalize_model(name: str) -> str:
     return name
 
 
+def _catalog_model_ids() -> frozenset[str]:
+    """SDK `list_models()` のキャッシュにあるモデル ID（FR-MODEL-03）。
+
+    ネットワークへ出ず、キャッシュが無い・読めない場合は空集合を返す。
+    """
+    try:
+        from hve import models_cache
+
+        cached = models_cache.load(allow_stale=True)
+    except Exception:  # pragma: no cover - キャッシュ読込失敗は許可リストを広げないだけ
+        return frozenset()
+    if not cached or not cached.models:
+        return frozenset()
+    return frozenset(str(model_id) for model_id in cached.models)
+
+
 def _normalize_model_with_warning(name: Optional[str]) -> Optional[str]:
     """モデル名を正規化する（後方互換ラッパー）。
 
-    許可リスト（MODEL_CHOICES + MODEL_AUTO_VALUE）に含まれない値が来た場合、
+    許可リスト（MODEL_CHOICES + MODEL_AUTO_VALUE + SDK の model catalog キャッシュ）に含まれない値が来た場合、
     WARNING を発出して MODEL_AUTO_VALUE を返す。
     これにより既存 Issue/PR の廃止モデル指定（claude-sonnet-4.6 等）は Auto にフォールバックされる。
     """
@@ -189,6 +175,8 @@ def _normalize_model_with_warning(name: Optional[str]) -> Optional[str]:
         return None
     normalized = normalize_model(name)
     allowed = set(MODEL_CHOICES) | {MODEL_AUTO_VALUE}
+    if normalized and normalized not in allowed and normalized in _catalog_model_ids():
+        return normalized
     if normalized and normalized not in allowed:
         import warnings
         warnings.warn(
@@ -304,37 +292,32 @@ def _parse_bool_mapping(value: Any) -> Dict[str, bool]:
     return result
 
 
-def _parse_workiq_akm_ingest_dxx(value: str) -> List[str]:
-    """``WORKIQ_AKM_INGEST_DXX`` / ``--workiq-dxx`` 文字列を ``["D01","D04",...]`` に正規化する。
+def _parse_knowledge_sources(value: str) -> List[str]:
+    """FR-KD-01: ``HVE_KNOWLEDGE_SOURCES`` を知識源名へ分解する（不正トークンと空トークンは無視）。"""
+    try:
+        from .knowledge_discovery import parse_source_names
+    except ImportError:  # pragma: no cover - flat import compatibility
+        from knowledge_discovery import parse_source_names  # type: ignore[no-redef]
+    return parse_source_names([value or ""], strict=False)
 
-    - 受理形式: ``D01,D04`` / ``D01 D04`` / 大文字小文字混在
-    - 不正パターン（``Dxx`` 形式でない、番号範囲外等）は除外する
-    - 空文字や空白のみ → 空リスト（= 全 Dxx を対象）
-    """
-    if not value or not str(value).strip():
-        return []
-    import re as _re
-    tokens = [t for t in _re.split(r"[,\s]+", str(value)) if t]
-    result: List[str] = []
-    seen: set = set()
-    for token in tokens:
-        t = token.strip().upper()
-        m = _re.fullmatch(r"D(\d{1,2})", t)
-        if not m:
-            continue
-        num = int(m.group(1))
-        if num < 1 or num > 99:
-            continue
-        canonical = f"D{num:02d}"
-        if canonical in seen:
-            continue
-        seen.add(canonical)
-        result.append(canonical)
-    return result
+
+def _workiq_enabled_from_env(value: Optional[str]) -> bool:
+    """FR-KD-11: ``WORKIQ_ENABLED`` が ``false`` / ``0`` / ``no`` のときだけ無効（未設定は有効）。"""
+    return (value or "").strip().lower() not in ("false", "0", "no")
+
+
+DEFAULT_IGNORE_PATHS: Tuple[str, ...] = ("docs", "images", "qa", "src", "work")
 
 
 @dataclass
 class SDKConfig:
+    """HVE の SDK セッション設定。
+
+    ``mcp_servers`` は旧呼び出しとのコンストラクタ互換のためだけに受理し、
+    runtime state には保持しない。MCP の公開範囲は SDK resource snapshot と
+    Tool Search policy から解決する。
+    """
+
     # --- 基本設定 ---
     model: str = DEFAULT_MODEL              # デフォルトモデル
     review_model: Optional[str] = None      # レビュー専用モデル（未指定時は model）
@@ -410,7 +393,7 @@ class SDKConfig:
     # ポーリング検知後、今回作成した作業ブランチをローカルのみ削除する（既定: 有効）。
     # GUI/CLI から --no-delete-local-merged-branch で無効化。enable_auto_merge 無効時は作動しない。
     delete_local_merged_branch: bool = True
-    ignore_paths: List[str] = field(default_factory=lambda: ["docs", "images", "qa", "src", "work"])
+    ignore_paths: List[str] = field(default_factory=lambda: list(DEFAULT_IGNORE_PATHS))
     # qa/ は PR commit 対象外（ignore_paths に含まれる）。
     # 例外: ADI Step 1.1 / 1.2 の原本質問票は main 成果物のため、
     #   orchestrator.py が安全な明示パスだけを commit 対象へ追加する。
@@ -489,9 +472,16 @@ class SDKConfig:
     # `tool_search_tool` を呼ばないため、差し替えても何も起きない。
     tool_search_ranking: str = "sdk"
 
+    # --- Tool Search の遅延ロード閾値 (FR-MODEL-04) ---
+    # 正の整数を指定した場合だけ create_session の tool_search dict へ
+    # `defer_threshold` として渡す。None（既定）ではキー自体を送らず SDK 既定へ委譲する。
+    # 0 以下・非整数は「未指定」と同じ扱いにして SDK 既定へ委譲する（fail-open）。
+    # `tool_search` が False のときは tool_search dict 自体を送らないため作用しない。
+    tool_search_defer_threshold: Optional[int] = None
+
     # --- Fleet mode (GitHub Copilot SDK 1.0.0+) ---
     # True 時: 複数 Step の DAG wave を Copilot SDK Fleet mode に委譲する。
-    # 既定 OFF。SPLIT_REQUIRED / subissues.md ではなく workflow-level fan-out / DAG wave が対象。
+    # 既定 OFF。subissues.md ではなく workflow-level fan-out / DAG wave が対象。
     fleet_mode_enabled: bool = False
 
     # --- Cloud Sessions (GitHub Copilot SDK 1.0.0+) ---
@@ -508,23 +498,8 @@ class SDKConfig:
     # 実行中の DAG wave ごとに自動算出される local/cloud ルーティング。
     # CLI/GUI 永続設定ではなく、Cloud Session 自動振り分けの runtime 状態。
 
-    # --- MCP Servers ---
-    mcp_servers: Optional[Dict[str, Any]] = None
-    # Copilot SDK の mcp_servers 形式。例:
-    # {
-    #     "filesystem": {
-    #         "type": "local",
-    #         "command": "npx",
-    #         "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
-    #         "tools": ["*"],
-    #     },
-    #     "github": {
-    #         "type": "http",
-    #         "url": "https://api.githubcopilot.com/mcp/",
-    #         "headers": {"Authorization": "Bearer ${TOKEN}"},
-    #         "tools": ["*"],
-    #     },
-    # }
+    # --- Legacy MCP session config (compat input only; no runtime field) ---
+    mcp_servers: InitVar[Optional[Dict[str, Any]]] = None
 
     # --- 追加プロンプト ---
     # Phase 2 で SDK へ `custom_agents` キーを渡さなくなったため、本フィールドは
@@ -533,53 +508,13 @@ class SDKConfig:
     # 他途用との区別が付けるまでフィールドを残す。次回の清掎候補。
     additional_prompt: Optional[str] = None  # 全 Custom Agent の prompt 末尾に追記する文字列
 
-    # --- Work IQ (Microsoft 365 データ参照) ---
-    workiq_enabled: bool = False                          # Work IQ 連携の有効/無効（後方互換の総合フラグ）
-    workiq_qa_enabled: Optional[bool] = None              # QA フェーズ用 Work IQ（None = workiq_enabled を継承）
-    workiq_akm_review_enabled: Optional[bool] = None      # AKM 実行後レビュー用 Work IQ（None = workiq_enabled を継承）
-    # --- AKM 入力ソースとしての Work IQ（AKM Work IQ 取り込みフェーズ）---
-    # AKM メイン DAG の前で走り、Work IQ を使って knowledge/Dxx-*.md を起票・差分更新する。
-    # 既存の workiq_akm_review_enabled（DAG 後の妥当性検証）とは独立したフラグ。
-    workiq_akm_ingest_enabled: bool = False               # AKM Work IQ 取り込みフェーズの有効/無効
-    workiq_akm_ingest_dxx: List[str] = field(default_factory=list)  # 取り込み対象 Dxx のフィルタ（空 = 全件 D01〜D21）
-    workiq_tenant_id: Optional[str] = None                # Entra テナント ID（任意）
-    workiq_prompt_qa: Optional[str] = None                # QA 用カスタムプロンプト（None = デフォルト）
-    workiq_prompt_km: Optional[str] = None                # KM 用カスタムプロンプト（None = デフォルト）
-    workiq_prompt_review: Optional[str] = None            # Review 用カスタムプロンプト（None = デフォルト）
-    workiq_draft_mode: bool = False                       # QA: 質問ごとの回答ドラフト生成モード
-    workiq_draft_output_dir: str = "qa"                   # Work IQ 補助レポート出力先ディレクトリ（互換のため設定名は据え置き）
-    workiq_per_question_timeout: float = 1200.0           # QA: 質問ごとの Work IQ クエリタイムアウト秒数（既定 20 分）
-    workiq_request_timeout: float = 300.0                 # Work IQ MCP サーバーへのツール呼び出し 1 回あたりのタイムアウト秒数（既定 5 分）。Copilot SDK MCPServerConfigLocal.timeout にミリ秒として渡される。
-    workiq_max_draft_questions: int = 10                  # QA: ドラフト生成対象の最大質問数（Wave 2: 30→10 に削減）
-    # Wave 2-6: デフォルトを 30 から 10 に削減。WORKIQ_MAX_DRAFT_QUESTIONS 環境変数で上書き可能。
-    # 重要度フィルタ（workiq_priority_filter）により "最重要"/"高" の質問を優先し、不足分は残りの質問で補填する。
-    workiq_priority_filter: bool = True                   # Work IQ: 高優先度の質問を優先して抽出し、最大件数に満たない分は他の質問で補填する
+    # --- 知識源（FR-KD-01）---
+    workiq_enabled: bool = False                          # `workiq` を知識源へ加える（--workiq / WORKIQ_ENABLED）
+    knowledge_sources: List[str] = field(default_factory=list)  # 知識源の MCP server 名（--knowledge-source / HVE_KNOWLEDGE_SOURCES）
 
     # 注: 旧 post-QA モードは廃止済み。事前 QA のみが提供される。
 
-    # --- Self-Improve ---
-    auto_self_improve: bool = False             # デフォルト: 無効。Issue Template / CLI --self-improve / HVE_AUTO_SELF_IMPROVE で有効化
-    self_improve_max_iterations: int = 3        # 最大イテレーション数
     tdd_max_retries: int = 5                    # TDD GREEN フェーズの最大リトライ回数。HVE_TDD_MAX_RETRIES 環境変数で上書き可能
-    self_improve_quality_threshold: int = 80    # ゴール達成率閾値（この値以上で完了。goal_achievement_pct * 100 と比較）
-    self_improve_max_tokens: int = 500_000      # コストハードリミット（トークン上限）
-    self_improve_max_requests: int = 50         # コストハードリミット（リクエスト上限）
-    self_improve_target_scope: str = ""
-    # 改善対象スコープ。受理する形式:
-    #   - ""       : (新仕様) そのステップの成果物。取得不能時は SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS。work/ 配下は常に除外。
-    #                (旧仕様) リポジトリ全体（フィーチャーフラグ OFF 時）
-    #   - "*"      : SELF_IMPROVE_WILDCARD_PATHS（実在するもののみ。存在しないパスは警告ログ）
-    #   - "src/ docs/" : カンマ/空白区切りの複数パス（先頭が "-" のトークンは拒否）
-    # 内部的には _resolve_target_scope_paths() で List[str] に正規化される。
-    self_improve_goal: str = ""                 # タスク固有ゴールの説明（空 = ワークフロー ID から自動生成）
-    self_improve_success_criteria: List[str] = field(default_factory=list)  # 自動検索で得た success_criteria（空 = ワークフロー標準を使用）
-    self_improve_skip: bool = False             # --no-self-improve で True
-    self_improve_scope: str = "workflow"        # 実行単位: "" (後方互換), "disabled", "step", "workflow"
-    # HVE_SELF_IMPROVE_SCOPE 環境変数でも指定可能。
-    # "workflow"  : Post-DAG（orchestrator.py）のみ実行。Issue Template 経路推奨。Wave 2 以降デフォルト。
-    # ""          : 後方互換。auto_self_improve=True 時に Step-level と Post-DAG の両方が実行される（非推奨）。
-    # "disabled"  : Self-Improve を一切実行しない（auto_self_improve の値に関係なく）。
-    # "step"      : Step-level（runner.py Phase 4）のみ実行。Issue Template 外のローカル実行向け。
 
     # --- Pricing / Cost 表示 ---
     pricing_usd_jpy_rate: float = 150.0        # USD → JPY 換算レート（固定値）。HVE_USD_JPY_RATE で上書き可能
@@ -644,7 +579,6 @@ class SDKConfig:
     # --- メイン成果物改善制御 ---
     apply_qa_improvements_to_main: bool = False   # QA 結果をメイン成果物へ反映（デフォルト: 無効）
     apply_review_improvements_to_main: bool = True  # レビュー指摘をメイン成果物へ反映（デフォルト: 有効）
-    apply_self_improve_to_main: bool = True       # Self-Improve 計画をメイン成果物へ反映（デフォルト: 有効）
 
     # --- 前提成果物チェック（Phase 8） ---
     require_input_artifacts: bool = False
@@ -656,6 +590,10 @@ class SDKConfig:
 
     # --- 全自動モード ---
     unattended: bool = False                # True の場合、実行中のインタラクティブ入力を全てスキップ
+    # FR-PROMPT-13: Prompt 版 execution_policy で宣言された事前承認の範囲。
+    pre_approved_operations: Tuple[str, ...] = ()
+    allow_public_exposure: bool = False
+    budget_note: str = ""
 
     # --- その他 ---
     dry_run: bool = False                   # ドライラン
@@ -684,11 +622,20 @@ class SDKConfig:
     # "yes" : Tool 数に関係なく Toolbox と tool search を使う
     # "no"  : tool search を使わない（全 Tool を毎ターン渡す）
 
-    def __post_init__(self) -> None:
+    def __post_init__(self, mcp_servers: Optional[Dict[str, Any]]) -> None:
+        """値を正規化し、legacy ``mcp_servers`` を意図的に破棄する。
+
+        exact MCP 要件は resource routing の ``required_mcp_servers`` または
+        ``required_skills`` へ渡す。raw MCP config を session state へ複製しない
+        FR-TS-13 の境界を維持するため、この互換入力の値は使用しない。
+        """
+        # FR-TS-13: legacy constructor input is accepted for source compatibility
+        # only.  Raw MCP configuration must not survive as runtime session state.
+        del mcp_servers
         # SDKConfig は from_env() 以外（直接コンストラクタ呼び出し）でも利用されるため、
-        # 空文字モデルはここでも Auto に寄せて挙動を統一する。
+        # 空文字モデルはここでも DEFAULT_MODEL に寄せて挙動を統一する（FR-MODEL-01）。
         if not self.model:
-            self.model = MODEL_AUTO_VALUE
+            self.model = DEFAULT_MODEL
         # "Auto" は GitHub 側の Auto Model Selection に委譲するため固定モデルへ解決しない。
         # 正規化後に空文字になった場合も DEFAULT_MODEL へ固定せず Auto にフォールバックする。
         if self.model != MODEL_AUTO_VALUE:
@@ -741,34 +688,41 @@ class SDKConfig:
         self.cloud_session_step_overrides = _parse_bool_mapping(self.cloud_session_step_overrides)
         self.cloud_session_subtask_overrides = _parse_bool_mapping(self.cloud_session_subtask_overrides)
         self.cloud_session_runtime_step_overrides = _parse_bool_mapping(self.cloud_session_runtime_step_overrides)
-        # self_improve_scope は from_env() と同様に正規化してから検証し、
-        # 直接コンストラクタ呼び出し時も挙動を統一する。
-        self.self_improve_scope = (self.self_improve_scope or "").strip().lower()
-        if self.self_improve_scope not in VALID_SELF_IMPROVE_SCOPES:
-            import warnings
-            warnings.warn(
-                f"self_improve_scope='{self.self_improve_scope}' は無効な値です。"
-                f"有効な値: {VALID_SELF_IMPROVE_SCOPES}。"
-                f"'' (後方互換) にフォールバックします。",
-                stacklevel=2,
-            )
-            self.self_improve_scope = ""
 
-    def is_workiq_qa_enabled(self) -> bool:
-        """QA フェーズで Work IQ を使うかを返す（旧 workiq_enabled と互換）。"""
-        return self.workiq_enabled if self.workiq_qa_enabled is None else self.workiq_qa_enabled
+    def effective_knowledge_sources(self, *extra: str) -> List[str]:
+        """FR-KD-01: 実効知識源を ``workiq``（有効時）→ ``knowledge_sources`` → ``extra`` の順で返す。
 
-    def is_workiq_akm_review_enabled(self) -> bool:
-        """AKM 実行後レビューで Work IQ を使うかを返す（旧 workiq_enabled と互換）。"""
-        return self.workiq_enabled if self.workiq_akm_review_enabled is None else self.workiq_akm_review_enabled
-
-    def is_workiq_akm_ingest_enabled(self) -> bool:
-        """AKM 入力フェーズとして Work IQ を使うかを返す。
-
-        フラグは独立フラグ。``sources`` に ``workiq`` が含まれる場合 or
-        ``--workiq-akm-ingest`` / ``WORKIQ_AKM_INGEST_ENABLED`` で True に設定される。
+        完全一致の重複は最初の 1 件だけ残し、名前規則に合わない値は除外する。
         """
-        return bool(self.workiq_akm_ingest_enabled)
+        try:
+            from .knowledge_discovery import merge_source_names
+        except ImportError:  # pragma: no cover - flat import compatibility
+            from knowledge_discovery import merge_source_names  # type: ignore[no-redef]
+        return merge_source_names(
+            ["workiq"] if self.workiq_enabled else [],
+            list(self.knowledge_sources or []),
+            list(extra),
+        )
+
+    def tool_search_session_option(self) -> Optional[Dict[str, Any]]:
+        """FR-MODEL-04: ``create_session`` へ渡す ``tool_search`` dict を組み立てる。
+
+        すべてのローカルセッション（メイン / サブ / ARD 補助 /
+        Fleet 親 / Code Review）が本メソッドを唯一の組み立て口として使い、
+        同一の値が伝搬することを保証する。
+
+        戻り値:
+            - ``tool_search`` が False のとき ``None``（呼び出し側はキーを送らない）
+            - 有効かつ閾値未指定のとき ``{"enabled": True}``
+            - 有効かつ正の整数閾値のとき ``{"enabled": True, "defer_threshold": N}``
+        """
+        if not self.tool_search:
+            return None
+        option: Dict[str, Any] = {"enabled": True}
+        threshold = self.tool_search_defer_threshold
+        if isinstance(threshold, int) and not isinstance(threshold, bool) and threshold > 0:
+            option["defer_threshold"] = threshold
+        return option
 
     @classmethod
     def from_env(cls) -> "SDKConfig":
@@ -776,45 +730,10 @@ class SDKConfig:
         import os
         raw_model = os.environ.get("MODEL")
         if raw_model is None or raw_model.strip() == "":
-            env_model = MODEL_AUTO_VALUE
+            env_model = DEFAULT_MODEL
         else:
             env_model = _normalize_model_with_warning(raw_model) or MODEL_AUTO_VALUE
-        try:
-            env_workiq_per_question_timeout = float(
-                os.environ.get("WORKIQ_PER_QUESTION_TIMEOUT", "1200.0")
-            )
-        except (TypeError, ValueError):
-            env_workiq_per_question_timeout = 1200.0
-        try:
-            env_workiq_request_timeout = float(
-                os.environ.get("WORKIQ_REQUEST_TIMEOUT", "300.0")
-            )
-        except (TypeError, ValueError):
-            env_workiq_request_timeout = 300.0
-        try:
-            env_workiq_max_draft_questions = int(
-                os.environ.get("WORKIQ_MAX_DRAFT_QUESTIONS", "10")
-            )
-        except (TypeError, ValueError):
-            env_workiq_max_draft_questions = 10
-
         # 旧 post-QA 用環境変数は廃止済み。
-
-        _raw_si_scope = os.environ.get("HVE_SELF_IMPROVE_SCOPE", "").strip().lower()
-        if _raw_si_scope and _raw_si_scope not in VALID_SELF_IMPROVE_SCOPES:
-            import warnings
-            warnings.warn(
-                f"HVE_SELF_IMPROVE_SCOPE='{_raw_si_scope}' は無効な値です。"
-                f"有効な値: {VALID_SELF_IMPROVE_SCOPES}。"
-                f"'' (後方互換) にフォールバックします。",
-                stacklevel=2,
-            )
-        # Wave 2-5: HVE_SELF_IMPROVE_SCOPE 未設定時は "workflow" をデフォルトとする。
-        # "" を明示的に設定した場合は後方互換（Step-level + Post-DAG 両方実行）。
-        if not _raw_si_scope:
-            env_si_scope = "workflow"
-        else:
-            env_si_scope = _raw_si_scope if _raw_si_scope in VALID_SELF_IMPROVE_SCOPES else ""
 
         try:
             env_max_diff_chars = int(os.environ.get("HVE_MAX_DIFF_CHARS", "80000"))
@@ -837,13 +756,28 @@ class SDKConfig:
             """HVE_AVAILABLE_TOOLS / HVE_EXCLUDED_TOOLS をパースしてリスト化する。
 
             空 / 未設定時は None を返す（= SDK デフォルト = 制限なし）。
-            区切り文字: カンマ または 空白（既存 _parse_workiq_akm_ingest_dxx と同様の正規化）。
+            区切り文字: カンマ または 空白。
             """
             if not value or not value.strip():
                 return None
             import re as _re
             tokens = [t for t in _re.split(r"[,\s]+", value.strip()) if t]
             return tokens or None
+
+        def _parse_defer_threshold(value: str) -> Optional[int]:
+            """HVE_TOOL_SEARCH_DEFER_THRESHOLD をパースする（FR-MODEL-04）。
+
+            正の整数だけを採用し、未設定 / 非整数 / 0 以下はすべて None を返して
+            SDK 既定へ委譲する（キー自体を create_session へ送らない）。
+            """
+            text = (value or "").strip()
+            if not text:
+                return None
+            try:
+                parsed = int(text)
+            except ValueError:
+                return None
+            return parsed if parsed > 0 else None
 
         def _env_bool_or_none(name: str) -> Optional[bool]:
             raw = os.environ.get(name)
@@ -859,22 +793,8 @@ class SDKConfig:
             review_model=_normalize_model_with_warning(os.environ.get("REVIEW_MODEL") or None),
             qa_model=_normalize_model_with_warning(os.environ.get("QA_MODEL") or None),
             show_reasoning=os.environ.get("SHOW_REASONING", "true").lower() in ("true", "1", "yes"),
-            workiq_enabled=os.environ.get("WORKIQ_ENABLED", "").lower() in ("true", "1", "yes"),
-            workiq_qa_enabled=_env_bool_or_none("WORKIQ_QA_ENABLED"),
-            workiq_akm_review_enabled=_env_bool_or_none("WORKIQ_AKM_REVIEW_ENABLED"),
-            workiq_akm_ingest_enabled=os.environ.get("WORKIQ_AKM_INGEST_ENABLED", "").lower() in ("true", "1", "yes"),
-            workiq_akm_ingest_dxx=_parse_workiq_akm_ingest_dxx(os.environ.get("WORKIQ_AKM_INGEST_DXX", "")),
-            workiq_tenant_id=os.environ.get("WORKIQ_TENANT_ID") or None,
-            workiq_prompt_qa=os.environ.get("WORKIQ_PROMPT_QA") or None,
-            workiq_prompt_km=os.environ.get("WORKIQ_PROMPT_KM") or None,
-            workiq_prompt_review=os.environ.get("WORKIQ_PROMPT_REVIEW") or None,
-            workiq_draft_mode=os.environ.get("WORKIQ_DRAFT_MODE", "").lower() in ("true", "1", "yes"),
-            workiq_draft_output_dir=os.environ.get("WORKIQ_DRAFT_OUTPUT_DIR", "qa"),
-            workiq_per_question_timeout=env_workiq_per_question_timeout,
-            workiq_request_timeout=env_workiq_request_timeout,
-            workiq_max_draft_questions=env_workiq_max_draft_questions,
-            workiq_priority_filter=_env_bool("WORKIQ_PRIORITY_FILTER", default=True),
-            auto_self_improve=os.environ.get("HVE_AUTO_SELF_IMPROVE", "").lower() in ("true", "1", "yes"),
+            workiq_enabled=_workiq_enabled_from_env(os.environ.get("WORKIQ_ENABLED")),
+            knowledge_sources=_parse_knowledge_sources(os.environ.get("HVE_KNOWLEDGE_SOURCES", "")),
             tdd_max_retries=int(os.environ.get("HVE_TDD_MAX_RETRIES", "5")),
             max_diff_chars=env_max_diff_chars,
             context_injection_max_chars=env_context_injection_max_chars,
@@ -884,12 +804,13 @@ class SDKConfig:
             tool_search_ranking=(
                 os.environ.get("HVE_TOOL_SEARCH_RANKING", "").strip().lower() or "sdk"
             ),
+            tool_search_defer_threshold=_parse_defer_threshold(
+                os.environ.get("HVE_TOOL_SEARCH_DEFER_THRESHOLD", "")
+            ),
             reuse_context_filtering=_env_bool("HVE_REUSE_CONTEXT_FILTERING", default=True),
             model_override=_normalize_model_with_warning(os.environ.get("HVE_MODEL_OVERRIDE") or None),
             apply_qa_improvements_to_main=_env_bool("HVE_APPLY_QA_IMPROVEMENTS_TO_MAIN", default=False),
             apply_review_improvements_to_main=_env_bool("HVE_APPLY_REVIEW_IMPROVEMENTS_TO_MAIN", default=True),
-            apply_self_improve_to_main=_env_bool("HVE_APPLY_SELF_IMPROVE_TO_MAIN", default=True),
-            self_improve_scope=env_si_scope,
             require_input_artifacts=_env_bool("HVE_REQUIRE_INPUT_ARTIFACTS", default=False),
             run_id=(os.environ.get("HVE_RUN_ID", "") or "").strip(),
             session_id_prefix=os.environ.get("HVE_SESSION_ID_PREFIX", "").strip(),

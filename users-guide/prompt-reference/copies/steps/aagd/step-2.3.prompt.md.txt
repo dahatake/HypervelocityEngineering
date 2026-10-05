@@ -29,10 +29,7 @@ Microsoft Foundry（Azure AI Foundry Agent Service）を使用して Agent を�
 - GREEN 化のためにテストコードを Azure AI Foundry Agent Service や外部 Tool API へ実接続する内容へ変更しない。Agent / Tool / RAG / HTTP 呼び出しは mock/stub で切り分ける。
 - 実装コードは Azure AI Foundry へデプロイ可能にしつつ、Endpoint、モデル名、Tool サービス URL、認証情報は環境変数または設定ファイルから読み込む。秘密情報をコード、README、ログにハードコードしない。
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 {existing_artifact_policy}
 
@@ -52,8 +49,8 @@ Microsoft Foundry（Azure AI Foundry Agent Service）を使用して Agent を�
 
 ## 完了条件
 - `src/agent/` 配下に Agent 実装コードが存在する
-- テストの全テストが PASS であること（TDD GREEN 確認）
-## TDD テスト結果レポート（必須）
+- `src/test/agent/{key}.Tests/` の対象テストが PASS であること（TDD GREEN 確認）。着手時 baseline に無い新規 FAIL が 0 件であること
+## TDD テスト結果レポート
 - 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - 必須ラベル: `Schema-Version`, `Evidence-Status`, `TDD-Judgement`, `Secret-Redaction`, `Test-Files-Changed`
 - `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とする。

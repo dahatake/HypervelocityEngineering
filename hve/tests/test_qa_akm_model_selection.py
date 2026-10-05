@@ -191,6 +191,11 @@ class TestBuildArgvAkmOverrides(unittest.TestCase):
         argv = _capture_argv(self._base_config(akm_model=MODEL_AUTO_VALUE))
         self.assertEqual(_value_after(argv, "--model"), MODEL_AUTO_VALUE)
 
+    def test_legacy_mcp_config_is_never_forwarded_to_the_child(self):
+        """FR-CLI-76: QA 起点 AKM 子実行は `--mcp-config` を再生しない。"""
+        argv = _capture_argv(self._base_config(mcp_servers={"azure": {"type": "local"}}))
+        self.assertNotIn("--mcp-config", argv)
+
 
 class TestAkmSettingsDoNotLeakToMainSessions(unittest.TestCase):
     """FR-QA-04: AKM 専用値がメイン / review / QA のセッション生成へ漏れない。"""

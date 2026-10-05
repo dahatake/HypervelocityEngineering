@@ -53,17 +53,19 @@ def test_aas_shows_only_notice(qapp):
             assert not g.isVisible(), f"{cat_key} should be hidden for aas"
 
 
-def test_workiq_draft_does_not_override_existing_true(qapp):
-    """非 ard/akm でも c4.workiq=True なら True のまま（妨害しない）。"""
+def test_workiq_checkbox_and_knowledge_sources_reach_args(qapp):
+    """FR-KD-01: Work IQ 有効化と追加知識源を、Workflow を問わずそのまま渡す。"""
     from hve.gui.page_options import OptionsPage
 
     page = OptionsPage()
     page.set_workflows(["adoc"], {"adoc": "ADOC"})
     page.c4.workiq.setChecked(True)
-    page.c4.workiq_draft.setChecked(False)
+    page.c4.knowledge_sources.setText(" docs-mcp ")
 
     args = page.build_args(repo_root=Path.cwd())
     assert args.workiq is True
+    assert args.knowledge_sources == "docs-mcp"
+    assert not hasattr(page.c4, "workiq_draft")
 
 
 def test_adi_depth_choices_are_japanese(qapp):
@@ -76,29 +78,15 @@ def test_adi_depth_choices_are_japanese(qapp):
     assert any("軽量" in t and "lightweight" in t for t in items)
 
 
-def test_workiq_draft_session_override_for_ard(qapp):
-    """ard 選択時に QA 回答ドラフト生成 ON → args.workiq=True（セッション限定）。"""
+def test_ard_does_not_force_workiq_without_user_choice(qapp):
+    """FR-KD-01: 旧ドラフト生成による Work IQ のセッション限定強制 ON は行わない。"""
     from hve.gui.page_options import OptionsPage
 
     page = OptionsPage()
     page.set_workflows(["ard"], {"ard": "ARD"})
     page.c4.workiq.setChecked(False)
-    page.c4.workiq_draft.setChecked(True)
 
     args = page.build_args(repo_root=Path.cwd())
-    assert args.workiq is True
-
-
-def test_workiq_draft_no_override_for_other_workflows(qapp):
-    from hve.gui.page_options import OptionsPage
-
-    page = OptionsPage()
-    page.set_workflows(["adoc"], {"adoc": "ADOC"})
-    page.c4.workiq.setChecked(False)
-    page.c4.workiq_draft.setChecked(True)
-
-    args = page.build_args(repo_root=Path.cwd())
-    # adoc では強制 ON されない
     assert args.workiq is False
 
 

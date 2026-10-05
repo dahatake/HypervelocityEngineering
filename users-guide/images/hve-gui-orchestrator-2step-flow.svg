@@ -50,14 +50,13 @@
 
   <!-- 右ペイン: オプション設定 -->
   <rect x="356" y="154" width="308" height="250" rx="6" fill="white" stroke="#6f42c1" stroke-width="1"/>
-  <text x="510" y="171" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">右ペイン: オプション設定（QToolBox 16 カテゴリ）</text>
-  <text x="368" y="189" font-size="9" fill="#586069">▼ C1 基本設定  --model / --review-model / --qa-model</text>
-  <text x="368" y="203" font-size="9" fill="#959da5">▶ C2 並列実行 / C3 共通設定 / C4 Work IQ</text>
-  <text x="368" y="217" font-size="9" fill="#959da5">▶ C5 Issue/PR / C6 出力制御 / C7 MCP・CLI 接続</text>
-  <text x="368" y="231" font-size="9" fill="#959da5">▶ C8 タイムアウト / C9 ブランチ・ステップ</text>
-  <text x="368" y="245" font-size="9" fill="#959da5">▶ C10 アプリID / C11 AKM / C13 ADOC</text>
-  <text x="368" y="259" font-size="9" fill="#959da5">▶ C14 ARD / C15 追加 / C16 実行 / C17 ADI</text>
-  <text x="510" y="276" text-anchor="middle" font-size="8.5" fill="#959da5">選択WFに応じて C10/C11/C13/C14/C17 を自動制御</text>
+  <text x="510" y="171" text-anchor="middle" font-size="10" font-weight="bold" fill="#24292e">右ペイン: オプション設定（実効項目のみ表示）</text>
+  <text x="368" y="189" font-size="9" fill="#586069">▼ C1 基本設定  --model / Effort / context_tier / timeout</text>
+  <text x="368" y="203" font-size="9" fill="#959da5">▶ C3 共通設定 / C4 Work IQ / C5 GitHub</text>
+  <text x="368" y="217" font-size="9" fill="#959da5">▶ C6 出力制御 / C7 SDK Resources</text>
+  <text x="368" y="231" font-size="9" fill="#959da5">▶ AZURE / AGENTIC / C10 APP-ID / C11 AKM</text>
+  <text x="368" y="245" font-size="9" fill="#959da5">▶ C13 ADOC / C14 ARD / C17 ADI</text>
+  <text x="510" y="276" text-anchor="middle" font-size="8.5" fill="#959da5">選択WFに応じて Workflow 固有入力だけを再配置・表示</text>
 
   <!-- コマンドプレビュー -->
   <rect x="366" y="285" width="288" height="44" rx="4" fill="#f6f8fa" stroke="#d1d5da" stroke-width="1"/>

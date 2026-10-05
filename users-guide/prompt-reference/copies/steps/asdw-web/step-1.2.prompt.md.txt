@@ -12,11 +12,10 @@ Step.1.1 で選定したデータストアに対する検証スクリプト `src
 ## 出力
 - `src/infra/azure/verify-data-resources.sh`（各データストアのリソース存在 / サービス別正常状態 / データ件数を検証。PostgreSQL Flexible Server は `state=Ready`、Cosmos DB / Storage / ADX は `provisioningState=Succeeded`、Azure SQL Database は `status=Online` を確認する。読み取り専用・冪等。1 件でも失敗があれば非ゼロ終了）
    - LF 改行（CRLF 禁止、UTF-8 BOM なし）で保存する。Windows/PowerShell から書き込む場合も `\r\n` を混入させない。
-- `tests/run/<run-id>/asdw-web/step-1-2/<target-app-id>/RED/tdd-test-report.md`（RED フェーズのテスト結果レポート。必須ラベル・固定見出しは下記「## TDD テスト結果レポート（必須）」に従う）
+- `tests/run/<run-id>/asdw-web/step-1-2/<target-app-id>/RED/tdd-test-report.md`（RED フェーズのテスト結果レポート。必須ラベル・固定見出しは下記「## TDD テスト結果レポート」に従う）
 - `tests/run/<run-id>/asdw-web/step-1-2/<target-app-id>/RED/static-verification.log`（`bash -n` / ShellCheck / artifact validator / focused pytest / LF・BOM 確認の実コマンドと終了コード。`tdd-test-report.md` の `Raw-Log-Path` が指す実在ファイル）
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティを扱う場合の **Microsoft Learn MCP が利用可能なら必ず参照** する規律、**title / URL / 確認事項** の記録、`要確認（Microsoft Learn MCP 未取得）` と記録して **推測で確定しない** 原則は、Agent 仕様 `.github/prompts/Dev-Microservice-Azure-DataTestCoding.prompt.md` の `## Azure 公式情報参照（Microsoft Learn MCP 必須）` に従う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 ## 生成テストの実行環境
 
@@ -25,7 +24,7 @@ Step.1.1 で選定したデータストアに対する検証スクリプト `src
 
 {existing_artifact_policy}
 
-## TDD RED フロー（必須）
+## TDD RED フロー
 - **出力前倒し（最優先）**: 必須成果物（`static-verification.log` → `tdd-test-report.md`）をできるだけ早いターンで確定する。既存 `verify-data-resources.sh` の適合性は逐次手読みではなく `bash -n` / artifact validator / LF・BOM で機械的に確認し、その直後に（追加の手読みレビューより前に）レポートを作成する（準拠・未変更なら `Test-Files-Changed: no`）。stale・不適合なら設計書＋契約から再生成してから同様に報告する。
 1. `docs/azure/azure-services-data.md` で選定された各データストア（PostgreSQL Flexible Server / Cosmos DB / SQL / Storage / ADX 等）の検証ブロックを生成する（`az ... show` でリソース存在・サービス別正常状態・`sample-data.json` 由来の期待件数を比較する。PostgreSQL Flexible Server に `provisioningState=Succeeded` を一律適用せず、`state=Ready` を確認する）
    - 既存 `src/infra/azure/verify-data-resources.sh` が存在しても、PostgreSQL Flexible Server が `provisioningState=Succeeded` 判定のままなら stale とみなし、`state=Ready` 契約を満たす内容へ更新する。
@@ -46,7 +45,7 @@ Step.1.1 で選定したデータストアに対する検証スクリプト `src
 - 選定された全データストアに対する検証ブロックが存在する
 - リソース作成・データ登録を含まない（読み取り専用）
 - `tdd-test-report.md` / `verify-data-resources.sh` / `static-verification.log` を作成しないままターンを終えない（ブロッカー・タイムアウト・ツール不安定時も、確認できた情報で verifier を生成し、レポートに `Evidence-Status: BLOCKED` / `TDD-Judgement: FAIL` と理由を記録して必ず作成。未作成は TDD report gate がファイル不在で fail 降格）。
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 - 共通出力パス: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - 出力先: `tests/run/<run-id>/asdw-web/step-1-2/<target-app-id>/RED/tdd-test-report.md`
 - `<target-app-id>` は実行対象の APP-ID（例: `APP-009`）を使用する。Custom Agent 名を Workflow に使用しない。

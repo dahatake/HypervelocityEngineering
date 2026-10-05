@@ -61,7 +61,6 @@
 | `auto-qa-to-review-transition.yml` | QA 完了 → adversarial-review 自動遷移 | `workflow_call` |
 | `auto-requirement-definition-reusable.yml` | ARD Orchestrator | `workflow_call` |
 | `auto-review-to-approve-transition.yml` | レビュー完了 → auto-approve-ready 自動遷移 | `workflow_call` |
-| `auto-self-improve-close.yml` | Self-Improve Auto Close | `pull_request: [closed]` |
 | `azure-static-web-apps-app009.yml` | Azure Static Web Apps APP-009 CI/CD | `workflow_dispatch`（Resource Group名とStatic Web App名を必須入力） |
 | `check-app-requirements-reusable.yml` | APP Requirement Preflight | `workflow_call` |
 | `check-auto-qa-skip-reusable.yml` | Check Auto-QA Skip (Reusable) | `workflow_call` |
@@ -80,7 +79,7 @@
 | `sync-issue-labels-to-pr.yml` | Issue ラベル → PR 自動同期 | `pull_request_target: [opened, ready_for_review]` |
 | `test-cli-scripts.yml` | Test CLI Scripts (Bash / PowerShell) | `push` / `pull_request`（path filter あり） |
 | `test-hve-gui-macos.yml` | Test HVE GUI on macOS | `workflow_dispatch` |
-| `test-hve-python.yml` | Test HVE Python | `push`（path filter あり）/ `pull_request`（全PRでrequired名を報告し、対象外では重いstepをskip） |
+| `test-hve-python.yml` | Test HVE Python | `push`（path filter あり）/ `pull_request`（全PRでrequired名を報告し、対象外では重いstepをskip）。重いテストの範囲（`mdq/`・`tools/skills/markdown_query/`・`mdq.toml`・`cq.toml` を含む）では、`mdq/golden-queries.json` と `cq/golden-queries.json` の golden 評価も実行し、下限を下回ると失敗する（[FR-MAINT-15](../hve-dev/requirement-definition.md)） |
 | `validate-hve-requirement-traceability.yml` | HVE Requirement Traceability | `pull_request: [opened, synchronize, reopened, edited, ready_for_review]` |
 | `validate-hve-requirement-traceability-trusted.yml` | HVE Requirement Traceability Trusted | `pull_request_target: [opened, synchronize, reopened, edited, ready_for_review]` |
 | `validate-io-contract.yml` | Validate io-contracts | `pull_request` / `push`（`.github/io-contracts/**`・`hve/workflow_registry.py` 等の path filter あり） |
@@ -169,7 +168,7 @@
 | `akm` | ✅ | ✅ | Cloud では `knowledge-management` ラベルで dispatcher が `AKM` を選択。 |
 | `adoc` | ✅ | ✅ | Cloud では `auto-app-documentation` ラベルで dispatcher が `ADOC` を選択。 |
 | `adi` | ❌ | ✅ | 原本の目録化・選別に加え、Step 1.1のD01〜D21質問票21並列生成とStep 1.2の横断joinを行うcanonical workflow。Issue Template / dispatcher経路は持たない（local専用）。 |
-| `aar` | ✅ | ✅ | Cloud では `auto-agentic-retrieval` ラベルで dispatcher が `AAR` を選択。`Agentic Retrieval を使用する=しない` の場合は Step Issue を生成しません。**Cloud の AAR は Step の逐次実行のみ**で、他ワークフローの QA ・敌対的レビュー・自動マージ・Self-Improve・モデル選択は含みません。これらが必要な場合は CLI / GUI を使ってください。 |
+| `aar` | ✅ | ✅ | Cloud では `auto-agentic-retrieval` ラベルで dispatcher が `AAR` を選択。`Agentic Retrieval を使用する=しない` の場合は Step Issue を生成しません。**Cloud の AAR は Step の逐次実行のみ**で、他ワークフローの QA ・敌対的レビュー・自動マージ・モデル選択は含みません。これらが必要な場合は CLI / GUI を使ってください。 |
 
 #### canonical workflow ID と alias（`hve/workflow_registry.py`）
 
@@ -189,17 +188,25 @@
 - `adi` は **HVE CLI / GUI Orchestrator 専用** です。ARD と AAR は CLI / GUI / Cloud の全経路に対応します。
 - alias（`aad`, `asdw`）は HVE CLI Orchestrator で canonical ID（`aad-web`, `asdw-web`）に解決されます。workflow ID の記載時は canonical ID と混同しないでください。
 
-### Work IQ 連携（オプション）
+### 知識探索連携（Work IQ / MCP 知識源）
 
-`--auto-qa` と `--workiq` が有効な場合のみ、QA フェーズで M365 補助情報を読み取り専用で参照します（未インストール時は自動スキップ）。Phase 1 の本処理、Review フェーズ、自己改善フェーズでは Work IQ を使用しません。
+Work IQ は、Copilot CLI に exact `workiq` 名で設定された Plugin または MCP Server を知識源として扱います。`--workiq` / `WORKIQ_ENABLED` は `workiq` を実効知識源へ追加し（ローカル CLI・Prompt 版・GUI 設定の既定は有効。`--no-workiq` / `WORKIQ_ENABLED=false` で無効）、`--knowledge-source NAME` / `HVE_KNOWLEDGE_SOURCES` は任意の MCP server 名を追加します。Prompt 版は request の `settings_overrides` で `workiq`（真偽値）と `knowledge_sources`（カンマ区切り文字列）を run 単位で指定できます。一般のPhase 1、通常Reviewへ横断的に注入する機能ではありません。
 
-- **QA（`--auto-qa`）**:  
-  - 質問票の**質問ごとに 1 回**問い合わせ、`qa/{run_id}-{step_id}-workiq-pre-qa-draft.md` を生成
-  - `--workiq-draft` は問い合わせ方式を切り替えるフラグではなく、Work IQ 連携自体を有効化するトリガー
-- wizard モード（`python -m hve`）では、QA 自動投入を有効にした場合のみ Work IQ 有効化メニューが表示されます。ログイン成功後に「Work IQ (Microsoft 365 Copilot) の末尾に追加するプロンプト」を入力すると、QA フェーズの Work IQ プロンプトへ追記できます。
+| 経路 | 実行条件 | 採用先 |
+|---|---|---|
+| **事前 QA** | usable な知識源が 1 件以上ある場合 | `qa/<run_id>-<step_id>-pre-execution-qa.md` の `調査回答` / `調査状態` / `調査出典`。`Confirmed` / `Tentative` で回答が空でないものだけ Phase 1 context へ渡す |
+| **実行後の不明点調査** | `auto_qa` 有効でメインタスクが成功した Step。質問が 1 件以上あれば保存し、usable な知識源があれば調べる | `qa/<run_id>-<step_id>-post-execution-qa.md`。後続 phase へは注入しない |
+| **AKM 知識探索** | AKM DAG 前、`--sources` に `workiq` を含むなど知識源が usable な場合 | `knowledge/Dxx-*.md`、status 文書、`qa/<run_id>-akm-knowledge-discovery-qa.md`、ChangeLog の `## 知識探索による更新履歴` |
+| **ARD 知識探索** | ARD Step 2 が実行対象で知識源が usable な場合 | `qa/` の探索記録。`Confirmed` / `Tentative` が 1 件以上あれば Step 2 Issue に `## ARD 知識探索: ユースケース参照情報` コメントを 1 件投稿 |
 
-利用ツール（読み取り専用）:
-- `ask`
+- 利用者はCopilot CLIへexact `workiq`名のPlugin または MCP Serverを事前設定・認証します。HVEはSDK discoveryで`ready`を確認するだけで、install・構成・OAuthを行いません。
+- discovery 結果が `not-configured` または `unverified` の知識源は、その run だけから除外します。保存設定は変更しません。
+- runtimeでは知識探索 session の`connected`状態と allowlist tool の公開を確認します。不足時はOAuthを試みず該当知識源を除外し、Copilot CLIの`/mcp`で確認するよう案内します。`needs-auth` の場合は `/mcp auth <名前>` の実行と HVE の再起動を案内します。除外の理由は QA ファイルの `## 知識探索の状況` 節（`| 知識源 | 状態 | 理由コード |`）に残ります。
+- 知識探索は1探索1つの SDK session で行い、`knowledge_tool_allowlists` の読み取り専用 tool だけを公開します。既定の `workiq` allowlist は `retrieve` / `ask` / `fetch` / `search_paths` / `get_schema` / `list_agents`、`microsoft-learn` は `microsoft_docs_search` / `microsoft_docs_fetch` / `microsoft_code_sample_search` です。
+- 調査状態は `Confirmed` / `Tentative` / `Unknown` の 3 値です。MCP source locator が同じ session の成功応答に含まれる場合だけ検証済み出典とし、`Confirmed` は 1 件以上の検証済み出典を必要とします。
+- 事前 QA で探索を行う場合、CLI / GUI / IPC の人への回答待ちは行いません。usable な知識源がない場合だけ従来の回答収集に戻ります。
+- `qa/` と `knowledge/` の作成・更新は `hve_qa_create` / `hve_qa_answer` / `hve_knowledge_write` の custom tool 経由で行い、`.hve/locks/` の OS ロック、SHA-256 照合、atomic replace により並行実行に安全です。
+- live Microsoft 365 本文、個人情報、秘密情報を検証記録やリポジトリへ保存しないでください。MCP log は診断用途に限定し、恒久文書の出典として引用しません。
 
 ---
 
@@ -279,7 +286,7 @@
 | ウィザード表示順 | 1 番目 |
 | ステップ数 | 8（`hve/workflow_registry.py` の実 `StepDef` 数。表示上は 4 グループ: 1 / 2 / 3 / 4） |
 | 主な出力 | `docs/company-business-requirement.md`、`docs/catalog/use-case-catalog.md` |
-| Work IQ 連携 | Step 2 のみ（条件付き） |
+| ARD 知識探索 | Step 2 のみ（知識源 usable 時） |
 
 ### ステップ DAG
 
@@ -311,13 +318,12 @@
 | `qa-akm-sync` | **QA 回答起点の AKM 実行を識別するラベル**。`auto-akm-after-qa.yml` が作成する AKM Root Issue と、その Step Issue に付与される。このラベルを持つ AKM だけが `akm-qa-sync-child-<repo>` の concurrency で直列化され、調整ワークフローが保持する `akm-knowledge-write-<repo>` との自己デッドロックを回避する |
 | `create-subissues` | **Sub Issue 自動作成のトリガー**。人間が PR にこのラベルを手動付与すると、PR 内の `work/**/subissues.md` をパースして Sub Issue を自動作成する |
 | `setup-labels` | **ラベル初期セットアップのトリガー**。Issue にこのラベルが付与されると `.github/labels.json` に定義された全ラベルがリポジトリに自動作成・更新される。リポジトリ作成後に1度実行する想定だが、ラベル定義変更時は再実行可能（冪等設計）。Actions タブの `workflow_dispatch` からも手動実行可能。 |
-| `split-mode` | **分割モード PR の識別ラベル**。`plan-validation-and-labeling.yml` の `label-split-mode` job が、PR 差分に含まれる `work/**/plan.md` の `<!-- split_decision: SPLIT_REQUIRED -->` を検知した場合に自動付与します。`check-split-mode` job は同 PR に実装ファイルが混在していないかを検証します。 |
-| `plan-only` | **plan.md のみの PR 識別ラベル**。`plan-validation-and-labeling.yml` の `label-split-mode` job が `split-mode` と同時に付与します。plan.md / subissues.md 中心の PR であることを示します。 |
+| `split-mode` | **計画中心 PR の識別ラベル**。`plan-validation-and-labeling.yml` が `work/**/plan.md` を含む PR を検査し、実装ファイルが混在していないかを確認するために使用します。 |
+| `plan-only` | **計画成果物だけを含む PR の識別ラベル**。`plan-validation-and-labeling.yml` が `plan.md` / `subissues.md` 中心の PR を識別するために使用します。 |
 | `adversarial-review` | **Copilot 敵対的レビューのトリガー**（`.github/labels.json` の説明: "explicit adversarial review trigger for Copilot review workflow"）。PR にこのラベルが付いた状態で PR が ready（非 draft）になると、Copilot に敵対的レビュー指示コメントを自動投稿する |
 | `auto-context-review` | **コンテキスト質問票・設計確認の強制トリガー**（同説明: "force context questionnaire and design clarification"）。Agent はコンテキストが十分でも設計判断・技術選定・スコープの確認質問を行う |
 | `auto-qa` | **Copilot 質問票作成のトリガー**。PR にこのラベルが付いた状態で PR が ready（非 draft）になると、Copilot に選択式の質問票作成指示コメントを自動投稿する |
 | `auto-approve-ready` | **PR 自動 Approve & Auto-merge のトリガー**。PR にこのラベルが付いた状態で PR が ready（非 draft, 非 split-mode）になると、`auto-approve-and-merge.yml` が自動発火し、PR の Approve と squash merge を実行する。各オーケストレーターが `auto-merge: true` 設定時に自動付与する |
-| `self-improve` | **自己改善ループの識別ラベル**。Issue テンプレートから Copilot を直接アサインして使用します。`auto-self-improve-close.yml` は、PR マージ時にこのラベルを持つ Issue を検知し、auto-merge 有効判定や Sub Issue 完了確認などの条件を満たした場合に自動クローズします（条件未達時はスキップされることがあります）。 |
 
 > [!IMPORTANT]
 > GitHub の Issue Template の `labels:` フィールドは、**リポジトリに既に存在するラベルのみ**を Issue に自動付与します。ラベルが存在しない場合、Issue 作成時にラベルの自動付与はサイレントにスキップされます。各ワークフローを使用する前に、必要なラベルを事前に作成してください。
@@ -369,15 +375,17 @@
 
 ## モデル選択ルール
 
-- 選択肢: `Auto` / `claude-opus-4.7` / `claude-opus-4.6` / `gpt-5.5` / `gpt-5.4`（5 種）
+- 選択肢: `Auto` / `claude-opus-5.5` / `claude-opus-4.7` / `claude-opus-4.6` / `gpt-5.5` / `gpt-5.4`（6 種）
+- 既定モデル（`hve/config.py` の `DEFAULT_MODEL`）は `claude-opus-5.5`（FR-MODEL-01）。ローカル実行の全ての面（`hve orchestrate` で `--model` と環境変数 `MODEL` の両方が未指定または空のとき、CLI ウィザードの初期選択、GUI の新規設定）で、モデルを指定しなければ `claude-opus-5.5` で実行する。`Auto` を使うには `--model Auto` または画面で `Auto` を選ぶ。GUI の保存済み設定値は書き換えない。Issue Template（Cloud）の先頭選択肢は `Auto` のまま
 - `Auto` は GitHub が最適モデルを動的に選択（可用性・レイテンシ・レート制限・プラン/ポリシーを考慮）
 - `Auto` 選択時はプレミアムリクエスト枠の消費が 0.9x（10% ディスカウント）
 - プレミアム乗数 1x 超のモデルは `Auto` 対象外
-- 空文字の場合は `Auto` として扱う
-- 廃止モデル（`claude-sonnet-4.6` / `gpt-5.3-codex` / `gemini-2.5-pro`）を指定した場合は `Auto` に自動フォールバック（WARNING ログあり）
+- ローカル実行で空文字の場合は `DEFAULT_MODEL` として扱う
+- 廃止モデル（`claude-opus-4.6` 以外の旧 ID 例: `claude-sonnet-4.6` / `gpt-5.3-codex` / `gemini-2.5-pro`）を指定した場合は `Auto` に自動フォールバック（WARNING ログあり）
 - Issue Template からも全モデル選択可（Phase 9+ で hve CLI `--model` とパリティ達成）
 - Sub-Issue には `model/*` / `review-model/*` / `qa-model/*` ラベルでモデル指定を伝播
 - `review_model` は hve CLI `--review-model` 相当。`Auto` 選択時は Copilot が最適モデルを自動選択（`SDKConfig.get_review_model()` は `Auto` をそのまま保持）
+- Phase 3（`auto_contents_review`）の評価は、`review_model` の値に依らず、メイン Step とは別の新しいセッションで行う（FR-CLI-92）。`review_model` はそのセッションのモデル選択だけを表す。評価セッションには当該 Step が宣言した `output_paths` の一覧を渡し、評価者がファイルを読む（宣言が無い Step だけメイン出力を切り詰めて渡す。FR-CLI-93）。評価者は判定と指摘だけを行い、成果物を修正しない。指摘の反映は `apply_review_improvements_to_main` が有効なときにメインセッションが行う（無効のときは再レビューせず初回の判定で確定する。FR-CLI-94）。2026-09-24 の 1 条件の計測（`aas` Step 1、`claude-opus-5.5`）では、Phase 3 は後続 Workflow の振り分けを誤らせる Critical を 1 件検出して修正した一方、所要時間は無効時の約 2.9 倍、入力トークンは約 3.3 倍だった。後続 Workflow の入力を作る Step では有効化を検討する（既定は無効のまま）
 - `qa_model` は hve CLI `--qa-model` 相当。`Auto` 選択時は Copilot が最適モデルを自動選択（`SDKConfig.get_qa_model()` は `Auto` をそのまま保持）
 - モデル ID は Copilot CLI の `/model` 表示に合わせてドット区切りを使用（例: `claude-opus-4.7`, `claude-opus-4.6`）
 - `HVE_MODEL_OVERRIDE` 環境変数が設定されている場合はそちらが優先される
@@ -435,7 +443,7 @@ python -m hve aas --app-ids APP-01
 ### SDK context の再利用
 
 - `reuse-session` は、中断対象が Main phase で、保存済み SDK session ID がある場合に限ります。HVE は `resume_session(..., continue_pending_work=False)` で保存済み context を開き、固定 recovery prompt を**新しい turn**として送ります。モデルの pending work を途中から自動継続する動作ではありません。
-- Main 以外の phase は `reuse-session` 対象外です。Pre-QA、Review、Self-Improve などは `restart-step` により fresh session から再実行します。
+- Main 以外の phase は `reuse-session` 対象外です。Pre-QA、Review などは `restart-step` により fresh session から再実行します。
 
 ### Legacy JSONL との境界
 
@@ -473,11 +481,12 @@ StepDef(
     # または
     fanout_parser="app_catalog",                      # 動的解決（hve/catalog_parsers.py 登録名）
     additional_prompt_template_path=".github/prompts/fanout/{wf}/_common.prompt.md",
-    per_key_mcp_servers={                             # キー別 MCP 上書き（任意）
-        "D08": {"sql-mcp": {"url": "..."}},
-    },
+    # raw per-key override は廃止。Plugin / MCP / Skill は generic route と
+    # SDK ResourceSnapshot に基づく policy で解決する。
 )
 ```
+
+  > Work IQ は generic route として扱う。workflow ごとの raw per-key override で接続先や credential を差し替えない。
 
 ### 登録済み動的解決パーサ（`hve/catalog_parsers.py`）
 
@@ -564,7 +573,7 @@ HVE が管理する固定 Prompt 本文の正本は `.github/prompts/**` の Mar
 | `.github/prompts/<Agent 名>.prompt.md` | Agent 本文。`load_prompt(<Agent 名>)` の呼び出し互換のため flat のまま（サブディレクトリ化しない） |
 | `.github/prompts/steps/<workflow>/step-<id>.prompt.md` | registry の `body_template_path` が参照する Step 本文 |
 | `.github/prompts/fanout/<workflow>/*.prompt.md` | registry の `additional_prompt_template_path` が参照する fan-out 追加本文 |
-| `.github/prompts/runtime/**` | QA / Review / Self-Improve / Work IQ / orchestrator / runner / template / addenda / fleet / gui / repository-query / shared 等の内部 Prompt |
+| `.github/prompts/runtime/**` | QA / Review / Work IQ / orchestrator / runner / template / addenda / fleet / gui / repository-query / shared 等の内部 Prompt |
 | `.github/prompts/cloud/*.prompt.md` | Workflow から `@copilot` へ投稿する固定実行指示 |
 
 読み込みの単一実装は [`hve/prompt_loader.py`](../hve/prompt_loader.py) の `load_prompt_file()` で、`.github/prompts/` を root とする安全な repository-relative path だけを受理します。必須 Prompt の欠損・空・不正パスは model call / SDK session / Copilot assignment の前に fail-closed で停止します（FR-PROMPT-SRC-02）。Prompt 本文には frontmatter を置きません。編集内容は次回の process / session から反映され、hot reload はありません。
@@ -587,7 +596,6 @@ HVE が管理する固定 Prompt 本文の正本は `.github/prompts/**` の Mar
 - AKM: [chain-akm.svg](./images/chain-akm.svg)
 - ADI: [00-design-doc-ingestion.md のAgentチェーン図](./00-design-doc-ingestion.md#agent-チェーン図adi)
 - ADOC: [chain-adoc.svg](./images/chain-adoc.svg)
-- Self-Improve: [chain-self-improve.svg](./images/chain-self-improve.svg)
 - Workflow interconnection: [workflow-interconnection.svg](./images/workflow-interconnection.svg)
 
 ### カテゴリ分類（`.github/prompts/*.prompt.md` 実体ベース）
@@ -619,26 +627,8 @@ HVE が管理する固定 Prompt 本文の正本は `.github/prompts/**` の Mar
 | `aagd` | AI Agent Dev & Deploy | 9 | `1`: `Arch-AIAgentDesign-Step1`<br>`2.1`: `Arch-TDD-TestSpec`<br>`2.2`: `Dev-Microservice-Azure-AgentTestCoding`<br>`2.3`: `Dev-Microservice-Azure-AgentCoding`<br>`3`: `Dev-Microservice-Azure-AgentDeploy`<br>`4`: `QA-ToolSearchEval`<br>`5`: `QA-RequirementsConformanceEval`<br>`6`: `QA-AgentRouteRightsizingEval`<br>`7`: `Dev-Agent-M365Publish` |
 | `aar` | Agentic Retrieval Add-on | 7 | `1`: `Arch-AgenticRetrieval-Detail`<br>`2`: `Dev-Microservice-Azure-AgenticRetrievalDesign`<br>`3`: `Arch-TDD-TestSpec`<br>`4`: `Dev-Microservice-Azure-AgenticRetrievalTestCoding`<br>`5`: `Dev-Microservice-Azure-AgenticRetrievalDeploy`<br>`6`: `QA-AgenticRetrievalEval`<br>`7`: `QA-RequirementsConformanceEval` |
 | `akm` | Knowledge Management | 2 | `1`: `KnowledgeManager`<br>`2`: `QA-DocConsistency` |
-| `adi` | Auto Design-doc Ingestion | 9 | `1`: `Doc-OriginalInventory`<br>`1.1`: `QA-DocConsistency`（D01〜D21 fan-out）<br>`1.2`: `QA-DocConsistency`（join）<br>`2`: `Doc-OriginalDocCard`<br>`3`: `Doc-OriginalTriage`<br>`4`: `Doc-OriginalRouting`<br>`5.1`: `Doc-OriginalDownstreamSeed`<br>`5.2`: `Doc-OriginalDownstreamSeed`<br>`5.3`: `Doc-OriginalDownstreamSeed` |
+| `adi` | Auto Design-doc Ingestion | 9 | `1`: `Doc-OriginalInventory`<br>`1.1`: `QA-DocConsistency`（D01〜D21 fan-out、既定 OFF）<br>`1.2`: `QA-DocConsistency`（join、既定 OFF）<br>`2`: `Doc-OriginalDocCard`<br>`3`: `Doc-OriginalTriage`<br>`4`: `Doc-OriginalRouting`<br>`5.1`: `Doc-OriginalDownstreamSeed`<br>`5.2`: `Doc-OriginalDownstreamSeed`<br>`5.3`: `Doc-OriginalDownstreamSeed` |
 | `adoc` | Source Codeからのドキュメント作成 | 23 | `2`: （グループ見出し・Agent 割当なし）<br>`3`: （グループ見出し・Agent 割当なし）<br>`5`: （グループ見出し・Agent 割当なし）<br>`6`: （グループ見出し・Agent 割当なし）<br>`1`: `Doc-FileInventory`<br>`2.1`: `Doc-FileSummary`<br>`2.2`: `Doc-TestSummary`<br>`2.3`: `Doc-ConfigSummary`<br>`2.4`: `Doc-CICDSummary`<br>`2.5`: `Doc-LargeFileSummary`<br>`3.1`: `Doc-ComponentDesign`<br>`3.2`: `Doc-APISpec`<br>`3.3`: `Doc-DataModel`<br>`3.4`: `Doc-TestSpecSummary`<br>`3.5`: `Doc-TechDebt`<br>`4`: `Doc-ComponentIndex`<br>`5.1`: `Doc-ArchOverview`<br>`5.2`: `Doc-DependencyMap`<br>`5.3`: `Doc-InfraDeps`<br>`5.4`: `Doc-NFRAnalysis`<br>`6.1`: `Doc-Onboarding`<br>`6.2`: `Doc-Refactoring`<br>`6.3`: `Doc-Migration` |
-
-### Self-Improve で使用する実装（CLI / GUI の `hve/runner.py` Phase 4 と `hve/self_improve.py`）
-
-自己改善ループは Custom Agent（`.github/prompts/*.prompt.md`）を呼び出しません。実装が使用するのは次の関数と Prompt 定数です。
-
-| 役割 | 実装 |
-|------|------|
-| Phase 4a: コードベーススキャン | `hve/self_improve.py` `scan_codebase()`（ruff / pytest / dotnet / markdownlint を subprocess 実行） |
-| Phase 4b: LLM 統合評価 | `hve/prompts.py` `SELF_IMPROVE_SCAN_PROMPT` |
-| Phase 4b: 改善計画生成 | `hve/prompts.py` `SELF_IMPROVE_PLAN_PROMPT` |
-| Phase 4c: 改善実行 | step スコープは `hve/runner.py` が計画内容をそのまま実行指示として送信。workflow スコープは `hve/self_improve.py` `_build_mutation_prompt()` |
-| Phase 4d: 改善後検証 | 判定は `hve/self_improve.py` `_build_verification_result()`。`hve/prompts.py` `SELF_IMPROVE_VERIFY_PROMPT` の応答は説明文（`notes`）としてのみ使用（FR-CLI-63） |
-
-> 上記の `SELF_IMPROVE_*` 定数は Python 側に本文を持たず、`hve/prompts.py` が `.github/prompts/runtime/self-improve/` 配下の Prompt ファイルを読み込んで公開する互換 facade です。本文を変更する場合は Prompt ファイル側を編集してください。
-
-> **注記**: `.github/prompts/` には `QA-CodeQualityScan` / `Arch-ImprovementPlanner` / `QA-PostImproveVerify` の 3 つの Prompt が存在しますが、2026-08-25 時点で CLI / GUI / Cloud のいずれの実行経路からも呼び出されていません（`.github/workflows/`・`.github/scripts/`・`hve/` の実装コードに参照がないことを確認済み）。将来の結線を想定した定義として保持されています。
->
-> **図について**: [chain-self-improve.svg](./images/chain-self-improve.svg) は上記 3 Prompt（`QA-CodeQualityScan [4a]` / `Arch-ImprovementPlanner [4b]` / `QA-PostImproveVerify [4d]`）を図示していますが、現行実装を表していません。本節の表を一次情報としてください。
 
 > **補足**: 各 Custom Agent の詳細な入出力や `knowledge/` 参照は、対応する `.github/prompts/*.prompt.md` と `hve/workflow_registry.py` を一次根拠として確認してください。
 
@@ -689,37 +679,56 @@ HVE が管理する固定 Prompt 本文の正本は `.github/prompts/**` の Mar
 | `web-app-design.yml` | Web App Design | `auto-app-detail-design-web` | `branch, runner_type, app_ids, steps, model, review_model` |
 | `web-app-dev.yml` | Web App Dev & Deploy | `auto-app-dev-microservice-web` | `app_ids, branch, runner_type, resource_group, steps, model` |
 
-> **自己改善設定について**: `setup-labels.yml` を除く多くのテンプレートは `enable_self_improve` / `self_improve_max_iterations` / `self_improve_quality_threshold` を持ちます。ただし `ai-agent-design.yml` / `ai-agent-dev.yml` には `enable_self_improve` が無く、`self_improve_max_iterations` / `self_improve_quality_threshold` のみを持ちます（両テンプレートは `enable_tool_search` も持ちます）。自己改善ループ専用の Issue Template は存在せず、各 reusable workflow 内の Self-Improve ステップとして実行されます。
-
-> **hve CLI からの自己改善制御**: `hve orchestrate -w <workflow_id> --self-improve` で有効化、`--no-self-improve` で無効化（`--self-improve` より優先）、`HVE_AUTO_SELF_IMPROVE=true` 環境変数でも有効化できます。
-
 ---
 
-## Skills 一覧と Agent-Skills 対応
+## 主要 Skills と Agent-Skills 対応
 
-`.github/skills/` 配下の全 Skills と、主な利用 Agent の対応表です。
+以下は主要 Skill と利用 Agent / 経路の抜粋です。この節は完全な一覧ではなく、日常のルーティングで判断に迷いやすい Skill を、各 Skill root の `SKILL.md` が定義する `USE FOR` / `WHEN` 条件に沿って要約します。登録一覧と適用範囲は [Skills ルーティング表](../.github/skills/_routing/README.md) を参照してください。
+
+> **正本の見分け方**: HVE の共通実行ルールは `.github/copilot-instructions.md` 全体を正本として扱います。節番号だけに依存した引用ではなく、該当箇所を含む文脈も確認してください。Prompt 本文を変更する場合の正本は `.github/prompts/**` の Markdown ファイルです。`users-guide/prompt-reference/**` は参照用コピーであり、編集先ではありません。Skill は Prompt 本文の置き換えではなく、どの前提・契約・詳細手順をいつ参照するかを固定するために使います。
+
+> **ID の扱い**: この節は Skill ルーティングの補助説明です。Workflow ID / Step ID / fan-out key のスキーマは、本書上部のワークフロー overview と `hve/workflow_registry.py` を正として扱い、ここでは置換・再番号付けしません。
 
 ### 共通 Skills（全 Agent）
 
-| Skill 名 | パス | 説明 |
-|---------|------|------|
-| `agent-common-preamble` | `.github/skills/agent-common-preamble/` | 全 Agent 共通ルール・Skills 参照リスト |
-| `input-file-validation` | `.github/skills/input-file-validation/` | 必読ファイル確認・欠損時処理 |
-| `app-scope-resolution` | `.github/skills/app-scope-resolution/` | APP-ID スコープ解決 |
-| `task-questionnaire` | `.github/skills/task-questionnaire/` | 質問票作成 |
-| `task-dag-planning` | `.github/skills/task-dag-planning/` | DAG計画・分割判定 |
-| `work-artifacts-layout` | `.github/skills/work-artifacts-layout/` | work/ 構造設計 |
-| `markdown-query` | `.github/skills/markdown-query/` | ローカル完結の Markdown 横断クエリ（Context 最小化用、`mdq` 実装） |
+| Skill 名 | パス | 使う条件 / 参照内容 |
+|---------|------|----------------------|
+| `agent-common-preamble` | `.github/skills/agent-common-preamble/` | Custom Agent が作業開始時に共通ルール・参照 Skill を確認するとき |
+| `input-file-validation` | `.github/skills/input-file-validation/` | 必読ファイル・推奨ファイルの存在確認と、欠損時の継続 / 停止判断が必要なとき |
+| `app-scope-resolution` | `.github/skills/app-scope-resolution/` | Issue body / HTML コメントから APP-ID を解決し、`docs/catalog/app-catalog.md` と紐付けるとき |
+| `task-questionnaire` | `.github/skills/task-questionnaire/` | 不明点を重要度・既定値候補付きで質問票化するとき |
+| `task-dag-planning` | `.github/skills/task-dag-planning/` | タスクを DAG で分解して分割判定・見積を行うとき（HVE 固有の plan.md / subissues.md フォーマットと実行面の選択は `.github/skills/_hve-plan-artifacts/hve-binding.md`） |
+| `work-artifacts-layout` | `.github/skills/work-artifacts-layout/` | `work/` 配下の作業成果物・一時ファイル・QA 構造の置き場所を決めるとき |
+| `markdown-query` | `.github/skills/markdown-query/` | ローカル Markdown 仕様・要求・見出しを小さな抜粋で検索するとき（`mdq` 実装） |
+| `code-query` | `.github/skills/code-query/` | ソースコードの定義・参照・呼び出し箇所を小さな抜粋で調査するとき（`cq` 実装） |
+
+### HVE 実行・保守ルーティング Skills
+
+| Skill 名 | パス | 使う条件 / 参照内容 |
+|---------|------|----------------------|
+| `hve-prompt-edition` | `.github/skills/hve-prompt-edition/` | 登録済み Workflow ID の Prompt Edition 実行、request の不足値確認、`resume` / 再開境界の詳細確認が必要なとき。Issue Template / Cloud Agent など対象外経路の扱いもこの Skill の条件に従う |
+| `hve-requirement-traceability` | `.github/skills/hve-requirement-traceability/` | HVE / `mdq` / `cq` / `hve-dev` など、HVE アプリケーション保守や不具合調査で要求トレーサビリティを確認するとき |
+| `application-requirement-traceability` | `.github/skills/application-requirement-traceability/` | 生成アプリの設計・開発で APP 固有要求を選択・検証・引用・追跡するとき |
 
 ### ドメイン Skills
 
-| Skill 名 | パス | 主な利用 Agent |
-|---------|------|-------------|
-| `architecture-questionnaire` | `.github/skills/architecture-questionnaire/` | `Arch-ArchitectureCandidateAnalyzer` |
-| `knowledge-management` | `.github/skills/knowledge-management/` | `KnowledgeManager` |
-| `mcp-server-design` | `.github/skills/mcp-server-design/` | MCP Server 設計時 |
-| `dataflow-design-guide` | `.github/skills/dataflow-design-guide/` | `Arch-Dataflow-*`, `Dev-Dataflow-*` |
-| `microservice-design-guide` | `.github/skills/microservice-design-guide/` | `Arch-Microservice-*`, `Dev-Microservice-*` |
+| Skill 名 | パス | 主な利用 Agent / 使う条件 |
+|---------|------|---------------------------|
+| `architecture-questionnaire` | `.github/skills/architecture-questionnaire/` | `Arch-ArchitectureCandidateAnalyzer`。アーキテクチャ候補選定や非機能要件の確認時 |
+| `knowledge-lookup` | `.github/skills/knowledge-lookup/` | 業務ルール・用語・データモデルなど、`knowledge/` 配下の確定済みドメイン知識を参照するとき |
+| `knowledge-management` | `.github/skills/knowledge-management/` | `KnowledgeManager`。`knowledge/` 配下の分類・命名・更新手順を確認するとき |
+| `dataflow-design-guide` | `.github/skills/dataflow-design-guide/` | `Arch-Dataflow-*`, `Dev-Dataflow-*`。ADFD / ADFDV の成果物契約、ジョブ単位・APP 単位の scope、テスト仕様を確認するとき |
+| `microservice-design-guide` | `.github/skills/microservice-design-guide/` | `Arch-Microservice-*`, `Dev-Microservice-*`。サービス定義・API 設計・境界コンテキストとの対応を確認するとき |
+
+### AI Agent / Retrieval 系 Skills
+
+| Skill 名 | パス | 使う条件 / 参照内容 |
+|---------|------|----------------------|
+| `ai-agent-capability-contract` | `.github/skills/ai-agent-capability-contract/` | AAG / AAGD の Agent 設計・実装・評価・デプロイで、goal loop・tools・identity・observability などの契約を確認するとき |
+| `agentic-retrieval-contract` | `.github/skills/agentic-retrieval-contract/` | Agentic Retrieval / Azure AI Search の KB / KS 契約、reasoning effort、evidence、budget を確認するとき |
+| `foundry-toolbox-contract` | `.github/skills/foundry-toolbox-contract/` | 多数の tool / workflow を扱う Agent で、toolbox・tool search・pin・lazy catalog の境界を確認するとき |
+
+上記のドメイン Skills は、HVE の成果物契約・要求トレーサビリティ・ワークフロー固有の設計判断を固定するための参照であり、汎用的なソフトウェア工学百科事典ではありません。Azure / Microsoft / MCP などの公式技術情報は、既存ルールどおり利用可能な公式ドキュメント / MCP ツールを一次参照し、MCP 関連タスクであっても必ずしも `SKILL.md` による代替を要求しません。
 
 ## APP-ID 指定方法
 
@@ -740,4 +749,3 @@ APP-ID 未指定の場合:
 - `adfd` / `adfdv`: `docs/catalog/app-arch-catalog.md` の `A) サマリ表（全APP横断）` から `データデータフロー処理` / `バッチ` の APP-ID が自動選択されます。
 - その他のワークフロー: 全サービス/全画面が対象となります（後方互換）。
 
-[^improvement-planner-phase4b]: 自己改善ループ（Self-Improve）の改善計画用として定義されていますが、2026-08-25 時点でどの実行経路からも呼び出されていません。

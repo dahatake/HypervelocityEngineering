@@ -39,7 +39,7 @@ TDD RED フェーズ: 画面別テスト仕様書（`docs/test-specs/{screenId}-
 ## Custom Agent
 `Dev-Microservice-Azure-UITestCoding` を使用
 
-## TDD RED 確認手順（必須）
+## TDD RED 確認手順
 1. Jest + jsdom テストを実行し、実結果を記録する（初回=実装なしのため全 FAIL＝RED、再実行=実装既存なら canonical スイートは PASS し得る。RED を作るための失敗テストは捏造しない）
 2. RED 確認結果（テスト実行ログ）を Issue コメントに記録する
 
@@ -49,7 +49,7 @@ TDD RED フェーズ: 画面別テスト仕様書（`docs/test-specs/{screenId}-
 ## 完了条件
 - `src/test/ui/` 配下に UI テストコードが生成されている
 - Jest テストが実行可能で実結果が記録されている（初回=全 FAIL＝RED、再実行=実装既存なら canonical スイートは PASS し得る。失敗テストの捏造なし）
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 - 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - `<workflow-id>` は HVE workflow id を指す。ASDW-WEB では `asdw-web` を使い、Agent 名 `Dev-Microservice-Azure-UITestCoding` を workflow id として使わない。
 - HVE から `## TDD report 出力先（HVE gate 必須）` として具体パスが提示された場合は、その具体パスを必ず優先する。

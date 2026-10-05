@@ -1,11 +1,12 @@
-"""security.py — ユーザー入力サニタイズ関数
+"""security.py — HVE 共通の最小サニタイズ関数。
 
-Issue Template の free-text 入力を
-LLM プロンプトへ埋め込む前にサニタイズするためのモジュール。
+用途の異なる次の2関数を提供する。
 
-既存のセキュリティ機構（permission_handler.py / workiq.py トークンマスク /
-orchestrator.py null バイト除去）と重複しないよう、
-本モジュールは「ユーザー自由記述入力のプロンプトインジェクション対策」に限定する。
+- ``sanitize_user_input``: free-textをLLM promptへ埋め込む前の構造保護。
+- ``sanitize_diagnostic_text``: 診断・ログ表示前の代表的なcredentialマスク。
+
+後者は完全な秘密情報検出を保証しない。permission判定やprompt injection対策の
+代替として使わず、診断出力の防御層にだけ使用する。
 """
 
 from __future__ import annotations
@@ -26,6 +27,32 @@ _PROMPT_DELIMITER_PATTERN = re.compile(
     r"(</?(?:system|assistant|user)>)",
     re.IGNORECASE,
 )
+
+
+def sanitize_diagnostic_text(text: str) -> str:
+    """診断用テキストの代表的な認証トークン・password・JWTをマスクする。
+
+    完全なサニタイズは保証しないため、credentialを保存可能にする判定や
+    ``sanitize_user_input``の代替には使用しない。
+    """
+    if not text:
+        return ""
+    sanitized = text
+    sanitized = re.sub(
+        r"(?i)\b(authorization\s*:\s*)(bearer|basic)\s+([A-Za-z0-9._~+/=-]+)",
+        r"\1\2 [REDACTED]",
+        sanitized,
+    )
+    sanitized = re.sub(
+        r"(?i)\b(token|access_token|refresh_token|id_token|api[_-]?key|apikey|password|passwd|pwd|secret|client[_-]?secret)\b(\s*[:=]\s*)([^\s,;]+)",
+        r"\1\2[REDACTED]",
+        sanitized,
+    )
+    return re.sub(
+        r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+\b",
+        "[REDACTED]",
+        sanitized,
+    )
 
 
 def is_sanitization_enabled() -> bool:

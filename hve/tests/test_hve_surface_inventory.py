@@ -45,7 +45,7 @@ IN_SCOPE_SAMPLES = (
     "tools/skills/markdown_query/vendor/mdq/store.py",
     ".github/copilot-instructions.md",
     ".github/instructions/hve-maintenance.instructions.md",
-    ".github/skills/harness/adversarial-review/SKILL.md",
+    ".github/skills/adversarial-review/SKILL.md",
     ".github/prompts/Arch-DataModeling.prompt.md",
     ".github/io-contracts/Arch-ImprovementPlanner.yaml",
     ".github/scripts/bash/validate-plan.sh",
@@ -91,7 +91,7 @@ VERSION_BUMP_REQUIRED_SAMPLES = (
     "template/sample.md",
     ".github/copilot-instructions.md",
     ".github/instructions/hve-maintenance.instructions.md",
-    ".github/skills/harness/adversarial-review/SKILL.md",
+    ".github/skills/adversarial-review/SKILL.md",
     ".github/prompts/Arch-DataModeling.prompt.md",
     ".github/io-contracts/Arch-ImprovementPlanner.yaml",
     ".github/scripts/hve_scope.py",
@@ -260,6 +260,62 @@ SURFACE_PROBES = (
     (".github/workflows/auto-approve-and-merge.yml", "cloud"),
 )
 
+TEST_PATH_CATEGORY_CASES = (
+    pytest.param(
+        "hve/tests/test_cli.py",
+        ("core-python", "hve-cli-orchestrator"),
+        id="hve-core",
+    ),
+    pytest.param(
+        "hve/gui/tests/test_window.py",
+        ("gui-python", "hve-gui-orchestrator"),
+        id="hve-gui",
+    ),
+    pytest.param(
+        ".github/scripts/python/tests/test_tool.py",
+        ("github-script-python", "cloud-orchestrator-scripts"),
+        id="gh-python",
+    ),
+    pytest.param(
+        ".github/scripts/powershell/tests/tool.Tests.ps1",
+        ("github-script-powershell", "cloud-orchestrator-scripts"),
+        id="gh-pwsh",
+    ),
+    pytest.param(
+        ".github/scripts/tests/test_tool.sh",
+        ("github-script-shell", "cloud-orchestrator-scripts"),
+        id="gh-shell",
+    ),
+    pytest.param(
+        "mdq/tests/test_cli.py",
+        ("mdq-support-python", "hve-mdq-support"),
+        id="mdq",
+    ),
+    pytest.param(
+        "cq/tests/test_store.py",
+        ("cq-support-python", "hve-cq-support"),
+        id="cq",
+    ),
+    pytest.param(
+        "mdq/gui/tests/test_window.py",
+        ("markdown-query-gui-support-python", "hve-mdq-support"),
+        id="mdq-gui",
+    ),
+    pytest.param(
+        "tests/bats/smoke.bats",
+        ("bats-shell", "hve-shell-launchers"),
+        id="bats",
+    ),
+)
+
+NESTED_TEST_PATH_LOOKALIKES = (
+    pytest.param("work/run/probe/artifacts/hve/tests/x.py", id="work"),
+    pytest.param("tmp/hve/gui/tests/x.py", id="tmp"),
+    pytest.param("vendor/.github/scripts/python/tests/x.py", id="vendor"),
+    pytest.param("other/mdq/tests/x.py", id="other"),
+    pytest.param(".github/sqlshell/tests/bats/x.bats", id="sqlshell"),
+)
+
 
 def _load_generator() -> ModuleType:
     spec = importlib.util.spec_from_file_location("generate_tdd_inventory", GENERATOR)
@@ -321,6 +377,78 @@ class TestSurfaceInventory:
         )
 
         assert generator.git_files() == ["hve/tests/existing.py"]
+
+    @pytest.mark.parametrize(("path", "expected"), TEST_PATH_CATEGORY_CASES)
+    def test_category_for_test_path_classifies_canonical_root(
+        self,
+        generator: ModuleType,
+        path: str,
+        expected: tuple[str, str],
+    ) -> None:
+        assert generator.category_for_test_path(path) == expected
+
+    @pytest.mark.parametrize("path", NESTED_TEST_PATH_LOOKALIKES)
+    def test_category_for_test_path_rejects_nested_lookalikes(
+        self,
+        generator: ModuleType,
+        path: str,
+    ) -> None:
+        assert generator.category_for_test_path(path) is None
+
+    def test_collect_tests_only_selects_repository_root_tests(
+        self,
+        generator: ModuleType,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        real = tmp_path / "hve" / "tests" / "test_real.py"
+        fake = (
+            tmp_path
+            / "work"
+            / "run"
+            / "probe"
+            / "artifacts"
+            / "hve"
+            / "tests"
+            / "test_fake.py"
+        )
+        real.parent.mkdir(parents=True)
+        fake.parent.mkdir(parents=True)
+        real.write_text("def test_real():\n    assert True\n", encoding="utf-8")
+        fake.write_text("def test_fake():\n    assert False\n", encoding="utf-8")
+        monkeypatch.setattr(generator, "ROOT", tmp_path)
+
+        rows, selected_files = generator.collect_tests(
+            [
+                "hve/tests/test_real.py",
+                "work/run/probe/artifacts/hve/tests/test_fake.py",
+            ]
+        )
+
+        assert selected_files == ["hve/tests/test_real.py"]
+        assert {str(row["file"]) for row in rows} == {"hve/tests/test_real.py"}
+
+        tree = ast.parse(GENERATOR.read_text(encoding="utf-8"))
+        classifier = next(
+            node
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "category_for_test_path"
+        )
+        patterns = [
+            node.args[0].value
+            for node in ast.walk(classifier)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "re"
+            and node.func.attr == "search"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        ]
+        assert len(patterns) == len(TEST_PATH_CATEGORY_CASES)
+        assert all(pattern.startswith("^") for pattern in patterns)
 
     def test_fieldnames_match_requirement(self, generator: ModuleType) -> None:
         assert generator.SURFACE_FIELDNAMES == EXPECTED_SURFACE_FIELDNAMES

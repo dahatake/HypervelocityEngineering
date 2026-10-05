@@ -2,11 +2,15 @@
 
 ← [README](../README.md)
 
+> OS だけの環境から初回起動する場合は、先に [HVE の1操作起動](./hve-one-operation-start.md) を参照してください。このページは、手動の開発環境セットアップと GUI 操作の詳細です。
+
 > **対象読者**: ローカル PC（Windows / macOS / Linux）から GUI ウィザードでワークフローを実行したい初めての方
 > **前提**: Python 3.11+ / Git / GitHub Copilot ライセンス
 > **別の方式**: [hve-cloud-getting-started.md](./hve-cloud-getting-started.md)（Cloud）/ [hve-cli-getting-started.md](./hve-cli-getting-started.md)（CLI）
 
 このガイドは、GUI Orchestrator を「動かしてみる」までの最小手順をまとめたチュートリアルです。GUI の各画面・全オプションの詳細は [hve-gui-orchestrator-guide.md](./hve-gui-orchestrator-guide.md) を参照してください。
+
+Step 1右ペインから任意の文書を追加・代替する方法は、[Workflow / Step入力ガイド](./step-inputs.md#gui)を参照してください。
 
 ---
 
@@ -25,7 +29,7 @@
 | ツール | 必須 / 任意 | メモ |
 |---|---|---|
 | Python 3.11+ | 必須 | `py -3.11 --version` または `python3 --version` で確認 |
-| PySide6 >= 6.6 | 必須 | セットアップスクリプトで自動インストール |
+| PySide6 >= 6.11 | 必須 | セットアップスクリプトで自動インストール |
 | Git | 必須 | リポジトリ取得 |
 | GitHub CLI (`gh`) | 必須 | セットアップスクリプトが自動導入。認証は `gh auth login` または GUI の「GitHub CLI でログイン」 |
 | PTY バックエンド（`pywinpty` / `ptyprocess`） | 必須 | GUI の「GitHub CLI でログイン」の埋め込み端末用。セットアップスクリプトが導入し、完了前に利用可否を検証 |
@@ -56,16 +60,18 @@ Copilot ライセンスが付与されているアカウントでログインし
 
 HVE の Step 実行は GitHub Copilot SDK を使います。初回または認証切れ時は次を実行してください。
 
+これは前項の GitHub REST / Issue / PR 用 `gh auth login` とは別の認証です。
+
 ```bash
 python -m hve login
 ```
 
-GitHub Copilot SDK へのログインは、上記のとおり CLI（`python -m hve login`）から行います。ログイン完了後は、GUI ステータスバーの **「利用できるモデルの取得」** ボタン（または「HVE 設定」→「基本設定」の一番上にある同名ボタン）を押すと、利用可能なモデル一覧を取得できます。ステータスバーには **「使用するモデル」** / **「Effort」** の選択コンボがあり、その場で直接選択を変更できます（変更は即座に反映され、「HVE 設定」の表示にも反映されます）。
+GitHub Copilot SDK へのログインは、上記のとおり CLI（`python -m hve login`）から行います。ログイン完了後に通常 GUI を起動すると、初回ウィンドウの表示直後に利用可能なモデル一覧をバックグラウンドで1回自動取得します。取得中は、ステータスバーと「HVE 設定」→「基本設定」にある同名の取得ボタンが両方とも一時的に無効になり、重複取得は開始しません。取得失敗時は警告ダイアログ、空結果では0件のステータスを表示しますが、索引差分更新・知識源確認・Workflow実行のstatusが同時に必要な場合はそちらを優先します。GUI は起動を継続し、既存のキャッシュと選択肢を維持します。GUI ステータスバーの **「利用できるモデルの取得」** ボタン（または設定画面の同名ボタン）は、手動で再取得または失敗後の再試行をするときに使います。取得中にウィンドウを閉じた場合は、安全に取得を終えてから終了します。ステータスバーには **「使用するモデル」** / **「Effort」** の選択コンボがあり、その場で直接選択を変更できます（変更は即座に反映され、「HVE 設定」の表示にも反映されます）。新規設定の既定値は **`claude-opus-5.5`** と **`context_tier=long_context`** です。
 
 > **GUI 設定画面からのログイン（任意）**
 >
-> 端末で `gh auth login` を実行する代わりに、GUI の **設定 → 各サービス連携 → GitHub** にある
-> **「GitHub CLI でログイン」** ボタンからも認証できます。押下すると埋め込み端末で
+> 端末で `gh auth login` を実行する代わりに、GUI ヘッダーの **[GitHub]** から開く
+> **GitHub Hub → [連携設定] →「GitHub CLI でログイン」** ボタンからも認証できます。押下すると埋め込み端末で
 > `gh auth login` を実行し、完了後に `gh auth token` で取得したトークンを
 > **このセッション限り** `GH_TOKEN` 環境変数へ設定します。これにより「ブランチ取得」や
 > Issue / PR 作成（GitHub REST を使う機能）が有効化されます。
@@ -125,6 +131,8 @@ hve.cmd gui
 ```
 
 `hve.cmd` / `hve.sh` は `.venv` の Python で `python -m hve` を実行するランチャーです（activate 不要）。引数なしでも GUI が起動します。ウィンドウが開けばセットアップ完了です。
+
+ただし、現在の checkout の HVE 版がインストール済み metadata より新しい場合、または metadata を確認できない場合は、GUI を表示する前に端末で setup 実行の確認が表示されます。`yes` を選ぶと既存の `hve/setup-hve.ps1` / `hve/setup-hve.sh` を通常モードで起動し、setup 成功後に版一致を再確認して同じコマンドを 1 回再起動します。`no` または Enter は更新せず続行し、標準入力が TTY でない場合は警告のみで続行します。この確認は GUI ダイアログではなく、Git remote / GitHub API / PyPI も参照しません。
 
 ---
 
@@ -187,7 +195,7 @@ ARD のチェックボックスを ON にすると、選択状態が反映され
 
 #### ステップ 2: 実行確認と実行
 
-「次へ」を押すと実行画面（Step 2）に遷移し、`Step 0/9` から進行が始まります。ログ・作業状況ツリー・実行中の課題などがリアルタイムで表示されます。
+「次へ」を押すと実行画面（Step 2）に遷移し、選択したワークフローと Step 数に応じた進行表示が始まります。ログ・作業状況ツリー・実行中の課題などがリアルタイムで表示されます。
 
 ![GUI Step 2 (実行): 進行状況・ログ・作業状況ツリー](./images/screenshots/gui-04-step2-execution.png)
 
@@ -207,7 +215,7 @@ ARD のチェックボックスを ON にすると、選択状態が反映され
 |---|---|---|
 | 環境構築 | セットアップスクリプトの終了コード | `0`、かつ `[OK] PTY backend for the embedded GitHub CLI terminal` が出力される |
 | GUI 起動 | `hve.cmd gui` / `./hve.sh gui` | ウィンドウが開く |
-| SDK 認証 | ステータスバーの「利用できるモデルの取得」 | モデル一覧が取得できる |
+| SDK 認証 | 通常 GUI 起動時の自動取得、またはステータスバーの「利用できるモデルの取得」による再取得 | モデル一覧が取得できる |
 | 実行 | Step 2 の進行表示と作業状況ツリー | 全 Step が完了として表示される |
 | 成果物 | ファイルツリーパネル、または `docs/` を直接確認 | 上記 3 つの成果物が生成・更新されている |
 

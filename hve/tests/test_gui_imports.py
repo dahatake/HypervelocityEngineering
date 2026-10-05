@@ -176,13 +176,11 @@ class TestOrchestrateArgs(unittest.TestCase):
             dry_run=True,
             auto_qa=True,
             quiet=True,
-            self_improve=True,
         )
         argv = a.to_argv()
         self.assertIn("--dry-run", argv)
         self.assertIn("--auto-qa", argv)
         self.assertIn("--quiet", argv)
-        self.assertIn("--self-improve", argv)
 
     def test_enable_auto_merge_to_argv(self) -> None:
         """enable_auto_merge=True で --enable-auto-merge が argv に含まれる（案 P 全自動）。"""
@@ -195,46 +193,44 @@ class TestOrchestrateArgs(unittest.TestCase):
         self.assertNotIn("--enable-auto-merge", off.to_argv())
 
     def test_workiq_options(self) -> None:
-        """Work IQ オプション 11 個の argv 生成。"""
+        """Work IQ と追加知識源だけを argv へ生成する（FR-KD-01）。"""
         from hve.gui.orchestrate_args import OrchestrateArgs
 
-        a = OrchestrateArgs(
-            workflow="akm",
-            workiq=True,
-            workiq_akm_review=True,
-            workiq_akm_ingest=False,
-            workiq_dxx="D01,D04",
-            workiq_draft=True,
-            workiq_draft_output_dir="qa",
-            workiq_tenant_id="tenant-id-123",
-            workiq_prompt_qa="custom qa prompt",
-            workiq_prompt_km="custom km prompt",
-            workiq_prompt_review="custom review prompt",
-            workiq_per_question_timeout=1800.0,
-            workiq_request_timeout=600.0,
-        )
+        a = OrchestrateArgs(workflow="akm", workiq=True, knowledge_sources=" docs-mcp,crm ")
         argv = a.to_argv()
         self.assertIn("--workiq", argv)
-        self.assertIn("--workiq-akm-review", argv)
-        self.assertIn("--no-workiq-akm-ingest", argv)
-        self.assertIn("--workiq-dxx", argv)
-        self.assertIn("D01,D04", argv)
-        self.assertIn("--workiq-draft", argv)
-        self.assertIn("--workiq-tenant-id", argv)
-        self.assertIn("tenant-id-123", argv)
-        self.assertIn("--workiq-per-question-timeout", argv)
-        self.assertIn("1800.0", argv)
-        self.assertIn("--workiq-request-timeout", argv)
-        self.assertIn("600.0", argv)
+        idx = argv.index("--knowledge-source")
+        self.assertEqual(argv[idx + 1], "docs-mcp,crm")
+        self.assertFalse(any(token.startswith("--workiq-") for token in argv))
+
+    def test_removed_workiq_runtime_fields_are_rejected(self) -> None:
+        from hve.gui.orchestrate_args import OrchestrateArgs
+
+        for field_name, value in (
+            ("workiq_tenant_id", "tenant"),
+            ("workiq_request_timeout", 300.0),
+            ("workiq_prompt_review", "review"),
+            ("workiq_akm_review", True),
+            ("workiq_akm_ingest", False),
+            ("workiq_dxx", "D01"),
+            ("workiq_draft", True),
+            ("workiq_draft_output_dir", "qa"),
+            ("workiq_prompt_qa", "qa"),
+            ("workiq_prompt_km", "km"),
+            ("workiq_per_question_timeout", 1800.0),
+        ):
+            with self.subTest(field_name=field_name):
+                with self.assertRaises(TypeError):
+                    OrchestrateArgs(workflow="akm", **{field_name: value})
 
     def test_tristate_combobox_value_inherit(self) -> None:
         """TriState が None の場合は引数に含まれない（継承）。"""
         from hve.gui.orchestrate_args import OrchestrateArgs
 
-        a = OrchestrateArgs(workflow="akm", workiq_akm_review=None)
+        a = OrchestrateArgs(workflow="akm", banner=None)
         argv = a.to_argv()
-        self.assertNotIn("--workiq-akm-review", argv)
-        self.assertNotIn("--no-workiq-akm-review", argv)
+        self.assertNotIn("--banner", argv)
+        self.assertNotIn("--no-banner", argv)
 
     def test_tristate_combobox_value_false(self) -> None:
         """TriState が False の場合は --no-* フラグが付く。"""

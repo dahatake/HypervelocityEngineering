@@ -27,6 +27,11 @@ def _format(**overrides):
 
 
 class TestProgressMarkdown:
+    def test_final_console_uses_the_generic_diagnostic_sanitizer(self) -> None:
+        from hve import security
+
+        assert _module().sanitize_diagnostic_text is security.sanitize_diagnostic_text
+
     def test_has_stable_run_marker_and_heading(self) -> None:
         text = _format()
         assert "<!-- hve-progress:run=run-123 -->" in text

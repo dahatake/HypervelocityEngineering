@@ -689,6 +689,24 @@ def _write_min_app_catalog(tmp_path, app_ids):
     )
 
 
+def _write_min_app_arch_catalog(tmp_path, rows):
+    """app-arch-catalog.md の canonical summary table を書き出す。"""
+    p = tmp_path / "docs" / "catalog" / "app-arch-catalog.md"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    body = "\n".join(
+        f"| {app_id} | name-{app_id} | {architecture} |"
+        for app_id, architecture in rows
+    )
+    p.write_text(
+        "# App Architecture Catalog\n\n"
+        "## A) サマリ表（全APP横断）\n\n"
+        "| APP-ID | APP名 | 推薦アーキテクチャ |\n"
+        "|---|---|---|\n"
+        f"{body}\n",
+        encoding="utf-8",
+    )
+
+
 def _write_min_screen_catalogs(tmp_path, screens_by_app):
     """screen-catalog-APP-NN.md を APP-ID 毎に作成する。
 
@@ -906,6 +924,36 @@ def test_parse_dataflow_catalog_fallback_to_app_catalog(tmp_path):
     # app-arch-catalog.md は作らない
     result = parse_dataflow_catalog(tmp_path)
     assert set(result) == {"APP-01", "APP-07", "APP-09"}
+
+
+def test_parse_dataflow_catalog_prefers_batch_apps_from_app_arch_catalog(tmp_path):
+    """primary catalog があればデータフロー推薦 APP-ID だけを返す。"""
+    from hve.catalog_parsers import parse_dataflow_catalog
+
+    _write_min_app_catalog(tmp_path, ["APP-01", "APP-02", "APP-03"])
+    _write_min_app_arch_catalog(
+        tmp_path,
+        [
+            ("APP-01", "Webフロントエンド + クラウド"),
+            ("APP-02", "データフロー処理"),
+            ("APP-03", "バッチ"),
+        ],
+    )
+
+    assert parse_dataflow_catalog(tmp_path) == ["APP-02", "APP-03"]
+
+
+def test_parse_dataflow_catalog_falls_back_when_primary_has_no_batch_apps(tmp_path):
+    """primary に該当 APP が無い場合は app-catalog の全 APP-IDへ戻る。"""
+    from hve.catalog_parsers import parse_dataflow_catalog
+
+    _write_min_app_catalog(tmp_path, ["APP-01", "APP-02"])
+    _write_min_app_arch_catalog(
+        tmp_path,
+        [("APP-01", "Webフロントエンド + クラウド")],
+    )
+
+    assert parse_dataflow_catalog(tmp_path) == ["APP-01", "APP-02"]
 
 
 def test_parse_dataflow_catalog_returns_empty_when_no_catalog(tmp_path):

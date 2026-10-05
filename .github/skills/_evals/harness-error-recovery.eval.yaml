@@ -5,7 +5,7 @@
 # - CI や手動レビューでの Skill ルーティング検証に使用
 
 skill: harness-error-recovery
-skill_path: .github/skills/harness/harness-error-recovery/SKILL.md
+skill_path: .github/skills/harness-error-recovery/SKILL.md
 description: エラー発生時の統一リカバリ契約。エラー分類ごとのリカバリフローと3要素出力（root_cause_hint / safe_retry_instruction / stop_condition）を提供するスキル。
 
 test_cases:

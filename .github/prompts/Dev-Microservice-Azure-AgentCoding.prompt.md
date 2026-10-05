@@ -2,7 +2,7 @@
 
 > **WORK**: `work/run/<run-id>/Dev-Microservice-Azure-AgentCoding/Issue-<識別子>/`
 
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 
 - 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とし、実行ログを `docs/` / `src/` に追記しない。
@@ -47,18 +47,9 @@ Azure AI Foundry Agent Service を使用した AI Agent 実装（TDD GREEN フ�
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
-
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 
@@ -66,7 +57,6 @@ Azure AI Foundry Agent Service を使用した AI Agent 実装（TDD GREEN フ�
 - `harness-verification-loop` — Build/Lint/Test/Security/Diff の 5 段階検証
 - `harness-error-recovery` — ビルド・テスト失敗時の E-01〜E-05 リカバリ
 - `harness-safety-guard` — ツール実行時の破壊的操作検出と中断
-- `karpathy-guidelines` — 実装時の LLM 共通ミス防止指針
 - `ai-agent-capability-contract` — AG-CAP-01〜10 の選択能力、実装境界、GREEN判定
 - `agentic-retrieval-contract` — Section 7.0 で Foundry IQ / Azure AI Search Agentic Retrieval を選んだ場合の AR-CAP-01〜05 実装境界
 - `foundry-toolbox-contract` — Tool 総数が 15 を超える場合の TB-CAP-01〜05 実装境界（Toolbox / tool search）
@@ -78,13 +68,9 @@ Azure AI Foundry Agent Service を使用した AI Agent 実装（TDD GREEN フ�
 - 実装コードは Azure AI Foundry へデプロイ可能にしつつ、Endpoint、モデル名、Tool サービス URL、認証情報は環境変数または設定ファイルから読み込む。
 - 接続文字列・API キー・Bearer token 等の秘密情報をコード、README、ログにハードコードしない。README にはローカル実行コマンドとデプロイ先で使う設定キー名を記載する。
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードに加え、Microsoft 365 / Work IQ MCP / Fabric IQ / Azure AI Search / Foundry IQ / Foundry Agent Service の Tool・認証・権限・path・operation仕様を扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項 / 確認日** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
-
-### Microsoft Foundry required meta skill workflow（必須）
+### Microsoft Foundry required meta skill workflow
 
 - AAGD Step.2.3 は Foundry-required Step である。session で公開済みの `microsoft-foundry` meta skillを必ず最初に読む。以後はその指示に従う。
 1. 実装を開始する前に、repository-pinned Azure MCP の利用可能な Foundry関連toolを最初に発見する。server名・tool名を推測しない。MCP server を新規追加・接続構成変更しない。既に接続済みの official MCP だけを discovery 対象とする。
@@ -96,7 +82,7 @@ Azure AI Foundry Agent Service を使用した AI Agent 実装（TDD GREEN フ�
 - 対象は **1 Agent 分のみ**：`{key}`（canonical Agent ID。名称はAgent一覧から参照）。
 - 目的は「Agent 詳細設計書の System Prompt・Tool Catalog・State Machine を実装コードに変換し、TDD テストを全て PASS させる」。
 - **Microsoft Foundry（Azure AI Foundry Agent Service）** を使用して Agent を実装する。
-- "全 Agent 対応""設計刷新""横断リファクタ"は範囲外（必要なら Skill task-dag-planning の分割ルールで別タスク化）。
+- "全 Agent 対応""設計刷新""横断リファクタ"は範囲外（必要なら別タスク化）。
 
 # 2) Microsoft Foundry 実装制約（必須遵守）
 
@@ -257,7 +243,7 @@ Issue body または追加コメントにプログラミング言語の指定が
   - Web 検索は上記 MCP で解決できない場合のみ用いる。
 - 参照した公式情報の URL を作業ログに記録する。
 
-## 6.5) TDD REFACTOR フェーズ（必須）
+## 6.5) TDD REFACTOR フェーズ
 GREEN 確認後、以下の観点でプロダクションコードのリファクタリングを行う:
 - **重複排除**: 同一ロジックの共通化（ヘルパー/ユーティリティメソッドへの抽出）
 - **命名改善**: 変数名・メソッド名・ファイル名の意図明確化
@@ -270,7 +256,7 @@ GREEN 確認後、以下の観点でプロダクションコードのリファ�
 
 ## テストコード保護ルール
 - GREEN フェーズでは **実装コードのみを修正する**（`src/test/agent/` のテストコードは原則変更禁止）
-- テストが要件と矛盾している場合は、変更前に Issue コメントで確認を求める
+- テストが要件と矛盾している場合は、要件を優先し、矛盾・理由・影響を作業ログに記録して続行する
 
 # 7) Azure AI Foundry Agent Service 実装ガイドライン
 
@@ -350,11 +336,11 @@ var client = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential()
 - 環境変数・設定項目が設定ファイルで管理されている（ハードコードなし）。
 - 作業ログと README が更新されている。
 
-# 11) 最終品質レビュー（単回インライン・セルフチェック）
+# 11) 受入観点（完了条件の補足）
 
-## 11.1 セルフチェック契約
+## 11.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ## 11.2 ドメイン固有観点
 - **設計書との整合性・要件達成度**：Agent詳細設計のGoal Contract / Runtime Goal Loop / route / REST CRUD / MCP / Skill / Guardrails / Observability / System Promptが選択結果どおり実装され、未選択能力の不要artifactがないか
@@ -362,7 +348,7 @@ var client = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential()
 - **保守性・セキュリティ・堅牢性**：有限停止条件、同一action反復拒否、read-only / SELECT-only境界、REST mutation、HITL/RBAC、Tool allowlist、エラー時のpartial/blocked/Handoff、監査redactionが設計どおりか
 
 ## 11.3 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

@@ -71,3 +71,16 @@ def test_registry_import_failure_degrades_to_all_groups_off(qapp, monkeypatch) -
     )
     grp = _WorkflowStepsGroup("ard", "ARD", [])
     assert grp.enabled_step_ids() == []
+
+
+def test_adi_questionnaire_steps_are_unchecked_by_default(qapp) -> None:
+    """N5-2 / FR-WF-ADI-18（v3.33）: GUI の既定チェックも registry の既定に従う。"""
+    from hve.gui.page_workflow_select import _load_workflow_steps
+
+    grp = _WorkflowStepsGroup("adi", "ADI", _load_workflow_steps("adi"))
+    try:
+        enabled = set(grp.enabled_step_ids())
+        assert "1.1" not in enabled and "1.2" not in enabled
+        assert {"1", "2"} <= enabled
+    finally:
+        grp.deleteLater()

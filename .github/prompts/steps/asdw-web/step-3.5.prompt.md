@@ -28,7 +28,7 @@ Step.3.4 で Azure Compute（Azure Functions 等）にデプロイ済みのサ�
 ## Custom Agent
 `Dev-Microservice-Azure-ComputePostDeployTest` を使用（本仕様作成は別タスク）
 
-## 検証手順（必須）
+## 検証手順
 1. Step.3.3 のサービステストを、エンドポイント環境変数を本番エンドポイントに切り替えて実行する
 2. FAIL があれば原因を切り分け（デプロイ設定 / Compute 構成 / 周辺サービス）し、必要なら Step.3.4 のスクリプトを修正して再デプロイ
 3. 全テスト PASS を確認

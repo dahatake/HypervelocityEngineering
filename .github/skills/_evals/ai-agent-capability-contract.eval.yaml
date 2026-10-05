@@ -16,7 +16,7 @@ test_cases:
     expected_trigger: true
     verify:
       - type: contract
-        detail: "Goal Contractと有限Runtime Goal Loopを実装し、HVE Post-DAG Self-Improveと混同しない"
+        detail: "Goal Contractと有限Runtime Goal Loopを実装し"
     reason: "AAGDのAgent実装とRuntime Goal Loopは本Skillの対象"
 
   - id: aagd-agent-search-routing
@@ -60,8 +60,8 @@ test_cases:
   - id: generic-mcp-server-design
     input: "既存データベースを公開する汎用MCP Serverの責務とAPIを設計したい"
     expected_trigger: false
-    expected_skill: mcp-server-design
-    reason: "生成AgentのMCP接続ではなく、汎用MCP Server設計は別Skillの責務"
+    expected_skill: null
+    reason: "生成AgentのMCP接続ではなく、汎用MCP Serverの責務やAPIに関する一般的な公式情報参照の相談であり、HVEのAAG/AAGD能力契約へ強制しない"
 
   - id: standalone-sql-query
     input: "売上テーブルから月別合計を取得するSQL文だけを書いてほしい"

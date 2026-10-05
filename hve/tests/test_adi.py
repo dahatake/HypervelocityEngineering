@@ -12,12 +12,14 @@ _repo_root = os.path.join(os.path.dirname(__file__), "..", "..")
 sys.path.insert(0, os.path.abspath(_repo_root))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from hve.config import SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS  # noqa: E402
 from hve.orchestrator import _collect_params_non_interactive  # noqa: E402
 from hve.template_engine import _WORKFLOW_DISPLAY_NAMES  # noqa: E402
 from hve.workflow_registry import get_workflow  # noqa: E402
 
 _HVE_DIR = Path(__file__).resolve().parents[1]
+_REQUIREMENT_DEFINITION = (
+    Path(__file__).resolve().parents[2] / "hve-dev" / "requirement-definition.md"
+)
 
 _main_path = os.path.join(os.path.dirname(__file__), "..", "__main__.py")
 _spec = _ilu.spec_from_file_location("hve_main_for_adi", os.path.abspath(_main_path))
@@ -150,6 +152,23 @@ def test_adi_fanout_uses_inventory_parser() -> None:
     assert step.additional_prompt_template_path == ".github/prompts/fanout/adi/_common.prompt.md"
 
 
+def test_fr_dag_04_declares_adi_step_2_inventory_parser() -> None:
+    """FR-DAG-04 が ADI Step 2 の実在 parser を列挙すること。"""
+    step = get_workflow("adi").get_step("2")
+    assert step is not None
+    text = _REQUIREMENT_DEFINITION.read_text(encoding="utf-8")
+    block = text.split("- **FR-DAG-04**:", 1)[1].split("- **FR-DAG-05**:", 1)[0]
+
+    declarations = [
+        line
+        for line in block.splitlines()
+        if f"`{step.fanout_parser}`" in line and "ADI Step 2" in line
+    ]
+    assert len(declarations) == 1, (
+        "design_doc_inventory と利用元 ADI Step 2 を同じ列挙行で宣言していない"
+    )
+
+
 def test_adi_step_dependencies_are_serial() -> None:
     wf = get_workflow("adi")
     step_11 = wf.get_step("1.1")
@@ -177,26 +196,6 @@ def test_adi_step1_contract() -> None:
     assert step.output_paths_template == [
         "docs/original-design-doc-ingest/*/content.md",
     ]
-
-
-def test_adi_self_improve_scope() -> None:
-    assert SELF_IMPROVE_WORKFLOW_SCOPE_DEFAULTS["adi"] == "docs/original-design-doc-ingest/"
-
-
-def test_adi_owns_integrated_questionnaire_self_improve_context() -> None:
-    from hve.self_improve import (
-        _WORKFLOW_AGENT_MAP,
-        _WORKFLOW_KNOWLEDGE_MAP,
-        _WORKFLOW_TASK_GOALS,
-    )
-
-    assert "QA-DocConsistency.agent.md" in _WORKFLOW_AGENT_MAP["adi"]
-    assert _WORKFLOW_KNOWLEDGE_MAP["adi"] == ["D01", "D02"]
-    assert "原本質問票" in _WORKFLOW_TASK_GOALS["adi"]["goal_description"]
-    removed_id = "aq" + "od"
-    assert removed_id not in _WORKFLOW_AGENT_MAP
-    assert removed_id not in _WORKFLOW_KNOWLEDGE_MAP
-    assert removed_id not in _WORKFLOW_TASK_GOALS
 
 
 def test_adi_registered_in_skill_manifest() -> None:
@@ -313,3 +312,32 @@ def test_adi_questionnaire_main_outputs_are_separate_from_pre_qa_file() -> None:
     assert not is_original_docs_questionnaire_filename(
         Path("qa/Issue-1-questionnaire-answered-abc12345.md")
     )
+
+
+def test_adi_questionnaire_steps_can_be_skipped() -> None:
+    """N5-2 / FR-WF-ADI-18（v3.29）: Step 1.1 / 1.2 を選ばない実行でも Step 2 へ進める。"""
+    adi = get_workflow("adi")
+    step_2 = adi.get_step("2")
+    assert step_2.depends_on == ["1.2"]
+    assert step_2.skip_fallback_deps == ["1"]
+    assert "qa/original-docs-cross-questionnaire.md" not in step_2.required_input_paths
+
+
+def test_adi_questionnaire_steps_are_not_selected_by_default() -> None:
+    """N5-2 / FR-WF-ADI-18（v3.33）: 既定の選択から 1.1 / 1.2 を外す。"""
+    from hve.workflow_registry import default_step_ids
+
+    defaults = default_step_ids("adi")
+    assert "1.1" not in defaults and "1.2" not in defaults
+    assert defaults[0] == "1" and "2" in defaults
+    assert default_step_ids("aas") == []
+
+
+def test_cli_without_steps_uses_the_registry_default_selection() -> None:
+    from hve.__main__ import _build_parser, _build_params
+
+    args = _build_parser().parse_args(["orchestrate", "--workflow", "adi", "--dry-run"])
+    params = _build_params(args)
+    assert "1.1" not in params["steps"] and "1" in params["steps"]
+    explicit = _build_params(_build_parser().parse_args(["orchestrate", "-w", "adi", "--steps", "1,1.1,1.2", "--dry-run"]))
+    assert explicit["steps"] == ["1", "1.1", "1.2"]

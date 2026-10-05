@@ -542,14 +542,17 @@ class TestARDGroupStepExpansion(unittest.TestCase):
         self.assertTrue({"2", "3.1", "3.2", "3.3"}.issubset(active))
 
 
-class TestARDPromptConstant(unittest.TestCase):
-    def test_workiq_usecase_prompt_exists(self):
-        from hve.prompts import ARD_WORKIQ_USECASE_PROMPT
-        self.assertIn("{business_requirement_content}", ARD_WORKIQ_USECASE_PROMPT)
-        self.assertIn("{workiq_result}", ARD_WORKIQ_USECASE_PROMPT)
-        self.assertIn("{company_name}", ARD_WORKIQ_USECASE_PROMPT)
-        self.assertIn("docs/company-business-requirement.md", ARD_WORKIQ_USECASE_PROMPT)
-        self.assertIn("docs/catalog/use-case-catalog.md", ARD_WORKIQ_USECASE_PROMPT)
+class TestARDKnowledgeDiscoveryGoal(unittest.TestCase):
+    """FR-KD-08: ARD の Work IQ 専用プロンプトは知識探索の目的文へ置き換えた。"""
+
+    def test_workiq_usecase_prompt_constant_is_removed(self):
+        import hve.prompts as prompts
+        self.assertFalse(hasattr(prompts, "ARD_WORKIQ_USECASE_PROMPT"))
+
+    def test_goal_names_company_and_falls_back_to_unspecified(self):
+        from hve.orchestrator import _ard_knowledge_discovery_goal
+        self.assertIn("ACME", _ard_knowledge_discovery_goal({"company_name": " ACME "}))
+        self.assertIn("未指定", _ard_knowledge_discovery_goal({}))
 
 
 class TestARDWorkflowRegistryBodyTemplatePaths(unittest.TestCase):

@@ -8,8 +8,8 @@ inputs:
 - path: knowledge/Dxx-*.md
   required: true
   kind: static
-- path: qa/*-workiq-*.md
-  required: true
+- path: qa/*-knowledge-discovery-qa*.md
+  required: false
   kind: static
 - path: template/business-requirement-document-master-list.md
   required: true

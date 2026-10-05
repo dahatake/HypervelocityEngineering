@@ -18,6 +18,7 @@ AI Agentを設計・実装するための汎用設計ドキュメントです。
 > **共通能力契約**: AAG / AAGD では Skill `ai-agent-capability-contract` を参照し、AG-CAP-01〜10を設計・テスト・実装・検証します。詳細は `.github/skills/ai-agent-capability-contract/SKILL.md` を参照してください。
 
 > **注記**: 本ドキュメントの Step 1〜3 に掲載する Prompt は **手動実行用** です。AAG / AAGD で自動実行する場合の Single Source of Truth は [`.github/prompts/Arch-AIAgentDesign-Step1.prompt.md`](../.github/prompts/Arch-AIAgentDesign-Step1.prompt.md) / [`Step2`](../.github/prompts/Arch-AIAgentDesign-Step2.prompt.md) / [`Step3`](../.github/prompts/Arch-AIAgentDesign-Step3.prompt.md) であり、本文ではありません。両者は同一内容を保証しません。
+> 手動実行用 Prompt に含まれる分割・確認質問の記述は、HVE の現行自動実行契約そのものではありません。自動実行の停止条件・事前承認・質問票例外は `.github/copilot-instructions.md`、`hve-prompt-edition`、`task-questionnaire`、FR-CLI-103 を正本として確認してください。
 
 ## 対象読者・前提・次のステップ
 
@@ -152,7 +153,7 @@ Prompt:
 > | ドキュメント上の Step | ワークフロー | hve ワークフロー ID | Step ID（コード上） |
 > |---|---|---|---|
 > | Step 1〜3（設計フェーズ） | AI Agent Design | `aag` | 1 / 2 / 3 |
-> | Step 4（実装・Deployフェーズ） | AI Agent Dev & Deploy | `aagd` | 1 / 2.1 / 2.2 / 2.3 / 3 / 4 / 5 |
+> | Step 4（実装・Deployフェーズ） | AI Agent Dev & Deploy | `aagd` | 1 / 2.1 / 2.2 / 2.3 / 3 / 4 / 5 / 6 / 7 |
 >
 > hve CLI で実行する場合: `hve orchestrate -w aag` → `hve orchestrate -w aagd`
 > Issue Template から実行する場合: `ai-agent-design.yml`（AAG）→ `ai-agent-dev.yml`（AAGD）
@@ -181,6 +182,10 @@ Prompt:
 | AAGD | 3 | `Dev-Microservice-Azure-AgentDeploy` |
 | AAGD | 4 | `QA-ToolSearchEval`（`--enable-tool-search no` では skip） |
 | AAGD | 5 | `QA-RequirementsConformanceEval` |
+| AAGD | 6 | `QA-AgentRouteRightsizingEval` |
+| AAGD | 7 | `Dev-Agent-M365Publish` |
+
+> AAGD Step `1` は AAG Step `1` と同じ `Arch-AIAgentDesign-Step1` を使います。既存の `docs/agent/agent-application-definition.md` がある場合は削除・再生成ではなく、Azure 設計や対象ユースケースで変わる点だけを差分追記します。
 
 ### 生成する AI Agent の Agentic Retrieval 方針
 
@@ -680,7 +685,7 @@ Step 1〜3 で完成した設計書（アプリケーション定義・アーキ
 
 1. **Step.2.7T**: テスト仕様書の生成（TDD RED フェーズ）
 2. **Step.2.7TC**: テストコードの生成（TDD RED コード）— build/collection成功後、未実装production behaviorのテストが1件以上FAILしてsuite全体がREDであることを確認
-3. **Step.2.7**: Agent 実装コードの生成（TDD GREEN フェーズ）— 全テスト PASS まで最大 5 回反復後、REFACTOR フェーズを実施
+3. **Step.2.7**: Agent 実装コードの生成（TDD GREEN フェーズ）— `src/test/agent/{key}.Tests/` の対象テストが PASS するまで最大 5 回反復後、REFACTOR フェーズを実施
 4. **Step.2.8**: Azure AI Foundry Agent Service へのデプロイ（検証は最大 3 回反復）
 
 ### 事後 HITL フロー（リトライ上限超過後）
@@ -739,7 +744,7 @@ build/collection成功後、未実装production behaviorのテストが1件以�
 
 ```text
 # タスク
-Agent 詳細設計書から AI Agent を実装し、全テストを PASS させる（TDD GREEN フェーズ）。
+Agent 詳細設計書から AI Agent を実装し、`src/test/agent/{key}.Tests/` の対象テストを PASS させる（TDD GREEN フェーズ）。
 Microsoft Foundry（Azure AI Foundry Agent Service）を使用して Agent を実装する。
 
 ## 重要

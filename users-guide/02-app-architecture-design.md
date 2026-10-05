@@ -703,7 +703,7 @@ Step 7 のペルソナ一覧を前提に、複数 APP-ID で共通化できる�
    - **対象ブランチ**: 設計ドキュメントをコミットするブランチ名 (例: `main`)
   - **実行 Runner**: GitHub Hosted または Self-hosted (ACA)
    - **実行するステップ**: 実行したい Step にチェック（全て未選択の場合は全 Step 実行。一部チェックした場合、チェックしていない Step はスキップされます）
-  - **モデル / QA / レビュー / 自己改善 / PR 完全自動化**: 必要な項目だけ設定
+  - **モデル / QA / レビュー / PR 完全自動化**: 必要な項目だけ設定
    - **追加コメント**: 補足・制約があれば記載
 4. Issue を Submit → `auto-app-selection` ラベルが自動付与される
 
@@ -840,7 +840,7 @@ AAG Step.1 の宣言済み入力は次のとおりです。
 3. fan-out が必要なら `fanout_parser`、`.github/prompts/fanout/aas/` の追加指示、下流 AND join を定義します。
 4. `auto-app-selection-reusable.yml` の Sub-Issue 作成、skip 伝播、`activate_with_prereq_check`、最終 `aas:done` と成果物一覧を更新します。
 5. `app-architecture-design.yml` の表、チェックボックス、依存チェーンを更新します。
-6. Bash / PowerShell 利用面の `.github/scripts/bash/lib/workflow-registry.sh` と `.github/scripts/powershell/lib/workflow-registry.ps1` を同期します。
+6. Cloud の Bash registry は `python hve-dev/generate_workflow_registry_sh.py` で再生成し、`.github/scripts/bash/lib/workflow-registry.sh` を `hve/workflow_registry.py` と同期します。PowerShell 側の `.github/scripts/powershell/lib/workflow-registry.ps1` を利用面で参照している場合は、必要な差分だけを別途確認します。
 7. 本ガイドと必要な図を更新します。
 8. `hve/tests/test_workflow_registry.py` で DAG、`hve/tests/test_template_engine.py` で Step template の列挙・展開、横断契約テストで Prompt / Template / I/O / Cloud / Issue Form / shell registry / guide の同期を固定します。
 

@@ -21,7 +21,17 @@ def _assert_in_order(text: str, *markers: str) -> None:
     assert positions == sorted(positions), f"markers are out of order: {markers!r}"
 
 
-def test_create_subissues_from_pr_preserves_cloud_split_required_contract() -> None:
+def test_subissue_workflows_still_exist() -> None:
+    for name in (
+        "create-subissues-from-pr.yml",
+        "auto-create-subissues-transition.yml",
+        "validate-subissues.yml",
+        "advance-subissues.yml",
+    ):
+        assert (REPO_ROOT / ".github" / "workflows" / name).is_file()
+
+
+def test_create_subissues_from_pr_preserves_optional_subissues_contract() -> None:
     text = _read_workflow("create-subissues-from-pr.yml")
 
     assert "pull_request:" in text
@@ -33,7 +43,7 @@ def test_create_subissues_from_pr_preserves_cloud_split_required_contract() -> N
     assert "contents: write" in text
     assert "pull-requests: write" in text
 
-    # Cloud split handoff must continue to discover only PR-changed work/**/subissues.md.
+    # Cloud subissue handoff must continue to discover only PR-changed work/**/subissues.md.
     assert 'test("^work/.*subissues\\\\.md$")' in text
     assert 'find work -type f -name \'subissues.md\'' in text
 
@@ -70,6 +80,19 @@ def test_create_subissues_from_pr_preserves_cloud_split_required_contract() -> N
         'contains("<!-- subissues-created -->")',
         "gh issue create",
     )
+
+
+def test_plan_validation_labels_are_driven_by_changed_subissues() -> None:
+    text = _read_workflow("plan-validation-and-labeling.yml")
+
+    assert "bash .github/scripts/bash/validate-plan.sh --path" in text
+    assert "^work\\/.*\\/subissues\\.md$" in text
+    assert "changedSubissues.length > 0" in text
+    assert "labels: ['split-mode', 'plan-only']" in text
+    assert "subissues.md 変更により split-mode / plan-only ラベルを付与" in text
+    assert "split_decision" not in text
+    assert "SPLIT_REQUIRED" not in text
+    assert "IMPL_FILES" not in text
 
 
 def test_advance_subissues_preserves_dependency_and_copilot_assignment_contract() -> None:

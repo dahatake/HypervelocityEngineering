@@ -90,13 +90,13 @@ class Header2Widget(QWidget):
 
 
 class FooterWidget(QWidget):
-    """Footer ペイン: コンテキスト使用率, モデル, 経過時間, Cost, Reqs, Tools(Step), Skills(Step)、そして「📊 詳細」ボタン。
+    """Footer ペイン: コンテキスト使用率, モデル, 経過時間, AI Credit, Reqs, Tools(Step), Skills(Step)、そして「📊 詳細」ボタン。
 
     Wave 4 拡張:
-    - 1Hz QTimer による自動再描画 (経過時間とコストを live 更新)
+    - 1Hz QTimer による自動再描画 (経過時間と AI Credit を live 更新)
     - 多項目を 1 つの ``QLabel`` (wordWrap=True) に表示
     - 区切り ``|`` の前後に ZWSP を挿入し自然な折り返しを可能にする
-    - Cost / Premium Requests を常時表示 (未取得値は ``-``、捏造禁止)
+    - AI Credit (SDK の AIU。未取得時は mc / N/A / pricing 経路の金額へ縮退) / Premium Requests を常時表示 (未取得値は ``-``、捏造禁止)
     """
 
     # 項目名（濃色 bold）と値（中間色）の配色。値は theme.TOKENS のキー。

@@ -12,9 +12,10 @@ JSON ファイルとして OS 標準キャッシュディレクトリに保存�
 
 ファイル形式:
     {
-        "version": 1,
+        "version": 2,
         "fetched_at": <epoch seconds, float>,
-        "models": ["id1", "id2", ...]
+        "models": ["id1", "id2", ...],
+        "entries": [{"id": "id1", "name": "Model 1", ...}, ...]
     }
 """
 
@@ -22,6 +23,8 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -44,6 +47,7 @@ __all__ = [
 
 CACHE_VERSION: int = 2
 DEFAULT_TTL_SECONDS: int = 24 * 60 * 60  # 24h
+_CACHE_WRITE_LOCK = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -208,6 +212,38 @@ def load(
 # ---------------------------------------------------------------------------
 
 
+def _write_payload_atomically(target: Path, payload: dict) -> None:
+    """writer固有の一時ファイルから ``target`` を原子的に置換する。"""
+    with _CACHE_WRITE_LOCK:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=target.parent,
+                prefix=f".{target.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as stream:
+                tmp = Path(stream.name)
+                json.dump(payload, stream, ensure_ascii=False, indent=2)
+            for attempt in range(5):
+                try:
+                    os.replace(tmp, target)
+                    break
+                except PermissionError:
+                    if attempt == 4:
+                        raise
+                    time.sleep(0.01 * (attempt + 1))
+        finally:
+            if tmp is not None:
+                try:
+                    tmp.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+
 def save(
     models: List[str],
     *,
@@ -223,16 +259,13 @@ def save(
         書き込んだファイルの絶対パス。
     """
     target = path or get_cache_path()
-    target.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "version": CACHE_VERSION,
         "fetched_at": float(now if now is not None else time.time()),
         "models": list(models),
         "entries": [],
     }
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(tmp, target)
+    _write_payload_atomically(target, payload)
     return target
 
 
@@ -247,7 +280,6 @@ def save_entries(
     `entries` と互換用の `models` (ID のみ) を両方保存する。
     """
     target = path or get_cache_path()
-    target.parent.mkdir(parents=True, exist_ok=True)
     serialized: List[dict] = []
     for e in entries:
         d: dict = {"id": e.id, "name": e.name}
@@ -272,9 +304,7 @@ def save_entries(
         "models": [e.id for e in entries],
         "entries": serialized,
     }
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(tmp, target)
+    _write_payload_atomically(target, payload)
     return target
 
 

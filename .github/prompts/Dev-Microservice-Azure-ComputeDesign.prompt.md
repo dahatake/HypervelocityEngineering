@@ -6,20 +6,11 @@
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 - 変更対象は原則 **ドキュメントと work/** のみ（コード実装はしない。例外が必要なら `plan.md` に理由を書く）。
 
-
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 - **`report_progress` 必須**: `report_progress.prDescription` に検証記録を必ず含める。推奨形式は `- [x] <!-- validation-confirmed --> 検証・セキュリティ確認を実施する`。
 - **最終回答のみ記載は不可**: 最終 assistant message だけに `<!-- validation-confirmed -->` を書いても不十分。PR body 反映対象の `report_progress.prDescription` に含めること。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 
 ## Agent 固有の Skills 依存
 
@@ -29,11 +20,7 @@
 - `app-scope-resolution` — APP-ID 指定時の対象サービス・画面・エンティティのスコープ判定
 - `knowledge-lookup` — `knowledge/D01〜D21` の業務要件・ドメイン定義の参照
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 ## 1) 目的 / スコープ
 ### 目的
@@ -51,7 +38,7 @@
 > **実行順序**: local-first / live-last DAG において、本 Agent は Deploy 系 Step（1.3 / 2.2 / 3.4）**より前**に実行される。Step.1.3 が生成する `docs/azure/service-catalog.md` など deploy 後の live 成果物を入力にしない。データ系の接続先・SKU は `azure-services-data.md` の planned design を根拠にし、未確定値は推測せず未決事項として記録する。
 
 ## APP-ID スコープ → Skill `app-scope-resolution` を参照
-### 成果物（必須）
+### 成果物
 - 設計書（Markdown）: `docs/azure/azure-services-compute.md`
 - 進捗ログ（追記）: `{WORK}services-azure-compute-design-work-status.md`
 - 分割が必要な場合: `{WORK}subissues.md`（Sub Issue本文をそのままコピペできる形式）
@@ -64,7 +51,7 @@
   - 理由（根拠）: 以下の観点から **少なくとも3観点**（箇条書きで可）
     - 可用性 / スケール / 運用 / コスト / セキュリティ
   - 参照URL: **Microsoft Learn / Microsoft Docs 等の公式URLを最低1つ**
-- 推測が必要な箇所は「前提/未決事項」に明記し、質問は**必要な項目をすべて**（1回にまとめる）。質問だけで停止しない。
+- 推測が必要な箇所は「前提/未決事項」に、採用した既定値・理由・影響を記録して続行する。
 
 ## 3) 選定ルーブリック（“出発点”であり決め打ち禁止）
 入力ドキュメントに書かれた要件・制約・SLO/運用体制を優先し、以下は初期仮説として使う。
@@ -79,29 +66,16 @@
   - AKS を優先検討（ただし運用体制が前提）
 
 ## 4) 実行ワークフロー（必ずこの順）
-### 4.1 Plan（最初に必ず作る）
-- `Skill task-dag-planning` のルールに従って `{WORK}plan.md` を作る（DAG + 見積（分） + リスク + 検証）。
-- **plan.md 作成時の必須手順（省略禁止）**:
-  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
-  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
-     ```
-     <!-- task_scope: single|multi -->
-     <!-- context_size: small|medium|large -->
-     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
-     <!-- subissues_count: N -->
-     <!-- implementation_files: true or false -->
-     ```
-  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/task-dag-planning/references/plan-template.md` を参照）
-  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
-- 見積は粗くてよいが、****task_scope=multi または context_size=large** なら分割へ切り替える。
+### 4.1 Plan
+- 計画を書く場合は Skill `task-dag-planning` に従う。
 
-### 4.2 分割判定（task_scope=multi or context_size=large なら実装しない）
-- task_scope=multi または context_size=large（サービス数が多く参照ファイルが 9 件以上）なら:
+### 4.2 分割時の扱い
+- 1 セッションで終わらない量だと判断した場合は、独立して検証できる単位で `subissues.md` に分割してよい。
   - `{WORK}subissues.md` を作り、Sub Issue本文を出力して終了（設計書の全量作成はしない）。
   - 分割は「サービス範囲（例: A〜F）」で切り、競合ファイルが同じなら直列、独立なら並列とする。
   - 各Subには必ず「対象サービス範囲」「更新するファイルパス」「AC」「検証」「依存」を書く。
 
-### 4.3 Execution（task_scope=single かつ context_size ≤ medium のときのみ）
+### 4.3 Execution
 1) 入力3ファイルを読み、対象サービスの完全な一覧を取得（不足や矛盾は notes に記録しつつ先へ進む）。  
 2) 設計書 `docs/azure/azure-services-compute.md` を **小さく作成**（ヘッダ＋空表まで）。  
 3) 表を **数行ずつ追記**しながら、対象サービスの Primary / Alternatives / 理由（>=3観点）/ 参照URL を埋める。  
@@ -123,7 +97,7 @@
 - ネットワーク / 認証認可 / 監視 / デプロイ運用 について、今回のホスティング選定に影響する点のみ
 
 ## 4. 未決事項（最大10項目）
-- 前提不足・判断保留・追加確認が必要な点（質問は最大3つ）
+- 前提不足・判断保留・追加確認が必要な点（採用した既定値・理由・影響を記録する）
 
 ## 6) work-status 追記フォーマット（固定）
 - `YYYY-MM-DD HH:MM`: 読んだもの / 決めたこと / 次にやること（各1行、合計3行以内）
@@ -132,11 +106,11 @@
 - 1ファイルが大きくなりそうなら、`large-output-chunking` スキルに従い、
   `{WORK}artifacts/` に index + part 分割で保存する（設計書の本体は読みやすさ優先で維持）。
 
-## 8) 最終品質レビュー（単回インライン・セルフチェック）
+## 8) 受入観点（完了条件の補足）
 
-### 8.1 セルフチェック契約
+### 8.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ### 8.2 ドメイン固有観点
 
@@ -152,7 +126,7 @@
 - **妥当性**：推測が混ざる箇所は前提/未決事項に隔離されている
 - **変更最小**：無関係ファイルに触れていない
 
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

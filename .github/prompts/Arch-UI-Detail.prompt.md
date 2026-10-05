@@ -8,15 +8,7 @@
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 
@@ -61,44 +53,27 @@
 ## 3) 作業ディレクトリ（このagent固有）
 - task-slug: `screen-detail`
 - `{WORK}`
-  - `plan.md`（**必須** — Skill task-dag-planning 条件「大量/生成」に該当するタスクでは常に作成。§2.3 必須セクション形式に従うこと）
+  - `plan.md`（計画を書く場合に使用）
   - `screen-detail-work-status.md`（進捗：フォーマット固定）
-  - `subissues.md`（SPLIT_REQUIRED 判定時に必須。Sub Issue 用本文）
+  - `subissues.md`（分割時に使用。Sub Issue 用本文）
 
 ## 4) 実行フロー（必ずこの順）
 
 ### 4.1 Planner（最初に必ず / 大量生成はしない）
+- 計画を書く場合は Skill `task-dag-planning` に従う。
 1) `screen-list.md` から画面IDと画面名を抽出して画面数を確定  
 2) 画面ごとに概算（X–Y分）と合計を見積（厳密不要）  
-3) **Skill task-dag-planning の条件判定を実施する**（必須。スキップ禁止）
-4) **plan.md 作成時の必須手順（省略禁止）**:
-   1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
-   2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
-      ```
-      <!-- task_scope: single|multi -->
-      <!-- context_size: small|medium|large -->
-      <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
-      <!-- subissues_count: N -->
-      <!-- implementation_files: true or false -->
-      ```
-   3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/task-dag-planning/references/plan-template.md` を参照）
-   4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
-5) Skill task-dag-planning の疑似コードに従い分割判定を実行し、結果を `{WORK}plan.md` の `## 分割判定` セクションに記録する
-6) `{WORK}screen-detail-work-status.md` の `## Planner` にも記録
+3) 1 セッションで終わらない量だと判断した場合は、独立して検証できる単位で `subissues.md` に分割してよい（形式は `.github/skills/_hve-plan-artifacts/hve-binding.md` §3）。
+4) `{WORK}screen-detail-work-status.md` の `## Planner` にも記録
 
-> ⚠️ **plan.md の作成は見積結果に関わらず必須**。Skill task-dag-planning の条件「大規模/大量/生成」に全画面一括生成タスクは常に該当するため。
-> ⚠️ plan.md を作成せずに docs/screen/ 配下のファイルを生成することは禁止（Skill task-dag-planning 違反）。
+### 4.2 分割時の扱い
 
-> 分割判定の詳細手順は Skill `task-dag-planning` を参照。
-
-### 4.2 Split Mode（task_scope=multi または context_size=large）
-
-> ⚠️ **subissues.md フォーマット規約は厳守（Orchestrator がパース失敗で停止する）**。以下の順序を必ず遵守すること。独自フォーマットでの出力は禁止。
+> subissues.md は `validate-subissues` が形式を検査し、違反があると Cloud の Sub-Issue 作成が止まる。以下の順序に従う。
 
 #### 4.2.1 必須手順（順序固定・省略禁止）
 
 1. **template を read してコピー元とする**（再発明禁止）:
-   - `.github/skills/task-dag-planning/references/subissues-template.md` を read
+   - `.github/skills/_hve-plan-artifacts/subissues-template.md` を read
    - 各サブブロックは template の構造（`<!-- subissue -->` → `<!-- title: -->` → `<!-- custom_agent: -->` → `<!-- depends_on: -->` → `## Sub-N: ...`）を踏襲
 2. **各 `<!-- subissue -->` 直下に HTML コメントメタを必ず記載**:
    - `<!-- title: <Markdown 見出しと一致するタイトル> -->`（必須・空値/`REPLACE_ME` 禁止）
@@ -109,11 +84,11 @@
    - bash:    `bash .github/scripts/bash/validate-subissues.sh --path {WORK}subissues.md`
 4. PASS が出ない場合は **その場で修正して再実行**し、完了報告に validator 実行結果（`✅ PASS` ログ）を添付する。
 
-> ⚠️ Markdown 見出し（`## Sub-N: ...`）のみで `<!-- title: -->` を省略すると、パーサ `hve/split_fork.py` が即失敗し Step 全体が停止する。**Markdown 見出しと `<!-- title: -->` の両方が必須**である点に注意。
+> Markdown 見出し（`## Sub-N: ...`）のみで `<!-- title: -->` を省略すると `validate-subissues` が失敗する。Markdown 見出しと `<!-- title: -->` の両方が必要である。
 
 #### 4.2.2 サブタスク分割方針
 
-- 1サブあたりの目安: 3〜5画面（または context_size ≤ medium になるよう調整）
+- 1サブあたりの目安: 3〜5画面。
 - 各Subの本文（`## Sub-N:` 以降）には以下を必ず含める:
   - 対象画面ID一覧
   - 成果物（生成するファイル）
@@ -122,9 +97,9 @@
   - Questions（あれば記載、無ければ None）
 - その後終了（この run では docs を生成しない）
 
-### 4.3 Execution（Split不要のときだけ）
+### 4.3 Execution
 0) 入力を読み切り、画面一覧を確定  
-   - 不足/矛盾が致命的なら **質問は1往復（1メッセージ）にまとめる**。質問項目数の上限なし。
+   - 不足/矛盾が致命的なら、既定値を選び、理由・影響・後で確認すべき事項を1か所にまとめる。
    - 致命的でない不明点は各成果物に TODO として明記。
 
 1) 付録を作成/更新（存在する場合のみ）
@@ -145,11 +120,22 @@
 3) 進捗更新（追記のみ）
 - `{WORK}screen-detail-work-status.md` に Done/Pending を更新（フォーマット固定）
 
-### 4.4 最終品質レビュー（単回インライン・セルフチェック）
+### 4.3.1 業務 UI の視覚デザイン基準と除外するスタイル
+業務 UI は、一貫性のある配置・文言・操作、読み取りやすい可読性、重要度が分かる情報の階層、十分なコントラストとアクセシビリティを優先して定義する。
 
-#### 4.4.1 セルフチェック契約
+除外するスタイル:
+- 過度なグラデーション背景
+- ネオン/グロー効果
+- 装飾目的だけのアニメーション
+- グラスモーフィズムの多用
+- 意味のない絵文字アイコン
+- 紫系グラデーションの既定テンプレート風配色
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+### 4.4 受入観点（完了条件の補足）
+
+#### 4.4.1 位置付け
+
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 #### 4.4.2 ドメイン固有観点
 - **機能完全性・要件達成度**：画面定義書（UX/A11y/セキュリティ/AC）が screen-list および参照ドキュメントと整合し、対応する実装に使用可能か
@@ -157,7 +143,7 @@
 - **保守性・拡張性・堅牢性**：テンプレ構造が統一され、サンプルデータ/API接続/状態管理が明確で、将来の画面追加に対応可能か
 
 #### 4.4.3 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 ## 5) 書き込み失敗（空ファイル化等）対策（このagent固有・必須）
 - 1回の edit の目安: **最大200行 or 6–8KB**

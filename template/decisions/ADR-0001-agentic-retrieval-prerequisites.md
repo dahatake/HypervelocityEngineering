@@ -96,8 +96,8 @@ find .github/skills -name "SKILL.md" | sort
 
 | Skill 名 | ルーティング表の参照パス | 実在パス | 判定 |
 |---|---|---|---|
-| `azure-cli-deploy-scripts` | `.github/skills/azure-skills/azure-cli-deploy-scripts/SKILL.md` | `.github/skills/azure-skills/azure-cli-deploy-scripts/SKILL.md` | **実在**（後続PRで新設） |
-| `azure-ac-verification` | `.github/skills/azure-skills/azure-ac-verification/SKILL.md` | `.github/skills/azure-skills/azure-ac-verification/SKILL.md` | **実在**（後続PRで新設） |
+| `azure-cli-deploy-scripts` | `.github/skills/azure-cli-deploy-scripts/SKILL.md` | `.github/skills/azure-cli-deploy-scripts/SKILL.md` | **実在**（後続PRで新設） |
+| `azure-ac-verification` | `.github/skills/azure-ac-verification/SKILL.md` | `.github/skills/azure-ac-verification/SKILL.md` | **実在**（後続PRで新設） |
 | `app-scope-resolution` | `.github/skills/app-scope-resolution/SKILL.md` | `.github/skills/app-scope-resolution/SKILL.md` | **実在** ✅ |
 
 **注記**: 本 ADR の初版作成時点（2026-05-07）は不在だったが、後続 PR で `.github/skills/azure-skills/` 配下に 2 Skill が新設された。
@@ -158,15 +158,15 @@ find .github/skills -name "SKILL.md" | sort
 | `.github/skills/azure-skills/microsoft-foundry/models/deploy-model/capacity/SKILL.md` | `capacity` | モデルキャパシティ設定 |
 | `.github/skills/azure-skills/microsoft-foundry/models/deploy-model/customize/SKILL.md` | `customize` | モデルカスタマイズ |
 | `.github/skills/azure-skills/microsoft-foundry/models/deploy-model/preset/SKILL.md` | `preset` | モデルプリセット |
-| `.github/skills/cicd/github-actions-cicd/SKILL.md` | `github-actions-cicd` | GitHub Actions CI/CD |
-| `.github/skills/harness/adversarial-review/SKILL.md` | `adversarial-review` | 敵対的レビュー（5軸） |
-| `.github/skills/harness/harness-error-recovery/SKILL.md` | `harness-error-recovery` | エラーリカバリ（3要素） |
-| `.github/skills/harness/harness-safety-guard/SKILL.md` | `harness-safety-guard` | 安全ガード（破壊的操作検出） |
-| `.github/skills/harness/harness-verification-loop/SKILL.md` | `harness-verification-loop` | 検証ループ（Build/Lint/Test/Security/Diff） |
+| `.github/skills/github-actions-cicd/SKILL.md` | `github-actions-cicd` | GitHub Actions CI/CD |
+| `.github/skills/adversarial-review/SKILL.md` | `adversarial-review` | 敵対的レビュー（5軸） |
+| `.github/skills/harness-error-recovery/SKILL.md` | `harness-error-recovery` | エラーリカバリ（3要素） |
+| `.github/skills/harness-safety-guard/SKILL.md` | `harness-safety-guard` | 安全ガード（破壊的操作検出） |
+| `.github/skills/harness-verification-loop/SKILL.md` | `harness-verification-loop` | 検証ループ（Build/Lint/Test/Security/Diff） |
 | `.github/skills/karpathy-guidelines/SKILL.md` | `karpathy-guidelines` | Karpathy コーディングガイドライン |
 | `.github/skills/observability/appinsights-instrumentation/SKILL.md` | `appinsights-instrumentation` | Application Insights 計装 |
-| `.github/skills/output/docs-output-format/SKILL.md` | `docs-output-format` | docs/ 成果物フォーマット |
-| `.github/skills/output/large-output-chunking/SKILL.md` | `large-output-chunking` | 大量出力・50k 超の分割 |
+| `.github/skills/docs-output-format/SKILL.md` | `docs-output-format` | docs/ 成果物フォーマット |
+| `.github/skills/large-output-chunking/SKILL.md` | `large-output-chunking` | 大量出力・50k 超の分割 |
 | `.github/skills/output/svg-renderer/SKILL.md` | `svg-renderer` | SVG ダイアグラム生成 |
 | `.github/skills/agent-common-preamble/SKILL.md` | `agent-common-preamble` | 全 Agent 共通ルール |
 | `.github/skills/app-scope-resolution/SKILL.md` | `app-scope-resolution` | APP-ID スコープ解決 |
@@ -309,6 +309,9 @@ child_id.startswith(step.id + ".")
 
 本 ADR は 2026-05-07 時点の決定記録であり、原文は履歴として保持する。以下は**追記時点の実測**による差分注記である。
 
+> [!IMPORTANT]
+> **CURRENT 利用注記（2026-09-11）**: §4.4 Annex / §7 / §9.1 に残る旧 5 Skill 言及（`karpathy-guidelines` / `appinsights-instrumentation` / `test-strategy-template` / `mcp-server-design` / `svg-renderer` を含む過去の一覧・採否・判定）は、各記載日の履歴ログであり、現時点の必読 Skill 一覧または現在の計測値へ読み替えない。現在の route は `.github/skills/ai-agent-capability-contract/SKILL.md` の AG-CAP-03 で確定し、Foundry IQ / Azure AI Search Agentic Retrieval を選ぶ場合だけ `.github/skills/agentic-retrieval-contract/SKILL.md` の AR-CAP-01〜05 と `.github/skills/tdd-red-green-reality/SKILL.md` §1.7 を参照する。
+
 ### 9.1 Skill 実在状況の訂正
 
 `.github/skills/**/SKILL.md` の実測件数は **33 件**（§4.4 Annex および §8 AC1-2 の「55 件」は追記時点と一致しない）。
@@ -317,9 +320,9 @@ child_id.startswith(step.id + ".")
 
 | パス | 状態 |
 |---|---|
-| `.github/skills/azure-skills/azure-region-policy/SKILL.md` | 実在 |
-| `.github/skills/azure-skills/azure-cli-deploy-scripts/SKILL.md` | 実在（§4.2 の記述と一致） |
-| `.github/skills/azure-skills/azure-ac-verification/SKILL.md` | 実在（§4.2 の記述と一致） |
+| `.github/skills/azure-region-policy/SKILL.md` | 実在 |
+| `.github/skills/azure-cli-deploy-scripts/SKILL.md` | 実在（§4.2 の記述と一致） |
+| `.github/skills/azure-ac-verification/SKILL.md` | 実在（§4.2 の記述と一致） |
 
 §4.4 Annex が列挙する `azure-ai` / `microsoft-foundry` / `azure-deploy` / `azure-validate` / `azure-rbac` / `azure-prepare` 等は **リポジトリ内に存在しない**。これらはユーザー環境の `~/.agents/skills/` 配下へ導入される外部 Skill であり、`.github/prompts/Dev-Microservice-Azure-AgenticRetrievalDesign.prompt.md` の「外部 Skill（ユーザー環境）」節も「リポジトリ内には存在しない」「未配備時は本 prompt 本文の指示のみで動作する」と明記している。
 

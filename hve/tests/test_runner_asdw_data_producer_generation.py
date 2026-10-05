@@ -232,17 +232,12 @@ def _run_step_with_generation_probe(
         events.append("main-turn")
         return object()
 
-    async def fake_split_fork(**_kwargs) -> bool:
-        events.append("split-fork")
-        return True
-
     runner = StepRunner(
         config=SDKConfig(
             run_id=run_id,
             dry_run=dry_run,
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
         ),
         console=Console(verbose=False, quiet=True),
         workflow_params=workflow_params
@@ -293,11 +288,6 @@ def _run_step_with_generation_probe(
         fake_runtime_gate,
     )
     monkeypatch.setattr(
-        runner_module,
-        "_require_trusted_asdw_data_deploy_mcp_servers",
-        lambda *_args, **_kwargs: {"microsoft-learn": {}},
-    )
-    monkeypatch.setattr(
         runner,
         "_create_main_session",
         types.MethodType(fake_session, runner),
@@ -307,7 +297,6 @@ def _run_step_with_generation_probe(
         "_send_and_wait_with_model_call_failure_guard",
         types.MethodType(fake_main_turn, runner),
     )
-    monkeypatch.setattr(runner, "_maybe_run_split_fork", fake_split_fork)
 
     def fake_input_gate(*_args, **_kwargs):
         is_pre_session_call = "main-turn" not in events
@@ -1022,7 +1011,6 @@ def test_data_producer_generation_is_not_called_outside_asdw_web_step_1_3(
         "client-start",
         "session-created",
         "main-turn",
-        "split-fork",
     ]
     assert subprocess_calls == []
 

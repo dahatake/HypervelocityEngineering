@@ -33,7 +33,6 @@ _AZURE_CLI_SKILL = (
     _REPO_ROOT
     / ".github"
     / "skills"
-    / "azure-skills"
     / "azure-cli-deploy-scripts"
     / "SKILL.md"
 )
@@ -44,7 +43,7 @@ _VERIFIER_CONTRACT = (
 )
 _VERIFIER_CONTRACT_LINK = "references/asdw-data-verifier-contract.md"
 _VERIFIER_CONTRACT_REPO_PATH = (
-    ".github/skills/azure-skills/azure-cli-deploy-scripts/"
+    ".github/skills/azure-cli-deploy-scripts/"
     "references/asdw-data-verifier-contract.md"
 )
 _VSCODE_TASKS = _REPO_ROOT / ".vscode" / "tasks.json"

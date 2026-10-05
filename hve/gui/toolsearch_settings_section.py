@@ -2,7 +2,7 @@
 
 4 タブ構成:
 
-- **基本**: `tool_search` / `tool_search_ranking`。この 2 つの入力欄は本セクションが単独で
+- **基本**: `tool_search` / `tool_search_ranking` / `tool_search_defer_threshold`。この 3 つの入力欄は本セクションが単独で
   所有する（Step 1 右ペインと二重に持たない。FR-MAINT-07）。
 - **Skill Layer**: workflow / step に対する `workflow_defaults`、`required_skills`、
   `optional_skills` の閲覧専用サマリーを表示し、Core / Required / Optional / Extend の
@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -48,6 +49,7 @@ from PySide6.QtWidgets import (
 from ..toolsearch.dashboard import build_dashboard, render_html, render_text
 from ..toolsearch.stats import default_events_path
 from ..toolsearch.usage import default_usage_path
+from ..workflow_registry import list_workflows
 from .help_popup import with_help
 from .page_options import _LabeledField
 
@@ -116,6 +118,9 @@ class _ContextWorker(QThread):
             self.finished_with.emit(1, "", str(exc))
             return
         self.finished_with.emit(code, out, err)
+
+
+_ACTIVE_CONTEXT_WORKERS: set[QThread] = set()
 
 
 class _KeyValueTable(QWidget):
@@ -205,6 +210,80 @@ class _KeyValueTable(QWidget):
             self._table.removeRow(index)
 
 
+class _ListValueTable(QWidget):
+    """`server -> [tool, ...]` を編集する表ウィジェット。"""
+
+    def __init__(
+        self,
+        key_header: str,
+        value_header: str,
+        *,
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+        self._table = QTableWidget(0, 2, self)
+        self._table.setHorizontalHeaderLabels([key_header, value_header])
+        self._table.verticalHeader().setVisible(False)
+        self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._table.setMinimumHeight(150)
+        header = self._table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+
+        add_button = QPushButton(self.tr("行を追加"))
+        add_button.clicked.connect(self._on_add_clicked)
+        remove_button = QPushButton(self.tr("選択行を削除"))
+        remove_button.clicked.connect(self._on_remove_clicked)
+        buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 0, 0, 0)
+        for button in (add_button, remove_button):
+            button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            buttons.addWidget(button)
+        buttons.addStretch(1)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        layout.addWidget(self._table)
+        layout.addLayout(buttons)
+
+    def set_rows(self, mapping: Mapping[str, tuple[str, ...] | list[str]]) -> None:
+        self._table.setRowCount(0)
+        for key in sorted(mapping):
+            values = mapping[key]
+            self.add_row(key, ", ".join(str(value) for value in values))
+
+    def add_row(self, key: str = "", value: str = "") -> None:
+        index = self._table.rowCount()
+        self._table.insertRow(index)
+        self._table.setItem(index, 0, QTableWidgetItem(key))
+        self._table.setItem(index, 1, QTableWidgetItem(value))
+
+    def rows(self) -> Dict[str, tuple[str, ...]]:
+        result: Dict[str, tuple[str, ...]] = {}
+        for index in range(self._table.rowCount()):
+            key_item = self._table.item(index, 0)
+            key = key_item.text().strip() if key_item is not None else ""
+            if not key:
+                continue
+            value_item = self._table.item(index, 1)
+            raw = value_item.text().strip() if value_item is not None else ""
+            if not raw:
+                result[key] = ()
+                continue
+            tools = tuple(part for part in re.split(r"[\s,]+", raw) if part)
+            result[key] = tools
+        return result
+
+    def _on_add_clicked(self) -> None:
+        self.add_row("", "")
+
+    def _on_remove_clicked(self) -> None:
+        rows = sorted({index.row() for index in self._table.selectedIndexes()}, reverse=True)
+        for index in rows:
+            self._table.removeRow(index)
+
+
 class ToolSearchSection(QWidget):
     """Tool Search の設定・ポリシー・統計をまとめたセクション。"""
 
@@ -217,6 +296,9 @@ class ToolSearchSection(QWidget):
         self.tool_search_ranking.setEditable(False)
         self.tool_search_ranking.addItem(self.tr("SDK 組み込みのまま"), userData="sdk")
         self.tool_search_ranking.addItem(self.tr("HVE 実装へ差し替え"), userData="hve")
+        self.tool_search_defer_threshold = QSpinBox()
+        self.tool_search_defer_threshold.setRange(0, 10000)
+        self.tool_search_defer_threshold.setSpecialValueText(self.tr("SDK 既定に従う"))
 
         self.skill_layer_view = QPlainTextEdit()
         self.skill_layer_view.setReadOnly(True)
@@ -253,6 +335,77 @@ class ToolSearchSection(QWidget):
         )
         self._policy_loaded = False
         self._policy_version = 0
+        self._loaded_policy = None
+        self._resource_classifications: Dict[str, Dict[str, str]] = {
+            "plugins": {},
+            "mcp_servers": {},
+            "skills": {},
+        }
+
+        self._resource_snapshot: object = None
+        self._resource_refresh_callback: Optional[Callable[[bool], bool]] = None
+        self._resource_rows: list[object] = []
+        self._resource_selection_updating = False
+        self._resource_state_label = QLabel("")
+        self._resource_state_label.setWordWrap(True)
+        self._resource_state_label.setProperty("hveRole", "description")
+        self._resource_result_label = QLabel("")
+        self._resource_result_label.setWordWrap(True)
+        self._resource_table = QTableWidget(0, 8, self)
+        self._resource_table.setHorizontalHeaderLabels(
+            [
+                "kind",
+                "name",
+                "source_kind",
+                "plugin_marketplace",
+                "owner_plugin",
+                "enabled",
+                "effective_category",
+                "individual_override",
+            ]
+        )
+        self._resource_table.verticalHeader().setVisible(False)
+        self._resource_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        self._resource_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
+        self._resource_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self._resource_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.ResizeToContents
+        )
+        self._resource_table.horizontalHeader().setStretchLastSection(True)
+        self._resource_table.itemSelectionChanged.connect(
+            self._on_resource_selection_changed
+        )
+        self._resource_selected_label = QLabel("")
+        self._resource_selected_label.setWordWrap(True)
+        self._resource_classification_combo = QComboBox()
+        self._resource_classification_combo.addItem(
+            self.tr("（exact override なし / owner plugin または未分類へ委譲）"),
+            userData="",
+        )
+        for classification in (
+            "knowledge",
+            "software-engineering",
+            "both",
+            "unclassified",
+        ):
+            self._resource_classification_combo.addItem(classification, userData=classification)
+        self._resource_classification_combo.currentIndexChanged.connect(
+            self._on_resource_classification_changed
+        )
+        self._knowledge_allowlists = _ListValueTable(
+            self.tr("Knowledge MCP Server"),
+            self.tr("許可する bare tool 名（空白またはカンマ区切り）"),
+        )
+        self._software_allowlists = _ListValueTable(
+            self.tr("Software Engineering MCP Server"),
+            self.tr("許可する bare tool 名（空白またはカンマ区切り）"),
+        )
 
         self.stats_view = QPlainTextEdit()
         self.stats_view.setReadOnly(True)
@@ -273,10 +426,21 @@ class ToolSearchSection(QWidget):
         _monospace(self.context_view)
         self.context_result_label = QLabel("")
         self.context_result_label.setWordWrap(True)
+        self._context_workflow = QComboBox()
+        self._context_workflow.setEditable(False)
+        for workflow in sorted(list_workflows(), key=lambda item: item.id):
+            self._context_workflow.addItem(workflow.id, userData=workflow.id)
+        self._context_step = QComboBox()
+        self._context_step.setEditable(False)
+        self._context_workflow.currentIndexChanged.connect(
+            self._rebuild_context_steps
+        )
+        self._rebuild_context_steps()
         self._context_worker: Optional[_ContextWorker] = None
 
         self._tabs = QTabWidget(self)
         self._tabs.addTab(self._build_basic_tab(), self.tr("基本"))
+        self._tabs.addTab(self._build_resource_tab(), self.tr("SDK Resources"))
         self._tabs.addTab(self._build_skill_layer_tab(), self.tr("Skill Layer"))
         self._tabs.addTab(self._build_policy_tab(), self.tr("ポリシー"))
         self._stats_tab_index = self._tabs.addTab(
@@ -291,6 +455,7 @@ class ToolSearchSection(QWidget):
 
         self.reload_skill_layer()
         self.reload_policy()
+        self.set_resource_snapshot(None)
         self._refresh_paths_label()
 
     # ------------------------------------------------------------------
@@ -323,6 +488,15 @@ class ToolSearchSection(QWidget):
                 " 生成する AI Agent 向けの Foundry Toolbox 設定（Step 1 右ペイン）とは別物です。"
             ),
             input_widget=self.tool_search_ranking,
+        ))
+        layout.addWidget(_LabeledField(
+            title=self.tr("遅延ロードの閾値 (tool_search_defer_threshold)"),
+            description=self.tr(
+                "遅延ロードへ切り替えるツール数を SDK へ渡します。"
+                "0（既定）のときは引数を送らず SDK 既定へ委譲します。"
+                " 上の遅延ロードが OFF のときはこの設定は何もしません。"
+            ),
+            input_widget=self.tool_search_defer_threshold,
         ))
 
         self.basic_note = QLabel(self.tr(
@@ -367,6 +541,50 @@ class ToolSearchSection(QWidget):
         row.addWidget(button)
         row.addStretch(1)
         layout.addLayout(row)
+        return tab
+
+    def _build_resource_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.addWidget(QLabel(self.tr("<b>SDK Resource Snapshot</b>")))
+        desc = QLabel(self.tr(
+            "GUI process-wide に共有される SDK resource snapshot を表示し、"
+            "resource classification と MCP tool allowlist を policy.json と同じ単一情報源として編集します。"
+            " 生の config / path / credential は表示しません。"
+        ))
+        desc.setWordWrap(True)
+        layout.addWidget(desc)
+        self._resource_scope_note = QLabel(self.tr(
+            "Plugin 分類は、SDK が所有元を確認できた MCP / Skill の既定分類にだけ使います。"
+            "Plugin の hook / agent / instruction 全体を無効化する制御ではありません。"
+            "Cloud Session は未対応です。保存した変更は次に開始する local session から反映されます。"
+        ))
+        self._resource_scope_note.setWordWrap(True)
+        layout.addWidget(self._resource_scope_note)
+        layout.addWidget(self._resource_state_label)
+
+        refresh_row = QHBoxLayout()
+        self._resource_refresh_button = QPushButton(self.tr("SDK Resources を再検出"))
+        self._resource_refresh_button.clicked.connect(self._on_resource_refresh_clicked)
+        refresh_row.addWidget(self._resource_refresh_button)
+        refresh_row.addStretch(1)
+        layout.addLayout(refresh_row)
+
+        layout.addWidget(self._resource_table, 1)
+        resource_form = QFormLayout()
+        resource_form.addRow(self.tr("選択中 resource"), self._resource_selected_label)
+        resource_form.addRow(
+            self.tr("exact resource classification"),
+            self._resource_classification_combo,
+        )
+        layout.addLayout(resource_form)
+
+        layout.addWidget(QLabel(self.tr("<b>Knowledge MCP allowlist</b>")))
+        layout.addWidget(self._knowledge_allowlists)
+        layout.addWidget(QLabel(self.tr("<b>Software Engineering MCP allowlist</b>")))
+        layout.addWidget(self._software_allowlists)
+        layout.addWidget(self._resource_result_label)
         return tab
 
     def _build_policy_tab(self) -> QWidget:
@@ -490,6 +708,10 @@ class ToolSearchSection(QWidget):
         ))
         pointer.setWordWrap(True)
         layout.addWidget(pointer)
+        workflow_row = QFormLayout()
+        workflow_row.addRow(self.tr("Workflow"), self._context_workflow)
+        workflow_row.addRow(self.tr("Step"), self._context_step)
+        layout.addLayout(workflow_row)
         layout.addWidget(self.context_view, 1)
 
         self._context_button = QPushButton(self.tr("実測する"))
@@ -497,9 +719,15 @@ class ToolSearchSection(QWidget):
             QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
         )
         self._context_button.clicked.connect(self.measure_context)
+        self._compare_context_button = QPushButton(self.tr("OFF / ON を比較"))
+        self._compare_context_button.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+        )
+        self._compare_context_button.clicked.connect(self.compare_context)
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.addWidget(self._context_button)
+        row.addWidget(self._compare_context_button)
         row.addStretch(1)
         layout.addLayout(row)
         layout.addWidget(self.context_result_label)
@@ -535,6 +763,7 @@ class ToolSearchSection(QWidget):
 
         self._policy_loaded = True
         self._policy_version = policy.version
+        self._loaded_policy = policy
         self._policy_editor.setVisible(True)
         self.policy_version_label.setText(str(policy.version))
         self.policy_limit.setValue(policy.limit)
@@ -547,6 +776,13 @@ class ToolSearchSection(QWidget):
         self.policy_step_overrides.set_rows(
             {key: str(value.get("mode", "search")) for key, value in policy.step_overrides.items()}
         )
+        self._resource_classifications = {
+            kind: dict(policy.resource_classifications.get(kind, {}))
+            for kind in ("plugins", "mcp_servers", "skills")
+        }
+        self._knowledge_allowlists.set_rows(policy.knowledge_tool_allowlists)
+        self._software_allowlists.set_rows(policy.software_engineering_tool_allowlists)
+        self._populate_resource_table()
         self.policy_result_label.setText("")
 
     def save_policy(self) -> None:
@@ -559,8 +795,16 @@ class ToolSearchSection(QWidget):
                 "既存の内容を空値で上書きしないよう、ファイルを直接修正してから再読み込みしてください。"
             ))
             return
+        if self._loaded_policy is None:
+            self.policy_result_label.setText(self.tr("読み込み済み policy が見つからないため保存しません。"))
+            return
 
         path = ToolSearchPolicy.default_path(self._repo_root)
+        step_overrides = {}
+        for key, mode in self.policy_step_overrides.rows().items():
+            current = dict(self._loaded_policy.step_overrides.get(key, {}))
+            current["mode"] = mode
+            step_overrides[key] = current
         candidate = ToolSearchPolicy(
             version=self._policy_version,
             limit=self.policy_limit.value(),
@@ -569,9 +813,16 @@ class ToolSearchSection(QWidget):
             field_weights={name: box.value() for name, box in self.policy_weights.items()},
             pins=self.policy_pins.rows(),
             additional_search_text=self.policy_search_text.rows(),
-            step_overrides={
-                key: {"mode": mode} for key, mode in self.policy_step_overrides.rows().items()
+            step_overrides=step_overrides,
+            resource_classifications={
+                kind: dict(values) for kind, values in self._resource_classifications.items()
             },
+            knowledge_tool_allowlists=self._knowledge_allowlists.rows(),
+            software_engineering_tool_allowlists=self._software_allowlists.rows(),
+            required_mcp_servers_by_skill=dict(
+                self._loaded_policy.required_mcp_servers_by_skill
+            ),
+            extra_top_level=dict(self._loaded_policy.extra_top_level),
         )
         try:
             candidate.save(path)
@@ -583,11 +834,26 @@ class ToolSearchSection(QWidget):
         except OSError as exc:
             self.policy_result_label.setText(self.tr("保存に失敗しました: ") + str(exc))
             return
+        self._loaded_policy = candidate
         self.policy_result_label.setText(
             self.tr("保存しました: ")
             + f"{path}\n"
             + self.tr("次に開始する Step 実行から反映されます（実行中のセッションは変わりません）。")
         )
+
+    def set_resource_snapshot(self, snapshot: object) -> None:
+        self._resource_snapshot = snapshot
+        self._resource_refresh_button.setEnabled(snapshot is not None)
+        if snapshot is None:
+            self._resource_result_label.setText("")
+        self._render_resource_state()
+        self._populate_resource_table()
+
+    def set_resource_refresh_callback(
+        self,
+        callback: Optional[Callable[[bool], bool]],
+    ) -> None:
+        self._resource_refresh_callback = callback
 
     def policy_help_keys(self) -> Tuple[str, ...]:
         return tuple(f"toolsearch.{field}" for field, _ in _POLICY_FIELDS)
@@ -658,33 +924,296 @@ class ToolSearchSection(QWidget):
     # コンテキスト内訳（FR-TS-11）
     # ------------------------------------------------------------------
 
-    def _run_context_command(self) -> Tuple[int, str, str]:
+    def _rebuild_context_steps(self, _index: int = -1) -> None:
+        workflow_id = str(
+            self._context_workflow.currentData()
+            or self._context_workflow.currentText()
+        )
+        self._context_step.clear()
+        self._context_step.addItem(self.tr("Workflow 全体"), userData=None)
+        workflow = next(
+            (item for item in list_workflows() if item.id == workflow_id),
+            None,
+        )
+        if workflow is None:
+            return
+        for step in workflow.steps:
+            if not step.is_container:
+                self._context_step.addItem(
+                    f"{self.tr('Step')} {step.id}",
+                    userData=step.id,
+                )
+
+    def _context_command_argv(self, *, compare: bool = False) -> list[str]:
+        argv = [
+            sys.executable,
+            "-m",
+            "hve",
+            "toolsearch",
+            "context",
+            "--workflow",
+            self._context_workflow.currentData() or self._context_workflow.currentText(),
+        ]
+        step_id = self._context_step.currentData()
+        if step_id:
+            argv.extend(("--step", str(step_id)))
+        if compare:
+            argv.append("--compare")
+        return argv
+
+    def _run_context_command(self, compare: bool = False) -> Tuple[int, str, str]:
         """CLI をそのまま呼ぶ。GUI 側で集計や推定はしない。"""
-        kwargs = {}
+        kwargs: dict[str, object] = {}
         if sys.platform == "win32":
             # pythonw から起動した GUI でコンソール窓を開かせない。
             kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
-        proc = subprocess.run(  # noqa: S603 - 引数は固定でシェルを介さない
-            [sys.executable, "-m", "hve", "toolsearch", "context"],
+        proc = subprocess.Popen(  # noqa: S603 - 引数は固定でシェルを介さない
+            self._context_command_argv(compare=compare),
             cwd=str(self._repo_root),
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
             errors="replace",
             **kwargs,
         )
-        return proc.returncode, (proc.stdout or "").strip(), (proc.stderr or "").strip()
+        current_thread = QThread.currentThread()
+        while True:
+            try:
+                out, err = proc.communicate(timeout=0.1)
+                return proc.returncode, (out or "").strip(), (err or "").strip()
+            except subprocess.TimeoutExpired:
+                if not current_thread.isInterruptionRequested():
+                    continue
+                proc.terminate()
+                try:
+                    out, err = proc.communicate(timeout=1.0)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    out, err = proc.communicate()
+                reason = self.tr("実測を中断しました。")
+                return 1, (out or "").strip(), ((err or "").strip() or reason)
 
-    def measure_context(self) -> None:
+    def _start_context_worker(self, *, compare: bool) -> None:
         if self._context_worker is not None and self._context_worker.isRunning():
             return
         self.context_result_label.setText(self.tr("実測中…"))
+        self.context_view.clear()
         self._context_button.setEnabled(False)
-        worker = _ContextWorker(self._run_context_command, self)
+        self._compare_context_button.setEnabled(False)
+        worker = _ContextWorker(lambda: self._run_context_command(compare=compare), self)
         worker.finished_with.connect(self.apply_context_result)
+        worker.finished.connect(lambda current=worker: self._release_context_worker(current))
         worker.finished.connect(worker.deleteLater)
         self._context_worker = worker
-        worker.start()
+        _ACTIVE_CONTEXT_WORKERS.add(worker)
+        try:
+            worker.start()
+        except Exception as exc:
+            _ACTIVE_CONTEXT_WORKERS.discard(worker)
+            self._release_context_worker(worker)
+            self._context_button.setEnabled(True)
+            self._compare_context_button.setEnabled(True)
+            self.context_result_label.setText(
+                self.tr("実測に失敗しました: ") + str(exc)
+            )
+            worker.deleteLater()
+
+    def _release_context_worker(self, worker: _ContextWorker) -> None:
+        _ACTIVE_CONTEXT_WORKERS.discard(worker)
+        if self._context_worker is worker:
+            self._context_worker = None
+
+    def _resource_items(self) -> tuple[object, ...]:
+        if self._resource_snapshot is None:
+            return ()
+        return tuple(
+            sorted(
+                (
+                    *(getattr(self._resource_snapshot, "plugins", ()) or ()),
+                    *(getattr(self._resource_snapshot, "mcp_servers", ()) or ()),
+                    *(getattr(self._resource_snapshot, "skills", ()) or ()),
+                ),
+                key=lambda item: (
+                    str(getattr(item, "kind", "")),
+                    str(getattr(item, "name", "")),
+                ),
+            )
+        )
+
+    def _render_resource_state(self) -> None:
+        if self._resource_snapshot is None:
+            self._resource_state_label.setText(
+                self.tr("snapshot 状態: 確認中（startup discovery 完了待ち）")
+            )
+            return
+
+        def label(value: object) -> str:
+            return self.tr("確認済み") if value == "ready" else self.tr("未確認")
+
+        self._resource_state_label.setText(
+            " / ".join(
+                (
+                    f"plugin={label(getattr(self._resource_snapshot, 'plugin_state', None))}",
+                    f"mcp={label(getattr(self._resource_snapshot, 'mcp_state', None))}",
+                    f"skill={label(getattr(self._resource_snapshot, 'skill_state', None))}",
+                    f"skill-ownership={label(getattr(self._resource_snapshot, 'skill_ownership_state', None))}",
+                )
+            )
+        )
+
+    def _populate_resource_table(self) -> None:
+        items = self._resource_items()
+        self._resource_rows = []
+        self._resource_table.setRowCount(len(items))
+        for row, item in enumerate(items):
+            policy_kind = self._policy_resource_kind(
+                str(getattr(item, "kind", "") or "")
+            )
+            name = str(getattr(item, "name", "") or "")
+            exact = self._resource_classifications.get(policy_kind, {}).get(name, "")
+            effective = self._effective_resource_classification(
+                policy_kind,
+                item,
+            )
+            values = (
+                str(getattr(item, "kind", "") or ""),
+                name,
+                str(getattr(item, "source_kind", "") or ""),
+                str(getattr(item, "plugin_marketplace", "") or ""),
+                str(getattr(item, "owner_plugin", "") or ""),
+                "true" if getattr(item, "enabled", False) else "false",
+                effective,
+                exact,
+            )
+            for column, value in enumerate(values):
+                self._resource_table.setItem(row, column, QTableWidgetItem(value))
+            self._resource_rows.append(item)
+        self._refresh_resource_editor_from_selection()
+
+    def _policy_resource_kind(self, kind: str) -> str:
+        return {
+            "plugin": "plugins",
+            "mcp_server": "mcp_servers",
+            "skill": "skills",
+        }.get(kind, kind)
+
+    def _effective_resource_classification(
+        self,
+        policy_kind: str,
+        resource: object,
+    ) -> str:
+        if self._loaded_policy is None or self._resource_snapshot is None:
+            return "unclassified"
+        from ..toolsearch.policy import ToolSearchPolicy
+        from ..toolsearch.resource_routing import effective_resource_classification
+
+        policy = ToolSearchPolicy(
+            version=self._loaded_policy.version,
+            limit=self._loaded_policy.limit,
+            max_limit=self._loaded_policy.max_limit,
+            tau=self._loaded_policy.tau,
+            field_weights=dict(self._loaded_policy.field_weights),
+            pins=dict(self._loaded_policy.pins),
+            additional_search_text=dict(self._loaded_policy.additional_search_text),
+            step_overrides={
+                key: dict(value) for key, value in self._loaded_policy.step_overrides.items()
+            },
+            resource_classifications={
+                kind: dict(value) for kind, value in self._resource_classifications.items()
+            },
+            knowledge_tool_allowlists=self._knowledge_allowlists.rows(),
+            software_engineering_tool_allowlists=self._software_allowlists.rows(),
+            required_mcp_servers_by_skill=dict(
+                self._loaded_policy.required_mcp_servers_by_skill
+            ),
+            extra_top_level=dict(self._loaded_policy.extra_top_level),
+        )
+        return effective_resource_classification(
+            policy,
+            self._resource_snapshot,
+            policy_kind,
+            resource,
+        )
+
+    def _selected_resource_identity(self) -> tuple[str, str, str | None] | None:
+        row = self._resource_table.currentRow()
+        if row < 0 or row >= len(self._resource_rows):
+            return None
+        resource = self._resource_rows[row]
+        return (
+            self._policy_resource_kind(str(getattr(resource, "kind", "") or "")),
+            str(getattr(resource, "name", "") or ""),
+            getattr(resource, "owner_plugin", None),
+        )
+
+    def _refresh_resource_editor_from_selection(self) -> None:
+        current = self._selected_resource_identity()
+        self._resource_selection_updating = True
+        try:
+            if current is None:
+                self._resource_selected_label.setText(self.tr("未選択"))
+                self._resource_classification_combo.setCurrentIndex(0)
+                self._resource_classification_combo.setEnabled(False)
+                return
+            policy_kind, name, owner_plugin = current
+            exact = self._resource_classifications.get(policy_kind, {}).get(name, "")
+            combo_index = self._resource_classification_combo.findData(exact)
+            self._resource_classification_combo.setCurrentIndex(max(0, combo_index))
+            self._resource_classification_combo.setEnabled(True)
+            row = self._resource_table.currentRow()
+            resource = self._resource_rows[row]
+            effective = self._effective_resource_classification(policy_kind, resource)
+            owner_text = owner_plugin or "-"
+            self._resource_selected_label.setText(
+                f"{policy_kind}:{name} / owner={owner_text} / effective={effective}"
+            )
+        finally:
+            self._resource_selection_updating = False
+
+    def _on_resource_selection_changed(self) -> None:
+        self._refresh_resource_editor_from_selection()
+
+    def _on_resource_classification_changed(self, _index: int) -> None:
+        if self._resource_selection_updating:
+            return
+        current = self._selected_resource_identity()
+        if current is None:
+            return
+        policy_kind, name, _owner_plugin = current
+        value = str(self._resource_classification_combo.currentData() or "")
+        table = self._resource_classifications.setdefault(policy_kind, {})
+        if value:
+            table[name] = value
+        else:
+            table.pop(name, None)
+        row = self._resource_table.currentRow()
+        if 0 <= row < len(self._resource_rows):
+            resource = self._resource_rows[row]
+            effective = self._effective_resource_classification(policy_kind, resource)
+            self._resource_table.setItem(row, 6, QTableWidgetItem(effective))
+            self._resource_table.setItem(row, 7, QTableWidgetItem(value))
+        self._refresh_resource_editor_from_selection()
+
+    def _on_resource_refresh_clicked(self) -> None:
+        if self._resource_refresh_callback is None:
+            self._resource_result_label.setText(
+                self.tr("再検出 callback が未接続です。")
+            )
+            return
+        self._resource_refresh_button.setEnabled(False)
+        started = bool(self._resource_refresh_callback(True))
+        self._resource_result_label.setText(
+            self.tr("再検出を開始しました。")
+            if started
+            else self.tr("既に再検出中です。完了を待っています。")
+        )
+
+    def measure_context(self) -> None:
+        self._start_context_worker(compare=False)
+
+    def compare_context(self) -> None:
+        self._start_context_worker(compare=True)
 
     def wait_for_context_measurement(self, msec: int) -> bool:
         """実測ワーカーの終了を待つ（テストと終了処理用）。"""
@@ -695,11 +1224,16 @@ class ToolSearchSection(QWidget):
     def apply_context_result(self, code: int, out: str, err: str) -> None:
         """CLI の出力をそのまま描画する。失敗時は数値を推定で埋めない。"""
         self._context_button.setEnabled(True)
+        self._compare_context_button.setEnabled(True)
         if code == 0:
             self.context_view.setPlainText(out)
             self.context_result_label.setText("")
             return
-        reason = err or out or self.tr("理由を取得できませんでした。")
+        if out:
+            self.context_view.setPlainText(out)
+        else:
+            self.context_view.clear()
+        reason = err or self.tr("比較または実測の一部が失敗しました。")
         self.context_result_label.setText(self.tr("実測に失敗しました: ") + reason)
 
     def export_html(self, path: Path | str) -> None:

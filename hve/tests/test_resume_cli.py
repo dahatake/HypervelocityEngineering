@@ -527,7 +527,7 @@ def runtime(
     )
     monkeypatch.setattr(
         hve_main,
-        "_run_workiq_auth_preflight",
+        "_run_workiq_capability_preflight",
         external_preflight("workiq-auth"),
     )
     monkeypatch.setattr(
@@ -965,6 +965,51 @@ class TestCandidateSelectionAndInteraction:
             "lease.release"
         )
 
+    def test_parent_lease_heartbeat_spans_the_child_run(
+        self,
+        runtime: _Runtime,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        events = runtime.trace.events
+        state_module = sys.modules["hve.run_state_store"]
+        workers: list[Any] = []
+
+        class PathStore(_FakeRunStateStore):
+            def __init__(self, path: str | Path | None = None) -> None:
+                super().__init__(tmp_path / "state.sqlite3")
+
+        class RecordingWorker:
+            def __init__(self, path: Any, token: Any, **_kwargs: Any) -> None:
+                self.path, self.token = path, token
+                workers.append(self)
+
+            def start(self) -> None:
+                events.append("heartbeat.start")
+
+            def stop(self, timeout: float = 1.0) -> None:
+                events.append("heartbeat.stop")
+
+        monkeypatch.setattr(state_module, "RunStateStore", PathStore)
+        monkeypatch.setattr(state_module, "HeartbeatWorker", RecordingWorker)
+        runtime.trace.plans = [_plan(), _plan()]
+        runtime.trace.child_returncode = 9
+        _set_terminal(monkeypatch, runtime.trace, tty=False)
+
+        code = _invoke(
+            runtime,
+            ["resume", "execution-1", "--action", "restart-step"],
+        )
+
+        assert code == 9
+        assert len(workers) == 1
+        assert workers[0].path == tmp_path / "state.sqlite3"
+        assert workers[0].token.owner == runtime.trace.acquire_calls[0][1]
+        order = [
+            events.index(name)
+            for name in ("heartbeat.start", "child", "heartbeat.stop", "lease.release")
+        ]
+        assert order == sorted(order)
     def test_ordered_execution_continues_with_the_next_incomplete_instance(
         self,
         runtime: _Runtime,
@@ -1552,7 +1597,7 @@ class TestHiddenDurableIdentity:
     ) -> None:
         del runtime
         fixture = yaml.safe_load(_PARITY_FIXTURE.read_text(encoding="utf-8"))
-        assert set(fixture.get("orchestrate_cli_internal_dests") or ()) == {
+        assert {
             "_execution_id",
             "_instance_id",
             "_expected_state_version",
@@ -1560,7 +1605,7 @@ class TestHiddenDurableIdentity:
             "_lease_owner",
             "_lease_generation",
             "_unattended",
-        }
+        } <= set(fixture.get("orchestrate_cli_internal_dests") or ())
 
     def test_internal_identity_reaches_immutable_orchestrator_context(
         self,
@@ -1650,9 +1695,14 @@ def _install_quick_wizard(runtime: _Runtime, monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(workflow_registry, "get_workflow", lambda _workflow_id: workflow)
     monkeypatch.setattr(template_engine, "_WORKFLOW_DISPLAY_NAMES", {"aas": "AAS"})
     monkeypatch.setattr(config, "get_model_choices", lambda include_auto=True: ["Auto"])
-    monkeypatch.setattr(workiq, "is_workiq_available", lambda: False)
-    monkeypatch.setattr(workiq, "workiq_login", lambda _console: False)
-    monkeypatch.setattr(workiq, "get_workiq_prompt_template", lambda _mode: "")
+    monkeypatch.setattr(
+        workiq,
+        "probe_workiq_plugin_capability",
+        lambda **_kwargs: workiq.WorkIQCapability(
+            state="not-configured",
+            reason_code="not-configured",
+        ),
+    )
 
     async def fake_run_workflow(*args: Any, **kwargs: Any) -> dict[str, Any]:
         runtime.trace.workflow_calls.append({"args": args, "kwargs": kwargs})
@@ -1724,11 +1774,16 @@ class TestExecutionRegistration:
         assert runtime.trace.events.index("params-resolved") < runtime.trace.events.index(
             "register"
         )
-        assert runtime.trace.events.index("register") < runtime.trace.events.index(
-            "copilot-auth"
+        ordered_events = (
+            "register",
+            "startup-preflight",
+            "copilot-auth",
+            "workiq-auth",
+            "azure-auth",
+            "index-refresh",
         )
-        assert runtime.trace.events.index("register") < runtime.trace.events.index(
-            "index-refresh"
+        assert [runtime.trace.events.index(event) for event in ordered_events] == sorted(
+            runtime.trace.events.index(event) for event in ordered_events
         )
         assert runtime.trace.events.index("register") < runtime.trace.events.index(
             "workdir-create"
@@ -1752,16 +1807,61 @@ class TestExecutionRegistration:
         descriptors = runtime.trace.register_calls[0]["descriptors"]
         assert len(descriptors) == 1
         assert descriptors[0].workflow_id == "aas"
-        assert runtime.trace.events.index("register") < runtime.trace.events.index(
-            "copilot-auth"
+        ordered_events = (
+            "register",
+            "startup-preflight",
+            "copilot-auth",
+            "workiq-auth",
+            "azure-auth",
+            "index-refresh",
         )
-        assert runtime.trace.events.index("register") < runtime.trace.events.index(
-            "index-refresh"
+        assert [runtime.trace.events.index(event) for event in ordered_events] == sorted(
+            runtime.trace.events.index(event) for event in ordered_events
         )
         assert runtime.trace.events.index("register") < runtime.trace.events.index(
             "run-workflow"
         )
 
+    @pytest.mark.parametrize("command", ["run", "cli"])
+    def test_closed_stdin_stops_the_wizard_before_any_execution(
+        self,
+        runtime: _Runtime,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        command: str,
+    ) -> None:
+        from hve import console
+
+        _install_quick_wizard(runtime, monkeypatch)
+        eof_console = _WizardConsole(runtime.trace)
+        eof_console.input_eof = True
+        monkeypatch.setattr(console, "Console", lambda **_kwargs: eof_console)
+
+        assert _invoke(runtime, [command, "--no-banner"]) == 1
+
+        assert runtime.trace.register_calls == []
+        assert runtime.trace.workflow_calls == []
+        assert runtime.trace.external_calls == []
+        assert "標準入力が閉じている" in capsys.readouterr().err
+
+    def test_keyboard_interrupt_in_orchestrate_exits_one_with_a_message(
+        self,
+        runtime: _Runtime,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        from hve import orchestrator
+
+        async def interrupted(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(orchestrator, "run_workflow", interrupted)
+        monkeypatch.setattr(runtime.hve_main, "_install_windows_break_as_interrupt", lambda: None)
+
+        code = _invoke(runtime, ["orchestrate", "--workflow", "aas", "--quiet"])
+
+        assert code == 1
+        assert "中断されました" in capsys.readouterr().err
     def test_registration_failure_is_fail_closed_before_auth_or_execution(
         self,
         runtime: _Runtime,

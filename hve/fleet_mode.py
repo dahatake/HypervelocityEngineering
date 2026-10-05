@@ -15,9 +15,9 @@ except ImportError:  # pragma: no cover
     from prompt_loader import load_prompt_file  # type: ignore[import-not-found,no-redef]
 
 try:
-    from .split_fork import SubIssueDef, make_subtask_work_subdir
+    from .run_paths import has_validation_marker
 except ImportError:  # pragma: no cover
-    from split_fork import SubIssueDef, make_subtask_work_subdir  # type: ignore[import-not-found,no-redef]
+    from run_paths import has_validation_marker  # type: ignore[import-not-found,no-redef]
 
 try:
     from .runtime_observability import extract_usage_credit_fields
@@ -26,27 +26,16 @@ except ImportError:  # pragma: no cover
 
 _LOGGER = logging.getLogger(__name__)
 
-_SPLIT_FLEET_PROMPT_TEMPLATE = load_prompt_file("runtime/fleet/split-fleet.prompt.md")
-_SPLIT_FLEET_TODO_TEMPLATE = load_prompt_file("runtime/fleet/split-fleet-todo.prompt.md")
 _DAG_WAVE_FLEET_PROMPT_TEMPLATE = load_prompt_file("runtime/fleet/dag-wave.prompt.md")
 _DAG_WAVE_FLEET_TASK_TEMPLATE = load_prompt_file("runtime/fleet/dag-wave-task.prompt.md")
-
-
-@dataclass(frozen=True)
-class SplitFleetPrompt:
-    """Prompt and expected output directories for a legacy split-fork fleet run."""
-
-    prompt: str
-    work_subdirs: Dict[int, str]
 
 
 @dataclass(frozen=True)
 class DagWaveFleetTask:
     """One workflow-level DAG/fan-out task to be delegated to Fleet mode.
 
-    This structure is intentionally independent from ``SubIssueDef`` so CLI/GUI
-    Fleet integration can target normal DAG waves instead of Cloud Sub-Issue
-    artifacts.
+    CLI/GUI Fleet integration targets normal DAG waves instead of Cloud
+    Sub-Issue artifacts.
     """
 
     step_id: str
@@ -290,74 +279,6 @@ class FleetEventCollector:
             _CURRENT_EMIT_STEP_ID.reset(token)
 
 
-def build_split_fleet_prompt(
-    *,
-    subissues: Sequence[SubIssueDef],
-    parent_step_id: str,
-    parent_custom_agent: Optional[str],
-    parent_identifier: str,
-    repo_root: Path,
-    work_root: Optional[Path] = None,
-) -> SplitFleetPrompt:
-    """Build the fleet-mode prompt for ``SPLIT_REQUIRED`` subissues.
-
-    The prompt keeps HVE's existing completion contract: every worker must write
-    ``completion-report.md`` with a validation marker under its assigned output
-    directory.  The returned ``work_subdirs`` map is used by the parent runner to
-    verify completion independently from model/sub-agent self-reporting.
-    """
-    work_subdirs: Dict[int, str] = {
-        subissue.index: make_subtask_work_subdir(
-            parent_custom_agent=parent_custom_agent,
-            parent_work_identifier=parent_identifier,
-            subissue_index=subissue.index,
-        )
-        for subissue in subissues
-    }
-    effective_work_root = (
-        Path(work_root).resolve()
-        if work_root is not None
-        else (repo_root / "work" / "run" / "unknown-run").resolve()
-    )
-    prompt_prefix = _SPLIT_FLEET_PROMPT_TEMPLATE.format(
-        parent_step_id=parent_step_id,
-        parent_custom_agent=parent_custom_agent or "(none)",
-    )
-    todo_blocks: list[str] = []
-
-    for subissue in subissues:
-        work_subdir = work_subdirs[subissue.index]
-        abs_output_dir = (effective_work_root / work_subdir).as_posix() + "/"
-        depends_on = ", ".join(f"sub-{dep:03d}" for dep in subissue.depends_on) or "なし"
-        dependency_reports = ", ".join(
-            (effective_work_root / work_subdirs[dep] / "completion-report.md").as_posix()
-            for dep in subissue.depends_on
-            if dep in work_subdirs
-        ) or "なし"
-        labels = ", ".join(subissue.labels) or "なし"
-        agent = subissue.custom_agent or parent_custom_agent or "(none)"
-
-        todo_blocks.append(
-            _SPLIT_FLEET_TODO_TEMPLATE.format(
-                index=subissue.index,
-                title=subissue.title,
-                agent=agent,
-                depends_on=depends_on,
-                dependency_reports=dependency_reports,
-                labels=labels,
-                abs_output_dir=abs_output_dir,
-                body=_indent_block(subissue.body or "(本文なし)", prefix="  "),
-            )
-        )
-
-    prompt = prompt_prefix
-    if todo_blocks:
-        prompt += "\n\n" + "\n\n".join(todo_blocks)
-    prompt = prompt.rstrip() + "\n"
-
-    return SplitFleetPrompt(prompt=prompt, work_subdirs=work_subdirs)
-
-
 def build_dag_wave_fleet_prompt(
     *,
     tasks: Sequence[DagWaveFleetTask],
@@ -369,8 +290,8 @@ def build_dag_wave_fleet_prompt(
 ) -> DagWaveFleetPrompt:
     """Build a Fleet prompt for normal workflow DAG/fan-out wave tasks.
 
-    Unlike ``build_split_fleet_prompt``, this helper does not consume
-    ``subissues.md`` and does not model GitHub Sub-Issues.  It is the prompt
+    This helper does not consume ``subissues.md`` and does not model GitHub
+    Sub-Issues.  It is the prompt
     boundary for future CLI/GUI Fleet execution of already-expanded DAG steps.
 
     ``work_root`` controls where Fleet workers must write their
@@ -452,6 +373,53 @@ def build_dag_wave_fleet_prompt(
         task_step_ids=tuple(task.step_id for task in task_list),
         report_dirs=report_dirs,
     )
+
+
+def check_subtask_completion(
+    work_root: Path,
+    work_subdir: str,
+) -> tuple[bool, str]:
+    """fleet タスクの完了判定。
+
+    判定基準:
+      1. `<work_root>/<work_subdir>/completion-report.md` が存在
+      2. ファイル内に検証マーカー（`<!-- validation-confirmed -->` 等）が含まれる
+
+    Returns:
+        (成功フラグ, 理由文字列)。成功時は理由は "OK"。
+    """
+    report_path = work_root / work_subdir / "completion-report.md"
+    if not report_path.is_file():
+        # LLM が相対パスを誤解決して hve/work/ へ書いた場合の診断情報。
+        # work_root.name == "work" の場合だけ repo_root を推定する。
+        misplaced_hints: list[str] = []
+        try:
+            if work_root.name == "work":
+                repo_root = work_root.parent
+                candidate = repo_root / "hve" / "work" / work_subdir / "completion-report.md"
+                if candidate.is_file():
+                    misplaced_hints.append(str(candidate))
+        except (OSError, ValueError):  # pragma: no cover - 診断補助
+            pass
+
+        msg = f"completion-report.md が存在しない: {report_path}"
+        if misplaced_hints:
+            msg += (
+                " [MISPLACED] 誤書き込みの可能性: "
+                + ", ".join(misplaced_hints)
+                + " （正規パスは <repo>/work/... です。`hve/work/...` ではありません）"
+            )
+        return False, msg
+
+    try:
+        content = report_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return False, f"completion-report.md 読み込み失敗: {exc}"
+
+    if has_validation_marker(content):
+        return True, "OK"
+
+    return False, f"検証マーカーが見つからない: {report_path}"
 
 
 def _safe_path_segment(value: str) -> str:

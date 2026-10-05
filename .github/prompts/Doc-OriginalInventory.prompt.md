@@ -7,15 +7,8 @@
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。
-
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。CI ジョブ `check-docs-original` が違反を fail させる。
 - **捏造禁止**: 件数・ファイル名・拡張子を推測で書かない。すべて `index.json` の実値を転記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタを行わない（最小差分）。
 - **内容の要約禁止**: 本 Step では原本の**中身を読まない**。目録化のみを行う。要約は Doc Card（Step 2）の責務。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **ルート `README.md` 変更禁止**。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
 
 ## Agent 固有の Skills 依存
 
@@ -24,7 +17,7 @@
 
 ## 1) 目的と非目的
 
-### 目的（MUST）
+### 目的
 - `python -m hve ingest-docs` を実行して `docs/original-design-doc-ingest/` を最新化する。
 - `docs/original-design-doc-ingest/index.json` を人間可読な設計書インベントリ（`docs/catalog/design-doc-inventory.md`）へ変換する。
 - 変換失敗・未対応形式・重複を**件数と理由付き**で明示する。
@@ -73,7 +66,7 @@
 
 ## 5) 品質原則（必ず守る）
 
-- 捏造は絶対に禁止。すべての行は `index.json` の実値に基づくこと。
+- 捏造しない（根拠のない内容は確認と修正の手間を増やし、結果の信頼を損なうため）。すべての行は `index.json` の実値に基づくこと。
 - `index.json` に無い列（推測した文書種別・重要度など）を追加しないこと。
 - 除外・重複が 0 件の場合も、セクションを省略せず「なし」と明記すること。
 - 不明点は `TBD（推論: ...）` と明記すること。

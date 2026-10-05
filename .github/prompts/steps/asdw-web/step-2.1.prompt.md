@@ -4,6 +4,8 @@
 ## 目的
 サービス定義書の「外部依存・統合」から、追加で必要な Azure サービス（AI/認証/統合/運用等）を選定し、根拠（Microsoft Learn）付きで記録する（APP-ID 指定時はスコープ内のサービスのみ）。
 
+既存の `docs/azure/azure-services-additional.md` がある場合は読み、本 Workflow で確定した Azure のデータ層・コンピュート（`docs/azure/azure-services-compute.md` / `docs/azure/azure-services-data.md`）を反映して変わる点の差分だけを追記する。既存の記述を削除・再生成しない。AAD-WEB Step.2.5 が同じ Agent で同じ成果物を作っており、選定をやり直すと同じ内容を 2 回書くことになるためである。既存の成果物が無い場合は新規に作成する。
+
 ## 補足: AI/LLM ・ 検索カテゴリの強制ルール
 対象サービスの機能要件に `チャットボット` / `Prompt` / `AI Agent` / `RAG` 等が含まれる場合は、Prompt `Dev-Microservice-Azure-AddServiceDesign` の§3.1 強制ルールに従う（AI/LLM 第一候補 = Microsoft Foundry / 検索第一候補 = Azure AI Search）。
 
@@ -22,10 +24,7 @@ AI/LLM 該当時は、Foundry resource と **Foundry Project** を別リソー�
 ## 出力
 - `docs/azure/azure-services-additional.md`
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 {existing_artifact_policy}
 

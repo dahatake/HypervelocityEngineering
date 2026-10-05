@@ -3,7 +3,7 @@
 ローカル完結で Markdown 群を横断検索し、ヒット箇所の小さな snippet だけを返す Skill。
 Copilot / Custom Agent の Context Window 消費を最小化することが唯一の目的で、外部 API は呼び出さない。
 
-このフォルダは上流リポジトリ（`dahatake/RoyalytyService2ndGen`）の
+このフォルダは配布元リポジトリの
 `tools/skills/markdown_query/` を `tools/for-other-repo/copy_to_repo.py` でコピーしたもの。
 同梱の版情報は [`KIT-VERSION.json`](./KIT-VERSION.json) にある。
 

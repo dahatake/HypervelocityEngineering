@@ -195,7 +195,7 @@ class TestConditionalSidecarsStayOutOfRuntimeGates:
         ) == []
 
     @pytest.mark.parametrize("workflow_id", _WORKFLOW_IDS)
-    def test_self_improve_scope_excludes_optional_sidecars(
+    def test_collected_output_paths_exclude_optional_sidecars(
         self, workflow_id: str, tmp_path: Path
     ) -> None:
         collected = collect_workflow_output_paths(workflow_id, repo_root=tmp_path)

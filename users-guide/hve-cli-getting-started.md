@@ -8,6 +8,8 @@
 
 このガイドは、CLI Orchestrator を「動かしてみる」までの最小手順をまとめたチュートリアルです。詳細仕様・全オプションは [hve-cli-orchestrator-guide.md](./hve-cli-orchestrator-guide.md) を参照してください。
 
+途中Stepへ任意の文書を追加・代替する場合は、[Workflow / Step入力ガイド](./step-inputs.md#cli)を参照してください。
+
 ---
 
 ## 目次
@@ -73,6 +75,8 @@ hve\setup-hve.cmd
 
 スクリプトは `.venv` 作成 + `github-copilot-sdk` + 全 extras（`test` / `mdq-watch` / `mdq-ja` / `semantic` / `code-watch` / `code-tokenizer` / `code-semantic` / `gui` / `gui-pty` / `gui-docconvert`）を既定でインストールします。`test` は repository / VS Code task 検証用の pytest を含みます。CLI のみで良い場合は `--no-gui`、runtime baseだけにしたい場合は `--minimal` を付けてください。詳細・オプションは [hve-cli-orchestrator-guide.md の「セットアップスクリプトを使った環境構築」](./hve-cli-orchestrator-guide.md#セットアップスクリプトを使った環境構築windows--macos--linux) を参照してください。
 
+セットアップは初回専用ではありません。`git pull` や branch 切り替えで checkout 側の HVE バージョンが進んだ場合も、同じスクリプトを再実行して `.venv` の distribution metadata と依存を更新できます。通常は既存の `.venv` を再利用するため、作り直す場合を除き `-Force` / `--force` は不要です。
+
 ### code-query の文法を言語で絞る
 
 既定では `code-query`（`cq`）が対応する全言語の tree-sitter 文法を導入します。使う言語だけに絞りたい場合は言語名をカンマ区切りで渡してください。
@@ -135,6 +139,8 @@ python -m hve --help
 
 `hve` のヘルプが表示されればセットアップ完了です。
 
+通常の起動には、常にリポジトリの `.venv` を使う Windows の `hve.cmd` または macOS / Linux の `./hve.sh` を推奨します。HVE は GUI / CLI の dispatch 前に、checkout の `pyproject.toml` とインストール済み `hve` metadata をローカルだけで比較します。インストール済み版が古い場合、または metadata を確認できない場合は TTY で setup 実行を確認し、成功して版一致を再確認できたときだけ、リポジトリの `.venv` Python で同じ引数を 1 回再起動します。インストール済み版の方が新しい場合は自動 downgrade せず警告して続行します。Git remote、GitHub API、PyPI への更新確認は行いません。
+
 ---
 
 ## クイックスタート（サンプルで動かしてみる）
@@ -194,6 +200,8 @@ python -m hve cli
 ```
 
 ワークフローやパラメータを wizard が順に尋ねます。
+
+モデル一覧は `python -m hve login` がキャッシュした SDK の model catalog に従い、未キャッシュ時は組み込みの fallback 一覧を表示します。Enter の既定値は `claude-opus-5.5` で、`Auto` を使う場合だけ明示的に選択してください。
 
 ---
 

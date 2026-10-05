@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from hve import mcp_io_log as mio
+from hve import workiq
 from hve.console import Console
 
 
@@ -41,7 +42,6 @@ class TestConsoleLoggerAttachment:
         console.mcp_tool_request("azure", "t", tool_call_id="c1")
         console.mcp_tool_response(tool_call_id="c1", success=True)
         console.mcp_server_status("azure", status="connected")
-        console.workiq_prompt("prompt body")
         assert list(tmp_path.glob("mcp-*.log")) == []
 
     def test_detach_stops_recording(self, tmp_path: Path) -> None:
@@ -78,54 +78,35 @@ class TestConsoleToolRecords:
         assert "status=connected" in _read(tmp_path, "microsoft-learn")
 
 
-class TestConsoleWorkIQPersistence:
-    """FR-MCPLOG-01: 表示の切り詰め・抑止と記録を分離する。"""
-
-    def test_prompt_is_recorded_in_full_beyond_display_truncation(
-        self, tmp_path: Path
-    ) -> None:
-        prompt = "あ" * 20_000
-        console, logger = _attached(tmp_path, verbosity=2)
-        console.workiq_prompt(prompt, label="Work IQ プロンプト [Q1]")
-        logger.close()
-
-        text = _read(tmp_path, "_hve_workiq")
-        assert prompt in text
-        assert "label=Work IQ プロンプト [Q1]" in text
-
-    def test_response_is_recorded_in_full(self, tmp_path: Path) -> None:
-        response = "い" * 20_000
-        console, logger = _attached(tmp_path)
-        console.workiq_response(response, label="Work IQ 応答 [Q1]")
-        logger.close()
-        assert response in _read(tmp_path, "_hve_workiq")
+class TestConsoleKnowledgeSourcePersistence:
+    """FR-MCPLOG-01 / FR-KD-02: 知識源（Work IQ を含む）の通信は汎用 MCP 記録で全文を残す。"""
 
     @pytest.mark.parametrize("verbosity", [0, 1, 2, 3])
-    def test_recorded_regardless_of_verbosity(
+    def test_response_is_recorded_in_full_regardless_of_verbosity(
         self, tmp_path: Path, verbosity: int
     ) -> None:
+        response = "い" * 20_000
         console, logger = _attached(tmp_path, verbosity=verbosity)
-        console.workiq_prompt("本文", label="L")
-        console.workiq_response("応答", label="L")
+        console.mcp_tool_request(
+            workiq.WORKIQ_MCP_SERVER_NAME, "ask", tool_call_id="c1",
+            arguments={"question": "本文"},
+        )
+        console.mcp_tool_response(tool_call_id="c1", success=True, content=response)
         logger.close()
 
-        text = _read(tmp_path, "_hve_workiq")
+        text = _read(tmp_path, workiq.WORKIQ_MCP_SERVER_NAME)
         assert "本文" in text
-        assert "応答" in text
+        assert response in text
 
     def test_final_only_still_records(self, tmp_path: Path) -> None:
         console = Console(verbosity=2, no_color=True, final_only=True)
         logger = mio.McpIoLogger(tmp_path)
         console.attach_mcp_io_logger(logger)
-        console.workiq_prompt("本文", label="L")
+        console.mcp_tool_request("docs-mcp", "search", tool_call_id="c1", arguments={"q": "本文"})
         logger.close()
-        assert "本文" in _read(tmp_path, "_hve_workiq")
+        assert "本文" in _read(tmp_path, "docs-mcp")
 
-    def test_uses_the_shared_workiq_server_name(self, tmp_path: Path) -> None:
-        from hve import workiq
-
-        console, logger = _attached(tmp_path)
-        console.workiq_prompt("本文", label="L")
-        logger.close()
-        expected = tmp_path / f"mcp-{workiq.WORKIQ_MCP_SERVER_NAME}.log"
-        assert expected.is_file()
+    def test_workiq_specific_console_channel_is_removed(self) -> None:
+        console = _console()
+        assert not hasattr(console, "workiq_prompt")
+        assert not hasattr(console, "workiq_response")

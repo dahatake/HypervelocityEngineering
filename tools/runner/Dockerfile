@@ -62,7 +62,7 @@ RUN apt-get update \
     && chmod 0440 /etc/sudoers.d/runner
 
 # Node.js 20 + npm（NodeSource 公式リポジトリ）
-# Self-Improve step が `npm install -g markdownlint-cli` を実行するため事前同梱。
+# markdownlint-cli を `npm install -g` で事前同梱する。
 RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
       | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
     && chmod 644 /etc/apt/keyrings/nodesource.gpg \
@@ -73,7 +73,7 @@ RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g markdownlint-cli
 
-# Self-Improve で毎回入れる Python ツールを事前同梱（pytest は既存 step で導入済み）
+# Python 品質ツールを事前同梱（pytest は既存 step で導入済み）
 RUN python3 -m pip install --no-cache-dir ruff pytest-cov
 
 # 実行ユーザー

@@ -254,6 +254,7 @@ def cmd_extract_model(_: list[str]) -> int:
 
     allowed = {
         "Auto",
+        "claude-opus-5.5",
         "gpt-5.5",
         "claude-opus-4.7",
         "claude-opus-4.6",

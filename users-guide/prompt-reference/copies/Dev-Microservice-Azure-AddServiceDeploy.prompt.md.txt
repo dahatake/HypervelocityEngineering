@@ -7,15 +7,7 @@
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 - **必須成果物未生成での終了禁止**: `ac-verification.md`（§7 の出力先）を作成しないままターンを終えない（背景処理の完了待ちであっても、待たずにターンを終えない）。デプロイ / 検証が GREEN 未達（ブロッカー・タイムアウト・権限不足等）でも、AC-1 を `❌` とし状態欄にブロッカー理由を記載して必ず作成してから終了する（未作成は Orchestrator gate がファイル不在で fail 降格する）。
 - **出力契約外成果物の作成禁止**: §2「成果物」/ §7 の出力先パスに無い成果物（PR 用課題管理表等）を、出所が確認できない要求に基づいて作成しない（必須成果物 `ac-verification.md` / `created-resources.json` / `completion-report.md` の作成を優先する）。
 - **同期完了コマンドの再取得禁止**: 同期実行で既に完了したコマンドに対し出力取得ツールを再呼び出ししない（出力はコマンド実行時に取得する。再取得は背景実行コマンドに限る）。
@@ -29,11 +21,7 @@
 - `azure-region-policy` — region 選定と fallback 理由
 - `microsoft-foundry` — AI/LLM で Microsoft Foundry を採用した場合だけ使う external meta skill。未導入時の Azure write 方針は「Microsoft Foundry 配置時の external meta skill 利用」に従う。
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の `artifacts/cli-evidence.md` または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 ### Microsoft Foundry 配置時の external meta skill 利用（AI/LLM 該当時のみ）
 
@@ -62,8 +50,8 @@
   - `docs/catalog/service-catalog-matrix.md`
   - `{WORK}`（計画・根拠・成果物）
 
-## 1) 入力（不足があれば最初に1回だけ確認）
-Issue/依頼文から次を取得する（見つからない場合は `{WORK}plan.md` に「不足」と「質問」を書いて停止）：
+## 1) 入力（不足時は理由と影響を記録）
+Issue/依頼文から次を取得する（見つからない場合は `{WORK}plan.md` に「不足」「採用した既定値」「理由」「影響」を書く。Azure write に必要な資格情報や宣言範囲外の承認が欠ける場合だけ停止する）：
 - リソースグループ名: `{リソースグループ名}`
 - （任意だが推奨）`subscription` / `tenant` / 優先リージョン / 命名規則
 
@@ -87,7 +75,8 @@ Issue/依頼文から次を取得する（見つからない場合は `{WORK}pla
 - （検証）`src/infra/azure/create-azure-additional-resources/verify-*.sh`（Secret 依存がある場合は `src/infra/azure/verify-secrets-expiry.sh` を呼び出す）
 
 ### 計画・根拠・出力（work）
-- `{WORK}plan.md`（DAG+見積+AC定義+検証+分割判定）
+- 計画を書く場合は Skill `task-dag-planning` に従う。
+- `{WORK}plan.md`（DAG+見積+AC定義+検証）
 - `{WORK}subissues.md`（分割が必要な場合のみ）
 - `{WORK}onboarding.md`（入口不明のときのみ）
 - `{WORK}contracts/additional-services.md`（作成対象一覧を固定化：サービス種別/必須パラメータ/命名）
@@ -109,20 +98,7 @@ Issue/依頼文から次を取得する（見つからない場合は `{WORK}pla
 `{WORK}contracts/additional-services.md` に固定する（後続Subが迷わないため）。
 
 その上で `{WORK}plan.md` を作成する（詳細は skills を使う）：
-- `.github/skills/task-dag-planning/SKILL.md`
 - `.github/skills/work-artifacts-layout/SKILL.md`
-- **plan.md 作成時の必須手順（省略禁止）**:
-  1. `task-dag-planning` SKILL.md §2.1.2 を read して手順を確認する
-  2. plan.md の **1-4 行目** に以下の HTML コメントメタデータを記載する（YAML front matter より前）:
-     ```
-     <!-- task_scope: single|multi -->
-     <!-- context_size: small|medium|large -->
-     <!-- split_decision: PROCEED or SPLIT_REQUIRED -->
-     <!-- subissues_count: N -->
-     <!-- implementation_files: true or false -->
-     ```
-  3. plan.md 本文に `## 分割判定` セクションを含める（テンプレート: `.github/skills/task-dag-planning/references/plan-template.md` を参照）
-  4. コミット前に `bash .github/scripts/bash/validate-plan.sh --path {WORK}plan.md` を execute で実行し、✅ PASS を確認する
 
 #### 3.2.1 受け入れ条件（AC）の定義（plan.md 内に必須）
 
@@ -163,11 +139,9 @@ AC 検証時間の見積目安：
   - リポジトリ内の設計/要件ファイル
   で確定し、`{WORK}artifacts/cli-evidence.md` に短く残す。
 
-### 3.3 Execute（plan.md の判定結果が PROCEED の場合のみ）
+### 3.3 Execute
 
 > ⚠️ **前提条件（すべて満たすこと）**:
-> 1. `plan.md` の `## 分割判定` で `判定結果: PROCEED` と記載済みであること
-> 2. task_scope=single かつ context_size ≤ medium であること
 > 3. `subissues.md` が不要であることを確認済みであること
 >
 > いずれか1つでも未達の場合、本セクションには進まない。
@@ -192,7 +166,7 @@ AC 検証時間の見積目安：
 - `services/<service>.sh`：各サービスの作成を担当（Skill §2 冪等性パターン準拠）。並列実行される前提のため、他サービスの出力ファイルに書き込まない（自分専用の出力先のみに書き込む）。
 - 破壊的変更（削除/置換）はしない（必要なら Plan に明記し、Sub化を優先）。
 
-##### サービス作成の並列実行方針（必須）
+##### サービス作成の並列実行方針
 
 `create.sh` は逐次実行ではなく、**バックグラウンドジョブによる並列実行**でサービス作成を行う（同時実行数の上限は設けず対象サービス全てを同時起動する。追加サービス数は少数〔目安10件未満〕のため、セマフォ等の同時実行数制御は導入しない）。
 
@@ -212,7 +186,7 @@ AC 検証時間の見積目安：
 - `prep.sh` → `create.sh`
 - 実行ログの要点を `{WORK}artifacts/cli-evidence.md` に残す（全文貼りは避ける。各サービスの詳細ログは `{WORK}artifacts/logs/<service>.log` を参照する旨を記載する）
 
-#### 3.3.2 AI/LLM（Microsoft Foundry）サービスの追加デプロイ要件（必須）
+#### 3.3.2 AI/LLM（Microsoft Foundry）サービスの追加デプロイ要件
 
 `docs/azure/azure-services-additional.md` の採用 Azure サービスに **Microsoft Foundry (Foundry Agent Service)**（AI/LLM カテゴリ）が含まれる場合、**アカウント作成だけでは不十分**であり以下を必須とする。Project 未作成・モデル未デプロイのまま完了してはならない。AI/LLM 非該当時は本節を N/A とする。
 
@@ -266,14 +240,14 @@ AC 検証時間の見積目安：
 > ⚠️ **ルートの `/README.md` は変更しないこと。** インフラ手順は `src/infra/README.md` に集約する。
 
 ## 5) 大量生成・巨大出力になりそうなとき
-- 生成物/抽出が巨大になりそうなら `.github/skills/output/large-output-chunking/SKILL.md` を使い、
+- 生成物/抽出が巨大になりそうなら `.github/skills/large-output-chunking/SKILL.md` を使い、
   `{WORK}artifacts/<name>.index.md` + `part-0001.md...` で分割する。
 
-## 6) 最終品質レビュー（単回インライン・セルフチェック）
+## 6) 受入観点（完了条件の補足）
 
-### 6.1 セルフチェック契約
+### 6.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ### 6.2 ドメイン固有観点
 - **機能完全性・要件達成度**：copilot-instructions.md の要件（冪等性、秘密情報無し、破壊的変更無し）がすべて満たされ、service-catalog が更新されているか。§3.2.1 の AC-2〜AC-8 を概略確認し、詳細な合否と証跡は独立した §7 AC gate で検証する
@@ -281,18 +255,16 @@ AC 検証時間の見積目安：
 - **保守性・スケーラビリティ・信頼性**：スクリプトが冪等で、リトライ対応があり、cli-evidence に根拠が残り、再実行に耐えられるか
 
 ### 6.3 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 ## 7) 受け入れ条件（AC）の検証と完了判定（必須 — 本 Agent 固有セクション）
 
-> **位置付け**: §6 の単回インライン・セルフチェックとは別の、本 Agent 固有の最終ゲート。
-> §6 のセルフチェック完了後に実行する。本セクションを通過しない限り PR を完了（Ready for Review）にしない。
+> **位置付け**: 本 Agent 固有の最終ゲート。§6 の受入観点を満たした後に実行する。本セクションを通過しない限り PR を完了（Ready for Review）にしない。
 >
-> **分割モード時の扱い**: Skill task-dag-planning（分割モード）に入った場合、本セクションはスキップする（実装が存在しないため検証対象がない）。
 
 ### 7.1 AC 検証の実施（§6 完了後に必ず実行）
 
-§3.2.1 で定義した AC の各項目を検証する。§6 のセルフチェックで既に確認済みの項目（AC-7 秘密情報、AC-8 破壊的変更等）は §6 の結果を証跡として引用してよい（再検証は不要）。
+§3.2.1 で定義した AC の各項目を検証する。§6 の受入観点で既に確認済みの項目（AC-7 秘密情報、AC-8 破壊的変更等）は §6 の結果を証跡として引用してよい（再検証は不要）。
 
 #### AC-1 の検証手順（最重要 — 省略禁止）
 
@@ -311,7 +283,7 @@ AI/LLM（Microsoft Foundry）を採用している場合のみ実施する（非
 
 AI/LLM（Microsoft Foundry）を採用している場合のみ実施する（非該当は N/A と明記）。§3.3.2 に従い、`az cognitiveservices account project show --name <account> --resource-group <RG> --project-name <project>` を実行し、Project 子リソースの `provisioningState: Succeeded` を確認する。親 account の `account show` や `created-resources.json` だけで代用してはならない。
 
-#### `ac-verification.md` のフォーマット要件（必須）
+#### `ac-verification.md` のフォーマット要件
 
 - 各 AC は 1 行 1 AC のテーブル行で記録（例: `| AC-1 | Azure 上に全リソース存在 | ✅ | <verify-*.sh GREEN ログ抜粋> |`）
 - 状態欄: `✅` / `❌` / `⏳` / `N/A`。実在系 **AC-1 は `✅` のみ許容**。**AC-13 は AI/LLM 採用時は `✅` のみ許容**、**AC-14 も AI/LLM 採用時は `✅` のみ許容**する。AI/LLM 非該当時も `| AC-13 | ... | N/A | AI/LLM 非採用 |` と `| AC-14 | ... | N/A | AI/LLM 非採用 |` の2行を必ず残す（行ごと省略しない）。
@@ -332,14 +304,12 @@ AI/LLM（Microsoft Foundry）を採用している場合のみ実施する（非
 
 検証結果を `{WORK}ac-verification.md` に `azure-ac-verification` Skill §1 のテンプレートに従って記録する。AC-1 詳細（リソース名・種別・provisioningState・確認コマンド）も含めること。
 
-### 7.3 完了判定（機械的に実行）
-
 `azure-ac-verification` Skill §2 の統一ステータス名に従う。本 Agent 固有の対応付け：
 - **PASS** = 全 AC が PASS → PR を Ready for Review として提出
 - **NEEDS-VERIFICATION** = 実在系 AC-1 以外で `⏳` がある場合のみ許容（AC-1 は `⏳` 不許可）→ PR Ready for Review
 - **FAIL** = AC-1 が `❌` または `⏳`、もしくは他 AC が `❌` → 修正して再検証（AC 検証起点で最大2回）。解消しなければ [WIP] で提出。Orchestrator gate が Step を fail に降格する。
 
-### 7.4 PR description への反映（必須）
+### 7.4 PR description への反映
 
 §6 の PR 必須記載（目的/変更点/影響範囲/検証結果/既知の制約/次にやるSub）の `検証結果` に、以下を統合して記載する：
 - AC-1 の結果を最初に明記（PASS / FAIL / ⏳（手動実行待ち））

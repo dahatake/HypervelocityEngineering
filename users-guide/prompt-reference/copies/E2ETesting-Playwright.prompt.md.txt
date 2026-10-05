@@ -14,7 +14,7 @@ UIDeploy 後の実環境 E2E 検証専用 Agent。
 - `work-artifacts-layout` — `work/run/<run-id>/E2ETesting-Playwright/Issue-<識別子>/` 配下の成果物（screenshot/trace/report）構造に準拠
 - `harness/harness-verification-loop` — E2E テスト結果の検証ループ
 - `harness/harness-error-recovery` — テスト失敗時の artifact 収集と E-01〜E-05 リカバリ
-- `testing/test-strategy-template` — E2E シナリオ設計テンプレートに準拠
+- `testing/tdd-red-green-reality` — HVE 実行環境・採用方針に準拠（`.github/skills/tdd-red-green-reality/SKILL.md`）
 
 ## 生成テストの実行環境
 

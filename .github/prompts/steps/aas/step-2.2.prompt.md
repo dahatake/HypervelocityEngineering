@@ -29,6 +29,9 @@
 ## アプリケーション粒度
 📋 `docs/catalog/app-catalog.md` のアプリケーション一覧（APP-ID）を参照し、各サービス候補に APP-ID との紐付け（N:N）を行うこと。
 
+## ID 台帳
+- カタログを書き終えたら `python .github/scripts/check-id-ledger.py --bootstrap --warn-only` を実行し、`docs/catalog/id-ledger.md` をカタログから作り直す（FR-IDL-01）。台帳を手で編集しない。並列に動く他の Step と同じ結果になるよう、台帳はカタログから決定的に生成するためである。表示された違反は作業ログに記録する。
+
 ## 完了条件
 - `docs/catalog/service-catalog.md` が作成されている
 {completion_instruction}{additional_section}

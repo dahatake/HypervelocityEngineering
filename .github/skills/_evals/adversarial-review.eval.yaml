@@ -5,7 +5,7 @@
 # - CI や手動レビューでの Skill ルーティング検証に使用
 
 skill: adversarial-review
-skill_path: .github/skills/harness/adversarial-review/SKILL.md
+skill_path: .github/skills/adversarial-review/SKILL.md
 description: 成果物の敵対的レビューを実行するスキル。6つの検証軸で問題を発見し、Critical/Major/Minor の重大度分類と PASS/FAIL 判定を行う。
 
 test_cases:
@@ -76,7 +76,7 @@ test_cases:
     reason: "SKILL.md の誤適用防止セクションに 'auto-context-review は敵対的レビューの実行条件に含めない' と明示されており、auto-context-review のみでは発動しない。"
 
   - id: plan-only-split-mode
-    input: "SPLIT_REQUIRED と判定されたので、plan.md と subissues.md のみ作成した PR です。adversarial-review: true は指定されていません。"
+    input: "作業を分割したので、plan.md と subissues.md のみ作成した PR です。adversarial-review: true は指定されていません。"
     expected_trigger: false
     expected_skill: null
     reason: "SKILL.md の例外は明示triggerがないPlan-Onlyだけを省略対象としており、この入力にはmarker / label / ユーザー依頼 / HVE Phase 3のいずれもない"

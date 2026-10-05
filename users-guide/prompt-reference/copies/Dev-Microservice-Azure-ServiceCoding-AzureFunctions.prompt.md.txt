@@ -2,7 +2,7 @@
 
 > **WORK**: `work/run/<run-id>/Dev-Microservice-Azure-ServiceCoding-AzureFunctions/Issue-<識別子>/`
 
-## TDD テスト結果レポート（必須）
+## TDD テスト結果レポート
 
 - 出力先: `tests/run/<run-id>/<workflow-id>/step-<step-id>/<target-key>/<phase>/tdd-test-report.md`
 - `src/test/` はテストコード専用、`tests/` はテスト結果レポート専用とし、実行ログを `docs/` / `src/` に追記しない。
@@ -45,23 +45,14 @@
 # 目的（スコープ固定）
 - 対象は **1サービス分のみ**：`{serviceId}-{serviceNameSlug}`。
 - 目的は「定義書どおりに動く *最小の本実装*」＋「CIで決定的に通る単体テスト」＋「利用者が実行/検証できる最小ドキュメント」。
-- “全サービス対応”“設計刷新”“横断リファクタ”は範囲外（必要なら Skill task-dag-planning の分割ルールで別タスク化）。
+- “全サービス対応”“設計刷新”“横断リファクタ”は範囲外（必要なら別タスク化）。
 
 ## 共通ルール
 > 共通行動規約は `.github/copilot-instructions.md` および Skill `agent-common-preamble` (`.github/skills/agent-common-preamble/SKILL.md`) を継承する。
 
-
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## Agent 固有の Skills 依存
 
@@ -70,7 +61,6 @@
 - `harness-verification-loop` — Build/Lint/Test/Security/Diff の 5 段階検証
 - `harness-error-recovery` — ビルド・テスト失敗時の E-01〜E-05 リカバリ
 - `harness-safety-guard` — ツール実行時の破壊的操作検出と中断
-- `karpathy-guidelines` — 実装時の LLM 共通ミス防止指針
 
 ## 生成テストの実行環境
 
@@ -79,12 +69,8 @@
 - 実装コードは Azure Functions としてデプロイ可能にしつつ、接続先・認証・base URL・リソース名は環境変数または設定ファイルから読み込む。秘密情報はコード、README、ログにハードコードしない。
 - README にはローカル実行コマンド、必要な環境変数名、デプロイ先で同じ設定キーを使うことを記載する。
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
-- Azure MCP の Functions template を取得する場合、template 名は MCP が返す利用可能テンプレート一覧の **正確な ID** を使用する。`HttpTrigger` など別ツール文脈の名前を推測で固定指定しない。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
+- Azure MCP の Functions template を取得する場合、template 名は MCP が返す利用可能テンプレート一覧の正確な ID を使用する。`HttpTrigger` など別ツール文脈の名前を推測で固定指定しない。
 
 # 入力（不足なら Questions：必要な項目をすべて）
 最低限ほしい情報：
@@ -102,7 +88,7 @@
 不足があれば「何が足りない/なぜ必要か/代替案（仮置き）をするなら何か」を添えて Questions に必要な項目をすべて出す。捏造は禁止。
 
 ## APP-ID スコープ → Skill `app-scope-resolution` を参照
-# 成果物（必須）
+# 成果物
 - 実装：
   - `src/api/{serviceId}-{serviceNameSlug}/` 配下に Azure Functionsを作成/更新
 - テスト：
@@ -135,7 +121,7 @@
 
 4) **RED 確認（TDD RED フェーズ）**
    - テストコードをビルドし、コンパイルが成功することを確認する。
-   - `dotnet test` を実行し、全テストが **FAIL** であることを確認する（プロダクションコード未実装のため）。
+   - `dotnet test src/test/api/` を実行し、対象テストが **FAIL** であることを確認する（プロダクションコード未実装のため）。
    - RED 確認結果を作業ログに記録する。
 
 5) **実装（TDD GREEN フェーズ）**
@@ -145,7 +131,7 @@
    - 構造化ログと相関ID（要求単位）を入れる。
 
 6) **GREEN 確認（TDD GREEN フェーズ）**
-   - `dotnet test` を実行し、全テストが **PASS** であることを確認する。
+   - `dotnet test src/test/api/` を実行し、対象テストが **PASS** であることを確認する。反復中は対象テストのみを実行し、引数なしの全件実行は行わない。全件回帰は PR の CI で 1 回だけ確認する。
    - PASS しないテストがある場合は実装を修正する（テストコード自体は原則変更しない）。
    - **リトライ戦略（Skill `tdd-green-retry-strategy` 準拠）**: GREEN 化の反復（最大 `tdd_max_retries` 回、既定 5）は、各回で前回と**異なるアプローチ**を選ぶ（同一の修正を単純に繰り返さない）。各 FAIL 時は失敗の実出力（テスト名・スタックトレース・例外）から根本原因を特定し、次の修正を決める前に **Microsoft Learn MCP**（C# / .NET / Azure Functions / SDK / API）で正しい API・構文・パターンを確認する。Web 検索は MCP で解決できない場合のみ用いる。参照した Microsoft Learn の URL を作業ログに記録する。
 
@@ -158,7 +144,7 @@
      - **マジックナンバー/文字列の定数化**
      - **既存コードの型への準拠**: リポジトリ慣習の DI/ログ/例外処理パターンとの一貫性維持
    - リファクタリングは **テストの振る舞いを変更しない** 範囲で行う。
-   - リファクタリング後、`dotnet test` を再実行し **全テストが引き続き PASS** であることを確認する（回帰テスト）。
+   - リファクタリング後、`dotnet test src/test/api/` を再実行し **対象テストが引き続き PASS** であることを確認する（回帰テスト）。
    - PASS しないテストが発生した場合はリファクタリングを戻し、原因を特定してからやり直す。
    - リファクタリング内容を作業ログに記録する（変更前後の差分概要）。
 
@@ -173,16 +159,16 @@
 # 完了条件（DoD）
 - `src/api/{serviceId}-{serviceNameSlug}/` がビルド可能
 - `src/test/api/` の単体テストが決定的に実行可能
-- `dotnet test` の全テストが **PASS** であること（TDD GREEN 確認済み）
-- TDD REFACTOR フェーズを実施し、リファクタリング後も全テストが **PASS** であること
+- `dotnet test src/test/api/` の対象テストが **PASS** であること（TDD GREEN 確認済み）。着手時 baseline に無い新規 FAIL が 0 件であること
+- TDD REFACTOR フェーズを実施し、リファクタリング後も `src/test/api/` の対象テストが **PASS** であること
 - テスト仕様書（`docs/test-specs/{serviceId}-test-spec.md`）のテストケースが、テストコードとしてすべて実装されていること
 - 作業ログと README が更新され、設定キー/実行手順/検証手順が分かる
 
-# 最終品質レビュー（単回インライン・セルフチェック）
+# 受入観点（完了条件の補足）
 
-## 1) セルフチェック契約
+## 1) 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ## 2) ドメイン固有観点
 - **技術妥当性・実装完全性**：コードが定義書に正しく基づいているか、エラーハンドリングは十分か、秘密情報/タイムアウト/リトライの設定は正しいか、構造化ログと相関IDが適切か、テストカバレッジは十分か、受入条件（入力/出力/エラー/HTTPコード）が実装・テスト・READMEで一致しているか
@@ -190,7 +176,7 @@
 - **保守性・堅牢性・スケーラビリティ**：TDD REFACTOR フェーズで重複排除・命名改善・責務分離が実施されているか、コードの可読性と既存型への一貫性、設定の外部化とキー管理、ログ出力の品質と監査可能性、テスト拡張性と再利用可能性、他サービスへの波及リスク、スコープは1サービスのみか（他サービスへ波及していないか）
 
 ## 3) 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：

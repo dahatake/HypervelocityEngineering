@@ -5,7 +5,7 @@
 # - CI や手動レビューでの Skill ルーティング検証に使用
 
 skill: harness-verification-loop
-skill_path: .github/skills/harness/harness-verification-loop/SKILL.md
+skill_path: .github/skills/harness-verification-loop/SKILL.md
 description: コード変更後の5段階検証パイプライン（Build/Lint/Test/Security/Diff）の詳細手順を提供するスキル。
 
 test_cases:

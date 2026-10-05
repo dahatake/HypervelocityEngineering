@@ -35,12 +35,12 @@
 - `template/business-requirement-document-master-list.md`
 - `.github/skills/knowledge-management/references/knowledge-management-guide.md`
 
-> **Work IQ 入力の取り扱い**:
-> `sources` にカンマ区切りで `workiq` が含まれている場合、本ステップが実行される **前** に
-> AKM Work IQ 取り込みフェーズ（`_run_akm_workiq_ingest`）が走り、`knowledge/Dxx-*.md` が
-> 既に Work IQ 由来の情報で生成・更新されている可能性がある。本ステップでは Work IQ 出典付き
-> の既存内容を **保護** し、qa/original-docs からの新規情報は差分マージのみ行うこと（捏造禁止・
-> 状態降格禁止）。
+> **知識探索の結果の取り扱い**:
+> 知識源（`sources` の `workiq`、`--workiq`、`--knowledge-source`）が有効な場合、本ステップが実行される
+> **前** に AKM 知識探索（FR-KD-07）が走り、`knowledge/Dxx-*.md` が既に出典付きで更新され、調べた
+> 不明点と結論が `qa/*-knowledge-discovery-qa*.md` に記録されている可能性がある。本ステップでは
+> 知識探索の出典付きの既存内容を **保護** し、qa/original-docs からの新規情報は差分マージのみ行うこと
+> （捏造禁止・状態降格禁止）。
 
 ## 出力
 - `knowledge/business-requirement-document-status.md`

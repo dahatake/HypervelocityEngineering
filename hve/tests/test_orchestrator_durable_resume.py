@@ -674,8 +674,6 @@ def _config(**overrides: Any) -> SDKConfig:
         "no_workbench": True,
         "mdq_watch": False,
         "cq_watch": False,
-        "auto_self_improve": False,
-        "self_improve_skip": True,
         "create_issues": False,
         "create_pr": False,
         "repo": "",
@@ -739,7 +737,7 @@ def _approval_records(trace: _Trace, wave_index: int) -> list[dict[str, Any]]:
     return [
         record
         for record in trace.step_transitions
-        if record["step_id"] == f"approval:{wave_index}"
+        if record["step_id"] == f"approval-{wave_index}"
     ]
 
 
@@ -985,7 +983,7 @@ class TestDurableWriteFailure:
 
 
 class TestDurableContext:
-    def test_identity_fields_are_immutable_and_survive_depth_changes(self) -> None:
+    def test_identity_fields_are_immutable(self) -> None:
         context = _context(
             execution_id="exec-public",
             instance_id="instance-2",
@@ -993,7 +991,6 @@ class TestDurableContext:
             recovery_action="restart-step",
             lease_owner="resume-owner",
             lease_generation=3,
-            split_fork_depth=1,
         )
         assert context.execution_id == "exec-public"
         assert context.instance_id == "instance-2"
@@ -1003,15 +1000,6 @@ class TestDurableContext:
         assert context.lease_generation == 3
         with pytest.raises(dataclasses.FrozenInstanceError):
             context.execution_id = "mutated"  # type: ignore[misc]
-
-        child = context.with_increased_depth()
-        assert child.split_fork_depth == 2
-        assert child.execution_id == context.execution_id
-        assert child.instance_id == context.instance_id
-        assert child.expected_state_version == context.expected_state_version
-        assert child.recovery_action == context.recovery_action
-        assert child.lease_owner == context.lease_owner
-        assert child.lease_generation == context.lease_generation
 
 
 class TestDurableTransitions:
@@ -2198,7 +2186,7 @@ class TestRegistrationBoundary:
         assert "--unattended" in safe_argv
         assert safe_argv[safe_argv.index("--app-ids") + 1] == "APP-009"
         assert "additional_prompt" in missing
-        assert "mcp_config" in missing
+        assert "mcp_config" not in missing
         assert "do-not-persist-this-prompt" not in safe_argv
 
     def test_direct_replay_uses_the_effective_continue_on_error_mode(

@@ -14,11 +14,12 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 from typing import List
 
 from PySide6.QtWidgets import QApplication, QStyleFactory
-from PySide6.QtCore import QLoggingCategory, QTimer
+from PySide6.QtCore import QLoggingCategory, QThread, QTimer, Signal
 
 from . import theme as _theme
 from .fonts import preferred_ui_font
@@ -72,6 +73,189 @@ _session_counter = [1]
 # 差分更新の完了ポーリング間隔。完了検知が遅れても実害は実行開始の待ち時間だけなので短くしない。
 _INDEX_REFRESH_POLL_MS = 500
 _index_refresh_timer: QTimer | None = None
+_resource_snapshot_shared: object = None
+_resource_snapshot_started = False
+_resource_snapshot_thread: QThread | None = None
+_RESOURCE_SNAPSHOT_THREAD_SHUTDOWN_TIMEOUT_MS = 16_000
+
+
+class _StartupResourceSnapshotThread(QThread):
+    done = Signal(object)
+
+    def __init__(self, repo_root: Path, *, force_refresh: bool = False) -> None:
+        super().__init__()
+        self._repo_root = repo_root
+        self._force_refresh = force_refresh
+
+    def run(self) -> None:  # type: ignore[override]
+        try:
+            from ..toolsearch.resource_inventory import discover_sdk_resources
+            from . import settings_store
+
+            options = settings_store.load().get("options", {})
+            snapshot = discover_sdk_resources(
+                working_directory=self._repo_root,
+                cli_path=str(options.get("cli_path") or "") or None,
+                cli_url=str(options.get("cli_url") or "") or None,
+                force_refresh=self._force_refresh,
+            )
+            self.done.emit(snapshot)
+        except Exception as exc:
+            self.done.emit(exc)
+
+
+def _empty_resource_snapshot() -> object:
+    from ..toolsearch.resource_inventory import ResourceSnapshot
+
+    return ResourceSnapshot(
+        plugin_state="unverified",
+        mcp_state="unverified",
+        skill_state="unverified",
+        skill_ownership_state="unverified",
+        plugins=(),
+        mcp_servers=(),
+        skills=(),
+    )
+
+
+def _coerce_resource_snapshot(result: object) -> object:
+    required = (
+        "plugin_state",
+        "mcp_state",
+        "skill_state",
+        "skill_ownership_state",
+        "plugins",
+        "mcp_servers",
+        "skills",
+    )
+    if all(hasattr(result, name) for name in required):
+        return result
+    return _empty_resource_snapshot()
+
+
+def _project_workiq_capability(snapshot: object) -> object:
+    from ..workiq import WorkIQCapability, workiq_capability_from_snapshot
+
+    try:
+        return workiq_capability_from_snapshot(snapshot)
+    except Exception:
+        return WorkIQCapability(
+            state="unverified",
+            reason_code="unverified",
+        )
+
+
+def _share_resource_snapshot(result: object) -> None:
+    """snapshot を全 window へ同期する。``None`` は確認中を表す。"""
+    global _resource_snapshot_shared
+    snapshot = _coerce_resource_snapshot(result)
+    _resource_snapshot_shared = snapshot
+    for window in list(_open_windows):
+        setter = getattr(window, "set_resource_snapshot", None)
+        if not callable(setter):
+            continue
+        try:
+            setter(snapshot)
+        except RuntimeError:
+            pass
+
+
+def _on_resource_snapshot_check_finished(result: object) -> None:
+    """SDK discovery worker 結果を正規化し、全 window へ共有する。"""
+    _share_resource_snapshot(result)
+
+
+def _release_resource_snapshot_thread(thread: QThread) -> None:
+    """完了した static worker の global 参照を解放する。"""
+    global _resource_snapshot_thread
+    if _resource_snapshot_thread is thread:
+        _resource_snapshot_thread = None
+
+
+def request_resource_snapshot_refresh(
+    repo_root: Path | None = None,
+    *,
+    force_refresh: bool = False,
+) -> bool:
+    """共有 SDK resource snapshot の再検出を開始する。"""
+    global _resource_snapshot_thread
+    if _resource_snapshot_thread is not None and _resource_snapshot_thread.isRunning():
+        return False
+    resolved_repo_root = Path(repo_root) if repo_root is not None else _resolve_repo_root()
+    thread = _StartupResourceSnapshotThread(
+        resolved_repo_root,
+        force_refresh=force_refresh,
+    )
+    thread.done.connect(_on_resource_snapshot_check_finished)
+    thread.finished.connect(lambda t=thread: _release_resource_snapshot_thread(t))
+    thread.finished.connect(thread.deleteLater)
+    app = QApplication.instance()
+    if isinstance(app, QApplication):
+        app.aboutToQuit.connect(thread.requestInterruption)
+    _resource_snapshot_thread = thread
+    try:
+        thread.start()
+    except Exception:
+        _resource_snapshot_thread = None
+        _share_resource_snapshot(_empty_resource_snapshot())
+        thread.deleteLater()
+        return False
+    return True
+
+
+def start_startup_resource_snapshot_check(repo_root: Path | None = None) -> bool:
+    """GUI process につき 1 回だけ SDK resource snapshot worker を開始する。"""
+    global _resource_snapshot_started
+    if _resource_snapshot_started:
+        return False
+    _resource_snapshot_started = True
+    return request_resource_snapshot_refresh(repo_root, force_refresh=False)
+
+
+def _shutdown_resource_workers() -> None:
+    """GUI終了時にresource/context workerを取消し、有界時間で回収する。"""
+    threads: list[QThread] = []
+    seen: set[int] = set()
+    try:
+        from .toolsearch_settings_section import _ACTIVE_CONTEXT_WORKERS
+
+        context_threads = tuple(_ACTIVE_CONTEXT_WORKERS)
+    except Exception:
+        context_threads = ()
+    for thread in (
+        _resource_snapshot_thread,
+        *context_threads,
+    ):
+        if thread is None or id(thread) in seen:
+            continue
+        seen.add(id(thread))
+        threads.append(thread)
+
+    for thread in threads:
+        try:
+            thread.requestInterruption()
+        except RuntimeError:
+            pass
+
+    deadline = time.monotonic() + (_RESOURCE_SNAPSHOT_THREAD_SHUTDOWN_TIMEOUT_MS / 1000)
+    for thread in threads:
+        try:
+            is_running = getattr(thread, "isRunning", None)
+            if callable(is_running) and not is_running():
+                continue
+            remaining_ms = max(0, int((deadline - time.monotonic()) * 1000))
+            if remaining_ms and hasattr(thread, "wait"):
+                thread.wait(remaining_ms)
+        except RuntimeError:
+            pass
+
+
+def _exec_with_resource_cleanup(app: QApplication) -> int:
+    """Qt event loop終了後にresource/context workerを回収する。"""
+    try:
+        return app.exec()
+    finally:
+        _shutdown_resource_workers()
 
 
 def start_startup_index_refresh(repo_root: Path) -> bool:
@@ -205,13 +389,16 @@ def run_app(args=None) -> int:
         rc = _open_autopilot_child_window(args)
         if rc != 0:
             return rc
-        return app.exec()
+        start_startup_resource_snapshot_check(_resolve_repo_root())
+        return _exec_with_resource_cleanup(app)
 
     initial_catalog = getattr(args, "app_arch_catalog", None) if args is not None else None
     _open_first_window(initial_catalog=initial_catalog)
+    repo_root = _resolve_repo_root()
+    start_startup_resource_snapshot_check(repo_root)
     _run_startup_github_auth()
-    start_startup_index_refresh(_resolve_repo_root())
-    return app.exec()
+    start_startup_index_refresh(repo_root)
+    return _exec_with_resource_cleanup(app)
 
 
 def _run_startup_github_auth() -> None:
@@ -289,12 +476,16 @@ def _open_first_window(initial_catalog: str | None = None) -> None:
         on_new_session=_open_additional_window,
         repo_root=repo_root,
     )
+    setter = getattr(win, "set_resource_snapshot", None)
+    if callable(setter):
+        setter(_resource_snapshot_shared)
     if initial_catalog:
         try:
             win._page_workflow.set_autopilot_catalog_path(initial_catalog)
         except Exception:
             pass
     win.show()
+    win._on_login_clicked()
     _open_windows.append(win)
     win.destroyed.connect(lambda _obj=None, w=win: _on_window_destroyed(w))
 
@@ -308,6 +499,9 @@ def _open_additional_window() -> None:
         on_new_session=_open_additional_window,
         repo_root=repo_root,
     )
+    setter = getattr(win, "set_resource_snapshot", None)
+    if callable(setter):
+        setter(_resource_snapshot_shared)
     win.show()
     _open_windows.append(win)
     win.destroyed.connect(lambda _obj=None, w=win: _on_window_destroyed(w))

@@ -22,8 +22,8 @@ from functools import partial
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from PySide6.QtCore import Qt, QStringListModel, QT_TRANSLATE_NOOP, Signal
-from PySide6.QtGui import QDoubleValidator, QIntValidator
+from PySide6.QtCore import Qt, QStringListModel, QT_TRANSLATE_NOOP, QThread, Signal
+from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -51,6 +51,7 @@ from PySide6.QtWidgets import (
 )
 
 from .orchestrate_args import OrchestrateArgs, _coerce_tristate, _split_semicolon_list
+from .step_input_pane import StepInputPane
 from .workflow_display import format_workflow_label
 from .workflow_requirements_banner import WorkflowRequirementsBanner
 from .workflow_step_requirements import (
@@ -148,7 +149,7 @@ def _load_model_choices() -> List[str]:
         from hve import models_cache as _cache
         from hve.config import FALLBACK_MODEL_CHOICES, MODEL_AUTO_VALUE
     except ImportError:  # pragma: no cover
-        return ["Auto", "claude-opus-4.7", "claude-opus-4.6", "gpt-5.5"]
+        return ["Auto", "claude-opus-5.5", "claude-opus-4.7", "claude-opus-4.6", "gpt-5.5"]
 
     cached = _cache.load(allow_stale=True)
     raw = list(cached.models) if (cached and cached.models) else list(FALLBACK_MODEL_CHOICES)
@@ -774,11 +775,12 @@ class _C1Basic(QWidget):
         choices = _load_model_choices()
         self._entries_map: Dict[str, object] = _load_model_entries_map()
 
-        # --model: 編集不可ドロップダウン、デフォルト Auto
+        # --model: 編集不可ドロップダウン、デフォルト DEFAULT_MODEL（FR-MODEL-01）
+        from hve.config import DEFAULT_MODEL
         self.model = QComboBox()
         self.model.setEditable(False)
         self._populate_main_combo(self.model, choices)
-        self.model.setCurrentIndex(0)  # Auto
+        self.model.setCurrentIndex(max(self.model.findData(DEFAULT_MODEL), 0))
         self.effort = QComboBox()
         self.effort.setEditable(False)
         self.context_size_label = QLabel("")
@@ -786,7 +788,7 @@ class _C1Basic(QWidget):
         layout.addWidget(_LabeledField(
             title=self.tr("使用するモデル"),
             description=(
-                self.tr("使用するモデル名（既定: Auto）。"
+                self.tr("使用するモデル名（既定: claude-opus-5.5）。"
                 "「Auto」を指定すると GitHub が最適モデルを自動選択します。")
             ),
             input_widget=self._build_model_effort_row(
@@ -1167,7 +1169,15 @@ class _CQaPrompt(QWidget):
         self.qa_answer_mode.setEnabled(self.is_auto_qa_enabled())
 
     def to_args(self, args: OrchestrateArgs) -> None:
-        args.auto_qa = self.is_auto_qa_enabled()
+        _tristate = self.auto_qa.get_tristate()
+        # FR-KD-11 / FR-LOCAL-SURFACE-01: 未選択は Prompt 版と同じく有効として argv を組み立てる
+        # （GUI は FR-GUI-16 の validate() で未選択のまま実行させない）。
+        args.auto_qa = _tristate is not False
+        if _tristate is None:
+            _saved_mode = self.qa_answer_mode.currentData() or "autopilot"
+            args.qa_answer_mode = "autopilot" if _saved_mode == "autopilot" else None
+            args.qa_ipc_dir = None
+            return
 
         # QA 回答モード: auto_qa が有効なときのみ CLI へ渡す
         if args.auto_qa:
@@ -1371,82 +1381,10 @@ class _CKnowledgeManagement(QWidget):
             args.akm_context_tier = None
 
 
-class _CSelfImprove(QWidget):
-    """自己改善 (Self Improve) セクション。"""
-
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
-        super().__init__(parent)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
-
-        self.self_improve = TriStateCombo()
-        layout.addWidget(_LabeledField(
-            title=self.tr("自己改善ループ"),
-            description=(
-                self.tr("継承時はAAG/AAGDで既定ON、その他は既定設定を使用します。"
-                "明示OFFは --no-self-improve として既定ONや環境変数より優先します。")
-            ),
-            input_widget=self.self_improve,
-        ))
-
-        # 自己改善ループ 詳細オプション（CLI ウィザードと同等）
-        self.self_improve_max_iterations = QSpinBox()
-        self.self_improve_max_iterations.setRange(1, 10)
-        self.self_improve_max_iterations.setValue(3)
-        layout.addWidget(_LabeledField(
-            title=self.tr("自己改善 最大繰り返し回数"),
-            description=self.tr("スキャン→改善→検証を繰り返す最大回数（既定: 3）。"),
-            input_widget=self.self_improve_max_iterations,
-        ))
-
-        self.self_improve_target_scope = QLineEdit()
-        self.self_improve_target_scope.setPlaceholderText(self.tr("例: src/  hve/  空=リポジトリ全体"))
-        layout.addWidget(_LabeledField(
-            title=self.tr("自己改善 対象パス"),
-            description=self.tr("対象パス（空=リポジトリ全体）。"),
-            input_widget=self.self_improve_target_scope,
-        ))
-
-        self.self_improve_goal = QPlainTextEdit()
-        self.self_improve_goal.setFixedHeight(60)
-        self.self_improve_goal.setPlaceholderText(self.tr("例: テスト失敗を 0 件にし lint エラーを解消する"))
-        layout.addWidget(_LabeledField(
-            title=self.tr("自己改善 ゴール説明"),
-            description=self.tr("ゴール説明（省略可 → ワークフロー種別から自動設定）。"),
-            input_widget=self.self_improve_goal,
-        ))
-
-        # self_improve 連動で 3 オプションをグレーアウト
-        self.self_improve.currentIndexChanged.connect(self._on_self_improve_changed)
-        self._on_self_improve_changed(self.self_improve.currentIndex())
-
-    def _on_self_improve_changed(self, _index: int) -> None:
-        explicitly_enabled = self.self_improve.get_tristate() is True
-        self.self_improve_max_iterations.setEnabled(explicitly_enabled)
-        self.self_improve_target_scope.setEnabled(explicitly_enabled)
-        self.self_improve_goal.setEnabled(explicitly_enabled)
-
-    def to_args(self, args: OrchestrateArgs) -> None:
-        self_improve_state = self.self_improve.get_tristate()
-        args.self_improve = self_improve_state is True
-        args.no_self_improve = self_improve_state is False
-        if args.self_improve:
-            args.self_improve_max_iterations = int(self.self_improve_max_iterations.value())
-            _si_scope = self.self_improve_target_scope.text().strip()
-            args.self_improve_target_scope = _si_scope or None
-            _si_goal = self.self_improve_goal.toPlainText().strip()
-            args.self_improve_goal = _si_goal or None
-        else:
-            args.self_improve_max_iterations = None
-            args.self_improve_target_scope = None
-            args.self_improve_goal = None
-
-
 class _C3AutoPrompt(QWidget):
-    """Step 1 右ペインの「共通設定」枠が使う 4 セクションの合成ウィジェット。
+    """Step 1 右ペインの「共通設定」枠が使う 3 セクションの合成ウィジェット。
 
-    設定画面では 4 セクションが独立ノードとして表示されるため（FR-GUI-20）、
+    設定画面では 3 セクションが独立ノードとして表示されるため（FR-GUI-20）、
     ウィジェットの実装は各サブクラスが単一で持ち、本クラスは合成と属性公開だけを行う。
     """
 
@@ -1459,8 +1397,7 @@ class _C3AutoPrompt(QWidget):
         self.qa = _CQaPrompt()
         self.km = _CKnowledgeManagement()
         self.review = _CReviewPrompt()
-        self.self_improve_section = _CSelfImprove()
-        for section in (self.qa, self.km, self.review, self.self_improve_section):
+        for section in (self.qa, self.km, self.review):
             layout.addWidget(section)
 
         # 既存参照（`page.c3.<field>`）との互換のため入力ウィジェットを再公開する。
@@ -1475,10 +1412,6 @@ class _C3AutoPrompt(QWidget):
         self.auto_coding_agent_review_auto_approval = (
             self.review.auto_coding_agent_review_auto_approval
         )
-        self.self_improve = self.self_improve_section.self_improve
-        self.self_improve_max_iterations = self.self_improve_section.self_improve_max_iterations
-        self.self_improve_target_scope = self.self_improve_section.self_improve_target_scope
-        self.self_improve_goal = self.self_improve_section.self_improve_goal
 
         wire_auto_qa_to_knowledge_management(self.qa, self.km)
 
@@ -1490,7 +1423,6 @@ class _C3AutoPrompt(QWidget):
         self.qa.to_args(args)
         self.km.to_args(args)
         self.review.to_args(args)
-        self.self_improve_section.to_args(args)
 
 
 def wire_auto_qa_to_knowledge_management(
@@ -1507,7 +1439,7 @@ def wire_auto_qa_to_knowledge_management(
 
 
 class _C4WorkIQ(QWidget):
-    """C4: Work IQ — CLI 固有オプション 11 個"""
+    """C4: 知識源（FR-KD-01）— Work IQ の availability と知識探索に使う MCP server。"""
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -1515,228 +1447,88 @@ class _C4WorkIQ(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        notice = QLabel(
-            self.tr("Work IQ 経由の M365 データ参照設定。")
-        )
-        notice.setProperty("hveRole", "description")
-        notice.setStyleSheet("padding: 4px;")
-        notice.setWordWrap(True)
-        layout.addWidget(notice)
-
-        auth_row = QHBoxLayout()
-        auth_row.setContentsMargins(0, 0, 0, 0)
-        self.workiq_auth_button = QPushButton(self.tr("Work IQ 認証確認"))
-        self.workiq_auth_button.setToolTip(
-            self.tr("EULA 承認と Microsoft 365 認証を確認します。")
-        )
-        self.workiq_auth_button.clicked.connect(self._on_workiq_auth_clicked)
-        self.workiq_auth_status = QLabel(self.tr("未確認"))
-        self.workiq_auth_status.setProperty("hveRole", "description")
-        self.workiq_auth_status.setStyleSheet("font-size: 9pt;")
-        auth_row.addWidget(self.workiq_auth_button, 0)
-        auth_row.addWidget(self.workiq_auth_status, 1)
-        layout.addLayout(auth_row)
+        self.workiq_availability_status = QLabel(self.tr("Work IQ: 確認中"))
+        self.workiq_availability_status.setProperty("hveRole", "description")
+        self.workiq_availability_status.setStyleSheet("font-size: 9pt;")
+        self.workiq_availability_status.setWordWrap(True)
+        layout.addWidget(_LabeledField(
+            title=self.tr("Work IQ 利用状態"),
+            description=self.tr(
+                "GitHub Copilot CLIで`workiq`名のPluginまたはMCP Serverを"
+                "事前に設定・認証し、変更後はHVEを再起動してください。"
+            ),
+            input_widget=self.workiq_availability_status,
+        ))
 
         self.workiq = QCheckBox(self.tr("有効化"))
         layout.addWidget(_LabeledField(
-            title=self.tr("Work IQ を有効化"),
-            description=(
-                self.tr("Work IQ 経由の M365 データ（メール・チャット・会議・ファイル）参照を有効にします。"
-                "QA フェーズと、AKM 実行後レビューの後方互換トリガーとしても扱われます"
-                "（既定: 無効、@microsoft/workiq インストール必須）。")
+            title=self.tr("Work IQ を知識源に加える"),
+            description=self.tr(
+                "Work IQ（Microsoft 365 のメール・チャット・会議・ファイル）を知識源に加えます。"
+                "事前 QA の回答と AKM / ARD の知識探索で、エージェントが自分で問い合わせて調べます"
+                "（既定: 無効、GitHub Copilot CLIに`workiq`名のPluginまたはMCP Server設定が必要）。"
             ),
             input_widget=self.workiq,
         ))
 
-        self.workiq_akm_review = TriStateCombo()
+        self.knowledge_sources = QLineEdit()
+        self.knowledge_sources.setPlaceholderText(self.tr("例: confluence,jira"))
         layout.addWidget(_LabeledField(
-            title=self.tr("AKM 実行後レビューで Work IQ 検証"),
-            description=(
-                self.tr("AKM 実行後レビューで Work IQ 検証を有効/無効化します。"
-                "未指定時は上の「Work IQ を有効化」または WORKIQ_ENABLED 環境変数を継承。")
+            title=self.tr("知識源 MCP サーバー"),
+            description=self.tr(
+                "知識探索で使う MCP server 名をカンマ区切りで指定します。読み取り専用の tool は "
+                "Tool-Search 設定の knowledge 許可リストで決まり、許可リストが無い server は使われません。"
             ),
-            input_widget=self.workiq_akm_review,
-        ))
-
-        self.workiq_akm_ingest = TriStateCombo()
-        layout.addWidget(_LabeledField(
-            title=self.tr("AKM 入力ソースとして Work IQ"),
-            description=(
-                self.tr("AKM の入力ソースとして Work IQ を有効/無効化します。"
-                "未指定時は取り込みソースに 'workiq' が含まれるかで自動判定。")
-            ),
-            input_widget=self.workiq_akm_ingest,
-        ))
-
-        self.workiq_dxx = QLineEdit()
-        self.workiq_dxx.setPlaceholderText(self.tr("例: D01,D04"))
-        layout.addWidget(_LabeledField(
-            title=self.tr("Work IQ 取り込み対象 Dxx"),
-            description=(
-                self.tr("AKM Work IQ 取り込み対象 Dxx をカンマ区切りで指定（例: D01,D04）。"
-                "省略時は全 D01〜D21 を対象。")
-            ),
-            input_widget=self.workiq_dxx,
-        ))
-
-        self.workiq_draft = QCheckBox(self.tr("有効化"))
-        layout.addWidget(_LabeledField(
-            title=self.tr("Work IQ 回答ドラフト作成"),
-            description=self.tr("QA フェーズで質問ごとに Work IQ 回答ドラフトを生成します（既定: 無効）。"
-                "本項目を有効にすると、上の「Work IQ を有効化」が未チェックでも Work IQ 連携全体が有効になります。"),
-            input_widget=self.workiq_draft,
-        ))
-
-        self.workiq_draft_output_dir = _FilePickerWidget(
-            mode="dir", title=self.tr("QA ドラフト出力フォルダを選択")
-        )
-        self.workiq_draft_output_dir.setPlaceholderText(self.tr("例: qa"))
-        layout.addWidget(_LabeledField(
-            title=self.tr("Work IQ 補助レポート出力先"),
-            description=(
-                self.tr("Work IQ 補助レポートの出力先ディレクトリ。"
-                "未指定時: 設定/環境変数、最終既定値は 'qa'。")
-            ),
-            input_widget=self.workiq_draft_output_dir,
-        ))
-
-        # workiq_tenant_id の GUI 入力経路は廃止 (Wave 3 / Q9=b、_OBSOLETE_KEYS と整合)。
-        # CLI 引数 --workiq-tenant-id / 環境変数 WORKIQ_TENANT_ID 経由は引き続き有効。
-
-        self.workiq_prompt_qa = QPlainTextEdit()
-        self.workiq_prompt_qa.setFixedHeight(60)
-        layout.addWidget(_LabeledField(
-            title=self.tr("QA 用プロンプト上書き"),
-            description=(
-                self.tr("Work IQ の QA 用プロンプトを上書きします（{target_content} プレースホルダ使用可。"
-                "省略時はデフォルトプロンプト）。")
-            ),
-            input_widget=self.workiq_prompt_qa,
-        ))
-
-        self.workiq_prompt_km = QPlainTextEdit()
-        self.workiq_prompt_km.setFixedHeight(60)
-        layout.addWidget(_LabeledField(
-            title=self.tr("KM 用プロンプト上書き"),
-            description=self.tr("Work IQ の KM 用プロンプトを上書きします（AKM 実行後レビューで使用）。"),
-            input_widget=self.workiq_prompt_km,
-        ))
-
-        self.workiq_prompt_review = QPlainTextEdit()
-        self.workiq_prompt_review.setFixedHeight(60)
-        layout.addWidget(_LabeledField(
-            title=self.tr("Original Docs レビュー用プロンプト上書き（互換用）"),
-            description=self.tr("Work IQ の Original Docs レビュー用プロンプトを上書きします（互換用）。"),
-            input_widget=self.workiq_prompt_review,
-        ))
-
-        self.workiq_per_question_timeout = QLineEdit()
-        _timeout_validator = QDoubleValidator(0.0, 86400.0, 1, self.workiq_per_question_timeout)
-        _timeout_validator.setNotation(QDoubleValidator.StandardNotation)
-        self.workiq_per_question_timeout.setValidator(_timeout_validator)
-        self.workiq_per_question_timeout.setPlaceholderText(
-            self.tr("（既定 1200 秒 = 20 分を使用）")
-        )
-        layout.addWidget(_LabeledField(
-            title=self.tr("QA 質問ごとのタイムアウト（秒）"),
-            description=(
-                self.tr("Work IQ: QA 質問ごとのクエリタイムアウト秒数（数値のみ）。"
-                "未入力または 0 のとき環境変数/設定（既定 1200 秒 = 20 分）を使用。")
-            ),
-            input_widget=self.workiq_per_question_timeout,
-        ))
-
-        self.workiq_request_timeout = QLineEdit()
-        _req_timeout_validator = QDoubleValidator(0.0, 86400.0, 1, self.workiq_request_timeout)
-        _req_timeout_validator.setNotation(QDoubleValidator.StandardNotation)
-        self.workiq_request_timeout.setValidator(_req_timeout_validator)
-        self.workiq_request_timeout.setPlaceholderText(
-            self.tr("（既定 300 秒 = 5 分を使用）")
-        )
-        layout.addWidget(_LabeledField(
-            title=self.tr("Work IQ Request Timeout（秒）"),
-            description=(
-                self.tr("Work IQ MCP サーバーへのツール呼び出し 1 回あたりのタイムアウト秒数（数値のみ）。"
-                "Copilot SDK の MCPServerConfigLocal.timeout へミリ秒として渡り、ツール呼び出しにのみ作用する（接続時のツール一覧取得には適用されない）。"
-                "未入力または 0 のとき環境変数 WORKIQ_REQUEST_TIMEOUT / 設定（既定 300 秒 = 5 分）を使用。")
-            ),
-            input_widget=self.workiq_request_timeout,
+            input_widget=self.knowledge_sources,
         ))
 
     def to_args(self, args: OrchestrateArgs) -> None:
         args.workiq = self.workiq.isChecked()
-        args.workiq_akm_review = self.workiq_akm_review.get_tristate()
-        args.workiq_akm_ingest = self.workiq_akm_ingest.get_tristate()
-        args.workiq_dxx = self.workiq_dxx.text().strip() or None
-        args.workiq_draft = self.workiq_draft.isChecked()
-        args.workiq_draft_output_dir = self.workiq_draft_output_dir.text().strip() or None
-        args.workiq_tenant_id = None  # GUI 経路は廃止。CLI/env 経路は config.py / orchestrate_args.py で上書きされる。
-        args.workiq_prompt_qa = self.workiq_prompt_qa.toPlainText().strip() or None
-        args.workiq_prompt_km = self.workiq_prompt_km.toPlainText().strip() or None
-        args.workiq_prompt_review = self.workiq_prompt_review.toPlainText().strip() or None
-        timeout_text = self.workiq_per_question_timeout.text().strip().replace(",", ".")
-        try:
-            timeout = float(timeout_text) if timeout_text else 0.0
-        except ValueError:
-            timeout = 0.0
-        args.workiq_per_question_timeout = timeout if timeout > 0 else None
-        req_timeout_text = self.workiq_request_timeout.text().strip().replace(",", ".")
-        try:
-            req_timeout = float(req_timeout_text) if req_timeout_text else 0.0
-        except ValueError:
-            req_timeout = 0.0
-        args.workiq_request_timeout = req_timeout if req_timeout > 0 else None
+        args.knowledge_sources = self.knowledge_sources.text().strip() or None
 
-    def _on_workiq_auth_clicked(self) -> None:
-        """Work IQ の EULA / M365 認証を確認する。"""
-        self.workiq_auth_button.setEnabled(False)
-        self.workiq_auth_status.setText(self.tr("確認中..."))
-        from PySide6.QtCore import QThread, Signal
+    def _workiq_inputs(self) -> Tuple[QWidget, ...]:
+        """Capabilityに連動して操作可否を切り替えるC4入力群。"""
+        return (self.workiq,)
 
-        class _WorkIQAuthThread(QThread):
-            done = Signal(object)  # dict | Exception
+    def set_workiq_capability(
+        self,
+        capability: object,
+        *,
+        saved_requested: Optional[bool] = None,
+    ) -> None:
+        """保存値を変えず、今回の起動におけるWork IQ操作可否だけを反映する。"""
+        if saved_requested is None:
+            saved_requested = self.workiq.isChecked()
+        self._workiq_saved_requested = bool(saved_requested)
+        self._workiq_capability = capability
+        state = getattr(capability, "state", "") if capability is not None else ""
+        ready = state == "ready"
+        for control in self._workiq_inputs():
+            control.setEnabled(ready)
 
-            def run(self) -> None:  # type: ignore[override]
-                warnings: List[str] = []
-
-                class _Console:
-                    @staticmethod
-                    def warning(message: str) -> None:
-                        warnings.append(message)
-
-                try:
-                    from hve.workiq import workiq_login
-                    ok = workiq_login(_Console())  # type: ignore[arg-type]
-                    self.done.emit({"ok": ok, "detail": "\n".join(warnings)})
-                except Exception as exc:
-                    self.done.emit(exc)
-
-        thread = _WorkIQAuthThread(self)
-        thread.done.connect(self._on_workiq_auth_finished)
-        self._workiq_auth_thread = thread  # GC 防止
-        thread.start()
-
-    def _on_workiq_auth_finished(self, result: object) -> None:
-        self.workiq_auth_button.setEnabled(True)
-        if isinstance(result, Exception):
-            self.workiq_auth_status.setText(self.tr("失敗"))
-            QMessageBox.warning(
-                self,
-                self.tr("Work IQ 認証確認失敗"),
-                self.tr("Work IQ 認証確認に失敗しました: {err}").format(err=str(result)),
+        saved_label = self.tr("有効") if saved_requested else self.tr("無効")
+        if capability is None:
+            self.workiq_availability_status.setText(
+                self.tr("Work IQ: 確認中 / 保存設定: {saved}").format(
+                    saved=saved_label
+                )
             )
             return
-        ok = bool(result.get("ok")) if isinstance(result, dict) else False
-        detail = str(result.get("detail") or "") if isinstance(result, dict) else ""
-        if ok:
-            self.workiq_auth_status.setText(self.tr("確認済み"))
-        else:
-            self.workiq_auth_status.setText(self.tr("失敗"))
-            QMessageBox.warning(
-                self,
-                self.tr("Work IQ 認証確認失敗"),
-                detail or self.tr("Work IQ 認証確認に失敗しました。`python -m hve workiq-doctor` で診断してください。"),
+        effective_label = self.tr("有効") if ready else self.tr("無効")
+        state_label = (
+            self.tr("設定済み")
+            if ready
+            else self.tr("未設定")
+            if state == "not-configured"
+            else self.tr("確認不能")
+        )
+        self.workiq_availability_status.setText(
+            self.tr("Work IQ: {state} / 保存設定: {saved} / この起動: {effective}").format(
+                state=state_label,
+                saved=saved_label,
+                effective=effective_label,
             )
+        )
 
 
 # FR-CLI-34: マージ後ローカル作業ブランチ削除トグルの共通定義（C5 設定画面 / C10 主画面で共有）。
@@ -2097,7 +1889,7 @@ class _C5IssuePR(QWidget):
             title=self.tr("Fleet mode"),
             description=self.tr(
                 "ON にすると複数 Step の DAG wave を Copilot SDK Fleet mode に委譲します（既定: OFF）。"
-                " SPLIT_REQUIRED / subissues.md ではなく workflow-level fan-out が対象です。"
+                " workflow-level fan-out が対象です。"
                 " 未指定の場合は環境変数/CLI 設定を継承します。"
             ),
             input_widget=self.fleet_mode_enabled,
@@ -2566,8 +2358,16 @@ class _C6Output(QWidget):
 
 
 class _C7Connection(QWidget):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(
+        self,
+        parent: Optional[QWidget] = None,
+        *,
+        repo_root: Optional[Path] = None,
+    ) -> None:
         super().__init__(parent)
+        self._repo_root = Path(repo_root) if repo_root is not None else Path.cwd()
+        self._resource_snapshot: object = None
+        self._resource_refresh_callback = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
@@ -2585,12 +2385,12 @@ class _C7Connection(QWidget):
         self.cli_url.hide()
 
         # ----------------------------------------------------------
-        # 再列挙ボタン (MCP Servers / Plugins を `copilot` CLI から再取得)
+        # 再検出ボタン（GUI process-wide の共有 snapshot を更新）
         # ----------------------------------------------------------
         refresh_row = QHBoxLayout()
-        self._refresh_btn = QPushButton(self.tr("MCP Server / Plugin を再列挙"))
+        self._refresh_btn = QPushButton(self.tr("SDK Resources を再検出"))
         self._refresh_btn.setToolTip(
-            self.tr("`copilot mcp list --json` と `copilot plugin list` を実行して一覧を再取得します。")
+            self.tr("GUI process-wide の共有 SDK resource snapshot を再検出します。")
         )
         self._refresh_btn.clicked.connect(self._on_refresh_clicked)
         refresh_row.addWidget(self._refresh_btn)
@@ -2601,12 +2401,15 @@ class _C7Connection(QWidget):
         refresh_row.addStretch(1)
         layout.addLayout(refresh_row)
 
+        self._state_label = QLabel("")
+        self._state_label.setWordWrap(True)
+        self._state_label.setProperty("hveRole", "description")
+        layout.addWidget(self._state_label)
+
         # ----------------------------------------------------------
-        # T5 (Wave 1 / C2): MCP Server 一覧表示
+        # MCP Server 一覧（安全な snapshot field のみ）
         # ----------------------------------------------------------
-        self._mcp_section_label = QLabel(
-            self.tr("登録済み MCP Server 一覧（実行で使用する場合は --mcp-config を指定）")
-        )
+        self._mcp_section_label = QLabel(self.tr("MCP Servers"))
         self._mcp_section_label.setProperty("hveRole", "description")
         self._mcp_section_label.setStyleSheet("padding: 6px 0 2px 0;")
         layout.addWidget(self._mcp_section_label)
@@ -2617,17 +2420,13 @@ class _C7Connection(QWidget):
         self._mcp_container_layout.setSpacing(2)
         layout.addWidget(self._mcp_container)
 
-        # 互換属性。現行 UI は一覧表示のみで、実行時 ON/OFF には使わない。
         self._mcp_checkboxes: Dict[str, QCheckBox] = {}
         self._mcp_empty_label: Optional[QLabel] = None
-        self._populate_mcp_servers()
 
         # ----------------------------------------------------------
-        # Plugin 一覧 (`copilot plugin list`)
+        # Plugin 一覧（安全な snapshot field のみ）
         # ----------------------------------------------------------
-        self._plugin_section_label = QLabel(
-            self.tr("Plugin 一覧（`copilot plugin list`）— Plugin は OAuth 認証不要（インストール時の GitHub 認証を利用）")
-        )
+        self._plugin_section_label = QLabel(self.tr("Plugins"))
         self._plugin_section_label.setProperty("hveRole", "description")
         self._plugin_section_label.setStyleSheet("padding: 6px 0 2px 0;")
         layout.addWidget(self._plugin_section_label)
@@ -2639,132 +2438,144 @@ class _C7Connection(QWidget):
         layout.addWidget(self._plugin_container)
 
         self._plugin_empty_label: Optional[QLabel] = None
-        self._populate_plugins()
+
+        self._skill_section_label = QLabel(self.tr("Skills"))
+        self._skill_section_label.setProperty("hveRole", "description")
+        self._skill_section_label.setStyleSheet("padding: 6px 0 2px 0;")
+        layout.addWidget(self._skill_section_label)
+
+        self._skill_container = QWidget(self)
+        self._skill_container_layout = QVBoxLayout(self._skill_container)
+        self._skill_container_layout.setContentsMargins(0, 0, 0, 0)
+        self._skill_container_layout.setSpacing(2)
+        layout.addWidget(self._skill_container)
+        self._skill_empty_label: Optional[QLabel] = None
+
+        self.set_resource_snapshot(None)
 
     # ----------------------------------------------------------
-    def _populate_mcp_servers(self) -> None:
-        """`copilot mcp list` から MCP サーバ名を取得し、一覧 UI を構築する。"""
-        try:
-            from .copilot_cli_bridge import CopilotCliBridge
-            servers = CopilotCliBridge.list_mcp_servers()
-            server_names = sorted(servers.keys()) if isinstance(servers, dict) else []
-        except Exception:
-            server_names = []
+    def set_resource_snapshot(self, snapshot: object) -> None:
+        self._resource_snapshot = snapshot
+        self._refresh_btn.setEnabled(True)
+        if snapshot is None:
+            self._refresh_status.setText(self.tr("確認中..."))
+        else:
+            self._refresh_status.setText("")
+        self._render_snapshot()
 
-        # 既存ウィジェットをクリア
-        while self._mcp_container_layout.count():
-            item = self._mcp_container_layout.takeAt(0)
-            w = item.widget() if item is not None else None
-            if w is not None:
-                w.setParent(None)
-                w.deleteLater()
-        self._mcp_checkboxes.clear()
-        self._mcp_empty_label = None
+    def set_resource_refresh_callback(self, callback) -> None:
+        self._resource_refresh_callback = callback
 
-        if not server_names:
-            self._mcp_empty_label = QLabel(
-                self.tr("MCP Server が登録されていません（`copilot mcp add` 後に「再列挙」ボタンを押してください）。")
+    def _clear_layout(self, layout: QVBoxLayout) -> None:
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+
+    def _resource_state(self, attr: str) -> str:
+        if self._resource_snapshot is None:
+            return "pending"
+        return str(getattr(self._resource_snapshot, attr, "unverified") or "unverified")
+
+    def _render_snapshot(self) -> None:
+        self._state_label.setText(
+            " / ".join(
+                (
+                    f"plugin={self._resource_state('plugin_state')}",
+                    f"mcp={self._resource_state('mcp_state')}",
+                    f"skill={self._resource_state('skill_state')}",
+                    f"skill-ownership={self._resource_state('skill_ownership_state')}",
+                )
             )
-            self._mcp_empty_label.setProperty("hveRole", "muted")
-            self._mcp_empty_label.setStyleSheet("padding: 2px;")
-            self._mcp_container_layout.addWidget(self._mcp_empty_label)
+        )
+        self._render_resource_group(
+            self._mcp_container_layout,
+            tuple(getattr(self._resource_snapshot, 'mcp_servers', ()) or ()) if self._resource_snapshot is not None else (),
+            state=self._resource_state('mcp_state'),
+            empty_label_attr='_mcp_empty_label',
+            ready_empty_text=self.tr('登録された MCP Server はありません。'),
+            failed_text=self.tr('MCP Server を確認できませんでした。再検出してください。'),
+        )
+        self._render_resource_group(
+            self._plugin_container_layout,
+            tuple(getattr(self._resource_snapshot, 'plugins', ()) or ()) if self._resource_snapshot is not None else (),
+            state=self._resource_state('plugin_state'),
+            empty_label_attr='_plugin_empty_label',
+            ready_empty_text=self.tr('登録された Plugin はありません。'),
+            failed_text=self.tr('Plugin を確認できませんでした。再検出してください。'),
+        )
+        self._render_resource_group(
+            self._skill_container_layout,
+            tuple(getattr(self._resource_snapshot, 'skills', ()) or ()) if self._resource_snapshot is not None else (),
+            state=self._resource_state('skill_state'),
+            empty_label_attr='_skill_empty_label',
+            ready_empty_text=self.tr('登録された Skill はありません。'),
+            failed_text=self.tr('Skill を確認できませんでした。再検出してください。'),
+        )
+
+    def _render_resource_group(
+        self,
+        layout: QVBoxLayout,
+        resources: tuple[object, ...],
+        *,
+        state: str,
+        empty_label_attr: str,
+        ready_empty_text: str,
+        failed_text: str,
+    ) -> None:
+        self._clear_layout(layout)
+        setattr(self, empty_label_attr, None)
+        if not resources:
+            if state == 'pending':
+                text = self.tr('確認中です。')
+            elif state != 'ready':
+                text = failed_text
+            else:
+                text = ready_empty_text
+            label = QLabel(text)
+            label.setProperty('hveRole', 'muted')
+            label.setStyleSheet('padding: 2px;')
+            layout.addWidget(label)
+            setattr(self, empty_label_attr, label)
             return
+        for resource in sorted(resources, key=lambda item: str(getattr(item, 'name', '') or '')):
+            label = QLabel(self._format_resource_label(resource))
+            label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            layout.addWidget(label)
 
-        for name in server_names:
-            row_widget = QWidget(self._mcp_container)
-            row_layout = QHBoxLayout(row_widget)
-            row_layout.setContentsMargins(0, 0, 0, 0)
-            row_layout.setSpacing(6)
-            lbl = QLabel(f"• {name}")
-            lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-            row_layout.addWidget(lbl)
-            row_layout.addStretch(1)
-            auth_btn = QPushButton(self.tr("認証手順..."))
-            auth_btn.setToolTip(
-                self.tr("OAuth を使う Remote MCP Server の再認証手順を表示します（ローカル stdio サーバーは認証不要）。")
-            )
-            auth_btn.clicked.connect(lambda _checked=False, n=name: self._show_auth_guidance(n))
-            row_layout.addWidget(auth_btn)
-            self._mcp_container_layout.addWidget(row_widget)
-
-    # ----------------------------------------------------------
-    def _populate_plugins(self) -> None:
-        """``copilot plugin list`` から Plugin 一覧を取得し表示する。"""
-        try:
-            from .copilot_cli_bridge import CopilotCliBridge
-            plugins = CopilotCliBridge.list_plugins()
-        except Exception:
-            plugins = []
-
-        # 既存ウィジェットをクリア
-        while self._plugin_container_layout.count():
-            item = self._plugin_container_layout.takeAt(0)
-            w = item.widget() if item is not None else None
-            if w is not None:
-                w.setParent(None)
-                w.deleteLater()
-        self._plugin_empty_label = None
-
-        if not plugins:
-            self._plugin_empty_label = QLabel(
-                self.tr("Plugin が登録されていません（`copilot plugin install <name>` 後に再列挙してください）。")
-            )
-            self._plugin_empty_label.setProperty("hveRole", "muted")
-            self._plugin_empty_label.setStyleSheet("padding: 2px;")
-            self._plugin_container_layout.addWidget(self._plugin_empty_label)
-            return
-
-        for p in plugins:
-            lbl = QLabel(f"• {p.name}@{p.source} (v{p.version})")
-            lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-            self._plugin_container_layout.addWidget(lbl)
+    def _format_resource_label(self, resource: object) -> str:
+        parts = [str(getattr(resource, 'name', '') or '-')]
+        parts.append(self.tr('有効') if getattr(resource, 'enabled', False) else self.tr('無効'))
+        source_kind = str(getattr(resource, 'source_kind', '') or '')
+        if source_kind:
+            parts.append(f"source={source_kind}")
+        plugin_marketplace = str(getattr(resource, 'plugin_marketplace', '') or '')
+        if plugin_marketplace:
+            parts.append(f"marketplace={plugin_marketplace}")
+        owner_plugin = str(getattr(resource, 'owner_plugin', '') or '')
+        if owner_plugin:
+            parts.append(f"owner={owner_plugin}")
+        plugin_version = str(getattr(resource, 'plugin_version', '') or '')
+        if plugin_version:
+            parts.append(f"version={plugin_version}")
+        description = str(getattr(resource, 'description', '') or '')
+        if description:
+            parts.append(f"description={description}")
+        return '• ' + ' / '.join(parts)
 
     # ----------------------------------------------------------
     def _on_refresh_clicked(self) -> None:
-        """MCP / Plugin 一覧を再列挙する。
-
-        ``CopilotCliBridge`` は同期 ``subprocess.run`` を使うため UI スレッドが
-        一時的にブロックされる。ボタン無効化 + ステータス表示で UX を補う
-        （将来的には ``QThread`` 化が望ましい）。
-        """
+        """共有 SDK resource snapshot の再検出を app-level callback へ委譲する。"""
+        if self._resource_refresh_callback is None:
+            self._refresh_status.setText(self.tr("再検出 callback が未接続です。"))
+            return
         self._refresh_btn.setEnabled(False)
-        self._refresh_status.setText(self.tr("列挙中..."))
-        try:
-            # イベントキューを 1 回処理してラベルを描画させる
-            from PySide6.QtCore import QCoreApplication
-            QCoreApplication.processEvents()
-            self._populate_mcp_servers()
-            self._populate_plugins()
-            self._refresh_status.setText(self.tr("完了"))
-        finally:
-            self._refresh_btn.setEnabled(True)
-
-    # ----------------------------------------------------------
-    def _show_auth_guidance(self, server_name: str) -> None:
-        """個別 MCP Server の OAuth 再認証手順をダイアログ表示する。
-
-        現時点の GitHub Copilot CLI 公式リファレンスでは、コマンドライン直接の
-        ``copilot mcp auth`` サブコマンドは記載がなく、OAuth 再認証はインタラクティブ
-        セッション内のスラッシュコマンド ``/mcp auth <name>`` のみが公式手段。
-        本ダイアログはユーザーが手動で実行する手順を案内する（捏造禁止のため自動化はしない）。
-        """
-        msg = QMessageBox(self)
-        msg.setIcon(QMessageBox.Icon.Information)
-        msg.setWindowTitle(self.tr("MCP Server 認証手順"))
-        msg.setTextFormat(Qt.TextFormat.PlainText)
-        msg.setText(
-            self.tr(
-                "MCP Server '{name}' の OAuth 再認証を行うには、ターミナルで以下を実行してください:\n\n"
-                "  1. `copilot` を起動（インタラクティブモード）\n"
-                "  2. プロンプトで `/mcp auth {name}` を入力して送信\n"
-                "  3. ブラウザが開いたら GitHub アカウントでサインイン\n"
-                "     （Headless OAuth: client_credentials 構成の場合はブラウザは開きません）\n"
-                "  4. 完了後、サーバーは自動的に再接続されます\n\n"
-                "出典: GitHub Copilot CLI 公式リファレンス\n"
-                "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference#oauth-re-authentication"
-            ).format(name=server_name)
+        started = bool(self._resource_refresh_callback(True))
+        self._refresh_status.setText(
+            self.tr('再検出中...') if started else self.tr('既に再検出中です。')
         )
-        msg.exec()
 
     # ----------------------------------------------------------
     def _on_mcp_toggle(self, _checked: bool) -> None:
@@ -2774,8 +2585,7 @@ class _C7Connection(QWidget):
     # ----------------------------------------------------------
     def refresh_mcp_servers(self) -> None:
         """外部から MCP サーバ一覧を再列挙したい場合のフック。Plugin も同時更新する。"""
-        self._populate_mcp_servers()
-        self._populate_plugins()
+        self._on_refresh_clicked()
 
     def mcp_enabled_dict(self) -> Dict[str, bool]:
         """後方互換用。現行 UI は MCP Server の実行時 ON/OFF を扱わない。"""
@@ -3115,6 +2925,12 @@ class _C11AKM(QWidget):
         text = self.custom_source_dir.text().strip()
         args.custom_source_dir = text.split() if text else []
 
+    def set_workiq_capability(self, capability: object) -> None:
+        """保存済みcheck値を維持してWork IQ sourceの操作可否だけを反映する。"""
+        self.sources_workiq.setEnabled(
+            getattr(capability, "state", "") == "ready"
+        )
+
 
 class _C17ADI(QWidget):
     purpose: QLineEdit
@@ -3362,7 +3178,8 @@ _STEP2_FIELDS_BY_WORKFLOW: Dict[str, List[Tuple[str, str]]] = {
         ("c14", "対象企業名"),
         ("c14", "業務エリア"),
         ("c14", "採用 Strategic Recommendation ID"),
-        ("c4", "Work IQ 回答ドラフト作成"),
+        ("c4", "Work IQ 利用状態"),
+        ("c4", "Work IQ 有効化（回答ドラフト互換トリガー）"),
     ],
     "aas": [],
     "aad-web": [
@@ -3393,7 +3210,8 @@ _STEP2_FIELDS_BY_WORKFLOW: Dict[str, List[Tuple[str, str]]] = {
         ("c10", _C10AppId.TDD_MAX_RETRIES_FIELD_TITLE),
     ],
     "akm": [
-        ("c4", "Work IQ 回答ドラフト作成"),
+        ("c4", "Work IQ 利用状態"),
+        ("c4", "Work IQ 有効化（回答ドラフト互換トリガー）"),
         ("c4", "QA 用プロンプト上書き"),
         ("c4", "KM 用プロンプト上書き"),
         ("c11", "取り込みソース"),
@@ -3442,15 +3260,11 @@ _STEP2_COMMON_FIELDS: List[Tuple[str, str]] = []
 _STEP2_HIDDEN_CATEGORIES = {"C1", "C3", "C5", "C6", "C7", "AZURE", "AGENTIC"}
 
 # 共通設定枠（C3 合成ウィジェット）内で Step 1 右ペインに出さないフィールド。
-# 文字列は `_CReviewPrompt` / `_CSelfImprove` の `_LabeledField(title=...)` と完全一致。
+# 文字列は `_CReviewPrompt` の `_LabeledField(title=...)` と完全一致。
 _COMMON_FRAME_HIDDEN_TITLES: Tuple[str, ...] = (
     "レビュー自動投入",
     "ローカルでコードレビュー実行",
     "コードレビュー修正プランを自動承認",
-    "自己改善ループ",
-    "自己改善 最大繰り返し回数",
-    "自己改善 対象パス",
-    "自己改善 ゴール説明",
 )
 
 # Step 1 右ペインのワークフロー枠 表示順（正準順 — ARD 先頭）。
@@ -3495,6 +3309,8 @@ class OptionsPage(QWidget):
         # steps_selection_changed 経由で set_selected_steps が更新する。
         # ASDW-WEB / ADFDV の CI/CD 系トグルの表示条件評価に用いる。
         self._selected_steps: Dict[str, List[str]] = {}
+        self._workiq_capability: object = None
+        self._workiq_capability_initialized = False
 
         # 各カテゴリのインスタンス（参照保持）
         self.c1 = _C1Basic()
@@ -3502,7 +3318,7 @@ class OptionsPage(QWidget):
         self.c4 = _C4WorkIQ()
         self.c5 = _C5IssuePR()
         self.c6 = _C6Output()
-        self.c7 = _C7Connection()
+        self.c7 = _C7Connection(repo_root=self._repo_root)
         self.c_azure = _CAzure()
         self.c_agentic = _CAgenticRetrieval()
         self.c10 = _C10AppId()
@@ -3510,6 +3326,7 @@ class OptionsPage(QWidget):
         self.c13 = _C13ADOC()
         self.c14 = _C14ARD()
         self.c17 = _C17ADI()
+        self.step_input_pane = StepInputPane(repo_root=self._repo_root)
 
         # ARD 添付ペイン（ARD 選択時のみ表示）— 遅延 import で循環依存回避
         self._attachment_pane: Optional[QWidget] = None
@@ -3597,7 +3414,29 @@ class OptionsPage(QWidget):
         self._selected_steps = {
             wf: list(steps) for wf, steps in (steps_by_workflow or {}).items()
         }
+        self.step_input_pane.set_selected_steps(self._selected_steps)
         self._refresh_specific_categories()
+
+    def _saved_workiq_requested(self) -> bool:
+        return bool(
+            self.c4.workiq.isChecked()
+            or self.c11.sources_workiq.isChecked()
+        )
+
+    def set_workiq_capability(self, capability: object) -> None:
+        """GUI processのWork IQ snapshotをC4/C11と実行argvへ共有する。"""
+        self._workiq_capability = capability
+        self._workiq_capability_initialized = True
+        self.c4.set_workiq_capability(
+            capability,
+            saved_requested=self._saved_workiq_requested(),
+        )
+        self.c11.set_workiq_capability(capability)
+        self.validity_changed.emit(self.validate()[0])
+
+    def is_workiq_check_pending(self) -> bool:
+        """SDK discovery workerが未確定か返す。"""
+        return bool(self._workiq_capability_initialized and self._workiq_capability is None)
 
     def build_args(self, repo_root: Optional["Path"] = None) -> OrchestrateArgs:  # type: ignore[name-defined] # noqa: F821
         """全カテゴリの入力値を `OrchestrateArgs` にまとめて返す。"""
@@ -3647,6 +3486,13 @@ class OptionsPage(QWidget):
             # sdk は CLI 既定と同じなので引数を増やさない。
             if _opts.get("tool_search_ranking") == "hve":
                 args.tool_search_ranking = "hve"
+            # FR-MODEL-04: 0 / 未指定は「SDK 既定へ委譲」なので引数を増やさない。
+            try:
+                _defer = int(_opts.get("tool_search_defer_threshold") or 0)
+            except (TypeError, ValueError):
+                _defer = 0
+            if _defer > 0:
+                args.tool_search_defer_threshold = _defer
         except Exception:
             pass
 
@@ -3663,10 +3509,26 @@ class OptionsPage(QWidget):
                 if tb and not args.target_business:
                     args.target_business = tb
 
-        # Step 2 セッション限定: `ard` / `akm` で「QA 回答ドラフト生成」 ON のとき
-        # `workiq=true` をセッション内のみ強制有効化する（設定保存はしない）。
-        if workflow_id in ("ard", "akm") and self.c4.workiq_draft.isChecked():
-            args.workiq = True
+        if (
+            self._workiq_capability_initialized
+            and getattr(self._workiq_capability, "state", "") != "ready"
+        ):
+            from ..workiq import disable_workiq_for_run
+
+            disable_workiq_for_run(args)
+
+        step_inputs = self.step_input_pane.selections_for_workflow(workflow_id)
+        args.step_inputs = [
+            (
+                spec.step_id,
+                spec.role,
+                spec.canonical,
+                str(spec.source),
+            )
+            for spec in step_inputs
+        ]
+        if step_inputs:
+            args.step_input_mcp_consent = self.step_input_pane.mcp_consent()
 
         return args
 
@@ -3688,6 +3550,21 @@ class OptionsPage(QWidget):
                 "「{0}」を選択してください。実行前 QA を行うかどうかは"
                 "回答の AKM 同期有無を左右するため、明示的な選択が必要です。"
             ).format(self.c3.tr(_AUTO_QA_FIELD_TITLE))
+        if (
+            self.is_workiq_check_pending()
+        ):
+            return False, self.tr("Work IQ の起動時確認が完了するまで実行できません。")
+        if (
+            self._workiq_capability_initialized
+            and getattr(self._workiq_capability, "state", "") != "ready"
+            and self._workflow_id == "akm"
+            and self.c11.sources_workiq.isChecked()
+            and not self.c11.sources_qa.isChecked()
+            and not self.c11.sources_original_docs.isChecked()
+        ):
+            return False, self.tr(
+                "Work IQ を利用できず、AKM の取り込み source が0件になるため実行できません。"
+            )
         if self.c10.github_cicd_enabled.isChecked():
             selected_set = set(self._workflow_ids or ([self._workflow_id] if self._workflow_id else []))
             cicd_auth_required = any(
@@ -4001,6 +3878,7 @@ class OptionsPage(QWidget):
         _add("C13", "ADOC 固有", self.c13)
         _add("C14", "要求定義書", self.c14)
         _add("C17", "ADI 固有", self.c17)
+        _add("STEP_INPUTS", self.tr("Step入力（run-scoped）"), self.step_input_pane)
 
         # 「追加プロンプト」の所有者は設定画面の基本設定（C1）だが、Step 1 右ペインでは
         # 共通設定枠の最下段に常時表示する（FR-GUI-20）。

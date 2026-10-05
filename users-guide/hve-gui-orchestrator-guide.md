@@ -47,7 +47,7 @@
 |---|---|---|---|---|
 | **HVE Cloud Agent Orchestrator** | GitHub Issue Template | GitHub Actions | なし | リモート実行・Sub Issue 自動生成 |
 | **HVE CLI Orchestrator** | `python -m hve orchestrate` / `python -m hve cli` | ローカル端末 | なし | ターミナル Rich Live Workbench |
-| **HVE GUI Orchestrator** | `python -m hve`（既定）/ `python -m hve gui` | ローカル端末 | `PySide6>=6.6` | GUI ウィザード・マウス操作・複数セッション |
+| **HVE GUI Orchestrator** | `python -m hve`（既定）/ `python -m hve gui` | ローカル端末 | `PySide6>=6.11` | GUI ウィザード・マウス操作・複数セッション |
 
 HVE GUI Orchestrator は CLI Orchestrator と同じ `hve orchestrate` エンジンを呼び出します。内部動作・オプション仕様・ワークフロー定義は共通です。UI の操作方法のみが異なります。
 
@@ -83,11 +83,13 @@ gh auth login
 **Windows 初心者向け（ダブルクリックで完結）**:
 
 ```text
-hve\setup-hve.cmd   ← 初回 1 回だけダブルクリック（.venv + GUI extras + markitdown 一括）
-hve.cmd gui         ← 以降はこれで GUI 起動
+hve\setup-hve.cmd   ← 初回セットアップ（.venv + GUI extras + markitdown 一括）
+hve.cmd gui         ← 通常の GUI 起動
 ```
 
 **macOS / Linux**: `./hve/setup-hve.sh` で一括セットアップ後、`./hve.sh gui` で起動。
+
+通常は上記の役割分担ですが、checkout 更新後に HVE 本体の版差分が見つかった場合は、後続の `hve.cmd gui` / `./hve.sh gui` 起動でも GUI 表示前に端末で setup 実行の確認が出ることがあります。
 
 ウィザードが開いたら **Step 1（ワークフロー選択＋オプション設定）→ Step 2（実行）** の順に進めます（Step 1 は左ペインで選択、右ペインでオプション設定）。詳細は [2 ステップ操作ガイド](#2-ステップ操作ガイド) を参照してください。
 
@@ -138,11 +140,11 @@ pwsh -NoProfile -File hve\setup-hve.ps1
 
 リポジトリ直下の **`hve.cmd`** を使います。エクスプローラからダブルクリックすると引数なしで実行され、GUI が起動します（コマンドプロンプトから明示する場合は `hve.cmd gui`）。
 
-> **役割の違い**: `hve\setup-hve.cmd` は **初回セットアップ専用**（venv + 依存関係の導入、通常 1 度だけ実行）。`hve.cmd` は **起動専用**（セットアップ完了後、毎回これを使う）。
+> **役割の違い**: `hve\setup-hve.cmd` は環境構築用、`hve.cmd` は通常起動用です。最上位起動では GUI / CLI の dispatch 前に HVE の版整合性を確認し、checkout 版の方が新しい場合やインストール済み版を確認できない場合は、GUI ではなく端末側で既存 setup の実行可否を尋ねます。`yes` の場合だけ setup を起動し、版一致を再確認できた場合に元の起動を 1 回再実行します。
 
 ```text
-RoyalytyService2ndGen\
-├── hve\setup-hve.cmd   ← 初回 1 回だけダブルクリック（セットアップ）
+REPOSITORY\
+├── hve\setup-hve.cmd   ← 初回または構成更新時のセットアップ
 └── hve.cmd             ← 毎回ダブルクリック（GUI 起動）
 ```
 
@@ -161,7 +163,7 @@ RoyalytyService2ndGen\
 リポジトリ直下の **`hve.sh`** を使います。
 
 ```text
-RoyalytyService2ndGen/
+REPOSITORY/
 └── hve.sh   ← ターミナルから実行（引数なしで GUI 起動）
 ```
 
@@ -194,6 +196,8 @@ RoyalytyService2ndGen/
 ### 共通: 起動後の動作
 
 いずれの方法でも **単一ウィンドウ** が開き、2 つの画面（ワークフロー選択 → 実行）を順に進めます。
+
+通常起動では、初回ウィンドウの表示直後に、ログイン済みの GitHub Copilot SDK から利用可能なモデル一覧をバックグラウンドで1回取得します。取得中はステータスバーと「HVE 設定」→「基本設定」の **「利用できるモデルの取得」** ボタンが両方とも一時的に無効になり、同じウィンドウで重複取得を開始しません。ワークフロー選択やオプション入力は継続できます。非空の一覧を取得するとステータスバーと「HVE 設定」のモデル選択肢へ反映されます。取得失敗時は警告ダイアログとステータスを表示し、空結果では0件のステータスを表示します。ただし、索引差分更新・Work IQ確認・Workflow実行のstatusが同時に必要な場合は、それらをモデル取得statusより優先します。どちらの場合も GUI の起動を継続し、既存のキャッシュと選択肢を維持します。失敗後は同じボタンで再試行できます。取得中にウィンドウを閉じた場合は、workerを破棄せず取得完了後に終了します。追加セッションと `--autopilot-child` は独立した起動時自動取得を行いません。
 
 起動直後、GUI は **既存の `markdown-query` / `cq` 索引 DB をバックグラウンドで差分更新** します。更新中はステータス欄に「索引 (markdown-query / code-query) の差分更新中です。完了後に実行を開始できます。」と表示され、実行開始ボタンが一時的に無効になります。GUI が起動する `hve orchestrate` 子プロセスは自身の索引 watcher を起動するため、同一の索引 DB へ同時に書き込まないようにするためです。更新が終わるとボタンは自動的に有効へ戻ります。
 
@@ -241,6 +245,7 @@ RoyalytyService2ndGen/
 
 - 選択中ワークフローの ID・正式名称・短い説明を下部に表示。
 - 画面左下の **「実行ステップ（チェック ON のみ実行対象）」** では、実行したいステップだけを個別に ON/OFF できます。各チェックは**単独で切り替わり、前後のステップへ自動連動しません**（依存伝播なし）。前段ステップの成果物が既に存在していれば、途中のステップ（例: `Step 2.1` の追加サービスから）だけを選んで実行できます。
+- Step を未指定のまま進むと、GUI は `workflow_registry.default_step_ids()` の既定選択をそのまま使います。現行では ADI の `Step 1.1` / `1.2`（原本質問票）は**初期チェック OFF**で、ARD は Group 2〜5 が既定、Group 1 は opt-in です。
 - [次へ] 押下時の統合 precheck は、選択したステップの必須ファイル / 必須入力を `FILE` / `WIZARD_INPUT` として検査し、GitHub 書き込みを伴う実行では GitHub 連携のローカル不整合も `SETTING` / `AUTH` として表示します。起動引数の組み立てで `ValueError` になった場合は「入力エラー」を表示し、precheck や Step 2 へ進まず Step 1 に留まります。
 - 左ペインで選択後、同じ画面右ペインの「オプション選択」（下記）でオプションを設定します。
 
@@ -252,16 +257,20 @@ RoyalytyService2ndGen/
 
 **Step 1 の右ペインはこのカテゴリー一覧をそのまま並べません**。選択中のワークフローに応じて実効的な行だけを表示し、ワークフロー固有の入力欄は選択ワークフロー枠へ移されます（例: AAS の Step 1 では C3 内の 6 行 / 7 入力だけが実効表示されます）。
 
+同じ右ペインの「Step入力（run-scoped）」では、選択Stepのrequired / optional文書、canonical path、kind、存在状態を確認し、追加資料または欠損文書の代替を複数選択できます。選択値は設定へ保存されません。詳しくは[Workflow / Step入力ガイド](./step-inputs.md#gui)を参照してください。
+
+FR-GUI-02 対象の必須入力（現行は `resource_group`）は、GUI 共通の設定ストアへ保存され、次回起動時に復元されます。右ペイン専用の別ストアはなく、上記の run-scoped な Step 入力（追加資料・代替文書）は保存されないため、右ペインのすべての項目が永続化されるわけではありません。
+
 以下の表は、設定画面側のカテゴリー ID と保持するオプションの対応です。
 
 | カテゴリ | 画面上の見出し | 主な内容 |
 |---|---|---|
-| C1 | 基本設定  *必須 | `--model` / `--review-model` / `--qa-model` / `--reasoning-effort` 系 / `--context-tier` / `--max-parallel` / `--timeout` / `--review-timeout` / `--verbosity` / テーマ / `--additional-prompt` / `--context-max-chars` |
-| C3 | 共通設定  *必須 | `--auto-qa`（**必須選択** / 下記参照）/ **QA (質問票) 回答モード**（下記参照）/ `--auto-contents-review` / `--auto-coding-agent-review` / `--qa-akm-background-merge`（下記参照）/ `--akm-model` / `--akm-reasoning-effort` / `--akm-context-tier` / `--self-improve` 系。設定画面では `QA (質問票)` / `レビュー` / `Knowledge Management` / `自己改善 (Self Improve)` の 4 ノードへ分かれています |
-| C4 | Work IQ | `--workiq` 系（M365 メール・チャット・会議・ファイル参照。`@microsoft/workiq` プラグインのインストールが必要）。`OrchestrateArgs` は Work IQ 関連 12 フィールドを保持し、`--workiq*` 引数として CLI に渡ります（`--workiq-tenant-id` の GUI 入力欄は廃止済み。CLI 引数と環境変数 `WORKIQ_TENANT_ID` は引き続き有効） |
+| C1 | 基本設定  *必須 | `--model` / `--review-model` / `--qa-model` / `--reasoning-effort` 系 / `--context-tier` / `--max-parallel` / `--timeout` / `--review-timeout` / `--verbosity` / テーマ / `--additional-prompt` / `--context-max-chars`（GUI の新規設定既定は `model=claude-opus-5.5`、`context_tier=long_context`） |
+| C3 | 共通設定  *必須 | `--auto-qa`（**必須選択** / 下記参照）/ **QA (質問票) 回答モード**（下記参照）/ `--auto-contents-review` / `--auto-coding-agent-review` / `--qa-akm-background-merge`（下記参照）/ `--akm-model` / `--akm-reasoning-effort` / `--akm-context-tier` 。設定画面では `QA (質問票)` / `レビュー` / `Knowledge Management` の 3 ノードへ分かれています |
+| C4 | Work IQ / 知識源 | `--workiq` と `--knowledge-source` 系（M365 メール・チャット・会議・ファイル等を知識探索で参照）。GUI には「Work IQ を知識源に加える」チェックボックスと「知識源 MCP サーバー」（カンマ区切り）欄だけを表示します。利用前にCopilot CLIへexact `workiq`名のPlugin または MCP Serverを設定・認証し、GUIはSDKの`mcp.discover`結果で操作可否を決めます |
 | C5 | GitHub（内部互換カテゴリ。設定ツリーには表示しない） | `--create-issues` / `--create-pr` / `--repo` / **Root Issue の扱い**（新規作成 / 既存 Issue に連携、`--issue-number`。下記参照）/ `--issue-title` / `--branch` / Legacy 進捗 run-id（`--resume-run`。durable Resume とは別機能）/ `--enable-auto-merge` / マージ後ローカルブランチ削除 / Fleet mode / Cloud Sessions 関連 |
 | C6 | 出力制御 | `--verbose` / `--quiet` / `--show-stream` / `--log-level` / `--no-color` / `--banner` / `--screen-reader` / `--timestamp-style` / `--final-only`。**この枠の値は保存されず、起動のたびに既定値へ戻ります**（コンソール表示の制御であり実行結果の意味を変えないため、面固有のままとしています。固定したい場合は CLI 実行時に同名のフラグを指定してください。なお `--banner` は `orchestrate` では効果がありません） |
-| C7 | MCP / CLI 接続 | `--cli-path` / `--cli-url` |
+| C7 | MCP / CLI 接続 | process-wide の SDK ResourceSnapshot を読み取り専用表示します。`--cli-path` / `--cli-url` の互換フィールドは内部に残りますが、GUI入力欄は表示しません |
 | AZURE | Azure | `--resource-group`（`default_params` を持たない必須パラメータのみ。FR-GUI-02 / FR-WF-ASDW-02） |
 | AGENTIC | Agentic Retrieval | `--enable-agentic-retrieval` / データソース方式 / Foundry MCP 連携 / データソースのヒント / 既存設計の差分更新 / Foundry SKU フォールバック方針。**この枠の 6 項目は保存され、次回起動時に復元されます**（Prompt 版も同じ保存値を引き継ぎます） |
 | C10 | アプリケーションID | `--app-ids` / `--usecase-id` / github.com CI/CD トグル（下記参照） |
@@ -372,18 +381,15 @@ RoyalytyService2ndGen/
 
 ##### QA 回答ダイアログからのクリップボードコピー
 
-QA 回答ダイアログの左下には、質問票をクリップボードへ複製する 2 つのボタンがあります。どちらも**クリップボードへ書き込むだけ**で、Work IQ への送信・ログインは行いません。
+QA 回答ダイアログの左下には、質問票をクリップボードへ複製するボタンがあります。**クリップボードへ書き込むだけ**で、知識源への送信・ログインは行いません。
 
 | ボタン | コピーされる内容 |
 |---|---|
 | **質問票をコピー** | 表示中の質問票の Markdown 全文 |
-| **Work IQ 用プロンプトをコピー** | Work IQ へ貼り付けるためのプロンプト（上記の質問票全文を埋め込んだもの） |
 
 - コピーされるのは AI が生成した質問票そのものです。**ダイアログで入力途中の回答は含まれません。**
-- 質問が 1 件もない場合、両ボタンは無効になります。
+- 質問が 1 件もない場合、ボタンは無効になります。
 - **貼り付け先には質問票の本文がそのまま渡ります。** 質問票には対象業務やリポジトリの情報が含まれるため、貼り付け先を確認してから実行してください。
-- Work IQ 用プロンプトの応答は**最大 5 件**に制限されています（プロンプト側の出力スキーマによる）。質問数がこれを超える場合、回答されない質問が残ります。
-- 「QA (質問票) 自動投入」に組み込まれた Work IQ 自動連携とは送信内容が異なります。自動連携は質問を 1 件ずつ送り、重要度による絞り込みと件数上限（既定 10 件）を適用しますが、本ボタンは表示中の全質問を 1 つの表としてまとめて渡します。
 - 質問票の表セル内の改行は `<br>`、記号 `|` は `&#124;` として出力されます（表形式を保つための変換）。貼り付け先でそのまま表示される点に注意してください。
 
 #### 共通設定: Knowledge Management 用モデル / コンテキスト階層
@@ -820,17 +826,16 @@ GitHub Hub の一覧から Pull Request を選択するか、連携設定の **�
 
 ## Plugin / MCP Server 認証
 
-GUI Orchestrator は、GitHub Copilot / GitHub CLI / Work IQ の認証導線を GUI から起動できます。一方、任意の MCP Server の登録・OAuth 再認証は GitHub Copilot CLI 側で管理します。GUI は登録済み MCP Server / Plugin の一覧表示と手順案内を行います。
+GUI Orchestrator は、GitHub Copilot / GitHub CLI の認証導線を提供します。Work IQ を含む Plugin / MCP / Skill の install / config / auth は GitHub Copilot CLI 側で管理し、GUI は **process-wide の同じ ResourceSnapshot** を C7 と Tool-Search の `SDK Resources` タブへ共有表示するだけです。HVE は Work IQ の設定・認証を実行しません。
 
-> **一覧に出ていても、リポジトリが `.github/.mcp.json` で宣言していない MCP Server / Plugin は HVE のセッションからは使われません。** HVE は実行時に MCP の自動探索を停止し、宣言分だけをセッションへ渡します（詳細は CLI ガイドの「HVE のセッションが接続する MCP サーバー」）。Copilot CLI へインストール済みでも、認証不備などで利用できない Plugin が HVE の実行を妨げないようにするためです。
+> local runtime では、起動直後に取得した同じ `ResourceSnapshot` を GUI 全体で共有します。snapshot が未到着の「確認中」は再検出ボタンを無効化し、ready / unverified のいずれかが到着すると再試行可能になります。`SDK Resources を再検出` は処理中の二重起動を防ぎ、`force_refresh=true` で再取得します。Cloud Session は未対応で、保存した変更は次に開始する local session から反映されます。
 
 ### 認証ボタンの場所
 
 - CLI: `python -m hve login` — GitHub Copilot SDK へのログインを行います（GUI に専用ボタンはありません）。
-- ステータスバー / 設定 → 基本設定: **「利用できるモデルの取得」** — ログイン済みの GitHub Copilot SDK からモデル一覧を取得しキャッシュを更新します（ログイン自体は行いません）。取得結果は隣接する **「使用するモデル」** 表示にも反映されます。
+- ステータスバー / 設定 → 基本設定: **「利用できるモデルの取得」** — 通常 GUI 起動時にも同じ処理が1回自動実行されます。このボタンはログイン済みの GitHub Copilot SDK からモデル一覧を手動で再取得し、キャッシュと隣接する **「使用するモデル」** 表示を更新します（ログイン自体は行いません）。
 - **GUI 起動時の自動確認** — `GH_TOKEN` / `GITHUB_TOKEN` が未設定のときだけ `gh auth token` を試し、取得できなければログインを行うか確認するダイアログを 1 回だけ表示します（下記参照）。
-- 設定 → 各サービス連携 → GitHub: **「GitHub CLI でログイン」** — `gh auth login` を埋め込み端末で実行し、この GUI セッションの `GH_TOKEN` に橋渡しします。Issue / PR 作成やブランチ取得向けです。
-- Work IQ 設定: **「Work IQ 認証確認」** — `@microsoft/workiq` の EULA / Microsoft 365 認証を確認します。
+- ヘッダーの **[GitHub]** → GitHub Hub → **[連携設定]**: **「GitHub CLI でログイン」** — `gh auth login` を埋め込み端末で実行し、この GUI セッションの `GH_TOKEN` に橋渡しします。Issue / PR 作成やブランチ取得向けです。
 
 ### 起動時の GitHub 認証確認
 
@@ -840,7 +845,7 @@ GUI は起動時に次の順で GitHub 認証状態を解決します。
 2. 未設定なら `gh auth token` を試し、取得できたトークンをこの GUI セッションの `GH_TOKEN` へ注入します。
 3. 取得できなかった場合に限り、**「今すぐ `gh auth login` を実行しますか？」** の確認ダイアログを 1 回だけ表示します。
 
-確認ダイアログで「いいえ」を選んでも GUI は通常どおり起動します。GitHub 連携を使わないワークフローはそのまま実行できます。後からログインしたい場合は設定 → GitHub → 「GitHub CLI でログイン」を使います。
+確認ダイアログで「いいえ」を選んでも GUI は通常どおり起動します。GitHub 連携を使わないワークフローはそのまま実行できます。後からログインしたい場合はヘッダーの **[GitHub]** → GitHub Hub → **[連携設定]** →「GitHub CLI でログイン」を使います。
 
 > GUI が `gh auth login` を勝手に実行することはありません。対話ログインは必ず利用者の明示操作で行われます。取得したトークンはセッション限りで、ディスクへ保存されません。
 
@@ -851,44 +856,49 @@ GUI は **GitHub Copilot CLI を唯一の信頼ソース** とし、以下の方
 | 対象 | 検出方法 | 認証方式 |
 |---|---|---|
 | GitHub Copilot | 常時必須 | `copilot login` (Device Flow)。CLI (`python -m hve login`) から実行（GUI に専用ボタンはなし） |
-| Microsoft Work IQ | Work IQ オプションを有効にするとき | `npx @microsoft/workiq accept-eula` + `ask -q ping`。GUI の「Work IQ 認証確認」から実行可能。**実行開始時に認証確認が失敗した場合、GUI からの実行は停止せず、その実行に限って Work IQ を自動無効化して続行します**（実行ログに要求元の設定名を出力） |
-| 任意の MCP Server | `copilot mcp list --json` に登録されている全サーバ | GitHub Copilot CLI 側で登録・認証。GUI は一覧表示と認証手順表示のみ |
-| 外部 Copilot SDK サーバー | 「設定」→「CLI 接続」で `cli_url`（例: `localhost:4321`）を指定 | TCP 疎通テスト |
+| Microsoft Work IQ | GUI process起動時にSDK `mcp.discover`を1回 | Copilot CLIへ事前設定・認証されたexact `workiq`名のPlugin または MCP Serverを利用。HVEは導入・構成・認証・ブラウザ起動を行わない |
+| 任意の MCP / Skill / Plugin | process-wide `ResourceSnapshot` に現れた enabled resource | GitHub Copilot CLI 側で登録・認証。GUI は safe field の一覧表示のみ |
 
 > **Breaking Change (Wave 3 以降)**: GUI 設定の `mcp_config`（MCP Server 設定 JSON
-> ファイルパス）と `workiq_tenant_id` は **廃止** されました。
-> 代わりに `copilot mcp add` / `copilot plugin install` で Copilot CLI 側に登録してください。
+> ファイルパス）と旧Work IQ tenant overrideは **廃止** されました。
+> 代わりに `copilot mcp add` / `copilot plugins install` で Copilot CLI 側に登録してください。
 > 既存設定ファイルに残存していた場合、初回起動時に自動削除されます。
 
-### MCP Server の扱い
+### SDK Resources の扱い
 
-GUI の MCP セクションは **登録済み一覧** です。実行時に MCP Server を Copilot SDK セッションへ渡す場合は、CLI と同じく `--mcp-config` を使います。`--mcp-config` は直接 map 形式と `.github/.mcp.json` の `mcpServers` wrapper 形式の両方を受け付けます。
+GUI の C7 と Tool-Search の `SDK Resources` は **登録済みの safe snapshot 表示** です。raw config、path、credential、transport は表示しません。
+編集できるのは safe editor としての **exact resource classification** と、`Knowledge MCP allowlist` / `Software Engineering MCP allowlist` の 2 系統だけです。
 
-一覧に登録されていることと、HVE のセッションへ渡ることは別です。HVE が接続するのは `.github/.mcp.json` の宣言分と HVE 内部の Work IQ サーバーだけです。
+required Skill と exact MCP server 名の対応は `policy.json` の `required_mcp_servers_by_skill` で管理します。この対応はGUIの表編集対象には含めず、環境別の `.toolsearch/policy.json` を直接編集します。runtime discoveryで得たserver / tool名は自動保存されないため、実在を確認したexact名だけを記録してください。
 
-MCP Server の登録・OAuth 再認証は GitHub Copilot CLI の対話 UI で実施してください。GUI の「認証手順...」ボタンは、対象サーバーの再認証手順を表示する案内機能です。
+ResourceSnapshot は process-wide に 1 回取得され、C7 と Tool-Search が同じ object を共有します。再検出ボタンは `force_refresh=true` で同じ経路をやり直します。
+
+Tool-Searchの「コンテキスト内訳」ではWorkflowに加えて任意の非コンテナStepを選択できます。既定の「Workflow 全体」は従来のworkflow単位routeを測定し、Stepを選ぶとregistry / Skill manifestのrequired / optional Skillとpolicyのrequired MCP依存を反映します。GUIはCLIの結果をそのまま表示し、再集計や推定は行いません。
 
 ### 操作フロー
 
-1. GitHub Copilot SDK を使う前に、必要なら CLI で **`python -m hve login`** を実行
+1. GitHub Copilot SDK を使う前に、必要なら CLI で **`python -m hve login`** を実行。これは GitHub REST / Issue / PR 用の `gh auth login` とは別の認証です。通常 GUI を起動するとモデル一覧を自動取得し、再取得が必要な場合だけ **「利用できるモデルの取得」** を押す
 2. Issue / PR 作成やブランチ取得を使う場合は、起動時の確認ダイアログでログインするか、後から **「GitHub CLI でログイン」** を押下
-3. Work IQ を使う場合は、必要なら **「Work IQ 認証確認」** を押下
-4. 任意 MCP Server は、GUI の一覧で登録状況を確認し、必要なら **「認証手順...」** で Copilot CLI 側の手順を確認
+3. Work IQを知識源にする場合はCopilot CLIでexact `workiq`を事前設定・認証し、設定変更後はHVE process を再起動
+4. 任意 Plugin / MCP / Skill は、GUI の一覧で safe field と effective category を確認する
 
 ### 認証が不足していた場合の振る舞い
 
-- **起動時**: GitHub 認証のみ上記の手順で 1 回解決を試みます。拒否しても起動は継続します。
-- **実行開始前**: GUI は認証状態を自動で定期確認しません。「Work IQ 認証確認」「GitHub CLI でログイン」は利用者が押したときだけ実行されます。Step 1 の統合 precheck は、GitHub 書き込みを伴う実行に限り、起動時の認証解決後に現 GUI プロセスへ設定された `GH_TOKEN` / `GITHUB_TOKEN` を確認します。ここで `gh auth token` を再実行することはなく、未設定なら `AUTH` として表示して Step 1 に留まります。
-- **子プロセス起動後**: GUI が起動した `hve orchestrate` サブプロセスは、active step の解決後、最初のモデル呼び出し・ブランチ作成・DAG 構築より前に、Git remote `origin` と `refs/heads/<ベースブランチ>` の完全一致を共通 preflight で確認します。保存済みのベースブランチが remote に存在しない場合は fail-closed とし、`main`、ローカルブランチ、GitHub の既定ブランチへ自動補正しません。GitHub Copilot / Work IQ / Azure の各認証 preflight も子プロセスが担い、失敗理由を実行ログへ出力して終了します。GUI から子プロセスへ入力を送る経路は無いため、これらの preflight が対話入力を求めることはありません（FR-GUI-23）。
+- **起動時**: GUI表示直後、GitHub認証確認ダイアログより前に、非blocking workerがSDK `mcp.discover`を1回実行します。状態は`確認中`、`ready`、`not-configured`、`unverified`のいずれかで表示し、`ready`以外ではWork IQ項目を表示したまま無効化します。保存値がONなら「保存設定: 有効 / この起動: 無効」とreason codeを表示します。
+- **実行開始前**: 起動時snapshotだけで認証操作は行いません。設定・認証を変更した場合はHVE process を再起動し、新しいdiscovery snapshotを取得してください。
+- **子プロセス起動後**: GUIが起動した`hve orchestrate`もSDK discoveryを実行し、知識探索 session では`session.rpc.mcp.list()`と`list_tools`で`connected`かつ allowlist tool の公開を確認します。利用不可ならそのrunだけから該当知識源を除外します。runtimeで接続またはtoolを確認できない知識源は、HVEが認証を試みず除外してCopilot CLI側の`/mcp`確認を案内します。
 - **実行中の失効**: 実行中に認証が失効した場合の自動検知・自動再認証は行いません。
 
 ### 「利用できるモデルの取得」ボタンと「使用するモデル」表示
 
+通常 GUI は、初回 `MainWindow` を表示した直後に、このボタンと同じモデル取得処理をバックグラウンドで1回自動実行します。1つのウィンドウでは同時に1件だけ取得し、取得中はステータスバーと設定画面の両ボタンを無効にします。非空の一覧を取得した場合だけキャッシュとモデル選択欄を更新します。取得失敗または空結果では既存のキャッシュと選択欄を維持し、警告またはステータスを表示したうえで GUI の起動を継続します。失敗後は同じボタンで再試行できます。取得中の終了要求はworker完了後に続行します。追加セッションと `--autopilot-child` では独立した自動取得を開始しません。
+
 ステータスバー右端の「**利用できるモデルの取得**」ボタンは:
 
 - 常に表示されます
-- 押下時は **モデル一覧の取得とキャッシュ更新のみ** を実行します（GitHub Copilot SDK へのログイン自体は行いません。未ログインの場合は事前に CLI で `python -m hve login` を実行してください）
+- 押下時は、起動時と同じ **モデル一覧の取得とキャッシュ更新** を手動で再実行します（GitHub Copilot SDK へのログイン自体は行いません。未ログインの場合は事前に CLI で `python -m hve login` を実行してください）
 - 同じボタンは「HVE 設定」→「基本設定」の一番上にも配置されており、機能・挙動は全く同じです（どちらから押しても同じ処理が実行され、両方の画面の表示に反映されます）
+- 取得中は両方のボタンが無効になり、同じウィンドウから2件目の取得は開始されません
 
 「利用できるモデルの取得」ボタンの右側には **「使用するモデル」** / **「Effort」** の選択コンボがあり、「HVE 設定」→「基本設定」の「使用するモデル *必須」および「Effort」と**同じ選択内容**を示します。両者は別々に生成されたウィジェットであり、`settings_store` とシグナル経由で値を同期しています（同一の物理ウィジェットではありません）。ここで直接選択を変更でき、変更内容は即座に `settings_store` へ保存され、「HVE 設定」ダイアログを開いている場合はそちらの表示にも反映されます。
 
@@ -925,7 +935,7 @@ python -m hve &
 | 複数セッション | 非対応 | メニューから複数ウィンドウ起動 |
 | 起動ウィザード | 逐次プロンプト | 単一ウィンドウ 2 ステップ |
 | ARD 添付資料 | 手動でファイル配置 + `--attached-docs` | ドラッグ&ドロップ自動変換 |
-| 追加依存 | なし | `PySide6>=6.6` |
+| 追加依存 | なし | `PySide6>=6.11` |
 | Work IQ C4 オプション | 利用可 | 利用可（GUI 固有制約なし） |
 
 ---
@@ -1050,7 +1060,7 @@ DAG 並列実行（`--max-parallel`）と Post-step 自動プロンプト（`--a
 | `python -m hve` / `python -m hve gui` でエラー | GUI 依存未インストール | `hve\setup-hve.cmd` / `./hve/setup-hve.sh` を実行（引数なし起動は CLI に自動フォールバック） |
 | D&D で `.docx` / `.pdf` / `.xlsx` / `.pptx` / `.html` が変換されない | `gui-docconvert`（markitdown）未インストール | `hve\setup-hve.cmd` / `./hve/setup-hve.sh` をオプション無しで再実行 |
 | GUI が起動しない（X11 / Wayland エラー） | ディスプレイサーバー未接続 | SSH ポートフォワードや X11 転送を設定するか、CLI Orchestrator を使用 |
-| ウィンドウが複数起動しない | PySide6 バージョン不足 | `PySide6>=6.6` を確認 |
+| ウィンドウが複数起動しない | PySide6 バージョン不足 | `PySide6>=6.11` を確認 |
 
 その他のトラブルは [troubleshooting.md](./troubleshooting.md) を参照してください。
 
@@ -1128,6 +1138,13 @@ GUI 自体を変更する場合の正本、変更手順、回帰検証、互換�
 
 ### 回帰検証
 
+HVE 自己テストとその直接依存の回帰検証は、開始前に [共通入口・品質証跡契約（FR-MAINT-12）](../tests/README.md) と [GUI Full SystemTest](../tests/%5Bgui%5DSystemTest%20-%20Full.txt) を確認してください（CLI / Prompt 版の入口も共通 README にあります）。
+
+- 起動前に**元リポジトリの `tests/run/<run-id>/<task>/`** を確保し、全 controller 生成物（plan / request / case / status / checkpoint / review / helper / driver / stdout・stderr / 終了コード / ログ / 測定値 / 検証結果 / PNG・manifest / 安全な設定 snapshot / report）を最初からこの保存ルート配下に保持します。指定された README・plan・completion report は task 直下、その他の詳細証跡は `artifacts/` とし、いずれも lane 外へ置きます。最終 report だけの移動では不十分です。
+- GUI はセッション root と `HVE_WORK_ROOT` / `HVE_RUN_ID` を上書きするため、環境変数だけに頼らず、兄弟 `lanes/<CASE-ID>/` の専用 checkout / worktree のコードから起動します。子 session に元リポジトリ・保存ルート・lane・書き込み範囲を絶対パスで渡し、実効出力先を確認します。元リポジトリの `work/` へ自己テストの新規出力をせず、通常の work / logs defaults・canonical outputs・GUI cleanup 実装は変更しません。
+- GUI 終了時の archive / purge を含む cleanup **前**に、必要な安全な内部ログ・生成物の検証証拠を lane 外の兄弟 `artifacts/` へ退避し、証跡一覧との対応・存在・必要な非空条件・相対リンク・要求される hash を確認します（正常な空 stderr は許容）。削除予定 lane へのリンクだけに依存せず、欠損・検証不能なら cleanup を止め、PASS としません。
+- 機微情報は保存せず、failed / blocked / interrupted を含む品質証跡・過去履歴は削除しません。cleanup は退避・検証済みの専用 lane / fixture だけとし、再実行は新 run / attempt に分離します。保存先の契約はモデル利用・Azure 操作等の実行承認を代替しません。
+
 ```bash
 # GUI ヘルプ本文の契約
 python -m pytest hve/tests/test_gui_help_content.py
@@ -1165,7 +1182,7 @@ macOS 固有の window / menu / dialog / application lifecycle、theme / font / 
 ### 互換性・安全性
 
 - `hve/.settings.txt` は既存ユーザーの設定ファイルです。キー名の変更・削除は互換性を壊すため、既定値の追加を優先してください。
-- Step 1 スナップショットはマスキング済みですが、`work/run/<session_run_id>/` は使い捨ての作業領域です。コミット対象に含めないでください。
+- Step 1 スナップショットはマスキング済みですが、**通常 runtime の** `work/run/<session_run_id>/` は使い捨ての作業領域です。コミット対象に含めないでください。自己テストの品質証跡はこの使い捨て規約の対象外であり、[回帰検証](#回帰検証)に従って安全に退避・確認し、`tests/run/` に保持して削除しません。
 - GUI が子プロセスへ注入する `GH_TOKEN` のコピーはセッション限りで、GUI 終了で破棄されます。一方で `gh auth login` 自体はトークンをシステム資格情報ストアへ保存し、利用できない場合は平文ファイルへフォールバックするため、保存先の取り扱いを変更する場合は影響を評価してください。
 
 ---
@@ -1222,7 +1239,7 @@ Step 1「ワークフロー選択」画面で [次へ] を押し、4 カテゴ�
 | `AUTH` | GitHub 書き込みを伴う実行において、起動時の認証解決後も `GH_TOKEN` / `GITHUB_TOKEN` を解決できない状態 |
 
 - GitHub 書き込みを必要としない通常のローカル実行は `SETTING` / `AUTH` の対象外です。
-- `additional_prompt` や Work IQ 用プロンプトなどの Prompt 自由記述欄は内容検査の対象外です。空欄・自然言語・業務内容を理由に precheck は失敗しません。ただしプロンプトのサイズは Step 実行時に別途判定されます（下記）。
+- `additional_prompt` などの Prompt 自由記述欄は内容検査の対象外です。空欄・自然言語・業務内容を理由に precheck は失敗しません。ただしプロンプトのサイズは Step 実行時に別途判定されます（下記）。
 - Step 1 は UI thread で待ち時間が発生しないよう、remote `origin` と remote branch の照会を行いません。これらは GUI が起動する `hve orchestrate` 子プロセスが同じ共通 preflight を remote 検査ありで実行します。このため remote 不存在・認証・通信の結果は Step 1 の4カテゴリスナップショットには含まれず、子プロセスの実行ログに出力されます。
 - `AUTH` は「[起動時の GitHub 認証確認](#起動時の-github-認証確認)」で捕捉・注入されたセッション限りの token を参照する判定であり、同じ認証解決を再実装するものではありません。token 本体はスナップショットへ保存されません。
 
@@ -1255,7 +1272,7 @@ Step 1「ワークフロー選択」画面で [次へ] を押し、4 カテゴ�
 ### 動作・運用
 
 - スナップショット保存の失敗は GUI 主処理を止めません（WARNING ログのみ出力）。
-- `work/run/<session_run_id>/` は使い捨ての作業成果物です。`.gitignore` による一括除外はされていないため、コミット対象に含めないよう `git status` で確認してください（`.gitignore` が除外するのは `work/**/artifacts/` 配下の `*.env` / `*.log` / `*.key` / `*.pem` 等の秘密になり得るファイルです）。
+- **通常 runtime の** `work/run/<session_run_id>/` は使い捨ての作業成果物です。`.gitignore` による一括除外はされていないため、コミット対象に含めないよう `git status` で確認してください（`.gitignore` が除外するのは `work/**/artifacts/` 配下の `*.env` / `*.log` / `*.key` / `*.pem` 等の秘密になり得るファイルです）。自己テストの品質証跡は例外として `tests/run/` に保持し、削除しません。以下の archive / purge より前に、[回帰検証](#回帰検証)の安全な退避・確認を完了してください。
 - セッション終了時の挙動は `GuiSessionWorkdir.cleanup_policy`（既定 `keep`）に従い、`archive`（`work/archive/<session_run_id>.zip` へ zip 化して元ディレクトリを削除）/ `purge`（削除）を指定するとスナップショットも対象になります。`archive` で作成した ZIP は `.gitignore` の秘密ファイル除外規則の対象外で、元ディレクトリ内の `*.env` / `*.key` などが含まれる場合があるため、コミット前に ZIP も必ず確認・除外してください。
 - スキーマは `metadata.json.schema_version` でバージョニング（現行 `1`）。
 

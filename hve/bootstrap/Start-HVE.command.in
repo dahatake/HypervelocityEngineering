@@ -1,0 +1,491 @@
+#!/bin/bash -p
+# FR-LOCAL-SURFACE-04: private distribution, macOS 15/26 Apple Silicon only.
+# -p prevents BASH_ENV and exported functions from running before the native guard.
+# Functions below are internal test seams, not a public shell interface.
+
+hve_platform_facts() {
+  local system machine version=""
+  system="$(/usr/bin/uname -s)" || return 2
+  machine="$(/usr/bin/uname -m)" || return 2
+  if [[ "$system" == Darwin ]]; then
+    version="$(/usr/bin/sw_vers -productVersion)" || return 2
+  fi
+  printf '%s\n' "$system" "$machine" "$version"
+}
+
+hve_fail() {
+  HVE_FAILURE_STAGE=$1
+  HVE_FAILURE_REASON=$2
+  # Values come only from fixed enums / native child exit statuses, never tool output.
+  printf '{"stage":"%s","reason_code":"%s","retryable":true}\n' "$HVE_FAILURE_STAGE" "$HVE_FAILURE_REASON" >&2
+  return "$3"
+}
+
+hve_sanitize_environment() {
+  set +x +v +H
+  unset BASH_ENV ENV CDPATH GLOBIGNORE
+  local name
+  for name in ${!PYTHON@} ${!PIP_@} ${!PERL@} ${!DYLD_@} ${!LD_@} \
+              ${!HOMEBREW_@} NODE_OPTIONS NODE_PATH RUBYOPT RUBYLIB \
+              COPILOT_CLI_PATH COPILOT_CLI_EXTRACT_DIR COPILOT_SKIP_CLI_DOWNLOAD; do
+    unset "$name"
+  done
+  IFS=$' \t\n'
+  export PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin
+  export PYTHONNOUSERSITE=1 PIP_CONFIG_FILE=/dev/null
+  hash -r
+}
+
+hve_exec() {
+  # Bash -p ignores imported functions but can still forward their environment
+  # records to a non-privileged child. env -i drops those records as well as
+  # interpreter/package-manager injection variables, without modifying profiles.
+  /usr/bin/env -i PATH="$PATH" HOME="${HOME:-}" USER="${USER:-}" \
+    LOGNAME="${LOGNAME:-}" TMPDIR="${TMPDIR:-/tmp}" TERM="${TERM:-dumb}" \
+    LANG="${LANG:-en_US.UTF-8}" LC_CTYPE="${LC_CTYPE:-UTF-8}" \
+    PYTHONNOUSERSITE=1 PIP_CONFIG_FILE=/dev/null "$@"
+}
+
+hve_distribution_root() {
+  local source_path=$1 directory target count=0
+  [[ "$source_path" == */* ]] || source_path="./$source_path"
+  while :; do
+    directory="$(cd -P -- "${source_path%/*}" && pwd -P)" || return 2
+    source_path="$directory/${source_path##*/}"
+    if [[ ! -L "$source_path" ]]; then
+      printf '%s\n' "$directory"
+      return 0
+    fi
+    count=$((count + 1))
+    [[ "$count" -le 40 ]] || return 2
+    target="$(/usr/bin/readlink "$source_path")" || return 2
+    case "$target" in
+      /*) source_path=$target ;;
+      *) source_path="$directory/$target" ;;
+    esac
+  done
+}
+
+hve_prerequisite_plan() {
+  local system=$1 machine=$2 major=$3 critical=${4:-pending} clt=${5:-pending}
+  local stage=ready reason=ok action=continue
+  if [[ "$system" != Darwin ]]; then
+    stage=platform; reason=not-darwin
+  elif [[ "$machine" != arm64 ]]; then
+    stage=platform; reason=not-arm64
+  else
+    case "$major" in
+      15|26) ;;
+      *) stage=platform; reason=unsupported-macos-major ;;
+    esac
+    if [[ "$reason" == ok && "$critical" != pass && "$critical" != pending ]]; then
+      stage=integrity; reason='critical-file-hash'
+    elif [[ "$reason" == ok ]]; then
+      case "$clt" in
+        present|pending) ;;
+        timeout) stage=clt; reason='clt-timeout' ;;
+        *) stage=clt; reason='clt-refused' ;;
+      esac
+    fi
+  fi
+  [[ "$reason" == ok ]] || action=stop
+  HVE_PREREQUISITE_STAGE=$stage
+  HVE_PREREQUISITE_REASON=$reason
+  HVE_PREREQUISITE_ACTION=$action
+  printf '{"stage":"%s","reason_code":"%s","action":"%s"}\n' "$stage" "$reason" "$action"
+}
+
+hve_verify_critical_payload() {
+  local root=$1 list digest line relative part candidate count=0
+  local EXPECTED_CRITICAL_LIST_SHA256="{{CRITICAL_LIST_SHA256}}"
+  list="$root/hve-bootstrap-critical.sha256"
+  if [[ ! "$EXPECTED_CRITICAL_LIST_SHA256" =~ ^[0-9a-f]{64}$ || ! -f "$list" || -L "$list" ]]; then
+    hve_fail integrity critical-list-hash 3; return $?
+  fi
+  digest="$(/usr/bin/shasum -a 256 < "$list")" || { hve_fail integrity critical-list-hash 3; return $?; }
+  if [[ "${digest%% *}" != "$EXPECTED_CRITICAL_LIST_SHA256" ]]; then
+    hve_fail integrity critical-list-hash 3; return $?
+  fi
+  # Only consume the list after authenticating its bytes. Reject symlink escapes
+  # before native -c opens any of the listed files; never source the list.
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    digest=${line:0:64}
+    relative=${line:66}
+    if [[ ! "$digest" =~ ^[0-9a-f]{64}$ || "${line:64:2}" != '  ' ]]; then
+      hve_fail integrity critical-file-hash 3; return $?
+    fi
+    case "$relative" in
+      ''|/*|*\\*|*:*|*$'\r'*|*/../*|../*|*/..|..|*/./*|./*|*/.|.|*//*|*/)
+        hve_fail integrity critical-file-hash 3; return $? ;;
+    esac
+    candidate=$root
+    local -a parts=()
+    IFS=/ read -r -a parts <<< "$relative"
+    for part in "${parts[@]}"; do
+      candidate="$candidate/$part"
+      if [[ -L "$candidate" ]]; then
+        hve_fail integrity critical-file-hash 3; return $?
+      fi
+    done
+    [[ -f "$candidate" ]] || { hve_fail integrity critical-file-hash 3; return $?; }
+    count=$((count + 1))
+  done < "$list"
+  if [[ "$count" -eq 0 ]] || ! (cd -P -- "$root" && /usr/bin/shasum -a 256 -c hve-bootstrap-critical.sha256 >/dev/null); then
+    hve_fail integrity critical-file-hash 3; return $?
+  fi
+}
+
+hve_clt_present() { /usr/bin/xcode-select -p >/dev/null 2>&1; }
+hve_now() { /bin/date +%s; }
+hve_sleep() { /bin/sleep 5; }
+
+hve_wait_for_clt() {
+  local timeout=$1 started now waited=0
+  [[ "$timeout" =~ ^[1-9][0-9]{0,3}$ ]] || { hve_fail clt clt-timeout 3; return $?; }
+  started="$(hve_now)" || { hve_fail clt clt-timeout 3; return $?; }
+  [[ "$started" =~ ^[0-9]+$ ]] || { hve_fail clt clt-timeout 3; return $?; }
+  while ! hve_clt_present; do
+    now="$(hve_now)" || { hve_fail clt clt-timeout 3; return $?; }
+    # The independent poll budget also bounds a clock that stops or moves back.
+    if [[ ! "$now" =~ ^[0-9]+$ ]] || (( now - started >= timeout || waited >= timeout )); then
+      hve_fail clt clt-timeout 3; return $?
+    fi
+    hve_sleep || { hve_fail clt clt-timeout 3; return $?; }
+    waited=$((waited + 5))
+  done
+}
+
+hve_prepare_clt() {
+  local CLT_TIMEOUT_SECONDS=900
+  hve_clt_present && return 0
+  if ! /usr/bin/xcode-select --install; then
+    hve_fail clt clt-refused 3; return $?
+  fi
+  hve_wait_for_clt "$CLT_TIMEOUT_SECONDS"
+}
+
+hve_homebrew_present() { [[ -x /opt/homebrew/bin/brew ]]; }
+
+hve_apply_homebrew_shellenv() {
+  local shellenv
+  shellenv="$(hve_exec /opt/homebrew/bin/brew shellenv)" || { hve_fail homebrew homebrew-shellenv 3; return $?; }
+  # This is the sole eval: trusted installed brew's output, never paths or JSON.
+  eval "$shellenv" || { hve_fail homebrew homebrew-shellenv 3; return $?; }
+  if [[ "$(command -v brew)" != /opt/homebrew/bin/brew ]]; then
+    hve_fail homebrew homebrew-path 3; return $?
+  fi
+}
+
+hve_prepare_homebrew() {
+  local root=$1 final_url digest rc
+  if hve_homebrew_present; then
+    hve_apply_homebrew_shellenv || return $?
+    hve_prepare_clt
+    return $?
+  fi
+  hve_prepare_clt || return $?
+  local HOMEBREW_INSTALL_URL="{{HOMEBREW_INSTALL_URL}}"
+  local HOMEBREW_INSTALL_SHA256="{{HOMEBREW_INSTALL_SHA256}}"
+  if [[ ! "$HOMEBREW_INSTALL_URL" =~ ^https://raw\.githubusercontent\.com/Homebrew/install/[0-9a-f]{40}/install\.sh$ ||
+        ! "$HOMEBREW_INSTALL_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+    hve_fail homebrew homebrew-source-invalid 3; return $?
+  fi
+  # The OS owns credential entry. Never capture stdin or persist sudo output.
+  hve_exec /usr/bin/sudo -v || { hve_fail homebrew sudo-refused 3; return $?; }
+  HVE_DOWNLOAD_DIR="$(/usr/bin/mktemp -d "$root/.hve-bootstrap/homebrew.XXXXXX")" || { hve_fail homebrew download-directory 3; return $?; }
+  HVE_DOWNLOAD_ID="$(hve_lock_identity "$HVE_DOWNLOAD_DIR")" || { hve_fail homebrew download-directory 3; return $?; }
+  # -q must be first: user curlrc cannot override the pinned source or protocol.
+  if ! final_url="$(/usr/bin/curl -q --fail --silent --show-error --location \
+      --proto "=https" --proto-redir "=https" --max-redirs 5 \
+      --connect-timeout 30 --max-time 300 \
+      --output "$HVE_DOWNLOAD_DIR/install.sh" --write-out '%{url_effective}' \
+      "$HOMEBREW_INSTALL_URL")"; then
+    hve_fail homebrew homebrew-download 3; return $?
+  fi
+  case "$final_url" in
+    *$'\n'*|*$'\r'*) hve_fail homebrew homebrew-final-host 3; return $? ;;
+    https://raw.githubusercontent.com/*) ;;
+    *) hve_fail homebrew homebrew-final-host 3; return $? ;;
+  esac
+  if [[ ! -s "$HVE_DOWNLOAD_DIR/install.sh" || -L "$HVE_DOWNLOAD_DIR/install.sh" ]]; then
+    hve_fail homebrew homebrew-installer-hash 3; return $?
+  fi
+  digest="$(/usr/bin/shasum -a 256 < "$HVE_DOWNLOAD_DIR/install.sh")" || { hve_fail homebrew homebrew-installer-hash 3; return $?; }
+  if [[ "${digest%% *}" != "$HOMEBREW_INSTALL_SHA256" ]]; then
+    hve_fail homebrew homebrew-installer-hash 3; return $?
+  fi
+  if hve_exec NONINTERACTIVE=1 /bin/bash "$HVE_DOWNLOAD_DIR/install.sh"; then
+    :
+  else
+    rc=$?; hve_fail homebrew "child-exit-$rc" "$rc"; return $?
+  fi
+  hve_homebrew_present || { hve_fail homebrew homebrew-unavailable 3; return $?; }
+  hve_apply_homebrew_shellenv
+}
+
+hve_lock_identity() { /usr/bin/stat -f '%d:%i' "$1"; }
+
+hve_lock_snapshot() {
+  local directory=$1 identity digest
+  [[ -d "$directory" && ! -L "$directory" && -f "$directory/owner.txt" && ! -L "$directory/owner.txt" ]] || return 1
+  identity="$(hve_lock_identity "$directory")" || return 1
+  digest="$(/usr/bin/shasum -a 256 < "$directory/owner.txt")" || return 1
+  printf '%s:%s\n' "$identity" "${digest%% *}"
+}
+
+hve_read_lock_owner() {
+  local line
+  local -a lines=()
+  while IFS= read -r line || [[ -n "$line" ]]; do lines+=("$line"); done < "$1/owner.txt"
+  [[ ${#lines[@]} -eq 2 && "${lines[0]}" =~ ^PID=([1-9][0-9]{0,9})$ ]] || return 1
+  HVE_LOCK_PID=${BASH_REMATCH[1]}
+  [[ "${lines[1]}" =~ ^STARTED_UTC=[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]
+}
+
+hve_pid_state() {
+  local pid=$1 found rc
+  if kill -0 "$pid" 2>/dev/null; then
+    printf 'live\n'
+  else
+    # kill failure alone could mean EPERM. Only ps's documented empty/not-found
+    # result proves absence; permission / unexpected command failures stop us.
+    if found="$(/bin/ps -p "$pid" -o pid= 2>/dev/null)"; then rc=0; else rc=$?; fi
+    if [[ "$rc" -eq 1 && -z "$found" ]]; then printf 'dead\n'
+    else printf 'unverifiable\n'; fi
+  fi
+}
+
+hve_before_stale_remove() { :; }
+
+hve_lock_error() {
+  HVE_LOCK_REASON=$1
+  hve_fail lock "$HVE_LOCK_REASON" 1
+}
+
+hve_acquire_lock() {
+  local root=$1 LOCK_DIR="$1/.hve-bootstrap/bootstrap.lock" pid_state snapshot identity started
+  HVE_LOCK_REASON=ok
+  [[ ! -L "$root/.hve-bootstrap" ]] || { hve_lock_error lock-owner-unverifiable; return $?; }
+  umask 077
+  /bin/mkdir -p -- "$root/.hve-bootstrap" || { hve_lock_error lock-owner-unverifiable; return $?; }
+  if ! /bin/mkdir "$LOCK_DIR" 2>/dev/null; then
+    snapshot="$(hve_lock_snapshot "$LOCK_DIR")" || { hve_lock_error lock-owner-unverifiable; return $?; }
+    hve_read_lock_owner "$LOCK_DIR" || { hve_lock_error lock-owner-unverifiable; return $?; }
+    [[ "$(hve_lock_snapshot "$LOCK_DIR")" == "$snapshot" ]] || { hve_lock_error lock-owner-changed; return $?; }
+    pid_state="$(hve_pid_state "$HVE_LOCK_PID")" || pid_state=unverifiable
+    case "$pid_state" in
+      live) hve_lock_error lock-owner-live; return $? ;;
+      dead) HVE_LOCK_REASON=lock-owner-stale ;;
+      *) hve_lock_error lock-owner-unverifiable; return $? ;;
+    esac
+    identity="$(hve_lock_identity "$LOCK_DIR")" || { hve_lock_error lock-owner-unverifiable; return $?; }
+    # Serialize stale reapers. A contender cannot recreate the lock while this
+    # child exists. Never use recursive deletion on a shared lock pathname.
+    /bin/mkdir "$LOCK_DIR/.reaping" 2>/dev/null || { hve_lock_error lock-owner-changed; return $?; }
+    hve_before_stale_remove
+    if [[ "$(hve_lock_snapshot "$LOCK_DIR")" != "$snapshot" ]]; then
+      if [[ ! -L "$LOCK_DIR" && "$(hve_lock_identity "$LOCK_DIR")" == "$identity" ]]; then
+        /bin/rmdir "$LOCK_DIR/.reaping" || return 1
+      fi
+      hve_lock_error lock-owner-changed; return $?
+    fi
+    pid_state="$(hve_pid_state "$HVE_LOCK_PID")" || pid_state=unverifiable
+    if [[ "$pid_state" != dead ]]; then
+      /bin/rmdir "$LOCK_DIR/.reaping" || return 1
+      case "$pid_state" in
+        live) hve_lock_error lock-owner-live ;;
+        *) hve_lock_error lock-owner-unverifiable ;;
+      esac
+      return $?
+    fi
+    if [[ "$(hve_lock_snapshot "$LOCK_DIR")" != "$snapshot" ]]; then
+      if [[ ! -L "$LOCK_DIR" && "$(hve_lock_identity "$LOCK_DIR")" == "$identity" ]]; then
+        /bin/rmdir "$LOCK_DIR/.reaping" || return 1
+      fi
+      hve_lock_error lock-owner-changed; return $?
+    fi
+    if ! { /bin/rm -- "$LOCK_DIR/owner.txt" && /bin/rmdir "$LOCK_DIR/.reaping" && /bin/rmdir "$LOCK_DIR"; }; then
+      hve_lock_error lock-owner-changed; return $?
+    fi
+    /bin/mkdir "$LOCK_DIR" 2>/dev/null || { hve_lock_error lock-owner-changed; return $?; }
+  fi
+  started="$(/bin/date -u +%Y-%m-%dT%H:%M:%SZ)" || { hve_lock_error lock-owner-unverifiable; return $?; }
+  (set -C; printf 'PID=%s\nSTARTED_UTC=%s\n' "$$" "$started" > "$LOCK_DIR/owner.txt") \
+    || { hve_lock_error lock-owner-unverifiable; return $?; }
+  LOCK_OWNER_SNAPSHOT="$(hve_lock_snapshot "$LOCK_DIR")" || { hve_lock_error lock-owner-unverifiable; return $?; }
+  HVE_LOCK_ROOT=$root
+  HVE_LOCK_HELD=true
+  HVE_LOCK_REASON=ok
+}
+
+hve_release_lock() {
+  [[ "${HVE_LOCK_HELD:-false}" == true ]] || return 0
+  local root=$1 LOCK_DIR="$1/.hve-bootstrap/bootstrap.lock" snapshot
+  if [[ "$root" != "$HVE_LOCK_ROOT" || -L "$root/.hve-bootstrap" ]]; then
+    hve_lock_error lock-owner-changed; return $?
+  fi
+  snapshot="$(hve_lock_snapshot "$LOCK_DIR")" || { hve_lock_error lock-owner-changed; return $?; }
+  [[ "$snapshot" == "$LOCK_OWNER_SNAPSHOT" ]] || { hve_lock_error lock-owner-changed; return $?; }
+  if ! { /bin/rm -- "$LOCK_DIR/owner.txt" && /bin/rmdir "$LOCK_DIR"; }; then
+    hve_lock_error lock-owner-changed; return $?
+  fi
+  HVE_LOCK_HELD=false
+}
+
+hve_cleanup() {
+  local rc=0
+  if [[ -n "${HVE_DOWNLOAD_DIR:-}" ]]; then
+    if [[ ! -L "$HVE_DOWNLOAD_DIR" && -d "$HVE_DOWNLOAD_DIR" &&
+          "$(hve_lock_identity "$HVE_DOWNLOAD_DIR")" == "${HVE_DOWNLOAD_ID:-}" ]]; then
+      /bin/rm -f -- "$HVE_DOWNLOAD_DIR/install.sh" && /bin/rmdir "$HVE_DOWNLOAD_DIR" || rc=3
+      [[ "$rc" -ne 0 ]] || HVE_DOWNLOAD_DIR=""
+    else
+      rc=3
+    fi
+  fi
+  if [[ "${HVE_LOCK_HELD:-false}" == true ]]; then
+    hve_release_lock "$HVE_LOCK_ROOT" || rc=3
+  fi
+  [[ "$rc" -eq 0 ]] || { hve_fail cleanup owned-cleanup-failed "$rc"; return $?; }
+}
+
+hve_on_exit() {
+  local exit_code=$?
+  trap - EXIT
+  hve_cleanup || { [[ "$exit_code" -ne 0 ]] || exit_code=3; }
+  exit "$exit_code"
+}
+
+hve_setup_argv() { printf '%s\n' "$1/hve/setup-hve.sh" --yes --no-global-cleanup; }
+hve_verifier_argv() { printf '%s\n' "$1/.venv/bin/python" -I -m hve.bootstrap_verify --root "$1" --json; }
+hve_gui_argv() { printf '%s\n' "$1/hve.sh" gui; }
+
+hve_resolve_action() {
+  case "$1:$2" in
+    ready:0) HVE_ACTION=launch_gui ;;
+    needs_setup:10) HVE_ACTION=run_setup ;;
+    needs_version_decision:11) HVE_ACTION=launch_version_entrypoint ;;
+    blocked:12|blocked:2) HVE_ACTION=stop ;;
+    *) hve_fail verifier state-exit-mismatch 2; return $? ;;
+  esac
+  printf '{"state":"%s","verifier_exit":%s,"action":"%s"}\n' "$1" "$2" "$HVE_ACTION"
+}
+
+hve_validate_verifier_result() {
+  # Python exists on this path. Reuse the verified module's closed schema rather
+  # than implementing JSON or readiness predicates in shell.
+  hve_exec "$1/.venv/bin/python" -I -c '
+import json, pathlib, sys
+try:
+    from hve import bootstrap_verify as verifier
+    root = pathlib.Path(sys.argv[1])
+    if not pathlib.Path(verifier.__file__).samefile(root / "hve/bootstrap_verify.py"):
+        raise ValueError("verifier-origin")
+    current = verifier.check_python(root, executable=pathlib.Path(sys.executable),
+        prefix=pathlib.Path(sys.prefix), version_info=sys.version_info,
+        platform_name=sys.platform, isolated=bool(sys.flags.isolated))
+    if not current.passed:
+        raise ValueError("python-origin")
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError("duplicate-key")
+            value[key] = item
+        return value
+    payload = json.load(sys.stdin, object_pairs_hook=unique)
+    if verifier.validate_payload(payload, reported_exit=int(sys.argv[2])):
+        raise ValueError("invalid-result")
+    print(payload["state"])
+except Exception:
+    sys.exit(2)
+' "$1" "$2"
+}
+
+hve_initial_verification() {
+  local root=$1 arg result state
+  local -a argv=()
+  HVE_INITIAL_STATE=needs_setup
+  HVE_INITIAL_EXIT=10
+  if [[ -L "$root/.venv" || -L "$root/.venv/bin" ]]; then
+    hve_fail verifier python-path 2; return $?
+  fi
+  [[ -x "$root/.venv/bin/python" ]] || return 0
+  while IFS= read -r arg; do argv+=("$arg"); done < <(hve_verifier_argv "$root")
+  if result="$(hve_exec "${argv[@]}")"; then HVE_INITIAL_EXIT=0; else HVE_INITIAL_EXIT=$?; fi
+  if ! state="$(hve_validate_verifier_result "$root" "$HVE_INITIAL_EXIT" <<< "$result")"; then
+    hve_fail verifier invalid-verifier-result 2; return $?
+  fi
+  HVE_INITIAL_STATE=$state
+  hve_resolve_action "$HVE_INITIAL_STATE" "$HVE_INITIAL_EXIT" >/dev/null
+}
+
+hve_run_process() { shift; hve_exec "$@"; }
+
+hve_bootstrap_sequence() {
+  local root=$1 state=$2 code=$3 arg rc stage=gui
+  local -a argv=()
+  hve_resolve_action "$state" "$code" >/dev/null || return $?
+  case "$HVE_ACTION" in
+    stop) hve_fail verifier verifier-blocked "$code"; return $? ;;
+    run_setup)
+      while IFS= read -r arg; do argv+=("$arg"); done < <(hve_setup_argv "$root")
+      if hve_run_process setup "${argv[@]}"; then :
+      else rc=$?; hve_fail setup "child-exit-$rc" "$rc"; return $?; fi
+      # Installation owns its final verifier. Do not run it a second time here.
+      ;;
+    launch_version_entrypoint) stage='version-entrypoint' ;;
+  esac
+  argv=()
+  while IFS= read -r arg; do argv+=("$arg"); done < <(hve_gui_argv "$root")
+  if hve_run_process "$stage" "${argv[@]}"; then return 0
+  else rc=$?; hve_fail "$stage" "child-exit-$rc" "$rc"; return $?; fi
+}
+
+hve_main() {
+  hve_sanitize_environment
+  # Ownership is established by this invocation, never inherited environment.
+  HVE_LOCK_HELD=false
+  HVE_LOCK_ROOT=""
+  LOCK_OWNER_SNAPSHOT=""
+  HVE_DOWNLOAD_DIR=""
+  HVE_DOWNLOAD_ID=""
+  local root=$1 facts line major rc=0
+  local -a platform_facts=()
+  facts="$(hve_platform_facts)" || { hve_fail platform platform-unavailable 2; return $?; }
+  while IFS= read -r line; do platform_facts+=("$line"); done <<< "$facts"
+  major=${platform_facts[2]:-}
+  hve_prerequisite_plan "${platform_facts[0]:-}" "${platform_facts[1]:-}" "${major%%.*}" >/dev/null
+  if [[ "$HVE_PREREQUISITE_ACTION" != continue ]]; then
+    hve_fail "$HVE_PREREQUISITE_STAGE" "$HVE_PREREQUISITE_REASON" 2; return $?
+  fi
+  if [[ "$root" != /* || "$root" == *$'\n'* || "$root" == *$'\r'* || ! -d "$root" ]]; then
+    hve_fail root invalid-distribution-root 2; return $?
+  fi
+  hve_verify_critical_payload "$root" || return $?
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap hve_on_exit EXIT
+  hve_acquire_lock "$root" || return $?
+  hve_initial_verification "$root" || rc=$?
+  if [[ "$rc" -eq 0 ]]; then
+    hve_resolve_action "$HVE_INITIAL_STATE" "$HVE_INITIAL_EXIT" >/dev/null || rc=$?
+  fi
+  if [[ "$rc" -eq 0 && "$HVE_ACTION" == run_setup ]]; then
+    hve_prepare_homebrew "$root" || rc=$?
+  fi
+  if [[ "$rc" -eq 0 ]]; then
+    hve_bootstrap_sequence "$root" "$HVE_INITIAL_STATE" "$HVE_INITIAL_EXIT" || rc=$?
+  fi
+  hve_cleanup || { [[ "$rc" -ne 0 ]] || rc=3; }
+  return "$rc"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  hve_sanitize_environment
+  if [[ $# -ne 0 ]]; then hve_fail arguments invalid-arguments 2; exit $?; fi
+  HVE_DISTRIBUTION_ROOT="$(hve_distribution_root "${BASH_SOURCE[0]}")" \
+    || { hve_fail root invalid-distribution-root 2; exit $?; }
+  hve_main "$HVE_DISTRIBUTION_ROOT"
+  exit $?
+fi

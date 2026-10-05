@@ -25,7 +25,6 @@ def _sections(page: OptionsPage) -> dict:
         "QA": page.c3,
         "REVIEW": page.c3,
         "KM": page.c3,
-        "SELFIMPROVE": page.c3,
         "C4": page.c4,
         "C5": page.c5,
         "C7": page.c7,
@@ -46,10 +45,6 @@ def _saved_settings(scenario: str) -> dict:
             {
                 "auto_qa": "on",
                 "qa_answer_mode": "autopilot",
-                "self_improve": "on",
-                "self_improve_max_iterations": 7,
-                "self_improve_target_scope": "hve",
-                "self_improve_goal": "設定面を改善する",
                 "tool_search_ranking": "hve",
                 "sources_qa": True,
                 "sources_original_docs": False,

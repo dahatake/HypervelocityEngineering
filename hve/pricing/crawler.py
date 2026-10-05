@@ -1,7 +1,8 @@
 """hve.pricing.crawler — GitHub Copilot 料金表のクロール。
 
 ソース:
-- ``docs.github.com`` の "About billing for GitHub Copilot" → モデル別 multiplier 表
+- ``docs.github.com`` の "Models and pricing for GitHub Copilot" → モデル別 token 単価表
+  （旧形式の ``Model`` / ``Multiplier`` 表も後方互換で解釈する）
 - ``github.com/pricing`` → プラン別月額 / premium request 含有数 / 超過単価
 
 両方とも HTML テーブル / 構造化テキストから正規表現で抽出する。失敗時は
@@ -14,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import replace
 from html.parser import HTMLParser
 from typing import Dict, List, Optional, Tuple
 from urllib import request as urllib_request
@@ -28,10 +30,10 @@ from hve.pricing.models import (
 
 logger = logging.getLogger(__name__)
 
+# 2026-10-02 確認: 旧 about-billing-for-github-copilot は 404。モデル別 token 単価表は本 URL にある。
 DOCS_URL = (
-    "https://docs.github.com/en/copilot/managing-copilot/"
-    "managing-copilot-as-an-individual-subscriber/"
-    "about-billing-for-github-copilot"
+    "https://docs.github.com/en/copilot/reference/copilot-billing/"
+    "models-and-pricing"
 )
 PRICING_URL = "https://github.com/pricing"
 
@@ -190,6 +192,113 @@ def parse_docs_multipliers(html: str) -> Dict[str, ModelPricing]:
 
 
 # ---------------------------------------------------------------------------
+# docs.github.com: token 単価表抽出（Model / Input / Output 列）
+# ---------------------------------------------------------------------------
+
+class _AllTablesParser(HTMLParser):
+    """全 ``<table>`` を (見出し, 行) の組として収集する。``<sup>`` 内の脚注番号は除外する。"""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.tables: List[Tuple[List[str], List[List[str]]]] = []
+        self._headers: List[str] = []
+        self._rows: List[List[str]] = []
+        self._row: List[str] = []
+        self._cell: List[str] = []
+        self._in_table = False
+        self._in_cell = False
+        self._row_has_th = False
+        self._sup_depth = 0
+
+    def handle_starttag(self, tag: str, attrs) -> None:  # type: ignore[override]
+        if tag == "table":
+            self._in_table = True
+            self._headers, self._rows = [], []
+        elif not self._in_table:
+            return
+        elif tag == "tr":
+            self._row, self._row_has_th = [], False
+        elif tag in ("th", "td"):
+            self._in_cell = True
+            self._cell = []
+            self._row_has_th = self._row_has_th or tag == "th"
+        elif tag == "sup" and self._in_cell:
+            self._sup_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:  # type: ignore[override]
+        if not self._in_table:
+            return
+        if tag == "sup" and self._sup_depth:
+            self._sup_depth -= 1
+        elif tag in ("th", "td") and self._in_cell:
+            self._row.append(re.sub(r"\s+", " ", "".join(self._cell)).strip())
+            self._in_cell = False
+        elif tag == "tr":
+            if self._row_has_th and not self._headers:
+                self._headers = list(self._row)
+            elif self._row:
+                self._rows.append(list(self._row))
+            self._row = []
+        elif tag == "table":
+            if self._headers:
+                self.tables.append((self._headers, self._rows))
+            self._in_table = False
+
+    def handle_data(self, data: str) -> None:  # type: ignore[override]
+        if self._in_cell and not self._sup_depth:
+            self._cell.append(data)
+
+
+_USD_VALUE_RE = re.compile(r"\$\s*(\d+(?:,\d{3})*(?:\.\d+)?)")
+
+
+def _parse_usd(raw: str) -> Optional[float]:
+    m = _USD_VALUE_RE.search(raw)
+    return float(m.group(1).replace(",", "")) if m else None
+
+
+def parse_docs_token_prices(html: str) -> Dict[str, ModelPricing]:
+    """``Model`` / ``Input`` / ``Output`` 列を持つ表から token 単価 (USD / 100 万 token) を抽出。
+
+    同じモデルが Tier 違いで複数行ある場合は先頭行（Default tier）を採用する。
+    ``$`` 付きの数値でない値（``Not applicable`` 等）は ``None`` のまま保持する。
+    """
+    parser = _AllTablesParser()
+    try:
+        parser.feed(html)
+    except Exception as e:  # HTMLParser 自体は緩いが念のため
+        logger.warning("parse_docs_token_prices: HTMLParser raised: %s", e)
+        return {}
+
+    out: Dict[str, ModelPricing] = {}
+    for headers, rows in parser.tables:
+        lowered = [h.lower() for h in headers]
+        if "model" not in lowered or "input" not in lowered or "output" not in lowered:
+            continue
+        model_idx = lowered.index("model")
+        input_idx = lowered.index("input")
+        output_idx = lowered.index("output")
+        for row in rows:
+            if len(row) <= max(model_idx, input_idx, output_idx):
+                continue
+            display = row[model_idx].strip()
+            input_price = _parse_usd(row[input_idx])
+            output_price = _parse_usd(row[output_idx])
+            if not display or (input_price is None and output_price is None):
+                continue
+            model_id = _normalize_model_id(display)
+            if not model_id or model_id in out:
+                continue
+            out[model_id] = ModelPricing(
+                model_id=model_id,
+                display_name=display,
+                input_price_per_mtoken_usd=input_price,
+                output_price_per_mtoken_usd=output_price,
+            )
+    return out
+
+
+# ---------------------------------------------------------------------------
 # github.com/pricing: プラン情報抽出
 # ---------------------------------------------------------------------------
 
@@ -285,7 +394,12 @@ def fetch_copilot_pricing(
 
     try:
         docs_html = _http_get(docs_url, timeout=timeout)
-        models = parse_docs_multipliers(docs_html)
+        models = parse_docs_token_prices(docs_html)
+        for model_id, legacy in parse_docs_multipliers(docs_html).items():
+            known = models.get(model_id)
+            models[model_id] = (
+                replace(known, multiplier=legacy.multiplier) if known else legacy
+            )
         sources["docs"] = docs_url
         if not models:
             errors.append("docs: 0 models parsed")
@@ -322,5 +436,6 @@ __all__ = [
     "PRICING_URL",
     "fetch_copilot_pricing",
     "parse_docs_multipliers",
+    "parse_docs_token_prices",
     "parse_pricing_plans",
 ]

@@ -13,6 +13,14 @@
 1. **`cq` の技術アーキテクチャ詳細** — Skill をフォーク／カスタマイズする開発者向けに、構成要素・メッセージフロー・チャンク分割・索引データファイルと更新頻度を解説する（§ 1〜§ 4）。
 2. **日常利用と運用の手引き** — CLI の使い分け、検索モード、品質計測、トラブルシューティング（§ 5 以降）。
 
+## 最短導線と副作用
+
+- 最短導線は「`cq.toml` の profile roots → `cq search` → 必要時だけ `chunk_id` で `cq get` / `trace` の `doc_path` を `mdq` 側へ渡す」。Skill 詳細は `SKILL.md` を入口にし、足りない時だけ `references/` を開く。
+- 現行 roots は `hve`: `hve`, `mdq`, `cq`, `hve-dev`, `tools`, `.github/scripts`、`app`: `src`。`tools/skills/*/vendor/**` などの source copy は索引から除外される。
+- 副作用: `cq search` は索引済みファイルの `stat()` 差分を見て、差分が `--auto-reindex-limit`（既定 50）以下なら応答前に再索引する。超過時は stale 警告、新規ファイルは `cq index` / `cq watch` が必要。
+- `cq index` / `cq watch` は索引 DB を更新する。`watch` 以外の CLI サブコマンドは `.cq/usage.jsonl` へ追記するため、「完全 read-only 調査なら CLI は usage を書かない」とは案内しない。
+- HVE 固有資料・repo-specific な references は配布キット非同梱の任意資料。source copy と kit canonical の同一性は同期・verify 後に確認するもので、最終同期前の実測済み主張として書かない。
+
 ## 目次
 
 | § | 章 | 主な対象読者 |
@@ -524,7 +532,7 @@ python -m cq search --profile app --re "async\s+Task<\w+>" --paths "src/api/*"
 出力例:
 
 ```json
-{"path": "hve/split_fork.py", "lines": [68, 91], "route": "symbol", "score": 1.0, "snippet": "def resolve_run_id() -> str:\n    ...", "parser": "ast", "chunk_id": "54adf527...", "qualname": "resolve_run_id", "kind": "function", "signature": "def resolve_run_id() -> str", "match": "qualname"}
+{"path": "hve/run_paths.py", "lines": [54, 77], "route": "symbol", "score": 1.0, "snippet": "def resolve_run_id() -> str:\n    ...", "parser": "ast", "chunk_id": "54adf527...", "qualname": "resolve_run_id", "kind": "function", "signature": "def resolve_run_id() -> str", "match": "qualname"}
 ```
 
 主なフィールド: `path` / `lines` / `route` / `score` / `snippet` / `parser` / `chunk_id` / `qualname` / `kind` / `signature`。
@@ -908,6 +916,8 @@ python -m cq.benchmark --profile app --paths "^src/" --baseline grep
 
 出力は各群について top-1 / top-k 正解率、平均応答トークン、cold / warm 平均レイテンシ、`token_counter`。
 `tiktoken` が無い環境では `token_counter` が `chars/4-approx` になり、**トークン数は近似値**になる。
+
+**CI での回帰検出**: `test-hve-python.yml` の `cq Python Tests` job は、[cq/golden-queries.json](../cq/golden-queries.json) を `python -m cq.benchmark --with-cq --baseline ""` で profile（`hve` / `app`）ごとに評価し、top-k の正解数が下限を下回ると失敗する。この job は required ではないため、失敗してもマージは止まらない。下限とその変え方は [要求定義書](../hve-dev/requirement-definition.md) の FR-MAINT-15 を参照。
 
 ### 9.3 参考実測値
 

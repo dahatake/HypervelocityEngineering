@@ -1,13 +1,13 @@
 name: Protect Read-Only Paths
 
 # PR で以下のパスへの変更を禁止する:
-#   - docs-original/ 配下のファイル (.github/copilot-instructions.md §0「docs-original/ 読み取り専用（絶対）」)
+#   - docs-original/ 配下のファイル (.github/copilot-instructions.md「検索と検証」: 原本 docs-original/ は読み取り専用)
 #     ただし旧 original-docs/ から同じ相対パスへ移す初回リネームだけは許可する。
 #   - リポジトリルート直下への新規ファイル／ディレクトリ追加
-#     (.github/copilot-instructions.md §0「一時作業ファイルは work/ 配下に限定（絶対）」)
+#     (.github/copilot-instructions.md「検索と検証」: 作業ファイルは work/ 配下)
 #
 # 注: ルート README.md の変更制限は解除済み
-#     (.github/copilot-instructions.md §0「ルート README.md の扱い」)。
+#     (ルート README.md の扱い)。
 #     check-readme ジョブは解除を明示する no-op として残している。
 #
 # 注: paths フィルタを使うと違反のない PR ではチェック自体が実行されず、
@@ -82,7 +82,7 @@ jobs:
           if [ -n "${READONLY_VIOLATIONS}" ]; then
             echo "::error::docs-original/ 配下の許可されていない変更が検出されました。"
             echo ""
-            echo ".github/copilot-instructions.md §0 ルール:"
+            echo ".github/copilot-instructions.md のルール:"
             echo "  「docs-original/ 読み取り専用（絶対）: docs-original/ 配下のファイルは全 Agent から読み取り専用。変更・削除・追記を禁止。」"
             echo "  例外: original-docs/ から docs-original/ への同じ相対パスの rename のみ。"
             echo ""
@@ -173,7 +173,7 @@ jobs:
           if [ -n "${VIOLATIONS}" ]; then
             echo "::error::リポジトリルート直下への新規ファイル／ディレクトリ追加が検出されました。"
             echo ""
-            echo ".github/copilot-instructions.md §0 ルール:"
+            echo ".github/copilot-instructions.md のルール:"
             echo "  「一時作業ファイルは work/ 配下に限定（絶対）: 一時作業ファイルをリポジトリルート直下（/）に作成してはならない。」"
             echo ""
             echo "検出されたパス:"

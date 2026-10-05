@@ -212,7 +212,7 @@ jobs:
           fi
 
       - name: 検証実施確認（auto-approve 前提条件）
-        # .github/copilot-instructions.md §0 要件: 最低1つの検証を実施。
+        # 検証の要件: 最低1つの検証を実施。
         # PR body またはコメントに検証実施記録（marker/見出し/箇条書き）が存在することを確認する。
         # 存在しない場合は自動 Approve/Merge をスキップし、不足コメントを投稿する（冪等化）。
         id: check-validation
@@ -265,7 +265,7 @@ jobs:
               | jq --arg marker "${VALIDATION_MARKER}" '[.[] | select(.body | contains($marker) | not)]' \
               2>/dev/null || echo '[]')
 
-            # 判定は hve/split_fork.py の単一実装（FR-MAINT-06）へ委譲する
+            # 判定は hve/run_paths.py の単一実装（FR-MAINT-06）へ委譲する
             combined_text=$(printf '%s\n%s\n' "${pr_body}" "$(echo "${pr_comments}" | jq -r '.[].body' 2>/dev/null)")
             validation_subject="${RUNNER_TEMP}/validation-subject.md"
             printf '%s' "${combined_text}" > "${validation_subject}"
@@ -310,7 +310,7 @@ jobs:
               printf '\n'
               printf '%s\n' "PR body またはコメントに検証実施記録（\`validation-confirmed\` マーカー / \`Validation\`・\`検証\` 見出し / \`検証:\` 形式）が見つからないため、自動 Approve/Merge をスキップしました。"
               printf '\n'
-              printf '%s\n' "**.github/copilot-instructions.md §0 要件**: 最低1つの検証を実施すること（テスト/ビルド/静的解析のいずれかを行い、できない場合は理由と代替を明記すること）。"
+              printf '%s\n' "**検証の要件**: 最低1つの検証を実施すること（テスト/ビルド/静的解析のいずれかを行い、できない場合は理由と代替を明記すること）。"
               printf '\n'
               printf '%s\n' "### 対処方法"
               printf '\n'

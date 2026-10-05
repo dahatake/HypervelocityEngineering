@@ -25,7 +25,6 @@ from hve.console import Console
 from hve.runner import (
     StepRunner,
     _create_session_with_auto_reasoning_fallback,
-    _require_trusted_asdw_data_deploy_mcp_servers,
 )
 
 
@@ -169,12 +168,12 @@ def test_data_deploy_registration_gate_runs_only_after_main_task() -> None:
     main_task = source.index("main_response = await")
     pre_gate = source.index("include_registration=False")
     post_main_gate = source.index("post_main_contract_errors = (")
-    split_fork = source.index("_maybe_run_split_fork(")
+    review_phase = source.index("# Phase 3: 敵対的レビュー")
 
-    assert pre_gate < main_task < post_main_gate < split_fork
+    assert pre_gate < main_task < post_main_gate < review_phase
     assert (
         source.index("self._run_asdw_data_producer_contract_gate(", post_main_gate)
-        < split_fork
+        < review_phase
     )
     assert (
         inspect.signature(StepRunner._run_asdw_data_verify_contract_gate)
@@ -191,7 +190,7 @@ def test_data_deploy_gate_guarantee_boundary_is_pre_verify_post_fresh_producer()
     assert source.count("include_registration=False") == 3
     assert source.index("include_registration=False") < source.index("main_response = await")
     assert source.index("post_main_contract_errors") > source.index("main_response = await")
-    assert source.rindex("verify_contract_errors =") > source.index("_maybe_run_split_fork(")
+    assert source.rindex("verify_contract_errors =") > source.index("# Phase 3: 敵対的レビュー")
 
 
 def test_permission_gate_is_installed_before_main_session() -> None:
@@ -235,7 +234,7 @@ def test_data_deploy_agent_permission_and_mcp_dead_path_stay_removed() -> None:
 
 
 def test_general_sub_session_mcp_routing_is_unchanged() -> None:
-    """一般 Step の sub-session MCP routing は DataDeploy 削除の影響を受けない。"""
+    """一般 Step の sub-session は raw mcp_servers を注入せず共有 routing 側へ委譲する。"""
     runner = StepRunner(
         config=SDKConfig(
             mcp_servers={
@@ -261,39 +260,31 @@ def test_general_sub_session_mcp_routing_is_unchanged() -> None:
             custom_agent="Dev-Microservice-Azure-AgentCoding",
         )
 
-    assert set(options["mcp_servers"]) == {"azure", "microsoft-learn"}
+    assert "mcp_servers" not in options
     assert "enable_config_discovery" not in options
 
 
-def test_data_deploy_requires_repository_pinned_microsoft_learn_before_session_is_kept() -> None:
-    """Learn MCP の repository-pinned 検査は一般 Foundry 経路と共有され続ける。"""
-    assert callable(_require_trusted_asdw_data_deploy_mcp_servers)
+def test_data_deploy_runtime_context_no_longer_uses_repository_pinned_mcp_helper() -> None:
+    """Step 1.3 preflight は削除済み repository MCP helper に依存しない。"""
+    import hve.runner as runner_module
+
+    source = inspect.getsource(runner_module._validate_asdw_data_deploy_runtime_context)
+
+    assert ".mcp.json" not in source
+    assert "_require_trusted_asdw_data_deploy_mcp_servers" not in source
 
 
-@pytest.mark.parametrize(
-    "mcp_payload",
-    (
-        None,
-        "{not-json",
-        '{"mcpServers":{"microsoft-learn":{"type":"http",'
-        '"url":"https://learn.microsoft.com/api/mcp"}}}',
-        '{"mcpServers":{"microsoft-learn":{"type":"http",'
-        '"url":"https://evil.example/mcp"}}}',
-    ),
-)
-def test_data_deploy_requires_repository_pinned_microsoft_learn_before_session(
-    mcp_payload: str | None,
+def test_data_deploy_preflight_does_not_require_repository_mcp_file(
     tmp_path,
     monkeypatch,
 ) -> None:
-    config = tmp_path / ".github" / ".mcp.json"
-    if mcp_payload is not None:
-        config.parent.mkdir(parents=True)
-        config.write_text(mcp_payload, encoding="utf-8")
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HVE_RUN_ID", "run-1")
+    monkeypatch.setenv("HVE_WORK_ROOT", str((tmp_path / "work" / "run" / "run-1").resolve()))
 
-    with pytest.raises(RuntimeError, match="repository-pinned Microsoft Learn"):
-        _require_trusted_asdw_data_deploy_mcp_servers(tmp_path)
+    from hve.runner import _validate_asdw_data_deploy_runtime_context
+
+    assert _validate_asdw_data_deploy_runtime_context("run-1", tmp_path) == []
 
 
 def test_discovery_false_is_not_stripped_for_old_sdk() -> None:
@@ -364,7 +355,7 @@ def test_data_deploy_run_step_stops_before_workdir_on_cross_run_root(
     assert not other_run.exists()
 
 
-def test_data_deploy_runs_pre_verify_gate_then_native_pipeline_without_split_fork(
+def test_data_deploy_runs_pre_verify_gate_then_native_pipeline_without_sdk(
     monkeypatch,
 ) -> None:
     """Step 1.3 は pre-verify gate 後に native pipeline へ入り、SDK 経路を使わない。
@@ -374,7 +365,6 @@ def test_data_deploy_runs_pre_verify_gate_then_native_pipeline_without_split_for
     """
     calls: list[str] = []
     sdk_calls: list[str] = []
-    split_fork_called = False
     deploy_gate_called = False
 
     run_id = f"pytest-registration-gate-{uuid.uuid4().hex}"
@@ -383,11 +373,6 @@ def test_data_deploy_runs_pre_verify_gate_then_native_pipeline_without_split_for
     monkeypatch.setenv(
         "HVE_WORK_ROOT", str((Path.cwd() / "work" / "run" / run_id).resolve())
     )
-
-    async def split_fork_must_not_run(**_kwargs):
-        nonlocal split_fork_called
-        split_fork_called = True
-        return False
 
     def fake_gate(_step_id, _agent, *, include_registration=True):
         calls.append(f"gate:{include_registration}")
@@ -403,7 +388,6 @@ def test_data_deploy_runs_pre_verify_gate_then_native_pipeline_without_split_for
         return []
 
     _forbid_sdk_client(monkeypatch, sdk_calls)
-    monkeypatch.setattr(runner, "_maybe_run_split_fork", split_fork_must_not_run)
     monkeypatch.setattr(runner, "_run_asdw_data_verify_contract_gate", fake_gate)
     monkeypatch.setattr(
         runner,
@@ -431,7 +415,6 @@ def test_data_deploy_runs_pre_verify_gate_then_native_pipeline_without_split_for
     # pre-verify gate → native pipeline の順。SDK main session / post-main producer gate は無い。
     assert calls == ["gate:False", "native"]
     assert sdk_calls == []
-    assert split_fork_called is False
     assert deploy_gate_called is False
 
 
@@ -488,10 +471,6 @@ def test_data_deploy_success_path_runs_pre_verify_gate_then_native_pipeline_only
         "HVE_WORK_ROOT", str((Path.cwd() / "work" / "run" / run_id).resolve())
     )
 
-    async def fake_split_fork(**_kwargs):
-        calls.append("split")
-        return True
-
     def fake_gate(_step_id, _agent, *, include_registration=True):
         calls.append(f"gate:{include_registration}")
         return ["stale registration must remain producer-gate owned"] if include_registration else []
@@ -502,7 +481,6 @@ def test_data_deploy_success_path_runs_pre_verify_gate_then_native_pipeline_only
         return []
 
     _forbid_sdk_client(monkeypatch, sdk_calls)
-    monkeypatch.setattr(runner, "_maybe_run_split_fork", fake_split_fork)
     monkeypatch.setattr(runner, "_run_asdw_data_verify_contract_gate", fake_gate)
     monkeypatch.setattr(
         runner,
@@ -539,7 +517,7 @@ def test_data_deploy_success_path_runs_pre_verify_gate_then_native_pipeline_only
         shutil.rmtree(run_root, ignore_errors=True)
 
     assert result is True
-    # 成功パスでも SDK main session / split-fork / post-main producer gate は走らない。
+    # 成功パスでも SDK main session / post-main producer gate は走らない。
     assert calls == ["gate:False", "native"]
     assert sdk_calls == []
     assert producer_session_starts == []

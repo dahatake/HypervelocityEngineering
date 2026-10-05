@@ -19,8 +19,7 @@ cleanup_policy:
   - ``"purge"``   : ``work_root`` を rmtree 削除。
 
 参考:
-  - copilot-instructions.md §0.5 ("CLI セッション起点モード")
-  - hve/split_fork.py `resolve_work_root` (HVE_WORK_ROOT を優先参照)
+  - hve/run_paths.py `resolve_work_root` (HVE_WORK_ROOT を優先参照)
 """
 from __future__ import annotations
 
@@ -137,7 +136,7 @@ class GuiSessionWorkdir:
         """子プロセスに注入すべき環境変数を返す。
 
         - ``HVE_WORK_ROOT``: ``work/run/<run-id>/`` 絶対 Path
-        - ``HVE_RUN_ID``: ``<run-id>`` 単体（``hve.split_fork.resolve_run_id`` 用）
+        - ``HVE_RUN_ID``: ``<run-id>`` 単体（``hve.run_paths.resolve_run_id`` 用）
         - ``HVE_GUI_SESSION_ID``: GUI 起源識別用（dir 名がプレフィックス無しのため必要）
         - ``HVE_RUN_ID_TZ``: ``<run-id>`` 生成タイムゾーン（親プロセス env を継承）
         """

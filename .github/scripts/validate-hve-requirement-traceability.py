@@ -9,6 +9,12 @@ import re
 import sys
 from pathlib import Path
 
+from hve_requirement_mapping import (
+    ALLOWED_TEST_PREFIXES,
+    iter_requirement_definitions,
+    parse_requirement_mapping,
+    resolve_allowed_test_path,
+)
 from hve_scope import ScopeError, is_in_scope, normalise_relative
 
 
@@ -28,12 +34,6 @@ REQUIREMENT_DEFINITION = "hve-dev/requirement-definition.md"
 REQUIREMENT_MAPPING = "hve-dev/requirement-test-mapping.md"
 FEATURE_INVENTORY = "hve-dev/hve-feature-inventory.csv"
 TEST_INVENTORY = "hve-dev/hve-test-inventory.csv"
-
-ALLOWED_TEST_PREFIXES = (
-    "hve/tests/", "hve/gui/tests/", "mdq/tests/", "cq/tests/", ".github/scripts/tests/",
-    ".github/scripts/python/tests/", ".github/scripts/powershell/tests/",
-    "mdq/gui/tests/", "tests/bats/",
-)
 
 
 class ValidationError(ValueError):
@@ -123,13 +123,17 @@ def _read_inventory(root: Path) -> dict[str, list[dict[str, str]]]:
 
 
 def _mapping_paths(mapping_text: str, requirement_id: str) -> set[str]:
-    # 要求テストマッピングは節を `###` と `####` の両方で書いている。
-    heading = re.search(rf"^#{{3,4}}\s+{re.escape(requirement_id)}(?:\s|—|-|$)(.*?)(?=^#{{1,4}}\s|\Z)", mapping_text, re.MULTILINE | re.DOTALL)
-    if heading is None:
+    entry = parse_requirement_mapping(mapping_text).get(requirement_id)
+    if entry is None:
         return set()
     paths: set[str] = set()
-    for display, target in re.findall(r"\[([^\]]+)\]\(([^)]*)\)", heading.group(1)):
-        if display != target:
+    links = entry.get("links", [])
+    if not isinstance(links, list):
+        return set()
+    for display, target in links:
+        if not target.startswith(ALLOWED_TEST_PREFIXES):
+            continue
+        if display not in {target, Path(target).name}:
             raise ValidationError(f"mapping label and target differ for {requirement_id}")
         paths.add(_normalise_relative(target))
     return paths
@@ -139,6 +143,12 @@ def _validate_requirement_ids(root: Path, requirement_ids: tuple[str, ...], test
     inventory = _read_inventory(root)
     definition = _read_text(root / REQUIREMENT_DEFINITION)
     mapping = _read_text(root / REQUIREMENT_MAPPING)
+    active_definition_ids = {
+        identifier
+        for _line_number, _section, identifier, status, _line
+        in iter_requirement_definitions(definition)
+        if status == "active-or-described"
+    }
     for requirement_id in requirement_ids:
         rows = inventory.get(requirement_id, [])
         if len(rows) != 1:
@@ -146,28 +156,19 @@ def _validate_requirement_ids(root: Path, requirement_ids: tuple[str, ...], test
         row = rows[0]
         if row.get("active_status") != "active-or-described" or row.get("source") != REQUIREMENT_DEFINITION:
             raise ValidationError(f"requirement is not active: {requirement_id}")
-        if not re.search(rf"(?<![A-Za-z0-9-]){re.escape(requirement_id)}(?![A-Za-z0-9-])", definition):
+        if requirement_id not in active_definition_ids:
             raise ValidationError(f"requirement is absent from definition: {requirement_id}")
         if not _mapping_paths(mapping, requirement_id).intersection(test_paths):
             raise ValidationError(f"requirement mapping does not contain a declared test path: {requirement_id}")
 
 
 def _validate_test_paths(root: Path, test_paths: tuple[str, ...]) -> None:
-    root_resolved = root.resolve()
     for value in test_paths:
         path = _normalise_relative(value)
-        if not path.startswith(ALLOWED_TEST_PREFIXES):
-            raise ValidationError(f"test path is outside the allowlist: {path}")
-        candidate = root / path
-        if candidate.is_symlink():
-            raise ValidationError(f"test path must not be a symlink: {path}")
         try:
-            resolved = candidate.resolve(strict=True)
-            resolved.relative_to(root_resolved)
-        except (OSError, ValueError) as exc:
-            raise ValidationError(f"test path is missing or escapes repository: {path}") from exc
-        if not resolved.is_file():
-            raise ValidationError(f"test path is not a file: {path}")
+            resolve_allowed_test_path(root, path)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
 
 
 def _require_evidence(evidence: str, test_paths: tuple[str, ...]) -> None:

@@ -142,11 +142,10 @@ qa_review = """## 追加コンテキストの参照
 
 - `qa/` 配下の、この Root Issue / Step / PR に関連する QA 回答
 - この PR または関連 Issue のレビュー指摘
-- Self-Improve 結果または改善計画（存在する場合のみ）
 - `## 入力` に記載された前 Step 成果物（`docs/` 成果物経由のみ。他 Step の `work/run/<run-id>/...` 配下の作業ファイルは入力として読まないこと）
 - 追加で注入された既存成果物・reuse context
 
-参照した QA / Review / Self-Improve の内容は成果物へ反映し、反映しない場合は理由を記録してください。
+参照した QA / Review の内容は成果物へ反映し、反映しない場合は理由を記録してください。
 
 ## 検証結果（PR本文に必須）
 <!-- validation-confirmed -->

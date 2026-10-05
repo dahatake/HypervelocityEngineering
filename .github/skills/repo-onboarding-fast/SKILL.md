@@ -2,6 +2,7 @@
 name: repo-onboarding-fast
 description: >
   初見のリポジトリで最小限の読解により入口・境界・標準コマンドを確定し、 onboarding.md に固定するスキル。"全部読む"を避け、作業に必要な最小限だけ確定する。 USE FOR: repository onboarding, first assignment, entry point discovery. DO NOT USE FOR: full code analysis. WHEN: リポジトリに初めてアサインされた、入口が不明。
+context: fork
 metadata:
   origin: user
   version: 2.0.0
@@ -22,12 +23,12 @@ metadata:
 1) 入口：README / docs / CI（.github/workflows）から標準コマンドを拾う
 2) 境界：公開I/F（API/スキーマ/型）とデータ境界（DB/移行）を特定
 3) 既存の類似実装を1つ見つけて踏襲点（命名/例外/ログ/テスト）を抽出
-4) `work/run/<run-id>/<task>/onboarding.md` に固定（後続Subが再利用できる形）
+4) `work/run/<run-id>/<task>/onboarding.md` が既にある場合は削除→新規作成し、後続Subが再利用できる短い事実として固定
 
 ## onboarding.md 最小フォーマット
 - 入口（主要パス）
 - 境界（API/データ/責務）
-- 踏襲元（類似実装パス）
+- 参照元/踏襲元（類似実装パス）
 - 標準コマンド（build/test/lint）
 - 不明点とSpike案（あれば）
 
@@ -37,7 +38,7 @@ metadata:
 
 | ファイル | 内容 |
 |---------|------|
-| `references/onboarding-examples.md` | 入出力例セクション全体（例1: 本リポジトリを対象とした onboarding.md、例2: 既存 onboarding.md がある場合の更新） |
+| `references/onboarding-examples.md` | `onboarding.md` の最小成果物契約、簡潔な出力例、既存時の delete→create 振る舞い |
 
 ## Related Skills
 

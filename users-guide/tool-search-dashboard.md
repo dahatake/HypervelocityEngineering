@@ -497,11 +497,11 @@ print(render_json(snapshot))
 
 ## 9. 収集のオーバヘッド（実測）
 
-**取得条件**: 2026-08-05 実測。Python 3.14 / Windows。
-Skill 総数 **73 件**は、リポジトリ内の `.github/skills`（2026-08-07 時点で 35 件）に加えて、
+**取得条件**: 2026-10-01 実測。Python 3.14 / Windows。
+Skill 総数 **72 件**は、リポジトリ内の `.github/skills`（2026-10-01 時点で 33 件）に加えて、
 `default_skill_roots()` が併せて走査する `~/.agents/skills` / `~/.copilot/skills` を含めた計測環境の値。
 外部 Skill ルートを持たない環境では件数がこれより少なくなり、所要時間も相応に短くなる。
-自分の環境の件数はリポジトリのルートで次を実行すると確認できる（本リポジトリでは 35 件）。
+自分の環境の件数はリポジトリのルートで次を実行すると確認できる（本リポジトリでは 33 件）。
 
 ```bash
 python -c "from pathlib import Path; from hve.toolsearch.session import default_skill_roots; from hve.toolsearch.skill_catalog import discover_skills; print(len(discover_skills(default_skill_roots(Path('.')))))"
@@ -511,8 +511,8 @@ python -c "from pathlib import Path; from hve.toolsearch.session import default_
 
 | 処理 | 値 | 発生頻度 |
 |---|---|---|
-| `discover_skills`（`SKILL.md` 73 件の読み直し） | 中央値 **60.6 ms**（初回最大 534 ms） | Step ごと 1 回 |
-| `build_session_toolset`（上記 ＋ ツール 74 件の登録） | 中央値 **58.1 ms** | Step ごと 1 回 |
+| `discover_skills`（`SKILL.md` 72 件の読み直し） | 中央値 **150.1 ms**（最大 257.9 ms） | Step ごと 1 回 |
+| `build_session_toolset`（上記 ＋ ツール 73 件の登録） | 中央値 **200.8 ms**（最大 284.2 ms） | Step ごと 1 回 |
 | トークン推定の初回充填（カタログ 250 件） | **173.6 ms** | プロセスごと 1 回 |
 | トークン推定（キャッシュ済み、250 件） | **0.05 ms** | 検索ごと |
 

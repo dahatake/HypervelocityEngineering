@@ -265,6 +265,33 @@ class TestBuildCompletionInstruction:
         assert "出力ファイルが全て正常に生成" in result
         assert "`akm:done` ラベルの付与は不要" in result
 
+    def test_completion_local_template_source_requires_p30_completion_evidence(self):
+        content = _load_template(
+            ".github/prompts/runtime/template/completion-local.prompt.md"
+        )
+
+        assert "{done_label}" in content
+        assert "選択した対象だけ" in content
+        assert "対応検証" in content
+        assert "未実施" in content
+        assert "blocked" in content
+        assert "理由" in content
+        assert "HVE 製品 run 中の自己テスト" in content
+        assert "起動しない" in content
+
+    def test_completion_instruction_local_renders_p30_contract_without_done_label(self):
+        result = _build_completion_instruction("akm", "local")
+
+        assert "{done_label}" not in result
+        assert "`akm:done` ラベルの付与は不要" in result
+        assert "選択した対象だけ" in result
+        assert "対応検証" in result
+        assert "未実施" in result
+        assert "blocked" in result
+        assert "理由" in result
+        assert "HVE 製品 run 中の自己テスト" in result
+        assert "起動しない" in result
+
 
 # ---------------------------------------------------------------------------
 # render_template

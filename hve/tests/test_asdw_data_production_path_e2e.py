@@ -151,7 +151,6 @@ def _data_deploy_runner(run_id: str) -> StepRunner:
             run_id=run_id,
             auto_qa=False,
             auto_contents_review=False,
-            auto_self_improve=False,
         ),
         console=Console(verbose=False, quiet=True),
         workflow_params=dict(_WORKFLOW_PARAMS),

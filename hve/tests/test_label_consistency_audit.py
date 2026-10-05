@@ -199,6 +199,19 @@ def _hitl_label_prefixes(suffix: str) -> set[str]:
     return {d["name"].split(":")[0] for d in data if d["name"].endswith(f":{suffix}")}
 
 
+def test_fr_state_02_uses_adfd_and_adfdv_not_retired_ids() -> None:
+    block = _requirement_block("FR-STATE-02")
+    target_line = next(line for line in block.splitlines() if "対象セット:" in line)
+    targets = set(re.findall(r"`([^`]+:qa-ready)`", target_line))
+    current = {"adfd:qa-ready", "adfdv:qa-ready"}
+    retired = {"abd:qa-ready", "abdv:qa-ready"}
+
+    assert current <= targets, f"現行 Dataflow ID が不足: {sorted(current - targets)}"
+    assert targets.isdisjoint(retired), f"廃止済み ID が残存: {sorted(targets & retired)}"
+    for retired_id in retired:
+        assert retired_id not in target_line, f"廃止済み ID が平文で残存: {retired_id}"
+
+
 class TestHitlStateLabelsAreDeclared(unittest.TestCase):
     """labels.json の HITL ラベルが FR-STATE-01 に宣言されていること。"""
 

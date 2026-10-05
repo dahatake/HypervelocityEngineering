@@ -137,12 +137,12 @@ hve/.run-progress.jsonl
 .github/skills/azure-skills/
 !.github/skills/azure-skills/
 .github/skills/azure-skills/*
-!.github/skills/azure-skills/azure-ac-verification/
-!.github/skills/azure-skills/azure-ac-verification/SKILL.md
-!.github/skills/azure-skills/azure-cli-deploy-scripts/
-!.github/skills/azure-skills/azure-cli-deploy-scripts/SKILL.md
-!.github/skills/azure-skills/azure-region-policy/
-!.github/skills/azure-skills/azure-region-policy/SKILL.md
+!.github/skills/azure-ac-verification/
+!.github/skills/azure-ac-verification/SKILL.md
+!.github/skills/azure-cli-deploy-scripts/
+!.github/skills/azure-cli-deploy-scripts/SKILL.md
+!.github/skills/azure-region-policy/
+!.github/skills/azure-region-policy/SKILL.md
 
 
 # Markdown preview vendored assets (downloaded by setup-hve)
@@ -232,6 +232,10 @@ work/**/artifacts/**/*.env.d/
 work/**/artifacts/**/*.log
 work/**/artifacts/**/*.key
 work/**/artifacts/**/*.pem
+
+# Pytest basetemp sandboxes may contain nested Git repositories without commits.
+# Keep sibling reports/evidence tracked, but exclude disposable test directories.
+/work/**/artifacts/*-temp/
 
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt
@@ -683,3 +687,103 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# FR-MAINT-12: self-test evidence is selectable only within a run/task.
+# Reopen directories (including artifacts/ and logs/), not every file format.
+# Selection is not approval to commit: review/redact logs and images first;
+# never automatically commit logs or original settings.
+/tests/run/*/*/**
+!/tests/run/*/
+!/tests/run/*/*/
+!/tests/run/*/*/**/
+!/tests/run/*/*/**/*.md
+!/tests/run/*/*/**/*.json
+!/tests/run/*/*/**/*.log
+!/tests/run/*/*/**/*.xml
+!/tests/run/*/*/**/*.png
+# Text evidence stays under the task's artifacts/ (including Prompt 01 outputs).
+!/tests/run/*/*/artifacts/**/*.txt
+# Only reviewed controller helpers in artifacts/scripts/ are selectable source.
+!/tests/run/*/*/artifacts/scripts/**/*.py
+!/tests/run/*/*/artifacts/scripts/**/*.ps1
+!/tests/run/*/*/artifacts/scripts/**/*.sh
+
+# Keep these exclusions last: apply at every depth, including under artifacts/.
+/tests/run/**/private/
+/tests/run/**/fixtures/
+/tests/run/**/lanes/
+/tests/run/**/*-temp/
+/tests/run/**/node_modules/
+/tests/run/**/.venv/
+/tests/run/**/__pycache__/
+/tests/run/**/*.key
+/tests/run/**/*.pem
+/tests/run/**/*.pfx
+/tests/run/**/.env
+/tests/run/**/.env.*
+/tests/run/**/hve/.settings.txt
+/tests/run/**/hve/.settings.txt.tmp
+/tests/run/**/local.settings.json
+
+# Restore existing cache/runtime exclusions after evidence directory reopening.
+# Scoped to self-test evidence only; ordinary work/ rules remain unchanged.
+/tests/run/**/env/
+/tests/run/**/venv/
+/tests/run/**/ENV/
+/tests/run/**/env.bak/
+/tests/run/**/venv.bak/
+/tests/run/**/.eggs/
+/tests/run/**/eggs/
+/tests/run/**/develop-eggs/
+/tests/run/**/*.egg-info/
+/tests/run/**/build/
+/tests/run/**/dist/
+/tests/run/**/downloads/
+/tests/run/**/parts/
+/tests/run/**/sdist/
+/tests/run/**/var/
+/tests/run/**/wheels/
+/tests/run/**/share/python-wheels/
+/tests/run/**/target/
+/tests/run/**/[Bb]in/
+/tests/run/**/[Oo]bj/
+/tests/run/**/bld/
+/tests/run/**/[Dd]ebug/
+/tests/run/**/[Dd]ebugPublic/
+/tests/run/**/[Rr]elease/
+/tests/run/**/[Rr]eleases/
+/tests/run/**/[Dd]ebugPS/
+/tests/run/**/[Rr]eleasePS/
+/tests/run/**/x64/
+/tests/run/**/x86/
+/tests/run/**/[Ww][Ii][Nn]32/
+/tests/run/**/[Aa][Rr][Mm]/
+/tests/run/**/[Aa][Rr][Mm]64/
+/tests/run/**/ipch/
+/tests/run/**/.artifacts/
+/tests/run/**/BenchmarkDotNet.Artifacts/
+/tests/run/**/[Pp]ackages/
+/tests/run/**/.mypy_cache/
+/tests/run/**/.pytest_cache/
+/tests/run/**/.ruff_cache/
+/tests/run/**/.cache/
+/tests/run/**/.tox/
+/tests/run/**/.nox/
+/tests/run/**/.hypothesis/
+/tests/run/**/.mdq/
+/tests/run/**/.cq/
+/tests/run/**/.hve/
+/tests/run/**/.toolsearch/
+/tests/run/**/.pyre/
+/tests/run/**/.pytype/
+/tests/run/**/.ipynb_checkpoints/
+/tests/run/**/.sass-cache/
+/tests/run/**/.webassets-cache/
+/tests/run/**/.scrapy/
+/tests/run/**/.pybuilder/
+/tests/run/**/.pdm-build/
+/tests/run/**/.pixi/
+/tests/run/**/__pypackages__/
+/tests/run/**/.vs/
+/tests/run/**/.dmypy.json
+/tests/run/**/dmypy.json

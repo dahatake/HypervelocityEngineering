@@ -19,7 +19,7 @@ from hve.artifact_validation import (
 _SQL_MODE = "sql-ledger-digest"
 _DIRECT_MODE = "acl-direct"
 _CONTRACT = Path(
-    ".github/skills/azure-skills/azure-cli-deploy-scripts/references/"
+    ".github/skills/azure-cli-deploy-scripts/references/"
     "asdw-data-verifier-contract.md"
 )
 

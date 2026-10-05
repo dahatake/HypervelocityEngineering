@@ -1,75 +1,85 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 760" role="img" aria-labelledby="title desc">
   <title id="title">ADFD データフロー（各 Prompt の入出力ファイル）</title>
-  <desc id="desc">ADFD 3 ステップの各 Prompt が読み書きするファイル。step-1 Arch-Dataflow-AppSpec と step-2 Arch-Dataflow-MonitoringDesign は docs/catalog/* を入力に成果物を生成し、step-3 Arch-Dataflow-TDD-TestSpec は step-1/step-2 の出力も入力にして TDD テスト仕様書を生成する。</desc>
-  <defs>
-    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#586069"/></marker>
-    <marker id="dep" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#e36209"/></marker>
-  </defs>
+  <desc id="desc">ADFD の current registry 7 Step について、各 Step の代表的な入力と出力を示す。</desc>
   <style>
-    text { font-family: "Noto Sans CJK JP", "Noto Sans JP", system-ui, -apple-system, sans-serif; fill: #24292e; }
-    .t { font-size: 16px; font-weight: 700; }
+    text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill: #0f172a; }
+    .t { font-size: 17px; font-weight: 700; }
     .hd { font-size: 13px; font-weight: 700; }
     .in { fill: #e8f0fe; stroke: #0366d6; stroke-width: 1.4; rx: 7; }
     .ag { fill: #e8d5f5; stroke: #6f42c1; stroke-width: 1.8; rx: 8; }
     .out { fill: #d4edda; stroke: #28a745; stroke-width: 1.4; rx: 7; }
-    .f { font-size: 10px; fill: #1f2937; }
+    .f { font-size: 10px; }
     .ag-t { font-size: 11.5px; font-weight: 700; fill: #6f42c1; }
-    .ln { stroke: #586069; stroke-width: 1.6; fill: none; marker-end: url(#arr); }
-    .dep { stroke: #e36209; stroke-width: 1.6; fill: none; stroke-dasharray: 5 3; marker-end: url(#dep); }
     .sub { font-size: 10.5px; fill: #475569; }
   </style>
-  <rect width="1200" height="560" fill="#f6f8fa" rx="12"/>
-  <text x="24" y="34" class="t">ADFD データフロー（各 Prompt の入出力）</text>
+  <rect width="1240" height="760" fill="#f6f8fa" rx="12"/>
+  <text x="24" y="34" class="t">ADFD データフロー（current registry 7 Step）</text>
   <text x="40" y="64" class="hd" fill="#0366d6">入力ファイル</text>
-  <text x="520" y="64" class="hd" fill="#6f42c1">Prompt（= Custom Agent）</text>
-  <text x="900" y="64" class="hd" fill="#28a745">出力ファイル</text>
+  <text x="530" y="64" class="hd" fill="#6f42c1">Prompt（= Custom Agent）</text>
+  <text x="930" y="64" class="hd" fill="#28a745">出力ファイル</text>
 
-  <!-- step-1 -->
-  <rect x="40" y="84" width="300" height="74" class="in"/>
-  <text x="52" y="104" class="f">docs/catalog/app-catalog.md</text>
-  <text x="52" y="122" class="f">docs/catalog/data-model.md</text>
-  <text x="52" y="140" class="f">docs/catalog/service-catalog-matrix.md</text>
-  <rect x="470" y="92" width="320" height="58" class="ag"/>
-  <text x="486" y="116" class="ag-t">step-1: Arch-Dataflow-AppSpec</text>
-  <text x="486" y="136" class="sub">ジョブ詳細仕様書（per-job fanout・root）</text>
-  <rect x="900" y="92" width="276" height="58" class="out"/>
-  <text x="912" y="116" class="f">docs/dataflow/apps/</text>
-  <text x="912" y="134" class="f">{jobId}-{jobNameSlug}-spec.md</text>
-  <path class="ln" d="M340 121 L468 121"/>
-  <path class="ln" d="M790 121 L898 121"/>
+  <rect x="40" y="86" width="320" height="64" class="in"/>
+  <text x="52" y="108" class="f">docs/catalog/app-catalog.md</text>
+  <rect x="470" y="92" width="300" height="48" class="ag"/>
+  <text x="486" y="112" class="ag-t">Step 0.1: Arch-Dataflow-DataModel</text>
+  <text x="486" y="128" class="sub">データモデル定義書</text>
+  <rect x="900" y="92" width="290" height="48" class="out"/>
+  <text x="912" y="120" class="f">docs/dataflow/dataflow-data-model.md</text>
 
-  <!-- step-2 -->
-  <rect x="40" y="186" width="300" height="58" class="in"/>
-  <text x="52" y="208" class="f">docs/catalog/app-catalog.md</text>
-  <text x="52" y="226" class="f">docs/catalog/service-catalog-matrix.md</text>
-  <rect x="470" y="188" width="320" height="54" class="ag"/>
-  <text x="486" y="210" class="ag-t">step-2: Arch-Dataflow-MonitoringDesign</text>
-  <text x="486" y="230" class="sub">監視・運用設計書（root）</text>
-  <rect x="900" y="188" width="276" height="54" class="out"/>
-  <text x="912" y="210" class="f">docs/dataflow/</text>
-  <text x="912" y="228" class="f">dataflow-monitoring-design.md</text>
-  <path class="ln" d="M340 215 L468 215"/>
-  <path class="ln" d="M790 215 L898 215"/>
+  <rect x="40" y="172" width="320" height="80" class="in"/>
+  <text x="52" y="194" class="f">docs/catalog/app-catalog.md</text>
+  <text x="52" y="210" class="f">docs/catalog/service-catalog-matrix.md</text>
+  <text x="52" y="226" class="f">docs/dataflow/dataflow-data-model.md</text>
+  <rect x="470" y="188" width="300" height="48" class="ag"/>
+  <text x="486" y="208" class="ag-t">Step 0.2: Arch-Dataflow-AppCatalog</text>
+  <text x="486" y="224" class="sub">データフローアプリカタログ</text>
+  <rect x="900" y="188" width="290" height="48" class="out"/>
+  <text x="912" y="216" class="f">docs/dataflow/dataflow-app-catalog.md</text>
 
-  <!-- step-3 -->
-  <rect x="40" y="300" width="300" height="116" class="in"/>
-  <text x="52" y="322" class="f">docs/catalog/test-strategy.md</text>
-  <text x="52" y="340" class="f">docs/catalog/service-catalog-matrix.md</text>
-  <text x="52" y="364" class="f" fill="#e36209">docs/dataflow/apps/{jobId}-…-spec.md ←step-1</text>
-  <text x="52" y="388" class="f" fill="#e36209">docs/dataflow/dataflow-monitoring-design.md ←step-2</text>
-  <rect x="470" y="322" width="320" height="64" class="ag"/>
-  <text x="486" y="346" class="ag-t">step-3: Arch-Dataflow-TDD-TestSpec</text>
-  <text x="486" y="366" class="sub">TDD テスト仕様書（per-job fanout）</text>
-  <text x="486" y="380" class="sub">depends: step-1 AND step-2</text>
-  <rect x="900" y="322" width="276" height="64" class="out"/>
-  <text x="912" y="348" class="f">docs/test-specs/</text>
-  <text x="912" y="366" class="f">{jobId}-test-spec.md</text>
-  <path class="ln" d="M340 358 L468 354"/>
-  <path class="ln" d="M790 354 L898 354"/>
+  <rect x="40" y="274" width="320" height="64" class="in"/>
+  <text x="52" y="296" class="f">docs/catalog/service-catalog-matrix.md</text>
+  <text x="52" y="312" class="f">docs/dataflow/dataflow-app-catalog.md</text>
+  <rect x="470" y="280" width="300" height="48" class="ag"/>
+  <text x="486" y="300" class="ag-t">Step 4: Arch-Dataflow-ServiceCatalog</text>
+  <text x="486" y="316" class="sub">サービスカタログ</text>
+  <rect x="900" y="280" width="290" height="48" class="out"/>
+  <text x="912" y="308" class="f">docs/dataflow/dataflow-service-catalog.md</text>
 
-  <!-- dependency arrows: step-1/step-2 outputs feed step-3 inputs -->
-  <path class="dep" d="M1036 150 C 1090 220, 360 250, 300 358"/>
-  <path class="dep" d="M1036 242 C 1070 280, 360 270, 300 382"/>
-  <text x="360" y="470" class="sub" fill="#e36209">破線: step-1 / step-2 の出力が step-3 の入力になる（AND 依存）。</text>
-  <text x="360" y="490" class="sub">step-1 / step-3 は dataflow_catalog fanout でジョブごとに per-job 展開。</text>
+  <rect x="40" y="360" width="320" height="64" class="in"/>
+  <text x="52" y="382" class="f">docs/catalog/test-strategy.md</text>
+  <text x="52" y="398" class="f">docs/dataflow/dataflow-app-catalog.md / service-catalog.md</text>
+  <rect x="470" y="366" width="300" height="48" class="ag"/>
+  <text x="486" y="386" class="ag-t">Step 5: Arch-Dataflow-TestStrategy</text>
+  <text x="486" y="402" class="sub">テスト戦略書</text>
+  <rect x="900" y="366" width="290" height="48" class="out"/>
+  <text x="912" y="394" class="f">docs/dataflow/dataflow-test-strategy.md</text>
+
+  <rect x="40" y="452" width="320" height="64" class="in"/>
+  <text x="52" y="474" class="f">docs/catalog/app-catalog.md / data-model.md</text>
+  <text x="52" y="490" class="f">docs/catalog/service-catalog-matrix.md</text>
+  <rect x="470" y="458" width="300" height="48" class="ag"/>
+  <text x="486" y="478" class="ag-t">Step 1: Arch-Dataflow-AppSpec</text>
+  <text x="486" y="494" class="sub">APP-ID fan-out の詳細仕様書</text>
+  <rect x="900" y="458" width="290" height="48" class="out"/>
+  <text x="912" y="486" class="f">docs/dataflow/apps/{APP-ID}-spec.md</text>
+
+  <rect x="40" y="544" width="320" height="64" class="in"/>
+  <text x="52" y="566" class="f">docs/catalog/app-catalog.md</text>
+  <text x="52" y="582" class="f">docs/catalog/service-catalog-matrix.md</text>
+  <rect x="470" y="550" width="300" height="48" class="ag"/>
+  <text x="486" y="570" class="ag-t">Step 2: Arch-Dataflow-MonitoringDesign</text>
+  <text x="486" y="586" class="sub">監視・運用設計書</text>
+  <rect x="900" y="550" width="290" height="48" class="out"/>
+  <text x="912" y="578" class="f">docs/dataflow/dataflow-monitoring-design.md</text>
+
+  <rect x="40" y="636" width="320" height="76" class="in"/>
+  <text x="52" y="658" class="f">docs/catalog/test-strategy.md</text>
+  <text x="52" y="674" class="f">docs/catalog/service-catalog-matrix.md</text>
+  <text x="52" y="690" class="f">docs/dataflow/apps/{APP-ID}-spec.md</text>
+  <text x="52" y="706" class="f">docs/dataflow/dataflow-monitoring-design.md</text>
+  <rect x="470" y="650" width="300" height="48" class="ag"/>
+  <text x="486" y="670" class="ag-t">Step 3: Arch-Dataflow-TDD-TestSpec</text>
+  <text x="486" y="686" class="sub">APP-ID fan-out の TDD テスト仕様</text>
+  <rect x="900" y="650" width="290" height="48" class="out"/>
+  <text x="912" y="678" class="f">docs/test-specs/{APP-ID}-test-spec.md</text>
 </svg>

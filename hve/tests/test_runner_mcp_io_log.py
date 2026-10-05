@@ -130,6 +130,46 @@ class TestRunnerMcpToolRecords:
         logger.close()
         assert list(tmp_path.glob("mcp-*.log")) == []
 
+    def test_builtin_collision_cannot_be_logged_as_mcp_response(
+        self,
+        tmp_path: Path,
+        wired,
+    ) -> None:
+        runner, logger = wired
+        runner._handle_session_event(
+            _FakeEvent(
+                "tool.execution_start",
+                _FakeData(
+                    tool_name="ask",
+                    mcp_tool_name="ask",
+                    mcp_server_name="workiq",
+                    tool_call_id="shared",
+                ),
+            )
+        )
+        runner._handle_session_event(
+            _FakeEvent(
+                "tool.execution_start",
+                _FakeData(tool_name="view", tool_call_id="shared"),
+            )
+        )
+        runner._handle_session_event(
+            _FakeEvent(
+                "tool.execution_complete",
+                _FakeData(
+                    success=True,
+                    tool_call_id="shared",
+                    result=_FakeData(content="builtin result"),
+                ),
+            )
+        )
+        logger.close()
+
+        text = _read(tmp_path, "workiq")
+        assert "| mcp_request |" in text
+        assert "| mcp_response |" not in text
+        assert "builtin result" not in text
+
     def test_arguments_are_not_truncated(self, tmp_path: Path, wired) -> None:
         runner, logger = wired
         payload = "う" * 20_000

@@ -90,8 +90,29 @@ jobs:
         if: steps.gate.outputs.mode == 'initialize'
         run: |
           set -euo pipefail
+          ROOT_ISSUE_BODY_FILE="${RUNNER_TEMP}/ard-root-issue-body.md"
+          gh api "/repos/${REPO}/issues/${ISSUE_NUMBER}" --jq '.body // ""' > "${ROOT_ISSUE_BODY_FILE}"
+          source "${GITHUB_WORKSPACE}/.github/scripts/bash/lib/step-inputs.sh"
+          # 固定セクションは `python3 -m hve.step_inputs cloud-manifest` の実行をSub-Issueへ指示し、
+          # Agentが`step-input-manifest`を参照する。`Cloud upload unavailable`時はbranch-relative pathへ縮退する。
+          STEP_INPUT_SECTION=$(render_cloud_step_input_section "ard" "${ROOT_ISSUE_BODY_FILE}")
           bash .github/scripts/bash/ard-cloud.sh initialize \
             --issue "${ISSUE_NUMBER}" --repo "${REPO}"
+          if [[ -n "${STEP_INPUT_SECTION}" ]]; then
+            export STEP_INPUT_SECTION
+            gh api --paginate "/repos/${REPO}/issues/${ISSUE_NUMBER}/sub_issues?per_page=100" --jq '.[].number' \
+              | while IFS= read -r sub_issue_number; do
+                  sub_issue_body=$(gh api "/repos/${REPO}/issues/${sub_issue_number}" --jq '.body // ""')
+                  export sub_issue_body
+                  updated_body=$(python3 - <<'PY'
+          import os
+          print(os.environ["sub_issue_body"].rstrip() + "\n\n" + os.environ["STEP_INPUT_SECTION"])
+          PY
+                  )
+                  gh api --method PATCH "/repos/${REPO}/issues/${sub_issue_number}" \
+                    -f body="${updated_body}" > /dev/null
+                done
+          fi
 
       - name: Advance ARD DAG
         if: steps.gate.outputs.mode == 'advance'

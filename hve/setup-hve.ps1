@@ -23,7 +23,7 @@
 # winget で導入する OS ツール (未導入時のみ。-NoInstallTools で抑止):
 #   - Git.Git             : リポジトリ操作 / git diff
 #   - GitHub.cli          : gh auth login / Issue / PR
-#   - OpenJS.NodeJS.LTS   : MCP Server / Work IQ / npx skills
+#   - OpenJS.NodeJS.LTS   : MCP Server / npx skills
 #   - Microsoft.AzureCLI  : Azure 系ワークフロー (asdw-* / ADFD)
 #   - koalaman.shellcheck : ASDW Step 1.2 の静的検証
 #   - @github/copilot     : GUI の Copilot チャットパネル (npm -g で常に最新版へ更新)
@@ -382,7 +382,7 @@ Write-Step 'Checking OS tools'
 # MCP Server・Azure ワークフロー・ASDW Step 1.2 静的検証で必要になる。
 Install-OsTool -Command 'git'        -WingetId 'Git.Git'             -Label 'Git'         -Purpose 'repository operations / git diff'
 Install-OsTool -Command 'gh'         -WingetId 'GitHub.cli'          -Label 'GitHub CLI'  -Purpose 'gh auth login / Issue / PR'
-Install-OsTool -Command 'node'       -WingetId 'OpenJS.NodeJS.LTS'   -Label 'Node.js LTS' -Purpose 'MCP Server / Work IQ / npx skills'
+Install-OsTool -Command 'node'       -WingetId 'OpenJS.NodeJS.LTS'   -Label 'Node.js LTS' -Purpose 'MCP Server / npx skills'
 Install-OsTool -Command 'az'         -WingetId 'Microsoft.AzureCLI'  -Label 'Azure CLI'   -Purpose 'Azure workflows (asdw-* / ADFD)'
 Install-OsTool -Command 'shellcheck' -WingetId 'koalaman.shellcheck' -Label 'ShellCheck'  -Purpose 'ASDW Step 1.2 static verification'
 
@@ -911,6 +911,25 @@ if ($WithSkills) {
 }
 
 # ---------- 検証 ----------
+if ($installGui -and (Test-Path -LiteralPath (Join-Path $repoRoot 'hve-bootstrap-manifest.json'))) {
+    # FR-LOCAL-SURFACE-04 / design 5.1: distribution setup owns exactly one
+    # final verifier. Normal checkouts and explicit opt-outs keep their audit.
+    Write-Step 'Verifying private distribution readiness'
+    try {
+        . (Join-Path $repoRoot 'Start-HVE.ps1')
+        $verification = Invoke-HveBootstrapChild -Root "$repoRoot" -Stage 'verifier' -Exe $venvPy `
+            -ArgList @(Get-HveVerifierArgList -Root "$repoRoot") -CaptureOutput -TimeoutSeconds 180
+        $action = Validate-BootstrapPayload -Root "$repoRoot" -Json $verification.stdout -VerifierExit $verification.exit_code
+    } catch {
+        Write-ErrLine 'BOOTSTRAP_FAIL stage=verifier reason=invalid-verifier-payload retry=true'
+        exit 12
+    }
+    if ($action.action -ne 'launch_gui') {
+        Write-ErrLine 'BOOTSTRAP_FAIL stage=verifier reason=not-ready retry=true'
+        exit $verification.exit_code
+    }
+    Write-Ok 'Private distribution ready'
+} else {
 Write-Step 'Verifying installation'
 
 $checks = @(
@@ -1049,6 +1068,7 @@ if ((Invoke-Probe -Exe $venvPy -ArgList @('-c',$trigramCode)) -eq 0) {
 if ($gh) {
     if ((Invoke-Probe -Exe $gh.Source -ArgList @('auth','status')) -eq 0) { Write-Ok 'gh auth status' }
     else { Write-Warn2 "gh not authenticated. Run: gh auth login" }
+}
 }
 
 # ---------- まとめ ----------

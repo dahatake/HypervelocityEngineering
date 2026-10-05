@@ -30,6 +30,8 @@ AAS / ADA / AAD-WEB / ASDW-WEB / ADFD / ADFDV / AAG / AAGD / AAR で、対象 AP
 <!-- app-requirements:end -->
 ```
 
+- `Requirement-IDs` と `Unresolved-Blockers` は、Requirement ID のカンマ区切り、または `none` のみを書く。理由や説明文は block の外へ書く。
+
 ## コンテキスト節約
 
 - 要求書全文を全 Step へ常時注入しない。

@@ -23,4 +23,4 @@
 
 - これらのスクリプトは `hve.workflow_registry._REGISTRY` を参照する。`_REGISTRY` の構造変更時はスクリプト側も更新が必要。
 - 旧 `<Agent>.yaml` は `split_io_contracts.py` 実行後に手動削除する想定（スクリプト自体は削除しない）。
-- 詳細経緯は [CHANGELOG.md](../CHANGELOG.md) の `[Unreleased]` セクション、および [work/pipeline-io-consistency-check-v3.md](../work/pipeline-io-consistency-check-v3.md) を参照。
+- 詳細経緯は [CHANGELOG.md](../CHANGELOG.md) の `[Unreleased]` セクションを参照。

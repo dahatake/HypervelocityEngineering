@@ -34,6 +34,37 @@ _KEYED_TABLES = ("pins", "additional_search_text")
 _VALID_PIN_MODES = ("always", "auto", "never")
 _VALID_STEP_MODES = ("search", "pin_only")
 
+RESOURCE_KINDS = ("plugins", "mcp_servers", "skills")
+RESOURCE_CLASSIFICATIONS = (
+    "knowledge",
+    "software-engineering",
+    "both",
+    "unclassified",
+)
+_RESOURCE_ROUTING_FIELDS = (
+    "resource_classifications",
+    "knowledge_tool_allowlists",
+    "software_engineering_tool_allowlists",
+)
+_REQUIRED_MCP_SERVERS_BY_SKILL_FIELD = "required_mcp_servers_by_skill"
+_MCP_DEPENDENT_REQUIRED_SKILLS = frozenset({"microsoft-foundry"})
+
+# FR-TS-13: Knowledge resource は registry 上の全 Workflow で利用候補。
+KNOWLEDGE_WORKFLOW_IDS = frozenset(
+    {
+        "ard", "aas", "ada", "aad-web", "asdw-web", "adfd", "adfdv",
+        "aag", "aagd", "aar", "akm", "adi", "adoc",
+    }
+)
+
+# FR-TS-13: Software Engineering resource を利用できる Workflow の単一正本。
+SOFTWARE_ENGINEERING_WORKFLOW_IDS = frozenset(
+    {
+        "aas", "ada", "aad-web", "asdw-web", "adfd", "adfdv",
+        "aag", "aagd", "aar", "adoc",
+    }
+)
+
 _REQUIRED_FIELDS = (
     "version", "limit", "max_limit", "tau",
     "field_weights", "pins", "additional_search_text", "step_overrides",
@@ -41,6 +72,97 @@ _REQUIRED_FIELDS = (
 _REQUIRED_WEIGHT_FIELDS = frozenset(
     {"name", "additional_search_text", "description", "arg_terms"}
 )
+
+
+def _validate_exact_resource_name(name: object, *, field_name: str) -> str:
+    if not isinstance(name, str) or not name.strip() or name == "*":
+        raise PolicyError(f"{field_name} name must be a non-empty exact resource name")
+    return name
+
+
+def _validate_resource_classifications(raw: object) -> dict[str, dict[str, str]]:
+    if not isinstance(raw, Mapping) or set(raw) != set(RESOURCE_KINDS):
+        raise PolicyError(
+            "resource_classifications must contain exactly "
+            f"{list(RESOURCE_KINDS)}"
+        )
+
+    validated: dict[str, dict[str, str]] = {}
+    for kind in RESOURCE_KINDS:
+        table = raw[kind]
+        if not isinstance(table, Mapping):
+            raise PolicyError(f"resource_classifications.{kind} must be an object")
+        validated[kind] = {}
+        for raw_name, classification in table.items():
+            name = _validate_exact_resource_name(
+                raw_name,
+                field_name=f"resource_classifications.{kind}",
+            )
+            if not isinstance(classification, str) or classification not in RESOURCE_CLASSIFICATIONS:
+                raise PolicyError(
+                    f"resource_classifications.{kind}[{name!r}] classification "
+                    f"must be one of {RESOURCE_CLASSIFICATIONS}"
+                )
+            validated[kind][name] = classification
+    return validated
+
+
+def _validate_tool_allowlists(raw: object, *, field_name: str) -> dict[str, tuple[str, ...]]:
+    if not isinstance(raw, Mapping):
+        raise PolicyError(f"{field_name} allowlist table must be an object")
+
+    validated: dict[str, tuple[str, ...]] = {}
+    for raw_server, raw_tools in raw.items():
+        server = _validate_exact_resource_name(raw_server, field_name=f"{field_name} allowlist")
+        if not isinstance(raw_tools, list):
+            raise PolicyError(f"{field_name}[{server!r}] allowlist must be a list")
+
+        tools: list[str] = []
+        for tool in raw_tools:
+            if (
+                not isinstance(tool, str)
+                or not tool.strip()
+                or tool == "*"
+                or ":" in tool
+                or any(character.isspace() for character in tool)
+            ):
+                raise PolicyError(
+                    f"{field_name}[{server!r}] allowlist entries must be bare exact tool names"
+                )
+            if tool in tools:
+                raise PolicyError(
+                    f"{field_name}[{server!r}] allowlist contains duplicate tool {tool!r}"
+                )
+            tools.append(tool)
+        validated[server] = tuple(tools)
+    return validated
+
+
+def _validate_required_mcp_servers_by_skill(
+    raw: object,
+) -> dict[str, tuple[str, ...]]:
+    field_name = _REQUIRED_MCP_SERVERS_BY_SKILL_FIELD
+    if not isinstance(raw, Mapping):
+        raise PolicyError(f"{field_name} must be an object")
+
+    validated: dict[str, tuple[str, ...]] = {}
+    for raw_skill, raw_servers in raw.items():
+        skill = _validate_exact_resource_name(raw_skill, field_name=field_name)
+        if not isinstance(raw_servers, list) or not raw_servers:
+            raise PolicyError(f"{field_name}[{skill!r}] must be a non-empty list")
+        servers: list[str] = []
+        for raw_server in raw_servers:
+            server = _validate_exact_resource_name(
+                raw_server,
+                field_name=f"{field_name}[{skill!r}]",
+            )
+            if server in servers:
+                raise PolicyError(
+                    f"{field_name}[{skill!r}] contains duplicate server {server!r}"
+                )
+            servers.append(server)
+        validated[skill] = tuple(servers)
+    return validated
 
 
 class PolicyError(ToolSearchContractError):
@@ -83,6 +205,11 @@ class ToolSearchPolicy:
     pins: Mapping[str, PinMode]
     additional_search_text: Mapping[str, str]
     step_overrides: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    resource_classifications: Mapping[str, Mapping[str, str]] = field(default_factory=dict)
+    knowledge_tool_allowlists: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    software_engineering_tool_allowlists: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    required_mcp_servers_by_skill: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    extra_top_level: Mapping[str, Any] = field(default_factory=dict)
 
     # --- 読み込みと検証 ---------------------------------------------------
     @classmethod
@@ -124,6 +251,42 @@ class ToolSearchPolicy:
         if not 0.0 <= tau <= 1.0:
             raise PolicyError(f"tau must be within [0.0, 1.0], got {tau}")
 
+        present_routing_fields = set(raw) & set(_RESOURCE_ROUTING_FIELDS)
+        if present_routing_fields and present_routing_fields != set(_RESOURCE_ROUTING_FIELDS):
+            missing = next(
+                name for name in _RESOURCE_ROUTING_FIELDS if name not in present_routing_fields
+            )
+            raise PolicyError(f"policy is missing required field: {missing!r}")
+
+        if present_routing_fields:
+            resource_classifications = _validate_resource_classifications(
+                raw["resource_classifications"]
+            )
+            knowledge_tool_allowlists = _validate_tool_allowlists(
+                raw["knowledge_tool_allowlists"],
+                field_name="knowledge_tool_allowlists",
+            )
+            software_engineering_tool_allowlists = _validate_tool_allowlists(
+                raw["software_engineering_tool_allowlists"],
+                field_name="software_engineering_tool_allowlists",
+            )
+        else:
+            # FR-TS-03 のランキング専用 policy は後方互換のため引き続き受理する。
+            resource_classifications = {kind: {} for kind in RESOURCE_KINDS}
+            knowledge_tool_allowlists = {}
+            software_engineering_tool_allowlists = {}
+
+        required_mcp_servers_by_skill = _validate_required_mcp_servers_by_skill(
+            raw.get(_REQUIRED_MCP_SERVERS_BY_SKILL_FIELD, {})
+        )
+
+        known_fields = (
+            set(_REQUIRED_FIELDS)
+            | set(_RESOURCE_ROUTING_FIELDS)
+            | {_REQUIRED_MCP_SERVERS_BY_SKILL_FIELD}
+        )
+        extra_top_level = {key: value for key, value in raw.items() if key not in known_fields}
+
         return cls(
             version=int(raw["version"]),
             limit=limit,
@@ -133,6 +296,11 @@ class ToolSearchPolicy:
             pins=dict(raw["pins"]),
             additional_search_text=dict(raw["additional_search_text"]),
             step_overrides={k: dict(v) for k, v in raw["step_overrides"].items()},
+            resource_classifications=resource_classifications,
+            knowledge_tool_allowlists=knowledge_tool_allowlists,
+            software_engineering_tool_allowlists=software_engineering_tool_allowlists,
+            required_mcp_servers_by_skill=required_mcp_servers_by_skill,
+            extra_top_level=extra_top_level,
         )
 
     @staticmethod
@@ -168,6 +336,7 @@ class ToolSearchPolicy:
     def to_dict(self) -> dict[str, Any]:
         """`from_dict()` が受け付ける形へ戻す。"""
         return {
+            **self.extra_top_level,
             "version": self.version,
             "limit": self.limit,
             "max_limit": self.max_limit,
@@ -176,6 +345,22 @@ class ToolSearchPolicy:
             "pins": dict(self.pins),
             "additional_search_text": dict(self.additional_search_text),
             "step_overrides": {k: dict(v) for k, v in self.step_overrides.items()},
+            "resource_classifications": {
+                kind: dict(self.resource_classifications.get(kind, {}))
+                for kind in RESOURCE_KINDS
+            },
+            "knowledge_tool_allowlists": {
+                server: list(tools)
+                for server, tools in self.knowledge_tool_allowlists.items()
+            },
+            "software_engineering_tool_allowlists": {
+                server: list(tools)
+                for server, tools in self.software_engineering_tool_allowlists.items()
+            },
+            "required_mcp_servers_by_skill": {
+                skill: list(servers)
+                for skill, servers in self.required_mcp_servers_by_skill.items()
+            },
         }
 
     def save(self, path: Path | str) -> None:
@@ -229,6 +414,69 @@ class ToolSearchPolicy:
         if not override:
             return "search"
         return str(override.get("mode", "search"))
+
+    def classification_for(
+        self,
+        resource_kind: str,
+        resource_name: str,
+        *,
+        owner_plugin: str | None = None,
+    ) -> str:
+        """exact resource、owner Plugin、未分類の順で分類を解決する。"""
+        if resource_kind not in RESOURCE_KINDS:
+            raise PolicyError(f"unknown resource kind: {resource_kind!r}")
+
+        exact = self.resource_classifications.get(resource_kind, {}).get(resource_name)
+        if exact is not None:
+            return exact
+        if resource_kind in ("mcp_servers", "skills") and owner_plugin is not None:
+            owner = self.resource_classifications.get("plugins", {}).get(owner_plugin)
+            if owner is not None:
+                return owner
+        return "unclassified"
+
+    def classification_allowed(self, workflow_id: str, classification: str) -> bool:
+        """Workflow で分類済み resource を公開候補にできるか判定する。"""
+        if workflow_id not in KNOWLEDGE_WORKFLOW_IDS:
+            raise PolicyError(f"unknown workflow: {workflow_id!r}")
+        if classification not in RESOURCE_CLASSIFICATIONS:
+            raise PolicyError(f"unknown resource classification: {classification!r}")
+        if classification == "knowledge":
+            return True
+        if classification == "software-engineering":
+            return workflow_id in SOFTWARE_ENGINEERING_WORKFLOW_IDS
+        if classification == "both":
+            # `SOFTWARE_ENGINEERING_WORKFLOW_IDS` は `KNOWLEDGE_WORKFLOW_IDS` の部分集合で、
+            # 未登録 Workflow は冒頭で拒否済みのため、ここに来た時点で常に候補となる。
+            return True
+        return False
+
+    def tool_allowlist_for(self, classification: str, server_name: str) -> tuple[str, ...]:
+        """category と exact MCP server 名に対応する bare tool allowlist を返す。"""
+        if classification == "knowledge":
+            return tuple(self.knowledge_tool_allowlists.get(server_name, ()))
+        if classification == "software-engineering":
+            return tuple(self.software_engineering_tool_allowlists.get(server_name, ()))
+        raise PolicyError(f"tool allowlist has no category for classification {classification!r}")
+
+    def required_mcp_servers_for_skills(
+        self,
+        skill_names: Iterable[str],
+    ) -> tuple[str, ...]:
+        """Resolve exact MCP dependencies for required Skills without guessing names."""
+        required: list[str] = []
+        for raw_name in skill_names:
+            skill_name = str(raw_name)
+            servers = tuple(self.required_mcp_servers_by_skill.get(skill_name, ()))
+            if skill_name in _MCP_DEPENDENT_REQUIRED_SKILLS and not servers:
+                raise PolicyError(
+                    "policy is missing required_mcp_servers_by_skill mapping for "
+                    f"required Skill {skill_name!r}"
+                )
+            for server_name in servers:
+                if server_name not in required:
+                    required.append(server_name)
+        return tuple(required)
 
 
 def apply_policy(

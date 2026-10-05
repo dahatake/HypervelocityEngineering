@@ -1,54 +1,61 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 360" role="img" aria-labelledby="title desc">
-  <title id="title">ADFD Agent チェーン（3 ステップ）</title>
-  <desc id="desc">ADFD の Prompt チェーン。step-1 Arch-Dataflow-AppSpec（ジョブ詳細仕様書）と step-2 Arch-Dataflow-MonitoringDesign（監視・運用設計書）を並列実行し、AND 合流して step-3 Arch-Dataflow-TDD-TestSpec（TDD テスト仕様書）を実行する。</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 300" role="img" aria-labelledby="title desc">
+  <title id="title">ADFD チェーン図</title>
+  <desc id="desc">ADFD の現行 7 Step。0.1 から 0.2、4、5 を直列で進み、Step 1 と Step 2 が並列に起動し、Step 3 が合流する。Step 1 と Step 3 は APP-ID fan-out。</desc>
   <defs>
-    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#586069"/></marker>
+    <marker id="arr" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 9 3.5, 0 7" fill="#475569"/>
+    </marker>
   </defs>
   <style>
-    text { font-family: "Noto Sans CJK JP", "Noto Sans JP", system-ui, -apple-system, sans-serif; fill: #24292e; }
-    .t { font-size: 16px; font-weight: 700; }
-    .sub { font-size: 11px; fill: #586069; }
-    .step { fill: #e8d5f5; stroke: #6f42c1; stroke-width: 2; rx: 10; ry: 10; }
-    .agent { font-size: 13px; font-weight: 700; fill: #6f42c1; }
-    .ttl { font-size: 12px; font-weight: 600; }
-    .io { font-size: 10px; fill: #475569; }
-    .ln { stroke: #586069; stroke-width: 2; fill: none; marker-end: url(#arr); }
-    .join { fill: #334155; }
+    text { font-family: "Segoe UI", "Noto Sans JP", Arial, sans-serif; fill: #0f172a; }
+    .title { font-size: 18px; font-weight: 700; }
+    .note { font-size: 11px; fill: #475569; }
+    .box { rx: 8; ry: 8; stroke-width: 1.6; fill: #ede9fe; stroke: #7c3aed; }
+    .parallel { fill: #dcfce7; stroke: #15803d; }
+    .text1 { font-size: 12px; font-weight: 700; }
+    .text2 { font-size: 10px; }
+    .line { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#arr); }
   </style>
-  <rect width="940" height="360" fill="#f6f8fa" rx="12"/>
-  <text x="470" y="34" text-anchor="middle" class="t">ADFD Agent チェーン（3 ステップ）</text>
-  <text x="470" y="54" text-anchor="middle" class="sub">入力: docs/catalog/*（AAS 出力） — step-1 ∥ step-2 を並列実行 → AND 合流 → step-3</text>
 
-  <!-- step-1 -->
-  <rect x="40" y="86" width="320" height="92" class="step"/>
-  <text x="56" y="110" class="ttl">step-1: ジョブ詳細仕様書（per-job fanout）</text>
-  <text x="56" y="132" class="agent">Arch-Dataflow-AppSpec</text>
-  <text x="56" y="152" class="io">in: app-catalog.md / data-model.md / service-catalog-matrix.md</text>
-  <text x="56" y="168" class="io">out: docs/dataflow/apps/{jobId}-{jobNameSlug}-spec.md</text>
+  <text x="560" y="30" text-anchor="middle" class="title">ADFD — Dataflow Design（現行 7 Step）</text>
 
-  <!-- step-2 -->
-  <rect x="40" y="196" width="320" height="92" class="step"/>
-  <text x="56" y="220" class="ttl">step-2: 監視・運用設計書</text>
-  <text x="56" y="242" class="agent">Arch-Dataflow-MonitoringDesign</text>
-  <text x="56" y="262" class="io">in: app-catalog.md / service-catalog-matrix.md</text>
-  <text x="56" y="278" class="io">out: docs/dataflow/dataflow-monitoring-design.md</text>
+  <rect x="30" y="108" width="130" height="58" class="box"/>
+  <text x="95" y="134" text-anchor="middle" class="text1">Step 0.1</text>
+  <text x="95" y="150" text-anchor="middle" class="text2">データモデル定義書</text>
 
-  <!-- AND join -->
-  <circle cx="470" cy="187" r="10" class="join"/>
-  <text x="470" y="167" text-anchor="middle" class="sub" fill="#334155">AND</text>
-  <path class="ln" d="M360 132 L455 178"/>
-  <path class="ln" d="M360 242 L455 196"/>
+  <rect x="194" y="108" width="130" height="58" class="box"/>
+  <text x="259" y="134" text-anchor="middle" class="text1">Step 0.2</text>
+  <text x="259" y="150" text-anchor="middle" class="text2">データフローアプリカタログ</text>
 
-  <!-- step-3 -->
-  <rect x="560" y="120" width="340" height="134" class="step"/>
-  <text x="576" y="146" class="ttl">step-3: TDD テスト仕様書（per-job fanout）</text>
-  <text x="576" y="170" class="agent">Arch-Dataflow-TDD-TestSpec</text>
-  <text x="576" y="192" class="io">depends: step-1 AND step-2</text>
-  <text x="576" y="210" class="io">in: test-strategy.md / service-catalog-matrix.md /</text>
-  <text x="576" y="224" class="io">    {jobId}-spec.md / dataflow-monitoring-design.md</text>
-  <text x="576" y="244" class="io">out: docs/test-specs/{jobId}-test-spec.md</text>
-  <path class="ln" d="M481 187 L555 187"/>
+  <rect x="358" y="108" width="130" height="58" class="box"/>
+  <text x="423" y="134" text-anchor="middle" class="text1">Step 4</text>
+  <text x="423" y="150" text-anchor="middle" class="text2">サービスカタログ</text>
 
-  <text x="470" y="318" text-anchor="middle" class="sub">step-1 / step-3 は dataflow_catalog fanout で per-job に展開（ジョブごとに 1 ファイル生成）。</text>
-  <text x="470" y="338" text-anchor="middle" class="sub">ラベル遷移: adfd:ready → adfd:running → adfd:done</text>
+  <rect x="522" y="108" width="130" height="58" class="box"/>
+  <text x="587" y="134" text-anchor="middle" class="text1">Step 5</text>
+  <text x="587" y="150" text-anchor="middle" class="text2">テスト戦略書</text>
+
+  <rect x="706" y="54" width="150" height="58" class="box parallel"/>
+  <text x="781" y="80" text-anchor="middle" class="text1">Step 1</text>
+  <text x="781" y="96" text-anchor="middle" class="text2">ジョブ詳細仕様書</text>
+  <text x="781" y="108" text-anchor="middle" class="text2">APP-ID fan-out</text>
+
+  <rect x="706" y="162" width="150" height="58" class="box parallel"/>
+  <text x="781" y="188" text-anchor="middle" class="text1">Step 2</text>
+  <text x="781" y="204" text-anchor="middle" class="text2">監視・運用設計書</text>
+
+  <rect x="926" y="108" width="164" height="58" class="box"/>
+  <text x="1008" y="134" text-anchor="middle" class="text1">Step 3</text>
+  <text x="1008" y="150" text-anchor="middle" class="text2">TDD テスト仕様書</text>
+  <text x="1008" y="162" text-anchor="middle" class="text2">APP-ID fan-out</text>
+
+  <path d="M160 137 L194 137" class="line"/>
+  <path d="M324 137 L358 137" class="line"/>
+  <path d="M488 137 L522 137" class="line"/>
+  <path d="M652 137 L706 83" class="line"/>
+  <path d="M652 137 L706 191" class="line"/>
+  <path d="M856 83 L926 122" class="line"/>
+  <path d="M856 191 L926 152" class="line"/>
+
+  <text x="560" y="266" text-anchor="middle" class="note">依存: 0.1 → 0.2 → 4 → 5 → (1 と 2 を並列起動) → 3。Cloud の旧 3 Step 表示ではなく、CLI / GUI の current registry を表す。</text>
 </svg>

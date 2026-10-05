@@ -7873,6 +7873,8 @@ def _validate_asdw_data_deploy_host_boundary(
         "exit 1",
         "fi",
         "hve_policy_preflight_complete=1",
+        # 作成直後の ACR は DNS 反映待ちが必要なため、push 前の固定待機だけを許可する。
+        "sleep 30",
         'if [[ -z "$policy_assignments" || -z "$policy_exemptions" ]]; then',
         'if [[ ! "$DATA_CREATE_RUN_ID" =~ ^[0-9a-f]{32}$ ]]; then',
         "if ! command -v timeout >/dev/null 2>&1; then",
@@ -7888,6 +7890,8 @@ def _validate_asdw_data_deploy_host_boundary(
         "policy_assignments",
         "policy_exemptions",
         "data_identity_principal_id",
+        "ledger_tenant_id",
+        "ledger_admin_object_id",
         "non_audit_command",
         "data_aci_name",
         "data_aci_created",
@@ -7937,6 +7941,16 @@ def _validate_asdw_data_deploy_host_boundary(
                 'data_identity_principal_id="$(az identity show --resource-group '
                 '"$RESOURCE_GROUP" --name data-deploy-identity --query principalId '
                 '--output tsv)"'
+            ):
+                continue
+            if name == "ledger_tenant_id" and command == (
+                'ledger_tenant_id="$(az account show --query tenantId --output tsv)"'
+            ):
+                continue
+            if name == "ledger_admin_object_id" and command == (
+                'ledger_admin_object_id="$(az ad signed-in-user show --query id '
+                '--output tsv 2>/dev/null || az ad sp show --id "$(az account show '
+                '--query user.name --output tsv)" --query id --output tsv)"'
             ):
                 continue
             if name == "data_aci_name" and command == (
@@ -10195,9 +10209,9 @@ def validate_tdd_test_report(
 
     errors: List[str] = []
     try:
-        from .split_fork import has_validation_marker
+        from .run_paths import has_validation_marker
     except ImportError:  # pragma: no cover - フラット import 経路
-        from split_fork import has_validation_marker  # type: ignore[no-redef]
+        from run_paths import has_validation_marker  # type: ignore[no-redef]
 
     if not has_validation_marker(text, html_comment_only=True):
         errors.append("tdd-test-report.md missing <!-- validation-confirmed --> marker")

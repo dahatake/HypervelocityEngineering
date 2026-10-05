@@ -85,7 +85,7 @@ GUI / CLI Orchestrator は既定ではコミット・push を行いません。�
 
 | ワークフロー | デプロイ対象 | 生成される GitHub Actions ワークフロー | 担当ステップ（エージェント） |
 |---|---|---|---|
-| `asdw-web` | API（Azure Functions） | Functions デプロイ用ワークフロー（例: `.github/workflows/deploy-app009-functions.yml` 等） | Step 3.4（`Dev-Microservice-Azure-ComputeDeploy-AzureFunctions`） |
+| `asdw-web` | API（Azure Functions） | Functions デプロイ用ワークフロー（`.github/workflows/deploy-*.yml`。具体名は生成物を正とする） | Step 3.4（`Dev-Microservice-Azure-ComputeDeploy-AzureFunctions`） |
 | `asdw-web` | UI（Azure Static Web Apps） | `.github/workflows/azure-static-web-apps-*.yml` | Step 4.3（`Dev-Microservice-Azure-UIDeploy-AzureStaticWebApps`） |
 | `adfdv` | データフロー（Azure Functions） | `.github/workflows/deploy-batch-functions.yml` | Step 3（`Dev-Dataflow-FunctionsDeploy`） |
 

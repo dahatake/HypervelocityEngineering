@@ -1,6 +1,5 @@
 # HVE TDD ベースライン突合サマリー
 
-- 生成日時 (UTC): `2026-09-01T13:04:29Z`
 - 対象: `hve` アプリケーションのみ（HVE CLI / GUI / Cloud Agent Orchestrator 関連）。他アプリ開発には適用しない。
 - 捏造防止: テスト仕様欄は docstring / 関数名 / assert・raises・Pester `Should` / shell `pass` ラベル等、実在コードから機械抽出した。
 
@@ -19,93 +18,82 @@
 
 ## テスト棚卸し件数
 
-- 抽出行数: **15188**
-- 対象ファイル数: **716**
+- 抽出行数: **16056**
+- 対象ファイル数: **794**
 
 | 分類 | ファイル数 | 行数 |
 |---|---:|---:|
-| core-python | 414 | 10563 |
+| core-python | 488 | 11247 |
 | cq-support-python | 38 | 696 |
-| github-script-powershell | 5 | 90 |
+| github-script-powershell | 5 | 82 |
 | github-script-python | 5 | 85 |
-| github-script-shell | 9 | 121 |
-| gui-python | 207 | 3220 |
+| github-script-shell | 10 | 168 |
+| gui-python | 210 | 3365 |
 | markdown-query-gui-support-python | 8 | 75 |
 | mdq-support-python | 30 | 338 |
 
 | 種別 | 行数 |
 |---|---:|
-| fixture | 303 |
-| helper | 3234 |
-| pester-it | 99 |
+| fixture | 323 |
+| helper | 3597 |
+| pester-it | 91 |
 | python-file | 7 |
 | script | 1 |
-| setup-teardown | 140 |
-| shell-case | 37 |
-| shell-helper | 5 |
-| test | 11362 |
+| setup-teardown | 119 |
+| shell-case | 44 |
+| shell-helper | 7 |
+| test | 11867 |
 
 ## 機能一覧件数
 
-- 抽出行数: **508**
+- 抽出行数: **580**
 
 | 種別 | 行数 |
 |---|---:|
 | C | 4 |
-| FR | 313 |
+| FR | 383 |
 | GATE | 5 |
-| NFR | 34 |
+| NFR | 36 |
 | UC | 8 |
 | WORKFLOW | 13 |
 | WORKFLOW_STEP | 131 |
 
 ## 要求定義 ↔ 既存マッピング文書の突合
 
-- `hve-dev/requirement-definition.md` 側 ID 数（FR/NFR/GATE/C/UC）: **364**
-- `hve-dev/requirement-test-mapping.md` 側 ID 数: **365**
-- 要求定義にあるがマッピング見出しが未確認の ID: **27**
-- マッピングにあるが要求定義の抽出対象に無い ID: **4**
-- 要求定義上で廃止/削除表記を含む ID: **7**
+- `hve-dev/requirement-definition.md` 側 ID 数（FR/NFR/GATE/C/UC）: **436**
+- `hve-dev/requirement-test-mapping.md` 側 ID 数: **418**
+- 要求定義にあるがマッピング見出しが未確認の ID: **6**
+- マッピングにあるが要求定義の抽出対象に無い ID: **0**
+- 要求定義上で廃止/削除表記を含む ID: **20**
 
 ### 要求定義にあるがマッピング見出しが未確認
 
-- `FR-WF-AAS-03`
-- `FR-WF-ADFDV-01`
-- `FR-WF-ADFDV-02`
-- `FR-WF-ADI-02`
-- `FR-WF-ADI-03`
-- `FR-WF-ADI-04`
-- `FR-WF-ADI-05`
-- `FR-WF-ADI-06`
-- `FR-WF-ADI-07`
-- `FR-WF-ADI-08`
-- `FR-WF-ADI-09`
-- `FR-WF-ADI-10`
-- `FR-WF-ADI-11`
-- `FR-WF-ADI-12`
-- `FR-WF-ADI-13`
-- `FR-WF-ADI-14`
-- `FR-WF-ADI-15`
-- `FR-WF-ADI-16`
-- `FR-WF-ADI-17`
-- `FR-WF-ADI-18`
-- `FR-WF-CONF-01`
-- `FR-WF-CONF-02`
-- `FR-WF-CONF-03`
-- `FR-WF-CONF-04`
-- `FR-WF-CONF-05`
-- `FR-WF-CONF-06`
-- `NFR-SEC-ADI-02`
+- `NFR-COMP-01`
+- `NFR-CONC-01`
+- `NFR-OBS-04`
+- `NFR-PERF-04`
+- `NFR-REL-01`
+- `NFR-REL-02`
 
 ### マッピングにあるが要求定義の抽出対象に無い ID
 
-- `FR-RTO`
-- `FR-WF-CONF`
-- `G-CAP`
-- `NFR-RTO`
+- なし
 
 ### 廃止/削除表記を含む ID
 
+- `FR-ATG-01`
+- `FR-ATG-02`
+- `FR-ATG-03`
+- `FR-ATG-04`
+- `FR-ATG-05`
+- `FR-ATG-06`
+- `FR-ATG-07`
+- `FR-ATG-08`
+- `FR-ATG-09`
+- `FR-QA-06`
+- `FR-QA-08`
+- `FR-WIQ-01`
+- `FR-WIQ-02`
 - `NFR-COMP-01`
 - `NFR-CONC-01`
 - `NFR-OBS-04`

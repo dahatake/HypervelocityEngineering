@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from hve.orchestrator import (
@@ -15,6 +16,10 @@ from hve.workflow_registry import (
     ARD,
     ARD_DEFAULT_GROUP_IDS,
     _WORKFLOW_GROUP_MAPS,
+)
+
+_REQUIREMENT_DEFINITION = (
+    Path(__file__).resolve().parents[2] / "hve-dev" / "requirement-definition.md"
 )
 
 
@@ -65,6 +70,22 @@ def test_aas_starts_at_step_1_after_renumbering() -> None:
     assert step.fanout_static_keys is None
     assert "app_requirements" in (step.consumed_artifacts or [])
     assert "docs/architectural-requirements-app-*.md" in step.required_input_paths
+
+
+def test_section_13_1_aas_step_1_matches_registry_non_fanout() -> None:
+    """§13.1 の AAS Step 1 行を非 fan-out の registry 定義へ合わせる。"""
+    step = AAS.get_step("1")
+    assert step is not None
+    text = _REQUIREMENT_DEFINITION.read_text(encoding="utf-8")
+    section = text.split("### 13.1 ", 1)[1].split("### 13.2 ", 1)[0]
+    rows = [line for line in section.splitlines() if line.startswith("| 1 |")]
+    assert len(rows) == 1, "§13.1 の AAS Step 1 行を一意に抽出できません"
+    row = rows[0]
+    cells = [cell.strip() for cell in row.strip("|").split("|")]
+
+    assert cells[1] == step.title
+    assert cells[2] == step.custom_agent
+    assert cells[4] == f"`{step.output_paths[0]}`"
 
 
 def test_ada_step_1_is_migrated_to_ard_and_no_longer_exists() -> None:

@@ -7,22 +7,14 @@
 
 ## 禁止事項
 
-> 共通行動規約 (`.github/copilot-instructions.md` §0 / Skill `agent-common-preamble`) の禁止事項を本 Agent でも明示する。詳細は継承元を参照。
-
-- **捏造禁止**: ID / URL / 数値 / 固有名を根拠なく生成しない。不明は `TBD` または `不明（要確認）` と明記する。
-- **無関係変更禁止**: スコープ外のファイル整形・一括リファクタ・不要依存追加を行わない（最小差分）。
-- **検証マーカー欠落禁止**: 完了報告に `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を必ず含める。
-- **work/ 直接編集禁止**: 既存 `work/` ファイルは「削除 → 新規作成」（Skill `work-artifacts-layout` §4.1）。
-- **`docs-original/` 書き込み禁止**: 読み取り専用（追記・削除・変更不可）。
-- **ルート `README.md` 変更禁止**: `/README.md` の作成・変更を行わない。
-- **秘密情報禁止**: 鍵 / トークン / 個人情報 / 内部 URL 等を成果物に含めない。
+- 完了報告には、実行したテストのコマンドと exit code を書いてください。HVE が合否の判定に使います。必要に応じて `<!-- validation-confirmed -->` または `## 検証` / `## 検証結果` / `## Validation` を含めます。
 
 ## 1) 目的と非目的
 
 データフローアプリ デプロイ & CI/CD 構築専用Agent の **Step 3: Azure Functions/コンテナ Deploy** 担当。
 バッチサービスカタログ・ジョブカタログ・ジョブ詳細仕様書を根拠に、
 **GitHub Actions CI/CD ワークフロー**・**README**・**スモークテスト** を整備し、AC 検証を実施する。
-"全ジョブ横断設計刷新" や "アーキテクチャ変更" は範囲外（必要なら Skill task-dag-planning の分割ルールで別タスク化）。
+"全ジョブ横断設計刷新" や "アーキテクチャ変更" は範囲外（必要なら別タスク化）。
 
 ## 2) 変数
 
@@ -32,7 +24,7 @@
 
 ## 3) 入力・出力
 
-### 3.1 入力（必須）
+### 3.1 入力
 
 - `docs/dataflow/dataflow-service-catalog.md`（Arch-Dataflow-ServiceCatalog の出力 — Azure サービスマッピング・DLQ 設定・依存関係マトリクス）
 - `docs/dataflow/dataflow-app-catalog.md`（Arch-Dataflow-AppCatalog の出力 — Job-ID 一覧・スケジュール・リトライ戦略）
@@ -44,18 +36,14 @@
 - `src/infra/azure/` 配下の既存スクリプト（既存パターンがあれば踏襲する）
 - `.github/workflows/` 配下の既存ワークフロー（既存 CI/CD パターンがあれば踏襲する）
 
-### 3.3 出力（必須）
+### 3.3 出力
 
 - `.github/workflows/deploy-batch-functions.yml`（データフローアプリ Azure Functions の CI/CD ワークフロー）
 - `src/infra/azure/dataflow/README.md`（インフラ手順・環境変数一覧・トラブルシューティング）
 - AC 検証結果（`{WORK}ac-verification.md` に記録。Orchestrator gate は `Issue-<識別子>` 直下を検査するため `artifacts/` 配下に置かない）
 - 作業ログ: `{WORK}` 配下
 
-## Azure 公式情報参照（Microsoft Learn MCP 必須）
-
-- Azure サービス選定 / Azure CLI / SDK / REST API / SKU / 状態プロパティ / サンプルコードを扱う場合、**Microsoft Learn MCP が利用可能なら必ず参照**する。
-- 参照した Microsoft Learn の **title / URL / 確認事項** を `{WORK}` の作業ログ（work-status 系成果物）または成果物の根拠欄に記録する。
-- Microsoft Learn MCP を利用できない場合は `要確認（Microsoft Learn MCP 未取得）` と記録し、**推測で確定しない**。必要に応じて `az ... -h` / パッケージマネージャ / 公式 CLI help を補助確認として使う。
+- Azure や Microsoft Foundry の SKU・API・リージョン対応・CLI / SDK / REST 仕様など変わりやすい値は、Microsoft Learn MCP が利用可能なら必ず参照し、title / URL / 確認事項 / 確認日を記録してから書く（詳細は Skill `agent-common-preamble`）。参照できない値は `要確認（Microsoft Learn MCP 未取得）` と記録し、推測で確定しない。
 
 ### knowledge/ 参照（任意・存在する場合のみ）
 以下の `knowledge/` ファイルが存在する場合、業務要件・制約のコンテキストとして参照する（設計判断の根拠補強に使用）：
@@ -86,7 +74,6 @@ B) GitHub Actions CI/CD ワークフロー
 → D) スモークテスト
 → E) 進捗ログ（随時更新）
 → AC検証（全ステップ完了後）
-→ 最終品質レビュー（AC検証完了後）
 ```
 
 ※ B, C, D は互いに並列実行可能。E は全ステップで随時更新。
@@ -135,7 +122,7 @@ B) GitHub Actions CI/CD ワークフロー
 | AC-4 | `.github/workflows/deploy-batch-functions.yml` が YAML 構文的に正しい（`yamllint` またはスキーマ確認） | |
 | AC-5 | 依存導入と `pytest` がリポジトリルートで成功する | |
 
-#### 実在系 AC の記録要件（必須）
+#### 実在系 AC の記録要件
 
 - `{WORK}ac-verification.md` に各 AC を 1 行 1 AC のテーブル行で記録する。
 - 実在系 **AC-2 / AC-3 は `✅` のみ許容**。`❌` / `⏳` / `NEEDS-VERIFICATION` のまま success / 成功扱いにしてはならない。
@@ -167,11 +154,11 @@ B) GitHub Actions CI/CD ワークフロー
 - `src/infra/azure/dataflow/README.md` に手順・環境変数・トラブルシューティングが記載されている。
 - 作業ログが更新されている。
 
-## 10) 最終品質レビュー（単回インライン・セルフチェック）
+## 10) 受入観点（完了条件の補足）
 
-### 10.1 セルフチェック契約
+### 10.1 位置付け
 
-以下のドメイン固有観点は、通常時に1回のインライン・セルフチェックとしてまとめて確認し、敵対的レビューの発動条件ではない。
+以下のドメイン固有観点は成果物の受入条件であり、出力前に行う別の検証ステップでも、敵対的レビューの発動条件でもない。
 
 ### 10.2 ドメイン固有観点
 
@@ -180,7 +167,7 @@ B) GitHub Actions CI/CD ワークフロー
 - **保守性・セキュリティ・コンプライアンス**：スクリプトの可読性と再利用性、パラメータのハードコードがないか、最小権限原則が守られているか（マネージド ID 優先）、既存の `src/infra/azure/` パターンとの一貫性
 
 ### 10.3 反映方法
-確認結果は独立したレビュー成果物にせず、問題があれば主成果物を修正し、完了報告の検証結果へ簡潔に含める。
+観点を満たさない箇所は作業中に主成果物で直し、独立したレビュー成果物は作らない。完了報告の検証結果には結果を簡潔に含める。
 
 ## Agent 固有の Skills 依存
 - `azure-cli-deploy-scripts`：Azure CLI スクリプトの共通仕様（prep/create/verify 3点セット・冪等性パターン・CLI 利用不可時フォールバック）を参照する。
