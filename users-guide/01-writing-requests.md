@@ -94,3 +94,34 @@ FR-022: 却下（今期は対象外）
 | 回答の反映だけ | `<request>` を空にし、`<answers>` だけを書く |
 | 既存リポジトリへのインストール直後 | 「既存の要求定義書（docs/requirements-definition.md）を toolkit の書式（構造化欄・検証レベル・PARAM）に合わせる。意味は変えない」 |
 | 過去の矛盾の診断（Phase 0） | rd-auditor を直接呼び、`scope: 全量`、`runs: 1`、`history_mode: する`（[08-roadmap.md](08-roadmap.md)） |
+| GitHub Spec Kit の仕様から始める | `python scripts/import-speckit.py` が作る依頼文を `/build` の後に貼る（[1.7](#17-github-spec-kit-の仕様を取り込む)） |
+
+## 1.7 GitHub Spec Kit の仕様を取り込む
+
+[GitHub Spec Kit](https://github.com/github/spec-kit) で書いた仕様（`/speckit-specify`・`/speckit-clarify` の成果物）を、この toolkit の要求定義書に取り込んでから、conductor で実装・検証できます。仕様の書き方は Spec Kit、最後まで作り切って検証するのは conductor、という分担です。
+
+```bash
+python scripts/import-speckit.py                          # このリポジトリの specs/*/spec.md をすべて
+python scripts/import-speckit.py --source ../photo-app    # 別のリポジトリにある Spec Kit のプロジェクト
+python scripts/import-speckit.py --feature 001            # 機能ディレクトリを前方一致で選ぶ（複数可）
+python scripts/import-speckit.py --implement              # 取り込みと実装を 1 回の run で行う依頼文にする
+```
+
+出力は `work/import/speckit-<日時>.md` です。中の「依頼文」を、conductor の `/build` の後に貼り付けて送信します。
+
+| Spec Kit | 取り込み先の候補（最終判断は rd-author） |
+|---|---|
+| User Story（Priority P1 / P2 / P3） | 利用シナリオと要求（FR）。優先度は MUST / SHOULD / MAY |
+| Acceptance Scenarios（Given / When / Then） | 受入基準（AC）。検証レベルの候補は system |
+| Functional Requirements（`FR-001` など） | 要求（FR）。本文の MUST / SHOULD / MAY を優先度の候補にする |
+| `[NEEDS CLARIFICATION: …]`、疑問形の Edge Cases | 質問票（Q）と、関係する AC の BLOCKED |
+| Clarifications（`Q: … → A: …`） | 決定記録（出自: 利用者決定） |
+| Success Criteria（`SC-001` など） | 目的（G）の成功指標、または非機能要求（NFR） |
+| Key Entities | 用語と対象エンティティ |
+| Assumptions | 前提・制約、または ASSUMPTION |
+| Constitution の原則 | 既定制約、または非機能要求。開発プロセスの原則は決定記録 |
+| plan.md・tasks.md・contracts/ | `<references>` にだけ載せる（技術選定は要求にしない） |
+
+- スクリプトは要求定義書を編集せず、ID も振りません（G-1・G-3）。Spec Kit の ID は `speckit:001-photo-albums/FR-003` の形の取り込み元 ID として残し、rd-author が `next-id.py` で採番し直して出典欄に書きます。
+- 既定の依頼文は `scope: なし`・`approval_policy: 厳格` で、要求定義だけを行います。報告の質問票に回答してから、次の `/build` で実装します。
+- テンプレートのまま（`[FEATURE NAME]` など）の箇所があると `WARN` を出します。先に Spec Kit 側で埋めるか、rd-author に質問票へ挙げさせます。

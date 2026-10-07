@@ -82,6 +82,26 @@ def test_verify_runs_configured_commands(sample):
     assert proc.returncode == 1 and "FAIL slow" in proc.stdout
 
 
+def test_verify_accepts_string_commands_and_reports_bad_entries(sample):
+    cfg = json.loads(sample.read("scripts/hve.config.json"))
+    cfg["verify"]["commands"] = ["python -c \"print('one')\"", "python -c \"print('two')\""]
+    sample.write("scripts/hve.config.json", json.dumps(cfg))
+    proc = sample.py("verify.py")
+    assert proc.returncode == 0, proc.stdout
+    assert "PASS python " in proc.stdout and "PASS python-2 " in proc.stdout
+
+    cfg["verify"]["commands"] = "python -c \"print('only')\""
+    sample.write("scripts/hve.config.json", json.dumps(cfg))
+    assert sample.py("verify.py").returncode == 0
+
+    cfg["verify"]["commands"] = [{"name": "unit"}, 3]
+    sample.write("scripts/hve.config.json", json.dumps(cfg))
+    proc = sample.py("verify.py")
+    assert proc.returncode == 1
+    assert "FAIL config" in proc.stdout and '"run"' in proc.stdout and "Traceback" not in proc.stdout + proc.stderr
+    assert sample.py("verify.py", "--docs-only").returncode == 0
+
+
 def test_clean_work(sample):
     old = sample.path / "work" / "runs" / "200001010000"
     old.mkdir(parents=True)

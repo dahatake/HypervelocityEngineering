@@ -1,0 +1,28 @@
+{
+  "tool": "speckit",
+  "task": "T2",
+  "run": 1,
+  "date": "2026-10-08",
+  "toolkit_version": null,
+  "tool_version": "1.1.1",
+  "model": "claude-sonnet-5.5 (medium)",
+  "interventions": 9,
+  "hidden_pass": 14,
+  "hidden_total": 14,
+  "verified_requirements": 6,
+  "total_requirements": 6,
+  "nsm": 0.6666666666666666,
+  "lead_time_min": 16.4,
+  "human_minutes": null,
+  "credits": null,
+  "completed_without_correction": true,
+  "notes": "converge 1 回目で 2 件追加、2 周",
+  "requirements": {
+    "R1": true,
+    "R2": true,
+    "R3": true,
+    "R4": true,
+    "R5": true,
+    "R6": true
+  }
+}

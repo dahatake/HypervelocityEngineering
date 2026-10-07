@@ -12,6 +12,7 @@ disable-model-invocation: true
 ## 始めに（新しい文脈でも毎回）
 1. `python scripts/clean-work.py` → `python scripts/run-state.py start --options "<run_options の各行>"`。
    出力が `RESUME <run-id>` なら再開です。表示された工程・queue・progress の続きから進めます（以前の会話を読み返しません）。
+   再開のきっかけが利用者の Prompt なら、KPI のために 1 回だけ記録します: `<answers>` があれば `python scripts/run-state.py human answers`、なければ `human resume`（途中の追加指示だけなら `human instruction`）。新しい run の最初の依頼は start が記録するので不要です。文脈の圧縮など、利用者の Prompt がない再開では記録しません。
    main 上で始めた場合、start が統合ブランチ `run/<run-id>` を作ります。以後の commit はすべて統合ブランチか作業ブランチで行います。
    統合ブランチは `run-state.py status` の `integration:` の行（meta.json の `integration_branch`）です。run の途中でブランチ名を変えません（GitHub Copilot app の `rename_branch` も使いません。hook G-5 が拒否します）。
 2. `git log --oneline -10` と `python scripts/verify.py --docs-only` で基準を記録します（失敗していても続けます。基準として progress に書きます）。
@@ -23,6 +24,7 @@ disable-model-invocation: true
    直接矛盾が確度高で残れば、その依頼文を rd-author に渡して 1 に戻す（最大 3 周）。利用者の判断が要るものは質問票・BLOCKED にして先に進む。
 3. 計画 → `python scripts/rdcheck.py list --state 承認済み` を元に queue を作る（`run-state.py queue add`）。
    1 項目は要求 ID 1〜3 個。依存は `--depends`、同じ共通部品・テーブル・境界は `--boundary` / `--shared` で表し、重なる項目は並行させない。BLOCKED だけの要求は入れない。
+   画面を持つアプリで、カタログの共通部品に「デザイン基盤」がなければ、ui_policy のワークスペースの要求を含む項目を最初に置き、そこでデザイン基盤を作らせる（skill `implement-fr` の「画面の見た目」）。ほかの画面の項目は、その項目に `--depends` を付ける（並行して別々の見た目が作られるのを防ぐ）。
    scope が「なし」（要求定義だけの依頼）なら queue を空のまま `stage 3 --done` とし、工程 4・5 を省いて工程 6 へ進む。
 4. System Test の設計 → test-designer。実装より前に行う。全ケース not_run で commit させる。
 5. 実装ループ → 下の「実装ループ」。
@@ -36,7 +38,7 @@ disable-model-invocation: true
 - implementer の結果（10 行以内）を受けたら:
   - `GATE: fail` や `GATE G-4` を含む → `queue set <item> --status todo`。同じ項目が 3 回失敗したら強いモデル（models.implementer-escalation）で 1 回だけ再挑戦し、それも失敗したら `--status blocked` にして原因を progress に書く。
   - `競合:` があれば rd-author に回し（工程 1 を差分で再実行）、影響する項目を blocked か todo に戻す。
-  - MUST の要求、または共通部品・契約の変更を含む → reviewer に差分と関連 AC を渡し、`差し戻し` なら implementer に戻す。
+  - MUST の要求、共通部品・契約の変更、または画面の変更を含む → reviewer に差分と関連 AC を渡し、`差し戻し` なら implementer に戻す。
 - 統合は 1 本ずつ直列に行う（統合ブランチの上で）:
   `git merge --no-ff work/<run-id>/<item>` →
   `python scripts/verify.py --run current` →
@@ -51,7 +53,8 @@ disable-model-invocation: true
 1. `python scripts/ledger.py --by conductor run --select all --canary-first` と `python scripts/verify.py --strict --run current`。
 2. rd-auditor（scope: 全量、runs: 3）。
 3. rd-author に転記を依頼する（包括承認した項目→決定記録、未回答の質問票・承認依頼→仮定・未解決事項、残った監査指摘→監査指摘）。`python scripts/next-id.py --sync --finalize`。
-4. `work/runs/<run-id>/run-report.md` を書く（下の形）。`run-state.py stage 6 --done` → `run-state.py finish --result "<結果>"` → commit → `python scripts/clean-work.py`。
+4. `python scripts/kpi.py run --out work/runs/<run-id>/kpi.md` と `python scripts/kpi.py run --format html --out work/runs/<run-id>/kpi.html` で KPI を集計する。
+   `work/runs/<run-id>/run-report.md` を書く（下の形）。`run-state.py stage 6 --done` → `run-state.py finish --result "<結果>"` → commit → `python scripts/clean-work.py`。
 5. main への取り込み（ローカル）: 結果が「全件完了」で `python scripts/run-state.py complete-check` が exit 0 のときだけ行う。さらに、meta.json の `integration_branch` が `run/<run-id>`（main 上で始めた run）の場合に限る。別ブランチや New Worktree（VS Code・GitHub Copilot app の worktree セッション）で始めた run は利用者のブランチなので取り込まない。
    `git checkout <base_branch>` → `git merge --no-ff run/<run-id>` → `python scripts/verify.py --run current`。
    `git checkout` が失敗する（base が別の worktree で使用中・未コミットの変更がある）場合も取り込まず、統合ブランチを残して理由を run-report.md に書く。
@@ -66,6 +69,7 @@ run-report.md の形:
 - 包括承認した項目（影響の大きい順）
 - 未回答の質問票（重要度の高い順。次の Prompt の `<answers>` にそのまま書ける形）
 - 品質の指標: verify、AC の pass 率（`ledger.py summary`）、監査の指摘（CRITICAL・HIGH の件数）
+- KPI: `kpi.md` の表をそのまま貼る（North Star「人の介入 1 回あたりの検証済み要求」、1 回目のゲート通過率、トレーサビリティ網羅率など）。検証済みにならなかった要求は理由を添える
 - 取り込み方法: 統合ブランチ名と、`git merge` または `gh pr create` のコマンド
 
 ## 完了の判定

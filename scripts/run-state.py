@@ -12,6 +12,7 @@ Usage:
   python scripts/run-state.py queue show
   python scripts/run-state.py time                         # elapsed / max_hours; exit 3 when >= 85 %
   python scripts/run-state.py complete-check               # exit 0 only when the run may end (§8.3)
+  python scripts/run-state.py human answers|resume|instruction [--note "..."]   # count one human prompt (KPI)
   python scripts/run-state.py finish [--result "..."] [--credits "..."]   # append docs/run-history.md, close the run
 """
 from __future__ import annotations
@@ -36,9 +37,32 @@ HISTORY_HEADER = (
     "# 実行履歴\n\n"
     "conductor の 1 回の実行を 1 行で記録します（工程 6 で `scripts/run-state.py finish` が追記します）。"
     "`/work` の一時ファイルが消えても、実行の結果と KPI をここで追えます。\n\n"
-    "| run-id | 開始 | 終了 | HEAD | 結果 | 実装した要求 ID | BLOCKED | AC pass 率 | 経過時間 | 1 回目のゲート通過率 | AI クレジット |\n"
-    "|---|---|---|---|---|---|---|---|---|---|---|\n"
+    "| run-id | 開始 | 終了 | HEAD | 結果 | 実装した要求 ID | BLOCKED | AC pass 率 | 経過時間 | 1 回目のゲート通過率 | AI クレジット | 人の介入 | 検証済み要求 |\n"
+    "|---|---|---|---|---|---|---|---|---|---|---|---|---|\n"
 )
+HISTORY_NEW_COLS = ("人の介入", "検証済み要求")
+HUMAN_KINDS = ("request", "answers", "resume", "instruction")
+
+
+def upgrade_history(text: str) -> str:
+    """Add the columns introduced in 1.2.0 to a run-history table written by an older version."""
+    lines = text.split("\n")
+    in_table = False
+    for i, l in enumerate(lines):
+        if re.match(r"^\|\s*run-id\s*\|", l):
+            if all(c in l for c in HISTORY_NEW_COLS):
+                return text
+            lines[i] = l.rstrip() + "".join(f" {c} |" for c in HISTORY_NEW_COLS)
+            in_table = True
+            continue
+        if in_table:
+            if re.match(r"^\|[\s\-:|]+\|\s*$", l):
+                lines[i] = l.rstrip() + "---|" * len(HISTORY_NEW_COLS)
+            elif l.startswith("|"):
+                lines[i] = l.rstrip() + " - |" * len(HISTORY_NEW_COLS)
+            else:
+                in_table = False
+    return "\n".join(lines)
 
 
 def ctx(args):
@@ -112,6 +136,7 @@ def cmd_start(args) -> int:
         "head_at_start": h.head_commit(root), "branch_at_start": start_branch,
         "integration_branch": branch, "options": opts, "stage": 0,
         "stages_done": [], "ledger_strict": False, "session_id": None, "toolkit": h.TOOLKIT_VERSION,
+        "human_interventions": [{"at": h.now_iso(), "kind": "request", "note": ""}],
     }
     h.save_meta(root, cfg, rid, meta)
     h.write_json(rdir / "queue.json", {"run_id": rid, "items": []})
@@ -333,6 +358,19 @@ def cmd_complete_check(args) -> int:
     return 0
 
 
+def cmd_human(args) -> int:
+    root, cfg = ctx(args)
+    rid = need_run(root, cfg)
+    if args.kind not in HUMAN_KINDS:
+        raise SystemExit(f"ERROR run-state: human の種類は {'/'.join(HUMAN_KINDS)} です")
+    meta = h.load_meta(root, cfg, rid)
+    log = meta.setdefault("human_interventions", [])
+    log.append({"at": h.now_iso(), "kind": args.kind, "note": (args.note or "")[:200]})
+    h.save_meta(root, cfg, rid, meta)
+    print(f"human: {args.kind} (計 {len(log)} 回)")
+    return 0
+
+
 def cmd_finish(args) -> int:
     root, cfg = ctx(args)
     rid = need_run(root, cfg)
@@ -351,16 +389,20 @@ def cmd_finish(args) -> int:
     passed = {a for c in ledger.get("cases", []) if c.get("status") == "pass" for a in c.get("ac_ids", [])}
     ac_rate = f"{sum(1 for a in sys_acs if a in passed)}/{len(sys_acs)}" if sys_acs else "-"
     el = elapsed_hours(meta)
+    verified, _ = h.load_script("kpi").verified_requirements(root, cfg, impl)
+    human = meta.get("human_interventions")
+    human_n = str(len(human)) if isinstance(human, list) else "未記録"
     result = args.result or ("全件完了" if not blocked else "blocked あり")
     meta.update({"status": "finished", "finished_at": h.now_iso(), "result": result})
     h.save_meta(root, cfg, rid, meta)
     hist = root / h.mf(cfg, "run_history")
-    text = h.read_text(hist) if hist.exists() else HISTORY_HEADER
+    text = upgrade_history(h.read_text(hist)) if hist.exists() else HISTORY_HEADER
     if re.search(rf"^\|\s*{re.escape(rid)}\s*\|", text, re.M):
         print(f"run-history: {rid} は既に記録されています")
     else:
         row = (f"| {rid} | {meta['started_at'][:16]} | {meta['finished_at'][:16]} | {h.head_commit(root)} | {result} | "
-               f"{', '.join(impl) or '-'} | {len(blocked)} | {ac_rate} | {el:.1f}h | {first_gate} | {args.credits or '未取得'} |")
+               f"{', '.join(impl) or '-'} | {len(blocked)} | {ac_rate} | {el:.1f}h | {first_gate} | {args.credits or '未取得'} | "
+               f"{human_n} | {len(verified)}/{len(impl)} |")
         if not text.endswith("\n"):
             text += "\n"
         h.write_text_atomic(hist, text + row + "\n")
@@ -411,6 +453,9 @@ def main(argv=None) -> int:
     qs.add_parser("show")
     sub.add_parser("time")
     sub.add_parser("complete-check")
+    hu = sub.add_parser("human")
+    hu.add_argument("kind", choices=HUMAN_KINDS)
+    hu.add_argument("--note", default="")
     f = sub.add_parser("finish")
     f.add_argument("--result")
     f.add_argument("--credits")
@@ -418,7 +463,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     return {"start": cmd_start, "status": cmd_status, "stage": cmd_stage, "progress": cmd_progress,
             "queue": cmd_queue, "time": cmd_time, "complete-check": cmd_complete_check,
-            "finish": cmd_finish}[args.cmd](args)
+            "human": cmd_human, "finish": cmd_finish}[args.cmd](args)
 
 
 if __name__ == "__main__":

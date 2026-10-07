@@ -67,6 +67,8 @@ conductor toolkit は、次の 4 つの手段でこれらを防ぎます。
 scripts/         決定的スクリプト（Python 3.9 以上。標準ライブラリだけを使用）
   verify.py / verify.ps1 / verify.sh   L1 検査（CHK-01〜23）＋ビルド・テスト
   rdcheck.py  next-id.py  ledger.py  select-tests.py  summarize.py  clean-work.py  run-state.py
+  kpi.py           KPI の集計（North Star: 人の介入 1 回あたりの検証済み要求）
+  import-speckit.py  GitHub Spec Kit の成果物を /build の依頼文に変換
   hooks/gate.py   hook の本体
   hve.config.json 設定（検証コマンド、モデル、ゲート、保持期間）
 docs/            永続のドキュメント（git で管理）
@@ -245,6 +247,7 @@ python tools/install.py --target /path/to/your-repo
    python scripts/next-id.py --sync --adopt
    ```
    続けて `python scripts/verify.py --docs-only --show-warnings` を実行し、構造化欄の不足（CHK-20）などを確認します。修正は最初の run で rd-author に任せてかまいません（依頼に「既存の要求定義書を toolkit の書式に合わせる」と書きます）。
+   [GitHub Spec Kit](https://github.com/github/spec-kit) の仕様（`specs/*/spec.md`、`.specify/memory/constitution.md`）がある場合は、`python scripts/import-speckit.py` で `/build` の依頼文を作ります（[Spec Kit からの取り込み](users-guide/01-writing-requests.md#17-github-spec-kit-の仕様を取り込む)）。
 5. （任意）社内の情報や対象の技術のツールを使う場合は、run を実行する環境（VS Code・Copilot CLI・GitHub Copilot app）に MCP Server・plugin を設定し、サインインしておきます。例は、要求の一次情報には Work IQ、Azure を使う開発には Microsoft Learn と Azure MCP Server、Copilot Studio を使う開発には Microsoft が提供する plugin です。エージェント側の設定は不要です（[設定とカスタマイズ 4.4](users-guide/04-customization.md#44-mcp-serverplugin拡張機能を使う)）。
 
 ### 更新・確認・アンインストール
@@ -461,8 +464,9 @@ hook や subagent の動作は、クライアント（VS Code・Copilot CLI・Gi
 | 7 | [トラブルシューティング](users-guide/07-troubleshooting.md) | 止まった・拒否された・失敗した |
 | 8 | [導入ロードマップと KPI](users-guide/08-roadmap.md) | 診断から本番運用までの段取りと、効果の測り方を知りたい |
 
-## 用語
+GitHub Spec Kit との比較計測（同じ課題・隠し受入テスト・North Star の比較）の手順と結果は [bench/](bench/README.md) にあります。最新の結果は [bench/RESULTS.md](bench/RESULTS.md) です。
 
+## 用語
 | 用語 | 意味 |
 |---|---|
 | conductor（オーケストレーター） | 利用者が直接呼ぶ唯一のエージェント。計画・作業の割り当て・統合・ゲートの判定・報告を行います。 |
@@ -487,3 +491,4 @@ hook や subagent の動作は、クライアント（VS Code・Copilot CLI・Gi
 | 管理データの雛形 | [docs/](docs/)、[tests/system/ledger.json](tests/system/ledger.json) |
 | インストールスクリプト | [tools/](tools/) |
 | toolkit のテスト | [tests/toolkit/](tests/toolkit/)（`python -m pytest tests/toolkit -q`） |
+| GitHub Spec Kit との比較計測（配布しない） | [bench/](bench/README.md)、結果は [bench/RESULTS.md](bench/RESULTS.md) |

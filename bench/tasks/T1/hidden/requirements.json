@@ -1,0 +1,8 @@
+{
+  "R1": {"title": "商品の登録と入庫（重複・不明 SKU・数量の検証を含む）", "tests": ["test_add_and_on_hand", "test_duplicate_sku_rejected", "test_unknown_sku", "test_receive_increases_stock", "test_invalid_quantity"]},
+  "R2": {"title": "予約は引当可能数だけを減らし、不足は拒否する", "tests": ["test_reserve_reduces_available_not_on_hand", "test_cannot_reserve_more_than_available"]},
+  "R3": {"title": "予約の取り消しと確定", "tests": ["test_release_restores_available", "test_commit_reduces_on_hand"]},
+  "R4": {"title": "発注点以下の商品の一覧（昇順・等しい場合を含む）", "tests": ["test_low_stock_uses_available_and_is_sorted", "test_low_stock_includes_equal_to_reorder_level"]},
+  "R5": {"title": "JSON ファイルへの保存と再読み込み", "tests": ["test_save_and_reload", "test_save_without_path_fails"]},
+  "R6": {"title": "CLI で同じ操作ができる", "tests": ["test_cli_flow", "test_cli_error_exit_code"]}
+}

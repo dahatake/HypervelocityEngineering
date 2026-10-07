@@ -1,0 +1,28 @@
+{
+  "tool": "speckit",
+  "task": "T3",
+  "run": 2,
+  "date": "2026-10-08",
+  "toolkit_version": null,
+  "tool_version": "1.1.1",
+  "model": "claude-sonnet-5.5 (medium)",
+  "interventions": 7,
+  "hidden_pass": 13,
+  "hidden_total": 13,
+  "verified_requirements": 6,
+  "total_requirements": 6,
+  "nsm": 0.8571428571428571,
+  "lead_time_min": 15.1,
+  "human_minutes": null,
+  "credits": null,
+  "completed_without_correction": true,
+  "notes": "converge は 1 回で Converged。質問 2 件は推奨案",
+  "requirements": {
+    "R1": true,
+    "R2": true,
+    "R3": true,
+    "R4": true,
+    "R5": true,
+    "R6": true
+  }
+}

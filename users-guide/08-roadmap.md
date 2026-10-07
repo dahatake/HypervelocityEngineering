@@ -50,18 +50,25 @@ external_exposure: 公開しない
 
 ## 8.2 KPI
 
-効果を測るための指標です。
+効果を測るための指標です。`python scripts/kpi.py run`（1 回の run）と `python scripts/kpi.py history`（全 run）で集計できます。工程 6 では conductor が自動で集計し、run-report.md に載せます。
+
+**North Star: 人の介入 1 回あたりの検証済み要求**（＝ 検証済み要求の数 ÷ 利用者の Prompt の数）。人の手を減らすことと、要求どおりに作り切ったと証明できることを、1 つの数で表します。介入を減らしても検証済みの要求が増えなければ上がりません。検証済みの定義は [5 章の kpi.py](05-scripts-reference.md#kpipykpi-の集計) にあります。
 
 | 区分 | KPI | 目標の目安 | 取得元 |
 |---|---|---|---|
+| North Star | 人の介入 1 回あたりの検証済み要求 | 増加傾向 | `kpi.py`、`docs/run-history.md` の「人の介入」「検証済み要求」 |
+| 完走 | 無人完走率（結果が「全件完了」の run の割合） | 80% 以上 | `kpi.py history` |
 | 品質 | 承認済みで BLOCKED でない AC の pass 率 | 100% | `docs/run-history.md` の AC pass 率、`ledger.py summary` |
+| 品質 | トレーサビリティ網羅率（承認済み要求のうち、カタログ行があり system AC がすべて台帳にあるもの） | 100% | `kpi.py run` |
 | 品質 | マージ後に見つかった直接矛盾・欠陥 | 0 件 | 次回の rd-auditor |
 | 品質 | system AC のカバレッジと、ダイジェストの不一致 | 100% と 0 件 | `verify.py --strict-ledger`、`rdcheck.py stats` |
-| 時間 | 要求 1 件あたりの経過時間 | Phase 1 の計測値を基準に短縮 | `docs/run-history.md`（経過時間 ÷ 実装した要求の数） |
+| 時間 | 要求 1 件あたりの経過時間 | Phase 1 の計測値を基準に短縮 | `docs/run-history.md`（経過時間 ÷ 実装した要求の数）、`kpi.py history` |
 | 時間 | 1 回目のゲートで通過した項目の割合 | 70% 以上 | `docs/run-history.md` の「1 回目のゲート通過率」 |
 | Token | 要求 1 件・AC 1 件あたりの AI クレジット | Phase 1 の計測値を基準に削減 | Agent Debug Logs と使用量の表示（`run-state.py finish --credits` で記録） |
 | Token | subagent が使った Token の割合 | 記録し、増え続けるなら委譲の範囲を見直す | 同上 |
-| 人 | 1 回の依頼で利用者が書く Prompt の回数 | 1 回（回答があれば 2 回） | — |
+| 人 | 1 回の依頼で利用者が書く Prompt の回数 | 1 回（回答があれば 2 回） | `run-state.py human` の記録（run-history の「人の介入」） |
+
+GitHub Spec Kit など、ほかの進め方と同じ課題で比べる手順は [bench/README.md](../bench/README.md) にあります。
 
 ## 8.3 リスクと対策
 

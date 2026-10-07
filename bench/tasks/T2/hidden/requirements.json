@@ -1,0 +1,8 @@
+{
+  "R1": {"title": "利用者・フォームごとの下書きの保存と再開", "tests": ["test_save_and_resume", "test_resume_missing_raises", "test_users_and_forms_are_isolated", "test_persists_across_instances"]},
+  "R2": {"title": "保持期間（既定 30 日・ちょうどで期限切れ・変更可能）", "tests": ["test_default_retention_29_days_still_alive", "test_default_retention_exactly_30_days_is_expired", "test_custom_retention_days"]},
+  "R3": {"title": "提出すると下書きが消える", "tests": ["test_submit_returns_and_deletes", "test_submit_expired_raises"]},
+  "R4": {"title": "期限切れの一括削除と件数", "tests": ["test_purge_expired_returns_count"]},
+  "R5": {"title": "既定: 上書きは 1 件のまま、再保存で期限を数え直し、再開では延長しない", "tests": ["test_default_overwrite_keeps_single_draft", "test_resave_restarts_expiry", "test_resume_does_not_extend_expiry"]},
+  "R6": {"title": "既定: 65536 バイト超は拒否", "tests": ["test_size_limit_default_65536_bytes"]}
+}

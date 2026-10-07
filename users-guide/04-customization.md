@@ -26,6 +26,8 @@
 | `slow` | `true` にすると、作業役のゲート（`verify.py --quick`）ではスキップし、統合時と最終工程でだけ実行します |
 | `timeout_sec` | このコマンドのタイムアウト（既定は `verify.timeout_sec`） |
 
+`"commands": ["python -m pytest -q"]` のように文字列だけを書くこともできます。その場合、`name` はコマンドの先頭の語（例: `python`）になります。`run` のない要素や、文字列でもオブジェクトでもない要素は、`FAIL config` として verify を失敗させます。
+
 技術スタック別の例:
 
 | スタック | 例 |
@@ -115,12 +117,21 @@ conductor は subagent を呼び出すとき、この表のモデルを指定し
 | `checks.id_scan_exclude` | `docs/**` など | コードから要求 ID を検索するときに除外するパス（CHK-17/19） |
 | `checks.test_path_pattern` | tests/、*.test.* など | テストコードとみなすパス（CHK-09） |
 
-## 4.6 エージェントと手順書を変更する
+## 4.6 画面の見た目（デザインシステム）
+
+要求定義書は「何を満たすか」だけを書き、配色・装飾・UI ライブラリは指定しません。見た目は implementer が、skill `implement-fr` の「画面の見た目（UI デザインの基盤）」に従って決めます。
+
+- **既定**: 対象プラットフォームの最新の公式デザインシステムと公式のコンポーネントを使います。Web は Microsoft Fluent 2（Fluent UI）、Windows は WinUI 3、Apple のプラットフォームは Human Interface Guidelines と SwiftUI の標準コンポーネント、Android は Material 3 です。リポジトリに既存のデザインシステムがあれば、それを優先します。
+- **一貫性**: 最初に画面を作る項目で、テーマ（ライト・ダーク・ハイコントラスト）、デザイントークン、アプリの外枠を「デザイン基盤」としてカタログの共通部品に載せます。conductor はほかの画面の項目をこの項目のあとに並べ、reviewer は画面の差分を規則と照合します。
+- **指定したい場合**: 依頼に「デザインシステムは Fluent 2 を使う」「社内のブランドガイド（添付）に従う」のように書くか、`<references>` に指針を渡します。rd-author が既定制約として要求定義書に記録し、implementer はそれを最優先にします。
+- **既存のアプリの見た目を直したい場合**: 「既存の画面をデザイン基盤に移行する」と依頼します。手順書だけを更新しても、既に作られた画面は変わりません。
+
+## 4.7 エージェントと手順書を変更する
 
 - 役割ごとの振る舞いは `.github/agents/*.agent.md`、詳しい手順は `.github/skills/*/SKILL.md` に定義しています。直接編集してかまいません。
 - インストールスクリプトを再実行しても、ローカルで変更したファイルは上書きされません（`KEEP-LOCAL`）。toolkit の新しいバージョンを取り込みたい場合は、`--dry-run` で確認してから、差分を手でマージするか、`--force`（バックアップを残します）を使います。
 - skills の本文は、元になった 3 つの Prompt（RequirementDefinition作成・RD-FR_Prompt・SystemTest-Increment-Run）の全文です。先頭の「読み替え表」が、元の Prompt と無人実行との差分を吸収しています。元の Prompt を改訂した場合は、本文を差し替え、読み替え表はそのまま残します。
 
-## 4.7 CI
+## 4.8 CI
 
 `.github/workflows/hve-verify.yml` は、pull request と main への push をトリガーに `scripts/verify.sh --show-warnings` を実行します。アプリのビルドに必要なツールチェーン（`actions/setup-node` など）は、verify の前にステップとして追加します。CodeQL や依存関係のスキャンを加える場合も、このワークフローに追記します。

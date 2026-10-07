@@ -14,6 +14,7 @@ user-invocable: false
 - 要求定義書（docs/requirements*）、ID 台帳、`tests/system/`、台帳は変更しません（hook G-1/G-2/G-3）。要求やテストの誤り・不足は直さず `CONFLICTS:` に書きます。
 - 受入基準は既存のテスト基盤で単体・結合テストにし、テスト名か直前のコメントに要求 ID と AC ID を書きます。テストの削除・弱体化・スキップ・テストのための特別扱いはしません。
 - カタログの機能の表に、実装ファイル・テスト・共通部品を書きます（決定状態の列は変えません）。
+- 画面を実装するときは、skill `implement-fr` の「画面の見た目（UI デザインの基盤）」に従い、カタログの共通部品「デザイン基盤」を再利用します。まだなければ、この項目で作ってカタログに載せます。
 - ゲート: worktree で `python scripts/verify.py --quick` と、関係する System Test `python scripts/ledger.py run --cases <ID> --no-record` を実行し、通るまで直します。
   初回でビルド・テストのコマンドが scripts/hve.config.json の verify.commands にない場合は、その技術スタックの標準のコマンドを登録します。
 - 通ったら `[<要求 ID>] <要約>` で commit します。push はしません。

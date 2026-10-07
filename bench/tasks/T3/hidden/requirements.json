@@ -1,0 +1,8 @@
+{
+  "R1": {"title": "既存の動作を壊さない（利用者を指定しない呼び出し）", "tests": ["test_legacy_create_read_update_delete", "test_legacy_errors_unchanged", "test_legacy_list_ids_sorted"]},
+  "R2": {"title": "ロールの割り当てと検証", "tests": ["test_set_and_get_role", "test_invalid_role_rejected", "test_permission_error_is_docstore_error"]},
+  "R3": {"title": "viewer / editor / admin の権限の範囲", "tests": ["test_viewer_can_read_and_list_only", "test_editor_can_create_update_not_delete", "test_admin_can_do_everything"]},
+  "R4": {"title": "拒否した操作は文書を変更しない", "tests": ["test_denied_operation_does_not_change_document"]},
+  "R5": {"title": "ロール未割り当ての利用者は全操作を拒否、権限確認が存在確認より先", "tests": ["test_user_without_role_is_denied_everything", "test_permission_checked_before_existence"]},
+  "R6": {"title": "ロールの割り当ては admin だけ", "tests": ["test_set_role_requires_admin_when_actor_given"]}
+}

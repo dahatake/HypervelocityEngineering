@@ -1,0 +1,28 @@
+{
+  "tool": "conductor",
+  "task": "T3",
+  "run": 2,
+  "date": "2026-10-08",
+  "toolkit_version": "1.3.0",
+  "tool_version": null,
+  "model": "claude-sonnet-5.5 (medium)",
+  "interventions": 1,
+  "hidden_pass": 13,
+  "hidden_total": 13,
+  "verified_requirements": 6,
+  "total_requirements": 6,
+  "nsm": 6.0,
+  "lead_time_min": 40.9,
+  "human_minutes": null,
+  "credits": null,
+  "completed_without_correction": true,
+  "notes": "実エージェント。並行 1（store.py 共有のため直列）。reviewer の差し戻し 2 回。質問 2 件は推奨案",
+  "requirements": {
+    "R1": true,
+    "R2": true,
+    "R3": true,
+    "R4": true,
+    "R5": true,
+    "R6": true
+  }
+}

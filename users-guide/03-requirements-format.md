@@ -144,4 +144,4 @@
 
 ## 3.5 実行履歴（`docs/run-history.md`）
 
-`run-state.py finish` が、1 run につき 1 行を追記します。列は run-id、開始、終了、HEAD、結果、実装した要求 ID、BLOCKED、AC pass 率、経過時間、1 回目のゲート通過率、AI クレジットです。run-id は一意である必要があります（CHK-23）。
+`run-state.py finish` が、1 run につき 1 行を追記します。列は run-id、開始、終了、HEAD、結果、実装した要求 ID、BLOCKED、AC pass 率、経過時間、1 回目のゲート通過率、AI クレジット、人の介入、検証済み要求です。run-id は一意である必要があります（CHK-23）。1.1.0 以前の表に追記するときは、「人の介入」と「検証済み要求」の列を自動で足し、過去の行には `-` を入れます。

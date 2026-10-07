@@ -17,9 +17,12 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
+import re
 import sys
 import time
 from pathlib import Path
+from typing import Dict, List, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import hvelib as h  # noqa: E402
@@ -31,6 +34,34 @@ def log_dir(root: Path, cfg: dict) -> Path:
     d = h.run_dir(croot, cfg, rid) / "logs" if rid else h.work_dir(root, cfg) / "logs"
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+def normalize_commands(raw) -> Tuple[List[dict], List[str]]:
+    """verify.commands -> ([{"name", "run", ...}], [problems]). A plain string is accepted as {"run": <string>}."""
+    if raw in (None, ""):
+        return [], []
+    if isinstance(raw, (str, dict)):
+        raw = [raw]
+    if not isinstance(raw, list):
+        return [], [f"verify.commands は配列にします（現在: {type(raw).__name__}）"]
+    out: List[dict] = []
+    problems: List[str] = []
+    used: Dict[str, int] = {}
+    for i, c in enumerate(raw, 1):
+        if isinstance(c, str):
+            c = {"run": c}
+        if not isinstance(c, dict):
+            problems.append(f"verify.commands の {i} 番目が不正です（{type(c).__name__}）")
+            continue
+        run = c.get("run") or c.get("command") or c.get("cmd")
+        if not isinstance(run, str) or not run.strip():
+            problems.append(f"verify.commands の {i} 番目に \"run\"（実行するコマンド）がありません: {json.dumps(c, ensure_ascii=False)[:120]}")
+            continue
+        base = str(c.get("name") or re.sub(r"[^A-Za-z0-9_.-]+", "-", run.split()[0].split("/")[-1].split("\\")[-1]).strip("-") or "step")
+        used[base] = used.get(base, 0) + 1
+        name = base if used[base] == 1 else f"{base}-{used[base]}"
+        out.append({**c, "name": name, "run": run})
+    return out, problems
 
 
 def main(argv=None) -> int:
@@ -95,13 +126,15 @@ def main(argv=None) -> int:
         print("  " + lines[-1])
 
     if not args.docs_only:
-        cmds = cfg.get("verify", {}).get("commands", []) or []
-        if not cmds:
+        cmds, problems = normalize_commands(cfg.get("verify", {}).get("commands", []))
+        for p in problems:
+            failed.append("config")
+            print(f"FAIL config {p}")
+            print('  書き方: "commands": [{"name": "unit", "run": "python -m pytest -q"}]（users-guide/04-customization.md 4.1）')
+        if not cmds and not problems:
             print("INFO verify.commands が空です（scripts/hve.config.json にビルド・静的検査・テストのコマンドを登録します）")
         for c in cmds:
-            name, cmd = c.get("name", "step"), c.get("run")
-            if not cmd:
-                continue
+            name, cmd = c["name"], c["run"]
             if args.quick and c.get("slow"):
                 print(f"SKIP {name} (slow, --quick)")
                 continue

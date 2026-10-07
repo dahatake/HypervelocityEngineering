@@ -89,8 +89,30 @@ python scripts/run-state.py queue ready --parallel 3
 python scripts/run-state.py queue set I-01 --status doing --branch work/<run-id>/I-01 --attempts +1
 python scripts/run-state.py time                  # 時間予算の 85% を超えたら exit 3
 python scripts/run-state.py complete-check        # 完了条件の判定
+python scripts/run-state.py human answers --note "Q-003: B"   # 利用者の Prompt を 1 回として記録（answers / resume / instruction）
 python scripts/run-state.py finish --result "全件完了" --credits "…"   # docs/run-history.md に 1 行追記
 ```
+
+新しい run の最初の依頼は `start` が `request` として記録します。`human` は、利用者の Prompt で run を再開したときに conductor が 1 回だけ実行します。記録した回数は KPI の「人の介入」になります。
+
+## kpi.py（KPI の集計）
+
+```bash
+python scripts/kpi.py run                          # 実行中（なければ最新）の run の KPI を Markdown で表示
+python scripts/kpi.py run --run 202610080900 --format json
+python scripts/kpi.py run --format html --out work/runs/<run-id>/kpi.html
+python scripts/kpi.py history                      # docs/run-history.md 全体の集計
+```
+
+North Star は「人の介入 1 回あたりの検証済み要求」です。**検証済み要求**は、実装した要求のうち、承認済みで、カタログの行があり、BLOCKED の AC がなく、system の AC がすべて台帳で `pass` のものです。検証済みにならなかった要求は、理由（「カタログの行がない」など）を表示します。指標と目標は [08-roadmap.md の 8.2](08-roadmap.md#82-kpi) にあります。
+
+## import-speckit.py（GitHub Spec Kit からの取り込み）
+
+```bash
+python scripts/import-speckit.py [--source DIR] [--feature 001] [--implement] [--no-constitution] [--out F | --stdout | --json]
+```
+
+`specs/*/spec.md` と `.specify/memory/constitution.md` を読み、対応表と `/build` の依頼文を `work/import/speckit-<日時>.md` に書きます。要求定義書は編集せず、ID も振りません。使い方は [1.7](01-writing-requests.md#17-github-spec-kit-の仕様を取り込む) にあります。
 
 ## clean-work.py（/work のクリーンアップ）
 

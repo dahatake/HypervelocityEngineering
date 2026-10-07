@@ -55,6 +55,8 @@ MANAGED = [
     "scripts/summarize.py",
     "scripts/clean-work.py",
     "scripts/run-state.py",
+    "scripts/kpi.py",
+    "scripts/import-speckit.py",
     "scripts/hooks/gate.py",
 ]
 # Shipped by older versions. Removed on update when unmodified (prompt files are not loaded by the
