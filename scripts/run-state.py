@@ -29,8 +29,8 @@ import hvelib as h  # noqa: E402
 STAGES = {0: "初期化", 1: "要求定義", 2: "独立監査", 3: "計画", 4: "System Test の設計", 5: "実装ループ", 6: "最終"}
 DEFAULT_OPTIONS = {
     "max_hours": "24", "approval_policy": "安全範囲は推奨どおり", "parallel_workers": "3",
-    "scope": "承認済みすべて", "git_push": "しない", "deploy": "しない", "paid_services": "使わない",
-    "external_exposure": "公開しない",
+    "scope": "承認済みすべて", "git_push": "しない", "deploy": "しない", "external_write": "しない",
+    "paid_services": "使わない", "external_exposure": "公開しない",
 }
 HISTORY_HEADER = (
     "# 実行履歴\n\n"
@@ -125,6 +125,20 @@ def cmd_start(args) -> int:
     return 0
 
 
+def heal_integration_branch(root: Path, cfg: dict, rid: str, meta: dict) -> str:
+    """The integration branch was renamed (e.g. from the GitHub Copilot app): follow the current branch."""
+    old = meta.get("integration_branch") or ""
+    if not old or h.ref_exists(root, f"refs/heads/{old}"):
+        return ""
+    cur = h.current_branch(root)
+    if not cur or cur == "HEAD" or cur in (cfg.get("base_branch", "main"), "master") or cur.startswith("work/"):
+        return f"WARN 統合ブランチ {old} が見つかりません。`git branch` で確認し、統合ブランチに切り替えてから続けます"
+    meta["integration_branch"] = cur
+    meta.setdefault("integration_branch_renamed_from", old)
+    h.save_meta(root, cfg, rid, meta)
+    return f"WARN 統合ブランチ {old} が見つからないため、現在のブランチ {cur} を統合ブランチとして記録し直しました"
+
+
 def cmd_status(args) -> int:
     root, cfg = ctx(args)
     rid = h.current_run(root, cfg)
@@ -132,12 +146,16 @@ def cmd_status(args) -> int:
         print("run: なし（新しい実行として始めます: run-state.py start）")
         return 0
     meta = h.load_meta(root, cfg, rid)
+    heal = heal_integration_branch(root, cfg, rid, meta) if meta.get("status") == "active" else ""
     q = h.load_queue(root, cfg, rid)
     c = counts(q)
     mh = float(meta.get("options", {}).get("max_hours", 24) or 24)
     el = elapsed_hours(meta)
     print(f"run: {rid} status={meta.get('status')} stage={meta.get('stage')}({STAGES.get(meta.get('stage'), '?')}) done={meta.get('stages_done')}")
     print(f"time: {el:.1f}h / {mh:g}h ({el / mh * 100:.0f}%)  branch={h.current_branch(root)} HEAD={h.head_commit(root)}")
+    print(f"integration: {meta.get('integration_branch') or '-'}")
+    if heal:
+        print(heal)
     print(f"queue: todo={c['todo']} doing={c['doing']} done={c['done']} blocked={c['blocked']}")
     for it in q.get("items", []):
         if it.get("status") in ("doing", "todo"):

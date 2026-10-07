@@ -104,6 +104,60 @@ def test_commit_on_main_is_denied_during_run(sample):
     assert denied(shell(sample, "git commit -m x"), "G-5")
 
 
+def tool(repo, name, args=None):
+    return repo.gate("pre-tool", {"toolName": name, "toolArgs": args or {}})
+
+
+def test_external_tools_read_always_write_only_when_allowed(sample):
+    # outside a run: user-configured MCP / plugin tools are not restricted (the user approves in the client)
+    assert tool(sample, "workiq-create_entity") == {}
+    start(sample)
+    for name in ("workiq-ask", "workiq-retrieve", "microsoft-learn-microsoft_docs_fetch",
+                 "mcp_azure_query_azure_resource_graph", "github-mcp-server-get_file_contents", "doSearch"):
+        assert tool(sample, name) == {}, name
+    for name in ("workiq-create_entity", "workiq-do_action", "mcp_outlook_sendMail",
+                 "github-mcp-server-create_or_update_file", "Foundry-MCP-agent_delete", "addComment"):
+        assert denied(tool(sample, name, {"path": "README.md"}), "G-5"), name
+    assert "external_write" in tool(sample, "workiq-update_entity")["permissionDecisionReason"]
+    assert "deploy" in tool(sample, "Foundry-MCP-model_deploy")["permissionDecisionReason"]
+    # built-in tools keep their own (path based) rules
+    assert edit(sample, "work/runs/x/a.md", tool="create") == {}
+    assert edit(sample, "work/runs/x/a.md", tool="create_file") == {}
+    assert shell(sample, "npm test", tool="run_in_terminal") == {}
+
+
+def test_copilot_app_session_tools(sample):
+    # GitHub Copilot app tools: local app state only, never treated as external writes
+    assert tool(sample, "rename_branch", {"name": "feature-x"}) == {}  # before a run: allowed
+    start(sample)
+    assert tool(sample, "rename_session", {"title": "x"}) == {}
+    assert tool(sample, "send_session_message", {"message": "x"}) == {}
+    res = tool(sample, "rename_branch", {"name": "feature-x"})
+    assert denied(res, "G-5") and "integration_branch" in res["permissionDecisionReason"]
+    sample.gate("subagent-start", {"agentName": "rd-auditor"})
+    assert tool(sample, "rename_session", {"title": "y"}) == {}
+
+
+def test_external_write_and_deploy_options(sample):
+    start(sample, "external_write: する")
+    assert tool(sample, "workiq-create_entity") == {}
+    assert denied(tool(sample, "mcp_copilotstudio_publish_agent"), "G-5")  # deploy: しない
+    sample.gate("subagent-start", {"agentName": "reviewer"})
+    assert denied(tool(sample, "workiq-create_entity"), "G-5")  # read-only role
+    assert tool(sample, "workiq-ask") == {}
+
+
+def test_external_deploy_allowed_and_allow_list(sample):
+    start(sample, "deploy: する")
+    assert tool(sample, "mcp_azure_deploy_app") == {}
+    assert denied(tool(sample, "mcp_myindex_update_index"), "G-5")
+    cfg_path = sample.path / "scripts" / "hve.config.json"
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cfg["gates"]["external_tool_allow"] = ["^mcp_myindex_update_index$"]
+    cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    assert tool(sample, "mcp_myindex_update_index") == {}
+
+
 def test_subagent_stop_runs_verify(sample):
     start(sample)
     sample.gate("subagent-start", {"agentName": "rd-author"})

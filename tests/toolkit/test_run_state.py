@@ -38,6 +38,21 @@ def test_run_state_lifecycle(sample):
     assert sample.py("rdcheck.py", "check", "--base", "none").returncode == 0
 
 
+def test_status_follows_renamed_integration_branch(sample):
+    # e.g. a GitHub Copilot app worktree session whose branch was renamed after the run started
+    git(sample.path, "switch", "-q", "-c", "copilot-session")
+    rid = start_run(sample)
+    assert git(sample.path, "branch", "--show-current") == "copilot-session"
+    git(sample.path, "branch", "-m", "copilot-session", "renamed-session")
+    out = sample.py("run-state.py", "status", check=True).stdout
+    assert "integration: renamed-session" in out and "WARN" in out
+    meta = json.loads((sample.path / "work" / "runs" / rid / "meta.json").read_text(encoding="utf-8"))
+    assert meta["integration_branch"] == "renamed-session"
+    assert meta["integration_branch_renamed_from"] == "copilot-session"
+    out = sample.py("run-state.py", "status", check=True).stdout
+    assert "WARN" not in out
+
+
 def test_stage4_makes_ledger_strict(sample):
     start_run(sample)
     assert sample.py("verify.py", "--docs-only").returncode == 0

@@ -1,7 +1,6 @@
 ---
 name: implementer
 description: 1 つの作業項目（要求 ID 1〜3 個）を、専用の git worktree で実装し、単体・結合テストとカタログの行を書いて、ゲートを通す作業役。
-tools: ['read', 'search', 'edit', 'execute', 'todo']
 user-invocable: false
 # model: 低〜中位のモデル（models.implementer）。2 回失敗したら conductor が models.implementer-escalation に切り替える
 ---
@@ -19,6 +18,7 @@ user-invocable: false
   初回でビルド・テストのコマンドが scripts/hve.config.json の verify.commands にない場合は、その技術スタックの標準のコマンドを登録します。
 - 通ったら `[<要求 ID>] <要約>` で commit します。push はしません。
 - 終了時に hook G-4 が worktree で verify を再実行します。失敗していると終了できません。
+- 利用者が設定した MCP Server・plugin のツールと skill（Microsoft Learn、Azure、Copilot Studio など）が対象の技術に合えば、推測より先に使います。外部のシステムの変更は、渡された external_write・deploy の範囲でだけ行います（hook G-5）。
 
 ## 返す結果（10 行以内。1 行目は必ず WORKTREE）
 ```

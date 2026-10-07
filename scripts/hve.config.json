@@ -18,7 +18,7 @@
     "commands": []
   },
   "models": {
-    "_note": "Phase 1 で較正して決めます（users-guide/07-customization.md）。conductor は subagent を呼ぶときにこの表を参照します。空なら既定のモデルを使います。",
+    "_note": "Phase 1 で較正して決めます（users-guide/04-customization.md）。conductor は subagent を呼ぶときにこの表を参照します。空なら既定のモデルを使います。",
     "conductor": "",
     "rd-author": "",
     "rd-auditor": "",

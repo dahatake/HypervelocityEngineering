@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """gate.py - quality gates for Copilot hooks (plan §7.4 G-1..G-6, §8.3, R-23, R-25).
 
-Configured in .github/hooks/quality-gates.json (Copilot CLI / VS Code Copilot harness format).
+Configured in .github/hooks/quality-gates.json (Copilot CLI format; also loaded by the VS Code Copilot harness
+and the GitHub Copilot app, which runs sessions on the Copilot CLI runtime).
 Events (first argument):
   session-start   inject the active run-id so a new context resumes from state files
-  pre-tool        deny forbidden edits / shell commands (G-1, G-2, G-3, G-5, G-6)
+  pre-tool        deny forbidden edits / shell commands / external changes by MCP or plugin tools (G-1, G-2, G-3, G-5, G-6)
   subagent-start  remember which custom agent is running (preToolUse has no agent name)
   subagent-stop   G-4: run scripts/verify before implementer / test-designer / rd-author may finish
   agent-stop      do not let the conductor end its turn before the completion conditions hold
@@ -34,6 +35,43 @@ READ_TOOL_RX = re.compile(r"^(view|read|grep|glob|search|list|fetch|web)", re.I)
 SHELL_TOOL_RX = re.compile(r"^(bash|powershell|shell|execute|run_in_terminal|terminal|runcommand|run_command)", re.I)
 PATH_KEYS = ("path", "file_path", "filePath", "filepath", "target_file", "file", "uri", "paths", "files", "newPath", "oldPath")
 STATE_TTL_SEC = 12 * 3600
+# Built-in tools of Copilot CLI / VS Code (and Claude-style aliases). Every other tool comes from an MCP server,
+# a plugin or an extension that the user configured, and may change an external system (check_external).
+BUILTIN_TOOLS = {
+    "view", "read", "create", "edit", "write", "multiedit", "notebookedit", "str_replace", "str_replace_editor",
+    "insert", "apply_patch", "grep", "glob", "rg", "search", "ls", "bash", "powershell", "shell", "execute",
+    "read_bash", "write_bash", "stop_bash", "list_bash", "read_powershell", "write_powershell", "stop_powershell",
+    "list_powershell", "task", "agent", "read_agent", "write_agent", "list_agents", "skill", "web", "web_fetch",
+    "web_search", "fetch", "ask_user", "report_intent", "sql", "session_store_sql", "store_memory", "update_todo",
+    "todo", "task_complete", "exit_plan_mode", "tool_search_tool", "fetch_copilot_cli_documentation", "show_file",
+    "create_file", "create_directory", "replace_string_in_file", "multi_replace_string_in_file",
+    "insert_edit_into_file", "edit_files", "editfiles", "edit_notebook_file", "create_new_jupyter_notebook",
+    "create_new_workspace", "read_file", "list_dir", "file_search", "grep_search", "semantic_search",
+    "list_code_usages", "get_errors", "get_changed_files", "run_in_terminal", "get_terminal_output",
+    "kill_terminal", "create_and_run_task", "run_task", "get_task_output", "run_vscode_command",
+    "manage_todo_list", "runsubagent", "run_subagent", "runtests", "run_tests", "test_failure", "fetch_webpage",
+    "open_simple_browser", "memory", "vscode_ask_questions", "ask_questions", "write_file", "edit_file",
+    "delete_file", "move_file", "rename_file",
+    # GitHub Copilot app (desktop): session tools that only change the local app state
+    "rename_session", "send_session_message",
+}
+# GitHub Copilot app: renames the session's git branch. During a run it would orphan meta.json's integration_branch.
+BRANCH_RENAME_TOOLS = {"rename_branch"}
+
+
+def normalize_tool(name: str) -> str:
+    s = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name)
+    return re.sub(r"[^a-z0-9]+", "_", s.lower()).strip("_")
+
+
+def has_verb(norm: str, verbs: Iterable[str]) -> Optional[str]:
+    for v in verbs:
+        if re.search(rf"(^|_){re.escape(normalize_tool(v))}(_|$)", norm):
+            return v
+    return None
+
+
+BUILTIN_NORM = {normalize_tool(t) for t in BUILTIN_TOOLS}
 
 
 # ---------------------------------------------------------------------- io helpers
@@ -262,6 +300,38 @@ def check_shell(ctx: Ctx, cmd: str) -> Optional[Tuple[str, str]]:
     return None
 
 
+def check_external(ctx: Ctx, tool: str) -> Optional[Tuple[str, str]]:
+    """G-5: changes to external systems through MCP servers / plugins / extensions configured by the user."""
+    norm = normalize_tool(tool)
+    if norm in BRANCH_RENAME_TOOLS:
+        if ctx.run_active or is_work_branch(ctx):
+            return ("G-5", "実行中は git のブランチ名を変更しません（統合ブランチは meta.json の integration_branch に記録済みです）。"
+                           "ブランチ名を変えたい場合は、run の開始前か終了後に行います")
+        return None
+    if not norm or norm in BUILTIN_NORM or SHELL_TOOL_RX.match(tool):
+        return None
+    gates = ctx.cfg["gates"]
+    if any(re.search(p, tool, re.I) for p in gates.get("external_tool_allow", [])):
+        return None
+    deploy_verb = has_verb(norm, gates.get("external_deploy_verbs", []))
+    verb = deploy_verb or has_verb(norm, gates.get("external_write_verbs", []))
+    if not verb:
+        return None
+    names = ctx.active_names()
+    wd = ctx.cfg["work"]["dir"]
+    if names and set(names) <= {"rd-auditor", "reviewer"}:
+        return ("G-5", f"{'・'.join(sorted(set(names)))} は読み取り専用の役割なので、外部のツールでの変更（{tool}）はしません。"
+                       f"結果は /{wd}/runs/<run-id>/ に書きます")
+    if not (ctx.run_active or is_work_branch(ctx)):
+        return None
+    if deploy_verb and not h.allows(ctx.option("deploy")):
+        return ("G-5", f"run_options の deploy が「しない」なので、外部のツールでのデプロイ・公開（{tool}）はしません")
+    if not deploy_verb and not h.allows(ctx.option("external_write")):
+        return ("G-5", f"run_options の external_write が「しない」なので、外部のツールでの変更（{tool}）はしません。"
+                       "参照（検索・取得）だけ行い、変更が必要なら報告に書きます")
+    return None
+
+
 def on_pre_tool(ctx: Ctx) -> None:
     tool = str(g(ctx.data, "toolName", "tool_name", default=""))
     args = g(ctx.data, "toolArgs", "tool_input", default={})
@@ -270,6 +340,11 @@ def on_pre_tool(ctx: Ctx) -> None:
             args = json.loads(args)
         except json.JSONDecodeError:
             args = {"command": args} if SHELL_TOOL_RX.match(tool) else {"input": args}
+    res = check_external(ctx, tool)
+    if res:
+        ctx.log(f"DENY {res[0]} {tool}")
+        deny(res[1], res[0])
+        return
     if SHELL_TOOL_RX.match(tool):
         cmd = ""
         if isinstance(args, dict):

@@ -8,8 +8,9 @@ From a local clone:
   python tools/install.py --target <repo> --uninstall    # remove unmodified toolkit files (keeps docs and ledger)
 
 What it does (idempotent):
-  * copies the managed files (.github/agents, .github/skills, .github/hooks, .github/prompts/build.prompt.md,
-    .github/workflows/hve-verify.yml, scripts/*) and updates them on re-run unless you modified them locally;
+  * copies the managed files (.github/agents, .github/skills, .github/hooks, .github/workflows/hve-verify.yml,
+    scripts/*) and updates them on re-run unless you modified them locally;
+  * removes files that older versions installed but this version no longer ships (OBSOLETE), unless modified;
   * creates the management-data templates only when missing (docs/*.md, tests/system/ledger.json);
   * merges scripts/hve.config.json (adds new keys, keeps your values);
   * adds /work/ to .gitignore, union-merge rules to .gitattributes, and a marked block to AGENTS.md
@@ -40,8 +41,8 @@ MANAGED = [
     ".github/skills/implement-fr/SKILL.md",
     ".github/skills/system-test-increment/SKILL.md",
     ".github/skills/rd-audit/SKILL.md",
+    ".github/skills/build/SKILL.md",
     ".github/hooks/quality-gates.json",
-    ".github/prompts/build.prompt.md",
     ".github/workflows/hve-verify.yml",
     "scripts/hvelib.py",
     "scripts/rdcheck.py",
@@ -56,6 +57,11 @@ MANAGED = [
     "scripts/run-state.py",
     "scripts/hooks/gate.py",
 ]
+# Shipped by older versions. Removed on update when unmodified (prompt files are not loaded by the
+# VS Code Agent Host / Copilot CLI; /build is now the skill .github/skills/build/SKILL.md).
+OBSOLETE = [
+    ".github/prompts/build.prompt.md",
+]
 TEMPLATES = [
     "docs/requirements-definition.md",
     "docs/catalog.md",
@@ -69,7 +75,7 @@ EXECUTABLE = {"scripts/verify.sh"}
 BEGIN, END = "<!-- hve-conductor:begin -->", "<!-- hve-conductor:end -->"
 INSTRUCTIONS_BLOCK = """## conductor toolkit（要求定義書・カタログ・System Test の一貫性）
 
-- 長時間の開発の依頼は、custom agent `conductor` に 1 回で渡します（VS Code では `/build`）。手順は `.github/agents/` と `.github/skills/` にあります。
+- 長時間の開発の依頼は、custom agent `conductor` に 1 回で渡します（VS Code・GitHub Copilot app では `/build`）。手順は `.github/agents/` と `.github/skills/` にあります。
 - 検証は `python scripts/verify.py`（`scripts/verify.ps1` / `scripts/verify.sh`）。exit 0 が合格です。
 - 要求の正本は `docs/requirements-definition.md` で、編集は rd-author だけが行います。ID は `python scripts/next-id.py <種別>` でだけ採番します。
 - System Test の台帳 `tests/system/ledger.json` は `python scripts/ledger.py` でだけ更新します。
@@ -147,6 +153,24 @@ class Installer:
             else:
                 self.note("KEEP-LOCAL", rel)
                 self.new_hashes[rel] = old or cur
+
+    def remove_obsolete(self) -> None:
+        for rel in OBSOLETE:
+            p = self.target / rel
+            old = self.manifest.get("files", {}).get(rel)
+            if not p.exists() or old is None:
+                continue
+            if sha(p) == old:
+                self.note("REMOVE", rel)
+                if not self.dry:
+                    p.unlink()
+                    try:
+                        p.parent.rmdir()
+                    except OSError:
+                        pass
+            else:
+                self.note("KEEP-LOCAL", rel)
+                self.new_hashes[rel] = old
 
     def install_templates(self) -> None:
         for rel in TEMPLATES:
@@ -306,6 +330,7 @@ def main(argv=None) -> int:
         ins.uninstall()
     else:
         ins.install_managed()
+        ins.remove_obsolete()
         ins.install_templates()
         ins.install_config()
         ins.ensure_lines(".gitignore", GITIGNORE_LINES, "# conductor toolkit: temporary run files (kept 14 days)")
@@ -331,11 +356,13 @@ def main(argv=None) -> int:
     if not args.skip_verify:
         print("\n--- verify --docs-only ---")
         run_verify(target)
-    print("\n次の手順（users-guide/02-install.md・03-quickstart.md）:")
+    print("\n次の手順（README.md の「インストール」「Quickstart」）:")
     print("  1. 変更を確認して commit します: git add -A && git commit -m \"Add conductor toolkit\"")
     print("  2. scripts/hve.config.json の verify.commands に、ビルド・静的検査・テストのコマンドを登録します（初回の実行で implementer が登録することもできます）")
-    print("  3. VS Code の Agents ウィンドウで Session Target=Copilot、Agent=conductor、Autopilot、New Worktree を選び、/build で依頼します")
-    print("     （Copilot CLI では `copilot --agent conductor --autopilot` などで同じ雛形を送ります）")
+    print("  3. VS Code の Agents ウィンドウで Session Target=Copilot、Agent=conductor、Autopilot、New Worktree を選び、")
+    print("     チャット欄に「/build やりたいこと」と書いて送ります（入力欄は表示されません）")
+    print("     （雛形は「/build template」で表示されます。Copilot CLI では `copilot --agent conductor --autopilot` などで同じ雛形を送ります）")
+    print("     GitHub Copilot app では、プロジェクトにこのリポジトリを追加し、新しい worktree・Autopilot・Agent=conductor で「/build やりたいこと」を送ります")
     return 0
 
 

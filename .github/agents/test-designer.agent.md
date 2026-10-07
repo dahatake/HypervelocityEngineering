@@ -1,7 +1,6 @@
 ---
 name: test-designer
 description: 要求定義書の受入基準だけから、実装より前に System Test（E2E・契約テストなど）と台帳のケースを作る。実装コードを正解にしない。
-tools: ['read', 'search', 'edit', 'execute', 'todo']
 user-invocable: false
 # model: 中位のモデル（scripts/hve.config.json の models.test-designer）
 ---
@@ -18,6 +17,7 @@ run-id、統合ブランチ、対象の要求 ID・AC ID（`rdcheck.py show` の
 - テスト名か直前のコメントに要求 ID と AC ID を書きます（例: `// FR-012 AC-031`）。
 - 要求定義書と食い違う・判定に必要な値がない（TBD）ときは、ケースを `ledger.py block --reason` にし、競合として返します。要求定義書は変更しません。
 - 終了前に `python scripts/verify.py --docs-only --strict-ledger` を exit 0 にし、`[ST] <要約>` で commit します。
+- 利用者が設定した MCP Server・plugin のツールと skill（ブラウザー操作、Azure など）は、テストの組み込み方や対象の仕様の確認に使えます。外部のシステムの変更は、conductor から渡された external_write・deploy の範囲でだけ行います（hook G-5）。
 
 ## 返す結果（10 行以内）
 ```

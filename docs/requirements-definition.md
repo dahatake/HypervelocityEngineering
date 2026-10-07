@@ -2,7 +2,7 @@
 
 <!--
 この文書は、このアプリの要求の唯一の正本です。編集できるのは rd-author だけです（hook G-1）。
-書式の規則は users-guide/06-requirements-format.md と .github/skills/requirement-definition/SKILL.md を参照します。
+書式の規則は users-guide/03-requirements-format.md と .github/skills/requirement-definition/SKILL.md を参照します。
 ID（FR・NFR・AC・Q・PARAM）は `python scripts/next-id.py <種別>` でだけ採番します（G-3）。
 -->
 

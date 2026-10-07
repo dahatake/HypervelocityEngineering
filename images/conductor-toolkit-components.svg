@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="880" viewBox="0 0 1200 880" font-family="'Segoe UI', Meiryo, 'Hiragino Sans', 'Noto Sans JP', sans-serif" font-size="13" fill="#1f2328">
+  <title>conductor toolkit のコンポーネント図</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+    </marker>
+    <style>
+      .frame { fill: none; stroke: #8c959f; stroke-width: 1.5; stroke-dasharray: 6 4; }
+      .frame-label { font-size: 14px; font-weight: 600; fill: #57606a; }
+      .box { stroke-width: 1.5; }
+      .agent { fill: #ddf4ff; stroke: #0969da; }
+      .lead { fill: #0969da; stroke: #0550ae; }
+      .ctrl { fill: #fff8c5; stroke: #9a6700; }
+      .perm { fill: #dafbe1; stroke: #1a7f37; }
+      .temp { fill: #f6f8fa; stroke: #6e7781; }
+      .ext { fill: #fbefff; stroke: #8250df; }
+      .title { font-size: 15px; font-weight: 700; }
+      .sub { font-size: 12px; fill: #57606a; }
+      .line { stroke: #57606a; stroke-width: 1.5; fill: none; }
+      .dash { stroke-dasharray: 5 4; }
+      .note { font-size: 12px; fill: #57606a; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="880" fill="#ffffff"/>
+  <text x="600" y="34" text-anchor="middle" font-size="20" font-weight="700">conductor toolkit のコンポーネント構成</text>
+
+  <!-- 利用者 -->
+  <rect class="box ext" x="60" y="60" width="240" height="56" rx="8"/>
+  <text class="title" x="180" y="84" text-anchor="middle">利用者</text>
+  <text class="sub" x="180" y="104" text-anchor="middle">VS Code の /build で依頼を 1 回</text>
+
+  <!-- CI -->
+  <rect class="box ext" x="880" y="60" width="260" height="56" rx="8"/>
+  <text class="title" x="1010" y="84" text-anchor="middle">GitHub Actions</text>
+  <text class="sub" x="1010" y="104" text-anchor="middle">.github/workflows/hve-verify.yml</text>
+
+  <!-- エージェント層 -->
+  <rect class="frame" x="40" y="140" width="1120" height="230" rx="10"/>
+  <text class="frame-label" x="56" y="162">エージェント層（.github/agents/）</text>
+
+  <rect class="box lead" x="470" y="160" width="260" height="66" rx="8"/>
+  <text class="title" x="600" y="186" text-anchor="middle" fill="#ffffff">conductor（進行役）</text>
+  <text x="600" y="208" text-anchor="middle" font-size="12" fill="#ffffff">計画・振り分け・統合・ゲート判定・報告</text>
+
+  <path class="line" d="M300,88 C390,88 400,193 468,193" marker-end="url(#arrow)"/>
+  <text class="note" x="318" y="80">依頼・回答</text>
+  <path class="line dash" d="M470,212 C380,212 330,150 240,118" marker-end="url(#arrow)"/>
+  <text class="note" x="100" y="134">報告・質問票</text>
+
+  <!-- 委任線 -->
+  <path class="line" d="M600,226 L600,248 M164,248 L1036,248 M164,248 L164,268 M382,248 L382,268 M600,248 L600,268 M818,248 L818,268 M1036,248 L1036,268"/>
+  <text class="note" x="610" y="243">委任（作業役ごとに新しい文脈）</text>
+
+  <rect class="box agent" x="66" y="270" width="196" height="84" rx="8"/>
+  <text class="title" x="164" y="296" text-anchor="middle">rd-author</text>
+  <text class="sub" x="164" y="316" text-anchor="middle">要求定義書・カタログの</text>
+  <text class="sub" x="164" y="334" text-anchor="middle">唯一の書き手</text>
+
+  <rect class="box agent" x="284" y="270" width="196" height="84" rx="8"/>
+  <text class="title" x="382" y="296" text-anchor="middle">rd-auditor</text>
+  <text class="sub" x="382" y="316" text-anchor="middle">矛盾・目的との整合の</text>
+  <text class="sub" x="382" y="334" text-anchor="middle">独立監査（読み取り専用）</text>
+
+  <rect class="box agent" x="502" y="270" width="196" height="84" rx="8"/>
+  <text class="title" x="600" y="296" text-anchor="middle">test-designer</text>
+  <text class="sub" x="600" y="316" text-anchor="middle">受入基準から System Test</text>
+  <text class="sub" x="600" y="334" text-anchor="middle">を実装より前に作る</text>
+
+  <rect class="box agent" x="720" y="270" width="196" height="84" rx="8"/>
+  <text class="title" x="818" y="296" text-anchor="middle">implementer</text>
+  <text class="sub" x="818" y="316" text-anchor="middle">1 項目を専用 worktree で</text>
+  <text class="sub" x="818" y="334" text-anchor="middle">実装・単体/結合テスト</text>
+
+  <rect class="box agent" x="938" y="270" width="196" height="84" rx="8"/>
+  <text class="title" x="1036" y="296" text-anchor="middle">reviewer</text>
+  <text class="sub" x="1036" y="316" text-anchor="middle">差分と受入基準の照合</text>
+  <text class="sub" x="1036" y="334" text-anchor="middle">（MUST・共通部品のみ）</text>
+
+  <!-- 手順と統制の層 -->
+  <rect class="frame" x="40" y="400" width="1120" height="156" rx="10"/>
+  <text class="frame-label" x="56" y="422">手順と統制の層</text>
+
+  <path class="line" d="M225,370 L225,436" marker-end="url(#arrow)"/>
+  <text class="note" x="233" y="392">必要な工程だけ読み込む</text>
+  <path class="line" d="M585,370 L585,436" marker-end="url(#arrow)"/>
+  <text class="note" x="593" y="392">ツール実行前・終了前に検査</text>
+  <path class="line" d="M960,370 L960,436" marker-end="url(#arrow)"/>
+  <text class="note" x="968" y="392">呼び出す</text>
+
+  <rect class="box ctrl" x="60" y="438" width="330" height="108" rx="8"/>
+  <text class="title" x="76" y="462">.github/skills/（手順書）</text>
+  <text class="sub" x="76" y="484">requirement-definition ・ rd-audit</text>
+  <text class="sub" x="76" y="502">system-test-increment ・ implement-fr</text>
+  <text class="sub" x="76" y="520">build（/build の入口と雛形）</text>
+  <text class="sub" x="76" y="538">長い手順は担当の作業役だけが読む</text>
+
+  <rect class="box ctrl" x="420" y="438" width="330" height="108" rx="8"/>
+  <text class="title" x="436" y="462">強制ゲート（hook）</text>
+  <text class="sub" x="436" y="484">.github/hooks/quality-gates.json</text>
+  <text class="sub" x="436" y="502">→ scripts/hooks/gate.py</text>
+  <text class="sub" x="436" y="520">G-1〜G-6：役割ごとの書き込み範囲、</text>
+  <text class="sub" x="436" y="538">作業役の終了前に verify を再実行</text>
+
+  <rect class="box ctrl" x="780" y="438" width="360" height="108" rx="8"/>
+  <text class="title" x="796" y="462">scripts/（決定的スクリプト）</text>
+  <text class="sub" x="796" y="484">verify.py（CHK-01〜23・ビルド・テスト）</text>
+  <text class="sub" x="796" y="502">rdcheck.py ・ next-id.py ・ ledger.py</text>
+  <text class="sub" x="796" y="520">select-tests.py ・ summarize.py</text>
+  <text class="sub" x="796" y="538">run-state.py ・ clean-work.py ・ hve.config.json</text>
+
+  <path class="line" d="M750,492 L778,492" marker-end="url(#arrow)"/>
+
+  <!-- CI → verify -->
+  <path class="line dash" d="M1140,88 L1172,88 L1172,470 L1142,470" marker-end="url(#arrow)"/>
+  <text class="note" x="1180" y="280" transform="rotate(90 1180 280)" text-anchor="middle">push / PR で verify を再確認</text>
+
+  <!-- データ層 -->
+  <rect class="frame" x="40" y="606" width="1120" height="256" rx="10"/>
+  <text class="frame-label" x="56" y="628">データ層（toolkit が維持管理するデータ）</text>
+
+  <path class="line" d="M840,546 L840,568 L400,568 L400,644" marker-end="url(#arrow)"/>
+  <text class="note" x="392" y="590" text-anchor="end">整合検査・ID 採番（rdcheck / next-id）</text>
+  <path class="line" d="M880,546 L880,580 L620,580 L620,644" marker-end="url(#arrow)"/>
+  <text class="note" x="628" y="598">台帳の更新（ledger.py）</text>
+  <path class="line" d="M960,546 L960,644" marker-end="url(#arrow)"/>
+  <text class="note" x="968" y="598">実行状態・結果・ログ</text>
+
+  <rect class="box perm" x="60" y="646" width="400" height="140" rx="8"/>
+  <text class="title" x="76" y="670">docs/（永続・git で管理）</text>
+  <text class="sub" x="76" y="694">requirements-definition.md … 要求定義書（正本）</text>
+  <text class="sub" x="76" y="714">　質問票・決定記録を含む</text>
+  <text class="sub" x="76" y="734">catalog.md … カタログ（要求と実装・テストの対応）</text>
+  <text class="sub" x="76" y="754">id-registry.md … ID 台帳</text>
+  <text class="sub" x="76" y="774">run-history.md … 実行履歴</text>
+
+  <rect class="box perm" x="480" y="646" width="280" height="140" rx="8"/>
+  <text class="title" x="496" y="670">tests/system/（永続・git）</text>
+  <text class="sub" x="496" y="694">ledger.json … System Test の台帳</text>
+  <text class="sub" x="496" y="714">　（ケースと最新の状態）</text>
+  <text class="sub" x="496" y="734">System Test 本体</text>
+  <text class="sub" x="496" y="754">　（E2E・契約テストなど）</text>
+
+  <rect class="box temp" x="780" y="646" width="360" height="140" rx="8"/>
+  <text class="title" x="796" y="670">work/（一時・git 管理外・14 日で削除）</text>
+  <text class="sub" x="796" y="694">current-run.txt … 実行中の run-id</text>
+  <text class="sub" x="796" y="714">runs/&lt;run-id&gt;/ meta・queue・progress</text>
+  <text class="sub" x="796" y="734">　run-report・results・logs・evidence・audit</text>
+  <text class="sub" x="796" y="754">worktrees/ … 作業役ごとの git worktree</text>
+  <text class="sub" x="796" y="774">中断しても状態ファイルから再開</text>
+
+  <path class="line" d="M960,786 L960,822 L400,822 L400,788" marker-end="url(#arrow)"/>
+  <path class="line" d="M620,822 L620,788" marker-end="url(#arrow)"/>
+  <text class="note" x="610" y="846" text-anchor="middle">工程 6 で残すべき判断・品質の状態を /docs と台帳へ転記</text>
+</svg>

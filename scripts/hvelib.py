@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
-TOOLKIT_VERSION = "1.0.0"
+TOOLKIT_VERSION = "1.1.0"
 
 DEFAULT_CONFIG: dict = {
     "management_files": {
@@ -78,6 +78,18 @@ DEFAULT_CONFIG: dict = {
             r"\bgh\s+release\s+create\b",
             r"\bdocker\s+push\b",
         ],
+        # Tools contributed by MCP servers, plugins and extensions (anything not in gate.py BUILTIN_TOOLS).
+        # A tool name whose words contain one of these verbs is treated as a change to an external system.
+        "external_write_verbs": [
+            "create", "update", "upsert", "delete", "remove", "destroy", "purge", "drop", "write", "insert",
+            "add", "put", "patch", "post", "send", "reply", "forward", "comment", "submit", "merge", "close",
+            "reopen", "resolve", "approve", "assign", "unassign", "cancel", "start", "stop", "restart", "scale",
+            "invoke", "do_action", "apply", "upload", "move", "rename", "archive", "share", "grant", "revoke",
+            "enable", "disable", "schedule", "accept", "decline", "transfer", "push", "commit", "trigger",
+            "dispatch", "rerun", "edit", "modify",
+        ],
+        "external_deploy_verbs": ["deploy", "provision", "publish", "release"],
+        "external_tool_allow": [],
     },
 }
 

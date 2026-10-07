@@ -1,7 +1,6 @@
 ---
 name: rd-author
 description: 要求定義書とカタログの唯一の書き手。conductor から渡された依頼・回答・資料を要求として整理し、質問票と決定記録を更新する。
-tools: ['read', 'search', 'edit', 'execute', 'web', 'todo']
 user-invocable: false
 # model: 推論の強いモデル（scripts/hve.config.json の models.rd-author）
 ---
@@ -17,6 +16,7 @@ run-id、`<request>`、`<answers>`、`<references>`、approval_policy、（2 周
 - approval_policy が「厳格」以外のときは、skill の §承認ポリシーの条件を満たす AI提案だけを「承認済み（包括承認 YYYY-MM-DD・approval_policy）」にします。
 - 依頼にない既存の承認済み要求の文面は変えません。食い違いは競合として記録し、関係する AC を `BLOCKED: Q-xxx` にします。
 - 終了前に `python scripts/verify.py --docs-only` を exit 0 にし、`[RD] <要約>` で commit します（終了時に hook G-4 が同じ検査を行います）。
+- 利用者が設定した MCP Server・plugin のツール（Work IQ、Microsoft Learn、Azure など）は、一次情報の参照（検索・取得・質問）に使います。得た事実は出典台帳（SRC-ID）に記録します。外部のシステムは変更しません。
 
 ## 返す結果（10 行以内）
 ```

@@ -1,81 +1,88 @@
-# 5. 実行中と終了後
+# 2. 実行中と終了後
 
-## 5.1 実行中の様子を見る
+## 2.1 進捗を確認する
 
-conductor の作業ツリー（VS Code の New Worktree なら、そのセッションの worktree）で次を実行します。どれも読み取りだけで、実行中の作業に影響しません。
+conductor の作業ツリー（VS Code の New Worktree や GitHub Copilot app の新しい作業ツリーなら、そのセッションの worktree）で次のコマンドを実行します。どれも読み取り専用で、実行中の run には影響しません。GitHub Copilot app の worktree は、既定では `<リポジトリの親>/copilot-worktrees/<リポジトリ名>/<ブランチ名>` にあります（`git worktree list` で確認できます）。
 
 ```bash
-python scripts/run-state.py status          # run-id、経過時間と時間予算、工程、queue の件数、progress の末尾
+python scripts/run-state.py status          # run-id、経過時間と時間予算、統合ブランチ、工程、queue の件数、progress の末尾
 python scripts/run-state.py queue show      # 項目ごとの状態・試行回数・ブランチ
 python scripts/ledger.py summary -v         # System Test の pass / fail / blocked / not_run
 git log --oneline --graph -20               # [RD] [ST] [FR-xxx] の commit と統合
 ```
 
-`work/.hve/gate.log` には、hook が拒否・差し戻した操作が記録されます。
+hook が拒否・差し戻した操作は `work/.hve/gate.log` に記録されます。
 
-## 5.2 止まったとき・再開（§7.5、§8.3）
+## 2.2 停止したときの再開
 
-| 状況 | すること |
+状態は `/work` のファイルと git に永続化されているので、どの時点で止まっても続きから再開できます。
+
+| 状況 | 対処 |
 |---|---|
-| Autopilot がターンを終えたが、完了条件を満たしていない | 同じセッションで「続けて」と送ります。agentStop の hook が、完了条件を満たすまで自動で続けさせます（上限 40 回） |
-| PC の再起動・Agent Host の停止 | 新しいセッションで、同じ Prompt をもう一度送ります。conductor は `RESUME <run-id>` として、`/work` の状態ファイルと git から続きを再開します |
-| 途中でやめたい | セッションを止めます。統合ブランチには、そこまでに統合した項目が commit 済みです。`work/current-run.txt` を削除すると、次の依頼は新しい run として始まります |
+| Autopilot がターンを終えたが、完了条件を満たしていない | 同じセッションで「続けて」と送信します。agentStop の hook が、完了条件を満たすまで自動で継続させます（上限 40 回） |
+| PC の再起動・Agent Host の停止 | 新しいセッションで、同じ Prompt をもう一度送信します。conductor は `RESUME <run-id>` として、`/work` の状態ファイルと git から続きを再開します |
+| GitHub Copilot app の再起動・セッションの中断 | サイドバーから**同じセッション**を開き、「続けて」と送信します。新しい作業ツリーのセッションを新しく作ると別の worktree になり、`/work` の状態がないため新しい run として始まってしまいます。ローカル リポジトリで実行していた場合は、新しいセッションでも再開できます |
+| 途中でやめたい | セッションを停止します。そこまでに統合した項目は、統合ブランチに commit 済みです。`work/current-run.txt` を削除すると、次の依頼は新しい run として始まります |
 
-conductor が自分で止まる条件（§8.3）:
+conductor が自分で停止する条件:
 
 | 条件 | 動作 |
 |---|---|
-| queue のすべての項目が done または blocked | 工程 6 に進み、終了する |
-| `max_hours` の 85% を過ぎた | 新しい項目を始めず、工程 6 に進む |
-| 同じ項目が 3 回続けてゲートで失敗 | 強いモデルで 1 回だけ再挑戦し、失敗したら blocked にして原因を記録 |
-| canary が失敗し、3 回の修正でも直らない | 実装ループを止め、工程 6 に進む |
-| 統合ブランチの verify が直前の統合で失敗に転じた | その統合を取り消し、項目を todo に戻す |
+| queue のすべての項目が done または blocked | 工程 6 に進んで終了する |
+| `max_hours` の 85% を超えた | 新しい項目には着手せず、工程 6 に進む |
+| 同じ項目がゲートで 3 回続けて失敗した | 上位モデルで 1 回だけ再挑戦し、それでも失敗したら blocked にして原因を記録する |
+| canary が失敗し、3 回修正しても直らない | 実装ループを止めて、工程 6 に進む |
+| 直前の統合で、統合ブランチの verify が失敗に変わった | その統合を取り消し、項目を todo に戻す |
 
-終了の判定は、モデルの「完了した」という判断ではなく、`python scripts/run-state.py complete-check` が exit 0（queue に todo・doing がない、工程 6 が終わっている、run-report.md がある）であることです。
+終了の判定は、モデルの「完了した」という自己申告ではなく、`python scripts/run-state.py complete-check` が exit 0 を返すことで行います。exit 0 の条件は、queue に todo・doing がない、工程 6 が終わっている、run-report.md がある、の 3 つです。
 
-## 5.3 終了後に読むもの（§8.4）
+## 2.3 終了後に読むもの
 
-`work/runs/<run-id>/run-report.md`:
+`work/runs/<run-id>/run-report.md` には次の内容があります。
 
 - 1 行目: 結果（全件完了／blocked あり／時間予算で中止／canary 失敗で中止）、経過時間、AI クレジット
-- 実装した要求 ID、BLOCKED の要求 ID と理由
-- **包括承認した項目**（影響の大きい順）… 意図と違えば次の `<answers>` で取り消します
-- **未回答の質問票**（重要度の高い順）… 次の `<answers>` にそのまま書ける形
-- 品質の指標: verify、AC の pass 率、監査の指摘（CRITICAL・HIGH の件数）
-- 取り込み方法: 統合ブランチ名と、取り込みのコマンド
+- 実装した要求 ID、BLOCKED の要求 ID とその理由
+- **包括承認した項目**（影響の大きい順）… 意図と違えば、次の `<answers>` で取り消します
+- **未回答の質問票**（重要度の高い順）… 次の `<answers>` にそのまま書ける形式です
+- 品質メトリクス: verify、AC の pass 率、監査の指摘（CRITICAL・HIGH の件数）
+- マージ方法: 統合ブランチ名と、マージのコマンド
 
-`/work` は 14 日で消えますが、要点は次の永続の場所に転記されています。
+`/work` は 14 日で削除されますが、要点は次の永続的な場所に転記されています。
 
 | 情報 | 場所 |
 |---|---|
-| 実行の要約と KPI（1 実行 1 行） | `docs/run-history.md` |
+| run の要約と KPI（1 run 1 行） | `docs/run-history.md` |
 | 包括承認・回答を反映した決定 | 要求定義書の「決定記録」 |
 | 未回答の質問票・承認依頼 | 要求定義書の「仮定・未解決事項」 |
-| 残っている監査の指摘 | 要求定義書の「監査指摘」 |
+| 未解決の監査指摘 | 要求定義書の「監査指摘」 |
 | System Test の最新の状態 | `tests/system/ledger.json` |
 
-## 5.4 取り込む
+## 2.4 マージする
 
-統合ブランチ（main 上で始めた場合は `run/<run-id>`。VS Code の New Worktree ならそのセッションのブランチ）を確認して取り込みます。
+結果が「全件完了」で最終の verify が通った run は、conductor が統合ブランチ `run/<run-id>` をローカルの main へ `--no-ff` でマージし、統合ブランチを削除します（main への push はしません）。マージが競合したり verify が失敗したりした場合、および「blocked あり」「時間予算で中止」「canary 失敗で中止」の run は、取り込まずにブランチを残します。その場合や VS Code の New Worktree・GitHub Copilot app の新しい作業ツリー（そのセッションのブランチ）では、次のように手動で取り込みます。
 
 ```bash
 git switch main
-git merge --no-ff run/202610080900          # ローカルで取り込む
+git merge --no-ff run/202610080900          # ローカルでマージする
 # または
-git push origin run/202610080900 && gh pr create --base main --head run/202610080900   # PR で取り込む（CI の hve-verify が再確認）
+git push origin run/202610080900 && gh pr create --base main --head run/202610080900   # PR でマージする（CI の hve-verify が再検証）
 ```
 
-`git_push: 作業ブランチへ push する` を指定していれば、conductor が push と PR の作成まで行います（マージは利用者が行います。Q-5）。
+`git_push: 作業ブランチへ push する` を指定していれば、conductor は取り込みの前に統合ブランチを push します（バックアップ。PR は作りません）。
 
-取り込む前に、少なくとも次を見ます。
+GitHub Copilot app の新しい作業ツリーで実行した run は、セッションのブランチが統合ブランチです（`run-state.py status` の `integration:`）。conductor は main へマージしないので、アプリのプル要求の作成機能で PR を作るか、上のコマンドの `run/<run-id>` をセッションのブランチ名に置き換えて取り込みます。取り込みが終わるまで、セッションをアーカイブ・削除しないでください（worktree と `/work` の報告が消えることがあります）。
+
+自動マージの前に確認したい場合は、`git diff main...<統合ブランチ>` を取り込み前に見ることはできないため、事後に `git revert -m 1 <マージ commit>` で戻します。
+
+手動でマージする場合は、その前に少なくとも次の 3 点を確認します。
 
 1. `run-report.md` の結果と「包括承認した項目」
-2. `git diff main...<統合ブランチ> -- docs/requirements-definition.md`（要求の変化）
-3. `python scripts/verify.py --strict` が PASS であること
+2. `git diff main...<統合ブランチ> -- docs/requirements-definition.md`（要求の変更点）
+3. `python scripts/verify.py --strict` が PASS になること
 
-## 5.5 次の依頼
+## 2.5 次の依頼
 
-回答と新しい要望を 1 つの Prompt にまとめて送れます。
+回答と新しい要望を 1 つの Prompt にまとめて送信できます。
 
 ```text
 <request>
@@ -87,11 +94,11 @@ Q-003: B
 </answers>
 ```
 
-## 5.6 /work の片付け
+## 2.6 /work のクリーンアップ
 
-`/work/runs/` のうち 14 日を過ぎたものは、conductor が実行の最初と最後に `scripts/clean-work.py` で削除します（実行中の run と、まだ main に取り込まれていないブランチの run は残します）。手動でも実行できます。
+`/work/runs/` のうち 14 日を過ぎたものは、conductor が run の最初と最後に `scripts/clean-work.py` で削除します（実行中の run と、まだ main にマージされていないブランチの run は残します）。手動でも実行できます。
 
 ```bash
-python scripts/clean-work.py --dry-run   # 何が消えるかを確認
+python scripts/clean-work.py --dry-run   # 削除対象を確認する
 python scripts/clean-work.py
 ```
