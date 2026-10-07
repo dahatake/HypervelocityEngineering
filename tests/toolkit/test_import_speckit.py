@@ -140,6 +140,25 @@ def test_implement_and_stdout(repo):
     assert "scope: なし" not in out and "speckit-constitution" not in out
 
 
+def test_coexists_with_speckit_files(repo):
+    # Spec Kit numbers its own FR-001... in specs/ and .specify/templates; they must not trip CHK-19
+    make_speckit(repo)
+    repo.write(".specify/templates/spec-template.md", "- **FR-001**: System MUST [capability]\n")
+    repo.write("specs/tests/test_feature.py", "# AC-999 is a real test reference\n")
+    repo.write("docs-images/flow.svg", "<svg><text>FR-777 example</text></svg>\n")
+    repo.commit("add speckit")
+    proc = repo.py("verify.py", "--docs-only")
+    assert proc.returncode == 1 and "specs/tests/test_feature.py" in proc.stdout  # non-Markdown files are still scanned
+    (repo.path / "specs/tests/test_feature.py").unlink()
+    repo.commit("remove")
+    proc = repo.py("verify.py", "--docs-only")
+    assert proc.returncode == 0, proc.stdout
+    sel = repo.py("select-tests.py", "--base", "HEAD~2", check=True).stdout
+    assert "specs/001-photo-albums" not in sel and ".specify" not in sel
+    req_line = next(l for l in sel.splitlines() if l.startswith("REQ"))
+    assert not any(f"FR-00{i}" in req_line for i in (1, 2, 3))  # Spec Kit's own numbers are not harvested as toolkit IDs
+
+
 def test_placeholder_warning_and_missing(repo):
     make_speckit(repo)
     proc = repo.py("import-speckit.py", "--feature", "002", "--out", "work/import/w.md", check=True)

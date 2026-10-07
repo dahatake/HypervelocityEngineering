@@ -54,6 +54,8 @@ def main(argv=None) -> int:
     ids: Set[str] = set(x for x in re.split(r"[,\s]+", args.req) if x)
     for f in files:
         p = root / f
+        if h.glob_match(f, h.SPECKIT_PATHS):
+            continue
         if p.is_file() and p.stat().st_size < 2_000_000:
             ids.update(h.CODE_ID_RE.findall(p.read_bytes().decode("utf-8", "replace")))
     # expand: requirement -> its ACs, AC -> its requirement

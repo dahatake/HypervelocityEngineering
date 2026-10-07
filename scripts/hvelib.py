@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 TOOLKIT_VERSION = "1.3.0"
+
+SPECKIT_PATHS = [".specify/**", "specs/**/*.md"]
 
 DEFAULT_CONFIG: dict = {
     "management_files": {
@@ -43,7 +45,9 @@ DEFAULT_CONFIG: dict = {
         "id_scan_exclude": [
             "docs/**", "work/**", ".github/**", "scripts/**", "tools/**", "users-guide/**",
             "tests/toolkit/**", "templates/**", "node_modules/**", "**/node_modules/**", ".git/**",
-            "**/*.lock", "**/package-lock.json", "AGENTS.md", "README.md",
+            "**/*.lock", "**/package-lock.json", "AGENTS.md", "README.md", "**/*.svg",
+            # GitHub Spec Kit artifacts use their own FR-/SC- numbering (imported via scripts/import-speckit.py)
+            *SPECKIT_PATHS,
         ],
         "test_path_pattern": r"(^|/)(tests?|__tests__|spec|specs|e2e)(/|$)|(^|/)(test_[^/]*|[^/]*_test\.[^/]+|[^/]*\.(test|spec)\.[^/]+|[^/]*Tests?\.[^/]+)$",
         "temp_file_pattern": r"\.(log|har|trace|webm)$|(^|/)(trace[^/]*\.zip|results[^/]*\.json)$|(^|/)(evidence|screenshots|test-results|playwright-report)/",

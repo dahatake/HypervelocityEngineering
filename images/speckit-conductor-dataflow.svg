@@ -1,0 +1,205 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1060" viewBox="0 0 1200 1060" font-family="'Segoe UI', Meiryo, 'Hiragino Sans', 'Noto Sans JP', sans-serif" font-size="13" fill="#1f2328">
+  <title>Spec Kit の成果物から conductor の管理データへのデータ連携</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+    </marker>
+    <style>
+      .box { stroke-width: 1.5; }
+      .agent { fill: #ddf4ff; stroke: #0969da; }
+      .lead { fill: #0969da; stroke: #0550ae; }
+      .ctrl { fill: #fff8c5; stroke: #9a6700; }
+      .perm { fill: #dafbe1; stroke: #1a7f37; }
+      .temp { fill: #f6f8fa; stroke: #6e7781; }
+      .ext { fill: #fbefff; stroke: #8250df; }
+      .hl { stroke-width: 2.5; }
+      .title { font-size: 13px; font-weight: 700; }
+      .sub { font-size: 12px; fill: #57606a; }
+      .head { font-size: 15px; font-weight: 700; }
+      .line { stroke: #57606a; stroke-width: 1.5; fill: none; }
+      .dash { stroke-dasharray: 5 4; }
+      .note { font-size: 12px; fill: #57606a; }
+      .step { font-size: 13px; font-weight: 700; fill: #0550ae; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="1060" fill="#ffffff"/>
+  <text x="600" y="34" text-anchor="middle" font-size="20" font-weight="700">データ連携: Spec Kit の成果物 → conductor の管理データ</text>
+  <text x="600" y="58" text-anchor="middle" class="note">中央は import-speckit.py が機械的に付ける「候補」。採番・統合・最終判断は rd-author が行い、rd-auditor が監査する</text>
+
+  <!-- 列見出し -->
+  <text class="head" x="195" y="94" text-anchor="middle" fill="#8250df">Spec Kit（specs/&lt;NNN&gt;/ ほか）</text>
+  <text class="step" x="195" y="112" text-anchor="middle">① 人が対話で書く</text>
+  <text class="head" x="580" y="94" text-anchor="middle" fill="#9a6700">import-speckit.py の対応付け</text>
+  <text class="step" x="580" y="112" text-anchor="middle">② 機械的に候補を付ける</text>
+  <text class="head" x="985" y="94" text-anchor="middle" fill="#1a7f37">conductor の管理データ（正本）</text>
+  <text class="step" x="985" y="112" text-anchor="middle">③ rd-author が採番・確定</text>
+
+  <!-- 行 1: User Story -->
+  <rect class="box ext" x="30" y="126" width="330" height="56" rx="8"/>
+  <text class="title" x="195" y="149" text-anchor="middle">User Story</text>
+  <text class="sub" x="195" y="169" text-anchor="middle">Priority P1 / P2 / P3、Independent Test</text>
+  <rect class="box ctrl" x="420" y="126" width="320" height="56" rx="8"/>
+  <text class="title" x="580" y="149" text-anchor="middle">P1→MUST・P2→SHOULD・P3→MAY</text>
+  <text class="sub" x="580" y="169" text-anchor="middle">本文の MUST 等と食い違えば強い方</text>
+  <rect class="box perm" x="800" y="126" width="370" height="56" rx="8"/>
+  <text class="title" x="985" y="149" text-anchor="middle">要求（FR）と利用シナリオ</text>
+  <text class="sub" x="985" y="169" text-anchor="middle">優先度の欄に、その理由を書く</text>
+  <path class="line" d="M360,154 L418,154" marker-end="url(#arrow)"/>
+  <path class="line" d="M740,154 L798,154" marker-end="url(#arrow)"/>
+
+  <!-- 行 2: Acceptance Scenarios -->
+  <rect class="box ext hl" x="30" y="196" width="330" height="56" rx="8"/>
+  <text class="title" x="195" y="219" text-anchor="middle">Acceptance Scenarios</text>
+  <text class="sub" x="195" y="239" text-anchor="middle">Given / When / Then</text>
+  <rect class="box ctrl hl" x="420" y="196" width="320" height="56" rx="8"/>
+  <text class="title" x="580" y="219" text-anchor="middle">受入基準の候補</text>
+  <text class="sub" x="580" y="239" text-anchor="middle">検証レベルの候補: system</text>
+  <rect class="box perm hl" x="800" y="196" width="370" height="56" rx="8"/>
+  <text class="title" x="985" y="219" text-anchor="middle">受入基準（AC）→ System Test の台帳</text>
+  <text class="sub" x="985" y="239" text-anchor="middle">test-designer が実装より前にケースを作る</text>
+  <path class="line" d="M360,224 L418,224" marker-end="url(#arrow)"/>
+  <path class="line" d="M740,224 L798,224" marker-end="url(#arrow)"/>
+
+  <!-- 行 3: FR -->
+  <rect class="box ext hl" x="30" y="266" width="330" height="56" rx="8"/>
+  <text class="title" x="195" y="289" text-anchor="middle">Functional Requirements</text>
+  <text class="sub" x="195" y="309" text-anchor="middle">FR-001, FR-002 …（Spec Kit の番号）</text>
+  <rect class="box ctrl hl" x="420" y="266" width="320" height="56" rx="8"/>
+  <text class="title" x="580" y="289" text-anchor="middle">取り込み元 ID として残す</text>
+  <text class="sub" x="580" y="309" text-anchor="middle">例: speckit:001-albums/FR-003</text>
+  <rect class="box perm hl" x="800" y="266" width="370" height="56" rx="8"/>
+  <text class="title" x="985" y="289" text-anchor="middle">要求（FR-0xx）</text>
+  <text class="sub" x="985" y="309" text-anchor="middle">next-id.py で採番し直し、出典の欄に取り込み元 ID</text>
+  <path class="line" d="M360,294 L418,294" marker-end="url(#arrow)"/>
+  <path class="line" d="M740,294 L798,294" marker-end="url(#arrow)"/>
+
+  <!-- 行 4: NEEDS CLARIFICATION -->
+  <rect class="box ext hl" x="30" y="336" width="330" height="56" rx="8"/>
+  <text class="title" x="195" y="359" text-anchor="middle">[NEEDS CLARIFICATION: …]</text>
+  <text class="sub" x="195" y="379" text-anchor="middle">疑問形の Edge Cases も含む</text>
+  <rect class="box ctrl hl" x="420" y="336" width="320" height="56" rx="8"/>
+  <text class="title" x="580" y="359" text-anchor="middle">未確定事項</text>
+  <text class="sub" x="580" y="379" text-anchor="middle">質問票と BLOCKED の候補</text>
+  <rect class="box perm hl" x="800" y="336" width="370" height="56" rx="8"/>
+  <text class="title" x="985" y="359" text-anchor="middle">質問票（Q）＋ 関係する AC の BLOCKED</text>
+  <text class="sub" x="985" y="379" text-anchor="middle">推奨案つき。回答は次の /build の &lt;answers&gt;</text>
+  <path class="line" d="M360,364 L418,364" marker-end="url(#arrow)"/>
+  <path class="line" d="M740,364 L798,364" marker-end="url(#arrow)"/>
+
+  <!-- 行 5: Clarifications -->
+  <rect class="box ext" x="30" y="406" width="330" height="56" rx="8"/>
+  <text class="title" x="195" y="429" text-anchor="middle">Clarifications</text>
+  <text class="sub" x="195" y="449" text-anchor="middle">Q: … → A: …（clarify の回答）</text>
+  <rect class="box ctrl" x="420" y="406" width="320" height="56" rx="8"/>
+  <text class="title" x="580" y="429" text-anchor="middle">確認済みの回答</text>
+  <text class="sub" x="580" y="449" text-anchor="middle">出自: 利用者決定</text>
+  <rect class="box perm" x="800" y="406" width="370" height="56" rx="8"/>
+  <text class="title" x="985" y="429" text-anchor="middle">決定記録</text>
+  <text class="sub" x="985" y="449" text-anchor="middle">「承認済み」の根拠として残る</text>
+  <path class="line" d="M360,434 L418,434" marker-end="url(#arrow)"/>
+  <path class="line" d="M740,434 L798,434" marker-end="url(#arrow)"/>
+
+  <!-- 行 6: Success Criteria -->
+  <rect class="box ext" x="30" y="476" width="330" height="56" rx="8"/>
+  <text class="title" x="195" y="499" text-anchor="middle">Success Criteria</text>
+  <text class="sub" x="195" y="519" text-anchor="middle">SC-001 …（測定できる成果）</text>
+  <rect class="box ctrl" x="420" y="476" width="320" height="56" rx="8"/>
+  <text class="title" x="580" y="499" text-anchor="middle">成功指標の候補</text>
+  <text class="sub" x="580" y="519" text-anchor="middle">目的の指標か、非機能要求か</text>
+  <rect class="box perm" x="800" y="476" width="370" height="56" rx="8"/>
+  <text class="title" x="985" y="499" text-anchor="middle">目的（G）の成功指標 ／ 非機能要求（NFR）</text>
+  <text class="sub" x="985" y="519" text-anchor="middle">閾値は PARAM にして参照する</text>
+  <path class="line" d="M360,504 L418,504" marker-end="url(#arrow)"/>
+  <path class="line" d="M740,504 L798,504" marker-end="url(#arrow)"/>
+
+  <!-- 行 7: Key Entities -->
+  <rect class="box ext" x="30" y="546" width="330" height="56" rx="8"/>
+  <text class="title" x="195" y="569" text-anchor="middle">Key Entities</text>
+  <text class="sub" x="195" y="589" text-anchor="middle">エンティティと属性</text>
+  <rect class="box ctrl" x="420" y="546" width="320" height="56" rx="8"/>
+  <text class="title" x="580" y="569" text-anchor="middle">用語の候補</text>
+  <text class="sub" x="580" y="589" text-anchor="middle">対象エンティティの候補</text>
+  <rect class="box perm" x="800" y="546" width="370" height="56" rx="8"/>
+  <text class="title" x="985" y="569" text-anchor="middle">用語・対象エンティティ</text>
+  <text class="sub" x="985" y="589" text-anchor="middle">禁止同義語も定義し、監査の突き合わせに使う</text>
+  <path class="line" d="M360,574 L418,574" marker-end="url(#arrow)"/>
+  <path class="line" d="M740,574 L798,574" marker-end="url(#arrow)"/>
+
+  <!-- 行 8: Assumptions -->
+  <rect class="box ext" x="30" y="616" width="330" height="56" rx="8"/>
+  <text class="title" x="195" y="639" text-anchor="middle">Assumptions</text>
+  <text class="sub" x="195" y="659" text-anchor="middle">仕様が置いた前提</text>
+  <rect class="box ctrl" x="420" y="616" width="320" height="56" rx="8"/>
+  <text class="title" x="580" y="639" text-anchor="middle">前提の候補</text>
+  <text class="sub" x="580" y="659" text-anchor="middle">確認できない前提は ASSUMPTION</text>
+  <rect class="box perm" x="800" y="616" width="370" height="56" rx="8"/>
+  <text class="title" x="985" y="639" text-anchor="middle">前提・制約 ／ ASSUMPTION</text>
+  <text class="sub" x="985" y="659" text-anchor="middle">報告で、確認が必要な前提として示す</text>
+  <path class="line" d="M360,644 L418,644" marker-end="url(#arrow)"/>
+  <path class="line" d="M740,644 L798,644" marker-end="url(#arrow)"/>
+
+  <!-- 行 9: Constitution -->
+  <rect class="box ext" x="30" y="686" width="330" height="56" rx="8"/>
+  <text class="title" x="195" y="709" text-anchor="middle">constitution.md の原則</text>
+  <text class="sub" x="195" y="729" text-anchor="middle">.specify/memory/</text>
+  <rect class="box ctrl" x="420" y="686" width="320" height="56" rx="8"/>
+  <text class="title" x="580" y="709" text-anchor="middle">既定制約の候補</text>
+  <text class="sub" x="580" y="729" text-anchor="middle">開発プロセスの原則は要求にしない</text>
+  <rect class="box perm" x="800" y="686" width="370" height="56" rx="8"/>
+  <text class="title" x="985" y="709" text-anchor="middle">既定制約 ／ NFR ／ 決定記録</text>
+  <text class="sub" x="985" y="729" text-anchor="middle">テスト方針などは決定記録に残す</text>
+  <path class="line" d="M360,714 L418,714" marker-end="url(#arrow)"/>
+  <path class="line" d="M740,714 L798,714" marker-end="url(#arrow)"/>
+
+  <!-- 行 10: plan/tasks -->
+  <rect class="box ext" x="30" y="756" width="330" height="56" rx="8"/>
+  <text class="title" x="195" y="779" text-anchor="middle">plan.md・tasks.md・contracts/</text>
+  <text class="sub" x="195" y="799" text-anchor="middle">技術選定・タスク・API 契約</text>
+  <rect class="box temp" x="420" y="756" width="320" height="56" rx="8"/>
+  <text class="title" x="580" y="779" text-anchor="middle">参照のみ</text>
+  <text class="sub" x="580" y="799" text-anchor="middle">要求には変換しない</text>
+  <rect class="box temp" x="800" y="756" width="370" height="56" rx="8"/>
+  <text class="title" x="985" y="779" text-anchor="middle">&lt;references&gt;</text>
+  <text class="sub" x="985" y="799" text-anchor="middle">rd-author と implementer が必要なときに読む</text>
+  <path class="line dash" d="M360,784 L418,784" marker-end="url(#arrow)"/>
+  <path class="line dash" d="M740,784 L798,784" marker-end="url(#arrow)"/>
+
+  <!-- トレーサビリティの鎖 -->
+  <text class="head" x="30" y="852">トレーサビリティの鎖（太枠の行）: 1 件の受入シナリオが「検証済み」と判定されるまで</text>
+
+  <rect class="box ext" x="22" y="870" width="180" height="64" rx="8"/>
+  <text class="title" x="112" y="895" text-anchor="middle">US1-AS1（Spec Kit）</text>
+  <text class="sub" x="112" y="917" text-anchor="middle">Given / When / Then</text>
+
+  <rect class="box perm" x="218" y="870" width="180" height="64" rx="8"/>
+  <text class="title" x="308" y="895" text-anchor="middle">AC-031（FR-012）</text>
+  <text class="sub" x="308" y="917" text-anchor="middle">出典: speckit:…/US1</text>
+
+  <rect class="box perm" x="414" y="870" width="180" height="64" rx="8"/>
+  <text class="title" x="504" y="895" text-anchor="middle">E2E-004</text>
+  <text class="sub" x="504" y="917" text-anchor="middle">tests/system/ledger.json</text>
+
+  <rect class="box agent" x="610" y="870" width="180" height="64" rx="8"/>
+  <text class="title" x="700" y="895" text-anchor="middle">System Test</text>
+  <text class="sub" x="700" y="917" text-anchor="middle">実装より前に作る</text>
+
+  <rect class="box ctrl" x="806" y="870" width="180" height="64" rx="8"/>
+  <text class="title" x="896" y="895" text-anchor="middle">pass</text>
+  <text class="sub" x="896" y="917" text-anchor="middle">ledger.py run・verify.py</text>
+
+  <rect class="box lead" x="1002" y="870" width="180" height="64" rx="8"/>
+  <text class="title" x="1092" y="895" text-anchor="middle" fill="#ffffff">検証済み要求</text>
+  <text x="1092" y="917" text-anchor="middle" font-size="12" fill="#ffffff">kpi.py（North Star）</text>
+
+  <path class="line" d="M202,902 L216,902" marker-end="url(#arrow)"/>
+  <path class="line" d="M398,902 L412,902" marker-end="url(#arrow)"/>
+  <path class="line" d="M594,902 L608,902" marker-end="url(#arrow)"/>
+  <path class="line" d="M790,902 L804,902" marker-end="url(#arrow)"/>
+  <path class="line" d="M986,902 L1000,902" marker-end="url(#arrow)"/>
+
+  <rect class="box temp" x="22" y="956" width="1160" height="86" rx="8"/>
+  <text class="title" x="40" y="980">取り込みの規則</text>
+  <text class="sub" x="40" y="1002">・一方向（Spec Kit → conductor）。取り込んだ後の正本は要求定義書で、conductor は specs/ を書き換えない。仕様を変えたら取り込み直す。</text>
+  <text class="sub" x="40" y="1022">・同じ意味の既存の要求があれば新しく作らずに対応付け、違いは競合として質問票に挙げる（機能ごとの spec.md が、1 つの正本に統合される）。</text>
+</svg>

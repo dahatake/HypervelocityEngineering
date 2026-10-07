@@ -125,3 +125,5 @@ python scripts/import-speckit.py --implement              # 取り込みと実�
 - スクリプトは要求定義書を編集せず、ID も振りません（G-1・G-3）。Spec Kit の ID は `speckit:001-photo-albums/FR-003` の形の取り込み元 ID として残し、rd-author が `next-id.py` で採番し直して出典欄に書きます。
 - 既定の依頼文は `scope: なし`・`approval_policy: 厳格` で、要求定義だけを行います。報告の質問票に回答してから、次の `/build` で実装します。
 - テンプレートのまま（`[FEATURE NAME]` など）の箇所があると `WARN` を出します。先に Spec Kit 側で埋めるか、rd-author に質問票へ挙げさせます。
+- 同じリポジトリに Spec Kit を入れたままでかまいません。Spec Kit の文書（`specs/**/*.md`、`.specify/**`）は独自の `FR-001` などの番号を使うため、ID の検査（CHK-19）と `select-tests.py` の対象外です。連携するときは `/speckit-implement`・`/speckit-converge` を使わず、実装は conductor に任せます。run の実行中は Spec Kit のスキルを使いません（run が終わってから仕様を更新します）。
+- 連携の考え方・構成図・データの対応図は、[README の「GitHub Spec Kit との連携」](../README.md#github-spec-kit-との連携) にあります。

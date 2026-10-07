@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" font-family="'Segoe UI', Meiryo, 'Hiragino Sans', 'Noto Sans JP', sans-serif" font-size="13" fill="#1f2328">
+  <title>GitHub Spec Kit と conductor toolkit の連携（コンポーネント構成）</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+    </marker>
+    <style>
+      .frame { fill: none; stroke: #8c959f; stroke-width: 1.5; stroke-dasharray: 6 4; }
+      .frame-label { font-size: 14px; font-weight: 600; fill: #57606a; }
+      .box { stroke-width: 1.5; }
+      .agent { fill: #ddf4ff; stroke: #0969da; }
+      .lead { fill: #0969da; stroke: #0550ae; }
+      .ctrl { fill: #fff8c5; stroke: #9a6700; }
+      .perm { fill: #dafbe1; stroke: #1a7f37; }
+      .temp { fill: #f6f8fa; stroke: #6e7781; }
+      .ext { fill: #fbefff; stroke: #8250df; }
+      .muted { fill: #ffffff; stroke: #8c959f; stroke-dasharray: 5 4; }
+      .title { font-size: 14px; font-weight: 700; }
+      .sub { font-size: 12px; fill: #57606a; }
+      .line { stroke: #57606a; stroke-width: 1.5; fill: none; }
+      .dash { stroke-dasharray: 5 4; }
+      .note { font-size: 12px; fill: #57606a; }
+      .step { font-size: 13px; font-weight: 700; fill: #0550ae; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="900" fill="#ffffff"/>
+  <text x="600" y="34" text-anchor="middle" font-size="20" font-weight="700">GitHub Spec Kit と conductor toolkit の連携</text>
+  <text x="600" y="58" text-anchor="middle" class="note">仕様は Spec Kit で対話しながら書き、仕様どおりに作り切って証明するのは conductor。橋渡しは import-speckit.py（一方向）</text>
+
+  <!-- 利用者 -->
+  <rect class="box ext" x="450" y="78" width="300" height="58" rx="8"/>
+  <text class="title" x="600" y="102" text-anchor="middle">利用者（プロダクト担当・開発者）</text>
+  <text class="sub" x="600" y="122" text-anchor="middle">仕様は対話で書き、実装は /build 1 回で任せる</text>
+
+  <!-- ===== 左: Spec Kit ===== -->
+  <rect class="frame" x="30" y="170" width="370" height="520" rx="10"/>
+  <text class="frame-label" x="46" y="192">GitHub Spec Kit（仕様を書く）</text>
+
+  <rect class="box ext" x="50" y="206" width="330" height="56" rx="8"/>
+  <text class="title" x="215" y="229" text-anchor="middle">/speckit-* スキル（.github/skills/）</text>
+  <text class="sub" x="215" y="249" text-anchor="middle">constitution → specify → clarify（→ plan → tasks）</text>
+
+  <rect class="box ext" x="50" y="280" width="330" height="56" rx="8"/>
+  <text class="title" x="215" y="303" text-anchor="middle">.specify/memory/constitution.md</text>
+  <text class="sub" x="215" y="323" text-anchor="middle">プロジェクトの原則</text>
+
+  <rect class="box ext" x="50" y="354" width="330" height="74" rx="8"/>
+  <text class="title" x="215" y="377" text-anchor="middle">specs/&lt;NNN-機能&gt;/spec.md</text>
+  <text class="sub" x="215" y="397" text-anchor="middle">ユーザーストーリー（P1〜P3）・受入シナリオ</text>
+  <text class="sub" x="215" y="415" text-anchor="middle">FR・SC・Key Entities・Clarifications</text>
+
+  <rect class="box ext" x="50" y="446" width="330" height="56" rx="8"/>
+  <text class="title" x="215" y="469" text-anchor="middle">plan.md・tasks.md・contracts/</text>
+  <text class="sub" x="215" y="489" text-anchor="middle">技術計画とタスク（要求には変換しない）</text>
+
+  <rect class="box muted" x="50" y="520" width="330" height="56" rx="8"/>
+  <text class="title" x="215" y="543" text-anchor="middle" fill="#57606a">/speckit-implement・converge</text>
+  <text class="sub" x="215" y="563" text-anchor="middle">連携するときは使わない（実装は conductor）</text>
+
+  <text class="note" x="215" y="612" text-anchor="middle">人が段階ごとに呼び出して確認する</text>
+  <text class="note" x="215" y="632" text-anchor="middle">clarify で未確定事項を対話で潰す</text>
+  <text class="note" x="215" y="652" text-anchor="middle">機能ごとに specs/ の下へ文書が増える</text>
+
+  <!-- 利用者 → Spec Kit -->
+  <path class="line" d="M450,107 C360,107 330,150 330,204" marker-end="url(#arrow)"/>
+  <text class="step" x="320" y="100" text-anchor="middle">① 対話で仕様を書く</text>
+
+  <!-- ===== 中央: 橋渡し ===== -->
+  <rect class="frame" x="430" y="170" width="340" height="520" rx="10"/>
+  <text class="frame-label" x="446" y="192">橋渡し（toolkit 1.2.0）</text>
+
+  <rect class="box ctrl" x="450" y="296" width="300" height="74" rx="8"/>
+  <text class="title" x="600" y="319" text-anchor="middle">scripts/import-speckit.py</text>
+  <text class="sub" x="600" y="339" text-anchor="middle">LLM を使わない決定的な変換</text>
+  <text class="sub" x="600" y="357" text-anchor="middle">要求定義書は編集せず、ID も振らない</text>
+  <text class="step" x="600" y="284" text-anchor="middle">② 取り込む</text>
+
+  <rect class="box temp" x="450" y="414" width="300" height="74" rx="8"/>
+  <text class="title" x="600" y="437" text-anchor="middle">work/import/speckit-&lt;日時&gt;.md</text>
+  <text class="sub" x="600" y="457" text-anchor="middle">対応表（取り込み元 ID → 取り込み先の候補）</text>
+  <text class="sub" x="600" y="475" text-anchor="middle">＋ /build にそのまま貼る依頼文</text>
+
+  <path class="line" d="M600,370 L600,412" marker-end="url(#arrow)"/>
+
+  <rect class="box temp" x="450" y="516" width="300" height="156" rx="8"/>
+  <text class="title" x="600" y="539" text-anchor="middle">同じリポジトリでの共存</text>
+  <text class="sub" x="466" y="563">Spec Kit: specs/、.specify/、</text>
+  <text class="sub" x="466" y="581">　.github/skills/speckit-*</text>
+  <text class="sub" x="466" y="603">toolkit: docs/、tests/system/、scripts/、</text>
+  <text class="sub" x="466" y="621">　.github/agents/、.github/skills/（5 つ）</text>
+  <text class="sub" x="466" y="643">specs/**/*.md と .specify/** は、ID の検査</text>
+  <text class="sub" x="466" y="661">（CHK-19）とテスト選択の対象外</text>
+
+  <!-- Spec Kit → import -->
+  <path class="line" d="M380,308 C415,308 415,322 448,322" marker-end="url(#arrow)"/>
+  <path class="line" d="M380,391 C415,391 415,346 448,346" marker-end="url(#arrow)"/>
+  <path class="line dash" d="M380,474 C415,474 415,451 448,451" marker-end="url(#arrow)"/>
+  <text class="note" x="405" y="522" text-anchor="middle">参照のみ</text>
+
+  <!-- ===== 右: conductor ===== -->
+  <rect class="frame" x="800" y="170" width="370" height="520" rx="10"/>
+  <text class="frame-label" x="816" y="192">conductor toolkit（作り切って証明する）</text>
+
+  <rect class="box lead" x="820" y="206" width="330" height="60" rx="8"/>
+  <text class="title" x="985" y="231" text-anchor="middle" fill="#ffffff">conductor（進行役）</text>
+  <text x="985" y="252" text-anchor="middle" font-size="12" fill="#ffffff">工程 0〜6 を無人で実行し、作業役に振り分ける</text>
+
+  <!-- 利用者 → conductor -->
+  <path class="line" d="M750,107 C900,107 985,140 985,204" marker-end="url(#arrow)"/>
+  <text class="step" x="890" y="100" text-anchor="middle">③ /build を 1 回</text>
+
+  <!-- 依頼文 → conductor -->
+  <path class="line" d="M750,451 C790,451 780,246 818,246" marker-end="url(#arrow)"/>
+  <rect x="757" y="334" width="56" height="20" fill="#ffffff"/>
+  <text class="note" x="785" y="349" text-anchor="middle">貼り付け</text>
+
+  <path class="line" d="M985,266 L985,284" marker-end="url(#arrow)"/>
+
+  <rect class="box agent" x="820" y="286" width="160" height="56" rx="8"/>
+  <text class="title" x="900" y="309" text-anchor="middle">rd-author</text>
+  <text class="sub" x="900" y="329" text-anchor="middle">要求定義書の唯一の書き手</text>
+
+  <rect class="box agent" x="990" y="286" width="160" height="56" rx="8"/>
+  <text class="title" x="1070" y="309" text-anchor="middle">rd-auditor</text>
+  <text class="sub" x="1070" y="329" text-anchor="middle">書き手と別に監査</text>
+
+  <rect class="box agent" x="820" y="352" width="160" height="56" rx="8"/>
+  <text class="title" x="900" y="375" text-anchor="middle">test-designer</text>
+  <text class="sub" x="900" y="395" text-anchor="middle">AC から先に System Test</text>
+
+  <rect class="box agent" x="990" y="352" width="160" height="56" rx="8"/>
+  <text class="title" x="1070" y="375" text-anchor="middle">implementer</text>
+  <text class="sub" x="1070" y="395" text-anchor="middle">worktree で実装</text>
+
+  <rect class="box agent" x="820" y="418" width="160" height="56" rx="8"/>
+  <text class="title" x="900" y="441" text-anchor="middle">reviewer</text>
+  <text class="sub" x="900" y="461" text-anchor="middle">差分を AC と照合</text>
+
+  <rect class="box ctrl" x="990" y="418" width="160" height="56" rx="8"/>
+  <text class="title" x="1070" y="441" text-anchor="middle">next-id.py・ledger.py</text>
+  <text class="sub" x="1070" y="461" text-anchor="middle">ID の採番・台帳の更新</text>
+
+  <rect class="box perm" x="820" y="492" width="330" height="80" rx="8"/>
+  <text class="title" x="985" y="515" text-anchor="middle">管理データ（正本・git で管理）</text>
+  <text class="sub" x="985" y="537" text-anchor="middle">requirements-definition.md（FR・AC・Q・G）</text>
+  <text class="sub" x="985" y="557" text-anchor="middle">catalog.md・id-registry.md・ledger.json</text>
+
+  <rect class="box perm" x="820" y="590" width="330" height="80" rx="8"/>
+  <text class="title" x="985" y="613" text-anchor="middle">④ 完了の証拠</text>
+  <text class="sub" x="985" y="635" text-anchor="middle">verify.py exit 0・System Test の pass</text>
+  <text class="sub" x="985" y="655" text-anchor="middle">kpi.py（North Star）・run-report.md</text>
+
+  <!-- ===== 下: ゲートとフィードバック ===== -->
+  <rect class="box ctrl" x="30" y="716" width="1140" height="66" rx="8"/>
+  <text class="title" x="600" y="741" text-anchor="middle">品質ゲート（toolkit）: hook G-1〜G-6 ／ verify.py CHK-01〜23 ＋ ビルド・テスト ／ CI（hve-verify.yml）</text>
+  <text class="sub" x="600" y="764" text-anchor="middle">取り込んだ後の正本は要求定義書。合否の判定は、Spec Kit の文書ではなく要求定義書・台帳・テストの結果で行う</text>
+
+  <rect class="box temp" x="30" y="802" width="1140" height="78" rx="8"/>
+  <text class="title" x="50" y="826">⑤ フィードバック（一方向の取り込み）</text>
+  <text class="sub" x="50" y="848">run-report.md の質問票（Q）に、利用者が次の /build の &lt;answers&gt; で回答する。BLOCKED だった受入基準は、回答の後に実装される。</text>
+  <text class="sub" x="50" y="868">Spec Kit 側で仕様を変えたら import-speckit.py で取り込み直し、rd-author が既存の要求との違いを競合（Q）として扱う。conductor は specs/ を書き換えない。</text>
+</svg>

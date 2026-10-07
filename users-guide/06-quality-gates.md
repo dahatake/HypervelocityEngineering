@@ -46,7 +46,7 @@
 | CHK-16 | 未定義の PARAM の参照、PARAM の表にない PARAM | error | PARAM の表に追加する |
 | CHK-17 | 廃止した要求に対して、コード・テスト・カタログが残っている（不整合） | error / warn | 削除し終えたら本文から外す |
 | CHK-18 | BLOCKED の AC が、未回答の Q・TBD・競合を参照していない／回答済みの Q を参照している | error | ブロックの原因を書く／回答を反映して BLOCKED を外す |
-| CHK-19 | コード・テストにある要求 ID・AC ID が要求定義書にない | error | ID を直す（廃止した ID の残骸は削除する） |
+| CHK-19 | コード・テストにある要求 ID・AC ID が要求定義書にない（`checks.id_scan_exclude` のパスは対象外。既定で docs・scripts・SVG の図・Spec Kit の `specs/**/*.md`・`.specify/**` などを除外） | error | ID を直す（廃止した ID の残骸は削除する） |
 | CHK-20 | 既定制約の節、ペルソナ表の必須列、要求の構造化欄、承認済み AC の検証レベルがない。決定状態が規定の値でない | error | [03-requirements-format.md](03-requirements-format.md) の形式にする |
 | CHK-21 | （`--run` 指定時）done の項目の要求がカタログに実装済みとして載り、その system AC のケースが pass になっているか | error | 統合をやり直す |
 | CHK-22 | 承認済みの決定記録が、依頼・Q・承認依頼・包括承認のどれも根拠として指していない（または、存在しない Q を指している） | error | 根拠を直す |

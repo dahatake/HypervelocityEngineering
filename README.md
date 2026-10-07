@@ -10,12 +10,14 @@ GitHub Copilot（VS Code の Agents ウィンドウ / Copilot CLI / GitHub Copil
   - 終了前に必ず検証する
   - 危険な操作は拒否する
 - これらの規則の多くは、`/build` で run を開始したときだけ働きます。`/build` 以外の Prompt で変更を依頼するリスクは、[重要: `/build` 以外の Prompt を送るときのリスク](#重要-build-以外の-prompt-を送るときのリスク) を参照してください。
+- [GitHub Spec Kit](https://github.com/github/spec-kit) で書いた仕様を取り込み、実装と検証を conductor に任せることもできます（[GitHub Spec Kit との連携](#github-spec-kit-との連携)）。
 
 ## 目次
 
 - [概要](#概要)
 - [インストール](#インストール)
 - [Quickstart](#quickstart)
+- [GitHub Spec Kit との連携](#github-spec-kit-との連携)
 - [詳細ドキュメント](#詳細ドキュメント)
 - [用語](#用語)
 - [リポジトリの構成](#リポジトリの構成)
@@ -449,6 +451,101 @@ hook や subagent の動作は、クライアント（VS Code・Copilot CLI・Gi
 
 ---
 
+## GitHub Spec Kit との連携
+
+[GitHub Spec Kit](https://github.com/github/spec-kit)（以下 Spec Kit）で書いた仕様を、この toolkit に取り込んで実装・検証できます。**仕様は Spec Kit で対話しながら書き、仕様どおりに作り切って証明するのは conductor** という分担です。橋渡しは `scripts/import-speckit.py` で、取り込みは一方向（Spec Kit → conductor）です。
+
+### なぜ連携するのか
+
+どちらも「仕様を正本にする」という考え方は同じですが、得意な工程が違います。
+
+| 観点 | Spec Kit | conductor toolkit |
+|---|---|---|
+| 解く問題 | 仕様を**どう書くか**（Spec-Driven Development の作法とテンプレート） | 仕様どおりに**最後まで作り切り、それを証明する**こと |
+| 人の関わり方 | `/speckit-*` を段階ごとに呼び、人が結果を確かめて次へ進む | `/build` を 1 回送るだけ。判断が要る点は質問票にまとめ、止まらずに進む |
+| 未確定事項の扱い | `/speckit-clarify` で、その場で対話して潰す | 質問票（Q）と BLOCKED に記録し、次の `/build` の `<answers>` で回答する |
+| 完了の判定 | `/speckit-converge` が、仕様・タスク・コードを LLM で読み比べる | 要求 → 受入基準 → System Test → verify の鎖で、決定的に判定する（exit 0） |
+| 正本の形 | 機能ごとの `specs/<NNN-機能>/spec.md` | 1 つの要求定義書（ID 付き）、カタログ、System Test の台帳 |
+
+ここから、次のように分担するのが合理的だと考えます。
+
+1. **仕様を育てる段階は、対話が向いている。** 要求の意図や優先度は、人と短いやりとりを重ねるほど正確になります。Spec Kit の specify・clarify・constitution は、この段階のために作られています。conductor は質問を run の後にまとめて返すため、仕様を一緒に練り上げる用途には向きません。
+2. **作る・確かめる段階は、無人と決定的な判定が向いている。** 実装・テスト・統合は手数が多く、人が段階ごとに呼び出すと介入が増えます。また、「仕様どおりか」を LLM の読み比べで判定すると、判定そのものが揺れます。conductor は役割を分けた作業役と hook・verify で、この段階を人の手 1 回で進め、合否を機械的に出します。
+3. **2 つをつなぐには、仕様の各要素を conductor の管理データへ対応付ける必要がある。** ユーザーストーリー・受入シナリオ・未確定事項などは、それぞれ要求・受入基準・質問票に対応します。この対応付けを毎回手で行うと、抜けや ID の重複が起きます。`import-speckit.py` が機械的に候補を付け、rd-author が採番と最終判断を行います。
+
+**計測での裏付け**: 同じ 3 課題を両方のツールで各 2 回実行しました（[bench/RESULTS.md](bench/RESULTS.md)）。課題が小さく合格率が上限に張りついたため、品質の差はまだ検出できていません。分かっているのは次の 4 点です。
+
+- 隠し受入テストは、どちらも 100% 合格でした。
+- 人の介入は、Spec Kit が平均 7.7 回、conductor が 1 回でした。
+- conductor の reviewer と最終監査は、隠しテストでは測れない欠陥を見つけました（テストの脆さ、受入基準と非機能要求の矛盾）。
+- 一方で、所要時間は conductor のほうが長くかかりました（役割を分けて実行した run で約 40 分、Spec Kit は約 17 分）。
+
+### 何が、どう連携するのか
+
+![GitHub Spec Kit と conductor toolkit の連携（コンポーネント構成）](images/speckit-conductor-integration.svg)
+
+| 段階 | 担当 | すること | 主な成果物 |
+|---|---|---|---|
+| ① 仕様を書く | 利用者 ＋ Spec Kit | `/speckit-constitution` → `/speckit-specify` → `/speckit-clarify`（必要なら `/speckit-plan`・`/speckit-tasks`） | `.specify/memory/constitution.md`、`specs/<NNN-機能>/spec.md` ほか |
+| ② 取り込む | `import-speckit.py`（決定的スクリプト） | Spec Kit の文書を読み、要素ごとに取り込み先の候補を付ける。要求定義書は編集せず、ID も振らない | `work/import/speckit-<日時>.md`（対応表と `/build` の依頼文） |
+| ③ 作り切る | conductor と作業役 | 依頼文を `/build` に貼って送る。rd-author が採番して要求定義書に書き、rd-auditor が監査し、test-designer → implementer → reviewer の順に進む | 要求定義書、カタログ、System Test と台帳、実装 |
+| ④ 証明する | hook・verify・kpi.py | ゲートを通るまで完了にしない。KPI と報告を出す | `verify.py` の exit 0、`kpi.md`、`run-report.md` |
+| ⑤ 回答・更新 | 利用者 | 質問票に `<answers>` で回答する。Spec Kit 側で仕様を変えたら、②から取り込み直す | 決定記録、更新された要求 |
+
+```bash
+# ① の後で、リポジトリのルートで実行する
+python scripts/import-speckit.py                         # specs/*/spec.md をすべて取り込む
+python scripts/import-speckit.py --feature 001           # 機能を選ぶ（前方一致・複数可）
+python scripts/import-speckit.py --source ../photo-app   # 別のリポジトリにある Spec Kit のプロジェクト
+python scripts/import-speckit.py --implement             # 取り込みと実装を 1 回の run で行う依頼文にする
+```
+
+出力された `work/import/speckit-<日時>.md` の「依頼文」を、conductor の `/build` の後に貼り付けて送ります。既定の依頼文は、`scope: なし`・`approval_policy: 厳格` で、**要求定義だけ**を行います。報告の質問票を確認・回答してから、次の `/build` で実装します。確認を挟まずに進めてよい場合は、`--implement` を付けて依頼文を作ります。
+
+**同じリポジトリでの共存**: 2 つのツールは、置き場所が分かれています。
+
+| ツール | 置き場所 |
+|---|---|
+| Spec Kit | `specs/`、`.specify/`、`.github/skills/speckit-*` |
+| conductor toolkit | `docs/`、`tests/system/`、`scripts/`、`.github/agents/`、`.github/skills/` の 5 つ、`.github/hooks/` |
+
+Spec Kit は独自の番号（`FR-001`、`SC-001` など）を使います。toolkit の ID と衝突しないよう、`specs/**/*.md` と `.specify/**` は ID の検査（CHK-19）と影響範囲のテスト選択（`select-tests.py`）の対象外です。連携するときは `/speckit-implement`・`/speckit-converge` を使いません。実装を 2 つのツールで二重に行わないためです。また、run の実行中（run が `active`）は Spec Kit のスキルを使わず、run が終わってから仕様を更新します（[`/build` 以外の Prompt を送るときのリスク](#重要-build-以外の-prompt-を送るときのリスク)）。
+
+### データをどう連携するか
+
+![Spec Kit の成果物から conductor の管理データへのデータ連携](images/speckit-conductor-dataflow.svg)
+
+取り込みの規則は次のとおりです（対応表の全体は [users-guide 1.7](users-guide/01-writing-requests.md#17-github-spec-kit-の仕様を取り込む)）。
+
+- **ID は採番し直し、出典を残す。** Spec Kit の `FR-003` は、`speckit:001-albums/FR-003` という取り込み元 ID になります。rd-author は `next-id.py` で toolkit の ID（例: `FR-012`）を振り、要求の出典の欄に取り込み元 ID を書きます。取り込み元のファイルは、出典台帳に SRC として登録します。
+- **受入シナリオは受入基準になり、System Test につながる。** Given / When / Then は AC になります（検証レベルの候補は system）。test-designer は実装より前に、その AC から System Test と台帳のケースを作ります。
+- **未確定事項は消えない。** `[NEEDS CLARIFICATION: …]` と、疑問形の Edge Cases は、質問票（Q）になります。関係する AC には BLOCKED が付き、回答が出るまで実装されません。clarify で決まった回答は、決定記録になります。
+- **技術計画は要求にしない。** `plan.md`・`tasks.md`・`contracts/` は `<references>` に載せるだけです。何を満たすか（要求）と、どう作るか（設計）を混ぜないためです。
+- **機能ごとの仕様を、1 つの正本に統合する。** 同じ意味の既存の要求があれば、新しく作らずに対応付けます。違いがあれば、競合として質問票に挙げます。
+- **取り込みは一方向。** 取り込んだ後の正本は要求定義書です。conductor は `specs/` を書き換えません。仕様を変えるときは、Spec Kit 側を直して取り込み直します（rd-author が差分を扱います）。
+
+### 連携で得られる効果
+
+| 効果 | 仕組み | 根拠・確かめ方 |
+|---|---|---|
+| 仕様の質を、対話で上げられる | Spec Kit の clarify と constitution で、意図・優先度・未確定事項を詰めてから渡す | 取り込み時に、Clarifications は決定記録、未確定事項は質問票になる |
+| 実装は人の手 1 回で最後まで進む | `/build` 1 回で、工程 0〜6 を無人で実行する | 計測では、人の介入が Spec Kit の 7〜9 回に対して、conductor は 1 回（[bench/RESULTS.md](bench/RESULTS.md)） |
+| 仕様どおりかを、機械的に証明できる | AC → System Test → 台帳 → `verify.py` の鎖。合否は LLM の判断ではなくテストの結果で決まる | `python scripts/kpi.py run` の「検証済み要求」と「トレーサビリティ網羅率」 |
+| 仕様の出典を、後から追える | 要求の出典の欄に `speckit:<機能>/<元 ID>` が残る | 要求定義書と、出典台帳（SRC） |
+| 未確定事項が実装に紛れ込まない | NEEDS CLARIFICATION → 質問票 ＋ BLOCKED。BLOCKED の AC は実装しない | `run-report.md` の未回答の質問票 |
+| 書いた本人以外が確かめる | rd-auditor（監査）と reviewer（差分の確認）は、書き手と別の作業役 | 計測では、reviewer の差し戻し 2 回、最終監査による矛盾の検出 1 件 |
+| 仕様が機能ごとにばらけない | rd-author が既存の要求と突き合わせて、1 つの要求定義書に統合する | 競合は質問票に挙がる |
+
+### 向いている場面と注意点
+
+- **向いている場面**: 仕様は人が詰めたいが、実装と検証は任せたい場合。夜間などに無人で実行したい場合や、レビューの担当者が少ないチーム。監査やトレーサビリティの証拠が必要な開発。
+- **時間と計算資源**: conductor は作業役を何度も呼び出すため、Spec Kit 単独より時間と Token を多く使います。小さな変更や試作で素早く作るなら、Spec Kit 単独（`/speckit-implement`）のほうが速いことがあります。
+- **一方向であること**: run の中で決まった回答や設計の判断は、要求定義書と決定記録に残ります。`specs/` には戻りません。Spec Kit の文書を最新に保ちたい場合は、決定記録を見て Spec Kit 側にも反映します。
+- **テンプレートの前提**: `import-speckit.py` は、Spec Kit の標準テンプレートの見出し（User Scenarios、Requirements、Success Criteria など）を読みます。preset で見出しを大きく変えた場合は、対応表が粗くなります。ただし、元の文書は依頼文に全文が入るので、rd-author が判断できます。テンプレートのまま（`[FEATURE NAME]` など）の箇所があると、`WARN` を出します。
+- **計測の範囲**: 上の計測は、小さな 3 課題を各 2 回実行したものです。より難しい課題での品質の差や、コストの差（クレジット）は、まだ測っていません（[bench/README.md](bench/README.md)）。
+
+---
+
 ## 詳細ドキュメント
 
 詳細は [users-guide/](users-guide/README.md) にあります。
@@ -467,6 +564,7 @@ hook や subagent の動作は、クライアント（VS Code・Copilot CLI・Gi
 GitHub Spec Kit との比較計測（同じ課題・隠し受入テスト・North Star の比較）の手順と結果は [bench/](bench/README.md) にあります。最新の結果は [bench/RESULTS.md](bench/RESULTS.md) です。
 
 ## 用語
+
 | 用語 | 意味 |
 |---|---|
 | conductor（オーケストレーター） | 利用者が直接呼ぶ唯一のエージェント。計画・作業の割り当て・統合・ゲートの判定・報告を行います。 |
