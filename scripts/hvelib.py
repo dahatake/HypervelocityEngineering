@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
-TOOLKIT_VERSION = "1.3.0"
+TOOLKIT_VERSION = "0.1.0"
 
 SPECKIT_PATHS = [".specify/**", "specs/**/*.md"]
 

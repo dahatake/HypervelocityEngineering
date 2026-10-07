@@ -316,6 +316,7 @@ def main(argv=None) -> int:
     ap.add_argument("--check", action="store_true", help="更新が必要かを確かめる（必要なら exit 1）")
     ap.add_argument("--force", action="store_true", help="ローカルで変更した toolkit のファイルも上書きする（.hve-backup-* を残す）")
     ap.add_argument("--no-ci", action="store_true", help=".github/workflows/hve-verify.yml を入れない")
+    ap.add_argument("--version", action="store_true", help="toolkit の版を表示して終了する")
     ap.add_argument("--uninstall", action="store_true")
     ap.add_argument("--allow-non-git", action="store_true")
     ap.add_argument("--skip-verify", action="store_true")
@@ -327,6 +328,9 @@ def main(argv=None) -> int:
     target = Path(args.target).resolve()
     if not (source / "scripts" / "hvelib.py").exists():
         raise SystemExit(f"ERROR install: toolkit のソースが見つかりません: {source}")
+    if args.version:
+        print(toolkit_version(source))
+        return 0
     if source == target:
         raise SystemExit("ERROR install: 導入先が toolkit のソースと同じです。--target に導入先のリポジトリを指定します")
     if not target.is_dir():
