@@ -1,1 +1,0 @@
-- 対象企業: {company_name}

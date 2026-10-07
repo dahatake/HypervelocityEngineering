@@ -1,1 +1,0 @@
-リソースグループ: `{resource_group}`

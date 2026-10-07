@@ -1,5 +1,0 @@
-inputs: []
-outputs:
-- path: docs/company-business-recommendation.md
-  required: true
-  mode: create

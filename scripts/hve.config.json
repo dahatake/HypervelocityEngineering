@@ -1,0 +1,41 @@
+{
+  "management_files": {
+    "requirements": "docs/requirements-definition.md",
+    "requirements_dir": "docs/requirements",
+    "catalog": "docs/catalog.md",
+    "id_registry": "docs/id-registry.md",
+    "run_history": "docs/run-history.md",
+    "ledger": "tests/system/ledger.json",
+    "manual_tests": "docs/manual-tests.md"
+  },
+  "base_branch": "main",
+  "work": {
+    "dir": "work",
+    "retention_days": 14
+  },
+  "verify": {
+    "timeout_sec": 1800,
+    "commands": []
+  },
+  "models": {
+    "_note": "Phase 1 で較正して決めます（users-guide/07-customization.md）。conductor は subagent を呼ぶときにこの表を参照します。空なら既定のモデルを使います。",
+    "conductor": "",
+    "rd-author": "",
+    "rd-auditor": "",
+    "test-designer": "",
+    "implementer": "",
+    "implementer-escalation": "",
+    "reviewer": ""
+  },
+  "gates": {
+    "enabled": true,
+    "subagent_verify": {
+      "implementer": ["--quick"],
+      "test-designer": ["--docs-only"],
+      "rd-author": ["--docs-only"]
+    },
+    "subagent_verify_max_blocks": 3,
+    "agent_stop_max_blocks": 40,
+    "enforce_conductor_edit_scope": true
+  }
+}

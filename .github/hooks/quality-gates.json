@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "if command -v python3 >/dev/null 2>&1; then python3 scripts/hooks/gate.py session-start; else python scripts/hooks/gate.py session-start; fi",
+        "powershell": "python scripts/hooks/gate.py session-start",
+        "cwd": ".",
+        "timeoutSec": 20
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "if command -v python3 >/dev/null 2>&1; then python3 scripts/hooks/gate.py pre-tool; else python scripts/hooks/gate.py pre-tool; fi",
+        "powershell": "python scripts/hooks/gate.py pre-tool",
+        "cwd": ".",
+        "timeoutSec": 20
+      }
+    ],
+    "subagentStart": [
+      {
+        "type": "command",
+        "bash": "if command -v python3 >/dev/null 2>&1; then python3 scripts/hooks/gate.py subagent-start; else python scripts/hooks/gate.py subagent-start; fi",
+        "powershell": "python scripts/hooks/gate.py subagent-start",
+        "cwd": ".",
+        "timeoutSec": 20
+      }
+    ],
+    "subagentStop": [
+      {
+        "type": "command",
+        "bash": "if command -v python3 >/dev/null 2>&1; then python3 scripts/hooks/gate.py subagent-stop; else python scripts/hooks/gate.py subagent-stop; fi",
+        "powershell": "python scripts/hooks/gate.py subagent-stop",
+        "cwd": ".",
+        "timeoutSec": 900
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "command",
+        "bash": "if command -v python3 >/dev/null 2>&1; then python3 scripts/hooks/gate.py agent-stop; else python scripts/hooks/gate.py agent-stop; fi",
+        "powershell": "python scripts/hooks/gate.py agent-stop",
+        "cwd": ".",
+        "timeoutSec": 30
+      }
+    ]
+  }
+}

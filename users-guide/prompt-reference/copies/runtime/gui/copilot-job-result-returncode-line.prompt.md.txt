@@ -1,1 +1,0 @@
-- 終了コード: {returncode}

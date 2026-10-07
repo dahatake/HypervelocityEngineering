@@ -1,0 +1,80 @@
+import json
+import os
+import time
+
+from conftest import git
+
+
+def start_run(repo, options="max_hours: 24\ngit_push: しない\ndeploy: しない"):
+    out = repo.py("run-state.py", "start", "--options", options, check=True).stdout
+    rid = out.split()[1]
+    return rid
+
+
+def test_run_state_lifecycle(sample):
+    rid = start_run(sample)
+    assert git(sample.path, "branch", "--show-current") == f"run/{rid}"
+    assert sample.py("run-state.py", "start", check=True).stdout.startswith(f"RESUME {rid}")
+    sample.py("run-state.py", "queue", "add", "--id", "I-01", "--req", "FR-001", "--ac", "AC-001", "--boundary", "申請", check=True)
+    sample.py("run-state.py", "queue", "add", "--id", "I-02", "--req", "FR-001", "--boundary", "申請", check=True)
+    sample.py("run-state.py", "queue", "add", "--id", "I-03", "--req", "FR-001", "--depends", "I-01", check=True)
+    assert sample.py("run-state.py", "queue", "add", "--id", "I-04", "--req", "FR-1,FR-2,FR-3,FR-4").returncode != 0
+    ready = sample.py("run-state.py", "queue", "ready", "--parallel", "3", check=True).stdout
+    assert "I-01" in ready and "I-02" not in ready and "I-03" not in ready  # same boundary / dependency
+    sample.py("run-state.py", "queue", "set", "I-01", "--status", "done", "--attempts", "+1", check=True)
+    ready = sample.py("run-state.py", "queue", "ready", check=True).stdout
+    assert "I-02" in ready and "I-03" in ready
+    assert sample.py("run-state.py", "complete-check").returncode == 1
+    for item in ("I-02", "I-03"):
+        sample.py("run-state.py", "queue", "set", item, "--status", "blocked", check=True)
+    sample.py("run-state.py", "stage", "6", "--done", check=True)
+    sample.write(f"work/runs/{rid}/run-report.md", "結果: blocked あり\n")
+    assert sample.py("run-state.py", "complete-check").returncode == 0
+    out = sample.py("run-state.py", "finish", "--credits", "12.5", check=True).stdout
+    assert "blocked あり" in out
+    hist = sample.read("docs/run-history.md")
+    assert f"| {rid} |" in hist and "| FR-001 |" in hist and "| 1/1 |" in hist
+    assert not (sample.path / "work" / "current-run.txt").exists()
+    assert sample.py("rdcheck.py", "check", "--base", "none").returncode == 0
+
+
+def test_stage4_makes_ledger_strict(sample):
+    start_run(sample)
+    assert sample.py("verify.py", "--docs-only").returncode == 0
+    sample.py("run-state.py", "stage", "4", "--done", check=True)
+    proc = sample.py("verify.py", "--docs-only")
+    assert proc.returncode == 1 and "CHK-10" in proc.stdout
+
+
+def test_time_budget(sample):
+    rid = start_run(sample, "max_hours: 1")
+    meta_p = sample.path / "work" / "runs" / rid / "meta.json"
+    meta = json.loads(meta_p.read_text(encoding="utf-8"))
+    meta["started_at"] = "2000-01-01T00:00:00+00:00"
+    meta_p.write_text(json.dumps(meta), encoding="utf-8")
+    assert sample.py("run-state.py", "time").returncode == 3
+
+
+def test_verify_runs_configured_commands(sample):
+    cfg = json.loads(sample.read("scripts/hve.config.json"))
+    cfg["verify"]["commands"] = [
+        {"name": "ok", "run": "python -c \"print('fine')\""},
+        {"name": "slow", "run": "python -c \"raise SystemExit(1)\"", "slow": True},
+    ]
+    sample.write("scripts/hve.config.json", json.dumps(cfg))
+    assert sample.py("verify.py", "--quick").returncode == 0
+    proc = sample.py("verify.py")
+    assert proc.returncode == 1 and "FAIL slow" in proc.stdout
+
+
+def test_clean_work(sample):
+    old = sample.path / "work" / "runs" / "200001010000"
+    old.mkdir(parents=True)
+    (old / "progress.md").write_text("x", encoding="utf-8")
+    past = time.time() - 30 * 86400
+    os.utime(old / "progress.md", (past, past))
+    os.utime(old, (past, past))
+    rid = start_run(sample)
+    out = sample.py("clean-work.py", check=True).stdout
+    assert "DELETE work/runs/200001010000" in out and f"KEEP   work/runs/{rid}" in out
+    assert not old.exists()

@@ -1,0 +1,3 @@
+# Append-only records: parallel branches add rows at the end; keep both sides when merging.
+docs/id-registry.md merge=union
+docs/run-history.md merge=union

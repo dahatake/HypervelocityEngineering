@@ -1,5 +1,0 @@
-inputs: []
-outputs:
-- path: docs-generated/components/tech-debt.md
-  required: true
-  mode: create

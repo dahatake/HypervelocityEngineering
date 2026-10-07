@@ -1,0 +1,24 @@
+name: hve-verify
+
+# Re-runs the L1 deterministic verification outside the agent (plan §10, Q-5).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Add the toolchain your verify.commands need (for example actions/setup-node + npm ci) above this step.
+      - name: verify
+        run: bash scripts/verify.sh --show-warnings

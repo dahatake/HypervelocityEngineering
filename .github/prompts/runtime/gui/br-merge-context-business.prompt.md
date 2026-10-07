@@ -1,1 +1,0 @@
-- 対象事業・業務: {target_business}
