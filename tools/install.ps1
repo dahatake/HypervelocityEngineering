@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Install / update the conductor toolkit into the current (or given) git repository with one command.
+  Install / update the Assured Build Kit into the current (or given) git repository with one command.
 
 .EXAMPLE
   # in the root of your repository (downloads the toolkit from GitHub)

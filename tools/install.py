@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""install.py - install / update / uninstall the conductor toolkit into another repository.
+"""install.py - install / update / uninstall the Assured Build Kit into another repository.
 
 Usually started through tools/install.ps1 or tools/install.sh (one command, downloads this repository).
 From a local clone:
@@ -74,8 +74,17 @@ TEMPLATES = [
 CONFIG = "scripts/hve.config.json"
 MANIFEST = ".github/hve-toolkit.json"
 EXECUTABLE = {"scripts/verify.sh"}
-BEGIN, END = "<!-- hve-conductor:begin -->", "<!-- hve-conductor:end -->"
-INSTRUCTIONS_BLOCK = """## conductor toolkit（要求定義書・カタログ・System Test の一貫性）
+BEGIN, END = "<!-- hve-abk:begin -->", "<!-- hve-abk:end -->"
+LEGACY_MARKERS = (("<!-- hve-" + "conductor:begin -->", "<!-- hve-" + "conductor:end -->"),)
+
+
+def block_markers(text: str):
+    """Return the (begin, end) pair present in text (current first, then legacy), or None."""
+    for b, e in ((BEGIN, END),) + LEGACY_MARKERS:
+        if b in text and e in text:
+            return b, e
+    return None
+INSTRUCTIONS_BLOCK = """## Assured Build Kit（要求定義書・カタログ・System Test の一貫性）
 
 - 長時間の開発の依頼は、custom agent `conductor` に 1 回で渡します（VS Code・GitHub Copilot app では `/build`）。手順は `.github/agents/` と `.github/skills/` にあります。
 - 検証は `python scripts/verify.py`（`scripts/verify.ps1` / `scripts/verify.sh`）。exit 0 が合格です。
@@ -242,7 +251,7 @@ class Installer:
 
     def write_manifest(self, version: str) -> None:
         data = {
-            "name": "hve-conductor-toolkit",
+            "name": "hve-assured-build-kit",
             "version": version,
             "source": os.environ.get("HVE_SOURCE_LABEL", str(self.source)),
             "installed_at": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -335,8 +344,8 @@ def main(argv=None) -> int:
         ins.remove_obsolete()
         ins.install_templates()
         ins.install_config()
-        ins.ensure_lines(".gitignore", GITIGNORE_LINES, "# conductor toolkit: temporary run files (kept 14 days)")
-        ins.ensure_lines(".gitattributes", GITATTR_LINES, "# conductor toolkit: append-only records")
+        ins.ensure_lines(".gitignore", GITIGNORE_LINES, "# Assured Build Kit: temporary run files (kept 14 days)")
+        ins.ensure_lines(".gitattributes", GITATTR_LINES, "# Assured Build Kit: append-only records")
         ins.ensure_block("AGENTS.md", "# AGENTS.md\n\n")
         ins.ensure_block(".github/copilot-instructions.md", "# Copilot instructions\n\n")
         if ins.manifest.get("version") != version or any(k not in ("SAME", "EXISTS", "KEEP-LOCAL") for k, _ in ins.actions):
@@ -348,7 +357,7 @@ def main(argv=None) -> int:
     pending = [a for a in ins.actions if a[0] not in ("SAME", "EXISTS", "KEEP-LOCAL", "KEEP")]
     kept = [rel for k, rel in ins.actions if k == "KEEP-LOCAL"]
     mode = "uninstall" if args.uninstall else ("check" if args.check else ("dry-run" if args.dry_run else "install"))
-    print(f"\nconductor toolkit {version}: {mode} {target}  changes={len(pending)}")
+    print(f"\nAssured Build Kit {version}: {mode} {target}  changes={len(pending)}")
     if kept:
         print(f"注意: ローカルで変更されたファイルは更新していません（{len(kept)} 件）。上書きするには --force（バックアップを残します）。")
     if args.check:
@@ -359,7 +368,7 @@ def main(argv=None) -> int:
         print("\n--- verify --docs-only ---")
         run_verify(target)
     print("\n次の手順（README.md の「インストール」「Quickstart」）:")
-    print("  1. 変更を確認して commit します: git add -A && git commit -m \"Add conductor toolkit\"")
+    print("  1. 変更を確認して commit します: git add -A && git commit -m \"Add Assured Build Kit\"")
     print("  2. scripts/hve.config.json の verify.commands に、ビルド・静的検査・テストのコマンドを登録します（初回の実行で implementer が登録することもできます）")
     print("  3. VS Code の Agents ウィンドウで Session Target=Copilot、Agent=conductor、Autopilot、New Worktree を選び、")
     print("     チャット欄に「/build やりたいこと」と書いて送ります（入力欄は表示されません）")

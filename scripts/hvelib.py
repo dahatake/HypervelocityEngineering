@@ -1,4 +1,4 @@
-"""Shared helpers for the conductor toolkit scripts (Python 3.9+, standard library only).
+"""Shared helpers for the Assured Build Kit scripts (Python 3.9+, standard library only).
 
 The scripts under scripts/ import this module. It parses the management data
 (requirements definition, catalog, ID registry, system-test ledger) and manages

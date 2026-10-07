@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="880" viewBox="0 0 1200 880" font-family="'Segoe UI', Meiryo, 'Hiragino Sans', 'Noto Sans JP', sans-serif" font-size="13" fill="#1f2328">
-  <title>conductor toolkit のコンポーネント図</title>
+  <title>Assured Build Kit のコンポーネント図</title>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
@@ -23,7 +23,7 @@
   </defs>
 
   <rect x="0" y="0" width="1200" height="880" fill="#ffffff"/>
-  <text x="600" y="34" text-anchor="middle" font-size="20" font-weight="700">conductor toolkit のコンポーネント構成</text>
+  <text x="600" y="34" text-anchor="middle" font-size="20" font-weight="700">Assured Build Kit のコンポーネント構成</text>
 
   <!-- 利用者 -->
   <rect class="box ext" x="60" y="60" width="240" height="56" rx="8"/>

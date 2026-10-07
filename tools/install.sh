@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install / update the conductor toolkit into the current (or given) git repository with one command.
+# Install / update the Assured Build Kit into the current (or given) git repository with one command.
 #
 #   curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash
 #   curl -fsSL .../tools/install.sh | bash -s -- --dry-run          # options are passed to install.py

@@ -22,7 +22,7 @@ def test_fresh_install_layout(empty_repo):
     assert "/build template" in skill and "max_hours: 24" in skill
     assert "/work/" in (empty_repo / ".gitignore").read_text(encoding="utf-8")
     assert "merge=union" in (empty_repo / ".gitattributes").read_text(encoding="utf-8")
-    assert "hve-conductor:begin" in (empty_repo / "AGENTS.md").read_text(encoding="utf-8")
+    assert "hve-abk:begin" in (empty_repo / "AGENTS.md").read_text(encoding="utf-8")
     assert not (empty_repo / ".github/workflows/toolkit-tests.yml").exists()
     assert not (empty_repo / "tests/toolkit").exists()
 
@@ -67,9 +67,9 @@ def test_existing_files_and_config_are_merged(empty_repo):
     cfg = json.loads((empty_repo / "scripts/hve.config.json").read_text(encoding="utf-8"))
     assert cfg["verify"]["commands"][0]["run"] == "npm test" and "gates" in cfg
     agents = (empty_repo / "AGENTS.md").read_text(encoding="utf-8")
-    assert agents.startswith("# 既存") and "独自の指示" in agents and agents.count("hve-conductor:begin") == 1
+    assert agents.startswith("# 既存") and "独自の指示" in agents and agents.count("hve-abk:begin") == 1
     install(empty_repo)
-    assert (empty_repo / "AGENTS.md").read_text(encoding="utf-8").count("hve-conductor:begin") == 1
+    assert (empty_repo / "AGENTS.md").read_text(encoding="utf-8").count("hve-abk:begin") == 1
 
 
 def test_obsolete_prompt_file_is_removed_on_update(empty_repo):
@@ -110,7 +110,7 @@ def test_uninstall(empty_repo):
     assert not (empty_repo / ".github/agents/conductor.agent.md").exists()
     assert not (empty_repo / "scripts/rdcheck.py").exists()
     assert (empty_repo / "docs/requirements-definition.md").exists()
-    assert "hve-conductor" not in (empty_repo / "AGENTS.md").read_text(encoding="utf-8")
+    assert "hve-abk" not in (empty_repo / "AGENTS.md").read_text(encoding="utf-8")
 
 
 def test_refuses_non_git_and_self(tmp_path):

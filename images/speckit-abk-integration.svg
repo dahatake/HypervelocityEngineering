@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900" font-family="'Segoe UI', Meiryo, 'Hiragino Sans', 'Noto Sans JP', sans-serif" font-size="13" fill="#1f2328">
-  <title>GitHub Spec Kit と conductor toolkit の連携（コンポーネント構成）</title>
+  <title>GitHub Spec Kit と Assured Build Kit の連携（コンポーネント構成）</title>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
@@ -25,7 +25,7 @@
   </defs>
 
   <rect x="0" y="0" width="1200" height="900" fill="#ffffff"/>
-  <text x="600" y="34" text-anchor="middle" font-size="20" font-weight="700">GitHub Spec Kit と conductor toolkit の連携</text>
+  <text x="600" y="34" text-anchor="middle" font-size="20" font-weight="700">GitHub Spec Kit と Assured Build Kit の連携</text>
   <text x="600" y="58" text-anchor="middle" class="note">仕様は Spec Kit で対話しながら書き、仕様どおりに作り切って証明するのは conductor。橋渡しは import-speckit.py（一方向）</text>
 
   <!-- 利用者 -->
@@ -100,7 +100,7 @@
 
   <!-- ===== 右: conductor ===== -->
   <rect class="frame" x="800" y="170" width="370" height="520" rx="10"/>
-  <text class="frame-label" x="816" y="192">conductor toolkit（作り切って証明する）</text>
+  <text class="frame-label" x="816" y="192">Assured Build Kit（作り切って証明する）</text>
 
   <rect class="box lead" x="820" y="206" width="330" height="60" rx="8"/>
   <text class="title" x="985" y="231" text-anchor="middle" fill="#ffffff">conductor（進行役）</text>

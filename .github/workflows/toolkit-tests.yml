@@ -1,6 +1,6 @@
 name: toolkit-tests
 
-# Tests for the conductor toolkit itself (scripts/, hooks, installer). Not installed into target repositories.
+# Tests for the Assured Build Kit itself (scripts/, hooks, installer). Not installed into target repositories.
 on:
   pull_request:
   push:
