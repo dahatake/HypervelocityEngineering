@@ -220,7 +220,8 @@ python tools/install.py --target /path/to/your-repo
 | `--check` | `-Check` | 更新が必要かどうかを確認します（必要なら exit 1。CI でバージョンのずれを検出できます） |
 | `--force` | `-Force` | ローカルで変更した toolkit のファイルも上書きします（`*.hve-backup-<日時>` を残します） |
 | `--no-ci` | `-NoCi` | `.github/workflows/hve-verify.yml` をインストールしません |
-| `--uninstall` | `-Uninstall` | 変更していない toolkit のファイルを削除します（管理データは残します） |
+| `--uninstall` | `-Uninstall` | 変更していない toolkit のファイル、`AGENTS.md` などのブロック、マニフェスト、空になったフォルダーを削除します（管理データと設定は残します）。`uninstall.ps1` / `uninstall.sh` でも実行できます |
+| `--purge` | `-Purge` | `--uninstall` に加えて、管理データ（`docs/` の要求定義書・カタログ・ID 台帳・run 履歴・手動テスト、`tests/system/ledger.json`）、`scripts/hve.config.json`、`/work`、`.gitignore`・`.gitattributes` に追記した行、`*.hve-backup-*` も削除します |
 
 ### インストールされるファイル
 
@@ -252,7 +253,7 @@ python tools/install.py --target /path/to/your-repo
    [GitHub Spec Kit](https://github.com/github/spec-kit) の仕様（`specs/*/spec.md`、`.specify/memory/constitution.md`）がある場合は、`python scripts/import-speckit.py` で `/build` の依頼文を作ります（[Spec Kit からの取り込み](users-guide/01-writing-requests.md#17-github-spec-kit-の仕様を取り込む)）。
 5. （任意）社内の情報や対象の技術のツールを使う場合は、run を実行する環境（VS Code・Copilot CLI・GitHub Copilot app）に MCP Server・plugin を設定し、サインインしておきます。例は、要求の一次情報には Work IQ、Azure を使う開発には Microsoft Learn と Azure MCP Server、Copilot Studio を使う開発には Microsoft が提供する plugin です。エージェント側の設定は不要です（[設定とカスタマイズ 4.4](users-guide/04-customization.md#44-mcp-serverplugin拡張機能を使う)）。
 
-### 更新・確認・アンインストール
+### 更新・確認
 
 ```bash
 # 更新（同じインストールコマンドをもう一度実行するだけ）
@@ -260,10 +261,47 @@ curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/m
 
 # 更新が必要かどうかだけを確認する
 curl -fsSL .../tools/install.sh | bash -s -- --check
-
-# アンインストール（変更していない toolkit のファイルと、AGENTS.md などのブロックを削除します。docs と台帳は残します）
-curl -fsSL .../tools/install.sh | bash -s -- --uninstall
 ```
+
+### アンインストール・クリーンアップ
+
+インストールと同じように、インストール先のリポジトリの**ルート**で 1 行を実行します。
+
+**Windows（PowerShell）**
+
+```powershell
+# アンインストール（toolkit のファイルとブロックを削除します。docs・台帳・設定・/work は残します）
+irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.ps1 | iex
+
+# クリーンアップ（管理データ・設定・/work・追記した行も含めて、toolkit が加えたものをすべて削除します）
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.ps1))) -Purge -DryRun   # 確認
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.ps1))) -Purge
+```
+
+**macOS / Linux / WSL / Git Bash**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.sh | bash -s -- --purge --dry-run   # 確認
+curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.sh | bash -s -- --purge
+```
+
+toolkit を clone 済みの場合は `python tools/install.py --target /path/to/your-repo --uninstall`（または `--purge`）です。`install.ps1 -Uninstall`、`install.sh --uninstall` でも同じです。
+
+| 対象 | `--uninstall` | `--purge` |
+|---|---|---|
+| toolkit のファイル（`.github/agents`・`skills`・`hooks`・`workflows/hve-verify.yml`、`scripts/*.py` など）と旧版のファイル | 変更していなければ削除（変更していれば `KEEP-LOCAL` で残す。`--force` で削除） | 同じ |
+| `AGENTS.md`・`.github/copilot-instructions.md` のブロック | ブロックだけを削除（ほかに記述がなければファイルごと削除） | 同じ |
+| マニフェスト `.github/hve-toolkit.json`、空になったフォルダー、削除した `.py` の `__pycache__` | 削除 | 削除 |
+| 管理データ（`docs/requirements-definition.md`・`catalog.md`・`id-registry.md`・`run-history.md`・`manual-tests.md`・`docs/requirements/`、`tests/system/ledger.json`）。パスは `scripts/hve.config.json` の `files` に従います | 残す | 削除 |
+| `scripts/hve.config.json`、`/work`、`*.hve-backup-*` | 残す | 削除 |
+| `.gitignore` の `/work/`、`.gitattributes` の `merge=union` の行 | 残す | 追記した行だけを削除（空になればファイルごと削除） |
+| System Test のコード（`tests/system/` の台帳以外）、アプリのコード、`docs/` のほかの文書 | 残す | 残す |
+
+- マニフェストが失われている場合は、この版の toolkit と同じ内容のファイルだけを削除します（`WARN` を表示します）。
+- 削除は git の作業ツリーに対して行います。結果を `git status` で確認してから commit します（`git restore` で戻せます。`/work` は git の管理対象外なので戻せません）。
+- run が作った worktree と `work/*` ブランチは削除しません。必要なら `git worktree list`・`git branch --list "work/*"` で確認して削除します。
+- 何度実行しても安全です（2 回目は `changes=0`）。
 
 ### plugin ではなくインストーラーを使う理由
 
@@ -276,7 +314,7 @@ GitHub Copilot には、agents・skills・hooks をまとめて配布する標�
 | hook のスコープ | plugin の hook は、利用者のすべてのリポジトリ・セッションで動く | ゲートは、toolkit をインストールしたリポジトリでだけ動くべき |
 | チームでの共有 | 利用者ごとにインストールが必要 | リポジトリを clone すれば、チーム全員と CI が同じバージョンを使える |
 
-そこで、customizations（`.github/`）と `scripts/` をリポジトリに直接置く方式にしました。これは VS Code・Copilot CLI・Copilot app・cloud agent が標準で読み込む場所です。そのインストール・更新・アンインストールを 1 コマンドで行うために `tools/install.*` を用意しています。
+そこで、customizations（`.github/`）と `scripts/` をリポジトリに直接置く方式にしました。これは VS Code・Copilot CLI・Copilot app・cloud agent が標準で読み込む場所です。そのインストール・更新・アンインストールを 1 コマンドで行うために `tools/install.*`・`tools/uninstall.*` を用意しています。
 
 ### インストール時のトラブル
 

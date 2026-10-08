@@ -111,6 +111,67 @@ def test_uninstall(empty_repo):
     assert not (empty_repo / "scripts/rdcheck.py").exists()
     assert (empty_repo / "docs/requirements-definition.md").exists()
     assert "hve-abk" not in (empty_repo / "AGENTS.md").read_text(encoding="utf-8")
+    # empty toolkit directories are removed; management data and config are kept
+    for rel in (".github/agents", ".github/skills", ".github/hooks", ".github/workflows", "scripts/hooks", ".github/hve-toolkit.json",
+                ".github/copilot-instructions.md"):
+        assert not (empty_repo / rel).exists(), rel
+    assert (empty_repo / "scripts/hve.config.json").exists() and (empty_repo / "tests/system/ledger.json").exists()
+    assert "/work/" in (empty_repo / ".gitignore").read_text(encoding="utf-8")
+    # running it again is harmless
+    proc = install(empty_repo, "--uninstall")
+    assert proc.returncode == 0 and "changes=0" in proc.stdout
+
+
+def test_uninstall_keeps_modified_files_unless_forced(empty_repo):
+    install(empty_repo)
+    agent = empty_repo / ".github/agents/conductor.agent.md"
+    agent.write_text("利用者の変更\n", encoding="utf-8")
+    proc = install(empty_repo, "--uninstall", "--dry-run")
+    assert "REMOVE" in proc.stdout and (empty_repo / "scripts/rdcheck.py").exists()
+    proc = install(empty_repo, "--uninstall")
+    assert "KEEP-LOCAL" in proc.stdout and agent.exists()
+    assert not (empty_repo / ".github/agents/reviewer.agent.md").exists()
+    # the manifest is gone now: the fallback compares with the toolkit's own copies, --force removes the rest
+    proc = install(empty_repo, "--uninstall")
+    assert "KEEP-LOCAL" in proc.stdout and agent.exists()
+    proc = install(empty_repo, "--uninstall", "--force")
+    assert not agent.exists() and not (empty_repo / ".github/agents").exists()
+
+
+def test_purge_removes_everything_the_toolkit_added(empty_repo):
+    (empty_repo / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
+    install(empty_repo)
+    (empty_repo / "work/runs/r1").mkdir(parents=True)
+    (empty_repo / "work/runs/r1/log.txt").write_text("log\n", encoding="utf-8")
+    (empty_repo / "docs/manual-tests.md").write_text("# 手動テスト\n", encoding="utf-8")
+    (empty_repo / "docs/notes.md").write_text("利用者の文書\n", encoding="utf-8")
+    (empty_repo / "scripts/build.sh").write_text("echo build\n", encoding="utf-8")
+    (empty_repo / "tests/system/test_flow.py").write_text("def test_x():\n    pass\n", encoding="utf-8")
+    backup = empty_repo / ".github/agents/conductor.agent.md.hve-backup-20260101000000"
+    backup.write_text("old\n", encoding="utf-8")
+    (empty_repo / "scripts/__pycache__").mkdir()
+    (empty_repo / "scripts/__pycache__/hvelib.cpython-312.pyc").write_bytes(b"\0")
+    proc = install(empty_repo, "--purge", "--dry-run")
+    assert proc.returncode == 0 and (empty_repo / "docs/catalog.md").exists() and backup.exists()
+    proc = install(empty_repo, "--purge")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    for rel in ("docs/requirements-definition.md", "docs/catalog.md", "docs/id-registry.md", "docs/run-history.md",
+                "docs/manual-tests.md", "tests/system/ledger.json", "scripts/hve.config.json", "work", ".github",
+                ".gitattributes", "AGENTS.md", "scripts/verify.py", "scripts/__pycache__"):
+        assert not (empty_repo / rel).exists(), rel
+    assert (empty_repo / ".gitignore").read_text(encoding="utf-8") == "node_modules/\n"
+    for rel in ("docs/notes.md", "scripts/build.sh", "tests/system/test_flow.py", "README.md"):
+        assert (empty_repo / rel).exists(), rel
+    # the repository can be installed again afterwards
+    assert install(empty_repo).returncode == 0 and (empty_repo / ".github/hve-toolkit.json").exists()
+
+
+def test_uninstall_wrappers_pass_uninstall():
+    ps1 = (SOURCE / "tools/uninstall.ps1").read_text(encoding="utf-8")
+    assert "Uninstall = $true" in ps1 and "Purge" in ps1 and "install.ps1" in ps1
+    sh = (SOURCE / "tools/uninstall.sh").read_text(encoding="utf-8")
+    assert "install.sh\" --uninstall \"$@\"" in sh and "bash -s -- --uninstall \"$@\"" in sh
+    assert "[switch]$Purge" in (SOURCE / "tools/install.ps1").read_text(encoding="utf-8")
 
 
 def test_refuses_non_git_and_self(tmp_path):

@@ -206,9 +206,29 @@ def test_gate_never_bricks_on_bad_input(sample):
     assert proc.returncode == 0
 
 
+def test_build_template_turn_only_prints_template(sample):
+    start(sample)  # an active run must neither resume nor keep the template turn alive
+    assert sample.gate("user-prompt", {"sessionId": "s1", "prompt": "  /build  Template \n"}) == {}
+    assert denied(shell(sample, "python scripts/run-state.py start --options x"), "TEMPLATE")
+    assert denied(edit(sample, "work/runs/x/a.md", tool="create"), "TEMPLATE")
+    assert denied(sample.gate("pre-tool", {"toolName": "task", "toolArgs": {"agent_type": "rd-author"}}), "TEMPLATE")
+    assert sample.gate("pre-tool", {"toolName": "view", "toolArgs": {"path": ".github/skills/build/SKILL.md"}}) == {}
+    assert sample.gate("pre-tool", {"toolName": "skill", "toolArgs": {"skill": "build"}}) == {}
+    assert sample.gate("pre-tool", {"sessionId": "other", "toolName": "bash", "toolArgs": {"command": "ls"}}) == {}
+    assert sample.gate("agent-stop", {"sessionId": "s1"}) == {}  # allowed despite the unfinished run
+    assert shell(sample, "ls") == {}  # the template turn is over
+    assert sample.gate("agent-stop", {"sessionId": "s1"}).get("decision") == "block"
+
+
+def test_other_prompts_clear_template_mode(sample):
+    sample.gate("user-prompt", {"sessionId": "s1", "prompt": "/build template"})
+    sample.gate("user-prompt", {"sessionId": "s1", "prompt": "/build template を使って備品アプリを作る"})
+    assert shell(sample, "ls") == {}
+
+
 def test_hooks_config_is_valid(sample):
     cfg = json.loads(sample.read(".github/hooks/quality-gates.json"))
     assert cfg["version"] == 1
-    for ev in ("sessionStart", "preToolUse", "subagentStart", "subagentStop", "agentStop"):
+    for ev in ("sessionStart", "userPromptSubmitted", "preToolUse", "subagentStart", "subagentStop", "agentStop"):
         entry = cfg["hooks"][ev][0]
         assert "gate.py" in entry["bash"] and "gate.py" in entry["powershell"]

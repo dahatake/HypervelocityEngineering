@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
-  Install / update the Assured Build Kit into the current (or given) git repository with one command.
+  Install / update / uninstall the Assured Build Kit into the current (or given) git repository with one command.
+  To uninstall, tools/uninstall.ps1 is the one-command shortcut for -Uninstall / -Purge.
 
 .EXAMPLE
   # in the root of your repository (downloads the toolkit from GitHub)
@@ -22,7 +23,8 @@ param(
     [switch]$Check,
     [switch]$Force,
     [switch]$NoCi,
-    [switch]$Uninstall
+    [switch]$Uninstall,
+    [switch]$Purge
 )
 $ErrorActionPreference = 'Stop'
 
@@ -57,6 +59,7 @@ try {
     if ($Force) { $argsList += '--force' }
     if ($NoCi) { $argsList += '--no-ci' }
     if ($Uninstall) { $argsList += '--uninstall' }
+    if ($Purge) { $argsList += '--purge' }
     $env:PYTHONUTF8 = '1'
     & $py @argsList
     $code = $LASTEXITCODE

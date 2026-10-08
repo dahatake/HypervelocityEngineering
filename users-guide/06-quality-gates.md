@@ -16,6 +16,7 @@
 | **G-6** 一時ファイルの置き場所 | 全エージェント | ログ・証跡・実行結果（`*.log`、`*.har`、`*.trace`、`trace*.zip`、`results*.json`、`evidence/`、`screenshots/`、`test-results/`、`playwright-report/`）を `/work` 以外に書くことを拒否します。`/work` の削除は、`clean-work.py` と `git worktree remove` にだけ許可します |
 | 完了判定 | conductor | 完了条件（queue に todo・doing がない、工程 6 が完了、run-report.md がある）を満たすまで、ターンの終了を差し戻します（最大 40 回。時間予算の 125% を超えたら差し戻しません） |
 | 再開の案内 | 全エージェント | セッション開始時に、実行中の run があれば run-id と再開手順を表示します |
+| `/build template` | 全エージェント | Prompt が `/build template` だけのターンでは、読み取りと skill 以外のツール（コマンド・書き込み・作業役の呼び出し）を拒否し、実行中の run があってもターンの終了を差し戻しません。雛形の表示が run の開始・再開に変わるのを防ぎます（`userPromptSubmitted` イベントで判定し、`work/.hve/template-request.json` に記録します） |
 
 **エージェントの識別方法**: Copilot の hook の `preToolUse` イベントには、呼び出し元のエージェント名が含まれません。そこで、`subagentStart` / `subagentStop` イベントで実行中の custom agent を `work/.hve/active-agents.json` に記録し、書き込み先のパス、作業役の worktree（`work/worktrees/…`）、ブランチ（`work/<run-id>/<item>`）と合わせて判定します。
 

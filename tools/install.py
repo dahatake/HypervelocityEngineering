@@ -6,6 +6,8 @@ From a local clone:
   python tools/install.py --target <path-to-your-repo> [--dry-run] [--force] [--no-ci]
   python tools/install.py --target <repo> --check        # show what would change, exit 1 if outdated
   python tools/install.py --target <repo> --uninstall    # remove unmodified toolkit files (keeps docs and ledger)
+  python tools/install.py --target <repo> --purge        # uninstall + remove docs, ledger, config, /work, appended lines
+  (one command: tools/uninstall.ps1 / tools/uninstall.sh, same options as install.ps1 / install.sh)
 
 What it does (idempotent):
   * copies the managed files (.github/agents, .github/skills, .github/hooks, .github/workflows/hve-verify.yml,
@@ -93,6 +95,18 @@ INSTRUCTIONS_BLOCK = """## Assured Build Kit（要求定義書・カタログ・
 - 一時ファイル（ログ・証跡・実行結果・作業メモ）は `/work` に置きます（git の管理対象外。14 日で削除）。"""
 GITIGNORE_LINES = ["/work/"]
 GITATTR_LINES = ["docs/id-registry.md merge=union", "docs/run-history.md merge=union"]
+GITIGNORE_HEADER = "# Assured Build Kit: temporary run files (kept 14 days)"
+GITATTR_HEADER = "# Assured Build Kit: append-only records"
+# Management data paths (defaults of scripts/hvelib.py DEFAULT_CONFIG["files"]); --purge also honours the target's config.
+DEFAULT_FILES = {
+    "requirements": "docs/requirements-definition.md",
+    "requirements_dir": "docs/requirements",
+    "catalog": "docs/catalog.md",
+    "id_registry": "docs/id-registry.md",
+    "run_history": "docs/run-history.md",
+    "ledger": "tests/system/ledger.json",
+    "manual_tests": "docs/manual-tests.md",
+}
 
 
 def sha(path: Path) -> str:
@@ -260,36 +274,141 @@ class Installer:
         self.note("MANIFEST", MANIFEST)
         self.write_bytes(MANIFEST, (json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
 
-    def uninstall(self) -> None:
-        files = self.manifest.get("files", {})
-        if not files:
-            raise SystemExit(f"ERROR install: {MANIFEST} がないため、導入済みのファイルを特定できません")
-        for rel, h in files.items():
+    # ---- uninstall / cleanup -------------------------------------------------------------------
+
+    def remove_path(self, rel: str, kind: str = "REMOVE") -> None:
+        """Delete a file or directory under the target and prune the directories it leaves empty."""
+        p = self.target / rel
+        self.note(kind, rel)
+        if self.dry:
+            return
+        if p.is_dir() and not p.is_symlink():
+            shutil.rmtree(p, ignore_errors=True)
+        else:
+            p.unlink(missing_ok=True)
+        if p.suffix == ".py":
+            cache = p.parent / "__pycache__"
+            for pyc in cache.glob(p.stem + ".*.pyc"):
+                pyc.unlink(missing_ok=True)
+            self.prune_dirs(cache)
+        self.prune_dirs(p.parent)
+
+    def prune_dirs(self, d: Path) -> None:
+        root = self.target.resolve()
+        d = d.resolve()
+        while d != root and root in d.parents:
+            try:
+                d.rmdir()
+            except OSError:
+                return
+            d = d.parent
+
+    def uninstall_files(self) -> None:
+        recorded = self.manifest.get("files", {})
+        if recorded:
+            candidates = dict(recorded)
+        else:
+            # No manifest (deleted or never written): treat a file as unmodified when it equals this toolkit's copy.
+            candidates = {rel: (sha(self.source / rel) if (self.source / rel).exists() else None) for rel in MANAGED + OBSOLETE}
+            if any((self.target / rel).exists() for rel in candidates):
+                self.note("WARN", f"{MANIFEST} がないため、この版の toolkit と同じ内容のファイルだけを削除します")
+        for rel, h in candidates.items():
             p = self.target / rel
-            if not p.exists():
+            if not p.is_file():
                 continue
-            if sha(p) == h or self.force:
-                self.note("REMOVE", rel)
-                if not self.dry:
-                    p.unlink()
+            if self.force or (h is not None and sha(p) == h):
+                self.remove_path(rel)
             else:
                 self.note("KEEP-LOCAL", rel)
-        for rel in ("AGENTS.md", ".github/copilot-instructions.md"):
+
+    def remove_backups(self) -> None:
+        for rel in sorted(set(MANAGED + OBSOLETE + [CONFIG])):
+            d = (self.target / rel).parent
+            if d.is_dir():
+                for b in sorted(d.glob(Path(rel).name + ".hve-backup-*")):
+                    self.remove_path(b.relative_to(self.target).as_posix())
+
+    def remove_blocks(self) -> None:
+        for rel, title in (("AGENTS.md", "# AGENTS.md"), (".github/copilot-instructions.md", "# Copilot instructions")):
             p = self.target / rel
+            if not p.is_file():
+                continue
+            text = p.read_text(encoding="utf-8")
+            changed = False
+            while True:
+                m = block_markers(text)
+                if not m:
+                    break
+                b, e = m
+                pre, rest = text.split(b, 1)
+                if e not in rest:
+                    break
+                text = pre.rstrip() + "\n\n" + rest.split(e, 1)[1].lstrip("\n")
+                changed = True
+            if not changed:
+                continue
+            text = text.strip() + "\n"
+            if text.strip() in ("", title):
+                self.remove_path(rel, "UNBLOCK")
+            else:
+                self.note("UNBLOCK", rel)
+                self.write_bytes(rel, text.encode("utf-8"))
+
+    def remove_lines(self, rel: str, lines: List[str], header: str) -> None:
+        p = self.target / rel
+        if not p.is_file():
+            return
+        text = p.read_text(encoding="utf-8")
+        drop = set(lines) | {header}
+        kept = [l for l in text.splitlines() if l.strip() not in drop]
+        if len(kept) == len(text.splitlines()):
+            return
+        out: List[str] = []
+        for l in kept:
+            if not l.strip() and (not out or not out[-1].strip()):
+                continue
+            out.append(l)
+        while out and not out[-1].strip():
+            out.pop()
+        if not out:
+            self.remove_path(rel, "UNAPPEND")
+            return
+        self.note("UNAPPEND", rel)
+        self.write_bytes(rel, ("\n".join(out) + "\n").encode("utf-8"))
+
+    def purge_data(self) -> None:
+        """Remove the management data, config and run files that the toolkit created (--purge)."""
+        cfg = dict(DEFAULT_FILES)
+        work_dir = "work"
+        try:
+            data = json.loads((self.target / CONFIG).read_text(encoding="utf-8"))
+            cfg.update({k: v for k, v in (data.get("files") or {}).items() if isinstance(v, str) and v})
+            work_dir = (data.get("work") or {}).get("dir") or work_dir
+        except (OSError, json.JSONDecodeError, AttributeError):
+            pass
+        rels = list(dict.fromkeys(TEMPLATES + [v for v in cfg.values()] + [work_dir, CONFIG]))
+        root = self.target.resolve()
+        for rel in rels:
+            p = (self.target / rel).resolve()
+            if p == root or root not in p.parents:
+                self.note("SKIP(outside repo)", rel)
+                continue
             if p.exists():
-                text = p.read_text(encoding="utf-8")
-                if BEGIN in text and END in text:
-                    pre, rest = text.split(BEGIN, 1)
-                    new = (pre.rstrip() + "\n" + rest.split(END, 1)[1].lstrip("\n")).strip() + "\n"
-                    self.note("UNBLOCK", rel)
-                    if not self.dry:
-                        if new.strip() in ("", "# AGENTS.md", "# Copilot instructions"):
-                            p.unlink()
-                        else:
-                            p.write_text(new, encoding="utf-8")
-        if not self.dry:
-            (self.target / MANIFEST).unlink(missing_ok=True)
-        self.note("KEEP", "docs/*, tests/system/ledger.json, scripts/hve.config.json, .gitignore, .gitattributes（管理データと設定は残します）")
+                self.remove_path(rel)
+
+    def uninstall(self, purge: bool = False) -> None:
+        self.uninstall_files()
+        self.remove_blocks()
+        if purge:
+            self.remove_backups()
+            self.purge_data()
+            self.remove_lines(".gitignore", GITIGNORE_LINES, GITIGNORE_HEADER)
+            self.remove_lines(".gitattributes", GITATTR_LINES, GITATTR_HEADER)
+        if (self.target / MANIFEST).exists():
+            self.remove_path(MANIFEST)
+        if not purge:
+            self.note("KEEP", "docs/*, tests/system/ledger.json, scripts/hve.config.json, /work, .gitignore, .gitattributes"
+                              "（管理データと設定は残します。すべて削除するには --purge）")
 
 
 def run_verify(target: Path) -> int:
@@ -317,7 +436,8 @@ def main(argv=None) -> int:
     ap.add_argument("--force", action="store_true", help="ローカルで変更した toolkit のファイルも上書きする（.hve-backup-* を残す）")
     ap.add_argument("--no-ci", action="store_true", help=".github/workflows/hve-verify.yml を入れない")
     ap.add_argument("--version", action="store_true", help="toolkit の版を表示して終了する")
-    ap.add_argument("--uninstall", action="store_true")
+    ap.add_argument("--uninstall", action="store_true", help="変更していない toolkit のファイルと AGENTS.md などのブロックを削除する（管理データと設定は残す）")
+    ap.add_argument("--purge", action="store_true", help="--uninstall に加えて、管理データ（docs・台帳）・設定・/work・.gitignore と .gitattributes の追記・バックアップも削除する")
     ap.add_argument("--allow-non-git", action="store_true")
     ap.add_argument("--skip-verify", action="store_true")
     args = ap.parse_args(argv)
@@ -339,17 +459,18 @@ def main(argv=None) -> int:
         raise SystemExit(f"ERROR install: {target} は git リポジトリではありません（`git init` するか --allow-non-git）")
 
     dry = args.dry_run or args.check
+    uninstalling = args.uninstall or args.purge
     ins = Installer(source, target, dry, args.force, args.no_ci)
     version = toolkit_version(source)
-    if args.uninstall:
-        ins.uninstall()
+    if uninstalling:
+        ins.uninstall(purge=args.purge)
     else:
         ins.install_managed()
         ins.remove_obsolete()
         ins.install_templates()
         ins.install_config()
-        ins.ensure_lines(".gitignore", GITIGNORE_LINES, "# Assured Build Kit: temporary run files (kept 14 days)")
-        ins.ensure_lines(".gitattributes", GITATTR_LINES, "# Assured Build Kit: append-only records")
+        ins.ensure_lines(".gitignore", GITIGNORE_LINES, GITIGNORE_HEADER)
+        ins.ensure_lines(".gitattributes", GITATTR_LINES, GITATTR_HEADER)
         ins.ensure_block("AGENTS.md", "# AGENTS.md\n\n")
         ins.ensure_block(".github/copilot-instructions.md", "# Copilot instructions\n\n")
         if ins.manifest.get("version") != version or any(k not in ("SAME", "EXISTS", "KEEP-LOCAL") for k, _ in ins.actions):
@@ -358,15 +479,30 @@ def main(argv=None) -> int:
     width = max((len(k) for k, _ in ins.actions), default=4)
     for kind, rel in ins.actions:
         print(f"{kind.ljust(width)}  {rel}")
-    pending = [a for a in ins.actions if a[0] not in ("SAME", "EXISTS", "KEEP-LOCAL", "KEEP")]
+    pending = [a for a in ins.actions if a[0] not in ("SAME", "EXISTS", "KEEP-LOCAL", "KEEP", "WARN")]
     kept = [rel for k, rel in ins.actions if k == "KEEP-LOCAL"]
-    mode = "uninstall" if args.uninstall else ("check" if args.check else ("dry-run" if args.dry_run else "install"))
+    if uninstalling:
+        mode = ("purge" if args.purge else "uninstall") + (" (dry-run)" if dry else "")
+    else:
+        mode = "check" if args.check else ("dry-run" if args.dry_run else "install")
     print(f"\nAssured Build Kit {version}: {mode} {target}  changes={len(pending)}")
     if kept:
-        print(f"注意: ローカルで変更されたファイルは更新していません（{len(kept)} 件）。上書きするには --force（バックアップを残します）。")
+        if uninstalling:
+            print(f"注意: ローカルで変更されたファイルは削除していません（{len(kept)} 件）。削除するには --force。")
+        else:
+            print(f"注意: ローカルで変更されたファイルは更新していません（{len(kept)} 件）。上書きするには --force（バックアップを残します）。")
     if args.check:
         return 1 if pending else 0
-    if dry or args.uninstall:
+    if uninstalling:
+        if not dry:
+            print("\n次の手順:")
+            print("  1. 変更を確認して commit します: git status && git add -A && git commit -m \"Remove Assured Build Kit\"")
+            if args.purge:
+                print("  2. run が作った worktree と work/* ブランチが残っていれば削除します: git worktree list / git branch --list \"work/*\"")
+            else:
+                print("  2. 管理データ・設定・/work も消すには --purge で再実行します（先に --dry-run で確認できます）")
+        return 0
+    if dry:
         return 0
     if not args.skip_verify:
         print("\n--- verify --docs-only ---")

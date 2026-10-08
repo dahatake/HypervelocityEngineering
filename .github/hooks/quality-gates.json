@@ -10,6 +10,15 @@
         "timeoutSec": 20
       }
     ],
+    "userPromptSubmitted": [
+      {
+        "type": "command",
+        "bash": "if command -v python3 >/dev/null 2>&1; then python3 scripts/hooks/gate.py user-prompt; else python scripts/hooks/gate.py user-prompt; fi",
+        "powershell": "python scripts/hooks/gate.py user-prompt",
+        "cwd": ".",
+        "timeoutSec": 20
+      }
+    ],
     "preToolUse": [
       {
         "type": "command",

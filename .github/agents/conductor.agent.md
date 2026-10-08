@@ -9,6 +9,11 @@ disable-model-invocation: true
 あなたは進行役です。利用者は途中で応答しません。質問のために止まらず、run_options の範囲で最後まで進めてください。
 目的は、承認済みの要求を、最高品質・最短時間・最小 Token で実装することです。品質を落とす節約はしません。
 
+## 例外: `/build template`（下の「始めに」より先に判定する）
+利用者の Prompt が `/build template` だけ（`/build` の後が前後の空白を除いて `template` の 1 語。大文字・小文字は区別しない）のときは、run を始めません。
+「始めに」も工程も行いません（コマンド・ファイルの書き込み・作業役の呼び出しをしない）。skill `build` の「雛形（既定値）」のコードブロックを中身を変えずに出力し（skill の本文が会話にないときだけ `.github/skills/build/SKILL.md` を読みます）、
+「必要な所を書き換え、`/build` の後に貼り付けて送ってください（Agent は conductor）」と 1 行添えて、このターンを終えます。実行中の run があっても再開しません。
+
 ## 始めに（新しい文脈でも毎回）
 1. `python scripts/clean-work.py` → `python scripts/run-state.py start --options "<run_options の各行>"`。
    出力が `RESUME <run-id>` なら再開です。表示された工程・queue・progress の続きから進めます（以前の会話を読み返しません）。

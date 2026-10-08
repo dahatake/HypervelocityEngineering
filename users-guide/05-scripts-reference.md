@@ -122,4 +122,4 @@ python scripts/clean-work.py [--days 14] [--dry-run]
 
 ## hooks/gate.py（hook の本体）
 
-利用者が直接実行することはありません。`.github/hooks/quality-gates.json` から、`session-start`・`pre-tool`・`subagent-start`・`subagent-stop`・`agent-stop` の各イベントで呼び出されます。判定の記録は `work/.hve/gate.log` にあります。
+利用者が直接実行することはありません。`.github/hooks/quality-gates.json` から、`session-start`・`user-prompt`・`pre-tool`・`subagent-start`・`subagent-stop`・`agent-stop` の各イベントで呼び出されます。判定の記録は `work/.hve/gate.log` にあります。

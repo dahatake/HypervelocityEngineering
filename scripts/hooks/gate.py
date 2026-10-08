@@ -9,7 +9,7 @@ Events (first argument):
   subagent-start  remember which custom agent is running (preToolUse has no agent name)
   subagent-stop   G-4: run scripts/verify before implementer / test-designer / rd-author may finish
   agent-stop      do not let the conductor end its turn before the completion conditions hold
-
+  user-prompt     detect `/build template`: deny tools other than reads and let the turn end after printing it
 Reads the hook payload (camelCase or snake_case) from stdin; writes one JSON decision to stdout.
 Fail-safe: unexpected internal errors allow the tool call (exit 0) and are logged to work/.hve/gate.log,
 except that a malformed payload for pre-tool is allowed as well, so a broken gate never bricks a session.
@@ -55,6 +55,11 @@ BUILTIN_TOOLS = {
     # GitHub Copilot app (desktop): session tools that only change the local app state
     "rename_session", "send_session_message",
 }
+# `/build template` only prints the request template (skill build, step 0). While that turn runs, every tool except
+# reads and these is denied, and agentStop lets the turn end even if a run is active.
+TEMPLATE_PROMPT_RX = re.compile(r"^\s*/build\s+template\s*$", re.I)
+TEMPLATE_ALLOWED_TOOLS = {"skill", "report_intent", "task_complete"}
+TEMPLATE_TTL_SEC = 30 * 60
 # GitHub Copilot app: renames the session's git branch. During a run it would orphan meta.json's integration_branch.
 BRANCH_RENAME_TOOLS = {"rename_branch"}
 
@@ -332,8 +337,50 @@ def check_external(ctx: Ctx, tool: str) -> Optional[Tuple[str, str]]:
     return None
 
 
+# ---------------------------------------------------------------------- /build template
+
+def session_id(ctx: Ctx) -> str:
+    return str(g(ctx.data, "sessionId", "session_id", default=""))
+
+
+def template_path(ctx: Ctx) -> Path:
+    return ctx.state_dir / "template-request.json"
+
+
+def template_active(ctx: Ctx) -> bool:
+    """True while the current turn answers `/build template` (show the request template only)."""
+    st = h.read_json(template_path(ctx), default=None)
+    if not isinstance(st, dict) or time.time() - float(st.get("t", 0)) > TEMPLATE_TTL_SEC:
+        return False
+    sid, mine = str(st.get("session", "")), session_id(ctx)
+    return not (sid and mine and sid != mine)
+
+
+def clear_template(ctx: Ctx) -> None:
+    try:
+        template_path(ctx).unlink()
+    except (FileNotFoundError, OSError):
+        pass
+
+
+def on_user_prompt(ctx: Ctx) -> None:
+    prompt = str(g(ctx.data, "prompt", default=""))
+    if TEMPLATE_PROMPT_RX.match(prompt):
+        ctx.state_dir.mkdir(parents=True, exist_ok=True)
+        h.write_json(template_path(ctx), {"session": session_id(ctx), "t": time.time()})
+        ctx.log("TEMPLATE requested")
+    else:
+        clear_template(ctx)
+    emit({})
+
+
 def on_pre_tool(ctx: Ctx) -> None:
     tool = str(g(ctx.data, "toolName", "tool_name", default=""))
+    if template_active(ctx) and not (READ_TOOL_RX.match(tool) or normalize_tool(tool) in TEMPLATE_ALLOWED_TOOLS):
+        ctx.log(f"DENY TEMPLATE {tool}")
+        deny("`/build template` は雛形を表示するだけです。ファイルの書き込み・コマンド・作業役の呼び出し・conductor の手順は行いません。"
+             "skill `build` の「雛形（既定値）」のコードブロックをそのまま出力して、このターンを終えてください", "TEMPLATE")
+        return
     args = g(ctx.data, "toolArgs", "tool_input", default={})
     if isinstance(args, str):
         try:
@@ -452,6 +499,11 @@ def on_session_start(ctx: Ctx) -> None:
 
 
 def on_agent_stop(ctx: Ctx) -> None:
+    if template_active(ctx):
+        clear_template(ctx)
+        ctx.log("AGENT-STOP allowed (template)")
+        emit({})
+        return
     if not ctx.run_active:
         emit({})
         return
@@ -496,7 +548,8 @@ def main() -> int:
             emit({})
             return 0
         {"pre-tool": on_pre_tool, "subagent-start": on_subagent_start, "subagent-stop": on_subagent_stop,
-         "session-start": on_session_start, "agent-stop": on_agent_stop}.get(event, lambda c: emit({}))(ctx)
+         "session-start": on_session_start, "agent-stop": on_agent_stop,
+         "user-prompt": on_user_prompt}.get(event, lambda c: emit({}))(ctx)
     except Exception:  # never brick a session because of a gate bug
         try:
             d = Path(os.getcwd()) / "work" / ".hve"
