@@ -409,6 +409,23 @@ def strip_md(s: str) -> str:
     return re.sub(r"[*`]", "", s or "").strip()
 
 
+NONE_VALUES = ("", "-", "—", "なし", "無し", "N/A", "n/a")
+
+
+def split_values(cell: str, states: bool = False) -> List[str]:
+    """Split a structured-field / table cell into names (「」 and markdown removed, 「なし」 dropped).
+    states=True also splits transitions such as 下書き→提出済み."""
+    s = strip_md(re.sub(r"<br\s*/?>", "、", cell or ""))
+    s = re.sub(r"[（(][^）)]*[）)]", "", s)
+    sep = r"[、,，/／;；]" + (r"|→|⇒|->|=>|～|〜" if states else "")
+    out = []
+    for part in re.split(sep, s):
+        v = part.strip().strip("「」『』\"'").strip()
+        if v and v not in NONE_VALUES:
+            out.append(v)
+    return out
+
+
 # --------------------------------------------------------------------------- requirements
 
 @dataclass
@@ -519,6 +536,10 @@ class RequirementsDoc:
     has_ui_policy: bool = False
     no_ui: bool = False
     persona_headers: List[List[str]] = field(default_factory=list)
+    # 用語の表の用語 -> (file, line)
+    glossary: Dict[str, Tuple[str, int]] = field(default_factory=dict)
+    # 状態の表の対象エンティティ -> {"states": set, "file": str, "line": int}
+    entities: Dict[str, Dict[str, object]] = field(default_factory=dict)
     text: Dict[str, str] = field(default_factory=dict)
     exists: bool = False
 
@@ -703,6 +724,22 @@ def _parse_tables(doc: RequirementsDoc) -> None:
                             if w.strip() and w.strip() not in ("-", "なし", "—")]
                     if forb:
                         doc.terms.append((strip_md(cells[tcol]), forb))
+            if "用語" in hdr:
+                tcol = t.col("用語")
+                for ln, cells in t.rows:
+                    if tcol is not None and tcol < len(cells):
+                        for term in split_values(cells[tcol]):
+                            doc.glossary.setdefault(term, (rel, ln))
+            ecol = t.col("対象エンティティ", "エンティティ")
+            scol = next((i for i, hd in enumerate(t.header) if strip_md(hd).replace(" ", "") == "状態"), None)
+            if ecol is not None and scol is not None:
+                for ln, cells in t.rows:
+                    if ecol >= len(cells):
+                        continue
+                    for ent in split_values(cells[ecol]):
+                        e = doc.entities.setdefault(ent, {"states": set(), "file": rel, "line": ln})
+                        if scol < len(cells):
+                            e["states"].update(split_values(cells[scol], states=True))  # type: ignore[union-attr]
             if any("ペルソナ" in h for h in t.header) or "ペルソナ" in t.heading:
                 doc.persona_headers.append(t.header)
         for d_id, defs in doc.defs.items():
@@ -800,6 +837,26 @@ def catalog_cell(row: CatalogRow, *names: str) -> str:
         if any(n.replace(" ", "") in kn for n in names):
             return v
     return ""
+
+
+def catalog_table_kind(t: Table) -> str:
+    """feature | part | table | api | '' (the four tables of docs/catalog.md)."""
+    if t.col("要求 ID", "要求ID") is not None and t.col("決定状態") is not None:
+        return "feature"
+    if t.col("部品名") is not None:
+        return "part"
+    if t.col("テーブル名") is not None:
+        return "table"
+    if t.col("名前") is not None and t.col("定義ファイル") is not None:
+        return "api"
+    return ""
+
+
+def parse_catalog_tables(root: Path, cfg: dict) -> List[Tuple[str, Table]]:
+    path = root / mf(cfg, "catalog")
+    if not path.exists():
+        return []
+    return [(catalog_table_kind(t), t) for t in parse_tables(strip_comments(read_text(path)).splitlines())]
 
 
 # --------------------------------------------------------------------------- ledger

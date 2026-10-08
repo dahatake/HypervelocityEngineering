@@ -67,7 +67,7 @@ Enterprise App Build Kit は、次の 4 つの手段でこれらを防ぎます�
   hooks/         quality-gates.json … 全エージェント共通の強制ゲート（G-1〜G-7）
   workflows/     hve-verify.yml … GitHub Actions で verify を再実行（外部での再確認）
 scripts/         決定的スクリプト（Python 3.9 以上。標準ライブラリだけを使用）
-  verify.py / verify.ps1 / verify.sh   L1 検査（CHK-01〜23）＋ビルド・テスト
+  verify.py / verify.ps1 / verify.sh   L1 検査（CHK-01〜27）＋ビルド・テスト
   rdcheck.py  next-id.py  ledger.py  select-tests.py  summarize.py  clean-work.py  run-state.py
   rdfix.py         データ層のファイル間の不整合を、要求定義書に合わせて自動修正
   integrate.py     worktree のプールと、統合（merge → verify → System Test → commit）を 1 コマンドで行う
@@ -131,7 +131,7 @@ flowchart TD
 | 層 | 実装 | 発火するタイミング | 例 |
 |---|---|---|---|
 | hook | `.github/hooks/quality-gates.json` → `scripts/hooks/gate.py` | ツール実行の**前**と、作業役・conductor が**終了する前** | rd-author 以外が要求定義書を編集しようとしたら拒否する（G-1）。implementer の終了前に verify を実行し、失敗なら差し戻す（G-4） |
-| verify | `scripts/verify.py`（CHK-01〜23） | 作業役のゲート、統合のたび、CI | 台帳のケースが理由なく削除された（CHK-12）。AC の本文が変わったのに台帳が古いまま（CHK-11） |
+| verify | `scripts/verify.py`（CHK-01〜27） | 作業役のゲート、統合のたび、CI | 台帳のケースが理由なく削除された（CHK-12）。AC の本文が変わったのに台帳が古いまま（CHK-11） |
 
 VS Code の hook はプレビュー機能で、harness によって動作が異なることがあります（Copilot CLI と、その上に構築された GitHub Copilot app は同じ `.github/hooks` を読み込みます）。そのため同じ規則を verify でも検査し、hook が効かない環境でも統合の時点で必ず止まるようにしています。詳しくは [品質ゲートと検査項目](users-guide/06-quality-gates.md) を参照してください。
 
@@ -598,7 +598,7 @@ Spec Kit は独自の番号（`FR-001`、`SC-001` など）を使います。too
 | 3 | [管理データの書式](users-guide/03-requirements-format.md) | 要求定義書・カタログ・ID 台帳・System Test の台帳のフォーマットを知りたい |
 | 4 | [設定とカスタマイズ](users-guide/04-customization.md) | ビルド・テストのコマンド、モデルの割り当て、ゲートを調整したい。MCP Server・plugin（Work IQ・Azure など）を使いたい |
 | 5 | [スクリプトリファレンス](users-guide/05-scripts-reference.md) | `scripts/` の各コマンドの使い方を知りたい |
-| 6 | [品質ゲートと検査項目](users-guide/06-quality-gates.md) | hook（G-1〜G-7）と verify（CHK-01〜23）の意味と直し方を知りたい |
+| 6 | [品質ゲートと検査項目](users-guide/06-quality-gates.md) | hook（G-1〜G-7）と verify（CHK-01〜27）の意味と直し方を知りたい |
 | 7 | [トラブルシューティング](users-guide/07-troubleshooting.md) | 止まった・拒否された・失敗した |
 | 8 | [導入ロードマップと KPI](users-guide/08-roadmap.md) | 診断から本番運用までの段取りと、効果の測り方を知りたい |
 | 9 | [バージョンアップの手順](users-guide/09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者） |
@@ -615,7 +615,7 @@ GitHub Spec Kit との比較計測（同じ課題・隠し受入テスト・Nort
 | run | conductor の 1 回の実行。`run-id`（開始日時。例: `202610080900`）で識別します。 |
 | 工程（stage） | run の段階。工程 0（初期化）から工程 6（最終）まであります（[1 回の run の流れ](#1-回の-run-の流れ)）。 |
 | `/work` | 一時ファイルの置き場所（git の管理対象外。14 日で削除）。作業キュー、進捗、ログ、証跡、報告を置きます。 |
-| ゲート | モデルの判断に関係なく規則を強制する仕組み。hook（G-1〜G-7）と決定的検査 verify（CHK-01〜23）の 2 層です。 |
+| ゲート | モデルの判断に関係なく規則を強制する仕組み。hook（G-1〜G-7）と決定的検査 verify（CHK-01〜27）の 2 層です。 |
 | 包括承認 | run_options の `approval_policy` で、「この範囲の AI 提案は推奨案どおりでよい」と事前に決めておくこと。 |
 
 ## リポジトリの構成

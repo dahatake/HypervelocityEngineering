@@ -144,3 +144,14 @@ def test_apply_refused_for_workers(sample):
     sample.gate("subagent-start", {"agentName": "rd-author"})
     assert denied(shell(sample, "python scripts/rdfix.py --apply"), "G-5")
     assert shell(sample, "python scripts/rdfix.py --apply --only catalog,registry") == {}
+
+def test_common_parts_follow_function_table(sample):
+    sample.write("docs/catalog.md", sample.read("docs/catalog.md").replace("| 未実装 | 未実装 | なし |", "| 未実装 | 未実装 | 下書き保存 |")
+                 + "\n## 共通部品\n\n| 部品名 | ファイル | 用途 | 使っている要求 ID |\n|---|---|---|---|\n"
+                 + "| 下書き保存 | - | 下書きの保持 | FR-404 |\n")
+    assert "CHK-27" in sample.py("rdcheck.py", "check", "--base", "none").stdout
+    proc = sample.py("rdfix.py", "--only", "catalog", "--apply")
+    assert proc.returncode == 0, proc.stdout
+    assert "| 下書き保存 | - | 下書きの保持 | FR-001 |" in sample.read("docs/catalog.md")
+    out = sample.py("rdcheck.py", "check", "--base", "none").stdout
+    assert "CHK-27" not in out and "CHK-24" not in out, out

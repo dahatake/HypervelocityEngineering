@@ -49,6 +49,18 @@ description: 要求定義書とカタログを作成・更新する rd-author �
 - 質問票は表（`| ID | 重要度 | 質問 | 選択肢 | 推奨 | 状態 | 回答 |`）にし、回答を反映したら状態を「回答済み」にします。
 - BLOCKED の受入基準は、未回答の Q-ID、TBD、競合のどれかを `BLOCKED:` の欄に書きます。
 
+### つながりの規則（体系としての一貫性。scripts/verify が検査します）
+
+要求定義書とカタログは、ID と名前でつながった 1 つのデータです。1 か所を書き換えたら、つながる先も同じ commit で直します。
+
+- 本文・表に書く ID（G・FR・NFR・AC・Q・PARAM・SRC）は、必ず定義済みのものにします。参照先のない ID は書きません（CHK-24）。出典は出典台帳の `SRC-xxx` で書きます。
+- 対象エンティティは用語の表か状態の表（`| 対象エンティティ | 状態 | 遷移の条件 |`）に、関係する状態はそのエンティティの状態の表に定義してから使います（CHK-25）。新しいエンティティ・状態は、要求より先に表へ足します。
+- 本文・受入基準で `{PARAM-xxx}` を使ったら、その要求の「参照パラメータ」の欄にも書きます（CHK-25）。
+- どこからも使われなくなった PARAM・SRC・状態の表のエンティティは、廃止するか参照を足します（CHK-26 の警告）。
+- 要求を追加・改題・状態変更したら、カタログの機能の表の行（要求 ID・題名・決定状態）を同じ commit で合わせます。`python scripts/rdfix.py --only catalog --apply` で機械的に合わせられます（CHK-07）。
+- 「関連する既存資産」に `共通部品「…」`・`API「…」`・`テーブル「…」` と書くときは、カタログに実在する名前にします（CHK-27）。
+- 要求を変更・廃止する前に `python scripts/rdcheck.py trace <ID>` で、つながる AC・台帳のケース・カタログ・コードを確かめ、影響を変更履歴と結果に書きます。エンティティ・PARAM を変えるときは `trace <名前|PARAM-xxx>` で、それを使う要求を洗い出します。
+
 ### 承認ポリシー（approval_policy）
 
 | 値 | 動作 |
@@ -65,6 +77,7 @@ description: 要求定義書とカタログを作成・更新する rd-author �
 |---|---|
 | ID の採番（手で振らない） | `python scripts/next-id.py FR`、`python scripts/next-id.py NFR-SEC`、`python scripts/next-id.py AC --count 3`、`Q`、`PARAM` |
 | 必要な節だけ読む | `python scripts/rdcheck.py show FR-012 AC-031` |
+| つながり・影響範囲をたどる | `python scripts/rdcheck.py trace FR-012`、`trace 申請`、`trace PARAM-004` |
 | 一覧・件数 | `python scripts/rdcheck.py list --state 承認済み`、`python scripts/rdcheck.py stats` |
 | 終了前の検査（G-4） | `python scripts/verify.py --docs-only --show-warnings`（exit 0 にする） |
 | 工程 6 の ID 台帳の整理 | `python scripts/next-id.py --sync --finalize`（conductor が実行） |

@@ -5,7 +5,7 @@
 ## verify（L1 決定的検査）
 
 ```bash
-python scripts/verify.py                  # 管理データの検査（CHK-01〜23）＋ verify.commands
+python scripts/verify.py                  # 管理データの検査（CHK-01〜27）＋ verify.commands
 python scripts/verify.py --docs-only      # 管理データの検査だけ（rd-author・test-designer のゲート）
 python scripts/verify.py --quick          # "slow": true のコマンドをスキップする（implementer のゲート）
 python scripts/verify.py --run current    # 実行中の run の queue.json との整合性（CHK-21）も検査する
@@ -29,6 +29,8 @@ python scripts/rdcheck.py list --state 承認済み --priority MUST
 python scripts/rdcheck.py list --level system          # System Test の対象になる AC
 python scripts/rdcheck.py stats                        # 監査のメトリクス（JSON）
 python scripts/rdcheck.py digest AC-031                # AC のダイジェスト
+python scripts/rdcheck.py trace FR-012 [--json]        # 要求の上流（G・出典）・横（用語・状態・PARAM）・下流（AC・台帳のケース・カタログ・コード）をたどる
+python scripts/rdcheck.py trace G-002 申請 PARAM-004 下書き保存   # 目的・エンティティ・PARAM・共通部品から、関係する要求を逆にたどる（影響分析）
 ```
 
 `--base` の既定値は main との分岐点（merge-base）です。差分の検査（CHK-12/13）に使います。

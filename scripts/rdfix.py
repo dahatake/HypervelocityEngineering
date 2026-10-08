@@ -13,7 +13,8 @@ What is fixed (derived data follows the requirements definition, which is never 
                                     -> through next-id.py (G-3)
   catalog   docs/catalog.md         決定状態・題名 of the function table (CHK-07), rows for requirements that are
                                     missing, rows for unknown requirements without files, renamed / deleted
-                                    file references (CHK-08), implementation files of retired requirements (CHK-17)
+                                    file references (CHK-08), implementation files of retired requirements (CHK-17),
+                                    使っている要求 ID of the common-parts table from the function table (CHK-27)
   ledger    tests/system/ledger.json  missing fields, requirement_ids, missing / orphan ac_digests
                                     -> through ledger.py with history (G-2)
   gitignore .gitignore              /work/ (CHK-23)
@@ -244,8 +245,26 @@ class Fixer:
         if not func:
             self.act("MANUAL", "CHK-07", cat, "カタログに機能の表（要求 ID・決定状態の列）がありません", "rd-author", t)
         seen: Dict[str, List[str]] = {}
+        used_by: Dict[str, Set[str]] = {}
+        part_names: Set[str] = set()
+        for tb in tables:
+            kind = h.catalog_table_kind(tb)
+            pc, nc = tb.col("共通部品"), tb.col("部品名")
+            idc0 = tb.col("要求 ID", "要求ID")
+            for _, cells in tb.rows:
+                if kind == "feature" and pc is not None and idc0 is not None and pc < len(cells):
+                    m = h.REQ_ID_RE.search(cells[idc0])
+                    if m and m.group(1) in self.doc.requirements:
+                        for p in h.split_values(cells[pc]):
+                            used_by.setdefault(p, set()).add(m.group(1))
+                elif kind == "part" and nc is not None and nc < len(cells):
+                    part_names.add(h.strip_md(cells[nc]))
+        for p in sorted(set(used_by) - part_names):
+            self.act("MANUAL", "CHK-27", cat, f"機能の表が使っている共通部品「{p}」が共通部品の表にありません。行を追加します（{'、'.join(sorted(used_by[p]))}）", "implementer", t)
         for tb in tables:
             is_func = any(tb is f for f in func)
+            is_part = h.catalog_table_kind(tb) == "part"
+            pnc, puc = tb.col("部品名"), tb.col("要求 ID", "要求ID")
             file_cols = [i for i, hd in enumerate(tb.header) if re.search(r"ファイル|テスト", hd)]
             idc, tc, sc = tb.col("要求 ID", "要求ID"), tb.col("題名"), tb.col("決定状態")
             ic = tb.col("実装ファイル")
@@ -290,6 +309,14 @@ class Fixer:
                                 cells[ic] = "なし"
                 for c in file_cols:
                     cells[c] = self._fix_paths(cells[c], loc, "未実装" if is_func else "-", t)
+                if is_part and pnc is not None and puc is not None:
+                    name = h.strip_md(cells[pnc])
+                    if name and name not in h.NONE_VALUES:
+                        want = sorted(used_by.get(name, set()))
+                        if sorted(set(h.REQ_ID_RE.findall(cells[puc]))) != want:
+                            new = "、".join(want) or "なし"
+                            self.act("FIX", "CHK-27", loc, f"共通部品「{name}」の使っている要求 ID を「{h.strip_md(cells[puc]) or '空'}」→「{new}」に直します（機能の表に合わせる）", "", t)
+                            cells[puc] = new
                 if cells != orig:
                     ed.set(ln - 1, row_line(cells))
         if func:

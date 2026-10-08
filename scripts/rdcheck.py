@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""rdcheck.py - parse and check the management data (plan §10, CHK-01..23).
+"""rdcheck.py - parse and check the management data (plan §10, CHK-01..27).
 
 Usage:
   python scripts/rdcheck.py check [--base REF] [--run RUN_ID] [--strict] [--strict-ledger] [--json]
   python scripts/rdcheck.py show ID [ID ...]        # print only the requirement / AC block (token saving)
+  python scripts/rdcheck.py trace ID|名前 [...] [--json]  # links up and down (G / SRC / 用語・状態 / PARAM / AC / 台帳 / カタログ / コード)
   python scripts/rdcheck.py list [--state 承認済み] [--level system] [--priority MUST] [--kind FR]
   python scripts/rdcheck.py stats                   # metrics for rd-audit
   python scripts/rdcheck.py digest [AC ...]         # current AC digests (PARAM expanded)
@@ -24,6 +25,11 @@ from typing import Dict, List, Optional, Set
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import hvelib as h  # noqa: E402
 
+# requirements that must have a row in the function table of the catalog (same as rdfix.CATALOG_STATES)
+CATALOG_STATES = ("承認済み", "承認待ち", "保留")
+HISTORY_SECTION_RE = re.compile(r"変更履歴|決定記録|監査指摘")
+ASSET_RE = re.compile(r"(共通部品|API|イベント|テーブル)\s*[「『]([^」』]+)[」』]")
+
 
 @dataclass
 class Finding:
@@ -36,6 +42,15 @@ class Finding:
         return f"{self.level} {self.chk} {self.loc} {self.msg}"
 
 
+@dataclass
+class Ref:
+    """One mention of an ID in the requirements definition (outside its own definition line)."""
+    file: str
+    line: int
+    section: str
+    owner: str  # requirement whose block contains the mention ('' if none)
+
+
 class Checker:
     def __init__(self, root: Path, cfg: dict, base: Optional[str], run_id: Optional[str],
                  strict: bool, strict_ledger: Optional[bool]):
@@ -46,7 +61,9 @@ class Checker:
         self.ledger = h.load_ledger(root, cfg)
         self.cat_exists, self.cat_rows, self.cat_refs = h.parse_catalog(root, cfg)
         self.cat_req = h.catalog_req_rows(self.cat_rows)
+        self.cat_tables = h.parse_catalog_tables(root, cfg)
         self._files: Optional[List[str]] = None
+        self._refs: Optional[Dict[str, List[Ref]]] = None
         self.croot = h.conductor_root(root, cfg)
         if strict_ledger is None:
             strict_ledger = strict
@@ -104,9 +121,46 @@ class Checker:
             return self.findings
         for fn in (self.chk01_02, self.chk03, self.chk04, self.chk05, self.chk06_22, self.chk07_08,
                    self.chk09, self.chk10_11, self.chk12, self.chk13_14_15, self.chk16, self.chk17,
-                   self.chk18, self.chk19, self.chk20, self.chk21, self.chk23):
+                   self.chk18, self.chk19, self.chk20, self.chk21, self.chk23, self.chk25, self.chk26,
+                   self.chk27, self.chk24):
             fn()
         return self.findings
+
+    # ------------------------------------------------------------------ reference index
+    def refs(self) -> Dict[str, List[Ref]]:
+        """ID -> mentions in the requirements definition, excluding definition lines, code blocks and `code`."""
+        if self._refs is None:
+            def_lines = {(d.file, d.line) for ds in self.doc.defs.values() for d in ds}
+            out: Dict[str, List[Ref]] = {}
+            for rel, text in self.doc.text.items():
+                section, owner, owner_lvl, in_code = "", "", 0, False
+                for ln, line in enumerate(text.splitlines(), start=1):
+                    if line.lstrip().startswith("```"):
+                        in_code = not in_code
+                        continue
+                    if in_code:
+                        continue
+                    hm = h.HEADING_RE.match(line)
+                    if hm:
+                        section = hm.group(2)
+                        lvl = len(hm.group(1))
+                        rm = h.REQ_HEADING_RE.match(line)
+                        if rm:
+                            owner, owner_lvl = rm.group(2), lvl
+                        elif owner and lvl <= owner_lvl:
+                            owner = ""
+                    body = re.sub(r"`[^`]*`", "", line)
+                    own = (rel, ln) in def_lines
+                    for m in h.ID_RE.finditer(body):
+                        id_ = m.group(0)
+                        if own and body.find(id_) == m.start() and self._defined_here(id_, rel, ln):
+                            continue
+                        out.setdefault(id_, []).append(Ref(rel, ln, section, owner))
+            self._refs = out
+        return self._refs
+
+    def _defined_here(self, id_: str, rel: str, ln: int) -> bool:
+        return any(d.file == rel and d.line == ln for d in self.doc.defs.get(id_, []))
 
     # ------------------------------------------------------------------ CHK-01/02
     def chk01_02(self) -> None:
@@ -207,6 +261,17 @@ class Checker:
         if not self.cat_exists:
             self.warn("CHK-07", cat, "カタログがありません")
             return
+        if not any(k == "feature" for k, _ in self.cat_tables):
+            self.err("CHK-07", cat, "カタログに機能の表（要求 ID・題名・決定状態の列）がありません")
+        seen: Dict[str, int] = {}
+        for row in self.cat_rows:
+            m = h.REQ_ID_RE.search(h.catalog_cell(row, "要求ID"))
+            if not m:
+                continue
+            rid = m.group(1)
+            if rid in seen and seen[rid] != row.line:
+                self.err("CHK-07", self.loc(cat, row.line), f"{rid} の行が機能の表に重複しています（{seen[rid]} 行目）。1 要求 1 行にします")
+            seen.setdefault(rid, row.line)
         for rid, row in self.cat_req.items():
             req = self.doc.requirements.get(rid)
             if req is None:
@@ -215,6 +280,14 @@ class Checker:
             cstate = h.normalize_state(h.catalog_cell(row, "決定状態"))
             if cstate != req.state:
                 self.err("CHK-07", self.loc(cat, row.line), f"{rid} の決定状態が一致しません（カタログ={cstate or '空'}、要求定義書={req.state or '空'}）")
+            if any("題名" in k for k in row.cells):
+                ctitle = h.strip_md(h.catalog_cell(row, "題名"))
+                if req.title and ctitle != req.title:
+                    self.err("CHK-07", self.loc(cat, row.line), f"{rid} の題名が一致しません（カタログ=「{ctitle}」、要求定義書=「{req.title}」）")
+        for rid, req in self.doc.requirements.items():
+            if req.state in CATALOG_STATES and rid not in self.cat_req:
+                self.err("CHK-07", self.loc(req.file, req.line),
+                         f"{rid}（{req.state}）がカタログの機能の表にありません（rdfix.py --only catalog --apply で行を追加できます）")
         files = set(self.files())
         for ln, p in self.cat_refs:
             rel = p.lstrip("./")
@@ -532,6 +605,159 @@ class Checker:
                         self.err("CHK-23", self.loc(h.mf(self.cfg, "run_history"), ln), f"run-id {rid} が重複しています（{seen[rid]} 行目）")
                     seen[rid] = ln
 
+    # ------------------------------------------------------------------ CHK-24
+    def chk24(self) -> None:
+        """Every ID mentioned in the requirements definition and the catalog must point to a definition."""
+        already: Set[str] = set()
+        for f in self.findings:
+            if f.level == "ERROR" and re.search(r"存在しない|未定義|定義されていません|ありません", f.msg):
+                already.update(m.group(0) for m in h.ID_RE.finditer(f.msg))
+        retired: Set[str] = set()
+        reg_path = self.root / h.mf(self.cfg, "id_registry")
+        if reg_path.exists():
+            for id_, ent in h.parse_registry_text(h.read_text(reg_path)).items():
+                if re.search(r"削除済み|欠番|廃止", ent["state"]):
+                    retired.add(id_)
+        for id_, refs in sorted(self.refs().items()):
+            if id_ in self.doc.defs or id_ in already:
+                continue
+            for r in refs:
+                if id_ in retired and HISTORY_SECTION_RE.search(r.section):
+                    continue
+                self.err("CHK-24", self.loc(r.file, r.line), f"{id_} を参照していますが、要求定義書に定義がありません（参照先がない）")
+        cat = h.mf(self.cfg, "catalog")
+        for kind, t in self.cat_tables:
+            if kind == "feature":
+                continue  # CHK-07
+            for ln, cells in t.rows:
+                for m in h.ID_RE.finditer(" ".join(cells)):
+                    id_ = m.group(0)
+                    if id_ not in self.doc.defs:
+                        self.err("CHK-24", self.loc(cat, ln), f"カタログの「{t.heading or kind}」の行が、要求定義書にない {id_} を参照しています")
+                        continue
+                    req = self.doc.requirements.get(id_)
+                    if req is not None and not req.active:
+                        self.warn("CHK-24", self.loc(cat, ln), f"カタログの「{t.heading or kind}」の行が {req.state} の {id_} を参照しています。参照を外すか、資産ごと取り除きます")
+
+    # ------------------------------------------------------------------ CHK-25
+    def chk25(self) -> None:
+        """Structured fields must point to definitions: 対象エンティティ → 用語・状態の表, 関係する状態 → 状態の表,
+        参照パラメータ ⇔ {PARAM-xxx} used in the requirement and its ACs."""
+        known = set(self.doc.glossary) | set(self.doc.entities)
+        for r in self.doc.requirements.values():
+            if not r.active:
+                continue
+            loc = self.loc(r.file, r.line)
+            ents = h.split_values(r.fields.get("対象エンティティ", ""))
+            for e in ents:
+                if e not in known:
+                    self.err("CHK-25", loc, f"{r.id} の対象エンティティ「{e}」が用語の表にも状態の表にもありません（用語の表か状態の表に定義します）")
+            states = h.split_values(r.fields.get("関係する状態", ""), states=True)
+            if states:
+                with_states = [e for e in ents if e in self.doc.entities]
+                if not with_states:
+                    self.err("CHK-25", loc, f"{r.id} の関係する状態（{'、'.join(states)}）を持つ対象エンティティ（{'、'.join(ents) or 'なし'}）が状態の表にありません")
+                else:
+                    defined: Set[str] = set()
+                    for e in with_states:
+                        defined |= self.doc.entities[e]["states"]  # type: ignore[operator]
+                    for s in states:
+                        if s not in defined:
+                            self.err("CHK-25", loc, f"{r.id} の関係する状態「{s}」が状態の表（{'、'.join(with_states)}）にありません")
+            listed = set(re.findall(r"PARAM-\d{3,}", r.fields.get("参照パラメータ", "")))
+            text = " ".join(r.body) + " " + " ".join(self.doc.acs[a].full_text() for a in r.acs if a in self.doc.acs)
+            used = set(h.PARAM_REF_RE.findall(text))
+            for p in sorted(used - listed):
+                self.err("CHK-25", loc, f"{r.id} の本文・受入基準が {{{p}}} を使っていますが、参照パラメータの欄にありません")
+            for p in sorted(listed - used):
+                self.warn("CHK-25", loc, f"{r.id} の参照パラメータ {p} が本文・受入基準で {{{p}}} として使われていません")
+
+    # ------------------------------------------------------------------ CHK-26
+    def chk26(self) -> None:
+        """Definitions that nothing refers to (orphans): PARAM, SRC, entities of the state table."""
+        refs = self.refs()
+        for pid, p in self.doc.params.items():
+            if not refs.get(pid):
+                self.warn("CHK-26", self.loc(p["file"], p["line"]), f"{pid} はどの要求・受入基準からも参照されていません（不要なら廃止します）")
+        for sid in self.doc.kind_ids("SRC"):
+            if not refs.get(sid):
+                d = self.doc.defs[sid][0]
+                self.warn("CHK-26", self.loc(d.file, d.line), f"{sid} はどの要求・ペルソナからも出典として参照されていません")
+        used_ents: Set[str] = set()
+        for r in self.doc.requirements.values():
+            if r.active:
+                used_ents.update(h.split_values(r.fields.get("対象エンティティ", "")))
+        for e, info in self.doc.entities.items():
+            if e not in used_ents:
+                self.warn("CHK-26", self.loc(str(info["file"]), info["line"]), f"状態の表の「{e}」を対象エンティティにする要求がありません")
+
+    # ------------------------------------------------------------------ CHK-27
+    def catalog_names(self) -> Dict[str, Dict[str, int]]:
+        col = {"part": "部品名", "api": "名前", "table": "テーブル名"}
+        out: Dict[str, Dict[str, int]] = {"part": {}, "api": {}, "table": {}}
+        for kind, t in self.cat_tables:
+            c = t.col(col[kind]) if kind in col else None
+            if c is None:
+                continue
+            for ln, cells in t.rows:
+                n = h.strip_md(cells[c]) if c < len(cells) else ""
+                if n and n not in h.NONE_VALUES:
+                    out[kind].setdefault(n, ln)
+        return out
+
+    def chk27(self) -> None:
+        """Catalog tables are linked both ways: 機能の表「使っている共通部品」⇔ 共通部品の表「使っている要求 ID」,
+        and 関連する既存資産 of a requirement must exist in the catalog."""
+        if not self.cat_exists:
+            return
+        cat = h.mf(self.cfg, "catalog")
+        col = {"part": "部品名", "api": "名前", "table": "テーブル名"}
+        label = {"part": "共通部品", "api": "API・イベント", "table": "テーブル"}
+        for kind, t in self.cat_tables:
+            c = t.col(col[kind]) if kind in col else None
+            if c is None:
+                continue
+            seen: Dict[str, int] = {}
+            for ln, cells in t.rows:
+                n = h.strip_md(cells[c]) if c < len(cells) else ""
+                if not n or n in h.NONE_VALUES:
+                    continue
+                if n in seen:
+                    self.err("CHK-27", self.loc(cat, ln), f"{label[kind]}の表に「{n}」が重複しています（{seen[n]} 行目）")
+                seen.setdefault(n, ln)
+        names = self.catalog_names()
+        used_by: Dict[str, Set[str]] = {}
+        for rid, row in self.cat_req.items():
+            for p in h.split_values(h.catalog_cell(row, "共通部品")):
+                used_by.setdefault(p, set()).add(rid)
+                if p not in names["part"]:
+                    self.err("CHK-27", self.loc(cat, row.line), f"{rid} が使っている共通部品「{p}」が共通部品の表にありません")
+        for kind, t in self.cat_tables:
+            if kind != "part":
+                continue
+            nc, uc = t.col("部品名"), t.col("要求ID", "要求 ID")
+            if nc is None or uc is None:
+                continue
+            for ln, cells in t.rows:
+                n = h.strip_md(cells[nc]) if nc < len(cells) else ""
+                if not n or n in h.NONE_VALUES:
+                    continue
+                declared = set(h.REQ_ID_RE.findall(cells[uc] if uc < len(cells) else ""))
+                actual = used_by.get(n, set())
+                if declared != actual:
+                    self.err("CHK-27", self.loc(cat, ln),
+                             f"共通部品「{n}」の使っている要求 ID（{'、'.join(sorted(declared)) or 'なし'}）が機能の表"
+                             f"（{'、'.join(sorted(actual)) or 'なし'}）と一致しません（rdfix.py --only catalog --apply で機能の表に合わせます）")
+        kind_of = {"共通部品": "part", "API": "api", "イベント": "api", "テーブル": "table"}
+        for r in self.doc.requirements.values():
+            if not r.active:
+                continue
+            for m in ASSET_RE.finditer(r.fields.get("関連する既存資産", "")):
+                k = kind_of[m.group(1)]
+                if m.group(2).strip() not in names[k]:
+                    self.err("CHK-27", self.loc(r.file, r.line),
+                             f"{r.id} の関連する既存資産 {m.group(1)}「{m.group(2)}」がカタログの{label[k]}の表にありません")
+
 
 # ---------------------------------------------------------------------- commands
 
@@ -654,6 +880,130 @@ def cmd_stats(args, root, cfg) -> int:
     return 0
 
 
+def _code_index(ck: "Checker") -> Dict[str, Set[str]]:
+    idx: Dict[str, Set[str]] = {}
+    for f in ck.scan_files():
+        for id_ in set(h.CODE_ID_RE.findall(ck.read(f))):
+            idx.setdefault(id_, set()).add(f)
+    return idx
+
+
+def trace_one(ck: "Checker", key: str, code: Dict[str, Set[str]]) -> dict:
+    doc = ck.doc
+    refs = ck.refs()
+    cases = ck.ledger.get("cases", [])
+
+    def where(id_: str) -> str:
+        d = doc.defs.get(id_)
+        return f"{d[0].file}:{d[0].line}" if d else "-"
+
+    def referrers(id_: str) -> List[str]:
+        return sorted({r.owner or f"{r.file}:{r.line}（{r.section}）" for r in refs.get(id_, [])})
+
+    def cat_assets(rid: str) -> List[str]:
+        out = []
+        for kind, t in ck.cat_tables:
+            if kind in ("api", "table", "part"):
+                c = t.col("部品名", "テーブル名", "名前")
+                for ln, cells in t.rows:
+                    if rid in h.REQ_ID_RE.findall(" ".join(cells)) and c is not None and c < len(cells):
+                        out.append(f"{t.heading or kind}「{h.strip_md(cells[c])}」")
+        return out
+
+    if key in doc.requirements:
+        r = doc.requirements[key]
+        row = ck.cat_req.get(key)
+        acs = []
+        for a in r.acs:
+            ac = doc.acs.get(a)
+            if not ac:
+                continue
+            acs.append({
+                "id": a, "level": ac.level or "-", "blocked": ac.blocked_ref if ac.blocked else "",
+                "cases": [f"{c.get('id')}({c.get('status')})" for c in cases if a in c.get("ac_ids", [])],
+                "code": sorted(code.get(a, set())),
+            })
+        ents = h.split_values(r.fields.get("対象エンティティ", ""))
+        return {
+            "id": key, "kind": "requirement", "title": r.title, "state": r.state, "priority": r.priority, "at": where(key),
+            "upper": [{"id": g, "at": where(g)} for g in re.findall(r"G-\d{3,}", r.fields.get("上位", ""))] or [r.fields.get("上位", "")],
+            "source": r.fields.get("出典", "") or r.fields.get("出自", ""),
+            "entities": {e: sorted(doc.entities.get(e, {}).get("states", set())) for e in ents},  # type: ignore[arg-type]
+            "states": h.split_values(r.fields.get("関係する状態", ""), states=True),
+            "params": {p: f"{h.strip_md(doc.params[p]['value'])}{h.strip_md(doc.params[p]['unit'])}" if p in doc.params else "未定義"
+                       for p in re.findall(r"PARAM-\d{3,}", r.fields.get("参照パラメータ", ""))},
+            "acs": acs,
+            "catalog": {k: h.strip_md(v) for k, v in row.cells.items()} if row else None,
+            "catalog_assets": cat_assets(key),
+            "code": sorted(code.get(key, set())),
+            "referenced_by": [x for x in referrers(key) if x != key],
+        }
+    if key in doc.acs:
+        ac = doc.acs[key]
+        return {"id": key, "kind": "AC", "at": where(key), "requirement": ac.requirement, "level": ac.level or "-",
+                "blocked": ac.blocked_ref if ac.blocked else "",
+                "cases": [f"{c.get('id')}({c.get('status')})" for c in cases if key in c.get("ac_ids", [])],
+                "code": sorted(code.get(key, set())), "referenced_by": referrers(key)}
+    if key.startswith("G-") and key in doc.defs:
+        reqs = [r.id for r in doc.requirements.values() if key in re.findall(r"G-\d{3,}", r.fields.get("上位", ""))]
+        return {"id": key, "kind": "goal", "at": where(key), "requirements": reqs, "referenced_by": referrers(key)}
+    if key in doc.defs:
+        return {"id": key, "kind": h.id_kind(key) or "id", "at": where(key), "referenced_by": referrers(key)}
+    if key in doc.entities or key in doc.glossary:
+        reqs = [r.id for r in doc.requirements.values() if key in h.split_values(r.fields.get("対象エンティティ", ""))]
+        info = doc.entities.get(key)
+        return {"id": key, "kind": "entity", "states": sorted(info["states"]) if info else [],  # type: ignore[arg-type]
+                "at": f"{info['file']}:{info['line']}" if info else "{}:{}".format(*doc.glossary[key]), "requirements": reqs}
+    names = ck.catalog_names()
+    for kind, label in (("part", "共通部品"), ("api", "API・イベント"), ("table", "テーブル")):
+        if key in names[kind]:
+            reqs = sorted(rid for rid, row in ck.cat_req.items() if key in h.split_values(h.catalog_cell(row, "共通部品"))) if kind == "part" else []
+            for k2, t in ck.cat_tables:
+                if k2 == kind:
+                    for ln, cells in t.rows:
+                        if ln == names[kind][key]:
+                            reqs = sorted(set(reqs) | set(h.REQ_ID_RE.findall(" ".join(cells))))
+            return {"id": key, "kind": label, "at": f"{h.mf(ck.cfg, 'catalog')}:{names[kind][key]}", "requirements": reqs}
+    return {"id": key, "kind": "not_found"}
+
+
+def _print_trace(t: dict) -> None:
+    if t["kind"] == "not_found":
+        print(f"{t['id']}: 見つかりません")
+        return
+    head = f"{t['id']} [{t['kind']}]"
+    if t["kind"] == "requirement":
+        head += f" {t['title']}（{t['state'] or '-'}・{t['priority'] or '-'}）"
+    print(f"{head}  {t.get('at', '-')}")
+    for k, v in t.items():
+        if k in ("id", "kind", "title", "state", "priority", "at") or v in (None, "", [], {}):
+            continue
+        if k == "acs":
+            print("  acs:")
+            for a in v:
+                extra = f" BLOCKED: {a['blocked']}" if a["blocked"] else ""
+                print(f"    {a['id']} [{a['level']}]{extra} cases={','.join(a['cases']) or '-'} code={','.join(a['code']) or '-'}")
+        elif isinstance(v, dict):
+            print(f"  {k}: " + "　".join(f"{a}={'/'.join(b) if isinstance(b, list) else b}" for a, b in v.items()))
+        elif isinstance(v, list):
+            print(f"  {k}: " + ", ".join(x if isinstance(x, str) else f"{x['id']}({x['at']})" for x in v))
+        else:
+            print(f"  {k}: {v}")
+    print()
+
+
+def cmd_trace(args, root, cfg) -> int:
+    ck = Checker(root, cfg, None, None, False, False)
+    code = _code_index(ck)
+    out = [trace_one(ck, k, code) for k in args.ids]
+    if args.json:
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+    else:
+        for t in out:
+            _print_trace(t)
+    return 1 if any(t["kind"] == "not_found" for t in out) else 0
+
+
 def cmd_digest(args, root, cfg) -> int:
     doc = h.parse_requirements(root, cfg)
     ids = args.ids or sorted(doc.acs)
@@ -686,10 +1036,14 @@ def main(argv=None) -> int:
     sub.add_parser("stats")
     d = sub.add_parser("digest")
     d.add_argument("ids", nargs="*")
+    tr = sub.add_parser("trace")
+    tr.add_argument("ids", nargs="+")
+    tr.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     root = Path(args.root).resolve() if args.root else h.repo_root()
     cfg = h.load_config(root)
-    return {"check": cmd_check, "show": cmd_show, "list": cmd_list, "stats": cmd_stats, "digest": cmd_digest}[args.cmd](args, root, cfg)
+    return {"check": cmd_check, "show": cmd_show, "list": cmd_list, "stats": cmd_stats, "digest": cmd_digest,
+            "trace": cmd_trace}[args.cmd](args, root, cfg)
 
 
 if __name__ == "__main__":
