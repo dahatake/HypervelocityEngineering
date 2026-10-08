@@ -1,7 +1,7 @@
 # AGENTS.md
 
 <!-- hve-abk:begin -->
-## Assured Build Kit（要求定義書・カタログ・System Test の一貫性）
+## Enterprise App Build Kit（要求定義書・カタログ・System Test の一貫性）
 
 - 長時間の開発の依頼は、custom agent `conductor` に 1 回で渡します（VS Code・GitHub Copilot app では `/build`）。手順は `.github/agents/` と `.github/skills/` にあります。
 - 検証は `python scripts/verify.py`（`scripts/verify.ps1` / `scripts/verify.sh`）。exit 0 が合格です。

@@ -1,6 +1,6 @@
-# Assured Build Kit 詳細ガイド
+# Enterprise App Build Kit 詳細ガイド
 
-Assured Build Kit の詳細なリファレンスです。概要・インストール・Quickstart・用語は、リポジトリ直下の [README.md](../README.md) を先に読んでください。
+Enterprise App Build Kit の詳細なリファレンスです。概要・インストール・Quickstart・用語は、リポジトリ直下の [README.md](../README.md) を先に読んでください。
 
 
 ## ドキュメント一覧

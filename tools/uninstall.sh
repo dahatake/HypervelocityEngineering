@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Uninstall the Assured Build Kit from the current (or given) git repository with one command.
+# Uninstall the Enterprise App Build Kit from the current (or given) git repository with one command.
 #
 #   curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.sh | bash
 #   curl -fsSL .../tools/uninstall.sh | bash -s -- --purge --dry-run   # options are passed to install.py

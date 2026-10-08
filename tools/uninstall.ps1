@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Uninstall the Assured Build Kit from the current (or given) git repository with one command.
+  Uninstall the Enterprise App Build Kit from the current (or given) git repository with one command.
 
 .DESCRIPTION
   Runs tools/install.ps1 with -Uninstall (or -Purge). Without -Purge, unmodified toolkit files, the

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1060" viewBox="0 0 1200 1060" font-family="'Segoe UI', Meiryo, 'Hiragino Sans', 'Noto Sans JP', sans-serif" font-size="13" fill="#1f2328">
-  <title>Spec Kit の成果物から Assured Build Kit の管理データへのデータ連携</title>
+  <title>Spec Kit の成果物から Enterprise App Build Kit の管理データへのデータ連携</title>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
@@ -24,7 +24,7 @@
   </defs>
 
   <rect x="0" y="0" width="1200" height="1060" fill="#ffffff"/>
-  <text x="600" y="34" text-anchor="middle" font-size="20" font-weight="700">データ連携: Spec Kit の成果物 → Assured Build Kit の管理データ</text>
+  <text x="600" y="34" text-anchor="middle" font-size="20" font-weight="700">データ連携: Spec Kit の成果物 → Enterprise App Build Kit の管理データ</text>
   <text x="600" y="58" text-anchor="middle" class="note">中央は import-speckit.py が機械的に付ける「候補」。採番・統合・最終判断は rd-author が行い、rd-auditor が監査する</text>
 
   <!-- 列見出し -->
@@ -32,7 +32,7 @@
   <text class="step" x="195" y="112" text-anchor="middle">① 人が対話で書く</text>
   <text class="head" x="580" y="94" text-anchor="middle" fill="#9a6700">import-speckit.py の対応付け</text>
   <text class="step" x="580" y="112" text-anchor="middle">② 機械的に候補を付ける</text>
-  <text class="head" x="985" y="94" text-anchor="middle" fill="#1a7f37">Assured Build Kit の管理データ（正本）</text>
+  <text class="head" x="985" y="94" text-anchor="middle" fill="#1a7f37">Enterprise App Build Kit の管理データ（正本）</text>
   <text class="step" x="985" y="112" text-anchor="middle">③ rd-author が採番・確定</text>
 
   <!-- 行 1: User Story -->
@@ -200,6 +200,6 @@
 
   <rect class="box temp" x="22" y="956" width="1160" height="86" rx="8"/>
   <text class="title" x="40" y="980">取り込みの規則</text>
-  <text class="sub" x="40" y="1002">・一方向（Spec Kit → Assured Build Kit）。取り込んだ後の正本は要求定義書で、conductor は specs/ を書き換えない。仕様を変えたら取り込み直す。</text>
+  <text class="sub" x="40" y="1002">・一方向（Spec Kit → Enterprise App Build Kit）。取り込んだ後の正本は要求定義書で、conductor は specs/ を書き換えない。仕様を変えたら取り込み直す。</text>
   <text class="sub" x="40" y="1022">・同じ意味の既存の要求があれば新しく作らずに対応付け、違いは競合として質問票に挙げる（機能ごとの spec.md が、1 つの正本に統合される）。</text>
 </svg>

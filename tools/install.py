@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""install.py - install / update / uninstall the Assured Build Kit into another repository.
+"""install.py - install / update / uninstall the Enterprise App Build Kit into another repository.
 
 Usually started through tools/install.ps1 or tools/install.sh (one command, downloads this repository).
 From a local clone:
@@ -86,7 +86,7 @@ def block_markers(text: str):
         if b in text and e in text:
             return b, e
     return None
-INSTRUCTIONS_BLOCK = """## Assured Build Kit（要求定義書・カタログ・System Test の一貫性）
+INSTRUCTIONS_BLOCK = """## Enterprise App Build Kit（要求定義書・カタログ・System Test の一貫性）
 
 - 長時間の開発の依頼は、custom agent `conductor` に 1 回で渡します（VS Code・GitHub Copilot app では `/build`）。手順は `.github/agents/` と `.github/skills/` にあります。
 - 検証は `python scripts/verify.py`（`scripts/verify.ps1` / `scripts/verify.sh`）。exit 0 が合格です。
@@ -95,8 +95,8 @@ INSTRUCTIONS_BLOCK = """## Assured Build Kit（要求定義書・カタログ・
 - 一時ファイル（ログ・証跡・実行結果・作業メモ）は `/work` に置きます（git の管理対象外。14 日で削除）。"""
 GITIGNORE_LINES = ["/work/"]
 GITATTR_LINES = ["docs/id-registry.md merge=union", "docs/run-history.md merge=union"]
-GITIGNORE_HEADER = "# Assured Build Kit: temporary run files (kept 14 days)"
-GITATTR_HEADER = "# Assured Build Kit: append-only records"
+GITIGNORE_HEADER = "# Enterprise App Build Kit: temporary run files (kept 14 days)"
+GITATTR_HEADER = "# Enterprise App Build Kit: append-only records"
 # Management data paths (defaults of scripts/hvelib.py DEFAULT_CONFIG["files"]); --purge also honours the target's config.
 DEFAULT_FILES = {
     "requirements": "docs/requirements-definition.md",
@@ -265,7 +265,7 @@ class Installer:
 
     def write_manifest(self, version: str) -> None:
         data = {
-            "name": "hve-assured-build-kit",
+            "name": "hve-enterprise-app-build-kit",
             "version": version,
             "source": os.environ.get("HVE_SOURCE_LABEL", str(self.source)),
             "installed_at": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -485,7 +485,7 @@ def main(argv=None) -> int:
         mode = ("purge" if args.purge else "uninstall") + (" (dry-run)" if dry else "")
     else:
         mode = "check" if args.check else ("dry-run" if args.dry_run else "install")
-    print(f"\nAssured Build Kit {version}: {mode} {target}  changes={len(pending)}")
+    print(f"\nEnterprise App Build Kit {version}: {mode} {target}  changes={len(pending)}")
     if kept:
         if uninstalling:
             print(f"注意: ローカルで変更されたファイルは削除していません（{len(kept)} 件）。削除するには --force。")
@@ -496,7 +496,7 @@ def main(argv=None) -> int:
     if uninstalling:
         if not dry:
             print("\n次の手順:")
-            print("  1. 変更を確認して commit します: git status && git add -A && git commit -m \"Remove Assured Build Kit\"")
+            print("  1. 変更を確認して commit します: git status && git add -A && git commit -m \"Remove Enterprise App Build Kit\"")
             if args.purge:
                 print("  2. run が作った worktree と work/* ブランチが残っていれば削除します: git worktree list / git branch --list \"work/*\"")
             else:
@@ -508,7 +508,7 @@ def main(argv=None) -> int:
         print("\n--- verify --docs-only ---")
         run_verify(target)
     print("\n次の手順（README.md の「インストール」「Quickstart」）:")
-    print("  1. 変更を確認して commit します: git add -A && git commit -m \"Add Assured Build Kit\"")
+    print("  1. 変更を確認して commit します: git add -A && git commit -m \"Add Enterprise App Build Kit\"")
     print("  2. scripts/hve.config.json の verify.commands に、ビルド・静的検査・テストのコマンドを登録します（初回の実行で implementer が登録することもできます）")
     print("  3. VS Code の Agents ウィンドウで Session Target=Copilot、Agent=conductor、Autopilot、New Worktree を選び、")
     print("     チャット欄に「/build やりたいこと」と書いて送ります（入力欄は表示されません）")

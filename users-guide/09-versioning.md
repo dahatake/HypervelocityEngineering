@@ -1,6 +1,6 @@
 # バージョンアップの手順
 
-Assured Build Kit の版の付け方と、版を上げる手順（配布元の保守者向け）、導入済みリポジトリを新しい版に更新する手順（利用者向け）です。
+Enterprise App Build Kit の版の付け方と、版を上げる手順（配布元の保守者向け）、導入済みリポジトリを新しい版に更新する手順（利用者向け）です。
 
 ## 9.1 版の規則
 
@@ -68,7 +68,7 @@ Assured Build Kit の版の付け方と、版を上げる手順（配布元の�
    ```
 6. 差分を確認して commit します。
    ```bash
-   git add -A && git commit -m "Update Assured Build Kit to 0.2.0"
+   git add -A && git commit -m "Update Enterprise App Build Kit to 0.2.0"
    ```
 7. CI で版のずれを検出するには、`--check` を使います。
 

@@ -1,4 +1,4 @@
-# HypervelocityEngineering — Assured Build Kit
+# HypervelocityEngineering — Enterprise App Build Kit
 
 GitHub Copilot（VS Code の Agents ウィンドウ / Copilot CLI / GitHub Copilot app）用のマルチエージェント開発 toolkit です。要求定義書・カタログ・System Test の整合性を保ったまま、アプリケーションを**最高品質・最短時間・最小 Token** で実装することを目指します。
 
@@ -34,7 +34,7 @@ GitHub Copilot（VS Code の Agents ウィンドウ / Copilot CLI / GitHub Copil
 - 並行作業で ID が重複したり、要求の意味が衝突したりする。
 - 監査結果やログがチャット履歴にしか残らず、失われる。
 
-Assured Build Kit は、次の 4 つの手段でこれらを防ぎます。
+Enterprise App Build Kit は、次の 4 つの手段でこれらを防ぎます。
 
 | 手段 | 内容 |
 |---|---|
@@ -47,7 +47,7 @@ Assured Build Kit は、次の 4 つの手段でこれらを防ぎます。
 
 ### アーキテクチャ
 
-![Assured Build Kit のコンポーネント構成](images/assured-build-kit-components.svg)
+![Enterprise App Build Kit のコンポーネント構成](images/enterprise-app-build-kit-components.svg)
 
 利用者は conductor に依頼を 1 回渡すだけです。
 
@@ -241,7 +241,7 @@ python tools/install.py --target /path/to/your-repo
 
 1. 差分を確認して commit します。
    ```bash
-   git add -A && git commit -m "Add Assured Build Kit"
+   git add -A && git commit -m "Add Enterprise App Build Kit"
    ```
 2. `scripts/hve.config.json` の `verify.commands` に、ビルド・静的解析・テストのコマンドを登録します（[設定とカスタマイズ](users-guide/04-customization.md)）。空のままでも、初回の run で implementer がその技術スタックの標準的なコマンドを登録します。
 3. CI でアプリのツールチェーン（Node.js など）が必要な場合は、`.github/workflows/hve-verify.yml` の verify ステップの前にセットアップのステップを追加します。
@@ -491,13 +491,13 @@ hook や subagent の動作は、クライアント（VS Code・Copilot CLI・Gi
 
 ## GitHub Spec Kit との連携
 
-[GitHub Spec Kit](https://github.com/github/spec-kit)（以下 Spec Kit）で書いた仕様を、この toolkit に取り込んで実装・検証できます。**仕様は Spec Kit で対話しながら書き、仕様どおりに作り切って証明するのは conductor** という分担です。橋渡しは `scripts/import-speckit.py` で、取り込みは一方向（Spec Kit → Assured Build Kit）です。
+[GitHub Spec Kit](https://github.com/github/spec-kit)（以下 Spec Kit）で書いた仕様を、この toolkit に取り込んで実装・検証できます。**仕様は Spec Kit で対話しながら書き、仕様どおりに作り切って証明するのは conductor** という分担です。橋渡しは `scripts/import-speckit.py` で、取り込みは一方向（Spec Kit → Enterprise App Build Kit）です。
 
 ### なぜ連携するのか
 
 どちらも「仕様を正本にする」という考え方は同じですが、得意な工程が違います。
 
-| 観点 | Spec Kit | Assured Build Kit |
+| 観点 | Spec Kit | Enterprise App Build Kit |
 |---|---|---|
 | 解く問題 | 仕様を**どう書くか**（Spec-Driven Development の作法とテンプレート） | 仕様どおりに**最後まで作り切り、それを証明する**こと |
 | 人の関わり方 | `/speckit-*` を段階ごとに呼び、人が結果を確かめて次へ進む | `/build` を 1 回送るだけ。判断が要る点は質問票にまとめ、止まらずに進む |
@@ -509,7 +509,7 @@ hook や subagent の動作は、クライアント（VS Code・Copilot CLI・Gi
 
 1. **仕様を育てる段階は、対話が向いている。** 要求の意図や優先度は、人と短いやりとりを重ねるほど正確になります。Spec Kit の specify・clarify・constitution は、この段階のために作られています。conductor は質問を run の後にまとめて返すため、仕様を一緒に練り上げる用途には向きません。
 2. **作る・確かめる段階は、無人と決定的な判定が向いている。** 実装・テスト・統合は手数が多く、人が段階ごとに呼び出すと介入が増えます。また、「仕様どおりか」を LLM の読み比べで判定すると、判定そのものが揺れます。conductor は役割を分けた作業役と hook・verify で、この段階を人の手 1 回で進め、合否を機械的に出します。
-3. **2 つをつなぐには、仕様の各要素を Assured Build Kit の管理データへ対応付ける必要がある。** ユーザーストーリー・受入シナリオ・未確定事項などは、それぞれ要求・受入基準・質問票に対応します。この対応付けを毎回手で行うと、抜けや ID の重複が起きます。`import-speckit.py` が機械的に候補を付け、rd-author が採番と最終判断を行います。
+3. **2 つをつなぐには、仕様の各要素を Enterprise App Build Kit の管理データへ対応付ける必要がある。** ユーザーストーリー・受入シナリオ・未確定事項などは、それぞれ要求・受入基準・質問票に対応します。この対応付けを毎回手で行うと、抜けや ID の重複が起きます。`import-speckit.py` が機械的に候補を付け、rd-author が採番と最終判断を行います。
 
 **計測での裏付け**: 同じ 3 課題を両方のツールで各 2 回実行しました（[bench/RESULTS.md](bench/RESULTS.md)）。課題が小さく合格率が上限に張りついたため、品質の差はまだ検出できていません。分かっているのは次の 4 点です。
 
@@ -520,7 +520,7 @@ hook や subagent の動作は、クライアント（VS Code・Copilot CLI・Gi
 
 ### 何が、どう連携するのか
 
-![GitHub Spec Kit と Assured Build Kit の連携（コンポーネント構成）](images/speckit-abk-integration.svg)
+![GitHub Spec Kit と Enterprise App Build Kit の連携（コンポーネント構成）](images/speckit-abk-integration.svg)
 
 | 段階 | 担当 | すること | 主な成果物 |
 |---|---|---|---|
@@ -545,13 +545,13 @@ python scripts/import-speckit.py --implement             # 取り込みと実装
 | ツール | 置き場所 |
 |---|---|
 | Spec Kit | `specs/`、`.specify/`、`.github/skills/speckit-*` |
-| Assured Build Kit | `docs/`、`tests/system/`、`scripts/`、`.github/agents/`、`.github/skills/` の 5 つ、`.github/hooks/` |
+| Enterprise App Build Kit | `docs/`、`tests/system/`、`scripts/`、`.github/agents/`、`.github/skills/` の 5 つ、`.github/hooks/` |
 
 Spec Kit は独自の番号（`FR-001`、`SC-001` など）を使います。toolkit の ID と衝突しないよう、`specs/**/*.md` と `.specify/**` は ID の検査（CHK-19）と影響範囲のテスト選択（`select-tests.py`）の対象外です。連携するときは `/speckit-implement`・`/speckit-converge` を使いません。実装を 2 つのツールで二重に行わないためです。また、run の実行中（run が `active`）は Spec Kit のスキルを使わず、run が終わってから仕様を更新します（[`/build` 以外の Prompt を送るときのリスク](#重要-build-以外の-prompt-を送るときのリスク)）。
 
 ### データをどう連携するか
 
-![Spec Kit の成果物から Assured Build Kit の管理データへのデータ連携](images/speckit-abk-dataflow.svg)
+![Spec Kit の成果物から Enterprise App Build Kit の管理データへのデータ連携](images/speckit-abk-dataflow.svg)
 
 取り込みの規則は次のとおりです（対応表の全体は [users-guide 1.7](users-guide/01-writing-requests.md#17-github-spec-kit-の仕様を取り込む)）。
 

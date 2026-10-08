@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Install / update / uninstall the Assured Build Kit into the current (or given) git repository with one command.
+  Install / update / uninstall the Enterprise App Build Kit into the current (or given) git repository with one command.
   To uninstall, tools/uninstall.ps1 is the one-command shortcut for -Uninstall / -Purge.
 
 .EXAMPLE
