@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""toolkit の版を確認・更新する。版の正本は scripts/hvelib.py の TOOLKIT_VERSION（Semantic Versioning）。
+"""toolkit の版を確認・更新する。版の正本は scripts/ebaklib.py の TOOLKIT_VERSION（Semantic Versioning）。
 
   python tools/bump-version.py             # 現在の版を表示
   python tools/bump-version.py patch       # 0.1.0 -> 0.1.1
@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-LIB = ROOT / "scripts" / "hvelib.py"
+LIB = ROOT / "scripts" / "ebaklib.py"
 CHANGELOG = ROOT / "CHANGELOG.md"
 PATTERN = re.compile(r'^(TOOLKIT_VERSION\s*=\s*)"([^"]+)"', re.M)
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")

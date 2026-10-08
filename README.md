@@ -65,7 +65,7 @@ Enterprise App Build Kit は、次の 4 つの手段でこれらを防ぎます�
                  requirement-definition / implement-fr / system-test-increment / rd-audit
                  build … 利用者が /build で呼ぶ依頼の入口と雛形（手動呼び出し専用）
   hooks/         quality-gates.json … 全エージェント共通の強制ゲート（G-1〜G-7）
-  workflows/     hve-verify.yml … GitHub Actions で verify を再実行（外部での再確認）
+  workflows/     ebak-verify.yml … GitHub Actions で verify を再実行（外部での再確認）
 scripts/         決定的スクリプト（Python 3.9 以上。標準ライブラリだけを使用）
   verify.py / verify.ps1 / verify.sh   L1 検査（CHK-01〜27）＋ビルド・テスト
   rdcheck.py  next-id.py  ledger.py  select-tests.py  summarize.py  clean-work.py  run-state.py
@@ -74,7 +74,7 @@ scripts/         決定的スクリプト（Python 3.9 以上。標準ライブ�
   kpi.py           KPI の集計（North Star: 人の介入 1 回あたりの検証済み要求。流れの指標も出す）
   import-speckit.py  GitHub Spec Kit の成果物を /build の依頼文に変換
   hooks/gate.py   hook の本体
-  hve.config.json 設定（検証コマンド、モデル、ゲート、保持期間）
+  ebak.config.json 設定（検証コマンド、モデル、ゲート、保持期間）
 docs/            永続のドキュメント（git で管理）
   requirements-definition.md  catalog.md  id-registry.md  run-history.md
 tests/system/ledger.json      System Test の台帳（永続）
@@ -168,7 +168,7 @@ verify が見つけたデータ層のファイル間の不整合（カタログ�
 | 工程ごとに新しいコンテキストから再開する | `run-state.py status` と progress.md |
 | テストは影響範囲だけを実行し、全量は節目と最終工程だけ | `select-tests.py`、`ledger.py run --select changed` |
 | 多数決の監査は最終工程だけ | 節目は runs: 1、最終は runs: 3 |
-| 作業役のモデルを難易度で振り分け、失敗したときだけ上位モデルに切り替える | `scripts/hve.config.json` の `models`（[設定とカスタマイズ](users-guide/04-customization.md)） |
+| 作業役のモデルを難易度で振り分け、失敗したときだけ上位モデルに切り替える | `scripts/ebak.config.json` の `models`（[設定とカスタマイズ](users-guide/04-customization.md)） |
 
 ---
 
@@ -207,7 +207,7 @@ curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/m
 curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash -s -- --dry-run
 ```
 
-特定のバージョン（タグ・ブランチ・commit）を使う場合は、環境変数 `HVE_REF` を指定します（例: `HVE_REF=v1.0.0`）。フォークを使う場合は `HVE_REPO=<owner>/<repo>` を指定します。
+特定のバージョン（タグ・ブランチ・commit）を使う場合は、環境変数 `EBAK_REF` を指定します（例: `EBAK_REF=v1.0.0`）。フォークを使う場合は `EBAK_REPO=<owner>/<repo>` を指定します。
 
 **toolkit を clone 済みの場合**
 
@@ -222,21 +222,21 @@ python tools/install.py --target /path/to/your-repo
 | `--target <dir>` | `-Target` | インストール先（既定: カレントディレクトリ） |
 | `--dry-run` | `-DryRun` | 何も書き込まず、実行する操作だけを表示します |
 | `--check` | `-Check` | 更新が必要かどうかを確認します（必要なら exit 1。CI でバージョンのずれを検出できます） |
-| `--force` | `-Force` | ローカルで変更した toolkit のファイルも上書きします（`*.hve-backup-<日時>` を残します） |
-| `--no-ci` | `-NoCi` | `.github/workflows/hve-verify.yml` をインストールしません |
+| `--force` | `-Force` | ローカルで変更した toolkit のファイルも上書きします（`*.ebak-backup-<日時>` を残します） |
+| `--no-ci` | `-NoCi` | `.github/workflows/ebak-verify.yml` をインストールしません |
 | `--uninstall` | `-Uninstall` | 変更していない toolkit のファイル、`AGENTS.md` などのブロック、マニフェスト、空になったフォルダーを削除します（管理データと設定は残します）。`uninstall.ps1` / `uninstall.sh` でも実行できます |
-| `--purge` | `-Purge` | `--uninstall` に加えて、管理データ（`docs/` の要求定義書・カタログ・ID 台帳・run 履歴・手動テスト、`tests/system/ledger.json`）、`scripts/hve.config.json`、`/work`、`.gitignore`・`.gitattributes` に追記した行、`*.hve-backup-*` も削除します |
+| `--purge` | `-Purge` | `--uninstall` に加えて、管理データ（`docs/` の要求定義書・カタログ・ID 台帳・run 履歴・手動テスト、`tests/system/ledger.json`）、`scripts/ebak.config.json`、`/work`、`.gitignore`・`.gitattributes` に追記した行、`*.ebak-backup-*` も削除します |
 
 ### インストールされるファイル
 
 | 種類 | ファイル | 再実行時の扱い |
 |---|---|---|
-| toolkit のファイル | `.github/agents/*.agent.md`（6）、`.github/skills/*/SKILL.md`（5。`/build` の skill を含む）、`.github/hooks/quality-gates.json`、`.github/workflows/hve-verify.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`・`scripts/hooks/gate.py` | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
+| toolkit のファイル | `.github/agents/*.agent.md`（6）、`.github/skills/*/SKILL.md`（5。`/build` の skill を含む）、`.github/hooks/quality-gates.json`、`.github/workflows/ebak-verify.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`・`scripts/hooks/gate.py` | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
 | 管理データの雛形 | `docs/requirements-definition.md`、`docs/catalog.md`、`docs/id-registry.md`、`docs/run-history.md`、`tests/system/ledger.json` | **存在しない場合だけ**作成します。既存のファイルは上書きしません |
-| 設定 | `scripts/hve.config.json` | なければ作成します。あれば新しいキーだけを追加し、利用者が設定した値は変更しません |
+| 設定 | `scripts/ebak.config.json` | なければ作成します。あれば新しいキーだけを追加し、利用者が設定した値は変更しません |
 | 追記 | `.gitignore` に `/work/`、`.gitattributes` に `docs/id-registry.md merge=union` と `docs/run-history.md merge=union` | 足りない行だけを追記します |
-| ブロック | `AGENTS.md`、`.github/copilot-instructions.md` に `<!-- hve-abk:begin -->`〜`end` で囲んだ数行 | ブロックの中だけを置き換えます。ブロック外の記述は変更しません |
-| マニフェスト | `.github/hve-toolkit.json` | バージョンと、インストールしたファイルのハッシュ（更新・削除の判定に使います） |
+| ブロック | `AGENTS.md`、`.github/copilot-instructions.md` に `<!-- ebak-abk:begin -->`〜`end` で囲んだ数行 | ブロックの中だけを置き換えます。ブロック外の記述は変更しません |
+| マニフェスト | `.github/ebak-toolkit.json` | バージョンと、インストールしたファイルのハッシュ（更新・削除の判定に使います） |
 
 インストールの最後に `python scripts/verify.py --docs-only` を実行し、結果を表示します。
 
@@ -246,8 +246,8 @@ python tools/install.py --target /path/to/your-repo
    ```bash
    git add -A && git commit -m "Add Enterprise App Build Kit"
    ```
-2. `scripts/hve.config.json` の `verify.commands` に、ビルド・静的解析・テストのコマンドを登録します（[設定とカスタマイズ](users-guide/04-customization.md)）。空のままでも、初回の run で implementer がその技術スタックの標準的なコマンドを登録します。
-3. CI でアプリのツールチェーン（Node.js など）が必要な場合は、`.github/workflows/hve-verify.yml` の verify ステップの前にセットアップのステップを追加します。
+2. `scripts/ebak.config.json` の `verify.commands` に、ビルド・静的解析・テストのコマンドを登録します（[設定とカスタマイズ](users-guide/04-customization.md)）。空のままでも、初回の run で implementer がその技術スタックの標準的なコマンドを登録します。
+3. CI でアプリのツールチェーン（Node.js など）が必要な場合は、`.github/workflows/ebak-verify.yml` の verify ステップの前にセットアップのステップを追加します。
 4. 既存の要求定義書がある場合は、その ID を ID 台帳に取り込みます。
    ```bash
    python scripts/next-id.py --sync --adopt
@@ -293,11 +293,11 @@ toolkit を clone 済みの場合は `python tools/install.py --target /path/to/
 
 | 対象 | `--uninstall` | `--purge` |
 |---|---|---|
-| toolkit のファイル（`.github/agents`・`skills`・`hooks`・`workflows/hve-verify.yml`、`scripts/*.py` など）と旧版のファイル | 変更していなければ削除（変更していれば `KEEP-LOCAL` で残す。`--force` で削除） | 同じ |
+| toolkit のファイル（`.github/agents`・`skills`・`hooks`・`workflows/ebak-verify.yml`、`scripts/*.py` など）と旧版のファイル | 変更していなければ削除（変更していれば `KEEP-LOCAL` で残す。`--force` で削除） | 同じ |
 | `AGENTS.md`・`.github/copilot-instructions.md` のブロック | ブロックだけを削除（ほかに記述がなければファイルごと削除） | 同じ |
-| マニフェスト `.github/hve-toolkit.json`、空になったフォルダー、削除した `.py` の `__pycache__` | 削除 | 削除 |
-| 管理データ（`docs/requirements-definition.md`・`catalog.md`・`id-registry.md`・`run-history.md`・`manual-tests.md`・`docs/requirements/`、`tests/system/ledger.json`）。パスは `scripts/hve.config.json` の `files` に従います | 残す | 削除 |
-| `scripts/hve.config.json`、`/work`、`*.hve-backup-*` | 残す | 削除 |
+| マニフェスト `.github/ebak-toolkit.json`、空になったフォルダー、削除した `.py` の `__pycache__` | 削除 | 削除 |
+| 管理データ（`docs/requirements-definition.md`・`catalog.md`・`id-registry.md`・`run-history.md`・`manual-tests.md`・`docs/requirements/`、`tests/system/ledger.json`）。パスは `scripts/ebak.config.json` の `files` に従います | 残す | 削除 |
+| `scripts/ebak.config.json`、`/work`、`*.ebak-backup-*` | 残す | 削除 |
 | `.gitignore` の `/work/`、`.gitattributes` の `merge=union` の行 | 残す | 追記した行だけを削除（空になればファイルごと削除） |
 | System Test のコード（`tests/system/` の台帳以外）、アプリのコード、`docs/` のほかの文書 | 残す | 残す |
 
@@ -377,7 +377,7 @@ GitHub Copilot には、agents・skills・hooks をまとめて配布する標�
    |---|---|---|
    | 実行場所 | **新しい作業ツリー**（推奨） | セッションごとに専用のブランチと worktree（例: `<リポジトリの親>/copilot-worktrees/<リポジトリ名>/<ブランチ名>`）で動くので、元の作業ツリーを汚しません。**ローカル リポジトリ**を選ぶと、Copilot CLI と同じく今のチェックアウトで動きます |
    | セッション モード | **Autopilot** | 入力を待たずに最後まで進みます。早すぎる完了は agentStop の hook が差し戻します |
-   | モデル | 推論の強いモデル | conductor のモデルです。作業役のモデルは `scripts/hve.config.json` の `models` で指定します |
+   | モデル | 推論の強いモデル | conductor のモデルです。作業役のモデルは `scripts/ebak.config.json` の `models` で指定します |
    | Agent | **conductor** | エージェント ピッカー、またはプロンプト欄の `/agent` で選びます |
 
 4. ローカル サンドボックスを有効にします（アプリの設定 → プロジェクト → **サンドボックス** の **サンドボックスの新しいセッション**、またはセッション中に `/sandbox on`）。既定のポリシーで、worktree の読み書き、パッケージのインストール、ローカルの開発サーバーへの接続ができます。hook もサンドボックスの中で動きます。
@@ -457,11 +457,11 @@ hook や subagent の動作は、クライアント（VS Code・Copilot CLI・Gi
 |---|---|---|
 | 1 | custom agent を subagent として呼べるか | progress.md に rd-author・test-designer・implementer の結果が記録されている |
 | 2 | custom agent ごとのモデル指定が効くか | Agent Debug Logs や使用量の表示で、作業役ごとのモデルを確認する |
-| 3 | hook のイベントで、呼び出し元のエージェントを識別できるか | `work/.hve/gate.log` に `START rd-author` などと `DENY`/`BLOCK` が記録されている |
+| 3 | hook のイベントで、呼び出し元のエージェントを識別できるか | `work/.ebak/gate.log` に `START rd-author` などと `DENY`/`BLOCK` が記録されている |
 | 4 | ウィンドウを閉じても処理が続くか | ウィンドウを閉じて 30 分後に開き直し、progress.md が進んでいる |
 | 5 | サンドボックス内でテストとブラウザー自動操作（Playwright）が動くか | `ledger.py run` の結果が pass/fail で記録される（`TIMEOUT` や権限エラーではない） |
 | 6 | Advanced Autopilot の有無で完了判定がどう変わるか | 早すぎる完了宣言が起きないか（agentStop の hook が `完了条件を満たしていません` で差し戻しているか） |
-| 7 | （GitHub Copilot app）サンドボックスの中で hook が動くか、統合ブランチが変わらないか | `work/.hve/gate.log` に記録がある。アプリに hook の失敗の警告が出ていない。`python scripts/run-state.py status` の `integration:` が、セッションのブランチ（main 上で始めた場合は `run/<run-id>`）と一致する |
+| 7 | （GitHub Copilot app）サンドボックスの中で hook が動くか、統合ブランチが変わらないか | `work/.ebak/gate.log` に記録がある。アプリに hook の失敗の警告が出ていない。`python scripts/run-state.py status` の `integration:` が、セッションのブランチ（main 上で始めた場合は `run/<run-id>`）と一致する |
 
 3 で subagent を識別できない場合は、[トラブルシューティング](users-guide/07-troubleshooting.md) の「拒否・差し戻し」にある `[G-5] conductor が編集できるのは…` の行を参照してください。
 
@@ -488,7 +488,7 @@ hook や subagent の動作は、クライアント（VS Code・Copilot CLI・Gi
 
 逆に、**中断中の run が残っている**（run が `active`）と、通常の Prompt にも conductor 用の制限がかかります。たとえば、`/work` と `docs/run-history.md` 以外は編集を拒否されます（G-5）。また、作業ツリーでは統合ブランチ（`run/<run-id>`）がチェックアウトされたままのことがあり、そこに無関係な変更を commit すると、run の再開時に前提が崩れます。通常の Prompt を使う前に `python scripts/run-state.py status` で状態を確認し、run を続けるなら `/build` で再開します。
 
-通常の Prompt でファイルを変更した場合は、commit の前に `python scripts/verify.py` を実行し、exit 0 になることを確認してください。CI（`.github/workflows/hve-verify.yml`）でも同じ検査を実行します。
+通常の Prompt でファイルを変更した場合は、commit の前に `python scripts/verify.py` を実行し、exit 0 になることを確認してください。CI（`.github/workflows/ebak-verify.yml`）でも同じ検査を実行します。
 
 ---
 

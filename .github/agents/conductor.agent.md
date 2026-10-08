@@ -4,7 +4,7 @@ description: 要求定義から System Test・実装・統合・報告までを�
 agents: ['rd-author', 'rd-auditor', 'test-designer', 'implementer', 'reviewer']
 user-invocable: true
 disable-model-invocation: true
-# model: 推論の強いモデル（Phase 1 で較正。scripts/hve.config.json の models.conductor）
+# model: 推論の強いモデル（Phase 1 で較正。scripts/ebak.config.json の models.conductor）
 ---
 あなたは進行役です。利用者は途中で応答しません。質問のために止まらず、run_options の範囲で最後まで進めてください。
 目的は、承認済みの要求を、最高品質・最短時間・最小 Token で実装することです。品質を落とす節約はしません。
@@ -29,7 +29,7 @@ disable-model-invocation: true
 - 作業役は background で起動し、完了の通知が来た順に処理します。全員の完了を待ちません（バリアを作らない）。空いた枠には、すぐ次の項目を入れます。
 - 統合は `python scripts/integrate.py merge` の 1 コマンドで行い、出力（3 行程度）だけを読みます。merge・verify・System Test・台帳の commit・worktree の解放を、別々のツール呼び出しに分けません。
 - 作業役の差分・長いログ・ファイルの本文を、進行役が読み返しません。判断に要るのは、作業役の 10 行の結果、`run-state.py status`、`integrate.py` の出力だけです。
-- 作業役は `scripts/hve.config.json` の models のモデルで呼びます（`task` の model 引数に必ず指定。空の項目は指定しない）。指定がないと hook G-7 が拒否します。
+- 作業役は `scripts/ebak.config.json` の models のモデルで呼びます（`task` の model 引数に必ず指定。空の項目は指定しない）。指定がないと hook G-7 が拒否します。
 
 ## 軽量モード（小さな依頼）
 `<request>` が数文で言える変更で、工程 3 の queue が 2 項目以下になり、セキュリティ・個人情報・課金・認証の要求（NFR-SEC など）に触れないときは、軽量モードで進めます。progress に「軽量モード」と書きます。
@@ -102,7 +102,7 @@ run-report.md の形:
 ## 作業役への依頼（Token の規則）
 - 依頼は次の 5 点だけにする: 目的、関連 AC の本文（`python scripts/rdcheck.py show <ID>` の出力）、読むべきファイル、許可する操作、返す結果（10 行以内）。
   run-id、統合ブランチ、作業ブランチと worktree のパスを含める。会話の履歴や長いログは渡さない。
-- モデルは `scripts/hve.config.json` の models を使い、`task` の model 引数に必ず指定する（空の項目だけ既定）。指定がないか違うと hook G-7 が拒否する。rd-auditor は rd-author と別系統のモデルにする。
+- モデルは `scripts/ebak.config.json` の models を使い、`task` の model 引数に必ず指定する（空の項目だけ既定）。指定がないか違うと hook G-7 が拒否する。rd-auditor は rd-author と別系統のモデルにする。
 - 依頼文の先頭（役割・規則・返す結果の形）は毎回同じ文面にし、項目ごとに変わる部分（目的・AC・パス・要約）を後ろに置く（プロンプトのキャッシュが効き、作業役の応答が速くなる）。
 - 長いログは `python scripts/summarize.py <log>` を通してから読む。数回のツール呼び出しで終わる作業は委譲せず自分で行う。
 - 工程・判断が変わるたびに `python scripts/run-state.py progress "<3 行以内>"`。それ以前の詳細は読み返さない。

@@ -18,7 +18,7 @@ python scripts/verify.py --no-cache       # キャッシュを使わずに必ず
 
 exit 0 なら合格です。ログの全文は `/work` に保存されます。
 
-**キャッシュ:** 作業ツリーが clean（commit していない変更も、追跡していないファイルもない）のときの PASS は、`/work/.hve/verify-cache.json` に記録されます。キーは、HEAD・引数・`scripts/hve.config.json`・run の状態（工程、`--run` のときは queue.json）です。同じ commit に同じ verify を実行すると、キャッシュから即座に `PASS (cached …)` を返します。たとえば implementer のゲートの直後に hook G-4 が実行する verify がこれに当たります。FAIL は記録しません。無効にするには、`--no-cache` か、環境変数 `HVE_VERIFY_NO_CACHE=1` を使います。
+**キャッシュ:** 作業ツリーが clean（commit していない変更も、追跡していないファイルもない）のときの PASS は、`/work/.ebak/verify-cache.json` に記録されます。キーは、HEAD・引数・`scripts/ebak.config.json`・run の状態（工程、`--run` のときは queue.json）です。同じ commit に同じ verify を実行すると、キャッシュから即座に `PASS (cached …)` を返します。たとえば implementer のゲートの直後に hook G-4 が実行する verify がこれに当たります。FAIL は記録しません。無効にするには、`--no-cache` か、環境変数 `EBAK_VERIFY_NO_CACHE=1` を使います。
 
 ## rdcheck.py（要求定義書のパーサー）
 
@@ -129,7 +129,7 @@ python scripts/integrate.py pool [--prune]                     # プールの一
 - worktree は `work/worktrees/<run-id>-w<N>` のプールとして run の間再利用されます。ignore されたビルドの生成物（node_modules・bin/obj・.venv など）が残るので、2 回目以降のビルドが増分になります。`prepare` は、前の試行のブランチがあればそれを使い、統合ブランチを取り込んでから渡します。
 - `merge` は、統合ブランチの上で、1 回の呼び出しで直列の統合をすべて行い、数行だけを出力します。System Test は、merge 直前の commit からの差分に関係するケースと canary だけを実行します。まだ統合していない要求のケースは、通らないことが分かっているので除きます。
 - 競合（exit 2）、verify・System Test の失敗（exit 1）のときは、統合を取り消して（`git reset --hard`）項目を todo に戻します。統合ブランチは常に緑に保たれます。
-- 統合はロック（`work/.hve/integrate.lock`）で 1 本ずつに制限されます。
+- 統合はロック（`work/.ebak/integrate.lock`）で 1 本ずつに制限されます。
 
 ## kpi.py（KPI の集計）
 
@@ -160,4 +160,4 @@ python scripts/clean-work.py [--days 14] [--dry-run]
 
 ## hooks/gate.py（hook の本体）
 
-利用者が直接実行することはありません。`.github/hooks/quality-gates.json` から、`session-start`・`user-prompt`・`pre-tool`・`subagent-start`・`subagent-stop`・`agent-stop` の各イベントで呼び出されます。判定の記録は `work/.hve/gate.log` にあります。
+利用者が直接実行することはありません。`.github/hooks/quality-gates.json` から、`session-start`・`user-prompt`・`pre-tool`・`subagent-start`・`subagent-stop`・`agent-stop` の各イベントで呼び出されます。判定の記録は `work/.ebak/gate.log` にあります。

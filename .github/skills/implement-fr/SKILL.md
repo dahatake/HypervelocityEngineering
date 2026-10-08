@@ -33,8 +33,8 @@ description: 承認済みの要求を 1 項目ずつ worktree で実装し、単
 
 ### 検証スクリプトと CI
 - 原本の「検証スクリプト」は `scripts/verify.py`（`verify.ps1` / `verify.sh` から呼ぶ）として既にあります。管理データの整合（CHK-01〜27）はそこで検査されます。
-- ビルド・静的検査・テストのコマンドは、`scripts/hve.config.json` の `verify.commands` に登録します。例: `{"name": "unit", "run": "npm test"}`。時間のかかるものには `"slow": true` を付けます（作業役のゲートは `--quick` で省きます）。
-- 原本の「CI」は `.github/workflows/hve-verify.yml` として既にあります。CodeQL・依存関係の確認を加える場合はこのワークフローに追記します。
+- ビルド・静的検査・テストのコマンドは、`scripts/ebak.config.json` の `verify.commands` に登録します。例: `{"name": "unit", "run": "npm test"}`。時間のかかるものには `"slow": true` を付けます（作業役のゲートは `--quick` で省きます）。
+- 原本の「CI」は `.github/workflows/ebak-verify.yml` として既にあります。CodeQL・依存関係の確認を加える場合はこのワークフローに追記します。
 
 ### worktree とゲート
 - 作業は渡された worktree（`work/worktrees/<run-id>-w<N>/`。項目をまたいで再利用されるプール。ブランチ `work/<run-id>/<item>`）の中だけで行います。ignore されたビルドの生成物は消さずに増分ビルドに使います。

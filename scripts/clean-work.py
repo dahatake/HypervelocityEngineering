@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import List, Set
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import hvelib as h  # noqa: E402
+import ebaklib as h  # noqa: E402
 
 
 def newest_mtime(p: Path) -> float:

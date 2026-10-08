@@ -2,7 +2,7 @@
 name: rd-auditor
 description: 要求定義書の意味の矛盾・目的との整合・記述の質を、書き手とは独立に監査する読み取り専用の監査役。
 user-invocable: true
-# model: rd-author とは別系統のモデル（偏りの共有を避ける。scripts/hve.config.json の models.rd-auditor）
+# model: rd-author とは別系統のモデル（偏りの共有を避ける。scripts/ebak.config.json の models.rd-auditor）
 ---
 あなたは独立した監査役です。最初に skill `rd-audit` を読み込み、その手順に従います。
 

@@ -9,15 +9,15 @@ Usage:
   python scripts/verify.py --strict        # final / integration gate: warnings that matter become errors
   python scripts/verify.py --no-cache      # always run (a PASS on the same clean commit is otherwise reused)
 
-Project commands come from scripts/hve.config.json -> verify.commands:
+Project commands come from scripts/ebak.config.json -> verify.commands:
   [{"name": "build", "run": "npm run build"}, {"name": "unit", "run": "npm test"},
    {"name": "e2e-smoke", "run": "npx playwright test --grep @canary", "slow": true}]
 Full logs go to /work (never to /docs or tests); only a short summary is printed.
 
 Cache: when the working tree is clean (no tracked or untracked changes), a PASS is stored in
-/work/.hve/verify-cache.json under a key made of HEAD, the arguments, scripts/hve.config.json and the run state
+/work/.ebak/verify-cache.json under a key made of HEAD, the arguments, scripts/ebak.config.json and the run state
 that the checks read. The same verify on the same commit (e.g. the implementer's gate, then hook G-4) is then
-answered from the cache. FAIL is never cached. Disable with --no-cache or HVE_VERIFY_NO_CACHE=1.
+answered from the cache. FAIL is never cached. Disable with --no-cache or EBAK_VERIFY_NO_CACHE=1.
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import hvelib as h  # noqa: E402
+import ebaklib as h  # noqa: E402
 
 
 def log_dir(root: Path, cfg: dict) -> Path:
@@ -78,7 +78,7 @@ CACHE_MAX = 200
 
 def cache_key(root: Path, cfg: dict, args) -> str:
     """Key of a verify result, or "" when the result must not be cached (dirty tree, no git)."""
-    if args.no_cache or os.environ.get("HVE_VERIFY_NO_CACHE"):
+    if args.no_cache or os.environ.get("EBAK_VERIFY_NO_CACHE"):
         return ""
     rc, head = h.git(["rev-parse", "HEAD"], root)
     if rc != 0 or not head.strip():
@@ -101,7 +101,7 @@ def cache_key(root: Path, cfg: dict, args) -> str:
 
 
 def cache_path(root: Path, cfg: dict) -> Path:
-    return h.work_dir(h.conductor_root(root, cfg), cfg) / ".hve" / "verify-cache.json"
+    return h.work_dir(h.conductor_root(root, cfg), cfg) / ".ebak" / "verify-cache.json"
 
 
 def cache_get(root: Path, cfg: dict, key: str) -> dict:
@@ -213,7 +213,7 @@ def main(argv=None) -> int:
             print(f"FAIL config {p}")
             print('  書き方: "commands": [{"name": "unit", "run": "python -m pytest -q"}]（users-guide/04-customization.md 4.1）')
         if not cmds and not problems:
-            print("INFO verify.commands が空です（scripts/hve.config.json にビルド・静的検査・テストのコマンドを登録します）")
+            print("INFO verify.commands が空です（scripts/ebak.config.json にビルド・静的検査・テストのコマンドを登録します）")
         for c in cmds:
             name, cmd = c["name"], c["run"]
             if args.quick and c.get("slow"):

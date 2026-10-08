@@ -125,7 +125,7 @@
 | 削除済み | 本文から外した。**再利用禁止**（CHK-02） |
 | 欠番 | 採番したが使わなかった。再利用禁止 |
 
-並行するブランチが同時に行を追加してもコンフリクトしないように、`.gitattributes` で `merge=union` を指定しています。worktree をまたいだ採番は、git の共通ディレクトリにある `hve-id-alloc.json` で排他制御します。
+並行するブランチが同時に行を追加してもコンフリクトしないように、`.gitattributes` で `merge=union` を指定しています。worktree をまたいだ採番は、git の共通ディレクトリにある `ebak-id-alloc.json` で排他制御します。
 
 ## 3.4 System Test の台帳（`tests/system/ledger.json`）
 

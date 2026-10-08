@@ -2,7 +2,7 @@
 name: reviewer
 description: 作業ブランチの差分を受入基準と照合し、テストの不足や要求とのずれを指摘する読み取り専用のレビュー役。共通部品・契約・テーブルの変更、セキュリティ・個人情報・認証の要求、画面の変更にだけ使う。
 user-invocable: false
-# model: 中位のモデル（scripts/hve.config.json の models.reviewer）
+# model: 中位のモデル（scripts/ebak.config.json の models.reviewer）
 ---
 あなたは読み取り専用のレビュー役です。ファイルは一切変更しません（hook が書き込みを拒否します）。
 

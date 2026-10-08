@@ -14,8 +14,8 @@ def test_fresh_install_layout(empty_repo):
     proc = install(empty_repo)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     for rel in (".github/agents/conductor.agent.md", ".github/skills/rd-audit/SKILL.md", ".github/hooks/quality-gates.json",
-                ".github/skills/build/SKILL.md", ".github/workflows/hve-verify.yml", "scripts/hooks/gate.py",
-                "scripts/verify.sh", "docs/requirements-definition.md", "tests/system/ledger.json", ".github/hve-toolkit.json"):
+                ".github/skills/build/SKILL.md", ".github/workflows/ebak-verify.yml", "scripts/hooks/gate.py",
+                "scripts/verify.sh", "docs/requirements-definition.md", "tests/system/ledger.json", ".github/ebak-toolkit.json"):
         assert (empty_repo / rel).exists(), rel
     assert not (empty_repo / ".github/prompts").exists()
     skill = (empty_repo / ".github/skills/build/SKILL.md").read_text(encoding="utf-8")
@@ -26,7 +26,7 @@ def test_fresh_install_layout(empty_repo):
     assert block.search(tmpl).group(1) == block.search(skill).group(1)
     assert "/work/" in (empty_repo / ".gitignore").read_text(encoding="utf-8")
     assert "merge=union" in (empty_repo / ".gitattributes").read_text(encoding="utf-8")
-    assert "hve-abk:begin" in (empty_repo / "AGENTS.md").read_text(encoding="utf-8")
+    assert "ebak-abk:begin" in (empty_repo / "AGENTS.md").read_text(encoding="utf-8")
     assert not (empty_repo / ".github/workflows/toolkit-tests.yml").exists()
     assert not (empty_repo / "tests/toolkit").exists()
 
@@ -42,38 +42,38 @@ def test_local_modifications_are_kept(empty_repo):
     install(empty_repo)
     agent = empty_repo / ".github/agents/conductor.agent.md"
     agent.write_text(agent.read_text(encoding="utf-8") + "\n# local note\n", encoding="utf-8")
-    manifest = json.loads((empty_repo / ".github/hve-toolkit.json").read_text(encoding="utf-8"))
+    manifest = json.loads((empty_repo / ".github/ebak-toolkit.json").read_text(encoding="utf-8"))
     manifest["files"][".github/agents/reviewer.agent.md"] = "outdated"
-    (empty_repo / ".github/hve-toolkit.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (empty_repo / ".github/ebak-toolkit.json").write_text(json.dumps(manifest), encoding="utf-8")
     proc = install(empty_repo)
     assert "SAME" in proc.stdout
     assert "local note" in agent.read_text(encoding="utf-8")
     src = (SOURCE / ".github/agents/conductor.agent.md").read_text(encoding="utf-8")
     # simulate a toolkit update: the manifest hash is the old one, so the locally edited file is kept
-    manifest = json.loads((empty_repo / ".github/hve-toolkit.json").read_text(encoding="utf-8"))
+    manifest = json.loads((empty_repo / ".github/ebak-toolkit.json").read_text(encoding="utf-8"))
     manifest["files"][".github/agents/conductor.agent.md"] = "something-else"
-    (empty_repo / ".github/hve-toolkit.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (empty_repo / ".github/ebak-toolkit.json").write_text(json.dumps(manifest), encoding="utf-8")
     proc = install(empty_repo)
     assert "KEEP-LOCAL" in proc.stdout and "local note" in agent.read_text(encoding="utf-8")
     proc = install(empty_repo, "--force")
     assert "OVERWRITE" in proc.stdout and agent.read_text(encoding="utf-8") == src
-    assert list(agent.parent.glob("conductor.agent.md.hve-backup-*"))
+    assert list(agent.parent.glob("conductor.agent.md.ebak-backup-*"))
 
 
 def test_existing_files_and_config_are_merged(empty_repo):
     (empty_repo / "docs").mkdir()
     (empty_repo / "docs/requirements-definition.md").write_text("# 既存の要求定義書\n", encoding="utf-8")
     (empty_repo / "scripts").mkdir()
-    (empty_repo / "scripts/hve.config.json").write_text(json.dumps({"verify": {"commands": [{"name": "unit", "run": "npm test"}]}}), encoding="utf-8")
+    (empty_repo / "scripts/ebak.config.json").write_text(json.dumps({"verify": {"commands": [{"name": "unit", "run": "npm test"}]}}), encoding="utf-8")
     (empty_repo / "AGENTS.md").write_text("# 既存\n\n独自の指示\n", encoding="utf-8")
     install(empty_repo)
     assert (empty_repo / "docs/requirements-definition.md").read_text(encoding="utf-8") == "# 既存の要求定義書\n"
-    cfg = json.loads((empty_repo / "scripts/hve.config.json").read_text(encoding="utf-8"))
+    cfg = json.loads((empty_repo / "scripts/ebak.config.json").read_text(encoding="utf-8"))
     assert cfg["verify"]["commands"][0]["run"] == "npm test" and "gates" in cfg
     agents = (empty_repo / "AGENTS.md").read_text(encoding="utf-8")
-    assert agents.startswith("# 既存") and "独自の指示" in agents and agents.count("hve-abk:begin") == 1
+    assert agents.startswith("# 既存") and "独自の指示" in agents and agents.count("ebak-abk:begin") == 1
     install(empty_repo)
-    assert (empty_repo / "AGENTS.md").read_text(encoding="utf-8").count("hve-abk:begin") == 1
+    assert (empty_repo / "AGENTS.md").read_text(encoding="utf-8").count("ebak-abk:begin") == 1
 
 
 def test_uninstall(empty_repo):
@@ -84,12 +84,12 @@ def test_uninstall(empty_repo):
     assert not (empty_repo / ".github/agents/conductor.agent.md").exists()
     assert not (empty_repo / "scripts/rdcheck.py").exists()
     assert (empty_repo / "docs/requirements-definition.md").exists()
-    assert "hve-abk" not in (empty_repo / "AGENTS.md").read_text(encoding="utf-8")
+    assert "ebak-abk" not in (empty_repo / "AGENTS.md").read_text(encoding="utf-8")
     # empty toolkit directories are removed; management data and config are kept
-    for rel in (".github/agents", ".github/skills", ".github/hooks", ".github/workflows", "scripts/hooks", ".github/hve-toolkit.json",
+    for rel in (".github/agents", ".github/skills", ".github/hooks", ".github/workflows", "scripts/hooks", ".github/ebak-toolkit.json",
                 ".github/copilot-instructions.md"):
         assert not (empty_repo / rel).exists(), rel
-    assert (empty_repo / "scripts/hve.config.json").exists() and (empty_repo / "tests/system/ledger.json").exists()
+    assert (empty_repo / "scripts/ebak.config.json").exists() and (empty_repo / "tests/system/ledger.json").exists()
     assert "/work/" in (empty_repo / ".gitignore").read_text(encoding="utf-8")
     # running it again is harmless
     proc = install(empty_repo, "--uninstall")
@@ -121,23 +121,23 @@ def test_purge_removes_everything_the_toolkit_added(empty_repo):
     (empty_repo / "docs/notes.md").write_text("利用者の文書\n", encoding="utf-8")
     (empty_repo / "scripts/build.sh").write_text("echo build\n", encoding="utf-8")
     (empty_repo / "tests/system/test_flow.py").write_text("def test_x():\n    pass\n", encoding="utf-8")
-    backup = empty_repo / ".github/agents/conductor.agent.md.hve-backup-20260101000000"
+    backup = empty_repo / ".github/agents/conductor.agent.md.ebak-backup-20260101000000"
     backup.write_text("old\n", encoding="utf-8")
     (empty_repo / "scripts/__pycache__").mkdir()
-    (empty_repo / "scripts/__pycache__/hvelib.cpython-312.pyc").write_bytes(b"\0")
+    (empty_repo / "scripts/__pycache__/ebaklib.cpython-312.pyc").write_bytes(b"\0")
     proc = install(empty_repo, "--purge", "--dry-run")
     assert proc.returncode == 0 and (empty_repo / "docs/catalog.md").exists() and backup.exists()
     proc = install(empty_repo, "--purge")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     for rel in ("docs/requirements-definition.md", "docs/catalog.md", "docs/id-registry.md", "docs/run-history.md",
-                "docs/manual-tests.md", "tests/system/ledger.json", "scripts/hve.config.json", "work", ".github",
+                "docs/manual-tests.md", "tests/system/ledger.json", "scripts/ebak.config.json", "work", ".github",
                 ".gitattributes", "AGENTS.md", "scripts/verify.py", "scripts/__pycache__"):
         assert not (empty_repo / rel).exists(), rel
     assert (empty_repo / ".gitignore").read_text(encoding="utf-8") == "node_modules/\n"
     for rel in ("docs/notes.md", "scripts/build.sh", "tests/system/test_flow.py", "README.md"):
         assert (empty_repo / rel).exists(), rel
     # the repository can be installed again afterwards
-    assert install(empty_repo).returncode == 0 and (empty_repo / ".github/hve-toolkit.json").exists()
+    assert install(empty_repo).returncode == 0 and (empty_repo / ".github/ebak-toolkit.json").exists()
 
 
 def test_uninstall_wrappers_pass_uninstall():

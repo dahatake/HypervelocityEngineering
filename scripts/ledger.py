@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import hvelib as h  # noqa: E402
+import ebaklib as h  # noqa: E402
 
 LAYERS = ("e2e", "api", "contract", "data", "nonfunctional", "ai_eval")
 STATUSES = ("not_run", "pass", "fail", "blocked")

@@ -11,7 +11,7 @@ python scripts/ledger.py summary -v         # System Test の pass / fail / bloc
 git log --oneline --graph -20               # [RD] [ST] [FR-xxx] の commit と統合
 ```
 
-hook が拒否・差し戻した操作は `work/.hve/gate.log` に記録されます。
+hook が拒否・差し戻した操作は `work/.ebak/gate.log` に記録されます。
 
 ## 2.2 停止したときの再開
 
@@ -66,7 +66,7 @@ conductor が自分で停止する条件:
 git switch main
 git merge --no-ff run/202610080900          # ローカルでマージする
 # または
-git push origin run/202610080900 && gh pr create --base main --head run/202610080900   # PR でマージする（CI の hve-verify が再検証）
+git push origin run/202610080900 && gh pr create --base main --head run/202610080900   # PR でマージする（CI の ebak-verify が再検証）
 ```
 
 `git_push: 作業ブランチへ push する` を指定していれば、conductor は取り込みの前に統合ブランチを push します（バックアップ。PR は作りません）。

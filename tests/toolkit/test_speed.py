@@ -57,9 +57,9 @@ def test_integrate_pool_reuses_worktree_and_merges(sample):
 
 
 def test_integrate_rolls_back_when_verify_fails(sample):
-    cfg = json.loads(sample.read("scripts/hve.config.json"))
+    cfg = json.loads(sample.read("scripts/ebak.config.json"))
     cfg["verify"]["commands"] = [{"name": "unit", "run": "python -c \"import os,sys; sys.exit(os.path.exists('fail.flag'))\""}]
-    sample.write("scripts/hve.config.json", json.dumps(cfg))
+    sample.write("scripts/ebak.config.json", json.dumps(cfg))
     sample.commit("verify command")
     rid = start_run(sample)
     sample.py("run-state.py", "queue", "add", "--id", "I-01", "--req", "FR-001", check=True)
@@ -107,9 +107,9 @@ def test_verify_cache_reuses_pass_on_clean_commit(sample):
 
 
 def test_verify_cache_never_stores_fail(sample):
-    cfg = json.loads(sample.read("scripts/hve.config.json"))
+    cfg = json.loads(sample.read("scripts/ebak.config.json"))
     cfg["verify"]["commands"] = [{"name": "bad", "run": "python -c \"raise SystemExit(1)\""}]
-    sample.write("scripts/hve.config.json", json.dumps(cfg))
+    sample.write("scripts/ebak.config.json", json.dumps(cfg))
     sample.commit("bad command")
     assert sample.py("verify.py").returncode == 1
     proc = sample.py("verify.py")
@@ -117,9 +117,9 @@ def test_verify_cache_never_stores_fail(sample):
 
 
 def test_gate_enforces_model_table(sample):
-    cfg = json.loads(sample.read("scripts/hve.config.json"))
+    cfg = json.loads(sample.read("scripts/ebak.config.json"))
     cfg["models"].update({"implementer": "m-small", "implementer-escalation": "m-big", "reviewer": ""})
-    sample.write("scripts/hve.config.json", json.dumps(cfg))
+    sample.write("scripts/ebak.config.json", json.dumps(cfg))
     sample.commit("models")
     task = lambda **a: sample.gate("pre-tool", {"toolName": "task", "toolArgs": a})  # noqa: E731
     assert task(agent_type="implementer") == {}  # no run: not enforced
@@ -133,7 +133,7 @@ def test_gate_enforces_model_table(sample):
     assert [(e["agent"], e["model"]) for e in lines] == [
         ("implementer", "(既定)"), ("implementer", "m-small"), ("implementer", "m-big"), ("reviewer", "(既定)")]
     cfg["gates"]["enforce_models"] = False
-    sample.write("scripts/hve.config.json", json.dumps(cfg))
+    sample.write("scripts/ebak.config.json", json.dumps(cfg))
     assert task(agent_type="implementer") == {}
 
 

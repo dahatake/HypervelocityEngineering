@@ -91,7 +91,7 @@ python bench/bench.py record --tool speckit --task T1 --run 1 --repo C:\bench\sp
 ```
 
 `score` は、隠しテストを一時フォルダへコピーし、成果物のリポジトリを `PYTHONPATH` に置いて pytest を実行します。
-`record` は採点して、`results/<tool>-<task>-r<run>.json` を書きます。conductor の版は `scripts/hvelib.py` から読みます。
+`record` は採点して、`results/<tool>-<task>-r<run>.json` を書きます。conductor の版は `scripts/ebaklib.py` から読みます。
 
 ## 指標の定義
 

@@ -1,4 +1,4 @@
-name: hve-verify
+name: ebak-verify
 
 # Re-runs the L1 deterministic verification outside the agent (plan §10, Q-5).
 on:

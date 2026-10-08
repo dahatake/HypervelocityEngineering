@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import List, Optional, Set
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import hvelib as h  # noqa: E402
+import ebaklib as h  # noqa: E402
 
 FULL_EVERY = 5
 LOCK_STALE_SEC = 3600
@@ -218,7 +218,7 @@ def tail(out: str, n: int = 8) -> str:
 
 def cmd_merge(c: Ctx, args) -> int:
     t0 = time.time()
-    with Lock(h.work_dir(c.root, c.cfg) / ".hve" / "integrate.lock"):
+    with Lock(h.work_dir(c.root, c.cfg) / ".ebak" / "integrate.lock"):
         cur = h.current_branch(c.root)
         if cur != c.integration:
             raise SystemExit(f"ERROR integrate: 統合ブランチ {c.integration} の上で実行します（現在: {cur}）")

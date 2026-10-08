@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import hvelib as h  # noqa: E402
+import ebaklib as h  # noqa: E402
 
 TARGET_FIRST_GATE = 0.70
 TARGET_AC_PASS = 1.0
@@ -259,7 +259,7 @@ def flow_rows(f: dict) -> List[Tuple[str, str, str, str, str]]:
          "queue.json の work_sec（doing の間の時間）"),
         ("統合の直列時間", "-" if f["integrate_minutes"] is None else f"{f['integrate_minutes']} 分（ループの {pct(f['integrate_share'])}）",
          "ループの 20% 以下", "-" if f["integrate_share"] is None else judge(f["integrate_share"], 0.2, False), "integrate.py merge の所要時間の合計"),
-        ("実際に使ったモデル", models, "hve.config.json の models と一致", "-", "models.jsonl（G-7）"),
+        ("実際に使ったモデル", models, "ebak.config.json の models と一致", "-", "models.jsonl（G-7）"),
     ]
 
 

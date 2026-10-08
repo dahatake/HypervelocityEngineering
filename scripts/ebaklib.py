@@ -171,7 +171,7 @@ def write_json(path: Path, data) -> None:
 def load_script(name: str):
     """Import a sibling script whose file name contains hyphens (e.g. next-id.py)."""
     import importlib.util
-    modname = "hve_" + name.replace("-", "_")
+    modname = "ebak_" + name.replace("-", "_")
     if modname in sys.modules:
         return sys.modules[modname]
     path = Path(__file__).resolve().parent / f"{name}.py"
@@ -319,13 +319,13 @@ def _deep_merge(base: dict, extra: dict) -> dict:
 
 
 def load_config(root: Path) -> dict:
-    path = root / "scripts" / "hve.config.json"
+    path = root / "scripts" / "ebak.config.json"
     cfg = DEFAULT_CONFIG
     if path.exists():
         try:
             cfg = _deep_merge(DEFAULT_CONFIG, json.loads(read_text(path)))
         except json.JSONDecodeError as exc:
-            print(f"WARN config: scripts/hve.config.json を読めません: {exc}", file=sys.stderr)
+            print(f"WARN config: scripts/ebak.config.json を読めません: {exc}", file=sys.stderr)
     return cfg
 
 

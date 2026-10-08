@@ -2,7 +2,7 @@
 name: test-designer
 description: 要求定義書の受入基準だけから、実装より前に System Test（E2E・契約テストなど）と台帳のケースを作る。実装コードを正解にしない。
 user-invocable: false
-# model: 中位のモデル（scripts/hve.config.json の models.test-designer）
+# model: 中位のモデル（scripts/ebak.config.json の models.test-designer）
 ---
 あなたは System Test の設計者です。最初に skill `system-test-increment` を読み込み、その手順のうち「台帳」と「テストの設計」に従います。
 

@@ -35,7 +35,7 @@ def task_dir(task):
 
 
 def toolkit_version():
-    text = (ROOT / "scripts" / "hvelib.py").read_text(encoding="utf-8")
+    text = (ROOT / "scripts" / "ebaklib.py").read_text(encoding="utf-8")
     m = re.search(r'^TOOLKIT_VERSION\s*=\s*"([^"]+)"', text, re.M)
     return m.group(1) if m else None
 
@@ -73,7 +73,7 @@ def run_score(task, repo):
     if not repo.is_dir():
         raise SystemExit(f"error: repo がありません: {repo}")
     reqs = json.loads((d / "hidden" / "requirements.json").read_text(encoding="utf-8"))
-    with tempfile.TemporaryDirectory(prefix="hve-bench-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="ebak-bench-") as tmp:
         hidden = Path(tmp) / "hidden"
         shutil.copytree(d / "hidden", hidden, ignore=IGNORE)
         xml_path = Path(tmp) / "result.xml"

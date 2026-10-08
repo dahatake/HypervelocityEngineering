@@ -10,14 +10,14 @@ From a local clone:
   (one command: tools/uninstall.ps1 / tools/uninstall.sh, same options as install.ps1 / install.sh)
 
 What it does (idempotent):
-  * copies the managed files (.github/agents, .github/skills, .github/hooks, .github/workflows/hve-verify.yml,
+  * copies the managed files (.github/agents, .github/skills, .github/hooks, .github/workflows/ebak-verify.yml,
     scripts/*) and updates them on re-run unless you modified them locally;
   * removes files that older versions installed but this version no longer ships (OBSOLETE), unless modified;
   * creates the management-data templates only when missing (docs/*.md, tests/system/ledger.json);
-  * merges scripts/hve.config.json (adds new keys, keeps your values);
+  * merges scripts/ebak.config.json (adds new keys, keeps your values);
   * adds /work/ to .gitignore, union-merge rules to .gitattributes, and a marked block to AGENTS.md
     and .github/copilot-instructions.md;
-  * records versions and hashes in .github/hve-toolkit.json.
+  * records versions and hashes in .github/ebak-toolkit.json.
 """
 from __future__ import annotations
 
@@ -48,8 +48,8 @@ MANAGED = [
     ".github/skills/build/SKILL.md",
     ".github/skills/build-template/SKILL.md",
     ".github/hooks/quality-gates.json",
-    ".github/workflows/hve-verify.yml",
-    "scripts/hvelib.py",
+    ".github/workflows/ebak-verify.yml",
+    "scripts/ebaklib.py",
     "scripts/rdcheck.py",
     "scripts/rdfix.py",
     "scripts/verify.py",
@@ -75,11 +75,11 @@ TEMPLATES = [
     "docs/run-history.md",
     "tests/system/ledger.json",
 ]
-CONFIG = "scripts/hve.config.json"
-MANIFEST = ".github/hve-toolkit.json"
+CONFIG = "scripts/ebak.config.json"
+MANIFEST = ".github/ebak-toolkit.json"
 EXECUTABLE = {"scripts/verify.sh"}
-BEGIN, END = "<!-- hve-abk:begin -->", "<!-- hve-abk:end -->"
-LEGACY_MARKERS = (("<!-- hve-" + "conductor:begin -->", "<!-- hve-" + "conductor:end -->"),)
+BEGIN, END = "<!-- ebak-abk:begin -->", "<!-- ebak-abk:end -->"
+LEGACY_MARKERS = (("<!-- ebak-" + "conductor:begin -->", "<!-- ebak-" + "conductor:end -->"),)
 
 
 def block_markers(text: str):
@@ -99,7 +99,7 @@ GITIGNORE_LINES = ["/work/"]
 GITATTR_LINES = ["docs/id-registry.md merge=union", "docs/run-history.md merge=union"]
 GITIGNORE_HEADER = "# Enterprise App Build Kit: temporary run files (kept 14 days)"
 GITATTR_HEADER = "# Enterprise App Build Kit: append-only records"
-# Management data paths (defaults of scripts/hvelib.py DEFAULT_CONFIG["files"]); --purge also honours the target's config.
+# Management data paths (defaults of scripts/ebaklib.py DEFAULT_CONFIG["files"]); --purge also honours the target's config.
 DEFAULT_FILES = {
     "requirements": "docs/requirements-definition.md",
     "requirements_dir": "docs/requirements",
@@ -116,7 +116,7 @@ def sha(path: Path) -> str:
 
 
 def toolkit_version(source: Path) -> str:
-    for line in (source / "scripts" / "hvelib.py").read_text(encoding="utf-8").splitlines():
+    for line in (source / "scripts" / "ebaklib.py").read_text(encoding="utf-8").splitlines():
         if line.startswith("TOOLKIT_VERSION"):
             return line.split("=", 1)[1].strip().strip('"')
     return "unknown"
@@ -152,7 +152,7 @@ class Installer:
             dest.chmod(dest.stat().st_mode | 0o111)
 
     def managed_files(self) -> List[str]:
-        files = [f for f in MANAGED if not (self.no_ci and f.endswith("hve-verify.yml"))]
+        files = [f for f in MANAGED if not (self.no_ci and f.endswith("ebak-verify.yml"))]
         return files
 
     def install_managed(self) -> None:
@@ -174,7 +174,7 @@ class Installer:
             old = self.manifest.get("files", {}).get(rel)
             if old == cur or self.force:
                 if old != cur and not self.dry:
-                    shutil.copy2(dest, dest.with_name(dest.name + f".hve-backup-{self.stamp}"))
+                    shutil.copy2(dest, dest.with_name(dest.name + f".ebak-backup-{self.stamp}"))
                 self.note("UPDATE" if old == cur else "OVERWRITE", rel)
                 self.write_bytes(rel, src.read_bytes())
             else:
@@ -267,9 +267,9 @@ class Installer:
 
     def write_manifest(self, version: str) -> None:
         data = {
-            "name": "hve-enterprise-app-build-kit",
+            "name": "ebak-enterprise-app-build-kit",
             "version": version,
-            "source": os.environ.get("HVE_SOURCE_LABEL", str(self.source)),
+            "source": os.environ.get("EBAK_SOURCE_LABEL", str(self.source)),
             "installed_at": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
             "files": self.new_hashes,
         }
@@ -327,7 +327,7 @@ class Installer:
         for rel in sorted(set(MANAGED + OBSOLETE + [CONFIG])):
             d = (self.target / rel).parent
             if d.is_dir():
-                for b in sorted(d.glob(Path(rel).name + ".hve-backup-*")):
+                for b in sorted(d.glob(Path(rel).name + ".ebak-backup-*")):
                     self.remove_path(b.relative_to(self.target).as_posix())
 
     def remove_blocks(self) -> None:
@@ -409,7 +409,7 @@ class Installer:
         if (self.target / MANIFEST).exists():
             self.remove_path(MANIFEST)
         if not purge:
-            self.note("KEEP", "docs/*, tests/system/ledger.json, scripts/hve.config.json, /work, .gitignore, .gitattributes"
+            self.note("KEEP", "docs/*, tests/system/ledger.json, scripts/ebak.config.json, /work, .gitignore, .gitattributes"
                               "（管理データと設定は残します。すべて削除するには --purge）")
 
 
@@ -435,8 +435,8 @@ def main(argv=None) -> int:
     ap.add_argument("--source", default=str(Path(__file__).resolve().parent.parent), help="toolkit のソース（既定: このスクリプトのリポジトリ）")
     ap.add_argument("--dry-run", action="store_true", help="書き込まずに、行う操作だけを表示する")
     ap.add_argument("--check", action="store_true", help="更新が必要かを確かめる（必要なら exit 1）")
-    ap.add_argument("--force", action="store_true", help="ローカルで変更した toolkit のファイルも上書きする（.hve-backup-* を残す）")
-    ap.add_argument("--no-ci", action="store_true", help=".github/workflows/hve-verify.yml を入れない")
+    ap.add_argument("--force", action="store_true", help="ローカルで変更した toolkit のファイルも上書きする（.ebak-backup-* を残す）")
+    ap.add_argument("--no-ci", action="store_true", help=".github/workflows/ebak-verify.yml を入れない")
     ap.add_argument("--version", action="store_true", help="toolkit の版を表示して終了する")
     ap.add_argument("--uninstall", action="store_true", help="変更していない toolkit のファイルと AGENTS.md などのブロックを削除する（管理データと設定は残す）")
     ap.add_argument("--purge", action="store_true", help="--uninstall に加えて、管理データ（docs・台帳）・設定・/work・.gitignore と .gitattributes の追記・バックアップも削除する")
@@ -448,7 +448,7 @@ def main(argv=None) -> int:
         raise SystemExit("ERROR install: Python 3.9 以上が必要です")
     source = Path(args.source).resolve()
     target = Path(args.target).resolve()
-    if not (source / "scripts" / "hvelib.py").exists():
+    if not (source / "scripts" / "ebaklib.py").exists():
         raise SystemExit(f"ERROR install: toolkit のソースが見つかりません: {source}")
     if args.version:
         print(toolkit_version(source))
@@ -511,7 +511,7 @@ def main(argv=None) -> int:
         run_verify(target)
     print("\n次の手順（README.md の「インストール」「Quickstart」）:")
     print("  1. 変更を確認して commit します: git add -A && git commit -m \"Add Enterprise App Build Kit\"")
-    print("  2. scripts/hve.config.json の verify.commands に、ビルド・静的検査・テストのコマンドを登録します（初回の実行で implementer が登録することもできます）")
+    print("  2. scripts/ebak.config.json の verify.commands に、ビルド・静的検査・テストのコマンドを登録します（初回の実行で implementer が登録することもできます）")
     print("  3. VS Code の Agents ウィンドウで Session Target=Copilot、Agent=conductor、Autopilot、New Worktree を選び、")
     print("     チャット欄に「/build やりたいこと」と書いて送ります（入力欄は表示されません）")
     print("     （雛形は「/build-template」（または「/build template」）で表示されます。Copilot CLI では `copilot --agent conductor --autopilot` などで同じ雛形を送ります）")

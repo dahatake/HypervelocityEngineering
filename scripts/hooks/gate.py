@@ -11,11 +11,11 @@ Events (first argument):
   agent-stop      do not let the conductor end its turn before the completion conditions hold
   user-prompt     detect `/build template`: deny tools other than reads and let the turn end after printing it
 Also in pre-tool (G-7): while a run is active, a `task` call for a custom agent whose model is fixed in
-scripts/hve.config.json -> models must pass that model; every call is logged to work/runs/<run-id>/models.jsonl.
+scripts/ebak.config.json -> models must pass that model; every call is logged to work/runs/<run-id>/models.jsonl.
 Speed: pre-tool for built-in read-only tools (view, grep, glob, ...) answers before importing anything else,
 because it runs thousands of times per run and none of the gates applies to them.
 Reads the hook payload (camelCase or snake_case) from stdin; writes one JSON decision to stdout.
-Fail-safe: unexpected internal errors allow the tool call (exit 0) and are logged to work/.hve/gate.log,
+Fail-safe: unexpected internal errors allow the tool call (exit 0) and are logged to work/.ebak/gate.log,
 except that a malformed payload for pre-tool is allowed as well, so a broken gate never bricks a session.
 """
 from __future__ import annotations
@@ -52,7 +52,7 @@ from typing import Iterable, List, Optional, Tuple  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-import hvelib as h  # noqa: E402
+import ebaklib as h  # noqa: E402
 
 WRITE_TOOL_RX = re.compile(r"edit|create|write|replace|patch|insert|delete|rename|move|notebook", re.I)
 READ_TOOL_RX = re.compile(r"^(view|read|grep|glob|search|list|fetch|web)", re.I)
@@ -147,7 +147,7 @@ class Ctx:
         cfg0 = h.load_config(self.root)
         self.croot = h.conductor_root(self.root, cfg0)
         self.cfg = h.load_config(self.croot)
-        self.state_dir = h.work_dir(self.croot, self.cfg) / ".hve"
+        self.state_dir = h.work_dir(self.croot, self.cfg) / ".ebak"
         self.run_id = h.current_run(self.croot, self.cfg)
         self.meta = h.load_meta(self.croot, self.cfg, self.run_id) if self.run_id else {}
         self.run_active = bool(self.run_id and self.meta.get("status") == "active")
@@ -288,7 +288,7 @@ def check_write(ctx: Ctx, rel: Optional[str], in_worker: bool, ap: Path) -> Opti
             and ctx.cfg["gates"].get("enforce_conductor_edit_scope", True)
             and rel != h.mf(ctx.cfg, "run_history")):
         return ("G-5", f"conductor が編集できるのは /{wd}/ と {h.mf(ctx.cfg, 'run_history')} だけです。作業は作業役に委譲します"
-                       "（subagent の検出に問題がある場合は scripts/hve.config.json の gates.enforce_conductor_edit_scope を false にします）")
+                       "（subagent の検出に問題がある場合は scripts/ebak.config.json の gates.enforce_conductor_edit_scope を false にします）")
     return None
 
 
@@ -380,7 +380,7 @@ AGENT_KEYS = ("agent_type", "agentType", "subagent_type", "agentName", "agent_na
 
 
 def check_model(ctx: Ctx, tool: str, args) -> Optional[Tuple[str, str]]:
-    """G-7: the model table in hve.config.json is enforced on `task` calls (it was ignored in 10 of 15 runs)."""
+    """G-7: the model table in ebak.config.json is enforced on `task` calls (it was ignored in 10 of 15 runs)."""
     if normalize_tool(tool) not in SUBAGENT_TOOLS or not ctx.run_active or not isinstance(args, dict):
         return None
     agent = str(g(args, *AGENT_KEYS, default="")).strip()
@@ -400,7 +400,7 @@ def check_model(ctx: Ctx, tool: str, args) -> Optional[Tuple[str, str]]:
     allowed = {want} | {v for k, v in models.items() if k.startswith(agent + "-") and v}
     if got in allowed:
         return None
-    return ("G-7", f"scripts/hve.config.json の models で {agent} のモデルは {want} です"
+    return ("G-7", f"scripts/ebak.config.json の models で {agent} のモデルは {want} です"
                    f"{'（ほかに ' + ', '.join(sorted(allowed - {want})) + ' も可）' if len(allowed) > 1 else ''}。"
                    f"task の model に \"{want}\" を指定して呼び直してください（現在: {got or '未指定'}）")
 
@@ -620,7 +620,7 @@ def main() -> int:
          "user-prompt": on_user_prompt}.get(event, lambda c: emit({}))(ctx)
     except Exception:  # never brick a session because of a gate bug
         try:
-            d = Path(os.getcwd()) / "work" / ".hve"
+            d = Path(os.getcwd()) / "work" / ".ebak"
             d.mkdir(parents=True, exist_ok=True)
             with open(d / "gate.log", "a", encoding="utf-8") as fh:
                 fh.write(f"{h.now_iso()} ERROR {event}: {traceback.format_exc()}\n")

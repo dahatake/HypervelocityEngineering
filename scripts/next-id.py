@@ -9,7 +9,7 @@ Usage:
 
 The next number is max(requirements definition, ID registry, the same files on the base
 branch, the system-test ledger, and the allocation log shared by all worktrees) + 1.
-Allocated IDs are appended to docs/id-registry.md and to <git-common-dir>/hve-id-alloc.json,
+Allocated IDs are appended to docs/id-registry.md and to <git-common-dir>/ebak-id-alloc.json,
 so parallel worktrees never hand out the same ID.
 """
 from __future__ import annotations
@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import hvelib as h  # noqa: E402
+import ebaklib as h  # noqa: E402
 
 KIND_RE = re.compile(r"^(G|FR|AC|Q|PARAM|SRC|E2E|IT|NFR-[A-Z0-9]+)$")
 REGISTRY_TITLE = (
@@ -148,8 +148,8 @@ def source_label(root: Path) -> str:
 
 def allocate(root: Path, cfg: dict, kind: str, count: int, note: str, dry: bool) -> List[str]:
     cd = common_dir(root)
-    alloc_path = cd / "hve-id-alloc.json" if cd else None
-    with Lock(cd / "hve-id-alloc.lock" if cd else None):
+    alloc_path = cd / "ebak-id-alloc.json" if cd else None
+    with Lock(cd / "ebak-id-alloc.lock" if cd else None):
         alloc = h.read_json(alloc_path, default={}) if alloc_path else {}
         start = max_for_kind(root, cfg, kind, alloc) + 1
         ids = [fmt(kind, n) for n in range(start, start + count)]
@@ -254,8 +254,8 @@ def write_sync(root: Path, cfg: dict, plan: dict) -> None:
         h.write_text_atomic(reg_path, plan["text"])
     cd = common_dir(root)
     if cd:
-        alloc_path = cd / "hve-id-alloc.json"
-        with Lock(cd / "hve-id-alloc.lock"):
+        alloc_path = cd / "ebak-id-alloc.json"
+        with Lock(cd / "ebak-id-alloc.lock"):
             alloc = h.read_json(alloc_path, default={}) or {}
             for id_ in plan["ids"]:
                 if not id_:

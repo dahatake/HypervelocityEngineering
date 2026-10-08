@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import hvelib as h  # noqa: E402
+import ebaklib as h  # noqa: E402
 
 STAGES = {0: "初期化", 1: "要求定義", 2: "独立監査", 3: "計画", 4: "System Test の設計", 5: "実装ループ", 6: "最終"}
 DEFAULT_OPTIONS = {

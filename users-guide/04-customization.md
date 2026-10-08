@@ -1,6 +1,6 @@
 # 4. 設定とカスタマイズ
 
-設定は `scripts/hve.config.json` に集約しています。インストール・更新時には、利用者が設定した値は保持され、新しいキーだけが追加されます。
+設定は `scripts/ebak.config.json` に集約しています。インストール・更新時には、利用者が設定した値は保持され、新しいキーだけが追加されます。
 
 ## 4.1 ビルド・静的解析・テストのコマンド（`verify.commands`）
 
@@ -93,7 +93,7 @@ run の実行中は、hook G-7 がこの表を強制します。値のある役�
 | `agent_stop_max_blocks` | 完了条件を満たしていない conductor の終了を差し戻す回数の上限 |
 | `enforce_conductor_edit_scope` | conductor が `work/` と `docs/run-history.md` 以外を編集するのを拒否します。harness で subagent の検出が動かない場合（[07-troubleshooting.md](07-troubleshooting.md)）だけ `false` にします |
 | `enforce_models` | run の実行中、`models` に値のある役割の `task` 呼び出しに、そのモデルの指定を求めます（G-7）。harness の `task` が `model` 引数を受け付けない場合だけ `false` にします |
-| `deploy_patterns` | デプロイとみなすコマンドの正規表現。指定すると既定値（`scripts/hvelib.py` の `DEFAULT_CONFIG`）を**置き換える**ので、既定値をコピーしてから追加します |
+| `deploy_patterns` | デプロイとみなすコマンドの正規表現。指定すると既定値（`scripts/ebaklib.py` の `DEFAULT_CONFIG`）を**置き換える**ので、既定値をコピーしてから追加します |
 | `external_write_verbs` | MCP Server・plugin・拡張機能のツールのうち、名前にこの動詞（`create`・`update`・`delete`・`send`・`do_action` など）を含むものを「外部のシステムの変更」とみなします（G-5。[4.4](#44-mcp-serverplugin拡張機能を使う)）。指定すると既定値を**置き換えます** |
 | `external_deploy_verbs` | 同じく、名前にこの動詞（`deploy`・`provision`・`publish`・`release`）を含むものを「デプロイ・公開」とみなし、`deploy` の値で判定します |
 | `external_tool_allow` | 外部のシステムの変更とみなさないツール名の正規表現（例: `"^mcp_myindex_update_index$"`）。名前に動詞を含むが、ローカルにしか作用しないツールを許可するときに使います |
@@ -137,4 +137,4 @@ run の実行中は、hook G-7 がこの表を強制します。値のある役�
 
 ## 4.8 CI
 
-`.github/workflows/hve-verify.yml` は、pull request と main への push をトリガーに `scripts/verify.sh --show-warnings` を実行します。アプリのビルドに必要なツールチェーン（`actions/setup-node` など）は、verify の前にステップとして追加します。CodeQL や依存関係のスキャンを加える場合も、このワークフローに追記します。
+`.github/workflows/ebak-verify.yml` は、pull request と main への push をトリガーに `scripts/verify.sh --show-warnings` を実行します。アプリのビルドに必要なツールチェーン（`actions/setup-node` など）は、verify の前にステップとして追加します。CodeQL や依存関係のスキャンを加える場合も、このワークフローに追記します。

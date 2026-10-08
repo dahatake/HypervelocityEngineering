@@ -33,7 +33,7 @@
   <!-- CI -->
   <rect class="box ext" x="880" y="60" width="260" height="56" rx="8"/>
   <text class="title" x="1010" y="84" text-anchor="middle">GitHub Actions</text>
-  <text class="sub" x="1010" y="104" text-anchor="middle">.github/workflows/hve-verify.yml</text>
+  <text class="sub" x="1010" y="104" text-anchor="middle">.github/workflows/ebak-verify.yml</text>
 
   <!-- エージェント層 -->
   <rect class="frame" x="40" y="140" width="1120" height="230" rx="10"/>
@@ -107,7 +107,7 @@
   <text class="sub" x="796" y="484">verify.py（CHK-01〜23・ビルド・テスト）</text>
   <text class="sub" x="796" y="502">rdcheck.py ・ next-id.py ・ ledger.py</text>
   <text class="sub" x="796" y="520">select-tests.py ・ summarize.py</text>
-  <text class="sub" x="796" y="538">run-state.py ・ clean-work.py ・ hve.config.json</text>
+  <text class="sub" x="796" y="538">run-state.py ・ clean-work.py ・ ebak.config.json</text>
 
   <path class="line" d="M750,492 L778,492" marker-end="url(#arrow)"/>
 

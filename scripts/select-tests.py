@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Dict, List, Set
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import hvelib as h  # noqa: E402
+import ebaklib as h  # noqa: E402
 
 
 def changed(root: Path, base) -> List[str]:

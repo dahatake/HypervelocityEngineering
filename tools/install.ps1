@@ -17,8 +17,8 @@
 #>
 param(
     [string]$Target = (Get-Location).Path,
-    [string]$Ref = $(if ($env:HVE_REF) { $env:HVE_REF } else { 'main' }),
-    [string]$Repo = $(if ($env:HVE_REPO) { $env:HVE_REPO } else { 'dahatake/HypervelocityEngineering' }),
+    [string]$Ref = $(if ($env:EBAK_REF) { $env:EBAK_REF } else { 'main' }),
+    [string]$Repo = $(if ($env:EBAK_REPO) { $env:EBAK_REPO } else { 'dahatake/HypervelocityEngineering' }),
     [switch]$DryRun,
     [switch]$Check,
     [switch]$Force,
@@ -41,7 +41,7 @@ $tmp = $null
 if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot 'install.py'))) {
     $source = Split-Path $PSScriptRoot -Parent
 } else {
-    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("hve-toolkit-" + [guid]::NewGuid().ToString('N'))
+    $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("ebak-toolkit-" + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $tmp | Out-Null
     $zip = Join-Path $tmp 'toolkit.zip'
     $url = "https://codeload.github.com/$Repo/zip/$Ref"
@@ -49,7 +49,7 @@ if ($PSScriptRoot -and (Test-Path (Join-Path $PSScriptRoot 'install.py'))) {
     Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
     Expand-Archive -Path $zip -DestinationPath $tmp
     $source = (Get-ChildItem $tmp -Directory | Select-Object -First 1).FullName
-    $env:HVE_SOURCE_LABEL = "$Repo@$Ref"
+    $env:EBAK_SOURCE_LABEL = "$Repo@$Ref"
 }
 
 try {

@@ -6,7 +6,7 @@
   Runs tools/install.ps1 with -Uninstall (or -Purge). Without -Purge, unmodified toolkit files, the
   AGENTS.md / copilot-instructions blocks and the manifest are removed; docs, the ledger, the config and
   /work are kept. With -Purge, those are removed too, along with the lines added to .gitignore /
-  .gitattributes and the *.hve-backup-* files.
+  .gitattributes and the *.ebak-backup-* files.
 
 .EXAMPLE
   # in the root of your repository
@@ -22,8 +22,8 @@
 #>
 param(
     [string]$Target = (Get-Location).Path,
-    [string]$Ref = $(if ($env:HVE_REF) { $env:HVE_REF } else { 'main' }),
-    [string]$Repo = $(if ($env:HVE_REPO) { $env:HVE_REPO } else { 'dahatake/HypervelocityEngineering' }),
+    [string]$Ref = $(if ($env:EBAK_REF) { $env:EBAK_REF } else { 'main' }),
+    [string]$Repo = $(if ($env:EBAK_REPO) { $env:EBAK_REPO } else { 'dahatake/HypervelocityEngineering' }),
     [switch]$DryRun,
     [switch]$Force,
     [switch]$Purge

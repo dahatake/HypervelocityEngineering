@@ -9,9 +9,9 @@ import pytest
 SOURCE = Path(__file__).resolve().parents[2]
 BENCH_PY = SOURCE / "bench" / "bench.py"
 
-spec = importlib.util.spec_from_file_location("hve_bench", BENCH_PY)
+spec = importlib.util.spec_from_file_location("ebak_bench", BENCH_PY)
 bench = importlib.util.module_from_spec(spec)
-sys.modules["hve_bench"] = bench
+sys.modules["ebak_bench"] = bench
 spec.loader.exec_module(bench)
 
 

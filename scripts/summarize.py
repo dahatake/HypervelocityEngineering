@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import hvelib as h  # noqa: E402
+import ebaklib as h  # noqa: E402
 
 ERROR_RX = re.compile(
     r"(?i)(\berror\b|\bfailed\b|\bfailure\b|\bexception\b|traceback|assert(ion)?error|\bFAIL\b|✗|✘|\bpanic\b|\bfatal\b|ERR!|"

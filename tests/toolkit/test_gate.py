@@ -151,7 +151,7 @@ def test_external_deploy_allowed_and_allow_list(sample):
     start(sample, "deploy: する")
     assert tool(sample, "mcp_azure_deploy_app") == {}
     assert denied(tool(sample, "mcp_myindex_update_index"), "G-5")
-    cfg_path = sample.path / "scripts" / "hve.config.json"
+    cfg_path = sample.path / "scripts" / "ebak.config.json"
     cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
     cfg["gates"]["external_tool_allow"] = ["^mcp_myindex_update_index$"]
     cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")

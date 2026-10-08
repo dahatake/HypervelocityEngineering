@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import hvelib as h  # noqa: E402
+import ebaklib as h  # noqa: E402
 
 PRIORITY = {"P1": "MUST", "P2": "SHOULD"}
 CLARIFY_RE = re.compile(r"\[NEEDS CLARIFICATION:\s*([^\]]+)\]", re.I)

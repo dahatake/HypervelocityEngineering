@@ -71,31 +71,31 @@ def test_time_budget(sample):
 
 
 def test_verify_runs_configured_commands(sample):
-    cfg = json.loads(sample.read("scripts/hve.config.json"))
+    cfg = json.loads(sample.read("scripts/ebak.config.json"))
     cfg["verify"]["commands"] = [
         {"name": "ok", "run": "python -c \"print('fine')\""},
         {"name": "slow", "run": "python -c \"raise SystemExit(1)\"", "slow": True},
     ]
-    sample.write("scripts/hve.config.json", json.dumps(cfg))
+    sample.write("scripts/ebak.config.json", json.dumps(cfg))
     assert sample.py("verify.py", "--quick").returncode == 0
     proc = sample.py("verify.py")
     assert proc.returncode == 1 and "FAIL slow" in proc.stdout
 
 
 def test_verify_accepts_string_commands_and_reports_bad_entries(sample):
-    cfg = json.loads(sample.read("scripts/hve.config.json"))
+    cfg = json.loads(sample.read("scripts/ebak.config.json"))
     cfg["verify"]["commands"] = ["python -c \"print('one')\"", "python -c \"print('two')\""]
-    sample.write("scripts/hve.config.json", json.dumps(cfg))
+    sample.write("scripts/ebak.config.json", json.dumps(cfg))
     proc = sample.py("verify.py")
     assert proc.returncode == 0, proc.stdout
     assert "PASS python " in proc.stdout and "PASS python-2 " in proc.stdout
 
     cfg["verify"]["commands"] = "python -c \"print('only')\""
-    sample.write("scripts/hve.config.json", json.dumps(cfg))
+    sample.write("scripts/ebak.config.json", json.dumps(cfg))
     assert sample.py("verify.py").returncode == 0
 
     cfg["verify"]["commands"] = [{"name": "unit"}, 3]
-    sample.write("scripts/hve.config.json", json.dumps(cfg))
+    sample.write("scripts/ebak.config.json", json.dumps(cfg))
     proc = sample.py("verify.py")
     assert proc.returncode == 1
     assert "FAIL config" in proc.stdout and '"run"' in proc.stdout and "Traceback" not in proc.stdout + proc.stderr

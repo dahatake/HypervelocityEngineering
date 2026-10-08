@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import hvelib as h  # noqa: E402
+import ebaklib as h  # noqa: E402
 
 # requirements that must have a row in the function table of the catalog (same as rdfix.CATALOG_STATES)
 CATALOG_STATES = ("承認済み", "承認待ち", "保留")

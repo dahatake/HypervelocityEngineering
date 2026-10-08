@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import hvelib as h  # noqa: E402
+import ebaklib as h  # noqa: E402
 
 TARGETS = ("registry", "catalog", "ledger", "gitignore", "history")
 CATALOG_TEMPLATE = (

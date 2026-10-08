@@ -153,7 +153,7 @@
 
   <!-- ===== 下: ゲートとフィードバック ===== -->
   <rect class="box ctrl" x="30" y="716" width="1140" height="66" rx="8"/>
-  <text class="title" x="600" y="741" text-anchor="middle">品質ゲート（toolkit）: hook G-1〜G-6 ／ verify.py CHK-01〜23 ＋ ビルド・テスト ／ CI（hve-verify.yml）</text>
+  <text class="title" x="600" y="741" text-anchor="middle">品質ゲート（toolkit）: hook G-1〜G-6 ／ verify.py CHK-01〜23 ＋ ビルド・テスト ／ CI（ebak-verify.yml）</text>
   <text class="sub" x="600" y="764" text-anchor="middle">取り込んだ後の正本は要求定義書。合否の判定は、Spec Kit の文書ではなく要求定義書・台帳・テストの結果で行う</text>
 
   <rect class="box temp" x="30" y="802" width="1140" height="78" rx="8"/>
