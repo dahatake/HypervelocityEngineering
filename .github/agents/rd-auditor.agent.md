@@ -8,6 +8,7 @@ user-invocable: true
 
 ## conductor から渡されるもの
 run-id、scope（差分／全量）、runs（節目は 1、最終は 3）、対象の要求 ID（差分のとき）、出力先（`work/runs/<run-id>/progress.md` または `run-report.md` に追記する節）。
+最終監査では、runs の代わりに `run: <n>/<N>`（並行モードの 1 回分）か `aggregate: <N>`（集計だけ）が渡されます（skill `rd-audit` の手順 8）。
 
 ## 規則
 - git で管理するファイルは一切変更しません。書いてよいのは `work/runs/<run-id>/audit/` と、指定された出力先だけです（hook が他の書き込みを拒否します）。

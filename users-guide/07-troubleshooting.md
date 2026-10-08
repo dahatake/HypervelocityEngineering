@@ -12,6 +12,7 @@
 | 社内の情報（Work IQ）や Microsoft Learn・Azure の MCP Server が使われない | その MCP Server・plugin が、run を実行する環境（VS Code・Copilot CLI・GitHub Copilot app）に設定されていない、または VS Code のツールピッカーで無効になっている。agent の frontmatter に `tools:` を追加して、ツールを限定している | VS Code の MCP の一覧（`MCP: List Servers`）、Copilot CLI の `/mcp`、GitHub Copilot app の **カスタマイズ** → **インストール済み** でサーバーが有効かを確認します。サインインが必要なものは事前にサインインします。agent の frontmatter に `tools:` を書いた場合は、`<サーバー名>/*` を追加します（[4.4](04-customization.md#44-mcp-serverplugin拡張機能を使う)） |
 | `[G-5] 実行中は git のブランチ名を変更しません` | GitHub Copilot app のセッションで、エージェントがセッションのブランチ名を付け直そうとした（`rename_branch`） | 想定どおりの動作です。統合ブランチ名は run の開始時に記録されているため、そのまま続けます。ブランチ名を変えたい場合は、run の開始前か終了後に行います。画面から変えてしまった場合は、`python scripts/run-state.py status` が現在のブランチを統合ブランチとして記録し直します（`WARN 統合ブランチ … を記録し直しました`） |
 | `[G-6] ログ・証跡・実行結果などの一時ファイルは /work/runs/<run-id>/ に書きます` | テストレポートなどをリポジトリ直下に出力しようとした | テストツールの出力先を `work/` の下に設定します（例: Playwright の `outputDir`） |
+| `[G-7] scripts/hve.config.json の models で <役割> のモデルは <モデル> です` | run の実行中に、conductor が `models` に値のある作業役を、`task` の `model` 引数なし、または違うモデルで呼んだ | 想定どおりの動作です。conductor が指定のモデルで呼び直します。harness の `task` が `model` を受け付けず、呼び直しても拒否が続く場合は、`gates.enforce_models` を `false` にし、agent の frontmatter の `model:` で固定します（[4.2](04-customization.md#42-モデルの割り当てmodels)） |
 | `[G-4] 終了前の検証が失敗しています` | 作業役の verify が失敗した | 作業役が自動で修正します。3 回で直らなければ `GATE G-4` 付きで conductor に返され、その項目は統合されません |
 | hook がまったく動かない | Session Target が Copilot 以外、hook が無効、Python がない | Session Target で Copilot harness を選びます。`/hooks`（VS Code）や `copilot` の設定で hook が有効かを確認します。`python --version` を確認します。`work/.hve/gate.log` が作成されるかどうかで判断できます |
 | GitHub Copilot app で hook の失敗の警告が出る（Windows で `DriveNotFoundException` など） | ローカル サンドボックスの中で PowerShell や Python を起動できなかった。Python がサンドボックスから読めない場所にある | 一時的なものは、`/restart-session` でセッションを再起動すると直ることがあります。続く場合は、プロジェクトのサンドボックス設定の **追加の読み取り専用** に Python のインストール先を追加します。ゲートが効かない間も、verify が統合の時点で同じ規則を検査します |
@@ -33,6 +34,8 @@
 
 | 症状 | 対処 |
 |---|---|
+| `PASS (cached …)` と出るが、結果が古いのではと心配 | キャッシュは、作業ツリーが clean で、HEAD・引数・設定・run の状態が同じときだけ使われます。ビルドの環境（SDK・依存のキャッシュなど）を変えた後は `--no-cache` で再実行します |
+| `INTEGRATE: fail <項目> …` が出る | `integrate.py merge` が、verify か System Test の失敗のため統合を取り消し、項目を todo に戻しました。出力の要約を付けて、conductor が implementer に戻します。統合ブランチは統合前の状態のままです |
 | インストール直後に CHK-20・CHK-01 が大量に出る | 既存の要求定義書が toolkit の書式になっていないためです。`python scripts/next-id.py --sync --adopt` を実行した後、「既存の要求定義書を toolkit の書式に合わせる。意味は変えない」と依頼します |
 | 工程 4 の後に CHK-10/11 が出る | AC が追加・変更されたのに、System Test が追従していません。conductor が test-designer に作業を割り当てます |
 | CHK-19 で、テストデータや資料の中の ID が検出される | `checks.id_scan_exclude` にそのパスを追加します |

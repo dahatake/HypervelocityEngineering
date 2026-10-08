@@ -7,17 +7,25 @@ Usage:
   python scripts/verify.py --quick         # skip commands marked "slow": true (implementer gate)
   python scripts/verify.py --run current   # add CHK-21 for the active run's queue.json
   python scripts/verify.py --strict        # final / integration gate: warnings that matter become errors
+  python scripts/verify.py --no-cache      # always run (a PASS on the same clean commit is otherwise reused)
 
 Project commands come from scripts/hve.config.json -> verify.commands:
   [{"name": "build", "run": "npm run build"}, {"name": "unit", "run": "npm test"},
    {"name": "e2e-smoke", "run": "npx playwright test --grep @canary", "slow": true}]
 Full logs go to /work (never to /docs or tests); only a short summary is printed.
+
+Cache: when the working tree is clean (no tracked or untracked changes), a PASS is stored in
+/work/.hve/verify-cache.json under a key made of HEAD, the arguments, scripts/hve.config.json and the run state
+that the checks read. The same verify on the same commit (e.g. the implementer's gate, then hook G-4) is then
+answered from the cache. FAIL is never cached. Disable with --no-cache or HVE_VERIFY_NO_CACHE=1.
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
+import os
 import re
 import sys
 import time
@@ -64,6 +72,66 @@ def normalize_commands(raw) -> Tuple[List[dict], List[str]]:
     return out, problems
 
 
+CACHE_TTL_SEC = 24 * 3600
+CACHE_MAX = 200
+
+
+def cache_key(root: Path, cfg: dict, args) -> str:
+    """Key of a verify result, or "" when the result must not be cached (dirty tree, no git)."""
+    if args.no_cache or os.environ.get("HVE_VERIFY_NO_CACHE"):
+        return ""
+    rc, head = h.git(["rev-parse", "HEAD"], root)
+    if rc != 0 or not head.strip():
+        return ""
+    rc, dirty = h.git(["status", "--porcelain"], root)
+    # the toolkit's own byte-code (scripts/__pycache__) appears as untracked when the target does not ignore it
+    dirty = "\n".join(l for l in dirty.splitlines() if "__pycache__/" not in l and not l.endswith(".pyc"))
+    if rc != 0 or dirty.strip():
+        return ""
+    parts = [head.strip(), json.dumps(vars(args), sort_keys=True, default=str),
+             json.dumps(cfg, sort_keys=True, ensure_ascii=False), h.TOOLKIT_VERSION]
+    croot = h.conductor_root(root, cfg)
+    rid = h.current_run(croot, cfg)
+    if rid:
+        meta = h.load_meta(croot, cfg, rid)
+        parts.append(f"{rid}:{meta.get('ledger_strict')}:{meta.get('stages_done')}")
+        if args.run:
+            parts.append(json.dumps(h.load_queue(croot, cfg, rid), sort_keys=True, ensure_ascii=False))
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
+
+
+def cache_path(root: Path, cfg: dict) -> Path:
+    return h.work_dir(h.conductor_root(root, cfg), cfg) / ".hve" / "verify-cache.json"
+
+
+def cache_get(root: Path, cfg: dict, key: str) -> dict:
+    if not key:
+        return {}
+    data = h.read_json(cache_path(root, cfg), default={}) or {}
+    hit = data.get(key) or {}
+    if hit and time.time() - float(hit.get("t", 0)) < CACHE_TTL_SEC:
+        return hit
+    return {}
+
+
+def cache_put(root: Path, cfg: dict, key: str, summary: str) -> None:
+    if not key:
+        return
+    p = cache_path(root, cfg)
+    try:
+        data = h.read_json(p, default={}) or {}
+    except ValueError:
+        data = {}
+    data[key] = {"t": time.time(), "at": h.now_iso(), "summary": summary}
+    if len(data) > CACHE_MAX:
+        data = dict(sorted(data.items(), key=lambda kv: kv[1].get("t", 0))[-CACHE_MAX:])
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        h.write_json(p, data)
+    except OSError:
+        pass
+
+
 def main(argv=None) -> int:
     h.setup_io()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -75,10 +143,17 @@ def main(argv=None) -> int:
     ap.add_argument("--strict-ledger", action="store_true")
     ap.add_argument("--no-strict-ledger", action="store_true")
     ap.add_argument("--show-warnings", action="store_true")
+    ap.add_argument("--no-cache", action="store_true")
     ap.add_argument("--root", default=None)
     args = ap.parse_args(argv)
     root = Path(args.root).resolve() if args.root else h.repo_root()
     cfg = h.load_config(root)
+    key = "" if args.show_warnings else cache_key(root, cfg, args)
+    hit = cache_get(root, cfg, key)
+    if hit:
+        print(f"PASS (cached {hit.get('at', '')[:19]}: 同じ commit・引数・設定で合格済み。再実行は --no-cache)")
+        print(f"verify: PASS failed=- elapsed=0s HEAD={h.head_commit(root) or '-'} cached=1")
+        return 0
     summarize = h.load_script("summarize").summarize
     rdcheck = h.load_script("rdcheck")
     ldir = log_dir(root, cfg)
@@ -157,7 +232,10 @@ def main(argv=None) -> int:
                 for l in summarize(out, 10, 3).splitlines():
                     print("  " + l)
     status = "FAIL" if failed else "PASS"
-    print(f"verify: {status} failed={','.join(failed) or '-'} elapsed={time.time() - t0:.0f}s HEAD={h.head_commit(root) or '-'}")
+    line = f"verify: {status} failed={','.join(failed) or '-'} elapsed={time.time() - t0:.0f}s HEAD={h.head_commit(root) or '-'}"
+    print(line)
+    if not failed and key and key == cache_key(root, cfg, args):
+        cache_put(root, cfg, key, line)
     return 1 if failed else 0
 
 

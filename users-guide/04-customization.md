@@ -53,7 +53,8 @@
 }
 ```
 
-conductor は subagent を呼び出すとき、この表のモデルを指定します。空なら既定のモデルを使います。各 `.github/agents/*.agent.md` の frontmatter に `model:` を書いて固定することもできます（推奨値はコメントに書いてあります）。
+conductor は subagent を呼び出すとき、この表のモデルを指定します。空なら既定のモデルを使います。
+run の実行中は、hook G-7 がこの表を強制します。値のある役割を、`task` の `model` 引数なしで呼ぶか、違うモデルで呼ぶと拒否します。`implementer` には `implementer-escalation` のモデルも使えます。実際に使ったモデルは `work/runs/<run-id>/models.jsonl` に記録され、`kpi.py run` の「実際に使ったモデル」に出ます。以前は、表に書いても守られないことがありました（15 回中 10 回）。そのため、値を入れた表は G-7 で必ず効くようになっています。各 `.github/agents/*.agent.md` の frontmatter に `model:` を書いて固定することもできます（推奨値はコメントに書いてあります）。
 
 割り当ての方針（Phase 1 で調整します）:
 
@@ -79,7 +80,8 @@ conductor は subagent を呼び出すとき、この表のモデルを指定し
   },
   "subagent_verify_max_blocks": 3,
   "agent_stop_max_blocks": 40,
-  "enforce_conductor_edit_scope": true
+  "enforce_conductor_edit_scope": true,
+  "enforce_models": true
 }
 ```
 
@@ -90,6 +92,7 @@ conductor は subagent を呼び出すとき、この表のモデルを指定し
 | `subagent_verify_max_blocks` | 同じ作業役を差し戻す回数の上限。超えると結果に `GATE G-4` を付けて返し、conductor はその結果を統合しません |
 | `agent_stop_max_blocks` | 完了条件を満たしていない conductor の終了を差し戻す回数の上限 |
 | `enforce_conductor_edit_scope` | conductor が `work/` と `docs/run-history.md` 以外を編集するのを拒否します。harness で subagent の検出が動かない場合（[07-troubleshooting.md](07-troubleshooting.md)）だけ `false` にします |
+| `enforce_models` | run の実行中、`models` に値のある役割の `task` 呼び出しに、そのモデルの指定を求めます（G-7）。harness の `task` が `model` 引数を受け付けない場合だけ `false` にします |
 | `deploy_patterns` | デプロイとみなすコマンドの正規表現。指定すると既定値（`scripts/hvelib.py` の `DEFAULT_CONFIG`）を**置き換える**ので、既定値をコピーしてから追加します |
 | `external_write_verbs` | MCP Server・plugin・拡張機能のツールのうち、名前にこの動詞（`create`・`update`・`delete`・`send`・`do_action` など）を含むものを「外部のシステムの変更」とみなします（G-5。[4.4](#44-mcp-serverplugin拡張機能を使う)）。指定すると既定値を**置き換えます** |
 | `external_deploy_verbs` | 同じく、名前にこの動詞（`deploy`・`provision`・`publish`・`release`）を含むものを「デプロイ・公開」とみなし、`deploy` の値で判定します |

@@ -12,10 +12,13 @@ python scripts/verify.py --run current    # 実行中の run の queue.json と�
 python scripts/verify.py --strict         # 最終工程・統合時用。重要な警告をエラーとして扱う
 python scripts/verify.py --strict-ledger  # system AC と台帳の対応（CHK-10/11）の不足をエラーにする（工程 4 以降は自動）
 python scripts/verify.py --show-warnings  # 警告も表示する
+python scripts/verify.py --no-cache       # キャッシュを使わずに必ず実行する
 ./scripts/verify.sh   /  .\scripts\verify.ps1   # 同じもの（Python を探して verify.py を呼ぶラッパー）
 ```
 
 exit 0 なら合格です。ログの全文は `/work` に保存されます。
+
+**キャッシュ:** 作業ツリーが clean（commit していない変更も、追跡していないファイルもない）のときの PASS は、`/work/.hve/verify-cache.json` に記録されます。キーは、HEAD・引数・`scripts/hve.config.json`・run の状態（工程、`--run` のときは queue.json）です。同じ commit に同じ verify を実行すると、キャッシュから即座に `PASS (cached …)` を返します。たとえば implementer のゲートの直後に hook G-4 が実行する verify がこれに当たります。FAIL は記録しません。無効にするには、`--no-cache` か、環境変数 `HVE_VERIFY_NO_CACHE=1` を使います。
 
 ## rdcheck.py（要求定義書のパーサー）
 
@@ -98,9 +101,9 @@ python scripts/run-state.py start --options "max_hours: 24\ngit_push: しない"
 python scripts/run-state.py status
 python scripts/run-state.py stage 4 [--done]
 python scripts/run-state.py progress "工程 2: 直接矛盾 0。Q-012 を BLOCKED"
-python scripts/run-state.py queue add --id I-01 --req FR-012,FR-013 --ac AC-031 --boundary 申請 --shared 下書き保存 --depends I-00
-python scripts/run-state.py queue ready --parallel 3
-python scripts/run-state.py queue set I-01 --status doing --branch work/<run-id>/I-01 --attempts +1
+python scripts/run-state.py queue add --id I-01 --req FR-012,FR-013 --ac AC-031 --boundary 申請 --shared 下書き保存 --depends I-00   # 要求 ID は 1〜5 個
+python scripts/run-state.py queue ready --parallel 5
+python scripts/run-state.py queue set I-01 --status doing --branch work/<run-id>/I-01 --attempts +1   # 通常は integrate.py が行う
 python scripts/run-state.py time                  # 時間予算の 85% を超えたら exit 3
 python scripts/run-state.py complete-check        # 完了条件の判定
 python scripts/run-state.py human answers --note "Q-003: B"   # 利用者の Prompt を 1 回として記録（answers / resume / instruction）
@@ -108,6 +111,23 @@ python scripts/run-state.py finish --result "全件完了" --credits "…"   # d
 ```
 
 新しい run の最初の依頼は `start` が `request` として記録します。`human` は、利用者の Prompt で run を再開したときに conductor が 1 回だけ実行します。記録した回数は KPI の「人の介入」になります。
+
+`queue set --status` は、項目が doing になった時刻・doing でいた時間（`work_sec`）・終わった時刻を、`stage` は工程ごとの開始・完了の時刻を記録します（kpi.py の流れの指標に使います）。
+
+## integrate.py（worktree のプールと統合。実装ループ）
+
+```bash
+python scripts/integrate.py prepare I-01                       # プールの worktree を割り当て、work/<run-id>/I-01 を作り、doing にする
+python scripts/integrate.py merge I-01 --summary "…"           # 統合: merge → verify --quick → System Test → 台帳の commit → 解放 → done
+python scripts/integrate.py merge I-01 --full                  # verify の slow なコマンドも実行する（5 項目ごとに自動）
+python scripts/integrate.py abandon I-01 [--blocked] [--reason "…"]   # todo（または blocked）に戻し、worktree を解放する
+python scripts/integrate.py pool [--prune]                     # プールの一覧。--prune で使っていない worktree を削除する（工程 6）
+```
+
+- worktree は `work/worktrees/<run-id>-w<N>` のプールとして run の間再利用されます。ignore されたビルドの生成物（node_modules・bin/obj・.venv など）が残るので、2 回目以降のビルドが増分になります。`prepare` は、前の試行のブランチがあればそれを使い、統合ブランチを取り込んでから渡します。
+- `merge` は、統合ブランチの上で、1 回の呼び出しで直列の統合をすべて行い、数行だけを出力します。System Test は、merge 直前の commit からの差分に関係するケースと canary だけを実行します。まだ統合していない要求のケースは、通らないことが分かっているので除きます。
+- 競合（exit 2）、verify・System Test の失敗（exit 1）のときは、統合を取り消して（`git reset --hard`）項目を todo に戻します。統合ブランチは常に緑に保たれます。
+- 統合はロック（`work/.hve/integrate.lock`）で 1 本ずつに制限されます。
 
 ## kpi.py（KPI の集計）
 
@@ -119,6 +139,8 @@ python scripts/kpi.py history                      # docs/run-history.md 全体�
 ```
 
 North Star は「人の介入 1 回あたりの検証済み要求」です。**検証済み要求**は、実装した要求のうち、承認済みで、カタログの行があり、BLOCKED の AC がなく、system の AC がすべて台帳で `pass` のものです。検証済みにならなかった要求は、理由（「カタログの行がない」など）を表示します。指標と目標は [08-roadmap.md の 8.2](08-roadmap.md#82-kpi) にあります。
+
+流れ（速さ）の指標として、工程ごとの時間、実装ループの実効の並列度（項目の作業時間の合計 ÷ ループの経過時間）、項目 1 件あたりの作業時間、統合の直列時間とその割合、実際に使ったモデル（hook G-7 が記録する `work/runs/<run-id>/models.jsonl`）も出力します。遅い run では、まずこの表で、並列度が低いのか（作業役の待ち）、統合の直列時間が長いのか（verify・System Test の重さ）を切り分けます。
 
 ## import-speckit.py（GitHub Spec Kit からの取り込み）
 

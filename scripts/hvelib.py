@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
-TOOLKIT_VERSION = "0.1.0"
+TOOLKIT_VERSION = "0.2.0"
 
 SPECKIT_PATHS = [".specify/**", "specs/**/*.md"]
 
@@ -62,6 +62,8 @@ DEFAULT_CONFIG: dict = {
         "subagent_verify_max_blocks": 3,
         "agent_stop_max_blocks": 40,
         "enforce_conductor_edit_scope": True,
+        # G-7: deny `task` calls that do not pass the model fixed in "models" (only while a run is active)
+        "enforce_models": True,
         "deploy_patterns": [
             r"\bazd\s+(up|deploy|provision)\b",
             r"\baz\s+deployment\s+\S+\s+create\b",

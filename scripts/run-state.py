@@ -6,9 +6,9 @@ Usage:
   python scripts/run-state.py status                       # resume summary (read this first in a new context)
   python scripts/run-state.py stage N [--done]             # 0 init,1 RD,2 audit,3 plan,4 ST design,5 impl,6 final
   python scripts/run-state.py progress "text"              # append one entry (<= 3 lines) to progress.md
-  python scripts/run-state.py queue add --id I-01 --req FR-001 [--ac AC-001] [--boundary B] [--depends I-00] [--shared X] [--summary S]
-  python scripts/run-state.py queue set I-01 [--status todo|doing|done|blocked] [--attempts +1] [--branch B] [--summary S]
-  python scripts/run-state.py queue ready [--parallel 3]   # items that can start now (deps done, no shared boundary)
+  python scripts/run-state.py queue add --id I-01 --req FR-001[,FR-002..] [--ac AC-001] [--boundary B] [--depends I-00] [--shared X] [--summary S]
+  python scripts/run-state.py queue set I-01 [--status todo|doing|done|blocked] [--attempts +1] [--branch B] [--worktree P] [--summary S]
+  python scripts/run-state.py queue ready [--parallel 5]   # items that can start now (deps done, no shared boundary)
   python scripts/run-state.py queue show
   python scripts/run-state.py time                         # elapsed / max_hours; exit 3 when >= 85 %
   python scripts/run-state.py complete-check               # exit 0 only when the run may end (§8.3)
@@ -29,7 +29,7 @@ import hvelib as h  # noqa: E402
 
 STAGES = {0: "初期化", 1: "要求定義", 2: "独立監査", 3: "計画", 4: "System Test の設計", 5: "実装ループ", 6: "最終"}
 DEFAULT_OPTIONS = {
-    "max_hours": "24", "approval_policy": "安全範囲は推奨どおり", "parallel_workers": "3",
+    "max_hours": "24", "approval_policy": "安全範囲は推奨どおり", "parallel_workers": "5",
     "scope": "承認済みすべて", "git_push": "しない", "deploy": "しない", "external_write": "しない",
     "paid_services": "使わない", "external_exposure": "公開しない",
 }
@@ -42,6 +42,7 @@ HISTORY_HEADER = (
 )
 HISTORY_NEW_COLS = ("人の介入", "検証済み要求")
 HUMAN_KINDS = ("request", "answers", "resume", "instruction")
+MAX_REQS_PER_ITEM = 5
 
 
 def upgrade_history(text: str) -> str:
@@ -201,13 +202,16 @@ def cmd_stage(args) -> int:
     n = args.n
     if n not in STAGES:
         raise SystemExit("ERROR run-state: stage は 0〜6 です")
+    times = meta.setdefault("stage_times", {}).setdefault(str(n), {})
     if args.done:
+        times["done"] = h.now_iso()
         if n not in meta["stages_done"]:
             meta["stages_done"].append(n)
         if n == 4:
             meta["ledger_strict"] = True
         msg = f"工程{n} {STAGES[n]} 完了"
     else:
+        times.setdefault("start", h.now_iso())
         meta["stage"] = n
         if n == 1:
             meta["ledger_strict"] = False
@@ -241,6 +245,23 @@ def ids(v) -> List[str]:
     return [x for x in re.split(r"[,\s]+", v or "") if x]
 
 
+def mark_status(it: dict, status: str) -> None:
+    """Set the status and record the timing used by kpi.py (flow metrics)."""
+    now = h.now_iso()
+    if status == "doing" and it.get("status") != "doing":
+        it.setdefault("first_started_at", now)
+        it["started_at"] = now
+    if status in ("done", "blocked", "todo") and it.get("status") == "doing" and it.get("started_at"):
+        try:
+            sec = (parse_ts(now) - parse_ts(it["started_at"])).total_seconds()
+            it["work_sec"] = round(it.get("work_sec", 0) + max(sec, 0), 1)
+        except ValueError:
+            pass
+    if status in ("done", "blocked"):
+        it["finished_at"] = now
+    it["status"] = status
+
+
 def save_queue(root, cfg, rid, q) -> None:
     h.write_json(h.run_dir(root, cfg, rid) / "queue.json", q)
 
@@ -255,15 +276,15 @@ def cmd_queue(args) -> int:
         if args.id in by_id:
             raise SystemExit(f"ERROR run-state: {args.id} は既にあります")
         reqs = ids(args.req)
-        if not 1 <= len(reqs) <= 3:
-            raise SystemExit("ERROR run-state: 1 項目の要求 ID は 1〜3 個です（§7.3）")
+        if not 1 <= len(reqs) <= MAX_REQS_PER_ITEM:
+            raise SystemExit(f"ERROR run-state: 1 項目の要求 ID は 1〜{MAX_REQS_PER_ITEM} 個です（縦に切った機能の単位）")
         for d in ids(args.depends):
             if d not in by_id:
                 raise SystemExit(f"ERROR run-state: 依存先 {d} がありません")
         items.append({
             "id": args.id, "requirement_ids": reqs, "ac_ids": ids(args.ac), "boundary": args.boundary or "",
             "shared": ids(args.shared), "depends_on": ids(args.depends), "status": "todo", "attempts": 0,
-            "branch": None, "summary": args.summary or "",
+            "branch": None, "worktree": None, "summary": args.summary or "",
         })
         save_queue(root, cfg, rid, q)
         print(f"added {args.id}")
@@ -275,11 +296,13 @@ def cmd_queue(args) -> int:
         if args.status:
             if args.status not in ("todo", "doing", "done", "blocked"):
                 raise SystemExit("ERROR run-state: status は todo/doing/done/blocked です")
-            it["status"] = args.status
+            mark_status(it, args.status)
         if args.attempts:
             it["attempts"] = it.get("attempts", 0) + int(args.attempts[1:]) if args.attempts.startswith("+") else int(args.attempts)
         if args.branch is not None:
             it["branch"] = args.branch or None
+        if args.worktree is not None:
+            it["worktree"] = args.worktree or None
         if args.summary is not None:
             it["summary"] = args.summary
         save_queue(root, cfg, rid, q)
@@ -447,9 +470,10 @@ def main(argv=None) -> int:
     qset.add_argument("--status")
     qset.add_argument("--attempts")
     qset.add_argument("--branch")
+    qset.add_argument("--worktree")
     qset.add_argument("--summary")
     qr = qs.add_parser("ready")
-    qr.add_argument("--parallel", type=int, default=3)
+    qr.add_argument("--parallel", type=int, default=5)
     qs.add_parser("show")
     sub.add_parser("time")
     sub.add_parser("complete-check")

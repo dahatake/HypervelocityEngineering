@@ -10,6 +10,10 @@ North Star: verified requirements per human intervention
 A requirement is "verified" when it is approved, has a catalog row, none of its ACs is BLOCKED,
 and every system-level AC has at least one System Test case and all of them are `pass` in the ledger.
 Integration / unit ACs are covered by the implementer gate and verify, so they are not re-checked here.
+
+Flow (speed) metrics come from the timestamps written by run-state.py / integrate.py: stage durations,
+effective parallelism of the implementation loop (sum of item work time / wall time of stage 5),
+serial integration time, and the models actually used by `task` calls (work/runs/<run-id>/models.jsonl, G-7).
 """
 from __future__ import annotations
 
@@ -130,6 +134,51 @@ def hours_between(meta: dict) -> float:
         return 0.0
 
 
+def _ts(s: Optional[str]):
+    import datetime as dt
+    try:
+        return dt.datetime.fromisoformat(s) if s else None
+    except ValueError:
+        return None
+
+
+def flow(root: Path, cfg: dict, rid: str, meta: dict, items: List[dict]) -> dict:
+    import datetime as dt
+    now = dt.datetime.now().astimezone()
+    stages = {}
+    for n, t in (meta.get("stage_times") or {}).items():
+        a, b = _ts(t.get("start")), _ts(t.get("done"))
+        if a:
+            stages[n] = round(((b or now) - a).total_seconds() / 60, 1)
+    work = [float(it.get("work_sec", 0)) for it in items if it.get("work_sec")]
+    integ = [float(it.get("integrate_sec", 0)) for it in items if it.get("integrate_sec")]
+    loop_min = stages.get("5")
+    if loop_min is None:
+        starts = [x for x in (_ts(it.get("first_started_at")) for it in items) if x]
+        ends = [x for x in (_ts(it.get("finished_at")) for it in items) if x]
+        loop_min = round((max(ends) - min(starts)).total_seconds() / 60, 1) if starts and ends else None
+    models: Dict[str, Dict[str, int]] = {}
+    mp = h.run_dir(root, cfg, rid) / "models.jsonl"
+    if mp.exists():
+        for line in h.read_text(mp).splitlines():
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            per = models.setdefault(e.get("agent") or "?", {})
+            per[e.get("model") or "?"] = per.get(e.get("model") or "?", 0) + 1
+    return {
+        "stage_minutes": stages,
+        "loop_minutes": loop_min,
+        "item_work_minutes_avg": round(sum(work) / len(work) / 60, 1) if work else None,
+        "parallelism": round(sum(work) / 60 / loop_min, 2) if work and loop_min else None,
+        "integrate_minutes": round(sum(integ) / 60, 1) if integ else None,
+        "integrate_share": round(sum(integ) / 60 / loop_min, 2) if integ and loop_min else None,
+        "parallel_workers": meta.get("options", {}).get("parallel_workers"),
+        "models": models,
+    }
+
+
 def run_kpis(root: Path, cfg: dict, rid: str) -> dict:
     meta = h.load_meta(root, cfg, rid)
     items = h.load_queue(root, cfg, rid).get("items", [])
@@ -155,6 +204,7 @@ def run_kpis(root: Path, cfg: dict, rid: str) -> dict:
         "traceability": {"traced": traced, "total": approved, "rate": ratio(traced, approved)},
         "hours_per_requirement": round(hours / len(impl), 2) if impl else None,
         "open_questions": open_questions(root, cfg),
+        "flow": flow(root, cfg, rid, meta, items),
     }
 
 
@@ -187,6 +237,29 @@ def run_rows(k: dict) -> List[Tuple[str, str, str, str, str]]:
         ("項目の完了 / BLOCKED", f"{k['items']['done']}/{k['items']['total']}（BLOCKED {k['items']['blocked']}）", "BLOCKED 0", 
          "-" if not k["items"]["total"] else ("達成" if k["items"]["blocked"] == 0 else "未達"), "queue.json"),
         ("未回答の質問票", str(k["open_questions"]), "-", "-", "次の Prompt の <answers> で回答する"),
+    ] + flow_rows(k.get("flow") or {})
+
+
+def flow_rows(f: dict) -> List[Tuple[str, str, str, str, str]]:
+    if not f:
+        return []
+    rs_stages = {"1": "要求定義", "2": "独立監査", "3": "計画", "4": "System Test の設計", "5": "実装ループ", "6": "最終"}
+    st = "、".join(f"{rs_stages.get(n, n)} {m} 分" for n, m in sorted(f["stage_minutes"].items())) or "未記録"
+    par, pw = f.get("parallelism"), f.get("parallel_workers")
+    try:
+        pw_n = float(pw) if pw else None
+    except ValueError:
+        pw_n = None
+    models = "; ".join(f"{a}: " + ", ".join(f"{m}×{n}" for m, n in per.items()) for a, per in sorted(f["models"].items())) or "未記録"
+    return [
+        ("工程ごとの時間", st, "-", "-", "meta.json の stage_times"),
+        ("実効の並列度（実装ループ）", "-" if par is None else f"{par}", f"parallel_workers（{pw or '-'}）の 70% 以上",
+         "-" if par is None or not pw_n else judge(par / pw_n, 0.7), "項目の作業時間の合計 ÷ 実装ループの経過時間"),
+        ("項目 1 件あたりの作業時間", "-" if f["item_work_minutes_avg"] is None else f"{f['item_work_minutes_avg']} 分", "-", "-",
+         "queue.json の work_sec（doing の間の時間）"),
+        ("統合の直列時間", "-" if f["integrate_minutes"] is None else f"{f['integrate_minutes']} 分（ループの {pct(f['integrate_share'])}）",
+         "ループの 20% 以下", "-" if f["integrate_share"] is None else judge(f["integrate_share"], 0.2, False), "integrate.py merge の所要時間の合計"),
+        ("実際に使ったモデル", models, "hve.config.json の models と一致", "-", "models.jsonl（G-7）"),
     ]
 
 

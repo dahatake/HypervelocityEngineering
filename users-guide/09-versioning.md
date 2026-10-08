@@ -4,7 +4,7 @@ Enterprise App Build Kit の版の付け方と、版を上げる手順（配布�
 
 ## 9.1 版の規則
 
-- 版は [Semantic Versioning](https://semver.org/lang/ja/)（`MAJOR.MINOR.PATCH`）に従います。現在の版は **0.1.0** です。
+- 版は [Semantic Versioning](https://semver.org/lang/ja/)（`MAJOR.MINOR.PATCH`）に従います。現在の版は **0.2.0** です。
 - 版の正本は `scripts/hvelib.py` の `TOOLKIT_VERSION` です。インストーラ（`tools/install.py`）、`bench/bench.py`、`scripts/run-state.py` の記録は、すべてここから読みます。ほかの場所に版を書き写しません。
 - 変更履歴は、リポジトリ直下の [CHANGELOG.md](../CHANGELOG.md) に書きます。
 - 1.0.0 になるまでは、MINOR の更新で互換性のない変更が入ることがあります。

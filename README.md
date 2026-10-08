@@ -64,13 +64,14 @@ Enterprise App Build Kit は、次の 4 つの手段でこれらを防ぎます�
   skills/        手順書。必要な作業役だけが読み込む（Token を節約）
                  requirement-definition / implement-fr / system-test-increment / rd-audit
                  build … 利用者が /build で呼ぶ依頼の入口と雛形（手動呼び出し専用）
-  hooks/         quality-gates.json … 全エージェント共通の強制ゲート（G-1〜G-6）
+  hooks/         quality-gates.json … 全エージェント共通の強制ゲート（G-1〜G-7）
   workflows/     hve-verify.yml … GitHub Actions で verify を再実行（外部での再確認）
 scripts/         決定的スクリプト（Python 3.9 以上。標準ライブラリだけを使用）
   verify.py / verify.ps1 / verify.sh   L1 検査（CHK-01〜23）＋ビルド・テスト
   rdcheck.py  next-id.py  ledger.py  select-tests.py  summarize.py  clean-work.py  run-state.py
   rdfix.py         データ層のファイル間の不整合を、要求定義書に合わせて自動修正
-  kpi.py           KPI の集計（North Star: 人の介入 1 回あたりの検証済み要求）
+  integrate.py     worktree のプールと、統合（merge → verify → System Test → commit）を 1 コマンドで行う
+  kpi.py           KPI の集計（North Star: 人の介入 1 回あたりの検証済み要求。流れの指標も出す）
   import-speckit.py  GitHub Spec Kit の成果物を /build の依頼文に変換
   hooks/gate.py   hook の本体
   hve.config.json 設定（検証コマンド、モデル、ゲート、保持期間）
@@ -79,7 +80,7 @@ docs/            永続のドキュメント（git で管理）
 tests/system/ledger.json      System Test の台帳（永続）
 work/            一時ファイル（.gitignore 対象。14 日で削除）
   current-run.txt  runs/<run-id>/{meta.json, queue.json, progress.md, run-report.md, results.json, logs/, evidence/, audit/}
-  worktrees/<run-id>-<item>/  作業役ごとの git worktree（統合後に削除）
+  worktrees/<run-id>-w<N>/    作業役の git worktree のプール（項目をまたいで再利用し、工程 6 で削除）
 ```
 
 常に読み込まれる instructions（`AGENTS.md`、`.github/copilot-instructions.md`）は数行に抑えています。長い手順は skills に置き、担当の作業役が必要になったときだけ読み込みます。
@@ -92,8 +93,8 @@ work/            一時ファイル（.gitignore 対象。14 日で削除）
 | **rd-author** | 要求定義書・カタログの作成と更新、質問票、決定記録。**要求を書けるのはこのエージェントだけ** | `docs/`（run-history を除く） | requirement-definition |
 | **rd-auditor** | 意味の監査（矛盾・目的との整合・記述の質）。rd-author とは別系統のモデルを使う | `work/` だけ（読み取り専用） | rd-audit |
 | **test-designer** | 受入基準から System Test と台帳のケースを、**実装より前に**作る | `tests/system/`（台帳は ledger.py 経由） | system-test-increment |
-| **implementer** | 1 つの作業項目（要求 1〜3 個）を専用の worktree で実装し、単体テスト・結合テストとカタログの行を書く | 自分の worktree（要求定義書と System Test は変更不可） | implement-fr |
-| **reviewer** | 差分と受入基準の照合。MUST の要求と共通部品の変更にだけ使う | なし（読み取り専用） | なし |
+| **implementer** | 1 つの作業項目（要求 1〜5 個）をプールの worktree で実装し、単体テスト・結合テストとカタログの行を書く | 自分の worktree（要求定義書と System Test は変更不可） | implement-fr |
+| **reviewer** | 差分と受入基準の照合。共通部品・契約・テーブルの変更、セキュリティ・個人情報・認証、画面の変更にだけ使う | なし（読み取り専用） | なし |
 
 どのエージェントも frontmatter でツールを限定していません。利用者が GitHub Copilot に設定した MCP Server・plugin・拡張機能のツールと skill は、そのまま使えます。例は、Work IQ（社内のメール・会議・チャット・ドキュメント）、Microsoft Learn、Azure MCP Server、Copilot Studio の plugin です。rd-author は、これらを一次情報の参照に使い、得た事実を出典付きで要求定義書に残します。外部のシステムを変更する操作（送信・作成・更新・削除・デプロイ）は、run_options の `external_write`・`deploy` で許可したときだけ行えます（hook G-5）。詳しくは [設定とカスタマイズ 4.4](users-guide/04-customization.md#44-mcp-serverplugin拡張機能を使う) を参照してください。
 
@@ -108,15 +109,15 @@ flowchart TD
   A1 --> S3[工程3 計画<br/>queue.json 機能単位・依存・境界]
   S3 --> S4[工程4 System Test を先に設計<br/>test-designer 全ケース not_run]
   S4 --> L{工程5 実装ループ}
-  L -->|依存のない項目を最大3〜4本並行| W[implementer 各 worktree]
+  L -->|依存のない項目を最大5本 パイプライン| W[implementer プールの worktree]
   W --> G[ゲート verify＋関係する System Test<br/>終了前に hook G-4 が再検査]
-  G -->|MUST・共通部品| RV[reviewer]
-  G --> M[conductor が直列に統合<br/>verify・canary・影響ケース]
+  G -->|共通部品・セキュリティ・画面| RV[reviewer]
+  G --> M[integrate.py merge で直列に統合<br/>verify quick・canary・差分のケース]
   RV --> M
-  M --> K{節目 5項目・4時間}
-  K -->|はい| A2[rd-auditor 差分・System Test 増分] --> L
+  M --> K{節目 10項目・4時間}
+  K -->|はい| A2[rd-auditor 差分 background・System Test 増分] --> L
   K -->|いいえ| L
-  L -->|完了 or 時間予算85%| F[工程6 最終<br/>System Test 全量・監査 3回多数決・転記・run-report]
+  L -->|完了 or 時間予算85%| F[工程6 最終<br/>System Test 全量・監査 3体並行の多数決・転記・run-report]
   F --> U[利用者: 報告を読み、回答 or 取り込み]
 ```
 
@@ -426,7 +427,7 @@ docs/source/備品管理の現状.md
 <run_options>
 max_hours: 8
 approval_policy: 安全範囲は推奨どおり
-parallel_workers: 3
+parallel_workers: 5
 scope: 承認済みすべて
 git_push: しない
 deploy: しない
@@ -597,7 +598,7 @@ Spec Kit は独自の番号（`FR-001`、`SC-001` など）を使います。too
 | 3 | [管理データの書式](users-guide/03-requirements-format.md) | 要求定義書・カタログ・ID 台帳・System Test の台帳のフォーマットを知りたい |
 | 4 | [設定とカスタマイズ](users-guide/04-customization.md) | ビルド・テストのコマンド、モデルの割り当て、ゲートを調整したい。MCP Server・plugin（Work IQ・Azure など）を使いたい |
 | 5 | [スクリプトリファレンス](users-guide/05-scripts-reference.md) | `scripts/` の各コマンドの使い方を知りたい |
-| 6 | [品質ゲートと検査項目](users-guide/06-quality-gates.md) | hook（G-1〜G-6）と verify（CHK-01〜23）の意味と直し方を知りたい |
+| 6 | [品質ゲートと検査項目](users-guide/06-quality-gates.md) | hook（G-1〜G-7）と verify（CHK-01〜23）の意味と直し方を知りたい |
 | 7 | [トラブルシューティング](users-guide/07-troubleshooting.md) | 止まった・拒否された・失敗した |
 | 8 | [導入ロードマップと KPI](users-guide/08-roadmap.md) | 診断から本番運用までの段取りと、効果の測り方を知りたい |
 | 9 | [バージョンアップの手順](users-guide/09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者） |
@@ -614,7 +615,7 @@ GitHub Spec Kit との比較計測（同じ課題・隠し受入テスト・Nort
 | run | conductor の 1 回の実行。`run-id`（開始日時。例: `202610080900`）で識別します。 |
 | 工程（stage） | run の段階。工程 0（初期化）から工程 6（最終）まであります（[1 回の run の流れ](#1-回の-run-の流れ)）。 |
 | `/work` | 一時ファイルの置き場所（git の管理対象外。14 日で削除）。作業キュー、進捗、ログ、証跡、報告を置きます。 |
-| ゲート | モデルの判断に関係なく規則を強制する仕組み。hook（G-1〜G-6）と決定的検査 verify（CHK-01〜23）の 2 層です。 |
+| ゲート | モデルの判断に関係なく規則を強制する仕組み。hook（G-1〜G-7）と決定的検査 verify（CHK-01〜23）の 2 層です。 |
 | 包括承認 | run_options の `approval_policy` で、「この範囲の AI 提案は推奨案どおりでよい」と事前に決めておくこと。 |
 
 ## リポジトリの構成

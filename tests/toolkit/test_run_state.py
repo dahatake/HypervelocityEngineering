@@ -18,7 +18,7 @@ def test_run_state_lifecycle(sample):
     sample.py("run-state.py", "queue", "add", "--id", "I-01", "--req", "FR-001", "--ac", "AC-001", "--boundary", "申請", check=True)
     sample.py("run-state.py", "queue", "add", "--id", "I-02", "--req", "FR-001", "--boundary", "申請", check=True)
     sample.py("run-state.py", "queue", "add", "--id", "I-03", "--req", "FR-001", "--depends", "I-01", check=True)
-    assert sample.py("run-state.py", "queue", "add", "--id", "I-04", "--req", "FR-1,FR-2,FR-3,FR-4").returncode != 0
+    assert sample.py("run-state.py", "queue", "add", "--id", "I-04", "--req", "FR-1,FR-2,FR-3,FR-4,FR-5,FR-6").returncode != 0
     ready = sample.py("run-state.py", "queue", "ready", "--parallel", "3", check=True).stdout
     assert "I-01" in ready and "I-02" not in ready and "I-03" not in ready  # same boundary / dependency
     sample.py("run-state.py", "queue", "set", "I-01", "--status", "done", "--attempts", "+1", check=True)
