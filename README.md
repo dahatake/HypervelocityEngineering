@@ -357,7 +357,7 @@ GitHub Copilot には、agents・skills・hooks をまとめて配布する標�
 
 3. エージェントの**サンドボックス**を有効にします。ネットワークは、パッケージレジストリなど必要な宛先だけを許可します（worktree はセキュリティ境界ではないためです）。
 4. チャット欄に `/build` と入力し、**同じ欄に続けて**やりたいことを書いて送信します（例: `/build 社内の備品貸出アプリを新規に作りたい。…`）。
-   - `/build` は skill（`.github/skills/build/SKILL.md`）です。入力した文章を `<request>` として扱い、`<run_options>` には既定値（`max_hours: 24` など）を使います。回答や run_options も指定する場合は、[依頼の書き方](users-guide/01-writing-requests.md) の雛形を `/build` の後に貼り付けて書き換えます。雛形は `/build template` と送るとチャットに表示されます（run は開始しません）。
+   - `/build` は skill（`.github/skills/build/SKILL.md`）です。入力した文章を `<request>` として扱い、`<run_options>` には既定値（`max_hours: 24` など）を使います。回答や run_options も指定する場合は、[依頼の書き方](users-guide/01-writing-requests.md) の雛形を `/build` の後に貼り付けて書き換えます。雛形は `/build-template`（または `/build template`）と送るとチャットに表示されます（run は開始しません）。
    - `<request>` などの**入力フォームは表示されません**。依頼の文章はチャット欄に直接書きます。
    - `/build` が候補に出ない場合は、インストールコマンドを再実行して更新します。更新しなくても、Agent が conductor なら、雛形を書き換えてそのまま送信すれば同じように動きます（prompt file は Agent Host では読み込まれないため、Session Target が Copilot のときは `/build` として表示されません）。
 5. 送信したらウィンドウを閉じてもかまいません。ただし **PC はスリープさせないでください**（Agent Host はローカルの PC 上で動きます）。途中経過は、Agents ウィンドウのセッション一覧から開いて確認できます。
@@ -380,7 +380,7 @@ GitHub Copilot には、agents・skills・hooks をまとめて配布する標�
    | Agent | **conductor** | エージェント ピッカー、またはプロンプト欄の `/agent` で選びます |
 
 4. ローカル サンドボックスを有効にします（アプリの設定 → プロジェクト → **サンドボックス** の **サンドボックスの新しいセッション**、またはセッション中に `/sandbox on`）。既定のポリシーで、worktree の読み書き、パッケージのインストール、ローカルの開発サーバーへの接続ができます。hook もサンドボックスの中で動きます。
-5. プロンプト欄に `/build` と入力し、続けてやりたいことを書いて送信します。雛形は `/build template` で表示されます（run は開始しません）。
+5. プロンプト欄に `/build` と入力し、続けてやりたいことを書いて送信します。雛形は `/build-template`（または `/build template`）で表示されます（run は開始しません）。
 6. 送信後は、アプリを起動したままにし、**PC をスリープさせないでください**（ローカルのセッションは PC 上で動きます）。途中経過は、サイドバーのセッションから確認できます。
 
 GitHub Copilot app に固有の注意点:

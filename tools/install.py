@@ -44,6 +44,7 @@ MANAGED = [
     ".github/skills/system-test-increment/SKILL.md",
     ".github/skills/rd-audit/SKILL.md",
     ".github/skills/build/SKILL.md",
+    ".github/skills/build-template/SKILL.md",
     ".github/hooks/quality-gates.json",
     ".github/workflows/hve-verify.yml",
     "scripts/hvelib.py",
@@ -510,7 +511,7 @@ def main(argv=None) -> int:
     print("  2. scripts/hve.config.json の verify.commands に、ビルド・静的検査・テストのコマンドを登録します（初回の実行で implementer が登録することもできます）")
     print("  3. VS Code の Agents ウィンドウで Session Target=Copilot、Agent=conductor、Autopilot、New Worktree を選び、")
     print("     チャット欄に「/build やりたいこと」と書いて送ります（入力欄は表示されません）")
-    print("     （雛形は「/build template」で表示されます。Copilot CLI では `copilot --agent conductor --autopilot` などで同じ雛形を送ります）")
+    print("     （雛形は「/build-template」（または「/build template」）で表示されます。Copilot CLI では `copilot --agent conductor --autopilot` などで同じ雛形を送ります）")
     print("     GitHub Copilot app では、プロジェクトにこのリポジトリを追加し、新しい worktree・Autopilot・Agent=conductor で「/build やりたいこと」を送ります")
     return 0
 

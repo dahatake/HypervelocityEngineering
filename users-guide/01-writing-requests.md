@@ -27,7 +27,7 @@ external_exposure: 公開しない
 
 VS Code では、Agent を conductor にしてから、チャット欄に `/build` と入力し、続けて依頼を書いて送信します。`<request>`・`<answers>`・`<references>` の入力フォームは表示されません。GitHub Copilot app でも同じで、エージェント ピッカー（またはプロンプト欄の `/agent`）で conductor を選び、プロンプト欄に `/build` と続けて依頼を書いて送信します（[README の「GitHub Copilot app で実行する」](../README.md#github-copilot-app-で実行する)）。
 
-- **雛形を表示する**: `/build template` と送ると、run を開始せずに、上の雛形（`.github/skills/build/SKILL.md` の既定値）がコードブロックでチャットに出力されます。コピーして書き換え、`/build` の後に貼り付けて送信します。VS Code の skill には入力欄へ直接テキストを差し込む機能がないため、応答として出力する方式にしています。
+- **雛形を表示する**: `/build-template` と送ると（`/build template` でも同じ）、run を開始せずに、上の雛形がコードブロックでチャットに出力されます。`/build template` は conductor が通常の依頼として扱ってしまうことがあるため、確実に表示したいときは `/build-template` を使います（`.github/skills/build-template/SKILL.md`。雛形は `build` の既定値と同じで、テストで一致を確認しています）。コピーして書き換え、`/build` の後に貼り付けて送信します。VS Code の skill には入力欄へ直接テキストを差し込む機能がないため、応答として出力する方式にしています。
 - **やりたいことだけを書く**（例: `/build 申請に下書き保存を加える`）: 入力全体が `<request>` になります。`<answers>`・`<references>` は空、`<run_options>` は上の既定値です。
 - **回答や run_options も指定する**: 上の雛形を `/build` の後に貼り付け、必要な部分だけ書き換えて送信します。`<run_options>` で省略したキーは既定値になります。
 - **チームの既定値を変える**: `.github/skills/build/SKILL.md` の雛形を編集します（ローカルで変更したファイルは、インストールコマンドを再実行しても上書きされません）。

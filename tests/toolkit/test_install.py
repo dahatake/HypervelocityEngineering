@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 import sys
 
 from conftest import SOURCE, run
@@ -20,6 +21,9 @@ def test_fresh_install_layout(empty_repo):
     skill = (empty_repo / ".github/skills/build/SKILL.md").read_text(encoding="utf-8")
     assert "name: build" in skill and "disable-model-invocation: true" in skill
     assert "/build template" in skill and "max_hours: 24" in skill
+    block = re.compile(r"```text\n(.*?)```", re.S)
+    tmpl = (empty_repo / ".github/skills/build-template/SKILL.md").read_text(encoding="utf-8")
+    assert block.search(tmpl).group(1) == block.search(skill).group(1)
     assert "/work/" in (empty_repo / ".gitignore").read_text(encoding="utf-8")
     assert "merge=union" in (empty_repo / ".gitattributes").read_text(encoding="utf-8")
     assert "hve-abk:begin" in (empty_repo / "AGENTS.md").read_text(encoding="utf-8")

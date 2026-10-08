@@ -57,7 +57,7 @@ BUILTIN_TOOLS = {
 }
 # `/build template` only prints the request template (skill build, step 0). While that turn runs, every tool except
 # reads and these is denied, and agentStop lets the turn end even if a run is active.
-TEMPLATE_PROMPT_RX = re.compile(r"^\s*/build\s+template\s*$", re.I)
+TEMPLATE_PROMPT_RX = re.compile(r"^\s*/build(?:\s+|-)template\s*$", re.I)
 TEMPLATE_ALLOWED_TOOLS = {"skill", "report_intent", "task_complete"}
 TEMPLATE_TTL_SEC = 30 * 60
 # GitHub Copilot app: renames the session's git branch. During a run it would orphan meta.json's integration_branch.
