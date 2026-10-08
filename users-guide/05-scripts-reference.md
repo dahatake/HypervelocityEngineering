@@ -30,6 +30,19 @@ python scripts/rdcheck.py digest AC-031                # AC のダイジェス�
 
 `--base` の既定値は main との分岐点（merge-base）です。差分の検査（CHK-12/13）に使います。
 
+## rdfix.py（データ層の不整合の自動修正）
+
+```bash
+python scripts/rdfix.py                           # 修正の計画を表示する（書き込まない）。直せるものがあれば exit 1
+python scripts/rdfix.py --apply                   # 修正を書き込み、rdcheck で確かめる
+python scripts/rdfix.py --only catalog,ledger     # 対象を絞る: registry, catalog, ledger, gitignore, history
+python scripts/rdfix.py --adopt --apply           # ID 台帳にない ID も取り込む（手で振った ID でないと確かめたとき）
+python scripts/rdfix.py --json
+python scripts/ledger.py repair [--apply]         # 台帳の部分だけ（rdfix が内部で使う）
+```
+
+要求定義書を正本として、カタログ・ID 台帳・System Test の台帳・実行履歴・`.gitignore` をそれに合わせます。要求定義書は変更しません。出力は `FIX <CHK> <場所> <内容>`（自動で直す）と `MANUAL <CHK> <場所> <内容>（担当: <役割>）`（判断が要る）の行と、最後の `rdfix: fix=N manual=M mode=…` の 1 行です。exit 0 は「自動で直すものが残っていない」です。直す範囲は [6.3](06-quality-gates.md#63-データ層の不整合の自動修正rdfix) にあります。
+
 ## next-id.py（ID の採番。G-3）
 
 ```bash
@@ -54,6 +67,7 @@ python scripts/ledger.py --by test-designer update E2E-001 --command "…" --rea
 python scripts/ledger.py --by test-designer block E2E-001 --reason "…"                 # 削除の代わりに使う
 python scripts/ledger.py set E2E-001 blocked --reason "…"
 python scripts/ledger.py digests [--update]
+python scripts/ledger.py repair [--apply]          # 要求定義書に合わせて台帳を直す（rdfix.py から使う）
 python scripts/ledger.py --by conductor run --select changed|failed|all [--canary-first] [--stop-on-canary-fail] [--max-minutes N]
 python scripts/ledger.py run --cases E2E-001,IT-002 --no-record   # 作業役の worktree で、台帳を更新せずに実行だけする
 ```

@@ -72,36 +72,6 @@ def test_existing_files_and_config_are_merged(empty_repo):
     assert (empty_repo / "AGENTS.md").read_text(encoding="utf-8").count("hve-abk:begin") == 1
 
 
-def test_obsolete_prompt_file_is_removed_on_update(empty_repo):
-    install(empty_repo)
-    old = empty_repo / ".github/prompts/build.prompt.md"
-    old.parent.mkdir(parents=True)
-    old.write_text("---\nagent: conductor\n---\n旧版の雛形\n", encoding="utf-8")
-    manifest_path = empty_repo / ".github/hve-toolkit.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["files"][".github/prompts/build.prompt.md"] = hashlib.sha256(old.read_bytes()).hexdigest()
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-    assert install(empty_repo, "--check").returncode == 1
-    proc = install(empty_repo)
-    assert "REMOVE" in proc.stdout and not old.exists() and not old.parent.exists()
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert ".github/prompts/build.prompt.md" not in manifest["files"]
-    assert install(empty_repo, "--check").returncode == 0
-
-
-def test_modified_obsolete_file_is_kept(empty_repo):
-    install(empty_repo)
-    old = empty_repo / ".github/prompts/build.prompt.md"
-    old.parent.mkdir(parents=True)
-    old.write_text("利用者が書き換えた雛形\n", encoding="utf-8")
-    manifest_path = empty_repo / ".github/hve-toolkit.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["files"][".github/prompts/build.prompt.md"] = "hash-of-the-original"
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-    proc = install(empty_repo)
-    assert "KEEP-LOCAL" in proc.stdout and old.exists()
-
-
 def test_uninstall(empty_repo):
     install(empty_repo)
     (empty_repo / "AGENTS.md").write_text((empty_repo / "AGENTS.md").read_text(encoding="utf-8") + "\n追記\n", encoding="utf-8")

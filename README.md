@@ -69,6 +69,7 @@ Enterprise App Build Kit は、次の 4 つの手段でこれらを防ぎます�
 scripts/         決定的スクリプト（Python 3.9 以上。標準ライブラリだけを使用）
   verify.py / verify.ps1 / verify.sh   L1 検査（CHK-01〜23）＋ビルド・テスト
   rdcheck.py  next-id.py  ledger.py  select-tests.py  summarize.py  clean-work.py  run-state.py
+  rdfix.py         データ層のファイル間の不整合を、要求定義書に合わせて自動修正
   kpi.py           KPI の集計（North Star: 人の介入 1 回あたりの検証済み要求）
   import-speckit.py  GitHub Spec Kit の成果物を /build の依頼文に変換
   hooks/gate.py   hook の本体
@@ -132,6 +133,8 @@ flowchart TD
 | verify | `scripts/verify.py`（CHK-01〜23） | 作業役のゲート、統合のたび、CI | 台帳のケースが理由なく削除された（CHK-12）。AC の本文が変わったのに台帳が古いまま（CHK-11） |
 
 VS Code の hook はプレビュー機能で、harness によって動作が異なることがあります（Copilot CLI と、その上に構築された GitHub Copilot app は同じ `.github/hooks` を読み込みます）。そのため同じ規則を verify でも検査し、hook が効かない環境でも統合の時点で必ず止まるようにしています。詳しくは [品質ゲートと検査項目](users-guide/06-quality-gates.md) を参照してください。
+
+verify が見つけたデータ層のファイル間の不整合（カタログの決定状態のずれ、ID 台帳の状態、マージで重複した行、名前が変わったファイルの参照など）のうち、要求定義書から機械的に決まるものは `python scripts/rdfix.py --apply` で直せます。要求定義書は変更せず、判断が要るもの（AC の本文の変更、ID の再利用など）は担当の役割とともに `MANUAL` として示します（[6.3](users-guide/06-quality-gates.md#63-データ層の不整合の自動修正rdfix)）。
 
 ### 状態の永続化と再開
 
@@ -228,7 +231,6 @@ python tools/install.py --target /path/to/your-repo
 | 種類 | ファイル | 再実行時の扱い |
 |---|---|---|
 | toolkit のファイル | `.github/agents/*.agent.md`（6）、`.github/skills/*/SKILL.md`（5。`/build` の skill を含む）、`.github/hooks/quality-gates.json`、`.github/workflows/hve-verify.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`・`scripts/hooks/gate.py` | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
-| 旧バージョンのファイル | `.github/prompts/build.prompt.md`（1.0.0 まで） | 変更していなければ削除します（`REMOVE`）。変更していれば残します |
 | 管理データの雛形 | `docs/requirements-definition.md`、`docs/catalog.md`、`docs/id-registry.md`、`docs/run-history.md`、`tests/system/ledger.json` | **存在しない場合だけ**作成します。既存のファイルは上書きしません |
 | 設定 | `scripts/hve.config.json` | なければ作成します。あれば新しいキーだけを追加し、利用者が設定した値は変更しません |
 | 追記 | `.gitignore` に `/work/`、`.gitattributes` に `docs/id-registry.md merge=union` と `docs/run-history.md merge=union` | 足りない行だけを追記します |
@@ -357,7 +359,7 @@ GitHub Copilot には、agents・skills・hooks をまとめて配布する標�
 4. チャット欄に `/build` と入力し、**同じ欄に続けて**やりたいことを書いて送信します（例: `/build 社内の備品貸出アプリを新規に作りたい。…`）。
    - `/build` は skill（`.github/skills/build/SKILL.md`）です。入力した文章を `<request>` として扱い、`<run_options>` には既定値（`max_hours: 24` など）を使います。回答や run_options も指定する場合は、[依頼の書き方](users-guide/01-writing-requests.md) の雛形を `/build` の後に貼り付けて書き換えます。雛形は `/build template` と送るとチャットに表示されます（run は開始しません）。
    - `<request>` などの**入力フォームは表示されません**。依頼の文章はチャット欄に直接書きます。
-   - `/build` が候補に出ない場合（旧バージョンの toolkit で `.github/prompts/build.prompt.md` しかない場合など）は、インストールコマンドを再実行して更新します。更新しなくても、Agent が conductor なら、雛形を書き換えてそのまま送信すれば同じように動きます（prompt file は Agent Host では読み込まれないため、Session Target が Copilot のときは `/build` として表示されません）。
+   - `/build` が候補に出ない場合は、インストールコマンドを再実行して更新します。更新しなくても、Agent が conductor なら、雛形を書き換えてそのまま送信すれば同じように動きます（prompt file は Agent Host では読み込まれないため、Session Target が Copilot のときは `/build` として表示されません）。
 5. 送信したらウィンドウを閉じてもかまいません。ただし **PC はスリープさせないでください**（Agent Host はローカルの PC 上で動きます）。途中経過は、Agents ウィンドウのセッション一覧から開いて確認できます。
 
 > New Worktree では、git の管理対象外のファイル（`/work` など）は新しい worktree にコピーされません。conductor の `/work` は、そのセッションの worktree の中に作られます。

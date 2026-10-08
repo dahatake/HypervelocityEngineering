@@ -295,8 +295,17 @@ def check_shell(ctx: Ctx, cmd: str) -> Optional[Tuple[str, str]]:
     if worker or any(n in ("implementer", "reviewer") for n in names):
         if re.search(r"(\b(rm|del|Remove-Item|git\s+rm|git\s+mv|mv|move|Move-Item|Set-Content|Add-Content|Out-File|tee|sed\s+-i|perl\s+-pi)\b[^;&|]*|>{1,2}\s*)['\"]?(\./)?tests[/\\]system", c, re.I):
             return ("G-2", "System Test（tests/system/）は implementer・reviewer からは変更できません")
-        if re.search(r"\bledger\.py\b.*\b(add|update|block|digests|set)\b", c):
+        if re.search(r"\bledger\.py\b.*\b(add|update|block|digests|set)\b", c) or re.search(r"\bledger\.py\b.*\brepair\b.*--apply\b", c):
             return ("G-2", "作業役は台帳を更新しません（`ledger.py run --no-record` で実行だけ行います）")
+    if re.search(r"\brdfix\.py\b.*--apply\b", c):
+        m = re.search(r"--only[=\s]+['\"]?([A-Za-z,]+)", c)
+        only = {x for x in (m.group(1).split(",") if m else []) if x} or {"registry", "catalog", "ledger", "gitignore", "history"}
+        if worker or any(n in ("implementer", "reviewer", "rd-auditor") for n in names):
+            return ("G-2", "作業役・読み取り専用の役割はデータ層を自動修正しません（`rdfix.py` は確認だけ。--apply は conductor が統合ブランチで実行します）")
+        allowed = {"rd-author": {"registry", "catalog"}, "test-designer": {"ledger"}}
+        for n in names:
+            if n in allowed and not only <= allowed[n]:
+                return ("G-5", f"{n} が rdfix.py --apply で直せるのは {','.join(sorted(allowed[n]))} だけです（--only で絞ります）")
     if re.search(r"(\b(Set-Content|Add-Content|Out-File|tee|sed\s+-i|perl\s+-pi)\b[^;&|]*|>{1,2}\s*)['\"]?(\./)?docs[/\\]requirements", c, re.I):
         if worker or (ctx.run_active and "rd-author" not in names):
             return ("G-1", "要求定義書を編集できるのは rd-author だけです")

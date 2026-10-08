@@ -165,15 +165,29 @@ def allocate(root: Path, cfg: dict, kind: str, count: int, note: str, dry: bool)
     return ids
 
 
-def sync(root: Path, cfg: dict, adopt: bool, finalize: bool) -> int:
+REUSE_FORBIDDEN = ("削除済み", "欠番")
+
+
+def plan_sync(root: Path, cfg: dict, adopt: bool, finalize: bool, revive: bool = True,
+              dedupe: bool = False) -> dict:
+    """Compute the reconciled registry without writing it.
+
+    Returns {"text", "exists", "changes": [(id, old, new)], "added": [id], "missing": [id],
+    "reused": [id], "dups_removed": [(id, line)], "dups_conflict": [(id, line)]}.
+    revive=False keeps 削除済み／欠番 rows that are used again (CHK-02) instead of marking them 使用中.
+    dedupe=True removes later rows that repeat an ID with the same 採番日時 and 採番元 (merge=union artifacts).
+    """
     reg_path = root / h.mf(cfg, "id_registry")
     doc = h.parse_requirements(root, cfg)
     ledger = h.load_ledger(root, cfg)
-    case_ids = {c.get("id") for c in ledger.get("cases", [])}
+    case_ids = {c.get("id") for c in ledger.get("cases", []) if isinstance(c, dict) and c.get("id")}
     text = ensure_registry(reg_path)
     lines = text.splitlines()
     reg = h.parse_registry_text(text)
-    changes = 0
+    res: dict = {"exists": reg_path.exists(), "changes": [], "added": [], "missing": [], "reused": [],
+                 "dups_removed": [], "dups_conflict": []}
+    seen: Dict[str, List[str]] = {}
+    drop: List[int] = []
     for idx, line in enumerate(lines):
         m = re.match(r"^\|\s*([A-Z0-9-]+)\s*\|", line)
         if not m or m.group(1) == "ID":
@@ -182,6 +196,13 @@ def sync(root: Path, cfg: dict, adopt: bool, finalize: bool) -> int:
         cells = h.split_row(line)
         if len(cells) < 3:
             continue
+        if dedupe and id_ in seen:
+            if cells[3:5] == seen[id_][3:5]:
+                drop.append(idx)
+                res["dups_removed"].append((id_, idx + 1))
+                continue
+            res["dups_conflict"].append((id_, idx + 1))
+        seen.setdefault(id_, cells)
         state = cells[2]
         kind = h.id_kind(id_)
         if kind in ("E2E", "IT"):
@@ -193,6 +214,9 @@ def sync(root: Path, cfg: dict, adopt: bool, finalize: bool) -> int:
             retired = bool(req and req.state == "廃止")
         new = state
         if present:
+            if not revive and state in REUSE_FORBIDDEN:
+                res["reused"].append(id_)
+                continue
             new = "廃止" if retired else "使用中"
         elif state in ("使用中", "廃止"):
             new = "削除済み"
@@ -201,36 +225,53 @@ def sync(root: Path, cfg: dict, adopt: bool, finalize: bool) -> int:
         if new != state:
             cells[2] = new
             lines[idx] = "| " + " | ".join(cells) + " |"
-            changes += 1
-            print(f"{id_}: {state} -> {new}")
+            res["changes"].append((id_, state, new))
+    for idx in reversed(drop):
+        del lines[idx]
     out = "\n".join(lines) + "\n"
-    added = []
+    missing = [i for i in sorted(doc.defs, key=lambda x: (h.id_kind(x), h.id_num(x)))
+               if i not in reg and h.id_kind(i) not in ("", "G", "SRC")]
+    missing += sorted(c for c in case_ids if c not in reg)
+    res["missing"] = missing
     if adopt:
         src = source_label(root)
         now = h.now_iso()
-        for id_ in sorted(doc.defs, key=lambda x: (h.id_kind(x), h.id_num(x))):
-            if id_ not in reg and h.id_kind(id_) not in ("", "G", "SRC"):
-                req = doc.requirements.get(id_)
-                st = "廃止" if req and req.state == "廃止" else "使用中"
-                added.append(f"| {id_} | {h.id_kind(id_)} | {st} | {now} | {src} | 既存の ID を取り込み |")
-        for cid in sorted(c for c in case_ids if c and c not in reg):
-            added.append(f"| {cid} | {h.id_kind(cid)} | 使用中 | {now} | {src} | 既存の ID を取り込み |")
+        added = []
+        for id_ in missing:
+            req = doc.requirements.get(id_)
+            st = "廃止" if req and req.state == "廃止" else "使用中"
+            added.append(f"| {id_} | {h.id_kind(id_)} | {st} | {now} | {src} | 既存の ID を取り込み |")
         out += "".join(a + "\n" for a in added)
-    if changes or added or not reg_path.exists():
-        h.write_text_atomic(reg_path, out)
+        res["added"] = list(missing)
+    res["text"] = out
+    res["ids"] = list(doc.defs) + list(case_ids)
+    return res
+
+
+def write_sync(root: Path, cfg: dict, plan: dict) -> None:
+    reg_path = root / h.mf(cfg, "id_registry")
+    if plan["changes"] or plan["added"] or plan["dups_removed"] or not plan["exists"]:
+        h.write_text_atomic(reg_path, plan["text"])
     cd = common_dir(root)
     if cd:
         alloc_path = cd / "hve-id-alloc.json"
         with Lock(cd / "hve-id-alloc.lock"):
             alloc = h.read_json(alloc_path, default={}) or {}
-            for id_ in list(doc.defs) + list(case_ids or []):
+            for id_ in plan["ids"]:
                 if not id_:
                     continue
                 k = h.id_kind(id_)
                 if k:
                     alloc[k] = max(alloc.get(k, 0), h.id_num(id_))
             h.write_json(alloc_path, alloc)
-    print(f"next-id sync: changed={changes} adopted={len(added)}")
+
+
+def sync(root: Path, cfg: dict, adopt: bool, finalize: bool) -> int:
+    plan = plan_sync(root, cfg, adopt, finalize)
+    for id_, old, new in plan["changes"]:
+        print(f"{id_}: {old} -> {new}")
+    write_sync(root, cfg, plan)
+    print(f"next-id sync: changed={len(plan['changes'])} adopted={len(plan['added'])}")
     return 0
 
 

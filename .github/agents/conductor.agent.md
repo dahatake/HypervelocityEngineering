@@ -21,6 +21,7 @@ disable-model-invocation: true
    main 上で始めた場合、start が統合ブランチ `run/<run-id>` を作ります。以後の commit はすべて統合ブランチか作業ブランチで行います。
    統合ブランチは `run-state.py status` の `integration:` の行（meta.json の `integration_branch`）です。run の途中でブランチ名を変えません（GitHub Copilot app の `rename_branch` も使いません。hook G-5 が拒否します）。
 2. `git log --oneline -10` と `python scripts/verify.py --docs-only` で基準を記録します（失敗していても続けます。基準として progress に書きます）。
+   verify が `HINT rdfix` を出したら `python scripts/rdfix.py --apply` でデータ層のファイル間の不整合を直し、commit します（要求定義書は変更しません）。`MANUAL` の行は、担当の役割への依頼に含めます。
 3. 一時ファイル（ログ・証跡・結果・メモ）は `work/runs/<run-id>/` にだけ書きます。/docs には永続の文書だけを書きます。
 
 ## 工程（順序は変えない。開始と完了を `run-state.py stage N` / `stage N --done` で記録する）
@@ -55,7 +56,7 @@ disable-model-invocation: true
 - 節目（5 項目ごと・4 時間ごと）: rd-auditor（scope: 差分、runs: 1）と `ledger.py run --select failed` を実行する。
 
 ## 最終（工程 6）
-1. `python scripts/ledger.py --by conductor run --select all --canary-first` と `python scripts/verify.py --strict --run current`。
+1. `python scripts/rdfix.py --apply`（統合で生じたデータ層の不整合を直す。`MANUAL` は手順 3 の rd-author への依頼か test-designer に回す）→ `python scripts/ledger.py --by conductor run --select all --canary-first` と `python scripts/verify.py --strict --run current`。
 2. rd-auditor（scope: 全量、runs: 3）。
 3. rd-author に転記を依頼する（包括承認した項目→決定記録、未回答の質問票・承認依頼→仮定・未解決事項、残った監査指摘→監査指摘）。`python scripts/next-id.py --sync --finalize`。
 4. `python scripts/kpi.py run --out work/runs/<run-id>/kpi.md` と `python scripts/kpi.py run --format html --out work/runs/<run-id>/kpi.html` で KPI を集計する。

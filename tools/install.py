@@ -48,6 +48,7 @@ MANAGED = [
     ".github/workflows/hve-verify.yml",
     "scripts/hvelib.py",
     "scripts/rdcheck.py",
+    "scripts/rdfix.py",
     "scripts/verify.py",
     "scripts/verify.ps1",
     "scripts/verify.sh",
@@ -61,11 +62,8 @@ MANAGED = [
     "scripts/import-speckit.py",
     "scripts/hooks/gate.py",
 ]
-# Shipped by older versions. Removed on update when unmodified (prompt files are not loaded by the
-# VS Code Agent Host / Copilot CLI; /build is now the skill .github/skills/build/SKILL.md).
-OBSOLETE = [
-    ".github/prompts/build.prompt.md",
-]
+# Files no longer shipped. Removed on update when unmodified.
+OBSOLETE: list[str] = []
 TEMPLATES = [
     "docs/requirements-definition.md",
     "docs/catalog.md",

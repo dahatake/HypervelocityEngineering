@@ -116,6 +116,12 @@ def main(argv=None) -> int:
         more = sum(1 for l in lines if l.startswith("ERROR")) - len(shown)
         if more > 0:
             print(f"  ... (+{more} errors)")
+        try:
+            n = h.load_script("rdfix").count_fixable(root, cfg)
+        except Exception:  # the hint must never break verify
+            n = 0
+        if n:
+            print(f"HINT rdfix: データ層の不整合のうち {n} 件は `python scripts/rdfix.py --apply` で自動修正できます（要求定義書は変更しません）")
     else:
         print("PASS rdcheck (management data)")
     if args.show_warnings:

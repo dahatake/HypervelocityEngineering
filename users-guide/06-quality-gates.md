@@ -35,8 +35,8 @@
 | CHK-04 | 要求に上位の G-ID（または既定制約）がない。存在しない G-ID を参照している。承認済みの要求を持たない G-ID がある | error / warn | 上位の欄を直す |
 | CHK-05 | MUST 要求に AC も未回答の Q もない | error | AC を追加するか、Q を挙げる |
 | CHK-06 | 承認済みの要求に決定記録（根拠と日付）がない | error | `承認済み（依頼 YYYY-MM-DD）` の形にする |
-| CHK-07 | カタログの要求 ID が要求定義書にない／決定状態が一致しない | error | カタログを直す |
-| CHK-08 | カタログに書かれたファイルが存在しない | error | パスを直すか「未実装」にする |
+| CHK-07 | カタログの要求 ID が要求定義書にない／決定状態が一致しない | error | `rdfix.py --apply` で要求定義書に合わせる（6.3） |
+| CHK-08 | カタログに書かれたファイルが存在しない | error | パスを直すか「未実装」にする。名前の変更・削除は `rdfix.py --apply` で追従できる |
 | CHK-09 | 実装済みの MUST 要求の ID が、テストコードにも manual-tests にもない（未実装なら warn） | error / warn | テスト名かコメントに `FR-012 AC-031` を書く |
 | CHK-10 | system の AC と台帳のケースが双方向に対応していない | warn（工程 4 以降と `--strict-ledger` では error） | test-designer がケースを追加する。対象外になった AC のケースは block する |
 | CHK-11 | `ac_digests` が AC の本文と一致しない | 同上 | test-designer がケースを見直し、`ledger.py digests --update` を実行する |
@@ -54,3 +54,20 @@
 | CHK-23 | `/work` が .gitignore にない。docs・tests に一時ファイルが commit されている。run-history の run-id が重複している | error | .gitignore に `/work/` を追加する。一時ファイルを /work に移す |
 
 出力は 1 行に 1 指摘（`ERROR CHK-07 docs/catalog.md:12 …`）で、最後に `rdcheck: errors=N warnings=M` の 1 行が出力されます。
+
+## 6.3 データ層の不整合の自動修正（rdfix）
+
+データ層のファイル（要求定義書・カタログ・ID 台帳・System Test の台帳・実行履歴・`.gitignore`）の間の食い違いのうち、要求定義書から機械的に決まるものは `python scripts/rdfix.py --apply` で直せます。verify が失敗し、自動で直せる不整合があるときは、`HINT rdfix: …` の行が出ます。
+
+- 正本は要求定義書です。rdfix は要求定義書を変更しません（G-1）。ID 台帳は `next-id.py`、台帳は `ledger.py` を通して直し、台帳の変更は `history` に残します（G-2・G-3）。
+- 判断が要る不整合は直さず、`MANUAL … （担当: <役割>）` として示します。例: AC の本文が変わった（CHK-11。ケースの見直しが要る）、削除済み・欠番の ID の再利用（CHK-02）、ID 台帳にない ID（CHK-01。手で振った ID かもしれない）、System Test の対象外になった AC のケース（CHK-10）。
+
+| 対象（`--only`） | 自動で直すもの | 対応する検査 |
+|---|---|---|
+| registry | ID 台帳の状態（使用中・廃止・削除済み）、merge=union で重複した行、ID 台帳がないときの作成。`--adopt` を付けたときだけ、台帳にない ID を取り込む | CHK-01 |
+| catalog | 機能の表の決定状態・題名を要求定義書に合わせる。要求の行の追加（実装ファイル・テストは、その ID を書いたコード・テストから埋める）。要求定義書にない要求の行（ファイルの記載がないもの）と重複した行の削除。名前が変わったファイルの参照の付け替えと、存在しないファイルの参照の削除。コードがなくなった廃止の要求の実装ファイルを「なし」にする | CHK-07・CHK-08・CHK-17 |
+| ledger | ケースの欠けた項目、`requirement_ids` を AC の「対応する要求」に合わせる、`ac_digests` の不足の補充と、どのケースも参照しない `ac_digests` の削除 | CHK-10・CHK-11 |
+| gitignore | `/work/` の追加 | CHK-23 |
+| history | merge=union で重複した実行履歴の行の削除 | CHK-23 |
+
+`--apply` は conductor が統合ブランチで実行します（「始めに」と工程 6）。作業役のブランチ（`work/<run-id>/<item>`）では実行を拒否し、hook も implementer・reviewer・rd-auditor による `--apply` を拒否します（G-2）。rd-author は `--only catalog,registry`、test-designer は `--only ledger` に限って使えます。

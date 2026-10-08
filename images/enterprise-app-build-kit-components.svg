@@ -120,7 +120,7 @@
   <text class="frame-label" x="56" y="628">データ層（toolkit が維持管理するデータ）</text>
 
   <path class="line" d="M840,546 L840,568 L400,568 L400,644" marker-end="url(#arrow)"/>
-  <text class="note" x="392" y="590" text-anchor="end">整合検査・ID 採番（rdcheck / next-id）</text>
+  <text class="note" x="392" y="590" text-anchor="end">整合検査・修復・ID 採番（rdcheck / rdfix / next-id）</text>
   <path class="line" d="M880,546 L880,580 L620,580 L620,644" marker-end="url(#arrow)"/>
   <text class="note" x="628" y="598">台帳の更新（ledger.py）</text>
   <path class="line" d="M960,546 L960,644" marker-end="url(#arrow)"/>

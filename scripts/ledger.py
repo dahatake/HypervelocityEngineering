@@ -8,6 +8,7 @@ Usage:
   python scripts/ledger.py block ID --reason "..."          # never delete a case; block it with a reason
   python scripts/ledger.py set ID pass|fail|blocked|not_run [--evidence PATH] [--reason ...]
   python scripts/ledger.py digests [--update]               # ac_digests (PARAM expanded AC text)
+  python scripts/ledger.py repair [--apply]                 # align with the requirements definition (rdfix.py)
   python scripts/ledger.py run [--cases E2E-001,IT-002 | --select changed|failed|all] [--base REF]
                                [--canary-first] [--max-minutes N] [--no-record] [--results PATH]
 
@@ -184,6 +185,123 @@ def cmd_digests(args, root, cfg) -> int:
     return 0 if (diff == 0 or args.update) else 1
 
 
+CASE_DEFAULTS = {
+    "requirement_ids": list, "ac_ids": list, "title": str, "layer": str, "command": str,
+    "canary": lambda: False, "status": lambda: "not_run", "last_commit": lambda: None,
+    "last_run_at": lambda: None, "evidence": lambda: None, "history": list,
+}
+
+
+def repair(root: Path, cfg: dict, doc, apply: bool, by: str = "rdfix") -> List[dict]:
+    """Bring the ledger in line with the requirements definition (used by rdfix.py).
+
+    Fixes only what follows mechanically from the requirements definition: missing fields,
+    requirement_ids that no longer match the ACs, missing / orphan ac_digests. Anything that needs
+    a test-designer's review (changed AC text, AC out of scope, unknown AC) is returned as MANUAL.
+    Returns [{"kind": "FIX"|"MANUAL", "chk", "loc", "msg", "owner"}].
+    """
+    led = h.mf(cfg, "ledger")
+    path = root / led
+    out: List[dict] = []
+
+    def add(kind: str, chk: str, msg: str, owner: str = "test-designer") -> None:
+        out.append({"kind": kind, "chk": chk, "loc": led, "msg": msg, "owner": owner})
+
+    try:
+        raw = h.read_json(path, default=None)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        add("MANUAL", "CHK-10", f"台帳の JSON を読めません（マージの競合の印などを確認します）: {exc}")
+        return out
+    if raw is not None and not isinstance(raw, dict):
+        add("MANUAL", "CHK-10", "台帳の形式が不正です（最上位がオブジェクトではありません）")
+        return out
+    data = h.load_ledger(root, cfg)
+    changed = raw is None
+    if raw is None:
+        add("FIX", "CHK-10", "台帳がありません。空の台帳を作成します")
+    if not isinstance(data.get("cases"), list) or not isinstance(data.get("ac_digests"), dict):
+        add("MANUAL", "CHK-10", "台帳の cases（配列）または ac_digests（オブジェクト）の形式が不正です")
+        return out
+    seen: Dict[str, int] = {}
+    referenced: List[str] = []
+    sys_ids = {a.id for a in h.system_acs(doc)} if doc.exists else set()
+    for i, c in enumerate(data["cases"]):
+        if not isinstance(c, dict) or not c.get("id"):
+            add("MANUAL", "CHK-10", f"{i + 1} 番目のケースに id がありません")
+            continue
+        cid = c["id"]
+        seen[cid] = seen.get(cid, 0) + 1
+        if seen[cid] == 2:
+            add("MANUAL", "CHK-10", f"ケース {cid} が重複しています（ケースは削除せず、片方を `ledger.py update` で直します）")
+        filled = []
+        for key, make in CASE_DEFAULTS.items():
+            if key not in c:
+                c[key] = make()
+                filled.append(key)
+        if c.get("status") not in STATUSES:
+            filled.append(f"status={c.get('status')!r}→not_run")
+            c["status"] = "not_run"
+        if filled:
+            changed = True
+            add("FIX", "CHK-10", f"{cid} の欠けた項目を補います: {', '.join(filled)}")
+        acs = [a for a in c.get("ac_ids", []) if isinstance(a, str)]
+        referenced += acs
+        if not doc.exists:
+            continue
+        for a in acs:
+            if a not in doc.acs:
+                add("MANUAL", "CHK-10", f"{cid} が存在しない受入基準 {a} を参照しています（`ledger.py update --ac` か `block`）")
+            elif a not in sys_ids and c.get("status") != "blocked":
+                add("MANUAL", "CHK-10", f"{cid} の {a} は System Test の対象外になりました（理由つきで `ledger.py block` するか更新します）")
+        old = [r for r in c.get("requirement_ids", []) if isinstance(r, str)]
+        owners = []
+        for a in acs:
+            r = doc.acs[a].requirement if a in doc.acs else None
+            if r and r in doc.requirements and r not in owners:
+                owners.append(r)
+        new = [r for r in old if r in doc.requirements]
+        new += [r for r in owners if r not in new]
+        if new and new != c.get("requirement_ids"):
+            changed = True
+            history(c, f"requirement_ids: {c.get('requirement_ids')} -> {new}",
+                    "rdfix: 受入基準の「対応する要求」と要求定義書に合わせる", by)
+            c["requirement_ids"] = new
+            add("FIX", "CHK-10", f"{cid} の requirement_ids を {old} → {new} に直します（受入基準の対応する要求に合わせる）")
+    digests = data["ac_digests"]
+    ref_set = set(referenced)
+    if doc.exists:
+        for a in sorted(ref_set):
+            ac = doc.acs.get(a)
+            if ac is None:
+                continue
+            cur = h.ac_digest(ac, doc.params)
+            old_d = digests.get(a)
+            if old_d is None:
+                digests[a] = cur
+                changed = True
+                add("FIX", "CHK-11", f"{a} の ac_digests を補います（{cur}）")
+            elif old_d != cur:
+                add("MANUAL", "CHK-11", f"{a} の本文が台帳の作成時から変わっています。ケースを見直してから `ledger.py digests --update`")
+        for a in sorted(k for k in digests if k not in ref_set):
+            del digests[a]
+            changed = True
+            add("FIX", "CHK-11", f"どのケースも参照していない {a} の ac_digests を取り除きます")
+    if apply and changed:
+        h.save_ledger(root, cfg, data)
+    return out
+
+
+def cmd_repair(args, root, cfg) -> int:
+    doc = h.parse_requirements(root, cfg)
+    acts = repair(root, cfg, doc, args.apply, args.by)
+    for a in acts:
+        tail = f"（担当: {a['owner']}）" if a["kind"] == "MANUAL" else ""
+        print(f"{a['kind']} {a['chk']} {a['loc']} {a['msg']}{tail}")
+    fixes = sum(1 for a in acts if a["kind"] == "FIX")
+    print(f"ledger repair: fix={fixes} manual={len(acts) - fixes}{' (applied)' if args.apply else ''}")
+    return 1 if fixes and not args.apply else 0
+
+
 def changed_files(root: Path, base: Optional[str]) -> List[str]:
     if not base:
         return []
@@ -319,6 +437,8 @@ def main(argv=None) -> int:
     st.add_argument("--reason")
     d = sub.add_parser("digests")
     d.add_argument("--update", action="store_true")
+    rp = sub.add_parser("repair")
+    rp.add_argument("--apply", action="store_true", help="修正を書き込む（既定は確認だけ）")
     r = sub.add_parser("run")
     r.add_argument("--cases")
     r.add_argument("--select", default="changed", choices=("changed", "failed", "all"))
@@ -333,7 +453,7 @@ def main(argv=None) -> int:
     root = Path(args.root).resolve() if args.root else h.repo_root()
     cfg = h.load_config(root)
     fn = {"summary": cmd_summary, "add": cmd_add, "update": cmd_update, "block": cmd_block,
-          "set": cmd_set, "digests": cmd_digests, "run": cmd_run}[args.cmd]
+          "set": cmd_set, "digests": cmd_digests, "run": cmd_run, "repair": cmd_repair}[args.cmd]
     return fn(args, root, cfg)
 
 
