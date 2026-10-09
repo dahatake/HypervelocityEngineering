@@ -53,6 +53,7 @@ function renderNav() {
 
 async function route() {
   const name = routeName();
+  document.documentElement.dataset.route = name;
   document.documentElement.classList.toggle('snapshot', isSnapshotLink());
   renderNav();
   if (!store.model) return;
