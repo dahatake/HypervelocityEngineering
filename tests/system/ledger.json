@@ -8,14 +8,24 @@
     "AC-006": "sha256:82d44e3a89ec4b70",
     "AC-008": "sha256:361dae2866606a9a",
     "AC-010": "sha256:8bbd19693f009e1c",
-    "AC-013": "sha256:bfc117641b7cd411",
+    "AC-013": "sha256:243092b08a7d5cae",
     "AC-023": "sha256:1be2a7da6dae5725",
-    "AC-024": "sha256:55e372494ad2a27b",
+    "AC-024": "sha256:1cf7f5ce8645784e",
     "AC-026": "sha256:033c7123cb893dce",
     "AC-028": "sha256:f2fb5e2374ba8ab5",
     "AC-033": "sha256:b4254552158c81b2",
     "AC-034": "sha256:ba2b21d21e4d7ac7",
-    "AC-037": "sha256:a2f283700b0565c2"
+    "AC-037": "sha256:a2f283700b0565c2",
+    "AC-044": "sha256:4261ddc0095208fa",
+    "AC-045": "sha256:797391cd7043133f",
+    "AC-046": "sha256:ec8fcb9abcb2cef1",
+    "AC-047": "sha256:4317d9cf7363a64b",
+    "AC-048": "sha256:f29c10442414e706",
+    "AC-049": "sha256:1b37d3963a440968",
+    "AC-050": "sha256:0645e5c6f226688c",
+    "AC-051": "sha256:5901f924fec6d109",
+    "AC-052": "sha256:6d1731d953da7274",
+    "AC-053": "sha256:871dc91803313df7"
   },
   "cases": [
     {
@@ -528,6 +538,256 @@
           "by": "test-designer",
           "change": "title: 'First-steps startup prerequisites and unknowns' -> 'All documented startup prerequisites, evidence, and unknowns'",
           "reason": "AC本文の未検証句と異常系を補い、期待値を要求定義書だけから強化"
+        }
+      ]
+    },
+    {
+      "id": "E2E-016",
+      "requirement_ids": [
+        "FR-1002"
+      ],
+      "ac_ids": [
+        "AC-044"
+      ],
+      "title": "All seven pages show page-specific analysis for three personas",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_every_page_has_page_specific_analysis_for_all_three_personas",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T00:04:59+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-017",
+      "requirement_ids": [
+        "FR-1003"
+      ],
+      "ac_ids": [
+        "AC-045"
+      ],
+      "title": "All data layers distinguish current and ideal structures and every difference type",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_current_and_ideal_structure_explain_every_layer_and_difference_type",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T00:05:04+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-018",
+      "requirement_ids": [
+        "FR-1004"
+      ],
+      "ac_ids": [
+        "AC-046"
+      ],
+      "title": "Explicit maintenance previews and safely applies the two permitted catalog columns",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_explicit_maintenance_previews_and_applies_only_two_catalog_columns",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T00:05:10+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-019",
+      "requirement_ids": [
+        "FR-1004"
+      ],
+      "ac_ids": [
+        "AC-047"
+      ],
+      "title": "All maintenance failure modes roll back bytes and offer retry or cancel",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_maintenance_failures_roll_back_every_byte_and_offer_retry_or_cancel",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T00:05:14+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-020",
+      "requirement_ids": [
+        "FR-1005"
+      ],
+      "ac_ids": [
+        "AC-048"
+      ],
+      "title": "Runtime code data and local or cloud boundaries show locations and directions",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_runtime_and_data_placement_show_local_none_and_defined_cloud_boundaries",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T00:05:18+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-021",
+      "requirement_ids": [
+        "FR-1006"
+      ],
+      "ac_ids": [
+        "AC-049"
+      ],
+      "title": "Layer consistency traces complete missing and dangling chains by ID",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_layer_consistency_traces_normal_missing_layer_and_dangling_reference_by_id",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T00:05:26+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-022",
+      "requirement_ids": [
+        "FR-1006"
+      ],
+      "ac_ids": [
+        "AC-050"
+      ],
+      "title": "Entity ER diagram cites requirement evidence and does not invent relations",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_entity_er_uses_requirement_evidence_and_never_invents_missing_relations",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T00:05:32+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-023",
+      "requirement_ids": [
+        "FR-1006"
+      ],
+      "ac_ids": [
+        "AC-051"
+      ],
+      "title": "History progress and infographics drill down without counting not_run as pass",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_history_progress_and_infographics_drill_to_evidence_without_counting_not_run_as_pass",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T00:05:36+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-024",
+      "requirement_ids": [
+        "FR-1007"
+      ],
+      "ac_ids": [
+        "AC-052"
+      ],
+      "title": "Manifest proves same-commit reproducible real screenshots for every screen",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_screen_manifest_has_reproducible_same_commit_real_screenshots_for_all_views",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T00:05:42+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-025",
+      "requirement_ids": [
+        "FR-010"
+      ],
+      "ac_ids": [
+        "AC-053"
+      ],
+      "title": "Repository default precedence is explicit argument then cwd then Studio placement",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_repository_precedence_is_explicit_then_cwd_then_studio_placement",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T00:05:47+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
         }
       ]
     }
