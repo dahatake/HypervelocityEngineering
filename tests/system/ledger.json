@@ -1,5 +1,397 @@
 {
   "version": 1,
-  "ac_digests": {},
-  "cases": []
+  "ac_digests": {
+    "AC-001": "sha256:ec444f1d50fc8ae7",
+    "AC-002": "sha256:dc97819966b31970",
+    "AC-003": "sha256:cc645b49ac0ed529",
+    "AC-005": "sha256:c0c502ef4909cd05",
+    "AC-006": "sha256:82d44e3a89ec4b70",
+    "AC-008": "sha256:361dae2866606a9a",
+    "AC-010": "sha256:8bbd19693f009e1c",
+    "AC-013": "sha256:bfc117641b7cd411",
+    "AC-023": "sha256:1be2a7da6dae5725",
+    "AC-024": "sha256:55e372494ad2a27b",
+    "AC-026": "sha256:033c7123cb893dce",
+    "AC-028": "sha256:f2fb5e2374ba8ab5",
+    "AC-033": "sha256:b4254552158c81b2",
+    "AC-034": "sha256:ba2b21d21e4d7ac7",
+    "AC-037": "sha256:5558e6d7776bb1ad"
+  },
+  "cases": [
+    {
+      "id": "E2E-001",
+      "requirement_ids": [
+        "FR-001"
+      ],
+      "ac_ids": [
+        "AC-001"
+      ],
+      "title": "Model traversal from requirement to catalog, file, and test",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "canary": true,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-09T22:10:37+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-002",
+      "requirement_ids": [
+        "FR-002"
+      ],
+      "ac_ids": [
+        "AC-002"
+      ],
+      "title": "Dashboard aggregates and selectable breakdowns",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-09T22:10:43+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-003",
+      "requirement_ids": [
+        "FR-003"
+      ],
+      "ac_ids": [
+        "AC-003"
+      ],
+      "title": "2D and 3D relationship highlighting and navigation",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-09T22:10:48+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-004",
+      "requirement_ids": [
+        "FR-005"
+      ],
+      "ac_ids": [
+        "AC-005"
+      ],
+      "title": "Selection and filter persistence across views",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-09T22:10:54+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-005",
+      "requirement_ids": [
+        "FR-006"
+      ],
+      "ac_ids": [
+        "AC-006"
+      ],
+      "title": "Search shortcuts, result limit, and CSV export",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-09T22:11:02+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-006",
+      "requirement_ids": [
+        "FR-008"
+      ],
+      "ac_ids": [
+        "AC-008"
+      ],
+      "title": "Persona defaults and state preservation",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-09T22:11:09+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-007",
+      "requirement_ids": [
+        "FR-010"
+      ],
+      "ac_ids": [
+        "AC-010"
+      ],
+      "title": "Invalid repository switch preserves current model",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-09T22:11:16+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-008",
+      "requirement_ids": [
+        "FR-013"
+      ],
+      "ac_ids": [
+        "AC-013"
+      ],
+      "title": "Read-only startup, switching, and refresh boundary",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-09T22:11:22+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-009",
+      "requirement_ids": [
+        "NFR-SEC-001"
+      ],
+      "ac_ids": [
+        "AC-023"
+      ],
+      "title": "Loopback binding and foreign-host rejection",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-09T22:11:27+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-010",
+      "requirement_ids": [
+        "NFR-SEC-002"
+      ],
+      "ac_ids": [
+        "AC-024"
+      ],
+      "title": "Read-only behavior across all views",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-09T22:11:33+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-011",
+      "requirement_ids": [
+        "NFR-OPS-001"
+      ],
+      "ac_ids": [
+        "AC-026"
+      ],
+      "title": "Supported runtime and default model startup",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-09T22:11:39+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-012",
+      "requirement_ids": [
+        "NFR-OPS-003"
+      ],
+      "ac_ids": [
+        "AC-028"
+      ],
+      "title": "Missing data recovery and model retention",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-09T22:11:47+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-013",
+      "requirement_ids": [
+        "FR-001"
+      ],
+      "ac_ids": [
+        "AC-033"
+      ],
+      "title": "Configured cross-record traceability",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-09T22:11:54+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-014",
+      "requirement_ids": [
+        "FR-010"
+      ],
+      "ac_ids": [
+        "AC-034"
+      ],
+      "title": "Repository switch success and failure retention",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-09T22:12:01+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-015",
+      "requirement_ids": [
+        "FR-1001"
+      ],
+      "ac_ids": [
+        "AC-037"
+      ],
+      "title": "First-steps startup prerequisites and unknowns",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-09T22:13:44+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    }
+  ]
 }
