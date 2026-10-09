@@ -77,6 +77,7 @@ MANAGED = [
     "EABK-Studio/web/js/diagrams.js",
     "EABK-Studio/web/js/drawer.js",
     "EABK-Studio/web/js/i18n.js",
+    "EABK-Studio/web/js/insights.js",
     "EABK-Studio/web/js/map2d.js",
     "EABK-Studio/web/js/map3d.js",
     "EABK-Studio/web/js/placement.js",
@@ -91,6 +92,15 @@ MANAGED = [
     "EABK-Studio/users-guide/02-screens.md",
     "EABK-Studio/users-guide/03-tasks.md",
     "EABK-Studio/users-guide/04-troubleshooting.md",
+    "EABK-Studio/users-guide/capture-screens.py",
+    "EABK-Studio/users-guide/screen-images.json",
+    "EABK-Studio/users-guide/images/dashboard.png",
+    "EABK-Studio/users-guide/images/map2d.png",
+    "EABK-Studio/users-guide/images/map3d.png",
+    "EABK-Studio/users-guide/images/diagrams.png",
+    "EABK-Studio/users-guide/images/placement.png",
+    "EABK-Studio/users-guide/images/source.png",
+    "EABK-Studio/users-guide/images/tables.png",
 ]
 # Files no longer shipped. Removed on update when unmodified.
 OBSOLETE: list[str] = []

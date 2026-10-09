@@ -186,3 +186,98 @@ export function mountConsistency(host) {
   host.append(page);
   return { destroy() {} };
 }
+
+export function mountMaintenance(host) {
+    const page = el('div', { class: 'page' },
+      el('h1', {}, '整合性保守 / Maintenance'),
+      el('p', { class: 'sub' }, '要求正本と異なるカタログの題名・決定状態だけを、明示プレビュー後に原子的に更新します。'),
+      el('div', { class: 'warnbox' }, '通常の閲覧は参照専用です。保守は選択した1行・2列だけが対象で、検査失敗時はバイト単位で戻します。'));
+    const list = el('div', { class: 'grid cols2' });
+    const reqs = new Map(store.model.reqs.map((r) => [r.id, r]));
+    const featureCounts = store.model.catalog.features.reduce((counts, feature) => {
+      counts.set(feature.req, (counts.get(feature.req) || 0) + 1);
+      return counts;
+    }, new Map());
+    for (const feature of store.model.catalog.features) {
+      const req = reqs.get(feature.req);
+      const mismatch = !req || feature.title !== req.title || feature.status !== req.status;
+      if (!mismatch) continue;
+      list.append(el('button', { class: 'card maintenance-item', onclick: () => preview(feature.req) },
+        el('b', {}, feature.req),
+        el('span', {}, req ? `${feature.title} → ${req.title}` : '未対応: 要求正本に参照先なし'),
+        el('span', {}, req ? `${feature.status} → ${req.status}` : 'unsupported')));
+    }
+    if (!list.children.length) list.append(el('p', { class: 'empty' }, '保守候補はありません。'));
+    page.append(list);
+    host.append(page);
+
+    const errorText = {
+      unsupported: '未対応 / unsupported',
+      'invalid-input': '入力条件が一意ではありません / invalid input condition',
+      'preview-conflict': 'プレビュー後の競合 / preview conflict',
+      'write-error': '書込みに失敗 / write error',
+      'outside-preview': 'preview 外の同一ファイルを検出 / outside preview',
+      'verify-failure': '検査に失敗 / verify failure',
+    };
+    const request = async (path, body) => {
+      const response = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-EABK-Studio': '1' },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (!response.ok) throw data;
+      return data;
+    };
+    const showError = (failure, retry) => {
+      document.querySelector('.maintenance-modal')?.remove();
+      const alert = el('div', { class: 'card maintenance-result', role: 'alert' },
+        el('b', {}, errorText[failure.error] || failure.error || 'maintenance error'),
+        el('p', {}, failure.detail || ''),
+        el('p', {}, '変更はバイト単位で元に戻しました / byte-for-byte restored'),
+        el('div', { class: 'row' },
+          el('button', { class: 'btn', onclick: retry }, '再試行 / Retry'),
+          el('button', { class: 'btn ghost', onclick: () => alert.remove() }, '中止 / Cancel')));
+      page.prepend(alert);
+    };
+    const preview = async (id) => {
+      if (!reqs.has(id)) {
+        showError({ error: 'unsupported', detail: 'unsupported requirement' }, () => preview(id));
+        return;
+      }
+      if (featureCounts.get(id) !== 1) {
+        showError({ error: 'invalid-input', detail: 'input condition is not unique' }, () => preview(id));
+        return;
+      }
+      const card = el('div', { class: 'card' },
+        el('h2', {}, '保守プレビュー / Maintenance preview'),
+        el('p', {}, `${id}: 読み込み中 / Loading`),
+        el('button', { class: 'btn ghost', onclick: () => modal.remove() }, '中止 / Cancel'));
+      const modal = el('div', { class: 'modal maintenance-modal', role: 'dialog', 'aria-label': '保守プレビュー / Maintenance preview' }, card);
+      document.body.append(modal);
+      try {
+        const data = await request('/api/maintenance/preview', { id });
+        card.replaceChildren(
+            el('h2', {}, '保守プレビュー / Maintenance preview'),
+            el('p', {}, `${data.path} — ${data.id}`),
+            ...data.changes.map((change) => el('p', {}, `${change.column}: ${change.before} → ${change.after}`)),
+            el('p', { class: 'mono' }, data.verify),
+            el('div', { class: 'row' },
+              el('button', { class: 'btn', onclick: async () => {
+                try {
+                  const result = await request('/api/maintenance/apply', { token: data.token });
+                  modal.remove();
+                  const status = el('div', { class: 'card maintenance-result', role: 'status' },
+                    `exit ${result.exit}: ${result.message} — ${result.path}`);
+                  page.prepend(status);
+                } catch (failure) {
+                  showError(failure, () => preview(id));
+                }
+              } }, '確認して実行 / Confirm and apply'),
+              el('button', { class: 'btn ghost', onclick: () => modal.remove() }, '中止 / Cancel')));
+      } catch (failure) {
+        showError(failure, () => preview(id));
+      }
+    };
+  return { destroy() { document.querySelector('.maintenance-modal')?.remove(); } };
+}

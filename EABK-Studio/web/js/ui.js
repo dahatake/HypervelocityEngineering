@@ -80,6 +80,10 @@ export function nodeTip(n) {
 }
 
 export function animateNumber(node, to, ms = 900) {
+  if (document.documentElement.classList.contains('snapshot')) {
+    node.textContent = String(to);
+    return;
+  }
   const t0 = performance.now();
   const dec = String(to).includes('.') ? 1 : 0;
   const step = (now) => {

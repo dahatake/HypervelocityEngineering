@@ -1,0 +1,81 @@
+{
+  "screens": [
+    {
+      "screen_id": "dashboard",
+      "image": "images/dashboard.png",
+      "sha256": "bae161f81d13fdb3befa9f319ae4514e269eafec93f9b2c2651c49844020cc9c",
+      "commit": "0000000000000000000000000000000000000000",
+      "capture_command": "python EABK-Studio/users-guide/capture-screens.py --commit 0000000000000000000000000000000000000000",
+      "required_elements": [
+        "ダッシュボード",
+        "Product Manager"
+      ]
+    },
+    {
+      "screen_id": "map2d",
+      "image": "images/map2d.png",
+      "sha256": "916a4539bb454a445377d9411b7e4938c776662ec8c14f79bf9c37c870fcf040",
+      "commit": "0000000000000000000000000000000000000000",
+      "capture_command": "python EABK-Studio/users-guide/capture-screens.py --commit 0000000000000000000000000000000000000000",
+      "required_elements": [
+        "2D マップ",
+        "Product Manager"
+      ]
+    },
+    {
+      "screen_id": "map3d",
+      "image": "images/map3d.png",
+      "sha256": "6b7df7e088b22a4d098c409a12b06e4a64a4e50a221f5142e10117590ad17970",
+      "commit": "0000000000000000000000000000000000000000",
+      "capture_command": "python EABK-Studio/users-guide/capture-screens.py --commit 0000000000000000000000000000000000000000",
+      "required_elements": [
+        "3D マップ",
+        "Product Manager"
+      ]
+    },
+    {
+      "screen_id": "diagrams",
+      "image": "images/diagrams.png",
+      "sha256": "f0465ff0a8f8645e97289b3e3ab531cbbbcf18e06baead896c832dad2cdb0770",
+      "commit": "0000000000000000000000000000000000000000",
+      "capture_command": "python EABK-Studio/users-guide/capture-screens.py --commit 0000000000000000000000000000000000000000",
+      "required_elements": [
+        "図式",
+        "Product Manager"
+      ]
+    },
+    {
+      "screen_id": "placement",
+      "image": "images/placement.png",
+      "sha256": "4e792792ea2561bf6d6eb13744a9d61aa4c4805641f32cff21c765b31ded128b",
+      "commit": "0000000000000000000000000000000000000000",
+      "capture_command": "python EABK-Studio/users-guide/capture-screens.py --commit 0000000000000000000000000000000000000000",
+      "required_elements": [
+        "配置",
+        "Product Manager"
+      ]
+    },
+    {
+      "screen_id": "source",
+      "image": "images/source.png",
+      "sha256": "445bc3e862ebe1f20af8f0b180d18392c338d219967a883a1b15c6023e51451e",
+      "commit": "0000000000000000000000000000000000000000",
+      "capture_command": "python EABK-Studio/users-guide/capture-screens.py --commit 0000000000000000000000000000000000000000",
+      "required_elements": [
+        "ソース対応",
+        "Product Manager"
+      ]
+    },
+    {
+      "screen_id": "tables",
+      "image": "images/tables.png",
+      "sha256": "f561512ae7327b166ce11c02b94464123dd1261a69d76f0910c4d44fc198aae0",
+      "commit": "0000000000000000000000000000000000000000",
+      "capture_command": "python EABK-Studio/users-guide/capture-screens.py --commit 0000000000000000000000000000000000000000",
+      "required_elements": [
+        "表",
+        "Product Manager"
+      ]
+    }
+  ]
+}

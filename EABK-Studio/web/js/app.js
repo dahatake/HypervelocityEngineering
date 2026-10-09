@@ -2,7 +2,7 @@ import { t, lang, setLang, onLang, applyI18n } from './i18n.js';
 import { store } from './store.js';
 import { el, esc, colorOf, typeLabel, toast } from './ui.js';
 import { initDrawer } from './drawer.js';
-import { decorate, mountStructure, mountConsistency } from './insights.js';
+import { decorate, mountStructure, mountConsistency, mountMaintenance } from './insights.js';
 
 const ROUTES = {
   dashboard: { icon: '◉', load: () => import('./dashboard.js') },
@@ -12,6 +12,7 @@ const ROUTES = {
   placement: { icon: '⊞', load: () => import('./placement.js') },
   source: { icon: '⌘', load: () => import('./source.js') },
   tables: { icon: '☰', load: () => import('./tables.js') },
+  maintenance: { icon: '⚙', label: '整合性保守 / Maintenance', mount: mountMaintenance },
   structure: { hidden: true, mount: mountStructure },
   consistency: { hidden: true, mount: mountConsistency },
 };
@@ -28,6 +29,7 @@ for (const name of ['Product Manager', 'Architect', 'Software Engineer']) {
 }
 
 const routeName = () => { const r = (location.hash.replace(/^#\/?/, '') || 'dashboard').split('?')[0]; return ROUTES[r] ? r : 'dashboard'; };
+const isSnapshotLink = () => new URLSearchParams(location.hash.split('?')[1] || '').has('select');
 
 // Deep links: #/map2d?select=FR-001 or #/tables?q=keyword (applied once per navigation).
 let linkDone = '';
@@ -37,7 +39,7 @@ function applyDeepLink() {
   linkDone = raw;
   const p = new URLSearchParams(raw.split('?')[1]);
   if (p.get('q')) q.value = p.get('q');
-  if (p.get('select') && store.nodes.has(p.get('select'))) setTimeout(() => store.select(p.get('select'), { fly: true }), 50);
+  if (p.get('select') && store.nodes.has(p.get('select'))) store.select(p.get('select'), { fly: !isSnapshotLink() });
   else if (p.get('q')) {
     const r = store.search(p.get('q'));
     if (r.total) setTimeout(() => store.setFocus(r.all, `“${p.get('q')}”`), 50);
@@ -46,11 +48,12 @@ function applyDeepLink() {
 
 function renderNav() {
   const r = routeName();
-  nav.replaceChildren(...Object.entries(ROUTES).filter(([, v]) => !v.hidden).map(([k, v]) => el('a', { href: '#/' + k, class: k === r ? 'on' : '' }, el('span', {}, v.icon), t('nav.' + k))));
+  nav.replaceChildren(...Object.entries(ROUTES).filter(([, v]) => !v.hidden).map(([k, v]) => el('a', { href: '#/' + k, class: k === r ? 'on' : '' }, el('span', {}, v.icon), v.label || t('nav.' + k))));
 }
 
 async function route() {
   const name = routeName();
+  document.documentElement.classList.toggle('snapshot', isSnapshotLink());
   renderNav();
   if (!store.model) return;
   const my = ++token;
@@ -64,6 +67,10 @@ async function route() {
     current = mod.mount(host);
     decorate(name, host);
     applyDeepLink();
+    if (isSnapshotLink()) {
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      host.append(el('span', { class: 'sr-only' }, `Snapshot ready: ${name}`));
+    }
   } catch (e) {
     console.error(e);
     host.replaceChildren(el('div', { class: 'page' }, el('div', { class: 'warnbox' }, String((e && e.message) || e))));
@@ -172,7 +179,7 @@ document.getElementById('repoBtn').addEventListener('click', async () => {
 window.addEventListener('hashchange', route);
 
 setInterval(async () => {
-  if (document.hidden || !store.model) return;
+  if (document.hidden || !store.model || routeName() === 'maintenance') return;
   try {
     const f = await (await fetch('/api/fingerprint', { cache: 'no-store' })).json();
     if (fingerprint && f.fingerprint !== fingerprint) { toast(t('update.avail')); await loadModel(true); route(); }

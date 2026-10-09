@@ -255,9 +255,10 @@ export function mount(host) {
       ctx.fill();
       ctx.shadowBlur = 0;
       if (n.id === store.selected || n.id === store.hover) {
-        const pulse = 1 + 0.25 * Math.sin(now / 220);
+        const snapshot = document.documentElement.classList.contains('snapshot');
+        const pulse = snapshot ? 1 : 1 + 0.25 * Math.sin(now / 220);
         ctx.strokeStyle = '#fff'; ctx.lineWidth = 2 / k; ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.9 * pulse, 0, 7); ctx.stroke();
-        dirty = true;
+        if (!snapshot) dirty = true;
       }
       if ((labelOn && on) || (focusing && on && k > 0.22 && (set.size < 90 || n.id === store.selected))) {
         const fs = 12;
@@ -297,7 +298,15 @@ export function mount(host) {
     mini._s = { s, ox, oy };
   }
 
-  function schedule() { if (!raf && !dead) raf = requestAnimationFrame(frame); }
+  function schedule() {
+    if (document.documentElement.classList.contains('snapshot')) {
+      if (!raf && !dead) {
+        raf = requestAnimationFrame((now) => frame(now));
+      }
+    } else if (!raf && !dead) {
+      raf = requestAnimationFrame(frame);
+    }
+  }
   function frame(now) {
     raf = 0;
     if (dead) return;
@@ -436,7 +445,9 @@ export function mount(host) {
     store.on('model', () => relayout(false)),
     onLang(() => { renderToolbar(); renderStatus(); layout(); redraw(); }),
   ];
-  if (store.activeSet()) setTimeout(() => { const c = camFor(store.activeSet(), 160); if (c) fly(c, 900); renderStatus(); }, 50);
+  if (store.activeSet() && !document.documentElement.classList.contains('snapshot')) {
+    setTimeout(() => { const c = camFor(store.activeSet(), 160); if (c) fly(c, 900); renderStatus(); }, 50);
+  }
 
   return { destroy() { dead = true; cancelAnimationFrame(raf); stopTour(); ro.disconnect(); offs.forEach((f) => f()); hideTip(); } };
 }

@@ -9,8 +9,8 @@ from __future__ import annotations
 import json
 import hashlib
 import re
-import time
 from collections import Counter, OrderedDict
+from datetime import datetime
 from pathlib import Path
 
 STUDIO_VERSION = "1.0.0"
@@ -271,6 +271,17 @@ def fingerprint(root: Path) -> str:
     return "|".join(stamps)
 
 
+def generated_at(root: Path) -> str:
+    files = load_config(root)
+    paths = [root / files[k] for k in ("requirements", "catalog", "ledger", "id_registry", "run_history")]
+    rd = root / files["requirements_dir"]
+    if rd.is_dir():
+        paths += sorted(rd.glob("*.md"))
+    stamps = [path.stat().st_mtime for path in paths if path.is_file()]
+    value = max(stamps, default=root.stat().st_mtime)
+    return datetime.fromtimestamp(value).astimezone().isoformat(timespec="seconds")
+
+
 # --------------------------------------------------------------------------- requirements
 def parse_requirements(doc: dict) -> list[dict]:
     lines, reqs = doc["lines"], []
@@ -449,7 +460,7 @@ def build_model(root: Path) -> dict:
     warnings: list[str] = []
     model: dict = {
         "meta": {"repo": str(root), "name": root.name, "studio": STUDIO_VERSION,
-                 "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "files": {}, "fingerprint": fingerprint(root)},
+                 "generatedAt": generated_at(root), "files": {}, "fingerprint": fingerprint(root)},
         "goals": [], "reqs": [], "params": [], "terms": [], "stateMachines": [], "personas": [], "integrations": [],
         "questions": [], "decisions": [], "audits": [], "sources": [], "scenarios": [], "catalog": {"features": [], "apis": [], "tables": [], "parts": []},
         "cases": [], "caseDigests": {}, "runs": [], "registry": [], "registryRecords": [],

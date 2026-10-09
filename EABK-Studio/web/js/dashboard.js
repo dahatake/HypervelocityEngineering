@@ -75,7 +75,11 @@ export function mount(host) {
     const kpi = (v, label, ids, sfx = '') => {
       const vEl = el('div', { class: 'v' }, '0');
       const card = el('div', { class: 'card kpi', style: { cursor: ids ? 'pointer' : 'default' }, onclick: () => ids && focusAndGo(ids, label) }, vEl, el('div', { class: 'l' }, label));
-      animateNumber(vEl, v); if (sfx) setTimeout(() => (vEl.textContent = v + sfx), 1000);
+      animateNumber(vEl, v);
+      if (sfx) {
+        if (document.documentElement.classList.contains('snapshot')) vEl.textContent = v + sfx;
+        else setTimeout(() => (vEl.textContent = v + sfx), 1000);
+      }
       return card;
     };
 

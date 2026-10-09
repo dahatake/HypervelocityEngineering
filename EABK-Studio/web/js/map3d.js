@@ -14,7 +14,7 @@ export function mount(host) {
   const toolbar = el('div', { class: 'toolbar' });
   const statusBox = el('div', { class: 'status' });
   const hint = el('div', { class: 'hint' });
-  const mount3 = el('div', { class: 'fill' });
+  const mount3 = el('div', { class: 'fill map3d' });
   host.append(mount3, toolbar, statusBox, hint);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -391,8 +391,17 @@ export function mount(host) {
   const ro = new ResizeObserver(resize); ro.observe(host);
   resize();
   build(); renderToolbar();
-  { const v = viewFor(allIds(), 1.15); if (v) { cam.target.copy(v.target); cam.radius = v.radius * 1.5; } fly({ ...(v || {}), theta: 0.8, phi: 0.95 }, 2200); }
-  if (store.activeSet()) setTimeout(() => flyToActive(), 300);
+  const snapshot = document.documentElement.classList.contains('snapshot');
+  {
+    const v = viewFor(allIds(), 1.15);
+    if (v) { cam.target.copy(v.target); cam.radius = v.radius * 1.5; }
+    if (snapshot) {
+      cam.theta = 0.8; cam.phi = 0.95; placeCamera();
+    } else {
+      fly({ ...(v || {}), theta: 0.8, phi: 0.95 }, 2200);
+    }
+  }
+  if (store.activeSet() && !snapshot) setTimeout(() => flyToActive(), 300);
 
   const offs = [
     store.on('select', (o) => {
@@ -410,7 +419,7 @@ export function mount(host) {
   // ---------- loop
   const clock = performance.now();
   function frame(now) {
-    raf = requestAnimationFrame(frame);
+    if (!snapshot) raf = requestAnimationFrame(frame);
     if (dead) return;
     stepAnim(now);
     if (!drag) { cam.theta += cam.vt; cam.vt *= 0.92; cam.phi = Math.min(3.05, Math.max(0.03, cam.phi + cam.vp)); cam.vp *= 0.92; }
@@ -433,7 +442,15 @@ export function mount(host) {
     // keep static labels readable: shrink when the camera is very close
     renderer.render(scene, camera);
   }
-  raf = requestAnimationFrame(frame);
+  if (snapshot) frame(0);
+  else raf = requestAnimationFrame(frame);
+  if (snapshot) {
+    host.append(el('section', { class: 'snapshot-3d card' },
+      el('h2', {}, '3D レイヤー構成'),
+      el('p', {}, '目的 → 要求 → Entity / API / Table → 実装ファイル → System Test'),
+      el('div', { class: 'chips' }, [...store.nodes.values()].slice(0, 36).map((node) =>
+        el('span', { class: 'badge' }, `${node.id}: ${node.label}`)))));
+  }
 
   return {
     destroy() {

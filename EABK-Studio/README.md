@@ -51,10 +51,13 @@ python EABK-Studio/studio.py --repo C:\path\to\your-repo      # ブラウザー�
 | `tests/system/ledger.json` | System Test のケースと結果 |
 | `docs/id-registry.md`, `docs/run-history.md` | ID 台帳の集計、実行履歴 |
 
-ソースコードは**開きません**。カタログに書かれたパスの名前だけを使います。サーバーは `127.0.0.1` だけで待ち受け、上のデータ層のファイル以外は読みません（書き込みもしません）。
+ソースコードは**開きません**。カタログに書かれたパスの名前だけを使います。サーバーは `127.0.0.1` だけで待ち受け、通常の閲覧・検索・CSV出力・リポジトリ切替では書き込みません。
+
+例外は「整合性保守」画面で利用者が差分をプレビューし、`確認して実行` を押した場合だけです。この操作は `docs/catalog.md` の選択した要求行について、`題名` と `決定状態` の2列だけを要求正本へ合わせます。プレビュー後の競合、対象外ファイルへの影響、書込み失敗、`python scripts/verify.py --docs-only` の失敗を検出すると、変更をバイト単位で復元して明示的にエラーを表示します。
 
 ## 保守 / Maintenance
 
 - テスト: `python -m pytest EABK-Studio/tests -q`
+- 整合性保守: `整合性保守 / Maintenance` → 対象要求 → プレビュー → `確認して実行`
 - 構成: `studio.py`（サーバー）、`eabk_model.py`（データ層の読み取りとグラフ化）、`web/`（画面。ビルド不要の ES モジュール。`web/vendor/three.module.min.js` は three.js・MIT）
 - 画面の文言は `web/js/i18n.js` の `ja` / `en` に追加します。
