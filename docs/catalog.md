@@ -14,7 +14,7 @@
 | FR-006 | 表と検索 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/tables.js` | 未実装 | UI 部品、ストア |
 | FR-007 | ソース対応 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/source.js` | 未実装 | ストア |
 | FR-008 | ペルソナ既定表現 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/dashboard.js` | 未実装 | ストア |
-| FR-009 | 履歴・理想状態・整合性 | 承認済み（依頼 2026-10-09） | `EABK-Studio/eabk_model.py` | 未実装 | 管理データモデル |
+| FR-009 | 履歴・理想状態・整合性 | 承認済み（依頼 2026-10-09） | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/dashboard.js` | `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア |
 | FR-010 | リポジトリの既定と切替 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | HTTP サーバー |
 | FR-011 | JA/EN とリンク | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/i18n.js` | 未実装 | UI 部品 |
 | FR-012 | 鮮度検知と再読込 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | フィンガープリント |
@@ -63,7 +63,7 @@
 |---|---|---|---|
 | 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、NFR-OPS-004、NFR-SEC-002 |
 | HTTP サーバー | `EABK-Studio/studio.py` | 127.0.0.1 限定の読取 API と静的配信 | FR-010、FR-013、FR-1001、NFR-OPS-003、NFR-SEC-001 |
-| ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008 |
+| ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-009 |
 | UI 部品 | `EABK-Studio/web/js/ui.js` | 表示、詳細、通知、リンク | FR-006、FR-011、NFR-OPS-003、NFR-UX-005、NFR-UX-007 |
 | フィンガープリント | `EABK-Studio/studio.py` | 更新検知と再読込 | FR-012、NFR-OPS-002 |
 | 起動スクリプト | `EABK-Studio/start.ps1`, `EABK-Studio/start.sh` | Windows/macOS/Linux の起動補助 | FR-1001、NFR-OPS-001 |
