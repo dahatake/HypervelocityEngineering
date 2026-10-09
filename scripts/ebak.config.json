@@ -15,7 +15,12 @@
   },
   "verify": {
     "timeout_sec": 1800,
-    "commands": []
+    "commands": [
+      {
+        "name": "studio-unit",
+        "run": "python -m unittest discover -s EABK-Studio/tests -p test_*.py"
+      }
+    ]
   },
   "models": {
     "_note": "Phase 1 で較正して決めます（users-guide/04-customization.md）。conductor は subagent を呼ぶときにこの表を参照します。空なら既定のモデルを使います。",

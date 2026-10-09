@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EABK Studio</title>
+  <link rel="stylesheet" href="design-system.css">
+</head>
+<body>
+  <header><strong>EABK Studio</strong><button id="repoBtn" type="button">repository</button></header>
+  <main>
+    <label for="q">検索</label><input id="q" type="search" autocomplete="off">
+    <nav aria-label="Views">
+      <a href="#/dashboard">Dashboard</a><a href="#/map2d">2D Map</a><a href="#/map3d">3D Map</a>
+      <a href="#/diagrams">Diagrams</a><a href="#/placement">Placement</a>
+      <a href="#/source">Source</a><a href="#/tables?tab=reqs">Tables</a>
+    </nav>
+    <section id="view" aria-live="polite">Loading…</section>
+  </main>
+  <aside id="drawer" hidden></aside>
+  <div id="toast" role="status"></div>
+  <dialog id="repoDialog"><form method="dialog"><label>Repository <input id="repoPath"></label>
+    <button value="cancel">Cancel</button><button id="repoOk" value="default">OK</button></form></dialog>
+  <script src="app.js"></script>
+</body>
+</html>
