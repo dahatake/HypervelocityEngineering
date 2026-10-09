@@ -19,7 +19,7 @@
 | FR-011 | JA/EN とリンク | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/i18n.js` | 未実装 | UI 部品 |
 | FR-012 | 鮮度検知と再読込 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | フィンガープリント |
 | FR-013 | 参照専用データ境界 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | HTTP サーバー |
-| FR-1001 | users-guide の利用開始前提条件 | 承認済み（依頼 2026-10-09） | `EABK-Studio/users-guide/01-first-steps.md` | 未実装（AC-037 の System Test 設計要） | 起動スクリプト、HTTP サーバー |
+| FR-1001 | users-guide の利用開始前提条件 | 承認済み（依頼 2026-10-09） | 未実装 | 未実装（AC-037 対応の E2E-015 は登録済み・`not_run`。合格ではない） | 起動スクリプト、HTTP サーバー |
 | NFR-UX-001 | レイアウト変更 | AI提案／承認待ち | 未実装 | 未実装 | なし |
 | NFR-UX-002 | レイアウト復元 | AI提案／承認待ち | 未実装 | 未実装 | なし |
 | NFR-UX-003 | 非ドラッグ操作 | AI提案／承認待ち | 未実装 | 未実装 | なし |
