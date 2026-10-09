@@ -1,6 +1,12 @@
 // FR-1002/1003/1005/1006: decision-oriented views derived only from the loaded model.
 import { store } from './store.js';
-import { el } from './ui.js';
+import { el, vscodeUrl } from './ui.js';
+
+export function evidenceTarget(record) {
+  return record.file && record.line
+    ? { label: `${record.file}:${record.line}`, href: vscodeUrl(record.file, record.line) }
+    : { label: '根拠位置なし', href: '' };
+}
 
 const PAGE = {
   dashboard: ['ダッシュボード', '目的・進捗・要求', '優先順位と未完了の影響', '次に投資する対象'],
@@ -78,7 +84,16 @@ function historyProgress() {
   const m = store.model;
   const pass = m.cases.filter((c) => c.status === 'pass').length;
   const recordLabel = (record) => record.id || record['run-id'] || record.target || record.name || record.label || 'record';
-  const sourceLabel = (record) => [record.file, record.line].filter(Boolean).join(':');
+  const sourceLink = (record) => {
+    const target = evidenceTarget(record);
+    return target.href
+    ? el('a', {
+      class: 'mono',
+      href: target.href,
+      title: `${record.category} ${record.status} の根拠を VS Code で開く`,
+    }, target.label)
+    : el('span', { class: 'mono' }, target.label);
+  };
   const evidence = (title, groups) => {
     const count = groups.reduce((n, group) => n + group.records.length, 0);
     const open = () => {
@@ -95,7 +110,7 @@ function historyProgress() {
               el('b', {}, recordLabel(record)),
               record.date ? ` — 時点: ${record.date}` : ' — 時点: 記録なし',
               record.status ? ` — 状態: ${record.status}` : '',
-              sourceLabel(record) ? ` — 根拠: ${sourceLabel(record)}` : '')))
+              ' — 根拠: ', sourceLink(record))))
             : el('p', { class: 'empty' }, '該当レコードなし'))),
         el('button', { class: 'btn', onclick: () => (drawer.hidden = true) }, '閉じる'));
       drawer.hidden = false;
@@ -115,16 +130,19 @@ function historyProgress() {
   const goalGroups = by(m.reqs, (r) => r.goal);
   const typeGroups = by([...store.nodes.values()], (n) => n.type);
   const historyGroups = Object.entries((m.analysis.history || []).reduce((out, record) => {
-    (out[record.category] ||= []).push(record);
+    ((out[record.category] ||= {})[record.status] ||= []).push(record);
     return out;
-  }, {})).map(([label, records]) => ({ label, records }));
+  }, {})).map(([label, states]) => ({
+    label,
+    groups: Object.entries(states).map(([status, records]) => ({ label: status, records })),
+  }));
   return el('section', { class: 'visual-section' }, el('h2', {}, '設計・開発履歴と進捗'),
     el('p', { class: 'sub' }, `測定時点: ${m.meta.generatedAt} · 時系列 / 状態別`),
     el('div', { class: 'progress-summary' }, el('span', {}, 'System Test 合格 '),
       el('strong', { 'data-testid': 'system-test-pass-count' }, String(pass)),
       el('span', {}, ` / ${m.cases.length}（not_run は合格に含めない）`)),
     el('div', { class: 'grid cols2' },
-      ...historyGroups.map((group) => evidence(group.label, [group])),
+      ...historyGroups.map((category) => evidence(category.label, category.groups)),
       evidence('目的', goalGroups),
       evidence('データ種別', typeGroups)));
 }
@@ -136,6 +154,8 @@ export function mountStructure(host) {
     el('div', { class: 'grid cols2 layer-list' }, analysis.layers.map((layer) =>
       el('article', { class: 'card' }, el('h2', {}, layer.name),
         el('p', {}, `現状: ${layer.actual}`), el('p', {}, `理想: ${layer.ideal}`),
+        el('p', {}, `差分: ${layer.delta}`), el('p', {}, `適用規則: ${layer.rule}`),
+        el('p', {}, `判定理由: ${layer.reason}`),
         el('p', { class: 'mini mono' }, `根拠: ${layer.source}`)))),
     el('div', { class: 'tw' }, el('table', { class: 't' },
       el('thead', {}, el('tr', {}, ['データ層', '差分種別（delta）', '対象 ID / 位置', '現状（actual）', '理想（ideal）', '適用規則（rule）', '判定理由（reason）', '根拠（source）'].map((x) => el('th', {}, x)))),

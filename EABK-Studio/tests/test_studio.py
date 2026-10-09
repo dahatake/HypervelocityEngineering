@@ -1,6 +1,8 @@
 """Tests for EABK Studio: the data-layer parser and the local server. Run: python -m pytest EABK-Studio/tests -q"""
 import json
 import hashlib
+import re
+import subprocess
 import sys
 import threading
 import urllib.error
@@ -181,7 +183,8 @@ def test_management_analysis_is_derived_from_parsed_records(repo):
     assert {layer["name"] for layer in structure["layers"]} == {
         "要求定義書", "境界別要求", "カタログ", "System Test", "ID 台帳", "実行履歴", "境界間",
     }
-    assert all(layer["actual"] and layer["ideal"] and layer["source"] for layer in structure["layers"])
+    assert all(all(layer[key] for key in ("actual", "ideal", "delta", "rule", "reason", "source"))
+               for layer in structure["layers"])
     valid = next(d for d in structure["differences"] if d["kind"] == "妥当")
     assert valid["target"] == "ID / 位置: FR-001"
     assert valid["actual"] and valid["ideal"] and valid["rule"] and valid["reason"] and valid["source"]
@@ -240,17 +243,73 @@ def test_runtime_has_file_level_management_and_implementation_nodes(repo):
                for node in management + implementations)
 
 
-# FR-1006 AC-051: each timeline/status category exposes individual records
-# carrying state/time and clickable evidence coordinates for the renderer.
+# FR-1006 AC-051: every required category and state exposes individual records
+# carrying state/time and an exact clickable file:line destination.
 def test_history_has_individual_evidence_records_for_every_progress_category(repo):
+    requirements = repo / "docs" / "requirements-definition.md"
+    requirements.write_text(requirements.read_text(encoding="utf-8") + """
+
+## 決定記録
+| 日付 | 対象ID | 決定 | 根拠 | run-id |
+|---|---|---|---|---|
+| 2026-10-08 | FR-001 | 承認 | 依頼 | run-1 |
+| 2026-10-09 | FR-001 | 継続 | 再確認 | run-2 |
+""", encoding="utf-8")
+    (repo / "docs" / "run-history.md").write_text(
+        "# 実行履歴\n| run-id | 日時 | 工程状態 |\n|---|---|---|\n"
+        "| run-1 | 2026-10-08 | 完了 |\n| run-2 | 2026-10-09 | 失敗 |\n",
+        encoding="utf-8",
+    )
+    ledger = json.loads((repo / "tests" / "system" / "ledger.json").read_text(encoding="utf-8"))
+    ledger["cases"].append({**ledger["cases"][0], "id": "E2E-002", "status": "not_run",
+                            "last_run_at": None})
+    (repo / "tests" / "system" / "ledger.json").write_text(
+        json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
+
     model = m.build_model(repo)
     records = model["analysis"]["history"]
-    assert {record["category"] for record in records} == {
-        "要求状態", "実装登録", "System Test",
+    required_states = {
+        "決定記録": {"承認", "継続"},
+        "実行履歴": {"完了", "失敗"},
+        "実装登録": {"登録済み", "未登録"},
+        "System Test": {"pass", "not_run"},
     }
+    for category, states in required_states.items():
+        assert {record["status"] for record in records if record["category"] == category} == states
     assert any(record["category"] == "System Test" and record["status"] == "pass"
                and record["date"] == "2026-10-08T10:00:00+09:00" for record in records)
-    assert all(record["id"] and record["status"] and record["file"] for record in records)
+    required_records = [record for record in records if record["category"] in required_states]
+    assert all(record["id"] and record["status"] and record["file"] and record["line"]
+               for record in required_records)
+
+
+# FR-1003 AC-045 / FR-1006 AC-051: summaries render all judgement fields and
+# each evidence record uses its own VS Code file:line destination.
+def test_summary_and_history_renderers_expose_complete_click_targets():
+    source = (ROOT / "web" / "js" / "insights.js").read_text(encoding="utf-8")
+    for field in ("layer.actual", "layer.ideal", "layer.delta", "layer.rule",
+                  "layer.reason", "layer.source"):
+        assert field in source
+    assert "category.groups" in source
+    helper = re.search(
+        r"export function evidenceTarget\(record\) \{.*?^\}", source, re.MULTILINE | re.DOTALL
+    ).group(0).replace("export function", "function")
+    script = f"""
+      const vscodeUrl = (file, line) => `vscode://${{file}}:${{line}}`;
+      {helper}
+      console.log(JSON.stringify(evidenceTarget({{
+        category: "System Test", status: "not_run",
+        file: "tests/system/ledger.json", line: 42
+      }})));
+    """
+    target = json.loads(subprocess.check_output(
+        ["node", "-e", script],
+        text=True,
+    ))
+    assert target == {
+        "label": "tests/system/ledger.json:42",
+        "href": "vscode://tests/system/ledger.json:42",
+    }
 
 
 def test_tables_are_classified(repo):

@@ -640,11 +640,22 @@ def build_model(root: Path) -> dict:
     lp = root / files["ledger"]
     if lp.is_file():
         try:
-            data = json.loads(read_text(lp))
+            ledger_text = read_text(lp)
+            data = json.loads(ledger_text)
             model["caseDigests"] = data.get("ac_digests", {}) if isinstance(data.get("ac_digests", {}), dict) else {}
+            search_from = 0
             for c in data.get("cases", []):
-                model["cases"].append({k: c.get(k) for k in ("id", "requirement_ids", "ac_ids", "title", "layer", "command",
-                                                              "canary", "status", "last_commit", "last_run_at", "evidence")})
+                case = {k: c.get(k) for k in ("id", "requirement_ids", "ac_ids", "title", "layer", "command",
+                                              "canary", "status", "last_commit", "last_run_at", "evidence")}
+                encoded_id = json.dumps(c.get("id"), ensure_ascii=False)
+                match = re.search(r'"id"\s*:\s*' + re.escape(encoded_id), ledger_text[search_from:])
+                if match:
+                    absolute = search_from + match.start()
+                    case["line"] = ledger_text.count("\n", 0, absolute) + 1
+                    search_from += match.end()
+                else:
+                    case["line"] = 1
+                model["cases"].append(case)
         except ValueError:
             warnings.append("ledger is not valid JSON")
     rp = root / files["id_registry"]
@@ -712,12 +723,6 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
         ("実行履歴", len(model["runs"]), "run-idごとに工程・commit・要求・AC・ケースを記録する", files["run_history"]),
         ("境界間", len(model["integrations"]), "連携先ごとに方式・方向・正本を明示する", files["requirements"]),
     ]
-    for name, count, ideal, file in layer_specs:
-        structure["layers"].append({
-            "name": name, "actual": f"解析済みレコード {count} 件",
-            "ideal": ideal, "source": source(file),
-        })
-
     known_req = {r["id"] for r in model["reqs"]}
     known_goal = {g["id"] for g in model["goals"]}
     known_ac = {a["id"] for r in model["reqs"] for a in r["acs"]}
@@ -885,6 +890,22 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
                 "方式・方向・正本を明示", "境界間制約",
                 "境界を越えるデータ契約を個別に確認", item["file"], item["line"])
 
+    # AC-045: each of the seven layer summaries is a complete judgement in
+    # its own right, not a heading that relies on the detail table below it.
+    for name, count, ideal, file in layer_specs:
+        rows = [row for row in differences if row["layer"] == name]
+        kinds = Counter(row["delta"] for row in rows)
+        rules = list(dict.fromkeys(row["rule"] for row in rows))
+        structure["layers"].append({
+            "name": name,
+            "actual": f"解析済みレコード {count} 件",
+            "ideal": ideal,
+            "delta": " / ".join(f"{kind} {amount} 件" for kind, amount in kinds.items()) or "判定対象 0 件",
+            "rule": " / ".join(rules) or "対象レコードの存在確認",
+            "reason": f"個別根拠 {len(rows)} 件を集計",
+            "source": source(file),
+        })
+
     # Runtime/data placement is a contract derived from the files actually
     # loaded and catalog paths actually registered.
     management = [v for v in model["meta"]["files"].values() if v]
@@ -944,7 +965,7 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
                         "file": files["catalog"], "line": f["line"]})
     for c in model["cases"]:
         history.append({"category": "System Test", "id": c.get("id") or "", "date": c.get("last_run_at") or "",
-                        "status": c.get("status") or "未設定", "file": files["ledger"], "line": None})
+                        "status": c.get("status") or "未設定", "file": files["ledger"], "line": c.get("line")})
 
 
 def build_graph(model: dict, reqs: dict, parts: list[dict]) -> None:
