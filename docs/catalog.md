@@ -8,7 +8,7 @@
 |---|---|---|---|---|---|
 | FR-001 | 管理データのモデル化 | 承認済み（依頼 2026-10-09） | `EABK-Studio/eabk_model.py` | `EABK-Studio/tests/test_studio.py` | 管理データモデル |
 | FR-002 | ダッシュボードと進捗 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/dashboard.js` | 未実装 | ストア |
-| FR-003 | 2D/3D 関係マップ | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/map2d.js`, `EABK-Studio/web/js/map3d.js` | 未実装 | ストア、Three.js 同梱モジュール |
+| FR-003 | 2D/3D 関係マップ | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/map2d.js`, `EABK-Studio/web/js/map3d.js` | 未実装 | ストア、Three.js 同梱モジュールモジュール |
 | FR-004 | 図式化 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/diagrams.js` | 未実装 | ストア |
 | FR-005 | 配置と表現の切替 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/placement.js` | 未実装 | ストア |
 | FR-006 | 表と検索 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/tables.js` | 未実装 | UI 部品、ストア |
@@ -19,15 +19,16 @@
 | FR-011 | JA/EN とリンク | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/i18n.js` | 未実装 | UI 部品 |
 | FR-012 | 鮮度検知と再読込 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | フィンガープリント |
 | FR-013 | 参照専用データ境界 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | HTTP サーバー |
+| FR-1000 | 利用前提条件の案内 | 承認済み（依頼 2026-10-09） | 未実装 | 未実装（AC-036 は manual） | なし |
 | NFR-UX-001 | レイアウト変更 | AI提案／承認待ち | 未実装 | 未実装 | なし |
 | NFR-UX-002 | レイアウト復元 | AI提案／承認待ち | 未実装 | 未実装 | なし |
-| NFR-UX-003 | 非ドラッグ操作 | AI提案／承認待ち | 未実装 | 未実装 | UI 部品 |
-| NFR-UX-004 | 狭い画面と拡大 | AI提案／承認待ち | 未実装 | 未実装 | UI 部品 |
+| NFR-UX-003 | 非ドラッグ操作 | AI提案／承認待ち | 未実装 | 未実装 | なし |
+| NFR-UX-004 | 狭い画面と拡大 | AI提案／承認待ち | 未実装 | 未実装 | なし |
 | NFR-UX-005 | 一貫した操作結果 | AI提案／承認待ち | `EABK-Studio/web/js/i18n.js` | 未実装 | UI 部品 |
-| NFR-UX-006 | 表現の連動 | AI提案／承認待ち | 未実装 | 未実装 | ストア |
+| NFR-UX-006 | 表現の連動 | AI提案／承認待ち | 未実装 | 未実装 | なし |
 | NFR-UX-007 | 視覚表現の代替 | AI提案／承認待ち | `EABK-Studio/web/js/tables.js`, `EABK-Studio/web/js/diagrams.js` | 未実装 | UI 部品 |
 | NFR-UX-008 | ペルソナ表現の安全な切替 | AI提案／承認待ち | 未実装 | 未実装 | なし |
-| NFR-UX-009 | 状態と進行表示 | AI提案／承認待ち | 未実装 | 未実装 | UI 部品 |
+| NFR-UX-009 | 状態と進行表示 | AI提案／承認待ち | 未実装 | 未実装 | なし |
 | NFR-SEC-001 | ローカル限定 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | HTTP サーバー |
 | NFR-SEC-002 | 読取安全性 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | 管理データモデル |
 | NFR-SEC-003 | 権限・外部連携境界 | AI提案／承認待ち | 未実装 | 未実装 | なし |
@@ -62,8 +63,8 @@
 |---|---|---|---|
 | 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、NFR-OPS-004、NFR-SEC-002 |
 | HTTP サーバー | `EABK-Studio/studio.py` | 127.0.0.1 限定の読取 API と静的配信 | FR-010、FR-013、NFR-OPS-003、NFR-SEC-001 |
-| ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、NFR-UX-006 |
-| UI 部品 | `EABK-Studio/web/js/ui.js` | 表示、詳細、通知、リンク | FR-006、FR-011、NFR-OPS-003、NFR-UX-003、NFR-UX-004、NFR-UX-005、NFR-UX-007、NFR-UX-009 |
+| ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008 |
+| UI 部品 | `EABK-Studio/web/js/ui.js` | 表示、詳細、通知、リンク | FR-006、FR-011、NFR-OPS-003、NFR-UX-005、NFR-UX-007 |
 | フィンガープリント | `EABK-Studio/studio.py` | 更新検知と再読込 | FR-012、NFR-OPS-002 |
 | 起動スクリプト | `EABK-Studio/start.ps1`, `EABK-Studio/start.sh` | Windows/macOS/Linux の起動補助 | NFR-OPS-001 |
-| Three.js 同梱モジュール | `EABK-Studio/web/vendor/three.module.min.js` | 3D マップ表示 | FR-003 |
+| Three.js 同梱モジュールモジュール | `EABK-Studio/web/vendor/three.module.min.js` | 3D マップ表示 | FR-003 |
