@@ -256,8 +256,9 @@ def test_history_has_individual_evidence_records_for_every_progress_category(rep
 | 2026-10-09 | FR-001 | 継続 | 再確認 | run-2 |
 """, encoding="utf-8")
     (repo / "docs" / "run-history.md").write_text(
-        "# 実行履歴\n| run-id | 日時 | 工程状態 |\n|---|---|---|\n"
-        "| run-1 | 2026-10-08 | 完了 |\n| run-2 | 2026-10-09 | 失敗 |\n",
+        "# 実行履歴\n| run-id | 開始 | 終了 | 結果 |\n|---|---|---|---|\n"
+        "| run-1 | 2026-10-08T09:00:00+09:00 | 2026-10-08T10:00:00+09:00 | 完了 |\n"
+        "| run-2 | 2026-10-09T09:00:00+09:00 |  | 失敗 |\n",
         encoding="utf-8",
     )
     ledger = json.loads((repo / "tests" / "system" / "ledger.json").read_text(encoding="utf-8"))
@@ -276,6 +277,9 @@ def test_history_has_individual_evidence_records_for_every_progress_category(rep
     }
     for category, states in required_states.items():
         assert {record["status"] for record in records if record["category"] == category} == states
+    run_records = {record["id"]: record for record in records if record["category"] == "実行履歴"}
+    assert run_records["run-1"]["date"] == "2026-10-08T10:00:00+09:00"
+    assert run_records["run-2"]["date"] == "2026-10-09T09:00:00+09:00"
     assert any(record["category"] == "System Test" and record["status"] == "pass"
                and record["date"] == "2026-10-08T10:00:00+09:00" for record in records)
     required_records = [record for record in records if record["category"] in required_states]
