@@ -11,13 +11,13 @@
 | FR-003 | 2D/3D 関係マップ | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/map2d.js`, `EABK-Studio/web/js/map3d.js` | 未実装 | ストア、Three.js 同梱モジュールモジュール |
 | FR-004 | 図式化 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/diagrams.js` | 未実装 | ストア |
 | FR-005 | 配置と表現の切替 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/placement.js` | 未実装 | ストア |
-| FR-006 | 表と検索 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/tables.js` | 未実装 | UI 部品、ストア |
-| FR-007 | ソース対応 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/source.js` | 未実装 | ストア |
+| FR-006 | 表と検索 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/tables.js`, `EABK-Studio/web/js/app.js` | `EABK-Studio/tests/test_studio.py`, `tests/system/e2e/test_studio_system.py` | UI 部品、ストア、デザイン基盤 |
+| FR-007 | ソース対応 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/source.js`, `EABK-Studio/web/js/app.js` | `EABK-Studio/tests/test_studio.py` | ストア、デザイン基盤 |
 | FR-008 | ペルソナ既定表現 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/dashboard.js` | 未実装 | ストア |
 | FR-009 | 履歴・理想状態・整合性 | 承認済み（依頼 2026-10-09） | `EABK-Studio/eabk_model.py` | 未実装 | 管理データモデル |
-| FR-010 | リポジトリの既定と切替 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | HTTP サーバー |
-| FR-011 | JA/EN とリンク | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/i18n.js` | 未実装 | UI 部品 |
-| FR-012 | 鮮度検知と再読込 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | フィンガープリント |
+| FR-010 | リポジトリの既定と切替 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py`, `EABK-Studio/web/js/app.js` | `EABK-Studio/tests/test_studio.py`, `tests/system/e2e/test_studio_system.py` | HTTP サーバー、デザイン基盤 |
+| FR-011 | JA/EN とリンク | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/js/app.js` | `EABK-Studio/tests/test_studio.py`, `tests/system/e2e/test_studio_system.py` | UI 部品、デザイン基盤 |
+| FR-012 | 鮮度検知と再読込 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py`, `EABK-Studio/web/js/app.js` | `EABK-Studio/tests/test_studio.py` | フィンガープリント、デザイン基盤 |
 | FR-013 | 参照専用データ境界 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | HTTP サーバー |
 | FR-1001 | users-guide の利用開始前提条件 | 承認済み（依頼 2026-10-09） | `EABK-Studio/users-guide/01-first-steps.md` | 未実装（AC-037 の System Test 設計要） | 起動スクリプト、HTTP サーバー |
 | NFR-UX-001 | レイアウト変更 | AI提案／承認待ち | 未実装 | 未実装 | なし |
@@ -65,6 +65,7 @@
 | HTTP サーバー | `EABK-Studio/studio.py` | 127.0.0.1 限定の読取 API と静的配信 | FR-010、FR-013、FR-1001、NFR-OPS-003、NFR-SEC-001 |
 | ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008 |
 | UI 部品 | `EABK-Studio/web/js/ui.js` | 表示、詳細、通知、リンク | FR-006、FR-011、NFR-OPS-003、NFR-UX-005、NFR-UX-007 |
+| デザイン基盤 | `EABK-Studio/web/index.html` | Fluent 2 のトークン、レスポンシブ外枠、状態表示 | FR-006、FR-007、FR-010、FR-011、FR-012 |
 | フィンガープリント | `EABK-Studio/studio.py` | 更新検知と再読込 | FR-012、NFR-OPS-002 |
 | 起動スクリプト | `EABK-Studio/start.ps1`, `EABK-Studio/start.sh` | Windows/macOS/Linux の起動補助 | FR-1001、NFR-OPS-001 |
 | Three.js 同梱モジュールモジュール | `EABK-Studio/web/vendor/three.module.min.js` | 3D マップ表示 | FR-003 |
