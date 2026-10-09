@@ -28,7 +28,7 @@
       ],
       "title": "Model traversal from requirement to catalog, file, and test",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_model_can_traverse_requirement_to_catalog_file_and_test",
       "canary": true,
       "status": "not_run",
       "last_commit": null,
@@ -40,6 +40,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-09T22:43:27+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_system.py' -> 'python -m pytest tests/system/e2e/test_studio_system.py::test_model_can_traverse_requirement_to_catalog_file_and_test'",
+          "reason": "各ケースを独立実行し、他ACの結果に依存しないようにする"
         }
       ]
     },
@@ -53,7 +59,7 @@
       ],
       "title": "Dashboard aggregates and selectable breakdowns",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_dashboard_shows_aggregates_and_selectable_breakdowns",
       "canary": false,
       "status": "not_run",
       "last_commit": null,
@@ -65,6 +71,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-09T22:43:28+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_system.py' -> 'python -m pytest tests/system/e2e/test_studio_system.py::test_dashboard_shows_aggregates_and_selectable_breakdowns'",
+          "reason": "各ケースを独立実行し、他ACの結果に依存しないようにする"
         }
       ]
     },
@@ -78,7 +90,7 @@
       ],
       "title": "2D and 3D relationship highlighting and navigation",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_maps_highlight_selected_relationships_and_support_navigation",
       "canary": false,
       "status": "not_run",
       "last_commit": null,
@@ -90,6 +102,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-09T22:43:29+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_system.py' -> 'python -m pytest tests/system/e2e/test_studio_system.py::test_maps_highlight_selected_relationships_and_support_navigation'",
+          "reason": "各ケースを独立実行し、他ACの結果に依存しないようにする"
         }
       ]
     },
@@ -103,7 +121,7 @@
       ],
       "title": "Selection and filter persistence across views",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_selection_and_filter_survive_placement_map_and_table_switches",
       "canary": false,
       "status": "not_run",
       "last_commit": null,
@@ -115,6 +133,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-09T22:43:29+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_system.py' -> 'python -m pytest tests/system/e2e/test_studio_system.py::test_selection_and_filter_survive_placement_map_and_table_switches'",
+          "reason": "各ケースを独立実行し、他ACの結果に依存しないようにする"
         }
       ]
     },
@@ -126,9 +150,9 @@
       "ac_ids": [
         "AC-006"
       ],
-      "title": "Search shortcuts, result limit, and CSV export",
+      "title": "Search shortcuts, result limit, client-only CSV, and read-only export",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_search_shortcuts_limit_results_and_export_table_csv",
       "canary": false,
       "status": "not_run",
       "last_commit": null,
@@ -140,6 +164,18 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-09T22:43:30+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_system.py' -> 'python -m pytest tests/system/e2e/test_studio_system.py::test_search_shortcuts_limit_results_and_export_table_csv'",
+          "reason": "各ケースを独立実行し、他ACの結果に依存しないようにする"
+        },
+        {
+          "at": "2026-10-09T22:45:19+09:00",
+          "by": "test-designer",
+          "change": "title: 'Search shortcuts, result limit, and CSV export' -> 'Search shortcuts, result limit, client-only CSV, and read-only export'",
+          "reason": "AC本文の未検証句と異常系を補い、期待値を要求定義書だけから強化"
         }
       ]
     },
@@ -151,9 +187,9 @@
       "ac_ids": [
         "AC-008"
       ],
-      "title": "Persona defaults and state preservation",
+      "title": "Persona defaults and selected ID, filter, and time preservation",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_persona_defaults_and_switching_preserve_selected_id_filter_and_time",
       "canary": false,
       "status": "not_run",
       "last_commit": null,
@@ -165,6 +201,18 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-09T22:43:30+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_system.py' -> 'python -m pytest tests/system/e2e/test_studio_system.py::test_persona_defaults_and_switching_preserve_selected_id_filter_and_time'",
+          "reason": "各ケースを独立実行し、他ACの結果に依存しないようにする"
+        },
+        {
+          "at": "2026-10-09T22:45:19+09:00",
+          "by": "test-designer",
+          "change": "title: 'Persona defaults and state preservation' -> 'Persona defaults and selected ID, filter, and time preservation'",
+          "reason": "AC本文の未検証句と異常系を補い、期待値を要求定義書だけから強化"
         }
       ]
     },
@@ -178,7 +226,7 @@
       ],
       "title": "Invalid repository switch preserves current model",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_invalid_repository_switch_keeps_model_and_explains_failure",
       "canary": false,
       "status": "not_run",
       "last_commit": null,
@@ -190,6 +238,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-09T22:43:31+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_system.py' -> 'python -m pytest tests/system/e2e/test_studio_system.py::test_invalid_repository_switch_keeps_model_and_explains_failure'",
+          "reason": "各ケースを独立実行し、他ACの結果に依存しないようにする"
         }
       ]
     },
@@ -201,9 +255,9 @@
       "ac_ids": [
         "AC-013"
       ],
-      "title": "Read-only startup, switching, and refresh boundary",
+      "title": "Read-only startup, model retrieval, switching, refresh, and loopback boundary",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_startup_switch_and_refresh_do_not_write_data_or_leave_loopback",
       "canary": false,
       "status": "not_run",
       "last_commit": null,
@@ -215,6 +269,18 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-09T22:43:31+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_system.py' -> 'python -m pytest tests/system/e2e/test_studio_system.py::test_startup_switch_and_refresh_do_not_write_data_or_leave_loopback'",
+          "reason": "各ケースを独立実行し、他ACの結果に依存しないようにする"
+        },
+        {
+          "at": "2026-10-09T22:45:20+09:00",
+          "by": "test-designer",
+          "change": "title: 'Read-only startup, switching, and refresh boundary' -> 'Read-only startup, model retrieval, switching, refresh, and loopback boundary'",
+          "reason": "AC本文の未検証句と異常系を補い、期待値を要求定義書だけから強化"
         }
       ]
     },
@@ -226,9 +292,9 @@
       "ac_ids": [
         "AC-023"
       ],
-      "title": "Loopback binding and foreign-host rejection",
+      "title": "Default loopback binding and foreign-host rejection",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_server_binds_loopback_on_default_port_and_rejects_foreign_host",
       "canary": false,
       "status": "not_run",
       "last_commit": null,
@@ -240,6 +306,18 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-09T22:43:32+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_system.py' -> 'python -m pytest tests/system/e2e/test_studio_system.py::test_server_binds_loopback_on_default_port_and_rejects_foreign_host'",
+          "reason": "各ケースを独立実行し、他ACの結果に依存しないようにする"
+        },
+        {
+          "at": "2026-10-09T22:45:21+09:00",
+          "by": "test-designer",
+          "change": "title: 'Loopback binding and foreign-host rejection' -> 'Default loopback binding and foreign-host rejection'",
+          "reason": "AC本文の未検証句と異常系を補い、期待値を要求定義書だけから強化"
         }
       ]
     },
@@ -251,9 +329,9 @@
       "ac_ids": [
         "AC-024"
       ],
-      "title": "Read-only behavior across all views",
+      "title": "All-view management-data integrity and no external requests",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_all_views_are_read_only_and_do_not_issue_external_requests",
       "canary": false,
       "status": "not_run",
       "last_commit": null,
@@ -265,6 +343,18 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-09T22:43:32+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_system.py' -> 'python -m pytest tests/system/e2e/test_studio_system.py::test_all_views_are_read_only_and_do_not_issue_external_requests'",
+          "reason": "各ケースを独立実行し、他ACの結果に依存しないようにする"
+        },
+        {
+          "at": "2026-10-09T22:45:21+09:00",
+          "by": "test-designer",
+          "change": "title: 'Read-only behavior across all views' -> 'All-view management-data integrity and no external requests'",
+          "reason": "AC本文の未検証句と異常系を補い、期待値を要求定義書だけから強化"
         }
       ]
     },
@@ -276,9 +366,9 @@
       "ac_ids": [
         "AC-026"
       ],
-      "title": "Supported runtime and default model startup",
+      "title": "Python 3.9+ standard-library-only startup and default model",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_python_runtime_starts_without_extra_installation_and_shows_default_model",
       "canary": false,
       "status": "not_run",
       "last_commit": null,
@@ -290,6 +380,18 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-09T22:43:32+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_system.py' -> 'python -m pytest tests/system/e2e/test_studio_system.py::test_python_runtime_starts_without_extra_installation_and_shows_default_model'",
+          "reason": "各ケースを独立実行し、他ACの結果に依存しないようにする"
+        },
+        {
+          "at": "2026-10-09T22:45:22+09:00",
+          "by": "test-designer",
+          "change": "title: 'Supported runtime and default model startup' -> 'Python 3.9+ standard-library-only startup and default model'",
+          "reason": "AC本文の未検証句と異常系を補い、期待値を要求定義書だけから強化"
         }
       ]
     },
@@ -301,9 +403,9 @@
       "ac_ids": [
         "AC-028"
       ],
-      "title": "Missing data recovery and model retention",
+      "title": "Missing-data cause, retry/back actions, and model retention",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_missing_data_error_offers_recovery_without_losing_current_model",
       "canary": false,
       "status": "not_run",
       "last_commit": null,
@@ -315,6 +417,18 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-09T22:43:33+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_system.py' -> 'python -m pytest tests/system/e2e/test_studio_system.py::test_missing_data_error_offers_recovery_without_losing_current_model'",
+          "reason": "各ケースを独立実行し、他ACの結果に依存しないようにする"
+        },
+        {
+          "at": "2026-10-09T22:45:23+09:00",
+          "by": "test-designer",
+          "change": "title: 'Missing data recovery and model retention' -> 'Missing-data cause, retry/back actions, and model retention'",
+          "reason": "AC本文の未検証句と異常系を補い、期待値を要求定義書だけから強化"
         }
       ]
     },
@@ -328,7 +442,7 @@
       ],
       "title": "Configured cross-record traceability",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_configured_data_links_requirement_ac_catalog_case_and_source",
       "canary": false,
       "status": "not_run",
       "last_commit": null,
@@ -340,6 +454,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-09T22:43:33+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_system.py' -> 'python -m pytest tests/system/e2e/test_studio_system.py::test_configured_data_links_requirement_ac_catalog_case_and_source'",
+          "reason": "各ケースを独立実行し、他ACの結果に依存しないようにする"
         }
       ]
     },
@@ -353,7 +473,7 @@
       ],
       "title": "Repository switch success and failure retention",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_repository_switch_success_updates_model_and_failure_restores_previous",
       "canary": false,
       "status": "not_run",
       "last_commit": null,
@@ -365,6 +485,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-09T22:43:34+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_system.py' -> 'python -m pytest tests/system/e2e/test_studio_system.py::test_repository_switch_success_updates_model_and_failure_restores_previous'",
+          "reason": "各ケースを独立実行し、他ACの結果に依存しないようにする"
         }
       ]
     },
@@ -376,9 +502,9 @@
       "ac_ids": [
         "AC-037"
       ],
-      "title": "First-steps startup prerequisites and unknowns",
+      "title": "All documented startup prerequisites, evidence, and unknowns",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_system.py",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_first_steps_consolidates_startup_prerequisites_and_unknowns",
       "canary": false,
       "status": "not_run",
       "last_commit": null,
@@ -390,6 +516,18 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-09T22:43:34+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_system.py' -> 'python -m pytest tests/system/e2e/test_studio_system.py::test_first_steps_consolidates_startup_prerequisites_and_unknowns'",
+          "reason": "各ケースを独立実行し、他ACの結果に依存しないようにする"
+        },
+        {
+          "at": "2026-10-09T22:45:23+09:00",
+          "by": "test-designer",
+          "change": "title: 'First-steps startup prerequisites and unknowns' -> 'All documented startup prerequisites, evidence, and unknowns'",
+          "reason": "AC本文の未検証句と異常系を補い、期待値を要求定義書だけから強化"
         }
       ]
     }
