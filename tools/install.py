@@ -101,6 +101,9 @@ MANAGED = [
     "EABK-Studio/users-guide/images/placement.png",
     "EABK-Studio/users-guide/images/source.png",
     "EABK-Studio/users-guide/images/tables.png",
+    "EABK-Studio/tests/test_studio.py",
+    "tests/system/e2e/test_studio_system.py",
+    "tests/system/e2e/test_judge_capabilities.py",
 ]
 # Files no longer shipped. Removed on update when unmodified.
 OBSOLETE: list[str] = []
