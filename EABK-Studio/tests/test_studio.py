@@ -142,6 +142,34 @@ def test_requirements_and_acceptance_criteria(repo):
     assert reqs["NFR-SEC-001"]["statusKind"] == "proposed" and reqs["NFR-SEC-001"]["cat"] == "SEC"
 
 
+# FR-1006 AC-050: explicit entity relationships are evidence; missing ones remain empty.
+def test_entity_relationships_are_explicit_only(repo):
+    path = repo / "docs" / "requirements-definition.md"
+    path.write_text(path.read_text(encoding="utf-8").replace(
+        "- 関連する既存資産: 共通部品「下書き保存」",
+        "- 関連する既存資産: 共通部品「下書き保存」\n- 関係: 申請 1 -- * 明細",
+    ), encoding="utf-8")
+    model = m.build_model(repo)
+    reqs = {r["id"]: r for r in model["reqs"]}
+    assert reqs["FR-001"]["relation"] == "申請 1 -- * 明細"
+    assert reqs["NFR-SEC-001"]["relation"] == ""
+
+
+# FR-1002 AC-044 / FR-1003 AC-045 / FR-1005 AC-048 / FR-1006 AC-049 AC-050 AC-051
+def test_decision_views_define_required_layers_personas_and_evidence():
+    source = (ROOT / "web" / "js" / "insights.js").read_text(encoding="utf-8")
+    for persona in ("Product Manager", "Architect", "Software Engineer"):
+        assert persona in source
+    for route in ("dashboard", "map2d", "map3d", "diagrams", "placement", "source", "tables"):
+        assert f"{route}:" in source
+    for term in (
+        "要求定義書", "境界別要求", "System Test", "ID 台帳", "実行履歴", "境界間",
+        "PC・ブラウザー", "Studio サーバー", "外部／クラウド境界",
+        "層一貫性ビューアー", "Entity 向け ER 図", "測定時点",
+    ):
+        assert term in source
+
+
 def test_tables_are_classified(repo):
     model = m.build_model(repo)
     assert [g["id"] for g in model["goals"]] == ["G-001"]

@@ -2,6 +2,7 @@ import { t, lang, setLang, onLang, applyI18n } from './i18n.js';
 import { store } from './store.js';
 import { el, esc, colorOf, typeLabel, toast } from './ui.js';
 import { initDrawer } from './drawer.js';
+import { decorate, mountStructure, mountConsistency } from './insights.js';
 
 const ROUTES = {
   dashboard: { icon: '◉', load: () => import('./dashboard.js') },
@@ -11,6 +12,8 @@ const ROUTES = {
   placement: { icon: '⊞', load: () => import('./placement.js') },
   source: { icon: '⌘', load: () => import('./source.js') },
   tables: { icon: '☰', load: () => import('./tables.js') },
+  structure: { hidden: true, mount: mountStructure },
+  consistency: { hidden: true, mount: mountConsistency },
 };
 const view = document.getElementById('view');
 const nav = document.getElementById('nav');
@@ -43,7 +46,7 @@ function applyDeepLink() {
 
 function renderNav() {
   const r = routeName();
-  nav.replaceChildren(...Object.entries(ROUTES).map(([k, v]) => el('a', { href: '#/' + k, class: k === r ? 'on' : '' }, el('span', {}, v.icon), t('nav.' + k))));
+  nav.replaceChildren(...Object.entries(ROUTES).filter(([, v]) => !v.hidden).map(([k, v]) => el('a', { href: '#/' + k, class: k === r ? 'on' : '' }, el('span', {}, v.icon), t('nav.' + k))));
 }
 
 async function route() {
@@ -56,9 +59,10 @@ async function route() {
   const host = el('div', { class: 'fill' });
   view.replaceChildren(host);
   try {
-    const mod = await ROUTES[name].load();
+    const mod = ROUTES[name].mount ? { mount: ROUTES[name].mount } : await ROUTES[name].load();
     if (my !== token) return;
     current = mod.mount(host);
+    decorate(name, host);
     applyDeepLink();
   } catch (e) {
     console.error(e);
