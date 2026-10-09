@@ -95,8 +95,8 @@
 | AC-034 | AC | 使用中 | 2026-10-09T21:47:00+09:00 | run/202610092141@39a88a3 |  |
 | AC-035 | AC | 使用中 | 2026-10-09T21:47:00+09:00 | run/202610092141@39a88a3 |  |
 | G-003 | G | 使用中 | 2026-10-09T21:52:10+09:00 | run/202610092141@39a88a3 | EABK Studio users-guide prerequisite documentation |
-| FR-1000 | FR | 使用中 | 2026-10-09T21:52:16+09:00 | run/202610092141@39a88a3 | EABK Studio users-guide prerequisite documentation |
-| AC-036 | AC | 使用中 | 2026-10-09T21:52:22+09:00 | run/202610092141@39a88a3 | EABK Studio users-guide prerequisite documentation |
+| FR-1000 | FR | 削除済み | 2026-10-09T21:52:16+09:00 | run/202610092141@39a88a3 | EABK Studio users-guide prerequisite documentation |
+| AC-036 | AC | 削除済み | 2026-10-09T21:52:22+09:00 | run/202610092141@39a88a3 | EABK Studio users-guide prerequisite documentation |
 | SRC-009 | SRC | 削除済み | 2026-10-09T21:52:28+09:00 | run/202610092141@39a88a3 | EABK Studio prerequisite evidence |
 | SRC-010 | SRC | 削除済み | 2026-10-09T21:52:28+09:00 | run/202610092141@39a88a3 | EABK Studio prerequisite evidence |
 | SRC-011 | SRC | 削除済み | 2026-10-09T21:52:28+09:00 | run/202610092141@39a88a3 | EABK Studio prerequisite evidence |
@@ -109,3 +109,6 @@
 | FR-132 | FR | 廃止 | 2026-10-09T21:56:59+09:00 | run/202610092141@39a88a3 | 既存の ID を取り込み |
 | FR-200 | FR | 廃止 | 2026-10-09T21:56:59+09:00 | run/202610092141@39a88a3 | 既存の ID を取り込み |
 | FR-999 | FR | 廃止 | 2026-10-09T21:56:59+09:00 | run/202610092141@39a88a3 | 既存の ID を取り込み |
+| FR-1001 | FR | 使用中 | 2026-10-09T22:09:04+09:00 | run/202610092141@f6bb8de |  |
+| AC-037 | AC | 使用中 | 2026-10-09T22:09:10+09:00 | run/202610092141@f6bb8de |  |
+| SRC-012 | SRC | 使用中 | 2026-10-09T22:09:15+09:00 | run/202610092141@f6bb8de |  |
