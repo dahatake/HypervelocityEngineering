@@ -1,5 +1,6 @@
 """Tests for EABK Studio: the data-layer parser and the local server. Run: python -m pytest EABK-Studio/tests -q"""
 import json
+import hashlib
 import sys
 import threading
 import urllib.error
@@ -193,6 +194,63 @@ def test_management_analysis_is_derived_from_parsed_records(repo):
     assert runtime["boundaries"][0]["source"].startswith("docs/requirements-definition.md:")
     assert model["cases"][0]["status"] == "pass"
     assert model["meta"]["generatedAt"]
+
+
+# FR-1003 AC-045: individual System Test records enforce parent, digest,
+# duplicate, and cross-boundary constraints instead of using aggregate counts.
+def test_structure_uses_individual_system_test_and_boundary_constraints(repo):
+    ledger_path = repo / "tests" / "system" / "ledger.json"
+    ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    digest = "sha256:" + hashlib.sha256("保存した下書きが再表示される。".encode("utf-8")).hexdigest()[:16]
+    ledger["ac_digests"] = {"AC-001": digest}
+    ledger["cases"].append({
+        **ledger["cases"][0],
+        "requirement_ids": ["NFR-SEC-001"],
+    })
+    ledger_path.write_text(json.dumps(ledger, ensure_ascii=False), encoding="utf-8")
+
+    model = m.build_model(repo)
+    rows = model["analysis"]["structure"]["differences"]
+    system_rows = [row for row in rows if row["layer"] == "System Test"]
+    assert any(row["kind"] == "重複" and "E2E-001" in row["target"] for row in system_rows)
+    assert any(row["kind"] == "参照不整合" and row["rule"] == "親子制約" for row in system_rows)
+    assert all(all(row[key] for key in ("actual", "ideal", "delta", "rule", "reason", "source"))
+               for row in system_rows)
+    boundary = next(row for row in rows if row["layer"] == "境界間")
+    assert boundary["target"] == "ID / 位置: 決済サービス"
+    assert boundary["rule"] == "境界間制約"
+    assert "方式=HTTPS" in boundary["actual"] and "正本=決済" in boundary["actual"]
+
+
+# FR-1005 AC-048: management data and implementation paths are separate
+# file-level nodes with location, access direction, and evidence.
+def test_runtime_has_file_level_management_and_implementation_nodes(repo):
+    runtime = m.build_model(repo)["analysis"]["runtime"]
+    management = [node for node in runtime["components"] if node.get("kind") == "management"]
+    implementations = [node for node in runtime["components"] if node.get("kind") == "implementation"]
+    assert {node["data"] for node in management} >= {
+        "docs/requirements-definition.md", "docs/catalog.md", "tests/system/ledger.json",
+    }
+    assert {node["data"] for node in implementations} >= {
+        "src/app.core/Drafts/Service.cs", "src/app.web/Drafts.tsx",
+    }
+    assert all(node["runsAt"] == "対象リポジトリ" and node["access"] and node["source"]
+               for node in management + implementations)
+    assert all(any(flow["data"] == node["data"] and flow["direction"] for flow in runtime["flows"])
+               for node in management + implementations)
+
+
+# FR-1006 AC-051: each timeline/status category exposes individual records
+# carrying state/time and clickable evidence coordinates for the renderer.
+def test_history_has_individual_evidence_records_for_every_progress_category(repo):
+    model = m.build_model(repo)
+    records = model["analysis"]["history"]
+    assert {record["category"] for record in records} == {
+        "要求状態", "実装登録", "System Test",
+    }
+    assert any(record["category"] == "System Test" and record["status"] == "pass"
+               and record["date"] == "2026-10-08T10:00:00+09:00" for record in records)
+    assert all(record["id"] and record["status"] and record["file"] for record in records)
 
 
 def test_tables_are_classified(repo):

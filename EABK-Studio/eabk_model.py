@@ -7,6 +7,7 @@ paths that the catalog already holds.
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 import time
 from collections import Counter, OrderedDict
@@ -451,8 +452,8 @@ def build_model(root: Path) -> dict:
                  "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "files": {}, "fingerprint": fingerprint(root)},
         "goals": [], "reqs": [], "params": [], "terms": [], "stateMachines": [], "personas": [], "integrations": [],
         "questions": [], "decisions": [], "audits": [], "sources": [], "scenarios": [], "catalog": {"features": [], "apis": [], "tables": [], "parts": []},
-        "cases": [], "runs": [], "registry": [], "registryRecords": [],
-        "analysis": {"structure": {"layers": [], "differences": []}, "runtime": {}},
+        "cases": [], "caseDigests": {}, "runs": [], "registry": [], "registryRecords": [],
+        "analysis": {"structure": {"layers": [], "differences": []}, "runtime": {}, "history": []},
         "graph": {"nodes": [], "edges": []}, "warnings": warnings,
     }
     rd_path = root / files["requirements"]
@@ -640,6 +641,7 @@ def build_model(root: Path) -> dict:
     if lp.is_file():
         try:
             data = json.loads(read_text(lp))
+            model["caseDigests"] = data.get("ac_digests", {}) if isinstance(data.get("ac_digests", {}), dict) else {}
             for c in data.get("cases", []):
                 model["cases"].append({k: c.get(k) for k in ("id", "requirement_ids", "ac_ids", "title", "layer", "command",
                                                               "canary", "status", "last_commit", "last_run_at", "evidence")})
@@ -694,7 +696,7 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
     def add(layer: str, kind: str, target: str, actual: str, ideal: str,
             rule: str, reason: str, file: str | None, line: int | None = None) -> None:
         differences.append({
-            "layer": layer, "kind": kind, "target": f"ID / 位置: {target}", "actual": actual,
+            "layer": layer, "kind": kind, "delta": kind, "target": f"ID / 位置: {target}", "actual": actual,
             "ideal": ideal, "rule": rule, "reason": f"理由: {reason}", "source": source(file, line),
         })
 
@@ -723,21 +725,22 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
 
     # Requirements: required elements, parent constraints, and duplicate IDs.
     for r in model["reqs"]:
+        req_layer = "境界別要求" if r["file"] != files["requirements"] else "要求定義書"
         missing = []
         if not r["status"]:
             missing.append("決定状態")
         if not r["acs"]:
             missing.append("受入基準")
         if missing:
-            add("要求定義書", "不足", r["id"], "不足: " + "・".join(missing),
+            add(req_layer, "不足", r["id"], "不足: " + "・".join(missing),
                 "決定状態・上位目的・受入基準あり", "必須要素",
                 "要求の必須要素が解析結果に存在しない", r["file"], r["line"])
         if not r["goal"] or r["goal"] not in known_goal:
-            add("要求定義書", "孤立", r["id"], f"上位={r['goal']}（参照先なし）",
+            add(req_layer, "孤立", r["id"], f"上位={r['goal']}（参照先なし）",
                 "存在する目的に接続", "親子制約", "上位目的が目的レコードに存在しない",
                 r["file"], r["line"])
         if not missing and r["goal"] in known_goal:
-            add("要求定義書", "妥当", r["id"], "必須要素と上位目的を解析済み",
+            add(req_layer, "妥当", r["id"], "必須要素と上位目的を解析済み",
                 "決定状態・上位目的・受入基準あり", "必須要素",
                 "必須要素と親レコードを確認できた", r["file"], r["line"])
         for ac in r["acs"]:
@@ -746,7 +749,7 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
                 ac["text"] or "",
             ))
             for ref in sorted(refs - known_req - known_goal - known_ac):
-                add("要求定義書", "参照不整合", ac["id"], f"{ref} を参照",
+                add(req_layer, "参照不整合", ac["id"], f"{ref} を参照",
                     "参照IDが管理データに存在", "参照制約",
                     f"参照先 {ref} が解析済みIDに存在しない", r["file"], ac["line"])
     for warning in warnings:
@@ -773,6 +776,11 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
             add("カタログ", "参照不整合", f["req"], f"カタログ={f['status']}",
                 f"要求正本={req_status[f['req']]}", "参照制約",
                 "決定状態が要求正本と一致しない", file, line)
+        else:
+            add("カタログ", "妥当", f["req"],
+                f"実装={len(f['impl'])} / 試験={len(f['tests'])} / 共通部品={len(f['parts'])}",
+                "要求ごとに実装・試験・共通部品を登録", "必須要素",
+                "機能行の要求参照と決定状態が正本に一致", file, line)
 
     registry_counts = Counter(r["id"] for r in model["registryRecords"])
     for record in model["registryRecords"]:
@@ -788,7 +796,57 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
         if registry_counts[rid] > 1:
             add("ID 台帳", "重複", rid, f"登録 {registry_counts[rid]} 件", "登録1件",
                 "必須要素", "同じIDが複数行に登録されている", record["file"], record["line"])
+        elif rid in known_req | known_ac | known_goal and record["kind"] == expected:
+            add("ID 台帳", "妥当", rid, f"種別={record['kind']} / 状態={record['state']}",
+                f"種別={expected} / 一意な登録", "必須要素",
+                "ID定義元・接頭辞・登録件数が一致", record["file"], record["line"])
 
+    # System Test: every case is checked as an individual record, including
+    # parent requirement/AC links, duplicate IDs, and the AC text digest.
+    case_counts = Counter(c.get("id") for c in model["cases"])
+    ac_parent = {a["id"]: r["id"] for r in model["reqs"] for a in r["acs"]}
+    params = {p["id"]: f"{p['value']}{(' ' + p['unit']) if p['unit'] else ''}" for p in model["params"]}
+
+    def current_digest(aid: str) -> str | None:
+        ac = next((a for r in model["reqs"] for a in r["acs"] if a["id"] == aid), None)
+        if not ac:
+            return None
+        text = re.sub(r"\{(PARAM-[A-Z0-9_-]+)\}", lambda m: params.get(m.group(1), m.group(0)), ac["text"])
+        return "sha256:" + hashlib.sha256(re.sub(r"\s+", " ", text).strip().encode("utf-8")).hexdigest()[:16]
+
+    for case in model["cases"]:
+        cid = case.get("id") or source(files["ledger"])
+        req_ids = case.get("requirement_ids") or []
+        ac_ids = case.get("ac_ids") or []
+        if case_counts[case.get("id")] > 1:
+            add("System Test", "重複", cid, f"ケース登録 {case_counts[case.get('id')]} 件",
+                "ケースIDは一意", "必須要素", "同じケースIDが複数登録されている", files["ledger"])
+        invalid_req = [rid for rid in req_ids if rid not in known_req]
+        invalid_ac = [aid for aid in ac_ids if aid not in known_ac]
+        wrong_parent = [aid for aid in ac_ids if aid in ac_parent and ac_parent[aid] not in req_ids]
+        if invalid_req or invalid_ac or wrong_parent:
+            actual = " / ".join(filter(None, [
+                invalid_req and f"未定義要求={','.join(invalid_req)}",
+                invalid_ac and f"未定義AC={','.join(invalid_ac)}",
+                wrong_parent and f"親要求不一致={','.join(wrong_parent)}",
+            ]))
+            add("System Test", "参照不整合", cid, actual,
+                "ケースの要求IDが各ACの親要求と一致", "親子制約",
+                "ケースから要求・ACの正しい親子関係を辿れない", files["ledger"])
+        for aid in ac_ids:
+            expected, recorded = current_digest(aid), model["caseDigests"].get(aid)
+            if expected and recorded != expected:
+                add("System Test", "参照不整合", f"{cid} / {aid}",
+                    f"digest={recorded or 'なし'}", f"digest={expected}", "参照制約",
+                    "AC本文digestが台帳の作成時点と一致しない", files["ledger"])
+        if (case_counts[case.get("id")] == 1 and not invalid_req and not invalid_ac
+                and not wrong_parent and all(model["caseDigests"].get(a) == current_digest(a) for a in ac_ids)):
+            add("System Test", "妥当", cid,
+                f"親要求={','.join(req_ids)} / AC={','.join(ac_ids)} / status={case.get('status')}",
+                "親要求一致・一意なケースID・AC digest一致", "親子制約・参照制約",
+                "ケースの親・digest・一意性を確認", files["ledger"])
+
+    run_counts = Counter(run.get("run-id", "") for run in model["runs"])
     for run in model["runs"]:
         run_id = run.get("run-id", "")
         refs = expand_ids(" ".join(str(v) for v in run.values()))
@@ -799,6 +857,33 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
                 "未定義参照: " + "・".join(dangling + case_refs),
                 "要求・ケース参照が存在", "参照制約",
                 "履歴から辿る参照先が解析データに存在しない", run["file"], run["line"])
+        elif run_counts[run_id] > 1:
+            add("実行履歴", "重複", run_id, f"履歴 {run_counts[run_id]} 件",
+                "run-idごとに履歴1件", "必須要素", "同じrun-idが複数行に存在", run["file"], run["line"])
+        else:
+            add("実行履歴", "妥当", run_id or source(run["file"], run["line"]),
+                "要求・AC・ケース参照を解析済み", "run-idごとに参照先が存在",
+                "参照制約", "履歴の参照先と一意性を確認", run["file"], run["line"])
+
+    # Boundary contracts are records too; no aggregate count is used as the
+    # oracle. Method, direction, owner and source are cross-boundary constraints.
+    boundary_counts = Counter(x["name"] for x in model["integrations"])
+    for item in model["integrations"]:
+        missing = [label for label, value in (
+            ("方式", item["method"]), ("方向", item["meaning"]), ("正本", item["owner"])
+        ) if not value]
+        if boundary_counts[item["name"]] > 1:
+            add("境界間", "重複", item["name"], f"境界定義 {boundary_counts[item['name']]} 件",
+                "連携先ごとに定義1件", "必須要素", "同じ連携先が複数定義されている", item["file"], item["line"])
+        elif missing:
+            add("境界間", "不足", item["name"], "不足=" + "・".join(missing),
+                "方式・方向・正本を明示", "境界間制約",
+                "境界を越えるデータ契約の必須要素が不足", item["file"], item["line"])
+        else:
+            add("境界間", "妥当", item["name"],
+                f"方式={item['method']} / 方向={item['meaning']} / 正本={item['owner']}",
+                "方式・方向・正本を明示", "境界間制約",
+                "境界を越えるデータ契約を個別に確認", item["file"], item["line"])
 
     # Runtime/data placement is a contract derived from the files actually
     # loaded and catalog paths actually registered.
@@ -808,16 +893,30 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
         "name": x["name"], "method": x["method"], "direction": x["meaning"],
         "owner": x["owner"], "source": source(x["file"], x["line"]),
     } for x in model["integrations"]]
+    management_nodes = [
+        {"name": f"管理データ: {path}", "kind": "management", "runsAt": "対象リポジトリ",
+         "data": path, "access": "Studio サーバー → 読取", "source": path}
+        for path in management
+    ]
+    implementation_nodes = [
+        {"name": f"実装ファイル: {path}", "kind": "implementation", "runsAt": "対象リポジトリ",
+         "data": path, "access": "Studio サーバー → 登録位置のみ読取", "source": files["catalog"]}
+        for path in implementations
+    ]
     model["analysis"]["runtime"] = {
         "components": [
             {"name": "PC", "runsAt": str(model["meta"]["repo"]), "data": "Studio ローカルプロセス", "source": "起動時実行環境"},
             {"name": "ブラウザー", "runsAt": "PC", "data": "APIから受け取った表示モデル（メモリ）", "source": "/api/model"},
             {"name": "Studio サーバー", "runsAt": "PC / 127.0.0.1", "data": "管理データの解析結果（メモリ）", "source": "EABK-Studio/studio.py"},
             {"name": f"対象リポジトリ: {model['meta']['name']}", "runsAt": model["meta"]["repo"],
-             "data": f"管理データ {len(management)} 件 / 実装ファイル登録 {len(implementations)} 件",
-             "source": "、".join(management + implementations) or "管理データなし"},
+             "data": "管理データと実装ファイルの格納境界", "source": str(model["meta"]["repo"])},
+            *management_nodes, *implementation_nodes,
         ],
         "flows": [
+            *[{"from": node["name"], "to": "Studio サーバー", "direction": "読取",
+               "data": node["data"], "source": node["source"]} for node in management_nodes],
+            *[{"from": "カタログ", "to": node["name"], "direction": "読取（登録位置）",
+               "data": node["data"], "source": node["source"]} for node in implementation_nodes],
             {"from": "対象リポジトリ", "to": "Studio サーバー", "direction": "読取",
              "data": "管理データ・実装ファイルの登録位置", "source": "、".join(management) or "なし"},
             {"from": "Studio サーバー", "to": "ブラウザー", "direction": "読取",
@@ -828,6 +927,24 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
         "boundaries": boundaries,
         "externalSend": boundaries,
     }
+
+    # AC-051: normalized, evidence-bearing records for every progress dimension.
+    history = model["analysis"]["history"]
+    for d in model["decisions"]:
+        history.append({"category": "決定記録", "id": d["target"] or d["decision"], "date": d["date"],
+                        "status": d["decision"], "file": d["file"], "line": d["line"]})
+    for run in model["runs"]:
+        history.append({"category": "実行履歴", "id": run.get("run-id", ""), "date": run.get("日時", run.get("日付", "")),
+                        "status": run.get("工程状態", ""), "file": run["file"], "line": run["line"]})
+    for r in model["reqs"]:
+        history.append({"category": "要求状態", "id": r["id"], "date": "", "status": r["status"],
+                        "file": r["file"], "line": r["line"]})
+    for f in model["catalog"]["features"]:
+        history.append({"category": "実装登録", "id": f["req"], "date": "", "status": "登録済み" if f["impl"] else "未登録",
+                        "file": files["catalog"], "line": f["line"]})
+    for c in model["cases"]:
+        history.append({"category": "System Test", "id": c.get("id") or "", "date": c.get("last_run_at") or "",
+                        "status": c.get("status") or "未設定", "file": files["ledger"], "line": None})
 
 
 def build_graph(model: dict, reqs: dict, parts: list[dict]) -> None:

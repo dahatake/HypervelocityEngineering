@@ -44,7 +44,9 @@ function runtimePlacement() {
   const runtime = store.model.analysis.runtime;
   const box = (item) => el('article', { class: 'runtime-node card' },
     el('h3', {}, item.name), el('p', {}, `実行場所: ${item.runsAt}`),
-    el('p', {}, `データの所在: ${item.data}`), el('p', { class: 'mini mono' }, `根拠: ${item.source}`));
+    el('p', {}, `データの所在: ${item.data}`),
+    item.access ? el('p', {}, `読取・書込方向: ${item.access}`) : null,
+    el('p', { class: 'mini mono' }, `根拠: ${item.source}`));
   return el('section', { class: 'visual-section' }, el('h1', {}, 'アプリ構成とデータ位置づけ'),
     el('p', { class: 'sub' }, '解析した管理データと実装登録に基づく実行環境・コード・格納位置・明示境界'),
     el('div', { class: 'runtime-flow' }, runtime.components.map(box)),
@@ -90,8 +92,10 @@ function historyProgress() {
           el('h3', {}, `${group.label} (${group.records.length})`),
           group.records.length
             ? el('ul', {}, group.records.map((record) => el('li', {},
-              el('b', {}, recordLabel(record)), sourceLabel(record) ? ` — ${sourceLabel(record)}` : '',
-              record.status ? ` — ${record.status}` : '')))
+              el('b', {}, recordLabel(record)),
+              record.date ? ` — 時点: ${record.date}` : ' — 時点: 記録なし',
+              record.status ? ` — 状態: ${record.status}` : '',
+              sourceLabel(record) ? ` — 根拠: ${sourceLabel(record)}` : '')))
             : el('p', { class: 'empty' }, '該当レコードなし'))),
         el('button', { class: 'btn', onclick: () => (drawer.hidden = true) }, '閉じる'));
       drawer.hidden = false;
@@ -110,18 +114,17 @@ function historyProgress() {
   }, {})).map(([label, records]) => ({ label, records }));
   const goalGroups = by(m.reqs, (r) => r.goal);
   const typeGroups = by([...store.nodes.values()], (n) => n.type);
+  const historyGroups = Object.entries((m.analysis.history || []).reduce((out, record) => {
+    (out[record.category] ||= []).push(record);
+    return out;
+  }, {})).map(([label, records]) => ({ label, records }));
   return el('section', { class: 'visual-section' }, el('h2', {}, '設計・開発履歴と進捗'),
     el('p', { class: 'sub' }, `測定時点: ${m.meta.generatedAt} · 時系列 / 状態別`),
-    el('div', { class: 'dimension-list' },
-      el('span', { class: 'badge' }, `決定記録 ${m.decisions.length}`),
-      el('span', { class: 'badge' }, `実行履歴 ${m.runs.length}`),
-      ...by(m.reqs, (r) => `要求状態 ${r.statusKind}`).map((x) => el('span', { class: 'badge' }, `${x.label} ${x.records.length}`)),
-      el('span', { class: 'badge' }, `実装登録 ${m.catalog.features.filter((f) => f.impl.length).length}`),
-      ...by(m.cases, (c) => `System Test ${c.status || '未設定'}`).map((x) => el('span', { class: 'badge' }, `${x.label} ${x.records.length}`))),
     el('div', { class: 'progress-summary' }, el('span', {}, 'System Test 合格 '),
       el('strong', { 'data-testid': 'system-test-pass-count' }, String(pass)),
       el('span', {}, ` / ${m.cases.length}（not_run は合格に含めない）`)),
     el('div', { class: 'grid cols2' },
+      ...historyGroups.map((group) => evidence(group.label, [group])),
       evidence('目的', goalGroups),
       evidence('データ種別', typeGroups)));
 }
@@ -135,7 +138,7 @@ export function mountStructure(host) {
         el('p', {}, `現状: ${layer.actual}`), el('p', {}, `理想: ${layer.ideal}`),
         el('p', { class: 'mini mono' }, `根拠: ${layer.source}`)))),
     el('div', { class: 'tw' }, el('table', { class: 't' },
-      el('thead', {}, el('tr', {}, ['データ層', '差分種別', '対象 ID / 位置', '現状', '理想', '適用規則', '判定理由', '根拠'].map((x) => el('th', {}, x)))),
+      el('thead', {}, el('tr', {}, ['データ層', '差分種別（delta）', '対象 ID / 位置', '現状（actual）', '理想（ideal）', '適用規則（rule）', '判定理由（reason）', '根拠（source）'].map((x) => el('th', {}, x)))),
       el('tbody', {}, analysis.differences.map((diff) => el('tr', {},
         el('td', {}, diff.layer), el('td', {}, diff.kind), el('td', {}, diff.target),
         el('td', {}, diff.actual), el('td', {}, diff.ideal), el('td', {}, diff.rule),
