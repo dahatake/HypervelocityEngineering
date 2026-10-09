@@ -41,21 +41,25 @@ export function decorate(route, host) {
 }
 
 function runtimePlacement() {
-  const m = store.model;
-  const clouds = m.integrations.filter((x) => /cloud|azure|aws|gcp|外部送信/i.test(`${x.name} ${x.method} ${x.meaning}`));
-  const box = (title, place, data) => el('article', { class: 'runtime-node card' },
-    el('h3', {}, title), el('p', {}, `実行場所: ${place}`), el('p', {}, `データの所在: ${data}`));
+  const runtime = store.model.analysis.runtime;
+  const box = (item) => el('article', { class: 'runtime-node card' },
+    el('h3', {}, item.name), el('p', {}, `実行場所: ${item.runsAt}`),
+    el('p', {}, `データの所在: ${item.data}`), el('p', { class: 'mini mono' }, `根拠: ${item.source}`));
   return el('section', { class: 'visual-section' }, el('h1', {}, 'アプリ構成とデータ位置づけ'),
-    el('p', { class: 'sub' }, 'PC / ローカル / クラウドの信頼境界とコード・データの流れ'),
-    el('div', { class: 'runtime-flow' },
-      box('PC・ブラウザー', '利用者の PC', '表示用モデル（メモリ）'),
-      el('div', { class: 'flow-arrow' }, '読取 →'),
-      box('Studio サーバー', 'PC のローカルプロセス', '読取モデル'),
-      el('div', { class: 'flow-arrow' }, '読取 →'),
-      box(`対象リポジトリ: ${m.meta.name}`, m.meta.repo, '管理データ / 実装ファイル')),
+    el('p', { class: 'sub' }, '解析した管理データと実装登録に基づく実行環境・コード・格納位置・明示境界'),
+    el('div', { class: 'runtime-flow' }, runtime.components.map(box)),
+    el('div', { class: 'tw' }, el('table', { class: 't' },
+      el('thead', {}, el('tr', {}, ['送信元', '送信先', '方向', '対象データ', '根拠'].map((x) => el('th', {}, x)))),
+      el('tbody', {}, runtime.flows.map((flow) => el('tr', {},
+        el('td', {}, flow.from), el('td', {}, flow.to), el('td', {}, flow.direction),
+        el('td', {}, flow.data), el('td', { class: 'mono' }, flow.source)))))),
     el('div', { class: 'card boundary' }, el('h3', {}, '外部／クラウド境界'),
-      el('p', {}, clouds.length ? clouds.map((x) => x.name).join('、') : 'なし'),
-      el('p', {}, `書込: なし　外部送信: ${clouds.length ? '定義あり → ' + clouds.map((x) => x.name).join('、') : 'なし'}`)));
+      runtime.boundaries.length
+        ? runtime.boundaries.map((x) => el('p', {},
+          el('b', {}, x.name), ` / 方式: ${x.method || '未記載'} / 方向: ${x.direction || '未記載'} / 正本: ${x.owner || '未記載'} / 外部送信`,
+          el('span', { class: 'mono' }, ` / 根拠: ${x.source}`)))
+        : el('p', {}, 'なし'),
+      el('p', {}, `書込: なし　外部送信: ${runtime.externalSend.length ? '定義あり' : 'なし'}`)));
 }
 
 function entityER() {
@@ -71,38 +75,71 @@ function entityER() {
 function historyProgress() {
   const m = store.model;
   const pass = m.cases.filter((c) => c.status === 'pass').length;
-  const evidence = (title, text) => {
+  const recordLabel = (record) => record.id || record['run-id'] || record.target || record.name || record.label || 'record';
+  const sourceLabel = (record) => [record.file, record.line].filter(Boolean).join(':');
+  const evidence = (title, groups) => {
+    const count = groups.reduce((n, group) => n + group.records.length, 0);
     const open = () => {
       const drawer = document.getElementById('drawer');
       drawer.hidden = true;
-      drawer.replaceChildren(el('h2', {}, `${title}の根拠`), el('p', {}, text), el('button', { class: 'btn', onclick: () => (drawer.hidden = true) }, '閉じる'));
+      drawer.style.left = '8px';
+      drawer.style.right = 'auto';
+      drawer.style.width = 'min(440px, 35vw)';
+      drawer.replaceChildren(el('h2', {}, `${title}の根拠レコード`),
+        ...groups.map((group) => el('section', {},
+          el('h3', {}, `${group.label} (${group.records.length})`),
+          group.records.length
+            ? el('ul', {}, group.records.map((record) => el('li', {},
+              el('b', {}, recordLabel(record)), sourceLabel(record) ? ` — ${sourceLabel(record)}` : '',
+              record.status ? ` — ${record.status}` : '')))
+            : el('p', { class: 'empty' }, '該当レコードなし'))),
+        el('button', { class: 'btn', onclick: () => (drawer.hidden = true) }, '閉じる'));
+      drawer.hidden = false;
     };
     return el('figure', { class: 'card evidence-chart', 'aria-label': title },
-      el('figcaption', {}, title), el('button', { role: 'button', class: 'chart-button', onclick: open }, text));
+      el('figcaption', {}, title),
+      el('button', { role: 'button', class: 'chart-button', onclick: open },
+        `${groups.length} 集計 / ${count} 件 — 根拠レコードを表示`),
+      el('div', { class: 'dimension-list' }, groups.map((group) =>
+        el('span', { class: 'badge' }, `${group.label}: ${group.records.length}`))));
   };
+  const by = (records, key) => Object.entries(records.reduce((out, record) => {
+    const label = key(record) || '未分類';
+    (out[label] ||= []).push(record);
+    return out;
+  }, {})).map(([label, records]) => ({ label, records }));
+  const goalGroups = by(m.reqs, (r) => r.goal);
+  const typeGroups = by([...store.nodes.values()], (n) => n.type);
   return el('section', { class: 'visual-section' }, el('h2', {}, '設計・開発履歴と進捗'),
     el('p', { class: 'sub' }, `測定時点: ${m.meta.generatedAt} · 時系列 / 状態別`),
-    el('div', { class: 'dimension-list' }, ['決定記録', '実行履歴', '要求状態', '実装登録', 'System Test'].map((x) => el('span', { class: 'badge' }, x))),
+    el('div', { class: 'dimension-list' },
+      el('span', { class: 'badge' }, `決定記録 ${m.decisions.length}`),
+      el('span', { class: 'badge' }, `実行履歴 ${m.runs.length}`),
+      ...by(m.reqs, (r) => `要求状態 ${r.statusKind}`).map((x) => el('span', { class: 'badge' }, `${x.label} ${x.records.length}`)),
+      el('span', { class: 'badge' }, `実装登録 ${m.catalog.features.filter((f) => f.impl.length).length}`),
+      ...by(m.cases, (c) => `System Test ${c.status || '未設定'}`).map((x) => el('span', { class: 'badge' }, `${x.label} ${x.records.length}`))),
     el('div', { class: 'progress-summary' }, el('span', {}, 'System Test 合格 '),
       el('strong', { 'data-testid': 'system-test-pass-count' }, String(pass)),
       el('span', {}, ` / ${m.cases.length}（not_run は合格に含めない）`)),
     el('div', { class: 'grid cols2' },
-      evidence('目的', `${m.goals.length} 件の目的から要求へドリルダウン`),
-      evidence('データ種別', `${store.nodes.size} 件の根拠レコードへドリルダウン`)));
+      evidence('目的', goalGroups),
+      evidence('データ種別', typeGroups)));
 }
 
 export function mountStructure(host) {
-  const layers = ['要求定義書', '境界別要求', 'カタログ', 'System Test', 'ID 台帳', '実行履歴', '境界間'];
-  const differences = ['妥当', '不足', '余剰', '孤立', '重複', '参照不整合'];
+  const analysis = store.model.analysis.structure;
   const page = el('div', { class: 'page' }, el('h1', {}, '全データ層の現状対理想構造'),
-    el('p', { class: 'sub' }, '現状構造 と 理想構造（構造判定表）を層ごとに比較'),
-    el('div', { class: 'layer-list' }, layers.map((x) => el('span', { class: 'badge' }, x))),
+    el('p', { class: 'sub' }, '解析済みの現状構造 と 構造判定表から導いた理想構造を層ごとに比較'),
+    el('div', { class: 'grid cols2 layer-list' }, analysis.layers.map((layer) =>
+      el('article', { class: 'card' }, el('h2', {}, layer.name),
+        el('p', {}, `現状: ${layer.actual}`), el('p', {}, `理想: ${layer.ideal}`),
+        el('p', { class: 'mini mono' }, `根拠: ${layer.source}`)))),
     el('div', { class: 'tw' }, el('table', { class: 't' },
-      el('thead', {}, el('tr', {}, ['差分種別', '対象 ID / 位置', '適用規則', '判定理由'].map((x) => el('th', {}, x)))),
-      el('tbody', {}, differences.map((x, i) => el('tr', {},
-        el('td', {}, x), el('td', {}, i ? `位置 ${i}` : 'ID: model'),
-        el('td', {}, i % 3 === 0 ? '必須要素' : i % 3 === 1 ? '親子制約' : '参照制約'),
-        el('td', {}, `${x}の判定理由を正本間の識別子で追跡`)))))));
+      el('thead', {}, el('tr', {}, ['データ層', '差分種別', '対象 ID / 位置', '現状', '理想', '適用規則', '判定理由', '根拠'].map((x) => el('th', {}, x)))),
+      el('tbody', {}, analysis.differences.map((diff) => el('tr', {},
+        el('td', {}, diff.layer), el('td', {}, diff.kind), el('td', {}, diff.target),
+        el('td', {}, diff.actual), el('td', {}, diff.ideal), el('td', {}, diff.rule),
+        el('td', {}, diff.reason), el('td', { class: 'mono' }, diff.source)))))));
   host.append(page);
   return { destroy() {} };
 }
