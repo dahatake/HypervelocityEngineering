@@ -112,7 +112,24 @@
 | FR-1001 | FR | 使用中 | 2026-10-09T22:09:04+09:00 | run/202610092141@f6bb8de |  |
 | AC-037 | AC | 使用中 | 2026-10-09T22:09:10+09:00 | run/202610092141@f6bb8de |  |
 | SRC-012 | SRC | 使用中 | 2026-10-09T22:09:15+09:00 | run/202610092141@f6bb8de |  |
+| AC-038 | AC | 欠番 | 2026-10-09T22:10:29+09:00 | run/202610092141@f6bb8de |  |
+| E2E-001 | E2E | 使用中 | 2026-10-09T22:10:36+09:00 | run/202610092141@f6bb8de | Model traversal from requirement to cata |
+| E2E-002 | E2E | 使用中 | 2026-10-09T22:10:42+09:00 | run/202610092141@f6bb8de | Dashboard aggregates and selectable brea |
+| E2E-003 | E2E | 使用中 | 2026-10-09T22:10:47+09:00 | run/202610092141@f6bb8de | 2D and 3D relationship highlighting and |
+| E2E-004 | E2E | 使用中 | 2026-10-09T22:10:53+09:00 | run/202610092141@f6bb8de | Selection and filter persistence across |
+| E2E-005 | E2E | 使用中 | 2026-10-09T22:11:01+09:00 | run/202610092141@f6bb8de | Search shortcuts, result limit, and CSV |
+| E2E-006 | E2E | 使用中 | 2026-10-09T22:11:09+09:00 | run/202610092141@f6bb8de | Persona defaults and state preservation |
+| E2E-007 | E2E | 使用中 | 2026-10-09T22:11:15+09:00 | run/202610092141@f6bb8de | Invalid repository switch preserves curr |
+| E2E-008 | E2E | 使用中 | 2026-10-09T22:11:22+09:00 | run/202610092141@f6bb8de | Read-only startup, switching, and refres |
+| E2E-009 | E2E | 使用中 | 2026-10-09T22:11:27+09:00 | run/202610092141@f6bb8de | Loopback binding and foreign-host reject |
+| E2E-010 | E2E | 使用中 | 2026-10-09T22:11:32+09:00 | run/202610092141@f6bb8de | Read-only behavior across all views |
+| E2E-011 | E2E | 使用中 | 2026-10-09T22:11:39+09:00 | run/202610092141@f6bb8de | Supported runtime and default model star |
+| E2E-012 | E2E | 使用中 | 2026-10-09T22:11:46+09:00 | run/202610092141@f6bb8de | Missing data recovery and model retentio |
+| E2E-013 | E2E | 使用中 | 2026-10-09T22:11:54+09:00 | run/202610092141@f6bb8de | Configured cross-record traceability |
+| E2E-014 | E2E | 使用中 | 2026-10-09T22:12:01+09:00 | run/202610092141@f6bb8de | Repository switch success and failure re |
 | AC-039 | AC | 使用中 | 2026-10-09T22:12:55+09:00 | run/202610092141@9464dc6 |  |
+| AC-040 | AC | 欠番 | 2026-10-09T22:13:14+09:00 | run/202610092141@9464dc6 |  |
+| E2E-015 | E2E | 使用中 | 2026-10-09T22:13:44+09:00 | run/202610092141@f6bb8de | First-steps startup prerequisites and un |
 | AC-041 | AC | 採番済み | 2026-10-09T22:25:33+09:00 | run/202610092141@0de5362 |  |
 | AC-042 | AC | 採番済み | 2026-10-09T22:25:33+09:00 | run/202610092141@0de5362 |  |
 | AC-043 | AC | 採番済み | 2026-10-09T22:29:53+09:00 | run/202610092141@0de5362 |  |
