@@ -1,0 +1,33 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "EABK Studio: StudyReport-Evaluator-3",
+			"type": "shell",
+			"command": "C:\\Users\\dahatake\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+			"args": [
+				"C:\\GitHub\\HypervelocityEngineering\\EABK-Studio\\studio.py",
+				"--repo",
+				"C:\\GitHub\\StudyReport-Evaluator-3",
+				"--no-open"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "EABK Studio: HubRadio-MovieCreator",
+			"type": "shell",
+			"command": "C:\\Users\\dahatake\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+			"args": [
+				"C:\\GitHub\\HypervelocityEngineering\\EABK-Studio\\studio.py",
+				"--repo",
+				"C:\\GitHub\\HubRadio-MovieCreator",
+				"--port",
+				"8767",
+				"--no-open"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}
