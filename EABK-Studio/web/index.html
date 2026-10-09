@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EABK Studio</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2339d0ff'/%3E%3Cstop offset='1' stop-color='%23b36bff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Cpath d='M32 12 50 22v20L32 52 14 42V22z' fill='none' stroke='white' stroke-width='4' stroke-linejoin='round'/%3E%3Ccircle cx='32' cy='32' r='5' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="app.css">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
+</head>
+<body>
+<div class="bg" aria-hidden="true"><i></i><i></i><i></i></div>
+<header class="top">
+  <a class="brand" href="#/dashboard" title="EABK Studio">
+    <svg viewBox="0 0 64 64" width="30" height="30"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#39d0ff"/><stop offset="1" stop-color="#b36bff"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#lg)"/><path d="M32 12 50 22v20L32 52 14 42V22z" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round"/><circle cx="32" cy="32" r="5" fill="#fff"/></svg>
+    <span><b>EABK</b> Studio</span>
+  </a>
+  <nav id="nav" class="tabs"></nav>
+  <div class="search">
+    <svg viewBox="0 0 24 24" width="16" height="16"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m16 16 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <input id="q" type="search" autocomplete="off" spellcheck="false" data-i18n-ph="search.ph">
+    <kbd>/</kbd>
+    <div id="results" class="results" hidden></div>
+  </div>
+  <button id="repoBtn" class="chip repo" data-i18n-title="repo.change"></button>
+  <time id="modelTime" class="mini" aria-label="model timestamp"></time>
+  <div id="personaBar" class="row" aria-label="persona"></div>
+  <button id="lang" class="chip" title="Language / 言語">JA | EN</button>
+</header>
+<main id="view"></main>
+<aside id="drawer" class="drawer" hidden></aside>
+<div id="toast" class="toast" hidden></div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
