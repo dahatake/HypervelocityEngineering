@@ -955,8 +955,9 @@ def build_management_analysis(model: dict, docs: list[dict], cat_doc: dict | Non
         history.append({"category": "決定記録", "id": d["target"] or d["decision"], "date": d["date"],
                         "status": d["decision"], "file": d["file"], "line": d["line"]})
     for run in model["runs"]:
-        history.append({"category": "実行履歴", "id": run.get("run-id", ""), "date": run.get("日時", run.get("日付", "")),
-                        "status": run.get("工程状態", ""), "file": run["file"], "line": run["line"]})
+        history.append({"category": "実行履歴", "id": run.get("run-id", ""),
+                        "date": run.get("終了") or run.get("開始", ""),
+                        "status": run.get("結果", ""), "file": run["file"], "line": run["line"]})
     for r in model["reqs"]:
         history.append({"category": "要求状態", "id": r["id"], "date": "", "status": r["status"],
                         "file": r["file"], "line": r["line"]})
