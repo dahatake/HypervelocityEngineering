@@ -1,18 +1,18 @@
 import { t, lang, setLang, onLang, applyI18n } from './i18n.js';
 import { store } from './store.js';
-import { el, esc, colorOf, typeLabel, toast } from './ui.js';
+import { el, esc, colorOf, typeLabel, toast, businessIcon } from './ui.js';
 import { initDrawer } from './drawer.js';
 import { decorate, mountStructure, mountConsistency, mountMaintenance } from './insights.js';
 
 const ROUTES = {
-  dashboard: { icon: '◉', load: () => import('./dashboard.js') },
-  map2d: { icon: '▦', load: () => import('./map2d.js') },
-  map3d: { icon: '◈', load: () => import('./map3d.js') },
-  diagrams: { icon: '⬡', load: () => import('./diagrams.js') },
-  placement: { icon: '⊞', load: () => import('./placement.js') },
-  source: { icon: '⌘', load: () => import('./source.js') },
-  tables: { icon: '☰', load: () => import('./tables.js') },
-  maintenance: { icon: '⚙', label: '整合性保守 / Maintenance', mount: mountMaintenance },
+  dashboard: { icon: 'dashboard', load: () => import('./dashboard.js') },
+  map2d: { icon: 'map2d', load: () => import('./map2d.js') },
+  map3d: { icon: 'map3d', load: () => import('./map3d.js') },
+  diagrams: { icon: 'diagrams', load: () => import('./diagrams.js') },
+  placement: { icon: 'placement', load: () => import('./placement.js') },
+  source: { icon: 'source', load: () => import('./source.js') },
+  tables: { icon: 'tables', load: () => import('./tables.js') },
+  maintenance: { icon: 'maintenance', label: '整合性保守 / Maintenance', mount: mountMaintenance },
   structure: { hidden: true, mount: mountStructure },
   consistency: { hidden: true, mount: mountConsistency },
 };
@@ -20,12 +20,12 @@ const view = document.getElementById('view');
 const nav = document.getElementById('nav');
 let current = null, token = 0, fingerprint = null;
 const personaBar = document.getElementById('personaBar');
-for (const name of ['Product Manager', 'Architect', 'Software Engineer']) {
-  personaBar.append(el('button', { class: 'chip persona', onclick: () => {
+for (const [name, icon] of [['Product Manager', '🎯'], ['Architect', '🏗️'], ['Software Engineer', '💻']]) {
+  personaBar.append(el('button', { class: 'chip persona', 'aria-label': `${name} view`, onclick: () => {
     if (name === 'Architect') location.hash = '#/map2d';
     else if (name === 'Software Engineer') location.hash = '#/tables';
     else location.hash = '#/dashboard';
-  } }, name));
+  } }, el('span', { class: 'biz-icon', role: 'img', 'aria-hidden': 'true' }, icon), name));
 }
 
 const routeName = () => { const r = (location.hash.replace(/^#\/?/, '') || 'dashboard').split('?')[0]; return ROUTES[r] ? r : 'dashboard'; };
@@ -48,7 +48,7 @@ function applyDeepLink() {
 
 function renderNav() {
   const r = routeName();
-  nav.replaceChildren(...Object.entries(ROUTES).filter(([, v]) => !v.hidden).map(([k, v]) => el('a', { href: '#/' + k, class: k === r ? 'on' : '' }, el('span', {}, v.icon), v.label || t('nav.' + k))));
+  nav.replaceChildren(...Object.entries(ROUTES).filter(([, v]) => !v.hidden).map(([k, v]) => el('a', { href: '#/' + k, class: k === r ? 'on' : '', 'aria-current': k === r ? 'page' : null }, businessIcon(v.icon, v.label || t('nav.' + k)), el('span', {}, v.label || t('nav.' + k)))));
 }
 
 async function route() {

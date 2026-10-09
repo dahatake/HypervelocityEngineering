@@ -1,7 +1,7 @@
 // Dashboard: product-manager overview with clickable charts (click -> highlight on the map).
 import { t, onLang } from './i18n.js';
 import { store } from './store.js';
-import { el, svgEl, statusText, STATUS_COLOR, TYPE_COLOR, animateNumber } from './ui.js';
+import { el, svgEl, statusText, STATUS_COLOR, TYPE_COLOR, animateNumber, businessIcon } from './ui.js';
 
 const PALETTE = ['#39d0ff', '#b36bff', '#ff6bd6', '#34e0a1', '#ffb020', '#ff8a5c', '#7dd3fc', '#c3a6ff'];
 let persona = 'Product Manager';
@@ -115,23 +115,27 @@ export function mount(host) {
         kpi(blocked.length, t('dash.blocked'), blocked.map((r) => r.id)),
         kpi(files.length, t('dash.files') + ` / ${comps.length} ` + t('dash.comps'), files.map((f) => f.id))),
       el('div', { class: 'grid cols2', style: { marginTop: '16px' } },
-        el('div', { class: 'card' }, el('h3', {}, t('dash.status')), el('div', { class: 'row', style: { gap: '24px', flexWrap: 'nowrap' } }, donut(statusData), legend(statusData))),
-        el('div', { class: 'card' }, el('h3', {}, t('dash.priority')), el('div', { class: 'row', style: { gap: '24px', flexWrap: 'nowrap' } }, donut(prioData), legend(prioData))),
-        el('div', { class: 'card' }, el('h3', {}, t('dash.goals')),
+        el('div', { class: 'card' }, cardHeading('req', t('dash.status')), el('div', { class: 'row', style: { gap: '24px', flexWrap: 'nowrap' } }, donut(statusData), legend(statusData))),
+        el('div', { class: 'card' }, cardHeading('req', t('dash.priority')), el('div', { class: 'row', style: { gap: '24px', flexWrap: 'nowrap' } }, donut(prioData), legend(prioData))),
+        el('div', { class: 'card' }, cardHeading('goal', t('dash.goals')),
           el('div', { style: { display: 'grid', gap: '12px' } }, goalRows.map(({ g, rs, d, pct }) => el('div', { style: { cursor: 'pointer' }, onclick: () => { store.setFocus(rs.map((r) => r.id), g.id); location.hash = '#/map2d'; } },
             el('div', { class: 'mini', style: { display: 'flex', justifyContent: 'space-between' } }, el('span', {}, el('span', { class: 'mono' }, g.id), ' ', (g.title || '').slice(0, 56)), el('b', { style: { color: '#fff' } }, `${d.length}/${rs.length}`)),
             el('div', { class: 'bar' }, el('i', { style: { width: pct + '%' } })))))),
-        el('div', { class: 'card' }, el('h3', {}, t('dash.groups')), hbars(groupRows)),
-        el('div', { class: 'card' }, el('h3', {}, t('dash.levels')), hbars(levelRows)),
-        el('div', { class: 'card' }, el('h3', {}, t('dash.cases')),
+        el('div', { class: 'card' }, cardHeading('entity', t('dash.groups')), hbars(groupRows)),
+        el('div', { class: 'card' }, cardHeading('test', t('dash.levels')), hbars(levelRows)),
+        el('div', { class: 'card' }, cardHeading('test', t('dash.cases')),
           caseRows.length ? el('div', { class: 'row' }, caseRows.map(([k, n]) => el('span', { class: 'badge ' + (k === 'pass' ? 'pass' : k === 'fail' ? 'fail' : '') }, `${k} ${n}`))) : el('div', { class: 'empty' }, t('none')),
           el('div', { class: 'mini', style: { marginTop: '10px' } }, m.registry.length ? m.registry.map((x) => `${x.kind}:${x.state} ${x.count}`).join(' · ') : '')),
-        el('div', { class: 'card', style: { gridColumn: '1 / -1' } }, el('h3', {}, t('dash.runs')),
+        el('div', { class: 'card', style: { gridColumn: '1 / -1' } }, cardHeading('progress', t('dash.runs')),
           m.runs.length ? el('div', { style: { overflow: 'auto' } }, runsTable(m.runs)) : el('div', { class: 'empty' }, t('none')))));
   };
   render();
   const offs = [store.on('model', render), onLang(render)];
   return { destroy() { offs.forEach((f) => f()); } };
+}
+
+function cardHeading(kind, label) {
+  return el('h3', { class: 'card-heading' }, businessIcon(kind, label), el('span', {}, label));
 }
 
 function runsTable(runs) {

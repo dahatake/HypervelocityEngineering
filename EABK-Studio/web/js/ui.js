@@ -9,6 +9,31 @@ export const TYPE_COLOR = {
 };
 export const TYPE_ORDER = ['goal', 'req', 'ac', 'entity', 'part', 'api', 'table', 'param', 'question', 'file', 'component', 'case', 'persona', 'external'];
 export const STATUS_COLOR = { approved: '#34e0a1', proposed: '#ffb020', hold: '#8aa1b5', rejected: '#ff5c7a', retired: '#62708f', unknown: '#62708f' };
+export const BUSINESS_ICON = {
+  dashboard: ['📊', 'Dashboard'],
+  map2d: ['🗺️', '2D relationship map'],
+  map3d: ['🧊', '3D relationship map'],
+  diagrams: ['🧩', 'Diagrams'],
+  placement: ['🧭', 'Data placement'],
+  source: ['💻', 'Source'],
+  tables: ['📋', 'Data tables'],
+  maintenance: ['🛠️', 'Integrity maintenance'],
+  structure: ['🏗️', 'Data-layer structure'],
+  consistency: ['🔎', 'Consistency viewer'],
+  goal: ['🎯', 'Business goal'],
+  req: ['📝', 'Requirement'],
+  entity: ['🔗', 'Entity'],
+  api: ['🔌', 'API'],
+  test: ['✅', 'Test'],
+  progress: ['🚀', 'Progress'],
+  history: ['🕘', 'History'],
+  risk: ['⚠️', 'Risk'],
+};
+
+export function businessIcon(kind, label) {
+  const [glyph, fallback] = BUSINESS_ICON[kind] || ['•', kind];
+  return el('span', { class: 'biz-icon', role: 'img', 'aria-label': label || fallback, title: label || fallback }, glyph);
+}
 
 export function colorOf(n) {
   if (!n) return '#888';

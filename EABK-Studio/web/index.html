@@ -9,6 +9,7 @@
 <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
 </head>
 <body>
+<a class="skip-link" href="#view">メインコンテンツへ移動 / Skip to content</a>
 <div class="bg" aria-hidden="true"><i></i><i></i><i></i></div>
 <header class="top">
   <a class="brand" href="#/dashboard" title="EABK Studio">
@@ -16,9 +17,9 @@
     <span><b>EABK</b> Studio</span>
   </a>
   <nav id="nav" class="tabs"></nav>
-  <div class="search">
+  <div class="search" role="search" aria-label="Search project data">
     <svg viewBox="0 0 24 24" width="16" height="16"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m16 16 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-    <input id="q" type="search" autocomplete="off" spellcheck="false" data-i18n-ph="search.ph">
+    <input id="q" type="search" aria-label="Search project data" autocomplete="off" spellcheck="false" data-i18n-ph="search.ph">
     <kbd>/</kbd>
     <div id="results" class="results" hidden></div>
   </div>
@@ -27,9 +28,9 @@
   <div id="personaBar" class="row" aria-label="persona"></div>
   <button id="lang" class="chip" title="Language / 言語">JA | EN</button>
 </header>
-<main id="view"></main>
+<main id="view" tabindex="-1"></main>
 <aside id="drawer" class="drawer" hidden></aside>
-<div id="toast" class="toast" hidden></div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>
