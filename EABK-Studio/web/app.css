@@ -63,6 +63,17 @@ main{flex:1;min-height:0;position:relative;overflow:hidden}
 .kpi .v{font-size:34px;font-weight:700;background:linear-gradient(90deg,#fff,var(--c1));-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1.1}
 .kpi .l{color:var(--dim);font-size:12px;margin-top:4px}
 .kpi::after{content:"";position:absolute;right:-30px;top:-30px;width:90px;height:90px;border-radius:50%;background:radial-gradient(circle,rgba(57,208,255,.25),transparent 70%)}
+.analysis{margin-bottom:16px;padding:12px 16px}
+.analysis-title{display:flex;gap:12px;align-items:baseline;margin-bottom:8px}.analysis-title span{color:var(--dim);font-size:12px}
+.analysis-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.analysis article{border-left:3px solid var(--c1);padding-left:12px}.analysis article:nth-child(2){border-color:var(--c2)}.analysis article:nth-child(3){border-color:var(--c3)}
+.analysis h2{font-size:13px;margin:0 0 5px}.analysis p{font-size:12px;color:var(--dim);margin:3px 0}.analysis p b{color:var(--text)}
+.visual-section{margin-top:18px}.runtime-flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:10px;align-items:center}.flow-arrow{color:var(--c1);font-weight:700}
+.boundary{margin-top:12px}.er-grid{display:flex;flex-wrap:wrap;gap:14px;margin:16px 0}.entity-box{border:2px solid var(--entity);border-radius:var(--radius);padding:16px 28px;background:var(--panel)}
+.relation-row{margin:8px 0;padding:10px;border-left:3px solid var(--entity);background:var(--panel2)}.dimension-list{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.progress-summary{padding:12px 0;font-size:16px}.evidence-chart figcaption{font-weight:700;margin-bottom:10px}.chart-button{min-height:44px;width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:var(--radius);color:var(--text);cursor:pointer}
+.layer-list{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+@media(max-width:800px){.analysis-grid{grid-template-columns:1fr}.runtime-flow{grid-template-columns:1fr}.flow-arrow{transform:rotate(90deg);justify-self:center}}
 .cols2{grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}
 .badge{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:1px 9px;font-size:12px;border:1px solid var(--line);background:rgba(120,150,255,.1);white-space:nowrap}
 .badge.approved{color:var(--ok);border-color:rgba(52,224,161,.4)}

@@ -123,11 +123,17 @@ class Handler(BaseHTTPRequestHandler):
 def main(argv=None) -> int:
     global STATE
     ap = argparse.ArgumentParser(description="EABK Studio - viewer for the EABK data layer")
-    ap.add_argument("--repo", default=".", help="repository that uses EABK (default: current directory)")
+    ap.add_argument("--repo", default=None, help="repository that uses EABK (default: current directory)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-open", action="store_true", help="do not open the browser")
     args = ap.parse_args(argv)
-    root = eabk_model.find_root(Path(args.repo))
+    if args.repo is not None:
+        root = eabk_model.find_root(Path(args.repo))
+    else:
+        cwd_root = eabk_model.find_root(Path.cwd())
+        files = eabk_model.load_config(cwd_root)
+        has_data = any((cwd_root / files[k]).exists() for k in ("requirements", "catalog", "ledger"))
+        root = cwd_root if has_data else eabk_model.find_root(HERE.parent)
     STATE = State(root)
     srv = None
     for port in range(args.port, args.port + 20):

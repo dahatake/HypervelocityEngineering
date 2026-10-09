@@ -25,11 +25,11 @@ DEFAULT_FILES = {
 }
 CONFIG_CANDIDATES = ("scripts/ebak.config.json", "scripts/hve.config.json")
 
-REQ_ID = r"(?:FR|NFR-[A-Z0-9]+)-\d{3,}"
+REQ_ID = r"(?:FR-\d{3,}|FR-[A-Z][A-Z0-9_-]*|NFR-[A-Z0-9]+-\d{3,})"
 REQ_ID_RE = re.compile(r"(?<![A-Za-z0-9\-])(" + REQ_ID + r")(?![0-9])")
 ANY_ID_RE = re.compile(r"(?<![A-Za-z0-9\-])((?:FR|AC|G|Q|PARAM|SRC|E2E|IT|AUD|NFR-[A-Z0-9]+)-\d{3,})(?![0-9])")
 REQ_HEADING_RE = re.compile(r"^(#{2,6})\s+\**(" + REQ_ID + r")\**\s*(.*)$")
-AC_HEADING_RE = re.compile(r"^(#{2,6})\s+\**(AC-\d{3,})\**\s*(.*)$")
+AC_HEADING_RE = re.compile(r"^(#{2,6})\s+\**(AC-(?:\d{3,}|[A-Z][A-Z0-9_-]*))\**\s*(.*)$")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 RANGE_RE = re.compile(
     r"(?<![A-Za-z0-9\-])((?:FR|NFR-[A-Z0-9]+)-)(\d{3,})\s*[〜~～]\s*(?:(?:FR|NFR-[A-Z0-9]+)-)?(\d{3,})")
@@ -38,8 +38,8 @@ LIST_RE = re.compile(
 KEYS = ("決定状態", "出自", "優先度", "上位", "出典", "対象エンティティ", "関係する状態", "参照パラメータ", "関連する既存資産")
 KEY_RE = re.compile(r"(?:(?<=^)|(?<=[\s　]))(" + "|".join(KEYS) + r")\s*[:：]")
 TOP_KEY_RE = re.compile(
-    r"^[-*]\s+(要求|" + "|".join(KEYS) + r"|受入基準(?:\s+(?:AC-\d{3,}))?)\s*[:：]\s*(.*)$")
-AC_BULLET_RE = re.compile(r"^[-*]\s+(?:受入基準\s*)?\**(AC-\d{3,})\**\s*[:：]\s*(.*)$")
+    r"^[-*]\s+(要求|" + "|".join(KEYS) + r"|受入基準(?:\s+(?:AC-(?:\d{3,}|[A-Z][A-Z0-9_-]*)))?)\s*[:：]\s*(.*)$")
+AC_BULLET_RE = re.compile(r"^[-*]\s+(?:受入基準\s*)?\**(AC-(?:\d{3,}|[A-Z][A-Z0-9_-]*))\**\s*[:：]\s*(.*)$")
 SUB_RE = re.compile(r"^\s{2,}[-*]\s+(検証レベル|BLOCKED)\s*[:：]\s*(.*)$")
 NONE_WORDS = {"", "なし", "無し", "-", "—", "–", "n/a", "N/A", "未実装", "未設定", "tbd", "TBD"}
 
@@ -303,12 +303,17 @@ def parse_req_block(rid: str, title: str, rel: str, line: int, block: list[tuple
     cat = "" if kind == "FR" else rid.split("-")[1]
     r = {"id": rid, "kind": kind, "cat": cat, "title": title, "text": "", "status": "", "statusKind": "unknown",
          "origin": "", "priority": "", "priorityNote": "", "goal": "", "sources": "", "entities": [], "states": [],
-         "params": [], "assets": "", "acs": [], "blocked": [], "file": rel, "line": line, "body": ""}
+         "params": [], "assets": "", "relation": "", "acs": [], "blocked": [], "file": rel, "line": line, "body": ""}
     cur_key, cur_ac, texts = None, None, []
     body = []
     for ln_no, raw in block:
         body.append(raw)
         line_s = raw.rstrip()
+        relation = re.match(r"^[-*]\s+関係\s*[:：]\s*(.*)$", line_s)
+        if relation:
+            value = strip_md(relation.group(1))
+            r["relation"] = "" if value in NONE_WORDS else value
+            continue
         sub = SUB_RE.match(line_s)
         if sub and cur_ac is not None:
             if sub.group(1) == "検証レベル":
@@ -472,6 +477,18 @@ def build_model(root: Path) -> dict:
                 continue
             reqs[r["id"]] = r
     all_tables = [t for d in docs for t in d["tables"]]
+    # Compact/synthetic repositories may declare goals and external boundaries as bullets.
+    for d in docs:
+        for line_no, raw in enumerate(d["lines"], 1):
+            goal = re.match(r"^[-*]\s+目的\s+(G-[A-Z0-9_-]+)\s*[:：]\s*(.*)$", raw)
+            if goal and not any(g["id"] == goal.group(1) for g in model["goals"]):
+                model["goals"].append({"id": goal.group(1), "title": strip_md(goal.group(2)),
+                                       "metric": "", "method": "", "file": d["rel"], "line": line_no})
+            external = re.match(r"^[-*]\s+外部連携\s+([A-Za-z0-9_-]+)\s*[:：]\s*(.*)$", raw)
+            if external:
+                model["integrations"].append({"name": external.group(1), "method": strip_md(external.group(2)),
+                                              "meaning": strip_md(external.group(2)), "owner": "", "numbering": "",
+                                              "file": d["rel"], "line": line_no})
     for t in all_tables:  # index tables supply priority / group when the heading lacks them
         if "要求ID" in t["key"] and "題名" in t["key"] and "所属ファイル" in t["key"]:
             idx = {h: k for k, h in enumerate(t["key"])}
@@ -499,7 +516,7 @@ def build_model(root: Path) -> dict:
                                  "title": strip_md(c[idx["題名"]]), "text": "", "status": st, "statusKind": status_kind(st),
                                  "origin": "", "priority": strip_md(c[idx["優先度"]]) if "優先度" in idx and len(c) > idx["優先度"] else "",
                                  "priorityNote": "", "goal": "", "sources": "", "entities": [], "states": [], "params": [],
-                                 "assets": "", "acs": [], "blocked": [], "file": t["file"], "line": row["line"], "body": ""}
+                                 "assets": "", "relation": "", "acs": [], "blocked": [], "file": t["file"], "line": row["line"], "body": ""}
 
     # generic ID tables
     for t in all_tables:
