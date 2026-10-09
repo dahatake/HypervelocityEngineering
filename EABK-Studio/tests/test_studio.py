@@ -34,6 +34,41 @@ class StudioCoreTests(unittest.TestCase):
             kinds = {edge["kind"] for edge in model["edges"]}
             self.assertTrue({"catalog", "file"} <= kinds)
 
+    # FR-001 AC-001; NFR-OPS-001 AC-026
+    def test_model_classifies_all_catalog_sections_from_realistic_data(self):
+        with tempfile.TemporaryDirectory() as value:
+            root = Path(value); self.make_repo(root)
+            (root / "docs" / "catalog.md").write_text(
+                "## 機能\n"
+                "| 要求 ID | 題名 | 決定状態 | 実装ファイル | テスト | 使っている共通部品 |\n"
+                "|---|---|---|---|---|---|\n"
+                "| FR-001 | Model | 承認済み | `src/model.py` | `tests/test_model.py` | Model |\n"
+                "\n## API・イベント\n"
+                "| 名前 | 定義ファイル | 関連する要求 ID |\n"
+                "|---|---|---|\n"
+                "| `GET /api/model` | `src/server.py` | FR-001 |\n"
+                "| モデル更新 | `src/model.py` | FR-001 |\n"
+                "\n## テーブル\n"
+                "| テーブル名 | 定義ファイル | 正本のシステム | 関連する要求 ID |\n"
+                "|---|---|---|---|\n"
+                "| 要求 | `docs/requirements-definition.md` | 対象リポジトリ | FR-001 |\n"
+                "\n## 共通部品\n"
+                "| 部品名 | ファイル | 用途 | 使っている要求 ID |\n"
+                "|---|---|---|---|\n"
+                "| 管理データモデル | `src/model.py` | モデル構築 | FR-001 |\n",
+                encoding="utf-8")
+
+            model = build_model(root)
+
+            self.assertEqual([node["title"] for node in model["catalog"]], ["Model"])
+            self.assertEqual(
+                [node["title"] for node in model["apis"]],
+                ["GET /api/model", "モデル更新"])
+            self.assertEqual([node["title"] for node in model["tables"]], ["要求"])
+            self.assertEqual(
+                [node["title"] for node in model["components"]],
+                ["管理データモデル"])
+
     # FR-013 AC-013; NFR-SEC-002 AC-024
     def test_model_build_is_read_only(self):
         with tempfile.TemporaryDirectory() as value:

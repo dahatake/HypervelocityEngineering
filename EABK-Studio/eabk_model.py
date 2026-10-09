@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Dict, Iterable, List, Union
+from typing import Dict, Iterable, List, Tuple, Union
 
 DEFAULT_FILES = {
     "requirements": "docs/requirements-definition.md",
@@ -49,10 +49,23 @@ def _nodes(text: str, pattern: str, kind: str) -> List[dict]:
     return found
 
 
-def _catalog_rows(text: str) -> Iterable[List[str]]:
+def _catalog_rows(text: str) -> Iterable[Tuple[str, List[str]]]:
+    section = ""
     for line in text.splitlines():
+        heading = re.match(r"^##\s+(.+?)\s*$", line)
+        if heading:
+            section = heading.group(1)
+            continue
         if line.startswith("|") and not re.match(r"^\|[\s:-]+\|", line):
-            yield [cell.strip().strip("`") for cell in line.strip().strip("|").split("|")]
+            cells = [cell.strip().strip("`") for cell in line.strip().strip("|").split("|")]
+            header_sections = {
+                "要求 ID": "機能",
+                "名前": "API・イベント",
+                "テーブル名": "テーブル",
+                "部品名": "共通部品",
+            }
+            section = header_sections.get(cells[0], section)
+            yield section, cells
 
 
 def build_model(repo_path: Union[str, Path]) -> dict:
@@ -77,18 +90,18 @@ def build_model(repo_path: Union[str, Path]) -> dict:
     api_nodes: List[dict] = []
     table_nodes: List[dict] = []
     component_nodes: List[dict] = []
-    for cells in _catalog_rows(catalog):
-        if cells and re.fullmatch(r"(?:FR|NFR)-[\w-]+", cells[0]) and len(cells) >= 6:
+    for section, cells in _catalog_rows(catalog):
+        if section == "機能" and cells and re.fullmatch(r"(?:FR|NFR)-[\w-]+", cells[0]) and len(cells) >= 6:
             catalog_features.append({
                 "id": f"catalog:{cells[0]}", "requirement_id": cells[0],
                 "title": cells[1], "files": cells[3], "tests": cells[4],
                 "components": cells[5], "kind": "catalog-feature",
             })
-        elif len(cells) == 3 and cells[0].startswith(("GET ", "POST ", "PUT ", "DELETE ")):
+        elif section == "API・イベント" and len(cells) == 3 and cells[0] != "名前":
             api_nodes.append({"id": f"api:{cells[0]}", "title": cells[0], "file": cells[1], "kind": "api"})
-        elif len(cells) == 4 and cells[0] not in {"テーブル名", "部品名"}:
+        elif section == "テーブル" and len(cells) == 4 and cells[0] != "テーブル名":
             table_nodes.append({"id": f"table:{cells[0]}", "title": cells[0], "file": cells[1], "kind": "table"})
-        elif len(cells) == 4 and cells[0] not in {"名前", "要求 ID"}:
+        elif section == "共通部品" and len(cells) == 4 and cells[0] != "部品名":
             component_nodes.append({"id": f"component:{cells[0]}", "title": cells[0], "file": cells[1], "kind": "component"})
 
     ledger_path = repo / files["ledger"]
