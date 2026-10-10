@@ -16,6 +16,7 @@ Enterprise App Build Kit の詳細なリファレンスです。概要・イン�
 | 7 | [トラブルシューティング](07-troubleshooting.md) | 止まった・拒否された・失敗した |
 | 8 | [導入ロードマップと KPI](08-roadmap.md) | 診断から本番運用までの段取りと、効果の測り方を知りたい |
 | 9 | [バージョンアップの手順](09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者） |
+| 10 | [EABK Studio のガイド](../EABK-Studio/users-guide/README.md) | データ層を図・表で見たい。Product Manager・Architect・Software Engineer 別の手順と、各画面が読むデータを知りたい |
 ## README の各節へのリンク
 
 | 知りたいこと | README の節 |

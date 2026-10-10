@@ -11,7 +11,8 @@ From a local clone:
 
 What it does (idempotent):
   * copies the managed files (.github/agents, .github/skills, .github/hooks, .github/workflows/ebak-verify.yml,
-    scripts/*) and updates them on re-run unless you modified them locally;
+    scripts/*, EABK-Studio/ = the read-only data-layer viewer with its role guides and screenshots)
+    and updates them on re-run unless you modified them locally;
   * removes files that older versions installed but this version no longer ships (OBSOLETE), unless modified;
   * creates the management-data templates only when missing (docs/*.md, tests/system/ledger.json);
   * merges scripts/ebak.config.json (adds new keys, keeps your values);
@@ -65,6 +66,62 @@ MANAGED = [
     "scripts/kpi.py",
     "scripts/import-speckit.py",
     "scripts/hooks/gate.py",
+    "tools/install.py",
+    "users-guide/02-during-and-after-run.md",
+    "users-guide/05-scripts-reference.md",
+    "users-guide/07-troubleshooting.md",
+    "tests/toolkit/test_clean_work.py",
+    "tests/toolkit/test_run_state.py",
+    "tests/system/e2e/test_run_owned_cleanup.py",
+    "tests/system/test_run_cleanup_system.py",
+    "EABK-Studio/eabk_model.py",
+    "EABK-Studio/README.md",
+    "EABK-Studio/start.ps1",
+    "EABK-Studio/start.sh",
+    "EABK-Studio/studio.py",
+    "EABK-Studio/web/app.css",
+    "EABK-Studio/web/index.html",
+    "EABK-Studio/web/js/app.js",
+    "EABK-Studio/web/js/dashboard.js",
+    "EABK-Studio/web/js/diagrams.js",
+    "EABK-Studio/web/js/drawer.js",
+    "EABK-Studio/web/js/i18n.js",
+    "EABK-Studio/web/js/insights.js",
+    "EABK-Studio/web/js/map2d.js",
+    "EABK-Studio/web/js/map3d.js",
+    "EABK-Studio/web/js/placement.js",
+    "EABK-Studio/web/js/source.js",
+    "EABK-Studio/web/js/store.js",
+    "EABK-Studio/web/js/tables.js",
+    "EABK-Studio/web/js/ui.js",
+    "EABK-Studio/web/vendor/three.LICENSE",
+    "EABK-Studio/web/vendor/three.module.min.js",
+    "EABK-Studio/users-guide/README.md",
+    "EABK-Studio/users-guide/01-first-steps.md",
+    "EABK-Studio/users-guide/02-screens.md",
+    "EABK-Studio/users-guide/03-tasks.md",
+    "EABK-Studio/users-guide/04-troubleshooting.md",
+    "EABK-Studio/users-guide/05-product-manager.md",
+    "EABK-Studio/users-guide/06-architect.md",
+    "EABK-Studio/users-guide/07-software-engineer.md",
+    "EABK-Studio/users-guide/08-data-reference.md",
+    "EABK-Studio/users-guide/capture-screens.py",
+    "EABK-Studio/users-guide/screen-images.json",
+    "EABK-Studio/users-guide/images/cases.png",
+    "EABK-Studio/users-guide/images/consistency.png",
+    "EABK-Studio/users-guide/images/dashboard.png",
+    "EABK-Studio/users-guide/images/diagrams.png",
+    "EABK-Studio/users-guide/images/header.png",
+    "EABK-Studio/users-guide/images/maintenance.png",
+    "EABK-Studio/users-guide/images/map2d.png",
+    "EABK-Studio/users-guide/images/map3d.png",
+    "EABK-Studio/users-guide/images/placement.png",
+    "EABK-Studio/users-guide/images/runtime.png",
+    "EABK-Studio/users-guide/images/source.png",
+    "EABK-Studio/users-guide/images/states.png",
+    "EABK-Studio/users-guide/images/structure.png",
+    "EABK-Studio/users-guide/images/tables.png",
+    "EABK-Studio/tests/test_studio.py",
 ]
 # Files no longer shipped. Removed on update when unmodified.
 OBSOLETE: list[str] = []
@@ -77,7 +134,7 @@ TEMPLATES = [
 ]
 CONFIG = "scripts/ebak.config.json"
 MANIFEST = ".github/ebak-toolkit.json"
-EXECUTABLE = {"scripts/verify.sh"}
+EXECUTABLE = {"scripts/verify.sh", "EABK-Studio/start.sh"}
 BEGIN, END = "<!-- ebak-abk:begin -->", "<!-- ebak-abk:end -->"
 LEGACY_MARKERS = (("<!-- ebak-" + "conductor:begin -->", "<!-- ebak-" + "conductor:end -->"),)
 
@@ -516,6 +573,9 @@ def main(argv=None) -> int:
     print("     チャット欄に「/build やりたいこと」と書いて送ります（入力欄は表示されません）")
     print("     （雛形は「/build-template」（または「/build template」）で表示されます。Copilot CLI では `copilot --agent conductor --autopilot` などで同じ雛形を送ります）")
     print("     GitHub Copilot app では、プロジェクトにこのリポジトリを追加し、新しい worktree・Autopilot・Agent=conductor で「/build やりたいこと」を送ります")
+    print("  4. （任意）要求・カタログ・試験を図と表で見るには、EABK Studio を起動します（読み取り専用。役割は pm / architect / swe）:")
+    print("     python EABK-Studio/studio.py --check            # データ層が読めるか確認")
+    print("     python EABK-Studio/studio.py --role pm          # ブラウザーが開きます。ガイド: EABK-Studio/users-guide/README.md")
     return 0
 
 

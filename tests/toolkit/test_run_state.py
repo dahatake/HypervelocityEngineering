@@ -102,7 +102,8 @@ def test_verify_accepts_string_commands_and_reports_bad_entries(sample):
     assert sample.py("verify.py", "--docs-only").returncode == 0
 
 
-def test_clean_work(sample):
+def test_clean_work_retains_unverifiable_run_without_expiry(sample):
+    # FR-1009 AC-058 / NFR-OPS-005 AC-063
     old = sample.path / "work" / "runs" / "200001010000"
     old.mkdir(parents=True)
     (old / "progress.md").write_text("x", encoding="utf-8")
@@ -111,5 +112,5 @@ def test_clean_work(sample):
     os.utime(old, (past, past))
     rid = start_run(sample)
     out = sample.py("clean-work.py", check=True).stdout
-    assert "DELETE work/runs/200001010000" in out and f"KEEP   work/runs/{rid}" in out
-    assert not old.exists()
+    assert "KEEP   work/runs/200001010000" in out and f"KEEP   work/runs/{rid}" in out
+    assert old.exists()

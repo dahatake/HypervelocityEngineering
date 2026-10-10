@@ -17,6 +17,7 @@ GitHub Copilot（VS Code の Agents ウィンドウ / Copilot CLI / GitHub Copil
 - [概要](#概要)
 - [インストール](#インストール)
 - [Quickstart](#quickstart)
+- [EABK Studio（データ層のビューアー）](#eabk-studioデータ層のビューアー)
 - [GitHub Spec Kit との連携](#github-spec-kit-との連携)
 - [詳細ドキュメント](#詳細ドキュメント)
 - [用語](#用語)
@@ -75,6 +76,8 @@ scripts/         決定的スクリプト（Python 3.9 以上。標準ライブ�
   import-speckit.py  GitHub Spec Kit の成果物を /build の依頼文に変換
   hooks/gate.py   hook の本体
   ebak.config.json 設定（検証コマンド、モデル、ゲート、保持期間）
+EABK-Studio/     データ層のビューアー（ローカルの Web アプリ。読み取り専用）と、役割別ガイド・画面画像
+  studio.py  eabk_model.py  start.ps1 / start.sh  web/  users-guide/  tests/
 docs/            永続のドキュメント（git で管理）
   requirements-definition.md  catalog.md  id-registry.md  run-history.md
 tests/system/ledger.json      System Test の台帳（永続）
@@ -231,7 +234,7 @@ python tools/install.py --target /path/to/your-repo
 
 | 種類 | ファイル | 再実行時の扱い |
 |---|---|---|
-| toolkit のファイル | `.github/agents/*.agent.md`（6）、`.github/skills/*/SKILL.md`（5。`/build` の skill を含む）、`.github/hooks/quality-gates.json`、`.github/workflows/ebak-verify.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`・`scripts/hooks/gate.py` | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
+| toolkit のファイル | `.github/agents/*.agent.md`（6）、`.github/skills/*/SKILL.md`（5。`/build` の skill を含む）、`.github/hooks/quality-gates.json`、`.github/workflows/ebak-verify.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`・`scripts/hooks/gate.py`、`EABK-Studio/`（ビューアー本体・役割別ガイド・画面画像・テスト） | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
 | 管理データの雛形 | `docs/requirements-definition.md`、`docs/catalog.md`、`docs/id-registry.md`、`docs/run-history.md`、`tests/system/ledger.json` | **存在しない場合だけ**作成します。既存のファイルは上書きしません |
 | 設定 | `scripts/ebak.config.json` | なければ作成します。あれば新しいキーだけを追加し、利用者が設定した値は変更しません |
 | 追記 | `.gitignore` に `/work/`、`.gitattributes` に `docs/id-registry.md merge=union` と `docs/run-history.md merge=union` | 足りない行だけを追記します |
@@ -492,6 +495,38 @@ hook や subagent の動作は、クライアント（VS Code・Copilot CLI・Gi
 
 ---
 
+## EABK Studio（データ層のビューアー）
+
+**EABK Studio**（`EABK-Studio/`）は、EABK が管理するデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳・実行履歴）を、**図・表・検索**で見て回る、ローカル専用の Web アプリです。toolkit の一部として、インストールすると対象リポジトリに入ります。
+
+- **読み取り専用**です。ソースコードは開かず、`127.0.0.1` だけで待ち受けます。唯一の書き込みは、「整合性保守」でプレビューを確認して実行した、`docs/catalog.md` の題名・決定状態だけです。
+- Python 3.9 以上の標準ライブラリだけで動きます（追加のインストールなし）。データ層のファイルを更新すると、数秒で画面が読み直されます。
+- run の成果（要求・カタログ・試験）を、人が理解し、判断するための窓です。要求や実装の変更は、これまでどおり `/build` で依頼します。
+
+![EABK Studio のダッシュボード](EABK-Studio/users-guide/images/dashboard.png)
+
+| 役割 | 使い方 | ガイド |
+|---|---|---|
+| Product Manager | ダッシュボードで進捗・承認・未回答の質問を確認し、次に投資する目的を決める | [5. Product Manager 向け](EABK-Studio/users-guide/05-product-manager.md) |
+| Architect | 2D/3D マップ・図式・配置・構造で、依存・境界・置き場所と層の欠けを確かめる | [6. Architect 向け](EABK-Studio/users-guide/06-architect.md) |
+| Software Engineer | 表・ソース対応・詳細パネルで、要求から実装ファイルとテストまでをたどる | [7. Software Engineer 向け](EABK-Studio/users-guide/07-software-engineer.md) |
+| 全員 | どの画面が、どのファイルの何を読み、どう計算するか | [8. データリファレンス](EABK-Studio/users-guide/08-data-reference.md) |
+
+ガイドは、各 15 分のチュートリアル（実画面つき）、おすすめのリンク、その役割が判断できることで構成します（索引は [EABK-Studio/users-guide/](EABK-Studio/users-guide/README.md)）。
+
+### 自分のリポジトリで起動する
+
+`tools/install.py`（[インストール](#インストール)）で toolkit を入れたリポジトリのルートで、次を実行します。
+
+```bash
+python EABK-Studio/studio.py --check      # データ層が読めるか（見つかったファイルと解析できた件数）を確認
+python EABK-Studio/studio.py --role pm    # ブラウザーが開く。--role は pm / architect / swe
+```
+
+Windows では `.\EABK-Studio\start.ps1 -Role pm`、macOS / Linux では `./EABK-Studio/start.sh . 8765 --role pm` でも起動できます。インストールの最後にも、この起動コマンドを表示します。詳細は [EABK-Studio/README.md](EABK-Studio/README.md)、スクリプトのオプションは [スクリプトリファレンス](users-guide/05-scripts-reference.md#eabk-studioデータ層のビューアー) です。
+
+---
+
 ## GitHub Spec Kit との連携
 
 [GitHub Spec Kit](https://github.com/github/spec-kit)（以下 Spec Kit）で書いた仕様を、この toolkit に取り込んで実装・検証できます。**仕様は Spec Kit で対話しながら書き、仕様どおりに作り切って証明するのは conductor** という分担です。橋渡しは `scripts/import-speckit.py` で、取り込みは一方向（Spec Kit → Enterprise App Build Kit）です。
@@ -602,6 +637,7 @@ Spec Kit は独自の番号（`FR-001`、`SC-001` など）を使います。too
 | 7 | [トラブルシューティング](users-guide/07-troubleshooting.md) | 止まった・拒否された・失敗した |
 | 8 | [導入ロードマップと KPI](users-guide/08-roadmap.md) | 診断から本番運用までの段取りと、効果の測り方を知りたい |
 | 9 | [バージョンアップの手順](users-guide/09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者） |
+| 10 | [EABK Studio のガイド](EABK-Studio/users-guide/README.md) | データ層を図・表で見たい。Product Manager・Architect・Software Engineer 別の手順と、各画面が読むデータを知りたい |
 GitHub Spec Kit との比較計測（同じ課題・隠し受入テスト・North Star の比較）の手順と結果は [bench/](bench/README.md) にあります。最新の結果は [bench/RESULTS.md](bench/RESULTS.md) です。
 
 ## 用語
@@ -627,6 +663,7 @@ GitHub Spec Kit との比較計測（同じ課題・隠し受入テスト・Nort
 | 手順書（skills） | [.github/skills/](.github/skills/) |
 | 強制ゲート（hooks） | [.github/hooks/quality-gates.json](.github/hooks/quality-gates.json)、[scripts/hooks/gate.py](scripts/hooks/gate.py) |
 | 決定的スクリプト | [scripts/](scripts/) |
+| データ層のビューアー（EABK Studio） | [EABK-Studio/](EABK-Studio/README.md)、ガイドは [EABK-Studio/users-guide/](EABK-Studio/users-guide/README.md) |
 | 管理データの雛形 | [docs/](docs/)、[tests/system/ledger.json](tests/system/ledger.json) |
 | インストールスクリプト | [tools/](tools/) |
 | toolkit のテスト | [tests/toolkit/](tests/toolkit/)（`python -m pytest tests/toolkit -q`） |

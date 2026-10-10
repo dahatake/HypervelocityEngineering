@@ -1,5 +1,1136 @@
 {
   "version": 1,
-  "ac_digests": {},
-  "cases": []
+  "ac_digests": {
+    "AC-057": "sha256:3436b89e7a1c9fc2",
+    "AC-058": "sha256:e587799f79f261d0",
+    "AC-060": "sha256:23ffebb28e9b6044",
+    "AC-064": "sha256:4648377e243469b5",
+    "AC-066": "sha256:20490fd4702a0b1d",
+    "AC-067": "sha256:708fcd3688603262",
+    "AC-068": "sha256:44de9279f7071257",
+    "AC-001": "sha256:ec444f1d50fc8ae7",
+    "AC-002": "sha256:dc97819966b31970",
+    "AC-003": "sha256:cc645b49ac0ed529",
+    "AC-005": "sha256:c0c502ef4909cd05",
+    "AC-006": "sha256:82d44e3a89ec4b70",
+    "AC-008": "sha256:361dae2866606a9a",
+    "AC-010": "sha256:8bbd19693f009e1c",
+    "AC-053": "sha256:871dc91803313df7",
+    "AC-013": "sha256:243092b08a7d5cae",
+    "AC-037": "sha256:a2f283700b0565c2",
+    "AC-044": "sha256:4261ddc0095208fa",
+    "AC-045": "sha256:797391cd7043133f",
+    "AC-046": "sha256:ec8fcb9abcb2cef1",
+    "AC-047": "sha256:4317d9cf7363a64b",
+    "AC-048": "sha256:f29c10442414e706",
+    "AC-049": "sha256:1b37d3963a440968",
+    "AC-050": "sha256:0645e5c6f226688c",
+    "AC-051": "sha256:5901f924fec6d109",
+    "AC-052": "sha256:6d1731d953da7274",
+    "AC-023": "sha256:1be2a7da6dae5725",
+    "AC-024": "sha256:1cf7f5ce8645784e",
+    "AC-026": "sha256:033c7123cb893dce",
+    "AC-028": "sha256:f2fb5e2374ba8ab5",
+    "AC-033": "sha256:b4254552158c81b2",
+    "AC-034": "sha256:ba2b21d21e4d7ac7",
+    "AC-074": "sha256:4be099630333c44d",
+    "AC-075": "sha256:a0eade90d09d9464",
+    "AC-076": "sha256:9f4e195e1f56b0a1"
+  },
+  "cases": [
+    {
+      "id": "E2E-026",
+      "requirement_ids": [
+        "FR-1009"
+      ],
+      "ac_ids": [
+        "AC-057"
+      ],
+      "title": "正常完了順序と清掃許可",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_starts_only_after_ordered_success_and_pre_cleanup_report",
+      "canary": true,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:30:37+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-026-202610101530.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:41:32+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-027",
+      "requirement_ids": [
+        "FR-1009"
+      ],
+      "ac_ids": [
+        "AC-058"
+      ],
+      "title": "全失敗分岐の無期限保持",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_every_unsuccessful_branch_is_retained_without_expiry",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:31:57+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-027-202610101530.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:41:43+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-028",
+      "requirement_ids": [
+        "FR-1009"
+      ],
+      "ac_ids": [
+        "AC-057"
+      ],
+      "title": "全ゲートとmain統合後に限るrun所有資産清掃",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_cleanup_starts_only_after_all_gates_and_main_integration",
+      "canary": true,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:30:55+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-028-202610101530.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:41:53+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-029",
+      "requirement_ids": [
+        "FR-1010"
+      ],
+      "ac_ids": [
+        "AC-060"
+      ],
+      "title": "清掃前後run-report確定",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_report_is_finalized_before_cleanup_and_records_every_candidate_result",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:32:10+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-029-202610101531.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:42:01+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-030",
+      "requirement_ids": [
+        "FR-1009"
+      ],
+      "ac_ids": [
+        "AC-058"
+      ],
+      "title": "失敗・未完了runの無期限保持",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_failed_or_incomplete_run_is_retained_without_expiry",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:34:08+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-030-202610101532.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:42:06+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-031",
+      "requirement_ids": [
+        "NFR-OPS-005"
+      ],
+      "ac_ids": [
+        "AC-064"
+      ],
+      "title": "混在資産の所有権と保護",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_mixed_foreign_dirty_active_root_main_and_configured_assets_are_untouched",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:34:19+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-031-202610101534.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:42:10+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-032",
+      "requirement_ids": [
+        "FR-1010"
+      ],
+      "ac_ids": [
+        "AC-060"
+      ],
+      "title": "清掃前後run-reportの確定順序と結果",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_report_is_frozen_before_cleanup_then_finalized_before_completion",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:34:34+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-032-202610101534.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:42:17+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-033",
+      "requirement_ids": [
+        "NFR-COMPAT-001"
+      ],
+      "ac_ids": [
+        "AC-066"
+      ],
+      "title": "Windowsパス同一性とロック保護",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_windows_aliases_are_one_candidate_but_collisions_and_locks_are_protected",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:34:44+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-033-202610101534.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:42:22+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-001",
+      "requirement_ids": [
+        "NFR-OPS-005"
+      ],
+      "ac_ids": [
+        "AC-064"
+      ],
+      "title": "混在資産から安全なrun所有候補だけを清掃",
+      "layer": "nonfunctional",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_mixed_assets_delete_only_safe_owned_candidates",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:35:03+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/IT-001-202610101534.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:42:27+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-034",
+      "requirement_ids": [
+        "NFR-COMPAT-001"
+      ],
+      "ac_ids": [
+        "AC-067"
+      ],
+      "title": "配布物とガイドの清掃契約整合",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_shipping_catalog_agent_and_guides_publish_one_cleanup_contract",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:35:11+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-034-202610101535.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:42:36+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-002",
+      "requirement_ids": [
+        "NFR-COMPAT-001"
+      ],
+      "ac_ids": [
+        "AC-066"
+      ],
+      "title": "Windowsパス表記揺れ・衝突・空白・ロックの保護",
+      "layer": "nonfunctional",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_windows_alias_collision_spaces_and_locked_candidate_are_protected",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:35:27+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/IT-002-202610101535.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:42:44+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-035",
+      "requirement_ids": [
+        "NFR-COMPAT-001"
+      ],
+      "ac_ids": [
+        "AC-068"
+      ],
+      "title": "無関係差分保護と最終verify",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_preserves_unrelated_diff_and_all_final_verifiers_exit_zero",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:35:45+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-035-202610101535.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:42:51+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-003",
+      "requirement_ids": [
+        "NFR-COMPAT-001"
+      ],
+      "ac_ids": [
+        "AC-067"
+      ],
+      "title": "配布物・終了契約・カタログ・ガイドの清掃契約整合",
+      "layer": "contract",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_distribution_catalog_conductor_and_guides_publish_one_cleanup_contract",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:35:52+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/IT-003-202610101535.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:42:58+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-004",
+      "requirement_ids": [
+        "NFR-COMPAT-001"
+      ],
+      "ac_ids": [
+        "AC-068"
+      ],
+      "title": "清掃前後の無関係変更保持と全検証成功",
+      "layer": "nonfunctional",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_cleanup_preserves_unrelated_git_state_and_all_post_cleanup_gates_pass",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:40:41+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/IT-004-202610101535.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:43:10+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-036",
+      "requirement_ids": [
+        "FR-1009"
+      ],
+      "ac_ids": [
+        "AC-057",
+        "AC-058"
+      ],
+      "title": "milestone 欠損 run は清掃されず期限なし保持",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/test_run_cleanup_system.py -k test_run_with_missing_milestone_is_retained_without_expiry -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:42:20+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-036-202610101540.log",
+      "history": [
+        {
+          "at": "2026-10-10T14:29:15+09:00",
+          "by": "conductor",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-037",
+      "requirement_ids": [
+        "FR-001"
+      ],
+      "ac_ids": [
+        "AC-001"
+      ],
+      "title": "要求からカタログ・ファイル・テストへ辿れる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_model_can_traverse_requirement_to_catalog_file_and_test",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:42:24+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-037-202610101542.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:20:01+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-038",
+      "requirement_ids": [
+        "FR-002"
+      ],
+      "ac_ids": [
+        "AC-002"
+      ],
+      "title": "ダッシュボード集計と内訳選択",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_dashboard_shows_aggregates_and_selectable_breakdowns",
+      "canary": false,
+      "status": "fail",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:48:04+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-038-202610101547.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:20:07+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-039",
+      "requirement_ids": [
+        "FR-003"
+      ],
+      "ac_ids": [
+        "AC-003"
+      ],
+      "title": "マップの関連強調と遷移",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_maps_highlight_selected_relationships_and_support_navigation",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:42:36+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-039-202610101542.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:20:14+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-040",
+      "requirement_ids": [
+        "FR-005"
+      ],
+      "ac_ids": [
+        "AC-005"
+      ],
+      "title": "表示切替で選択とフィルタ維持",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_selection_and_filter_survive_placement_map_and_table_switches",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:42:44+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-040-202610101542.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:20:23+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-041",
+      "requirement_ids": [
+        "FR-006"
+      ],
+      "ac_ids": [
+        "AC-006"
+      ],
+      "title": "検索・ショートカット・CSV出力",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_search_shortcuts_limit_results_and_export_table_csv",
+      "canary": false,
+      "status": "fail",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:48:16+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-041-202610101548.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:20:32+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-042",
+      "requirement_ids": [
+        "FR-008"
+      ],
+      "ac_ids": [
+        "AC-008"
+      ],
+      "title": "ペルソナ切替で状態維持",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_persona_defaults_and_switching_preserve_selected_id_filter_and_time",
+      "canary": false,
+      "status": "fail",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:48:51+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-042-202610101548.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:20:41+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-043",
+      "requirement_ids": [
+        "FR-010"
+      ],
+      "ac_ids": [
+        "AC-010"
+      ],
+      "title": "不正リポジトリ切替の異常系",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_invalid_repository_switch_keeps_model_and_explains_failure",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:44:15+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-043-202610101543.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:20:48+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-044",
+      "requirement_ids": [
+        "FR-010"
+      ],
+      "ac_ids": [
+        "AC-053"
+      ],
+      "title": "リポジトリ解決の優先順位",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_repository_precedence_is_explicit_then_cwd_then_studio_placement",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:44:19+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-044-202610101544.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:20:58+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-045",
+      "requirement_ids": [
+        "FR-013"
+      ],
+      "ac_ids": [
+        "AC-013"
+      ],
+      "title": "読み取り専用・ループバック限定",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_startup_switch_and_refresh_do_not_write_data_or_leave_loopback",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:44:29+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-045-202610101544.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:21:05+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-046",
+      "requirement_ids": [
+        "FR-1001"
+      ],
+      "ac_ids": [
+        "AC-037"
+      ],
+      "title": "最初の手順の集約",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_first_steps_consolidates_startup_prerequisites_and_unknowns",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:44:34+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-046-202610101544.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:21:11+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-047",
+      "requirement_ids": [
+        "FR-1002"
+      ],
+      "ac_ids": [
+        "AC-044"
+      ],
+      "title": "全ページ3ペルソナ分析",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_every_page_has_page_specific_analysis_for_all_three_personas",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:44:42+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-047-202610101544.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:21:22+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-048",
+      "requirement_ids": [
+        "FR-1003"
+      ],
+      "ac_ids": [
+        "AC-045"
+      ],
+      "title": "現状・理想構造の説明",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_current_and_ideal_structure_explain_every_layer_and_difference_type",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:44:49+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-048-202610101544.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:21:29+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-049",
+      "requirement_ids": [
+        "FR-1004"
+      ],
+      "ac_ids": [
+        "AC-046"
+      ],
+      "title": "明示保守のプレビューと2列適用",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_explicit_maintenance_previews_and_applies_only_two_catalog_columns",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:44:57+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-049-202610101544.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:21:35+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-050",
+      "requirement_ids": [
+        "FR-1004"
+      ],
+      "ac_ids": [
+        "AC-047"
+      ],
+      "title": "保守失敗時の完全ロールバック",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_maintenance_failures_roll_back_every_byte_and_offer_retry_or_cancel",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:45:23+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-050-202610101544.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:21:44+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-051",
+      "requirement_ids": [
+        "FR-1005"
+      ],
+      "ac_ids": [
+        "AC-048"
+      ],
+      "title": "実行・データ配置の境界表示",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_runtime_and_data_placement_show_local_none_and_defined_cloud_boundaries",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:45:28+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-051-202610101545.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:21:53+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-052",
+      "requirement_ids": [
+        "FR-1006"
+      ],
+      "ac_ids": [
+        "AC-049"
+      ],
+      "title": "層整合性の欠落・宙吊り検出",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_layer_consistency_traces_normal_missing_layer_and_dangling_reference_by_id",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:45:34+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-052-202610101545.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:22:02+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-053",
+      "requirement_ids": [
+        "FR-1006"
+      ],
+      "ac_ids": [
+        "AC-050"
+      ],
+      "title": "ER図は根拠のない関係を作らない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_entity_er_uses_requirement_evidence_and_never_invents_missing_relations",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:45:39+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-053-202610101545.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:22:10+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-054",
+      "requirement_ids": [
+        "FR-1006"
+      ],
+      "ac_ids": [
+        "AC-051"
+      ],
+      "title": "履歴・進捗から根拠へ辿れる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_history_progress_and_infographics_drill_to_evidence_without_counting_not_run_as_pass",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:45:45+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-054-202610101545.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:23:05+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-055",
+      "requirement_ids": [
+        "FR-1007"
+      ],
+      "ac_ids": [
+        "AC-052"
+      ],
+      "title": "画面マニフェストと実スクリーンショット",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_screen_manifest_has_reproducible_same_commit_real_screenshots_for_all_views",
+      "canary": false,
+      "status": "fail",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:48:57+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-055-202610101548.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:23:12+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-056",
+      "requirement_ids": [
+        "NFR-SEC-001"
+      ],
+      "ac_ids": [
+        "AC-023"
+      ],
+      "title": "ループバック限定の待受",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_server_binds_loopback_on_default_port_and_rejects_foreign_host",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:45:54+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-056-202610101545.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:23:20+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-057",
+      "requirement_ids": [
+        "NFR-SEC-002"
+      ],
+      "ac_ids": [
+        "AC-024"
+      ],
+      "title": "読み取り専用・外部送信なし",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_all_views_are_read_only_and_do_not_issue_external_requests",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:45:58+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-057-202610101545.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:23:29+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-058",
+      "requirement_ids": [
+        "NFR-OPS-001"
+      ],
+      "ac_ids": [
+        "AC-026"
+      ],
+      "title": "追加導入なしの起動",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_python_runtime_starts_without_extra_installation_and_shows_default_model",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:46:01+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-058-202610101545.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:23:36+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-059",
+      "requirement_ids": [
+        "NFR-OPS-003"
+      ],
+      "ac_ids": [
+        "AC-028"
+      ],
+      "title": "エラー時の復旧導線とモデル保持",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_missing_data_error_offers_recovery_without_losing_current_model",
+      "canary": false,
+      "status": "fail",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:49:14+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-059-202610101548.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:23:45+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-060",
+      "requirement_ids": [
+        "FR-001"
+      ],
+      "ac_ids": [
+        "AC-033"
+      ],
+      "title": "設定データの要求・AC・カタログ連結",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_configured_data_links_requirement_ac_catalog_case_and_source",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:46:16+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-060-202610101546.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:23:53+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-061",
+      "requirement_ids": [
+        "FR-010"
+      ],
+      "ac_ids": [
+        "AC-034"
+      ],
+      "title": "切替成功と失敗時の復元",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_repository_switch_success_updates_model_and_failure_restores_previous",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "a7d4edc",
+      "last_run_at": "2026-10-10T15:46:21+09:00",
+      "evidence": "work/runs/202610100949/logs/system-test/E2E-061-202610101546.log",
+      "history": [
+        {
+          "at": "2026-10-10T15:24:03+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-005",
+      "requirement_ids": [
+        "NFR-PERF-001"
+      ],
+      "ac_ids": [
+        "AC-074"
+      ],
+      "title": "公開データセットの処理時間上限",
+      "layer": "nonfunctional",
+      "command": "python -m pytest tests/system/nonfunctional/test_benchmark_submission.py::test_public_dataset_processed_within_param_008_seconds",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T15:25:24+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-10T15:25:26+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "測定プロファイルと検証対象の提出物が要求定義書に未定義（TBD）"
+        }
+      ]
+    },
+    {
+      "id": "IT-006",
+      "requirement_ids": [
+        "NFR-PERF-002"
+      ],
+      "ac_ids": [
+        "AC-075"
+      ],
+      "title": "性能結果の機能結果との分離記録",
+      "layer": "nonfunctional",
+      "command": "python -m pytest tests/system/nonfunctional/test_benchmark_submission.py::test_private_perf_case_result_recorded_separately_from_functional_result",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T15:25:31+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-10T15:25:34+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "測定プロファイルと検証対象の提出物が要求定義書に未定義（TBD）"
+        }
+      ]
+    },
+    {
+      "id": "IT-007",
+      "requirement_ids": [
+        "NFR-REL-001"
+      ],
+      "ac_ids": [
+        "AC-076"
+      ],
+      "title": "検証による完了判定",
+      "layer": "nonfunctional",
+      "command": "python -m pytest tests/system/nonfunctional/test_benchmark_submission.py::test_fresh_process_verify_exit_code_and_result_file_decide_completion",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T15:25:40+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-10T15:25:42+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "測定プロファイルと検証対象の提出物が要求定義書に未定義（TBD）"
+        }
+      ]
+    }
+  ]
 }

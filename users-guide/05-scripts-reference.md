@@ -158,6 +158,29 @@ python scripts/import-speckit.py [--source DIR] [--feature 001] [--implement] [-
 python scripts/clean-work.py [--days 14] [--dry-run]
 ```
 
+全件完了 run を main に統合し、統合後 verify と清掃前版 run-report の確定まで成功した場合だけ、run 所有の pool worktree、作業ブランチ、統合ブランチ、一時資産を清掃します。`--dry-run` は候補・保護理由・予定操作を表示します。`--days` は互換性のため受け付けますが、失敗・中止・未達 run は自動期限なく保持されます。削除直前に run 記録、Git 登録、正規化した実体パス、dirty/lock/保護状態を再検査します。部分失敗は診断を report に残して非 0 となり、再実行時は削除済みを成功済みとして残存候補だけを扱います。
+
 ## hooks/gate.py（hook の本体）
 
 利用者が直接実行することはありません。`.github/hooks/quality-gates.json` から、`session-start`・`user-prompt`・`pre-tool`・`subagent-start`・`subagent-stop`・`agent-stop` の各イベントで呼び出されます。判定の記録は `work/.ebak/gate.log` にあります。
+
+## EABK-Studio（データ層のビューアー）
+
+インストールすると対象リポジトリの `EABK-Studio/` に入ります。データ層（要求定義書・カタログ・台帳）を 2D/3D の図・表・検索で見るローカル Web アプリです（日本語・英語）。
+
+```text
+python EABK-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|architect|swe] [--check]
+```
+
+| オプション | 動作 |
+|---|---|
+| `--repo DIR` | 対象リポジトリ（既定: カレントディレクトリ。親へさかのぼってデータ層を探す） |
+| `--port N` | 待ち受けポート（既定 8765。使用中なら次の番号を最大 20 まで試す） |
+| `--no-open` | ブラウザーを自動で開かない |
+| `--role pm\|architect\|swe` | 最初に開く画面（ダッシュボード／2D マップ／表） |
+| `--check` | 管理データのファイルの有無と、解析できた件数（要求・受入基準・カタログ行・台帳のケース・実行履歴）・警告を表示して終了。データ層があれば exit 0、なければ exit 1。サーバーは起動しない |
+
+- データ層のない `--repo` を指定すると、サーバーを起動せずに案内を表示して exit 1 で終わります。
+- ラッパー: `EABK-Studio/start.ps1 [-Repo DIR] [-Port N] [-Role …] [-Check] [-NoOpen]`、`EABK-Studio/start.sh [DIR] [PORT] [studio.py のオプション…]`。
+- ソースコードは読まず、127.0.0.1 だけで待ち受けます。読み取り専用で、書き込むのは「整合性保守」で確認して実行した `docs/catalog.md` の題名・決定状態だけです。
+- 役割別のガイド（Product Manager・Architect・Software Engineer）と、各画面が読むデータの一覧は `EABK-Studio/users-guide/README.md` にあります。詳細は `EABK-Studio/README.md` です。

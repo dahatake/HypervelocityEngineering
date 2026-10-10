@@ -48,7 +48,7 @@ conductor が自分で停止する条件:
 - **KPI**: North Star「人の介入 1 回あたりの検証済み要求」、1 回目のゲート通過率、トレーサビリティ網羅率など。HTML 版は `work/runs/<run-id>/kpi.html` です。過去の run を通した集計は `python scripts/kpi.py history` で表示できます
 - マージ方法: 統合ブランチ名と、マージのコマンド
 
-`/work` は 14 日で削除されますが、要点は次の永続的な場所に転記されています。
+`/work` は 14 日で削除されますが、要点は次の永続的な場所に転記されています。要求・カタログ・試験の状態は、[EABK Studio](../EABK-Studio/users-guide/README.md)（`python EABK-Studio/studio.py`）で図と表として確認できます。
 
 | 情報 | 場所 |
 |---|---|
@@ -97,9 +97,11 @@ Q-003: B
 
 ## 2.6 /work のクリーンアップ
 
-`/work/runs/` のうち 14 日を過ぎたものは、conductor が run の最初と最後に `scripts/clean-work.py` で削除します（実行中の run と、まだ main にマージされていないブランチの run は残します）。手動でも実行できます。
+清掃は保持期間ではなく、正常完了の証拠で許可されます。結果が「全件完了」で、完了条件、最終 verify、対象テスト、main への統合、main 上の統合後 verify が順に成功し、清掃前版 `run-report.md` が確定した run だけを清掃します。それ以外（blocked、中止、失敗、未達、report 不足）は再開できるよう自動期限なく保持します。
+
+清掃前版 report には main の統合 commit、各ゲートの構造化結果、清掃候補、保護・保持する資産と理由が含まれます。清掃後は候補別の削除・保持・失敗と run 最終状態だけを追記します。途中で失敗すると以後の削除を止めて非 0 で終了し、残存候補だけを再検査して安全に再試行できます。
 
 ```bash
-python scripts/clean-work.py --dry-run   # 削除対象を確認する
-python scripts/clean-work.py
+python scripts/clean-work.py --dry-run   # 候補・保護理由・実行予定を確認（変更なし）
+python scripts/clean-work.py             # 削除直前に所有権と状態を再検査
 ```

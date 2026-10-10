@@ -77,13 +77,13 @@ disable-model-invocation: true
 2. rd-auditor（scope: 全量、3 回の多数決。軽量モードでは scope: 差分、runs: 1）。3 回は、`run: 1/3`〜`run: 3/3` を渡した 3 体を background で同時に起動し、3 体が終わったら `aggregate: 3` を渡した 1 体で集計する。手順 1 の System Test と verify の実行中に起動してよい。
 3. rd-author に転記を依頼する（包括承認した項目→決定記録、未回答の質問票・承認依頼→仮定・未解決事項、残った監査指摘→監査指摘）。`python scripts/next-id.py --sync --finalize`。
 4. `python scripts/kpi.py run --out work/runs/<run-id>/kpi.md` と `python scripts/kpi.py run --format html --out work/runs/<run-id>/kpi.html` で KPI を集計する。
-   `work/runs/<run-id>/run-report.md` を書く（下の形）。`run-state.py stage 6 --done` → `run-state.py finish --result "<結果>"` → commit → `python scripts/clean-work.py`。
+   `work/runs/<run-id>/run-report.md` を書く（下の形）。`run-state.py stage 6 --done` → `run-state.py finish --result "<結果>"` → commit。ここではまだ清掃しない。
 5. main への取り込み（ローカル）: 結果が「全件完了」で `python scripts/run-state.py complete-check` が exit 0 のときだけ行う。さらに、meta.json の `integration_branch` が `run/<run-id>`（main 上で始めた run）の場合に限る。別ブランチや New Worktree（VS Code・GitHub Copilot app の worktree セッション）で始めた run は利用者のブランチなので取り込まない。
    `git checkout <base_branch>` → `git merge --no-ff run/<run-id>` → `python scripts/verify.py --run current`。
    `git checkout` が失敗する（base が別の worktree で使用中・未コミットの変更がある）場合も取り込まず、統合ブランチを残して理由を run-report.md に書く。
    verify が失敗、またはマージが競合したら `git merge --abort` / `git reset --hard HEAD~1` で取り消し、統合ブランチを残して run-report.md の「取り込み方法」に理由を書く。
-   成功したら `git branch -d run/<run-id>` で統合ブランチを削除し、`python scripts/clean-work.py` を再実行する。
-   「blocked あり」「時間予算で中止」「canary 失敗で中止」の run は、続きがあるので取り込まず、統合ブランチと worktree を残す。
+   成功したら main の統合 commit と、完了条件・最終 verify・対象テスト・main 上の統合後 verify の構造化結果、清掃候補、保護・保持する資産と理由を清掃前版 run-report に確定する。その後だけ `python scripts/clean-work.py --dry-run` で計画を表示し、`python scripts/clean-work.py` で再検査して清掃する。clean-work.py が統合済みの統合ブランチも削除し、候補別結果と清掃後最終状態を report に追記する。清掃成功を確認してから正常終了を完了記録する。
+   「blocked あり」「時間予算で中止」「canary 失敗で中止」、完了条件未達、各 verify・対象テスト失敗、統合失敗、report 不足、清掃許可判定失敗は、自動期限なく保持する。清掃が部分失敗した場合も非 0 で停止し、診断と残存資産を保持して再試行する。
 6. git_push が push を許す場合は、手順 5 の前に統合ブランチ `run/<run-id>` を push しておく（バックアップ）。main への push はしない。
 
 run-report.md の形:
@@ -94,6 +94,7 @@ run-report.md の形:
 - 品質の指標: verify、AC の pass 率（`ledger.py summary`）、監査の指摘（CRITICAL・HIGH の件数）
 - KPI: `kpi.md` の表をそのまま貼る（North Star「人の介入 1 回あたりの検証済み要求」、1 回目のゲート通過率、トレーサビリティ網羅率、工程ごとの時間・実効の並列度・統合の直列時間・実際に使ったモデルなど）。検証済みにならなかった要求は理由を添える
 - 取り込み方法: 統合ブランチ名と、`git merge` または `gh pr create` のコマンド
+- 清掃契約（全件完了時）: `正常完了`、`main 統合 commit`、`完了条件`、`最終 verify`、`対象テスト`、`main 上の統合後 verify`、`清掃許可判定`、`清掃候補`、`保護・保持する資産と理由`、`候補別結果`、`run 最終状態`。清掃前は `候補別結果: not_run` と `run 最終状態: 清掃待ち` で確定し、清掃中・清掃後に変更できるのは候補別結果と最終状態だけ。
 
 ## 完了の判定
 `python scripts/run-state.py complete-check` が exit 0（queue に todo・doing がなく、工程 6 が終わり、run-report.md がある）のときだけ終える。
