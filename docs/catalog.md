@@ -8,10 +8,10 @@
 
 | 要求 ID | 題名 | 決定状態 | 実装ファイル | テスト | 使っている共通部品 |
 |---|---|---|---|---|---|
-| FR-1009 | 正常完了 run の統合後清掃 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
-| FR-1010 | 清掃の診断と再開 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
-| NFR-OPS-005 | 所有権と保護状態にもとづく安全な削除 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
-| NFR-COMPAT-001 | Windows・報告・配布文書の一貫性 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
+| FR-1009 | 正常完了 run の統合後清掃 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | run 作業資産清掃、worktree pool 管理、conductor 終了契約 |
+| FR-1010 | 清掃の診断と再開 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | run 状態・完了記録、run 作業資産清掃、conductor 終了契約、run 運用ガイド |
+| NFR-OPS-005 | 所有権と保護状態にもとづく安全な削除 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | run 作業資産清掃、run 状態・完了記録、worktree pool 管理 |
+| NFR-COMPAT-001 | Windows・報告・配布文書の一貫性 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | run 作業資産清掃、run 状態・完了記録、worktree pool 管理、conductor 終了契約、run 運用ガイド、配布同期対象 |
 
 ## API・イベント
 
@@ -27,3 +27,9 @@
 
 | 部品名 | ファイル | 用途 | 使っている要求 ID |
 |---|---|---|---|
+| run 作業資産清掃 | `scripts/clean-work.py` | 保持期間にもとづく run ディレクトリ、Git worktree 登録、統合済み作業ブランチの現行清掃 | FR-1009、FR-1010、NFR-OPS-005、NFR-COMPAT-001 |
+| run 状態・完了記録 | `scripts/run-state.py` | run の完了条件、finish、run-history と current-run の状態管理 | FR-1010、NFR-OPS-005、NFR-COMPAT-001 |
+| worktree pool 管理 | `scripts/integrate.py` | pool worktree の列挙、強制削除、Git worktree 登録の prune | FR-1009、NFR-OPS-005、NFR-COMPAT-001 |
+| conductor 終了契約 | [`.github/agents/conductor.agent.md`](docs/../.github/agents/conductor.agent.md) | run 開始時・工程 6・main 統合・run-report・清掃の実行順序 | FR-1009、FR-1010、NFR-COMPAT-001 |
+| run 運用ガイド | `users-guide/02-during-and-after-run.md`、`users-guide/05-scripts-reference.md`、`users-guide/07-troubleshooting.md` | 利用者向けの統合、清掃、診断、再開、トラブルシューティング契約 | FR-1010、NFR-COMPAT-001 |
+| 配布同期対象 | `tools/install.py` | conductor、清掃・状態・統合スクリプトをインストール対象へ同期する管理対象 | NFR-COMPAT-001 |
