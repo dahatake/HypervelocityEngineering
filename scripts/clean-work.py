@@ -119,8 +119,13 @@ def authorization(root: Path, base: str, rid: str, meta: dict, report: str) -> s
         return "meta の run-id が一致しないため期限なく保持"
     if meta.get("status") != "finished" or meta.get("result") != "全件完了":
         return f"正常完了ではないため期限なく保持: {meta.get('result', '結果不明')}"
-    if not milestones_authorize(meta):
-        return "完了ゲートの構造化結果が未達のため期限なく保持"
+    if "completion_milestones" in meta:
+        if not milestones_authorize(meta):
+            return "完了ゲートの構造化結果が未達のため期限なく保持"
+    elif not re.search(r"清掃前版 run-report 確定\s*:\s*(?:pass|成功)", report):
+        # run-state finish records no structured milestones; the frozen report
+        # must then carry every gate result, including pre-cleanup finalization.
+        return "清掃前版 run-report が未確定のため期限なく保持"
     if not report_authorizes(report):
         return "清掃前版 run-report が未確定のため期限なく保持"
     integration = str(meta.get("integration_branch", ""))
