@@ -122,6 +122,8 @@ MANAGED = [
     "EABK-Studio/users-guide/images/structure.png",
     "EABK-Studio/users-guide/images/tables.png",
     "EABK-Studio/tests/test_studio.py",
+    "tests/system/e2e/test_studio_system.py",
+    "tests/system/e2e/test_judge_capabilities.py",
 ]
 # Files no longer shipped. Removed on update when unmodified.
 OBSOLETE: list[str] = []
@@ -262,7 +264,7 @@ class Installer:
                 self.note("EXISTS", rel)
             else:
                 self.note("CREATE", rel)
-                self.write_bytes(rel, (self.source / rel).read_bytes())
+                self.write_bytes(rel, (self.source / "tools" / "templates" / rel).read_bytes())
 
     def install_config(self) -> None:
         src = json.loads((self.source / CONFIG).read_text(encoding="utf-8"))

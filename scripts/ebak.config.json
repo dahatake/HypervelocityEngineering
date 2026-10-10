@@ -19,6 +19,10 @@
       {
         "name": "toolkit-unit",
         "run": "python -m pytest -q tests/toolkit/test_clean_work.py"
+      },
+      {
+        "name": "eabk-unit",
+        "run": "python -m pytest EABK-Studio/tests -q"
       }
     ]
   },

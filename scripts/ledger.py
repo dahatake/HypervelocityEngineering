@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -343,6 +344,17 @@ def select_cases(root: Path, cfg: dict, data: dict, mode: str, base: Optional[st
     return out
 
 
+def resolve_jobs(arg, cfg: dict) -> int:
+    """--jobs N|auto, else system_test.jobs in the config, else 1 (cases may share ports or data; opt in)."""
+    v = arg if arg not in (None, "") else (cfg.get("system_test") or {}).get("jobs", 1)
+    if str(v).lower() == "auto":
+        return max(1, min(8, (os.cpu_count() or 4) // 2))
+    try:
+        return max(1, int(v))
+    except (TypeError, ValueError):
+        return 1
+
+
 def cmd_run(args, root, cfg) -> int:
     data = h.load_ledger(root, cfg)
     if args.cases:
@@ -364,13 +376,13 @@ def cmd_run(args, root, cfg) -> int:
     summary = {"pass": 0, "fail": 0, "skipped": 0}
     lines_out = []
     stop_reason = ""
-    for c in sel:
+    h.apply_resource_env(root, cfg)
+    jobs = resolve_jobs(args.jobs, cfg)
+    cerr = h.conductor_root(root, cfg)
+
+    def execute(c):
         if deadline and time.time() > deadline:
-            summary["skipped"] += 1
-            stop_reason = "時間予算で中止"
-            continue
-        if not c.get("command"):
-            continue
+            return c, None
         t0 = time.time()
         log = logs_dir / f"{c['id']}-{h.new_run_id()}.log"
         try:
@@ -381,9 +393,39 @@ def cmd_run(args, root, cfg) -> int:
             rc, out = 124, f"TIMEOUT after {args.case_timeout}s"
         dur = round(time.time() - t0, 1)
         log.write_text(out, encoding="utf-8")
+        return c, (rc, dur, log)
+
+    todo = [c for c in sel if c.get("command")]
+    done: dict = {}
+    # canary cases run first and alone, so that a broken canary stops the run before the rest starts
+    first = [c for c in todo if args.canary_first and c.get("canary")]
+    rest = [c for c in todo if c not in first]
+    par = [c for c in rest if not c.get("serial")] if jobs > 1 else []
+    seq = [c for c in rest if c not in par]
+    for c in first:
+        done[c["id"]] = execute(c)[1]
+        if c.get("canary") and done[c["id"]] and done[c["id"]][0] != 0 and args.stop_on_canary_fail:
+            stop_reason = "canary 失敗で中止"
+            break
+    if not stop_reason:
+        if par:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(jobs) as ex:
+                for c, r in ex.map(execute, par):
+                    done[c["id"]] = r
+        for c in seq:
+            done[c["id"]] = execute(c)[1]
+    for c in todo:
+        r = done.get(c["id"])
+        if r is None:
+            summary["skipped"] += 1
+            if c["id"] not in done and not stop_reason:
+                stop_reason = "時間予算で中止"
+            continue
+        rc, dur, log = r
         status = "pass" if rc == 0 else "fail"
         summary[status] += 1
-        rel_log = log.relative_to(h.conductor_root(root, cfg)).as_posix() if str(log).startswith(str(h.conductor_root(root, cfg))) else str(log)
+        rel_log = log.relative_to(cerr).as_posix() if str(log).startswith(str(cerr)) else str(log)
         lines_out.append(f"{c['id']} {','.join(c.get('requirement_ids', []))} {status} {dur} {rel_log}")
         results["runs"].append({"case": c["id"], "status": status, "exit_code": rc, "seconds": dur, "commit": head, "at": h.now_iso(), "log": rel_log})
         if not args.no_record:
@@ -391,10 +433,9 @@ def cmd_run(args, root, cfg) -> int:
             c["last_commit"] = head
             c["last_run_at"] = h.now_iso()
             c["evidence"] = rel_log
-        if c.get("canary") and status == "fail" and args.stop_on_canary_fail:
-            stop_reason = "canary 失敗で中止"
-            break
     h.write_json(results_path, results)
+    if args.stop_on_canary_fail and not stop_reason and any(c.get("canary") and done.get(c["id"]) and done[c["id"]][0] != 0 for c in todo):
+        stop_reason = "canary 失敗で中止"
     if not args.no_record:
         h.save_ledger(root, cfg, data)
     print("\n".join(lines_out))
@@ -447,6 +488,7 @@ def main(argv=None) -> int:
     r.add_argument("--stop-on-canary-fail", action="store_true")
     r.add_argument("--max-minutes", type=float, default=0)
     r.add_argument("--case-timeout", type=int, default=1800)
+    r.add_argument("--jobs", default=None, help="同時に実行するケース数（N または auto。既定は system_test.jobs、なければ 1）。\"serial\": true のケースは単独で実行")
     r.add_argument("--no-record", action="store_true", help="台帳を書き換えない（作業役の worktree で使う）")
     r.add_argument("--results")
     args = ap.parse_args(argv)
@@ -454,8 +496,42 @@ def main(argv=None) -> int:
     cfg = h.load_config(root)
     fn = {"summary": cmd_summary, "add": cmd_add, "update": cmd_update, "block": cmd_block,
           "set": cmd_set, "digests": cmd_digests, "run": cmd_run, "repair": cmd_repair}[args.cmd]
+    if args.cmd in ("add", "update", "block", "set", "digests"):
+        with ledger_lock(root, cfg):
+            return fn(args, root, cfg)
     return fn(args, root, cfg)
 
+
+class ledger_lock:
+    """Serialises ledger writers (parallel test-designers). Waits up to 120 s; a lock older than 120 s is stale."""
+
+    def __init__(self, root: Path, cfg: dict):
+        self.path = h.work_dir(root, cfg) / ".ebak" / "ledger.lock"
+
+    def __enter__(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        end = time.time() + 120
+        while True:
+            try:
+                fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.close(fd)
+                return self
+            except FileExistsError:
+                try:
+                    if time.time() - self.path.stat().st_mtime > 120:
+                        self.path.unlink()
+                        continue
+                except OSError:
+                    continue
+                if time.time() > end:
+                    raise SystemExit("ERROR ledger: 台帳のロックを取得できません（別の書き込みが続いています）")
+                time.sleep(0.2)
+
+    def __exit__(self, *exc):
+        try:
+            self.path.unlink()
+        except OSError:
+            pass
 
 if __name__ == "__main__":
     sys.exit(main())

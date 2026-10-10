@@ -28,12 +28,15 @@ import json
 import os
 import re
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Dict, List, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ebaklib as h  # noqa: E402
+
+_STEP_LOCK = threading.Lock()
 
 
 def log_dir(root: Path, cfg: dict) -> Path:
@@ -80,7 +83,8 @@ def cache_key(root: Path, cfg: dict, args) -> str:
     """Key of a verify result, or "" when the result must not be cached (dirty tree, no git)."""
     if args.no_cache or os.environ.get("EBAK_VERIFY_NO_CACHE"):
         return ""
-    rc, head = h.git(["rev-parse", "HEAD"], root)
+    # tree hash: the same content on another commit/worktree shares the result
+    rc, head = h.git(["rev-parse", "HEAD^{tree}"], root)
     if rc != 0 or not head.strip():
         return ""
     rc, dirty = h.git(["status", "--porcelain"], root)
@@ -132,6 +136,57 @@ def cache_put(root: Path, cfg: dict, key: str, summary: str) -> None:
         pass
 
 
+FLAKY_DEFAULT = r"Timeout calling|ECONNRESET|ETIMEDOUT|EBUSY|EMFILE|worker (?:exited|terminated)|ERR_WORKER_OUT_OF_MEMORY"
+
+
+def step_key(root: Path, files) -> str:
+    """Hash of the files a step depends on (e.g. package-lock.json), or "" when none exist."""
+    hs = hashlib.sha256()
+    found = False
+    for f in files:
+        p = root / f
+        if p.is_file():
+            found = True
+            hs.update(f.encode() + b"\0" + p.read_bytes())
+    return hs.hexdigest() if found else ""
+
+
+def step_cache_path(root: Path, cfg: dict) -> Path:
+    return h.work_dir(root, cfg) / ".ebak" / "step-cache.json"
+
+
+def run_step(root: Path, cfg: dict, c: dict, cmd: str, no_cache: bool):
+    """Run one verify command. Returns (rc, out, note). Skips when "cache_files" are unchanged since the last success;
+    retries once when a failure matches an infrastructure-flaky pattern (config "retry_on", default FLAKY_DEFAULT)."""
+    timeout = int(c.get("timeout_sec", cfg["verify"].get("timeout_sec", 1800)))
+    files = c.get("cache_files") or []
+    skey = "" if no_cache or not files else step_key(root, files)
+    sp = step_cache_path(root, cfg)
+    if skey:
+        try:
+            if (h.read_json(sp, default={}) or {}).get(c["name"]) == skey:
+                return 0, "", "skipped (unchanged: " + ", ".join(files) + ")"
+        except (ValueError, OSError):
+            pass
+    rc, out = h.run(cmd, cwd=root, timeout=timeout, shell=True)
+    note = ""
+    pat = cfg["verify"].get("retry_on", FLAKY_DEFAULT)
+    if rc != 0 and pat and cfg["verify"].get("retry_flaky", True) and re.search(pat, out):
+        rc, out2 = h.run(cmd, cwd=root, timeout=timeout, shell=True)
+        out = out + "\n--- retry (flaky infrastructure failure) ---\n" + out2
+        note = "retried"
+    if rc == 0 and skey:
+        try:
+            with _STEP_LOCK:
+                data = h.read_json(sp, default={}) or {}
+                data[c["name"]] = skey
+                sp.parent.mkdir(parents=True, exist_ok=True)
+                h.write_json(sp, data)
+        except (ValueError, OSError):
+            pass
+    return rc, out, note
+
+
 def main(argv=None) -> int:
     h.setup_io()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -148,6 +203,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     root = Path(args.root).resolve() if args.root else h.repo_root()
     cfg = h.load_config(root)
+    h.apply_resource_env(root, cfg)
     key = "" if args.show_warnings else cache_key(root, cfg, args)
     hit = cache_get(root, cfg, key)
     if hit:
@@ -214,23 +270,44 @@ def main(argv=None) -> int:
             print('  書き方: "commands": [{"name": "unit", "run": "python -m pytest -q"}]（users-guide/04-customization.md 4.1）')
         if not cmds and not problems:
             print("INFO verify.commands が空です（scripts/ebak.config.json にビルド・静的検査・テストのコマンドを登録します）")
+        runnable = []
         for c in cmds:
-            name, cmd = c["name"], c["run"]
             if args.quick and c.get("slow"):
-                print(f"SKIP {name} (slow, --quick)")
+                print(f"SKIP {c['name']} (slow, --quick)")
                 continue
-            s = time.time()
-            rc, out = h.run(cmd, cwd=root, timeout=int(c.get("timeout_sec", cfg["verify"].get("timeout_sec", 1800))), shell=True)
-            logf = ldir / f"verify-{stamp}-{name}.log"
-            logf.write_text(out, encoding="utf-8")
-            dur = time.time() - s
-            if rc == 0:
-                print(f"PASS {name} ({dur:.0f}s)")
+            runnable.append(c)
+        # consecutive steps marked "parallel": true (e.g. lint, typecheck, unit after a build) run at the same time
+        groups: List[List[dict]] = []
+        for c in runnable:
+            if c.get("parallel") and groups and groups[-1][-1].get("parallel"):
+                groups[-1].append(c)
             else:
-                failed.append(name)
-                print(f"FAIL {name} exit={rc} ({dur:.0f}s) log={logf.as_posix()}")
-                for l in summarize(out, 10, 3).splitlines():
-                    print("  " + l)
+                groups.append([c])
+        nocache = args.no_cache or bool(os.environ.get("EBAK_VERIFY_NO_CACHE"))
+
+        def one(c):
+            s = time.time()
+            rc, out, note = run_step(root, cfg, c, c["run"], nocache)
+            return c, rc, out, note, time.time() - s
+
+        for g in groups:
+            if len(g) > 1:
+                from concurrent.futures import ThreadPoolExecutor
+                with ThreadPoolExecutor(len(g)) as ex:
+                    results = list(ex.map(one, g))
+            else:
+                results = [one(g[0])]
+            for c, rc, out, note, dur in results:
+                name = c["name"]
+                logf = ldir / f"verify-{stamp}-{name}.log"
+                logf.write_text(out, encoding="utf-8")
+                if rc == 0:
+                    print(f"PASS {name} ({dur:.0f}s){' ' + note if note else ''}")
+                else:
+                    failed.append(name)
+                    print(f"FAIL {name} exit={rc} ({dur:.0f}s) log={logf.as_posix()}")
+                    for l in summarize(out, 10, 3).splitlines():
+                        print("  " + l)
     status = "FAIL" if failed else "PASS"
     line = f"verify: {status} failed={','.join(failed) or '-'} elapsed={time.time() - t0:.0f}s HEAD={h.head_commit(root) or '-'}"
     print(line)

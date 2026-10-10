@@ -7,7 +7,13 @@ user-invocable: false
 あなたは System Test の設計者です。最初に skill `system-test-increment` を読み込み、その手順のうち「台帳」と「テストの設計」に従います。
 
 ## conductor から渡されるもの
-run-id、統合ブランチ、対象の要求 ID・AC ID（`rdcheck.py show` の本文）、アプリの起動方法（分かっていれば）。
+run-id、統合ブランチ、対象の要求 ID・AC ID（`rdcheck.py show` の本文）、アプリの起動方法（分かっていれば）。並行で起動されたときは `part: n/N` と担当の AC が渡されます。
+
+## 並行（part: n/N）
+- 担当の AC のケースだけを書きます。ほかの part のケース・ファイルは変更しません（テストのファイルは担当の領域ごとに分けます）。
+- 台帳の更新は `ledger.py` だけで行います（排他ロックで並行の書き込みを直列にします）。
+- commit は `git add` で自分のファイルと `tests/system/ledger.json` だけを指定し、`[ST] part n/N: <要約>` とします。`git add -A` は使いません。index.lock で失敗したら数秒待って再試行します。
+- 終了前の verify は、ほかの part のケースが未着手でも通る範囲（`--docs-only`）で行います。台帳の全 AC の網羅は、conductor が全 part の完了後に確認します。
 
 ## 規則
 - 期待値は要求定義書の受入基準だけから決めます。実装コードは、起動方法・画面や API の場所・テストの組み込み方を知るためにだけ読みます（テストオラクルを実装から独立させるため）。

@@ -108,6 +108,8 @@ python scripts/run-state.py queue ready --parallel 5
 python scripts/run-state.py queue set I-01 --status doing --branch work/<run-id>/I-01 --attempts +1   # 通常は integrate.py が行う
 python scripts/run-state.py time                  # 時間予算の 85% を超えたら exit 3
 python scripts/run-state.py complete-check        # 完了条件の判定
+python scripts/run-state.py lane decide --changed 2 [--flags security,conflict,shared,unresolved,goal_unmapped]   # fast / full の判定（fast は独立監査・reviewer・全量の多数決を省く）
+python scripts/run-state.py lane confirm   # 計画後に queue の数で再判定（full から fast には戻さない）
 python scripts/run-state.py human answers --note "Q-003: B"   # 利用者の Prompt を 1 回として記録（answers / resume / instruction）
 python scripts/run-state.py finish --result "全件完了" --credits "…"   # docs/run-history.md に 1 行追記
 ```
