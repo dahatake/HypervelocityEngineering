@@ -1,0 +1,74 @@
+{
+  "screens": [
+    {
+      "screen_id": "dashboard",
+      "image": "images/dashboard.png",
+      "sha256": "9ff3bb14640fe637afd35b4945cd46aef9924afd6a0777bfc4b6f95d1d357f20",
+      "commit": "3d5f7ad0ab8cfcd5fea98811c90a77a45146bbde",
+      "capture_command": "python EABK-Studio/users-guide/capture-screens.py --commit 3d5f7ad0ab8cfcd5fea98811c90a77a45146bbde",
+      "required_elements": [
+        "Snapshot ready: dashboard"
+      ]
+    },
+    {
+      "screen_id": "map2d",
+      "image": "images/map2d.png",
+      "sha256": "da75d5f9e6344a7c618a83b29f36a8c6b78380b30b673b006a90ec7608997277",
+      "commit": "3d5f7ad0ab8cfcd5fea98811c90a77a45146bbde",
+      "capture_command": "python EABK-Studio/users-guide/capture-screens.py --commit 3d5f7ad0ab8cfcd5fea98811c90a77a45146bbde",
+      "required_elements": [
+        "Snapshot ready: map2d"
+      ]
+    },
+    {
+      "screen_id": "map3d",
+      "image": "images/map3d.png",
+      "sha256": "0f4f86cfa2b394fbd980226512b89091026de7dbc0066f75bc2137715cdf08bc",
+      "commit": "3d5f7ad0ab8cfcd5fea98811c90a77a45146bbde",
+      "capture_command": "python EABK-Studio/users-guide/capture-screens.py --commit 3d5f7ad0ab8cfcd5fea98811c90a77a45146bbde",
+      "required_elements": [
+        "Snapshot ready: map3d"
+      ]
+    },
+    {
+      "screen_id": "diagrams",
+      "image": "images/diagrams.png",
+      "sha256": "79298d4e84c86e0709746f6e2820a4a77b02b8042410a6c09e9958c19564d233",
+      "commit": "3d5f7ad0ab8cfcd5fea98811c90a77a45146bbde",
+      "capture_command": "python EABK-Studio/users-guide/capture-screens.py --commit 3d5f7ad0ab8cfcd5fea98811c90a77a45146bbde",
+      "required_elements": [
+        "Snapshot ready: diagrams"
+      ]
+    },
+    {
+      "screen_id": "placement",
+      "image": "images/placement.png",
+      "sha256": "ca7bc3c2dae9c4c17d50cbc529d258eb4b5cfc2f1ecf44111c5a847dcfcd722a",
+      "commit": "3d5f7ad0ab8cfcd5fea98811c90a77a45146bbde",
+      "capture_command": "python EABK-Studio/users-guide/capture-screens.py --commit 3d5f7ad0ab8cfcd5fea98811c90a77a45146bbde",
+      "required_elements": [
+        "Snapshot ready: placement"
+      ]
+    },
+    {
+      "screen_id": "source",
+      "image": "images/source.png",
+      "sha256": "b48fbc5121bcfc16a8f553c1e5c8fa29d8b13b44a536be8e418abb6a813491b4",
+      "commit": "3d5f7ad0ab8cfcd5fea98811c90a77a45146bbde",
+      "capture_command": "python EABK-Studio/users-guide/capture-screens.py --commit 3d5f7ad0ab8cfcd5fea98811c90a77a45146bbde",
+      "required_elements": [
+        "Snapshot ready: source"
+      ]
+    },
+    {
+      "screen_id": "tables",
+      "image": "images/tables.png",
+      "sha256": "81434a0f5a06e58f20cc62b8a5f2aaadd70e48527b2e0709b7e44ed96fffcac4",
+      "commit": "3d5f7ad0ab8cfcd5fea98811c90a77a45146bbde",
+      "capture_command": "python EABK-Studio/users-guide/capture-screens.py --commit 3d5f7ad0ab8cfcd5fea98811c90a77a45146bbde",
+      "required_elements": [
+        "Snapshot ready: tables"
+      ]
+    }
+  ]
+}
