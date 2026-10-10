@@ -1,5 +1,364 @@
 {
   "version": 1,
-  "ac_digests": {},
-  "cases": []
+  "ac_digests": {
+    "AC-057": "sha256:3436b89e7a1c9fc2",
+    "AC-058": "sha256:e587799f79f261d0",
+    "AC-060": "sha256:23ffebb28e9b6044",
+    "AC-064": "sha256:4648377e243469b5",
+    "AC-066": "sha256:20490fd4702a0b1d",
+    "AC-067": "sha256:708fcd3688603262",
+    "AC-068": "sha256:44de9279f7071257"
+  },
+  "cases": [
+    {
+      "id": "E2E-026",
+      "requirement_ids": [
+        "FR-1009"
+      ],
+      "ac_ids": [
+        "AC-057"
+      ],
+      "title": "正常完了順序と清掃許可",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_starts_only_after_ordered_success_and_pre_cleanup_report",
+      "canary": true,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T10:41:32+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-027",
+      "requirement_ids": [
+        "FR-1009"
+      ],
+      "ac_ids": [
+        "AC-058"
+      ],
+      "title": "全失敗分岐の無期限保持",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_every_unsuccessful_branch_is_retained_without_expiry",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T10:41:43+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-028",
+      "requirement_ids": [
+        "FR-1009"
+      ],
+      "ac_ids": [
+        "AC-057"
+      ],
+      "title": "全ゲートとmain統合後に限るrun所有資産清掃",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_cleanup_starts_only_after_all_gates_and_main_integration",
+      "canary": true,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T10:41:53+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-029",
+      "requirement_ids": [
+        "FR-1010"
+      ],
+      "ac_ids": [
+        "AC-060"
+      ],
+      "title": "清掃前後run-report確定",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_report_is_finalized_before_cleanup_and_records_every_candidate_result",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T10:42:01+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-030",
+      "requirement_ids": [
+        "FR-1009"
+      ],
+      "ac_ids": [
+        "AC-058"
+      ],
+      "title": "失敗・未完了runの無期限保持",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_failed_or_incomplete_run_is_retained_without_expiry",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T10:42:06+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-031",
+      "requirement_ids": [
+        "NFR-OPS-005"
+      ],
+      "ac_ids": [
+        "AC-064"
+      ],
+      "title": "混在資産の所有権と保護",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_mixed_foreign_dirty_active_root_main_and_configured_assets_are_untouched",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T10:42:10+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-032",
+      "requirement_ids": [
+        "FR-1010"
+      ],
+      "ac_ids": [
+        "AC-060"
+      ],
+      "title": "清掃前後run-reportの確定順序と結果",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_report_is_frozen_before_cleanup_then_finalized_before_completion",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T10:42:17+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-033",
+      "requirement_ids": [
+        "NFR-COMPAT-001"
+      ],
+      "ac_ids": [
+        "AC-066"
+      ],
+      "title": "Windowsパス同一性とロック保護",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_windows_aliases_are_one_candidate_but_collisions_and_locks_are_protected",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T10:42:22+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-001",
+      "requirement_ids": [
+        "NFR-OPS-005"
+      ],
+      "ac_ids": [
+        "AC-064"
+      ],
+      "title": "混在資産から安全なrun所有候補だけを清掃",
+      "layer": "nonfunctional",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_mixed_assets_delete_only_safe_owned_candidates",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T10:42:27+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-034",
+      "requirement_ids": [
+        "NFR-COMPAT-001"
+      ],
+      "ac_ids": [
+        "AC-067"
+      ],
+      "title": "配布物とガイドの清掃契約整合",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_shipping_catalog_agent_and_guides_publish_one_cleanup_contract",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T10:42:36+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-002",
+      "requirement_ids": [
+        "NFR-COMPAT-001"
+      ],
+      "ac_ids": [
+        "AC-066"
+      ],
+      "title": "Windowsパス表記揺れ・衝突・空白・ロックの保護",
+      "layer": "nonfunctional",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_windows_alias_collision_spaces_and_locked_candidate_are_protected",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T10:42:44+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-035",
+      "requirement_ids": [
+        "NFR-COMPAT-001"
+      ],
+      "ac_ids": [
+        "AC-068"
+      ],
+      "title": "無関係差分保護と最終verify",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_preserves_unrelated_diff_and_all_final_verifiers_exit_zero",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T10:42:51+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-003",
+      "requirement_ids": [
+        "NFR-COMPAT-001"
+      ],
+      "ac_ids": [
+        "AC-067"
+      ],
+      "title": "配布物・終了契約・カタログ・ガイドの清掃契約整合",
+      "layer": "contract",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_distribution_catalog_conductor_and_guides_publish_one_cleanup_contract",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T10:42:58+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-004",
+      "requirement_ids": [
+        "NFR-COMPAT-001"
+      ],
+      "ac_ids": [
+        "AC-068"
+      ],
+      "title": "清掃前後の無関係変更保持と全検証成功",
+      "layer": "nonfunctional",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_cleanup_preserves_unrelated_git_state_and_all_post_cleanup_gates_pass",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T10:43:10+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    }
+  ]
 }
