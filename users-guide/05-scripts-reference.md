@@ -161,3 +161,13 @@ python scripts/clean-work.py [--days 14] [--dry-run]
 ## hooks/gate.py（hook の本体）
 
 利用者が直接実行することはありません。`.github/hooks/quality-gates.json` から、`session-start`・`user-prompt`・`pre-tool`・`subagent-start`・`subagent-stop`・`agent-stop` の各イベントで呼び出されます。判定の記録は `work/.ebak/gate.log` にあります。
+
+## EABK-Studio（データ層のビューアー）
+
+インストールすると対象リポジトリの `EABK-Studio/` に入ります。データ層（要求定義書・カタログ・台帳）を 2D/3D の図・表・検索で見るローカル Web アプリです（日本語・英語）。
+
+```text
+python EABK-Studio/studio.py [--repo DIR] [--port 8765] [--no-open]
+```
+
+ソースコードは読まず、127.0.0.1 だけで待ち受けます。詳細は `EABK-Studio/README.md` です。
