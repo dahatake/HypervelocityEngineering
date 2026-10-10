@@ -113,3 +113,24 @@ def test_clean_work(sample):
     out = sample.py("clean-work.py", check=True).stdout
     assert "DELETE work/runs/200001010000" in out and f"KEEP   work/runs/{rid}" in out
     assert not old.exists()
+
+
+def test_lane_fast_and_full(sample):
+    start_run(sample)
+    out = sample.py("run-state.py", "lane", "decide", "--changed", "2", check=True).stdout
+    assert "LANE: fast" in out and "独立監査" in out
+    # a security conflict forces the full lane, and confirm never goes back to fast
+    out = sample.py("run-state.py", "lane", "decide", "--changed", "1", "--flags", "security", check=True).stdout
+    assert "LANE: full" in out and "skipped: なし" in out
+    assert sample.py("run-state.py", "lane", "confirm", check=True).stdout.startswith("LANE: full")
+    assert "lane: full" in sample.py("run-state.py", "status", check=True).stdout
+
+
+def test_lane_confirm_uses_queue_size(sample):
+    start_run(sample)
+    sample.py("run-state.py", "lane", "decide", "--changed", "3", check=True)
+    for i in range(3):
+        sample.py("run-state.py", "queue", "add", "--id", f"I-0{i}", "--req", "FR-001", "--boundary", f"b{i}", check=True)
+    assert "LANE: full" in sample.py("run-state.py", "lane", "confirm", check=True).stdout
+    assert sample.py("run-state.py", "lane", "decide", "--changed", "4").stdout.count("LANE: full") == 1
+    assert sample.py("run-state.py", "lane", "decide", "--flags", "bogus").returncode != 0

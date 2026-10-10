@@ -15,7 +15,7 @@
 <run_options>
 max_hours: 24
 approval_policy: 安全範囲は推奨どおり
-parallel_workers: 5
+parallel_workers: auto
 scope: 承認済みすべて
 git_push: しない
 deploy: しない
@@ -62,7 +62,7 @@ FR-022: 却下（今期は対象外）
 |---|---|---|
 | `max_hours` | 数値（既定 24） | 時間予算。85% を超えたら新しい項目には着手せず、最終工程に進みます |
 | `approval_policy` | `厳格` / `安全範囲は推奨どおり`（既定） / `すべて推奨どおり` | AI 提案をどこまで推奨案どおりに承認して実装するか（[1.5](#15-承認ポリシー)） |
-| `parallel_workers` | 数値（既定 3） | 同時に動かす implementer の上限。3〜4 を推奨 |
+| `parallel_workers` | `auto`（既定） / 数値 | 同時に動かす implementer の上限。`auto` は、2 コアと 6 GB につき 1 体、最大 8 体で、開始時の CPU・メモリから算出します（20 コア・64 GB なら 8）。各 worker には CPU スレッドをコア数 × 1.5 ÷ worker 数で渡します（[4.9](04-customization.md#49-計算資源とクラウド)） |
 | `scope` | `承認済みすべて` または要求 ID のリスト（例: `FR-012, FR-013`） | 今回の run で実装する範囲 |
 | `git_push` | `しない`（既定） / `作業ブランチへ push する` | push する場合も main には push しません（hook G-5）。終了時に統合ブランチを push します（PR は作りません）。main へのローカルマージは、この設定に関係なく全件完了時に自動で行います |
 | `deploy` | `しない`（既定） / `する` | `しない` の間は、`azd up`・`terraform apply` などのコマンドと、MCP Server・plugin のデプロイ・公開の操作を hook が拒否します |

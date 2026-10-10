@@ -427,7 +427,7 @@ docs/source/備品管理の現状.md
 <run_options>
 max_hours: 8
 approval_policy: 安全範囲は推奨どおり
-parallel_workers: 5
+parallel_workers: auto
 scope: 承認済みすべて
 git_push: しない
 deploy: しない

@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
-TOOLKIT_VERSION = "0.2.0"
+TOOLKIT_VERSION = "0.3.0"
 
 SPECKIT_PATHS = [".specify/**", "specs/**/*.md"]
 
@@ -43,7 +43,8 @@ DEFAULT_CONFIG: dict = {
         ],
         "unit_pattern": r"(?<![A-Za-z0-9\-.])\d+(?:[.,]\d+)?\s*(?:ミリ秒|秒|分|時間|日間|日|週間|週|か月|ヶ月|カ月|年|件|回|%|％|ms|MB|GB|KB|TB|円|人|文字|px|行)",
         "id_scan_exclude": [
-            "docs/**", "work/**", ".github/**", "scripts/**", "tools/**", "users-guide/**",
+            "docs/**", "work/**", ".github/**", "scripts/**", "tools/**", "users-guide/**", "EABK-Studio/**",
+            "tests/system/e2e/test_studio_system.py", "tests/system/e2e/test_judge_capabilities.py",
             "tests/toolkit/**", "templates/**", "node_modules/**", "**/node_modules/**", ".git/**",
             "**/*.lock", "**/package-lock.json", "AGENTS.md", "README.md", "**/*.svg",
             # GitHub Spec Kit artifacts use their own FR-/SC- numbering (imported via scripts/import-speckit.py)
@@ -211,18 +212,88 @@ def git(args: List[str], cwd: Path) -> Tuple[int, str]:
         return 127, ""
 
 
+# --------------------------------------------------------------------------- machine resources
+
+def total_memory_gb() -> float:
+    try:
+        if os.name == "nt":
+            import ctypes
+
+            class MS(ctypes.Structure):
+                _fields_ = [("l", ctypes.c_ulong), ("m", ctypes.c_ulong), ("tp", ctypes.c_ulonglong), ("ap", ctypes.c_ulonglong),
+                            ("tpf", ctypes.c_ulonglong), ("apf", ctypes.c_ulonglong), ("tv", ctypes.c_ulonglong),
+                            ("av", ctypes.c_ulonglong), ("ae", ctypes.c_ulonglong)]
+            s = MS()
+            s.l = ctypes.sizeof(MS)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(s))
+            return s.tp / 2 ** 30
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 2 ** 30
+    except (OSError, ValueError, AttributeError):
+        return 8.0
+
+
+def auto_workers(cpus: Optional[int] = None, mem_gb: Optional[float] = None) -> int:
+    """Number of parallel implementers this machine can feed: 2 cores and 6 GB each, at least 2, at most 8."""
+    cpus = cpus or os.cpu_count() or 4
+    mem_gb = mem_gb if mem_gb is not None else total_memory_gb()
+    return max(2, min(8, cpus // 2, int(mem_gb // 6)))
+
+
+def cpu_share(workers: int, cpus: Optional[int] = None) -> int:
+    """CPU threads per worker: 1.5 x cores / workers. Measured with vitest on 20 cores x 8 workers: all cores 361 s
+    (a test timed out), 2 threads 404 s, 4 threads 371 s without timeouts - a mild oversubscription keeps the machine busy."""
+    cpus = cpus or os.cpu_count() or 4
+    return max(1, min(cpus, round(cpus * 1.5 / max(1, workers))))
+
+
+def apply_resource_env(root: Path, cfg: dict) -> int:
+    """Hand each parallel worker an equal CPU share so that N test runners do not each start one thread per core
+    (the cause of vitest `Timeout calling "onTaskUpdate"` under 5 workers). Variables the user already set win.
+    Returns the share."""
+    workers = 1
+    try:
+        croot = conductor_root(root, cfg)
+        rid = current_run(croot, cfg)
+        if rid:
+            workers = int(str(load_meta(croot, cfg, rid).get("options", {}).get("parallel_workers", 1)))
+    except (ValueError, OSError, KeyError, TypeError):
+        workers = 1
+    share = cpu_share(workers)
+    for k, v in (
+        ("HVE_CPUS", share), ("VITEST_MAX_WORKERS", share), ("VITEST_MAX_THREADS", share), ("VITEST_MAX_FORKS", share),
+        ("PYTEST_XDIST_AUTO_NUM_WORKERS", share), ("CARGO_BUILD_JOBS", share), ("GOMAXPROCS", share),
+        ("CMAKE_BUILD_PARALLEL_LEVEL", share), ("MAKEFLAGS", f"-j{share}"),
+    ):
+        os.environ.setdefault(k, str(v))
+    return share
 def repo_root(start: Optional[Path] = None) -> Path:
     start = Path(start or os.getcwd()).resolve()
+    # a .git directory (or the .git file of a worktree/submodule) marks the root; no process is needed
+    if not os.environ.get("GIT_DIR"):
+        for p in [start, *start.parents]:
+            if (p / ".git").exists():
+                return p
     rc, out = git(["rev-parse", "--show-toplevel"], start)
     if rc == 0 and out.strip():
         return Path(out.strip()).resolve()
-    for p in [start, *start.parents]:
-        if (p / ".git").exists():
-            return p
     return start
 
 
 def current_branch(root: Path) -> str:
+    # read HEAD directly (a process start costs ~60 ms on Windows and this runs in every pre-tool hook)
+    try:
+        g = Path(root) / ".git"
+        if g.is_file():
+            txt = g.read_text(encoding="utf-8").strip()
+            if txt.startswith("gitdir:"):
+                g = (Path(root) / txt.split(":", 1)[1].strip()).resolve()
+        head = (g / "HEAD").read_text(encoding="utf-8").strip()
+        if head.startswith("ref: refs/heads/"):
+            return head[len("ref: refs/heads/"):]
+        if re.fullmatch(r"[0-9a-f]{40,64}", head):
+            return "HEAD"
+    except OSError:
+        pass
     rc, out = git(["rev-parse", "--abbrev-ref", "HEAD"], root)
     return out.strip() if rc == 0 else ""
 

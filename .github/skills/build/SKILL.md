@@ -33,7 +33,7 @@ disable-model-invocation: true
 <run_options>
 max_hours: 24
 approval_policy: 安全範囲は推奨どおり
-parallel_workers: 5
+parallel_workers: auto
 scope: 承認済みすべて
 git_push: しない
 deploy: しない
