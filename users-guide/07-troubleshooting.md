@@ -28,6 +28,8 @@
 | GitHub Copilot app を閉じたり PC がスリープしたりして止まった | ローカルのセッションは PC の上で動いている | アプリを起動し直し、同じセッションで「続けて」と送ります。長い run の間は、PC のスリープを無効にします。PC を離れたい場合はクラウド サンドボックスを検討します（[README](../README.md#github-copilot-app-で実行する)） |
 | 終わらない（同じ失敗を繰り返している） | `python scripts/run-state.py status` と `progress.md` で、どの項目が何回失敗しているかを確認します。`max_hours` の 85% に達すると、自動的に最終工程に進みます。急ぐ場合は、その項目を `python scripts/run-state.py queue set <ID> --status blocked` にします |
 | 「完了条件を満たしていません」で差し戻され続ける | `python scripts/run-state.py complete-check` が出力する理由を確認します。工程 6 を終えて `run-state.py stage 6 --done` を実行し、`run-report.md` を作成する必要があります。差し戻しは 40 回、または時間予算の 125% で止まります |
+| `clean-work.py` が run を `KEEP` する | 全件完了、main 統合、統合後 verify、清掃前版 report、または所有証拠のいずれかが未達です。表示された保持理由を直してください。失敗・中止・未達 run は自動期限なく保持されます |
+| `clean-work.py` が非 0 で止まる | dirty、パス衝突、Windows のファイルロック、Git 登録の変化などで候補の削除に失敗しました。`run-report.md` の候補別結果を確認し、利用中のファイルを閉じるなど原因を除いて同じコマンドを再実行します。削除済み候補は成功済みとして扱われ、残存候補だけが再検査されます |
 | 前の run が残っていて、新しい依頼が RESUME になる | 前の run を終わらせるか、`work/current-run.txt` を削除してから依頼します |
 
 ## 7.3 verify が失敗する
