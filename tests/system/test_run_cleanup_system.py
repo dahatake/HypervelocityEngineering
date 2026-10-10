@@ -33,11 +33,12 @@ def start_run(repo: Path) -> tuple[str, str]:
     return run_id, f"run/{run_id}"
 
 
-def report_text(run_id: str, *, result: str = "全件完了", failed_gate: str = "") -> str:
+def report_text(run_id: str, *, result: str = "全件完了", failed_gate: str = "", omit: str = "") -> str:
     values = {
         "run-id": run_id,
         "結果": result,
         "正常完了": "true" if result == "全件完了" and not failed_gate else "false",
+        "main 統合": "pass",
         "main 統合 commit": "MAIN_COMMIT",
         "完了条件": "pass",
         "最終 verify": "pass",
@@ -53,6 +54,8 @@ def report_text(run_id: str, *, result: str = "全件完了", failed_gate: str =
     if failed_gate:
         values[failed_gate] = "fail"
         values["清掃許可判定"] = "fail"
+    if omit:
+        del values[omit]
     return "# run-report\n\n" + "".join(f"- {k}: {v}\n" for k, v in values.items())
 
 
@@ -178,6 +181,40 @@ def test_failed_or_incomplete_run_is_retained_without_expiry(
     assert (repo / "work" / "runs" / run_id / "run-report.md").exists()
     combined = first.stdout + second.stdout
     assert "KEEP" in combined and ("保持" in combined or "retain" in combined.lower())
+
+
+# FR-1009 AC-057 AC-058
+@pytest.mark.parametrize(
+    "missing",
+    [
+        "完了条件",
+        "最終 verify",
+        "対象テスト",
+        "main 統合",
+        "main 統合 commit",
+        "main 上の統合後 verify",
+        "清掃前版 run-report 確定",
+        "清掃許可判定",
+    ],
+)
+def test_run_with_missing_milestone_is_retained_without_expiry(
+    installed_repo: Path, missing: str
+):
+    repo = installed_repo
+    run_id, integration = start_run(repo)
+    candidate, branch = make_owned_candidate(repo, run_id)
+    temporary = repo / "work" / "runs" / run_id / "temporary-assets"
+    temporary.mkdir()
+    (temporary / "diagnostic.tmp").write_text("temporary\n", encoding="utf-8")
+    finish_and_merge(repo, run_id, integration, report_text(run_id, omit=missing))
+
+    first = py(repo, "clean-work.py", "--days", "-36500")
+    second = py(repo, "clean-work.py", "--days", "0")
+    assert candidate.exists(), first.stdout + second.stdout
+    assert git(repo, "branch", "--list", branch).stdout.strip()
+    assert git(repo, "branch", "--list", integration).stdout.strip()
+    assert (repo / "work" / "runs" / run_id / "run-report.md").exists()
+    assert (temporary / "diagnostic.tmp").exists()
 
 
 # FR-1010 AC-060
