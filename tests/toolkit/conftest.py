@@ -179,10 +179,16 @@ def sample(repo):
     for rel in (
         "tests/system/e2e/test_run_owned_cleanup.py",
         "tests/system/test_run_cleanup_system.py",
+        "tests/system/e2e/test_studio_system.py",
+        "tests/system/e2e/test_judge_capabilities.py",
     ):
         copied = repo.path / rel
         if copied.exists():
             copied.unlink()
+    # EABK-Studio ships product sources that cite product requirement IDs.
+    studio = repo.path / "EABK-Studio"
+    if studio.exists():
+        shutil.rmtree(studio)
     repo.py("next-id.py", "--sync", "--adopt", check=True)
     repo.commit("sample requirements")
     return repo

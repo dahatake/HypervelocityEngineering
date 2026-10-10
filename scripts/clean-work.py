@@ -75,6 +75,8 @@ def report_authorizes(report: str) -> bool:
     if failed:
         return False
     required = (
+        r"(?:main 統合|main_integration)\s*:\s*(?:pass|成功)",
+        r"(?:清掃許可判定|cleanup_authorization)\s*:\s*(?:pass|成功)",
         r"(?:main 統合 commit|main_commit)\s*:\s*(?![-\s]*$)\S+",
         r"(?:完了条件|complete_check)\s*:\s*(?:pass|成功)",
         r"(?:最終 verify|final_verify)\s*:\s*(?:pass|成功)",

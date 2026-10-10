@@ -17,7 +17,9 @@ SPEC.loader.exec_module(clean_work)
 # FR-1009 AC-057
 def test_report_authorization_requires_every_success_gate():
     report = """- result: 全件完了
-- main_commit: abc
+    - main_integration: pass
+    - cleanup_authorization: pass
+    - main_commit: abc
 - complete_check: pass
 - final_verify: pass
 - target_tests: pass
