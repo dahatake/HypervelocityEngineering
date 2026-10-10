@@ -359,6 +359,32 @@
           "reason": "受入基準からケースを作成"
         }
       ]
+    },
+    {
+      "id": "E2E-036",
+      "requirement_ids": [
+        "FR-1009"
+      ],
+      "ac_ids": [
+        "AC-057",
+        "AC-058"
+      ],
+      "title": "milestone 欠損 run は清掃されず期限なし保持",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/test_run_cleanup_system.py -k test_run_with_missing_milestone_is_retained_without_expiry -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T14:29:15+09:00",
+          "by": "conductor",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
     }
   ]
 }
