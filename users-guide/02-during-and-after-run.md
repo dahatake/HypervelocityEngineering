@@ -48,7 +48,7 @@ conductor が自分で停止する条件:
 - **KPI**: North Star「人の介入 1 回あたりの検証済み要求」、1 回目のゲート通過率、トレーサビリティ網羅率など。HTML 版は `work/runs/<run-id>/kpi.html` です。過去の run を通した集計は `python scripts/kpi.py history` で表示できます
 - マージ方法: 統合ブランチ名と、マージのコマンド
 
-`/work` は 14 日で削除されますが、要点は次の永続的な場所に転記されています。
+`/work` は 14 日で削除されますが、要点は次の永続的な場所に転記されています。要求・カタログ・試験の状態は、[EABK Studio](../EABK-Studio/users-guide/README.md)（`python EABK-Studio/studio.py`）で図と表として確認できます。
 
 | 情報 | 場所 |
 |---|---|

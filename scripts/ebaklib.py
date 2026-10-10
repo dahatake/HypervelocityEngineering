@@ -46,7 +46,8 @@ DEFAULT_CONFIG: dict = {
             "docs/**", "work/**", ".github/**", "scripts/**", "tools/**", "users-guide/**",
             "tests/toolkit/**", "templates/**", "node_modules/**", "**/node_modules/**", ".git/**",
             "**/*.lock", "**/package-lock.json", "AGENTS.md", "README.md", "**/*.svg",
-            # GitHub Spec Kit artifacts use their own FR-/SC- numbering (imported via scripts/import-speckit.py)
+                        "EABK-Studio/**",
+                        # GitHub Spec Kit artifacts use their own FR-/SC- numbering (imported via scripts/import-speckit.py)
             *SPECKIT_PATHS,
         ],
         "test_path_pattern": r"(^|/)(tests?|__tests__|spec|specs|e2e)(/|$)|(^|/)(test_[^/]*|[^/]*_test\.[^/]+|[^/]*\.(test|spec)\.[^/]+|[^/]*Tests?\.[^/]+)$",

@@ -255,6 +255,34 @@ def find_root(start: Path) -> Path:
     return start
 
 
+def has_data_layer(root: Path) -> bool:
+    files = load_config(root)
+    return any((root / files[k]).exists() for k in ("requirements", "catalog", "ledger"))
+
+
+def data_layer_report(root: Path) -> dict:
+    """Which data-layer files exist under root and how many records were parsed (used by --check)."""
+    root = Path(root).resolve()
+    files = load_config(root)
+    rdir = root / files["requirements_dir"]
+    entries = [{"key": k, "path": v, "exists": (root / v).exists()} for k, v in files.items()]
+    model = build_model(root)
+    return {
+        "root": str(root),
+        "ok": has_data_layer(root),
+        "files": entries,
+        "boundaryFiles": len(list(rdir.glob("*.md"))) if rdir.is_dir() else 0,
+        "counts": {
+            "requirements": len(model["reqs"]),
+            "acceptanceCriteria": sum(len(r["acs"]) for r in model["reqs"]),
+            "catalogFeatures": len(model["catalog"]["features"]),
+            "ledgerCases": len(model["cases"]),
+            "runs": len(model["runs"]),
+        },
+        "warnings": list(model["warnings"]),
+    }
+
+
 def fingerprint(root: Path) -> str:
     files = load_config(root)
     stamps = []

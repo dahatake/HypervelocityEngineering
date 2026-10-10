@@ -25,11 +25,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
+sys.dont_write_bytecode = True  # do not leave __pycache__ in the repository being viewed
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import eabk_model  # noqa: E402
 
 WEB = HERE / "web"
+GUIDE = "EABK-Studio/users-guide/01-first-steps.md"
+# --role: first screen for each reader (same targets as the persona buttons in the header).
+ROLE_ROUTES = {"pm": "#/dashboard", "architect": "#/map2d", "swe": "#/tables"}
 MIME = {
     ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
     ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon",
@@ -241,7 +245,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass  # the browser closed the connection (reload, tab closed)
 
     def send_json(self, obj, status=HTTPStatus.OK) -> None:
         self.send_bytes(json.dumps(obj, ensure_ascii=False).encode("utf-8"), MIME[".json"], status)
@@ -291,11 +298,32 @@ class Handler(BaseHTTPRequestHandler):
         if not raw or not p.is_dir():
             return self.send_json({"error": "not-a-directory"}, HTTPStatus.BAD_REQUEST)
         root = eabk_model.find_root(p)
-        files = eabk_model.load_config(root)
-        if not any((root / files[k]).exists() for k in ("requirements", "catalog", "ledger")):
+        if not eabk_model.has_data_layer(root):
             return self.send_json({"error": "no-data-layer", "repo": str(root)}, HTTPStatus.UNPROCESSABLE_ENTITY)
         STATE.set_root(root)
         self.send_json({"repo": str(root)})
+
+
+def format_report(report: dict) -> str:
+    lines = [f"EABK Studio {eabk_model.STUDIO_VERSION} --check", f"  repo: {report['root']}", "  data-layer files:"]
+    for item in report["files"]:
+        lines.append(f"    [{'found' if item['exists'] else 'missing':7}] {item['key']:<16} {item['path']}")
+    if report["boundaryFiles"]:
+        lines.append(f"    ({report['boundaryFiles']} boundary file(s) in the requirements directory)")
+    c = report["counts"]
+    lines.append(
+        f"  parsed: requirements={c['requirements']} acceptance-criteria={c['acceptanceCriteria']} "
+        f"catalog-rows={c['catalogFeatures']} ledger-cases={c['ledgerCases']} runs={c['runs']} "
+        f"warnings={len(report['warnings'])}")
+    lines += [f"    warning: {w}" for w in report["warnings"][:10]]
+    lines.append("  result: OK - start the viewer with `python EABK-Studio/studio.py --repo <repo>`" if report["ok"]
+                 else "  result: " + no_data_message(report["root"]))
+    return "\n".join(lines)
+
+
+def no_data_message(root) -> str:
+    return (f"no EABK data layer in {root} (docs/requirements-definition.md, docs/catalog.md or tests/system/ledger.json). "
+            f"Pass a repository that uses EABK with --repo, or see {GUIDE}")
 
 
 def main(argv=None) -> int:
@@ -304,14 +332,23 @@ def main(argv=None) -> int:
     ap.add_argument("--repo", default=None, help="repository that uses EABK (default: current directory)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-open", action="store_true", help="do not open the browser")
+    ap.add_argument("--role", choices=sorted(ROLE_ROUTES), default=None,
+                    help="first screen: pm=dashboard, architect=2D map, swe=tables")
+    ap.add_argument("--check", action="store_true",
+                    help="list the data-layer files found/missing and record counts, then exit (0 = data layer found, 1 = none)")
     args = ap.parse_args(argv)
     if args.repo is not None:
         root = eabk_model.find_root(Path(args.repo))
     else:
         cwd_root = eabk_model.find_root(Path.cwd())
-        files = eabk_model.load_config(cwd_root)
-        has_data = any((cwd_root / files[k]).exists() for k in ("requirements", "catalog", "ledger"))
-        root = cwd_root if has_data else eabk_model.find_root(HERE.parent)
+        root = cwd_root if eabk_model.has_data_layer(cwd_root) else eabk_model.find_root(HERE.parent)
+    if args.check:
+        report = eabk_model.data_layer_report(root)
+        print(format_report(report))
+        return 0 if report["ok"] else 1
+    if not eabk_model.has_data_layer(root):
+        print(no_data_message(root), file=sys.stderr)
+        return 1
     STATE = State(root)
     srv = None
     for port in range(args.port, args.port + 20):
@@ -323,7 +360,7 @@ def main(argv=None) -> int:
     if srv is None:
         print("no free port", file=sys.stderr)
         return 1
-    url = f"http://127.0.0.1:{srv.server_address[1]}/"
+    url = f"http://127.0.0.1:{srv.server_address[1]}/" + (ROLE_ROUTES[args.role] if args.role else "")
     print(f"EABK Studio {eabk_model.STUDIO_VERSION}\n  repo: {root}\n  url : {url}\n  (Ctrl+C to stop)")
     if not args.no_open:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()

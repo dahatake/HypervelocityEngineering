@@ -28,9 +28,18 @@ python EABK-Studio/studio.py
 python EABK-Studio/studio.py --repo C:\path\to\your-repo
 ```
 
+役割に合った画面から始めるときは `--role` を付けます（`pm` = ダッシュボード、`architect` = 2D マップ、`swe` = 表）。起動前にデータ層が見つかるかだけを確認するときは `--check` です。
+
+```powershell
+python EABK-Studio/studio.py --role architect
+python EABK-Studio/studio.py --check
+```
+
 ブラウザーが開き、`http://127.0.0.1:8765/` を表示します（使用中なら次の番号。ターミナルに出る URL を見てください）。止めるときはターミナルで `Ctrl+C` です。
 
-Windows は `.\EABK-Studio\start.ps1 <リポジトリ>`、macOS / Linux は `./EABK-Studio/start.sh <リポジトリ>` でも起動できます。
+Windows は `.\EABK-Studio\start.ps1 <リポジトリ>`、macOS / Linux は `./EABK-Studio/start.sh <リポジトリ>` でも起動できます。オプションは、PowerShell では `-Role pm`・`-Check`・`-NoOpen`、シェルでは `./EABK-Studio/start.sh . 8765 --role pm` のように渡せます。
+
+役割別の進め方は [05-product-manager.md](05-product-manager.md)・[06-architect.md](06-architect.md)・[07-software-engineer.md](07-software-engineer.md) にあります。
 
 ## 最初の 10 分
 

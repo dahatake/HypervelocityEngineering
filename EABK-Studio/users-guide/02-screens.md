@@ -1,6 +1,8 @@
 # 2. 画面の見かた
 
-上部のタブで切り替えます。どの画面でも、**選んだ項目と、それに関連する項目が強調**されます（検索・図・表で共通）。
+上部のタブで切り替えます。どの画面でも、**選んだ項目と、それに関連する項目が強調**されます（検索・図・表で共通）。各画面が読むデータと計算は [08-data-reference.md](08-data-reference.md) にあります。
+
+![ヘッダー（タブ・検索・対象リポジトリ・ロール切替・言語）](images/header.png)
 
 ## 実画面の例
 
@@ -63,9 +65,27 @@
 
 ## 構造・一貫性・保守
 
+URL で開くページです（`#/structure`・`#/consistency` は上部のタブには出ません）。
+
 - `#/structure`: 全データ層を、現状・理想・差分・適用規則・判定理由・根拠で比較します。
+
+  ![構造](images/structure.png)
 - `#/consistency`: 要求 → AC → System Test → カタログ → 実装ファイルを要求 ID ごとに追跡します。
+
+  ![一貫性](images/consistency.png)
 - `整合性保守 / Maintenance`: 要求正本と異なるカタログ行をプレビューし、確認後に題名と決定状態だけを更新します。
+
+  ![整合性保守](images/maintenance.png)
+
+### そのほかの実画面
+
+| 画面 | 実画面 |
+|---|---|
+| 配置（実行環境。`#/placement?kind=runtime`） | ![配置（実行環境）](images/runtime.png) |
+| 表の試験ケース（`#/tables?tab=cases`） | ![試験ケース](images/cases.png) |
+| 状態遷移図（`#/diagrams?kind=states`） | ![状態遷移図](images/states.png) |
+
+各画面が読むデータと計算は [08-data-reference.md](08-data-reference.md)、役割別の使い方は [05](05-product-manager.md)・[06](06-architect.md)・[07](07-software-engineer.md) にあります。
 
 ## ソース対応
 カタログに書かれたファイルの名前を、面積で見る図（ツリーマップ）です。面積は結び付く要求の数で、青は実装、緑はテストです。ファイルを選ぶと、そのファイルが満たす要求・使っている部品・テストが分かります。**ソースコードの中身は読みません。**

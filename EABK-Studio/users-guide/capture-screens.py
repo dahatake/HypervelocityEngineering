@@ -17,6 +17,15 @@ from playwright.sync_api import expect, sync_playwright
 ROOT = Path(__file__).resolve().parents[2]
 GUIDE = Path(__file__).resolve().parent
 ROUTES = ("dashboard", "map2d", "map3d", "diagrams", "placement", "source", "tables")
+# (image id, route, extra query) for screens used by the role-based guides.
+EXTRA = (
+    ("structure", "structure", ""),
+    ("consistency", "consistency", ""),
+    ("maintenance", "maintenance", ""),
+    ("runtime", "placement", "&kind=runtime"),
+    ("cases", "tables", "&tab=cases"),
+    ("states", "diagrams", "&kind=states"),
+)
 
 
 def free_port():
@@ -61,19 +70,29 @@ def main():
                 page.goto(f"http://127.0.0.1:{port}/#/{route}?select=FR-001")
                 expect(page.locator("#view")).to_contain_text(f"Snapshot ready: {route}")
                 page.screenshot(path=str(image_dir / f"{route}.png"), full_page=True)
+            for image_id, route, query in EXTRA:
+                page.goto(f"http://127.0.0.1:{port}/#/{route}?select=FR-001{query}")
+                expect(page.locator("#view")).to_contain_text(f"Snapshot ready: {route}")
+                page.screenshot(path=str(image_dir / f"{image_id}.png"), full_page=True)
+            # Header (tabs, search, persona bar) is hidden in snapshot links, so capture it from a normal link.
+            page.goto(f"http://127.0.0.1:{port}/#/dashboard")
+            expect(page.locator("#repoBtn")).to_contain_text("📁")
+            page.add_style_tag(content="#modelTime{visibility:hidden}")
+            page.locator("header.top").screenshot(path=str(image_dir / "header.png"))
             context.close()
             browser.close()
 
         rows = []
-        for route in ROUTES:
-            image = image_dir / f"{route}.png"
+        screens = [(r, r) for r in ROUTES] + [(i, r) for i, r, _ in EXTRA] + [("header", "dashboard")]
+        for image_id, route in screens:
+            image = image_dir / f"{image_id}.png"
             rows.append({
-                "screen_id": route,
-                "image": f"images/{route}.png",
+                "screen_id": image_id,
+                "image": f"images/{image_id}.png",
                 "sha256": hashlib.sha256(image.read_bytes()).hexdigest(),
                 "commit": head,
                 "capture_command": f"python EABK-Studio/users-guide/capture-screens.py --commit {head}",
-                "required_elements": [f"Snapshot ready: {route}"],
+                "required_elements": [f"Snapshot ready: {route}"] if image_id != "header" else ["EABK Studio"],
             })
         (GUIDE / "screen-images.json").write_text(
             json.dumps({"screens": rows}, ensure_ascii=False, indent=2) + "\n",
