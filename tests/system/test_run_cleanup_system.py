@@ -43,6 +43,7 @@ def report_text(run_id: str, *, result: str = "全件完了", failed_gate: str =
         "最終 verify": "pass",
         "対象テスト": "pass",
         "main 上の統合後 verify": "pass",
+        "清掃前版 run-report 確定": "pass",
         "清掃許可判定": "pass",
         "清掃候補": "pool-worktree, work-branch, integration-branch, temporary-assets",
         "保護・保持する資産と理由": "none",
@@ -157,6 +158,7 @@ def test_cleanup_starts_only_after_all_gates_and_main_integration(installed_repo
         ("全件完了", "対象テスト"),
         ("全件完了", "main 統合"),
         ("全件完了", "main 上の統合後 verify"),
+        ("全件完了", "清掃前版 run-report 確定"),
         ("全件完了", "清掃許可判定"),
     ],
 )
@@ -197,6 +199,7 @@ def test_report_is_frozen_before_cleanup_then_finalized_before_completion(instal
         "最終 verify",
         "対象テスト",
         "main 上の統合後 verify",
+        "清掃前版 run-report 確定",
         "清掃候補",
         "保護・保持する資産と理由",
     ):
