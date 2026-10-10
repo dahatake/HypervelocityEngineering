@@ -42,7 +42,7 @@ def test_structured_milestones_are_ordered_and_exact():
     ]
     assert clean_work.milestones_authorize({"completion_milestones": milestones})
     assert not clean_work.milestones_authorize({"completion_milestones": milestones[:-1]})
-    assert clean_work.milestones_authorize({})  # legacy report schema
+    assert not clean_work.milestones_authorize({})
 
 
 # FR-1009 AC-057 / FR-1010 AC-060

@@ -88,6 +88,12 @@ SAMPLE_CATALOG = """# カタログ
 | FR-001 | 入力の中断と再開 | 承認済み | 未実装 | 未実装 | なし |
 """
 
+SAMPLE_ID_REGISTRY = """# ID 台帳
+
+| ID | 種別 | 状態 | 採番日時 | 採番元 | メモ |
+|---|---|---|---|---|---|
+"""
+
 
 def run(cmd, cwd, input_text=None, check=False):
     env = dict(os.environ, PYTHONUTF8="1")
@@ -158,6 +164,25 @@ def repo(empty_repo):
 def sample(repo):
     repo.write("docs/requirements-definition.md", SAMPLE_RD)
     repo.write("docs/catalog.md", SAMPLE_CATALOG)
+    repo.write("docs/id-registry.md", SAMPLE_ID_REGISTRY)
+    repo.write(
+        "tests/system/ledger.json",
+        json.dumps(
+            {"version": 1, "ac_digests": {}, "cases": []},
+            ensure_ascii=False,
+            indent=2,
+        ) + "\n",
+    )
+    # The installed toolkit includes its product acceptance tests, while this
+    # fixture deliberately replaces the product requirements with SAMPLE_RD.
+    # Remove only those copied files in the temporary sample repository.
+    for rel in (
+        "tests/system/e2e/test_run_owned_cleanup.py",
+        "tests/system/test_run_cleanup_system.py",
+    ):
+        copied = repo.path / rel
+        if copied.exists():
+            copied.unlink()
     repo.py("next-id.py", "--sync", "--adopt", check=True)
     repo.commit("sample requirements")
     return repo

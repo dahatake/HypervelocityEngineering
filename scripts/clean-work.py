@@ -90,9 +90,7 @@ def report_authorizes(report: str) -> bool:
 def milestones_authorize(meta: dict) -> bool:
     milestones = meta.get("completion_milestones")
     if not isinstance(milestones, list):
-        # Older run-state records store the same structured gate fields in the
-        # finalized report.  authorization() validates those fields below.
-        return True
+        return False
     expected = (
         ("complete-check", "exit_code", 0),
         ("final-verify", "exit_code", 0),
