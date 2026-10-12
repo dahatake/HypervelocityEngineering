@@ -87,6 +87,15 @@ python scripts/select-tests.py [--base REF] [--req FR-012] [--json]
 
 変更したファイルに書かれている要求 ID・AC ID と、`--req` で指定した ID から、実行すべき System Test のケース（`CASE`）と、単体・結合テストのファイル（`TEST`）を選びます。canary と、not_run・fail のケースは常に含めます。
 
+## next-impl.py・build-request.py（次の実装候補と、時間だけで作る /build の依頼）
+
+```bash
+python scripts/next-impl.py [--json]        # 次に実装すべき要求の順位表・除外一覧・scope 用の ID 一覧（読み取り専用）
+python scripts/build-request.py 60分        # 60分 / 24時間 / 90m / 1.5h → /build に貼れる依頼を出力
+```
+
+`next-impl.py` は、承認済みで未着手・実装登録済み（試験未登録・試験未合格）の要求を、依存先を先に、次に優先度（MUST、SHOULD、MAY）、他の候補から依存される数、実装登録済みを先、要求 ID の順で並べます。除外した要求は理由（未承認・BLOCKED・依存先未完了・完了済み・実行中）つきで示します。依存は「関連する既存資産」に書いた他の要求 ID です。`build-request.py` は、許容時間を 1 要求あたり 60 分（PARAM-012）で割った件数（最小 1）だけ先頭から `scope` に入れ、`max_hours` に許容時間を入れた `<request>`・`<answers>`・`<references>`・`<run_options>` を出力します。生成のみで、run は開始しません。候補がないときは依頼を出力せず、除外の理由を示します。
+
 ## summarize.py（ログの要約）
 
 ```bash
