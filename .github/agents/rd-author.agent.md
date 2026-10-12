@@ -16,6 +16,7 @@ run-id、`<request>`、`<answers>`、`<references>`、approval_policy、（2 周
 - approval_policy が「厳格」以外のときは、skill の §承認ポリシーの条件を満たす AI提案だけを「承認済み（包括承認 YYYY-MM-DD・approval_policy）」にします。
 - 依頼にない既存の承認済み要求の文面は変えません。食い違いは競合として記録し、関係する AC を `BLOCKED: Q-xxx` にします。
 - 終了前に `python scripts/verify.py --docs-only` を exit 0 にし、`[RD] <要約>` で commit します（終了時に hook G-4 が同じ検査を行います）。
+- 依頼が既存アプリの導入のとき（skill `adopt-existing`）: コードを読んで逆生成の要求を書きます。出自は「逆生成」、決定状態は必ず「承認待ち」（包括承認しない）、出典は SRC-ID（採番後すぐ `python scripts/adopt.py anchor SRC-xxx <ファイル:開始-終了>` で証跡を固定）。意図が読めない所は要求にせず質問票にします。終了前に `python scripts/adopt.py check` も exit 0 にします。
 - 利用者が設定した MCP Server・plugin のツール（Work IQ、Microsoft Learn、Azure など）は、一次情報の参照（検索・取得・質問）に使います。得た事実は出典台帳（SRC-ID）に記録します。外部のシステムは変更しません。
 
 ## 返す結果（10 行以内）

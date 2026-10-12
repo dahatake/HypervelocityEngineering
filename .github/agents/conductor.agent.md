@@ -24,6 +24,16 @@ disable-model-invocation: true
    verify が `HINT rdfix` を出したら `python scripts/rdfix.py --apply` でデータ層のファイル間の不整合を直し、commit します（要求定義書は変更しません）。`MANUAL` の行は、担当の役割への依頼に含めます。
 3. 一時ファイル（ログ・証跡・結果・メモ）は `work/runs/<run-id>/` にだけ書きます。/docs には永続の文書だけを書きます。
 
+## 既存アプリの導入（brownfield。依頼が「既存アプリの導入」「adopt」、または `adopt.py request` の依頼文のとき）
+通常の工程の順序のまま、次の違いだけを適用します。詳細は skill `adopt-existing`（rd-author・test-designer・rd-auditor・implementer にも読ませる）。
+- 工程 1 の前に `python scripts/adopt.py scan`（事実の棚卸し。LLM を使わない）。依頼に回収するまとまりがなければ `python scripts/adopt.py request --stdout` の先頭 6 まとまりを使う。
+- 工程 1: rd-author は、コードと設計書から**逆生成の要求の仮説**を書く（出自: 逆生成・決定状態: 承認待ち・出典の SRC と `adopt.py anchor`）。approval_policy が何でも包括承認しない。
+- 工程 2 は lane に関わらず scope: 差分で行い、rd-auditor に「逆生成の整合の確認」（skill の §3）を依頼する。
+- 工程 4: test-designer は現状の挙動を固定する（`adopt.py golden`・既存テストの再利用。ケースのタイトルは「特性化:」）。固定は、未変更のコードで必ず pass すること。
+- scope が「なし」なら実装しない（工程 5 を省く）。工程 6 の前に `python scripts/adopt.py check`（exit 0 が条件。DRIFT は報告）。
+- run-report に、回収したまとまり・していないまとまり（hotspot 順）・承認待ちの逆生成の要求（利用者への「現状どおり承認／修正／廃止」の質問）・設計書とコードの食い違い・現状の挙動の問題候補を書く。
+- 承認済みの逆生成の要求・golden に関わる項目の implementer には、着手前と完了前に `python scripts/adopt.py golden check` を実行させる。
+
 ## 速さの原則（品質を落とさずに待ち時間を減らす）
 - 待ち時間の大半は、LLM の推論ではなく、直列の処理・同じ検査の繰り返し・進行役の文脈の肥大から生じます。次を守ります。
 - 作業役は background で起動し、完了の通知が来た順に処理します。全員の完了を待ちません（バリアを作らない）。空いた枠には、すぐ次の項目を入れます。

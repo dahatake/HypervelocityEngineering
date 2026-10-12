@@ -31,7 +31,7 @@ Enterprise App Build Kit の版の付け方と、版を上げる手順（配布�
 5. 配布物（ファイル）を追加・改名・削除した場合は、`tools/install.py` の `MANAGED`・`TEMPLATES`・`OBSOLETE` と、この `users-guide/` を合わせて直します。
 6. 版を確認し、commit してタグを付けます。
    ```bash
-   python tools/install.py --version     # 例: 0.2.0
+   python tools/install.py --version     # 例: 0.3.0
    git add -A && git commit -m "Release 0.2.0"
    git tag v0.2.0
    git push origin main --tags

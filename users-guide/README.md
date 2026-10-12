@@ -16,7 +16,19 @@ Enterprise App Build Kit の詳細なリファレンスです。概要・イン�
 | 7 | [トラブルシューティング](07-troubleshooting.md) | 止まった・拒否された・失敗した |
 | 8 | [導入ロードマップと KPI](08-roadmap.md) | 診断から本番運用までの段取りと、効果の測り方を知りたい |
 | 9 | [バージョンアップの手順](09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者） |
-| 10 | [EABK Studio のガイド](../EABK-Studio/users-guide/README.md) | データ層を図・表で見たい。Product Manager・Architect・Software Engineer 別の手順と、各画面が読むデータを知りたい |
+| 10 | [既存のアプリを導入する](10-adopting-existing-apps.md) | 既存のコード・設計書から、棚卸し → 逆生成の要求（承認待ち）→ 現状の挙動の固定でデータ層を整える。方式の調査と適合の検証 |
+| 参考 | [EABK Studio のガイド](../EABK-Studio/users-guide/README.md) | データ層を図・表で見たい。Product Manager・Architect・Software Engineer 別の手順と、各画面が読むデータを知りたい |
+
+## 役割別の読み方（初めて使う方へ）
+
+| あなたは | 読む順 |
+|---|---|
+| **Product Manager** | 1（依頼の書き方）→ 2（実行中と終了後。報告の読み方・質問票への回答・マージ）→ 8（導入ロードマップと KPI）→ [Studio: Product Manager](../EABK-Studio/users-guide/05-product-manager.md) |
+| **Architect** | 3（管理データの書式）→ 6（品質ゲートと検査項目）→ 4（設定とカスタマイズ）→ 8（導入ロードマップ）→ [Studio: Architect](../EABK-Studio/users-guide/06-architect.md) |
+| **Software Engineer** | 4（設定。検証コマンドの登録）→ 5（スクリプトリファレンス）→ 7（トラブルシューティング）→ 9（バージョンアップ）→ 10（既存アプリの導入）→ [Studio: Software Engineer](../EABK-Studio/users-guide/07-software-engineer.md) |
+
+いずれも、先に [README.md](../README.md) の「はじめに」「インストール」「Quickstart」を読んでから、このガイドに進んでください。
+
 ## README の各節へのリンク
 
 | 知りたいこと | README の節 |

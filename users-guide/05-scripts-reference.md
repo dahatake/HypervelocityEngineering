@@ -154,6 +154,18 @@ python scripts/import-speckit.py [--source DIR] [--feature 001] [--implement] [-
 
 `specs/*/spec.md` と `.specify/memory/constitution.md` を読み、対応表と `/build` の依頼文を `work/import/speckit-<日時>.md` に書きます。要求定義書は編集せず、ID も振りません。使い方は [1.7](01-writing-requests.md#17-github-spec-kit-の仕様を取り込む) にあります。
 
+## adopt.py（既存アプリの導入）
+
+```text
+python scripts/adopt.py scan [--since-days 365]                  # 棚卸し → docs/baseline/inventory.{json,md}
+python scripts/adopt.py request [--clusters 6] [--implement]      # /build の依頼文 → work/import/
+python scripts/adopt.py anchor SRC-003 src/a.py:10-48           # 出典の証跡を固定 → docs/baseline/evidence.json
+python scripts/adopt.py check [--strict] [--json]               # DRIFT・回収率・逆生成の要求の検査（exit 1 = 誤り）
+python scripts/adopt.py golden add NAME -- CMD ARG...           # 特性化テスト（golden master）
+python scripts/adopt.py golden record|check|list [NAME] [--update]
+```n
+詳細と根拠は [10. 既存のアプリを導入する](10-adopting-existing-apps.md)。要求定義書は編集せず、ID も振りません。
+
 ## clean-work.py（/work のクリーンアップ）
 
 ```bash

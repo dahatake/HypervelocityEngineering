@@ -5,6 +5,8 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- **既存アプリの導入（brownfield）** を追加しました（`scripts/adopt.py`・skill `adopt-existing`・[users-guide/10](users-guide/10-adopting-existing-apps.md)）。公開されている知見（再文書化とリエンジニアリングの分離、特性化テスト・golden master、Strangler Fig、ホットスポット分析、LLM による要求逆生成の幻覚対策）を、この toolkit の規則（G-1・G-2・G-3、承認は利用者）に照らして検証し、3 層（事実の棚卸し／逆生成の仮説＝出典と証跡の固定・承認待ち／現状の挙動の固定）で採用しました。`scan`・`request`・`anchor`・`check`・`golden` を提供し、conductor・rd-author・test-designer・rd-auditor・implementer の手順に導入モードを追加しました。
+
 - **EABK Studio**（`EABK-Studio/`。データ層をブラウザーで見る、読み取り専用のローカル Web アプリ）を、toolkit の副機能として配布します。インストールすると対象リポジトリに入り、インストールの最後に起動コマンドを表示します。
   - 役割別のガイドを追加しました: Product Manager・Architect・Software Engineer 向け（各 15 分のチュートリアル・おすすめのリンク・判断できること）と、各画面がどのファイルのどの節・列を読み、どう計算するかのデータリファレンス（実画面の画像つき。`capture-screens.py` で再採取できます）。
   - `studio.py` に `--check`（管理データのファイルの有無と解析件数を表示して終了。データ層がなければ exit 1）と `--role pm|architect|swe`（最初に開く画面）を追加しました。データ層のない `--repo` には、起動せずに案内を出します。`start.ps1`（`-Role`・`-Check`・`-NoOpen`）と `start.sh`（残りの引数）は、オプションをそのまま渡せます。

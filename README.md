@@ -11,9 +11,23 @@ GitHub Copilot（VS Code の Agents ウィンドウ / Copilot CLI / GitHub Copil
   - 危険な操作は拒否する
 - これらの規則の多くは、`/build` で run を開始したときだけ働きます。`/build` 以外の Prompt で変更を依頼するリスクは、[重要: `/build` 以外の Prompt を送るときのリスク](#重要-build-以外の-prompt-を送るときのリスク) を参照してください。
 - [GitHub Spec Kit](https://github.com/github/spec-kit) で書いた仕様を取り込み、実装と検証を conductor に任せることもできます（[GitHub Spec Kit との連携](#github-spec-kit-との連携)）。
+- すでにソースコード・設計書があるアプリ（brownfield）にも使えます。まず `python scripts/adopt.py scan` で棚卸しし、逆生成の要求の仮説（承認待ち）と現状の挙動の固定からデータ層を整えます（[既存のアプリを導入する](users-guide/10-adopting-existing-apps.md)）。
+
+## はじめに（読者別の読み方）
+
+初めて使う方は、役割に合わせて次の順で読んでください。どの役割でも、最初の run は短い時間（`max_hours: 4`〜`8`）で試すことをお勧めします。
+
+| あなたは | あなたがすること | 読む順 |
+|---|---|---|
+| **Product Manager**（何を作るか決め、結果を受け入れる） | 作りたいことを依頼に書く。質問票に回答する。報告を読んで、マージするか決める | ① [解決する問題](#解決する問題) → ② [Quickstart](#quickstart) → ③ [依頼の書き方](users-guide/01-writing-requests.md) → ④ [実行中と終了後](users-guide/02-during-and-after-run.md) → ⑤ [Studio: Product Manager](EABK-Studio/users-guide/05-product-manager.md) |
+| **Architect**（設計の整合・境界・品質ゲートを決める） | 規則と権限の仕組みを理解する。設定（検証コマンド・モデル・ゲート）を決める。要求定義書の構造を確かめる | ① [概要](#概要)（アーキテクチャ・エージェントと権限・run の流れ） → ② [管理データの書式](users-guide/03-requirements-format.md) → ③ [設定とカスタマイズ](users-guide/04-customization.md) → ④ [品質ゲートと検査項目](users-guide/06-quality-gates.md) → ⑤ [Studio: Architect](EABK-Studio/users-guide/06-architect.md) |
+| **Software Engineer**（toolkit を導入・運用し、実装・テストを確かめる） | インストールする。検証コマンドを登録する。run を起動し、止まったときや拒否されたときに直す | ① [インストール](#インストール) → ② [Quickstart](#quickstart) → ③ [スクリプトリファレンス](users-guide/05-scripts-reference.md) → ④ [トラブルシューティング](users-guide/07-troubleshooting.md) → ⑤ [Studio: Software Engineer](EABK-Studio/users-guide/07-software-engineer.md) |
+
+既存のアプリ（ソースコード・設計書がすでにある）に導入する場合は、まず [既存のアプリを導入する](users-guide/10-adopting-existing-apps.md) を読んでください。チームで段階的に導入する場合は [導入ロードマップと KPI](users-guide/08-roadmap.md) が参考になります。
 
 ## 目次
 
+- [はじめに（読者別の読み方）](#はじめに読者別の読み方)
 - [概要](#概要)
 - [インストール](#インストール)
 - [Quickstart](#quickstart)
@@ -63,8 +77,9 @@ Enterprise App Build Kit は、次の 4 つの手段でこれらを防ぎます�
 .github/
   agents/        conductor（オーケストレーター）と 5 つの作業役の定義（*.agent.md）
   skills/        手順書。必要な作業役だけが読み込む（Token を節約）
-                 requirement-definition / implement-fr / system-test-increment / rd-audit
-                 build … 利用者が /build で呼ぶ依頼の入口と雛形（手動呼び出し専用）
+                 requirement-definition / implement-fr / system-test-increment / rd-audit / adopt-existing
+                 build … 利用者が /build で呼ぶ依頼の入口（手動呼び出し専用）
+                 build-template … /build-template で依頼の雛形を表示する（run は開始しない）
   hooks/         quality-gates.json … 全エージェント共通の強制ゲート（G-1〜G-7）
   workflows/     ebak-verify.yml … GitHub Actions で verify を再実行（外部での再確認）
 scripts/         決定的スクリプト（Python 3.9 以上。標準ライブラリだけを使用）
@@ -74,6 +89,7 @@ scripts/         決定的スクリプト（Python 3.9 以上。標準ライブ�
   integrate.py     worktree のプールと、統合（merge → verify → System Test → commit）を 1 コマンドで行う
   kpi.py           KPI の集計（North Star: 人の介入 1 回あたりの検証済み要求。流れの指標も出す）
   import-speckit.py  GitHub Spec Kit の成果物を /build の依頼文に変換
+  adopt.py         既存アプリの導入（棚卸し・証跡の固定・現状の挙動の固定・依頼文の作成）
   hooks/gate.py   hook の本体
   ebak.config.json 設定（検証コマンド、モデル、ゲート、保持期間）
 EABK-Studio/     データ層のビューアー（ローカルの Web アプリ。読み取り専用）と、役割別ガイド・画面画像
@@ -98,6 +114,8 @@ work/            一時ファイル（.gitignore 対象。14 日で削除）
 | **test-designer** | 受入基準から System Test と台帳のケースを、**実装より前に**作る | `tests/system/`（台帳は ledger.py 経由） | system-test-increment |
 | **implementer** | 1 つの作業項目（要求 1〜5 個）をプールの worktree で実装し、単体テスト・結合テストとカタログの行を書く | 自分の worktree（要求定義書と System Test は変更不可） | implement-fr |
 | **reviewer** | 差分と受入基準の照合。共通部品・契約・テーブルの変更、セキュリティ・個人情報・認証、画面の変更にだけ使う | なし（読み取り専用） | なし |
+
+既存アプリの導入（`adopt.py` を使う依頼）のときは、conductor・rd-author・rd-auditor・test-designer が skill `adopt-existing` も読み込みます。
 
 どのエージェントも frontmatter でツールを限定していません。利用者が GitHub Copilot に設定した MCP Server・plugin・拡張機能のツールと skill は、そのまま使えます。例は、Work IQ（社内のメール・会議・チャット・ドキュメント）、Microsoft Learn、Azure MCP Server、Copilot Studio の plugin です。rd-author は、これらを一次情報の参照に使い、得た事実を出典付きで要求定義書に残します。外部のシステムを変更する操作（送信・作成・更新・削除・デプロイ）は、run_options の `external_write`・`deploy` で許可したときだけ行えます（hook G-5）。詳しくは [設定とカスタマイズ 4.4](users-guide/04-customization.md#44-mcp-serverplugin拡張機能を使う) を参照してください。
 
@@ -234,7 +252,7 @@ python tools/install.py --target /path/to/your-repo
 
 | 種類 | ファイル | 再実行時の扱い |
 |---|---|---|
-| toolkit のファイル | `.github/agents/*.agent.md`（6）、`.github/skills/*/SKILL.md`（5。`/build` の skill を含む）、`.github/hooks/quality-gates.json`、`.github/workflows/ebak-verify.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`・`scripts/hooks/gate.py`、`EABK-Studio/`（ビューアー本体・役割別ガイド・画面画像・テスト） | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
+| toolkit のファイル | `.github/agents/*.agent.md`（6）、`.github/skills/*/SKILL.md`（7。`/build`・`/build-template` の skill を含む）、`.github/hooks/quality-gates.json`、`.github/workflows/ebak-verify.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`・`scripts/hooks/gate.py`、`EABK-Studio/`（ビューアー本体・役割別ガイド・画面画像・テスト） | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
 | 管理データの雛形 | `docs/requirements-definition.md`、`docs/catalog.md`、`docs/id-registry.md`、`docs/run-history.md`、`tests/system/ledger.json` | **存在しない場合だけ**作成します。既存のファイルは上書きしません |
 | 設定 | `scripts/ebak.config.json` | なければ作成します。あれば新しいキーだけを追加し、利用者が設定した値は変更しません |
 | 追記 | `.gitignore` に `/work/`、`.gitattributes` に `docs/id-registry.md merge=union` と `docs/run-history.md merge=union` | 足りない行だけを追記します |
@@ -637,7 +655,8 @@ Spec Kit は独自の番号（`FR-001`、`SC-001` など）を使います。too
 | 7 | [トラブルシューティング](users-guide/07-troubleshooting.md) | 止まった・拒否された・失敗した |
 | 8 | [導入ロードマップと KPI](users-guide/08-roadmap.md) | 診断から本番運用までの段取りと、効果の測り方を知りたい |
 | 9 | [バージョンアップの手順](users-guide/09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者） |
-| 10 | [EABK Studio のガイド](EABK-Studio/users-guide/README.md) | データ層を図・表で見たい。Product Manager・Architect・Software Engineer 別の手順と、各画面が読むデータを知りたい |
+| 10 | [既存のアプリを導入する](users-guide/10-adopting-existing-apps.md) | 既存のコード・設計書から、棚卸し → 逆生成の要求（承認待ち）→ 現状の挙動の固定でデータ層を整える |
+| 参考 | [EABK Studio のガイド](EABK-Studio/users-guide/README.md) | データ層を図・表で見たい。Product Manager・Architect・Software Engineer 別の手順と、各画面が読むデータを知りたい |
 GitHub Spec Kit との比較計測（同じ課題・隠し受入テスト・North Star の比較）の手順と結果は [bench/](bench/README.md) にあります。最新の結果は [bench/RESULTS.md](bench/RESULTS.md) です。
 
 ## 用語

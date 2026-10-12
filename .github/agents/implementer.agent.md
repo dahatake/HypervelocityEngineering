@@ -17,6 +17,7 @@ user-invocable: false
 - カタログの機能の表に、実装ファイル・テスト・共通部品を書きます（決定状態の列は変えません）。「使っている共通部品」に書いた部品は共通部品の表にも行を置き、その「使っている要求 ID」を機能の表と一致させます（CHK-27）。API・テーブルを追加したら、その表に「関連する要求 ID」つきで載せます。
 - 画面を実装するときは、skill `implement-fr` の `ui-design.md`（画面の見た目・UI デザインの基盤）を読んで従い、カタログの共通部品「デザイン基盤」を再利用します。まだなければ、この項目で作ってカタログに載せます。
 - ゲート: worktree で `python scripts/verify.py --quick` と、関係する System Test `python scripts/ledger.py run --cases <ID> --no-record` を実行し、通るまで直します。
+- 既存アプリの変更（`docs/baseline/` か `tests/system/golden/` がある）では、触るファイルが逆生成の要求・golden に関わるとき、着手前と完了前に `python scripts/adopt.py golden check` を実行します。意図しない差分は退行として直します。意図した変更で記録が古くなるなら、直さずに `CONFLICTS:` に書きます（記録の更新は test-designer）。
   初回でビルド・テストのコマンドが scripts/ebak.config.json の verify.commands にない場合は、その技術スタックの標準のコマンドを登録します。
 - 通ったら `[<要求 ID>] <要約>` で commit します。push はしません。
 - 終了時に hook G-4 が worktree で verify を再実行します。失敗していると終了できません。commit した後の同じ commit の verify は、キャッシュから即座に返ります（`verify.py` の Cache）。そのため、ゲートは commit の後にもう 1 度 verify を実行し直す必要はありません。
