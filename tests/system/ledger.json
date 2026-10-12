@@ -17,7 +17,7 @@
     "AC-010": "sha256:8bbd19693f009e1c",
     "AC-053": "sha256:871dc91803313df7",
     "AC-013": "sha256:243092b08a7d5cae",
-    "AC-037": "sha256:a2f283700b0565c2",
+    "AC-037": "sha256:46c798f3729c2c06",
     "AC-044": "sha256:4261ddc0095208fa",
     "AC-045": "sha256:797391cd7043133f",
     "AC-046": "sha256:ec8fcb9abcb2cef1",
@@ -38,7 +38,9 @@
     "AC-076": "sha256:9f4e195e1f56b0a1",
     "AC-077": "sha256:f6a4b874fa642693",
     "AC-080": "sha256:c5379dd42824f506",
-    "AC-081": "sha256:23f25a36610bb70c"
+    "AC-081": "sha256:23f25a36610bb70c",
+    "AC-091": "sha256:ca174e05d42e8119",
+    "AC-104": "sha256:27092d207f2d76c1"
   },
   "cases": [
     {
@@ -2117,6 +2119,181 @@
       "history": [
         {
           "at": "2026-10-12T15:08:32+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-071",
+      "requirement_ids": [
+        "FR-1014"
+      ],
+      "ac_ids": [
+        "AC-091"
+      ],
+      "title": "実装状態画面: 全体・目的別・優先度別の積み上げバーとかんばんが表示される",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_impl_status_system.py -k bars_and_kanban_for_all_scopes -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-13T05:26:09+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-072",
+      "requirement_ids": [
+        "FR-1014"
+      ],
+      "ac_ids": [
+        "AC-091"
+      ],
+      "title": "実装状態画面: バー区間とかんばん列の件数が一致し合計が承認済み要求数に等しい",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_impl_status_system.py -k equal_kanban_columns -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-13T05:26:11+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-073",
+      "requirement_ids": [
+        "FR-1014"
+      ],
+      "ac_ids": [
+        "AC-091"
+      ],
+      "title": "実装状態画面: カードの選択で詳細へ移り他の表現と連動する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_impl_status_system.py -k card_selection -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-13T05:26:13+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-074",
+      "requirement_ids": [
+        "FR-1014"
+      ],
+      "ac_ids": [
+        "AC-091"
+      ],
+      "title": "実装状態画面(異常系): 承認済み以外の要求はカードに含まれない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_impl_status_system.py -k excludes_non_approved -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-13T05:26:15+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-075",
+      "requirement_ids": [
+        "FR-1016"
+      ],
+      "ac_ids": [
+        "AC-104"
+      ],
+      "title": "許容時間だけで貼り付け可能な依頼を生成し、ファイル変更・run 開始がない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_build_request_system.py -k pasteable -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-13T05:26:17+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-076",
+      "requirement_ids": [
+        "FR-1016"
+      ],
+      "ac_ids": [
+        "AC-104"
+      ],
+      "title": "候補 0 件で依頼を出力せず正常終了し変更なし(異常系)",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_build_request_system.py -k no_candidates -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-13T05:26:18+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-077",
+      "requirement_ids": [
+        "FR-1016"
+      ],
+      "ac_ids": [
+        "AC-104"
+      ],
+      "title": "不正な許容時間で異常終了し依頼を出力しない(異常系)",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_build_request_system.py -k invalid_duration -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-13T05:26:20+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
