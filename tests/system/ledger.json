@@ -54,9 +54,9 @@
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_model_can_traverse_requirement_to_catalog_file_and_test",
       "canary": true,
       "status": "pass",
-      "last_commit": "c61ee5b",
-      "last_run_at": "2026-10-10T01:51:02+09:00",
-      "evidence": "work/runs/202610092335/logs/system-test/E2E-001-202610100150.log",
+      "last_commit": "8433054",
+      "last_run_at": "2026-10-12T15:09:36+09:00",
+      "evidence": "work/runs/202610121452/logs/system-test/E2E-001-202610121509.log",
       "history": [
         {
           "at": "2026-10-09T22:10:37+09:00",
@@ -817,9 +817,9 @@
       "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_starts_only_after_ordered_success_and_pre_cleanup_report",
       "canary": true,
       "status": "pass",
-      "last_commit": "a7d4edc",
-      "last_run_at": "2026-10-10T15:30:37+09:00",
-      "evidence": "work/runs/202610100949/logs/system-test/E2E-026-202610101530.log",
+      "last_commit": "8433054",
+      "last_run_at": "2026-10-12T15:09:36+09:00",
+      "evidence": "work/runs/202610121452/logs/system-test/E2E-026-202610121509.log",
       "history": [
         {
           "at": "2026-10-10T10:41:32+09:00",
@@ -867,9 +867,9 @@
       "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_cleanup_starts_only_after_all_gates_and_main_integration",
       "canary": true,
       "status": "pass",
-      "last_commit": "a7d4edc",
-      "last_run_at": "2026-10-10T15:30:55+09:00",
-      "evidence": "work/runs/202610100949/logs/system-test/E2E-028-202610101530.log",
+      "last_commit": "8433054",
+      "last_run_at": "2026-10-12T15:09:36+09:00",
+      "evidence": "work/runs/202610121452/logs/system-test/E2E-028-202610121509.log",
       "history": [
         {
           "at": "2026-10-10T10:41:53+09:00",
