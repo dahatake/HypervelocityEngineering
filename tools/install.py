@@ -86,8 +86,6 @@ MANAGED = [
     "users-guide/images/dashboard.png",
     "tests/toolkit/test_clean_work.py",
     "tests/toolkit/test_run_state.py",
-    "tests/system/e2e/test_run_owned_cleanup.py",
-    "tests/system/test_run_cleanup_system.py",
     "EABK-Studio/eabk_model.py",
     "EABK-Studio/README.md",
     "EABK-Studio/start.ps1",
@@ -148,6 +146,8 @@ def dest_of(rel: str) -> str:
 # Files no longer shipped. Removed on update when unmodified.
 # EABK Studio guide moved from EABK-Studio/users-guide/ into the single users-guide/ (installed as EABK-docs/studio/).
 OBSOLETE: list[str] = [
+    "tests/system/e2e/test_run_owned_cleanup.py",
+    "tests/system/test_run_cleanup_system.py",
     "EABK-Studio/users-guide/README.md",
     "EABK-Studio/users-guide/01-first-steps.md",
     "EABK-Studio/users-guide/02-screens.md",
