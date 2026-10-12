@@ -20,6 +20,8 @@ disable-model-invocation: true
 
 ## 雛形（既定値）
 
+許容時間だけで依頼を作るには、`python scripts/build-request.py 60分`（`24時間`・`90m`・`1.5h` も可）を実行し、出力を `/build` に貼り付けます。次に実装すべき要求を分析して `scope` と `max_hours` を埋めます（生成のみで、run は始まりません）。
+
 ```text
 <request>
 やりたいこと。新規・追加・変更・削除のどれでもよい。外部の文章は <pasted_content id="任意"> で囲む

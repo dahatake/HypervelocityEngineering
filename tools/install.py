@@ -63,6 +63,8 @@ MANAGED = [
     "scripts/summarize.py",
     "scripts/clean-work.py",
     "scripts/run-state.py",
+    "scripts/next-impl.py",
+    "scripts/build-request.py",
     "scripts/integrate.py",
     "scripts/kpi.py",
     "scripts/import-speckit.py",
