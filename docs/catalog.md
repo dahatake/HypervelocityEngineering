@@ -25,8 +25,8 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1011 | 2D マップのノード選択と強調 | 承認済み | 未実装 | 未実装 | - |
 | FR-1012 | 実装配置図（画面・API・データの 3 層） | 承認済み | `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_map_placement_system.py`, `EABK-Studio/tests/test_studio.py` | ストア、UI 部品、デザイン基盤 |
 | FR-1013 | データの ER 図表示 | 承認済み | `EABK-Studio/web/js/insights.js`, `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/i18n.js` | `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
-| NFR-PERF-003 | EABK toolkit の git 子プロセス起動の削減 | 承認済み | 未実装 | 未実装 | - |
-| NFR-COMPAT-002 | 性能改善による挙動の不変 | 承認済み | 未実装 | 未実装 | - |
+| NFR-PERF-003 | EABK toolkit の git 子プロセス起動の削減 | 承認済み | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/rdfix.py` | `tests/toolkit/test_git_perf.py` | git ls-files 並行取得 |
+| NFR-COMPAT-002 | 性能改善による挙動の不変 | 承認済み | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/rdfix.py` | `tests/toolkit/test_git_perf.py` | git ls-files 並行取得 |
 
 ## API・イベント
 
@@ -48,6 +48,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | conductor 終了契約 | [`.github/agents/conductor.agent.md`](docs/../.github/agents/conductor.agent.md) | run 開始時・工程 6・main 統合・run-report・清掃の実行順序 | FR-1009、FR-1010、NFR-COMPAT-001 |
 | run 運用ガイド | `users-guide/02-during-and-after-run.md`、`users-guide/05-scripts-reference.md`、`users-guide/07-troubleshooting.md` | 利用者向けの統合、清掃、診断、再開、トラブルシューティング契約 | FR-1010、NFR-COMPAT-001 |
 | 配布同期対象 | `tools/install.py` | conductor、清掃・状態・統合スクリプトをインストール対象へ同期する管理対象 | NFR-COMPAT-001 |
+| git ls-files 並行取得 | `scripts/ebaklib.py` | `tracked_files` で tracked・untracked 一覧を ThreadPoolExecutor で並行取得し、rdcheck/rdfix は同一引数の呼び出しを 1 回にする | NFR-PERF-003、NFR-COMPAT-002 |
 # EABK Studio カタログ
 
 管理データの要求と、現時点で実在する実装資産の対応表。未実装の要求は「未実装」と記載する。`EABK-Studio` は依頼時点の作業ツリーに存在する資産であり、今回の要求定義コミットではコードを変更しない。
