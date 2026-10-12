@@ -2047,6 +2047,81 @@
           "reason": "受入基準からケースを作成"
         }
       ]
+    },
+    {
+      "id": "E2E-068",
+      "requirement_ids": [
+        "FR-1011"
+      ],
+      "ac_ids": [
+        "AC-077"
+      ],
+      "title": "2D map hit radius is 12 screen px at 3 zoom levels and with CSS size mismatch; outside radius keeps selection",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_map_placement_system.py -k fr1011 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-12T15:08:29+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-069",
+      "requirement_ids": [
+        "FR-1012"
+      ],
+      "ac_ids": [
+        "AC-080"
+      ],
+      "title": "Placement diagram shows 3 layers with links, draws nothing outside model",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_map_placement_system.py -k fr1012_ac080 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-12T15:08:31+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-070",
+      "requirement_ids": [
+        "FR-1012"
+      ],
+      "ac_ids": [
+        "AC-081"
+      ],
+      "title": "Placement diagram highlight/dim/restore via click, keyboard, table row",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_map_placement_system.py -k fr1012_ac081 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-12T15:08:32+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
     }
   ]
 }
