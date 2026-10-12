@@ -8,6 +8,8 @@ const LAYER_TYPES = ['goal', 'req', 'ac', 'entity', 'part', 'api', 'table', 'par
 const DEFAULT_ON = new Set(['goal', 'req', 'entity', 'part', 'api', 'table', 'file', 'case']);
 const rowH = 22, groupGap = 30, TOP = 70;
 const prefs = { layers: new Set(DEFAULT_ON), color: 'type' };
+const PICK_RADIUS = 12;    // PARAM-009: node pick radius, screen px
+const CLICK_DRAG_PX = 6;   // PARAM-010: click/pan drag threshold, screen px
 const IMPL_COLOR = { done: '#34e0a1', none: '#ff5c7a', unlisted: '#8aa1b5' };
 
 export function mount(host) {
@@ -239,6 +241,7 @@ export function mount(host) {
 
     // nodes
     const labelOn = k >= 0.85;
+    const emph = [];
     for (const p of order) {
       const n = p.n;
       if (p.x < vx0 || p.x > vx1 || p.y < vy0 || p.y > vy1) continue;
@@ -255,10 +258,11 @@ export function mount(host) {
       ctx.fill();
       ctx.shadowBlur = 0;
       if (n.id === store.selected || n.id === store.hover) {
-        const snapshot = document.documentElement.classList.contains('snapshot');
-        const pulse = snapshot ? 1 : 1 + 0.25 * Math.sin(now / 220);
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2 / k; ctx.beginPath(); ctx.arc(p.x, p.y, r * 1.9 * pulse, 0, 7); ctx.stroke();
-        if (!snapshot) dirty = true;
+        // FR-1011 AC-079: ring of constant on-screen size (larger than normal) + always-on labelled badge.
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 3 / k; ctx.beginPath(); ctx.arc(p.x, p.y, 15 / k, 0, 7); ctx.stroke();
+        ctx.strokeStyle = '#0b1020'; ctx.lineWidth = 1 / k; ctx.beginPath(); ctx.arc(p.x, p.y, 17 / k, 0, 7); ctx.stroke();
+        emph.push(p);
       }
       if ((labelOn && on) || (focusing && on && k > 0.22 && (set.size < 90 || n.id === store.selected))) {
         const fs = 12;
@@ -270,6 +274,17 @@ export function mount(host) {
       }
     }
     ctx.globalAlpha = 1;
+    for (const p of emph) {
+      const fs = 13 / k, pad = 4 / k;
+      ctx.font = `600 ${fs}px "Segoe UI","Yu Gothic UI",sans-serif`;
+      const lab = (p.n.label + (p.n.title ? '  ' + p.n.title.slice(0, 28) : '')).slice(0, 44);
+      const tw = ctx.measureText(lab).width, lx = p.x + 20 / k, h = fs + pad * 2;
+      ctx.fillStyle = 'rgba(11,16,32,0.92)';
+      round(ctx, lx - pad, p.y - h / 2, tw + pad * 2, h, 4 / k); ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1 / k; ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
+      ctx.fillText(lab, lx, p.y);
+    }
     ctx.restore();
     drawMini(set);
     if (cam.k < 0.07) hint.textContent = '';
@@ -317,39 +332,44 @@ export function mount(host) {
   const redraw = () => { dirty = true; schedule(); };
 
   // ---------- interaction
-  function pick(sx, sy) {
-    const w = toWorld(sx, sy);
-    let best = null, bd = Infinity;
-    const tol = Math.max(7, 10 / cam.k);
+  // FR-1011 AC-077: nearest node in on-screen (CSS) px within PICK_RADIUS; independent of zoom and of canvas CSS/internal size mismatch.
+  function pick(clientX, clientY) {
+    const r = canvas.getBoundingClientRect();
+    if (!r.width || !r.height || !W || !H) return null;
+    const kx = r.width / W, ky = r.height / H;
+    const px = clientX - r.left, py = clientY - r.top;
+    let best = null, bd = PICK_RADIUS * PICK_RADIUS;
     for (const p of order) {
-      const dx = p.x - w.x, dy = p.y - w.y;
-      if (Math.abs(dx) > tol + 6 || Math.abs(dy) > tol) continue;
+      const dx = ((p.x - cam.x) * cam.k + W / 2) * kx - px;
+      const dy = ((p.y - cam.y) * cam.k + H / 2) * ky - py;
       const d = dx * dx + dy * dy;
-      if (d < bd) { bd = d; best = p; }
+      if (d <= bd) { bd = d; best = p; }
     }
     return best;
   }
-  canvas.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y }; moved = false; canvas.setPointerCapture(e.pointerId); stopTour(); anim = null; });
+  // FR-1011 AC-078: press-to-release travel within CLICK_DRAG_PX is a click (no pan); beyond it is a pan.
+  canvas.addEventListener('pointerdown', (e) => {
+    drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y, cand: pick(e.clientX, e.clientY) };
+    moved = false; canvas.setPointerCapture(e.pointerId); stopTour(); anim = null;
+  });
   canvas.addEventListener('pointermove', (e) => {
-    const r = canvas.getBoundingClientRect();
     if (drag) {
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-      if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
-      cam.x = drag.cx - dx / cam.k; cam.y = drag.cy - dy / cam.k; redraw(); hideTip();
+      if (!moved && Math.hypot(dx, dy) > CLICK_DRAG_PX) moved = true;
+      if (moved) { cam.x = drag.cx - dx / cam.k; cam.y = drag.cy - dy / cam.k; redraw(); hideTip(); }
       return;
     }
-    const p = pick(e.clientX - r.left, e.clientY - r.top);
+    const p = pick(e.clientX, e.clientY);
     canvas.style.cursor = p ? 'pointer' : 'grab';
     store.setHover(p ? p.n.id : null);
     if (p) showTip(nodeTip(p.n), e.clientX, e.clientY); else hideTip();
   });
   canvas.addEventListener('pointerup', (e) => {
-    const was = moved; drag = null;
-    if (was) return;
-    const r = canvas.getBoundingClientRect();
-    const p = pick(e.clientX - r.left, e.clientY - r.top);
+    const d = drag; drag = null;
+    if (!d || moved) return;
+    const p = pick(e.clientX, e.clientY) || d.cand;
+    // Outside the radius the selection is left unchanged (AC-077).
     if (p) store.select(p.n.id, { fly: true });
-    else if (store.selected || store.focus) store.clear();
   });
   canvas.addEventListener('pointerleave', () => { store.setHover(null); hideTip(); });
   canvas.addEventListener('dblclick', () => { store.clear(); fly(camFit()); });

@@ -316,6 +316,20 @@ def test_summary_and_history_renderers_expose_complete_click_targets():
     }
 
 
+# FR-1011 AC-077 AC-078 AC-079: map2d uses PARAM-009/010 screen-px constants, a
+# CSS-size-aware pick, no deselect on miss, and a screen-constant labelled ring.
+def test_map2d_hit_testing_uses_screen_px_params():
+    source = (ROOT / "web" / "js" / "map2d.js").read_text(encoding="utf-8")
+    assert "const PICK_RADIUS = 12;" in source
+    assert "const CLICK_DRAG_PX = 6;" in source
+    pick = re.search(r"function pick\(clientX, clientY\) \{.*?^  \}", source, re.MULTILINE | re.DOTALL).group(0)
+    assert "getBoundingClientRect" in pick and "r.width / W" in pick and "PICK_RADIUS" in pick
+    up = re.search(r"addEventListener\('pointerup'.*?^  \}\);", source, re.MULTILINE | re.DOTALL).group(0)
+    assert "store.clear" not in up and "d.cand" in up
+    assert "Math.hypot(dx, dy) > CLICK_DRAG_PX" in source
+    assert "15 / k" in source and "emph.push" in source
+
+
 def test_tables_are_classified(repo):
     model = m.build_model(repo)
     assert [g["id"] for g in model["goals"]] == ["G-001"]
