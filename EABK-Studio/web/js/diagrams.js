@@ -3,8 +3,9 @@
 import { t, onLang } from './i18n.js';
 import { store } from './store.js';
 import { el, svgEl, colorOf, TYPE_COLOR, STATUS_COLOR, showTip, hideTip, nodeTip, nodeChip, statusText } from './ui.js';
+import { entityER } from './insights.js';
 
-const KINDS = ['ctx', 'goals', 'states', 'entities', 'components'];
+const KINDS = ['ctx', 'goals', 'states', 'entities', 'components', 'layers'];
 let kind = 'ctx';
 let entThreshold = 0;
 let goalColor = 'impl';
@@ -32,8 +33,9 @@ function bindNode(g, id) {
 }
 
 function applyDim(root) {
-  const hov = store.hover ? store.related(store.hover, 1) : null;
-  const set = hov || store.activeSet();
+  let set;
+  if (kind === 'layers') set = store.selected ? layerSet(store.selected) : null; // hover shows only the tooltip, so deselecting restores the normal view
+  else { const hov = store.hover ? store.related(store.hover, 1) : null; set = hov || store.activeSet(); }
   root.querySelectorAll('[data-id]').forEach((n) => n.classList.toggle('dim', !!set && !set.has(n.dataset.id) && !(n.dataset.ids && n.dataset.ids.split('|').some((x) => set.has(x)))));
   root.querySelectorAll('[data-a]').forEach((n) => {
     const hi = set && set.has(n.dataset.a) && set.has(n.dataset.b);
@@ -216,6 +218,128 @@ function entityDiagram(m, host) {
   return el('div', {}, ctrl, el('div', { style: { overflow: 'auto' } }, svg));
 }
 
+// ---------------------------------------------------------------- placement (layers) diagram
+// FR-1012 AC-080..083 / FR-1013 AC-085: classify model assets into screen / API / data layers (+ other, test).
+const LAYERS = ['screen', 'api', 'data'];
+const SCREEN_DIRS = new Set(['web', 'ui', 'pages', 'views', 'templates']);
+const API_DIRS = new Set(['api', 'routes', 'controllers', 'handlers', 'server', 'services', 'endpoints']);
+const DATA_DIRS = new Set(['db', 'models', 'migrations', 'schema', 'sql', 'entities']);
+let LAY = null;
+
+export function classifyPath(path, role) {
+  if (role === 'test') return 'test';
+  const parts = String(path || '').toLowerCase().split('/');
+  const file = parts.pop() || '';
+  const ext = file.includes('.') ? file.slice(file.lastIndexOf('.')) : '';
+  const base = file.replace(/\.[^.]*$/, '');
+  const hit = (set) => parts.some((p) => set.has(p)) || set.has(base);
+  if (ext === '.sql' || hit(DATA_DIRS)) return 'data';
+  if (hit(API_DIRS)) return 'api';
+  if (hit(SCREEN_DIRS) || ['.html', '.css', '.tsx', '.jsx', '.vue'].includes(ext)) return 'screen';
+  return 'other';
+}
+
+function buildLayers(m) {
+  const assets = { screen: new Map(), api: new Map(), data: new Map(), other: new Map() };
+  const reqLayers = new Map(m.reqs.map((r) => [r.id, { screen: false, api: false, data: false, test: false }]));
+  const assetReqs = new Map();
+  const add = (layer, id, rid) => {
+    if (!assets[layer].has(id)) assets[layer].set(id, new Set());
+    assets[layer].get(id).add(rid);
+    if (!assetReqs.has(id)) assetReqs.set(id, new Set());
+    assetReqs.get(id).add(rid);
+    const rl = reqLayers.get(rid); if (rl && layer !== 'other') rl[layer] = true;
+  };
+  for (const r of m.reqs) {
+    for (const a of store.neighbors(r.id)) {
+      const n = store.node(a.id); if (!n) continue;
+      if (n.type === 'file') {
+        const layer = classifyPath(n.path, n.role);
+        if (layer === 'test') { reqLayers.get(r.id).test = true; continue; }
+        if (n.comp && store.node('comp:' + n.comp)) add(layer, 'comp:' + n.comp, r.id);
+        else { const c = [...store.neighbors(n.id, ['component'])][0]; if (c) add(layer, c.id, r.id); }
+      } else if (n.type === 'api') add('api', n.id, r.id);
+      else if (n.type === 'table' || n.type === 'entity') add('data', n.id, r.id);
+    }
+  }
+  const links = [];
+  for (const [la, lb] of [['screen', 'api'], ['api', 'data']]) {
+    for (const [ia, ra] of assets[la]) for (const [ib, rb] of assets[lb]) { let w = 0; for (const r of ra) if (rb.has(r)) w++; if (w) links.push({ a: ia, b: ib, w }); }
+  }
+  links.sort((p, q) => q.w - p.w);
+  const reqAssets = new Map();
+  for (const [id, rs] of assetReqs) for (const r of rs) { if (!reqAssets.has(r)) reqAssets.set(r, new Set()); reqAssets.get(r).add(id); }
+  return { assets, reqLayers, assetReqs, reqAssets, links: links.slice(0, 120) };
+}
+
+// ids to keep emphasised for an asset or a requirement (own id, shared requirements, assets of those requirements)
+function layerSet(id) {
+  if (!LAY) return null;
+  const out = new Set([id]);
+  if (LAY.reqAssets.has(id)) for (const a of LAY.reqAssets.get(id)) out.add(a);
+  if (LAY.assetReqs.has(id)) for (const r of LAY.assetReqs.get(id)) { out.add(r); for (const a of LAY.reqAssets.get(r) || []) out.add(a); }
+  return out;
+}
+
+function layersDiagram(m) {
+  LAY = buildLayers(m);
+  const total = LAYERS.reduce((s, l) => s + LAY.assets[l].size, 0) + LAY.assets.other.size;
+  if (!total) return el('div', { class: 'empty' }, t('lay.empty'));
+  const CW = 168, CH = 26, GX = 10, GY = 10, PER = 6, PADX = 90, CAP = 48, Ww = PADX + PER * (CW + GX) + 10;
+  const bands = [...LAYERS, 'other'];
+  let y = 10;
+  const pos = new Map(), parts = [];
+  const svg = svgEl('svg', { viewBox: '0 0 1 1', width: Ww, style: 'max-width:100%' }, defs());
+  const lineLayer = svgEl('g', {});
+  svg.append(lineLayer);
+  for (const layer of bands) {
+    const items = [...LAY.assets[layer].keys()].sort();
+    const shown = items.slice(0, CAP);
+    const rows = Math.max(1, Math.ceil(shown.length / PER)), bh = rows * (CH + GY) + 30;
+    svg.append(svgEl('rect', { x: 4, y, width: Ww - 8, height: bh, rx: 12, fill: layer === 'other' ? 'rgba(138,161,181,.06)' : 'rgba(57,208,255,.06)', stroke: '#3a4a78' }),
+      svgEl('text', { x: 14, y: y + 22, 'font-size': 14, 'font-weight': 700, fill: '#fff' }, t('lay.' + layer)),
+      svgEl('text', { x: 14, y: y + 40, 'font-size': 11, fill: '#9aa9c9' }, String(items.length)));
+    if (!items.length) svg.append(svgEl('text', { x: PADX, y: y + 22, 'font-size': 12, fill: '#9aa9c9' }, t('none')));
+    shown.forEach((id, i) => {
+      const n = store.node(id), cx = PADX + (i % PER) * (CW + GX), cy = y + 12 + Math.floor(i / PER) * (CH + GY);
+      pos.set(id, { x: cx + CW / 2, top: cy, bottom: cy + CH });
+      const g = svgEl('g', { tabindex: 0, role: 'button', 'aria-label': n.label, style: 'cursor:pointer' },
+        svgEl('rect', { x: cx, y: cy, width: CW, height: CH, rx: 8, fill: 'rgba(10,15,32,.8)', stroke: colorOf(n), 'stroke-width': 1.5, 'data-sel': 1 }),
+        svgEl('text', { x: cx + 8, y: cy + 17, 'font-size': 11.5, fill: colorOf(n) }, cut(`${n.type === 'component' ? '▣' : n.type === 'api' ? '⇄' : n.type === 'table' ? '▦' : '◆'} ${n.label}`, 22)),
+        svgEl('title', {}, `${n.label} (${LAY.assetReqs.get(id).size})`));
+      bindNode(g, id);
+      g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); store.select(id, { fly: true }); } });
+      parts.push(g);
+    });
+    if (items.length > CAP) svg.append(svgEl('text', { x: Ww - 14, y: y + 22, 'text-anchor': 'end', 'font-size': 11, fill: '#9aa9c9' }, `+${items.length - CAP} ${t('lay.more')}`));
+    y += bh + 12;
+  }
+  const maxW = Math.max(1, ...LAY.links.map((l) => l.w));
+  for (const l of LAY.links) {
+    const a = pos.get(l.a), b = pos.get(l.b); if (!a || !b) continue;
+    const up = a.top < b.top ? [a, b] : [b, a];
+    const bow = 36 + (l.w % 3) * 8, mx = (up[0].x + up[1].x) / 2 + bow, my = (up[0].bottom + up[1].top) / 2;
+    lineLayer.append(svgEl('path', { d: `M${up[0].x} ${up[0].bottom} Q${mx} ${my} ${up[1].x} ${up[1].top}`, fill: 'none', stroke: '#7f9bff', 'stroke-opacity': 0.25 + 0.5 * l.w / maxW, 'stroke-width': 1 + 4 * l.w / maxW, 'data-a': l.a, 'data-b': l.b }, svgEl('title', {}, `${l.w} ${t('lay.shared')}`)));
+  }
+  parts.forEach((g) => svg.append(g));
+  svg.setAttribute('viewBox', `0 0 ${Ww} ${y}`); svg.setAttribute('height', y);
+  return svg;
+}
+
+function layersTable(m) {
+  const cell = (v, none) => el('td', {}, v ? t('lay.has') : t(none));
+  const rows = [...m.reqs].sort((a, b) => a.id.localeCompare(b.id)).map((r) => {
+    const l = LAY.reqLayers.get(r.id), unimpl = !l.screen && !l.api && !l.data;
+    return el('tr', { 'data-id': r.id, tabindex: 0, 'data-lay': ['screen', 'api', 'data', 'test'].map((k) => (l[k] ? 1 : 0)).join(''), onclick: () => store.select(r.id, { fly: true }), onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); store.select(r.id, { fly: true }); } } },
+      el('td', {}, r.id), el('td', {}, cut(r.title || '', 40)), cell(l.screen, unimpl ? 'lay.unimpl' : 'lay.none'), cell(l.api, unimpl ? 'lay.unimpl' : 'lay.none'), cell(l.data, unimpl ? 'lay.unimpl' : 'lay.none'), cell(l.test, 'lay.none'));
+  });
+  return el('div', { style: { marginTop: '14px' } }, el('b', {}, t('lay.table')),
+    el('div', { class: 'mini', style: { margin: '4px 0' } }, t('lay.legend')),
+    el('div', { style: { maxHeight: '420px', overflow: 'auto' } }, el('table', { class: 't' },
+      el('thead', {}, el('tr', {}, ...['lay.req', 'lay.title', 'lay.screen', 'lay.api', 'lay.data', 'lay.test'].map((k) => el('th', {}, t(k))))),
+      el('tbody', {}, rows))));
+}
+
 // ---------------------------------------------------------------- component diagram
 function componentDiagram(m) {
   const comps = [...store.nodes.values()].filter((n) => n.type === 'component');
@@ -262,7 +386,7 @@ export function mount(host) {
   const tabs = el('div', { class: 'dgmtabs' });
   const body = el('div', { class: 'dgm' });
   host.append(tabs, body);
-  let current = null;
+  let current = null, erLink = null;
   const render = () => {
     const m = store.model;
     tabs.replaceChildren(...KINDS.map((k) => el('button', { class: 'tabbtn' + (k === kind ? ' on' : ''), onclick: () => { kind = k; render(); } }, t('dgm.' + k))));
@@ -272,14 +396,21 @@ export function mount(host) {
     else if (kind === 'goals') content = el('div', {}, el('div', { class: 'row', style: { marginBottom: '8px' } }, ['impl', 'status'].map((c) => el('button', { class: 'tabbtn' + (goalColor === c ? ' on' : ''), onclick: () => { goalColor = c; render(); } }, t('map.color.' + c))),
       el('span', { class: 'legend' }, goalColor === 'impl' ? [['#34e0a1', t('impl.done')], ['#3a4a78', t('impl.none')]].map(([c, l]) => el('span', {}, el('i', { class: 'dot', style: { background: c } }), l)) : Object.entries(STATUS_COLOR).slice(0, 4).map(([k, c]) => el('span', {}, el('i', { class: 'dot', style: { background: c } }), statusText(k, ''))))), el('div', { style: { overflow: 'auto' } }, goalTree(m)));
     else if (kind === 'states') content = statesView(m);
-    else if (kind === 'entities') { const hostEl = el('div'); hostEl.append(entityDiagram(m, hostEl)); content = hostEl; }
-    else content = componentDiagram(m);
+    else if (kind === 'entities') { const hostEl = el('div'); hostEl.append(entityER(), entityDiagram(m, hostEl)); content = hostEl; }
+    else if (kind === 'layers') {
+      const toER = el('button', { class: 'tabbtn', 'data-er-link': 1, onclick: () => { kind = 'entities'; render(); } }, t('lay.toER'));
+      erLink = () => { const n = store.node(store.selected); toER.hidden = !(n && (n.type === 'entity' || n.type === 'table')); };
+      erLink();
+      content = el('div', {}, el('div', { style: { overflow: 'auto' } }, layersDiagram(m)), toER, layersTable(m));
+    }
+    else { erLink = null; content = componentDiagram(m); }
+    if (kind !== 'layers') erLink = null;
     current = el('div', {}, note, content);
     body.replaceChildren(current);
     applyDim(body);
   };
   render();
-  const refresh = () => applyDim(body);
+  const refresh = () => { applyDim(body); if (erLink) erLink(); };
   const offs = [store.on('select', refresh), store.on('hover', refresh), store.on('model', render), onLang(render)];
   body.addEventListener('click', (e) => { if (e.target === body || e.target.tagName === 'svg') store.clear(); });
   return { destroy() { offs.forEach((f) => f()); hideTip(); } };

@@ -23,8 +23,8 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | NFR-PERF-002 | 大規模性能 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
 | NFR-REL-001 | 検証による完了判定 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
 | FR-1011 | 2D マップのノード選択と強調 | 承認済み | `EABK-Studio/web/js/map2d.js` | `tests/system/e2e/test_studio_map_placement_system.py`, `EABK-Studio/tests/test_studio.py` | ストア |
-| FR-1012 | 実装配置図（画面・API・データの 3 層） | 承認済み | 未実装 | 未実装 | - |
-| FR-1013 | データの ER 図表示 | 承認済み | 未実装 | 未実装 | - |
+| FR-1012 | 実装配置図（画面・API・データの 3 層） | 承認済み | `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_map_placement_system.py`, `EABK-Studio/tests/test_studio.py` | ストア、UI 部品、デザイン基盤 |
+| FR-1013 | データの ER 図表示 | 承認済み | `EABK-Studio/web/js/insights.js`, `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/i18n.js` | `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
 | NFR-PERF-003 | EABK toolkit の git 子プロセス起動の削減 | 承認済み | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/rdfix.py` | `tests/toolkit/test_git_perf.py` | git ls-files 並行取得 |
 | NFR-COMPAT-002 | 性能改善による挙動の不変 | 承認済み | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/rdfix.py` | `tests/toolkit/test_git_perf.py` | git ls-files 並行取得 |
 
@@ -60,7 +60,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-001 | 管理データのモデル化 | 承認済み（依頼 2026-10-09） | `EABK-Studio/eabk_model.py` | `EABK-Studio/tests/test_studio.py` | 管理データモデル |
 | FR-002 | ダッシュボードと進捗 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/dashboard.js` | `tests/system/e2e/test_studio_system.py` | ストア、デザイン基盤 |
 | FR-003 | 2D/3D 関係マップ | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/map2d.js`, `EABK-Studio/web/js/map3d.js` | `tests/system/e2e/test_studio_system.py` | ストア、Three.js 同梱モジュール、デザイン基盤 |
-| FR-004 | 図式化 | 承認済み（包括承認 2026-10-12・approval_policy） | `EABK-Studio/web/js/diagrams.js` | `tests/system/e2e/test_studio_system.py` | ストア、デザイン基盤 |
+| FR-004 | 図式化 | 承認済み（包括承認 2026-10-12・approval_policy） | `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_system.py`, `EABK-Studio/tests/test_studio.py` | ストア、デザイン基盤 |
 | FR-005 | 配置と表現の切替 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/placement.js` | `tests/system/e2e/test_studio_system.py` | ストア、デザイン基盤 |
 | FR-006 | 表と検索 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/tables.js` | `tests/system/e2e/test_studio_system.py` | UI 部品、ストア、デザイン基盤 |
 | FR-007 | ソース対応 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/source.js` | `tests/system/e2e/test_studio_system.py` | ストア |
@@ -118,11 +118,11 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 
 | 部品名 | ファイル | 用途 | 使っている要求 ID |
 |---|---|---|---|
-| 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、NFR-OPS-004、NFR-SEC-002 |
+| 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、NFR-OPS-004、NFR-SEC-002 |
 | HTTP サーバー | `EABK-Studio/studio.py` | 127.0.0.1 限定の読取 API と静的配信 | FR-010、FR-013、FR-1001、NFR-OPS-003、NFR-SEC-001 |
-| ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011 |
-| UI 部品 | `EABK-Studio/web/js/ui.js` | 表示、詳細、通知、リンク | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、NFR-OPS-003、NFR-UX-005、NFR-UX-007 |
-| デザイン基盤 | `EABK-Studio/web/app.css`, `EABK-Studio/web/index.html` | Fluent 2 に寄せたテーマ変数、外枠、ナビゲーション、検索、通知、ダーク表示 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006 |
+| ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013 |
+| UI 部品 | `EABK-Studio/web/js/ui.js` | 表示、詳細、通知、リンク | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、NFR-OPS-003、NFR-UX-005、NFR-UX-007 |
+| デザイン基盤 | `EABK-Studio/web/app.css`, `EABK-Studio/web/index.html` | Fluent 2 に寄せたテーマ変数、外枠、ナビゲーション、検索、通知、ダーク表示 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013 |
 | フィンガープリント | `EABK-Studio/studio.py` | 更新検知と再読込 | FR-012、NFR-OPS-002 |
 | 起動スクリプト | `EABK-Studio/start.ps1`, `EABK-Studio/start.sh` | Windows/macOS/Linux の起動補助 | FR-1001、NFR-OPS-001 |
 | Three.js 同梱モジュール | `EABK-Studio/web/vendor/three.module.min.js` | 3D マップ表示 | FR-003 |
