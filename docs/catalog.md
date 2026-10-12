@@ -27,6 +27,9 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1013 | データの ER 図表示 | 承認済み | `EABK-Studio/web/js/insights.js`, `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/i18n.js` | `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
 | NFR-PERF-003 | EABK toolkit の git 子プロセス起動の削減 | 承認済み | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/rdfix.py` | `tests/toolkit/test_git_perf.py` | git ls-files 並行取得 |
 | NFR-COMPAT-002 | 性能改善による挙動の不変 | 承認済み | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/rdfix.py` | `tests/toolkit/test_git_perf.py` | git ls-files 並行取得 |
+| FR-1014 | 要求の実装状態ビュー（実装の登録と試験 pass の区別） | 承認済み | 未実装 | 未実装 | - |
+| FR-1015 | 次に実装すべき要求の分析コマンド | 承認済み | 未実装 | 未実装 | - |
+| FR-1016 | 許容時間を指定するだけの実装依頼（/build 入口）の生成 | 承認済み | 未実装 | 未実装 | - |
 
 ## API・イベント
 
