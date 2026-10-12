@@ -28,12 +28,13 @@ def _node_ids(url):
 
 
 def _selected(page, ids):
-    """First model ID that appears in the detail drawer, or None."""
-    text = page.locator("#drawer").inner_text()
-    for m in re.finditer(r"[A-Za-z][A-Za-z0-9_.\-/]*", text):
-        if m.group(0) in ids:
-            return m.group(0)
-    return None
+    """Model ID of the selected node, read from the drawer heading
+    (type label + ' · ' + ID).  Related IDs further down are ignored.
+    Returns None when nothing is selected (drawer hidden/empty)."""
+    sid = page.evaluate(
+        "() => { const e = document.querySelector('#drawer:not([hidden]) .typ .mono');"
+        " return e ? e.textContent.trim() : null; }")
+    return sid if sid in ids else None
 
 
 class _Map:
