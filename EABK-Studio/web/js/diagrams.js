@@ -318,7 +318,8 @@ function layersDiagram(m) {
   for (const l of LAY.links) {
     const a = pos.get(l.a), b = pos.get(l.b); if (!a || !b) continue;
     const up = a.top < b.top ? [a, b] : [b, a];
-    lineLayer.append(svgEl('line', { x1: up[0].x, y1: up[0].bottom, x2: up[1].x, y2: up[1].top, stroke: '#7f9bff', 'stroke-opacity': 0.25 + 0.5 * l.w / maxW, 'stroke-width': 1 + 4 * l.w / maxW, 'data-a': l.a, 'data-b': l.b }, svgEl('title', {}, `${l.w} ${t('lay.shared')}`)));
+    const bow = 36 + (l.w % 3) * 8, mx = (up[0].x + up[1].x) / 2 + bow, my = (up[0].bottom + up[1].top) / 2;
+    lineLayer.append(svgEl('path', { d: `M${up[0].x} ${up[0].bottom} Q${mx} ${my} ${up[1].x} ${up[1].top}`, fill: 'none', stroke: '#7f9bff', 'stroke-opacity': 0.25 + 0.5 * l.w / maxW, 'stroke-width': 1 + 4 * l.w / maxW, 'data-a': l.a, 'data-b': l.b }, svgEl('title', {}, `${l.w} ${t('lay.shared')}`)));
   }
   parts.forEach((g) => svg.append(g));
   svg.setAttribute('viewBox', `0 0 ${Ww} ${y}`); svg.setAttribute('height', y);
