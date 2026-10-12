@@ -86,6 +86,12 @@ class Checker:
     def loc(file: str, line) -> str:
         return f"{file}:{line}"
 
+    def git_ls_files(self):
+        # NFR-PERF-003 AC-089: 同一引数の git ls-files は 1 回だけ起動する
+        if getattr(self, "_ls_cache", None) is None:
+            self._ls_cache = h.git(["ls-files"], self.root)
+        return self._ls_cache
+
     def files(self) -> List[str]:
         if self._files is None:
             self._files = h.tracked_files(self.root)
@@ -586,7 +592,7 @@ class Checker:
         if not any(re.fullmatch(rf"/?{re.escape(wd)}/?\*{{0,2}}", l.strip()) for l in lines):
             self.err("CHK-23", ".gitignore", f"/{wd}/ が .gitignore にありません（一時ファイルを git の管理対象外にします）")
         rx = re.compile(self.cfg["checks"]["temp_file_pattern"])
-        rc, out = h.git(["ls-files"], self.root)
+        rc, out = self.git_ls_files()
         for f in (out.splitlines() if rc == 0 else []):
             if (f.startswith("docs/") or f.startswith("tests/")) and rx.search(f):
                 self.err("CHK-23", f, "一時ファイル（ログ・証跡・実行結果）が commit されています。/work に置きます")

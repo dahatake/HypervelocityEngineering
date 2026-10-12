@@ -116,6 +116,12 @@ class Fixer:
     def act(self, kind: str, chk: str, loc: str, msg: str, owner: str, target: str) -> None:
         self.actions.append(Action(kind, chk, loc, msg, owner, target))
 
+    def git_ls_files(self):
+        # NFR-PERF-003 AC-089: 同一引数の git ls-files は 1 回だけ起動する
+        if getattr(self, "_ls_cache", None) is None:
+            self._ls_cache = h.git(["ls-files"], self.root)
+        return self._ls_cache
+
     def files(self) -> List[str]:
         if self._files is None:
             self._files = h.tracked_files(self.root)
@@ -372,7 +378,7 @@ class Fixer:
     def fix_gitignore(self) -> None:
         wd = self.cfg["work"]["dir"]
         rx = re.compile(self.cfg["checks"]["temp_file_pattern"])
-        rc, out = h.git(["ls-files"], self.root)
+        rc, out = self.git_ls_files()
         for f in (out.splitlines() if rc == 0 else []):
             if (f.startswith("docs/") or f.startswith("tests/")) and rx.search(f):
                 self.act("MANUAL", "CHK-23", f, f"一時ファイルが commit されています。/{wd}/runs/<run-id>/ へ移し `git rm --cached` します",

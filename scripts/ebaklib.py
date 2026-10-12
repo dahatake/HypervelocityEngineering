@@ -14,6 +14,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -328,14 +329,19 @@ def git_show(root: Path, ref: str, rel: str) -> Optional[str]:
 
 
 def tracked_files(root: Path, include_untracked: bool = True) -> List[str]:
-    rc, out = git(["ls-files", "-z"], root)
+    # NFR-PERF-003 AC-088: 2 本の git ls-files を並行に実行する（結果は直列時と同一）
+    if include_untracked:
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            f1 = ex.submit(git, ["ls-files", "-z"], root)
+            f2 = ex.submit(git, ["ls-files", "-z", "-o", "--exclude-standard"], root)
+            (rc, out), (rc2, out2) = f1.result(), f2.result()
+    else:
+        (rc, out), (rc2, out2) = git(["ls-files", "-z"], root), (1, "")
     files: List[str] = []
     if rc == 0:
         files = [f for f in out.split("\0") if f]
-        if include_untracked:
-            rc2, out2 = git(["ls-files", "-z", "-o", "--exclude-standard"], root)
-            if rc2 == 0:
-                files += [f for f in out2.split("\0") if f]
+        if include_untracked and rc2 == 0:
+            files += [f for f in out2.split("\0") if f]
         return sorted(set(f.replace("\\", "/") for f in files if (root / f).is_file()))
     for p in root.rglob("*"):
         if p.is_file() and ".git" not in p.parts:
