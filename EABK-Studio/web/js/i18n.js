@@ -5,6 +5,7 @@ const listeners = new Set();
 
 const D = {
   ja: {
+    'nav.implstatus': '実装状態', 'impl2.sub': '承認済みの要求が、未着手・実装登録済み・試験 pass 済みのどこにあるかを表します。実装の登録と試験の合否は別に判定します。', 'impl2.legend': '状態の凡例', 'impl2.all': '全体', 'impl2.goal': '目的別', 'impl2.priority': '優先度別', 'impl2.kanban': 'かんばん', 'impl2.table': '一覧表', 'impl2.cases': '試験ケースの内訳', 'impl2.stalled': '停止中', 'impl2.excluded': '対象外（承認待ち・保留・却下・廃止）の要求数',
     'nav.dashboard': 'ダッシュボード', 'nav.map2d': '2D マップ', 'nav.map3d': '3D マップ', 'nav.diagrams': '図式', 'nav.placement': '配置', 'nav.source': 'ソース対応', 'nav.tables': '表',
     'search.ph': 'ID・題名・ファイル・用語を検索…', 'repo.change': '対象リポジトリを切り替える', 'repo.prompt': 'EABK を使っているリポジトリのフォルダーのパスを入力してください',         'repo.nodata': 'data layer がそのフォルダーには見つかりません（docs/requirements-definition.md など）。', 'repo.bad': 'not found: フォルダーが見つかりません。',
     'update.avail': 'データが更新されました。再読み込みします…', 'loading': 'データ層を読み込み中…', 'none': '（なし）',
@@ -43,6 +44,7 @@ const D = {
     'd.text': '要求本文', 'd.acs': '受入基準', 'd.info': '情報', 'd.impl': '実装ファイル', 'd.tests': 'テスト', 'd.refs': '本文で参照している要求', 'd.src': '定義の位置', 'd.raw': '要求定義書の原文を表示', 'd.open': 'VS Code で開く', 'd.copy': 'IDをコピー', 'd.copied': 'コピーしました',
   },
   en: {
+    'nav.implstatus': 'Impl. status', 'impl2.sub': 'Where each approved requirement stands: not started, implementation registered, or test passed. Registration and test results are judged separately.', 'impl2.legend': 'State legend', 'impl2.all': 'Overall', 'impl2.goal': 'By goal', 'impl2.priority': 'By priority', 'impl2.kanban': 'Kanban', 'impl2.table': 'Table', 'impl2.cases': 'Test case breakdown', 'impl2.stalled': 'Stalled', 'impl2.excluded': 'Excluded (pending, on hold, rejected, retired) requirements',
     'nav.dashboard': 'Dashboard', 'nav.map2d': '2D Map', 'nav.map3d': '3D Map', 'nav.diagrams': 'Diagrams', 'nav.placement': 'Placement', 'nav.source': 'Source Map', 'nav.tables': 'Tables',
     'search.ph': 'Search IDs, titles, files, terms…', 'repo.change': 'Switch the target repository', 'repo.prompt': 'Enter the folder path of a repository that uses EABK', 'repo.nodata': 'No EABK data layer (docs/requirements-definition.md etc.) was found in that folder.', 'repo.bad': 'Folder not found.',
     'update.avail': 'Data changed. Reloading…', 'loading': 'Loading the data layer…', 'none': '(none)',
