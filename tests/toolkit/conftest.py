@@ -156,6 +156,9 @@ def empty_repo(tmp_path):
 def repo(empty_repo):
     run([sys.executable, str(SOURCE / "tools" / "install.py"), "--target", str(empty_repo), "--skip-verify"], empty_repo, check=True)
     r = Repo(empty_repo)
+    # Shipped product acceptance tests cite source-repo requirement IDs that a fresh repo does not have.
+    for rel in ("tests/system/e2e/test_run_owned_cleanup.py", "tests/system/test_run_cleanup_system.py"):
+        (empty_repo / rel).unlink(missing_ok=True)
     r.commit("install toolkit")
     return r
 
