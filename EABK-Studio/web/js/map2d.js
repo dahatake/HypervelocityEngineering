@@ -369,7 +369,7 @@ export function mount(host) {
     if (!d || moved) return;
     const p = pick(e.clientX, e.clientY) || d.cand;
     // Outside the radius the selection is left unchanged (AC-077).
-    if (p) store.select(p.n.id, { fly: true });
+    if (p) store.select(p.n.id);
   });
   canvas.addEventListener('pointerleave', () => { store.setHover(null); hideTip(); });
   canvas.addEventListener('dblclick', () => { store.clear(); fly(camFit()); });

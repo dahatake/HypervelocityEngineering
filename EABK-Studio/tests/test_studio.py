@@ -325,7 +325,7 @@ def test_map2d_hit_testing_uses_screen_px_params():
     pick = re.search(r"function pick\(clientX, clientY\) \{.*?^  \}", source, re.MULTILINE | re.DOTALL).group(0)
     assert "getBoundingClientRect" in pick and "r.width / W" in pick and "PICK_RADIUS" in pick
     up = re.search(r"addEventListener\('pointerup'.*?^  \}\);", source, re.MULTILINE | re.DOTALL).group(0)
-    assert "store.clear" not in up and "d.cand" in up
+    assert "store.clear" not in up and "d.cand" in up and "fly" not in up  # click must not pan the map (AC-078)
     assert "Math.hypot(dx, dy) > CLICK_DRAG_PX" in source
     assert "15 / k" in source and "emph.push" in source
 
