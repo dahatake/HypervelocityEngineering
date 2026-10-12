@@ -517,3 +517,67 @@ def test_placement_diagram_and_shared_er_are_wired_bilingually():
         assert len(re.findall(rf"'{re.escape(key)}':", i18n)) == 2, key  # AC-083 / AC-084 ja+en
     assert "export function entityER" in ins and "import { entityER }" in dgm and "entityER()" in dgm  # AC-084 shared display
     assert "'data-id': n.id" in ins and "'data-id': id" in ins and "lay.toER" in dgm  # AC-085
+
+
+# FR-1014 AC-092: boundary data for the five states; the extra repo is built on top of the base fixture
+def _status_repo(tmp_path):
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "tests" / "system").mkdir(parents=True)
+    (tmp_path / "src").mkdir()
+    for n in ("a", "b", "c", "d", "e", "f"):
+        (tmp_path / "src" / f"{n}.py").write_text("x", encoding="utf-8")
+
+    def req(i, status, level, extra=""):
+        return (f"#### FR-{i} 要求{i}\n- 要求: x\n- 決定状態: {status}　出自: 依頼原文　優先度: MUST（x）\n"
+                f"- 上位: G-001　出典: SRC-001\n- 受入基準 AC-{i}: x\n  - 検証レベル: {level}\n{extra}\n")
+    rd = ("# RD\n\n## 6. 要求\n\n" + req("101", "承認済み", "system") + req("102", "承認済み", "system")
+          + req("103", "承認済み", "system") + req("104", "承認済み", "system") + req("105", "承認済み", "integration")
+          + req("106", "承認済み", "system", "  - BLOCKED: Q-009（未定）\n") + req("107", "承認済み", "system")
+          + req("108", "AI提案／承認待ち", "system") + req("109", "却下", "system"))
+    (tmp_path / "docs" / "requirements-definition.md").write_text(rd, encoding="utf-8")
+    rows = [("101", "未実装"), ("102", "src/a.py"), ("103", "src/b.py"), ("104", "src/c.py"), ("105", "src/d.py"),
+            ("106", "src/e.py"), ("107", "src/missing.py")]
+    cat = "# カタログ\n\n## 機能\n\n| 要求 ID | 題名 | 決定状態 | 実装ファイル | テスト | 使っている共通部品 |\n|---|---|---|---|---|---|\n"
+    cat += "".join(f"| FR-{i} | t | 承認済み | {p} | x | なし |\n" for i, p in rows)
+    (tmp_path / "docs" / "catalog.md").write_text(cat, encoding="utf-8")
+    cases = [{"id": "E2E-1", "requirement_ids": ["FR-103"], "status": "pass"},
+             {"id": "E2E-2", "requirement_ids": ["FR-104"], "status": "pass"},
+             {"id": "E2E-3", "requirement_ids": ["FR-104"], "status": "not_run"}]
+    (tmp_path / "tests" / "system" / "ledger.json").write_text(json.dumps({"version": 1, "cases": cases}), encoding="utf-8")
+    return tmp_path
+
+
+def test_impl_status_classifies_the_five_states_and_excludes_non_approved(tmp_path):
+    st = m.build_model(_status_repo(tmp_path))["implStatus"]
+    by = {i["id"]: i for i in st["items"]}
+    S = m.IMPL_STATES
+    assert by["FR-101"]["state"] == S[0]  # no implementation
+    assert by["FR-102"]["state"] == S[1]  # impl + system AC, no case
+    assert by["FR-103"]["state"] == S[3]  # all cases pass
+    assert by["FR-104"]["state"] == S[2]  # one non-pass case blocks "pass"
+    assert by["FR-104"]["cases"] == {"pass": 1, "not_run": 1}
+    assert by["FR-105"]["state"] == S[4]  # no system AC
+    assert by["FR-107"]["state"] == S[0]  # path does not exist
+    assert by["FR-106"]["blocked"] is True and by["FR-102"]["blocked"] is False
+    assert "FR-108" not in by and "FR-109" not in by and st["excluded"] == 2
+    assert len(st["items"]) == 7
+
+
+# FR-1014 AC-094: node attribute impl keeps its meaning
+def test_impl_status_does_not_change_node_impl_values(tmp_path):
+    g = m.build_model(_status_repo(tmp_path))["graph"]["nodes"]
+    impl = {n["id"]: n["impl"] for n in g if n.get("type") == "req"}
+    assert impl["FR-101"] == "none" and impl["FR-107"] == "done" and impl["FR-103"] == "done"
+
+
+# FR-1014 AC-093 AC-094 AC-091
+def test_impl_status_screen_is_wired_bilingually_with_keyboard_and_symbols():
+    js = ROOT / "web" / "js"
+    src = (js / "implstatus.js").read_text(encoding="utf-8")
+    app = (js / "app.js").read_text(encoding="utf-8")
+    i18n = (js / "i18n.js").read_text(encoding="utf-8")
+    assert "implstatus:" in app and "implstatus.js" in app
+    assert "store.select" in src and "keydown" in src and "tabindex" in src and "STATE_META" in src and "sym" in src
+    for key in ("nav.implstatus", "impl2.all", "impl2.goal", "impl2.priority", "impl2.kanban", "impl2.table", "impl2.stalled", "impl2.legend"):
+        assert len(re.findall(rf"'{re.escape(key)}':", i18n)) == 2, key
+    assert "ledger" not in src.lower() and "fetch(" not in src  # read-only view

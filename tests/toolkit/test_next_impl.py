@@ -156,3 +156,25 @@ def test_no_candidates_exits_normally_without_request(repo):
     r = repo.py("build-request.py", "60分")
     assert r.returncode == 0
     assert "<run_options>" not in r.stdout and "FR-801" in r.stdout
+
+
+# FR-1015 AC-099 (same implementation state as FR-1014 for every requirement)
+def test_state_matches_studio_impl_status(repo):
+    import importlib
+    from conftest import SOURCE
+    sys.path.insert(0, str(SOURCE / "EABK-Studio"))
+    studio = importlib.import_module("eabk_model")
+    setup(repo, [
+        req("901"), req("902", state="承認待ち"), req("903"), req("904"), req("905"), req("906", level="unit"),
+        req("907", level="unit"), req("908", blocked=True), req("909"),
+    ], row("903") + row("904") + row("905") + row("906") + row("907") + row("908"),
+        [{"id": "E1", "requirement_ids": ["FR-904"], "status": "pass"},
+         {"id": "E2", "requirement_ids": ["FR-905"], "status": "pass"},
+         {"id": "E3", "requirement_ids": ["FR-905"], "status": "not_run"},
+         {"id": "E4", "requirement_ids": ["FR-907"], "status": "fail"}])
+    mine = analyze(repo)["states"]
+    items = studio.build_model(repo.path)["implStatus"]["items"]
+    assert items
+    for it in items:
+        assert mine[it["id"]] == it["state"], it["id"]
+    assert {i["id"] for i in items} == {k for k in mine if k != "FR-902"}

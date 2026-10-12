@@ -51,15 +51,11 @@ def classify(root: Path, req, doc, rows, ledger) -> str:
         impl = any((root / p).exists() for p in h.split_paths(h.catalog_cell(row, "実装ファイル")))
     if not impl:
         return S_NOT_STARTED
-    has_system = any(doc.acs[a].level == "system" for a in req.acs if a in doc.acs)
-    if not has_system:
-        return S_NO_SYSTEM
     cases = [c for c in ledger.get("cases", []) if req.id in (c.get("requirement_ids") or [])]
-    if not cases:
-        return S_NO_TEST
-    if any(c.get("status") != "pass" for c in cases):
-        return S_TEST_FAIL
-    return S_PASS
+    if cases:  # same precedence as FR-1014: ledger cases decide first
+        return S_PASS if all((c.get("status") or "not_run") == "pass" for c in cases) else S_TEST_FAIL
+    has_system = any(doc.acs[a].level == "system" for a in req.acs if a in doc.acs)
+    return S_NO_TEST if has_system else S_NO_SYSTEM
 
 
 def stopped(req, doc) -> bool:
