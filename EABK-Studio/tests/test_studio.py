@@ -484,3 +484,22 @@ def test_role_sets_the_first_screen(repo, monkeypatch, capsys):
         assert route in capsys.readouterr().out
     with pytest.raises(SystemExit):
         studio.main(["--repo", str(repo), "--role", "ceo"])
+
+
+# FR-1012 AC-080 AC-081 AC-082 AC-083 / FR-1013 AC-084 AC-085 / FR-004 AC-004
+def test_placement_diagram_and_shared_er_are_wired_bilingually():
+    js = ROOT / "web" / "js"
+    dgm = (js / "diagrams.js").read_text(encoding="utf-8")
+    ins = (js / "insights.js").read_text(encoding="utf-8")
+    i18n = (js / "i18n.js").read_text(encoding="utf-8")
+    kinds = re.search(r"const KINDS = \[(.*?)\]", dgm).group(1)
+    assert len(re.findall(r"'(\w+)'", kinds)) == 6 and "'layers'" in kinds  # AC-004
+    for layer in ("'screen'", "'api'", "'data'"):
+        assert layer in dgm  # AC-080
+    assert "classifyPath" in dgm and "layerSet" in dgm and "store.select" in dgm  # AC-081
+    assert "keydown" in dgm and "tabindex" in dgm  # AC-081 keyboard / row selection
+    assert "lay.has" in dgm and "lay.unimpl" in dgm and "data-lay" in dgm  # AC-082 symbol + word
+    for key in ("dgm.layers", "dgm.layers.note", "lay.screen", "lay.api", "lay.data", "lay.test", "lay.has", "lay.none", "lay.legend", "lay.req", "er.title", "er.norel"):
+        assert len(re.findall(rf"'{re.escape(key)}':", i18n)) == 2, key  # AC-083 / AC-084 ja+en
+    assert "export function entityER" in ins and "import { entityER }" in dgm and "entityER()" in dgm  # AC-084 shared display
+    assert "'data-id': n.id" in ins and "'data-id': id" in ins and "lay.toER" in dgm  # AC-085
