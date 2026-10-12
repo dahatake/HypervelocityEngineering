@@ -83,9 +83,21 @@ def test_fr1011_ac077_outside_radius_keeps_selection(page):
     node = next(iter(res["hits"].values()))[0]
     canvas = page.locator("#view canvas").first
     canvas.click(position={"x": node[0], "y": node[1]})
-    before = page.locator("#drawer").inner_text()
+    drawer = page.locator("#drawer")
+    # wait until the drawer shows the selected node's detail and its text is stable
+    before, stable = "", 0
+    for _ in range(40):
+        page.wait_for_timeout(150)
+        cur = drawer.inner_text() if drawer.is_visible() else ""
+        stable = stable + 1 if (cur == before and len(cur) > 20) else 0
+        before = cur
+        if stable >= 3:
+            break
+    assert stable >= 3, "selection detail did not appear/stabilise after clicking a node"
     canvas.click(position={"x": far[0], "y": far[1]})
-    expect(page.locator("#drawer")).to_have_text(before)
+    page.wait_for_timeout(800)  # allow any (incorrect) delayed selection change to show
+    assert drawer.is_visible(), "outside-radius click must not clear the selection"
+    assert drawer.inner_text() == before, "outside-radius click changed the selection"
 
 
 def _open_placement_diagram(page):
