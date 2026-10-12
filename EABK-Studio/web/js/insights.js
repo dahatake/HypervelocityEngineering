@@ -1,5 +1,6 @@
 // FR-1002/1003/1005/1006: decision-oriented views derived only from the loaded model.
 import { store } from './store.js';
+import { t, lang } from './i18n.js';
 import { el, vscodeUrl } from './ui.js';
 
 export function evidenceTarget(record) {
@@ -70,14 +71,32 @@ function runtimePlacement() {
       el('p', {}, `書込: なし　外部送信: ${runtime.externalSend.length ? '定義あり' : 'なし'}`)));
 }
 
-function entityER() {
+// FR-1006 AC-050 / FR-1013 AC-084 AC-085: one ER view shared by the ER page and the diagrams "data relation" tab.
+// Entities and their related tables (tables sharing a requirement) carry data-id = model node id.
+export function entityER() {
+  const ja = lang() === 'ja';
   const reqs = store.model.reqs.filter((r) => r.entities.length);
   const related = reqs.filter((r) => r.relation);
   const entities = [...new Set(reqs.flatMap((r) => r.entities))];
-  return el('section', { class: 'visual-section' }, el('h1', {}, 'Entity 向け ER 図'),
-    entities.length ? el('div', { class: 'er-grid' }, entities.map((e) => el('div', { class: 'entity-box' }, e))) : el('div', { class: 'empty' }, '対象エンティティがありません'),
-    related.map((r) => el('div', { class: 'relation-row' }, el('b', {}, r.id), ` 根拠: ${r.relation}`)),
-    reqs.filter((r) => !r.relation).map((r) => el('div', { class: 'warnbox' }, `${r.entities.join('、')}: 関係情報が不足（${r.id} から推測しません）`)));
+  const entNode = (name) => [...store.nodes.values()].find((n) => n.type === 'entity' && (n.label === name || n.id === 'ent:' + name));
+  const tablesOf = (name) => {
+    const m = new Map();
+    for (const r of reqs.filter((x) => x.entities.includes(name))) for (const a of store.neighbors(r.id, ['table'])) { if (!m.has(a.id)) m.set(a.id, []); m.get(a.id).push(r.id); }
+    return m;
+  };
+  const pick = (id) => () => store.select(id, { fly: true });
+  const key = (id) => (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); store.select(id, { fly: true }); } };
+  const box = (name) => {
+    const n = entNode(name), tbls = tablesOf(name);
+    const head = el('b', {}, name);
+    const attrs = n ? { 'data-id': n.id, tabindex: 0, role: 'button', onclick: pick(n.id), onkeydown: key(n.id) } : {};
+    return el('div', { class: 'entity-box', ...attrs }, head,
+      el('div', { class: 'mini' }, t('er.tables') + ': ', tbls.size ? [...tbls.entries()].map(([id, rs]) => el('span', { class: 'chip', 'data-id': id, tabindex: 0, role: 'button', title: `${t('er.evidence')}: ${rs.join(', ')}`, onclick: (e) => { e.stopPropagation(); pick(id)(); }, onkeydown: (e) => { e.stopPropagation(); key(id)(e); } }, `▦ ${store.node(id)?.label || id} (${rs.join(', ')}) `)) : t('er.notable')));
+  };
+  return el('section', { class: 'visual-section' }, el('h1', {}, ja ? 'Entity 向け ER 図' : t('er.title')),
+    entities.length ? el('div', { class: 'er-grid' }, entities.map(box)) : el('div', { class: 'empty' }, t('er.noent')),
+    related.map((r) => el('div', { class: 'relation-row' }, el('b', {}, r.id), ` ${t('er.evidence')}: ${r.relation}`)),
+    reqs.filter((r) => !r.relation).map((r) => el('div', { class: 'warnbox' }, `${r.entities.join(ja ? '、' : ', ')}: ${t('er.norelwarn', { id: r.id })} [${t('er.norel')}]`)));
 }
 
 function historyProgress() {
