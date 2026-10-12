@@ -376,7 +376,7 @@ def test_repository_switch_success_updates_model_and_failure_restores_previous(p
 
 # FR-1001 AC-037
 def test_first_steps_consolidates_startup_prerequisites_and_unknowns(page):
-    guide = ROOT / "EABK-Studio" / "users-guide" / "01-first-steps.md"
+    guide = ROOT / "users-guide" / "studio" / "01-first-steps.md"
     page.goto("file://" + guide.as_posix())
     content = page.locator("body")
     for phrase in (

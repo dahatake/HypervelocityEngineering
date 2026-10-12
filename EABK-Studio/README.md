@@ -5,7 +5,7 @@ EABK を使っている**どのリポジトリでも**動きます（このリ�
 
 *A local-only web app that lets a product manager explore the EABK data layer (requirements, catalog, system-test ledger, ID registry, run history) of **any** repository that uses EABK. The UI switches between Japanese and English with the `JA | EN` button.*
 
-> 初めての方は、役割に合うガイドから読んでください: [Product Manager](users-guide/05-product-manager.md)・[Architect](users-guide/06-architect.md)・[Software Engineer](users-guide/07-software-engineer.md)（索引は [users-guide/README.md](users-guide/README.md)）。各画面が読むデータの一覧は [08-data-reference.md](users-guide/08-data-reference.md) です。`tools/install.py` で他のリポジトリへ入れると、これらのガイドも一緒に入ります。
+> 初めての方は、役割に合うガイドから読んでください: [Product Manager](../users-guide/studio/05-product-manager.md)・[Architect](../users-guide/studio/06-architect.md)・[Software Engineer](../users-guide/studio/07-software-engineer.md)（索引は [users-guide/studio/README.md](../users-guide/studio/README.md)）。各画面が読むデータの一覧は [08-data-reference.md](../users-guide/studio/08-data-reference.md) です。`tools/install.py` で他のリポジトリへ入れると、これらのガイドも一緒に入ります。
 
 ## 起動 / Start
 
@@ -60,7 +60,7 @@ python EABK-Studio/studio.py --check                           # データ層が
 | `tests/system/ledger.json` | System Test のケースと結果 |
 | `docs/id-registry.md`, `docs/run-history.md` | ID 台帳の集計、実行履歴 |
 
-ソースコードは**開きません**。カタログに書かれたパスの名前だけを使います。どの画面がどのファイルのどの節・列を読み、どう計算するかは [08-data-reference.md](users-guide/08-data-reference.md) にあります。サーバーは `127.0.0.1` だけで待ち受け、通常の閲覧・検索・CSV出力・リポジトリ切替では書き込みません。
+ソースコードは**開きません**。カタログに書かれたパスの名前だけを使います。どの画面がどのファイルのどの節・列を読み、どう計算するかは [08-data-reference.md](../users-guide/studio/08-data-reference.md) にあります。サーバーは `127.0.0.1` だけで待ち受け、通常の閲覧・検索・CSV出力・リポジトリ切替では書き込みません。
 
 例外は「整合性保守」画面で利用者が差分をプレビューし、`確認して実行` を押した場合だけです。この操作は `docs/catalog.md` の選択した要求行について、`題名` と `決定状態` の2列だけを要求正本へ合わせます。プレビュー後の競合、対象外ファイルへの影響、書込み失敗、`python scripts/verify.py --docs-only` の失敗を検出すると、変更をバイト単位で復元して明示的にエラーを表示します。
 

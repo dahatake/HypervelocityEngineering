@@ -91,7 +91,7 @@ def main():
                 "image": f"images/{image_id}.png",
                 "sha256": hashlib.sha256(image.read_bytes()).hexdigest(),
                 "commit": head,
-                "capture_command": f"python EABK-Studio/users-guide/capture-screens.py --commit {head}",
+                "capture_command": f"python users-guide/studio/capture-screens.py --commit {head}",
                 "required_elements": [f"Snapshot ready: {route}"] if image_id != "header" else ["EABK Studio"],
             })
         (GUIDE / "screen-images.json").write_text(

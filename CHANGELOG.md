@@ -5,11 +5,14 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- **次に実装すべき要求の分析と、時間だけで始める /build の依頼生成**を追加しました（FR-1015・FR-1016）。`python scripts/next-impl.py` が、承認済みで未着手・試験未登録・試験未合格の要求を、依存・優先度・実装状態の順位表と除外の理由つきで出し、`python scripts/build-request.py 60分`（`90m`・`24時間`・`1.5h`）が、許容時間を 1 要求あたり 60 分（PARAM-012）で件数に換算した `/build` 用の依頼を生成します（生成のみ。run は開始しません）。
+
 - **既存アプリの導入（brownfield）** を追加しました（`scripts/adopt.py`・skill `adopt-existing`・[users-guide/10](users-guide/10-adopting-existing-apps.md)）。公開されている知見（再文書化とリエンジニアリングの分離、特性化テスト・golden master、Strangler Fig、ホットスポット分析、LLM による要求逆生成の幻覚対策）を、この toolkit の規則（G-1・G-2・G-3、承認は利用者）に照らして検証し、3 層（事実の棚卸し／逆生成の仮説＝出典と証跡の固定・承認待ち／現状の挙動の固定）で採用しました。`scan`・`request`・`anchor`・`check`・`golden` を提供し、conductor・rd-author・test-designer・rd-auditor・implementer の手順に導入モードを追加しました。
 
 - **EABK Studio**（`EABK-Studio/`。データ層をブラウザーで見る、読み取り専用のローカル Web アプリ）を、toolkit の副機能として配布します。インストールすると対象リポジトリに入り、インストールの最後に起動コマンドを表示します。
   - 役割別のガイドを追加しました: Product Manager・Architect・Software Engineer 向け（各 15 分のチュートリアル・おすすめのリンク・判断できること）と、各画面がどのファイルのどの節・列を読み、どう計算するかのデータリファレンス（実画面の画像つき。`capture-screens.py` で再採取できます）。
   - `studio.py` に `--check`（管理データのファイルの有無と解析件数を表示して終了。データ層がなければ exit 1）と `--role pm|architect|swe`（最初に開く画面）を追加しました。データ層のない `--repo` には、起動せずに案内を出します。`start.ps1`（`-Role`・`-Check`・`-NoOpen`）と `start.sh`（残りの引数）は、オプションをそのまま渡せます。
+  - EABK と EABK Studio のユーザーガイドを `users-guide/` の 1 か所にまとめました。Studio のガイドは `EABK-Studio/users-guide/` から [users-guide/studio/](users-guide/studio/README.md) へ移り（導入先では `EABK-docs/studio/`）、章の記号を `S1`〜`S8` にしました。索引 [users-guide/README.md](users-guide/README.md) を、第 1 部（EABK 本体）・第 2 部（Studio）・役割別・目的別の構成に作り直しました。更新時、導入先の旧 `EABK-Studio/users-guide/` は（変更していなければ）削除されます。
   - Studio は `__pycache__` を作らないので、対象リポジトリの `git status` を汚しません。
 - conductor にレーンの自動判定を追加しました（`run-state.py lane decide|confirm|show`）。変えた要求が 3 件以下・queue が 2 項目以下で、セキュリティ・競合・共通部品・未確定・事業目的との不一致がないときだけ fast レーンとし、独立監査・reviewer・全量の多数決を省きます（比較レポートの E-4・E-5 の実測に基づく）。要求の書き戻し・System Test の先行設計・verify・hook は省きません。条件を外れる事象が出たら full に戻します。run-report にレーンと省いた工程、依頼の範囲の充足率を書きます。
 

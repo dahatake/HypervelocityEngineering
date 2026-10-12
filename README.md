@@ -19,9 +19,9 @@ GitHub Copilot（VS Code の Agents ウィンドウ / Copilot CLI / GitHub Copil
 
 | あなたは | あなたがすること | 読む順 |
 |---|---|---|
-| **Product Manager**（何を作るか決め、結果を受け入れる） | 作りたいことを依頼に書く。質問票に回答する。報告を読んで、マージするか決める | ① [解決する問題](#解決する問題) → ② [Quickstart](#quickstart) → ③ [依頼の書き方](users-guide/01-writing-requests.md) → ④ [実行中と終了後](users-guide/02-during-and-after-run.md) → ⑤ [Studio: Product Manager](EABK-Studio/users-guide/05-product-manager.md) |
-| **Architect**（設計の整合・境界・品質ゲートを決める） | 規則と権限の仕組みを理解する。設定（検証コマンド・モデル・ゲート）を決める。要求定義書の構造を確かめる | ① [概要](#概要)（アーキテクチャ・エージェントと権限・run の流れ） → ② [管理データの書式](users-guide/03-requirements-format.md) → ③ [設定とカスタマイズ](users-guide/04-customization.md) → ④ [品質ゲートと検査項目](users-guide/06-quality-gates.md) → ⑤ [Studio: Architect](EABK-Studio/users-guide/06-architect.md) |
-| **Software Engineer**（toolkit を導入・運用し、実装・テストを確かめる） | インストールする。検証コマンドを登録する。run を起動し、止まったときや拒否されたときに直す | ① [インストール](#インストール) → ② [Quickstart](#quickstart) → ③ [スクリプトリファレンス](users-guide/05-scripts-reference.md) → ④ [トラブルシューティング](users-guide/07-troubleshooting.md) → ⑤ [Studio: Software Engineer](EABK-Studio/users-guide/07-software-engineer.md) |
+| **Product Manager**（何を作るか決め、結果を受け入れる） | 作りたいことを依頼に書く。質問票に回答する。報告を読んで、マージするか決める | ① [解決する問題](#解決する問題) → ② [Quickstart](#quickstart) → ③ [依頼の書き方](users-guide/01-writing-requests.md) → ④ [実行中と終了後](users-guide/02-during-and-after-run.md) → ⑤ [Studio: Product Manager](users-guide/studio/05-product-manager.md) |
+| **Architect**（設計の整合・境界・品質ゲートを決める） | 規則と権限の仕組みを理解する。設定（検証コマンド・モデル・ゲート）を決める。要求定義書の構造を確かめる | ① [概要](#概要)（アーキテクチャ・エージェントと権限・run の流れ） → ② [管理データの書式](users-guide/03-requirements-format.md) → ③ [設定とカスタマイズ](users-guide/04-customization.md) → ④ [品質ゲートと検査項目](users-guide/06-quality-gates.md) → ⑤ [Studio: Architect](users-guide/studio/06-architect.md) |
+| **Software Engineer**（toolkit を導入・運用し、実装・テストを確かめる） | インストールする。検証コマンドを登録する。run を起動し、止まったときや拒否されたときに直す | ① [インストール](#インストール) → ② [Quickstart](#quickstart) → ③ [スクリプトリファレンス](users-guide/05-scripts-reference.md) → ④ [トラブルシューティング](users-guide/07-troubleshooting.md) → ⑤ [Studio: Software Engineer](users-guide/studio/07-software-engineer.md) |
 
 既存のアプリ（ソースコード・設計書がすでにある）に導入する場合は、まず [既存のアプリを導入する](users-guide/10-adopting-existing-apps.md) を読んでください。チームで段階的に導入する場合は [導入ロードマップと KPI](users-guide/08-roadmap.md) が参考になります。
 
@@ -252,7 +252,7 @@ python tools/install.py --target /path/to/your-repo
 
 | 種類 | ファイル | 再実行時の扱い |
 |---|---|---|
-| toolkit のファイル | `.github/agents/*.agent.md`（6）、`.github/skills/*/SKILL.md`（7。`/build`・`/build-template` の skill を含む）、`.github/hooks/quality-gates.json`、`.github/workflows/ebak-verify.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`・`scripts/hooks/gate.py`、`EABK-Studio/`（ビューアー本体・役割別ガイド・画面画像・テスト） | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
+| toolkit のファイル | `.github/agents/*.agent.md`（6）、`.github/skills/*/SKILL.md`（7。`/build`・`/build-template` の skill を含む）、`.github/hooks/quality-gates.json`、`.github/workflows/ebak-verify.yml`、`scripts/*.py`・`verify.ps1`・`verify.sh`・`scripts/hooks/gate.py`、`EABK-Studio/`（ビューアー本体・テスト）、`EABK-docs/`（このリポジトリの `users-guide/` と同じ内容。EABK Studio のガイドは `EABK-docs/studio/`。導入先の `users-guide/` は触りません） | 変更していなければ新しいバージョンに更新します。ローカルで変更していれば**そのまま残します**（`KEEP-LOCAL`。`--force` で上書き） |
 | 管理データの雛形 | `docs/requirements-definition.md`、`docs/catalog.md`、`docs/id-registry.md`、`docs/run-history.md`、`tests/system/ledger.json` | **存在しない場合だけ**作成します。既存のファイルは上書きしません |
 | 設定 | `scripts/ebak.config.json` | なければ作成します。あれば新しいキーだけを追加し、利用者が設定した値は変更しません |
 | 追記 | `.gitignore` に `/work/`、`.gitattributes` に `docs/id-registry.md merge=union` と `docs/run-history.md merge=union` | 足りない行だけを追記します |
@@ -521,16 +521,16 @@ hook や subagent の動作は、クライアント（VS Code・Copilot CLI・Gi
 - Python 3.9 以上の標準ライブラリだけで動きます（追加のインストールなし）。データ層のファイルを更新すると、数秒で画面が読み直されます。
 - run の成果（要求・カタログ・試験）を、人が理解し、判断するための窓です。要求や実装の変更は、これまでどおり `/build` で依頼します。
 
-![EABK Studio のダッシュボード](EABK-Studio/users-guide/images/dashboard.png)
+![EABK Studio のダッシュボード](users-guide/studio/images/dashboard.png)
 
 | 役割 | 使い方 | ガイド |
 |---|---|---|
-| Product Manager | ダッシュボードで進捗・承認・未回答の質問を確認し、次に投資する目的を決める | [5. Product Manager 向け](EABK-Studio/users-guide/05-product-manager.md) |
-| Architect | 2D/3D マップ・図式・配置・構造で、依存・境界・置き場所と層の欠けを確かめる | [6. Architect 向け](EABK-Studio/users-guide/06-architect.md) |
-| Software Engineer | 表・ソース対応・詳細パネルで、要求から実装ファイルとテストまでをたどる | [7. Software Engineer 向け](EABK-Studio/users-guide/07-software-engineer.md) |
-| 全員 | どの画面が、どのファイルの何を読み、どう計算するか | [8. データリファレンス](EABK-Studio/users-guide/08-data-reference.md) |
+| Product Manager | ダッシュボードで進捗・承認・未回答の質問を確認し、次に投資する目的を決める | [S5. Product Manager 向け](users-guide/studio/05-product-manager.md) |
+| Architect | 2D/3D マップ・図式・配置・構造で、依存・境界・置き場所と層の欠けを確かめる | [S6. Architect 向け](users-guide/studio/06-architect.md) |
+| Software Engineer | 表・ソース対応・詳細パネルで、要求から実装ファイルとテストまでをたどる | [S7. Software Engineer 向け](users-guide/studio/07-software-engineer.md) |
+| 全員 | どの画面が、どのファイルの何を読み、どう計算するか | [S8. データリファレンス](users-guide/studio/08-data-reference.md) |
 
-ガイドは、各 15 分のチュートリアル（実画面つき）、おすすめのリンク、その役割が判断できることで構成します（索引は [EABK-Studio/users-guide/](EABK-Studio/users-guide/README.md)）。
+ガイドは、各 15 分のチュートリアル（実画面つき）、おすすめのリンク、その役割が判断できることで構成します（索引は [users-guide/studio/](users-guide/studio/README.md)）。
 
 ### 自分のリポジトリで起動する
 
@@ -656,7 +656,8 @@ Spec Kit は独自の番号（`FR-001`、`SC-001` など）を使います。too
 | 8 | [導入ロードマップと KPI](users-guide/08-roadmap.md) | 診断から本番運用までの段取りと、効果の測り方を知りたい |
 | 9 | [バージョンアップの手順](users-guide/09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者） |
 | 10 | [既存のアプリを導入する](users-guide/10-adopting-existing-apps.md) | 既存のコード・設計書から、棚卸し → 逆生成の要求（承認待ち）→ 現状の挙動の固定でデータ層を整える |
-| 参考 | [EABK Studio のガイド](EABK-Studio/users-guide/README.md) | データ層を図・表で見たい。Product Manager・Architect・Software Engineer 別の手順と、各画面が読むデータを知りたい |
+| 参考 | [EABK Studio のガイド](users-guide/studio/README.md) | データ層を図・表で見たい。Product Manager・Architect・Software Engineer 別の手順と、各画面が読むデータを知りたい |
+
 GitHub Spec Kit との比較計測（同じ課題・隠し受入テスト・North Star の比較）の手順と結果は [bench/](bench/README.md) にあります。最新の結果は [bench/RESULTS.md](bench/RESULTS.md) です。
 
 ## 用語
@@ -682,7 +683,7 @@ GitHub Spec Kit との比較計測（同じ課題・隠し受入テスト・Nort
 | 手順書（skills） | [.github/skills/](.github/skills/) |
 | 強制ゲート（hooks） | [.github/hooks/quality-gates.json](.github/hooks/quality-gates.json)、[scripts/hooks/gate.py](scripts/hooks/gate.py) |
 | 決定的スクリプト | [scripts/](scripts/) |
-| データ層のビューアー（EABK Studio） | [EABK-Studio/](EABK-Studio/README.md)、ガイドは [EABK-Studio/users-guide/](EABK-Studio/users-guide/README.md) |
+| データ層のビューアー（EABK Studio） | [EABK-Studio/](EABK-Studio/README.md)、ガイドは [users-guide/studio/](users-guide/studio/README.md) |
 | 管理データの雛形 | [docs/](docs/)、[tests/system/ledger.json](tests/system/ledger.json) |
 | インストールスクリプト | [tools/](tools/) |
 | toolkit のテスト | [tests/toolkit/](tests/toolkit/)（`python -m pytest tests/toolkit -q`） |

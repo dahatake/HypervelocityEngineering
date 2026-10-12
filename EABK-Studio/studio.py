@@ -31,7 +31,8 @@ sys.path.insert(0, str(HERE))
 import eabk_model  # noqa: E402
 
 WEB = HERE / "web"
-GUIDE = "EABK-Studio/users-guide/01-first-steps.md"
+# The toolkit source keeps the guide in users-guide/; installed repositories get it as EABK-docs/.
+GUIDE = next((d + "/studio/01-first-steps.md" for d in ("EABK-docs", "users-guide") if (HERE.parent / d / "studio" / "01-first-steps.md").exists()), "EABK-docs/studio/01-first-steps.md")
 # --role: first screen for each reader (same targets as the persona buttons in the header).
 ROLE_ROUTES = {"pm": "#/dashboard", "architect": "#/map2d", "swe": "#/tables"}
 MIME = {

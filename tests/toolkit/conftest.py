@@ -177,8 +177,6 @@ def sample(repo):
     # fixture deliberately replaces the product requirements with SAMPLE_RD.
     # Remove only those copied files in the temporary sample repository.
     for rel in (
-        "tests/system/e2e/test_run_owned_cleanup.py",
-        "tests/system/test_run_cleanup_system.py",
         "tests/system/e2e/test_studio_system.py",
         "tests/system/e2e/test_judge_capabilities.py",
     ):

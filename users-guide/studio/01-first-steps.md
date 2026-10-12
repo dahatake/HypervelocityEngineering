@@ -1,4 +1,4 @@
-# 1. はじめかた
+# S1 はじめかた
 
 ## 利用開始前の前提条件
 
@@ -6,12 +6,12 @@
 
 | 項目 | 前提条件 | 根拠・確認状況 |
 |---|---|---|
-| Python | Python 3.9 以上が必要です。 | 確認済み: [`README.md`](../README.md) |
-| 追加インストール | 追加インストール不要です。3D 表示用の three.js は同梱されています。 | 確認済み: [`README.md`](../README.md) |
-| 起動スクリプト | Windows では `start.ps1`、macOS/Linux では `start.sh` を利用できます。各 OS の版別の動作確認範囲は未確認です。 | 確認済み: [`start.ps1`](../start.ps1)、[`start.sh`](../start.sh) |
+| Python | Python 3.9 以上が必要です。 | 確認済み: [`README.md`](../../EABK-Studio/README.md) |
+| 追加インストール | 追加インストール不要です。3D 表示用の three.js は同梱されています。 | 確認済み: [`README.md`](../../EABK-Studio/README.md) |
+| 起動スクリプト | Windows では `start.ps1`、macOS/Linux では `start.sh` を利用できます。各 OS の版別の動作確認範囲は未確認です。 | 確認済み: [`start.ps1`](../../EABK-Studio/start.ps1)、[`start.sh`](../../EABK-Studio/start.sh) |
 | ブラウザー | ローカル URL を開くブラウザーが必要です。対応するブラウザー名・版は未確認です。 | 確認済み: 起動時にブラウザーを開く仕様。対応範囲は未確認。 |
-| 対象リポジトリ | EABK の管理データがあるリポジトリを指定します。`docs/requirements-definition.md` または `docs/catalog.md` が見つかる場所を対象にできます。 | 確認済み: [`README.md`](../README.md) |
-| ネットワーク | インターネット接続は不要です。Studio は `127.0.0.1` だけで待ち受け、既定ポートは `8765` です。 | 確認済み: [`README.md`](../README.md) |
+| 対象リポジトリ | EABK の管理データがあるリポジトリを指定します。`docs/requirements-definition.md` または `docs/catalog.md` が見つかる場所を対象にできます。 | 確認済み: [`README.md`](../../EABK-Studio/README.md) |
+| ネットワーク | インターネット接続は不要です。Studio は `127.0.0.1` だけで待ち受け、既定ポートは `8765` です。 | 確認済み: [`README.md`](../../EABK-Studio/README.md) |
 | 権限・ネットワーク設定 | 管理者権限、ファイアウォール／プロキシの設定、ローカルポート利用許可が必要かどうかは未確認です。必要になった場合は、組織の端末・ネットワーク管理者に確認してください。 | 未確認 |
 
 ## 起動

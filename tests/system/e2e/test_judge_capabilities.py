@@ -455,7 +455,7 @@ def test_history_progress_and_infographics_drill_to_evidence_without_counting_no
 def test_screen_manifest_has_reproducible_same_commit_real_screenshots_for_all_views(
     studio_page, tmp_path
 ):
-    manifest_path = ROOT / "EABK-Studio" / "users-guide" / "screen-images.json"
+    manifest_path = ROOT / "users-guide" / "studio" / "screen-images.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     rows = manifest["screens"]
     assert {row["screen_id"] for row in rows} == set(ROUTES)
