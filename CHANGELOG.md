@@ -10,6 +10,7 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 - **EABK Studio**（`EABK-Studio/`。データ層をブラウザーで見る、読み取り専用のローカル Web アプリ）を、toolkit の副機能として配布します。インストールすると対象リポジトリに入り、インストールの最後に起動コマンドを表示します。
   - 役割別のガイドを追加しました: Product Manager・Architect・Software Engineer 向け（各 15 分のチュートリアル・おすすめのリンク・判断できること）と、各画面がどのファイルのどの節・列を読み、どう計算するかのデータリファレンス（実画面の画像つき。`capture-screens.py` で再採取できます）。
   - `studio.py` に `--check`（管理データのファイルの有無と解析件数を表示して終了。データ層がなければ exit 1）と `--role pm|architect|swe`（最初に開く画面）を追加しました。データ層のない `--repo` には、起動せずに案内を出します。`start.ps1`（`-Role`・`-Check`・`-NoOpen`）と `start.sh`（残りの引数）は、オプションをそのまま渡せます。
+  - EABK と EABK Studio のユーザーガイドを `users-guide/` の 1 か所にまとめました。Studio のガイドは `EABK-Studio/users-guide/` から [users-guide/studio/](users-guide/studio/README.md) へ移り（導入先では `EABK-docs/studio/`）、章の記号を `S1`〜`S8` にしました。索引 [users-guide/README.md](users-guide/README.md) を、第 1 部（EABK 本体）・第 2 部（Studio）・役割別・目的別の構成に作り直しました。更新時、導入先の旧 `EABK-Studio/users-guide/` は（変更していなければ）削除されます。
   - Studio は `__pycache__` を作らないので、対象リポジトリの `git status` を汚しません。
 - conductor にレーンの自動判定を追加しました（`run-state.py lane decide|confirm|show`）。変えた要求が 3 件以下・queue が 2 項目以下で、セキュリティ・競合・共通部品・未確定・事業目的との不一致がないときだけ fast レーンとし、独立監査・reviewer・全量の多数決を省きます（比較レポートの E-4・E-5 の実測に基づく）。要求の書き戻し・System Test の先行設計・verify・hook は省きません。条件を外れる事象が出たら full に戻します。run-report にレーンと省いた工程、依頼の範囲の充足率を書きます。
 

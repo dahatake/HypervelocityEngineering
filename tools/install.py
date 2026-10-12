@@ -69,10 +69,19 @@ MANAGED = [
     "scripts/adopt.py",
     "scripts/hooks/gate.py",
     "tools/install.py",
+    "users-guide/README.md",
+    "users-guide/01-writing-requests.md",
     "users-guide/02-during-and-after-run.md",
-    "users-guide/10-adopting-existing-apps.md",
+    "users-guide/03-requirements-format.md",
+    "users-guide/04-customization.md",
     "users-guide/05-scripts-reference.md",
+    "users-guide/06-quality-gates.md",
     "users-guide/07-troubleshooting.md",
+    "users-guide/08-roadmap.md",
+    "users-guide/09-versioning.md",
+    "users-guide/10-adopting-existing-apps.md",
+    "users-guide/images/architecture-diagram.png",
+    "users-guide/images/dashboard.png",
     "tests/toolkit/test_clean_work.py",
     "tests/toolkit/test_run_state.py",
     "tests/system/e2e/test_run_owned_cleanup.py",
@@ -99,6 +108,44 @@ MANAGED = [
     "EABK-Studio/web/js/ui.js",
     "EABK-Studio/web/vendor/three.LICENSE",
     "EABK-Studio/web/vendor/three.module.min.js",
+    "users-guide/studio/README.md",
+    "users-guide/studio/01-first-steps.md",
+    "users-guide/studio/02-screens.md",
+    "users-guide/studio/03-tasks.md",
+    "users-guide/studio/04-troubleshooting.md",
+    "users-guide/studio/05-product-manager.md",
+    "users-guide/studio/06-architect.md",
+    "users-guide/studio/07-software-engineer.md",
+    "users-guide/studio/08-data-reference.md",
+    "users-guide/studio/capture-screens.py",
+    "users-guide/studio/screen-images.json",
+    "users-guide/studio/images/cases.png",
+    "users-guide/studio/images/consistency.png",
+    "users-guide/studio/images/dashboard.png",
+    "users-guide/studio/images/diagrams.png",
+    "users-guide/studio/images/header.png",
+    "users-guide/studio/images/maintenance.png",
+    "users-guide/studio/images/map2d.png",
+    "users-guide/studio/images/map3d.png",
+    "users-guide/studio/images/placement.png",
+    "users-guide/studio/images/runtime.png",
+    "users-guide/studio/images/source.png",
+    "users-guide/studio/images/states.png",
+    "users-guide/studio/images/structure.png",
+    "users-guide/studio/images/tables.png",
+    "EABK-Studio/tests/test_studio.py",
+]
+# The source's users-guide/ is installed as EABK-docs/ in the target (the target's own users-guide/ is never touched).
+GUIDE_SRC, GUIDE_DEST = "users-guide/", "EABK-docs/"
+
+
+def dest_of(rel: str) -> str:
+    return GUIDE_DEST + rel[len(GUIDE_SRC):] if rel.startswith(GUIDE_SRC) else rel
+
+
+# Files no longer shipped. Removed on update when unmodified.
+# EABK Studio guide moved from EABK-Studio/users-guide/ into the single users-guide/ (installed as EABK-docs/studio/).
+OBSOLETE: list[str] = [
     "EABK-Studio/users-guide/README.md",
     "EABK-Studio/users-guide/01-first-steps.md",
     "EABK-Studio/users-guide/02-screens.md",
@@ -124,10 +171,7 @@ MANAGED = [
     "EABK-Studio/users-guide/images/states.png",
     "EABK-Studio/users-guide/images/structure.png",
     "EABK-Studio/users-guide/images/tables.png",
-    "EABK-Studio/tests/test_studio.py",
 ]
-# Files no longer shipped. Removed on update when unmodified.
-OBSOLETE: list[str] = []
 TEMPLATES = [
     "docs/requirements-definition.md",
     "docs/catalog.md",
@@ -221,6 +265,7 @@ class Installer:
             if not src.exists():
                 raise SystemExit(f"ERROR install: ソースに {rel} がありません（{self.source}）")
             new = sha(src)
+            rel = dest_of(rel)
             self.new_hashes[rel] = new
             dest = self.target / rel
             if not dest.exists():
@@ -371,7 +416,7 @@ class Installer:
             candidates = dict(recorded)
         else:
             # No manifest (deleted or never written): treat a file as unmodified when it equals this toolkit's copy.
-            candidates = {rel: (sha(self.source / rel) if (self.source / rel).exists() else None) for rel in MANAGED + OBSOLETE}
+            candidates = {dest_of(rel): (sha(self.source / rel) if (self.source / rel).exists() else None) for rel in MANAGED + OBSOLETE}
             if any((self.target / rel).exists() for rel in candidates):
                 self.note("WARN", f"{MANIFEST} がないため、この版の toolkit と同じ内容のファイルだけを削除します")
         for rel, h in candidates.items():
@@ -384,7 +429,7 @@ class Installer:
                 self.note("KEEP-LOCAL", rel)
 
     def remove_backups(self) -> None:
-        for rel in sorted(set(MANAGED + OBSOLETE + [CONFIG])):
+        for rel in sorted(set(dest_of(r) for r in MANAGED + OBSOLETE) | {CONFIG}):
             d = (self.target / rel).parent
             if d.is_dir():
                 for b in sorted(d.glob(Path(rel).name + ".ebak-backup-*")):
@@ -578,7 +623,7 @@ def main(argv=None) -> int:
     print("     GitHub Copilot app では、プロジェクトにこのリポジトリを追加し、新しい worktree・Autopilot・Agent=conductor で「/build やりたいこと」を送ります")
     print("  4. （任意）要求・カタログ・試験を図と表で見るには、EABK Studio を起動します（読み取り専用。役割は pm / architect / swe）:")
     print("     python EABK-Studio/studio.py --check            # データ層が読めるか確認")
-    print("     python EABK-Studio/studio.py --role pm          # ブラウザーが開きます。ガイド: EABK-Studio/users-guide/README.md")
+    print("     python EABK-Studio/studio.py --role pm          # ブラウザーが開きます。ガイド: EABK-docs/studio/README.md")
     return 0
 
 

@@ -28,7 +28,7 @@ Enterprise App Build Kit の版の付け方と、版を上げる手順（配布�
    ```
    `TOOLKIT_VERSION` が書き換わり、`CHANGELOG.md` の `[Unreleased]` の下に新しい版の見出しが入ります。引数なしで実行すると、現在の版を表示するだけです。
 4. `CHANGELOG.md` で、`[Unreleased]` に書いた内容を新しい版の見出しの下へ移します。
-5. 配布物（ファイル）を追加・改名・削除した場合は、`tools/install.py` の `MANAGED`・`TEMPLATES`・`OBSOLETE` と、この `users-guide/` を合わせて直します。
+5. 配布物（ファイル）を追加・改名・削除した場合は、`tools/install.py` の `MANAGED`・`TEMPLATES`・`OBSOLETE` と、この `users-guide/` を合わせて直します。`users-guide/` の全ファイルは `MANAGED` に列挙し、導入先では `EABK-docs/` に保存されます（導入先の `users-guide/` は編集しません）。
 6. 版を確認し、commit してタグを付けます。
    ```bash
    python tools/install.py --version     # 例: 0.3.0

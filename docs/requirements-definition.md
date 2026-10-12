@@ -442,8 +442,8 @@ EABK の要求定義書、カタログ、System Test 台帳、ID 台帳、実行
 #### FR-1001 users-guide の利用開始前提条件
 - 要求: EABK Studio の users-guide を読む利用者は、利用開始前に満たすべき前提条件を一箇所で確認できる。前提条件は、現存する EABK-Studio の README、配布／実行設定、テストで根拠確認できる範囲だけを明記し、根拠未確認事項は前提条件として断定せず未確認と識別できる。
 - 決定状態: 承認済み（依頼 2026-10-09）　出自: 依頼原文　優先度: SHOULD（利用開始時の環境不適合と誤った準備を防ぐ）
-- 上位: G-001　出典: SRC-012　対象エンティティ: EABK Studio 利用環境　関係する状態: 根拠未確認→根拠確認済み→users-guide 記載済み　参照パラメータ: PARAM-001、PARAM-002、PARAM-003　関連する既存資産: `EABK-Studio/users-guide/01-first-steps.md`、共通部品「起動スクリプト」、共通部品「HTTP サーバー」
-- 受入基準 AC-037: 利用者が `EABK-Studio/users-guide/01-first-steps.md` の利用開始前提条件を確認したとき、同じ一箇所で、(1) Windows 用 `start.ps1` と macOS/Linux 用 `start.sh` が存在すること（各 OS の版・網羅的な対応可否は未確認）、(2) Python {PARAM-001} 以上と追加インストール不要であること、(3) 同梱の three.js 以外の追加依存ツールが根拠資料にないこと、(4) ローカル URL を開くブラウザーが必要であること（対応ブラウザー名・版は未確認）、(5) 対象リポジトリに管理データが必要であること、(6) インターネット接続は不要で {PARAM-002}:{PARAM-003} を使用すること、(7) 管理者権限、ファイアウォール／プロキシ、ローカルポート利用許可の要否は未確認であることを、各根拠または未確認表示とともに確認できる。
+- 上位: G-001　出典: SRC-012　対象エンティティ: EABK Studio 利用環境　関係する状態: 根拠未確認→根拠確認済み→users-guide 記載済み　参照パラメータ: PARAM-001、PARAM-002、PARAM-003　関連する既存資産: `users-guide/studio/01-first-steps.md`、共通部品「起動スクリプト」、共通部品「HTTP サーバー」
+- 受入基準 AC-037: 利用者が `users-guide/studio/01-first-steps.md` の利用開始前提条件を確認したとき、同じ一箇所で、(1) Windows 用 `start.ps1` と macOS/Linux 用 `start.sh` が存在すること（各 OS の版・網羅的な対応可否は未確認）、(2) Python {PARAM-001} 以上と追加インストール不要であること、(3) 同梱の three.js 以外の追加依存ツールが根拠資料にないこと、(4) ローカル URL を開くブラウザーが必要であること（対応ブラウザー名・版は未確認）、(5) 対象リポジトリに管理データが必要であること、(6) インターネット接続は不要で {PARAM-002}:{PARAM-003} を使用すること、(7) 管理者権限、ファイアウォール／プロキシ、ローカルポート利用許可の要否は未確認であることを、各根拠または未確認表示とともに確認できる。
   - 対応する要求: FR-1001
   - 検証レベル: system
   - 実装・検証状態: 未実装。対応する E2E-015 は台帳に登録済みだが `not_run` であり、AC-037 の合格または users-guide 実装済みを意味しない。
@@ -510,7 +510,7 @@ EABK の要求定義書、カタログ、System Test 台帳、ID 台帳、実行
 #### FR-1007 users-guide 実画面スクリーンショット
 - 要求: EABK Studio の users-guide を読む利用者は、現行リリースの各主要画面と主要操作を、同じ検証対象commitを実行して取得した実画面スクリーンショットで確認できる。画像ごとの画面ID、画像参照、省略していない検証対象commit ID、再現可能な取得手順、必須主要要素を記録する画面画像manifestを正本とし、画面変更時はmanifestと古い画像を現行画面に合わせて更新できる。
 - 決定状態: 承認済み（包括承認 2026-10-09・approval_policy）　出自: 依頼原文　優先度: MUST（ガイドと実画面の不一致を防ぐため）
-- 上位: G-001、G-002　出典: SRC-013　対象エンティティ: EABK Studio 利用環境　関係する状態: 根拠確認済み→users-guide 記載済み　参照パラメータ: なし　関連する既存資産: `EABK-Studio/users-guide/02-screens.md`、共通部品「デザイン基盤」
+- 上位: G-001、G-002　出典: SRC-013　対象エンティティ: EABK Studio 利用環境　関係する状態: 根拠確認済み→users-guide 記載済み　参照パラメータ: なし　関連する既存資産: `users-guide/studio/02-screens.md`、共通部品「デザイン基盤」
 - 画面画像manifestの必須主要要素:
 
 | 画面ID | 画面名 | 必須主要要素 |
@@ -792,7 +792,7 @@ EABK の要求定義書、カタログ、System Test 台帳、ID 台帳、実行
 | AUD-001 | 2026-10-09 | 作業ツリー | 中 | `tools/install.py` | 管理データ外の変更が既に存在する。依頼範囲外のため変更せず、今回のコミットにも含めない | 未対応（監査対象外） |
 | AUD-002 | 2026-10-09 | 作業ツリー | 中 | `users-guide/05-scripts-reference.md` | ガイド本文の既存変更がある。要求定義の根拠には使うが変更しない | 未対応（監査対象外） |
 | AUD-003 | 2026-10-09 | 作業ツリー | 低 | `.vscode/` | 未追跡設定がある。要求定義・カタログには含めない | 未対応（監査対象外） |
-| AUD-004 | 2026-10-09 | 資産確認 | 中 | `EABK-Studio/users-guide` | `users-guide/images/` に実画面画像2点を確認したが、主要7画面の網羅性と対象コミットの識別がない | FR-1007／AC-052 で対応要求化 |
+| AUD-004 | 2026-10-09 | 資産確認 | 中 | `users-guide/studio` | `users-guide/images/` に実画面画像2点を確認したが、主要7画面の網羅性と対象コミットの識別がない | FR-1007／AC-052 で対応要求化 |
 | AUD-005 | 2026-10-09 | トレーサビリティ | 高 | `EABK-Studio/eabk_model.py`、`EABK-Studio/tests/test_studio.py` | CHK-19 のうち FR-102〜105、FR-110、FR-131、FR-132、FR-200、FR-999 はパーサーの範囲・否定例であり要求参照ではない。管理データだけでは検査を除外できないため、実装工程で例示表記または `checks.id_scan_exclude` を是正する | 未対応（実装工程） |
 | AG-001 | 2026-10-09 | 対応／実行可能性 | 高 | `docs/catalog.md`、`tests/system/ledger.json`、system AC | run 202610092141 の転記時点では15件がすべて `not_run` で、未実装表示も残っていた。登録・実装・証跡・実行・合格を別状態として表示し、`not_run` を合格扱いしない | 転記済み（G-001、G-003、決定記録。最新測定値は C-01 で同期） |
 | AG-002 | 2026-10-09 | 目的整合／測定 | 中 | G-001〜G-003、FR-002/009、ledger | 合格率・実装登録率の分母、`not_run`／`BLOCKED` の扱い、測定時点が不足し現時点の達成判定を再現できない | 転記済み（G-001、決定記録） |
@@ -826,7 +826,7 @@ EABK の要求定義書、カタログ、System Test 台帳、ID 台帳、実行
 | SRC-006 | EABK Studio README の 2D/3D マップ・配置・図式説明 | 作業ツリー 2026-10-09 | Views 表 | 2026-10-09 | 本文 |
 | SRC-007 | `EABK-Studio/tests/test_studio.py` | 作業ツリー 2026-10-09 | Studio の API・読取境界テスト | 2026-10-09 | 本文 |
 | SRC-008 | W3C WCAG 2.2 公開達成基準 | 2026-10-09 | 1.4.1、1.4.10、2.1.1、2.5.7、4.1.3 の参照 | 2026-10-09 | 要旨のみ（適用レベル未決定） |
-| SRC-012 | `EABK-Studio/README.md`、`EABK-Studio/users-guide/01-first-steps.md`、`EABK-Studio/start.ps1`、`EABK-Studio/start.sh`、`EABK-Studio/studio.py`、`EABK-Studio/tests/test_studio.py` | 作業ツリー 2026-10-09 | 起動節・必要なもの・起動補助・127.0.0.1 待受・標準ライブラリ・API／読取境界テスト。`requirements.txt`、`pyproject.toml`、`package.json` は EABK-Studio に未存在 | 2026-10-09 | 本文 |
+| SRC-012 | `EABK-Studio/README.md`、`users-guide/studio/01-first-steps.md`、`EABK-Studio/start.ps1`、`EABK-Studio/start.sh`、`EABK-Studio/studio.py`、`EABK-Studio/tests/test_studio.py` | 作業ツリー 2026-10-09 | 起動節・必要なもの・起動補助・127.0.0.1 待受・標準ライブラリ・API／読取境界テスト。`requirements.txt`、`pyproject.toml`、`package.json` は EABK-Studio に未存在 | 2026-10-09 | 本文 |
 | SRC-013 | run 202610092335 利用者依頼とリポジトリ現況（`EABK-Studio/README.md`、`web/index.html`、`web/js/dashboard.js`、`users-guide/02-screens.md`、`users-guide/images/`） | 依頼 2026-10-09・作業ツリー 2026-10-09 | 6項目の依頼本文。現行は7画面、ペルソナ切替、読取専用記述、ローカル構成、実画面画像2点を確認 | 2026-10-09 | 本文 |
 | SRC-019 | run 202610121452 利用者依頼と `EABK-Studio/web/js/map2d.js` の調査（ポインタ処理・ヒット判定・ホバー強調・描画寸法の換算） | 依頼 2026-10-12・作業ツリー 2026-10-12 | 依頼本文の原因 4 点と、ドラッグ判定・`getBoundingClientRect`・`devicePixelRatio`・ホバー強調の実装箇所を確認 | 2026-10-12 | 本文 |
 

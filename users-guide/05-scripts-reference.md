@@ -197,4 +197,4 @@ python EABK-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|a
 - データ層のない `--repo` を指定すると、サーバーを起動せずに案内を表示して exit 1 で終わります。
 - ラッパー: `EABK-Studio/start.ps1 [-Repo DIR] [-Port N] [-Role …] [-Check] [-NoOpen]`、`EABK-Studio/start.sh [DIR] [PORT] [studio.py のオプション…]`。
 - ソースコードは読まず、127.0.0.1 だけで待ち受けます。読み取り専用で、書き込むのは「整合性保守」で確認して実行した `docs/catalog.md` の題名・決定状態だけです。
-- 役割別のガイド（Product Manager・Architect・Software Engineer）と、各画面が読むデータの一覧は `EABK-Studio/users-guide/README.md` にあります。詳細は `EABK-Studio/README.md` です。
+- 役割別のガイド（Product Manager・Architect・Software Engineer）と、各画面が読むデータの一覧は [studio/README.md](studio/README.md) にあります。詳細は `EABK-Studio/README.md` です。

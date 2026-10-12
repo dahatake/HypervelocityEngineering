@@ -28,7 +28,7 @@ def test_fresh_install_layout(empty_repo):
     assert "merge=union" in (empty_repo / ".gitattributes").read_text(encoding="utf-8")
     assert "ebak-abk:begin" in (empty_repo / "AGENTS.md").read_text(encoding="utf-8")
     assert not (empty_repo / ".github/workflows/toolkit-tests.yml").exists()
-    assert not (empty_repo / "tests/toolkit").exists()
+    assert not (empty_repo / "tests/toolkit/test_install.py").exists()
 
 
 def test_reinstall_is_idempotent_and_check(empty_repo):

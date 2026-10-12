@@ -267,7 +267,7 @@ def main(argv=None) -> int:
         for p in problems:
             failed.append("config")
             print(f"FAIL config {p}")
-            print('  書き方: "commands": [{"name": "unit", "run": "python -m pytest -q"}]（users-guide/04-customization.md 4.1）')
+            print('  書き方: "commands": [{"name": "unit", "run": "python -m pytest -q"}]（EABK-docs/04-customization.md 4.1）')
         if not cmds and not problems:
             print("INFO verify.commands が空です（scripts/ebak.config.json にビルド・静的検査・テストのコマンドを登録します）")
         runnable = []
