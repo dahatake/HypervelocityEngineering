@@ -42,7 +42,18 @@ class _Map:
         self.page, self.ids = page, ids
         self.box = page.locator("canvas.fill").bounding_box()
 
+    def on_canvas(self, x, y):
+        """True only when the canvas itself is the topmost element at the point
+        (toolbar, minimap, status, hints, persona band etc. overlay it)."""
+        return self.page.evaluate(
+            "([x, y]) => { const c = document.querySelector('canvas.fill');"
+            " return document.elementFromPoint(x, y) === c; }",
+            [self.box["x"] + x, self.box["y"] + y])
+
     def click(self, x, y):
+        """Click only points where the canvas is topmost; otherwise do nothing."""
+        if not self.on_canvas(x, y):
+            return None
         self.page.mouse.click(self.box["x"] + x, self.box["y"] + y)
         return _selected(self.page, self.ids)
 
@@ -111,6 +122,9 @@ def test_map2d_click_selects_node_within_fixed_px_radius(browser, studio_url, na
         for axis in ("x", "y"):
             ext = _chord(m, anchor, node, axis)
             assert ext, f"{axis}: node not hit"
+            if axis == "x":
+                # probe the y chord through the node's centre column, not the sweep's first-hit point
+                node = (node[0], node[1] + (ext[0] + ext[1]) // 2, node[2])
             chord = ext[1] - ext[0] + 1
             # The radius is a fixed screen distance, independent of zoom / CSS size.
             assert chord <= 2 * RADIUS + 1 + TOL, f"{name} {axis}: hit width {chord}px exceeds {2 * RADIUS}px"
