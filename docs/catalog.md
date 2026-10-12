@@ -60,7 +60,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-001 | 管理データのモデル化 | 承認済み（依頼 2026-10-09） | `EABK-Studio/eabk_model.py` | `EABK-Studio/tests/test_studio.py` | 管理データモデル |
 | FR-002 | ダッシュボードと進捗 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/dashboard.js` | `tests/system/e2e/test_studio_system.py` | ストア、デザイン基盤 |
 | FR-003 | 2D/3D 関係マップ | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/map2d.js`, `EABK-Studio/web/js/map3d.js` | `tests/system/e2e/test_studio_system.py` | ストア、Three.js 同梱モジュール、デザイン基盤 |
-| FR-004 | 図式化 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/diagrams.js` | `tests/system/e2e/test_studio_system.py` | ストア、デザイン基盤 |
+| FR-004 | 図式化 | 承認済み（包括承認 2026-10-12・approval_policy） | `EABK-Studio/web/js/diagrams.js` | `tests/system/e2e/test_studio_system.py` | ストア、デザイン基盤 |
 | FR-005 | 配置と表現の切替 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/placement.js` | `tests/system/e2e/test_studio_system.py` | ストア、デザイン基盤 |
 | FR-006 | 表と検索 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/tables.js` | `tests/system/e2e/test_studio_system.py` | UI 部品、ストア、デザイン基盤 |
 | FR-007 | ソース対応 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/source.js` | `tests/system/e2e/test_studio_system.py` | ストア |
