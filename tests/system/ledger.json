@@ -35,7 +35,10 @@
     "AC-034": "sha256:ba2b21d21e4d7ac7",
     "AC-074": "sha256:4be099630333c44d",
     "AC-075": "sha256:a0eade90d09d9464",
-    "AC-076": "sha256:9f4e195e1f56b0a1"
+    "AC-076": "sha256:9f4e195e1f56b0a1",
+    "AC-077": "sha256:f6a4b874fa642693",
+    "AC-080": "sha256:c5379dd42824f506",
+    "AC-081": "sha256:23f25a36610bb70c"
   },
   "cases": [
     {
@@ -1892,6 +1895,231 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "測定プロファイルと検証対象の提出物が要求定義書に未定義（TBD）"
+        }
+      ]
+    },
+    {
+      "id": "E2E-062",
+      "requirement_ids": [
+        "FR-1011"
+      ],
+      "ac_ids": [
+        "AC-077"
+      ],
+      "title": "2D マップのクリックは縮小・既定・拡大・CSS寸法差でも画面 12px 半径内の最近傍ノードだけを選択する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_map2d_click_selects_node_within_fixed_px_radius -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-12T15:07:56+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-063",
+      "requirement_ids": [
+        "FR-1011"
+      ],
+      "ac_ids": [
+        "AC-077"
+      ],
+      "title": "2D マップの半径外クリックでは選択が変わらない（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_map2d_click_outside_radius_keeps_selection -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-12T15:07:57+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-064",
+      "requirement_ids": [
+        "FR-1012"
+      ],
+      "ac_ids": [
+        "AC-080"
+      ],
+      "title": "実装配置図が 3 層に分類しモデル上の資産と関連線だけを描く",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_placement_diagram_shows_three_layers -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-12T15:07:58+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-065",
+      "requirement_ids": [
+        "FR-1012"
+      ],
+      "ac_ids": [
+        "AC-080"
+      ],
+      "title": "実装配置図は再描画でも存在しない関係を描かない（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_placement_diagram_does_not_invent -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-12T15:07:59+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-066",
+      "requirement_ids": [
+        "FR-1012"
+      ],
+      "ac_ids": [
+        "AC-081"
+      ],
+      "title": "実装配置図のクリックで関連を強調・無関係を弱め・解除で戻る",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_placement_click_highlights -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-12T15:08:00+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-067",
+      "requirement_ids": [
+        "FR-1012"
+      ],
+      "ac_ids": [
+        "AC-081"
+      ],
+      "title": "実装配置図をキーボード・対応表の行で選択できる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_placement_selectable_by_keyboard -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-12T15:08:02+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-068",
+      "requirement_ids": [
+        "FR-1011"
+      ],
+      "ac_ids": [
+        "AC-077"
+      ],
+      "title": "2D map hit radius is 12 screen px at 3 zoom levels and with CSS size mismatch; outside radius keeps selection",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_map_placement_system.py -k fr1011 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-12T15:08:29+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-069",
+      "requirement_ids": [
+        "FR-1012"
+      ],
+      "ac_ids": [
+        "AC-080"
+      ],
+      "title": "Placement diagram shows 3 layers with links, draws nothing outside model",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_map_placement_system.py -k fr1012_ac080 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-12T15:08:31+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-070",
+      "requirement_ids": [
+        "FR-1012"
+      ],
+      "ac_ids": [
+        "AC-081"
+      ],
+      "title": "Placement diagram highlight/dim/restore via click, keyboard, table row",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_map_placement_system.py -k fr1012_ac081 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-12T15:08:32+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
         }
       ]
     }
