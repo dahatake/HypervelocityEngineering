@@ -54,9 +54,9 @@
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_model_can_traverse_requirement_to_catalog_file_and_test",
       "canary": true,
       "status": "pass",
-      "last_commit": "8433054",
-      "last_run_at": "2026-10-12T15:09:36+09:00",
-      "evidence": "work/runs/202610121452/logs/system-test/E2E-001-202610121509.log",
+      "last_commit": "efdac43",
+      "last_run_at": "2026-10-12T15:37:59+09:00",
+      "evidence": "work/runs/202610121536/logs/system-test/E2E-001-202610121537.log",
       "history": [
         {
           "at": "2026-10-09T22:10:37+09:00",
@@ -817,9 +817,9 @@
       "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_starts_only_after_ordered_success_and_pre_cleanup_report",
       "canary": true,
       "status": "pass",
-      "last_commit": "8433054",
-      "last_run_at": "2026-10-12T15:09:36+09:00",
-      "evidence": "work/runs/202610121452/logs/system-test/E2E-026-202610121509.log",
+      "last_commit": "efdac43",
+      "last_run_at": "2026-10-12T15:37:59+09:00",
+      "evidence": "work/runs/202610121536/logs/system-test/E2E-026-202610121537.log",
       "history": [
         {
           "at": "2026-10-10T10:41:32+09:00",
@@ -867,9 +867,9 @@
       "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_cleanup_starts_only_after_all_gates_and_main_integration",
       "canary": true,
       "status": "pass",
-      "last_commit": "8433054",
-      "last_run_at": "2026-10-12T15:09:36+09:00",
-      "evidence": "work/runs/202610121452/logs/system-test/E2E-028-202610121509.log",
+      "last_commit": "efdac43",
+      "last_run_at": "2026-10-12T15:37:59+09:00",
+      "evidence": "work/runs/202610121536/logs/system-test/E2E-028-202610121537.log",
       "history": [
         {
           "at": "2026-10-10T10:41:53+09:00",
@@ -1960,10 +1960,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_placement_diagram_shows_three_layers -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "efdac43",
+      "last_run_at": "2026-10-12T15:37:59+09:00",
+      "evidence": "work/runs/202610121536/logs/system-test/E2E-064-202610121537.log",
       "history": [
         {
           "at": "2026-10-12T15:07:58+09:00",
@@ -1985,10 +1985,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_placement_diagram_does_not_invent -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "efdac43",
+      "last_run_at": "2026-10-12T15:37:59+09:00",
+      "evidence": "work/runs/202610121536/logs/system-test/E2E-065-202610121537.log",
       "history": [
         {
           "at": "2026-10-12T15:07:59+09:00",
@@ -2010,10 +2010,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_placement_click_highlights -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "efdac43",
+      "last_run_at": "2026-10-12T15:37:59+09:00",
+      "evidence": "work/runs/202610121536/logs/system-test/E2E-066-202610121537.log",
       "history": [
         {
           "at": "2026-10-12T15:08:00+09:00",
@@ -2035,10 +2035,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_placement_selectable_by_keyboard -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "efdac43",
+      "last_run_at": "2026-10-12T15:37:59+09:00",
+      "evidence": "work/runs/202610121536/logs/system-test/E2E-067-202610121537.log",
       "history": [
         {
           "at": "2026-10-12T15:08:02+09:00",
@@ -2085,10 +2085,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_map_placement_system.py -k fr1012_ac080 -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "efdac43",
+      "last_run_at": "2026-10-12T15:37:59+09:00",
+      "evidence": "work/runs/202610121536/logs/system-test/E2E-069-202610121537.log",
       "history": [
         {
           "at": "2026-10-12T15:08:31+09:00",
@@ -2110,10 +2110,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_map_placement_system.py -k fr1012_ac081 -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "efdac43",
+      "last_run_at": "2026-10-12T15:37:59+09:00",
+      "evidence": "work/runs/202610121536/logs/system-test/E2E-070-202610121537.log",
       "history": [
         {
           "at": "2026-10-12T15:08:32+09:00",
