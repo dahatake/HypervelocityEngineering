@@ -102,7 +102,10 @@ def test_fr1012_ac080_three_layers_and_links_only_from_model(page):
     view = page.locator("#view")
     for layer in ("画面", "API", "データ"):
         expect(view.get_by_text(layer).first).to_be_visible()
-    expect(view.locator("svg line, svg path").first).to_be_visible()
+    # visible links only: exclude <defs>/<marker> geometry (arrowhead paths are never rendered links)
+    visible_links = view.locator("svg line:not(defs *):not(marker *), svg path:not(defs *):not(marker *)")
+    assert visible_links.count() >= 1, "at least one visible link line/path outside defs/marker"
+    expect(visible_links.first).to_be_visible()
     # abnormal: asset/relationship absent from the model is never drawn
     assert view.get_by_text("ZZ-NOT-IN-MODEL").count() == 0
 
@@ -120,14 +123,22 @@ def test_fr1012_ac081_click_highlights_and_deselect_restores(page):
     _open_placement_diagram(page)
     view = page.locator("#view")
     target = view.get_by_text("FR-001", exact=True).first
-    before = view.inner_html()
+    # AC-081: related emphasised, unrelated weakened (opacity), deselect -> normal display.
+    # Observed via rendered opacity (user-visible), not exact markup (selection may legitimately
+    # leave non-visual attributes such as focus/aria state behind).
+    probe = "els => els.map(e => parseFloat(getComputedStyle(e).opacity))"
+    sel = "svg *, [class]"
+    before = view.locator(sel).evaluate_all(probe)
+    assert before and min(before) >= 0.99, "normal display has nothing weakened"
     target.click()
     page.wait_for_timeout(300)
-    during = view.inner_html()
-    assert during != before, "selection must visibly highlight related assets / dim others"
+    during = view.locator(sel).evaluate_all(probe)
+    assert min(during) < 0.99, "unrelated targets are weakened while selected"
+    assert max(during) >= 0.99, "related targets stay emphasised"
     page.keyboard.press("Escape")
     page.wait_for_timeout(300)
-    assert view.inner_html() == before, "deselect restores normal display"
+    after = view.locator(sel).evaluate_all(probe)
+    assert min(after) >= 0.99, "deselect restores normal display (nothing weakened)"
 
 
 def test_fr1012_ac081_keyboard_selects_same_as_click(page):
