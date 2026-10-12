@@ -6,6 +6,7 @@ import { decorate, mountStructure, mountConsistency, mountMaintenance } from './
 
 const ROUTES = {
   dashboard: { icon: 'dashboard', load: () => import('./dashboard.js') },
+  implstatus: { icon: 'progress', load: () => import('./implstatus.js') },
   map2d: { icon: 'map2d', load: () => import('./map2d.js') },
   map3d: { icon: 'map3d', load: () => import('./map3d.js') },
   diagrams: { icon: 'diagrams', load: () => import('./diagrams.js') },

@@ -482,6 +482,59 @@ def chain(m: dict, seg: str, label: str) -> None:
 
 
 # --------------------------------------------------------------------------- main build
+# FR-1014: five implementation states (kept separate from the node attribute `impl`).
+IMPL_STATES = (
+    "未着手",
+    "実装登録済み・試験未登録",
+    "実装登録済み・試験未合格",
+    "試験 pass 済み",
+    "実装登録済み・system 試験対象外",
+)
+
+
+def classify_impl_state(has_impl: bool, has_system_ac: bool, case_statuses: list) -> str:
+    """FR-1014 AC-092 classification rule (approved requirements only)."""
+    if not has_impl:
+        return IMPL_STATES[0]
+    if case_statuses:
+        return IMPL_STATES[3] if all(s == "pass" for s in case_statuses) else IMPL_STATES[2]
+    return IMPL_STATES[1] if has_system_ac else IMPL_STATES[4]
+
+
+def build_impl_status(model: dict, root: Path) -> dict:
+    """Per-requirement implementation state + counts. Read-only; uses only the data layer."""
+    feats = {f["req"]: f for f in model["catalog"]["features"]}
+    cases_by_req: dict = {}
+    for c in model["cases"]:
+        for rid in c.get("requirement_ids") or []:
+            cases_by_req.setdefault(rid, []).append(c.get("status") or "not_run")
+    items, excluded = [], 0
+    for r in model["reqs"]:
+        if r["statusKind"] != "approved":
+            excluded += 1
+            continue
+        f = feats.get(r["id"])
+        has_impl = False
+        if f:
+            for p in f["impl"]:
+                try:
+                    if (root / p).exists():
+                        has_impl = True
+                        break
+                except OSError:
+                    pass
+        statuses = cases_by_req.get(r["id"], [])
+        has_sys = any((a.get("level") or "") == "system" for a in r["acs"])
+        breakdown: dict = {}
+        for s in statuses:
+            breakdown[s] = breakdown.get(s, 0) + 1
+        stalled = bool(r["blocked"]) or any(a.get("blocked") for a in r["acs"])
+        items.append({"id": r["id"], "title": r["title"], "state": classify_impl_state(has_impl, has_sys, statuses),
+                      "cases": breakdown, "blocked": stalled, "goal": r["goal"] or "-",
+                      "priority": r["priority"] or "-"})
+    return {"states": list(IMPL_STATES), "items": items, "excluded": excluded}
+
+
 def build_model(root: Path) -> dict:
     root = Path(root).resolve()
     files = load_config(root)
@@ -725,6 +778,7 @@ def build_model(root: Path) -> dict:
                     model["runs"].append(record)
 
     model["reqs"] = list(reqs.values())
+    model["implStatus"] = build_impl_status(model, root)
     build_management_analysis(model, docs, cat_doc, files, warnings)
     build_graph(model, reqs, parts)
     return model
