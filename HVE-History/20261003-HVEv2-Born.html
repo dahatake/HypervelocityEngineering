@@ -385,7 +385,7 @@ function makeS(){
     for(const k in to)el._s[k]=st.f[k]+(to[k]-st.f[k])*p;if(st.pop)el._s.s=el._sc*(.55+.45*p);applyObj(el)},ez);
   S.hide=(el,t,dur=.3)=>S.mv(el,t,dur,{o:0},EZ.lin);
   S.set=(el,t,patch)=>S.at(t,()=>{Object.assign(el._s,patch);applyObj(el)});
-  S.clear=t=>S.at(t,()=>world.querySelectorAll('.obj').forEach(o=>{if(o._s){o._s.o=0;applyObj(o)}}));
+  S.clear=t=>S.at(t,()=>{world.querySelectorAll('.obj').forEach(o=>{if(o._s){o._s.o=0;applyObj(o)}});tl.querySelectorAll('.tp,.slam,.stamp,.lesson').forEach(e=>e.remove())});
   S.num=(el,t,dur,a,b,f=fmtN,ez=EZ.out3)=>S.tween(t,dur,(p,st)=>{el._in.textContent=f(a+(b-a)*p);if(!st.l||E.clock-st.l>70){st.l=E.clock;A.play('tick')}},ez);
   S.type=(el,t,text,cps)=>S.tween(t,text.length/cps,(p,st)=>{const n=Math.floor(p*text.length);if(n!==st.n){st.n=n;el._in.textContent=text.slice(0,n)+(p<1?'▌':'');A.play('tick')}if(p>=1)el._in.textContent=text},EZ.lin);
   S.cam0=o=>Object.assign(cam.base,o);
@@ -406,16 +406,13 @@ function makeS(){
   S.emote=(t,ch)=>S.at(t,()=>{const el=document.createElement('div');el.className='emote';el.textContent=ch;tl.appendChild(el);A.play('pop');setTimeout(()=>el.remove(),1800)});
   S.say=(t,text,o={})=>{let el;const dur=o.dur||3;
     S.at(t,()=>{el=document.createElement('div');el.className='tp '+(o.pos||'top')+(o.band?' band '+(o.band===true?'':o.band):'');
-      el.innerHTML='<span>'+fmt(text)+'</span>';if(o.size)el.style.fontSize=o.size+'px';if(o.top!==undefined)el.style.top=o.top+'px';tl.appendChild(el);if(o.sfx!==false)A.play(o.sfx||'pop')});
-    S.at(t+dur,()=>{if(el)el.classList.add('out')});S.at(t+dur+.3,()=>{if(el)el.remove()})};
+      el.innerHTML='<span>'+fmt(text)+'</span>';if(o.size)el.style.fontSize=o.size+'px';if(o.top!==undefined)el.style.top=o.top+'px';      tl.appendChild(el);placeOv(el);if(o.sfx!==false)A.play(o.sfx||'pop')})};
   S.slam=(t,text,o={})=>{let el;const dur=o.dur||2;
     S.at(t,()=>{el=document.createElement('div');el.className='slam';el.style.top=(o.y??360)+'px';
       el.innerHTML=`<div class="s1" style="font-size:${o.size||190}px;color:${o.color||'#fff'}">${fmt(text)}</div>`+(o.sub?`<div class="s2" style="color:${o.subColor||'#fff'}">${fmt(o.sub)}</div>`:'');
-      tl.appendChild(el);A.play(o.sfx||'boom');fx.shake=Math.max(fx.shake,o.shake??22);flashEl.style.background=o.flashC||'#fff';fx.flash=(o.flash??.5)*RM;fx.flashDur=.35;fx.lines=.8;if(o.burst)burst(o.burst,{color:o.color||'#ffd84a'})});
-    S.at(t+dur,()=>{if(el)el.classList.add('out')});S.at(t+dur+.3,()=>{if(el)el.remove()})};
+      tl.appendChild(el);placeOv(el);A.play(o.sfx||'boom');fx.shake=Math.max(fx.shake,o.shake??22);flashEl.style.background=o.flashC||'#fff';fx.flash=(o.flash??.5)*RM;fx.flashDur=.35;fx.lines=.8;if(o.burst)burst(o.burst,{color:o.color||'#ffd84a'})})};
   S.lesson=(t,n,text,dur=4.2)=>{let el;
-    S.at(t,()=>{el=document.createElement('div');el.className='lesson';el.innerHTML=`<div><b>LESSON ${n}</b><span>${fmt(text)}</span></div>`;tl.appendChild(el);A.play('pinpon');burst(30,{x:VW/2,y:VH*.76,color:'#00ff9d',speed:8})});
-    S.at(t+dur,()=>{if(el)el.classList.add('out')});S.at(t+dur+.3,()=>{if(el)el.remove()})};
+    S.at(t,()=>{el=document.createElement('div');el.className='lesson';el.innerHTML=`<div><b>LESSON ${n}</b><span>${fmt(text)}</span></div>`;    tl.appendChild(el);placeOv(el);A.play('pinpon');burst(30,{x:VW/2,y:VH*.76,color:'#00ff9d',speed:8})})};
   S.banner=(ghost,cnum,title,sub,color,tagText)=>{
     S.at(.05,()=>{chapEl.style.setProperty('--c',color);tagEl.style.setProperty('--c',color);
       chapEl.innerHTML=`<div class="cghost">${ghost}</div><div class="cwipe"></div><div class="cnum">${cnum}</div><div class="ctitle">${title}</div><div class="cdate">${sub}</div>`;
@@ -430,11 +427,10 @@ function makeS(){
     const a=mk('#00ff9d','✔ うまくいったこと',ok),b=mk('#ff4466','✖ うまくいかなかったこと',ng);a._s.x=-470;b._s.x=470;applyObj(a);applyObj(b);
     S.mv(a,t,.45,{o:1},EZ.back);S.sfx(t,'ding');S.mv(b,t2??t+2.4,.45,{o:1},EZ.back);S.sfx(t2??t+2.4,'buzz')};
   S.verdict=(t,kind,sub)=>{const m={clear:['CLEAR','#00ff9d'],miss:['MISS','#ff3b30'],part:['PARTIAL','#ffb02e'],open:['NOT YET','#b48cff']}[kind];let el;
-    S.at(t,()=>{el=document.createElement('div');el.className='stamp';el.style.setProperty('--c',m[1]);el.innerHTML=`${m[0]}<small>${sub||''}</small>`;tl.appendChild(el);
-      A.play(kind==='clear'?'fanfare':kind==='part'?'pop':'stamp');fx.shake=Math.max(fx.shake,kind==='clear'?8:18);
-      if(kind==='clear'){burst(80,{color:'#00ff9d',speed:12})}else{flashEl.style.background=m[1];fx.flash=.35*RM;fx.flashDur=.25}
-      tagEl.textContent=tagEl.textContent.split(' ｜ 判定')[0]+' ｜ 判定: '+m[0]});
-    S.at(t+3,()=>{if(el)el.classList.add('out')});S.at(t+3.3,()=>{if(el)el.remove()})};
+    S.at(t,()=>{el=document.createElement('div');el.className='stamp';el.style.setProperty('--c',m[1]);el.innerHTML=`${m[0]}<small>${sub||''}</small>`;    tl.appendChild(el);placeOv(el);
+          A.play(kind==='clear'?'fanfare':kind==='part'?'pop':'stamp');fx.shake=Math.max(fx.shake,kind==='clear'?8:18);
+          if(kind==='clear'){burst(80,{color:'#00ff9d',speed:12})}else{flashEl.style.background=m[1];fx.flash=.35*RM;fx.flashDur=.25}
+          tagEl.textContent=tagEl.textContent.split(' ｜ 判定')[0]+' ｜ 判定: '+m[0]})};
   S.flood=(t,dur,words,o={})=>{const n=o.n||30;for(let i=0;i<n;i++)S.at(t+i*dur/n,()=>{const el=document.createElement('div');el.className='flow';el.textContent=words[i%words.length];
     const y0=o.y0??120,y1=o.y1??760;el.style.cssText+=`top:${y0+Math.random()*(y1-y0)}px;font-size:${(o.min||40)+Math.random()*(o.max||36)}px;color:${o.color||'#fff'};animation-duration:${3.6+Math.random()*2.6}s`;
     tl.appendChild(el);setTimeout(()=>el.remove(),7000)})};
@@ -468,6 +464,29 @@ function makeS(){
   S.end=(tail=1)=>{S.dur=(Math.max(S.cur,S.maxT)+tail)*1000};
   return S;
 }
+/* 強調表示はシーンが終わるまで残す。出そろった文字どうしが重ならないよう、縦方向に空きを探して置く */
+function placeOv(el){
+  const u=ui.getBoundingClientRect(),k=(u.width/1920)||1,old=el.style.animation,s1=el.querySelector('.s1'),s2=el.querySelector('.s2');
+  const tp=el.classList.contains('tp'),fs1=s1?parseFloat(s1.style.fontSize):tp?parseFloat(getComputedStyle(el).fontSize):0;
+  const measure=()=>{el.style.animation='none';const r0=el.getBoundingClientRect(),q={left:1e9,right:-1e9,width:0},w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);for(let n;n=w.nextNode();){if(!n.textContent.trim())continue;const g=document.createRange();g.selectNodeContents(n);const c=g.getBoundingClientRect();if(c.width){q.left=Math.min(q.left,c.left);q.right=Math.max(q.right,c.right);q.width=1}}
+    const m={L:((q.width?q.left:r0.left)-u.left)/k,R:((q.width?q.right:r0.right)-u.left)/k,T:(r0.top-u.top)/k,B:(r0.bottom-u.top)/k};el.style.animation=old;return m};
+  const others=()=>[...tl.children].filter(e=>e!==el&&e._r);
+  const hit=(l,r,t,b)=>others().find(o=>!(o._r.r+14<l||o._r.l-14>r||o._r.b+10<t||o._r.t-10>b));
+  let m,dx=0,dy=0,ok=false;
+  for(const f of(s1||tp?[1,.78,.6,.46,.36]:[1])){
+    if(tp)el.style.fontSize=fs1*f+'px';
+    if(s1){s1.style.fontSize=fs1*f+'px';if(s2)s2.style.fontSize=50*f+'px'}
+    m=measure();dx=0;dy=0;
+    if(!hit(m.L,m.R,m.T,m.B)){ok=true;break}
+    let best=1e9;
+    for(let x=-1840;x<=1840;x+=40){if(m.L+x<20||m.R+x>1900)continue;
+      for(let s=-1000;s<=1000;s+=10){if(m.T+s<0||m.B+s>1010)continue;const c=Math.abs(x)*.6+Math.abs(s);
+        if(c<best&&!hit(m.L+x,m.R+x,m.T+s,m.B+s)){best=c;dx=x;dy=s}}}
+    if(best<1e9){ok=true;break}}
+  if(!ok){dx=0;dy=0;let o;while((o=hit(m.L,m.R,m.T,m.B))){o._r=null;o.remove()}}
+  if(dy)el.style.top=(el.offsetTop+dy)+'px';
+  if(dx){if(el.classList.contains('stamp'))el.style.right=(parseFloat(getComputedStyle(el).right)-dx)+'px';else el.style.left=dx+'px'}
+  el._r={l:m.L+dx,r:m.R+dx,t:m.T+dy,b:m.B+dy}}
 function clearStage(){world.innerHTML='';tl.innerHTML='';chapEl.innerHTML='';tagEl.classList.remove('on');tagEl.textContent='';bars.classList.remove('on');vig.classList.remove('red');wrap.classList.remove('glitch');
   world.querySelectorAll('video').forEach(v=>v.pause())}
 function goto(i,cut){
@@ -762,12 +781,12 @@ sc('purpose','HVE の目的と、7つの目標','tension',S=>{
 
 /* 3. 弱かった時代 */
 sc('era','第1幕 弱かった時代','tension',S=>{
-  S.cam0({z:700});S.bg(0,{speed:.2,tint:'#08304a'});S.tag(0,'ACT 1 ｜ 足場の時代（2026-01 〜 03）',C.or);
+  S.cam0({z:300});S.bg(0,{speed:.2,tint:'#08304a'});S.tag(0,'ACT 1 ｜ 足場の時代（2026-01 〜 03）',C.or);
   const cols=[C.cy,C.mg,C.ye,C.gr,C.vi,C.or];
-  for(let i=0;i<20;i++){const a=i*.9,c=cols[i%6];
-    const o=S.obj(CD(c,`${F(80,c,'FS'+pad(i+1,2))}${T(28,'#cfe','Future Scenario')}`,'width:460px'),{x:Math.cos(a)*520,y:Math.sin(a)*260,z:-i*300,rz:(i%2?1:-1)*7,o:0});S.mv(o,.3+i*.05,.4,{o:1},EZ.lin)}
+  for(let i=0;i<20;i++){const c=cols[i%6];
+    const o=S.obj(CD(c,`${F(54,c,'FS'+pad(i+1,2))}${T(22,'#cfe','Future Scenario')}`,'width:330px;padding:14px 18px'),{x:-720+(i%5)*360,y:-300+Math.floor(i/5)*200,z:0,rz:0,o:0});S.mv(o,.3+i*.05,.4,{o:1},EZ.lin)}
   let b=S.N('最初の依頼は、コードではありませんでした。事業の未来シナリオ、20件。');
-  S.bg(.2,{speed:1});S.sfx(.2,'riser',4);S.cam(0,b+5.4,{z:-5000},EZ.io3);S.say(b+.6,'最初の依頼は、{y|コードじゃなかった}。',{pos:'top',size:64,dur:3});
+  S.bg(.2,{speed:1});S.sfx(.2,'riser',4);S.cam(0,b+5.4,{z:0},EZ.io3);S.say(b+.6,'最初の依頼は、{y|コードじゃなかった}。',{pos:'top',size:64,dur:3});
   S.clear(S.cur-.2);S.at(S.cur-.2,()=>{cam.base.z=500;cam.base.y=0});S.bg(S.cur-.2,{speed:.1,tint:'#3a2208',grid:true,gridCol:C.or});
   b=S.N('2026年1月。当時のモデルは、長い出力が途中で切れ、一度では、品質が出ませんでした。');
   const m=S.obj(CD(C.gy,`${F(34,C.gy,'claude-sonnet-4.5')}${T(28,'#cde','2026-01 の主力モデル')}`,'width:560px'),{x:-480,y:-40,o:0});S.mv(m,b+.3,.5,{o:1},EZ.back);
@@ -797,13 +816,13 @@ sc('era','第1幕 弱かった時代','tension',S=>{
 sc('v1','第1幕 HVE v1 誕生','drive',S=>{
   S.cam0({y:-40,z:60,ry:-50});S.bg(0,{speed:.15,tint:'#06402a'});S.tag(0,'ACT 1 ｜ 手順が、フレームワークになる',C.gr);S.meter(0,40,100);
   const lines=['def run_workflow(step, ctx):','  for task in dag.ready():','    ctx.review(cycles=3)','    wave.dispatch(task)','class Orchestrator(ATG):','  def resume(self, step):','# Self-Improve loop','prompts/ 314 files','skills/  34 files','workflows/ 13','if not verify(): retry()','agent.run(prompt, tools=[...])'];
-  for(let k=0;k<9;k++){const a=(k-4)*.42,R=1500;let txt='';for(let j=0;j<34;j++)txt+=lines[(j*3+k*5)%lines.length]+'\n';
-    const o=S.obj(`<pre class="mono" style="font-size:25px;line-height:1.45;color:#5cffb0;text-align:left;opacity:.55;border:2px solid #0f6;padding:20px 30px;background:rgba(0,30,15,.6)">${txt}</pre>`,{x:Math.sin(a)*R,z:-Math.cos(a)*R+R*.6,ry:-a*57.3,o:0,y:20});S.mv(o,.4+k*.18,.6,{o:1,y:-20},EZ.out3);S.sfx(.4+k*.18,'tick')}
+  for(let k=0;k<9;k++){const a=(k-4)*.5,R=1700;let txt='';for(let j=0;j<14;j++)txt+=lines[(j*3+k*5)%lines.length]+'\n';
+    const o=S.obj(`<pre class="mono" style="font-size:22px;line-height:1.45;color:#5cffb0;text-align:left;opacity:.55;border:2px solid #0f6;padding:20px 30px;background:rgba(0,30,15,.6)">${txt}</pre>`,{x:Math.sin(a)*R,z:-Math.cos(a)*R+R*.6,ry:-a*57.3,o:0,y:20});S.mv(o,.4+k*.18,.6,{o:1,y:-20},EZ.out3);S.sfx(.4+k*.18,'tick')}
   let b=S.N('足場は、フレームワークになりました。HVE バージョン1。');
   b=S.N('Python は934ファイル、27万行超。Prompt は約314件、Skill は34件。');
   S.slam(b+.2,'27.7万行',{size:240,color:C.gr,sub:'Python 934ファイル ／ Prompt 約314件 ／ Skill 34件',dur:3,sfx:'hit'});
   b=S.N('リリースは、48日間で197回。ほぼ、毎日です。');
-  const v=S.obj('v0.8.1',{o:0,y:250,z:300,css:'font:900 170px Consolas,monospace;color:#fff;text-shadow:0 0 40px #00ff9d'});S.mv(v,b,.2,{o:1},EZ.lin);S.sfx(b,'riser',3);
+  const v=S.obj('v0.8.1',{o:0,y:400,z:300,css:'font:900 170px Consolas,monospace;color:#fff;text-shadow:0 0 40px #00ff9d'});S.mv(v,b,.2,{o:1},EZ.lin);S.sfx(b,'riser',3);
   S.tween(b,3,p=>{v._in.textContent='v0.8.'+Math.max(1,Math.round(197*p));if(Math.random()<.4)A.play('tick')},EZ.in2);S.set(v,b+3,{o:0});
   S.slam(b+3,'197回',{size:240,color:C.mg,sub:'0.8.1 → 0.8.197 ／ 48日間',dur:1.8,burst:90});
   b=S.N('課題は、本物でした。では、この解き方は、本当に正しかったのか。測るのは、まだ先でした。');
@@ -849,7 +868,7 @@ QS('q2',2,'分けて、並列に流す','目標：大きな作業を分け、依
   b=S.N('測ってみました。単一の Prompt と、ATG。品質は、同じ。ところが、時間は1.7倍から2.25倍。費用は2.49倍から3.5倍。');
   const lane=(y,lbl,c,len,t,time,cost)=>{const l=S.obj(lbl,{x:-410,y,o:0,css:'transform:translate(-100%,-50%);text-align:right;font:800 36px sans-serif;color:#fff'});S.mv(l,b+.2,.3,{o:1});
     S.hbar(-380,y,740,70,'#fff',b+.2,0,{track:true});S.hbar(-380,y,len,70,c,b+.8,t,{});
-    const v=S.txtL(time,-380+740+40,y-14,`font:900 44px Consolas;color:${c}`),w=S.txtL(cost,-380+740+40,y+32,`font:700 28px Consolas;color:#cde`);S.mv(v,b+.8+t,.3,{o:1});S.mv(w,b+.8+t,.3,{o:1})};
+    const v=S.txtL(time,-380+740+40,y-30,`font:900 44px Consolas;color:${c}`),w=S.txtL(cost,-380+740+40,y+38,`font:700 28px Consolas;color:#cde`);S.mv(v,b+.8+t,.3,{o:1});S.mv(w,b+.8+t,.3,{o:1})};
   lane(-120,'単一の Prompt',C.gr,330,1.4,'基準（1.0）','費用 基準');lane(40,'ATG（自作 DAG）',C.rd,740,3.1,'時間 ×1.7〜2.25','費用 ×2.49〜3.50');
   S.sfx(b+.8,'drum',1.5);S.sfx(b+2.3,'ding');S.sfx(b+4.0,'buzz');
   S.say(b+4.2,'品質は、{y|同じ}。',{pos:'mid',size:70,dur:2.2,sfx:'hit',top:520});
@@ -971,6 +990,7 @@ QS('q7',7,'費用と証跡を、管理する','目標：実行の費用・時間
     const v=S.txtL('0%',X+880+16,y,`font:900 70px Consolas;color:${c};text-shadow:0 0 24px ${c}`);S.mv(l,t0,.3,{o:1});S.mv(v,t0,.3,{o:1});S.num(v,t0,1.6,0,pct,x=>x.toFixed(1)+'%')};
   mk(-100,'8時間超のセッション（件数）',18.2,C.cy,b+.4);mk(20,'その総滞留時間',73.6,C.rd,b+2.6);
   S.slam(b+5.4,'18.2% → 73.6%',{size:130,color:C.ye,y:560,dur:1.8,sfx:'hit',burst:50});
+  S.clear(S.cur-.1);
   b=S.N('最長のステップの92パーセントは、LLM ではなく、ツールの実行や、承認待ちでした。そして、今も。v2 の実行履歴は、AI クレジットが、「未取得」のままです。');
   const rg=S.obj(`<div class="ring" style="width:320px;height:320px;--p:0;background:conic-gradient(${C.mg} calc(var(--p)*1%),rgba(255,255,255,.12) 0)"></div>`,{x:-360,y:-10,o:0});
   const rv=S.obj('0%',{x:-360,y:-10,o:0,css:`font:900 80px Consolas;color:${C.mg};text-shadow:0 0 24px ${C.mg}`});
@@ -1008,9 +1028,9 @@ sc('eos','第4幕 止める決断','tension',S=>{
   b=S.N('課題は、今も実在します。不要になったのは、解決のために、フレームワークを作り、保守することでした。');
   S.clear(S.cur-.1);S.hide(cg,b,.2);
   b=S.N('そして、harness は、なくなったのではありません。置き場所が、移りました。プラットフォーム本体、公式ガイドの作法を取り込んだ Prompt、リポジトリー内の決定的な検査。');
-  S.cam(b,.5,{y:-120,z:600,rx:-10,ry:-20},EZ.out3);S.cam(b+.6,8,{ry:20},EZ.lin);
+  S.cam(b,.5,{y:-120,z:600,rx:-6,ry:-8},EZ.out3);S.cam(b+.6,8,{ry:8},EZ.lin);
   [['① プラットフォーム本体の harness','Autopilot ／ サブエージェント ／ task_complete',C.cy],['② 公式ガイドの作法を取り込んだ Prompt','数段落の自然言語で足りる',C.ye],['③ リポジトリー内の決定的な検査','verify の exit code ／ CI ／ 要求 ID の追跡テスト',C.gr]].forEach(([a,t,c],i)=>{
-    const o=S.box(1000,130,380,c,`<div style="font:900 36px sans-serif">${a}</div><div style="font:600 26px sans-serif;color:#cde;margin-top:6px">${t}</div>`,{y:900,x:0,o:0});S.set(o,b+.4+i*1.6,{o:1});S.mv(o,b+.4+i*1.6,.9,{y:90-(2-i)*160},EZ.back);S.sfx(b+.7+i*1.6,'hit');S.shake(b+1+i*1.6,12)});
+    const o=S.box(1000,130,40,c,`<div style="font:900 36px sans-serif">${a}</div><div style="font:600 26px sans-serif;color:#cde;margin-top:6px">${t}</div>`,{y:900,x:0,o:0});S.set(o,b+.4+i*1.6,{o:1});S.mv(o,b+.4+i*1.6,.9,{y:60-(2-i)*230},EZ.back);S.sfx(b+.7+i*1.6,'hit');S.shake(b+1+i*1.6,12)});
   S.end(1.2);
 });
 
@@ -1040,24 +1060,24 @@ sc('born','第5幕 HVE v2 BORN','none',S=>{
   let b=S.N('止めて、測り直して、薄い足場だけを、残す。そして、作り直しました。');
   const dot=S.obj('<div style="width:40px;height:40px;border-radius:50%;background:#fff;box-shadow:0 0 60px 20px #7ff,0 0 160px 60px #08f"></div>',{o:0,s:.3});
   S.mv(dot,b+.2,.5,{o:1},EZ.lin);S.mv(dot,b+.2,3.6,{s:2.4},EZ.in2);S.sfx(b+.2,'riser',3.8);[b+.4,b+1.4,b+2.2,b+2.8,b+3.2,b+3.5,b+3.7].forEach(t=>S.sfx(t,'heart'));S.bg(b+.2,{speed:1.5,tint:'#104a8a'});S.cam(b+.2,3.8,{z:100},EZ.in2);
-  const logo=S.obj(LOGO(330)+'HVE v2</div>',{o:0,y:-60,s:3});
+  const logo=S.obj(LOGO(330)+'HVE v2</div>',{o:0,y:-130,s:3});
   b=S.N('HVE バージョン2。正式名称は、Enterprise App Build Kit。');
   S.at(b+.1,()=>{dot._s.o=0;applyObj(dot);A.play('boom');A.mood('epic');fx.flash=1;flashEl.style.background='#fff';fx.flashDur=.6;fx.shake=40;fx.lines=1;burst(220,{color:'#ffe066',speed:20})});
   S.mv(logo,b+.1,.8,{o:1,s:1},EZ.back);S.bg(b+.1,{speed:.3,tint:'#0b6a8a',grid:true,gridCol:C.cy});S.cam(b+.1,.3,{z:0,p:900});S.cam(b+.4,6,{p:1500},EZ.out3);
-  const sub=S.obj('Enterprise App Build Kit ＝ EABK',{o:0,y:130,css:'font:800 60px sans-serif;color:#fff;letter-spacing:.1em;text-shadow:0 0 30px #00e5ff'});S.mv(sub,b+.9,.6,{o:1},EZ.back);
-  const s2=S.obj('※「HVE v2 ＝ EABK」は、このストーリーでの置き方',{o:0,y:200,css:'font:500 28px sans-serif;color:#9fe'});S.mv(s2,b+1.6,.5,{o:1});
+  const sub=S.obj('Enterprise App Build Kit ＝ EABK',{o:0,y:190,css:'font:800 60px sans-serif;color:#fff;letter-spacing:.1em;text-shadow:0 0 30px #00e5ff'});S.mv(sub,b+.9,.6,{o:1},EZ.back);
+  const s2=S.obj('※「HVE v2 ＝ EABK」は、このストーリーでの置き方',{o:0,y:270,css:'font:500 28px sans-serif;color:#9fe'});S.mv(s2,b+1.6,.5,{o:1});
   b=S.N('使い方は、conductor に、Prompt を、1回送るだけ。');
   S.clear(b+1.6);
   const N7=['① 要求定義','② 独立監査','③ System Test\n先行設計','④ 並行実装','⑤ 直列の統合','⑥ 最終監査','⑦ 報告'],cols=[C.cy,C.vi,C.mg,C.or,C.gr,C.vi,C.ye];
   b=S.N('要求定義、独立監査、テストの先行設計、並行実装、直列の統合、最終監査、報告まで。最大24時間から48時間、人の介入なしに、進みます。');
-  S.cam(b,.5,{x:-1000,y:-60,z:150},EZ.io3);const orb=S.obj('<div style="width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,#fff 0%,#fff 10%,#ffe600 20%,rgba(255,230,0,.35) 38%,transparent 64%)"></div>',{x:-1250,y:0,o:0}),pl=S.obj('Prompt 1回',{x:-1250,y:-200,o:0,css:'font:900 44px sans-serif;color:#ffe600;-webkit-text-stroke:8px #000;paint-order:stroke fill'});
+  S.cam(b,.5,{x:-1000,y:-60,z:150},EZ.io3);const orb=S.obj('<div style="width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,#fff 0%,#fff 10%,#ffe600 20%,rgba(255,230,0,.35) 38%,transparent 64%)"></div>',{x:-1250,y:0,o:0,s:.5}),pl=S.obj('Prompt 1回',{x:-1250,y:-200,o:0,css:'font:900 44px sans-serif;color:#ffe600;-webkit-text-stroke:8px #000;paint-order:stroke fill'});
   S.mv(orb,b,.3,{o:1});S.mv(pl,b,.3,{o:1});S.bars(b,true);
   N7.forEach((n,i)=>{const t=b+.6+i*1.5,x=-900+i*410,y=Math.sin(i*1.1)*90;const o=S.obj(CD(cols[i],n.replace('\n','<br>'),'font:800 34px/1.3 sans-serif;min-width:260px'),{x,y,z:-i*20,o:0,ry:-12});
-    S.mv(o,t-.5,.5,{o:1},EZ.back);S.mv(orb,t-.6,.7,{x,y:y-110},EZ.io3);S.mv(pl,t-.6,.7,{x,y:y-200},EZ.io3);S.cam(t-.8,1.1,{x:x+120},EZ.io3);S.at(t,()=>{A.play('pop');burst(26,{color:cols[i],speed:7})})});
+    S.mv(o,t-.5,.5,{o:1},EZ.back);S.mv(orb,t-.6,.7,{x,y:y-170},EZ.io3);S.mv(pl,t-.6,.7,{x,y:y-290},EZ.io3);S.cam(t-.8,1.1,{x:x+120},EZ.io3);S.at(t,()=>{A.play('pop');burst(26,{color:cols[i],speed:7})})});
   S.at(b+10.2,()=>{pl._in.textContent='完了'});
   S.clear(S.cur-.1);S.bars(S.cur-.1,false);S.cam(S.cur-.1,.5,{x:0,y:-60,z:330,rx:-6},EZ.out3);S.cam(S.cur+.4,12,{ry:12},EZ.lin);S.bg(S.cur,{speed:.12});
   const R=[['✍️','要求定義書を書けるのは、<br>1つのエージェントだけ',C.cy,'守らせる規則は4つ。要求定義書を書けるのは、1つのエージェントだけ。'],['🔒','実装担当は<br>System Test を変更できない',C.mg,'実装担当は、システムテストを変更できない。'],['✅','終了前に必ず検証。<br>合否は exit code',C.gr,'終了前に、必ず検証する。合否は、終了コードで決める。'],['⛔','危険な操作は拒否',C.rd,'危険な操作は、拒否する。']];
-  R.forEach(([ic,t,c,nt],i)=>{b=S.N(nt,'nar',{gap:.2});const o=S.box(380,520,70,c,`<div style="font-size:110px">${ic}</div><div style="font:800 36px/1.4 sans-serif;margin-top:18px">${t}</div>`,{x:-690+i*460,y:700,o:0});
+  R.forEach(([ic,t,c,nt],i)=>{b=S.N(nt,'nar',{gap:.2});const o=S.box(380,520,30,c,`<div style="font-size:110px">${ic}</div><div style="font:800 36px/1.4 sans-serif;margin-top:18px">${t}</div>`,{x:-690+i*460,y:700,o:0});
     S.set(o,b,{o:1});S.mv(o,b,.9,{y:260},EZ.back);S.sfx(b+.3,'hit');S.shake(b+.5,14)});
   b=S.N('しかも、それを、LLM の判断ではなく、フックと、決定的なスクリプトで、強制します。');
   S.lesson(b+.8,4,'規則は、お願いではなく{y|仕組み（hook）で強制}する。設定だけでは、守られない。',4.4);
@@ -1097,9 +1117,9 @@ sc('demoEabk','DEMO EABK ／ EABK Studio','drive',S=>{
   let b=S.N('では、実際の画面です。EABK は、conductor に Prompt を1回送ると、進捗が、流れていきます。');
   S.mv(cli,b+.2,.6,{o:1},EZ.back);S.sfx(b+.2,'whoosh');S.say(b+1,'conductor に、Prompt を{y|1回}。',{pos:'bot',size:46,dur:4,sfx:false});
   b=S.N('EABK Studio は、要求、カタログ、システムテスト、実行履歴を、図と表で見て回る、読み取り専用のビューアーです。');
-  S.mv(cli,b,.9,{x:-760,y:-360,z:-500,s:.7},EZ.io3);S.cam(b-.2,1.2,{z:0,ry:0},EZ.io3);
-  const st=S.media('media/studio-app.webm',1280,720,C.mg,{x:80,y:70,z:0,o:0,s:.8});S.play(st,b+.6);S.mv(st,b+.6,.8,{o:1,s:1},EZ.back);S.sfx(b+.6,'hit');S.shake(b+.7,10);
-  const cap=S.obj('EABK Studio ― 要求・カタログ・System Test・実行履歴を、図と表で（読み取り専用）',{y:-420,o:0,css:'font:800 34px "Yu Gothic UI",sans-serif;color:#fff;text-shadow:0 0 24px #ff2d78'});S.mv(cap,b+1,.5,{o:1});
+  S.mv(cli,b,.9,{x:-760,y:-310,z:0,s:.45},EZ.io3);S.cam(b-.2,1.2,{z:0,ry:0},EZ.io3);
+  const st=S.media('media/studio-app.webm',1280,720,C.mg,{x:300,y:70,z:0,o:0,s:.8});S.play(st,b+.6);S.mv(st,b+.6,.8,{o:1,s:1},EZ.back);S.sfx(b+.6,'hit');S.shake(b+.7,10);
+  const cap=S.obj('EABK Studio ― 要求・カタログ・System Test・実行履歴を、図と表で（読み取り専用）',{y:-495,o:0,css:'font:800 34px "Yu Gothic UI",sans-serif;color:#fff;text-shadow:0 0 24px #ff2d78'});S.mv(cap,b+1,.5,{o:1});
   S.tween(b+.6,15,p=>{cam.base.z=-p*160;cam.base.ry=Math.sin(p*3.1)*5},EZ.lin);
   b=S.N('ダッシュボード、実装状態、依存の地図、試験結果。この toolkit 自身も、EABK で作って、EABK Studio で、見ています。');
   S.say(b+.5,'進捗・依存・試験結果が、{y|1画面で追える}。',{pos:'bot',size:44,dur:5,sfx:'pop'});
@@ -1157,7 +1177,7 @@ sc('bas','第6幕 Business Analytics Studio','calm',S=>{
 sc('ring','第6幕 一周して、戻ってきた','epic',S=>{
   S.cam0({y:-30,z:-900,p:900});cam.eye=true;S.bg(0,{speed:.15,tint:'#2a1060',grid:true,gridCol:C.vi});S.tag(0,'ACT 6 ｜ 事業 → コード → 事業',C.vi);S.meter(0,95,18);
   const P=[['01月','事業の未来シナリオ','手順で弱さを補う',C.cy],['02〜09月','業務アプリのコード（HVE v1）','補助輪が、成果と並ぶ費用に',C.rd],['10月','薄い足場（HVE v2）','正本と決定的検査だけが残る',C.gr],['10月〜','顧客の ToBe と意思決定（BAS）','データ・出典・確度・機密',C.ye]];
-  P.forEach(([d,t,s,c],i)=>{const a=i*Math.PI/2,R=900;S.obj(CD(c,`${F(38,c,'段 '+(i+1)+' ｜ '+d)}<div style="font:900 52px/1.3 sans-serif;margin:14px 0">${t}</div>${T(36,'#cde',s)}`,'width:760px;white-space:normal'),{x:Math.sin(a)*R,z:-Math.cos(a)*R,ry:-a*57.3,o:0})});
+  P.forEach(([d,t,s,c],i)=>{const a=i*Math.PI/2,R=1500;S.obj(CD(c,`${F(34,c,'段 '+(i+1)+' ｜ '+d)}<div style="font:900 44px/1.3 sans-serif;margin:12px 0">${t}</div>${T(30,'#cde',s)}`,'width:640px;white-space:normal'),{x:Math.sin(a)*R,z:-Math.cos(a)*R,ry:-a*57.3,o:0})});
   const objs=[...world.querySelectorAll('.obj')];
   cam.base.ry=60;
   let b=S.N('最初の依頼は、事業の未来シナリオでした。');S.mv(objs[0],b,.5,{o:1},EZ.back);S.sfx(b,'hit');
@@ -1176,7 +1196,7 @@ sc('limit','限界と、妥当性への脅威','tension',S=>{
   let b=S.N('最後に、信じすぎないでください。');S.slam(b,'信じすぎないで。',{size:130,color:C.ye,y:60,dur:2,sfx:'hit',shake:12});
   const L=['n = 1（1人・約9か月・1つの題材群）','EABK は自作のツール。実験・集計・執筆は AI が行い、採点にも同系統のモデルを使った','各条件の試行は 1〜6 回。統計的な有意差は示せない','記録は下限値が多い（履歴の保持期間・PC 再起動で消失）','モデルの進化と、足場の効果を、完全には分離できない'];
   b=S.N('私の経験は、1人、約9か月です。EABK は自作で、実験も採点も、同じ系統の AI が行いました。試行は1回から6回。記録は下限値で、モデルの進化と、足場の効果は、分けきれていません。');
-  L.forEach((t,i)=>{const o=S.obj(CD(C.ye,`⚠ ${t}`,'font:700 34px sans-serif;text-align:left;min-width:1400px;white-space:normal'),{y:-250+i*105,o:0});S.mv(o,b+.8+i*2.4,.4,{o:1},EZ.back);S.sfx(b+.8+i*2.4,'buzz')});
+  L.forEach((t,i)=>{const o=S.obj(CD(C.ye,`⚠ ${t}`,'font:700 30px sans-serif;text-align:left;min-width:1400px;white-space:normal'),{y:-290+i*135,o:0});S.mv(o,b+.8+i*2.4,.4,{o:1},EZ.back);S.sfx(b+.8+i*2.4,'buzz')});
   b=S.N('数字は、事実、推論、未検証を、分けて読んでください。');
   S.say(b,'{c|事実}／{y|推論}／{r|未検証}',{pos:'bot',size:58,dur:3.6,sfx:'hit'});
   S.end(1);
