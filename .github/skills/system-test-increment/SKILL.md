@@ -1,6 +1,6 @@
 ---
 name: system-test-increment
-description: 要求定義書の受入基準から System Test と台帳のケースを作り、増分で実行する手順書。test-designer（設計）と conductor（実行）が使う。
+description: 承認済みで BLOCKED でない「検証レベル: system」の受入基準から、System Test（E2E・契約・ai_eval など）と tests/system/ledger.json のケースを作り、変更のあったケースだけを canary 先行で増分実行する手順書。test-designer が実装より前に設計し、conductor が統合のたび・節目・最終で `ledger.py run` を実行する。台帳は ledger.py だけで更新する。
 ---
 # system-test-increment（test-designer と conductor の手順書）
 

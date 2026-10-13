@@ -1,6 +1,6 @@
 ---
 name: implement-fr
-description: 承認済みの要求を 1 項目ずつ worktree で実装し、単体・結合テスト、カタログの行、検証コマンドを整える implementer の手順書。
+description: implementer が、conductor から渡された承認済みの要求（ID 1〜5 個）を、プールの git worktree の中で実装する手順書。単体・結合テスト、カタログの行、`verify.py --quick` と System Test のゲートまでを行う。要求定義書と tests/system/・台帳は変更せず、不整合は `CONFLICTS:` で返す。画面を持つ要求は ui-design.md を併せて読む。
 ---
 # implement-fr（implementer の手順書）
 
@@ -14,7 +14,7 @@ description: 承認済みの要求を 1 項目ずつ worktree で実装し、単
 |---|---|---|
 | RequirementDefinition「commit と push は行わない。利用者が差分をレビュー」 | rd-author は統合ブランチに `[RD] <要約>` で commit します。利用者のレビューは、最終報告（run-report）と取り込みの判断で行います。 | 無人で連続実行するため |
 | RD-FR「依頼をもって承認」「要求定義書を作成または更新」 | implementer は要求定義書を変更しません。要求の誤りや不足は、結果の `CONFLICTS:` に書き、conductor が rd-author に回します。 | 要求の書き手を 1 つにする（GAP-1、H1） |
-| RD-FR「テストが誤っていると判断した場合は、理由を記録して直す」 | 単体・結合テストに限ります。`tests/system/` と台帳は変更しません。 | System Test を不変にする（H4、R-5） |
+| RD-FR「テストが誤っていると判断した場合は、理由を記録して直す」 | 単体・結合テストに限ります。`tests/system/` と台帳は変更しません。理由は要求定義書ではなく、結果とコミットメッセージに書きます。 | System Test を不変にする（H4、R-5） |
 | SystemTest「自動修正は `systemtest-autofix/<日時>` ブランチ」 | 統合ブランチの上で、conductor が implementer に修正を依頼します。test-designer は修正しません。 | ブランチを増やさない |
 | SystemTest「対象 AC はシステム全体を通して確かめるもの」 | 「検証レベル: system」の AC にします。 | 判断のぶれをなくす（GAP-5） |
 | 3 Prompt「最終報告はチャットで」 | `work/runs/<run-id>/run-report.md` に書きます（conductor）。作業役は 10 行以内の結果を返します。残すべき情報は `/docs` と台帳に転記します。依頼に関係しない既存の問題は、要求定義書の「監査指摘」に書きます。 | 監査結果を消さない（GAP-7） |
@@ -28,7 +28,7 @@ description: 承認済みの要求を 1 項目ずつ worktree で実装し、単
 ### 原本のどこを使うか
 - implementer が行うのは、原本の `<implementation>`、`<catalog>`（機能の表の実装ファイル・テスト・共通部品の列と、API・テーブル・共通部品の表）、`<boundaries>` です。
 - 原本の `<investigation>` は、渡された要求 ID・AC と、カタログに載っている関連資産の範囲で行います（`python scripts/rdcheck.py show <ID>` で必要な節だけ読む）。
-- 原本の `<audit>`・`<questionnaire>`・`<requirements_document>` の作業（要求定義書の作成・更新、質問票の追加、決定状態の変更）は行いません。見つけた不整合・不足・要求の誤りは、結果の `CONFLICTS:` に 1 行ずつ書きます。
+- 原本の `<audit>`・`<questionnaire>`・`<requirements_document>` の作業（要求定義書の作成・更新、質問票の追加、決定状態の変更）は行いません。見つけた不整合・不足・要求の誤りは、結果の `CONFLICTS:` に 1 行ずつ書きます。原本の `<implementation>` の「理由を要求定義書に記録」「競合として記録し質問票に挙げる」、`<communication>` の「要求定義書が更新され」も、同じく `CONFLICTS:` と結果への記載に読み替えます。
 - `<execution_options>` は conductor が run_options から渡します（implement_scope ← scope、ほかは同名）。
 
 ### 検証スクリプトと CI

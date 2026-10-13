@@ -16,7 +16,7 @@ disable-model-invocation: true
    - 文章に `<request>`・`<answers>`・`<references>`・`<run_options>` のタグがあれば、そのまま使います。ないタグは空とします。
    - タグがなければ、文章の全体を `<request>` とし、`<answers>` と `<references>` は空とします。
    - `<run_options>` にない項目は、下の雛形の既定値を使います。
-3. conductor の手順（「始めに」から「完了の判定」まで）で最後まで実行します。`run-state.py start --options` には、組み立てた `<run_options>` の各行を渡します。
+3. conductor の手順（「始めに」から「完了の判定」まで）で最後まで実行します。`run-state.py start --options` には、組み立てた `<run_options>` の各行を渡します（ファイルで渡すなら `--options-file`）。
 
 ## 雛形（既定値）
 
