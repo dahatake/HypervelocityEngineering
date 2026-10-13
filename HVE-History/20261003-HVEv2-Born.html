@@ -162,7 +162,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;align-items:stretch;text-align:left">
         <select id="geng"><option value="browser">ブラウザー内蔵（Edge の Microsoft Natural 音声）</option><option value="speech">Azure AI Speech ― HD 音声（Nanami / Masaru DragonHDLatest）</option><option value="oai">gpt-4o-mini-tts ― Azure OpenAI または OpenAI</option></select>
         <input id="gkey" type="password" placeholder="API キー（保存しません。このページのメモリだけ）">
-        <input id="greg" placeholder="Speech: リージョン（例 japaneast） ／ gpt-4o-mini-tts: エンドポイント URL（Azure OpenAI のリソース URL。OpenAI は空欄）">
+        <input id="greg" placeholder="Speech: リージョン（例 japaneast）または Foundry のエンドポイント URL（例 https://xxx.cognitiveservices.azure.com/） ／ gpt-4o-mini-tts: エンドポイント URL（Azure OpenAI のリソース URL。OpenAI は空欄）">
         <input id="gmod" placeholder="gpt-4o-mini-tts のデプロイ名／モデル名（既定 gpt-4o-mini-tts）">
         <small style="color:#889">失敗したときは、自動でブラウザー内蔵の音声に切り替えます。</small></div></details>    <div style="display:flex;gap:24px;flex-wrap:wrap;justify-content:center"><div id="go">▶ フル版（約16分）</div><div id="gos">▶ SHORT 版（約5分）</div></div>
     <p>音声ONでの全画面視聴を推奨（フル版 約16分／SHORT 版 約5分・自動再生。Microsoft Edge 推奨）<br>
@@ -294,7 +294,10 @@ async function fetchAudio(text,host){
   if(V.eng==='speech'){
     const voice=host?'ja-JP-Masaru:DragonHDLatestNeural':'ja-JP-Nanami:DragonHDLatestNeural';
     const ssml=`<speak version="1.0" xml:lang="ja-JP" xmlns="http://www.w3.org/2001/10/synthesis"><voice name="${voice}"><prosody rate="+8%">${text.replace(/[<>&]/g,'')}</prosody></voice></speak>`;
-    const r=await fetch(`https://${c.region}.tts.speech.microsoft.com/cognitiveservices/v1`,{method:'POST',headers:{'Ocp-Apim-Subscription-Key':c.key,'Content-Type':'application/ssml+xml','X-Microsoft-OutputFormat':'audio-24khz-96kbitrate-mono-mp3'},body:ssml});
+    // Foundry（AI Services）のエンドポイント URL が渡されたら、そのオリジンの /tts/cognitiveservices/v1 を使う
+    let ttsUrl=`https://${c.region}.tts.speech.microsoft.com/cognitiveservices/v1`;
+    if(/^https?:\/\//i.test(c.region)){try{ttsUrl=new URL(c.region).origin+'/tts/cognitiveservices/v1'}catch(e){}}
+    const r=await fetch(ttsUrl,{method:'POST',headers:{'Ocp-Apim-Subscription-Key':c.key,'Content-Type':'application/ssml+xml','X-Microsoft-OutputFormat':'audio-24khz-96kbitrate-mono-mp3'},body:ssml});
     if(!r.ok)throw new Error('speech '+r.status);return r.blob()}
   const body={model:c.model||'gpt-4o-mini-tts',input:text,voice:host?'onyx':'nova',response_format:'mp3',
     instructions:host?'日本語で、親しみやすく、テンポよく、熱量のある開発者として話してください。':'日本語で、落ち着いたトーンで、聞き取りやすく、要点を際立たせて、少し速めに読み上げてください。'};
