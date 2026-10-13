@@ -16,7 +16,7 @@ and `merge` does the whole serial integration in one call and prints at most a f
 
 merge:
   * verify runs with --quick (slow commands skipped); every FULL_EVERY-th integration and with --full it runs
-    every command. The final gate (stage 6) still runs `verify.py --strict` and the whole System Test.
+    every command. The final gate (stage 6) still runs `verify.py --strict`; the System Test there is the changed cases + canary by default, all cases only with `system_test: 全量`.
   * System Test cases are selected against the commit before the merge (only this item's changes), keeping
     the canary and dropping cases whose requirements are not integrated yet (they cannot pass yet).
   * On a merge conflict, a verify failure or a System Test failure the merge is undone (`git reset --hard`),

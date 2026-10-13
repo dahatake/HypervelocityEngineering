@@ -29,7 +29,7 @@ description: 承認済みで BLOCKED でない「検証レベル: system」の�
 | 原本の部分 | 担当 | この実行での行い方 |
 |---|---|---|
 | `<ledger>`・`<test_design>` | test-designer（工程 4） | 実装より前に、承認済み・BLOCKED でない・`検証レベル: system` の AC ごとにケースを作り、すべて `not_run` で commit します。 |
-| `<execution>` 1〜4・6 | conductor（統合のたび・節目・工程 6） | `python scripts/ledger.py --by conductor run --select changed --canary-first --stop-on-canary-fail`。工程 6 は `--select all`。 |
+| `<execution>` 1〜4・6 | conductor（統合のたび・節目・工程 6） | `python scripts/ledger.py --by conductor run --select changed --canary-first --stop-on-canary-fail`。工程 6 も、既定（`system_test: 必要最小限`）は `--select changed --base <meta.json の head_at_start>` で、この run で変わった要求のケースと canary だけを実行する。`system_test: 全量` のときだけ `--select all`。 |
 | `<execution>` 5（自動修正） | implementer（conductor が依頼） | 統合ブランチの上で修正します。test-designer は修正しません。 |
 | `<execution>` 7（commit） | conductor | 台帳の status の更新を統合ブランチに commit します。 |
 | `<report>` | conductor | 書式はそのまま、`work/runs/<run-id>/run-report.md` に書きます。 |

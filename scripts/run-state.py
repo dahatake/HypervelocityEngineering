@@ -36,6 +36,7 @@ DEFAULT_OPTIONS = {
     "max_hours": "24", "approval_policy": "安全範囲は推奨どおり", "parallel_workers": "auto",
     "scope": "承認済みすべて", "git_push": "しない", "deploy": "しない", "external_write": "しない",
     "paid_services": "使わない", "external_exposure": "公開しない",
+    "system_test": "必要最小限",
 }
 HISTORY_HEADER = (
     "# 実行履歴\n\n"
