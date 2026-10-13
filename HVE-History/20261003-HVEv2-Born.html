@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>HVE QUEST — 足場は、いつまで必要か？ | Hypervelocity Engineering 262日の挑戦と失敗と学び</title>
+<title>HVE QUEST — skillやharnessは、いつまで必要か？ | Hypervelocity Engineering 262日の挑戦と失敗と学び</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -31,7 +31,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .tp .k{-webkit-text-stroke:14px #000}
 .tp.band span{display:inline-block;background:#ffe600;color:#000;-webkit-text-stroke:0;text-shadow:none;padding:6px 34px;transform:skewX(-8deg);box-shadow:8px 8px 0 #000}
 .tp.band.r span{background:#ff3b5c;color:#fff}.tp.band.c span{background:#00e5ff}
-.tp.band .k{color:inherit;text-decoration:underline}
+.tp.band .k{color:inherit;text-decoration:underline;-webkit-text-stroke:0}
 @keyframes pop{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.12);opacity:1}100%{transform:scale(1)}}
 @keyframes tpout{to{transform:translateY(24px) scale(.96);opacity:0}}
 .slam{position:absolute;left:0;width:1920px;text-align:center;animation:slam .5s cubic-bezier(.2,1.2,.3,1) both}
@@ -54,7 +54,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .lesson div{display:flex;align-items:center;gap:26px;max-width:1700px;background:rgba(0,12,8,.92);border:4px solid #00ff9d;border-radius:18px;padding:16px 36px;box-shadow:0 0 40px rgba(0,255,157,.5),inset 0 0 30px rgba(0,255,157,.18)}
 .lesson b{flex:none;font:900 30px Consolas,monospace;color:#001a10;background:#00ff9d;padding:6px 18px;border-radius:10px;letter-spacing:.08em}
 .lesson span{font-weight:900;font-size:44px;line-height:1.3;color:#fff;white-space:normal}.lesson .k{color:#ffe600}
-.stamp{position:absolute;right:110px;top:430px;font:900 150px Impact,"Yu Gothic UI",sans-serif;border:16px solid var(--c);color:var(--c);padding:0 40px;border-radius:20px;background:rgba(0,0,0,.72);text-align:center;line-height:1.1;transform:rotate(-8deg);animation:stampin .35s cubic-bezier(.2,1.4,.4,1) both;text-shadow:0 0 40px var(--c)}
+.stamp{position:absolute;right:470px;top:430px;font:900 150px Impact,"Yu Gothic UI",sans-serif;border:16px solid var(--c);color:var(--c);padding:0 40px;border-radius:20px;background:rgba(0,0,0,.72);text-align:center;line-height:1.1;transform:rotate(-8deg);animation:stampin .35s cubic-bezier(.2,1.4,.4,1) both;text-shadow:0 0 40px var(--c)}
 .stamp small{display:block;font:800 34px "Yu Gothic UI",sans-serif;letter-spacing:.06em;color:#fff;text-shadow:none;padding-bottom:10px}
 .stamp.out{animation:tpout .3s ease-in both}
 @keyframes stampin{0%{transform:scale(4) rotate(-22deg);opacity:0}100%{transform:scale(1) rotate(-8deg);opacity:1}}
@@ -64,7 +64,12 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 @keyframes emo{0%{transform:scale(.3);opacity:0}20%{transform:scale(1.2);opacity:1}100%{transform:translateY(-90px) scale(1);opacity:0}}
 #tag{position:absolute;left:48px;top:40px;font:700 26px Consolas,"Yu Gothic UI",monospace;color:#fff;background:rgba(0,0,0,.6);border-left:8px solid var(--c,#00e5ff);padding:8px 22px;opacity:0;transition:opacity .5s}
 #tag.on{opacity:1}
-#meter{position:absolute;right:48px;top:36px;width:330px;background:rgba(0,0,0,.62);border:2px solid #456;border-radius:12px;padding:10px 14px;opacity:0;transition:opacity .6s}
+#storyCard{position:absolute;left:300px;top:300px;width:1200px;padding:34px 44px;border:4px solid #00e5ff;border-radius:24px;background:rgba(6,10,22,.94);box-shadow:0 0 50px #00e5ff55;text-align:left}
+#storyCard[hidden]{display:none}
+#storyCard small{font:800 26px Consolas,monospace;color:#00e5ff;letter-spacing:.12em}
+#storyCard h2{font-size:58px;line-height:1.3;color:#ffe600;margin:14px 0 20px}
+#storyCard p{font-size:38px;font-weight:700;line-height:1.6;color:#e8faff;overflow-wrap:anywhere}
+#meter{position:absolute;right:48px;top:470px;width:330px;background:rgba(0,0,0,.62);border:2px solid #456;border-radius:12px;padding:10px 14px;opacity:0;transition:opacity .6s}
 #meter.on{opacity:1}
 #meter .mt{font:800 20px "Yu Gothic UI",sans-serif;color:#cde;margin-bottom:6px}#meter small{font-weight:500;color:#889;margin-left:8px;font-size:16px}
 #meter .mr{display:flex;flex-direction:column;margin-top:4px}#meter .mr span{font:700 18px "Yu Gothic UI",sans-serif;color:#dde}
@@ -106,7 +111,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .mn.cur i,.mn.hl i{width:40px;height:40px;background:var(--c);box-shadow:0 0 50px 10px var(--c);animation:mnp .7s ease-in-out infinite alternate}
 .mn.cur b,.mn.hl b{font-size:30px;color:#ffe600}.mn.hl{opacity:1}
 @keyframes mnp{from{transform:scale(1)}to{transform:scale(1.25)}}
-#mm{position:absolute;right:48px;top:170px;width:340px;height:150px;overflow:hidden;background:rgba(0,0,0,.55);border:2px solid #456;border-radius:12px;opacity:0;transition:opacity .5s}
+#mm{position:absolute;right:48px;top:620px;width:340px;height:150px;overflow:hidden;background:rgba(0,0,0,.55);border:2px solid #456;border-radius:12px;opacity:0;transition:opacity .5s}
 #mm.on{opacity:1}#mm>div{position:absolute;left:0;top:0;width:1700px;height:700px;transform:scale(.2);transform-origin:0 0}
 #mm .mn b{font-size:34px}#mm .mn.cur b{font-size:60px}
 #hud{position:absolute;left:0;right:0;bottom:0;padding:14px 22px 12px;background:linear-gradient(transparent,rgba(0,0,0,.85));opacity:0;transition:opacity .4s;display:flex;align-items:center;gap:12px;z-index:20}
@@ -124,9 +129,27 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 #gate label{font-size:min(1.7vw,24px);color:#ffe600;cursor:pointer}
 #gvoice{font-size:min(1.4vw,19px);color:#9fe}
 #go{font-weight:900;font-size:min(3vw,40px);padding:.5em 1.6em;border:4px solid #ffe600;color:#ffe600;background:rgba(255,230,0,.08);border-radius:999px;cursor:pointer;letter-spacing:.2em;animation:gpulse 1.2s ease-in-out infinite alternate}
-#go:hover{background:#ffe600;color:#000}
+#go:hover,#gos:hover{background:#ffe600;color:#000}
+#gos{font-weight:900;font-size:min(3vw,40px);padding:.5em 1.6em;border:4px solid #00ff9d;color:#00ff9d;background:rgba(0,255,157,.08);border-radius:999px;cursor:pointer;letter-spacing:.2em}
+#gos:hover{background:#00ff9d!important}
 @keyframes gpulse{from{box-shadow:0 0 10px #ffe60066}to{box-shadow:0 0 50px #ffe600cc}}
-#end{position:absolute;right:26px;top:340px;z-index:30;display:none}
+#gr{position:absolute;right:48px;top:36px;width:340px;max-height:410px;overflow:hidden;background:#fbf7ea;color:#222;border:3px solid #222;border-radius:14px;box-shadow:6px 6px 0 rgba(0,0,0,.55);font:800 12.5px/1.35 "Yu Gothic UI","Hiragino Sans",sans-serif;pointer-events:auto;cursor:zoom-in;opacity:0;visibility:hidden;transition:opacity .5s;padding:8px 10px 10px;z-index:25}
+#gr.on{opacity:.96;visibility:visible}
+#gr.big{left:110px;right:110px;top:60px;width:auto;height:960px;max-height:none;overflow:auto;font-size:25px;cursor:zoom-out;z-index:60;opacity:1;padding:18px 30px 30px}
+#gr .gb{font:900 1.05em "Yu Gothic UI",sans-serif;background:#222;color:#ffd400;border-radius:8px;padding:2px 10px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+#gr .gb small{font-weight:700;opacity:.8;font-size:.75em}
+#gr .gw{display:grid;grid-template-columns:repeat(auto-fill,minmax(560px,1fr));gap:22px}
+#gr .gs{padding:8px 10px;border-radius:12px}
+#gr.big .gs{border:3px dashed #bbb;background:#fffdf5}#gr.big .gs.cur{border:4px solid #222;background:#fff;box-shadow:6px 6px 0 #ffd400}
+#gr .gt{display:inline-block;background:#ffd400;border:2px solid #222;border-radius:10px;padding:2px 10px;font-weight:900;transform:rotate(-1deg);margin-bottom:6px}
+#gr .gl{position:relative;padding-left:16px;border-left:3px dotted #888}
+#gr .gi{position:relative;display:flex;gap:7px;align-items:flex-start;margin:6px 0;padding:4px 9px;border:2px solid #222;border-radius:255px 14px 225px 14px/14px 225px 14px 255px;background:#fff;box-shadow:3px 3px 0 var(--c);transform:rotate(var(--r));animation:gin .45s cubic-bezier(.2,1.6,.4,1) both}
+#gr .gi::before{content:"";position:absolute;left:-19px;top:50%;width:16px;border-top:3px dotted #888}
+#gr .gi.gky{background:#ffe96b}#gr .gi.gkc{border-radius:40px;border-style:dashed;background:#fff}
+#gr .gi .ic{font-size:1.5em;line-height:1.1}
+#gr mark{background:linear-gradient(transparent 55%,#ffd400 55%);color:inherit;padding:0 1px}
+@keyframes gin{from{opacity:0;transform:scale(.5) rotate(var(--r))}}
+#end{position:absolute;left:26px;top:100px;z-index:30;display:none}
 #end button{font-size:22px;font-weight:700;padding:.5em 1.2em;background:#ffe600;border:0;border-radius:999px;cursor:pointer}
 @media (prefers-reduced-motion:reduce){#grain{animation:none}}
 </style>
@@ -136,12 +159,13 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
   <canvas id="bg"></canvas>
   <div id="wrap"><div id="view"><div id="cam"><div id="world"></div></div></div></div>
   <div id="ui"><div id="tag"></div>
-    <div id="meter"><div class="mt">足場メーター<small>概念図</small></div>
+    <div id="meter"><div class="mt">skill／harness メーター<small>概念図</small></div>
       <div class="mr"><span>🧠 モデル／Coding Agent の力</span><i><b id="mM" style="background:#00e5ff"></b></i></div>
-      <div class="mr"><span>🧱 自作の足場（仕組み・手順）</span><i><b id="mS" style="background:#ff9f1c"></b></i></div></div>
+      <div class="mr"><span>🧱 自作の skill／harness</span><i><b id="mS" style="background:#ff9f1c"></b></i></div></div>
     <div id="tm"><div class="mt">HVE 262日の航海図</div><div class="ms">2026-01-23 → 2026-10-13 ／ 上から見渡し、ひとつずつ降りていく</div><div id="tmc"></div></div><div id="mm"><div id="mmc"></div></div><div id="chap"></div><div id="tl"></div>
+    <div id="storyCard" hidden><small>HVE QUEST</small><h2></h2><p></p></div>
     <div id="host"><div class="ph"><img src="media/host.jpg" alt=""></div><div id="hname">HVE 開発者</div></div>
-    <div id="bubble"></div><div id="cap"><span></span></div></div>
+    <div id="gr"></div><div id="bubble"></div><div id="cap"><span></span></div></div>
   <canvas id="fx"></canvas>
   <div id="flash"></div><div id="vig"></div><div id="grain"></div><div id="bars"><i></i><i></i></div>
   <div id="end"><button id="replay">▶ もう一度</button></div>
@@ -153,17 +177,17 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
   <div id="gate">
     <h2>Hypervelocity Engineering ― 262日の挑戦と失敗と学び</h2>
     <h1>HVE QUEST</h1>
-    <h2>足場は、いつまで必要か？　CIO / CTO・Lead Software Engineer のために</h2>
+    <h2>skillやharnessは、いつまで必要か？　CIO / CTO・Lead Software Engineer のために</h2>
     <label><input type="checkbox" id="gnar" checked> 🗣 音声ナレーションを使う</label>
     <div id="gvoice"></div>
     <details id="gcloud" style="color:#9fe;font-size:min(1.3vw,18px);max-width:900px"><summary style="cursor:pointer;color:#ffe600">🎙 最新の音声モデルを使う（任意。Azure AI Speech HD 音声 ／ gpt-4o-mini-tts）</summary>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;align-items:stretch;text-align:left">
         <select id="geng"><option value="browser">ブラウザー内蔵（Edge の Microsoft Natural 音声）</option><option value="speech">Azure AI Speech ― HD 音声（Nanami / Masaru DragonHDLatest）</option><option value="oai">gpt-4o-mini-tts ― Azure OpenAI または OpenAI</option></select>
         <input id="gkey" type="password" placeholder="API キー（保存しません。このページのメモリだけ）">
-        <input id="greg" placeholder="Speech: リージョン（例 japaneast） ／ gpt-4o-mini-tts: エンドポイント URL（Azure OpenAI のリソース URL。OpenAI は空欄）">
+        <input id="greg" placeholder="Speech: リージョン（例 japaneast）または Foundry のエンドポイント URL（例 https://xxx.cognitiveservices.azure.com/） ／ gpt-4o-mini-tts: エンドポイント URL（Azure OpenAI のリソース URL。OpenAI は空欄）">
         <input id="gmod" placeholder="gpt-4o-mini-tts のデプロイ名／モデル名（既定 gpt-4o-mini-tts）">
-        <small style="color:#889">失敗したときは、自動でブラウザー内蔵の音声に切り替えます。</small></div></details>    <div id="go">▶ START</div>
-    <p>音声ONでの全画面視聴を推奨（約14分・自動再生。Microsoft Edge 推奨）<br>
+        <small style="color:#889">失敗したときは、自動でブラウザー内蔵の音声に切り替えます。</small></div></details>    <div style="display:flex;gap:24px;flex-wrap:wrap;justify-content:center"><div id="go">▶ フル版（約16分）</div><div id="gos">▶ SHORT 版（約5分）</div></div>
+    <p>音声ONでの全画面視聴を推奨（フル版 約16分／SHORT 版 約5分・自動再生。Microsoft Edge 推奨）<br>
     ⚠ 画面の点滅・大きな音・カメラの揺れを含みます<br>
     操作: Space=一時停止 ／ ← → =シーン移動 ／ N=ナレーション ／ M=BGM・効果音 ／ F=全画面 ／ 画面下にマウスを寄せると操作バー</p>
   </div>
@@ -174,6 +198,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 /* ===================== 基本 ===================== */
 const $=s=>document.querySelector(s);
 const app=$('#app'),bgc=$('#bg'),fxc=$('#fx'),view=$('#view'),camEl=$('#cam'),world=$('#world'),ui=$('#ui'),tl=$('#tl'),chapEl=$('#chap'),tagEl=$('#tag'),flashEl=$('#flash'),wrap=$('#wrap'),vig=$('#vig'),bars=$('#bars'),hostEl=$('#host'),bubEl=$('#bubble'),capEl=$('#cap'),meterEl=$('#meter');
+const storyCard=$('#storyCard');
 const RM=matchMedia('(prefers-reduced-motion:reduce)').matches?0.35:1;
 const C={cy:'#00e5ff',mg:'#ff2d78',ye:'#ffe600',gr:'#00ff9d',rd:'#ff3b30',or:'#ff9f1c',vi:'#8b5cff',gy:'#8a94a6'};
 const EZ={lin:p=>p,out3:p=>1-Math.pow(1-p,3),in3:p=>p*p*p,in2:p=>p*p,io3:p=>p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2,
@@ -292,7 +317,10 @@ async function fetchAudio(text,host){
   if(V.eng==='speech'){
     const voice=host?'ja-JP-Masaru:DragonHDLatestNeural':'ja-JP-Nanami:DragonHDLatestNeural';
     const ssml=`<speak version="1.0" xml:lang="ja-JP" xmlns="http://www.w3.org/2001/10/synthesis"><voice name="${voice}"><prosody rate="+8%">${text.replace(/[<>&]/g,'')}</prosody></voice></speak>`;
-    const r=await fetch(`https://${c.region}.tts.speech.microsoft.com/cognitiveservices/v1`,{method:'POST',headers:{'Ocp-Apim-Subscription-Key':c.key,'Content-Type':'application/ssml+xml','X-Microsoft-OutputFormat':'audio-24khz-96kbitrate-mono-mp3'},body:ssml});
+    // Foundry（AI Services）のエンドポイント URL が渡されたら、そのオリジンの /tts/cognitiveservices/v1 を使う
+    let ttsUrl=`https://${c.region}.tts.speech.microsoft.com/cognitiveservices/v1`;
+    if(/^https?:\/\//i.test(c.region)){try{ttsUrl=new URL(c.region).origin+'/tts/cognitiveservices/v1'}catch(e){}}
+    const r=await fetch(ttsUrl,{method:'POST',headers:{'Ocp-Apim-Subscription-Key':c.key,'Content-Type':'application/ssml+xml','X-Microsoft-OutputFormat':'audio-24khz-96kbitrate-mono-mp3'},body:ssml});
     if(!r.ok)throw new Error('speech '+r.status);return r.blob()}
   const body={model:c.model||'gpt-4o-mini-tts',input:text,voice:host?'onyx':'nova',response_format:'mp3',
     instructions:host?'日本語で、親しみやすく、テンポよく、熱量のある開発者として話してください。':'日本語で、落ち着いたトーンで、聞き取りやすく、要点を際立たせて、少し速めに読み上げてください。'};
@@ -314,6 +342,7 @@ function speak(text,who){
 }const narBusy=()=>V.on&&V.ok&&V.act>0&&E.clock<V.hard;
 function narStart(text,who,id){
   V.cur=id;
+  storyCard.querySelector('p').textContent=text;
   if(who==='host'){hostEl.classList.add('on','sp');bubEl.textContent=text;bubEl.classList.add('on');capEl.classList.remove('on')}
   else{hostEl.classList.remove('on','sp');bubEl.classList.remove('on');capEl.firstChild.textContent=text;capEl.classList.add('on')}
   speak(text,who);
@@ -362,12 +391,13 @@ const SCENES=[];
 const sc=(id,title,mood,build)=>SCENES.push({id,title,mood,build});
 const estSec=t=>Math.max(1.4,t.replace(/[\s、。，．,.「」『』（）()]/g,'').length/(V.on&&V.ok?6.4:7.0)+.45);
 function makeS(){
-  const S={ev:[],tw:[],dur:0,cur:0,maxT:0,nid:0,hold:false};
+  const S={ev:[],tw:[],dur:0,cur:0,maxT:0,nid:0,hold:false,nts:[]};
   const mt=t=>{S.maxT=Math.max(S.maxT,t)};
   S.at=(t,fn,hold)=>{S.ev.push({t:t*1000,fn,done:false,hold});mt(t)};
+  S.expire=(getEl,t,dur,fade)=>{S.at(t+Math.max(0,dur-fade),()=>getEl()?.classList.add('out'));S.at(t+dur,()=>{const el=getEl();if(el){el._r=null;el.remove()}})};
   S.tween=(t,dur,fn,ez)=>{S.tw.push({t:t*1000,dur:dur*1000,fn,ez:ez||EZ.out3,st:{},done:false});mt(t+dur)};
   /* ナレーション: 読み上げ長さで S.cur を進める。返り値は開始時刻（ビート） */
-  S.N=(text,who='nar',o={})=>{const t=S.cur,d=estSec(text),id=++S.nid;
+  S.N=(text,who='nar',o={})=>{const t=S.cur;S.nts.push(t);const d=estSec(text),id=++S.nid;
     S.at(t,()=>narStart(text,who,id),true);S.at(t+d+.1,()=>narEnd(id,who),true);
     S.cur=t+d+(o.gap??.3);mt(S.cur);return t};
   S.H=(text,o)=>S.N(text,'host',o);
@@ -380,7 +410,7 @@ function makeS(){
     for(const k in to)el._s[k]=st.f[k]+(to[k]-st.f[k])*p;if(st.pop)el._s.s=el._sc*(.55+.45*p);applyObj(el)},ez);
   S.hide=(el,t,dur=.3)=>S.mv(el,t,dur,{o:0},EZ.lin);
   S.set=(el,t,patch)=>S.at(t,()=>{Object.assign(el._s,patch);applyObj(el)});
-  S.clear=t=>S.at(t,()=>world.querySelectorAll('.obj').forEach(o=>{if(o._s){o._s.o=0;applyObj(o)}}));
+  S.clear=t=>S.at(t,()=>{world.querySelectorAll('.obj').forEach(o=>{if(o._s){o._s.o=0;applyObj(o)}});tl.querySelectorAll('.tp,.slam,.stamp,.lesson').forEach(e=>e.remove())});
   S.num=(el,t,dur,a,b,f=fmtN,ez=EZ.out3)=>S.tween(t,dur,(p,st)=>{el._in.textContent=f(a+(b-a)*p);if(!st.l||E.clock-st.l>70){st.l=E.clock;A.play('tick')}},ez);
   S.type=(el,t,text,cps)=>S.tween(t,text.length/cps,(p,st)=>{const n=Math.floor(p*text.length);if(n!==st.n){st.n=n;el._in.textContent=text.slice(0,n)+(p<1?'▌':'');A.play('tick')}if(p>=1)el._in.textContent=text},EZ.lin);
   S.cam0=o=>Object.assign(cam.base,o);
@@ -401,16 +431,13 @@ function makeS(){
   S.emote=(t,ch)=>S.at(t,()=>{const el=document.createElement('div');el.className='emote';el.textContent=ch;tl.appendChild(el);A.play('pop');setTimeout(()=>el.remove(),1800)});
   S.say=(t,text,o={})=>{let el;const dur=o.dur||3;
     S.at(t,()=>{el=document.createElement('div');el.className='tp '+(o.pos||'top')+(o.band?' band '+(o.band===true?'':o.band):'');
-      el.innerHTML='<span>'+fmt(text)+'</span>';if(o.size)el.style.fontSize=o.size+'px';if(o.top!==undefined)el.style.top=o.top+'px';tl.appendChild(el);if(o.sfx!==false)A.play(o.sfx||'pop')});
-    S.at(t+dur,()=>{if(el)el.classList.add('out')});S.at(t+dur+.3,()=>{if(el)el.remove()})};
+      el.innerHTML='<span>'+fmt(text)+'</span>';if(o.size)el.style.fontSize=o.size+'px';if(o.top!==undefined)el.style.top=o.top+'px';      tl.appendChild(el);placeOv(el);if(o.sfx!==false)A.play(o.sfx||'pop')});S.expire(()=>el,t,dur,.25)};
   S.slam=(t,text,o={})=>{let el;const dur=o.dur||2;
     S.at(t,()=>{el=document.createElement('div');el.className='slam';el.style.top=(o.y??360)+'px';
       el.innerHTML=`<div class="s1" style="font-size:${o.size||190}px;color:${o.color||'#fff'}">${fmt(text)}</div>`+(o.sub?`<div class="s2" style="color:${o.subColor||'#fff'}">${fmt(o.sub)}</div>`:'');
-      tl.appendChild(el);A.play(o.sfx||'boom');fx.shake=Math.max(fx.shake,o.shake??22);flashEl.style.background=o.flashC||'#fff';fx.flash=(o.flash??.5)*RM;fx.flashDur=.35;fx.lines=.8;if(o.burst)burst(o.burst,{color:o.color||'#ffd84a'})});
-    S.at(t+dur,()=>{if(el)el.classList.add('out')});S.at(t+dur+.3,()=>{if(el)el.remove()})};
+      tl.querySelectorAll('.slam').forEach(e=>e.remove());tl.appendChild(el);placeOv(el);A.play(o.sfx||'boom');fx.shake=Math.max(fx.shake,o.shake??22);flashEl.style.background=o.flashC||'#fff';fx.flash=(o.flash??.5)*RM;fx.flashDur=.35;fx.lines=.8;if(o.burst)burst(o.burst,{color:o.color||'#ffd84a'})});S.expire(()=>el,t,dur,.3)};
   S.lesson=(t,n,text,dur=4.2)=>{let el;
-    S.at(t,()=>{el=document.createElement('div');el.className='lesson';el.innerHTML=`<div><b>LESSON ${n}</b><span>${fmt(text)}</span></div>`;tl.appendChild(el);A.play('pinpon');burst(30,{x:VW/2,y:VH*.76,color:'#00ff9d',speed:8})});
-    S.at(t+dur,()=>{if(el)el.classList.add('out')});S.at(t+dur+.3,()=>{if(el)el.remove()})};
+    S.at(t,()=>{el=document.createElement('div');el.className='lesson';el.innerHTML=`<div><b>LESSON ${n}</b><span>${fmt(text)}</span></div>`;    tl.appendChild(el);placeOv(el);A.play('pinpon');burst(30,{x:VW/2,y:VH*.76,color:'#00ff9d',speed:8})});S.expire(()=>el,t,dur,.25)};
   S.banner=(ghost,cnum,title,sub,color,tagText)=>{
     S.at(.05,()=>{chapEl.style.setProperty('--c',color);tagEl.style.setProperty('--c',color);
       chapEl.innerHTML=`<div class="cghost">${ghost}</div><div class="cwipe"></div><div class="cnum">${cnum}</div><div class="ctitle">${title}</div><div class="cdate">${sub}</div>`;
@@ -425,11 +452,10 @@ function makeS(){
     const a=mk('#00ff9d','✔ うまくいったこと',ok),b=mk('#ff4466','✖ うまくいかなかったこと',ng);a._s.x=-470;b._s.x=470;applyObj(a);applyObj(b);
     S.mv(a,t,.45,{o:1},EZ.back);S.sfx(t,'ding');S.mv(b,t2??t+2.4,.45,{o:1},EZ.back);S.sfx(t2??t+2.4,'buzz')};
   S.verdict=(t,kind,sub)=>{const m={clear:['CLEAR','#00ff9d'],miss:['MISS','#ff3b30'],part:['PARTIAL','#ffb02e'],open:['NOT YET','#b48cff']}[kind];let el;
-    S.at(t,()=>{el=document.createElement('div');el.className='stamp';el.style.setProperty('--c',m[1]);el.innerHTML=`${m[0]}<small>${sub||''}</small>`;tl.appendChild(el);
-      A.play(kind==='clear'?'fanfare':kind==='part'?'pop':'stamp');fx.shake=Math.max(fx.shake,kind==='clear'?8:18);
-      if(kind==='clear'){burst(80,{color:'#00ff9d',speed:12})}else{flashEl.style.background=m[1];fx.flash=.35*RM;fx.flashDur=.25}
-      tagEl.textContent=tagEl.textContent.split(' ｜ 判定')[0]+' ｜ 判定: '+m[0]});
-    S.at(t+3,()=>{if(el)el.classList.add('out')});S.at(t+3.3,()=>{if(el)el.remove()})};
+    S.at(t,()=>{el=document.createElement('div');el.className='stamp';el.style.setProperty('--c',m[1]);el.innerHTML=`${m[0]}<small>${sub||''}</small>`;    tl.appendChild(el);placeOv(el);
+          A.play(kind==='clear'?'fanfare':kind==='part'?'pop':'stamp');fx.shake=Math.max(fx.shake,kind==='clear'?8:18);
+          if(kind==='clear'){burst(80,{color:'#00ff9d',speed:12})}else{flashEl.style.background=m[1];fx.flash=.35*RM;fx.flashDur=.25}
+          tagEl.textContent=tagEl.textContent.split(' ｜ 判定')[0]+' ｜ 判定: '+m[0]})};
   S.flood=(t,dur,words,o={})=>{const n=o.n||30;for(let i=0;i<n;i++)S.at(t+i*dur/n,()=>{const el=document.createElement('div');el.className='flow';el.textContent=words[i%words.length];
     const y0=o.y0??120,y1=o.y1??760;el.style.cssText+=`top:${y0+Math.random()*(y1-y0)}px;font-size:${(o.min||40)+Math.random()*(o.max||36)}px;color:${o.color||'#fff'};animation-duration:${3.6+Math.random()*2.6}s`;
     tl.appendChild(el);setTimeout(()=>el.remove(),7000)})};
@@ -460,19 +486,46 @@ function makeS(){
     ob.show=(t,ids)=>S.at(t,()=>{ids.forEach(id=>{const e=find(id);if(!e)return;e.style.opacity=1;if(e.tagName==='DIV')e.style.transform='scale(1)'});A.play('pop')});
     ob.pulse=(t,id)=>S.at(t,()=>{const e=find(id);if(e){e.firstElementChild.style.boxShadow='0 0 90px 12px '+(N[id].c||'#fff');A.play('hit')}});
     return ob};
+  S.info=(t,dur,sp)=>mkInfo(S,t,dur,sp);
   S.end=(tail=1)=>{S.dur=(Math.max(S.cur,S.maxT)+tail)*1000};
   return S;
 }
+/* 強調表示はシーンが終わるまで残す。出そろった文字どうしが重ならないよう、縦方向に空きを探して置く */
+function placeOv(el){
+  const u=ui.getBoundingClientRect(),k=(u.width/1920)||1,old=el.style.animation,s1=el.querySelector('.s1'),s2=el.querySelector('.s2');
+  const tp=el.classList.contains('tp'),fs1=s1?parseFloat(s1.style.fontSize):tp?parseFloat(getComputedStyle(el).fontSize):0;
+  const measure=()=>{el.style.animation='none';const r0=el.getBoundingClientRect(),q={left:1e9,right:-1e9,width:0},w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);for(let n;n=w.nextNode();){if(!n.textContent.trim())continue;const g=document.createRange();g.selectNodeContents(n);const c=g.getBoundingClientRect();if(c.width){q.left=Math.min(q.left,c.left);q.right=Math.max(q.right,c.right);q.width=1}}
+    const m={L:((q.width?q.left:r0.left)-u.left)/k,R:((q.width?q.right:r0.right)-u.left)/k,T:(r0.top-u.top)/k,B:(r0.bottom-u.top)/k};el.style.animation=old;return m};
+  const others=()=>[...tl.children].filter(e=>e!==el&&e._r);
+  const hit=(l,r,t,b)=>others().find(o=>!(o._r.r+14<l||o._r.l-14>r||o._r.b+10<t||o._r.t-10>b));
+  let m,dx=0,dy=0,ok=false;
+  for(const f of(s1||tp?[1,.78,.6,.46,.36]:[1])){
+    if(tp)el.style.fontSize=fs1*f+'px';
+    if(s1){s1.style.fontSize=fs1*f+'px';if(s2)s2.style.fontSize=50*f+'px'}
+    m=measure();dx=0;dy=0;
+    if(!hit(m.L,m.R,m.T,m.B)){ok=true;break}
+    let best=1e9;
+    for(let x=-1840;x<=1840;x+=40){if(m.L+x<20||m.R+x>1900)continue;
+      for(let s=-1000;s<=1000;s+=10){if(m.T+s<0||m.B+s>1010)continue;const c=Math.abs(x)*.6+Math.abs(s);
+        if(c<best&&!hit(m.L+x,m.R+x,m.T+s,m.B+s)){best=c;dx=x;dy=s}}}
+    if(best<1e9){ok=true;break}}
+  if(!ok){dx=0;dy=0;let o;while((o=hit(m.L,m.R,m.T,m.B))){o._r=null;o.remove()}}
+  if(dy)el.style.top=(el.offsetTop+dy)+'px';
+  if(dx){if(el.classList.contains('stamp'))el.style.right=(parseFloat(getComputedStyle(el).right)-dx)+'px';else el.style.left=dx+'px'}
+  el._r={l:m.L+dx,r:m.R+dx,t:m.T+dy,b:m.B+dy}}
 function clearStage(){world.innerHTML='';tl.innerHTML='';chapEl.innerHTML='';tagEl.classList.remove('on');tagEl.textContent='';bars.classList.remove('on');vig.classList.remove('red');wrap.classList.remove('glitch');
+  storyCard.hidden=true;storyCard.querySelector('p').textContent='';
   world.querySelectorAll('video').forEach(v=>v.pause())}
 function goto(i,cut){
   if(i<0)i=0;if(i>=SCENES.length){finish();return}
   narReset();E.idx=i;E.T=0;E.running=true;clearStage();camReset();
   fx.parts.length=0;fx.lines=0;fx.shake=0;fx.flash=0;bg.ts=.05;bg.speed=.05;bg.grid=false;
   const s=SCENES[i],S=makeS();E.S=S;
+  storyCard.querySelector('h2').textContent=s.title;
   try{s.build(S)}catch(err){console.error('build error',s.id,err)}
   E.tmS=false;if(TOP[s.id]&&!E.noCutFx){E.T=-2400;A.play('pop')}
   if(!S.dur&&!S.hold)S.end(1);if(S.hold)S.dur=1e12;
+  grPlan(S,s.id);
   S.ev.sort((a,b)=>a.t-b.t);A.mood(s.mood);mapState();
   if(cut&&!E.noCutFx){A.play('whoosh');fx.flash=.7*RM;flashEl.style.background='#fff';fx.flashDur=.25;fx.glitchUntil=E.clock+220}
   $('#end').style.display='none';stepEngine();buildHud();
@@ -485,6 +538,28 @@ function stepEngine(){
   for(const w of S.tw){if(w.done||E.T<w.t)continue;const p=Math.min(1,(E.T-w.t)/w.dur);try{w.fn(w.ez(p),w.st)}catch(err){console.error(err)}if(p>=1)w.done=true}
 }
 function finish(){E.running=false;$('#end').style.display='block';app.classList.add('hud')}
+/* 字幕や補助パネルではなく、画面内で実際に見える主要オブジェクトを判定する。 */
+function stageHasContent(){
+  const bounds=ui.getBoundingClientRect();
+  const top=Math.max(bounds.top,bars.classList.contains('on')?VH*.095:0),bottom=Math.min(bounds.bottom,bars.classList.contains('on')?VH*.905:VH);
+  const visible=el=>{
+    let opacity=1;
+    for(let p=el;p&&p!==app;p=p.parentElement){
+      const s=getComputedStyle(p);opacity*=Number(s.opacity);
+      if(s.display==='none'||s.visibility==='hidden'||opacity<.15)return false}
+    const r=el.getBoundingClientRect(),w=Math.max(0,Math.min(r.right,bounds.right)-Math.max(r.left,bounds.left)),h=Math.max(0,Math.min(r.bottom,bottom)-Math.max(r.top,top));
+    return w>=16*SC&&h>=16*SC&&w*h>=1600*SC*SC;
+  };
+  if([...chapEl.querySelectorAll('.ctitle'),...tl.querySelectorAll('.tp,.slam,.stamp,.lesson')].some(visible))return true;
+  if(E.T<0||SCENES[E.idx]?.id==='bird')return visible($('#tmc'));
+  for(const o of world.children){
+    if(!o._s||o._s.o<.15)continue;
+    for(const el of o.querySelectorAll('.in,.in *,.face.front,.face.front *')){
+      const text=[...el.childNodes].some(n=>n.nodeType===Node.TEXT_NODE&&n.textContent.trim());
+      const graphic=el.matches('img,video,path,line,rect,circle')||getComputedStyle(el).backgroundImage!=='none'||getComputedStyle(el).backgroundColor!=='rgba(0, 0, 0, 0)';
+      if((text||graphic)&&visible(el))return true}}
+  return false;
+}
 let last=performance.now();
 function frame(ts){requestAnimationFrame(frame);let dt=Math.min(50,ts-last);last=ts;if(E.paused||!E.running)dt=0;E.clock+=dt;
   if(dt>0){E.T+=dt;stepEngine();if(E.running&&E.S&&E.T>=E.S.dur&&!narBusy())goto(E.idx+1,true)}render(dt)}
@@ -496,7 +571,7 @@ function render(dt){
   if(E.clock>fx.glitchUntil)wrap.classList.remove('glitch');else wrap.classList.add('glitch');
   if(fx.flash>0){fx.flash=Math.max(0,fx.flash-dt/1000/fx.flashDur);flashEl.style.opacity=fx.flash}else flashEl.style.opacity=0;
   bg.speed+=(bg.ts-bg.speed)*Math.min(1,dt/400);for(let i=0;i<3;i++)bg.col[i]+=(bg.tc[i]-bg.col[i])*Math.min(1,dt/600);
-  tmFrame();drawBg(dt);drawFx(dt);if(E.hudT>0&&performance.now()-E.hudT>2800)app.classList.remove('hud');updateHud();
+  tmFrame();storyCard.hidden=!E.S||stageHasContent();drawBg(dt);drawFx(dt);if(E.hudT>0&&performance.now()-E.hudT>2800)app.classList.remove('hud');updateHud();
 }
 function drawBg(dt){const c=bgx,w=bgc.width,h=bgc.height;c.setTransform(1,0,0,1,0,0);const sp=bg.speed;
   c.globalAlpha=1;c.fillStyle=sp>.5?'rgba(5,6,10,.28)':'#05060a';c.fillRect(0,0,w,h);
@@ -531,17 +606,17 @@ function showHud(){app.classList.add('hud');E.hudT=performance.now()}
 function fullscreen(){if(document.fullscreenElement)document.exitFullscreen();else document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{})}
 function setMute(){A.mute(!A.muted);$('#bMute').textContent=A.muted?'🔇':'🔊'}
 function setNar(v){V.on=v;$('#bNar').textContent=v?'🗣':'🤐';if(!v){narReset()}}
-function start(){A.init();const e=$('#geng').value;if(e!=='browser'&&$('#gkey').value){V.eng=e;V.cfg=e==='speech'?{key:$('#gkey').value,region:$('#greg').value.trim()||'japaneast'}:{key:$('#gkey').value,url:$('#greg').value.trim(),model:$('#gmod').value.trim()};V.ok=true}if(A.ctx)A.ctx.resume();setNar($('#gnar').checked);
+function start(short){if(short){SCENES.length=0;SHORTSCENES.forEach(s=>SCENES.push(s));$('#prog').innerHTML=''}A.init();const e=$('#geng').value;if(e!=='browser'&&$('#gkey').value){V.eng=e;V.cfg=e==='speech'?{key:$('#gkey').value,region:$('#greg').value.trim()||'japaneast'}:{key:$('#gkey').value,url:$('#greg').value.trim(),model:$('#gmod').value.trim()};V.ok=true}if(A.ctx)A.ctx.resume();setNar($('#gnar').checked);
   try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{})}catch(e){}
   $('#gate').style.display='none';E.paused=false;E.running=true;goto(0,false);syncPlay();showHud()}
-$('#go').onclick=start;$('#bPlay').onclick=togglePause;
+$('#go').onclick=()=>start(false);$('#gos').onclick=()=>start(true);if(new URLSearchParams(location.search).has('short')){$('#go').style.display='none';document.title='【SHORT 5分】'+document.title}$('#bPlay').onclick=togglePause;
 $('#bPrev').onclick=()=>{goto(E.T>2500?E.idx:E.idx-1,false);E.paused=false;syncPlay()};
 $('#bNext').onclick=()=>{goto(E.idx+1,true);E.paused=false;syncPlay()};
 $('#bMute').onclick=setMute;$('#bNar').onclick=()=>setNar(!V.on);$('#bFull').onclick=fullscreen;
 $('#replay').onclick=()=>{E.paused=false;goto(0,false);syncPlay()};
 addEventListener('mousemove',showHud);
 addEventListener('keydown',e=>{
-  if($('#gate').style.display!=='none'){if(e.key==='Enter'||e.key===' '){e.preventDefault();start()}return}
+  if($('#gate').style.display!=='none'){if(e.key==='Enter'||e.key===' '){e.preventDefault();start(new URLSearchParams(location.search).has('short'))}return}
   showHud();
   if(e.key===' '||e.key==='k'){e.preventDefault();togglePause()}
   else if(e.key==='ArrowRight'){goto(E.idx+1,true);E.paused=false;syncPlay()}
@@ -554,7 +629,7 @@ requestAnimationFrame(frame);
 /* ===================== 航海図（全体の鳥観図 → 個々のトピックへ降りる） ===================== */
 const TOP={era:{d:[1,23],l:0,t:'弱かった時代',c:'#ff9f1c'},v1:{d:[3,18],l:0,t:'HVE v1 誕生',c:'#00ff9d'},
   q1:{d:[3,10],l:1,t:'Q1 止まらない',c:'#00e5ff'},q7:{d:[9,18],l:1,t:'Q7 費用',c:'#ffe600'},proof:{d:[10,10],l:1,t:'EABK の結果',c:'#ff2d78'},
-  q4:{d:[4,21],l:2,t:'Q4 知識',c:'#ff2d78'},q3:{d:[8,26],l:2,t:'Q3 工程',c:'#00ff9d'},q2:{d:[9,27],l:2,t:'Q2 並列',c:'#8b5cff'},shrink:{d:[10,5],l:2,t:'足場は縮んだ',c:'#00ff9d'},twist:{d:[10,10],l:2,t:'使い分け',c:'#ff2d78'},
+  q4:{d:[4,21],l:2,t:'Q4 知識',c:'#ff2d78'},q3:{d:[8,26],l:2,t:'Q3 工程',c:'#00ff9d'},q2:{d:[9,27],l:2,t:'Q2 並列',c:'#8b5cff'},shrink:{d:[10,5],l:2,t:'skillやharnessは縮んだ',c:'#00ff9d'},twist:{d:[10,10],l:2,t:'使い分け',c:'#ff2d78'},
   q5:{d:[3,18],l:3,t:'Q5 安全',c:'#ff9f1c'},q6:{d:[9,25],l:3,t:'Q6 正しさ',c:'#ff3b30'},bas:{d:[10,12],l:3,t:'BAS',c:'#ff9f1c'},
   eos:{d:[10,3],l:0,t:'EOS 止める',c:'#ff3b30'},born:{d:[10,8],l:0,t:'HVE v2 誕生',c:'#00e5ff'},ring:{d:[10,13],l:0,t:'一周して戻る',c:'#8b5cff'}};
 const fpos=d=>{const[m,dd]=d;return(m<10?(m-1)+dd/31:9+dd/13*3)/12};
@@ -582,6 +657,124 @@ function tmFrame(){
     tm.style.opacity=q<.55?1:Math.max(0,1-(q-.55)/.45);world.style.opacity=Math.max(0,(q-.6)/.4);mm.classList.remove('on')}
   else{tm.style.transform='none';tm.style.opacity=bird?1:0;world.style.opacity=1;mm.classList.toggle('on',has&&!bird)}
 }
+/* ===================== SHORT 版（約5分・重要点だけ） ===================== */
+const SHORTSEQ=['open','s_goal','s_era','s_quests','s_eos','s_shrink','s_v2','s_enterprise','s_bas','s_take'];
+const VERD={clear:['CLEAR','#00ff9d'],miss:['MISS','#ff3b30'],part:['PARTIAL','#ffb02e'],open:['NOT YET','#b48cff']};
+sc('s_goal','SHORT 目的と問い','tension',S=>{
+  S.cam0({z:500});S.bg(0,{speed:.12,tint:'#08304a'});S.tag(0,'SHORT ｜ 目的と、7つの目標',C.cy);
+  let b=S.H('HVE の開発者です。HVE の目的は、要求から設計、実装、検証までを、再現可能なワークフローにすることでした。');S.emote(b+.4,'👋');
+  const Q=['止まらない','分けて並列','工程を回す','社内の情報','安全に任せる','正しさ','費用と証跡'],cols=[C.cy,C.vi,C.gr,C.mg,C.or,C.rd,C.ye];
+  b=S.N('挑んだ目標は7つ。止まらない。分けて並列。工程を回す。社内の情報。安全に任せる。正しさ。費用と証跡。');
+  Q.forEach((t,i)=>{const o=S.obj(CD(cols[i],`${F(32,cols[i],'Q'+(i+1))}${T(28,'#fff',t,800)}`,'width:400px;padding:14px 20px'),{x:i<4?-690+i*460:-460+(i-4)*460,y:i<4?-60:130,o:0});S.mv(o,b+.3+i*.7,.4,{o:1},EZ.back);S.sfx(b+.3+i*.7,'coin')});
+  b=S.N('何に挑み、何がうまくいき、何がうまくいかなかったのか。そして、モデルが強くなったとき、必要な仕組みは、どこまで小さくなるのか。');
+  S.clear(b+3);S.slam(b+3.2,'skillやharnessは、いつまで必要か？',{size:118,color:C.ye,y:380,dur:3.4,sfx:'boom',burst:100});S.wait(1.4);S.end(.8)});
+sc('s_era','SHORT skillやharnessの時代','drive',S=>{
+  S.cam0({z:400});S.bg(0,{speed:.2,tint:'#3a2208',grid:true,gridCol:C.or});S.tag(0,'SHORT ｜ 弱かった時代に、skillやharnessを積んだ',C.or);S.meter(0,30,62);
+  let b=S.N('2026年1月。最初の依頼は、事業の未来シナリオでした。当時のモデルは、長い出力が途切れ、一度では品質が出ませんでした。');
+  const hd=S.obj(CD(C.gy,`${F(34,C.gy,'claude-sonnet-4.5')}${T(26,'#cde','2026-01 の主力モデル')}`,'width:560px'),{x:-480,y:-40,o:0});S.mv(hd,b+.3,.5,{o:1},EZ.back);
+  ['出力が途中で切れる','長文の一貫性が崩れる','一度では品質が出ない'].forEach((t,i)=>{const o=S.obj(CD(C.rd,T(30,'#fff','⚠ '+t,800),'width:560px;padding:14px 24px'),{x:480,y:-40+i*110,o:0});S.mv(o,b+2+i*1.3,.4,{o:1},EZ.back);S.sfx(b+2+i*1.3,'buzz')});
+  S.clear(S.cur-.1);
+  b=S.N('だから、分割し、レビューを回し、手順を増やしました。1か月でファイルは11倍。HVE v1 は、27万行、Prompt 314件、ほぼ毎日リリースのフレームワークになりました。');
+  S.info(b+1.2,2.8,{type:'cmp',c:C.ye,title:'ファイル数の増加（02-20 → 03-31）',big:'×11',rows:[['02-20',69,C.cy,'69'],['03-31',754,C.ye,'754']]});
+  S.info(b+4.4,3.2,{type:'kpi',step:.9,items:[['🐍',277000,' 行','27.7万行（Python 934ファイル）',C.gr],['📚',314,' 件','Prompt（Skill 34件）',C.cy],['🚀',197,' 回','48日間のリリース',C.mg]]});
+  S.clear(S.cur-.1);
+  b=S.N('これは、当時は正しい処方でした。足りなかったのは、外す基準だけです。');S.lesson(b+.3,1,'補助輪は、当時は正しかった。足りなかったのは{y|外す基準}（測る仕組み）。',3.6);S.end(1)});
+sc('s_quests','SHORT 7つの結果','drive',S=>{
+  S.cam0({z:420});S.bg(0,{speed:.1,tint:'#2a1060',grid:true,gridCol:C.vi});S.tag(0,'SHORT ｜ 7つの目標の結果',C.vi);S.meter(0,60,100);
+  const R=[['Q1 止まらない','人の入力の約半分が「再開」。自作の再開機構は、15〜39時間の連鎖を生んだ','miss','止まらない。人の入力の約半分が再開でした。自作の再開機構は、1回15時間から39時間の、止まる連鎖を生みました。'],
+    ['Q2 分けて並列','自作 ATG は、品質は同じで、時間 ×1.7〜2.25。勝ったのは「300行以内」の1文','part','並列。自作の ATG は、品質が同じで、時間は2倍近く。勝ったのは、300行以内に分ける、という1文でした。'],
+    ['Q3 工程を回す','Prompt 約314件。業務アプリは未完成（HVE 関連の使用量は 4アプリ合計の1.4倍）','part','工程。Prompt 314件の保守費用が、成果と並びました。業務アプリは、未完成でした。'],
+    ['Q4 社内の情報','固定の1問×1回は、35問中66%が見つからず。道具を渡して任せる設計へ','part','社内の情報。固定の1問1回は、35問中66パーセントが見つかりませんでした。道具を渡して、任せる設計に変え、残る壁は、認証です。'],
+    ['Q5 安全に任せる','plan モード・pre-tool-use フック・Cloud agent の標準機能が追いついた','clear','安全。ここは、プラットフォームが追いつきました。自作は、不要になりました。'],
+    ['Q6 正しさ','偽の PASS。隠しテスト 258 / 564 の実装を受理','miss','正しさ。自作の ATG は、終了コードの自己申告を受け入れ、隠しテスト564件のうち258件の実装を、合格にしました。HVE があっても、防げませんでした。'],
+    ['Q7 費用と証跡','測り始めは約8か月後。v2 でも AI クレジットは自動集計されない','open','費用と証跡。測り始めたのは、約8か月後。正直に言うと、これは、まだ解けていません。']];
+  let b=S.N('7つの目標の結果です。');
+  R.forEach(([q,t,v,n],i)=>{b=S.N(n,'nar',{gap:.25});const y=-355+i*100,c=VERD[v][1];
+    const row=S.obj(CD(c,`<span style="color:${c};font-weight:900">${q}</span>　<span style="color:#fff">${t}</span>`,'font:700 24px/1.3 sans-serif;width:1420px;padding:12px 20px;text-align:left;white-space:normal'),{x:-170,y,o:0});S.mv(row,b,.4,{o:1},EZ.back);S.sfx(b,'pop');
+    const ch=S.obj(`<div style="font:900 34px Impact,sans-serif;color:${c};border:6px solid ${c};padding:2px 18px;border-radius:10px;background:rgba(0,0,0,.75);transform:rotate(-6deg)">${VERD[v][0]}</div>`,{x:700,y,z:60,o:0,s:2.4});S.mv(ch,b+1.2,.18,{o:1,s:1},EZ.in2);S.sfx(b+1.3,v==='clear'?'fanfare':'stamp')});
+  S.end(1.2)});
+sc('s_eos','SHORT 止める決断','tension',S=>{
+  S.cam0({z:600});S.bg(0,{speed:0,tint:'#400a0a'});S.tag(0,'SHORT ｜ 2026-10-03 止める決断',C.rd);S.meter(0,60,100);
+  let b=S.N('10月3日。解こうとした10の課題を、ひとつずつ検証しました。');S.sfx(b,'siren',2);S.red(b,true);
+  const date=S.obj('2026-10-03',{o:0,y:-300,css:'font:700 70px Consolas;color:#ff9a9a;letter-spacing:.2em'});S.mv(date,b+.3,.4,{o:1});
+  b=S.N('7つは、Copilot 本体の機能か、運用の規則で足りる。残る3つも、小さな仕組みで足ります。');S.red(b,false);
+  S.slam(b+.8,'7 ＋ 3',{size:230,color:C.ye,y:300,dur:3.4,sfx:'hit',sub:'不要 7 ／ 薄い仕組み 3'});
+  b=S.N('HVE を止める。ただし、課題は今も実在します。不要になったのは、解決のために、フレームワークを作り保守することです。');
+  S.at(b+.3,()=>{A.play('stamp');fx.shake=28;flashEl.style.background='#f33';fx.flash=.6;fx.flashDur=.3});S.slam(b+.3,'EOS',{size:220,color:C.rd,y:380,dur:3,sfx:'stamp',sub:'HVE v1 の開発停止を決定'});
+  b=S.N('harness は、なくなったのではありません。置き場所が、移りました。');
+  S.lesson(b+.3,2,'課題は実在する。不要なのは「作って保守すること」。harness は{y|置き場所が移った}。',4);S.end(1)});
+sc('s_shrink','SHORT skillやharnessは縮んだ','epic',S=>{
+  S.cam0({z:300});S.bg(0,{speed:.3,tint:'#0b4a6a',grid:true,gridCol:C.cy});S.tag(0,'SHORT ｜ skillやharnessは、縮んだ',C.gr);S.meter(0,60,100);
+  let b=S.N('同じ目標への答えは、今は、とても小さくなりました。止まらない目標は、自動継続と、1文の再開。並列は、1文。工程は、2本の Prompt。安全は、標準機能。正しさは、終了コードと CI。');
+  const L=[['止まらない','Workflow 再開機構','Autopilot ＋「再開して」'],['並列','DAG・ATG','「300行以内に」の1文'],['工程','Prompt 約314件','Prompt 2本'],['安全','自作ゲート','標準機能'],['正しさ','自己申告','exit code ＋ CI']];
+  L.forEach(([q,o,n],i)=>{const y=-300+i*86,t0=b+.4+i*1.6;
+    const a=S.obj(CD(C.rd,`<b style="color:#ff9aa8">${q}</b>　${o}`,'font:700 26px sans-serif;width:640px;padding:10px 16px;text-align:left'),{x:-420,y,o:0});S.mv(a,t0,.35,{o:1},EZ.back);
+    const n2=S.obj(CD(C.gr,`<b style="color:#fff">${n}</b>`,'font:700 26px sans-serif;width:560px;padding:10px 16px;text-align:left'),{x:410,y,o:0,s:.6});S.mv(n2,t0+.7,.4,{o:1,s:1},EZ.back);S.sfx(t0+.7,'shrink');S.mv(a,t0+.7,.5,{o:.4},EZ.io3);S.meter(t0+.7,60+i*5,100-(i+1)*14)});
+  S.clear(S.cur-.1);
+  b=S.N('モデルと Coding Agent の力が上がるほど、必要なskillやharnessは、小さくなります。ただし、ゼロではありません。能力に依存しないskillやharnessだけが、残りました。');
+  S.cam(b,.3,{z:0});const ch=mkChart(S,b+.2,true);ch.reveal(b+1,4);S.meter(b+1,92,22);
+  S.lesson(b+6,3,'skillやharnessは2種類。「能力不足を補うもの」は外し、「能力に依存しないもの」は{y|残す}。',4.2);S.end(1)});
+sc('s_v2','SHORT HVE v2 BORN','epic',S=>{
+  S.cam0({z:300});S.bg(0,{speed:.4,tint:'#0b6a8a',grid:true,gridCol:C.cy});S.tag(0,'SHORT ｜ 薄いskillやharnessで、再挑戦',C.cy);S.meter(0,88,24);
+  const logo=S.obj(LOGO(300)+'HVE v2</div>',{o:0,y:-170,s:2});
+  let b=S.N('HVE バージョン2。Enterprise App Build Kit、EABK。conductor に、Prompt を1回送るだけ。');
+  S.at(b+.2,()=>{A.play('boom');A.mood('epic');fx.flash=1;flashEl.style.background='#fff';fx.flashDur=.5;fx.shake=34;fx.lines=1;burst(180,{color:'#ffe066',speed:18})});S.mv(logo,b+.2,.7,{o:1,s:1},EZ.back);
+  const R=[['✍️','要求を書けるのは、<br>1つのエージェントだけ',C.cy],['🔒','実装担当は、<br>System Test を変更できない',C.mg],['✅','合否は exit code。<br>終了前に必ず検証',C.gr],['⛔','危険な操作は拒否',C.rd]];
+  b=S.N('規則は4つ。要求を書けるのは1つだけ。実装担当はテストを変えられない。合否は終了コード。危険な操作は拒否。それを、お願いではなく、フックで強制します。');
+  R.forEach(([ic,t,c],i)=>{const o=S.obj(CD(c,`<div style="font-size:70px">${ic}</div><div style="font:800 26px/1.4 sans-serif">${t}</div>`,'width:370px;padding:14px 12px'),{x:-690+i*460,y:120,o:0});S.mv(o,b+.4+i*1.7,.5,{o:1},EZ.back);S.sfx(b+.4+i*1.7,'hit')});
+  S.clear(S.cur-.1);S.mv(logo,S.cur,.2,{o:0},EZ.lin);
+  b=S.N('人が打つ Prompt は、対話型の254回から、EABK の5回へ。完走させると、受入基準の98パーセント。止まっても、1文で再開できます。');
+  S.slam(b+.4,'254 → 5',{size:210,color:C.gr,y:240,dur:3,sfx:'boom',sub:'※ 条件の異なる参考値（n=1）',subColor:'#ffb3b3'});
+  S.slam(b+4.4,'98%',{size:200,color:C.cy,y:240,dur:2.6,sfx:'hit',sub:'完走した場合の受入基準（49/50）／ 1,096 テスト'});
+  S.clear(S.cur-.1);
+  b=S.N('ただし正直に。1回の実行は48パーセント。素の Agent の51パーセントと同水準です。小さな変更なら、素の Agent が最強。だから、使い分けです。');
+  const a1=S.obj(CD(C.or,`${T(26,'#cde','EABK の1回の実行')}${F(110,C.or,'48%')}`,'min-width:440px'),{x:-480,y:-60,o:0}),a2=S.obj(CD(C.cy,`${T(26,'#cde','素の Coding Agent')}${F(110,C.cy,'51%')}`,'min-width:440px'),{x:0,y:-60,o:0}),a3=S.obj(CD(C.gr,`${T(26,'#cde','使い分け')}${T(30,C.gr,'小さな変更 → 素の Agent<br>規模・規制 → EABK',900)}`,'min-width:520px'),{x:520,y:-60,o:0});
+  S.mv(a1,b+.3,.4,{o:1},EZ.back);S.mv(a2,b+1.6,.4,{o:1},EZ.back);S.mv(a3,b+4,.5,{o:1},EZ.back);S.sfx(b+4,'ding');
+  S.lesson(b+7,4,'規則は{y|hook で強制}する。補助輪はゼロにせず、薄く、外から効く場所だけ。',3.6);S.end(1)});
+sc('s_enterprise','SHORT Enterprise：比較評価の機能要件','tension',S=>{
+  S.cam0({z:0});S.bg(0,{speed:.1,tint:'#0b2a5a',grid:true,gridCol:C.cy});S.tag(0,'SHORT ｜ 比較評価の考慮事項：Enterprise の機能要件',C.cy);S.meter(0,88,22);
+  let b=S.N('方式を比べるときの、もうひとつの考慮事項。Enterprise です。時間や品質は非機能。大量の部署、人、モノ、プロセス、取引先が関わることは、機能要件です。画面だけのモックとの、大きな違いです。');
+  S.slam(b+.3,'ENTERPRISE',{size:140,color:C.cy,y:380,dur:4.2,sfx:'hit',shake:12,sub:'時間や品質ではない。機能要件の話。'});
+  S.clear(S.cur-.1);
+  const AX=[['① 規模と整合','部署をまたぐ要求の矛盾・ドリフトを防ぐ',C.cy],['② 権限と責任分界','誰が書き、承認し、変更できないか',C.vi],['③ 監査証跡','何を・誰が・いつ・どのモデルで',C.gr],['④ 規制・セキュリティ','個人情報・認証・機密は重い工程へ',C.rd],['⑤ 実環境・既存システム','本物の認証・社内データ。スタブで完了にしない',C.or],['⑥ 長期の保守と費用','予算・配賦・引き継ぎ',C.ye]];
+  b=S.N('評価するのは6つ。規模と整合。権限と責任の分界。監査の証跡。規制とセキュリティ。実環境と既存システム。長期の保守と費用。');
+  S.say(b+.2,'Enterprise で{y|増える評価軸}：6つ',{pos:'top',size:58,dur:60,sfx:'hit',band:true,top:130});
+  AX.forEach(([h,t,c],i)=>{const o=S.obj(CD(c,`${T(34,c,h,900)}${T(24,'#dde',t,600)}`,'width:560px;padding:16px 22px;white-space:normal;text-align:left'),{x:-600+(i%3)*600,y:i<3?-90:150,o:0});S.mv(o,b+.6+i*1.5,.45,{o:1},EZ.back);S.sfx(b+.6+i*1.5,'ding')});
+  S.wait(.4);S.clear(S.cur-.1);
+  b=S.N('方式ごとに並べると、差が出ます。再現性、職務分掌、規則の強制、要求の追跡は、EABK が、構造で満たします。代わりに、保守の負担は、重くなります。');
+  S.say(b+.1,'Enterprise の{y|機能要件} × 4つの方式',{pos:'top',size:54,dur:60,sfx:'hit',band:true,top:110});
+  const t1=entTable(S,{head:ENT_ROWS.head,rows:ENT_ROWS.rows.filter((r,i)=>[0,1,2,5,8,10].includes(i))},{y:60,fs:27});S.mv(t1,b,.4,{o:1},EZ.lin);
+  for(let i=0;i<6;i++)t1.show(b+.8+i*.9,i);
+  S.wait(.8);S.clear(S.cur-.1);
+  b=S.N('比較評価の重みは、運用が20、ビジネスとの整合が25。Enterprise に直結する観点が、合わせて45パーセント。重みを変えると、首位も変わります。時間だけなら素の Agent。整合を最重視すると Prompt 駆動。品質と運用を重く見ると EABK です。');
+  S.say(b+.1,'Enterprise に直結する観点：{y|45%}。重みで{y|首位が変わる}',{pos:'top',size:46,dur:60,sfx:'hit',band:true,top:110});
+  const t3=entTable(S,S_ROWS,{y:60,fs:28});S.mv(t3,b,.4,{o:1},EZ.lin);
+  [0,1,2,3].forEach(i=>t3.show(b+2+i*2.2,i));
+  S.wait(.8);S.clear(S.cur-.1);
+  b=S.N('点数は私の判断で、1つのアプリでの採点です。大企業の規模での実測は、まだありません。あなたの組織の重みで、計算し直してください。');
+  S.say(b+.3,'あなたの組織の{y|重み}は、どこにありますか？',{pos:'mid',size:60,dur:5,sfx:'hit',band:true});
+  S.say(b+2.2,'※ 点数は筆者の判断・n=1。大企業の規模での{r|実測は未実施}',{pos:'bot',size:36,dur:4,sfx:false,band:'r'});
+  S.lesson(b+4.2,7,'Enterprise は{y|機能要件}が違う。重みは自分で決める。',3.6);S.wait(4.2);
+  S.end(1)});
+sc('s_bas','SHORT 事業構想へ（BAS）','calm',S=>{
+  S.cam0({z:600});S.bg(0,{speed:.1,tint:'#3a2208',grid:true,gridCol:C.or});S.tag(0,'SHORT ｜ 同じ道具を、事業構想へ',C.or);S.meter(0,92,20);
+  let b=S.N('このskillやharnessを、事業構想にも向けました。Business Analytics Studio。最初の、毎回ゼロから生成する方式は、1件60分以上かかり、要件は一部だけでした。');
+  S.say(b+.3,'1件 {r|60分以上}／要件は一部だけ',{pos:'top',size:52,dur:4,sfx:'buzz',band:'r'});
+  b=S.N('そこで、再利用できるものをデータに分けました。共通アプリ本体、顧客パック、生成パイプライン。目標は、1件3〜6分。ただし、まだ測っていない目標です。');
+  const v=S.media('media/bas-app.webm',1500,844,C.or,{x:0,y:30,o:0,s:.8});S.play(v,b+.3,6.0);S.mv(v,b+.3,.9,{o:1,s:1},EZ.back);S.sfx(b+.3,'hit');S.cam(b+.3,14,{z:100},EZ.lin);
+  S.say(b+6,'画面は{y|デモ（お手本パック）}。3〜6分は目標で、未実測。',{pos:'top',size:38,dur:5,sfx:false,band:'c'});
+  b=S.N('価値の中心は、コードではなく、顧客パック。出典と確度と機密区分を持つ、データです。');S.lesson(b+.3,5,'再利用できるものは、{y|データ}に分ける。価値の中心は、顧客パック・出典・確度。',4);S.end(1)});
+sc('s_take','SHORT 持ち帰り','epic',S=>{
+  S.cam0({z:600});S.bg(0,{speed:.2,tint:'#0b4a6a',grid:true,gridCol:C.cy});S.tag(0,'SHORT ｜ 持ち帰り',C.ye);S.meter(0,95,16);
+  let b=S.H('skillやharnessは、いつまで必要か。答えは、測って、外す。持ち帰ってほしいのは、5つです。');S.emote(b+.5,'💡');
+  const T5=[['補助輪を、棚卸しする','能力不足を補うものは外し、能力に依存しないものは残す'],['測る仕組みを、最初に入れる','AIU・キャッシュ・サブエージェント別・LLM 以外の時間'],['合否は、エージェントの外で決める','exit code と CI。自己申告を信じない'],['規則は、hook で強制する','設定だけでは守られない'],['使い分ける','小さな変更は素の Agent。規模・規制は薄い harness']];
+  T5.forEach(([a,t],i)=>{b=S.N(a+'。','nar',{gap:.15});const o=S.obj(CD(i%2?C.mg:C.cy,`${T(36,i%2?C.mg:C.cy,(i+1)+'. '+a,900)}${T(24,'#dde',t,600)}`,'width:1200px;white-space:normal;text-align:left;padding:14px 30px'),{y:-300+i*128,o:0});S.mv(o,b,.45,{o:1},EZ.back);S.sfx(b,'pop')});
+  S.clear(S.cur+.6);S.wait(.8);
+  const t=S.obj(LOGO(300)+'HVE v2</div>',{y:-120,o:0,s:2});b=S.H('次世代のソフトウェアエンジニアリングは、もっと速く、もっと楽しくなります。一緒に、作りましょう。');
+  S.at(b-.2,()=>{A.play('boom');fx.flash=1;flashEl.style.background='#fff';fx.flashDur=.5;fx.shake=26;fx.lines=1;burst(180,{color:'#ffe066',speed:18})});S.mv(t,b-.2,.7,{o:1,s:1},EZ.back);
+  const a=S.obj('Be Hypervelocity.',{o:0,y:100,css:'font:800 80px Consolas,monospace;color:#ffe600;text-shadow:0 0 30px #ffe600;letter-spacing:.08em'});S.mv(a,b+.4,.6,{o:1},EZ.back);S.emote(b+1.5,'🚀');
+  S.at(b+2,()=>{$('#end').style.display='block';app.classList.add('hud')});S.wait(1);S.hold=true});
+
 /* ===================== 共通部品 ===================== */
 const CD=(c,inner,css='')=>`<div class="card" style="--c:${c};${css}">${inner}</div>`;
 const F=(px,c,txt,extra='')=>`<div style="font:900 ${px}px Consolas,'Yu Gothic UI',monospace;color:${c};${extra}">${txt}</div>`;
@@ -589,7 +782,102 @@ const T=(px,c,txt,w=700)=>`<div style="font:${w} ${px}px 'Yu Gothic UI',sans-ser
 const LOGO=(px)=>`<div style="font:900 ${px}px/1 Impact,'Arial Black',sans-serif;background:linear-gradient(90deg,#00e5ff,#ff2d78 60%,#ffe600);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 40px rgba(0,229,255,.6))">`;
 const dayStr=d=>{const t=new Date(2026,0,23+d);return `${t.getFullYear()}-${pad(t.getMonth()+1,2)}-${pad(t.getDate(),2)}`};
 const stat=(S,t,big,small,color,o={})=>S.slam(t,big,Object.assign({size:220,color,sub:small,dur:1.4,sfx:'hit',shake:16,flash:.35,burst:40},o));
-/* 概念図: モデルの力は伸び続け、自作の足場は積み上がって、縮む */
+/* ===================== グラフィック・ファシリテーション（右上の記録パネル） ===================== */
+/* 各シーンで話した内容を、ナレーションの進行に合わせて、アイコン・吹き出し・強調で図式化して記録する。クリックで拡大（全シーンの記録を一覧）。[..] は蛍光ペンの強調。kind: y=黄の塗り, c=雲（問い・決断） */
+const GR={
+open:[['📅','[2026-01-23] たった1つの commit から始まった'],['⏱','[262日] ／ commit 4,775'],['📦','27.7万行 ／ HVE 本体で [181,055 AIU]'],['🛑','10/3 HVE の開発を[止めた]','c'],['🧭','失敗ではなく「挑んで・測って・外して・作り直した」記録','y']],
+purpose:[['🎯','目的：要求→設計→実装→検証を[再現可能なワークフロー]に'],['7️⃣','7つの目標 Q1〜Q7'],['🏃','Q1 止まらない／Q2 分けて並列／Q3 工程を回す'],['🧠','Q4 社内の情報／Q5 安全に任せる'],['✅','Q6 正しさ／Q7 費用と証跡'],['❓','問い：skillやharnessは、いつまで必要か？','c']],
+bird:[['🗺','262日を上から見渡す（1/23 → 10/13）'],['🧩','上段＝転換点／下段＝7つの目標'],['⬇','時代を順に降りていく','y']],
+era:[['🧪','最初の依頼は[コードではなく]未来シナリオ20件'],['⚠','出力が途切れる／一度では品質が出ない'],['🧱','分割・レビュー固定回数・手順で補った'],['📈','ファイル 69→754 [×11]','y'],['💡','補助輪は当時は正しい。足りなかったのは[外す基準]','c']],
+v1:[['🧰','手順が[フレームワーク]になった（HVE v1）'],['🐍','Python 934ファイル／[27.7万行]'],['📚','Prompt 約314件／Skill 34件'],['🚀','48日で[197回]リリース'],['🤔','課題は本物。でも解き方は…？','c']],
+archV1:[['🚪','入口は4つ：CLI・GUI・Cloud・手動 Prompt'],['⚙','自作の Workflow エンジンと ATG'],['📚','Prompt 約314／Skill 34／知識文書'],['🔄','モデルの周りを[自作の層]が何重にも囲む','y'],['⛓','この層が「止まる連鎖」と「偽の合格」を生んだ','c']],
+q1:[['🏃','Q1 止まらない：[MISS]','y'],['🙋','人の入力の約半分(50.7%)が「再開して」'],['🔁','43.8%は同じ指示の打ち直し'],['🧯','自作の再開機構で14件すべて中断'],['⏳','1回通すのに[15〜39時間]','c']],
+q2:[['🧵','Q2 分けて並列：[PARTIAL]','y'],['🧮','DAG・Wave・自作 ATG'],['⚖','品質は同じ／時間 ×1.7〜2.25／費用 ×2.49〜3.5'],['0️⃣','22セッションで ATG は[1回も呼ばれず]'],['✂','勝ったのは「300行以内に分ける」の[1文]','c']],
+q3:[['🪜','Q3 工程を回す：[PARTIAL]','y'],['📄','13 Workflow／Prompt 約314件'],['💰','HVE 関連 290,602 AIU ＝ 4アプリの[1.39倍]'],['🚧','業務アプリは[未完成]'],['⚖','良かったのは「要求を整理してから作る」考え方','c']],
+q4:[['🧠','Q4 社内の情報：[PARTIAL]','y'],['🎯','固定の1問×1回：35問中[66%]見つからず'],['🛠','道具を渡して任せる設計へ（10/1）'],['🔐','残る壁は[認証と権限]','c']],
+q5:[['🛡','Q5 安全に任せる：[CLEAR]','y'],['📝','計画の承認・範囲外の防止を自作していた'],['🏛','plan モード・pre-tool-use フック・Cloud agent が標準で対応'],['🚀','強くなったのは[プラットフォーム側]','c']],
+q6:[['🔍','Q6 正しさ：[MISS]','y'],['🙈','verify を実行せず「exit code 0」をそのまま受理'],['❌','偽の PASS：隠しテスト [258/564]'],['📚','文書が増えるほど文脈が膨らむ'],['⚖','合否は[エージェントの外]で決める','c']],
+q7:[['📊','Q7 費用と証跡：[NOT YET]','y'],['🕘','測り始めは約8か月後（9/18）'],['⏱','8時間超セッション 件数18.2% → 時間[73.6%]'],['🧱','最長ステップの[91.8%]は LLM 以外の時間'],['❗','v2 でも AI クレジットは「未取得」','c']],
+eos:[['🔎','7つの目標を並べ、10課題を検証（10/3）'],['🟩','[7つは不要]（本体・運用で足りる）'],['🟨','[3つは薄い仕組み]で足りる'],['🛑','EOS：開発停止を決定','y'],['🏠','harness は消えず、[置き場所が移った]','c']],
+shrink:[['🧮','同じ7つの目標、今の答えを並べる'],['📉','自作の仕組みは[縮んだ]'],['1️⃣','Q1 Autopilot＋「再開して」の1文'],['🧰','Prompt 2本／道具を渡す／標準機能'],['⚖','残るのは「外で決める・対応表・測る」','y'],['💡','能力不足を補うもの→外す／能力に依存しないもの→[残す]','c']],
+born:[['🌱','HVE v2 ＝ [EABK]（Enterprise App Build Kit）','y'],['🎛','conductor に Prompt を[1回]渡すだけ'],['🔗','要求定義→独立監査→テスト先行設計→並行実装→統合→最終監査→報告'],['⏳','24〜48時間、人の介入なしで進む'],['🔒','規則は[hook で強制]（お願いではなく仕組み）','c']],
+archEabk:[['🧑‍💼','利用者は conductor に Prompt を1回'],['👥','5つの作業役：書き手は rd-author だけ'],['📜','手順書は必要なものだけ読み、スクリプトで作業'],['🪝','フックと verify が外から強制'],['✅','GitHub Actions がもう一度検査']],
+proof:[['🧮','人が打つ Prompt：[254回 → 5回]','y'],['✅','完走で受入基準 [98%]（49/50）／1,096テスト'],['⏱','19.3時間／約18,300 AI クレジット'],['⚠','空からの1回は48%（素の Agent は51%）'],['🎲','モデル指定が守られたのは[5/15回]','c']],
+archStudio:[['🖥','EABK Studio：読み取り専用のビューアー'],['🗃','入力はデータ層のファイル'],['🧩','Python が要求・受入基準・試験の関係をモデル化'],['🔄','更新は数秒で再読み込み'],['🛟','書き込みは整合性保守だけ（確認→実行→失敗なら戻す）']],
+demoEabk:[['💬','conductor に Prompt を[1回]送る'],['📈','進捗が流れていく'],['🖥','EABK Studio で要求・カタログ・試験を見て回る'],['🔎','[1画面]で進捗・依存・試験結果が追える','y']],
+twist:[['✋','ちょっと待て！','c'],['6️⃣','小さな変更6件は[素の Agent が最強]（6/6）'],['⏱','EABK は時間 ×15／AI クレジット ×31'],['🧭','結論は最強ではなく[使い分け]','y'],['✂','reviewer を外すと -26%（結果は同じ）→ fast レーン']],
+enterprise:[['🏢','時間・品質＝非機能／部署・人・モノ・プロセス・取引先＝[機能要件]','y'],['🆚','画面だけのモック と 大企業は別物'],['6️⃣','6つの評価軸：規模・権限・監査・規制・実環境・保守'],['⚖','運用20＋整合25＝[Enterprise 直結 45%]'],['🔀','重みで首位が変わる（時間→素 ／整合→② ／運用→EABK）'],['🗳','あなたの組織の[重み]は？','c']],
+archBas:[['🅰','A 共通アプリ本体（React）を一度だけ作る'],['🅱','B 顧客パック＝JSON のデータ'],['🅲','C 生成パイプライン：調査→複製→生成→検証→起動'],['🔌','AI は中継プロセス経由（使えなければモック）'],['🧩','顧客ごとに変わるのは[データだけ]','y']],
+bas:[['🧭','BAS：同じ道具を[事業構想]へ'],['😵','最初は失敗：毎回ゼロ生成で1件60分以上'],['🗂','再利用できるものは[データに分ける]','y'],['🖼','画面はお手本パックのデモ'],['📏','6日間：要求144／受入基準236／ST 141'],['❓','効果（3〜6分）は[目標]。未実測','c']],
+ring:[['⭕','事業 → コード → 事業'],['1️⃣','01月 事業の未来シナリオ'],['2️⃣','02〜09月 業務アプリ（HVE v1）'],['3️⃣','10月 薄い harness（v2）'],['4️⃣','10月〜 顧客の ToBe と意思決定（BAS）'],['💡','コードは目的ではなく、事業を構想する[道具の1つ]','y']],
+limit:[['⚠','信じすぎないで','c'],['1️⃣','n=1（1人・約9か月）'],['🛠','EABK は自作／採点も同系統モデル'],['🎲','試行は1〜6回'],['📉','記録は下限値が多い'],['🔀','モデルの進化と効果は分離しきれない'],['🏷','[事実]／[推論]／[未検証]を分けて読む','y']],
+take:[['🎁','持ち帰りは6つ'],['👔','CIO/CTO：skill/harness を棚卸し'],['📏','測る仕組みを最初に入れる'],['🔀','使い分けの基準を決める'],['🧑‍💻','Engineer：正本は1つ・書き手も1つ'],['🚦','合否は外で決める／規則は hook で強制'],['✂','[測って、外す。]','y']],
+outro:[['🔭','次に測る4つ：BAS の AIU・35問再実験・v1 と素の Agent・使用量の永続化'],['❓','skill/harness は、いつまで必要か？','c'],['✂','答えは[測って、外す]','y'],['🤝','一緒に作りましょう']]};
+const GRALIAS={s_goal:['purpose'],s_era:['era'],s_quests:['q1','q2','q3','q4','q5','q6','q7'],s_eos:['eos'],s_shrink:['shrink'],s_v2:['born','proof'],s_enterprise:['enterprise'],s_bas:['bas'],s_take:['take']};
+const grItems=id=>GRALIAS[id]?(id==='s_quests'?GRALIAS[id].map(i=>GR[i][0]):GRALIAS[id].flatMap(i=>GR[i]).slice(0,8)):(GR[id]||[]);
+const GRC=['#ffd400','#ff8a8a','#7fdcc9','#9fc5ff','#ffb870'];
+const grEl=()=>document.getElementById('gr');
+const grItemHTML=(it,i,anim)=>`<div class="gi ${it[2]?'gk'+it[2]:''}" style="--r:${[-1.2,.8,-.6,1.1,-.9][i%5]}deg;--c:${GRC[i%5]}${anim?'':';animation:none'}"><span class="ic">${it[0]}</span><span>${it[1].replace(/\[([^\]]+)\]/g,'<mark>$1</mark>')}</span></div>`;
+function grBuild(){
+  const g=grEl(),big=g.classList.contains('big'),cur=E.idx,list=big?SCENES.slice(0,cur+1):[SCENES[cur]];
+  g.innerHTML=(big?'<div class="gb">GRAPHIC RECORDING ｜ ここまでの記録（クリックで閉じる）</div><div class="gw">':'<div class="gb">✎ GRAPHIC RECORDING<small>クリックで拡大</small></div>')+list.map(s=>{
+    const isCur=s===SCENES[cur],items=grItems(s.id),n=isCur?E.grN:items.length;
+    return`<div class="gs${isCur?' cur':''}"><div class="gt">${s.title}</div><div class="gl">${items.slice(0,n).map((it,i)=>grItemHTML(it,i,false)).join('')}</div></div>`}).join('')+(big?'</div>':'');
+  if(big){const c=g.querySelector('.gs.cur');if(c)g.scrollTop=Math.max(0,c.offsetTop-80)}}
+function grAdd(i){const g=grEl(),items=grItems(SCENES[E.idx].id);if(!items[i])return;E.grN=i+1;
+  const l=g.querySelector('.gs.cur .gl');if(!l){grBuild();return}
+  l.insertAdjacentHTML('beforeend',grItemHTML(items[i],i,true));
+  if(g.classList.contains('big')){const c=g.querySelector('.gs.cur');if(c&&c.offsetTop+c.offsetHeight>g.scrollTop+g.clientHeight)g.scrollTop=c.offsetTop+c.offsetHeight-g.clientHeight+40}}
+function grPlan(S,id){const items=grItems(id),nt=S.nts,n=items.length;E.grN=0;grBuild();grEl().classList.toggle('on',n>0);
+  items.forEach((it,i)=>{const t=nt.length?nt[Math.min(nt.length-1,Math.floor(i*nt.length/n))]+.9+(i%2?.4:0):1+i*1.5;S.at(t,()=>grAdd(i))})}
+grEl().onclick=()=>{const g=grEl();g.classList.toggle('big');grBuild()};
+addEventListener('keydown',e=>{const g=grEl();if(e.key==='Escape'&&g.classList.contains('big')){g.classList.remove('big');grBuild()}});
+
+/* ===================== インフォグラフィックス（数値の図解） ===================== */
+function infoHTML(sp){
+  const c=sp.c||'#ffe600',F2="'Yu Gothic UI',sans-serif";
+  const head=sp.title?`<div style="font:900 40px ${F2};color:${c};margin-bottom:12px;text-align:center">${sp.title}</div>`:'',foot=sp.sub?`<div style="font:700 28px ${F2};color:#cde;margin-top:12px;text-align:center">${sp.sub}</div>`:'';
+  let b='';
+  if(sp.type==='kpi')b=`<div style="display:flex;gap:26px">${sp.items.map(([ic,,,l,col])=>`<div class="ik" style="opacity:0;text-align:center;min-width:430px;padding:20px 24px;border:4px solid ${col};border-radius:20px;background:rgba(6,10,22,.9);box-shadow:0 0 40px ${col}77"><div style="font-size:70px">${ic}</div><div class="iv" style="font:900 88px Consolas;color:${col}">0</div><div style="font:700 28px ${F2};color:#dde">${l}</div></div>`).join('')}</div>`;
+  else if(sp.type==='cmp')b=`<div style="display:flex;align-items:center;gap:40px"><div>${sp.rows.map(([l,v,col,txt])=>`<div style="display:flex;align-items:center;gap:20px;margin:14px 0"><div style="width:300px;text-align:right;font:800 32px ${F2};color:#fff">${l}</div><div style="width:620px;height:62px;background:rgba(255,255,255,.12);border-radius:10px;overflow:hidden"><div class="ib" data-v="${v}" style="height:100%;width:0;background:linear-gradient(90deg,${col}77,${col});border-radius:10px;box-shadow:0 0 24px ${col}"></div></div><div class="iv" style="font:900 40px Consolas;color:${col};min-width:230px;text-align:left;opacity:0">${txt}</div></div>`).join('')}</div>${sp.big?`<div class="ibig" style="font:900 120px Impact,${F2};color:${c};-webkit-text-stroke:8px #000;paint-order:stroke fill;opacity:0">${sp.big}</div>`:''}</div>`;
+  else if(sp.type==='waffle'){const cols=sp.cols||(sp.n>20?12:5);b=`<div style="display:flex;align-items:center;gap:50px"><div style="text-align:center;white-space:nowrap"><div style="font:900 130px Impact,${F2};color:${c};-webkit-text-stroke:8px #000;paint-order:stroke fill">${sp.big}</div><div style="font:700 26px/1.4 ${F2};color:#cde;white-space:normal;width:420px">${sp.label||''}</div></div><div style="display:grid;grid-template-columns:repeat(${cols},58px);gap:8px">${Array.from({length:sp.n},()=>`<div class="iw" style="width:58px;height:58px;border-radius:12px;background:rgba(255,255,255,.12);border:3px solid rgba(255,255,255,.25)"></div>`).join('')}</div></div>`}
+  else if(sp.type==='ring')b=`<div style="display:flex;align-items:center;gap:50px"><div style="position:relative;width:340px;height:340px"><div class="ring ir" style="width:340px;height:340px;--p:0;background:conic-gradient(${c} calc(var(--p)*1%),rgba(255,255,255,.14) 0)"></div><div class="irv" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:900 80px Consolas;color:${c}">0%</div></div><div style="font:800 40px/1.5 ${F2};color:#fff;max-width:520px">${sp.label||''}</div></div>`;
+  return`<div class="card" style="--c:${c};padding:26px 44px;white-space:normal">${head}${b}${foot}</div>`}
+function mkInfo(S,t,dur,sp){
+  const o=S.obj(infoHTML(sp),{x:sp.x||0,y:sp.y||0,z:20,o:0}),q=s=>o._in.querySelectorAll(s);
+  S.mv(o,t,.45,{o:1},EZ.back);S.sfx(t,'hit');
+  if(sp.type==='cmp'){const mx=Math.max(...sp.rows.map(r=>r[1]));S.tween(t+.4,1.4,p=>{q('.ib').forEach(b=>b.style.width=(b.dataset.v/mx*100*p)+'%');q('.iv').forEach(v=>v.style.opacity=p>.5?1:0);q('.ibig').forEach(v=>v.style.opacity=p>.7?1:0)},EZ.out3)}
+  else if(sp.type==='kpi')sp.items.forEach(([,num,suf],i)=>{const tile=q('.ik')[i],v=q('.iv')[i];S.tween(t+.4+i*(sp.step||1.1),1,p=>{tile.style.opacity=1;v.textContent=fmtN(num*p)+(suf||'')},EZ.out3);S.sfx(t+.4+i*(sp.step||1.1),'coin')});
+  else if(sp.type==='waffle'){const cs=q('.iw'),k=sp.k;S.tween(t+.4,1.4,p=>{cs.forEach((c,i)=>{const on=i<Math.round(k*p);c.style.background=on?(sp.c||'#ffe600'):'rgba(255,255,255,.12)';c.style.boxShadow=on?`0 0 14px ${sp.c||'#ffe600'}`:'none'})},EZ.lin)}
+  else if(sp.type==='ring'){S.tween(t+.4,1.5,p=>{o._in.querySelector('.ir').style.setProperty('--p',sp.pct*p);o._in.querySelector('.irv').textContent=(sp.pct*p).toFixed(1)+'%'},EZ.out3)}
+  if(dur<90)S.hide(o,t+dur,.3);return o}
+
+/* Enterprise の比較表。行は S.at で1行ずつ出す。セルの先頭が「*」なら最良（強調）。 */
+function entTable(S,spec,o={}){
+  const fs=o.fs||26,paint=v=>{const w=v.startsWith('*'),s=w?v.slice(1):v,c=s.startsWith('◎')?'#00ff9d':s.startsWith('○')?'#00e5ff':s.startsWith('△')?'#ffe600':s.startsWith('✕')?'#ff4466':'#fff';
+    return`<td style="text-align:center;padding:8px 14px;color:${c};${w?'background:rgba(255,230,0,.28);font-weight:900;border-radius:8px;box-shadow:0 0 18px #ffe60088;':''}">${s}</td>`};
+  const head=`<tr>${spec.head.map((h,i)=>`<th style="padding:8px 14px;text-align:${i?'center':'left'};color:#9fe;font-weight:900;border-bottom:3px solid #9fe">${h}</th>`).join('')}</tr>`;
+  const rows=spec.rows.map(r=>{const hl=r.hl,cells=r.c;
+    return`<tr class="er" style="opacity:0;transition:opacity .45s;background:${hl?'rgba(255,230,0,.13)':'rgba(6,10,22,.9)'}"><td style="padding:8px 14px;text-align:left;${hl?'border-left:8px solid #ffe600;color:#ffe600;':''}font-weight:900">${cells[0]}</td>${cells.slice(1).map(paint).join('')}</tr>`}).join('');
+  const html=`<table style="border-collapse:separate;border-spacing:0 5px;font:700 ${fs}px 'Yu Gothic UI',sans-serif;color:#fff;min-width:${o.w||1650}px">${head}${rows}</table>`;
+  const ob=S.obj(html,{y:o.y||0,o:0});
+  ob.show=(t,i)=>S.at(t,()=>{const r=ob._in.querySelectorAll('tr.er')[i];if(r){r.style.opacity=1;A.play('pop')}});
+  return ob}
+const ENT_ROWS={head:['Enterprise の機能要件','⓪ 素の Agent（ローカル）','⓪ cloud agent','① 対話型','② Prompt 駆動','③ EABK'],rows:[
+  {c:['再現性','✕','✕','✕','△','◎']},{c:['職務分掌','✕','△','✕','△','◎']},{c:['規則の強制','✕','△','✕','△','◎']},
+  {c:['人の承認','△','◎','○','○','○']},{c:['セキュリティの検査','✕','◎','△','○','△']},{c:['権限の最小化','△','◎','—','○','◎']},
+  {c:['証跡','△','○','△','○','○']},{c:['長時間の実行と再開','✕','✕','✕','△','◎']},
+  {c:['要求の追跡と変更管理','✕','✕','✕','○','◎']},{c:['チームへの展開','○','○','✕','○','◎']},{c:['保守の負担（軽いほど◎）','◎','◎','—','◎','△']}]};
+const W_ROWS={head:['観点（重み）','⓪ 素の Agent','① 対話型','② Prompt 駆動','③ EABK'],rows:[
+  {c:['(A) 時間 20%','*5','1','4','3.5']},{c:['(B) 品質・工程 10%','2','2.5','3.5','*4.5']},{c:['(B) 品質・結果 10%','3','4','2.5','*4.5']},
+  {c:['(C) Token 15%','*4.5','1','2.5','3.5']},{c:['(D) 運用 20%　★Enterprise','2','1','3','*4'],hl:1},{c:['(E) ビジネスとの整合 25%　★Enterprise','1.5','2','*4','3'],hl:1},
+  {c:['加重スコア','2.95','1.70','3.38','*3.68']}]};
+const S_ROWS={head:['重みの置き方','⓪ 素の Agent','① 対話型','② Prompt 駆動','③ EABK','首位'],rows:[
+  {c:['本書の重み（A20・B20・C15・D20・E25）','2.95','1.70','3.38','*3.68','③ EABK']},
+  {c:['時間だけ（100%）','*5.00','1.00','4.00','3.50','⓪ 素の Agent']},
+  {c:['ビジネスとの整合を最重視（E 50%）','2.50','1.78','*3.56','3.44','② Prompt 駆動']},
+  {c:['品質と運用を最重視（B・D 各 35%）','2.68','1.89','3.15','*3.98','③ EABK']}]};
+/* 概念図: モデルの力は伸び続け、自作のskillやharnessは積み上がって、縮む */
 function mkChart(S,t0,full){
   const X=m=>70+m*82,P=a=>a.map(([m,y],i)=>(i?'L':'M')+X(m)+' '+y).join(' ');
   const lab=['1月','3月','5月','7月','9月','11月'].map((t,i)=>`<text x="${X(i*2)}" y="486" fill="#9ab" font-size="24" text-anchor="middle">${t}</text>`).join('');
@@ -598,11 +886,11 @@ function mkChart(S,t0,full){
    <g stroke="#345" stroke-width="2"><line x1="70" y1="456" x2="1080" y2="456"/><line x1="70" y1="40" x2="70" y2="456"/></g>${lab}
    ${pa('mA',P([[0,400],[2,360],[4,300],[6,230],[8,160]]),'#00e5ff')}${pa('mB',P([[8,160],[9,120],[10,95],[11,70]]),'#00e5ff')}
    ${pa('sA',P([[0,420],[1,330],[2,200],[3,150],[5,110],[8,70]]),'#ff9f1c')}${pa('sB',P([[8,70],[9,230],[10,330],[11,350]]),'#ff9f1c')}
-   <text x="90" y="72" fill="#00e5ff" font-size="28" font-weight="800">● モデル／Coding Agent の力</text><text x="90" y="110" fill="#ff9f1c" font-size="28" font-weight="800">● 自作の足場（仕組み・手順の量）</text>
+   <text x="90" y="72" fill="#00e5ff" font-size="28" font-weight="800">● モデル／Coding Agent の力</text><text x="90" y="110" fill="#ff9f1c" font-size="28" font-weight="800">● 自作のskillやharness（仕組み・手順の量）</text>
    <text x="1090" y="524" fill="#889" font-size="20" text-anchor="end">概念図（実測ではない）</text>
    <g class="ann" opacity="0"><line x1="${X(9)}" y1="40" x2="${X(9)}" y2="456" stroke="#ff4466" stroke-width="3" stroke-dasharray="10 8"/>
    <text x="${X(9)-8}" y="150" fill="#ff7a90" font-size="26" font-weight="800" text-anchor="end">10/3 HVE v1 EOS</text>
-   <text x="${X(11)}" y="300" fill="#00ff9d" font-size="26" font-weight="800" text-anchor="middle">薄い足場</text></g></svg>`;
+   <text x="${X(11)}" y="300" fill="#00ff9d" font-size="26" font-weight="800" text-anchor="middle">薄いskillやharness</text></g></svg>`;
   const o=S.obj(svg,{x:0,y:30,o:0}),q=c=>o._in.querySelector(c),set=(el,p)=>{el.style.strokeDashoffset=1-p};
   const mA=q('.mA'),mB=q('.mB'),sA=q('.sA'),sB=q('.sB'),ann=q('.ann');
   S.mv(o,t0,.5,{o:1},EZ.back);
@@ -612,8 +900,8 @@ function mkChart(S,t0,full){
 
 /* ====================================================================
    シーン（幕立て）
-   第1幕 導入  → 第2幕 足場の時代 → 第3幕 7つの目標への挑戦 → 第4幕 測る・止める・縮む
-   → 第5幕 薄い足場で再挑戦 → 第6幕 事業構想へ → 終幕
+   第1幕 導入  → 第2幕 skillやharnessの時代 → 第3幕 7つの目標への挑戦 → 第4幕 測る・止める・縮む
+   → 第5幕 薄いskillやharnessで再挑戦 → 第6幕 事業構想へ → 終幕
    ==================================================================== */
 
 /* 1. COLD OPEN */
@@ -628,17 +916,19 @@ sc('open','COLD OPEN','drone',S=>{
   S.tween(b,2.4,p=>{const day=Math.floor(262*p);d._in.textContent='DAY '+pad(day,3);sub._in.textContent=dayStr(day)},EZ.in2);
   S.set(d,b+2.5,{o:0});S.set(sub,b+2.5,{o:0});
   S.slam(b+2.5,'262日',{size:300,color:C.ye,sub:'2026-01-23 → 2026-10-13',dur:1.2,burst:80});S.bg(b+2.6,{speed:.4});S.mood(b+2.6,'drive');
-  stat(S,b+3.9,'4,775','commit',C.cy,{dur:1.2});stat(S,b+5.0,'27.7万行','HVE v1 ／ Python 934ファイル',C.gr,{dur:1.2});stat(S,b+6.1,'181,055 AIU','HVE 本体の開発・保守（AI クレジット）',C.or,{dur:1.2});
+  S.info(b+3.9,3.6,{type:'kpi',step:1.0,items:[['🧾',4775,'','commit 数',C.cy],['🐍',277000,' 行','HVE v1 ／ Python 934ファイル',C.gr],['🪙',181055,' AIU','HVE 本体の開発・保守',C.or]]});
+  S.clear(S.cur-.1);
   b=S.N('そして、10月3日。私たちは、その開発を、止めました。');
   S.at(b,()=>{A.play('scratch');A.mood('none')});S.bg(b,{speed:0,tint:'#020204'});
   const d2=S.obj('2026-10-03',{o:0,css:'font:700 120px Consolas,monospace;color:#ff6b6b;letter-spacing:.08em'});S.mv(d2,b+.2,.3,{o:1},EZ.lin);S.sfx(b+.3,'heart');S.sfx(b+1.2,'heart');
   S.say(b+1.8,'HVE の開発を、{r|止めた}。',{pos:'mid',size:92,dur:2.2,sfx:'hit'});S.glitch(b+1.8,350);S.shake(b+1.8,14);S.mv(d2,b+3.2,.3,{o:0},EZ.lin);
+  S.clear(S.cur-.1);
   b=S.N('失敗だったのか。いいえ。これは、挑んで、測って、外して、作り直した記録です。');
   S.at(b+.3,()=>A.play('riser',3));S.bg(b+.3,{speed:.7,tint:'#3a1060'});
   const t=S.obj(LOGO(300)+'HVE QUEST</div>',{o:0,y:-70,s:1.8});
   S.at(b+3,()=>{A.play('boom');A.mood('epic');fx.flash=1;flashEl.style.background='#fff';fx.flashDur=.5;fx.shake=34;fx.lines=1;burst(160,{color:'#ffe066',speed:18})});
   S.mv(t,b+3,.7,{o:1,s:1},EZ.back);S.bg(b+3,{speed:.25,tint:'#0b6a8a'});
-  const s1=S.obj('足場は、いつまで必要か？',{o:0,y:150,css:'font:900 76px "Yu Gothic UI",sans-serif;color:#ffe600;text-shadow:0 0 30px #ffe600'});S.mv(s1,b+3.7,.6,{o:1,y:140},EZ.out3);
+  const s1=S.obj('skillやharnessは、いつまで必要か？',{o:0,y:150,css:'font:900 76px "Yu Gothic UI",sans-serif;color:#ffe600;text-shadow:0 0 30px #ffe600'});S.mv(s1,b+3.7,.6,{o:1,y:140},EZ.out3);
   const s2=S.obj('Hypervelocity Engineering ｜ CIO / CTO・Lead Software Engineer のために',{o:0,y:250,css:'font:600 36px "Yu Gothic UI",sans-serif;color:#9fe'});S.mv(s2,b+4.4,.6,{o:1});
   S.cam(0,S.cur,{z:-120},EZ.lin);S.end(1.5);
 });
@@ -658,18 +948,18 @@ sc('purpose','HVE の目的と、7つの目標','tension',S=>{
   b=S.N('それぞれ、何に挑み、何がうまくいき、何がうまくいかなかったのか。順に見ていきます。');
   b=S.N('そして最後に、ひとつの問いに答えます。モデルと Coding Agent が強くなったとき、必要な仕組みは、どこまで小さくなるのか。');
   S.at(b+.2,()=>A.play('riser',3));S.clear(b+1.5);S.hide(g,b+1.5,.3);
-  S.slam(b+3.2,'足場は、いつまで必要か？',{size:120,color:C.ye,y:380,dur:3.6,sfx:'boom',burst:100});
+  S.slam(b+3.2,'skillやharnessは、いつまで必要か？',{size:120,color:C.ye,y:380,dur:3.6,sfx:'boom',burst:100});
   S.cam(0,S.cur,{z:80},EZ.lin);S.end(1.2);
 });
 
 /* 3. 弱かった時代 */
 sc('era','第1幕 弱かった時代','tension',S=>{
-  S.cam0({z:700});S.bg(0,{speed:.2,tint:'#08304a'});S.tag(0,'ACT 1 ｜ 足場の時代（2026-01 〜 03）',C.or);
+  S.cam0({z:300});S.bg(0,{speed:.2,tint:'#08304a'});S.tag(0,'ACT 1 ｜ skillやharnessの時代（2026-01 〜 03）',C.or);
   const cols=[C.cy,C.mg,C.ye,C.gr,C.vi,C.or];
-  for(let i=0;i<20;i++){const a=i*.9,c=cols[i%6];
-    const o=S.obj(CD(c,`${F(80,c,'FS'+pad(i+1,2))}${T(28,'#cfe','Future Scenario')}`,'width:460px'),{x:Math.cos(a)*520,y:Math.sin(a)*260,z:-i*300,rz:(i%2?1:-1)*7,o:0});S.mv(o,.3+i*.05,.4,{o:1},EZ.lin)}
+  for(let i=0;i<20;i++){const c=cols[i%6];
+    const o=S.obj(CD(c,`${F(54,c,'FS'+pad(i+1,2))}${T(22,'#cfe','Future Scenario')}`,'width:330px;padding:14px 18px'),{x:-720+(i%5)*360,y:-300+Math.floor(i/5)*200,z:0,rz:0,o:0});S.mv(o,.3+i*.05,.4,{o:1},EZ.lin)}
   let b=S.N('最初の依頼は、コードではありませんでした。事業の未来シナリオ、20件。');
-  S.bg(.2,{speed:1});S.sfx(.2,'riser',4);S.cam(0,b+5.4,{z:-5000},EZ.io3);S.say(b+.6,'最初の依頼は、{y|コードじゃなかった}。',{pos:'top',size:64,dur:3});
+  S.bg(.2,{speed:1});S.sfx(.2,'riser',4);S.cam(0,b+5.4,{z:0},EZ.io3);S.say(b+.6,'最初の依頼は、{y|コードじゃなかった}。',{pos:'top',size:64,dur:3});
   S.clear(S.cur-.2);S.at(S.cur-.2,()=>{cam.base.z=500;cam.base.y=0});S.bg(S.cur-.2,{speed:.1,tint:'#3a2208',grid:true,gridCol:C.or});
   b=S.N('2026年1月。当時のモデルは、長い出力が途中で切れ、一度では、品質が出ませんでした。');
   const m=S.obj(CD(C.gy,`${F(34,C.gy,'claude-sonnet-4.5')}${T(28,'#cde','2026-01 の主力モデル')}`,'width:560px'),{x:-480,y:-40,o:0});S.mv(m,b+.3,.5,{o:1},EZ.back);
@@ -686,7 +976,7 @@ sc('era','第1幕 弱かった時代','tension',S=>{
     const bx=S.box(96,h,96,c,'',{x,y:GY,o:0,sy:.001}),mo=S.obj(`<div style="font:700 30px Consolas,monospace;color:#fff">${pad(i+1,2)}月</div>`,{x,y:GY+44,z:130,o:0}),vl=S.obj(`<div style="font:900 ${pk?60:34}px Consolas,monospace;color:${c};text-shadow:0 0 20px ${c}">${fmtN(v)}</div>`,{x,y:GY-h-80,z:130,o:0});
     const t0=b+.2+i*.28;S.set(bx,t0,{o:1});S.mv(bx,t0,.5,{sy:1},EZ.out3);S.mv(mo,t0,.3,{o:1});S.mv(vl,t0+.4,.3,{o:1});S.sfx(t0+.4,pk?'hit':'tick')});
   const hd=S.obj('<div style="font:700 32px sans-serif;color:#fdb">月別 commit 数（作業リポジトリー）</div>',{y:-420,o:0});S.mv(hd,b,.4,{o:1});
-  S.slam(b+3.2,'×11',{size:260,color:C.ye,y:300,dur:1.8,sub:'ファイル数 69 → 754（02-20 → 03-31）',sfx:'hit',burst:60});
+  S.clear(b+3.1);S.info(b+3.2,2.6,{type:'cmp',c:C.ye,title:'ファイル数の増加（02-20 → 03-31）',big:'×11',rows:[['02-20',69,C.cy,'69'],['03-31',754,C.ye,'754']]});
   S.cam(b,3,{z:300,y:-60},EZ.io3);
   S.clear(S.cur-.2);S.at(S.cur-.2,()=>{cam.base.z=0;cam.base.y=0});
   b=S.N('これは、当時は正しい処方でした。足りなかったのは、外す基準だけです。');
@@ -699,15 +989,15 @@ sc('era','第1幕 弱かった時代','tension',S=>{
 sc('v1','第1幕 HVE v1 誕生','drive',S=>{
   S.cam0({y:-40,z:60,ry:-50});S.bg(0,{speed:.15,tint:'#06402a'});S.tag(0,'ACT 1 ｜ 手順が、フレームワークになる',C.gr);S.meter(0,40,100);
   const lines=['def run_workflow(step, ctx):','  for task in dag.ready():','    ctx.review(cycles=3)','    wave.dispatch(task)','class Orchestrator(ATG):','  def resume(self, step):','# Self-Improve loop','prompts/ 314 files','skills/  34 files','workflows/ 13','if not verify(): retry()','agent.run(prompt, tools=[...])'];
-  for(let k=0;k<9;k++){const a=(k-4)*.42,R=1500;let txt='';for(let j=0;j<34;j++)txt+=lines[(j*3+k*5)%lines.length]+'\n';
-    const o=S.obj(`<pre class="mono" style="font-size:25px;line-height:1.45;color:#5cffb0;text-align:left;opacity:.55;border:2px solid #0f6;padding:20px 30px;background:rgba(0,30,15,.6)">${txt}</pre>`,{x:Math.sin(a)*R,z:-Math.cos(a)*R+R*.6,ry:-a*57.3,o:0,y:20});S.mv(o,.4+k*.18,.6,{o:1,y:-20},EZ.out3);S.sfx(.4+k*.18,'tick')}
-  let b=S.N('足場は、フレームワークになりました。HVE バージョン1。');
+  for(let k=0;k<9;k++){const a=(k-4)*.5,R=1700;let txt='';for(let j=0;j<14;j++)txt+=lines[(j*3+k*5)%lines.length]+'\n';
+    const o=S.obj(`<pre class="mono" style="font-size:22px;line-height:1.45;color:#5cffb0;text-align:left;opacity:.55;border:2px solid #0f6;padding:20px 30px;background:rgba(0,30,15,.6)">${txt}</pre>`,{x:Math.sin(a)*R,z:-Math.cos(a)*R+R*.6,ry:-a*57.3,o:0,y:20});S.mv(o,.4+k*.18,.6,{o:1,y:-20},EZ.out3);S.sfx(.4+k*.18,'tick')}
+  let b=S.N('skillやharnessは、フレームワークになりました。HVE バージョン1。');
   b=S.N('Python は934ファイル、27万行超。Prompt は約314件、Skill は34件。');
-  S.slam(b+.2,'27.7万行',{size:240,color:C.gr,sub:'Python 934ファイル ／ Prompt 約314件 ／ Skill 34件',dur:3,sfx:'hit'});
+  S.clear(b+.1);S.info(b+.2,3.4,{type:'cmp',c:C.gr,title:'HVE v1 の規模',big:'27.7万行',rows:[['Python ファイル',934,C.gr,'934'],['Prompt',314,C.cy,'約314'],['Skill',34,C.ye,'34']]});
   b=S.N('リリースは、48日間で197回。ほぼ、毎日です。');
-  const v=S.obj('v0.8.1',{o:0,y:250,z:300,css:'font:900 170px Consolas,monospace;color:#fff;text-shadow:0 0 40px #00ff9d'});S.mv(v,b,.2,{o:1},EZ.lin);S.sfx(b,'riser',3);
+  const v=S.obj('v0.8.1',{o:0,y:400,z:300,css:'font:900 170px Consolas,monospace;color:#fff;text-shadow:0 0 40px #00ff9d'});S.mv(v,b,.2,{o:1},EZ.lin);S.sfx(b,'riser',3);
   S.tween(b,3,p=>{v._in.textContent='v0.8.'+Math.max(1,Math.round(197*p));if(Math.random()<.4)A.play('tick')},EZ.in2);S.set(v,b+3,{o:0});
-  S.slam(b+3,'197回',{size:240,color:C.mg,sub:'0.8.1 → 0.8.197 ／ 48日間',dur:1.8,burst:90});
+  S.info(b+3,2.6,{type:'waffle',n:48,k:48,cols:12,c:C.mg,big:'197回',label:'48日間（1マス＝1日）／ 0.8.1 → 0.8.197'});
   b=S.N('課題は、本物でした。では、この解き方は、本当に正しかったのか。測るのは、まだ先でした。');
   S.say(b+.5,'課題は本物。{r|でも、解き方は——}',{pos:'top',size:64,dur:3.4,sfx:'hit'});S.at(b,()=>A.play('riser',3));
   S.cam(0,S.cur,{ry:50},EZ.lin);S.end(1);
@@ -751,7 +1041,7 @@ QS('q2',2,'分けて、並列に流す','目標：大きな作業を分け、依
   b=S.N('測ってみました。単一の Prompt と、ATG。品質は、同じ。ところが、時間は1.7倍から2.25倍。費用は2.49倍から3.5倍。');
   const lane=(y,lbl,c,len,t,time,cost)=>{const l=S.obj(lbl,{x:-410,y,o:0,css:'transform:translate(-100%,-50%);text-align:right;font:800 36px sans-serif;color:#fff'});S.mv(l,b+.2,.3,{o:1});
     S.hbar(-380,y,740,70,'#fff',b+.2,0,{track:true});S.hbar(-380,y,len,70,c,b+.8,t,{});
-    const v=S.txtL(time,-380+740+40,y-14,`font:900 44px Consolas;color:${c}`),w=S.txtL(cost,-380+740+40,y+32,`font:700 28px Consolas;color:#cde`);S.mv(v,b+.8+t,.3,{o:1});S.mv(w,b+.8+t,.3,{o:1})};
+    const v=S.txtL(time,-380+740+40,y-30,`font:900 44px Consolas;color:${c}`),w=S.txtL(cost,-380+740+40,y+38,`font:700 28px Consolas;color:#cde`);S.mv(v,b+.8+t,.3,{o:1});S.mv(w,b+.8+t,.3,{o:1})};
   lane(-120,'単一の Prompt',C.gr,330,1.4,'基準（1.0）','費用 基準');lane(40,'ATG（自作 DAG）',C.rd,740,3.1,'時間 ×1.7〜2.25','費用 ×2.49〜3.50');
   S.sfx(b+.8,'drum',1.5);S.sfx(b+2.3,'ding');S.sfx(b+4.0,'buzz');
   S.say(b+4.2,'品質は、{y|同じ}。',{pos:'mid',size:70,dur:2.2,sfx:'hit',top:520});
@@ -779,7 +1069,7 @@ QS('q3',3,'工程を、段階的に回す','目標：要求から設計・実装
   S.at(b+4.6,()=>{const s=S.obj('<div style="font:900 110px Impact,sans-serif;color:#ff3b30;border:12px solid #ff3b30;padding:0 30px;border-radius:14px;transform:rotate(-8deg);background:rgba(0,0,0,.7)">未完成</div>',{x:600,y:-60,z:200,o:0,s:3});
     S.mv(s,b+4.6,.18,{o:1,s:1},EZ.in2);A.play('stamp');fx.shake=26});
   b=S.N('AI の使用量は、HVE 関連が約29万。4アプリ合計の、1.4倍。規模の違いはあります。それでも、仕組みの維持費が、成果と並びました。');
-  S.slam(b+.5,'1.39倍',{size:220,color:C.or,y:560,sub:'HVE 290,602 AIU ／ 4アプリ合計 209,521 AIU',dur:2.8,burst:60});
+  S.clear(b+.3);S.info(b+.5,3.2,{type:'cmp',c:C.or,title:'AI 使用量（AIU）',big:'×1.39',rows:[['HVE 関連',290602,C.or,'290,602'],['4アプリ合計',209521,C.cy,'209,521']]});
   S.clear(S.cur-.1);
   b=S.N('うまくいったのは、要求を整理してから作る、という考え方。うまくいかなかったのは、314件もの Prompt を、保守し続ける費用です。');
   S.wl(b,'要求を整理してから作る考え方（のちの 2 本の Prompt に残る）','Prompt 約314件の保守費用。業務アプリは未完成（※規模の差あり）',b+4.8);S.verdict(b+7.2,'part','考え方は残り、仕組みは重すぎた');
@@ -842,7 +1132,7 @@ QS('q6',6,'正しさを、保証する','目標：偽の合格を防ぎ、要求
   const code=S.obj(CD(C.gr,`verify_command: <span style="color:#888">（実行されない）</span><br>handoff.exit_code: 0 <span style="color:#ff0">← そのまま受理</span><br>assert True<br>status: <b style="color:#0f8">succeeded ✔</b>`,'font:600 32px/1.7 Consolas,monospace;text-align:left;width:900px;white-space:nowrap'),{x:-330,y:-40,o:0});S.mv(code,b+.3,.5,{o:1},EZ.back);S.sfx(b+.3,'pop');
   b=S.N('スタブ実装でも、assert True のテストでも、成功。隠しテスト564件のうち、258件しか通らない実装まで、受理した例があります。');
   S.at(b+.5,()=>{A.play('scratch');fx.glitchUntil=E.clock+400;code._in.firstChild.style.setProperty('--c','#ff3b30')});
-  S.slam(b+1.2,'偽の PASS',{size:200,color:C.rd,y:500,dur:2.8,sfx:'buzz',flashC:'#f44',sub:'隠しテスト 258 / 564'});
+  S.slam(b+1.2,'偽の PASS',{size:130,color:C.rd,y:700,dur:2.8,sfx:'buzz',flashC:'#f44'});S.info(b+1.2,2.8,{type:'ring',c:C.rd,x:610,y:60,pct:45.7,label:'隠しテスト 564件のうち 258件だけ通過'});
   S.mv(code,b+4.2,.4,{o:0},EZ.lin);
   b=S.N('さらに、文書が増えるほど、文脈は膨らみ、要求とテストの対応が、追えなくなりました。');
   const dc=S.obj(CD(C.or,`${T(30,'#fdb','要求・設計文書（ある運用での実測）')}${F(110,C.or,'0')}${T(30,'#fff','ファイル　→　ID がずれた')}`,'width:760px'),{x:-330,y:-20,o:0});S.mv(dc,b+.2,.5,{o:1},EZ.back);
@@ -873,6 +1163,7 @@ QS('q7',7,'費用と証跡を、管理する','目標：実行の費用・時間
     const v=S.txtL('0%',X+880+16,y,`font:900 70px Consolas;color:${c};text-shadow:0 0 24px ${c}`);S.mv(l,t0,.3,{o:1});S.mv(v,t0,.3,{o:1});S.num(v,t0,1.6,0,pct,x=>x.toFixed(1)+'%')};
   mk(-100,'8時間超のセッション（件数）',18.2,C.cy,b+.4);mk(20,'その総滞留時間',73.6,C.rd,b+2.6);
   S.slam(b+5.4,'18.2% → 73.6%',{size:130,color:C.ye,y:560,dur:1.8,sfx:'hit',burst:50});
+  S.clear(S.cur-.1);
   b=S.N('最長のステップの92パーセントは、LLM ではなく、ツールの実行や、承認待ちでした。そして、今も。v2 の実行履歴は、AI クレジットが、「未取得」のままです。');
   const rg=S.obj(`<div class="ring" style="width:320px;height:320px;--p:0;background:conic-gradient(${C.mg} calc(var(--p)*1%),rgba(255,255,255,.12) 0)"></div>`,{x:-360,y:-10,o:0});
   const rv=S.obj('0%',{x:-360,y:-10,o:0,css:`font:900 80px Consolas;color:${C.mg};text-shadow:0 0 24px ${C.mg}`});
@@ -910,56 +1201,56 @@ sc('eos','第4幕 止める決断','tension',S=>{
   b=S.N('課題は、今も実在します。不要になったのは、解決のために、フレームワークを作り、保守することでした。');
   S.clear(S.cur-.1);S.hide(cg,b,.2);
   b=S.N('そして、harness は、なくなったのではありません。置き場所が、移りました。プラットフォーム本体、公式ガイドの作法を取り込んだ Prompt、リポジトリー内の決定的な検査。');
-  S.cam(b,.5,{y:-120,z:600,rx:-10,ry:-20},EZ.out3);S.cam(b+.6,8,{ry:20},EZ.lin);
+  S.cam(b,.5,{y:-120,z:600,rx:-6,ry:-8},EZ.out3);S.cam(b+.6,8,{ry:8},EZ.lin);
   [['① プラットフォーム本体の harness','Autopilot ／ サブエージェント ／ task_complete',C.cy],['② 公式ガイドの作法を取り込んだ Prompt','数段落の自然言語で足りる',C.ye],['③ リポジトリー内の決定的な検査','verify の exit code ／ CI ／ 要求 ID の追跡テスト',C.gr]].forEach(([a,t,c],i)=>{
-    const o=S.box(1000,130,380,c,`<div style="font:900 36px sans-serif">${a}</div><div style="font:600 26px sans-serif;color:#cde;margin-top:6px">${t}</div>`,{y:900,x:0,o:0});S.set(o,b+.4+i*1.6,{o:1});S.mv(o,b+.4+i*1.6,.9,{y:90-(2-i)*160},EZ.back);S.sfx(b+.7+i*1.6,'hit');S.shake(b+1+i*1.6,12)});
+    const o=S.box(1000,130,40,c,`<div style="font:900 36px sans-serif">${a}</div><div style="font:600 26px sans-serif;color:#cde;margin-top:6px">${t}</div>`,{y:900,x:0,o:0});S.set(o,b+.4+i*1.6,{o:1});S.mv(o,b+.4+i*1.6,.9,{y:60-(2-i)*230},EZ.back);S.sfx(b+.7+i*1.6,'hit');S.shake(b+1+i*1.6,12)});
   S.end(1.2);
 });
 
 /* 6. SHRINK */
-sc('shrink','第4幕 足場は、縮んだ','epic',S=>{
+sc('shrink','第4幕 skillやharnessは、縮んだ','epic',S=>{
   S.cam0({z:300});S.bg(0,{speed:.3,tint:'#0b4a6a',grid:true,gridCol:C.cy});S.tag(0,'ACT 4 ｜ 同じ7つの目標、今の答え',C.gr);S.meter(0,60,100);
   let b=S.N('では、同じ7つの目標に、今の答えを、並べてみましょう。');
   const R=[['Q1 止まらない','Workflow の連続実行・Step 再開・実行台帳','Autopilot ＋「再開して」の1文'],['Q2 分けて並列','DAG・Wave・自作オーケストレーター ATG','「300行以内に分けて書く」の1文 ／ /fleet'],['Q3 工程を回す','13 Workflow ／ Prompt 約314件','Prompt 2本（要求定義 ＋ 実装）'],['Q4 社内の情報','1問×1回の固定スキーマ','道具を渡して、モデルに任せる'],['Q5 安全に任せる','計画ハッシュ・承認ゲート・範囲ゲート','plan モード ／ pre-tool-use フック（標準）'],['Q6 正しさ','ATG の検証・要件索引・context pack','verify の exit code ＋ CI ＋ 短い対応表'],['Q7 費用と証跡','実行台帳・予算・KPI ダッシュボード','AI Credits 予算・セッションログ（※自動集計は未解決）']];
-  const hd=S.obj('<div style="display:flex;gap:560px;font:900 34px sans-serif"><span style="color:#ff7a90">当時の足場（自作）</span><span style="color:#00ff9d">今の答え</span></div>',{y:-440,o:0});S.mv(hd,b+.3,.4,{o:1});
+  const hd=S.obj('<div style="display:flex;gap:560px;font:900 34px sans-serif"><span style="color:#ff7a90">当時のskillやharness（自作）</span><span style="color:#00ff9d">今の答え</span></div>',{y:-440,o:0});S.mv(hd,b+.3,.4,{o:1});
   const narr=['止まらない。Autopilot と、「再開して」のたった1文。','分けて並列。「300行以内に分けて書く」の1文。','工程を回す。Prompt は、2本。','社内の情報。道具を渡して、モデルに任せる。','安全に任せる。プラットフォームの標準機能。','正しさ。合否は外で決める。exit code と CI。','費用と証跡。予算とログ。ただし、自動集計は、まだ。'];
   R.forEach(([q,old,now],i)=>{const y=-340+i*95;
     b=S.N(narr[i],'nar',{gap:.15});
     const o=S.obj(CD(C.rd,`<span style="color:#ff9aa8;font-weight:900">${q}</span>　<span style="color:#fff">${old}</span>`,'font:700 25px sans-serif;width:880px;padding:12px 18px;text-align:left;white-space:normal'),{x:-480,y,o:0});S.mv(o,b,.35,{o:1,x:-480},EZ.back);S.at(b,()=>{o._s.x=-700;applyObj(o)});
     const n=S.obj(CD(C.gr,`<span style="color:#fff;font-weight:900">${now}</span>`,'font:700 25px sans-serif;width:780px;padding:12px 18px;text-align:left;white-space:normal'),{x:520,y,o:0,s:.6});S.mv(n,b+1.6,.4,{o:1,s:1},EZ.back);S.sfx(b+1.5,'shrink');S.mv(o,b+1.5,.5,{o:.4,sx:.9,sy:.9},EZ.io3);
     S.meter(b+1.6,60+i*3,100-(i+1)*10)});
-  b=S.N('自作の足場は、縮みました。モデルと Coding Agent の力が上がるほど、必要な足場は、小さくなります。');
+  b=S.N('自作のskillやharnessは、縮みました。モデルと Coding Agent の力が上がるほど、必要なskillやharnessは、小さくなります。');
   S.clear(b);S.hide(hd,b,.2);S.cam(b,.4,{z:0});const ch=mkChart(S,b+.2,true);ch.reveal(b+1.2,4);S.meter(b+1.2,92,22);
-  S.say(b+5.6,'足場は{y|縮み}、力は{c|伸びる}。',{pos:'top',size:64,dur:3,top:60});
-  b=S.N('ただし、ゼロではありません。「合否を、外で決める」「対応表を持つ」「測る」。能力に依存しない足場だけが、残りました。');
-  S.lesson(b+1.2,3,'足場は2種類。「能力不足を補うもの」は外す。「能力に依存しないもの」は{y|残す}。',5.6);
+  S.say(b+5.6,'skillやharnessは{y|縮み}、力は{c|伸びる}。',{pos:'top',size:64,dur:3,top:60});
+  b=S.N('ただし、ゼロではありません。「合否を、外で決める」「対応表を持つ」「測る」。能力に依存しないskillやharnessだけが、残りました。');
+  S.lesson(b+1.2,3,'skillやharnessは2種類。「能力不足を補うもの」は外す。「能力に依存しないもの」は{y|残す}。',5.6);
   S.end(1.2);
 });
 
 /* 7. EABK 誕生 */
 sc('born','第5幕 HVE v2 BORN','none',S=>{
-  S.cam0({z:300});S.bg(0,{speed:0,tint:'#000000'});S.tag(0,'ACT 5 ｜ 薄い足場で、再挑戦（2026-10-06 〜 10-08）',C.cy);S.meter(0,80,24);
-  let b=S.N('止めて、測り直して、薄い足場だけを、残す。そして、作り直しました。');
+  S.cam0({z:300});S.bg(0,{speed:0,tint:'#000000'});S.tag(0,'ACT 5 ｜ 薄いskillやharnessで、再挑戦（2026-10-06 〜 10-08）',C.cy);S.meter(0,80,24);
+  let b=S.N('止めて、測り直して、薄いskillやharnessだけを、残す。そして、作り直しました。');
   const dot=S.obj('<div style="width:40px;height:40px;border-radius:50%;background:#fff;box-shadow:0 0 60px 20px #7ff,0 0 160px 60px #08f"></div>',{o:0,s:.3});
   S.mv(dot,b+.2,.5,{o:1},EZ.lin);S.mv(dot,b+.2,3.6,{s:2.4},EZ.in2);S.sfx(b+.2,'riser',3.8);[b+.4,b+1.4,b+2.2,b+2.8,b+3.2,b+3.5,b+3.7].forEach(t=>S.sfx(t,'heart'));S.bg(b+.2,{speed:1.5,tint:'#104a8a'});S.cam(b+.2,3.8,{z:100},EZ.in2);
-  const logo=S.obj(LOGO(330)+'HVE v2</div>',{o:0,y:-60,s:3});
+  const logo=S.obj(LOGO(330)+'HVE v2</div>',{o:0,y:-130,s:3});
   b=S.N('HVE バージョン2。正式名称は、Enterprise App Build Kit。');
   S.at(b+.1,()=>{dot._s.o=0;applyObj(dot);A.play('boom');A.mood('epic');fx.flash=1;flashEl.style.background='#fff';fx.flashDur=.6;fx.shake=40;fx.lines=1;burst(220,{color:'#ffe066',speed:20})});
   S.mv(logo,b+.1,.8,{o:1,s:1},EZ.back);S.bg(b+.1,{speed:.3,tint:'#0b6a8a',grid:true,gridCol:C.cy});S.cam(b+.1,.3,{z:0,p:900});S.cam(b+.4,6,{p:1500},EZ.out3);
-  const sub=S.obj('Enterprise App Build Kit ＝ EABK',{o:0,y:130,css:'font:800 60px sans-serif;color:#fff;letter-spacing:.1em;text-shadow:0 0 30px #00e5ff'});S.mv(sub,b+.9,.6,{o:1},EZ.back);
-  const s2=S.obj('※「HVE v2 ＝ EABK」は、このストーリーでの置き方',{o:0,y:200,css:'font:500 28px sans-serif;color:#9fe'});S.mv(s2,b+1.6,.5,{o:1});
+  const sub=S.obj('Enterprise App Build Kit ＝ EABK',{o:0,y:190,css:'font:800 60px sans-serif;color:#fff;letter-spacing:.1em;text-shadow:0 0 30px #00e5ff'});S.mv(sub,b+.9,.6,{o:1},EZ.back);
+  const s2=S.obj('※「HVE v2 ＝ EABK」は、このストーリーでの置き方',{o:0,y:270,css:'font:500 28px sans-serif;color:#9fe'});S.mv(s2,b+1.6,.5,{o:1});
   b=S.N('使い方は、conductor に、Prompt を、1回送るだけ。');
   S.clear(b+1.6);
   const N7=['① 要求定義','② 独立監査','③ System Test\n先行設計','④ 並行実装','⑤ 直列の統合','⑥ 最終監査','⑦ 報告'],cols=[C.cy,C.vi,C.mg,C.or,C.gr,C.vi,C.ye];
   b=S.N('要求定義、独立監査、テストの先行設計、並行実装、直列の統合、最終監査、報告まで。最大24時間から48時間、人の介入なしに、進みます。');
-  S.cam(b,.5,{x:-1000,y:-60,z:150},EZ.io3);const orb=S.obj('<div style="width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,#fff 0%,#fff 10%,#ffe600 20%,rgba(255,230,0,.35) 38%,transparent 64%)"></div>',{x:-1250,y:0,o:0}),pl=S.obj('Prompt 1回',{x:-1250,y:-200,o:0,css:'font:900 44px sans-serif;color:#ffe600;-webkit-text-stroke:8px #000;paint-order:stroke fill'});
+  S.cam(b,.5,{x:-1000,y:-60,z:150},EZ.io3);const orb=S.obj('<div style="width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,#fff 0%,#fff 10%,#ffe600 20%,rgba(255,230,0,.35) 38%,transparent 64%)"></div>',{x:-1250,y:0,o:0,s:.5}),pl=S.obj('Prompt 1回',{x:-1250,y:-200,o:0,css:'font:900 44px sans-serif;color:#ffe600;-webkit-text-stroke:8px #000;paint-order:stroke fill'});
   S.mv(orb,b,.3,{o:1});S.mv(pl,b,.3,{o:1});S.bars(b,true);
   N7.forEach((n,i)=>{const t=b+.6+i*1.5,x=-900+i*410,y=Math.sin(i*1.1)*90;const o=S.obj(CD(cols[i],n.replace('\n','<br>'),'font:800 34px/1.3 sans-serif;min-width:260px'),{x,y,z:-i*20,o:0,ry:-12});
-    S.mv(o,t-.5,.5,{o:1},EZ.back);S.mv(orb,t-.6,.7,{x,y:y-110},EZ.io3);S.mv(pl,t-.6,.7,{x,y:y-200},EZ.io3);S.cam(t-.8,1.1,{x:x+120},EZ.io3);S.at(t,()=>{A.play('pop');burst(26,{color:cols[i],speed:7})})});
+    S.mv(o,t-.5,.5,{o:1},EZ.back);S.mv(orb,t-.6,.7,{x,y:y-170},EZ.io3);S.mv(pl,t-.6,.7,{x,y:y-290},EZ.io3);S.cam(t-.8,1.1,{x:x+120},EZ.io3);S.at(t,()=>{A.play('pop');burst(26,{color:cols[i],speed:7})})});
   S.at(b+10.2,()=>{pl._in.textContent='完了'});
   S.clear(S.cur-.1);S.bars(S.cur-.1,false);S.cam(S.cur-.1,.5,{x:0,y:-60,z:330,rx:-6},EZ.out3);S.cam(S.cur+.4,12,{ry:12},EZ.lin);S.bg(S.cur,{speed:.12});
   const R=[['✍️','要求定義書を書けるのは、<br>1つのエージェントだけ',C.cy,'守らせる規則は4つ。要求定義書を書けるのは、1つのエージェントだけ。'],['🔒','実装担当は<br>System Test を変更できない',C.mg,'実装担当は、システムテストを変更できない。'],['✅','終了前に必ず検証。<br>合否は exit code',C.gr,'終了前に、必ず検証する。合否は、終了コードで決める。'],['⛔','危険な操作は拒否',C.rd,'危険な操作は、拒否する。']];
-  R.forEach(([ic,t,c,nt],i)=>{b=S.N(nt,'nar',{gap:.2});const o=S.box(380,520,70,c,`<div style="font-size:110px">${ic}</div><div style="font:800 36px/1.4 sans-serif;margin-top:18px">${t}</div>`,{x:-690+i*460,y:700,o:0});
+  R.forEach(([ic,t,c,nt],i)=>{b=S.N(nt,'nar',{gap:.2});const o=S.box(380,520,30,c,`<div style="font-size:110px">${ic}</div><div style="font:800 36px/1.4 sans-serif;margin-top:18px">${t}</div>`,{x:-690+i*460,y:700,o:0});
     S.set(o,b,{o:1});S.mv(o,b,.9,{y:260},EZ.back);S.sfx(b+.3,'hit');S.shake(b+.5,14)});
   b=S.N('しかも、それを、LLM の判断ではなく、フックと、決定的なスクリプトで、強制します。');
   S.lesson(b+.8,4,'規則は、お願いではなく{y|仕組み（hook）で強制}する。設定だけでは、守られない。',4.4);
@@ -987,7 +1278,7 @@ sc('proof','第5幕 結果：何が縮み、何が残ったか','drive',S=>{
   S.mv(c1,b+.5,.5,{o:1},EZ.back);S.mv(c2,b+2,.5,{o:1},EZ.back);S.sfx(b+.5,'hit');S.sfx(b+2,'hit');
   S.clear(S.cur-.1);
   b=S.N('失敗もありました。作業役に、安いモデルを使う指定は、15回中5回しか、守られませんでした。設定には、強制力がない。だから、フックで強制するのです。');
-  const mm=S.obj(CD(C.rd,`${T(30,'#fcc','作業役のモデル指定が守られた回数')}${F(170,C.rd,'5 / 15')}`,'min-width:760px'),{y:-20,o:0});S.mv(mm,b+.4,.5,{o:1},EZ.back);S.sfx(b+.4,'buzz');S.glitch(b+.4,300);
+  S.info(b+.4,99,{type:'waffle',n:15,k:5,cols:5,c:C.rd,y:-20,big:'5 / 15',label:'作業役のモデル指定が守られた回数（1マス＝1回）'});S.sfx(b+.4,'buzz');S.glitch(b+.4,300);
   S.end(1.2);
 });
 
@@ -999,9 +1290,9 @@ sc('demoEabk','DEMO EABK ／ EABK Studio','drive',S=>{
   let b=S.N('では、実際の画面です。EABK は、conductor に Prompt を1回送ると、進捗が、流れていきます。');
   S.mv(cli,b+.2,.6,{o:1},EZ.back);S.sfx(b+.2,'whoosh');S.say(b+1,'conductor に、Prompt を{y|1回}。',{pos:'bot',size:46,dur:4,sfx:false});
   b=S.N('EABK Studio は、要求、カタログ、システムテスト、実行履歴を、図と表で見て回る、読み取り専用のビューアーです。');
-  S.mv(cli,b,.9,{x:-760,y:-360,z:-500,s:.7},EZ.io3);S.cam(b-.2,1.2,{z:0,ry:0},EZ.io3);
-  const st=S.media('media/studio-app.webm',1280,720,C.mg,{x:80,y:70,z:0,o:0,s:.8});S.play(st,b+.6);S.mv(st,b+.6,.8,{o:1,s:1},EZ.back);S.sfx(b+.6,'hit');S.shake(b+.7,10);
-  const cap=S.obj('EABK Studio ― 要求・カタログ・System Test・実行履歴を、図と表で（読み取り専用）',{y:-420,o:0,css:'font:800 34px "Yu Gothic UI",sans-serif;color:#fff;text-shadow:0 0 24px #ff2d78'});S.mv(cap,b+1,.5,{o:1});
+  S.mv(cli,b,.9,{x:-760,y:-310,z:0,s:.45},EZ.io3);S.cam(b-.2,1.2,{z:0,ry:0},EZ.io3);
+  const st=S.media('media/studio-app.webm',1280,720,C.mg,{x:300,y:70,z:0,o:0,s:.8});S.play(st,b+.6);S.mv(st,b+.6,.8,{o:1,s:1},EZ.back);S.sfx(b+.6,'hit');S.shake(b+.7,10);
+  const cap=S.obj('EABK Studio ― 要求・カタログ・System Test・実行履歴を、図と表で（読み取り専用）',{y:-495,o:0,css:'font:800 34px "Yu Gothic UI",sans-serif;color:#fff;text-shadow:0 0 24px #ff2d78'});S.mv(cap,b+1,.5,{o:1});
   S.tween(b+.6,15,p=>{cam.base.z=-p*160;cam.base.ry=Math.sin(p*3.1)*5},EZ.lin);
   b=S.N('ダッシュボード、実装状態、依存の地図、試験結果。この toolkit 自身も、EABK で作って、EABK Studio で、見ています。');
   S.say(b+.5,'進捗・依存・試験結果が、{y|1画面で追える}。',{pos:'bot',size:44,dur:5,sfx:'pop'});
@@ -1027,10 +1318,65 @@ sc('twist','第5幕 ちょっと待て。','drive',S=>{
   S.end(1.2);
 });
 
+/* 10b. ENTERPRISE: 比較評価の考慮事項。関係する部署・人・モノ・プロセス・取引先が多い、という機能要件 */
+sc('enterprise','第5幕 Enterprise：比較評価の機能要件','tension',S=>{
+  S.cam0({z:0});S.bg(0,{speed:.1,tint:'#0b2a5a',grid:true,gridCol:C.cy});S.tag(0,'ACT 5 ｜ 比較評価の考慮事項：Enterprise の機能要件',C.cy);S.meter(0,88,22);
+  let b=S.N('ここで、方式を比べるときの、もうひとつの考慮事項です。Enterprise の視点です。');
+  S.slam(b+.3,'ENTERPRISE',{size:150,color:C.cy,y:340,dur:3.2,sfx:'hit',shake:12,sub:'時間や品質ではない。機能要件の話。'});
+  S.clear(S.cur-.1);
+  b=S.N('時間、品質、Token は、非機能の側面です。Enterprise には、もうひとつ、機能要件があります。関係する、部署、人、モノ、プロセス、取引先が、大量にあること。画面だけのモックとの、大きな違いです。');
+  const demo=S.obj(CD(C.gy,`${F(40,C.gy,'画面だけのモック')}${T(28,'#cde','画面 数枚 ／ 利用者 数人')}${T(28,'#cde','データ 少量 ／ 1チーム')}`,'width:520px'),{x:-620,y:-40,o:0});
+  S.mv(demo,b+.4,.5,{o:1},EZ.back);S.sfx(b+.4,'pop');
+  const big=S.obj(CD(C.cy,`${F(40,C.cy,'大企業')}${T(28,'#cde','部署・人・モノ・プロセス・取引先が、互いに絡む')}`,'width:900px'),{x:420,y:-250,o:0});
+  S.mv(big,b+3.4,.5,{o:1},EZ.back);S.sfx(b+3.4,'hit');
+  [['🏢','部署',C.cy],['👥','人・役割',C.vi],['📦','モノ・資産',C.gr],['🔁','業務プロセス',C.or],['🤝','取引先',C.mg]].forEach(([ic,t,c],i)=>{const o=S.obj(CD(c,`${F(60,c,ic)}${T(28,'#fff',t,800)}`,'width:210px;padding:14px 10px'),{x:60+(i%3)*250+(i>=3?125:0),y:i<3?-60:130,o:0});S.mv(o,b+4.2+i*.5,.4,{o:1},EZ.back);S.sfx(b+4.2+i*.5,'coin')});
+  S.clear(S.cur-.1);
+  b=S.N('だから、Enterprise では、動くかどうかだけでなく、次の6つを、評価します。');S.say(b+.2,'Enterprise で{y|増える評価軸}：6つ',{pos:'top',size:60,dur:60,sfx:'hit',band:true,top:130});
+  const AX=[['① 規模と整合','部署をまたぐ要求の矛盾・ドリフトを防ぐ。正本は1つ（R12〜R14）',C.cy,'1つ目。規模と整合。部署をまたいでも、要求が矛盾せず、ずれないこと。正本は、1つです。'],
+    ['② 権限と責任分界','誰が書き、誰が承認し、誰が変更できないか。規則は hook で強制',C.vi,'2つ目。権限と責任の分界。誰が書き、誰が承認し、誰が変更できないか。規則は、フックで強制します。'],
+    ['③ 監査証跡','何を、誰が、いつ、どのモデルで。実行履歴と使用量を残す（R2）',C.gr,'3つ目。監査の証跡。何を、誰が、いつ、どのモデルで行ったかを、残せること。'],
+    ['④ 規制・セキュリティ','個人情報・認証・機密に触れる変更は、重い工程へ回す',C.rd,'4つ目。規制とセキュリティ。個人情報、認証、機密に触れる変更は、重い工程に回します。'],
+    ['⑤ 実環境・既存システム','本物の認証・社内データ・取引先とつなぐ。スタブで「完了」にしない（R15）',C.or,'5つ目。実環境と、既存システム。本物の認証や社内データに、つなぐこと。スタブで、完了にしないことです。'],
+    ['⑥ 長期の保守と費用','予算と上限、部門への配賦、引き継ぎ。測る仕組みを最初に（R16）',C.ye,'6つ目。長期の保守と費用。予算と上限、部門への配賦、そして、引き継ぎです。']];
+  AX.forEach(([h,t,c,n],i)=>{b=S.N(n,'nar',{gap:.2});
+    const o=S.obj(CD(c,`${T(34,c,h,900)}${T(24,'#dde',t,600)}`,'width:560px;padding:16px 22px;white-space:normal;text-align:left'),{x:-600+(i%3)*600,y:i<3?-90:150,o:0});
+    S.mv(o,b+.2,.45,{o:1},EZ.back);S.sfx(b+.2,'ding')});
+  S.wait(.6);S.clear(S.cur-.1);
+  /* 比較表 1: Enterprise の機能要件 × 方式 */
+  b=S.N('この機能要件を、方式ごとに、並べてみます。再現性、職務分掌、規則の強制。素の Agent には、ほとんどありません。');
+  S.say(b+.1,'Enterprise の{y|機能要件} × 4つの方式',{pos:'top',size:54,dur:60,sfx:'hit',band:true,top:110});
+  const t1=entTable(S,ENT_ROWS,{y:70,fs:25});S.mv(t1,b,.4,{o:1},EZ.lin);
+  [0,1,2].forEach(i=>t1.show(b+.8+i*.7,i));
+  b=S.N('人の承認、セキュリティの検査、権限の最小化は、cloud agent の標準機能が強い。ただし、証跡と、長時間の実行は、足りません。');
+  [3,4,5,6,7].forEach((r,i)=>t1.show(b+.6+i*.8,r));
+  b=S.N('要求の追跡、変更管理、チームへの展開は、EABK が、構造で満たします。代わりに、保守の負担は、重くなります。');
+  [8,9,10].forEach((r,i)=>t1.show(b+.6+i*.9,r));
+  S.wait(1.2);S.clear(S.cur-.1);
+  /* 比較表 2: 評価の重み */
+  b=S.N('では、比較評価の点数と、その重みを、見てみます。時間20、品質20、Token15、運用20、ビジネスとの整合25パーセント。');
+  S.say(b+.1,'比較評価の{y|重み}と採点（5点満点）',{pos:'top',size:54,dur:60,sfx:'hit',band:true,top:110});
+  const t2=entTable(S,W_ROWS,{y:10,fs:27});S.mv(t2,b,.4,{o:1},EZ.lin);
+  [0,1,2,3,4,5].forEach(i=>t2.show(b+.8+i*.8,i));
+  b=S.N('このうち、運用と、ビジネスとの整合は、Enterprise の機能要件に、直結します。重みは、合わせて45パーセント。');
+  t2.show(b+.3,6);S.say(b+.6,'Enterprise に直結する観点：{y|45%}（運用20＋整合25）',{pos:'bot',size:44,dur:60,sfx:'pinpon',band:'c',top:850});
+  S.wait(1.5);S.clear(S.cur-.1);
+  /* 比較表 3: 重みを変えると首位が変わる */
+  b=S.N('そして、重みを変えると、首位が変わります。時間だけを見れば、素の Agent。ビジネスとの整合を最重視すると、Prompt 駆動。品質と運用を重く見ると、EABK です。');
+  S.say(b+.1,'何を重く見るかで、{y|首位が変わる}',{pos:'top',size:56,dur:60,sfx:'hit',band:true,top:110});
+  const t3=entTable(S,S_ROWS,{y:70,fs:27});S.mv(t3,b,.4,{o:1},EZ.lin);
+  [0,1,2,3].forEach(i=>t3.show(b+1+i*1.6,i));
+  S.wait(1);S.clear(S.cur-.1);
+  b=S.N('点数は、私の判断で、1つのアプリでの採点です。大企業の規模での実測は、まだありません。だからこそ、あなたの組織の重みで、計算し直してください。');
+  S.say(b+.3,'あなたの組織の{y|重み}は、どこにありますか？',{pos:'mid',size:64,dur:5,sfx:'hit',band:true});
+  S.say(b+2.2,'※ 点数は筆者の判断・n=1。大企業の規模での{r|実測は未実施}',{pos:'bot',size:38,dur:4,sfx:false,band:'r'});
+  S.lesson(b+4.6,7,'Enterprise は{y|機能要件}が違う。部署・人・モノ・プロセス・取引先まで含めて比べ、重みは自分で決める。',4.4);S.wait(4.6);
+  S.end(1.2);
+});
+
 /* 11. BAS */
 sc('bas','第6幕 Business Analytics Studio','calm',S=>{
   S.cam0({z:600});S.bg(0,{speed:.1,tint:'#3a2208'});S.tag(0,'ACT 6 ｜ 同じ道具を、事業構想へ（2026-10-08 〜 10-13）',C.or);S.meter(0,92,20);
-  let b=S.N('この足場を、事業構想にも向けました。Business Analytics Studio、略して BAS。');
+  let b=S.N('このskillやharnessを、事業構想にも向けました。Business Analytics Studio、略して BAS。');
   S.say(b+.4,'顧客の ToBe と、意思決定を支える。',{pos:'top',size:50,dur:4,sfx:'pop'});
   b=S.N('最初は、失敗でした。顧客ごとに、毎回ゼロから生成する Prompt。1件、60分以上。要件は、一部だけ。見た目は、毎回変わる。工程ごとの時間も、測っていませんでした。');
   [['1件 60分以上'],['時間をかけても、要件は一部だけ'],['毎回、見た目と品質が変わる'],['工程ごとの時間を測っていない']].forEach(([t],i)=>{const o=S.obj(CD(C.rd,`✖ ${t}`,'font:800 42px sans-serif;min-width:700px;text-align:left'),{x:(i%2?-1:1)*340,y:-200+i*130,z:-i*30,o:0,ry:(i%2?10:-10)});S.mv(o,b+1.2+i*1.5,.4,{o:1},EZ.back);S.sfx(b+1.2+i*1.5,'buzz');S.shake(b+1.3+i*1.5,10)});
@@ -1058,13 +1404,13 @@ sc('bas','第6幕 Business Analytics Studio','calm',S=>{
 /* 12. 一周して戻る */
 sc('ring','第6幕 一周して、戻ってきた','epic',S=>{
   S.cam0({y:-30,z:-900,p:900});cam.eye=true;S.bg(0,{speed:.15,tint:'#2a1060',grid:true,gridCol:C.vi});S.tag(0,'ACT 6 ｜ 事業 → コード → 事業',C.vi);S.meter(0,95,18);
-  const P=[['01月','事業の未来シナリオ','手順で弱さを補う',C.cy],['02〜09月','業務アプリのコード（HVE v1）','補助輪が、成果と並ぶ費用に',C.rd],['10月','薄い足場（HVE v2）','正本と決定的検査だけが残る',C.gr],['10月〜','顧客の ToBe と意思決定（BAS）','データ・出典・確度・機密',C.ye]];
-  P.forEach(([d,t,s,c],i)=>{const a=i*Math.PI/2,R=900;S.obj(CD(c,`${F(38,c,'段 '+(i+1)+' ｜ '+d)}<div style="font:900 52px/1.3 sans-serif;margin:14px 0">${t}</div>${T(36,'#cde',s)}`,'width:760px;white-space:normal'),{x:Math.sin(a)*R,z:-Math.cos(a)*R,ry:-a*57.3,o:0})});
+  const P=[['01月','事業の未来シナリオ','手順で弱さを補う',C.cy],['02〜09月','業務アプリのコード（HVE v1）','補助輪が、成果と並ぶ費用に',C.rd],['10月','薄いskillやharness（HVE v2）','正本と決定的検査だけが残る',C.gr],['10月〜','顧客の ToBe と意思決定（BAS）','データ・出典・確度・機密',C.ye]];
+  P.forEach(([d,t,s,c],i)=>{const a=i*Math.PI/2,R=1500;S.obj(CD(c,`${F(34,c,'段 '+(i+1)+' ｜ '+d)}<div style="font:900 44px/1.3 sans-serif;margin:12px 0">${t}</div>${T(30,'#cde',s)}`,'width:640px;white-space:normal'),{x:Math.sin(a)*R,z:-Math.cos(a)*R,ry:-a*57.3,o:0})});
   const objs=[...world.querySelectorAll('.obj')];
   cam.base.ry=60;
   let b=S.N('最初の依頼は、事業の未来シナリオでした。');S.mv(objs[0],b,.5,{o:1},EZ.back);S.sfx(b,'hit');
   b=S.N('コードを通って、補助輪が、成果と並ぶ費用になり、');S.mv(objs[1],b,.5,{o:1},EZ.back);S.sfx(b,'hit');
-  b=S.N('薄い足場にして、');S.mv(objs[2],b,.5,{o:1},EZ.back);S.sfx(b,'hit');
+  b=S.N('薄いskillやharnessにして、');S.mv(objs[2],b,.5,{o:1},EZ.back);S.sfx(b,'hit');
   b=S.N('また、事業構想へ、戻ってきました。');S.mv(objs[3],b,.5,{o:1},EZ.back);S.sfx(b,'hit');
   S.tween(0,S.cur,p=>{cam.base.ry=60-p*360},EZ.lin);
   b=S.H('コードを書くことは、目的ではなく、事業を構想する、道具の1つでした。');S.emote(b+.8,'💡');
@@ -1076,9 +1422,9 @@ sc('ring','第6幕 一周して、戻ってきた','epic',S=>{
 sc('limit','限界と、妥当性への脅威','tension',S=>{
   S.cam0({z:600});S.bg(0,{speed:.05,tint:'#3a3208'});S.tag(0,'LIMITS ｜ 信じすぎないでください',C.ye);S.meter(0,95,18);
   let b=S.N('最後に、信じすぎないでください。');S.slam(b,'信じすぎないで。',{size:130,color:C.ye,y:60,dur:2,sfx:'hit',shake:12});
-  const L=['n = 1（1人・約9か月・1つの題材群）','EABK は自作のツール。実験・集計・執筆は AI が行い、採点にも同系統のモデルを使った','各条件の試行は 1〜6 回。統計的な有意差は示せない','記録は下限値が多い（履歴の保持期間・PC 再起動で消失）','モデルの進化と、足場の効果を、完全には分離できない'];
-  b=S.N('私の経験は、1人、約9か月です。EABK は自作で、実験も採点も、同じ系統の AI が行いました。試行は1回から6回。記録は下限値で、モデルの進化と、足場の効果は、分けきれていません。');
-  L.forEach((t,i)=>{const o=S.obj(CD(C.ye,`⚠ ${t}`,'font:700 34px sans-serif;text-align:left;min-width:1400px;white-space:normal'),{y:-250+i*105,o:0});S.mv(o,b+.8+i*2.4,.4,{o:1},EZ.back);S.sfx(b+.8+i*2.4,'buzz')});
+  const L=['n = 1（1人・約9か月・1つの題材群）','EABK は自作のツール。実験・集計・執筆は AI が行い、採点にも同系統のモデルを使った','各条件の試行は 1〜6 回。統計的な有意差は示せない','記録は下限値が多い（履歴の保持期間・PC 再起動で消失）','モデルの進化と、skillやharnessの効果を、完全には分離できない'];
+  b=S.N('私の経験は、1人、約9か月です。EABK は自作で、実験も採点も、同じ系統の AI が行いました。試行は1回から6回。記録は下限値で、モデルの進化と、skillやharnessの効果は、分けきれていません。');
+  L.forEach((t,i)=>{const o=S.obj(CD(C.ye,`⚠ ${t}`,'font:700 30px sans-serif;text-align:left;min-width:1400px;white-space:normal'),{y:-290+i*135,o:0});S.mv(o,b+.8+i*2.4,.4,{o:1},EZ.back);S.sfx(b+.8+i*2.4,'buzz')});
   b=S.N('数字は、事実、推論、未検証を、分けて読んでください。');
   S.say(b,'{c|事実}／{y|推論}／{r|未検証}',{pos:'bot',size:58,dur:3.6,sfx:'hit'});
   S.end(1);
@@ -1104,7 +1450,7 @@ sc('outro','NEXT ／ END','outro',S=>{
   const crawl=S.obj(`<div style="text-align:center;font:800 54px/1.8 'Yu Gothic UI',sans-serif;color:#ffe600;width:1700px"><div style="font:900 72px sans-serif;color:#fff;margin-bottom:30px">NEXT ── 次に、測ること</div>① BAS 自身の AI クレジットと稼働時間の実測<br>② 知識探索エージェントで、同じ 35 問を再実験<br>③ HVE v1 の Workflow と ⓪（最新モデル）を同一要求で比較<br>④ 実行ごとの使用量の永続化（未解決）<br><br><span style="color:#9ef;font-size:38px">出典：HVE-History/202610130930-HVE-JourneyStory.md ほか</span></div>`,{x:0,y:1300,z:-300,rx:48,o:1});
   S.mv(crawl,0,S.cur-.4,{y:-1500},EZ.lin);S.sfx(.2,'riser',4);S.sfx(2,'spark');
   S.clear(S.cur);S.bars(S.cur,false);S.cam(S.cur,.5,{z:0,rx:0},EZ.out3);S.bg(S.cur,{speed:.8,tint:'#0b6a8a',grid:true,gridCol:C.cy});
-  b=S.H('足場は、いつまで必要か。答えは、測って、外す。');
+  b=S.H('skillやharnessは、いつまで必要か。答えは、測って、外す。');
   const t=S.obj(LOGO(300)+'HVE v2</div>',{y:-120,o:0,s:2});
   S.at(b,()=>{A.play('boom');fx.flash=1;flashEl.style.background='#fff';fx.flashDur=.5;fx.shake=26;fx.lines=1;burst(180,{color:'#ffe066',speed:18})});
   S.mv(t,b,.7,{o:1,s:1},EZ.back);S.cam(b,10,{z:-150},EZ.out3);S.emote(b+2,'🚀');
@@ -1156,7 +1502,7 @@ ARCH('archEabk','アーキテクチャ ― EABK（HVE v2）','ARCHITECTURE ｜ E
   b=S.N('作業役は、必要な手順書だけを読み、決定的なスクリプトで作業します。');a.show(b,['sk','sc','w1>sk','w4>sc']);
   b=S.N('そして、規則を守らせるのは、モデルのお願いではありません。フックと verify が、外から強制します。');a.show(b,['hk','hk>sc']);a.pulse(b+.4,'hk');
   b=S.N('成果は、データ層のファイルに残り、GitHub Actions が、もう一度、検査します。');a.show(b,['dl','sc>dl','ci','dl>ci']);
-  S.say(b+.5,'LLM の外に、{y|決定的な足場}。',{pos:'bot',size:58,dur:3.4,sfx:'pinpon'});
+  S.say(b+.5,'LLM の外に、{y|決定的なskillやharness}。',{pos:'bot',size:58,dur:3.4,sfx:'pinpon'});
 });
 
 ARCH('archStudio','アーキテクチャ ― EABK Studio','ARCHITECTURE ｜ EABK Studio（データ層のビューアー）',C.mg,'#3a0a30',(S,col)=>{
@@ -1202,12 +1548,14 @@ sc('bird','航海図 ― 全体を見渡す','calm',S=>{
   b=S.N('左が1月23日。右が10月13日。上の段が時代の転換点。下の3段が、HVE が挑んだ7つの目標です。');S.at(b,()=>mapHl(MAPORD));
   b=S.N('1月、事業の未来シナリオから始まり、3月、手順がフレームワークになります。');S.at(b,()=>mapHl(['era','v1']));
   b=S.N('4月から9月にかけて、7つの目標に挑みました。うまくいったものも、いかなかったものも。');S.at(b,()=>mapHl(['q1','q4','q5','q3','q7','q2','q6']));
-  b=S.N('そして10月3日。止める決断。薄い足場で、HVE v2 を作り直し、事業構想へ戻ってきます。');S.at(b,()=>mapHl(['eos','shrink','born','proof','twist','bas','ring']));
+  b=S.N('そして10月3日。止める決断。薄いskillやharnessで、HVE v2 を作り直し、事業構想へ戻ってきます。');S.at(b,()=>mapHl(['eos','shrink','born','proof','twist','bas','ring']));
   b=S.N('では、時代を、順に、降りていきましょう。');S.at(b,()=>{mapHl([]);A.play('riser',2)});
   S.end(.6);
 });
-{ const order=['open','purpose','bird','era','v1','archV1','q1','q2','q3','q4','q5','q6','q7','eos','shrink','born','archEabk','proof','archStudio','demoEabk','twist','archBas','bas','ring','limit','take','outro'];
+{ const order=['open','purpose','bird','era','v1','archV1','q1','q2','q3','q4','q5','q6','q7','eos','shrink','born','archEabk','proof','archStudio','demoEabk','twist','enterprise','archBas','bas','ring','limit','take','outro'];
   SCENES.sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id)); }
+const ALLSCENES=SCENES.filter(s=>!s.id.startsWith('s_')),SHORTSCENES=SHORTSEQ.map(id=>SCENES.find(s=>s.id===id));
+SCENES.length=0;ALLSCENES.forEach(s=>SCENES.push(s));
 buildHud();
 /* テスト用: ?s=シーン番号&t=秒 で該当位置から開始（音声なし）。?voice=1 で音声を有効 */
 (function(){const q=new URLSearchParams(location.search);
@@ -1216,4 +1564,3 @@ buildHud();
 </script>
 </body>
 </html>
-
