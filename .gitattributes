@@ -1,3 +1,6 @@
 # Append-only records: parallel branches add rows at the end; keep both sides when merging.
 docs/id-registry.md merge=union
 docs/run-history.md merge=union
+
+# HVE-History の画像・動画は、バイナリとして扱う（改行変換・差分表示をしない）
+HVE-History/media/** binary
