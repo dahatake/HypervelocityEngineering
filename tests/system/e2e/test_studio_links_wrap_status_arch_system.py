@@ -130,7 +130,23 @@ def _long_repo(tmp_path):
         f"\n#### FR-{900 + i} {long_id}{i} " + "とても長い題名" * 12 + "\n- 決定状態: 承認済み\n"
         for i in range(40)
     )
-    doc.write_text(doc.read_text(encoding="utf-8") + extra, encoding="utf-8")
+    # 決定記録（長い対象 ID・多数行）。書式は docs/requirements-definition.md の「決定記録」表と同じ
+    decisions = "\n## 10. 決定記録\n\n| 日付 | 対象 ID | 決定 | 根拠（依頼・Q・承認依頼・包括承認） | run-id |\n|---|---|---|---|---|\n" + "".join(
+        f"| 2026-10-{1 + i % 28:02d} | FR-{900 + i}、{long_id}{i} | 承認 | " + "長い根拠" * 12 + f" | 2026101{i % 10}0000 |\n"
+        for i in range(30)
+    )
+    doc.write_text(doc.read_text(encoding="utf-8") + extra + decisions, encoding="utf-8")
+    # 実行履歴（docs/run-history.md と同じ列。長い要求 ID 列・多数行）
+    rows = "".join(
+        f"| 20261015{i:04d} | 2026-10-15T05:00 | 2026-10-15T05:30 | abc{i:04d} | " + "長い結果" * 12
+        + f" | {', '.join(f'FR-{900 + j}' for j in range(8))}, {long_id}{i} | 0 | 1/2 | 0.5h | 1/1 | 未取得 | 1 | 1/1 |\n"
+        for i in range(30)
+    )
+    (repo / "docs" / "run-history.md").write_text(
+        "# 実行履歴\n\n| run-id | 開始 | 終了 | HEAD | 結果 | 実装した要求 ID | BLOCKED | AC pass 率 | 経過時間 | 1 回目のゲート通過率 | AI クレジット | 人の介入 | 検証済み要求 |\n"
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|\n" + rows,
+        encoding="utf-8",
+    )
     return repo
 
 
