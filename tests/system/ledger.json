@@ -50,7 +50,13 @@
     "AC-111": "sha256:70bbdfa7fa058260",
     "AC-112": "sha256:92996c1826c2b30d",
     "AC-113": "sha256:bc06c52f2dce258e",
-    "AC-114": "sha256:f10e8f690a809032"
+    "AC-114": "sha256:f10e8f690a809032",
+    "AC-154": "sha256:36ae79f9fe540d90",
+    "AC-157": "sha256:9d3bde2a45b11ae9",
+    "AC-168": "sha256:ab5564fae29f2104",
+    "AC-151": "sha256:531cbc815604fafc",
+    "AC-159": "sha256:cf0a1590bf6f244f",
+    "AC-163": "sha256:480baecec8ec6eff"
   },
   "cases": [
     {
@@ -2677,6 +2683,181 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-105..114 が level system になったため blocked 解除"
+        }
+      ]
+    },
+    {
+      "id": "E2E-078",
+      "requirement_ids": [
+        "FR-1021"
+      ],
+      "ac_ids": [
+        "AC-154"
+      ],
+      "title": "対応表: 行列と作成/参照/更新/削除の語・未記載・空セル",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_entities_studio_system.py -k ac154 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-14T22:49:23+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-079",
+      "requirement_ids": [
+        "FR-1022"
+      ],
+      "ac_ids": [
+        "AC-157"
+      ],
+      "title": "エンティティ詳細: 説明・状態・要求・テーブル・出典・未記載",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_entities_studio_system.py -k ac157 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-14T22:49:25+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-080",
+      "requirement_ids": [
+        "NFR-COMPAT-003"
+      ],
+      "ac_ids": [
+        "AC-168"
+      ],
+      "title": "他リポジトリで Studio 対応表が「エンティティなし」を案内",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_entities_studio_system.py -k ac168 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-14T22:49:27+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-018",
+      "requirement_ids": [
+        "FR-1020"
+      ],
+      "ac_ids": [
+        "AC-151"
+      ],
+      "title": "エンティティ一覧の項目・新規ファイルなし・再読込で変化",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_entities_system.py -k ac151 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-14T22:49:39+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-019",
+      "requirement_ids": [
+        "FR-1023"
+      ],
+      "ac_ids": [
+        "AC-159"
+      ],
+      "title": "参照元未設定: 未設定と報告し verify の結果が不変",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_entities_system.py -k ac159 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-14T22:49:41+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-020",
+      "requirement_ids": [
+        "FR-1024"
+      ],
+      "ac_ids": [
+        "AC-163"
+      ],
+      "title": "参照元未設定: 全エンティティを企業カタログ未確認の ToDo に（0 件含む）",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_entities_system.py -k ac163 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-14T22:49:43+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-021",
+      "requirement_ids": [
+        "NFR-COMPAT-003"
+      ],
+      "ac_ids": [
+        "AC-168"
+      ],
+      "title": "他リポジトリ（別パス・0 件・カタログなし）で一覧・検査が動く",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_entities_system.py -k ac168 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-14T22:49:55+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
         }
       ]
     }
