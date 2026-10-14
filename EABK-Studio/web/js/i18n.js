@@ -59,7 +59,7 @@ const D = {
         'sz.omitted': '画面の外の {n} 件のエンティティは描画を省略しています（拡大・移動・検索で表示されます。データは欠けません）',
         'sz.nothing': '絞り込みに合うエンティティがありません', 'sz.alt': '表で見る（代替表現）', 'sz.alt.clusters': 'クラスター', 'sz.alt.edges': '関係', 'sz.alt.cols': '列',
         'sz.from': '元', 'sz.to': '先', 'sz.kind': '種別', 'sz.src': '出典', 'sz.sel': '選択中', 'sz.none': '選択なし', 'sz.hint': 'ホイール／＋−キーで拡大縮小、ドラッグ／矢印キーで移動、0 で全体、Enter で選択、Esc で解除',
-        'sz.to2d': '2D で見る', 'sz.to3d': '3D で見る', 'sz.graph': '関係グラフ（従来）', 'sz.entview': 'エンティティ表示', 'sz.rot': '回転', 'sz.mismatch': '補完と食い違い', 'sz.supp': '補完（DDL・スキーマ）',
+        'sz.to2d': '2D で見る', 'arch.storage': '保存先', 'arch.locations': '実行場所', 'arch.kind': '種別', 'arch.place': '場所', 'arch.apps': 'アプリ', 'arch.data': 'データ', 'arch.links': '通信（方向）', 'arch.toentity': 'エンティティ図へ', 'arch.toarch': 'アーキテクチャ図へ', 'sz.to3d': '3D で見る', 'sz.graph': '関係グラフ（従来）', 'sz.entview': 'エンティティ表示', 'sz.rot': '回転', 'sz.mismatch': '補完と食い違い', 'sz.supp': '補完（DDL・スキーマ）',
         'sz.goto': '参照先へ移動', 'sz.badge.selected': '選択', 'sz.badge.related': '関係先', 'sz.use': '使用', 'sz.nowebgl': '',
       },
   en: {
@@ -117,7 +117,7 @@ const D = {
         'sz.omitted': '{n} entities outside the view are not drawn (zoom, pan or search shows them; no data is lost)',
         'sz.nothing': 'No entity matches the filter', 'sz.alt': 'Table view (alternative)', 'sz.alt.clusters': 'Clusters', 'sz.alt.edges': 'Relations', 'sz.alt.cols': 'Columns',
         'sz.from': 'From', 'sz.to': 'To', 'sz.kind': 'Kind', 'sz.src': 'Source', 'sz.sel': 'Selected', 'sz.none': 'Nothing selected', 'sz.hint': 'Wheel / + - keys zoom, drag / arrow keys pan, 0 fits, Enter selects, Esc clears',
-        'sz.to2d': 'View in 2D', 'sz.to3d': 'View in 3D', 'sz.graph': 'Relation graph (classic)', 'sz.entview': 'Entity view', 'sz.rot': 'Rotate', 'sz.mismatch': 'differs from the DDL / schema', 'sz.supp': 'Supplement (DDL / schema)',
+        'sz.to2d': 'View in 2D', 'arch.storage': 'Stored at', 'arch.locations': 'Execution locations', 'arch.kind': 'Kind', 'arch.place': 'Place', 'arch.apps': 'Apps', 'arch.data': 'Data', 'arch.links': 'Links (direction)', 'arch.toentity': 'To entity model', 'arch.toarch': 'To architecture', 'sz.to3d': 'View in 3D', 'sz.graph': 'Relation graph (classic)', 'sz.entview': 'Entity view', 'sz.rot': 'Rotate', 'sz.mismatch': 'differs from the DDL / schema', 'sz.supp': 'Supplement (DDL / schema)',
         'sz.goto': 'Go to referenced column', 'sz.badge.selected': 'selected', 'sz.badge.related': 'related', 'sz.use': 'uses', 'sz.nowebgl': '',
       },
 };

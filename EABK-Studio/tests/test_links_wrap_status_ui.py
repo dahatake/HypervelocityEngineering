@@ -53,7 +53,7 @@ def _open(studio, route, width=1280, lang=None):
     page.goto(f"{url}/#/{route}")
     page.wait_for_load_state("networkidle")
     if lang == "en":
-        page.evaluate("() => localStorage.setItem('eabk.lang','en')")
+        page.evaluate("() => localStorage.setItem('eabk-studio.lang','en')")
         page.reload()
         page.wait_for_load_state("networkidle")
     return page
