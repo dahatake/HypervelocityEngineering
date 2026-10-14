@@ -137,3 +137,75 @@ def run_entities(root: Path, *args: str):
         cwd=root, capture_output=True, text=True, encoding="utf-8", errors="replace",
         env=dict(os.environ, PYTHONUTF8="1"),
     )
+
+# ---------------------------------------------------------------------------------------------
+# FR-1025..FR-1030 / NFR-PERF-004 fixtures.  PROVISIONAL FORMAT (仮置き): the requirements leave the concrete
+# notation to the implementation.  Assumed here, adjust once fixed:
+#   * columns: under the catalog "テーブル" section, one sub-heading per table
+#         ### 列: orders
+#         対象エンティティ: 注文
+#         | 列名 | 型 | キー | 参照先 | 説明 |
+#         |---|---|---|---|---|
+#         | id | int | 主キー | | 注文番号 |
+#         | customer_id | int | 外部キー | 顧客.id | 購入者 |
+#   * relations between entities: optional field on a requirement
+#         - エンティティの関係: 注文→商品（参照）
+#   * Studio contract (3D is a canvas, so state is read from a published object; also mirrored in DOM for 2D/entities):
+#         [data-testid="semantic-zoom"]  attrs  data-scale (number)  data-level (overview|mid|detail)  data-ready ("true" when operable)
+#         window.eabkView.setScale(n)    -> set magnification (1 = whole fits)
+#         window.eabkView.getState()     -> {scale, level, clusters:[{id,count,entities:[name]}],
+#                                            entities:[name], edges:[{from,to,kind}],  kind in 外部キー|参照|使用
+#                                            columns:{<entity>:[{name,type,key,ref}]}}   (columns only at level "detail")
+#         2D DOM: [data-entity="名"], [data-edge][data-from][data-to][data-kind], [data-column]
+#   * routes: #/entities, #/map2d, #/map3d
+# ---------------------------------------------------------------------------------------------
+ZOOM_ENTITIES = {"注文": "購入内容", "顧客": "購入者", "商品": "販売品", "在庫": "倉庫の数量"}
+ZOOM_COLUMNS = {
+    "orders": ("注文", [("id", "int", "主キー", "", "注文番号"), ("customer_id", "int", "外部キー", "顧客.id", "購入者"), ("item", "text", "なし", "", "品目")]),
+    "customers": ("顧客", [("id", "int", "主キー", "", "顧客番号"), ("name", "text", "なし", "", "氏名")]),
+}
+
+
+def _col_section(table: str, entity: str, cols: list[tuple[str, str, str, str, str]]) -> str:
+    rows = "\n".join(f"| {a} | {b} | {c} | {d} | {e} |" for a, b, c, d, e in cols)
+    return f"\n### 列: {table}\n対象エンティティ: {entity}\n| 列名 | 型 | キー | 参照先 | 説明 |\n|---|---|---|---|---|\n{rows}\n"
+
+
+def make_zoom(root: Path) -> Path:
+    """4 entities; 注文→顧客 (FK via column), 注文→商品 (requirement relation), 在庫 isolated; 商品 has no columns."""
+    root.mkdir(parents=True, exist_ok=True)
+    _base(root)
+    (root / "docs").mkdir(exist_ok=True)
+    reqs = [
+        _req("FR-001", "注文登録", "注文、顧客", "注文（作成）", "1", 1),
+        _req("FR-002", "商品登録", "商品", "商品（作成）", "1", 2).replace(
+            "- 受入基準", "- エンティティの関係: 注文→商品（参照）\n- 受入基準", 1),
+        _req("FR-003", "在庫確認", "在庫", "在庫（参照）", "2", 3),
+    ]
+    (root / DOC).write_text(build_doc(ZOOM_ENTITIES, [], reqs), encoding="utf-8")
+    cat = build_catalog([("orders", "db/orders.sql", "FR-001"), ("customers", "db/customers.sql", "FR-001")], ["FR-001", "FR-002", "FR-003"])
+    for t, (e, cols) in ZOOM_COLUMNS.items():
+        cat += _col_section(t, e, cols)
+    (root / CAT).write_text(cat, encoding="utf-8")
+    return root
+
+
+def make_large(root: Path, entities: int = 300, columns: int = 5000) -> Path:
+    """PARAM-019 / PARAM-020 scale synthetic data: chain-linked clusters of 10 entities, columns spread evenly."""
+    root.mkdir(parents=True, exist_ok=True)
+    _base(root)
+    (root / "docs").mkdir(exist_ok=True)
+    names = {f"E{i:04d}": f"エンティティ{i}" for i in range(entities)}
+    per, extra = divmod(columns, entities)
+    reqs, tables, secs = [], [], []
+    for i, n in enumerate(names):
+        rel = f"- エンティティの関係: {n}→E{i - 1:04d}（参照）\n" if i % 10 else ""
+        r = _req(f"FR-{i + 1:04d}", f"要求{i}", n, f"{n}（作成）", "1", i + 1)
+        reqs.append(r.replace("- 受入基準", rel + "- 受入基準", 1) if rel else r)
+        tables.append((f"t{i:04d}", f"db/t{i:04d}.sql", f"FR-{i + 1:04d}"))
+        k = per + (1 if i < extra else 0)
+        cols = [("id", "int", "主キー", "", "識別子")] + [(f"c{j}", "text", "なし", "", f"列{j}") for j in range(1, k)]
+        secs.append(_col_section(f"t{i:04d}", n, cols))
+    (root / DOC).write_text(build_doc(names, [], reqs), encoding="utf-8")
+    (root / CAT).write_text(build_catalog(tables, [f"FR-{i + 1:04d}" for i in range(entities)]) + "".join(secs), encoding="utf-8")
+    return root
