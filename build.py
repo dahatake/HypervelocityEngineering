@@ -21,6 +21,7 @@ GROUPS = [
     ("はじめに", ["README.md", "CHANGELOG.md"]),
     ("ユーザーガイド", sorted(p.relative_to(SRC).as_posix() for p in (SRC / "users-guide").glob("*.md"))),
     ("Studio ガイド", sorted(p.relative_to(SRC).as_posix() for p in (SRC / "users-guide/studio").glob("*.md"))),
+    ("HVE-History", sorted(p.relative_to(SRC).as_posix() for p in (SRC / "HVE-History").glob("*.md"))),
     ("管理データ（docs）", sorted(p.relative_to(SRC).as_posix() for p in (SRC / "docs").glob("*.md"))),
 ]
 PAGES = {}  # repo path -> out path
@@ -106,7 +107,7 @@ def fix_links(body, src_path, out_path, assets):
         if target in PAGES:
             return f'{attr}="{rel(out_path, PAGES[target])}{frag}"'
         f = SRC / target
-        if f.is_file() and attr == "src":
+        if f.is_file() and (attr == "src" or target.startswith("HVE-History/")):
             assets.add(target)
             return f'{attr}="{rel(out_path, target)}"'
         if f.is_dir():
@@ -129,6 +130,8 @@ def nav_html(out_path, cur):
             text = first_heading(f) or f
             c = ' class="cur"' if f == cur else ""
             parts.append(f'<a{c} href="{rel(out_path, PAGES[f])}">{html.escape(text)}</a>')
+    if any(f.startswith("HVE-History/") for f in PAGES):
+        parts.append(f'<h4>HVE-History（スライド）</h4><a href="{rel(out_path, "HVE-History/20261003-HVEv2-Born.html")}">HVE v2 Born（HTML）</a>')
     return "\n".join(parts)
 
 
@@ -185,8 +188,14 @@ await mermaid.run({{querySelector:'pre.mermaid'}});
         dest = OUT / a
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(SRC / a, dest)
+    for p in (SRC / "HVE-History").rglob("*"):
+        if p.is_file() and p.suffix != ".md":
+            dest = OUT / p.relative_to(SRC)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(p, dest)
     (OUT / ".nojekyll").write_text("")
     print(f"{len(PAGES)} pages, {len(assets)} assets")
 
 
 main()
+

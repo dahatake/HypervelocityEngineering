@@ -1,0 +1,3308 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GitHub Copilot によるアプリケーション開発の 4 方式の比較 — 「⓪ 素の Coding Agent」を基準にした「① 対話型 Vibe Coding」「② Prompt 駆動」「③ Enterprise App Build Kit」の実測と実験による評価 — HypervelocityEngineering</title>
+<link id="hl" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+<style>
+:root{--bg:#fff;--fg:#1f2328;--muted:#656d76;--card:#f6f8fa;--bd:#d0d7de;--ac:#0969da;--side:#f6f8fa;--code:#eff1f3;--r:10px}
+[data-theme=dark]{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--card:#161b22;--bd:#30363d;--ac:#58a6ff;--side:#010409;--code:#1c2128}
+[data-theme=midnight]{--bg:#0f1226;--fg:#e4e7ff;--muted:#9aa0cc;--card:#171a3a;--bd:#2c3062;--ac:#8b9cff;--side:#0a0c1d;--code:#1d2147}
+[data-theme=ocean]{--bg:#f2fafc;--fg:#0c2d3a;--muted:#4f7583;--card:#e0f2f7;--bd:#b4dce6;--ac:#0087a8;--side:#dcf0f5;--code:#d3ebf1}
+[data-theme=forest]{--bg:#f4f8f2;--fg:#1c2b1e;--muted:#5a6f5c;--card:#e6efe2;--bd:#c3d6bd;--ac:#2f7d3a;--side:#e1ecdc;--code:#dae7d5}
+[data-theme=sunset]{--bg:#fff8f2;--fg:#3a2118;--muted:#8a6252;--card:#ffebdc;--bd:#f2cdb3;--ac:#d9480f;--side:#ffeede;--code:#fde1cc}
+[data-theme=rose]{--bg:#fff6f8;--fg:#3a1c26;--muted:#8d5a6b;--card:#ffe6ec;--bd:#f2c2cf;--ac:#c2255c;--side:#ffe9ef;--code:#fcdbe4}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 system-ui,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;transition:background .2s,color .2s}
+a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;padding:.6rem 1.2rem;background:var(--card);border-bottom:1px solid var(--bd);backdrop-filter:blur(6px)}
+header .brand{font-weight:700;color:var(--fg)}header .sp{flex:1}
+header select,header button{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:.3rem .6rem;font:inherit;font-size:.9rem}
+#menu{display:none}
+.layout{display:flex;min-height:calc(100vh - 54px)}
+nav{width:290px;flex:none;background:var(--side);border-right:1px solid var(--bd);padding:1rem;position:sticky;top:54px;height:calc(100vh - 54px);overflow:auto;font-size:.9rem}
+nav h4{margin:1.1rem 0 .3rem;color:var(--muted);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
+nav a{display:block;padding:.25rem .6rem;border-radius:6px;color:var(--fg);line-height:1.4}
+nav a:hover{background:var(--card);text-decoration:none}
+nav a.cur{background:var(--ac);color:#fff}
+main{flex:1;min-width:0;max-width:900px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1,h2{border-bottom:1px solid var(--bd);padding-bottom:.3rem}
+h1,h2,h3,h4{line-height:1.3;scroll-margin-top:70px}
+img{max-width:100%;height:auto;border-radius:var(--r);border:1px solid var(--bd)}
+pre{background:var(--code);border:1px solid var(--bd);border-radius:var(--r);padding:1rem;overflow:auto;line-height:1.5;font-size:.88rem}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font:.88em ui-monospace,Consolas,monospace}
+pre code{background:none;padding:0}
+pre.mermaid{background:var(--card);text-align:center}
+table{border-collapse:collapse;display:block;overflow:auto;margin:1rem 0}
+th,td{border:1px solid var(--bd);padding:.45rem .8rem;vertical-align:top}
+th{background:var(--card)}tr:nth-child(even) td{background:color-mix(in srgb,var(--card) 50%,transparent)}
+blockquote{margin:1rem 0;padding:.2rem 1rem;border-left:4px solid var(--ac);background:var(--card);border-radius:0 var(--r) var(--r) 0;color:var(--muted)}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var(--muted);font-size:.85rem}
+@media(max-width:820px){#menu{display:inline-block}nav{position:fixed;left:-310px;top:54px;z-index:9;transition:left .2s}nav.open{left:0}main{padding:1.2rem 1rem}}
+</style>
+<script>document.documentElement.dataset.theme=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')</script>
+</head><body>
+<header><button id="menu" aria-label="menu">☰</button><a class="brand" href="../index.html">⚡ HypervelocityEngineering</a><span class="sp"></span>
+<label>🎨 <select id="theme" aria-label="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="midnight">Midnight</option><option value="ocean">Ocean</option><option value="forest">Forest</option><option value="sunset">Sunset</option><option value="rose">Rose</option></select></label>
+<a href="https://github.com/dahatake/HypervelocityEngineering">GitHub</a></header>
+<div class="layout"><nav><h4>はじめに</h4>
+<a href="../index.html">HypervelocityEngineering — Enterprise App Build Kit</a>
+<a href="../CHANGELOG.html">Changelog</a>
+<h4>ユーザーガイド</h4>
+<a href="../users-guide/01-writing-requests.html">1. 依頼の書き方（/build と runoptions）</a>
+<a href="../users-guide/02-during-and-after-run.html">2. 実行中と終了後</a>
+<a href="../users-guide/03-requirements-format.html">3. 管理データの書式</a>
+<a href="../users-guide/04-customization.html">4. 設定とカスタマイズ</a>
+<a href="../users-guide/05-scripts-reference.html">5. スクリプトリファレンス</a>
+<a href="../users-guide/06-quality-gates.html">6. 品質ゲートと検査項目</a>
+<a href="../users-guide/07-troubleshooting.html">7. トラブルシューティング</a>
+<a href="../users-guide/08-roadmap.html">8. 導入ロードマップと KPI</a>
+<a href="../users-guide/09-versioning.html">バージョンアップの手順</a>
+<a href="../users-guide/10-adopting-existing-apps.html">10. 既存のアプリを導入する（Adopt）</a>
+<a href="../users-guide/index.html">EABK ユーザーガイド</a>
+<h4>Studio ガイド</h4>
+<a href="../users-guide/studio/01-first-steps.html">S1 はじめかた</a>
+<a href="../users-guide/studio/02-screens.html">S2 画面の見かた</a>
+<a href="../users-guide/studio/03-tasks.html">S3 こんなとき、どう見るか</a>
+<a href="../users-guide/studio/04-troubleshooting.html">S4 うまく動かないとき・用語集</a>
+<a href="../users-guide/studio/05-product-manager.html">S5 Product Manager 向けガイド</a>
+<a href="../users-guide/studio/06-architect.html">S6 Architect 向けガイド</a>
+<a href="../users-guide/studio/07-software-engineer.html">S7 Software Engineer 向けガイド</a>
+<a href="../users-guide/studio/08-data-reference.html">S8 データリファレンス（どの機能が、どのデータを読むか）</a>
+<a href="../users-guide/studio/README.html">EABK Studio ユーザーガイド（第 2 部）</a>
+<h4>HVE-History</h4>
+<a class="cur" href="2026100220-3TypeOfFrameworkCompetitiveAnalyticsReport.html">GitHub Copilot によるアプリケーション開発の 4 方式の比較 — 「⓪ 素の Coding Agent」を基準にした「① 対話型 Vibe Coding」「② Prompt 駆動」「③ Enterprise App Build Kit」の実測と実験による評価</a>
+<a href="202610031135-HVE_EOS_ValidationReport.html">HVE 利用停止（EOS）の妥当性検証レポート — 「3 つの Prompt + GitHub Copilot」で企業向け大規模分散アプリを開発できるか</a>
+<a href="202610051515-DevelopmentHistoryReport.html">開発履歴レポート（StudyReport-Evaluator）</a>
+<a href="202610070515-DevelopmentHistoryReport.html">StudyReport-Evaluator-new-era 開発履歴調査レポート</a>
+<a href="202610070815-HVE-EOS-PoC-by-StudyReportEvaluator-AnalyticsReport.html">HVE 利用停止（EOS）の実証 — StudyReport-Evaluator の前版と new-era の開発資源の比較分析</a>
+<a href="202610072130-RD-MaintenanceAnalyticsReport-BeforeToolkit.html">要求定義書・カタログ・System Test の一貫性を保ち、最高品質・最短時間・最小 Token で実装する計画</a>
+<a href="202610081155-DevelopmentHistoryReport-newToolkit.html">開発履歴 調査レポート（StudyReport-Evaluator-3）</a>
+<a href="202610130930-HVE-JourneyStory.html">Hypervelocity Engineering の歴史と経緯 — 個人の Vibe Coding を Business Envisioning まで広げた 262 日の失敗と発見</a>
+<a href="202610131000-Qiita-HVE-JourneyStory.html">HVE-History/202610131000-Qiita-HVE-JourneyStory.md</a>
+<a href="presentation-generator-prompt.html">Prompt: HVE の歴史を伝える「ドラマティック・プレゼンテーション」HTML を生成する</a>
+<h4>管理データ（docs）</h4>
+<a href="../docs/catalog.html">カタログ</a>
+<a href="../docs/id-registry.html">ID 台帳</a>
+<a href="../docs/manual-tests.html">手順で確かめる受入基準</a>
+<a href="../docs/requirements-definition.html">要求定義書</a>
+<a href="../docs/run-history.html">実行履歴</a>
+<h4>HVE-History（スライド）</h4><a href="20261003-HVEv2-Born.html">HVE v2 Born（HTML）</a></nav>
+<main><h1 id="github-copilot-4-0-coding-agent1-vibe-coding2-prompt-3-enterprise-app-build-kit">GitHub Copilot によるアプリケーション開発の 4 方式の比較 — 「⓪ 素の Coding Agent」を基準にした「① 対話型 Vibe Coding」「② Prompt 駆動」「③ Enterprise App Build Kit」の実測と実験による評価</h1>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>文書名</td>
+<td>20261220-3TypeOfFrameworkCompetitiveAnalyticsReport（ファイル名は、既存の参照を壊さないために初版のまま据え置いています。内容は 4 方式の比較です）</td>
+</tr>
+<tr>
+<td>版</td>
+<td>3.1（2026-10-10 JST）。変更履歴は付録 A</td>
+</tr>
+<tr>
+<td>目的</td>
+<td>GitHub Copilot を使った 4 つの開発方式を、<strong>(A) 短い実行時間、(B) コードの品質、(C) 最小の Token、(D) Enterprise で使える運用、(E) ビジネスとの整合</strong>の 5 観点で比べ、標準とする方式と改善策を示す。研究課題は §1.4</td>
+</tr>
+<tr>
+<td>比較する方式</td>
+<td><strong>⓪ 素の Coding Agent</strong>（基準。HVE も大きな Prompt も EABK も使わず、Coding Agent にその都度 Prompt だけを入れる）／<strong>① 対話型 Vibe Coding</strong>（⓪を仕様の正本なしにアプリ全体へ積み重ねたもの。旧称「HVE 期」）／<strong>② Prompt 駆動</strong>（要求定義の Prompt P-RD と実装の Prompt P-FR）／<strong>③ Enterprise App Build Kit（EABK）</strong>（進行役・作業役・skills・hooks・決定的スクリプト）。詳細は §2</td>
+</tr>
+<tr>
+<td>主な資料</td>
+<td>①②③の開発履歴（<a href="202610051515-DevelopmentHistoryReport.html">①</a>、<a href="202610070515-DevelopmentHistoryReport.html">②</a>、<a href="202610081155-DevelopmentHistoryReport-newToolkit.html">③</a>）、⓪の過去の実測（<a href="202610031135-HVE_EOS_ValidationReport.html">EOS レポート</a> §3.1・§3.3・§3.10）、2026-10-08 の追加実験 E-0〜E-5（§5、付録 C）と③の元の実行の再計測（完走。§5.9）、①の人の Prompt 219 件の分類（§1.2）。補助資料は <a href="202610070815-HVE-EOS-PoC-by-StudyReportEvaluator-AnalyticsReport.html">①②の比較分析</a> と <a href="202610072130-RD-MaintenanceAnalyticsReport-BeforeToolkit.html">③の設計書</a></td>
+</tr>
+<tr>
+<td>③の公開先</td>
+<td><a href="https://github.com/dahatake/HypervelocityEngineering">dahatake/HypervelocityEngineering</a>（旧称 Assured Build Kit／ABK。§2.1）</td>
+</tr>
+<tr>
+<td>表記</td>
+<td><strong>事実</strong>＝資料・実測・公式文書で確かめたこと。<strong>推論</strong>＝事実から導いた判断。<strong>未検証</strong>＝まだ確かめていないこと。費用は <strong>AI クレジット</strong>（ログの <code>totalNanoAiu</code> ÷ 10⁹。1 AI クレジット ＝ 0.01 USD とみなした目安）。記号と時間の指標の定義は §3.2</td>
+</tr>
+<tr>
+<td>利害関係</td>
+<td>③は本書の利用者が開発したツールキットです。追加実験の設計・実行・集計と本書の執筆は AI（GitHub Copilot のエージェント）が行い、採点役にも同じ系統のモデル（Claude Sonnet 5.5）を使いました（§9）</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="_1">要旨</h2>
+<p><strong>背景と目的.</strong> 「何もない⓪が一番よい」が出発点です。しかし⓪を人がアプリ全体に回し続けると（＝①）、元のビジネスから外れ、ビジネスの論理の一貫性が崩れ、同じ Prompt を何度も入れ、そのたびにジョブが止まりました。②③はこれを解くための自動実行の機構です。本書は、4 方式がこれらの問題と 5 観点（A〜E）をどこまで満たすかを、既存の実行ログと追加実験で評価します。</p>
+<p><strong>方法.</strong> (1) ①②③の開発履歴と⓪の過去の実測を、指標の定義をそろえて比べました。(2) 同じドラフト要求定義書（177KB、受入基準 50 件）を使い、6 つの追加実験（E-0〜E-5）を行い、さらに③の元の実行（利用者が 51/90 項目で打ち切ったもの）を同じ run のまま完走させて再計測しました（§5.9）。(3) 成果物は、匿名化した盲検の受入基準の採点、ビルドとテスト、CodeQL で評価しました。(4) ①の人の Prompt 219 件を 2 人の評価者が独立に分類しました（一致率 90%、κ=0.87）。</p>
+<p><strong>主な結果.</strong></p>
+<ol>
+<li><strong>止まる・繰り返す（B3・B4）:</strong> ①では人の Prompt の <strong>47.5〜50.7% が「止まったジョブの再開・エラー対処」、43.8〜44.7% が「以前とほぼ同じ指示の打ち直し」</strong>でした（値の幅は評価者 2 人の差）。③は人の Prompt 1 回で 71 分止まらずに進み（E-1）、完走までの再計測では、5 回止まっても（環境の上限 3 回、PC 停止、モデルの利用不可）、そのたびに 1 文の「再開」で続きから進みました（§5.9）。</li>
+<li><strong>ビジネスとの整合（B1・B2）:</strong> 要求定義書に入れた 10 件の矛盾を、⓪は 0 件、② P-RD は 8 件、③は 2 件検出しました。③は依頼の範囲を黙って縮め（受入基準の約半分）、「全件完了」と報告しました。一方、既存の要求（セキュリティ）との衝突は③だけが毎回検出しました。</li>
+<li><strong>結果の品質と費用:</strong> 空のリポジトリからの <strong>1 回の実行</strong>では、どの方式もアプリを完成させませんでした（受入基準の充足 10〜51%）。満たした受入基準 1 点あたりの AI クレジットは ⓪ Sonnet 4.4、⓪ Opus 15.5、③ 55、② 445 でした。<strong>一方、③を完走させると、106/106 項目、受入基準 98%（49/50 点）、1,096 テスト合格に達しました（19.3 時間、約 18,300 AI クレジット。1 点あたり約 373）。</strong> CodeQL の指摘は全 10 成果物で 0 件でした。</li>
+<li><strong>小さな変更:</strong> 1 文で言える変更 6 件では、⓪と③はどちらも隠しテスト 6/6 で、③は時間で約 15 倍、AI クレジットで約 31 倍かかりました。</li>
+</ol>
+<p><strong>総合評価（§7）.</strong> 5 観点の加重スコア（アプリ規模の開発）は <strong>③ 3.68、② 3.38、⓪ 2.95、① 1.70</strong> です。時間だけを重く見ると⓪、ビジネスとの整合を半分の重みにすると②が首位になります（③は僅差の 2 位）。</p>
+<p><strong>結論.</strong> (1) 小さな変更は⓪（高速レーン）で足ります。ただし既存のセキュリティ・プライバシーの要求に触れる変更は③に回します。(2) アプリ規模の開発の標準は③です。③は、完走させると受入基準 98% に達し、止まっても 1 文で続きから進み、既存の要求との衝突を検出し、申告と記録が残ります。ただし完走までに 19.3 時間と約 18,300 AI クレジットがかかり、1 回の実行の範囲は run ごとに大きく変わります（E-1 は 48%）。(3) ③は「ビジネスとの整合」で②に劣るため、展開の前に、範囲の報告（R12）、ドラフトの監査（R13）、②の事業目的の監査の取り込み（R14）、中心の機能の実環境での確認（R15）、モデル指定の強制（R11）などを直します（§8.2.2）。各条件の試行は 1〜6 回で、統計的な有意差を示すものではありません（§9）。</p>
+<hr />
+<h2 id="1">1. 背景と問題設定</h2>
+<h3 id="11">1.1 背景</h3>
+<ul>
+<li><strong>事実:</strong> 利用者は、GitHub Copilot で業務アプリを作るために、独自のワークフローのフレームワーク HVE と DAG のオーケストレータ ATG を作りました。しかし HVE で作ろうとした業務アプリは完成せず、HVE 本体の開発・保守に 181,055 AI クレジットを使いました（<a href="202610031135-HVE_EOS_ValidationReport.html">EOS §3.10〜3.11</a>）。そこで HVE を止め、② 2 本の大きな Prompt（P-RD・P-FR）と、③ 長時間の無人実行のためのツールキット EABK に移りました。</li>
+<li><strong>事実:</strong> 同じ時期に、HVE を使わずに Coding Agent に都度 Prompt を入れて作ったアプリ（⓪にあたる）は、4 つとも実行や受入の記録があるところまで進みました（EOS §3.10）。ATG の比較実験でも、⓪にあたる単一の Prompt は、オーケストレータを足した場合より 1.7〜2.25 倍速く、2.49〜3.50 倍安く、品質は同じでした（EOS §3.1）。</li>
+<li><strong>利用者の問題意識:</strong> 「そもそも何もない⓪が一番よい。しかし⓪を人が回し続けると、時間とともに元のビジネスから外れたり、ビジネスの論理の一貫性が欠けたりする。何度も同じ Prompt を入れ、そのたびにジョブが止まる。だから②③のような自動実行の機構が欲しかった。」本書は、この問題意識を出発点にします。§1.2 で①の実態を数字で示し、§1.3 で問題を 8 つに整理します。</li>
+</ul>
+<h3 id="12-1-prompt-0">1.2 ①の Prompt の実態（人が⓪を回し続けたときに何が起きたか）</h3>
+<p>①（StudyReport-Evaluator、32 日）の Prompt を、VS Code Chat と Copilot CLI の履歴から 285 件抽出しました。このうち 66 件はターミナルの完了通知の自動注入なので除き、<strong>人が入力した 219 件</strong>を、Sonnet 5.5 の評価者 2 体が互いの結果を見ずに 1 件ずつ読んで分類しました（一致率 90.0%、κ=0.87。§3.5）。表の件数は 1 人目の評価者のものです。</p>
+<table>
+<thead>
+<tr>
+<th>分類</th>
+<th style="text-align: right;">件数</th>
+<th style="text-align: right;">割合</th>
+<th>代表例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>止まった作業の再開・続行の指示</strong></td>
+<td style="text-align: right;"><strong>93</strong></td>
+<td style="text-align: right;"><strong>42.5%</strong></td>
+<td>「@agent Try Again」22 回、「残作業をリストアップしてください」12 回、「全てのタスクを実行をしてください…」11 回、「全ての残作業を実行してください」8 回、「Start implementation」7 回</td>
+</tr>
+<tr>
+<td><strong>エラーで止まったジョブへの対処</strong></td>
+<td style="text-align: right;"><strong>18</strong></td>
+<td style="text-align: right;"><strong>8.2%</strong></td>
+<td>「Autopilotで発生しているエラーの根本原因を調査してください…」9 回</td>
+</tr>
+<tr>
+<td>要求・範囲の変更</td>
+<td style="text-align: right;">26</td>
+<td style="text-align: right;">11.9%</td>
+<td>「私が提供すべき情報が多すぎます。以下だけで実行できるように要求定義や実装プランを変更してください」「[設問別得点]は、削除してください」</td>
+</tr>
+<tr>
+<td><strong>ビジネスの意図からのずれ・不整合の指摘</strong></td>
+<td style="text-align: right;"><strong>8</strong></td>
+<td style="text-align: right;"><strong>3.7%</strong></td>
+<td>「要求定義に誤りがあると思います」「元の学生のレポートを見ないと判断ができません」「GitHub Copilotへのログイン画面がありません」</td>
+</tr>
+<tr>
+<td>レビュー・検証の依頼</td>
+<td style="text-align: right;">22</td>
+<td style="text-align: right;">10.0%</td>
+<td>「あなたは今から <strong>敵対的レビュアー</strong> として振る舞ってください…」9 回</td>
+</tr>
+<tr>
+<td>ビルド・リリース・運用</td>
+<td style="text-align: right;">26</td>
+<td style="text-align: right;">11.9%</td>
+<td>—</td>
+</tr>
+<tr>
+<td>質問・説明・文書</td>
+<td style="text-align: right;">21</td>
+<td style="text-align: right;">9.6%</td>
+<td>—</td>
+</tr>
+<tr>
+<td>不具合の修正・その他</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">2.3%</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>事実:</strong> 人の入力の <strong>50.7%（111 件）が「止まったジョブの再開」と「エラーで止まったジョブへの対処」</strong>でした（2 人目の評価者では 47.5%。UI の再実行ボタンに近い「@agent Try Again」22 件を除くと 45.2%）。2026-09-05 の 1 日だけで 62 件ありました。</li>
+<li><strong>事実:</strong> 人の入力の <strong>43.8%（96 件）は、以前とほぼ同じ文面の打ち直し</strong>でした（文面の 80% 以上が同じもの。2 人目の評価者では 44.7%、「@agent Try Again」を除くと 38.1%）。</li>
+<li><strong>事実:</strong> 要求の変更と意図のずれの指摘は 34 件で、稼働 16 日のうち 10 日にわたり、独立した方向転換は約 9 回でした。要求定義書は 29 回改訂され、5.3 万文字 → 2.4 万文字（範囲を絞る）→ 14.1 万文字と大きく揺れました（<a href="202610070815-HVE-EOS-PoC-by-StudyReportEvaluator-AnalyticsReport.html">202610070815 §2.4</a>）。</li>
+<li><strong>推論:</strong> 利用者の実感（同じ Prompt を何度も入れる、そのたびにジョブが止まる、ビジネスから外れる）は、数字で裏付けられます。人の入力の約半分は「開発を前に進める判断」ではなく「止まったものを動かす作業」でした。</li>
+</ul>
+<h3 id="13-b1b8">1.3 ビジネスの視点での問題点（B1〜B8）</h3>
+<p>5 つの資料（EOS レポート §3.10〜3.11・§5.1、①②③の開発履歴、PoC 分析、ツールキットの設計書 §3〜§4）に書かれた問題を、重複をまとめて 8 つにしました。</p>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>ビジネスの問題</th>
+<th>何が起きたか（証拠）</th>
+<th>元の資料</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>B1</strong></td>
+<td><strong>事業の目的から外れていく（ドリフト）</strong></td>
+<td>①: 要求定義書を 29 回改訂し、約 9 回の方向転換、意図のずれの指摘 8 件。HVE の業務アプリ: アーキテクチャの推薦が 14 件すべてで中断し、作り直しの削除 commit が 53 件</td>
+<td>§1.2、EOS §3.11</td>
+</tr>
+<tr>
+<td><strong>B2</strong></td>
+<td><strong>ビジネスの論理の一貫性が崩れる</strong>（機能を足すと矛盾が生まれる）</td>
+<td>機能追加の後の論理矛盾（原因の仮説 H1〜H5: 書き手が複数、自己点検だけ、閾値と用語の重複、テストを直すと意味が変わる、並行作業の組み合わせ）</td>
+<td>設計書 §3〜§4</td>
+</tr>
+<tr>
+<td><strong>B3</strong></td>
+<td><strong>同じ指示を何度も入れる</strong>（人の手間）</td>
+<td>①: 人の入力の 43.8% が打ち直し</td>
+<td>§1.2</td>
+</tr>
+<tr>
+<td><strong>B4</strong></td>
+<td><strong>ジョブが止まり、人が再開する</strong></td>
+<td>①: 人の入力の 50.7%。AutoVision-Studio: abort 6 回・resume 12 回を手で再開。HVE: 前の Step が止まると後ろが止まる。③: PC の再起動で 88 分停止</td>
+<td>§1.2、EOS §5.1・§3.11、③の履歴</td>
+</tr>
+<tr>
+<td><strong>B5</strong></td>
+<td><strong>「完了」の申告を信じられない</strong>（偽の PASS、範囲の黙った縮小）</td>
+<td>ATG で隠しテスト 258/564 の実装を受理。HVE: 総合判定が「INCOMPLETE・BLOCKED」</td>
+<td>EOS §3.6・§3.11</td>
+</tr>
+<tr>
+<td><strong>B6</strong></td>
+<td><strong>人の判断が重いか、形だけになる</strong></td>
+<td>承認待ちのままでは長時間の実行が止まる。②では質問票 9 件・承認 10 件をすべて推奨どおりに受け入れた（自動化バイアス）</td>
+<td>設計書 §8.2、PoC §2.3</td>
+</tr>
+<tr>
+<td><strong>B7</strong></td>
+<td><strong>時間と費用が読めない</strong></td>
+<td>①: 総待ち時間 143 時間。1 セッションに詰め込むと費用の 31% を占めた。HVE: 1 回通すのに 15〜39 時間。③: 再起動で Token の集計が消えた</td>
+<td>①の履歴、EOS §3.10〜3.11、③の履歴</td>
+</tr>
+<tr>
+<td><strong>B8</strong></td>
+<td><strong>仕組みそのものに費用がかかる</strong></td>
+<td>HVE の開発・保守に 181,055 AI クレジット（約 1,811 USD）。その仕組みで作ったアプリは完成しなかった</td>
+<td>EOS §3.10〜3.11</td>
+</tr>
+</tbody>
+</table>
+<h3 id="14">1.4 研究課題と評価の枠組み</h3>
+<p>本書は次の 5 つの研究課題（RQ）に答えます。採点の 5 観点（A〜E）と、§1.3 のビジネスの問題（B1〜B8）は、下の表のとおり対応します。</p>
+<table>
+<thead>
+<tr>
+<th>RQ</th>
+<th>問い</th>
+<th>観点</th>
+<th>ビジネスの問題</th>
+<th>答え</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RQ1</td>
+<td>各方式は、同じアプリをどれだけの時間と AI クレジットで作るか。満たした受入基準 1 点あたりではどうか</td>
+<td>(A) 時間、(C) Token</td>
+<td>B7</td>
+<td>§6.1</td>
+</tr>
+<tr>
+<td>RQ2</td>
+<td>コードの品質に、工程の強さと結果（受入基準の充足・テスト・静的解析）で差はあるか</td>
+<td>(B) 品質</td>
+<td>B5</td>
+<td>§6.1</td>
+</tr>
+<tr>
+<td>RQ3</td>
+<td>事業の目的からのずれと、ビジネスの論理の矛盾を防げるか</td>
+<td>(E) ビジネスとの整合</td>
+<td>B1、B2、B5</td>
+<td>§6.1、§6.2</td>
+</tr>
+<tr>
+<td>RQ4</td>
+<td>人の Prompt の回数と、ジョブの停止を減らせるか</td>
+<td>(D) 運用</td>
+<td>B3、B4</td>
+<td>§6.1、§6.2</td>
+</tr>
+<tr>
+<td>RQ5</td>
+<td>Enterprise の運用の要件を満たすか。小さな変更とアプリ規模で、どの方式を使い分けるべきか</td>
+<td>(D) 運用</td>
+<td>B6、B8</td>
+<td>§6.1、§7、§8</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>観点 (E) は、v2 までの 4 観点の採点にはなく、利用者の問題意識（§1.1）を評価に入れるために v3.0 で加えました。B6（人の判断）と B8（仕組みの費用）は (D) に含めます。</li>
+<li><strong>採点の対象の範囲:</strong> §7 の採点は「本書のアプリ（StudyReport-Evaluator）の規模の開発」を対象にします。1 文で言える小さな変更は、§5.5 で別に評価します。</li>
+</ul>
+<hr />
+<h2 id="2-4">2. 比較する 4 つの方式</h2>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>⓪ 素の Coding Agent（基準）</th>
+<th>① 対話型 Vibe Coding</th>
+<th>② Prompt 駆動（HVE 廃止）</th>
+<th>③ Enterprise App Build Kit（EABK）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>開発の形</td>
+<td>Coding Agent（VS Code・CLI の Agent／Autopilot、または cloud agent）に、<strong>その都度、短い Prompt だけ</strong>を入れる。仕様の正本、手順書、独自の仕組みを持たない</td>
+<td>人が細かく指示を重ねる<strong>対話型の Vibe Coding</strong>。実態は「⓪を仕様の正本なしで 254 回積み重ねたもの」に近い</td>
+<td><strong>仕様駆動の自律実行</strong>。要求定義の Prompt（P-RD、約 47KB）→ 承認 → 実装の Prompt（P-FR、約 42KB）</td>
+<td><strong>進行役＋作業役＋skills＋hooks＋決定的スクリプト</strong>。<code>/build</code> を 1 回入力すると、要求定義 → 独立監査 → 計画 → System Test の先行設計 → 並行実装 → 統合 → 最終監査 → 報告まで進む</td>
+</tr>
+<tr>
+<td>実測の対象</td>
+<td>ATG の比較実験の C1・C1S（家計簿 CLI、表計算エンジン、SQL エンジン）。Optoronics-Studio-Demo（生産管理デモ、Azure へのデプロイと AI の評価まで）</td>
+<td><code>StudyReport-Evaluator</code>（v0.8.6）</td>
+<td><code>StudyReport-Evaluator-new-era</code>（<code>8170eb5</code>）</td>
+<td><code>StudyReport-Evaluator-3</code>（<code>cc63773</code>。完走の再計測は §5.9 の <code>35d9c4f</code>）</td>
+</tr>
+<tr>
+<td>依頼の文面</td>
+<td>1 文〜数文。例:「要求定義を最後まで完成させてください。私は途中で応答しません。」＋必要なら「1 回のツール呼び出しで書き込む内容は 300 行以内」</td>
+<td>254 回の短い指示</td>
+<td>約 47KB と約 42KB の Prompt</td>
+<td><code>/build</code> ＋ 依頼。手順書（約 100KB）は skills にあり、必要なときだけ読む</td>
+</tr>
+<tr>
+<td>モデル</td>
+<td>opus-5.5（実験）、sonnet-5.5（比較）</td>
+<td>15 通り以上</td>
+<td>opus-5.5（effort high）＋ gpt-5.6-luna</td>
+<td>opus-5.5（conductor、medium）＋ sonnet-5.5（作業役 119 体）</td>
+</tr>
+<tr>
+<td>harness</td>
+<td>Copilot 本体だけ（Autopilot、<code>task_complete</code>、cloud agent の場合は PR・CodeQL・firewall など）</td>
+<td>VS Code Chat と Copilot CLI</td>
+<td>Copilot の Autopilot ＋ サブエージェント 8 体</td>
+<td>Copilot harness（Agent Host）＋ custom agents 6 種＋ skills ＋ hooks ＋ <code>queue.json</code>・<code>progress.md</code></td>
+</tr>
+<tr>
+<td>要求の管理</td>
+<td>なし（依頼文と、エージェントが読むリポジトリの中身だけ）</td>
+<td>要求定義書を 29 回改訂。要求 ID なし</td>
+<td>FR・NFR・AC に ID、<code>docs/catalog.md</code></td>
+<td>要求定義書＋カタログ＋ ID 台帳＋ System Test 台帳。ID はスクリプトで採番</td>
+</tr>
+</tbody>
+</table>
+<p><strong>注意（事実）:</strong>
+- 利用者は①を「HVE」と呼んでいますが、このリポジトリでは HVE のフレームワークも ATG も呼び出していません（<a href="202610070815-HVE-EOS-PoC-by-StudyReportEvaluator-AnalyticsReport.html">202610070815 §3.1 C7</a>）。HVE のフレームワークで実際にアプリを作ったときの結果は §4.5 に載せました。
+- ⓪と①の違いは、「Prompt の数」ではなく<strong>単位</strong>にあります。⓪は「1 つのタスクを 1〜数回の Prompt で終える」方式、①は「プロジェクト全体を、仕様を固めないまま Prompt の積み重ねで進める」方式です。①は、⓪をプロジェクトの規模で繰り返したときに何が起こるかを示す実例として読めます（§4.1.3）。</p>
+<h3 id="21-enterprise-app-build-kit">2.1 Enterprise App Build Kit の公開と入手方法</h3>
+<ul>
+<li><strong>事実:</strong> Enterprise App Build Kit（EABK）は、<a href="https://github.com/dahatake/HypervelocityEngineering">dahatake/HypervelocityEngineering</a>（Business Engineering x Software Engineering include Agentic DevOps）で公開しています。README の題名は「HypervelocityEngineering — Enterprise App Build Kit」です（確認日 2026-10-08）。</li>
+<li><strong>事実（README の記載）:</strong></li>
+<li>GitHub Copilot（VS Code の Agents ウィンドウ、Copilot CLI、GitHub Copilot app）用のマルチエージェント開発 toolkit で、要求定義書・カタログ・System Test の整合を保ったまま、<strong>最高品質・最短時間・最小 Token</strong> で実装することを目指しています。</li>
+<li>利用者は、進行役 <code>conductor</code> に <code>/build</code> で Prompt を 1 回送ります。conductor は、要求定義 → 独立監査 → System Test の先行設計 → 並行実装 → 直列の統合 → 最終監査 → 報告までを、最大 24〜48 時間、人の介入なしで実行します。</li>
+<li>インストールは、対象リポジトリのルートで 1 行のコマンドを実行します。入るのは、<code>.github/agents/*.agent.md</code>（6）、<code>.github/skills/*/SKILL.md</code>（5。<code>/build</code> を含む）、<code>.github/hooks/quality-gates.json</code>、<code>.github/workflows/hve-verify.yml</code>、<code>scripts/</code>（<code>verify.ps1</code>・<code>verify.sh</code>・hook のゲートなど）と、バージョンとハッシュを記録したマニフェスト <code>.github/hve-toolkit.json</code> です。環境変数 <code>HVE_REF</code> でタグや commit を固定でき、<code>--check</code> で更新の要否を CI で検出できます。</li>
+<li>前提は Python 3.9 以上で、スクリプトと hook は標準ライブラリだけで動きます。</li>
+<li>GitHub Spec Kit の仕様（<code>specs/*/spec.md</code>、<code>constitution.md</code>）を <code>/build</code> の依頼文に変換する <code>scripts/import-speckit.py</code> があります。</li>
+<li>README は、品質の規則の多くが <code>/build</code> で run を開始したときにだけ働き、<code>/build</code> 以外の Prompt で変更を依頼すると規則が効かないリスクがある、と注意しています。</li>
+<li><strong>推論（本書の評価への含意）:</strong></li>
+<li><strong>Enterprise での配布と統制に有利です（§4.4）。</strong> バージョンを固定でき、マニフェストのハッシュでローカルの変更を検出できるので、複数のリポジトリやチームに同じ版を配り、ずれを CI で見つけられます。</li>
+<li><strong>§8.2.2 の R4（PR と CI での外部再検証）は、toolkit に部品があります。</strong> <code>hve-verify.yml</code> が入るので、今回の実行（リモート未設定）で欠けていたのは「リモートへの push と PR」の運用です。</li>
+<li><strong>仕様駆動開発（N2）とつながります。</strong> Spec Kit の成果物を取り込めるので、Spec Kit で仕様を作り、EABK で実装と検証を行う組み合わせが可能です。</li>
+<li><strong>⓪とのつなぎ目に注意が要ります。</strong> README のとおり、<code>/build</code> 以外の Prompt（＝⓪の流し方）で同じリポジトリを変更すると、EABK の規則は働きません。§8 の 3 レーン制では、⓪の変更も PR の CI（<code>hve-verify.yml</code> を含む）を通すことで、この穴をふさぎます。</li>
+<li>本書の③の実測（<code>StudyReport-Evaluator-3</code>）が、公開版のどのバージョンで行われたかは資料にありません（<strong>未検証</strong>）。</li>
+</ul>
+<hr />
+<h2 id="3">3. 方法</h2>
+<h3 id="31">3.1 データと分析の手順</h3>
+<table>
+<thead>
+<tr>
+<th>区分</th>
+<th>対象</th>
+<th>方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>実行ログの集計</td>
+<td>比較の中心の 3 レポート（①②③）</td>
+<td>全文を読み、指標の定義（Prompt、ジョブ実行時間、総待ち時間、Token、AI クレジット）をそろえて比べた</td>
+</tr>
+<tr>
+<td>⓪の実測</td>
+<td>EOS レポートの §3.1・§3.3・§3.10</td>
+<td>ATG の比較実験の C1（ATG なしの単一 Prompt）と C1S（分割の 1 文を追加）、Opus 5.5 と Sonnet 5.5 の比較、HVE・ATG・大きな Prompt を使わずに作られたアプリの実績を抜き出した</td>
+</tr>
+<tr>
+<td>背景と根拠</td>
+<td>補助の 2 レポート</td>
+<td>方式ごとの設計の意図、既知の交絡、外部の根拠（X1〜X30、E1〜E24、SRC-01〜31）を抽出した</td>
+</tr>
+<tr>
+<td>外部の文献</td>
+<td>Vibe Coding、仕様駆動開発、AI 支援開発の組織研究、AI 生成コードの品質と安全性</td>
+<td>補助レポートが確認済みの文献に加え、本書で 4 件を追加で確認した（§6.3、付録 B。確認日 2026-10-08）</td>
+</tr>
+<tr>
+<td>正規化</td>
+<td>規模・範囲・完成度の違い</td>
+<td>タスクあたり、作業項目あたり、Token あたりの費用などに換算した（§4、§5.8）</td>
+</tr>
+<tr>
+<td>追加実験</td>
+<td>同じドラフト要求定義書による 6 つの実験（E-0〜E-5）</td>
+<td>新しいリポジトリから各条件を実行し、時間・AI クレジット・成果物を集めた（§3.4、§5、付録 C）</td>
+</tr>
+<tr>
+<td>①の Prompt の分類</td>
+<td>①の VS Code Chat と Copilot CLI の履歴（285 件、うち人の入力 219 件）</td>
+<td>2 人の評価者が独立に 9 分類した（§1.2、§3.5）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32">3.2 指標の定義・正規化・記号</h3>
+<p><strong>時間の指標.</strong> 資料によって時間の定義が違います。本書では、定義の違う値どうしの比は取らず、比を示すときは定義を併記します。</p>
+<table>
+<thead>
+<tr>
+<th>指標</th>
+<th>定義</th>
+<th>使った対象</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>総待ち時間</td>
+<td>人の Prompt の入力から、その Prompt に対するエージェントの最後の処理の終了までの合計。①は次の Prompt までの人の確認待ちを一部含み、記録の欠けがあるため下限</td>
+<td>①②③の元の実行</td>
+</tr>
+<tr>
+<td>実行時間</td>
+<td>実験の 1 回の実行の開始から終了まで</td>
+<td>⓪の過去の実測（ATG の比較実験）</td>
+</tr>
+<tr>
+<td>稼働時間</td>
+<td>エージェントのターンの開始から終了までを重ねずに合算した時間。人の待ちを含まない</td>
+<td>Optoronics-Studio-Demo など（EOS §3.10）</td>
+</tr>
+<tr>
+<td>壁時計</td>
+<td>Prompt の投入から CLI の終了まで。人の待ちはない</td>
+<td>§5 の追加実験</td>
+</tr>
+</tbody>
+</table>
+<p><strong>費用.</strong> AI クレジット（表紙の「表記」）。§5 の実験は CLI の usage 出力の実測、③の元の実行は推定を含みます（§9）。</p>
+<p><strong>受入基準による正規化.</strong> ドラフトの受入基準 AC-001〜AC-050 を、1 件あたり 0〜1 点（§3.5）で採点し、合計を<strong>受入基準の充足点</strong>（0〜50 点）とします。方式どうしの費用と時間は、1 回の実行あたりの値と、<strong>充足点 1 点あたりの値</strong>の両方で示します（§5.8）。充足点は「実装が存在し、テストで確かめられているか」を測るもので、UI の使いやすさや実際の AI 呼び出しの正しさは含みません。</p>
+<p><strong>記号.</strong></p>
+<table>
+<thead>
+<tr>
+<th>記号・点</th>
+<th>意味</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1〜5 点</td>
+<td>§7 の採点。1＝劣る、5＝優れる。0.5 点刻み</td>
+</tr>
+<tr>
+<td>◎</td>
+<td>実測で確認できた、または要件を構造で満たす</td>
+</tr>
+<tr>
+<td>○</td>
+<td>おおむね満たす</td>
+</tr>
+<tr>
+<td>△</td>
+<td>一部だけ満たす、または条件付き</td>
+</tr>
+<tr>
+<td>✕</td>
+<td>満たさない</td>
+</tr>
+<tr>
+<td>—</td>
+<td>該当しない、または資料がない</td>
+</tr>
+</tbody>
+</table>
+<h3 id="33">3.3 交絡要因</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>要因</th>
+<th>⓪</th>
+<th>①</th>
+<th>②</th>
+<th>③</th>
+<th>結果への影響</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">C0</td>
+<td><strong>対象のアプリ</strong></td>
+<td><strong>過去の実測は別の課題</strong>（家計簿 CLI、表計算、SQL エンジン、生産管理デモ）。§5 の E-0 で同じアプリでも測った</td>
+<td>StudyReport-Evaluator</td>
+<td>同左</td>
+<td>同左</td>
+<td>過去の実測は①②③と直接は比べられない。同じアプリでの比較は §5 による</td>
+</tr>
+<tr>
+<td style="text-align: right;">C1</td>
+<td>出発点の要求</td>
+<td>課題ごとの要求定義（4,458〜9,908 文字）。Optoronics は不明</td>
+<td>3.7KB の依頼文。要求は未確定</td>
+<td>①の最終の要求定義書（266KB）と<strong>バイト単位で同一</strong>のドラフト</td>
+<td>ドラフト。作成の経緯は履歴にない（②と <strong>SHA-256 で同一</strong>であることを §5 で確認）</td>
+<td>②③を大きく有利にする。⓪の実験も「確定した要求定義」から始めている</td>
+</tr>
+<tr>
+<td style="text-align: right;">C2</td>
+<td>引き継いだコード</td>
+<td>なし（新規作成）</td>
+<td>なし</td>
+<td>①のコードの約 92%</td>
+<td>不明（<strong>未検証</strong>）</td>
+<td>②を大きく有利にする</td>
+</tr>
+<tr>
+<td style="text-align: right;">C3</td>
+<td>モデルの世代</td>
+<td>opus-5.5／sonnet-5.5</td>
+<td>5.5 世代は約 17%</td>
+<td>opus-5.5</td>
+<td>opus-5.5 ＋ sonnet-5.5</td>
+<td>①だけが不利</td>
+</tr>
+<tr>
+<td style="text-align: right;">C4</td>
+<td>範囲と完成度</td>
+<td>課題の全体。完成率は課題で 1/3〜3/3</td>
+<td>公開まで</td>
+<td>承認済みの範囲をすべて</td>
+<td><strong>90 項目中 51 項目</strong>（利用者が打ち切り）。§5.9 で完走（106/106 項目）を再計測</td>
+<td>元の実行の時間と費用は、全範囲に換算すると増える。完走後の値は §5.9</td>
+</tr>
+<tr>
+<td style="text-align: right;">C5</td>
+<td>測り方</td>
+<td>実験の実行時間とクレジット。Optoronics は稼働時間（人の待ちを含まない）</td>
+<td>人の確認待ちを一部含む。記録の欠けあり</td>
+<td><code>task_complete</code> まで</td>
+<td>中断で区切られたジョブを含む。PC 停止を除外</td>
+<td>⓪の稼働時間は、①②③の総待ち時間より短く出やすい</td>
+</tr>
+<tr>
+<td style="text-align: right;">C6</td>
+<td>品質の測り方</td>
+<td><strong>隠しテスト</strong>（74、225、564 件）で採点</td>
+<td>なし（実利用）</td>
+<td>自動ゲート</td>
+<td>自動ゲート＋ System Test</td>
+<td>⓪の品質の数字だけが、外部の採点による</td>
+</tr>
+<tr>
+<td style="text-align: right;">C7</td>
+<td>System Test</td>
+<td>なし</td>
+<td>なし</td>
+<td>なし</td>
+<td>あり（Token の約 4〜7%）</td>
+<td>③の時間と Token を増やす</td>
+</tr>
+</tbody>
+</table>
+<h3 id="34">3.4 追加実験の設計</h3>
+<p>2026-10-08 に、同じ PC（14 コア・64GB、Windows、常時稼働）で 6 つの実験を行いました。下の表は、計画した条件と、実際に実施した条件の差です。</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>実験</th>
+<th>目的</th>
+<th>計画した条件</th>
+<th><strong>実施した条件（計画との差）</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;"><strong>E-0</strong></td>
+<td>同じドラフト要求定義書を⓪に渡し、「このアプリを実装してください。私は途中で応答しません。1 回のツール呼び出しで書き込む内容は 300 行以内」とだけ依頼する</td>
+<td>⓪の本当の速さと費用、②③の追加の工程が何を買っているかを、同じアプリで測る</td>
+<td>空のリポジトリと既存コードの 2 通り。Opus 5.5 と Sonnet 5.5 の 2 通り。Autopilot</td>
+<td>計画どおり 4 条件（各 n=1）。既存コードは①の v0.8.6（<code>94e5d8c</code>）。Copilot CLI 1.0.93 の Autopilot（自動継続 30 回まで）、effort medium</td>
+</tr>
+<tr>
+<td style="text-align: right;">E-1</td>
+<td>同じドラフト・同じ初期コード・同じ範囲で、②と③を走らせる</td>
+<td>C1・C2・C4 の交絡を除く</td>
+<td>③は R1〜R4 を適用。②は effort medium と sonnet の作業役も試す</td>
+<td>空のリポジトリ・同じドラフト・同じ範囲（「承認済みすべて」）で②と③を各 1 回。②は元の実行と同じ Prompt の並び（P-RD → 回答 3 回 → P-FR、Opus 5.5・effort high）。③は R1（常時稼働のホスト）・R2（usage ファイルで逐次記録）・R3（rd-auditor を gpt-5.5 に指定）を適用。<strong>R4（PR と CI）は、リモートを作らないため未適用。②の effort medium・sonnet の作業役の変種は未実施</strong></td>
+</tr>
+<tr>
+<td style="text-align: right;">E-2</td>
+<td>人が別に用意した E2E テスト（隠しテスト）で、⓪①②③の成果物を採点する</td>
+<td>「コードの品質」を工程ではなく結果で比べる</td>
+<td>実装役には見せない。CodeQL の指摘数も比べる</td>
+<td><strong>E2E の隠しテストは、技術も API も成果物ごとに違うため作れなかった。</strong> 代わりに、(a) ドラフトの受入基準 AC-001〜AC-050 を採点表にした盲検の採点（成果物を X1〜X10 に匿名化し、ツールキットの痕跡を消して、Sonnet 5.5 の採点役 3 体が静的に採点）、(b) ビルドと全テストの実行、(c) CodeQL 2.27.2（code-scanning スイート）、(d) .NET アナライザー（AnalysisMode=All）のセキュリティ規則、で採点した。対象は E-0・E-1 の 6 成果物、①②③の元の成果物 3 つ、③の完走した成果物（§5.9）の計 10</td>
+</tr>
+<tr>
+<td style="text-align: right;">E-3</td>
+<td>同じ要求定義書に意図的な矛盾を 10 件入れ、⓪②③で検出と扱いを比べる</td>
+<td>⓪の「仕様の正本がない」ことの影響と、③の監査の効果を測る</td>
+<td>③は rd-auditor を sonnet-5.5 と GPT 系の 2 通り</td>
+<td>矛盾 10 件（既定値、件数、手順、再試行回数、AI への送信可否、命名など。答えは採点まで非公開）。⓪（Sonnet 5.5、実装を依頼）、②（P-RD だけ）、③（<code>/build</code> で要求定義と監査だけ、scope: なし）×監査役 2 通り。<strong>③の「sonnet-5.5」の条件では、モデル表の指定が守られず、監査役は Opus 5.5 で動いた（§5.7）</strong></td>
+</tr>
+<tr>
+<td style="text-align: right;">E-4</td>
+<td>既存のアプリに小さな変更を 20 件、⓪と③で行う</td>
+<td>小さな変更で③が過剰かどうか（レーンの振り分けの基準の較正）</td>
+<td>1 件ごとの壁時計・AI クレジット・CI の結果・欠陥</td>
+<td><strong>20 件を 6 件に減らした</strong>（時間の制約）。③の成果物（<code>cc63773</code>）に対する 1 文で言える変更 6 件（S01〜S06。上限値の変更、入力の検査、許可項目の追加、NaN の扱い、空白の除去、重複の除去）。変更ごとに、実装役に見せない隠しテスト（基のコードで失敗し、参照の実装で成功することを確認済み）を用意した。⓪は Sonnet 5.5（ツールキットを外したリポジトリ）、③は <code>/build</code>（max_hours: 1）</td>
+</tr>
+<tr>
+<td style="text-align: right;">E-5</td>
+<td>③の部品（reviewer、節目の監査、canary）を 1 つずつ外す</td>
+<td>除去テスト（R9）</td>
+<td>KPI が変わらない部品を特定する</td>
+<td>E-4 の S01〜S03 で、conductor の手順から (a) reviewer、(b) 独立監査と最終監査、を外した 2 通り。<strong>canary の除去は未実施</strong>（小さな変更では canary の対象が同じで、差が出ないため）</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>実験の入力・スクリプト・成果物・採点結果は <code>C:\bench\sec8\</code>（付録 C）にあります。各条件は新しいリポジトリから始め、時間の上限（E-0・E-1 は 4 時間 15 分、E-3 は 75〜90 分、E-4・E-5 は ⓪ 40 分・③ 75 分）と AI クレジットの上限を設けました。<strong>どの条件も、時間と AI クレジットの上限には達しませんでした</strong>（⓪ Opus・既存だけは、CLI の待機上限 600 秒で終了しました。§5.1）。</li>
+<li>ドラフト要求定義書（177,626 バイト、1,297 行）は、②の <code>StudyReport-Evaluator-new-era</code> と③の <code>StudyReport-Evaluator-3</code> のものが <strong>SHA-256 で同一</strong>であることを確かめ、それを全条件に使いました（§3.3 の C1 の「未検証」が解消）。</li>
+<li>AI クレジットは CLI の usage 出力（<code>totalNanoAiu</code>）、時間は Prompt の投入から CLI の終了までの壁時計です。人の待ち時間はありません。</li>
+</ul>
+<h3 id="35">3.5 採点と分類の方法</h3>
+<table>
+<thead>
+<tr>
+<th>対象</th>
+<th>方法</th>
+<th>信頼性の確認</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>受入基準の充足（E-2）</td>
+<td>10 の成果物を X1〜X10 に匿名化し、ツールキットの痕跡（agents・skills・hooks・<code>work/</code>）を消して、Sonnet 5.5 の採点役 3 体が 3 つずつ静的に採点した。1.0＝本体に完全な実装があり自動テストで確かめている、0.75＝実装はあるがテストがない、0.5＝一部だけ、0＝ない</td>
+<td>主要な 4 成果物（X3・X5・X6・X7）を、別の採点役 1 体が他の結果を見ずに再採点した。受入基準単位の完全一致 78.5%、差 0.25 点以内 91.0%。合計の差は 0〜9 ポイントで、4 成果物の順位は同じ。さらに 3 人目と 4 人目の採点役が、完走した③（X10）を独立に採点し、どちらも 98.0%（49/50 点）で一致した。同時に採点した基準の成果物は、採点役ごとに X5 が 49.5〜55.5%、X6（③の元の成果物、51/90）が 61.5〜75%（最大 13.5 ポイント差）（§5.3）</td>
+</tr>
+<tr>
+<td>ビルド・テスト・静的解析（E-2）</td>
+<td>成果物の複製で、ビルド、全テスト（TRX で集計）、CodeQL 2.27.2（C# は code-scanning スイートの 52 規則、Python は 43 規則）、.NET アナライザー（AnalysisMode=All のセキュリティ規則）を実行</td>
+<td>決定的な処理</td>
+</tr>
+<tr>
+<td>矛盾の検出（E-3）</td>
+<td>実験の実行者が 10 件の矛盾を入れ、答えを採点まで非公開にした。Sonnet 5.5 の採点役が、成果物と会話の記録から、各矛盾を「検出して記録」「会話でだけ指摘」「黙って片方を採用」「見逃し」に分類</td>
+<td>採点役 1 体（§9）</td>
+</tr>
+<tr>
+<td>小さな変更（E-4・E-5）</td>
+<td>変更ごとに、実装役に見せない隠しテストを用意した。基のコードで失敗し、参照の実装で成功することを事前に確かめた</td>
+<td>決定的な処理</td>
+</tr>
+<tr>
+<td>①の Prompt の分類（§1.2）</td>
+<td>自動注入の通知 66 件を除いた人の Prompt 219 件を、Sonnet 5.5 の評価者 2 体が互いの結果を見ずに 9 分類し、打ち直し（文面の 80% 以上が以前と同じ）かどうかを判定</td>
+<td>9 分類の一致率 90.0%（Cohen の κ=0.87）。「停止・再開／要求の変更／その他」の 3 区分では一致率 95.4%（κ=0.93）。打ち直しの判定の一致率 98.2%</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="4-1">4. 結果 1: 既存の実行ログによる観点ごとの比較</h2>
+<p>①②③の元の実行と、⓪の過去の実測（別の課題）を、観点 (A)〜(D) で比べます。観点 (E) ビジネスとの整合は、既存のログでは §1.2・§1.3 で、同じアプリでの実験では §5.2・§5.4・§5.5 で扱います。</p>
+<h3 id="41-a">4.1 (A) 短い実行時間</h3>
+<h4 id="411-0">4.1.1 ⓪の実測値</h4>
+<table>
+<thead>
+<tr>
+<th>課題（⓪の実測）</th>
+<th style="text-align: right;">要求定義の文字数</th>
+<th style="text-align: right;">隠しテスト</th>
+<th style="text-align: right;">⓪の時間</th>
+<th>⓪の完成率</th>
+<th>参考: オーケストレータあり（ATG）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>家計簿 CLI</td>
+<td style="text-align: right;">4,458</td>
+<td style="text-align: right;">74</td>
+<td style="text-align: right;"><strong>5.5 分</strong>（328.8 秒）</td>
+<td>2/2</td>
+<td>12.3 分（2.25 倍）、2/2</td>
+</tr>
+<tr>
+<td>表計算エンジン</td>
+<td style="text-align: right;">9,908</td>
+<td style="text-align: right;">225</td>
+<td style="text-align: right;"><strong>31.3 分</strong>（1,879.8 秒）</td>
+<td>3/3</td>
+<td>53.7 分（1.71 倍）、3/3</td>
+</tr>
+<tr>
+<td>SQL エンジン（medium）</td>
+<td style="text-align: right;">7,155</td>
+<td style="text-align: right;">564</td>
+<td style="text-align: right;">131.3 分（7,876.5 秒）</td>
+<td><strong>1/3</strong></td>
+<td>135.3 分、0/3</td>
+</tr>
+<tr>
+<td>SQL エンジン＋分割の 1 文（C1S）</td>
+<td style="text-align: right;">同上</td>
+<td style="text-align: right;">同上</td>
+<td style="text-align: right;">122.5 分（7,350.5 秒）</td>
+<td>2/3（Sonnet 5.5 では 3/3）</td>
+<td>103.9 分、2/3</td>
+</tr>
+<tr>
+<td>Optoronics-Studio-Demo（実アプリ）</td>
+<td style="text-align: right;">不明</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;"><strong>稼働 5.3 時間・1 日</strong>（2 セッション、3 commit）</td>
+<td>Azure へのデプロイと AI の評価まで完了。同時接続の計測などは受入待ち</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>事実:</strong> Sonnet 5.5 の総時間は Opus 5.5 の 0.41 倍（表計算）と 0.56 倍（SQL）でした（<a href="202610031135-HVE_EOS_ValidationReport.html">EOS §3.3</a>）。⓪を Sonnet 5.5 で回すと、さらに速くなります。</li>
+</ul>
+<h4 id="412-4">4.1.2 4 方式の比較</h4>
+<table>
+<thead>
+<tr>
+<th>指標</th>
+<th style="text-align: right;">⓪ 素の Coding Agent</th>
+<th style="text-align: right;">① 対話型 Vibe Coding</th>
+<th style="text-align: right;">② Prompt 駆動</th>
+<th style="text-align: right;">③ EABK</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>人の Prompt 回数（1 つの開発単位）</td>
+<td style="text-align: right;"><strong>1 回</strong>（課題あたり）</td>
+<td style="text-align: right;">254 回</td>
+<td style="text-align: right;">7 回（作業 2、判断 5）</td>
+<td style="text-align: right;">5 回（作業 1、打ち切り 1、運用 3）</td>
+</tr>
+<tr>
+<td>要求定義・計画の工程</td>
+<td style="text-align: right;"><strong>なし</strong></td>
+<td style="text-align: right;">対話の中で随時</td>
+<td style="text-align: right;">28 分＋人の判断 14 分</td>
+<td style="text-align: right;">要求定義 19 分＋監査 5 分＋計画 3 分</td>
+</tr>
+<tr>
+<td>テストの設計の工程</td>
+<td style="text-align: right;">なし（エージェントの判断）</td>
+<td style="text-align: right;">なし</td>
+<td style="text-align: right;">実装と一緒</td>
+<td style="text-align: right;">System Test の先行設計 6 分</td>
+</tr>
+<tr>
+<td>総待ち時間</td>
+<td style="text-align: right;">課題により 5.5〜131 分。実アプリは稼働 5.3 時間</td>
+<td style="text-align: right;">143 時間 47 分</td>
+<td style="text-align: right;">7 時間 06 分</td>
+<td style="text-align: right;">9 時間 13 分（51/90 項目で打ち切り。System Test を除くと 7.8〜8.5 時間）。<strong>完走（106/106）の再計測は 19.3 時間（稼働の壁時計。§5.9）</strong></td>
+</tr>
+<tr>
+<td>中断からの再開</td>
+<td style="text-align: right;">✕（1 つのセッションに依存）</td>
+<td style="text-align: right;">✕</td>
+<td style="text-align: right;">△</td>
+<td style="text-align: right;">◎（実証済み）</td>
+</tr>
+</tbody>
+</table>
+<h4 id="413">4.1.3 分析</h4>
+<ul>
+<li><strong>事実・推論（⓪が最短である理由）:</strong> ⓪は、②③が持つ「要求定義 → 承認 → 計画 → テスト設計 → 監査 → 統合のたびのゲート」という工程を持ちません。長時間化の主な原因は、LLM の推論ではなく、ツールの実行・承認待ち・直列の実行・文脈の肥大でした（LLM 以外の時間が 91.8%。<a href="202610031135-HVE_EOS_ValidationReport.html">EOS §3.4</a>）。⓪はこれらを最小にします。Anthropic も「差分を 1 文で説明できる作業なら計画は省く」としています（X11）。</li>
+<li><strong>事実（⓪の限界 1: 能力の境界）:</strong> SQL エンジンの課題では、⓪の完成率は 1/3 でした。モデルが 1 回の応答の出力上限（32,000 Token）をすべて推論に使い切り、ツールを呼べないままターンが終わることを繰り返したためです（推論 Token が出力の 95.7%）。オーケストレータを足しても防げず、効いたのは「書き込みを小さく分ける」1 文でした。METR の測定では、AI が 50% の成功率で完了できる作業の長さは約 7 か月で倍になっています（X24）。<strong>⓪の守備範囲は広がり続けていますが、境界を越えた作業では「速いが完成しない」ことがあります。</strong></li>
+<li><strong>推論（⓪の限界 2: 積み重ねの時間）:</strong> ⓪はタスク単位の最短です。しかしプロジェクト全体では、「何を作るか」が決まっていないと、Prompt を重ねるたびに仕様が動きます。①はその実例です。254 回の Prompt、29 回の要求定義書の改訂、総待ち時間 143 時間 47 分でした。②③の約 7〜9 時間は、①が固めた要求定義書の上に成り立っています（C1）。<strong>⓪で最短になるのは、「何を作るか」が 1〜数文で言える仕事だけです。</strong></li>
+<li><strong>推論（②③の位置）:</strong> ②は⓪に「要求定義の工程（約 42 分）」と「大きな Prompt」を足したものです。③はさらに「監査・テストの先行設計・役割ごとの起動・統合のたびのゲート」を足したものです。全範囲に換算すると、③の総待ち時間は約 15 時間（51 項目で約 465 分の実装ループ。残り 39 項目を同じペースで進めた場合）と見積もりましたが、<strong>§5.9 で実際に完走させると 19.3 時間</strong>（conductor が 16 項目を追加し、106 項目になった）で、見積もりより約 3 割長く、②の約 2.7 倍です。③の追加の時間は、品質と再開できることを買う費用です。</li>
+</ul>
+<p><strong>判定（時間）:</strong> ⓪ ＞ ② ＞ ③ ≫ ①（タスク単位）。ただし、24 時間を超える無人の実行や中断のある運用では③が安定します。</p>
+<h3 id="42-b">4.2 (B) コードの品質</h3>
+<h4 id="421">4.2.1 品質の証拠</h4>
+<table>
+<thead>
+<tr>
+<th>証拠</th>
+<th>⓪ 素の Coding Agent</th>
+<th>① 対話型 Vibe Coding</th>
+<th>② Prompt 駆動</th>
+<th>③ EABK</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>外部の採点</td>
+<td><strong>隠しテスト 74/74、225/225</strong>（完成した実行）。SQL は完成した実装で 561.3/564（Opus）・557.4/564（Sonnet）</td>
+<td>なし</td>
+<td>なし</td>
+<td>なし</td>
+</tr>
+<tr>
+<td>完成率</td>
+<td>課題により 1/3〜3/3</td>
+<td>公開版</td>
+<td>承認済みの範囲をすべて</td>
+<td>元の実行は <strong>51/90 項目</strong>（利用者が「System Test は一度ここで打ち切ります」と指示して中断。エージェントの停止ではない）。<strong>再計測で完走: 106/106 項目（受入基準 98%。§5.9）</strong></td>
+</tr>
+<tr>
+<td>要求の追跡</td>
+<td>なし</td>
+<td>なし（AC 53 件）</td>
+<td>ID と <code>RequirementTraceabilityTests</code></td>
+<td>ID はスクリプトで採番。AC のダイジェストで台帳と照合</td>
+</tr>
+<tr>
+<td>要求の矛盾の検出</td>
+<td>なし</td>
+<td>人の対話</td>
+<td>書き手の自己点検（§5.4 の実験では矛盾 8/10 を検出）</td>
+<td><strong>別の文脈の <code>rd-auditor</code></strong> が実装の前と最終に監査（ただし §5.4 の実験では 2/10 の検出で、②を下回った）</td>
+</tr>
+<tr>
+<td>テストの作り方</td>
+<td>エージェントの判断（Opus 5 系は指示がなくても自分で検証する。X3）</td>
+<td>実装と一緒</td>
+<td>実装と一緒</td>
+<td><strong>System Test を実装の前に要求定義書だけから作る</strong></td>
+</tr>
+<tr>
+<td>テストの改変の防止</td>
+<td>なし</td>
+<td>なし</td>
+<td>Prompt の規則</td>
+<td><strong>hook で強制</strong>＋ verify の CHK</td>
+</tr>
+<tr>
+<td>合否の判定</td>
+<td><strong>エージェントの申告</strong>（cloud agent なら PR の CI とレビュー）</td>
+<td>人の確認と CI</td>
+<td><code>verify.ps1</code> の exit code、CI、CodeQL</td>
+<td>verify、canary、影響ケース、System Test 12/12</td>
+</tr>
+<tr>
+<td>コードレビュー</td>
+<td>なし（cloud agent なら人の PR レビューが必須）</td>
+<td>rubber-duck 18 回</td>
+<td>なし</td>
+<td>reviewer 54 体</td>
+</tr>
+<tr>
+<td>公開と利用</td>
+<td>Optoronics は Azure にデプロイ、受入は一部待ち</td>
+<td><strong>v0.8.6 を公開。実データでの利用記録あり</strong></td>
+<td>未公開。UAT 未実施</td>
+<td>未公開。UAT 未実施。リモート未設定</td>
+</tr>
+</tbody>
+</table>
+<h4 id="422">4.2.2 分析</h4>
+<ul>
+<li><strong>事実（⓪は、範囲の中では品質が高い）:</strong> 完成した実行の隠しテストは 100%（74/74、225/225）で、SQL でも 99% 以上でした。<strong>モデルの能力の範囲に収まる、要求がはっきりした課題なら、⓪のコードの品質は、オーケストレータを足した場合と変わりません</strong>（ATG の実測、X21 の「harness による合格率の差は 0〜8 ポイント」）。</li>
+<li><strong>推論（⓪の品質の弱点）:</strong>
+  1. <strong>合否を確かめる仕組みがない。</strong> 上の 100% は、実験が外部の隠しテストを用意したから分かったことです。実務の⓪には隠しテストがありません。エージェントの申告だけでは、偽の PASS（ATG で 258/564 の実装を受理した例）、テストの書き換え（METR の reward hacking、ImpossibleBench）、自己修正の限界（E10）を見逃します。
+  2. <strong>追跡ができない。</strong> 要求 ID も catalog もないので、「どの要求をどのコードとテストが満たしているか」を後から確かめられません。変更を重ねると、①のように仕様が少しずつずれます。
+  3. <strong>セキュリティ。</strong> 公開されている Vibe Coding のアプリ 200 件の 91% に脆弱性があり、その 65.77% が Critical か High でした（X28）。AI の生成コードは高リスクの脆弱性の割合が高いという大規模な比較もあります（N4）。⓪は、CodeQL などの検査がリポジトリか cloud agent の側にないと、この型に当てはまります。</li>
+<li><strong>推論（②③）:</strong> ②は「外で再実行できる自動ゲート」と要求の追跡を持ちますが、テストと実装を同じエージェントが書きます。③は、テストオラクル問題・報酬ハッキング・自己修正の限界・早すぎる完了宣言のそれぞれに、構造で対処しています。ただし、System Test は 12 ケースと薄く（完走後も 12 ケースで、NFR-TEST-028 の一部は fault を注入できず未達）、元の実行では 39 項目が未実装で（完走は §5.9）、<code>rd-auditor</code> は設計と違って <code>rd-author</code> と同じ sonnet-5.5 でした。</li>
+<li><strong>推論（①）:</strong> ①は、実際の利用で鍛えられた唯一の版です。一方、要求 ID がなく、機械で正しさを確かめられません。</li>
+<li><strong>共通の欠落（既存のログ）:</strong> ⓪の過去の実験以外は、隠しテスト、静的解析の指摘数、テストの網羅率、ミューテーションスコア、UAT と本番での欠陥の流出数を測っていません。</li>
+</ul>
+<p><strong>判定（品質）:</strong> 工程の強さでは ③ ＞ ② ＞ ① ＞ ⓪。ただし、範囲の中の小さな課題では⓪の結果の品質は②③と変わらない（外部の採点つきの実測）。同じアプリの結果の品質（§5.3）でも、空から作った場合の⓪ Opus と③に差はなかった。</p>
+<h3 id="43-c-token">4.3 (C) 最小の Token</h3>
+<h4 id="431">4.3.1 実測値</h4>
+<table>
+<thead>
+<tr>
+<th>指標</th>
+<th style="text-align: right;">⓪ 素の Coding Agent</th>
+<th style="text-align: right;">① 対話型 Vibe Coding</th>
+<th style="text-align: right;">② Prompt 駆動</th>
+<th style="text-align: right;">③ EABK</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 回の開発の AI クレジット</td>
+<td style="text-align: right;">家計簿 <strong>47.8</strong>／表計算 <strong>254.5</strong>／SQL 1,620.7（C1S 1,572.0）／Optoronics <strong>7,747</strong>（約 77 USD）</td>
+<td style="text-align: right;"><strong>33,999 以上</strong>（約 340 USD 以上）</td>
+<td style="text-align: right;"><strong>13,191</strong>（約 132 USD）</td>
+<td style="text-align: right;"><strong>11,193</strong>（約 112 USD。51/90 項目）。<strong>完走（106/106）は約 18,300（約 183 USD。§5.9）</strong></td>
+</tr>
+<tr>
+<td>参考: オーケストレータあり</td>
+<td style="text-align: right;">167.2（3.50 倍）／634.3（2.49 倍）／1,914.8／—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>総 Token</td>
+<td style="text-align: right;">記録なし</td>
+<td style="text-align: right;">4.54 億以上</td>
+<td style="text-align: right;">2.97 億</td>
+<td style="text-align: right;">約 1.65〜1.8 億（推定）</td>
+</tr>
+<tr>
+<td>依頼の文面の大きさ（毎ターン文脈を占める）</td>
+<td style="text-align: right;"><strong>数十〜数百バイト</strong></td>
+<td style="text-align: right;">小（ただし会話が長い）</td>
+<td style="text-align: right;">約 42〜47KB</td>
+<td style="text-align: right;"><code>/build</code> は小。skills の約 100KB は必要な工程だけ</td>
+</tr>
+<tr>
+<td>サブエージェント</td>
+<td style="text-align: right;">なし（または少数）</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">8 体（Token の 77%）</td>
+<td style="text-align: right;">119 体（1 体あたり平均 約 112 万 Token）</td>
+</tr>
+<tr>
+<td>キャッシュ読込の割合</td>
+<td style="text-align: right;">記録なし</td>
+<td style="text-align: right;">93.2%（CLI）</td>
+<td style="text-align: right;">96.4%</td>
+<td style="text-align: right;">約 83%</td>
+</tr>
+<tr>
+<td>100 万 Token あたりの AI クレジット</td>
+<td style="text-align: right;">記録なし</td>
+<td style="text-align: right;">約 86</td>
+<td style="text-align: right;">約 44</td>
+<td style="text-align: right;">約 62〜68</td>
+</tr>
+</tbody>
+</table>
+<h4 id="432">4.3.2 分析</h4>
+<ul>
+<li><strong>事実・推論（⓪が最少である理由）:</strong> 同じ課題で、⓪の費用はオーケストレータありの 1/2.49〜1/3.50 でした。⓪は、大きな手順書を文脈に持たず、マルチエージェントの Token の増加（単一エージェントの約 4 倍、チャットの約 15 倍。X26）も起こしません。Optoronics-Studio-Demo は、Azure へのデプロイと AI の評価まで含めて 7,747 AI クレジットで、②の約 6 割でした（アプリは別）。</li>
+<li><strong>推論（⓪の Token の弱点）:</strong>
+  1. <strong>1 つのセッションに詰め込むと急に膨らむ。</strong> AutoVision-Studio では、作業を詰め込んだ 1 セッションが 14,909 AI クレジット（全体の 31%）を使いました。VS Code Chat の 1 セッションで入力 26.8 億 Token・94.9 時間に達した例もあります（<a href="202610031135-HVE_EOS_ValidationReport.html">EOS §3.10</a>）。⓪は文脈の大きさを管理する仕組みを持たないので、作業が大きくなると「最小」から「最大」に転じる危険があります。
+  2. <strong>手戻りの費用。</strong> ⓪の Token は 1 回の実行では最小ですが、仕様のずれや偽の PASS で手戻りが起きると、その分だけ増えます。①の 33,999 AI クレジット 以上は、その累積の例です。EABK の設計書も「手戻りを減らすことが最大の節約」としています（T-4）。</li>
+<li><strong>推論（②と③）:</strong> ③は②より Token を約 40〜45%、AI クレジットを約 15% 減らしました。作業役の文脈を項目ごとに新しくし（②のサブエージェントは 1 体あたり平均約 5,770 万 Token、③の implementer は約 112 万）、作業役を sonnet-5.5 にし、手順書を skills にしたためです。一方、119 体がそれぞれ新しい文脈で始まるため、キャッシュ読込の割合が下がり、1 Token あたりの単価は②の約 1.5 倍になりました。全 90 項目に換算すると、③は約 17,600〜19,800 AI クレジットと見積もりましたが、<strong>§5.9 の完走の実測は約 18,300（106 項目）で、見積もりの範囲に入りました</strong>。②（13,191）の約 1.4 倍です。</li>
+<li><strong>推論（4 方式の並び）:</strong> <strong>1 タスクの費用は⓪が最小</strong>です。<strong>大きな開発では、文脈を管理する③が、⓪を積み重ねた場合（①）より桁違いに少なく済みます。</strong> ⓪と③の間の分かれ目は、「1 つのセッションの文脈が、モデルが無理なく扱える大きさに収まるか」です。</li>
+</ul>
+<p><strong>判定（Token）:</strong> ⓪ ＞ ③ ＞ ② ≫ ①（1 回の実行の量）。大きな開発や手戻りを含めると、⓪の優位は保証されない。</p>
+<h3 id="44-d-enterprise">4.4 (D) Enterprise で使える運用</h3>
+<h4 id="441">4.4.1 評価項目</h4>
+<p>Enterprise の要件は、DORA の AI Capabilities Model、NIST AI RMF、OWASP LLM06（Excessive Agency）、Azure Well-Architected Framework（安全なデプロイ）、GitHub Spec Kit（仕様駆動開発）を参考に定めました（§6.3）。⓪は、どの Coding Agent を使うかで評価が変わるので、ローカル（VS Code・CLI の Agent／Autopilot）と cloud agent に分けました。</p>
+<table>
+<thead>
+<tr>
+<th>要件</th>
+<th>⓪ ローカル</th>
+<th>⓪ cloud agent</th>
+<th>①</th>
+<th>②</th>
+<th>③</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>再現性</td>
+<td>✕ 依頼文と人の技能に依存</td>
+<td>✕ 同左（Issue に依頼が残る）</td>
+<td>✕</td>
+<td>△ Prompt 2 本で再現</td>
+<td>◎ <code>/build</code> 1 回、手順は版管理</td>
+</tr>
+<tr>
+<td>職務分掌</td>
+<td>✕</td>
+<td>△ 書くのはエージェント、マージは人</td>
+<td>✕</td>
+<td>△</td>
+<td>◎ 役割を分離</td>
+</tr>
+<tr>
+<td>規則の強制</td>
+<td>✕（hooks を置けば可能）</td>
+<td>△ リポジトリの hooks と ruleset</td>
+<td>✕</td>
+<td>△ Prompt の規則</td>
+<td>◎ hooks ＋ CHK</td>
+</tr>
+<tr>
+<td>人の承認</td>
+<td>△ 人が都度判断</td>
+<td>◎ <strong>PR のマージに人のレビューが必須</strong></td>
+<td>○</td>
+<td>○（自動化バイアスの危険）</td>
+<td>○ approval_policy</td>
+</tr>
+<tr>
+<td>セキュリティの検査</td>
+<td>✕（リポジトリに CI がなければ）</td>
+<td>◎ CodeQL、Advisory Database、Secret scanning を自動で実行</td>
+<td>△</td>
+<td>○ CodeQL</td>
+<td>△ 記録が資料にない</td>
+</tr>
+<tr>
+<td>権限の最小化</td>
+<td>△ Autopilot は全権限（サンドボックスの併用を推奨）</td>
+<td>◎ push 先は 1 ブランチ、firewall でネットワークを制限</td>
+<td>—</td>
+<td>○</td>
+<td>◎ hook G-5、worktree、サンドボックス</td>
+</tr>
+<tr>
+<td>証跡</td>
+<td>△ セッションログ</td>
+<td>○ 署名つき commit、セッションログ、監査ログ</td>
+<td>△ 欠けあり</td>
+<td>○</td>
+<td>○（Token の集計は再起動で消えた）</td>
+</tr>
+<tr>
+<td>長時間の実行と再開</td>
+<td>✕ 自動継続は既定 5 回</td>
+<td>✕ <strong>1 セッションの時間に上限がある</strong>（EABK 設計書 v2 で 59 分の制約として扱われた）</td>
+<td>✕</td>
+<td>△</td>
+<td>◎</td>
+</tr>
+<tr>
+<td>要求の追跡と変更管理</td>
+<td>✕</td>
+<td>✕</td>
+<td>✕</td>
+<td>○</td>
+<td>◎</td>
+</tr>
+<tr>
+<td>保守の負担</td>
+<td><strong>◎ なし</strong></td>
+<td><strong>◎ なし</strong></td>
+<td>—</td>
+<td>◎ Prompt 2 本</td>
+<td>△ agents・skills・hooks・scripts</td>
+</tr>
+<tr>
+<td>チームへの展開</td>
+<td>○ 誰でもすぐ使える</td>
+<td>○ Issue を割り当てるだけ</td>
+<td>✕</td>
+<td>○</td>
+<td>◎ 共通の customizations</td>
+</tr>
+</tbody>
+</table>
+<h4 id="442">4.4.2 分析</h4>
+<ul>
+<li><strong>推論（⓪）:</strong> ⓪の Enterprise での評価は、<strong>方式そのものではなく、Copilot 本体とリポジトリの設定に依存</strong>します。cloud agent を使えば、人の PR レビュー、CodeQL、Secret scanning、firewall、署名つき commit、監査ログという、Enterprise の基本的な安全策がプラットフォームから手に入ります（<a href="202610031135-HVE_EOS_ValidationReport.html">EOS §4.1</a>）。一方、要求の追跡、再現性、長時間の実行、職務分掌は、⓪では得られません。規制や監査のある業務の「機能追加」には足りませんが、「小さな修正」には十分です。</li>
+<li><strong>推論（③）:</strong> ③は、Enterprise の要件のほとんどを構造で満たしています。最大のリスクは、仕組みそのものが重くなることです。HVE は「アプリを作る仕組み」にアプリの開発と同じくらいの費用（181,055 AI クレジット）をかけ、その仕組みで作ったアプリは完成しませんでした（§4.5）。<strong>⓪は、③の部品が本当に必要かを測る「対照群」として使えます。</strong> ⓪で足りる作業に③を使っていないかを、定期的に確かめます（§8.2 の R9）。</li>
+<li><strong>推論（②）:</strong> ②は、⓪より再現性と追跡が強く、③より軽い中間の選択肢です。</li>
+</ul>
+<p><strong>判定（Enterprise）:</strong> ③ ＞ ② ＞ ⓪（cloud agent）＞ ⓪（ローカル）≫ ①。</p>
+<h3 id="45-hve">4.5 参考: HVE のフレームワークで実際にアプリを作ったときの結果</h3>
+<table>
+<thead>
+<tr>
+<th>指標</th>
+<th>値</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>期間</td>
+<td>2026-01〜09（約 9 か月。cloud agent の Issue 168 件を含む）</td>
+</tr>
+<tr>
+<td>ローカルの HVE 実行</td>
+<td>381 セッション、稼働 85.6 時間、109,547 AI クレジット（約 1,095 USD）</td>
+</tr>
+<tr>
+<td>HVE 本体の開発・保守</td>
+<td>稼働 143.3 時間、181,055 AI クレジット（約 1,811 USD）</td>
+</tr>
+<tr>
+<td>到達点</td>
+<td>アーキテクチャ推薦は 14 件すべてで中断。System Test は「INCOMPLETE・BLOCKED」。削除 commit 53 件</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>事実:</strong> ⓪にあたる単一 Prompt に ATG（HVE の DAG 系）を足しても品質は変わらず、時間は 1.7〜2.25 倍、費用は 2.49〜3.50 倍になりました。同じ時期に HVE を使わずに作った 4 つのアプリは、どれも実行や受入の記録があるところまで進みました（<a href="202610031135-HVE_EOS_ValidationReport.html">EOS §3.1、§3.10〜3.11</a>）。</li>
+<li><strong>推論:</strong> <strong>「⓪に重い仕組みを足すと遅く高くなるだけで、品質は上がらない」が HVE の教訓です。</strong> ③が HVE と違うのは、(1) 合否を決定的なスクリプトと hook で決める、(2) 状態の正本をファイルと git に置き、文脈を毎回新しくする、(3) Copilot 本体の harness に薄く載せる、の 3 点です。③が⓪に足しているのは「速さ」ではなく、「⓪では得られない、追跡・独立した検証・再開・強制」です。足したものが本当にそれを生んでいるかは、⓪を対照にして測り続ける必要があります（§5）。</li>
+</ul>
+<hr />
+<h2 id="5-2">5. 結果 2: 追加実験</h2>
+<p>実験の条件は §3.4、採点の方法は §3.5 にあります。</p>
+<h3 id="51-e-0-0">5.1 E-0: ⓪を同じアプリで測る</h3>
+<table>
+<thead>
+<tr>
+<th>条件</th>
+<th style="text-align: right;">時間</th>
+<th style="text-align: right;">AI クレジット</th>
+<th style="text-align: right;">入力 Token</th>
+<th>成果物</th>
+<th>自動テスト</th>
+<th style="text-align: right;">AC の充足（盲検、§5.3）</th>
+<th>エージェントの申告</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>⓪ Sonnet 5.5・空</td>
+<td style="text-align: right;"><strong>7.5 分</strong></td>
+<td style="text-align: right;"><strong>36.5</strong></td>
+<td style="text-align: right;">62 万</td>
+<td>C#・WinForms、3 ファイル・394 行</td>
+<td>なし</td>
+<td style="text-align: right;">16.5%</td>
+<td>「一部だけ実装。ドラフトは約 680 行目までしか読んでいない。AI は常に失敗するスタブ」と<strong>正直に申告して終了</strong></td>
+</tr>
+<tr>
+<td>⓪ Opus 5.5・空</td>
+<td style="text-align: right;">28.9 分</td>
+<td style="text-align: right;">395.9</td>
+<td style="text-align: right;">598 万</td>
+<td>C#・WPF、19 ファイル・2,195 行</td>
+<td>16/16 合格</td>
+<td style="text-align: right;"><strong>51.0%</strong></td>
+<td>「実装した。AI はスタブで 16 件合格、単一 EXE も起動確認。実際の Copilot 呼び出しとログインは未確認」</td>
+</tr>
+<tr>
+<td>⓪ Opus 5.5・既存（①のコード）</td>
+<td style="text-align: right;">27.9 分</td>
+<td style="text-align: right;">98.3</td>
+<td style="text-align: right;">111 万</td>
+<td>①に 8 行の変更（類似度の列名を「AI」と誤認させない名前に）</td>
+<td>2,107/2,111（環境依存の失敗 3）</td>
+<td style="text-align: right;">99.0%（ほぼ①の値）</td>
+<td>全テストの実行中に CLI の待機上限（600 秒）で終了。<strong>完了の申告なし</strong></td>
+</tr>
+<tr>
+<td>⓪ Sonnet 5.5・既存（①のコード）</td>
+<td style="text-align: right;">35.4 分</td>
+<td style="text-align: right;">49.4</td>
+<td style="text-align: right;">37 万</td>
+<td><strong>変更なし</strong></td>
+<td>2,108/2,111（同上）</td>
+<td style="text-align: right;">99.0%（①と同一のコード）</td>
+<td>「既に実装済みのため変更していない。ドラフト全体との照合はしていない」</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>事実:</strong> 同じアプリでも、⓪は数分〜30 分・数十〜約 400 AI クレジットで終わりました。②③の元の実行（総待ち時間 7〜9 時間・1.1〜1.3 万 AI クレジット）より大幅に小さい値ですが、時間の定義と完成度が違うため、比は取りません（§3.2。完成度をそろえた比較は §5.8）。</li>
+<li><strong>事実:</strong> しかし、空のリポジトリからは、<strong>⓪は 1 回でアプリを完成させませんでした。</strong> Sonnet は早々に打ち切り、Opus は受入基準の約半分（51%）に達したところで「完了」と申告しました。既存コードがあると、⓪は<strong>ドラフトとの差分をほとんど見つけず</strong>（照合をしたと言えるのは Opus の 1 か所だけ）、①のコードをほぼそのまま「満たしている」と扱いました。</li>
+<li><strong>推論:</strong> §4.1 の「⓪の速さはモデルの能力の範囲の中でだけ保たれる」が、このアプリでも確かめられました。177KB の要求定義書は、⓪の 1 回の実行で扱える範囲を超えています。⓪の申告は Sonnet では正直でしたが、Opus は半分の実装で完了を申告しており、<strong>外部の採点がないと完成度を見誤ります</strong>。</li>
+</ul>
+<h3 id="52-e-1-23">5.2 E-1: 同じ出発点で②と③を走らせる</h3>
+<table>
+<thead>
+<tr>
+<th>指標</th>
+<th style="text-align: right;">② Prompt 駆動（E-1）</th>
+<th style="text-align: right;">③ EABK（E-1）</th>
+<th style="text-align: right;">参考: ②の元の実行</th>
+<th style="text-align: right;">参考: ③の元の実行（打ち切り時点。完走は §5.9）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>出発点</td>
+<td style="text-align: right;">空＋ドラフト</td>
+<td style="text-align: right;">空＋ドラフト＋ツールキット</td>
+<td style="text-align: right;"><strong>①のコード（92%）</strong>＋ドラフト</td>
+<td style="text-align: right;">空＋ドラフト＋ツールキット</td>
+</tr>
+<tr>
+<td>人の Prompt</td>
+<td style="text-align: right;">5 回（P-RD、回答 3 回、P-FR）</td>
+<td style="text-align: right;"><strong>1 回</strong>（<code>/build</code>）</td>
+<td style="text-align: right;">7 回</td>
+<td style="text-align: right;">5 回</td>
+</tr>
+<tr>
+<td>時間</td>
+<td style="text-align: right;">42.1 分（要求定義 20.1 分、回答 4.6 分、実装 17.3 分）</td>
+<td style="text-align: right;">71.4 分</td>
+<td style="text-align: right;">7 時間 06 分</td>
+<td style="text-align: right;">9 時間 13 分</td>
+</tr>
+<tr>
+<td>AI クレジット</td>
+<td style="text-align: right;">2,225.7</td>
+<td style="text-align: right;"><strong>1,321.6</strong>（②の 59%）</td>
+<td style="text-align: right;">13,191</td>
+<td style="text-align: right;">11,193</td>
+</tr>
+<tr>
+<td>入力 Token / 出力 Token</td>
+<td style="text-align: right;">1,381 万 / 56 万</td>
+<td style="text-align: right;">2,674 万 / 28 万</td>
+<td style="text-align: right;">2.96 億 / 116 万</td>
+<td style="text-align: right;">約 1.65〜1.8 億（推定）</td>
+</tr>
+<tr>
+<td>モデル（メッセージ数）</td>
+<td style="text-align: right;">Opus 127</td>
+<td style="text-align: right;">Opus 56、Sonnet 228、<strong>gpt-5.5 24（監査役。R3 が効いた）</strong></td>
+<td style="text-align: right;">Opus、gpt-5.6-luna</td>
+<td style="text-align: right;">Opus、Sonnet</td>
+</tr>
+<tr>
+<td>作った要求</td>
+<td style="text-align: right;">承認済みの MUST 156 件</td>
+<td style="text-align: right;"><strong>承認済み 26 件</strong>（作業項目 11）</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">作業項目 90</td>
+</tr>
+<tr>
+<td>実装した範囲</td>
+<td style="text-align: right;">156 件中 7 件＋一部 4 件（計算部品だけ）</td>
+<td style="text-align: right;">26 件中 24 件を検証済み（11 項目すべて完了）</td>
+<td style="text-align: right;">承認済みの範囲をすべて</td>
+<td style="text-align: right;">51/90 項目</td>
+</tr>
+<tr>
+<td>終了のしかた</td>
+<td style="text-align: right;"><strong>「依頼は完了していません」</strong>。verify は exit 1。テストを弱めずに終了</td>
+<td style="text-align: right;"><strong>「全件完了」</strong>。verify --strict PASS、System Test 4/4、監査 HIGH 1</td>
+<td style="text-align: right;">完了</td>
+<td style="text-align: right;">利用者の指示で打ち切り</td>
+</tr>
+<tr>
+<td>技術の選択</td>
+<td style="text-align: right;">C#（.NET 8）の計算ライブラリだけ</td>
+<td style="text-align: right;"><strong>Python・tkinter</strong>（D-001 として包括承認）</td>
+<td style="text-align: right;">C#・Avalonia（①を継承）</td>
+<td style="text-align: right;">C#・WPF</td>
+</tr>
+<tr>
+<td>AC の充足（盲検、§5.3）</td>
+<td style="text-align: right;">10.0%</td>
+<td style="text-align: right;"><strong>48.0%</strong></td>
+<td style="text-align: right;">99.0%</td>
+<td style="text-align: right;">75.0%</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>事実:</strong> 交絡 C1（ドラフト）と C2（引き継いだコード）をそろえると、②は 42 分・2,226 AI クレジットで、受入基準の 10% しか満たしませんでした。②の元の実行が 7 時間で「すべて実装」できたのは、<strong>①のコードを 92% 引き継いでいたから</strong>であることが、ほぼ確かめられました。</li>
+<li><strong>事実:</strong> ③は、人の Prompt 1 回・71 分・1,322 AI クレジットで、受入基準の 48% を満たし、自分の範囲の中では「全件完了」でした。同じ出発点では、③は②より <strong>AI クレジットが 41% 少なく、受入基準の充足は約 5 倍</strong>でした。</li>
+<li><strong>事実（③の範囲の縮小）:</strong> ただし③の rd-author は、1,297 行のドラフトを<strong>承認済み 26 件の要求</strong>にまとめ、それ以外を計画に入れませんでした。「全件完了」は「26 件について完了」という意味で、ドラフトの受入基準では 48% です。元の実行（90 項目）とは範囲の決め方が大きく違い、<strong>同じツールキットでも run ごとに範囲が大きく変わります</strong>。run-report には「ドラフトのどれだけを要求にしたか」が書かれていませんでした。</li>
+<li><strong>推論:</strong> ③の 1 回の <code>/build</code> は、②の 2 本の大きな Prompt より、少ない AI クレジットで多くの受入基準を満たしました（時間は②の 1.7 倍）。ただし、どちらの方式も、このドラフトを 1 回の実行で完成させることはできません。③の「全件完了」の表示は、範囲を自分で縮めた結果である点に注意が要ります（§8.2.2 の R12）。</li>
+</ul>
+<h3 id="53-e-2">5.3 E-2: 成果物の品質を結果で比べる</h3>
+<table>
+<thead>
+<tr>
+<th>成果物</th>
+<th>言語・UI</th>
+<th style="text-align: right;">本体の行数</th>
+<th style="text-align: right;">テストの行数</th>
+<th>全テストの結果</th>
+<th style="text-align: right;">CodeQL の指摘</th>
+<th style="text-align: right;">.NET のセキュリティ規則の警告</th>
+<th style="text-align: right;">AC の充足（盲検）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>⓪ Sonnet・空（E-0）</td>
+<td>C#・WinForms</td>
+<td style="text-align: right;">394</td>
+<td style="text-align: right;">0</td>
+<td>テストなし</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">16.5%</td>
+</tr>
+<tr>
+<td>⓪ Opus・空（E-0）</td>
+<td>C#・WPF</td>
+<td style="text-align: right;">2,195</td>
+<td style="text-align: right;">179</td>
+<td>16/16</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">51.0%</td>
+</tr>
+<tr>
+<td>⓪ Opus・既存（E-0）</td>
+<td>C#・Avalonia</td>
+<td style="text-align: right;">39,539</td>
+<td style="text-align: right;">65,292</td>
+<td>2,107/2,111</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">99.0%</td>
+</tr>
+<tr>
+<td>⓪ Sonnet・既存（E-0）</td>
+<td>同上（①と同一）</td>
+<td style="text-align: right;">39,539</td>
+<td style="text-align: right;">65,292</td>
+<td>2,108/2,111</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">99.0%</td>
+</tr>
+<tr>
+<td>② 空（E-1）</td>
+<td>C#（計算部品のみ）</td>
+<td style="text-align: right;">433</td>
+<td style="text-align: right;">299</td>
+<td>33/33</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">10.0%</td>
+</tr>
+<tr>
+<td>③ 空（E-1）</td>
+<td>Python・tkinter</td>
+<td style="text-align: right;">2,136</td>
+<td style="text-align: right;">1,085</td>
+<td>91/91（1 件スキップ）</td>
+<td style="text-align: right;">0（Python）</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">48.0%</td>
+</tr>
+<tr>
+<td>① 元の成果物（v0.8.6）</td>
+<td>C#・Avalonia</td>
+<td style="text-align: right;">39,539</td>
+<td style="text-align: right;">65,292</td>
+<td>2,108/2,111</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">99.0%</td>
+</tr>
+<tr>
+<td>② 元の成果物（<code>8170eb5</code>）</td>
+<td>C#・Avalonia</td>
+<td style="text-align: right;">43,566</td>
+<td style="text-align: right;">67,831</td>
+<td>2,170/2,173</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">99.0%</td>
+</tr>
+<tr>
+<td>③ 元の成果物（<code>cc63773</code>、51/90 項目で打ち切り）</td>
+<td>C#・WPF</td>
+<td style="text-align: right;">7,541</td>
+<td style="text-align: right;">10,238</td>
+<td><strong>636/636</strong></td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">75.0%（採点役により 61.5〜75%）</td>
+</tr>
+<tr>
+<td><strong>③ 完走した成果物（再計測。106/106 項目、<code>35d9c4f</code>）</strong></td>
+<td>C#・WPF</td>
+<td style="text-align: right;">11,574</td>
+<td style="text-align: right;">19,659</td>
+<td><strong>1,096/1,096</strong></td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;"><strong>98.0%</strong>（2 人の採点役が同じ値）</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>全テストの失敗（①と⓪既存の 2〜3 件、②の 1 件）は、同梱していないサンプルの Excel、単一 EXE の起動、テストホストの異常終了など、実行環境に依存するものでした。.NET のセキュリティ規則の警告は、CA5394（安全でない乱数）と CA5392（DllImport の検索パス）だけでした。</li>
+<li><strong>事実:</strong> <strong>CodeQL の指摘は、10 の成果物すべてで 0 件</strong>でした（C# 52 規則、Python 43 規則）。このアプリ（ローカルのデスクトップアプリ、外部入力は Excel とコマンドライン）では、方式によるセキュリティの差は、静的解析では検出されませんでした。</li>
+<li><strong>事実:</strong> 受入基準の充足は、<strong>出発点のコードの量と、実行をどこまで続けたかでほぼ決まりました</strong>。①のコードを持つ成果物（①、②の元、⓪既存）は 99%、空から 1 回の実行で作ったものは 10〜51% でした（順位は ⓪ Opus 51% ≒ ③（E-1）48% ＞ ⓪ Sonnet 16.5% ＞ ② 10%）。<strong>③の元の run は、51/90 項目で打ち切った成果物が 75%、完走させた成果物が 98% でした。①のコードを引き継がずに、①と同等（99%）に達したのは③の完走だけです。</strong></li>
+<li><strong>推論:</strong> 「③のコードは⓪②より品質が高い」は、<strong>結果の品質（受入基準の充足と静的解析）では確かめられませんでした。</strong> 同じ時間の上限の中では、⓪ Opus（29 分・396 AI クレジット）と③（71 分・1,322 AI クレジット）は同程度の充足でした。③が上回ったのは、テストの量（テスト行／本体行 = 0.51 に対し ⓪ Opus 0.08）、範囲と結果の自己申告の整合（③は申告と実態が一致、⓪ Opus は 51% で完了を申告）、追跡の記録でした。§4.2 の判定（工程の強さでは ③ が上）は維持しますが、<strong>結果の品質の差は、この実験では示せませんでした。</strong></li>
+<li><strong>限界:</strong> AC の採点は静的な確認で、UI の操作や実際の AI 呼び出しは試していません。①のコードを持つ大きな成果物は、キーワードとテスト名による採点が中心です。主要な 4 成果物は別の採点役が独立に再採点し、合計の差は 0〜9 ポイント、順位は同じでした（③ 空 48% 対 39%、⓪ Opus 空 51% 対 55.5%、③ 元 75% 対 71%、② 空 10% 対 10%。§3.5）。2 人目の採点でも、⓪ Opus は③以上でした。さらに 3 人目の採点では、③の元の成果物が 61.5%（1 人目 75%）で、<strong>同じ成果物でも採点役により最大 13.5 ポイント</strong>ずれました。完走した③は 2 人の採点役が独立に 98.0% でした（受入基準単位では 49/50 点で、1 点未満は AC-022〜023、026 の配布と文書の 3 件だけ）。</li>
+</ul>
+<h3 id="54-e-3">5.4 E-3: 要求定義書の矛盾の検出</h3>
+<table>
+<thead>
+<tr>
+<th>矛盾</th>
+<th>⓪ Sonnet（実装を依頼）</th>
+<th>② P-RD</th>
+<th>③ 監査役 Opus（「sonnet」指定が守られず）</th>
+<th>③ 監査役 gpt-5.5</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>検出し、成果物に記録した</td>
+<td>0</td>
+<td><strong>8</strong></td>
+<td>2</td>
+<td>2</td>
+</tr>
+<tr>
+<td>会話の中でだけ指摘した</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>指摘せず、どちらかに決めた</td>
+<td>3（すべて正しい側）</td>
+<td>0</td>
+<td>4</td>
+<td>4</td>
+</tr>
+<tr>
+<td>見逃した（誤った側を採用、または扱わない）</td>
+<td><strong>7</strong></td>
+<td>2</td>
+<td>4</td>
+<td>4</td>
+</tr>
+<tr>
+<td>キーにない矛盾の報告</td>
+<td>0</td>
+<td>2</td>
+<td>6</td>
+<td>2</td>
+</tr>
+<tr>
+<td>時間 / AI クレジット</td>
+<td>9.3 分 / 47.6</td>
+<td>23.3 分 / 295.4</td>
+<td>39.3 分 / 871.4</td>
+<td>19.6 分 / 409.0</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>事実（⓪）:</strong> ⓪は矛盾を 1 件も指摘せず、誤った値のうち 4 件（ベース点の既定 70、差分を最初の設問へ、W=0 で参照回答の生成を省略、ファイル名の秒）をそのまま実装しました。</li>
+<li><strong>事実（②）:</strong> 大きな要求定義の Prompt（P-RD）が最もよく検出しました。8 件を、矛盾の表（E-01〜E-07）と質問票（Q-001〜Q-006）として要求定義書に記録しました。</li>
+<li><strong>事実（③）:</strong> ③は 2 件（同時実行の既定値と上限、回答行の上限）だけを検出しました。③の rd-author は、細かい値をドラフトへの参照のままにする書き方をしたため、ドラフトの中の矛盾は監査の対象になりませんでした。監査役のモデルを Opus と gpt-5.5 で変えても、検出した矛盾は同じでした。一方の条件では、誤った値（schema 不正の再試行 3 回、quota 枯渇での再試行 2 回、回答行の上限 2,000）を包括承認で採用しました。</li>
+<li><strong>推論:</strong> <strong>「別の文脈の監査役」は、それだけでは矛盾の検出を保証しません。</strong> 何を監査の対象にするか（ドラフトの全文か、書き起こした要求だけか）が、監査役のモデルより効いていました。§4.2 の「③は要求の矛盾の検出が最も強い」は、この実験では支持されず、② P-RD の方が強い結果でした。ただし n=1 です。</li>
+</ul>
+<h3 id="55-e-4-1-6">5.5 E-4: 小さな変更（1 文で言える変更 6 件）</h3>
+<table>
+<thead>
+<tr>
+<th>指標</th>
+<th style="text-align: right;">⓪ 素の Coding Agent（Sonnet 5.5）</th>
+<th style="text-align: right;">③ EABK（<code>/build</code>）</th>
+<th style="text-align: right;">③ / ⓪</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>隠しテストの合格</td>
+<td style="text-align: right;"><strong>6/6</strong></td>
+<td style="text-align: right;"><strong>6/6</strong></td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>既存の単体テストの退行</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>平均の時間（範囲）</td>
+<td style="text-align: right;"><strong>3.1 分</strong>（1.3〜4.8）</td>
+<td style="text-align: right;">47.6 分（36.6〜62.4）</td>
+<td style="text-align: right;">約 15 倍</td>
+</tr>
+<tr>
+<td>平均の AI クレジット</td>
+<td style="text-align: right;"><strong>8.1</strong></td>
+<td style="text-align: right;">252.0</td>
+<td style="text-align: right;">約 31 倍</td>
+</tr>
+<tr>
+<td>本体の変更行（平均）</td>
+<td style="text-align: right;">3.8</td>
+<td style="text-align: right;">12.5</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>追加したテストの行（平均）</td>
+<td style="text-align: right;">1.8</td>
+<td style="text-align: right;">116.8</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>更新した管理文書（平均）</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">5.3（要求定義書・カタログ・ID 台帳・System Test 台帳など）</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>依頼の問題点の指摘</td>
+<td style="text-align: right;"><strong>0/6</strong></td>
+<td style="text-align: right;">S03 で 1 件（下記）</td>
+<td style="text-align: right;">—</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>事実:</strong> 1 文で言える変更では、⓪も③も隠しテストに全件合格し、退行もありませんでした。③は時間で約 15 倍、AI クレジットで約 31 倍かかりました。その分、③は要求 ID・受入基準・テスト・カタログを毎回更新しました。</li>
+<li><strong>事実（S03 の扱い）:</strong> S03 は「ログに <code>definitionId</code> を許可する」という依頼です。これは既存の要求 NFR-SEC-022（設定の実内容をログに入れない）と衝突し得ます。⓪は 77 秒で黙って実装しました。③は、E-4 と E-5 の 3 回とも、この衝突を質問票（Q-013）か監査の指摘として記録し、1 回は実装を止めて利用者の判断を求めました（BLOCKED）。</li>
+<li><strong>推論:</strong> §8.3 の基準（差分を 1 文で説明でき、既存の要求の範囲内なら⓪）は、実測で支持されました。<strong>小さな変更では、③の追加の費用（約 30 倍）は、結果の正しさを買っていません。</strong> 買っているのは、記録の更新と、<strong>既存の要求（特にセキュリティ）との衝突の検出</strong>です。したがって、⓪の高速レーンには「既存の要求、特にセキュリティ・プライバシーの要求に触れないこと」という条件を明示し、触れる変更は③に回すのが妥当です（§8.3 に反映）。</li>
+</ul>
+<h3 id="56-e-5-3s01s03">5.6 E-5: ③の部品の除去テスト（S01〜S03）</h3>
+<table>
+<thead>
+<tr>
+<th>条件</th>
+<th style="text-align: right;">隠しテストの合格</th>
+<th style="text-align: right;">平均の時間</th>
+<th style="text-align: right;">平均の AI クレジット</th>
+<th style="text-align: right;">追加したテストの行（平均）</th>
+<th>備考</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>③ そのまま（E-4 の S01〜S03）</td>
+<td style="text-align: right;">3/3</td>
+<td style="text-align: right;">42.3 分</td>
+<td style="text-align: right;">277.7</td>
+<td style="text-align: right;">111.7</td>
+<td>S03 は衝突を質問票に記録して実装</td>
+</tr>
+<tr>
+<td>③ reviewer なし</td>
+<td style="text-align: right;">3/3</td>
+<td style="text-align: right;">37.1 分</td>
+<td style="text-align: right;">206.1（−26%）</td>
+<td style="text-align: right;">98.0</td>
+<td>S03 は監査の指摘として記録して実装</td>
+</tr>
+<tr>
+<td>③ 独立監査・最終監査なし</td>
+<td style="text-align: right;">2/3</td>
+<td style="text-align: right;">35.1 分</td>
+<td style="text-align: right;"><strong>140.1（−50%）</strong></td>
+<td style="text-align: right;">90.3</td>
+<td>S03 は<strong>衝突を理由に BLOCKED</strong>（隠しテストは不合格だが、判断としては妥当）</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>事実:</strong> reviewer を外しても、小さな変更の結果は変わらず、AI クレジットは約 26% 減りました。監査を外すと AI クレジットは約半分になりました。S03 の衝突は、監査を外しても rd-author が検出しました。</li>
+<li><strong>推論:</strong> <strong>reviewer を外しても、合格・退行は変わりませんでした。監査を外すと隠しテストの合格は 3/3 から 2/3 に下がりましたが、その 1 件は既存のセキュリティ要求との衝突を理由に実装を止めた（BLOCKED）もので、判断としては妥当です。衝突の検出は、監査を外しても rd-author が保ちました。</strong> R6（reviewer を MUST の要求と共通部品の変更にだけ使う）を支持し、さらに「小さな変更では監査を差分 1 回に限る」ことを検討できます。ただし n=3 で、ばらつき（同じ条件で 29〜43 分）が差より大きい指標もあります。大きな変更での効果は、この実験では測っていません。</li>
+</ul>
+<h3 id="57-3">5.7 実験で見つかった、③の運用上の問題</h3>
+<ol>
+<li><strong>モデル表は強制されない。</strong> <code>scripts/hve.config.json</code> の <code>models</code>（rd-auditor = gpt-5.5、作業役 = sonnet-5.5）は、③の 15 回の実行（E-1 1 回、E-3 2 回、E-4 6 回、E-5 6 回）のうち 5 回でしか守られず、残りの 10 回は作業役も監査役も conductor と同じ Opus 5.5 で動きました。R3（監査役を別系統にする）と、作業役を安いモデルにする費用の設計は、<strong>設定ファイルだけでは保証されません</strong>（§8.2.2 の R11）。</li>
+<li><strong>範囲の縮小が見えにくい。</strong> E-1 の③は、ドラフトの受入基準 50 件のうち約半分しか要求にせず、「全件完了」と報告しました（§5.2）。</li>
+<li><strong>R2（Token の逐次記録）は、CLI の <code>--usage-output-file</code> で実現できました。</strong> ただし、run-report の AI クレジットは「取得できず」のままで、ツールキットの側では集計されていません。</li>
+</ol>
+<h3 id="58-1">5.8 受入基準の充足点 1 点あたりの費用と時間（正規化）</h3>
+<table>
+<thead>
+<tr>
+<th>成果物</th>
+<th style="text-align: right;">時間（定義）</th>
+<th style="text-align: right;">AI クレジット</th>
+<th style="text-align: right;">充足点（50 点満点）</th>
+<th style="text-align: right;">AI クレジット / 点</th>
+<th style="text-align: right;">分 / 点</th>
+<th>注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>⓪ Sonnet・空（E-0）</td>
+<td style="text-align: right;">7.5 分（壁時計）</td>
+<td style="text-align: right;">36.5</td>
+<td style="text-align: right;">8.25</td>
+<td style="text-align: right;"><strong>4.4</strong></td>
+<td style="text-align: right;"><strong>0.9</strong></td>
+<td>テストなし。未完了を正直に申告</td>
+</tr>
+<tr>
+<td>⓪ Opus・空（E-0）</td>
+<td style="text-align: right;">28.9 分（壁時計）</td>
+<td style="text-align: right;">395.9</td>
+<td style="text-align: right;">25.5</td>
+<td style="text-align: right;"><strong>15.5</strong></td>
+<td style="text-align: right;">1.1</td>
+<td>テスト／本体の行数比 0.08。51% で「完了」と申告</td>
+</tr>
+<tr>
+<td>② 空（E-1）</td>
+<td style="text-align: right;">42.1 分（壁時計）</td>
+<td style="text-align: right;">2,225.7</td>
+<td style="text-align: right;">5.0</td>
+<td style="text-align: right;">445.1</td>
+<td style="text-align: right;">8.4</td>
+<td>計算部品だけ。未完了を正直に申告</td>
+</tr>
+<tr>
+<td>③ 空（E-1）</td>
+<td style="text-align: right;">71.4 分（壁時計）</td>
+<td style="text-align: right;">1,321.6</td>
+<td style="text-align: right;">24.0</td>
+<td style="text-align: right;">55.1</td>
+<td style="text-align: right;">3.0</td>
+<td>テスト／本体 0.51。自分の範囲（26 要求）では完了</td>
+</tr>
+<tr>
+<td>参考: ①（v0.8.6）</td>
+<td style="text-align: right;">143 時間 47 分（総待ち時間）</td>
+<td style="text-align: right;">33,999 以上</td>
+<td style="text-align: right;">49.5</td>
+<td style="text-align: right;">687 以上</td>
+<td style="text-align: right;">174</td>
+<td>32 日。人の待ちを含み、費用は下限</td>
+</tr>
+<tr>
+<td>参考: ②の元の実行</td>
+<td style="text-align: right;">7 時間 06 分（総待ち時間）</td>
+<td style="text-align: right;">13,191</td>
+<td style="text-align: right;">49.5</td>
+<td style="text-align: right;">266</td>
+<td style="text-align: right;">8.6</td>
+<td>①のコードの 92% を引き継いだ</td>
+</tr>
+<tr>
+<td>参考: ③の元の実行（打ち切り時点）</td>
+<td style="text-align: right;">9 時間 13 分（総待ち時間）</td>
+<td style="text-align: right;">11,193</td>
+<td style="text-align: right;">37.5（75%。採点役により 30.75〜37.5）</td>
+<td style="text-align: right;">298</td>
+<td style="text-align: right;">14.7</td>
+<td>51/90 項目で打ち切り</td>
+</tr>
+<tr>
+<td><strong>参考: ③の元の実行（再計測で完走）</strong></td>
+<td style="text-align: right;"><strong>19.3 時間</strong>（稼働の壁時計。PC 停止を除く）</td>
+<td style="text-align: right;"><strong>約 18,300</strong>（確定 17,016＋推定 約 1,240）</td>
+<td style="text-align: right;"><strong>49.0</strong>（98.0%）</td>
+<td style="text-align: right;"><strong>約 373</strong></td>
+<td style="text-align: right;"><strong>23.6</strong></td>
+<td>106/106 項目。1,096 テスト。§5.9</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>事実:</strong> 空のリポジトリからの 1 回の実行（上の 4 行）では、充足点 1 点あたりの AI クレジットは <strong>⓪ Sonnet 4.4 ＜ ⓪ Opus 15.5 ＜ ③ 55 ＜ ② 445</strong> でした。③は②の約 1/8 ですが、⓪ Opus の約 3.5 倍です。</li>
+<li><strong>推論:</strong> 「③は同じ費用でより多くの受入基準を満たす」は、②との比較では正しいが、⓪との比較では正しくありません。③の追加の費用は、充足点ではなく、<strong>テストの量、申告と実態の一致、要求の追跡、既存の要求との衝突の検出、止まらずに続けられること</strong>に使われています（§5.3、§5.5、§6.2）。</li>
+<li><strong>事実（完走した③）:</strong> 完走した③は、充足点 1 点あたり約 373 AI クレジット・23.6 分で、②の元の実行（266・8.6。①のコードの 92% を引き継ぎ）の約 1.4 倍・約 2.7 倍、①（687 以上・174）の約 0.5 倍・約 0.14 倍です。<strong>①のコードを引き継がずに受入基準 98% に達するのに、③は①の約 1/7 の時間で済みました。</strong></li>
+<li><strong>限界:</strong> 充足点は 1 回の実行の到達点です。⓪に「続けて」を繰り返してアプリを完成させるまでの費用（①の形）は測っていません（§8.5 の E-6）。参考の 4 行は時間の定義と出発点が違うため、上の 4 行とは直接比べられません。</li>
+</ul>
+<h3 id="59-3">5.9 ③の元の実行の再計測（完走）</h3>
+<p><strong>なぜ 51/90 で止まっていたのか.</strong> 元の実行（StudyReport-Evaluator-3）は、エージェント自身が止まったのではなく、<strong>利用者が打ち切りました</strong>。10:59 の Prompt #4「System Testは一度ここで打ち切ります。増分テストの出来る状態にしてください。」で実装ループが止められ、残り 39 項目が「打ち切り（利用者指示）」として blocked になっていました（<code>queue.json</code>、<code>progress.md</code>）。その前にも、08:06 の PC の再起動で 88 分止まっていました。したがって、51/90 は「③の到達点」ではなく「③を途中で止めた時点」です。</p>
+<p><strong>再計測の方法.</strong> 元のリポジトリの複製で、同じ run（<code>202610080113</code>）を、打ち切りの時点（工程 5、完了 51）から続けました。打ち切りで blocked にした項目を todo に戻し、WIP だった 3 項目はブランチと worktree を復元しました。経過時間の計算は、PC の停止を除いた稼働時間に合わせました。依頼は毎回 1 文「タスクを再開してください。作業役は sonnet-5.5/medium」です。conductor は Opus 5.5（medium）、作業役は Sonnet 5.5（medium）、監査役は gpt-5.5 を指定しました。</p>
+<table>
+<thead>
+<tr>
+<th>区間</th>
+<th style="text-align: right;">壁時計</th>
+<th style="text-align: right;">AI クレジット</th>
+<th>終わり方（原因）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>元の実行</td>
+<td style="text-align: right;">553 分</td>
+<td style="text-align: right;">11,193</td>
+<td>利用者の打ち切り（51/90 項目）</td>
+</tr>
+<tr>
+<td>再計測 1</td>
+<td style="text-align: right;">85.7 分</td>
+<td style="text-align: right;">837.1</td>
+<td><strong>conductor が、実験の設定で付けた AI クレジットの上限（20,000）を見て「残りが少ない」と判断</strong>し、32 項目を blocked にして最終工程へ（実際の使用は 837。上限の 4%）</td>
+</tr>
+<tr>
+<td>再計測 2</td>
+<td style="text-align: right;">165.2 分</td>
+<td style="text-align: right;">2,936.3</td>
+<td>CLI の自動継続の上限（60 回）に達した</td>
+</tr>
+<tr>
+<td>再計測 3</td>
+<td style="text-align: right;">151.9 分</td>
+<td style="text-align: right;">1,792.2</td>
+<td>CLI のバックグラウンド待機の上限（600 秒）に達した</td>
+</tr>
+<tr>
+<td>再計測 4</td>
+<td style="text-align: right;">約 84 分</td>
+<td style="text-align: right;">約 1,240（推定）</td>
+<td>利用者の PC 停止で強制終了（usage の記録なし。再計測 2・3 の消費速度 11.8〜17.8 クレジット/分から推定。範囲 990〜1,490）</td>
+</tr>
+<tr>
+<td>（PC 停止）</td>
+<td style="text-align: right;">（約 26 時間）</td>
+<td style="text-align: right;">—</td>
+<td>稼働時間に含めない</td>
+</tr>
+<tr>
+<td>再計測 5</td>
+<td style="text-align: right;">1.3 分</td>
+<td style="text-align: right;">0</td>
+<td><strong>claude-opus-5.5 が CLI で使えなくなり</strong>、起動に失敗</td>
+</tr>
+<tr>
+<td>再計測 6</td>
+<td style="text-align: right;">118.5 分</td>
+<td style="text-align: right;">257.0</td>
+<td><strong>全件完了</strong>（conductor は claude-sonnet-5.5 に変更）</td>
+</tr>
+<tr>
+<td><strong>合計</strong></td>
+<td style="text-align: right;"><strong>1,158 分（19.3 時間）</strong></td>
+<td style="text-align: right;"><strong>約 18,300</strong>（確定 17,016＋推定）</td>
+<td>run 自身の時計は約 19.5 時間</td>
+</tr>
+</tbody>
+</table>
+<p><strong>結果.</strong></p>
+<table>
+<thead>
+<tr>
+<th>指標</th>
+<th style="text-align: right;">打ち切り時点（<code>cc63773</code>）</th>
+<th style="text-align: right;">完走（<code>35d9c4f</code>）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>作業項目</td>
+<td style="text-align: right;">51/90</td>
+<td style="text-align: right;"><strong>106/106</strong>（conductor が 16 項目を追加。結果の列の追加と手動変更、採点設計と入力詳細の画面、ページ表示、ZIP 配布と EXE の検査など）</td>
+</tr>
+<tr>
+<td>本体の行数／テストの行数</td>
+<td style="text-align: right;">7,541／10,238（テスト比 1.36）</td>
+<td style="text-align: right;">11,574／19,659（1.70）</td>
+</tr>
+<tr>
+<td>全テスト</td>
+<td style="text-align: right;">636/636</td>
+<td style="text-align: right;"><strong>1,096/1,096</strong>（単体 133、結合 963）</td>
+</tr>
+<tr>
+<td>CodeQL の指摘</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr>
+<td>受入基準の充足（盲検）</td>
+<td style="text-align: right;">75.0%（採点役により 61.5〜75%）</td>
+<td style="text-align: right;"><strong>98.0%（49/50 点。2 人の採点役が同じ値）</strong></td>
+</tr>
+<tr>
+<td>System Test</td>
+<td style="text-align: right;">12/12</td>
+<td style="text-align: right;">12/12（<code>verify --strict</code> も合格）</td>
+</tr>
+<tr>
+<td>最終の監査</td>
+<td style="text-align: right;">あり（指摘 Y-01〜Y-08 を転記）</td>
+<td style="text-align: right;">独立 1 回のみ（全量 3 回は不成立）。CRITICAL 0／HIGH 4／MEDIUM 2／LOW 2</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>事実:</strong> 受入基準で 1 点未満だったのは、AC-022（0.75。画面のスクリーンショットが 1 枚だけ）、AC-023（0.5。EXE を主導線とする説明と sidecar が文書にない）、AC-026（0.75。OS だけの端末での確認は手順書のみ）の 3 件で、すべて配布と文書の項目でした。実装と自動テストで確かめられる項目は、すべて 1.0 でした。</li>
+<li><strong>事実（監査）:</strong> 最終の監査の HIGH のうち Z-01 は、<strong>ドラフト自体の矛盾</strong>（AC-057「200% 表示で本文の縦スクロールを許す」と FR-135・AC-150④「外側スクロール不要」）を新たに見つけ、質問票 Q-014 に記録したものです（承認済みの本文は変えていません）。E-3 では③の監査はドラフトの矛盾を 2/10 しか見つけませんでしたが、完走した run では、ドラフトの中の実在する矛盾を 1 件見つけました。</li>
+<li><strong>事実（正直な報告）:</strong> 容量不足、cache 欠落からの復元、抽出の中断、ZIP と EXE の checkpoint 互換（NFR-TEST-028）は、fault を注入できず試験していません。カタログに「一部未達」と明記し、PASS にしていませんでした。Window を表示する結合テストが並行実行で失敗する不安定さも、run-report に書かれていました。</li>
+<li><strong>事実（止まりかたの内訳）:</strong> 完走まで、人の入力は元の実行で 5 回、再計測で「再開」6 回（うち 1 回は起動に失敗）でした。再計測の中で止まった 5 回の原因は、環境の上限 3 回（AI クレジットの上限の表示、自動継続の上限、待機の上限）、PC 停止 1 回、モデルの利用不可 1 回（起動に失敗）で、③の設計や品質の問題によるものはありません。毎回、<code>queue.json</code> と <code>progress.md</code> から 1 文の依頼で続きから進みました。</li>
+<li><strong>事実（上限の見え方）:</strong> 再計測 1 では、AI クレジットの上限が見えた conductor が、実際の使用が上限の 4% の時点で「残りが少ない」と判断して打ち切りました。上限を外すと、同じ run は続きから完走しました。<strong>③は、実行の上限（時間・AI クレジット・自動継続回数・待機時間）を実際より厳しく解釈して早めに止まることがあります</strong>（§8.2.2 の R16）。</li>
+<li><strong>推論:</strong> 完走した③は、①のコードを引き継がずに、空のリポジトリから受入基準 98%（①の 99% と同等）に達しました。それに必要だったのは 19.3 時間と約 18,300 AI クレジットで、①（総待ち時間 143 時間 47 分、33,999 以上）の約 1/7 の時間、約 0.5 倍の費用です。E-1 の 48%（71 分）は、ドラフトを 26 要求に縮めた run のもので、<strong>同じツールキットでも run によって到達点が 48% と 98% に分かれます</strong>（範囲の決め方が違うため。R12）。</li>
+<li><strong>限界:</strong> conductor は最後の約 2 時間（全体の約 10%）は Sonnet 5.5 でした。Opus 5.5 が使えなくなったためで、元の実行と完全に同じ構成ではありません。再計測 4 の AI クレジットは推定です。再計測は 1 回です。</li>
+</ul>
+<hr />
+<h2 id="6">6. 考察</h2>
+<h3 id="61">6.1 研究課題への答え</h3>
+<table>
+<thead>
+<tr>
+<th>RQ</th>
+<th>答え</th>
+<th>主な根拠</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RQ1 時間と費用</td>
+<td>1 タスク・1 回の実行では⓪が最も速く安い。空からのアプリ規模の 1 回の実行では、充足点 1 点あたりでも⓪が最も安く（⓪ Opus 15.5 AI クレジット）、③（55）は②（445）の約 1/8。どの方式も 1 回では完成しない。<strong>③を完走させると 19.3 時間・約 18,300 AI クレジット・1 点あたり約 373（②の元の実行の約 1.4 倍、①の約 0.5 倍）</strong></td>
+<td>§4.1、§4.3、§5.1、§5.2、§5.8、§5.9</td>
+</tr>
+<tr>
+<td>RQ2 コードの品質</td>
+<td><strong>工程の強さ</strong>は ③ ＞ ② ＞ ① ＞ ⓪。<strong>結果</strong>は、空からの 1 回の実行では、⓪ Opus（51%）と③（48%）に差はなく、CodeQL は全成果物で 0 件。<strong>ただし③を完走させると 98%（1,096 テスト合格、テスト／本体 1.70）で、①のコードを引き継がずに①と同等に達した</strong>。③が上回ったのはテストの量と、申告と実態の一致</td>
+<td>§4.2、§5.3、§5.9</td>
+</tr>
+<tr>
+<td>RQ3 ビジネスとの整合</td>
+<td><strong>② P-RD が最も強く</strong>（矛盾 8/10 を記録、未完了を正直に報告）、③は一部（既存の要求との衝突は 3/3 回検出、ドラフトの中の矛盾は 2/10、範囲を黙って縮小）、⓪は弱い（0/10、誤った値を 4 件実装、51% で完了を申告）</td>
+<td>§5.2、§5.4、§5.5、§6.2</td>
+</tr>
+<tr>
+<td>RQ4 止まらない・繰り返さない</td>
+<td>③で解決（E-1 は人の Prompt 1 回で 71 分止まらずに進行。完走の再計測では、環境の上限・PC 停止・モデルの利用不可で 5 回止まったが、そのたびに 1 文の再開で続きから進んだ）。②はおおむね解決（人の Prompt 5〜7 回、判断の区切りで止まる）。①は人の Prompt の約半分が再開・エラー対処</td>
+<td>§1.2、§5.2、§5.9、§6.2</td>
+</tr>
+<tr>
+<td>RQ5 運用と使い分け</td>
+<td>小さな変更は⓪で足りる（⓪も③も隠しテスト 6/6、③は約 15 倍の時間と約 31 倍の AI クレジット）。ただし既存のセキュリティ要求に触れる変更は③だけが衝突を検出した。アプリ規模では③が運用の要件を最も満たすが、モデル指定が強制されない、範囲の縮小が見えない、実行の上限を実際より厳しく解釈して早めに止まる、という欠陥がある</td>
+<td>§4.4、§5.5〜§5.9、§7</td>
+</tr>
+</tbody>
+</table>
+<p><strong>この比較から言えないこと.</strong></p>
+<ol>
+<li>⓪に「続けて」を繰り返して完成させた場合の総費用と、そのときのドリフトの大きさ（§8.5 の E-6 で測る）。</li>
+<li>実際の Copilot による答案の評価が、どの方式の成果物で正しく動くか（すべての自動実行で AI はスタブ。§6.2）。</li>
+<li>統計的な有意差（各条件 1〜6 回。§9）。</li>
+</ol>
+<h3 id="62">6.2 ビジネスの問題の解決状況</h3>
+<p>凡例: ◎ 解決（実測で確認）、○ おおむね解決、△ 一部だけ、✕ 解決していない。⓪は「小さな変更（1 文で言える変更）」と「アプリ全体」で分けました。</p>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>⓪ 素の Coding Agent</th>
+<th>① 対話型 Vibe Coding（⓪の積み重ね）</th>
+<th>② Prompt 駆動</th>
+<th>③ EABK</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>B1 ドリフト</strong></td>
+<td>小: ○ 依頼が 1 文なのでずれる余地が小さい／全体: ✕ 正本がない。既存コードからは<strong>ドラフトとの差分をほとんど見つけなかった</strong>（E-0）</td>
+<td>✕ 29 回改訂・約 9 回の方向転換</td>
+<td>○ P-RD が毎回「事業上の目的」に照らして監査し、AI の提案は承認待ちにする</td>
+<td>△ 要求の正本・ID・書き手 1 人で固定する。<strong>E-1 では受入基準の約半分を黙って範囲から外し「全件完了」と報告</strong>。元の run の完走では 98% を取り込んだ（§5.9）。run ごとに範囲が大きく変わる</td>
+</tr>
+<tr>
+<td><strong>B2 一貫性</strong></td>
+<td>✕ 矛盾 0/10 を検出、誤った値を 4 件実装（E-3）。既存のセキュリティ要求との衝突 0/6（E-4）</td>
+<td>△ 人が気づいた分だけ（8 件）</td>
+<td>○ <strong>矛盾 8/10 を検出して記録</strong>（E-3）</td>
+<td>△ 新しい依頼と既存の要求との衝突は <strong>3/3 回検出</strong>（E-4・E-5）。ドラフトの中の矛盾は 2/10（E-3）</td>
+</tr>
+<tr>
+<td><strong>B3 繰り返し</strong></td>
+<td>小: ◎ 1 回で済む（E-4 で 6/6）／全体: ✕ 1 回では終わらず、同じ依頼を重ねることになる（E-0）</td>
+<td>✕ 43.8% が打ち直し</td>
+<td>○ 人の Prompt 5〜7 回（毎回 42〜47KB の Prompt を貼る）</td>
+<td>◎ <strong>人の Prompt 1 回</strong>（E-1）。元の実行でも作業の依頼は 1 回。完走の再計測では、環境の上限などで止まるたびに 1 文の再開（計 5 回）で続きから進み、同じ指示の打ち直しはなかった（§5.9）</td>
+</tr>
+<tr>
+<td><strong>B4 停止と再開</strong></td>
+<td>小: ◎ 数分で終わる／全体: ✕ Sonnet は 7.5 分で自分から終了、Opus は待機上限で終了（E-0）</td>
+<td>✕ 50.7% が再開・エラー対処</td>
+<td>○ 実装の 6 時間 25 分を 1 回で完走。承認の区切りでは止まる（設計どおり）</td>
+<td>◎ <strong>E-1 は 71 分を止まらずに完走</strong>（作業役の引き継ぎ 23 回）。元の実行は PC の再起動後、「再開」の 1 回で続きから進んだ。完走の再計測では、PC 停止（約 26 時間）、CLI の上限 2 回、モデルの利用不可を挟んでも、記録（<code>queue.json</code>・<code>progress.md</code>）から続きから進んだ。ただしホストが止まると止まる（R1）。上限の表示を見て早めに止まることがある（R16）</td>
+</tr>
+<tr>
+<td><strong>B5 完了の信頼</strong></td>
+<td>✕ Opus は受入基準 51% で「完了」と申告（E-0）</td>
+<td>△ 人が確かめる</td>
+<td>○ 未完了を「未完了」と正直に報告し、verify も exit 1（E-1）</td>
+<td>△ 申告は自分の範囲とは一致するが、<strong>範囲の縮小が見えない</strong>（E-1）</td>
+</tr>
+<tr>
+<td><strong>B6 人の判断</strong></td>
+<td>△ 判断は軽いが、すべて人が都度行う</td>
+<td>✕</td>
+<td>△ 判断 5 回。すべて推奨どおりで形だけになりがち</td>
+<td>○ <code>approval_policy</code> で事前に決め、セキュリティの衝突は BLOCKED にして人に返す（E-5）。ただし包括承認で誤った値を採った例がある（E-3）</td>
+</tr>
+<tr>
+<td><strong>B7 時間と費用</strong></td>
+<td>小: ◎ 平均 3.1 分・8.1 AI クレジット（E-4）／全体: ✕ 詰め込むと急に膨らむ</td>
+<td>✕ 143 時間</td>
+<td>○ E-1 で 42 分・2,226 AI クレジット</td>
+<td>○ <code>max_hours</code> を守る。E-1 で 71 分・1,322。Token の集計はツールキットにない（§5.7）</td>
+</tr>
+<tr>
+<td><strong>B8 仕組みの費用</strong></td>
+<td>◎ なし</td>
+<td>—</td>
+<td>◎ Prompt 2 本</td>
+<td>△ agents・skills・hooks・scripts（導入時 41 ファイル・約 6,000 行）の保守。HVE よりはるかに小さい</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>事実・推論（⓪が一番よい、は正しい。ただし小さな変更に限る）:</strong> 1 文で言える変更では、⓪は③と同じ結果（隠しテスト 6/6）を、1/15 の時間と 1/31 の費用で出しました（§5.5）。B1〜B8 のほとんどで、⓪は小さな変更なら問題を起こしません。<strong>問題が起きるのは、⓪をアプリ全体に繰り返し使ったとき（＝①）です。</strong></li>
+<li><strong>事実（自動実行の機構で解決できたもの）:</strong> <strong>B3（同じ指示の繰り返し）と B4（ジョブの停止と再開）は、③で解決しました。</strong> ①では人の入力の約半分が「止まったものを動かす作業」で、4 割強が打ち直しでした。③では、同じ規模の作業が <code>/build</code> の 1 回に置き換わり、71 分止まらずに進み、中断からも 1 回の「再開」で続きから進みました。②もおおむね解決していますが、大きな Prompt を毎回貼り、判断の区切りで止まります。<strong>利用者が自動実行の機構に求めた「何度も同じ Prompt を入れない、止まらない」は、③で達成されています。</strong></li>
+<li><strong>事実（自動実行の機構でも、まだ解決できていないもの）:</strong> <strong>B1（事業の目的から外れる）と B2（ビジネスの論理の一貫性）は、③でも一部しか解決していません。</strong> ③は要求の正本と ID と書き手 1 人の仕組みで、変更のたびに「既存の要求との衝突」を見つけます（E-4 の S03 で 3/3）。一方で、(a) 依頼の範囲を黙って縮めても「全件完了」と報告し（E-1）、(b) ドラフトの中に残した矛盾を監査しませんでした（E-3）。<strong>元のビジネスから「外れていく」のは止められても、「最初から全部を取り込んでいるか」「ドラフト自体が論理的に一貫しているか」は保証していません。</strong></li>
+<li><strong>事実（この点では②が強い）:</strong> B1・B2 は②の P-RD の方が強い結果でした（矛盾 8/10 を記録、未完了を正直に報告）。P-RD には「事業上の目的に沿っているか」「解釈が分かれないか」を毎回監査する手順があり、③の rd-author は細部をドラフトへの参照のままにしたため、その監査が働きませんでした。</li>
+<li>
+<p><strong>推論（まだ誰も確かめていない、ビジネスの中心の機能）:</strong> §5 のどの自動実行でも、アプリの事業価値の中心である「GitHub Copilot による答案の評価」は、偽の AI（スタブ）で試しただけで、実際の Copilot では動かしていません（③は「CopilotEvaluator は実際の SDK API を未確認」と報告）。<strong>「止まらずに完了した」ことと「ビジネスの目的を果たすアプリができた」ことは別です。</strong> 実環境での確認（UAT と同じ水準）が、どの方式でも残っています。</p>
+</li>
+<li>
+<p><strong>推論（まとめ）:</strong> 利用者が②③に求めた 4 つのうち、「何度も同じ Prompt を入れる」と「そのたびにジョブが止まる」は③で解決しました。「元のビジネスから外れる」と「ビジネスの論理の一貫性が欠ける」は③では一部の解決で、②の P-RD の方が強い結果でした。③の進め方（1 回の <code>/build</code>、止まらない、再開できる）に、②の P-RD の「事業目的に照らした監査」を取り込むのが、4 つの問題をまとめて解く最短の道です（R14。§8.2.2）。</p>
+</li>
+</ul>
+<h3 id="63">6.3 外部の研究とベストプラクティスとの照合</h3>
+<h4 id="631">6.3.1 参照した主な文献</h4>
+<p>補助レポートで確認済みの文献（X・E・SRC の番号。一覧は付録 B.4）に、本書で 4 件（N1〜N4）を加えました。</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>主張</th>
+<th>出典</th>
+<th>確認</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">N1</td>
+<td>「Vibe Coding」は、自然言語で意図を伝え、AI が書いたコードを読まずに「動くかどうか」だけで受け入れるやり方として、2025 年 2 月に Andrej Karpathy が名付けた。2025〜2026 年には、より規律ある「Agentic Engineering」への移行が論じられている</td>
+<td>IBM, "What is Vibe Coding?", https://www.ibm.com/think/topics/vibe-coding ほか</td>
+<td>要旨（検索結果）</td>
+</tr>
+<tr>
+<td style="text-align: right;">N2</td>
+<td>仕様駆動開発: 仕様を単一の正本にし、Specify → Plan → Tasks → Implement → 検証の順に進める。組織の基準を「constitution」として書き、各段階で人が確認する</td>
+<td>GitHub Blog, "Spec-driven development with AI"／GitHub Spec Kit／Microsoft for Developers, "From spec-first to enterprise-ready"</td>
+<td>要旨（検索結果）</td>
+</tr>
+<tr>
+<td style="text-align: right;">N3</td>
+<td>AI は組織の強みと弱みを増幅する。AI はデリバリーの速さを上げるが、自動テストや版管理などの基盤がないと安定性を下げる。効果を引き出す 7 つの能力（明確な AI 方針、強い版管理、良い内部プラットフォーム、健全なデータ基盤、<strong>小さなバッチ</strong>、AI が使える社内データ、利用者中心）</td>
+<td>Google DORA, "2025 State of AI-assisted Software Development" と "DORA AI Capabilities Model"</td>
+<td>要旨（検索結果）</td>
+</tr>
+<tr>
+<td style="text-align: right;">N4</td>
+<td>人が書いたコードと AI が生成したコード（50 万件超）の比較で、AI のコードは単純で反復が多く、未使用の構成要素とハードコードされた値が多く、<strong>高リスクの脆弱性の割合が高かった</strong></td>
+<td>Cotroneo et al., arXiv:2508.21634（ISSRE 2025）</td>
+<td>要旨（検索結果）</td>
+</tr>
+</tbody>
+</table>
+<p>⓪の評価に特に関係する既存の根拠は次のとおりです。</p>
+<table>
+<thead>
+<tr>
+<th>根拠</th>
+<th>⓪への含意</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Building effective agents（X9/E1）: 単純で組み合わせやすい部品が複雑なフレームワークに勝ることが多い</td>
+<td>⓪を出発点にし、複雑さは必要なときだけ足す</td>
+</tr>
+<tr>
+<td>Agentless・mini-SWE-agent（X20/E2）: 単純な手順や数百行の harness が、複雑なエージェントより高い性能と低い費用を出した</td>
+<td>⓪の速さと安さを支持する</td>
+</tr>
+<tr>
+<td>The Scaffold Effect（X21）: harness の選び方で解いた課題あたりの Token が最大 40 倍変わり、合格率の差は 0〜8 ポイント</td>
+<td>合格率では⓪で十分なことが多い。harness の価値は合格率以外（費用・追跡・再開）で測る</td>
+</tr>
+<tr>
+<td>Harness design for long-running apps（X8）: harness の部品はモデルの限界についての仮定で、モデルが良くなると古くなる。ただし harness の余地は縮まず移動する</td>
+<td>⓪の守備範囲は広がり続ける。③の部品は⓪と比べて定期的に見直す</td>
+</tr>
+<tr>
+<td>Prompting Claude Opus 5（X3）: 検証を促す指示は過剰な検証を生む。古い harness の足場は外す</td>
+<td>⓪で足りる。ただし「外部の判定」まで外せとは言っていない</td>
+</tr>
+<tr>
+<td>Claude Code best practices（X11）: 差分を 1 文で説明できる作業なら計画を省く。検証手段（テスト、ビルド）は与える</td>
+<td>⓪の適用条件そのもの</td>
+</tr>
+<tr>
+<td>METR Time Horizon（X24）: 作業の長さの上限が約 7 か月で倍</td>
+<td>⓪の守備範囲の境界は動く。境界を越えた作業では完成率が落ちる</td>
+</tr>
+<tr>
+<td>reward hacking（X18/E11）、ImpossibleBench（X19/E12）、Self-Correct（E10）</td>
+<td>⓪の「申告で完了」は危うい。外部のゲートが要る</td>
+</tr>
+<tr>
+<td>Vibe-Coded Applications の脆弱性（X28）、N4</td>
+<td>⓪の成果物には、リポジトリか cloud agent の側でセキュリティの検査が要る</td>
+</tr>
+<tr>
+<td>DORA（E22、N3）: AI は組織の強みと弱みを増幅する。小さなバッチ</td>
+<td>⓪は「小さなバッチ」に合うが、仕様と検証の基盤がない組織では不安定さを増幅する</td>
+</tr>
+<tr>
+<td>METR の生産性の RCT（X25/E20）、Peng et al.（E21）</td>
+<td>熟練者の実務では AI で遅くなった例、定型課題では 55.8% 速くなった例。⓪の速さは課題の種類で変わり、実地で測る必要がある</td>
+</tr>
+</tbody>
+</table>
+<h4 id="632">6.3.2 ベストプラクティスへの適合</h4>
+<table>
+<thead>
+<tr>
+<th>ベストプラクティス</th>
+<th>出典</th>
+<th style="text-align: center;">⓪</th>
+<th style="text-align: center;">①</th>
+<th style="text-align: center;">②</th>
+<th style="text-align: center;">③</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>単純な部品から始め、複雑さは必要なときだけ足す</td>
+<td>X9、X20</td>
+<td style="text-align: center;"><strong>◎</strong></td>
+<td style="text-align: center;">△</td>
+<td style="text-align: center;">◎</td>
+<td style="text-align: center;">○</td>
+</tr>
+<tr>
+<td>仕様を正本にし、各段階を人が確認する</td>
+<td>N2、E16</td>
+<td style="text-align: center;">✕</td>
+<td style="text-align: center;">✕</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">◎</td>
+</tr>
+<tr>
+<td>機能の一覧を JSON で持ち、1 機能ずつ進める</td>
+<td>X7/E4</td>
+<td style="text-align: center;">✕</td>
+<td style="text-align: center;">✕</td>
+<td style="text-align: center;">△</td>
+<td style="text-align: center;">◎</td>
+</tr>
+<tr>
+<td>git と進捗ファイルで状態を引き継ぐ</td>
+<td>X7、SRC-19</td>
+<td style="text-align: center;">△（git のみ）</td>
+<td style="text-align: center;">✕</td>
+<td style="text-align: center;">△</td>
+<td style="text-align: center;">◎</td>
+</tr>
+<tr>
+<td>合否をエージェントの外の決定的な検査で決める</td>
+<td>E10、X11、X18</td>
+<td style="text-align: center;">△（CI があれば）</td>
+<td style="text-align: center;">△</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">◎</td>
+</tr>
+<tr>
+<td>テストを実装から独立して作る</td>
+<td>SRC-15</td>
+<td style="text-align: center;">✕</td>
+<td style="text-align: center;">✕</td>
+<td style="text-align: center;">✕</td>
+<td style="text-align: center;">◎</td>
+</tr>
+<tr>
+<td>テストの改変を禁じる（強制）</td>
+<td>X19/E12、SRC-22</td>
+<td style="text-align: center;">✕</td>
+<td style="text-align: center;">✕</td>
+<td style="text-align: center;">△</td>
+<td style="text-align: center;">◎</td>
+</tr>
+<tr>
+<td>文脈を小さく保つ</td>
+<td>X4、X6、X22、X23</td>
+<td style="text-align: center;">◎（小さな作業なら）／✕（詰め込むと）</td>
+<td style="text-align: center;">✕</td>
+<td style="text-align: center;">△</td>
+<td style="text-align: center;">◎</td>
+</tr>
+<tr>
+<td>作業役は低コストのモデル</td>
+<td>SRC-26、X12</td>
+<td style="text-align: center;">○（Sonnet を既定にすれば）</td>
+<td style="text-align: center;">✕</td>
+<td style="text-align: center;">△</td>
+<td style="text-align: center;">◎</td>
+</tr>
+<tr>
+<td>計画が要らない作業では計画を省く</td>
+<td>X11</td>
+<td style="text-align: center;"><strong>◎</strong></td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">✕</td>
+<td style="text-align: center;">✕</td>
+</tr>
+<tr>
+<td>小さなバッチ</td>
+<td>N3</td>
+<td style="text-align: center;"><strong>◎</strong></td>
+<td style="text-align: center;">△</td>
+<td style="text-align: center;">△</td>
+<td style="text-align: center;">○</td>
+</tr>
+<tr>
+<td>権限を絞り、影響の大きい操作は人が承認する</td>
+<td>E14、E19</td>
+<td style="text-align: center;">○（cloud agent）／△（ローカル）</td>
+<td style="text-align: center;">—</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">◎</td>
+</tr>
+<tr>
+<td>AI 生成コードのセキュリティ検査を外に置く</td>
+<td>X28、X29、N4</td>
+<td style="text-align: center;">○（cloud agent）／✕（ローカル）</td>
+<td style="text-align: center;">△</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">△</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>推論:</strong> ⓪は「単純さ」「計画を省く」「小さなバッチ」で最も優れ、「仕様」「独立した検証」「追跡」で最も劣ります。③はその逆です。<strong>両者は対立するのではなく、作業の大きさで使い分けるもの</strong>です。</li>
+</ul>
+<hr />
+<h2 id="7">7. 総合評価</h2>
+<h3 id="71">7.1 採点</h3>
+<p>採点の対象は、本書のアプリの規模の開発です（§1.4）。(B) 品質は、<strong>工程の強さ</strong>と<strong>結果</strong>（§5 の実験の成果物）に分けて採点し、その平均を (B) の点にしました。v2 までの採点（4 観点、結果は工程の強さだけで評価）は付録 A に残しました。</p>
+<table>
+<thead>
+<tr>
+<th>観点（重み）</th>
+<th style="text-align: right;">⓪</th>
+<th style="text-align: right;">①</th>
+<th style="text-align: right;">②</th>
+<th style="text-align: right;">③</th>
+<th>採点の理由</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>(A) 時間（20%）</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">3.5</td>
+<td>⓪はタスク単位で最短（E-0 で 7.5〜35 分、E-4 で平均 3.1 分）。②は 1 回の実行が速い（E-1 で 42 分）が、充足点あたりは最も遅い（8.4 分）。③は 1 回の実行（E-1）は②の 1.7 倍で充足点あたり 3.0 分だが、<strong>完走は 19.3 時間（充足点あたり 23.6 分）</strong>で、中断から再開できる。①は総待ち時間 143 時間</td>
+</tr>
+<tr>
+<td>(B) 品質・工程（10%）</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2.5</td>
+<td style="text-align: right;">3.5</td>
+<td style="text-align: right;">4.5</td>
+<td>⓪はテストを作るかがエージェント任せ（E-0 で Sonnet 0 行、Opus はテスト／本体 0.08）。①は CI と敵対的レビュー、要求 ID なし。②は verify と追跡テスト。③は System Test の先行設計、hook による強制、reviewer</td>
+</tr>
+<tr>
+<td>(B) 品質・結果（10%）</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">2.5</td>
+<td style="text-align: right;">4.5</td>
+<td>⓪は空から 16.5〜51%、小さな変更 6/6。①は受入基準 99% で、唯一公開・実利用された版（32 日）。②は空から 10%（元の実行の 99% は①のコードの引継ぎ）。③は <strong>完走で 98%（1,096 テスト合格、テスト／本体 1.70。①のコードの引継ぎなし）</strong>、E-1 は 48%、小さな変更 6/6。CodeQL は全成果物で 0 件。①は実利用の証拠があるので、③を 4.5 とした</td>
+</tr>
+<tr>
+<td>(C) Token（15%）</td>
+<td style="text-align: right;">4.5</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2.5</td>
+<td style="text-align: right;">3.5</td>
+<td>⓪は 1 回の実行あたりも充足点あたりも最少（4.4〜15.5）。積み重ねると膨らむ危険（①）があり満点にしない。②は充足点あたり 445（E-1）。③は E-1 で 55、完走で約 373（②の元の実行は 266、①は 687 以上）</td>
+</tr>
+<tr>
+<td>(D) 運用（20%）</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">4</td>
+<td>⓪は cloud agent の安全策で底上げされるが、再現性・追跡・長時間の実行がない。②は Prompt 2 本で再現できるが判断の区切りで止まる。③は人の Prompt 1 回で止まらず、5 回止まっても 1 文で続きから進み（§5.9）、職務分掌・強制・再開・証跡を持つ。モデル指定が強制されず（§5.7）、上限の表示を見て早めに止まることがある（§5.9）ため 4.5 にしない</td>
+</tr>
+<tr>
+<td>(E) ビジネスとの整合（25%）</td>
+<td style="text-align: right;">1.5</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">3</td>
+<td>⓪は矛盾 0/10、51% で完了を申告。①は人が意図のずれを直したが、要求定義書を 29 回改訂。②は矛盾 8/10、未完了を正直に報告。③は既存の要求との衝突を 3/3 回検出したが、ドラフトの矛盾 2/10、範囲を黙って縮小</td>
+</tr>
+<tr>
+<td><strong>加重スコア</strong></td>
+<td style="text-align: right;"><strong>2.95</strong></td>
+<td style="text-align: right;"><strong>1.70</strong></td>
+<td style="text-align: right;"><strong>3.38</strong></td>
+<td style="text-align: right;"><strong>3.68</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>計算: (B) ＝（工程＋結果）÷ 2。⓪ ＝ 0.20×5 ＋ 0.20×2.5 ＋ 0.15×4.5 ＋ 0.20×2 ＋ 0.25×1.5 ＝ 2.95。① ＝ 0.20×1 ＋ 0.20×3.25 ＋ 0.15×1 ＋ 0.20×1 ＋ 0.25×2 ＝ 1.70。② ＝ 0.20×4 ＋ 0.20×3 ＋ 0.15×2.5 ＋ 0.20×3 ＋ 0.25×4 ＝ 3.375。③ ＝ 0.20×3.5 ＋ 0.20×4.5 ＋ 0.15×3.5 ＋ 0.20×4 ＋ 0.25×3 ＝ 3.675。</li>
+<li><strong>重みの根拠:</strong> (E) は利用者の問題意識の中心（§1.1）なので最も重くしました。(C) は (A) と強く相関する（どちらも作業量に比例する）ので軽くしました。重みを変えた結果は §7.2 に示します。</li>
+<li><strong>v2 からの変更点:</strong> (A) の②を 4.5 → 4。(B) を工程と結果に分けた。(C) の②を 3 → 2.5（充足点あたり）。(D) の③を 4.5 → 4（モデル指定が強制されない）。(E) を新設。</li>
+<li><strong>v3.0 からの変更点（③の完走の再計測）:</strong> (A) の③を 4 → 3.5（完走は 19.3 時間）、(B) 結果の③を 3.5 → 4.5（受入基準 98%）、(C) の③を 4 → 3.5（完走は約 18,300 AI クレジット）。③の加重スコアは 3.75 → 3.68、(E) は 3 のままです（run ごとに範囲が変わるため。E-1 の 48% と完走の 98%）。</li>
+</ul>
+<h3 id="72">7.2 感度分析</h3>
+<table>
+<thead>
+<tr>
+<th>重みの置き方</th>
+<th style="text-align: right;">⓪</th>
+<th style="text-align: right;">①</th>
+<th style="text-align: right;">②</th>
+<th style="text-align: right;">③</th>
+<th>首位</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>本書の重み（A20・B20・C15・D20・E25）</td>
+<td style="text-align: right;">2.95</td>
+<td style="text-align: right;">1.70</td>
+<td style="text-align: right;">3.38</td>
+<td style="text-align: right;"><strong>3.68</strong></td>
+<td>③</td>
+</tr>
+<tr>
+<td>5 観点を均等（各 20%）</td>
+<td style="text-align: right;">3.10</td>
+<td style="text-align: right;">1.65</td>
+<td style="text-align: right;">3.30</td>
+<td style="text-align: right;"><strong>3.70</strong></td>
+<td>③</td>
+</tr>
+<tr>
+<td>v2 の重み（A25・B30・C20・D25、E なし）</td>
+<td style="text-align: right;">3.40</td>
+<td style="text-align: right;">1.68</td>
+<td style="text-align: right;">3.15</td>
+<td style="text-align: right;"><strong>3.93</strong></td>
+<td>③</td>
+</tr>
+<tr>
+<td>時間だけ（100%）</td>
+<td style="text-align: right;"><strong>5.00</strong></td>
+<td style="text-align: right;">1.00</td>
+<td style="text-align: right;">4.00</td>
+<td style="text-align: right;">3.50</td>
+<td><strong>⓪</strong></td>
+</tr>
+<tr>
+<td>時間を最重視（A 50%、ほか各 12.5%）</td>
+<td style="text-align: right;"><strong>3.81</strong></td>
+<td style="text-align: right;">1.41</td>
+<td style="text-align: right;">3.56</td>
+<td style="text-align: right;">3.63</td>
+<td>③（⓪と僅差）</td>
+</tr>
+<tr>
+<td>ビジネスとの整合を最重視（E 50%、ほか各 12.5%）</td>
+<td style="text-align: right;">2.50</td>
+<td style="text-align: right;">1.78</td>
+<td style="text-align: right;"><strong>3.56</strong></td>
+<td style="text-align: right;">3.44</td>
+<td><strong>②</strong>（③と僅差）</td>
+</tr>
+<tr>
+<td>品質と運用を最重視（B・D 各 35%、ほか各 10%）</td>
+<td style="text-align: right;">2.68</td>
+<td style="text-align: right;">1.89</td>
+<td style="text-align: right;">3.15</td>
+<td style="text-align: right;"><strong>3.98</strong></td>
+<td>③</td>
+</tr>
+<tr>
+<td>(B) を工程だけで採点</td>
+<td style="text-align: right;">2.85</td>
+<td style="text-align: right;">1.55</td>
+<td style="text-align: right;">3.48</td>
+<td style="text-align: right;"><strong>3.68</strong></td>
+<td>③</td>
+</tr>
+<tr>
+<td>(B) を結果だけで採点</td>
+<td style="text-align: right;">3.05</td>
+<td style="text-align: right;">1.85</td>
+<td style="text-align: right;">3.28</td>
+<td style="text-align: right;"><strong>3.68</strong></td>
+<td>③</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>推論:</strong> ほとんどの重みで③が首位です。<strong>時間だけを見ると⓪、ビジネスとの整合を最重視すると②が首位</strong>になります。③の首位は、(E) を R12〜R15 で②と同等（4 点）にできれば、重みによらず安定します（本書の重みで 3.93）。時間を最重視したときの⓪と③の差（3.81 と 3.63）は、③の完走が 19.3 時間かかったことで広がりました。</li>
+<li><strong>推論:</strong> ⓪の点が低いのは、アプリ規模の開発を対象にしているからです。小さな変更では、⓪は③と同じ結果を 1/15 の時間と 1/31 の費用で出します（§5.5）。</li>
+</ul>
+<h3 id="73">7.3 方式ごとの位置づけ</h3>
+<table>
+<thead>
+<tr>
+<th>方式</th>
+<th>向いている場面</th>
+<th>向いていない場面</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>⓪ 素の Coding Agent</td>
+<td>差分を 1 文で説明できる修正、バグ修正、依存関係の更新、小さな機能、プロトタイプ、調査。モデルの能力の範囲に収まり、PR の CI とレビューで外から確かめられるもの</td>
+<td>要求の多い新規開発、長時間の無人実行、要求の追跡や監査が要る業務、モデルの能力の境界を越える作業</td>
+</tr>
+<tr>
+<td>① 対話型 Vibe Coding（⓪の積み重ね）</td>
+<td>要求を利用者と一緒に見つける探索（ただし⓪で試し、決まったことは要求定義書に書き戻す）</td>
+<td>本番のコード、チームでの保守</td>
+</tr>
+<tr>
+<td>② Prompt 駆動</td>
+<td>要求が確定した中規模の変更、1 人の開発、短時間で結果が欲しいとき</td>
+<td>24 時間を超える実行、職務分掌が要る業務</td>
+</tr>
+<tr>
+<td>③ EABK</td>
+<td>要求の多い新規開発やリリース、規制や監査のある業務、長時間の無人実行、チームでの標準化</td>
+<td>1 文で説明できる小さな修正（工程が過剰）</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="8">8. 推奨</h2>
+<h3 id="81-enterprise-3">8.1 Enterprise の標準プロセス（3 レーン制）</h3>
+<pre class="mermaid">flowchart LR
+  I[依頼] --&gt; Q{差分を 1 文で説明でき、モデルの能力の範囲に収まり、&lt;br/&gt;既存のセキュリティ・プライバシーの要求に触れないか}
+  Q --&gt;|はい| Z[高速レーン: ⓪ 素の Coding Agent&lt;br/&gt;短い Prompt + 最小のガードレール]
+  Q --&gt;|いいえ| R{要求定義書は確定していて、&lt;br/&gt;中規模・1 人・短時間か}
+  R --&gt;|はい| M[中間レーン: ② P-RD → P-FR]
+  R --&gt;|いいえ・機能追加・リリース・MUST 要求| L[標準レーン: ③ EABK&lt;br/&gt;監査 → ST 先行設計 → 並行実装 → 統合 → 最終監査]
+  Z --&gt; PR[PR + GitHub Actions で外部再検証&lt;br/&gt;CodeQL・依存関係・Secret scanning]
+  M --&gt; PR
+  L --&gt; PR
+  PR --&gt; U[人のレビュー・UAT・承認]
+  Z -. 要求の変更が生じたら .-&gt; RD[要求定義書に書き戻す]
+</pre>
+<h3 id="82">8.2 改善策</h3>
+<h4 id="821-0">8.2.1 ⓪（高速レーン）の最小のガードレール</h4>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>施策</th>
+<th>根拠</th>
+<th>費用への影響</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">Z1</td>
+<td><code>.github/copilot-instructions.md</code>（または <code>AGENTS.md</code>）に、ビルドとテストのコマンドだけを数行書く</td>
+<td>X11（検証手段を与える）、SRC-26（常時の指示は短く）</td>
+<td>ほぼなし</td>
+</tr>
+<tr>
+<td style="text-align: right;">Z2</td>
+<td>PR で CI（全テスト、CodeQL、依存関係の確認、Secret scanning）を必須にし、マージは人が行う</td>
+<td>E10、X18、X28、E19</td>
+<td>CI の時間だけ</td>
+</tr>
+<tr>
+<td style="text-align: right;">Z3</td>
+<td>可能なら cloud agent を使う（push 先の制限、firewall、署名つき commit、監査ログ）</td>
+<td>EOS §4.1</td>
+<td>時間の上限があるため、長い作業には使わない</td>
+</tr>
+<tr>
+<td style="text-align: right;">Z4</td>
+<td>大きめの依頼には「1 回のツール呼び出しで書き込む内容は 300 行以内」と「私は途中で応答しません。最後まで完成させてください」の 2 文を足す</td>
+<td>EOS §3.1〜3.2（完成率 1/3 → 2/3、Sonnet で 3/3）</td>
+<td>ほぼなし</td>
+</tr>
+<tr>
+<td style="text-align: right;">Z5</td>
+<td>モデルは Sonnet 5.5 を既定にし、難しい設計判断だけ Opus 5.5 にする</td>
+<td>EOS §3.3（時間 0.41〜0.56 倍、完成率は同等以上）</td>
+<td>費用を下げる</td>
+</tr>
+<tr>
+<td style="text-align: right;">Z6</td>
+<td>1 つのセッションに作業を詰め込まない。話題が変わったら新しいセッションにする</td>
+<td>AutoVision の 1 セッション 31%、SRC-26</td>
+<td>費用の暴走を防ぐ</td>
+</tr>
+<tr>
+<td style="text-align: right;">Z7</td>
+<td>⓪の結果が要求を変えたら、要求定義書に書き戻す（書き戻せないなら②③のレーンに移す）</td>
+<td>①の 29 回の改訂、N2</td>
+<td>仕様のずれを防ぐ</td>
+</tr>
+</tbody>
+</table>
+<h4 id="822-3">8.2.2 ③（標準レーン）を展開する前に直すこと</h4>
+<p>優先度「必須」は③を展開する前に、「推奨」は運用しながら直します。</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>改善</th>
+<th>根拠</th>
+<th>期待する効果</th>
+<th>優先度</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">R1</td>
+<td>常に動いているホスト（Dev Box、Codespaces、SSH・Tunnel のホスト）で実行する</td>
+<td>再起動で 88 分停止し、Token の集計が失われた</td>
+<td>時間の短縮、計測の欠落の防止</td>
+<td>必須</td>
+</tr>
+<tr>
+<td style="text-align: right;">R2</td>
+<td>Token と AI クレジットを、工程ごと・作業役ごとに <code>/work/runs/&lt;id&gt;/usage.jsonl</code> に逐次記録し、最終で <code>docs/run-history.md</code> に転記する</td>
+<td>③の Token は推定に頼った</td>
+<td>費用の KPI が実測になる</td>
+<td>必須</td>
+</tr>
+<tr>
+<td style="text-align: right;">R3</td>
+<td><code>rd-auditor</code> を別系統のモデル（例: GPT 系）にする</td>
+<td>実際は rd-author と同じ sonnet-5.5。§5.7: gpt-5.5 を指定しても 15 回中 10 回は守られなかった。R11 で実現する</td>
+<td>監査の独立性</td>
+<td>推奨</td>
+</tr>
+<tr>
+<td style="text-align: right;">R4</td>
+<td>リモートに push して PR を作り、GitHub Actions の verify・CodeQL・依存関係の確認・Secret scanning で外から再検証する</td>
+<td>③はリモート未設定。②のゲートは環境の速さに左右された</td>
+<td>外部での再現性、セキュリティの検査</td>
+<td>必須</td>
+</tr>
+<tr>
+<td style="text-align: right;">R5</td>
+<td>1 回の実行の範囲を Wave（例: 20〜30 項目、または 4〜8 時間）に分ける</td>
+<td>元の実行は 51/90 で利用者が打ち切り。完走は 106 項目・19.3 時間（§5.9）</td>
+<td>小さなバッチ（N3）</td>
+<td>必須</td>
+</tr>
+<tr>
+<td style="text-align: right;">R6</td>
+<td>reviewer を MUST の要求と共通部品の変更にだけ使う</td>
+<td>reviewer 54 体。§5.6: 小さな変更では reviewer を外しても結果は同じで、AI クレジットは 26% 減</td>
+<td>時間と Token の削減</td>
+<td>推奨</td>
+</tr>
+<tr>
+<td style="text-align: right;">R7</td>
+<td>作業役への依頼文の先頭部分を毎回同じにする</td>
+<td>1 Token あたりの単価が②の約 1.5 倍</td>
+<td>キャッシュ読込の割合を上げる</td>
+<td>推奨</td>
+</tr>
+<tr>
+<td style="text-align: right;">R8</td>
+<td>System Test のケースを、system の検証レベルの AC に 1:1 以上で対応させる</td>
+<td>ST は 12 ケースで薄い</td>
+<td>品質の証拠を厚くする</td>
+<td>推奨</td>
+</tr>
+<tr>
+<td style="text-align: right;">R9</td>
+<td><strong>⓪を対照群にした「除去テスト」を四半期ごとに行う。</strong> ③の部品を 1 つずつ外し、⓪とも比べて、KPI が変わらない部品は捨てる</td>
+<td>HVE の失敗、X8</td>
+<td>「HVE の再来」を防ぐ</td>
+<td>推奨</td>
+</tr>
+<tr>
+<td style="text-align: right;">R10</td>
+<td>人の承認は、セキュリティ・データ・課金に関わる項目だけ根拠を読んでから行う</td>
+<td>②で全件を推奨どおりに承認</td>
+<td>人の監督の実質化（E15）</td>
+<td>推奨</td>
+</tr>
+<tr>
+<td style="text-align: right;">R11</td>
+<td><strong>作業役と監査役のモデルを、<code>hve.config.json</code> の表ではなく、各 agent の定義（<code>model:</code>）か呼び出しの引数で強制し、run-report に実際のモデル別の件数を出す</strong></td>
+<td>§5.7: 15 回中 10 回でモデル表が守られず、監査役も作業役も Opus で動いた</td>
+<td>R3 と費用の設計を実際に効かせる</td>
+<td>必須</td>
+</tr>
+<tr>
+<td style="text-align: right;">R12</td>
+<td><strong>run-report の 1 行目に「ドラフト（または依頼）の受入基準のうち、要求にした割合」を出し、要求にしなかったものを一覧にする</strong></td>
+<td>§5.2: 受入基準の約半分しか要求にせず「全件完了」と報告</td>
+<td>範囲の縮小を人が見落とさない</td>
+<td>必須</td>
+</tr>
+<tr>
+<td style="text-align: right;">R13</td>
+<td>rd-auditor に、書き起こした要求だけでなく、参照しているドラフトの本文も監査させる</td>
+<td>§5.4: ドラフトに残した矛盾 8 件を監査が見逃した</td>
+<td>矛盾の検出</td>
+<td>必須</td>
+</tr>
+<tr>
+<td style="text-align: right;">R14</td>
+<td>要求定義書の先頭に「事業の目的・利用者・成功指標」を固定の節として置き、rd-author と rd-auditor が毎回、各要求と目的の対応を確かめる。②の P-RD の監査の観点を rd-audit skill に取り込む</td>
+<td>§6.2: ドリフトと一貫性（B1・B2）は②の P-RD の方が強かった</td>
+<td>元のビジネスから外れない</td>
+<td>必須</td>
+</tr>
+<tr>
+<td style="text-align: right;">R15</td>
+<td>ビジネスの中心の機能（このアプリでは Copilot による評価）は、run の最後に実環境で 1 回通す System Test を必須にする（認証が要るなら BLOCKED として人に返す）</td>
+<td>§6.2: §5 のすべての自動実行が AI をスタブで済ませた</td>
+<td>「完了」がビジネスの目的の達成を意味するようにする</td>
+<td>必須</td>
+</tr>
+<tr>
+<td style="text-align: right;">R16</td>
+<td>run の開始時に、時間・AI クレジット・自動継続の回数・待機時間の上限を明示し、conductor には「上限の 85% までは続ける」ことを指示する。上限で止まったときは、止まった原因を run-report の 1 行目に書き、再開の依頼文をそのまま添える</td>
+<td>§5.9: 上限の 4% の使用で「残りが少ない」と判断して打ち切った。CLI の自動継続と待機の上限で 2 回止まった</td>
+<td>早すぎる打ち切りの防止。再開の手間を 1 文にする</td>
+<td>推奨</td>
+</tr>
+</tbody>
+</table>
+<h3 id="83">8.3 レーンの振り分けの基準</h3>
+<table>
+<thead>
+<tr>
+<th>基準</th>
+<th>⓪ 高速</th>
+<th>② 中間</th>
+<th>③ 標準</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>差分の説明</td>
+<td>1 文</td>
+<td>数段落</td>
+<td>要求定義書の節</td>
+</tr>
+<tr>
+<td>影響する要求</td>
+<td>0〜1 件（既存の要求の範囲内）</td>
+<td>数件〜数十件（確定済み）</td>
+<td>数十件以上、または未確定を含む</td>
+</tr>
+<tr>
+<td>想定の実行時間</td>
+<td>〜1 時間</td>
+<td>〜8 時間</td>
+<td>8 時間超、無人の長時間実行</td>
+</tr>
+<tr>
+<td>共通部品・契約（API、スキーマ）の変更</td>
+<td>なし</td>
+<td>少し</td>
+<td>あり</td>
+</tr>
+<tr>
+<td>規制・監査の要件</td>
+<td>なし</td>
+<td>軽い</td>
+<td>あり</td>
+</tr>
+<tr>
+<td>既存のセキュリティ・プライバシーの要求との関係</td>
+<td><strong>触れない</strong></td>
+<td>触れるなら要求定義書で確認</td>
+<td>触れる（衝突の検出を③に任せる）</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>§5.5 による較正:</strong> 1 文で言える変更 6 件では、⓪と③の結果（隠しテストの合格・退行なし）は同じで、③は時間で約 15 倍、AI クレジットで約 31 倍かかりました。上の基準どおり、こうした変更は⓪で十分です。ただし、ログの許可項目の追加（S03）のように<strong>既存のセキュリティ要求に触れる変更</strong>は、⓪が黙って実装し、③だけが衝突を検出したため、⓪の対象から外しました（上の表の最後の行）。</li>
+</ul>
+<h3 id="84-kpi5">8.4 KPI（5 観点を、レーンごとに数字で追う）</h3>
+<table>
+<thead>
+<tr>
+<th>観点</th>
+<th>KPI</th>
+<th>取得元</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>時間</td>
+<td>依頼から PR の CI が緑になるまでの壁時計（レーン別）、1 回目のゲートの通過率</td>
+<td>PR、<code>queue.json</code>、<code>docs/run-history.md</code></td>
+</tr>
+<tr>
+<td>品質</td>
+<td>隠しテストの合格率、CodeQL の High 以上の指摘（0）、テストの網羅率、ミューテーションスコア、UAT と本番での欠陥の流出数、<strong>⓪レーンから②③レーンへの差し戻し率</strong></td>
+<td>CI、台帳、UAT の記録</td>
+</tr>
+<tr>
+<td>Token</td>
+<td>依頼 1 件・要求 1 件・AC 1 件あたりの AI クレジット（レーン別）、cache read の割合</td>
+<td>使用量の表示、R2 の記録</td>
+</tr>
+<tr>
+<td>ビジネスとの整合</td>
+<td>依頼の受入基準のうち要求にした割合（R12）、UAT と本番で見つかった要求の矛盾の数、事業の目的に対応しない要求の数（R14）、中心の機能の実環境の試験の合否（R15）</td>
+<td>run-report、要求定義書、UAT の記録</td>
+</tr>
+<tr>
+<td>Enterprise</td>
+<td>1 リリースあたりの人の Prompt 回数、中断からの再開の成功率、hook の拒否件数、⓪の変更のうち要求定義書に書き戻した割合</td>
+<td><code>progress.md</code>、hook のログ、PR</td>
+</tr>
+</tbody>
+</table>
+<h3 id="85">8.5 次の実験</h3>
+<p>本書の実験で残った問いに答えるため、次の実験を 1 つの計画にまとめます。</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>実験</th>
+<th>目的</th>
+<th>条件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>E-1′</td>
+<td>R11〜R15 を入れた③、②、⓪ Opus で、E-1 と同じ出発点から各 3 回以上実行する</td>
+<td>③の (E) ビジネスとの整合が②と同等以上になるか。⓪ Opus と③の充足点あたりの費用の差が再現するか</td>
+<td>受入基準の採点は成果物ごとに 2 体以上の採点役。共通の成果物（アンカー）で採点役を較正する</td>
+</tr>
+<tr>
+<td>E-3′</td>
+<td>矛盾を入れたドラフトで、R13・R14 を入れた③と② P-RD を各 3 回以上</td>
+<td>ドラフトの中の矛盾の検出が②と同等以上になるか</td>
+<td>矛盾の種類を増やす（既定値・手順・境界・権限・用語）</td>
+</tr>
+<tr>
+<td>E-6</td>
+<td>⓪に「続けて」を、完成（受入基準 90% 以上）か上限（例: 20 回）まで繰り返す</td>
+<td>①の形の総費用・総時間・ドリフトの大きさを、同じアプリで測る（§5.8 の限界）</td>
+<td>Prompt の文面は固定。ドリフトは E-3′ の答えと受入基準で測る</td>
+</tr>
+<tr>
+<td>E-7</td>
+<td>各方式の成果物で、実際の Copilot による答案の評価を通す</td>
+<td>「完了」がビジネスの目的を果たしているか（R15）</td>
+<td>サンプルの workbook で、参照回答の生成・評価・類似度・出力までを実環境で 1 回</td>
+</tr>
+<tr>
+<td>E-5′</td>
+<td>canary の除去と、大きな変更での reviewer・監査の除去</td>
+<td>除去テスト（R9）の残り</td>
+<td>E-1′ と同じ出発点</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="9">9. 限界と妥当性への脅威</h2>
+<p><strong>内的妥当性（測ったものが原因か）</strong></p>
+<ol>
+<li><strong>試行の回数が少ない。</strong> 各条件 1〜6 回で、ばらつきは E-4・E-5 の範囲（例: ③は 36.6〜62.4 分）しか示せません。統計的な有意差は示していません。</li>
+<li><strong>出発点のコードの効果。</strong> ①のコードを持つ成果物（①、②の元、⓪ 既存）の受入基準 99% は、ほぼ①のコードの値です。方式の効果と分けるため、§5.3 では出発点を併記し、方式の比較は空から作った 4 つの成果物で行いました。</li>
+<li><strong>範囲がそろわない。</strong> E-1 で出発点はそろえましたが、③が範囲を自分で 26 要求に縮めたため、到達した範囲はそろっていません。②③の元の実行も範囲が違います（③は元の実行が 51/90 項目で、完走の再計測では 106/106 項目。§5.9）。</li>
+<li><strong>時間の定義の違い。</strong> 総待ち時間・実行時間・稼働時間・壁時計が混在します（§3.2）。定義の違う値の比は取らず、取る場合は定義を併記しました。</li>
+<li><strong>③の条件の一部が設計どおりでない。</strong> ③のモデル表は 15 回の実行のうち 10 回で守られず、作業役も監査役も Opus 5.5 で動きました（§5.7）。E-3 の「監査役 sonnet-5.5」の条件は、実際には Opus 5.5 でした。⓪ Opus・既存の実行は、全テストの実行中に CLI の待機上限（600 秒）で終了しました。</li>
+<li><strong>計画からの縮小。</strong> E-2 は E2E の隠しテストを作れず、受入基準の盲検採点で代えました。E-4 は 20 件を 6 件に減らし、E-5 は canary の除去を行いませんでした。</li>
+<li><strong>③の元の実行の Token は推定です</strong>（PC の再起動で一部の集計が失われた）。⓪の過去の実測には総 Token の記録がありません。
+7a. <strong>③の完走の再計測（§5.9）は 1 回で、構成が元の実行と完全には同じではありません。</strong> 再計測 4 の AI クレジットは推定（約 1,240、範囲 990〜1,490）です。最後の約 2 時間（全体の約 10%）は、Opus 5.5 が使えなくなったため conductor が Sonnet 5.5 でした。再計測の途中で、測定の設定（AI クレジットの上限、自動継続の回数、待機時間）と PC の停止で何度も止まり、止まりかたが元の実行と違います。PC の停止の約 26 時間は稼働時間から除きました。</li>
+</ol>
+<p><strong>構成概念の妥当性（測りたいものを測っているか）</strong></p>
+<ol start="8">
+<li><strong>受入基準の採点は静的な確認です。</strong> UI の操作と実際の AI 呼び出しは試していません。大きなコードベースは、キーワードとテスト名による採点が中心です。主要な 4 成果物の再採点で、合計の差は最大 9 ポイントでした（§3.5）。③の元の成果物（X6）は 3 人目の採点役が 61.5% とし、1 人目の 75% との差は 13.5 ポイントでした。順位は同じでしたが、十数ポイントの差は採点役の違いの範囲です。完走した③（X10）は 2 人の採点役が同じ 98.0% でしたが、どちらも静的な確認が中心で、全テストを読んだわけではありません。</li>
+<li><strong>ビジネスの中心の機能を確かめていません。</strong> すべての自動実行で、Copilot による答案の評価は偽の AI（スタブ）で試しただけです（§6.2）。</li>
+<li><strong>CodeQL が全成果物で 0 件</strong>だったことは、このアプリ（ローカルのデスクトップアプリ。外部入力は Excel とコマンドライン）の攻撃面が小さいことの反映でもあり、方式の安全性の差を示すものではありません。</li>
+<li><strong>①の Prompt の分類。</strong> 評価者 2 体（同じ系統のモデル）の一致率は 90.0%（κ=0.87）でした。「@agent Try Again」22 件は UI の再実行に近い操作で、人の判断として数えるかには議論の余地があります。これを除くと、再開・エラー対処は 45.2%、打ち直しは 38.1% です（§1.2）。</li>
+</ol>
+<p><strong>利害関係とバイアス</strong></p>
+<ol start="12">
+<li>③は本書の利用者が開発したツールキットです。実験の設計・実行・集計と本書の執筆は AI（GitHub Copilot のエージェント）が行いました。採点役と評価者は Claude Sonnet 5.5 で、③の作業役と同じ系統のモデルです。同じ系統のモデルの成果物を好む偏りの可能性は否定できません。成果物の匿名化（§3.5）と、決定的な検査（ビルド、テスト、CodeQL、隠しテスト）の併用で、影響を小さくしようとしました。</li>
+</ol>
+<p><strong>外的妥当性（一般化できるか）</strong></p>
+<ol start="13">
+<li><strong>規模が小さい。</strong> どの方式も、EOS レポートが対象にした「企業向けの大規模分散アプリ」での比較ではありません。</li>
+<li><strong>モデルの進歩は速い。</strong> METR の Time Horizon は約 7 か月で倍になっています（X24）。⓪の守備範囲は広がり、③の部品の一部は不要になる可能性があります。これは除去テスト（R9）と E-4 を続ける理由です。</li>
+<li><strong>外部の文献の一部は要旨だけの確認です。</strong> N1〜N4 は検索結果の要旨で確認しました（付録 B.2）。重要な判断は、本文を確認済みの文献に依っています。</li>
+</ol>
+<p><strong>再現性</strong></p>
+<ol start="16">
+<li>実験の入力・依頼文・成果物・採点結果は、実行した PC の <code>C:\bench\sec8\</code> にあり、公開の保存先はありません。主要な入力ファイルの SHA-256 と依頼文の全文を付録 C に載せました。</li>
+</ol>
+<hr />
+<h2 id="10">10. 結論</h2>
+<ol>
+<li><strong>「何もない⓪が一番よい」は、小さな変更に限って正しい。</strong> 1 文で言える変更では、⓪は③と同じ結果（隠しテスト 6/6）を、1/15 の時間と 1/31 の費用で出しました。アプリ規模の 1 回の実行でも、⓪は充足点 1 点あたり最も安く作りました。しかし、⓪は 1 回ではアプリを完成させず、矛盾を見逃し、完成度を過大に申告しました。⓪を人がアプリ全体に繰り返した①では、人の Prompt の約半分が「止まったジョブの再開・エラー対処」、4 割強が「同じ指示の打ち直し」でした。</li>
+<li><strong>自動実行の機構は、「止まる・繰り返す」を解決した。</strong> ③は人の Prompt 1 回で止まらずに進み（E-1）、完走の再計測では、環境の上限・PC 停止・モデルの利用不可で 5 回止まっても、毎回 1 文の再開で続きから進みました。③を完走させると、106/106 項目、受入基準 98% に達しました（19.3 時間、約 18,300 AI クレジット）。②もおおむね解決しましたが、大きな Prompt を貼り、判断の区切りで止まります。</li>
+<li><strong>「元のビジネスから外れる・ビジネスの論理の一貫性が崩れる」は、まだ解決していない。</strong> この点では② P-RD が最も強く（矛盾 8/10）、③は一部（既存の要求との衝突は検出、ドラフトの中の矛盾は 2/10、範囲を黙って縮小）でした。</li>
+<li><strong>使い分け.</strong> 小さな変更は⓪（既存のセキュリティ・プライバシーの要求に触れる変更を除く）、要求が確定した中規模の変更は②、アプリ規模の開発・リリース・規制のある業務は③を標準にします（加重スコア ③ 3.68、② 3.38、⓪ 2.95、① 1.70）。</li>
+<li><strong>③を展開する前に直すこと.</strong> 必須の 9 項目（R1・R2・R4・R5・R11〜R15、§8.2.2）と、早すぎる打ち切りの防止（R16）、特に、範囲の報告（R12）、ドラフトの監査（R13）、②の事業目的の監査の取り込み（R14）、中心の機能の実環境での確認（R15）、モデル指定の強制（R11）です。これらを入れた③で、E-1′・E-3′・E-6・E-7（§8.5）を行い、(E) ビジネスとの整合が②と同等以上になるかを確かめます。</li>
+</ol>
+<hr />
+<h2 id="a-v2">付録 A. 変更履歴と v2 の採点</h2>
+<h3 id="a1">A.1 変更履歴</h3>
+<table>
+<thead>
+<tr>
+<th>版</th>
+<th>日付</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1.0</td>
+<td>2026-10-08</td>
+<td>初版。①②③の 3 方式を比較した</td>
+</tr>
+<tr>
+<td>2.0</td>
+<td>2026-10-08</td>
+<td>⓪ 素の Coding Agent を基準（0 番地）として追加し、4 方式の比較に改めた。時間の採点の尺度を見直した（②を 5 → 4.5）。高速レーンを②から⓪に改め、3 レーン制にした。⓪を同じアプリで測る実験 E-0 を計画した</td>
+</tr>
+<tr>
+<td>2.1</td>
+<td>2026-10-08</td>
+<td>③の名称を「Assured Build Kit（ABK）」から「Enterprise App Build Kit（EABK）」に改めた。公開リポジトリの情報を追記した</td>
+</tr>
+<tr>
+<td>2.2</td>
+<td>2026-10-08</td>
+<td>追加実験 E-0〜E-5 を実施し、結果を記録した。改善策 R11〜R13 を加えた。採点は変えなかった</td>
+</tr>
+<tr>
+<td>2.3</td>
+<td>2026-10-08</td>
+<td>ビジネスの視点での問題点（B1〜B8）を整理し、4 方式で解決できているかを調べた節を新設した。改善策 R14・R15 を加えた</td>
+</tr>
+<tr>
+<td>3.0</td>
+<td>2026-10-08</td>
+<td>論文としての監査に基づき全体を改訂した。 (1) 章を「問題設定 → 方法 → 結果 → 考察 → 総合評価 → 推奨 → 限界 → 結論」の順に組み替え、要旨を新設した。(2) 研究課題 RQ1〜RQ5 を定め、5 観点（A〜E）と B1〜B8 を対応させた。(3) 観点 (E) ビジネスとの整合を加え、(B) 品質を工程と結果に分けて採点し直した（③ 4.15 → 3.75、② 3.53 → 3.38、⓪ 3.40 → 2.95、① 1.60 → 1.70）。(4) 受入基準の充足点 1 点あたりの正規化を加えた（§5.8）。(5) 受入基準の採点を別の採点役で再採点して較正し、①の Prompt の分類を 2 人目の評価者で確かめた（§3.5）。(6) 実験結果と食い違っていた記述（③の矛盾の検出、E-5 の結果、③の首位の理由など）を直した。(7) 時間の指標の定義、記号の凡例、利害関係、妥当性への脅威、参考文献の一覧、再現の情報（ハッシュと依頼文）を加えた。(8) ①の呼び方を「HVE 期」から「対話型 Vibe Coding」に、費用の単位を「AI クレジット」に統一した。(9) 推奨の改善策を §8.2.2 の 1 つの表にまとめ、優先度を付けた</td>
+</tr>
+<tr>
+<td><strong>3.1</strong></td>
+<td>2026-10-10</td>
+<td><strong>③の元の実行（51/90 項目で、利用者が打ち切ったもの）を、同じ run のまま完走させて再計測した（§5.9）。</strong> 106/106 項目、受入基準 98%、1,096 テスト合格、19.3 時間、約 18,300 AI クレジットでした。これに合わせて、§4.1〜§4.3 の 51/90 の記述、§5.3・§5.8 の表、§6.1・§6.2、§7 の採点（③ 3.75 → 3.68。(A) 4→3.5、(B) 結果 3.5→4.5、(C) 4→3.5）と感度分析、§8.2.2 の R16、§9、§10、要旨を更新した。採点役の較正に 3・4 人目を加えた（§3.5）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="a2-v2">A.2 v2 の採点（参考）</h3>
+<p>v2.0〜v2.3 は、4 観点（A〜D）で、(B) 品質を工程の強さだけで採点していました。v3.0 の採点（§7.1）との比較のために残します。</p>
+<table>
+<thead>
+<tr>
+<th>観点（重み）</th>
+<th style="text-align: center;">⓪</th>
+<th style="text-align: center;">①</th>
+<th style="text-align: center;">②</th>
+<th style="text-align: center;">③</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>(A) 時間（25%）</td>
+<td style="text-align: center;">5</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">4.5</td>
+<td style="text-align: center;">3.5</td>
+</tr>
+<tr>
+<td>(B) 品質（30%）</td>
+<td style="text-align: center;">2.5</td>
+<td style="text-align: center;">3</td>
+<td style="text-align: center;">3.5</td>
+<td style="text-align: center;">4.5</td>
+</tr>
+<tr>
+<td>(C) Token（20%）</td>
+<td style="text-align: center;">4.5</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">3</td>
+<td style="text-align: center;">4</td>
+</tr>
+<tr>
+<td>(D) Enterprise（25%）</td>
+<td style="text-align: center;">2</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">3</td>
+<td style="text-align: center;">4.5</td>
+</tr>
+<tr>
+<td><strong>加重スコア</strong></td>
+<td style="text-align: center;">3.40</td>
+<td style="text-align: center;">1.60</td>
+<td style="text-align: center;">3.53</td>
+<td style="text-align: center;">4.15</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="b">付録 B. 出典</h2>
+<h3 id="b1">B.1 内部資料（本フォルダー）</h3>
+<table>
+<thead>
+<tr>
+<th>資料</th>
+<th>主に使った節</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="202610051515-DevelopmentHistoryReport.html">202610051515-DevelopmentHistoryReport.md</a></td>
+<td>全体（①の実測値）</td>
+</tr>
+<tr>
+<td><a href="202610070515-DevelopmentHistoryReport.html">202610070515-DevelopmentHistoryReport.md</a></td>
+<td>全体（②の実測値）</td>
+</tr>
+<tr>
+<td><a href="202610081155-DevelopmentHistoryReport-newToolkit.html">202610081155-DevelopmentHistoryReport-newToolkit.md</a></td>
+<td>全体（③の実測値）</td>
+</tr>
+<tr>
+<td><a href="202610031135-HVE_EOS_ValidationReport.html">202610031135-HVE_EOS_ValidationReport.md</a></td>
+<td>§0、<strong>§3.1〜3.4（⓪の実測）</strong>、§3.10〜3.11、§4.1〜4.2、§7〜§9</td>
+</tr>
+<tr>
+<td><a href="202610070815-HVE-EOS-PoC-by-StudyReportEvaluator-AnalyticsReport.html">202610070815-HVE-EOS-PoC-by-StudyReportEvaluator-AnalyticsReport.md</a></td>
+<td>§0、§2、§3、§5、§6、§7</td>
+</tr>
+<tr>
+<td><a href="202610072130-RD-MaintenanceAnalyticsReport-BeforeToolkit.html">202610072130-RD-MaintenanceAnalyticsReport-BeforeToolkit.md</a></td>
+<td>§1、§2、§3〜§7、§11〜§16</td>
+</tr>
+</tbody>
+</table>
+<p>EOS レポートが引用している一次資料（<code>202609271600-ATG-BusinessImpactAnalytics.md</code>、<code>202609300906-Opus55-vs-Sonnet55-ModelComparison.md</code>、<code>20260921-LongTimeTaskAnalytics2.md</code> など）は本フォルダーにはなく、EOS レポートの記載を通して使いました。</p>
+<h3 id="b2-2026-10-08">B.2 本書で追加した外部資料（確認日 2026-10-08）</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>資料</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">N1</td>
+<td>IBM, "What is Vibe Coding?", https://www.ibm.com/think/topics/vibe-coding</td>
+</tr>
+<tr>
+<td style="text-align: right;">N2</td>
+<td>GitHub Blog, "Spec-driven development with AI: Get started with a new open source toolkit", https://github.blog/ai-and-ml/generative-ai/spec-driven-development-with-ai-get-started-with-a-new-open-source-toolkit/ ／ GitHub Spec Kit, https://github.com/github/spec-kit ／ Microsoft for Developers, "From spec-first to enterprise-ready: extending GitHub Spec Kit", https://developer.microsoft.com/blog/from-spec-first-to-enterprise-ready-extending-github-spec-kit/</td>
+</tr>
+<tr>
+<td style="text-align: right;">N3</td>
+<td>Google DORA, "2025 State of AI-assisted Software Development", https://cloud.google.com/resources/content/2025-dora-ai-assisted-software-development-report ／ "DORA AI Capabilities Model", https://services.google.com/fh/files/misc/2025_dora_ai_capabilities_model.pdf</td>
+</tr>
+<tr>
+<td style="text-align: right;">N4</td>
+<td>Cotroneo et al., "Human-Written vs. AI-Generated Code: A Large-Scale Study of Defects, Vulnerabilities, and Complexity", arXiv:2508.21634, https://arxiv.org/abs/2508.21634</td>
+</tr>
+</tbody>
+</table>
+<p>補助レポートの外部資料のうち、本書で引用したものは付録 B.4 にあります。確認範囲は、それぞれのレポートの出典表を参照してください。</p>
+<h3 id="b3-enterprise-app-build-kit-2026-10-08">B.3 Enterprise App Build Kit の公開リポジトリ（確認日 2026-10-08）</h3>
+<table>
+<thead>
+<tr>
+<th>資料</th>
+<th>確認した範囲</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>dahatake, "HypervelocityEngineering — Enterprise App Build Kit", https://github.com/dahatake/HypervelocityEngineering</td>
+<td><code>README.md</code>（概要、アーキテクチャ、エージェントと権限、インストール、インストールされるファイル、Spec Kit からの取り込み、<code>/build</code> 以外の Prompt のリスク）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="b4">B.4 補助レポートから引用した外部資料</h3>
+<p>本文の X・E・SRC の番号は、次の補助レポートの出典表の番号です（X＝<a href="202610070815-HVE-EOS-PoC-by-StudyReportEvaluator-AnalyticsReport.html">202610070815</a>、E＝<a href="202610031135-HVE_EOS_ValidationReport.html">202610031135</a>、SRC＝<a href="202610072130-RD-MaintenanceAnalyticsReport-BeforeToolkit.html">202610072130</a>）。</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>出典</th>
+<th>定義している資料</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>X1</td>
+<td>Anthropic, "Claude Opus 5.5", 2026-09-22, https://www.anthropic.com/claude-opus-5-5</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X3</td>
+<td>Anthropic, "Prompting Claude Opus 5", https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X4</td>
+<td>Anthropic（Claude blog）, "The new rules of context engineering for Claude 5-generation models", 2026, https://claude.com/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X6</td>
+<td>Anthropic, "Effective context engineering for AI agents", 2025, https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X7</td>
+<td>Anthropic, "Effective harnesses for long-running agents", 2025, https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X8</td>
+<td>Anthropic, "Harness design for long-running application development", 2026, https://www.anthropic.com/engineering/harness-design-long-running-apps</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X9</td>
+<td>Anthropic, "Building effective agents", 2024-12, https://www.anthropic.com/engineering/building-effective-agents</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X11</td>
+<td>Anthropic, "Claude Code best practices", https://code.claude.com/docs/en/best-practices</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X12</td>
+<td>Anthropic, "Claude Sonnet 5.5", 2026-09-28, https://www.anthropic.com/claude-sonnet-5-5 と "Prompting Claude Sonnet 5.5"</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X18</td>
+<td>METR, "Recent frontier models are reward hacking", 2025-06-05, https://metr.org/blog/2025-06-05-recent-reward-hacking/</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X19</td>
+<td>"ImpossibleBench", arXiv:2510.20270, 2025</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X20</td>
+<td>Xia et al., arXiv:2407.01489, 2024／mini-SWE-agent, https://github.com/SWE-agent/mini-swe-agent</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X21</td>
+<td>Vats &amp; Golev, "The Scaffold Effect in Coding Agents: Harness Choice as a Hidden Variable in Coding-Agent Evaluation", arXiv:2607.22585, 2026</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X22</td>
+<td>Liu et al., "Lost in the Middle", TACL 2024, arXiv:2307.03172</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X23</td>
+<td>Chroma Research, "Context Rot", 2025, https://www.trychroma.com/research/context-rot</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X24</td>
+<td>METR, "Measuring AI ability to complete long tasks", 2025-03-19（arXiv:2503.14499）と "Time Horizon 1.1", 2026-01-29, https://metr.org/blog/2026-1-29-time-horizon-1-1/</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X25</td>
+<td>METR, 2025-07-10 と "We are changing our developer productivity experiment design", 2026-02-24, https://metr.org/blog/2026-02-24-uplift-update/</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X26</td>
+<td>Anthropic, "How we built our multi-agent research system", 2025, https://www.anthropic.com/engineering/multi-agent-research-system</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X28</td>
+<td>Deng, Fan, Meng, "Understanding the (In)Security of Vibe-Coded Applications", arXiv:2606.23130, 2026</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X29</td>
+<td>Veracode, "2025 GenAI Code Security Report", https://www.veracode.com/resources/analyst-reports/2025-genai-code-security-report/</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>X30</td>
+<td>Sutton, "The Bitter Lesson", 2019, http://www.incompleteideas.net/IncIdeas/BitterLesson.html／Zunic, "The Bitter Lesson of Agent Harnesses", browser-use, 2026-04-19, https://browser-use.com/posts/bitter-lesson-agent-harnesses</td>
+<td>202610070815</td>
+</tr>
+<tr>
+<td>E1</td>
+<td>Anthropic, "Building effective agents", 2024, https://www.anthropic.com/engineering/building-effective-agents</td>
+<td>202610031135</td>
+</tr>
+<tr>
+<td>E2</td>
+<td>Xia et al., "Agentless: Demystifying LLM-based Software Engineering Agents", arXiv:2407.01489, 2024</td>
+<td>202610031135</td>
+</tr>
+<tr>
+<td>E3</td>
+<td>Anthropic, "How we built our multi-agent research system", 2025, https://www.anthropic.com/engineering/multi-agent-research-system</td>
+<td>202610031135</td>
+</tr>
+<tr>
+<td>E4</td>
+<td>Anthropic, "Effective harnesses for long-running agents", 2025, https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents</td>
+<td>202610031135</td>
+</tr>
+<tr>
+<td>E10</td>
+<td>Huang et al., "Large Language Models Cannot Self-Correct Reasoning Yet", ICLR 2024（arXiv:2310.01798）</td>
+<td>202610031135</td>
+</tr>
+<tr>
+<td>E11</td>
+<td>METR, "Recent Frontier Models Are Reward Hacking", 2025-06-05, https://metr.org/blog/2025-06-05-recent-reward-hacking/</td>
+<td>202610031135</td>
+</tr>
+<tr>
+<td>E12</td>
+<td>Zhong et al., "ImpossibleBench: Measuring LLMs' Propensity of Exploiting Test Cases", arXiv:2510.20270, 2025</td>
+<td>202610031135</td>
+</tr>
+<tr>
+<td>E14</td>
+<td>OWASP, "LLM06:2025 Excessive Agency", https://genai.owasp.org/llmrisk/llm062025-excessive-agency/</td>
+<td>202610031135</td>
+</tr>
+<tr>
+<td>E15</td>
+<td>NIST, "AI Risk Management Framework"（AI RMF 1.0, 2023 と AI 600-1, 2024）, https://www.nist.gov/itl/ai-risk-management-framework</td>
+<td>202610031135</td>
+</tr>
+<tr>
+<td>E16</td>
+<td>ISO/IEC/IEEE 29148:2018, https://www.iso.org/standard/72089.html</td>
+<td>202610031135</td>
+</tr>
+<tr>
+<td>E19</td>
+<td>GitHub Docs, "Managing environments for deployment", https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments</td>
+<td>202610031135</td>
+</tr>
+<tr>
+<td>E20</td>
+<td>METR, "Measuring the Impact of Early-2025 AI on Experienced Open-Source Developer Productivity", 2025-07-10, https://metr.org/blog/2025-07-10-early-2025-ai-experienced-os-dev-study/</td>
+<td>202610031135</td>
+</tr>
+<tr>
+<td>E21</td>
+<td>Peng et al., "The Impact of AI on Developer Productivity: Evidence from GitHub Copilot", arXiv:2302.06590, 2023</td>
+<td>202610031135</td>
+</tr>
+<tr>
+<td>E22</td>
+<td>Google DORA, "State of AI-assisted Software Development", 2025, https://dora.dev/research/2025/dora-report/</td>
+<td>202610031135</td>
+</tr>
+<tr>
+<td>E24</td>
+<td>Liu et al., "Is Your Code Generated by ChatGPT Really Correct?"（EvalPlus）, NeurIPS 2023（arXiv:2305.01210）</td>
+<td>202610031135</td>
+</tr>
+<tr>
+<td>SRC-01</td>
+<td>添付 Prompt 3 本（2026-10-07 時点）</td>
+<td>202610072130</td>
+</tr>
+<tr>
+<td>SRC-15</td>
+<td>LLM によるテストオラクル生成の研究（2025）</td>
+<td>202610072130</td>
+</tr>
+<tr>
+<td>SRC-19</td>
+<td>Anthropic「Effective harnesses for long-running agents」 https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents（—）</td>
+<td>202610072130</td>
+</tr>
+<tr>
+<td>SRC-22</td>
+<td>VS Code Docs「Configure agent hooks」 https://code.visualstudio.com/docs/agent-customization/hooks（Preview）</td>
+<td>202610072130</td>
+</tr>
+<tr>
+<td>SRC-26</td>
+<td>VS Code Docs「Optimize AI credit usage」 https://code.visualstudio.com/docs/agents/guides/optimize-usage（—）</td>
+<td>202610072130</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="c">付録 C. 追加実験のデータと再現の情報</h2>
+<h3 id="c1">C.1 データの保存場所</h3>
+<table>
+<thead>
+<tr>
+<th>資料</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>C:\bench\sec8\inputs\</code></td>
+<td>ドラフト要求定義書（SHA-256 <code>761AC488…86A5</code>）、②の P-RD・P-FR（元の実行の添付から復元）、矛盾を入れたドラフト（E-3）</td>
+</tr>
+<tr>
+<td><code>C:\bench\sec8\arms\&lt;条件&gt;\</code></td>
+<td>各条件の依頼文（<code>step*.txt</code>）、<code>meta.json</code>（時間）、<code>log\usage-step*.json</code>（AI クレジットと Token）、CLI の出力</td>
+</tr>
+<tr>
+<td><code>C:\bench\sec8\runs\&lt;条件&gt;\</code></td>
+<td>各条件の成果物のリポジトリ（最後の状態を commit 済み）</td>
+</tr>
+<tr>
+<td><code>C:\bench\sec8\runs\R3-resume\</code>、<code>arms\R3-resume*\</code></td>
+<td>③の完走の再計測（§5.9）の複製リポジトリ（最後の状態は <code>run/202610080113</code> の <code>35d9c4f</code>）と、再計測 1〜6 の依頼文・時間・usage（再計測 4 は記録なし）、<code>keys\r3-sessions.csv</code>（セッションごとの時間と AI クレジット）</td>
+</tr>
+<tr>
+<td><code>C:\bench\sec8\keys\</code></td>
+<td>E-3 の答え（<code>E3-contradictions.json</code>）と採点（<code>E3-grading.json</code>）、受入基準の採点（<code>ac-grades-A/B/C.json</code>、再採点の <code>ac-grades-D.json</code>、完走した③の採点の <code>ac-grades-E.json</code>・<code>ac-grades-F.json</code>、匿名化の対応は <code>blind-map.json</code>）、E-4・E-5 の採点（<code>e4-grades.jsonl</code>）、使用量の集計（<code>usage.json</code>）、<strong>①の人の Prompt の抽出と分類（<code>p1-prompts.json</code>、<code>p1-prompt-classes.json</code>、2 人目の <code>p1-prompt-classes-2.json</code>、<code>p1-prompt-summary.md</code>。§1.2）</strong></td>
+</tr>
+<tr>
+<td><code>C:\bench\sec8\grade\</code></td>
+<td>ビルド・テスト・アナライザー・CodeQL の結果（成果物ごとの JSON と SARIF）</td>
+</tr>
+<tr>
+<td><code>C:\bench\sec8\e4-design\</code></td>
+<td>E-4 の変更 6 件（<code>changes.json</code>）、隠しテスト、参照の実装の差分</td>
+</tr>
+<tr>
+<td><code>C:\bench\sec8\tools\</code></td>
+<td>実行・採点のスクリプト（<code>run-arm.ps1</code>、<code>grade-metrics.py</code>、<code>grade-e4.ps1</code> など）</td>
+</tr>
+</tbody>
+</table>
+<p>環境: Copilot CLI 1.0.93、Windows（14 コア・64GB）、.NET SDK 8.0.425／10.0.401、Python 3.12、CodeQL 2.27.2。採点の補助と E-4 の設計には Sonnet 5.5（effort medium）のサブエージェントを使いました。</p>
+<h3 id="c2-sha-256-16">C.2 主要な入力ファイルの SHA-256（先頭 16 桁）</h3>
+<table>
+<thead>
+<tr>
+<th>ファイル</th>
+<th>SHA-256</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>inputs\requirements-definition-draft.md</code>（ドラフト要求定義書。②③の元の実行と同一）</td>
+<td><code>761AC4885639AED5…</code></td>
+</tr>
+<tr>
+<td><code>inputs\requirements-definition-draft-E3.md</code>（矛盾 10 件を入れたもの）</td>
+<td><code>2F746364F56A2910…</code></td>
+</tr>
+<tr>
+<td><code>inputs\P-RD.txt</code>（②の要求定義の Prompt。元の実行の添付から復元）</td>
+<td><code>8B4780CFEC9B4A78…</code></td>
+</tr>
+<tr>
+<td><code>inputs\P-FR.txt</code>（②の実装の Prompt。同上）</td>
+<td><code>58463E56DD8A5D14…</code></td>
+</tr>
+<tr>
+<td><code>keys\E3-contradictions.json</code>（E-3 の答え）</td>
+<td><code>F77E8AC34C26E252…</code></td>
+</tr>
+<tr>
+<td><code>keys\ac-rubric.md</code>（受入基準 AC-001〜AC-050）</td>
+<td><code>B6B6A49CCE24E672…</code></td>
+</tr>
+<tr>
+<td><code>e4-design\changes.json</code>（E-4 の変更 6 件）</td>
+<td><code>E66ED635268F3B8E…</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="c3">C.3 依頼文</h3>
+<p><strong>E-0（⓪）と E-3（⓪）:</strong></p>
+<blockquote>
+<p>要求定義書のドラフト <code>docs/requirements-definition-draft.md</code> のアプリケーションを実装してください。私は途中で応答しません。最後まで完成させてください。1 回のツール呼び出しで書き込む内容は 300 行以内にしてください。</p>
+</blockquote>
+<p><strong>E-1（②）:</strong> 元の実行と同じ人の Prompt の並び（言語の指定と説明の依頼は除く）。P-RD（<code>inputs\P-RD.txt</code>）→「未回答の質問票は、最良と考える選択肢を採用してください。要求定義書を更新してください。」→「承認待ちは全て承認します。」→「残る項目は全て: 除外します。やりません。」→ P-FR（<code>inputs\P-FR.txt</code>）。E-3（②）は P-RD だけ。</p>
+<p><strong>E-1（③）:</strong> E-3（③）は <code>&lt;request&gt;</code> を「ドラフト要求定義書 docs/requirements-definition-draft.md を toolkit 書式に合わせる。今回は要求定義と監査だけを行い、実装はしない。」、<code>max_hours</code> を 1、<code>scope</code> を「なし」にしたもの。</p>
+<pre><code class="language-text">/build
+&lt;request&gt;
+ドラフト要求定義書 docs/requirements-definition-draft.md を toolkit 書式に合わせ、アプリを実装する。作業役は sonnet-5.5/medium
+&lt;/request&gt;
+&lt;run_options&gt;
+max_hours: 4
+approval_policy: 安全範囲は推奨どおり
+parallel_workers: 3
+scope: 承認済みすべて
+git_push: しない
+deploy: しない
+external_write: しない
+paid_services: 使わない
+external_exposure: 公開しない
+&lt;/run_options&gt;
+</code></pre>
+<p><strong>E-4・E-5:</strong> ⓪は「（変更の依頼） 私は途中で応答しません。最後まで完成させてください。」（S02 は、先頭の <code>--input</code> を CLI がオプションと解釈したため、「依頼: 」を前に付けて再実行）。③は上の <code>/build</code> の <code>&lt;request&gt;</code> を変更の依頼に、<code>max_hours</code> を 1 にしたもの。</p>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>変更の依頼</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>S01</td>
+<td>LogPolicy の MaxValueLength を 120 から 200 文字に変更してください。</td>
+</tr>
+<tr>
+<td>S02</td>
+<td>--input に .xlsx 以外のファイルが指定されたときは LaunchException を投げるようにしてください。</td>
+</tr>
+<tr>
+<td>S03</td>
+<td>LogPolicy の許可フィールドに "definitionId" を追加してください。</td>
+</tr>
+<tr>
+<td>S04</td>
+<td>NormalScoring.Normalize で raw が NaN の場合は 0 を返すようにして、EvaluatorValue が有限値のままになるようにしてください。</td>
+</tr>
+<tr>
+<td>S05</td>
+<td>OutputPathPlanner.EffectiveDirectory で出力先の上書き指定の前後の空白を取り除き、空白だけの場合は null と同じく入力ファイル隣の "result" を使うようにしてください。</td>
+</tr>
+<tr>
+<td>S06</td>
+<td>StudentAnswerText で、補助列が主回答列または他の補助列と（大文字小文字を区別せず）同じ場合は重複して表示しないようにしてください。</td>
+</tr>
+</tbody>
+</table><footer>出典: <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/HVE-History/2026100220-3TypeOfFrameworkCompetitiveAnalyticsReport.md">HVE-History/2026100220-3TypeOfFrameworkCompetitiveAnalyticsReport.md</a></footer></main></div>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"></script>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark=['dark','midnight'].includes(document.documentElement.dataset.theme);
+mermaid.initialize({startOnLoad:false,theme:dark?'dark':'default'});
+await mermaid.run({querySelector:'pre.mermaid'});
+</script>
+<script>document.querySelectorAll('pre code').forEach(e=>hljs.highlightElement(e));
+const t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+const sel=document.getElementById('theme');
+function setT(v){document.documentElement.dataset.theme=v;localStorage.setItem('theme',v);sel.value=v;
+ const hl=document.getElementById('hl');if(hl)hl.href='https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github'+(['dark','midnight'].includes(v)?'-dark':'')+'.min.css';}
+sel.onchange=()=>setT(sel.value);setT(t);
+document.getElementById('menu').onclick=()=>document.querySelector('nav').classList.toggle('open');
+document.querySelector('nav a.cur')?.scrollIntoView({block:'center'});
+</script>
+</body></html>

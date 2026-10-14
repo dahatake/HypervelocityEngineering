@@ -70,12 +70,24 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var
 <a href="07-software-engineer.html">S7 Software Engineer 向けガイド</a>
 <a href="08-data-reference.html">S8 データリファレンス（どの機能が、どのデータを読むか）</a>
 <a href="README.html">EABK Studio ユーザーガイド（第 2 部）</a>
+<h4>HVE-History</h4>
+<a href="../../HVE-History/2026100220-3TypeOfFrameworkCompetitiveAnalyticsReport.html">GitHub Copilot によるアプリケーション開発の 4 方式の比較 — 「⓪ 素の Coding Agent」を基準にした「① 対話型 Vibe Coding」「② Prompt 駆動」「③ Enterprise App Build Kit」の実測と実験による評価</a>
+<a href="../../HVE-History/202610031135-HVE_EOS_ValidationReport.html">HVE 利用停止（EOS）の妥当性検証レポート — 「3 つの Prompt + GitHub Copilot」で企業向け大規模分散アプリを開発できるか</a>
+<a href="../../HVE-History/202610051515-DevelopmentHistoryReport.html">開発履歴レポート（StudyReport-Evaluator）</a>
+<a href="../../HVE-History/202610070515-DevelopmentHistoryReport.html">StudyReport-Evaluator-new-era 開発履歴調査レポート</a>
+<a href="../../HVE-History/202610070815-HVE-EOS-PoC-by-StudyReportEvaluator-AnalyticsReport.html">HVE 利用停止（EOS）の実証 — StudyReport-Evaluator の前版と new-era の開発資源の比較分析</a>
+<a href="../../HVE-History/202610072130-RD-MaintenanceAnalyticsReport-BeforeToolkit.html">要求定義書・カタログ・System Test の一貫性を保ち、最高品質・最短時間・最小 Token で実装する計画</a>
+<a href="../../HVE-History/202610081155-DevelopmentHistoryReport-newToolkit.html">開発履歴 調査レポート（StudyReport-Evaluator-3）</a>
+<a href="../../HVE-History/202610130930-HVE-JourneyStory.html">Hypervelocity Engineering の歴史と経緯 — 個人の Vibe Coding を Business Envisioning まで広げた 262 日の失敗と発見</a>
+<a href="../../HVE-History/202610131000-Qiita-HVE-JourneyStory.html">HVE-History/202610131000-Qiita-HVE-JourneyStory.md</a>
+<a href="../../HVE-History/presentation-generator-prompt.html">Prompt: HVE の歴史を伝える「ドラマティック・プレゼンテーション」HTML を生成する</a>
 <h4>管理データ（docs）</h4>
 <a href="../../docs/catalog.html">カタログ</a>
 <a href="../../docs/id-registry.html">ID 台帳</a>
 <a href="../../docs/manual-tests.html">手順で確かめる受入基準</a>
 <a href="../../docs/requirements-definition.html">要求定義書</a>
-<a href="../../docs/run-history.html">実行履歴</a></nav>
+<a href="../../docs/run-history.html">実行履歴</a>
+<h4>HVE-History（スライド）</h4><a href="../../HVE-History/20261003-HVEv2-Born.html">HVE v2 Born（HTML）</a></nav>
 <main><h1 id="s2">S2 画面の見かた</h1>
 <p>上部のタブで切り替えます。どの画面でも、<strong>選んだ項目と、それに関連する項目が強調</strong>されます（検索・図・表で共通）。各画面が読むデータと計算は <a href="08-data-reference.html">08-data-reference.md</a> にあります。</p>
 <p><img alt="ヘッダー（タブ・検索・対象リポジトリ・ロール切替・言語）" src="images/header.png" /></p>
@@ -197,7 +209,38 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var
 </tr>
 </tbody>
 </table>
-<h2 id="_4">配置</h2>
+<h2 id="_4">エンティティ</h2>
+<p><code>#/entities</code>。行がエンティティ、列が要求と利用シナリオの対応表です。セルには、そのユースケースがエンティティを <strong>作成・参照・更新・削除</strong> のどれで使うかを、記号（C・R・U・D）と語で示します（色だけには頼りません）。使い方が書かれていない関連は「使用（使い方未記載）」、関係のない組は空です。どのユースケースからも使われないエンティティは「未使用」、エンティティを持たない要求は「エンティティなし」と示します。行・列の絞り込み、行の並べ替え、CSV の保存、テキスト表示ができ、すべてキーボードで操作できます。エンティティの見出しを選ぶと詳細（説明、状態と遷移の条件、使う要求、利用シナリオ、管理テーブル、使うコンポーネント・API・共通部品、出典の位置）に移り、そこから ER 図・実装配置図へ、また図のエンティティの詳細パネルからこの詳細へ戻れます。表示は JA / EN で切り替わります。</p>
+<h3 id="_5">意味的ズーム（関係と列）</h3>
+<p><code>#/entities</code> の下部、および 2D マップ・3D マップ（モデルに関係か列があるとき最初に開き、「関係グラフ（従来）」で従来の図に切り替えられます）で、エンティティの関係と列を、倍率に応じた 3 つの粒度で見られます。倍率は、全体がちょうど収まる状態を 1 とします。</p>
+<table>
+<thead>
+<tr>
+<th>倍率（既定）</th>
+<th>粒度</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 以上 2 未満（PARAM-017）</td>
+<td>全体</td>
+<td>クラスター（関係でつながったエンティティのまとまり）と件数。関係のないエンティティは単独のクラスター。クラスターを選ぶとそこへ拡大します</td>
+</tr>
+<tr>
+<td>2 以上 8 未満（PARAM-018）</td>
+<td>中</td>
+<td>エンティティと関係線。種別は 外部キー（◆・実線）／参照（◇・破線）／使用（▫・点線）の線種・印・語で区別。エンティティを選ぶと関係先が強調されます</td>
+</tr>
+<tr>
+<td>8 以上</td>
+<td>大</td>
+<td>列の一覧（キー・名前・型・参照先）。参照先の列は線と「→」で辿れます。列がないエンティティは「列未記載」</td>
+</tr>
+</tbody>
+</table>
+<p>操作: ホイール・ピンチ・ボタン（＋ − ⤢ と 全体／中／大）・キーボード（＋ − で拡大縮小、矢印で移動、0 で全体、1・2・3 で粒度、n・p で次・前のエンティティ、. ・ , で列、Enter で参照先へ、Esc で解除）。3D は ⟲ ⟳ ⤒ ⤓（Q・E・R・F）で回転・傾けます。2D と 3D を切り替えても、選択・倍率・絞り込みは保たれます。「表で見る（代替表現）」にクラスター・関係・列が表で出ます。画面に収まらない分は描画を省き（その旨が表示されます）、データは欠けません。</p>
+<h2 id="_6">配置</h2>
 <p>「事業の要求が、アプリのどこに作られているか」の表（ヒートマップ）です。</p>
 <ul>
 <li><strong>ビジネス層 × コンポーネント</strong>: 行は目的・境界・種別から選びます。数字は、その行の要求のうち、そのコンポーネントに実装があるものの数です。</li>
@@ -207,7 +250,7 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var
 <p>セルを選ぶと、要求とファイルの一覧が出て、地図でも強調されます。</p>
 <p><code>#/placement?kind=runtime</code> では、PC、ブラウザー、Studio サーバー、対象リポジトリ、
 管理データ、実装ファイル、明示されたクラウド/外部境界の位置と読取・書込・外部送信方向を確認できます。</p>
-<h2 id="_5">構造・一貫性・保守</h2>
+<h2 id="_7">構造・一貫性・保守</h2>
 <p>URL で開くページです（<code>#/structure</code>・<code>#/consistency</code> は上部のタブには出ません）。</p>
 <ul>
 <li><code>#/structure</code>: 全データ層を、現状・理想・差分・適用規則・判定理由・根拠で比較します。</li>
@@ -217,7 +260,7 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var
 <p><img alt="一貫性" src="images/consistency.png" />
 - <code>整合性保守 / Maintenance</code>: 要求正本と異なるカタログ行をプレビューし、確認後に題名と決定状態だけを更新します。</p>
 <p><img alt="整合性保守" src="images/maintenance.png" /></p>
-<h3 id="_6">そのほかの実画面</h3>
+<h3 id="_8">そのほかの実画面</h3>
 <table>
 <thead>
 <tr>
@@ -241,11 +284,11 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var
 </tbody>
 </table>
 <p>各画面が読むデータと計算は <a href="08-data-reference.html">08-data-reference.md</a>、役割別の使い方は <a href="05-product-manager.html">05</a>・<a href="06-architect.html">06</a>・<a href="07-software-engineer.html">07</a> にあります。</p>
-<h2 id="_7">ソース対応</h2>
+<h2 id="_9">ソース対応</h2>
 <p>カタログに書かれたファイルの名前を、面積で見る図（ツリーマップ）です。面積は結び付く要求の数で、青は実装、緑はテストです。ファイルを選ぶと、そのファイルが満たす要求・使っている部品・テストが分かります。<strong>ソースコードの中身は読みません。</strong></p>
-<h2 id="_8">表</h2>
+<h2 id="_10">表</h2>
 <p>全レコードの一覧です（要求・受入基準・試験ケース・共通部品・API/テーブル・ファイル・パラメータ・質問票・用語・ペルソナ・外部連携・決定記録・監査指摘・出典・実行履歴）。見出しで並べ替え、上の欄で絞り込み、「選択に関連する行だけ」で、地図で選んだものに関係する行だけを表示、CSV で書き出せます。</p>
-<h2 id="_9">右の詳細パネル</h2>
+<h2 id="_11">右の詳細パネル</h2>
 <p>項目を選ぶと出ます。要求なら本文、受入基準、決定状態、優先度、上位の目的、扱うデータ、パラメータ、実装ファイル、テスト、BLOCKED の質問が分かります。「VS Code」リンクで、定義の位置やファイルをエディターで開けます。「2D／3D 地図で見る」で画面を移れます。</p><footer>出典: <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/users-guide/studio/02-screens.md">users-guide/studio/02-screens.md</a></footer></main></div>
 <script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"></script>
 <script type="module">

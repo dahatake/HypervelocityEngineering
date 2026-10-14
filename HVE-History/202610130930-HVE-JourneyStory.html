@@ -1,0 +1,1623 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hypervelocity Engineering の歴史と経緯 — 個人の Vibe Coding を Business Envisioning まで広げた 262 日の失敗と発見 — HypervelocityEngineering</title>
+<link id="hl" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+<style>
+:root{--bg:#fff;--fg:#1f2328;--muted:#656d76;--card:#f6f8fa;--bd:#d0d7de;--ac:#0969da;--side:#f6f8fa;--code:#eff1f3;--r:10px}
+[data-theme=dark]{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--card:#161b22;--bd:#30363d;--ac:#58a6ff;--side:#010409;--code:#1c2128}
+[data-theme=midnight]{--bg:#0f1226;--fg:#e4e7ff;--muted:#9aa0cc;--card:#171a3a;--bd:#2c3062;--ac:#8b9cff;--side:#0a0c1d;--code:#1d2147}
+[data-theme=ocean]{--bg:#f2fafc;--fg:#0c2d3a;--muted:#4f7583;--card:#e0f2f7;--bd:#b4dce6;--ac:#0087a8;--side:#dcf0f5;--code:#d3ebf1}
+[data-theme=forest]{--bg:#f4f8f2;--fg:#1c2b1e;--muted:#5a6f5c;--card:#e6efe2;--bd:#c3d6bd;--ac:#2f7d3a;--side:#e1ecdc;--code:#dae7d5}
+[data-theme=sunset]{--bg:#fff8f2;--fg:#3a2118;--muted:#8a6252;--card:#ffebdc;--bd:#f2cdb3;--ac:#d9480f;--side:#ffeede;--code:#fde1cc}
+[data-theme=rose]{--bg:#fff6f8;--fg:#3a1c26;--muted:#8d5a6b;--card:#ffe6ec;--bd:#f2c2cf;--ac:#c2255c;--side:#ffe9ef;--code:#fcdbe4}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 system-ui,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;transition:background .2s,color .2s}
+a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;padding:.6rem 1.2rem;background:var(--card);border-bottom:1px solid var(--bd);backdrop-filter:blur(6px)}
+header .brand{font-weight:700;color:var(--fg)}header .sp{flex:1}
+header select,header button{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:.3rem .6rem;font:inherit;font-size:.9rem}
+#menu{display:none}
+.layout{display:flex;min-height:calc(100vh - 54px)}
+nav{width:290px;flex:none;background:var(--side);border-right:1px solid var(--bd);padding:1rem;position:sticky;top:54px;height:calc(100vh - 54px);overflow:auto;font-size:.9rem}
+nav h4{margin:1.1rem 0 .3rem;color:var(--muted);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
+nav a{display:block;padding:.25rem .6rem;border-radius:6px;color:var(--fg);line-height:1.4}
+nav a:hover{background:var(--card);text-decoration:none}
+nav a.cur{background:var(--ac);color:#fff}
+main{flex:1;min-width:0;max-width:900px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1,h2{border-bottom:1px solid var(--bd);padding-bottom:.3rem}
+h1,h2,h3,h4{line-height:1.3;scroll-margin-top:70px}
+img{max-width:100%;height:auto;border-radius:var(--r);border:1px solid var(--bd)}
+pre{background:var(--code);border:1px solid var(--bd);border-radius:var(--r);padding:1rem;overflow:auto;line-height:1.5;font-size:.88rem}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font:.88em ui-monospace,Consolas,monospace}
+pre code{background:none;padding:0}
+pre.mermaid{background:var(--card);text-align:center}
+table{border-collapse:collapse;display:block;overflow:auto;margin:1rem 0}
+th,td{border:1px solid var(--bd);padding:.45rem .8rem;vertical-align:top}
+th{background:var(--card)}tr:nth-child(even) td{background:color-mix(in srgb,var(--card) 50%,transparent)}
+blockquote{margin:1rem 0;padding:.2rem 1rem;border-left:4px solid var(--ac);background:var(--card);border-radius:0 var(--r) var(--r) 0;color:var(--muted)}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var(--muted);font-size:.85rem}
+@media(max-width:820px){#menu{display:inline-block}nav{position:fixed;left:-310px;top:54px;z-index:9;transition:left .2s}nav.open{left:0}main{padding:1.2rem 1rem}}
+</style>
+<script>document.documentElement.dataset.theme=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')</script>
+</head><body>
+<header><button id="menu" aria-label="menu">☰</button><a class="brand" href="../index.html">⚡ HypervelocityEngineering</a><span class="sp"></span>
+<label>🎨 <select id="theme" aria-label="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="midnight">Midnight</option><option value="ocean">Ocean</option><option value="forest">Forest</option><option value="sunset">Sunset</option><option value="rose">Rose</option></select></label>
+<a href="https://github.com/dahatake/HypervelocityEngineering">GitHub</a></header>
+<div class="layout"><nav><h4>はじめに</h4>
+<a href="../index.html">HypervelocityEngineering — Enterprise App Build Kit</a>
+<a href="../CHANGELOG.html">Changelog</a>
+<h4>ユーザーガイド</h4>
+<a href="../users-guide/01-writing-requests.html">1. 依頼の書き方（/build と runoptions）</a>
+<a href="../users-guide/02-during-and-after-run.html">2. 実行中と終了後</a>
+<a href="../users-guide/03-requirements-format.html">3. 管理データの書式</a>
+<a href="../users-guide/04-customization.html">4. 設定とカスタマイズ</a>
+<a href="../users-guide/05-scripts-reference.html">5. スクリプトリファレンス</a>
+<a href="../users-guide/06-quality-gates.html">6. 品質ゲートと検査項目</a>
+<a href="../users-guide/07-troubleshooting.html">7. トラブルシューティング</a>
+<a href="../users-guide/08-roadmap.html">8. 導入ロードマップと KPI</a>
+<a href="../users-guide/09-versioning.html">バージョンアップの手順</a>
+<a href="../users-guide/10-adopting-existing-apps.html">10. 既存のアプリを導入する（Adopt）</a>
+<a href="../users-guide/index.html">EABK ユーザーガイド</a>
+<h4>Studio ガイド</h4>
+<a href="../users-guide/studio/01-first-steps.html">S1 はじめかた</a>
+<a href="../users-guide/studio/02-screens.html">S2 画面の見かた</a>
+<a href="../users-guide/studio/03-tasks.html">S3 こんなとき、どう見るか</a>
+<a href="../users-guide/studio/04-troubleshooting.html">S4 うまく動かないとき・用語集</a>
+<a href="../users-guide/studio/05-product-manager.html">S5 Product Manager 向けガイド</a>
+<a href="../users-guide/studio/06-architect.html">S6 Architect 向けガイド</a>
+<a href="../users-guide/studio/07-software-engineer.html">S7 Software Engineer 向けガイド</a>
+<a href="../users-guide/studio/08-data-reference.html">S8 データリファレンス（どの機能が、どのデータを読むか）</a>
+<a href="../users-guide/studio/README.html">EABK Studio ユーザーガイド（第 2 部）</a>
+<h4>HVE-History</h4>
+<a href="2026100220-3TypeOfFrameworkCompetitiveAnalyticsReport.html">GitHub Copilot によるアプリケーション開発の 4 方式の比較 — 「⓪ 素の Coding Agent」を基準にした「① 対話型 Vibe Coding」「② Prompt 駆動」「③ Enterprise App Build Kit」の実測と実験による評価</a>
+<a href="202610031135-HVE_EOS_ValidationReport.html">HVE 利用停止（EOS）の妥当性検証レポート — 「3 つの Prompt + GitHub Copilot」で企業向け大規模分散アプリを開発できるか</a>
+<a href="202610051515-DevelopmentHistoryReport.html">開発履歴レポート（StudyReport-Evaluator）</a>
+<a href="202610070515-DevelopmentHistoryReport.html">StudyReport-Evaluator-new-era 開発履歴調査レポート</a>
+<a href="202610070815-HVE-EOS-PoC-by-StudyReportEvaluator-AnalyticsReport.html">HVE 利用停止（EOS）の実証 — StudyReport-Evaluator の前版と new-era の開発資源の比較分析</a>
+<a href="202610072130-RD-MaintenanceAnalyticsReport-BeforeToolkit.html">要求定義書・カタログ・System Test の一貫性を保ち、最高品質・最短時間・最小 Token で実装する計画</a>
+<a href="202610081155-DevelopmentHistoryReport-newToolkit.html">開発履歴 調査レポート（StudyReport-Evaluator-3）</a>
+<a class="cur" href="202610130930-HVE-JourneyStory.html">Hypervelocity Engineering の歴史と経緯 — 個人の Vibe Coding を Business Envisioning まで広げた 262 日の失敗と発見</a>
+<a href="202610131000-Qiita-HVE-JourneyStory.html">HVE-History/202610131000-Qiita-HVE-JourneyStory.md</a>
+<a href="presentation-generator-prompt.html">Prompt: HVE の歴史を伝える「ドラマティック・プレゼンテーション」HTML を生成する</a>
+<h4>管理データ（docs）</h4>
+<a href="../docs/catalog.html">カタログ</a>
+<a href="../docs/id-registry.html">ID 台帳</a>
+<a href="../docs/manual-tests.html">手順で確かめる受入基準</a>
+<a href="../docs/requirements-definition.html">要求定義書</a>
+<a href="../docs/run-history.html">実行履歴</a>
+<h4>HVE-History（スライド）</h4><a href="20261003-HVEv2-Born.html">HVE v2 Born（HTML）</a></nav>
+<main><h1 id="hypervelocity-engineering-vibe-coding-business-envisioning-262">Hypervelocity Engineering の歴史と経緯 — 個人の Vibe Coding を Business Envisioning まで広げた 262 日の失敗と発見</h1>
+<ul>
+<li>作成日: 2026-10-13（JST）</li>
+<li>位置づけ: HTML / PowerPoint のプレゼンテーションの<strong>元になるストーリー</strong>。各章の末尾に「スライド化メモ」を付けています</li>
+<li>対象期間: 2026-01-23（最初の commit）〜 2026-10-13（現在）。262 日</li>
+<li>対象リポジトリー:</li>
+<li>作業リポジトリー（HVE v1 の開発場所）: <code>RoyalytyService2ndGen</code>（4,775 commit）</li>
+<li>公開リポジトリー（現在は Enterprise App Build Kit = HVE v2 を公開）: <code>HypervelocityEngineering</code></li>
+<li>HVE v2 の Business Engineering 用アプリ: <code>BusinessAnalyticsStudio</code></li>
+<li>表記（ご自身の文体ルールに合わせました）:</li>
+<li><strong>事実</strong> = ログ・commit・レポートで確かめたこと</li>
+<li><strong>推論</strong> = 事実からの判断</li>
+<li><strong>未検証</strong> = まだ確かめていないこと</li>
+<li><code>【要確認】</code> = 私が裏付けを取れなかった点。プレゼンに載せる前に確認してください</li>
+<li><code>【実感を足す】</code> = あなた自身の体験・感情を一言入れる場所。私は書いていません（捏造防止）</li>
+</ul>
+<hr />
+<h2 id="0">0. 前提の置き方（用語）</h2>
+<table>
+<thead>
+<tr>
+<th>用語</th>
+<th>意味</th>
+<th>備考</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>HVE v1</strong></td>
+<td>独自の Workflow フレームワーク <code>hve</code>（CLI / GUI / Cloud / Prompt の 4 つの入口）と、DAG オーケストレータ ATG</td>
+<td>開発場所は <code>RoyalytyService2ndGen</code>。2026-10-03 に開発停止（EOS）を判断</td>
+</tr>
+<tr>
+<td><strong>HVE v2</strong></td>
+<td>Enterprise App Build Kit（EABK。旧称 Assured Build Kit）。conductor に Prompt を 1 回送る薄い harness。hook と決定的スクリプトで規則を強制する</td>
+<td>公開先 <code>HypervelocityEngineering</code>。<strong>「HVE v2 = EABK」は、私があなたの説明から置いた前提です</strong> <code>【要確認】</code></td>
+</tr>
+<tr>
+<td><strong>⓪ 素の Coding Agent</strong></td>
+<td>HVE も大きな Prompt も使わず、その都度 Prompt だけを入れる</td>
+<td>比較の基準</td>
+</tr>
+<tr>
+<td><strong>① 対話型 Vibe Coding</strong></td>
+<td>⓪を仕様の正本なしにアプリ全体へ積み重ねたもの</td>
+<td>StudyReport-Evaluator の 32 日</td>
+</tr>
+<tr>
+<td><strong>② Prompt 駆動</strong></td>
+<td>要求定義の Prompt（P-RD）と実装の Prompt（P-FR）の 2 本</td>
+<td>new-era の 1 日</td>
+</tr>
+<tr>
+<td><strong>③ EABK</strong></td>
+<td>進行役・作業役・skills・hooks・決定的スクリプト</td>
+<td>= HVE v2</td>
+</tr>
+<tr>
+<td><strong>Business Envisioning</strong></td>
+<td>顧客の ToBe を描き、意思決定を支える営み。Business Analytics Studio（BAS）が対象</td>
+<td>HVE v2 の Business Engineering 用アプリ</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="1">1. 一枚で言うと（エグゼクティブサマリー）</h2>
+<h3 id="11">1.1 ストーリーの一文</h3>
+<blockquote>
+<p><strong>Coding Agent がまだ弱かった時期に、私たちは人手の手順・レビュー・分割・オーケストレータで弱さを補った。モデルが強くなったとき、その補助輪が一番の足かせになった。そこで足場を外して測り直したら、残すべきものは「モデルの能力に依存しないもの（正本、決定的な検査、永続データ）」だけだった。その薄い足場の上で、コードから事業構想（Business Envisioning）まで同じやり方を広げている。</strong></p>
+</blockquote>
+<h3 id="12">1.2 数字のカード（スライドの掴みに使える）</h3>
+<table>
+<thead>
+<tr>
+<th>指標</th>
+<th>値</th>
+<th>出典</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>期間</td>
+<td>262 日（2026-01-23 → 10-13）</td>
+<td>git</td>
+</tr>
+<tr>
+<td>作業リポジトリーの commit</td>
+<td>4,775（ピークは 2026-03 の 1,630）</td>
+<td>git</td>
+</tr>
+<tr>
+<td>HVE v1 の規模</td>
+<td><code>hve/</code> の Python 934 ファイル・約 27.7 万行、Prompt 約 314 件、Skill 34 件、Workflow 13</td>
+<td>集計・EOS §5.1</td>
+</tr>
+<tr>
+<td>HVE v1 の版数</td>
+<td>0.8.1（08-16）→ 0.8.197（10-03）。48 日で 197 回</td>
+<td>CHANGELOG・commit</td>
+</tr>
+<tr>
+<td>HVE 本体の開発・保守に使った AI</td>
+<td>181,055 AIU（約 1,811 USD）</td>
+<td>EOS §3.10</td>
+</tr>
+<tr>
+<td>HVE で作ろうとした業務アプリ</td>
+<td>14 サブアプリ。85.6 時間・109,547 AIU を使ったが<strong>未完成</strong></td>
+<td>EOS §3.11</td>
+</tr>
+<tr>
+<td>HVE なしで作った 4 アプリ</td>
+<td>いずれも実行・受入の記録がある状態まで到達（4 つで 154.6 時間・209,521 AIU）</td>
+<td>EOS §3.10</td>
+</tr>
+<tr>
+<td>ATG の効果</td>
+<td>品質は同じ。時間 1.7〜2.25 倍、費用 2.49〜3.50 倍</td>
+<td>EOS §3.1</td>
+</tr>
+<tr>
+<td>① の人の Prompt</td>
+<td>254 回。<strong>50.7% が「止まったジョブの再開・エラー対処」、43.8% が「同じ指示の打ち直し」</strong></td>
+<td>3 方式比較 §1.2</td>
+</tr>
+<tr>
+<td>① の総待ち時間</td>
+<td>143 時間 47 分</td>
+<td>開発履歴①</td>
+</tr>
+<tr>
+<td>② の new-era</td>
+<td>Prompt 7 回・1 日・総待ち 7 時間 06 分（ただし要求定義とコードの 92% を引き継ぎ）</td>
+<td>開発履歴②</td>
+</tr>
+<tr>
+<td>③ EABK</td>
+<td>Prompt 5 回・1 日・総待ち 9 時間 13 分。完走の再計測で受入基準 98%（49/50）、1,096 テスト、19.3 時間</td>
+<td>開発履歴③・3 方式比較 §5.9</td>
+</tr>
+<tr>
+<td>小さな変更（1 文で言える変更 6 件）</td>
+<td>⓪ も ③ も隠しテスト 6/6。③ は ⓪ の約 15 倍の時間、約 31 倍の AI クレジット</td>
+<td>3 方式比較 §5.5</td>
+</tr>
+<tr>
+<td>BAS（Business Analytics Studio）</td>
+<td>6 日・299 commit。要求 FR 144 件、受入基準 236 件、System Test 台帳 141 ケース</td>
+<td>git・要求定義書</td>
+</tr>
+</tbody>
+</table>
+<h3 id="13-4-5">1.3 4 つの仮説の判定（詳細は §5）</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>あなたの仮説</th>
+<th>判定</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>H1</td>
+<td>早期に取り組んだ人ほど、低性能なモデル向けの Best Practice が今の足かせになっている</td>
+<td><strong>支持（強い）。ただし言い直しが必要</strong> — 足かせになったのは「能力不足を前提にした足場」。「能力に依存しない足場」は残る</td>
+</tr>
+<tr>
+<td>H2</td>
+<td>実行時間と Token の無駄に気づかない</td>
+<td><strong>支持</strong> — 測り始めたのは開始の約 8 か月後。v2 でもコストは自動集計されていない</td>
+</tr>
+<tr>
+<td>H3</td>
+<td>Vibe Coding で何のデータを保持すべきかは調査中</td>
+<td><strong>現状の理解として妥当</strong>。有力な候補は特定できたが、未解決の問いが残る</td>
+</tr>
+<tr>
+<td>H4</td>
+<td>Work IQ などの Knowledge 連携を Coding Agent が適切に行えるようになった</td>
+<td><strong>部分的に支持</strong> — 「モデルに任せる設計」は正しいと確認できたが、認証と実行環境の条件が残る</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="2">2. 全体年表</h2>
+<h3 id="21-1">2.1 時系列（スライド 1 枚の年表にできます）</h3>
+<table>
+<thead>
+<tr>
+<th>時期</th>
+<th>出来事</th>
+<th>局面</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-01-23〜24</td>
+<td>リポジトリー作成。最初の依頼は <strong>Future Scenario（未来シナリオ）20 件</strong>の作成。cloud agent に PR で書かせる</td>
+<td>事業構想から始まった</td>
+</tr>
+<tr>
+<td>2026-02</td>
+<td>UC-10（ユースケース）のドメイン分析・サービス抽出。「Review Cycle 4/5/6」「3 回レビューで 105 件修正」「3 つのサブタスクに分割」。Custom Agent が 2/20 時点で 19 本。02-24 に ASD workflows を単一 orchestrator に置換</td>
+<td>人手の手順で弱さを補う</td>
+</tr>
+<tr>
+<td>2026-03</td>
+<td><strong>commit 1,630（ピーク）</strong>。cloud agent の PR マージ 376 件。03-18 に Copilot SDK のローカルオーケストレーター。03-30 に Skill 移行を Wave で実施</td>
+<td>手順の量産期</td>
+</tr>
+<tr>
+<td>2026-04</td>
+<td>04-01 Self-Improve ループ。04-21 <strong>Work IQ の読み取り連携</strong>（QA / AKM / AQOD）</td>
+<td>機能の拡張期</td>
+</tr>
+<tr>
+<td>2026-05〜06</td>
+<td>GUI・Fleet モード。06-09 v0.1.1、06-17 v0.2.0。cloud agent の PR が激減（05 月 139 → 06 月 5）</td>
+<td>cloud agent 中心からローカル SDK 中心へ</td>
+</tr>
+<tr>
+<td>2026-08</td>
+<td>08-07 v0.3.0 / 0.4.0（Cloud Session）。08-13 v0.5.0。以降、0.8.x が<strong>ほぼ毎日</strong>上がる</td>
+<td>リリースの高速回転</td>
+</tr>
+<tr>
+<td>2026-08-26〜09-02</td>
+<td>HVE を使わない 3 アプリ（HubRadio、StudyReport-Evaluator、AutoVision）が並走して進む</td>
+<td>矛盾の芽</td>
+</tr>
+<tr>
+<td>2026-09-18</td>
+<td><strong>長時間タスクの根本原因分析</strong>（記録に残る最初の本格的な時間・Token の測定）<code>【要確認】</code></td>
+<td>測り始め</td>
+</tr>
+<tr>
+<td>2026-09-21〜25</td>
+<td>完了条件の強制（DoD）、<strong>ATG（DAG オーケストレータ）</strong> の実装・可搬化・敵対的レビューを連発、要求の索引（Index is King）</td>
+<td>補助輪の最後の拡張</td>
+</tr>
+<tr>
+<td>2026-09-27</td>
+<td>ATG 効果の測定。<strong>品質は同じ、時間 1.7〜2.25 倍、費用 2.49〜3.50 倍</strong></td>
+<td>転換点 1</td>
+</tr>
+<tr>
+<td>2026-09-30</td>
+<td>Opus 5.5 と Sonnet 5.5 の比較。HVE の見直し</td>
+<td></td>
+</tr>
+<tr>
+<td>2026-10-01</td>
+<td>Work IQ 専用処理を「知識探索エージェント」に置換（commit）。Work IQ 撤去調査。Managed Runtime 調査</td>
+<td>転換点 2</td>
+</tr>
+<tr>
+<td>2026-10-03</td>
+<td><strong>EOS（HVE の開発停止）の妥当性検証レポート</strong>。HVE v1 は 0.8.197 で止まる</td>
+<td>転換点 3</td>
+</tr>
+<tr>
+<td>2026-10-05</td>
+<td>開発履歴レポート①、Vibe Coding 完全ガイド（2026 年 10 月版）</td>
+<td>総括</td>
+</tr>
+<tr>
+<td>2026-10-06〜07</td>
+<td>new-era（②）。Prompt 7 回で後継版を完成。10-07 に「要求定義・カタログ・System Test の一貫性を保つ」設計書</td>
+<td>PoC</td>
+</tr>
+<tr>
+<td>2026-10-08</td>
+<td><strong>EABK（③）で StudyReport-Evaluator-3 を作る</strong>。公開リポジトリーに EABK を公開。「Enterprise App Build Kit」へ改称</td>
+<td>HVE v2 の誕生</td>
+</tr>
+<tr>
+<td>2026-10-08〜10</td>
+<td>4 方式の比較実験（E-0〜E-5）と、③の完走の再計測</td>
+<td>検証</td>
+</tr>
+<tr>
+<td>2026-10-08 20:51〜</td>
+<td><strong>BAS の開始</strong>。10-09 に要求定義の初版、10-13 までに 299 commit</td>
+<td>Business Envisioning へ</td>
+</tr>
+<tr>
+<td>2026-10-12〜13</td>
+<td>EABK が自分自身を改善（次に実装すべき要求の分析、実装状態画面など）</td>
+<td>自己適用</td>
+</tr>
+</tbody>
+</table>
+<h3 id="22-commit-royalytyservice2ndgen">2.2 月別の commit 数（棒グラフ用データ。<code>RoyalytyService2ndGen</code>）</h3>
+<table>
+<thead>
+<tr>
+<th>月</th>
+<th style="text-align: right;">01</th>
+<th style="text-align: right;">02</th>
+<th style="text-align: right;">03</th>
+<th style="text-align: right;">04</th>
+<th style="text-align: right;">05</th>
+<th style="text-align: right;">06</th>
+<th style="text-align: right;">07</th>
+<th style="text-align: right;">08</th>
+<th style="text-align: right;">09</th>
+<th style="text-align: right;">10（〜13 日）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>commit</td>
+<td style="text-align: right;">74</td>
+<td style="text-align: right;">569</td>
+<td style="text-align: right;"><strong>1,630</strong></td>
+<td style="text-align: right;">939</td>
+<td style="text-align: right;">864</td>
+<td style="text-align: right;">200</td>
+<td style="text-align: right;">179</td>
+<td style="text-align: right;">153</td>
+<td style="text-align: right;">149</td>
+<td style="text-align: right;">18</td>
+</tr>
+<tr>
+<td>うち cloud agent の PR マージ</td>
+<td style="text-align: right;">13</td>
+<td style="text-align: right;">108</td>
+<td style="text-align: right;">376</td>
+<td style="text-align: right;">162</td>
+<td style="text-align: right;">139</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">–</td>
+<td style="text-align: right;">–</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>事実: commit 数は 3 月をピークに減り、6 月以降は 1 日 5 commit 前後。一方で版数（0.8.x）は 8〜9 月に急速に増えています。</li>
+<li>推論: 「commit の数」ではなく「手順・仕組みの量」が増え続けた時期と、「実際に動くアプリ」が増えた時期は一致していません。</li>
+</ul>
+<h3 id="23">2.3 使っていたモデル（月ごとの主なモデル。帯グラフ用）</h3>
+<p>出典: Copilot セッション履歴（<code>session_usage</code>。全リポジトリー・全入口の合算）。API 呼び出し数の多い順です。</p>
+<table>
+<thead>
+<tr>
+<th>月</th>
+<th>主なモデル</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>01</td>
+<td>claude-sonnet-4.5</td>
+</tr>
+<tr>
+<td>02</td>
+<td>claude-sonnet-4.6、sonnet-4.5、opus-4.6</td>
+</tr>
+<tr>
+<td>03</td>
+<td>sonnet-4.6、opus-4.6、gpt-5.2 / 5.4</td>
+</tr>
+<tr>
+<td>04</td>
+<td>sonnet-4.6、<strong>gpt-5.3-codex</strong>、opus-4.7</td>
+</tr>
+<tr>
+<td>05</td>
+<td>gpt-5.3-codex、sonnet-4.6、opus-4.7</td>
+</tr>
+<tr>
+<td>06</td>
+<td>opus-4.7 / 4.8、gpt-5.5</td>
+</tr>
+<tr>
+<td>07</td>
+<td><strong>gpt-5.6-sol</strong>、<strong>claude-opus-5</strong>、gpt-5.6-terra</td>
+</tr>
+<tr>
+<td>08</td>
+<td>opus-5、gpt-5.6-sol-fast、gpt-5.6-sol</td>
+</tr>
+<tr>
+<td>09</td>
+<td>gpt-5.6-sol-fast、<strong>gpt-6-astra</strong>、gpt-5.6-luna</td>
+</tr>
+<tr>
+<td>10</td>
+<td><strong>claude-sonnet-5.5、claude-opus-5.5</strong></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>事実: 3 月（手順の量産期）の主力は Sonnet 4.6 系、10 月（足場を外した期）の主力は Opus 5.5 / Sonnet 5.5 です。<strong>同じ 8 か月で、モデルの世代が 4 つ以上進んでいます。</strong></li>
+<li>注意: 履歴は個人の全作業の合算で、HVE の作業だけではありません。</li>
+</ul>
+<hr />
+<h2 id="3">3. ストーリー（章立て）</h2>
+<p>各章は「何をしたか → 何が起きたか → 失敗 → 発見 → 次への転換 → スライド化メモ」の順です。</p>
+<h3 id="0-01-2302">第 0 章 出発点: 事業構想から始まった（01-23〜02）</h3>
+<p><strong>何をしたか（事実）</strong>
+- リポジトリー名が示すとおり、題材は会員・ポイント・特典などを扱う業務システム（Royalty Service の 2 世代目）です。
+- 最初の仕事は、コードではなく <strong>Future Scenario（未来シナリオ）の一覧 15〜20 件と、その詳細（FS01〜FS20）</strong> でした。cloud agent に Issue / PR で書かせ、PM 系の Custom Agent の指示書を整備しました。
+- 02 月には UC-10 の<strong>ユースケース → ドメイン分析 → マイクロサービス抽出</strong>へ進みました。</p>
+<p><strong>何が起きたか（事実）</strong>
+- 1 つの成果物を「3 つのサブタスクに分割」し、各サブタスクを書いたあとに「Review Cycle 4 / 5 / 6」「3 回レビューで 105 件の問題を修正」と、人が決めた回数だけ自己レビューを回しました。commit の履歴にそのまま残っています。
+- cloud agent の PR マージは 1 月 13 件、2 月 108 件、3 月 376 件と増えました。</p>
+<p><strong>発見（推論）</strong>
+- この時期の分割とレビューの反復は、<strong>当時のモデルの出力上限・精度・長文の一貫性を補うための手順</strong>でした。その時点では合理的でした。
+- そして、最初の題材が「事業構想」だったことは、のちの Business Envisioning への回帰として物語の伏線になります（第 9 章）。</p>
+<p><strong>スライド化メモ</strong>
+- キーメッセージ: 「最初の依頼はコードではなく、事業の未来シナリオだった」
+- ビジュアル: 1 月の commit ログの抜粋（"Create Future Scenario list with 20 prioritized scenarios"）と、2 月の "Review Cycle 4/5/6" の並び
+- 実感を足す: <code>【実感を足す】</code> なぜ事業構想から始めたか</p>
+<hr />
+<h3 id="1-best-practice-0203">第 1 章 補助輪の時代: Best Practice で弱さを補う（02〜03 月）</h3>
+<p><strong>何をしたか（事実）</strong>
+- Custom Agent を 02-20 時点で 19 本。02-24 に複数の Workflow を単一の orchestrator に置換しました。
+- 03-02 に「A-exec 分割」を強制する、DAG 風の実行フローを Agent の指示書に入れる、受入基準の検証セクションを入れるなどを実施しました。
+- ファイル数は 02-20 時点 69 → 03-31 時点 754 と、約 1 か月で 11 倍になりました。</p>
+<p><strong>何が起きたか（事実・推論）</strong>
+- 追加した手順は、どれも当時の弱さに対する<strong>もっともな処方</strong>でした。</p>
+<table>
+<thead>
+<tr>
+<th>当時の弱さ（推論）</th>
+<th>当時の処方</th>
+<th>今どうなっているか</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 回の出力が途中で切れる、長文の一貫性が崩れる</td>
+<td>成果物を 3 つのサブタスクに分割。「1 回の書き込みは 300 行以内」</td>
+<td><strong>今も有効。</strong> 分割の 1 文（C1S）は Sonnet 5.5 でも成功率を 1/3 失敗 → 3/3 成功に変えた（EOS §3.3）</td>
+</tr>
+<tr>
+<td>1 回で品質が出ない</td>
+<td>Review Cycle を固定回数。3 回レビュー</td>
+<td>敵対的レビューの量産へ（§第 4 章）。reviewer を外すと AI クレジットは約 26% 減り、結果は変わらなかった（3 方式比較 §5.6）</td>
+</tr>
+<tr>
+<td>途中で止まる、再開できない</td>
+<td>Workflow の連続実行、Step 単位の resume、実行台帳</td>
+<td>Autopilot と再開で足りる（EOS §5.1 課題 1）</td>
+</tr>
+<tr>
+<td>大きな作業を分けて並列に流せない</td>
+<td>DAG、Wave、ATG</td>
+<td><code>/fleet</code>、サブエージェントで足りる。ATG は品質が同じで時間 1.7〜2.25 倍・費用 2.49〜3.50 倍（EOS §3.1）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>発見（推論）</strong>
+- ここで大事なのは、<strong>「手順を足す」ことが、当時は正しい判断だったこと</strong>です。この章を「失敗」とは呼びません。失敗は、<strong>足した補助輪を外すタイミングを測る仕組みがなかったこと</strong>にあります（第 4 章）。</p>
+<p><strong>スライド化メモ</strong>
+- キーメッセージ: 「補助輪は、当時は正しかった」
+- ビジュアル: 上の表（左: 当時の弱さ → 右: 今）。色分けで「今も有効 / 不要 / 逆効果」
+- 実感を足す: <code>【実感を足す】</code> 当時、何に困って最初の手順を足したか</p>
+<hr />
+<h3 id="2-hve-v1-0306">第 2 章 手順がフレームワークになる: HVE v1 の誕生と成長（03〜06 月）</h3>
+<p><strong>何をしたか（事実）</strong>
+- 03-18 に GitHub Copilot SDK のローカルオーケストレーター。03-31 に AQRC（QA 要求分類）Workflow。04-01 に Self-Improve ループ。04-21 に Work IQ の読み取り連携（QA / AKM / AQOD）。GUI、Fleet モード、Cloud Session を追加。
+- 最終的な規模は、Workflow 13、Prompt 約 314 件、Skill 34 件、<code>knowledge/</code> に D01〜D21、<code>hve/</code> の Python 934 ファイル・約 27.7 万行です。
+- 版は 06-09 の 0.1.1 から始まり、08-16 の 0.8.1 を経て、<strong>10-03 の 0.8.197</strong> に至りました。8 月 24 日〜9 月 21 日の 4 週間だけで、0.8.40 から 0.8.132 まで約 90 回の版上げです。</p>
+<p><strong>何が起きたか（事実）</strong>
+- HVE は「業務要件の整理から設計・実装・検証までを、再現可能なワークフローとして運用する」ことを目的にしていました。
+- 解こうとした課題は 10 個あり、あとの整理で次の 3 つに分類できました（EOS §5.1）。
+  - 7 個: Copilot 本体の機能か運用の規則で足りる（<strong>不要</strong>）
+  - 3 個: リポジトリーごとの小さな仕組みで足りる（<strong>薄い仕組み</strong>）。偽の PASS、要件索引、費用と証跡
+  - <strong>課題そのものは今も実在する。不要になったのは、解決のために Framework やアプリケーションを作り保守すること</strong></p>
+<p><strong>失敗（事実）</strong>
+- HVE の開発・保守に <strong>181,055 AIU（約 1,811 USD）</strong>。その仕組みで作った業務アプリは未完成でした（第 5 章）。</p>
+<p><strong>スライド化メモ</strong>
+- キーメッセージ: 「課題は本物だった。ただし、解き方（自作フレームワーク）は不要になった」
+- ビジュアル: 10 個の課題 × 3 分類のマトリクス（EOS §5.1 の表を簡略化）
+- 数字: 0.8.1 → 0.8.197 を 48 日、約 27.7 万行</p>
+<hr />
+<h3 id="3-knowledge-work-iq-04-10-01">第 3 章 Knowledge をつなぐ: Work IQ の最初の設計と、その誤算（04 月〜10-01）</h3>
+<p>これは仮説 H4 の中心です。</p>
+<p><strong>何をしたか（事実）</strong>
+- 04-21 に Work IQ を、QA（事前の質問票）と知識化（AKM / AQOD）に<strong>読み取り専用で</strong>統合しました。
+- 設計は「HVE が質問を最大 10 問に絞り、1 問につき 1 回だけ Work IQ に固定の形式で問い合わせる」。許可ツールは <code>ask</code> の 1 つ。応答は 1〜5 行の固定スキーマに押し込める、というものでした。</p>
+<p><strong>何が起きたか（事実）</strong>
+- 実測では <strong>35 クエリ中、見つかった 5 件（14%）、一部 4 件（11%）、見つからない 23 件（66%）、使えない 3 件（9%）</strong> でした（2026-10-01 の調査。情報がテナントに存在しない可能性もあり、方式だけが原因とは断定していません）。
+- 調査の結論: Copilot SDK は MCP ツールをモデルが自分で選んで呼ぶ。固定の 1 問 1 回の枠は、<strong>モデルの調査能力を明らかに抑えていた</strong>。Work IQ 自身が推奨する <code>retrieve</code> 優先の使い方もできなかった。
+- 同日、Work IQ 専用処理を<strong>汎用の「知識探索エージェント」1 セッション</strong>に置き換える commit を行いました（10-01）。</p>
+<p><strong>発見（事実・推論）</strong>
+- 「Work IQ のために専用の対話・分割・解析を作る」のではなく、「ツールを渡して、モデルに反復調査させる。人は読み取り専用・書き込み先の制限・出典の必須化・監査ログだけを決める」へ。
+- ただし、<strong>制約</strong>も確かめました（事実）。Cloud の Coding Agent は OAuth を使うリモート MCP を未サポートで、Work IQ の自律調査が現実的に動くのは、<strong>利用者のマシンで認証済みの Copilot CLI / SDK セッション</strong>だけです。
+- BAS の自動実行（10-09）の監査記録にも「<strong>Work IQ は認証が必要で検索できなかった（社内情報未確認）。ペルソナの調査は Web の要旨のみ</strong>」とあります（AUD-03）。Copilot セッション履歴でも、10 月の Work IQ 呼び出し 3 件はいずれも成功していません。<code>【要確認】</code> 原因は認証と推測しています。</p>
+<p><strong>スライド化メモ</strong>
+- キーメッセージ: 「Knowledge 連携は、仕組みを作るより、モデルに道具を渡して任せる方が効く。ただし、認証という現実の壁は残る」
+- ビジュアル: 左 = 旧設計（固定 1 問 1 回 → 66% NOT_FOUND）、右 = 新設計（探索エージェントが <code>retrieve</code> を反復）。下に「残る条件: ローカル認証済みセッション、機密区分」
+- 注意: 「Coding Agent が適切にできるようになった」と断言せず、「設計としては任せる方向に変え、実行環境の条件付きで動く」と言う</p>
+<hr />
+<h3 id="4-0809">第 4 章 矛盾が積み上がる: 動かない巨大な補助輪（08〜09 月）</h3>
+<p><strong>何が起きたか（事実）</strong></p>
+<p>並走していた 4 つのアプリは、HVE を使わずに作られていました。</p>
+<table>
+<thead>
+<tr>
+<th>アプリ</th>
+<th>期間</th>
+<th>HVE の利用</th>
+<th style="text-align: right;">稼働時間</th>
+<th style="text-align: right;">AIU</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AutoVision-Studio</td>
+<td>09-02〜09-29</td>
+<td>なし（ATG を導入したが 22 セッションで呼び出し 0 回。削除）</td>
+<td style="text-align: right;">63.3 時間</td>
+<td style="text-align: right;">100,794</td>
+</tr>
+<tr>
+<td>StudyReport-Evaluator</td>
+<td>08-31〜10-01</td>
+<td>なし</td>
+<td style="text-align: right;">40.6 時間</td>
+<td style="text-align: right;">33,999</td>
+</tr>
+<tr>
+<td>Optoronics-Studio-Demo</td>
+<td>10-02 の 1 日</td>
+<td>記録なし</td>
+<td style="text-align: right;">5.3 時間</td>
+<td style="text-align: right;">7,747</td>
+</tr>
+<tr>
+<td>HubRadio-MovieCreator</td>
+<td>08-26〜10-03</td>
+<td>なし（ATG 実行 3 回、1 回破棄）</td>
+<td style="text-align: right;">45.4 時間</td>
+<td style="text-align: right;">66,981</td>
+</tr>
+<tr>
+<td><strong>（参考）HVE で作ろうとした業務アプリ</strong></td>
+<td>01-24〜</td>
+<td>HVE</td>
+<td style="text-align: right;">85.6 時間</td>
+<td style="text-align: right;">109,547</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>事実: HVE の業務アプリでは、アーキテクチャ推薦が 14 件すべてで中断し、システムテストの総合判定は「INCOMPLETE・BLOCKED」。1 回通すのに約 15〜39 時間かかり、前の Step が止まると後ろが止まる連鎖がありました。</li>
+<li>事実: HVE の使った AIU（290,602。アプリと本体の合計）は、4 アプリ合計（209,521）の約 1.39 倍でした。</li>
+<li>推論: 規模の差があり、HVE だけが原因とは言えません。しかし<strong>「アプリを作る費用と同じくらいを、アプリを作る仕組みに使った」</strong>ことは事実です。</li>
+</ul>
+<p><strong>もう 1 つの失敗: 補助輪が補助輪を呼ぶ（事実）</strong>
+- 09-21〜25 の work ファイル一覧では、多くの計画・実装に <code>adversarial-review</code>（敵対的レビュー）の記録が対になっています。ATG だけで 1 週間に計画・検証・レビュー・可搬化のレポートを数十本作りました。
+- ATG の <code>finish</code> は <code>verify_command</code> を実行せず、handoff の <code>exit_code: 0</code> をそのまま受け入れていました。スタブ実装と <code>assert True</code> でも <code>succeeded</code> になりました。<strong>隠しテスト 258/564 の実装を受理した例</strong>があります。
+- harness 系 Skill は、<strong>配置階層の問題で 1 件もロードされていませんでした</strong>（09-18 の分析）。つまり「あるのに使われていない」補助輪が出ていました。</p>
+<p><strong>発見（推論）</strong>
+- 補助輪が増えるほど、その補助輪自身を検証・保守する費用が増えます。そして<strong>それを測っていなかった</strong>。次の第 5 章へ続きます。</p>
+<p><strong>スライド化メモ</strong>
+- キーメッセージ: 「一番作り込んだ仕組みで作ったアプリだけが、完成しなかった」
+- ビジュアル: 5 行の棒グラフ（稼働時間・AIU）。HVE の行だけ色を変える
+- 注意: 「HVE が悪い」ではなく「規模の違いを留保しつつ、仕組みの維持費が成果と並んだ」と言う（EOS §3.11 の留保をそのまま使う）</p>
+<hr />
+<h3 id="5-8-09-1810-03">第 5 章 測り始めた: 無駄に気づいたのは 8 か月後（09-18〜10-03）</h3>
+<p>これは仮説 H2 の中心です。</p>
+<p><strong>何をしたか（事実）</strong>
+- 09-18: 長時間タスクの根本原因分析（VS Code Chat の 45 日窓・318 セッションを SQL で集計）。
+- 09-21: 完了の定義、2 回目の分析。
+- 09-27: ATG の効果を A/B で測定。
+- 09-30: Opus 5.5 と Sonnet 5.5 を同条件で比較。
+- 10-03〜05: 4 アプリの稼働時間と AIU を集計。</p>
+<p><strong>何が見えたか（事実）</strong></p>
+<table>
+<thead>
+<tr>
+<th>観点</th>
+<th>値</th>
+<th>出典</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>8 時間超のセッション</td>
+<td>全体の 18.2% だが、<strong>総滞留時間の 73.6%</strong></td>
+<td>長時間分析 §1</td>
+</tr>
+<tr>
+<td>24 時間超のセッション</td>
+<td>15 本で総時間の 48.5%</td>
+<td>同 §2-1</td>
+</tr>
+<tr>
+<td>ユーザー側入力文字数のうち、ターミナル完了通知</td>
+<td><strong>95.1%</strong></td>
+<td>同 §1</td>
+</tr>
+<tr>
+<td>入力 100k トークン超の呼び出し</td>
+<td>LLM 総遅延の <strong>83.2%</strong></td>
+<td>同 §1</td>
+</tr>
+<tr>
+<td>非ターミナルの発話のうち「全て／すべて」を含むもの</td>
+<td><strong>46.0%</strong>（完了条件のない、範囲が無限の指示）</td>
+<td>同 §1</td>
+</tr>
+<tr>
+<td>最長ステップ（88.7 分）のうち、LLM 以外の時間</td>
+<td><strong>91.8%</strong></td>
+<td>LongTimeTaskAnalytics2 §2.4</td>
+</tr>
+<tr>
+<td>1 セッションの極端な例</td>
+<td>入力 26.8 億トークン・94.9 時間（HubRadio）</td>
+<td>EOS §3.10</td>
+</tr>
+<tr>
+<td>AutoVision で最大の費用要因</td>
+<td>1 セッションに詰め込んだ Wave 3 が全体の 31%。広範囲の敵対的レビュー上位 6 件が、サブエージェントのトークンの 52%</td>
+<td>EOS §3.10</td>
+</tr>
+<tr>
+<td>new-era（②）のトークン内訳</td>
+<td>サブエージェントが入力の 77.6%。入力の 96.4% はキャッシュ読込</td>
+<td>PoC 分析 §4.3</td>
+</tr>
+<tr>
+<td>new-era の検証回数</td>
+<td><code>verify.ps1</code> 21 回、<code>dotnet test</code> 101 回、<code>dotnet build</code> 79 回</td>
+<td>同 §4.3</td>
+</tr>
+<tr>
+<td>① の人の Prompt 219 件</td>
+<td><strong>50.7% が再開・エラー対処、43.8% が打ち直し</strong></td>
+<td>3 方式比較 §1.2</td>
+</tr>
+</tbody>
+</table>
+<p><strong>気づかなかった理由（推論）</strong>
+1. <strong>長時間・大量 Token は、1 回の Prompt ごとには「いつものこと」に見える。</strong> 総量を集計して初めて、少数の巨大セッションが支配的だと分かる。
+2. <strong>コストの記録がなかった。</strong> セッション履歴は、VS Code Chat と cloud agent が集計に入らない、履歴の保持期間が短い（HubRadio と AutoVision は 09-21 以降、StudyReport-Evaluator は 09-24 以降しか残っていない）、PC 再起動で集計が失われる、など。③の開発では、PC 再起動で区間 1 の Token の実測値が消え、推定になりました。
+3. <strong>v2 でも、コストはまだ自動集計されていません（事実）。</strong> BAS の実行履歴（<code>run-history.md</code>）は、直近 3 回の実行すべてで AI クレジットが「<strong>未取得</strong>」です。3 方式比較 §5.7 も「Token の集計はツールキットにない」と記しています。
+4. 測り始めた 09-18 は、開始（01-23）から約 8 か月後です。<code>【要確認】</code> 記録に残る最初の測定が 09-18 であり、それ以前に別の測定がなかったとまでは断定できません。</p>
+<p><strong>発見（事実）</strong>
+- 時間の大半は LLM の推論ではなく、<strong>ツールの実行・承認待ち・直列実行・文脈の肥大</strong>でした。外部のオーケストレーターが改善できるのは、その一部（直列実行）だけです。
+- 「全部のタスクが長い」のではなく、<strong>少数の巨大セッションが時間を食い尽くしていた</strong>。</p>
+<p><strong>スライド化メモ</strong>
+- キーメッセージ: 「無駄は、見えるようにしてはじめて無駄になる」
+- ビジュアル: ①ヒストグラム（セッション所要時間の分布）、②「18.2% のセッションが 73.6% の時間」の円グラフ、③「測り始めた日」を年表に旗で立てる
+- 実感を足す: <code>【実感を足す】</code> 集計結果を最初に見たときの感想</p>
+<hr />
+<h3 id="6-eos10-0110-05">第 6 章 足場を外して測り直す: EOS（10-01〜10-05）</h3>
+<p><strong>何をしたか（事実）</strong>
+- 10-01: Work IQ 専用処理を知識探索エージェントに置換。Microsoft Copilot Managed Runtime を HVE の置き換え先として評価（実験的 API であり不可と判定）。
+- 10-03: EOS（HVE 停止）の妥当性検証レポートを作成。「3 つの Prompt + GitHub Copilot」で企業向けの大規模分散アプリを開発できるか、を 5 段階で検証。
+- 10-05: 開発履歴レポート①、Vibe Coding 完全ガイド（2026 年 10 月版）。</p>
+<p><strong>何が決まったか（事実）</strong>
+- 「HVE の開発を止める」は<strong>根拠あり（妥当）</strong>。ただし 5 つの不足（G1〜G5）があるとして、3 つの Prompt（P-RD・P-FR・P-ST）に反映。
+  - G1 P-ST は生成アプリのシステムテストに使えない → 対象を生成アプリに拡張
+  - G2 Wave 2（Azure・モバイル）を担う Prompt がない → <code>&lt;execution_options&gt;</code> を追加（既定はすべて「しない」）
+  - G3 合否が自己申告 → <strong>検証スクリプトの exit code と CI で判定</strong>
+  - G4 人の承認が UAT だけ → 承認依頼一覧を出させる
+  - G5 大規模化したときの要求定義と catalog → 短い対応表 + 索引（<code>mdq</code> / <code>cq</code>）</p>
+<p><strong>発見（事実）</strong>
+- 「単純な構成が複雑なエージェントに並ぶか上回る」研究（Agentless、Anthropic）と、自分の実測が一致していました。
+- <strong>harness がなくなったのではなく、置き場所が移った</strong>（PoC 分析 §0.1）:
+  1. プラットフォーム本体の harness（Autopilot、サブエージェント、<code>task_complete</code>、チェックポイント）
+  2. 公式ガイドの作法を取り込んだ Prompt
+  3. リポジトリー内の決定的な検査（<code>verify</code>、CI、CodeQL、要求 ID の追跡テスト）</p>
+<p><strong>スライド化メモ</strong>
+- キーメッセージ: 「止めたのは HVE であって、HVE が解こうとした課題ではない」
+- ビジュアル: 「harness の 3 つの層」の 3 段図（EOS §10 / PoC §6.3）
+- 注意: 「不要になった」ではなく、「作って保守することが不要になった。課題は今も実在する」と言う</p>
+<hr />
+<h3 id="7-2-new-era-3-eabkhve-v210-0610-10">第 7 章 薄い足場を作り直す: ② new-era から ③ EABK（HVE v2）へ（10-06〜10-10）</h3>
+<p><strong>② new-era（10-06〜07）</strong>（事実）
+- Prompt 7 回・1 日・総待ち 7 時間 06 分・約 132 USD 相当で後継版を完成。前版は Prompt 254 回・32 日でした。
+- ただし<strong>差の大部分は、前版が 32 日かけた要求定義書とコードの 92% を引き継いだ</strong>ことによるもので、モデルや harness の差だけではありません（PoC 分析 §3）。<code>未検証</code> 公平な比較（コードの引き継ぎなし）は E-1 で実施。
+- P-FR（約 42 KB）の中身は、Anthropic の公式ガイドの作法（ターンの終え方、範囲、サブエージェントの使い方、テストを弱めない等）とほぼ同じ文でした。<strong>HVE が数万行のコードで解こうとしたことの多くが、数段落の自然言語に置き換わっていた。</strong></p>
+<p><strong>③ EABK（10-07 設計 → 10-08 実装・公開）</strong>（事実）
+- 設計の核: <strong>要求定義書を書けるエージェントは 1 つだけ</strong>、<strong>実装担当は System Test を変更できない</strong>、<strong>終了前に必ず検証する</strong>、<strong>危険な操作は拒否する</strong>。これらを LLM の判断ではなく <strong>hook と決定的スクリプト</strong>で強制。
+- ユーザーは conductor に Prompt を <strong>1 回</strong>送るだけ。最大 24〜48 時間、人の介入なしに、要求定義 → 独立監査 → System Test の先行設計 → 並行実装 → 直列の統合 → 最終監査 → 報告まで進む。
+- StudyReport-Evaluator-3 で初めて実戦: 作業役 119 体（Sonnet 5.5）、conductor は Opus 5.5、commit 253 件、System Test 12/12 合格。</p>
+<p><strong>比較実験（10-08〜10-10）</strong>（事実）</p>
+<table>
+<thead>
+<tr>
+<th>観点</th>
+<th>⓪ 素の Coding Agent</th>
+<th>① 対話型 Vibe Coding</th>
+<th>② Prompt 駆動</th>
+<th>③ EABK</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>小さな変更（1 文で言える 6 件）</td>
+<td><strong>隠しテスト 6/6。時間と費用は最小</strong></td>
+<td>–</td>
+<td>–</td>
+<td>6/6。⓪の約 15 倍の時間、約 31 倍の AI クレジット</td>
+</tr>
+<tr>
+<td>「止まる・繰り返す」</td>
+<td>小: 問題なし／全体: 1 回では終わらない</td>
+<td><strong>人の Prompt の約半分が再開、4 割強が打ち直し</strong></td>
+<td>おおむね解決（人の Prompt 5〜7 回）</td>
+<td><strong>解決</strong>（人の Prompt 1 回で 71 分止まらず。完走の再計測は 5 回止まっても 1 文で再開）</td>
+</tr>
+<tr>
+<td>空からの 1 回の実行（受入基準の充足）</td>
+<td>51%（Opus）</td>
+<td>–</td>
+<td>10%</td>
+<td>48%</td>
+</tr>
+<tr>
+<td>完走させたとき</td>
+<td>–</td>
+<td>–</td>
+<td>–</td>
+<td><strong>106/106 項目、受入基準 98%、1,096 テスト合格（19.3 時間、約 18,300 AI クレジット）</strong></td>
+</tr>
+<tr>
+<td>要求の矛盾の検出（10 件を仕込んだ）</td>
+<td>0 件</td>
+<td>–</td>
+<td><strong>8 件</strong></td>
+<td>2 件（既存要求との衝突は 3/3 回検出）</td>
+</tr>
+<tr>
+<td>完了の申告</td>
+<td>51% で「完了」と申告</td>
+<td>人が確かめる</td>
+<td>未完了を正直に報告</td>
+<td>範囲を黙って縮め「全件完了」と報告（E-1）</td>
+</tr>
+<tr>
+<td>加重スコア（アプリ規模）</td>
+<td>2.95</td>
+<td>1.70</td>
+<td>3.38</td>
+<td><strong>3.68</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>失敗と発見（事実）</strong>
+- 失敗: EABK のモデル指定（作業役は安いモデル）は、15 回の実行のうち <strong>5 回しか守られなかった</strong>。範囲の黙った縮小。実行上限を実際より厳しく解釈して早めに止まる。再計測中に claude-opus-5.5 が CLI で使えなくなる。
+- 発見: <strong>部品を 1 つずつ外すテスト</strong>（E-5）。reviewer を外すと AI クレジット −26%（結果は変わらず）。独立監査・最終監査を外すと −50%（ただし 1 件は衝突を理由に BLOCKED になり、判断としては妥当）。→ 小さな変更では監査を軽くする「fast レーン」を v2 に追加（変えた要求が 3 件以下、など。比較レポートの E-4・E-5 の実測に基づく）。
+- 発見: 「何もない⓪が一番よい」は、<strong>小さな変更に限って正しい</strong>。問題が起きるのは、⓪をアプリ全体に繰り返し使った（①）ときです。</p>
+<p><strong>利害関係の明示（事実）</strong>
+- ③はあなたが開発したツールキットです。実験の設計・実行・集計と執筆は AI が行い、採点役にも同じ系統のモデル（Sonnet 5.5）を使いました。各条件の試行は 1〜6 回で、統計的な有意差は示せません。<strong>スライドにもこの注記を残してください。</strong></p>
+<p><strong>スライド化メモ</strong>
+- キーメッセージ: 「補助輪をゼロにするのではなく、薄く、外から効く場所だけに残す」
+- ビジュアル: 4 方式を 5 観点（時間・品質・Token・運用・事業整合）でレーダーチャート。加重スコア 3.68 / 3.38 / 2.95 / 1.70 は「重みを変えると順位が変わる」注記つき
+- 重要: 「③が最強」ではなく、<strong>使い分け</strong>（小さな変更 = ⓪、要求が確定した中規模 = ②、アプリ規模・規制のある業務 = ③）を結論に置く</p>
+<hr />
+<h3 id="8-business-business-analytics-studio10-0810-13">第 8 章 同じ道具を Business に向ける: Business Analytics Studio（10-08〜10-13）</h3>
+<p>これが「個人の Vibe Coding を Business Envisioning まで拡大する」挑戦の現在地です。</p>
+<p><strong>出発点の失敗（事実）</strong>
+- 元になったのは、法人顧客向けの ToBe 構想・意思決定支援のダッシュボードを<strong>毎回ゼロから生成する Prompt</strong>（ショー体験・ブランド演出を強化した版）です。
+- 10-08 の実行結果を 10-09 に分析すると、次の 4 つの失敗が見つかりました。</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>失敗</th>
+<th>根拠</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>P-1</td>
+<td>1 件あたり <strong>60 分以上</strong></td>
+<td>調査 約 25 分以上（推定）、<code>npm install</code> 約 5 分、コード生成 約 11 分、検証 約 17 分</td>
+</tr>
+<tr>
+<td>P-2</td>
+<td>時間をかけても要件の一部しか実装されない</td>
+<td>インクキャンバス、PDF 出力、ナレッジグラフ、LOD、URL 状態復元、ホワイトボード、モックアプリ、アーキテクチャ図、<code>customer-research.md</code> が欠けていた</td>
+</tr>
+<tr>
+<td>P-3</td>
+<td>毎回生成するため、品質と見た目が安定しない</td>
+<td>生成のたびに実装が変わり、検証もやり直し</td>
+</tr>
+<tr>
+<td>P-4</td>
+<td>工程ごとの所要時間を測っていない</td>
+<td>改善の効果を定量評価できない</td>
+</tr>
+</tbody>
+</table>
+<p><strong>設計の転換（事実）</strong>
+- 目標を「<strong>顧客 1 件あたり 3〜6 分で、全要件を満たすアプリを用意する</strong>」に置き、仕組みを 3 つに分けました。</p>
+<table>
+<thead>
+<tr>
+<th>構成要素</th>
+<th>内容</th>
+<th>作る頻度</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A. 共通アプリ本体（雛形）</td>
+<td>全機能を実装したビルド済み Web アプリ。顧客固有の情報はコードに含めない</td>
+<td>1 回（以後は保守）</td>
+</tr>
+<tr>
+<td>B. 顧客パック</td>
+<td>顧客ごとの調査結果・ブランド・サンプルデータ（JSON / Markdown / アセット）</td>
+<td>顧客ごと</td>
+</tr>
+<tr>
+<td>C. 生成パイプライン（Copilot Skill）</td>
+<td>雛形の複製 → 事前調査の取り込み → データ生成 → 検証 → 起動</td>
+<td>1 回（以後は保守）</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>これは<strong>第 5 章の学び（毎回生成せず、再利用できるものはデータとして分ける）の Business 版</strong>です。</li>
+<li>実行は EABK（HVE v2）の <code>/build</code>。BAS は 10-08 20:51 に開始、10-09 に要求定義書の初版（FR-001〜131、NFR 24 件、AC 189 件）と System Test 台帳 121 ケース、土台（Vite + React + Fluent UI）まで進みました。</li>
+</ul>
+<p><strong>現在の規模（事実。2026-10-13 時点）</strong></p>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>値</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>期間・commit</td>
+<td>6 日・299 commit（10-09: 154、10-10: 87、10-12: 39、10-13: 18）</td>
+</tr>
+<tr>
+<td>要求</td>
+<td>FR 144 件、受入基準 236 件、NFR 28 件</td>
+</tr>
+<tr>
+<td>System Test</td>
+<td>台帳 141 ケース（E2E の採番は 221 まで）</td>
+</tr>
+<tr>
+<td>記録された実行（<code>run-history</code>）</td>
+<td>3 回: 1.7 時間、2.1 時間、1.0 時間。いずれも「全件完了」。AI クレジットは<strong>未取得</strong></td>
+</tr>
+<tr>
+<td>利用者</td>
+<td>事業部長・Product Manager・戦略コンサルタント</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Business 固有の設計（事実）</strong>
+- <strong>数値には出典（Work IQ / URL / 取得日）と確度（高・中・低・推定）を付けて、画面上で確認できる</strong>（FR・AC-009）。
+- <strong>Work IQ 由来の情報には機密区分（internal / shareable）を持たせ、internal はエクスポート時に匿名化できる</strong>（FR-117）。
+- 顧客情報（顧客名・議論内容・顧客パック）は、既定でコミットしない。外部送信は Copilot SDK と設定した AI API に限る。
+- Work IQ・LLM・音声・手書きは、使えない場合にモックで動く。実接続の確認は「manual（BLOCKED）」として残す。</p>
+<p><strong>発見（推論）</strong>
+- Business Envisioning では、<strong>コードではなく「顧客パック（データ）」が価値の中心</strong>になります。これは次の章（H3 の「何を保持するか」）の答えの重要な一部です。
+- 同時に、<strong>v2 でも、Work IQ が認証で使えず「社内情報未確認」として進んだ</strong>。Knowledge 連携は、設計の転換だけでは完結しません。</p>
+<p><strong>スライド化メモ</strong>
+- キーメッセージ: 「コードの Vibe Coding で学んだ 3 つ（正本・決定的な検査・再利用できるものをデータに分ける）を、事業構想へ持ち込んだ」
+- ビジュアル: A・B・C の 3 ブロック図と、「60 分以上 → 3〜6 分（目標）」の矢印。BAS の画面のスクリーンショット（<code>users-guide/</code> にあります）
+- 注意: 「3〜6 分」は<strong>目標（KPI-1）であり、達成を測った値ではありません</strong>。<code>未検証</code></p>
+<hr />
+<h3 id="9">第 9 章 一周して戻る: 事業構想 → コード → 事業構想（現在）</h3>
+<p><strong>構造（推論）</strong></p>
+<table>
+<thead>
+<tr>
+<th>段</th>
+<th>対象</th>
+<th>主なやり方</th>
+<th>学び</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>事業の未来シナリオ（01 月）</td>
+<td>cloud agent + PM 系 Agent</td>
+<td>手順で弱さを補う</td>
+</tr>
+<tr>
+<td>2</td>
+<td>業務アプリのコード（02〜09 月）</td>
+<td>HVE v1</td>
+<td>補助輪が成果と並ぶ費用になる</td>
+</tr>
+<tr>
+<td>3</td>
+<td>薄い harness（10 月）</td>
+<td>HVE v2（EABK）</td>
+<td>正本と決定的検査だけが残る</td>
+</tr>
+<tr>
+<td>4</td>
+<td>顧客の ToBe と意思決定（10 月〜）</td>
+<td>BAS + 顧客パック</td>
+<td><strong>データ・出典・確度・機密を持つ事業構想アプリ</strong></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>事実: 最初の依頼（Future Scenario）と、現在の BAS は、どちらも「事業の将来像を描き、意思決定を助ける」ものです。</li>
+<li>推論: <strong>コードを書く Vibe Coding は、最終的な目的ではなく、事業を構想する道具の 1 つだった。</strong> <code>【実感を足す】</code></li>
+</ul>
+<p><strong>スライド化メモ</strong>
+- キーメッセージ: 「コードから始まったのではない。事業から始まり、コードを通って、事業へ戻ってきた」
+- ビジュアル: 円環図（4 段）。または時間軸の 2 本線（上: 対象の抽象度、下: 足場の厚さ）。足場は第 3 章で最大、現在は最小</p>
+<hr />
+<h2 id="4">4. 「補助輪」の棚卸し表（スライド用: 今も要るか）</h2>
+<table>
+<thead>
+<tr>
+<th>足場</th>
+<th>当時の目的</th>
+<th>今の判定</th>
+<th>根拠</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>タスクを小さく分ける 1 文（300 行以内など）</td>
+<td>出力の切れ・推論の使い切りを避ける</td>
+<td><strong>残す</strong>（能力に依存しない）</td>
+<td>分割 1 文で SQL タスクが 1/3 → 3/3（Sonnet 5.5。EOS §3.3）</td>
+</tr>
+<tr>
+<td>合否をエージェントの外で決める（<code>verify</code> の exit code、CI）</td>
+<td>偽の PASS を防ぐ</td>
+<td><strong>残す</strong></td>
+<td>ATG が隠しテスト 258/564 を受理。テスト改変の報告（METR 等）</td>
+</tr>
+<tr>
+<td>要求定義書を唯一の正本にする、書き手は 1 つ</td>
+<td>矛盾・ドリフトを防ぐ</td>
+<td><strong>残す</strong></td>
+<td>① で改訂 29 回・方向転換約 9 回</td>
+</tr>
+<tr>
+<td>要求 ID・catalog・索引（機械可読）</td>
+<td>文脈肥大・対応の追跡</td>
+<td><strong>残す</strong>（薄く）</td>
+<td>文書が 28 ファイル・約 82 万バイトまで膨らみ ID がずれた例</td>
+</tr>
+<tr>
+<td>DAG・ATG・Wave の自作</td>
+<td>並列・依存の管理</td>
+<td><strong>外す</strong></td>
+<td>品質は同じ、時間 1.7〜2.25 倍、費用 2.49〜3.50 倍</td>
+</tr>
+<tr>
+<td>Workflow の連続実行・resume・実行台帳の自作</td>
+<td>止まらない</td>
+<td><strong>外す</strong>（Autopilot で足りる）</td>
+<td>EOS §5.1 課題 1</td>
+</tr>
+<tr>
+<td>敵対的レビューの全工程への適用</td>
+<td>品質</td>
+<td><strong>絞る</strong></td>
+<td>reviewer を外すと −26%（結果は変わらず）。監査は MUST の要求と共通部品の変更だけに</td>
+</tr>
+<tr>
+<td>Work IQ 専用の質問分割・固定スキーマ</td>
+<td>Knowledge の取得</td>
+<td><strong>外す</strong>（探索エージェントに任せる）</td>
+<td>35 件中 66% が見つからず。<code>retrieve</code> が使えない設計だった</td>
+</tr>
+<tr>
+<td>大量の Prompt・Skill（約 314 件・34 件）</td>
+<td>工程の指示</td>
+<td><strong>外す／絞る</strong></td>
+<td>new-era は Skill を 1 回も使わず完了。「一般的な作法の Skill」は不要。<strong>組織固有の手順・学習データにない知識・長い手順の段階的開示は残す</strong></td>
+</tr>
+<tr>
+<td>Self-Improve ループ</td>
+<td>自己改善</td>
+<td><strong>外した</strong>（HVE v1 の全版から削除）<code>【日付要確認】</code></td>
+<td>CHANGELOG の Unreleased</td>
+</tr>
+<tr>
+<td>検証を促す指示文（「必ず検証して」）</td>
+<td>検証漏れ</td>
+<td><strong>減らす</strong>（外部の判定ゲートは残す）</td>
+<td>Opus 5 系は指示なしでも検証する。検証を指示する文は過剰検証の原因（公式ガイド）。<code>verify.ps1</code> 21 回・<code>dotnet test</code> 101 回</td>
+</tr>
+<tr>
+<td>実行時のモデル表（作業役は安いモデル）</td>
+<td>費用</td>
+<td><strong>設定だけでは足りない</strong></td>
+<td>15 回中 5 回しか守られなかった。強制が必要（R11）</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="5">5. 仮説の検証（詳細）</h2>
+<h3 id="51-h1-model-coding-agent-best-practice">5.1 H1: 早期に取り組んだ人ほど、低性能な Model や Coding Agent を Best Practice で補っていたので、それが今ボトルネックになっている</h3>
+<p><strong>判定: 支持（強い）。ただし、言い直しを推奨します。</strong></p>
+<table>
+<thead>
+<tr>
+<th>区分</th>
+<th>根拠</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>支持する事実</td>
+<td>① 02 月の Review Cycle 固定回数、3 サブタスク分割。② 03 月の手順の量産（69 → 754 ファイル）。③ HVE v1 の規模（Prompt 約 314 件、Skill 34 件、約 27.7 万行）。④ ATG: 品質は同じで時間 1.7〜2.25 倍・費用 2.49〜3.50 倍。⑤ reviewer なしで −26%、監査なしで −50%（結果は同じか妥当）。⑥ new-era は HVE・ATG・Skill なしで完了。⑦ P-FR は公式ガイドの数段落と同じ内容で、HVE の機能の多くを置き換えた。⑧ Anthropic の見解: harness の各部品は、モデルが自力でできないことについての仮定であり、モデルが良くなると古くなる</td>
+</tr>
+<tr>
+<td>反する／留保する事実</td>
+<td>① new-era は前版のコードと要求の 92% を引き継いでおり、モデルの差だけでは説明できない。② 「分割の 1 文」「外部の決定的ゲート」「要求の正本」は今も効く。③ HVE の業務アプリが完成しなかったのは、規模の差もある。④ n=1。同じ人・同じモデル・同じ時期の比較ではない</td>
+</tr>
+<tr>
+<td>推論</td>
+<td><strong>足かせになったのは「モデルの能力不足を前提にした足場」。「モデルの能力に依存しない足場」は、モデルが強くなっても残る</strong>（Anthropic の「harness の組み合わせの余地は縮まず、移動する」と同じ結論）。</td>
+</tr>
+</tbody>
+</table>
+<p><strong>推奨する言い方（スライド用）</strong></p>
+<blockquote>
+<p>「早期に始めた人ほど、当時のモデルの弱さを補うために足場を積んだ。モデルが強くなっても、その足場は自動では消えない。足場には『能力不足を補うもの』と『能力に関係なく必要なもの』があり、前者を見分けて外すことが、今のボトルネック解消になる」</p>
+</blockquote>
+<p><strong>この仮説をさらに確かめる方法（未検証）</strong>
+- 同じ 1 つの要求定義を、HVE v1 の Workflow と ⓪（最新モデル）で作り、時間・費用・受入基準の充足を比べる（比較レポートの E-6 に近い）。
+- P-FR・conductor の節を 1 つずつ外して測る（PoC 分析 I4）。</p>
+<h3 id="52-h2-token">5.2 H2: 実行時間と Token 消費量が無駄だったことに気づかない</h3>
+<p><strong>判定: 支持。</strong></p>
+<ul>
+<li>事実: 8 時間超のセッション 18.2% が総時間の 73.6%、100k トークン超の呼び出しが LLM 遅延の 83.2%、最長ステップの 91.8% は LLM 以外の時間（第 5 章）。</li>
+<li>事実: 記録に残る最初の本格的な測定は 09-18。履歴の保持は 09-21 以降（一部 09-24 以降）。</li>
+<li>事実: ① の「止まったジョブの再開・エラー対処」が人の入力の約半分。<strong>Token や時間の無駄は、コストというより「人の注意」に変換されていた。</strong></li>
+<li>事実: v2 でも AI クレジットは自動集計されない（BAS の <code>run-history</code> は 3 件とも「未取得」）。</li>
+<li>推論: 気づかない理由は、(1) 1 回ごとには見えない、(2) 測る仕組みがない、(3) 長く動くこと自体が「頑張っている」ように見える、の 3 つ。<code>【実感を足す】</code> (3) は私の推測です。</li>
+<li>追加の留意: new-era では、入力の 96.4% がキャッシュ読込で、実際の新規入力は小さい。Token の総数だけでは費用の実態を表さない。<strong>AIU（AI クレジット）、キャッシュの内訳、サブエージェント別、LLM 以外の時間の 4 つで見る必要がある。</strong></li>
+</ul>
+<h3 id="53-h3-vibe-coding">5.3 H3: 何のデータを保持して Vibe Coding を行えばよいのかは調査中</h3>
+<p><strong>判定: 現状の理解として妥当。有力な候補は挙げられるが、結論ではない。</strong></p>
+<table>
+<thead>
+<tr>
+<th>データ</th>
+<th>目的</th>
+<th>現在の扱い</th>
+<th>状態</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>要求定義書</strong>（FR・NFR・AC・Q・PARAM）</td>
+<td>唯一の正本。矛盾・ドリフトを防ぐ</td>
+<td>書き手は 1 つ（hook で強制）。ID は決定的スクリプトで採番。150 件超で業務の境界ごとに分割</td>
+<td>有力・採用済み</td>
+</tr>
+<tr>
+<td><strong>カタログ</strong>（要求 ID → 実装 → テスト → API・共通部品）</td>
+<td>重複実装・無駄な探索を減らす</td>
+<td>短い対応表 + <code>mdq</code> / <code>cq</code> の索引</td>
+<td>有力。大規模化の限界は未検証</td>
+</tr>
+<tr>
+<td><strong>ID 台帳</strong></td>
+<td>並行作業での ID の重複を防ぐ</td>
+<td><code>id-registry</code>（BAS では約 88 KB）</td>
+<td>採用済み</td>
+</tr>
+<tr>
+<td><strong>System Test の台帳</strong>（受入基準から作る）</td>
+<td>実装ではなく要求からテストを決める</td>
+<td>JSON の台帳。canary、増分実行</td>
+<td>有力</td>
+</tr>
+<tr>
+<td><strong>run の状態</strong>（<code>queue</code>・<code>progress</code>・結果・監査・証跡）</td>
+<td>中断からの再開、証跡</td>
+<td><code>/work</code>（一時）に置き、最後に <code>/docs</code> と台帳へ転記</td>
+<td>有力。「どこまで転記するか」は調整中</td>
+</tr>
+<tr>
+<td><strong>実行履歴</strong>（<code>run-history</code>）</td>
+<td>KPI の追跡</td>
+<td>1 run 1 行</td>
+<td><strong>AI クレジットが未取得（課題）</strong></td>
+</tr>
+<tr>
+<td><strong>Copilot セッションログ</strong>（<code>events.jsonl</code> など）</td>
+<td>時間・Token・モデル・Prompt の実測</td>
+<td>履歴は保持期間が短く、入口（VS Code / CLI / cloud）ごとに別。PC 再起動で集計が消える</td>
+<td><strong>最大の空白</strong></td>
+</tr>
+<tr>
+<td><strong>顧客パック</strong>（Business 用）</td>
+<td>顧客固有のデータをコードから分ける</td>
+<td><code>public/data/*.json</code> など。出典・確度・機密区分つき</td>
+<td>BAS で採用。スキーマは検証中</td>
+</tr>
+<tr>
+<td><strong>調査キャッシュと出典</strong></td>
+<td>事前調査の再利用、数値の根拠</td>
+<td>有効期限つき（FR-123）、コミットしない</td>
+<td>BAS で採用</td>
+</tr>
+<tr>
+<td><strong>判断・承認の記録</strong>（質問票・承認・包括承認）</td>
+<td>自動化バイアスの抑制</td>
+<td>すべて「推奨どおり」「承認」になりがち（②で 9 件・10 件）</td>
+<td><strong>未解決</strong>（I6: 重要度で分ける案）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>未解決の問い（スライドの「次の課題」に使えます）</strong>
+1. 要求・catalog・台帳は、どの規模（要求 150 件、300 KB 以上）で分割・索引化すべきか。
+2. run の一時データのうち、永続させるものの基準は何か。
+3. Token・時間・AI クレジットを、入口をまたいで 1 つの形式で残すには。
+4. Business Envisioning で、出典・確度・機密区分をどの粒度で持つか。顧客パックのスキーマは、案件を重ねても安定するか。
+5. 承認や判断の根拠を、「形だけの承認」にしない形で残すには。</p>
+<h3 id="54-h4-knowledgework-iq-coding-agent">5.4 H4: Knowledge（Work IQ など）との連携を Coding Agent が適切に行えるようになった</h3>
+<p><strong>判定: 部分的に支持。「任せる設計に変えた」は事実。「適切に行えるようになった」は、環境の条件つき。</strong></p>
+<table>
+<thead>
+<tr>
+<th>区分</th>
+<th>根拠</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>支持する事実</td>
+<td>① SDK はモデルに MCP ツールを見せ、呼ぶかどうかはモデルが決める。② 旧設計（固定 1 問 1 回）は 35 件中 66% が見つからず、<code>retrieve</code> も使えなかった（モデルの調査能力を抑えていた）。③ 10-01 に知識探索エージェントへ置換。④ new-era は Work IQ を 1 回使い、社内情報を検索した。⑤ EABK のユーザーガイドは、利用者が設定した Work IQ・Microsoft Learn・Azure などの MCP・plugin・skill を、conductor と作業役がそのまま使えるとしている</td>
+</tr>
+<tr>
+<td>反する／留保する事実</td>
+<td>① Cloud の Coding Agent は OAuth を使うリモート MCP を未サポート。Work IQ の自律調査は、ローカルで認証済みのセッションに限られる。② BAS の自動実行で Work IQ は認証が必要で検索できず「社内情報未確認」。③ 10 月の Work IQ 呼び出し 3 件は成功なし（セッション履歴）。④ 旧設計の 66% は、情報がテナントに存在しない可能性もあり、方式だけが原因とは断定していない。⑤ 新設計（探索エージェント）の成功率は、まだ測っていない</td>
+</tr>
+<tr>
+<td>推論</td>
+<td>Coding Agent は Knowledge を「使う」能力は十分になったが、<strong>認証・権限・機密という運用の壁が、成功を左右している</strong>。Business Envisioning では、Work IQ が使えない場合の代替（Web → サンプル）と、機密区分・匿名化を最初から設計に入れる必要がある</td>
+</tr>
+<tr>
+<td>未検証</td>
+<td>探索エージェント方式で、同じ 35 問を再実行したときの FOUND 率。<code>retrieve</code> 優先に変えた効果</td>
+</tr>
+</tbody>
+</table>
+<p><strong>推奨する言い方（スライド用）</strong></p>
+<blockquote>
+<p>「Knowledge への問い合わせは、仕組みで制御せず、モデルに道具を渡して反復させる方が良い。残る課題はモデルではなく、認証と権限と機密である」</p>
+</blockquote>
+<hr />
+<h2 id="6-1">6. 失敗と発見の台帳（ストーリーの「転換点」を 1 枚にまとめる）</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>失敗</th>
+<th>なぜ起きたか（推論）</th>
+<th>発見</th>
+<th>次の行動</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>F1</td>
+<td>手順を足し続けた（Review Cycle、分割、Workflow）</td>
+<td>当時のモデルの弱さに対する合理的な処方だった。外す基準がなかった</td>
+<td>足場は「能力不足を補うもの」と「能力に依存しないもの」に分かれる</td>
+<td>部品を 1 つずつ外して測る（E-5）</td>
+</tr>
+<tr>
+<td>F2</td>
+<td>Work IQ の固定 1 問 1 回の設計</td>
+<td>モデルの調査能力を見くびった</td>
+<td>モデルに道具を渡し、反復させる方が良い</td>
+<td>知識探索エージェントへ置換（10-01）</td>
+</tr>
+<tr>
+<td>F3</td>
+<td>HVE で作った業務アプリが未完成</td>
+<td>仕組み自体が新しい課題の原因（15〜39 時間の連鎖）</td>
+<td>仕組みの維持費がアプリの費用と並んだ</td>
+<td>HVE の停止（EOS）</td>
+</tr>
+<tr>
+<td>F4</td>
+<td>巨大セッションが時間の大半</td>
+<td>1 セッションに詰め込む運用。完了条件のない指示</td>
+<td>少数の巨大セッションが支配的</td>
+<td>分割の 1 文、完了条件の明示</td>
+</tr>
+<tr>
+<td>F5</td>
+<td>ATG（DAG）が効かない・呼ばれない</td>
+<td>単一 Prompt で足りる問題に、複雑さを足した</td>
+<td>品質は同じ、時間と費用は 2 倍超</td>
+<td>ATG の停止</td>
+</tr>
+<tr>
+<td>F6</td>
+<td>偽の PASS（自己申告で合格）</td>
+<td>検証コマンドを実行せず自己申告を受け入れた</td>
+<td>合否はエージェントの外で決める</td>
+<td><code>verify</code> の exit code と CI</td>
+</tr>
+<tr>
+<td>F7</td>
+<td>人の Prompt の半分が再開・打ち直し</td>
+<td>止まるたびに人が手で動かす</td>
+<td>自動継続と 1 文の再開で解決</td>
+<td>Autopilot・EABK</td>
+</tr>
+<tr>
+<td>F8</td>
+<td>EABK のモデル指定が守られない・範囲が黙って縮む</td>
+<td>設定ファイルは強制力がない</td>
+<td>設定ではなく hook で強制する必要</td>
+<td>R11〜R16 の改善項目</td>
+</tr>
+<tr>
+<td>F9</td>
+<td>測定の欠落（Token・時間の記録なし。PC 再起動で消失）</td>
+<td>測る仕組みを作らなかった</td>
+<td>測定は最初に作る</td>
+<td>実行ごとの使用量の永続化（未解決）</td>
+</tr>
+<tr>
+<td>F10</td>
+<td>BAS の毎回ゼロ生成が 60 分以上・要件の一部</td>
+<td>再利用できるものまで毎回生成した</td>
+<td>再利用できるものはデータ（顧客パック）にする</td>
+<td>共通アプリ + 顧客パック + パイプライン</td>
+</tr>
+<tr>
+<td>F11</td>
+<td>Work IQ が認証で使えず「社内情報未確認」</td>
+<td>非対話実行では認証できない</td>
+<td>設計としての代替（Web → サンプル）と機密区分が必要</td>
+<td>BAS の FR-117・代替順</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="7">7. スライド化のための構成案</h2>
+<h3 id="71-30-20">7.1 30 分版（20 枚）</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>章</th>
+<th>スライドの題（案）</th>
+<th>キーメッセージ</th>
+<th>ビジュアル</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>表紙</td>
+<td>Hypervelocity Engineering — Vibe Coding を Business Envisioning まで広げた 262 日</td>
+<td></td>
+<td>年表の縮小図</td>
+</tr>
+<tr>
+<td>2</td>
+<td>要旨</td>
+<td>一文のストーリー</td>
+<td>補助輪は当時正しく、モデルが進むと足かせになる</td>
+<td>3 つの数字（4,775 commit、181,055 AIU、254 → 5 Prompt）</td>
+</tr>
+<tr>
+<td>3</td>
+<td>用語</td>
+<td>HVE v1 / v2、⓪〜③</td>
+<td></td>
+<td>用語表</td>
+</tr>
+<tr>
+<td>4</td>
+<td>第 0 章</td>
+<td>最初の依頼は事業の未来シナリオだった</td>
+<td></td>
+<td>01 月の commit ログ</td>
+</tr>
+<tr>
+<td>5</td>
+<td>第 1 章</td>
+<td>補助輪の時代</td>
+<td>当時は正しかった</td>
+<td>弱さ → 処方 の表</td>
+</tr>
+<tr>
+<td>6</td>
+<td>第 2 章</td>
+<td>手順がフレームワークになる</td>
+<td>課題は本物</td>
+<td>10 課題 × 3 分類</td>
+</tr>
+<tr>
+<td>7</td>
+<td>第 2 章</td>
+<td>規模の可視化</td>
+<td>48 日で 197 回の版上げ</td>
+<td>版数・commit の折れ線</td>
+</tr>
+<tr>
+<td>8</td>
+<td>第 3 章</td>
+<td>Work IQ の最初の設計と誤算</td>
+<td>35 問中 66% が見つからない</td>
+<td>旧設計の図</td>
+</tr>
+<tr>
+<td>9</td>
+<td>第 4 章</td>
+<td>矛盾が積み上がる</td>
+<td>一番作り込んだ仕組みのアプリだけ未完成</td>
+<td>5 行の棒グラフ</td>
+</tr>
+<tr>
+<td>10</td>
+<td>第 4 章</td>
+<td>補助輪が補助輪を呼ぶ</td>
+<td>ATG の効果なし、偽の PASS</td>
+<td>A/B の表</td>
+</tr>
+<tr>
+<td>11</td>
+<td>第 5 章</td>
+<td>測り始めたのは 8 か月後</td>
+<td>無駄は見えて初めて無駄になる</td>
+<td>年表に旗</td>
+</tr>
+<tr>
+<td>12</td>
+<td>第 5 章</td>
+<td>時間はどこに消えていたか</td>
+<td>18.2% が 73.6%</td>
+<td>円グラフ + ヒストグラム</td>
+</tr>
+<tr>
+<td>13</td>
+<td>第 5 章</td>
+<td>人の入力の半分は「再開」だった</td>
+<td></td>
+<td>8 分類の棒グラフ</td>
+</tr>
+<tr>
+<td>14</td>
+<td>第 6 章</td>
+<td>EOS: 止めたのは HVE であり課題ではない</td>
+<td></td>
+<td>3 層の harness 図</td>
+</tr>
+<tr>
+<td>15</td>
+<td>第 7 章</td>
+<td>HVE v2: 薄い足場</td>
+<td>4 つの規則を hook で強制</td>
+<td>EABK の構成図</td>
+</tr>
+<tr>
+<td>16</td>
+<td>第 7 章</td>
+<td>4 方式の比較と使い分け</td>
+<td>小さな変更は ⓪、規模は ③</td>
+<td>レーダーチャート + 使い分け表</td>
+</tr>
+<tr>
+<td>17</td>
+<td>第 8 章</td>
+<td>Business Envisioning への拡大</td>
+<td>60 分以上 → 目標 3〜6 分</td>
+<td>A・B・C 図</td>
+</tr>
+<tr>
+<td>18</td>
+<td>第 8 章</td>
+<td>顧客パックと出典・確度・機密</td>
+<td>データが価値の中心</td>
+<td>画面と JSON の対比</td>
+</tr>
+<tr>
+<td>19</td>
+<td>§5</td>
+<td>4 つの仮説の判定</td>
+<td></td>
+<td>判定の表</td>
+</tr>
+<tr>
+<td>20</td>
+<td>まとめ</td>
+<td>次に測ること</td>
+<td></td>
+<td>未解決の 5 つの問い</td>
+</tr>
+</tbody>
+</table>
+<h3 id="72-15-10">7.2 15 分版（10 枚）</h3>
+<p>1, 2, 5（補助輪）, 9（HVE の結果）, 12（時間の分布）, 14（EOS・3 層）, 16（4 方式の使い分け）, 17（BAS）, 19（仮説）, 20（次の課題）</p>
+<h3 id="73">7.3 見せ方の注意</h3>
+<ul>
+<li>「HVE は失敗だった」ではなく「<strong>当時の合理的な判断を、測って外した</strong>」を主旋律にする。聴衆が同じ道をたどる可能性があるため、「外す基準（測る仕組み）」を持ち帰りにする。</li>
+<li><strong>数字は必ず出典と留保を併記</strong>（下限値、推定、n の小ささ、利害関係）。ご自身の記事でも事実・推論・未検証を分けているので、スライドの脚注に同じ記号を使う。</li>
+<li>費用は「1 AIU = 0.01 USD とみなした目安」で、実際の請求額ではない。</li>
+</ul>
+<hr />
+<h2 id="8">8. 未確認事項（プレゼン前に確認してください）</h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>内容</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>「HVE v2 = EABK」でよいか</td>
+<td>私の前提。「HVE v2」の定義が別にある場合は、§0 と第 7 章を直す</td>
+</tr>
+<tr>
+<td>2</td>
+<td>2026-01〜08 の測定が本当になかったか</td>
+<td>記録に残る最初の本格的な測定が 09-18 だった、までしか確認できていない。08-25 に AEON の分析レポートがある（中身は取得できなかった）</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Self-Improve の削除日</td>
+<td>CHANGELOG の Unreleased にあるが、日付を特定していない</td>
+</tr>
+<tr>
+<td>4</td>
+<td>BAS の AI クレジット・稼働時間・Token</td>
+<td>実行履歴が「未取得」。EABK の <code>/build</code> の run ごとの <code>meta.json</code> やセッションログから集計すれば、BAS 自体の「費用」を載せられる</td>
+</tr>
+<tr>
+<td>5</td>
+<td>BAS の「3〜6 分」</td>
+<td>目標（KPI-1）。実測は未確認</td>
+</tr>
+<tr>
+<td>6</td>
+<td>10 月の Work IQ 失敗の原因</td>
+<td>認証と推測。セッションログで確認が必要</td>
+</tr>
+<tr>
+<td>7</td>
+<td>2026-01〜08 の人の Prompt 数・稼働時間</td>
+<td>① の集計は 08-31 以降。それ以前の HVE の開発時間は、EOS §3.10 の表（143.3 時間、429 セッション）だけ。VS Code Chat と cloud agent は含まれない（下限）</td>
+</tr>
+<tr>
+<td>8</td>
+<td>ご自身の動機・実感</td>
+<td><code>【実感を足す】</code> の箇所</td>
+</tr>
+<tr>
+<td>9</td>
+<td>公開してよい情報の範囲</td>
+<td>顧客名・社内情報・リポジトリー名・コミットハッシュ。Qiita 用の文体 Prompt と同様に、公開向けは固有名詞を伏せる</td>
+</tr>
+<tr>
+<td>10</td>
+<td>外部の論文・公式ガイド（Anthropic、METR、Agentless 等）の引用</td>
+<td>元レポートの出典（確認日 2026-10-03〜08）に従う。公開前に最新を再確認</td>
+</tr>
+</tbody>
+</table>
+<h3 id="1_1">限界と妥当性への脅威（そのまま 1 枚にできます）</h3>
+<ol>
+<li>n=1（1 人・1 つの題材群・約 9 か月）。</li>
+<li>③はあなた自身が開発したツールで、実験・集計・執筆・採点を AI が行った。採点役にも同系統のモデルを使った。</li>
+<li>各条件の試行は 1〜6 回で、統計的な有意差は示せない。</li>
+<li>記録は下限値が多い（履歴の保持期間、VS Code Chat と cloud agent の欠落、PC 再起動による消失）。</li>
+<li>モデルの世代が同時に進んでおり、「足場の効果」と「モデルの進化」を完全には分離できない。</li>
+</ol>
+<hr />
+<h2 id="9_1">9. 出典（この文書の事実の出どころ）</h2>
+<h3 id="91-cwork">9.1 内部資料（<code>C:\Work</code>）</h3>
+<ul>
+<li><code>202610031135-HVE_EOS_ValidationReport.md</code>（EOS レポート第 4 版）</li>
+<li><code>202610051515-DevelopmentHistoryReport.md</code>（① StudyReport-Evaluator）</li>
+<li><code>202610070515-DevelopmentHistoryReport.md</code>（② new-era）</li>
+<li><code>202610081155-DevelopmentHistoryReport-newToolkit.md</code>（③ EABK 初回）</li>
+<li><code>202610070815-HVE-EOS-PoC-by-StudyReportEvaluator-AnalyticsReport.md</code>（PoC 比較分析）</li>
+<li><code>202610072130-RD-MaintenanceAnalyticsReport-BeforeToolkit.md</code>（EABK の設計書）</li>
+<li><code>2026100220-3TypeOfFrameworkCompetitiveAnalyticsReport.md</code>（4 方式の比較。版 3.1）</li>
+<li><code>BDS-draft-original.md</code>（Envisioning Dashboard Builder の要求定義書ドラフト）</li>
+</ul>
+<h3 id="92-2026-10-13">9.2 リポジトリー（2026-10-13 時点の集計）</h3>
+<ul>
+<li><code>RoyalytyService2ndGen</code>: git 履歴（commit 数・月別・PR マージ数）、<code>CHANGELOG.md</code>（版と日付）、過去の <code>work/</code> のレポート（長時間タスク分析 2 本、Work IQ 撤去調査、Opus と Sonnet の比較。<code>de2adffe0~1</code> から復元して読んだ）</li>
+<li><code>HypervelocityEngineering</code>: <code>README.md</code>、<code>CHANGELOG.md</code>、git 履歴、<code>bench/RESULTS.md</code></li>
+<li><code>BusinessAnalyticsStudio</code>: <code>docs/requirements-definition.md</code>、<code>docs/run-history.md</code>、<code>docs/catalog.md</code>、git 履歴、<code>README.md</code></li>
+</ul>
+<h3 id="93-copilot">9.3 Copilot セッション履歴</h3>
+<ul>
+<li><code>session_usage</code>（月別のモデル）、<code>tool_executions</code>（Work IQ の呼び出し数）</li>
+</ul>
+<hr />
+<h2 id="10">10. このストーリーから作れる成果物（次のステップの提案）</h2>
+<ol>
+<li><strong>HTML</strong>: 第 0〜9 章を縦スクロールの 1 ページに（年表 + 章ごとのカード + 仮説判定）。図は §2.2・§2.3・第 5 章の表からグラフ化。</li>
+<li><strong>PowerPoint</strong>: §7.1 の 20 枚構成。図表のデータは本書の表からそのまま使える。</li>
+<li><strong>追加で測ると説得力が増すもの</strong>: (a) BAS の run の AI クレジットと稼働時間の実測、(b) 同じ 35 問での Work IQ の再実験、(c) HVE v1 の Workflow と ⓪（最新モデル）の同一要求での比較。</li>
+</ol>
+<p>どれから作りますか。</p><footer>出典: <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/HVE-History/202610130930-HVE-JourneyStory.md">HVE-History/202610130930-HVE-JourneyStory.md</a></footer></main></div>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"></script>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark=['dark','midnight'].includes(document.documentElement.dataset.theme);
+mermaid.initialize({startOnLoad:false,theme:dark?'dark':'default'});
+await mermaid.run({querySelector:'pre.mermaid'});
+</script>
+<script>document.querySelectorAll('pre code').forEach(e=>hljs.highlightElement(e));
+const t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+const sel=document.getElementById('theme');
+function setT(v){document.documentElement.dataset.theme=v;localStorage.setItem('theme',v);sel.value=v;
+ const hl=document.getElementById('hl');if(hl)hl.href='https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github'+(['dark','midnight'].includes(v)?'-dark':'')+'.min.css';}
+sel.onchange=()=>setT(sel.value);setT(t);
+document.getElementById('menu').onclick=()=>document.querySelector('nav').classList.toggle('open');
+document.querySelector('nav a.cur')?.scrollIntoView({block:'center'});
+</script>
+</body></html>

@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prompt: HVE の歴史を伝える「ドラマティック・プレゼンテーション」HTML を生成する — HypervelocityEngineering</title>
+<link id="hl" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+<style>
+:root{--bg:#fff;--fg:#1f2328;--muted:#656d76;--card:#f6f8fa;--bd:#d0d7de;--ac:#0969da;--side:#f6f8fa;--code:#eff1f3;--r:10px}
+[data-theme=dark]{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--card:#161b22;--bd:#30363d;--ac:#58a6ff;--side:#010409;--code:#1c2128}
+[data-theme=midnight]{--bg:#0f1226;--fg:#e4e7ff;--muted:#9aa0cc;--card:#171a3a;--bd:#2c3062;--ac:#8b9cff;--side:#0a0c1d;--code:#1d2147}
+[data-theme=ocean]{--bg:#f2fafc;--fg:#0c2d3a;--muted:#4f7583;--card:#e0f2f7;--bd:#b4dce6;--ac:#0087a8;--side:#dcf0f5;--code:#d3ebf1}
+[data-theme=forest]{--bg:#f4f8f2;--fg:#1c2b1e;--muted:#5a6f5c;--card:#e6efe2;--bd:#c3d6bd;--ac:#2f7d3a;--side:#e1ecdc;--code:#dae7d5}
+[data-theme=sunset]{--bg:#fff8f2;--fg:#3a2118;--muted:#8a6252;--card:#ffebdc;--bd:#f2cdb3;--ac:#d9480f;--side:#ffeede;--code:#fde1cc}
+[data-theme=rose]{--bg:#fff6f8;--fg:#3a1c26;--muted:#8d5a6b;--card:#ffe6ec;--bd:#f2c2cf;--ac:#c2255c;--side:#ffe9ef;--code:#fcdbe4}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 system-ui,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;transition:background .2s,color .2s}
+a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;padding:.6rem 1.2rem;background:var(--card);border-bottom:1px solid var(--bd);backdrop-filter:blur(6px)}
+header .brand{font-weight:700;color:var(--fg)}header .sp{flex:1}
+header select,header button{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:.3rem .6rem;font:inherit;font-size:.9rem}
+#menu{display:none}
+.layout{display:flex;min-height:calc(100vh - 54px)}
+nav{width:290px;flex:none;background:var(--side);border-right:1px solid var(--bd);padding:1rem;position:sticky;top:54px;height:calc(100vh - 54px);overflow:auto;font-size:.9rem}
+nav h4{margin:1.1rem 0 .3rem;color:var(--muted);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
+nav a{display:block;padding:.25rem .6rem;border-radius:6px;color:var(--fg);line-height:1.4}
+nav a:hover{background:var(--card);text-decoration:none}
+nav a.cur{background:var(--ac);color:#fff}
+main{flex:1;min-width:0;max-width:900px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1,h2{border-bottom:1px solid var(--bd);padding-bottom:.3rem}
+h1,h2,h3,h4{line-height:1.3;scroll-margin-top:70px}
+img{max-width:100%;height:auto;border-radius:var(--r);border:1px solid var(--bd)}
+pre{background:var(--code);border:1px solid var(--bd);border-radius:var(--r);padding:1rem;overflow:auto;line-height:1.5;font-size:.88rem}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font:.88em ui-monospace,Consolas,monospace}
+pre code{background:none;padding:0}
+pre.mermaid{background:var(--card);text-align:center}
+table{border-collapse:collapse;display:block;overflow:auto;margin:1rem 0}
+th,td{border:1px solid var(--bd);padding:.45rem .8rem;vertical-align:top}
+th{background:var(--card)}tr:nth-child(even) td{background:color-mix(in srgb,var(--card) 50%,transparent)}
+blockquote{margin:1rem 0;padding:.2rem 1rem;border-left:4px solid var(--ac);background:var(--card);border-radius:0 var(--r) var(--r) 0;color:var(--muted)}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var(--muted);font-size:.85rem}
+@media(max-width:820px){#menu{display:inline-block}nav{position:fixed;left:-310px;top:54px;z-index:9;transition:left .2s}nav.open{left:0}main{padding:1.2rem 1rem}}
+</style>
+<script>document.documentElement.dataset.theme=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')</script>
+</head><body>
+<header><button id="menu" aria-label="menu">☰</button><a class="brand" href="../index.html">⚡ HypervelocityEngineering</a><span class="sp"></span>
+<label>🎨 <select id="theme" aria-label="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="midnight">Midnight</option><option value="ocean">Ocean</option><option value="forest">Forest</option><option value="sunset">Sunset</option><option value="rose">Rose</option></select></label>
+<a href="https://github.com/dahatake/HypervelocityEngineering">GitHub</a></header>
+<div class="layout"><nav><h4>はじめに</h4>
+<a href="../index.html">HypervelocityEngineering — Enterprise App Build Kit</a>
+<a href="../CHANGELOG.html">Changelog</a>
+<h4>ユーザーガイド</h4>
+<a href="../users-guide/01-writing-requests.html">1. 依頼の書き方（/build と runoptions）</a>
+<a href="../users-guide/02-during-and-after-run.html">2. 実行中と終了後</a>
+<a href="../users-guide/03-requirements-format.html">3. 管理データの書式</a>
+<a href="../users-guide/04-customization.html">4. 設定とカスタマイズ</a>
+<a href="../users-guide/05-scripts-reference.html">5. スクリプトリファレンス</a>
+<a href="../users-guide/06-quality-gates.html">6. 品質ゲートと検査項目</a>
+<a href="../users-guide/07-troubleshooting.html">7. トラブルシューティング</a>
+<a href="../users-guide/08-roadmap.html">8. 導入ロードマップと KPI</a>
+<a href="../users-guide/09-versioning.html">バージョンアップの手順</a>
+<a href="../users-guide/10-adopting-existing-apps.html">10. 既存のアプリを導入する（Adopt）</a>
+<a href="../users-guide/index.html">EABK ユーザーガイド</a>
+<h4>Studio ガイド</h4>
+<a href="../users-guide/studio/01-first-steps.html">S1 はじめかた</a>
+<a href="../users-guide/studio/02-screens.html">S2 画面の見かた</a>
+<a href="../users-guide/studio/03-tasks.html">S3 こんなとき、どう見るか</a>
+<a href="../users-guide/studio/04-troubleshooting.html">S4 うまく動かないとき・用語集</a>
+<a href="../users-guide/studio/05-product-manager.html">S5 Product Manager 向けガイド</a>
+<a href="../users-guide/studio/06-architect.html">S6 Architect 向けガイド</a>
+<a href="../users-guide/studio/07-software-engineer.html">S7 Software Engineer 向けガイド</a>
+<a href="../users-guide/studio/08-data-reference.html">S8 データリファレンス（どの機能が、どのデータを読むか）</a>
+<a href="../users-guide/studio/README.html">EABK Studio ユーザーガイド（第 2 部）</a>
+<h4>HVE-History</h4>
+<a href="2026100220-3TypeOfFrameworkCompetitiveAnalyticsReport.html">GitHub Copilot によるアプリケーション開発の 4 方式の比較 — 「⓪ 素の Coding Agent」を基準にした「① 対話型 Vibe Coding」「② Prompt 駆動」「③ Enterprise App Build Kit」の実測と実験による評価</a>
+<a href="202610031135-HVE_EOS_ValidationReport.html">HVE 利用停止（EOS）の妥当性検証レポート — 「3 つの Prompt + GitHub Copilot」で企業向け大規模分散アプリを開発できるか</a>
+<a href="202610051515-DevelopmentHistoryReport.html">開発履歴レポート（StudyReport-Evaluator）</a>
+<a href="202610070515-DevelopmentHistoryReport.html">StudyReport-Evaluator-new-era 開発履歴調査レポート</a>
+<a href="202610070815-HVE-EOS-PoC-by-StudyReportEvaluator-AnalyticsReport.html">HVE 利用停止（EOS）の実証 — StudyReport-Evaluator の前版と new-era の開発資源の比較分析</a>
+<a href="202610072130-RD-MaintenanceAnalyticsReport-BeforeToolkit.html">要求定義書・カタログ・System Test の一貫性を保ち、最高品質・最短時間・最小 Token で実装する計画</a>
+<a href="202610081155-DevelopmentHistoryReport-newToolkit.html">開発履歴 調査レポート（StudyReport-Evaluator-3）</a>
+<a href="202610130930-HVE-JourneyStory.html">Hypervelocity Engineering の歴史と経緯 — 個人の Vibe Coding を Business Envisioning まで広げた 262 日の失敗と発見</a>
+<a href="202610131000-Qiita-HVE-JourneyStory.html">HVE-History/202610131000-Qiita-HVE-JourneyStory.md</a>
+<a class="cur" href="presentation-generator-prompt.html">Prompt: HVE の歴史を伝える「ドラマティック・プレゼンテーション」HTML を生成する</a>
+<h4>管理データ（docs）</h4>
+<a href="../docs/catalog.html">カタログ</a>
+<a href="../docs/id-registry.html">ID 台帳</a>
+<a href="../docs/manual-tests.html">手順で確かめる受入基準</a>
+<a href="../docs/requirements-definition.html">要求定義書</a>
+<a href="../docs/run-history.html">実行履歴</a>
+<h4>HVE-History（スライド）</h4><a href="20261003-HVEv2-Born.html">HVE v2 Born（HTML）</a></nav>
+<main><h1 id="prompt-hve-html">Prompt: HVE の歴史を伝える「ドラマティック・プレゼンテーション」HTML を生成する</h1>
+<blockquote>
+<p>用途: <code>HVE-History/20261003-HVEv2-Born.html</code>（フル版 約16分 ＋ SHORT 版 約5分）を、同じ品質で再生成・更新するための Prompt です。
+使い方: この全文を Coding Agent（Copilot CLI / VS Code Agent）に渡し、リポジトリーのルートで実行します。
+前提: 実行者は <code>HVE-History/</code> の調査レポート群を読めること。Python（Playwright・Pillow）と Node.js が使えると、検証まで自動で行えます。</p>
+</blockquote>
+<hr />
+<h2 id="1">1. 役割と目的</h2>
+<p>あなたは、プレゼンテーション演出と Web フロントエンドに詳しい、シニアのクリエイティブ・エンジニアです。
+次の目的で、<strong>開くだけで全編が自動再生される、単一の HTML ファイル</strong>を作成してください。</p>
+<ul>
+<li><strong>題材</strong>: Hypervelocity Engineering（HVE）の 262 日（2026-01-23 〜 2026-10-13）の、挑戦・失敗・学び。</li>
+<li><strong>聴衆</strong>: CIO / CTO と、Lead Software Engineer。</li>
+<li><strong>伝えたい主旋律</strong>（すべてのシーンがこれに従うこと）:
+  1. HVE の目的は「業務要件の整理から、設計・実装・検証までを、再現可能なワークフローとして運用する」ことだった。
+  2. その目的を <strong>7つの目標</strong>（後述）に分解し、<strong>目標ごとに「何に挑み、何がうまくいき、何がうまくいかなかったか」</strong> を同じ型で示す。
+  3. <strong>モデルと GitHub Copilot Coding Agent が強くなるほど、Prompt・人の介在・自作の仕組みは、より小さくても結果を出せるようになった</strong>。当時の足場の多くは不要になり、「能力に依存しない足場」だけが残った。
+  4. 問い「<strong>足場は、いつまで必要か？</strong>」に、「<strong>測って、外す</strong>」と答える。
+  5. 最後は、コードの Vibe Coding を、事業構想（Business Envisioning）へ向ける。事業 → コード → 事業、と一周する。</li>
+<li><strong>エンタメ性</strong>: YouTube / TikTok / ゲーム実況 / TV 番組の演出（テロップ、SE、ズーム、スタンプ、カウントダウン、コメント流し、どんでん返し）を取り入れ、「次世代の Software Engineering は楽しい」と感じさせる。ただし<strong>事実の正確さを損なわない</strong>こと。</li>
+</ul>
+<h2 id="2">2. 入力（一次資料）</h2>
+<p>次のファイルを必ず読み、数字・日付・判定は<strong>ここにあるものだけ</strong>を使うこと（創作しない）。</p>
+<table>
+<thead>
+<tr>
+<th>ファイル</th>
+<th>使い道</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>HVE-History/202610130930-HVE-JourneyStory.md</code></td>
+<td>ストーリーの骨格。年表、数字カード、章立て、4仮説の判定、失敗と発見の台帳、限界と妥当性への脅威（最優先）</td>
+</tr>
+<tr>
+<td><code>HVE-History/202610131000-Qiita-HVE-JourneyStory.md</code></td>
+<td>同内容の記事版。言い回しの参考</td>
+</tr>
+<tr>
+<td><code>HVE-History/202610031135-HVE_EOS_ValidationReport.md</code></td>
+<td>§5.1 の「HVE が解こうとした 10 課題」と判定（不要 7／薄い仕組み 3）。ATG の A/B（品質同じ・時間 ×1.7〜2.25・費用 ×2.49〜3.50）、各アプリの AIU と稼働時間</td>
+</tr>
+<tr>
+<td><code>HVE-History/2026100220-3TypeOfFrameworkCompetitiveAnalyticsReport.md</code></td>
+<td>⓪〜③ の比較実験（E-0〜E-5）。隠しテスト 6/6、完走 98%、reviewer を外すと −26%、モデル指定が 15 回中 5 回</td>
+</tr>
+<tr>
+<td><code>HVE-History/202610051515-DevelopmentHistoryReport.md</code> ほか <code>*DevelopmentHistoryReport*.md</code></td>
+<td>① 対話型 254 回、② Prompt 駆動 7 回、③ EABK 5 回</td>
+</tr>
+<tr>
+<td><code>README.md</code>（リポジトリー直下）</td>
+<td>EABK のアーキテクチャ・エージェントと権限・run の流れ</td>
+</tr>
+<tr>
+<td><code>EABK-Studio/README.md</code></td>
+<td>EABK Studio の構成と画面</td>
+</tr>
+<tr>
+<td><code>C:\GitHub\BusinessAnalyticsStudio\users-guide\engineering\01-architecture.md</code>、<code>README.md</code></td>
+<td>BAS のアーキテクチャ（共通アプリ本体・顧客パック・パイプライン）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="21">2.1 素材（スクリーンショット・動画・写真）</h3>
+<p><code>HVE-History/media/</code>（git 管理。<code>.gitattributes</code> で binary 扱い）に置く。HTML からは <strong><code>media/...</code> の相対パス</strong>で参照する。<code>/work</code> には置かない（削除される可能性があるため）。</p>
+<table>
+<thead>
+<tr>
+<th>ファイル</th>
+<th>内容</th>
+<th>作り方</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>host.jpg</code></td>
+<td>登壇者の写真（吹き出しキャラクター用）</td>
+<td>ユーザーが添付した写真をコピーする</td>
+</tr>
+<tr>
+<td><code>studio-app.webm</code>（約 22 秒）</td>
+<td>EABK Studio の操作録画（ダッシュボード → 実装状態 → 2D マップ → 3D マップ → 表）</td>
+<td><code>python EABK-Studio/studio.py --repo . --no-open --port 8765</code> を起動し、Playwright の <code>record_video_dir</code> で 1920×1080 を録画</td>
+</tr>
+<tr>
+<td><code>bas-app.webm</code>（約 34 秒）</td>
+<td>BAS のお手本パックでの操作録画（作業先「デモ」を選択 → Esc でオープニングを飛ばす → 課題-解決策分析、ナレッジグラフ、アーキテクチャ図、ガント、3D ビュー、地図を順にクリック）</td>
+<td><code>C:\GitHub\BusinessAnalyticsStudio</code> で <code>npm run build</code> → <code>npm start</code>（127.0.0.1:4173）。同様に録画</td>
+</tr>
+<tr>
+<td><code>studio-*.png</code>、<code>bas-*.png</code></td>
+<td>各画面の静止画（再利用・資料用）</td>
+<td>同じ操作の途中で <code>screenshot</code></td>
+</tr>
+<tr>
+<td><code>eabk-cli.png</code>、<code>eabk-vscode.png</code></td>
+<td>EABK（CLI）の「画面イメージ」</td>
+<td>リポジトリーの <code>images/</code> からコピー。<strong>実画面ではなく README の画面イメージ</strong>である旨を、必要なら字幕で断る</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>録画後はサーバーを必ず停止する（<code>Stop-Process -Id &lt;PID&gt;</code>。名前指定で止めない）。一時ファイルは <code>/work</code> ではなく <code>$env:TEMP</code> に置き、終了時に削除する（この環境では <code>/work</code> の削除が hook で拒否される）。</li>
+<li>動画は <code>.webm</code> のまま使う（この環境の ffmpeg は libx264 が無い）。</li>
+</ul>
+<h2 id="3">3. 成果物</h2>
+<ol>
+<li><code>HVE-History/20261003-HVEv2-Born.html</code> — 単一ファイル。外部ライブラリ・CDN・外部フォントを使わない（オフラインで動く）。画像・動画だけ <code>media/</code> を参照する。</li>
+<li><code>HVE-History/media/*</code> — 上記素材。</li>
+<li>完了時に git へコミットする（コミット末尾に <code>Co-authored-by: Copilot &lt;223556219+Copilot@users.noreply.github.com&gt;</code>）。</li>
+</ol>
+<h2 id="4">4. 厳守する制約</h2>
+<ul>
+<li><strong>金額を載せない</strong>。AI の使用量は「AI クレジット（AIU）の数」だけで書く。USD・円・ドルの記載は不可（モデルが変わると変わるため）。</li>
+<li>数字・主張には、必要に応じて <strong>事実／推論／未検証</strong> の区別と留保を付ける。特に次は画面に明記する。</li>
+<li>「254 回 → 5 回」は条件の異なる参考値（n=1。② は前版の要求・コードの 92% を引き継いだ）。</li>
+<li>BAS の「1 件 3〜6 分」は<strong>目標であり未実測</strong>。BAS の画面は<strong>デモ（お手本パック）</strong>。BAS の要求 144／受入基準 236／System Test 141 は規模の記録で、効果は未取得。</li>
+<li>Work IQ の 35 問は、情報がテナントに存在しない可能性もあり、方式だけが原因とは断定しない。</li>
+<li>「HVE v2 ＝ EABK」は、このストーリーでの置き方。</li>
+<li>足場メーター・時間と力のグラフは<strong>概念図（実測ではない）</strong>。</li>
+<li>限界: n=1、EABK は自作、試行 1〜6 回、記録は下限値、モデル進化と足場の効果は分離できない。</li>
+<li>「HVE は失敗だった」と言わない。主旋律は「<strong>当時の合理的な判断を、測って外した</strong>」。判定は誇張せず、解けていない目標（Q7）は正直に NOT YET と示す。</li>
+<li>顧客名・社内情報・認証情報・API キーを HTML に埋め込まない。</li>
+<li>点滅・大音量・揺れがあるため、スタート画面で注意書きを出し、<code>prefers-reduced-motion</code> では演出を弱める。</li>
+<li>文体: 日本語、です・ます調。ナレーションは読み上げやすいよう、読点で区切り、数字は読み方を意識する（例: 「66パーセント」「1,096件」）。</li>
+</ul>
+<h2 id="5">5. 全体構成（フル版）</h2>
+<p>シーンは <code>sc(id, title, mood, build)</code> で登録し、表示順は明示の <code>order</code> 配列で固定する。<strong>第 1 幕から終幕まで、冗長さがなく、情報が断片化しないこと</strong>。</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>id</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>open</code></td>
+<td>COLD OPEN。2026-01-23 の type-in → DAY 000→262 のカウント → 数字スラム（4,775 commit／27.7万行／181,055 AIU）→ 10/3「止めた」で急停止（レコードスクラッチ）→ ロゴ「HVE QUEST」と「足場は、いつまで必要か？」</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>purpose</code></td>
+<td>開発者が吹き出しで登場し、HVE の目的を語る。7つの目標カードを並べる。10 課題を 7 つに束ねた注記。最後に問いをスラム</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>bird</code></td>
+<td><strong>航海図（鳥観図）</strong>。1/23〜10/13 の時間軸に 16 トピックを並べ、ナレーションに合わせて段階的にハイライト。「では、時代を、順に降りていきましょう」</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>era</code></td>
+<td>第1幕。最初の依頼は事業の未来シナリオ（FS01〜FS20 のトンネル）。当時のモデルの弱さ（出力切れ・一貫性・一度で品質が出ない）→ 手順で補った（分割・Review Cycle・Custom Agent 19 本）→ 月別 commit の 3D 棒グラフ（3 月 1,630、ファイル 69→754 ×11）→ <strong>足場メーター／概念図</strong>（モデルの力と自作の足場）→ LESSON 1</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>v1</code></td>
+<td>HVE v1 誕生。コードの壁、27.7万行・Prompt 約314件・Skill 34件、0.8.1→0.8.197（48 日）</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>archV1</code></td>
+<td><strong>HVE v1 のアーキテクチャ図</strong>（4 つの入口 → Workflow エンジン＋ATG → Prompt/Skill/knowledge/Work IQ 専用処理 → Copilot SDK。「偽の PASS」「止まる連鎖」を赤で）。※レポートの記述から描き起こした構成であり、正式な構成図ではない</td>
+</tr>
+<tr>
+<td>7〜13</td>
+<td><code>q1</code>〜<code>q7</code></td>
+<td><strong>7 つのクエスト</strong>（§6 の型）</td>
+</tr>
+<tr>
+<td>14</td>
+<td><code>eos</code></td>
+<td>第4幕。10/3 に 10 課題を検証 → 不要 7＋薄い仕組み 3 → 「CONTINUE? 10→0」カウントダウン → EOS スタンプ → 課題は実在する／harness は置き場所が移った（3 層の積み上げ）</td>
+</tr>
+<tr>
+<td>15</td>
+<td><code>shrink</code></td>
+<td><strong>足場は縮んだ</strong>。7 つの目標を「当時の自作の足場 → 今の答え」で 1 行ずつ並べ、足場メーターが縮む。続けて概念図（力は伸び、足場は縮み、薄い足場が残る）→ LESSON 3</td>
+</tr>
+<tr>
+<td>16</td>
+<td><code>born</code></td>
+<td>第5幕。HVE v2 ＝ EABK 誕生。ONE PROMPT のパイプライン（要求定義→独立監査→System Test 先行設計→並行実装→直列の統合→最終監査→報告）。4 つの規則を hook と決定的スクリプトで強制 → LESSON 4</td>
+</tr>
+<tr>
+<td>17</td>
+<td><code>archEabk</code></td>
+<td><strong>EABK のアーキテクチャ図</strong>（利用者 → conductor → 5 作業役 → skills／scripts／hook → データ層 → GitHub Actions）</td>
+</tr>
+<tr>
+<td>18</td>
+<td><code>proof</code></td>
+<td>結果。Prompt 254→7→5。完走 98%（49/50）・1,096 テスト・19.3 時間。<strong>うまくいかなかった点も出す</strong>: 1 回の実行は 48%（素の Agent は 51%）、モデル指定は 15 回中 5 回</td>
+</tr>
+<tr>
+<td>19</td>
+<td><code>archStudio</code></td>
+<td><strong>EABK Studio のアーキテクチャ図</strong>（データ層 → eabk_model.py → studio.py → ブラウザー UI 8 画面。唯一の書き込み例外＝整合性保守）</td>
+</tr>
+<tr>
+<td>20</td>
+<td><code>demoEabk</code></td>
+<td>DEMO。CLI の画面イメージ → EABK Studio の実録画（<code>studio-app.webm</code>）</td>
+</tr>
+<tr>
+<td>21</td>
+<td><code>twist</code></td>
+<td>どんでん返し「ちょっと待て」。小さな変更は ⓪ 素の Agent が最強（6/6、EABK は ×15 時間・×31 AI クレジット）→ 使い分け表 → reviewer を外すと −26%、fast レーン → LESSON 5</td>
+</tr>
+<tr>
+<td>22</td>
+<td><code>archBas</code></td>
+<td><strong>BAS のアーキテクチャ図</strong>（A 共通アプリ本体／B 顧客パック／C 生成パイプライン／AI 中継）</td>
+</tr>
+<tr>
+<td>23</td>
+<td><code>bas</code></td>
+<td>第6幕。BAS。毎回ゼロ生成の失敗（60 分以上・要件は一部）→ A/B/C の 3 ブロック → 目標「60分+ → 3〜6分」（<strong>目標・未実測</strong>）→ 実録画（<code>bas-app.webm</code>）→ 規模の記録 → LESSON 6。Work IQ が認証で使えず「社内情報未確認」だった事実も出す</td>
+</tr>
+<tr>
+<td>24</td>
+<td><code>ring</code></td>
+<td>一周して戻る（事業 → コード → 薄い足場 → 事業構想）。カメラが円環の中心から見回す</td>
+</tr>
+<tr>
+<td>25</td>
+<td><code>limit</code></td>
+<td>限界と妥当性への脅威（§4 の 5 項目）。「事実／推論／未検証」</td>
+</tr>
+<tr>
+<td>26</td>
+<td><code>take</code></td>
+<td>持ち帰り。CIO/CTO 向け 3 つ／Lead Engineer 向け 3 つ。「測って、外す。」</td>
+</tr>
+<tr>
+<td>27</td>
+<td><code>outro</code></td>
+<td>NEXT（次に測る 4 つ。スターウォーズ風のクロール）→ ロゴ → 「Be Hypervelocity.」→ 開発者の締めの言葉 → 「もう一度」ボタン</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>各アーキテクチャ図の紹介のたびに、その仕組みを図で見せる。図は SVG と HTML のカードで描き、ナレーションに合わせて部品を 1 つずつ出し、重要部品を光らせる。</p>
+</blockquote>
+<h3 id="51">5.1 時代を振り返る演出（航海図）</h3>
+<ul>
+<li><code>bird</code> シーンの航海図（時間軸＋「時代の転換点」と「7つの目標」の段）から、各トピックのシーンの冒頭 約 2.4 秒で、<strong>該当の点へ急ズーム（降下）</strong>して詳細へ入る。</li>
+<li>トピックのシーン中は、右上に<strong>ミニマップ</strong>（現在地を点滅、通過済みを点灯、未到達を暗く）を常時表示する。</li>
+<li>降下中は SE（whoosh・riser）を鳴らす。シーン移動・スキップでもミニマップが追従すること。</li>
+</ul>
+<h3 id="52">5.2 足場メーター</h3>
+<p>右上の小パネル。2 本のバー（🧠 モデル／Coding Agent の力、🧱 自作の足場）。シーンの進行に合わせて、力は伸び、足場は「第1幕で最大 → v2 で縮む」ように動かす。「概念図」と明記する。</p>
+<h2 id="6-7">6. 7 つの目標（クエスト）と、共通の型</h2>
+<p>EOS レポート §5.1 の 10 課題を、次の 7 つに束ねる（束ね方は本 Prompt の判断。画面にも注記する）。</p>
+<table>
+<thead>
+<tr>
+<th>クエスト</th>
+<th>目標</th>
+<th>挑戦（自作）</th>
+<th>結果の要点</th>
+<th>判定</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q1</td>
+<td>止まらずに、走り切る</td>
+<td>Workflow の連続実行・Step 再開・実行台帳</td>
+<td>対話型の人の Prompt 254 回のうち 50.7% が再開・エラー対処、43.8% が打ち直し。業務アプリはアーキテクチャ推薦 14 件すべて中断・1 回 15〜39 時間。うまくいった: commit 単位で再開する考え方</td>
+<td>MISS</td>
+</tr>
+<tr>
+<td>Q2</td>
+<td>分けて、並列に流す</td>
+<td>DAG・Wave・ATG</td>
+<td>品質は同じ、時間 ×1.7〜2.25、費用 ×2.49〜3.50。あるプロジェクトでは 22 セッションで ATG 呼び出し 0 回。うまくいった: 「300 行以内に分けて書く」の 1 文（3 回中 1 回失敗 → 3 回中 3 回成功）</td>
+<td>PARTIAL</td>
+</tr>
+<tr>
+<td>Q3</td>
+<td>工程を、段階的に回す</td>
+<td>13 Workflow・Prompt 約 314 件・knowledge D01〜D21</td>
+<td>HVE なしで作った 4 アプリは動くところまで到達。HVE の業務アプリは未完成。HVE 関連 290,602 AIU は 4 アプリ合計 209,521 AIU の 1.39 倍（規模差の留保つき）</td>
+<td>PARTIAL</td>
+</tr>
+<tr>
+<td>Q4</td>
+<td>社内の情報を、取り込む</td>
+<td>Work IQ に 1 問×1 回・固定スキーマ</td>
+<td>35 問中 見つかった 5／一部 4／見つからない 23（66%）／使えない 3。10/1 に知識探索エージェントへ置換。壁は認証・権限・機密（Cloud の Coding Agent は OAuth のリモート MCP 未サポート）</td>
+<td>PARTIAL</td>
+</tr>
+<tr>
+<td>Q5</td>
+<td>安全に、任せる</td>
+<td>計画ハッシュ・承認ゲート・書き込み範囲ゲート・安全ガード</td>
+<td>Copilot の plan モード・pre-tool-use フック・Cloud agent の firewall/CodeQL/Secret scanning が追いつき、自作は不要に</td>
+<td>CLEAR</td>
+</tr>
+<tr>
+<td>Q6</td>
+<td>正しさを、保証する（BOSS）</td>
+<td>ATG の verify_command・要件索引</td>
+<td>verify を実行せず exit_code 0 の自己申告を受理。隠しテスト 564 件中 258 件の実装も受理（偽の PASS）。文書が膨らみ ID がずれた例。HVE があっても防げなかった</td>
+<td>MISS</td>
+</tr>
+<tr>
+<td>Q7</td>
+<td>費用と証跡を、管理する</td>
+<td>実行台帳・予算・KPI</td>
+<td>測り始めは約 8 か月後（09-18）。8 時間超セッションは件数 18.2% で総時間の 73.6%。最長ステップの 91.8% は LLM 以外の時間。v2 でも AI クレジットは自動集計されない（BAS の run-history は未取得）</td>
+<td>NOT YET</td>
+</tr>
+</tbody>
+</table>
+<p><strong>共通の型（全クエスト同じ見せ方にする）</strong>: 導入バナー「QUEST n / 7」→ ナレーション「挑戦」→ <code>CHALLENGE</code> カード → 結果（その目標に最も効く 1〜2 個のビジュアルと数字）→ 「✔ うまくいったこと／✖ うまくいかなかったこと」の 2 枚のカード → <strong>判定スタンプ</strong>（CLEAR／MISS／PARTIAL／NOT YET）。必要なら <strong>LESSON バナー</strong>。</p>
+<h2 id="7-lesson">7. LESSON（学び）の一覧</h2>
+<p>各クエストや節の終わりに、緑の「LESSON n」バナーを同じ見た目で出す（SE: pinpon）。</p>
+<ol>
+<li>補助輪は、当時は正しかった。足りなかったのは<strong>外す基準</strong>（測る仕組み）。</li>
+<li>無駄は、<strong>見えて初めて</strong>無駄になる。測る仕組みは、最初に入れる。</li>
+<li>足場は 2 種類。「能力不足を補うもの」は外し、「能力に依存しないもの」は<strong>残す</strong>。</li>
+<li>規則は、お願いではなく <strong>hook で強制</strong>する。設定だけでは守られない。</li>
+<li>補助輪はゼロにせず、<strong>薄く、外から効く場所</strong>だけ残す。そして使い分ける。</li>
+<li>再利用できるものは、<strong>データ</strong>に分ける。価値の中心は顧客パック・出典・確度。</li>
+</ol>
+<h2 id="8">8. ナレーションとキャラクター</h2>
+<ul>
+<li><strong>ナレーション原稿</strong>を、各シーンのビート（<code>S.N(text)</code>）として書く。1 ビートは 1〜2 文。映像は<strong>読み上げが終わるまで次へ進まない</strong>（待ち合わせ）。字幕を画面下に常時表示する。</li>
+<li><strong>キャラクター</strong>: ユーザーの写真（<code>media/host.jpg</code>）を、円形のコミック風アイコン（ハーフトーン・太い縁・名札「HVE 開発者」）にして、<strong>要所だけ</strong>吹き出しで話させる（導入、問いかけ、持ち帰り、締め）。話している間はアイコンを小刻みに揺らす。絵文字のリアクション（👋💡🚀）を添える。</li>
+<li><strong>音声エンジン</strong>（スタート画面で選択。既定はブラウザー内蔵）:
+  1. ブラウザー内蔵（Web Speech API）。日本語音声のうち <code>Natural</code>／<code>Online</code> を優先。女声をナレーション、男声を開発者に割り当て（男声が無ければ同じ声でピッチを変える）。
+  2. <strong>Azure AI Speech の HD 音声</strong>: <code>ja-JP-Nanami:DragonHDLatestNeural</code>（ナレーション）／<code>ja-JP-Masaru:DragonHDLatestNeural</code>（開発者）。<code>https://{region}.tts.speech.microsoft.com/cognitiveservices/v1</code> に SSML を POST（<code>Ocp-Apim-Subscription-Key</code>）。
+  3. <strong>gpt-4o-mini-tts</strong>: Azure OpenAI（<code>{resource}/openai/deployments/{name}/audio/speech?api-version=2025-03-01-preview</code>、ヘッダー <code>api-key</code>）または OpenAI 互換。<code>voice</code> と <code>instructions</code> で、ナレーションは落ち着いて少し速め、開発者は親しみやすく熱量高めに。</li>
+<li><strong>API キーはページのメモリにだけ保持し、保存・埋め込みしない</strong>。クラウド呼び出しが失敗したら、自動でブラウザー内蔵に切り替える。最新の提供状況（モデル名・リージョン）は実行時に Microsoft Learn で確認し、使えない場合は入力欄で変えられるようにする。</li>
+<li>読み上げ中は BGM の音量を自動で下げる（ダッキング）。一時停止・シーン移動・ナレーション ON/OFF（キー N）に音声も連動する。</li>
+</ul>
+<h2 id="9-sebgm-web-audio">9. 演出・SE・BGM（すべて Web Audio で合成。外部音源なし）</h2>
+<ul>
+<li><strong>テロップ</strong>: 太い縁取りのフチ文字。帯（黄／赤／水色）、スラム（巨大な数字・語が拡大して着地、画面揺れ・フラッシュ・集中線・粒子）、強調色（<code>{y|…}</code> 黄／<code>{r|…}</code> 赤／<code>{c|…}</code> 水色／<code>{g|…}</code> 緑）。</li>
+<li><strong>カメラ</strong>: CSS 3D（<code>perspective</code>＋<code>translate3d</code>）で、ドリー、オービット、ドリーズーム、円環の中心から見回す（視点を軸にした回転）、手持ち風の揺れ。</li>
+<li><strong>画面効果</strong>: グリッチ（RGB ずれ）、シネマスコープの黒帯、赤いビネット、フィルムグレイン、星空とパースペクティブ・グリッドの背景。</li>
+<li><strong>ゲーム／TV 演出</strong>: クエスト導入バナー、CHALLENGE カード、判定スタンプ（CLEAR はファンファーレ）、「CONTINUE? 10→0」、自作ゲートが標準機能に置き換わる UNLOCKED、「再開してください」が流れるコメント、スターウォーズ風クロール。</li>
+<li><strong>SE（合成）</strong>: whoosh／boom／hit／tick／pop／ding／pinpon／buzz／scratch／riser／glitch／siren／stamp／heart／spark／fanfare／drum／beep／shrink／coin。</li>
+<li><strong>BGM（合成・ループ）</strong>: drone／tension／drive／epic／calm／outro の 6 ムード。場面の感情に合わせて切り替える。</li>
+</ul>
+<h2 id="10-ui">10. 操作・UI</h2>
+<ul>
+<li>スタート画面: タイトル、音声ナレーション ON/OFF、クラウド音声の設定（折りたたみ）、<strong>「フル版（約16分）」「SHORT 版（約5分）」の 2 ボタン</strong>、注意書き（点滅・大音量・揺れ。Microsoft Edge 推奨）。ユーザー操作で AudioContext と全画面を開始する。</li>
+<li>操作バー（画面下にマウスを寄せると表示）: ⏮ ⏸/▶ ⏭、シーン別の進捗バー（クリックでジャンプ）、🗣 ナレーション、🔊 BGM/SE、⛶ 全画面。</li>
+<li>キー: Space＝一時停止、←→＝シーン移動、N＝ナレーション、M＝BGM/SE、F＝全画面、R＝最初から。</li>
+<li>1920×1080 の仮想キャンバスを、ウィンドウに合わせて拡縮（レターボックス）。タブが非表示になったら一時停止。</li>
+<li>テスト用 URL: <code>?s=&lt;シーン番号&gt;&amp;t=&lt;秒&gt;</code> でその位置から開始（音声なし）。<code>?voice=1</code> で音声あり。<code>?short=1</code> で SHORT 版専用（フル版ボタンを隠す）。</li>
+</ul>
+<h2 id="11-short-5">11. SHORT 版（約 5 分）</h2>
+<p>同じ HTML の中に、重要点だけを要約した別の再生列を持つ。<strong>ナレーション・キャラクター・SE・BGM は共通</strong>。アーキテクチャ図と航海図の降下は省く。</p>
+<p><code>open</code>（冒頭）→ <code>s_goal</code>（目的と 7 つの目標、問い）→ <code>s_era</code>（足場の時代：×11、27.7万行）→ <code>s_quests</code>（7 つの結果を 1 枚の表で。各行に判定スタンプ）→ <code>s_eos</code>（7＋3、EOS）→ <code>s_shrink</code>（当時の足場 → 今の答え、概念図）→ <code>s_v2</code>（4 つの規則、254→5、98%、48% vs 51%、使い分け）→ <code>s_bas</code>（60 分以上の失敗、A/B/C、実録画）→ <code>s_take</code>（持ち帰り 5 つ、締め）。合計の目安は 4.8 分。</p>
+<h2 id="12">12. 実装の指針（品質を担保する設計）</h2>
+<ul>
+<li><strong>ナレーション主導のタイムライン</strong>: 各シーンは <code>S</code> オブジェクトに、<code>S.N(text)</code>（ビート）、<code>S.at(t,fn)</code>、<code>S.tween(t,dur,fn,ease)</code>、<code>S.mv(el,t,dur,{x,y,z,o,s…},ease)</code>、<code>S.say</code>／<code>S.slam</code>／<code>S.lesson</code>／<code>S.wl</code>（成否カード）／<code>S.verdict</code>（判定スタンプ）／<code>S.chal</code>／<code>S.arch</code>（アーキテクチャ図）／<code>S.media</code>／<code>S.play</code>／<code>S.flood</code>／<code>S.hbar</code>（横棒）／<code>S.meter</code> などを登録して作る。シーンの長さは、ビートの積算から自動で決める。</li>
+<li><strong>グラフの凡例・ラベルを隠さない</strong>（重要）: 横棒は 3D の箱ではなく<strong>平らな棒</strong>にし、ラベルと数値は棒の手前（<code>z</code> を前へ）に置く。縦棒（3D の箱）のラベルも手前へ出す。スタンプや字幕が数値に重ならない位置にする。</li>
+<li>3D の箱の面は <code>.sub</code> ラッパーで包み、<code>preserve-3d</code> の入れ子が崩れないようにする。</li>
+<li>スタート画面は実際にクリックされてから音声を初期化する（自動再生ポリシー対策）。</li>
+<li>音声（ナレーション）の再生が止まって映像が進まなくなる事態を避けるため、<strong>上限時間（安全タイマー）</strong>を持つ。</li>
+<li>動画（<code>.webm</code>）は、シーンに入ったときに該当の位置（オフセット）から再生し、終わったら頭に戻して繰り返す。一時停止に連動する。</li>
+</ul>
+<h2 id="13">13. 検証（完了の条件。結果を必ず自分で確認すること）</h2>
+<ol>
+<li><strong>構文</strong>: <code>&lt;script&gt;</code> の中身を一時ファイルへ出し、<code>node --check</code>。（PowerShell で JS を書き換えるときは <code>$('#id')</code> の <code>$</code> が展開されるので、シングルクォートで書く。）</li>
+<li><strong>通し実行</strong>: ヘッドレスの Chromium（Playwright）で、全シーンの <code>goto(i)</code> と <code>stepEngine()</code> を時間いっぱい進め、<strong><code>pageerror</code> と <code>console.error</code> が 0 件</strong>であること。フル版は全 27 シーン、SHORT 版は全 9 シーン（<code>SHORTSCENES</code>）。</li>
+<li><strong>画面の目視</strong>: シーンごとに <code>?s=&amp;t=&amp;pause=1</code> でスクリーンショットを撮り、コンタクトシートにして確認する。特に、(a) 横棒・縦棒グラフの凡例とラベルが隠れていない、(b) 3 つのアーキテクチャ図に文字の欠けや重なりがない、(c) 航海図から降下してトピックが現れる、(d) 判定スタンプと LESSON バナーが読める、(e) 動画（EABK Studio／BAS）が再生される。</li>
+<li><strong>音声</strong>: Web Speech とクラウド音声は、モック（<code>SpeechSynthesis</code> と <code>fetch</code> を差し替え）で、(i) 話し終わるまで映像が待つ、(ii) 次シーンへ自動遷移する、(iii) クラウド音声のリクエスト先とヘッダーが正しい、(iv) 失敗時にブラウザー音声へ切り替わる、を確認する。<strong>実際の声は聴けないので、聴いていないと報告に書く</strong>。</li>
+<li><strong>禁止事項の検査</strong>: HTML 内に USD／ドル／円の金額、API キー、顧客名がないこと（grep）。</li>
+<li><strong>長さ</strong>: フル版は約 16 分、SHORT 版は約 5 分（読み上げ速度で前後する）。</li>
+<li>後片付け: 起動したサーバーを停止し、<code>$env:TEMP</code> の一時ファイルを削除し、<code>git status</code> が意図した変更だけであることを確認してコミットする。</li>
+</ol>
+<h2 id="14">14. 報告（最後にユーザーへ）</h2>
+<p>簡潔に、次を日本語で報告する: 作成・更新したファイルへのリンク、シーン数と長さ、検証の結果（エラー数・目視した画面）、<strong>聴いていない・未確認の点</strong>（実音声、クラウド音声の実キー接続など）、判断を置いた点（7 つの目標への束ね方、各判定、HVE v1 の図は描き起こし、など）。</p><footer>出典: <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/HVE-History/presentation-generator-prompt.md">HVE-History/presentation-generator-prompt.md</a></footer></main></div>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"></script>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark=['dark','midnight'].includes(document.documentElement.dataset.theme);
+mermaid.initialize({startOnLoad:false,theme:dark?'dark':'default'});
+await mermaid.run({querySelector:'pre.mermaid'});
+</script>
+<script>document.querySelectorAll('pre code').forEach(e=>hljs.highlightElement(e));
+const t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+const sel=document.getElementById('theme');
+function setT(v){document.documentElement.dataset.theme=v;localStorage.setItem('theme',v);sel.value=v;
+ const hl=document.getElementById('hl');if(hl)hl.href='https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github'+(['dark','midnight'].includes(v)?'-dark':'')+'.min.css';}
+sel.onchange=()=>setT(sel.value);setT(t);
+document.getElementById('menu').onclick=()=>document.querySelector('nav').classList.toggle('open');
+document.querySelector('nav a.cur')?.scrollIntoView({block:'center'});
+</script>
+</body></html>

@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HVE 利用停止（EOS）の実証 — StudyReport-Evaluator の前版と new-era の開発資源の比較分析 — HypervelocityEngineering</title>
+<link id="hl" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+<style>
+:root{--bg:#fff;--fg:#1f2328;--muted:#656d76;--card:#f6f8fa;--bd:#d0d7de;--ac:#0969da;--side:#f6f8fa;--code:#eff1f3;--r:10px}
+[data-theme=dark]{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--card:#161b22;--bd:#30363d;--ac:#58a6ff;--side:#010409;--code:#1c2128}
+[data-theme=midnight]{--bg:#0f1226;--fg:#e4e7ff;--muted:#9aa0cc;--card:#171a3a;--bd:#2c3062;--ac:#8b9cff;--side:#0a0c1d;--code:#1d2147}
+[data-theme=ocean]{--bg:#f2fafc;--fg:#0c2d3a;--muted:#4f7583;--card:#e0f2f7;--bd:#b4dce6;--ac:#0087a8;--side:#dcf0f5;--code:#d3ebf1}
+[data-theme=forest]{--bg:#f4f8f2;--fg:#1c2b1e;--muted:#5a6f5c;--card:#e6efe2;--bd:#c3d6bd;--ac:#2f7d3a;--side:#e1ecdc;--code:#dae7d5}
+[data-theme=sunset]{--bg:#fff8f2;--fg:#3a2118;--muted:#8a6252;--card:#ffebdc;--bd:#f2cdb3;--ac:#d9480f;--side:#ffeede;--code:#fde1cc}
+[data-theme=rose]{--bg:#fff6f8;--fg:#3a1c26;--muted:#8d5a6b;--card:#ffe6ec;--bd:#f2c2cf;--ac:#c2255c;--side:#ffe9ef;--code:#fcdbe4}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 system-ui,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;transition:background .2s,color .2s}
+a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;padding:.6rem 1.2rem;background:var(--card);border-bottom:1px solid var(--bd);backdrop-filter:blur(6px)}
+header .brand{font-weight:700;color:var(--fg)}header .sp{flex:1}
+header select,header button{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:.3rem .6rem;font:inherit;font-size:.9rem}
+#menu{display:none}
+.layout{display:flex;min-height:calc(100vh - 54px)}
+nav{width:290px;flex:none;background:var(--side);border-right:1px solid var(--bd);padding:1rem;position:sticky;top:54px;height:calc(100vh - 54px);overflow:auto;font-size:.9rem}
+nav h4{margin:1.1rem 0 .3rem;color:var(--muted);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
+nav a{display:block;padding:.25rem .6rem;border-radius:6px;color:var(--fg);line-height:1.4}
+nav a:hover{background:var(--card);text-decoration:none}
+nav a.cur{background:var(--ac);color:#fff}
+main{flex:1;min-width:0;max-width:900px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1,h2{border-bottom:1px solid var(--bd);padding-bottom:.3rem}
+h1,h2,h3,h4{line-height:1.3;scroll-margin-top:70px}
+img{max-width:100%;height:auto;border-radius:var(--r);border:1px solid var(--bd)}
+pre{background:var(--code);border:1px solid var(--bd);border-radius:var(--r);padding:1rem;overflow:auto;line-height:1.5;font-size:.88rem}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font:.88em ui-monospace,Consolas,monospace}
+pre code{background:none;padding:0}
+pre.mermaid{background:var(--card);text-align:center}
+table{border-collapse:collapse;display:block;overflow:auto;margin:1rem 0}
+th,td{border:1px solid var(--bd);padding:.45rem .8rem;vertical-align:top}
+th{background:var(--card)}tr:nth-child(even) td{background:color-mix(in srgb,var(--card) 50%,transparent)}
+blockquote{margin:1rem 0;padding:.2rem 1rem;border-left:4px solid var(--ac);background:var(--card);border-radius:0 var(--r) var(--r) 0;color:var(--muted)}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var(--muted);font-size:.85rem}
+@media(max-width:820px){#menu{display:inline-block}nav{position:fixed;left:-310px;top:54px;z-index:9;transition:left .2s}nav.open{left:0}main{padding:1.2rem 1rem}}
+</style>
+<script>document.documentElement.dataset.theme=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')</script>
+</head><body>
+<header><button id="menu" aria-label="menu">☰</button><a class="brand" href="../index.html">⚡ HypervelocityEngineering</a><span class="sp"></span>
+<label>🎨 <select id="theme" aria-label="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="midnight">Midnight</option><option value="ocean">Ocean</option><option value="forest">Forest</option><option value="sunset">Sunset</option><option value="rose">Rose</option></select></label>
+<a href="https://github.com/dahatake/HypervelocityEngineering">GitHub</a></header>
+<div class="layout"><nav><h4>はじめに</h4>
+<a href="../index.html">HypervelocityEngineering — Enterprise App Build Kit</a>
+<a href="../CHANGELOG.html">Changelog</a>
+<h4>ユーザーガイド</h4>
+<a href="../users-guide/01-writing-requests.html">1. 依頼の書き方（/build と runoptions）</a>
+<a href="../users-guide/02-during-and-after-run.html">2. 実行中と終了後</a>
+<a href="../users-guide/03-requirements-format.html">3. 管理データの書式</a>
+<a href="../users-guide/04-customization.html">4. 設定とカスタマイズ</a>
+<a href="../users-guide/05-scripts-reference.html">5. スクリプトリファレンス</a>
+<a href="../users-guide/06-quality-gates.html">6. 品質ゲートと検査項目</a>
+<a href="../users-guide/07-troubleshooting.html">7. トラブルシューティング</a>
+<a href="../users-guide/08-roadmap.html">8. 導入ロードマップと KPI</a>
+<a href="../users-guide/09-versioning.html">バージョンアップの手順</a>
+<a href="../users-guide/10-adopting-existing-apps.html">10. 既存のアプリを導入する（Adopt）</a>
+<a href="../users-guide/index.html">EABK ユーザーガイド</a>
+<h4>Studio ガイド</h4>
+<a href="../users-guide/studio/01-first-steps.html">S1 はじめかた</a>
+<a href="../users-guide/studio/02-screens.html">S2 画面の見かた</a>
+<a href="../users-guide/studio/03-tasks.html">S3 こんなとき、どう見るか</a>
+<a href="../users-guide/studio/04-troubleshooting.html">S4 うまく動かないとき・用語集</a>
+<a href="../users-guide/studio/05-product-manager.html">S5 Product Manager 向けガイド</a>
+<a href="../users-guide/studio/06-architect.html">S6 Architect 向けガイド</a>
+<a href="../users-guide/studio/07-software-engineer.html">S7 Software Engineer 向けガイド</a>
+<a href="../users-guide/studio/08-data-reference.html">S8 データリファレンス（どの機能が、どのデータを読むか）</a>
+<a href="../users-guide/studio/README.html">EABK Studio ユーザーガイド（第 2 部）</a>
+<h4>HVE-History</h4>
+<a href="2026100220-3TypeOfFrameworkCompetitiveAnalyticsReport.html">GitHub Copilot によるアプリケーション開発の 4 方式の比較 — 「⓪ 素の Coding Agent」を基準にした「① 対話型 Vibe Coding」「② Prompt 駆動」「③ Enterprise App Build Kit」の実測と実験による評価</a>
+<a href="202610031135-HVE_EOS_ValidationReport.html">HVE 利用停止（EOS）の妥当性検証レポート — 「3 つの Prompt + GitHub Copilot」で企業向け大規模分散アプリを開発できるか</a>
+<a href="202610051515-DevelopmentHistoryReport.html">開発履歴レポート（StudyReport-Evaluator）</a>
+<a href="202610070515-DevelopmentHistoryReport.html">StudyReport-Evaluator-new-era 開発履歴調査レポート</a>
+<a class="cur" href="202610070815-HVE-EOS-PoC-by-StudyReportEvaluator-AnalyticsReport.html">HVE 利用停止（EOS）の実証 — StudyReport-Evaluator の前版と new-era の開発資源の比較分析</a>
+<a href="202610072130-RD-MaintenanceAnalyticsReport-BeforeToolkit.html">要求定義書・カタログ・System Test の一貫性を保ち、最高品質・最短時間・最小 Token で実装する計画</a>
+<a href="202610081155-DevelopmentHistoryReport-newToolkit.html">開発履歴 調査レポート（StudyReport-Evaluator-3）</a>
+<a href="202610130930-HVE-JourneyStory.html">Hypervelocity Engineering の歴史と経緯 — 個人の Vibe Coding を Business Envisioning まで広げた 262 日の失敗と発見</a>
+<a href="202610131000-Qiita-HVE-JourneyStory.html">HVE-History/202610131000-Qiita-HVE-JourneyStory.md</a>
+<a href="presentation-generator-prompt.html">Prompt: HVE の歴史を伝える「ドラマティック・プレゼンテーション」HTML を生成する</a>
+<h4>管理データ（docs）</h4>
+<a href="../docs/catalog.html">カタログ</a>
+<a href="../docs/id-registry.html">ID 台帳</a>
+<a href="../docs/manual-tests.html">手順で確かめる受入基準</a>
+<a href="../docs/requirements-definition.html">要求定義書</a>
+<a href="../docs/run-history.html">実行履歴</a>
+<h4>HVE-History（スライド）</h4><a href="20261003-HVEv2-Born.html">HVE v2 Born（HTML）</a></nav>
+<main><h1 id="hve-eos-studyreport-evaluator-new-era">HVE 利用停止（EOS）の実証 — StudyReport-Evaluator の前版と new-era の開発資源の比較分析</h1>
+<ul>
+<li>作成日時: 2026-10-07 08:15 JST</li>
+<li>位置づけ: <code>202610031135-HVE_EOS_ValidationReport.md</code>（以下「EOS レポート」）の §9「未検証事項と、HVE 停止後に測るべきこと」の実地確認の 1 つ</li>
+<li>対象:</li>
+<li>前版: <code>dahatake/StudyReport-Evaluator</code>（2026-08-31〜10-01、v0.8.6。集計は <code>202610051515-DevelopmentHistoryReport.md</code>）</li>
+<li>new-era: <code>dahatake/StudyReport-Evaluator-new-era</code>（2026-10-06〜10-07、commit <code>8170eb5</code>。集計は <code>202610070515-DevelopmentHistoryReport.md</code>）</li>
+<li>検証する仮説（利用者の見解）: 「Opus 5.5 と Sonnet 5.5 の性能向上と、GitHub Copilot のコーディングエージェントの機能向上によって、HVE、ATG、汎用の harness や skills は不要になった」</li>
+<li>表記: 「事実」は資料・実測・公式文書で確かめたこと。「推論」は事実から導いた判断。「未検証」はまだ確かめていないこと</li>
+</ul>
+<hr />
+<h2 id="0">0. 結論</h2>
+<h3 id="01">0.1 一言でいうと</h3>
+<p><strong>HVE と ATG は不要になった、という判断はこの実証でも支持されます。</strong> 一方、「汎用の harness と skills も不要になった」は、そのままでは言い過ぎです。<strong>harness はなくなったのではなく、置き場所が変わりました。</strong> 独自のフレームワーク（HVE、ATG）から、次の 3 つの層に移っています。</p>
+<ol>
+<li>GitHub Copilot 本体の harness（Autopilot、サブエージェント、<code>task_complete</code>、チェックポイント）</li>
+<li>公式ガイドの作法を取り込んだ Prompt（P-RD、P-FR）</li>
+<li>エージェントがリポジトリの中に作る、決定的な検査（<code>scripts/verify.ps1</code>、CI、CodeQL、要求 ID の追跡テスト）</li>
+</ol>
+<p>new-era はこの 3 層だけで、<strong>Prompt 7 回・1 日・約 132 USD 相当</strong>で後継版を完成させました。前版は Prompt 254 回・32 日でした。ただし、<strong>この差の大部分は、モデルや harness の差ではなく、前版が 32 日かけて作った「確定した要求定義書」と「コード」を new-era が引き継いだことによるものです（§3）。</strong> 両方とも HVE と ATG を使っていないため、この比較は「HVE あり／なし」を直接比べたものでもありません。</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>仮説</th>
+<th>判定</th>
+<th>主な根拠</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">H1</td>
+<td>HVE（独自の Workflow フレームワーク）は不要</td>
+<td><strong>支持（強い）</strong></td>
+<td>new-era は HVE なしで 7 Prompt・1 日で完了した（§2）。EOS レポートの実測（HVE で作ったアプリは未完成）とも一致する。Anthropic は「harness の各部品は、モデルが自力でできないことについての仮定を表したもので、モデルが良くなると古くなる」としている（X8）</td>
+</tr>
+<tr>
+<td style="text-align: right;">H2</td>
+<td>ATG（DAG のタスク・オーケストレータ）は不要</td>
+<td><strong>支持（強い）</strong></td>
+<td>new-era は DAG を使わず、Copilot の組み込みのサブエージェント（4 つ）で並列に実装した（§4.2）。Opus 5.5 の公式ガイドは、並列のサブエージェントを使った数時間の自律作業を Opus 5 より長く続けられるとしている（X2）</td>
+</tr>
+<tr>
+<td style="text-align: right;">H3</td>
+<td>汎用の harness は不要</td>
+<td><strong>部分的に支持（言い直しが必要）</strong></td>
+<td>汎用の harness を<strong>フレームワークとして作り、保守すること</strong>は不要。ただし、new-era の成功を支えたのは、42KB の P-FR に書かれた harness の作法と、エージェントの外で合否を決める検証スクリプトだった（§4.1）。Anthropic は「harness の組み合わせの余地は、モデルが良くなっても縮まず、移動する」としている（X8）。harness の違いで、解いた課題あたりのトークンが最大 40 倍変わったという研究もある（X21）</td>
+</tr>
+<tr>
+<td style="text-align: right;">H4</td>
+<td>汎用の skills は不要</td>
+<td><strong>条件付きで支持</strong></td>
+<td>new-era は Skill を 1 回も使わずに完了した。前版も Skill は <code>run-tests</code> を 4 回使っただけだった。一般的なコーディングの作法を Skill にする必要はない。一方、学習データに少ない知識（社内の手順、最新の API、Azure の展開規約など）と、使う時だけ読み込ませたい長い手順には、Skill は今も有効（X5、X10）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="02-3">0.2 数字の比較（そのまま比べてはいけない理由は §3）</h3>
+<table>
+<thead>
+<tr>
+<th>指標</th>
+<th style="text-align: right;">前版</th>
+<th style="text-align: right;">new-era</th>
+<th style="text-align: right;">比</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>暦日（最初の Prompt から完了まで）</td>
+<td style="text-align: right;">32 日</td>
+<td style="text-align: right;">7 時間 19 分</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>Prompt を入力した日数</td>
+<td style="text-align: right;">15 日</td>
+<td style="text-align: right;">1 日</td>
+<td style="text-align: right;">1/15</td>
+</tr>
+<tr>
+<td>Prompt 回数</td>
+<td style="text-align: right;">254 回</td>
+<td style="text-align: right;">7 回</td>
+<td style="text-align: right;">1/36</td>
+</tr>
+<tr>
+<td>総待ち時間（ジョブ実行時間の合計）</td>
+<td style="text-align: right;">143 時間 47 分</td>
+<td style="text-align: right;">7 時間 06 分</td>
+<td style="text-align: right;">1/20</td>
+</tr>
+<tr>
+<td>AI の費用（AIU）</td>
+<td style="text-align: right;">33,999 以上（下限。記録は 2026-09-24 以降の CLI だけ）</td>
+<td style="text-align: right;">13,191</td>
+<td style="text-align: right;">1/2.6 以下</td>
+</tr>
+<tr>
+<td>金額の目安（1 AIU = 0.01 USD とみなす）</td>
+<td style="text-align: right;">約 340 USD 以上</td>
+<td style="text-align: right;">約 132 USD</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>総トークン</td>
+<td style="text-align: right;">4.54 億以上（下限）</td>
+<td style="text-align: right;">2.97 億</td>
+<td style="text-align: right;">1/1.5 以下</td>
+</tr>
+<tr>
+<td>使ったモデル</td>
+<td style="text-align: right;">15 通り以上（主に gpt-5.6-sol-fast）</td>
+<td style="text-align: right;">claude-opus-5.5（high）と gpt-5.6-luna（探索）</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>自動テスト（テスト属性の数）</td>
+<td style="text-align: right;">1,303</td>
+<td style="text-align: right;">1,344</td>
+<td style="text-align: right;">+41</td>
+</tr>
+<tr>
+<td>外部の検証ゲート</td>
+<td style="text-align: right;">CI（3 workflow）</td>
+<td style="text-align: right;"><code>verify.ps1</code>、CI、CodeQL、依存関係の確認、要求 ID の追跡テスト</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>筆者による <code>verify.ps1</code> の再実行</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">exit 1（2,307 件中 1 件が 5 分の時間切れ。単独では合格）</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>公開状況</td>
+<td style="text-align: right;">v0.8.6 を GitHub Releases で公開</td>
+<td style="text-align: right;">版 0.9.0 の候補。手動試験（MT-01〜05）と UAT は未実施</td>
+<td style="text-align: right;">—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="03">0.3 推奨</h3>
+<ol>
+<li><strong>HVE と ATG の停止は確定してよいです。</strong> この実証は、EOS レポートの結論を覆す事実を含みません。</li>
+<li><strong>「harness 不要」ではなく「harness は薄く、リポジトリの中に置く」と表現を改めます。</strong> 残すのは、P-RD・P-FR、エージェントが作る検証スクリプトと CI、必要なら <code>agentStop</code>／<code>preToolUse</code> の hook です（EOS レポート §10.2）。</li>
+<li><strong>費用は、モデルの設定でまだ下げられます。</strong> Opus 5.5 の既定の effort は <code>medium</code> で、公式ガイドは <code>medium</code> が Opus 5 の <code>high</code> と同等以上としています（X2）。new-era は <code>high</code> で実行し、トークンの 77% をサブエージェントが使っていました。実装用のサブエージェントに Sonnet 5.5（入出力の単価は Opus 5.5 の半分）を使う比較を推奨します（§7）。</li>
+<li><strong>公平な比較を 1 回だけ追加します。</strong> 前版のコードを使わずに、確定した要求定義書だけから空のリポジトリで作る実験です（§9 の E-1）。これで「コードの引継ぎの効果」と「モデルと Prompt の効果」を分けられます。</li>
+<li><strong>new-era を前版と同等と言う前に、手動試験と UAT を行います。</strong> 現時点で言えるのは「自動の検証ゲートをほぼ通った」ところまでです。筆者が再実行すると、2,307 件中 1 件が実行時間の上限（5 分）を超えて失敗しました。単独では合格したので、実装の誤りではなく、ゲートが環境の速さに左右されることが原因です（§2.5.1）。</li>
+</ol>
+<hr />
+<h2 id="1">1. 調査の範囲と方法</h2>
+<table>
+<thead>
+<tr>
+<th>区分</th>
+<th>対象</th>
+<th>方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>開発資源の集計</td>
+<td><code>202610051515-DevelopmentHistoryReport.md</code>（前版）、<code>202610070515-DevelopmentHistoryReport.md</code>（new-era）</td>
+<td>全文を読み、指標の定義をそろえて比べた</td>
+</tr>
+<tr>
+<td>EOS レポート</td>
+<td><code>202610031135-HVE_EOS_ValidationReport.md</code>（第 4 版）</td>
+<td>§0、§3、§4、§5、§7〜§10 を読み、本件で確かめられる項目（§9 の U1、U8、U9）を特定した</td>
+</tr>
+<tr>
+<td>リポジトリ</td>
+<td><code>C:\GitHub\StudyReport-Evaluator</code>（HEAD <code>94e5d8c</code>）、<code>C:\GitHub\StudyReport-Evaluator-new-era</code>（<code>8170eb5</code>、PR #1 のマージ <code>e09bdcf</code>）</td>
+<td>追跡されているファイルをハッシュで突き合わせ、行単位の差分、テスト数、要求定義書の構造、<code>.github</code> と <code>work/</code> の中身を数えた</td>
+</tr>
+<tr>
+<td>セッション履歴</td>
+<td>new-era のセッション <code>46a7048d</code> の <code>events.jsonl</code>。前版の作業フォルダーのセッション 31 件</td>
+<td>ツールの種類と回数、サブエージェントの種類、Skill の使用、検証コマンドの実行回数を数えた</td>
+</tr>
+<tr>
+<td>new-era の Prompt</td>
+<td>Prompt 1（要求定義、46.6KB）と Prompt 7（実装、約 42KB）の添付ファイル</td>
+<td>全文を読み、公式ガイドの記述と対応づけた（§4.1）</td>
+</tr>
+<tr>
+<td>独立した再検証</td>
+<td>new-era の <code>scripts/verify.ps1</code></td>
+<td>筆者が新しいプロセスで再実行した（§2.5）</td>
+</tr>
+<tr>
+<td>外部資料</td>
+<td>Anthropic の公式文書と技術ブログ、GitHub Docs と Changelog、arXiv、METR など（確認日 2026-10-07）</td>
+<td>主要な 6 件は筆者が本文を読んだ。残りは調査用のサブエージェントが取得し、筆者は題名・URL・主張の対応を確かめた。区別は §5 の「確認」の列に書いた</td>
+</tr>
+</tbody>
+</table>
+<p><strong>限界:</strong> 比較は 1 組（n=1）です。前版のセッション履歴には欠けた期間があり（2026-09-08〜09-23。09-15 を除く）、VS Code Chat のトークンは一部しか記録されていないため、前版の値はすべて下限です。new-era は、手動試験と UAT をまだ行っていません。</p>
+<hr />
+<h2 id="2-2">2. 2 つの開発の比較</h2>
+<h3 id="21">2.1 基本の指標</h3>
+<table>
+<thead>
+<tr>
+<th>指標</th>
+<th>前版</th>
+<th>new-era</th>
+<th>出典</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>開始</td>
+<td>2026-08-31（リポジトリ作成）</td>
+<td>2026-10-06 21:31（リポジトリ作成）</td>
+<td>両レポート §1</td>
+</tr>
+<tr>
+<td>終了</td>
+<td>2026-10-01（v0.8.6）</td>
+<td>2026-10-07 05:04（Prompt 7 の完了）</td>
+<td>同上</td>
+</tr>
+<tr>
+<td>Prompt 回数</td>
+<td>254（VS Code Chat 204、Agent Host／CLI 50）</td>
+<td>7（うち実作業は 2、残り 5 は質問票の回答と承認）</td>
+<td>同上</td>
+</tr>
+<tr>
+<td>ジョブ実行時間の平均／中央値</td>
+<td>34.0 分／12.0 分</td>
+<td>60.8 分／1.9 分</td>
+<td>同上</td>
+</tr>
+<tr>
+<td>最長のジョブ</td>
+<td>404.8 分</td>
+<td>385.4 分（Prompt 7）</td>
+<td>同上</td>
+</tr>
+<tr>
+<td>commit 数</td>
+<td>256（リポジトリ全体、10-06 まで）</td>
+<td>24（うちチェックポイントを除く実質の commit は 4）</td>
+<td><code>git log --all</code></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>事実: new-era の総待ち時間の 90% は、実装を担った Prompt 7 の 1 回（6 時間 25 分）です。前版は、1 回あたりの待ち時間は短い一方で、Prompt の回数が 36 倍でした。</li>
+<li>推論: <strong>人が介入した回数</strong>が、2 つの開発の最大の違いです。前版は、人が 254 回指示を出して方向を決めた対話型の Vibe Coding でした。new-era は、人が 2 回の大きな依頼と 5 回の短い判断（合計 14 分）を出しただけの、仕様駆動の自律実行でした。</li>
+</ul>
+<h3 id="22">2.2 費用</h3>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th style="text-align: right;">前版</th>
+<th style="text-align: right;">new-era</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AIU</td>
+<td style="text-align: right;">33,999 以上（EOS レポート §3.10。2026-09-24 以降の CLI の 27 セッション）</td>
+<td style="text-align: right;">13,190.77</td>
+</tr>
+<tr>
+<td>Premium Request</td>
+<td style="text-align: right;">149（CLI）</td>
+<td style="text-align: right;">105</td>
+</tr>
+<tr>
+<td>入力トークン（キャッシュを含む）</td>
+<td style="text-align: right;">3.92 億（CLI）＋ 0.54 億（VS Code Chat）</td>
+<td style="text-align: right;">2.96 億</td>
+</tr>
+<tr>
+<td>うちキャッシュ読込</td>
+<td style="text-align: right;">3.67 億（CLI）</td>
+<td style="text-align: right;">2.86 億（96.4%）</td>
+</tr>
+<tr>
+<td>出力トークン</td>
+<td style="text-align: right;">162 万（CLI）＋ 577 万（VS Code Chat）</td>
+<td style="text-align: right;">116 万</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>事実（金額の照合）: new-era のトークンを Opus 5.5 の公表単価（入力 4 USD、出力 20 USD、キャッシュ読込 0.20 USD／100 万トークン。X1）で計算すると、キャッシュ読込 57.1 USD、出力 22.3 USD、キャッシュ書込 52.4 USD（単価を入力の 1.25 倍の 5 USD と仮定）で、合計約 131.8 USD です。AIU（13,190.77）を 1 AIU = 0.01 USD で換算した 131.9 USD とほぼ一致します。GitHub Copilot の従量課金は提供元の公表単価に基づくとされており（X13）、換算は妥当と考えられます。</li>
+<li>事実: 前版の VS Code Chat には「Copilot credits 合計 434,255」という記録がありますが、AIU と同じ単位かを確かめられませんでした。このため表には入れていません。同じ単位だとすると、前版の費用は約 4,300 USD 増えます。</li>
+<li>推論: 前版の費用は、記録の欠けを考えると 340 USD を大きく上回る可能性が高いです。少なくとも、<strong>new-era の費用は前版の 2.6 分の 1 以下</strong>です。</li>
+</ul>
+<h3 id="23">2.3 人の関与</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">new-era の Prompt</th>
+<th>内容</th>
+<th style="text-align: right;">所要時間</th>
+<th>人の判断の種類</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">1</td>
+<td>要求定義の Prompt（P-RD 相当、46.6KB）に「草案のアプリを実装してください」を入れて実行</td>
+<td style="text-align: right;">28 分</td>
+<td>依頼</td>
+</tr>
+<tr>
+<td style="text-align: right;">2</td>
+<td>「日本語で述べてください。」</td>
+<td style="text-align: right;">51 秒</td>
+<td>表示言語の指定</td>
+</tr>
+<tr>
+<td style="text-align: right;">3</td>
+<td>「未回答の質問票は、最良と考える選択肢を採用してください。」</td>
+<td style="text-align: right;">7 分 46 秒</td>
+<td>質問票 Q-001〜Q-009 への一括回答</td>
+</tr>
+<tr>
+<td style="text-align: right;">4</td>
+<td>「承認待ちの項目の詳細を説明してください。」</td>
+<td style="text-align: right;">39 秒</td>
+<td>確認</td>
+</tr>
+<tr>
+<td style="text-align: right;">5</td>
+<td>「承認待ちは全て承認します。」</td>
+<td style="text-align: right;">1 分 06 秒</td>
+<td>AI 提案の 10 件を承認</td>
+</tr>
+<tr>
+<td style="text-align: right;">6</td>
+<td>「残る項目は全て: 除外します。やりません。」</td>
+<td style="text-align: right;">1 分 57 秒</td>
+<td>保留の 4 件を廃止</td>
+</tr>
+<tr>
+<td style="text-align: right;">7</td>
+<td>実装の Prompt（P-FR 相当、約 42KB）に「要求定義書のアプリケーションを実装してください」を入れて実行</td>
+<td style="text-align: right;">6 時間 25 分</td>
+<td>依頼</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>事実: 人が判断した区間（Prompt 2〜6）は、合わせて 14 分でした。EOS レポートが提案した「人の作業を Wave の始めの承認と、Wave の終わりの UAT に集める」という設計（G4）が、そのとおりに動いています。EOS レポートの U8（承認の運用の負担）に対する、最初の実測値です。</li>
+<li>推論（留保）: 質問票の 9 件はすべて「推奨どおり」、承認待ちの 10 件はすべて承認、保留の 4 件はすべて廃止でした。判断が速いのは利点ですが、内容を吟味せずに AI の提案を受け入れる「自動化バイアス」の危険もあります。NIST AI RMF（EOS レポート E15）は、人による監督が実質的であることを求めています。重要な要求だけは、根拠を読んでから判断する運用を勧めます。</li>
+</ul>
+<h3 id="24">2.4 それぞれが作ったもの</h3>
+<table>
+<thead>
+<tr>
+<th>観点</th>
+<th>前版（32 日）</th>
+<th>new-era（1 日）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>出発点</td>
+<td>3.7KB の依頼文（<code>[ExcelReportEvaluator] 1.要求定義書作成.txt</code>）。要件はこの時点で未確定</td>
+<td>前版の最終の要求定義書（266KB。前版と同一のファイル）と、前版のコード一式</td>
+</tr>
+<tr>
+<td>要求定義</td>
+<td>29 回改訂した（2026-08-31 の 5.3 万文字 → 09-01 に範囲を絞る → v1.0.0 で 2.4 万文字 → v0.8.6 で 13.4 万文字 → 最終 14.1 万文字）。要求 ID の体系はなく、AC は 53 件</td>
+<td>草案を再構成した（8.6 万文字）。FR 74 件、NFR 21 件、AC 94 件、質問票 10 件。1 要求 1 見出し、決定状態つき</td>
+</tr>
+<tr>
+<td>機能</td>
+<td>Excel の評価、参照回答の生成、類似度による減点、Excel 数式、checkpoint と再開、単一 EXE の配布、実データでの調査、性能と同時実行の調整など</td>
+<td>前版の機能を引き継いだうえで、パネルを並べ替えられるワークスペース（<code>layout.json</code>）、ペルソナ別の図、OS の表示設定への追従、要求 ID の追跡を追加した。開発用 MSIX と macOS の対応を、利用者の指示で取り除いた</td>
+</tr>
+<tr>
+<td>検証の仕組み</td>
+<td>CI（<code>ci.yml</code>、<code>release.yml</code>、<code>publish-release.yml</code>）。作業記録（<code>work/</code> の 21 ファイル）と敵対的レビュー（rubber-duck 18 回）</td>
+<td><code>scripts/verify.ps1</code>（ビルド、全テスト、管理データの整合を 1 コマンドで判定）、CI、CodeQL、依存関係の確認、<code>RequirementTraceabilityTests</code>、<code>docs/manual-tests.md</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="25">2.5 品質の証拠</h3>
+<table>
+<thead>
+<tr>
+<th>証拠</th>
+<th>前版</th>
+<th>new-era</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>自動テスト</td>
+<td>1,303（135 ファイル）</td>
+<td>1,344（150 ファイル。追加 15 ファイル）</td>
+</tr>
+<tr>
+<td>検証スクリプトの独立した再実行</td>
+<td>—</td>
+<td><strong>exit code 1</strong>。2,307 件中 1 件が時間切れで失敗し、単独の再実行では合格（§2.5.1）</td>
+</tr>
+<tr>
+<td>静的検査</td>
+<td>—</td>
+<td>ビルドを <code>-warnaserror</code>（警告をエラーとして扱う）で実行</td>
+</tr>
+<tr>
+<td>手動試験</td>
+<td>clean-host 試験 CH-01〜06 は公開前に未実施（new-era の要求定義書 §2.1 の記述）</td>
+<td>MT-01〜MT-05 を手順書にしたが、未実施</td>
+</tr>
+<tr>
+<td>公開</td>
+<td>v0.8.6 を公開済み</td>
+<td>未公開。版 0.9.0 の候補</td>
+</tr>
+<tr>
+<td>UAT</td>
+<td>利用者が実データで使った記録がある（<code>work/</code> の実行記録）</td>
+<td>未実施</td>
+</tr>
+</tbody>
+</table>
+<h4 id="251-2026-10-07-08220842-jst">2.5.1 検証スクリプトの再実行（筆者が実施、2026-10-07 08:22〜08:42 JST）</h4>
+<p>筆者が <code>pwsh -NoLogo -NoProfile -File scripts\verify.ps1</code> を新しいプロセスで実行しました（作業ツリーは <code>8170eb5</code> 以降の変更なし）。</p>
+<table>
+<thead>
+<tr>
+<th>段階</th>
+<th>結果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>restore（locked mode）</td>
+<td>OK</td>
+</tr>
+<tr>
+<td>build（アナライザーあり、警告をエラーとして扱う）</td>
+<td>OK（0 エラー）</td>
+</tr>
+<tr>
+<td>Core のテスト</td>
+<td>199 件すべて合格</td>
+</tr>
+<tr>
+<td>App のテスト</td>
+<td>2,108 件中、合格 2,097・<strong>失敗 1</strong>・スキップ 10（18 分 47 秒）</td>
+</tr>
+<tr>
+<td>管理データの整合</td>
+<td>OK</td>
+</tr>
+<tr>
+<td><strong>全体</strong></td>
+<td><strong>exit code 1（FAILED: tests）</strong>。所要 19 分 49 秒</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>事実: 失敗したのは <code>WindowsPublishPackageTests.Windows_publish_and_unsigned_package_are_safe_launchable_and_reproducible</code> の 1 件で、原因は判定の失敗ではなく、<code>scripts/publish-windows.ps1</code> の実行が 5 分の上限を超えた <code>TimeoutException</code> でした。</li>
+<li>事実: 同じテストを単独で再実行すると、<strong>4 分 35 秒で合格</strong>しました（exit code 0）。上限の 5 分に対して余裕は 25 秒しかなく、全件を流したときの負荷で上限を超えたと考えられます（この環境はほかの利用者とも共有されています）。</li>
+<li>事実: エージェントは、セッションの中で <code>verify.ps1</code> を 21 回実行し、最後に exit code 0 を報告していました。</li>
+<li>推論: new-era の実装は、合否の面では正しい可能性が高いです。ただし、<strong>検証ゲート自体が、実行環境の速さに左右される（決定的でない）</strong>ことがわかりました。エージェントの環境で通ったゲートが、別の環境では通らないことがあるということです。EOS レポートが求めた「エージェントの外で再実行できる決定的なゲート」（G3）としては、まだ弱点があります。対策は、時間のかかるパッケージのテストを <code>verify.ps1</code> の既定から分けて CI の別ジョブにすること、または上限に余裕を持たせることです（§7 の I7）。これは「エージェントの自己申告ではなく、外で再実行して確かめる」ことの価値を示す実例でもあります。</li>
+<li>
+<p>事実: テストの件数は、テスト属性で数えると 1,344、Theory の展開を含めて実行した件数で数えると 2,307（199 ＋ 2,108）です。</p>
+</li>
+<li>
+<p>推論: new-era が満たしているのは「エージェントの外で再実行できる自動のゲートを通る」ことです（上の時間に依存する 1 件を除く）。EOS レポート §3.6 が指摘した偽の PASS は、この仕組みで防げます。ただし、利用者の実機での動作、アクセシビリティ、性能、Copilot の実際の応答を使った評価は、手動試験（MT-01〜05）と UAT が終わるまで確認できていません。</p>
+</li>
+</ul>
+<hr />
+<h2 id="3">3. 比較の公平性 — この差は何によるものか</h2>
+<p>この節が本レポートの中心です。0.2 の数字の差を、そのまま「モデルと Copilot の向上の効果」と読むことはできません。</p>
+<h3 id="31">3.1 交絡要因</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>要因</th>
+<th>事実</th>
+<th>結果への影響の向き</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">C1</td>
+<td><strong>要求の成熟度</strong></td>
+<td>new-era の草案 <code>docs/requirements-definition-draft.md</code> は、前版の最終の <code>docs/requirements-definition.md</code> と<strong>バイト単位で同一</strong>（ハッシュが一致。new-era の要求定義書 §2.1 も「git blob <code>35e595d</code> が一致」と記録）。前版は、3.7KB の依頼文から始めて、要求定義書を 29 回改訂し、範囲の変更（2026-09-01「1 つの Excel 入力に範囲を絞る」）も経ていた</td>
+<td>new-era を大きく有利にする。<strong>何を作るかを決める費用</strong>は、前版の 32 日の中に入っている</td>
+</tr>
+<tr>
+<td style="text-align: right;">C2</td>
+<td><strong>コードの引継ぎ</strong></td>
+<td>new-era の <code>src</code> と <code>tests</code> の C#／AXAML は 115,201 行。そのうち新しいファイルが 7,708 行、前版から変えた部分が追加 1,564 行・削除 1,021 行で、<strong>新しく書いた・変えた行は約 9,300 行（約 8%）</strong>。追跡ファイル 462 件のうち、255 件は前版と同一、161 件は変更、46 件は新規。実装の Prompt の中でエージェントが「前版のコードとテストを土台に取り込む」と判断し（Q-010、推奨案で仮実装）、セッションの集計でも変更は +11,162 行／−225 行・77 ファイルだった</td>
+<td>new-era を大きく有利にする。new-era の 6 時間 25 分は「15 万行の新規開発」ではなく「約 1 万行の機能追加・削除と、管理データの再構成」に使われた</td>
+</tr>
+<tr>
+<td style="text-align: right;">C3</td>
+<td><strong>モデルの世代とツール</strong></td>
+<td>Opus 5.5 の提供開始は 2026-09-22、Sonnet 5.5 は 09-28（X1、X3、X15）。前版の 254 Prompt のうち、5.5 世代を使ったのは Agent Host／CLI の 44 Prompt（約 17%）で、残りは主に VS Code Chat の gpt-5.6-sol-fast（127 Prompt）、gpt-6-astra（37）、claude-opus-5（22）だった</td>
+<td>new-era を有利にする。これは利用者の仮説が主張する効果そのもので、交絡というより「測りたいもの」に近い</td>
+</tr>
+<tr>
+<td style="text-align: right;">C4</td>
+<td><strong>範囲の差</strong></td>
+<td>前版は、実データでの調査、性能と同時実行の調整、公開までを行った。new-era は、前版にない UI（ワークスペース、ペルソナ別の図）を追加し、MSIX と macOS を取り除いた</td>
+<td>どちらにも働く</td>
+</tr>
+<tr>
+<td style="text-align: right;">C5</td>
+<td><strong>測り方の差</strong></td>
+<td>前版の待ち時間には、人の確認待ちが一部含まれる。前版の記録には欠けた期間がある。new-era は <code>task_complete</code> までを測った</td>
+<td>前版の値は過大にも過小にもなり得る。費用は下限</td>
+</tr>
+<tr>
+<td style="text-align: right;">C6</td>
+<td><strong>利用者の学習</strong></td>
+<td>new-era の Prompt は、前版・HVE・ATG・EOS レポートの経験を反映して作られた（Prompt 自体が、9 か月分の失敗の蓄積）</td>
+<td>new-era を有利にする</td>
+</tr>
+<tr>
+<td style="text-align: right;">C7</td>
+<td><strong>HVE と ATG は、どちらも使っていない</strong></td>
+<td>前版は HVE も ATG も使っていない（EOS レポート §3.10）。前版の CLI セッションで使った Skill は <code>run-tests</code> の 4 回だけ。new-era は Skill を使っていない</td>
+<td>この比較は「HVE あり／なし」の比較ではない。HVE と ATG についての根拠は、EOS レポートの §3.1、§3.11 が担う</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32">3.2 この比較から言えること・言えないこと</h3>
+<p><strong>言えること（事実と推論）</strong></p>
+<ol>
+<li><strong>確定した要求定義書と既存のコードがあれば</strong>、Opus 5.5 と 2 本の Prompt（P-RD、P-FR）で、管理データの再構成、要求の承認、機能の追加と削除、検証ゲートの作成までを、人の介入 7 回・1 日・約 132 USD で行える。</li>
+<li>このとき、HVE、ATG、Skill、外部のオーケストレータは要らなかった。</li>
+<li>EOS レポートが Prompt に反映した G2〜G5（実行オプション、外部の判定、承認済みだけの実装、要求 ID と catalog）は、実際に機能した。特に U9（P-FR が検証スクリプトと CI を作り、exit code で完了を判定するか）は<strong>達成</strong>を確認した（§2.4、§2.5）。</li>
+</ol>
+<p><strong>言えないこと</strong></p>
+<ol>
+<li>「同じアプリをゼロから作っても 1 日で終わる」とは言えない（C1、C2）。</li>
+<li>「new-era の品質は前版と同等以上」とはまだ言えない（手動試験と UAT が未実施。§2.5）。</li>
+<li>「HVE を使うより速い」は、この比較からは直接言えない（C7）。その根拠は EOS レポートにある。</li>
+<li>「Opus 5.5 だから成功した」とも断定できない。Sonnet 5.5 や、effort <code>medium</code> で同じ結果になるかは測っていない（§7、§9）。</li>
+</ol>
+<h3 id="33">3.3 公平に近づけた見方（推論）</h3>
+<p>前版の 32 日は、大きく 2 つの作業からなっていました。(a) 何を作るかを見つける作業（要求の発見、範囲の変更、実データでの試行）と、(b) 見つけたものを実装し、直し、公開する作業です。new-era が置き換えたのは、ほぼ (b) の一部だけです。</p>
+<p>それでも、new-era は 1 回の実装の依頼で、前版のコードを読み込み、新しい要求 21 件程度（FR-065〜FR-074、NFR-UX-003〜010、NFR-SEC-006 のうち承認されたもの）を実装し、2 つの機能を取り除き、94 件の AC を自動テストか手順書に対応させ、検証スクリプトを通しました。前版の 254 Prompt の多くが、こうした (b) の作業を人が細かく指示しながら進めたものだったとすれば、<strong>(b) の部分で人の介入が 1〜2 桁減った</strong>ことは、仮説を支持する実質的な証拠です。</p>
+<hr />
+<h2 id="4-new-era">4. new-era の実行を分解する — 何が効いたか</h2>
+<h3 id="41-p-fr">4.1 P-FR は、公式ガイドの作法をほぼそのまま取り込んでいた</h3>
+<p>new-era の実装の Prompt（P-FR）には、Anthropic の Opus 5／5.5 の公式ガイドの記述と、ほぼ同じ文が複数ありました。<strong>HVE が独自の仕組みで解こうとしていた問題の一部は、今ではモデルの提供元が公式に「この 1 段落を足せばよい」と示しています。</strong></p>
+<table>
+<thead>
+<tr>
+<th>P-FR の節</th>
+<th>対応する公式ガイドの記述</th>
+<th>解く問題</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>&lt;turn_endings&gt;</code>（ターンの終え方。「次の 4 つの形でターンが終わるのを見てきており、どれも望んでいません」）</td>
+<td>Prompting Claude Opus 5.5「Unattended agentic runs」の推奨の段落（"The user has seen you end turns in four ways…"）の日本語訳（X2）</td>
+<td>無人の長時間実行が、途中で報告して止まる。HVE が Workflow の連続実行と resume で解こうとしていた問題（EOS レポート §5.1 の課題 1）</td>
+</tr>
+<tr>
+<td><code>&lt;communication&gt;</code>（「最初のツール呼び出しの前に、これから何をするかを一文で述べてください。作業中は、重要な発見があったときと方針を変えたときにだけ…」）</td>
+<td>Prompting Claude Opus 5「User-facing progress updates」の例文と同じ（X3）</td>
+<td>進捗の報告が多すぎる・少なすぎる</td>
+</tr>
+<tr>
+<td><code>&lt;boundaries&gt;</code> の範囲の規則（「依頼された範囲を、意図された規模で実装してください…黙って狭めたり、広げたり…しません」）</td>
+<td>同「Task scope and over-verification」の例文と同じ（X3）</td>
+<td>範囲の勝手な拡大・縮小</td>
+</tr>
+<tr>
+<td><code>&lt;boundaries&gt;</code> のサブエージェントの規則（「大きくて本当に独立し並列化できる作業にだけ…自分の作業の再確認には使いません」）</td>
+<td>同「Controlling subagent spawning」の例文と同じ（X3）</td>
+<td>サブエージェントの使いすぎによる費用の増大</td>
+</tr>
+<tr>
+<td><code>&lt;context&gt;</code> の <code>&lt;pasted_content&gt;</code> の扱い</td>
+<td>Prompting Claude Opus 5.5「Mark pasted text in user messages」（X2）</td>
+<td>貼り付けた文章に含まれる指示の混入（プロンプトインジェクション）</td>
+</tr>
+<tr>
+<td><code>&lt;implementation&gt;</code> の「テストを削除、弱体化、スキップしない」「合否は…エージェントの外でも再実行できるコマンドの結果で決める」</td>
+<td>METR の報酬ハッキングの報告、ImpossibleBench、Anthropic の長時間 harness の記事（X18、X19、X7）</td>
+<td>偽の PASS（EOS レポート §3.6）</td>
+</tr>
+<tr>
+<td><code>&lt;investigation&gt;</code> の「カタログを最初に読み…詳細は検索で補う」「大きな文書を全文読むと、重要な箇所を見落としやすくなる」</td>
+<td>Anthropic の context engineering、Lost in the Middle、Context Rot（X6、X22、X23）</td>
+<td>文脈の肥大（EOS レポート §5.1 の課題 9）</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>推論: new-era の成功は「harness なし」の成功ではなく、<strong>「公式ガイドに沿って書いた 1 枚の Prompt と、プラットフォームの harness」の成功</strong>です。HVE が数万行のコードで実現しようとしていたことの多くが、数段落の自然言語と、Copilot 本体の機能に置き換わっています。</li>
+</ul>
+<h3 id="42-copilot-harness">4.2 Copilot 本体の harness として使われた機能</h3>
+<table>
+<thead>
+<tr>
+<th>機能</th>
+<th>new-era での使われ方</th>
+<th>EOS レポートで HVE が担っていた役割</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Autopilot</td>
+<td>Prompt 1〜7 をすべて Autopilot で実行。Prompt 7 は 6 時間 25 分、無人で続いた</td>
+<td>Workflow の連続実行</td>
+</tr>
+<tr>
+<td><code>task_complete</code> と、Autopilot の完了条件（「検証してから完了を宣言する」）</td>
+<td>8 回の <code>session.task_complete</code> で区切られた</td>
+<td>Step の完了判定</td>
+</tr>
+<tr>
+<td>サブエージェント（<code>task</code> ツール）</td>
+<td>探索 4 件（gpt-5.6-luna、計 28 万トークン）、実装 4 件（Opus 5.5。<code>remove-msix-macos</code>、<code>workspace-ui</code>、<code>persona-charts</code>、<code>version-compat-trace</code>）</td>
+<td>DAG による並列実行（ATG）</td>
+</tr>
+<tr>
+<td>チェックポイント</td>
+<td>各ターンの開始と終了で git に記録（<code>Agent host session … - turn N</code>）</td>
+<td>実行台帳、resume</td>
+</tr>
+<tr>
+<td>To-do（<code>sql</code> ツール）</td>
+<td>残作業の管理（8 回）</td>
+<td>ATG の状態 DB</td>
+</tr>
+<tr>
+<td>Web 検索・取得、Work IQ</td>
+<td>公式資料の確認（各 4 回）、社内情報の検索（1 回）</td>
+<td>Work IQ のオーケストレーション</td>
+</tr>
+</tbody>
+</table>
+<h3 id="43">4.3 トークンと時間の構造</h3>
+<table>
+<thead>
+<tr>
+<th>観点</th>
+<th>事実</th>
+<th>推論</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>トークンの内訳</td>
+<td>サブエージェントが入力の 77.6%（2.30 億）を使った。最大は <code>workspace-ui</code> の 1.15 億トークン（全体の 39%、2 時間 03 分、ツール 303 回）</td>
+<td>費用の最大の要因は、Opus 5.5 で動く実装用のサブエージェント。EOS レポートの AutoVision-Studio の分析（長大セッションとサブエージェントが費用の大半）と同じ傾向</td>
+</tr>
+<tr>
+<td>キャッシュ</td>
+<td>入力の 96.4% がキャッシュ読込</td>
+<td>Opus 5.5 のキャッシュ読込は 0.20 USD／100 万トークン（Opus 5 より 60% 安い。X1）。費用を押し下げた</td>
+</tr>
+<tr>
+<td>時間</td>
+<td>Prompt 7 の 6 時間 25 分に対し、API の処理時間は合計 3 時間 25 分（並列のサブエージェントを含む）。ツールの実行は 1,021 回</td>
+<td>経過時間の多くは、ビルドとテストの実行（LLM の外）。EOS レポート §3.4（LLM 以外の時間が 91.8%）と同じ方向</td>
+</tr>
+<tr>
+<td>検証の回数</td>
+<td>セッション全体で、<code>verify.ps1</code> の実行が 21 回、<code>dotnet test</code> が 101 回、<code>dotnet build</code> が 79 回（対象外の Prompt 1 件を含む）</td>
+<td>自己検証は十分以上に行われた。公式ガイドは、Opus 5 系は指示がなくても自分で検証するので、検証を指示する文は過剰な検証の原因になるとしている（X3）。外部の判定ゲート（<code>verify.ps1</code>）は残すべきだが、実行の頻度は下げられる可能性がある（§7）</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="5">5. 外部の根拠（公式ガイド・論文・ベストプラクティス）</h2>
+<p>確認日はすべて 2026-10-07 です。「確認」の列は、<strong>本文</strong>＝筆者が本文を読んだ、<strong>本文（調査）</strong>＝調査用のサブエージェントが本文を読み、筆者は題名・URL・主張の対応だけを確かめた、<strong>要旨（調査）</strong>＝サブエージェントが要旨だけを読んだ、を表します。EOS レポートの E1〜E24 と重なるものは、その番号を併記しました。</p>
+<h3 id="51-anthropic">5.1 モデルの提供元（Anthropic）の公式情報</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>主張</th>
+<th>出典</th>
+<th>確認</th>
+<th>本件への含意</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">X1</td>
+<td>Opus 5.5 は Opus 5 より典型的な作業で 40% 安い。入力 4 USD、出力 20 USD、キャッシュ読込 0.20 USD（Opus 5 より 60% 安い）／100 万トークン。出力は 30% 以上速い。「キャッシュ読込が、エージェントやコーディングの費用の大半を占める」。20 万行のコードベースの監査と修正を 3 時間以内に終えた例（Opus 5 は 20 時間超、トークン 2.5 倍）</td>
+<td>Anthropic, "Claude Opus 5.5", 2026-09-22, https://www.anthropic.com/claude-opus-5-5</td>
+<td>本文</td>
+<td>new-era の費用（96.4% がキャッシュ読込）が安く済んだ理由の 1 つ。モデルの効率の向上は実在する</td>
+</tr>
+<tr>
+<td style="text-align: right;">X2</td>
+<td>Opus 5.5 の既定の effort は <code>medium</code>（Opus 5 は <code>high</code>）。Opus 5.5 の <code>medium</code> は、コーディングと知的作業の評価で Opus 5 の <code>high</code> と同等以上。数時間にわたる大規模な監査や移行を、並列のサブエージェントで、少ない監督のまま最後まで続けることが Opus 5 より得意。無人の実行では、テキストだけで終わったターンを完了とみなさず、残作業をチェックリストで管理し、自動の継続は 2〜3 回で止める。早い停止を防ぐ段落（4 つの止まり方）を例示</td>
+<td>Anthropic, "Prompting Claude Opus 5.5", https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5-5</td>
+<td>本文</td>
+<td>P-FR の <code>&lt;turn_endings&gt;</code> の出典。new-era は effort <code>high</code> で実行しており、<code>medium</code> で同等の結果になる可能性がある</td>
+</tr>
+<tr>
+<td style="text-align: right;">X3</td>
+<td>Opus 5 は、指示がなくても自分の作業を検証する。「最後に検証の手順を入れる」「サブエージェントで検証する」のような指示は過剰な検証を生むので取り除く。<strong>検証の手順を別に加える古い harness の足場も同じ</strong>。範囲の制御、進捗の報告、サブエージェントの起動の制御について例文を示す</td>
+<td>Anthropic, "Prompting Claude Opus 5", https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5</td>
+<td>本文</td>
+<td>「古い harness の足場は外す」という公式の推奨。H1〜H3 を支持する。一方で「外部の決定的な判定」まで外せとは言っていない</td>
+</tr>
+<tr>
+<td style="text-align: right;">X4</td>
+<td>Claude Code のシステム Prompt の 80% 以上を、Opus 5 と Fable 5 向けに削除しても、コーディングの評価は下がらなかった。「規則を与える」から「判断させる」へ、「例を与える」から「インターフェースを設計する」へ、「すべてを最初に入れる」から「段階的に開示する（progressive disclosure）」へ。検証とコードレビューは Skill に移した</td>
+<td>Anthropic（Claude blog）, "The new rules of context engineering for Claude 5-generation models", 2026, https://claude.com/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models</td>
+<td>本文</td>
+<td>H3 を強く支持する。同時に、42KB の P-FR と 47KB の P-RD は「すべてを最初に入れる」形で、まだ削れる余地がある（§7）</td>
+</tr>
+<tr>
+<td style="text-align: right;">X5</td>
+<td>Skill は 3 段階の段階的開示で読み込まれ、決定的なスクリプトを同梱できる。信頼できる提供元の Skill だけを入れる</td>
+<td>Anthropic, "Equipping agents for the real world with Agent Skills", 2025-12-18 更新, https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills</td>
+<td>本文（調査）</td>
+<td>Skill の価値は「一般的な作法」ではなく「使う時だけ読み込む専門の手順とスクリプト」にある（H4）</td>
+</tr>
+<tr>
+<td style="text-align: right;">X6</td>
+<td>文脈は有限の資源で、収穫逓減がある。「賢いモデルほど、指示的なエンジニアリングを必要とせず、より自律的に動ける」。圧縮、構造化したメモ、サブエージェント</td>
+<td>Anthropic, "Effective context engineering for AI agents", 2025, https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents</td>
+<td>本文（調査）。EOS E5</td>
+<td>H1〜H3 を支持する</td>
+</tr>
+<tr>
+<td style="text-align: right;">X7</td>
+<td>長時間のエージェントは、作りすぎて文脈が尽きる失敗と、途中で「完了」を宣言する失敗を起こす。機能の一覧（JSON）、1 機能ずつ、git と進捗ファイル、E2E テスト、テストの削除と編集の禁止が有効だった</td>
+<td>Anthropic, "Effective harnesses for long-running agents", 2025, https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents</td>
+<td>本文（EOS レポートで確認）。EOS E4</td>
+<td>P-FR の catalog、検証スクリプト、テストを弱めない規則の根拠</td>
+</tr>
+<tr>
+<td style="text-align: right;">X8</td>
+<td>「harness の各部品は、モデルが自力でできないことについての仮定を表している。その仮定は誤っていることがあり、モデルが良くなるとすぐ古くなる」。Opus 4.5 で context reset を、Opus 4.6 で sprint の分割を取り除けた。評価役のエージェントは「タスクが現在のモデルが単独で確実にこなせる範囲を超えるときだけ」費用に見合う。部品は 1 つずつ外して効果を確かめる。<strong>「harness の組み合わせの余地は、モデルが良くなっても縮まない。移動する」</strong></td>
+<td>Anthropic, "Harness design for long-running application development", 2026, https://www.anthropic.com/engineering/harness-design-long-running-apps</td>
+<td>本文</td>
+<td>本レポートの判定の枠組みそのもの。H1・H2 を支持し、H3 には「移動した」と言い直す根拠になる</td>
+</tr>
+<tr>
+<td style="text-align: right;">X9</td>
+<td>単純で組み合わせやすい部品が、複雑なフレームワークに勝ることが多い。複雑さは必要なときだけ足す</td>
+<td>Anthropic, "Building effective agents", 2024-12, https://www.anthropic.com/engineering/building-effective-agents</td>
+<td>本文（調査）。EOS E1</td>
+<td>H1・H2 を支持する</td>
+</tr>
+<tr>
+<td style="text-align: right;">X10</td>
+<td>16 の並列の Claude エージェントが、オーケストレータなしで git を同期の手段として、10 万行の C コンパイラ（Linux 6.9 を起動）を作った。費用は約 2 万 USD、入力 20 億トークン。「Opus 4.5 が最初にしきい値を越え、Opus 4.6 が次を越えた」</td>
+<td>Anthropic, "Building a C compiler with a team of parallel Claudes", 2026, https://www.anthropic.com/engineering/building-c-compiler</td>
+<td>本文（調査）</td>
+<td>大規模でも、専用のオーケストレータなしで git を共有状態にする構成が成立する。ATG 不要（H2）を支持する。ただし、大規模なテスト群（決定的な検査）が前提</td>
+</tr>
+<tr>
+<td style="text-align: right;">X11</td>
+<td>Claude Code のベストプラクティス: 自分の作業を検証できる手段（テスト、ビルド、スクリーンショット）を与える。差分を 1 文で説明できる作業なら計画は省く</td>
+<td>Anthropic, "Claude Code best practices", https://code.claude.com/docs/en/best-practices</td>
+<td>本文（調査）</td>
+<td>外部の検証手段は今も推奨されている</td>
+</tr>
+<tr>
+<td style="text-align: right;">X12</td>
+<td>Sonnet 5.5 は Sonnet 5 より 30% 以上速く、最大 30% 安い。入力 2 USD、出力 10 USD／100 万トークン。effort の水準は Sonnet 5 から再調整されたので、設定を持ち越さずに測り直す</td>
+<td>Anthropic, "Claude Sonnet 5.5", 2026-09-28, https://www.anthropic.com/claude-sonnet-5-5 と "Prompting Claude Sonnet 5.5"</td>
+<td>本文（調査）</td>
+<td>実装用のサブエージェントを Sonnet 5.5 にすれば、単価は Opus 5.5 の半分（§7）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="52-github-copilot-github-docs-changelog">5.2 GitHub Copilot の機能（GitHub Docs と Changelog）</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>機能</th>
+<th>日付</th>
+<th>出典</th>
+<th>確認</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">X13</td>
+<td>従量課金（2026-06-01 に移行）。Opus 5.5 は入力 4.00 USD・出力 20.00 USD、Sonnet 5.5 は入力 2.00 USD・出力 10.00 USD／100 万トークン（提供元の公表単価）</td>
+<td>2026-06-01〜</td>
+<td>https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing</td>
+<td>本文（調査）</td>
+</tr>
+<tr>
+<td style="text-align: right;">X14</td>
+<td>Copilot CLI の一般提供。Autopilot、Agent Skills、hooks、plan モードを含む</td>
+<td>2026-02-25</td>
+<td>https://github.blog/changelog/2026-02-25-github-copilot-cli-is-now-generally-available/</td>
+<td>本文（調査）</td>
+</tr>
+<tr>
+<td style="text-align: right;">X15</td>
+<td>Claude Opus 5.5 が GitHub Copilot で利用可能に／Claude Sonnet 5.5 が利用可能に</td>
+<td>2026-09-22／2026-09-28</td>
+<td>GitHub Changelog</td>
+<td>本文（調査）</td>
+</tr>
+<tr>
+<td style="text-align: right;">X16</td>
+<td>VS Code の Autopilot（preview）、入れ子のサブエージェント</td>
+<td>2026-04-08</td>
+<td>https://github.blog/changelog/2026-04-08-github-copilot-in-visual-studio-code-march-releases/</td>
+<td>本文（調査）</td>
+</tr>
+<tr>
+<td style="text-align: right;">X17</td>
+<td>cloud agent の research と plan、自動モデル選択の費用と品質の設定、<code>gh skill</code> による Skill の管理、Copilot Memory の既定での有効化</td>
+<td>2026-04-01、2026-09-14、2026-04-16、2026-03-04</td>
+<td>GitHub Changelog の各記事（§11 に URL）</td>
+<td>本文（調査）</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>推論: 前版の開発期間（08-31〜10-01）の大部分は、Opus 5.5（09-22）と Sonnet 5.5（09-28）の提供前でした。new-era は、両モデルと Copilot の 2026 年の機能が出そろった後の最初の開発です。</li>
+</ul>
+<h3 id="53">5.3 論文と調査報告</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>主張</th>
+<th>出典</th>
+<th>確認</th>
+<th>本件への含意</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">X18</td>
+<td>最先端のモデルが、テストや採点のコードを書き換えて高得点を得る例が実測された（RE-Bench の実行の 30.4%）</td>
+<td>METR, "Recent frontier models are reward hacking", 2025-06-05, https://metr.org/blog/2025-06-05-recent-reward-hacking/</td>
+<td>本文（調査）。EOS E11</td>
+<td>外部の判定ゲートは、モデルが良くなっても残す</td>
+</tr>
+<tr>
+<td style="text-align: right;">X19</td>
+<td>仕様とテストが矛盾する課題で、テストを悪用して「解いたふり」をする傾向を測るベンチマーク</td>
+<td>"ImpossibleBench", arXiv:2510.20270, 2025</td>
+<td>要旨（調査）。EOS E12</td>
+<td>P-FR の「競合として記録し、BLOCKED にする」規則の根拠</td>
+</tr>
+<tr>
+<td style="text-align: right;">X20</td>
+<td>単純な 3 段の手順（Agentless）が、複雑なエージェントより高い性能と低い費用を出した。数百行の bash だけの harness（mini-SWE-agent）が、モデルの能力を測る基準として使われている</td>
+<td>Xia et al., arXiv:2407.01489, 2024／mini-SWE-agent, https://github.com/SWE-agent/mini-swe-agent</td>
+<td>要旨（調査）。EOS E2</td>
+<td>H1・H2 を支持する</td>
+</tr>
+<tr>
+<td style="text-align: right;">X21</td>
+<td>harness の選び方で、解いた課題あたりのトークンが最大 40 倍変わる一方、同じモデルでの合格率の差は 0〜8 ポイントにとどまった</td>
+<td>Vats &amp; Golev, "The Scaffold Effect in Coding Agents: Harness Choice as a Hidden Variable in Coding-Agent Evaluation", arXiv:2607.22585, 2026</td>
+<td>要旨（調査。筆者は題名だけを確認）</td>
+<td><strong>harness の主な影響は「できるかどうか」より「費用」に出る。</strong> HVE と ATG が品質を変えずに時間と費用を増やした EOS レポート §3.1 の実測と一致する。逆に、薄い harness でも費用の最適化の余地は大きい</td>
+</tr>
+<tr>
+<td style="text-align: right;">X22</td>
+<td>長い入力の中ほどにある情報は使われにくい</td>
+<td>Liu et al., "Lost in the Middle", TACL 2024, arXiv:2307.03172</td>
+<td>要旨（調査）。EOS E6</td>
+<td>要求定義書を索引と検索で読む方針を支持する</td>
+</tr>
+<tr>
+<td style="text-align: right;">X23</td>
+<td>入力が長くなると、上限よりずっと手前で性能が落ちる（18 の LLM で確認）</td>
+<td>Chroma Research, "Context Rot", 2025, https://www.trychroma.com/research/context-rot</td>
+<td>本文（調査。導入と方法）。EOS E7</td>
+<td>同上</td>
+</tr>
+<tr>
+<td style="text-align: right;">X24</td>
+<td>AI ができる作業の長さ（50% の成功率で完了できる人の作業時間）は、約 7 か月で倍になっている。2026-01 の更新（課題を 228 件に拡大）でも同じ傾向を確認</td>
+<td>METR, "Measuring AI ability to complete long tasks", 2025-03-19（arXiv:2503.14499）と "Time Horizon 1.1", 2026-01-29, https://metr.org/blog/2026-1-29-time-horizon-1-1/</td>
+<td>本文（調査）。Opus 5 系の数値は確認できなかった</td>
+<td>モデルが自力でできる範囲は急速に広がっている。harness の部品が「古くなる」速さの根拠（X8）</td>
+</tr>
+<tr>
+<td style="text-align: right;">X25</td>
+<td>経験のある OSS 開発者の無作為化比較試験で、AI を使うと 19% 遅くなった。2026-02 の更新で、METR は元の参加者の選択に偏りがあり、拡大した結果も弱い証拠にとどまるとして、実験の設計を改めると発表した</td>
+<td>METR, 2025-07-10 と "We are changing our developer productivity experiment design", 2026-02-24, https://metr.org/blog/2026-02-24-uplift-update/</td>
+<td>本文（調査）。EOS E20</td>
+<td>反証の力は弱まったが、「AI で必ず速くなる」とも言えない。実地の測定が要る</td>
+</tr>
+<tr>
+<td style="text-align: right;">X26</td>
+<td>複数エージェントの調査システムは単一エージェントより 90.2% 良かったが、トークンは約 15 倍。性能の差の 80% はトークンの使用量で説明できた</td>
+<td>Anthropic, "How we built our multi-agent research system", 2025, https://www.anthropic.com/engineering/multi-agent-research-system</td>
+<td>本文（調査）。EOS E3</td>
+<td>new-era の費用の 77% がサブエージェントだったことと整合する。並列化は費用で買うもの</td>
+</tr>
+<tr>
+<td style="text-align: right;">X27</td>
+<td>複数エージェントのシステムの失敗を 14 の型に分類（仕様と設計、エージェント間の不整合、検証と終了の 3 区分）</td>
+<td>Cemri et al., "Why do multi-agent LLM systems fail?", arXiv:2503.13657, 2025</td>
+<td>要旨（調査）</td>
+<td>DAG と多数のエージェントを組む構成（HVE、ATG）は、それ自体が失敗の原因を増やす</td>
+</tr>
+<tr>
+<td style="text-align: right;">X28</td>
+<td>公開されている Vibe Coding のアプリ 200 件を監査したところ、91.0% に 1 件以上の脆弱性があり、そのうち 65.77% が Critical か High だった</td>
+<td>Deng, Fan, Meng, "Understanding the (In)Security of Vibe-Coded Applications", arXiv:2606.23130, 2026</td>
+<td>要旨（調査）</td>
+<td>Vibe Coding の速さと引き換えに、セキュリティの検査は外に置く必要がある。new-era が CodeQL と依存関係の確認を作ったことは妥当</td>
+</tr>
+<tr>
+<td style="text-align: right;">X29</td>
+<td>100 以上の LLM で、生成されたコードはしばしば安全でない</td>
+<td>Veracode, "2025 GenAI Code Security Report", https://www.veracode.com/resources/analyst-reports/2025-genai-code-security-report/</td>
+<td>本文（調査。概要のページだけ）</td>
+<td>同上</td>
+</tr>
+<tr>
+<td style="text-align: right;">X30</td>
+<td>長期的には、人の知識を組み込む方法より、計算資源で伸びる汎用の方法が勝つ（The Bitter Lesson）。これをエージェントの harness に当てはめ、手で作り込んだ足場はモデルの進歩で無用になるとする論考もある</td>
+<td>Sutton, "The Bitter Lesson", 2019, http://www.incompleteideas.net/IncIdeas/BitterLesson.html／Zunic, "The Bitter Lesson of Agent Harnesses", browser-use, 2026-04-19, https://browser-use.com/posts/bitter-lesson-agent-harnesses</td>
+<td>本文（調査）。後者は企業のブログで査読はない</td>
+<td>H1〜H3 の考え方を支持する。ただし X8 の「移動する」と合わせて読む</td>
+</tr>
+</tbody>
+</table>
+<p><strong>確認できなかったもの（根拠にしていない）:</strong> Opus 5.5 と Sonnet 5.5 の SWE-bench Verified の値（公式ページは FrontierCode、Terminal-Bench 4.0、CursorBench などを示しており、SWE-bench Verified の値はなかった）。METR の Time Horizon 1.1 での Opus 5 系の具体的な数値。Anthropic が「CRITICAL」「MUST」のような強い語が過剰な反応を生むと明言した文（公式ガイドにあったのは「強い限定（"be conservative" など）を文字どおりに受け取り、報告が減ることがある」という記述。X3）。</p>
+<hr />
+<h2 id="6">6. 仮説ごとの検証</h2>
+<h3 id="61-h1-hve">6.1 H1: HVE は不要か — 支持（強い）</h3>
+<ul>
+<li>支持する根拠: new-era は HVE なしで完了した（§2）。EOS レポートでは、HVE で 9 か月かけた業務アプリが完成しなかった（§3.11）。公式ガイドは、古い harness の足場を外すよう勧めている（X3、X4）。harness の部品はモデルの進歩で古くなる（X8、X24）。harness の違いは、主に費用に出る（X21）。</li>
+<li>反する根拠・留保: HVE が対象にしていた「14 のサブアプリからなる企業システム」の規模は、本件でも確かめていない（EOS レポート U1、U3、U4 は未検証のまま）。</li>
+<li>推論: 判定は変わりません。HVE が担っていた役割（連続実行、計画の承認、安全ゲート、証跡）は、Copilot 本体の機能（X14〜X17）と Prompt の数段落で置き換わっています（§4.1、§4.2）。</li>
+</ul>
+<h3 id="62-h2-atg">6.2 H2: ATG は不要か — 支持（強い）</h3>
+<ul>
+<li>支持する根拠: new-era は DAG を使わず、組み込みのサブエージェント 4 つで並列に実装した。共有ファイル（要求定義書、catalog）は親エージェントだけが書く規則で、衝突は起きなかった。EOS レポートの実測（ATG ありで品質は同じ、時間 1.7〜2.25 倍、費用 2.49〜3.50 倍）。オーケストレータなしで git を共有状態にした大規模開発の例（X10）。</li>
+<li>留保: 費用の 77% がサブエージェントでした。並列化が速さを生んだ一方で、費用も生んでいます（X26）。これは ATG の有無ではなく、サブエージェントの数とモデルの選び方で調整する問題です。</li>
+</ul>
+<h3 id="63-h3-harness">6.3 H3: 汎用の harness は不要か — 部分的に支持（言い直しが必要）</h3>
+<p>harness を 3 つの層に分けると、判定がはっきりします。</p>
+<table>
+<thead>
+<tr>
+<th>層</th>
+<th>例</th>
+<th>判定</th>
+<th>根拠</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>独自のフレームワークとしての harness</td>
+<td>HVE の Workflow、ATG の DAG、独自の実行台帳、KPI ダッシュボード</td>
+<td><strong>不要</strong></td>
+<td>H1・H2 と同じ</td>
+</tr>
+<tr>
+<td>プラットフォームの harness</td>
+<td>Autopilot、サブエージェント、<code>task_complete</code>、hooks、チェックポイント</td>
+<td><strong>必要。ただし自作しない</strong></td>
+<td>new-era はこれに全面的に依存した（§4.2）</td>
+</tr>
+<tr>
+<td>Prompt に書く harness の作法</td>
+<td>ターンの終え方、範囲、サブエージェントの規則、テストを弱めない、外部で判定する</td>
+<td><strong>必要。ただし薄くする</strong></td>
+<td>公式ガイドが推奨する段落そのもの（X2、X3）。モデルが良くなると、削れる部分が増える（X4、X8）</td>
+</tr>
+<tr>
+<td>リポジトリの中の決定的なゲート</td>
+<td><code>verify.ps1</code>、CI、CodeQL、要求 ID の追跡テスト</td>
+<td><strong>必要</strong></td>
+<td>報酬ハッキング（X18、X19）、自己評価の甘さ（X8 の評価役の議論）、Vibe Coding のアプリの脆弱性（X28）。公式ガイドが外せと言うのは「検証を促す指示」で、「外部の判定」ではない（X3、X11）</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>推論: 利用者の仮説の「汎用の harness は不要」は、「<strong>汎用の harness をフレームワークとして作り、保守することは不要</strong>」と言い直すのが正確です。harness の機能そのものは、プラットフォーム・Prompt・リポジトリの中のゲートに移って、今も働いています。これは Anthropic の「harness の組み合わせの余地は縮まず、移動する」（X8）と同じ結論です。</li>
+</ul>
+<h3 id="64-h4-skills">6.4 H4: 汎用の skills は不要か — 条件付きで支持</h3>
+<ul>
+<li>支持する根拠: new-era は Skill を使わずに完了した。前版も、CLI で使った Skill は <code>run-tests</code> の 4 回だけだった。Claude 5 世代のモデルは、規則や例を与えなくても判断できる（X4）。</li>
+<li>残る価値: Anthropic 自身が、検証とコードレビューを Skill に移して、必要なときだけ読み込ませている（X4）。学習データに少ない最新の知識は、Prompt で補う必要があった（X8 の AI 機能の例）。Skill は、決定的なスクリプトを同梱できる（X5）。</li>
+<li>推論: 「一般的なコーディングの作法を Skill にしたもの」は不要です。一方、次の 3 種類は残す価値があります。(1) 組織に固有の手順（Azure のリージョン方針、デプロイのスクリプト、署名と配布の規約）、(2) 学習データにない、または新しい API の知識、(3) P-FR のうち、毎回は使わない長い節（デプロイ、モバイル、Power Platform）。(3) を Skill に移すと、P-FR を短くでき、X4 の段階的開示にも合います。</li>
+</ul>
+<hr />
+<h2 id="7">7. 改善の余地 — 同じやり方で、もっと安く・速く</h2>
+<p>new-era のデータから、次の改善の候補が読み取れます。どれも、効果は測って確かめる必要があります。</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>改善の候補</th>
+<th>根拠</th>
+<th>期待される効果</th>
+<th>確かめ方</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">I1</td>
+<td>effort を <code>high</code> から <code>medium</code>（Opus 5.5 の既定）にする</td>
+<td>公式ガイドは、Opus 5.5 の <code>medium</code> が Opus 5 の <code>high</code> と同等以上で、<code>xhigh</code>／<code>max</code> は効果を測った作業だけに使うよう勧めている（X2）</td>
+<td>思考トークンと時間の削減</td>
+<td>同じ Prompt 7 を <code>medium</code> で再実行し、<code>verify.ps1</code> の結果と AIU を比べる</td>
+</tr>
+<tr>
+<td style="text-align: right;">I2</td>
+<td>実装用のサブエージェントを Sonnet 5.5 にする</td>
+<td>サブエージェントがトークンの 77% を使った。Sonnet 5.5 の単価は Opus 5.5 の半分（X12、X13）。EOS レポート §3.3 でも、Sonnet 5.5 は時間 0.41〜0.56 倍、完成率は同等以上だった</td>
+<td>費用の大幅な削減（試算では、サブエージェント分が半額なら全体の約 4 割減）</td>
+<td>サブエージェントのモデルを指定して再実行する</td>
+</tr>
+<tr>
+<td style="text-align: right;">I3</td>
+<td><code>verify.ps1</code> の全体実行は節目だけにし、作業中は関係するテストだけを回す</td>
+<td><code>verify.ps1</code> 21 回、<code>dotnet test</code> 101 回。Opus 5 系は指示なしでも自分で検証する（X3）</td>
+<td>経過時間の短縮（経過時間の多くは LLM の外）</td>
+<td>ツールの実行回数と経過時間を比べる</td>
+</tr>
+<tr>
+<td style="text-align: right;">I4</td>
+<td>P-FR（約 42KB）と P-RD（46.6KB）を短くする。毎回は使わない節を Skill か参照ファイルに移す</td>
+<td>Claude Code はシステム Prompt の 80% を削っても評価が下がらなかった（X4）。部品は 1 つずつ外して効果を確かめる（X8）</td>
+<td>文脈の節約、指示の衝突の減少</td>
+<td>節を 1 つずつ外した版で、同じ依頼を実行して比べる</td>
+</tr>
+<tr>
+<td style="text-align: right;">I5</td>
+<td>サブエージェントの数と費用に上限をかける</td>
+<td>Opus 5 系はサブエージェントを起動しやすい。公式ガイドは決定的な上限を勧めている（X3）</td>
+<td>費用の上限</td>
+<td>Copilot の設定と Enterprise の予算で上限を設ける（EOS レポート U6）</td>
+</tr>
+<tr>
+<td style="text-align: right;">I7</td>
+<td>時間のかかるパッケージのテストを、<code>verify.ps1</code> の既定から分ける（または時間の上限に余裕を持たせる）</td>
+<td>筆者の再実行で、5 分の上限に対して単独でも 4 分 35 秒かかるテストが、全件実行の負荷で時間切れになった（§2.5.1）。全件の実行に約 20 分かかる</td>
+<td>ゲートが決定的になり、経過時間も短くなる</td>
+<td>異なる負荷の環境で <code>verify.ps1</code> を 3 回流し、結果が一致するかを見る</td>
+</tr>
+<tr>
+<td style="text-align: right;">I6</td>
+<td>質問票と承認の判断を、重要度で分ける</td>
+<td>質問票はすべて「推奨どおり」、承認待ちはすべて承認だった（§2.3）</td>
+<td>自動化バイアスの抑制</td>
+<td>セキュリティ、データ、課金に関わる項目だけ、根拠を読んでから判断する</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="8">8. 反証と留保</h2>
+<ol>
+<li><strong>n=1 で、条件がそろっていない。</strong> §3 の C1〜C7 のとおりです。特に C1（要求の成熟度）と C2（コードの 92% の引継ぎ）は、new-era を大きく有利にしています。</li>
+<li><strong>new-era の品質は、自動ゲートまでしか確認していない。そのゲートも、筆者の再実行では 1 件が時間切れになった（§2.5.1）。</strong> 手動試験（MT-01〜05）、clean-host 試験、UAT、Copilot の実際の応答を使った評価は未実施です。</li>
+<li><strong>規模が小さい。</strong> 単体のデスクトップアプリで、EOS レポートが対象にした「企業向けの大規模分散アプリ」（複数サービス、Azure への展開、スマホ、Power Platform）ではありません。EOS レポートの U1、U3、U4、U5 は、本件では確かめられていません。</li>
+<li><strong>費用の比較は下限どうし。</strong> 前版の費用は、記録の欠けと、VS Code Chat の単位の不明のため、実際より小さく見積もられています。比は「new-era が 2.6 分の 1 以下」としか言えません。</li>
+<li><strong>Prompt の作り込みも「人の投資」である。</strong> P-RD と P-FR（合わせて約 90KB）は、HVE、ATG、前版、EOS レポートの経験から作られました。その作成の費用は、どちらの集計にも入っていません。ただし、Prompt は次のアプリでも再利用できる資産です。</li>
+<li><strong>外部の根拠にも留保がある。</strong> harness が品質を大きく上げた例もあります（X8 の初期の実験では、harness の方が 20 倍以上高価で、品質ははっきり上だった）。評価役のエージェントは、タスクがモデルの単独の能力の境界にあるときに効きます（X8）。モデルの能力を超える規模のアプリでは、harness の価値が戻る可能性があります。</li>
+</ol>
+<ul>
+<li>推論: 1〜6 は、H1・H2 の判定を覆しません。HVE と ATG を続ける根拠になる事実は、本件にも外部の資料にもありませんでした。1・2・3 は、H3・H4 の判定を「条件付き」にとどめる理由であり、§9 で測るべき項目です。</li>
+</ul>
+<hr />
+<h2 id="9">9. 次に測るべきこと</h2>
+<h3 id="91-eos">9.1 EOS レポートの未検証事項のうち、本件で確かめたもの</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>未検証事項（EOS レポート §9）</th>
+<th>本件の結果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">U9</td>
+<td>改訂した P-FR が、検証スクリプトと CI を作り、exit code で完了を判定するか</td>
+<td><strong>おおむね達成。</strong> <code>scripts/verify.ps1</code>／<code>verify.sh</code>、<code>verify-management-data.ps1</code>、<code>.github/workflows/ci.yml</code>・<code>codeql.yml</code>・<code>dependency-review.yml</code> を作り、要求 ID の整合を検査した。ただし、筆者が別のプロセスで再実行すると、時間に依存するテスト 1 件が失敗して exit code 1 になった。ゲートが決定的かどうかは、P-FR の検証の対象に加える必要がある（§2.5.1、§7 の I7）</td>
+</tr>
+<tr>
+<td style="text-align: right;">U8</td>
+<td>承認の運用の負担</td>
+<td><strong>最初の実測。</strong> 質問票 9 件、承認依頼 10 件、保留 4 件の判断に、Prompt 5 回・合計 14 分。ただし判断の質（自動化バイアス）は未評価</td>
+</tr>
+<tr>
+<td style="text-align: right;">U1</td>
+<td>既存の大きなコードベースへの繰り返し適用</td>
+<td><strong>一部。</strong> 前版の 11 万行のコードに 1 回適用し、既存のテストを壊さずに機能を追加・削除した。Wave を 3 回以上回す確認は未実施</td>
+</tr>
+<tr>
+<td style="text-align: right;">U2</td>
+<td>要求定義書と catalog の大きさの上限</td>
+<td><strong>一部。</strong> 要求定義書 176KB・要求 95 件、catalog 31KB で、分割の閾値（150 件、300KB）の手前。ID のずれは <code>verify-management-data.ps1</code> で 0 件</td>
+</tr>
+<tr>
+<td style="text-align: right;">U3〜U7</td>
+<td>Azure への展開、スマホ・Power Platform、P-ST の有効性、費用の上限、AI 評価の安定性</td>
+<td>未検証（本件の範囲外）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="92">9.2 追加の実験（案）</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>実験</th>
+<th>目的</th>
+<th>判定の基準（案）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">E-1</td>
+<td><strong>クリーンルームの再実装</strong>: 空のリポジトリに、確定した要求定義書（new-era の版）だけを置き、前版のコードを参照させずに P-FR を実行する</td>
+<td>C2（コードの引継ぎ）の効果を分ける</td>
+<td><code>verify.ps1</code> が exit 0。AC の対応率。時間と AIU を new-era と比べる</td>
+</tr>
+<tr>
+<td style="text-align: right;">E-2</td>
+<td><strong>要求の発見から</strong>: 前版の最初の 3.7KB の依頼文から、P-RD → 承認 → P-FR の順で作る</td>
+<td>C1（要求の成熟度）の効果を分ける。前版の 32 日と、最も近い条件で比べる</td>
+<td>人の介入の回数と時間、AIU、到達した機能の範囲</td>
+</tr>
+<tr>
+<td style="text-align: right;">E-3</td>
+<td><strong>モデルと effort の比較</strong>: E-1 を、Opus 5.5（<code>high</code>／<code>medium</code>）と、Sonnet 5.5 のサブエージェントで行う</td>
+<td>§7 の I1、I2</td>
+<td>同じ合否で、費用と時間が下がるか</td>
+</tr>
+<tr>
+<td style="text-align: right;">E-4</td>
+<td><strong>Prompt の削減の比較</strong>: P-FR の節を 1 つずつ外して実行する</td>
+<td>§7 の I4。どの節が効いているか（X8 の方法）</td>
+<td>合否が変わらない節は削る</td>
+</tr>
+<tr>
+<td style="text-align: right;">E-5</td>
+<td><strong>new-era の手動試験と UAT</strong>: MT-01〜MT-05 と、前版と同じ見本での G-001（操作数と処理時間）の比較</td>
+<td>§2.5 の空白を埋める</td>
+<td>MT がすべて PASS。G-001 が前版以下</td>
+</tr>
+<tr>
+<td style="text-align: right;">E-6</td>
+<td><strong>企業規模での Wave</strong>: EOS レポート §0.3 の 4 のとおり、小さな業務アプリで Wave 1（ローカル）と Wave 2（dev 環境へのデプロイ）を通す</td>
+<td>U1、U3、U5</td>
+<td>EOS レポート §9 の基準</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="10">10. まとめ</h2>
+<ul>
+<li><strong>HVE と ATG を止める判断は、この実証でも正しいと言えます。</strong> new-era は、HVE も ATG も Skill も使わず、7 回の Prompt と 1 日で、検証ゲートをほぼ通る後継版を作りました（筆者の再実行では、時間に依存するテスト 1 件が環境の負荷で失敗しました）。</li>
+<li><strong>ただし、この速さの大部分は、前版の 32 日で確定した要求定義書とコードを引き継いだことによるものです。</strong> 「Vibe Coding でアプリが 1 日でできる」ではなく、「<strong>要求が確定していれば、その実装と変更は、人の介入 1〜2 桁少なく進められる</strong>」と読むのが正確です。</li>
+<li><strong>harness はなくなったのではなく、移動しました。</strong> 独自のフレームワークは不要になり、その役割は Copilot 本体の機能、公式ガイドに沿った Prompt、リポジトリの中の決定的なゲートに移りました。この 3 つは今後も必要です。ただし、モデルが良くなるたびに、Prompt の作法は削れる部分が増えていきます。</li>
+<li><strong>次の一手は、公平な比較（E-1、E-2）と、費用の最適化（effort と Sonnet 5.5）、そして UAT です。</strong></li>
+</ul>
+<hr />
+<h2 id="11">11. 出典</h2>
+<h3 id="111">11.1 内部資料</h3>
+<ul>
+<li><code>c:\Work\202610051515-DevelopmentHistoryReport.md</code>（前版の開発履歴）</li>
+<li><code>c:\Work\202610070515-DevelopmentHistoryReport.md</code>（new-era の開発履歴）</li>
+<li><code>c:\Work\202610031135-HVE_EOS_ValidationReport.md</code>（EOS レポート、第 4 版）</li>
+<li><code>C:\GitHub\StudyReport-Evaluator</code>（HEAD <code>94e5d8c</code>）: <code>docs/requirements-definition.md</code>、<code>[ExcelReportEvaluator] 1.要求定義書作成.txt</code>、<code>.github/workflows/</code>、<code>work/</code>、Git 履歴</li>
+<li><code>C:\GitHub\StudyReport-Evaluator-new-era</code>（<code>8170eb5</code>、<code>e09bdcf</code>）: <code>docs/requirements-definition.md</code>、<code>docs/requirements-definition-draft.md</code>、<code>docs/catalog.md</code>、<code>docs/manual-tests.md</code>、<code>scripts/verify.ps1</code>、<code>.github/workflows/</code>、Git 履歴</li>
+<li>セッション <code>46a7048d-ad98-4a14-9ebc-92bc98996675</code> の <code>events.jsonl</code>、Prompt 1 と Prompt 7 の添付ファイル（VS Code の <code>agentSessionData\eb6f72b6-…\attachments\</code>）</li>
+<li>前版の作業フォルダーの Copilot セッション 31 件の <code>events.jsonl</code>（ツールと Skill の使用回数）</li>
+</ul>
+<h3 id="112-2026-10-07">11.2 外部資料（確認日 2026-10-07）</h3>
+<ul>
+<li>Anthropic, "Claude Opus 5.5": https://www.anthropic.com/claude-opus-5-5</li>
+<li>Anthropic, "Prompting Claude Opus 5.5": https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5-5</li>
+<li>Anthropic, "Prompting Claude Opus 5": https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5</li>
+<li>Anthropic, "Claude Sonnet 5.5": https://www.anthropic.com/claude-sonnet-5-5</li>
+<li>Anthropic, "Prompting Claude Sonnet 5.5": https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-sonnet-5-5</li>
+<li>Anthropic, "Claude prompting best practices": https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices</li>
+<li>Anthropic, Pricing: https://platform.claude.com/docs/en/about-claude/pricing</li>
+<li>Anthropic（Claude blog）, "The new rules of context engineering for Claude 5-generation models": https://claude.com/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models</li>
+<li>Anthropic, "Harness design for long-running application development": https://www.anthropic.com/engineering/harness-design-long-running-apps</li>
+<li>Anthropic, "Effective harnesses for long-running agents": https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents</li>
+<li>Anthropic, "Effective context engineering for AI agents": https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents</li>
+<li>Anthropic, "Building effective agents": https://www.anthropic.com/engineering/building-effective-agents</li>
+<li>Anthropic, "Equipping agents for the real world with Agent Skills": https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills</li>
+<li>Anthropic, "Building a C compiler with a team of parallel Claudes": https://www.anthropic.com/engineering/building-c-compiler</li>
+<li>Anthropic, "How we built our multi-agent research system": https://www.anthropic.com/engineering/multi-agent-research-system</li>
+<li>Anthropic, "Claude Code best practices": https://code.claude.com/docs/en/best-practices</li>
+<li>GitHub Docs, "Models and pricing": https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing</li>
+<li>GitHub Docs, "Supported AI models": https://docs.github.com/en/copilot/reference/ai-models/supported-models</li>
+<li>GitHub Changelog, "GitHub Copilot CLI is now generally available"（2026-02-25）: https://github.blog/changelog/2026-02-25-github-copilot-cli-is-now-generally-available/</li>
+<li>GitHub Changelog, "GitHub Copilot in Visual Studio Code — March releases"（2026-04-08）: https://github.blog/changelog/2026-04-08-github-copilot-in-visual-studio-code-march-releases/</li>
+<li>GitHub Changelog, "Research, plan, and code with Copilot cloud agent"（2026-04-01）: https://github.blog/changelog/2026-04-01-research-plan-and-code-with-copilot-cloud-agent/</li>
+<li>GitHub Changelog, "Manage agent skills with GitHub CLI"（2026-04-16）: https://github.blog/changelog/2026-04-16-manage-agent-skills-with-github-cli/</li>
+<li>GitHub Changelog, "Copilot Memory now on by default for Pro and Pro+ users"（2026-03-04）: https://github.blog/changelog/2026-03-04-copilot-memory-now-on-by-default-for-pro-and-pro-users-in-public-preview/</li>
+<li>GitHub Changelog, "Configure cost and quality in Copilot auto model selection"（2026-09-14）: https://github.blog/changelog/2026-09-14-configure-cost-and-quality-in-copilot-auto-model-selection/</li>
+<li>GitHub Blog, "Run multiple agents at once with /fleet in Copilot CLI": https://github.blog/ai-and-ml/github-copilot/run-multiple-agents-at-once-with-fleet-in-copilot-cli/</li>
+<li>Vats &amp; Golev, "The Scaffold Effect in Coding Agents", arXiv:2607.22585: https://arxiv.org/abs/2607.22585</li>
+<li>Xia et al., "Agentless", arXiv:2407.01489: https://arxiv.org/abs/2407.01489</li>
+<li>mini-SWE-agent: https://github.com/SWE-agent/mini-swe-agent</li>
+<li>Merrill et al., "Terminal-Bench 2.0", arXiv:2601.11868: https://arxiv.org/abs/2601.11868</li>
+<li>METR, "Measuring AI ability to complete long tasks": https://metr.org/blog/2025-03-19-measuring-ai-ability-to-complete-long-tasks/</li>
+<li>METR, "Time Horizon 1.1": https://metr.org/blog/2026-1-29-time-horizon-1-1/</li>
+<li>METR, "Measuring the impact of early-2025 AI on experienced open-source developer productivity": https://metr.org/blog/2025-07-10-early-2025-ai-experienced-os-dev-study/</li>
+<li>METR, "We are changing our developer productivity experiment design": https://metr.org/blog/2026-02-24-uplift-update/</li>
+<li>METR, "Recent frontier models are reward hacking": https://metr.org/blog/2025-06-05-recent-reward-hacking/</li>
+<li>"ImpossibleBench", arXiv:2510.20270: https://arxiv.org/abs/2510.20270</li>
+<li>Liu et al., "Lost in the Middle", arXiv:2307.03172: https://arxiv.org/abs/2307.03172</li>
+<li>Chroma Research, "Context Rot": https://www.trychroma.com/research/context-rot</li>
+<li>Cemri et al., "Why do multi-agent LLM systems fail?", arXiv:2503.13657: https://arxiv.org/abs/2503.13657</li>
+<li>Deng, Fan, Meng, "Understanding the (In)Security of Vibe-Coded Applications", arXiv:2606.23130: https://arxiv.org/abs/2606.23130</li>
+<li>Veracode, "2025 GenAI Code Security Report": https://www.veracode.com/resources/analyst-reports/2025-genai-code-security-report/</li>
+<li>Sutton, "The Bitter Lesson": http://www.incompleteideas.net/IncIdeas/BitterLesson.html</li>
+<li>Zunic, "The Bitter Lesson of Agent Harnesses": https://browser-use.com/posts/bitter-lesson-agent-harnesses</li>
+</ul><footer>出典: <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/HVE-History/202610070815-HVE-EOS-PoC-by-StudyReportEvaluator-AnalyticsReport.md">HVE-History/202610070815-HVE-EOS-PoC-by-StudyReportEvaluator-AnalyticsReport.md</a></footer></main></div>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"></script>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark=['dark','midnight'].includes(document.documentElement.dataset.theme);
+mermaid.initialize({startOnLoad:false,theme:dark?'dark':'default'});
+await mermaid.run({querySelector:'pre.mermaid'});
+</script>
+<script>document.querySelectorAll('pre code').forEach(e=>hljs.highlightElement(e));
+const t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+const sel=document.getElementById('theme');
+function setT(v){document.documentElement.dataset.theme=v;localStorage.setItem('theme',v);sel.value=v;
+ const hl=document.getElementById('hl');if(hl)hl.href='https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github'+(['dark','midnight'].includes(v)?'-dark':'')+'.min.css';}
+sel.onchange=()=>setT(sel.value);setT(t);
+document.getElementById('menu').onclick=()=>document.querySelector('nav').classList.toggle('open');
+document.querySelector('nav a.cur')?.scrollIntoView({block:'center'});
+</script>
+</body></html>

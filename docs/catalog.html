@@ -70,12 +70,24 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var
 <a href="../users-guide/studio/07-software-engineer.html">S7 Software Engineer 向けガイド</a>
 <a href="../users-guide/studio/08-data-reference.html">S8 データリファレンス（どの機能が、どのデータを読むか）</a>
 <a href="../users-guide/studio/README.html">EABK Studio ユーザーガイド（第 2 部）</a>
+<h4>HVE-History</h4>
+<a href="../HVE-History/2026100220-3TypeOfFrameworkCompetitiveAnalyticsReport.html">GitHub Copilot によるアプリケーション開発の 4 方式の比較 — 「⓪ 素の Coding Agent」を基準にした「① 対話型 Vibe Coding」「② Prompt 駆動」「③ Enterprise App Build Kit」の実測と実験による評価</a>
+<a href="../HVE-History/202610031135-HVE_EOS_ValidationReport.html">HVE 利用停止（EOS）の妥当性検証レポート — 「3 つの Prompt + GitHub Copilot」で企業向け大規模分散アプリを開発できるか</a>
+<a href="../HVE-History/202610051515-DevelopmentHistoryReport.html">開発履歴レポート（StudyReport-Evaluator）</a>
+<a href="../HVE-History/202610070515-DevelopmentHistoryReport.html">StudyReport-Evaluator-new-era 開発履歴調査レポート</a>
+<a href="../HVE-History/202610070815-HVE-EOS-PoC-by-StudyReportEvaluator-AnalyticsReport.html">HVE 利用停止（EOS）の実証 — StudyReport-Evaluator の前版と new-era の開発資源の比較分析</a>
+<a href="../HVE-History/202610072130-RD-MaintenanceAnalyticsReport-BeforeToolkit.html">要求定義書・カタログ・System Test の一貫性を保ち、最高品質・最短時間・最小 Token で実装する計画</a>
+<a href="../HVE-History/202610081155-DevelopmentHistoryReport-newToolkit.html">開発履歴 調査レポート（StudyReport-Evaluator-3）</a>
+<a href="../HVE-History/202610130930-HVE-JourneyStory.html">Hypervelocity Engineering の歴史と経緯 — 個人の Vibe Coding を Business Envisioning まで広げた 262 日の失敗と発見</a>
+<a href="../HVE-History/202610131000-Qiita-HVE-JourneyStory.html">HVE-History/202610131000-Qiita-HVE-JourneyStory.md</a>
+<a href="../HVE-History/presentation-generator-prompt.html">Prompt: HVE の歴史を伝える「ドラマティック・プレゼンテーション」HTML を生成する</a>
 <h4>管理データ（docs）</h4>
 <a class="cur" href="catalog.html">カタログ</a>
 <a href="id-registry.html">ID 台帳</a>
 <a href="manual-tests.html">手順で確かめる受入基準</a>
 <a href="requirements-definition.html">要求定義書</a>
-<a href="run-history.html">実行履歴</a></nav>
+<a href="run-history.html">実行履歴</a>
+<h4>HVE-History（スライド）</h4><a href="../HVE-History/20261003-HVEv2-Born.html">HVE v2 Born（HTML）</a></nav>
 <main><h1 id="_1">カタログ</h1>
 <p>既存の機能・API・テーブル・共通部品の対応表です。1 行 1 項目の短い表にし、詳細はリンク先のファイルに任せます。
 機能の表は rd-author（要求 ID・題名・決定状態）と implementer（実装ファイル・テスト・共通部品）が更新します。
@@ -294,6 +306,126 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var
 <td><code>tests/toolkit/test_next_impl.py</code>、<code>tests/system/e2e/test_build_request_system.py</code></td>
 <td>次実装候補の分析、run 状態・完了記録、配布同期対象</td>
 </tr>
+<tr>
+<td>FR-1020</td>
+<td>エンティティ台帳の導出（既存の構造化欄が正本）</td>
+<td>承認済み</td>
+<td><code>scripts/entities.py</code>、<code>scripts/rdcheck.py</code>、<code>tools/install.py</code>、<code>users-guide/05-scripts-reference.md</code></td>
+<td><code>tests/toolkit/test_entities.py</code></td>
+<td>エンティティ台帳・企業カタログ照合</td>
+</tr>
+<tr>
+<td>FR-1021</td>
+<td>エンティティ × ユースケース の対応表（Studio）</td>
+<td>承認済み</td>
+<td><code>EABK-Studio/eabk_model.py</code>, <code>EABK-Studio/web/js/entities.js</code>, <code>EABK-Studio/web/js/app.js</code>, <code>EABK-Studio/web/js/i18n.js</code>, <code>EABK-Studio/web/js/ui.js</code>, <code>EABK-Studio/web/app.css</code>, <code>EABK-Studio/README.md</code>, <code>users-guide/studio/02-screens.md</code></td>
+<td><code>tests/system/e2e/test_entities_studio_system.py</code>, <code>EABK-Studio/tests/test_studio.py</code></td>
+<td>エンティティ台帳・企業カタログ照合、管理データモデル、ストア、UI 部品、デザイン基盤</td>
+</tr>
+<tr>
+<td>FR-1022</td>
+<td>エンティティ詳細（要求・テーブル・コンポーネント）</td>
+<td>承認済み</td>
+<td><code>EABK-Studio/eabk_model.py</code>, <code>EABK-Studio/web/js/entities.js</code>, <code>EABK-Studio/web/js/drawer.js</code>, <code>EABK-Studio/web/js/i18n.js</code>, <code>EABK-Studio/web/app.css</code></td>
+<td><code>tests/system/e2e/test_entities_studio_system.py</code>, <code>EABK-Studio/tests/test_studio.py</code></td>
+<td>エンティティ台帳・企業カタログ照合、管理データモデル、ストア、UI 部品、デザイン基盤</td>
+</tr>
+<tr>
+<td>FR-1023</td>
+<td>企業データカタログとの整合の検査</td>
+<td>承認済み</td>
+<td><code>scripts/entities.py</code>、<code>scripts/rdcheck.py</code>、<code>tools/install.py</code>、<code>users-guide/05-scripts-reference.md</code></td>
+<td><code>tests/toolkit/test_entities.py</code></td>
+<td>エンティティ台帳・企業カタログ照合</td>
+</tr>
+<tr>
+<td>FR-1024</td>
+<td>企業データカタログが覆わないエンティティの ToDo 生成</td>
+<td>承認済み</td>
+<td><code>scripts/entities.py</code>、<code>scripts/rdcheck.py</code>、<code>tools/install.py</code>、<code>users-guide/05-scripts-reference.md</code></td>
+<td><code>tests/toolkit/test_entities.py</code></td>
+<td>エンティティ台帳・企業カタログ照合</td>
+</tr>
+<tr>
+<td>NFR-COMPAT-003</td>
+<td>エンティティ機能の他リポジトリでの動作</td>
+<td>承認済み</td>
+<td><code>scripts/entities.py</code>、<code>scripts/rdcheck.py</code>、<code>tools/install.py</code>、<code>users-guide/05-scripts-reference.md</code>、<code>EABK-Studio/eabk_model.py</code>、<code>EABK-Studio/web/js/entities.js</code></td>
+<td><code>tests/toolkit/test_entities.py</code>、<code>tests/system/e2e/test_entities_studio_system.py</code>、<code>EABK-Studio/tests/test_studio.py</code></td>
+<td>エンティティ台帳・企業カタログ照合、管理データモデル</td>
+</tr>
+<tr>
+<td>NFR-SEC-023</td>
+<td>企業データカタログの参照の安全性</td>
+<td>承認待ち</td>
+<td><code>scripts/entities.py</code></td>
+<td><code>tests/toolkit/test_entities.py</code></td>
+<td>エンティティ台帳・企業カタログ照合</td>
+</tr>
+<tr>
+<td>FR-1025</td>
+<td>列（属性）の任意欄（カタログのテーブル節）</td>
+<td>承認済み</td>
+<td><code>scripts/entities.py</code>、<code>scripts/rdcheck.py</code>、<code>EABK-Studio/eabk_model.py</code>、<code>users-guide/03-requirements-format.md</code>、<code>users-guide/05-scripts-reference.md</code></td>
+<td><code>tests/integration/test_entity_columns.py</code>、<code>EABK-Studio/tests/test_studio.py</code></td>
+<td>エンティティ台帳・企業カタログ照合、管理データモデル</td>
+</tr>
+<tr>
+<td>FR-1026</td>
+<td>エンティティ間・列間の関係と、要求・テーブル・コンポーネントとの関係</td>
+<td>承認済み</td>
+<td><code>scripts/entities.py</code>、<code>scripts/rdcheck.py</code>、<code>EABK-Studio/eabk_model.py</code>、<code>users-guide/03-requirements-format.md</code>、<code>users-guide/05-scripts-reference.md</code></td>
+<td><code>tests/integration/test_entity_columns.py</code>、<code>EABK-Studio/tests/test_studio.py</code></td>
+<td>エンティティ台帳・企業カタログ照合、管理データモデル</td>
+</tr>
+<tr>
+<td>FR-1027</td>
+<td>意味的ズーム（2D・3D 共通の規則）</td>
+<td>承認済み</td>
+<td><code>EABK-Studio/web/js/semzoom.js</code>、<code>EABK-Studio/web/js/sz2d.js</code>、<code>EABK-Studio/web/js/sz3d.js</code>、<code>EABK-Studio/web/js/entities.js</code>、<code>EABK-Studio/web/js/map2d.js</code>、<code>EABK-Studio/web/js/map3d.js</code>、<code>EABK-Studio/web/js/i18n.js</code>、<code>EABK-Studio/web/sz.css</code>、<code>EABK-Studio/web/index.html</code>、<code>EABK-Studio/README.md</code>、<code>users-guide/studio/02-screens.md</code></td>
+<td><code>tests/system/e2e/test_semantic_zoom_system.py</code>、<code>tests/integration/test_semantic_zoom_ui.py</code>、<code>EABK-Studio/tests/test_semantic_zoom_wiring.py</code>、<code>EABK-Studio/tests/test_studio.py</code></td>
+<td>管理データモデル、ストア、UI 部品、意味的ズーム</td>
+</tr>
+<tr>
+<td>FR-1028</td>
+<td>2D での関係と列の表現</td>
+<td>承認済み</td>
+<td><code>EABK-Studio/web/js/sz2d.js</code>、<code>EABK-Studio/web/js/semzoom.js</code>、<code>EABK-Studio/web/js/map2d.js</code>、<code>EABK-Studio/web/js/entities.js</code>、<code>EABK-Studio/web/sz.css</code></td>
+<td><code>tests/system/e2e/test_semantic_zoom_system.py</code>、<code>tests/integration/test_semantic_zoom_ui.py</code></td>
+<td>管理データモデル、UI 部品、意味的ズーム</td>
+</tr>
+<tr>
+<td>FR-1029</td>
+<td>3D での関係と列の表現</td>
+<td>承認済み</td>
+<td><code>EABK-Studio/web/js/sz3d.js</code>、<code>EABK-Studio/web/js/semzoom.js</code>、<code>EABK-Studio/web/js/map3d.js</code>、<code>EABK-Studio/web/sz.css</code></td>
+<td><code>tests/system/e2e/test_semantic_zoom_system.py</code>、<code>tests/integration/test_semantic_zoom_ui.py</code></td>
+<td>管理データモデル、ストア、意味的ズーム</td>
+</tr>
+<tr>
+<td>FR-1030</td>
+<td>DDL・スキーマファイルからの列と関係の補完（任意の拡張）</td>
+<td>承認済み</td>
+<td><code>scripts/entities.py</code>、<code>users-guide/03-requirements-format.md</code></td>
+<td><code>tests/integration/test_entity_columns.py</code></td>
+<td>エンティティ台帳・企業カタログ照合</td>
+</tr>
+<tr>
+<td>NFR-PERF-004</td>
+<td>エンティティ表示の大規模データでの滑らかさ</td>
+<td>承認済み</td>
+<td><code>EABK-Studio/web/js/semzoom.js</code>、<code>EABK-Studio/web/js/sz2d.js</code>、<code>EABK-Studio/web/js/sz3d.js</code>、<code>scripts/entities.py</code></td>
+<td><code>tests/system/e2e/test_semantic_zoom_system.py</code>、<code>tests/integration/test_semantic_zoom_ui.py</code></td>
+<td>意味的ズーム</td>
+</tr>
+<tr>
+<td>NFR-UX-010</td>
+<td>エンティティ表示の代替手段・キーボード・言語</td>
+<td>承認済み</td>
+<td><code>EABK-Studio/web/js/semzoom.js</code>、<code>EABK-Studio/web/js/sz2d.js</code>、<code>EABK-Studio/web/js/sz3d.js</code>、<code>EABK-Studio/web/js/i18n.js</code>、<code>EABK-Studio/web/sz.css</code></td>
+<td><code>tests/system/e2e/test_semantic_zoom_system.py</code>、<code>tests/integration/test_semantic_zoom_ui.py</code></td>
+<td>意味的ズーム、UI 部品</td>
+</tr>
 </tbody>
 </table>
 <h2 id="api">API・イベント</h2>
@@ -402,6 +534,12 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var
 <td><code>scripts/rdfix.py</code></td>
 <td>要求定義書を変更せずデータ層の不整合を自動修復し、残りを手動対応として示す</td>
 <td>FR-1018、FR-1019</td>
+</tr>
+<tr>
+<td>エンティティ台帳・企業カタログ照合</td>
+<td><code>scripts/entities.py</code></td>
+<td>用語表・状態表・対象エンティティ・カタログのテーブル表からエンティティ台帳を導出し（list）、企業データカタログ（任意設定 <code>enterprise_data_catalog</code>。読み取り専用）と照合し（check）、覆われないものを質問票形式の ToDo にする（todo）。導出関数 <code>derive</code> は Studio からも再利用する。任意欄: 要求の <code>エンティティの関係</code>、カタログの <code>### 列: &lt;テーブル&gt;</code> 節の表、DDL・JSON Schema の読み取り専用の補完（列・関係・クラスターも導出する）</td>
+<td>FR-1020、FR-1021、FR-1022、FR-1023、FR-1024、FR-1025、FR-1026、FR-1030、NFR-COMPAT-003、NFR-SEC-023</td>
 </tr>
 <tr>
 <td># EABK Studio カタログ</td>
@@ -810,7 +948,7 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var
 <td>管理データモデル</td>
 <td><code>EABK-Studio/eabk_model.py</code></td>
 <td>正本ファイルを読み、ノードと関係を構築</td>
-<td>FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、NFR-OPS-004、NFR-SEC-002</td>
+<td>FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、FR-1025、FR-1026、FR-1027、FR-1028、FR-1029、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002</td>
 </tr>
 <tr>
 <td>HTTP サーバー</td>
@@ -822,19 +960,19 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var
 <td>ストア</td>
 <td><code>EABK-Studio/web/js/store.js</code></td>
 <td>モデル、選択、関連、表現間の状態を共有</td>
-<td>FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014</td>
+<td>FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1029</td>
 </tr>
 <tr>
 <td>UI 部品</td>
 <td><code>EABK-Studio/web/js/ui.js</code></td>
 <td>表示、詳細、通知、リンク</td>
-<td>FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、NFR-OPS-003、NFR-UX-005、NFR-UX-007</td>
+<td>FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1028、NFR-OPS-003、NFR-UX-005、NFR-UX-007、NFR-UX-010</td>
 </tr>
 <tr>
 <td>デザイン基盤</td>
 <td><code>EABK-Studio/web/app.css</code>, <code>EABK-Studio/web/index.html</code></td>
 <td>Fluent 2 に寄せたテーマ変数、外枠、ナビゲーション、検索、通知、ダーク表示</td>
-<td>FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014</td>
+<td>FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022</td>
 </tr>
 <tr>
 <td>フィンガープリント</td>
@@ -853,6 +991,12 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var
 <td><code>EABK-Studio/web/vendor/three.module.min.js</code></td>
 <td>3D マップ表示</td>
 <td>FR-003</td>
+</tr>
+<tr>
+<td>意味的ズーム</td>
+<td><code>EABK-Studio/web/js/semzoom.js</code>, <code>EABK-Studio/web/js/sz2d.js</code>, <code>EABK-Studio/web/js/sz3d.js</code>, <code>EABK-Studio/web/sz.css</code></td>
+<td>エンティティの倍率に応じた 3 粒度（クラスター・エンティティと関係線・列の一覧）。2D（SVG）と 3D（Canvas）が 1 つの共有状態（倍率・中心・選択・絞り込み）で動き、可視範囲だけを描画し、表の代替表現・キーボード・JA/EN を備える。<code>window.eabkView</code>（setScale・getState）を公開する</td>
+<td>FR-1027、FR-1028、FR-1029、NFR-PERF-004、NFR-UX-010</td>
 </tr>
 </tbody>
 </table><footer>出典: <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/docs/catalog.md">docs/catalog.md</a></footer></main></div>
