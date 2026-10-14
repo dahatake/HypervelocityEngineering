@@ -14,11 +14,11 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1010 | 清掃の診断と再開 | 承認済み（依頼 2026-10-10） | `scripts/clean-work.py`、[`.github/agents/conductor.agent.md`](docs/../.github/agents/conductor.agent.md)、`users-guide/02-during-and-after-run.md`、`users-guide/05-scripts-reference.md`、`users-guide/07-troubleshooting.md` | `tests/toolkit/test_clean_work.py`、`tests/system/e2e/test_run_owned_cleanup.py`、`tests/system/test_run_cleanup_system.py` | run 状態・完了記録、run 作業資産清掃、conductor 終了契約、run 運用ガイド |
 | NFR-OPS-005 | 所有権と保護状態にもとづく安全な削除 | 承認済み（依頼 2026-10-10） | `scripts/clean-work.py` | `tests/toolkit/test_clean_work.py`、`tests/toolkit/test_run_state.py`、`tests/system/e2e/test_run_owned_cleanup.py`、`tests/system/test_run_cleanup_system.py` | run 作業資産清掃、run 状態・完了記録、worktree pool 管理 |
 | NFR-COMPAT-001 | Windows・報告・配布文書の一貫性 | 承認済み（依頼 2026-10-10） | `scripts/clean-work.py`、`tools/install.py`、[`.github/agents/conductor.agent.md`](docs/../.github/agents/conductor.agent.md)、`users-guide/02-during-and-after-run.md`、`users-guide/05-scripts-reference.md`、`users-guide/07-troubleshooting.md` | `tests/toolkit/test_clean_work.py`、`tests/system/e2e/test_run_owned_cleanup.py`、`tests/system/test_run_cleanup_system.py` | run 作業資産清掃、run 状態・完了記録、worktree pool 管理、conductor 終了契約、run 運用ガイド、配布同期対象 |
-| FR-1017 | データ層の妥当性検査の自動実行 | 承認済み（依頼 2026-10-14） | 未実装 | tests/system/test_data_layer_workflow_system.py | データ層検査、配布同期対象 |
-| FR-1018 | 不整合の自動修復と修復の反映 | 承認済み（依頼 2026-10-14） | 未実装 | tests/system/test_data_layer_workflow_system.py | データ層修復、データ層検査 |
-| FR-1019 | 直せない不整合の Issue 化 | 承認済み（依頼 2026-10-14） | 未実装 | tests/system/test_data_layer_workflow_system.py | データ層修復 |
-| NFR-SEC-004 | データ層ワークフローの最小権限と書き込みの安全性 | 承認済み（依頼 2026-10-14） | 未実装 | 未実装 | 配布同期対象 |
-| NFR-OPS-006 | データ層ワークフローの配布と利用者向け文書 | 承認済み（依頼 2026-10-14） | 未実装 | 未実装 | 配布同期対象 |
+| FR-1017 | データ層の妥当性検査の自動実行 | 承認済み（依頼 2026-10-14） | `.github/workflows/ebak-data-layer.yml` | `tests/system/test_data_layer_workflow_system.py` | データ層検査、配布同期対象 |
+| FR-1018 | 不整合の自動修復と修復の反映 | 承認済み（依頼 2026-10-14） | `.github/workflows/ebak-data-layer.yml` | `tests/system/test_data_layer_workflow_system.py` | データ層修復、データ層検査 |
+| FR-1019 | 直せない不整合の Issue 化 | 承認済み（依頼 2026-10-14） | `.github/workflows/ebak-data-layer.yml` | `tests/system/test_data_layer_workflow_system.py` | データ層修復 |
+| NFR-SEC-004 | データ層ワークフローの最小権限と書き込みの安全性 | 承認済み（依頼 2026-10-14） | `.github/workflows/ebak-data-layer.yml` | `tests/system/test_data_layer_workflow_system.py` | 配布同期対象 |
+| NFR-OPS-006 | データ層ワークフローの配布と利用者向け文書 | 承認済み（依頼 2026-10-14） | `.github/workflows/ebak-data-layer.yml`、`tools/install.py`、`README.md`、`users-guide/04-customization.md` | `tests/toolkit/test_install.py`、`tests/system/test_data_layer_workflow_system.py` | 配布同期対象 |
 | NFR-COR-001 | 再現性 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
 | NFR-COR-002 | エラーの明確性 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
 | NFR-COR-003 | 境界値 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |

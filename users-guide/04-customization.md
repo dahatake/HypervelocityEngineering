@@ -150,6 +150,15 @@ run の実行中は、hook G-7 がこの表を強制します。値のある役�
 
 `.github/workflows/ebak-verify.yml` は、pull request と main への push をトリガーに `scripts/verify.sh --show-warnings` を実行します。アプリのビルドに必要なツールチェーン（`actions/setup-node` など）は、verify の前にステップとして追加します。CodeQL や依存関係のスキャンを加える場合も、このワークフローに追記します。
 
+### データ層ワークフロー（ebak-data-layer）
+
+`.github/workflows/ebak-data-layer.yml`（ebak-data-layer）は、プルリクエスト、main への push、手動実行（workflow_dispatch）、週 1 回の定期実行（schedule）で `python scripts/verify.py --docs-only` を実行し、データ層を検査します。
+
+- 不合格のとき、`python scripts/rdfix.py --apply` で自動修復して再検査します。自動修復で要求定義書は変更しない設計です（`docs/requirements-definition.md` は修復後に元へ戻します）。合格した場合だけ修復を commit します。同一リポジトリのプルリクエストでは当該 PR のブランチへ、main への push と定期実行では修復用ブランチ `eabk/data-layer-fix` へ push して PR を作成します（既にあれば追加しません）。
+- 修復後も直らないときは、ラベル `eabk-data-layer` つきで、失敗の要約と実行へのリンクを含む Issue を作成します。同じ内容の未解決 Issue があれば、コメントを追加します。
+- 権限は contents・pull-requests・issues の write だけです。fork からのプルリクエストでは検査だけを行い、書き込みはしません。bot の修復 commit では再修復しません。
+- 無効化するには、このファイルを削除するか、GitHub の Actions 画面でこのワークフローを Disable します。インストール時に入れたくない場合は `--no-ci` を指定します。
+
 ## 4.9 計算資源とクラウド
 
 **並列度は CPU とメモリに合わせます。**
