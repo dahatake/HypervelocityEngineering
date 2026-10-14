@@ -3,7 +3,7 @@ import { t, onLang } from './i18n.js';
 import { store } from './store.js';
 import { xrefLink } from './xref.js';
 import { create2d } from './sz2d.js';
-import { mountShell, wantsEntityView, hasEntityStructure, setTab } from './semzoom.js';
+import { mountShell, isArch, wantsEntityView, hasEntityStructure, setTab } from './semzoom.js';
 import { el, colorOf, TYPE_COLOR, STATUS_COLOR, showTip, hideTip, nodeTip } from './ui.js';
 
 const COL = { goal: 0, req: 1, ac: 2, entity: 3, part: 3, api: 3, table: 3, param: 3, question: 3, file: 4, component: 4, case: 5, persona: 6, external: 6 };
@@ -482,9 +482,10 @@ export function mount(host) {
   const run = () => {
     inner?.destroy?.();
     host.replaceChildren();
-    if (wantsEntityView(store.model)) {
+    if (isArch() || wantsEntityView(store.model)) {
       inner = mountShell(host, { mode: 'map2d', createRenderer: create2d,
-        links: [{ id: 'sz-to-3d', label: () => t('sz.to3d'), href: '#/map3d' }], onSwitch: () => { setTab('graph'); run(); } });
+        links: [{ id: 'sz-to-3d', label: () => t('sz.to3d'), href: '#/map3d' + (isArch() ? '?view=arch' : '') },
+          isArch() ? { id: 'sz-to-entity', label: () => t('arch.toentity'), href: '#/map2d' } : { id: 'sz-to-arch', label: () => t('arch.toarch'), href: '#/=arch' }], onSwitch: () => { setTab('graph'); run(); } });
     } else {
       inner = mountGraph(host);
       if (hasEntityStructure(store.model)) host.append(el('button', { type: 'button', class: 'btn ghost sz-switch', onclick: () => { setTab('entities'); run(); } }, t('sz.entview')));
