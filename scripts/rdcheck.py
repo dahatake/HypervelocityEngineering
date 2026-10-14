@@ -681,6 +681,9 @@ class Checker:
                 self.err("CHK-25", loc, f"{r.id} の本文・受入基準が {{{p}}} を使っていますが、参照パラメータの欄にありません")
             for p in sorted(listed - used):
                 self.warn("CHK-25", loc, f"{r.id} の参照パラメータ {p} が本文・受入基準で {{{p}}} として使われていません")
+        # FR-1025 AC-170: the optional column definitions of the catalog (absent = valid)
+        for f, ln, msg in ent.column_problems(self.doc, self.root, self.cfg):
+            self.err("CHK-25", self.loc(f, ln), msg)
 
     # ------------------------------------------------------------------ CHK-26
     def chk26(self) -> None:

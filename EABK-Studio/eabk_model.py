@@ -539,7 +539,7 @@ def build_impl_status(model: dict, root: Path) -> dict:
 def build_entities(root: Path, warnings: list[str]) -> dict:
     """FR-1021/FR-1022/NFR-COMPAT-003: the entity ledger, derived by the toolkit's scripts/entities.py (loaded
     dynamically; read-only).  When the script is unavailable the screen degrades to "no entities" instead of failing."""
-    empty = {"available": False, "entities": [], "scenarios": {}}
+    empty = {"available": False, "entities": [], "scenarios": {}, "relations": [], "clusters": [], "supplement": {"files": [], "diagnostics": []}}
     try:
         import importlib.util
         import sys
@@ -558,6 +558,13 @@ def build_entities(root: Path, warnings: list[str]) -> dict:
             finally:
                 sys.dont_write_bytecode = sd
             data["available"] = True
+            # FR-1025/1026: degrade to "no columns / no relations" when the derivation predates them (every entity is its own cluster)
+            for e in data.get("entities", []):
+                e.setdefault("columns", [])
+                e.setdefault("columnsMissing", not e["columns"])
+            data.setdefault("relations", [])
+            data.setdefault("clusters", [{"id": f"C{i + 1}", "count": 1, "entities": [e["name"]]} for i, e in enumerate(data.get("entities", []))])
+            data.setdefault("supplement", {"files": [], "diagnostics": []})
             return data
     except Exception as e:  # noqa: BLE001 - a broken derivation must not stop Studio
         warnings.append(f"entities: {type(e).__name__}: {e}")

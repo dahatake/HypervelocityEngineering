@@ -42,6 +42,14 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1024 | 企業データカタログが覆わないエンティティの ToDo 生成 | 承認済み | `scripts/entities.py`、`scripts/rdcheck.py`、`tools/install.py`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_entities.py` | エンティティ台帳・企業カタログ照合 |
 | NFR-COMPAT-003 | エンティティ機能の他リポジトリでの動作 | 承認済み | `scripts/entities.py`、`scripts/rdcheck.py`、`tools/install.py`、`users-guide/05-scripts-reference.md`、`EABK-Studio/eabk_model.py`、`EABK-Studio/web/js/entities.js` | `tests/toolkit/test_entities.py`、`tests/system/e2e/test_entities_studio_system.py`、`EABK-Studio/tests/test_studio.py` | エンティティ台帳・企業カタログ照合、管理データモデル |
 | NFR-SEC-023 | 企業データカタログの参照の安全性 | 承認待ち | `scripts/entities.py` | `tests/toolkit/test_entities.py` | エンティティ台帳・企業カタログ照合 |
+| FR-1025 | 列（属性）の任意欄（カタログのテーブル節） | 承認済み | `scripts/entities.py`、`scripts/rdcheck.py`、`EABK-Studio/eabk_model.py`、`users-guide/03-requirements-format.md`、`users-guide/05-scripts-reference.md` | `tests/integration/test_entity_columns.py`、`EABK-Studio/tests/test_studio.py` | エンティティ台帳・企業カタログ照合、管理データモデル |
+| FR-1026 | エンティティ間・列間の関係と、要求・テーブル・コンポーネントとの関係 | 承認済み | `scripts/entities.py`、`scripts/rdcheck.py`、`EABK-Studio/eabk_model.py`、`users-guide/03-requirements-format.md`、`users-guide/05-scripts-reference.md` | `tests/integration/test_entity_columns.py`、`EABK-Studio/tests/test_studio.py` | エンティティ台帳・企業カタログ照合、管理データモデル |
+| FR-1027 | 意味的ズーム（2D・3D 共通の規則） | 承認済み | `EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/sz2d.js`、`EABK-Studio/web/js/sz3d.js`、`EABK-Studio/web/js/entities.js`、`EABK-Studio/web/js/map2d.js`、`EABK-Studio/web/js/map3d.js`、`EABK-Studio/web/js/i18n.js`、`EABK-Studio/web/sz.css`、`EABK-Studio/web/index.html`、`EABK-Studio/README.md`、`users-guide/studio/02-screens.md` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py`、`EABK-Studio/tests/test_semantic_zoom_wiring.py`、`EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、意味的ズーム |
+| FR-1028 | 2D での関係と列の表現 | 承認済み | `EABK-Studio/web/js/sz2d.js`、`EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/map2d.js`、`EABK-Studio/web/js/entities.js`、`EABK-Studio/web/sz.css` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 管理データモデル、UI 部品、意味的ズーム |
+| FR-1029 | 3D での関係と列の表現 | 承認済み | `EABK-Studio/web/js/sz3d.js`、`EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/map3d.js`、`EABK-Studio/web/sz.css` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 管理データモデル、ストア、意味的ズーム |
+| FR-1030 | DDL・スキーマファイルからの列と関係の補完（任意の拡張） | 承認済み | `scripts/entities.py`、`users-guide/03-requirements-format.md` | `tests/integration/test_entity_columns.py` | エンティティ台帳・企業カタログ照合 |
+| NFR-PERF-004 | エンティティ表示の大規模データでの滑らかさ | 承認済み | `EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/sz2d.js`、`EABK-Studio/web/js/sz3d.js`、`scripts/entities.py` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 意味的ズーム |
+| NFR-UX-010 | エンティティ表示の代替手段・キーボード・言語 | 承認済み | `EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/sz2d.js`、`EABK-Studio/web/js/sz3d.js`、`EABK-Studio/web/js/i18n.js`、`EABK-Studio/web/sz.css` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 意味的ズーム、UI 部品 |
 
 ## API・イベント
 
@@ -67,7 +75,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | 次実装候補の分析 | `scripts/next-impl.py` | 承認済み・未完了の要求を優先度・依存・実装状態で順位付けし、除外の理由と scope 用 ID 一覧を出す（読み取り専用） | FR-1015、FR-1016 |
 | データ層検査 | `scripts/verify.py` | `--docs-only` でデータ層の妥当性を検査する | FR-1017、FR-1018 |
 | データ層修復 | `scripts/rdfix.py` | 要求定義書を変更せずデータ層の不整合を自動修復し、残りを手動対応として示す | FR-1018、FR-1019 |
-| エンティティ台帳・企業カタログ照合 | `scripts/entities.py` | 用語表・状態表・対象エンティティ・カタログのテーブル表からエンティティ台帳を導出し（list）、企業データカタログ（任意設定 `enterprise_data_catalog`。読み取り専用）と照合し（check）、覆われないものを質問票形式の ToDo にする（todo）。導出関数 `derive` は Studio からも再利用する | FR-1020、FR-1021、FR-1022、FR-1023、FR-1024、NFR-COMPAT-003、NFR-SEC-023 |
+| エンティティ台帳・企業カタログ照合 | `scripts/entities.py` | 用語表・状態表・対象エンティティ・カタログのテーブル表からエンティティ台帳を導出し（list）、企業データカタログ（任意設定 `enterprise_data_catalog`。読み取り専用）と照合し（check）、覆われないものを質問票形式の ToDo にする（todo）。導出関数 `derive` は Studio からも再利用する。任意欄: 要求の `エンティティの関係`、カタログの `### 列: <テーブル>` 節の表、DDL・JSON Schema の読み取り専用の補完（列・関係・クラスターも導出する） | FR-1020、FR-1021、FR-1022、FR-1023、FR-1024、FR-1025、FR-1026、FR-1030、NFR-COMPAT-003、NFR-SEC-023 |
 # EABK Studio カタログ
 
 管理データの要求と、現時点で実在する実装資産の対応表。未実装の要求は「未実装」と記載する。`EABK-Studio` は依頼時点の作業ツリーに存在する資産であり、今回の要求定義コミットではコードを変更しない。
@@ -137,11 +145,12 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 
 | 部品名 | ファイル | 用途 | 使っている要求 ID |
 |---|---|---|---|
-| 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002 |
+| 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、FR-1025、FR-1026、FR-1027、FR-1028、FR-1029、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002 |
 | HTTP サーバー | `EABK-Studio/studio.py` | 127.0.0.1 限定の読取 API と静的配信 | FR-010、FR-013、FR-1001、NFR-OPS-003、NFR-SEC-001 |
-| ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022 |
-| UI 部品 | `EABK-Studio/web/js/ui.js` | 表示、詳細、通知、リンク | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、NFR-OPS-003、NFR-UX-005、NFR-UX-007 |
+| ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1029 |
+| UI 部品 | `EABK-Studio/web/js/ui.js` | 表示、詳細、通知、リンク | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1028、NFR-OPS-003、NFR-UX-005、NFR-UX-007、NFR-UX-010 |
 | デザイン基盤 | `EABK-Studio/web/app.css`, `EABK-Studio/web/index.html` | Fluent 2 に寄せたテーマ変数、外枠、ナビゲーション、検索、通知、ダーク表示 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022 |
 | フィンガープリント | `EABK-Studio/studio.py` | 更新検知と再読込 | FR-012、NFR-OPS-002 |
 | 起動スクリプト | `EABK-Studio/start.ps1`, `EABK-Studio/start.sh` | Windows/macOS/Linux の起動補助 | FR-1001、NFR-OPS-001 |
 | Three.js 同梱モジュール | `EABK-Studio/web/vendor/three.module.min.js` | 3D マップ表示 | FR-003 |
+| 意味的ズーム | `EABK-Studio/web/js/semzoom.js`, `EABK-Studio/web/js/sz2d.js`, `EABK-Studio/web/js/sz3d.js`, `EABK-Studio/web/sz.css` | エンティティの倍率に応じた 3 粒度（クラスター・エンティティと関係線・列の一覧）。2D（SVG）と 3D（Canvas）が 1 つの共有状態（倍率・中心・選択・絞り込み）で動き、可視範囲だけを描画し、表の代替表現・キーボード・JA/EN を備える。`window.eabkView`（setScale・getState）を公開する | FR-1027、FR-1028、FR-1029、NFR-PERF-004、NFR-UX-010 |
