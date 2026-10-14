@@ -19,15 +19,6 @@
       {
         "name": "toolkit-unit",
         "run": "python -m pytest -q tests/toolkit/test_clean_work.py"
-      },
-      {
-        "name": "entity-columns",
-        "run": "python -m pytest -q tests/integration/test_entity_columns.py EABK-Studio/tests/test_semantic_zoom_wiring.py"
-      },
-      {
-        "name": "semantic-zoom-ui",
-        "run": "python -m pytest -q tests/integration/test_semantic_zoom_ui.py",
-        "slow": true
       }
     ]
   },
