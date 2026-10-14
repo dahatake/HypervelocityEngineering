@@ -19,14 +19,14 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1019 | 直せない不整合の Issue 化 | 承認済み（依頼 2026-10-14） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml) | `tests/system/test_data_layer_workflow_system.py` | データ層修復 |
 | NFR-SEC-004 | データ層ワークフローの最小権限と書き込みの安全性 | 承認済み（依頼 2026-10-14） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml) | `tests/system/test_data_layer_workflow_system.py` | 配布同期対象 |
 | NFR-OPS-006 | データ層ワークフローの配布と利用者向け文書 | 承認済み（依頼 2026-10-14） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml)、`tools/install.py`、`README.md`、`users-guide/04-customization.md` | `tests/toolkit/test_install.py`、`tests/system/test_data_layer_workflow_system.py` | 配布同期対象 |
-| NFR-COR-001 | 再現性 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
-| NFR-COR-002 | エラーの明確性 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
-| NFR-COR-003 | 境界値 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
-| NFR-COR-004 | データ保全 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
-| NFR-COR-005 | 文書化 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
-| NFR-PERF-001 | 公開データセットの処理性能 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
-| NFR-PERF-002 | 大規模性能 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
-| NFR-REL-001 | 検証による完了判定 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
+| NFR-COR-001 | 再現性 | 廃止 | 未実装 | 未実装 | なし |
+| NFR-COR-002 | エラーの明確性 | 廃止 | 未実装 | 未実装 | なし |
+| NFR-COR-003 | 境界値 | 廃止 | 未実装 | 未実装 | なし |
+| NFR-COR-004 | データ保全 | 廃止 | 未実装 | 未実装 | なし |
+| NFR-COR-005 | 文書化 | 廃止 | 未実装 | 未実装 | なし |
+| NFR-PERF-001 | 公開データセットの処理性能 | 廃止 | 未実装 | 未実装 | なし |
+| NFR-PERF-002 | 大規模性能 | 廃止 | 未実装 | 未実装 | なし |
+| NFR-REL-001 | 検証による完了判定 | 廃止 | 未実装 | 未実装 | なし |
 | FR-1011 | 2D マップのノード選択と強調 | 承認済み | `EABK-Studio/web/js/map2d.js` | `tests/system/e2e/test_studio_map_placement_system.py`, `EABK-Studio/tests/test_studio.py` | ストア |
 | FR-1012 | 実装配置図（画面・API・データの 3 層） | 承認済み | `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_map_placement_system.py`, `EABK-Studio/tests/test_studio.py` | ストア、UI 部品、デザイン基盤 |
 | FR-1013 | データの ER 図表示 | 承認済み | `EABK-Studio/web/js/insights.js`, `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/i18n.js` | `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
