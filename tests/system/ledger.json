@@ -60,7 +60,12 @@
     "AC-174": "sha256:d3856a2b0e9c79fe",
     "AC-177": "sha256:e881e7e3ce2d21fc",
     "AC-179": "sha256:ed6de68701ff58fa",
-    "AC-183": "sha256:230c70f4be088ccb"
+    "AC-183": "sha256:230c70f4be088ccb",
+    "AC-188": "sha256:56dee61fd7c27bd3",
+    "AC-191": "sha256:12ae440ed1f98d11",
+    "AC-194": "sha256:cf4f7ab4d4b698de",
+    "AC-199": "sha256:ef333f7118d1292f",
+    "AC-200": "sha256:154e6ee6245957a5"
   },
   "cases": [
     {
@@ -3084,6 +3089,131 @@
       "history": [
         {
           "at": "2026-10-15T00:52:26+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-090",
+      "requirement_ids": [
+        "FR-1031"
+      ],
+      "ac_ids": [
+        "AC-188"
+      ],
+      "title": "ID はどの画面でもリンクで、クリック・キーボードで同じ詳細へ移動する／実在しない ID はリンクにしない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_links_wrap_status_arch_system.py -k \"ac188\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T05:03:13+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-091",
+      "requirement_ids": [
+        "FR-1032"
+      ],
+      "ac_ids": [
+        "AC-191"
+      ],
+      "title": "長い ID・題名・多数項目でも 4 種のチップが枠内に収まり横スクロールしない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_links_wrap_status_arch_system.py -k \"ac191\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T05:03:14+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-092",
+      "requirement_ids": [
+        "FR-1033"
+      ],
+      "ac_ids": [
+        "AC-194"
+      ],
+      "title": "全体バーの区間クリックで かんばん・一覧・他グラフに同じ状態が適用され、再クリックで戻る",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_links_wrap_status_arch_system.py -k \"ac194\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T05:03:15+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-093",
+      "requirement_ids": [
+        "FR-1034"
+      ],
+      "ac_ids": [
+        "AC-199"
+      ],
+      "title": "アーキテクチャ図（2D/3D）で実行場所ごとのアプリ・データ・通信が区別でき、未記載の配置は描かない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_links_wrap_status_arch_system.py -k \"ac199\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T05:03:16+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-094",
+      "requirement_ids": [
+        "FR-1034"
+      ],
+      "ac_ids": [
+        "AC-200"
+      ],
+      "title": "アーキテクチャ図の倍率で 全体→中→大 の 3 段に切り替わり、列まで同じ ID で辿れる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_links_wrap_status_arch_system.py -k \"ac200\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T05:03:17+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
