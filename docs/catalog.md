@@ -48,6 +48,10 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1028 | 2D での関係と列の表現 | 承認済み | `EABK-Studio/web/js/sz2d.js`、`EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/map2d.js`、`EABK-Studio/web/js/entities.js`、`EABK-Studio/web/sz.css` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 管理データモデル、UI 部品、意味的ズーム |
 | FR-1029 | 3D での関係と列の表現 | 承認済み | `EABK-Studio/web/js/sz3d.js`、`EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/map3d.js`、`EABK-Studio/web/sz.css` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 管理データモデル、ストア、意味的ズーム |
 | FR-1030 | DDL・スキーマファイルからの列と関係の補完（任意の拡張） | 承認済み | `scripts/entities.py`、`users-guide/03-requirements-format.md` | `tests/integration/test_entity_columns.py` | エンティティ台帳・企業カタログ照合 |
+| FR-1031 | 表示オブジェクトへのリンク | 承認済み | 未実装 | 未実装 | UI 部品、ストア |
+| FR-1032 | 設計・開発履歴と進捗の項目の自動折り返し | 承認済み | 未実装 | 未実装 | デザイン基盤 |
+| FR-1033 | 実装状態のグラフ区間からの画面横断の強調と絞り込み | 承認済み | 未実装 | 未実装 | ストア、UI 部品 |
+| FR-1034 | アーキテクチャ図とエンティティモデル図（2D/3D）とデータの所在 | 承認済み | 未実装 | 未実装 | 管理データモデル、ストア、意味的ズーム |
 | NFR-PERF-004 | エンティティ表示の大規模データでの滑らかさ | 承認済み | `EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/sz2d.js`、`EABK-Studio/web/js/sz3d.js`、`scripts/entities.py` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 意味的ズーム |
 | NFR-UX-010 | エンティティ表示の代替手段・キーボード・言語 | 承認済み | `EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/sz2d.js`、`EABK-Studio/web/js/sz3d.js`、`EABK-Studio/web/js/i18n.js`、`EABK-Studio/web/sz.css` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 意味的ズーム、UI 部品 |
 
@@ -145,12 +149,12 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 
 | 部品名 | ファイル | 用途 | 使っている要求 ID |
 |---|---|---|---|
-| 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、FR-1025、FR-1026、FR-1027、FR-1028、FR-1029、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002 |
+| 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、FR-1025、FR-1026、FR-1027、FR-1028、FR-1029、FR-1034、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002 |
 | HTTP サーバー | `EABK-Studio/studio.py` | 127.0.0.1 限定の読取 API と静的配信 | FR-010、FR-013、FR-1001、NFR-OPS-003、NFR-SEC-001 |
-| ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1029 |
-| UI 部品 | `EABK-Studio/web/js/ui.js` | 表示、詳細、通知、リンク | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1028、NFR-OPS-003、NFR-UX-005、NFR-UX-007、NFR-UX-010 |
-| デザイン基盤 | `EABK-Studio/web/app.css`, `EABK-Studio/web/index.html` | Fluent 2 に寄せたテーマ変数、外枠、ナビゲーション、検索、通知、ダーク表示 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022 |
+| ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1029、FR-1031、FR-1033、FR-1034 |
+| UI 部品 | `EABK-Studio/web/js/ui.js` | 表示、詳細、通知、リンク | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1028、FR-1031、FR-1033、NFR-OPS-003、NFR-UX-005、NFR-UX-007、NFR-UX-010 |
+| デザイン基盤 | `EABK-Studio/web/app.css`, `EABK-Studio/web/index.html` | Fluent 2 に寄せたテーマ変数、外枠、ナビゲーション、検索、通知、ダーク表示 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1032 |
 | フィンガープリント | `EABK-Studio/studio.py` | 更新検知と再読込 | FR-012、NFR-OPS-002 |
 | 起動スクリプト | `EABK-Studio/start.ps1`, `EABK-Studio/start.sh` | Windows/macOS/Linux の起動補助 | FR-1001、NFR-OPS-001 |
 | Three.js 同梱モジュール | `EABK-Studio/web/vendor/three.module.min.js` | 3D マップ表示 | FR-003 |
-| 意味的ズーム | `EABK-Studio/web/js/semzoom.js`, `EABK-Studio/web/js/sz2d.js`, `EABK-Studio/web/js/sz3d.js`, `EABK-Studio/web/sz.css` | エンティティの倍率に応じた 3 粒度（クラスター・エンティティと関係線・列の一覧）。2D（SVG）と 3D（Canvas）が 1 つの共有状態（倍率・中心・選択・絞り込み）で動き、可視範囲だけを描画し、表の代替表現・キーボード・JA/EN を備える。`window.eabkView`（setScale・getState）を公開する | FR-1027、FR-1028、FR-1029、NFR-PERF-004、NFR-UX-010 |
+| 意味的ズーム | `EABK-Studio/web/js/semzoom.js`, `EABK-Studio/web/js/sz2d.js`, `EABK-Studio/web/js/sz3d.js`, `EABK-Studio/web/sz.css` | エンティティの倍率に応じた 3 粒度（クラスター・エンティティと関係線・列の一覧）。2D（SVG）と 3D（Canvas）が 1 つの共有状態（倍率・中心・選択・絞り込み）で動き、可視範囲だけを描画し、表の代替表現・キーボード・JA/EN を備える。`window.eabkView`（setScale・getState）を公開する | FR-1027、FR-1028、FR-1029、FR-1034、NFR-PERF-004、NFR-UX-010 |
