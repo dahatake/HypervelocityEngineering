@@ -40,7 +40,17 @@
     "AC-080": "sha256:c5379dd42824f506",
     "AC-081": "sha256:23f25a36610bb70c",
     "AC-091": "sha256:ca174e05d42e8119",
-    "AC-104": "sha256:27092d207f2d76c1"
+    "AC-104": "sha256:27092d207f2d76c1",
+    "AC-105": "sha256:03cb2f867130393c",
+    "AC-106": "sha256:94487a7c5825a588",
+    "AC-107": "sha256:c879802e05db1e1f",
+    "AC-108": "sha256:8bb717e1dbef090b",
+    "AC-109": "sha256:b41d71a8926e59ae",
+    "AC-110": "sha256:282f54a74c9198f2",
+    "AC-111": "sha256:70bbdfa7fa058260",
+    "AC-112": "sha256:92996c1826c2b30d",
+    "AC-113": "sha256:bc06c52f2dce258e",
+    "AC-114": "sha256:f10e8f690a809032"
   },
   "cases": [
     {
@@ -2297,6 +2307,316 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-008",
+      "requirement_ids": [
+        "FR-1017"
+      ],
+      "ac_ids": [
+        "AC-105"
+      ],
+      "title": "4 種類の起動契機で検査が起動し定期実行は週 1 回である",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac105 -q",
+      "canary": true,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-14T20:55:51+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:40+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        }
+      ]
+    },
+    {
+      "id": "IT-009",
+      "requirement_ids": [
+        "FR-1017"
+      ],
+      "ac_ids": [
+        "AC-106"
+      ],
+      "title": "検査合格時は commit・PR・Issue・コメントを行わない",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac106 -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-14T20:56:17+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:40+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        }
+      ]
+    },
+    {
+      "id": "IT-010",
+      "requirement_ids": [
+        "FR-1018"
+      ],
+      "ac_ids": [
+        "AC-107"
+      ],
+      "title": "再検査合格時のみ修復を commit し不合格なら commit も push もしない(異常系)",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac107 -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-14T20:56:18+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:40+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        }
+      ]
+    },
+    {
+      "id": "IT-011",
+      "requirement_ids": [
+        "FR-1018"
+      ],
+      "ac_ids": [
+        "AC-108"
+      ],
+      "title": "PR は当該ブランチへ push・main と定期は修復ブランチ PR を作り重複 PR を作らない",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac108 -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-14T20:56:19+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:41+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        }
+      ]
+    },
+    {
+      "id": "IT-012",
+      "requirement_ids": [
+        "FR-1018"
+      ],
+      "ac_ids": [
+        "AC-109"
+      ],
+      "title": "自動修復で要求定義書を変更しない",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac109 -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-14T20:56:20+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:41+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        }
+      ]
+    },
+    {
+      "id": "IT-013",
+      "requirement_ids": [
+        "FR-1019"
+      ],
+      "ac_ids": [
+        "AC-110"
+      ],
+      "title": "再検査不合格時にラベル・要約・実行リンク付き Issue を 1 件作成する",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac110 -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-14T20:56:21+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:41+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        }
+      ]
+    },
+    {
+      "id": "IT-014",
+      "requirement_ids": [
+        "FR-1019"
+      ],
+      "ac_ids": [
+        "AC-111"
+      ],
+      "title": "同じ失敗の未解決 Issue があれば新規作成せずコメントする",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac111 -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-14T20:56:22+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:41+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        }
+      ]
+    },
+    {
+      "id": "IT-015",
+      "requirement_ids": [
+        "NFR-SEC-004"
+      ],
+      "ac_ids": [
+        "AC-112"
+      ],
+      "title": "権限は 3 つの write のみで fork PR は書き込みせず検査のみ(異常系)",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac112 -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-14T20:56:23+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:41+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        }
+      ]
+    },
+    {
+      "id": "IT-016",
+      "requirement_ids": [
+        "NFR-SEC-004"
+      ],
+      "ac_ids": [
+        "AC-113"
+      ],
+      "title": "bot の修復 commit を契機とする実行で修復の連鎖が起きない(異常系)",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac113 -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-14T20:56:25+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:41+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        }
+      ]
+    },
+    {
+      "id": "IT-017",
+      "requirement_ids": [
+        "NFR-OPS-006"
+      ],
+      "ac_ids": [
+        "AC-114"
+      ],
+      "title": "MANAGED 登録・--no-ci 除外・README と users-guide の記述",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac114 -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-14T20:56:27+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:42+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
         }
       ]
     }
