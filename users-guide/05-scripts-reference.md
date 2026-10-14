@@ -48,6 +48,16 @@ python scripts/ledger.py repair [--apply]         # 台帳の部分だけ（rdfi
 
 要求定義書を正本として、カタログ・ID 台帳・System Test の台帳・実行履歴・`.gitignore` をそれに合わせます。要求定義書は変更しません。出力は `FIX <CHK> <場所> <内容>`（自動で直す）と `MANUAL <CHK> <場所> <内容>（担当: <役割>）`（判断が要る）の行と、最後の `rdfix: fix=N manual=M mode=…` の 1 行です。exit 0 は「自動で直すものが残っていない」です。直す範囲は [6.3](06-quality-gates.md#63-データ層の不整合の自動修正rdfix) にあります。
 
+## entities.py（エンティティ台帳と企業データカタログとの整合）
+
+```bash
+python scripts/entities.py list  [--repo DIR] [--json]          # エンティティ台帳（名前・説明・管理テーブル・ユースケース・使い方）
+python scripts/entities.py check [--repo DIR] [--json] [--strict] # 企業データカタログとの照合（一致／EABK のみ／企業カタログのみ／名称の揺れ候補）
+python scripts/entities.py todo  [--repo DIR] [--json]          # 覆われていないエンティティの ToDo（質問票の行の形式）
+```
+
+台帳は、用語表・状態表・各要求の「対象エンティティ」から導出します（専用のファイルや表は作りません）。説明・管理テーブル・使い方が管理データにないものは「説明未記載」「テーブル未記載」「使い方未記載」と表示し、推測しません。企業データカタログの参照元は `scripts/ebak.config.json` の `enterprise_data_catalog` で任意に指定します（[4 章](04-customization.md)）。未設定でも動き、「企業データカタログ: 未設定（照合していない）」と報告します。参照元は読み取り専用で、本文を保存・転記せず（名前と `出典:行` だけを出力）、URL は http・https のみ、認証情報の埋め込みは取得せず「照合不能」にします。`todo` は質問票の行（ID は採番前）を出力するだけで管理データを書き換えません。rd-author が `next-id.py` で採番して質問票へ転記します。理由は「企業カタログ未確認」「企業カタログになし」「名称の確認」で、同じエンティティ・同じ理由の未回答の質問が質問票にあれば出力しません。exit 0（`check --strict` は差分・照合不能で 1）。
+
 ## next-id.py（ID の採番。G-3）
 
 ```bash
