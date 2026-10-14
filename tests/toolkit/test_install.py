@@ -14,7 +14,7 @@ def test_fresh_install_layout(empty_repo):
     proc = install(empty_repo)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     for rel in (".github/agents/conductor.agent.md", ".github/skills/rd-audit/SKILL.md", ".github/hooks/quality-gates.json",
-                ".github/skills/build/SKILL.md", ".github/workflows/ebak-verify.yml", "scripts/hooks/gate.py",
+                ".github/skills/build/SKILL.md", ".github/workflows/ebak-verify.yml", ".github/workflows/ebak-data-layer.yml", "scripts/hooks/gate.py",
                 "scripts/verify.sh", "docs/requirements-definition.md", "tests/system/ledger.json", ".github/ebak-toolkit.json"):
         assert (empty_repo / rel).exists(), rel
     assert not (empty_repo / ".github/prompts").exists()
