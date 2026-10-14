@@ -73,6 +73,7 @@ export function initDrawer(root) {
       const sm = m.stateMachines.find((x) => 'ent:' + x.entity === id);
       kids.push(section(t('col.definition'), term?.definition || (n.title !== n.label ? n.title : '')), section(t('col.forbidden'), term?.forbidden && term.forbidden !== 'なし' ? term.forbidden : null),
         sm ? section(t('dgm.states'), el('div', {}, el('div', { class: 'chips' }, sm.states.map((s) => el('span', { class: 'badge' }, s))), el('div', { style: { marginTop: '8px' } }, el('a', { class: 'btn ghost', href: '#/diagrams', onclick: () => { } }, '▦ ' + t('dgm.states'))))) : null,
+        el('section', {}, el('a', { class: 'btn ghost', href: '#/entities?entity=' + encodeURIComponent(n.label) }, '🔗 ' + t('nav.entities'))),
         section(t('d.src'), loc(n.file, n.line)));
     } else if (n.type === 'persona') {
       const p = m.personas.find((x) => 'persona:' + x.name === id);

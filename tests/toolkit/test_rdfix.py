@@ -94,6 +94,18 @@ def test_registry_states_and_duplicates_but_not_reuse(sample):
     assert "| AC-077 | AC | 使用中 |" in sample.read("docs/id-registry.md")
 
 
+def test_registry_separator_rows_are_not_duplicates(sample):
+    # merge=union leaves a second table with its own |---| separator row
+    reg = sample.read("docs/id-registry.md")
+    sep = next(l for l in reg.splitlines() if l.startswith("|---") or l.startswith("| ---"))
+    header = next(l for l in reg.splitlines() if l.startswith("| ID"))
+    sample.write("docs/id-registry.md", reg.rstrip("\n") + "\n\n" + header + "\n" + sep + "\n")
+    out = sample.py("rdfix.py", "--only", "registry").stdout
+    assert not any("---" in l for l in fixes(out))
+    sample.py("rdfix.py", "--only", "registry", "--apply", check=True)
+    assert sample.read("docs/id-registry.md").count(sep) == 2
+
+
 def test_ledger_repair_keeps_review_signals(sample):
     sample.py("ledger.py", "add", "--req", "FR-001", "--ac", "AC-001", "--title", "t", "--layer", "e2e",
               "--command", "python -c \"raise SystemExit(0)\"", check=True)

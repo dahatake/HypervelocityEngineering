@@ -192,3 +192,20 @@ svg text{font-family:inherit}
 }
 
 .pop{position:relative;padding:0!important}.pop>summary{list-style:none;cursor:pointer;padding:5px 12px;color:var(--dim);border-radius:8px}.pop>summary::-webkit-details-marker{display:none}.pop[open]>summary{color:#fff}.pop>div{position:absolute;top:calc(100% + 6px);left:0;width:max-content;max-width:min(360px,80vw);display:flex;flex-wrap:wrap;gap:2px;padding:8px;background:rgba(12,18,36,.97);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+
+/* Entity × use-case matrix and entity detail (FR-1021, FR-1022) */
+.eu .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+.eu-controls input,.eu-controls select{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 10px;outline:0;min-width:200px}
+.eu-scroll{overflow:auto;max-width:100%;border:1px solid var(--line);border-radius:12px}
+.eu-matrix,.eu-sub{border-collapse:collapse;width:100%;font-size:13px}
+.eu-matrix th,.eu-matrix td,.eu-sub th,.eu-sub td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top;white-space:nowrap}
+.eu-sub th,.eu-sub td{white-space:normal}
+.eu-matrix thead th{position:sticky;top:0;background:var(--panel2)}
+.eu-matrix tbody th{position:sticky;left:0;background:var(--panel2)}
+.eu-matrix td.on{background:rgba(57,208,255,.14);font-weight:600}
+.eu-matrix .sel{outline:2px solid var(--c1);outline-offset:-2px}
+.eu-h{background:none;border:0;cursor:pointer;color:var(--c1);padding:0;text-decoration:underline}
+.eu-unused::after{content:"⚠ " attr(data-unused);margin-left:8px;color:var(--warn);font-size:12px;font-weight:400}
+.eu-text{width:100%;font-family:Consolas,"Cascadia Mono",monospace;font-size:12px;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px}
+.eu-sec{margin:18px 0}.eu-sec h2{font-size:15px;margin:0 0 6px}
+.eu-cols{margin:6px 0;padding-left:18px;font-size:12px;color:var(--dim)}

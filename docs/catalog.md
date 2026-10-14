@@ -35,6 +35,13 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1014 | 要求の実装状態ビュー（実装の登録と試験 pass の区別） | 承認済み | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/implstatus.js`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/i18n.js`, `users-guide/studio/08-data-reference.md` | `tests/system/e2e/test_impl_status_system.py`, `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
 | FR-1015 | 次に実装すべき要求の分析コマンド | 承認済み | `scripts/next-impl.py`、`tools/install.py`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_next_impl.py` | 次実装候補の分析、run 状態・完了記録、配布同期対象 |
 | FR-1016 | 許容時間を指定するだけの実装依頼（/build 入口）の生成 | 承認済み | `scripts/build-request.py`、[`.github/skills/build/SKILL.md`](docs/../.github/skills/build/SKILL.md)、`tools/install.py`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_next_impl.py`、`tests/system/e2e/test_build_request_system.py` | 次実装候補の分析、run 状態・完了記録、配布同期対象 |
+| FR-1020 | エンティティ台帳の導出（既存の構造化欄が正本） | 承認済み | `scripts/entities.py`、`scripts/rdcheck.py`、`tools/install.py`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_entities.py` | エンティティ台帳・企業カタログ照合 |
+| FR-1021 | エンティティ × ユースケース の対応表（Studio） | 承認済み | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/entities.js`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/app.css`, `EABK-Studio/README.md`, `users-guide/studio/02-screens.md` | `tests/system/e2e/test_entities_studio_system.py`, `EABK-Studio/tests/test_studio.py` | エンティティ台帳・企業カタログ照合、管理データモデル、ストア、UI 部品、デザイン基盤 |
+| FR-1022 | エンティティ詳細（要求・テーブル・コンポーネント） | 承認済み | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/entities.js`, `EABK-Studio/web/js/drawer.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/app.css` | `tests/system/e2e/test_entities_studio_system.py`, `EABK-Studio/tests/test_studio.py` | エンティティ台帳・企業カタログ照合、管理データモデル、ストア、UI 部品、デザイン基盤 |
+| FR-1023 | 企業データカタログとの整合の検査 | 承認済み | `scripts/entities.py`、`scripts/rdcheck.py`、`tools/install.py`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_entities.py` | エンティティ台帳・企業カタログ照合 |
+| FR-1024 | 企業データカタログが覆わないエンティティの ToDo 生成 | 承認済み | `scripts/entities.py`、`scripts/rdcheck.py`、`tools/install.py`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_entities.py` | エンティティ台帳・企業カタログ照合 |
+| NFR-COMPAT-003 | エンティティ機能の他リポジトリでの動作 | 承認済み | `scripts/entities.py`、`scripts/rdcheck.py`、`tools/install.py`、`users-guide/05-scripts-reference.md`、`EABK-Studio/eabk_model.py`、`EABK-Studio/web/js/entities.js` | `tests/toolkit/test_entities.py`、`tests/system/e2e/test_entities_studio_system.py`、`EABK-Studio/tests/test_studio.py` | エンティティ台帳・企業カタログ照合、管理データモデル |
+| NFR-SEC-023 | 企業データカタログの参照の安全性 | 承認待ち | `scripts/entities.py` | `tests/toolkit/test_entities.py` | エンティティ台帳・企業カタログ照合 |
 
 ## API・イベント
 
@@ -60,6 +67,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | 次実装候補の分析 | `scripts/next-impl.py` | 承認済み・未完了の要求を優先度・依存・実装状態で順位付けし、除外の理由と scope 用 ID 一覧を出す（読み取り専用） | FR-1015、FR-1016 |
 | データ層検査 | `scripts/verify.py` | `--docs-only` でデータ層の妥当性を検査する | FR-1017、FR-1018 |
 | データ層修復 | `scripts/rdfix.py` | 要求定義書を変更せずデータ層の不整合を自動修復し、残りを手動対応として示す | FR-1018、FR-1019 |
+| エンティティ台帳・企業カタログ照合 | `scripts/entities.py` | 用語表・状態表・対象エンティティ・カタログのテーブル表からエンティティ台帳を導出し（list）、企業データカタログ（任意設定 `enterprise_data_catalog`。読み取り専用）と照合し（check）、覆われないものを質問票形式の ToDo にする（todo）。導出関数 `derive` は Studio からも再利用する | FR-1020、FR-1021、FR-1022、FR-1023、FR-1024、NFR-COMPAT-003、NFR-SEC-023 |
 # EABK Studio カタログ
 
 管理データの要求と、現時点で実在する実装資産の対応表。未実装の要求は「未実装」と記載する。`EABK-Studio` は依頼時点の作業ツリーに存在する資産であり、今回の要求定義コミットではコードを変更しない。
@@ -129,11 +137,11 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 
 | 部品名 | ファイル | 用途 | 使っている要求 ID |
 |---|---|---|---|
-| 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、NFR-OPS-004、NFR-SEC-002 |
+| 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002 |
 | HTTP サーバー | `EABK-Studio/studio.py` | 127.0.0.1 限定の読取 API と静的配信 | FR-010、FR-013、FR-1001、NFR-OPS-003、NFR-SEC-001 |
-| ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014 |
-| UI 部品 | `EABK-Studio/web/js/ui.js` | 表示、詳細、通知、リンク | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、NFR-OPS-003、NFR-UX-005、NFR-UX-007 |
-| デザイン基盤 | `EABK-Studio/web/app.css`, `EABK-Studio/web/index.html` | Fluent 2 に寄せたテーマ変数、外枠、ナビゲーション、検索、通知、ダーク表示 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014 |
+| ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022 |
+| UI 部品 | `EABK-Studio/web/js/ui.js` | 表示、詳細、通知、リンク | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、NFR-OPS-003、NFR-UX-005、NFR-UX-007 |
+| デザイン基盤 | `EABK-Studio/web/app.css`, `EABK-Studio/web/index.html` | Fluent 2 に寄せたテーマ変数、外枠、ナビゲーション、検索、通知、ダーク表示 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022 |
 | フィンガープリント | `EABK-Studio/studio.py` | 更新検知と再読込 | FR-012、NFR-OPS-002 |
 | 起動スクリプト | `EABK-Studio/start.ps1`, `EABK-Studio/start.sh` | Windows/macOS/Linux の起動補助 | FR-1001、NFR-OPS-001 |
 | Three.js 同梱モジュール | `EABK-Studio/web/vendor/three.module.min.js` | 3D マップ表示 | FR-003 |
