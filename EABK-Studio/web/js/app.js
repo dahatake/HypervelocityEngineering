@@ -2,6 +2,7 @@ import { t, lang, setLang, onLang, applyI18n } from './i18n.js';
 import { store } from './store.js';
 import { el, esc, colorOf, typeLabel, toast, businessIcon } from './ui.js';
 import { initDrawer } from './drawer.js';
+import { installXref } from './xref.js';
 import { decorate, mountStructure, mountConsistency, mountMaintenance } from './insights.js';
 
 const ROUTES = {
@@ -196,4 +197,6 @@ renderLangBtn();
 renderNav();
 view.replaceChildren(el('div', { class: 'splash' }, el('div', { class: 'spin' }), t('loading')));
 initDrawer(document.getElementById('drawer'));
+installXref();
+for (const k of ['dashboard', 'implstatus']) ROUTES[k].load().catch(() => {}); // warm the module cache
 loadModel().catch((e) => { view.replaceChildren(el('div', { class: 'page' }, el('div', { class: 'warnbox' }, 'Failed to load: ' + e.message))); });

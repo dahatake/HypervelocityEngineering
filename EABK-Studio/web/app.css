@@ -209,3 +209,23 @@ svg text{font-family:inherit}
 .eu-text{width:100%;font-family:Consolas,"Cascadia Mono",monospace;font-size:12px;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px}
 .eu-sec{margin:18px 0}.eu-sec h2{font-size:15px;margin:0 0 6px}
 .eu-cols{margin:6px 0;padding-left:18px;font-size:12px;color:var(--dim)}
+
+/* FR-1031 links */
+a.xref{color:var(--c1);text-decoration:underline;text-underline-offset:2px;cursor:pointer;overflow-wrap:anywhere}
+a.xref:focus-visible{outline:2px solid var(--c1);outline-offset:2px}
+/* FR-1032: history chips wrap inside their box (no overflow, no horizontal scroll) */
+.visual-section .grid>*,.history-grid>*{min-width:0}
+.history-box{min-width:0;max-width:100%;overflow:hidden}
+.hchips{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.hchip{display:inline-block;box-sizing:border-box;max-width:100%;min-width:0;padding:2px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(120,150,255,.1);font-size:12px;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+.visual-section .badge,.visual-section .dimension-list .badge{white-space:normal;overflow-wrap:anywhere;max-width:100%}
+.visual-section .dimension-list{display:flex;flex-wrap:wrap;gap:6px}
+/* FR-1033 implementation-status linking */
+.impl-seg{cursor:pointer}
+.impl-seg:focus-visible,.impl-legend button:focus-visible{outline:2px solid #fff;outline-offset:-2px}
+.impl-seg[aria-pressed=true]{outline:3px dashed #fff;outline-offset:-3px}
+[data-match=false]{opacity:.3}
+[data-match=true].impl-card,tr[data-match=true]{box-shadow:inset 3px 0 0 var(--c1)}
+.impl-filter-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.impl-legend button{background:none;border:1px solid var(--line);border-radius:999px;color:inherit;padding:2px 10px;cursor:pointer}
+.impl-legend button[aria-pressed=true]{border-style:dashed;border-width:2px}

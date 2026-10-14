@@ -5,7 +5,7 @@ const listeners = new Set();
 
 const D = {
   ja: {
-    'nav.implstatus': '実装状態', 'impl2.sub': '承認済みの要求が、未着手・実装登録済み・試験 pass 済みのどこにあるかを表します。実装の登録と試験の合否は別に判定します。', 'impl2.legend': '状態の凡例', 'impl2.all': '全体', 'impl2.goal': '目的別', 'impl2.priority': '優先度別', 'impl2.kanban': 'かんばん', 'impl2.table': '一覧表', 'impl2.cases': '試験ケースの内訳', 'impl2.stalled': '停止中', 'impl2.excluded': '対象外（承認待ち・保留・却下・廃止）の要求数',
+    'nav.implstatus': '実装状態', 'impl2.sub': '承認済みの要求が、未着手・実装登録済み・試験 pass 済みのどこにあるかを表します。実装の登録と試験の合否は別に判定します。', 'impl2.legend': '状態の凡例', 'impl2.all': '全体', 'impl2.goal': '目的別', 'impl2.priority': '優先度別', 'impl2.kanban': 'かんばん', 'impl2.table': '一覧表', 'impl2.cases': '試験ケースの内訳', 'impl2.stalled': '停止中', 'impl3.none': '絞り込みなし（区間をクリックで強調）', 'impl3.applied': '適用中', 'impl3.count': '件', 'impl3.nomatch': '該当なし', 'impl3.clear': '解除', 'impl3.mode.hl': '強調', 'impl3.mode.fl': '絞り込み', 'impl2.excluded': '対象外（承認待ち・保留・却下・廃止）の要求数',
     'nav.dashboard': 'ダッシュボード', 'nav.map2d': '2D マップ', 'nav.map3d': '3D マップ', 'nav.diagrams': '図式', 'nav.placement': '配置', 'nav.source': 'ソース対応', 'nav.tables': '表',
     'search.ph': 'ID・題名・ファイル・用語を検索…', 'repo.change': '対象リポジトリを切り替える', 'repo.prompt': 'EABK を使っているリポジトリのフォルダーのパスを入力してください',         'repo.nodata': 'data layer がそのフォルダーには見つかりません（docs/requirements-definition.md など）。', 'repo.bad': 'not found: フォルダーが見つかりません。',
     'update.avail': 'データが更新されました。再読み込みします…', 'loading': 'データ層を読み込み中…', 'none': '（なし）',
@@ -63,7 +63,7 @@ const D = {
         'sz.goto': '参照先へ移動', 'sz.badge.selected': '選択', 'sz.badge.related': '関係先', 'sz.use': '使用', 'sz.nowebgl': '',
       },
   en: {
-    'nav.implstatus': 'Impl. status', 'impl2.sub': 'Where each approved requirement stands: not started, implementation registered, or test passed. Registration and test results are judged separately.', 'impl2.legend': 'State legend', 'impl2.all': 'Overall', 'impl2.goal': 'By goal', 'impl2.priority': 'By priority', 'impl2.kanban': 'Kanban', 'impl2.table': 'Table', 'impl2.cases': 'Test case breakdown', 'impl2.stalled': 'Stalled', 'impl2.excluded': 'Excluded (pending, on hold, rejected, retired) requirements',
+    'nav.implstatus': 'Impl. status', 'impl2.sub': 'Where each approved requirement stands: not started, implementation registered, or test passed. Registration and test results are judged separately.', 'impl2.legend': 'State legend', 'impl2.all': 'Overall', 'impl2.goal': 'By goal', 'impl2.priority': 'By priority', 'impl2.kanban': 'Kanban', 'impl2.table': 'Table', 'impl2.cases': 'Test case breakdown', 'impl2.stalled': 'Stalled', 'impl3.none': 'No filter (click a segment to highlight)', 'impl3.applied': 'Applied', 'impl3.count': 'items', 'impl3.nomatch': 'No match', 'impl3.clear': 'Clear', 'impl3.mode.hl': 'Highlight', 'impl3.mode.fl': 'Filter', 'impl2.excluded': 'Excluded (pending, on hold, rejected, retired) requirements',
     'nav.dashboard': 'Dashboard', 'nav.map2d': '2D Map', 'nav.map3d': '3D Map', 'nav.diagrams': 'Diagrams', 'nav.placement': 'Placement', 'nav.source': 'Source Map', 'nav.tables': 'Tables',
     'search.ph': 'Search IDs, titles, files, terms…', 'repo.change': 'Switch the target repository', 'repo.prompt': 'Enter the folder path of a repository that uses EABK', 'repo.nodata': 'No EABK data layer (docs/requirements-definition.md etc.) was found in that folder.', 'repo.bad': 'Folder not found.',
     'update.avail': 'Data changed. Reloading…', 'loading': 'Loading the data layer…', 'none': '(none)',

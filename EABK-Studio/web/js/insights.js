@@ -2,6 +2,7 @@
 import { store } from './store.js';
 import { t, lang } from './i18n.js';
 import { el, vscodeUrl } from './ui.js';
+import { xrefLink } from './xref.js';
 
 export function evidenceTarget(record) {
   return record.file && record.line
@@ -155,12 +156,28 @@ function historyProgress() {
     label,
     groups: Object.entries(states).map(([status, records]) => ({ label: status, records })),
   }));
+  // FR-1032 / FR-1031: record chips wrap inside their box; each chip's ID is a link.
+  const KIND = { 決定記録: 'decision', 実行履歴: 'run', 要求状態: 'requirement', 実装登録: 'impl' };
+  const chipBoxes = Object.entries(KIND).map(([label, kind]) => {
+    const records = (m.analysis.history || []).filter((r) => r.category === label);
+    const chip = (r) => {
+      const id = String(r.id || '');
+      const link = store.nodes.has(id) ? xrefLink(id)
+        : (() => { const tg = evidenceTarget(r); return tg.href ? el('a', { class: 'mono xref', href: tg.href, title: `${label} ${id}` }, id || tg.label) : el('span', { class: 'mono' }, id || '-'); })();
+      return el('span', { class: 'hchip', 'data-testid': 'history-chip', 'data-kind': kind }, link, r.status ? el('span', { class: 'hstatus' }, ` ${r.status}`) : '');
+    };
+    return el('section', { class: 'card history-box', 'data-testid': 'history-box', 'data-kind': kind, 'aria-label': `${label} ${records.length}` },
+      el('h3', {}, `${label} (${records.length})`),
+      records.length ? el('div', { class: 'hchips' }, records.map(chip))
+        : el('div', { class: 'hchips' }, el('span', { class: 'hchip empty', 'data-testid': 'history-chip', 'data-kind': kind }, '該当レコードなし')));
+  });
   return el('section', { class: 'visual-section' }, el('h2', {}, '設計・開発履歴と進捗'),
     el('p', { class: 'sub' }, `測定時点: ${m.meta.generatedAt} · 時系列 / 状態別`),
     el('div', { class: 'progress-summary' }, el('span', {}, 'System Test 合格 '),
       el('strong', { 'data-testid': 'system-test-pass-count' }, String(pass)),
       el('span', {}, ` / ${m.cases.length}（not_run は合格に含めない）`)),
-    el('div', { class: 'grid cols2' },
+    el('div', { class: 'grid cols2 history-grid' }, ...chipBoxes),
+    el('div', { class: 'grid cols2 history-grid' },
       ...historyGroups.map((category) => evidence(category.label, category.groups)),
       evidence('目的', goalGroups),
       evidence('データ種別', typeGroups)));
