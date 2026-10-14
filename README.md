@@ -82,6 +82,7 @@ Enterprise App Build Kit は、次の 4 つの手段でこれらを防ぎます�
                  build-template … /build-template で依頼の雛形を表示する（run は開始しない）
   hooks/         quality-gates.json … 全エージェント共通の強制ゲート（G-1〜G-7）
   workflows/     ebak-verify.yml … GitHub Actions で verify を再実行（外部での再確認）
+                 ebak-data-layer.yml … データ層の検査と自動修復（下の「データ層ワークフロー（ebak-data-layer）」）
 scripts/         決定的スクリプト（Python 3.9 以上。標準ライブラリだけを使用）
   verify.py / verify.ps1 / verify.sh   L1 検査（CHK-01〜27）＋ビルド・テスト
   rdcheck.py  next-id.py  ledger.py  select-tests.py  summarize.py  clean-work.py  run-state.py
@@ -244,7 +245,7 @@ python tools/install.py --target /path/to/your-repo
 | `--dry-run` | `-DryRun` | 何も書き込まず、実行する操作だけを表示します |
 | `--check` | `-Check` | 更新が必要かどうかを確認します（必要なら exit 1。CI でバージョンのずれを検出できます） |
 | `--force` | `-Force` | ローカルで変更した toolkit のファイルも上書きします（`*.ebak-backup-<日時>` を残します） |
-| `--no-ci` | `-NoCi` | `.github/workflows/ebak-verify.yml` をインストールしません |
+| `--no-ci` | `-NoCi` | `.github/workflows/ebak-verify.yml` と `ebak-data-layer.yml` をインストールしません |
 | `--uninstall` | `-Uninstall` | 変更していない toolkit のファイル、`AGENTS.md` などのブロック、マニフェスト、空になったフォルダーを削除します（管理データと設定は残します）。`uninstall.ps1` / `uninstall.sh` でも実行できます |
 | `--purge` | `-Purge` | `--uninstall` に加えて、管理データ（`docs/` の要求定義書・カタログ・ID 台帳・run 履歴・手動テスト、`tests/system/ledger.json`）、`scripts/ebak.config.json`、`/work`、`.gitignore`・`.gitattributes` に追記した行、`*.ebak-backup-*` も削除します |
 
@@ -510,6 +511,15 @@ hook や subagent の動作は、クライアント（VS Code・Copilot CLI・Gi
 逆に、**中断中の run が残っている**（run が `active`）と、通常の Prompt にも conductor 用の制限がかかります。たとえば、`/work` と `docs/run-history.md` 以外は編集を拒否されます（G-5）。また、作業ツリーでは統合ブランチ（`run/<run-id>`）がチェックアウトされたままのことがあり、そこに無関係な変更を commit すると、run の再開時に前提が崩れます。通常の Prompt を使う前に `python scripts/run-state.py status` で状態を確認し、run を続けるなら `/build` で再開します。
 
 通常の Prompt でファイルを変更した場合は、commit の前に `python scripts/verify.py` を実行し、exit 0 になることを確認してください。CI（`.github/workflows/ebak-verify.yml`）でも同じ検査を実行します。
+
+### データ層ワークフロー（ebak-data-layer）
+
+`.github/workflows/ebak-data-layer.yml`（ebak-data-layer）は、プルリクエスト、main への push、手動実行（workflow_dispatch）、週 1 回の定期実行（schedule）で `python scripts/verify.py --docs-only` を実行します。
+
+- 不合格のとき、`python scripts/rdfix.py --apply` で自動修復して再検査し、合格した場合だけ修復を commit します。要求定義書は変更しない設計です。同一リポジトリの PR では当該 PR のブランチへ、main への push と定期実行では修復用ブランチ（`eabk/data-layer-fix`）と PR に反映します。
+- 修復後も直らないときは、ラベル `eabk-data-layer` つきで失敗の要約と実行へのリンクを含む Issue を作成します（同じ内容の未解決 Issue があればコメント）。
+- 権限は contents・pull-requests・issues の write だけで、fork からの PR では検査だけを行います。bot の修復 commit では再修復しません。
+- 無効化するには、ファイルを削除するか Actions 画面で Disable します（インストール時は `--no-ci`）。詳細は `users-guide/04-customization.md`。
 
 ---
 

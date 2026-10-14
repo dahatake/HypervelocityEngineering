@@ -1,0 +1,127 @@
+name: ebak-data-layer
+
+# データ層（docs/・tests/system/）の妥当性検査と、機械的に直せるずれの自動修復。
+#  FR-1017 検査 / FR-1018 修復と反映 / FR-1019 直せないときの Issue 化 / NFR-SEC-004 最小権限
+# 無効化するには: このファイルを削除するか、GitHub の Actions 画面でこのワークフローを Disable する。
+# 要求定義書（docs/requirements-definition.md）は自動修復で変更しない。
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # PARAM-013: 1 週ごと（月曜 03:17 UTC）
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: ebak-data-layer-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  data-layer:
+    runs-on: ubuntu-latest
+    env:
+      LABEL: eabk-data-layer # PARAM-014
+      FIX_BRANCH: eabk/data-layer-fix
+      HEAD_REF: ${{ github.head_ref }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      # fork の PR は fork 側の head を読み取り専用で検査するだけ（書き込みは各 step の if で除外）
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: check (1st)
+        id: first
+        continue-on-error: true
+        run: |
+          echo "actor: ${GITHUB_ACTOR} (github-actions[bot] の修復 commit では再修復しない)"
+          python scripts/verify.py --docs-only
+
+      - name: auto-repair (requirements definition is never changed)
+        id: repair
+        if: steps.first.outcome == 'failure' && github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, 'eabk-auto')
+        continue-on-error: true
+        run: python scripts/rdfix.py --apply
+
+      - name: restore requirements definition
+        if: steps.first.outcome == 'failure' && github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, 'eabk-auto')
+        run: git checkout -- docs/requirements-definition.md
+
+      - name: check (recheck after repair)
+        id: recheck
+        if: steps.first.outcome == 'failure' && github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, 'eabk-auto')
+        continue-on-error: true
+        run: |
+          set +e
+          python scripts/verify.py --docs-only 2>&1 | tee "$RUNNER_TEMP/recheck.log"
+          exit "${PIPESTATUS[0]}"
+
+      - name: commit repair and push (same-repo PR branch / fix branch + PR)
+        id: push
+        if: steps.first.outcome == 'failure' && steps.recheck.outcome == 'success' && github.actor != 'github-actions[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- docs tests/system .gitignore
+          git reset -q -- docs/requirements-definition.md
+          if git diff --cached --quiet; then
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -m "[eabk-auto] データ層の自動修復 (run ${GITHUB_RUN_ID})"
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            git push origin "HEAD:refs/heads/${HEAD_REF}"
+          else
+            git push --force origin "HEAD:refs/heads/${FIX_BRANCH}"
+            existing=$(gh pr list --head "${FIX_BRANCH}" --state open --json number --jq 'length')
+            if [ "${existing}" = "0" ]; then
+              gh pr create --head "${FIX_BRANCH}" --base "${GITHUB_REF_NAME}" \
+                --title "データ層の自動修復" \
+                --body "scripts/rdfix.py --apply による自動修復です（要求定義書は変更していません）。実行: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            fi
+          fi
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+      - name: open or update issue for unfixable inconsistencies
+        if: steps.recheck.outcome == 'failure' && github.actor != 'github-actions[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        run: |
+          set -e
+          grep -E 'CHK-[0-9]+' "$RUNNER_TEMP/recheck.log" | head -n 50 > "$RUNNER_TEMP/summary.txt" || true
+          fingerprint=$(sort "$RUNNER_TEMP/summary.txt" | sha256sum | cut -c1-16)
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          {
+            echo "自動修復後もデータ層の不整合が残っています（手動対応が必要です）。"
+            echo
+            echo "- 実行: ${run_url}"
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/summary.txt"
+            echo '```'
+            echo
+            echo "<!-- eabk-data-layer-fingerprint:${fingerprint} -->"
+          } > "$RUNNER_TEMP/body.md"
+          gh label create "${LABEL}" --description "EABK data layer check" 2>/dev/null || true
+          existing=$(gh issue list --label "${LABEL}" --state open --search "${fingerprint} in:body" --json number --jq '.[0].number // empty')
+          if [ -n "${existing}" ]; then
+            gh issue comment "${existing}" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh issue create --label "${LABEL}" --title "データ層の不整合（自動修復不可）" --body-file "$RUNNER_TEMP/body.md"
+          fi
+
+      - name: fail when the data layer is still not valid
+        if: steps.first.outcome == 'failure' && steps.push.outputs.pushed != 'true'
+        run: |
+          echo "データ層の検査に合格していません（自動修復は反映されていません）。"
+          exit 1

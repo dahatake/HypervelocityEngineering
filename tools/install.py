@@ -51,6 +51,7 @@ MANAGED = [
     ".github/skills/build-template/SKILL.md",
     ".github/hooks/quality-gates.json",
     ".github/workflows/ebak-verify.yml",
+    ".github/workflows/ebak-data-layer.yml",
     "scripts/ebaklib.py",
     "scripts/rdcheck.py",
     "scripts/rdfix.py",
@@ -258,7 +259,7 @@ class Installer:
             dest.chmod(dest.stat().st_mode | 0o111)
 
     def managed_files(self) -> List[str]:
-        files = [f for f in MANAGED if not (self.no_ci and f.endswith("ebak-verify.yml"))]
+        files = [f for f in MANAGED if not (self.no_ci and (f.endswith("ebak-verify.yml") or f.endswith("ebak-data-layer.yml")))]
         return files
 
     def install_managed(self) -> None:
