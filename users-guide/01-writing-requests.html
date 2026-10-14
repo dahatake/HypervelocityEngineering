@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>1. 依頼の書き方（/build と runoptions） — HypervelocityEngineering</title>
+<link id="hl" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+<style>
+:root{--bg:#fff;--fg:#1f2328;--muted:#656d76;--card:#f6f8fa;--bd:#d0d7de;--ac:#0969da;--side:#f6f8fa;--code:#eff1f3;--r:10px}
+[data-theme=dark]{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--card:#161b22;--bd:#30363d;--ac:#58a6ff;--side:#010409;--code:#1c2128}
+[data-theme=midnight]{--bg:#0f1226;--fg:#e4e7ff;--muted:#9aa0cc;--card:#171a3a;--bd:#2c3062;--ac:#8b9cff;--side:#0a0c1d;--code:#1d2147}
+[data-theme=ocean]{--bg:#f2fafc;--fg:#0c2d3a;--muted:#4f7583;--card:#e0f2f7;--bd:#b4dce6;--ac:#0087a8;--side:#dcf0f5;--code:#d3ebf1}
+[data-theme=forest]{--bg:#f4f8f2;--fg:#1c2b1e;--muted:#5a6f5c;--card:#e6efe2;--bd:#c3d6bd;--ac:#2f7d3a;--side:#e1ecdc;--code:#dae7d5}
+[data-theme=sunset]{--bg:#fff8f2;--fg:#3a2118;--muted:#8a6252;--card:#ffebdc;--bd:#f2cdb3;--ac:#d9480f;--side:#ffeede;--code:#fde1cc}
+[data-theme=rose]{--bg:#fff6f8;--fg:#3a1c26;--muted:#8d5a6b;--card:#ffe6ec;--bd:#f2c2cf;--ac:#c2255c;--side:#ffe9ef;--code:#fcdbe4}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 system-ui,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;transition:background .2s,color .2s}
+a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;padding:.6rem 1.2rem;background:var(--card);border-bottom:1px solid var(--bd);backdrop-filter:blur(6px)}
+header .brand{font-weight:700;color:var(--fg)}header .sp{flex:1}
+header select,header button{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:.3rem .6rem;font:inherit;font-size:.9rem}
+#menu{display:none}
+.layout{display:flex;min-height:calc(100vh - 54px)}
+nav{width:290px;flex:none;background:var(--side);border-right:1px solid var(--bd);padding:1rem;position:sticky;top:54px;height:calc(100vh - 54px);overflow:auto;font-size:.9rem}
+nav h4{margin:1.1rem 0 .3rem;color:var(--muted);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
+nav a{display:block;padding:.25rem .6rem;border-radius:6px;color:var(--fg);line-height:1.4}
+nav a:hover{background:var(--card);text-decoration:none}
+nav a.cur{background:var(--ac);color:#fff}
+main{flex:1;min-width:0;max-width:900px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1,h2{border-bottom:1px solid var(--bd);padding-bottom:.3rem}
+h1,h2,h3,h4{line-height:1.3;scroll-margin-top:70px}
+img{max-width:100%;height:auto;border-radius:var(--r);border:1px solid var(--bd)}
+pre{background:var(--code);border:1px solid var(--bd);border-radius:var(--r);padding:1rem;overflow:auto;line-height:1.5;font-size:.88rem}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font:.88em ui-monospace,Consolas,monospace}
+pre code{background:none;padding:0}
+pre.mermaid{background:var(--card);text-align:center}
+table{border-collapse:collapse;display:block;overflow:auto;margin:1rem 0}
+th,td{border:1px solid var(--bd);padding:.45rem .8rem;vertical-align:top}
+th{background:var(--card)}tr:nth-child(even) td{background:color-mix(in srgb,var(--card) 50%,transparent)}
+blockquote{margin:1rem 0;padding:.2rem 1rem;border-left:4px solid var(--ac);background:var(--card);border-radius:0 var(--r) var(--r) 0;color:var(--muted)}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var(--muted);font-size:.85rem}
+@media(max-width:820px){#menu{display:inline-block}nav{position:fixed;left:-310px;top:54px;z-index:9;transition:left .2s}nav.open{left:0}main{padding:1.2rem 1rem}}
+</style>
+<script>document.documentElement.dataset.theme=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')</script>
+</head><body>
+<header><button id="menu" aria-label="menu">☰</button><a class="brand" href="../index.html">⚡ HypervelocityEngineering</a><span class="sp"></span>
+<label>🎨 <select id="theme" aria-label="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="midnight">Midnight</option><option value="ocean">Ocean</option><option value="forest">Forest</option><option value="sunset">Sunset</option><option value="rose">Rose</option></select></label>
+<a href="https://github.com/dahatake/HypervelocityEngineering">GitHub</a></header>
+<div class="layout"><nav><h4>はじめに</h4>
+<a href="../index.html">HypervelocityEngineering — Enterprise App Build Kit</a>
+<a href="../CHANGELOG.html">Changelog</a>
+<h4>ユーザーガイド</h4>
+<a class="cur" href="01-writing-requests.html">1. 依頼の書き方（/build と runoptions）</a>
+<a href="02-during-and-after-run.html">2. 実行中と終了後</a>
+<a href="03-requirements-format.html">3. 管理データの書式</a>
+<a href="04-customization.html">4. 設定とカスタマイズ</a>
+<a href="05-scripts-reference.html">5. スクリプトリファレンス</a>
+<a href="06-quality-gates.html">6. 品質ゲートと検査項目</a>
+<a href="07-troubleshooting.html">7. トラブルシューティング</a>
+<a href="08-roadmap.html">8. 導入ロードマップと KPI</a>
+<a href="09-versioning.html">バージョンアップの手順</a>
+<a href="10-adopting-existing-apps.html">10. 既存のアプリを導入する（Adopt）</a>
+<a href="index.html">EABK ユーザーガイド</a>
+<h4>Studio ガイド</h4>
+<a href="studio/01-first-steps.html">S1 はじめかた</a>
+<a href="studio/02-screens.html">S2 画面の見かた</a>
+<a href="studio/03-tasks.html">S3 こんなとき、どう見るか</a>
+<a href="studio/04-troubleshooting.html">S4 うまく動かないとき・用語集</a>
+<a href="studio/05-product-manager.html">S5 Product Manager 向けガイド</a>
+<a href="studio/06-architect.html">S6 Architect 向けガイド</a>
+<a href="studio/07-software-engineer.html">S7 Software Engineer 向けガイド</a>
+<a href="studio/08-data-reference.html">S8 データリファレンス（どの機能が、どのデータを読むか）</a>
+<a href="studio/README.html">EABK Studio ユーザーガイド（第 2 部）</a>
+<h4>管理データ（docs）</h4>
+<a href="../docs/catalog.html">カタログ</a>
+<a href="../docs/id-registry.html">ID 台帳</a>
+<a href="../docs/manual-tests.html">手順で確かめる受入基準</a>
+<a href="../docs/requirements-definition.html">要求定義書</a>
+<a href="../docs/run-history.html">実行履歴</a></nav>
+<main><h1 id="1-build-run_options">1. 依頼の書き方（/build と run_options）</h1>
+<h2 id="11">1.1 雛形</h2>
+<pre><code class="language-text">&lt;request&gt;
+やりたいこと。新規・追加・変更・削除のどれでもよい。外部の文章は &lt;pasted_content id=&quot;任意&quot;&gt; で囲む
+&lt;/request&gt;
+&lt;answers&gt;
+前回の報告の質問票・承認依頼への回答。例: Q-003: B / FR-031: 承認 / 残りは推奨どおり。初回は空
+&lt;/answers&gt;
+&lt;references&gt;
+任意: 資料のパス、URL
+&lt;/references&gt;
+&lt;run_options&gt;
+max_hours: 24
+approval_policy: 安全範囲は推奨どおり
+parallel_workers: auto
+scope: 承認済みすべて
+git_push: しない
+deploy: しない
+external_write: しない
+paid_services: 使わない
+external_exposure: 公開しない
+&lt;/run_options&gt;
+</code></pre>
+<p>VS Code では、Agent を conductor にしてから、チャット欄に <code>/build</code> と入力し、続けて依頼を書いて送信します。<code>&lt;request&gt;</code>・<code>&lt;answers&gt;</code>・<code>&lt;references&gt;</code> の入力フォームは表示されません。GitHub Copilot app でも同じで、エージェント ピッカー（またはプロンプト欄の <code>/agent</code>）で conductor を選び、プロンプト欄に <code>/build</code> と続けて依頼を書いて送信します（<a href="../index.html#github-copilot-app-で実行する">README の「GitHub Copilot app で実行する」</a>）。</p>
+<ul>
+<li><strong>雛形を表示する</strong>: <code>/build-template</code> と送ると（<code>/build template</code> でも同じ）、run を開始せずに、上の雛形がコードブロックでチャットに出力されます。<code>/build template</code> は conductor が通常の依頼として扱ってしまうことがあるため、確実に表示したいときは <code>/build-template</code> を使います（<code>.github/skills/build-template/SKILL.md</code>。雛形は <code>build</code> の既定値と同じで、テストで一致を確認しています）。コピーして書き換え、<code>/build</code> の後に貼り付けて送信します。VS Code の skill には入力欄へ直接テキストを差し込む機能がないため、応答として出力する方式にしています。</li>
+<li><strong>やりたいことだけを書く</strong>（例: <code>/build 申請に下書き保存を加える</code>）: 入力全体が <code>&lt;request&gt;</code> になります。<code>&lt;answers&gt;</code>・<code>&lt;references&gt;</code> は空、<code>&lt;run_options&gt;</code> は上の既定値です。</li>
+<li><strong>回答や run_options も指定する</strong>: 上の雛形を <code>/build</code> の後に貼り付け、必要な部分だけ書き換えて送信します。<code>&lt;run_options&gt;</code> で省略したキーは既定値になります。</li>
+<li><strong>チームの既定値を変える</strong>: <code>.github/skills/build/SKILL.md</code> の雛形を編集します（ローカルで変更したファイルは、インストールコマンドを再実行しても上書きされません）。</li>
+<li><strong><code>/build</code> を使わない</strong>: 雛形を書き換えた全文をそのまま送信しても同じ動作になります（Agent が conductor であることが条件）。Copilot CLI の <code>-i</code> で渡す場合もこの形式です（<a href="../index.html#copilot-cli-で実行する">README の「Copilot CLI で実行する」</a>）。</li>
+</ul>
+<h2 id="12-request">1.2 <code>&lt;request&gt;</code> の書き方</h2>
+<ul>
+<li><strong>何を・誰のために・なぜ</strong> を書きます。画面レイアウトや DB 設計など「どう作るか」は書かなくてかまいません（要求定義書は「何を満たすか」を書くドキュメントです）。</li>
+<li>既存の要求を変更・廃止する場合は、わかれば要求 ID を書きます（例: 「FR-012 の保持期間を 30 日から 90 日にする」「FR-020 を廃止する」）。</li>
+<li>閾値（件数・時間・金額）が決まっていれば、そのまま書きます。決まっていなければ、rd-author が質問票に挙げます。</li>
+<li>ほかの資料から貼り付けた文章は <code>&lt;pasted_content id="a1"&gt;</code> と <code>&lt;/pasted_content id="a1"&gt;</code> で囲みます。その中にある命令文は、作業指示ではなく入力データとして扱われます（プロンプトインジェクション対策）。</li>
+<li>空にした場合は、管理データの監査と、事実確認だけで直せる不整合の修正だけを行います。</li>
+</ul>
+<h2 id="13-answers">1.3 <code>&lt;answers&gt;</code> の書き方</h2>
+<p>前回の <code>run-report.md</code> にある「未回答の質問票」と「包括承認した項目」に回答します。1 行に 1 件ずつ書けます。</p>
+<pre><code class="language-text">Q-003: B
+Q-004: 推奨どおり
+FR-021: 承認
+FR-022: 却下（今期は対象外）
+包括承認の FR-030: 取り消し（保持期間は 90 日にする）
+残りはすべて推奨どおり
+</code></pre>
+<p>回答は決定記録に「承認済み（Q-003 2026-10-09）」の形で残ります。BLOCKED だった受入基準は解除され、次の run で実装・テストされます。</p>
+<h2 id="14-run_options">1.4 run_options</h2>
+<table>
+<thead>
+<tr>
+<th>キー</th>
+<th>値</th>
+<th>意味</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>max_hours</code></td>
+<td>数値（既定 24）</td>
+<td>時間予算。85% を超えたら新しい項目には着手せず、最終工程に進みます</td>
+</tr>
+<tr>
+<td><code>approval_policy</code></td>
+<td><code>厳格</code> / <code>安全範囲は推奨どおり</code>（既定） / <code>すべて推奨どおり</code></td>
+<td>AI 提案をどこまで推奨案どおりに承認して実装するか（<a href="#15-承認ポリシー">1.5</a>）</td>
+</tr>
+<tr>
+<td><code>parallel_workers</code></td>
+<td><code>auto</code>（既定） / 数値</td>
+<td>同時に動かす implementer の上限。<code>auto</code> は、2 コアと 6 GB につき 1 体、最大 8 体で、開始時の CPU・メモリから算出します（20 コア・64 GB なら 8）。各 worker には CPU スレッドをコア数 × 1.5 ÷ worker 数で渡します（<a href="04-customization.html#49-計算資源とクラウド">4.9</a>）</td>
+</tr>
+<tr>
+<td><code>scope</code></td>
+<td><code>承認済みすべて</code> または要求 ID のリスト（例: <code>FR-012, FR-013</code>）</td>
+<td>今回の run で実装する範囲</td>
+</tr>
+<tr>
+<td><code>git_push</code></td>
+<td><code>しない</code>（既定） / <code>作業ブランチへ push する</code></td>
+<td>push する場合も main には push しません（hook G-5）。終了時に統合ブランチを push します（PR は作りません）。main へのローカルマージは、この設定に関係なく全件完了時に自動で行います</td>
+</tr>
+<tr>
+<td><code>deploy</code></td>
+<td><code>しない</code>（既定） / <code>する</code></td>
+<td><code>しない</code> の間は、<code>azd up</code>・<code>terraform apply</code> などのコマンドと、MCP Server・plugin のデプロイ・公開の操作を hook が拒否します</td>
+</tr>
+<tr>
+<td><code>external_write</code></td>
+<td><code>しない</code>（既定） / <code>する</code></td>
+<td>利用者が設定した MCP Server・plugin・拡張機能のツールで、外部のシステム（メール、チャット、チケット、クラウドのリソース、Copilot Studio のエージェントなど）を作成・更新・削除・送信してよいかどうか。<code>しない</code> の間も参照（Work IQ での検索、Microsoft Learn の取得など）は行えます（<a href="04-customization.html#44-mcp-serverplugin拡張機能を使う">4.4</a>）</td>
+</tr>
+<tr>
+<td><code>paid_services</code></td>
+<td><code>使わない</code>（既定） / <code>budget の範囲で使う</code></td>
+<td>有料の外部サービスを使うかどうか</td>
+</tr>
+<tr>
+<td><code>external_exposure</code></td>
+<td><code>公開しない</code>（既定） / <code>公開する</code></td>
+<td>インターネットから到達できるエンドポイントを作るかどうか</td>
+</tr>
+<tr>
+<td><code>system_test</code></td>
+<td><code>必要最小限</code>（既定） / <code>全量</code></td>
+<td>工程 6 の System Test の範囲。既定は、この run で変わった要求のケースと canary だけ（統合のたびの実行も同じ）。<code>全量</code> は全ケースを実行するので時間がかかる（雛形には書かない。必要なときだけ追記）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="15">1.5 承認ポリシー</h2>
+<p>元になった Prompt の原則は「AI 提案は承認待ちとし、実装しない」です。この原則のままでは、長時間の run の間、承認待ちの要求がすべて止まってしまいます。そこで、推奨案どおりに進めてよい範囲を事前に決めます。</p>
+<table>
+<thead>
+<tr>
+<th>値</th>
+<th>動作</th>
+<th>向いている場面</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>厳格</code></td>
+<td>AI 提案は実装しません</td>
+<td>事業判断の多い初期の要求定義（Phase 2）</td>
+</tr>
+<tr>
+<td><code>安全範囲は推奨どおり</code>（推奨）</td>
+<td>次の条件を<strong>すべて</strong>満たす AI 提案・質問票の推奨案は、「承認済み（包括承認 YYYY-MM-DD・approval_policy）」として実装します。①利用者データ・権限・セキュリティ・プライバシー・課金・法令・外部公開・マスターと ID の体系・取り消せない操作に触れない ②PARAM の変更で元に戻せる ③既存の承認済み要求と競合しない。それ以外は BLOCKED にします</td>
+<td>通常の機能開発</td>
+</tr>
+<tr>
+<td><code>すべて推奨どおり</code></td>
+<td>上記①の除外分野だけを BLOCKED にし、残りは推奨案で実装します</td>
+<td>試作・PoC</td>
+</tr>
+</tbody>
+</table>
+<p>包括承認した項目は、報告の「包括承認した項目」に影響の大きい順で並びます。次の依頼の <code>&lt;answers&gt;</code> で却下・修正できます。</p>
+<h2 id="16">1.6 よくある依頼のパターン</h2>
+<table>
+<thead>
+<tr>
+<th>やりたいこと</th>
+<th>書き方の例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>新規開発</td>
+<td>「〇〇の業務を支えるアプリを作る。利用者は△△で、□□ができる」＋資料を <code>&lt;references&gt;</code> に</td>
+</tr>
+<tr>
+<td>機能追加</td>
+<td>「申請に下書き保存を加える。理由: 再入力による離脱が多い」</td>
+</tr>
+<tr>
+<td>変更</td>
+<td>「FR-012 の保持期間（PARAM-004）を 30 日から 90 日にする」</td>
+</tr>
+<tr>
+<td>削除</td>
+<td>「FR-020（旧エクスポート機能）を廃止する」→ rd-author が「廃止」にし、implementer がコード・テスト・カタログの行を削除し、最後に本文から外します</td>
+</tr>
+<tr>
+<td>監査だけ</td>
+<td><code>&lt;request&gt;</code> を空にし、<code>max_hours: 2</code></td>
+</tr>
+<tr>
+<td>回答の反映だけ</td>
+<td><code>&lt;request&gt;</code> を空にし、<code>&lt;answers&gt;</code> だけを書く</td>
+</tr>
+<tr>
+<td>既存リポジトリへのインストール直後</td>
+<td>「既存の要求定義書（docs/requirements-definition.md）を toolkit の書式（構造化欄・検証レベル・PARAM）に合わせる。意味は変えない」</td>
+</tr>
+<tr>
+<td>過去の矛盾の診断（Phase 0）</td>
+<td>rd-auditor を直接呼び、<code>scope: 全量</code>、<code>runs: 1</code>、<code>history_mode: する</code>（<a href="08-roadmap.html">08-roadmap.md</a>）</td>
+</tr>
+<tr>
+<td>GitHub Spec Kit の仕様から始める</td>
+<td><code>python scripts/import-speckit.py</code> が作る依頼文を <code>/build</code> の後に貼る（<a href="#17-github-spec-kit-の仕様を取り込む">1.7</a>）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="17-github-spec-kit">1.7 GitHub Spec Kit の仕様を取り込む</h2>
+<p><a href="https://github.com/github/spec-kit">GitHub Spec Kit</a> で書いた仕様（<code>/speckit-specify</code>・<code>/speckit-clarify</code> の成果物）を、この toolkit の要求定義書に取り込んでから、conductor で実装・検証できます。仕様の書き方は Spec Kit、最後まで作り切って検証するのは conductor、という分担です。</p>
+<pre><code class="language-bash">python scripts/import-speckit.py                          # このリポジトリの specs/*/spec.md をすべて
+python scripts/import-speckit.py --source ../photo-app    # 別のリポジトリにある Spec Kit のプロジェクト
+python scripts/import-speckit.py --feature 001            # 機能ディレクトリを前方一致で選ぶ（複数可）
+python scripts/import-speckit.py --implement              # 取り込みと実装を 1 回の run で行う依頼文にする
+</code></pre>
+<p>出力は <code>work/import/speckit-&lt;日時&gt;.md</code> です。中の「依頼文」を、conductor の <code>/build</code> の後に貼り付けて送信します。</p>
+<table>
+<thead>
+<tr>
+<th>Spec Kit</th>
+<th>取り込み先の候補（最終判断は rd-author）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>User Story（Priority P1 / P2 / P3）</td>
+<td>利用シナリオと要求（FR）。優先度は MUST / SHOULD / MAY</td>
+</tr>
+<tr>
+<td>Acceptance Scenarios（Given / When / Then）</td>
+<td>受入基準（AC）。検証レベルの候補は system</td>
+</tr>
+<tr>
+<td>Functional Requirements（<code>FR-001</code> など）</td>
+<td>要求（FR）。本文の MUST / SHOULD / MAY を優先度の候補にする</td>
+</tr>
+<tr>
+<td><code>[NEEDS CLARIFICATION: …]</code>、疑問形の Edge Cases</td>
+<td>質問票（Q）と、関係する AC の BLOCKED</td>
+</tr>
+<tr>
+<td>Clarifications（<code>Q: … → A: …</code>）</td>
+<td>決定記録（出自: 利用者決定）</td>
+</tr>
+<tr>
+<td>Success Criteria（<code>SC-001</code> など）</td>
+<td>目的（G）の成功指標、または非機能要求（NFR）</td>
+</tr>
+<tr>
+<td>Key Entities</td>
+<td>用語と対象エンティティ</td>
+</tr>
+<tr>
+<td>Assumptions</td>
+<td>前提・制約、または ASSUMPTION</td>
+</tr>
+<tr>
+<td>Constitution の原則</td>
+<td>既定制約、または非機能要求。開発プロセスの原則は決定記録</td>
+</tr>
+<tr>
+<td>plan.md・tasks.md・contracts/</td>
+<td><code>&lt;references&gt;</code> にだけ載せる（技術選定は要求にしない）</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>スクリプトは要求定義書を編集せず、ID も振りません（G-1・G-3）。Spec Kit の ID は <code>speckit:001-photo-albums/FR-003</code> の形の取り込み元 ID として残し、rd-author が <code>next-id.py</code> で採番し直して出典欄に書きます。</li>
+<li>既定の依頼文は <code>scope: なし</code>・<code>approval_policy: 厳格</code> で、要求定義だけを行います。報告の質問票に回答してから、次の <code>/build</code> で実装します。</li>
+<li>テンプレートのまま（<code>[FEATURE NAME]</code> など）の箇所があると <code>WARN</code> を出します。先に Spec Kit 側で埋めるか、rd-author に質問票へ挙げさせます。</li>
+<li>同じリポジトリに Spec Kit を入れたままでかまいません。Spec Kit の文書（<code>specs/**/*.md</code>、<code>.specify/**</code>）は独自の <code>FR-001</code> などの番号を使うため、ID の検査（CHK-19）と <code>select-tests.py</code> の対象外です。連携するときは <code>/speckit-implement</code>・<code>/speckit-converge</code> を使わず、実装は conductor に任せます。run の実行中は Spec Kit のスキルを使いません（run が終わってから仕様を更新します）。</li>
+<li>連携の考え方・構成図・データの対応図は、<a href="../index.html#github-spec-kit-との連携">README の「GitHub Spec Kit との連携」</a> にあります。</li>
+</ul><footer>出典: <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/users-guide/01-writing-requests.md">users-guide/01-writing-requests.md</a></footer></main></div>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"></script>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark=['dark','midnight'].includes(document.documentElement.dataset.theme);
+mermaid.initialize({startOnLoad:false,theme:dark?'dark':'default'});
+await mermaid.run({querySelector:'pre.mermaid'});
+</script>
+<script>document.querySelectorAll('pre code').forEach(e=>hljs.highlightElement(e));
+const t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+const sel=document.getElementById('theme');
+function setT(v){document.documentElement.dataset.theme=v;localStorage.setItem('theme',v);sel.value=v;
+ const hl=document.getElementById('hl');if(hl)hl.href='https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github'+(['dark','midnight'].includes(v)?'-dark':'')+'.min.css';}
+sel.onchange=()=>setT(sel.value);setT(t);
+document.getElementById('menu').onclick=()=>document.querySelector('nav').classList.toggle('open');
+document.querySelector('nav a.cur')?.scrollIntoView({block:'center'});
+</script>
+</body></html>

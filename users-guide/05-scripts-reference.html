@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>5. スクリプトリファレンス — HypervelocityEngineering</title>
+<link id="hl" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+<style>
+:root{--bg:#fff;--fg:#1f2328;--muted:#656d76;--card:#f6f8fa;--bd:#d0d7de;--ac:#0969da;--side:#f6f8fa;--code:#eff1f3;--r:10px}
+[data-theme=dark]{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--card:#161b22;--bd:#30363d;--ac:#58a6ff;--side:#010409;--code:#1c2128}
+[data-theme=midnight]{--bg:#0f1226;--fg:#e4e7ff;--muted:#9aa0cc;--card:#171a3a;--bd:#2c3062;--ac:#8b9cff;--side:#0a0c1d;--code:#1d2147}
+[data-theme=ocean]{--bg:#f2fafc;--fg:#0c2d3a;--muted:#4f7583;--card:#e0f2f7;--bd:#b4dce6;--ac:#0087a8;--side:#dcf0f5;--code:#d3ebf1}
+[data-theme=forest]{--bg:#f4f8f2;--fg:#1c2b1e;--muted:#5a6f5c;--card:#e6efe2;--bd:#c3d6bd;--ac:#2f7d3a;--side:#e1ecdc;--code:#dae7d5}
+[data-theme=sunset]{--bg:#fff8f2;--fg:#3a2118;--muted:#8a6252;--card:#ffebdc;--bd:#f2cdb3;--ac:#d9480f;--side:#ffeede;--code:#fde1cc}
+[data-theme=rose]{--bg:#fff6f8;--fg:#3a1c26;--muted:#8d5a6b;--card:#ffe6ec;--bd:#f2c2cf;--ac:#c2255c;--side:#ffe9ef;--code:#fcdbe4}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 system-ui,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;transition:background .2s,color .2s}
+a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;padding:.6rem 1.2rem;background:var(--card);border-bottom:1px solid var(--bd);backdrop-filter:blur(6px)}
+header .brand{font-weight:700;color:var(--fg)}header .sp{flex:1}
+header select,header button{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:.3rem .6rem;font:inherit;font-size:.9rem}
+#menu{display:none}
+.layout{display:flex;min-height:calc(100vh - 54px)}
+nav{width:290px;flex:none;background:var(--side);border-right:1px solid var(--bd);padding:1rem;position:sticky;top:54px;height:calc(100vh - 54px);overflow:auto;font-size:.9rem}
+nav h4{margin:1.1rem 0 .3rem;color:var(--muted);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
+nav a{display:block;padding:.25rem .6rem;border-radius:6px;color:var(--fg);line-height:1.4}
+nav a:hover{background:var(--card);text-decoration:none}
+nav a.cur{background:var(--ac);color:#fff}
+main{flex:1;min-width:0;max-width:900px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1,h2{border-bottom:1px solid var(--bd);padding-bottom:.3rem}
+h1,h2,h3,h4{line-height:1.3;scroll-margin-top:70px}
+img{max-width:100%;height:auto;border-radius:var(--r);border:1px solid var(--bd)}
+pre{background:var(--code);border:1px solid var(--bd);border-radius:var(--r);padding:1rem;overflow:auto;line-height:1.5;font-size:.88rem}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font:.88em ui-monospace,Consolas,monospace}
+pre code{background:none;padding:0}
+pre.mermaid{background:var(--card);text-align:center}
+table{border-collapse:collapse;display:block;overflow:auto;margin:1rem 0}
+th,td{border:1px solid var(--bd);padding:.45rem .8rem;vertical-align:top}
+th{background:var(--card)}tr:nth-child(even) td{background:color-mix(in srgb,var(--card) 50%,transparent)}
+blockquote{margin:1rem 0;padding:.2rem 1rem;border-left:4px solid var(--ac);background:var(--card);border-radius:0 var(--r) var(--r) 0;color:var(--muted)}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var(--muted);font-size:.85rem}
+@media(max-width:820px){#menu{display:inline-block}nav{position:fixed;left:-310px;top:54px;z-index:9;transition:left .2s}nav.open{left:0}main{padding:1.2rem 1rem}}
+</style>
+<script>document.documentElement.dataset.theme=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')</script>
+</head><body>
+<header><button id="menu" aria-label="menu">☰</button><a class="brand" href="../index.html">⚡ HypervelocityEngineering</a><span class="sp"></span>
+<label>🎨 <select id="theme" aria-label="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="midnight">Midnight</option><option value="ocean">Ocean</option><option value="forest">Forest</option><option value="sunset">Sunset</option><option value="rose">Rose</option></select></label>
+<a href="https://github.com/dahatake/HypervelocityEngineering">GitHub</a></header>
+<div class="layout"><nav><h4>はじめに</h4>
+<a href="../index.html">HypervelocityEngineering — Enterprise App Build Kit</a>
+<a href="../CHANGELOG.html">Changelog</a>
+<h4>ユーザーガイド</h4>
+<a href="01-writing-requests.html">1. 依頼の書き方（/build と runoptions）</a>
+<a href="02-during-and-after-run.html">2. 実行中と終了後</a>
+<a href="03-requirements-format.html">3. 管理データの書式</a>
+<a href="04-customization.html">4. 設定とカスタマイズ</a>
+<a class="cur" href="05-scripts-reference.html">5. スクリプトリファレンス</a>
+<a href="06-quality-gates.html">6. 品質ゲートと検査項目</a>
+<a href="07-troubleshooting.html">7. トラブルシューティング</a>
+<a href="08-roadmap.html">8. 導入ロードマップと KPI</a>
+<a href="09-versioning.html">バージョンアップの手順</a>
+<a href="10-adopting-existing-apps.html">10. 既存のアプリを導入する（Adopt）</a>
+<a href="index.html">EABK ユーザーガイド</a>
+<h4>Studio ガイド</h4>
+<a href="studio/01-first-steps.html">S1 はじめかた</a>
+<a href="studio/02-screens.html">S2 画面の見かた</a>
+<a href="studio/03-tasks.html">S3 こんなとき、どう見るか</a>
+<a href="studio/04-troubleshooting.html">S4 うまく動かないとき・用語集</a>
+<a href="studio/05-product-manager.html">S5 Product Manager 向けガイド</a>
+<a href="studio/06-architect.html">S6 Architect 向けガイド</a>
+<a href="studio/07-software-engineer.html">S7 Software Engineer 向けガイド</a>
+<a href="studio/08-data-reference.html">S8 データリファレンス（どの機能が、どのデータを読むか）</a>
+<a href="studio/README.html">EABK Studio ユーザーガイド（第 2 部）</a>
+<h4>管理データ（docs）</h4>
+<a href="../docs/catalog.html">カタログ</a>
+<a href="../docs/id-registry.html">ID 台帳</a>
+<a href="../docs/manual-tests.html">手順で確かめる受入基準</a>
+<a href="../docs/requirements-definition.html">要求定義書</a>
+<a href="../docs/run-history.html">実行履歴</a></nav>
+<main><h1 id="5">5. スクリプトリファレンス</h1>
+<p>すべてのスクリプトは、Python 3.9 以上の標準ライブラリだけで動きます。リポジトリのどこから実行しても、git のルートを基準に動作します。詳しい使い方は <code>--help</code> で表示できます。出力は短く、LLM がそのまま読める形式です（1 行に 1 指摘、最後に 1 行の要約）。</p>
+<h2 id="verifyl1">verify（L1 決定的検査）</h2>
+<pre><code class="language-bash">python scripts/verify.py                  # 管理データの検査（CHK-01〜27）＋ verify.commands
+python scripts/verify.py --docs-only      # 管理データの検査だけ（rd-author・test-designer のゲート）
+python scripts/verify.py --quick          # &quot;slow&quot;: true のコマンドをスキップする（implementer のゲート）
+python scripts/verify.py --run current    # 実行中の run の queue.json との整合性（CHK-21）も検査する
+python scripts/verify.py --strict         # 最終工程・統合時用。重要な警告をエラーとして扱う
+python scripts/verify.py --strict-ledger  # system AC と台帳の対応（CHK-10/11）の不足をエラーにする（工程 4 以降は自動）
+python scripts/verify.py --show-warnings  # 警告も表示する
+python scripts/verify.py --no-cache       # キャッシュを使わずに必ず実行する
+./scripts/verify.sh   /  .\scripts\verify.ps1   # 同じもの（Python を探して verify.py を呼ぶラッパー）
+</code></pre>
+<p>exit 0 なら合格です。ログの全文は <code>/work</code> に保存されます。</p>
+<p><strong>キャッシュ:</strong> 作業ツリーが clean（commit していない変更も、追跡していないファイルもない）のときの PASS は、<code>/work/.ebak/verify-cache.json</code> に記録されます。キーは、HEAD・引数・<code>scripts/ebak.config.json</code>・run の状態（工程、<code>--run</code> のときは queue.json）です。同じ commit に同じ verify を実行すると、キャッシュから即座に <code>PASS (cached …)</code> を返します。たとえば implementer のゲートの直後に hook G-4 が実行する verify がこれに当たります。FAIL は記録しません。無効にするには、<code>--no-cache</code> か、環境変数 <code>EBAK_VERIFY_NO_CACHE=1</code> を使います。</p>
+<h2 id="rdcheckpy">rdcheck.py（要求定義書のパーサー）</h2>
+<pre><code class="language-bash">python scripts/rdcheck.py check [--base REF|none] [--run RUN_ID|current] [--strict] [--json]
+python scripts/rdcheck.py show FR-012 AC-031 Q-007     # 指定した要求・AC・質問の節だけを表示する（全文を読まずに済む）
+python scripts/rdcheck.py list --state 承認済み --priority MUST
+python scripts/rdcheck.py list --level system          # System Test の対象になる AC
+python scripts/rdcheck.py stats                        # 監査のメトリクス（JSON）
+python scripts/rdcheck.py digest AC-031                # AC のダイジェスト
+python scripts/rdcheck.py trace FR-012 [--json]        # 要求の上流（G・出典）・横（用語・状態・PARAM）・下流（AC・台帳のケース・カタログ・コード）をたどる
+python scripts/rdcheck.py trace G-002 申請 PARAM-004 下書き保存   # 目的・エンティティ・PARAM・共通部品から、関係する要求を逆にたどる（影響分析）
+</code></pre>
+<p><code>--base</code> の既定値は main との分岐点（merge-base）です。差分の検査（CHK-12/13）に使います。</p>
+<h2 id="rdfixpy">rdfix.py（データ層の不整合の自動修正）</h2>
+<pre><code class="language-bash">python scripts/rdfix.py                           # 修正の計画を表示する（書き込まない）。直せるものがあれば exit 1
+python scripts/rdfix.py --apply                   # 修正を書き込み、rdcheck で確かめる
+python scripts/rdfix.py --only catalog,ledger     # 対象を絞る: registry, catalog, ledger, gitignore, history
+python scripts/rdfix.py --adopt --apply           # ID 台帳にない ID も取り込む（手で振った ID でないと確かめたとき）
+python scripts/rdfix.py --json
+python scripts/ledger.py repair [--apply]         # 台帳の部分だけ（rdfix が内部で使う）
+</code></pre>
+<p>要求定義書を正本として、カタログ・ID 台帳・System Test の台帳・実行履歴・<code>.gitignore</code> をそれに合わせます。要求定義書は変更しません。出力は <code>FIX &lt;CHK&gt; &lt;場所&gt; &lt;内容&gt;</code>（自動で直す）と <code>MANUAL &lt;CHK&gt; &lt;場所&gt; &lt;内容&gt;（担当: &lt;役割&gt;）</code>（判断が要る）の行と、最後の <code>rdfix: fix=N manual=M mode=…</code> の 1 行です。exit 0 は「自動で直すものが残っていない」です。直す範囲は <a href="06-quality-gates.html#63-データ層の不整合の自動修正rdfix">6.3</a> にあります。</p>
+<h2 id="next-idpyid-g-3">next-id.py（ID の採番。G-3）</h2>
+<pre><code class="language-bash">python scripts/next-id.py FR                    # FR-013
+python scripts/next-id.py NFR-SEC               # NFR-SEC-004
+python scripts/next-id.py AC --count 3          # AC-041 AC-042 AC-043
+python scripts/next-id.py Q | PARAM | G | SRC | E2E | IT
+python scripts/next-id.py --peek FR             # 採番せずに次の ID を表示する
+python scripts/next-id.py --sync                # ID 台帳の状態を本文に合わせる（使用中・廃止・削除済み）
+python scripts/next-id.py --sync --adopt        # 台帳にない既存の ID を取り込む（インストール直後）
+python scripts/next-id.py --sync --finalize     # 使わなかった採番済みの ID を欠番にする（工程 6）
+</code></pre>
+<p>次の番号は、max(要求定義書, ID 台帳, main 上の同じファイル, System Test の台帳, worktree 共通の採番記録) + 1 で決まります。</p>
+<h2 id="ledgerpysystem-test-g-2">ledger.py（System Test の台帳。G-2）</h2>
+<pre><code class="language-bash">python scripts/ledger.py summary [-v]
+python scripts/ledger.py --by test-designer add --req FR-012 --ac AC-031 --title &quot;…&quot; --layer e2e --command &quot;…&quot; [--canary]
+python scripts/ledger.py --by test-designer update E2E-001 --command &quot;…&quot; --reason &quot;…&quot;   # 理由は必須
+python scripts/ledger.py --by test-designer block E2E-001 --reason &quot;…&quot;                 # 削除の代わりに使う
+python scripts/ledger.py set E2E-001 blocked --reason &quot;…&quot;
+python scripts/ledger.py digests [--update]
+python scripts/ledger.py repair [--apply]          # 要求定義書に合わせて台帳を直す（rdfix.py から使う）
+python scripts/ledger.py --by conductor run --select changed|failed|all [--canary-first] [--stop-on-canary-fail] [--max-minutes N]
+python scripts/ledger.py run --cases E2E-001,IT-002 --no-record   # 作業役の worktree で、台帳を更新せずに実行だけする
+</code></pre>
+<p><code>run</code> の出力は、元の Prompt が定める報告形式（<code>&lt;id&gt; &lt;requirement_ids&gt; &lt;pass|fail&gt; &lt;秒&gt; &lt;証跡&gt;</code> と <code>結果: …</code>）です。結果の詳細は <code>work/runs/&lt;run-id&gt;/results.json</code> にあります。</p>
+<h2 id="select-testspy">select-tests.py（影響範囲のテスト選択）</h2>
+<pre><code class="language-bash">python scripts/select-tests.py [--base REF] [--req FR-012] [--json]
+</code></pre>
+<p>変更したファイルに書かれている要求 ID・AC ID と、<code>--req</code> で指定した ID から、実行すべき System Test のケース（<code>CASE</code>）と、単体・結合テストのファイル（<code>TEST</code>）を選びます。canary と、not_run・fail のケースは常に含めます。</p>
+<h2 id="next-implpybuild-requestpy-build">next-impl.py・build-request.py（次の実装候補と、時間だけで作る /build の依頼）</h2>
+<pre><code class="language-bash">python scripts/next-impl.py [--json]        # 次に実装すべき要求の順位表・除外一覧・scope 用の ID 一覧（読み取り専用）
+python scripts/build-request.py 60分        # 60分 / 24時間 / 90m / 1.5h → /build に貼れる依頼を出力
+</code></pre>
+<p><code>next-impl.py</code> は、承認済みで未着手・実装登録済み（試験未登録・試験未合格）の要求を、依存先を先に、次に優先度（MUST、SHOULD、MAY）、他の候補から依存される数、実装登録済みを先、要求 ID の順で並べます。除外した要求は理由（未承認・BLOCKED・依存先未完了・完了済み・実行中）つきで示します。依存は「関連する既存資産」に書いた他の要求 ID です。<code>build-request.py</code> は、許容時間を 1 要求あたり 60 分（PARAM-012）で割った件数（最小 1）だけ先頭から <code>scope</code> に入れ、<code>max_hours</code> に許容時間を入れた <code>&lt;request&gt;</code>・<code>&lt;answers&gt;</code>・<code>&lt;references&gt;</code>・<code>&lt;run_options&gt;</code> を出力します。生成のみで、run は開始しません。候補がないときは依頼を出力せず、除外の理由を示します。</p>
+<h2 id="summarizepy">summarize.py（ログの要約）</h2>
+<pre><code class="language-bash">python scripts/summarize.py work/runs/&lt;run-id&gt;/logs/verify-…-unit.log [--max-lines 15]
+npm test 2&gt;&amp;1 | python scripts/summarize.py -
+</code></pre>
+<p>テストランナーの集計行、最初の数件の（重複しない）エラー行、末尾の数行だけを出力します。</p>
+<h2 id="run-statepyconductor">run-state.py（conductor の状態管理）</h2>
+<pre><code class="language-bash">python scripts/run-state.py start --options &quot;max_hours: 24\ngit_push: しない&quot;   # 実行中の run があれば RESUME
+python scripts/run-state.py status
+python scripts/run-state.py stage 4 [--done]
+python scripts/run-state.py progress &quot;工程 2: 直接矛盾 0。Q-012 を BLOCKED&quot;
+python scripts/run-state.py queue add --id I-01 --req FR-012,FR-013 --ac AC-031 --boundary 申請 --shared 下書き保存 --depends I-00   # 要求 ID は 1〜5 個
+python scripts/run-state.py queue ready --parallel 5
+python scripts/run-state.py queue set I-01 --status doing --branch work/&lt;run-id&gt;/I-01 --attempts +1   # 通常は integrate.py が行う
+python scripts/run-state.py time                  # 時間予算の 85% を超えたら exit 3
+python scripts/run-state.py complete-check        # 完了条件の判定
+python scripts/run-state.py lane decide --changed 2 [--flags security,conflict,shared,unresolved,goal_unmapped]   # fast / full の判定（fast は独立監査・reviewer・全量の多数決を省く）
+python scripts/run-state.py lane confirm   # 計画後に queue の数で再判定（full から fast には戻さない）
+python scripts/run-state.py human answers --note &quot;Q-003: B&quot;   # 利用者の Prompt を 1 回として記録（answers / resume / instruction）
+python scripts/run-state.py finish --result &quot;全件完了&quot; --credits &quot;…&quot;   # docs/run-history.md に 1 行追記
+</code></pre>
+<p>新しい run の最初の依頼は <code>start</code> が <code>request</code> として記録します。<code>human</code> は、利用者の Prompt で run を再開したときに conductor が 1 回だけ実行します。記録した回数は KPI の「人の介入」になります。</p>
+<p><code>queue set --status</code> は、項目が doing になった時刻・doing でいた時間（<code>work_sec</code>）・終わった時刻を、<code>stage</code> は工程ごとの開始・完了の時刻を記録します（kpi.py の流れの指標に使います）。</p>
+<h2 id="integratepyworktree">integrate.py（worktree のプールと統合。実装ループ）</h2>
+<pre><code class="language-bash">python scripts/integrate.py prepare I-01                       # プールの worktree を割り当て、work/&lt;run-id&gt;/I-01 を作り、doing にする
+python scripts/integrate.py merge I-01 --summary &quot;…&quot;           # 統合: merge → verify --quick → System Test → 台帳の commit → 解放 → done
+python scripts/integrate.py merge I-01 --full                  # verify の slow なコマンドも実行する（5 項目ごとに自動）
+python scripts/integrate.py abandon I-01 [--blocked] [--reason &quot;…&quot;]   # todo（または blocked）に戻し、worktree を解放する
+python scripts/integrate.py pool [--prune]                     # プールの一覧。--prune で使っていない worktree を削除する（工程 6）
+</code></pre>
+<ul>
+<li>worktree は <code>work/worktrees/&lt;run-id&gt;-w&lt;N&gt;</code> のプールとして run の間再利用されます。ignore されたビルドの生成物（node_modules・bin/obj・.venv など）が残るので、2 回目以降のビルドが増分になります。<code>prepare</code> は、前の試行のブランチがあればそれを使い、統合ブランチを取り込んでから渡します。</li>
+<li><code>merge</code> は、統合ブランチの上で、1 回の呼び出しで直列の統合をすべて行い、数行だけを出力します。System Test は、merge 直前の commit からの差分に関係するケースと canary だけを実行します。まだ統合していない要求のケースは、通らないことが分かっているので除きます。</li>
+<li>競合（exit 2）、verify・System Test の失敗（exit 1）のときは、統合を取り消して（<code>git reset --hard</code>）項目を todo に戻します。統合ブランチは常に緑に保たれます。</li>
+<li>統合はロック（<code>work/.ebak/integrate.lock</code>）で 1 本ずつに制限されます。</li>
+</ul>
+<h2 id="kpipykpi">kpi.py（KPI の集計）</h2>
+<pre><code class="language-bash">python scripts/kpi.py run                          # 実行中（なければ最新）の run の KPI を Markdown で表示
+python scripts/kpi.py run --run 202610080900 --format json
+python scripts/kpi.py run --format html --out work/runs/&lt;run-id&gt;/kpi.html
+python scripts/kpi.py history                      # docs/run-history.md 全体の集計
+</code></pre>
+<p>North Star は「人の介入 1 回あたりの検証済み要求」です。<strong>検証済み要求</strong>は、実装した要求のうち、承認済みで、カタログの行があり、BLOCKED の AC がなく、system の AC がすべて台帳で <code>pass</code> のものです。検証済みにならなかった要求は、理由（「カタログの行がない」など）を表示します。指標と目標は <a href="08-roadmap.html#82-kpi">08-roadmap.md の 8.2</a> にあります。</p>
+<p>流れ（速さ）の指標として、工程ごとの時間、実装ループの実効の並列度（項目の作業時間の合計 ÷ ループの経過時間）、項目 1 件あたりの作業時間、統合の直列時間とその割合、実際に使ったモデル（hook G-7 が記録する <code>work/runs/&lt;run-id&gt;/models.jsonl</code>）も出力します。遅い run では、まずこの表で、並列度が低いのか（作業役の待ち）、統合の直列時間が長いのか（verify・System Test の重さ）を切り分けます。</p>
+<h2 id="import-speckitpygithub-spec-kit">import-speckit.py（GitHub Spec Kit からの取り込み）</h2>
+<pre><code class="language-bash">python scripts/import-speckit.py [--source DIR] [--feature 001] [--implement] [--no-constitution] [--out F | --stdout | --json]
+</code></pre>
+<p><code>specs/*/spec.md</code> と <code>.specify/memory/constitution.md</code> を読み、対応表と <code>/build</code> の依頼文を <code>work/import/speckit-&lt;日時&gt;.md</code> に書きます。要求定義書は編集せず、ID も振りません。使い方は <a href="01-writing-requests.html#17-github-spec-kit-の仕様を取り込む">1.7</a> にあります。</p>
+<h2 id="adoptpy">adopt.py（既存アプリの導入）</h2>
+<pre><code class="language-text">python scripts/adopt.py scan [--since-days 365]                  # 棚卸し → docs/baseline/inventory.{json,md}
+python scripts/adopt.py request [--clusters 6] [--implement]      # /build の依頼文 → work/import/
+python scripts/adopt.py anchor SRC-003 src/a.py:10-48           # 出典の証跡を固定 → docs/baseline/evidence.json
+python scripts/adopt.py check [--strict] [--json]               # DRIFT・回収率・逆生成の要求の検査（exit 1 = 誤り）
+python scripts/adopt.py golden add NAME -- CMD ARG...           # 特性化テスト（golden master）
+python scripts/adopt.py golden record|check|list [NAME] [--update]
+```n
+詳細と根拠は [10. 既存のアプリを導入する](10-adopting-existing-apps.md)。要求定義書は編集せず、ID も振りません。
+
+## clean-work.py（/work のクリーンアップ）
+
+```bash
+python scripts/clean-work.py [--days 14] [--dry-run]
+</code></pre>
+<p>全件完了 run を main に統合し、統合後 verify と清掃前版 run-report の確定まで成功した場合だけ、run 所有の pool worktree、作業ブランチ、統合ブランチ、一時資産を清掃します。<code>--dry-run</code> は候補・保護理由・予定操作を表示します。<code>--days</code> は互換性のため受け付けますが、失敗・中止・未達 run は自動期限なく保持されます。削除直前に run 記録、Git 登録、正規化した実体パス、dirty/lock/保護状態を再検査します。部分失敗は診断を report に残して非 0 となり、再実行時は削除済みを成功済みとして残存候補だけを扱います。</p>
+<h2 id="hooksgatepyhook">hooks/gate.py（hook の本体）</h2>
+<p>利用者が直接実行することはありません。<code>.github/hooks/quality-gates.json</code> から、<code>session-start</code>・<code>user-prompt</code>・<code>pre-tool</code>・<code>subagent-start</code>・<code>subagent-stop</code>・<code>agent-stop</code> の各イベントで呼び出されます。判定の記録は <code>work/.ebak/gate.log</code> にあります。</p>
+<h2 id="eabk-studio">EABK-Studio（データ層のビューアー）</h2>
+<p>インストールすると対象リポジトリの <code>EABK-Studio/</code> に入ります。データ層（要求定義書・カタログ・台帳）を 2D/3D の図・表・検索で見るローカル Web アプリです（日本語・英語）。</p>
+<pre><code class="language-text">python EABK-Studio/studio.py [--repo DIR] [--port 8765] [--no-open] [--role pm|architect|swe] [--check]
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>オプション</th>
+<th>動作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--repo DIR</code></td>
+<td>対象リポジトリ（既定: カレントディレクトリ。親へさかのぼってデータ層を探す）</td>
+</tr>
+<tr>
+<td><code>--port N</code></td>
+<td>待ち受けポート（既定 8765。使用中なら次の番号を最大 20 まで試す）</td>
+</tr>
+<tr>
+<td><code>--no-open</code></td>
+<td>ブラウザーを自動で開かない</td>
+</tr>
+<tr>
+<td><code>--role pm\|architect\|swe</code></td>
+<td>最初に開く画面（ダッシュボード／2D マップ／表）</td>
+</tr>
+<tr>
+<td><code>--check</code></td>
+<td>管理データのファイルの有無と、解析できた件数（要求・受入基準・カタログ行・台帳のケース・実行履歴）・警告を表示して終了。データ層があれば exit 0、なければ exit 1。サーバーは起動しない</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>データ層のない <code>--repo</code> を指定すると、サーバーを起動せずに案内を表示して exit 1 で終わります。</li>
+<li>ラッパー: <code>EABK-Studio/start.ps1 [-Repo DIR] [-Port N] [-Role …] [-Check] [-NoOpen]</code>、<code>EABK-Studio/start.sh [DIR] [PORT] [studio.py のオプション…]</code>。</li>
+<li>ソースコードは読まず、127.0.0.1 だけで待ち受けます。読み取り専用で、書き込むのは「整合性保守」で確認して実行した <code>docs/catalog.md</code> の題名・決定状態だけです。</li>
+<li>役割別のガイド（Product Manager・Architect・Software Engineer）と、各画面が読むデータの一覧は <a href="studio/README.html">studio/README.md</a> にあります。詳細は <code>EABK-Studio/README.md</code> です。</li>
+</ul><footer>出典: <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/users-guide/05-scripts-reference.md">users-guide/05-scripts-reference.md</a></footer></main></div>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"></script>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark=['dark','midnight'].includes(document.documentElement.dataset.theme);
+mermaid.initialize({startOnLoad:false,theme:dark?'dark':'default'});
+await mermaid.run({querySelector:'pre.mermaid'});
+</script>
+<script>document.querySelectorAll('pre code').forEach(e=>hljs.highlightElement(e));
+const t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+const sel=document.getElementById('theme');
+function setT(v){document.documentElement.dataset.theme=v;localStorage.setItem('theme',v);sel.value=v;
+ const hl=document.getElementById('hl');if(hl)hl.href='https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github'+(['dark','midnight'].includes(v)?'-dark':'')+'.min.css';}
+sel.onchange=()=>setT(sel.value);setT(t);
+document.getElementById('menu').onclick=()=>document.querySelector('nav').classList.toggle('open');
+document.querySelector('nav a.cur')?.scrollIntoView({block:'center'});
+</script>
+</body></html>

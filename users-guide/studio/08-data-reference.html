@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>S8 データリファレンス（どの機能が、どのデータを読むか） — HypervelocityEngineering</title>
+<link id="hl" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+<style>
+:root{--bg:#fff;--fg:#1f2328;--muted:#656d76;--card:#f6f8fa;--bd:#d0d7de;--ac:#0969da;--side:#f6f8fa;--code:#eff1f3;--r:10px}
+[data-theme=dark]{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--card:#161b22;--bd:#30363d;--ac:#58a6ff;--side:#010409;--code:#1c2128}
+[data-theme=midnight]{--bg:#0f1226;--fg:#e4e7ff;--muted:#9aa0cc;--card:#171a3a;--bd:#2c3062;--ac:#8b9cff;--side:#0a0c1d;--code:#1d2147}
+[data-theme=ocean]{--bg:#f2fafc;--fg:#0c2d3a;--muted:#4f7583;--card:#e0f2f7;--bd:#b4dce6;--ac:#0087a8;--side:#dcf0f5;--code:#d3ebf1}
+[data-theme=forest]{--bg:#f4f8f2;--fg:#1c2b1e;--muted:#5a6f5c;--card:#e6efe2;--bd:#c3d6bd;--ac:#2f7d3a;--side:#e1ecdc;--code:#dae7d5}
+[data-theme=sunset]{--bg:#fff8f2;--fg:#3a2118;--muted:#8a6252;--card:#ffebdc;--bd:#f2cdb3;--ac:#d9480f;--side:#ffeede;--code:#fde1cc}
+[data-theme=rose]{--bg:#fff6f8;--fg:#3a1c26;--muted:#8d5a6b;--card:#ffe6ec;--bd:#f2c2cf;--ac:#c2255c;--side:#ffe9ef;--code:#fcdbe4}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 system-ui,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;transition:background .2s,color .2s}
+a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;padding:.6rem 1.2rem;background:var(--card);border-bottom:1px solid var(--bd);backdrop-filter:blur(6px)}
+header .brand{font-weight:700;color:var(--fg)}header .sp{flex:1}
+header select,header button{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:.3rem .6rem;font:inherit;font-size:.9rem}
+#menu{display:none}
+.layout{display:flex;min-height:calc(100vh - 54px)}
+nav{width:290px;flex:none;background:var(--side);border-right:1px solid var(--bd);padding:1rem;position:sticky;top:54px;height:calc(100vh - 54px);overflow:auto;font-size:.9rem}
+nav h4{margin:1.1rem 0 .3rem;color:var(--muted);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
+nav a{display:block;padding:.25rem .6rem;border-radius:6px;color:var(--fg);line-height:1.4}
+nav a:hover{background:var(--card);text-decoration:none}
+nav a.cur{background:var(--ac);color:#fff}
+main{flex:1;min-width:0;max-width:900px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1,h2{border-bottom:1px solid var(--bd);padding-bottom:.3rem}
+h1,h2,h3,h4{line-height:1.3;scroll-margin-top:70px}
+img{max-width:100%;height:auto;border-radius:var(--r);border:1px solid var(--bd)}
+pre{background:var(--code);border:1px solid var(--bd);border-radius:var(--r);padding:1rem;overflow:auto;line-height:1.5;font-size:.88rem}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font:.88em ui-monospace,Consolas,monospace}
+pre code{background:none;padding:0}
+pre.mermaid{background:var(--card);text-align:center}
+table{border-collapse:collapse;display:block;overflow:auto;margin:1rem 0}
+th,td{border:1px solid var(--bd);padding:.45rem .8rem;vertical-align:top}
+th{background:var(--card)}tr:nth-child(even) td{background:color-mix(in srgb,var(--card) 50%,transparent)}
+blockquote{margin:1rem 0;padding:.2rem 1rem;border-left:4px solid var(--ac);background:var(--card);border-radius:0 var(--r) var(--r) 0;color:var(--muted)}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var(--muted);font-size:.85rem}
+@media(max-width:820px){#menu{display:inline-block}nav{position:fixed;left:-310px;top:54px;z-index:9;transition:left .2s}nav.open{left:0}main{padding:1.2rem 1rem}}
+</style>
+<script>document.documentElement.dataset.theme=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')</script>
+</head><body>
+<header><button id="menu" aria-label="menu">☰</button><a class="brand" href="../../index.html">⚡ HypervelocityEngineering</a><span class="sp"></span>
+<label>🎨 <select id="theme" aria-label="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="midnight">Midnight</option><option value="ocean">Ocean</option><option value="forest">Forest</option><option value="sunset">Sunset</option><option value="rose">Rose</option></select></label>
+<a href="https://github.com/dahatake/HypervelocityEngineering">GitHub</a></header>
+<div class="layout"><nav><h4>はじめに</h4>
+<a href="../../index.html">HypervelocityEngineering — Enterprise App Build Kit</a>
+<a href="../../CHANGELOG.html">Changelog</a>
+<h4>ユーザーガイド</h4>
+<a href="../01-writing-requests.html">1. 依頼の書き方（/build と runoptions）</a>
+<a href="../02-during-and-after-run.html">2. 実行中と終了後</a>
+<a href="../03-requirements-format.html">3. 管理データの書式</a>
+<a href="../04-customization.html">4. 設定とカスタマイズ</a>
+<a href="../05-scripts-reference.html">5. スクリプトリファレンス</a>
+<a href="../06-quality-gates.html">6. 品質ゲートと検査項目</a>
+<a href="../07-troubleshooting.html">7. トラブルシューティング</a>
+<a href="../08-roadmap.html">8. 導入ロードマップと KPI</a>
+<a href="../09-versioning.html">バージョンアップの手順</a>
+<a href="../10-adopting-existing-apps.html">10. 既存のアプリを導入する（Adopt）</a>
+<a href="../index.html">EABK ユーザーガイド</a>
+<h4>Studio ガイド</h4>
+<a href="01-first-steps.html">S1 はじめかた</a>
+<a href="02-screens.html">S2 画面の見かた</a>
+<a href="03-tasks.html">S3 こんなとき、どう見るか</a>
+<a href="04-troubleshooting.html">S4 うまく動かないとき・用語集</a>
+<a href="05-product-manager.html">S5 Product Manager 向けガイド</a>
+<a href="06-architect.html">S6 Architect 向けガイド</a>
+<a href="07-software-engineer.html">S7 Software Engineer 向けガイド</a>
+<a class="cur" href="08-data-reference.html">S8 データリファレンス（どの機能が、どのデータを読むか）</a>
+<a href="README.html">EABK Studio ユーザーガイド（第 2 部）</a>
+<h4>管理データ（docs）</h4>
+<a href="../../docs/catalog.html">カタログ</a>
+<a href="../../docs/id-registry.html">ID 台帳</a>
+<a href="../../docs/manual-tests.html">手順で確かめる受入基準</a>
+<a href="../../docs/requirements-definition.html">要求定義書</a>
+<a href="../../docs/run-history.html">実行履歴</a></nav>
+<main><h1 id="s8">S8 データリファレンス（どの機能が、どのデータを読むか）</h1>
+<p>EABK Studio の各画面・機能が、<strong>どのファイルの、どの節・列・欄を読み</strong>、<strong>どう計算して</strong>表示するかの一覧です。数字や図の根拠を確かめたいとき（「この 62% は何の割合か」）に使います。
+内容は実装（<code>EABK-Studio/eabk_model.py</code>、<code>studio.py</code>、<code>web/js/*.js</code>）から確認したものです。</p>
+<ul>
+<li>読むのは<strong>データ層のファイルだけ</strong>です。ソースコードの中身は開きません。カタログと台帳に書かれた<strong>パスの文字列</strong>を、名前として使うだけです（S8.1・S8.8）。</li>
+<li>通常の閲覧は読み取り専用です。書き込むのは、「整合性保守」で確認して実行したときの <code>docs/catalog.md</code> だけです（S8.9）。</li>
+<li>通信は <code>127.0.0.1</code> だけです（S8.10）。</li>
+</ul>
+<h2 id="s81">S8.1 読むファイル</h2>
+<p>場所は、対象リポジトリの <code>scripts/ebak.config.json</code>（なければ <code>scripts/hve.config.json</code>）の <code>management_files</code> で変えられます。下は既定値です。</p>
+<table>
+<thead>
+<tr>
+<th>設定キー</th>
+<th>既定のパス</th>
+<th>読み方</th>
+<th>使う画面</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>requirements</code></td>
+<td><code>docs/requirements-definition.md</code></td>
+<td>見出し・箇条書き・表を解析</td>
+<td>ほぼすべて</td>
+</tr>
+<tr>
+<td><code>requirements_dir</code></td>
+<td><code>docs/requirements/*.md</code></td>
+<td>同上（境界別に分けた要求ファイル。ファイル名の順）</td>
+<td>ほぼすべて</td>
+</tr>
+<tr>
+<td><code>catalog</code></td>
+<td><code>docs/catalog.md</code></td>
+<td>表を解析（機能・API・テーブル・共通部品）</td>
+<td>2D/3D・配置・ソース対応・一貫性・保守</td>
+</tr>
+<tr>
+<td><code>ledger</code></td>
+<td><code>tests/system/ledger.json</code></td>
+<td>JSON として解析</td>
+<td>ダッシュボード・表（試験ケース）・一貫性・構造</td>
+</tr>
+<tr>
+<td><code>id_registry</code></td>
+<td><code>docs/id-registry.md</code></td>
+<td>表を解析（件数の集計と構造の判定）</td>
+<td>ダッシュボード・構造</td>
+</tr>
+<tr>
+<td><code>run_history</code></td>
+<td><code>docs/run-history.md</code></td>
+<td>表を解析</td>
+<td>ダッシュボード・表（実行履歴）・構造</td>
+</tr>
+<tr>
+<td><code>manual_tests</code></td>
+<td><code>docs/manual-tests.md</code></td>
+<td><strong>存在確認だけ</strong>（中身は解析しません）</td>
+<td>なし（<code>--check</code> の一覧と、モデルの <code>meta.files</code> のみ）</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>起動時に、<code>python EABK-Studio/studio.py --check</code> で「どのファイルが見つかったか・何件解析できたか」を確認できます（<a href="04-troubleshooting.html">04-troubleshooting.md</a>）。</li>
+<li>要求は「<code>docs/requirements-definition.md</code> と <code>docs/requirements/*.md</code>」の<strong>両方</strong>から集めます。同じ ID が 2 つ以上あるときは、先のものを使い、重複として構造画面に出します。</li>
+<li>ファイルがないときの見え方は S8.7 にあります。</li>
+<li>コードの中身を読まない根拠: テスト <code>test_nothing_outside_the_data_layer_is_read</code>（<code>EABK-Studio/tests/test_studio.py</code>）が、<code>src/</code> のファイルに書いた要求 ID が読まれないことを確認しています。</li>
+</ul>
+<h2 id="s82">S8.2 要求定義書から取り出す項目</h2>
+<p><code>docs/requirements-definition.md</code> と <code>docs/requirements/*.md</code> から、次の書式のものを取り出します（コードブロック内は無視）。書式は EABK 本体の<a href="../03-requirements-format.html">管理データの書式</a>に従います。</p>
+<table>
+<thead>
+<tr>
+<th>取り出すもの</th>
+<th>書式</th>
+<th>モデルの項目</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>要求</td>
+<td>見出し <code>## 〜 ###### FR-nnn 題名</code>、<code>FR-&lt;区分&gt;</code>、<code>NFR-&lt;区分&gt;-nnn</code>（太字も可）</td>
+<td><code>id</code>・<code>title</code>・<code>kind</code>（FR/NFR）・<code>cat</code>（NFR の区分）</td>
+</tr>
+<tr>
+<td>要求の本文</td>
+<td>見出し直下の <code>- 要求: …</code>（次の項目が始まるまで続く行）</td>
+<td><code>text</code></td>
+</tr>
+<tr>
+<td>決定状態</td>
+<td><code>- 決定状態: 承認済み</code> など。先頭の語で 承認済み / AI提案 / 保留 / 却下 / 廃止 に分類</td>
+<td><code>status</code>・<code>statusKind</code></td>
+</tr>
+<tr>
+<td>優先度</td>
+<td><code>- 優先度: MUST</code> など（MUST/SHOULD/MAY/COULD/WON'T を先頭から判定）</td>
+<td><code>priority</code></td>
+</tr>
+<tr>
+<td>上位の目的</td>
+<td><code>- 上位: G-001</code></td>
+<td><code>goal</code></td>
+</tr>
+<tr>
+<td>出自・出典</td>
+<td><code>- 出自:</code>・<code>- 出典:</code></td>
+<td><code>origin</code>・<code>sources</code></td>
+</tr>
+<tr>
+<td>扱うデータ</td>
+<td><code>- 対象エンティティ: 申請、承認</code></td>
+<td><code>entities</code>（<code>,</code> <code>、</code> <code>;</code> <code>・</code> <code>/</code> で分割）</td>
+</tr>
+<tr>
+<td>関係する状態・PARAM・既存資産</td>
+<td><code>- 関係する状態:</code>・<code>- 参照パラメータ:</code>・<code>- 関連する既存資産:</code></td>
+<td><code>states</code>・<code>params</code>・<code>assets</code></td>
+</tr>
+<tr>
+<td>エンティティ間の関係</td>
+<td><code>- 関係: …</code></td>
+<td><code>relation</code>（ER 図に使用）</td>
+</tr>
+<tr>
+<td>受入基準</td>
+<td><code>- AC-nnn: …</code>、<code>- 受入基準 AC-nnn: …</code>、または見出し <code>AC-nnn</code></td>
+<td><code>acs[].id</code>・<code>text</code></td>
+</tr>
+<tr>
+<td>検証レベル</td>
+<td>AC の下の字下げ行 <code>- 検証レベル: system</code></td>
+<td><code>acs[].level</code>（先頭の語を小文字に）</td>
+</tr>
+<tr>
+<td>BLOCKED</td>
+<td>AC の下の字下げ行 <code>- BLOCKED: Q-003 …</code></td>
+<td><code>acs[].blocked</code>、要求の <code>blocked</code>（<code>Q-nnn</code> を抽出）</td>
+</tr>
+<tr>
+<td>索引表</td>
+<td>見出し行に <code>要求ID</code>・<code>題名</code> と、<code>所属ファイル</code> か <code>優先度</code> を持つ表</td>
+<td>見出しにない優先度・決定状態の補完。見出しのない要求の追加</td>
+</tr>
+<tr>
+<td>目的</td>
+<td>表（先頭列 <code>ID</code> が <code>G-001</code>。2〜4 列目が 題名・指標・方法）、または箇条書き <code>- 目的 G-001: …</code></td>
+<td><code>goals</code></td>
+</tr>
+<tr>
+<td>PARAM</td>
+<td>表（<code>ID</code>=<code>PARAM-001</code>、列 名前・値・単位・根拠・決定状態）</td>
+<td><code>params</code></td>
+</tr>
+<tr>
+<td>質問票</td>
+<td>表（<code>ID</code>=<code>Q-001</code>、列 重要度・質問・選択肢・推奨・状態・回答）</td>
+<td><code>questions</code></td>
+</tr>
+<tr>
+<td>出典の表</td>
+<td>表（<code>ID</code>=<code>SRC-001</code>、列 資料・版・日付・区分）</td>
+<td><code>sources</code></td>
+</tr>
+<tr>
+<td>監査指摘</td>
+<td>表（<code>ID</code>=<code>AUD-001</code>、列 日付・カテゴリ・重大度・位置・要約・状態）</td>
+<td><code>audits</code></td>
+</tr>
+<tr>
+<td>用語</td>
+<td>表（先頭列 <code>用語</code>。1〜3 列目が 用語・定義・使ってはいけない言い方）</td>
+<td><code>terms</code></td>
+</tr>
+<tr>
+<td>ペルソナ</td>
+<td>表（先頭列 <code>ペルソナ</code>、列 業務・主要な判断・使うデータ・役割）</td>
+<td><code>personas</code></td>
+</tr>
+<tr>
+<td>外部連携</td>
+<td>表（先頭列 <code>連携先</code>。1〜5 列目が 連携先・方式・意味（方向）・正本・採番）、または箇条書き <code>- 外部連携 名前: …</code></td>
+<td><code>integrations</code></td>
+</tr>
+<tr>
+<td>決定記録</td>
+<td>表（先頭列 <code>日付</code>、<code>対象ID…</code> 列を持つ。1〜5 列目が 日付・対象・決定・根拠・run）</td>
+<td><code>decisions</code></td>
+</tr>
+<tr>
+<td>状態の表</td>
+<td>表（見出しに <code>対象エンティティ</code> と <code>状態</code>。<code>遷移…</code> 列があれば遷移条件）</td>
+<td><code>stateMachines</code>（状態と遷移。<code>→</code> と <code>／</code> を解釈）</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>受入基準の本文にある <code>{PARAM-001}</code> は、画面では置き換えず、本文のまま表示します（ただし S8.5.8 の AC digest の照合では PARAM の値に置き換えます）。</li>
+<li>利用シナリオ（<code>利用シナリオ</code> の見出しの下の箇条書き）は解析しますが、<strong>どの画面にも出しません</strong>。</li>
+</ul>
+<h2 id="s83">S8.3 カタログから取り出す項目</h2>
+<p><code>docs/catalog.md</code> の表を、<strong>見出し行の列名</strong>で見分けます。</p>
+<table>
+<thead>
+<tr>
+<th>表</th>
+<th>見分ける列名</th>
+<th>読む列</th>
+<th>モデルの項目</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>機能</td>
+<td><code>要求ID</code> と <code>実装ファイル</code></td>
+<td>要求ID・題名・決定状態・実装ファイル・テスト・使っている共通部品</td>
+<td><code>catalog.features</code>（<code>impl</code>・<code>tests</code> はパスらしい文字列だけ。<code>なし</code>・<code>未実装</code>・<code>—</code> などは空）</td>
+</tr>
+<tr>
+<td>API・イベント</td>
+<td><code>名前</code> と <code>定義ファイル</code></td>
+<td>名前・定義ファイル・関連する要求（3 列目）</td>
+<td><code>catalog.apis</code></td>
+</tr>
+<tr>
+<td>テーブル</td>
+<td><code>テーブル名</code> と <code>定義ファイル</code></td>
+<td>テーブル名・定義ファイル・正本のシステム・関連する要求ID</td>
+<td><code>catalog.tables</code></td>
+</tr>
+<tr>
+<td>共通部品</td>
+<td><code>部品名</code></td>
+<td>部品名・ファイル・用途・使っている要求ID</td>
+<td><code>catalog.parts</code></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>「パスらしい文字列」とは、<code>/</code> を含むか、<code>.</code> と 1〜6 文字の拡張子で終わる文字列です。<code>（…）</code> の注記と <code>:行番号</code> は取り除きます。<strong>ファイルが実在するかは確認しません。</strong> カタログに書かれていれば「登録済み」です。</li>
+<li><code>FR-nnn〜mmm</code>、<code>FR-nnn・mmm・kkk</code> のような範囲・列挙は、定義済みの要求 ID に展開します。</li>
+</ul>
+<h2 id="s84">S8.4 ほかのファイルから取り出す項目</h2>
+<table>
+<thead>
+<tr>
+<th>ファイル</th>
+<th>読む内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tests/system/ledger.json</code></td>
+<td><code>cases[]</code> の <code>id</code>・<code>requirement_ids</code>・<code>ac_ids</code>・<code>title</code>・<code>layer</code>・<code>command</code>・<code>canary</code>・<code>status</code>・<code>last_commit</code>・<code>last_run_at</code>・<code>evidence</code>、<code>ac_digests</code>。ケースの行番号は、ファイル内の <code>"id"</code> の位置から求めます</td>
+</tr>
+<tr>
+<td><code>docs/id-registry.md</code></td>
+<td>先頭の列が <code>ID</code>・<code>種別</code>・<code>状態</code>（または <code>使用状態</code>）の表の全行</td>
+</tr>
+<tr>
+<td><code>docs/run-history.md</code></td>
+<td>先頭の列が <code>run-id</code> の表の全行（全列を文字列として保持）</td>
+</tr>
+</tbody>
+</table>
+<p><code>command</code> に書かれたパスは、テストファイルの<strong>名前</strong>として図に載せます（ファイルは開きません）。</p>
+<h2 id="s85">S8.5 画面ごとに、何を読むか</h2>
+<p>以降の表の「計算」は、画面に出る数字・図の求め方です。分母・分子を取り違えやすいものに注意してください。</p>
+<h3 id="s851-dashboard">S8.5.1 ダッシュボード（<code>#/dashboard</code>）</h3>
+<table>
+<thead>
+<tr>
+<th>表示</th>
+<th>読むデータ</th>
+<th>計算</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>要求</td>
+<td>要求定義書の要求</td>
+<td>解析できた要求（FR・NFR）の数。<strong>決定状態を問わず全件</strong></td>
+</tr>
+<tr>
+<td>承認済み %</td>
+<td>要求の <code>決定状態</code></td>
+<td>先頭が「承認済み」の数 ÷ 要求の数（小数第 1 位まで）</td>
+</tr>
+<tr>
+<td>実装登録 %</td>
+<td>要求 × カタログの機能の表</td>
+<td>「実装ファイル」にパスが 1 つ以上ある要求の数 ÷ <strong>要求の数（全件）</strong>。カタログに行がない要求・実装ファイルが空の要求は「未登録」。ファイルの実在は見ません</td>
+</tr>
+<tr>
+<td>受入基準</td>
+<td>要求の AC</td>
+<td>全要求の AC の数</td>
+</tr>
+<tr>
+<td>試験合格 %</td>
+<td>台帳の <code>cases[].status</code></td>
+<td><code>status</code> が <code>pass</code> のケース ÷ ケースの数。<code>not_run</code> は合格に含めません</td>
+</tr>
+<tr>
+<td>未回答の質問</td>
+<td>質問票の <code>状態</code></td>
+<td>状態に「回答済み・解決済み・取り下げ・クローズ」を含まない質問の数</td>
+</tr>
+<tr>
+<td>BLOCKED の要求</td>
+<td>AC の <code>BLOCKED</code></td>
+<td><code>Q-nnn</code> を含む BLOCKED を持つ AC がある要求の数</td>
+</tr>
+<tr>
+<td>ファイル / コンポーネント</td>
+<td>カタログ・台帳</td>
+<td>図に載ったファイルの数 / その最上位の部品の数（S8.5.2）</td>
+</tr>
+<tr>
+<td>決定状態・優先度</td>
+<td>要求</td>
+<td>それぞれの内訳（円グラフ。クリックで該当要求を 2D マップで強調）</td>
+</tr>
+<tr>
+<td>目的ごとの実装進捗</td>
+<td>目的 × 要求 × カタログ</td>
+<td>目的（G）ごとに、その目的を <code>上位</code> に持つ要求のうち実装登録済みの数 ÷ その目的の要求の数</td>
+</tr>
+<tr>
+<td>境界ごとの実装</td>
+<td>要求の所属ファイル × カタログ</td>
+<td>要求が書かれたファイル名（拡張子なし）ごとの、実装登録済み ÷ 要求の数</td>
+</tr>
+<tr>
+<td>受入基準の検証レベル</td>
+<td>AC の <code>検証レベル</code></td>
+<td>レベルごとの AC の数（空は <code>-</code>）</td>
+</tr>
+<tr>
+<td>System Test と ID 台帳</td>
+<td>台帳 / ID 台帳</td>
+<td>ケースの <code>status</code> ごとの数。ID 台帳は 種別:状態 ごとの件数</td>
+</tr>
+<tr>
+<td>実行履歴</td>
+<td><code>docs/run-history.md</code></td>
+<td>末尾 8 行を新しい順に。先頭 7 列まで</td>
+</tr>
+<tr>
+<td>設計・開発履歴と進捗</td>
+<td>決定記録・実行履歴・要求・カタログ・台帳</td>
+<td>分類（決定記録／実行履歴／要求状態／実装登録／System Test）× 状態の件数。押すと、根拠レコードのファイル:行を右に出します（VS Code で開くリンク付き）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="s852-2d-3d-map2dmap3d">S8.5.2 2D マップ・3D マップ（<code>#/map2d</code>・<code>#/map3d</code>）</h3>
+<p>同じ関係図（グラフ）を、平面と立体で表示します。点（ノード）の元になるデータは次のとおりです。</p>
+<table>
+<thead>
+<tr>
+<th>点の種類</th>
+<th>元のデータ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>目的</td>
+<td>要求定義書の目的</td>
+</tr>
+<tr>
+<td>要求・受入基準</td>
+<td>要求定義書（AC は「レイヤー」で追加表示）</td>
+</tr>
+<tr>
+<td>パラメータ（PARAM）・質問</td>
+<td>要求定義書の表（レイヤーで追加表示）</td>
+</tr>
+<tr>
+<td>エンティティ</td>
+<td>状態の表、用語の表、要求の <code>対象エンティティ</code></td>
+</tr>
+<tr>
+<td>共通部品・API・テーブル</td>
+<td>カタログ</td>
+</tr>
+<tr>
+<td>ファイル・コンポーネント</td>
+<td>カタログの実装ファイル・テスト・各表の定義ファイル、台帳の <code>command</code> のパス。コンポーネントは、パスの先頭の 1〜2 階層（<code>src</code>・<code>app</code>・<code>apps</code>・<code>packages</code>・<code>services</code>・<code>lib</code>・<code>libs</code>・<code>modules</code>・<code>internal</code>・<code>cmd</code>・<code>pkg</code>・<code>projects</code> と <code>tests</code>・<code>test</code>・<code>__tests__</code>・<code>spec</code>・<code>specs</code> は 2 階層、そのほかは 1 階層）</td>
+</tr>
+<tr>
+<td>試験ケース</td>
+<td>台帳</td>
+</tr>
+<tr>
+<td>ペルソナ・外部連携</td>
+<td>要求定義書の表（コンテキスト図で使う。2D/3D のレイヤーには出ません）</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>線（関係）</th>
+<th>元のデータ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>目的 → 要求</td>
+<td>要求の <code>上位</code></td>
+</tr>
+<tr>
+<td>要求 → 受入基準</td>
+<td>要求の AC</td>
+</tr>
+<tr>
+<td>要求 → エンティティ / PARAM / 質問</td>
+<td><code>対象エンティティ</code>・<code>参照パラメータ</code>・BLOCKED の <code>Q-nnn</code></td>
+</tr>
+<tr>
+<td>要求 → 要求（参照）</td>
+<td>要求本文・AC の本文に書かれた別の要求 ID</td>
+</tr>
+<tr>
+<td>要求 → 実装ファイル / テスト</td>
+<td>カタログの機能の表の <code>実装ファイル</code>・<code>テスト</code></td>
+</tr>
+<tr>
+<td>要求 → 共通部品</td>
+<td>機能の表の <code>使っている共通部品</code>、共通部品の表の <code>使っている要求ID</code></td>
+</tr>
+<tr>
+<td>要求 → API・テーブル</td>
+<td>API・テーブルの表の関連する要求</td>
+</tr>
+<tr>
+<td>共通部品・API・テーブル → ファイル</td>
+<td>それぞれの <code>ファイル</code>・<code>定義ファイル</code></td>
+</tr>
+<tr>
+<td>要求・AC → 試験ケース</td>
+<td>台帳の <code>requirement_ids</code>・<code>ac_ids</code></td>
+</tr>
+<tr>
+<td>試験ケース → テストファイル</td>
+<td>台帳の <code>command</code> に含まれるパス</td>
+</tr>
+<tr>
+<td>ファイル → コンポーネント</td>
+<td>パスから決定</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>色の切替: 種別（点の種類）／決定状態（<code>statusKind</code>）／実装状況（done・none・unlisted）。</li>
+<li>「強調」: 点にポイント＝直接の関連、クリック＝2 段先まで（<code>ref</code> 関係と、つながりが 36 を超える点は経由しません）。</li>
+<li>点の位置（座標）は表示のために計算した値で、意味はありません。</li>
+</ul>
+<h3 id="s853-diagramskind">S8.5.3 図式（<code>#/diagrams</code>。<code>kind=</code> で種類を指定）</h3>
+<table>
+<thead>
+<tr>
+<th>図（<code>kind</code>）</th>
+<th>読むデータ</th>
+<th>作り方</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>コンテキスト図（<code>ctx</code>）</td>
+<td>ペルソナ（4.1 の表）・外部連携（8 の表）・目的</td>
+<td>中央にシステム、左にペルソナ（線のラベル＝<code>業務</code>）、右に外部連携（ラベル＝<code>方式</code>）。目的は中央の枠内に並べる</td>
+</tr>
+<tr>
+<td>目的ツリー（<code>goals</code>）</td>
+<td>目的・要求・カタログ</td>
+<td>目的ごとの要求を四角で並べる。色は実装登録か決定状態。青緑の枠は NFR。上位が不明な要求は「目的なし」の列</td>
+</tr>
+<tr>
+<td>状態遷移図（<code>states</code>）</td>
+<td>状態の表（<code>対象エンティティ</code>・<code>状態</code>・<code>遷移…</code>）</td>
+<td>エンティティごとの状態と遷移。二重枠は遷移先のない状態</td>
+</tr>
+<tr>
+<td>データ関連図（<code>entities</code>）</td>
+<td>要求の <code>対象エンティティ</code>、状態の表</td>
+<td>同じ要求に出てきたエンティティを線で結ぶ。線の太さ＝共有する要求の数、丸＝状態の数</td>
+</tr>
+<tr>
+<td>コンポーネント図（<code>components</code>）</td>
+<td>カタログのパス</td>
+<td>コンポーネントと、その中のモジュール・共通部品・API・テーブル。線＝同じ要求を実装している</td>
+</tr>
+<tr>
+<td>ER 図（<code>er</code>。タブには出ない補助表示）</td>
+<td>要求の <code>対象エンティティ</code>・<code>関係</code></td>
+<td><code>関係</code> が書かれた要求だけ根拠付きで表示。書かれていないものは<strong>推測せず</strong>「関係情報が不足」と出す</td>
+</tr>
+</tbody>
+</table>
+<h3 id="s854-placement">S8.5.4 配置（<code>#/placement</code>）</h3>
+<table>
+<thead>
+<tr>
+<th>タブ（<code>tab</code>）</th>
+<th>読むデータ</th>
+<th>計算</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ビジネス層 × コンポーネント（<code>biz</code>）</td>
+<td>要求・目的・カタログ</td>
+<td>行は 目的／境界（要求の所属ファイル）／種別（FR・NFR-区分）から選ぶ。列はコンポーネント（実装ファイル数の多い順）。<strong>セルの数 ＝ その行の要求のうち、そのコンポーネントに実装ファイルがある要求の数</strong>。「テストを含める」でテストのコンポーネントも対象</td>
+</tr>
+<tr>
+<td>データ × コンポーネント（<code>data</code>）</td>
+<td>要求の <code>対象エンティティ</code>・カタログ</td>
+<td>行はエンティティ。セルの数は同様。下に API・テーブルの一覧</td>
+</tr>
+<tr>
+<td>共通部品・API・テーブルの置き場（<code>items</code>）</td>
+<td>カタログ</td>
+<td>部品・API・テーブルごとの、定義ファイルのあるコンポーネントと要求の数</td>
+</tr>
+<tr>
+<td>アプリ構成とデータ位置づけ（<code>kind=runtime</code>）</td>
+<td>読み込めたファイルの一覧・カタログの実装ファイル・外部連携</td>
+<td>次の S8.5.5</td>
+</tr>
+</tbody>
+</table>
+<h3 id="s855-placementkindruntime">S8.5.5 配置（実行環境）（<code>#/placement?kind=runtime</code>）</h3>
+<p>Studio <strong>自身</strong>の動きを、読み込んだファイルから組み立てた図です。</p>
+<table>
+<thead>
+<tr>
+<th>表示</th>
+<th>読むデータ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PC・ブラウザー・Studio サーバー・対象リポジトリ</td>
+<td>起動環境の値（リポジトリのパス、<code>/api/model</code>、<code>studio.py</code>）。固定の説明</td>
+</tr>
+<tr>
+<td>管理データ: &lt;パス&gt;</td>
+<td>実際に存在した管理データのパス（S8.1。<code>requirements_dir</code> と <code>manual_tests</code> も、存在すれば含む）</td>
+</tr>
+<tr>
+<td>実装ファイル: &lt;パス&gt;</td>
+<td>カタログの機能の表に書かれた実装ファイルのパス（重複を除く）</td>
+</tr>
+<tr>
+<td>流れの表</td>
+<td>管理データ→Studio サーバー（読取）、カタログ→実装ファイル（読取（登録位置）。名前だけ）、サーバー→ブラウザー（読取）、Studio→対象リポジトリ（書込: なし）。右の根拠欄にパス</td>
+</tr>
+<tr>
+<td>外部／クラウド境界</td>
+<td>要求定義書の外部連携（方式・方向・正本）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="s856-source">S8.5.6 ソース対応（<code>#/source</code>）</h3>
+<table>
+<thead>
+<tr>
+<th>表示</th>
+<th>読むデータ</th>
+<th>計算</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ツリーマップ</td>
+<td>カタログのパス（実装・テスト・部品・API・テーブルの定義ファイル）、台帳の <code>command</code> のパス</td>
+<td>面積 ＝ <code>1 ＋ そのファイルに結び付く要求の数</code>。大きな枠＝コンポーネント。青＝実装、緑＝テスト</td>
+</tr>
+<tr>
+<td>ファイル一覧</td>
+<td>同上</td>
+<td>コンポーネントごとに折りたたみ。結び付く要求の数と、部品・API・テーブルの名前。<code>↗</code> は <code>vscode://file/&lt;リポジトリ&gt;/&lt;パス&gt;</code> を開く（Studio は開かない）</td>
+</tr>
+<tr>
+<td>絞り込み</td>
+<td>パスの文字列</td>
+<td>全角・半角と大文字・小文字を区別せず、パスに含まれるか</td>
+</tr>
+</tbody>
+</table>
+<h3 id="s857-tablestab">S8.5.7 表（<code>#/tables?tab=</code>）</h3>
+<p>全タブとも、行を選ぶと図で強調され（<code>選択に関連する行だけ</code> で絞れ）、見出しで並べ替え、<code>CSV</code> でそのタブの<strong>全行</strong>（絞り込み前）を書き出せます。</p>
+<table>
+<thead>
+<tr>
+<th>タブ（<code>tab</code>）</th>
+<th>読むデータ</th>
+<th>列</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>要求（<code>reqs</code>）</td>
+<td>要求定義書 ＋ カタログ（実装）</td>
+<td>ID・題名・決定状態・優先度・目的・実装（done/none/unlisted）・AC の数・BLOCKED・境界（所属ファイル名）</td>
+</tr>
+<tr>
+<td>受入基準（<code>acs</code>）</td>
+<td>要求の AC</td>
+<td>ID・要求・検証レベル・BLOCKED・本文</td>
+</tr>
+<tr>
+<td>試験ケース（<code>cases</code>）</td>
+<td>台帳 <code>cases[]</code></td>
+<td>ID・題名・要求・AC・層（<code>layer</code>）・状態（<code>status</code>）・最終実行（<code>last_run_at</code>）</td>
+</tr>
+<tr>
+<td>共通部品（<code>parts</code>）</td>
+<td>カタログの共通部品の表</td>
+<td>名前・用途・ファイル・要求の数</td>
+</tr>
+<tr>
+<td>API・テーブル（<code>apis</code>）</td>
+<td>カタログの API・テーブルの表</td>
+<td>種別・名前・正本のシステム・定義ファイル・要求</td>
+</tr>
+<tr>
+<td>ファイル（<code>files</code>）</td>
+<td>カタログ・台帳のパス</td>
+<td>パス・コンポーネント・モジュール・役割（impl/test）・結び付く要求の数</td>
+</tr>
+<tr>
+<td>パラメータ（<code>params</code>）</td>
+<td>PARAM の表</td>
+<td>ID・名前・値・単位・根拠・決定状態</td>
+</tr>
+<tr>
+<td>質問票（<code>questions</code>）</td>
+<td>質問票の表</td>
+<td>ID・重要度・質問・状態・回答</td>
+</tr>
+<tr>
+<td>用語（<code>terms</code>）</td>
+<td>用語の表</td>
+<td>用語・定義・使ってはいけない言い方</td>
+</tr>
+<tr>
+<td>ペルソナ（<code>personas</code>）</td>
+<td>ペルソナの表</td>
+<td>名前・業務・主要な判断・使うデータ・役割</td>
+</tr>
+<tr>
+<td>外部連携（<code>integrations</code>）</td>
+<td>外部連携の表</td>
+<td>名前・方式・意味・正本</td>
+</tr>
+<tr>
+<td>決定記録（<code>decisions</code>）</td>
+<td>決定記録の表</td>
+<td>日付・対象・決定・根拠・run</td>
+</tr>
+<tr>
+<td>監査指摘（<code>audits</code>）</td>
+<td>監査指摘の表</td>
+<td>ID・日付・カテゴリ・重大度・位置・要約・状態</td>
+</tr>
+<tr>
+<td>出典（<code>sources</code>）</td>
+<td>出典の表</td>
+<td>ID・資料・版・区分</td>
+</tr>
+<tr>
+<td>実行履歴（<code>runs</code>）</td>
+<td><code>docs/run-history.md</code></td>
+<td>表の先頭 8 列（列名はファイルのまま）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="s858-structure">S8.5.8 構造（<code>#/structure</code>）</h3>
+<p>ナビゲーションには出ないページです（URL で開きます）。<strong>7 つのデータ層</strong>ごとに、現状（解析した件数）と理想（判定の基準）を比べ、1 レコードずつ判定した行を一覧にします。</p>
+<table>
+<thead>
+<tr>
+<th>層</th>
+<th>読むデータ</th>
+<th>主な判定（差分の種別）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>要求定義書・境界別要求</td>
+<td>要求・目的・AC</td>
+<td>不足（決定状態・AC がない）、孤立（<code>上位</code> の目的が存在しない）、参照不整合（AC 本文の ID が未定義）、重複（同じ要求 ID）、妥当</td>
+</tr>
+<tr>
+<td>カタログ</td>
+<td>機能の表 × 要求</td>
+<td>余剰（要求にない行）、重複（同じ要求の行が複数）、参照不整合（決定状態が要求と違う）、妥当</td>
+</tr>
+<tr>
+<td>System Test</td>
+<td>台帳 × 要求・AC・PARAM</td>
+<td>重複（ケース ID）、参照不整合（未定義の要求・AC、AC の親要求が不一致、AC 本文の digest が台帳の <code>ac_digests</code> と不一致）、妥当</td>
+</tr>
+<tr>
+<td>ID 台帳</td>
+<td>ID 台帳 × 要求・AC・目的</td>
+<td>余剰（定義のない ID）、参照不整合（接頭辞と種別が不一致）、重複、妥当</td>
+</tr>
+<tr>
+<td>実行履歴</td>
+<td><code>run-history.md</code> × 要求・ケース</td>
+<td>参照不整合（存在しない要求・ケースを参照）、重複（run-id）、妥当</td>
+</tr>
+<tr>
+<td>境界間</td>
+<td>外部連携の表</td>
+<td>不足（方式・方向・正本が空）、重複、妥当</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>各行に <code>根拠</code>（ファイル:行）が付きます。</li>
+<li>AC の digest は、AC 本文の <code>{PARAM-nnn}</code> を値に置き換え、空白を詰めた文字列の SHA-256 先頭 16 桁です（<code>sha256:</code> 付き）。本文を変えたのに台帳を更新していないと「参照不整合」になります。</li>
+<li>内容の確かさ（意味の矛盾など）は判定しません。それは <code>python scripts/verify.py</code> と rd-auditor の役割です。</li>
+</ul>
+<h3 id="s859-consistency">S8.5.9 一貫性（<code>#/consistency</code>）</h3>
+<p>ナビゲーションには出ないページです。要求 ID ごとに、5 つの層に記録があるかを調べます。</p>
+<table>
+<thead>
+<tr>
+<th>列</th>
+<th>○（✓）の条件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>要求</td>
+<td>要求定義書にその ID の要求がある</td>
+</tr>
+<tr>
+<td>AC</td>
+<td>その要求に受入基準が 1 つ以上ある</td>
+</tr>
+<tr>
+<td>試験</td>
+<td>台帳のケースの <code>requirement_ids</code> にその ID がある（<code>status</code> は見ません）</td>
+</tr>
+<tr>
+<td>カタログ</td>
+<td>カタログの機能の表にその ID の行がある</td>
+</tr>
+<tr>
+<td>実装ファイル</td>
+<td>その行の <code>実装ファイル</code> にパスが 1 つ以上ある</td>
+</tr>
+</tbody>
+</table>
+<p>判定は、5 つともそろえば「正常」、1 つでも欠ければ「一層欠落」、カタログに行があるのに要求がなければ「参照先なし」です。</p>
+<h3 id="s8510-maintenance">S8.5.10 整合性保守（<code>#/maintenance</code>）</h3>
+<table>
+<thead>
+<tr>
+<th>表示</th>
+<th>読むデータ</th>
+<th>条件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>保守候補</td>
+<td>カタログの機能の行 × 要求</td>
+<td>行の <code>題名</code> か <code>決定状態</code> が、要求正本（見出しの題名・<code>決定状態</code>）と<strong>文字列として異なる</strong>行。要求正本に存在しない行は「未対応」として表示</td>
+</tr>
+</tbody>
+</table>
+<p>実行（書き込み）の条件は S8.9 です。</p>
+<h3 id="s8511-csv">S8.5.11 検索・詳細パネル・CSV・自動更新</h3>
+<table>
+<thead>
+<tr>
+<th>機能</th>
+<th>読むデータ</th>
+<th>動き</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>検索（<code>/</code>・<code>Ctrl+K</code>）</td>
+<td>図の点（ノード）の ID・名前・題名・パス・境界・状態、要求の本文・AC の本文・扱うデータ</td>
+<td>ブラウザーのメモリ上で、全角・半角と大文字・小文字を区別せずに、空白区切りの語をすべて含む点を探す。ID が完全一致するものを上位に、種別ごとの重みで並べる。上位 40 件を表示し、Enter で選択、Shift+Enter ですべて強調。サーバーへは問い合わせない</td>
+</tr>
+<tr>
+<td>詳細パネル（点を選ぶ）</td>
+<td>点の種類ごと（下表）</td>
+<td>右に表示。<code>↗ VS Code</code> で定義の位置（<code>ファイル:行</code>）を開く</td>
+</tr>
+<tr>
+<td>CSV</td>
+<td>表のタブの全行</td>
+<td>ブラウザーが UTF-8（BOM 付き）で生成して保存。サーバーへ送らない</td>
+</tr>
+<tr>
+<td>自動更新</td>
+<td>S8.1 のファイルの更新時刻とサイズ</td>
+<td>4 秒ごとに <code>/api/fingerprint</code> を問い合わせ、変わっていれば <code>/api/model</code> を読み直して再描画。画面が非表示のとき、整合性保守の画面では止まる</td>
+</tr>
+<tr>
+<td>対象リポジトリの切替</td>
+<td>リポジトリのフォルダー</td>
+<td>画面右上のリポジトリ名から。<code>docs/requirements-definition.md</code> か <code>docs/catalog.md</code> か台帳がないフォルダーは切り替えない</td>
+</tr>
+</tbody>
+</table>
+<p>詳細パネルの内容:</p>
+<table>
+<thead>
+<tr>
+<th>点の種類</th>
+<th>表示する項目（元のデータ）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>要求</td>
+<td>本文、受入基準（レベル・BLOCKED）、出自・出典・関連する既存資産・優先度の注記、扱うデータ、パラメータ、質問、実装ファイル、テスト・試験ケース、共通部品・API・テーブル、本文で参照する別の要求、定義位置、元の本文（折りたたみ）</td>
+</tr>
+<tr>
+<td>目的</td>
+<td>指標・方法、属する要求と実装登録済みの数</td>
+</tr>
+<tr>
+<td>受入基準</td>
+<td>本文・検証レベル・BLOCKED・親の要求</td>
+</tr>
+<tr>
+<td>ファイル</td>
+<td>パス・コンポーネント・モジュール・役割（impl/test）</td>
+</tr>
+<tr>
+<td>共通部品・API・テーブル</td>
+<td>用途、定義位置</td>
+</tr>
+<tr>
+<td>試験ケース</td>
+<td>状態・層・<code>command</code>・最終実行・commit・evidence</td>
+</tr>
+<tr>
+<td>質問・パラメータ</td>
+<td>質問・選択肢・推奨・状態・回答／名前・値・根拠・状態</td>
+</tr>
+<tr>
+<td>エンティティ</td>
+<td>用語の定義・使ってはいけない言い方・状態の一覧</td>
+</tr>
+<tr>
+<td>ペルソナ・外部連携</td>
+<td>業務・判断・使うデータ・役割／方式・意味・正本</td>
+</tr>
+</tbody>
+</table>
+<h3 id="s8512-implstatus">S8.5.12 実装状態（<code>#/implstatus</code>）</h3>
+<p>承認済みの要求が、実装の登録と試験の合否のどこにあるかを、状態別の積み上げ進捗バー（全体・目的別・優先度別）、かんばん、一覧表で表します。画面は管理データを読むだけで、対象リポジトリへは書き込みません。管理データが更新されると、再読込の後に状態と件数を再計算します。</p>
+<p>読むデータ: 要求の <code>決定状態</code>・AC の <code>検証レベル</code>・<code>BLOCKED</code>、カタログの機能の表の <code>実装ファイル</code>（パスが実在するもの）、台帳の <code>cases[].requirement_ids</code> と <code>cases[].status</code>。</p>
+<table>
+<thead>
+<tr>
+<th>状態</th>
+<th>定義（上から順に判定）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>未着手</td>
+<td>カタログに行がない、または実装ファイル欄に実在するパスがない</td>
+</tr>
+<tr>
+<td>実装登録済み・試験未登録</td>
+<td>実装があり、<code>検証レベル: system</code> の AC を持つが、台帳にその要求のケースがない</td>
+</tr>
+<tr>
+<td>実装登録済み・試験未合格</td>
+<td>実装があり、台帳のケースに <code>pass</code> 以外（<code>fail</code>・<code>blocked</code>・<code>not_run</code>）が 1 件でもある</td>
+</tr>
+<tr>
+<td>試験 pass 済み</td>
+<td>実装があり、台帳のケースが 1 件以上あり、全件 <code>pass</code></td>
+</tr>
+<tr>
+<td>実装登録済み・system 試験対象外</td>
+<td>実装があり、<code>system</code> の AC を持たず、台帳のケースもない</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>決定状態が承認済みの要求だけが対象です。承認待ち・保留・却下・廃止の要求は分母に含めず、「対象外」の件数だけを別に示します。</li>
+<li>未回答の質問・TBD・競合で受入判定を進められない要求（BLOCKED を持つ AC がある要求）には、状態に加えて「停止中」の印（⏸）を付けます。</li>
+<li>状態は色だけでなく、記号（○ ◔ ✖ ✔ ◇）と状態名の語で区別します。かんばんのカードと表の行は、キーボード（Tab と Enter）で選べ、選ぶと詳細パネルが開いて他の表現と連動します。見出し・状態名・凡例は JA/EN の切替に従います。</li>
+<li><strong>ダッシュボードの「試験合格 %」との違い</strong>: 試験合格 % は台帳の<strong>ケース単位</strong>（<code>pass</code> のケース ÷ ケースの数）です。実装状態は<strong>要求単位</strong>で、その要求に結び付くケースが 1 件でも <code>pass</code> 以外なら試験 pass 済みになりません。同じデータでも数字は一致しません。</li>
+<li>既存のノード属性 <code>impl</code>（<code>done</code>・<code>none</code>・<code>unlisted</code>）の意味は変わらず、2D/3D マップ・配置の表示も変わりません。実装状態は別の項目（<code>implStatus</code>）として計算します。</li>
+</ul>
+<h2 id="s86">S8.6 画面とファイルの対応（早見表）</h2>
+<p>「◎」は主な入力、「○」は補助的な入力です。</p>
+<table>
+<thead>
+<tr>
+<th>画面・機能</th>
+<th>要求定義書（<code>requirements/</code> を含む）</th>
+<th>カタログ</th>
+<th>台帳</th>
+<th>ID 台帳</th>
+<th>実行履歴</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ダッシュボード</td>
+<td>◎</td>
+<td>◎（実装登録）</td>
+<td>◎（合格率）</td>
+<td>○（件数）</td>
+<td>◎</td>
+</tr>
+<tr>
+<td>2D / 3D マップ</td>
+<td>◎</td>
+<td>◎</td>
+<td>○（ケース）</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>図式</td>
+<td>◎</td>
+<td>○（コンポーネント図）</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>配置</td>
+<td>◎</td>
+<td>◎</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>配置（実行環境）</td>
+<td>○（外部連携）</td>
+<td>◎（実装ファイルの名前）</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>ソース対応</td>
+<td>○</td>
+<td>◎</td>
+<td>○（command のパス）</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>表</td>
+<td>◎</td>
+<td>◎</td>
+<td>◎</td>
+<td></td>
+<td>◎</td>
+</tr>
+<tr>
+<td>構造</td>
+<td>◎</td>
+<td>◎</td>
+<td>◎</td>
+<td>◎</td>
+<td>◎</td>
+</tr>
+<tr>
+<td>一貫性</td>
+<td>◎</td>
+<td>◎</td>
+<td>◎</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>整合性保守</td>
+<td>◎（正本）</td>
+<td>◎（対象。書き込む）</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>検索・詳細パネル</td>
+<td>◎</td>
+<td>◎</td>
+<td>○</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>実装状態</td>
+<td>◎（決定状態・AC）</td>
+<td>◎（実装ファイル）</td>
+<td>◎（ケースの状態）</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 id="s87">S8.7 欠けたときの見え方</h2>
+<table>
+<thead>
+<tr>
+<th>欠けたもの</th>
+<th>見え方</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>要求定義書も要求ファイルもカタログもない</td>
+<td><code>--check</code> は終了コード 1。起動すると案内を出して終了。起動後に切り替えた場合も「データ層が見つかりません」で切り替わらない</td>
+</tr>
+<tr>
+<td>カタログがない</td>
+<td>実装登録 % は 0。ソース対応・配置は空（「カタログにファイルの対応がありません」）</td>
+</tr>
+<tr>
+<td>台帳がない・JSON が壊れている</td>
+<td>試験合格 % は 0、試験ケースは 0 件。壊れているときは警告（<code>ledger is not valid JSON</code>）を記録</td>
+</tr>
+<tr>
+<td>ID 台帳・実行履歴がない</td>
+<td>該当の欄が空。構造の層は「判定対象 0 件」</td>
+</tr>
+<tr>
+<td><code>実装ファイル</code> が <code>—</code>・未実装</td>
+<td>要求の実装は none（未登録）。一貫性は「一層欠落」</td>
+</tr>
+<tr>
+<td>列名が違う表</td>
+<td>見分けられない表は読みません。<code>--check</code> の件数（0 件）と、<code>04-troubleshooting.md</code> の「画面に出ない」を見てください</td>
+</tr>
+</tbody>
+</table>
+<h2 id="s88">S8.8 読まないもの</h2>
+<ul>
+<li>ソースコード・設定・ログ・<code>work/</code> の中身（run の進捗・証跡・監査結果）。名前として出るのは、カタログと台帳に書かれたパスだけです。</li>
+<li><code>docs/manual-tests.md</code> の中身（存在確認だけ）。</li>
+<li><code>.github/</code>（エージェント・skill・hook）の中身。</li>
+<li>要求定義書の利用シナリオ（解析はするが表示しない）。</li>
+</ul>
+<h2 id="s89">S8.9 書き込むもの</h2>
+<p>通常の閲覧・検索・CSV・リポジトリ切替では何も書きません。</p>
+<p>書き込みは、整合性保守で <code>確認して実行</code> を押したときの <strong><code>docs/catalog.md</code> だけ</strong>です。選んだ要求の行の <code>題名</code> と <code>決定状態</code> の 2 つのセルを、要求正本に合わせます。</p>
+<ol>
+<li>プレビュー: 変更前後を表示し、トークンを発行します（ファイルは変えません）。</li>
+<li>実行: ファイルの内容が、Studio の起動時（または前回の適用後）から変わっていないことを確認します。変わっていれば <code>preview-conflict</code> で止まります（別の手段でカタログを更新したあとは、Studio を起動し直してください）。</li>
+<li>同じフォルダーに一時ファイル（<code>.eabk-studio-*</code>）を書いて置き換え、<code>python scripts/verify.py --docs-only</code> を実行します（<code>scripts/verify.py</code> がなければ読み取りの検査だけ）。</li>
+<li>失敗（検査の失敗・書込みの失敗・対象外ファイルが同じ実体を指す）したら、<strong>元のバイト列と時刻・権限に戻して</strong>エラーを表示します。</li>
+</ol>
+<h2 id="s810-http-api127001">S8.10 HTTP API（<code>127.0.0.1</code> だけ）</h2>
+<table>
+<thead>
+<tr>
+<th>メソッド・パス</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /</code> ・ <code>GET /&lt;パス&gt;</code></td>
+<td><code>EABK-Studio/web/</code> の静的ファイル（外のパスは 404）</td>
+</tr>
+<tr>
+<td><code>GET /api/model</code></td>
+<td>解析した全データ（JSON）。更新時刻の指紋が同じなら、キャッシュを返す</td>
+</tr>
+<tr>
+<td><code>GET /api/fingerprint</code></td>
+<td>管理データの更新の指紋（リポジトリのパス ＋ 各ファイルの更新時刻・サイズ）</td>
+</tr>
+<tr>
+<td><code>GET /api/repo</code></td>
+<td>現在の対象リポジトリのパス</td>
+</tr>
+<tr>
+<td><code>POST /api/repo</code></td>
+<td>対象リポジトリの切替（本文 <code>{"path": …}</code>）。<code>X-EABK-Studio: 1</code> が必要</td>
+</tr>
+<tr>
+<td><code>POST /api/maintenance/preview</code></td>
+<td>本文 <code>{"id": "&lt;要求ID&gt;"}</code>。同じヘッダーが必要</td>
+</tr>
+<tr>
+<td><code>POST /api/maintenance/apply</code></td>
+<td>本文 <code>{"token": …}</code>。同じヘッダーが必要</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>待ち受けは <code>127.0.0.1</code>（既定のポートは 8765。使用中なら次の番号を最大 20 まで試す）。<code>Host</code> ヘッダーが <code>127.0.0.1</code>・<code>localhost</code>・<code>::1</code> 以外の要求は 403 で拒否します。</li>
+<li>POST は、ヘッダー <code>X-EABK-Studio: 1</code> がなければ 403 です（ほかのサイトからの送信を避けるため）。本文は 8 KB まで。</li>
+<li>外部のサーバーへは何も送りません（フォント・CDN・解析も使いません。3D 用の three.js は同梱）。</li>
+</ul><footer>出典: <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/users-guide/studio/08-data-reference.md">users-guide/studio/08-data-reference.md</a></footer></main></div>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"></script>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark=['dark','midnight'].includes(document.documentElement.dataset.theme);
+mermaid.initialize({startOnLoad:false,theme:dark?'dark':'default'});
+await mermaid.run({querySelector:'pre.mermaid'});
+</script>
+<script>document.querySelectorAll('pre code').forEach(e=>hljs.highlightElement(e));
+const t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+const sel=document.getElementById('theme');
+function setT(v){document.documentElement.dataset.theme=v;localStorage.setItem('theme',v);sel.value=v;
+ const hl=document.getElementById('hl');if(hl)hl.href='https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github'+(['dark','midnight'].includes(v)?'-dark':'')+'.min.css';}
+sel.onchange=()=>setT(sel.value);setT(t);
+document.getElementById('menu').onclick=()=>document.querySelector('nav').classList.toggle('open');
+document.querySelector('nav a.cur')?.scrollIntoView({block:'center'});
+</script>
+</body></html>

@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>3. 管理データの書式 — HypervelocityEngineering</title>
+<link id="hl" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+<style>
+:root{--bg:#fff;--fg:#1f2328;--muted:#656d76;--card:#f6f8fa;--bd:#d0d7de;--ac:#0969da;--side:#f6f8fa;--code:#eff1f3;--r:10px}
+[data-theme=dark]{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--card:#161b22;--bd:#30363d;--ac:#58a6ff;--side:#010409;--code:#1c2128}
+[data-theme=midnight]{--bg:#0f1226;--fg:#e4e7ff;--muted:#9aa0cc;--card:#171a3a;--bd:#2c3062;--ac:#8b9cff;--side:#0a0c1d;--code:#1d2147}
+[data-theme=ocean]{--bg:#f2fafc;--fg:#0c2d3a;--muted:#4f7583;--card:#e0f2f7;--bd:#b4dce6;--ac:#0087a8;--side:#dcf0f5;--code:#d3ebf1}
+[data-theme=forest]{--bg:#f4f8f2;--fg:#1c2b1e;--muted:#5a6f5c;--card:#e6efe2;--bd:#c3d6bd;--ac:#2f7d3a;--side:#e1ecdc;--code:#dae7d5}
+[data-theme=sunset]{--bg:#fff8f2;--fg:#3a2118;--muted:#8a6252;--card:#ffebdc;--bd:#f2cdb3;--ac:#d9480f;--side:#ffeede;--code:#fde1cc}
+[data-theme=rose]{--bg:#fff6f8;--fg:#3a1c26;--muted:#8d5a6b;--card:#ffe6ec;--bd:#f2c2cf;--ac:#c2255c;--side:#ffe9ef;--code:#fcdbe4}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 system-ui,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;transition:background .2s,color .2s}
+a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;padding:.6rem 1.2rem;background:var(--card);border-bottom:1px solid var(--bd);backdrop-filter:blur(6px)}
+header .brand{font-weight:700;color:var(--fg)}header .sp{flex:1}
+header select,header button{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:.3rem .6rem;font:inherit;font-size:.9rem}
+#menu{display:none}
+.layout{display:flex;min-height:calc(100vh - 54px)}
+nav{width:290px;flex:none;background:var(--side);border-right:1px solid var(--bd);padding:1rem;position:sticky;top:54px;height:calc(100vh - 54px);overflow:auto;font-size:.9rem}
+nav h4{margin:1.1rem 0 .3rem;color:var(--muted);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
+nav a{display:block;padding:.25rem .6rem;border-radius:6px;color:var(--fg);line-height:1.4}
+nav a:hover{background:var(--card);text-decoration:none}
+nav a.cur{background:var(--ac);color:#fff}
+main{flex:1;min-width:0;max-width:900px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1,h2{border-bottom:1px solid var(--bd);padding-bottom:.3rem}
+h1,h2,h3,h4{line-height:1.3;scroll-margin-top:70px}
+img{max-width:100%;height:auto;border-radius:var(--r);border:1px solid var(--bd)}
+pre{background:var(--code);border:1px solid var(--bd);border-radius:var(--r);padding:1rem;overflow:auto;line-height:1.5;font-size:.88rem}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font:.88em ui-monospace,Consolas,monospace}
+pre code{background:none;padding:0}
+pre.mermaid{background:var(--card);text-align:center}
+table{border-collapse:collapse;display:block;overflow:auto;margin:1rem 0}
+th,td{border:1px solid var(--bd);padding:.45rem .8rem;vertical-align:top}
+th{background:var(--card)}tr:nth-child(even) td{background:color-mix(in srgb,var(--card) 50%,transparent)}
+blockquote{margin:1rem 0;padding:.2rem 1rem;border-left:4px solid var(--ac);background:var(--card);border-radius:0 var(--r) var(--r) 0;color:var(--muted)}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var(--muted);font-size:.85rem}
+@media(max-width:820px){#menu{display:inline-block}nav{position:fixed;left:-310px;top:54px;z-index:9;transition:left .2s}nav.open{left:0}main{padding:1.2rem 1rem}}
+</style>
+<script>document.documentElement.dataset.theme=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')</script>
+</head><body>
+<header><button id="menu" aria-label="menu">☰</button><a class="brand" href="../index.html">⚡ HypervelocityEngineering</a><span class="sp"></span>
+<label>🎨 <select id="theme" aria-label="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="midnight">Midnight</option><option value="ocean">Ocean</option><option value="forest">Forest</option><option value="sunset">Sunset</option><option value="rose">Rose</option></select></label>
+<a href="https://github.com/dahatake/HypervelocityEngineering">GitHub</a></header>
+<div class="layout"><nav><h4>はじめに</h4>
+<a href="../index.html">HypervelocityEngineering — Enterprise App Build Kit</a>
+<a href="../CHANGELOG.html">Changelog</a>
+<h4>ユーザーガイド</h4>
+<a href="01-writing-requests.html">1. 依頼の書き方（/build と runoptions）</a>
+<a href="02-during-and-after-run.html">2. 実行中と終了後</a>
+<a class="cur" href="03-requirements-format.html">3. 管理データの書式</a>
+<a href="04-customization.html">4. 設定とカスタマイズ</a>
+<a href="05-scripts-reference.html">5. スクリプトリファレンス</a>
+<a href="06-quality-gates.html">6. 品質ゲートと検査項目</a>
+<a href="07-troubleshooting.html">7. トラブルシューティング</a>
+<a href="08-roadmap.html">8. 導入ロードマップと KPI</a>
+<a href="09-versioning.html">バージョンアップの手順</a>
+<a href="10-adopting-existing-apps.html">10. 既存のアプリを導入する（Adopt）</a>
+<a href="index.html">EABK ユーザーガイド</a>
+<h4>Studio ガイド</h4>
+<a href="studio/01-first-steps.html">S1 はじめかた</a>
+<a href="studio/02-screens.html">S2 画面の見かた</a>
+<a href="studio/03-tasks.html">S3 こんなとき、どう見るか</a>
+<a href="studio/04-troubleshooting.html">S4 うまく動かないとき・用語集</a>
+<a href="studio/05-product-manager.html">S5 Product Manager 向けガイド</a>
+<a href="studio/06-architect.html">S6 Architect 向けガイド</a>
+<a href="studio/07-software-engineer.html">S7 Software Engineer 向けガイド</a>
+<a href="studio/08-data-reference.html">S8 データリファレンス（どの機能が、どのデータを読むか）</a>
+<a href="studio/README.html">EABK Studio ユーザーガイド（第 2 部）</a>
+<h4>管理データ（docs）</h4>
+<a href="../docs/catalog.html">カタログ</a>
+<a href="../docs/id-registry.html">ID 台帳</a>
+<a href="../docs/manual-tests.html">手順で確かめる受入基準</a>
+<a href="../docs/requirements-definition.html">要求定義書</a>
+<a href="../docs/run-history.html">実行履歴</a></nav>
+<main><h1 id="3">3. 管理データの書式</h1>
+<p>管理データは人が読むドキュメントですが、<code>scripts/verify.py</code> が機械的に検査できるフォーマットで書きます。通常は rd-author・test-designer・implementer が書くので、利用者が手で書く必要はありません。このページは、手で修正するときや、既存のドキュメントを移行するときのリファレンスです。</p>
+<h2 id="31-docsrequirements-definitionmd">3.1 要求定義書（<code>docs/requirements-definition.md</code>）</h2>
+<h3 id="_1">節の構成</h3>
+<p>雛形（インストール時に作成）の節は次のとおりです。</p>
+<p>文書情報・変更履歴 / 概要（目的 <code>G-001</code>）/ 対象と対象外 / 前提・制約（<strong>既定制約</strong>、<strong>PARAM</strong>、<strong>用語</strong>、状態）/ <strong>ペルソナ</strong> / 利用シナリオ / <strong>要求</strong> / ワークスペースとペルソナ別の情報表現 / 外部連携とマスター・ID / 決定記録 / 仮定・未解決事項（<strong>質問票</strong>、承認依頼、ASSUMPTION・TBD・競合、<strong>監査指摘</strong>、提案・仮説）/ 出典台帳（<code>SRC-001</code>）</p>
+<p>要求が 150 件・300KB・業務境界 3 つを超えたら、要求定義書をインデックスにして、境界ごとのファイル <code>docs/requirements/&lt;境界名&gt;.md</code> に分割します。verify は両方を読みます。</p>
+<h3 id="1-1-b">1 要求 1 見出しと構造化欄（ルール B）</h3>
+<pre><code class="language-markdown">#### FR-012 入力の中断と再開
+- 要求: 申請を入力している利用者は、入力を中断して後で再開したときに、入力済みの内容と未完了の項目を確認できる。
+- 決定状態: 承認済み（依頼 2026-10-08）　出自: 依頼原文　優先度: MUST（中断のたびの再入力が離脱の原因）
+- 上位: G-002　出典: SRC-003 §2.1
+- 対象エンティティ: 申請　関係する状態: 下書き→提出済み　参照パラメータ: PARAM-004
+- 関連する既存資産: 共通部品「下書き保存」
+- 受入基準 AC-031: 入力途中で画面を閉じた利用者が、同じアカウントで再び開いたとき、入力済みの値が失われず、未完了の項目が識別できる。保持期間は {PARAM-004} とする。
+  - 検証レベル: system
+- 受入基準 AC-032: 保持期間を過ぎた下書きは一覧に表示されない。
+  - 検証レベル: integration
+  - BLOCKED: Q-007（保持期間の起点が TBD）
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>欄</th>
+<th>必須</th>
+<th>書き方</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>見出し</td>
+<td>○</td>
+<td><code>#### &lt;要求 ID&gt; &lt;短いタイトル&gt;</code>。機能要求は <code>FR-001</code>、非機能要求は <code>NFR-&lt;区分&gt;-001</code>（区分: PERF、SEC、OPS、A11Y、UX など）</td>
+</tr>
+<tr>
+<td>要求</td>
+<td>○</td>
+<td>「［対象者/システム］は、［状況・条件］に、［結果］を満たす。」の形で、1 要求に 1 つの主題だけを書く</td>
+</tr>
+<tr>
+<td>決定状態</td>
+<td>○</td>
+<td><code>承認済み（依頼 YYYY-MM-DD）</code>、<code>承認済み（Q-### YYYY-MM-DD）</code>、<code>承認済み（承認依頼 YYYY-MM-DD）</code>、<code>承認済み（包括承認 YYYY-MM-DD・approval_policy）</code>、<code>AI提案／承認待ち</code>、<code>保留</code>、<code>却下</code>、<code>廃止（依頼 YYYY-MM-DD）</code> のいずれか</td>
+</tr>
+<tr>
+<td>出自</td>
+<td>○</td>
+<td>依頼原文／利用者決定／AI提案</td>
+</tr>
+<tr>
+<td>優先度</td>
+<td>○</td>
+<td>MUST／SHOULD／MAY と、その理由</td>
+</tr>
+<tr>
+<td>上位</td>
+<td>○</td>
+<td><code>G-001</code> などの目的、または「既定制約」</td>
+</tr>
+<tr>
+<td>出典</td>
+<td></td>
+<td><code>SRC-xxx §…</code>（出典台帳に定義した ID。CHK-24）または「依頼原文」など</td>
+</tr>
+<tr>
+<td>対象エンティティ・関係する状態・参照パラメータ</td>
+<td>○</td>
+<td>値がなければ「なし」。対象エンティティは用語の表か状態の表に、関係する状態はそのエンティティの状態の表に定義したものだけを書きます。参照パラメータには、本文・受入基準で <code>{PARAM-xxx}</code> として使う PARAM をすべて書きます（CHK-25）。監査時のクラスタリング（同じ対象・状態・PARAM を持つ要求どうしを突き合わせる）と影響分析に使います</td>
+</tr>
+<tr>
+<td>関連する既存資産</td>
+<td></td>
+<td><code>共通部品「…」</code>・<code>API「…」</code>・<code>テーブル「…」</code> の形で書くと、カタログの該当する表に実在することを検査します（CHK-27）</td>
+</tr>
+<tr>
+<td>受入基準</td>
+<td>MUST は ○</td>
+<td><code>受入基準 AC-xxx: &lt;観察できる結果と判定条件&gt;</code>。その下に <code>検証レベル</code> を書く</td>
+</tr>
+<tr>
+<td>検証レベル</td>
+<td>承認済みは ○</td>
+<td><code>system</code>（System Test の台帳と対応）、<code>integration</code>、<code>unit</code>、<code>manual</code>（<code>docs/manual-tests.md</code> で確認）</td>
+</tr>
+<tr>
+<td>BLOCKED</td>
+<td>該当時</td>
+<td>ブロックの原因（未回答の <code>Q-xxx</code>、<code>TBD</code>、<code>競合</code>）を書きます</td>
+</tr>
+</tbody>
+</table>
+<p>1 行に複数の欄を書くときは、<strong>全角スペース</strong>（<code></code>）で区切ります。</p>
+<h3 id="param">PARAM・用語・質問票</h3>
+<pre><code class="language-markdown">| ID | 名前 | 値 | 単位 | 根拠 | 決定状態 |
+|---|---|---|---|---|---|
+| PARAM-004 | 下書きの保持期間 | 30 | 日 | 依頼原文 | 承認済み |
+
+| 用語 | 定義 | 禁止同義語 |
+|---|---|---|
+| 申請 | 利用者が提出する書類 | 申込、エントリー |
+
+| 対象エンティティ | 状態 | 遷移の条件 |
+|---|---|---|
+| 申請 | 下書き | 入力を始めたとき |
+| 申請 | 提出済み | 提出ボタンを押したとき |
+
+| ID | 重要度 | 質問 | 選択肢 | 推奨 | 状態 | 回答 |
+|---|---|---|---|---|---|---|
+| Q-007 | 高 | 保持期間の起点は | A: 作成時 / B: 最終更新時 | B | 未回答 | |
+</code></pre>
+<ul>
+<li>閾値・期間・件数は本文にハードコードせず、PARAM を <code>{PARAM-004}</code> の形で参照します（CHK-14）。値が未定なら <code>TBD（Q-007）</code> と書きます。</li>
+<li>禁止同義語を使うと、CHK-15 が警告します。</li>
+<li>質問票の「状態」を「回答済み」にすると、その Q を参照している BLOCKED が CHK-18 でエラーになります（回答を反映して BLOCKED を外すきっかけになります）。</li>
+<li>状態の表は 1 行に 1 状態（<code>下書き、提出済み</code> のように 1 つのセルに並べても可）を書きます。要求の「関係する状態」は <code>下書き→提出済み</code> のような遷移でも書けます。</li>
+</ul>
+<h3 id="_2">つながりの規則（体系としての一貫性）</h3>
+<p>要求定義書とカタログは、ばらばらの文書ではなく、ID と名前でつながった 1 つのデータとして扱います。verify は次のつながりを双方向に検査します。</p>
+<table>
+<thead>
+<tr>
+<th>つながり</th>
+<th>規則</th>
+<th>検査</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>目的 → 要求 → 受入基準</td>
+<td>要求は上位の G を、受入基準は要求を持つ。承認済みの要求を持たない G は警告</td>
+<td>CHK-03・04</td>
+</tr>
+<tr>
+<td>受入基準 ⇔ System Test の台帳 ⇔ テスト</td>
+<td>system の AC と台帳のケースが 1:1。実装済みの MUST の ID がテストにある</td>
+<td>CHK-09・10・11</td>
+</tr>
+<tr>
+<td>要求 → 用語・状態・PARAM・出典</td>
+<td>構造化欄が定義を指す。どこからも使われない定義は警告</td>
+<td>CHK-16・24・25・26</td>
+</tr>
+<tr>
+<td>要求 ⇔ カタログ</td>
+<td>承認済み・承認待ち・保留の要求は機能の表に 1 行。決定状態・題名が一致</td>
+<td>CHK-07</td>
+</tr>
+<tr>
+<td>カタログの表どうし</td>
+<td>機能の表の「使っている共通部品」と共通部品の表の「使っている要求 ID」が一致。API・テーブル・共通部品の表の要求 ID が実在</td>
+<td>CHK-24・27</td>
+</tr>
+<tr>
+<td>すべての ID</td>
+<td>本文・表・カタログに書いた ID は定義されている（参照先のないリンクを作らない）</td>
+<td>CHK-19・24</td>
+</tr>
+</tbody>
+</table>
+<p>つながりは <code>python scripts/rdcheck.py trace FR-012</code>（要求の上流の G・出典、横の用語・状態・PARAM、下流の AC・台帳のケース・カタログ・コード）、<code>trace G-002</code>、<code>trace 申請</code>、<code>trace PARAM-004</code>、<code>trace 下書き保存</code> で確認できます。要求を変えるときの影響範囲の確認に使います。</p>
+<h3 id="ui_policy">既定制約（ui_policy）</h3>
+<p>元になった Prompt が常に求める UI の方針（利用者がレイアウトを変更できる UI、ペルソナ別の情報表現）を「既定制約」の節に書きます。画面を持たないアプリ（バッチ・API のみ）は、前提・制約にその事実と根拠を「画面を持たない」と書けば省略できます（CHK-20）。</p>
+<h2 id="32-docscatalogmd">3.2 カタログ（<code>docs/catalog.md</code>）</h2>
+<p>4 つの表で構成します。1 行に 1 項目を書き、詳細はリンク先に任せます。</p>
+<pre><code class="language-markdown">## 機能
+| 要求 ID | 題名 | 決定状態 | 実装ファイル | テスト | 使っている共通部品 |
+|---|---|---|---|---|---|
+| FR-012 | 入力の中断と再開 | 承認済み | src/drafts/service.ts | tests/unit/drafts.test.ts | 下書き保存 |
+| FR-013 | 申請の取消 | 承認済み | 未実装 | 未実装 | なし |
+
+## API・イベント
+| 名前 | 定義ファイル | 関連する要求 ID |
+## テーブル
+| テーブル名 | 定義ファイル | 正本のシステム | 関連する要求 ID |
+## 共通部品
+| 部品名 | ファイル | 用途 | 使っている要求 ID |
+</code></pre>
+<ul>
+<li>決定状態・題名は要求定義書と一致させ、承認済み・承認待ち・保留の要求はすべて機能の表に 1 行ずつ載せます（CHK-07）。ファイルの列に書いたパスは実在している必要があります（CHK-08）。</li>
+<li>機能の表の「使っている共通部品」に書いた部品は共通部品の表に載せ、共通部品の表の「使っている要求 ID」は機能の表と一致させます（CHK-27。<code>rdfix.py --only catalog --apply</code> で機能の表に合わせられます）。API・テーブル・共通部品の表の「関連する要求 ID」は要求定義書に実在する ID にします（CHK-24）。</li>
+<li>未実装の要求は「未実装」と書きます。実装済みの MUST 要求の ID は、テストコード（テスト名か直前のコメント）か <code>docs/manual-tests.md</code> に出現している必要があります（CHK-09）。</li>
+</ul>
+<h2 id="33-id-docsid-registrymd">3.3 ID 台帳（<code>docs/id-registry.md</code>）</h2>
+<p>行を追加できるのは <code>scripts/next-id.py</code> だけです。手で編集すると hook が拒否します（G-3）。</p>
+<table>
+<thead>
+<tr>
+<th>状態</th>
+<th>意味</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>採番済み</td>
+<td>採番したが、まだ本文にない</td>
+</tr>
+<tr>
+<td>使用中</td>
+<td>本文にある</td>
+</tr>
+<tr>
+<td>廃止</td>
+<td>本文に「廃止」として残っている</td>
+</tr>
+<tr>
+<td>削除済み</td>
+<td>本文から外した。<strong>再利用禁止</strong>（CHK-02）</td>
+</tr>
+<tr>
+<td>欠番</td>
+<td>採番したが使わなかった。再利用禁止</td>
+</tr>
+</tbody>
+</table>
+<p>並行するブランチが同時に行を追加してもコンフリクトしないように、<code>.gitattributes</code> で <code>merge=union</code> を指定しています。worktree をまたいだ採番は、git の共通ディレクトリにある <code>ebak-id-alloc.json</code> で排他制御します。</p>
+<h2 id="34-system-test-testssystemledgerjson">3.4 System Test の台帳（<code>tests/system/ledger.json</code>）</h2>
+<pre><code class="language-json">{
+  &quot;version&quot;: 1,
+  &quot;ac_digests&quot;: { &quot;AC-031&quot;: &quot;sha256:3f6c0a1b2c3d4e5f&quot; },
+  &quot;cases&quot;: [
+    {
+      &quot;id&quot;: &quot;E2E-001&quot;,
+      &quot;requirement_ids&quot;: [&quot;FR-012&quot;],
+      &quot;ac_ids&quot;: [&quot;AC-031&quot;],
+      &quot;title&quot;: &quot;中断した入力を再開できる&quot;,
+      &quot;layer&quot;: &quot;e2e&quot;,
+      &quot;command&quot;: &quot;npx playwright test tests/system/e2e/fr-012.spec.ts&quot;,
+      &quot;canary&quot;: true,
+      &quot;status&quot;: &quot;pass&quot;,
+      &quot;last_commit&quot;: &quot;a1b2c3d&quot;,
+      &quot;last_run_at&quot;: &quot;2026-10-08T10:15:00+09:00&quot;,
+      &quot;evidence&quot;: &quot;work/runs/202610080900/logs/system-test/E2E-001-202610081015.log&quot;,
+      &quot;history&quot;: [{ &quot;at&quot;: &quot;…&quot;, &quot;by&quot;: &quot;test-designer&quot;, &quot;change&quot;: &quot;追加&quot;, &quot;reason&quot;: &quot;受入基準からケースを作成&quot; }]
+    }
+  ]
+}
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>キー</th>
+<th>意味</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>layer が e2e なら <code>E2E-001</code>、それ以外は <code>IT-001</code>。削除しても再利用しません</td>
+</tr>
+<tr>
+<td><code>layer</code></td>
+<td>e2e、api、contract、data、nonfunctional、ai_eval</td>
+</tr>
+<tr>
+<td><code>command</code></td>
+<td>リポジトリのルートから非対話で実行でき、成功時に exit 0 を返すコマンド</td>
+</tr>
+<tr>
+<td><code>canary</code></td>
+<td>最初に実行する主要フロー（スモークテスト）</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>not_run、pass、fail、blocked（pass/fail は実際の実行結果でのみ設定される）</td>
+</tr>
+<tr>
+<td><code>evidence</code></td>
+<td>最後の実行のログ（<code>/work</code> の下。保持期間を過ぎると消えるので、必要なら再実行して作り直します）</td>
+</tr>
+<tr>
+<td><code>ac_digests</code></td>
+<td>AC の本文（PARAM を展開したもの）のダイジェスト。AC が変更されると CHK-11 が検出します</td>
+</tr>
+</tbody>
+</table>
+<p><strong>「1:1」の定義</strong>: 承認済みで、BLOCKED でなく、検証レベルが system の AC と、台帳のケースが双方向に対応していて（1 つの AC に複数のケースがあってもよい）、ダイジェストが一致している状態を指します。</p>
+<p>台帳は <code>scripts/ledger.py</code> 経由でだけ更新します（直接の編集は hook G-2 が拒否します）。ケースは削除できません。不要になったケースは <code>ledger.py block --reason</code> で blocked にし、理由を history に残します。</p>
+<h2 id="35-docsrun-historymd">3.5 実行履歴（<code>docs/run-history.md</code>）</h2>
+<p><code>run-state.py finish</code> が、1 run につき 1 行を追記します。列は run-id、開始、終了、HEAD、結果、実装した要求 ID、BLOCKED、AC pass 率、経過時間、1 回目のゲート通過率、AI クレジット、人の介入、検証済み要求です。run-id は一意である必要があります（CHK-23）。1.1.0 以前の表に追記するときは、「人の介入」と「検証済み要求」の列を自動で足し、過去の行には <code>-</code> を入れます。</p><footer>出典: <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/users-guide/03-requirements-format.md">users-guide/03-requirements-format.md</a></footer></main></div>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"></script>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark=['dark','midnight'].includes(document.documentElement.dataset.theme);
+mermaid.initialize({startOnLoad:false,theme:dark?'dark':'default'});
+await mermaid.run({querySelector:'pre.mermaid'});
+</script>
+<script>document.querySelectorAll('pre code').forEach(e=>hljs.highlightElement(e));
+const t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+const sel=document.getElementById('theme');
+function setT(v){document.documentElement.dataset.theme=v;localStorage.setItem('theme',v);sel.value=v;
+ const hl=document.getElementById('hl');if(hl)hl.href='https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github'+(['dark','midnight'].includes(v)?'-dark':'')+'.min.css';}
+sel.onchange=()=>setT(sel.value);setT(t);
+document.getElementById('menu').onclick=()=>document.querySelector('nav').classList.toggle('open');
+document.querySelector('nav a.cur')?.scrollIntoView({block:'center'});
+</script>
+</body></html>

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>2. 実行中と終了後 — HypervelocityEngineering</title>
+<link id="hl" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+<style>
+:root{--bg:#fff;--fg:#1f2328;--muted:#656d76;--card:#f6f8fa;--bd:#d0d7de;--ac:#0969da;--side:#f6f8fa;--code:#eff1f3;--r:10px}
+[data-theme=dark]{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--card:#161b22;--bd:#30363d;--ac:#58a6ff;--side:#010409;--code:#1c2128}
+[data-theme=midnight]{--bg:#0f1226;--fg:#e4e7ff;--muted:#9aa0cc;--card:#171a3a;--bd:#2c3062;--ac:#8b9cff;--side:#0a0c1d;--code:#1d2147}
+[data-theme=ocean]{--bg:#f2fafc;--fg:#0c2d3a;--muted:#4f7583;--card:#e0f2f7;--bd:#b4dce6;--ac:#0087a8;--side:#dcf0f5;--code:#d3ebf1}
+[data-theme=forest]{--bg:#f4f8f2;--fg:#1c2b1e;--muted:#5a6f5c;--card:#e6efe2;--bd:#c3d6bd;--ac:#2f7d3a;--side:#e1ecdc;--code:#dae7d5}
+[data-theme=sunset]{--bg:#fff8f2;--fg:#3a2118;--muted:#8a6252;--card:#ffebdc;--bd:#f2cdb3;--ac:#d9480f;--side:#ffeede;--code:#fde1cc}
+[data-theme=rose]{--bg:#fff6f8;--fg:#3a1c26;--muted:#8d5a6b;--card:#ffe6ec;--bd:#f2c2cf;--ac:#c2255c;--side:#ffe9ef;--code:#fcdbe4}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 system-ui,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;transition:background .2s,color .2s}
+a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;padding:.6rem 1.2rem;background:var(--card);border-bottom:1px solid var(--bd);backdrop-filter:blur(6px)}
+header .brand{font-weight:700;color:var(--fg)}header .sp{flex:1}
+header select,header button{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:.3rem .6rem;font:inherit;font-size:.9rem}
+#menu{display:none}
+.layout{display:flex;min-height:calc(100vh - 54px)}
+nav{width:290px;flex:none;background:var(--side);border-right:1px solid var(--bd);padding:1rem;position:sticky;top:54px;height:calc(100vh - 54px);overflow:auto;font-size:.9rem}
+nav h4{margin:1.1rem 0 .3rem;color:var(--muted);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
+nav a{display:block;padding:.25rem .6rem;border-radius:6px;color:var(--fg);line-height:1.4}
+nav a:hover{background:var(--card);text-decoration:none}
+nav a.cur{background:var(--ac);color:#fff}
+main{flex:1;min-width:0;max-width:900px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1,h2{border-bottom:1px solid var(--bd);padding-bottom:.3rem}
+h1,h2,h3,h4{line-height:1.3;scroll-margin-top:70px}
+img{max-width:100%;height:auto;border-radius:var(--r);border:1px solid var(--bd)}
+pre{background:var(--code);border:1px solid var(--bd);border-radius:var(--r);padding:1rem;overflow:auto;line-height:1.5;font-size:.88rem}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font:.88em ui-monospace,Consolas,monospace}
+pre code{background:none;padding:0}
+pre.mermaid{background:var(--card);text-align:center}
+table{border-collapse:collapse;display:block;overflow:auto;margin:1rem 0}
+th,td{border:1px solid var(--bd);padding:.45rem .8rem;vertical-align:top}
+th{background:var(--card)}tr:nth-child(even) td{background:color-mix(in srgb,var(--card) 50%,transparent)}
+blockquote{margin:1rem 0;padding:.2rem 1rem;border-left:4px solid var(--ac);background:var(--card);border-radius:0 var(--r) var(--r) 0;color:var(--muted)}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var(--muted);font-size:.85rem}
+@media(max-width:820px){#menu{display:inline-block}nav{position:fixed;left:-310px;top:54px;z-index:9;transition:left .2s}nav.open{left:0}main{padding:1.2rem 1rem}}
+</style>
+<script>document.documentElement.dataset.theme=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')</script>
+</head><body>
+<header><button id="menu" aria-label="menu">☰</button><a class="brand" href="../index.html">⚡ HypervelocityEngineering</a><span class="sp"></span>
+<label>🎨 <select id="theme" aria-label="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="midnight">Midnight</option><option value="ocean">Ocean</option><option value="forest">Forest</option><option value="sunset">Sunset</option><option value="rose">Rose</option></select></label>
+<a href="https://github.com/dahatake/HypervelocityEngineering">GitHub</a></header>
+<div class="layout"><nav><h4>はじめに</h4>
+<a href="../index.html">HypervelocityEngineering — Enterprise App Build Kit</a>
+<a href="../CHANGELOG.html">Changelog</a>
+<h4>ユーザーガイド</h4>
+<a href="01-writing-requests.html">1. 依頼の書き方（/build と runoptions）</a>
+<a class="cur" href="02-during-and-after-run.html">2. 実行中と終了後</a>
+<a href="03-requirements-format.html">3. 管理データの書式</a>
+<a href="04-customization.html">4. 設定とカスタマイズ</a>
+<a href="05-scripts-reference.html">5. スクリプトリファレンス</a>
+<a href="06-quality-gates.html">6. 品質ゲートと検査項目</a>
+<a href="07-troubleshooting.html">7. トラブルシューティング</a>
+<a href="08-roadmap.html">8. 導入ロードマップと KPI</a>
+<a href="09-versioning.html">バージョンアップの手順</a>
+<a href="10-adopting-existing-apps.html">10. 既存のアプリを導入する（Adopt）</a>
+<a href="index.html">EABK ユーザーガイド</a>
+<h4>Studio ガイド</h4>
+<a href="studio/01-first-steps.html">S1 はじめかた</a>
+<a href="studio/02-screens.html">S2 画面の見かた</a>
+<a href="studio/03-tasks.html">S3 こんなとき、どう見るか</a>
+<a href="studio/04-troubleshooting.html">S4 うまく動かないとき・用語集</a>
+<a href="studio/05-product-manager.html">S5 Product Manager 向けガイド</a>
+<a href="studio/06-architect.html">S6 Architect 向けガイド</a>
+<a href="studio/07-software-engineer.html">S7 Software Engineer 向けガイド</a>
+<a href="studio/08-data-reference.html">S8 データリファレンス（どの機能が、どのデータを読むか）</a>
+<a href="studio/README.html">EABK Studio ユーザーガイド（第 2 部）</a>
+<h4>管理データ（docs）</h4>
+<a href="../docs/catalog.html">カタログ</a>
+<a href="../docs/id-registry.html">ID 台帳</a>
+<a href="../docs/manual-tests.html">手順で確かめる受入基準</a>
+<a href="../docs/requirements-definition.html">要求定義書</a>
+<a href="../docs/run-history.html">実行履歴</a></nav>
+<main><h1 id="2">2. 実行中と終了後</h1>
+<h2 id="21">2.1 進捗を確認する</h2>
+<p>conductor の作業ツリー（VS Code の New Worktree や GitHub Copilot app の新しい作業ツリーなら、そのセッションの worktree）で次のコマンドを実行します。どれも読み取り専用で、実行中の run には影響しません。GitHub Copilot app の worktree は、既定では <code>&lt;リポジトリの親&gt;/copilot-worktrees/&lt;リポジトリ名&gt;/&lt;ブランチ名&gt;</code> にあります（<code>git worktree list</code> で確認できます）。</p>
+<pre><code class="language-bash">python scripts/run-state.py status          # run-id、経過時間と時間予算、統合ブランチ、工程、queue の件数、progress の末尾
+python scripts/run-state.py queue show      # 項目ごとの状態・試行回数・ブランチ
+python scripts/ledger.py summary -v         # System Test の pass / fail / blocked / not_run
+git log --oneline --graph -20               # [RD] [ST] [FR-xxx] の commit と統合
+</code></pre>
+<p>hook が拒否・差し戻した操作は <code>work/.ebak/gate.log</code> に記録されます。</p>
+<h2 id="22">2.2 停止したときの再開</h2>
+<p>状態は <code>/work</code> のファイルと git に永続化されているので、どの時点で止まっても続きから再開できます。</p>
+<table>
+<thead>
+<tr>
+<th>状況</th>
+<th>対処</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Autopilot がターンを終えたが、完了条件を満たしていない</td>
+<td>同じセッションで「続けて」と送信します。agentStop の hook が、完了条件を満たすまで自動で継続させます（上限 40 回）</td>
+</tr>
+<tr>
+<td>PC の再起動・Agent Host の停止</td>
+<td>新しいセッションで、同じ Prompt をもう一度送信します。conductor は <code>RESUME &lt;run-id&gt;</code> として、<code>/work</code> の状態ファイルと git から続きを再開します</td>
+</tr>
+<tr>
+<td>GitHub Copilot app の再起動・セッションの中断</td>
+<td>サイドバーから<strong>同じセッション</strong>を開き、「続けて」と送信します。新しい作業ツリーのセッションを新しく作ると別の worktree になり、<code>/work</code> の状態がないため新しい run として始まってしまいます。ローカル リポジトリで実行していた場合は、新しいセッションでも再開できます</td>
+</tr>
+<tr>
+<td>途中でやめたい</td>
+<td>セッションを停止します。そこまでに統合した項目は、統合ブランチに commit 済みです。<code>work/current-run.txt</code> を削除すると、次の依頼は新しい run として始まります</td>
+</tr>
+</tbody>
+</table>
+<p>conductor が自分で停止する条件:</p>
+<table>
+<thead>
+<tr>
+<th>条件</th>
+<th>動作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>queue のすべての項目が done または blocked</td>
+<td>工程 6 に進んで終了する</td>
+</tr>
+<tr>
+<td><code>max_hours</code> の 85% を超えた</td>
+<td>新しい項目には着手せず、工程 6 に進む</td>
+</tr>
+<tr>
+<td>同じ項目がゲートで 3 回続けて失敗した</td>
+<td>上位モデルで 1 回だけ再挑戦し、それでも失敗したら blocked にして原因を記録する</td>
+</tr>
+<tr>
+<td>canary が失敗し、3 回修正しても直らない</td>
+<td>実装ループを止めて、工程 6 に進む</td>
+</tr>
+<tr>
+<td>直前の統合で、統合ブランチの verify が失敗に変わった</td>
+<td>その統合を取り消し、項目を todo に戻す</td>
+</tr>
+</tbody>
+</table>
+<p>終了の判定は、モデルの「完了した」という自己申告ではなく、<code>python scripts/run-state.py complete-check</code> が exit 0 を返すことで行います。exit 0 の条件は、queue に todo・doing がない、工程 6 が終わっている、run-report.md がある、の 3 つです。</p>
+<h2 id="23">2.3 終了後に読むもの</h2>
+<p><code>work/runs/&lt;run-id&gt;/run-report.md</code> には次の内容があります。</p>
+<ul>
+<li>1 行目: 結果（全件完了／blocked あり／時間予算で中止／canary 失敗で中止）、経過時間、AI クレジット</li>
+<li>実装した要求 ID、BLOCKED の要求 ID とその理由</li>
+<li><strong>包括承認した項目</strong>（影響の大きい順）… 意図と違えば、次の <code>&lt;answers&gt;</code> で取り消します</li>
+<li><strong>未回答の質問票</strong>（重要度の高い順）… 次の <code>&lt;answers&gt;</code> にそのまま書ける形式です</li>
+<li>品質メトリクス: verify、AC の pass 率、監査の指摘（CRITICAL・HIGH の件数）</li>
+<li><strong>KPI</strong>: North Star「人の介入 1 回あたりの検証済み要求」、1 回目のゲート通過率、トレーサビリティ網羅率など。HTML 版は <code>work/runs/&lt;run-id&gt;/kpi.html</code> です。過去の run を通した集計は <code>python scripts/kpi.py history</code> で表示できます</li>
+<li>マージ方法: 統合ブランチ名と、マージのコマンド</li>
+</ul>
+<p><code>/work</code> は 14 日で削除されますが、要点は次の永続的な場所に転記されています。要求・カタログ・試験の状態は、<a href="studio/README.html">EABK Studio</a>（<code>python EABK-Studio/studio.py</code>）で図と表として確認できます。</p>
+<table>
+<thead>
+<tr>
+<th>情報</th>
+<th>場所</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>run の要約と KPI（1 run 1 行）</td>
+<td><code>docs/run-history.md</code></td>
+</tr>
+<tr>
+<td>包括承認・回答を反映した決定</td>
+<td>要求定義書の「決定記録」</td>
+</tr>
+<tr>
+<td>未回答の質問票・承認依頼</td>
+<td>要求定義書の「仮定・未解決事項」</td>
+</tr>
+<tr>
+<td>未解決の監査指摘</td>
+<td>要求定義書の「監査指摘」</td>
+</tr>
+<tr>
+<td>System Test の最新の状態</td>
+<td><code>tests/system/ledger.json</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="24">2.4 マージする</h2>
+<p>結果が「全件完了」で最終の verify が通った run は、conductor が統合ブランチ <code>run/&lt;run-id&gt;</code> をローカルの main へ <code>--no-ff</code> でマージし、統合ブランチを削除します（main への push はしません）。マージが競合したり verify が失敗したりした場合、および「blocked あり」「時間予算で中止」「canary 失敗で中止」の run は、取り込まずにブランチを残します。その場合や VS Code の New Worktree・GitHub Copilot app の新しい作業ツリー（そのセッションのブランチ）では、次のように手動で取り込みます。</p>
+<pre><code class="language-bash">git switch main
+git merge --no-ff run/202610080900          # ローカルでマージする
+# または
+git push origin run/202610080900 &amp;&amp; gh pr create --base main --head run/202610080900   # PR でマージする（CI の ebak-verify が再検証）
+</code></pre>
+<p><code>git_push: 作業ブランチへ push する</code> を指定していれば、conductor は取り込みの前に統合ブランチを push します（バックアップ。PR は作りません）。</p>
+<p>GitHub Copilot app の新しい作業ツリーで実行した run は、セッションのブランチが統合ブランチです（<code>run-state.py status</code> の <code>integration:</code>）。conductor は main へマージしないので、アプリのプル要求の作成機能で PR を作るか、上のコマンドの <code>run/&lt;run-id&gt;</code> をセッションのブランチ名に置き換えて取り込みます。取り込みが終わるまで、セッションをアーカイブ・削除しないでください（worktree と <code>/work</code> の報告が消えることがあります）。</p>
+<p>自動マージの前に確認したい場合は、<code>git diff main...&lt;統合ブランチ&gt;</code> を取り込み前に見ることはできないため、事後に <code>git revert -m 1 &lt;マージ commit&gt;</code> で戻します。</p>
+<p>手動でマージする場合は、その前に少なくとも次の 3 点を確認します。</p>
+<ol>
+<li><code>run-report.md</code> の結果と「包括承認した項目」</li>
+<li><code>git diff main...&lt;統合ブランチ&gt; -- docs/requirements-definition.md</code>（要求の変更点）</li>
+<li><code>python scripts/verify.py --strict</code> が PASS になること</li>
+</ol>
+<h2 id="25">2.5 次の依頼</h2>
+<p>回答と新しい要望を 1 つの Prompt にまとめて送信できます。</p>
+<pre><code class="language-text">&lt;request&gt;
+（新しい要望。なければ空）
+&lt;/request&gt;
+&lt;answers&gt;
+Q-003: B
+残りはすべて推奨どおり
+&lt;/answers&gt;
+</code></pre>
+<h2 id="26-work">2.6 /work のクリーンアップ</h2>
+<p>清掃は保持期間ではなく、正常完了の証拠で許可されます。結果が「全件完了」で、完了条件、最終 verify、対象テスト、main への統合、main 上の統合後 verify が順に成功し、清掃前版 <code>run-report.md</code> が確定した run だけを清掃します。それ以外（blocked、中止、失敗、未達、report 不足）は再開できるよう自動期限なく保持します。</p>
+<p>清掃前版 report には main の統合 commit、各ゲートの構造化結果、清掃候補、保護・保持する資産と理由が含まれます。清掃後は候補別の削除・保持・失敗と run 最終状態だけを追記します。途中で失敗すると以後の削除を止めて非 0 で終了し、残存候補だけを再検査して安全に再試行できます。</p>
+<pre><code class="language-bash">python scripts/clean-work.py --dry-run   # 候補・保護理由・実行予定を確認（変更なし）
+python scripts/clean-work.py             # 削除直前に所有権と状態を再検査
+</code></pre><footer>出典: <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/users-guide/02-during-and-after-run.md">users-guide/02-during-and-after-run.md</a></footer></main></div>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"></script>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark=['dark','midnight'].includes(document.documentElement.dataset.theme);
+mermaid.initialize({startOnLoad:false,theme:dark?'dark':'default'});
+await mermaid.run({querySelector:'pre.mermaid'});
+</script>
+<script>document.querySelectorAll('pre code').forEach(e=>hljs.highlightElement(e));
+const t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+const sel=document.getElementById('theme');
+function setT(v){document.documentElement.dataset.theme=v;localStorage.setItem('theme',v);sel.value=v;
+ const hl=document.getElementById('hl');if(hl)hl.href='https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github'+(['dark','midnight'].includes(v)?'-dark':'')+'.min.css';}
+sel.onchange=()=>setT(sel.value);setT(t);
+document.getElementById('menu').onclick=()=>document.querySelector('nav').classList.toggle('open');
+document.querySelector('nav a.cur')?.scrollIntoView({block:'center'});
+</script>
+</body></html>

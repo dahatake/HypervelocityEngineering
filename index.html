@@ -1,29 +1,1356 @@
 <!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HypervelocityEngineering — Enterprise App Build Kit</title>
+<html lang="ja" data-theme="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HypervelocityEngineering — Enterprise App Build Kit — HypervelocityEngineering</title>
+<link id="hl" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
 <style>
-body{font-family:system-ui,"Segoe UI",sans-serif;max-width:760px;margin:3rem auto;padding:0 1rem;line-height:1.7;color:#1f2328}
-h1{border-bottom:1px solid #d0d7de;padding-bottom:.3rem}
-a{color:#0969da}
-li{margin:.3rem 0}
+:root{--bg:#fff;--fg:#1f2328;--muted:#656d76;--card:#f6f8fa;--bd:#d0d7de;--ac:#0969da;--side:#f6f8fa;--code:#eff1f3;--r:10px}
+[data-theme=dark]{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--card:#161b22;--bd:#30363d;--ac:#58a6ff;--side:#010409;--code:#1c2128}
+[data-theme=midnight]{--bg:#0f1226;--fg:#e4e7ff;--muted:#9aa0cc;--card:#171a3a;--bd:#2c3062;--ac:#8b9cff;--side:#0a0c1d;--code:#1d2147}
+[data-theme=ocean]{--bg:#f2fafc;--fg:#0c2d3a;--muted:#4f7583;--card:#e0f2f7;--bd:#b4dce6;--ac:#0087a8;--side:#dcf0f5;--code:#d3ebf1}
+[data-theme=forest]{--bg:#f4f8f2;--fg:#1c2b1e;--muted:#5a6f5c;--card:#e6efe2;--bd:#c3d6bd;--ac:#2f7d3a;--side:#e1ecdc;--code:#dae7d5}
+[data-theme=sunset]{--bg:#fff8f2;--fg:#3a2118;--muted:#8a6252;--card:#ffebdc;--bd:#f2cdb3;--ac:#d9480f;--side:#ffeede;--code:#fde1cc}
+[data-theme=rose]{--bg:#fff6f8;--fg:#3a1c26;--muted:#8d5a6b;--card:#ffe6ec;--bd:#f2c2cf;--ac:#c2255c;--side:#ffe9ef;--code:#fcdbe4}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 system-ui,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;transition:background .2s,color .2s}
+a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;padding:.6rem 1.2rem;background:var(--card);border-bottom:1px solid var(--bd);backdrop-filter:blur(6px)}
+header .brand{font-weight:700;color:var(--fg)}header .sp{flex:1}
+header select,header button{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:.3rem .6rem;font:inherit;font-size:.9rem}
+#menu{display:none}
+.layout{display:flex;min-height:calc(100vh - 54px)}
+nav{width:290px;flex:none;background:var(--side);border-right:1px solid var(--bd);padding:1rem;position:sticky;top:54px;height:calc(100vh - 54px);overflow:auto;font-size:.9rem}
+nav h4{margin:1.1rem 0 .3rem;color:var(--muted);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
+nav a{display:block;padding:.25rem .6rem;border-radius:6px;color:var(--fg);line-height:1.4}
+nav a:hover{background:var(--card);text-decoration:none}
+nav a.cur{background:var(--ac);color:#fff}
+main{flex:1;min-width:0;max-width:900px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1,h2{border-bottom:1px solid var(--bd);padding-bottom:.3rem}
+h1,h2,h3,h4{line-height:1.3;scroll-margin-top:70px}
+img{max-width:100%;height:auto;border-radius:var(--r);border:1px solid var(--bd)}
+pre{background:var(--code);border:1px solid var(--bd);border-radius:var(--r);padding:1rem;overflow:auto;line-height:1.5;font-size:.88rem}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font:.88em ui-monospace,Consolas,monospace}
+pre code{background:none;padding:0}
+pre.mermaid{background:var(--card);text-align:center}
+table{border-collapse:collapse;display:block;overflow:auto;margin:1rem 0}
+th,td{border:1px solid var(--bd);padding:.45rem .8rem;vertical-align:top}
+th{background:var(--card)}tr:nth-child(even) td{background:color-mix(in srgb,var(--card) 50%,transparent)}
+blockquote{margin:1rem 0;padding:.2rem 1rem;border-left:4px solid var(--ac);background:var(--card);border-radius:0 var(--r) var(--r) 0;color:var(--muted)}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var(--muted);font-size:.85rem}
+@media(max-width:820px){#menu{display:inline-block}nav{position:fixed;left:-310px;top:54px;z-index:9;transition:left .2s}nav.open{left:0}main{padding:1.2rem 1rem}}
 </style>
-</head>
-<body>
-<h1>HypervelocityEngineering</h1>
-<p>Enterprise App Build Kit — GitHub Copilot 用のマルチエージェント開発 toolkit。要求定義書・カタログ・System Test の整合性を保ったまま、アプリケーションを最高品質・最短時間・最小 Token で実装します。</p>
+<script>document.documentElement.dataset.theme=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')</script>
+</head><body>
+<header><button id="menu" aria-label="menu">☰</button><a class="brand" href="index.html">⚡ HypervelocityEngineering</a><span class="sp"></span>
+<label>🎨 <select id="theme" aria-label="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="midnight">Midnight</option><option value="ocean">Ocean</option><option value="forest">Forest</option><option value="sunset">Sunset</option><option value="rose">Rose</option></select></label>
+<a href="https://github.com/dahatake/HypervelocityEngineering">GitHub</a></header>
+<div class="layout"><nav><h4>はじめに</h4>
+<a class="cur" href="index.html">HypervelocityEngineering — Enterprise App Build Kit</a>
+<a href="CHANGELOG.html">Changelog</a>
+<h4>ユーザーガイド</h4>
+<a href="users-guide/01-writing-requests.html">1. 依頼の書き方（/build と runoptions）</a>
+<a href="users-guide/02-during-and-after-run.html">2. 実行中と終了後</a>
+<a href="users-guide/03-requirements-format.html">3. 管理データの書式</a>
+<a href="users-guide/04-customization.html">4. 設定とカスタマイズ</a>
+<a href="users-guide/05-scripts-reference.html">5. スクリプトリファレンス</a>
+<a href="users-guide/06-quality-gates.html">6. 品質ゲートと検査項目</a>
+<a href="users-guide/07-troubleshooting.html">7. トラブルシューティング</a>
+<a href="users-guide/08-roadmap.html">8. 導入ロードマップと KPI</a>
+<a href="users-guide/09-versioning.html">バージョンアップの手順</a>
+<a href="users-guide/10-adopting-existing-apps.html">10. 既存のアプリを導入する（Adopt）</a>
+<a href="users-guide/index.html">EABK ユーザーガイド</a>
+<h4>Studio ガイド</h4>
+<a href="users-guide/studio/01-first-steps.html">S1 はじめかた</a>
+<a href="users-guide/studio/02-screens.html">S2 画面の見かた</a>
+<a href="users-guide/studio/03-tasks.html">S3 こんなとき、どう見るか</a>
+<a href="users-guide/studio/04-troubleshooting.html">S4 うまく動かないとき・用語集</a>
+<a href="users-guide/studio/05-product-manager.html">S5 Product Manager 向けガイド</a>
+<a href="users-guide/studio/06-architect.html">S6 Architect 向けガイド</a>
+<a href="users-guide/studio/07-software-engineer.html">S7 Software Engineer 向けガイド</a>
+<a href="users-guide/studio/08-data-reference.html">S8 データリファレンス（どの機能が、どのデータを読むか）</a>
+<a href="users-guide/studio/README.html">EABK Studio ユーザーガイド（第 2 部）</a>
+<h4>管理データ（docs）</h4>
+<a href="docs/catalog.html">カタログ</a>
+<a href="docs/id-registry.html">ID 台帳</a>
+<a href="docs/manual-tests.html">手順で確かめる受入基準</a>
+<a href="docs/requirements-definition.html">要求定義書</a>
+<a href="docs/run-history.html">実行履歴</a></nav>
+<main><h1 id="hypervelocityengineering-enterprise-app-build-kit">HypervelocityEngineering — Enterprise App Build Kit</h1>
+<p>GitHub Copilot（VS Code の Agents ウィンドウ / Copilot CLI / GitHub Copilot app）用のマルチエージェント開発 toolkit です。要求定義書・カタログ・System Test の整合性を保ったまま、アプリケーションを<strong>最高品質・最短時間・最小 Token</strong> で実装することを目指します。</p>
 <ul>
-<li>オーケストレーター <code>conductor</code> に Prompt を 1 回送るだけで、要求定義から実装・検証・報告まで無人で実行します。</li>
-<li>品質規則は hook と決定的スクリプトで強制します。</li>
+<li>やることは、オーケストレーターのエージェント <code>conductor</code> に Prompt を <strong>1 回</strong>送るだけです。</li>
+<li>conductor は、要求定義 → 独立監査 → System Test の先行設計 → 並行実装 → 直列の統合 → 最終監査 → 報告 までを、最大 24〜48 時間、人の介入なしで実行します。</li>
+<li>品質を左右する規則は、LLM の判断に任せずに hook と決定的スクリプト（LLM を使わず、同じ入力から常に同じ結果を返すスクリプト）で強制します。具体的には次の 4 つです。</li>
+<li>要求定義書を書けるエージェントは 1 つだけ</li>
+<li>実装担当は System Test を変更できない</li>
+<li>終了前に必ず検証する</li>
+<li>危険な操作は拒否する</li>
+<li>これらの規則の多くは、<code>/build</code> で run を開始したときだけ働きます。<code>/build</code> 以外の Prompt で変更を依頼するリスクは、<a href="#重要-build-以外の-prompt-を送るときのリスク">重要: <code>/build</code> 以外の Prompt を送るときのリスク</a> を参照してください。</li>
+<li><a href="https://github.com/github/spec-kit">GitHub Spec Kit</a> で書いた仕様を取り込み、実装と検証を conductor に任せることもできます（<a href="#github-spec-kit-との連携">GitHub Spec Kit との連携</a>）。</li>
+<li>すでにソースコード・設計書があるアプリ（brownfield）にも使えます。まず <code>python scripts/adopt.py scan</code> で棚卸しし、逆生成の要求の仮説（承認待ち）と現状の挙動の固定からデータ層を整えます（<a href="users-guide/10-adopting-existing-apps.html">既存のアプリを導入する</a>）。</li>
 </ul>
-<h2>リンク</h2>
+<h2 id="_1">はじめに（読者別の読み方）</h2>
+<p>初めて使う方は、役割に合わせて次の順で読んでください。どの役割でも、最初の run は短い時間（<code>max_hours: 4</code>〜<code>8</code>）で試すことをお勧めします。</p>
+<table>
+<thead>
+<tr>
+<th>あなたは</th>
+<th>あなたがすること</th>
+<th>読む順</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Product Manager</strong>（何を作るか決め、結果を受け入れる）</td>
+<td>作りたいことを依頼に書く。質問票に回答する。報告を読んで、マージするか決める</td>
+<td>① <a href="#解決する問題">解決する問題</a> → ② <a href="#quickstart">Quickstart</a> → ③ <a href="users-guide/01-writing-requests.html">依頼の書き方</a> → ④ <a href="users-guide/02-during-and-after-run.html">実行中と終了後</a> → ⑤ <a href="users-guide/studio/05-product-manager.html">Studio: Product Manager</a></td>
+</tr>
+<tr>
+<td><strong>Architect</strong>（設計の整合・境界・品質ゲートを決める）</td>
+<td>規則と権限の仕組みを理解する。設定（検証コマンド・モデル・ゲート）を決める。要求定義書の構造を確かめる</td>
+<td>① <a href="#概要">概要</a>（アーキテクチャ・エージェントと権限・run の流れ） → ② <a href="users-guide/03-requirements-format.html">管理データの書式</a> → ③ <a href="users-guide/04-customization.html">設定とカスタマイズ</a> → ④ <a href="users-guide/06-quality-gates.html">品質ゲートと検査項目</a> → ⑤ <a href="users-guide/studio/06-architect.html">Studio: Architect</a></td>
+</tr>
+<tr>
+<td><strong>Software Engineer</strong>（toolkit を導入・運用し、実装・テストを確かめる）</td>
+<td>インストールする。検証コマンドを登録する。run を起動し、止まったときや拒否されたときに直す</td>
+<td>① <a href="#インストール">インストール</a> → ② <a href="#quickstart">Quickstart</a> → ③ <a href="users-guide/05-scripts-reference.html">スクリプトリファレンス</a> → ④ <a href="users-guide/07-troubleshooting.html">トラブルシューティング</a> → ⑤ <a href="users-guide/studio/07-software-engineer.html">Studio: Software Engineer</a></td>
+</tr>
+</tbody>
+</table>
+<p>既存のアプリ（ソースコード・設計書がすでにある）に導入する場合は、まず <a href="users-guide/10-adopting-existing-apps.html">既存のアプリを導入する</a> を読んでください。チームで段階的に導入する場合は <a href="users-guide/08-roadmap.html">導入ロードマップと KPI</a> が参考になります。</p>
+<h2 id="_2">目次</h2>
 <ul>
-<li><a href="https://github.com/dahatake/HypervelocityEngineering">リポジトリ</a></li>
-<li><a href="https://github.com/dahatake/HypervelocityEngineering#readme">README（インストール・Quickstart）</a></li>
-<li><a href="https://github.com/dahatake/HypervelocityEngineering/tree/main/users-guide">ユーザーガイド</a></li>
-<li><a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/CHANGELOG.md">CHANGELOG</a></li>
+<li><a href="#はじめに読者別の読み方">はじめに（読者別の読み方）</a></li>
+<li><a href="#概要">概要</a></li>
+<li><a href="#インストール">インストール</a></li>
+<li><a href="#quickstart">Quickstart</a></li>
+<li><a href="#eabk-studioデータ層のビューアー">EABK Studio（データ層のビューアー）</a></li>
+<li><a href="#github-spec-kit-との連携">GitHub Spec Kit との連携</a></li>
+<li><a href="#詳細ドキュメント">詳細ドキュメント</a></li>
+<li><a href="#用語">用語</a></li>
+<li><a href="#リポジトリの構成">リポジトリの構成</a></li>
 </ul>
-</body>
-</html>
+<h2 id="_3">概要</h2>
+<h3 id="_4">解決する問題</h3>
+<p>複数の AI エージェントに要求定義・実装・テストを繰り返させると、次の問題が起きがちです。</p>
+<ul>
+<li>実装の途中で要求が書き換わり、承認していない内容が「承認済み」になる。</li>
+<li>離れた要求どうしの矛盾に、書いた本人のセルフレビューでは気づけない。</li>
+<li>テストを実装に合わせて書き換えてしまい、要求の意味が変わる（実装のバグが「正解」になる）。</li>
+<li>並行作業で ID が重複したり、要求の意味が衝突したりする。</li>
+<li>監査結果やログがチャット履歴にしか残らず、失われる。</li>
+</ul>
+<p>Enterprise App Build Kit は、次の 4 つの手段でこれらを防ぎます。</p>
+<table>
+<thead>
+<tr>
+<th>手段</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>役割の分離</strong></td>
+<td>要求を書く役・監査する役・テストを作る役・実装する役を別のエージェントに分けます。どのエージェントも、自分が作った成果物を自分で「正解」と判定できません。</td>
+</tr>
+<tr>
+<td><strong>強制ゲート</strong></td>
+<td>エージェントごとの書き込み範囲と、作業を終える前の検証を、hook と verify で強制します。</td>
+</tr>
+<tr>
+<td><strong>決定的スクリプト</strong></td>
+<td>検査・ID の採番・台帳の更新・ログの要約は、LLM ではなくスクリプトで行います。同じ入力なら常に同じ結果になります。</td>
+</tr>
+<tr>
+<td><strong>データの永続管理</strong></td>
+<td>要求定義書、カタログ、ID 台帳、System Test の台帳、run の状態・結果・ログ・証跡・監査結果を、決まったパスのファイルとして作成・更新します。チャット履歴に依存しないので、要求・テスト・実装のトレーサビリティを後から追えます。中断しても途中から再開できます。</td>
+</tr>
+</tbody>
+</table>
+<p>土台になるのは、4 つ目の<strong>データの永続管理</strong>です。要求・判断・品質の状態は、永続データとして <code>/docs</code> と <code>tests/system/ledger.json</code> に置きます（git で管理）。run ごとの状態・ログ・証跡は、一時データとして <code>/work</code> に置きます。残すべき内容は、run の最後に <code>/docs</code> と台帳へ転記します（<a href="#データの置き場所">データの置き場所</a>）。</p>
+<h3 id="_5">アーキテクチャ</h3>
+<p><img alt="Enterprise App Build Kit のコンポーネント構成" src="images/enterprise-app-build-kit-components.svg" /></p>
+<p>利用者は conductor に依頼を 1 回渡すだけです。</p>
+<ol>
+<li>conductor が作業を subagent（作業役）に割り当てます。</li>
+<li>作業役は、skills の手順書を読みながら scripts を使って作業します。</li>
+<li>規則は hook と verify が強制します。verify は CI でも再実行します。</li>
+<li>成果はデータ層のファイルに残ります。</li>
+</ol>
+<p>ファイルの配置は次のとおりです。</p>
+<pre><code class="language-text">.github/
+  agents/        conductor（オーケストレーター）と 5 つの作業役の定義（*.agent.md）
+  skills/        手順書。必要な作業役だけが読み込む（Token を節約）
+                 requirement-definition / implement-fr / system-test-increment / rd-audit / adopt-existing
+                 build … 利用者が /build で呼ぶ依頼の入口（手動呼び出し専用）
+                 build-template … /build-template で依頼の雛形を表示する（run は開始しない）
+  hooks/         quality-gates.json … 全エージェント共通の強制ゲート（G-1〜G-7）
+  workflows/     ebak-verify.yml … GitHub Actions で verify を再実行（外部での再確認）
+                 ebak-data-layer.yml … データ層の検査と自動修復（下の「データ層ワークフロー（ebak-data-layer）」）
+scripts/         決定的スクリプト（Python 3.9 以上。標準ライブラリだけを使用）
+  verify.py / verify.ps1 / verify.sh   L1 検査（CHK-01〜27）＋ビルド・テスト
+  rdcheck.py  next-id.py  ledger.py  select-tests.py  summarize.py  clean-work.py  run-state.py
+  rdfix.py         データ層のファイル間の不整合を、要求定義書に合わせて自動修正
+  integrate.py     worktree のプールと、統合（merge → verify → System Test → commit）を 1 コマンドで行う
+  kpi.py           KPI の集計（North Star: 人の介入 1 回あたりの検証済み要求。流れの指標も出す）
+  import-speckit.py  GitHub Spec Kit の成果物を /build の依頼文に変換
+  adopt.py         既存アプリの導入（棚卸し・証跡の固定・現状の挙動の固定・依頼文の作成）
+  hooks/gate.py   hook の本体
+  ebak.config.json 設定（検証コマンド、モデル、ゲート、保持期間）
+EABK-Studio/     データ層のビューアー（ローカルの Web アプリ。読み取り専用）と、役割別ガイド・画面画像
+  studio.py  eabk_model.py  start.ps1 / start.sh  web/  users-guide/  tests/
+docs/            永続のドキュメント（git で管理）
+  requirements-definition.md  catalog.md  id-registry.md  run-history.md
+tests/system/ledger.json      System Test の台帳（永続）
+work/            一時ファイル（.gitignore 対象。14 日で削除）
+  current-run.txt  runs/&lt;run-id&gt;/{meta.json, queue.json, progress.md, run-report.md, results.json, logs/, evidence/, audit/}
+  worktrees/&lt;run-id&gt;-w&lt;N&gt;/    作業役の git worktree のプール（項目をまたいで再利用し、工程 6 で削除）
+</code></pre>
+<p>常に読み込まれる instructions（<code>AGENTS.md</code>、<code>.github/copilot-instructions.md</code>）は数行に抑えています。長い手順は skills に置き、担当の作業役が必要になったときだけ読み込みます。</p>
+<h3 id="_6">エージェントと権限</h3>
+<table>
+<thead>
+<tr>
+<th>エージェント</th>
+<th>責務</th>
+<th>書き込める範囲（hook で強制）</th>
+<th>読み込む skill</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>conductor</strong></td>
+<td>計画、作業の割り当て、統合、ゲートの判定、報告。小さな作業は自分で行う</td>
+<td><code>work/</code> と <code>docs/run-history.md</code> だけ</td>
+<td>build（利用者が <code>/build</code> で呼んだときだけ）</td>
+</tr>
+<tr>
+<td><strong>rd-author</strong></td>
+<td>要求定義書・カタログの作成と更新、質問票、決定記録。<strong>要求を書けるのはこのエージェントだけ</strong></td>
+<td><code>docs/</code>（run-history を除く）</td>
+<td>requirement-definition</td>
+</tr>
+<tr>
+<td><strong>rd-auditor</strong></td>
+<td>意味の監査（矛盾・目的との整合・記述の質）。rd-author とは別系統のモデルを使う</td>
+<td><code>work/</code> だけ（読み取り専用）</td>
+<td>rd-audit</td>
+</tr>
+<tr>
+<td><strong>test-designer</strong></td>
+<td>受入基準から System Test と台帳のケースを、<strong>実装より前に</strong>作る</td>
+<td><code>tests/system/</code>（台帳は ledger.py 経由）</td>
+<td>system-test-increment</td>
+</tr>
+<tr>
+<td><strong>implementer</strong></td>
+<td>1 つの作業項目（要求 1〜5 個）をプールの worktree で実装し、単体テスト・結合テストとカタログの行を書く</td>
+<td>自分の worktree（要求定義書と System Test は変更不可）</td>
+<td>implement-fr</td>
+</tr>
+<tr>
+<td><strong>reviewer</strong></td>
+<td>差分と受入基準の照合。共通部品・契約・テーブルの変更、セキュリティ・個人情報・認証、画面の変更にだけ使う</td>
+<td>なし（読み取り専用）</td>
+<td>なし</td>
+</tr>
+</tbody>
+</table>
+<p>既存アプリの導入（<code>adopt.py</code> を使う依頼）のときは、conductor・rd-author・rd-auditor・test-designer が skill <code>adopt-existing</code> も読み込みます。</p>
+<p>どのエージェントも frontmatter でツールを限定していません。利用者が GitHub Copilot に設定した MCP Server・plugin・拡張機能のツールと skill は、そのまま使えます。例は、Work IQ（社内のメール・会議・チャット・ドキュメント）、Microsoft Learn、Azure MCP Server、Copilot Studio の plugin です。rd-author は、これらを一次情報の参照に使い、得た事実を出典付きで要求定義書に残します。外部のシステムを変更する操作（送信・作成・更新・削除・デプロイ）は、run_options の <code>external_write</code>・<code>deploy</code> で許可したときだけ行えます（hook G-5）。詳しくは <a href="users-guide/04-customization.html#44-mcp-serverplugin拡張機能を使う">設定とカスタマイズ 4.4</a> を参照してください。</p>
+<h3 id="1-run">1 回の run の流れ</h3>
+<pre class="mermaid">flowchart TD
+  P[利用者: conductor に Prompt を 1 回] --&gt; S0[工程0 初期化&lt;br/&gt;run-state.py start・clean-work・verify の基準]
+  S0 --&gt; S1[工程1 要求定義&lt;br/&gt;rd-author]
+  S1 --&gt; A1[工程2 独立監査&lt;br/&gt;rd-auditor 差分]
+  A1 --&gt;|直接矛盾 最大3周| S1
+  A1 --&gt; S3[工程3 計画&lt;br/&gt;queue.json 機能単位・依存・境界]
+  S3 --&gt; S4[工程4 System Test を先に設計&lt;br/&gt;test-designer 全ケース not_run]
+  S4 --&gt; L{工程5 実装ループ}
+  L --&gt;|依存のない項目を最大5本 パイプライン| W[implementer プールの worktree]
+  W --&gt; G[ゲート verify＋関係する System Test&lt;br/&gt;終了前に hook G-4 が再検査]
+  G --&gt;|共通部品・セキュリティ・画面| RV[reviewer]
+  G --&gt; M[integrate.py merge で直列に統合&lt;br/&gt;verify quick・canary・差分のケース]
+  RV --&gt; M
+  M --&gt; K{節目 10項目・4時間}
+  K --&gt;|はい| A2[rd-auditor 差分 background・System Test 増分] --&gt; L
+  K --&gt;|いいえ| L
+  L --&gt;|完了 or 時間予算85%| F[工程6 最終&lt;br/&gt;System Test 全量・監査 3体並行の多数決・転記・run-report]
+  F --&gt; U[利用者: 報告を読み、回答 or 取り込み]
+</pre>
+<ul>
+<li><strong>品質の土台（工程 1〜2）</strong>: 実装を始める前に、要求定義書の直接矛盾を 0 件にします。利用者の判断が必要なものは質問票に挙げます。関係する受入基準は BLOCKED にして、残りの作業を先に進めます。</li>
+<li><strong>テストファースト（工程 4）</strong>: test-designer は要求定義書だけを根拠に期待値を決めます。実装を正解として扱わないためです（テストオラクル問題）。</li>
+<li><strong>項目単位の並行実装（工程 5）</strong>: 並行するのは、依存関係がなく、同じ共通部品・テーブル・境界に触れない項目だけです。統合は 1 本ずつ直列に行い、そのたびに verify と canary テストを実行します。</li>
+<li><strong>最終工程（工程 6）</strong>: System Test の全量実行と、rd-auditor による全量監査（3 回の多数決）を行います。残すべき情報を <code>/docs</code> と台帳に転記してから報告します。</li>
+</ul>
+<h3 id="2">2 層の品質ゲート</h3>
+<table>
+<thead>
+<tr>
+<th>層</th>
+<th>実装</th>
+<th>発火するタイミング</th>
+<th>例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>hook</td>
+<td><code>.github/hooks/quality-gates.json</code> → <code>scripts/hooks/gate.py</code></td>
+<td>ツール実行の<strong>前</strong>と、作業役・conductor が<strong>終了する前</strong></td>
+<td>rd-author 以外が要求定義書を編集しようとしたら拒否する（G-1）。implementer の終了前に verify を実行し、失敗なら差し戻す（G-4）</td>
+</tr>
+<tr>
+<td>verify</td>
+<td><code>scripts/verify.py</code>（CHK-01〜27）</td>
+<td>作業役のゲート、統合のたび、CI</td>
+<td>台帳のケースが理由なく削除された（CHK-12）。AC の本文が変わったのに台帳が古いまま（CHK-11）</td>
+</tr>
+</tbody>
+</table>
+<p>VS Code の hook はプレビュー機能で、harness によって動作が異なることがあります（Copilot CLI と、その上に構築された GitHub Copilot app は同じ <code>.github/hooks</code> を読み込みます）。そのため同じ規則を verify でも検査し、hook が効かない環境でも統合の時点で必ず止まるようにしています。詳しくは <a href="users-guide/06-quality-gates.html">品質ゲートと検査項目</a> を参照してください。</p>
+<p>verify が見つけたデータ層のファイル間の不整合（カタログの決定状態のずれ、ID 台帳の状態、マージで重複した行、名前が変わったファイルの参照など）のうち、要求定義書から機械的に決まるものは <code>python scripts/rdfix.py --apply</code> で直せます。要求定義書は変更せず、判断が要るもの（AC の本文の変更、ID の再利用など）は担当の役割とともに <code>MANUAL</code> として示します（<a href="users-guide/06-quality-gates.html#63-データ層の不整合の自動修正rdfix">6.3</a>）。</p>
+<h3 id="_7">状態の永続化と再開</h3>
+<p>会話の要約（compaction）には依存しません。状態はすべて次のファイルと git にあります。</p>
+<ul>
+<li><code>work/current-run.txt</code>: 実行中の run-id</li>
+<li><code>work/runs/&lt;run-id&gt;/meta.json</code>: 開始時刻、run_options、現在の工程、統合ブランチ</li>
+<li><code>work/runs/&lt;run-id&gt;/queue.json</code>: 作業キュー（項目ごとの要求 ID、AC、境界、依存、状態、試行回数、ブランチ）</li>
+<li><code>work/runs/&lt;run-id&gt;/progress.md</code>: 工程・判断・残課題（1 項目 3 行以内）</li>
+</ul>
+<p>新しいコンテキストで起動すると、conductor は <code>python scripts/run-state.py start</code> から始めます。実行中の run があれば、<code>RESUME</code> と状態を表示して続きを実行します。止まったときは、同じセッションで「続けて」と送るか、新しいセッションで同じ Prompt を送れば再開します。</p>
+<h3 id="_8">データの置き場所</h3>
+<table>
+<thead>
+<tr>
+<th>置き場所</th>
+<th>置くもの</th>
+<th>git</th>
+<th>保持期間</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/docs</code></td>
+<td>要求定義書、カタログ、ID 台帳、実行履歴</td>
+<td>管理する</td>
+<td>永続</td>
+</tr>
+<tr>
+<td><code>tests/system/ledger.json</code></td>
+<td>System Test のケースと最新の状態</td>
+<td>管理する</td>
+<td>永続</td>
+</tr>
+<tr>
+<td><code>/work</code></td>
+<td>キュー、進捗、報告、結果、証跡、監査の生データ、ログ、worktree</td>
+<td>管理しない</td>
+<td>14 日</td>
+</tr>
+</tbody>
+</table>
+<p><code>/work</code> が消えても、要求・判断・品質の状態を <code>/docs</code> と台帳だけで追えるように、工程 6 で転記します。</p>
+<h3 id="token">Token 消費を抑える設計</h3>
+<table>
+<thead>
+<tr>
+<th>工夫</th>
+<th>実装</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>長い手順書は、必要な作業役だけが読む</td>
+<td><code>.github/skills/</code>（長い手順を skill に分け、担当の作業役だけが読み込む）</td>
+</tr>
+<tr>
+<td>機械的な検査・採番・台帳更新・要約はスクリプトで行う</td>
+<td><code>scripts/*.py</code>。LLM には要約だけを渡す（<code>summarize.py</code>、<code>verify.py</code> の短い出力）</td>
+</tr>
+<tr>
+<td>必要な節だけを読む</td>
+<td><code>rdcheck.py show FR-012 AC-031</code></td>
+</tr>
+<tr>
+<td>工程ごとに新しいコンテキストから再開する</td>
+<td><code>run-state.py status</code> と progress.md</td>
+</tr>
+<tr>
+<td>テストは影響範囲だけを実行し、全量は節目と最終工程だけ</td>
+<td><code>select-tests.py</code>、<code>ledger.py run --select changed</code></td>
+</tr>
+<tr>
+<td>多数決の監査は最終工程だけ</td>
+<td>節目は runs: 1、最終は runs: 3</td>
+</tr>
+<tr>
+<td>作業役のモデルを難易度で振り分け、失敗したときだけ上位モデルに切り替える</td>
+<td><code>scripts/ebak.config.json</code> の <code>models</code>（<a href="users-guide/04-customization.html">設定とカスタマイズ</a>）</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="_9">インストール</h2>
+<h3 id="_10">前提条件</h3>
+<table>
+<thead>
+<tr>
+<th>必要なもの</th>
+<th>確認方法</th>
+<th>備考</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>git リポジトリ</td>
+<td><code>git status</code></td>
+<td>まだなら <code>git init -b main</code> して最初の commit を作ります</td>
+</tr>
+<tr>
+<td>Python 3.9 以上</td>
+<td><code>python --version</code>（macOS/Linux は <code>python3 --version</code>）</td>
+<td>スクリプトと hook が使います。標準ライブラリだけで動くので、追加パッケージは不要です。Windows では Microsoft Store の <code>python</code> スタブではなく、実体の Python をインストールします（<code>winget install Python.Python.3.12</code>）</td>
+</tr>
+<tr>
+<td>GitHub Copilot</td>
+<td>VS Code（Agents ウィンドウ）、Copilot CLI、または GitHub Copilot app</td>
+<td>長時間の実行は、VS Code の Copilot harness（Agent Host）か GitHub Copilot app と、Autopilot を前提にしています</td>
+</tr>
+<tr>
+<td>MCP Server・plugin（任意）</td>
+<td>VS Code の <code>MCP: List Servers</code>、Copilot CLI の <code>/mcp</code>、GitHub Copilot app の <strong>カスタマイズ</strong> → <strong>MCP</strong></td>
+<td>Work IQ、Microsoft Learn、Azure などを設定しておくと、エージェントが自動で使います。toolkit は MCP の設定を配布しません</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_11">インストールコマンド（推奨）</h3>
+<p>インストール先のリポジトリの<strong>ルート</strong>で、次の 1 行を実行します。このコマンドは toolkit を一時フォルダーにダウンロードし、<code>tools/install.py</code> を実行してから一時フォルダーを削除します。</p>
+<p><strong>Windows（PowerShell）</strong></p>
+<pre><code class="language-powershell">irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.ps1 | iex
+</code></pre>
+<p>オプションを付ける場合:</p>
+<pre><code class="language-powershell">&amp; ([scriptblock]::Create((irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.ps1))) -DryRun
+</code></pre>
+<p><strong>macOS / Linux / WSL / Git Bash</strong></p>
+<pre><code class="language-bash">curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash
+# オプションを付ける場合
+curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash -s -- --dry-run
+</code></pre>
+<p>特定のバージョン（タグ・ブランチ・commit）を使う場合は、環境変数 <code>EBAK_REF</code> を指定します（例: <code>EBAK_REF=v1.0.0</code>）。フォークを使う場合は <code>EBAK_REPO=&lt;owner&gt;/&lt;repo&gt;</code> を指定します。</p>
+<p><strong>toolkit を clone 済みの場合</strong></p>
+<pre><code class="language-bash">python tools/install.py --target /path/to/your-repo
+</code></pre>
+<h3 id="_12">オプション</h3>
+<table>
+<thead>
+<tr>
+<th>オプション（install.py / install.sh）</th>
+<th>PowerShell</th>
+<th>動作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--target &lt;dir&gt;</code></td>
+<td><code>-Target</code></td>
+<td>インストール先（既定: カレントディレクトリ）</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td><code>-DryRun</code></td>
+<td>何も書き込まず、実行する操作だけを表示します</td>
+</tr>
+<tr>
+<td><code>--check</code></td>
+<td><code>-Check</code></td>
+<td>更新が必要かどうかを確認します（必要なら exit 1。CI でバージョンのずれを検出できます）</td>
+</tr>
+<tr>
+<td><code>--force</code></td>
+<td><code>-Force</code></td>
+<td>ローカルで変更した toolkit のファイルも上書きします（<code>*.ebak-backup-&lt;日時&gt;</code> を残します）</td>
+</tr>
+<tr>
+<td><code>--no-ci</code></td>
+<td><code>-NoCi</code></td>
+<td><code>.github/workflows/ebak-verify.yml</code> と <code>ebak-data-layer.yml</code> をインストールしません</td>
+</tr>
+<tr>
+<td><code>--uninstall</code></td>
+<td><code>-Uninstall</code></td>
+<td>変更していない toolkit のファイル、<code>AGENTS.md</code> などのブロック、マニフェスト、空になったフォルダーを削除します（管理データと設定は残します）。<code>uninstall.ps1</code> / <code>uninstall.sh</code> でも実行できます</td>
+</tr>
+<tr>
+<td><code>--purge</code></td>
+<td><code>-Purge</code></td>
+<td><code>--uninstall</code> に加えて、管理データ（<code>docs/</code> の要求定義書・カタログ・ID 台帳・run 履歴・手動テスト、<code>tests/system/ledger.json</code>）、<code>scripts/ebak.config.json</code>、<code>/work</code>、<code>.gitignore</code>・<code>.gitattributes</code> に追記した行、<code>*.ebak-backup-*</code> も削除します</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_13">インストールされるファイル</h3>
+<table>
+<thead>
+<tr>
+<th>種類</th>
+<th>ファイル</th>
+<th>再実行時の扱い</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>toolkit のファイル</td>
+<td><code>.github/agents/*.agent.md</code>（6）、<code>.github/skills/*/SKILL.md</code>（7。<code>/build</code>・<code>/build-template</code> の skill を含む）、<code>.github/hooks/quality-gates.json</code>、<code>.github/workflows/ebak-verify.yml</code>、<code>scripts/*.py</code>・<code>verify.ps1</code>・<code>verify.sh</code>・<code>scripts/hooks/gate.py</code>、<code>EABK-Studio/</code>（ビューアー本体・テスト）、<code>EABK-docs/</code>（このリポジトリの <code>users-guide/</code> と同じ内容。EABK Studio のガイドは <code>EABK-docs/studio/</code>。導入先の <code>users-guide/</code> は触りません）</td>
+<td>変更していなければ新しいバージョンに更新します。ローカルで変更していれば<strong>そのまま残します</strong>（<code>KEEP-LOCAL</code>。<code>--force</code> で上書き）</td>
+</tr>
+<tr>
+<td>管理データの雛形</td>
+<td><code>docs/requirements-definition.md</code>、<code>docs/catalog.md</code>、<code>docs/id-registry.md</code>、<code>docs/run-history.md</code>、<code>tests/system/ledger.json</code></td>
+<td><strong>存在しない場合だけ</strong>作成します。既存のファイルは上書きしません</td>
+</tr>
+<tr>
+<td>設定</td>
+<td><code>scripts/ebak.config.json</code></td>
+<td>なければ作成します。あれば新しいキーだけを追加し、利用者が設定した値は変更しません</td>
+</tr>
+<tr>
+<td>追記</td>
+<td><code>.gitignore</code> に <code>/work/</code>、<code>.gitattributes</code> に <code>docs/id-registry.md merge=union</code> と <code>docs/run-history.md merge=union</code></td>
+<td>足りない行だけを追記します</td>
+</tr>
+<tr>
+<td>ブロック</td>
+<td><code>AGENTS.md</code>、<code>.github/copilot-instructions.md</code> に <code>&lt;!-- ebak-abk:begin --&gt;</code>〜<code>end</code> で囲んだ数行</td>
+<td>ブロックの中だけを置き換えます。ブロック外の記述は変更しません</td>
+</tr>
+<tr>
+<td>マニフェスト</td>
+<td><code>.github/ebak-toolkit.json</code></td>
+<td>バージョンと、インストールしたファイルのハッシュ（更新・削除の判定に使います）</td>
+</tr>
+</tbody>
+</table>
+<p>インストールの最後に <code>python scripts/verify.py --docs-only</code> を実行し、結果を表示します。</p>
+<h3 id="_14">インストール後の設定</h3>
+<ol>
+<li>差分を確認して commit します。
+   <code>bash
+   git add -A &amp;&amp; git commit -m "Add Enterprise App Build Kit"</code></li>
+<li><code>scripts/ebak.config.json</code> の <code>verify.commands</code> に、ビルド・静的解析・テストのコマンドを登録します（<a href="users-guide/04-customization.html">設定とカスタマイズ</a>）。空のままでも、初回の run で implementer がその技術スタックの標準的なコマンドを登録します。</li>
+<li>CI でアプリのツールチェーン（Node.js など）が必要な場合は、<code>.github/workflows/ebak-verify.yml</code> の verify ステップの前にセットアップのステップを追加します。</li>
+<li>既存の要求定義書がある場合は、その ID を ID 台帳に取り込みます。
+   <code>bash
+   python scripts/next-id.py --sync --adopt</code>
+   続けて <code>python scripts/verify.py --docs-only --show-warnings</code> を実行し、構造化欄の不足（CHK-20）などを確認します。修正は最初の run で rd-author に任せてかまいません（依頼に「既存の要求定義書を toolkit の書式に合わせる」と書きます）。
+   <a href="https://github.com/github/spec-kit">GitHub Spec Kit</a> の仕様（<code>specs/*/spec.md</code>、<code>.specify/memory/constitution.md</code>）がある場合は、<code>python scripts/import-speckit.py</code> で <code>/build</code> の依頼文を作ります（<a href="users-guide/01-writing-requests.html#17-github-spec-kit-の仕様を取り込む">Spec Kit からの取り込み</a>）。</li>
+<li>（任意）社内の情報や対象の技術のツールを使う場合は、run を実行する環境（VS Code・Copilot CLI・GitHub Copilot app）に MCP Server・plugin を設定し、サインインしておきます。例は、要求の一次情報には Work IQ、Azure を使う開発には Microsoft Learn と Azure MCP Server、Copilot Studio を使う開発には Microsoft が提供する plugin です。エージェント側の設定は不要です（<a href="users-guide/04-customization.html#44-mcp-serverplugin拡張機能を使う">設定とカスタマイズ 4.4</a>）。</li>
+</ol>
+<h3 id="_15">更新・確認</h3>
+<pre><code class="language-bash"># 更新（同じインストールコマンドをもう一度実行するだけ）
+curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash
+
+# 更新が必要かどうかだけを確認する
+curl -fsSL .../tools/install.sh | bash -s -- --check
+</code></pre>
+<h3 id="_16">アンインストール・クリーンアップ</h3>
+<p>インストールと同じように、インストール先のリポジトリの<strong>ルート</strong>で 1 行を実行します。</p>
+<p><strong>Windows（PowerShell）</strong></p>
+<pre><code class="language-powershell"># アンインストール（toolkit のファイルとブロックを削除します。docs・台帳・設定・/work は残します）
+irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.ps1 | iex
+
+# クリーンアップ（管理データ・設定・/work・追記した行も含めて、toolkit が加えたものをすべて削除します）
+&amp; ([scriptblock]::Create((irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.ps1))) -Purge -DryRun   # 確認
+&amp; ([scriptblock]::Create((irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.ps1))) -Purge
+</code></pre>
+<p><strong>macOS / Linux / WSL / Git Bash</strong></p>
+<pre><code class="language-bash">curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.sh | bash -s -- --purge --dry-run   # 確認
+curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/uninstall.sh | bash -s -- --purge
+</code></pre>
+<p>toolkit を clone 済みの場合は <code>python tools/install.py --target /path/to/your-repo --uninstall</code>（または <code>--purge</code>）です。<code>install.ps1 -Uninstall</code>、<code>install.sh --uninstall</code> でも同じです。</p>
+<table>
+<thead>
+<tr>
+<th>対象</th>
+<th><code>--uninstall</code></th>
+<th><code>--purge</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>toolkit のファイル（<code>.github/agents</code>・<code>skills</code>・<code>hooks</code>・<code>workflows/ebak-verify.yml</code>、<code>scripts/*.py</code> など）と旧版のファイル</td>
+<td>変更していなければ削除（変更していれば <code>KEEP-LOCAL</code> で残す。<code>--force</code> で削除）</td>
+<td>同じ</td>
+</tr>
+<tr>
+<td><code>AGENTS.md</code>・<code>.github/copilot-instructions.md</code> のブロック</td>
+<td>ブロックだけを削除（ほかに記述がなければファイルごと削除）</td>
+<td>同じ</td>
+</tr>
+<tr>
+<td>マニフェスト <code>.github/ebak-toolkit.json</code>、空になったフォルダー、削除した <code>.py</code> の <code>__pycache__</code></td>
+<td>削除</td>
+<td>削除</td>
+</tr>
+<tr>
+<td>管理データ（<code>docs/requirements-definition.md</code>・<code>catalog.md</code>・<code>id-registry.md</code>・<code>run-history.md</code>・<code>manual-tests.md</code>・<code>docs/requirements/</code>、<code>tests/system/ledger.json</code>）。パスは <code>scripts/ebak.config.json</code> の <code>files</code> に従います</td>
+<td>残す</td>
+<td>削除</td>
+</tr>
+<tr>
+<td><code>scripts/ebak.config.json</code>、<code>/work</code>、<code>*.ebak-backup-*</code></td>
+<td>残す</td>
+<td>削除</td>
+</tr>
+<tr>
+<td><code>.gitignore</code> の <code>/work/</code>、<code>.gitattributes</code> の <code>merge=union</code> の行</td>
+<td>残す</td>
+<td>追記した行だけを削除（空になればファイルごと削除）</td>
+</tr>
+<tr>
+<td>System Test のコード（<code>tests/system/</code> の台帳以外）、アプリのコード、<code>docs/</code> のほかの文書</td>
+<td>残す</td>
+<td>残す</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>マニフェストが失われている場合は、この版の toolkit と同じ内容のファイルだけを削除します（<code>WARN</code> を表示します）。</li>
+<li>削除は git の作業ツリーに対して行います。結果を <code>git status</code> で確認してから commit します（<code>git restore</code> で戻せます。<code>/work</code> は git の管理対象外なので戻せません）。</li>
+<li>run が作った worktree と <code>work/*</code> ブランチは削除しません。必要なら <code>git worktree list</code>・<code>git branch --list "work/*"</code> で確認して削除します。</li>
+<li>何度実行しても安全です（2 回目は <code>changes=0</code>）。</li>
+</ul>
+<h3 id="plugin">plugin ではなくインストーラーを使う理由</h3>
+<p>GitHub Copilot には、agents・skills・hooks をまとめて配布する標準の仕組みとして <strong>plugin</strong>（<code>copilot plugin install OWNER/REPO</code>、Agent Plugins 仕様）があります。採用を検討しましたが、この toolkit の配布には使っていません。理由は次のとおりです。</p>
+<table>
+<thead>
+<tr>
+<th>観点</th>
+<th>plugin</th>
+<th>この toolkit に必要なこと</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>インストール先</td>
+<td>利用者のホーム（plugin のディレクトリ）。リポジトリには入らない</td>
+<td>決定的スクリプト（<code>scripts/</code>）、管理データの雛形（<code>docs/</code>）、台帳、<code>.gitignore</code>、CI を<strong>対象リポジトリの中</strong>に置いて git で管理し、CI（GitHub Actions）でも同じ verify を実行する必要がある</td>
+</tr>
+<tr>
+<td>可搬性</td>
+<td>Agent Plugins 1.0 で可搬なのは skills と MCP だけ。custom agents と hooks はクライアントごとの拡張</td>
+<td>VS Code の Copilot harness・Copilot CLI・Copilot app で、同じ <code>.github/agents</code>・<code>.github/skills</code>・<code>.github/hooks</code> を使う</td>
+</tr>
+<tr>
+<td>hook のスコープ</td>
+<td>plugin の hook は、利用者のすべてのリポジトリ・セッションで動く</td>
+<td>ゲートは、toolkit をインストールしたリポジトリでだけ動くべき</td>
+</tr>
+<tr>
+<td>チームでの共有</td>
+<td>利用者ごとにインストールが必要</td>
+<td>リポジトリを clone すれば、チーム全員と CI が同じバージョンを使える</td>
+</tr>
+</tbody>
+</table>
+<p>そこで、customizations（<code>.github/</code>）と <code>scripts/</code> をリポジトリに直接置く方式にしました。これは VS Code・Copilot CLI・Copilot app・cloud agent が標準で読み込む場所です。そのインストール・更新・アンインストールを 1 コマンドで行うために <code>tools/install.*</code>・<code>tools/uninstall.*</code> を用意しています。</p>
+<h3 id="_17">インストール時のトラブル</h3>
+<table>
+<thead>
+<tr>
+<th>症状</th>
+<th>対処</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Python 3.9 以上が必要です</code></td>
+<td>Python をインストールし、<code>python --version</code> が通ることを確認します</td>
+</tr>
+<tr>
+<td><code>git リポジトリではありません</code></td>
+<td><code>git init -b main</code> してから実行します</td>
+</tr>
+<tr>
+<td><code>KEEP-LOCAL</code> が表示された</td>
+<td>ローカルで変更したファイルは更新していません。差分を確認し、上書きしてよければ <code>--force</code> を付けて再実行します</td>
+</tr>
+<tr>
+<td>hook の実行時に <code>python</code> が見つからない</td>
+<td>hook は <code>python3</code>（macOS/Linux）または <code>python</code>（Windows）を呼び出します。PATH を確認します</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="quickstart">Quickstart</h2>
+<p>全体の流れは次の 3 ステップです。</p>
+<ol>
+<li>自分のリポジトリのルートで、インストールコマンドを 1 回実行します（<a href="#インストール">インストール</a>）。
+   - Windows: <code>irm https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.ps1 | iex</code>
+   - macOS / Linux: <code>curl -fsSL https://raw.githubusercontent.com/dahatake/HypervelocityEngineering/main/tools/install.sh | bash</code></li>
+<li>VS Code の Agents ウィンドウで conductor を選び、チャット欄に <code>/build</code> に続けてやりたいことを書いて送信します（<a href="#vs-code-で実行する推奨">VS Code で実行する</a>）。GitHub Copilot app でも同じように送れます（<a href="#github-copilot-app-で実行する">GitHub Copilot app で実行する</a>）。</li>
+<li>終わったら <code>work/runs/&lt;run-id&gt;/run-report.md</code> を読みます。そのうえで、質問票に回答するか、統合ブランチをマージします（<a href="users-guide/02-during-and-after-run.html">実行中と終了後</a>）。</li>
+</ol>
+<h3 id="vs-code">VS Code で実行する（推奨）</h3>
+<p><img alt="VS Code の Agents ウィンドウで conductor に /build で依頼を送る画面イメージ" src="images/quickstart-vscode-agents.png" /></p>
+<p><em>画面イメージです。番号は下の手順に対応します。VS Code のバージョンによって、表示や項目の位置は異なります。</em></p>
+<ol>
+<li>toolkit をインストールしたリポジトリを VS Code で開き、<strong>Agents ウィンドウ</strong>で <strong>New</strong> を選びます。</li>
+<li>次のように設定します。</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>設定</th>
+<th>値</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Session Target</td>
+<td><strong>Copilot</strong></td>
+<td>Copilot harness（Agent Host）では、ウィンドウを閉じてもセッションが続きます。<code>.github/hooks</code> の hook も Copilot CLI と同じ仕様で動きます</td>
+</tr>
+<tr>
+<td>Agent</td>
+<td><strong>conductor</strong></td>
+<td>利用者が直接呼ぶ唯一のエージェントです</td>
+</tr>
+<tr>
+<td>モード</td>
+<td><strong>Autopilot</strong></td>
+<td>ツールを承認なしで実行し、エラー時は再試行し、作業が完了するまで続けます</td>
+</tr>
+<tr>
+<td>Code isolation</td>
+<td><strong>New Worktree</strong>（ベースは main）</td>
+<td>元の作業ツリーを汚さずに作業します。アプリの依存関係をコンテナーで揃えたい場合は Dev Container を選びます</td>
+</tr>
+</tbody>
+</table>
+<ol start="3">
+<li>エージェントの<strong>サンドボックス</strong>を有効にします。ネットワークは、パッケージレジストリなど必要な宛先だけを許可します（worktree はセキュリティ境界ではないためです）。</li>
+<li>チャット欄に <code>/build</code> と入力し、<strong>同じ欄に続けて</strong>やりたいことを書いて送信します（例: <code>/build 社内の備品貸出アプリを新規に作りたい。…</code>）。
+   - <code>/build</code> は skill（<code>.github/skills/build/SKILL.md</code>）です。入力した文章を <code>&lt;request&gt;</code> として扱い、<code>&lt;run_options&gt;</code> には既定値（<code>max_hours: 24</code> など）を使います。回答や run_options も指定する場合は、<a href="users-guide/01-writing-requests.html">依頼の書き方</a> の雛形を <code>/build</code> の後に貼り付けて書き換えます。雛形は <code>/build-template</code>（または <code>/build template</code>）と送るとチャットに表示されます（run は開始しません）。
+   - <code>&lt;request&gt;</code> などの<strong>入力フォームは表示されません</strong>。依頼の文章はチャット欄に直接書きます。
+   - <code>/build</code> が候補に出ない場合は、インストールコマンドを再実行して更新します。更新しなくても、Agent が conductor なら、雛形を書き換えてそのまま送信すれば同じように動きます（prompt file は Agent Host では読み込まれないため、Session Target が Copilot のときは <code>/build</code> として表示されません）。</li>
+<li>送信したらウィンドウを閉じてもかまいません。ただし <strong>PC はスリープさせないでください</strong>（Agent Host はローカルの PC 上で動きます）。途中経過は、Agents ウィンドウのセッション一覧から開いて確認できます。</li>
+</ol>
+<blockquote>
+<p>New Worktree では、git の管理対象外のファイル（<code>/work</code> など）は新しい worktree にコピーされません。conductor の <code>/work</code> は、そのセッションの worktree の中に作られます。</p>
+</blockquote>
+<h3 id="github-copilot-app">GitHub Copilot app で実行する</h3>
+<p><a href="https://docs.github.com/ja/copilot/how-tos/github-copilot-app">GitHub Copilot app</a>（デスクトップアプリ）は Copilot CLI の上に構築されており、リポジトリの <code>.github/agents</code>（custom agents）・<code>.github/skills</code>（<code>/build</code> を含む skill）・<code>.github/hooks</code>（品質ゲート）をそのまま読み込みます。toolkit 側の追加設定は不要です。</p>
+<ol>
+<li>toolkit のインストールを <strong>commit</strong> しておきます（新しい作業ツリーは commit からチェックアウトされるため、commit していないファイルは入りません）。GitHub からリポジトリを選ぶ場合やクラウド サンドボックスを使う場合は、push もしておきます。</li>
+<li>サイドバーの <strong>プロジェクト</strong> の横の <strong>+</strong> で新しいセッションを作り、toolkit を入れたリポジトリを選びます。</li>
+<li>プロンプト欄の下で次のように設定します。</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>設定</th>
+<th>値</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>実行場所</td>
+<td><strong>新しい作業ツリー</strong>（推奨）</td>
+<td>セッションごとに専用のブランチと worktree（例: <code>&lt;リポジトリの親&gt;/copilot-worktrees/&lt;リポジトリ名&gt;/&lt;ブランチ名&gt;</code>）で動くので、元の作業ツリーを汚しません。<strong>ローカル リポジトリ</strong>を選ぶと、Copilot CLI と同じく今のチェックアウトで動きます</td>
+</tr>
+<tr>
+<td>セッション モード</td>
+<td><strong>Autopilot</strong></td>
+<td>入力を待たずに最後まで進みます。早すぎる完了は agentStop の hook が差し戻します</td>
+</tr>
+<tr>
+<td>モデル</td>
+<td>推論の強いモデル</td>
+<td>conductor のモデルです。作業役のモデルは <code>scripts/ebak.config.json</code> の <code>models</code> で指定します</td>
+</tr>
+<tr>
+<td>Agent</td>
+<td><strong>conductor</strong></td>
+<td>エージェント ピッカー、またはプロンプト欄の <code>/agent</code> で選びます</td>
+</tr>
+</tbody>
+</table>
+<ol start="4">
+<li>ローカル サンドボックスを有効にします（アプリの設定 → プロジェクト → <strong>サンドボックス</strong> の <strong>サンドボックスの新しいセッション</strong>、またはセッション中に <code>/sandbox on</code>）。既定のポリシーで、worktree の読み書き、パッケージのインストール、ローカルの開発サーバーへの接続ができます。hook もサンドボックスの中で動きます。</li>
+<li>プロンプト欄に <code>/build</code> と入力し、続けてやりたいことを書いて送信します。雛形は <code>/build-template</code>（または <code>/build template</code>）で表示されます（run は開始しません）。</li>
+<li>送信後は、アプリを起動したままにし、<strong>PC をスリープさせないでください</strong>（ローカルのセッションは PC 上で動きます）。途中経過は、サイドバーのセッションから確認できます。</li>
+</ol>
+<p>GitHub Copilot app に固有の注意点:</p>
+<ul>
+<li><strong>ブランチ名の変更</strong>: アプリは、セッションのブランチ名をエージェントのツール（<code>rename_branch</code>）で付け直すことがあります。run の開始後は、統合ブランチが <code>meta.json</code> に記録されているため、hook（G-5）がこのツールを拒否します。アプリの画面などでブランチ名を変えた場合も、<code>python scripts/run-state.py status</code> が現在のブランチを統合ブランチとして記録し直します。</li>
+<li><strong>取り込み</strong>: 新しい作業ツリーで始めた run は、セッションのブランチがそのまま統合ブランチになり、conductor は main へマージしません。<code>run-report.md</code> を確認してから、アプリのプル要求の作成（または <code>git merge</code>）で取り込みます。<code>git_push: しない</code> の場合、push はアプリの操作で利用者が行います。</li>
+<li><strong>再開</strong>: <code>/work</code>（run の状態）は git の管理対象外なので、そのセッションの worktree の中にしかありません。止まったときは<strong>同じセッション</strong>で「続けて」と送ります。新しいセッションを作ると別の worktree になり、run の状態を引き継げません。run が終わって取り込むまで、セッションをアーカイブ・削除しないでください。</li>
+<li><strong>クラウド サンドボックス</strong>: GitHub がホストする Linux 環境でセッション全体が動くため、PC をスリープさせても続きます。ただし、リポジトリは GitHub から取得されるので toolkit を push 済みであること、組織・Enterprise のポリシーで有効になっていること、使用量に応じた課金があることに注意します。成果物はサンドボックスの中にあるので、<code>git_push</code> を「作業ブランチへ push する」にするか、終了後にアプリから push・プル要求の作成を行います。最初は短い run で<a href="#初回に確認すること">初回に確認すること</a>を確かめます。</li>
+</ul>
+<h3 id="copilot-cli">Copilot CLI で実行する</h3>
+<p>同じ customizations（<code>.github/agents</code>・<code>.github/skills</code>・<code>.github/hooks</code>）を Copilot CLI でも使えます。</p>
+<p><img alt="Copilot CLI で conductor を autopilot で起動し、run が進んでいる画面イメージ" src="images/quickstart-copilot-cli.png" /></p>
+<p><em>画面イメージです。Copilot CLI のバージョンによって表示は異なります。</em></p>
+<pre><code class="language-bash"># 依頼を書いたファイル（雛形は users-guide/01-writing-requests.md の 1.1）を用意して
+copilot --agent conductor --autopilot --allow-all --max-autopilot-continues 500 -i &quot;$(cat request.md)&quot;
+</code></pre>
+<pre><code class="language-powershell">copilot --agent conductor --autopilot --allow-all --max-autopilot-continues 500 -i (Get-Content request.md -Raw)
+</code></pre>
+<ul>
+<li><code>--max-autopilot-continues</code> の既定値は 5 です。24〜48 時間の run では大きな値にします。</li>
+<li>サンドボックスは、対話中に <code>/sandbox</code> で設定します（<code>copilot help sandbox</code>）。全権限（<code>--allow-all</code>）はサンドボックスと組み合わせて使うことが推奨されています。</li>
+<li>別のブランチで実行したい場合は、先に <code>git switch -c run/&lt;名前&gt;</code> してから起動します。main 上で起動した場合も、conductor が最初に統合ブランチ <code>run/&lt;run-id&gt;</code> を作ります。</li>
+</ul>
+<h3 id="_18">最初の依頼の例</h3>
+<pre><code class="language-text">&lt;request&gt;
+社内の備品貸出アプリを新規に作りたい。社員は備品を検索して予約し、総務は貸出と返却を記録する。
+延滞が 3 日を超えたら本人と上長に通知する。Web アプリで、まずはローカルで動けばよい。
+&lt;/request&gt;
+&lt;answers&gt;
+&lt;/answers&gt;
+&lt;references&gt;
+docs/source/備品管理の現状.md
+&lt;/references&gt;
+&lt;run_options&gt;
+max_hours: 8
+approval_policy: 安全範囲は推奨どおり
+parallel_workers: auto
+scope: 承認済みすべて
+git_push: しない
+deploy: しない
+external_write: しない
+paid_services: 使わない
+external_exposure: 公開しない
+&lt;/run_options&gt;
+</code></pre>
+<p>最初は <code>max_hours</code> を短め（4〜8 時間）にして、報告の形式と品質を確認することをお勧めします。</p>
+<h3 id="run">run の中で起きること</h3>
+<ol>
+<li>conductor が <code>run-state.py start</code> で run を開始し、統合ブランチを作り、verify のベースラインを記録します。</li>
+<li>rd-author が要求定義書とカタログを作り、質問票を挙げます（<code>[RD]</code> の commit）。</li>
+<li>rd-auditor が独立に監査します。直接矛盾があれば rd-author に差し戻します。</li>
+<li>conductor が作業キューを作ります。</li>
+<li>test-designer が System Test と台帳のケースを作ります（<code>[ST]</code> の commit。すべて <code>not_run</code>）。</li>
+<li>implementer が項目ごとに worktree で実装し（<code>[FR-xxx]</code> の commit）、conductor が 1 本ずつ統合します。</li>
+<li>最後に System Test の全量実行と全量監査を行い、<code>work/runs/&lt;run-id&gt;/run-report.md</code> を書きます。</li>
+</ol>
+<h3 id="_19">初回に確認すること</h3>
+<p>hook や subagent の動作は、クライアント（VS Code・Copilot CLI・GitHub Copilot app）やそのバージョンによって異なることがあります。最初の run（または短い試行）で次の項目を確認し、結果を <code>docs/run-history.md</code> の備考かチームの記録に残します（導入の段取りでは「Phase 1 のチェックリスト」と呼びます。<a href="users-guide/08-roadmap.html">導入ロードマップと KPI</a>）。</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>確認すること</th>
+<th>確認方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>custom agent を subagent として呼べるか</td>
+<td>progress.md に rd-author・test-designer・implementer の結果が記録されている</td>
+</tr>
+<tr>
+<td>2</td>
+<td>custom agent ごとのモデル指定が効くか</td>
+<td>Agent Debug Logs や使用量の表示で、作業役ごとのモデルを確認する</td>
+</tr>
+<tr>
+<td>3</td>
+<td>hook のイベントで、呼び出し元のエージェントを識別できるか</td>
+<td><code>work/.ebak/gate.log</code> に <code>START rd-author</code> などと <code>DENY</code>/<code>BLOCK</code> が記録されている</td>
+</tr>
+<tr>
+<td>4</td>
+<td>ウィンドウを閉じても処理が続くか</td>
+<td>ウィンドウを閉じて 30 分後に開き直し、progress.md が進んでいる</td>
+</tr>
+<tr>
+<td>5</td>
+<td>サンドボックス内でテストとブラウザー自動操作（Playwright）が動くか</td>
+<td><code>ledger.py run</code> の結果が pass/fail で記録される（<code>TIMEOUT</code> や権限エラーではない）</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Advanced Autopilot の有無で完了判定がどう変わるか</td>
+<td>早すぎる完了宣言が起きないか（agentStop の hook が <code>完了条件を満たしていません</code> で差し戻しているか）</td>
+</tr>
+<tr>
+<td>7</td>
+<td>（GitHub Copilot app）サンドボックスの中で hook が動くか、統合ブランチが変わらないか</td>
+<td><code>work/.ebak/gate.log</code> に記録がある。アプリに hook の失敗の警告が出ていない。<code>python scripts/run-state.py status</code> の <code>integration:</code> が、セッションのブランチ（main 上で始めた場合は <code>run/&lt;run-id&gt;</code>）と一致する</td>
+</tr>
+</tbody>
+</table>
+<p>3 で subagent を識別できない場合は、<a href="users-guide/07-troubleshooting.html">トラブルシューティング</a> の「拒否・差し戻し」にある <code>[G-5] conductor が編集できるのは…</code> の行を参照してください。</p>
+<h3 id="build-prompt">重要: <code>/build</code> 以外の Prompt を送るときのリスク</h3>
+<blockquote>
+<p>[!IMPORTANT]
+この toolkit の品質保証は、<code>/build</code>（conductor）で run を開始したときに働くように作られています。toolkit を入れたリポジトリでも、<code>/build</code> を使わない通常の Prompt（Agent モードでの依頼など）では、多くのゲートが働きません。<strong>要求・テスト・実装の変更は <code>/build</code> で依頼してください。</strong> 通常の Prompt は、質問や調査など読み取りだけの用途にとどめることをお勧めします。</p>
+</blockquote>
+<p><code>scripts/hooks/gate.py</code> の規則の多くは、run が active なとき（<code>work/current-run.txt</code> の run の状態が <code>active</code>）か、作業ブランチ（<code>work/&lt;run-id&gt;/…</code>）の上にいるときだけ適用されます。</p>
+<table>
+<thead>
+<tr>
+<th>区分</th>
+<th>規則</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>run の外でも拒否される</td>
+<td>台帳（<code>tests/system/ledger.json</code>）の直接編集（G-2）、ID 台帳の直接編集（G-3）、一時ファイルを <code>/work</code> の外に書くこと（G-6）、作業ディレクトリの外への書き込み、<code>main</code> への push と force push、履歴を書き換える git 操作、<code>/work</code> の直接削除</td>
+</tr>
+<tr>
+<td>run の外では<strong>止まらない</strong></td>
+<td>rd-author 以外による要求定義書の編集（G-1）、<code>main</code> への直接の commit・merge、<code>run_options</code> の <code>deploy</code>・<code>git_push</code>・<code>external_write</code> による制限（デプロイと、MCP などの外部ツールでの変更）、hook 自体の変更、終了前の完了確認（agentStop）、作業役の終了前の verify（G-4）</td>
+</tr>
+</tbody>
+</table>
+<p>このため、通常の Prompt では次のことが起こりえます。</p>
+<ol>
+<li><strong>要求定義書が無断で変わる</strong>: <code>docs/requirements-definition.md</code> が、rd-author の構造化欄、質問票、決定記録を経ずに書き換わります。独立監査（rd-auditor）も通りません。ID は <code>next-id.py</code> を使わずに手で付けられがちです。その結果、ID の不整合や未採番は後の verify で初めて見つかります。</li>
+<li><strong>System Test が実装に合わせられる</strong>: 通常のエージェントは <code>tests/system/</code> を編集できます。受入基準ではなく実装を正解としてテストを直してしまうと、test-designer の独立性（テストオラクル問題への対策）が失われます。</li>
+<li><strong><code>main</code> に未検証の変更が入る</strong>: 統合ブランチ・worktree による隔離、統合ごとの verify と canary、失敗時の自動の取り消し、reviewer のレビューがありません。</li>
+<li><strong>外部に変更が及ぶ</strong>: run_options による制限が働かないため、デプロイや、MCP・plugin による外部システムの変更が止まりません。</li>
+<li><strong>途中で完了と宣言される</strong>: 完了条件の確認がないため、検証を実行しないまま終わることがあります。</li>
+<li><strong>文脈と Token が膨らむ</strong>: 作業役への委譲と状態ファイルによる再開がないため、長い作業が 1 つの会話にたまり、圧縮されたときに規則や進捗を取り違えやすくなります。</li>
+</ol>
+<p>逆に、<strong>中断中の run が残っている</strong>（run が <code>active</code>）と、通常の Prompt にも conductor 用の制限がかかります。たとえば、<code>/work</code> と <code>docs/run-history.md</code> 以外は編集を拒否されます（G-5）。また、作業ツリーでは統合ブランチ（<code>run/&lt;run-id&gt;</code>）がチェックアウトされたままのことがあり、そこに無関係な変更を commit すると、run の再開時に前提が崩れます。通常の Prompt を使う前に <code>python scripts/run-state.py status</code> で状態を確認し、run を続けるなら <code>/build</code> で再開します。</p>
+<p>通常の Prompt でファイルを変更した場合は、commit の前に <code>python scripts/verify.py</code> を実行し、exit 0 になることを確認してください。CI（<code>.github/workflows/ebak-verify.yml</code>）でも同じ検査を実行します。</p>
+<h3 id="ebak-data-layer">データ層ワークフロー（ebak-data-layer）</h3>
+<p><code>.github/workflows/ebak-data-layer.yml</code>（ebak-data-layer）は、プルリクエスト、main への push、手動実行（workflow_dispatch）、週 1 回の定期実行（schedule）で <code>python scripts/verify.py --docs-only</code> を実行します。</p>
+<ul>
+<li>不合格のとき、<code>python scripts/rdfix.py --apply</code> で自動修復して再検査し、合格した場合だけ修復を commit します。要求定義書は変更しない設計です。同一リポジトリの PR では当該 PR のブランチへ、main への push と定期実行では修復用ブランチ（<code>eabk/data-layer-fix</code>）と PR に反映します。</li>
+<li>修復後も直らないときは、ラベル <code>eabk-data-layer</code> つきで失敗の要約と実行へのリンクを含む Issue を作成します（同じ内容の未解決 Issue があればコメント）。</li>
+<li>権限は contents・pull-requests・issues の write だけで、fork からの PR では検査だけを行います。bot の修復 commit では再修復しません。</li>
+<li>無効化するには、ファイルを削除するか Actions 画面で Disable します（インストール時は <code>--no-ci</code>）。詳細は <code>users-guide/04-customization.md</code>。</li>
+</ul>
+<hr />
+<h2 id="eabk-studio">EABK Studio（データ層のビューアー）</h2>
+<p><strong>EABK Studio</strong>（<code>EABK-Studio/</code>）は、EABK が管理するデータ層（要求定義書・カタログ・System Test の台帳・ID 台帳・実行履歴）を、<strong>図・表・検索</strong>で見て回る、ローカル専用の Web アプリです。toolkit の一部として、インストールすると対象リポジトリに入ります。</p>
+<ul>
+<li><strong>読み取り専用</strong>です。ソースコードは開かず、<code>127.0.0.1</code> だけで待ち受けます。唯一の書き込みは、「整合性保守」でプレビューを確認して実行した、<code>docs/catalog.md</code> の題名・決定状態だけです。</li>
+<li>Python 3.9 以上の標準ライブラリだけで動きます（追加のインストールなし）。データ層のファイルを更新すると、数秒で画面が読み直されます。</li>
+<li>run の成果（要求・カタログ・試験）を、人が理解し、判断するための窓です。要求や実装の変更は、これまでどおり <code>/build</code> で依頼します。</li>
+</ul>
+<p><img alt="EABK Studio のダッシュボード" src="users-guide/studio/images/dashboard.png" /></p>
+<table>
+<thead>
+<tr>
+<th>役割</th>
+<th>使い方</th>
+<th>ガイド</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Product Manager</td>
+<td>ダッシュボードで進捗・承認・未回答の質問を確認し、次に投資する目的を決める</td>
+<td><a href="users-guide/studio/05-product-manager.html">S5. Product Manager 向け</a></td>
+</tr>
+<tr>
+<td>Architect</td>
+<td>2D/3D マップ・図式・配置・構造で、依存・境界・置き場所と層の欠けを確かめる</td>
+<td><a href="users-guide/studio/06-architect.html">S6. Architect 向け</a></td>
+</tr>
+<tr>
+<td>Software Engineer</td>
+<td>表・ソース対応・詳細パネルで、要求から実装ファイルとテストまでをたどる</td>
+<td><a href="users-guide/studio/07-software-engineer.html">S7. Software Engineer 向け</a></td>
+</tr>
+<tr>
+<td>全員</td>
+<td>どの画面が、どのファイルの何を読み、どう計算するか</td>
+<td><a href="users-guide/studio/08-data-reference.html">S8. データリファレンス</a></td>
+</tr>
+</tbody>
+</table>
+<p>ガイドは、各 15 分のチュートリアル（実画面つき）、おすすめのリンク、その役割が判断できることで構成します（索引は <a href="users-guide/studio/README.html">users-guide/studio/</a>）。</p>
+<h3 id="_20">自分のリポジトリで起動する</h3>
+<p><code>tools/install.py</code>（<a href="#インストール">インストール</a>）で toolkit を入れたリポジトリのルートで、次を実行します。</p>
+<pre><code class="language-bash">python EABK-Studio/studio.py --check      # データ層が読めるか（見つかったファイルと解析できた件数）を確認
+python EABK-Studio/studio.py --role pm    # ブラウザーが開く。--role は pm / architect / swe
+</code></pre>
+<p>Windows では <code>.\EABK-Studio\start.ps1 -Role pm</code>、macOS / Linux では <code>./EABK-Studio/start.sh . 8765 --role pm</code> でも起動できます。インストールの最後にも、この起動コマンドを表示します。詳細は <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/EABK-Studio/README.md">EABK-Studio/README.md</a>、スクリプトのオプションは <a href="users-guide/05-scripts-reference.html#eabk-studioデータ層のビューアー">スクリプトリファレンス</a> です。</p>
+<hr />
+<h2 id="github-spec-kit">GitHub Spec Kit との連携</h2>
+<p><a href="https://github.com/github/spec-kit">GitHub Spec Kit</a>（以下 Spec Kit）で書いた仕様を、この toolkit に取り込んで実装・検証できます。<strong>仕様は Spec Kit で対話しながら書き、仕様どおりに作り切って証明するのは conductor</strong> という分担です。橋渡しは <code>scripts/import-speckit.py</code> で、取り込みは一方向（Spec Kit → Enterprise App Build Kit）です。</p>
+<h3 id="_21">なぜ連携するのか</h3>
+<p>どちらも「仕様を正本にする」という考え方は同じですが、得意な工程が違います。</p>
+<table>
+<thead>
+<tr>
+<th>観点</th>
+<th>Spec Kit</th>
+<th>Enterprise App Build Kit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>解く問題</td>
+<td>仕様を<strong>どう書くか</strong>（Spec-Driven Development の作法とテンプレート）</td>
+<td>仕様どおりに<strong>最後まで作り切り、それを証明する</strong>こと</td>
+</tr>
+<tr>
+<td>人の関わり方</td>
+<td><code>/speckit-*</code> を段階ごとに呼び、人が結果を確かめて次へ進む</td>
+<td><code>/build</code> を 1 回送るだけ。判断が要る点は質問票にまとめ、止まらずに進む</td>
+</tr>
+<tr>
+<td>未確定事項の扱い</td>
+<td><code>/speckit-clarify</code> で、その場で対話して潰す</td>
+<td>質問票（Q）と BLOCKED に記録し、次の <code>/build</code> の <code>&lt;answers&gt;</code> で回答する</td>
+</tr>
+<tr>
+<td>完了の判定</td>
+<td><code>/speckit-converge</code> が、仕様・タスク・コードを LLM で読み比べる</td>
+<td>要求 → 受入基準 → System Test → verify の鎖で、決定的に判定する（exit 0）</td>
+</tr>
+<tr>
+<td>正本の形</td>
+<td>機能ごとの <code>specs/&lt;NNN-機能&gt;/spec.md</code></td>
+<td>1 つの要求定義書（ID 付き）、カタログ、System Test の台帳</td>
+</tr>
+</tbody>
+</table>
+<p>ここから、次のように分担するのが合理的だと考えます。</p>
+<ol>
+<li><strong>仕様を育てる段階は、対話が向いている。</strong> 要求の意図や優先度は、人と短いやりとりを重ねるほど正確になります。Spec Kit の specify・clarify・constitution は、この段階のために作られています。conductor は質問を run の後にまとめて返すため、仕様を一緒に練り上げる用途には向きません。</li>
+<li><strong>作る・確かめる段階は、無人と決定的な判定が向いている。</strong> 実装・テスト・統合は手数が多く、人が段階ごとに呼び出すと介入が増えます。また、「仕様どおりか」を LLM の読み比べで判定すると、判定そのものが揺れます。conductor は役割を分けた作業役と hook・verify で、この段階を人の手 1 回で進め、合否を機械的に出します。</li>
+<li><strong>2 つをつなぐには、仕様の各要素を Enterprise App Build Kit の管理データへ対応付ける必要がある。</strong> ユーザーストーリー・受入シナリオ・未確定事項などは、それぞれ要求・受入基準・質問票に対応します。この対応付けを毎回手で行うと、抜けや ID の重複が起きます。<code>import-speckit.py</code> が機械的に候補を付け、rd-author が採番と最終判断を行います。</li>
+</ol>
+<p><strong>計測での裏付け</strong>: 同じ 3 課題を両方のツールで各 2 回実行しました（<a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/bench/RESULTS.md">bench/RESULTS.md</a>）。課題が小さく合格率が上限に張りついたため、品質の差はまだ検出できていません。分かっているのは次の 4 点です。</p>
+<ul>
+<li>隠し受入テストは、どちらも 100% 合格でした。</li>
+<li>人の介入は、Spec Kit が平均 7.7 回、conductor が 1 回でした。</li>
+<li>conductor の reviewer と最終監査は、隠しテストでは測れない欠陥を見つけました（テストの脆さ、受入基準と非機能要求の矛盾）。</li>
+<li>一方で、所要時間は conductor のほうが長くかかりました（役割を分けて実行した run で約 40 分、Spec Kit は約 17 分）。</li>
+</ul>
+<h3 id="_22">何が、どう連携するのか</h3>
+<p><img alt="GitHub Spec Kit と Enterprise App Build Kit の連携（コンポーネント構成）" src="images/speckit-abk-integration.svg" /></p>
+<table>
+<thead>
+<tr>
+<th>段階</th>
+<th>担当</th>
+<th>すること</th>
+<th>主な成果物</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>① 仕様を書く</td>
+<td>利用者 ＋ Spec Kit</td>
+<td><code>/speckit-constitution</code> → <code>/speckit-specify</code> → <code>/speckit-clarify</code>（必要なら <code>/speckit-plan</code>・<code>/speckit-tasks</code>）</td>
+<td><code>.specify/memory/constitution.md</code>、<code>specs/&lt;NNN-機能&gt;/spec.md</code> ほか</td>
+</tr>
+<tr>
+<td>② 取り込む</td>
+<td><code>import-speckit.py</code>（決定的スクリプト）</td>
+<td>Spec Kit の文書を読み、要素ごとに取り込み先の候補を付ける。要求定義書は編集せず、ID も振らない</td>
+<td><code>work/import/speckit-&lt;日時&gt;.md</code>（対応表と <code>/build</code> の依頼文）</td>
+</tr>
+<tr>
+<td>③ 作り切る</td>
+<td>conductor と作業役</td>
+<td>依頼文を <code>/build</code> に貼って送る。rd-author が採番して要求定義書に書き、rd-auditor が監査し、test-designer → implementer → reviewer の順に進む</td>
+<td>要求定義書、カタログ、System Test と台帳、実装</td>
+</tr>
+<tr>
+<td>④ 証明する</td>
+<td>hook・verify・kpi.py</td>
+<td>ゲートを通るまで完了にしない。KPI と報告を出す</td>
+<td><code>verify.py</code> の exit 0、<code>kpi.md</code>、<code>run-report.md</code></td>
+</tr>
+<tr>
+<td>⑤ 回答・更新</td>
+<td>利用者</td>
+<td>質問票に <code>&lt;answers&gt;</code> で回答する。Spec Kit 側で仕様を変えたら、②から取り込み直す</td>
+<td>決定記録、更新された要求</td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-bash"># ① の後で、リポジトリのルートで実行する
+python scripts/import-speckit.py                         # specs/*/spec.md をすべて取り込む
+python scripts/import-speckit.py --feature 001           # 機能を選ぶ（前方一致・複数可）
+python scripts/import-speckit.py --source ../photo-app   # 別のリポジトリにある Spec Kit のプロジェクト
+python scripts/import-speckit.py --implement             # 取り込みと実装を 1 回の run で行う依頼文にする
+</code></pre>
+<p>出力された <code>work/import/speckit-&lt;日時&gt;.md</code> の「依頼文」を、conductor の <code>/build</code> の後に貼り付けて送ります。既定の依頼文は、<code>scope: なし</code>・<code>approval_policy: 厳格</code> で、<strong>要求定義だけ</strong>を行います。報告の質問票を確認・回答してから、次の <code>/build</code> で実装します。確認を挟まずに進めてよい場合は、<code>--implement</code> を付けて依頼文を作ります。</p>
+<p><strong>同じリポジトリでの共存</strong>: 2 つのツールは、置き場所が分かれています。</p>
+<table>
+<thead>
+<tr>
+<th>ツール</th>
+<th>置き場所</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Spec Kit</td>
+<td><code>specs/</code>、<code>.specify/</code>、<code>.github/skills/speckit-*</code></td>
+</tr>
+<tr>
+<td>Enterprise App Build Kit</td>
+<td><code>docs/</code>、<code>tests/system/</code>、<code>scripts/</code>、<code>.github/agents/</code>、<code>.github/skills/</code> の 5 つ、<code>.github/hooks/</code></td>
+</tr>
+</tbody>
+</table>
+<p>Spec Kit は独自の番号（<code>FR-001</code>、<code>SC-001</code> など）を使います。toolkit の ID と衝突しないよう、<code>specs/**/*.md</code> と <code>.specify/**</code> は ID の検査（CHK-19）と影響範囲のテスト選択（<code>select-tests.py</code>）の対象外です。連携するときは <code>/speckit-implement</code>・<code>/speckit-converge</code> を使いません。実装を 2 つのツールで二重に行わないためです。また、run の実行中（run が <code>active</code>）は Spec Kit のスキルを使わず、run が終わってから仕様を更新します（<a href="#重要-build-以外の-prompt-を送るときのリスク"><code>/build</code> 以外の Prompt を送るときのリスク</a>）。</p>
+<h3 id="_23">データをどう連携するか</h3>
+<p><img alt="Spec Kit の成果物から Enterprise App Build Kit の管理データへのデータ連携" src="images/speckit-abk-dataflow.svg" /></p>
+<p>取り込みの規則は次のとおりです（対応表の全体は <a href="users-guide/01-writing-requests.html#17-github-spec-kit-の仕様を取り込む">users-guide 1.7</a>）。</p>
+<ul>
+<li><strong>ID は採番し直し、出典を残す。</strong> Spec Kit の <code>FR-003</code> は、<code>speckit:001-albums/FR-003</code> という取り込み元 ID になります。rd-author は <code>next-id.py</code> で toolkit の ID（例: <code>FR-012</code>）を振り、要求の出典の欄に取り込み元 ID を書きます。取り込み元のファイルは、出典台帳に SRC として登録します。</li>
+<li><strong>受入シナリオは受入基準になり、System Test につながる。</strong> Given / When / Then は AC になります（検証レベルの候補は system）。test-designer は実装より前に、その AC から System Test と台帳のケースを作ります。</li>
+<li><strong>未確定事項は消えない。</strong> <code>[NEEDS CLARIFICATION: …]</code> と、疑問形の Edge Cases は、質問票（Q）になります。関係する AC には BLOCKED が付き、回答が出るまで実装されません。clarify で決まった回答は、決定記録になります。</li>
+<li><strong>技術計画は要求にしない。</strong> <code>plan.md</code>・<code>tasks.md</code>・<code>contracts/</code> は <code>&lt;references&gt;</code> に載せるだけです。何を満たすか（要求）と、どう作るか（設計）を混ぜないためです。</li>
+<li><strong>機能ごとの仕様を、1 つの正本に統合する。</strong> 同じ意味の既存の要求があれば、新しく作らずに対応付けます。違いがあれば、競合として質問票に挙げます。</li>
+<li><strong>取り込みは一方向。</strong> 取り込んだ後の正本は要求定義書です。conductor は <code>specs/</code> を書き換えません。仕様を変えるときは、Spec Kit 側を直して取り込み直します（rd-author が差分を扱います）。</li>
+</ul>
+<h3 id="_24">連携で得られる効果</h3>
+<table>
+<thead>
+<tr>
+<th>効果</th>
+<th>仕組み</th>
+<th>根拠・確かめ方</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>仕様の質を、対話で上げられる</td>
+<td>Spec Kit の clarify と constitution で、意図・優先度・未確定事項を詰めてから渡す</td>
+<td>取り込み時に、Clarifications は決定記録、未確定事項は質問票になる</td>
+</tr>
+<tr>
+<td>実装は人の手 1 回で最後まで進む</td>
+<td><code>/build</code> 1 回で、工程 0〜6 を無人で実行する</td>
+<td>計測では、人の介入が Spec Kit の 7〜9 回に対して、conductor は 1 回（<a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/bench/RESULTS.md">bench/RESULTS.md</a>）</td>
+</tr>
+<tr>
+<td>仕様どおりかを、機械的に証明できる</td>
+<td>AC → System Test → 台帳 → <code>verify.py</code> の鎖。合否は LLM の判断ではなくテストの結果で決まる</td>
+<td><code>python scripts/kpi.py run</code> の「検証済み要求」と「トレーサビリティ網羅率」</td>
+</tr>
+<tr>
+<td>仕様の出典を、後から追える</td>
+<td>要求の出典の欄に <code>speckit:&lt;機能&gt;/&lt;元 ID&gt;</code> が残る</td>
+<td>要求定義書と、出典台帳（SRC）</td>
+</tr>
+<tr>
+<td>未確定事項が実装に紛れ込まない</td>
+<td>NEEDS CLARIFICATION → 質問票 ＋ BLOCKED。BLOCKED の AC は実装しない</td>
+<td><code>run-report.md</code> の未回答の質問票</td>
+</tr>
+<tr>
+<td>書いた本人以外が確かめる</td>
+<td>rd-auditor（監査）と reviewer（差分の確認）は、書き手と別の作業役</td>
+<td>計測では、reviewer の差し戻し 2 回、最終監査による矛盾の検出 1 件</td>
+</tr>
+<tr>
+<td>仕様が機能ごとにばらけない</td>
+<td>rd-author が既存の要求と突き合わせて、1 つの要求定義書に統合する</td>
+<td>競合は質問票に挙がる</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_25">向いている場面と注意点</h3>
+<ul>
+<li><strong>向いている場面</strong>: 仕様は人が詰めたいが、実装と検証は任せたい場合。夜間などに無人で実行したい場合や、レビューの担当者が少ないチーム。監査やトレーサビリティの証拠が必要な開発。</li>
+<li><strong>時間と計算資源</strong>: conductor は作業役を何度も呼び出すため、Spec Kit 単独より時間と Token を多く使います。小さな変更や試作で素早く作るなら、Spec Kit 単独（<code>/speckit-implement</code>）のほうが速いことがあります。</li>
+<li><strong>一方向であること</strong>: run の中で決まった回答や設計の判断は、要求定義書と決定記録に残ります。<code>specs/</code> には戻りません。Spec Kit の文書を最新に保ちたい場合は、決定記録を見て Spec Kit 側にも反映します。</li>
+<li><strong>テンプレートの前提</strong>: <code>import-speckit.py</code> は、Spec Kit の標準テンプレートの見出し（User Scenarios、Requirements、Success Criteria など）を読みます。preset で見出しを大きく変えた場合は、対応表が粗くなります。ただし、元の文書は依頼文に全文が入るので、rd-author が判断できます。テンプレートのまま（<code>[FEATURE NAME]</code> など）の箇所があると、<code>WARN</code> を出します。</li>
+<li><strong>計測の範囲</strong>: 上の計測は、小さな 3 課題を各 2 回実行したものです。より難しい課題での品質の差や、コストの差（クレジット）は、まだ測っていません（<a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/bench/README.md">bench/README.md</a>）。</li>
+</ul>
+<hr />
+<h2 id="_26">詳細ドキュメント</h2>
+<p>詳細は <a href="users-guide/index.html">users-guide/</a> にあります。</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>ドキュメント</th>
+<th>読むタイミング</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><a href="users-guide/01-writing-requests.html">依頼の書き方（/build と run_options）</a></td>
+<td>よい依頼・回答の書き方や、承認ポリシーを知りたい</td>
+</tr>
+<tr>
+<td>2</td>
+<td><a href="users-guide/02-during-and-after-run.html">実行中と終了後</a></td>
+<td>進捗の確認、再開、報告の読み方、マージの方法を知りたい</td>
+</tr>
+<tr>
+<td>3</td>
+<td><a href="users-guide/03-requirements-format.html">管理データの書式</a></td>
+<td>要求定義書・カタログ・ID 台帳・System Test の台帳のフォーマットを知りたい</td>
+</tr>
+<tr>
+<td>4</td>
+<td><a href="users-guide/04-customization.html">設定とカスタマイズ</a></td>
+<td>ビルド・テストのコマンド、モデルの割り当て、ゲートを調整したい。MCP Server・plugin（Work IQ・Azure など）を使いたい</td>
+</tr>
+<tr>
+<td>5</td>
+<td><a href="users-guide/05-scripts-reference.html">スクリプトリファレンス</a></td>
+<td><code>scripts/</code> の各コマンドの使い方を知りたい</td>
+</tr>
+<tr>
+<td>6</td>
+<td><a href="users-guide/06-quality-gates.html">品質ゲートと検査項目</a></td>
+<td>hook（G-1〜G-7）と verify（CHK-01〜27）の意味と直し方を知りたい</td>
+</tr>
+<tr>
+<td>7</td>
+<td><a href="users-guide/07-troubleshooting.html">トラブルシューティング</a></td>
+<td>止まった・拒否された・失敗した</td>
+</tr>
+<tr>
+<td>8</td>
+<td><a href="users-guide/08-roadmap.html">導入ロードマップと KPI</a></td>
+<td>診断から本番運用までの段取りと、効果の測り方を知りたい</td>
+</tr>
+<tr>
+<td>9</td>
+<td><a href="users-guide/09-versioning.html">バージョンアップの手順</a></td>
+<td>版を上げる（配布元）、導入済みのリポジトリを更新する（利用者）</td>
+</tr>
+<tr>
+<td>10</td>
+<td><a href="users-guide/10-adopting-existing-apps.html">既存のアプリを導入する</a></td>
+<td>既存のコード・設計書から、棚卸し → 逆生成の要求（承認待ち）→ 現状の挙動の固定でデータ層を整える</td>
+</tr>
+<tr>
+<td>参考</td>
+<td><a href="users-guide/studio/README.html">EABK Studio のガイド</a></td>
+<td>データ層を図・表で見たい。Product Manager・Architect・Software Engineer 別の手順と、各画面が読むデータを知りたい</td>
+</tr>
+</tbody>
+</table>
+<p>GitHub Spec Kit との比較計測（同じ課題・隠し受入テスト・North Star の比較）の手順と結果は <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/bench/README.md">bench/</a> にあります。最新の結果は <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/bench/RESULTS.md">bench/RESULTS.md</a> です。</p>
+<h2 id="_27">用語</h2>
+<table>
+<thead>
+<tr>
+<th>用語</th>
+<th>意味</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>conductor（オーケストレーター）</td>
+<td>利用者が直接呼ぶ唯一のエージェント。計画・作業の割り当て・統合・ゲートの判定・報告を行います。</td>
+</tr>
+<tr>
+<td>作業役（worker）</td>
+<td>conductor が subagent として呼ぶ custom agent。rd-author、rd-auditor、test-designer、implementer、reviewer の 5 つです。</td>
+</tr>
+<tr>
+<td>管理データ</td>
+<td>要求定義書（<code>docs/requirements-definition.md</code>）とカタログ（<code>docs/catalog.md</code>）。要求と既存資産の Single Source of Truth です。</td>
+</tr>
+<tr>
+<td>台帳（ledger）</td>
+<td>System Test のケース定義と最新の状態（<code>tests/system/ledger.json</code>）。</td>
+</tr>
+<tr>
+<td>run</td>
+<td>conductor の 1 回の実行。<code>run-id</code>（開始日時。例: <code>202610080900</code>）で識別します。</td>
+</tr>
+<tr>
+<td>工程（stage）</td>
+<td>run の段階。工程 0（初期化）から工程 6（最終）まであります（<a href="#1-回の-run-の流れ">1 回の run の流れ</a>）。</td>
+</tr>
+<tr>
+<td><code>/work</code></td>
+<td>一時ファイルの置き場所（git の管理対象外。14 日で削除）。作業キュー、進捗、ログ、証跡、報告を置きます。</td>
+</tr>
+<tr>
+<td>ゲート</td>
+<td>モデルの判断に関係なく規則を強制する仕組み。hook（G-1〜G-7）と決定的検査 verify（CHK-01〜27）の 2 層です。</td>
+</tr>
+<tr>
+<td>包括承認</td>
+<td>run_options の <code>approval_policy</code> で、「この範囲の AI 提案は推奨案どおりでよい」と事前に決めておくこと。</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_28">リポジトリの構成</h2>
+<table>
+<thead>
+<tr>
+<th>内容</th>
+<th>場所</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>詳細ドキュメント</td>
+<td><a href="users-guide/index.html">users-guide/</a></td>
+</tr>
+<tr>
+<td>エージェント（conductor＋作業役 5）</td>
+<td><a href="https://github.com/dahatake/HypervelocityEngineering/tree/main/.github/agents">.github/agents/</a></td>
+</tr>
+<tr>
+<td>手順書（skills）</td>
+<td><a href="https://github.com/dahatake/HypervelocityEngineering/tree/main/.github/skills">.github/skills/</a></td>
+</tr>
+<tr>
+<td>強制ゲート（hooks）</td>
+<td><a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/.github/hooks/quality-gates.json">.github/hooks/quality-gates.json</a>、<a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/scripts/hooks/gate.py">scripts/hooks/gate.py</a></td>
+</tr>
+<tr>
+<td>決定的スクリプト</td>
+<td><a href="https://github.com/dahatake/HypervelocityEngineering/tree/main/scripts">scripts/</a></td>
+</tr>
+<tr>
+<td>データ層のビューアー（EABK Studio）</td>
+<td><a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/EABK-Studio/README.md">EABK-Studio/</a>、ガイドは <a href="users-guide/studio/README.html">users-guide/studio/</a></td>
+</tr>
+<tr>
+<td>管理データの雛形</td>
+<td><a href="https://github.com/dahatake/HypervelocityEngineering/tree/main/docs">docs/</a>、<a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/tests/system/ledger.json">tests/system/ledger.json</a></td>
+</tr>
+<tr>
+<td>インストールスクリプト</td>
+<td><a href="https://github.com/dahatake/HypervelocityEngineering/tree/main/tools">tools/</a></td>
+</tr>
+<tr>
+<td>toolkit のテスト</td>
+<td><a href="https://github.com/dahatake/HypervelocityEngineering/tree/main/tests/toolkit">tests/toolkit/</a>（<code>python -m pytest tests/toolkit -q</code>）</td>
+</tr>
+<tr>
+<td>GitHub Spec Kit との比較計測（配布しない）</td>
+<td><a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/bench/README.md">bench/</a>、結果は <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/bench/RESULTS.md">bench/RESULTS.md</a></td>
+</tr>
+</tbody>
+</table><footer>出典: <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/README.md">README.md</a></footer></main></div>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"></script>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark=['dark','midnight'].includes(document.documentElement.dataset.theme);
+mermaid.initialize({startOnLoad:false,theme:dark?'dark':'default'});
+await mermaid.run({querySelector:'pre.mermaid'});
+</script>
+<script>document.querySelectorAll('pre code').forEach(e=>hljs.highlightElement(e));
+const t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+const sel=document.getElementById('theme');
+function setT(v){document.documentElement.dataset.theme=v;localStorage.setItem('theme',v);sel.value=v;
+ const hl=document.getElementById('hl');if(hl)hl.href='https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github'+(['dark','midnight'].includes(v)?'-dark':'')+'.min.css';}
+sel.onchange=()=>setT(sel.value);setT(t);
+document.getElementById('menu').onclick=()=>document.querySelector('nav').classList.toggle('open');
+document.querySelector('nav a.cur')?.scrollIntoView({block:'center'});
+</script>
+</body></html>

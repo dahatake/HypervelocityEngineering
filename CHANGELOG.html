@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Changelog — HypervelocityEngineering</title>
+<link id="hl" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+<style>
+:root{--bg:#fff;--fg:#1f2328;--muted:#656d76;--card:#f6f8fa;--bd:#d0d7de;--ac:#0969da;--side:#f6f8fa;--code:#eff1f3;--r:10px}
+[data-theme=dark]{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--card:#161b22;--bd:#30363d;--ac:#58a6ff;--side:#010409;--code:#1c2128}
+[data-theme=midnight]{--bg:#0f1226;--fg:#e4e7ff;--muted:#9aa0cc;--card:#171a3a;--bd:#2c3062;--ac:#8b9cff;--side:#0a0c1d;--code:#1d2147}
+[data-theme=ocean]{--bg:#f2fafc;--fg:#0c2d3a;--muted:#4f7583;--card:#e0f2f7;--bd:#b4dce6;--ac:#0087a8;--side:#dcf0f5;--code:#d3ebf1}
+[data-theme=forest]{--bg:#f4f8f2;--fg:#1c2b1e;--muted:#5a6f5c;--card:#e6efe2;--bd:#c3d6bd;--ac:#2f7d3a;--side:#e1ecdc;--code:#dae7d5}
+[data-theme=sunset]{--bg:#fff8f2;--fg:#3a2118;--muted:#8a6252;--card:#ffebdc;--bd:#f2cdb3;--ac:#d9480f;--side:#ffeede;--code:#fde1cc}
+[data-theme=rose]{--bg:#fff6f8;--fg:#3a1c26;--muted:#8d5a6b;--card:#ffe6ec;--bd:#f2c2cf;--ac:#c2255c;--side:#ffe9ef;--code:#fcdbe4}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 system-ui,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;transition:background .2s,color .2s}
+a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;padding:.6rem 1.2rem;background:var(--card);border-bottom:1px solid var(--bd);backdrop-filter:blur(6px)}
+header .brand{font-weight:700;color:var(--fg)}header .sp{flex:1}
+header select,header button{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:.3rem .6rem;font:inherit;font-size:.9rem}
+#menu{display:none}
+.layout{display:flex;min-height:calc(100vh - 54px)}
+nav{width:290px;flex:none;background:var(--side);border-right:1px solid var(--bd);padding:1rem;position:sticky;top:54px;height:calc(100vh - 54px);overflow:auto;font-size:.9rem}
+nav h4{margin:1.1rem 0 .3rem;color:var(--muted);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
+nav a{display:block;padding:.25rem .6rem;border-radius:6px;color:var(--fg);line-height:1.4}
+nav a:hover{background:var(--card);text-decoration:none}
+nav a.cur{background:var(--ac);color:#fff}
+main{flex:1;min-width:0;max-width:900px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1,h2{border-bottom:1px solid var(--bd);padding-bottom:.3rem}
+h1,h2,h3,h4{line-height:1.3;scroll-margin-top:70px}
+img{max-width:100%;height:auto;border-radius:var(--r);border:1px solid var(--bd)}
+pre{background:var(--code);border:1px solid var(--bd);border-radius:var(--r);padding:1rem;overflow:auto;line-height:1.5;font-size:.88rem}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font:.88em ui-monospace,Consolas,monospace}
+pre code{background:none;padding:0}
+pre.mermaid{background:var(--card);text-align:center}
+table{border-collapse:collapse;display:block;overflow:auto;margin:1rem 0}
+th,td{border:1px solid var(--bd);padding:.45rem .8rem;vertical-align:top}
+th{background:var(--card)}tr:nth-child(even) td{background:color-mix(in srgb,var(--card) 50%,transparent)}
+blockquote{margin:1rem 0;padding:.2rem 1rem;border-left:4px solid var(--ac);background:var(--card);border-radius:0 var(--r) var(--r) 0;color:var(--muted)}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var(--muted);font-size:.85rem}
+@media(max-width:820px){#menu{display:inline-block}nav{position:fixed;left:-310px;top:54px;z-index:9;transition:left .2s}nav.open{left:0}main{padding:1.2rem 1rem}}
+</style>
+<script>document.documentElement.dataset.theme=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')</script>
+</head><body>
+<header><button id="menu" aria-label="menu">☰</button><a class="brand" href="index.html">⚡ HypervelocityEngineering</a><span class="sp"></span>
+<label>🎨 <select id="theme" aria-label="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="midnight">Midnight</option><option value="ocean">Ocean</option><option value="forest">Forest</option><option value="sunset">Sunset</option><option value="rose">Rose</option></select></label>
+<a href="https://github.com/dahatake/HypervelocityEngineering">GitHub</a></header>
+<div class="layout"><nav><h4>はじめに</h4>
+<a href="index.html">HypervelocityEngineering — Enterprise App Build Kit</a>
+<a class="cur" href="CHANGELOG.html">Changelog</a>
+<h4>ユーザーガイド</h4>
+<a href="users-guide/01-writing-requests.html">1. 依頼の書き方（/build と runoptions）</a>
+<a href="users-guide/02-during-and-after-run.html">2. 実行中と終了後</a>
+<a href="users-guide/03-requirements-format.html">3. 管理データの書式</a>
+<a href="users-guide/04-customization.html">4. 設定とカスタマイズ</a>
+<a href="users-guide/05-scripts-reference.html">5. スクリプトリファレンス</a>
+<a href="users-guide/06-quality-gates.html">6. 品質ゲートと検査項目</a>
+<a href="users-guide/07-troubleshooting.html">7. トラブルシューティング</a>
+<a href="users-guide/08-roadmap.html">8. 導入ロードマップと KPI</a>
+<a href="users-guide/09-versioning.html">バージョンアップの手順</a>
+<a href="users-guide/10-adopting-existing-apps.html">10. 既存のアプリを導入する（Adopt）</a>
+<a href="users-guide/index.html">EABK ユーザーガイド</a>
+<h4>Studio ガイド</h4>
+<a href="users-guide/studio/01-first-steps.html">S1 はじめかた</a>
+<a href="users-guide/studio/02-screens.html">S2 画面の見かた</a>
+<a href="users-guide/studio/03-tasks.html">S3 こんなとき、どう見るか</a>
+<a href="users-guide/studio/04-troubleshooting.html">S4 うまく動かないとき・用語集</a>
+<a href="users-guide/studio/05-product-manager.html">S5 Product Manager 向けガイド</a>
+<a href="users-guide/studio/06-architect.html">S6 Architect 向けガイド</a>
+<a href="users-guide/studio/07-software-engineer.html">S7 Software Engineer 向けガイド</a>
+<a href="users-guide/studio/08-data-reference.html">S8 データリファレンス（どの機能が、どのデータを読むか）</a>
+<a href="users-guide/studio/README.html">EABK Studio ユーザーガイド（第 2 部）</a>
+<h4>管理データ（docs）</h4>
+<a href="docs/catalog.html">カタログ</a>
+<a href="docs/id-registry.html">ID 台帳</a>
+<a href="docs/manual-tests.html">手順で確かめる受入基準</a>
+<a href="docs/requirements-definition.html">要求定義書</a>
+<a href="docs/run-history.html">実行履歴</a></nav>
+<main><h1 id="changelog">Changelog</h1>
+<p>Enterprise App Build Kit の変更履歴です。版は <a href="https://semver.org/lang/ja/">Semantic Versioning</a> に従い、正本は <code>scripts/ebaklib.py</code> の <code>TOOLKIT_VERSION</code> です。
+版の更新は <code>python tools/bump-version.py &lt;major|minor|patch|X.Y.Z&gt;</code> で行います。現在の版は <code>python tools/install.py --version</code> で確認できます。</p>
+<h2 id="unreleased">[Unreleased]</h2>
+<ul>
+<li>
+<p><strong>次に実装すべき要求の分析と、時間だけで始める /build の依頼生成</strong>を追加しました（FR-1015・FR-1016）。<code>python scripts/next-impl.py</code> が、承認済みで未着手・試験未登録・試験未合格の要求を、依存・優先度・実装状態の順位表と除外の理由つきで出し、<code>python scripts/build-request.py 60分</code>（<code>90m</code>・<code>24時間</code>・<code>1.5h</code>）が、許容時間を 1 要求あたり 60 分（PARAM-012）で件数に換算した <code>/build</code> 用の依頼を生成します（生成のみ。run は開始しません）。</p>
+</li>
+<li>
+<p><strong>既存アプリの導入（brownfield）</strong> を追加しました（<code>scripts/adopt.py</code>・skill <code>adopt-existing</code>・<a href="users-guide/10-adopting-existing-apps.html">users-guide/10</a>）。公開されている知見（再文書化とリエンジニアリングの分離、特性化テスト・golden master、Strangler Fig、ホットスポット分析、LLM による要求逆生成の幻覚対策）を、この toolkit の規則（G-1・G-2・G-3、承認は利用者）に照らして検証し、3 層（事実の棚卸し／逆生成の仮説＝出典と証跡の固定・承認待ち／現状の挙動の固定）で採用しました。<code>scan</code>・<code>request</code>・<code>anchor</code>・<code>check</code>・<code>golden</code> を提供し、conductor・rd-author・test-designer・rd-auditor・implementer の手順に導入モードを追加しました。</p>
+</li>
+<li>
+<p><strong>EABK Studio</strong>（<code>EABK-Studio/</code>。データ層をブラウザーで見る、読み取り専用のローカル Web アプリ）を、toolkit の副機能として配布します。インストールすると対象リポジトリに入り、インストールの最後に起動コマンドを表示します。</p>
+</li>
+<li>役割別のガイドを追加しました: Product Manager・Architect・Software Engineer 向け（各 15 分のチュートリアル・おすすめのリンク・判断できること）と、各画面がどのファイルのどの節・列を読み、どう計算するかのデータリファレンス（実画面の画像つき。<code>capture-screens.py</code> で再採取できます）。</li>
+<li><code>studio.py</code> に <code>--check</code>（管理データのファイルの有無と解析件数を表示して終了。データ層がなければ exit 1）と <code>--role pm|architect|swe</code>（最初に開く画面）を追加しました。データ層のない <code>--repo</code> には、起動せずに案内を出します。<code>start.ps1</code>（<code>-Role</code>・<code>-Check</code>・<code>-NoOpen</code>）と <code>start.sh</code>（残りの引数）は、オプションをそのまま渡せます。</li>
+<li>EABK と EABK Studio のユーザーガイドを <code>users-guide/</code> の 1 か所にまとめました。Studio のガイドは <code>EABK-Studio/users-guide/</code> から <a href="users-guide/studio/README.html">users-guide/studio/</a> へ移り（導入先では <code>EABK-docs/studio/</code>）、章の記号を <code>S1</code>〜<code>S8</code> にしました。索引 <a href="users-guide/index.html">users-guide/README.md</a> を、第 1 部（EABK 本体）・第 2 部（Studio）・役割別・目的別の構成に作り直しました。更新時、導入先の旧 <code>EABK-Studio/users-guide/</code> は（変更していなければ）削除されます。</li>
+<li>Studio は <code>__pycache__</code> を作らないので、対象リポジトリの <code>git status</code> を汚しません。</li>
+<li>conductor にレーンの自動判定を追加しました（<code>run-state.py lane decide|confirm|show</code>）。変えた要求が 3 件以下・queue が 2 項目以下で、セキュリティ・競合・共通部品・未確定・事業目的との不一致がないときだけ fast レーンとし、独立監査・reviewer・全量の多数決を省きます（比較レポートの E-4・E-5 の実測に基づく）。要求の書き戻し・System Test の先行設計・verify・hook は省きません。条件を外れる事象が出たら full に戻します。run-report にレーンと省いた工程、依頼の範囲の充足率を書きます。</li>
+</ul>
+<h2 id="030">[0.3.0]</h2>
+<ul>
+<li>要求定義書とカタログを、ID と名前でつながった 1 つの体系として保つ検査を追加しました（ISO/IEC/IEEE 29148 の「追跡可能」「一貫している」に相当）。</li>
+<li>CHK-24: 要求定義書の本文・表とカタログの API・テーブル・共通部品の表に書いた ID が、すべて定義されていること（参照先のないリンクの禁止）。</li>
+<li>CHK-25: 構造化欄が定義を指していること（対象エンティティ → 用語・状態の表、関係する状態 → 状態の表、<code>{PARAM-xxx}</code> ⇔ 参照パラメータの欄）。</li>
+<li>CHK-26（warn）: どこからも参照されない PARAM・SRC・状態の表のエンティティ。</li>
+<li>CHK-27: カタログの表どうしの双方向の一致（機能の表「使っている共通部品」⇔ 共通部品の表「使っている要求 ID」、名前の重複、「関連する既存資産」の実在）。</li>
+<li>CHK-07 を強化しました。題名の不一致、承認済み・承認待ち・保留の要求の行の不足、行の重複、機能の表がないことを error にします（これまでは <code>rdfix.py</code> が直すだけで、verify は止めませんでした）。</li>
+<li><code>rdcheck.py trace &lt;ID|名前&gt;</code> を追加しました。要求の上流（G・出典）・横（用語・状態・PARAM）・下流（AC・台帳のケース・カタログ・コード）と、G・エンティティ・PARAM・共通部品から要求への逆向きのつながりを表示します（<code>--json</code> 可）。</li>
+<li><code>rdfix.py</code> の catalog が、共通部品の表の「使っている要求 ID」を機能の表に合わせます（CHK-27）。</li>
+<li>既存の要求定義書に導入すると、状態の表に定義していない「関係する状態」などが CHK-25 で error になります。<code>python scripts/verify.py --docs-only --show-warnings</code> で確認し、rd-author に「状態の表と用語の表を要求に合わせて整える。意味は変えない」と依頼してください。</li>
+<li>verify の高速化（実測: 統合の再試行が環境起因の timeout で長引いた）。</li>
+<li>結果のキャッシュの鍵を HEAD から tree hash に変えました。同じ内容なら commit や worktree が違っても再利用します。</li>
+<li>環境起因の失敗（vitest の <code>Timeout calling</code> など）は 1 回だけ自動で再実行します（<code>verify.retry_on</code> / <code>verify.retry_flaky</code>）。</li>
+<li>verify.commands に <code>cache_files</code> を追加しました。依存のファイルが変わっていなければ、<code>npm ci</code> などをスキップします。</li>
+<li>工程 4 の分割並行化（<code>part: n/N</code>）、1 項目の AC の上限（12 個）、台帳の書き込みの排他ロック、<code>models</code> が空のときの HINT を追加しました。</li>
+<li>計算資源の活用（0.3.0）。</li>
+<li><code>parallel_workers</code> の既定を <code>auto</code> にしました（2 コア・6 GB につき 1 体、最大 8 体）。各 worker に CPU スレッドを「コア数 × 1.5 ÷ worker 数」で渡します（<code>HVE_CPUS</code>、<code>VITEST_MAX_WORKERS</code> など）。実測（vitest・20 コア・8 並列）で、全コアを使わせると timeout が 1 件出て、4 スレッドずつにすると出ませんでした。</li>
+<li><code>verify.commands</code> の <code>"parallel": true</code> で、独立した工程を同時に実行します。<code>ledger.py run --jobs N|auto</code>（<code>system_test.jobs</code>）で System Test を同時に実行します（<code>"serial": true</code> のケースは単独）。</li>
+<li>hook の起動で git を呼ばなくしました（<code>.git</code> の走査と HEAD の直接読み）。読み取り系以外のツールで 260 ms → 150 ms です。</li>
+<li>Azure は既定で使いません。使う条件を <a href="users-guide/04-customization.html">4.9</a> に書きました。</li>
+<li>修正: 導入時に、この配布元自身の要求定義書・台帳・Studio のコードの ID が利用者のリポジトリーに混ざる不具合を直しました（雛形は <code>tools/templates/</code> から配る。CHK-19 の対象から Studio の同梱ファイルを除外）。</li>
+</ul>
+<h2 id="020">[0.2.0]</h2>
+<ul>
+<li>実行の高速化（品質のゲートは維持）:</li>
+<li>実装ループをパイプラインにしました。conductor は作業役を background で起動し、完了した順に統合して、空いた枠にすぐ次の項目を入れます。<code>parallel_workers</code> の既定は 5 です。1 項目は要求 ID 1〜5 個で、縦に切った機能の単位にまとめます。</li>
+<li>統合を 1 コマンドにする <code>scripts/integrate.py</code> を追加しました（<code>prepare</code>・<code>merge</code>・<code>abandon</code>・<code>pool</code>）。worktree はプール（<code>work/worktrees/&lt;run-id&gt;-w&lt;N&gt;</code>）として再利用し、ignore されたビルドの生成物を残します。<code>merge</code> は verify を <code>--quick</code> で実行し（5 項目ごとに全コマンド）、System Test は merge 直前からの差分に関係するケースと canary だけに絞ります（まだ統合していない要求のケースは除きます）。失敗したら統合を取り消して todo に戻します。</li>
+<li>verify に結果のキャッシュを追加しました。作業ツリーが clean で、HEAD・引数・設定・run の状態が同じなら、PASS を再利用します（implementer のゲートの直後の hook G-4 など）。<code>--no-cache</code> で無効にできます。</li>
+<li>hook G-7 を追加しました。run の実行中に、<code>models</code> に値のある作業役をそのモデルなしで呼ぶことを拒否し、実際のモデルを <code>models.jsonl</code> に記録します（<code>gates.enforce_models</code>）。</li>
+<li>hook の pre-tool は、読み取りだけの組み込みツールに対して、設定の読み込みや git の呼び出しの前に応答します。hook は <code>python -S</code> で起動します。</li>
+<li>reviewer の対象を、共通部品・契約・テーブルの変更、セキュリティ・個人情報・認証、画面の変更に絞りました（MUST だけでは使いません）。小さな依頼のための軽量モードを conductor に追加しました。test-designer と計画、最終監査の 3 回と System Test の実行を並行させます。最終監査は 3 体の並行と集計 1 体で行います（rd-audit の並行モード・集計モード）。</li>
+<li>skill <code>implement-fr</code> から、画面の規則（<code>ui-design.md</code>）と、implementer が使わない原本の節（<code>original-rd.md</code>）を分け、毎回読む量を約 35% 減らしました。</li>
+<li><code>run-state.py</code> が項目と工程の時刻を記録し、<code>kpi.py run</code> が流れの指標（工程ごとの時間、実効の並列度、項目あたりの作業時間、統合の直列時間、実際に使ったモデル）を出力します。</li>
+<li>データ層のファイル間の不整合を修正する <code>scripts/rdfix.py</code> を追加しました。要求定義書を正本として、カタログ（決定状態・題名・行の不足と重複・名前が変わったファイルの参照・廃止の要求の実装ファイル）、ID 台帳（状態・merge=union で重複した行）、System Test の台帳（欠けた項目・<code>requirement_ids</code>・<code>ac_digests</code> の不足と残骸）、実行履歴の重複行、<code>.gitignore</code> の <code>/work/</code> を直します。既定は確認だけで、<code>--apply</code> で書き込みます。要求定義書は変更せず、判断が要る不整合は担当の役割とともに <code>MANUAL</code> として示します。verify は自動で直せる不整合があるときに <code>HINT rdfix</code> を表示し、conductor は「始めに」と工程 6 で実行します。hook は作業役・読み取り専用の役割による <code>--apply</code> を拒否します。あわせて <code>ledger.py repair</code> を追加しました。</li>
+<li>toolkit を使っている別のリポジトリから、インストールと同じ 1 コマンドでアンインストール・クリーンアップできるようにしました（<code>tools/uninstall.ps1</code>・<code>tools/uninstall.sh</code>）。<code>--uninstall</code> は空になったフォルダー・<code>__pycache__</code>・旧マーカーのブロックも削除し、マニフェストがなくても toolkit と同じ内容のファイルを判別して削除します。新しい <code>--purge</code>（PowerShell は <code>-Purge</code>）は、管理データ・<code>scripts/ebak.config.json</code>・<code>/work</code>・<code>.gitignore</code> と <code>.gitattributes</code> に追記した行・<code>*.ebak-backup-*</code> も削除します。</li>
+<li><code>/build template</code> が雛形を表示せず、conductor の「始めに」（<code>run-state.py start</code>）や実行中の run の再開に進んでしまう問題を直しました。conductor と skill <code>build</code> で雛形の表示を最優先にし、hook（<code>userPromptSubmitted</code>）がそのターンの読み取り以外のツールを拒否して、ターンの終了を差し戻さないようにしました。</li>
+</ul>
+<h2 id="010">[0.1.0]</h2>
+<ul>
+<li>版管理を整理し、現在の版を 0.1.0 としました。</li>
+</ul><footer>出典: <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/CHANGELOG.md">CHANGELOG.md</a></footer></main></div>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"></script>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark=['dark','midnight'].includes(document.documentElement.dataset.theme);
+mermaid.initialize({startOnLoad:false,theme:dark?'dark':'default'});
+await mermaid.run({querySelector:'pre.mermaid'});
+</script>
+<script>document.querySelectorAll('pre code').forEach(e=>hljs.highlightElement(e));
+const t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+const sel=document.getElementById('theme');
+function setT(v){document.documentElement.dataset.theme=v;localStorage.setItem('theme',v);sel.value=v;
+ const hl=document.getElementById('hl');if(hl)hl.href='https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github'+(['dark','midnight'].includes(v)?'-dark':'')+'.min.css';}
+sel.onchange=()=>setT(sel.value);setT(t);
+document.getElementById('menu').onclick=()=>document.querySelector('nav').classList.toggle('open');
+document.querySelector('nav a.cur')?.scrollIntoView({block:'center'});
+</script>
+</body></html>

@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>4. 設定とカスタマイズ — HypervelocityEngineering</title>
+<link id="hl" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+<style>
+:root{--bg:#fff;--fg:#1f2328;--muted:#656d76;--card:#f6f8fa;--bd:#d0d7de;--ac:#0969da;--side:#f6f8fa;--code:#eff1f3;--r:10px}
+[data-theme=dark]{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--card:#161b22;--bd:#30363d;--ac:#58a6ff;--side:#010409;--code:#1c2128}
+[data-theme=midnight]{--bg:#0f1226;--fg:#e4e7ff;--muted:#9aa0cc;--card:#171a3a;--bd:#2c3062;--ac:#8b9cff;--side:#0a0c1d;--code:#1d2147}
+[data-theme=ocean]{--bg:#f2fafc;--fg:#0c2d3a;--muted:#4f7583;--card:#e0f2f7;--bd:#b4dce6;--ac:#0087a8;--side:#dcf0f5;--code:#d3ebf1}
+[data-theme=forest]{--bg:#f4f8f2;--fg:#1c2b1e;--muted:#5a6f5c;--card:#e6efe2;--bd:#c3d6bd;--ac:#2f7d3a;--side:#e1ecdc;--code:#dae7d5}
+[data-theme=sunset]{--bg:#fff8f2;--fg:#3a2118;--muted:#8a6252;--card:#ffebdc;--bd:#f2cdb3;--ac:#d9480f;--side:#ffeede;--code:#fde1cc}
+[data-theme=rose]{--bg:#fff6f8;--fg:#3a1c26;--muted:#8d5a6b;--card:#ffe6ec;--bd:#f2c2cf;--ac:#c2255c;--side:#ffe9ef;--code:#fcdbe4}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 system-ui,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;transition:background .2s,color .2s}
+a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;padding:.6rem 1.2rem;background:var(--card);border-bottom:1px solid var(--bd);backdrop-filter:blur(6px)}
+header .brand{font-weight:700;color:var(--fg)}header .sp{flex:1}
+header select,header button{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:.3rem .6rem;font:inherit;font-size:.9rem}
+#menu{display:none}
+.layout{display:flex;min-height:calc(100vh - 54px)}
+nav{width:290px;flex:none;background:var(--side);border-right:1px solid var(--bd);padding:1rem;position:sticky;top:54px;height:calc(100vh - 54px);overflow:auto;font-size:.9rem}
+nav h4{margin:1.1rem 0 .3rem;color:var(--muted);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
+nav a{display:block;padding:.25rem .6rem;border-radius:6px;color:var(--fg);line-height:1.4}
+nav a:hover{background:var(--card);text-decoration:none}
+nav a.cur{background:var(--ac);color:#fff}
+main{flex:1;min-width:0;max-width:900px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1,h2{border-bottom:1px solid var(--bd);padding-bottom:.3rem}
+h1,h2,h3,h4{line-height:1.3;scroll-margin-top:70px}
+img{max-width:100%;height:auto;border-radius:var(--r);border:1px solid var(--bd)}
+pre{background:var(--code);border:1px solid var(--bd);border-radius:var(--r);padding:1rem;overflow:auto;line-height:1.5;font-size:.88rem}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font:.88em ui-monospace,Consolas,monospace}
+pre code{background:none;padding:0}
+pre.mermaid{background:var(--card);text-align:center}
+table{border-collapse:collapse;display:block;overflow:auto;margin:1rem 0}
+th,td{border:1px solid var(--bd);padding:.45rem .8rem;vertical-align:top}
+th{background:var(--card)}tr:nth-child(even) td{background:color-mix(in srgb,var(--card) 50%,transparent)}
+blockquote{margin:1rem 0;padding:.2rem 1rem;border-left:4px solid var(--ac);background:var(--card);border-radius:0 var(--r) var(--r) 0;color:var(--muted)}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var(--muted);font-size:.85rem}
+@media(max-width:820px){#menu{display:inline-block}nav{position:fixed;left:-310px;top:54px;z-index:9;transition:left .2s}nav.open{left:0}main{padding:1.2rem 1rem}}
+</style>
+<script>document.documentElement.dataset.theme=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')</script>
+</head><body>
+<header><button id="menu" aria-label="menu">☰</button><a class="brand" href="../index.html">⚡ HypervelocityEngineering</a><span class="sp"></span>
+<label>🎨 <select id="theme" aria-label="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="midnight">Midnight</option><option value="ocean">Ocean</option><option value="forest">Forest</option><option value="sunset">Sunset</option><option value="rose">Rose</option></select></label>
+<a href="https://github.com/dahatake/HypervelocityEngineering">GitHub</a></header>
+<div class="layout"><nav><h4>はじめに</h4>
+<a href="../index.html">HypervelocityEngineering — Enterprise App Build Kit</a>
+<a href="../CHANGELOG.html">Changelog</a>
+<h4>ユーザーガイド</h4>
+<a href="01-writing-requests.html">1. 依頼の書き方（/build と runoptions）</a>
+<a href="02-during-and-after-run.html">2. 実行中と終了後</a>
+<a href="03-requirements-format.html">3. 管理データの書式</a>
+<a class="cur" href="04-customization.html">4. 設定とカスタマイズ</a>
+<a href="05-scripts-reference.html">5. スクリプトリファレンス</a>
+<a href="06-quality-gates.html">6. 品質ゲートと検査項目</a>
+<a href="07-troubleshooting.html">7. トラブルシューティング</a>
+<a href="08-roadmap.html">8. 導入ロードマップと KPI</a>
+<a href="09-versioning.html">バージョンアップの手順</a>
+<a href="10-adopting-existing-apps.html">10. 既存のアプリを導入する（Adopt）</a>
+<a href="index.html">EABK ユーザーガイド</a>
+<h4>Studio ガイド</h4>
+<a href="studio/01-first-steps.html">S1 はじめかた</a>
+<a href="studio/02-screens.html">S2 画面の見かた</a>
+<a href="studio/03-tasks.html">S3 こんなとき、どう見るか</a>
+<a href="studio/04-troubleshooting.html">S4 うまく動かないとき・用語集</a>
+<a href="studio/05-product-manager.html">S5 Product Manager 向けガイド</a>
+<a href="studio/06-architect.html">S6 Architect 向けガイド</a>
+<a href="studio/07-software-engineer.html">S7 Software Engineer 向けガイド</a>
+<a href="studio/08-data-reference.html">S8 データリファレンス（どの機能が、どのデータを読むか）</a>
+<a href="studio/README.html">EABK Studio ユーザーガイド（第 2 部）</a>
+<h4>管理データ（docs）</h4>
+<a href="../docs/catalog.html">カタログ</a>
+<a href="../docs/id-registry.html">ID 台帳</a>
+<a href="../docs/manual-tests.html">手順で確かめる受入基準</a>
+<a href="../docs/requirements-definition.html">要求定義書</a>
+<a href="../docs/run-history.html">実行履歴</a></nav>
+<main><h1 id="4">4. 設定とカスタマイズ</h1>
+<p>設定は <code>scripts/ebak.config.json</code> に集約しています。インストール・更新時には、利用者が設定した値は保持され、新しいキーだけが追加されます。</p>
+<h2 id="41-verifycommands">4.1 ビルド・静的解析・テストのコマンド（<code>verify.commands</code>）</h2>
+<p><code>scripts/verify.py</code> は、管理データの検査（CHK-01〜27）の後に、ここに登録したコマンドを順に実行します。1 つでも失敗すると exit 1 になります。</p>
+<pre><code class="language-json">&quot;verify&quot;: {
+  &quot;timeout_sec&quot;: 1800,
+  &quot;commands&quot;: [
+    { &quot;name&quot;: &quot;install&quot;, &quot;run&quot;: &quot;npm ci&quot; },
+    { &quot;name&quot;: &quot;lint&quot;, &quot;run&quot;: &quot;npm run lint&quot; },
+    { &quot;name&quot;: &quot;build&quot;, &quot;run&quot;: &quot;npm run build&quot; },
+    { &quot;name&quot;: &quot;unit&quot;, &quot;run&quot;: &quot;npm test -- --run&quot; },
+    { &quot;name&quot;: &quot;e2e-smoke&quot;, &quot;run&quot;: &quot;npx playwright test --grep @canary&quot;, &quot;slow&quot;: true, &quot;timeout_sec&quot;: 900 }
+  ]
+}
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>キー</th>
+<th>意味</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>表示名。ログのファイル名にも使います</td>
+</tr>
+<tr>
+<td><code>run</code></td>
+<td>リポジトリのルートで実行するシェルコマンド</td>
+</tr>
+<tr>
+<td><code>slow</code></td>
+<td><code>true</code> にすると、作業役のゲート（<code>verify.py --quick</code>）ではスキップし、統合時と最終工程でだけ実行します</td>
+</tr>
+<tr>
+<td><code>timeout_sec</code></td>
+<td>このコマンドのタイムアウト（既定は <code>verify.timeout_sec</code>）</td>
+</tr>
+<tr>
+<td><code>cache_files</code></td>
+<td>例: <code>["package.json", "package-lock.json"]</code>。これらが前回の成功時から変わっていなければ、このコマンドをスキップします（<code>npm ci</code> などの依存の導入向け。<code>--no-cache</code> で無効）。build と分けて登録します</td>
+</tr>
+</tbody>
+</table>
+<p><code>verify.retry_on</code>（正規表現）に一致する環境起因の失敗（既定は vitest の <code>Timeout calling</code> や <code>ECONNRESET</code> など）は、1 回だけ自動で再実行します。無効にするには <code>verify.retry_flaky: false</code> にします。</p>
+<p><code>"commands": ["python -m pytest -q"]</code> のように文字列だけを書くこともできます。その場合、<code>name</code> はコマンドの先頭の語（例: <code>python</code>）になります。<code>run</code> のない要素や、文字列でもオブジェクトでもない要素は、<code>FAIL config</code> として verify を失敗させます。</p>
+<p>技術スタック別の例:</p>
+<table>
+<thead>
+<tr>
+<th>スタック</th>
+<th>例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>.NET</td>
+<td><code>dotnet build --nologo</code>、<code>dotnet test --nologo</code></td>
+</tr>
+<tr>
+<td>Python</td>
+<td><code>python -m ruff check .</code>、<code>python -m pytest -q</code></td>
+</tr>
+<tr>
+<td>Java (Gradle)</td>
+<td><code>./gradlew build</code></td>
+</tr>
+<tr>
+<td>Go</td>
+<td><code>go vet ./...</code>、<code>go test ./...</code></td>
+</tr>
+</tbody>
+</table>
+<p>ログの全文は <code>/work/runs/&lt;run-id&gt;/logs/</code>（run がないときは <code>/work/logs/</code>）に保存され、コンソールには失敗の要約だけが出力されます。</p>
+<h2 id="42-models">4.2 モデルの割り当て（<code>models</code>）</h2>
+<pre><code class="language-json">&quot;models&quot;: {
+  &quot;conductor&quot;: &quot;&quot;,
+  &quot;rd-author&quot;: &quot;&quot;,
+  &quot;rd-auditor&quot;: &quot;&quot;,
+  &quot;test-designer&quot;: &quot;&quot;,
+  &quot;implementer&quot;: &quot;&quot;,
+  &quot;implementer-escalation&quot;: &quot;&quot;,
+  &quot;reviewer&quot;: &quot;&quot;
+}
+</code></pre>
+<p>conductor は subagent を呼び出すとき、この表のモデルを指定します。空なら既定のモデルを使います。
+run の実行中は、hook G-7 がこの表を強制します。値のある役割を、<code>task</code> の <code>model</code> 引数なしで呼ぶか、違うモデルで呼ぶと拒否します。<code>implementer</code> には <code>implementer-escalation</code> のモデルも使えます。実際に使ったモデルは <code>work/runs/&lt;run-id&gt;/models.jsonl</code> に記録され、<code>kpi.py run</code> の「実際に使ったモデル」に出ます。以前は、表に書いても守られないことがありました（15 回中 10 回）。そのため、値を入れた表は G-7 で必ず効くようになっています。各 <code>.github/agents/*.agent.md</code> の frontmatter に <code>model:</code> を書いて固定することもできます（推奨値はコメントに書いてあります）。</p>
+<p>割り当ての方針（Phase 1 で調整します）:</p>
+<table>
+<thead>
+<tr>
+<th>役割</th>
+<th>方針</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>conductor、rd-author</td>
+<td>推論能力の高いモデル</td>
+</tr>
+<tr>
+<td>rd-auditor</td>
+<td>rd-author とは<strong>別系統</strong>のモデル（同じバイアスを共有しないため）</td>
+</tr>
+<tr>
+<td>test-designer、reviewer</td>
+<td>中位のモデル</td>
+</tr>
+<tr>
+<td>implementer</td>
+<td>低〜中位のモデル（仕様が明確なため）</td>
+</tr>
+<tr>
+<td>implementer-escalation</td>
+<td>同じ項目で失敗が続いたときに 1 回だけ使う上位モデル</td>
+</tr>
+</tbody>
+</table>
+<p><strong>較正の手順（実測に基づく）</strong>: 全役割が空のまま run すると、<code>run-state.py start</code> が HINT を出します。次の順で 1 つずつ変えて比べます（一度に変えると、どれが効いたか分かりません）。
+1. 基準: 全部既定で、要求 3〜5 件の小さい run を 1 回。<code>kpi.py run</code> の「項目 1 件あたりの作業時間」「1 回目のゲート通過率」「統合の直列時間」を控える。
+2. conductor だけを 1 段安いモデルにする（conductor は 300 ターン級の文脈で、Token の約 4 割を使った実績がある）。通過率と AC pass 率が基準を下回らなければ採用。
+3. implementer を 1 段安いモデルにし、<code>implementer-escalation</code> に基準のモデルを入れる。1 回目の通過率が 10 ポイント以上落ちたら戻す。
+4. 採用した表を <code>scripts/ebak.config.json</code> に固定し、<code>docs/run-history.md</code> に理由を残す。</p>
+<p>調整の方法: 代表的な作業（要求 3 件分）を、モデルの組み合わせ 2〜3 通り × 2 回ずつ実行します。<code>docs/run-history.md</code> の AC pass 率・1 回目のゲート通過率・経過時間と、使用量の表示（AI クレジット）を比較して決めます。<strong>最も安いモデルが、最も安い結果になるとは限りません</strong>（手戻りでコストが逆転します）。</p>
+<p><strong>項目の粒度</strong>: <code>queue add</code> は、1 項目の AC が 12 個を超えると拒否します（<code>--allow-large</code> で例外）。実測では、作業時間が 200 分を超えた項目に手戻りが集中しました。</p>
+<h2 id="43-gates">4.3 ゲートの調整（<code>gates</code>）</h2>
+<pre><code class="language-json">&quot;gates&quot;: {
+  &quot;enabled&quot;: true,
+  &quot;subagent_verify&quot;: {
+    &quot;implementer&quot;: [&quot;--quick&quot;],
+    &quot;test-designer&quot;: [&quot;--docs-only&quot;],
+    &quot;rd-author&quot;: [&quot;--docs-only&quot;]
+  },
+  &quot;subagent_verify_max_blocks&quot;: 3,
+  &quot;agent_stop_max_blocks&quot;: 40,
+  &quot;enforce_conductor_edit_scope&quot;: true,
+  &quot;enforce_models&quot;: true
+}
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>キー</th>
+<th>意味</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td><code>false</code> にすると hook のゲートをすべて無効にします（verify の検査は残ります）。原因の切り分けのときだけ使います</td>
+</tr>
+<tr>
+<td><code>subagent_verify</code></td>
+<td>作業役の終了前に実行する verify の引数（G-4）。ここにない作業役は検査しません</td>
+</tr>
+<tr>
+<td><code>subagent_verify_max_blocks</code></td>
+<td>同じ作業役を差し戻す回数の上限。超えると結果に <code>GATE G-4</code> を付けて返し、conductor はその結果を統合しません</td>
+</tr>
+<tr>
+<td><code>agent_stop_max_blocks</code></td>
+<td>完了条件を満たしていない conductor の終了を差し戻す回数の上限</td>
+</tr>
+<tr>
+<td><code>enforce_conductor_edit_scope</code></td>
+<td>conductor が <code>work/</code> と <code>docs/run-history.md</code> 以外を編集するのを拒否します。harness で subagent の検出が動かない場合（<a href="07-troubleshooting.html">07-troubleshooting.md</a>）だけ <code>false</code> にします</td>
+</tr>
+<tr>
+<td><code>enforce_models</code></td>
+<td>run の実行中、<code>models</code> に値のある役割の <code>task</code> 呼び出しに、そのモデルの指定を求めます（G-7）。harness の <code>task</code> が <code>model</code> 引数を受け付けない場合だけ <code>false</code> にします</td>
+</tr>
+<tr>
+<td><code>deploy_patterns</code></td>
+<td>デプロイとみなすコマンドの正規表現。指定すると既定値（<code>scripts/ebaklib.py</code> の <code>DEFAULT_CONFIG</code>）を<strong>置き換える</strong>ので、既定値をコピーしてから追加します</td>
+</tr>
+<tr>
+<td><code>external_write_verbs</code></td>
+<td>MCP Server・plugin・拡張機能のツールのうち、名前にこの動詞（<code>create</code>・<code>update</code>・<code>delete</code>・<code>send</code>・<code>do_action</code> など）を含むものを「外部のシステムの変更」とみなします（G-5。<a href="#44-mcp-serverplugin拡張機能を使う">4.4</a>）。指定すると既定値を<strong>置き換えます</strong></td>
+</tr>
+<tr>
+<td><code>external_deploy_verbs</code></td>
+<td>同じく、名前にこの動詞（<code>deploy</code>・<code>provision</code>・<code>publish</code>・<code>release</code>）を含むものを「デプロイ・公開」とみなし、<code>deploy</code> の値で判定します</td>
+</tr>
+<tr>
+<td><code>external_tool_allow</code></td>
+<td>外部のシステムの変更とみなさないツール名の正規表現（例: <code>"^mcp_myindex_update_index$"</code>）。名前に動詞を含むが、ローカルにしか作用しないツールを許可するときに使います</td>
+</tr>
+</tbody>
+</table>
+<h2 id="44-mcp-serverplugin">4.4 MCP Server・plugin・拡張機能を使う</h2>
+<p>利用者が GitHub Copilot に設定した MCP Server・plugin・拡張機能のツールと skill は、追加の設定なしで、conductor とすべての作業役が使えます。例は Work IQ（社内のメール・会議・チャット・ドキュメント）、Microsoft Learn、Azure MCP Server、Copilot Studio・Microsoft 365 Agents Toolkit の plugin です。</p>
+<ul>
+<li><strong>仕組み</strong>: <code>.github/agents/*.agent.md</code> の frontmatter に <code>tools:</code> を書いていません。Copilot CLI と GitHub では、<code>tools</code> を省略すると、構成済みの MCP Server を含むすべてのツールが有効になります。VS Code では、ツールピッカーで有効にしているツールが使われます。<code>tools:</code> を書くと、列挙していないツール（MCP Server のツールを含む）は使えなくなります。役割ごとに制限したい場合は、組み込みのツールに加えて <code>&lt;サーバー名&gt;/*</code> の形で必要な MCP Server を列挙します。</li>
+<li><strong>設定する場所</strong>: MCP Server と plugin は、利用者ごと（VS Code のユーザー設定・<code>~/.copilot/</code> の設定・<code>copilot plugin install</code>・GitHub Copilot app の <strong>カスタマイズ</strong> → <strong>MCP</strong> / <strong>プラグイン</strong>）か、リポジトリ（<code>.vscode/mcp.json</code>、GitHub のリポジトリ設定）に登録します。GitHub Copilot app は Copilot CLI 用の設定（<code>~/.copilot/</code>）とリポジトリの設定を自動で使います。認証情報が必要なものは、リポジトリに秘密値を置かず、各利用者のサインインや環境変数で渡します。toolkit は MCP Server の設定を配布しません。</li>
+<li><strong>使い方</strong>: 依頼に「Work IQ で関連する会議とメールを調べる」のようにツールを書く必要はありません。skill（requirement-definition・implement-fr）が、社内の情報・公式ドキュメント・対象の技術の MCP Server と skill を、使えるときに使うよう指示しています。社内の情報から得た事実は、出典台帳（SRC-ID）に出典付きで記録されます。そのため、同じツールを持たない後続の人やエージェントも、要求定義書だけで同じ情報をたどれます。</li>
+<li><strong>ツールがない環境</strong>: 特定のツールがある前提にはしていません。使えない場合は、通常の検索と <code>&lt;references&gt;</code> の資料で進め、「社内情報未確認」などと記録します。</li>
+<li><strong>外部のシステムの変更</strong>: 参照（検索・取得・質問）はいつでも行えます。メール送信、チケットの作成、クラウドのリソースや Copilot Studio のエージェントの作成・更新・削除のような外部への変更は、run 中は run_options の <code>external_write: する</code> のときだけ行えます。デプロイ・公開は <code>deploy: する</code> のときだけです。どちらも hook が強制します（G-5）。rd-auditor と reviewer は、run_options に関係なく参照だけです。GitHub Copilot app の組み込みツールのうち、アプリの中だけに作用する <code>rename_session</code>・<code>send_session_message</code> は外部の変更とみなしません。セッションのブランチ名を変える <code>rename_branch</code> は、統合ブランチが変わってしまうため run 中だけ拒否します。</li>
+<li><strong>ツール数の上限</strong>: VS Code では、1 回のリクエストで有効にできるツールは 128 個までです。MCP Server を多く登録して上限を超える場合は、ツールピッカーで使わないサーバーを無効にします。</li>
+</ul>
+<h2 id="45">4.5 そのほかの設定</h2>
+<table>
+<thead>
+<tr>
+<th>キー</th>
+<th>既定値</th>
+<th>意味</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>management_files</code></td>
+<td><code>docs/requirements-definition.md</code> など</td>
+<td>管理データのパス。既存のディレクトリ構成に合わせて変更できます</td>
+</tr>
+<tr>
+<td><code>base_branch</code></td>
+<td><code>main</code></td>
+<td>マージ先のブランチ。差分の検査（CHK-12/13）と、push の拒否（G-5）に使います</td>
+</tr>
+<tr>
+<td><code>work.retention_days</code></td>
+<td>14</td>
+<td><code>/work/runs/</code> の保持日数</td>
+</tr>
+<tr>
+<td><code>checks.ambiguous_words</code></td>
+<td>適切、迅速、直感的 など</td>
+<td>曖昧な語のリスト（CHK-13）</td>
+</tr>
+<tr>
+<td><code>checks.id_scan_exclude</code></td>
+<td><code>docs/**</code>、<code>EABK-Studio/**</code> など</td>
+<td>コードから要求 ID を検索するときに除外するパス（CHK-17/19）</td>
+</tr>
+<tr>
+<td><code>checks.test_path_pattern</code></td>
+<td>tests/、<em>.test.</em> など</td>
+<td>テストコードとみなすパス（CHK-09）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="46">4.6 画面の見た目（デザインシステム）</h2>
+<p>要求定義書は「何を満たすか」だけを書き、配色・装飾・UI ライブラリは指定しません。見た目は implementer が、skill <code>implement-fr</code> の「画面の見た目（UI デザインの基盤）」に従って決めます。</p>
+<ul>
+<li><strong>既定</strong>: 対象プラットフォームの最新の公式デザインシステムと公式のコンポーネントを使います。Web は Microsoft Fluent 2（Fluent UI）、Windows は WinUI 3、Apple のプラットフォームは Human Interface Guidelines と SwiftUI の標準コンポーネント、Android は Material 3 です。リポジトリに既存のデザインシステムがあれば、それを優先します。</li>
+<li><strong>一貫性</strong>: 最初に画面を作る項目で、テーマ（ライト・ダーク・ハイコントラスト）、デザイントークン、アプリの外枠を「デザイン基盤」としてカタログの共通部品に載せます。conductor はほかの画面の項目をこの項目のあとに並べ、reviewer は画面の差分を規則と照合します。</li>
+<li><strong>指定したい場合</strong>: 依頼に「デザインシステムは Fluent 2 を使う」「社内のブランドガイド（添付）に従う」のように書くか、<code>&lt;references&gt;</code> に指針を渡します。rd-author が既定制約として要求定義書に記録し、implementer はそれを最優先にします。</li>
+<li><strong>既存のアプリの見た目を直したい場合</strong>: 「既存の画面をデザイン基盤に移行する」と依頼します。手順書だけを更新しても、既に作られた画面は変わりません。</li>
+</ul>
+<h2 id="47">4.7 エージェントと手順書を変更する</h2>
+<ul>
+<li>役割ごとの振る舞いは <code>.github/agents/*.agent.md</code>、詳しい手順は <code>.github/skills/*/SKILL.md</code> に定義しています。直接編集してかまいません。</li>
+<li>インストールスクリプトを再実行しても、ローカルで変更したファイルは上書きされません（<code>KEEP-LOCAL</code>）。toolkit の新しいバージョンを取り込みたい場合は、<code>--dry-run</code> で確認してから、差分を手でマージするか、<code>--force</code>（バックアップを残します）を使います。</li>
+<li>skills の本文は、元になった 3 つの Prompt（RequirementDefinition作成・RD-FR_Prompt・SystemTest-Increment-Run）の全文です。先頭の「読み替え表」が、元の Prompt と無人実行との差分を吸収しています。元の Prompt を改訂した場合は、本文を差し替え、読み替え表はそのまま残します。</li>
+</ul>
+<h2 id="48-ci">4.8 CI</h2>
+<p><code>.github/workflows/ebak-verify.yml</code> は、pull request と main への push をトリガーに <code>scripts/verify.sh --show-warnings</code> を実行します。アプリのビルドに必要なツールチェーン（<code>actions/setup-node</code> など）は、verify の前にステップとして追加します。CodeQL や依存関係のスキャンを加える場合も、このワークフローに追記します。</p>
+<h3 id="ebak-data-layer">データ層ワークフロー（ebak-data-layer）</h3>
+<p><code>.github/workflows/ebak-data-layer.yml</code>（ebak-data-layer）は、プルリクエスト、main への push、手動実行（workflow_dispatch）、週 1 回の定期実行（schedule）で <code>python scripts/verify.py --docs-only</code> を実行し、データ層を検査します。</p>
+<ul>
+<li>不合格のとき、<code>python scripts/rdfix.py --apply</code> で自動修復して再検査します。自動修復で要求定義書は変更しない設計です（<code>docs/requirements-definition.md</code> は修復後に元へ戻します）。合格した場合だけ修復を commit します。同一リポジトリのプルリクエストでは当該 PR のブランチへ、main への push と定期実行では修復用ブランチ <code>eabk/data-layer-fix</code> へ push して PR を作成します（既にあれば追加しません）。</li>
+<li>修復後も直らないときは、ラベル <code>eabk-data-layer</code> つきで、失敗の要約と実行へのリンクを含む Issue を作成します。同じ内容の未解決 Issue があれば、コメントを追加します。</li>
+<li>権限は contents・pull-requests・issues の write だけです。fork からのプルリクエストでは検査だけを行い、書き込みはしません。bot の修復 commit では再修復しません。</li>
+<li>無効化するには、このファイルを削除するか、GitHub の Actions 画面でこのワークフローを Disable します。インストール時に入れたくない場合は <code>--no-ci</code> を指定します。</li>
+</ul>
+<h2 id="49">4.9 計算資源とクラウド</h2>
+<p><strong>並列度は CPU とメモリに合わせます。</strong>
+- <code>parallel_workers: auto</code>（既定）は、2 コアと 6 GB につき implementer を 1 体、最大 8 体にします。<code>run-state.py start</code> が解決した数を <code>meta.json</code> に残します。
+- 各 worker には CPU スレッドを「コア数 × 1.5 ÷ worker 数」で渡します（<code>HVE_CPUS</code>。20 コア・8 体なら 4）。同時に、主なテストランナーの設定の環境変数も渡します（<code>VITEST_MAX_WORKERS</code>・<code>VITEST_MAX_THREADS</code>・<code>VITEST_MAX_FORKS</code>・<code>PYTEST_XDIST_AUTO_NUM_WORKERS</code>・<code>CARGO_BUILD_JOBS</code>・<code>GOMAXPROCS</code>・<code>CMAKE_BUILD_PARALLEL_LEVEL</code>・<code>MAKEFLAGS</code>）。利用者が設定済みの値は上書きしません。
+- 実測（プロジェクトの vitest を 20 コアで 8 並列）: 全コアを使わせると 361 秒で、テストの timeout が 1 件出ました。2 スレッドずつに絞ると 404 秒（遅い）、4 スレッドずつだと 371 秒で timeout なしでした。そのため、少し多めの配分にしています。前回の run の <code>Timeout calling "onTaskUpdate"</code> は、並列度 5 の worker にブラウザーなどの負荷が重なった状況で、unit のログの約 10% に出ました。Playwright など環境変数を読まないツールは、設定ファイルで <code>workers: Number(process.env.HVE_CPUS) || undefined</code> のように読みます。</p>
+<p><strong>検査を同時に動かします。</strong>
+- <code>verify.commands</code> で、連続する工程に <code>"parallel": true</code> を付けると同時に実行します（例: lint・型検査・単体テスト）。build のように前の工程が必要なものには付けません。
+- System Test は、<code>ledger.py run --jobs N|auto</code>（または設定の <code>system_test.jobs</code>）で同時に実行します。既定は 1 です（ポートや DB を共有するケースがあるため）。ケースに <code>"serial": true</code> を付けると、並列の実行が終わってから単独で動きます。canary は常に先に単独で動きます。</p>
+<p><strong>Azure は、既定では使いません。</strong> 次の条件が揃ったときだけ、利用者が選びます（実行時のオプションとしては実装していません）。
+1. 手元のマシンが小さい（コア数が 8 未満、またはメモリが 32 GB 未満）。
+2. <code>kpi.py run</code> で、実効の並列度が <code>parallel_workers</code> に届かず、その原因が CPU の不足（verify・System Test の所要時間が支配的）である。
+3. モデルの応答待ち（LLM の時間）が支配的でないこと。クラウドの VM を増やしても、LLM の待ち時間は短くなりません。</p>
+<p>前回の実測では、LLM 以外の時間の大半は、統合の直列区間・検査の重複・テストランナーの過剰な並列でした。これらは上の設定とキャッシュで解消でき、VM は不要でした。検査だけを Azure の VM（例: 32 コアの Dev/Test）で動かす場合は、VM 上に作業ツリーを置いて <code>parallel_workers</code> を VM のコア数に合わせ、料金（paid_services）を run のオプションで許可してください。</p><footer>出典: <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/users-guide/04-customization.md">users-guide/04-customization.md</a></footer></main></div>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"></script>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark=['dark','midnight'].includes(document.documentElement.dataset.theme);
+mermaid.initialize({startOnLoad:false,theme:dark?'dark':'default'});
+await mermaid.run({querySelector:'pre.mermaid'});
+</script>
+<script>document.querySelectorAll('pre code').forEach(e=>hljs.highlightElement(e));
+const t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+const sel=document.getElementById('theme');
+function setT(v){document.documentElement.dataset.theme=v;localStorage.setItem('theme',v);sel.value=v;
+ const hl=document.getElementById('hl');if(hl)hl.href='https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github'+(['dark','midnight'].includes(v)?'-dark':'')+'.min.css';}
+sel.onchange=()=>setT(sel.value);setT(t);
+document.getElementById('menu').onclick=()=>document.querySelector('nav').classList.toggle('open');
+document.querySelector('nav a.cur')?.scrollIntoView({block:'center'});
+</script>
+</body></html>

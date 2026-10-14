@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>6. 品質ゲートと検査項目 — HypervelocityEngineering</title>
+<link id="hl" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+<style>
+:root{--bg:#fff;--fg:#1f2328;--muted:#656d76;--card:#f6f8fa;--bd:#d0d7de;--ac:#0969da;--side:#f6f8fa;--code:#eff1f3;--r:10px}
+[data-theme=dark]{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--card:#161b22;--bd:#30363d;--ac:#58a6ff;--side:#010409;--code:#1c2128}
+[data-theme=midnight]{--bg:#0f1226;--fg:#e4e7ff;--muted:#9aa0cc;--card:#171a3a;--bd:#2c3062;--ac:#8b9cff;--side:#0a0c1d;--code:#1d2147}
+[data-theme=ocean]{--bg:#f2fafc;--fg:#0c2d3a;--muted:#4f7583;--card:#e0f2f7;--bd:#b4dce6;--ac:#0087a8;--side:#dcf0f5;--code:#d3ebf1}
+[data-theme=forest]{--bg:#f4f8f2;--fg:#1c2b1e;--muted:#5a6f5c;--card:#e6efe2;--bd:#c3d6bd;--ac:#2f7d3a;--side:#e1ecdc;--code:#dae7d5}
+[data-theme=sunset]{--bg:#fff8f2;--fg:#3a2118;--muted:#8a6252;--card:#ffebdc;--bd:#f2cdb3;--ac:#d9480f;--side:#ffeede;--code:#fde1cc}
+[data-theme=rose]{--bg:#fff6f8;--fg:#3a1c26;--muted:#8d5a6b;--card:#ffe6ec;--bd:#f2c2cf;--ac:#c2255c;--side:#ffe9ef;--code:#fcdbe4}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 system-ui,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;transition:background .2s,color .2s}
+a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
+header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:1rem;padding:.6rem 1.2rem;background:var(--card);border-bottom:1px solid var(--bd);backdrop-filter:blur(6px)}
+header .brand{font-weight:700;color:var(--fg)}header .sp{flex:1}
+header select,header button{background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:.3rem .6rem;font:inherit;font-size:.9rem}
+#menu{display:none}
+.layout{display:flex;min-height:calc(100vh - 54px)}
+nav{width:290px;flex:none;background:var(--side);border-right:1px solid var(--bd);padding:1rem;position:sticky;top:54px;height:calc(100vh - 54px);overflow:auto;font-size:.9rem}
+nav h4{margin:1.1rem 0 .3rem;color:var(--muted);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
+nav a{display:block;padding:.25rem .6rem;border-radius:6px;color:var(--fg);line-height:1.4}
+nav a:hover{background:var(--card);text-decoration:none}
+nav a.cur{background:var(--ac);color:#fff}
+main{flex:1;min-width:0;max-width:900px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1,h2{border-bottom:1px solid var(--bd);padding-bottom:.3rem}
+h1,h2,h3,h4{line-height:1.3;scroll-margin-top:70px}
+img{max-width:100%;height:auto;border-radius:var(--r);border:1px solid var(--bd)}
+pre{background:var(--code);border:1px solid var(--bd);border-radius:var(--r);padding:1rem;overflow:auto;line-height:1.5;font-size:.88rem}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font:.88em ui-monospace,Consolas,monospace}
+pre code{background:none;padding:0}
+pre.mermaid{background:var(--card);text-align:center}
+table{border-collapse:collapse;display:block;overflow:auto;margin:1rem 0}
+th,td{border:1px solid var(--bd);padding:.45rem .8rem;vertical-align:top}
+th{background:var(--card)}tr:nth-child(even) td{background:color-mix(in srgb,var(--card) 50%,transparent)}
+blockquote{margin:1rem 0;padding:.2rem 1rem;border-left:4px solid var(--ac);background:var(--card);border-radius:0 var(--r) var(--r) 0;color:var(--muted)}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--bd);color:var(--muted);font-size:.85rem}
+@media(max-width:820px){#menu{display:inline-block}nav{position:fixed;left:-310px;top:54px;z-index:9;transition:left .2s}nav.open{left:0}main{padding:1.2rem 1rem}}
+</style>
+<script>document.documentElement.dataset.theme=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light')</script>
+</head><body>
+<header><button id="menu" aria-label="menu">☰</button><a class="brand" href="../index.html">⚡ HypervelocityEngineering</a><span class="sp"></span>
+<label>🎨 <select id="theme" aria-label="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="midnight">Midnight</option><option value="ocean">Ocean</option><option value="forest">Forest</option><option value="sunset">Sunset</option><option value="rose">Rose</option></select></label>
+<a href="https://github.com/dahatake/HypervelocityEngineering">GitHub</a></header>
+<div class="layout"><nav><h4>はじめに</h4>
+<a href="../index.html">HypervelocityEngineering — Enterprise App Build Kit</a>
+<a href="../CHANGELOG.html">Changelog</a>
+<h4>ユーザーガイド</h4>
+<a href="01-writing-requests.html">1. 依頼の書き方（/build と runoptions）</a>
+<a href="02-during-and-after-run.html">2. 実行中と終了後</a>
+<a href="03-requirements-format.html">3. 管理データの書式</a>
+<a href="04-customization.html">4. 設定とカスタマイズ</a>
+<a href="05-scripts-reference.html">5. スクリプトリファレンス</a>
+<a class="cur" href="06-quality-gates.html">6. 品質ゲートと検査項目</a>
+<a href="07-troubleshooting.html">7. トラブルシューティング</a>
+<a href="08-roadmap.html">8. 導入ロードマップと KPI</a>
+<a href="09-versioning.html">バージョンアップの手順</a>
+<a href="10-adopting-existing-apps.html">10. 既存のアプリを導入する（Adopt）</a>
+<a href="index.html">EABK ユーザーガイド</a>
+<h4>Studio ガイド</h4>
+<a href="studio/01-first-steps.html">S1 はじめかた</a>
+<a href="studio/02-screens.html">S2 画面の見かた</a>
+<a href="studio/03-tasks.html">S3 こんなとき、どう見るか</a>
+<a href="studio/04-troubleshooting.html">S4 うまく動かないとき・用語集</a>
+<a href="studio/05-product-manager.html">S5 Product Manager 向けガイド</a>
+<a href="studio/06-architect.html">S6 Architect 向けガイド</a>
+<a href="studio/07-software-engineer.html">S7 Software Engineer 向けガイド</a>
+<a href="studio/08-data-reference.html">S8 データリファレンス（どの機能が、どのデータを読むか）</a>
+<a href="studio/README.html">EABK Studio ユーザーガイド（第 2 部）</a>
+<h4>管理データ（docs）</h4>
+<a href="../docs/catalog.html">カタログ</a>
+<a href="../docs/id-registry.html">ID 台帳</a>
+<a href="../docs/manual-tests.html">手順で確かめる受入基準</a>
+<a href="../docs/requirements-definition.html">要求定義書</a>
+<a href="../docs/run-history.html">実行履歴</a></nav>
+<main><h1 id="6">6. 品質ゲートと検査項目</h1>
+<p>品質ゲートは 2 層です。hook がツール実行の前と終了前に規則を強制し、verify が同じ規則を決定的に検査します（<a href="../index.html#2-層の品質ゲート">README の「2 層の品質ゲート」</a>）。</p>
+<h2 id="61-hook">6.1 hook のゲート</h2>
+<p><code>.github/hooks/quality-gates.json</code>（Copilot CLI の形式。VS Code の Copilot harness と、Copilot CLI の上に構築された GitHub Copilot app も読み込みます）が <code>scripts/hooks/gate.py</code> を呼び出します。GitHub Copilot app でローカル サンドボックスを有効にすると、hook もサンドボックスの中で、エージェントのシェルと同じ権限で動きます。</p>
+<table>
+<thead>
+<tr>
+<th>ゲート</th>
+<th>対象</th>
+<th>動作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>G-1</strong> 要求の書き手を 1 つに限定</td>
+<td>rd-author 以外</td>
+<td>run の実行中、<code>docs/requirements*</code> の編集を拒否します。作業役の worktree からの編集は常に拒否します</td>
+</tr>
+<tr>
+<td><strong>G-2</strong> System Test の変更禁止</td>
+<td>implementer、reviewer、作業役の worktree</td>
+<td><code>tests/system/**</code> の編集・削除と、台帳を更新する <code>ledger.py</code> の操作を拒否します。台帳 <code>ledger.json</code> の直接編集は、誰であっても拒否します（<code>ledger.py</code> を使う）</td>
+</tr>
+<tr>
+<td><strong>G-3</strong> ID の採番</td>
+<td>全エージェント</td>
+<td><code>docs/id-registry.md</code> の直接編集を拒否します（<code>next-id.py</code> を使う）。手で振った ID は CHK-01 が検出します</td>
+</tr>
+<tr>
+<td><strong>G-4</strong> 終了前の検証</td>
+<td>implementer、test-designer、rd-author</td>
+<td>作業役の終了前に verify を実行し、失敗していれば差し戻します（最大 3 回）。implementer の場合は、結果に含まれる <code>WORKTREE:</code> の worktree で検査します</td>
+</tr>
+<tr>
+<td><strong>G-5</strong> 危険な操作の拒否</td>
+<td>全エージェント</td>
+<td>main への push、force push、履歴の書き換え、run 実行中の main への直接 commit、<code>deploy: しない</code> の間のデプロイ、<code>git_push: しない</code> の間の push、作業ディレクトリ外への書き込み、実行中の hook の変更、実行中のブランチ名の変更（GitHub Copilot app の <code>rename_branch</code>）を拒否します。あわせて役割ごとの書き込み範囲を強制します（conductor は <code>work/</code> と run-history、rd-author は <code>docs/</code>、test-designer は <code>tests/system/</code>、rd-auditor・reviewer は読み取り専用）。利用者が設定した MCP Server・plugin・拡張機能のツールによる外部のシステムの変更（名前に <code>create</code>・<code>update</code>・<code>delete</code>・<code>send</code> などを含むツール）は、run 中は <code>external_write: する</code> のときだけ、デプロイ・公開（<code>deploy</code>・<code>publish</code> など）は <code>deploy: する</code> のときだけ許可します。rd-auditor・reviewer の外部の変更は常に拒否します（<a href="04-customization.html#44-mcp-serverplugin拡張機能を使う">4.4</a>）</td>
+</tr>
+<tr>
+<td><strong>G-7</strong> モデルの強制</td>
+<td>conductor</td>
+<td>run の実行中、<code>scripts/ebak.config.json</code> の <code>models</code> に値のある作業役を、<code>task</code> の <code>model</code> 引数なし、または違うモデルで呼ぶことを拒否します（<code>implementer</code> は <code>implementer-escalation</code> のモデルも可）。呼び出しはすべて <code>work/runs/&lt;run-id&gt;/models.jsonl</code> に記録します。<code>gates.enforce_models: false</code> で無効にできます</td>
+</tr>
+<tr>
+<td><strong>G-6</strong> 一時ファイルの置き場所</td>
+<td>全エージェント</td>
+<td>ログ・証跡・実行結果（<code>*.log</code>、<code>*.har</code>、<code>*.trace</code>、<code>trace*.zip</code>、<code>results*.json</code>、<code>evidence/</code>、<code>screenshots/</code>、<code>test-results/</code>、<code>playwright-report/</code>）を <code>/work</code> 以外に書くことを拒否します。<code>/work</code> の削除は、<code>clean-work.py</code> と <code>git worktree remove</code> にだけ許可します</td>
+</tr>
+<tr>
+<td>完了判定</td>
+<td>conductor</td>
+<td>完了条件（queue に todo・doing がない、工程 6 が完了、run-report.md がある）を満たすまで、ターンの終了を差し戻します（最大 40 回。時間予算の 125% を超えたら差し戻しません）</td>
+</tr>
+<tr>
+<td>再開の案内</td>
+<td>全エージェント</td>
+<td>セッション開始時に、実行中の run があれば run-id と再開手順を表示します</td>
+</tr>
+<tr>
+<td><code>/build template</code></td>
+<td>全エージェント</td>
+<td>Prompt が <code>/build template</code> だけのターンでは、読み取りと skill 以外のツール（コマンド・書き込み・作業役の呼び出し）を拒否し、実行中の run があってもターンの終了を差し戻しません。雛形の表示が run の開始・再開に変わるのを防ぎます（<code>userPromptSubmitted</code> イベントで判定し、<code>work/.ebak/template-request.json</code> に記録します）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>エージェントの識別方法</strong>: Copilot の hook の <code>preToolUse</code> イベントには、呼び出し元のエージェント名が含まれません。そこで、<code>subagentStart</code> / <code>subagentStop</code> イベントで実行中の custom agent を <code>work/.ebak/active-agents.json</code> に記録し、書き込み先のパス、作業役の worktree（<code>work/worktrees/…</code>）、ブランチ（<code>work/&lt;run-id&gt;/&lt;item&gt;</code>）と合わせて判定します。</p>
+<p><strong>フェイルオープンの設計</strong>: gate.py の内部エラーや不正な入力は「許可」として扱い、ログに記録します（ゲートの不具合でセッション全体が止まるのを防ぐためです）。同じ規則を verify でも検査するので、統合の時点では必ず止まります。</p>
+<p>hook の速さ: pre-tool は 1 回の run で数千回呼ばれます。読み取りだけの組み込みツール（view・grep・glob・read_powershell など）は、どのゲートの対象にもならないため、gate.py が設定ファイルの読み込みや git の呼び出しの前に許可を返します。hook は <code>python -S</code> で起動し、site-packages の初期化も省きます（gate.py は標準ライブラリだけを使います）。</p>
+<h2 id="62-verify">6.2 verify の検査項目</h2>
+<p><code>scripts/verify.py</code> が実行する検査です。</p>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>検査内容</th>
+<th>重大度</th>
+<th>直し方</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CHK-00</td>
+<td>要求定義書がない</td>
+<td>warn（<code>--strict</code> では error）</td>
+<td>最初の run で rd-author が作成します</td>
+</tr>
+<tr>
+<td>CHK-01</td>
+<td>ID の重複。ID 台帳にない ID（手で振った ID）</td>
+<td>error</td>
+<td><code>next-id.py</code> で振り直す。既存のドキュメントは <code>next-id.py --sync --adopt</code></td>
+</tr>
+<tr>
+<td>CHK-02</td>
+<td>削除済み・欠番の ID の再利用</td>
+<td>error</td>
+<td>新しい ID を採番する</td>
+</tr>
+<tr>
+<td>CHK-03</td>
+<td>AC が実在する要求を参照していない</td>
+<td>error</td>
+<td>要求の見出しの下に書くか、<code>対応する要求:</code> を付ける</td>
+</tr>
+<tr>
+<td>CHK-04</td>
+<td>要求に上位の G-ID（または既定制約）がない。存在しない G-ID を参照している。承認済みの要求を持たない G-ID がある</td>
+<td>error / warn</td>
+<td>上位の欄を直す</td>
+</tr>
+<tr>
+<td>CHK-05</td>
+<td>MUST 要求に AC も未回答の Q もない</td>
+<td>error</td>
+<td>AC を追加するか、Q を挙げる</td>
+</tr>
+<tr>
+<td>CHK-06</td>
+<td>承認済みの要求に決定記録（根拠と日付）がない</td>
+<td>error</td>
+<td><code>承認済み（依頼 YYYY-MM-DD）</code> の形にする</td>
+</tr>
+<tr>
+<td>CHK-07</td>
+<td>カタログの要求 ID が要求定義書にない／決定状態・題名が一致しない／承認済み・承認待ち・保留の要求の行がない／同じ要求の行が重複している／機能の表がない</td>
+<td>error</td>
+<td><code>rdfix.py --apply</code> で要求定義書に合わせる（6.3）</td>
+</tr>
+<tr>
+<td>CHK-08</td>
+<td>カタログに書かれたファイルが存在しない</td>
+<td>error</td>
+<td>パスを直すか「未実装」にする。名前の変更・削除は <code>rdfix.py --apply</code> で追従できる</td>
+</tr>
+<tr>
+<td>CHK-09</td>
+<td>実装済みの MUST 要求の ID が、テストコードにも manual-tests にもない（未実装なら warn）</td>
+<td>error / warn</td>
+<td>テスト名かコメントに <code>FR-012 AC-031</code> を書く</td>
+</tr>
+<tr>
+<td>CHK-10</td>
+<td>system の AC と台帳のケースが双方向に対応していない</td>
+<td>warn（工程 4 以降と <code>--strict-ledger</code> では error）</td>
+<td>test-designer がケースを追加する。対象外になった AC のケースは block する</td>
+</tr>
+<tr>
+<td>CHK-11</td>
+<td><code>ac_digests</code> が AC の本文と一致しない</td>
+<td>同上</td>
+<td>test-designer がケースを見直し、<code>ledger.py digests --update</code> を実行する</td>
+</tr>
+<tr>
+<td>CHK-12</td>
+<td>台帳のケースの削除、理由のない command・ac_ids の変更、tests/system の assert の減少、作業役のブランチによる tests/system の変更</td>
+<td>error</td>
+<td>元に戻す。変更は <code>ledger.py update --reason</code> で行う</td>
+</tr>
+<tr>
+<td>CHK-13</td>
+<td>新規・変更した要求・AC に曖昧な語がある</td>
+<td>warn（<code>--strict</code> では MUST 要求は error）</td>
+<td>観察可能な表現に言い換える</td>
+</tr>
+<tr>
+<td>CHK-14</td>
+<td>数値と単位がハードコードされている</td>
+<td>warn</td>
+<td>PARAM にして <code>{PARAM-xxx}</code> で参照する</td>
+</tr>
+<tr>
+<td>CHK-15</td>
+<td>用語集の禁止同義語を使っている</td>
+<td>warn</td>
+<td>正しい用語に直す</td>
+</tr>
+<tr>
+<td>CHK-16</td>
+<td>未定義の PARAM の参照、PARAM の表にない PARAM</td>
+<td>error</td>
+<td>PARAM の表に追加する</td>
+</tr>
+<tr>
+<td>CHK-17</td>
+<td>廃止した要求に対して、コード・テスト・カタログが残っている（不整合）</td>
+<td>error / warn</td>
+<td>削除し終えたら本文から外す</td>
+</tr>
+<tr>
+<td>CHK-18</td>
+<td>BLOCKED の AC が、未回答の Q・TBD・競合を参照していない／回答済みの Q を参照している</td>
+<td>error</td>
+<td>ブロックの原因を書く／回答を反映して BLOCKED を外す</td>
+</tr>
+<tr>
+<td>CHK-19</td>
+<td>コード・テストにある要求 ID・AC ID が要求定義書にない（<code>checks.id_scan_exclude</code> のパスは対象外。既定で docs・scripts・SVG の図・<code>EABK-Studio/**</code>（別リポジトリへ配布するため）・Spec Kit の <code>specs/**/*.md</code>・<code>.specify/**</code> などを除外）</td>
+<td>error</td>
+<td>ID を直す（廃止した ID の残骸は削除する）</td>
+</tr>
+<tr>
+<td>CHK-20</td>
+<td>既定制約の節、ペルソナ表の必須列、要求の構造化欄、承認済み AC の検証レベルがない。決定状態が規定の値でない</td>
+<td>error</td>
+<td><a href="03-requirements-format.html">03-requirements-format.md</a> の形式にする</td>
+</tr>
+<tr>
+<td>CHK-21</td>
+<td>（<code>--run</code> 指定時）done の項目の要求がカタログに実装済みとして載り、その system AC のケースが pass になっているか</td>
+<td>error</td>
+<td>統合をやり直す</td>
+</tr>
+<tr>
+<td>CHK-22</td>
+<td>承認済みの決定記録が、依頼・Q・承認依頼・包括承認のどれも根拠として指していない（または、存在しない Q を指している）</td>
+<td>error</td>
+<td>根拠を直す</td>
+</tr>
+<tr>
+<td>CHK-23</td>
+<td><code>/work</code> が .gitignore にない。docs・tests に一時ファイルが commit されている。run-history の run-id が重複している</td>
+<td>error</td>
+<td>.gitignore に <code>/work/</code> を追加する。一時ファイルを /work に移す</td>
+</tr>
+<tr>
+<td>CHK-24</td>
+<td>参照先がない: 要求定義書の本文・表（出典・関連・決定記録など）やカタログの API・テーブル・共通部品の表に書いた ID が、要求定義書に定義されていない。変更履歴・決定記録・監査指摘の中の、ID 台帳で削除済み・廃止の ID だけは許す。カタログが廃止・却下の要求を参照している（warn）</td>
+<td>error / warn</td>
+<td>ID を直すか、参照先を定義する</td>
+</tr>
+<tr>
+<td>CHK-25</td>
+<td>構造化欄が定義を指していない: 対象エンティティが用語の表にも状態の表にもない。関係する状態が、その対象エンティティの状態の表にない。本文・受入基準の <code>{PARAM-xxx}</code> が参照パラメータの欄にない（欄にあるのに使っていない PARAM は warn）</td>
+<td>error / warn</td>
+<td>用語・状態の表に定義するか、欄を直す</td>
+</tr>
+<tr>
+<td>CHK-26</td>
+<td>孤立した定義: どこからも参照されない PARAM・出典（SRC）、どの要求の対象エンティティでもない状態の表のエンティティ</td>
+<td>warn</td>
+<td>参照を足すか、不要なら廃止する</td>
+</tr>
+<tr>
+<td>CHK-27</td>
+<td>カタログの表どうしの不整合: 機能の表の「使っている共通部品」が共通部品の表にない。共通部品の表の「使っている要求 ID」が機能の表と一致しない。部品名・API 名・テーブル名の重複。要求の「関連する既存資産」に書いた 共通部品「…」・API「…」・テーブル「…」がカタログにない</td>
+<td>error</td>
+<td>共通部品の表の要求 ID は <code>rdfix.py --only catalog --apply</code> で機能の表に合わせる。それ以外は表に行を足す</td>
+</tr>
+</tbody>
+</table>
+<p>CHK-24〜27 は、要求定義書とカタログを「体系として」保つための検査です。目的（G）→ 要求 → 受入基準 → System Test の台帳 → 実装・テストという縦のつながり（CHK-03・04・09・10）に加えて、要求と用語・状態・PARAM・出典・カタログの資産という横のつながりも、参照先が実在し、双方向で一致していることを保証します。つながりは <code>python scripts/rdcheck.py trace &lt;ID または名前&gt;</code> で上流・下流ともにたどれます（<a href="05-scripts-reference.html">5. スクリプト</a>）。
+出力は 1 行に 1 指摘（<code>ERROR CHK-07 docs/catalog.md:12 …</code>）で、最後に <code>rdcheck: errors=N warnings=M</code> の 1 行が出力されます。</p>
+<h2 id="63-rdfix">6.3 データ層の不整合の自動修正（rdfix）</h2>
+<p>データ層のファイル（要求定義書・カタログ・ID 台帳・System Test の台帳・実行履歴・<code>.gitignore</code>）の間の食い違いのうち、要求定義書から機械的に決まるものは <code>python scripts/rdfix.py --apply</code> で直せます。verify が失敗し、自動で直せる不整合があるときは、<code>HINT rdfix: …</code> の行が出ます。</p>
+<ul>
+<li>正本は要求定義書です。rdfix は要求定義書を変更しません（G-1）。ID 台帳は <code>next-id.py</code>、台帳は <code>ledger.py</code> を通して直し、台帳の変更は <code>history</code> に残します（G-2・G-3）。</li>
+<li>判断が要る不整合は直さず、<code>MANUAL … （担当: &lt;役割&gt;）</code> として示します。例: AC の本文が変わった（CHK-11。ケースの見直しが要る）、削除済み・欠番の ID の再利用（CHK-02）、ID 台帳にない ID（CHK-01。手で振った ID かもしれない）、System Test の対象外になった AC のケース（CHK-10）。</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>対象（<code>--only</code>）</th>
+<th>自動で直すもの</th>
+<th>対応する検査</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>registry</td>
+<td>ID 台帳の状態（使用中・廃止・削除済み）、merge=union で重複した行、ID 台帳がないときの作成。<code>--adopt</code> を付けたときだけ、台帳にない ID を取り込む</td>
+<td>CHK-01</td>
+</tr>
+<tr>
+<td>catalog</td>
+<td>機能の表の決定状態・題名を要求定義書に合わせる。要求の行の追加（実装ファイル・テストは、その ID を書いたコード・テストから埋める）。要求定義書にない要求の行（ファイルの記載がないもの）と重複した行の削除。名前が変わったファイルの参照の付け替えと、存在しないファイルの参照の削除。コードがなくなった廃止の要求の実装ファイルを「なし」にする。共通部品の表の「使っている要求 ID」を機能の表に合わせる</td>
+<td>CHK-07・CHK-08・CHK-17・CHK-27</td>
+</tr>
+<tr>
+<td>ledger</td>
+<td>ケースの欠けた項目、<code>requirement_ids</code> を AC の「対応する要求」に合わせる、<code>ac_digests</code> の不足の補充と、どのケースも参照しない <code>ac_digests</code> の削除</td>
+<td>CHK-10・CHK-11</td>
+</tr>
+<tr>
+<td>gitignore</td>
+<td><code>/work/</code> の追加</td>
+<td>CHK-23</td>
+</tr>
+<tr>
+<td>history</td>
+<td>merge=union で重複した実行履歴の行の削除</td>
+<td>CHK-23</td>
+</tr>
+</tbody>
+</table>
+<p><code>--apply</code> は conductor が統合ブランチで実行します（「始めに」と工程 6）。作業役のブランチ（<code>work/&lt;run-id&gt;/&lt;item&gt;</code>）では実行を拒否し、hook も implementer・reviewer・rd-auditor による <code>--apply</code> を拒否します（G-2）。rd-author は <code>--only catalog,registry</code>、test-designer は <code>--only ledger</code> に限って使えます。</p><footer>出典: <a href="https://github.com/dahatake/HypervelocityEngineering/blob/main/users-guide/06-quality-gates.md">users-guide/06-quality-gates.md</a></footer></main></div>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11/lib/common.min.js"></script>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark=['dark','midnight'].includes(document.documentElement.dataset.theme);
+mermaid.initialize({startOnLoad:false,theme:dark?'dark':'default'});
+await mermaid.run({querySelector:'pre.mermaid'});
+</script>
+<script>document.querySelectorAll('pre code').forEach(e=>hljs.highlightElement(e));
+const t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+const sel=document.getElementById('theme');
+function setT(v){document.documentElement.dataset.theme=v;localStorage.setItem('theme',v);sel.value=v;
+ const hl=document.getElementById('hl');if(hl)hl.href='https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github'+(['dark','midnight'].includes(v)?'-dark':'')+'.min.css';}
+sel.onchange=()=>setT(sel.value);setT(t);
+document.getElementById('menu').onclick=()=>document.querySelector('nav').classList.toggle('open');
+document.querySelector('nav a.cur')?.scrollIntoView({block:'center'});
+</script>
+</body></html>
