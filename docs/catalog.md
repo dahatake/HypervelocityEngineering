@@ -35,6 +35,13 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1014 | 要求の実装状態ビュー（実装の登録と試験 pass の区別） | 承認済み | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/implstatus.js`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/i18n.js`, `users-guide/studio/08-data-reference.md` | `tests/system/e2e/test_impl_status_system.py`, `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
 | FR-1015 | 次に実装すべき要求の分析コマンド | 承認済み | `scripts/next-impl.py`、`tools/install.py`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_next_impl.py` | 次実装候補の分析、run 状態・完了記録、配布同期対象 |
 | FR-1016 | 許容時間を指定するだけの実装依頼（/build 入口）の生成 | 承認済み | `scripts/build-request.py`、[`.github/skills/build/SKILL.md`](docs/../.github/skills/build/SKILL.md)、`tools/install.py`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_next_impl.py`、`tests/system/e2e/test_build_request_system.py` | 次実装候補の分析、run 状態・完了記録、配布同期対象 |
+| FR-1020 | エンティティ台帳の導出（既存の構造化欄が正本） | 承認済み | 未実装 | 未実装 | - |
+| FR-1021 | エンティティ × ユースケース の対応表（Studio） | 承認済み | 未実装 | 未実装 | - |
+| FR-1022 | エンティティ詳細（要求・テーブル・コンポーネント） | 承認済み | 未実装 | 未実装 | - |
+| FR-1023 | 企業データカタログとの整合の検査 | 承認済み | 未実装 | 未実装 | - |
+| FR-1024 | 企業データカタログが覆わないエンティティの ToDo 生成 | 承認済み | 未実装 | 未実装 | - |
+| NFR-COMPAT-003 | エンティティ機能の他リポジトリでの動作 | 承認済み | 未実装 | 未実装 | - |
+| NFR-SEC-023 | 企業データカタログの参照の安全性 | 承認待ち | 未実装 | 未実装 | - |
 
 ## API・イベント
 
