@@ -7,6 +7,7 @@ until the feature is implemented.
 """
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 
@@ -61,7 +62,9 @@ def test_ac159_check_without_source_reports_unset_and_keeps_verify_result(tmp_pa
     assert r.returncode == 0, r.stdout + r.stderr
     assert "企業データカタログ: 未設定（照合していない）" in r.stdout
     v1 = subprocess.run(verify, **kw)
-    assert (v0.returncode, v0.stdout) == (v1.returncode, v1.stdout)
+    def _stable(out):  # 日時入りのログパス（work/logs/verify-<日時>-*.log）の行は比較しない
+        return [ln for ln in out.splitlines() if not re.search(r"verify-\d[\w-]*\.log", ln)]
+    assert (v0.returncode, _stable(v0.stdout)) == (v1.returncode, _stable(v1.stdout))
 
 
 # FR-1024 AC-163
