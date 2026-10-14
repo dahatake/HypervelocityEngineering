@@ -42,7 +42,14 @@ const D = {
     'place.pick': 'セルを選ぶと、その要求とファイルの一覧を表示します。', 'place.to2d': '2D 地図で見る', 'place.to3d': '3D 地図で見る', 'place.data.note': 'エンティティ(要求の「対象エンティティ」)を実装する要求が、どのコンポーネントにあるかを示します。', 'place.noapi': 'カタログの「API・イベント」「テーブル」に登録がありません。',
     'src.sub': 'カタログ(機能・共通部品・API・テーブルの表)に書かれたパスだけを使い、ソースコードは読みません。面積は結び付く要求の数です。', 'src.filter': 'パスで絞り込む…', 'src.tests': 'テストを含める', 'src.legend': '青:実装 / 緑:テスト、濃いほど多くの要求に結び付く', 'src.none': 'カタログにファイルの対応がありません。',
     'd.text': '要求本文', 'd.acs': '受入基準', 'd.info': '情報', 'd.impl': '実装ファイル', 'd.tests': 'テスト', 'd.refs': '本文で参照している要求', 'd.src': '定義の位置', 'd.raw': '要求定義書の原文を表示', 'd.open': 'VS Code で開く', 'd.copy': 'IDをコピー', 'd.copied': 'コピーしました',
-  },
+        'nav.entities': 'エンティティ', 'eu.title': 'エンティティ × ユースケース', 'eu.sub': '行がエンティティ、列が要求と利用シナリオです。セルは、そのユースケースがエンティティを 作成・参照・更新・削除 のどれで使うかを示します。見出しを選ぶと詳細に移ります。',
+        'eu.none.h': 'エンティティなし', 'eu.none.d': '用語表・状態表・各要求の「対象エンティティ」欄に、エンティティの名前がありません。名前を書くと、ここに一覧と対応表が表示されます。', 'eu.unavail': 'エンティティの導出機能（scripts/entities.py）が見つかりません。管理データは変更されていません。',
+        'eu.rowq': '行（エンティティ）を絞り込む…', 'eu.colq': '列（要求・シナリオ）を絞り込む…', 'eu.sort': '行の並べ替え', 'eu.sort.name': '名前順', 'eu.sort.use': '使われている数の多い順', 'eu.csv': 'CSV を保存', 'eu.text': 'テキストで表示', 'eu.entity': 'エンティティ', 'eu.scn': 'シナリオ {n}',
+        'eu.unused': '未使用', 'eu.unusedlist': '未使用のエンティティ（どのユースケースからも使われていない）', 'eu.noent': 'エンティティなし', 'eu.noentcols': 'エンティティなしの要求', 'eu.used': '使用（使い方未記載）', 'eu.legend': '凡例', 'eu.cols': '列の説明', 'eu.colsel': '列を選択中', 'eu.clear': '選択を解除', 'eu.nomatch': '条件に合う行・列がありません。',
+        'eu.back': '← 対応表へ', 'eu.toER': 'ER 図で見る', 'eu.toLayers': '実装配置図で見る', 'eu.d.desc': '説明', 'eu.d.states': '状態と遷移の条件', 'eu.d.reqs': '使う要求', 'eu.d.scn': '利用シナリオ', 'eu.d.tables': '管理テーブル／ファイル', 'eu.d.parts': '使うコンポーネント・API・共通部品',
+        'eu.state': '状態', 'eu.cond': '遷移の条件', 'eu.usage': '使い方', 'eu.src': '出典', 'eu.nodata': 'なし', 'eu.unwritten': '未記載', 'eu.notfound': '指定のエンティティが見つかりません。',
+        'eu.w.作成': '作成', 'eu.w.参照': '参照', 'eu.w.更新': '更新', 'eu.w.削除': '削除',
+      },
   en: {
     'nav.implstatus': 'Impl. status', 'impl2.sub': 'Where each approved requirement stands: not started, implementation registered, or test passed. Registration and test results are judged separately.', 'impl2.legend': 'State legend', 'impl2.all': 'Overall', 'impl2.goal': 'By goal', 'impl2.priority': 'By priority', 'impl2.kanban': 'Kanban', 'impl2.table': 'Table', 'impl2.cases': 'Test case breakdown', 'impl2.stalled': 'Stalled', 'impl2.excluded': 'Excluded (pending, on hold, rejected, retired) requirements',
     'nav.dashboard': 'Dashboard', 'nav.map2d': '2D Map', 'nav.map3d': '3D Map', 'nav.diagrams': 'Diagrams', 'nav.placement': 'Placement', 'nav.source': 'Source Map', 'nav.tables': 'Tables',
@@ -81,7 +88,14 @@ const D = {
     'place.pick': 'Select a cell to list its requirements and files.', 'place.to2d': 'Show on 2D map', 'place.to3d': 'Show on 3D map', 'place.data.note': 'Shows in which components the requirements that handle each entity ("target entity") are implemented.', 'place.noapi': 'No entries in the catalog "API / events" or "tables".',
     'src.sub': 'Uses only the paths written in the catalog (features, common parts, APIs, tables); source code is never read. Area = number of linked requirements.', 'src.filter': 'Filter by path…', 'src.tests': 'Include tests', 'src.legend': 'Blue: implementation / Green: tests; darker = more requirements', 'src.none': 'The catalog has no file mapping.',
     'd.text': 'Requirement text', 'd.acs': 'Acceptance criteria', 'd.info': 'Info', 'd.impl': 'Implementation files', 'd.tests': 'Tests', 'd.refs': 'Referenced in the text', 'd.src': 'Defined at', 'd.raw': 'Show original markdown', 'd.open': 'Open in VS Code', 'd.copy': 'Copy ID', 'd.copied': 'Copied',
-  },
+        'nav.entities': 'Entities', 'eu.title': 'Entity × use case', 'eu.sub': 'Rows are entities; columns are requirements and usage scenarios. A cell shows whether the use case Creates, Reads, Updates or Deletes the entity. Select a heading to open its detail.',
+        'eu.none.h': 'No entities', 'eu.none.d': 'No entity names were found in the glossary, the state table, or the "target entity" field of any requirement. Once names are written, the list and the matrix appear here.', 'eu.unavail': 'The entity derivation (scripts/entities.py) was not found. Management data is unchanged.',
+        'eu.rowq': 'Filter rows (entities)…', 'eu.colq': 'Filter columns (requirements, scenarios)…', 'eu.sort': 'Sort rows', 'eu.sort.name': 'By name', 'eu.sort.use': 'Most used first', 'eu.csv': 'Save CSV', 'eu.text': 'Show as text', 'eu.entity': 'Entity', 'eu.scn': 'Scenario {n}',
+        'eu.unused': 'Unused', 'eu.unusedlist': 'Unused entities (no use case uses them)', 'eu.noent': 'No entity', 'eu.noentcols': 'Requirements without an entity', 'eu.used': 'Used (usage not stated)', 'eu.legend': 'Legend', 'eu.cols': 'Columns', 'eu.colsel': 'Column selected', 'eu.clear': 'Clear selection', 'eu.nomatch': 'No rows or columns match.',
+        'eu.back': '← Back to matrix', 'eu.toER': 'Show in ER diagram', 'eu.toLayers': 'Show in placement diagram', 'eu.d.desc': 'Description', 'eu.d.states': 'States and transition conditions', 'eu.d.reqs': 'Requirements using it', 'eu.d.scn': 'Usage scenarios', 'eu.d.tables': 'Managed tables / files', 'eu.d.parts': 'Components, APIs and common parts used',
+        'eu.state': 'State', 'eu.cond': 'Transition condition', 'eu.usage': 'Usage', 'eu.src': 'Source', 'eu.nodata': 'None', 'eu.unwritten': 'Not stated', 'eu.notfound': 'The entity was not found.',
+        'eu.w.作成': 'Create', 'eu.w.参照': 'Read', 'eu.w.更新': 'Update', 'eu.w.削除': 'Delete',
+      },
 };
 
 export const lang = () => current;

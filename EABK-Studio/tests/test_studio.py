@@ -581,3 +581,61 @@ def test_impl_status_screen_is_wired_bilingually_with_keyboard_and_symbols():
     for key in ("nav.implstatus", "impl2.all", "impl2.goal", "impl2.priority", "impl2.kanban", "impl2.table", "impl2.stalled", "impl2.legend"):
         assert len(re.findall(rf"'{re.escape(key)}':", i18n)) == 2, key
     assert "ledger" not in src.lower() and "fetch(" not in src  # read-only view
+
+# --- FR-1021 / FR-1022 / NFR-COMPAT-003: entity matrix and detail ---------------------------------------------------
+SEP = "\u3000"
+
+
+def _entity_repo(tmp_path, with_entities=True):
+    (tmp_path / "docs").mkdir(parents=True)
+    ents = "| 注文 | 購入内容 | なし |\n| 在庫 | 倉庫の数量 | なし |\n" if with_entities else ""
+    states = "| 注文 | 確定 | 支払い完了時 |\n" if with_entities else ""
+    use = "注文" if with_entities else "なし"
+    uf = "- エンティティの使い方: 注文（作成）\n- 利用シナリオ: 1\n" if with_entities else ""
+    (tmp_path / "docs" / "requirements-definition.md").write_text(
+        "# 要求定義書\n\n### 3.3 用語\n\n| 用語 | 定義 | 禁止同義語 |\n|---|---|---|\n" + ents
+        + "\n### 3.4 状態\n\n| 対象エンティティ | 状態 | 遷移の条件 |\n|---|---|---|\n" + states
+        + "\n## 5. 利用シナリオ\n\n1. 利用者が注文する。\n\n## 6. 要求\n\n"
+        + f"#### FR-001 登録\n- 要求: 登録できる。\n- 決定状態: 承認済み（依頼 2026-10-14）{SEP}出自: 依頼原文{SEP}優先度: MUST\n"
+        + f"- 上位: G-001{SEP}出典: 依頼{SEP}対象エンティティ: {use}{SEP}関係する状態: なし{SEP}参照パラメータ: なし{SEP}関連する既存資産: なし\n" + uf
+        + "- 受入基準 AC-001: 登録できる。\n  - 検証レベル: system\n\n"
+        + f"#### FR-002 表示\n- 要求: 表示する。\n- 決定状態: 承認済み（依頼 2026-10-14）{SEP}出自: 依頼原文{SEP}優先度: MUST\n"
+        + f"- 上位: G-001{SEP}出典: 依頼{SEP}対象エンティティ: なし{SEP}関係する状態: なし{SEP}参照パラメータ: なし{SEP}関連する既存資産: なし\n"
+        + "- 受入基準 AC-002: 表示する。\n  - 検証レベル: system\n",
+        encoding="utf-8")
+    return tmp_path
+
+
+# FR-1021 AC-154 AC-156 FR-1022 AC-157
+def test_model_has_entity_ledger_with_usage_states_and_unused(tmp_path):
+    model = m.build_model(_entity_repo(tmp_path))
+    ents = {e["name"]: e for e in model["entities"]["entities"]}
+    assert model["entities"]["available"] is True
+    assert ents["注文"]["usecases"][0]["usages"] == ["作成"] and ents["注文"]["usecases"][0]["scenarios"] == [1]
+    assert ents["在庫"]["usecases"] == []  # unused entities are not dropped
+    sm = next(x for x in model["stateMachines"] if x["entity"] == "注文")
+    assert sm["rows"][0]["state"] == "確定" and sm["rows"][0]["condition"] == "支払い完了時"
+
+
+# NFR-COMPAT-003 AC-168
+def test_zero_entities_and_missing_derivation_do_not_fail(tmp_path, monkeypatch):
+    model = m.build_model(_entity_repo(tmp_path, with_entities=False))
+    assert model["entities"]["entities"] == [] and model["warnings"] == []
+    warnings = []
+    monkeypatch.setattr(m.Path, "is_file", lambda self: False if self.name == "entities.py" else Path.is_file(self))
+    assert m.build_entities(tmp_path, warnings) == {"available": False, "entities": [], "scenarios": {}}
+
+
+# FR-1021 AC-155 FR-1022 AC-158 NFR-COMPAT-003 AC-168
+def test_entity_screen_is_wired_bilingually_with_keyboard_csv_and_links():
+    js = ROOT / "web" / "js"
+    src = (js / "entities.js").read_text(encoding="utf-8")
+    app = (js / "app.js").read_text(encoding="utf-8")
+    i18n = (js / "i18n.js").read_text(encoding="utf-8")
+    drawer = (js / "drawer.js").read_text(encoding="utf-8")
+    assert "entities:" in app and "entities.js" in app
+    assert "el('button'" in src and "csvCell" in src and "download" in src and "type: 'search'" in src
+    assert "#/diagrams?kind=entities" in src and "#/diagrams?kind=layers" in src and "#/entities?entity=" in drawer
+    for key in [k for k in re.findall(r"t\('(eu\.[a-zA-Z.]+)'", src) if not k.endswith(".")] + ["nav.entities", "eu.none.h", "eu.unused", "eu.noent", "eu.used"]:
+        assert len(re.findall(rf"'{re.escape(key)}':", i18n)) == 2, key
+    assert "fetch(" not in src  # read-only view
