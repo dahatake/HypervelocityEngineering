@@ -22,7 +22,12 @@ def studio(tmp_path_factory):
     doc = repo / DOC
     long_id = "Y" * 120
     doc.write_text(doc.read_text(encoding="utf-8") + "".join(
-        f"\n#### FR-{900 + i} {long_id}{i} " + "とても長い題名" * 10 + "\n- 決定状態: 承認済み\n" for i in range(20)), encoding="utf-8")
+        f"\n#### FR-{900 + i} {long_id}{i} " + "とても長い題名" * 10 + "\n- 決定状態: 承認済み\n" for i in range(20))
+        + "\n| 日付 | 対象ID | 決定 | 根拠 | run |\n|---|---|---|---|---|\n| 2026-10-15 | FR-001 | " + "長い決定" * 20 + " | 依頼 | " + "R" * 100 + " |\n",
+        encoding="utf-8")
+    (repo / "docs" / "run-history.md").write_text(
+        "| run-id | 開始 | 終了 | HEAD | 結果 | 実装した要求 ID |\n|---|---|---|---|---|---|\n| " + "r" * 100
+        + " | 2026-10-15T01:00 | 2026-10-15T02:00 | abc | 実装完了 | FR-001 |\n", encoding="utf-8")
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
@@ -150,3 +155,4 @@ def test_segment_click_does_not_open_detail(studio):
     page.locator('[data-testid="impl-bar-segment"][data-scope="all"]').first.click()
     assert page.locator("#drawer[hidden]").count() == 1
     page.context.close()
+

@@ -169,7 +169,7 @@ function historyProgress() {
     return el('section', { class: 'card history-box', 'data-testid': 'history-box', 'data-kind': kind, 'aria-label': `${label} ${records.length}` },
       el('h3', {}, `${label} (${records.length})`),
       records.length ? el('div', { class: 'hchips' }, records.map(chip))
-        : el('div', { class: 'hchips' }, el('span', { class: 'hchip empty', 'data-testid': 'history-chip', 'data-kind': kind }, '該当レコードなし')));
+        : el('p', { class: 'empty', 'data-testid': 'history-empty' }, t('none')));
   });
   return el('section', { class: 'visual-section' }, el('h2', {}, '設計・開発履歴と進捗'),
     el('p', { class: 'sub' }, `測定時点: ${m.meta.generatedAt} · 時系列 / 状態別`),

@@ -24,7 +24,7 @@ export function mount(host) {
   host.append(page);
   let cardEls = [];
   // FR-1033: one filter {state, scope?, group?} drives every view; clicking a segment never navigates (AC-204).
-  let filter = null;
+  let filter = store.implFilter;
   let mode = 'highlight';
   let statusEl = null;
   const matches = (r) => !filter || (r.state === filter.state && (!filter.scope || r[filter.scope] === filter.group));
@@ -36,8 +36,8 @@ export function mount(host) {
     return seg;
   };
   const toggle = (f) => {
-    filter = filter && filter.state === f.state && filter.scope === f.scope && filter.group === f.group ? null : f;
-    applyFilter();
+    const same = filter && filter.state === f.state && filter.scope === f.scope && filter.group === f.group;
+    store.setImplFilter(same ? null : f);
   };
   const applyFilter = () => {
     const flag = (node, ok) => {
@@ -97,14 +97,15 @@ export function mount(host) {
     statusEl = el('span', { 'data-testid': 'impl-filter-status', role: 'status', 'aria-live': 'polite' });
     const filterBar = el('div', { class: 'impl-filter-bar' }, statusEl,
       el('button', { type: 'button', class: 'btn', 'data-testid': 'impl-filter-mode', onclick: (e) => { mode = mode === 'highlight' ? 'filter' : 'highlight'; e.currentTarget.textContent = t(mode === 'highlight' ? 'impl3.mode.hl' : 'impl3.mode.fl'); applyFilter(); } }, t(mode === 'highlight' ? 'impl3.mode.hl' : 'impl3.mode.fl')),
-      el('button', { type: 'button', class: 'btn', 'data-testid': 'impl-filter-clear', onclick: () => { filter = null; applyFilter(); } }, t('impl3.clear')));
+      el('button', { type: 'button', class: 'btn', 'data-testid': 'impl-filter-clear', onclick: () => store.setImplFilter(null) }, t('impl3.clear')));
 
     const columns = ja.map((s, i) => {
       const rows = items.filter((r) => r.state === s);
       return el('section', { class: 'card impl-col', 'data-testid': 'impl-kanban-column', 'data-scope': 'all', 'data-state': s, 'data-count': rows.length, 'aria-label': `${stateLabel(i, ja)} ${rows.length}`, style: { minWidth: '200px', flex: '1 1 200px', borderTop: `4px solid ${STATE_META[i].color}` } },
         el('h3', { style: { fontSize: '13px' } }, `${STATE_META[i].sym} ${stateLabel(i, ja)} (${rows.length})`),
         el('div', { style: { display: 'grid', gap: '6px' } }, rows.map((r) => el('div', { class: 'chip impl-card', 'data-testid': 'impl-kanban-card', 'data-req': r.id, 'data-state': r.state,
-          style: { textAlign: 'left', whiteSpace: 'normal', overflowWrap: 'anywhere' }, onclick: () => select(r.id) },
+          tabindex: '0', style: { textAlign: 'left', whiteSpace: 'normal', overflowWrap: 'anywhere' }, onclick: () => select(r.id),
+          onkeydown: (e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); select(r.id); } } },
         el('span', { class: 'mono' }, xrefLink(r.id)), ' ', r.title, r.blocked ? el('b', { class: 'badge fail', style: { marginLeft: '6px' } }, '⏸ ' + t('impl2.stalled')) : ''))));
     });
 
@@ -137,6 +138,6 @@ export function mount(host) {
   };
   const mark = () => cardEls.forEach((c) => c.classList.toggle('on', c.dataset.req === store.selected));
   render();
-  const offs = [store.on('model', render), onLang(render), store.on('select', mark)];
+  const offs = [store.on('implfilter', (f) => { filter = f; applyFilter(); }), store.on('model', render), onLang(render), store.on('select', mark)];
   return { destroy() { offs.forEach((f) => f()); } };
 }
