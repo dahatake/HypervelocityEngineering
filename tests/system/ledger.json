@@ -66,9 +66,9 @@
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_model_can_traverse_requirement_to_catalog_file_and_test",
       "canary": true,
       "status": "pass",
-      "last_commit": "218adb9",
-      "last_run_at": "2026-10-13T08:32:51+09:00",
-      "evidence": "work/runs/202610130523/logs/system-test/E2E-001-202610130548.log",
+      "last_commit": "212e618",
+      "last_run_at": "2026-10-14T22:19:03+09:00",
+      "evidence": "work/runs/202610142046/logs/system-test/E2E-001-202610142218.log",
       "history": [
         {
           "at": "2026-10-09T22:10:37+09:00",
@@ -829,9 +829,9 @@
       "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_starts_only_after_ordered_success_and_pre_cleanup_report",
       "canary": true,
       "status": "pass",
-      "last_commit": "218adb9",
-      "last_run_at": "2026-10-13T08:32:51+09:00",
-      "evidence": "work/runs/202610130523/logs/system-test/E2E-026-202610130548.log",
+      "last_commit": "212e618",
+      "last_run_at": "2026-10-14T22:19:03+09:00",
+      "evidence": "work/runs/202610142046/logs/system-test/E2E-026-202610142218.log",
       "history": [
         {
           "at": "2026-10-10T10:41:32+09:00",
@@ -879,9 +879,9 @@
       "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_cleanup_starts_only_after_all_gates_and_main_integration",
       "canary": true,
       "status": "pass",
-      "last_commit": "218adb9",
-      "last_run_at": "2026-10-13T08:32:51+09:00",
-      "evidence": "work/runs/202610130523/logs/system-test/E2E-028-202610130548.log",
+      "last_commit": "212e618",
+      "last_run_at": "2026-10-14T22:19:03+09:00",
+      "evidence": "work/runs/202610142046/logs/system-test/E2E-028-202610142218.log",
       "history": [
         {
           "at": "2026-10-10T10:41:53+09:00",
@@ -2322,10 +2322,10 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac105 -q",
       "canary": true,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "212e618",
+      "last_run_at": "2026-10-14T22:19:03+09:00",
+      "evidence": "work/runs/202610142046/logs/system-test/IT-008-202610142218.log",
       "history": [
         {
           "at": "2026-10-14T20:55:51+09:00",
@@ -2359,10 +2359,10 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac106 -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "212e618",
+      "last_run_at": "2026-10-14T22:19:03+09:00",
+      "evidence": "work/runs/202610142046/logs/system-test/IT-009-202610142218.log",
       "history": [
         {
           "at": "2026-10-14T20:56:17+09:00",
@@ -2396,10 +2396,10 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac107 -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "212e618",
+      "last_run_at": "2026-10-14T22:19:03+09:00",
+      "evidence": "work/runs/202610142046/logs/system-test/IT-010-202610142218.log",
       "history": [
         {
           "at": "2026-10-14T20:56:18+09:00",
@@ -2433,10 +2433,10 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac108 -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "212e618",
+      "last_run_at": "2026-10-14T22:19:03+09:00",
+      "evidence": "work/runs/202610142046/logs/system-test/IT-011-202610142218.log",
       "history": [
         {
           "at": "2026-10-14T20:56:19+09:00",
@@ -2470,10 +2470,10 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac109 -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "212e618",
+      "last_run_at": "2026-10-14T22:19:03+09:00",
+      "evidence": "work/runs/202610142046/logs/system-test/IT-012-202610142218.log",
       "history": [
         {
           "at": "2026-10-14T20:56:20+09:00",
@@ -2507,10 +2507,10 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac110 -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "212e618",
+      "last_run_at": "2026-10-14T22:19:03+09:00",
+      "evidence": "work/runs/202610142046/logs/system-test/IT-013-202610142218.log",
       "history": [
         {
           "at": "2026-10-14T20:56:21+09:00",
@@ -2544,10 +2544,10 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac111 -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "212e618",
+      "last_run_at": "2026-10-14T22:19:03+09:00",
+      "evidence": "work/runs/202610142046/logs/system-test/IT-014-202610142218.log",
       "history": [
         {
           "at": "2026-10-14T20:56:22+09:00",
@@ -2581,10 +2581,10 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac112 -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "212e618",
+      "last_run_at": "2026-10-14T22:19:03+09:00",
+      "evidence": "work/runs/202610142046/logs/system-test/IT-015-202610142218.log",
       "history": [
         {
           "at": "2026-10-14T20:56:23+09:00",
@@ -2618,10 +2618,10 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac113 -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "212e618",
+      "last_run_at": "2026-10-14T22:19:03+09:00",
+      "evidence": "work/runs/202610142046/logs/system-test/IT-016-202610142218.log",
       "history": [
         {
           "at": "2026-10-14T20:56:25+09:00",
@@ -2655,10 +2655,10 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac114 -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "212e618",
+      "last_run_at": "2026-10-14T22:19:03+09:00",
+      "evidence": "work/runs/202610142046/logs/system-test/IT-017-202610142219.log",
       "history": [
         {
           "at": "2026-10-14T20:56:27+09:00",
