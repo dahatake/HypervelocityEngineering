@@ -158,3 +158,16 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | 起動スクリプト | `EABK-Studio/start.ps1`, `EABK-Studio/start.sh` | Windows/macOS/Linux の起動補助 | FR-1001、NFR-OPS-001 |
 | Three.js 同梱モジュール | `EABK-Studio/web/vendor/three.module.min.js` | 3D マップ表示 | FR-003 |
 | 意味的ズーム | `EABK-Studio/web/js/semzoom.js`, `EABK-Studio/web/js/sz2d.js`, `EABK-Studio/web/js/sz3d.js`, `EABK-Studio/web/sz.css` | エンティティの倍率に応じた 3 粒度（クラスター・エンティティと関係線・列の一覧）。2D（SVG）と 3D（Canvas）が 1 つの共有状態（倍率・中心・選択・絞り込み）で動き、可視範囲だけを描画し、表の代替表現・キーボード・JA/EN を備える。`window.eabkView`（setScale・getState）を公開する | FR-1027、FR-1028、FR-1029、FR-1034、NFR-PERF-004、NFR-UX-010 |
+
+## 配置先
+
+実在する配置だけを書く（書式は `EABK-Studio/eabk_model.py` の `parse_placements`、FR-1034）。
+
+- 配置先: PC内のフォルダ / 場所: docs/ / アプリ: EABK toolkit のスクリプト、EABK Studio サーバー / データ: 要求定義書、カタログ、ID 台帳、実行履歴、手動テスト手順
+- 配置先: PC内のフォルダ / 場所: work/ / アプリ: EABK toolkit のスクリプト / データ: 実行ごとの作業記録（work/runs/）、ログ（work/logs/）
+- 配置先: PC内のフォルダ / 場所: tests/system/ / アプリ: EABK toolkit のスクリプト / データ: System Test 台帳（ledger.json）
+- 配置先: ブラウザ Local Storage / キー: eabk-studio.lang / アプリ: EABK Studio 画面 / データ: 表示言語（ja か en）
+- 配置先: ローカル HTTP サーバー / 待受: 127.0.0.1 / アプリ: EABK Studio サーバー
+- 通信: EABK Studio 画面 → EABK Studio サーバー（双方向）
+- 通信: EABK Studio サーバー → docs/（受信）
+- 通信: EABK Studio サーバー → tests/system/（受信）
