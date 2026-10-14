@@ -1,6 +1,7 @@
 // 2D traceability map: goals -> requirements -> parts/data -> source -> tests, on a pannable, zoomable canvas.
 import { t, onLang } from './i18n.js';
 import { store } from './store.js';
+import { xrefLink } from './xref.js';
 import { create2d } from './sz2d.js';
 import { mountShell, wantsEntityView, hasEntityStructure, setTab } from './semzoom.js';
 import { el, colorOf, TYPE_COLOR, STATUS_COLOR, showTip, hideTip, nodeTip } from './ui.js';
@@ -428,7 +429,7 @@ function mountGraph(host) {
     if (!set) return;
     const n = store.selected ? store.node(store.selected) : null;
     statusBox.replaceChildren(
-      el('div', {}, n ? el('b', {}, n.label) : el('b', {}, store.focusLabel || t('focus.set')), ' · ', t('focus.count', { n: [...set].filter((id) => pos.has(id)).length })),
+      el('div', {}, n ? el('b', {}, xrefLink(n.id, n.label)) : el('b', {}, store.focusLabel || t('focus.set')), ' · ', t('focus.count', { n: [...set].filter((id) => pos.has(id)).length })),
       el('div', { class: 'row', style: { marginTop: '6px' } }, el('button', { class: 'btn ghost', onclick: () => store.clear() }, t('focus.clear'))));
   }
   function relayout(keepCam) {

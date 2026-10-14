@@ -2,6 +2,7 @@ import { t, lang, setLang, onLang, applyI18n } from './i18n.js';
 import { store } from './store.js';
 import { el, esc, colorOf, typeLabel, toast, businessIcon } from './ui.js';
 import { initDrawer } from './drawer.js';
+import { installXref } from './xref.js';
 import { decorate, mountStructure, mountConsistency, mountMaintenance } from './insights.js';
 
 const ROUTES = {
@@ -105,9 +106,24 @@ function hl(text, toks) {
   for (const tk of toks) if (tk) s = s.replace(new RegExp('(' + esc(tk).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig'), '<mark>$1</mark>');
   return s;
 }
+// FR-1033 AC-197: command box. ">" followed by text lists commands; Enter runs one.
+function commandHits(val) {
+  const ja = lang() === 'ja';
+  const needle = val.slice(1).trim().toLowerCase();
+  const states = store.model.implStatus?.states || [];
+  const list = states.map((s) => ({ cmd: true, id: 'cmd:select:' + s, label: (ja ? '実装状態の区間を選択: ' : 'Select impl-status segment: ') + s,
+    run: () => { location.hash = '#/implstatus'; store.setImplFilter({ state: s, scope: null, group: null }); } }));
+  list.push({ cmd: true, id: 'cmd:clear', label: ja ? '実装状態の絞り込みを解除' : 'Clear impl-status filter', run: () => store.setImplFilter(null) });
+  return list.filter((c) => c.label.toLowerCase().includes(needle));
+}
 function renderResults() {
   const val = q.value.trim();
   if (!val || !store.model) { box.hidden = true; lastResult = null; return; }
+  if (/^[>＞]/.test(val)) {
+    hits = commandHits(val); lastResult = null; active = Math.min(active, Math.max(0, hits.length - 1)); box.hidden = false;
+    box.replaceChildren(el('div', { class: 'result-body', role: 'listbox', 'data-testid': 'command-list' }, ...hits.map((c, i) => el('div', { class: 'res' + (i === active ? ' on' : ''), role: 'option', 'data-testid': 'command-item', onclick: () => runCommand(c) }, el('span', { class: 't' }, c.label)))));
+    return;
+  }
   lastResult = store.search(val, 40);
   hits = lastResult.hits;
   active = Math.min(active, Math.max(0, hits.length - 1));
@@ -120,6 +136,7 @@ function renderResults() {
       el('span', { class: 't', html: `<b>${hl(n.label, lastResult.toks)}</b><small>${esc(typeLabel(n))}${n.title && n.title !== n.label ? ' · ' + hl(String(n.title).slice(0, 90), lastResult.toks) : ''}</small>` }))));
   box.replaceChildren(resultBody);
 }
+function runCommand(c) { box.hidden = true; q.value = ''; c.run(); }
 function mark() { [...box.querySelectorAll('.res')].forEach((e, i) => e.classList.toggle('on', i === active)); }
 function ensureGraphView() { if (routeName() === 'dashboard') location.hash = '#/map2d'; }
 function choose(id) { box.hidden = true; ensureGraphView(); store.select(id, { fly: true }); }
@@ -134,7 +151,7 @@ q.addEventListener('input', () => { active = 0; renderResults(); });
 q.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowDown') { active = Math.min(hits.length - 1, active + 1); mark(); e.preventDefault(); box.querySelectorAll('.res')[active]?.scrollIntoView({ block: 'nearest' }); }
   else if (e.key === 'ArrowUp') { active = Math.max(0, active - 1); mark(); e.preventDefault(); box.querySelectorAll('.res')[active]?.scrollIntoView({ block: 'nearest' }); }
-  else if (e.key === 'Enter') { e.preventDefault(); if (e.shiftKey) highlightAll(); else if (hits[active]) choose(hits[active].id); }
+  else if (e.key === 'Enter') { e.preventDefault(); if (e.shiftKey) highlightAll(); else if (hits[active]?.cmd) runCommand(hits[active]); else if (hits[active]) choose(hits[active].id); }
   else if (e.key === 'Escape') { box.hidden = true; q.blur(); }
 });
 q.addEventListener('focus', renderResults);
@@ -196,4 +213,6 @@ renderLangBtn();
 renderNav();
 view.replaceChildren(el('div', { class: 'splash' }, el('div', { class: 'spin' }), t('loading')));
 initDrawer(document.getElementById('drawer'));
+installXref();
+for (const k of ['dashboard', 'implstatus']) ROUTES[k].load().catch(() => {}); // warm the module cache
 loadModel().catch((e) => { view.replaceChildren(el('div', { class: 'page' }, el('div', { class: 'warnbox' }, 'Failed to load: ' + e.message))); });
