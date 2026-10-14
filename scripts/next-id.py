@@ -190,7 +190,7 @@ def plan_sync(root: Path, cfg: dict, adopt: bool, finalize: bool, revive: bool =
     drop: List[int] = []
     for idx, line in enumerate(lines):
         m = re.match(r"^\|\s*([A-Z0-9-]+)\s*\|", line)
-        if not m or m.group(1) == "ID":
+        if not m or m.group(1) == "ID" or not re.search(r"[A-Z0-9]", m.group(1)):
             continue
         id_ = m.group(1)
         cells = h.split_row(line)
