@@ -32,13 +32,13 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .tp.band span{display:inline-block;background:#ffe600;color:#000;-webkit-text-stroke:0;text-shadow:none;padding:6px 34px;transform:skewX(-8deg);box-shadow:8px 8px 0 #000}
 .tp.band.r span{background:#ff3b5c;color:#fff}.tp.band.c span{background:#00e5ff}
 .tp.band .k{color:inherit;text-decoration:underline;-webkit-text-stroke:0}
-@keyframes pop{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.12);opacity:1}100%{transform:scale(1)}}
+@keyframes pop{0%{transform:scale(.4);opacity:1}60%{transform:scale(1.12);opacity:1}100%{transform:scale(1)}}
 @keyframes tpout{to{transform:translateY(24px) scale(.96);opacity:0}}
 .slam{position:absolute;left:0;width:1920px;text-align:center;animation:slam .5s cubic-bezier(.2,1.2,.3,1) both}
 .slam.out{animation:tpout .3s ease-in both}
 .slam .s1{font-weight:900;font-style:italic;-webkit-text-stroke:22px #000;paint-order:stroke fill;text-shadow:0 14px 0 #000,0 0 60px rgba(0,0,0,.6);line-height:1.05}
 .slam .s2{margin-top:18px;font-weight:900;font-size:50px;-webkit-text-stroke:12px #000;paint-order:stroke fill;text-shadow:0 8px 0 #000}
-@keyframes slam{0%{transform:scale(5) rotate(-5deg);opacity:0}35%{transform:scale(.9) rotate(1.5deg);opacity:1}55%{transform:scale(1.07)}100%{transform:scale(1)}}
+@keyframes slam{0%{transform:scale(5) rotate(-5deg);opacity:1}35%{transform:scale(.9) rotate(1.5deg);opacity:1}55%{transform:scale(1.07)}100%{transform:scale(1)}}
 #chap{position:absolute;left:0;top:0;width:1920px;height:1080px}
 .cwipe{position:absolute;left:0;top:330px;width:1920px;height:400px;background:linear-gradient(90deg,rgba(0,0,0,.92),rgba(0,0,0,.7) 70%,rgba(0,0,0,0));border-top:6px solid var(--c);border-bottom:6px solid var(--c);animation:cin .5s cubic-bezier(.2,.9,.2,1) both}
 .cnum{position:absolute;left:120px;top:370px;font:900 34px Consolas,monospace;letter-spacing:.5em;color:var(--c);animation:cslide .6s .1s both}
@@ -89,6 +89,8 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 #bubble::after{content:"";position:absolute;left:-19px;top:64px;border:14px solid transparent;border-right:24px solid #fff;border-left:0}
 #cap{position:absolute;left:0;width:1920px;top:985px;text-align:center;font:700 32px/1.4 "Yu Gothic UI",sans-serif;opacity:0;transition:opacity .25s}
 #cap.on{opacity:1}
+/* Captions are the voice's reading surface, not an independent entrance beat. */
+#cap,#bubble{transition:none}
 #cap span{display:inline-block;max-width:1600px;background:rgba(0,0,0,.72);padding:6px 26px;border-radius:12px;color:#fff}
 #flash{position:absolute;inset:0;opacity:0;pointer-events:none;background:#fff;mix-blend-mode:screen}
 #vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.75) 100%)}
@@ -106,8 +108,8 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 #tmc{position:absolute;left:110px;top:210px;width:1700px;height:700px}
 .mn{position:absolute;transform:translate(-50%,-50%);text-align:center;transition:all .4s}
 .mn i{display:block;width:22px;height:22px;border-radius:50%;margin:0 auto;border:4px solid var(--c);background:#05060a}
-.mn b{display:block;font:800 19px "Yu Gothic UI",sans-serif;color:#fff;white-space:nowrap;margin-top:6px;text-shadow:0 2px 6px #000}
-.mn.fut{opacity:.35}.mn.done i{background:var(--c);box-shadow:0 0 18px var(--c)}
+.mn b{display:block;width:230px;font:800 19px "Yu Gothic UI",sans-serif;color:#fff;white-space:normal;margin-top:6px;text-shadow:0 2px 6px #000}
+.mn.fut{opacity:1}.mn.done i{background:var(--c);box-shadow:0 0 18px var(--c)}
 .mn.cur i,.mn.hl i{width:40px;height:40px;background:var(--c);box-shadow:0 0 50px 10px var(--c);animation:mnp .7s ease-in-out infinite alternate}
 .mn.cur b,.mn.hl b{font-size:30px;color:#ffe600}.mn.hl{opacity:1}
 @keyframes mnp{from{transform:scale(1)}to{transform:scale(1.25)}}
@@ -151,6 +153,59 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 @keyframes gin{from{opacity:0;transform:scale(.5) rotate(var(--r))}}
 #end{position:absolute;left:26px;top:100px;z-index:30;display:none}
 #end button{font-size:22px;font-weight:700;padding:.5em 1.2em;background:#ffe600;border:0;border-radius:999px;cursor:pointer}
+/* A real right-hand rail; the stage is fitted to the remaining rectangle. */
+#rail{position:absolute;right:12px;top:12px;bottom:70px;width:300px;display:flex;flex-direction:column;gap:12px;z-index:8}
+#rail #gr,#rail #meter,#rail #mm{position:relative;left:auto;right:auto;top:auto;width:100%;flex:none}
+#rail #gr{font-size:14px;max-height:none;overflow:auto;flex:1;min-height:120px}
+#rail #meter{padding:10px}
+#rail #meter .mt{font-size:14px}#rail #meter small{font-size:11px}
+#rail #meter .mr span{font-size:12px}
+#rail #mm{height:140px}
+#rail #mm>div{transform:scale(.17)}
+#rail #gr.big{position:fixed;inset:20px;width:auto;height:auto;font-size:22px;z-index:60}
+#rail #gr .gw{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+@media(max-width:1000px){#rail{width:220px;right:8px;top:8px;gap:8px}#rail #gr{font-size:12px}#rail #mm{height:100px}#rail #mm>div{transform:scale(.125)}#hudt{min-width:0;max-width:160px;font-size:11px}#hud{gap:4px;padding:8px}#hud button{min-width:28px;font-size:14px;padding:0 4px}}
+@media(max-width:600px){#rail{width:144px;bottom:62px}#rail #gr{font-size:11px;padding:4px}#rail #gr .gs{padding:4px 0}#rail #gr .gi{padding:4px;gap:3px}#rail #gr .gb{flex-wrap:wrap}#rail #meter .mt{font-size:11px}#rail #meter .mr span{font-size:10px}#rail #meter small{display:none}#rail #mm{height:64px}#rail #mm>div{transform:scale(.08)}#hudt{display:none}}
+#readingView{display:none}
+@media(max-width:600px){
+  #readingView{display:flex;position:absolute;left:8px;right:160px;top:12px;bottom:70px;z-index:7;background:#060a16;flex-direction:column;gap:12px;padding:8px;border:1px solid #456;border-radius:12px;overflow:auto}
+  #readingView h2{font-size:16px;color:#ffe600;line-height:1.4}
+  #readingView .reading-body{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:safe center;gap:var(--reading-gap,12px)}
+  #readingView .reading-caption{flex:none;font-size:12px;line-height:1.5;color:#cde;border-top:1px solid #456;padding-top:8px}
+  #readingView .reading-body *{position:static!important;transform:none!important;scale:none!important;animation:none!important;transition:none!important;width:auto!important;min-width:0!important;max-width:100%!important;height:auto!important;margin:0!important;padding:0!important;gap:0!important;white-space:normal!important;overflow-wrap:anywhere!important;font-size:var(--reading-font,14px)!important;line-height:var(--reading-line,1.45)!important;letter-spacing:normal!important;-webkit-text-stroke:0!important;text-shadow:none!important;box-shadow:none!important}
+  #readingView .reading-body .card,#readingView .reading-body .face{padding:8px!important;border-width:2px!important;overflow:visible!important}
+  #readingView .reading-body img,#readingView .reading-body video,#readingView .reading-body svg{width:100%!important}
+  #readingView .reading-body td{display:block!important;padding:2px!important;text-align:left!important}
+  #readingView .reading-body .lesson div{display:block!important}
+}
+@media(max-width:360px){
+  #rail{width:104px}
+  #readingView{right:120px;gap:6px;--reading-gap:4px;--reading-font:12px;--reading-line:1.3}
+  #readingView h2{font-size:14px}
+  #readingView .reading-body .card{padding:4px!important}
+}
+@media(max-width:600px) and (max-height:420px){
+  #readingView .reading-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-content:safe center;align-items:center}
+  #readingView .reading-body>:only-child,#readingView .reading-body>:has(video),#readingView .reading-body>:has(img){grid-column:1/-1}
+}
+@media(max-height:420px){
+  #rail{top:6px;bottom:54px;gap:4px}
+  #rail #gr{min-height:0}
+  #rail #gr .gb,#rail #gr .gt{margin-bottom:2px}
+  #rail #gr .gi{margin:3px 0;padding:2px}
+  #rail #gr .gs{padding:0}
+  #rail #meter:not(.on),#rail #mm:not(.on){display:none}
+  #rail #meter{padding:4px}
+  #rail #meter .mt{margin-bottom:2px}
+  #rail #meter .mr{margin-top:2px}
+  #rail #meter i{height:6px}
+  #rail #mm{height:38px}
+  #rail #mm>div{transform:scale(.05)}
+  #readingView{top:6px;bottom:54px;gap:4px;--reading-gap:4px;--reading-font:12px;--reading-line:1.3}
+  #readingView h2{font-size:14px}
+  #readingView .reading-caption{font-size:11px;padding-top:4px}
+  #readingView .reading-body .card{padding:4px!important}
+}
 @media (prefers-reduced-motion:reduce){#grain{animation:none}}
 </style>
 </head>
@@ -186,8 +241,8 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
         <input id="gkey" type="password" placeholder="API キー（保存しません。このページのメモリだけ）">
         <input id="greg" placeholder="Speech: リージョン（例 japaneast）または Foundry のエンドポイント URL（例 https://xxx.cognitiveservices.azure.com/） ／ gpt-4o-mini-tts: エンドポイント URL（Azure OpenAI のリソース URL。OpenAI は空欄）">
         <input id="gmod" placeholder="gpt-4o-mini-tts のデプロイ名／モデル名（既定 gpt-4o-mini-tts）">
-        <small style="color:#889">失敗したときは、自動でブラウザー内蔵の音声に切り替えます。</small></div></details>    <div style="display:flex;gap:24px;flex-wrap:wrap;justify-content:center"><div id="go">▶ フル版（約16分）</div><div id="gos">▶ SHORT 版（約5分）</div></div>
-    <p>音声ONでの全画面視聴を推奨（フル版 約16分／SHORT 版 約5分・自動再生。Microsoft Edge 推奨）<br>
+        <small style="color:#889">失敗したときは、自動でブラウザー内蔵の音声に切り替えます。</small></div></details>    <div style="display:flex;gap:24px;flex-wrap:wrap;justify-content:center"><div id="go">▶ フル版（28シーン）</div><div id="gos">▶ SHORT 版（10シーン）</div></div>
+    <p>音声ONでの全画面視聴を推奨（全オブジェクトの読み時間を確保し、音声終了を待って進みます。Microsoft Edge 推奨）<br>
     ⚠ 画面の点滅・大きな音・カメラの揺れを含みます<br>
     操作: Space=一時停止 ／ ← → =シーン移動 ／ N=ナレーション ／ M=BGM・効果音 ／ F=全画面 ／ 画面下にマウスを寄せると操作バー</p>
   </div>
@@ -199,6 +254,10 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 const $=s=>document.querySelector(s);
 const app=$('#app'),bgc=$('#bg'),fxc=$('#fx'),view=$('#view'),camEl=$('#cam'),world=$('#world'),ui=$('#ui'),tl=$('#tl'),chapEl=$('#chap'),tagEl=$('#tag'),flashEl=$('#flash'),wrap=$('#wrap'),vig=$('#vig'),bars=$('#bars'),hostEl=$('#host'),bubEl=$('#bubble'),capEl=$('#cap'),meterEl=$('#meter');
 const storyCard=$('#storyCard');
+const rail=document.createElement('aside');rail.id='rail';app.appendChild(rail);
+['gr','meter','mm'].forEach(id=>rail.appendChild(document.getElementById(id)));
+const readingView=document.createElement('section');readingView.id='readingView';
+readingView.innerHTML='<h2></h2><div class="reading-body"></div><p class="reading-caption"></p>';app.appendChild(readingView);
 const RM=matchMedia('(prefers-reduced-motion:reduce)').matches?0.35:1;
 const C={cy:'#00e5ff',mg:'#ff2d78',ye:'#ffe600',gr:'#00ff9d',rd:'#ff3b30',or:'#ff9f1c',vi:'#8b5cff',gy:'#8a94a6'};
 const EZ={lin:p=>p,out3:p=>1-Math.pow(1-p,3),in3:p=>p*p*p,in2:p=>p*p,io3:p=>p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2,
@@ -337,7 +396,8 @@ function speak(text,who){
     try{speechSynthesis.speak(u)}catch(e){done()}};
   if(V.eng==='browser'){browser();return}
   fetchAudio(text,host).then(blob=>{if(g!==V.gen){return}
-    const a=new Audio(URL.createObjectURL(blob));V.audio=a;a.playbackRate=V.eng==='oai'?1.1:1;a.onended=done;a.onerror=done;
+    const url=URL.createObjectURL(blob),a=new Audio(url);a._url=url;V.audio=a;a.playbackRate=V.eng==='oai'?1.1:1;
+    const ended=()=>{URL.revokeObjectURL(url);done()};a.onended=ended;a.onerror=ended;
     V.hard=Math.max(V.hard,E.clock+(text.length/3+6)*1000);if(E.paused)a._wait=true;else a.play().catch(done)}).catch(err=>{console.warn('cloud voice failed → browser',err);V.eng='browser';browser()})
 }const narBusy=()=>V.on&&V.ok&&V.act>0&&E.clock<V.hard;
 function narStart(text,who,id){
@@ -348,7 +408,7 @@ function narStart(text,who,id){
   speak(text,who);
 }
 function narEnd(id,who){if(V.cur!==id)return;if(who==='host'){hostEl.classList.remove('sp');bubEl.classList.remove('on')}else capEl.classList.remove('on')}
-function narReset(){V.gen++;if(V.audio){try{V.audio.pause()}catch(e){}V.audio=null}V.act=0;V.hard=0;A.duck(false);try{speechSynthesis.cancel()}catch(e){}hostEl.classList.remove('on','sp');bubEl.classList.remove('on');capEl.classList.remove('on')}
+function narReset(){V.gen++;if(V.audio){try{V.audio.pause();if(V.audio._url)URL.revokeObjectURL(V.audio._url)}catch(e){}V.audio=null}V.act=0;V.hard=0;A.duck(false);try{speechSynthesis.cancel()}catch(e){}hostEl.classList.remove('on','sp');bubEl.classList.remove('on');capEl.classList.remove('on')}
 
 /* ===================== 背景・エフェクト ===================== */
 const bgx=bgc.getContext('2d'),fxx=fxc.getContext('2d');
@@ -357,7 +417,7 @@ const bg={speed:0,ts:0,col:[6,60,80],tc:[6,60,80],grid:false,gridCol:'#00e5ff',s
 for(let i=0;i<320;i++)bg.stars.push({x:Math.random()*2-1,y:Math.random()*2-1,z:Math.random()*.95+.05});
 const fx={shake:0,flash:0,flashDur:.3,lines:0,parts:[],glitchUntil:0};
 const hex=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
-function resize(){VW=innerWidth;VH=innerHeight;DPR=Math.min(2,devicePixelRatio||1);for(const c of [bgc,fxc]){c.width=VW*DPR;c.height=VH*DPR}SC=Math.min(VW/1920,VH/1080)}
+function resize(){VW=innerWidth;VH=innerHeight;DPR=Math.min(2,devicePixelRatio||1);for(const c of [bgc,fxc]){c.width=VW*DPR;c.height=VH*DPR}SC=Math.min((rail.getBoundingClientRect().left-12)/1920,(VH-70)/1080)}
 addEventListener('resize',resize);resize();
 function burst(n,o={}){const cx=(o.x??VW/2),cy=(o.y??VH/2);for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=(o.speed||14)*(.3+Math.random());
   fx.parts.push({x:cx,y:cy,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,dec:.008+Math.random()*.015,r:1.5+Math.random()*4,c:o.color||'#ffd84a',g:o.g??.12})}}
@@ -370,12 +430,14 @@ function applyCam(clock){
   const hx=Math.sin(clock*.0007)*9*h,hy=Math.cos(clock*.0009)*7*h,hr=Math.sin(clock*.0005)*.25*h;
   const x=b.x+hx,y=b.y+hy,z=b.z-cam.punch;
   const rot=`rotateX(${-b.rx}deg) rotateY(${-b.ry}deg) rotateZ(${-(b.rz+hr)}deg)`;
-  camEl.style.transform=(cam.eye?`translateZ(${b.p}px) ${rot} translateZ(${-b.p}px)`:rot)+` translate3d(${-x}px,${-y}px,${-z}px)`;
+  // Camera travel is retained in the authored timeline, but not allowed to
+  // carry reading material outside the reserved stage.
+  camEl.style.transform='none';
   view.style.perspective=b.p+'px';
 }
 function applyObj(el){const s=el._s;
-  el.style.transform=`translate3d(${s.x}px,${s.y}px,${s.z}px) rotateX(${s.rx}deg) rotateY(${s.ry}deg) rotateZ(${s.rz}deg) scale3d(${s.s*s.sx},${s.s*s.sy},${s.s})`;
-  if(el._3d)el.style.visibility=s.o>.01?'visible':'hidden';else el.style.opacity=s.o}
+  el.style.transform=`translate(${s.x}px,${s.y}px) scale(${s.s*s.sx},${s.s*s.sy})`;
+  el.style.opacity=s.o;el.style.visibility=s.o>.01?'visible':'hidden'}
 function reg(el,o){el._s=Object.assign({x:0,y:0,z:0,rx:0,ry:0,rz:0,s:1,sx:1,sy:1,o:0},o.st||{});
   for(const k of ['x','y','z','rx','ry','rz','s','sx','sy','o'])if(o[k]!==undefined)el._s[k]=o[k];el._sc=el._s.s;applyObj(el);return el}
 function mkBox(w,h,d,c,html){
@@ -391,51 +453,59 @@ const SCENES=[];
 const sc=(id,title,mood,build)=>SCENES.push({id,title,mood,build});
 const estSec=t=>Math.max(1.4,t.replace(/[\s、。，．,.「」『』（）()]/g,'').length/(V.on&&V.ok?6.4:7.0)+.45);
 function makeS(){
-  const S={ev:[],tw:[],dur:0,cur:0,maxT:0,nid:0,hold:false,nts:[]};
+  const S={ev:[],tw:[],dur:0,cur:0,maxT:0,nid:0,hold:false,nts:[],reading:[],barriers:[],fades:[],narrations:[]};
   const mt=t=>{S.maxT=Math.max(S.maxT,t)};
-  S.at=(t,fn,hold)=>{S.ev.push({t:t*1000,fn,done:false,hold});mt(t)};
-  S.expire=(getEl,t,dur,fade)=>{S.at(t+Math.max(0,dur-fade),()=>getEl()?.classList.add('out'));S.at(t+dur,()=>{const el=getEl();if(el){el._r=null;el.remove()}})};
-  S.tween=(t,dur,fn,ez)=>{S.tw.push({t:t*1000,dur:dur*1000,fn,ez:ez||EZ.out3,st:{},done:false});mt(t+dur)};
+  const owner=t=>S.currentNarration&&t>=S.currentNarration.t?S.currentNarration.id:undefined;
+  S.at=(t,fn,hold,kind='mutation')=>{S.ev.push({t:t*1000,fn,done:false,hold,kind,parent:owner(t)});if(kind==='mutation')S.barriers.push(t);mt(t)};
+  S.expire=(getEl,t,dur,fade)=>{S.at(t+Math.max(0,dur-fade),()=>getEl()?.classList.add('out'),false,'destructive');S.at(t+dur,()=>{const el=getEl();if(el){el._r=null;el.remove()}},false,'destructive')};
+  S.tween=(t,dur,fn,ez,reading=true)=>{S.tw.push({t:(S.mapTime?S.mapTime(t):t)*1000,dur:dur*1000,fn,ez:ez||EZ.out3,st:{},done:false,reading,parent:owner(t)});if(reading){S.reading.push({t,dur,parent:owner(t)});S.barriers.push(t)}mt(t+dur)};
   /* ナレーション: 読み上げ長さで S.cur を進める。返り値は開始時刻（ビート） */
-  S.N=(text,who='nar',o={})=>{const t=S.cur;S.nts.push(t);const d=estSec(text),id=++S.nid;
-    S.at(t,()=>narStart(text,who,id),true);S.at(t+d+.1,()=>narEnd(id,who),true);
+  S.N=(text,who='nar',o={})=>{const t=S.cur;S.nts.push(t);const d=Math.max(READ_SECONDS,estSec(text)),id=++S.nid;
+    S.currentNarration={t,d,text,who,id};S.narrations.push(S.currentNarration);
+    S.at(t,()=>narStart(text,who,id),true,'narration');S.at(t+d+.1,()=>narEnd(id,who),true,'narration-end');
     S.cur=t+d+(o.gap??.3);mt(S.cur);return t};
   S.H=(text,o)=>S.N(text,'host',o);
   S.wait=d=>{S.cur+=d;mt(S.cur)};
   S.obj=(html,o={})=>{const a=document.createElement('div');a.className='obj';const i=document.createElement('div');i.className='in'+(o.cls?' '+o.cls:'');
     if(o.css)i.style.cssText=o.css;i.innerHTML=html;a.appendChild(i);a._in=i;reg(a,o);world.appendChild(a);return a};
   S.box=(w,h,d,c,html,o={})=>{const a=mkBox(w,h,d,c,html);reg(a,o);world.appendChild(a);return a};
-  S.mv=(el,t,dur,to,ez)=>S.tween(t,dur,(p,st)=>{
-    if(!st.f){st.f={};for(const k in to)st.f[k]=el._s[k];st.pop=to.o===1&&ez===EZ.back&&to.s===undefined&&!el._3d}
-    for(const k in to)el._s[k]=st.f[k]+(to[k]-st.f[k])*p;if(st.pop)el._s.s=el._sc*(.55+.45*p);applyObj(el)},ez);
+  S.mv=(el,t,dur,to,ez)=>{if(to.o!==undefined&&to.o<1){S.barriers.push(t);S.fades.push({t,parent:owner(t)})}return S.tween(t,dur,(p,st)=>{
+    if(!st.f){el._cueTime=E.T;st.f={};for(const k in to)st.f[k]=el._s[k];
+      // A newly arriving card is already inked during its scale/position
+      // entrance. An opacity-zero first frame would flash a different fallback
+      // paragraph for only 0.1s between otherwise coherent reading beats.
+      if(to.o===1&&st.f.o===0)st.f.o=1;
+      st.pop=to.o===1&&ez===EZ.back&&to.s===undefined&&!el._3d}
+    for(const k in to)el._s[k]=st.f[k]+(to[k]-st.f[k])*p;if(st.pop)el._s.s=el._sc*(.55+.45*p);applyObj(el)},ez,to.o!==0)};
   S.hide=(el,t,dur=.3)=>S.mv(el,t,dur,{o:0},EZ.lin);
   S.set=(el,t,patch)=>S.at(t,()=>{Object.assign(el._s,patch);applyObj(el)});
-  S.clear=t=>S.at(t,()=>{world.querySelectorAll('.obj').forEach(o=>{if(o._s){o._s.o=0;applyObj(o)}});tl.querySelectorAll('.tp,.slam,.stamp,.lesson').forEach(e=>e.remove())});
+  S.clear=t=>S.at(t,()=>{world.querySelectorAll('.obj').forEach(o=>{if(o._s){o._s.o=0;applyObj(o)}});tl.querySelectorAll('.tp,.slam,.stamp,.lesson').forEach(e=>e.remove())},false,'clear');
   S.num=(el,t,dur,a,b,f=fmtN,ez=EZ.out3)=>S.tween(t,dur,(p,st)=>{el._in.textContent=f(a+(b-a)*p);if(!st.l||E.clock-st.l>70){st.l=E.clock;A.play('tick')}},ez);
   S.type=(el,t,text,cps)=>S.tween(t,text.length/cps,(p,st)=>{const n=Math.floor(p*text.length);if(n!==st.n){st.n=n;el._in.textContent=text.slice(0,n)+(p<1?'▌':'');A.play('tick')}if(p>=1)el._in.textContent=text},EZ.lin);
   S.cam0=o=>Object.assign(cam.base,o);
-  S.cam=(t,dur,to,ez)=>S.tween(t,dur,(p,st)=>{if(!st.f){st.f={};for(const k in to)st.f[k]=cam.base[k]}for(const k in to)cam.base[k]=st.f[k]+(to[k]-st.f[k])*p},ez||EZ.io3);
-  S.punch=(t,amt=140,dur=.5)=>S.tween(t,dur,p=>{cam.punch=amt*(1-p)*(1-p)},EZ.lin);
-  S.bg=(t,o)=>S.at(t,()=>{if(o.speed!==undefined)bg.ts=o.speed;if(o.tint)bg.tc=hex(o.tint);if(o.grid!==undefined)bg.grid=o.grid;if(o.gridCol)bg.gridCol=o.gridCol});
-  S.sfx=(t,n,a,b)=>S.at(t,()=>A.play(n,a,b));
-  S.mood=(t,n)=>S.at(t,()=>A.mood(n));
-  S.shake=(t,a=20)=>S.at(t,()=>{fx.shake=Math.max(fx.shake,a)});
-  S.flash=(t,c='#fff',d=.3,a=1)=>S.at(t,()=>{flashEl.style.background=c;fx.flash=a*RM+(1-RM)*.3;fx.flashDur=d});
-  S.glitch=(t,ms=250)=>S.at(t,()=>{fx.glitchUntil=E.clock+ms;A.play('glitch')});
-  S.lines=(t,a=1)=>S.at(t,()=>{fx.lines=a});
-  S.burst=(t,n=120,o={})=>S.at(t,()=>burst(n,o));
-  S.bars=(t,on)=>S.at(t,()=>bars.classList.toggle('on',on));
-  S.red=(t,on)=>S.at(t,()=>vig.classList.toggle('red',on));
-  S.tag=(t,text,c)=>S.at(t,()=>{tagEl.style.setProperty('--c',c||'#00e5ff');tagEl.textContent=text;tagEl.classList.add('on')});
-  S.meter=(t,m,s)=>S.at(t,()=>{meterEl.classList.add('on');$('#mM').style.width=m+'%';$('#mS').style.width=s+'%'});
-  S.emote=(t,ch)=>S.at(t,()=>{const el=document.createElement('div');el.className='emote';el.textContent=ch;tl.appendChild(el);A.play('pop');setTimeout(()=>el.remove(),1800)});
+  S.cam=(t,dur,to,ez)=>S.tween(t,dur,(p,st)=>{if(!st.f){st.f={};for(const k in to)st.f[k]=cam.base[k]}for(const k in to)cam.base[k]=st.f[k]+(to[k]-st.f[k])*p},ez||EZ.io3,false);
+  S.punch=(t,amt=140,dur=.5)=>S.tween(t,dur,p=>{cam.punch=amt*(1-p)*(1-p)},EZ.lin,false);
+  const effect=(t,fn)=>S.at(t,fn,false,'effect');
+  S.bg=(t,o)=>effect(t,()=>{if(o.speed!==undefined)bg.ts=o.speed;if(o.tint)bg.tc=hex(o.tint);if(o.grid!==undefined)bg.grid=o.grid;if(o.gridCol)bg.gridCol=o.gridCol});
+  S.sfx=(t,n,a,b)=>effect(t,()=>A.play(n,a,b));
+  S.mood=(t,n)=>effect(t,()=>A.mood(n));
+  S.shake=(t,a=20)=>effect(t,()=>{fx.shake=Math.max(fx.shake,a)});
+  S.flash=(t,c='#fff',d=.3,a=1)=>effect(t,()=>{flashEl.style.background=c;fx.flash=a*RM+(1-RM)*.3;fx.flashDur=d});
+  S.glitch=(t,ms=250)=>effect(t,()=>{fx.glitchUntil=E.clock+ms;A.play('glitch')});
+  S.lines=(t,a=1)=>effect(t,()=>{fx.lines=a});
+  S.burst=(t,n=120,o={})=>effect(t,()=>burst(n,o));
+  S.bars=(t,on)=>S.at(t,()=>bars.classList.toggle('on',on),false,'chrome');
+  S.red=(t,on)=>S.at(t,()=>vig.classList.toggle('red',on),false,'chrome');
+  S.tag=(t,text,c)=>S.at(t,()=>{tagEl.style.setProperty('--c',c||'#00e5ff');tagEl.textContent=text;tagEl.classList.add('on')},false,'chrome');
+  S.meter=(t,m,s)=>S.at(t,()=>{meterEl.classList.add('on');$('#mM').style.width=m+'%';$('#mS').style.width=s+'%'},false,'chrome');
+  S.emote=(t,ch)=>{let el;S.at(t,()=>{el=document.createElement('div');el.className='emote';el.textContent=ch;el.style.animation='pop .3s both';tl.appendChild(el);placeOv(el);A.play('pop')});S.expire(()=>el,t,4.2,.25)};
   S.say=(t,text,o={})=>{let el;const dur=o.dur||3;
     S.at(t,()=>{el=document.createElement('div');el.className='tp '+(o.pos||'top')+(o.band?' band '+(o.band===true?'':o.band):'');
       el.innerHTML='<span>'+fmt(text)+'</span>';if(o.size)el.style.fontSize=o.size+'px';if(o.top!==undefined)el.style.top=o.top+'px';      tl.appendChild(el);placeOv(el);if(o.sfx!==false)A.play(o.sfx||'pop')});S.expire(()=>el,t,dur,.25)};
   S.slam=(t,text,o={})=>{let el;const dur=o.dur||2;
     S.at(t,()=>{el=document.createElement('div');el.className='slam';el.style.top=(o.y??360)+'px';
       el.innerHTML=`<div class="s1" style="font-size:${o.size||190}px;color:${o.color||'#fff'}">${fmt(text)}</div>`+(o.sub?`<div class="s2" style="color:${o.subColor||'#fff'}">${fmt(o.sub)}</div>`:'');
-      tl.querySelectorAll('.slam').forEach(e=>e.remove());tl.appendChild(el);placeOv(el);A.play(o.sfx||'boom');fx.shake=Math.max(fx.shake,o.shake??22);flashEl.style.background=o.flashC||'#fff';fx.flash=(o.flash??.5)*RM;fx.flashDur=.35;fx.lines=.8;if(o.burst)burst(o.burst,{color:o.color||'#ffd84a'})});S.expire(()=>el,t,dur,.3)};
+      tl.appendChild(el);placeOv(el);A.play(o.sfx||'boom');fx.shake=Math.max(fx.shake,o.shake??22);flashEl.style.background=o.flashC||'#fff';fx.flash=(o.flash??.5)*RM;fx.flashDur=.35;fx.lines=.8;if(o.burst)burst(o.burst,{color:o.color||'#ffd84a'})});S.expire(()=>el,t,dur,.3)};
   S.lesson=(t,n,text,dur=4.2)=>{let el;
     S.at(t,()=>{el=document.createElement('div');el.className='lesson';el.innerHTML=`<div><b>LESSON ${n}</b><span>${fmt(text)}</span></div>`;    tl.appendChild(el);placeOv(el);A.play('pinpon');burst(30,{x:VW/2,y:VH*.76,color:'#00ff9d',speed:8})});S.expire(()=>el,t,dur,.25)};
   S.banner=(ghost,cnum,title,sub,color,tagText)=>{
@@ -456,9 +526,9 @@ function makeS(){
           A.play(kind==='clear'?'fanfare':kind==='part'?'pop':'stamp');fx.shake=Math.max(fx.shake,kind==='clear'?8:18);
           if(kind==='clear'){burst(80,{color:'#00ff9d',speed:12})}else{flashEl.style.background=m[1];fx.flash=.35*RM;fx.flashDur=.25}
           tagEl.textContent=tagEl.textContent.split(' ｜ 判定')[0]+' ｜ 判定: '+m[0]})};
-  S.flood=(t,dur,words,o={})=>{const n=o.n||30;for(let i=0;i<n;i++)S.at(t+i*dur/n,()=>{const el=document.createElement('div');el.className='flow';el.textContent=words[i%words.length];
-    const y0=o.y0??120,y1=o.y1??760;el.style.cssText+=`top:${y0+Math.random()*(y1-y0)}px;font-size:${(o.min||40)+Math.random()*(o.max||36)}px;color:${o.color||'#fff'};animation-duration:${3.6+Math.random()*2.6}s`;
-    tl.appendChild(el);setTimeout(()=>el.remove(),7000)})};
+  S.flood=(t,dur,words,o={})=>{const n=o.n||30;for(let i=0;i<n;i++){
+    const el=S.obj(words[i%words.length],{x:-660+(i%4)*440,y:-280+Math.floor(i/4)*100,o:0,css:`font:800 32px sans-serif;color:${o.color||'#fff'};background:#10131f;padding:8px;border:2px solid #667;border-radius:8px`});
+    S.mv(el,t+i*dur/n,.3,{o:1});S.hide(el,t+dur+4,.3)}};
   S.hbar=(x,y,len,h,c,t0,dur,o={})=>{const b=S.obj('',{x,y,o:0,sx:.001,css:`width:${len}px;height:${h}px;transform:translate(0,-50%);border-radius:8px;background:${o.track?'rgba(255,255,255,.12)':`linear-gradient(90deg,color-mix(in srgb,${c} 45%,#000),${c})`};box-shadow:${o.track?'none':`0 0 28px ${c}99`}`});
     S.set(b,t0,{o:1});if(!o.track)S.mv(b,t0,dur,{sx:1},EZ.out3);else b._s.sx=1;return b};
   S.txtL=(html,x,y,css)=>S.obj(html,{x,y,z:60,o:0,css:'transform:translate(0,-50%);text-align:left;'+css});
@@ -475,20 +545,137 @@ function makeS(){
     let svg='',nd='';
     (spec.edges||[]).forEach(([a,b,l],i)=>{const A=N[a],B=N[b],[x1,y1]=anchor(A,B),[x2,y2]=anchor(B,A);
       const mx=(x1+x2)/2,my=(y1+y2)/2;
-      svg+=`<g class="rv" data-id="${a}>${b}" style="opacity:0;transition:opacity .5s"><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${spec.ec||'#9fe'}" stroke-width="5" marker-end="url(#ah)" stroke-linecap="round"/>${l?`<text x="${mx+8}" y="${my-6}" fill="#ffe600" font-size="24" font-weight="800" stroke="#000" stroke-width="6" paint-order="stroke">${l}</text>`:''}</g>`});
+      // Centre the label in the connector's gap, not eight pixels into its
+      // target node. Use actual glyph bounds after construction below.
+      svg+=`<g class="rv" data-id="${a}>${b}" style="opacity:0;transition:opacity .5s"><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${spec.ec||'#9fe'}" stroke-width="5" marker-end="url(#ah)" stroke-linecap="round"/>${l?`<text x="${mx}" y="${my}" text-anchor="middle" dominant-baseline="central" fill="#ffe600" font-size="24" font-weight="800" stroke="#000" stroke-width="6" paint-order="stroke">${l}</text>`:''}</g>`});
     spec.nodes.forEach(n=>{const c=n.c||'#00e5ff';
       nd+=`<div class="rv" data-id="${n.id}" style="position:absolute;left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px;opacity:0;transform:scale(.8);transition:all .45s cubic-bezier(.2,1.5,.4,1)">
        <div class="card" style="--c:${c};width:100%;height:100%;padding:10px 16px;white-space:normal;text-align:left;display:flex;flex-direction:column;justify-content:center;${n.bad?'background:rgba(40,6,10,.92);':''}">
        <div style="font:900 ${n.fs||30}px 'Yu Gothic UI',sans-serif;color:${n.bad?'#ff8a8a':c};line-height:1.25">${n.t}</div>${n.sub?`<div style="font:600 ${n.ss||22}px/1.35 'Yu Gothic UI',sans-serif;color:#dde;margin-top:4px">${n.sub}</div>`:''}</div></div>`});
     const html=`<div style="position:relative;width:${W}px;height:${H}px"><svg width="${W}" height="${H}" style="position:absolute;left:0;top:0"><defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="${spec.ec||'#9fe'}"/></marker></defs>${svg}</svg>${nd}</div>`;
     const ob=S.obj(html,{x:0,y:o.y??40,o:0,s:o.s??1});S.mv(ob,.05,.4,{o:1},EZ.lin);
+    // A short gap can be narrower than the actual Japanese glyphs. Find the
+    // nearest genuine whitespace using SVG glyph bounds (including stroke),
+    // rather than assuming the connector midpoint is always a safe label box.
+    const labels=[];
+    ob._in.querySelectorAll('svg text').forEach(label=>{
+      const b=label.getBBox(),pad=6,candidates=[];
+      for(let dy=-160;dy<=160;dy+=8)for(let dx=-160;dx<=160;dx+=8)candidates.push({dx,dy,d:dx*dx+dy*dy});
+      candidates.sort((a,b)=>a.d-b.d);
+      const pos=candidates.find(({dx,dy})=>{
+        const r={x:b.x+dx-pad,y:b.y+dy-pad,w:b.width+2*pad,h:b.height+2*pad};
+        if(r.x<0||r.y<0||r.x+r.w>W||r.y+r.h>H)return false;
+        return ![...spec.nodes,...labels].some(n=>r.x<n.x+n.w+4&&r.x+r.w>n.x-4&&r.y<n.y+n.h+4&&r.y+r.h>n.y-4);
+      });
+      if(pos){label.setAttribute('x',Number(label.getAttribute('x'))+pos.dx);
+        label.setAttribute('y',Number(label.getAttribute('y'))+pos.dy);
+        labels.push({x:b.x+pos.dx-pad,y:b.y+pos.dy-pad,w:b.width+2*pad,h:b.height+2*pad})}
+    });
     const find=id=>ob._in.querySelector(`[data-id="${CSS.escape(id)}"]`);
     ob.show=(t,ids)=>S.at(t,()=>{ids.forEach(id=>{const e=find(id);if(!e)return;e.style.opacity=1;if(e.tagName==='DIV')e.style.transform='scale(1)'});A.play('pop')});
-    ob.pulse=(t,id)=>S.at(t,()=>{const e=find(id);if(e){e.firstElementChild.style.boxShadow='0 0 90px 12px '+(N[id].c||'#fff');A.play('hit')}});
+    ob.pulse=(t,id)=>S.at(t,()=>{const e=find(id);if(e){e.firstElementChild.style.boxShadow='0 0 90px 12px '+(N[id].c||'#fff');A.play('hit')}},false,'effect');
     return ob};
   S.info=(t,dur,sp)=>mkInfo(S,t,dur,sp);
   S.end=(tail=1)=>{S.dur=(Math.max(S.cur,S.maxT)+tail)*1000};
   return S;
+}
+/* Compile one shared beat clock, not independent expiry extensions. Every
+   destructive cue waits for completed reveals/counts and 3.2s of reading.
+   All later visuals, narration starts/ends and recording entries move together.
+   Animation durations and voice rates themselves are never slowed down. */
+const READ_SECONDS=3.2,SWEEP_LIMIT=7200;
+// Integer microseconds are the shared precision for both cues and transport.
+const clockTick=ms=>Math.round(ms*1000),clockMs=ms=>clockTick(ms)/1000;
+function compileBeats(S){
+  // Pack explicitly owned paragraphs in authored order before compiling holds.
+  // Speech estimates can be shorter than a late authored reveal (e.g. 完了).
+  // Such a cue still belongs to its authoring paragraph, never the next one.
+  const originals=S.narrations.map(n=>({id:n.id,t:n.t,d:n.d}));
+  const phase=t=>originals.filter(n=>n.t<=t).at(-1)?.id;
+  S.ev.forEach(e=>{e.parent??=phase(e.t/1000)});
+  S.tw.forEach(w=>{w.parent??=phase(w.t/1000)});
+  S.reading.forEach(r=>{r.parent??=phase(r.t)});
+  S.fades.forEach(r=>{r.parent??=phase(r.t)});
+  const shifts=new Map();let lastCue=-.3;
+  S.narrations.forEach(n=>{
+    const origin=Math.max(n.t,lastCue+.3),shift=origin-n.t;
+    shifts.set(n.id,shift);n.t=origin;
+    lastCue=Math.max(origin,...S.reading.filter(r=>r.parent===n.id).map(r=>r.t+shift),
+      ...S.ev.filter(e=>e.parent===n.id&&e.kind==='mutation').map(e=>e.t/1000+shift));
+  });
+  S.ev.forEach(e=>{const n=originals.find(n=>n.id===e.parent);
+    if(e.kind==='clear'&&n&&e.t/1000>n.t+n.d)e.nextParent=n.id+1;
+    e.t+=(shifts.get(e.parent)||0)*1000});
+  S.tw.forEach(w=>w.t+=(shifts.get(w.parent)||0)*1000);
+  S.reading.forEach(r=>r.t+=shifts.get(r.parent)||0);
+  S.fades.forEach(r=>r.t+=shifts.get(r.parent)||0);
+  // Reconstruct barriers from their owned cues, not the pre-packed source
+  // times. This also keeps fades and numeric replacements in their own phase.
+  S.barriers=[...S.reading.map(r=>r.t),...S.fades.map(r=>r.t),...S.ev.filter(e=>e.kind==='mutation').map(e=>e.t/1000)];
+  const tailShift=Math.max(0,...shifts.values());
+  const sourceEnd=Math.max(S.maxT+tailShift,S.cur+tailShift,S.hold?0:S.dur/1000+tailShift,
+    ...S.ev.map(e=>e.t/1000),...S.tw.map(w=>(w.t+w.dur)/1000));
+  // The authored N/H call explicitly owns its subsequently authored content
+  // cues, even when a delayed reveal runs beyond the speech-length estimate.
+  // Reveal that material first, then speak the COMPLETE associated paragraph.
+  // No proximity/character-count guess can move a clause to another visual.
+  S.ev=S.ev.filter(e=>!e.kind.startsWith('narration'));
+  S.ev.filter(e=>e.kind==='mutation').forEach(e=>S.reading.push({t:e.t/1000,dur:1.8,parent:e.parent}));
+  const reveals=S.reading.slice();
+  // Clear and its incoming reveal are one atomic replacement, not a flash of
+  // the previous paragraph in storyCard between two floating-point offsets.
+  S.ev.filter(e=>e.kind==='clear').forEach(e=>{
+    const next=reveals.filter(r=>e.nextParent?r.parent===e.nextParent:clockTick(r.t*1000)>=clockTick(e.t)).sort((a,b)=>a.t-b.t)[0];
+    if(next)e.t=next.t*1000;
+  });
+  // An overlay's decorative expiry must not create an unrelated fallback beat.
+  // Retire it atomically when the next reading surface arrives (or at the
+  // finite scene boundary), rather than in a gap before that reveal.
+  S.ev.filter(e=>e.kind==='destructive').forEach(e=>{
+    const next=reveals.filter(r=>clockTick(r.t*1000)>=clockTick(e.t)).sort((a,b)=>a.t-b.t)[0];
+    e.t=(next?.t??sourceEnd)*1000;
+  });
+  S.ev.filter(e=>e.kind==='destructive'||e.kind==='clear').forEach(e=>S.barriers.push(e.t/1000));
+  // The initial fallback is itself reading material; keep it through its
+  // first complete reading interval before a delayed scene entrance.
+  S.reading.push({t:0,dur:0});
+  S.narrations.forEach((n,i)=>{
+    const end=S.narrations[i+1]?.t??sourceEnd;
+    n.cues=reveals.filter(r=>r.parent===n.id||(r.parent===undefined&&r.t>=n.t&&r.t<end));
+    n.ready=Math.max(n.t,...n.cues.map(r=>r.t));
+    n.lead=Math.max(0,...n.cues.filter(r=>r.t===n.ready).map(r=>r.dur));
+    // This is a real beat dependency: the next clear/replacement/reveal cannot
+    // pass the paragraph's completed entrance, speech and reading interval.
+    S.reading.push({t:n.ready,dur:n.lead+n.d});
+    S.barriers.push(n.t,n.ready,end);
+  });
+  S.barriers.push(sourceEnd);
+  // Canonical microsecond keys prevent a multiplication round-trip from
+  // placing a subtitle start on the opposite side of an inserted reading hold.
+  const key=t=>Math.round(t*1e6)/1e6;
+  S.reading.forEach(r=>r.t=key(r.t));S.barriers=S.barriers.map(key);
+  const times=[...new Set([...S.ev.map(e=>key(e.t/1000)),...S.tw.map(w=>key(w.t/1000)),...S.barriers,key(sourceEnd)])].sort((a,b)=>a-b);
+  const mapped=new Map(),guards=new Set(S.barriers),beats=[];let offset=0;
+  for(const t of times){
+    let next=t+offset;
+    if(guards.has(t))for(const r of S.reading){
+      if(r.t>=t)continue;
+      const start=mapped.get(r.t)??(r.t+offset);
+      next=Math.max(next,start+r.dur+READ_SECONDS)}
+    offset=next-t;mapped.set(t,next);beats.push({source:t,start:next})}
+  const map=t=>{t=key(t);let offset=0;for(const b of beats){if(b.source>t)break;offset=b.start-b.source}return t+offset};
+  S.beats=beats;S.mapTime=map;S.sourceEnd=sourceEnd;
+  S.ev.forEach(e=>{e.source=e.t/1000;e.t=clockMs(map(e.source)*1000)});
+  S.tw.forEach(w=>{w.source=w.t/1000;w.t=clockMs(map(w.source)*1000);w.dur=clockMs(w.dur)});
+  S.narrations.forEach(n=>{
+    n.start=clockMs((map(n.ready)+n.lead)*1000)/1000;
+    n.end=clockMs((n.start+n.d)*1000)/1000;
+    S.ev.push({t:n.start*1000,fn:()=>narStart(n.text,n.who,n.id),done:false,hold:true,kind:'narration'},
+      {t:n.end*1000,fn:()=>narEnd(n.id,n.who),done:false,hold:true,kind:'narration-end'});
+  });
+  S.nts=S.narrations.map(n=>n.start);
+  S.horizon=clockMs(Math.min(SWEEP_LIMIT,Math.max(map(sourceEnd)+READ_SECONDS,...S.reading.map(r=>map(r.t)+r.dur+READ_SECONDS)))*1000)/1000;
+  S.dur=S.hold?1e12:S.horizon*1000;
 }
 /* 強調表示はシーンが終わるまで残す。出そろった文字どうしが重ならないよう、縦方向に空きを探して置く */
 function placeOv(el){
@@ -509,13 +696,15 @@ function placeOv(el){
       for(let s=-1000;s<=1000;s+=10){if(m.T+s<0||m.B+s>1010)continue;const c=Math.abs(x)*.6+Math.abs(s);
         if(c<best&&!hit(m.L+x,m.R+x,m.T+s,m.B+s)){best=c;dx=x;dy=s}}}
     if(best<1e9){ok=true;break}}
-  if(!ok){dx=0;dy=0;let o;while((o=hit(m.L,m.R,m.T,m.B))){o._r=null;o.remove()}}
+  // Never evict another reading object to make room for a new overlay.
+  if(!ok){el.style.left='0px';el.style.right='auto';el.style.top='110px';el.style.transform='none';el.style.fontSize='30px'}
   if(dy)el.style.top=(el.offsetTop+dy)+'px';
   if(dx){if(el.classList.contains('stamp'))el.style.right=(parseFloat(getComputedStyle(el).right)-dx)+'px';else el.style.left=dx+'px'}
   el._r={l:m.L+dx,r:m.R+dx,t:m.T+dy,b:m.B+dy}}
-function clearStage(){world.innerHTML='';tl.innerHTML='';chapEl.innerHTML='';tagEl.classList.remove('on');tagEl.textContent='';bars.classList.remove('on');vig.classList.remove('red');wrap.classList.remove('glitch');
+function clearStage(){document.querySelectorAll('#world video,#readingView video').forEach(v=>v.pause());world.innerHTML='';tl.innerHTML='';chapEl.innerHTML='';tagEl.classList.remove('on');tagEl.textContent='';bars.classList.remove('on');vig.classList.remove('red');wrap.classList.remove('glitch');
   storyCard.hidden=true;storyCard.querySelector('p').textContent='';
-  world.querySelectorAll('video').forEach(v=>v.pause())}
+  readingView._seen=new Map();readingView._serial=0;readingView.querySelector('.reading-body').innerHTML='';
+}
 function goto(i,cut){
   if(i<0)i=0;if(i>=SCENES.length){finish();return}
   narReset();E.idx=i;E.T=0;E.running=true;clearStage();camReset();
@@ -523,19 +712,112 @@ function goto(i,cut){
   const s=SCENES[i],S=makeS();E.S=S;
   storyCard.querySelector('h2').textContent=s.title;
   try{s.build(S)}catch(err){console.error('build error',s.id,err)}
-  E.tmS=false;if(TOP[s.id]&&!E.noCutFx){E.T=-2400;A.play('pop')}
+  storyCard.querySelector('p').textContent=S.narrations[0]?.text||'';
+  E.tmS=false;if(TOP[s.id]&&!E.noCutFx){E.T=-4800;A.play('pop')}
   if(!S.dur&&!S.hold)S.end(1);if(S.hold)S.dur=1e12;
-  grPlan(S,s.id);
+  grPlan(S,s.id);compileBeats(S);
   S.ev.sort((a,b)=>a.t-b.t);A.mood(s.mood);mapState();
   if(cut&&!E.noCutFx){A.play('whoosh');fx.flash=.7*RM;flashEl.style.background='#fff';fx.flashDur=.25;fx.glitchUntil=E.clock+220}
   $('#end').style.display='none';stepEngine();buildHud();
 }
 function stepEngine(){
   const S=E.S;if(!S)return;
-  for(const e of S.ev){if(e.done||e.t>E.T)continue;
+  if(narBusy()){const barrier=S.ev.find(e=>!e.done&&e.hold&&clockTick(e.t)<=clockTick(E.T));if(barrier)E.T=barrier.t}
+  const animate=()=>{for(const w of S.tw){if(w.done||clockTick(E.T)<clockTick(w.t))continue;const p=clockTick(E.T)>=clockTick(w.t+w.dur)?1:Math.min(1,(E.T-w.t)/w.dur);try{w.fn(w.ez(p),w.st)}catch(err){console.error(err)}if(p>=1)w.done=true}};
+  // Finish an outgoing numeric/entrance tween before its clear/replacement cue.
+  animate();
+  for(const e of S.ev){if(e.done||clockTick(e.t)>clockTick(E.T))continue;
     if(e.hold&&narBusy()){E.T=e.t;break}   // 読み上げが終わるまで映像を待たせる
     e.done=true;try{e.fn(e.t/1000)}catch(err){console.error(err)}}
-  for(const w of S.tw){if(w.done||E.T<w.t)continue;const p=Math.min(1,(E.T-w.t)/w.dur);try{w.fn(w.ez(p),w.st)}catch(err){console.error(err)}if(p>=1)w.done=true}
+  animate();
+  document.getAnimations().forEach(a=>{if(a._scene!==S){a._scene=S;a._birth=E.T}if(a.effect?.getTiming().iterations!==Infinity){a.pause();a.currentTime=Math.max(0,E.T-a._birth)}});
+}
+/* Keep the authored spatial relationships, fit the entire visible composition
+   into its reading rectangle, and reserve a separate overlay band above it. */
+function fitStage(){
+  world.style.transform='none';
+  const active=[...world.children].filter(o=>o._s&&o._s.o>.01),u=ui.getBoundingClientRect(),k=SC||1;
+  active.forEach(o=>o.style.opacity=o._s.o);
+  // Overlapping authored fly-through cards become successive reading beats.
+  // Numeric labels over a non-text ring/bar are intentional, not collisions.
+  const hasInk=e=>{const walker=document.createTreeWalker(e,NodeFilter.SHOW_TEXT);for(let n;n=walker.nextNode();){
+    if(!n.textContent.trim())continue;let opacity=1;
+    for(let p=n.parentElement;p&&p!==world;p=p.parentElement){const c=getComputedStyle(p);opacity*=Number(c.opacity);if(c.visibility==='hidden'||c.display==='none'){opacity=0;break}}
+    if(opacity>=.15)return true}return false};
+  const text=active.map(o=>({o,e:o.querySelector('.in,.face.front')})).filter(v=>v.e&&hasInk(v.e)&&v.o._s.o>=.98)
+    .map(v=>({...v,r:v.e.getBoundingClientRect()})).sort((a,b)=>(b.o._cueTime||0)-(a.o._cueTime||0));
+  const kept=[];
+  for(const v of text){
+    const overlaps=kept.some(p=>Math.min(v.r.right,p.r.right)-Math.max(v.r.left,p.r.left)>12*k&&Math.min(v.r.bottom,p.r.bottom)-Math.max(v.r.top,p.r.top)>12*k);
+    if(overlaps)v.o.style.opacity=0;else kept.push(v)}
+  const rects=active.filter(o=>+o.style.opacity>.01).flatMap(o=>[...o.querySelectorAll('.in,.face.front')].map(e=>e.getBoundingClientRect())).filter(r=>r.width&&r.height);
+  if(!rects.length)return;
+  const l=Math.min(...rects.map(r=>(r.left-u.left)/k)),r=Math.max(...rects.map(r=>(r.right-u.left)/k));
+  const t=Math.min(...rects.map(r=>(r.top-u.top)/k)),b=Math.max(...rects.map(r=>(r.bottom-u.top)/k));
+  const scale=Math.min(1,1800/Math.max(1,r-l),520/Math.max(1,b-t));
+  const x=960-(l+r)/2*scale,y=430-(t+b)/2*scale;
+  world.style.transform=`translate(${x+960*(scale-1)}px,${y+540*(scale-1)}px) scale(${scale})`;
+}
+function fitOverlays(){
+  const els=[...tl.children].filter(e=>!e.classList.contains('out'));
+  let y=96;
+  for(const e of els){
+    e.style.position='absolute';e.style.left='0px';e.style.right='auto';e.style.top=y+'px';
+    e.style.width='1920px';e.style.transformOrigin='50% 0';
+    const h=e.offsetHeight||50,k=Math.min(1,130/Math.max(1,els.length)/h);
+    e.style.scale=k; // Individual scale does not replace the entrance animation.
+    y+=h*k+6}
+}
+/* Narrow screens use the same beat, at a genuine readable font size, instead
+   of shrinking an entire 1920px diagram into a 226px thumbnail. Newly revealed
+   nodes/rows are the focus; already-read content stays in the recording rail. */
+function renderReadingView(){
+  if(VW>600||!E.S)return;
+  readingView.querySelector('h2').textContent=SCENES[E.idx].title;
+  // Narrow-screen captions share the same active cue as the desktop surface;
+  // do not retain the previous paragraph while the next visual is entering.
+  readingView.querySelector('.reading-caption').textContent=capEl.classList.contains('on')?capEl.firstChild.textContent:
+    bubEl.classList.contains('on')?bubEl.textContent:'';
+  const settling=E.S.tw.some(w=>w.reading&&!w.done&&w.t<=E.T)||
+    document.getAnimations().some(a=>a.effect?.target?.closest?.('#world,#tl,#chap,#tmc')&&a.effect?.getTiming().iterations!==Infinity&&a.effect?.getComputedTiming().progress<1);
+  if(settling)return; // Collect a whole reveal batch, including its connectors.
+  const seen=readingView._seen||(readingView._seen=new Map()),changes=[];
+  const candidates=[...world.children].flatMap(o=>{
+    const staged=[...o.querySelectorAll('.rv,.er,.ik')];
+    return staged.length?staged:[o.querySelector('.in,.face.front')].filter(Boolean)});
+  candidates.push(...tl.children,...chapEl.querySelectorAll('.ctitle,.cdate'));
+  if(SCENES[E.idx].id==='bird'||E.T<0)candidates.push(...$('#tmc').querySelectorAll('.mn'));
+  const visible=e=>{for(let p=e;p&&p!==app;p=p.parentElement){const c=getComputedStyle(p);if(c.visibility==='hidden'||+c.opacity<.98)return false}return true};
+  for(const e of candidates){
+    if(!visible(e))continue;
+    const signature=e.className+'|'+e.textContent+'|'+e.innerHTML;
+    if(seen.get(e)!==signature){if(!seen.has(e))e._readingId=++readingView._serial;seen.set(e,signature);changes.push(e)}}
+  const body=readingView.querySelector('.reading-body');
+  if(changes.length){
+    // Keep connector text with its newly revealed target instead of spending
+    // a separate narrow-screen row on each arrow in the same reveal batch.
+    const connections=new Map();
+    for(const e of changes)if(e instanceof SVGElement){
+      const target=changes.find(n=>!(n instanceof SVGElement)&&n.dataset.id===e.dataset.id?.split('>')[1]);
+      if(target){const text=(e.dataset.id||'').replace('>',' → ')+' '+e.textContent;
+        connections.set(target,[...(connections.get(target)||[]),text]);connections.set(e,target)}
+    }
+    body.replaceChildren(...changes.filter(e=>!(e instanceof SVGElement&&connections.has(e))).map(e=>{if(e instanceof SVGElement||e.classList.contains('mn')){const c=document.createElement('div');c.dataset.sourceToken=e._readingId;
+      c.textContent=e.classList.contains('mn')?(e.classList.contains('hl')?'● ':'○ ')+e.textContent:(e.dataset.id||'').replace('>',' → ')+' '+e.textContent;return c}
+      const clone=e.cloneNode(true);clone.dataset.sourceToken=e._readingId;clone.removeAttribute('id');clone.querySelectorAll('[id]').forEach(c=>c.removeAttribute('id'));
+      if(connections.has(e)){const heading=clone.querySelector('.card>div')||clone;
+        heading.prepend(document.createTextNode(connections.get(e).join(' ／ ')+' · '))}
+      clone.querySelectorAll('video').forEach((v,i)=>{const source=e.querySelectorAll('video')[i];v.controls=true;v.muted=true;v._on=source?._on;
+        const offset=source?.currentTime||0;v.onloadedmetadata=()=>{v.currentTime=offset;if(!E.paused&&v._on)v.play().catch(()=>{})};if(!E.paused&&v._on)v.play().catch(()=>{})});
+      return clone}));
+    readingView.scrollTop=0}
+  if(!stageHasContent()){body.textContent=storyCard.querySelector('p').textContent||SCENES[E.idx].title}
+}
+function fitRecording(){
+  const g=grEl();if(g.classList.contains('big'))return;
+  [...g.children].forEach(e=>e.style.zoom='1');
+  const available=g.clientHeight-16,total=[...g.children].reduce((h,e)=>h+e.offsetHeight+12,0);
+  if(total>available)[...g.children].forEach(e=>e.style.zoom=String(Math.min(1,available/total)));
 }
 function finish(){E.running=false;$('#end').style.display='block';app.classList.add('hud')}
 /* 字幕や補助パネルではなく、画面内で実際に見える主要オブジェクトを判定する。 */
@@ -565,13 +847,13 @@ function frame(ts){requestAnimationFrame(frame);let dt=Math.min(50,ts-last);last
   if(dt>0){E.T+=dt;stepEngine();if(E.running&&E.S&&E.T>=E.S.dur&&!narBusy())goto(E.idx+1,true)}render(dt)}
 function render(dt){
   fx.shake*=Math.pow(.0009,dt/1000);if(fx.shake<.3)fx.shake=0;
-  const sh=fx.shake*RM,sx=(Math.random()-.5)*2*sh,sy=(Math.random()-.5)*2*sh,ox=(VW-1920*SC)/2,oy=(VH-1080*SC)/2;
+  const sh=0,sx=0,sy=0,ox=(rail.getBoundingClientRect().left-12-1920*SC)/2,oy=(VH-70-1080*SC)/2;
   view.style.transform=`translate(${ox+sx*SC}px,${oy+sy*SC}px) scale(${SC})`;ui.style.transform=`translate(${ox+sx*SC*.5}px,${oy+sy*SC*.5}px) scale(${SC})`;
-  applyCam(E.clock);
+  applyCam(E.clock);fitStage();fitOverlays();
   if(E.clock>fx.glitchUntil)wrap.classList.remove('glitch');else wrap.classList.add('glitch');
   if(fx.flash>0){fx.flash=Math.max(0,fx.flash-dt/1000/fx.flashDur);flashEl.style.opacity=fx.flash}else flashEl.style.opacity=0;
   bg.speed+=(bg.ts-bg.speed)*Math.min(1,dt/400);for(let i=0;i<3;i++)bg.col[i]+=(bg.tc[i]-bg.col[i])*Math.min(1,dt/600);
-  tmFrame();storyCard.hidden=!E.S||stageHasContent();drawBg(dt);drawFx(dt);if(E.hudT>0&&performance.now()-E.hudT>2800)app.classList.remove('hud');updateHud();
+  tmFrame();storyCard.hidden=!E.S||stageHasContent();renderReadingView();fitRecording();drawBg(dt);drawFx(dt);if(E.hudT>0&&performance.now()-E.hudT>2800)app.classList.remove('hud');updateHud();
 }
 function drawBg(dt){const c=bgx,w=bgc.width,h=bgc.height;c.setTransform(1,0,0,1,0,0);const sp=bg.speed;
   c.globalAlpha=1;c.fillStyle=sp>.5?'rgba(5,6,10,.28)':'#05060a';c.fillRect(0,0,w,h);
@@ -597,7 +879,7 @@ function updateHud(){const p=$('#prog');if(!E.S||!p.children.length)return;
   [...p.children].forEach((e,i)=>{e.className=i===E.idx?'cur':'';e.firstChild.style.width=(i<E.idx?100:i===E.idx?Math.max(0,Math.min(100,E.T/E.S.dur*100)):0)+'%'});
   $('#hudt').textContent=`${E.idx+1}/${SCENES.length}  ${SCENES[E.idx].title}`}
 function syncPlay(){$('#bPlay').textContent=E.paused?'▶':'⏸';app.classList.toggle('paused',E.paused);
-  world.querySelectorAll('video').forEach(v=>{if(E.paused)v.pause();else if(v._on)v.play().catch(()=>{})});
+  document.querySelectorAll('#world video,#readingView video').forEach(v=>{if(E.paused)v.pause();else if(v._on)v.play().catch(()=>{})});
   try{if(E.paused)speechSynthesis.pause();else speechSynthesis.resume()}catch(e){}
   if(V.audio){if(E.paused)V.audio.pause();else V.audio.play().catch(()=>{})}
   if(A.ctx){E.paused?A.pause():A.resume()}}
@@ -609,7 +891,7 @@ function setNar(v){V.on=v;$('#bNar').textContent=v?'🗣':'🤐';if(!v){narReset
 function start(short){if(short){SCENES.length=0;SHORTSCENES.forEach(s=>SCENES.push(s));$('#prog').innerHTML=''}A.init();const e=$('#geng').value;if(e!=='browser'&&$('#gkey').value){V.eng=e;V.cfg=e==='speech'?{key:$('#gkey').value,region:$('#greg').value.trim()||'japaneast'}:{key:$('#gkey').value,url:$('#greg').value.trim(),model:$('#gmod').value.trim()};V.ok=true}if(A.ctx)A.ctx.resume();setNar($('#gnar').checked);
   try{document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{})}catch(e){}
   $('#gate').style.display='none';E.paused=false;E.running=true;goto(0,false);syncPlay();showHud()}
-$('#go').onclick=()=>start(false);$('#gos').onclick=()=>start(true);if(new URLSearchParams(location.search).has('short')){$('#go').style.display='none';document.title='【SHORT 5分】'+document.title}$('#bPlay').onclick=togglePause;
+$('#go').onclick=()=>start(false);$('#gos').onclick=()=>start(true);if(new URLSearchParams(location.search).has('short')){$('#go').style.display='none';document.title='【SHORT】'+document.title}$('#bPlay').onclick=togglePause;
 $('#bPrev').onclick=()=>{goto(E.T>2500?E.idx:E.idx-1,false);E.paused=false;syncPlay()};
 $('#bNext').onclick=()=>{goto(E.idx+1,true);E.paused=false;syncPlay()};
 $('#bMute').onclick=setMute;$('#bNar').onclick=()=>setNar(!V.on);$('#bFull').onclick=fullscreen;
@@ -634,7 +916,11 @@ const TOP={era:{d:[1,23],l:0,t:'弱かった時代',c:'#ff9f1c'},v1:{d:[3,18],l:
   eos:{d:[10,3],l:0,t:'EOS 止める',c:'#ff3b30'},born:{d:[10,8],l:0,t:'HVE v2 誕生',c:'#00e5ff'},ring:{d:[10,13],l:0,t:'一周して戻る',c:'#8b5cff'}};
 const fpos=d=>{const[m,dd]=d;return(m<10?(m-1)+dd/31:9+dd/13*3)/12};
 const MAPORD=['era','v1','q1','q4','q5','q3','q7','q2','q6','eos','shrink','born','proof','twist','bas','ring'];
-const mapPos=id=>({x:70+fpos(TOP[id].d)*1500,y:110+TOP[id].l*150+((['eos','born','ring','shrink','proof','twist','bas'].indexOf(id)%2)*34)});
+const mapPos=id=>{
+  // Even spacing within each chronological lane leaves room for the labels
+  // around October, rather than stacking six labels at nearly the same x.
+  const lane=MAPORD.filter(k=>TOP[k].l===TOP[id].l).sort((a,b)=>fpos(TOP[a].d)-fpos(TOP[b].d));
+  return{x:130+lane.indexOf(id)*1440/Math.max(1,lane.length-1),y:100+TOP[id].l*150}};
 function mapHTML(){
   const pts=MAPORD.slice().sort((a,b)=>fpos(TOP[a].d)-fpos(TOP[b].d)||TOP[a].l-TOP[b].l).map(mapPos);
   const lane=[0,1,2,3].map(i=>`<div style="position:absolute;left:0;top:${110+i*150-8}px;width:1700px;border-top:1px dashed rgba(255,255,255,.1)"></div>`).join('');
@@ -651,8 +937,8 @@ function tmFrame(){
   const sc=SCENES[E.idx],id=sc&&sc.id,tm=$('#tm'),mm=$('#mm');if(!sc)return;
   const bird=id==='bird',has=!!TOP[id];
   if(has&&E.T<0){
-    const p=Math.max(0,(E.T+2400)/2400),q=Math.max(0,(p-.4)/.6),e=q*q*q,pt=mapPos(id);
-    if(!E.tmS&&p>.4){E.tmS=true;A.play('whoosh');A.play('riser',1.4)}
+    const q=Math.max(0,(E.T+1200)/1200),e=q*q*q,pt=mapPos(id);
+    if(!E.tmS&&q>0){E.tmS=true;A.play('whoosh');A.play('riser',1.2)}
     tm.style.transformOrigin=`${110+pt.x}px ${210+pt.y}px`;tm.style.transform=`scale(${1+e*11})`;
     tm.style.opacity=q<.55?1:Math.max(0,1-(q-.55)/.45);world.style.opacity=Math.max(0,(q-.6)/.4);mm.classList.remove('on')}
   else{tm.style.transform='none';tm.style.opacity=bird?1:0;world.style.opacity=1;mm.classList.toggle('on',has&&!bird)}
@@ -829,7 +1115,7 @@ function grAdd(i){const g=grEl(),items=grItems(SCENES[E.idx].id);if(!items[i])re
   l.insertAdjacentHTML('beforeend',grItemHTML(items[i],i,true));
   if(g.classList.contains('big')){const c=g.querySelector('.gs.cur');if(c&&c.offsetTop+c.offsetHeight>g.scrollTop+g.clientHeight)g.scrollTop=c.offsetTop+c.offsetHeight-g.clientHeight+40}}
 function grPlan(S,id){const items=grItems(id),nt=S.nts,n=items.length;E.grN=0;grBuild();grEl().classList.toggle('on',n>0);
-  items.forEach((it,i)=>{const t=nt.length?nt[Math.min(nt.length-1,Math.floor(i*nt.length/n))]+.9+(i%2?.4:0):1+i*1.5;S.at(t,()=>grAdd(i))})}
+  items.forEach((it,i)=>{const t=nt.length?nt[Math.min(nt.length-1,Math.floor(i*nt.length/n))]+.9+(i%2?.4:0):1+i*1.5;S.at(t,()=>grAdd(i),false,'recording')})}
 grEl().onclick=()=>{const g=grEl();g.classList.toggle('big');grBuild()};
 addEventListener('keydown',e=>{const g=grEl();if(e.key==='Escape'&&g.classList.contains('big')){g.classList.remove('big');grBuild()}});
 
@@ -850,7 +1136,10 @@ function mkInfo(S,t,dur,sp){
   else if(sp.type==='kpi')sp.items.forEach(([,num,suf],i)=>{const tile=q('.ik')[i],v=q('.iv')[i];S.tween(t+.4+i*(sp.step||1.1),1,p=>{tile.style.opacity=1;v.textContent=fmtN(num*p)+(suf||'')},EZ.out3);S.sfx(t+.4+i*(sp.step||1.1),'coin')});
   else if(sp.type==='waffle'){const cs=q('.iw'),k=sp.k;S.tween(t+.4,1.4,p=>{cs.forEach((c,i)=>{const on=i<Math.round(k*p);c.style.background=on?(sp.c||'#ffe600'):'rgba(255,255,255,.12)';c.style.boxShadow=on?`0 0 14px ${sp.c||'#ffe600'}`:'none'})},EZ.lin)}
   else if(sp.type==='ring'){S.tween(t+.4,1.5,p=>{o._in.querySelector('.ir').style.setProperty('--p',sp.pct*p);o._in.querySelector('.irv').textContent=(sp.pct*p).toFixed(1)+'%'},EZ.out3)}
-  if(dur<90)S.hide(o,t+dur,.3);return o}
+  // A statistic remains the visual referent of its narration until the next
+  // explicit clear/replacement beat; a short decorative duration must not
+  // leave a different fallback paragraph flashing between sentence fragments.
+  return o}
 
 /* Enterprise の比較表。行は S.at で1行ずつ出す。セルの先頭が「*」なら最良（強調）。 */
 function entTable(S,spec,o={}){
@@ -1066,8 +1355,8 @@ QS('q3',3,'工程を、段階的に回す','目標：要求から設計・実装
   rows.forEach(([n,v,h,c],i)=>{const y=-190+i*80,len=v/110000*640,X=-300,t0=b+.6+i*.7;
     const lb=S.txtR(n,X-26,y,`font:700 30px sans-serif;color:${i===4?'#ff8a8a':'#cde'}`);S.hbar(X,y,len,52,c,t0,.7);const val=S.txtL(`${fmtN(v)} AIU ／ ${h}`,X+len+22,y,`font:900 34px Consolas;color:${c}`);
     S.mv(lb,t0,.3,{o:1});S.mv(val,t0+.5,.3,{o:1});S.sfx(t0,'whoosh')});
-  S.at(b+4.6,()=>{const s=S.obj('<div style="font:900 110px Impact,sans-serif;color:#ff3b30;border:12px solid #ff3b30;padding:0 30px;border-radius:14px;transform:rotate(-8deg);background:rgba(0,0,0,.7)">未完成</div>',{x:600,y:-60,z:200,o:0,s:3});
-    S.mv(s,b+4.6,.18,{o:1,s:1},EZ.in2);A.play('stamp');fx.shake=26});
+  const incomplete=S.obj('<div style="font:900 110px Impact,sans-serif;color:#ff3b30;border:12px solid #ff3b30;padding:0 30px;border-radius:14px;transform:rotate(-8deg);background:rgba(0,0,0,.7)">未完成</div>',{x:600,y:300,z:200,o:0,s:3});
+  S.mv(incomplete,b+4.6,.18,{o:1,s:1},EZ.in2);S.sfx(b+4.6,'stamp');S.shake(b+4.6,26);
   b=S.N('AI の使用量は、HVE 関連が約29万。4アプリ合計の、1.4倍。規模の違いはあります。それでも、仕組みの維持費が、成果と並びました。');
   S.clear(b+.3);S.info(b+.5,3.2,{type:'cmp',c:C.or,title:'AI 使用量（AIU）',big:'×1.39',rows:[['HVE 関連',290602,C.or,'290,602'],['4アプリ合計',209521,C.cy,'209,521']]});
   S.clear(S.cur-.1);
@@ -1557,10 +1846,39 @@ sc('bird','航海図 ― 全体を見渡す','calm',S=>{
 const ALLSCENES=SCENES.filter(s=>!s.id.startsWith('s_')),SHORTSCENES=SHORTSEQ.map(id=>SCENES.find(s=>s.id===id));
 SCENES.length=0;ALLSCENES.forEach(s=>SCENES.push(s));
 buildHud();
+/* Public deterministic transport. Times are playback seconds after compilation.
+   timeline().horizon is always finite, including the intentionally held finale.
+   seek/advance cap input to that horizon; never iterate over S.hold's 1e12. */
+function selectMode(short){
+  narReset();E.S=null;E.idx=-1;E.running=false;SCENES.length=0;(short?SHORTSCENES:ALLSCENES).forEach(s=>SCENES.push(s));$('#prog').innerHTML='';buildHud();
+}
+function advanceTo(seconds){
+  if(!E.S)return;
+  const target=clockMs(Math.max(0,Math.min(Number(seconds)||0,E.S.horizon))*1000);
+  if(clockTick(target)<clockTick(E.T)){const i=E.idx;goto(i,false)}
+  // Walk cue/tween boundaries, not an unbounded frame-count loop.
+  const stops=[...new Set([target,...E.S.ev.map(e=>e.t),...E.S.tw.flatMap(w=>[w.t,w.t+w.dur])].map(clockTick))]
+    .filter(t=>t>clockTick(E.T)&&t<=clockTick(target)).sort((a,b)=>a-b).map(t=>t/1000);
+  for(const t of stops){const dt=t-E.T;E.clock+=dt;E.T=t;stepEngine();render(dt)}
+  render(0);syncPlay();return E.T/1000;
+}
+window.HVEPlayback=Object.freeze({
+  setMode(mode){selectMode(mode==='short');return SCENES.map(s=>({id:s.id,title:s.title}))},
+  seek(index,seconds=0){$('#gate').style.display='none';E.paused=true;E.noCutFx=true;
+    const voiceOn=V.on;V.on=false;
+    goto(Math.max(0,Math.min(SCENES.length-1,Math.trunc(Number(index)||0))),false);advanceTo(seconds);
+    V.on=voiceOn;
+    const n=E.S.narrations.find(n=>clockTick(n.start*1000)<=clockTick(E.T)&&clockTick(n.end*1000)>clockTick(E.T));
+    if(n&&voiceOn)speak(n.text,n.who);syncPlay();return this.timeline()},
+  advance:advanceTo,
+  timeline(){return E.S?{index:E.idx,id:SCENES[E.idx].id,time:E.T/1000,horizon:E.S.horizon,hold:E.S.hold,beats:E.S.beats,narrations:E.S.narrations.map(n=>({text:n.text,who:n.who,start:n.start,end:n.end}))}:null},
+  state(){return{paused:E.paused,running:E.running,voiceOn:V.on,voiceEngine:V.eng,voiceActive:V.act,sceneCount:SCENES.length,stageHasContent:stageHasContent(),fallbackVisible:!storyCard.hidden}},
+  play:togglePause
+});
 /* テスト用: ?s=シーン番号&t=秒 で該当位置から開始（音声なし）。?voice=1 で音声を有効 */
 (function(){const q=new URLSearchParams(location.search);
-  if(q.has('s')){$('#gate').style.display='none';E.paused=false;E.running=true;E.noCutFx=true;if(!q.has('voice'))V.on=false;
-    goto(+q.get('s'),false);const ms=(+q.get('t')||0)*1000;for(let k=0;k<ms/16;k++){E.T+=16;E.clock+=16;stepEngine()}if(q.has('pause'))E.paused=true}})();
+  if(q.has('s')){if(q.has('short'))selectMode(true);if(!q.has('voice'))V.on=false;
+    HVEPlayback.seek(+q.get('s'),+q.get('t')||0);E.paused=q.has('pause');syncPlay()}})();
 </script>
 </body>
 </html>
