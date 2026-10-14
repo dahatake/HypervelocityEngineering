@@ -49,6 +49,10 @@ import ebaklib as h  # noqa: E402
 USAGE_WORDS = ("作成", "参照", "更新", "削除")
 USAGE_FIELD = "エンティティの使い方"
 SCENARIO_FIELD = "利用シナリオ"
+RELATION_FIELD = "エンティティの関係"
+RELATION_KINDS = ("参照", "外部キー")
+KEY_WORDS = ("主キー", "外部キー", "なし")
+COLUMN_HEAD_RE = re.compile(r"^#{2,6}\s+列\s*[:：]\s*(.+?)\s*#*\s*$")
 DEFAULT_THRESHOLD = 0.8
 DEFAULT_TIMEOUT = 10.0
 MAX_BYTES = 5 * 1024 * 1024
@@ -158,7 +162,414 @@ def optional_field_problems(doc: "h.RequirementsDoc", req: "h.Requirement") -> L
     if SCENARIO_FIELD in req.fields:
         nums, bad = scenario_items_check(doc, req.fields[SCENARIO_FIELD])
         out += [f"{SCENARIO_FIELD}: {p}" for p in bad]
+    if RELATION_FIELD in req.fields:  # FR-1026 AC-172
+        rels, problems = parse_relation_field(req.fields[RELATION_FIELD])
+        out += [f"{RELATION_FIELD}: {p}" for p in problems]
+        for a, b, k in rels:
+            for n in (a, b):
+                if n not in known:
+                    out.append(f"{RELATION_FIELD}: エンティティ「{n}」が用語の表にも状態の表にもありません")
+            if k not in RELATION_KINDS:
+                out.append(f"{RELATION_FIELD}: 種別「{k}」は {'・'.join(RELATION_KINDS)} のいずれかにします（{a}→{b}）")
     return out
+
+
+# --------------------------------------------------------------------------- relations and columns (FR-1025, FR-1026, FR-1030)
+
+def parse_relation_field(value: str) -> Tuple[List[Tuple[str, str, str]], List[str]]:
+    """`注文→商品（参照）、注文→顧客（外部キー）` -> ([(from, to, kind)], [problem...])."""
+    items: List[Tuple[str, str, str]] = []
+    problems: List[str] = []
+    for tok in split_top(h.strip_md(value)):
+        if tok in h.NONE_VALUES:
+            continue
+        m = re.fullmatch(r"(.+?)\s*(?:→|⇒|->)\s*(.+?)\s*[（(](.*)[）)]", tok)
+        if m:
+            items.append((m.group(1).strip().strip("「」"), m.group(2).strip().strip("「」"), m.group(3).strip()))
+        elif re.fullmatch(r".+?\s*(?:→|⇒|->)\s*.+", tok):
+            problems.append(f"「{tok}」に種別がありません（{'・'.join(RELATION_KINDS)}）")
+        else:
+            problems.append(f"「{tok}」は 注文→商品（参照） の書式ではありません")
+    return items, problems
+
+
+def parse_ref(ref: str) -> Optional[Tuple[str, str]]:
+    m = re.fullmatch(r"(.+)\.([^.]+)", (ref or "").strip())
+    return (m.group(1).strip(), m.group(2).strip()) if m else None
+
+
+def catalog_columns(root: Path, cfg: dict) -> List[dict]:
+    """`### 列: <table>` sections of the catalog (optional): [{table, entity, file, line, rows, problems}]."""
+    rel = h.mf(cfg, "catalog")
+    path = root / rel
+    out: List[dict] = []
+    if not path.is_file():
+        return out
+    lines = h.strip_comments(h.read_text(path)).splitlines()
+    cur: Optional[dict] = None
+    in_code = False
+    for i, line in enumerate(lines, 1):
+        if line.lstrip().startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code:
+            continue
+        if h.HEADING_RE.match(line):
+            m = COLUMN_HEAD_RE.match(line)
+            cur = {"table": h.strip_md(m.group(1)), "entity": "", "file": rel, "line": i, "body": [], "rows": [], "problems": []} if m else None
+            if cur:
+                out.append(cur)
+            continue
+        if cur is None:
+            continue
+        em = re.match(r"^\s*\**対象エンティティ\**\s*[:：]\s*(.*)$", line)
+        if em:
+            cur["entity"] = h.strip_md(em.group(1))
+            continue
+        cur["body"].append((i, line))
+    for sec in out:
+        tabs = [t for t in h.parse_tables([l for _, l in sec["body"]]) if t.col("列名") is not None]
+        if not tabs:
+            sec["problems"].append((sec["line"], f"列「{sec['table']}」の節に 列名・型・キー・参照先・説明 の表がありません"))
+            continue
+        t = tabs[0]
+        ix = [t.col(n) for n in ("列名", "型", "キー", "参照先", "説明")]
+        for rel_ln, cells in t.rows:
+            ln = sec["body"][rel_ln - 1][0]
+            get = lambda k: h.strip_md(cells[ix[k]]) if ix[k] is not None and ix[k] < len(cells) else ""  # noqa: E731
+            if not get(0):
+                continue
+            sec["rows"].append({"name": get(0), "type": get(1), "key": get(2), "ref": get(3), "description": get(4), "line": ln})
+    return out
+
+
+def _by_req(doc: "h.RequirementsDoc") -> Dict[str, List[str]]:
+    return {r.id: h.split_values(r.fields.get("対象エンティティ", "")) for r in doc.requirements.values() if r.active}
+
+
+def _linked_tables(name: str, tables: List[dict], by_req: Dict[str, List[str]]) -> List[dict]:
+    linked = []
+    for t in tables:
+        rel = [x for x in t["reqs"] if x in by_req]
+        common = None
+        for x in rel:
+            s = set(by_req[x])
+            common = s if common is None else common & s
+        by_name = name in t["name"] or name in t["file"]
+        if (common is not None and name in common) or by_name:
+            linked.append({"name": t["name"], "file": t["file"]})
+    return linked
+
+
+# --- DDL / JSON Schema supplement (FR-1030): read-only, no network, nothing is guessed
+SKIP_DIRS = {"node_modules", "work", "vendor", "__pycache__", "venv", "dist", "build", "bin", "obj", "site-packages"}
+MAX_SCHEMA_FILES = 300
+MAX_SCHEMA_BYTES = 1024 * 1024
+CREATE_RE = re.compile(r"create\s+(?:or\s+replace\s+)?(?:(?:global\s+|local\s+)?temp(?:orary)?\s+)?table\s+(?:if\s+not\s+exists\s+)?([`\"\[]?[\w.\"`\[\]]+)\s*\(", re.I)
+
+
+def _unq(s: str) -> str:
+    return s.strip().strip('`"[]').strip()
+
+
+def _tail(s: str) -> str:
+    return _unq(s.split(".")[-1]) if s else s
+
+
+def _split_top_commas(s: str) -> List[Tuple[str, int]]:
+    out, cur, depth, start = [], "", 0, 0
+    for i, ch in enumerate(s):
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        if ch == "," and depth == 0:
+            out.append((cur, start))
+            cur, start = "", i + 1
+        else:
+            cur += ch
+    out.append((cur, start))
+    return out
+
+
+def parse_ddl(text: str, rel: str) -> Tuple[List[dict], List[dict]]:
+    """CREATE TABLE statements -> ([{table, columns:[{name,type,key,ref,line}]}], [{file,line,reason}])."""
+    tables: List[dict] = []
+    diags: List[dict] = []
+    clean = re.sub(r"--[^\n]*", lambda m: " " * len(m.group(0)), text)
+    clean = re.sub(r"/\*.*?\*/", lambda m: re.sub(r"[^\n]", " ", m.group(0)), clean, flags=re.S)
+    for m in CREATE_RE.finditer(clean):
+        start = m.end()
+        depth, i = 1, start
+        while i < len(clean) and depth:
+            depth += {"(": 1, ")": -1}.get(clean[i], 0)
+            i += 1
+        base_line = clean.count("\n", 0, m.start()) + 1
+        if depth:
+            diags.append({"file": rel, "line": base_line, "reason": f"CREATE TABLE {_tail(m.group(1))} の括弧が閉じていないため解析できません"})
+            continue
+        body = clean[start:i - 1]
+        cols: Dict[str, dict] = {}
+        order: List[str] = []
+        pending: List[Tuple[str, str, str, int]] = []  # (kind, col, ref, line)
+        for item, off in _split_top_commas(body):
+            s = item.strip()
+            if not s:
+                continue
+            ln = clean.count("\n", 0, start + off + (len(item) - len(item.lstrip()))) + 1
+            low = re.sub(r"^constraint\s+\S+\s+", "", s, flags=re.I)
+            pk = re.match(r"primary\s+key\s*\(([^)]*)\)", low, re.I)
+            fk = re.match(r"foreign\s+key\s*\(([^)]*)\)\s*references\s+([`\"\[\w.\]]+)\s*\(([^)]*)\)", low, re.I)
+            if pk:
+                for c in pk.group(1).split(","):
+                    pending.append(("pk", _unq(c), "", ln))
+                continue
+            if fk:
+                a, b = [_unq(x) for x in fk.group(1).split(",")], [_unq(x) for x in fk.group(3).split(",")]
+                if len(a) == len(b):
+                    for x, y in zip(a, b):
+                        pending.append(("fk", x, f"{_tail(fk.group(2))}.{y}", ln))
+                else:
+                    diags.append({"file": rel, "line": ln, "reason": "FOREIGN KEY の列数が参照先の列数と合いません"})
+                continue
+            if re.match(r"(unique|check|key|index|exclude|foreign\s+key|primary\s+key|fulltext)\b", low, re.I):
+                continue
+            cm = re.match(r"([`\"\[]?[\w]+[`\"\]]?)\s+([A-Za-z_][\w ]*?(?:\s*\([^)]*\))?)(?=\s|$|,)(.*)$", s, re.S)
+            if not cm:
+                diags.append({"file": rel, "line": ln, "reason": f"列の定義「{s[:40]}」を解析できません"})
+                continue
+            name, typ, rest = _unq(cm.group(1)), cm.group(2).strip(), cm.group(3)
+            typ = re.split(r"\s+(?:not|null|default|primary|references|unique|check|constraint|auto_increment|identity|generated)\b", typ, flags=re.I)[0].strip()
+            key, ref = "なし", ""
+            if re.search(r"\bprimary\s+key\b", rest, re.I):
+                key = "主キー"
+            rm = re.search(r"\breferences\s+([`\"\[\w.\]]+)\s*(?:\(([^)]*)\))?", rest, re.I)
+            if rm:
+                if rm.group(2):
+                    key, ref = "外部キー", f"{_tail(rm.group(1))}.{_unq(rm.group(2).split(',')[0])}"
+                else:
+                    diags.append({"file": rel, "line": ln, "reason": f"列 {name} の REFERENCES に参照先の列がありません"})
+            cols[name] = {"name": name, "type": typ, "key": key, "ref": ref, "line": ln}
+            order.append(name)
+        for kind, cname, ref, ln in pending:
+            if cname in cols:
+                if kind == "pk":
+                    cols[cname]["key"] = "主キー"
+                else:
+                    cols[cname]["key"], cols[cname]["ref"] = "外部キー", ref
+        tables.append({"table": _tail(m.group(1)), "columns": [cols[n] for n in order], "file": rel, "line": base_line})
+    return tables, diags
+
+
+def parse_json_schema(text: str, rel: str) -> Tuple[Optional[dict], List[dict]]:
+    try:
+        data = json.loads(text)
+    except ValueError as e:
+        return None, [{"file": rel, "line": 1, "reason": f"JSON として解析できません: {e}"}]
+    if not isinstance(data, dict) or not isinstance(data.get("properties"), dict):
+        return None, []
+    lines = text.splitlines()
+    cols = []
+    for name, spec in data["properties"].items():
+        typ = spec.get("type") if isinstance(spec, dict) else None
+        typ = "|".join(typ) if isinstance(typ, list) else (typ or "")
+        ln = next((i for i, l in enumerate(lines, 1) if f'"{name}"' in l), 1)
+        cols.append({"name": name, "type": typ, "key": "", "ref": "", "line": ln})
+    title = data.get("title") if isinstance(data.get("title"), str) else ""
+    stem = re.sub(r"\.schema$", "", Path(rel).stem)
+    return {"table": stem, "title": title, "columns": cols, "file": rel, "line": 1}, []
+
+
+def scan_schema_files(root: Path) -> Tuple[List[dict], List[dict], List[str]]:
+    """Read-only scan of *.sql and *.schema.json (and schema(s)/ directory JSON) files.  Returns (tables, diagnostics, files)."""
+    import os
+    tables: List[dict] = []
+    diags: List[dict] = []
+    files: List[str] = []
+    for dirpath, dirs, names in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d not in SKIP_DIRS)
+        for n in sorted(names):
+            p = Path(dirpath) / n
+            low = n.lower()
+            in_schema_dir = p.parent.name.lower() in ("schema", "schemas")
+            if not (low.endswith(".sql") or low.endswith(".schema.json") or (low.endswith(".json") and in_schema_dir)):
+                continue
+            if len(files) >= MAX_SCHEMA_FILES:
+                diags.append({"file": "", "line": 0, "reason": f"読み取るファイルが {MAX_SCHEMA_FILES} 件を超えたため、残りは読んでいません"})
+                return tables, diags, files
+            rel = p.relative_to(root).as_posix()
+            try:
+                if p.stat().st_size > MAX_SCHEMA_BYTES:
+                    diags.append({"file": rel, "line": 0, "reason": "ファイルが大きすぎるため読んでいません"})
+                    continue
+                text = p.read_text(encoding="utf-8", errors="replace")
+            except OSError as e:
+                diags.append({"file": rel, "line": 0, "reason": f"読めません: {e.__class__.__name__}"})
+                continue
+            files.append(rel)
+            if low.endswith(".sql"):
+                ts, ds = parse_ddl(text, rel)
+                tables += ts
+                diags += ds
+            else:
+                t, ds = parse_json_schema(text, rel)
+                if t:
+                    tables.append(t)
+                diags += ds
+    return tables, diags, files
+
+
+def column_model(root: Path, cfg: dict, doc: "h.RequirementsDoc") -> dict:
+    """Columns (FR-1025) and the supplement from DDL / schema files (FR-1030), per entity, with the problems of the written
+    definitions: {"columns": {entity: [column]}, "problems": [(file, line, message)], "supplement": {...}}."""
+    tables = _catalog_tables(root, cfg)
+    by_req = _by_req(doc)
+    known = set(doc.glossary) | set(doc.entities) | {e for v in by_req.values() for e in v}
+    tabnames = {t["name"] for t in tables}
+    tab_ents: Dict[str, List[str]] = {}  # table name -> entities linked to it (computed once: O(entities x tables))
+    for n in sorted(known):
+        for l in _linked_tables(n, tables, by_req):
+            tab_ents.setdefault(l["name"], []).append(n)
+    problems: List[Tuple[str, int, str]] = []
+    cols: Dict[str, List[dict]] = {}
+    table_entity: Dict[str, str] = {}
+    for sec in catalog_columns(root, cfg):
+        for ln, msg in sec["problems"]:
+            problems.append((sec["file"], ln, msg))
+        if sec["table"] not in tabnames:
+            problems.append((sec["file"], sec["line"], f"列の定義「{sec['table']}」はカタログのテーブルの表にないテーブルです"))
+        ent_name = sec["entity"]
+        if ent_name in h.NONE_VALUES:
+            ent_name = ""
+        if not ent_name:
+            cands = tab_ents.get(sec["table"], [])
+            ent_name = cands[0] if len(cands) == 1 else ""
+        if not ent_name:
+            problems.append((sec["file"], sec["line"], f"列の定義「{sec['table']}」の対象エンティティを特定できません（節の先頭に 対象エンティティ: 名前 を書きます）"))
+            continue
+        if ent_name not in known:
+            problems.append((sec["file"], sec["line"], f"列の定義「{sec['table']}」の対象エンティティ「{ent_name}」が用語の表にも状態の表にもありません"))
+            continue
+        table_entity[sec["table"].casefold()] = ent_name
+        for r in sec["rows"]:
+            if r["key"] and r["key"] not in KEY_WORDS:
+                problems.append((sec["file"], r["line"], f"列 {r['name']} のキー「{r['key']}」は {'・'.join(KEY_WORDS)} のいずれかにします"))
+            cols.setdefault(ent_name, []).append({**{k: r[k] for k in ("name", "type", "key", "ref", "description")}, "table": sec["table"],
+                                                  "origin": "管理データ", "source": {"file": sec["file"], "line": r["line"]}, "mismatch": []})
+    # supplement (FR-1030)
+    sup_tables, diags, sup_files = scan_schema_files(root)
+    for t in tables:
+        ents = tab_ents.get(t["name"], [])
+        if len(ents) == 1:
+            table_entity.setdefault(t["name"].casefold(), ents[0])
+    for n in known:
+        table_entity.setdefault(n.casefold(), n)
+    for st in sup_tables:
+        ent_name = table_entity.get(st["table"].casefold()) or (st.get("title") if st.get("title") in known else "")
+        if not ent_name:
+            diags.append({"file": st["file"], "line": st["line"], "reason": f"テーブル {st['table']} に対応するエンティティを特定できないため補完していません"})
+            continue
+        have = {c["name"].casefold(): c for c in cols.get(ent_name, [])}
+        for sc in st["columns"]:
+            ref = sc["ref"]
+            if ref:
+                p = parse_ref(ref)
+                tgt = table_entity.get(p[0].casefold()) if p else None
+                if tgt:
+                    ref = f"{tgt}.{p[1]}"
+                else:
+                    diags.append({"file": st["file"], "line": sc["line"], "reason": f"列 {sc['name']} の参照先テーブルに対応するエンティティを特定できないため参照先を補完していません"})
+                    ref = ""
+            sup = {"type": sc["type"], "key": sc["key"], "ref": ref}
+            src = {"file": st["file"], "line": sc["line"]}
+            cur = have.get(sc["name"].casefold())
+            if cur:
+                for f in ("type", "key", "ref"):
+                    a, b = cur[f], sup[f]
+                    if b and a.casefold() != b.casefold() and not (f == "ref" and sc["ref"] and not ref):
+                        cur["mismatch"].append({"field": f, "managed": a, "supplement": b, "source": src})
+            else:
+                col = {"name": sc["name"], "type": sup["type"], "key": sup["key"], "ref": ref, "description": "",
+                       "table": st["table"], "origin": "補完", "source": src, "mismatch": []}
+                cols.setdefault(ent_name, []).append(col)
+                have[sc["name"].casefold()] = col
+    # references of the written columns must resolve (AC-170)
+    for e, lst in cols.items():
+        for c in lst:
+            if c["origin"] != "管理データ" or not c["ref"]:
+                continue
+            p = parse_ref(c["ref"])
+            file, line = c["source"]["file"], c["source"]["line"]
+            if not p:
+                problems.append((file, line, f"列 {c['name']} の参照先「{c['ref']}」は エンティティ.列 の書式ではありません"))
+            elif p[0] not in known:
+                problems.append((file, line, f"列 {c['name']} の参照先のエンティティ「{p[0]}」が用語の表にも状態の表にもありません"))
+            elif p[1] not in {x["name"] for x in cols.get(p[0], [])}:
+                problems.append((file, line, f"列 {c['name']} の参照先の列「{p[1]}」がエンティティ「{p[0]}」の列にありません"))
+    return {"columns": cols, "problems": problems, "supplement": {"files": sup_files, "diagnostics": diags}, "known": known}
+
+
+def column_problems(doc: "h.RequirementsDoc", root: Path, cfg: dict) -> List[Tuple[str, int, str]]:
+    """Errors of the written column definitions (AC-170).  Empty when there are none."""
+    return column_model(root, cfg, doc)["problems"]
+
+
+def derive_relations(doc: "h.RequirementsDoc", reqs: list, entities: List[dict], columns: Dict[str, List[dict]], known: set) -> List[dict]:
+    rels: Dict[tuple, dict] = {}
+
+    def add(key: tuple, base: dict, source: dict) -> dict:
+        r = rels.setdefault(key, {**base, "sources": []})
+        if source not in r["sources"]:
+            r["sources"].append(source)
+        return r
+
+    for r in reqs:  # entity <-> entity by the requirement's optional field (AC-171)
+        if RELATION_FIELD in r.fields:
+            items, _ = parse_relation_field(r.fields[RELATION_FIELD])
+            for a, b, k in items:
+                if a in known and b in known and k in RELATION_KINDS:
+                    rel = add(("entity", a, b), {"kind": k, "scope": "entity", "from": a, "to": b}, {"file": r.file, "line": r.line, "origin": f"要求 {r.id}"})
+                    if k == "外部キー":
+                        rel["kind"] = "外部キー"
+    for e, lst in columns.items():  # column <-> column, and the FK's entity <-> entity (AC-173)
+        for c in lst:
+            p = parse_ref(c["ref"]) if c["ref"] else None
+            if not p or p[0] not in known:
+                continue
+            src = {**c["source"], "origin": "列の定義" if c["origin"] == "管理データ" else "DDL・スキーマ（補完）"}
+            add(("column", e, p[0], c["name"], p[1]), {"kind": "参照", "scope": "column", "from": e, "to": p[0],
+                                                       "fromColumn": c["name"], "toColumn": p[1]}, src)
+            if c["key"] == "外部キー" and p[0] != e:
+                rel = add(("entity", e, p[0]), {"kind": "外部キー", "scope": "entity", "from": e, "to": p[0]}, src)
+                rel["kind"] = "外部キー"
+    for e in entities:  # entity -> table / requirement (FR-1022, already derived)
+        for tb in e["tables"]:
+            add(("usage", e["name"], "table:" + tb["name"]), {"kind": "使用", "scope": "usage", "from": e["name"], "to": tb["name"], "toType": "table"},
+                {"file": tb["file"], "line": 0, "origin": "カタログのテーブル表"})
+        for u in e["usecases"]:
+            r = doc.requirements.get(u["requirement"])
+            add(("usage", e["name"], "req:" + u["requirement"]), {"kind": "使用", "scope": "usage", "from": e["name"], "to": u["requirement"], "toType": "requirement"},
+                {"file": r.file if r else "", "line": r.line if r else 0, "origin": "要求の対象エンティティ"})
+    return sorted(rels.values(), key=lambda r: (r["scope"], r["from"], r["to"], r.get("fromColumn", ""), r.get("toColumn", "")))
+
+
+def derive_clusters(names: List[str], relations: List[dict]) -> List[dict]:
+    parent = {n: n for n in names}
+
+    def find(x: str) -> str:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for r in relations:
+        if r["scope"] == "entity" and r["from"] in parent and r["to"] in parent:
+            parent[find(r["from"])] = find(r["to"])
+    groups: Dict[str, List[str]] = {}
+    for n in names:
+        groups.setdefault(find(n), []).append(n)
+    ordered = sorted((sorted(g) for g in groups.values()), key=lambda g: (-len(g), g[0]))
+    return [{"id": f"C{i + 1}", "count": len(g), "entities": g} for i, g in enumerate(ordered)]
 
 
 def scenario_items_check(doc: "h.RequirementsDoc", value: str) -> Tuple[List[int], List[str]]:
@@ -217,16 +628,7 @@ def derive(root: Path, cfg: dict) -> dict:
             nums = sorted(n for n in set(nums) if n in scen_items)
             usages.update(u)
             use.append({"requirement": r.id, "title": r.title, "scenarios": nums, "usages": u})
-        linked = []
-        for t in tables:
-            rel = [x for x in t["reqs"] if x in by_req]
-            common = None
-            for x in rel:
-                s = set(by_req[x])
-                common = s if common is None else common & s
-            by_name = name in t["name"] or name in t["file"]
-            if (common is not None and name in common) or by_name:
-                linked.append({"name": t["name"], "file": t["file"]})
+        linked = _linked_tables(name, tables, by_req)
         desc = defs.get(name, "")
         entities.append({
             "name": name,
@@ -238,7 +640,14 @@ def derive(root: Path, cfg: dict) -> dict:
                                          ("使い方未記載", bool(usages))) if not ok],
             "position": {"file": names[name][0], "line": names[name][1]},
         })
-    return {"entities": entities, "scenarios": {str(k): v for k, v in sorted(scen_items.items())}}
+    cm = column_model(root, cfg, doc)
+    for e in entities:  # FR-1025 / FR-1030
+        e["columns"] = cm["columns"].get(e["name"], [])
+        e["columnsMissing"] = not e["columns"]  # 「列未記載」: nothing is guessed
+    relations = derive_relations(doc, reqs, entities, cm["columns"], set(names))
+    return {"entities": entities, "scenarios": {str(k): v for k, v in sorted(scen_items.items())},
+            "relations": relations, "clusters": derive_clusters([e["name"] for e in entities], relations),
+            "supplement": cm["supplement"]}
 
 
 def _catalog_tables(root: Path, cfg: dict) -> List[dict]:
@@ -274,7 +683,16 @@ def render_list(model: dict) -> str:
             u["requirement"] + ("（シナリオ " + "・".join(map(str, u["scenarios"])) + "）" if u["scenarios"] else "")
             for u in e["usecases"]) or "ユースケースなし"
         lines.append(f"- {e['name']} | 説明: {e['description'] or '説明未記載'} | 管理テーブル: {tab} | "
-                     f"ユースケース: {uc} | 使い方: {'、'.join(e['usages']) or '使い方未記載'}")
+                     f"ユースケース: {uc} | 使い方: {'、'.join(e['usages']) or '使い方未記載'}"
+                     f" | 列: {str(len(e['columns'])) + ' 件' if e.get('columns') else '列未記載'}")
+    rels = [r for r in model.get("relations", []) if r["scope"] != "usage"]
+    if rels:
+        lines.append(f"関係: {len(rels)} 件")
+        for r in rels:
+            a = r["from"] + (f".{r['fromColumn']}" if r.get("fromColumn") else "")
+            b = r["to"] + (f".{r['toColumn']}" if r.get("toColumn") else "")
+            src = "、".join(f"{s['file']}:{s['line']}" for s in r["sources"])
+            lines.append(f"- {a}→{b}（{r['kind']}） | 出典: {src}")
     return "\n".join(lines) + "\n"
 
 

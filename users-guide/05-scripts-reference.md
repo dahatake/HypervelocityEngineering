@@ -51,7 +51,7 @@ python scripts/ledger.py repair [--apply]         # 台帳の部分だけ（rdfi
 ## entities.py（エンティティ台帳と企業データカタログとの整合）
 
 ```bash
-python scripts/entities.py list  [--repo DIR] [--json]          # エンティティ台帳（名前・説明・管理テーブル・ユースケース・使い方）
+python scripts/entities.py list  [--repo DIR] [--json]          # エンティティ台帳（名前・説明・管理テーブル・ユースケース・使い方・列）と関係・クラスター・DDL/スキーマの補完（FR-1025/1026/1030）
 python scripts/entities.py check [--repo DIR] [--json] [--strict] # 企業データカタログとの照合（一致／EABK のみ／企業カタログのみ／名称の揺れ候補）
 python scripts/entities.py todo  [--repo DIR] [--json]          # 覆われていないエンティティの ToDo（質問票の行の形式）
 ```

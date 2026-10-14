@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 import { t, onLang } from './i18n.js';
 import { store } from './store.js';
+import { create3d } from './sz3d.js';
+import { mountShell, wantsEntityView, hasEntityStructure, setTab } from './semzoom.js';
 import { el, colorOf, TYPE_COLOR, STATUS_COLOR, showTip, hideTip, nodeTip } from './ui.js';
 
 const LEVEL = { goal: 0, req: 1, ac: 2, entity: 3, part: 3, api: 3, table: 3, param: 3, question: 3, file: 4, case: 5 };
@@ -10,7 +12,7 @@ const prefs = { layers: new Set(['goal', 'req', 'entity', 'part', 'api', 'table'
 const IMPL_COLOR = { done: '#34e0a1', none: '#ff5c7a', unlisted: '#8aa1b5' };
 const GAP = 95, SP = 6.5;
 
-export function mount(host) {
+function mountGraph(host) {
   const toolbar = el('div', { class: 'toolbar' });
   const statusBox = el('div', { class: 'status' });
   const hint = el('div', { class: 'hint' });
@@ -460,4 +462,23 @@ export function mount(host) {
       renderer.dispose(); renderer.forceContextLoss?.();
     },
   };
+}
+
+// FR-1027..FR-1029: when the model has entity relations or columns, this route opens the entity view (semantic zoom) first;
+// the classic relationship graph stays one button away.  The target, level and filter are shared with the other renderer.
+export function mount(host) {
+  let inner = null;
+  const run = () => {
+    inner?.destroy?.();
+    host.replaceChildren();
+    if (wantsEntityView(store.model)) {
+      inner = mountShell(host, { mode: 'map3d', createRenderer: create3d,
+        links: [{ id: 'sz-to-2d', label: () => t('sz.to2d'), href: '#/map2d' }], onSwitch: () => { setTab('graph'); run(); } });
+    } else {
+      inner = mountGraph(host);
+      if (hasEntityStructure(store.model)) host.append(el('button', { type: 'button', class: 'btn ghost sz-switch', onclick: () => { setTab('entities'); run(); } }, t('sz.entview')));
+    }
+  };
+  run();
+  return { destroy() { inner?.destroy?.(); } };
 }

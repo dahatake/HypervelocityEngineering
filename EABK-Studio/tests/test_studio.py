@@ -623,7 +623,8 @@ def test_zero_entities_and_missing_derivation_do_not_fail(tmp_path, monkeypatch)
     assert model["entities"]["entities"] == [] and model["warnings"] == []
     warnings = []
     monkeypatch.setattr(m.Path, "is_file", lambda self: False if self.name == "entities.py" else Path.is_file(self))
-    assert m.build_entities(tmp_path, warnings) == {"available": False, "entities": [], "scenarios": {}}
+    assert m.build_entities(tmp_path, warnings) == {"available": False, "entities": [], "scenarios": {}, "relations": [], "clusters": [],
+                                                    "supplement": {"files": [], "diagnostics": []}}  # FR-1025/1026 縮退
 
 
 # FR-1021 AC-155 FR-1022 AC-158 NFR-COMPAT-003 AC-168
