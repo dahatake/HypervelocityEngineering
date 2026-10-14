@@ -130,7 +130,6 @@ def nav_html(out_path, cur):
             text = first_heading(f) or f
             c = ' class="cur"' if f == cur else ""
             parts.append(f'<a{c} href="{rel(out_path, PAGES[f])}">{html.escape(text)}</a>')
-    if any(f.startswith("HVE-History/") for f in PAGES):
         parts.append(f'<h4>HVE-History（スライド）</h4><a href="{rel(out_path, "HVE-History/20261003-HVEv2-Born.html")}">HVE v2 Born（HTML）</a>')
     return "\n".join(parts)
 
@@ -198,4 +197,5 @@ await mermaid.run({{querySelector:'pre.mermaid'}});
 
 
 main()
+
 
