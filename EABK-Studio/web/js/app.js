@@ -11,6 +11,7 @@ const ROUTES = {
   map3d: { icon: 'map3d', load: () => import('./map3d.js') },
   diagrams: { icon: 'diagrams', load: () => import('./diagrams.js') },
   placement: { icon: 'placement', load: () => import('./placement.js') },
+  entities: { icon: 'entities', load: () => import('./entities.js') },
   source: { icon: 'source', load: () => import('./source.js') },
   tables: { icon: 'tables', load: () => import('./tables.js') },
   maintenance: { icon: 'maintenance', label: '整合性保守 / Maintenance', mount: mountMaintenance },

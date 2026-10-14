@@ -444,6 +444,7 @@ def parse_state_machines(tables: list[dict]) -> list[dict]:
             cond = strip_md(c[ci]) if ci is not None and ci < len(c) else ""
             m = machines.setdefault(ent, {"entity": ent, "states": [], "transitions": [], "file": t["file"], "line": row["line"]})
             cell = strip_md(c[si])
+            m.setdefault("rows", []).append({"state": cell, "condition": cond, "line": row["line"]})  # FR-1022: 状態と遷移の条件
             segments = [s for s in re.split(r"[。\n]", cell) if s.strip()]
             multi = any(("→" in s or "／" in s) for s in segments)
             if multi:
@@ -533,6 +534,34 @@ def build_impl_status(model: dict, root: Path) -> dict:
                       "cases": breakdown, "blocked": stalled, "goal": r["goal"] or "-",
                       "priority": r["priority"] or "-"})
     return {"states": list(IMPL_STATES), "items": items, "excluded": excluded}
+
+
+def build_entities(root: Path, warnings: list[str]) -> dict:
+    """FR-1021/FR-1022/NFR-COMPAT-003: the entity ledger, derived by the toolkit's scripts/entities.py (loaded
+    dynamically; read-only).  When the script is unavailable the screen degrades to "no entities" instead of failing."""
+    empty = {"available": False, "entities": [], "scenarios": {}}
+    try:
+        import importlib.util
+        import sys
+        for base in (Path(__file__).resolve().parent.parent, root):
+            path = base / "scripts" / "entities.py"
+            if not path.is_file():
+                continue
+            sd = sys.dont_write_bytecode
+            sys.dont_write_bytecode = True
+            try:
+                spec = importlib.util.spec_from_file_location("eabk_entities_" + str(abs(hash(str(path)))), path)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                cfg = mod.h.load_config(root)
+                data = mod.derive(root, cfg)
+            finally:
+                sys.dont_write_bytecode = sd
+            data["available"] = True
+            return data
+    except Exception as e:  # noqa: BLE001 - a broken derivation must not stop Studio
+        warnings.append(f"entities: {type(e).__name__}: {e}")
+    return empty
 
 
 def build_model(root: Path) -> dict:
@@ -666,6 +695,7 @@ def build_model(root: Path) -> dict:
                 model["decisions"].append({"date": strip_md(c[0]), "target": strip_md(c[1]), "decision": strip_md(c[2]),
                                            "basis": strip_md(c[3]), "run": strip_md(c[4]), "file": t["file"], "line": row["line"]})
     model["stateMachines"] = parse_state_machines(all_tables)
+    model["entities"] = build_entities(root, warnings)
     for d in docs[:1]:
         for ln, lvl, text in d["headings"]:
             if re.match(r"^(\d+\.\s*)?利用シナリオ", text):

@@ -15,6 +15,7 @@ export const BUSINESS_ICON = {
   map3d: ['🧊', '3D relationship map'],
   diagrams: ['🧩', 'Diagrams'],
   placement: ['🧭', 'Data placement'],
+  entities: ['🔗', 'Entity × use case'],
   source: ['💻', 'Source'],
   tables: ['📋', 'Data tables'],
   maintenance: ['🛠️', 'Integrity maintenance'],

@@ -125,6 +125,7 @@ run の実行中は、hook G-7 がこの表を強制します。値のある役�
 | キー | 既定値 | 意味 |
 |---|---|---|
 | `management_files` | `docs/requirements-definition.md` など | 管理データのパス。既存のディレクトリ構成に合わせて変更できます |
+| `enterprise_data_catalog` | なし（未設定） | 任意。企業データカタログの参照元。`{"source": "<ファイルのパスまたは http(s) の URL>", "name_column": "<名前の列・項目（省略可）>", "format": "auto|csv|json|markdown|html（省略可）"}`。`scripts/entities.py check` / `todo` が読み取りだけで照合します。URL に認証情報を埋め込めません（その場合は「照合不能」）。取得の待ち時間は PARAM-016、揺れ候補の類似度は PARAM-015 です |
 | `base_branch` | `main` | マージ先のブランチ。差分の検査（CHK-12/13）と、push の拒否（G-5）に使います |
 | `work.retention_days` | 14 | `/work/runs/` の保持日数 |
 | `checks.ambiguous_words` | 適切、迅速、直感的 など | 曖昧な語のリスト（CHK-13） |

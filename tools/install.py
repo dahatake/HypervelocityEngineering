@@ -55,7 +55,7 @@ MANAGED = [
     "scripts/ebaklib.py",
     "scripts/rdcheck.py",
     "scripts/rdfix.py",
-    "scripts/verify.py",
+    "scripts/entities.py",    "scripts/verify.py",
     "scripts/verify.ps1",
     "scripts/verify.sh",
     "scripts/next-id.py",
