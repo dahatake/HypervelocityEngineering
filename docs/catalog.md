@@ -14,6 +14,11 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1010 | 清掃の診断と再開 | 承認済み（依頼 2026-10-10） | `scripts/clean-work.py`、[`.github/agents/conductor.agent.md`](docs/../.github/agents/conductor.agent.md)、`users-guide/02-during-and-after-run.md`、`users-guide/05-scripts-reference.md`、`users-guide/07-troubleshooting.md` | `tests/toolkit/test_clean_work.py`、`tests/system/e2e/test_run_owned_cleanup.py`、`tests/system/test_run_cleanup_system.py` | run 状態・完了記録、run 作業資産清掃、conductor 終了契約、run 運用ガイド |
 | NFR-OPS-005 | 所有権と保護状態にもとづく安全な削除 | 承認済み（依頼 2026-10-10） | `scripts/clean-work.py` | `tests/toolkit/test_clean_work.py`、`tests/toolkit/test_run_state.py`、`tests/system/e2e/test_run_owned_cleanup.py`、`tests/system/test_run_cleanup_system.py` | run 作業資産清掃、run 状態・完了記録、worktree pool 管理 |
 | NFR-COMPAT-001 | Windows・報告・配布文書の一貫性 | 承認済み（依頼 2026-10-10） | `scripts/clean-work.py`、`tools/install.py`、[`.github/agents/conductor.agent.md`](docs/../.github/agents/conductor.agent.md)、`users-guide/02-during-and-after-run.md`、`users-guide/05-scripts-reference.md`、`users-guide/07-troubleshooting.md` | `tests/toolkit/test_clean_work.py`、`tests/system/e2e/test_run_owned_cleanup.py`、`tests/system/test_run_cleanup_system.py` | run 作業資産清掃、run 状態・完了記録、worktree pool 管理、conductor 終了契約、run 運用ガイド、配布同期対象 |
+| FR-1017 | データ層の妥当性検査の自動実行 | 承認済み（依頼 2026-10-14） | 未実装 | 未実装 | データ層検査、配布同期対象 |
+| FR-1018 | 不整合の自動修復と修復の反映 | 承認済み（依頼 2026-10-14） | 未実装 | 未実装 | データ層修復、データ層検査 |
+| FR-1019 | 直せない不整合の Issue 化 | 承認済み（依頼 2026-10-14） | 未実装 | 未実装 | データ層修復 |
+| NFR-SEC-004 | データ層ワークフローの最小権限と書き込みの安全性 | 承認済み（依頼 2026-10-14） | 未実装 | 未実装 | 配布同期対象 |
+| NFR-OPS-006 | データ層ワークフローの配布と利用者向け文書 | 承認済み（依頼 2026-10-14） | 未実装 | 未実装 | 配布同期対象 |
 | NFR-COR-001 | 再現性 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
 | NFR-COR-002 | エラーの明確性 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
 | NFR-COR-003 | 境界値 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
@@ -50,9 +55,11 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | worktree pool 管理 | `scripts/integrate.py` | pool worktree の列挙、強制削除、Git worktree 登録の prune | FR-1009、NFR-OPS-005、NFR-COMPAT-001 |
 | conductor 終了契約 | [`.github/agents/conductor.agent.md`](docs/../.github/agents/conductor.agent.md) | run 開始時・工程 6・main 統合・run-report・清掃の実行順序 | FR-1009、FR-1010、NFR-COMPAT-001 |
 | run 運用ガイド | `users-guide/02-during-and-after-run.md`、`users-guide/05-scripts-reference.md`、`users-guide/07-troubleshooting.md` | 利用者向けの統合、清掃、診断、再開、トラブルシューティング契約 | FR-1010、NFR-COMPAT-001 |
-| 配布同期対象 | `tools/install.py` | conductor、清掃・状態・統合スクリプトをインストール対象へ同期する管理対象 | FR-1015、FR-1016、NFR-COMPAT-001 |
+| 配布同期対象 | `tools/install.py` | conductor、清掃・状態・統合スクリプトをインストール対象へ同期する管理対象 | FR-1015、FR-1016、FR-1017、NFR-COMPAT-001、NFR-OPS-006、NFR-SEC-004 |
 | git ls-files 並行取得 | `scripts/ebaklib.py` | `tracked_files` で tracked・untracked 一覧を ThreadPoolExecutor で並行取得し、rdcheck/rdfix は同一引数の呼び出しを 1 回にする | NFR-PERF-003、NFR-COMPAT-002 |
 | 次実装候補の分析 | `scripts/next-impl.py` | 承認済み・未完了の要求を優先度・依存・実装状態で順位付けし、除外の理由と scope 用 ID 一覧を出す（読み取り専用） | FR-1015、FR-1016 |
+| データ層検査 | `scripts/verify.py` | `--docs-only` でデータ層の妥当性を検査する | FR-1017、FR-1018 |
+| データ層修復 | `scripts/rdfix.py` | 要求定義書を変更せずデータ層の不整合を自動修復し、残りを手動対応として示す | FR-1018、FR-1019 |
 # EABK Studio カタログ
 
 管理データの要求と、現時点で実在する実装資産の対応表。未実装の要求は「未実装」と記載する。`EABK-Studio` は依頼時点の作業ツリーに存在する資産であり、今回の要求定義コミットではコードを変更しない。
