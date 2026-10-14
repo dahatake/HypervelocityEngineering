@@ -120,7 +120,7 @@ def fix_links(body, src_path, out_path, assets):
 
 
 def nav_html(out_path, cur):
-    parts = []
+    parts = [f'<h4>Featured</h4><a href="{rel(out_path, "HVE-History/20261003-HVEv2-Born.html")}">⭐ HVE QUEST — Hypervelocity Engineering 262日の挑戦（スライド）</a>']
     for title, files in GROUPS:
         items = [f for f in files if f in PAGES]
         if not items:
@@ -197,5 +197,6 @@ await mermaid.run({{querySelector:'pre.mermaid'}});
 
 
 main()
+
 
 
