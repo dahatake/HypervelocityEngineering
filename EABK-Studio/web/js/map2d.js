@@ -1,6 +1,8 @@
 // 2D traceability map: goals -> requirements -> parts/data -> source -> tests, on a pannable, zoomable canvas.
 import { t, onLang } from './i18n.js';
 import { store } from './store.js';
+import { create2d } from './sz2d.js';
+import { mountShell, wantsEntityView, hasEntityStructure, setTab } from './semzoom.js';
 import { el, colorOf, TYPE_COLOR, STATUS_COLOR, showTip, hideTip, nodeTip } from './ui.js';
 
 const COL = { goal: 0, req: 1, ac: 2, entity: 3, part: 3, api: 3, table: 3, param: 3, question: 3, file: 4, component: 4, case: 5, persona: 6, external: 6 };
@@ -12,7 +14,7 @@ const PICK_RADIUS = 12;    // PARAM-009: node pick radius, screen px
 const CLICK_DRAG_PX = 6;   // PARAM-010: click/pan drag threshold, screen px
 const IMPL_COLOR = { done: '#34e0a1', none: '#ff5c7a', unlisted: '#8aa1b5' };
 
-export function mount(host) {
+function mountGraph(host) {
   host.append(el('h1', { class: 'sr-only' }, '2D マップ'));
   const canvas = el('canvas', { class: 'fill' });
   const mini = el('canvas', { class: 'minimap', width: 380, height: 240 });
@@ -470,4 +472,23 @@ export function mount(host) {
   }
 
   return { destroy() { dead = true; cancelAnimationFrame(raf); stopTour(); ro.disconnect(); offs.forEach((f) => f()); hideTip(); } };
+}
+
+// FR-1027..FR-1029: when the model has entity relations or columns, this route opens the entity view (semantic zoom) first;
+// the classic relationship graph stays one button away.  The target, level and filter are shared with the other renderer.
+export function mount(host) {
+  let inner = null;
+  const run = () => {
+    inner?.destroy?.();
+    host.replaceChildren();
+    if (wantsEntityView(store.model)) {
+      inner = mountShell(host, { mode: 'map2d', createRenderer: create2d,
+        links: [{ id: 'sz-to-3d', label: () => t('sz.to3d'), href: '#/map3d' }], onSwitch: () => { setTab('graph'); run(); } });
+    } else {
+      inner = mountGraph(host);
+      if (hasEntityStructure(store.model)) host.append(el('button', { type: 'button', class: 'btn ghost sz-switch', onclick: () => { setTab('entities'); run(); } }, t('sz.entview')));
+    }
+  };
+  run();
+  return { destroy() { inner?.destroy?.(); } };
 }

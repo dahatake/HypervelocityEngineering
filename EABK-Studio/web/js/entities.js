@@ -3,6 +3,8 @@
 import { t, onLang } from './i18n.js';
 import { store, norm } from './store.js';
 import { el, statusBadge, nodeChip, vscodeUrl, typeLabel } from './ui.js';
+import { mountShell } from './semzoom.js';
+import { create2d } from './sz2d.js';
 
 const WORDS = ['作成', '参照', '更新', '削除'];
 const SYMBOL = { 作成: 'C', 参照: 'R', 更新: 'U', 削除: 'D' };
@@ -155,7 +157,9 @@ function detailView(host, m, name) {
 export function mount(host) {
   const page = el('div', { class: 'page eu' });
   host.append(page);
+  let zoom = null;   // FR-1027: semantic zoom of the relations and columns, below the matrix (the matrix keeps its place)
   const render = () => {
+    zoom?.destroy(); zoom = null;
     const m = store.model;
     const name = new URLSearchParams(location.hash.split('?')[1] || '').get('entity');
     const body = el('div');
@@ -170,8 +174,12 @@ export function mount(host) {
     const mat = el('div');
     page.append(mat);
     matrixView(mat, m);
+    const zoomHost = el('div', { class: 'eu-zoom' });
+    page.append(zoomHost);
+    zoom = mountShell(zoomHost, { mode: 'entities', createRenderer: create2d, height: 560,
+      links: [{ id: 'sz-to-2d', label: () => t('sz.to2d'), href: '#/map2d' }, { id: 'sz-to-3d', label: () => t('sz.to3d'), href: '#/map3d' }] });
   };
   render();
   const offs = [onLang(render), store.on('model', render)];
-  return { destroy() { offs.forEach((f) => f()); } };
+  return { destroy() { offs.forEach((f) => f()); zoom?.destroy(); } };
 }
