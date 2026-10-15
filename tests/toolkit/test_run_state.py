@@ -135,3 +135,18 @@ def test_lane_confirm_uses_queue_size(sample):
     assert "LANE: full" in sample.py("run-state.py", "lane", "confirm", check=True).stdout
     assert sample.py("run-state.py", "lane", "decide", "--changed", "4").stdout.count("LANE: full") == 1
     assert sample.py("run-state.py", "lane", "decide", "--flags", "bogus").returncode != 0
+
+
+def test_start_in_primary_checkout_requires_own_worktree(repo):
+    import subprocess
+    import sys
+    env = {k: v for k, v in os.environ.items() if k != "EABK_ALLOW_PRIMARY"}
+    env["PYTHONUTF8"] = "1"
+    proc = subprocess.run([sys.executable, str(repo.path / "scripts" / "run-state.py"), "start"], cwd=str(repo.path),
+                          capture_output=True, text=True, encoding="utf-8", env=env)
+    assert proc.returncode == 4 and "WORKTREE-REQUIRED" in proc.stdout
+    wt = proc.stdout.split("WORKTREE-REQUIRED", 1)[1].split()[0]
+    assert os.path.isdir(wt) and (repo.path / "work" / "current-run.txt").exists() is False
+    proc2 = subprocess.run([sys.executable, str(os.path.join(wt, "scripts", "run-state.py")), "start"], cwd=wt,
+                           capture_output=True, text=True, encoding="utf-8", env=env)
+    assert proc2.returncode == 0 and proc2.stdout.startswith("START ")

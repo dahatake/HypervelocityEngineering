@@ -5,6 +5,8 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- **run ごとに専用の git worktree を必須**にしました。`run-state.py start` は主の作業ツリーでは run を始めず（exit 4・`WORKTREE-REQUIRED <path>`）、統合ブランチ `run/<id>` の専用 worktree を作って案内します（1 つの VS Code で複数の run を動かしても、別々の worktree で行われます）。成功（全件完了）した run は、主の作業ツリーで必ず main へ取り込み、worktree と統合ブランチを自動で清掃します。失敗した run は worktree と統合ブランチを保持し、清掃は利用者が行います。`ebak.config.json` の `run.require_worktree: false` または `--allow-primary` で外せます。
+
 - **外部連携の要求チェックリスト**（FR-1038・FR-1039）を追加しました。`.github/skills/requirement-definition/integration-requirements.md` に 16 観点（問い・要求に書く内容・受入基準の例・書かない設計事項）と要求テンプレートを置き、rd-author（カタログの確認・INT 採番・16 観点の走査・包括承認の除外）と rd-audit（観点の欠落・カタログとの食い違い）の手順書に組み込み、インストールで配ります。
 
 - **外部連携カタログ**（任意の `docs/integrations.md`）を追加しました（FR-1035〜FR-1037、toolkit 0.4.0）。外部アプリ・データとの連携を `#### INT-001 <名前>` の 1 連携 1 項目で記録し、16 観点の欄（値・なし・TBD（Q-xxx））と認証情報を書かない規則を持ちます。`python scripts/next-id.py INT` で採番し、`verify.py --docs-only`（CHK-28）が形式・ID・要求との対応を検査し、`rdcheck.py trace INT-xxx` が参照する要求・受入基準を一覧します。インストールは雛形を、まだないときに限り作ります。手順は [users-guide/11-integration-catalog.md](users-guide/11-integration-catalog.md) です。カタログがないリポジトリの検査・Studio・清掃は従来どおりです。

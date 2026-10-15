@@ -18,7 +18,8 @@ disable-model-invocation: true
 1. `python scripts/clean-work.py` → `python scripts/run-state.py start --options "<run_options の各行>"`。
    出力が `RESUME <run-id>` なら再開です。表示された工程・queue・progress の続きから進めます（以前の会話を読み返しません）。
    再開のきっかけが利用者の Prompt なら、KPI のために 1 回だけ記録します: `<answers>` があれば `python scripts/run-state.py human answers`、なければ `human resume`（途中の追加指示だけなら `human instruction`）。新しい run の最初の依頼は start が記録するので不要です。文脈の圧縮など、利用者の Prompt がない再開では記録しません。
-   main 上で始めた場合、start が統合ブランチ `run/<run-id>` を作ります。以後の commit はすべて統合ブランチか作業ブランチで行います。
+   出力が `WORKTREE-REQUIRED <path>`（exit 4）なら、run は始まっていません。主の作業ツリーでは run を始められず（run ごとに別の worktree が必須）、専用 worktree を作ったので、そのパスと「その worktree で `/build` をやり直す」案内を利用者に 1 回だけ返して終えます。
+   run の統合ブランチは worktree の現在のブランチです。以後の commit はすべて統合ブランチか作業ブランチで行います。
    統合ブランチは `run-state.py status` の `integration:` の行（meta.json の `integration_branch`）です。run の途中でブランチ名を変えません（GitHub Copilot app の `rename_branch` も使いません。hook G-5 が拒否します）。
 2. `git log --oneline -10` と `python scripts/verify.py --docs-only` で基準を記録します（失敗していても続けます。基準として progress に書きます）。
    verify が `HINT rdfix` を出したら `python scripts/rdfix.py --apply` でデータ層のファイル間の不整合を直し、commit します（要求定義書は変更しません）。`MANUAL` の行は、担当の役割への依頼に含めます。
@@ -95,11 +96,11 @@ disable-model-invocation: true
 3. rd-author に転記を依頼する（包括承認した項目→決定記録、未回答の質問票・承認依頼→仮定・未解決事項、残った監査指摘→監査指摘）。`python scripts/next-id.py --sync --finalize`。
 4. `python scripts/kpi.py run --out work/runs/<run-id>/kpi.md` と `python scripts/kpi.py run --format html --out work/runs/<run-id>/kpi.html` で KPI を集計する。
    `work/runs/<run-id>/run-report.md` を書く（下の形）。`run-state.py stage 6 --done` → `run-state.py finish --result "<結果>"` → commit。ここではまだ清掃しない。
-5. main への取り込み（ローカル）: 結果が「全件完了」で `python scripts/run-state.py complete-check` が exit 0 のときだけ行う。さらに、meta.json の `integration_branch` が `run/<run-id>`（main 上で始めた run）の場合に限る。別ブランチや New Worktree（VS Code・GitHub Copilot app の worktree セッション）で始めた run は利用者のブランチなので取り込まない。
-   `git checkout <base_branch>` → `git merge --no-ff run/<run-id>` → `python scripts/verify.py --run current`。
-   `git checkout` が失敗する（base が別の worktree で使用中・未コミットの変更がある）場合も取り込まず、統合ブランチを残して理由を run-report.md に書く。
-   verify が失敗、またはマージが競合したら `git merge --abort` / `git reset --hard HEAD~1` で取り消し、統合ブランチを残して run-report.md の「取り込み方法」に理由を書く。
+5. main への取り込み（ローカル）: 結果が「全件完了」で `python scripts/run-state.py complete-check` が exit 0 のときは、必ず行う（利用者に任せない）。run は必ずその run 専用の worktree の統合ブランチ（meta.json の `integration_branch`）にあるので、取り込みは main を持つ主の作業ツリー（`git worktree list` の先頭）で行う。
+   `git -C <主の作業ツリー> merge --no-ff <integration_branch>`（主が main で、未コミットの変更がないこと）→ 主で `python scripts/verify.py --run current`。主が main でない・未コミットの変更がある・別の run が主で作業中の場合は、取り込まずに統合ブランチを残し、理由を run-report.md に書く。
+   verify が失敗、またはマージが競合したら、主で `git merge --abort` / `git reset --hard HEAD~1` で取り消し、統合ブランチと worktree を残して run-report.md の「取り込み方法」に理由を書く。
    成功したら main の統合 commit と、完了条件・最終 verify・対象テスト・main 上の統合後 verify の構造化結果、清掃候補、保護・保持する資産と理由を清掃前版 run-report に確定する。その後だけ `python scripts/clean-work.py --dry-run` で計画を表示し、`python scripts/clean-work.py` で再検査して清掃する。clean-work.py が統合済みの統合ブランチも削除し、候補別結果と清掃後最終状態を report に追記する。清掃成功を確認してから正常終了を完了記録する。
+   run の worktree の撤去は、成功したときは取り込み後に自動で行う（使用中の自分の worktree は、清掃の最後に `git worktree remove` を主から実行する）。失敗（blocked あり・中止・統合失敗など）のときは、利用者が直して再開できるよう worktree と統合ブランチを自動期限なく保持し、清掃は利用者が行う。
    「blocked あり」「時間予算で中止」「canary 失敗で中止」、完了条件未達、各 verify・対象テスト失敗、統合失敗、report 不足、清掃許可判定失敗は、自動期限なく保持する。清掃が部分失敗した場合も非 0 で停止し、診断と残存資産を保持して再試行する。
 6. git_push が push を許す場合は、手順 5 の前に統合ブランチ `run/<run-id>` を push しておく（バックアップ）。main への push はしない。
 
