@@ -66,7 +66,11 @@
     "AC-194": "sha256:cf4f7ab4d4b698de",
     "AC-199": "sha256:ef333f7118d1292f",
     "AC-200": "sha256:154e6ee6245957a5",
-    "AC-207": "sha256:40b359dd25f34c5b"
+    "AC-207": "sha256:40b359dd25f34c5b",
+    "AC-214": "sha256:8b150fccfc64b3d8",
+    "AC-220": "sha256:af2e38bad9142bf4",
+    "AC-226": "sha256:3fb36c9b336fcf6f",
+    "AC-227": "sha256:9246b2f136587171"
   },
   "cases": [
     {
@@ -3261,6 +3265,331 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "AC-207 の System Test を追加"
+        }
+      ]
+    },
+    {
+      "id": "E2E-096",
+      "requirement_ids": [
+        "FR-1037"
+      ],
+      "ac_ids": [
+        "AC-214"
+      ],
+      "title": "インストールで外部連携カタログの雛形（書式説明と空の索引表）が作られる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/test_integration_catalog_install_system.py -k \"ac214_install_creates\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T22:36:41+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test を追加"
+        }
+      ]
+    },
+    {
+      "id": "E2E-097",
+      "requirement_ids": [
+        "FR-1037"
+      ],
+      "ac_ids": [
+        "AC-214"
+      ],
+      "title": "異常系: 既存のカタログは上書きされず再実行でも不変、雛形がなければ作られる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/test_integration_catalog_install_system.py -k \"never_overwritten or missing_template\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T22:36:44+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test を追加"
+        }
+      ]
+    },
+    {
+      "id": "E2E-098",
+      "requirement_ids": [
+        "FR-1037"
+      ],
+      "ac_ids": [
+        "AC-214"
+      ],
+      "title": "カタログ関連の配布物が通常の更新で復元され、--no-ci の挙動は変わらない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/test_integration_catalog_install_system.py -k \"managed_files_follow\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T22:36:47+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test を追加"
+        }
+      ]
+    },
+    {
+      "id": "E2E-099",
+      "requirement_ids": [
+        "FR-1040"
+      ],
+      "ac_ids": [
+        "AC-220"
+      ],
+      "title": "6 種類の図式で 2D/3D を切替でき、どちらも同じ要素・関係・ラベルを表示する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"ac220_each_diagram\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T22:37:00+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test を追加"
+        }
+      ]
+    },
+    {
+      "id": "E2E-100",
+      "requirement_ids": [
+        "FR-1040"
+      ],
+      "ac_ids": [
+        "AC-220"
+      ],
+      "title": "異常系: 不正な次元指定は 2D に戻り表示は壊れない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"ac220_invalid\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T22:37:11+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test を追加"
+        }
+      ]
+    },
+    {
+      "id": "E2E-101",
+      "requirement_ids": [
+        "FR-1041"
+      ],
+      "ac_ids": [
+        "AC-226"
+      ],
+      "title": "旧 URL #/map2d・#/map3d は選択と次元を保って新しい項目へ移動する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"old_map_urls\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T22:37:19+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test を追加"
+        }
+      ]
+    },
+    {
+      "id": "E2E-102",
+      "requirement_ids": [
+        "FR-1041"
+      ],
+      "ac_ids": [
+        "AC-226"
+      ],
+      "title": "旧 URL #/placement は図式の配置の表示へ移動し、?q も保たれる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"old_placement_url\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T22:37:26+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test を追加"
+        }
+      ]
+    },
+    {
+      "id": "E2E-103",
+      "requirement_ids": [
+        "FR-1041"
+      ],
+      "ac_ids": [
+        "AC-226"
+      ],
+      "title": "異常系: 旧 URL に存在しない ID を指定してもリンク切れ・例外にならない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"unknown_select\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T22:37:32+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test を追加"
+        }
+      ]
+    },
+    {
+      "id": "E2E-104",
+      "requirement_ids": [
+        "FR-1041"
+      ],
+      "ac_ids": [
+        "AC-226"
+      ],
+      "title": "map2d・map3d・placement が画面画像 manifest の画面 ID として有効",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"legacy_screen_ids\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T22:37:37+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test を追加"
+        }
+      ]
+    },
+    {
+      "id": "E2E-105",
+      "requirement_ids": [
+        "FR-1041"
+      ],
+      "ac_ids": [
+        "AC-226"
+      ],
+      "title": "すべてのナビ項目にキーボードとコマンド検索から到達できる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"nav_item_is_reachable\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T22:37:42+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test を追加"
+        }
+      ]
+    },
+    {
+      "id": "E2E-106",
+      "requirement_ids": [
+        "FR-1042"
+      ],
+      "ac_ids": [
+        "AC-227"
+      ],
+      "title": "外部連携が一覧（INT-ID・連携先・方向等）に出て、詳細に 16 観点・関連要求・AC・責任分界が出る",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"list_shows_columns\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T22:37:48+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test を追加"
+        }
+      ]
+    },
+    {
+      "id": "E2E-107",
+      "requirement_ids": [
+        "FR-1042"
+      ],
+      "ac_ids": [
+        "AC-227"
+      ],
+      "title": "外部連携の絞り込み・並べ替え・CSV 出力ができる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"sort_filter_and_csv\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T22:37:52+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test を追加"
+        }
+      ]
+    },
+    {
+      "id": "E2E-108",
+      "requirement_ids": [
+        "FR-1042"
+      ],
+      "ac_ids": [
+        "AC-227"
+      ],
+      "title": "異常系: 一致しない絞り込みは 0 件でエラーにならない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"no_match_shows_zero\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T22:37:55+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test を追加"
         }
       ]
     }
