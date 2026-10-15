@@ -86,9 +86,9 @@
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_model_can_traverse_requirement_to_catalog_file_and_test",
       "canary": true,
       "status": "pass",
-      "last_commit": "c3e3f9e1",
-      "last_run_at": "2026-10-15T23:05:52+09:00",
-      "evidence": "work/runs/202610152219/logs/system-test/E2E-001-202610152304.log",
+      "last_commit": "c67b41e8",
+      "last_run_at": "2026-10-15T23:15:00+09:00",
+      "evidence": "work/runs/202610152219/logs/system-test/E2E-001-202610152313.log",
       "history": [
         {
           "at": "2026-10-09T22:10:37+09:00",
@@ -849,9 +849,9 @@
       "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_starts_only_after_ordered_success_and_pre_cleanup_report",
       "canary": true,
       "status": "pass",
-      "last_commit": "c3e3f9e1",
-      "last_run_at": "2026-10-15T23:05:52+09:00",
-      "evidence": "work/runs/202610152219/logs/system-test/E2E-026-202610152304.log",
+      "last_commit": "c67b41e8",
+      "last_run_at": "2026-10-15T23:15:00+09:00",
+      "evidence": "work/runs/202610152219/logs/system-test/E2E-026-202610152313.log",
       "history": [
         {
           "at": "2026-10-10T10:41:32+09:00",
@@ -899,9 +899,9 @@
       "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_cleanup_starts_only_after_all_gates_and_main_integration",
       "canary": true,
       "status": "pass",
-      "last_commit": "c3e3f9e1",
-      "last_run_at": "2026-10-15T23:05:52+09:00",
-      "evidence": "work/runs/202610152219/logs/system-test/E2E-028-202610152304.log",
+      "last_commit": "c67b41e8",
+      "last_run_at": "2026-10-15T23:15:00+09:00",
+      "evidence": "work/runs/202610152219/logs/system-test/E2E-028-202610152314.log",
       "history": [
         {
           "at": "2026-10-10T10:41:53+09:00",
@@ -2361,9 +2361,9 @@
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac105 -q",
       "canary": true,
       "status": "pass",
-      "last_commit": "c3e3f9e1",
-      "last_run_at": "2026-10-15T23:05:52+09:00",
-      "evidence": "work/runs/202610152219/logs/system-test/IT-008-202610152305.log",
+      "last_commit": "c67b41e8",
+      "last_run_at": "2026-10-15T23:15:00+09:00",
+      "evidence": "work/runs/202610152219/logs/system-test/IT-008-202610152314.log",
       "history": [
         {
           "at": "2026-10-14T20:55:51+09:00",
@@ -3281,9 +3281,9 @@
       "command": "python -m pytest tests/system/test_integration_catalog_install_system.py -k \"ac214_install_creates\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "c3e3f9e1",
-      "last_run_at": "2026-10-15T23:05:52+09:00",
-      "evidence": "work/runs/202610152219/logs/system-test/E2E-096-202610152305.log",
+      "last_commit": "c67b41e8",
+      "last_run_at": "2026-10-15T23:15:00+09:00",
+      "evidence": "work/runs/202610152219/logs/system-test/E2E-096-202610152314.log",
       "history": [
         {
           "at": "2026-10-15T22:36:41+09:00",
@@ -3306,9 +3306,9 @@
       "command": "python -m pytest tests/system/test_integration_catalog_install_system.py -k \"never_overwritten or missing_template\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "c3e3f9e1",
-      "last_run_at": "2026-10-15T23:05:52+09:00",
-      "evidence": "work/runs/202610152219/logs/system-test/E2E-097-202610152305.log",
+      "last_commit": "c67b41e8",
+      "last_run_at": "2026-10-15T23:15:00+09:00",
+      "evidence": "work/runs/202610152219/logs/system-test/E2E-097-202610152314.log",
       "history": [
         {
           "at": "2026-10-15T22:36:44+09:00",
@@ -3331,9 +3331,9 @@
       "command": "python -m pytest tests/system/test_integration_catalog_install_system.py -k \"managed_files_follow\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "c3e3f9e1",
-      "last_run_at": "2026-10-15T23:05:52+09:00",
-      "evidence": "work/runs/202610152219/logs/system-test/E2E-098-202610152305.log",
+      "last_commit": "c67b41e8",
+      "last_run_at": "2026-10-15T23:15:00+09:00",
+      "evidence": "work/runs/202610152219/logs/system-test/E2E-098-202610152314.log",
       "history": [
         {
           "at": "2026-10-15T22:36:47+09:00",
