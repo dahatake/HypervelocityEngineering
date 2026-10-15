@@ -181,21 +181,23 @@ async function chooseRepository(cur) {
 }
 document.getElementById('repoBtn').addEventListener('click', async () => {
   const cur = store.model?.meta.repo || '';
-  const path = await chooseRepository(cur);
+  await switchRepository(cur, await chooseRepository(cur));
+});
+// NFR-OPS-003 AC-028: on failure keep the current model, show cause + Retry / Back.
+async function switchRepository(cur, path) {
   if (!path || path === cur) return;
   const res = await fetch('/api/repo', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-EABK-Studio': '1' }, body: JSON.stringify({ path }) });
   if (!res.ok) {
     const j = await res.json().catch(() => ({}));
-    if (j.error === 'no-data-layer') {
-      const box = document.getElementById('toast');
-      box.replaceChildren(document.createTextNode(t('repo.nodata')), el('button', { class: 'btn ghost', onclick: () => box.hidden = true }, 'Retry'));
-      box.hidden = false;
-    } else toast(t('repo.bad'));
+    toast(j.error === 'no-data-layer' ? t('repo.nodata') : t('repo.bad'), [
+      { label: t('repo.retry'), run: async () => switchRepository(cur, await chooseRepository(path)) },
+      { label: t('repo.back'), run: () => {} },
+    ]);
     return;
   }
   store.clear();
   await loadModel();
-});
+}
 window.addEventListener('hashchange', route);
 
 setInterval(async () => {

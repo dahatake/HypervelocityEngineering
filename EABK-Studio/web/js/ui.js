@@ -85,10 +85,20 @@ export function vscodeUrl(path, line) {
 }
 
 let toastTimer;
-export function toast(msg) {
+// NFR-OPS-003 AC-028: with `actions` ([{label, run}]) the toast stays until an action is taken.
+export function toast(msg, actions) {
   const e = document.getElementById('toast');
-  e.textContent = msg; e.hidden = false;
   clearTimeout(toastTimer);
+  e.textContent = msg; e.hidden = false;
+  if (actions && actions.length) {
+    for (const a of actions) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn ghost'; b.textContent = a.label;
+      b.addEventListener('click', () => { e.hidden = true; a.run?.(); });
+      e.append(b);
+    }
+    return;
+  }
   toastTimer = setTimeout(() => (e.hidden = true), 2600);
 }
 
