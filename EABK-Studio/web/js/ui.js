@@ -16,6 +16,7 @@ export const BUSINESS_ICON = {
   diagrams: ['🧩', 'Diagrams'],
   placement: ['🧭', 'Data placement'],
   entities: ['🔗', 'Entity × use case'],
+  integrations: ['🔌', 'External integrations'],
   source: ['💻', 'Source'],
   tables: ['📋', 'Data tables'],
   maintenance: ['🛠️', 'Integrity maintenance'],

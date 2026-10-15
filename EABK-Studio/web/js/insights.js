@@ -48,7 +48,7 @@ export function decorate(route, host) {
   }
 }
 
-function runtimePlacement() {
+export function runtimePlacement() {
   const runtime = store.model.analysis.runtime;
   const box = (item) => el('article', { class: 'runtime-node card' },
     el('h3', {}, item.name), el('p', {}, `実行場所: ${item.runsAt}`),
