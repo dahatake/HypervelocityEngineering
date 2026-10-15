@@ -61,7 +61,7 @@
     "AC-177": "sha256:e881e7e3ce2d21fc",
     "AC-179": "sha256:ed6de68701ff58fa",
     "AC-183": "sha256:230c70f4be088ccb",
-    "AC-188": "sha256:56dee61fd7c27bd3",
+    "AC-188": "sha256:5c0e80fdd05cb2b5",
     "AC-191": "sha256:12ae440ed1f98d11",
     "AC-194": "sha256:cf4f7ab4d4b698de",
     "AC-199": "sha256:ef333f7118d1292f",
@@ -70,7 +70,10 @@
     "AC-214": "sha256:8b150fccfc64b3d8",
     "AC-220": "sha256:af2e38bad9142bf4",
     "AC-226": "sha256:3fb36c9b336fcf6f",
-    "AC-227": "sha256:9246b2f136587171"
+    "AC-227": "sha256:9246b2f136587171",
+    "AC-015": "sha256:62a3d0689a35f224",
+    "AC-041": "sha256:07d179d0bab7a339",
+    "AC-042": "sha256:5d703b2791379e40"
   },
   "cases": [
     {
@@ -3126,11 +3129,11 @@
       "ac_ids": [
         "AC-188"
       ],
-      "title": "ID はどの画面でもリンクで、クリック・キーボードで同じ詳細へ移動する／実在しない ID はリンクにしない",
+      "title": "ID（INT を含む）はどの画面でもリンクで、クリック・キーボードで同じ詳細へ移動する／存在しない ID はリンクにしない",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_links_wrap_status_arch_system.py -k \"ac188\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "not_run",
       "last_commit": "6afbcd7e",
       "last_run_at": "2026-10-16T00:50:56+09:00",
       "evidence": "work/runs/202610152219/logs/system-test/E2E-090-202610160049.log",
@@ -3140,6 +3143,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-16T05:00:36+09:00",
+          "by": "test-designer",
+          "change": "title: 'ID はどの画面でもリンクで、クリック・キーボードで同じ詳細へ移動する／実在しない ID はリンクにしない' -> 'ID（INT を含む）はどの画面でもリンクで、クリック・キーボードで同じ詳細へ移動する／存在しない ID はリンクにしない'",
+          "reason": "AC-188 に INT を追加。INT の ID リンクのテストを追加（監査 A-02）"
         }
       ]
     },
@@ -3590,6 +3599,81 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test を追加"
+        }
+      ]
+    },
+    {
+      "id": "E2E-109",
+      "requirement_ids": [
+        "NFR-UX-002"
+      ],
+      "ac_ids": [
+        "AC-015"
+      ],
+      "title": "変更したレイアウトは同じブラウザーの再読込で復元され、別のブラウザーには引き継がれず、壊れた保存値は既定になる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_layout_authz_system.py -k \"ac015\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T05:00:06+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "AC-015 の台帳ケースを追加（監査 A-01）"
+        }
+      ]
+    },
+    {
+      "id": "E2E-110",
+      "requirement_ids": [
+        "NFR-UX-002"
+      ],
+      "ac_ids": [
+        "AC-041"
+      ],
+      "title": "既定へ戻すと既定の配置になり、検索語・選択・絞り込みが維持される／既に既定なら何も変わらない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_layout_authz_system.py -k \"ac041\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T05:00:08+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "AC-041 の台帳ケースを追加（監査 A-01）"
+        }
+      ]
+    },
+    {
+      "id": "E2E-111",
+      "requirement_ids": [
+        "NFR-SEC-003"
+      ],
+      "ac_ids": [
+        "AC-042"
+      ],
+      "title": "Studio は認可済み・機密判定済みを表示せず、管理データ全体が観察でき、レコード単位の判定 UI がない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_layout_authz_system.py -k \"ac042\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T05:00:11+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "AC-042 の台帳ケースを追加（監査 A-01）"
         }
       ]
     }
