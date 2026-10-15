@@ -69,7 +69,9 @@ def _verify(repo):
 
 
 def _stable(out):  # 日時入りのログパス（work/logs/verify-<日時>-*.log）の行は比較しない
-    return [ln for ln in out.splitlines() if not re.search(r"verify-\d[\w-]*\.log", ln)]
+    # 実行ごとに変わる値（elapsed=Ns・cached=...）も比較しない
+    lines = [ln for ln in out.splitlines() if not re.search(r"verify-\d[\w-]*\.log", ln)]
+    return [re.sub(r"\b(elapsed|cached)=\S+", r"\1=*", ln) for ln in lines]
 
 
 # FR-1023 AC-159 (未設定: 「利用しない（未設定）」と区別して報告)
