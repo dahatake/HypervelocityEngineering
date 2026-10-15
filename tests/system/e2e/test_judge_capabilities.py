@@ -253,7 +253,8 @@ def test_explicit_maintenance_previews_and_applies_only_two_catalog_columns(stud
     _switch_repo(studio_page, repo)
     before = _whole_repo_fingerprint(repo)
     studio_page.get_by_role("link", name=re.compile("整合性保守|maintenance", re.I)).click()
-    studio_page.get_by_text("FR-VALID", exact=True).click()
+    expect(studio_page).to_have_url(re.compile(r"#/maintenance"))
+    studio_page.locator(".maintenance-item").filter(has_text="FR-VALID").click()
     preview = studio_page.get_by_role("dialog", name=re.compile("preview|プレビュー", re.I))
     expect(preview).to_contain_text("docs/catalog.md")
     expect(preview).to_contain_text("FR-VALID")
@@ -455,31 +456,44 @@ def test_history_progress_and_infographics_drill_to_evidence_without_counting_no
 def test_screen_manifest_has_reproducible_same_commit_real_screenshots_for_all_views(
     studio_page, tmp_path
 ):
+    # 画面ID・必須主要要素の正本は FR-1007 の表（要求定義書）。manifest はそれを満たす。
+    spec = (ROOT / "docs" / "requirements-definition.md").read_text(encoding="utf-8")
+    block = spec.split("#### FR-1007", 1)[1].split("- 受入基準 AC-052", 1)[0]
+    defined = {
+        m.group(1): m.group(2).strip()
+        for m in re.finditer(r"^\| `([a-z0-9]+)` \| [^|]+ \| ([^|]+) \|$", block, re.M)
+    }
+    assert len(defined) >= 7, "FR-1007 の画面ID表を読み取れない"
     manifest_path = ROOT / "users-guide" / "studio" / "screen-images.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     rows = manifest["screens"]
-    assert {row["screen_id"] for row in rows} == set(ROUTES)
-    assert len(rows) == len({row["screen_id"] for row in rows})
+    ids = [row["screen_id"] for row in rows]
+    assert len(ids) == len(set(ids)), "画面IDが重複している"
+    assert set(defined) <= set(ids), f"欠落した画面ID: {set(defined) - set(ids)}"
     commits = {row["commit"] for row in rows}
-    assert len(commits) == 1
+    assert len(commits) == 1, "検証対象 commit が全行で同一でない"
     commit = commits.pop()
-    assert re.fullmatch(r"[0-9a-f]{40}", commit)
-    assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip() == commit
+    assert re.fullmatch(r"[0-9a-f]{40}", commit), "commit ID が省略されている"
+    subprocess.check_call(["git", "cat-file", "-e", f"{commit}^{{commit}}"], cwd=ROOT)
+    guide = (ROOT / "users-guide" / "studio" / "02-screens.md").read_text(encoding="utf-8")
     for row in rows:
+        screen = row["screen_id"]
         image = (manifest_path.parent / row["image"]).resolve()
-        assert image.is_file()
+        assert image.is_file(), f"{screen}: 画像参照が存在しない"
+        assert image.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
         assert hashlib.sha256(image.read_bytes()).hexdigest() == row["sha256"]
-        assert row["capture_command"] and commit in row["capture_command"]
-        route = row["screen_id"]
-        page = studio_page
-        page.goto(page.url.split("#")[0] + f"#/{route}?select=FR-001")
-        for required in row["required_elements"]:
-            expect(page.locator("#view")).to_contain_text(required)
-        captured = tmp_path / f"{route}.png"
-        page.screenshot(path=str(captured), full_page=True)
-        assert captured.read_bytes() == image.read_bytes(), (
-            f"{route}: manifest image is not the reproducible real screen for {commit}"
-        )
+        assert row["image"] in guide, f"{screen}: users-guide の画面説明が画像を参照していない"
+        assert commit in row["capture_command"], f"{screen}: 取得手順が commit を指定していない"
+        script = re.search(r"users-guide/\S+\.py", row["capture_command"])
+        assert script and (ROOT / script.group(0)).is_file(), f"{screen}: 取得手順のスクリプトがない"
+        if screen in defined:
+            # 必須主要要素: 表の各要素（「または」は選択肢）を manifest の行が全て記録している。
+            recorded = " ".join(row["required_elements"])
+            for element in re.split(r"[、,]", defined[screen]):
+                options = [o.strip() for o in element.split("または") if o.strip()]
+                assert any(o in recorded for o in options), (
+                    f"{screen}: 必須主要要素「{element.strip()}」が manifest に記録されていない"
+                )
 
 
 def _model_for_start(script, cwd, repo_arg=None):

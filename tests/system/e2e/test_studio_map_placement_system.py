@@ -59,18 +59,21 @@ class _Map:
 
 
 def _find_two_nodes(m):
-    """Sweep with coarse clicks; a selection change can only come from a hit."""
+    """Sweep with coarse clicks.  Selection persists after a miss, so only a click that
+    *changes* the selection counts as a hit (a stale selection must never be read as a hit)."""
     w, h = m.box["width"], m.box["height"]
     anchor = None
+    current = _selected(m.page, m.ids)
     y = 20
     while y < h - 20:
         x = 20
         while x < w - 20:
             got = m.click(x, y)
-            if got and anchor is None:
-                anchor = (got, x, y)
-            elif got and anchor and got != anchor[0]:
-                if abs(x - anchor[1]) + abs(y - anchor[2]) > 60:
+            if got and got != current:
+                current = got
+                if anchor is None:
+                    anchor = (got, x, y)
+                elif got != anchor[0] and abs(x - anchor[1]) + abs(y - anchor[2]) > 60:
                     return anchor, (got, x, y)
             x += 14
         y += 14

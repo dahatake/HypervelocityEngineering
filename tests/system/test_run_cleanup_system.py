@@ -323,7 +323,9 @@ def test_distribution_catalog_conductor_and_guides_publish_one_cleanup_contract(
         repo / "scripts" / "run-state.py",
         repo / "scripts" / "integrate.py",
         repo / ".github" / "agents" / "conductor.agent.md",
-        repo / "docs" / "catalog.md",
+        # AC-067 の「カタログ」は配布元の管理対象。インストール先の docs/catalog.md は
+        # 利用者のアプリのカタログ（既存を上書きしない）なので EABK の契約の正本ではない。
+        SOURCE / "docs" / "catalog.md",
         SOURCE / "users-guide" / "02-during-and-after-run.md",
         SOURCE / "users-guide" / "05-scripts-reference.md",
         SOURCE / "users-guide" / "07-troubleshooting.md",

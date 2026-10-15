@@ -65,7 +65,8 @@
     "AC-191": "sha256:12ae440ed1f98d11",
     "AC-194": "sha256:cf4f7ab4d4b698de",
     "AC-199": "sha256:ef333f7118d1292f",
-    "AC-200": "sha256:154e6ee6245957a5"
+    "AC-200": "sha256:154e6ee6245957a5",
+    "AC-207": "sha256:40b359dd25f34c5b"
   },
   "cases": [
     {
@@ -1860,6 +1861,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "測定プロファイルと検証対象の提出物が要求定義書に未定義（TBD）"
+        },
+        {
+          "at": "2026-10-15T08:19:15+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "要求(NFR-PERF-001/002・NFR-REL-001)が 2026-10-15 の依頼で廃止(決定状態: 廃止)。実行対象外。ケースは削除せず履歴保持"
         }
       ]
     },
@@ -1891,6 +1898,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "測定プロファイルと検証対象の提出物が要求定義書に未定義（TBD）"
+        },
+        {
+          "at": "2026-10-15T08:19:16+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "要求(NFR-PERF-001/002・NFR-REL-001)が 2026-10-15 の依頼で廃止(決定状態: 廃止)。実行対象外。ケースは削除せず履歴保持"
         }
       ]
     },
@@ -1922,6 +1935,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "測定プロファイルと検証対象の提出物が要求定義書に未定義（TBD）"
+        },
+        {
+          "at": "2026-10-15T08:19:16+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "要求(NFR-PERF-001/002・NFR-REL-001)が 2026-10-15 の依頼で廃止(決定状態: 廃止)。実行対象外。ケースは削除せず履歴保持"
         }
       ]
     },
@@ -3217,6 +3236,31 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-095",
+      "requirement_ids": [
+        "FR-1034"
+      ],
+      "ac_ids": [
+        "AC-207"
+      ],
+      "title": "アーキテクチャ図を 3D で表示しても 2D と同じ行（アプリ・データ・保存先・通信先と方向）が同じ ID・名称で欠けず、行が多くても 3 段ズームで省かない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_links_wrap_status_arch_system.py -k \"ac207\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-15T09:00:52+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "AC-207 の System Test を追加"
         }
       ]
     }

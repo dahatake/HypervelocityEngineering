@@ -265,3 +265,71 @@ def test_ac200_zoom_thresholds_switch_locations_entities_then_features_and_colum
     page.context.close()
 
 
+def _rows(st):
+    """アプリの行・データの行（実行場所・保存先・通信先と方向）を、比較できる形にそろえる。"""
+    rows = set()
+    for l in st["locations"]:
+        for app in l.get("apps", []):
+            rows.add(("app", l["kind"], l["name"], app))
+        for data in l.get("data", []):
+            rows.add(("data", l["kind"], l["name"], data))
+        for link in l.get("links", []):
+            rows.add(("link", l["kind"], l["name"], link["to"], link["direction"]))
+    return rows
+
+
+@pytest.fixture()
+def dense_arch_url(tmp_path):
+    repo = make_zoom(tmp_path / "arch-dense")
+    cat = repo / CAT
+    extra = "".join(
+        f"- 配置先: Azure / サービス: Svc{i:02d} / アプリ: App{i:02d} / データ: Data{i:02d}\n"
+        f"- 通信: App{i:02d} → Svc{i:02d}（送信）\n"
+        for i in range(30)
+    )
+    cat.write_text(cat.read_text(encoding="utf-8") + _placement_section() + extra, encoding="utf-8")
+    proc, url = _serve(repo)
+    yield url
+    proc.terminate()
+
+
+# FR-1034 AC-207
+def test_ac207_3d_shows_same_app_and_data_rows_as_2d_with_same_ids_and_names(browser, arch_url):
+    p2 = _open_arch(browser, arch_url, "map2d")
+    p3 = _open_arch(browser, arch_url, "map3d")
+    for scale in (1, T_MID, T_DETAIL):
+        s2, s3 = _state(p2, scale), _state(p3, scale)
+        r2, r3 = _rows(s2), _rows(s3)
+        assert r2, f"2D の行が空 (scale={scale})"
+        assert r2 <= r3, f"3D で欠けた行 (scale={scale}): {sorted(r2 - r3)}"  # 2D で確認できる行が 3D で欠けない
+        assert s3["level"] == s2["level"]
+        assert set(s3["entities"]) == set(s2["entities"])  # 同じ ID・同じ名称
+    # 実行場所・保存先・通信先と方向が 3D にある
+    rows3 = _rows(_state(p3, 1))
+    assert any(r[0] == "app" and "注文API" in r[3] for r in rows3)
+    assert any(r[0] == "data" and r[2] == "Azure SQL" and r[3] == "商品" for r in rows3)
+    assert any(r[0] == "link" and r[4] == "送信" for r in rows3)
+    p2.context.close()
+    p3.context.close()
+
+
+# FR-1034 AC-207 (abnormal: 行が多く判読できなくても行を省かず、3 段の意味的ズーム（AC-200）で段階表示する)
+def test_ac207_3d_with_many_rows_omits_no_row_and_stays_within_three_zoom_levels(browser, dense_arch_url):
+    p2 = _open_arch(browser, dense_arch_url, "map2d")
+    p3 = _open_arch(browser, dense_arch_url, "map3d")
+    levels = set()
+    union3 = set()
+    for scale in (1, T_MID, T_DETAIL):
+        s3 = _state(p3, scale)
+        levels.add(s3["level"])
+        union3 |= _rows(s3)
+    assert levels == {"overview", "mid", "detail"}  # 4 段目を作らず、3 段で表示する
+    all2 = set()
+    for scale in (1, T_MID, T_DETAIL):
+        all2 |= _rows(_state(p2, scale))
+    assert len([r for r in all2 if r[0] == "app" and r[3].startswith("App")]) >= 30
+    assert all2 <= union3, f"3D で省かれた行: {sorted(all2 - union3)[:5]}"
+    p2.context.close()
+    p3.context.close()
+
+
