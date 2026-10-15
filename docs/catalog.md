@@ -54,6 +54,14 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1034 | アーキテクチャ図とエンティティモデル図（2D/3D）とデータの所在 | 承認済み | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/semzoom.js`, `EABK-Studio/web/js/sz2d.js`, `EABK-Studio/web/js/map2d.js`, `EABK-Studio/web/js/map3d.js`, `EABK-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_links_wrap_status_arch_system.py`, `EABK-Studio/tests/test_arch_diagram.py`, `EABK-Studio/tests/test_req_placement.py` | 管理データモデル、ストア、意味的ズーム |
 | NFR-PERF-004 | エンティティ表示の大規模データでの滑らかさ | 承認済み | `EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/sz2d.js`、`EABK-Studio/web/js/sz3d.js`、`scripts/entities.py` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 意味的ズーム |
 | NFR-UX-010 | エンティティ表示の代替手段・キーボード・言語 | 承認済み | `EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/sz2d.js`、`EABK-Studio/web/js/sz3d.js`、`EABK-Studio/web/js/i18n.js`、`EABK-Studio/web/sz.css` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 意味的ズーム、UI 部品 |
+| FR-1035 | 外部連携カタログ（データ層） | 承認済み | 未実装 | 未実装 | - |
+| FR-1036 | 外部連携カタログの ID 採番と整合検査 | 承認済み | 未実装 | 未実装 | - |
+| FR-1037 | 外部連携カタログの配布と管理手順の文書化 | 承認済み | 未実装 | 未実装 | - |
+| FR-1038 | 外部連携の要求チェックリストと要求のテンプレート | 承認済み | 未実装 | 未実装 | - |
+| FR-1039 | rd-author の手順への外部連携チェックの組込み | 承認済み | 未実装 | 未実装 | - |
+| FR-1040 | 図式の各表示の 2D/3D 選択 | 承認済み | 未実装 | 未実装 | - |
+| FR-1041 | ナビゲーションの MECE 化と各項目の説明 | 承認済み | 未実装 | 未実装 | - |
+| FR-1042 | 外部連携カタログの閲覧（Studio） | 承認済み | 未実装 | 未実装 | - |
 
 ## API・イベント
 
