@@ -42,6 +42,7 @@ MANAGED = [
     ".github/agents/reviewer.agent.md",
     ".github/skills/requirement-definition/SKILL.md",
     ".github/skills/requirement-definition/integration-checklist.md",
+    ".github/skills/requirement-definition/integration-requirements.md",
     ".github/skills/implement-fr/SKILL.md",
     ".github/skills/implement-fr/ui-design.md",
     ".github/skills/implement-fr/original-rd.md",
