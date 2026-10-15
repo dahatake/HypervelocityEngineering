@@ -23,6 +23,7 @@ EABK（Enterprise App Build Kit）と **EABK Studio** は、1 つのアプリケ
 | 8 | [導入ロードマップと KPI](08-roadmap.md) | 診断から本番運用までの段取りと、効果の測り方を知りたい |
 | 9 | [バージョンアップの手順](09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者） |
 | 10 | [既存のアプリを導入する](10-adopting-existing-apps.md) | 既存のコード・設計書から、棚卸し → 逆生成の要求（承認待ち）→ 現状の挙動の固定でデータ層を整える。方式の調査と適合の検証 |
+| 11 | [外部連携カタログ](11-integration-catalog.md) | API・ファイル・DB・イベントでの外部連携を `docs/integrations.md` に記録し、追加・変更・廃止・検査（`verify.py --docs-only`）の手順を知りたい |
 
 ## 第 2 部: EABK Studio
 

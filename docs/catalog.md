@@ -54,9 +54,9 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1034 | アーキテクチャ図とエンティティモデル図（2D/3D）とデータの所在 | 承認済み | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/semzoom.js`, `EABK-Studio/web/js/sz2d.js`, `EABK-Studio/web/js/map2d.js`, `EABK-Studio/web/js/map3d.js`, `EABK-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_links_wrap_status_arch_system.py`, `EABK-Studio/tests/test_arch_diagram.py`, `EABK-Studio/tests/test_req_placement.py` | 管理データモデル、ストア、意味的ズーム |
 | NFR-PERF-004 | エンティティ表示の大規模データでの滑らかさ | 承認済み | `EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/sz2d.js`、`EABK-Studio/web/js/sz3d.js`、`scripts/entities.py` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 意味的ズーム |
 | NFR-UX-010 | エンティティ表示の代替手段・キーボード・言語 | 承認済み | `EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/sz2d.js`、`EABK-Studio/web/js/sz3d.js`、`EABK-Studio/web/js/i18n.js`、`EABK-Studio/web/sz.css` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 意味的ズーム、UI 部品 |
-| FR-1035 | 外部連携カタログ（データ層） | 承認済み | 未実装 | 未実装 | - |
-| FR-1036 | 外部連携カタログの ID 採番と整合検査 | 承認済み | 未実装 | 未実装 | - |
-| FR-1037 | 外部連携カタログの配布と管理手順の文書化 | 承認済み | 未実装 | 未実装 | - |
+| FR-1035 | 外部連携カタログ（データ層） | 承認済み | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`tools/templates/docs/integrations.md` | `tests/toolkit/test_integrations.py` | 外部連携カタログ解析・検査 |
+| FR-1036 | 外部連携カタログの ID 採番と整合検査 | 承認済み | `scripts/next-id.py`、`scripts/rdcheck.py`、`scripts/ebaklib.py`、`.github/skills/requirement-definition/integration-checklist.md` | `tests/toolkit/test_integrations.py` | 外部連携カタログ解析・検査 |
+| FR-1037 | 外部連携カタログの配布と管理手順の文書化 | 承認済み | `tools/install.py`、`tools/templates/docs/integrations.md`、`.github/skills/requirement-definition/integration-checklist.md`、`scripts/ebaklib.py`、`users-guide/03-requirements-format.md`、`users-guide/05-scripts-reference.md`、`users-guide/11-integration-catalog.md`、`README.md`、`CHANGELOG.md` | `tests/toolkit/test_integrations.py`、`tests/system/test_integration_catalog_install_system.py`、`tests/toolkit/test_version.py` | 配布同期対象、外部連携カタログ解析・検査 |
 | FR-1038 | 外部連携の要求チェックリストと要求のテンプレート | 承認済み | 未実装 | 未実装 | - |
 | FR-1039 | rd-author の手順への外部連携チェックの組込み | 承認済み | 未実装 | 未実装 | - |
 | FR-1040 | 図式の各表示の 2D/3D 選択 | 承認済み | 未実装 | 未実装 | - |
@@ -82,9 +82,10 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | worktree pool 管理 | `scripts/integrate.py` | pool worktree の列挙、強制削除、Git worktree 登録の prune | FR-1009、NFR-OPS-005、NFR-COMPAT-001 |
 | conductor 終了契約 | [`.github/agents/conductor.agent.md`](docs/../.github/agents/conductor.agent.md) | run 開始時・工程 6・main 統合・run-report・清掃の実行順序 | FR-1009、FR-1010、NFR-COMPAT-001 |
 | run 運用ガイド | `users-guide/02-during-and-after-run.md`、`users-guide/05-scripts-reference.md`、`users-guide/07-troubleshooting.md` | 利用者向けの統合、清掃、診断、再開、トラブルシューティング契約 | FR-1010、NFR-COMPAT-001 |
-| 配布同期対象 | `tools/install.py` | conductor、清掃・状態・統合スクリプトをインストール対象へ同期する管理対象 | FR-1015、FR-1016、FR-1017、NFR-COMPAT-001、NFR-OPS-006、NFR-SEC-004 |
+| 配布同期対象 | `tools/install.py` | conductor、清掃・状態・統合スクリプトをインストール対象へ同期する管理対象。外部連携カタログの雛形（TEMPLATES。なければ作成）と検査・チェックリスト（MANAGED）も配る | FR-1015、FR-1016、FR-1017、FR-1037、NFR-COMPAT-001、NFR-OPS-006、NFR-SEC-004 |
 | git ls-files 並行取得 | `scripts/ebaklib.py` | `tracked_files` で tracked・untracked 一覧を ThreadPoolExecutor で並行取得し、rdcheck/rdfix は同一引数の呼び出しを 1 回にする | NFR-PERF-003、NFR-COMPAT-002 |
 | 次実装候補の分析 | `scripts/next-impl.py` | 承認済み・未完了の要求を優先度・依存・実装状態で順位付けし、除外の理由と scope 用 ID 一覧を出す（読み取り専用） | FR-1015、FR-1016 |
+| 外部連携カタログ解析・検査 | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/next-id.py` | `docs/integrations.md` の解析（`parse_integrations`）、CHK-28 の検査（必須欄・16 観点の欄・値の形式・TBD・方向・状態・要求との対応・認証情報の値らしい文字列）、`trace INT-xxx`、`next-id.py INT` の採番と ID 台帳の同期 | FR-1035、FR-1036、FR-1037 |
 | データ層検査 | `scripts/verify.py` | `--docs-only` でデータ層の妥当性を検査する | FR-1017、FR-1018 |
 | データ層修復 | `scripts/rdfix.py` | 要求定義書を変更せずデータ層の不整合を自動修復し、残りを手動対応として示す | FR-1018、FR-1019 |
 | エンティティ台帳・企業カタログ照合 | `scripts/entities.py` | 用語表・状態表・対象エンティティ・カタログのテーブル表からエンティティ台帳を導出し（list）、企業データカタログ（任意設定 `enterprise_data_catalog`。読み取り専用）と照合し（check）、覆われないものを質問票形式の ToDo にする（todo）。導出関数 `derive` は Studio からも再利用する。任意欄: 要求の `エンティティの関係`、カタログの `### 列: <テーブル>` 節の表、DDL・JSON Schema の読み取り専用の補完（列・関係・クラスターも導出する） | FR-1020、FR-1021、FR-1022、FR-1023、FR-1024、FR-1025、FR-1026、FR-1030、NFR-COMPAT-003、NFR-SEC-023 |

@@ -6,7 +6,8 @@
     "id_registry": "docs/id-registry.md",
     "run_history": "docs/run-history.md",
     "ledger": "tests/system/ledger.json",
-    "manual_tests": "docs/manual-tests.md"
+    "manual_tests": "docs/manual-tests.md",
+    "integrations": "docs/integrations.md"
   },
   "base_branch": "main",
   "work": {
