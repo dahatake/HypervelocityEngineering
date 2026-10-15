@@ -16,7 +16,7 @@ The ledger is derived from what the management data already has; no entity file 
   * use cases    = requirement IDs that target the entity, with the optional fields
                    `エンティティの使い方: 注文（作成）、顧客（参照/更新）` (作成・参照・更新・削除) and
                    `利用シナリオ: 1、2` (numbers of the numbered list in section 5)
-Optional setting in scripts/ebak.config.json (the enterprise data catalog; absent = not checked):
+Optional setting in scripts/ebak.config.json (the enterprise data catalog; absent or "利用しない" = not used: no check, no ToDo):
   "enterprise_data_catalog": {"source": "<file path or http(s) URL>", "name_column": "<column / key of the entity name>"}
 The source is read only (never written, never cached; the body is not copied: only names and positions are shown).
 URLs: http / https only, no credentials in the URL, at most PARAM-016 seconds (default 10).
@@ -60,6 +60,7 @@ NAME_KEYS = ("エンティティ名", "entity_name", "entityname", "エンティ
              "table", "用語", "名前", "name")
 
 R_UNCHECKED = "企業カタログ未確認"
+OPT_OUT = "利用しない"  # explicit opt-out value of enterprise_data_catalog (FR-1023)
 R_MISSING = "企業カタログになし"
 R_CONFIRM = "名称の確認"
 
@@ -1012,12 +1013,14 @@ def params(root: Path, cfg: dict) -> Tuple[float, float]:
 
 
 def load_enterprise(root: Path, cfg: dict, timeout: float) -> dict:
-    """-> {"state": "unset"|"ok"|"unusable", "display", "reason", "names": [(name, "出典:行")]}"""
+    """-> {"state": "unset"|"declined"|"ok"|"unusable", "display", "reason", "names": [(name, "出典:行")]}"""
     conf = cfg.get("enterprise_data_catalog")
     source = (conf.get("source") if isinstance(conf, dict) else conf) if conf else None
     if not source or not str(source).strip():
         return {"state": "unset", "display": "", "reason": "", "names": []}
     source = str(source)
+    if source.strip() == OPT_OUT:  # explicit "利用しない" (FR-1023 AC-232)
+        return {"state": "declined", "display": "", "reason": "", "names": []}
     name_column = str(conf.get("name_column", "")) if isinstance(conf, dict) else ""
     fmt_conf = str(conf.get("format", "auto")).lower() if isinstance(conf, dict) else "auto"
     display = safe_display(source)
@@ -1097,7 +1100,9 @@ def run_check(root: Path, cfg: dict) -> dict:
 def render_check(rep: dict) -> str:
     src, res = rep["source"], rep["result"]
     if src["state"] == "unset":
-        return "企業データカタログ: 未設定（照合していない）\n"
+        return "企業データカタログ: 利用しない（未設定）\n"
+    if src["state"] == "declined":
+        return "企業データカタログ: 利用しない\n"
     if src["state"] == "unusable":
         return f"企業データカタログ: 照合不能（{src['display']}）\n理由: {src['reason']}\n"
     out = [f"企業データカタログ: {src['display']}（{len(src['names'])} 件）／エンティティ: {rep['eabk_count']} 件"]
@@ -1132,6 +1137,8 @@ def build_todos(root: Path, cfg: dict, rep: dict) -> List[dict]:
     ents = [e["name"] for e in rep["model"]["entities"]]
     res = rep["result"]
     todos: List[Tuple[str, str, str]] = []
+    if rep["source"]["state"] in ("unset", "declined"):
+        return []
     if rep["source"]["state"] != "ok":
         todos = [(n, R_UNCHECKED, "") for n in ents]
     else:
@@ -1167,8 +1174,10 @@ def _todo_text(name: str, reason: str, cand: str) -> dict:
 
 def render_todo(rep: dict, todos: List[dict]) -> str:
     out = []
-    if rep["source"]["state"] == "unset":
-        out.append("企業データカタログ: 未設定（照合していない）")
+    if rep["source"]["state"] in ("unset", "declined"):
+        out.append("企業データカタログ: 利用しない" + ("（未設定）" if rep["source"]["state"] == "unset" else ""))
+        out.append("ToDo: 0 件（企業データカタログを利用しないため、照合も ToDo も行いません）")
+        return "\n".join(out) + "\n"
     elif rep["source"]["state"] == "unusable":
         out.append(f"企業データカタログ: 照合不能（{rep['source']['display']}）。理由: {rep['source']['reason']}")
     if not rep["model"]["entities"]:
