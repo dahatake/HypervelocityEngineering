@@ -338,17 +338,71 @@ def parse_requirements(doc: dict) -> list[dict]:
     return reqs
 
 
+REQ_PLACEMENT_RE = re.compile(r"^[-*]\s+配置先\s*[:：]\s*(.*)$")
+
+
+def parse_req_placement(value: str) -> dict:
+    """FR-1034 AC-206: optional requirement field
+    `- 配置先: <実行場所>／保存: <場所>＝<データ名>／通信: <相手>（方向）` (items separated by 、).
+    An absent field or a 'なし' item reads as empty ('なし'); nothing is guessed."""
+    out = {"present": False, "runAt": [], "stores": [], "links": []}
+    value = strip_md(value or "")
+    if not value:
+        return out
+    out["present"] = True
+
+    def items(s: str) -> list[str]:
+        parts, depth, cur = [], 0, ""
+        for ch in s:
+            if ch in "（(":
+                depth += 1
+            elif ch in "）)":
+                depth = max(0, depth - 1)
+            if ch in "、,，" and depth == 0:
+                parts.append(cur)
+                cur = ""
+            else:
+                cur += ch
+        parts.append(cur)
+        return [p.strip() for p in parts if p.strip()]
+
+    def is_none(s: str) -> bool:
+        return re.split(r"[（(]", s.strip(), 1)[0].strip() in NONE_WORDS
+
+    for k, seg in enumerate(re.split(r"[／]", value)):
+        seg = seg.strip()
+        m = re.match(r"^(保存|通信)\s*[:：]\s*(.*)$", seg)
+        if not m:
+            if k == 0 and not is_none(seg):
+                out["runAt"] = items(seg)
+            continue
+        if is_none(m.group(2)):
+            continue
+        for it in items(m.group(2)):
+            if m.group(1) == "保存":
+                place, _, data = it.partition("＝")
+                out["stores"].append({"place": place.strip(), "data": data.strip() or "なし"})
+            else:
+                d = re.match(r"^(.*?)\s*[（(]\s*(送信|受信|双方向)\s*[）)]\s*$", it)
+                out["links"].append({"peer": (d.group(1) if d else it).strip(), "direction": d.group(2) if d else "なし"})
+    return out
+
+
 def parse_req_block(rid: str, title: str, rel: str, line: int, block: list[tuple[int, str]]) -> dict:
     kind = "FR" if rid.startswith("FR-") else "NFR"
     cat = "" if kind == "FR" else rid.split("-")[1]
     r = {"id": rid, "kind": kind, "cat": cat, "title": title, "text": "", "status": "", "statusKind": "unknown",
          "origin": "", "priority": "", "priorityNote": "", "goal": "", "sources": "", "entities": [], "states": [],
-         "params": [], "assets": "", "relation": "", "acs": [], "blocked": [], "file": rel, "line": line, "body": ""}
+         "params": [], "assets": "", "relation": "", "placement": parse_req_placement(""), "acs": [], "blocked": [], "file": rel, "line": line, "body": ""}
     cur_key, cur_ac, texts = None, None, []
     body = []
     for ln_no, raw in block:
         body.append(raw)
         line_s = raw.rstrip()
+        place = REQ_PLACEMENT_RE.match(line_s)
+        if place:
+            r["placement"] = parse_req_placement(place.group(1))
+            continue
         relation = re.match(r"^[-*]\s+関係\s*[:：]\s*(.*)$", line_s)
         if relation:
             value = strip_md(relation.group(1))
@@ -866,6 +920,10 @@ def build_model(root: Path) -> dict:
                     model["runs"].append(record)
 
     model["reqs"] = list(reqs.values())
+    # FR-1034 AC-206: per-requirement 配置先 (run location / stores / links) handed to the diagram and the list
+    model["placements"]["requirements"] = [
+        {"id": q["id"], "runAt": q["placement"]["runAt"], "stores": q["placement"]["stores"], "links": q["placement"]["links"]}
+        for q in model["reqs"] if q.get("placement", {}).get("present")]
     model["implStatus"] = build_impl_status(model, root)
     build_management_analysis(model, docs, cat_doc, files, warnings)
     build_graph(model, reqs, parts)
