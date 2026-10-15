@@ -5,6 +5,8 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- **専用 worktree での run を自動で開始**します。`run-state.py start` が主の作業ツリーで呼ばれると、worktree を作り、その中で run を開始します（`WORKTREE <path>` を出力）。conductor は以後のコマンドをその worktree を cwd にして実行するため、別の VS Code を開く・依頼を再送する必要はありません。複数の run は別々の worktree で並行して動き、hook（`scripts/hooks/gate.py`）は主の作業ツリー側から呼ばれても、触るパスに応じて対応する run の worktree の状態でゲートを判定します。worktree を作れなかったときだけ従来の `WORKTREE-REQUIRED`（exit 4）で案内します。
+
 - **run ごとに専用の git worktree を必須**にしました。`run-state.py start` は主の作業ツリーでは run を始めず（exit 4・`WORKTREE-REQUIRED <path>`）、統合ブランチ `run/<id>` の専用 worktree を作って案内します（1 つの VS Code で複数の run を動かしても、別々の worktree で行われます）。成功（全件完了）した run は、主の作業ツリーで必ず main へ取り込み、worktree と統合ブランチを自動で清掃します。失敗した run は worktree と統合ブランチを保持し、清掃は利用者が行います。`ebak.config.json` の `run.require_worktree: false` または `--allow-primary` で外せます。
 
 - **外部連携の要求チェックリスト**（FR-1038・FR-1039）を追加しました。`.github/skills/requirement-definition/integration-requirements.md` に 16 観点（問い・要求に書く内容・受入基準の例・書かない設計事項）と要求テンプレートを置き、rd-author（カタログの確認・INT 採番・16 観点の走査・包括承認の除外）と rd-audit（観点の欠落・カタログとの食い違い）の手順書に組み込み、インストールで配ります。

@@ -151,7 +151,36 @@ class Ctx:
         self.run_id = h.current_run(self.croot, self.cfg)
         self.meta = h.load_meta(self.croot, self.cfg, self.run_id) if self.run_id else {}
         self.run_active = bool(self.run_id and self.meta.get("status") == "active")
+        if not self.run_active and g(data, "toolName", "tool_name", default=""):
+            self.bind_sibling_run()
 
+    def sibling_runs(self) -> List[Path]:
+        """Run worktrees (<repo>-run-<id>) that run-state.py start created next to the primary checkout."""
+        if self.croot != self.root or (self.root / ".git").is_file():
+            return []
+        try:
+            return sorted(p for p in self.root.parent.glob(f"{self.root.name}-run-*") if (p / ".git").exists())
+        except OSError:
+            return []
+
+    def bind_to(self, tree: Path) -> bool:
+        rid = h.current_run(tree, self.cfg)
+        meta = h.load_meta(tree, self.cfg, rid) if rid else {}
+        if not (rid and meta.get("status") == "active"):
+            return False
+        self.croot, self.run_id, self.meta, self.run_active = tree, rid, meta, True
+        return True
+
+    def bind_sibling_run(self) -> None:
+        # the conductor works inside its run worktree while the hook runs in the primary checkout
+        best = None
+        for p in self.sibling_runs():
+            rid = h.current_run(p, self.cfg)
+            meta = h.load_meta(p, self.cfg, rid) if rid else {}
+            if rid and meta.get("status") == "active" and (best is None or meta.get("started_at", "") > best[0]):
+                best = (meta.get("started_at", ""), p)
+        if best:
+            self.bind_to(best[1])
     def log(self, line: str) -> None:
         try:
             self.state_dir.mkdir(parents=True, exist_ok=True)
@@ -212,6 +241,10 @@ def classify(ctx: Ctx, p: str) -> Tuple[Optional[str], bool, Path]:
     if not ap.is_absolute():
         ap = ctx.cwd / ap
     ap = Path(os.path.normpath(str(ap)))
+    for sib in ctx.sibling_runs():
+        if sib != ctx.croot and os.path.normcase(str(ap)).startswith(os.path.normcase(str(sib)) + os.sep):
+            ctx.bind_to(sib)
+            break
     try:
         rel = ap.resolve().relative_to(ctx.croot.resolve()).as_posix() if ap.exists() else ap.relative_to(ctx.croot).as_posix()
     except ValueError:

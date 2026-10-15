@@ -18,7 +18,8 @@ disable-model-invocation: true
 1. `python scripts/clean-work.py` → `python scripts/run-state.py start --options "<run_options の各行>"`。
    出力が `RESUME <run-id>` なら再開です。表示された工程・queue・progress の続きから進めます（以前の会話を読み返しません）。
    再開のきっかけが利用者の Prompt なら、KPI のために 1 回だけ記録します: `<answers>` があれば `python scripts/run-state.py human answers`、なければ `human resume`（途中の追加指示だけなら `human instruction`）。新しい run の最初の依頼は start が記録するので不要です。文脈の圧縮など、利用者の Prompt がない再開では記録しません。
-   出力が `WORKTREE-REQUIRED <path>`（exit 4）なら、run は始まっていません。主の作業ツリーでは run を始められず（run ごとに別の worktree が必須）、専用 worktree を作ったので、そのパスと「その worktree で `/build` をやり直す」案内を利用者に 1 回だけ返して終えます。
+   出力が `WORKTREE <path>` なら、主の作業ツリーで始めたため専用 worktree を作り、run をその中で開始済みです（利用者は何もしません。VS Code を別に開かず、利用者に再送も頼みません）。
+   以後のすべての `python scripts/...`・git コマンドは `<path>` を cwd にして実行し（powershell では毎回 `Set-Location <path>;` を先頭に付ける）、作業役への依頼にもこの worktree のパスを含めます。`WORKTREE-REQUIRED <path>`（exit 4）が出たときだけ、worktree で開始できなかったので、そのパスと「その worktree で `/build` をやり直す」案内を利用者に 1 回だけ返して終えます。
    run の統合ブランチは worktree の現在のブランチです。以後の commit はすべて統合ブランチか作業ブランチで行います。
    統合ブランチは `run-state.py status` の `integration:` の行（meta.json の `integration_branch`）です。run の途中でブランチ名を変えません（GitHub Copilot app の `rename_branch` も使いません。hook G-5 が拒否します）。
 2. `git log --oneline -10` と `python scripts/verify.py --docs-only` で基準を記録します（失敗していても続けます。基準として progress に書きます）。

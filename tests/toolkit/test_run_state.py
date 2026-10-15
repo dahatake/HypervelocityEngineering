@@ -144,9 +144,7 @@ def test_start_in_primary_checkout_requires_own_worktree(repo):
     env["PYTHONUTF8"] = "1"
     proc = subprocess.run([sys.executable, str(repo.path / "scripts" / "run-state.py"), "start"], cwd=str(repo.path),
                           capture_output=True, text=True, encoding="utf-8", env=env)
-    assert proc.returncode == 4 and "WORKTREE-REQUIRED" in proc.stdout
-    wt = proc.stdout.split("WORKTREE-REQUIRED", 1)[1].split()[0]
+    assert proc.returncode == 0 and "WORKTREE " in proc.stdout and "START " in proc.stdout
+    wt = proc.stdout.split("WORKTREE ", 1)[1].split("\n")[0].strip()
     assert os.path.isdir(wt) and (repo.path / "work" / "current-run.txt").exists() is False
-    proc2 = subprocess.run([sys.executable, str(os.path.join(wt, "scripts", "run-state.py")), "start"], cwd=wt,
-                           capture_output=True, text=True, encoding="utf-8", env=env)
-    assert proc2.returncode == 0 and proc2.stdout.startswith("START ")
+    assert os.path.exists(os.path.join(wt, "work", "current-run.txt"))

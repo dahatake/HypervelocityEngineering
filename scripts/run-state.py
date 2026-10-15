@@ -24,6 +24,7 @@ import argparse
 import datetime as dt
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -121,11 +122,23 @@ def require_own_worktree(root: Path, cfg: dict, args) -> Optional[int]:
     if rc != 0:
         print(f"ERROR run-state: 専用 worktree を作れませんでした: {out.strip()[:200]}")
         return 4
-    print(f"WORKTREE-REQUIRED {path}")
-    print("run は主の作業ツリーでは始められません（run ごとに別の worktree が必須）。"
-          f"専用 worktree と統合ブランチ run/{rid} を作りました。この worktree を VS Code で開き（または cd して）、"
-          "同じ依頼で `/build` をやり直してください。成功すると main へ取り込まれます。")
-    return 4
+    # start the run inside the new worktree right away: no second VS Code window and no re-sent request
+    cmd = [sys.executable, str(path / "scripts" / "run-state.py"), "start"]
+    if getattr(args, "options_file", None):
+        cmd += ["--options-file", str(Path(args.options_file).resolve())]
+    elif getattr(args, "options", None):
+        cmd += ["--options", args.options]
+    proc = subprocess.run(cmd, cwd=str(path), capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if proc.returncode != 0 or not (path / "scripts" / "run-state.py").exists():
+        print(f"WORKTREE-REQUIRED {path}")
+        print((proc.stdout + proc.stderr).strip()[:400])
+        print("worktree では run を始められませんでした。その worktree を開き（または cd して）、同じ依頼で `/build` をやり直してください。")
+        return 4
+    print(f"WORKTREE {path}")
+    print("run は専用 worktree で始めました。以後の `python scripts/...`・git・作業役への依頼は、すべてこのパスを cwd にして行います"
+          "（VS Code を別に開く必要はありません）。成功すると main へ取り込まれます。")
+    print(proc.stdout.strip())
+    return 0
 
 
 def cmd_start(args) -> int:
