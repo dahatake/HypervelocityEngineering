@@ -3,139 +3,172 @@
     {
       "screen_id": "dashboard",
       "image": "images/dashboard.png",
-      "sha256": "34faeb93c8dd2ab8da06ed7adfaaffc0cb3e2f484412c84e4212160c82c4ca5c",
-      "commit": "8009e3afa4c549d2ef8ad271bfc313391cbe4138",
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 8009e3afa4c549d2ef8ad271bfc313391cbe4138",
+      "sha256": "615f39d126ea5237d71871d4a3495f5f444cccdf58c5cfe46ed8ff30448c53e7",
+      "commit": "1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit 1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
       "required_elements": [
-        "Snapshot ready: dashboard"
+        "対象リポジトリ名",
+        "ペルソナ",
+        "目的",
+        "進捗",
+        "要求の状態",
+        "試験の状態",
+        "未回答",
+        "BLOCKED"
       ]
     },
     {
       "screen_id": "map2d",
       "image": "images/map2d.png",
-      "sha256": "f2b73341eec560a7488d2d20dc92ee6b5599b8f7949d9f8d12342f81d705df83",
-      "commit": "8009e3afa4c549d2ef8ad271bfc313391cbe4138",
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 8009e3afa4c549d2ef8ad271bfc313391cbe4138",
+      "sha256": "d54f7b91f6d49ebbfed596977b29257630d356f9db57919b1c6bdef2416c5395",
+      "commit": "1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit 1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
       "required_elements": [
-        "Snapshot ready: map2d"
+        "ノード",
+        "関係",
+        "選択対象",
+        "選択対象の詳細"
       ]
     },
     {
       "screen_id": "map3d",
       "image": "images/map3d.png",
-      "sha256": "86fe03f31d330c7ff1db5e3c378308831e4304fad690c6706b8fbaa9faeeafff",
-      "commit": "8009e3afa4c549d2ef8ad271bfc313391cbe4138",
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 8009e3afa4c549d2ef8ad271bfc313391cbe4138",
+      "sha256": "deb1c45fd943ff7ed973ed48b5ea9f99ca91726b649cc04853cfff9725ebe4c5",
+      "commit": "1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit 1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
       "required_elements": [
-        "Snapshot ready: map3d"
+        "ノード",
+        "関係",
+        "選択対象",
+        "選択対象の詳細",
+        "視点を変更できる表示"
       ]
     },
     {
       "screen_id": "diagrams",
       "image": "images/diagrams.png",
-      "sha256": "9794fe6d05d1e7cebbf6db7ac13ef14da4d51755f77286d4e8b8729d91c4acd5",
-      "commit": "8009e3afa4c549d2ef8ad271bfc313391cbe4138",
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 8009e3afa4c549d2ef8ad271bfc313391cbe4138",
+      "sha256": "22ce385dafdf65f08c0fb0056cb1dc62f692573dfe8bcc09802de5deda6507f4",
+      "commit": "1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit 1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
       "required_elements": [
-        "Snapshot ready: diagrams"
+        "図式の種別",
+        "ノード",
+        "関係",
+        "根拠ID"
       ]
     },
     {
       "screen_id": "placement",
       "image": "images/placement.png",
-      "sha256": "728d2b1e8fcd3d8d1bc8011ef5113816e5625e5d8b62724abaf8401e8a1d27f9",
-      "commit": "8009e3afa4c549d2ef8ad271bfc313391cbe4138",
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 8009e3afa4c549d2ef8ad271bfc313391cbe4138",
+      "sha256": "65c52df13520aedb244055b390b54b42c1f1c53e1167a498f0dbace3c2348595",
+      "commit": "1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit 1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
       "required_elements": [
-        "Snapshot ready: placement"
+        "ファイルまたはディレクトリ",
+        "配置関係",
+        "選択対象の詳細"
       ]
     },
     {
       "screen_id": "source",
       "image": "images/source.png",
-      "sha256": "048896dac204fc8f6c5069481dc10609e119d8c8586546bc901040bb3629d033",
-      "commit": "8009e3afa4c549d2ef8ad271bfc313391cbe4138",
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 8009e3afa4c549d2ef8ad271bfc313391cbe4138",
+      "sha256": "b2227f381384377533e0e8e47082f861299f5bca125ba963c5c3920571e39a2b",
+      "commit": "1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit 1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
       "required_elements": [
-        "Snapshot ready: source"
+        "管理データID",
+        "対応する実装ファイル",
+        "選択対象の詳細"
       ]
     },
     {
       "screen_id": "tables",
       "image": "images/tables.png",
-      "sha256": "8998affeb2df94554b34e7e138c57f67e4a6e5947f7c7d3b97111c19ac61ed3e",
-      "commit": "8009e3afa4c549d2ef8ad271bfc313391cbe4138",
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 8009e3afa4c549d2ef8ad271bfc313391cbe4138",
+      "sha256": "b72769a37ad6bb1867cd04a08f5fa6d86ec4b6ffb61c6880818a853524b115c9",
+      "commit": "1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit 1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
       "required_elements": [
-        "Snapshot ready: tables"
+        "対象種別",
+        "検索",
+        "絞込み",
+        "行一覧",
+        "選択対象の詳細"
       ]
     },
     {
       "screen_id": "structure",
       "image": "images/structure.png",
-      "sha256": "939a5bc2b16d5414fea83dcfa9cedcfd9d02e612eb710ec84508346e9c0a6ca5",
-      "commit": "8009e3afa4c549d2ef8ad271bfc313391cbe4138",
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 8009e3afa4c549d2ef8ad271bfc313391cbe4138",
+      "sha256": "ae214a38228d640e774b880db0eacec05306a8961deff443366b0ec1d820e524",
+      "commit": "1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit 1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
       "required_elements": [
-        "Snapshot ready: structure"
+        "現状対理想構造"
       ]
     },
     {
       "screen_id": "consistency",
       "image": "images/consistency.png",
-      "sha256": "2a8385787e320ff55311c62e7ad863fda64dea032b69766104fbae90d2ad0124",
-      "commit": "8009e3afa4c549d2ef8ad271bfc313391cbe4138",
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 8009e3afa4c549d2ef8ad271bfc313391cbe4138",
+      "sha256": "174d6fda07a6879036323959a0002f2cdfaf973d2f187833414470012a57e062",
+      "commit": "1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit 1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
       "required_elements": [
-        "Snapshot ready: consistency"
+        "層一貫性",
+        "行一覧"
       ]
     },
     {
       "screen_id": "maintenance",
       "image": "images/maintenance.png",
-      "sha256": "f6e9e842da4f10ee3209bb1dd22f978df997f831f3dda6ca76004cf701f63f21",
-      "commit": "8009e3afa4c549d2ef8ad271bfc313391cbe4138",
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 8009e3afa4c549d2ef8ad271bfc313391cbe4138",
+      "sha256": "331c8685db3e86e303fa9ed79a8813527cef93545ab2fc11b12f5423c9046eb9",
+      "commit": "1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit 1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
       "required_elements": [
-        "Snapshot ready: maintenance"
+        "整合性保守",
+        "変更候補"
       ]
     },
     {
       "screen_id": "runtime",
       "image": "images/runtime.png",
-      "sha256": "343f144069e5037f558261c21069a252516cd6b8996d40e6557acf65d7bfb9e8",
-      "commit": "8009e3afa4c549d2ef8ad271bfc313391cbe4138",
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 8009e3afa4c549d2ef8ad271bfc313391cbe4138",
+      "sha256": "893fccdf67210e7899fa64524534ac42fe5aa53d1debacb1d31879ae3e778a88",
+      "commit": "1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit 1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
       "required_elements": [
-        "Snapshot ready: placement"
+        "実行環境の配置",
+        "ブラウザー",
+        "対象リポジトリ"
       ]
     },
     {
       "screen_id": "cases",
       "image": "images/cases.png",
-      "sha256": "a6b2f6428295004a82607c1da283b576448bc3125d76259ff04911c7689d0705",
-      "commit": "8009e3afa4c549d2ef8ad271bfc313391cbe4138",
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 8009e3afa4c549d2ef8ad271bfc313391cbe4138",
+      "sha256": "53ba3cba4abdf7987760086e7b9d559da24b4ae909d3979c7ce1c7b4ca7b1624",
+      "commit": "1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit 1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
       "required_elements": [
-        "Snapshot ready: tables"
+        "試験ケース",
+        "行一覧",
+        "選択対象の詳細"
       ]
     },
     {
       "screen_id": "states",
       "image": "images/states.png",
-      "sha256": "34b00599c617df62ba4d52ea98908fa6e017647490e3adcf3fde997c8a821d4b",
-      "commit": "8009e3afa4c549d2ef8ad271bfc313391cbe4138",
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 8009e3afa4c549d2ef8ad271bfc313391cbe4138",
+      "sha256": "1e33d59a324a4e5510aecd9815592dd295c93776bc655272c1e5ba4d9ad8e30e",
+      "commit": "1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit 1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
       "required_elements": [
-        "Snapshot ready: diagrams"
+        "図式の種別",
+        "状態",
+        "遷移"
       ]
     },
     {
       "screen_id": "header",
       "image": "images/header.png",
-      "sha256": "cec9652541b19b5114def90341f21389eb10e9b71932f846b8096f1520096cc9",
-      "commit": "8009e3afa4c549d2ef8ad271bfc313391cbe4138",
-      "capture_command": "python users-guide/studio/capture-screens.py --commit 8009e3afa4c549d2ef8ad271bfc313391cbe4138",
+      "sha256": "c76d8f172597ffa2d1e38a38e8f08c69afd68d5bdacc1be8ae625064b21d70f7",
+      "commit": "1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
+      "capture_command": "python users-guide/studio/capture-screens.py --commit 1c3f6d27e27c2011011d3fc7936f6c8bba595a95",
       "required_elements": [
         "EABK Studio"
       ]
