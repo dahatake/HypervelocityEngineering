@@ -227,7 +227,7 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
   <div id="hud">
     <button id="bPrev" title="前のシーン (←)">⏮</button><button id="bPlay" title="一時停止 / 再生 (Space)">⏸</button><button id="bNext" title="次のシーン (→)">⏭</button>
     <div id="prog"></div><div id="hudt"></div>
-    <button id="bNar" title="ナレーション音声 (N)">🗣</button><button id="bMute" title="BGM・効果音 (M)">🔊</button><button id="bFull" title="全画面 (F)">⛶</button>
+    <button id="bCam" style="font-size:13px"></button><button id="bNar" title="ナレーション音声 (N)">🗣</button><button id="bMute" title="BGM・効果音 (M)">🔊</button><button id="bFull" title="全画面 (F)">⛶</button>
   </div>
   <div id="gate">
     <h2>Hypervelocity Engineering ― 262日の挑戦と失敗と学び</h2>
@@ -235,6 +235,9 @@ canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
     <h2>skillやharnessは、いつまで必要か？　CIO / CTO・Lead Software Engineer のために</h2>
     <label><input type="checkbox" id="gnar" checked> 🗣 音声ナレーションを使う</label>
     <div id="gvoice"></div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;color:#9fe;font-size:min(1.3vw,18px)">🎥 カメラワーク
+      <select id="gcam"></select>
+      <select id="gdim"><option value="3D">3D カメラ（奥行き・回り込み）</option><option value="2D">2D カメラ（パン・ズーム・ロール）</option></select></div>
     <details id="gcloud" style="color:#9fe;font-size:min(1.3vw,18px);max-width:900px"><summary style="cursor:pointer;color:#ffe600">🎙 最新の音声モデルを使う（任意。Azure AI Speech HD 音声 ／ gpt-4o-mini-tts）</summary>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;align-items:stretch;text-align:left">
         <select id="geng"><option value="browser">ブラウザー内蔵（Edge の Microsoft Natural 音声）</option><option value="speech">Azure AI Speech ― HD 音声（Nanami / Masaru DragonHDLatest）</option><option value="oai">gpt-4o-mini-tts ― Azure OpenAI または OpenAI</option></select>
@@ -434,7 +437,52 @@ function applyCam(clock){
   // carry reading material outside the reserved stage.
   camEl.style.transform='none';
   view.style.perspective=b.p+'px';
+  cam.css=camCss(E.T/1000,clock);
 }
+/* ===== カメラワーク（Shot Size × Angle × Movement × Character） =====
+   振幅は、読み取り領域から文字が出ない範囲に抑えている。 */
+const CAMS={
+  none:{n:'なし（固定）',d:'Static / Locked'},
+  corp:{n:'Corporate / Keynote',d:'Medium Wide + Eye Level + Very Slow Dolly In + Smooth'},
+  prod:{n:'Product / Tech Keynote',d:'Close-Up + Low Angle + Slow Orbit + Floating'},
+  cine:{n:'Cinematic / Film',d:'Medium Close-Up + Eye Level + Slow Push In + Natural'},
+  doc:{n:'Documentary',d:'Medium Shot + Eye Level + Handheld Follow + Organic'},
+  yt:{n:'YouTube',d:'Medium → Punch In → Medium → Close-Up + Energetic'},
+  ad:{n:'Commercial / Ad',d:'Macro Close-Up + Fast Dolly Out + Smooth-to-Energetic'},
+  mv:{n:'Music Video',d:'Medium Close-Up + Low Angle + Fast Orbit + Whip Pan + Aggressive'},
+  anime:{n:'Anime / Stylized 3D',d:'Extreme Close-Up → Extreme Wide + Orbit + Roll + Impossible'},
+  game:{n:'Game Trailer',d:'Wide + Low Angle + FPV Tracking + Hyperdynamic'}
+};
+const camSel={style:localStorage.getItem('hveCamStyle')||'corp',dim:localStorage.getItem('hveCamDim')||'3D'};
+if(!CAMS[camSel.style])camSel.style='corp';
+function camCss(u,clock){
+  const st=camSel.style;if(st==='none')return 'none';
+  const S=Math.sin,C=Math.cos,PI=Math.PI,cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const sm=p=>p*p*(3-2*p),ease=cl(u/1.2,0,1),e=sm(ease);
+  const o={x:0,y:0,z:0,rx:0,ry:0,rz:0,sc:1};
+  const hand=(a)=>{o.x+=(S(clock*.0013)+S(clock*.0031+1))*3.2*a;o.y+=(C(clock*.0017)+S(clock*.0041+2))*2.6*a;o.rz+=S(clock*.0011+.5)*.35*a;o.rx+=S(clock*.0023)*.25*a;o.ry+=C(clock*.0019)*.25*a};
+  switch(st){
+  case 'corp':o.z=cl(u,0,40)*3;o.ry=S(u*.18)*1.6;o.x=S(u*.12)*10;hand(.15);break;
+  case 'prod':o.ry=S(u*.45)*10;o.rx=-4+S(u*.3)*2;o.z=50+S(u*.5)*30;o.y=S(u*.9)*8;o.x=C(u*.45)*22;hand(.1);break;
+  case 'cine':o.z=cl(u,0,24)*6;o.x=S(u*.2)*12;o.ry=S(u*.2)*1.5;hand(.45);break;
+  case 'doc':o.x=S(u*.31)*22;o.y=S(u*.23)*10;o.ry=S(u*.31)*1.5;o.rz=S(u*.4)*.5;hand(2.4);break;
+  case 'yt':{const k=Math.floor(u/3.5)%4,tgt=[0,50,0,90][k],ph=(u%3.5)/3.5,s=[1,1.06,1,1.1][k],pv=cl((u%3.5)*6,0,1);
+    o.sc=1+(s-1)*(1-Math.pow(1-pv,3));o.z=tgt*(1-Math.pow(1-pv,3));o.y=-k%2*4;hand(.4);break}
+  case 'ad':{const q=u%9,out=cl(1-q/1.4,0,1);o.z=-260*out*out+(q>1.4?(q-1.4)*8:0);o.sc=1+.08*out;o.ry=S(u*.6)*6;o.x=C(u*.6)*20;hand(.2);break}
+  case 'mv':{const bp=60000/128,b=clock/bp,p=b%1,beat=Math.pow(1-p,3),bar=Math.floor(b/8),wp=cl((b%8)/.35,0,1);
+    o.z=70*beat;o.sc=1+.025*beat;o.ry=S(u*1.1)*9;o.rz=3+S(u*.9)*2.5;o.rx=-5;o.y=beat*-10;
+    if(b%8<.35)o.x=(bar%2?-1:1)*(1-wp)*160;hand(1.2);break}
+  case 'anime':o.ry=S(u*.8)*28;o.rx=S(u*.55)*12;o.rz=S(u*.45)*7;o.z=S(u*.6)*170;o.x=S(u*.5)*30;hand(.3);break;
+  case 'game':{const w=u*1.6;o.x=S(w)*34;o.y=C(w*1.3)*22;o.z=60+S(u*.9)*110;o.rz=S(w)*4;o.ry=S(w*.8)*10;o.rx=-6;
+    const sh=Math.max(0,S(u*3.1)-.8)*5;o.x+=S(clock*.09)*sh*3;o.y+=C(clock*.11)*sh*3;hand(1.6);break}
+  }
+  for(const k of ['x','y','z','rx','ry','rz'])o[k]*=e*RM;o.sc=1+(o.sc-1)*e*RM;
+  if(camSel.dim==='3D')return `translate3d(${o.x}px,${o.y}px,${o.z}px) rotateX(${o.rx}deg) rotateY(${o.ry}deg) rotateZ(${o.rz}deg) scale(${o.sc})`;
+  const sc=o.sc*(1+o.z/1500);
+  return `translate(${o.x-o.ry*8}px,${o.y+o.rx*8}px) rotate(${o.rz}deg) scale(${sc})`;
+}
+function camUi(){const c=CAMS[camSel.style];const b=$('#bCam');if(b){b.textContent='🎥 '+c.n+' ｜ '+camSel.dim;b.title='カメラワーク切替 (C) ／ 2D・3D 切替 (D)\n'+c.d}}
+function camSet(style,dim){if(style)camSel.style=style;if(dim)camSel.dim=dim;localStorage.setItem('hveCamStyle',camSel.style);localStorage.setItem('hveCamDim',camSel.dim);camUi();const g=$('#gcam');if(g)g.value=camSel.style;const d=$('#gdim');if(d)d.value=camSel.dim}
 function applyObj(el){const s=el._s;
   el.style.transform=`translate(${s.x}px,${s.y}px) scale(${s.s*s.sx},${s.s*s.sy})`;
   el.style.opacity=s.o;el.style.visibility=s.o>.01?'visible':'hidden'}
@@ -849,7 +897,7 @@ function render(dt){
   fx.shake*=Math.pow(.0009,dt/1000);if(fx.shake<.3)fx.shake=0;
   const sh=0,sx=0,sy=0,ox=(rail.getBoundingClientRect().left-12-1920*SC)/2,oy=(VH-70-1080*SC)/2;
   view.style.transform=`translate(${ox+sx*SC}px,${oy+sy*SC}px) scale(${SC})`;ui.style.transform=`translate(${ox+sx*SC*.5}px,${oy+sy*SC*.5}px) scale(${SC})`;
-  applyCam(E.clock);fitStage();fitOverlays();
+  applyCam(E.clock);fitStage();fitOverlays();camEl.style.transform=cam.css;
   if(E.clock>fx.glitchUntil)wrap.classList.remove('glitch');else wrap.classList.add('glitch');
   if(fx.flash>0){fx.flash=Math.max(0,fx.flash-dt/1000/fx.flashDur);flashEl.style.opacity=fx.flash}else flashEl.style.opacity=0;
   bg.speed+=(bg.ts-bg.speed)*Math.min(1,dt/400);for(let i=0;i<3;i++)bg.col[i]+=(bg.tc[i]-bg.col[i])*Math.min(1,dt/600);
@@ -894,6 +942,11 @@ function start(short){if(short){SCENES.length=0;SHORTSCENES.forEach(s=>SCENES.pu
 $('#go').onclick=()=>start(false);$('#gos').onclick=()=>start(true);if(new URLSearchParams(location.search).has('short')){$('#go').style.display='none';document.title='【SHORT】'+document.title}$('#bPlay').onclick=togglePause;
 $('#bPrev').onclick=()=>{goto(E.T>2500?E.idx:E.idx-1,false);E.paused=false;syncPlay()};
 $('#bNext').onclick=()=>{goto(E.idx+1,true);E.paused=false;syncPlay()};
+const camKeys=Object.keys(CAMS);
+$('#gcam').innerHTML=camKeys.map(k=>`<option value="${k}">${CAMS[k].n} ― ${CAMS[k].d}</option>`).join('');
+$('#gcam').onchange=e=>camSet(e.target.value);$('#gdim').onchange=e=>camSet(null,e.target.value);
+const camNext=()=>camSet(camKeys[(camKeys.indexOf(camSel.style)+1)%camKeys.length]),dimNext=()=>camSet(null,camSel.dim==='3D'?'2D':'3D');
+$('#bCam').onclick=e=>e.shiftKey?dimNext():camNext();$('#bCam').oncontextmenu=e=>{e.preventDefault();dimNext()};camSet();
 $('#bMute').onclick=setMute;$('#bNar').onclick=()=>setNar(!V.on);$('#bFull').onclick=fullscreen;
 $('#replay').onclick=()=>{E.paused=false;goto(0,false);syncPlay()};
 addEventListener('mousemove',showHud);
@@ -904,6 +957,7 @@ addEventListener('keydown',e=>{
   else if(e.key==='ArrowRight'){goto(E.idx+1,true);E.paused=false;syncPlay()}
   else if(e.key==='ArrowLeft'){goto(E.T>2500?E.idx:E.idx-1,false);E.paused=false;syncPlay()}
   else if(e.key==='m'||e.key==='M')setMute();else if(e.key==='n'||e.key==='N')setNar(!V.on);
+  else if(e.key==='c'||e.key==='C')camNext();else if(e.key==='d'||e.key==='D')dimNext();
   else if(e.key==='f'||e.key==='F')fullscreen();else if(e.key==='r'||e.key==='R'){goto(0,false);E.paused=false;syncPlay()}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&E.running&&!E.paused){E.paused=true;syncPlay()}});
 requestAnimationFrame(frame);

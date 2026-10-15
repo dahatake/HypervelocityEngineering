@@ -27,7 +27,8 @@ ROUTES = {
     "map2d": ("2D マップ", ("ノード", "関係", "詳細")),
     "map3d": ("3D マップ", ("ノード", "関係", "視点")),
     "diagrams": ("図式", ("図", "関係", "根拠")),
-    "placement": ("配置", ("ファイル", "配置", "詳細")),
+    # FR-1041 AC-226: 旧 placement は図式（kind=layers）へ統合された。独立した分析は持たず、
+    # 旧 URL が図式へ移ること（test_every_page_... の末尾）で検証する。
     "source": ("ソース対応", ("管理データ", "実装", "詳細")),
     "tables": ("表", ("種別", "絞り込み", "行")),
 }
@@ -155,6 +156,15 @@ def test_every_page_has_page_specific_analysis_for_all_three_personas(studio_pag
             assert any(term in section.inner_text() for term in screen_terms)
         page_texts[route] = analysis.inner_text()
     assert len(set(page_texts.values())) == len(ROUTES), "generic text reused instead of page-specific analysis"
+    # FR-1041 AC-226: 旧「配置」は図式へ移り、移った先でも図式の分析が 3 ペルソナ分表示される
+    for old in ("placement", "placement?kind=runtime"):
+        page.goto(page.url.split("#")[0] + f"#/{old}")
+        expect(page).to_have_url(re.compile(r"#/diagrams\?.*kind=layers"))
+        analysis = page.get_by_role("region", name=re.compile("分析|analysis", re.I))
+        expect(analysis).to_be_visible()
+        expect(analysis).to_contain_text("図式")
+        for persona in personas:
+            expect(analysis.get_by_role("heading", name=persona)).to_be_visible()
 
 
 # FR-1003 AC-045

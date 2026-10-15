@@ -4,6 +4,9 @@ import { t, onLang } from './i18n.js';
 import { store } from './store.js';
 import { el, svgEl, colorOf, TYPE_COLOR, STATUS_COLOR, showTip, hideTip, nodeTip, nodeChip, statusText } from './ui.js';
 import { entityER } from './insights.js';
+import { runtimePlacement } from './insights.js';
+import { dimToggle, dimState, registerDim } from './dim.js';
+import { mount as mountPlacement } from './placement.js';
 
 const KINDS = ['ctx', 'goals', 'states', 'entities', 'components', 'layers'];
 let kind = 'ctx';
@@ -46,8 +49,13 @@ function applyDim(root) {
 }
 
 // ---------------------------------------------------------------- context diagram
+// FR-1042 AC-229: external elements of the context diagram = catalog items (shown by INT-ID) + requirements-section rows not merged into one.
+export const ctxExternals = (m) => [
+  ...(m.integrationCatalog || []).map((c) => ({ nodeId: c.id, name: `${c.id} ${c.name}`, method: c.method, meaning: c.partner })),
+  ...m.integrations.map((x) => ({ ...x, nodeId: `ext:${x.name}` })),
+];
 function contextDiagram(m) {
-  const P = m.personas, X = m.integrations;
+  const P = m.personas, X = ctxExternals(m);
   const rows = Math.max(P.length, X.length, 1), Hh = rows * 120 + 140, Ww = 1180;
   const svg = svgEl('svg', { viewBox: `0 0 ${Ww} ${Hh}`, width: Ww, height: Hh, style: 'max-width:100%' }, defs());
   const cx = Ww / 2, cy = Hh / 2;
@@ -64,7 +72,7 @@ function contextDiagram(m) {
   const pp = place(P, 140, 'l'), xx = place(X, Ww - 140, 'r');
   const sx = (side) => (side === 'l' ? cx - sysW / 2 : cx + sysW / 2);
   for (const { it, x, y, side } of [...pp, ...xx]) {
-    const id = side === 'l' ? `persona:${it.name}` : `ext:${it.name}`;
+    const id = side === 'l' ? `persona:${it.name}` : it.nodeId;
     const label = it.name;
     const line = svgEl('line', { x1: side === 'l' ? x + 74 : x - 74, y1: y, x2: sx(side) + (side === 'l' ? -4 : 4), y2: cy + Math.max(-sysH / 2 + 20, Math.min(sysH / 2 - 20, (y - cy) * 0.5)), stroke: '#8fa6e8', 'stroke-width': 1.6, 'marker-end': 'url(#arr)', 'data-a': id, 'data-b': id, 'data-arrow': 1 });
     if (side === 'r') line.setAttribute('marker-start', 'url(#arr)');
@@ -172,9 +180,9 @@ function statesView(m) {
 }
 
 // ---------------------------------------------------------------- entity relation
-function entityDiagram(m, host) {
+// Shared by the 2D drawing and the dimension-neutral graph (FR-1040 AC-220).
+function entityData(m) {
   const ents = [...store.nodes.values()].filter((n) => n.type === 'entity' && n.deg > 0);
-  if (!ents.length) return el('div', { class: 'empty' }, t('none'));
   const co = new Map();
   for (const r of m.reqs) {
     const ids = [...new Set(store.neighbors(r.id, ['entity']).map((x) => x.id))];
@@ -183,7 +191,12 @@ function entityDiagram(m, host) {
   const all = [...co.entries()].map(([k, w]) => { const [a, b] = k.split('\u0001'); return { a, b, w }; }).sort((x, y) => y.w - x.w);
   const maxW = all[0]?.w || 1;
   if (!entThreshold) entThreshold = Math.max(1, all.length > 140 ? all[139].w : 1);
-  const edges = all.filter((e) => e.w >= entThreshold);
+  return { ents, all, maxW, edges: all.filter((e) => e.w >= entThreshold) };
+}
+
+function entityDiagram(m, host) {
+  const { ents, all, maxW, edges } = entityData(m);
+  if (!ents.length) return el('div', { class: 'empty' }, t('none'));
   const Ww = 1100, Hh = 760;
   const pos = new Map(ents.map((n, i) => [n.id, { x: Ww / 2 + Math.cos(i / ents.length * 6.283) * 300, y: Hh / 2 + Math.sin(i / ents.length * 6.283) * 260, vx: 0, vy: 0 }]));
   for (let it = 0; it < 260; it++) {
@@ -341,14 +354,21 @@ function layersTable(m) {
 }
 
 // ---------------------------------------------------------------- component diagram
-function componentDiagram(m) {
+function componentData() {
   const comps = [...store.nodes.values()].filter((n) => n.type === 'component');
-  if (!comps.length) return el('div', { class: 'empty' }, t('none'));
   const files = [...store.nodes.values()].filter((n) => n.type === 'file');
   const byComp = new Map(comps.map((c) => [c.path, { c, mods: new Map(), reqs: new Set(), parts: [], data: [] }]));
   for (const f of files) { const e = byComp.get(f.comp); if (!e) continue; const mm = e.mods.get(f.module) || { files: 0, test: 0 }; mm.files++; if (f.role === 'test') mm.test++; e.mods.set(f.module, mm); for (const a of store.adj.get(f.id) || []) if (store.node(a.id)?.type === 'req') e.reqs.add(a.id); }
   for (const n of store.nodes.values()) if (['part', 'api', 'table'].includes(n.type)) for (const a of store.adj.get(n.id) || []) { const f = store.node(a.id); if (f?.type === 'file') { const e = byComp.get(f.comp); if (e && !e.parts.includes(n)) e.parts.push(n); } }
   const list = [...byComp.values()].filter((e) => e.reqs.size || e.mods.size).sort((a, b) => (a.c.kind === 'test') - (b.c.kind === 'test') || b.reqs.size - a.reqs.size);
+  const links = [];
+  for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) { let w = 0; for (const r of list[i].reqs) if (list[j].reqs.has(r)) w++; if (w) links.push({ a: list[i].c.id, b: list[j].c.id, w }); }
+  return { comps, list, links };
+}
+
+function componentDiagram(m) {
+  const { comps, list, links } = componentData();
+  if (!comps.length) return el('div', { class: 'empty' }, t('none'));
   const bw = 300, perRow = Math.min(4, Math.max(2, Math.ceil(Math.sqrt(list.length))));
   const heights = list.map((e) => 70 + e.mods.size * 22 + (e.parts.length ? 26 + Math.ceil(e.parts.length / 2) * 20 : 0));
   const rowsH = []; list.forEach((_, i) => { const r = Math.floor(i / perRow); rowsH[r] = Math.max(rowsH[r] || 0, heights[i]); });
@@ -356,10 +376,8 @@ function componentDiagram(m) {
   const Ww = perRow * (bw + 80) + 20, Hh = y + 10;
   const svg = svgEl('svg', { viewBox: `0 0 ${Ww} ${Hh}`, width: Ww, height: Hh }, defs());
   const place = new Map(list.map((e, i) => [e.c.id, { x: 30 + (i % perRow) * (bw + 80), y: rowY[Math.floor(i / perRow)], h: heights[i] }]));
-  const links = [];
-  for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) { let w = 0; for (const r of list[i].reqs) if (list[j].reqs.has(r)) w++; if (w) links.push({ a: list[i].c.id, b: list[j].c.id, w }); }
   const maxW = Math.max(1, ...links.map((l) => l.w));
-  for (const l of links.sort((p, q) => p.w - q.w)) {
+  for (const l of [...links].sort((p, q) => p.w - q.w)) {
     const a = place.get(l.a), b = place.get(l.b);
     const x1 = a.x + bw / 2, y1 = a.y + a.h / 2, x2 = b.x + bw / 2, y2 = b.y + b.h / 2;
     svg.append(svgEl('path', { d: `M${x1} ${y1} Q${(x1 + x2) / 2} ${(y1 + y2) / 2 - 50} ${x2} ${y2}`, fill: 'none', stroke: '#7f9bff', 'stroke-opacity': 0.18 + 0.5 * l.w / maxW, 'stroke-width': 1 + 6 * l.w / maxW, 'data-a': l.a, 'data-b': l.b }, svgEl('title', {}, `${l.w} ${t('comp.shared')}`)));
@@ -379,19 +397,103 @@ function componentDiagram(m) {
   return el('div', {}, el('div', { class: 'mini', style: { marginBottom: '8px' } }, t('comp.note')), el('div', { style: { overflow: 'auto' } }, svg));
 }
 
+// ---------------------------------------------------------------- dimension-neutral graph (FR-1040 AC-220)
+// The same elements / relations feed the 3D scene and are published through window.eabkView.getState().diagram,
+// so 2D and 3D are compared on one source: the managed data.
+const LAYER_CAP = 48;
+export function graphOf(k, m) {
+  const elements = [], relations = [];
+  const addEl = (id, label, type, group) => { if (!elements.some((e) => e.id === id)) elements.push({ id, label: String(label ?? id), type, group: group || '' }); };
+  const rel = (from, to, label) => relations.push(label ? { from, to, label } : { from, to });
+  if (k === 'ctx') {
+    addEl('system', m.meta.name, 'system');
+    for (const g of m.goals) addEl(g.id, g.id, 'goal', 'system');
+    for (const p of m.personas) { addEl(`persona:${p.name}`, p.name, 'persona'); rel(`persona:${p.name}`, 'system', p.work); }
+    for (const x of ctxExternals(m)) { addEl(x.nodeId, x.name, 'external'); rel('system', x.nodeId, x.method); }
+  } else if (k === 'goals') {
+    addEl('system', m.meta.name, 'system');
+    for (const g of m.goals) { addEl(g.id, `${g.id} ${g.title || ''}`.trim(), 'goal'); rel('system', g.id); }
+    for (const r of m.reqs) {
+      const gid = m.goals.find((g) => g.id === r.goal) ? r.goal : 'goal:none';
+      if (gid === 'goal:none') { addEl('goal:none', t('goals.none'), 'goal'); if (!relations.some((x) => x.to === 'goal:none')) rel('system', 'goal:none'); }
+      addEl(r.id, r.id, 'req', gid); rel(gid, r.id);
+    }
+  } else if (k === 'states') {
+    for (const sm of m.stateMachines) {
+      const eid = `ent:${sm.entity}`;
+      addEl(eid, sm.entity, 'entity', eid);
+      for (const s of sm.states) addEl(`state:${sm.entity}:${s}`, s, 'state', eid);
+      for (const tr of sm.transitions) rel(`state:${sm.entity}:${tr.from}`, `state:${sm.entity}:${tr.to}`, tr.label);
+    }
+  } else if (k === 'entities') {
+    const { ents, edges } = entityData(m);
+    for (const n of ents) addEl(n.id, n.label, 'entity');
+    for (const e of edges) rel(e.a, e.b, String(e.w));
+  } else if (k === 'components') {
+    const { list, links } = componentData();
+    for (const e of list) addEl(e.c.id, e.c.label, e.c.kind === 'test' ? 'test' : 'component');
+    for (const l of links) rel(l.a, l.b, String(l.w));
+  } else if (k === 'layers') {
+    const lay = buildLayers(m);
+    const shown = new Set();
+    for (const layer of [...LAYERS, 'other']) for (const id of [...lay.assets[layer].keys()].sort().slice(0, LAYER_CAP)) { const n = store.node(id); if (n) { addEl(id, n.label, n.type, layer); shown.add(id); } }
+    for (const l of lay.links) if (shown.has(l.a) && shown.has(l.b)) rel(l.a, l.b, String(l.w));
+  }
+  return { kind: k, elements, relations };
+}
+
 // ---------------------------------------------------------------- shell
 export function mount(host) {
-  const hk = new URLSearchParams(location.hash.split('?')[1] || '').get('kind');
+  const qs = new URLSearchParams(location.hash.split('?')[1] || '');
+  const hk = qs.get('kind');
   if (KINDS.includes(hk)) kind = hk;
+  const viewOpt = qs.get('view');   // 'runtime' | 'matrix' (旧「配置」の見方。FR-1041 AC-226)
+  const dm = dimState.diagrams;
+  dimState.diagrams = qs.has('dim') ? (qs.get('dim') === '3d' ? '3d' : '2d') : dm;
+  let dim = dimState.diagrams;
   const tabs = el('div', { class: 'dgmtabs' });
   const body = el('div', { class: 'dgm' });
   host.append(tabs, body);
-  let current = null, erLink = null;
+  let current = null, erLink = null, three = null, renderToken = 0;
+  const diagramState = () => ({ ...graphOf(kind, store.model), dim });
+  const view = { mode: 'diagrams', getState: () => ({ diagram: diagramState() }), setDim: (d) => setDim(d) };
+  window.eabkView = view;
+  const setDim = (d) => { if (d !== '2d' && d !== '3d') return; if (d === dim) return; dim = dimState.diagrams = d; render(); };
+  const offDim = registerDim((d) => (d ? setDim(d) : setDim(dim === '2d' ? '3d' : '2d')));
   const render = () => {
     const m = store.model;
-    tabs.replaceChildren(...KINDS.map((k) => el('button', { class: 'tabbtn' + (k === kind ? ' on' : ''), onclick: () => { kind = k; render(); } }, t('dgm.' + k))));
+    three?.destroy?.(); three = null;
+    const my = ++renderToken;
+    const toggle = dimToggle({ current: dim, onPick: setDim });
+    tabs.replaceChildren(...KINDS.map((k) => el('button', { class: 'tabbtn' + (k === kind ? ' on' : ''), onclick: () => { kind = k; render(); } }, t('dgm.' + k))), toggle);
     const note = el('div', { class: 'mini', style: { marginBottom: '10px', maxWidth: '900px' } }, t('dgm.' + kind + '.note'));
     let content;
+    if (dim === '3d') {
+      const g = graphOf(kind, m);
+      const stage = el('div', { class: 'dgm3d', 'data-testid': 'dgm-3d' });
+      content = el('div', {}, stage);
+      const table = () => el('div', { class: 'tw', style: { maxHeight: '320px', marginTop: '10px' } }, el('table', { class: 't' },
+        el('thead', {}, el('tr', {}, ['ID', t('dim.label'), t('dim.type')].map((x) => el('th', {}, x)))),
+        el('tbody', {}, g.elements.map((e) => el('tr', { 'data-id': e.id }, el('td', {}, e.id), el('td', {}, e.label), el('td', {}, e.type))))));
+      if (!g.elements.length) stage.append(el('div', { class: 'empty' }, t('none')));
+      else import('./dgm3d.js').then((mod) => {
+        if (my !== renderToken) return;
+        try { three = mod.mount3d(stage, g, { onPick: (id) => { if (store.nodes.has(id)) store.select(id, { fly: true }); } }); three.setSelected(store.selected); }
+        catch (e) {
+          // AC-223: keep the selection, fall back to 2D and say why, with a table / text alternative.
+          dim = dimState.diagrams = '2d';
+          render();
+          body.prepend(el('div', { class: 'warnbox', role: 'alert', 'data-testid': 'dim-fallback' }, t('dim.nowebgl'), table()));
+        }
+      }).catch(() => {
+        if (my !== renderToken) return;
+        dim = dimState.diagrams = '2d'; render();
+        body.prepend(el('div', { class: 'warnbox', role: 'alert', 'data-testid': 'dim-fallback' }, t('dim.nowebgl'), table()));
+      });
+      current = el('div', {}, note, content, el('details', { class: 'sz-alt' }, el('summary', {}, t('dim.alt')), table()));
+      body.replaceChildren(current);
+      return;
+    }
     if (kind === 'ctx') content = el('div', { style: { overflow: 'auto' } }, contextDiagram(m));
     else if (kind === 'goals') content = el('div', {}, el('div', { class: 'row', style: { marginBottom: '8px' } }, ['impl', 'status'].map((c) => el('button', { class: 'tabbtn' + (goalColor === c ? ' on' : ''), onclick: () => { goalColor = c; render(); } }, t('map.color.' + c))),
       el('span', { class: 'legend' }, goalColor === 'impl' ? [['#34e0a1', t('impl.done')], ['#3a4a78', t('impl.none')]].map(([c, l]) => el('span', {}, el('i', { class: 'dot', style: { background: c } }), l)) : Object.entries(STATUS_COLOR).slice(0, 4).map(([k, c]) => el('span', {}, el('i', { class: 'dot', style: { background: c } }), statusText(k, ''))))), el('div', { style: { overflow: 'auto' } }, goalTree(m)));
@@ -402,6 +504,8 @@ export function mount(host) {
       erLink = () => { const n = store.node(store.selected); toER.hidden = !(n && (n.type === 'entity' || n.type === 'table')); };
       erLink();
       content = el('div', {}, el('div', { style: { overflow: 'auto' } }, layersDiagram(m)), toER, layersTable(m));
+      if (viewOpt === 'runtime') content.append(runtimePlacement());
+      if (viewOpt === 'matrix') { const emb = el('div', { class: 'dgm-embed' }); content.append(emb); embedded = mountPlacement(emb); }
     }
     else { erLink = null; content = componentDiagram(m); }
     if (kind !== 'layers') erLink = null;
@@ -409,9 +513,11 @@ export function mount(host) {
     body.replaceChildren(current);
     applyDim(body);
   };
+  let embedded = null;
   render();
-  const refresh = () => { applyDim(body); if (erLink) erLink(); };
-  const offs = [store.on('select', refresh), store.on('hover', refresh), store.on('model', render), onLang(render)];
+  const refresh = () => { applyDim(body); if (erLink) erLink(); three?.setSelected?.(store.selected); };
+  const offs = [store.on('select', refresh), store.on('hover', refresh), store.on('model', render), onLang(render), offDim];
   body.addEventListener('click', (e) => { if (e.target === body || e.target.tagName === 'svg') store.clear(); });
-  return { destroy() { offs.forEach((f) => f()); hideTip(); } };
+  return { destroy() { offs.forEach((f) => f()); three?.destroy?.(); embedded?.destroy?.(); hideTip(); if (window.eabkView === view) delete window.eabkView; } };
 }
+

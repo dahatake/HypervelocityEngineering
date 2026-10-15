@@ -59,6 +59,16 @@ description: rd-author が、conductor から渡された依頼・回答・資�
 - 「関連する既存資産」に `共通部品「…」`・`API「…」`・`テーブル「…」` と書くときは、カタログに実在する名前にします（CHK-27）。
 - 要求を変更・廃止する前に `python scripts/rdcheck.py trace <ID>` で、つながる AC・台帳のケース・カタログ・コードを確かめ、影響を変更履歴と結果に書きます。エンティティ・PARAM を変えるときは `trace <名前|PARAM-xxx>` で、それを使う要求を洗い出します。
 
+### 外部連携を含む依頼（FR-1039。`integration-checklist.md`・`integration-requirements.md`）
+
+依頼が外部のアプリ・データとの連携（API・ファイル・DB・イベント）を含むときは、要求を書く前に次を行います。
+
+1. 外部連携カタログ（`docs/integrations.md`。ない導入先は雛形から作成）を確認し、既存の連携があれば再利用・更新します。新しい連携は `python scripts/next-id.py INT` で INT-ID を採番し、`#### INT-xxx <名前>` の項目と索引表の行を足します。
+2. [integration-requirements.md](integration-requirements.md) の 16 観点（連携先・方向・方式・頻度と量・データ分類と個人情報・認証認可・可用性／SLA・レート制限・エラー／再試行／冪等性・契約／バージョン・変更通知・監視・データ保持・障害時の代替・責任分界・法務／ライセンス）を 1 つずつ走査します。決まらない観点は、質問票（Q-ID）に載せて値を `TBD（Q-xxx）` にし、関係する受入基準を BLOCKED にします。
+3. 個人情報・認証認可・外部公開に触れる観点は、approval_policy の包括承認の対象にしません（承認待ちのまま質問票に載せます）。
+4. 要求の「関連する既存資産」と構造化欄に、カタログの INT-ID を書きます。要求は同じ文書のテンプレート（基本形と構造化欄・検証レベル付きの受入基準）で書きます。
+5. 終了前に `python scripts/verify.py --docs-only` を exit 0 にし、結果に 16 観点の走査（観点番号ごとの扱い）を書きます。
+
 ### 承認ポリシー（approval_policy）
 
 | 値 | 動作 |

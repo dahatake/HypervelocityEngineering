@@ -144,7 +144,10 @@ def test_selection_and_filter_survive_placement_map_and_table_switches(page):
     page.locator('a[href="#/map2d"]').click()
     expect(page.locator("#drawer")).to_contain_text("FR-001")
     expect(page.locator("#q")).to_have_value("FR-001")
-    page.locator('a[href="#/placement"]').click()
+    # FR-1041: 配置は図式（層×コンポーネント）へ統合。ナビの「図式」から旧配置の見方へ移る
+    page.locator('a[data-nav="diagrams"]').click()
+    expect(page).to_have_url(re.compile(r"#/diagrams"))
+    page.evaluate("location.hash = '#/diagrams?kind=layers&view=matrix'")
     expect(page.locator("#view")).to_contain_text("配置")
     expect(page.locator("#drawer")).to_contain_text("FR-001")
     expect(page.locator("#q")).to_have_value("FR-001")

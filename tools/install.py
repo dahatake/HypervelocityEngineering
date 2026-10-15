@@ -41,6 +41,8 @@ MANAGED = [
     ".github/agents/implementer.agent.md",
     ".github/agents/reviewer.agent.md",
     ".github/skills/requirement-definition/SKILL.md",
+    ".github/skills/requirement-definition/integration-checklist.md",
+    ".github/skills/requirement-definition/integration-requirements.md",
     ".github/skills/implement-fr/SKILL.md",
     ".github/skills/implement-fr/ui-design.md",
     ".github/skills/implement-fr/original-rd.md",
@@ -83,6 +85,8 @@ MANAGED = [
     "users-guide/08-roadmap.md",
     "users-guide/09-versioning.md",
     "users-guide/10-adopting-existing-apps.md",
+    "users-guide/11-integration-catalog.md",
+    "users-guide/11-integration-catalog.md",
     "users-guide/images/architecture-diagram.png",
     "users-guide/images/dashboard.png",
     "tests/toolkit/test_clean_work.py",
@@ -184,8 +188,10 @@ OBSOLETE: list[str] = [
 TEMPLATES = [
     "docs/requirements-definition.md",
     "docs/catalog.md",
+    "docs/integrations.md",
     "docs/id-registry.md",
     "docs/run-history.md",
+    "docs/integrations.md",
     "tests/system/ledger.json",
 ]
 CONFIG = "scripts/ebak.config.json"
@@ -221,6 +227,7 @@ DEFAULT_FILES = {
     "run_history": "docs/run-history.md",
     "ledger": "tests/system/ledger.json",
     "manual_tests": "docs/manual-tests.md",
+    "integrations": "docs/integrations.md",
 }
 
 

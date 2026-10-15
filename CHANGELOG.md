@@ -5,6 +5,9 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- **外部連携の要求チェックリスト**（FR-1038・FR-1039）を追加しました。`.github/skills/requirement-definition/integration-requirements.md` に 16 観点（問い・要求に書く内容・受入基準の例・書かない設計事項）と要求テンプレートを置き、rd-author（カタログの確認・INT 採番・16 観点の走査・包括承認の除外）と rd-audit（観点の欠落・カタログとの食い違い）の手順書に組み込み、インストールで配ります。
+
+- **外部連携カタログ**（任意の `docs/integrations.md`）を追加しました（FR-1035〜FR-1037、toolkit 0.4.0）。外部アプリ・データとの連携を `#### INT-001 <名前>` の 1 連携 1 項目で記録し、16 観点の欄（値・なし・TBD（Q-xxx））と認証情報を書かない規則を持ちます。`python scripts/next-id.py INT` で採番し、`verify.py --docs-only`（CHK-28）が形式・ID・要求との対応を検査し、`rdcheck.py trace INT-xxx` が参照する要求・受入基準を一覧します。インストールは雛形を、まだないときに限り作ります。手順は [users-guide/11-integration-catalog.md](users-guide/11-integration-catalog.md) です。カタログがないリポジトリの検査・Studio・清掃は従来どおりです。
 - **次に実装すべき要求の分析と、時間だけで始める /build の依頼生成**を追加しました（FR-1015・FR-1016）。`python scripts/next-impl.py` が、承認済みで未着手・試験未登録・試験未合格の要求を、依存・優先度・実装状態の順位表と除外の理由つきで出し、`python scripts/build-request.py 60分`（`90m`・`24時間`・`1.5h`）が、許容時間を 1 要求あたり 60 分（PARAM-012）で件数に換算した `/build` 用の依頼を生成します（生成のみ。run は開始しません）。
 
 - **既存アプリの導入（brownfield）** を追加しました（`scripts/adopt.py`・skill `adopt-existing`・[users-guide/10](users-guide/10-adopting-existing-apps.md)）。公開されている知見（再文書化とリエンジニアリングの分離、特性化テスト・golden master、Strangler Fig、ホットスポット分析、LLM による要求逆生成の幻覚対策）を、この toolkit の規則（G-1・G-2・G-3、承認は利用者）に照らして検証し、3 層（事実の棚卸し／逆生成の仮説＝出典と証跡の固定・承認待ち／現状の挙動の固定）で採用しました。`scan`・`request`・`anchor`・`check`・`golden` を提供し、conductor・rd-author・test-designer・rd-auditor・implementer の手順に導入モードを追加しました。

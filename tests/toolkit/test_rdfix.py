@@ -167,3 +167,14 @@ def test_common_parts_follow_function_table(sample):
     assert "| 下書き保存 | - | 下書きの保持 | FR-001 |" in sample.read("docs/catalog.md")
     out = sample.py("rdcheck.py", "check", "--base", "none").stdout
     assert "CHK-27" not in out and "CHK-24" not in out, out
+
+
+def test_catalog_dot_prefixed_paths_are_kept(sample):
+    # 回帰: lstrip("./") は '.github/...' の先頭の '.' を落として実在ファイルの参照を消していた。'./' の接頭辞だけを除く。
+    sample.write(".github/skills/x/guide.md", "# guide\n")
+    sample.commit("add dot dir file")
+    cat = sample.read("docs/catalog.md").replace("| 未実装 | 未実装 | なし |", "| `.github/skills/x/guide.md`, `./.github/skills/x/guide.md` | 未実装 | なし |")
+    sample.write("docs/catalog.md", cat)
+    out = sample.py("rdfix.py", "--only", "catalog", "--apply").stdout
+    assert not any("存在しない" in l and ".github/skills/x/guide.md" in l for l in fixes(out)), out
+    assert ".github/skills/x/guide.md" in sample.read("docs/catalog.md")

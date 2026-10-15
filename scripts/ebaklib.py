@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
-TOOLKIT_VERSION = "0.3.0"
+TOOLKIT_VERSION = "0.4.0"
 
 SPECKIT_PATHS = [".specify/**", "specs/**/*.md"]
 
@@ -32,6 +32,7 @@ DEFAULT_CONFIG: dict = {
         "run_history": "docs/run-history.md",
         "ledger": "tests/system/ledger.json",
         "manual_tests": "docs/manual-tests.md",
+        "integrations": "docs/integrations.md",
     },
     "base_branch": "main",
     "work": {"dir": "work", "retention_days": 14},
@@ -952,6 +953,116 @@ def save_ledger(root: Path, cfg: dict, data: dict) -> None:
 
 
 # --------------------------------------------------------------------------- registry
+
+# --------------------------------------------------------------------------- integration catalog (FR-1035)
+
+INT_ID_RE = re.compile(r"(?<![A-Za-z0-9\-])(INT-\d{3,})(?![0-9])")
+INT_HEADING_RE = re.compile(r"^(#{2,6})\s+\**(INT[-_A-Za-z0-9]*)\**\s*(.*)$")
+# AC-208: fields every item must have (value required)
+INT_REQUIRED = ("連携先", "方向", "方式", "データ分類", "個人情報", "認証認可", "責任分界", "状態", "関連する要求")
+# FR-1038 の 16 観点のうち、必須欄に含まれない欄（値・なし・TBD(Q-xxx) のどれかで埋める）
+INT_PERSPECTIVES = ("頻度と量", "可用性・SLA", "レート制限", "エラー・再試行・冪等性", "契約・バージョン",
+                    "変更通知", "監視", "データ保持", "障害時の代替", "法務・ライセンス")
+INT_OPTIONAL = ("秘密の保管場所", "備考")  # 秘密の「値」ではなく保管場所の名前だけ
+INT_DIRECTIONS = ("受信", "送信", "双方向")
+INT_STATES = ("検討中", "運用中", "廃止")
+INT_TBD_RE = re.compile(r"^TBD\s*[（(]\s*(Q-\d{3,})\s*[）)]\s*$")
+INT_BAD_PLACEHOLDERS = ("未定", "不明", "?", "？", "-", "—", "TODO", "tbd")
+INT_BULLET_RE = re.compile(r"^\s{0,3}[-*]\s+\**([^:：*]{1,30}?)\**\s*[:：]\s*(.*)$")
+# 認証情報の「値」らしい文字列（AC-209）
+INT_SECRET_VALUE_RES = (
+    re.compile(r"://[^/\s:@]+:[^/\s@]+@"),
+    re.compile(r"\b(?:Password|Pwd|AccountKey|SharedAccessKey|SharedAccessSignature|Server|Data Source|User ID|Uid)\s*=\s*[^;\s]+", re.I),
+    re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{12,}", re.I),
+    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
+    re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
+    re.compile(r"\b(?:sk|pk|rk)[-_](?:live|test|proj)?[-_]?[A-Za-z0-9]{16,}"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}"),
+    re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}"),
+    re.compile(r"-----BEGIN [A-Z ]*(?:PRIVATE KEY|CERTIFICATE)"),
+    re.compile(r"(?i)(?:password|passwd|pwd|secret|token|api[ _-]?key|access[ _-]?key|パスワード|パスフレーズ|トークン|シークレット|秘密鍵|APIキー|接続文字列)\s*[:：=]\s*[^\s、。,;（()）「」]{6,}"),
+    re.compile(r"(?<![A-Za-z0-9+/=_.-])(?=[A-Za-z0-9+/_]*[A-Z])(?=[A-Za-z0-9+/_]*[a-z])(?=[A-Za-z0-9+/_]*\d)[A-Za-z0-9+/_]{32,}={0,2}(?![A-Za-z0-9+/=_.-])"),
+    re.compile(r"(?<![A-Za-z0-9_.-])[0-9a-fA-F]{32,}(?![A-Za-z0-9_.-])"),
+)
+INT_SECRET_FIELD_RE = re.compile(r"パスワード|パスフレーズ|トークン|シークレット|秘密鍵|鍵の値|接続文字列|認証情報|資格情報|password|passwd|secret|token|api[ _-]?key|credential|connection[ _-]?string", re.I)
+
+
+@dataclass
+class Integration:
+    id: str
+    name: str
+    file: str
+    line: int
+    fields: Dict[str, str] = field(default_factory=dict)
+    field_lines: Dict[str, int] = field(default_factory=dict)
+    dup_fields: List[Tuple[str, int]] = field(default_factory=list)
+    bad_id: bool = False
+
+    def get(self, key: str) -> str:
+        return strip_md(self.fields.get(key, ""))
+
+
+@dataclass
+class IntegrationCatalog:
+    file: str = ""
+    exists: bool = False
+    items: List[Integration] = field(default_factory=list)
+    index_rows: List[Tuple[int, List[str], List[str]]] = field(default_factory=list)  # (line, header, cells)
+
+    def by_id(self) -> Dict[str, Integration]:
+        return {i.id: i for i in self.items if not i.bad_id}
+
+
+def parse_integrations_text(text: str, rel: str = "") -> IntegrationCatalog:
+    cat = IntegrationCatalog(file=rel, exists=True)
+    lines = strip_comments(text).splitlines()
+    cur: Optional[Integration] = None
+    cur_lvl = 0
+    in_code = False
+    for n, line in enumerate(lines, start=1):
+        if line.lstrip().startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code:
+            continue
+        hm = HEADING_RE.match(line)
+        if hm:
+            lvl = len(hm.group(1))
+            im = INT_HEADING_RE.match(line)
+            if im:
+                raw_id = im.group(2)
+                cur = Integration(id=raw_id, name=strip_md(im.group(3)), file=rel, line=n,
+                                  bad_id=not re.fullmatch(r"INT-\d{3,}", raw_id))
+                cur_lvl = lvl
+                cat.items.append(cur)
+                continue
+            if cur is not None and lvl <= cur_lvl:
+                cur = None
+        if cur is not None:
+            bm = INT_BULLET_RE.match(line)
+            if bm:
+                key = bm.group(1).strip()
+                if key in cur.fields:
+                    cur.dup_fields.append((key, n))
+                else:
+                    cur.fields[key] = bm.group(2).strip()
+                    cur.field_lines[key] = n
+    for t in parse_tables(lines):
+        ic, nc = t.col("ID"), t.col("連携先")
+        if ic is None or nc is None:
+            continue
+        for ln, cells in t.rows:
+            cat.index_rows.append((ln, t.header, cells))
+    return cat
+
+
+def parse_integrations(root: Path, cfg: dict) -> IntegrationCatalog:
+    rel = cfg.get("management_files", {}).get("integrations") or "docs/integrations.md"
+    p = root / rel
+    if not p.is_file():
+        return IntegrationCatalog(file=rel, exists=False)
+    return parse_integrations_text(read_text(p), rel)
+
 
 def parse_registry_text(text: str) -> Dict[str, Dict[str, str]]:
     out: Dict[str, Dict[str, str]] = {}
