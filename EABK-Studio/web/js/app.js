@@ -271,5 +271,5 @@ renderNav();
 view.replaceChildren(el('div', { class: 'splash' }, el('div', { class: 'spin' }), t('loading')));
 initDrawer(document.getElementById('drawer'));
 installXref();
-for (const k of ['dashboard', 'implstatus', 'diagrams']) ROUTES[k].load().catch(() => {}); // warm the module cache
+for (const k of ['dashboard', 'implstatus', 'diagrams', 'map2d']) ROUTES[k].load().catch(() => {}); // warm the module cache (the 2D map is the default map target)
 loadModel().catch((e) => { view.replaceChildren(el('div', { class: 'page' }, el('div', { class: 'warnbox' }, 'Failed to load: ' + e.message))); });

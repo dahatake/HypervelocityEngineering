@@ -38,6 +38,13 @@ from typing import Dict, List, Optional, Set, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ebaklib as h  # noqa: E402
 
+
+def _strip_dot_slash(p: str) -> str:
+    """先頭の './' の繰り返しだけを除く（lstrip("./") は '.github/...' の先頭の '.' も落とす）。"""
+    while p.startswith("./"):
+        p = p[2:]
+    return p
+
 TARGETS = ("registry", "catalog", "ledger", "gitignore", "history")
 CATALOG_TEMPLATE = (
     "# カタログ\n\n"
@@ -129,7 +136,7 @@ class Fixer:
         return self._files
 
     def exists(self, p: str) -> bool:
-        rel = p.lstrip("./")
+        rel = _strip_dot_slash(p)
         self.files()
         return rel in self._file_set or (self.root / rel).exists()
 
@@ -180,7 +187,7 @@ class Fixer:
         return self._renames
 
     def follow(self, p: str) -> Optional[str]:
-        cur, seen = p.lstrip("./"), set()
+        cur, seen = _strip_dot_slash(p), set()
         while cur in self.renames() and cur not in seen:
             seen.add(cur)
             cur = self.renames()[cur]
