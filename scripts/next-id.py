@@ -3,7 +3,7 @@
 
 Usage:
   python scripts/next-id.py FR [--count 3] [--note "..."]      # -> FR-013 (FR-014 ...)
-  python scripts/next-id.py NFR-SEC | AC | Q | PARAM | G | SRC | E2E | IT
+  python scripts/next-id.py NFR-SEC | AC | Q | PARAM | G | SRC | E2E | IT | INT   # INT = 外部連携カタログ（docs/integrations.md）
   python scripts/next-id.py --sync [--adopt] [--finalize]     # reconcile docs/id-registry.md
   python scripts/next-id.py --peek FR                          # show next ID without allocating
 
@@ -26,7 +26,7 @@ from typing import Dict, List, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ebaklib as h  # noqa: E402
 
-KIND_RE = re.compile(r"^(G|FR|AC|Q|PARAM|SRC|E2E|IT|NFR-[A-Z0-9]+)$")
+KIND_RE = re.compile(r"^(G|FR|AC|Q|PARAM|SRC|E2E|IT|INT|NFR-[A-Z0-9]+)$")
 REGISTRY_TITLE = (
     "# ID 台帳\n\n"
     "要求・受入基準・質問票・パラメータ・テストケースの ID は `scripts/next-id.py` でだけ採番します。"
@@ -93,14 +93,27 @@ def max_for_kind(root: Path, cfg: dict, kind: str, alloc: Dict[str, int]) -> int
     led = root / h.mf(cfg, "ledger")
     if led.exists():
         texts.append(h.read_text(led))
+    integ_rel = cfg["management_files"].get("integrations", "docs/integrations.md")
+
+    def integ_ids(t: str) -> str:
+        # 雛形の書式例（コードブロック内の INT-001）は数えない。見出しの ID だけを数える。
+        return "\n".join(i.id for i in h.parse_integrations_text(t, integ_rel).items)
+
+    if kind == "INT":
+        ip = root / integ_rel
+        if ip.exists():
+            texts.append(integ_ids(h.read_text(ip)))
     base = cfg.get("base_branch", "main")
     for ref in (base, f"origin/{base}"):
         if not h.ref_exists(root, ref):
             continue
-        for rel in (h.mf(cfg, "requirements"), h.mf(cfg, "id_registry"), h.mf(cfg, "ledger")):
+        rels = [h.mf(cfg, "requirements"), h.mf(cfg, "id_registry"), h.mf(cfg, "ledger")]
+        if kind == "INT":
+            rels.append(integ_rel)
+        for rel in rels:
             t = h.git_show(root, ref, rel)
             if t:
-                texts.append(h.strip_comments(t))
+                texts.append(integ_ids(t) if rel == integ_rel else h.strip_comments(t))
         rc, out = h.git(["ls-tree", "-r", "--name-only", ref, h.mf(cfg, "requirements_dir")], root)
         if rc == 0:
             for rel in out.splitlines():
@@ -108,6 +121,9 @@ def max_for_kind(root: Path, cfg: dict, kind: str, alloc: Dict[str, int]) -> int
                 if t:
                     texts.append(h.strip_comments(t))
     for t in texts:
+        if kind == "INT":  # 書式の例（`INT-001`・コードブロック）は採番済みとして数えない
+            t = re.sub(r"^\s*```.*?^\s*```", "", t, flags=re.S | re.M)
+            t = re.sub(r"`[^`\n]*`", "", t)
         nums += ids_in_text(t, kind)
     if kind in ("E2E", "IT") and led.exists():
         try:
@@ -181,6 +197,7 @@ def plan_sync(root: Path, cfg: dict, adopt: bool, finalize: bool, revive: bool =
     doc = h.parse_requirements(root, cfg)
     ledger = h.load_ledger(root, cfg)
     case_ids = {c.get("id") for c in ledger.get("cases", []) if isinstance(c, dict) and c.get("id")}
+    int_items = h.parse_integrations(root, cfg).by_id()
     text = ensure_registry(reg_path)
     lines = text.splitlines()
     reg = h.parse_registry_text(text)
@@ -205,7 +222,11 @@ def plan_sync(root: Path, cfg: dict, adopt: bool, finalize: bool, revive: bool =
         seen.setdefault(id_, cells)
         state = cells[2]
         kind = h.id_kind(id_)
-        if kind in ("E2E", "IT"):
+        if id_.startswith("INT-"):
+            it = int_items.get(id_)
+            present = it is not None
+            retired = bool(it and it.get("状態") == "廃止")
+        elif kind in ("E2E", "IT"):
             present = id_ in case_ids
             retired = False
         else:
@@ -232,6 +253,7 @@ def plan_sync(root: Path, cfg: dict, adopt: bool, finalize: bool, revive: bool =
     missing = [i for i in sorted(doc.defs, key=lambda x: (h.id_kind(x), h.id_num(x)))
                if i not in reg and h.id_kind(i) not in ("", "G", "SRC")]
     missing += sorted(c for c in case_ids if c not in reg)
+    missing += sorted(i for i in int_items if i not in reg)
     res["missing"] = missing
     if adopt:
         src = source_label(root)
@@ -239,12 +261,13 @@ def plan_sync(root: Path, cfg: dict, adopt: bool, finalize: bool, revive: bool =
         added = []
         for id_ in missing:
             req = doc.requirements.get(id_)
-            st = "廃止" if req and req.state == "廃止" else "使用中"
-            added.append(f"| {id_} | {h.id_kind(id_)} | {st} | {now} | {src} | 既存の ID を取り込み |")
+            st = "廃止" if (req and req.state == "廃止") or (id_ in int_items and int_items[id_].get("状態") == "廃止") else "使用中"
+            kind_label = "INT" if id_.startswith("INT-") else h.id_kind(id_)
+            added.append(f"| {id_} | {kind_label} | {st} | {now} | {src} | 既存の ID を取り込み |")
         out += "".join(a + "\n" for a in added)
         res["added"] = list(missing)
     res["text"] = out
-    res["ids"] = list(doc.defs) + list(case_ids)
+    res["ids"] = list(doc.defs) + list(case_ids) + list(int_items)
     return res
 
 
@@ -260,7 +283,7 @@ def write_sync(root: Path, cfg: dict, plan: dict) -> None:
             for id_ in plan["ids"]:
                 if not id_:
                     continue
-                k = h.id_kind(id_)
+                k = "INT" if id_.startswith("INT-") else h.id_kind(id_)
                 if k:
                     alloc[k] = max(alloc.get(k, 0), h.id_num(id_))
             h.write_json(alloc_path, alloc)
@@ -292,7 +315,7 @@ def main(argv=None) -> int:
     if args.sync:
         return sync(root, cfg, args.adopt, args.finalize)
     if not args.kind or not KIND_RE.match(args.kind):
-        ap.error("kind は FR, NFR-<区分>（例: NFR-SEC）, AC, Q, PARAM, G, SRC, E2E, IT のどれかです")
+        ap.error("kind は FR, NFR-<区分>（例: NFR-SEC）, AC, Q, PARAM, G, SRC, E2E, IT, INT のどれかです")
     if args.count < 1 or args.count > 200:
         ap.error("--count は 1〜200 です")
     ids = allocate(root, cfg, args.kind, args.count, args.note, args.peek)

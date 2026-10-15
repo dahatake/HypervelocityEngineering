@@ -5,7 +5,7 @@
 ## verify（L1 決定的検査）
 
 ```bash
-python scripts/verify.py                  # 管理データの検査（CHK-01〜27）＋ verify.commands
+python scripts/verify.py                  # 管理データの検査（CHK-01〜28。CHK-28 は外部連携カタログ。ないときは何も報告しない）＋ verify.commands
 python scripts/verify.py --docs-only      # 管理データの検査だけ（rd-author・test-designer のゲート）
 python scripts/verify.py --quick          # "slow": true のコマンドをスキップする（implementer のゲート）
 python scripts/verify.py --run current    # 実行中の run の queue.json との整合性（CHK-21）も検査する
@@ -31,6 +31,7 @@ python scripts/rdcheck.py stats                        # 監査のメトリク�
 python scripts/rdcheck.py digest AC-031                # AC のダイジェスト
 python scripts/rdcheck.py trace FR-012 [--json]        # 要求の上流（G・出典）・横（用語・状態・PARAM）・下流（AC・台帳のケース・カタログ・コード）をたどる
 python scripts/rdcheck.py trace G-002 申請 PARAM-004 下書き保存   # 目的・エンティティ・PARAM・共通部品から、関係する要求を逆にたどる（影響分析）
+python scripts/rdcheck.py trace INT-001                # 外部連携を参照する要求と受入基準を一覧する
 ```
 
 `--base` の既定値は main との分岐点（merge-base）です。差分の検査（CHK-12/13）に使います。
@@ -65,6 +66,8 @@ python scripts/next-id.py FR                    # FR-013
 python scripts/next-id.py NFR-SEC               # NFR-SEC-004
 python scripts/next-id.py AC --count 3          # AC-041 AC-042 AC-043
 python scripts/next-id.py Q | PARAM | G | SRC | E2E | IT
+python scripts/next-id.py INT                   # INT-001（外部連携カタログ docs/integrations.md の ID）
+python scripts/next-id.py INT                   # INT-001（外部連携カタログ docs/integrations.md の ID。[11 章](11-integration-catalog.md)）
 python scripts/next-id.py --peek FR             # 採番せずに次の ID を表示する
 python scripts/next-id.py --sync                # ID 台帳の状態を本文に合わせる（使用中・廃止・削除済み）
 python scripts/next-id.py --sync --adopt        # 台帳にない既存の ID を取り込む（インストール直後）
