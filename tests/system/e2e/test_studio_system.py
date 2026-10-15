@@ -84,15 +84,18 @@ def _management_fingerprints(repo=ROOT):
 
 
 def _repository_files(repo=ROOT):
-    """Return the repository-side files that a client-side export must not alter."""
-    return {
-        path.relative_to(repo): _fingerprint(path)
-        for path in repo.rglob("*")
-        if path.is_file()
-        and ".git" not in path.parts
-        and "__pycache__" not in path.parts
-        and path.suffix not in {".pyc", ".pyo"}
-    }
+    """Return the repository-side files that a client-side export must not alter.
+
+    work/（run の実行ログ・worktree。実行中の別プロセスが書き続ける）と環境・キャッシュは
+    リポジトリの保存物ではないので除く。管理データ・ソース・docs・tests は全て対象。"""
+    skipped = {".git", "__pycache__", "work", ".venv", "node_modules", ".pytest_cache"}
+    found = {}
+    for path in repo.rglob("*"):
+        rel = path.relative_to(repo)
+        if skipped & set(rel.parts) or not path.is_file() or path.suffix in {".pyc", ".pyo"}:
+            continue
+        found[rel] = _fingerprint(path)
+    return found
 
 
 # FR-001 AC-001
@@ -111,8 +114,11 @@ def test_dashboard_shows_aggregates_and_selectable_breakdowns(page):
     expect(page.locator("#view")).to_contain_text("要求")
     expect(page.locator("#view")).to_contain_text("目的")
     expect(page.locator("#view")).to_contain_text("境界")
-    page.locator("#view").get_by_text("G-001", exact=True).click()
-    expect(page.url).to_contain_text("#/map2d")
+    # 目的の内訳の行（行全体が内訳の選択操作）。ID 文字列は AC-190/204 により詳細を開く xref リンクなので、行の余白を押す。
+    row = page.locator('#view a.xref[data-xref="G-001"]').first.locator(
+        "xpath=ancestor::div[contains(@style,'cursor: pointer')][1]")
+    row.locator(".bar").click()
+    expect(page).to_have_url(re.compile(r"#/map2d"))
 
 
 # FR-003 AC-003
@@ -157,12 +163,12 @@ def test_search_shortcuts_limit_results_and_export_table_csv(page):
     expect(page.locator("#results")).to_be_visible()
     assert page.locator("#results > *").count() <= 40
     page.keyboard.press("Enter")
-    expect(page.url).to_contain_text("map")
+    expect(page).to_have_url(re.compile(r"#/map"))
     page.keyboard.press("Control+K")
     expect(page.locator("#q")).to_be_focused()
     page.goto(page.url.split("#")[0] + "#/tables?tab=reqs")
     with page.expect_download() as download_info:
-        page.get_by_text("CSV", exact=True).click()
+        page.get_by_role("button", name=re.compile("CSV")).click()
     download = download_info.value
     assert download.suggested_filename.endswith(".csv")
     assert Path(download.path()).read_bytes()
@@ -180,13 +186,13 @@ def test_persona_defaults_and_switching_preserve_selected_id_filter_and_time(pag
     page.get_by_text("FR-001", exact=True).first.click()
     selected_at = page.locator("time").first.get_attribute("datetime")
 
-    page.get_by_text("Architect", exact=True).click()
+    page.locator("#personaBar").get_by_role("button", name=re.compile("Architect")).click()
     expect(page.locator("#view")).to_contain_text("2D")
     expect(page.locator("#drawer")).to_contain_text("FR-001")
     expect(page.locator("#q")).to_have_value("FR-001")
     assert page.locator("time").first.get_attribute("datetime") == selected_at
 
-    page.get_by_text("Software Engineer", exact=True).click()
+    page.locator("#personaBar").get_by_role("button", name=re.compile("Software Engineer")).click()
     expect(page.locator("#view")).to_contain_text("表")
     expect(page.locator("#drawer")).to_contain_text("FR-001")
     expect(page.locator("#q")).to_have_value("FR-001")

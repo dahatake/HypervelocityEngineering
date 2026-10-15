@@ -48,9 +48,10 @@ export function create2d(ctx) {
       const inner = svgEl('svg', { x: r.x, y: r.y, width: r.w, height: r.h, overflow: 'hidden' });
       inner.append(svgEl('text', { x: px(10), y: fs + px(5), 'font-size': fs, class: 'sz-cl-title' }, `${sel ? '◉ ' : ''}${c.id} · ${t('sz.entities', { n: c.count })}`));
       if (level === 'overview') {
+        const rowsTxt = c.lines || c.entities.map((n) => `▪ ${n}`);
         const lines = Math.max(0, Math.min(10, Math.floor((r.h * k - 44) / 17)));
-        c.entities.slice(0, lines).forEach((n, i) => inner.append(svgEl('text', { x: px(12), y: px(40 + 17 * i), 'font-size': px(13), class: 'sz-cl-name' + (n === view.selected ? ' sel' : '') }, `▪ ${n}`)));
-        if (c.count > lines && lines > 0) inner.append(svgEl('text', { x: px(12), y: px(40 + 17 * lines), 'font-size': px(12), class: 'sz-cl-name' }, `… +${c.count - lines}`));
+        rowsTxt.slice(0, lines).forEach((s, i) => inner.append(svgEl('text', { x: px(12), y: px(40 + 17 * i), 'font-size': px(13), class: 'sz-cl-name' + (c.entities[i] === view.selected && !c.lines ? ' sel' : '') }, s)));
+        if (rowsTxt.length > lines && lines > 0) inner.append(svgEl('text', { x: px(12), y: px(40 + 17 * lines), 'font-size': px(12), class: 'sz-cl-name' }, `… +${rowsTxt.length - lines}`));
       }
       g.append(inner);
       root.append(g);

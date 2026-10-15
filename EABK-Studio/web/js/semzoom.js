@@ -40,15 +40,19 @@ export const keyMark = (k) => (k === '主キー' ? 'PK' : k === '外部キー' ?
 
 // ---------------------------------------------------------------------------------------------- data + layout
 const cache = new WeakMap();
-export function dataOf(m) {
+const archCache = new WeakMap();
+// FR-1034: ?view=arch shows the architecture diagram (execution locations as the overview "clusters") on the same renderers.
+export const isArch = () => new URLSearchParams((location.hash.split('?')[1]) || '').get('view') === 'arch';
+export function dataOf(m, arch = false) {
   const ent = m && m.entities;
   if (!ent || !ent.entities || !ent.entities.length) return null;
-  let d = cache.get(ent);
-  if (!d) { d = build(m); cache.set(ent, d); }
+  const c = arch ? archCache : cache;
+  let d = c.get(ent);
+  if (!d) { d = build(m, arch); c.set(ent, d); }
   return d;
 }
 
-function build(m) {
+function build(m, arch = false) {
   const ent = m.entities;
   const ents = ent.entities;
   const byName = new Map(ents.map((e) => [e.name, e]));
@@ -66,13 +70,29 @@ function build(m) {
   }
   // every entity belongs to exactly one cluster (AC-176); anything the derivation missed becomes a singleton
   const seen = new Set();
-  const clusters = [];
-  for (const c of ent.clusters || []) {
-    const es = c.entities.filter((n) => byName.has(n) && !seen.has(n));
-    es.forEach((n) => seen.add(n));
-    if (es.length) clusters.push({ id: c.id, count: es.length, entities: es });
+  let clusters = [];
+  const locations = ((m.placements && m.placements.locations) || []).map((l) => ({ ...l, links: (l.links || []).map((x) => ({ ...x })) }));
+  const storage = new Map(names.map((n) => [n, []]));   // entity -> every listed location holding its data (AC-201)
+  for (const l of locations) for (const dn of l.data) if (storage.has(dn)) storage.get(dn).push({ kind: l.kind, name: l.name });
+  if (arch) {
+    // overview content = execution locations; nothing unlisted is invented, unplaced entities go to "なし" (AC-202)
+    for (const l of locations) {
+      const es = l.data.filter((n) => byName.has(n) && !seen.has(n));
+      es.forEach((n) => seen.add(n));
+      const lines = [...l.apps.map((a) => `▫ ${a}`), ...l.data.filter((n) => !byName.has(n)).map((n) => `▫ ${n}`), ...es.map((n) => `▪ ${n}`)];
+      clusters.push({ id: `${l.kind} · ${l.name}`, count: es.length, entities: es, lines, location: l });
+    }
+    const rest = names.filter((n) => !seen.has(n));
+    if (rest.length || !clusters.length) clusters.push({ id: 'なし', count: rest.length, entities: rest, lines: rest.map((n) => `▪ ${n}`), none: true });
+    rest.forEach((n) => seen.add(n));
+  } else {
+    for (const c of ent.clusters || []) {
+      const es = c.entities.filter((n) => byName.has(n) && !seen.has(n));
+      es.forEach((n) => seen.add(n));
+      if (es.length) clusters.push({ id: c.id, count: es.length, entities: es });
+    }
+    for (const n of names) if (!seen.has(n)) clusters.push({ id: 'C' + (clusters.length + 1), count: 1, entities: [n] });
   }
-  for (const n of names) if (!seen.has(n)) clusters.push({ id: 'C' + (clusters.length + 1), count: 1, entities: [n] });
   const clusterOf = new Map();
   for (const c of clusters) for (const n of c.entities) clusterOf.set(n, c);
 
@@ -84,7 +104,7 @@ function build(m) {
   const cellH = maxH + L.GAP_Y;
 
   const blocks = clusters.map((c) => {
-    const cols = Math.ceil(Math.sqrt(c.count)), rows = Math.ceil(c.count / cols);
+    const cols = Math.max(1, Math.ceil(Math.sqrt(c.count))), rows = Math.max(1, Math.ceil(c.count / cols));
     return { c, cols, w: cols * L.CELL_W - (L.CELL_W - L.BOX_W) + 2 * L.PAD, h: rows * cellH - L.GAP_Y + 2 * L.PAD + L.TITLE_H };
   });
   const area = blocks.reduce((s, b) => s + b.w * b.h, 0);
@@ -105,7 +125,7 @@ function build(m) {
   const world = { x0: 0, y0: 0, x1: maxX, y1: y + rowH };
   const cols = new Map();
   for (const e of ents) cols.set(e.name, new Map(e.columns.map((c, i) => [c.name, i])));
-  return { ents, byName, names, edges, colEdges, uses, nbr, clusters, clusterOf, pos, rects, world, cellH, cols,
+  return { ents, byName, names, edges, colEdges, uses, nbr, clusters, clusterOf, pos, rects, world, cellH, cols, arch, locations, storage,
     totalColumns: ents.reduce((s, e) => s + e.columns.length, 0), supplement: ent.supplement || { files: [], diagnostics: [] } };
 }
 
@@ -122,6 +142,9 @@ export function stateOf(d, th) {
     entities: [...d.names],
     edges: level === 'overview' ? [] : d.edges.map((e) => ({ from: e.from, to: e.to, kind: e.kind })),
     columns: {},
+    arch: !!d.arch,
+    locations: d.locations.map((l) => ({ kind: l.kind, name: l.name, apps: [...l.apps], data: [...l.data], links: l.links.map((x) => ({ ...x })) })),
+    storage: Object.fromEntries(d.names.map((n) => [n, d.storage.get(n).length ? d.storage.get(n).map((s) => `${s.kind} · ${s.name}`) : 'なし'])),
     totals: { entities: d.names.length, columns: d.totalColumns },
   };
   if (view.filter) st.matched = d.names.filter((n) => matches(n, d));
@@ -136,7 +159,7 @@ export function stateOf(d, th) {
 // renderer: { el, draw(), fit(), toWorld(px,py), toScreen(wx,wy), kind: '2d'|'3d', pick?(px,py) }
 export function mountShell(host, opts) {
   const m = store.model;
-  const d = dataOf(m);
+  const d = dataOf(m, isArch());
   if (!d) return { destroy() {} };
   const th = thresholds(m);
   let W = 0, H = 0, raf = 0, dead = false, moved = false, ready = false, altOpen = false;
@@ -233,6 +256,7 @@ export function mountShell(host, opts) {
       el('h3', {}, e.name, ' ', el('span', { class: 'badge' }, `${t('sz.badge.selected')}`)),
       e.description ? el('p', { class: 'mini' }, e.description) : null,
       el('p', { class: 'mini' }, d.clusterOf.get(n) ? t('sz.cluster', { id: d.clusterOf.get(n).id, n: d.clusterOf.get(n).count }) : ''),
+      el('p', { class: 'mini', 'data-testid': 'sz-storage' }, `${t('arch.storage')}: ${d.storage.get(n).length ? d.storage.get(n).map((s) => `${s.kind} · ${s.name}`).join(' / ') : 'なし'}`),
       rels.length ? el('ul', { class: 'sz-rels' }, rels.map((x) => { const o = x.from === n ? x.to : x.from; return el('li', {}, `${x.from} → ${x.to} · ${kindLabel(x.kind)} `, el('button', { type: 'button', class: 'eu-h', onclick: () => select(o) }, o)); })) : null,
       e.columns.length ? tb([t('sz.c.name'), t('sz.c.type'), t('sz.c.key'), t('sz.c.ref'), t('sz.c.desc')], colRows) : el('p', { class: 'sz-nocols' }, '⚠ ' + t('sz.nocols')));
   }
@@ -253,6 +277,12 @@ export function mountShell(host, opts) {
       if (colRows.length > LIM) break;
     }
     body.replaceChildren(
+      d.arch ? caption(`${t('arch.locations')}（${d.locations.length}）`) : null,
+      d.arch ? tbl([t('arch.kind'), t('arch.place'), t('arch.apps'), t('arch.data'), t('arch.links')], d.locations.map((l) => el('tr', { 'data-alt-location': `${l.kind}|${l.name}` },
+        el('td', {}, l.kind), el('td', {}, l.name), el('td', {}, l.apps.join('、') || 'なし'), el('td', {}, l.data.join('、') || 'なし'),
+        el('td', {}, l.links.map((x) => `→ ${x.to}（${x.direction}）`).join(' / ') || 'なし')))) : null,
+      d.arch ? caption(t('arch.storage')) : null,
+      d.arch ? tbl([t('eu.entity'), t('arch.storage')], d.names.map((n) => el('tr', { 'data-alt-storage': n }, el('td', {}, n), el('td', {}, d.storage.get(n).map((s) => `${s.kind} · ${s.name}`).join(' / ') || 'なし')))) : null,
       caption(`${t('sz.alt.clusters')}（${t('sz.entities', { n: d.names.length })}）`), tbl(['ID', '#', t('eu.entity')], clusterRows),
       caption(`${t('sz.alt.edges')}（${d.edges.length}）`), tbl([t('sz.from'), t('sz.to'), t('sz.kind'), t('sz.src')], edgeRows),
       d.edges.length > LIM ? el('p', { class: 'mini' }, t('sz.moreuses', { n: d.edges.length - LIM })) : null,

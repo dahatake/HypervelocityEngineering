@@ -19,14 +19,14 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1019 | 直せない不整合の Issue 化 | 承認済み（依頼 2026-10-14） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml) | `tests/system/test_data_layer_workflow_system.py` | データ層修復 |
 | NFR-SEC-004 | データ層ワークフローの最小権限と書き込みの安全性 | 承認済み（依頼 2026-10-14） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml) | `tests/system/test_data_layer_workflow_system.py` | 配布同期対象 |
 | NFR-OPS-006 | データ層ワークフローの配布と利用者向け文書 | 承認済み（依頼 2026-10-14） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml)、`tools/install.py`、`README.md`、`users-guide/04-customization.md` | `tests/toolkit/test_install.py`、`tests/system/test_data_layer_workflow_system.py` | 配布同期対象 |
-| NFR-COR-001 | 再現性 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
-| NFR-COR-002 | エラーの明確性 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
-| NFR-COR-003 | 境界値 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
-| NFR-COR-004 | データ保全 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
-| NFR-COR-005 | 文書化 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
-| NFR-PERF-001 | 公開データセットの処理性能 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
-| NFR-PERF-002 | 大規模性能 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
-| NFR-REL-001 | 検証による完了判定 | 承認済み（依頼 2026-10-10） | 未実装 | 未実装 | なし |
+| NFR-COR-001 | 再現性 | 廃止 | 未実装 | 未実装 | なし |
+| NFR-COR-002 | エラーの明確性 | 廃止 | 未実装 | 未実装 | なし |
+| NFR-COR-003 | 境界値 | 廃止 | 未実装 | 未実装 | なし |
+| NFR-COR-004 | データ保全 | 廃止 | 未実装 | 未実装 | なし |
+| NFR-COR-005 | 文書化 | 廃止 | 未実装 | 未実装 | なし |
+| NFR-PERF-001 | 公開データセットの処理性能 | 廃止 | 未実装 | 未実装 | なし |
+| NFR-PERF-002 | 大規模性能 | 廃止 | 未実装 | 未実装 | なし |
+| NFR-REL-001 | 検証による完了判定 | 廃止 | 未実装 | 未実装 | なし |
 | FR-1011 | 2D マップのノード選択と強調 | 承認済み | `EABK-Studio/web/js/map2d.js` | `tests/system/e2e/test_studio_map_placement_system.py`, `EABK-Studio/tests/test_studio.py` | ストア |
 | FR-1012 | 実装配置図（画面・API・データの 3 層） | 承認済み | `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_map_placement_system.py`, `EABK-Studio/tests/test_studio.py` | ストア、UI 部品、デザイン基盤 |
 | FR-1013 | データの ER 図表示 | 承認済み | `EABK-Studio/web/js/insights.js`, `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/i18n.js` | `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
@@ -48,6 +48,10 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1028 | 2D での関係と列の表現 | 承認済み | `EABK-Studio/web/js/sz2d.js`、`EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/map2d.js`、`EABK-Studio/web/js/entities.js`、`EABK-Studio/web/sz.css` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 管理データモデル、UI 部品、意味的ズーム |
 | FR-1029 | 3D での関係と列の表現 | 承認済み | `EABK-Studio/web/js/sz3d.js`、`EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/map3d.js`、`EABK-Studio/web/sz.css` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 管理データモデル、ストア、意味的ズーム |
 | FR-1030 | DDL・スキーマファイルからの列と関係の補完（任意の拡張） | 承認済み | `scripts/entities.py`、`users-guide/03-requirements-format.md` | `tests/integration/test_entity_columns.py` | エンティティ台帳・企業カタログ照合 |
+| FR-1031 | 表示オブジェクトへのリンク | 承認済み | `EABK-Studio/web/js/xref.js`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/implstatus.js`, `EABK-Studio/web/js/insights.js`, `EABK-Studio/web/js/map2d.js`, `EABK-Studio/web/app.css` | `tests/system/e2e/test_studio_links_wrap_status_arch_system.py`, `EABK-Studio/tests/test_links_wrap_status_ui.py`, `EABK-Studio/tests/test_links_wrap_status_ui2.py` | UI 部品、ストア |
+| FR-1032 | 設計・開発履歴と進捗の項目の自動折り返し | 承認済み | `EABK-Studio/web/js/insights.js`, `EABK-Studio/web/app.css` | `tests/system/e2e/test_studio_links_wrap_status_arch_system.py`, `EABK-Studio/tests/test_links_wrap_status_ui.py`, `EABK-Studio/tests/test_links_wrap_status_ui2.py` | デザイン基盤 |
+| FR-1033 | 実装状態のグラフ区間からの画面横断の強調と絞り込み | 承認済み | `EABK-Studio/web/js/implstatus.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/app.css` | `tests/system/e2e/test_studio_links_wrap_status_arch_system.py`, `EABK-Studio/tests/test_links_wrap_status_ui.py`, `EABK-Studio/tests/test_links_wrap_status_ui2.py` | ストア、UI 部品 |
+| FR-1034 | アーキテクチャ図とエンティティモデル図（2D/3D）とデータの所在 | 承認済み | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/semzoom.js`, `EABK-Studio/web/js/sz2d.js`, `EABK-Studio/web/js/map2d.js`, `EABK-Studio/web/js/map3d.js`, `EABK-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_links_wrap_status_arch_system.py`, `EABK-Studio/tests/test_arch_diagram.py`, `EABK-Studio/tests/test_req_placement.py` | 管理データモデル、ストア、意味的ズーム |
 | NFR-PERF-004 | エンティティ表示の大規模データでの滑らかさ | 承認済み | `EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/sz2d.js`、`EABK-Studio/web/js/sz3d.js`、`scripts/entities.py` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 意味的ズーム |
 | NFR-UX-010 | エンティティ表示の代替手段・キーボード・言語 | 承認済み | `EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/sz2d.js`、`EABK-Studio/web/js/sz3d.js`、`EABK-Studio/web/js/i18n.js`、`EABK-Studio/web/sz.css` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 意味的ズーム、UI 部品 |
 
@@ -112,14 +116,14 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | NFR-SEC-003 | 権限・外部連携境界 | AI提案／承認待ち | 未実装 | 未実装 | なし |
 | NFR-OPS-001 | 実行環境 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | 起動スクリプト |
 | NFR-OPS-002 | 自動再読込の継続 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/app.js` | 未実装 | フィンガープリント |
-| NFR-OPS-003 | 不足・失敗からの復旧 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | HTTP サーバー、UI 部品 |
+| NFR-OPS-003 | 不足・失敗からの復旧 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/ui.js` | `EABK-Studio/tests/test_studio.py`, `EABK-Studio/tests/test_repo_switch_recovery_wiring.py` | HTTP サーバー、UI 部品 |
 | NFR-OPS-004 | 管理データとの互換性 | 承認済み（依頼 2026-10-09） | `scripts/ebak.config.json`, `EABK-Studio/eabk_model.py` | `EABK-Studio/tests/test_studio.py` | 管理データモデル |
 | FR-1002 | 全画面のペルソナ別分析説明 | 承認済み（包括承認 2026-10-09・approval_policy） | `EABK-Studio/web/js/insights.js` | `EABK-Studio/tests/test_studio.py` | ストア、UI 部品、デザイン基盤 |
 | FR-1003 | 全データ層の現状対理想と構造妥当性 | 承認済み（包括承認 2026-10-09・approval_policy） | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/insights.js` | `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
 | FR-1004 | 安全で明示的な整合性保守 | 承認済み（包括承認 2026-10-09・approval_policy） | 未実装 | 未実装 | - |
 | FR-1005 | アプリ構成とデータ位置づけ | 承認済み（包括承認 2026-10-09・approval_policy） | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/insights.js` | `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
 | FR-1006 | 設計・開発判断の統合可視化 | 承認済み（包括承認 2026-10-09・approval_policy） | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/insights.js` | `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
-| FR-1007 | users-guide 実画面スクリーンショット | 承認済み（包括承認 2026-10-09・approval_policy） | 未実装 | 未実装 | - |
+| FR-1007 | users-guide 実画面スクリーンショット | 承認済み（包括承認 2026-10-09・approval_policy） | `users-guide/studio/capture-screens.py`, `users-guide/studio/screen-images.json`, `users-guide/studio/images/` | 未実装 | - |
 
 ## API・イベント
 
@@ -145,12 +149,25 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 
 | 部品名 | ファイル | 用途 | 使っている要求 ID |
 |---|---|---|---|
-| 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、FR-1025、FR-1026、FR-1027、FR-1028、FR-1029、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002 |
+| 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、FR-1025、FR-1026、FR-1027、FR-1028、FR-1029、FR-1034、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002 |
 | HTTP サーバー | `EABK-Studio/studio.py` | 127.0.0.1 限定の読取 API と静的配信 | FR-010、FR-013、FR-1001、NFR-OPS-003、NFR-SEC-001 |
-| ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1029 |
-| UI 部品 | `EABK-Studio/web/js/ui.js` | 表示、詳細、通知、リンク | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1028、NFR-OPS-003、NFR-UX-005、NFR-UX-007、NFR-UX-010 |
-| デザイン基盤 | `EABK-Studio/web/app.css`, `EABK-Studio/web/index.html` | Fluent 2 に寄せたテーマ変数、外枠、ナビゲーション、検索、通知、ダーク表示 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022 |
+| ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1029、FR-1031、FR-1033、FR-1034 |
+| UI 部品 | `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/js/xref.js` | 表示、詳細、通知、リンク | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1028、FR-1031、FR-1033、NFR-OPS-003、NFR-UX-005、NFR-UX-007、NFR-UX-010 |
+| デザイン基盤 | `EABK-Studio/web/app.css`, `EABK-Studio/web/index.html` | Fluent 2 に寄せたテーマ変数、外枠、ナビゲーション、検索、通知、ダーク表示 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1032 |
 | フィンガープリント | `EABK-Studio/studio.py` | 更新検知と再読込 | FR-012、NFR-OPS-002 |
 | 起動スクリプト | `EABK-Studio/start.ps1`, `EABK-Studio/start.sh` | Windows/macOS/Linux の起動補助 | FR-1001、NFR-OPS-001 |
 | Three.js 同梱モジュール | `EABK-Studio/web/vendor/three.module.min.js` | 3D マップ表示 | FR-003 |
-| 意味的ズーム | `EABK-Studio/web/js/semzoom.js`, `EABK-Studio/web/js/sz2d.js`, `EABK-Studio/web/js/sz3d.js`, `EABK-Studio/web/sz.css` | エンティティの倍率に応じた 3 粒度（クラスター・エンティティと関係線・列の一覧）。2D（SVG）と 3D（Canvas）が 1 つの共有状態（倍率・中心・選択・絞り込み）で動き、可視範囲だけを描画し、表の代替表現・キーボード・JA/EN を備える。`window.eabkView`（setScale・getState）を公開する | FR-1027、FR-1028、FR-1029、NFR-PERF-004、NFR-UX-010 |
+| 意味的ズーム | `EABK-Studio/web/js/semzoom.js`, `EABK-Studio/web/js/sz2d.js`, `EABK-Studio/web/js/sz3d.js`, `EABK-Studio/web/sz.css` | エンティティの倍率に応じた 3 粒度（クラスター・エンティティと関係線・列の一覧）。2D（SVG）と 3D（Canvas）が 1 つの共有状態（倍率・中心・選択・絞り込み）で動き、可視範囲だけを描画し、表の代替表現・キーボード・JA/EN を備える。`window.eabkView`（setScale・getState）を公開する | FR-1027、FR-1028、FR-1029、FR-1034、NFR-PERF-004、NFR-UX-010 |
+
+## 配置先
+
+実在する配置だけを書く（書式は `EABK-Studio/eabk_model.py` の `parse_placements`、FR-1034）。
+
+- 配置先: PC内のフォルダ / 場所: docs/ / アプリ: EABK toolkit のスクリプト、EABK Studio サーバー / データ: 要求定義書、カタログ、ID 台帳、実行履歴、手動テスト手順
+- 配置先: PC内のフォルダ / 場所: work/ / アプリ: EABK toolkit のスクリプト / データ: 実行ごとの作業記録（work/runs/）、ログ（work/logs/）
+- 配置先: PC内のフォルダ / 場所: tests/system/ / アプリ: EABK toolkit のスクリプト / データ: System Test 台帳（ledger.json）
+- 配置先: ブラウザ Local Storage / キー: eabk-studio.lang / アプリ: EABK Studio 画面 / データ: 表示言語（ja か en）
+- 配置先: ローカル HTTP サーバー / 待受: 127.0.0.1 / アプリ: EABK Studio サーバー
+- 通信: EABK Studio 画面 → EABK Studio サーバー（双方向）
+- 通信: EABK Studio サーバー → docs/（受信）
+- 通信: EABK Studio サーバー → tests/system/（受信）

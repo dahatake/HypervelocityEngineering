@@ -11,6 +11,7 @@ class Store {
     this.hover = null;
     this.focus = null; // Set of ids chosen from search / matrix cells
     this.focusLabel = '';
+    this.implFilter = null;
     this._l = {};
     this._rel = new Map();
   }
@@ -96,6 +97,8 @@ class Store {
     this.selected = null; this.focus = null; this.focusLabel = '';
     this.emit('select', { id: null, cleared: true });
   }
+  // FR-1033: implementation-status segment filter shared by every view and by the command box.
+  setImplFilter(f) { this.implFilter = f || null; this.emit('implfilter', this.implFilter); }
   setHover(id) {
     if (this.hover === id) return;
     this.hover = id;

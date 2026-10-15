@@ -5,9 +5,9 @@ const listeners = new Set();
 
 const D = {
   ja: {
-    'nav.implstatus': '実装状態', 'impl2.sub': '承認済みの要求が、未着手・実装登録済み・試験 pass 済みのどこにあるかを表します。実装の登録と試験の合否は別に判定します。', 'impl2.legend': '状態の凡例', 'impl2.all': '全体', 'impl2.goal': '目的別', 'impl2.priority': '優先度別', 'impl2.kanban': 'かんばん', 'impl2.table': '一覧表', 'impl2.cases': '試験ケースの内訳', 'impl2.stalled': '停止中', 'impl2.excluded': '対象外（承認待ち・保留・却下・廃止）の要求数',
+    'nav.implstatus': '実装状態', 'impl2.sub': '承認済みの要求が、未着手・実装登録済み・試験 pass 済みのどこにあるかを表します。実装の登録と試験の合否は別に判定します。', 'impl2.legend': '状態の凡例', 'impl2.all': '全体', 'impl2.goal': '目的別', 'impl2.priority': '優先度別', 'impl2.kanban': 'かんばん', 'impl2.table': '一覧表', 'impl2.cases': '試験ケースの内訳', 'impl2.stalled': '停止中', 'impl3.none': '絞り込みなし（区間をクリックで強調）', 'impl3.applied': '適用中', 'impl3.count': '件', 'impl3.nomatch': '該当なし', 'impl3.clear': '解除', 'impl3.mode.hl': '強調', 'impl3.mode.fl': '絞り込み', 'impl2.excluded': '対象外（承認待ち・保留・却下・廃止）の要求数',
     'nav.dashboard': 'ダッシュボード', 'nav.map2d': '2D マップ', 'nav.map3d': '3D マップ', 'nav.diagrams': '図式', 'nav.placement': '配置', 'nav.source': 'ソース対応', 'nav.tables': '表',
-    'search.ph': 'ID・題名・ファイル・用語を検索…', 'repo.change': '対象リポジトリを切り替える', 'repo.prompt': 'EABK を使っているリポジトリのフォルダーのパスを入力してください',         'repo.nodata': 'data layer がそのフォルダーには見つかりません（docs/requirements-definition.md など）。', 'repo.bad': 'not found: フォルダーが見つかりません。',
+    'search.ph': 'ID・題名・ファイル・用語を検索…', 'repo.change': '対象リポジトリを切り替える', 'repo.prompt': 'EABK を使っているリポジトリのフォルダーのパスを入力してください',         'repo.nodata': 'data layer がそのフォルダーには見つかりません（docs/requirements-definition.md など）。', 'repo.bad': 'not found: フォルダーが見つかりません。', 'repo.retry': '再試行', 'repo.back': '戻る（現在のモデルを保持）',
     'update.avail': 'データが更新されました。再読み込みします…', 'loading': 'データ層を読み込み中…', 'none': '（なし）',
     'err.nodata': 'このリポジトリには EABK のデータ層が見つかりませんでした。右上のリポジトリ名から別のリポジトリを指定できます。',
     'type.goal': '目的', 'type.req': '機能要求', 'type.nfr': '非機能要求', 'type.ac': '受入基準', 'type.part': '共通部品', 'type.api': 'API', 'type.table': 'テーブル', 'type.entity': 'エンティティ(データ)', 'type.file': 'ソースファイル', 'type.test': 'テストファイル',
@@ -59,13 +59,13 @@ const D = {
         'sz.omitted': '画面の外の {n} 件のエンティティは描画を省略しています（拡大・移動・検索で表示されます。データは欠けません）',
         'sz.nothing': '絞り込みに合うエンティティがありません', 'sz.alt': '表で見る（代替表現）', 'sz.alt.clusters': 'クラスター', 'sz.alt.edges': '関係', 'sz.alt.cols': '列',
         'sz.from': '元', 'sz.to': '先', 'sz.kind': '種別', 'sz.src': '出典', 'sz.sel': '選択中', 'sz.none': '選択なし', 'sz.hint': 'ホイール／＋−キーで拡大縮小、ドラッグ／矢印キーで移動、0 で全体、Enter で選択、Esc で解除',
-        'sz.to2d': '2D で見る', 'sz.to3d': '3D で見る', 'sz.graph': '関係グラフ（従来）', 'sz.entview': 'エンティティ表示', 'sz.rot': '回転', 'sz.mismatch': '補完と食い違い', 'sz.supp': '補完（DDL・スキーマ）',
+        'sz.to2d': '2D で見る', 'arch.storage': '保存先', 'arch.locations': '実行場所', 'arch.kind': '種別', 'arch.place': '場所', 'arch.apps': 'アプリ', 'arch.data': 'データ', 'arch.links': '通信（方向）', 'arch.toentity': 'エンティティ図へ', 'arch.toarch': 'アーキテクチャ図へ', 'sz.to3d': '3D で見る', 'sz.graph': '関係グラフ（従来）', 'sz.entview': 'エンティティ表示', 'sz.rot': '回転', 'sz.mismatch': '補完と食い違い', 'sz.supp': '補完（DDL・スキーマ）',
         'sz.goto': '参照先へ移動', 'sz.badge.selected': '選択', 'sz.badge.related': '関係先', 'sz.use': '使用', 'sz.nowebgl': '',
       },
   en: {
-    'nav.implstatus': 'Impl. status', 'impl2.sub': 'Where each approved requirement stands: not started, implementation registered, or test passed. Registration and test results are judged separately.', 'impl2.legend': 'State legend', 'impl2.all': 'Overall', 'impl2.goal': 'By goal', 'impl2.priority': 'By priority', 'impl2.kanban': 'Kanban', 'impl2.table': 'Table', 'impl2.cases': 'Test case breakdown', 'impl2.stalled': 'Stalled', 'impl2.excluded': 'Excluded (pending, on hold, rejected, retired) requirements',
+    'nav.implstatus': 'Impl. status', 'impl2.sub': 'Where each approved requirement stands: not started, implementation registered, or test passed. Registration and test results are judged separately.', 'impl2.legend': 'State legend', 'impl2.all': 'Overall', 'impl2.goal': 'By goal', 'impl2.priority': 'By priority', 'impl2.kanban': 'Kanban', 'impl2.table': 'Table', 'impl2.cases': 'Test case breakdown', 'impl2.stalled': 'Stalled', 'impl3.none': 'No filter (click a segment to highlight)', 'impl3.applied': 'Applied', 'impl3.count': 'items', 'impl3.nomatch': 'No match', 'impl3.clear': 'Clear', 'impl3.mode.hl': 'Highlight', 'impl3.mode.fl': 'Filter', 'impl2.excluded': 'Excluded (pending, on hold, rejected, retired) requirements',
     'nav.dashboard': 'Dashboard', 'nav.map2d': '2D Map', 'nav.map3d': '3D Map', 'nav.diagrams': 'Diagrams', 'nav.placement': 'Placement', 'nav.source': 'Source Map', 'nav.tables': 'Tables',
-    'search.ph': 'Search IDs, titles, files, terms…', 'repo.change': 'Switch the target repository', 'repo.prompt': 'Enter the folder path of a repository that uses EABK', 'repo.nodata': 'No EABK data layer (docs/requirements-definition.md etc.) was found in that folder.', 'repo.bad': 'Folder not found.',
+    'search.ph': 'Search IDs, titles, files, terms…', 'repo.change': 'Switch the target repository', 'repo.prompt': 'Enter the folder path of a repository that uses EABK', 'repo.nodata': 'No EABK data layer (docs/requirements-definition.md etc.) was found in that folder.', 'repo.bad': 'Folder not found.', 'repo.retry': 'Retry', 'repo.back': 'Back (keep current model)',
     'update.avail': 'Data changed. Reloading…', 'loading': 'Loading the data layer…', 'none': '(none)',
     'err.nodata': 'No EABK data layer was found in this repository. Use the repository button at the top right to pick another one.',
     'type.goal': 'Goal', 'type.req': 'Functional req.', 'type.nfr': 'Non-functional req.', 'type.ac': 'Acceptance criteria', 'type.part': 'Common part', 'type.api': 'API', 'type.table': 'Table', 'type.entity': 'Entity (data)', 'type.file': 'Source file', 'type.test': 'Test file',
@@ -117,7 +117,7 @@ const D = {
         'sz.omitted': '{n} entities outside the view are not drawn (zoom, pan or search shows them; no data is lost)',
         'sz.nothing': 'No entity matches the filter', 'sz.alt': 'Table view (alternative)', 'sz.alt.clusters': 'Clusters', 'sz.alt.edges': 'Relations', 'sz.alt.cols': 'Columns',
         'sz.from': 'From', 'sz.to': 'To', 'sz.kind': 'Kind', 'sz.src': 'Source', 'sz.sel': 'Selected', 'sz.none': 'Nothing selected', 'sz.hint': 'Wheel / + - keys zoom, drag / arrow keys pan, 0 fits, Enter selects, Esc clears',
-        'sz.to2d': 'View in 2D', 'sz.to3d': 'View in 3D', 'sz.graph': 'Relation graph (classic)', 'sz.entview': 'Entity view', 'sz.rot': 'Rotate', 'sz.mismatch': 'differs from the DDL / schema', 'sz.supp': 'Supplement (DDL / schema)',
+        'sz.to2d': 'View in 2D', 'arch.storage': 'Stored at', 'arch.locations': 'Execution locations', 'arch.kind': 'Kind', 'arch.place': 'Place', 'arch.apps': 'Apps', 'arch.data': 'Data', 'arch.links': 'Links (direction)', 'arch.toentity': 'To entity model', 'arch.toarch': 'To architecture', 'sz.to3d': 'View in 3D', 'sz.graph': 'Relation graph (classic)', 'sz.entview': 'Entity view', 'sz.rot': 'Rotate', 'sz.mismatch': 'differs from the DDL / schema', 'sz.supp': 'Supplement (DDL / schema)',
         'sz.goto': 'Go to referenced column', 'sz.badge.selected': 'selected', 'sz.badge.related': 'related', 'sz.use': 'uses', 'sz.nowebgl': '',
       },
 };

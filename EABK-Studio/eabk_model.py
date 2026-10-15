@@ -338,17 +338,71 @@ def parse_requirements(doc: dict) -> list[dict]:
     return reqs
 
 
+REQ_PLACEMENT_RE = re.compile(r"^[-*]\s+配置先\s*[:：]\s*(.*)$")
+
+
+def parse_req_placement(value: str) -> dict:
+    """FR-1034 AC-206: optional requirement field
+    `- 配置先: <実行場所>／保存: <場所>＝<データ名>／通信: <相手>（方向）` (items separated by 、).
+    An absent field or a 'なし' item reads as empty ('なし'); nothing is guessed."""
+    out = {"present": False, "runAt": [], "stores": [], "links": []}
+    value = strip_md(value or "")
+    if not value:
+        return out
+    out["present"] = True
+
+    def items(s: str) -> list[str]:
+        parts, depth, cur = [], 0, ""
+        for ch in s:
+            if ch in "（(":
+                depth += 1
+            elif ch in "）)":
+                depth = max(0, depth - 1)
+            if ch in "、,，" and depth == 0:
+                parts.append(cur)
+                cur = ""
+            else:
+                cur += ch
+        parts.append(cur)
+        return [p.strip() for p in parts if p.strip()]
+
+    def is_none(s: str) -> bool:
+        return re.split(r"[（(]", s.strip(), 1)[0].strip() in NONE_WORDS
+
+    for k, seg in enumerate(re.split(r"[／]", value)):
+        seg = seg.strip()
+        m = re.match(r"^(保存|通信)\s*[:：]\s*(.*)$", seg)
+        if not m:
+            if k == 0 and not is_none(seg):
+                out["runAt"] = items(seg)
+            continue
+        if is_none(m.group(2)):
+            continue
+        for it in items(m.group(2)):
+            if m.group(1) == "保存":
+                place, _, data = it.partition("＝")
+                out["stores"].append({"place": place.strip(), "data": data.strip() or "なし"})
+            else:
+                d = re.match(r"^(.*?)\s*[（(]\s*(送信|受信|双方向)\s*[）)]\s*$", it)
+                out["links"].append({"peer": (d.group(1) if d else it).strip(), "direction": d.group(2) if d else "なし"})
+    return out
+
+
 def parse_req_block(rid: str, title: str, rel: str, line: int, block: list[tuple[int, str]]) -> dict:
     kind = "FR" if rid.startswith("FR-") else "NFR"
     cat = "" if kind == "FR" else rid.split("-")[1]
     r = {"id": rid, "kind": kind, "cat": cat, "title": title, "text": "", "status": "", "statusKind": "unknown",
          "origin": "", "priority": "", "priorityNote": "", "goal": "", "sources": "", "entities": [], "states": [],
-         "params": [], "assets": "", "relation": "", "acs": [], "blocked": [], "file": rel, "line": line, "body": ""}
+         "params": [], "assets": "", "relation": "", "placement": parse_req_placement(""), "acs": [], "blocked": [], "file": rel, "line": line, "body": ""}
     cur_key, cur_ac, texts = None, None, []
     body = []
     for ln_no, raw in block:
         body.append(raw)
         line_s = raw.rstrip()
+        place = REQ_PLACEMENT_RE.match(line_s)
+        if place:
+            r["placement"] = parse_req_placement(place.group(1))
+            continue
         relation = re.match(r"^[-*]\s+関係\s*[:：]\s*(.*)$", line_s)
         if relation:
             value = strip_md(relation.group(1))
@@ -536,6 +590,56 @@ def build_impl_status(model: dict, root: Path) -> dict:
     return {"states": list(IMPL_STATES), "items": items, "excluded": excluded}
 
 
+def parse_placements(cat_doc: dict | None) -> dict:
+    """FR-1034 / Q-014 (A): optional 'Placement' section of the catalog -> execution locations, apps, data and links.
+    Lines:  - 配置先: <種別> / <ラベル>: <名前> / アプリ: a、b / データ: x、y      - 通信: <元> → <先>（送信|受信|双方向）
+    Nothing is guessed: a link whose ends are not both listed is kept as unresolved and never drawn."""
+    out: dict = {"locations": [], "links": []}
+    if not cat_doc:
+        return out
+    lines = cat_doc["lines"]
+    heads = cat_doc["headings"]
+    start = next((h for h in heads if "配置先" in h[2]), None)
+    if not start:
+        return out
+    end = next((h[0] for h in heads if h[0] > start[0] and h[1] <= start[1]), len(lines) + 1)
+    locs: OrderedDict[tuple[str, str], dict] = OrderedDict()
+    raw_links = []
+    for no in range(start[0], end - 1):
+        ln = lines[no]
+        m = re.match(r"^\s*[-*]\s*配置先[:：]\s*(.+?)\s*$", ln)
+        if m:
+            segs = [strip_md(s) for s in re.split(r"\s+/\s+", m.group(1)) if s.strip()]
+            kind = segs[0]
+            name, extra = kind, segs[1:]
+            if extra and re.match(r"^[^:：]+[:：]", extra[0]) and not re.match(r"^(アプリ|データ)[:：]", extra[0]):
+                name = re.split(r"[:：]", extra[0], 1)[1].strip() or kind
+                extra = extra[1:]
+            loc = locs.setdefault((kind, name), {"kind": kind, "name": name, "apps": [], "data": [], "links": [], "file": cat_doc["rel"], "line": no + 1})
+            for seg in extra:
+                mm = re.match(r"^(アプリ|データ)[:：]\s*(.+)$", seg)
+                if mm:
+                    key = "apps" if mm.group(1) == "アプリ" else "data"
+                    for v in re.split(r"[、,]", mm.group(2)):
+                        v = v.strip()
+                        if v and v not in loc[key]:
+                            loc[key].append(v)
+            continue
+        m = re.match(r"^\s*[-*]\s*通信[:：]\s*(.+?)\s*(?:→|->)\s*(.+?)\s*(?:[（(]\s*(送信|受信|双方向)\s*[）)])?\s*$", ln)
+        if m:
+            raw_links.append({"from": strip_md(m.group(1)), "to": strip_md(m.group(2)), "direction": m.group(3) or "なし", "line": no + 1})
+    names = {l["name"] for l in locs.values()} | {l["kind"] for l in locs.values()}
+    for lk in raw_links:
+        owner = next((l for l in locs.values() if lk["from"] == l["name"] or any(a == lk["from"] or a.startswith(lk["from"]) for a in l["apps"])), None)
+        known_to = lk["to"] in names or any(a == lk["to"] or a.startswith(lk["to"]) for l in locs.values() for a in l["apps"])
+        lk["resolved"] = bool(owner and known_to)
+        if lk["resolved"]:
+            owner["links"].append({"to": lk["to"], "direction": lk["direction"]})
+        out["links"].append(lk)
+    out["locations"] = list(locs.values())
+    return out
+
+
 def build_entities(root: Path, warnings: list[str]) -> dict:
     """FR-1021/FR-1022/NFR-COMPAT-003: the entity ledger, derived by the toolkit's scripts/entities.py (loaded
     dynamically; read-only).  When the script is unavailable the screen degrades to "no entities" instead of failing."""
@@ -703,6 +807,7 @@ def build_model(root: Path) -> dict:
                                            "basis": strip_md(c[3]), "run": strip_md(c[4]), "file": t["file"], "line": row["line"]})
     model["stateMachines"] = parse_state_machines(all_tables)
     model["entities"] = build_entities(root, warnings)
+    model["placements"] = parse_placements(cat_doc)
     for d in docs[:1]:
         for ln, lvl, text in d["headings"]:
             if re.match(r"^(\d+\.\s*)?利用シナリオ", text):
@@ -815,6 +920,10 @@ def build_model(root: Path) -> dict:
                     model["runs"].append(record)
 
     model["reqs"] = list(reqs.values())
+    # FR-1034 AC-206: per-requirement 配置先 (run location / stores / links) handed to the diagram and the list
+    model["placements"]["requirements"] = [
+        {"id": q["id"], "runAt": q["placement"]["runAt"], "stores": q["placement"]["stores"], "links": q["placement"]["links"]}
+        for q in model["reqs"] if q.get("placement", {}).get("present")]
     model["implStatus"] = build_impl_status(model, root)
     build_management_analysis(model, docs, cat_doc, files, warnings)
     build_graph(model, reqs, parts)
