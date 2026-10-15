@@ -123,7 +123,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1004 | 安全で明示的な整合性保守 | 承認済み（包括承認 2026-10-09・approval_policy） | 未実装 | 未実装 | - |
 | FR-1005 | アプリ構成とデータ位置づけ | 承認済み（包括承認 2026-10-09・approval_policy） | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/insights.js` | `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
 | FR-1006 | 設計・開発判断の統合可視化 | 承認済み（包括承認 2026-10-09・approval_policy） | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/insights.js` | `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
-| FR-1007 | users-guide 実画面スクリーンショット | 承認済み（包括承認 2026-10-09・approval_policy） | 未実装 | 未実装 | - |
+| FR-1007 | users-guide 実画面スクリーンショット | 承認済み（包括承認 2026-10-09・approval_policy） | `users-guide/studio/capture-screens.py`, `users-guide/studio/screen-images.json`, `users-guide/studio/images/` | 未実装 | - |
 
 ## API・イベント
 
