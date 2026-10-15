@@ -63,6 +63,7 @@ class Checker:
         self.cat_exists, self.cat_rows, self.cat_refs = h.parse_catalog(root, cfg)
         self.cat_req = h.catalog_req_rows(self.cat_rows)
         self.cat_tables = h.parse_catalog_tables(root, cfg)
+        self.integ = h.parse_integrations(root, cfg)
         self._files: Optional[List[str]] = None
         self._refs: Optional[Dict[str, List[Ref]]] = None
         self.croot = h.conductor_root(root, cfg)
@@ -129,7 +130,7 @@ class Checker:
         for fn in (self.chk01_02, self.chk03, self.chk04, self.chk05, self.chk06_22, self.chk07_08,
                    self.chk09, self.chk10_11, self.chk12, self.chk13_14_15, self.chk16, self.chk17,
                    self.chk18, self.chk19, self.chk20, self.chk21, self.chk23, self.chk25, self.chk26,
-                   self.chk27, self.chk24):
+                   self.chk27, self.chk24, self.chk28):
             fn()
         return self.findings
 
@@ -297,7 +298,7 @@ class Checker:
                          f"{rid}（{req.state}）がカタログの機能の表にありません（rdfix.py --only catalog --apply で行を追加できます）")
         files = set(self.files())
         for ln, p in self.cat_refs:
-            rel = p.lstrip("./")
+            rel = p[2:] if p.startswith("./") else p
             if rel in files or (self.root / rel).exists():
                 continue
             self.err("CHK-08", self.loc(cat, ln), f"カタログのファイル {p} が存在しません")
@@ -772,6 +773,107 @@ class Checker:
                              f"{r.id} の関連する既存資産 {m.group(1)}「{m.group(2)}」がカタログの{label[k]}の表にありません")
 
 
+    # ------------------------------------------------------------------ CHK-28 (FR-1035 / FR-1036)
+    def chk28(self) -> None:
+        """外部連携カタログ（任意）の形式・ID・観点の欄・秘密値・要求との対応。カタログがなければ何も報告しない。"""
+        cat = self.integ
+        # 要求定義書から INT-xxx への参照（カタログの有無にかかわらず、存在しなければ未定義参照）
+        ids = cat.by_id() if cat.exists else {}
+        for rel, text in self.doc.text.items():
+            in_code = False
+            for ln, line in enumerate(text.splitlines(), start=1):
+                if line.lstrip().startswith("```"):
+                    in_code = not in_code
+                    continue
+                if in_code:
+                    continue
+                for m in h.INT_ID_RE.finditer(re.sub(r"`[^`]*`", "", line)):
+                    if m.group(1) not in ids:
+                        self.err("CHK-28", self.loc(rel, ln), f"{m.group(1)} を参照していますが、外部連携カタログ（{cat.file}）に定義がありません（未定義参照）")
+        if not cat.exists:
+            return
+        seen: Dict[str, int] = {}
+        reg_path = self.root / h.mf(self.cfg, "id_registry")
+        reg = h.parse_registry_text(h.read_text(reg_path)) if reg_path.exists() else None
+        for it in cat.items:
+            where = self.loc(cat.file, it.line)
+            if it.bad_id:
+                self.err("CHK-28", where, f"{it.id} は ID の形式（INT-001 のように INT-<3 桁以上の番号>）に合いません。ID は next-id.py INT で採番します")
+                continue
+            if it.id in seen:
+                self.err("CHK-28", where, f"{it.id} が重複して定義されています（{seen[it.id]} 行目）")
+                continue
+            seen[it.id] = it.line
+            if reg is not None:
+                ent = reg.get(it.id)
+                if ent is None:
+                    self.warn("CHK-28", where, f"{it.id} が ID 台帳にありません。ID は scripts/next-id.py INT でだけ採番します（G-3）")
+                elif re.search(r"削除済み|欠番", ent["state"]):
+                    self.err("CHK-28", where, f"{it.id} は ID 台帳で「{ent['state']}」です。廃止・削除した ID は再利用しません")
+            if not it.name:
+                self.err("CHK-28", where, f"{it.id} の名前（見出しの ID の後ろ）がありません（AC-208）")
+            for key, ln in it.dup_fields:
+                self.err("CHK-28", self.loc(cat.file, ln), f"{it.id} の欄「{key}」が重複しています")
+            for key in it.fields:
+                if key not in h.INT_REQUIRED + h.INT_PERSPECTIVES + h.INT_OPTIONAL and h.INT_SECRET_FIELD_RE.search(key):
+                    self.err("CHK-28", self.loc(cat.file, it.field_lines[key]),
+                             f"{it.id} に認証情報の値を書く欄「{key}」があります。方式の名前と秘密の保管場所の名前だけを書きます（AC-209）")
+            for key in h.INT_REQUIRED:
+                if key not in it.fields or not it.get(key):
+                    self.err("CHK-28", where, f"{it.id} の必須欄「{key}」がありません（AC-208）")
+            for key in h.INT_PERSPECTIVES:
+                if key not in it.fields:
+                    self.err("CHK-28", where, f"{it.id} の観点の欄「{key}」がありません（値・なし・TBD（Q-xxx）のどれかで埋めます。FR-1038）")
+            for key, raw in it.fields.items():
+                ln = self.loc(cat.file, it.field_lines[key])
+                val = h.strip_md(raw)
+                if not val:
+                    if key in h.INT_PERSPECTIVES:
+                        self.err("CHK-28", ln, f"{it.id} の「{key}」が空です（値・なし・TBD（Q-xxx）のどれかで埋めます）")
+                    continue
+                if key in h.INT_PERSPECTIVES + h.INT_REQUIRED and (val in h.INT_BAD_PLACEHOLDERS or val.upper().startswith("TBD")):
+                    m = h.INT_TBD_RE.match(val)
+                    if not m:
+                        self.err("CHK-28", ln, f"{it.id} の「{key}」の値「{val}」は 値／なし／TBD（Q-xxx）の形式ではありません")
+                    elif m.group(1) not in self.doc.defs:
+                        self.err("CHK-28", ln, f"{it.id} の「{key}」の TBD が指す {m.group(1)} が質問票にありません")
+                    elif key == "状態":
+                        self.err("CHK-28", ln, f"{it.id} の状態に TBD は書けません（{'／'.join(h.INT_STATES)}）")
+                for rx in h.INT_SECRET_VALUE_RES:
+                    sm = rx.search(re.sub(r"`", "", val))
+                    if sm:
+                        self.err("CHK-28", ln, f"{it.id} の「{key}」に認証情報の値らしい文字列があります。値は書かず、方式の名前と秘密の保管場所の名前だけを書きます（AC-209）")
+                        break
+            direction = it.get("方向")
+            if direction and direction not in h.INT_DIRECTIONS and not h.INT_TBD_RE.match(direction) \
+                    and direction not in h.INT_BAD_PLACEHOLDERS and not direction.upper().startswith("TBD"):
+                self.err("CHK-28", self.loc(cat.file, it.field_lines["方向"]), f"{it.id} の方向「{direction}」は {'／'.join(h.INT_DIRECTIONS)} のどれでもありません")
+            state = it.get("状態")
+            if state and state not in h.INT_STATES and not state.upper().startswith("TBD") and state not in h.INT_BAD_PLACEHOLDERS:
+                self.err("CHK-28", self.loc(cat.file, it.field_lines["状態"]), f"{it.id} の状態「{state}」は {'／'.join(h.INT_STATES)} のどれでもありません")
+            rel_cell = it.get("関連する要求")
+            if rel_cell and "関連する要求" in it.fields:
+                rids = h.REQ_ID_RE.findall(rel_cell)
+                tbd = h.INT_TBD_RE.match(rel_cell)
+                if not rids and not tbd:
+                    self.err("CHK-28", self.loc(cat.file, it.field_lines["関連する要求"]),
+                             f"{it.id} の関連する要求に要求 ID（FR-xxx／NFR-xxx-xxx）がありません（AC-208）")
+                for rid in rids:
+                    if rid not in self.doc.requirements:
+                        self.err("CHK-28", self.loc(cat.file, it.field_lines["関連する要求"]), f"{it.id} の関連する要求 {rid} が要求定義書にありません")
+                if state == "運用中" and rids:
+                    bad = [r for r in rids if r in self.doc.requirements and self.doc.requirements[r].state != "承認済み"]
+                    if bad:
+                        self.warn("CHK-28", where, f"{it.id} は運用中ですが、関連する要求 {'、'.join(bad)} が承認済みではありません")
+        listed = {h.strip_md(c) for _, header, cells in cat.index_rows for c in cells[:1] if h.INT_ID_RE.fullmatch(h.strip_md(c))}
+        for ln, header, cells in cat.index_rows:
+            iid = h.strip_md(cells[0]) if cells else ""
+            if iid and h.INT_ID_RE.fullmatch(iid) and iid not in ids:
+                self.warn("CHK-28", self.loc(cat.file, ln), f"索引表の {iid} に対応する項目（#### {iid} …）がありません")
+        for iid, it in ids.items():
+            if cat.index_rows and iid not in listed:
+                self.warn("CHK-28", self.loc(cat.file, it.line), f"{iid} が索引表にありません")
+
 # ---------------------------------------------------------------------- commands
 
 def cmd_check(args, root, cfg) -> int:
@@ -960,6 +1062,35 @@ def trace_one(ck: "Checker", key: str, code: Dict[str, Set[str]]) -> dict:
     if key.startswith("G-") and key in doc.defs:
         reqs = [r.id for r in doc.requirements.values() if key in re.findall(r"G-\d{3,}", r.fields.get("上位", ""))]
         return {"id": key, "kind": "goal", "at": where(key), "requirements": reqs, "referenced_by": referrers(key)}
+    if h.INT_ID_RE.fullmatch(key):
+        it = ck.integ.by_id().get(key) if ck.integ.exists else None
+        if it is None:
+            return {"id": key, "kind": "not_found"}
+        mention_owners: Set[str] = set()
+        for rel, text in doc.text.items():
+            owner, owner_lvl, in_code = "", 0, False
+            for line in text.splitlines():
+                if line.lstrip().startswith("```"):
+                    in_code = not in_code
+                    continue
+                if in_code:
+                    continue
+                hm = h.HEADING_RE.match(line)
+                if hm:
+                    rm = h.REQ_HEADING_RE.match(line)
+                    if rm:
+                        owner, owner_lvl = rm.group(2), len(hm.group(1))
+                    elif owner and len(hm.group(1)) <= owner_lvl:
+                        owner = ""
+                if owner and key in h.INT_ID_RE.findall(re.sub(r"`[^`]*`", "", line)):
+                    mention_owners.add(owner)
+        related = set(h.REQ_ID_RE.findall(it.get("関連する要求"))) | mention_owners
+        reqs = sorted(r for r in related if r in doc.requirements)
+        acs = sorted({a for r in reqs for a in doc.requirements[r].acs})
+        return {"id": key, "kind": "外部連携", "title": it.name, "at": f"{it.file}:{it.line}",
+                "direction": it.get("方向"), "integration_state": it.get("状態"), "counterparty": it.get("連携先"),
+                "requirements": [f"{r}（{doc.requirements[r].state}）" for r in reqs],
+                "acs": acs and [{"id": a, "level": doc.acs[a].level or "-", "cases": [], "code": [], "blocked": ""} for a in acs if a in doc.acs]}
     if key in doc.defs:
         return {"id": key, "kind": h.id_kind(key) or "id", "at": where(key), "referenced_by": referrers(key)}
     if key in doc.entities or key in doc.glossary:
