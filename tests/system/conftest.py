@@ -17,7 +17,7 @@ SOURCE = Path(__file__).resolve().parents[2]
 
 
 def run(args, cwd: Path, check: bool = True):
-    env = dict(os.environ, PYTHONUTF8="1")
+    env = dict(os.environ, PYTHONUTF8="1", EABK_ALLOW_PRIMARY="1")
     result = subprocess.run(
         [str(a) for a in args],
         cwd=cwd,
