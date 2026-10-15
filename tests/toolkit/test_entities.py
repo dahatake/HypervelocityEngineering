@@ -223,6 +223,7 @@ def test_ac164_todo_reasons_by_catalog_content(tmp_path):
 # FR-1024 AC-165
 def test_ac165_deterministic_and_deduplicated_against_open_questions(tmp_path):
     repo = make_standard(tmp_path / "r")
+    set_source(repo, "no/such/enterprise-catalog.csv")
     a = run_entities(repo, "todo").stdout
     assert a == run_entities(repo, "todo").stdout
     p = repo / DOC
@@ -231,6 +232,38 @@ def test_ac165_deterministic_and_deduplicated_against_open_questions(tmp_path):
     b = run_entities(repo, "todo").stdout
     assert not rows(b, "「顧客」") and rows(b, "「注文」") and rows(b, "「在庫」")
     assert "| （採番前） | 中 |" in b
+
+
+def set_optout(repo: Path) -> None:
+    p = repo / "scripts" / "ebak.config.json"
+    cfg = json.loads(p.read_text(encoding="utf-8"))
+    cfg["enterprise_data_catalog"] = "利用しない"
+    p.write_text(json.dumps(cfg, ensure_ascii=False), encoding="utf-8")
+
+
+# FR-1023 AC-159 AC-232 / FR-1024 AC-234
+@pytest.mark.parametrize("explicit", [False, True])
+def test_ac159_ac232_ac234_opt_out_no_check_no_todo(tmp_path, explicit):
+    repo = make_standard(tmp_path / "r")
+    if explicit:
+        set_optout(repo)
+    for c in ("check", "todo"):
+        r = run_entities(repo, c)
+        assert r.returncode == 0
+        assert "企業データカタログ: 利用しない" in r.stdout
+        assert ("（未設定）" in r.stdout) == (not explicit)
+        assert "企業カタログ未確認" not in r.stdout and "（採番前）" not in r.stdout
+    assert rdcheck(repo).returncode == rdcheck(make_standard(tmp_path / "r2")).returncode
+
+
+# FR-1023 AC-233 FR-1024 AC-163
+def test_ac233_ac163_switch_to_use_and_unusable_reports_all_entities(tmp_path):
+    repo = make_standard(tmp_path / "r")
+    set_optout(repo)
+    set_source(repo, "no/such/enterprise-catalog.csv")
+    assert "照合不能" in run_entities(repo, "check").stdout
+    out = run_entities(repo, "todo").stdout
+    assert rows(out, "「顧客」", "企業カタログ未確認") and rows(out, "「注文」", "企業カタログ未確認")
 
 
 # NFR-COMPAT-003 AC-168
