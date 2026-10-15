@@ -54,9 +54,9 @@
     "AC-154": "sha256:36ae79f9fe540d90",
     "AC-157": "sha256:9d3bde2a45b11ae9",
     "AC-168": "sha256:ab5564fae29f2104",
-    "AC-151": "sha256:531cbc815604fafc",
-    "AC-159": "sha256:cf0a1590bf6f244f",
-    "AC-163": "sha256:480baecec8ec6eff",
+    "AC-151": "sha256:aa28b5797e95c2a9",
+    "AC-159": "sha256:d86128bec7cdb557",
+    "AC-163": "sha256:119c533685ff04ad",
     "AC-174": "sha256:d3856a2b0e9c79fe",
     "AC-177": "sha256:e881e7e3ce2d21fc",
     "AC-179": "sha256:ed6de68701ff58fa",
@@ -73,7 +73,8 @@
     "AC-227": "sha256:9246b2f136587171",
     "AC-015": "sha256:62a3d0689a35f224",
     "AC-041": "sha256:07d179d0bab7a339",
-    "AC-042": "sha256:5d703b2791379e40"
+    "AC-042": "sha256:5d703b2791379e40",
+    "AC-234": "sha256:d0d879d6202d91ea"
   },
   "cases": [
     {
@@ -2829,11 +2830,11 @@
       "ac_ids": [
         "AC-159"
       ],
-      "title": "参照元未設定: 未設定と報告し verify の結果が不変",
+      "title": "企業データカタログ: 未設定・明示「利用しない」の報告と verify の結果不変",
       "layer": "contract",
       "command": "python -m pytest tests/system/test_entities_system.py -k ac159 -q",
       "canary": false,
-      "status": "pass",
+      "status": "not_run",
       "last_commit": "6afbcd7e",
       "last_run_at": "2026-10-16T00:50:56+09:00",
       "evidence": "work/runs/202610152219/logs/system-test/IT-019-202610160048.log",
@@ -2843,6 +2844,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-16T05:12:49+09:00",
+          "by": "test-designer",
+          "change": "title: '参照元未設定: 未設定と報告し verify の結果が不変' -> '企業データカタログ: 未設定・明示「利用しない」の報告と verify の結果不変'",
+          "reason": "commit 2ef25488 で AC-159 が『利用しない（未設定／明示）』に改訂"
         }
       ]
     },
@@ -2854,11 +2861,11 @@
       "ac_ids": [
         "AC-163"
       ],
-      "title": "参照元未設定: 全エンティティを企業カタログ未確認の ToDo に（0 件含む）",
+      "title": "企業データカタログ「利用する」で参照元が取得不能: 全エンティティを企業カタログ未確認の ToDo に（0 件含む）",
       "layer": "contract",
       "command": "python -m pytest tests/system/test_entities_system.py -k ac163 -q",
       "canary": false,
-      "status": "pass",
+      "status": "not_run",
       "last_commit": "6afbcd7e",
       "last_run_at": "2026-10-16T00:50:56+09:00",
       "evidence": "work/runs/202610152219/logs/system-test/IT-020-202610160048.log",
@@ -2868,6 +2875,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-16T05:12:50+09:00",
+          "by": "test-designer",
+          "change": "title: '参照元未設定: 全エンティティを企業カタログ未確認の ToDo に（0 件含む）' -> '企業データカタログ「利用する」で参照元が取得不能: 全エンティティを企業カタログ未確認の ToDo に（0 件含む）'",
+          "reason": "commit 2ef25488 で AC-163 が『利用する』設定時のみに改訂"
         }
       ]
     },
@@ -3674,6 +3687,31 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "AC-042 の台帳ケースを追加（監査 A-01）"
+        }
+      ]
+    },
+    {
+      "id": "IT-022",
+      "requirement_ids": [
+        "FR-1024"
+      ],
+      "ac_ids": [
+        "AC-234"
+      ],
+      "title": "企業データカタログ「利用しない」: 企業カタログ起因の ToDo 0 件・verify 不変",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_entities_system.py -k ac234 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T05:12:52+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
         }
       ]
     }
