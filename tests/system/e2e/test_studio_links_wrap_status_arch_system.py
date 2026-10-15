@@ -29,7 +29,7 @@ from test_studio_system import ROOT, STUDIO, page, studio_url  # noqa: F401  (fi
 
 MISSING_ID = "FR-" + "9" * 4  # 実在しない ID
 T_MID, T_DETAIL = 2, 8  # PARAM-017, PARAM-018
-ID_RE = re.compile(r"^(G|FR|NFR(?:-[A-Z]+)?|AC|Q|PARAM|SRC|E2E|IT)-\d+$")
+ID_RE = re.compile(r"^(G|FR|NFR(?:-[A-Z]+)?|AC|Q|PARAM|SRC|INT|E2E|IT)-\d+$")
 
 
 def _serve(repo):
@@ -108,6 +108,40 @@ def test_ac188_nonexistent_id_is_not_a_link(page):
     page.goto(page.url + "#/tables?tab=reqs&q=" + MISSING_ID)
     page.wait_for_load_state("networkidle")
     assert page.locator("#view a", has_text=re.compile(re.compile("^" + MISSING_ID + "$"))).count() == 0
+
+
+# FR-1031 AC-188 (INT: 外部連携カタログの ID も同じ詳細へ移動するリンク。INT-001 は実在、INT-999 は実在しない)
+def test_ac188_int_ids_are_links_by_click_and_keyboard_and_missing_int_is_not(browser, tmp_path):
+    import json
+    from entity_repo import make_zoom as _mk
+    repo = _mk(tmp_path / "intlink")
+    cfg_path = repo / "scripts" / "ebak.config.json"
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cfg["management_files"]["integrations"] = "docs/integrations.md"
+    cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    (repo / "docs" / "integrations.md").write_text(
+        "# 外部連携カタログ\n\n#### INT-001 受注 API\n- 連携先: 取引先 A\n- 方向: 受信\n- 状態: 運用中\n- 関連する要求: FR-001\n",
+        encoding="utf-8")
+    proc, url = _serve(repo)
+    ctx = browser.new_context()
+    try:
+        p = ctx.new_page()
+        p.goto(url + "#/integrations")
+        p.wait_for_load_state("networkidle")
+        link = p.locator("#view a", has_text=re.compile(r"^INT-001$")).first
+        assert link.count() == 1
+        link.click()
+        expect(p.locator("#drawer")).to_contain_text("INT-001")
+        p.keyboard.press("Escape")
+        link.focus()
+        p.keyboard.press("Enter")
+        expect(p.locator("#drawer")).to_contain_text("INT-001")
+        p.goto(url + "#/tables?tab=reqs&q=INT-999")
+        p.wait_for_load_state("networkidle")
+        assert p.locator("#view a", has_text=re.compile(r"^INT-999$")).count() == 0
+    finally:
+        ctx.close()
+        proc.terminate()
 
 
 # FR-1031 AC-188 (graph legend / chip / diagram label)
