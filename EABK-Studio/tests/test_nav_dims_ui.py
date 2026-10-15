@@ -28,10 +28,10 @@ def test_ac224_every_nav_item_has_unique_description_in_tooltip_and_screen_heade
     page.context.close()
 
 
-# FR-1041 AC-224: the integrations place exists (content arrives with FR-1042) and says so instead of being blank.
+# FR-1041 AC-224 / FR-1042 AC-230: a repository without an integration catalog shows "no integrations", not a blank page.
 def test_ac224_integrations_item_has_a_place_with_a_provisional_empty_view(studio):
     page = _open(studio, "integrations")
-    assert page.get_by_test_id("integrations-soon").is_visible()
+    assert page.get_by_test_id("integrations-none").is_visible()
     page.context.close()
 
 

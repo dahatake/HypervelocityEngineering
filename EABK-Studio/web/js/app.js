@@ -8,12 +8,6 @@ import { dimToggle, dimState, registerDim, hasDimHandler, runDim } from './dim.j
 
 // FR-1041: the top navigation, organised by "what data can be viewed" (9 items, MECE).
 // Old screen ids (map2d / map3d / placement) stay as aliases and move to the item that now holds them (AC-226).
-function mountIntegrationsPlaceholder(host) {
-  host.append(el('div', { class: 'page' }, el('h1', {}, '🔌 ' + t('nav.integrations')), el('p', { class: 'sub' }, t('navd.integrations')),
-    el('div', { class: 'empty', 'data-testid': 'integrations-soon' }, t('navd.integrations.soon'))));
-  const off = onLang(() => { host.replaceChildren(); mountIntegrationsPlaceholder(host); });
-  return { destroy: off };
-}
 const ROUTES = {
   dashboard: { icon: 'dashboard', load: () => import('./dashboard.js') },
   implstatus: { icon: 'progress', load: () => import('./implstatus.js') },
@@ -22,7 +16,7 @@ const ROUTES = {
   diagrams: { icon: 'diagrams', load: () => import('./diagrams.js') },
   placement: { navKey: 'diagrams', alias: 'diagrams', load: () => import('./diagrams.js') },
   entities: { icon: 'entities', load: () => import('./entities.js') },
-  integrations: { icon: 'integrations', mount: mountIntegrationsPlaceholder },
+  integrations: { icon: 'integrations', load: () => import('./integrations.js') },
   source: { icon: 'source', load: () => import('./source.js') },
   tables: { icon: 'tables', load: () => import('./tables.js') },
   maintenance: { icon: 'maintenance', mount: mountMaintenance },

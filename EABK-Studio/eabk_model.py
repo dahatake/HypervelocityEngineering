@@ -23,6 +23,7 @@ DEFAULT_FILES = {
     "run_history": "docs/run-history.md",
     "ledger": "tests/system/ledger.json",
     "manual_tests": "docs/manual-tests.md",
+    "integrations": "docs/integrations.md",
 }
 CONFIG_CANDIDATES = ("scripts/ebak.config.json", "scripts/hve.config.json")
 
@@ -286,7 +287,7 @@ def data_layer_report(root: Path) -> dict:
 def fingerprint(root: Path) -> str:
     files = load_config(root)
     stamps = []
-    paths = [root / files[k] for k in ("requirements", "catalog", "ledger", "id_registry", "run_history")]
+    paths = [root / files[k] for k in ("requirements", "catalog", "ledger", "id_registry", "run_history", "integrations")]
     rd = root / files["requirements_dir"]
     if rd.is_dir():
         paths += sorted(rd.glob("*.md"))
@@ -301,7 +302,7 @@ def fingerprint(root: Path) -> str:
 
 def generated_at(root: Path) -> str:
     files = load_config(root)
-    paths = [root / files[k] for k in ("requirements", "catalog", "ledger", "id_registry", "run_history")]
+    paths = [root / files[k] for k in ("requirements", "catalog", "ledger", "id_registry", "run_history", "integrations")]
     rd = root / files["requirements_dir"]
     if rd.is_dir():
         paths += sorted(rd.glob("*.md"))
@@ -675,6 +676,82 @@ def build_entities(root: Path, warnings: list[str]) -> dict:
     return empty
 
 
+# FR-1042: external integration catalog (FR-1035) read-only. 16 viewpoints of FR-1038 -> catalog field names.
+INT_VIEWPOINTS = (
+    ("連携先", ("連携先",)), ("方向", ("方向",)), ("方式", ("方式",)), ("頻度と量", ("頻度と量",)),
+    ("データ分類と個人情報", ("データ分類", "個人情報")), ("認証認可", ("認証認可",)),
+    ("可用性・SLA", ("可用性・SLA",)), ("レート制限", ("レート制限",)),
+    ("エラー・再試行・冪等性", ("エラー・再試行・冪等性",)), ("契約・バージョン", ("契約・バージョン",)),
+    ("変更通知", ("変更通知",)), ("監視", ("監視",)), ("データ保持", ("データ保持",)),
+    ("障害時の代替", ("障害時の代替",)), ("責任分界", ("責任分界",)), ("法務・ライセンス", ("法務・ライセンス",)),
+)
+INT_HEADING = re.compile(r"^#{2,6}\s+\**(INT-\d{3,})\**\s*(.*)$")
+INT_BULLET = re.compile(r"^\s{0,3}[-*]\s+\**([^:：*]{1,30}?)\**\s*[:：]\s*(.*)$")
+INT_SECRET = re.compile(r"(?i)(?:://[^/\s:@]+:[^/\s@]+@|\bBearer\s+[A-Za-z0-9._~+/=-]{12,}|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"
+                        r"|\bgh[pousr]_[A-Za-z0-9]{20,}|\b(?:sk|pk)[-_][A-Za-z0-9_-]{16,}|-----BEGIN [A-Z ]*PRIVATE KEY"
+                        r"|(?:password|passwd|secret|token|api[ _-]?key|パスワード|トークン)\s*[:：=]\s*\S{6,})")
+
+
+def viewpoint_state(value: str) -> str:
+    v = (value or "").strip()
+    if not v:
+        return "missing"
+    if v == "なし":
+        return "none"
+    if re.match(r"^TBD(?:\s*[（(].*[）)])?$", v, re.I):
+        return "tbd"
+    return "filled"
+
+
+def parse_integration_catalog(root: Path, files: dict, model: dict) -> None:
+    """Fill model['integrationCatalog'] and merge same-partner rows of the requirements section 8 table (AC-231)."""
+    rel = files.get("integrations") or "docs/integrations.md"
+    p = root / rel
+    items: list[dict] = []
+    if p.is_file():
+        cur = None
+        in_code = False
+        for n, line in enumerate(read_text(p).splitlines(), 1):
+            if line.lstrip().startswith("```"):
+                in_code = not in_code
+                continue
+            if in_code:
+                continue
+            hm = INT_HEADING.match(line)
+            if hm:
+                cur = {"id": hm.group(1), "name": strip_md(hm.group(2)), "fields": {}, "file": rel, "line": n}
+                items.append(cur)
+                continue
+            if cur is not None and re.match(r"^#{1,6}\s", line):
+                cur = None
+            bm = INT_BULLET.match(line) if cur is not None else None
+            if bm and bm.group(1).strip() not in cur["fields"]:
+                val = strip_md(bm.group(2))
+                cur["fields"][bm.group(1).strip()] = "（認証情報らしい値のため非表示）" if INT_SECRET.search(val) else val
+    legacy = model["integrations"]
+    for it in items:
+        f = it["fields"]
+        it["partner"], it["direction"], it["method"] = f.get("連携先", ""), f.get("方向", ""), f.get("方式", "")
+        it["dataClass"], it["pii"], it["status"] = f.get("データ分類", ""), f.get("個人情報", ""), f.get("状態", "")
+        it["authz"], it["responsibility"] = f.get("認証認可", ""), f.get("責任分界", "")
+        it["reqs"] = list(dict.fromkeys(REQ_ID_RE.findall(f.get("関連する要求", ""))))
+        vps = []
+        for label, keys in INT_VIEWPOINTS:
+            states = [viewpoint_state(f.get(k, "")) for k in keys]
+            st = next((s for s in ("missing", "tbd") if s in states), "none" if all(s == "none" for s in states) else "filled")
+            vps.append({"label": label, "value": " / ".join(f.get(k, "") for k in keys if f.get(k, "")), "state": st})
+        it["viewpoints"] = vps
+        it["missing"] = sum(1 for v in vps if v["state"] == "missing")
+        it["tbd"] = sum(1 for v in vps if v["state"] == "tbd")
+        it["flag"] = it["pii"].strip() not in ("なし", "") or viewpoint_state(it["authz"]) == "tbd"
+        key = norm(it["partner"]).lower()
+        merged = [x for x in legacy if key and norm(x["name"]).lower() == key]
+        it["merged"] = [{"name": x["name"], "method": x["method"], "owner": x["owner"], "file": x["file"], "line": x["line"]} for x in merged]
+        for x in merged:
+            legacy.remove(x)
+    model["integrationCatalog"] = items
+
+
 def build_model(root: Path) -> dict:
     root = Path(root).resolve()
     files = load_config(root)
@@ -682,7 +759,7 @@ def build_model(root: Path) -> dict:
     model: dict = {
         "meta": {"repo": str(root), "name": root.name, "studio": STUDIO_VERSION,
                  "generatedAt": generated_at(root), "files": {}, "fingerprint": fingerprint(root)},
-        "goals": [], "reqs": [], "params": [], "terms": [], "stateMachines": [], "personas": [], "integrations": [],
+        "goals": [], "reqs": [], "params": [], "terms": [], "stateMachines": [], "personas": [],         "integrations": [], "integrationCatalog": [],
         "questions": [], "decisions": [], "audits": [], "sources": [], "scenarios": [], "catalog": {"features": [], "apis": [], "tables": [], "parts": []},
         "cases": [], "caseDigests": {}, "runs": [], "registry": [], "registryRecords": [],
         "analysis": {"structure": {"layers": [], "differences": []}, "runtime": {}, "history": []},
@@ -805,6 +882,7 @@ def build_model(root: Path) -> dict:
                 c = row["cells"] + [""] * 5
                 model["decisions"].append({"date": strip_md(c[0]), "target": strip_md(c[1]), "decision": strip_md(c[2]),
                                            "basis": strip_md(c[3]), "run": strip_md(c[4]), "file": t["file"], "line": row["line"]})
+    parse_integration_catalog(root, files, model)
     model["stateMachines"] = parse_state_machines(all_tables)
     model["entities"] = build_entities(root, warnings)
     model["placements"] = parse_placements(cat_doc)
@@ -1348,6 +1426,10 @@ def build_graph(model: dict, reqs: dict, parts: list[dict]) -> None:
         node(f"persona:{p['name']}", "persona", p["name"], title=p["work"], file=p["file"], line=p["line"])
     for it in model["integrations"]:
         node(f"ext:{it['name']}", "external", it["name"], title=it["meaning"][:160], file=it["file"], line=it["line"])
+    for it in model.get("integrationCatalog", []):
+        node(it["id"], "integration", it["id"], title=it["name"], status=it["status"], file=it["file"], line=it["line"])
+        for rid in it["reqs"]:
+            edge(rid, it["id"], "req-int")
 
     deg: Counter = Counter()
     for (a, b, _rel) in edges:
