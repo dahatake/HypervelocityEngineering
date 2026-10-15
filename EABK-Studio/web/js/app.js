@@ -100,9 +100,11 @@ async function route() {
   current = null;
   const host = el('div', { class: 'fill' });
   view.replaceChildren(host);
+  host.append(el('div', { class: 'sr-only', role: 'status' }, t('loading'))); // never leave the view empty while the module loads
   try {
     const mod = ROUTES[name].mount ? { mount: ROUTES[name].mount } : await ROUTES[name].load();
     if (my !== token) return;
+    host.querySelector(':scope > [role=status].sr-only')?.remove();
     current = mod.mount(host);
     if (ROUTES[name].dim) mountMapDim(host, name, current);
     decorate(name, host);
