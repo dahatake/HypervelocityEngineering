@@ -5,6 +5,8 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- **外部連携の要求チェックリスト**（FR-1038・FR-1039）を追加しました。`.github/skills/requirement-definition/integration-requirements.md` に 16 観点（問い・要求に書く内容・受入基準の例・書かない設計事項）と要求テンプレートを置き、rd-author（カタログの確認・INT 採番・16 観点の走査・包括承認の除外）と rd-audit（観点の欠落・カタログとの食い違い）の手順書に組み込み、インストールで配ります。
+
 - **外部連携カタログ**（`docs/integrations.md`。任意）を追加しました（FR-1035・FR-1036・FR-1037）。API・ファイル・DB・イベントなどの外部連携を、1 連携 1 項目（`#### INT-001 <名前>`、16 観点に対応する欄、索引表）で記録します。ID は `python scripts/next-id.py INT` で採番し、`verify.py --docs-only`（CHK-28）が、形式・ID の一意性・必須欄と観点の欄・TBD の質問票・要求との対応・認証情報の値らしい文字列を検査します。`rdcheck.py trace INT-xxx` で、参照する要求と受入基準を一覧できます。インストールでは、雛形（まだないときに限り作成）と検査・チェックリスト（`.github/skills/requirement-definition/integration-checklist.md`）が配られ、版は 0.4.0 になりました。手順は [users-guide/03](users-guide/03-requirements-format.md) にあります。
 
 - **外部連携カタログ**（任意の `docs/integrations.md`）を追加しました（FR-1035〜FR-1037、toolkit 0.4.0）。外部アプリ・データとの連携を `#### INT-001 <名前>` の 1 連携 1 項目で記録し、16 観点の欄（値・なし・TBD（Q-xxx））と認証情報を書かない規則を持ちます。`python scripts/next-id.py INT` で採番し、`verify.py --docs-only`（CHK-28）が形式・ID・要求との対応を検査し、`rdcheck.py trace INT-xxx` が参照する要求・受入基準を一覧します。インストールは雛形を、まだないときに限り作ります。手順は [users-guide/11-integration-catalog.md](users-guide/11-integration-catalog.md) です。カタログがないリポジトリの検査・Studio・清掃は従来どおりです。

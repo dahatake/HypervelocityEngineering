@@ -17,4 +17,12 @@ def test_external_integration_catalog_suite_passes():
         [sys.executable, "-m", "pytest", "-q", "-x", str(SOURCE / "tests" / "toolkit" / "test_integrations.py")],
         cwd=SOURCE, capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
+
+
+# FR-1038 AC-216 AC-217 / FR-1039 AC-218 AC-219
+def test_external_integration_requirements_suite_passes():
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-x", str(SOURCE / "tests" / "toolkit" / "test_integration_requirements.py")],
+        cwd=SOURCE, capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
     assert proc.returncode == 0, proc.stdout[-4000:] + proc.stderr[-2000:]
