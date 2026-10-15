@@ -188,6 +188,7 @@ svg text{font-family:inherit}
 .fill:has(> .dgm) > .dgmtabs{position:static;flex:none;padding:10px 14px 0}
 .fill:has(> .dgm) > .dgm{position:relative;inset:auto;flex:1;min-height:0;padding:12px 20px 20px}
 .node-g{cursor:pointer;transition:opacity .2s}
+[data-id].node-g{transition:none} /* 選択・解除の強調は即時に反映（フェード中の中間値を見せない） */
 .dim{opacity:.18}
 .heat td.c{text-align:center;cursor:pointer;min-width:42px;transition:.15s}
 .heat td.c:hover{outline:2px solid var(--c1)}
