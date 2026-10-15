@@ -112,17 +112,17 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-013 | 通常操作の参照専用データ境界 | 承認済み（包括承認 2026-10-09・approval_policy） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | HTTP サーバー |
 | FR-1001 | users-guide の利用開始前提条件 | 承認済み（依頼 2026-10-09） | 未実装 | AC-037 対応の E2E-015 は登録・実装済み、commit `c61ee5b` の実行結果は `fail`（合格ではない） | 起動スクリプト、HTTP サーバー |
 | NFR-UX-001 | レイアウト変更 | AI提案／承認待ち | 未実装 | 未実装 | なし |
-| NFR-UX-002 | レイアウト復元 | AI提案／承認待ち | 未実装 | 未実装 | なし |
-| NFR-UX-003 | 非ドラッグ操作 | AI提案／承認待ち | 未実装 | 未実装 | なし |
-| NFR-UX-004 | 狭い画面と拡大 | AI提案／承認待ち | 未実装 | 未実装 | なし |
+| NFR-UX-002 | レイアウト復元 | 承認済み | 未実装 | 未実装 | なし |
+| NFR-UX-003 | 非ドラッグ操作 | 承認済み | 未実装 | 未実装 | なし |
+| NFR-UX-004 | 狭い画面と拡大 | 承認済み | 未実装 | 未実装 | なし |
 | NFR-UX-005 | 一貫した操作結果 | AI提案／承認待ち | `EABK-Studio/web/js/i18n.js` | 未実装 | UI 部品 |
 | NFR-UX-006 | 表現の連動 | AI提案／承認待ち | 未実装 | 未実装 | なし |
-| NFR-UX-007 | 視覚表現の代替 | AI提案／承認待ち | `EABK-Studio/web/js/tables.js`, `EABK-Studio/web/js/diagrams.js` | 未実装 | UI 部品 |
-| NFR-UX-008 | ペルソナ表現の安全な切替 | AI提案／承認待ち | 未実装 | 未実装 | なし |
+| NFR-UX-007 | 視覚表現の代替 | 承認済み | `EABK-Studio/web/js/tables.js`, `EABK-Studio/web/js/diagrams.js` | 未実装 | UI 部品 |
+| NFR-UX-008 | ペルソナ表現の安全な切替 | 承認済み | 未実装 | 未実装 | なし |
 | NFR-UX-009 | 状態と進行表示 | AI提案／承認待ち | 未実装 | 未実装 | なし |
 | NFR-SEC-001 | ローカル限定 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | HTTP サーバー |
 | NFR-SEC-002 | 読取安全性 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | 管理データモデル |
-| NFR-SEC-003 | 権限・外部連携境界 | AI提案／承認待ち | 未実装 | 未実装 | なし |
+| NFR-SEC-003 | 権限・外部連携境界 | 承認済み | 未実装 | 未実装 | なし |
 | NFR-OPS-001 | 実行環境 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | 起動スクリプト |
 | NFR-OPS-002 | 自動再読込の継続 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/app.js` | 未実装 | フィンガープリント |
 | NFR-OPS-003 | 不足・失敗からの復旧 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/ui.js` | `EABK-Studio/tests/test_studio.py`, `EABK-Studio/tests/test_repo_switch_recovery_wiring.py` | HTTP サーバー、UI 部品 |
