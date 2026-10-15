@@ -49,8 +49,13 @@ function applyDim(root) {
 }
 
 // ---------------------------------------------------------------- context diagram
+// FR-1042 AC-229: external elements of the context diagram = catalog items (shown by INT-ID) + requirements-section rows not merged into one.
+export const ctxExternals = (m) => [
+  ...(m.integrationCatalog || []).map((c) => ({ nodeId: c.id, name: `${c.id} ${c.name}`, method: c.method, meaning: c.partner })),
+  ...m.integrations.map((x) => ({ ...x, nodeId: `ext:${x.name}` })),
+];
 function contextDiagram(m) {
-  const P = m.personas, X = m.integrations;
+  const P = m.personas, X = ctxExternals(m);
   const rows = Math.max(P.length, X.length, 1), Hh = rows * 120 + 140, Ww = 1180;
   const svg = svgEl('svg', { viewBox: `0 0 ${Ww} ${Hh}`, width: Ww, height: Hh, style: 'max-width:100%' }, defs());
   const cx = Ww / 2, cy = Hh / 2;
@@ -67,7 +72,7 @@ function contextDiagram(m) {
   const pp = place(P, 140, 'l'), xx = place(X, Ww - 140, 'r');
   const sx = (side) => (side === 'l' ? cx - sysW / 2 : cx + sysW / 2);
   for (const { it, x, y, side } of [...pp, ...xx]) {
-    const id = side === 'l' ? `persona:${it.name}` : `ext:${it.name}`;
+    const id = side === 'l' ? `persona:${it.name}` : it.nodeId;
     const label = it.name;
     const line = svgEl('line', { x1: side === 'l' ? x + 74 : x - 74, y1: y, x2: sx(side) + (side === 'l' ? -4 : 4), y2: cy + Math.max(-sysH / 2 + 20, Math.min(sysH / 2 - 20, (y - cy) * 0.5)), stroke: '#8fa6e8', 'stroke-width': 1.6, 'marker-end': 'url(#arr)', 'data-a': id, 'data-b': id, 'data-arrow': 1 });
     if (side === 'r') line.setAttribute('marker-start', 'url(#arr)');
@@ -404,7 +409,7 @@ export function graphOf(k, m) {
     addEl('system', m.meta.name, 'system');
     for (const g of m.goals) addEl(g.id, g.id, 'goal', 'system');
     for (const p of m.personas) { addEl(`persona:${p.name}`, p.name, 'persona'); rel(`persona:${p.name}`, 'system', p.work); }
-    for (const x of m.integrations) { addEl(`ext:${x.name}`, x.name, 'external'); rel('system', `ext:${x.name}`, x.method); }
+    for (const x of ctxExternals(m)) { addEl(x.nodeId, x.name, 'external'); rel('system', x.nodeId, x.method); }
   } else if (k === 'goals') {
     addEl('system', m.meta.name, 'system');
     for (const g of m.goals) { addEl(g.id, `${g.id} ${g.title || ''}`.trim(), 'goal'); rel('system', g.id); }

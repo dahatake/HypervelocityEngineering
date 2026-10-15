@@ -3,7 +3,7 @@
 import { store } from './store.js';
 import { typeLabel } from './ui.js';
 
-export const ID_RE = /\b(?:G|FR|NFR(?:-[A-Z]+)?|AC|Q|PARAM|SRC|E2E|IT)-\d+\b/g;
+export const ID_RE = /\b(?:G|FR|NFR(?:-[A-Z]+)?|AC|Q|PARAM|SRC|E2E|IT|INT)-\d+\b/g;
 const PATH_RE = /(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+/g;
 const SKIP = 'a,button,script,style,textarea,input,select,title,desc,[data-noxref],[role=link],[contenteditable]';
 const NAMED = new Set(['part', 'api', 'table', 'entity', 'component', 'term']);
