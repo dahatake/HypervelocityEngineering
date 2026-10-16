@@ -94,9 +94,9 @@
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_model_can_traverse_requirement_to_catalog_file_and_test",
       "canary": true,
       "status": "pass",
-      "last_commit": "4c02aa76",
-      "last_run_at": "2026-10-16T12:15:57+09:00",
-      "evidence": "work/runs/202610160833/logs/system-test/E2E-001-202610161212.log",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/E2E-001-202610161316.log",
       "history": [
         {
           "at": "2026-10-09T22:10:37+09:00",
@@ -857,9 +857,9 @@
       "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_starts_only_after_ordered_success_and_pre_cleanup_report",
       "canary": true,
       "status": "pass",
-      "last_commit": "4c02aa76",
-      "last_run_at": "2026-10-16T12:15:57+09:00",
-      "evidence": "work/runs/202610160833/logs/system-test/E2E-026-202610161212.log",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/E2E-026-202610161316.log",
       "history": [
         {
           "at": "2026-10-10T10:41:32+09:00",
@@ -907,9 +907,9 @@
       "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_cleanup_starts_only_after_all_gates_and_main_integration",
       "canary": true,
       "status": "pass",
-      "last_commit": "4c02aa76",
-      "last_run_at": "2026-10-16T12:15:57+09:00",
-      "evidence": "work/runs/202610160833/logs/system-test/E2E-028-202610161213.log",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/E2E-028-202610161316.log",
       "history": [
         {
           "at": "2026-10-10T10:41:53+09:00",
@@ -2369,9 +2369,9 @@
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac105 -q",
       "canary": true,
       "status": "pass",
-      "last_commit": "4c02aa76",
-      "last_run_at": "2026-10-16T12:15:57+09:00",
-      "evidence": "work/runs/202610160833/logs/system-test/IT-008-202610161213.log",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/IT-008-202610161316.log",
       "history": [
         {
           "at": "2026-10-14T20:55:51+09:00",
@@ -3732,9 +3732,9 @@
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac240_check_clean\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "4c02aa76",
-      "last_run_at": "2026-10-16T12:15:57+09:00",
-      "evidence": "work/runs/202610160833/logs/system-test/IT-023-202610161213.log",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/IT-023-202610161316.log",
       "history": [
         {
           "at": "2026-10-16T09:09:14+09:00",
@@ -3757,9 +3757,9 @@
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac240_check_inconsistent\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "4c02aa76",
-      "last_run_at": "2026-10-16T12:15:57+09:00",
-      "evidence": "work/runs/202610160833/logs/system-test/IT-024-202610161214.log",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/IT-024-202610161317.log",
       "history": [
         {
           "at": "2026-10-16T09:09:17+09:00",
@@ -3782,9 +3782,9 @@
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac240_check_with_only_automatic\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "4c02aa76",
-      "last_run_at": "2026-10-16T12:15:57+09:00",
-      "evidence": "work/runs/202610160833/logs/system-test/IT-025-202610161214.log",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/IT-025-202610161317.log",
       "history": [
         {
           "at": "2026-10-16T09:09:21+09:00",
@@ -3807,9 +3807,9 @@
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_automatic_only\" -q",
       "canary": true,
       "status": "pass",
-      "last_commit": "4c02aa76",
-      "last_run_at": "2026-10-16T12:15:57+09:00",
-      "evidence": "work/runs/202610160833/logs/system-test/IT-026-202610161213.log",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/IT-026-202610161316.log",
       "history": [
         {
           "at": "2026-10-16T09:09:24+09:00",
@@ -3832,9 +3832,9 @@
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_with_manual_left\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "4c02aa76",
-      "last_run_at": "2026-10-16T12:15:57+09:00",
-      "evidence": "work/runs/202610160833/logs/system-test/IT-027-202610161214.log",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/IT-027-202610161317.log",
       "history": [
         {
           "at": "2026-10-16T09:09:27+09:00",
@@ -3857,9 +3857,9 @@
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_on_worker_branch\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "4c02aa76",
-      "last_run_at": "2026-10-16T12:15:57+09:00",
-      "evidence": "work/runs/202610160833/logs/system-test/IT-028-202610161215.log",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/IT-028-202610161317.log",
       "history": [
         {
           "at": "2026-10-16T09:09:31+09:00",
@@ -3882,9 +3882,9 @@
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_cancelled_on_write_failure\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "4c02aa76",
-      "last_run_at": "2026-10-16T12:15:57+09:00",
-      "evidence": "work/runs/202610160833/logs/system-test/IT-029-202610161215.log",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/IT-029-202610161317.log",
       "history": [
         {
           "at": "2026-10-16T09:09:34+09:00",
@@ -3907,9 +3907,9 @@
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_on_clean\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "4c02aa76",
-      "last_run_at": "2026-10-16T12:15:57+09:00",
-      "evidence": "work/runs/202610160833/logs/system-test/IT-030-202610161215.log",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/IT-030-202610161318.log",
       "history": [
         {
           "at": "2026-10-16T09:09:37+09:00",
@@ -3931,10 +3931,10 @@
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac237_new_install\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/IT-031-202610161318.log",
       "history": [
         {
           "at": "2026-10-16T09:09:40+09:00",
@@ -3956,10 +3956,10 @@
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac237_update_install_repairs\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/IT-032-202610161318.log",
       "history": [
         {
           "at": "2026-10-16T09:09:44+09:00",
@@ -3981,10 +3981,10 @@
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac237_update_install_automatic_only\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/IT-033-202610161318.log",
       "history": [
         {
           "at": "2026-10-16T09:09:47+09:00",
@@ -4006,10 +4006,10 @@
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac238_no_repair\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/IT-034-202610161318.log",
       "history": [
         {
           "at": "2026-10-16T09:09:50+09:00",
@@ -4031,10 +4031,10 @@
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac238_skip_verify\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/IT-035-202610161319.log",
       "history": [
         {
           "at": "2026-10-16T09:09:54+09:00",
@@ -4056,10 +4056,10 @@
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac238_non_install_modes\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "32b36f02",
+      "last_run_at": "2026-10-16T13:20:07+09:00",
+      "evidence": "work/runs/202610160833/logs/system-test/IT-036-202610161319.log",
       "history": [
         {
           "at": "2026-10-16T09:09:57+09:00",
