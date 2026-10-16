@@ -171,6 +171,13 @@ class Ctx:
         self.croot, self.run_id, self.meta, self.run_active = tree, rid, meta, True
         return True
 
+    def rebind_primary(self) -> None:
+        self.croot = self.root
+        self.state_dir = h.work_dir(self.croot, self.cfg) / ".ebak"
+        self.run_id = h.current_run(self.croot, self.cfg)
+        self.meta = h.load_meta(self.croot, self.cfg, self.run_id) if self.run_id else {}
+        self.run_active = bool(self.run_id and self.meta.get("status") == "active")
+
     def bind_sibling_run(self) -> None:
         # the conductor works inside its run worktree while the hook runs in the primary checkout
         best = None
@@ -241,10 +248,17 @@ def classify(ctx: Ctx, p: str) -> Tuple[Optional[str], bool, Path]:
     if not ap.is_absolute():
         ap = ctx.cwd / ap
     ap = Path(os.path.normpath(str(ap)))
+    nap = os.path.normcase(str(ap))
+    in_sibling = False
     for sib in ctx.sibling_runs():
-        if sib != ctx.croot and os.path.normcase(str(ap)).startswith(os.path.normcase(str(sib)) + os.sep):
-            ctx.bind_to(sib)
+        if nap.startswith(os.path.normcase(str(sib)) + os.sep):
+            in_sibling = True
+            if sib != ctx.croot and not ctx.bind_to(sib):
+                ctx.croot = sib  # an inactive run worktree of this repository is still not "outside"
             break
+    if not in_sibling and ctx.croot != ctx.root and nap.startswith(os.path.normcase(str(ctx.root)) + os.sep):
+        # a sibling run was auto-bound, but this write targets the primary tree the session is in
+        ctx.rebind_primary()
     try:
         rel = ap.resolve().relative_to(ctx.croot.resolve()).as_posix() if ap.exists() else ap.relative_to(ctx.croot).as_posix()
     except ValueError:
