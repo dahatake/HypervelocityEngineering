@@ -19,15 +19,15 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1019 | 直せない不整合の Issue 化 | 承認済み（依頼 2026-10-14） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml) | `tests/system/test_data_layer_workflow_system.py` | データ層修復 |
 | NFR-SEC-004 | データ層ワークフローの最小権限と書き込みの安全性 | 承認済み（依頼 2026-10-14） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml) | `tests/system/test_data_layer_workflow_system.py` | 配布同期対象 |
 | NFR-OPS-006 | データ層ワークフローの配布と利用者向け文書 | 承認済み（依頼 2026-10-14） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml)、`tools/install.py`、`README.md`、`users-guide/04-customization.md` | `tests/toolkit/test_install.py`、`tests/system/test_data_layer_workflow_system.py` | 配布同期対象 |
-| FR-1044 | データ層の確認・修復の共通の入口 | 承認済み（包括承認 2026-10-16・approval_policy） | 未実装 | 未実装 | データ層修復、データ層検査 |
-| FR-1045 | インストール時のデータ層の確認と自動修復 | 承認済み（依頼 2026-10-16） | 未実装 | 未実装 | データ層修復、配布同期対象 |
+| FR-1044 | データ層の確認・修復の共通の入口 | 承認済み（包括承認 2026-10-16・approval_policy） | [`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml)、`tools/install.py`、`scripts/rdfix.py` | `tests/toolkit/test_repair_entrypoints.py`、`tests/integration/test_repair_entrypoints_it.py`、`tests/system/test_data_layer_repair_system.py` | データ層修復、データ層検査 |
+| FR-1045 | インストール時のデータ層の確認と自動修復 | 承認済み（依頼 2026-10-16） | `tools/install.py` | `tests/toolkit/test_repair_entrypoints.py`、`tests/integration/test_repair_entrypoints_it.py`、`tests/system/test_data_layer_repair_system.py` | データ層修復、配布同期対象 |
 | FR-1046 | 手動のデータ層の確認と修復のコマンド | 承認済み（依頼 2026-10-16） | `scripts/rdfix.py`、`scripts/verify.py`、`users-guide/05-scripts-reference.md` | `tests/system/test_data_layer_repair_system.py`、`tests/toolkit/test_rdfix_full.py`、`tests/integration/test_data_layer_repair.py` | データ層修復、データ層検査 |
 | NFR-REL-002 | 自動修復の安全性（要求定義書の保護・書き込みの原子性・取り消し） | 承認済み（包括承認 2026-10-16・approval_policy） | `scripts/rdfix.py` | `tests/toolkit/test_rdfix_full.py`、`tests/integration/test_data_layer_repair.py`、`tests/system/test_data_layer_repair_system.py` | データ層修復 |
 | NFR-REL-003 | 自動修復の冪等性・収束・排他 | 承認済み（包括承認 2026-10-16・approval_policy） | `scripts/rdfix.py` | `tests/toolkit/test_rdfix_full.py`、`tests/integration/test_data_layer_repair.py` | データ層修復 |
 | NFR-REL-004 | 壊れた入力と git でないディレクトリでの確認・修復 | 承認済み（包括承認 2026-10-16・approval_policy） | `scripts/rdfix.py`、`scripts/ebaklib.py` | `tests/toolkit/test_rdfix_robust.py`、`tests/integration/test_data_layer_repair.py` | データ層修復 |
 | NFR-PERF-005 | データ層の確認・修復の速さ | 承認済み（依頼 2026-10-16） | `scripts/rdfix.py`、`scripts/ebaklib.py` | `tests/toolkit/test_rdfix_robust.py`、`tests/integration/test_data_layer_repair.py` | データ層修復、データ層検査 |
-| NFR-COMPAT-004 | 既存のデータ層の検査・修復の挙動の維持 | 承認済み（包括承認 2026-10-16・approval_policy） | 未実装 | 未実装 | データ層修復 |
-| NFR-OPS-007 | データ層の確認・修復の配布と利用者向け文書 | 承認済み（包括承認 2026-10-16・approval_policy） | 未実装 | 未実装 | 配布同期対象 |
+| NFR-COMPAT-004 | 既存のデータ層の検査・修復の挙動の維持 | 承認済み（包括承認 2026-10-16・approval_policy） | `scripts/rdfix.py`、[`.github/workflows/ebak-data-layer.yml`](docs/../.github/workflows/ebak-data-layer.yml) | `tests/toolkit/test_repair_entrypoints.py`、`tests/integration/test_repair_entrypoints_it.py`、`tests/toolkit/test_rdfix.py`、`tests/system/test_data_layer_workflow_system.py` | データ層修復 |
+| NFR-OPS-007 | データ層の確認・修復の配布と利用者向け文書 | 承認済み（包括承認 2026-10-16・approval_policy） | `tools/install.py`、`scripts/ebaklib.py`、`README.md`、`CHANGELOG.md`、`users-guide/04-customization.md`、`users-guide/05-scripts-reference.md`、`users-guide/06-quality-gates.md`、`users-guide/07-troubleshooting.md`、[`.github/agents/conductor.agent.md`](docs/../.github/agents/conductor.agent.md) | `tests/toolkit/test_repair_entrypoints.py`、`tests/integration/test_repair_entrypoints_it.py`、`tests/toolkit/test_version.py` | 配布同期対象 |
 | NFR-COR-001 | 再現性 | 廃止 | 未実装 | 未実装 | なし |
 | NFR-COR-002 | エラーの明確性 | 廃止 | 未実装 | 未実装 | なし |
 | NFR-COR-003 | 境界値 | 廃止 | 未実装 | 未実装 | なし |

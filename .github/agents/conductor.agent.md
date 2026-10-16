@@ -23,7 +23,7 @@ disable-model-invocation: true
    run の統合ブランチは worktree の現在のブランチです。以後の commit はすべて統合ブランチか作業ブランチで行います。
    統合ブランチは `run-state.py status` の `integration:` の行（meta.json の `integration_branch`）です。run の途中でブランチ名を変えません（GitHub Copilot app の `rename_branch` も使いません。hook G-5 が拒否します）。
 2. `git log --oneline -10` と `python scripts/verify.py --docs-only` で基準を記録します（失敗していても続けます。基準として progress に書きます）。
-   verify が `HINT rdfix` を出したら `python scripts/rdfix.py --apply` でデータ層のファイル間の不整合を直し、commit します（要求定義書は変更しません）。`MANUAL` の行は、担当の役割への依頼に含めます。
+   verify が `HINT rdfix` を出したら 統合ブランチで共通の入口 `python scripts/rdfix.py --full --apply`（確認だけなら `--full`。終了コード 0 = 合格・修復済み、1 = 手動対応が残る、2 = 実行しなかった・取り消した。同時に 1 つだけ実行される）でデータ層のファイル間の不整合を直し、commit します（要求定義書は変更しません。入口は Actions・インストーラ・手動の 3 つで結果は同じです。インストーラは既定で導入後に 1 回呼び、`--no-repair` で計画だけ）。`MANUAL` の行は、担当の役割への依頼に含めます。
 3. 一時ファイル（ログ・証跡・結果・メモ）は `work/runs/<run-id>/` にだけ書きます。/docs には永続の文書だけを書きます。
 
 ## 既存アプリの導入（brownfield。依頼が「既存アプリの導入」「adopt」、または `adopt.py request` の依頼文のとき）

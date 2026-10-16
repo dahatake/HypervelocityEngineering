@@ -15,7 +15,7 @@ def _load():
 
 
 def test_current_version_is_0_2_0():
-    assert _load().current() == "0.4.0"
+    assert _load().current() == "0.4.1"
 
 
 def test_bump_rules():

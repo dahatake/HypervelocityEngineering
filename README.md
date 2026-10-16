@@ -157,7 +157,7 @@ flowchart TD
 
 VS Code の hook はプレビュー機能で、harness によって動作が異なることがあります（Copilot CLI と、その上に構築された GitHub Copilot app は同じ `.github/hooks` を読み込みます）。そのため同じ規則を verify でも検査し、hook が効かない環境でも統合の時点で必ず止まるようにしています。詳しくは [品質ゲートと検査項目](users-guide/06-quality-gates.md) を参照してください。
 
-verify が見つけたデータ層のファイル間の不整合（カタログの決定状態のずれ、ID 台帳の状態、マージで重複した行、名前が変わったファイルの参照など）のうち、要求定義書から機械的に決まるものは `python scripts/rdfix.py --apply` で直せます。要求定義書は変更せず、判断が要るもの（AC の本文の変更、ID の再利用など）は担当の役割とともに `MANUAL` として示します（[6.3](users-guide/06-quality-gates.md#63-データ層の不整合の自動修正rdfix)）。
+verify が見つけたデータ層のファイル間の不整合（カタログの決定状態のずれ、ID 台帳の状態、マージで重複した行、名前が変わったファイルの参照など）のうち、要求定義書から機械的に決まるものは、共通の入口 `python scripts/rdfix.py --full`（確認）と `python scripts/rdfix.py --full --apply`（検査→修復→再検査）で直せます。入口は 3 つ（GitHub Actions のワークフロー・インストーラ・手動）で、どこから呼んでも同じ検査・同じ修復・同じ結果です。終了コードは 0 = 合格・修復済み、1 = 手動対応が残る・修復の計画あり、2 = 実行しなかった・取り消した（作業役のブランチ・排他の待ち時間切れ・書き込み失敗など。すべて元に戻します）。同じリポジトリでは適用を同時に 1 つだけ実行します（排他）。要求定義書は変更せず、判断が要るもの（AC の本文の変更、ID の再利用など）は担当の役割とともに `MANUAL` として示します（[6.3](users-guide/06-quality-gates.md#63-データ層の不整合の自動修正rdfix)）。
 
 ### 状態の永続化と再開
 
@@ -246,6 +246,7 @@ python tools/install.py --target /path/to/your-repo
 | `--check` | `-Check` | 更新が必要かどうかを確認します（必要なら exit 1。CI でバージョンのずれを検出できます） |
 | `--force` | `-Force` | ローカルで変更した toolkit のファイルも上書きします（`*.ebak-backup-<日時>` を残します） |
 | `--no-ci` | `-NoCi` | `.github/workflows/ebak-verify.yml` と `ebak-data-layer.yml` をインストールしません |
+| `--no-repair` | `-NoRepair` | 導入後のデータ層の自動修復をせず、検査と修復の計画だけを表示します（書き込みません）。`--skip-verify` は検査も修復も行いません |
 | `--uninstall` | `-Uninstall` | 変更していない toolkit のファイル、`AGENTS.md` などのブロック、マニフェスト、空になったフォルダーを削除します（管理データと設定は残します）。`uninstall.ps1` / `uninstall.sh` でも実行できます |
 | `--purge` | `-Purge` | `--uninstall` に加えて、管理データ（`docs/` の要求定義書・カタログ・ID 台帳・run 履歴・手動テスト、`tests/system/ledger.json`）、`scripts/ebak.config.json`、`/work`、`.gitignore`・`.gitattributes` に追記した行、`*.ebak-backup-*` も削除します |
 
@@ -260,7 +261,7 @@ python tools/install.py --target /path/to/your-repo
 | ブロック | `AGENTS.md`、`.github/copilot-instructions.md` に `<!-- ebak-abk:begin -->`〜`end` で囲んだ数行 | ブロックの中だけを置き換えます。ブロック外の記述は変更しません |
 | マニフェスト | `.github/ebak-toolkit.json` | バージョンと、インストールしたファイルのハッシュ（更新・削除の判定に使います） |
 
-インストールの最後に `python scripts/verify.py --docs-only` を実行し、結果を表示します。
+インストール・更新の最後に、データ層の共通の入口 `python scripts/rdfix.py --full --apply` を 1 回だけ実行します（検査→自動修復→再検査。`verify.py --docs-only` を別に重ねません）。修復した項目・残った手動対応（検査項目 ID・位置・担当の役割）・再検査の合否を表示します。修復は commit せず作業ツリーに残し、要求定義書と外部連携カタログは変更しません。`--no-repair` を付けると `python scripts/rdfix.py --full`（検査と修復の計画の表示だけ。書き込まない）になり、`--skip-verify` では検査も修復も行いません。`--dry-run`・`--check`・`--uninstall`・`--purge` では修復しません。修復が取り消された（exit 2）・手動対応が残った（exit 1）場合も toolkit のファイルは残り、確認と修復のコマンドを表示します。インストーラの終了コードはデータ層の結果で変わりません。
 
 ### インストール後の設定
 
@@ -516,7 +517,7 @@ hook や subagent の動作は、クライアント（VS Code・Copilot CLI・Gi
 
 `.github/workflows/ebak-data-layer.yml`（ebak-data-layer）は、プルリクエスト、main への push、手動実行（workflow_dispatch）、週 1 回の定期実行（schedule）で `python scripts/verify.py --docs-only` を実行します。
 
-- 不合格のとき、`python scripts/rdfix.py --apply` で自動修復して再検査し、合格した場合だけ修復を commit します。要求定義書は変更しない設計です。同一リポジトリの PR では当該 PR のブランチへ、main への push と定期実行では修復用ブランチ（`eabk/data-layer-fix`）と PR に反映します。
+- 不合格のとき、共通の入口 `python scripts/rdfix.py --full --apply` で自動修復して再検査し、合格した場合だけ修復を commit します。要求定義書は変更しない設計です。同一リポジトリの PR では当該 PR のブランチへ、main への push と定期実行では修復用ブランチ（`eabk/data-layer-fix`）と PR に反映します。
 - 修復後も直らないときは、ラベル `eabk-data-layer` つきで失敗の要約と実行へのリンクを含む Issue を作成します（同じ内容の未解決 Issue があればコメント）。
 - 権限は contents・pull-requests・issues の write だけで、fork からの PR では検査だけを行います。bot の修復 commit では再修復しません。
 - 無効化するには、ファイルを削除するか Actions 画面で Disable します（インストール時は `--no-ci`）。詳細は `users-guide/04-customization.md`。

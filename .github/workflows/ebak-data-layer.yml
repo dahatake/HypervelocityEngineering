@@ -52,7 +52,7 @@ jobs:
         id: repair
         if: steps.first.outcome == 'failure' && github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, 'eabk-auto')
         continue-on-error: true
-        run: python scripts/rdfix.py --apply
+        run: python scripts/rdfix.py --full --apply
 
       - name: restore requirements definition
         if: steps.first.outcome == 'failure' && github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, 'eabk-auto')
@@ -89,7 +89,7 @@ jobs:
             if [ "${existing}" = "0" ]; then
               gh pr create --head "${FIX_BRANCH}" --base "${GITHUB_REF_NAME}" \
                 --title "データ層の自動修復" \
-                --body "scripts/rdfix.py --apply による自動修復です（要求定義書は変更していません）。実行: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+                --body "scripts/rdfix.py --full --apply による自動修復です（要求定義書は変更していません）。実行: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             fi
           fi
           echo "pushed=true" >> "$GITHUB_OUTPUT"

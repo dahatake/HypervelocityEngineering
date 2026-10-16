@@ -62,7 +62,7 @@ Enterprise App Build Kit の版の付け方と、版を上げる手順（配布�
    | `KEEP-LOCAL` | ローカルで変更したファイルは更新していません。差分を確認し、上書きしてよければ `--force` を付けて再実行します（`*.ebak-backup-<日時>` が残ります） |
 
    管理データ（`docs/` と台帳）と `scripts/ebak.config.json` の既存の値は変更されません。`ebak.config.json` には、新しいキーだけが追加されます。
-5. 検証します。インストーラが最後に `python scripts/verify.py --docs-only` を実行します。続けて全体の検証も通します。
+5. 検証します。インストーラが最後に `python scripts/rdfix.py --full --apply` を 1 回実行します（`--no-repair` で計画だけ、`--skip-verify` で省略）。続けて全体の検証も通します。
    ```bash
    python scripts/verify.py
    ```

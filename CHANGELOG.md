@@ -5,6 +5,13 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+## [0.4.1]
+
+- **データ層の確認・修復の共通の入口**（`scripts/rdfix.py --full [--apply]`）を、GitHub Actions（`ebak-data-layer.yml`）・インストーラ・手動の 3 つの入口で共有しました（FR-1044・FR-1045、NFR-COMPAT-004、NFR-OPS-007）。終了コードは 0（合格・修復済み）/1（手動対応が残る）/2（実行しなかった・取り消した）。同時に 1 つだけ適用します。要求定義書と外部連携カタログは変更しません。
+  - インストーラは、導入・更新の後に既定で `rdfix.py --full --apply` を 1 回呼び、修復した項目・残った手動対応・合否を表示します（修復は commit しません）。`--no-repair` で検査と計画だけ、`--skip-verify` で検査も修復もしません。`--dry-run`・`--check`・`--uninstall`・`--purge` では修復しません。インストーラの終了コードはデータ層の結果で変わりません。以前の導入後の `verify.py --docs-only` の別実行は、この入口に置き換わりました。
+  - ワークフローの修復手順を `rdfix.py --full --apply` に置き換えました（ループ防止・fork 保護・最小権限・Issue 化は変更なし）。
+  - TOOLKIT_VERSION を 0.4.1 に上げました。
+
 - **専用 worktree での run を自動で開始**します。`run-state.py start` が主の作業ツリーで呼ばれると、worktree を作り、その中で run を開始します（`WORKTREE <path>` を出力）。conductor は以後のコマンドをその worktree を cwd にして実行するため、別の VS Code を開く・依頼を再送する必要はありません。複数の run は別々の worktree で並行して動き、hook（`scripts/hooks/gate.py`）は主の作業ツリー側から呼ばれても、触るパスに応じて対応する run の worktree の状態でゲートを判定します。worktree を作れなかったときだけ従来の `WORKTREE-REQUIRED`（exit 4）で案内します。
 
 - **run ごとに専用の git worktree を必須**にしました。`run-state.py start` は主の作業ツリーでは run を始めず（exit 4・`WORKTREE-REQUIRED <path>`）、統合ブランチ `run/<id>` の専用 worktree を作って案内します（1 つの VS Code で複数の run を動かしても、別々の worktree で行われます）。成功（全件完了）した run は、主の作業ツリーで必ず main へ取り込み、worktree と統合ブランチを自動で清掃します。失敗した run は worktree と統合ブランチを保持し、清掃は利用者が行います。`ebak.config.json` の `run.require_worktree: false` または `--allow-primary` で外せます。

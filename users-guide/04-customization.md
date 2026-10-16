@@ -155,7 +155,7 @@ run の実行中は、hook G-7 がこの表を強制します。値のある役�
 
 `.github/workflows/ebak-data-layer.yml`（ebak-data-layer）は、プルリクエスト、main への push、手動実行（workflow_dispatch）、週 1 回の定期実行（schedule）で `python scripts/verify.py --docs-only` を実行し、データ層を検査します。
 
-- 不合格のとき、`python scripts/rdfix.py --apply` で自動修復して再検査します。自動修復で要求定義書は変更しない設計です（`docs/requirements-definition.md` は修復後に元へ戻します）。合格した場合だけ修復を commit します。同一リポジトリのプルリクエストでは当該 PR のブランチへ、main への push と定期実行では修復用ブランチ `eabk/data-layer-fix` へ push して PR を作成します（既にあれば追加しません）。
+- 不合格のとき、共通の入口 `python scripts/rdfix.py --full --apply` で自動修復して再検査します（インストーラ・手動実行と同じ入口。独自の書き換え手順は持ちません。終了コード 0/1/2 は [05](05-scripts-reference.md)）。インストーラは既定で導入後に同じ入口を 1 回呼び、`--no-repair` で検査と計画だけ（書き込まない）、`--skip-verify` で検査も修復もしません。自動修復で要求定義書は変更しない設計です（`docs/requirements-definition.md` は修復後に元へ戻します）。合格した場合だけ修復を commit します。同一リポジトリのプルリクエストでは当該 PR のブランチへ、main への push と定期実行では修復用ブランチ `eabk/data-layer-fix` へ push して PR を作成します（既にあれば追加しません）。
 - 修復後も直らないときは、ラベル `eabk-data-layer` つきで、失敗の要約と実行へのリンクを含む Issue を作成します。同じ内容の未解決 Issue があれば、コメントを追加します。
 - 権限は contents・pull-requests・issues の write だけです。fork からのプルリクエストでは検査だけを行い、書き込みはしません。bot の修復 commit では再修復しません。
 - 無効化するには、このファイルを削除するか、GitHub の Actions 画面でこのワークフローを Disable します。インストール時に入れたくない場合は `--no-ci` を指定します。

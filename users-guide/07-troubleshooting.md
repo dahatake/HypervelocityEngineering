@@ -42,7 +42,7 @@
 | 工程 4 の後に CHK-10/11 が出る | AC が追加・変更されたのに、System Test が追従していません。conductor が test-designer に作業を割り当てます |
 | CHK-19 で、テストデータや資料の中の ID が検出される | `checks.id_scan_exclude` にそのパスを追加します |
 | CHK-08 でカタログのパスが見つからない | パスはリポジトリのルートからの相対パスで、`src/a.ts, src/b.ts` のようにカンマ区切りで書きます。ファイルの名前を変えた・削除した場合は `python scripts/rdfix.py --apply` が参照を直します |
-| マージの後にカタログ・ID 台帳・台帳・実行履歴が食い違う（CHK-07・CHK-01・CHK-11・CHK-23） | `python scripts/rdfix.py` で修正の計画を確認し、`python scripts/rdfix.py --apply` で直します。`MANUAL` の行は、表示された担当の役割が直します（[6.3](06-quality-gates.md#63-データ層の不整合の自動修正rdfix)） |
+| マージの後にカタログ・ID 台帳・台帳・実行履歴が食い違う（CHK-07・CHK-01・CHK-11・CHK-23） | `python scripts/rdfix.py --full` で確認し、`python scripts/rdfix.py --full --apply` で直します（終了コード 0 = 合格・修復済み、1 = 手動対応が残る、2 = 実行しなかった・取り消した。インストール時にも既定で実行され、`--no-repair` で止められます。同時に 2 つ適用すると後からのものが最大 30 秒待ち、超えると exit 2。要求定義書は変更しません）。`MANUAL` の行は、表示された担当の役割が直します（[6.3](06-quality-gates.md#63-データ層の不整合の自動修正rdfix)） |
 | CI でだけ失敗する | CI にアプリのツールチェーンがない可能性があります。`.github/workflows/ebak-verify.yml` にセットアップのステップを追加します |
 
 ## 7.4 Windows 固有の問題
