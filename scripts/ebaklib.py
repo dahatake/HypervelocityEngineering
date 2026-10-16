@@ -19,8 +19,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
-TOOLKIT_VERSION = "0.4.0"
-
+TOOLKIT_VERSION = "0.4.1"
+
+
 SPECKIT_PATHS = [".specify/**", "specs/**/*.md"]
 
 DEFAULT_CONFIG: dict = {
@@ -145,12 +146,81 @@ def read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8-sig")
 
 
+BOM = b"\xef\xbb\xbf"
+
+
+def _split_keep_eol(body: str) -> List[str]:
+    """Split on LF only, keeping each line's own terminator (CRLF stays CRLF)."""
+    out, start = [], 0
+    while True:
+        i = body.find("\n", start)
+        if i < 0:
+            if start < len(body):
+                out.append(body[start:])
+            return out
+        out.append(body[start:i + 1])
+        start = i + 1
+
+
+def _eol_of(line: str) -> str:
+    return "\r\n" if line.endswith("\r\n") else ("\n" if line.endswith("\n") else "")
+
+
+def render_keep_format(old: Optional[bytes], text: str) -> bytes:
+    """Bytes for `text` (LF-normalised, as read by read_text) written over a file whose current bytes are `old`.
+    NFR-REL-004 AC-252: the BOM and every unchanged line keep their original bytes (CRLF / LF / mixed);
+    changed or new lines take the line ending of the line before them (else the file's majority ending)."""
+    plain = text.encode("utf-8")
+    if not old:
+        return plain
+    bom = old.startswith(BOM)
+    try:
+        old_text = old[len(BOM):].decode("utf-8") if bom else old.decode("utf-8")
+    except UnicodeDecodeError:
+        return plain
+    if not bom and "\r" not in old_text:
+        return plain
+    old_lines = _split_keep_eol(old_text)
+    new_lines = _split_keep_eol(text)
+    crlf = sum(1 for l in old_lines if l.endswith("\r\n"))
+    default = "\r\n" if crlf * 2 > len(old_lines) else "\n"
+    old_keys = [re.sub(r"\r?\n$", "", l) for l in old_lines]
+    new_keys = [re.sub(r"\n$", "", l) for l in new_lines]
+    import difflib
+    out: List[str] = []
+    sm = difflib.SequenceMatcher(None, old_keys, new_keys, autojunk=False)
+    last_eol = default
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            for k in range(i1, i2):
+                out.append(old_lines[k])
+                last_eol = _eol_of(old_lines[k]) or last_eol
+            continue
+        if i1 > 0:
+            last_eol = _eol_of(old_lines[i1 - 1]) or last_eol
+        for k in range(j1, j2):
+            line = new_lines[k]
+            out.append(re.sub(r"\n$", last_eol, line) if line.endswith("\n") else line)
+    for k in range(len(out) - 1):  # a line that lost its terminator in the middle (old last line without one)
+        if not out[k].endswith("\n"):
+            out[k] += last_eol
+    if out and not text.endswith("\n") and out[-1].endswith("\n"):
+        out[-1] = re.sub(r"\r?\n$", "", out[-1])
+    body = "".join(out).encode("utf-8")
+    return (BOM + body) if bom else body
+
+
 def write_text_atomic(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        old = path.read_bytes()
+    except OSError:
+        old = None
+    data = render_keep_format(old, text)
     fd, tmp = tempfile.mkstemp(prefix=".tmp-", dir=str(path.parent))
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
-            fh.write(text)
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
         os.replace(tmp, path)
     except Exception:
         try:
@@ -202,7 +272,24 @@ def run(cmd, cwd: Optional[Path] = None, timeout: Optional[int] = None, shell: b
         return 124, f"{out}\nTIMEOUT after {timeout}s"
 
 
+READ_ONLY_GIT = frozenset({"ls-files", "rev-parse", "merge-base", "diff", "show", "log", "status", "cat-file",
+                           "for-each-ref", "branch", "check-ignore", "describe"})
+
+
+def is_git_repo(root: Path) -> bool:
+    """True when `root` is inside a git working tree (a `.git` directory or file at or above it). No process is started."""
+    if os.environ.get("GIT_DIR"):
+        return True
+    try:
+        start = Path(root).resolve()
+    except OSError:
+        return False
+    return any((p / ".git").exists() for p in [start, *start.parents])
+
+
 def git(args: List[str], cwd: Path) -> Tuple[int, str]:
+    if args and args[0] in READ_ONLY_GIT and not is_git_repo(cwd):
+        return 128, ""  # NFR-REL-004 AC-253: no git process for a directory that is not a repository
     try:
         proc = subprocess.run(
             ["git", *args], cwd=str(cwd), capture_output=True, text=True,
@@ -345,7 +432,10 @@ def tracked_files(root: Path, include_untracked: bool = True) -> List[str]:
             files += [f for f in out2.split("\0") if f]
         return sorted(set(f.replace("\\", "/") for f in files if (root / f).is_file()))
     for p in root.rglob("*"):
-        if p.is_file() and ".git" not in p.parts:
+        rel_parts = p.relative_to(root).parts
+        if rel_parts[0] == "work" or ".git" in rel_parts:  # /work/ is ignored by .gitignore in a repository
+            continue
+        if p.is_file():
             files.append(p.relative_to(root).as_posix())
     return sorted(files)
 

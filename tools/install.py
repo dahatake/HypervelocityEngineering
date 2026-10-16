@@ -18,7 +18,12 @@ What it does (idempotent):
   * merges scripts/ebak.config.json (adds new keys, keeps your values);
   * adds /work/ to .gitignore, union-merge rules to .gitattributes, and a marked block to AGENTS.md
     and .github/copilot-instructions.md;
-  * records versions and hashes in .github/ebak-toolkit.json.
+  * records versions and hashes in .github/ebak-toolkit.json;
+  * after an install / update, calls the data-layer common entry point once: `scripts/rdfix.py --full --apply`
+    (check -> repair -> re-check; the requirements definition and docs/integrations.md are never changed; repairs are
+    not committed). `--no-repair` runs `rdfix.py --full` (check + plan only, writes nothing); `--skip-verify` neither
+    checks nor repairs; --dry-run / --check / --uninstall / --purge never repair. The installer's exit code does
+    not depend on the data-layer result.
 """
 from __future__ import annotations
 
@@ -534,14 +539,18 @@ class Installer:
                               "（管理データと設定は残します。すべて削除するには --purge）")
 
 
-def run_verify(target: Path) -> int:
+def run_data_layer(target: Path, apply: bool) -> int:
+    """FR-1044/FR-1045: the only data-layer step of the installer. It calls the common entry point once
+    (`rdfix.py --full [--apply]`); the check, the repair and the pass/fail all come from it (no second verify)."""
+    cmd = [sys.executable, str(target / "scripts" / "rdfix.py"), "--full"] + (["--apply"] if apply else [])
     try:
-        proc = subprocess.run([sys.executable, str(target / "scripts" / "verify.py"), "--docs-only"],
-                              cwd=str(target), capture_output=True, text=True, encoding="utf-8", errors="replace")
+        proc = subprocess.run(cmd, cwd=str(target), capture_output=True, text=True, encoding="utf-8", errors="replace")
     except OSError as exc:
-        print(f"WARN verify を実行できません: {exc}")
-        return 1
-    print((proc.stdout or "").strip())
+        print(f"WARN データ層の確認・修復を実行できません: {exc}")
+        return 2
+    for part in (proc.stdout, proc.stderr):
+        if (part or "").strip():
+            print(part.strip())
     return proc.returncode
 
 
@@ -562,7 +571,9 @@ def main(argv=None) -> int:
     ap.add_argument("--uninstall", action="store_true", help="変更していない toolkit のファイルと AGENTS.md などのブロックを削除する（管理データと設定は残す）")
     ap.add_argument("--purge", action="store_true", help="--uninstall に加えて、管理データ（docs・台帳）・設定・/work・.gitignore と .gitattributes の追記・バックアップも削除する")
     ap.add_argument("--allow-non-git", action="store_true")
-    ap.add_argument("--skip-verify", action="store_true")
+    ap.add_argument("--skip-verify", action="store_true", help="導入後のデータ層の検査も修復も行わない")
+    ap.add_argument("--no-repair", action="store_true",
+                    help="導入後のデータ層の自動修復をせず、検査と修復の計画だけを表示する（書き込まない）")
     args = ap.parse_args(argv)
 
     if sys.version_info < (3, 9):
@@ -628,8 +639,18 @@ def main(argv=None) -> int:
     if dry:
         return 0
     if not args.skip_verify:
-        print("\n--- verify --docs-only ---")
-        run_verify(target)
+        apply = not args.no_repair
+        print("\n--- データ層の確認" + ("と自動修復" if apply else "（修復の計画のみ・書き込みません）")
+              + ": python scripts/rdfix.py --full" + (" --apply" if apply else "") + " ---")
+        rc = run_data_layer(target, apply)
+        label = "再検査" if apply else "検査"
+        verdict = "合格 (PASS)" if rc == 0 else ("不合格 (FAIL)" if rc == 1 else "判定できません（修復は取り消された、または実行されませんでした）")
+        print(f"データ層の{label}の合否: {verdict}")
+        if rc != 0 or not apply:
+            print("データ層の確認: `python scripts/rdfix.py --full`、自動修復: `python scripts/rdfix.py --full --apply`"
+                  "（導入した toolkit のファイルはそのまま残ります。修復は commit していません。要求定義書は変更しません）")
+        if rc == 2:
+            print("取り消しの理由は上の表示を確認します。インストーラの終了コードはデータ層の結果で変わりません")
     print("\n次の手順（README.md の「インストール」「Quickstart」）:")
     print("  1. 変更を確認して commit します: git add -A && git commit -m \"Add Enterprise App Build Kit\"")
     print("  2. scripts/ebak.config.json の verify.commands に、ビルド・静的検査・テストのコマンドを登録します（初回の実行で implementer が登録することもできます）")

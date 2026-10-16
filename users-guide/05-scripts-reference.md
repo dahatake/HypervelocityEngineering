@@ -49,6 +49,18 @@ python scripts/ledger.py repair [--apply]         # 台帳の部分だけ（rdfi
 
 要求定義書を正本として、カタログ・ID 台帳・System Test の台帳・実行履歴・`.gitignore` をそれに合わせます。要求定義書は変更しません。出力は `FIX <CHK> <場所> <内容>`（自動で直す）と `MANUAL <CHK> <場所> <内容>（担当: <役割>）`（判断が要る）の行と、最後の `rdfix: fix=N manual=M mode=…` の 1 行です。exit 0 は「自動で直すものが残っていない」です。直す範囲は [6.3](06-quality-gates.md#63-データ層の不整合の自動修正rdfix) にあります。
 
+データ層の検査（`verify.py --docs-only` と同じ rdcheck）と修復をまとめて行うときは `--full` を付けます。
+
+```bash
+python scripts/rdfix.py --full                    # 確認だけ（書き込まない・排他を待たない）
+python scripts/rdfix.py --full --apply            # 検査→自動修復→再検査（収束するまで最大 3 回 = PARAM-026）
+python scripts/rdfix.py --full --apply --json     # 同じ結果を JSON で（手動対応は chk・file・line・owner・action の欄）
+```
+
+終了コードは 0 = 合格・修復済み、1 = 手動対応が残る・修復の計画がある・収束しない、2 = 実行しなかった・取り消した（作業役のブランチ、排他の待ち時間切れ、取り消し、想定外のエラー）です。`MANUAL` の行には検査項目 ID・`ファイル:行`・担当の役割・次の行動が付きます。適用は同じリポジトリで一度に 1 つだけ実行し（`work/.ebak/rdfix.lock`。後から起動した適用は最大 30 秒 = PARAM-027 待つ。`--lock-wait` で変更）、書き込みは一時ファイルの置き換えで行います。要求定義書・外部連携カタログが変わったとき、書き込みに失敗したとき、修復前になかったエラーが現れたとき、想定外のエラーのときは、すべての変更を取り消して修復前の内容に戻し、exit 2 で終わります。
+
+入口は 3 つで、いずれも同じ `rdfix.py --full [--apply]` を呼びます。(1) GitHub Actions の `ebak-data-layer.yml`（不合格のとき `--full --apply`）、(2) インストーラ `tools/install.py`（導入・更新の後に既定で `--full --apply` を 1 回。`--no-repair` は `--full` だけで書き込まない、`--skip-verify` は検査も修復もしない、`--dry-run`・`--check`・`--uninstall`・`--purge` は修復しない。修復の取り消し・手動対応が残っても toolkit は残り、終了コードはデータ層の結果で変わらない）、(3) 利用者・conductor の手動実行。作業役のブランチ（`work/<run-id>/<item>`）での `--apply` は書き込まずに exit 2 です。どの入口でも要求定義書と外部連携カタログは変更せず、修復は commit しません（Actions だけは合格した修復を commit します）。
+
 ## entities.py（エンティティ台帳と企業データカタログとの整合）
 
 ```bash
