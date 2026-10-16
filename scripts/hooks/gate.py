@@ -151,8 +151,38 @@ class Ctx:
         self.run_id = h.current_run(self.croot, self.cfg)
         self.meta = h.load_meta(self.croot, self.cfg, self.run_id) if self.run_id else {}
         self.run_active = bool(self.run_id and self.meta.get("status") == "active")
-        if not self.run_active and g(data, "toolName", "tool_name", default=""):
+        if not self.run_active and (g(data, "toolName", "tool_name", default="") or self.sid):
             self.bind_sibling_run()
+        self.land_pending: Optional[Tuple[Path, str, dict]] = None
+
+    @property
+    def sid(self) -> str:
+        return str(g(self.data, "sessionId", "session_id", default=""))
+
+    def pending_land(self) -> Optional[Tuple[Path, str, dict]]:
+        """A finished run of this session whose integration branch is not in the base branch yet."""
+        base = self.cfg.get("base_branch", "main")
+        cands = self.sibling_runs() or ([self.root] if (self.root / ".git").is_file() else [])
+        for p in cands:
+            rid = h.current_run(p, self.cfg)
+            runs = h.work_dir(p, self.cfg) / "runs"
+            ids = [rid] if rid else sorted(x.name for x in runs.glob("*") if (x / "meta.json").exists())[-1:]
+            for r in ids:
+                meta = h.load_meta(p, self.cfg, r)
+                owner = meta.get("session_id")
+                if meta.get("status") != "finished" or meta.get("result") != "全件完了" or meta.get("landed_commit"):
+                    continue
+                if (owner and self.sid and owner != self.sid) or (not owner and self.sid and not self.cwd_in(p)):
+                    continue
+                br = meta.get("integration_branch")
+                if br and h.ref_exists(self.root, f"refs/heads/{br}"):
+                    rc, _ = h.git(["merge-base", "--is-ancestor", br, base], self.root)
+                    if rc != 0:
+                        return p, r, meta
+        return None
+
+    def cwd_in(self, tree: Path) -> bool:
+        return os.path.normcase(str(self.cwd)).startswith(os.path.normcase(str(tree)))
 
     def sibling_runs(self) -> List[Path]:
         """Run worktrees (<repo>-run-<id>) that run-state.py start created next to the primary checkout."""
@@ -179,15 +209,25 @@ class Ctx:
         self.run_active = bool(self.run_id and self.meta.get("status") == "active")
 
     def bind_sibling_run(self) -> None:
-        # the conductor works inside its run worktree while the hook runs in the primary checkout
-        best = None
+        # The session works inside its run worktree while the hook runs in the primary checkout. Pick the run that
+        # belongs to this session; never another session's run (several runs may be active at once).
+        owned, free = [], []
         for p in self.sibling_runs():
             rid = h.current_run(p, self.cfg)
             meta = h.load_meta(p, self.cfg, rid) if rid else {}
-            if rid and meta.get("status") == "active" and (best is None or meta.get("started_at", "") > best[0]):
-                best = (meta.get("started_at", ""), p)
-        if best:
-            self.bind_to(best[1])
+            if not (rid and meta.get("status") == "active"):
+                continue
+            owner = meta.get("session_id")
+            if self.sid and owner == self.sid:
+                owned.append((meta.get("started_at", ""), p))
+            elif not owner:
+                free.append((meta.get("started_at", ""), p))
+        pick = max(owned)[1] if owned else (free[0][1] if len(free) == 1 else (max(free)[1] if free and not self.sid else None))
+        if pick:
+            self.bind_to(pick)
+            if self.sid and self.run_active and not self.meta.get("session_id"):
+                self.meta["session_id"] = self.sid
+                h.save_meta(self.croot, self.cfg, self.run_id, self.meta)
     def log(self, line: str) -> None:
         try:
             self.state_dir.mkdir(parents=True, exist_ok=True)
@@ -620,9 +660,23 @@ def on_agent_stop(ctx: Ctx) -> None:
         emit({})
         return
     if not ctx.run_active:
+        pend = ctx.pending_land()
+        if pend:
+            tree, rid, pmeta = pend
+            n = int(pmeta.get("land_blocks", 0)) + 1
+            pmeta["land_blocks"] = n
+            h.save_meta(tree, ctx.cfg, rid, pmeta)
+            limit = int(ctx.cfg["gates"].get("agent_stop_max_blocks", 40))
+            if n <= limit:
+                ctx.log(f"AGENT-STOP blocked (land {rid} {n}/{limit})")
+                emit({"decision": "block", "reason": (
+                    f"run {rid} は全件完了ですが、main への取り込みが終わっていません。`{tree}` を cwd にして "
+                    "`python scripts/run-state.py land` を実行してください（0 で終わり。2 は競合: run の worktree で main を merge して解消し、"
+                    "verify の後にもう一度実行。3 は主の作業ツリーが未整備: 待ってから再実行）。利用者は途中で応答しません。")})
+                return
         emit({})
         return
-    sid = str(g(ctx.data, "sessionId", "session_id", default=""))
+    sid = ctx.sid
     meta = ctx.meta
     if not meta.get("session_id") and sid:
         meta["session_id"] = sid

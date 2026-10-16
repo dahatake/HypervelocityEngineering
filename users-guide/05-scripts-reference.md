@@ -146,6 +146,7 @@ python scripts/run-state.py lane decide --changed 2 [--flags security,conflict,s
 python scripts/run-state.py lane confirm   # 計画後に queue の数で再判定（full から fast には戻さない）
 python scripts/run-state.py human answers --note "Q-003: B"   # 利用者の Prompt を 1 回として記録（answers / resume / instruction）
 python scripts/run-state.py finish --result "全件完了" --credits "…"   # docs/run-history.md に 1 行追記
+python scripts/run-state.py land [--wait 1800]    # 全件完了の run を main へ取り込む（共通ロックで 1 本ずつ。0 取り込み済み・1 verify 失敗（取り消し済み）・2 競合・3 主の作業ツリーが main でない／未コミットの変更あり）
 ```
 
 新しい run の最初の依頼は `start` が `request` として記録します。`human` は、利用者の Prompt で run を再開したときに conductor が 1 回だけ実行します。記録した回数は KPI の「人の介入」になります。

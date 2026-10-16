@@ -5,6 +5,13 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- **複数の run を 1 つの VS Code から無操作で完走させる**ための修正です。
+  - run ID の衝突をなくしました。worktree とブランチの作成を git の原子的な操作に任せ、同じ分に複数の run を始めても、後から来た側は次の空き ID を使います（以前は exit 4 で開始に失敗）。
+  - hook を、セッションが所有する run に固定しました。主の作業ツリーから呼ばれても、別セッションの run を選びません（所有者のない run が 1 件のときだけ、そのセッションの run として記録します）。
+  - main への取り込みを `run-state.py land` の 1 コマンドにしました。git の共通ディレクトリの全体ロックで run どうしを直列にし、主の作業ツリーが main で未コミットの変更がなくなるまで待ち、`merge --no-ff` → 統合後の `verify --quick` を行い、競合・失敗なら自動で取り消します（終了コード 0 取り込み済み・1 失敗・2 競合・3 主が未整備）。
+  - 全件完了なのに main に未取り込みの run があるとき、agentStop の hook が終了を差し戻し、`land` を実行させます（上限は `gates.agent_stop_max_blocks`）。
+  - `parallel_workers: auto` を、同時に動いている他の run の数で割ります（CPU・メモリを run どうしで奪い合わない）。
+
 ## [0.4.1]
 
 - **データ層の確認・修復の共通の入口**（`scripts/rdfix.py --full [--apply]`）を、GitHub Actions（`ebak-data-layer.yml`）・インストーラ・手動の 3 つの入口で共有しました（FR-1044・FR-1045、NFR-COMPAT-004、NFR-OPS-007）。終了コードは 0（合格・修復済み）/1（手動対応が残る）/2（実行しなかった・取り消した）。同時に 1 つだけ適用します。要求定義書と外部連携カタログは変更しません。

@@ -34,7 +34,7 @@ conductor が自分で停止する条件:
 | canary が失敗し、3 回修正しても直らない | 実装ループを止めて、工程 6 に進む |
 | 直前の統合で、統合ブランチの verify が失敗に変わった | その統合を取り消し、項目を todo に戻す |
 
-終了の判定は、モデルの「完了した」という自己申告ではなく、`python scripts/run-state.py complete-check` が exit 0 を返すことで行います。exit 0 の条件は、queue に todo・doing がない、工程 6 が終わっている、run-report.md がある、の 3 つです。
+終了の判定は、モデルの「完了した」という自己申告ではなく、`python scripts/run-state.py complete-check` が exit 0 を返すことで行います。exit 0 の条件は、queue に todo・doing がない、工程 6 が終わっている、run-report.md がある、の 3 つです。結果が「全件完了」の run は、さらに `python scripts/run-state.py land` で main へ取り込み済みになるまで、agentStop の hook が終了を差し戻します（複数の run が同時に完了しても、取り込みは共通ロックで 1 本ずつ行われます。競合・verify 失敗のときは自動で取り消し、conductor が解消して再実行します）。「blocked あり」の run は、完了条件を満たしても取り込まれず、全件成功とはみなされません。
 
 ## 2.3 終了後に読むもの
 

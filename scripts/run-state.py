@@ -16,6 +16,7 @@ Usage:
   python scripts/run-state.py lane confirm [--flags ...]   # 工程 3 の後に queue の数で再判定。full なら fast に戻さない
   python scripts/run-state.py lane show
   python scripts/run-state.py human answers|resume|instruction [--note "..."]   # count one human prompt (KPI)
+  python scripts/run-state.py land [--wait SEC]            # 全件完了の run を、共通ロックの下で main へ 1 本ずつ取り込む（0 取り込み済み・1 失敗・2 競合・3 主が未整備）
   python scripts/run-state.py finish [--result "..."] [--credits "..."]   # append docs/run-history.md, close the run
 """
 from __future__ import annotations
@@ -26,6 +27,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -116,11 +118,24 @@ def require_own_worktree(root: Path, cfg: dict, args) -> Optional[int]:
         return None
     if getattr(args, "allow_primary", False) or not (root / ".git").is_dir():
         return None
-    rid = h.new_run_id()
-    path = root.parent / f"{root.name}-run-{rid}"
-    rc, out = h.git(["worktree", "add", "-b", f"run/{rid}", str(path), "HEAD"], root)
-    if rc != 0:
-        print(f"ERROR run-state: 専用 worktree を作れませんでした: {out.strip()[:200]}")
+    # The branch ref is created atomically by git, so concurrent starts (several chats in one minute) never share an ID:
+    # the loser moves on to the next free minute-stamped ID.
+    stamp = dt.datetime.now()
+    for _ in range(60):
+        rid = stamp.strftime("%Y%m%d%H%M")
+        path = root.parent / f"{root.name}-run-{rid}"
+        taken = path.exists() or h.ref_exists(root, f"refs/heads/run/{rid}")
+        if not taken:
+            rc, out = h.git(["worktree", "add", "-b", f"run/{rid}", str(path), "HEAD"], root)
+            if rc == 0:
+                break
+            taken = path.exists() or h.ref_exists(root, f"refs/heads/run/{rid}")
+            if not taken:
+                print(f"ERROR run-state: 専用 worktree を作れませんでした: {out.strip()[:200]}")
+                return 4
+        stamp += dt.timedelta(minutes=1)
+    else:
+        print("ERROR run-state: 空いている run ID が見つかりませんでした")
         return 4
     # start the run inside the new worktree right away: no second VS Code window and no re-sent request
     cmd = [sys.executable, str(path / "scripts" / "run-state.py"), "start"]
@@ -138,6 +153,128 @@ def require_own_worktree(root: Path, cfg: dict, args) -> Optional[int]:
     print("run は専用 worktree で始めました。以後の `python scripts/...`・git・作業役への依頼は、すべてこのパスを cwd にして行います"
           "（VS Code を別に開く必要はありません）。成功すると main へ取り込まれます。")
     print(proc.stdout.strip())
+    return 0
+
+
+def primary_tree(root: Path) -> Path:
+    rc, out = h.git(["worktree", "list", "--porcelain"], root)
+    for line in out.splitlines():
+        if line.startswith("worktree "):
+            return Path(line.split(" ", 1)[1].strip())
+    return root
+
+
+def other_active_runs(root: Path) -> int:
+    """Active runs in other worktrees of this repository (they share the machine's CPU and memory)."""
+    n = 0
+    here = os.path.normcase(str(root.resolve()))
+    rc, out = h.git(["worktree", "list", "--porcelain"], root)
+    for line in out.splitlines():
+        if not line.startswith("worktree "):
+            continue
+        p = Path(line.split(" ", 1)[1].strip())
+        if os.path.normcase(str(p.resolve())) == here or not p.exists():
+            continue
+        try:
+            cfg = h.load_config(p)
+            rid = h.current_run(p, cfg)
+            if rid and h.load_meta(p, cfg, rid).get("status") == "active":
+                n += 1
+        except Exception:
+            continue
+    return n
+
+
+class LandLock:
+    """Repository-wide lock (in the git common dir) so that only one run at a time changes the base branch."""
+
+    def __init__(self, root: Path, wait: float):
+        rc, out = h.git(["rev-parse", "--git-common-dir"], root)
+        d = Path(out.strip()) if rc == 0 and out.strip() else root / ".git"
+        self.path = (d if d.is_absolute() else root / d) / "ebak-land.lock"
+        self.wait = wait
+
+    def __enter__(self):
+        deadline = time.time() + self.wait
+        while True:
+            try:
+                if self.path.exists() and time.time() - self.path.stat().st_mtime > 3600:
+                    self.path.unlink()
+            except OSError:
+                pass
+            try:
+                fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.write(fd, str(os.getpid()).encode())
+                os.close(fd)
+                return self
+            except FileExistsError:
+                if time.time() >= deadline:
+                    raise SystemExit("LAND-BUSY 別の run が main に取り込み中です（待ち時間切れ。もう一度 land を実行します）")
+                time.sleep(2)
+
+    def __exit__(self, *exc):
+        try:
+            self.path.unlink()
+        except OSError:
+            pass
+
+
+def landed(root: Path, branch: str, base: str) -> bool:
+    rc, _ = h.git(["merge-base", "--is-ancestor", branch, base], root)
+    return rc == 0
+
+
+def cmd_land(args) -> int:
+    """Merge this run's integration branch into the base branch in the primary tree, one run at a time."""
+    root, cfg = ctx(args)
+    rid = h.current_run(root, cfg)
+    if not rid:
+        runs = sorted(p.name for p in (h.work_dir(root, cfg) / "runs").glob("*") if (p / "meta.json").exists())
+        rid = runs[-1] if runs else None
+    if not rid:
+        raise SystemExit("ERROR run-state: 取り込む run がありません")
+    meta = h.load_meta(root, cfg, rid)
+    branch = meta.get("integration_branch") or h.current_branch(root)
+    base = cfg.get("base_branch", "main")
+    if meta.get("status") != "finished" or meta.get("result") != "全件完了":
+        print(f"LAND-SKIP {rid}: 結果が「全件完了」ではない（status={meta.get('status')} result={meta.get('result')}）ので取り込みません")
+        return 1
+    primary = primary_tree(root)
+    if os.path.normcase(str(primary.resolve())) == os.path.normcase(str(root.resolve())):
+        print("LAND-SKIP: この作業ツリーが主の作業ツリーです（run は専用 worktree で動かします）")
+        return 1
+    if landed(primary, branch, base):
+        print(f"LANDED {rid}: すでに {base} に取り込み済みです")
+        return 0
+    deadline = time.time() + args.wait
+    with LandLock(primary, args.wait):
+        while True:
+            cur = h.current_branch(primary)
+            rc, dirty = h.git(["status", "--porcelain", "--untracked-files=no"], primary)
+            if cur == base and not dirty.strip():
+                break
+            if time.time() >= deadline:
+                print(f"LAND-WAIT {rid}: 主の作業ツリーが {base} でない（{cur}）か、未コミットの変更があるため取り込めません。"
+                      "主の作業ツリーを整えたあと、もう一度 `run-state.py land` を実行します")
+                return 3
+            time.sleep(5)
+        old = h.head_commit(primary)
+        rc, out = h.git(["merge", "--no-ff", "-m", f"Merge {branch} ({rid})", branch], primary)
+        if rc != 0:
+            h.git(["merge", "--abort"], primary)
+            print(f"LAND-CONFLICT {rid}: {out.strip()[:300]}\n"
+                  f"run の worktree で `git merge {base}` を行って競合を解消し、verify の後にもう一度 land を実行します")
+            return 2
+        vrc, vout = h.run([sys.executable, str(primary / "scripts" / "verify.py"), "--quick"], cwd=primary,
+                          timeout=int(cfg["verify"].get("timeout_sec", 1800)) + 120)
+        if vrc != 0:
+            h.git(["reset", "--hard", old], primary)
+            print(f"LAND-VERIFY-FAIL {rid}: 統合後の verify が失敗したので取り消しました\n" + "\n".join(vout.splitlines()[-12:]))
+            return 1
+        sha = h.head_commit(primary)
+    meta["landed_commit"] = sha
+    h.save_meta(root, cfg, rid, meta)
+    print(f"LANDED {rid}: {base} @ {sha}")
     return 0
 
 
@@ -162,8 +299,10 @@ def cmd_start(args) -> int:
     pw = str(opts.get("parallel_workers", "auto")).strip()
     auto_note = ""
     if pw.lower() in ("auto", "自動", ""):
-        opts["parallel_workers"] = str(h.auto_workers())
-        auto_note = f"parallel_workers: auto -> {opts['parallel_workers']}（CPU {os.cpu_count()} コア・メモリ {h.total_memory_gb():.0f} GB から算出）"
+        others = other_active_runs(root)
+        opts["parallel_workers"] = str(max(1, h.auto_workers() // (others + 1)))
+        auto_note = (f"parallel_workers: auto -> {opts['parallel_workers']}（CPU {os.cpu_count()} コア・メモリ {h.total_memory_gb():.0f} GB から算出"
+                     f"{f'。同時に動いている別の run {others} 件と分け合う' if others else ''}）")
     rid = h.new_run_id()
     rdir = h.run_dir(root, cfg, rid)
     n = 1
@@ -593,6 +732,8 @@ def main(argv=None) -> int:
     qs.add_parser("show")
     sub.add_parser("time")
     sub.add_parser("complete-check")
+    la = sub.add_parser("land", help="全件完了した run を、共通ロックの下で main へ取り込む")
+    la.add_argument("--wait", type=float, default=1800, help="ロックと主の作業ツリーを待つ秒数")
     ln = sub.add_parser("lane")
     ls = ln.add_subparsers(dest="lcmd", required=True)
     for name in ("decide", "confirm"):
@@ -609,7 +750,7 @@ def main(argv=None) -> int:
     f.add_argument("--force", action="store_true")
     args = ap.parse_args(argv)
     return {"start": cmd_start, "status": cmd_status, "stage": cmd_stage, "progress": cmd_progress,
-            "queue": cmd_queue, "time": cmd_time, "complete-check": cmd_complete_check,
+            "queue": cmd_queue, "time": cmd_time,             "complete-check": cmd_complete_check, "land": cmd_land,
             "lane": cmd_lane, "human": cmd_human, "finish": cmd_finish}[args.cmd](args)
 
 
