@@ -95,7 +95,9 @@ class LineEdits:
     """Line-based edits that keep the rest of a file byte-for-byte."""
 
     def __init__(self, text: str):
-        self.lines = text.splitlines()
+        self.lines = text.split("\n") if text else []
+        if text.endswith("\n"):
+            self.lines.pop()  # LF only: a form feed or U+2028 inside a line is not a line break (AC-252)
         self.trailing_nl = text.endswith("\n") or not text
         self.replace: Dict[int, Optional[str]] = {}
         self.insert: Dict[int, List[str]] = {}
@@ -754,7 +756,7 @@ class Transaction:
         k = self.key(path)
         if k not in self.written:
             self.written.append(k)
-        atomic_write_bytes(Path(k), text.encode("utf-8"))
+        atomic_write_bytes(Path(k), h.render_keep_format(_read(Path(k)), text))
 
     @contextlib.contextmanager
     def capture(self):
@@ -1051,6 +1053,72 @@ def _dedupe(items: List[Item]) -> List[Item]:
     return out
 
 
+MARKER_RE = re.compile(r"^(<<<<<<<|>>>>>>>)(?:\s|$)")
+BROKEN_CHK = "CHK-20"  # the form of the data-layer files (an unreadable file is a form error)
+
+
+def _owner_of_file(root: Path, cfg: dict, rel: str) -> str:
+    mfs = cfg["management_files"]
+    if rel == h.mf(cfg, "ledger") or rel.startswith("tests/system/"):
+        return "test-designer"
+    if rel in (h.mf(cfg, "run_history"), ".gitignore"):
+        return "conductor"
+    if rel == h.mf(cfg, "catalog"):
+        return "implementer"
+    return "rd-author"
+
+
+def scan_broken_input(root: Path, cfg: dict) -> List[Item]:
+    """NFR-REL-004 AC-251: files the repair cannot read safely, as MANUAL items (file:line, role in charge).
+    Bytes that are not UTF-8, merge conflict markers, a ledger that is not JSON, and tables whose rows have a different
+    number of cells than their header. Nothing is written; the caller stops before planning any repair."""
+    out: List[Item] = []
+    req_files = {Path(os.path.relpath(str(p), str(root))).as_posix() for p in protected_paths(root, cfg)}
+    for p in data_layer_paths(root, cfg):
+        raw = _read(p)
+        if raw is None:
+            continue
+        rel = Path(os.path.relpath(str(p), str(root))).as_posix()
+        owner = _owner_of_file(root, cfg, rel)
+
+        def add(line: int, msg: str, hint: str) -> None:
+            out.append(Item("MANUAL", BROKEN_CHK, f"{rel}:{line}", msg, owner, "", rel, line,
+                            f"{hint}。{ROLE_ACTION[owner]}", "rdfix"))
+
+        body = raw[len(h.BOM):] if raw.startswith(h.BOM) else raw
+        try:
+            text = body.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            add(body[:exc.start].count(b"\n") + 1, f"UTF-8 として読めないバイト（位置 {exc.start}）があります",
+                "文字コードを UTF-8 に直します（このファイルは書き換えません）")
+            continue
+        lines = text.split("\n")
+        has_marker = False
+        for n, line in enumerate(lines, 1):
+            if MARKER_RE.match(line):
+                has_marker = True
+                add(n, f"merge の衝突マーカー（{line[:7]}）が残っています", "衝突を解消して、マーカーの行を取り除きます（このファイルは書き換えません）")
+        if has_marker:
+            for n, line in enumerate(lines, 1):
+                if line.rstrip() == "=======":
+                    add(n, "merge の衝突マーカー（=======）が残っています", "衝突を解消して、マーカーの行を取り除きます（このファイルは書き換えません）")
+            continue
+        if rel.endswith(".json"):
+            try:
+                json.loads(text)
+            except ValueError as exc:
+                add(getattr(exc, "lineno", 1) or 1, f"JSON として読めません（{str(exc).splitlines()[0]}）",
+                    "JSON の形式を直します（このファイルは書き換えません）")
+            continue
+        if rel.endswith(".md") and rel not in req_files:
+            for t in h.parse_tables([l.rstrip("\r") for l in lines]):
+                for ln, cells in t.rows:
+                    if len(cells) != len(t.header):
+                        add(ln, f"表の列数が崩れています（見出し {len(t.header)} 列、この行 {len(cells)} 列）",
+                            "行の列数を見出しに合わせます（このファイルは書き換えません）")
+    return out
+
+
 def _summary(exc: BaseException) -> str:
     tb = traceback.extract_tb(exc.__traceback__)
     where = f"（{Path(tb[-1].filename).name}:{tb[-1].lineno} {tb[-1].name}）" if tb else ""
@@ -1079,6 +1147,13 @@ def run_full(root: Path, cfg: dict, args, only: Set[str]) -> int:
         if args.apply and is_work_branch(root):
             return rep.finish(2, "refused", "作業役のブランチ（work/<run-id>/<item>）では --apply しません。"
                                             "conductor が統合ブランチで実行します（G-2）")
+        broken = scan_broken_input(root, cfg)
+        if not h.is_git_repo(root):
+            rep.info("INFO rdfix: git の管理下にないディレクトリです。git の情報を要する検査（CHK-12 の台帳の変更履歴・"
+                     "CHK-21・CHK-23 の commit 済みの一時ファイル）と修復は省き、それ以外は git リポジトリと同じに行います")
+        if broken:
+            rep.info("INFO rdfix: 読めない入力があるため、確認・修復の計画を立てず、何も書き込まずに止めます（下の各ファイルは書き換えません）")
+            return rep.finish(1, "manual", manual=_dedupe(broken))
         if args.apply:
             wait = args.lock_wait if args.lock_wait is not None else _cfg_number(cfg, "lock_wait_sec", LOCK_WAIT_SEC, 0)
             lock = RepairLock(lock_path(root, cfg))

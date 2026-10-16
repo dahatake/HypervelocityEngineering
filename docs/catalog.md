@@ -24,8 +24,8 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1046 | 手動のデータ層の確認と修復のコマンド | 承認済み（依頼 2026-10-16） | `scripts/rdfix.py`、`scripts/verify.py`、`users-guide/05-scripts-reference.md` | `tests/system/test_data_layer_repair_system.py`、`tests/toolkit/test_rdfix_full.py`、`tests/integration/test_data_layer_repair.py` | データ層修復、データ層検査 |
 | NFR-REL-002 | 自動修復の安全性（要求定義書の保護・書き込みの原子性・取り消し） | 承認済み（包括承認 2026-10-16・approval_policy） | `scripts/rdfix.py` | `tests/toolkit/test_rdfix_full.py`、`tests/integration/test_data_layer_repair.py`、`tests/system/test_data_layer_repair_system.py` | データ層修復 |
 | NFR-REL-003 | 自動修復の冪等性・収束・排他 | 承認済み（包括承認 2026-10-16・approval_policy） | `scripts/rdfix.py` | `tests/toolkit/test_rdfix_full.py`、`tests/integration/test_data_layer_repair.py` | データ層修復 |
-| NFR-REL-004 | 壊れた入力と git でないディレクトリでの確認・修復 | 承認済み（包括承認 2026-10-16・approval_policy） | 未実装 | 未実装 | データ層修復 |
-| NFR-PERF-005 | データ層の確認・修復の速さ | 承認済み（依頼 2026-10-16） | 未実装 | 未実装 | データ層修復、データ層検査 |
+| NFR-REL-004 | 壊れた入力と git でないディレクトリでの確認・修復 | 承認済み（包括承認 2026-10-16・approval_policy） | `scripts/rdfix.py`、`scripts/ebaklib.py` | `tests/toolkit/test_rdfix_robust.py`、`tests/integration/test_data_layer_repair.py` | データ層修復 |
+| NFR-PERF-005 | データ層の確認・修復の速さ | 承認済み（依頼 2026-10-16） | `scripts/rdfix.py`、`scripts/ebaklib.py` | `tests/toolkit/test_rdfix_robust.py`、`tests/integration/test_data_layer_repair.py` | データ層修復、データ層検査 |
 | NFR-COMPAT-004 | 既存のデータ層の検査・修復の挙動の維持 | 承認済み（包括承認 2026-10-16・approval_policy） | 未実装 | 未実装 | データ層修復 |
 | NFR-OPS-007 | データ層の確認・修復の配布と利用者向け文書 | 承認済み（包括承認 2026-10-16・approval_policy） | 未実装 | 未実装 | 配布同期対象 |
 | NFR-COR-001 | 再現性 | 廃止 | 未実装 | 未実装 | なし |
