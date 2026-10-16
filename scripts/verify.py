@@ -253,6 +253,9 @@ def main(argv=None) -> int:
             n = 0
         if n:
             print(f"HINT rdfix: データ層の不整合のうち {n} 件は `python scripts/rdfix.py --apply` で自動修正できます（要求定義書は変更しません）")
+        # FR-1046 AC-243: the same two commands on Windows, macOS and Linux (run at the repository root)
+        print("HINT rdfix: 確認だけ `python scripts/rdfix.py --full`、確認と修復 `python scripts/rdfix.py --full --apply`"
+              "（リポジトリのルートで実行します。手動対応は検査項目 ID・位置・担当の役割つきで表示されます）")
     else:
         print("PASS rdcheck (management data)")
     if args.show_warnings:
