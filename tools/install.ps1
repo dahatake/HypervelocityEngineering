@@ -23,6 +23,7 @@ param(
     [switch]$Check,
     [switch]$Force,
     [switch]$NoCi,
+    [switch]$NoRepair,
     [switch]$Uninstall,
     [switch]$Purge
 )
@@ -58,6 +59,7 @@ try {
     if ($Check) { $argsList += '--check' }
     if ($Force) { $argsList += '--force' }
     if ($NoCi) { $argsList += '--no-ci' }
+    if ($NoRepair) { $argsList += '--no-repair' }
     if ($Uninstall) { $argsList += '--uninstall' }
     if ($Purge) { $argsList += '--purge' }
     $env:PYTHONUTF8 = '1'

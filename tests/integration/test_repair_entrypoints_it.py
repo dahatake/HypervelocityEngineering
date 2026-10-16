@@ -33,6 +33,15 @@ def test_fr1045_ac238_installer_has_no_repair_and_skip_verify():
     assert "apply = not args.no_repair" in src and "if not args.skip_verify:" in src
 
 
+# FR-1045 AC-238: the wrappers pass --no-repair to install.py (README: -NoRepair / --no-repair)
+def test_fr1045_ac238_wrappers_pass_no_repair():
+    ps1 = _read("tools/install.ps1")
+    assert "[switch]$NoRepair" in ps1 and "'--no-repair'" in ps1
+    sh = _read("tools/install.sh")
+    assert '"$@"' in sh and "install.py" in sh  # every option, including --no-repair, is passed through
+    assert "`-NoRepair`" in _read("README.md")
+
+
 # NFR-COMPAT-004 AC-256: the existing rdfix invocations are kept
 def test_nfr_compat_004_ac256_existing_options_kept():
     src = _read("scripts/rdfix.py")
