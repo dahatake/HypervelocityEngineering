@@ -74,7 +74,11 @@
     "AC-015": "sha256:62a3d0689a35f224",
     "AC-041": "sha256:07d179d0bab7a339",
     "AC-042": "sha256:5d703b2791379e40",
-    "AC-234": "sha256:d0d879d6202d91ea"
+    "AC-234": "sha256:d0d879d6202d91ea",
+    "AC-240": "sha256:c03121f02106311a",
+    "AC-241": "sha256:2e24cc08cfdb2ff8",
+    "AC-237": "sha256:21f042a2f4ca5ad2",
+    "AC-238": "sha256:8a719013d3d38992"
   },
   "cases": [
     {
@@ -3709,6 +3713,356 @@
       "history": [
         {
           "at": "2026-10-16T05:12:52+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-023",
+      "requirement_ids": [
+        "FR-1046"
+      ],
+      "ac_ids": [
+        "AC-240"
+      ],
+      "title": "確認だけ: 不整合のないデータ層で exit 0・書き込みなし",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac240_check_clean\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T09:09:14+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-024",
+      "requirement_ids": [
+        "FR-1046"
+      ],
+      "ac_ids": [
+        "AC-240"
+      ],
+      "title": "確認だけ: 自動修復と手動対応の不整合で exit 1・FIX と MANUAL の行・書き込みなし",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac240_check_inconsistent\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T09:09:17+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-025",
+      "requirement_ids": [
+        "FR-1046"
+      ],
+      "ac_ids": [
+        "AC-240"
+      ],
+      "title": "確認だけ（異常系）: 自動修復の計画だけでも exit 1・書き込みなし",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac240_check_with_only_automatic\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T09:09:21+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-026",
+      "requirement_ids": [
+        "FR-1046"
+      ],
+      "ac_ids": [
+        "AC-241"
+      ],
+      "title": "適用: 自動修復できる不整合だけなら修復して再検査合格・exit 0・要求定義書と外部連携カタログ不変",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_automatic_only\" -q",
+      "canary": true,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T09:09:24+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-027",
+      "requirement_ids": [
+        "FR-1046"
+      ],
+      "ac_ids": [
+        "AC-241"
+      ],
+      "title": "適用: 手動対応が残るとき自動修復分を適用し残りを表示・exit 1",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_with_manual_left\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T09:09:27+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-028",
+      "requirement_ids": [
+        "FR-1046"
+      ],
+      "ac_ids": [
+        "AC-241"
+      ],
+      "title": "適用（異常系）: 作業役のブランチでは書き込まず exit 2（対照: 統合ブランチでは適用）",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_on_worker_branch\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T09:09:31+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-029",
+      "requirement_ids": [
+        "FR-1046"
+      ],
+      "ac_ids": [
+        "AC-241"
+      ],
+      "title": "適用（異常系）: 書き込みの失敗（外部から注入）で取り消し・修復前とバイト一致・exit 2",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_cancelled_on_write_failure\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T09:09:34+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-030",
+      "requirement_ids": [
+        "FR-1046"
+      ],
+      "ac_ids": [
+        "AC-241"
+      ],
+      "title": "適用: 不整合のないデータ層で exit 0・要求定義書と外部連携カタログ不変",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_on_clean\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T09:09:37+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-031",
+      "requirement_ids": [
+        "FR-1045"
+      ],
+      "ac_ids": [
+        "AC-237"
+      ],
+      "title": "インストーラ（新規の導入）: 導入後に自動修復し、修復項目・手動対応（CHK・位置・役割）・合否を表示",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac237_new_install\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T09:09:40+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-032",
+      "requirement_ids": [
+        "FR-1045"
+      ],
+      "ac_ids": [
+        "AC-237"
+      ],
+      "title": "インストーラ（更新・再実行）: 導入後に自動修復し、修復項目・手動対応（CHK・位置・役割）・合否を表示",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac237_update_install_repairs\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T09:09:44+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-033",
+      "requirement_ids": [
+        "FR-1045"
+      ],
+      "ac_ids": [
+        "AC-237"
+      ],
+      "title": "インストーラ（更新）: 自動修復だけで直る導入先は再検査に合格",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac237_update_install_automatic_only\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T09:09:47+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-034",
+      "requirement_ids": [
+        "FR-1045"
+      ],
+      "ac_ids": [
+        "AC-238"
+      ],
+      "title": "インストーラ --no-repair: 検査の結果と修復の計画を表示し、データ層を変えない",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac238_no_repair\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T09:09:50+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-035",
+      "requirement_ids": [
+        "FR-1045"
+      ],
+      "ac_ids": [
+        "AC-238"
+      ],
+      "title": "インストーラ --skip-verify: 検査も修復もしない",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac238_skip_verify\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T09:09:54+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-036",
+      "requirement_ids": [
+        "FR-1045"
+      ],
+      "ac_ids": [
+        "AC-238"
+      ],
+      "title": "インストーラ（異常系）: --dry-run・--check・--uninstall・--purge では修復しない",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac238_non_install_modes\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-16T09:09:57+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
