@@ -1,6 +1,6 @@
 import { t, lang, setLang, onLang, applyI18n } from './i18n.js';
 import { store } from './store.js';
-import { el, esc, colorOf, typeLabel, toast, businessIcon, statePanel } from './ui.js';
+import { el, esc, colorOf, typeLabel, toast, businessIcon, statePanel, icon } from './ui.js';
 import { initDrawer } from './drawer.js';
 import { installXref } from './xref.js';
 import { decorate, mountStructure, mountConsistency, mountMaintenance } from './insights.js';
@@ -30,15 +30,15 @@ const navKeyOf = (route) => ROUTES[route]?.navKey || route;
 const view = document.getElementById('view');
 const nav = document.getElementById('nav');
 const navDesc = document.getElementById('navDesc');
-let current = null, token = 0, fingerprint = null;
+let current = null, token = 0, fingerprint = null, modelError = null;
 
 const personaBar = document.getElementById('personaBar');
-for (const [name, icon] of [['Product Manager', '🎯'], ['Architect', '🏗️'], ['Software Engineer', '💻']]) {
+for (const [name, glyph] of [['Product Manager', 'goal'], ['Architect', 'structure'], ['Software Engineer', 'source']]) {
   personaBar.append(el('button', { class: 'chip persona', 'aria-label': `${name} view`, onclick: () => {
     if (name === 'Architect') location.hash = '#/map2d';
     else if (name === 'Software Engineer') location.hash = '#/tables';
     else location.hash = '#/dashboard';
-  } }, el('span', { class: 'biz-icon', role: 'img', 'aria-hidden': 'true' }, icon), name));
+  } }, el('span', { class: 'biz-icon', 'aria-hidden': 'true' }, icon(glyph, { size: 16 })), name, el('span', { class: 'sr-only' }, ' view')));
 }
 
 const routeName = () => { const r = (location.hash.replace(/^#\/?/, '') || 'dashboard').split('?')[0]; return ROUTES[r] ? r : 'dashboard'; };
@@ -81,6 +81,35 @@ function legacyRedirect(name) {
   return true;
 }
 
+// 全ナビ項目の画面で、更新できない（エラー）・データが無い（空）を同じ構造の状態表示で出す（FR-1048 AC-267）。入力済みの内容（検索ボックスなど）は触らない。
+function problemPanel() {
+  if (modelError) {
+    return statePanel({ state: 'error', heading: t('state.stale.h'), description: `${t('state.stale.d')} (${(modelError && modelError.message) || modelError})`,
+      action: el('button', { type: 'button', class: 'btn', onclick: () => loadModel(true).then(() => { modelError = null; route(); }).catch((e) => { modelError = e; route(); }) }, icon('stale', { size: 16 }), t('state.retry')) });
+  }
+  if (store.model && store.nodes.size === 0) {
+    return statePanel({ state: 'empty', heading: t('state.empty.h'), description: t('state.empty.d'),
+      action: el('button', { type: 'button', class: 'btn ghost', onclick: () => document.getElementById('repoBtn').click() }, icon('folder', { size: 16 }), t('state.empty.a')) });
+  }
+  // 検索ボックスの語に一致する項目が 0 件のときも「空」として同じ構造で示す（入力は消さない）
+  const typed = (document.getElementById('q')?.value || '').trim();
+  if (store.model && typed && !/^[>＞]/.test(typed) && store.search(typed, 1).total === 0) {
+    return statePanel({ state: 'empty', heading: t('state.nohit.h'), description: t('state.nohit.d'),
+      action: el('button', { type: 'button', class: 'btn ghost', onclick: () => { const qb = document.getElementById('q'); qb.value = ''; route(); qb.focus(); } }, icon('search', { size: 16 }), t('state.nohit.a')) });
+  }
+  return null;
+}
+async function checkModel() {
+  if (!store.model) return;
+  try {
+    const r = await fetch('/api/model', { cache: 'no-store' });
+    r.body?.cancel?.();
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (modelError) { modelError = null; route(); }
+  } catch (e) { modelError = e; route(); }
+}
+window.addEventListener('focus', checkModel);
+
 async function route() {
   const name = routeName();
   if (legacyRedirect(name)) return;
@@ -92,6 +121,8 @@ async function route() {
   const my = ++token;
   current?.destroy?.();
   current = null;
+  const problem = problemPanel();
+  if (problem) { view.replaceChildren(problem); return; }
   const host = el('div', { class: 'fill' });
   view.replaceChildren(host);
   host.append(el('div', { class: 'sr-only', role: 'status' }, t('loading'))); // never leave the view empty while the module loads
@@ -131,7 +162,7 @@ async function loadModel(quiet) {
   const model = await res.json();
   store.load(model);
   document.title = `EABK Studio · ${model.meta.name}`;
-  document.getElementById('repoBtn').textContent = '📁 ' + model.meta.name;
+  document.getElementById('repoBtn').replaceChildren(icon('folder', { size: 16 }), ' ' + model.meta.name);
   document.getElementById('repoBtn').title = model.meta.repo;
   const modelTime = document.getElementById('modelTime');
   modelTime.dateTime = model.meta.generatedAt;

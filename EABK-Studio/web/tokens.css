@@ -49,11 +49,23 @@
   --stroke-thick: 2px;
   --stroke-focus: 2px;
 
+  /* ---- 部品の種類ごとの段階（FR-1048 AC-263）: 同種は全画面で同値。値は上の基本トークンから選ぶ ---- */
+  --radius-control: var(--radius-md);     /* ボタン・入力・タブ・ナビ項目・リスト項目 */
+  --radius-container: var(--radius-lg);   /* カード・パネル */
+  --radius-overlay: var(--radius-xl);     /* ドロワー・ダイアログ・メニュー */
+  --radius-tooltip: var(--radius-sm);
+  --stroke-control: var(--stroke-thin);
+  --stroke-container: var(--stroke-thin);
+  --stroke-overlay: var(--stroke-thin);
+
   /* ---- エレベーション ---- */
   --shadow-1: 0 1px 2px var(--color-shadow-1);
   --shadow-2: 0 2px 8px var(--color-shadow-1);
   --shadow-3: 0 8px 16px var(--color-shadow-2);
   --shadow-4: 0 16px 32px var(--color-shadow-2);
+  --elevation-card: var(--shadow-2);        /* 面（カード・パネル）*/
+  --elevation-flyout: var(--shadow-3);      /* メニュー・ツールチップ・通知 */
+  --elevation-overlay: var(--shadow-4);     /* ドロワー・ダイアログ（重なりの最上段）*/
 
   /* ---- モーション（1 回 300ms 以内: PARAM-032） ---- */
   --duration-fast: 100ms;
@@ -62,6 +74,14 @@
   --ease-standard: cubic-bezier(0.33, 0, 0.67, 1);
   --ease-decelerate: cubic-bezier(0.1, 0.9, 0.2, 1);
   --ease-accelerate: cubic-bezier(0.9, 0.1, 1, 0.2);
+  --duration-instant: 1ms;    /* 動きの軽減時の切替（PARAM-037）*/
+  --motion-spin-period: 1s;  /* 進行中表示の回転周期（状態遷移ではない繰り返し。進行中表示だけが使う）*/
+
+  /* ---- 素材の階層（Mica / Acrylic 風）: ベース＝不透明の下地、レイヤー＝半透明＋ぼかし。非対応・強制色・透明効果の軽減では不透明の面に切り替える（AC-266）---- */
+  --material-base: var(--color-bg-canvas);
+  --material-layer-opaque: var(--color-bg-surface);
+  --material-layer: color-mix(in srgb, var(--color-bg-surface) 82%, transparent);
+  --material-blur: 24px;
 
   /* ---- 色: ライト（既定の値。:root[data-theme="dark"] が上書きする） ---- */
   color-scheme: light;

@@ -4,7 +4,7 @@ import { store } from './store.js';
 import { xrefLink } from './xref.js';
 import { create2d } from './sz2d.js';
 import { mountShell, isArch, wantsEntityView, hasEntityStructure, setTab } from './semzoom.js';
-import { el, colorOf, TYPE_COLOR, STATUS_COLOR, showTip, hideTip, nodeTip } from './ui.js';
+import { el, colorOf, TYPE_COLOR, STATUS_COLOR, IMPL_COLOR, token, icon, showTip, hideTip, nodeTip } from './ui.js';
 
 const COL = { goal: 0, req: 1, ac: 2, entity: 3, part: 3, api: 3, table: 3, param: 3, question: 3, file: 4, component: 4, case: 5, persona: 6, external: 6 };
 const LAYER_TYPES = ['goal', 'req', 'ac', 'entity', 'part', 'api', 'table', 'param', 'question', 'file', 'case'];
@@ -13,7 +13,6 @@ const rowH = 22, groupGap = 30, TOP = 70;
 const prefs = { layers: new Set(DEFAULT_ON), color: 'type' };
 const PICK_RADIUS = 12;    // PARAM-009: node pick radius, screen px
 const CLICK_DRAG_PX = 6;   // PARAM-010: click/pan drag threshold, screen px
-const IMPL_COLOR = { done: '#34e0a1', none: '#ff5c7a', unlisted: '#8aa1b5' };
 
 function mountGraph(host) {
   host.append(el('h1', { class: 'sr-only' }, '2D マップ'));
@@ -211,7 +210,7 @@ function mountGraph(host) {
       ctx.font = '600 1px "Segoe UI","Yu Gothic UI",sans-serif';
       const fs = Math.max(8, Math.min(Math.min(80, Math.max(11, 15 / k)), (subW - 40) / Math.max(1, ctx.measureText(gl).width)));
       ctx.font = `600 ${fs}px "Segoe UI","Yu Gothic UI",sans-serif`;
-      ctx.fillStyle = k < 0.5 ? 'rgba(200,215,255,0.8)' : 'rgba(160,180,230,0.55)';
+      ctx.fillStyle = k < 0.5 ? token('--color-fg-default') : token('--color-fg-subtle');
       ctx.textBaseline = 'alphabetic';
       ctx.fillText(gl, g.x - 6, g.y0 - 20 + (k < 0.5 ? -2 : 0));
     }
@@ -236,7 +235,7 @@ function mountGraph(host) {
         if (hi) {
           const base = nodeColor(a.n);
           ctx.strokeStyle = base; ctx.globalAlpha = 0.85; ctx.lineWidth = 1.8 / k;
-        } else { ctx.strokeStyle = focusing ? '#6f86c8' : '#7f9bff'; ctx.globalAlpha = focusing ? 0.035 : Math.min(0.18, 0.05 + 0.05 * k); ctx.lineWidth = lw; }
+        } else { ctx.strokeStyle = token('--viz-node-stroke'); ctx.globalAlpha = focusing ? 0.035 : Math.min(0.18, 0.05 + 0.05 * k); ctx.lineWidth = lw; }
         ctx.stroke();
       }
     }
@@ -263,14 +262,14 @@ function mountGraph(host) {
       if (n.id === store.selected || n.id === store.hover) {
         // FR-1011 AC-079: ring of constant on-screen size (larger than normal) + always-on labelled badge.
         ctx.globalAlpha = 1;
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = 3 / k; ctx.beginPath(); ctx.arc(p.x, p.y, 15 / k, 0, 7); ctx.stroke();
-        ctx.strokeStyle = '#0b1020'; ctx.lineWidth = 1 / k; ctx.beginPath(); ctx.arc(p.x, p.y, 17 / k, 0, 7); ctx.stroke();
+        ctx.strokeStyle = token('--color-fg-default'); ctx.lineWidth = 3 / k; ctx.beginPath(); ctx.arc(p.x, p.y, 15 / k, 0, 7); ctx.stroke();
+        ctx.strokeStyle = token('--color-bg-canvas'); ctx.lineWidth = 1 / k; ctx.beginPath(); ctx.arc(p.x, p.y, 17 / k, 0, 7); ctx.stroke();
         emph.push(p);
       }
       if ((labelOn && on) || (focusing && on && k > 0.22 && (set.size < 90 || n.id === store.selected))) {
         const fs = 12;
         ctx.font = `${fs}px "Segoe UI","Yu Gothic UI",sans-serif`;
-        ctx.fillStyle = on && focusing ? '#fff' : 'rgba(215,226,250,0.9)';
+        ctx.fillStyle = on && focusing ? token('--color-fg-default') : token('--color-fg-muted');
         ctx.textBaseline = 'middle';
         const lab = n.type === 'file' ? n.label : (n.type === 'req' || n.type === 'ac' || n.type === 'goal' || n.type === 'case') ? n.label + (labelOn || focusing ? '  ' + (n.title || '').slice(0, 28) : '') : n.label;
         ctx.fillText(lab.slice(0, 44), p.x + r + 6, p.y);
@@ -282,10 +281,10 @@ function mountGraph(host) {
       ctx.font = `600 ${fs}px "Segoe UI","Yu Gothic UI",sans-serif`;
       const lab = (p.n.label + (p.n.title ? '  ' + p.n.title.slice(0, 28) : '')).slice(0, 44);
       const tw = ctx.measureText(lab).width, lx = p.x + 20 / k, h = fs + pad * 2;
-      ctx.fillStyle = 'rgba(11,16,32,0.92)';
+      ctx.fillStyle = token('--viz-label-bg');
       round(ctx, lx - pad, p.y - h / 2, tw + pad * 2, h, 4 / k); ctx.fill();
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1 / k; ctx.stroke();
-      ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
+      ctx.strokeStyle = token('--color-fg-default'); ctx.lineWidth = 1 / k; ctx.stroke();
+      ctx.fillStyle = token('--color-fg-default'); ctx.textBaseline = 'middle';
       ctx.fillText(lab, lx, p.y);
     }
     ctx.restore();
@@ -305,12 +304,12 @@ function mountGraph(host) {
     const ox = (mw - bw * s) / 2 - bounds.x0 * s, oy = (mh - bh * s) / 2 - bounds.y0 * s;
     for (const p of order) {
       const on = !set || set.has(p.n.id);
-      mctx.fillStyle = on ? nodeColor(p.n) : 'rgba(150,170,220,.25)';
+      mctx.fillStyle = on ? nodeColor(p.n) : token('--viz-sep');
       mctx.globalAlpha = on ? 1 : 0.5;
       mctx.fillRect(p.x * s + ox, p.y * s + oy, on && set ? 5 : 2.5, on && set ? 5 : 2.5);
     }
     mctx.globalAlpha = 1;
-    mctx.strokeStyle = '#39d0ff'; mctx.lineWidth = 2;
+    mctx.strokeStyle = token('--viz-sel'); mctx.lineWidth = 2;
     const vw = W / cam.k, vh = H / cam.k;
     mctx.strokeRect((cam.x - vw / 2) * s + ox, (cam.y - vh / 2) * s + oy, vw * s, vh * s);
     mini._s = { s, ox, oy };
@@ -415,7 +414,7 @@ function mountGraph(host) {
     toolbar.replaceChildren(
       el('div', { class: 'grp' },
         el('button', { onclick: () => { store.clear(); fly(camFit(), 1200); } }, '🛰 ' + t('map.bird')),
-        el('button', { onclick: () => flyToActive() }, '🎯 ' + t('map.zoomsel')),
+        el('button', { onclick: () => flyToActive() }, icon('goal', { size: 16 }), ' ' + t('map.zoomsel')),
         el('button', { class: tour ? 'on' : '', onclick: startTour }, (tour ? '■ ' : '▶ ') + t('map.tour'))),
       el('details', { class: 'grp pop' }, el('summary', {}, '◧ ' + t('map.layers')), el('div', {}, LAYER_TYPES.map((ty) => el('label', { title: t('type.' + ty) },
         el('input', { type: 'checkbox', checked: prefs.layers.has(ty) || null, onchange: (e) => { e.target.checked ? prefs.layers.add(ty) : prefs.layers.delete(ty); relayout(true); } }),

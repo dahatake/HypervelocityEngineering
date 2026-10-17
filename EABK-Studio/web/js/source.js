@@ -33,7 +33,7 @@ export function mount(host) {
     for (const c of citems) {
       const r = out.get(c.key), pad = 3;
       svg.append(svgEl('rect', { x: r.x + pad, y: r.y + pad, width: Math.max(0, r.w - pad * 2), height: Math.max(0, r.h - pad * 2), rx: 10, fill: 'rgba(120,150,255,.06)', stroke: 'rgba(140,170,255,.35)' }));
-      if (r.w > 90 && r.h > 40) svg.append(svgEl('text', { x: r.x + 12, y: r.y + 22, 'font-size': 13, 'font-weight': 700, fill: '#cfe0ff' }, c.key.length > r.w / 8 ? c.key.split('/').pop() : c.key));
+      if (r.w > 90 && r.h > 40) svg.append(svgEl('text', { x: r.x + 12, y: r.y + 22, 'font-size': 13, 'font-weight': 700, fill: 'var(--viz-cluster-name)' }, c.key.length > r.w / 8 ? c.key.split('/').pop() : c.key));
       const inner = { x: r.x + 8, y: r.y + 30, w: r.w - 16, h: r.h - 38 };
       if (inner.w < 8 || inner.h < 8) continue;
       const fout = new Map();
@@ -43,8 +43,8 @@ export function mount(host) {
         const nreq = store.neighbors(f.id, ['req']).length, on = !set || set.has(f.id);
         const col = colorOf(f);
         const g = svgEl('g', { class: 'node-g', style: `opacity:${on ? 1 : 0.16}` },
-          svgEl('rect', { x: fr.x + 1, y: fr.y + 1, width: Math.max(0, fr.w - 2), height: Math.max(0, fr.h - 2), rx: 4, fill: col, 'fill-opacity': 0.18 + Math.min(0.6, nreq / 14), stroke: f.id === store.selected ? '#fff' : col, 'stroke-width': f.id === store.selected ? 2.5 : 0.8 }));
-        if (fr.w > 56 && fr.h > 18) g.append(svgEl('text', { x: fr.x + 5, y: fr.y + 14, 'font-size': 10.5, fill: '#fff' }, f.label.length * 6 > fr.w ? f.label.slice(0, Math.floor(fr.w / 6)) + '…' : f.label));
+          svgEl('rect', { x: fr.x + 1, y: fr.y + 1, width: Math.max(0, fr.w - 2), height: Math.max(0, fr.h - 2), rx: 4, fill: col, 'fill-opacity': 0.18 + Math.min(0.6, nreq / 14), stroke: f.id === store.selected ? 'var(--color-fg-default)' : col, 'stroke-width': f.id === store.selected ? 2.5 : 0.8 }));
+        if (fr.w > 56 && fr.h > 18) g.append(svgEl('text', { x: fr.x + 5, y: fr.y + 14, 'font-size': 10.5, fill: 'var(--color-fg-default)' }, f.label.length * 6 > fr.w ? f.label.slice(0, Math.floor(fr.w / 6)) + '…' : f.label));
         g.addEventListener('click', () => store.select(f.id, { fly: true }));
         g.addEventListener('mouseenter', (e) => { store.setHover(f.id); showTip(`<b style="color:${col}">${f.label}</b><div class="mini">${f.path}</div><div>${nreq} ${t('type.req')}</div>`, e.clientX, e.clientY); });
         g.addEventListener('mousemove', (e) => showTip(`<b style="color:${col}">${f.label}</b><div class="mini">${f.path}</div><div>${nreq} ${t('type.req')}</div>`, e.clientX, e.clientY));

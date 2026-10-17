@@ -3,9 +3,9 @@
 // which also respects "reduce motion".
 import * as THREE from 'three';
 import { t } from './i18n.js';
-import { el, TYPE_COLOR } from './ui.js';
+import { el, TYPE_COLOR, token } from './ui.js';
 
-const COLOR = { ...TYPE_COLOR, system: '#39d0ff', state: '#b36bff', test: TYPE_COLOR.test };
+const COLOR = { ...TYPE_COLOR, system: token('--viz-sel'), state: token('--viz-accent-2'), test: TYPE_COLOR.test };
 const LAYER_ORDER = ['screen', 'api', 'data', 'other'];
 
 function layout(g) {
@@ -61,7 +61,7 @@ export function mount3d(host, g, { onPick } = {}) {
 
   const dot = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const gr = x.createRadialGradient(32, 32, 0, 32, 32, 30); gr.addColorStop(0, '#fff'); gr.addColorStop(0.7, '#fff'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.beginPath(); x.arc(32, 32, 30, 0, 7); x.fill(); return new THREE.CanvasTexture(c); })();
   const sprites = g.elements.map((e, i) => {
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot, color: new THREE.Color(COLOR[e.type] || '#8aa1b5'), transparent: true, depthTest: false }));
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot, color: new THREE.Color(COLOR[e.type] || token('--viz-file')), transparent: true, depthTest: false }));
     s.position.set(P[i].x, P[i].y, P[i].z); s.scale.set(16, 16, 1); s.renderOrder = 5; world.add(s); return s;
   });
   const arr = [];
@@ -75,11 +75,11 @@ export function mount3d(host, g, { onPick } = {}) {
   const labelOf = (e, i, color) => {
     const c = document.createElement('canvas'); c.width = 512; c.height = 64; const x = c.getContext('2d');
     x.font = '500 28px "Segoe UI","Yu Gothic UI",sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
-    x.lineWidth = 6; x.strokeStyle = 'rgba(5,8,20,.9)'; const s = e.label.slice(0, 30); x.strokeText(s, 256, 34); x.fillStyle = color; x.fillText(s, 256, 34);
+    x.lineWidth = 6; x.strokeStyle = token('--scene-stage-bg'); const s = e.label.slice(0, 30); x.strokeText(s, 256, 34); x.fillStyle = color; x.fillText(s, 256, 34);
     const tex = new THREE.CanvasTexture(c); tex.minFilter = THREE.LinearFilter; texs.push(tex);
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false })); sp.scale.set(104, 13, 1); sp.position.set(P[i].x, P[i].y + 14, P[i].z); sp.renderOrder = 10; world.add(sp); return sp;
   };
-  g.elements.forEach((e, i) => { if (labelIds.has(e.id)) labelOf(e, i, '#e8eefc'); });
+  g.elements.forEach((e, i) => { if (labelIds.has(e.id)) labelOf(e, i, token('--viz-cluster-name')); });
   let selLabel = null;
 
   let maxR = 1; for (const p of P) maxR = Math.max(maxR, Math.hypot(p.x, p.y, p.z));
@@ -119,9 +119,9 @@ export function mount3d(host, g, { onPick } = {}) {
 
   return {
     setSelected(id) {
-      sprites.forEach((s, i) => { const on = g.elements[i].id === id; s.scale.set(on ? 28 : 16, on ? 28 : 16, 1); s.material.color.set(on ? '#ffffff' : (COLOR[g.elements[i].type] || '#8aa1b5')); });
+      sprites.forEach((s, i) => { const on = g.elements[i].id === id; s.scale.set(on ? 28 : 16, on ? 28 : 16, 1); s.material.color.set(on ? token('--viz-sel') : (COLOR[g.elements[i].type] || token('--viz-file'))); });
       if (selLabel) { world.remove(selLabel); selLabel.material.dispose(); selLabel = null; }
-      const i = idx.get(id); if (i != null && !labelIds.has(id)) selLabel = labelOf(g.elements[i], i, '#ffffff');
+      const i = idx.get(id); if (i != null && !labelIds.has(id)) selLabel = labelOf(g.elements[i], i, token('--viz-sel'));
       redraw();
     },
     destroy() {
