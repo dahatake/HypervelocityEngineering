@@ -78,7 +78,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1057 | 要求の階層化（目的→領域→要求） | 承認済み | `scripts/metadata.json`、`scripts/ebaklib.py`、`scripts/rdcheck.py`、`EABK-Studio/eabk_model.py`、`tools/install.py` | `tests/toolkit/test_hierarchy.py`、`tests/system/test_data_hierarchy_system.py` | メタデータ定義と階層・関係索引 |
 | FR-1058 | 管理データのメタデータ定義と検査 | 承認済み | `scripts/metadata.json`、`scripts/ebaklib.py`、`scripts/rdcheck.py`、`EABK-Studio/eabk_model.py`、`tools/install.py` | `tests/toolkit/test_hierarchy.py`、`tests/system/test_data_hierarchy_system.py` | メタデータ定義と階層・関係索引 |
 | FR-1059 | 関係の索引（種類つきの関連付け） | 承認済み | `scripts/metadata.json`、`scripts/ebaklib.py`、`scripts/rdcheck.py`、`EABK-Studio/eabk_model.py`、`tools/install.py` | `tests/toolkit/test_hierarchy.py`、`tests/system/test_data_hierarchy_system.py` | メタデータ定義と階層・関係索引 |
-| FR-1060 | 領域の初期分類（AI提案） | 承認待ち | 未実装 | 未実装 | - |
+| FR-1060 | 領域の初期分類（AI提案） | 承認済み | 未実装 | 未実装 | - |
 | NFR-UX-014 | 管理データの情報デザイン（段階的開示と一覧性） | 承認済み | `scripts/metadata.json`、`scripts/ebaklib.py`、`scripts/rdcheck.py`、`EABK-Studio/eabk_model.py`、`tools/install.py` | `tests/toolkit/test_hierarchy.py`、`tests/system/test_data_hierarchy_system.py` | メタデータ定義と階層・関係索引 |
 | FR-1050 | 表・連携の ID の全面リンク化と未解決 ID の明示 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
 | FR-1051 | 「表」画面の種別のグループ化と名称の統一 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
