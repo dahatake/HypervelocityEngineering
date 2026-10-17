@@ -177,6 +177,7 @@ def test_ac318_source_checkout_has_no_metadata_violation():
 # FR-1058 AC-319: 領域・更新日を足しても要求・受入基準の文面と決定状態は変わらない
 def test_ac319_adding_optional_fields_changes_only_those_lines(repo):
     before = txt(repo, d.RD)
+    show_before = d.py(repo, *RDC, "show", "FR-001").stdout
     set_area(repo, "FR-001", "受付")
     s = txt(repo, d.RD)
     j = s.index("\n- 関連する既存資産", s.index("#### FR-001 "))
@@ -187,7 +188,10 @@ def test_ac319_adding_optional_fields_changes_only_those_lines(repo):
     assert not removed, removed
     assert sorted(added) == sorted(["- 領域: 受付", "- 更新日: 2026-10-17"]), added
     sh = d.py(repo, *RDC, "show", "FR-001")
-    assert "完了" not in sh.stdout and "承認済み" in sh.stdout
+    # 本文・決定状態は追加前と同じ（fixture 本文の語には依存しない。追加前の表示行がすべて残る）
+    assert "承認済み" in sh.stdout
+    missing = [l for l in show_before.splitlines() if l not in sh.stdout.splitlines()]
+    assert not missing, missing
     dg = d.py(repo, *RDC, "digest", "AC-001")
     assert dg.returncode == 0, dg.stderr
     assert check(repo).returncode == 0
@@ -276,4 +280,4 @@ def test_ac324_table_column_mismatch_reported_and_clean_passes(repo):
     put(repo, d.CATALOG, cat.rstrip("\n") + "\n" + extra)
     r = check(repo)
     hit = [l for l in (lines(r, "ERROR") + lines(r, "WARN")) if "列" in l or "欄名" in l or "題名" in l or "決定状態" in l]
-        assert hit, r.stdout + r.stderr
+    assert hit, r.stdout + r.stderr
