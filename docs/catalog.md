@@ -71,6 +71,11 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1040 | 図式の各表示の 2D/3D 選択 | 承認済み | `EABK-Studio/web/js/dim.js`, `EABK-Studio/web/js/dgm3d.js`, `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/app.css`, `EABK-Studio/README.md`, `users-guide/studio/02-screens.md` | `EABK-Studio/tests/test_nav_dims_ui.py`, `tests/system/e2e/test_studio_nav_dims_integrations_system.py` | ストア、UI 部品、デザイン基盤、Three.js 同梱モジュール、2D・3D 切替 |
 | FR-1041 | ナビゲーションの MECE 化と各項目の説明 | 承認済み | `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/dim.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/index.html`, `EABK-Studio/web/app.css`, `EABK-Studio/README.md`, `users-guide/studio/02-screens.md` | `EABK-Studio/tests/test_nav_dims_ui.py`, `tests/system/e2e/test_studio_nav_dims_integrations_system.py` | ストア、UI 部品、デザイン基盤、2D・3D 切替 |
 | FR-1042 | 外部連携カタログの閲覧（Studio） | 承認済み | `EABK-Studio/web/js/integrations.js`, `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/drawer.js`, `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/js/xref.js` | `EABK-Studio/tests/test_integrations_catalog.py`, `EABK-Studio/tests/test_nav_dims_ui.py`, `tests/system/e2e/test_studio_nav_dims_integrations_system.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
+| FR-1057 | 要求の階層化（目的→領域→要求） | 承認済み | 未実装 | 未実装 | - |
+| FR-1058 | 管理データのメタデータ定義と検査 | 承認済み | 未実装 | 未実装 | - |
+| FR-1059 | 関係の索引（種類つきの関連付け） | 承認済み | 未実装 | 未実装 | - |
+| FR-1060 | 領域の初期分類（AI提案） | 承認待ち | 未実装 | 未実装 | - |
+| NFR-UX-014 | 管理データの情報デザイン（段階的開示と一覧性） | 承認済み | 未実装 | 未実装 | - |
 
 ## API・イベント
 
