@@ -114,9 +114,9 @@
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_model_can_traverse_requirement_to_catalog_file_and_test",
       "canary": true,
       "status": "pass",
-      "last_commit": "ac002d27",
-      "last_run_at": "2026-10-17T17:23:31+09:00",
-      "evidence": "work/runs/202610171434/logs/system-test/E2E-001-202610171635.log",
+      "last_commit": "87fefae6",
+      "last_run_at": "2026-10-17T18:56:43+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-001-202610171854.log",
       "history": [
         {
           "at": "2026-10-09T22:10:37+09:00",
@@ -877,9 +877,9 @@
       "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_starts_only_after_ordered_success_and_pre_cleanup_report",
       "canary": true,
       "status": "pass",
-      "last_commit": "ac002d27",
-      "last_run_at": "2026-10-17T17:23:31+09:00",
-      "evidence": "work/runs/202610171434/logs/system-test/E2E-026-202610171635.log",
+      "last_commit": "87fefae6",
+      "last_run_at": "2026-10-17T18:56:43+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-026-202610171854.log",
       "history": [
         {
           "at": "2026-10-10T10:41:32+09:00",
@@ -927,9 +927,9 @@
       "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_cleanup_starts_only_after_all_gates_and_main_integration",
       "canary": true,
       "status": "pass",
-      "last_commit": "ac002d27",
-      "last_run_at": "2026-10-17T17:23:31+09:00",
-      "evidence": "work/runs/202610171434/logs/system-test/E2E-028-202610171635.log",
+      "last_commit": "87fefae6",
+      "last_run_at": "2026-10-17T18:56:43+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-028-202610171855.log",
       "history": [
         {
           "at": "2026-10-10T10:41:53+09:00",
@@ -2389,9 +2389,9 @@
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac105 -q",
       "canary": true,
       "status": "pass",
-      "last_commit": "ac002d27",
-      "last_run_at": "2026-10-17T17:23:31+09:00",
-      "evidence": "work/runs/202610171434/logs/system-test/IT-008-202610171636.log",
+      "last_commit": "87fefae6",
+      "last_run_at": "2026-10-17T18:56:43+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/IT-008-202610171855.log",
       "history": [
         {
           "at": "2026-10-14T20:55:51+09:00",
@@ -3827,9 +3827,9 @@
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_automatic_only\" -q",
       "canary": true,
       "status": "pass",
-      "last_commit": "ac002d27",
-      "last_run_at": "2026-10-17T17:23:31+09:00",
-      "evidence": "work/runs/202610171434/logs/system-test/IT-026-202610171636.log",
+      "last_commit": "87fefae6",
+      "last_run_at": "2026-10-17T18:56:43+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/IT-026-202610171855.log",
       "history": [
         {
           "at": "2026-10-16T09:09:24+09:00",
@@ -4102,9 +4102,9 @@
       "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac286_default",
       "canary": false,
       "status": "pass",
-      "last_commit": "48de5350",
-      "last_run_at": "2026-10-17T16:19:56+09:00",
-      "evidence": "work/runs/202610171423/logs/system-test/E2E-153-202610171618.log",
+      "last_commit": "87fefae6",
+      "last_run_at": "2026-10-17T18:56:43+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-153-202610171856.log",
       "history": [
         {
           "at": "2026-10-17T14:47:10+09:00",
@@ -4127,9 +4127,9 @@
       "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac286_switching_keeps",
       "canary": false,
       "status": "pass",
-      "last_commit": "48de5350",
-      "last_run_at": "2026-10-17T16:19:56+09:00",
-      "evidence": "work/runs/202610171423/logs/system-test/E2E-154-202610171619.log",
+      "last_commit": "87fefae6",
+      "last_run_at": "2026-10-17T18:56:43+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-154-202610171856.log",
       "history": [
         {
           "at": "2026-10-17T14:47:16+09:00",
@@ -4152,9 +4152,9 @@
       "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac286_switching_does",
       "canary": false,
       "status": "pass",
-      "last_commit": "48de5350",
-      "last_run_at": "2026-10-17T16:19:56+09:00",
-      "evidence": "work/runs/202610171423/logs/system-test/E2E-155-202610171619.log",
+      "last_commit": "87fefae6",
+      "last_run_at": "2026-10-17T18:56:43+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-155-202610171856.log",
       "history": [
         {
           "at": "2026-10-17T14:47:21+09:00",
@@ -4177,9 +4177,9 @@
       "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac295_arrow",
       "canary": true,
       "status": "pass",
-      "last_commit": "48de5350",
-      "last_run_at": "2026-10-17T16:19:56+09:00",
-      "evidence": "work/runs/202610171423/logs/system-test/E2E-156-202610171531.log",
+      "last_commit": "87fefae6",
+      "last_run_at": "2026-10-17T18:56:43+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-156-202610171856.log",
       "history": [
         {
           "at": "2026-10-17T14:47:28+09:00",
