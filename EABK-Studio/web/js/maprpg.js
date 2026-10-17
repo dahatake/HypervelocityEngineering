@@ -1,5 +1,5 @@
 // FR-1053 / FR-1054 / FR-1055 / NFR-UX-012: the map shown as an 8-bit style 2D role-playing field.
-// Castles = business goals (G-ID), towns = entities. Walk with the keyboard, talk at an entrance to read the content.
+// Castles = business goals (G-ID), towns = groups of entities (FR-1026 connected components), residents = one entity each. Walk with the keyboard, talk at an entrance to read the content.
 // Everything (pixel art, sound) is generated here; nothing is fetched from outside (AC-291, AC-292, AC-299).
 import { lang, onLang } from './i18n.js';
 import { store } from './store.js';
@@ -7,7 +7,7 @@ import { el } from './ui.js';
 import { xrefLink } from './xref.js';
 import { runDim } from './dim.js';
 import { view as zoomView, dataOf, thresholds, stateOf, isArch } from './semzoom.js';
-import { buildWorld, stepOn, placeAt, DIRS, buttonOf } from './rpgworld.js';
+import { buildWorld, stepOn, placeAt, DIRS, buttonOf, groupEntities } from './rpgworld.js';
 import { createAudio } from './rpgaudio.js';
 import { mount as mount2d } from './map2d.js';
 
@@ -20,8 +20,8 @@ const TYPE_MS = 35;             // typewriter pace of the dialog
 const TXT = {
   ja: {
     title: 'RPG 風マップ', area: 'RPG 風の地図。方向キーで歩き、城や街の入口で決定キーを押すと話せます。Tab で他の部分へ移れます。',
-    castle: '城', town: '街', goal: '目的', entity: 'データ種別（エンティティ）', hero: '旅人', villager: '住人', guide: '案内役',
-    sound: '音', on: 'オン', off: 'オフ（ミュート）', soundBtn: '音の入切', pos: '現在位置', field: '野外', at: '{k} {n} の入口',
+    castle: '城', town: '街', goal: '目的', entity: 'エンティティ', group: 'エンティティのグルーピング', townName: '{n} の街', noneName: '関係なしの街', noneText: '他のエンティティとの関係がないエンティティが集まる街。', groupText: '関係でつながるエンティティ: {list}（{n} 件）', hero: '旅人', villager: '住人', guide: '案内役',
+    sound: '音', on: 'オン', off: 'オフ（ミュート）', soundBtn: '音の入切', pos: '現在位置', field: '野外', at: '{k} {n} の入口', with: '{k} {n} の位置',
     reqs: '関連する要求: {n} 件', repr: '代表: {ids}', noreq: '関連する要求はまだありません。', nodesc: '説明はまだありません。',
     start: 'スタート', select: 'セレクト', help: '操作の割り当て', close: '閉じる', to2d: '2D で表示', to3d: '3D で表示', toRpg: 'RPG 風で表示',
     keysTitle: '操作の割り当て', btn: 'ボタン', keys: 'キー', dpad: '十字キー', a: 'A（決定・話す・調べる）', b: 'B（取消・閉じる・戻る）',
@@ -35,8 +35,8 @@ const TXT = {
   },
   en: {
     title: 'RPG-style map', area: 'RPG-style map. Walk with the arrow keys and press the confirm key at a castle or town entrance to talk. Tab moves to other parts of the page.',
-    castle: 'Castle', town: 'Town', goal: 'Goal', entity: 'Data kind (entity)', hero: 'Traveler', villager: 'Villager', guide: 'Guide',
-    sound: 'Sound', on: 'On', off: 'Off (muted)', soundBtn: 'Toggle sound', pos: 'Position', field: 'Open field', at: 'At the entrance of {k} {n}',
+    castle: 'Castle', town: 'Town', goal: 'Goal', entity: 'Entity', group: 'Entity group', townName: 'Town of {n}', noneName: 'Town of no relations', noneText: 'The town of entities that have no relation to other entities.', groupText: 'Entities linked by relations: {list} ({n})', hero: 'Traveler', villager: 'Villager', guide: 'Guide',
+    sound: 'Sound', on: 'On', off: 'Off (muted)', soundBtn: 'Toggle sound', pos: 'Position', field: 'Open field', at: 'At the entrance of {k} {n}', with: 'At {k} {n}',
     reqs: 'Related requirements: {n}', repr: 'e.g. {ids}', noreq: 'No related requirements yet.', nodesc: 'No description yet.',
     start: 'Start', select: 'Select', help: 'Controls', close: 'Close', to2d: 'Show in 2D', to3d: 'Show in 3D', toRpg: 'Show as RPG-style',
     keysTitle: 'Controls', btn: 'Button', keys: 'Keys', dpad: 'D-pad', a: 'A (confirm / talk / examine)', b: 'B (cancel / close / back)',
@@ -61,16 +61,26 @@ export function collect(model) {
     return { id, name: id, text: title, reqIds: rs };
   });
   const ents = model.entities?.entities || [];
-  const towns = ents.map((e) => ({ id: 'ent:' + e.name, name: e.name, text: e.description || '', reqIds: reqs.filter((r) => (r.entities || []).includes(e.name)).map((r) => r.id).sort() }));
+  const byEntity = new Map(ents.map((e) => [e.name, e]));
+  const rels = (model.entities?.relations || []).filter((r) => r.scope === 'entity' && byEntity.has(r.from) && byEntity.has(r.to));
+  const resOf = (name) => { const e = byEntity.get(name); return { id: 'ent:' + name, name, text: e.description || '', reqIds: reqs.filter((r) => (r.entities || []).includes(name)).map((r) => r.id).sort() }; };
+  const residents = ents.map((e) => resOf(e.name));
+  const towns = groupEntities([...byEntity.keys()], rels).map((g) => {
+    const rs = g.members.map(resOf), reqIds = [...new Set(rs.flatMap((x) => x.reqIds))].sort();
+    const list = g.members.slice(0, 5).join('、') + (g.members.length > 5 ? '…' : '');
+    return { id: g.id, none: g.none, name: g.none ? tr('noneName') : tr('townName', { n: g.members[0] }), members: g.members, reqIds,
+      text: g.none ? tr('noneText') : tr('groupText', { list, n: g.members.length }), residents: rs };
+  });
+  const townOf = new Map(towns.flatMap((t) => t.members.map((m) => [m, t.id])));
   const roads = [];
-  const byEntity = new Set(ents.map((e) => e.name));
-  for (const r of model.entities?.relations || []) if (r.scope === 'entity' && byEntity.has(r.from) && byEntity.has(r.to)) roads.push({ from: 'ent:' + r.from, to: 'ent:' + r.to, kind: r.kind });
+  const seenRel = new Set();
+  for (const r of rels) { const k = [r.from, r.to].sort().join('>') + r.kind; if (!seenRel.has(k)) { seenRel.add(k); roads.push({ from: 'ent:' + r.from, to: 'ent:' + r.to, kind: r.kind }); } }
   const seen = new Set();
   for (const r of reqs) for (const e of r.entities || []) {
-    const k = r.goal + '>' + e;
-    if (r.goal && byEntity.has(e) && goalIds.has(r.goal) && !seen.has(k)) { seen.add(k); roads.push({ from: r.goal, to: 'ent:' + e, kind: 'goal' }); }
+    const t = townOf.get(e), k = r.goal + '>' + t;
+    if (r.goal && t && goalIds.has(r.goal) && !seen.has(k)) { seen.add(k); roads.push({ from: r.goal, to: t, kind: 'goal' }); }
   }
-  return { castles, towns, roads };
+  return { castles, towns, residents, roads };
 }
 
 // ---------------------------------------------------------------- pixel art (drawn with rectangles; no image files)
@@ -143,14 +153,15 @@ export function mount(host) {
   if (!ctx2d || !d || missing) return mountFallback(host, data, missing ? tr('fbNone', { what: tr(missing) }) : tr('fbCtx'));
 
   const world = buildWorld(data.castles, data.towns);
-  const placeById = new Map(world.places.map((p) => [p.id, p]));
+  const placeById = new Map([...world.places, ...world.residents].map((p) => [p.id, p]));
   const reduce = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const audio = createAudio({ initialMuted: INITIAL_MUTED });
 
   // start at the selected entity's town (NFR-UX-006: the selection survives the switch), else on the road below the castles
-  const sel = zoomView.selected ? placeById.get('ent:' + zoomView.selected) : null;
+  const sel = zoomView.selected ? world.residents.find((p) => p.id === 'ent:' + zoomView.selected) : null;
   const player = sel ? { x: sel.x, y: sel.y, dir: 'down' } : { ...world.start, dir: 'down' };
-  const npcs = world.places.map((p) => ({ kind: p.kind === 'castle' ? 'guide' : 'villager', x: p.x + 1, y: p.y, dir: 'left', place: p.id }));
+  const npcs = [...world.places.filter((p) => p.kind === 'castle').map((p) => ({ kind: 'guide', x: p.x + 1, y: p.y, dir: 'left', place: p.id })),
+    ...world.residents.map((p) => ({ kind: 'villager', x: p.x, y: p.y, dir: 'left', place: p.id }))];
   let anim = null, frame = 0, lastStep = 0, shiftPure = false;
   const ui = { dialog: null, menu: null, help: false, msg: '' };       // dialog: {place, full, shown, done} ; menu: {kind, items, idx}
   let dead = false, raf = 0, dirty = true, W = 0, H = 0, lastDraw = 0, fpsFrames = 0, fpsT = performance.now(), fps = 60, drawMs = 0, ambient = 0, typeT = 0;
@@ -172,10 +183,14 @@ export function mount(host) {
   const heading = root.querySelector('h1');
 
   let altLang = null;
-  const scene = () => { const p = placeAt(world, player.x, player.y); return p ? p.kind : 'field'; };
+  const scene = () => { const p = placeAt(world, player.x, player.y); return p ? p.kind : world.residents.some((r) => r.x === player.x && r.y === player.y) ? 'town' : 'field'; };
   const say = (s) => { live.textContent = ''; setTimeout(() => { if (!dead) live.textContent = s; }, 30); };
 
-  function placeText(p) { return `${tr(p.kind)} ${p.name}（${p.kind === 'castle' ? tr('goal') : tr('entity')} ${p.id}）`; }
+  function placeText(p) {
+    if (p.kind === 'resident') return `${tr('villager')} ${p.name}（${tr('entity')} ${p.id}）`;
+    if (p.kind === 'town') return `${tr('town')} ${p.name}（${tr('group')} ${p.id}）`;
+    return `${tr('castle')} ${p.name}（${tr('goal')} ${p.id}）`;
+  }
   function fullText(p) {
     const n = p.reqIds.length;
     return [placeText(p), p.text || tr('nodesc'), n ? tr('reqs', { n }) + '　' + tr('repr', { ids: p.reqIds.slice(0, 3).join('、') }) : tr('noreq')].join('\n');
@@ -190,14 +205,14 @@ export function mount(host) {
     soundBtn.setAttribute('aria-pressed', muted ? 'false' : 'true');
     soundBtn.title = tr('soundBtn');
     legend.textContent = tr('legend');
-    const p = placeAt(world, player.x, player.y);
-    posEl.textContent = `${tr('pos')}: ${p ? tr('at', { k: tr(p.kind), n: p.name }) : tr('field')} (${player.x}, ${player.y})`;
+    const p = placeAt(world, player.x, player.y), res = world.residents.find((q) => q.x === player.x && q.y === player.y);
+    posEl.textContent = `${tr('pos')}: ${p ? tr('at', { k: tr(p.kind), n: p.name }) : res ? tr('with', { k: tr('villager'), n: res.name }) : tr('field')} (${player.x}, ${player.y})`;
     if (altLang !== lang()) { altLang = lang(); alt.replaceChildren(el('summary', {}, tr('alt')), altTable()); }   // the table only changes with the language
   }
   function altTable() {
     return el('div', {},
       el('table', { class: 'tbl' }, el('thead', {}, el('tr', {}, [tr('cols'), tr('kind'), tr('where'), tr('rel')].map((x) => el('th', {}, x)))),
-        el('tbody', {}, world.places.map((p) => el('tr', { 'data-place': p.id }, el('td', {}, `${p.name} / ${p.id.replace(/^ent:/, '')}`), el('td', {}, tr(p.kind)), el('td', {}, `${p.x}, ${p.y}`), el('td', {}, p.reqIds.length ? p.reqIds.join(', ') : '—'))))),
+        el('tbody', {}, [...world.places, ...world.residents].map((p) => el('tr', { 'data-place': p.id }, el('td', {}, `${p.name} / ${p.id.replace(/^ent:/, '')}`), el('td', {}, tr(p.kind === 'resident' ? 'villager' : p.kind)), el('td', {}, `${p.x}, ${p.y}`), el('td', {}, p.reqIds.length ? p.reqIds.join(', ') : '—'))))),
       el('p', { class: 'mini' }, `${tr('roads')}: ${data.roads.length}`),
       el('ul', { class: 'mini rpg-roads' }, data.roads.slice(0, 200).map((rd) => el('li', {}, `${rd.from.replace(/^ent:/, '')} → ${rd.to.replace(/^ent:/, '')}`))));
   }
@@ -238,7 +253,7 @@ export function mount(host) {
   function setScene() { audio.setScene(scene()); }
   function toggleSound() { audio.setMuted(!audio.muted); audio.play('confirm'); refresh(); say(`${tr('sound')}: ${audio.muted ? tr('off') : tr('on')}`); }
   function openDialog(p) {
-    if (p.kind === 'town' && p.id.startsWith('ent:')) zoomView.selected = p.id.slice(4);        // the selection follows the talk (NFR-UX-006)
+    if (p.kind === 'resident') zoomView.selected = p.id.slice(4);        // the selection follows the talk (NFR-UX-006)
     const full = fullText(p);
     ui.dialog = { place: p, full, shown: reduce() ? full.length : 0, done: reduce() };
     audio.play('confirm'); refresh(); say(tr('talk', { n: p.name }) + ' ' + full.replace(/\n/g, ' '));
@@ -265,6 +280,7 @@ export function mount(host) {
       audio.play('move'); setScene(); refresh();
       const p = placeAt(world, player.x, player.y);
       if (p) say(tr('at', { k: tr(p.kind), n: p.name }));
+      else { const rs = world.residents.find((q) => q.x === player.x && q.y === player.y); if (rs) say(tr('with', { k: tr('villager'), n: rs.name })); }
     } else { audio.play('blocked'); dirty = true; }
   }
   function pressA() {
@@ -274,7 +290,7 @@ export function mount(host) {
       if (!dlg.done) { dlg.shown = dlg.full.length; dlg.done = true; audio.play('confirm'); refresh(); } else closeDialog();
       return;
     }
-    const p = placeAt(world, player.x, player.y);
+    const p = world.residents.find((r) => r.x === player.x && r.y === player.y) || placeAt(world, player.x, player.y);
     if (p) openDialog(p);
     else {
       const near = npcs.find((n) => n.x === player.x + DIRS[player.dir][0] && n.y === player.y + DIRS[player.dir][1]);
@@ -386,7 +402,7 @@ export function mount(host) {
       const x = npc.x * TILE - camX, y = npc.y * TILE - camY;
       drawChar(ctx, npc.kind, npc.dir, reduce() ? 0 : (ambient >> 1) & 1, x, y, TILE);
       ctx.fillStyle = 'rgba(10,16,34,.8)'; ctx.fillRect(x - 2, y - 11, TILE + 4, 11);
-      ctx.fillStyle = '#fff'; ctx.fillText(tr(npc.kind), x + TILE / 2, y - 2);
+      ctx.fillStyle = '#fff'; ctx.fillText(npc.kind === 'villager' ? (placeById.get(npc.place)?.name || '').slice(0, 6) : tr(npc.kind), x + TILE / 2, y - 2);
     }
     drawChar(ctx, 'hero', player.dir, anim && !reduce() ? frame : 0, vp.x * TILE - camX, vp.y * TILE - camY, TILE);
     drawMs_set(performance.now() - t0);
@@ -423,6 +439,7 @@ export function mount(host) {
       map: { width: world.width, height: world.height, blocked: [...world.blocked].map((k) => k.split(',').map(Number)) },
       player: { x: player.x, y: player.y, dir: player.dir },
       places: world.places.map((p) => ({ id: p.id, kind: p.kind, name: p.name, x: p.x, y: p.y })),
+      residents: world.residents.map((p) => ({ id: p.id, kind: 'resident', name: p.name, town: p.town, x: p.x, y: p.y })),
       roads: data.roads.map((x) => ({ ...x })),
       characters: [{ kind: 'hero', role: tr('hero'), x: player.x, y: player.y }, ...npcs.map((n) => ({ kind: n.kind, role: tr(n.kind), x: n.x, y: n.y }))],
       dialog: { open: !!ui.dialog, placeId: ui.dialog?.place.id ?? null, complete: !!ui.dialog?.done },
@@ -445,7 +462,7 @@ export function mount(host) {
 // AC-290: no goals / no entities / no 2D canvas -> show the 2D map with the reason and a table, never an error.
 function mountFallback(host, data, reason) {
   const inner = mount2d(host);
-  const rows = [...data.castles.map((c) => [c.name, tr('castle'), c.reqIds.length]), ...data.towns.map((c) => [c.name, tr('town'), c.reqIds.length])];
+  const rows = [...data.castles.map((c) => [c.name, tr('castle'), c.reqIds.length]), ...data.towns.map((c) => [c.name, tr('town'), c.reqIds.length]), ...data.residents.map((c) => [c.name, tr('villager'), c.reqIds.length])];
   const box = el('div', { class: 'warnbox', role: 'alert', 'data-testid': 'rpg-fallback', style: { position: 'absolute', left: '14px', top: '84px', right: '14px', zIndex: 9, maxHeight: '40%', overflow: 'auto' } },
     el('p', {}, reason),
     el('details', { class: 'sz-alt' }, el('summary', {}, tr('alt')),
