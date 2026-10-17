@@ -91,6 +91,12 @@ function problemPanel() {
     return statePanel({ state: 'empty', heading: t('state.empty.h'), description: t('state.empty.d'),
       action: el('button', { type: 'button', class: 'btn ghost', onclick: () => document.getElementById('repoBtn').click() }, icon('folder', { size: 16 }), t('state.empty.a')) });
   }
+  // 検索ボックスの語に一致する項目が 0 件のときも「空」として同じ構造で示す（入力は消さない）
+  const typed = (document.getElementById('q')?.value || '').trim();
+  if (store.model && typed && !/^[>＞]/.test(typed) && store.search(typed, 1).total === 0) {
+    return statePanel({ state: 'empty', heading: t('state.nohit.h'), description: t('state.nohit.d'),
+      action: el('button', { type: 'button', class: 'btn ghost', onclick: () => { const qb = document.getElementById('q'); qb.value = ''; route(); qb.focus(); } }, icon('search', { size: 16 }), t('state.nohit.a')) });
+  }
   return null;
 }
 async function checkModel() {
