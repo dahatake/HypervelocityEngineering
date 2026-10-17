@@ -52,6 +52,8 @@ function linkifyText(node) {
   }
   if (nameRe) for (const m of s.matchAll(nameRe)) if (!hits.some((h) => m.index < h.i + h.len && h.i < m.index + m[0].length)) hits.push({ i: m.index, len: m[0].length, id: nameIndex.get(m[0]) });
   if (!hits.length) return;
+  // 除外対象（リンク・ボタンなど）かどうかは、ヒットがあったノードだけで調べる（closest は高価）
+  if (!node.parentElement || node.parentElement.closest(SKIP)) return;
   hits.sort((a, b) => a.i - b.i);
   const svg = node.parentElement.namespaceURI === SVG_NS;
   const frag = document.createDocumentFragment();
@@ -69,9 +71,7 @@ function linkifyText(node) {
 export function linkify(root) {
   if (!store.model || !root || root.nodeType !== 1) return;
   indexes();
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode: (t) => (t.parentElement && !t.parentElement.closest(SKIP) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
-  });
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const nodes = [];
   while (walker.nextNode()) nodes.push(walker.currentNode);
   nodes.forEach(linkifyText);
