@@ -264,7 +264,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ---------------------------------------------------------------- chrome
-// テーマ（FR-1047 AC-259/260）: ライト・ダーク・システム。保存しない。切替は再読込なしで入力・選択・絞り込み・配置を保つ。
+// テーマ（FR-1047 AC-259/260）: ライト・ダーク・システム。名前だけを保存・復元する（AC-260）。切替は再読込なしで入力・選択・絞り込み・配置を保つ。
 const themeLive = document.getElementById('themeLive');
 function renderTheme(announce) {
   const cur = window.eabkTheme.get();

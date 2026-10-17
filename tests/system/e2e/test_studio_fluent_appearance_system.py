@@ -3,8 +3,8 @@ NFR-PERF-006 (AC-275, AC-276): Fluent 2 appearance of EABK Studio.
 
 Expected values come only from the acceptance criteria in docs/requirements-definition.md and
 PARAM-006/007/021/022/028..039.  The implementation is NOT the oracle.
-AC-260 is BLOCKED (Q-015: whether the theme choice may be stored) and has no test here.
-(Only its "does not store" half is covered by AC-259's default-follows-OS test being run on a fresh context.)
+AC-260 (Q-015 A 採用: テーマ名だけをブラウザーのローカル保存に保存し、再読込・次回起動で復元。未選択はシステム連動)
+のケースは test_ac260_* 。AC-259 の既定テスト（新しい context でシステム連動）は「未選択」の確認として残る。
 
 PROVISIONAL CONTRACT (仮置き。実装者が確認し、食い違えば CONFLICT として返す。この oracle は実装に合わせて直さない):
   - スタイル: EABK-Studio/web/*.css（index.html から読む全 CSS）。トークンは CSS カスタムプロパティで、
@@ -193,6 +193,114 @@ def test_ac259_every_color_token_has_a_value_in_both_themes(page):
         empty = page.evaluate(
             "(n) => n.filter(x => !getComputedStyle(document.documentElement).getPropertyValue(x).trim())", names)
         assert not empty, f"{choice}: 値の無い色トークン {empty}"
+
+
+# FR-1047 AC-260
+def _local_storage(page):
+    return page.evaluate("() => Object.fromEntries(Object.keys(localStorage).map(k => [k, localStorage.getItem(k)]))")
+
+
+def _bare(v):
+    return str(v).strip().strip('"').strip("'")
+
+
+# FR-1047 AC-260 (保存・再読込・次回起動で復元)
+@pytest.mark.parametrize("choice", ["light", "dark", "system"])
+def test_ac260_choice_is_restored_after_reload_and_next_launch(browser, studio_url, choice):
+    ctx = browser.new_context(color_scheme="light")
+    page = ctx.new_page()
+    page.goto(studio_url)
+    page.wait_for_load_state("networkidle")
+    # 既定が light/system なので、dark を選んだ後に目的の選択へ（system 確認のため一度ほかを選ぶ）
+    _theme(page, "dark" if choice != "dark" else "light")
+    _theme(page, choice)
+    page.reload()
+    page.wait_for_load_state("networkidle")
+    assert page.locator("html").get_attribute("data-theme-choice") == choice
+    expect(page.locator(f'[data-testid="theme-toggle"] [data-theme-choice="{choice}"]')).to_have_attribute("aria-pressed", "true")
+    expect(page.locator("html")).to_have_attribute("data-theme", "light" if choice in ("light", "system") else "dark")
+    page.close()
+    page2 = ctx.new_page()  # 次回起動（同じブラウザープロファイル）
+    page2.goto(studio_url)
+    page2.wait_for_load_state("networkidle")
+    assert page2.locator("html").get_attribute("data-theme-choice") == choice
+    ctx.close()
+
+
+# FR-1047 AC-260 (保存するのはテーマ名だけ・ローカル保存に入る)
+def test_ac260_only_theme_name_is_written_to_local_storage(browser, studio_url):
+    ctx = browser.new_context(color_scheme="light")
+    page = ctx.new_page()
+    page.goto(studio_url)
+    page.wait_for_load_state("networkidle")
+    before = _local_storage(page)
+    _theme(page, "dark")
+    after = _local_storage(page)
+    changed = {k: v for k, v in after.items() if before.get(k) != v}
+    assert changed, "テーマ選択がブラウザーのローカル保存に保存されない"
+    assert all(_bare(v) == "dark" for v in changed.values()), f"テーマ名以外が保存された: {changed}"
+    assert not ctx.cookies(), "Cookie に書いた"
+    ctx.close()
+
+
+# FR-1047 AC-260 (リポジトリ・外部には書かない)
+def test_ac260_choosing_theme_writes_nothing_to_repository_or_outside(browser, studio_url):
+    ctx = browser.new_context()
+    page = ctx.new_page()
+    outside = []
+    page.on("request", lambda r: outside.append(r.url) if not r.url.startswith(studio_url.split("#")[0].rstrip("/")) and not r.url.startswith(("data:", "blob:")) else None)
+    page.goto(studio_url)
+    page.wait_for_load_state("networkidle")
+    before_files = _repository_files()
+    before_mgmt = _management_fingerprints()
+    writes = []
+    page.on("request", lambda r: writes.append((r.method, r.url)) if r.method not in ("GET", "HEAD") else None)
+    for c in ("dark", "light", "system", "dark"):
+        _theme(page, c)
+    page.reload()
+    page.wait_for_load_state("networkidle")
+    assert _repository_files() == before_files, "リポジトリのファイルが変わった"
+    assert _management_fingerprints() == before_mgmt
+    assert not writes, f"サーバーへ書き込み要求: {writes}"
+    assert not outside, f"外部への通信: {outside}"
+    ctx.close()
+
+
+# FR-1047 AC-260 (異常系: 別のブラウザーコンテキストには引き継がれず、未選択はシステム連動)
+def test_ac260_choice_not_carried_to_another_context_which_follows_os(browser, studio_url):
+    ctx1 = browser.new_context(color_scheme="light")
+    p1 = ctx1.new_page()
+    p1.goto(studio_url)
+    p1.wait_for_load_state("networkidle")
+    _theme(p1, "dark")
+    expect(p1.locator("html")).to_have_attribute("data-theme", "dark")
+    ctx2 = browser.new_context(color_scheme="light")
+    p2 = ctx2.new_page()
+    p2.goto(studio_url)
+    p2.wait_for_load_state("networkidle")
+    assert p2.locator("html").get_attribute("data-theme-choice") == "system"
+    assert p2.locator("html").get_attribute("data-theme") == "light"
+    ctx1.close()
+    ctx2.close()
+
+
+# FR-1047 AC-260 (異常系: 保存値が壊れていても落ちず、システム連動で表示)
+@pytest.mark.parametrize("bad", ["purple", "", "{}"])
+def test_ac260_invalid_stored_value_falls_back_to_system(browser, studio_url, bad):
+    ctx = browser.new_context(color_scheme="dark")
+    page = ctx.new_page()
+    page.goto(studio_url)
+    page.wait_for_load_state("networkidle")
+    _theme(page, "light")
+    keys = [k for k, v in _local_storage(page).items() if _bare(v) == "light"]
+    assert keys, "テーマ名が保存されていない"
+    for k in keys:
+        page.evaluate("([k, v]) => localStorage.setItem(k, v)", [k, bad])
+    page.reload()
+    page.wait_for_load_state("networkidle")
+    assert page.locator("html").get_attribute("data-theme-choice") == "system"
+    assert page.locator("html").get_attribute("data-theme") == "dark"
+    ctx.close()
 
 
 # FR-1047 AC-261
