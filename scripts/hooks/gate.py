@@ -150,8 +150,9 @@ def run_is_fresh(meta: dict, minutes: int = 10) -> bool:
 
 
 class Ctx:
-    def __init__(self, data: dict):
+    def __init__(self, data: dict, event: str = ""):
         self.data = data
+        self.event = event
         cwd = g(data, "cwd", default=os.getcwd())
         self.cwd = Path(cwd).resolve()
         self.root = h.repo_root(self.cwd)
@@ -162,9 +163,13 @@ class Ctx:
         self.run_id = h.current_run(self.croot, self.cfg)
         self.meta = h.load_meta(self.croot, self.cfg, self.run_id) if self.run_id else {}
         self.run_active = bool(self.run_id and self.meta.get("status") == "active")
-        if not self.run_active and (g(data, "toolName", "tool_name", default="") or self.sid):
+        if not self.run_active and (g(data, "toolName", "tool_name", default="") or self.sid or self.is_subagent_event):
             self.bind_sibling_run()
         self.land_pending: Optional[Tuple[Path, str, dict]] = None
+
+    @property
+    def is_subagent_event(self) -> bool:
+        return self.event in ("subagent-start", "subagent-stop")
 
     @property
     def sid(self) -> str:
@@ -224,7 +229,7 @@ class Ctx:
     def bind_sibling_run(self) -> None:
         # The session works inside its run worktree while the hook runs in the primary checkout. Pick the run that
         # belongs to this session; never another session's run (several runs may be active at once).
-        owned, free = [], []
+        owned, free, others = [], [], []
         for p in self.sibling_runs():
             rid = h.current_run(p, self.cfg)
             meta = h.load_meta(p, self.cfg, rid) if rid else {}
@@ -235,8 +240,14 @@ class Ctx:
                 owned.append((meta.get("started_at", ""), p))
             elif not owner:
                 free.append((meta.get("started_at", ""), p))
+            else:
+                others.append((meta.get("started_at", ""), p))
         if owned:
             self.bind_to(max(owned)[1])
+            return
+        if self.is_subagent_event and not self.sid and not free and len(others) == 1:
+            # a subagent hook may carry no session id; with exactly one active run it can only belong to that run
+            self.bind_to(others[0][1])
             return
         if not free:
             return
@@ -747,7 +758,7 @@ def main() -> int:
     event = sys.argv[1] if len(sys.argv) > 1 else ""
     data = payload()
     try:
-        ctx = Ctx(data)
+        ctx = Ctx(data, event)
         if not ctx.cfg["gates"].get("enabled", True):
             emit({})
             return 0

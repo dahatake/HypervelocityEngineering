@@ -201,3 +201,25 @@ def test_agent_stop_blocks_until_finished_run_is_landed(sample):
     assert sample.gate("agent-stop", {"sessionId": "other"}) == {}
     assert py(wt, "run-state.py", "land", "--wait", "5").returncode == 0
     assert sample.gate("agent-stop", {"sessionId": "sA"}) == {}
+
+def test_subagent_start_without_session_binds_sole_owned_run(sample):
+    wt = start_in_worktree(sample)
+    patch_meta(wt, session_id="sA")
+    sample.gate("subagent-start", {"agentName": "rd-author"})
+    log = (wt / "work" / ".ebak" / "gate.log").read_text(encoding="utf-8")
+    assert "START rd-author" in log
+    assert json.loads((wt / "work" / ".ebak" / "active-agents.json").read_text(encoding="utf-8"))[0]["name"] == "rd-author"
+    res = sample.gate("pre-tool", {"sessionId": "sA", "toolName": "edit", "toolArgs": {
+        "path": str(wt / "docs" / "requirements-definition.md"), "old_str": "a", "new_str": "b"}})
+    assert res == {}
+    sample.gate("subagent-stop", {"agentName": "rd-author"})
+    assert "STOP rd-author" in (wt / "work" / ".ebak" / "gate.log").read_text(encoding="utf-8")
+
+
+def test_subagent_start_without_session_does_not_pick_among_several_runs(sample):
+    a, b = start_in_worktree(sample), start_in_worktree(sample)
+    patch_meta(a, session_id="sA")
+    patch_meta(b, session_id="sB")
+    sample.gate("subagent-start", {"agentName": "rd-author"})
+    for w in (a, b):
+        assert not (w / "work" / ".ebak" / "active-agents.json").exists()
