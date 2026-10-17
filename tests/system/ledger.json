@@ -78,7 +78,14 @@
     "AC-240": "sha256:c03121f02106311a",
     "AC-241": "sha256:0699afdfc9c2e349",
     "AC-237": "sha256:843f6f2d5d402e43",
-    "AC-238": "sha256:8a719013d3d38992"
+    "AC-238": "sha256:8a719013d3d38992",
+    "AC-277": "sha256:377fe370bc6ed13c",
+    "AC-278": "sha256:eda979d1a67b813f",
+    "AC-280": "sha256:2e038f8042a78fad",
+    "AC-281": "sha256:becdf6085063094f",
+    "AC-283": "sha256:da58c4870e1b04cb",
+    "AC-284": "sha256:d82b1f6154debf33",
+    "AC-285": "sha256:ef944f2578a4f90d"
   },
   "cases": [
     {
@@ -4063,6 +4070,181 @@
       "history": [
         {
           "at": "2026-10-16T09:09:57+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-112",
+      "requirement_ids": [
+        "FR-1050"
+      ],
+      "ac_ids": [
+        "AC-277"
+      ],
+      "title": "表の全種別の表セルの実在 ID はすべてリンク／実在しない ID はリンクにしない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac277\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:20:29+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-113",
+      "requirement_ids": [
+        "FR-1050"
+      ],
+      "ac_ids": [
+        "AC-278"
+      ],
+      "title": "外部連携の一覧・詳細の関連要求・AC・INT ID はリンク／未解決はリンクにしない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac278\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:20:32+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-114",
+      "requirement_ids": [
+        "FR-1051"
+      ],
+      "ac_ids": [
+        "AC-280"
+      ],
+      "title": "表の種別が 要求・設計・証跡・運用 の 4 グループ見出しの下に束ねられる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac280\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:20:34+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-115",
+      "requirement_ids": [
+        "FR-1051"
+      ],
+      "ac_ids": [
+        "AC-281"
+      ],
+      "title": "表の画面名が JA・EN のナビ・タイトルで一つの語に統一される",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac281\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:20:37+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-116",
+      "requirement_ids": [
+        "FR-1052"
+      ],
+      "ac_ids": [
+        "AC-283"
+      ],
+      "title": "エンティティ詳細にパンくず（nav・aria-current・一覧へ戻る a）がある",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac283\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:20:40+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-117",
+      "requirement_ids": [
+        "FR-1052"
+      ],
+      "ac_ids": [
+        "AC-284"
+      ],
+      "title": "ダッシュボードの図の区分がフォーカス可・名前と数値つき・数値ラベル常時表示",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac284\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:20:42+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-118",
+      "requirement_ids": [
+        "FR-1052"
+      ],
+      "ac_ids": [
+        "AC-285"
+      ],
+      "title": "外部連携の各行にキーボードで開ける「詳細」があり行クリックも維持／0 件で偽の操作なし",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac285\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:20:45+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
