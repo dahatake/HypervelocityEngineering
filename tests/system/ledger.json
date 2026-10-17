@@ -4726,7 +4726,7 @@
       "ac_ids": [
         "AC-323"
       ],
-      "title": "情報デザイン: 領域化した節の直下の項目数が上限超なら警告（FR-1060 後）",
+      "title": "情報デザイン: 領域化済みの節だけ項目数が上限(PARAM-043)超で警告（境界20/21・領域化前は無警告）",
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac323\" -q",
       "canary": false,
@@ -4746,6 +4746,24 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "AC-323 の段階導入の対象は FR-1060（承認待ち）の割り当て表の後。判定に必要な割り当て表の書式が未定"
+        },
+        {
+          "at": "2026-10-17T17:43:48+09:00",
+          "by": "test-designer",
+          "change": "title: '情報デザイン: 領域化した節の直下の項目数が上限超なら警告（FR-1060 後）' -> '情報デザイン: 領域化済みの節だけ項目数が上限(PARAM-043)超で警告（境界20/21・領域化前は無警告）'",
+          "reason": "FR-1060 承認・割り当て表確定。期待値を確定し blocked 解除"
+        },
+        {
+          "at": "2026-10-17T17:43:50+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "unblock"
+        },
+        {
+          "at": "2026-10-17T17:44:10+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "FR-1060 承認で期待値は確定しテストは緑だが、検証レベル=integration のため System Test の対象外（CHK-10）。統合テストとして残す"
         }
       ]
     },
@@ -4758,7 +4776,7 @@
       "ac_ids": [
         "AC-326"
       ],
-      "title": "階層化: 割り当て表と領域の欄の一致検査、領域名変更で ID 不変（FR-1060 後）",
+      "title": "領域の割り当て表と欄の一致検査（不一致・表なし・欄なしを位置つき列挙、名称変更でID不変）",
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac326\" -q",
       "canary": false,
@@ -4784,6 +4802,24 @@
           "by": "rdfix",
           "change": "requirement_ids: ['FR-1057'] -> ['FR-1057', 'FR-1060']",
           "reason": "rdfix: 受入基準の「対応する要求」と要求定義書に合わせる"
+        },
+        {
+          "at": "2026-10-17T17:43:49+09:00",
+          "by": "test-designer",
+          "change": "title: '階層化: 割り当て表と領域の欄の一致検査、領域名変更で ID 不変（FR-1060 後）' -> '領域の割り当て表と欄の一致検査（不一致・表なし・欄なしを位置つき列挙、名称変更でID不変）'",
+          "reason": "FR-1060 承認・割り当て表確定。期待値を確定し blocked 解除"
+        },
+        {
+          "at": "2026-10-17T17:43:51+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "unblock"
+        },
+        {
+          "at": "2026-10-17T17:44:11+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "FR-1060 承認で期待値は確定しテストは緑だが、検証レベル=integration のため System Test の対象外（CHK-10）。統合テストとして残す"
         }
       ]
     }
