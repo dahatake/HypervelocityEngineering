@@ -5,7 +5,7 @@
       {
         "type": "command",
         "bash": "if command -v python3 >/dev/null 2>&1; then python3 -S scripts/hooks/gate.py session-start; else python -S scripts/hooks/gate.py session-start; fi",
-        "powershell": "python -S scripts/hooks/gate.py session-start",
+        "powershell": "$p = if (Get-Command python -ErrorAction SilentlyContinue) { 'python' } else { 'py' }; & $p -S scripts/hooks/gate.py session-start",
         "cwd": ".",
         "timeoutSec": 20
       }
@@ -14,7 +14,7 @@
       {
         "type": "command",
         "bash": "if command -v python3 >/dev/null 2>&1; then python3 -S scripts/hooks/gate.py user-prompt; else python -S scripts/hooks/gate.py user-prompt; fi",
-        "powershell": "python -S scripts/hooks/gate.py user-prompt",
+        "powershell": "$p = if (Get-Command python -ErrorAction SilentlyContinue) { 'python' } else { 'py' }; & $p -S scripts/hooks/gate.py user-prompt",
         "cwd": ".",
         "timeoutSec": 20
       }
@@ -23,7 +23,7 @@
       {
         "type": "command",
         "bash": "if command -v python3 >/dev/null 2>&1; then python3 -S scripts/hooks/gate.py pre-tool; else python -S scripts/hooks/gate.py pre-tool; fi",
-        "powershell": "python -S scripts/hooks/gate.py pre-tool",
+        "powershell": "$p = if (Get-Command python -ErrorAction SilentlyContinue) { 'python' } else { 'py' }; & $p -S scripts/hooks/gate.py pre-tool",
         "cwd": ".",
         "timeoutSec": 20
       }
@@ -32,7 +32,7 @@
       {
         "type": "command",
         "bash": "if command -v python3 >/dev/null 2>&1; then python3 -S scripts/hooks/gate.py subagent-start; else python -S scripts/hooks/gate.py subagent-start; fi",
-        "powershell": "python -S scripts/hooks/gate.py subagent-start",
+        "powershell": "$p = if (Get-Command python -ErrorAction SilentlyContinue) { 'python' } else { 'py' }; & $p -S scripts/hooks/gate.py subagent-start",
         "cwd": ".",
         "timeoutSec": 20
       }
@@ -41,7 +41,7 @@
       {
         "type": "command",
         "bash": "if command -v python3 >/dev/null 2>&1; then python3 -S scripts/hooks/gate.py subagent-stop; else python -S scripts/hooks/gate.py subagent-stop; fi",
-        "powershell": "python -S scripts/hooks/gate.py subagent-stop",
+        "powershell": "$p = if (Get-Command python -ErrorAction SilentlyContinue) { 'python' } else { 'py' }; & $p -S scripts/hooks/gate.py subagent-stop",
         "cwd": ".",
         "timeoutSec": 900
       }
@@ -50,7 +50,7 @@
       {
         "type": "command",
         "bash": "if command -v python3 >/dev/null 2>&1; then python3 -S scripts/hooks/gate.py agent-stop; else python -S scripts/hooks/gate.py agent-stop; fi",
-        "powershell": "python -S scripts/hooks/gate.py agent-stop",
+        "powershell": "$p = if (Get-Command python -ErrorAction SilentlyContinue) { 'python' } else { 'py' }; & $p -S scripts/hooks/gate.py agent-stop",
         "cwd": ".",
         "timeoutSec": 30
       }

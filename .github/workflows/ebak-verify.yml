@@ -19,6 +19,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: install pytest (default verify command toolkit-unit)
+        run: python -m pip install pytest
       # Add the toolchain your verify.commands need (for example actions/setup-node + npm ci) above this step.
       - name: verify
         run: bash scripts/verify.sh --show-warnings
