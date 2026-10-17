@@ -116,7 +116,8 @@
     "AC-273": "sha256:acd70121105304c3",
     "AC-274": "sha256:c7d8170205aebbd7",
     "AC-275": "sha256:aa47a8147dcd4cc5",
-    "AC-276": "sha256:9653cb00e77a875e"
+    "AC-276": "sha256:9653cb00e77a875e",
+    "AC-260": "sha256:6e0e235f528c76de"
   },
   "cases": [
     {
@@ -6060,6 +6061,131 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "FR-1060 承認で期待値は確定しテストは緑だが、検証レベル=integration のため System Test の対象外（CHK-10）。統合テストとして残す"
+        }
+      ]
+    },
+    {
+      "id": "E2E-160",
+      "requirement_ids": [
+        "FR-1047"
+      ],
+      "ac_ids": [
+        "AC-260"
+      ],
+      "title": "テーマ選択が再読込・次回起動で復元される",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac260_choice_is_restored_after_reload_and_next_launch\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T21:03:12+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-161",
+      "requirement_ids": [
+        "FR-1047"
+      ],
+      "ac_ids": [
+        "AC-260"
+      ],
+      "title": "ローカル保存にはテーマ名だけが入る",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac260_only_theme_name_is_written_to_local_storage\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T21:03:17+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-162",
+      "requirement_ids": [
+        "FR-1047"
+      ],
+      "ac_ids": [
+        "AC-260"
+      ],
+      "title": "テーマ選択でリポジトリ・外部に書かない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac260_choosing_theme_writes_nothing_to_repository_or_outside\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T21:03:21+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-163",
+      "requirement_ids": [
+        "FR-1047"
+      ],
+      "ac_ids": [
+        "AC-260"
+      ],
+      "title": "別コンテキストへ引き継がれずシステム連動",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac260_choice_not_carried_to_another_context_which_follows_os\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T21:03:24+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-164",
+      "requirement_ids": [
+        "FR-1047"
+      ],
+      "ac_ids": [
+        "AC-260"
+      ],
+      "title": "不正な保存値はシステム連動に戻る",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac260_invalid_stored_value_falls_back_to_system\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T21:03:29+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
         }
       ]
     }
