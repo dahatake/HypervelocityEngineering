@@ -1,0 +1,284 @@
+/* Design tokens of EABK Studio (FR-1047, NFR-A11Y-001).  Fluent 2 に沿う名前付きトークンを 1 か所（このファイルの :root と各テーマ）に定義する。
+   - 色は --color-*（前景 fg・背景 bg・罫線 border・フォーカス focus・状態 status）。データ可視化の系列色は --viz-*、3D 描画の素材色は --scene-*（例外。下の一覧がすべて）。
+   - 余白・大きさ・角丸は 4px（PARAM-030）の倍数（罫線 1px・2px を除く）。文字は Segoe UI Variable を先頭とする OS 備え付けの書体だけ。
+   - テーマは <html data-theme="light|dark">（解決後）と data-theme-choice="light|dark|system"（選択。保存しない）で切り替える。
+   - 後続の項目（外観・モーション）もこの名前を使う。名前を変えない。 */
+
+:root {
+  /* ---- 書体・タイプランプ（PARAM-035: 本文 14px / PARAM-036: 最小 12px） ---- */
+  --font-family-base: "Segoe UI Variable", "Segoe UI", "Yu Gothic UI", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  --font-mono: Consolas, "Cascadia Mono", monospace;
+  --font-size-caption: 12px;
+  --font-size-body: 14px;
+  --font-size-subtitle: 16px;
+  --font-size-title: 20px;
+  --font-size-heading: 24px;
+  --font-size-display: 32px;
+  --line-height-caption: 16px;
+  --line-height-body: 20px;
+  --line-height-subtitle: 24px;
+  --line-height-title: 28px;
+  --line-height-heading: 32px;
+  --line-height-display: 40px;
+  --font-weight-regular: 400;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* ---- 余白・大きさ・角丸（4px グリッド） ---- */
+  --space-0: 0px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --size-target-min: 24px;   /* PARAM-031 */
+  --size-control: 32px;
+  --size-icon-sm: 16px;      /* PARAM-039 */
+  --size-icon-md: 20px;
+  --size-icon-lg: 24px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 1000px;
+  --stroke-thin: 1px;
+  --stroke-thick: 2px;
+  --stroke-focus: 2px;
+
+  /* ---- エレベーション ---- */
+  --shadow-1: 0 1px 2px var(--color-shadow-1);
+  --shadow-2: 0 2px 8px var(--color-shadow-1);
+  --shadow-3: 0 8px 16px var(--color-shadow-2);
+  --shadow-4: 0 16px 32px var(--color-shadow-2);
+
+  /* ---- モーション（1 回 300ms 以内: PARAM-032） ---- */
+  --duration-fast: 100ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+  --ease-standard: cubic-bezier(0.33, 0, 0.67, 1);
+  --ease-decelerate: cubic-bezier(0.1, 0.9, 0.2, 1);
+  --ease-accelerate: cubic-bezier(0.9, 0.1, 1, 0.2);
+
+  /* ---- 色: ライト（既定の値。:root[data-theme="dark"] が上書きする） ---- */
+  color-scheme: light;
+  --color-bg-canvas: #f5f5f5;
+  --color-bg-surface: #ffffff;
+  --color-bg-raised: #fafafa;
+  --color-bg-hover: #ebebeb;
+  --color-bg-selected: #dbe8f7;
+  --color-fg-default: #242424;
+  --color-fg-muted: #424242;
+  --color-fg-subtle: #5c5c5c;
+  --color-fg-link: #115ea3;
+  --color-fg-disabled: #707070;
+  --color-on-accent: #ffffff;
+  --color-accent: #115ea3;
+  --color-accent-hover: #0f548c;
+  --color-border-default: #d1d1d1;
+  --color-border-strong: #707070;
+  --color-focus: #0f3c68;
+  --color-wash-hover: rgba(0, 0, 0, 0.06);
+  --color-wash-selected: rgba(17, 94, 163, 0.14);
+  --color-wash-mark: rgba(255, 185, 0, 0.45);
+  --color-scrim: rgba(0, 0, 0, 0.4);
+  --color-shadow-1: rgba(0, 0, 0, 0.14);
+  --color-shadow-2: rgba(0, 0, 0, 0.2);
+  --color-deco-1: #dbe8f7;
+  --color-deco-2: #ece3f7;
+  --color-deco-3: #f7e3ee;
+  --color-status-success-fg: #0b5a0b;
+  --color-status-success-bg: #dff6dd;
+  --color-status-success-icon: #107c10;
+  --color-status-warning-fg: #6d4300;
+  --color-status-warning-bg: #fff4ce;
+  --color-status-warning-icon: #8a5200;
+  --color-status-danger-fg: #a4081a;
+  --color-status-danger-bg: #fdeaec;
+  --color-status-danger-icon: #c50f1f;
+  --color-status-info-fg: #0f548c;
+  --color-status-info-bg: #deecf9;
+  --color-status-info-icon: #115ea3;
+  --color-status-neutral-fg: #424242;
+  --color-status-neutral-bg: #ebebeb;
+  --color-status-neutral-icon: #616161;
+
+  /* ---- データ可視化の系列色（例外: 色の直値を持ってよい。この一覧がすべて） ---- */
+  --viz-goal: #b86e00;
+  --viz-req: #1f6fd1;
+  --viz-nfr: #007c75;
+  --viz-ac: #6b4fcf;
+  --viz-part: #c0309a;
+  --viz-api: #0f7b4f;
+  --viz-table: #8a6a00;
+  --viz-entity: #c4501f;
+  --viz-file: #5f7385;
+  --viz-test: #1c8a56;
+  --viz-comp: #6b7686;
+  --viz-case: #c4223c;
+  --viz-param: #7a52c8;
+  --viz-question: #c4213c;
+  --viz-persona: #a93fbd;
+  --viz-external: #0b78b8;
+  --viz-accent-2: #7a3fd0;
+  --viz-accent-3: #c0309a;
+  --viz-fk: #c4501f;
+  --viz-ref: #1f6fd1;
+  --viz-use: #5f7385;
+  --viz-node-fill: #e6eefb;
+  --viz-node-stroke: #5b78b0;
+  --viz-node-sel-fill: #cfe3fa;
+  --viz-label-bg: #ffffff;
+  --viz-cluster-fill: rgba(31, 111, 209, 0.08);
+  --viz-cluster-stroke: rgba(60, 90, 160, 0.6);
+  --viz-cluster-faint-fill: rgba(60, 90, 160, 0.04);
+  --viz-cluster-faint-stroke: rgba(60, 90, 160, 0.3);
+  --viz-sep: rgba(60, 90, 160, 0.3);
+  --viz-key: #8a6a00;
+  --viz-warn: #c4223c;
+  --viz-kind-fk-label: #a3400f;
+  --viz-kind-ref-label: #1a58a8;
+  --viz-kind-use-label: #4a5a6e;
+  --viz-text-muted: #4a5a6e;
+  --viz-cluster-name: #2e3f66;
+  --viz-sel: #115ea3;
+  --viz-rel: #8a5200;
+
+  /* ---- 3D 描画の素材色（例外） ---- */
+  --scene-stage-bg: #e8eef8;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg-canvas: #141414;
+  --color-bg-surface: #1f1f1f;
+  --color-bg-raised: #292929;
+  --color-bg-hover: #333333;
+  --color-bg-selected: #112d4a;
+  --color-fg-default: #f5f5f5;
+  --color-fg-muted: #d6d6d6;
+  --color-fg-subtle: #ababab;
+  --color-fg-link: #6cb8ff;
+  --color-fg-disabled: #8a8a8a;
+  --color-on-accent: #0a0a0a;
+  --color-accent: #479ef5;
+  --color-accent-hover: #6cb8ff;
+  --color-border-default: #424242;
+  --color-border-strong: #8a8a8a;
+  --color-focus: #ffffff;
+  --color-wash-hover: rgba(255, 255, 255, 0.08);
+  --color-wash-selected: rgba(71, 158, 245, 0.24);
+  --color-wash-mark: rgba(255, 185, 0, 0.4);
+  --color-scrim: rgba(0, 0, 0, 0.6);
+  --color-shadow-1: rgba(0, 0, 0, 0.5);
+  --color-shadow-2: rgba(0, 0, 0, 0.6);
+  --color-deco-1: #14204a;
+  --color-deco-2: #2a1252;
+  --color-deco-3: #3b1233;
+  --color-status-success-fg: #92e08b;
+  --color-status-success-bg: #0f2e12;
+  --color-status-success-icon: #6ccb5f;
+  --color-status-warning-fg: #ffd66b;
+  --color-status-warning-bg: #3a2a00;
+  --color-status-warning-icon: #f2b134;
+  --color-status-danger-fg: #ff9aa5;
+  --color-status-danger-bg: #3d1016;
+  --color-status-danger-icon: #ff6b7b;
+  --color-status-info-fg: #8ec9ff;
+  --color-status-info-bg: #0f2a45;
+  --color-status-info-icon: #6cb8ff;
+  --color-status-neutral-fg: #d6d6d6;
+  --color-status-neutral-bg: #333333;
+  --color-status-neutral-icon: #ababab;
+
+  --viz-goal: #ffb020;
+  --viz-req: #4f9dff;
+  --viz-nfr: #2fd3c9;
+  --viz-ac: #9b8cff;
+  --viz-part: #ff6bd6;
+  --viz-api: #34e0a1;
+  --viz-table: #ffd166;
+  --viz-entity: #ff8a5c;
+  --viz-file: #8aa1b5;
+  --viz-test: #7ee7a8;
+  --viz-comp: #e4e9f0;
+  --viz-case: #ff5c7a;
+  --viz-param: #c3a6ff;
+  --viz-question: #ff4d6d;
+  --viz-persona: #f5a3ff;
+  --viz-external: #7dd3fc;
+  --viz-accent-2: #b36bff;
+  --viz-accent-3: #ff6bd6;
+  --viz-fk: #ff8a5c;
+  --viz-ref: #4f9dff;
+  --viz-use: #8aa1b5;
+  --viz-node-fill: #1b2a4d;
+  --viz-node-stroke: rgba(160, 190, 255, 0.7);
+  --viz-node-sel-fill: #24507a;
+  --viz-label-bg: #0a0f20;
+  --viz-cluster-fill: rgba(79, 157, 255, 0.1);
+  --viz-cluster-stroke: rgba(160, 190, 255, 0.6);
+  --viz-cluster-faint-fill: rgba(120, 150, 255, 0.04);
+  --viz-cluster-faint-stroke: rgba(140, 170, 255, 0.25);
+  --viz-sep: rgba(140, 170, 255, 0.3);
+  --viz-key: #ffd166;
+  --viz-warn: #ff5c7a;
+  --viz-kind-fk-label: #ffb08a;
+  --viz-kind-ref-label: #9cc4ff;
+  --viz-kind-use-label: #c0cce0;
+  --viz-text-muted: #9aa9c9;
+  --viz-cluster-name: #c8d4f0;
+  --viz-sel: #39d0ff;
+  --viz-rel: #ffb020;
+  --scene-stage-bg: #050814;
+}
+
+/* 強制色（ハイコントラスト）: 色トークンをシステムカラーへ割り当てる。背景画像・影・半透明には頼らない。 */
+@media (forced-colors: active) {
+  :root,
+  :root[data-theme="dark"] {
+    --color-bg-canvas: Canvas;
+    --color-bg-surface: Canvas;
+    --color-bg-raised: Canvas;
+    --color-bg-hover: Canvas;
+    --color-bg-selected: Highlight;
+    --color-fg-default: CanvasText;
+    --color-fg-muted: CanvasText;
+    --color-fg-subtle: CanvasText;
+    --color-fg-link: LinkText;
+    --color-fg-disabled: GrayText;
+    --color-on-accent: HighlightText;
+    --color-accent: Highlight;
+    --color-accent-hover: Highlight;
+    --color-border-default: CanvasText;
+    --color-border-strong: CanvasText;
+    --color-focus: Highlight;
+    --color-wash-hover: transparent;
+    --color-wash-selected: transparent;
+    --color-wash-mark: Mark;
+    --color-scrim: transparent;
+    --color-shadow-1: transparent;
+    --color-shadow-2: transparent;
+    --color-deco-1: Canvas;
+    --color-deco-2: Canvas;
+    --color-deco-3: Canvas;
+    --color-status-success-fg: CanvasText;
+    --color-status-success-bg: Canvas;
+    --color-status-success-icon: CanvasText;
+    --color-status-warning-fg: CanvasText;
+    --color-status-warning-bg: Canvas;
+    --color-status-warning-icon: CanvasText;
+    --color-status-danger-fg: CanvasText;
+    --color-status-danger-bg: Canvas;
+    --color-status-danger-icon: CanvasText;
+    --color-status-info-fg: CanvasText;
+    --color-status-info-bg: Canvas;
+    --color-status-info-icon: CanvasText;
+    --color-status-neutral-fg: CanvasText;
+    --color-status-neutral-bg: Canvas;
+    --color-status-neutral-icon: CanvasText;
+  }
+}

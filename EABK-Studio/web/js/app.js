@@ -1,6 +1,6 @@
 import { t, lang, setLang, onLang, applyI18n } from './i18n.js';
 import { store } from './store.js';
-import { el, esc, colorOf, typeLabel, toast, businessIcon } from './ui.js';
+import { el, esc, colorOf, typeLabel, toast, businessIcon, statePanel } from './ui.js';
 import { initDrawer } from './drawer.js';
 import { installXref } from './xref.js';
 import { decorate, mountStructure, mountConsistency, mountMaintenance } from './insights.js';
@@ -154,6 +154,7 @@ function hl(text, toks) {
 // FR-1041 AC-226: every nav item (and the 2D / 3D switch) is reachable from the command box.
 function navCommands() {
   const list = NAV.map((k) => ({ cmd: true, id: 'cmd:nav:' + k, label: t('cmd.goto') + t('nav.' + k), key: t('nav.' + k), run: () => { location.hash = '#/' + navTarget(k); } }));
+  for (const c of window.eabkTheme.choices) list.push({ cmd: true, id: 'cmd:theme:' + c, label: t('theme.cmd') + t('theme.' + c), key: t('theme.keys') + ' ' + t('theme.' + c), run: () => window.eabkTheme.set(c) });
   if (hasDimHandler()) list.push({ cmd: true, id: 'cmd:dim', label: t('cmd.dim'), key: '2D 3D', run: () => runDim() });
   return list;
 }
@@ -218,9 +219,20 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ---------------------------------------------------------------- chrome
+// テーマ（FR-1047 AC-259/260）: ライト・ダーク・システム。保存しない。切替は再読込なしで入力・選択・絞り込み・配置を保つ。
+const themeLive = document.getElementById('themeLive');
+function renderTheme(announce) {
+  const cur = window.eabkTheme.get();
+  document.querySelectorAll('[data-testid="theme-toggle"] [data-theme-choice]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.themeChoice === cur)));
+  document.querySelector('[data-testid="theme-toggle"]').setAttribute('aria-label', t('theme.group'));
+  if (announce) themeLive.textContent = t('theme.announce.' + cur);
+}
+document.querySelectorAll('[data-testid="theme-toggle"] [data-theme-choice]').forEach((b) => b.addEventListener('click', () => window.eabkTheme.set(b.dataset.themeChoice)));
+window.eabkTheme.onChange(() => renderTheme(true));
+renderTheme(false);
 document.getElementById('lang').addEventListener('click', () => setLang(lang() === 'ja' ? 'en' : 'ja'));
 function renderLangBtn() { document.getElementById('lang').innerHTML = lang() === 'ja' ? '<b>JA</b> | EN' : 'JA | <b>EN</b>'; }
-onLang(() => { renderLangBtn(); renderNav(); if (!box.hidden) renderResults(); });
+onLang(() => { renderLangBtn(); renderNav(); renderTheme(false); if (!box.hidden) renderResults(); });
 async function chooseRepository(cur) {
   const modal = el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' },
     el('form', { class: 'card', onsubmit: (e) => e.preventDefault() },
@@ -268,8 +280,12 @@ new ResizeObserver(() => document.documentElement.style.setProperty('--hh', head
 applyI18n(document);
 renderLangBtn();
 renderNav();
-view.replaceChildren(el('div', { class: 'splash' }, el('div', { class: 'spin' }), t('loading')));
+view.replaceChildren(statePanel({ state: 'loading', heading: t('loading'), description: t('state.loading.d') }));
 initDrawer(document.getElementById('drawer'));
 installXref();
 for (const k of ['dashboard', 'implstatus', 'diagrams', 'map2d']) ROUTES[k].load().catch(() => {}); // warm the module cache (the 2D map is the default map target)
-loadModel().catch((e) => { view.replaceChildren(el('div', { class: 'page' }, el('div', { class: 'warnbox' }, 'Failed to load: ' + e.message))); });
+function showLoadError(e) {
+  view.replaceChildren(statePanel({ state: 'error', heading: t('state.error.h'), description: `${t('state.error.d')} (${(e && e.message) || e})`,
+    action: el('button', { type: 'button', class: 'btn', onclick: () => { view.replaceChildren(statePanel({ state: 'loading', heading: t('loading'), description: t('state.loading.d') })); loadModel().catch(showLoadError); } }, t('state.retry')) }));
+}
+loadModel().catch(showLoadError);
