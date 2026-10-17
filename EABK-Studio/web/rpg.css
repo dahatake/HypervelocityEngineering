@@ -1,17 +1,17 @@
 /* FR-1053: the RPG-style map. Colours come from the Studio's own tokens; the pixel art itself is drawn on a canvas. */
-.rpg{position:absolute;inset:0;display:flex;flex-direction:column;gap:8px;padding:10px 14px 64px;outline:none}
+.rpg{position:absolute;inset:0;display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-2) var(--space-3) 64px;outline:none}
 .rpg:focus-visible{box-shadow:inset 0 0 0 3px var(--c1)}
 .rpg-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .rpg-title{margin:0;font-size:16px}
-.rpg-pos{color:var(--dim);font-size:13px;flex:1}
+.rpg-pos{color:var(--dim);font-size:var(--font-size-body);flex:1}
 .rpg-sound{min-height:36px}
-.rpg-stage{position:relative;flex:1;min-height:200px;border:2px solid var(--line);border-radius:var(--radius);overflow:hidden;background:#10182c}
+.rpg-stage{position:relative;flex:1;min-height:200px;border:2px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--scene-rpg-stage-bg)}
 .rpg-canvas{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated}
-.rpg-dialog,.rpg-menu{position:absolute;background:#0a1022;color:#fff;border:3px solid #fff;border-radius:6px;padding:10px 14px;font-family:ui-monospace,Consolas,monospace;font-size:14px;line-height:1.6;box-shadow:0 0 0 3px #0a1022}
+.rpg-dialog,.rpg-menu{position:absolute;background:var(--scene-rpg-panel-bg);color:var(--scene-rpg-panel-fg);border:var(--stroke-thick) solid var(--scene-rpg-panel-fg);border-radius:var(--radius-sm);padding:var(--space-3) var(--space-4);font-family:var(--font-mono);font-size:var(--font-size-body);line-height:1.6;box-shadow:0 0 0 var(--stroke-thick) var(--scene-rpg-panel-bg)}
 .rpg-dialog[hidden],.rpg-menu[hidden]{display:none}
 .rpg-dialog{left:12px;right:12px;bottom:12px;min-height:96px}
 .rpg-text{white-space:pre-wrap}
-.rpg-links a{color:#8be9ff}
+.rpg-links a{color:var(--scene-rpg-link)}
 .rpg-more{text-align:right;color:var(--warn)}
 .rpg-menu{top:12px;right:12px;min-width:220px;max-width:min(520px,90%)}
 .rpg-select{right:auto;left:12px}
@@ -20,5 +20,5 @@
 .rpg-item{padding:2px 4px;cursor:pointer;border-radius:3px}
 .rpg-item.on{background:rgba(139,233,255,.22)}
 .rpg-keys{margin-top:8px;font-size:12px}
-.rpg-legend{margin:0;color:var(--dim);font-size:12px;padding-right:190px}
-.rpg-alt{font-size:12px;max-height:30%;overflow:auto}
+.rpg-legend{margin:0;color:var(--dim);font-size:var(--font-size-caption);padding-right:190px}
+.rpg-alt{font-size:var(--font-size-caption);max-height:30%;overflow:auto}

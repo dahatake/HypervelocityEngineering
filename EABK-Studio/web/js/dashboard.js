@@ -43,7 +43,7 @@ function hbars(rows, opt = {}) {
   const max = Math.max(1, ...rows.map((r) => r.total ?? r.value));
   return el('div', { style: { display: 'grid', gap: '7px' } }, rows.map((r) => {
     const parts = r.parts || [{ value: r.value, color: r.color || token('--viz-sel'), ids: r.ids }];
-    const wrap = el('div', { class: 'bar', style: { height: '12px', width: ((r.total ?? r.value) / max * 100) + '%', display: 'flex', background: 'var(--color-bg-hover)', minWidth: '6px' } },
+    const wrap = el('div', { class: 'bar', style: { height: 'var(--space-6)', width: ((r.total ?? r.value) / max * 100) + '%', display: 'flex', background: 'var(--color-bg-hover)', minWidth: 'var(--space-6)' } },
       parts.map((p) => {
         const go = () => focusAndGo(p.ids || [], `${r.label} / ${p.label || ''}`);
         const name = `${r.label}${p.label ? ' / ' + p.label : ''}: ${p.value}`;

@@ -169,6 +169,11 @@
 
   /* ---- 3D 描画の素材色（例外） ---- */
   --scene-stage-bg: #e8eef8;
+  /* FR-1053: RPG 風表示の会話窓・メニュー（どのテーマでも暗い画面の固定色） */
+  --scene-rpg-panel-bg: #0a1022;
+  --scene-rpg-panel-fg: #ffffff;
+  --scene-rpg-stage-bg: #10182c;
+  --scene-rpg-link: #8be9ff;
 }
 
 :root[data-theme="dark"] {
@@ -254,6 +259,10 @@
   --viz-sel: #39d0ff;
   --viz-rel: #ffb020;
   --scene-stage-bg: #050814;
+  --scene-rpg-panel-bg: #0a1022;
+  --scene-rpg-panel-fg: #ffffff;
+  --scene-rpg-stage-bg: #10182c;
+  --scene-rpg-link: #8be9ff;
 }
 
 /* 強制色（ハイコントラスト）: 色トークンをシステムカラーへ割り当てる。背景画像・影・半透明には頼らない。 */
