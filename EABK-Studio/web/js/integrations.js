@@ -3,6 +3,7 @@
 import { t, onLang } from './i18n.js';
 import { store, norm } from './store.js';
 import { el } from './ui.js';
+import { idRef } from './xref.js';
 
 const state = { q: '', sort: { k: 'id', d: 1 } };
 const COLS = ['id', 'name', 'partner', 'direction', 'method', 'dataClass', 'pii', 'status', 'reqs', 'gaps'];
@@ -11,7 +12,7 @@ const cell = (v) => (Array.isArray(v) ? v.join(', ') : v ?? '');
 function rowsOf(m) {
   return (m.integrationCatalog || []).map((c) => ({
     nodeId: c.id, id: c.id, name: c.name, partner: c.partner, direction: c.direction, method: c.method, dataClass: c.dataClass,
-    pii: c.pii, status: c.status, reqs: c.reqs, gaps: `${t('int.missing')} ${c.missing} / ${t('int.tbd')} ${c.tbd}`, flag: c.flag,
+    pii: c.pii, status: c.status, reqs: c.refs || c.reqs, gaps: `${t('int.missing')} ${c.missing} / ${t('int.tbd')} ${c.tbd}`, flag: c.flag,
     flags: [c.pii.trim() && c.pii.trim() !== 'なし' ? t('int.flag.pii') : '', /^TBD/i.test(c.authz.trim()) ? t('int.flag.auth') : ''].filter(Boolean),
   }));
 }
@@ -32,15 +33,13 @@ export function mount(host) {
     const input = el('input', { type: 'search', value: state.q, placeholder: t('int.filter'), 'aria-label': t('int.filter'), oninput: (e) => { state.q = e.target.value; fill(); } });
     const countEl = el('span', { class: 'mini' });
     const head = el('tr', {}, COLS.map((k) => el('th', { onclick: () => { const c = state.sort; state.sort = { k, d: c.k === k ? -c.d : 1 }; render(); } },
-      t('int.col.' + k), state.sort.k === k ? (state.sort.d > 0 ? ' ▲' : ' ▼') : '')));
+      t('int.col.' + k), state.sort.k === k ? (state.sort.d > 0 ? ' ▲' : ' ▼') : '')).concat([el('th', {}, t('int.detail'))]));
     const tbody = el('tbody');
     page.replaceChildren(el('h1', {}, '🔌 ' + t('nav.integrations')), el('p', { class: 'sub' }, t('int.sub')),
       el('div', { class: 'tbar' }, input, countEl, el('button', { class: 'btn ghost', onclick: () => exportCsv(rows) }, '⤓ ' + t('int.csv'))),
       el('div', { class: 'tw' }, el('table', { class: 't' }, el('thead', {}, head), tbody)));
     const link = (id) => el('a', { href: '#/integrations?select=' + encodeURIComponent(id), class: 'mono', onclick: (e) => { e.preventDefault(); e.stopPropagation(); store.select(id, {}); } }, id);
-    const reqLink = (id) => (store.nodes.has(id)
-      ? el('a', { href: '#/map2d?select=' + encodeURIComponent(id), class: 'mono', onclick: (e) => { e.preventDefault(); e.stopPropagation(); store.select(id, {}); } }, id)
-      : el('span', { class: 'mono' }, id));
+    const reqLink = (id) => idRef(id);
     fill = () => {
       const set = store.activeSet();
       const q = norm(state.q);
@@ -57,7 +56,7 @@ export function mount(host) {
         if (k === 'reqs') return el('td', {}, r.reqs.flatMap((x, i) => [i ? ', ' : '', reqLink(x)]));
         if (k === 'gaps') return el('td', {}, el('span', {}, r.gaps), ...r.flags.map((f) => el('span', { class: 'badge bad', style: { marginLeft: '6px' } }, '⚑ ' + f)));
         return el('td', {}, el('div', { class: 'clamp' }, String(cell(r[k])).slice(0, 400)));
-      }))));
+      }).concat([el('td', {}, el('button', { class: 'btn ghost', type: 'button', 'aria-label': `${t('int.detail')} ${r.id}`, onclick: (e) => { e.stopPropagation(); store.select(r.id, {}); } }, t('int.detail')))]))));
     };
     fill();
   };

@@ -71,9 +71,9 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1040 | 図式の各表示の 2D/3D 選択 | 承認済み | `EABK-Studio/web/js/dim.js`, `EABK-Studio/web/js/dgm3d.js`, `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/app.css`, `EABK-Studio/README.md`, `users-guide/studio/02-screens.md` | `EABK-Studio/tests/test_nav_dims_ui.py`, `tests/system/e2e/test_studio_nav_dims_integrations_system.py` | ストア、UI 部品、デザイン基盤、Three.js 同梱モジュール、2D・3D 切替 |
 | FR-1041 | ナビゲーションの MECE 化と各項目の説明 | 承認済み | `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/dim.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/index.html`, `EABK-Studio/web/app.css`, `EABK-Studio/README.md`, `users-guide/studio/02-screens.md` | `EABK-Studio/tests/test_nav_dims_ui.py`, `tests/system/e2e/test_studio_nav_dims_integrations_system.py` | ストア、UI 部品、デザイン基盤、2D・3D 切替 |
 | FR-1042 | 外部連携カタログの閲覧（Studio） | 承認済み | `EABK-Studio/web/js/integrations.js`, `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/drawer.js`, `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/js/xref.js` | `EABK-Studio/tests/test_integrations_catalog.py`, `EABK-Studio/tests/test_nav_dims_ui.py`, `tests/system/e2e/test_studio_nav_dims_integrations_system.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
-| FR-1050 | 表・連携の ID の全面リンク化と未解決 ID の明示 | 承認済み | 未実装 | 未実装 | UI 部品 |
-| FR-1051 | 「表」画面の種別のグループ化と名称の統一 | 承認済み | 未実装 | 未実装 | UI 部品 |
-| FR-1052 | 文脈の明示と、図・一覧の行のキーボード操作 | 承認済み | 未実装 | 未実装 | UI 部品 |
+| FR-1050 | 表・連携の ID の全面リンク化と未解決 ID の明示 | 承認済み | `EABK-Studio/web/js/tables.js`, `EABK-Studio/web/js/integrations.js`, `EABK-Studio/web/js/drawer.js`, `EABK-Studio/web/js/xref.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/eabk_model.py` | `EABK-Studio/tests/test_info_design_system_ui.py`, `tests/system/e2e/test_studio_info_design_system.py` | 管理データモデル、UI 部品 |
+| FR-1051 | 「表」画面の種別のグループ化と名称の統一 | 承認済み | `EABK-Studio/web/js/tables.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/app.css` | `EABK-Studio/tests/test_info_design_system_ui.py`, `tests/system/e2e/test_studio_info_design_system.py` | UI 部品、デザイン基盤 |
+| FR-1052 | 文脈の明示と、図・一覧の行のキーボード操作 | 承認済み | `EABK-Studio/web/js/entities.js`, `EABK-Studio/web/js/dashboard.js`, `EABK-Studio/web/js/integrations.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/app.css` | `tests/system/e2e/test_studio_info_design_system.py` | UI 部品、デザイン基盤 |
 ## API・イベント
 
 | 名前 | 定義ファイル | 関連する要求 ID |
@@ -169,11 +169,11 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 
 | 部品名 | ファイル | 用途 | 使っている要求 ID |
 |---|---|---|---|
-| 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、FR-1025、FR-1026、FR-1027、FR-1028、FR-1029、FR-1034、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002、FR-1042 |
+| 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、FR-1025、FR-1026、FR-1027、FR-1028、FR-1029、FR-1034、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002、FR-1042、FR-1050 |
 | HTTP サーバー | `EABK-Studio/studio.py` | 127.0.0.1 限定の読取 API と静的配信 | FR-010、FR-013、FR-1001、NFR-OPS-003、NFR-SEC-001 |
 | ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1029、FR-1031、FR-1033、FR-1034、FR-1040、FR-1041、FR-1042 |
 | UI 部品 | `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/js/xref.js` | 表示、詳細、通知、リンク | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1028、FR-1031、FR-1033、FR-1040、FR-1041、FR-1042、FR-1050、FR-1051、FR-1052、NFR-OPS-003、NFR-UX-005、NFR-UX-007、NFR-UX-010 |
-| デザイン基盤 | `EABK-Studio/web/app.css`, `EABK-Studio/web/index.html` | Fluent 2 に寄せたテーマ変数、外枠、ナビゲーション、検索、通知、ダーク表示 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1032、FR-1040、FR-1041、FR-1042 |
+| デザイン基盤 | `EABK-Studio/web/app.css`, `EABK-Studio/web/index.html` | Fluent 2 に寄せたテーマ変数、外枠、ナビゲーション、検索、通知、ダーク表示 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1032、FR-1040、FR-1041、FR-1042、FR-1051、FR-1052 |
 | 2D・3D 切替 | `EABK-Studio/web/js/dim.js`, `EABK-Studio/web/js/dgm3d.js` | マップと図式の 2D・3D 切替アイコン（アニメ調の顔つきの平面・立体と「2D」「3D」の語。外部取得なし）、コマンド検索からの切替、図式の 3D 描画（3D 不可なら 2D と表へ代替） | FR-1040、FR-1041 |
 | フィンガープリント | `EABK-Studio/studio.py` | 更新検知と再読込 | FR-012、NFR-OPS-002 |
 | 起動スクリプト | `EABK-Studio/start.ps1`, `EABK-Studio/start.sh` | Windows/macOS/Linux の起動補助 | FR-1001、NFR-OPS-001 |

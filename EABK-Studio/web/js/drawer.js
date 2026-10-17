@@ -2,6 +2,7 @@
 import { t, onLang, lang } from './i18n.js';
 import { store } from './store.js';
 import { el, colorOf, typeLabel, statusBadge, nodeChip, vscodeUrl, toast, TYPE_ORDER } from './ui.js';
+import { idRef } from './xref.js';
 
 export function initDrawer(root) {
   const render = () => {
@@ -91,8 +92,8 @@ export function initDrawer(root) {
         kids.push(section(t('int.resp'), el('div', {}, c.responsibility || t('int.st.missing'))),
           section(t('int.vp'), el('dl', { class: 'kv', 'data-testid': 'int-viewpoints' }, c.viewpoints.flatMap((v) => [el('dt', {}, v.label),
             el('dd', { 'data-state': v.state }, el('span', { class: 'badge ' + (v.state === 'missing' ? 'bad' : v.state === 'tbd' ? 'proposed' : '') }, t('int.st.' + v.state)), v.value ? ' ' + v.value : '')]))),
-          section(t('int.reqs'), chips(c.reqs.filter((x) => store.nodes.has(x)))),
-          section(t('int.acs'), chips(c.reqs.flatMap((x) => (store.reqMap.get(x)?.acs || []).map((a) => a.id)).filter((x) => store.nodes.has(x)))),
+          section(t('int.reqs'), (c.refs || c.reqs).length ? el('div', { class: 'chips' }, (c.refs || c.reqs).flatMap((x, i) => [i ? ', ' : '', idRef(x)])) : null),
+          section(t('int.acs'), (() => { const ids = [...new Set((c.refs || c.reqs).filter((x) => /^AC-/.test(x)).concat(c.reqs.flatMap((x) => (store.reqMap.get(x)?.acs || []).map((a) => a.id)).filter((x) => store.nodes.has(x))))]; return ids.length ? el('div', { class: 'chips' }, ids.flatMap((x, i) => [i ? ', ' : '', idRef(x)])) : null; })()),
           c.merged?.length ? section(t('int.merged'), el('div', {}, c.merged.map((x) => el('div', { class: 'mini' }, `${x.name} · ${x.method}${x.owner ? ' · ' + x.owner : ''}`)))) : null,
           section(t('d.src'), loc(n.file, n.line)));
       }
