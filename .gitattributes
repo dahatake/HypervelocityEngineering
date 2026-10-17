@@ -4,3 +4,6 @@ docs/run-history.md merge=union
 
 # HVE-History の画像・動画は、バイナリとして扱う（改行変換・差分表示をしない）
 HVE-History/media/** binary
+
+# シェルスクリプトは LF 固定（Windows で checkout しても Linux・macOS・WSL で動く）
+*.sh text eol=lf

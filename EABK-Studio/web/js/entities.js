@@ -124,7 +124,12 @@ function detailView(host, m, name) {
   const partIds = [];
   for (const { u } of reqs) for (const a of store.neighbors(u.requirement, ['part', 'api', 'component'])) if (!partIds.includes(a.id)) partIds.push(a.id);
 
+  // FR-1052 AC-283: breadcrumb "エンティティ › <name>" (current position = aria-current=page); the back link stays.
+  const crumbs = el('nav', { class: 'crumbs', 'aria-label': t('eu.crumb') },
+    el('a', { href: '#/entities' }, t('nav.entities')), el('span', { class: 'sep', 'aria-hidden': 'true' }, ' › '),
+    el('span', { 'aria-current': 'page' }, e.name));
   host.replaceChildren(
+    crumbs,
     el('div', { class: 'row' }, back,
       el('a', { class: 'btn ghost', href: '#/diagrams?kind=entities&select=' + encodeURIComponent(nodeId) }, t('eu.toER')),
       el('a', { class: 'btn ghost', href: '#/diagrams?kind=layers&select=' + encodeURIComponent(nodeId) }, t('eu.toLayers'))),

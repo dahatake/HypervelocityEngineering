@@ -79,6 +79,26 @@
     "AC-241": "sha256:0699afdfc9c2e349",
     "AC-237": "sha256:843f6f2d5d402e43",
     "AC-238": "sha256:8a719013d3d38992",
+    "AC-286": "sha256:89a427c5c0ab5eec",
+    "AC-295": "sha256:12ef77c6f1f51d41",
+    "AC-277": "sha256:377fe370bc6ed13c",
+    "AC-278": "sha256:eda979d1a67b813f",
+    "AC-280": "sha256:2e038f8042a78fad",
+    "AC-281": "sha256:becdf6085063094f",
+    "AC-283": "sha256:da58c4870e1b04cb",
+    "AC-284": "sha256:d82b1f6154debf33",
+    "AC-285": "sha256:ef944f2578a4f90d",
+    "AC-315": "sha256:6afe93012ae75bd9",
+    "AC-316": "sha256:66ce4030e6d07576",
+    "AC-317": "sha256:54771d3171598d41",
+    "AC-318": "sha256:a3e38f3dfdccd079",
+    "AC-319": "sha256:791135c9e50af683",
+    "AC-320": "sha256:9ea4dc384d7e6583",
+    "AC-321": "sha256:f7c9a1297eb9a442",
+    "AC-322": "sha256:d4309942722fe967",
+    "AC-324": "sha256:cd85fd0835ed4455",
+    "AC-323": "sha256:49a5faf2f0884497",
+    "AC-326": "sha256:6592fbd567b93463",
     "AC-258": "sha256:954f0878c6f30246",
     "AC-259": "sha256:a0e8e22f43a0f0e4",
     "AC-261": "sha256:214b215ae685875a",
@@ -1063,31 +1083,6 @@
       ]
     },
     {
-      "id": "IT-001",
-      "requirement_ids": [
-        "NFR-OPS-005"
-      ],
-      "ac_ids": [
-        "AC-064"
-      ],
-      "title": "混在資産から安全なrun所有候補だけを清掃",
-      "layer": "nonfunctional",
-      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_mixed_assets_delete_only_safe_owned_candidates",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-001-202610171831.log",
-      "history": [
-        {
-          "at": "2026-10-10T10:42:27+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        }
-      ]
-    },
-    {
       "id": "E2E-034",
       "requirement_ids": [
         "NFR-COMPAT-001"
@@ -1113,31 +1108,6 @@
       ]
     },
     {
-      "id": "IT-002",
-      "requirement_ids": [
-        "NFR-COMPAT-001"
-      ],
-      "ac_ids": [
-        "AC-066"
-      ],
-      "title": "Windowsパス表記揺れ・衝突・空白・ロックの保護",
-      "layer": "nonfunctional",
-      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_windows_alias_collision_spaces_and_locked_candidate_are_protected",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-002-202610171832.log",
-      "history": [
-        {
-          "at": "2026-10-10T10:42:44+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        }
-      ]
-    },
-    {
       "id": "E2E-035",
       "requirement_ids": [
         "NFR-COMPAT-001"
@@ -1156,56 +1126,6 @@
       "history": [
         {
           "at": "2026-10-10T10:42:51+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        }
-      ]
-    },
-    {
-      "id": "IT-003",
-      "requirement_ids": [
-        "NFR-COMPAT-001"
-      ],
-      "ac_ids": [
-        "AC-067"
-      ],
-      "title": "配布物・終了契約・カタログ・ガイドの清掃契約整合",
-      "layer": "contract",
-      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_distribution_catalog_conductor_and_guides_publish_one_cleanup_contract",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-003-202610171835.log",
-      "history": [
-        {
-          "at": "2026-10-10T10:42:58+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        }
-      ]
-    },
-    {
-      "id": "IT-004",
-      "requirement_ids": [
-        "NFR-COMPAT-001"
-      ],
-      "ac_ids": [
-        "AC-068"
-      ],
-      "title": "清掃前後の無関係変更保持と全検証成功",
-      "layer": "nonfunctional",
-      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_cleanup_preserves_unrelated_git_state_and_all_post_cleanup_gates_pass",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-004-202610171835.log",
-      "history": [
-        {
-          "at": "2026-10-10T10:43:10+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
@@ -1864,117 +1784,6 @@
       ]
     },
     {
-      "id": "IT-005",
-      "requirement_ids": [
-        "NFR-PERF-001"
-      ],
-      "ac_ids": [
-        "AC-074"
-      ],
-      "title": "公開データセットの処理時間上限",
-      "layer": "nonfunctional",
-      "command": "python -m pytest tests/system/nonfunctional/test_benchmark_submission.py::test_public_dataset_processed_within_param_008_seconds",
-      "canary": false,
-      "status": "blocked",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
-      "history": [
-        {
-          "at": "2026-10-10T15:25:24+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        },
-        {
-          "at": "2026-10-10T15:25:26+09:00",
-          "by": "test-designer",
-          "change": "blocked",
-          "reason": "測定プロファイルと検証対象の提出物が要求定義書に未定義（TBD）"
-        },
-        {
-          "at": "2026-10-15T08:19:15+09:00",
-          "by": "test-designer",
-          "change": "blocked",
-          "reason": "要求(NFR-PERF-001/002・NFR-REL-001)が 2026-10-15 の依頼で廃止(決定状態: 廃止)。実行対象外。ケースは削除せず履歴保持"
-        }
-      ]
-    },
-    {
-      "id": "IT-006",
-      "requirement_ids": [
-        "NFR-PERF-002"
-      ],
-      "ac_ids": [
-        "AC-075"
-      ],
-      "title": "性能結果の機能結果との分離記録",
-      "layer": "nonfunctional",
-      "command": "python -m pytest tests/system/nonfunctional/test_benchmark_submission.py::test_private_perf_case_result_recorded_separately_from_functional_result",
-      "canary": false,
-      "status": "blocked",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
-      "history": [
-        {
-          "at": "2026-10-10T15:25:31+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        },
-        {
-          "at": "2026-10-10T15:25:34+09:00",
-          "by": "test-designer",
-          "change": "blocked",
-          "reason": "測定プロファイルと検証対象の提出物が要求定義書に未定義（TBD）"
-        },
-        {
-          "at": "2026-10-15T08:19:16+09:00",
-          "by": "test-designer",
-          "change": "blocked",
-          "reason": "要求(NFR-PERF-001/002・NFR-REL-001)が 2026-10-15 の依頼で廃止(決定状態: 廃止)。実行対象外。ケースは削除せず履歴保持"
-        }
-      ]
-    },
-    {
-      "id": "IT-007",
-      "requirement_ids": [
-        "NFR-REL-001"
-      ],
-      "ac_ids": [
-        "AC-076"
-      ],
-      "title": "検証による完了判定",
-      "layer": "nonfunctional",
-      "command": "python -m pytest tests/system/nonfunctional/test_benchmark_submission.py::test_fresh_process_verify_exit_code_and_result_file_decide_completion",
-      "canary": false,
-      "status": "blocked",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
-      "history": [
-        {
-          "at": "2026-10-10T15:25:40+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        },
-        {
-          "at": "2026-10-10T15:25:42+09:00",
-          "by": "test-designer",
-          "change": "blocked",
-          "reason": "測定プロファイルと検証対象の提出物が要求定義書に未定義（TBD）"
-        },
-        {
-          "at": "2026-10-15T08:19:16+09:00",
-          "by": "test-designer",
-          "change": "blocked",
-          "reason": "要求(NFR-PERF-001/002・NFR-REL-001)が 2026-10-15 の依頼で廃止(決定状態: 廃止)。実行対象外。ケースは削除せず履歴保持"
-        }
-      ]
-    },
-    {
       "id": "E2E-062",
       "requirement_ids": [
         "FR-1011"
@@ -2375,376 +2184,6 @@
       ]
     },
     {
-      "id": "IT-008",
-      "requirement_ids": [
-        "FR-1017"
-      ],
-      "ac_ids": [
-        "AC-105"
-      ],
-      "title": "4 種類の起動契機で検査が起動し定期実行は週 1 回である",
-      "layer": "contract",
-      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac105 -q",
-      "canary": true,
-      "status": "pass",
-      "last_commit": "a049b30b",
-      "last_run_at": "2026-10-17T19:52:11+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-008-202610171951.log",
-      "history": [
-        {
-          "at": "2026-10-14T20:55:51+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "ケースを作成"
-        },
-        {
-          "at": "2026-10-14T20:56:40+09:00",
-          "by": "test-designer",
-          "change": "blocked",
-          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
-        },
-        {
-          "at": "2026-10-14T20:58:41+09:00",
-          "by": "test-designer",
-          "change": "status -> not_run",
-          "reason": "AC-105..114 が level system になったため blocked 解除"
-        }
-      ]
-    },
-    {
-      "id": "IT-009",
-      "requirement_ids": [
-        "FR-1017"
-      ],
-      "ac_ids": [
-        "AC-106"
-      ],
-      "title": "検査合格時は commit・PR・Issue・コメントを行わない",
-      "layer": "contract",
-      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac106 -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-009-202610171856.log",
-      "history": [
-        {
-          "at": "2026-10-14T20:56:17+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "ケースを作成"
-        },
-        {
-          "at": "2026-10-14T20:56:40+09:00",
-          "by": "test-designer",
-          "change": "blocked",
-          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
-        },
-        {
-          "at": "2026-10-14T20:58:41+09:00",
-          "by": "test-designer",
-          "change": "status -> not_run",
-          "reason": "AC-105..114 が level system になったため blocked 解除"
-        }
-      ]
-    },
-    {
-      "id": "IT-010",
-      "requirement_ids": [
-        "FR-1018"
-      ],
-      "ac_ids": [
-        "AC-107"
-      ],
-      "title": "再検査合格時のみ修復を commit し不合格なら commit も push もしない(異常系)",
-      "layer": "contract",
-      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac107 -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-010-202610171856.log",
-      "history": [
-        {
-          "at": "2026-10-14T20:56:18+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "ケースを作成"
-        },
-        {
-          "at": "2026-10-14T20:56:40+09:00",
-          "by": "test-designer",
-          "change": "blocked",
-          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
-        },
-        {
-          "at": "2026-10-14T20:58:42+09:00",
-          "by": "test-designer",
-          "change": "status -> not_run",
-          "reason": "AC-105..114 が level system になったため blocked 解除"
-        }
-      ]
-    },
-    {
-      "id": "IT-011",
-      "requirement_ids": [
-        "FR-1018"
-      ],
-      "ac_ids": [
-        "AC-108"
-      ],
-      "title": "PR は当該ブランチへ push・main と定期は修復ブランチ PR を作り重複 PR を作らない",
-      "layer": "contract",
-      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac108 -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-011-202610171856.log",
-      "history": [
-        {
-          "at": "2026-10-14T20:56:19+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "ケースを作成"
-        },
-        {
-          "at": "2026-10-14T20:56:41+09:00",
-          "by": "test-designer",
-          "change": "blocked",
-          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
-        },
-        {
-          "at": "2026-10-14T20:58:42+09:00",
-          "by": "test-designer",
-          "change": "status -> not_run",
-          "reason": "AC-105..114 が level system になったため blocked 解除"
-        }
-      ]
-    },
-    {
-      "id": "IT-012",
-      "requirement_ids": [
-        "FR-1018"
-      ],
-      "ac_ids": [
-        "AC-109"
-      ],
-      "title": "自動修復で要求定義書を変更しない",
-      "layer": "contract",
-      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac109 -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-012-202610171856.log",
-      "history": [
-        {
-          "at": "2026-10-14T20:56:20+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "ケースを作成"
-        },
-        {
-          "at": "2026-10-14T20:56:41+09:00",
-          "by": "test-designer",
-          "change": "blocked",
-          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
-        },
-        {
-          "at": "2026-10-14T20:58:42+09:00",
-          "by": "test-designer",
-          "change": "status -> not_run",
-          "reason": "AC-105..114 が level system になったため blocked 解除"
-        }
-      ]
-    },
-    {
-      "id": "IT-013",
-      "requirement_ids": [
-        "FR-1019"
-      ],
-      "ac_ids": [
-        "AC-110"
-      ],
-      "title": "再検査不合格時にラベル・要約・実行リンク付き Issue を 1 件作成する",
-      "layer": "contract",
-      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac110 -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-013-202610171856.log",
-      "history": [
-        {
-          "at": "2026-10-14T20:56:21+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "ケースを作成"
-        },
-        {
-          "at": "2026-10-14T20:56:41+09:00",
-          "by": "test-designer",
-          "change": "blocked",
-          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
-        },
-        {
-          "at": "2026-10-14T20:58:42+09:00",
-          "by": "test-designer",
-          "change": "status -> not_run",
-          "reason": "AC-105..114 が level system になったため blocked 解除"
-        }
-      ]
-    },
-    {
-      "id": "IT-014",
-      "requirement_ids": [
-        "FR-1019"
-      ],
-      "ac_ids": [
-        "AC-111"
-      ],
-      "title": "同じ失敗の未解決 Issue があれば新規作成せずコメントする",
-      "layer": "contract",
-      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac111 -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-014-202610171856.log",
-      "history": [
-        {
-          "at": "2026-10-14T20:56:22+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "ケースを作成"
-        },
-        {
-          "at": "2026-10-14T20:56:41+09:00",
-          "by": "test-designer",
-          "change": "blocked",
-          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
-        },
-        {
-          "at": "2026-10-14T20:58:42+09:00",
-          "by": "test-designer",
-          "change": "status -> not_run",
-          "reason": "AC-105..114 が level system になったため blocked 解除"
-        }
-      ]
-    },
-    {
-      "id": "IT-015",
-      "requirement_ids": [
-        "NFR-SEC-004"
-      ],
-      "ac_ids": [
-        "AC-112"
-      ],
-      "title": "権限は 3 つの write のみで fork PR は書き込みせず検査のみ(異常系)",
-      "layer": "contract",
-      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac112 -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-015-202610171856.log",
-      "history": [
-        {
-          "at": "2026-10-14T20:56:23+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "ケースを作成"
-        },
-        {
-          "at": "2026-10-14T20:56:41+09:00",
-          "by": "test-designer",
-          "change": "blocked",
-          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
-        },
-        {
-          "at": "2026-10-14T20:58:43+09:00",
-          "by": "test-designer",
-          "change": "status -> not_run",
-          "reason": "AC-105..114 が level system になったため blocked 解除"
-        }
-      ]
-    },
-    {
-      "id": "IT-016",
-      "requirement_ids": [
-        "NFR-SEC-004"
-      ],
-      "ac_ids": [
-        "AC-113"
-      ],
-      "title": "bot の修復 commit を契機とする実行で修復の連鎖が起きない(異常系)",
-      "layer": "contract",
-      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac113 -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-016-202610171856.log",
-      "history": [
-        {
-          "at": "2026-10-14T20:56:25+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "ケースを作成"
-        },
-        {
-          "at": "2026-10-14T20:56:41+09:00",
-          "by": "test-designer",
-          "change": "blocked",
-          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
-        },
-        {
-          "at": "2026-10-14T20:58:43+09:00",
-          "by": "test-designer",
-          "change": "status -> not_run",
-          "reason": "AC-105..114 が level system になったため blocked 解除"
-        }
-      ]
-    },
-    {
-      "id": "IT-017",
-      "requirement_ids": [
-        "NFR-OPS-006"
-      ],
-      "ac_ids": [
-        "AC-114"
-      ],
-      "title": "MANAGED 登録・--no-ci 除外・README と users-guide の記述",
-      "layer": "contract",
-      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac114 -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-017-202610171856.log",
-      "history": [
-        {
-          "at": "2026-10-14T20:56:27+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "ケースを作成"
-        },
-        {
-          "at": "2026-10-14T20:56:42+09:00",
-          "by": "test-designer",
-          "change": "blocked",
-          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
-        },
-        {
-          "at": "2026-10-14T20:58:43+09:00",
-          "by": "test-designer",
-          "change": "status -> not_run",
-          "reason": "AC-105..114 が level system になったため blocked 解除"
-        }
-      ]
-    },
-    {
       "id": "E2E-078",
       "requirement_ids": [
         "FR-1021"
@@ -2813,118 +2252,6 @@
       "history": [
         {
           "at": "2026-10-14T22:49:27+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        }
-      ]
-    },
-    {
-      "id": "IT-018",
-      "requirement_ids": [
-        "FR-1020"
-      ],
-      "ac_ids": [
-        "AC-151"
-      ],
-      "title": "エンティティ一覧の項目・新規ファイルなし・再読込で変化",
-      "layer": "contract",
-      "command": "python -m pytest tests/system/test_entities_system.py -k ac151 -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-018-202610171857.log",
-      "history": [
-        {
-          "at": "2026-10-14T22:49:39+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        }
-      ]
-    },
-    {
-      "id": "IT-019",
-      "requirement_ids": [
-        "FR-1023"
-      ],
-      "ac_ids": [
-        "AC-159"
-      ],
-      "title": "企業データカタログ: 未設定・明示「利用しない」の報告と verify の結果不変",
-      "layer": "contract",
-      "command": "python -m pytest tests/system/test_entities_system.py -k ac159 -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-019-202610171857.log",
-      "history": [
-        {
-          "at": "2026-10-14T22:49:41+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        },
-        {
-          "at": "2026-10-16T05:12:49+09:00",
-          "by": "test-designer",
-          "change": "title: '参照元未設定: 未設定と報告し verify の結果が不変' -> '企業データカタログ: 未設定・明示「利用しない」の報告と verify の結果不変'",
-          "reason": "commit 2ef25488 で AC-159 が『利用しない（未設定／明示）』に改訂"
-        }
-      ]
-    },
-    {
-      "id": "IT-020",
-      "requirement_ids": [
-        "FR-1024"
-      ],
-      "ac_ids": [
-        "AC-163"
-      ],
-      "title": "企業データカタログ「利用する」で参照元が取得不能: 全エンティティを企業カタログ未確認の ToDo に（0 件含む）",
-      "layer": "contract",
-      "command": "python -m pytest tests/system/test_entities_system.py -k ac163 -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-020-202610171857.log",
-      "history": [
-        {
-          "at": "2026-10-14T22:49:43+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        },
-        {
-          "at": "2026-10-16T05:12:50+09:00",
-          "by": "test-designer",
-          "change": "title: '参照元未設定: 全エンティティを企業カタログ未確認の ToDo に（0 件含む）' -> '企業データカタログ「利用する」で参照元が取得不能: 全エンティティを企業カタログ未確認の ToDo に（0 件含む）'",
-          "reason": "commit 2ef25488 で AC-163 が『利用する』設定時のみに改訂"
-        }
-      ]
-    },
-    {
-      "id": "IT-021",
-      "requirement_ids": [
-        "NFR-COMPAT-003"
-      ],
-      "ac_ids": [
-        "AC-168"
-      ],
-      "title": "他リポジトリ（別パス・0 件・カタログなし）で一覧・検査が動く",
-      "layer": "contract",
-      "command": "python -m pytest tests/system/test_entities_system.py -k ac168 -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-021-202610171857.log",
-      "history": [
-        {
-          "at": "2026-10-14T22:49:55+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
@@ -3713,24 +3040,24 @@
       ]
     },
     {
-      "id": "IT-022",
+      "id": "E2E-112",
       "requirement_ids": [
-        "FR-1024"
+        "FR-1050"
       ],
       "ac_ids": [
-        "AC-234"
+        "AC-277"
       ],
-      "title": "企業データカタログ「利用しない」: 企業カタログ起因の ToDo 0 件・verify 不変",
-      "layer": "contract",
-      "command": "python -m pytest tests/system/test_entities_system.py -k ac234 -q",
+      "title": "表の全種別の表セルの実在 ID はすべてリンク／実在しない ID はリンクにしない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac277\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-022-202610171905.log",
+      "last_commit": "2dc84348",
+      "last_run_at": "2026-10-17T19:44:58+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-112-202610171943.log",
       "history": [
         {
-          "at": "2026-10-16T05:12:52+09:00",
+          "at": "2026-10-17T14:20:29+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
@@ -3738,24 +3065,24 @@
       ]
     },
     {
-      "id": "IT-023",
+      "id": "E2E-113",
       "requirement_ids": [
-        "FR-1046"
+        "FR-1050"
       ],
       "ac_ids": [
-        "AC-240"
+        "AC-278"
       ],
-      "title": "確認だけ: 不整合のないデータ層で exit 0・書き込みなし",
-      "layer": "data",
-      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac240_check_clean\" -q",
+      "title": "外部連携の一覧・詳細の関連要求・AC・INT ID はリンク／未解決はリンクにしない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac278\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-023-202610171906.log",
+      "last_commit": "2dc84348",
+      "last_run_at": "2026-10-17T19:44:58+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-113-202610171944.log",
       "history": [
         {
-          "at": "2026-10-16T09:09:14+09:00",
+          "at": "2026-10-17T14:20:32+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
@@ -3763,24 +3090,24 @@
       ]
     },
     {
-      "id": "IT-024",
+      "id": "E2E-114",
       "requirement_ids": [
-        "FR-1046"
+        "FR-1051"
       ],
       "ac_ids": [
-        "AC-240"
+        "AC-280"
       ],
-      "title": "確認だけ: 自動修復と手動対応の不整合で exit 1・FIX と MANUAL の行・書き込みなし",
-      "layer": "data",
-      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac240_check_inconsistent\" -q",
+      "title": "表の種別が 要求・設計・証跡・運用 の 4 グループ見出しの下に束ねられる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac280\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-024-202610171906.log",
+      "last_commit": "2dc84348",
+      "last_run_at": "2026-10-17T19:44:58+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-114-202610171944.log",
       "history": [
         {
-          "at": "2026-10-16T09:09:17+09:00",
+          "at": "2026-10-17T14:20:34+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
@@ -3788,24 +3115,24 @@
       ]
     },
     {
-      "id": "IT-025",
+      "id": "E2E-115",
       "requirement_ids": [
-        "FR-1046"
+        "FR-1051"
       ],
       "ac_ids": [
-        "AC-240"
+        "AC-281"
       ],
-      "title": "確認だけ（異常系）: 自動修復の計画だけでも exit 1・書き込みなし",
-      "layer": "data",
-      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac240_check_with_only_automatic\" -q",
+      "title": "表の画面名が JA・EN のナビ・タイトルで一つの語に統一される",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac281\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-025-202610171907.log",
+      "last_commit": "2dc84348",
+      "last_run_at": "2026-10-17T19:44:58+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-115-202610171944.log",
       "history": [
         {
-          "at": "2026-10-16T09:09:21+09:00",
+          "at": "2026-10-17T14:20:37+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
@@ -3813,24 +3140,24 @@
       ]
     },
     {
-      "id": "IT-026",
+      "id": "E2E-116",
       "requirement_ids": [
-        "FR-1046"
+        "FR-1052"
       ],
       "ac_ids": [
-        "AC-241"
+        "AC-283"
       ],
-      "title": "適用: 自動修復できる不整合だけなら修復して再検査合格・exit 0・要求定義書と外部連携カタログ不変",
-      "layer": "data",
-      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_automatic_only\" -q",
-      "canary": true,
+      "title": "エンティティ詳細にパンくず（nav・aria-current・一覧へ戻る a）がある",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac283\" -q",
+      "canary": false,
       "status": "pass",
-      "last_commit": "a049b30b",
-      "last_run_at": "2026-10-17T19:52:11+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-026-202610171951.log",
+      "last_commit": "2dc84348",
+      "last_run_at": "2026-10-17T19:44:58+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-116-202610171944.log",
       "history": [
         {
-          "at": "2026-10-16T09:09:24+09:00",
+          "at": "2026-10-17T14:20:40+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
@@ -3838,24 +3165,24 @@
       ]
     },
     {
-      "id": "IT-027",
+      "id": "E2E-117",
       "requirement_ids": [
-        "FR-1046"
+        "FR-1052"
       ],
       "ac_ids": [
-        "AC-241"
+        "AC-284"
       ],
-      "title": "適用: 手動対応が残るとき自動修復分を適用し残りを表示・exit 1",
-      "layer": "data",
-      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_with_manual_left\" -q",
+      "title": "ダッシュボードの図の区分がフォーカス可・名前と数値つき・数値ラベル常時表示",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac284\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-027-202610171907.log",
+      "last_commit": "2dc84348",
+      "last_run_at": "2026-10-17T19:44:58+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-117-202610171944.log",
       "history": [
         {
-          "at": "2026-10-16T09:09:27+09:00",
+          "at": "2026-10-17T14:20:42+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
@@ -3863,224 +3190,24 @@
       ]
     },
     {
-      "id": "IT-028",
+      "id": "E2E-118",
       "requirement_ids": [
-        "FR-1046"
+        "FR-1052"
       ],
       "ac_ids": [
-        "AC-241"
+        "AC-285"
       ],
-      "title": "適用（異常系）: 作業役のブランチでは書き込まず exit 2（対照: 統合ブランチでは適用）",
-      "layer": "data",
-      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_on_worker_branch\" -q",
+      "title": "外部連携の各行にキーボードで開ける「詳細」があり行クリックも維持／0 件で偽の操作なし",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac285\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-028-202610171908.log",
+      "last_commit": "2dc84348",
+      "last_run_at": "2026-10-17T19:44:58+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-118-202610171944.log",
       "history": [
         {
-          "at": "2026-10-16T09:09:31+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        }
-      ]
-    },
-    {
-      "id": "IT-029",
-      "requirement_ids": [
-        "FR-1046"
-      ],
-      "ac_ids": [
-        "AC-241"
-      ],
-      "title": "適用（異常系）: 書き込みの失敗（外部から注入）で取り消し・修復前とバイト一致・exit 2",
-      "layer": "data",
-      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_cancelled_on_write_failure\" -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-029-202610171908.log",
-      "history": [
-        {
-          "at": "2026-10-16T09:09:34+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        }
-      ]
-    },
-    {
-      "id": "IT-030",
-      "requirement_ids": [
-        "FR-1046"
-      ],
-      "ac_ids": [
-        "AC-241"
-      ],
-      "title": "適用: 不整合のないデータ層で exit 0・要求定義書と外部連携カタログ不変",
-      "layer": "data",
-      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_on_clean\" -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-030-202610171909.log",
-      "history": [
-        {
-          "at": "2026-10-16T09:09:37+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        }
-      ]
-    },
-    {
-      "id": "IT-031",
-      "requirement_ids": [
-        "FR-1045"
-      ],
-      "ac_ids": [
-        "AC-237"
-      ],
-      "title": "インストーラ（新規の導入）: 導入後に自動修復し、修復項目・手動対応（CHK・位置・役割）・合否を表示",
-      "layer": "data",
-      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac237_new_install\" -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-031-202610171909.log",
-      "history": [
-        {
-          "at": "2026-10-16T09:09:40+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        }
-      ]
-    },
-    {
-      "id": "IT-032",
-      "requirement_ids": [
-        "FR-1045"
-      ],
-      "ac_ids": [
-        "AC-237"
-      ],
-      "title": "インストーラ（更新・再実行）: 導入後に自動修復し、修復項目・手動対応（CHK・位置・役割）・合否を表示",
-      "layer": "data",
-      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac237_update_install_repairs\" -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-032-202610171910.log",
-      "history": [
-        {
-          "at": "2026-10-16T09:09:44+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        }
-      ]
-    },
-    {
-      "id": "IT-033",
-      "requirement_ids": [
-        "FR-1045"
-      ],
-      "ac_ids": [
-        "AC-237"
-      ],
-      "title": "インストーラ（更新）: 自動修復だけで直る導入先は再検査に合格",
-      "layer": "data",
-      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac237_update_install_automatic_only\" -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-033-202610171910.log",
-      "history": [
-        {
-          "at": "2026-10-16T09:09:47+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        }
-      ]
-    },
-    {
-      "id": "IT-034",
-      "requirement_ids": [
-        "FR-1045"
-      ],
-      "ac_ids": [
-        "AC-238"
-      ],
-      "title": "インストーラ --no-repair: 検査の結果と修復の計画を表示し、データ層を変えない",
-      "layer": "data",
-      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac238_no_repair\" -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-034-202610171911.log",
-      "history": [
-        {
-          "at": "2026-10-16T09:09:50+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        }
-      ]
-    },
-    {
-      "id": "IT-035",
-      "requirement_ids": [
-        "FR-1045"
-      ],
-      "ac_ids": [
-        "AC-238"
-      ],
-      "title": "インストーラ --skip-verify: 検査も修復もしない",
-      "layer": "data",
-      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac238_skip_verify\" -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-035-202610171912.log",
-      "history": [
-        {
-          "at": "2026-10-16T09:09:54+09:00",
-          "by": "test-designer",
-          "change": "追加",
-          "reason": "受入基準からケースを作成"
-        }
-      ]
-    },
-    {
-      "id": "IT-036",
-      "requirement_ids": [
-        "FR-1045"
-      ],
-      "ac_ids": [
-        "AC-238"
-      ],
-      "title": "インストーラ（異常系）: --dry-run・--check・--uninstall・--purge では修復しない",
-      "layer": "data",
-      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac238_non_install_modes\" -q",
-      "canary": false,
-      "status": "pass",
-      "last_commit": "5003f0c5",
-      "last_run_at": "2026-10-17T19:20:31+09:00",
-      "evidence": "work/runs/202610171403/logs/system-test/IT-036-202610171912.log",
-      "history": [
-        {
-          "at": "2026-10-16T09:09:57+09:00",
+          "at": "2026-10-17T14:20:45+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
@@ -5306,6 +4433,1633 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        }
+      ]
+    },
+    {
+      "id": "E2E-153",
+      "requirement_ids": [
+        "FR-1053"
+      ],
+      "ac_ids": [
+        "AC-286"
+      ],
+      "title": "RPG 風: 既定は 2D・切替操作・キーボード・コマンド検索で RPG 風を選べる",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac286_default",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "2dc84348",
+      "last_run_at": "2026-10-17T19:44:58+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-153-202610171943.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:47:10+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-154",
+      "requirement_ids": [
+        "FR-1053"
+      ],
+      "ac_ids": [
+        "AC-286"
+      ],
+      "title": "RPG 風: 切替で 2D・3D の内容・選択・倍率が保たれる",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac286_switching_keeps",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "2dc84348",
+      "last_run_at": "2026-10-17T19:44:58+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-154-202610171943.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:47:16+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-155",
+      "requirement_ids": [
+        "FR-1053"
+      ],
+      "ac_ids": [
+        "AC-286"
+      ],
+      "title": "異常系: 切替で入力中の内容が失われない",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac286_switching_does",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "2dc84348",
+      "last_run_at": "2026-10-17T19:44:58+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-155-202610171943.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:47:21+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-156",
+      "requirement_ids": [
+        "FR-1055"
+      ],
+      "ac_ids": [
+        "AC-295"
+      ],
+      "title": "RPG 風: 方向キーで 1 マス移動し、通れない地点には入れない",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac295_arrow",
+      "canary": true,
+      "status": "pass",
+      "last_commit": "2dc84348",
+      "last_run_at": "2026-10-17T19:44:58+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-156-202610171858.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:47:28+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-157",
+      "requirement_ids": [
+        "FR-1055"
+      ],
+      "ac_ids": [
+        "AC-295"
+      ],
+      "title": "RPG 風: A で入る・話す、B で閉じ（位置保持）",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac295_a_button",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "2dc84348",
+      "last_run_at": "2026-10-17T19:44:58+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-157-202610171943.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:47:34+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-158",
+      "requirement_ids": [
+        "FR-1055"
+      ],
+      "ac_ids": [
+        "AC-295"
+      ],
+      "title": "RPG 風: スタートでメニュー・B で戻る・セレクトで音の入切（マウス不要）",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac295_start",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "2dc84348",
+      "last_run_at": "2026-10-17T19:44:58+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-158-202610171943.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:47:40+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-159",
+      "requirement_ids": [
+        "FR-1055"
+      ],
+      "ac_ids": [
+        "AC-295"
+      ],
+      "title": "異常系: 地図の端を越えず、何もない場所の A で会話は開かない",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac295_edge",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "2dc84348",
+      "last_run_at": "2026-10-17T19:44:58+09:00",
+      "evidence": "work/runs/202610171834/logs/system-test/E2E-159-202610171943.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:47:49+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-001",
+      "requirement_ids": [
+        "NFR-OPS-005"
+      ],
+      "ac_ids": [
+        "AC-064"
+      ],
+      "title": "混在資産から安全なrun所有候補だけを清掃",
+      "layer": "nonfunctional",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_mixed_assets_delete_only_safe_owned_candidates",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-001-202610171831.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:42:27+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-002",
+      "requirement_ids": [
+        "NFR-COMPAT-001"
+      ],
+      "ac_ids": [
+        "AC-066"
+      ],
+      "title": "Windowsパス表記揺れ・衝突・空白・ロックの保護",
+      "layer": "nonfunctional",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_windows_alias_collision_spaces_and_locked_candidate_are_protected",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-002-202610171832.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:42:44+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-003",
+      "requirement_ids": [
+        "NFR-COMPAT-001"
+      ],
+      "ac_ids": [
+        "AC-067"
+      ],
+      "title": "配布物・終了契約・カタログ・ガイドの清掃契約整合",
+      "layer": "contract",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_distribution_catalog_conductor_and_guides_publish_one_cleanup_contract",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-003-202610171835.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:42:58+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-004",
+      "requirement_ids": [
+        "NFR-COMPAT-001"
+      ],
+      "ac_ids": [
+        "AC-068"
+      ],
+      "title": "清掃前後の無関係変更保持と全検証成功",
+      "layer": "nonfunctional",
+      "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_cleanup_preserves_unrelated_git_state_and_all_post_cleanup_gates_pass",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-004-202610171835.log",
+      "history": [
+        {
+          "at": "2026-10-10T10:43:10+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-005",
+      "requirement_ids": [
+        "NFR-PERF-001"
+      ],
+      "ac_ids": [
+        "AC-074"
+      ],
+      "title": "公開データセットの処理時間上限",
+      "layer": "nonfunctional",
+      "command": "python -m pytest tests/system/nonfunctional/test_benchmark_submission.py::test_public_dataset_processed_within_param_008_seconds",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T15:25:24+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-10T15:25:26+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "測定プロファイルと検証対象の提出物が要求定義書に未定義（TBD）"
+        },
+        {
+          "at": "2026-10-15T08:19:15+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "要求(NFR-PERF-001/002・NFR-REL-001)が 2026-10-15 の依頼で廃止(決定状態: 廃止)。実行対象外。ケースは削除せず履歴保持"
+        }
+      ]
+    },
+    {
+      "id": "IT-006",
+      "requirement_ids": [
+        "NFR-PERF-002"
+      ],
+      "ac_ids": [
+        "AC-075"
+      ],
+      "title": "性能結果の機能結果との分離記録",
+      "layer": "nonfunctional",
+      "command": "python -m pytest tests/system/nonfunctional/test_benchmark_submission.py::test_private_perf_case_result_recorded_separately_from_functional_result",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T15:25:31+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-10T15:25:34+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "測定プロファイルと検証対象の提出物が要求定義書に未定義（TBD）"
+        },
+        {
+          "at": "2026-10-15T08:19:16+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "要求(NFR-PERF-001/002・NFR-REL-001)が 2026-10-15 の依頼で廃止(決定状態: 廃止)。実行対象外。ケースは削除せず履歴保持"
+        }
+      ]
+    },
+    {
+      "id": "IT-007",
+      "requirement_ids": [
+        "NFR-REL-001"
+      ],
+      "ac_ids": [
+        "AC-076"
+      ],
+      "title": "検証による完了判定",
+      "layer": "nonfunctional",
+      "command": "python -m pytest tests/system/nonfunctional/test_benchmark_submission.py::test_fresh_process_verify_exit_code_and_result_file_decide_completion",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-10T15:25:40+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-10T15:25:42+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "測定プロファイルと検証対象の提出物が要求定義書に未定義（TBD）"
+        },
+        {
+          "at": "2026-10-15T08:19:16+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "要求(NFR-PERF-001/002・NFR-REL-001)が 2026-10-15 の依頼で廃止(決定状態: 廃止)。実行対象外。ケースは削除せず履歴保持"
+        }
+      ]
+    },
+    {
+      "id": "IT-008",
+      "requirement_ids": [
+        "FR-1017"
+      ],
+      "ac_ids": [
+        "AC-105"
+      ],
+      "title": "4 種類の起動契機で検査が起動し定期実行は週 1 回である",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac105 -q",
+      "canary": true,
+      "status": "pass",
+      "last_commit": "a049b30b",
+      "last_run_at": "2026-10-17T19:52:11+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-008-202610171951.log",
+      "history": [
+        {
+          "at": "2026-10-14T20:55:51+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:40+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        },
+        {
+          "at": "2026-10-14T20:58:41+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-105..114 が level system になったため blocked 解除"
+        }
+      ]
+    },
+    {
+      "id": "IT-009",
+      "requirement_ids": [
+        "FR-1017"
+      ],
+      "ac_ids": [
+        "AC-106"
+      ],
+      "title": "検査合格時は commit・PR・Issue・コメントを行わない",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac106 -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-009-202610171856.log",
+      "history": [
+        {
+          "at": "2026-10-14T20:56:17+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:40+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        },
+        {
+          "at": "2026-10-14T20:58:41+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-105..114 が level system になったため blocked 解除"
+        }
+      ]
+    },
+    {
+      "id": "IT-010",
+      "requirement_ids": [
+        "FR-1018"
+      ],
+      "ac_ids": [
+        "AC-107"
+      ],
+      "title": "再検査合格時のみ修復を commit し不合格なら commit も push もしない(異常系)",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac107 -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-010-202610171856.log",
+      "history": [
+        {
+          "at": "2026-10-14T20:56:18+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:40+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        },
+        {
+          "at": "2026-10-14T20:58:42+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-105..114 が level system になったため blocked 解除"
+        }
+      ]
+    },
+    {
+      "id": "IT-011",
+      "requirement_ids": [
+        "FR-1018"
+      ],
+      "ac_ids": [
+        "AC-108"
+      ],
+      "title": "PR は当該ブランチへ push・main と定期は修復ブランチ PR を作り重複 PR を作らない",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac108 -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-011-202610171856.log",
+      "history": [
+        {
+          "at": "2026-10-14T20:56:19+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:41+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        },
+        {
+          "at": "2026-10-14T20:58:42+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-105..114 が level system になったため blocked 解除"
+        }
+      ]
+    },
+    {
+      "id": "IT-012",
+      "requirement_ids": [
+        "FR-1018"
+      ],
+      "ac_ids": [
+        "AC-109"
+      ],
+      "title": "自動修復で要求定義書を変更しない",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac109 -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-012-202610171856.log",
+      "history": [
+        {
+          "at": "2026-10-14T20:56:20+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:41+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        },
+        {
+          "at": "2026-10-14T20:58:42+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-105..114 が level system になったため blocked 解除"
+        }
+      ]
+    },
+    {
+      "id": "IT-013",
+      "requirement_ids": [
+        "FR-1019"
+      ],
+      "ac_ids": [
+        "AC-110"
+      ],
+      "title": "再検査不合格時にラベル・要約・実行リンク付き Issue を 1 件作成する",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac110 -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-013-202610171856.log",
+      "history": [
+        {
+          "at": "2026-10-14T20:56:21+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:41+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        },
+        {
+          "at": "2026-10-14T20:58:42+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-105..114 が level system になったため blocked 解除"
+        }
+      ]
+    },
+    {
+      "id": "IT-014",
+      "requirement_ids": [
+        "FR-1019"
+      ],
+      "ac_ids": [
+        "AC-111"
+      ],
+      "title": "同じ失敗の未解決 Issue があれば新規作成せずコメントする",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac111 -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-014-202610171856.log",
+      "history": [
+        {
+          "at": "2026-10-14T20:56:22+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:41+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        },
+        {
+          "at": "2026-10-14T20:58:42+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-105..114 が level system になったため blocked 解除"
+        }
+      ]
+    },
+    {
+      "id": "IT-015",
+      "requirement_ids": [
+        "NFR-SEC-004"
+      ],
+      "ac_ids": [
+        "AC-112"
+      ],
+      "title": "権限は 3 つの write のみで fork PR は書き込みせず検査のみ(異常系)",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac112 -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-015-202610171856.log",
+      "history": [
+        {
+          "at": "2026-10-14T20:56:23+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:41+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        },
+        {
+          "at": "2026-10-14T20:58:43+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-105..114 が level system になったため blocked 解除"
+        }
+      ]
+    },
+    {
+      "id": "IT-016",
+      "requirement_ids": [
+        "NFR-SEC-004"
+      ],
+      "ac_ids": [
+        "AC-113"
+      ],
+      "title": "bot の修復 commit を契機とする実行で修復の連鎖が起きない(異常系)",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac113 -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-016-202610171856.log",
+      "history": [
+        {
+          "at": "2026-10-14T20:56:25+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:41+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        },
+        {
+          "at": "2026-10-14T20:58:43+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-105..114 が level system になったため blocked 解除"
+        }
+      ]
+    },
+    {
+      "id": "IT-017",
+      "requirement_ids": [
+        "NFR-OPS-006"
+      ],
+      "ac_ids": [
+        "AC-114"
+      ],
+      "title": "MANAGED 登録・--no-ci 除外・README と users-guide の記述",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac114 -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-017-202610171856.log",
+      "history": [
+        {
+          "at": "2026-10-14T20:56:27+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "ケースを作成"
+        },
+        {
+          "at": "2026-10-14T20:56:42+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "競合: AC の検証レベルが integration で System Test の対象外（CHK-10）。conductor がレベルを system へ変更するか implementer の統合テストへ移管するまで保留"
+        },
+        {
+          "at": "2026-10-14T20:58:43+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-105..114 が level system になったため blocked 解除"
+        }
+      ]
+    },
+    {
+      "id": "IT-018",
+      "requirement_ids": [
+        "FR-1020"
+      ],
+      "ac_ids": [
+        "AC-151"
+      ],
+      "title": "エンティティ一覧の項目・新規ファイルなし・再読込で変化",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_entities_system.py -k ac151 -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-018-202610171857.log",
+      "history": [
+        {
+          "at": "2026-10-14T22:49:39+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-019",
+      "requirement_ids": [
+        "FR-1023"
+      ],
+      "ac_ids": [
+        "AC-159"
+      ],
+      "title": "企業データカタログ: 未設定・明示「利用しない」の報告と verify の結果不変",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_entities_system.py -k ac159 -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-019-202610171857.log",
+      "history": [
+        {
+          "at": "2026-10-14T22:49:41+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-16T05:12:49+09:00",
+          "by": "test-designer",
+          "change": "title: '参照元未設定: 未設定と報告し verify の結果が不変' -> '企業データカタログ: 未設定・明示「利用しない」の報告と verify の結果不変'",
+          "reason": "commit 2ef25488 で AC-159 が『利用しない（未設定／明示）』に改訂"
+        }
+      ]
+    },
+    {
+      "id": "IT-020",
+      "requirement_ids": [
+        "FR-1024"
+      ],
+      "ac_ids": [
+        "AC-163"
+      ],
+      "title": "企業データカタログ「利用する」で参照元が取得不能: 全エンティティを企業カタログ未確認の ToDo に（0 件含む）",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_entities_system.py -k ac163 -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-020-202610171857.log",
+      "history": [
+        {
+          "at": "2026-10-14T22:49:43+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-16T05:12:50+09:00",
+          "by": "test-designer",
+          "change": "title: '参照元未設定: 全エンティティを企業カタログ未確認の ToDo に（0 件含む）' -> '企業データカタログ「利用する」で参照元が取得不能: 全エンティティを企業カタログ未確認の ToDo に（0 件含む）'",
+          "reason": "commit 2ef25488 で AC-163 が『利用する』設定時のみに改訂"
+        }
+      ]
+    },
+    {
+      "id": "IT-021",
+      "requirement_ids": [
+        "NFR-COMPAT-003"
+      ],
+      "ac_ids": [
+        "AC-168"
+      ],
+      "title": "他リポジトリ（別パス・0 件・カタログなし）で一覧・検査が動く",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_entities_system.py -k ac168 -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-021-202610171857.log",
+      "history": [
+        {
+          "at": "2026-10-14T22:49:55+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-022",
+      "requirement_ids": [
+        "FR-1024"
+      ],
+      "ac_ids": [
+        "AC-234"
+      ],
+      "title": "企業データカタログ「利用しない」: 企業カタログ起因の ToDo 0 件・verify 不変",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/test_entities_system.py -k ac234 -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-022-202610171905.log",
+      "history": [
+        {
+          "at": "2026-10-16T05:12:52+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-023",
+      "requirement_ids": [
+        "FR-1046"
+      ],
+      "ac_ids": [
+        "AC-240"
+      ],
+      "title": "確認だけ: 不整合のないデータ層で exit 0・書き込みなし",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac240_check_clean\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-023-202610171906.log",
+      "history": [
+        {
+          "at": "2026-10-16T09:09:14+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-024",
+      "requirement_ids": [
+        "FR-1046"
+      ],
+      "ac_ids": [
+        "AC-240"
+      ],
+      "title": "確認だけ: 自動修復と手動対応の不整合で exit 1・FIX と MANUAL の行・書き込みなし",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac240_check_inconsistent\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-024-202610171906.log",
+      "history": [
+        {
+          "at": "2026-10-16T09:09:17+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-025",
+      "requirement_ids": [
+        "FR-1046"
+      ],
+      "ac_ids": [
+        "AC-240"
+      ],
+      "title": "確認だけ（異常系）: 自動修復の計画だけでも exit 1・書き込みなし",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac240_check_with_only_automatic\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-025-202610171907.log",
+      "history": [
+        {
+          "at": "2026-10-16T09:09:21+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-026",
+      "requirement_ids": [
+        "FR-1046"
+      ],
+      "ac_ids": [
+        "AC-241"
+      ],
+      "title": "適用: 自動修復できる不整合だけなら修復して再検査合格・exit 0・要求定義書と外部連携カタログ不変",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_automatic_only\" -q",
+      "canary": true,
+      "status": "pass",
+      "last_commit": "a049b30b",
+      "last_run_at": "2026-10-17T19:52:11+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-026-202610171951.log",
+      "history": [
+        {
+          "at": "2026-10-16T09:09:24+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-027",
+      "requirement_ids": [
+        "FR-1046"
+      ],
+      "ac_ids": [
+        "AC-241"
+      ],
+      "title": "適用: 手動対応が残るとき自動修復分を適用し残りを表示・exit 1",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_with_manual_left\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-027-202610171907.log",
+      "history": [
+        {
+          "at": "2026-10-16T09:09:27+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-028",
+      "requirement_ids": [
+        "FR-1046"
+      ],
+      "ac_ids": [
+        "AC-241"
+      ],
+      "title": "適用（異常系）: 作業役のブランチでは書き込まず exit 2（対照: 統合ブランチでは適用）",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_on_worker_branch\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-028-202610171908.log",
+      "history": [
+        {
+          "at": "2026-10-16T09:09:31+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-029",
+      "requirement_ids": [
+        "FR-1046"
+      ],
+      "ac_ids": [
+        "AC-241"
+      ],
+      "title": "適用（異常系）: 書き込みの失敗（外部から注入）で取り消し・修復前とバイト一致・exit 2",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_cancelled_on_write_failure\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-029-202610171908.log",
+      "history": [
+        {
+          "at": "2026-10-16T09:09:34+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-030",
+      "requirement_ids": [
+        "FR-1046"
+      ],
+      "ac_ids": [
+        "AC-241"
+      ],
+      "title": "適用: 不整合のないデータ層で exit 0・要求定義書と外部連携カタログ不変",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_on_clean\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-030-202610171909.log",
+      "history": [
+        {
+          "at": "2026-10-16T09:09:37+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-031",
+      "requirement_ids": [
+        "FR-1045"
+      ],
+      "ac_ids": [
+        "AC-237"
+      ],
+      "title": "インストーラ（新規の導入）: 導入後に自動修復し、修復項目・手動対応（CHK・位置・役割）・合否を表示",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac237_new_install\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-031-202610171909.log",
+      "history": [
+        {
+          "at": "2026-10-16T09:09:40+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-032",
+      "requirement_ids": [
+        "FR-1045"
+      ],
+      "ac_ids": [
+        "AC-237"
+      ],
+      "title": "インストーラ（更新・再実行）: 導入後に自動修復し、修復項目・手動対応（CHK・位置・役割）・合否を表示",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac237_update_install_repairs\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-032-202610171910.log",
+      "history": [
+        {
+          "at": "2026-10-16T09:09:44+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-033",
+      "requirement_ids": [
+        "FR-1045"
+      ],
+      "ac_ids": [
+        "AC-237"
+      ],
+      "title": "インストーラ（更新）: 自動修復だけで直る導入先は再検査に合格",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac237_update_install_automatic_only\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-033-202610171910.log",
+      "history": [
+        {
+          "at": "2026-10-16T09:09:47+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-034",
+      "requirement_ids": [
+        "FR-1045"
+      ],
+      "ac_ids": [
+        "AC-238"
+      ],
+      "title": "インストーラ --no-repair: 検査の結果と修復の計画を表示し、データ層を変えない",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac238_no_repair\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-034-202610171911.log",
+      "history": [
+        {
+          "at": "2026-10-16T09:09:50+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-035",
+      "requirement_ids": [
+        "FR-1045"
+      ],
+      "ac_ids": [
+        "AC-238"
+      ],
+      "title": "インストーラ --skip-verify: 検査も修復もしない",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac238_skip_verify\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-035-202610171912.log",
+      "history": [
+        {
+          "at": "2026-10-16T09:09:54+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-036",
+      "requirement_ids": [
+        "FR-1045"
+      ],
+      "ac_ids": [
+        "AC-238"
+      ],
+      "title": "インストーラ（異常系）: --dry-run・--check・--uninstall・--purge では修復しない",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac238_non_install_modes\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "5003f0c5",
+      "last_run_at": "2026-10-17T19:20:31+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-036-202610171912.log",
+      "history": [
+        {
+          "at": "2026-10-16T09:09:57+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-037",
+      "requirement_ids": [
+        "FR-1057"
+      ],
+      "ac_ids": [
+        "AC-315"
+      ],
+      "title": "階層化（正常・移行期）: 領域の欄が無くても違反・警告にならない",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac315\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:19+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:29+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-038",
+      "requirement_ids": [
+        "FR-1057"
+      ],
+      "ac_ids": [
+        "AC-316"
+      ],
+      "title": "階層化（正常・異常）: 領域で絞った一覧と件数の合計、廃止は件数外",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac316\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:23+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:30+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-039",
+      "requirement_ids": [
+        "FR-1057"
+      ],
+      "ac_ids": [
+        "AC-317"
+      ],
+      "title": "階層化（異常）: カタログの領域の区切りが要求定義書と違うと不整合",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac317\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:26+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:31+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-040",
+      "requirement_ids": [
+        "FR-1058"
+      ],
+      "ac_ids": [
+        "AC-318"
+      ],
+      "title": "メタデータ（正常・異常）: 定義外の欄・許容値外を位置つきで報告、現行は違反なし",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac318\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:30+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:31+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-041",
+      "requirement_ids": [
+        "FR-1058"
+      ],
+      "ac_ids": [
+        "AC-319"
+      ],
+      "title": "メタデータ: 領域・更新日の追加は差分がその行だけ",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac319\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:34+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:32+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-042",
+      "requirement_ids": [
+        "FR-1058"
+      ],
+      "ac_ids": [
+        "AC-320"
+      ],
+      "title": "メタデータ（unit）: 欄名の一覧がコードに重複しない",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac320\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:37+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:33+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-043",
+      "requirement_ids": [
+        "FR-1059"
+      ],
+      "ac_ids": [
+        "AC-321"
+      ],
+      "title": "関係の索引: 決定的・非保存・本文と一致・本文変更に追随",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac321\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:41+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:33+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-044",
+      "requirement_ids": [
+        "FR-1059"
+      ],
+      "ac_ids": [
+        "AC-322"
+      ],
+      "title": "関係の索引（正常・異常）: 逆引きが台帳の独立走査と一致",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac322\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:45+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:34+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-045",
+      "requirement_ids": [
+        "NFR-UX-014"
+      ],
+      "ac_ids": [
+        "AC-324"
+      ],
+      "title": "情報デザイン（異常）: 同種の表の列名・順序の不一致を列挙",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac324\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:49+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:35+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-046",
+      "requirement_ids": [
+        "NFR-UX-014"
+      ],
+      "ac_ids": [
+        "AC-323"
+      ],
+      "title": "情報デザイン: 領域化済みの節だけ項目数が上限(PARAM-043)超で警告（境界20/21・領域化前は無警告）",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac323\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:53+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:10+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC-323 の段階導入の対象は FR-1060（承認待ち）の割り当て表の後。判定に必要な割り当て表の書式が未定"
+        },
+        {
+          "at": "2026-10-17T17:43:48+09:00",
+          "by": "test-designer",
+          "change": "title: '情報デザイン: 領域化した節の直下の項目数が上限超なら警告（FR-1060 後）' -> '情報デザイン: 領域化済みの節だけ項目数が上限(PARAM-043)超で警告（境界20/21・領域化前は無警告）'",
+          "reason": "FR-1060 承認・割り当て表確定。期待値を確定し blocked 解除"
+        },
+        {
+          "at": "2026-10-17T17:43:50+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "unblock"
+        },
+        {
+          "at": "2026-10-17T17:44:10+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "FR-1060 承認で期待値は確定しテストは緑だが、検証レベル=integration のため System Test の対象外（CHK-10）。統合テストとして残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-047",
+      "requirement_ids": [
+        "FR-1057",
+        "FR-1060"
+      ],
+      "ac_ids": [
+        "AC-326"
+      ],
+      "title": "領域の割り当て表と欄の一致検査（不一致・表なし・欄なしを位置つき列挙、名称変更でID不変）",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac326\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:57+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:11+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC-326 は FR-1060（承認待ち）の決定記録の割り当て表の書式が未定で期待値を決められない"
+        },
+        {
+          "at": "2026-10-17T16:34:49+09:00",
+          "by": "rdfix",
+          "change": "requirement_ids: ['FR-1057'] -> ['FR-1057', 'FR-1060']",
+          "reason": "rdfix: 受入基準の「対応する要求」と要求定義書に合わせる"
+        },
+        {
+          "at": "2026-10-17T17:43:49+09:00",
+          "by": "test-designer",
+          "change": "title: '階層化: 割り当て表と領域の欄の一致検査、領域名変更で ID 不変（FR-1060 後）' -> '領域の割り当て表と欄の一致検査（不一致・表なし・欄なしを位置つき列挙、名称変更でID不変）'",
+          "reason": "FR-1060 承認・割り当て表確定。期待値を確定し blocked 解除"
+        },
+        {
+          "at": "2026-10-17T17:43:51+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "unblock"
+        },
+        {
+          "at": "2026-10-17T17:44:11+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "FR-1060 承認で期待値は確定しテストは緑だが、検証レベル=integration のため System Test の対象外（CHK-10）。統合テストとして残す"
         }
       ]
     }

@@ -30,8 +30,13 @@ function donut(data) {
   return ring;
 }
 function legend(data) {
-  return el('div', { class: 'legend', style: { flexDirection: 'column', gap: '6px' } }, data.map((d) => el('span', { style: { cursor: 'pointer' }, onclick: () => focusAndGo(d.ids || [], d.label) },
-    el('i', { class: 'dot', style: { background: d.color } }), `${d.label} `, el('b', { style: { color: 'var(--color-fg-default)' } }, d.value))));
+  // FR-1052 AC-284: 凡例の各項目がキーボードで届く区分（名前＋数値の読み上げ名）。Enter/Space でクリックと同じ動作。
+  return el('div', { class: 'legend', style: { flexDirection: 'column', gap: 'var(--space-2)' } }, data.map((d) => {
+    const go = () => focusAndGo(d.ids || [], d.label);
+    return el('span', { 'data-testid': 'chart-segment', tabindex: '0', role: 'button', 'aria-label': `${d.label}: ${d.value}`, style: { cursor: 'pointer' }, onclick: go,
+      onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } } },
+    el('i', { class: 'dot', style: { background: d.color } }), `${d.label} `, el('b', { 'data-testid': 'chart-segment-label', style: { color: 'var(--color-fg-default)' } }, d.value));
+  }));
 }
 
 function hbars(rows, opt = {}) {
@@ -39,8 +44,13 @@ function hbars(rows, opt = {}) {
   return el('div', { style: { display: 'grid', gap: '7px' } }, rows.map((r) => {
     const parts = r.parts || [{ value: r.value, color: r.color || token('--viz-sel'), ids: r.ids }];
     const wrap = el('div', { class: 'bar', style: { height: '12px', width: ((r.total ?? r.value) / max * 100) + '%', display: 'flex', background: 'var(--color-bg-hover)', minWidth: '6px' } },
-      parts.map((p) => el('i', { style: { width: ((p.value) / ((r.total ?? r.value) || 1) * 100) + '%', background: p.color, borderRadius: 0, cursor: 'pointer' }, title: `${p.label || ''} ${p.value}`, onclick: () => focusAndGo(p.ids || [], `${r.label} / ${p.label || ''}`) })));
-    return el('div', {}, el('div', { class: 'mini', style: { display: 'flex', justifyContent: 'space-between', marginBottom: '3px' } }, el('span', {}, r.label), el('b', { style: { color: 'var(--color-fg-default)' } }, r.right ?? (r.total ?? r.value))), wrap);
+      parts.map((p) => {
+        const go = () => focusAndGo(p.ids || [], `${r.label} / ${p.label || ''}`);
+        const name = `${r.label}${p.label ? ' / ' + p.label : ''}: ${p.value}`;
+        return el('i', { 'data-testid': 'chart-segment', tabindex: '0', role: 'button', 'aria-label': name, style: { width: ((p.value) / ((r.total ?? r.value) || 1) * 100) + '%', background: p.color, borderRadius: 0, cursor: 'pointer' }, title: `${p.label || ''} ${p.value}`, onclick: go,
+          onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } } });
+      }));
+    return el('div', {}, el('div', { class: 'mini', style: { display: 'flex', justifyContent: 'space-between', marginBottom: '3px' } }, el('span', {}, r.label), el('b', { 'data-testid': 'chart-segment-label', style: { color: 'var(--color-fg-default)' } }, r.right ?? (r.total ?? r.value))), wrap);
   }));
 }
 

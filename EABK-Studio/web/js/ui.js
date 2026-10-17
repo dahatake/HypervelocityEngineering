@@ -53,6 +53,7 @@ const ICON_PATHS = {
   error: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M9 9l6 6M15 9l-6 6',
   stale: 'M12 3l10 18H2zM12 10v5M12 18v.5',
   info: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 11v6M12 7.5v.5',
+  rpg: 'M4 20V9h3V6h2v3h2V6h2v3h2V6h2v3h3v11zM10 20v-5h4v5',
   search: 'M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13M15.5 16l5 5',
 };
 export const BUSINESS_ICON = {
