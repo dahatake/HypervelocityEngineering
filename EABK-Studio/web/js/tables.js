@@ -1,10 +1,14 @@
 // Table views: every kind of record in the data layer, sortable, filterable, and linked to the map selection.
 import { t, onLang } from './i18n.js';
 import { store, norm } from './store.js';
-import { el, statusBadge, nodeChip, colorOf } from './ui.js';
+import { el, statusBadge, colorOf } from './ui.js';
+import { xrefLink, idRef, idsToNodes } from './xref.js';
 
 let tab = 'reqs';
 const state = { q: '', only: false, filters: {}, sort: { reqs: { k: 'id', d: 1 }, acs: { k: 'id', d: 1 } } };
+
+// FR-1051 AC-280: every kind belongs to exactly one group (named by words, not colour).
+const GROUPS = [['req', ['goals', 'reqs', 'acs', 'params', 'questions']], ['design', ['entities', 'parts', 'apis', 'tables', 'integrations', 'terms', 'personas']], ['evidence', ['cases', 'files', 'sources']], ['ops', ['decisions', 'audits', 'runs']]];
 
 const cell = (v) => (Array.isArray(v) ? v.join(', ') : v ?? '');
 
@@ -12,6 +16,7 @@ function defs(m) {
   const nodes = store.nodes;
   const reqNode = (id) => nodes.get(id);
   return {
+    goals: { cols: [['id'], ['title'], ['reqs']], filters: [], rows: () => (m.goals || []).map((g) => ({ nodeId: g.id, id: g.id, title: g.title, reqs: m.reqs.filter((r) => r.goal === g.id).map((r) => r.id).join(', ') })) },
     reqs: {
       cols: [['id'], ['title'], ['status'], ['priority'], ['goal'], ['impl'], ['acs'], ['blocked'], ['group']],
       filters: ['status', 'priority', 'goal', 'impl', 'group'],
@@ -35,14 +40,9 @@ function defs(m) {
       filters: [],
       rows: () => m.catalog.parts.map((p) => ({ nodeId: 'part:' + p.name, name: p.name, purpose: p.purpose, files: p.files.join(', '), reqs: p.reqs.length })),
     },
-    apis: {
-      cols: [['kind'], ['name'], ['owner'], ['files'], ['reqs']],
-      filters: ['kind'],
-      rows: () => [
-        ...m.catalog.apis.map((a) => ({ nodeId: 'api:' + a.name, kind: 'API', name: a.name, owner: '', files: a.files.join(', '), reqs: a.reqs.join(', ') })),
-        ...m.catalog.tables.map((a) => ({ nodeId: 'tbl:' + a.name, kind: t('type.table'), name: a.name, owner: a.owner, files: a.files.join(', '), reqs: a.reqs.join(', ') })),
-      ],
-    },
+    apis: { cols: [['name'], ['files'], ['reqs']], filters: [], rows: () => m.catalog.apis.map((a) => ({ nodeId: 'api:' + a.name, name: a.name, files: a.files.join(', '), reqs: a.reqs.join(', ') })) },
+    tables: { cols: [['name'], ['owner'], ['files'], ['reqs']], filters: [], rows: () => m.catalog.tables.map((a) => ({ nodeId: 'tbl:' + a.name, name: a.name, owner: a.owner, files: a.files.join(', '), reqs: a.reqs.join(', ') })) },
+    entities: { cols: [['name'], ['description'], ['reqs']], filters: [], rows: () => ((m.entities && m.entities.entities) || []).map((e) => ({ nodeId: 'ent:' + e.name, name: e.name, description: e.description || '', reqs: [...new Set(e.usecases.map((u) => u.requirement))].join(', ') })) },
     files: {
       cols: [['path'], ['comp'], ['module'], ['role'], ['reqs']],
       filters: ['comp', 'role'],
@@ -75,7 +75,9 @@ export function mount(host) {
     const rows = def.rows();
     const colLabel = (k) => (tab === 'runs' ? k : t('col.' + k));
 
-    const tabBar = el('div', { class: 'tbar' }, Object.keys(D).map((k) => el('button', { class: 'tabbtn' + (k === tab ? ' on' : ''), onclick: () => { tab = k; state.filters = {}; render(); } }, t('tab.' + k), el('small', {}, D[k].rows().length))));
+    const tabBtn = (k) => el('button', { class: 'tabbtn' + (k === tab ? ' on' : ''), role: 'tab', type: 'button', 'aria-selected': k === tab ? 'true' : 'false', 'data-testid': 'table-kind', onclick: () => { tab = k; state.filters = {}; render(); } }, t('tab.' + k), el('small', {}, D[k].rows().length));
+    const tabBar = el('div', { class: 'tgroups' }, GROUPS.map(([g, keys]) => el('div', { class: 'tgroup', role: 'group', 'aria-label': t('tgrp.' + g), 'data-group': g },
+      el('span', { class: 'gh' }, t('tgrp.' + g)), el('div', { class: 'tgl', role: 'tablist', 'aria-label': t('tgrp.' + g) }, keys.filter((k) => D[k]).map(tabBtn)))));
     const input = el('input', { type: 'search', value: state.q, placeholder: t('tbl.filter'), oninput: (e) => { state.q = e.target.value; fill(); } });
     const only = el('label', { class: 'row mini', style: { cursor: 'pointer' } }, el('input', { type: 'checkbox', checked: state.only || null, onchange: (e) => { state.only = e.target.checked; fill(); } }), t('tbl.only'));
     const selects = (def.filters || []).map((k) => {
@@ -107,11 +109,12 @@ export function mount(host) {
           def.cols.map(([k]) => {
             const v = r[k];
             if (tab === 'reqs' && k === 'status') return el('td', {}, statusBadge(r.status, r.statusRaw));
-            if (k === 'id' && r.nodeId && store.nodes.has(r.nodeId)) return el('td', { class: 'mono' }, el('span', { style: { color: colorOf(store.node(r.nodeId)) } }, v));
-            if ((k === 'req' || k === 'goal') && store.nodes.has(v)) return el('td', {}, nodeChip(v));
+            if ((k === 'id' || (k === 'name' && !('id' in r))) && r.nodeId && store.nodes.has(r.nodeId)) { const a = xrefLink(r.nodeId, String(v)); a.style.color = colorOf(store.node(r.nodeId)); return el('td', { class: 'mono' }, a); }
+            if ((k === 'req' || k === 'goal') && v) return el('td', {}, idRef(v));
             if (tab === 'cases' && k === 'status') return el('td', {}, el('span', { class: 'badge ' + (v === 'pass' ? 'pass' : v === 'fail' ? 'fail' : '') }, v));
             if (k === 'impl') return el('td', {}, el('span', { class: 'badge ' + (v === 'done' ? 'ok' : v === 'none' ? 'bad' : '') }, t('impl.' + (v || 'unlisted'))));
-            return el('td', { class: k === 'path' || k === 'files' ? 'mono' : '' }, el('div', { class: 'clamp' }, String(cell(v)).slice(0, 400)));
+            if (k === 'path' && r.nodeId && store.nodes.has(r.nodeId)) return el('td', { class: 'mono' }, xrefLink(r.nodeId, String(v)));
+            return el('td', { class: k === 'path' || k === 'files' ? 'mono' : '' }, el('div', { class: 'clamp' }, idsToNodes(cell(v))));
           }));
       }));
       const sel = tbody.querySelector('tr.sel');

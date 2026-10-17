@@ -735,6 +735,8 @@ def parse_integration_catalog(root: Path, files: dict, model: dict) -> None:
         it["dataClass"], it["pii"], it["status"] = f.get("データ分類", ""), f.get("個人情報", ""), f.get("状態", "")
         it["authz"], it["responsibility"] = f.get("認証認可", ""), f.get("責任分界", "")
         it["reqs"] = list(dict.fromkeys(REQ_ID_RE.findall(f.get("関連する要求", ""))))
+        # FR-1050 AC-278: every ID written in 「関連する要求」 (FR / NFR / AC / INT …) so the UI can link it or show it as unresolved.
+        it["refs"] = list(dict.fromkeys(re.findall(r"(?<![A-Za-z0-9\-])((?:G|FR|NFR-[A-Z0-9]+|AC|Q|PARAM|SRC|INT|E2E|IT)-\d{3,})(?![0-9])", f.get("関連する要求", ""))))
         vps = []
         for label, keys in INT_VIEWPOINTS:
             states = [viewpoint_state(f.get(k, "")) for k in keys]
