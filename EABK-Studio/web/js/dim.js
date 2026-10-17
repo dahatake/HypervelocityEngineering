@@ -1,7 +1,7 @@
 // FR-1040: 2D / 3D switch shared by the diagrams and the map.
-// The icons are drawn inline (anime-style faces on a flat sheet / a cube), so nothing is fetched from outside (AC-222).
+// The icons come from the bundled icon set, so nothing is fetched from outside (AC-222).
 import { t } from './i18n.js';
-import { el, svgEl } from './ui.js';
+import { el, icon } from './ui.js';
 
 // The chosen dimension is kept only while the page is open (FR-1040 [ASSUMPTION]: not persisted, Q-003).
 export const dimState = { map: '2d', diagrams: '2d' };
@@ -12,28 +12,12 @@ export function registerDim(fn) { handler = fn; return () => { if (handler === f
 export const hasDimHandler = () => !!handler;
 export function runDim(d) { if (handler) handler(d); }
 
-const FACE = (x, y) => [
-  svgEl('circle', { cx: x - 5, cy: y, r: 1.9, fill: '#1b2440' }), svgEl('circle', { cx: x + 5, cy: y, r: 1.9, fill: '#1b2440' }),
-  svgEl('circle', { cx: x - 5.8, cy: y - 0.7, r: 0.6, fill: '#fff' }), svgEl('circle', { cx: x + 4.2, cy: y - 0.7, r: 0.6, fill: '#fff' }),
-  svgEl('ellipse', { cx: x - 9, cy: y + 4, rx: 2.4, ry: 1.4, fill: '#ff9db8', 'fill-opacity': 0.8 }), svgEl('ellipse', { cx: x + 9, cy: y + 4, rx: 2.4, ry: 1.4, fill: '#ff9db8', 'fill-opacity': 0.8 }),
-  svgEl('path', { d: `M${x - 3} ${y + 4}q3 3 6 0`, fill: 'none', stroke: '#1b2440', 'stroke-width': 1.4, 'stroke-linecap': 'round' }),
-];
-
+// 切替アイコンは同梱の 1 セット（ui.js の icon）の線画で、20px・currentColor（FR-1048 AC-268）。2D は面（平らな表）、3D は立方体。
 export function dimIcon(dim) {
-  const svg = svgEl('svg', { viewBox: '0 0 40 40', width: 28, height: 28, class: 'dim-ico dim-ico-' + dim, 'aria-hidden': 'true', focusable: 'false' });
-  if (dim === '2d') {
-    svg.append(svgEl('rect', { x: 5, y: 7, width: 30, height: 26, rx: 7, fill: '#8be9ff', stroke: '#1b2440', 'stroke-width': 1.6 }), ...FACE(20, 19));
-  } else {
-    svg.append(
-      svgEl('path', { d: 'M20 4 35 12v16L20 36 5 28V12z', fill: '#c9b8ff', stroke: '#1b2440', 'stroke-width': 1.6, 'stroke-linejoin': 'round' }),
-      svgEl('path', { d: 'M5 12 20 20 35 12', fill: 'none', stroke: '#1b2440', 'stroke-width': 1.4, 'stroke-linejoin': 'round' }),
-      svgEl('path', { d: 'M20 20v16', stroke: '#1b2440', 'stroke-width': 1.4 }),
-      svgEl('path', { d: 'M20 4 35 12 20 20 5 12z', fill: '#e6dcff', 'fill-opacity': 0.9 }),
-      svgEl('g', { transform: 'translate(20 29) scale(.62) translate(-20 -29)' }, ...FACE(20, 29)));
-  }
+  const svg = icon(dim === '2d' ? 'tables' : 'map3d', { size: 20 });
+  svg.setAttribute('class', 'icon dim-ico dim-ico-' + dim);
   return svg;
 }
-
 // <div data-testid="dim-toggle" data-current="2d|3d"> with <button data-dim="2d|3d">.
 export function dimToggle({ current, onPick }) {
   const cur = current === '3d' ? '3d' : '2d';

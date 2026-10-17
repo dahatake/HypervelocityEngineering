@@ -238,7 +238,7 @@ export function mountMaintenance(host) {
       const req = reqs.get(feature.req);
       const mismatch = !req || feature.title !== req.title || feature.status !== req.status;
       if (!mismatch) continue;
-      list.append(el('button', { class: 'card maintenance-item', onclick: () => preview(feature.req) },
+      list.append(el('button', { class: 'maintenance-item', onclick: () => preview(feature.req) },
         el('b', {}, feature.req),
         el('span', {}, req ? `${feature.title} → ${req.title}` : '未対応: 要求正本に参照先なし'),
         el('span', {}, req ? `${feature.status} → ${req.status}` : 'unsupported')));
