@@ -57,6 +57,9 @@ def integ_page(browser, tmp_path):
 
 # FR-1050 AC-277
 def test_ac277_existing_ids_in_all_table_cells_are_links(page):
+    page.goto(page.url.split("#")[0] + "#/tables")
+    page.wait_for_load_state("networkidle")
+    page.wait_for_selector("#view [role=tab]")
     tabs = page.locator('#view [role=tab], #view [data-testid="table-kind"]')
     n = tabs.count()
     assert n >= 10, "表の種別の選択肢が見つからない"
@@ -117,7 +120,7 @@ def test_ac280_kinds_are_grouped_under_four_headings(page):
         for kind in EXPECTED_KINDS[g]:
             assert grp.first.get_by_text(kind, exact=False).count() >= 1, f"{g} に {kind} がない"
             seen.append(kind)
-    assert len(seen) == len(set(seen)) == 15
+    assert len(seen) == len(set(seen)) == 18  # AC 本文の列挙: 5+7+3+3
     # 見出しなしのフラットなタブ列がない: すべてのタブがグループの内側にある
     tabs = page.locator("#view [role=tab]")
     in_group = page.locator("#view [role=group] [role=tab]")
@@ -135,9 +138,12 @@ def test_ac281_screen_name_is_unified(browser, studio_url, lang, word, banned):
     p = ctx.new_page()
     p.goto(studio_url + "#/tables")
     p.wait_for_load_state("networkidle")
+    p.wait_for_selector("#view [role=tab]")  # 表の画面が描画されるまで待つ
     nav = p.locator('nav a[href="#/tables"]').first
-    nav_text = nav.inner_text().strip()
-    title = p.locator("#view h1, #view h2").first.inner_text().strip()
+    def _strip(s):  # 絵文字・記号を除いた画面名
+        return re.sub(r"[^\w]+", " ", s, flags=re.UNICODE).strip()
+    nav_text = _strip(nav.inner_text())
+    title = _strip(p.locator("#view h1").first.inner_text())
     if lang == "ja":
         assert word in nav_text and word in title
     else:
