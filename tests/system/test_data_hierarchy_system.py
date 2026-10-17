@@ -1,7 +1,7 @@
 """System Tests for FR-1057 (hierarchy), FR-1058 (metadata), FR-1059 (relation index), NFR-UX-014 (information design).
 
 Expected values come from the acceptance criteria only (AC-315..AC-322, AC-324).
-AC-323 and AC-326 depend on the FR-1060 assignment table (pending approval) and are blocked in the ledger.
+AC-323 and AC-326 use the FR-1060 assignment table (decision record 9.2: | 要求 ID | 領域 |), approved.
 
 Every test works on a disposable Git repository (datalayer_repo.py); the source checkout is never written.
 
@@ -281,3 +281,98 @@ def test_ac324_table_column_mismatch_reported_and_clean_passes(repo):
     r = check(repo)
     hit = [l for l in (lines(r, "ERROR") + lines(r, "WARN")) if "列" in l or "欄名" in l or "題名" in l or "決定状態" in l]
     assert hit, r.stdout + r.stderr
+
+
+# ============================================================================ FR-1060 / NFR-UX-014
+def add_assignment(root, pairs):
+    """決定記録に領域の割り当て表（要求 ID・領域）を足す。"""
+    s = txt(root, d.RD)
+    tbl = "\n### 領域の割り当て表\n\n| 要求 ID | 領域 |\n|---|---|\n" + "".join(
+        f"| {r} | {a} |\n" for r, a in pairs) + "\n"
+    put(root, d.RD, s.replace("### 6.1 機能要求\n", tbl + "### 6.1 機能要求\n", 1))
+
+
+def area_ready(root, pairs=(("FR-001", "受付"), ("FR-002", "照会"))):
+    names = sorted({a for _, a in pairs})
+    add_area_table(root, [(a, sum(1 for _, x in pairs if x == a)) for a in names])
+    add_assignment(root, pairs)
+    for r, a in pairs:
+        set_area(root, r, a)
+
+
+def chk(r, code, level):
+    return [l for l in lines(r, level) if code in l]
+
+
+def area_section(root, n):
+    cat = txt(root, d.CATALOG)
+    hdr = "| 要求 ID | 題名 | 決定状態 | 実装ファイル | テスト | 使っている共通部品 |\n|---|---|---|---|---|---|\n"
+    rows = "".join("| FR-001 | 注文の登録 | 承認済み | 未実装 | 未実装 | なし |\n" for _ in range(n))
+    put(root, d.CATALOG, cat.rstrip("\n") + "\n\n#### 領域: 受付\n\n" + hdr + rows)
+
+
+# NFR-UX-014 AC-323: 領域化済みの節だけ、直下の項目が PARAM-043(20) を超えると警告。20 件は警告なし
+def test_ac323_area_section_over_limit_warns_at_boundary(repo):
+    area_ready(repo)
+    area_section(repo, 20)
+    ok = check(repo)
+    assert not chk(ok, "CHK-32", "WARN"), "20 件（上限ちょうど）で警告した:\n" + ok.stdout
+    area_section_repo = repo  # 21 件へ
+    cat = txt(repo, d.CATALOG)
+    row = "| FR-001 | 注文の登録 | 承認済み | 未実装 | 未実装 | なし |\n"
+    put(repo, d.CATALOG, cat.rstrip("\n") + "\n" + row)
+    r = check(area_section_repo)
+    hit = chk(r, "CHK-32", "WARN")
+    assert hit and "領域: 受付" in hit[0] and "21" in hit[0], r.stdout + r.stderr
+    assert not chk(r, "CHK-32", "ERROR"), "警告であって違反ではない"
+
+
+# NFR-UX-014 AC-323 (異常系): 領域化の前（割り当て表なし）の節は 21 件以上でも警告しない
+def test_ac323_before_area_assignment_no_warning(repo):
+    area_section(repo, 25)
+    r = check(repo)
+    assert not chk(r, "CHK-32", "WARN"), r.stdout + r.stderr
+
+
+# FR-1060 AC-326: 表と欄が一致していれば領域の違反なし
+def test_ac326_consistent_table_and_fields_clean(repo):
+    area_ready(repo)
+    r = check(repo)
+    bad = [l for l in lines(r, "ERROR") if "CHK-30" in l]
+    assert not bad, "\n".join(bad)
+
+
+# FR-1060 AC-326 (異常系): 値の不一致を位置つきで列挙する
+def test_ac326_value_mismatch_reported_with_location(repo):
+    area_ready(repo)
+    s = txt(repo, d.RD)
+    i = s.index("#### FR-001 ")
+    j = s.index("- 領域: 受付", i)
+    put(repo, d.RD, s[:j] + "- 領域: 照会" + s[j + len("- 領域: 受付"):])
+    r = check(repo)
+    hit = [l for l in chk(r, "CHK-30", "ERROR") if "FR-001" in l]
+    assert r.returncode == 1 and hit and re.search(r"requirements-definition\.md:\d+", hit[0]), r.stdout + r.stderr
+
+
+# FR-1060 AC-326 (異常系): 表にない要求・欄にない要求を列挙する
+def test_ac326_missing_in_table_and_missing_field_reported(repo):
+    area_ready(repo, (("FR-001", "受付"),))  # FR-002 は表にも欄にもない
+    r = check(repo)
+    hit = [l for l in chk(r, "CHK-30", "ERROR") if "FR-002" in l]
+    assert r.returncode == 1 and len(hit) >= 2, r.stdout + r.stderr
+    assert any("割り当て表" in l for l in hit) and any("欄" in l for l in hit), hit
+
+
+# FR-1060 AC-326: 領域の名称を変えても要求・受入基準の ID は変わらない
+def test_ac326_renaming_area_keeps_ids(repo):
+    area_ready(repo)
+    before = d.py(repo, *RDC, "list", "--area", "受付").stdout
+    assert "FR-001" in before
+    s = txt(repo, d.RD).replace("受付", "窓口")
+    put(repo, d.RD, s)
+    after = d.py(repo, *RDC, "list", "--area", "窓口").stdout
+    assert "FR-001" in after and "FR-002" not in after, after
+    r = check(repo)
+    assert not [l for l in lines(r, "ERROR") if "CHK-30" in l], r.stdout
+    ids = lambda t: sorted(set(re.findall(r"\b(?:FR-\d+|NFR-[A-Z]+-\d+|AC-\d+)\b", t)))
+    assert ids(s) == ids(txt(repo, d.RD))
