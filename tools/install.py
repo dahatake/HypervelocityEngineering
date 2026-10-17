@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
@@ -220,7 +221,8 @@ INSTRUCTIONS_BLOCK = """## Enterprise App Build Kit（要求定義書・カタ�
 - System Test の台帳 `tests/system/ledger.json` は `python scripts/ledger.py` でだけ更新します。
 - 一時ファイル（ログ・証跡・実行結果・作業メモ）は `/work` に置きます（git の管理対象外。14 日で削除）。"""
 GITIGNORE_LINES = ["/work/"]
-GITATTR_LINES = ["docs/id-registry.md merge=union", "docs/run-history.md merge=union"]
+GITATTR_LINES = ["docs/id-registry.md merge=union", "docs/run-history.md merge=union",
+                 "scripts/*.sh text eol=lf", "EABK-Studio/*.sh text eol=lf"]
 GITIGNORE_HEADER = "# Enterprise App Build Kit: temporary run files (kept 14 days)"
 GITATTR_HEADER = "# Enterprise App Build Kit: append-only records"
 # Management data paths (defaults of scripts/ebaklib.py DEFAULT_CONFIG["files"]); --purge also honours the target's config.
@@ -234,6 +236,19 @@ DEFAULT_FILES = {
     "manual_tests": "docs/manual-tests.md",
     "integrations": "docs/integrations.md",
 }
+
+
+def preflight() -> None:
+    """Warn (never fail) about missing tools that the installed scripts, agents and hooks rely on."""
+    if not shutil.which("git"):
+        print("警告: git が PATH にありません。run の worktree・統合・hook が動きません。")
+    if not shutil.which("python"):
+        print("警告: `python` コマンドが PATH にありません（`python3` / `py` のみ）。手順書・agent・verify.commands は `python scripts/...` と書かれています。"
+              "Windows は python.org か `winget install Python.Python.3.12` で導入（PATH に追加）、macOS・Linux は `python` を `python3` の別名にします"
+              "（例: python-is-python3、または venv を有効化）。")
+    if importlib.util.find_spec("pytest") is None:
+        print("注意: pytest が未導入です。既定の verify.commands（toolkit-unit）が失敗します。`python -m pip install pytest` を実行するか、"
+              "scripts/ebak.config.json の verify.commands を書き換えます。")
 
 
 def sha(path: Path) -> str:
@@ -638,6 +653,7 @@ def main(argv=None) -> int:
         return 0
     if dry:
         return 0
+    preflight()
     if not args.skip_verify:
         apply = not args.no_repair
         print("\n--- データ層の確認" + ("と自動修復" if apply else "（修復の計画のみ・書き込みません）")

@@ -18,7 +18,7 @@ export const BUSINESS_ICON = {
   entities: ['🔗', 'Entity × use case'],
   integrations: ['🔌', 'External integrations'],
   source: ['💻', 'Source'],
-  tables: ['📋', 'Data tables'],
+  tables: ['📋', 'Tables'],
   maintenance: ['🛠️', 'Integrity maintenance'],
   structure: ['🏗️', 'Data-layer structure'],
   consistency: ['🔎', 'Consistency viewer'],
