@@ -70,9 +70,11 @@ input[type=checkbox],input[type=radio]{width:var(--size-icon-lg);height:var(--si
 .dgm3d-hint{position:absolute;left:var(--space-1);right:var(--space-1);bottom:0}
 .dgm-embed .page{position:static;padding:0}
 .chip.repo{max-width:260px;overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-caption);color:var(--color-fg-muted)}
-.search{position:relative;display:flex;align-items:center;gap:var(--space-2);background:var(--color-bg-raised);border:var(--stroke-thin) solid var(--color-border-strong);border-radius:var(--radius-lg);padding:0 var(--space-3);width:min(360px,28vw);color:var(--color-fg-muted)}
-.search input{background:none;border:0;padding:var(--space-2) 0;flex:1;min-width:0}
-.search kbd{border:var(--stroke-thin) solid var(--color-border-strong);border-radius:var(--radius-sm);padding:0 var(--space-2);font-size:var(--font-size-caption);color:var(--color-fg-subtle)}
+.search{position:relative;display:flex;align-items:center;gap:var(--space-2);width:min(360px,28vw);color:var(--color-fg-muted)}
+/* 入力欄は全画面で同じ見た目（枠・角丸・背景）。アイコンと kbd は入力欄の上に重ねる（FR-1048 AC-263） */
+.search input{background:var(--color-bg-raised);border:var(--stroke-thin) solid var(--color-border-strong);border-radius:var(--radius-md);padding:var(--space-2) var(--space-8) var(--space-2) var(--space-8);flex:1;min-width:0}
+.search>.icon{position:absolute;left:var(--space-3);pointer-events:none}
+.search kbd{position:absolute;right:var(--space-3);border:var(--stroke-thin) solid var(--color-border-strong);border-radius:var(--radius-sm);padding:0 var(--space-2);font-size:var(--font-size-caption);color:var(--color-fg-subtle)}
 .results{position:fixed;top:var(--hh,56px);right:var(--space-4);width:min(560px,calc(100vw - var(--space-8)));max-height:calc(100vh - var(--hh,56px) - var(--space-4));overflow:auto;background:var(--color-bg-surface);border:var(--stroke-thin) solid var(--color-border-strong);border-radius:var(--radius-overlay);box-shadow:var(--elevation-flyout);padding:var(--space-2);z-index:60}
 .results .hd{display:flex;justify-content:space-between;color:var(--color-fg-muted);font-size:var(--font-size-caption);padding:var(--space-2)}
 .results .hd button{background:none;border:var(--stroke-thin) solid var(--color-border-strong);border-radius:var(--radius-md);color:var(--color-fg-link);cursor:pointer;padding:var(--space-1) var(--space-2);font-size:var(--font-size-caption)}
