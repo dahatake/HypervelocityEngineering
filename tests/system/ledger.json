@@ -112,9 +112,9 @@
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_model_can_traverse_requirement_to_catalog_file_and_test",
       "canary": true,
       "status": "pass",
-      "last_commit": "9f4ba89a",
-      "last_run_at": "2026-10-16T13:50:26+09:00",
-      "evidence": "work/runs/202610160833/logs/system-test/E2E-001-202610161320.log",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-001-202610171601.log",
       "history": [
         {
           "at": "2026-10-09T22:10:37+09:00",
@@ -875,9 +875,9 @@
       "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_starts_only_after_ordered_success_and_pre_cleanup_report",
       "canary": true,
       "status": "pass",
-      "last_commit": "9f4ba89a",
-      "last_run_at": "2026-10-16T13:50:26+09:00",
-      "evidence": "work/runs/202610160833/logs/system-test/E2E-026-202610161320.log",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-026-202610171602.log",
       "history": [
         {
           "at": "2026-10-10T10:41:32+09:00",
@@ -925,9 +925,9 @@
       "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_cleanup_starts_only_after_all_gates_and_main_integration",
       "canary": true,
       "status": "pass",
-      "last_commit": "9f4ba89a",
-      "last_run_at": "2026-10-16T13:50:26+09:00",
-      "evidence": "work/runs/202610160833/logs/system-test/E2E-028-202610161320.log",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-028-202610171602.log",
       "history": [
         {
           "at": "2026-10-10T10:41:53+09:00",
@@ -2387,9 +2387,9 @@
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac105 -q",
       "canary": true,
       "status": "pass",
-      "last_commit": "9f4ba89a",
-      "last_run_at": "2026-10-16T13:50:26+09:00",
-      "evidence": "work/runs/202610160833/logs/system-test/IT-008-202610161320.log",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-008-202610171602.log",
       "history": [
         {
           "at": "2026-10-14T20:55:51+09:00",
@@ -3825,9 +3825,9 @@
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_automatic_only\" -q",
       "canary": true,
       "status": "pass",
-      "last_commit": "f283a12e",
-      "last_run_at": "2026-10-16T14:04:30+09:00",
-      "evidence": "work/runs/202610161358/logs/system-test/IT-026-202610161403.log",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/IT-026-202610171602.log",
       "history": [
         {
           "at": "2026-10-16T09:09:24+09:00",
@@ -4099,10 +4099,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac258_tokens_defined_once_and_no_raw_colors_outside_them\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-119-202610171603.log",
       "history": [
         {
           "at": "2026-10-17T14:37:55+09:00",
@@ -4136,10 +4136,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac258_color_tokens_only_in_root_and_theme_blocks\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-120-202610171603.log",
       "history": [
         {
           "at": "2026-10-17T14:38:01+09:00",
@@ -4173,10 +4173,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac259_three_choices_default_system_and_follow_os_without_reload\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-121-202610171603.log",
       "history": [
         {
           "at": "2026-10-17T14:38:04+09:00",
@@ -4210,10 +4210,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac259_switch_keeps_input_selection_filter_and_layout_and_works_by_keyboard\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-122-202610171603.log",
       "history": [
         {
           "at": "2026-10-17T14:38:11+09:00",
@@ -4247,10 +4247,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac259_theme_can_be_chosen_from_command_search\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-123-202610171603.log",
       "history": [
         {
           "at": "2026-10-17T14:38:16+09:00",
@@ -4284,10 +4284,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac259_every_color_token_has_a_value_in_both_themes\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-124-202610171603.log",
       "history": [
         {
           "at": "2026-10-17T14:38:22+09:00",
@@ -4321,10 +4321,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac261_system_font_stack_no_remote_fonts_and_type_ramp\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-125-202610171603.log",
       "history": [
         {
           "at": "2026-10-17T14:38:28+09:00",
@@ -4358,10 +4358,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac261_no_external_font_requests\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-126-202610171603.log",
       "history": [
         {
           "at": "2026-10-17T14:38:34+09:00",
@@ -4395,10 +4395,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac262_spacing_size_radius_tokens_are_multiples_of_grid\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-127-202610171604.log",
       "history": [
         {
           "at": "2026-10-17T14:38:40+09:00",
@@ -4432,10 +4432,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac262_component_px_values_are_tokens_or_grid_multiples\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-128-202610171604.log",
       "history": [
         {
           "at": "2026-10-17T14:38:46+09:00",
@@ -4839,10 +4839,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac269_token_contrast_ratios_meet_wcag_aa_and_are_reported\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-139-202610171604.log",
       "history": [
         {
           "at": "2026-10-17T14:39:55+09:00",
@@ -4876,10 +4876,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac270_focus_visible_on_keyboard_not_on_mouse_and_no_bare_outline_none\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-140-202610171604.log",
       "history": [
         {
           "at": "2026-10-17T14:40:02+09:00",
@@ -4913,10 +4913,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac270_focus_ring_contrast_against_background\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-141-202610171604.log",
       "history": [
         {
           "at": "2026-10-17T14:40:10+09:00",
@@ -4950,10 +4950,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac271_forced_colors_defined_and_state_visible\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-142-202610171604.log",
       "history": [
         {
           "at": "2026-10-17T14:40:17+09:00",
@@ -4987,10 +4987,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac272_reduced_motion_stops_animations_on_all_screens\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-143-202610171604.log",
       "history": [
         {
           "at": "2026-10-17T14:40:22+09:00",
@@ -5024,10 +5024,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac272_loading_is_conveyed_without_motion\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-144-202610171604.log",
       "history": [
         {
           "at": "2026-10-17T14:40:30+09:00",
@@ -5061,10 +5061,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac273_pointer_target_size_at_least_24px\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-145-202610171604.log",
       "history": [
         {
           "at": "2026-10-17T14:40:35+09:00",
@@ -5098,10 +5098,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac273_reflow_and_text_zoom_without_horizontal_scroll\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-146-202610171604.log",
       "history": [
         {
           "at": "2026-10-17T14:40:41+09:00",
@@ -5135,10 +5135,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac274_theme_toggle_keyboard_reachable_with_name_role_state_and_announced\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-147-202610171605.log",
       "history": [
         {
           "at": "2026-10-17T14:40:48+09:00",
@@ -5172,10 +5172,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac274_states_not_conveyed_by_color_alone\" -q",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-148-202610171605.log",
       "history": [
         {
           "at": "2026-10-17T14:40:53+09:00",
@@ -5209,10 +5209,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac275_nav_items_and_legacy_urls_identical_to_baseline_commit\" -q",
       "canary": true,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "0f4b3283",
+      "last_run_at": "2026-10-17T16:05:54+09:00",
+      "evidence": "work/runs/202610171403/logs/system-test/E2E-149-202610171603.log",
       "history": [
         {
           "at": "2026-10-17T14:40:58+09:00",
