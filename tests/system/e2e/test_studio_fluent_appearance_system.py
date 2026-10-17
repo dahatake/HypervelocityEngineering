@@ -560,7 +560,13 @@ def test_ac274_theme_toggle_keyboard_reachable_with_name_role_state_and_announce
         assert (b.get_attribute("aria-label") or b.inner_text()).strip()
         assert b.get_attribute("aria-pressed") in ("true", "false") or b.get_attribute("role") == "radio"
     page.locator('[data-testid="theme-toggle"] [data-theme-choice="dark"]').click()
-    expect(page.locator('[data-testid="theme-toggle"] [data-theme-choice="dark"]')).to_have_attribute(re.compile("aria-pressed|aria-checked"), "true")
+    dark = page.locator('[data-testid="theme-toggle"] [data-theme-choice="dark"]')
+    for _ in range(20):  # 状態反映の待ち（最大約 2 秒）
+        if "true" in (dark.get_attribute("aria-pressed"), dark.get_attribute("aria-checked")):
+            break
+        page.wait_for_timeout(100)
+    assert "true" in (dark.get_attribute("aria-pressed"), dark.get_attribute("aria-checked")), \
+        "選択後に aria-pressed / aria-checked のどちらも true にならない"
     live = page.locator('[role="status"], [aria-live]:not([aria-live="off"])')
     expect(live.first).to_be_attached()
 
