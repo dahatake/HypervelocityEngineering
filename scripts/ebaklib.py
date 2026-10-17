@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
-TOOLKIT_VERSION = "0.4.1"
+TOOLKIT_VERSION = "0.5.0"
 
 
 SPECKIT_PATHS = [".specify/**", "specs/**/*.md"]
@@ -118,8 +118,36 @@ TOP_BULLET_RE = re.compile(r"^\s{0,1}[-*]\s+(.*)$")
 PARAM_REF_RE = re.compile(r"\{(PARAM-\d{3,})\}")
 
 STATES = ("承認済み", "承認待ち", "保留", "却下", "廃止")
-VERIFICATION_LEVELS = ("system", "integration", "unit", "manual")
-AC_META_KEYS = ("検証レベル", "BLOCKED", "対応する要求", "決定状態")
+
+# メタデータ定義（FR-1058）: 欄名・必須/任意・許容値は scripts/metadata.json が唯一の正本
+METADATA_PATH = Path(__file__).resolve().parent / "metadata.json"
+_METADATA_CACHE: Optional[dict] = None
+
+
+def load_metadata() -> dict:
+    global _METADATA_CACHE
+    if _METADATA_CACHE is None:
+        try:
+            _METADATA_CACHE = json.loads(METADATA_PATH.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            _METADATA_CACHE = {"requirement_fields": [], "ac_fields": [], "parameters": {}}
+    return _METADATA_CACHE
+
+
+def requirement_field_defs() -> Dict[str, dict]:
+    return {f["name"]: f for f in load_metadata().get("requirement_fields", [])}
+
+
+def required_requirement_fields() -> List[str]:
+    return [f["name"] for f in load_metadata().get("requirement_fields", []) if f.get("required")]
+
+
+def _ac_field(name: str) -> dict:
+    return next((f for f in load_metadata().get("ac_fields", []) if f["name"] == name), {})
+
+
+VERIFICATION_LEVELS = tuple(_ac_field("検証レベル").get("allowed") or ("system", "integration", "unit", "manual"))
+AC_META_KEYS = tuple(f["name"] for f in load_metadata().get("ac_fields", [])) or ("検証レベル", "BLOCKED", "対応する要求", "決定状態")
 AC_TEXT_KEYS = ("内容", "判定条件", "観察できる結果", "起点", "事前条件", "対象")
 ANSWERED_RE = re.compile(r"回答済み|解決済み|取り下げ|クローズ")
 
@@ -634,6 +662,11 @@ class Requirement:
     fields: Dict[str, str] = field(default_factory=dict)
     acs: List[str] = field(default_factory=list)
     body: List[str] = field(default_factory=list)
+    field_lines: Dict[str, int] = field(default_factory=dict)
+
+    @property
+    def area(self) -> str:
+        return strip_md(self.fields.get("領域", ""))
 
     @property
     def state_raw(self) -> str:
@@ -854,6 +887,7 @@ def _parse_one(doc: RequirementsDoc, rel: str, lines: List[str]) -> None:
                 cur_ac = None
                 for k, v in parse_fields(content).items():
                     cur_req.fields.setdefault(k, v)
+                    cur_req.field_lines.setdefault(k, idx)
                 cur_req.body.append(content)
             continue
         if cur_req is not None and line.strip():
