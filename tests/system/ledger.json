@@ -78,7 +78,18 @@
     "AC-240": "sha256:c03121f02106311a",
     "AC-241": "sha256:0699afdfc9c2e349",
     "AC-237": "sha256:843f6f2d5d402e43",
-    "AC-238": "sha256:8a719013d3d38992"
+    "AC-238": "sha256:8a719013d3d38992",
+    "AC-315": "sha256:6afe93012ae75bd9",
+    "AC-316": "sha256:66ce4030e6d07576",
+    "AC-317": "sha256:54771d3171598d41",
+    "AC-318": "sha256:a3e38f3dfdccd079",
+    "AC-319": "sha256:791135c9e50af683",
+    "AC-320": "sha256:9ea4dc384d7e6583",
+    "AC-321": "sha256:f7c9a1297eb9a442",
+    "AC-322": "sha256:d4309942722fe967",
+    "AC-324": "sha256:cd85fd0835ed4455",
+    "AC-323": "sha256:49a5faf2f0884497",
+    "AC-326": "sha256:6592fbd567b93463"
   },
   "cases": [
     {
@@ -4066,6 +4077,347 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-037",
+      "requirement_ids": [
+        "FR-1057"
+      ],
+      "ac_ids": [
+        "AC-315"
+      ],
+      "title": "階層化（正常・移行期）: 領域の欄が無くても違反・警告にならない",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac315\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:19+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:29+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-038",
+      "requirement_ids": [
+        "FR-1057"
+      ],
+      "ac_ids": [
+        "AC-316"
+      ],
+      "title": "階層化（正常・異常）: 領域で絞った一覧と件数の合計、廃止は件数外",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac316\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:23+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:30+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-039",
+      "requirement_ids": [
+        "FR-1057"
+      ],
+      "ac_ids": [
+        "AC-317"
+      ],
+      "title": "階層化（異常）: カタログの領域の区切りが要求定義書と違うと不整合",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac317\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:26+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:31+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-040",
+      "requirement_ids": [
+        "FR-1058"
+      ],
+      "ac_ids": [
+        "AC-318"
+      ],
+      "title": "メタデータ（正常・異常）: 定義外の欄・許容値外を位置つきで報告、現行は違反なし",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac318\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:30+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:31+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-041",
+      "requirement_ids": [
+        "FR-1058"
+      ],
+      "ac_ids": [
+        "AC-319"
+      ],
+      "title": "メタデータ: 領域・更新日の追加は差分がその行だけ",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac319\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:34+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:32+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-042",
+      "requirement_ids": [
+        "FR-1058"
+      ],
+      "ac_ids": [
+        "AC-320"
+      ],
+      "title": "メタデータ（unit）: 欄名の一覧がコードに重複しない",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac320\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:37+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:33+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-043",
+      "requirement_ids": [
+        "FR-1059"
+      ],
+      "ac_ids": [
+        "AC-321"
+      ],
+      "title": "関係の索引: 決定的・非保存・本文と一致・本文変更に追随",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac321\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:41+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:33+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-044",
+      "requirement_ids": [
+        "FR-1059"
+      ],
+      "ac_ids": [
+        "AC-322"
+      ],
+      "title": "関係の索引（正常・異常）: 逆引きが台帳の独立走査と一致",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac322\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:45+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:34+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-045",
+      "requirement_ids": [
+        "NFR-UX-014"
+      ],
+      "ac_ids": [
+        "AC-324"
+      ],
+      "title": "情報デザイン（異常）: 同種の表の列名・順序の不一致を列挙",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac324\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:49+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:35+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "対象 AC の検証レベルが integration/unit で System Test の対象外（CHK-10）。conductor へ競合として返す。テストは tests/system/test_data_hierarchy_system.py に残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-046",
+      "requirement_ids": [
+        "NFR-UX-014"
+      ],
+      "ac_ids": [
+        "AC-323"
+      ],
+      "title": "情報デザイン: 領域化した節の直下の項目数が上限超なら警告（FR-1060 後）",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac323\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:53+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:10+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC-323 の段階導入の対象は FR-1060（承認待ち）の割り当て表の後。判定に必要な割り当て表の書式が未定"
+        }
+      ]
+    },
+    {
+      "id": "IT-047",
+      "requirement_ids": [
+        "FR-1057"
+      ],
+      "ac_ids": [
+        "AC-326"
+      ],
+      "title": "階層化: 割り当て表と領域の欄の一致検査、領域名変更で ID 不変（FR-1060 後）",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_hierarchy_system.py -k \"ac326\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-17T14:57:57+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-17T14:58:11+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC-326 は FR-1060（承認待ち）の決定記録の割り当て表の書式が未定で期待値を決められない"
         }
       ]
     }
