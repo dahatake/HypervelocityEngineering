@@ -13,6 +13,7 @@ const ROUTES = {
   implstatus: { icon: 'progress', load: () => import('./implstatus.js') },
   map2d: { navKey: 'map', icon: 'map2d', dim: '2d', load: () => import('./map2d.js') },
   map3d: { navKey: 'map', icon: 'map3d', dim: '3d', load: () => import('./map3d.js') },
+  maprpg: { navKey: 'map', icon: 'map2d', dim: 'rpg', load: () => import('./maprpg.js') },
   diagrams: { icon: 'diagrams', load: () => import('./diagrams.js') },
   placement: { navKey: 'diagrams', alias: 'diagrams', load: () => import('./diagrams.js') },
   entities: { icon: 'entities', load: () => import('./entities.js') },
@@ -25,7 +26,8 @@ const ROUTES = {
 };
 // nav items in display order: key → route it opens (the map opens in the dimension chosen last)
 const NAV = ['dashboard', 'implstatus', 'map', 'diagrams', 'entities', 'integrations', 'source', 'tables', 'maintenance'];
-const navTarget = (k) => (k === 'map' ? (dimState.map === '3d' ? 'map3d' : 'map2d') : k);
+const MAP_ROUTE = { '2d': 'map2d', '3d': 'map3d', rpg: 'maprpg' };
+const navTarget = (k) => (k === 'map' ? MAP_ROUTE[dimState.map] || 'map2d' : k);
 const navKeyOf = (route) => ROUTES[route]?.navKey || route;
 const view = document.getElementById('view');
 const nav = document.getElementById('nav');
@@ -71,6 +73,11 @@ function renderNav() {
 
 // Old URLs move to the item that holds the view now, keeping the kind / dimension / ?select / ?q (FR-1041 AC-226).
 function legacyRedirect(name) {
+  if (ROUTES[name]?.dim && !ROUTES[name].mount) {     // #/map2d?dim=rpg (and 2d / 3d) opens the map in that dimension, keeping the rest of the query
+    const p = new URLSearchParams(location.hash.split('?')[1] || '');
+    const target = MAP_ROUTE[p.get('dim')];
+    if (target && target !== name) { p.delete('dim'); const s = p.toString(); location.replace('#/' + target + (s ? '?' + s : '')); return true; }
+  }
   if (name !== 'placement') return false;
   const p = new URLSearchParams(location.hash.split('?')[1] || '');
   const out = new URLSearchParams();
@@ -113,15 +120,19 @@ async function route() {
   }
 }
 
-// The map is one item: 2D (map2d) and 3D (map3d) are two displays of it, switched here (FR-1040).
+// The map is one item: 2D (map2d), 3D (map3d) and RPG-style (maprpg) are three displays of it, switched here (FR-1040, FR-1053).
 // Selection, filter and the search box live in the store / shared view state, so they survive the switch (AC-221).
+const MAP_DIMS = ['2d', '3d', 'rpg'];
 function mountMapDim(host, name, inner) {
   const go = (d) => {
     const q = location.hash.includes('?') ? '?' + location.hash.split('?')[1] : '';
-    location.hash = '#/' + (d === '3d' ? 'map3d' : 'map2d') + q;
+    location.hash = '#/' + (MAP_ROUTE[d] || 'map2d') + q;
   };
-  host.append(el('div', { class: 'dim-float' }, dimToggle({ current: ROUTES[name].dim, onPick: go })));
-  const off = registerDim((d) => go(d || (ROUTES[name].dim === '2d' ? '3d' : '2d')));
+  const cur = ROUTES[name].dim;
+  host.append(el('div', { class: 'dim-float' }, dimToggle({ current: cur, onPick: go, dims: MAP_DIMS })));
+  const off = registerDim((d) => go(MAP_DIMS.includes(d) ? d : cur === '2d' ? '3d' : '2d'));
+  const v = window.eabkView;      // every map display reports which dimension it is
+  if (v?.getState && !v.__dim) { const g = v.getState; v.getState = () => ({ dim: cur, ...g() }); v.__dim = true; }
   const orig = inner?.destroy;
   if (inner) inner.destroy = () => { off(); orig?.call(inner); };
 }
@@ -154,7 +165,10 @@ function hl(text, toks) {
 // FR-1041 AC-226: every nav item (and the 2D / 3D switch) is reachable from the command box.
 function navCommands() {
   const list = NAV.map((k) => ({ cmd: true, id: 'cmd:nav:' + k, label: t('cmd.goto') + t('nav.' + k), key: t('nav.' + k), run: () => { location.hash = '#/' + navTarget(k); } }));
-  if (hasDimHandler()) list.push({ cmd: true, id: 'cmd:dim', label: t('cmd.dim'), key: '2D 3D', run: () => runDim() });
+  if (hasDimHandler()) {
+    list.push({ cmd: true, id: 'cmd:dim', label: t('cmd.dim'), key: '2D 3D', run: () => runDim() });
+    if (ROUTES[routeName()]?.dim) list.push({ cmd: true, id: 'cmd:dim:rpg', label: t('cmd.dim.rpg'), key: 'RPG', run: () => runDim('rpg') });
+  }
   return list;
 }
 // FR-1033 AC-197: command box. ">" followed by text lists commands; Enter runs one.

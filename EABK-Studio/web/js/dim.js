@@ -21,6 +21,12 @@ const FACE = (x, y) => [
 
 export function dimIcon(dim) {
   const svg = svgEl('svg', { viewBox: '0 0 40 40', width: 28, height: 28, class: 'dim-ico dim-ico-' + dim, 'aria-hidden': 'true', focusable: 'false' });
+  if (dim === 'rpg') {   // FR-1053: a small pixel-style castle, drawn inline
+    svg.append(svgEl('rect', { x: 5, y: 8, width: 30, height: 26, rx: 5, fill: '#7ed08a', stroke: '#1b2440', 'stroke-width': 1.6 }),
+      svgEl('path', { d: 'M11 30V16h4v-3h3v3h4v-3h3v3h4v14z', fill: '#c9cfdc', stroke: '#1b2440', 'stroke-width': 1.3, 'stroke-linejoin': 'round' }),
+      svgEl('path', { d: 'M18 30v-6h4v6z', fill: '#6b3f1d' }), svgEl('path', { d: 'M20 13V8l4 1.5-4 1.5', fill: '#ffd23f', stroke: '#1b2440', 'stroke-width': 1 }));
+    return svg;
+  }
   if (dim === '2d') {
     svg.append(svgEl('rect', { x: 5, y: 7, width: 30, height: 26, rx: 7, fill: '#8be9ff', stroke: '#1b2440', 'stroke-width': 1.6 }), ...FACE(20, 19));
   } else {
@@ -34,9 +40,9 @@ export function dimIcon(dim) {
   return svg;
 }
 
-// <div data-testid="dim-toggle" data-current="2d|3d"> with <button data-dim="2d|3d">.
-export function dimToggle({ current, onPick }) {
-  const cur = current === '3d' ? '3d' : '2d';
+// <div data-testid="dim-toggle" data-current="2d|3d|rpg"> with <button data-dim="2d|3d|rpg">. The map offers RPG as a third mode (FR-1053).
+export function dimToggle({ current, onPick, dims = ['2d', '3d'] }) {
+  const cur = dims.includes(current) ? current : '2d';
   const live = el('span', { class: 'sr-only', role: 'status', 'aria-live': 'polite' }, t('dim.now', { d: cur.toUpperCase() }));
   const btn = (d) => {
     const on = d === cur;
@@ -45,5 +51,5 @@ export function dimToggle({ current, onPick }) {
       title: on ? t('dim.now', { d: d.toUpperCase() }) : t('dim.to', { d: d.toUpperCase() }),
       onclick: () => { if (!on) onPick(d); } }, dimIcon(d), el('span', { class: 'dim-word' }, d.toUpperCase()));
   };
-  return el('div', { class: 'dim-toggle', role: 'group', 'aria-label': t('dim.group'), 'data-testid': 'dim-toggle', 'data-current': cur }, btn('2d'), btn('3d'), live);
+  return el('div', { class: 'dim-toggle', role: 'group', 'aria-label': t('dim.group'), 'data-testid': 'dim-toggle', 'data-current': cur }, ...dims.map(btn), live);
 }
