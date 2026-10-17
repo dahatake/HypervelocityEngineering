@@ -4,12 +4,11 @@ import { t, onLang } from './i18n.js';
 import { store } from './store.js';
 import { create3d } from './sz3d.js';
 import { mountShell, isArch, wantsEntityView, hasEntityStructure, setTab } from './semzoom.js';
-import { el, colorOf, TYPE_COLOR, STATUS_COLOR, showTip, hideTip, nodeTip } from './ui.js';
+import { el, colorOf, TYPE_COLOR, STATUS_COLOR, IMPL_COLOR, token, icon, showTip, hideTip, nodeTip } from './ui.js';
 
 const LEVEL = { goal: 0, req: 1, ac: 2, entity: 3, part: 3, api: 3, table: 3, param: 3, question: 3, file: 4, case: 5 };
 const LAYER_TYPES = ['goal', 'req', 'ac', 'entity', 'part', 'api', 'table', 'param', 'question', 'file', 'case'];
 const prefs = { layers: new Set(['goal', 'req', 'entity', 'part', 'api', 'table', 'file', 'case']), color: 'type', auto: !matchMedia('(prefers-reduced-motion: reduce)').matches };
-const IMPL_COLOR = { done: '#34e0a1', none: '#ff5c7a', unlisted: '#8aa1b5' };
 const GAP = 95, SP = 6.5;
 
 function mountGraph(host) {
@@ -111,7 +110,7 @@ function mountGraph(host) {
     return colorOf(n);
   }
 
-  function labelSprite(text, color = '#e8eefc', big = false) {
+  function labelSprite(text, color = token('--viz-cluster-name'), big = false) {
     const key = text + color + big;
     let tex = labelCache.get(key);
     if (!tex) {
@@ -119,7 +118,7 @@ function mountGraph(host) {
       const g = c.getContext('2d');
       g.font = `${big ? 600 : 500} ${big ? 34 : 28}px "Segoe UI","Yu Gothic UI",sans-serif`;
       g.textBaseline = 'middle'; g.textAlign = 'center';
-      g.lineWidth = 6; g.strokeStyle = 'rgba(5,8,20,.9)'; g.strokeText(text.slice(0, 34), 256, 34);
+      g.lineWidth = 6; g.strokeStyle = token('--scene-stage-bg'); g.strokeText(text.slice(0, 34), 256, 34);
       g.fillStyle = color; g.fillText(text.slice(0, 34), 256, 34);
       tex = new THREE.CanvasTexture(c); tex.minFilter = THREE.LinearFilter;
       labelCache.set(key, tex);
@@ -178,11 +177,11 @@ function mountGraph(host) {
       const ring = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 73 }, (_, i) => new THREE.Vector3(Math.cos(i / 72 * 6.2832) * L.R, L.y - 3, Math.sin(i / 72 * 6.2832) * L.R))), new THREE.LineBasicMaterial({ color: 0x7f9bff, transparent: true, opacity: 0.28 }));
       world.add(disc, ring);
       const name = L.types.map((ty) => t('type.' + ty)).join(' / ');
-      const s = labelSprite(name, '#9fc0ff', true); s.scale.set(70, 8.75, 1); s.position.set(-L.R - 6, L.y, 0);
+      const s = labelSprite(name, token('--viz-cluster-name'), true); s.scale.set(70, 8.75, 1); s.position.set(-L.R - 6, L.y, 0);
       world.add(s); staticLabels.push(s);
       for (const c of L.clusters) {
         if (c.ns.length < 2 && L.clusters.length > 12) continue;
-        const lab = labelSprite(c.key.replace(/\.md$/, ''), '#cfe0ff'); lab.scale.set(38, 4.75, 1); lab.position.set(c.x, L.y + 7, c.z + c.r * 0.9 + 3);
+        const lab = labelSprite(c.key.replace(/\.md$/, ''), token('--viz-cluster-name')); lab.scale.set(38, 4.75, 1); lab.position.set(c.x, L.y + 7, c.z + c.r * 0.9 + 3);
         world.add(lab); staticLabels.push(lab);
       }
     }
@@ -239,7 +238,7 @@ function mountGraph(host) {
       for (const id of set) {
         const i = idx.get(id); if (i == null) continue;
         const n = nodes[i];
-        const s = labelSprite(n.label + (n.type === 'req' || n.type === 'goal' ? ' ' + (n.title || '').slice(0, 12) : ''), id === store.selected ? '#ffffff' : '#dfe9ff');
+        const s = labelSprite(n.label + (n.type === 'req' || n.type === 'goal' ? ' ' + (n.title || '').slice(0, 12) : ''), id === store.selected ? token('--viz-sel') : token('--viz-cluster-name'));
         s.scale.set(34, 4.25, 1); s.position.set(P[i * 3], P[i * 3 + 1] + 5.5, P[i * 3 + 2]);
         world.add(s); labelPool.push(s);
       }
@@ -363,7 +362,7 @@ function mountGraph(host) {
         el('button', { onclick: () => bird('bird') }, '🛰 ' + t('map.bird')),
         el('button', { onclick: () => bird('side') }, '▤ ' + t('map3d.side')),
         el('button', { onclick: () => bird('top') }, '◎ ' + t('map3d.top')),
-        el('button', { onclick: () => { stopTour(); flyToActive(); } }, '🎯 ' + t('map.zoomsel')),
+        el('button', { onclick: () => { stopTour(); flyToActive(); } }, icon('goal', { size: 16 }), ' ' + t('map.zoomsel')),
         el('button', { class: tour ? 'on' : '', onclick: startTour }, (tour ? '■ ' : '▶ ') + t('map.tour')),
         el('button', { class: prefs.auto ? 'on' : '', onclick: () => { prefs.auto = !prefs.auto; renderToolbar(); } }, '⟳ ' + t('map3d.auto'))),
       el('details', { class: 'grp pop' }, el('summary', {}, '◧ ' + t('map.layers')), el('div', {}, LAYER_TYPES.map((ty) => el('label', {},

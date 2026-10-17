@@ -1,6 +1,6 @@
 import { t, lang, setLang, onLang, applyI18n } from './i18n.js';
 import { store } from './store.js';
-import { el, esc, colorOf, typeLabel, toast, businessIcon } from './ui.js';
+import { el, esc, colorOf, typeLabel, toast, businessIcon, statePanel, icon } from './ui.js';
 import { initDrawer } from './drawer.js';
 import { installXref } from './xref.js';
 import { decorate, mountStructure, mountConsistency, mountMaintenance } from './insights.js';
@@ -32,15 +32,15 @@ const navKeyOf = (route) => ROUTES[route]?.navKey || route;
 const view = document.getElementById('view');
 const nav = document.getElementById('nav');
 const navDesc = document.getElementById('navDesc');
-let current = null, token = 0, fingerprint = null;
+let current = null, token = 0, fingerprint = null, modelError = null;
 
 const personaBar = document.getElementById('personaBar');
-for (const [name, icon] of [['Product Manager', '🎯'], ['Architect', '🏗️'], ['Software Engineer', '💻']]) {
+for (const [name, glyph] of [['Product Manager', 'goal'], ['Architect', 'structure'], ['Software Engineer', 'source']]) {
   personaBar.append(el('button', { class: 'chip persona', 'aria-label': `${name} view`, onclick: () => {
     if (name === 'Architect') location.hash = '#/map2d';
     else if (name === 'Software Engineer') location.hash = '#/tables';
     else location.hash = '#/dashboard';
-  } }, el('span', { class: 'biz-icon', role: 'img', 'aria-hidden': 'true' }, icon), name));
+  } }, el('span', { class: 'biz-icon', 'aria-hidden': 'true' }, icon(glyph, { size: 16 })), name, el('span', { class: 'sr-only' }, ' view')));
 }
 
 const routeName = () => { const r = (location.hash.replace(/^#\/?/, '') || 'dashboard').split('?')[0]; return ROUTES[r] ? r : 'dashboard'; };
@@ -88,6 +88,35 @@ function legacyRedirect(name) {
   return true;
 }
 
+// 全ナビ項目の画面で、更新できない（エラー）・データが無い（空）を同じ構造の状態表示で出す（FR-1048 AC-267）。入力済みの内容（検索ボックスなど）は触らない。
+function problemPanel() {
+  if (modelError) {
+    return statePanel({ state: 'error', heading: t('state.stale.h'), description: `${t('state.stale.d')} (${(modelError && modelError.message) || modelError})`,
+      action: el('button', { type: 'button', class: 'btn', onclick: () => loadModel(true).then(() => { modelError = null; route(); }).catch((e) => { modelError = e; route(); }) }, icon('stale', { size: 16 }), t('state.retry')) });
+  }
+  if (store.model && store.nodes.size === 0) {
+    return statePanel({ state: 'empty', heading: t('state.empty.h'), description: t('state.empty.d'),
+      action: el('button', { type: 'button', class: 'btn ghost', onclick: () => document.getElementById('repoBtn').click() }, icon('folder', { size: 16 }), t('state.empty.a')) });
+  }
+  // 検索ボックスの語に一致する項目が 0 件のときも「空」として同じ構造で示す（入力は消さない）
+  const typed = (document.getElementById('q')?.value || '').trim();
+  if (store.model && typed && !/^[>＞]/.test(typed) && store.search(typed, 1).total === 0) {
+    return statePanel({ state: 'empty', heading: t('state.nohit.h'), description: t('state.nohit.d'),
+      action: el('button', { type: 'button', class: 'btn ghost', onclick: () => { const qb = document.getElementById('q'); qb.value = ''; route(); qb.focus(); } }, icon('search', { size: 16 }), t('state.nohit.a')) });
+  }
+  return null;
+}
+async function checkModel() {
+  if (!store.model) return;
+  try {
+    const r = await fetch('/api/model', { cache: 'no-store' });
+    r.body?.cancel?.();
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (modelError) { modelError = null; route(); }
+  } catch (e) { modelError = e; route(); }
+}
+window.addEventListener('focus', checkModel);
+
 async function route() {
   const name = routeName();
   if (legacyRedirect(name)) return;
@@ -99,6 +128,8 @@ async function route() {
   const my = ++token;
   current?.destroy?.();
   current = null;
+  const problem = problemPanel();
+  if (problem) { view.replaceChildren(problem); return; }
   const host = el('div', { class: 'fill' });
   view.replaceChildren(host);
   host.append(el('div', { class: 'sr-only', role: 'status' }, t('loading'))); // never leave the view empty while the module loads
@@ -142,7 +173,7 @@ async function loadModel(quiet) {
   const model = await res.json();
   store.load(model);
   document.title = `EABK Studio · ${model.meta.name}`;
-  document.getElementById('repoBtn').textContent = '📁 ' + model.meta.name;
+  document.getElementById('repoBtn').replaceChildren(icon('folder', { size: 16 }), ' ' + model.meta.name);
   document.getElementById('repoBtn').title = model.meta.repo;
   const modelTime = document.getElementById('modelTime');
   modelTime.dateTime = model.meta.generatedAt;
@@ -165,6 +196,7 @@ function hl(text, toks) {
 // FR-1041 AC-226: every nav item (and the 2D / 3D switch) is reachable from the command box.
 function navCommands() {
   const list = NAV.map((k) => ({ cmd: true, id: 'cmd:nav:' + k, label: t('cmd.goto') + t('nav.' + k), key: t('nav.' + k), run: () => { location.hash = '#/' + navTarget(k); } }));
+  for (const c of window.eabkTheme.choices) list.push({ cmd: true, id: 'cmd:theme:' + c, label: t('theme.cmd') + t('theme.' + c), key: t('theme.keys') + ' ' + t('theme.' + c), run: () => window.eabkTheme.set(c) });
   if (hasDimHandler()) {
     list.push({ cmd: true, id: 'cmd:dim', label: t('cmd.dim'), key: '2D 3D', run: () => runDim() });
     if (ROUTES[routeName()]?.dim) list.push({ cmd: true, id: 'cmd:dim:rpg', label: t('cmd.dim.rpg'), key: 'RPG', run: () => runDim('rpg') });
@@ -232,9 +264,20 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ---------------------------------------------------------------- chrome
+// テーマ（FR-1047 AC-259/260）: ライト・ダーク・システム。保存しない。切替は再読込なしで入力・選択・絞り込み・配置を保つ。
+const themeLive = document.getElementById('themeLive');
+function renderTheme(announce) {
+  const cur = window.eabkTheme.get();
+  document.querySelectorAll('[data-testid="theme-toggle"] [data-theme-choice]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.themeChoice === cur)));
+  document.querySelector('[data-testid="theme-toggle"]').setAttribute('aria-label', t('theme.group'));
+  if (announce) themeLive.textContent = t('theme.announce.' + cur);
+}
+document.querySelectorAll('[data-testid="theme-toggle"] [data-theme-choice]').forEach((b) => b.addEventListener('click', () => window.eabkTheme.set(b.dataset.themeChoice)));
+window.eabkTheme.onChange(() => renderTheme(true));
+renderTheme(false);
 document.getElementById('lang').addEventListener('click', () => setLang(lang() === 'ja' ? 'en' : 'ja'));
 function renderLangBtn() { document.getElementById('lang').innerHTML = lang() === 'ja' ? '<b>JA</b> | EN' : 'JA | <b>EN</b>'; }
-onLang(() => { renderLangBtn(); renderNav(); if (!box.hidden) renderResults(); });
+onLang(() => { renderLangBtn(); renderNav(); renderTheme(false); if (!box.hidden) renderResults(); });
 async function chooseRepository(cur) {
   const modal = el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' },
     el('form', { class: 'card', onsubmit: (e) => e.preventDefault() },
@@ -282,8 +325,12 @@ new ResizeObserver(() => document.documentElement.style.setProperty('--hh', head
 applyI18n(document);
 renderLangBtn();
 renderNav();
-view.replaceChildren(el('div', { class: 'splash' }, el('div', { class: 'spin' }), t('loading')));
+view.replaceChildren(statePanel({ state: 'loading', heading: t('loading'), description: t('state.loading.d') }));
 initDrawer(document.getElementById('drawer'));
 installXref();
 for (const k of ['dashboard', 'implstatus', 'diagrams', 'map2d']) ROUTES[k].load().catch(() => {}); // warm the module cache (the 2D map is the default map target)
-loadModel().catch((e) => { view.replaceChildren(el('div', { class: 'page' }, el('div', { class: 'warnbox' }, 'Failed to load: ' + e.message))); });
+function showLoadError(e) {
+  view.replaceChildren(statePanel({ state: 'error', heading: t('state.error.h'), description: `${t('state.error.d')} (${(e && e.message) || e})`,
+    action: el('button', { type: 'button', class: 'btn', onclick: () => { view.replaceChildren(statePanel({ state: 'loading', heading: t('loading'), description: t('state.loading.d') })); loadModel().catch(showLoadError); } }, t('state.retry')) }));
+}
+loadModel().catch(showLoadError);

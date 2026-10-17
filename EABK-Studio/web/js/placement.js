@@ -39,7 +39,7 @@ export function mount(host) {
         const ids = cells.get(r.key + '\u0001' + c);
         const a = ids.length / max;
         const isSel = ui.sel && ui.sel.row === r.key && ui.sel.col === c;
-        return el('td', { class: 'c', style: { background: ids.length ? `rgba(57,208,255,${0.12 + a * 0.6})` : 'transparent', outline: isSel ? '2px solid #ffb020' : '' }, onclick: () => { ui.sel = { row: r.key, col: c, ids, r }; pickCell(r, c, ids); } }, ids.length || '');
+        return el('td', { class: 'c', style: { background: ids.length ? `rgba(57,208,255,${0.12 + a * 0.6})` : 'transparent', outline: isSel ? '2px solid var(--viz-goal)' : '' }, onclick: () => { ui.sel = { row: r.key, col: c, ids, r }; pickCell(r, c, ids); } }, ids.length || '');
       })))));
     return el('div', { class: 'tw', style: { maxHeight: '55vh' } }, table);
   }

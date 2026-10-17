@@ -7,11 +7,11 @@ import { xrefLink } from './xref.js';
 
 // Colour is never the only cue: every state also has a symbol and a word (AC-093).
 const STATE_META = [
-  { sym: '○', color: '#6b7a9c', en: 'Not started' },
-  { sym: '◔', color: '#ffb020', en: 'Registered · no test registered' },
-  { sym: '✖', color: '#ff5c7a', en: 'Registered · test not passing' },
-  { sym: '✔', color: '#34e0a1', en: 'Test passed' },
-  { sym: '◇', color: '#7dd3fc', en: 'Registered · outside system test' },
+  { sym: '○', color: 'var(--color-status-neutral-icon)', en: 'Not started' },
+  { sym: '◔', color: 'var(--color-status-warning-icon)', en: 'Registered · no test registered' },
+  { sym: '✖', color: 'var(--color-status-danger-icon)', en: 'Registered · test not passing' },
+  { sym: '✔', color: 'var(--color-status-success-icon)', en: 'Test passed' },
+  { sym: '◇', color: 'var(--color-status-info-icon)', en: 'Registered · outside system test' },
 ];
 const stateLabel = (i, ja) => (lang() === 'ja' ? ja[i] : STATE_META[i].en);
 const caseText = (cases) => {
@@ -77,10 +77,10 @@ export function mount(host) {
       return el('div', { class: 'impl-bar-row' },
         el('div', { class: 'mini', style: { display: 'flex', justifyContent: 'space-between' } }, el('b', {}, group), el('span', {}, `${total}`)),
         el('div', { class: 'impl-bar', role: 'group', 'aria-label': `${group} ${total}`, 'data-testid': 'impl-bar', 'data-scope': scope, 'data-group': group,
-          style: { display: 'flex', height: '26px', borderRadius: '6px', overflow: 'hidden', background: '#1b2442' } },
+          style: { display: 'flex', height: '26px', borderRadius: '6px', overflow: 'hidden', background: 'var(--color-bg-hover)' } },
         ja.map((s, i) => segRef(el('div', { class: 'impl-seg', role: 'button', tabindex: '0', 'aria-pressed': 'false', 'data-testid': 'impl-bar-segment', 'data-scope': scope, 'data-group': group, 'data-state': s, 'data-count': counts[i],
           title: `${stateLabel(i, ja)}: ${counts[i]}`,
-          style: { flex: `${counts[i]} 0 0`, background: STATE_META[i].color, color: '#0b1020', display: counts[i] ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '12px', minWidth: counts[i] ? '26px' : '0' } },
+          style: { flex: `${counts[i]} 0 0`, background: STATE_META[i].color, color: 'var(--color-bg-canvas)', display: counts[i] ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '12px', minWidth: counts[i] ? '26px' : '0' } },
         `${STATE_META[i].sym} ${counts[i]}`), rows.filter((r) => r.state === s)))));
     };
     const groupBy = (key) => {
