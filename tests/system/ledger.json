@@ -4393,7 +4393,8 @@
     {
       "id": "IT-047",
       "requirement_ids": [
-        "FR-1057"
+        "FR-1057",
+        "FR-1060"
       ],
       "ac_ids": [
         "AC-326"
@@ -4418,6 +4419,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "AC-326 は FR-1060（承認待ち）の決定記録の割り当て表の書式が未定で期待値を決められない"
+        },
+        {
+          "at": "2026-10-17T16:34:49+09:00",
+          "by": "rdfix",
+          "change": "requirement_ids: ['FR-1057'] -> ['FR-1057', 'FR-1060']",
+          "reason": "rdfix: 受入基準の「対応する要求」と要求定義書に合わせる"
         }
       ]
     }
