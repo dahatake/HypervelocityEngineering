@@ -78,7 +78,7 @@ def test_ac261_type_ramp_and_system_fonts():
     assert "@font-face" not in TOKENS and "url(" not in TOKENS
 
 
-# FR-1047 AC-260: the chosen theme is not stored; every session starts from "system"
-def test_ac260_theme_choice_is_not_persisted():
-    assert "localStorage" not in THEME_JS and "sessionStorage" not in THEME_JS and "cookie" not in THEME_JS
+# FR-1047 AC-260: only the theme name is stored in localStorage; invalid values fall back to system
+def test_ac260_theme_choice_is_persisted_as_name_only():
+    assert "localStorage" in THEME_JS and "CHOICES.indexOf(saved) >= 0" in THEME_JS and "sessionStorage" not in THEME_JS and "cookie" not in THEME_JS
     assert "var choice = 'system'" in THEME_JS
