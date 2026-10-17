@@ -63,22 +63,28 @@ def test_ac287_castles_and_towns_match_the_data_and_roads_connect_only_related_p
     for p in rpg["places"]:
         kinds.setdefault(p["kind"], []).append(p)
         assert p["name"] and p["id"]
-    assert [p["name"] for p in kinds["town"]] == ["注文", "顧客", "商品", "在庫"] or {p["name"] for p in kinds["town"]} == {"注文", "顧客", "商品", "在庫"}
-    assert len(kinds["town"]) == 4 and len(kinds["castle"]) == 1 and kinds["castle"][0]["id"] == "G-001"
-    assert len({p["id"] for p in rpg["places"]}) == len(rpg["places"])   # no duplicates
-    ids = {p["id"] for p in rpg["places"]}
+    assert len(kinds["town"]) == 2 and len(kinds["castle"]) == 1 and kinds["castle"][0]["id"] == "G-001"
+    towns = {p["id"]: p for p in kinds["town"]}
+    assert "town:none" in towns and towns["town:none"]["name"] == "関係なしの街"   # 在庫 has no relation
+    res = rpg["residents"]
+    assert {r["name"] for r in res} == {"注文", "顧客", "商品", "在庫"} and len(res) == 4   # residents = entities
+    assert {r["name"]: r["town"] for r in res}["在庫"] == "town:none" and len({r["town"] for r in res if r["name"] != "在庫"}) == 1
+    assert len({p["id"] for p in rpg["places"] + res}) == len(rpg["places"]) + len(res)   # no duplicates
+    ids = {p["id"] for p in rpg["places"] + res}
     pairs = {frozenset((r["from"], r["to"])) for r in rpg["roads"]}
     assert all(r["from"] in ids and r["to"] in ids for r in rpg["roads"])
     assert frozenset(("ent:注文", "ent:顧客")) in pairs and frozenset(("ent:注文", "ent:商品")) in pairs
     assert frozenset(("ent:在庫", "ent:注文")) not in pairs and frozenset(("ent:在庫", "ent:顧客")) not in pairs
-    assert frozenset(("G-001", "ent:在庫")) in pairs   # goal -> requirement -> entity
+    other = next(i for i in towns if i != "town:none")
+    assert frozenset(("G-001", "town:none")) in pairs and frozenset(("G-001", other)) in pairs   # goal -> requirement -> entity's town
     page.context.close()
 
 
 # FR-1053 AC-288 / AC-289: the talk window types out, A shows it all, IDs are links; the same content is readable without the picture.
 def test_ac288_ac289_dialog_text_links_and_alternative_representations(studio):
     page = _view(studio)
-    town = next(p for p in _rpg(page)["places"] if p["id"] == "ent:注文")
+    resident = next(p for p in _rpg(page)["residents"] if p["id"] == "ent:注文")
+    town = resident
     _walk_to(page, (town["x"], town["y"]))
     page.keyboard.press("Enter")
     dlg = page.get_by_test_id("rpg-dialog")
@@ -92,10 +98,25 @@ def test_ac288_ac289_dialog_text_links_and_alternative_representations(studio):
     assert "注文" in live and "FR-001" in live         # screen reader gets the full text
     assert "注文" in page.get_by_test_id("rpg-pos").inner_text()
     page.locator("summary", has_text="同じ内容を表で見る").click()
-    assert page.locator('[data-testid="rpg-alt"] tbody tr').count() == 5
+    assert page.locator('[data-testid="rpg-alt"] tbody tr').count() == 7   # 1 castle + 2 towns + 4 residents
     page.keyboard.press("Escape")
     assert (_rpg(page)["player"]["x"], _rpg(page)["player"]["y"]) == (town["x"], town["y"])
     assert _state(page)["selected"] == "注文"
+    page.context.close()
+
+
+# FR-1053 AC-288: talking at a town entrance shows the grouping (name, description, related requirements).
+def test_ac288_town_entrance_dialog_shows_the_grouping(studio):
+    page = _view(studio)
+    town = next(p for p in _rpg(page)["places"] if p["id"] == "town:none")
+    _walk_to(page, (town["x"], town["y"]))
+    page.keyboard.press("Enter")
+    page.keyboard.press("Enter")
+    txt = page.get_by_test_id("rpg-dialog").inner_text()
+    assert "関係なしの街" in txt and "town:none" in txt and "関連する要求" in txt
+    page.keyboard.press("Escape")
+    assert page.get_by_test_id("rpg-dialog").is_hidden()
+    assert (_rpg(page)["player"]["x"], _rpg(page)["player"]["y"]) == (town["x"], town["y"])
     page.context.close()
 
 
@@ -283,7 +304,8 @@ def test_ac299_large_data_keeps_frame_rate_and_makes_no_external_requests(studio
             page.goto(f"http://127.0.0.1:{port}/#/maprpg")
             page.wait_for_selector('[data-testid="rpg-view"][data-ready="true"]')
             page.get_by_test_id("rpg-view").focus()
-            assert len([p for p in _rpg(page)["places"] if p["kind"] == "town"]) == 300
+            rpg = _rpg(page)
+            assert len([p for p in rpg["places"] if p["kind"] == "town"]) == 30 and len(rpg["residents"]) == 300
             for key in ["ArrowDown", "ArrowRight", "ArrowDown", "ArrowLeft"] * 3:
                 page.keyboard.press(key)
                 page.wait_for_timeout(150)
