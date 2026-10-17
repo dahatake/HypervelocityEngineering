@@ -19,8 +19,19 @@ PROVISIONAL CONTRACT (仮置き。実装者が確認し、食い違えば CONFLI
     [data-part=icon] [data-part=heading] [data-part=description] [data-part=action]。
   - 基準 commit 80c7cc55 の測定値: work/**/evidence/perf-baseline-80c7cc55.json
     {"env":{...},"samples":{"first_display":[ms,...],"zoom":[...],"select":[...]}}（操作ごと PARAM-038 回以上）。
-"""
+
+    AC-276 の基準値の取得手順（実装者が、外観変更に着手する前に最初に行う。測定済みでなければ AC-276 は失敗する）:
+      1. 基準 commit の worktree を作る:  git worktree add ../eabk-baseline-80c7cc55 80c7cc55
+      2. この試験ファイル（と tests/system/e2e の補助モジュール）を、その worktree の同じ場所へ複製する（基準側に無ければ）。
+      3. その worktree で実行:  EABK_RECORD_PERF_BASELINE=1 python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py
+            -k test_ac276 -q   （PowerShell: $env:EABK_RECORD_PERF_BASELINE='1'）
+         → work/runs/202610171403/evidence/perf-baseline-80c7cc55.json（env と samples）が書かれる。
+      4. そのファイルを、run の作業ブランチ側の同じパスへ複製して commit する（測定環境と値を記録する）。
+      5. 以後の通常実行（環境変数なし）は、この値と比べる。測定は同じ機器・同じ環境で行う。
+    """
 import json
+import os
+import platform
 import re
 import subprocess
 import time
@@ -648,6 +659,14 @@ def _measure(browser, url, n):
 
 # NFR-PERF-006 AC-276
 def test_ac276_render_p95_within_tolerance_of_baseline_and_absolute_limits(browser, large_url):
+    if os.environ.get("EABK_RECORD_PERF_BASELINE") == "1":
+        out = ROOT / "work" / "runs" / "202610171403" / "evidence" / "perf-baseline-80c7cc55.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        env = {"commit": subprocess.run(["git", "rev-parse", "--short=8", "HEAD"], cwd=ROOT, capture_output=True,
+                                        text=True).stdout.strip(), "platform": platform.platform(),
+               "python": platform.python_version(), "n": P_N, "viewport": "1400x900", "dataset": "make_large"}
+        out.write_text(json.dumps({"env": env, "samples": _measure(browser, large_url, P_N)}), encoding="utf-8")
+        return
     files = list((ROOT / "work").glob("**/evidence/perf-baseline-80c7cc55.json"))
     assert files, "基準 commit 80c7cc55 の測定値（evidence）が無い。実装前に測って残す"
     base = json.loads(files[0].read_text(encoding="utf-8"))

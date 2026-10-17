@@ -4099,7 +4099,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac258_tokens_defined_once_and_no_raw_colors_outside_them\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4115,6 +4115,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:50:55+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4130,7 +4136,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac258_color_tokens_only_in_root_and_theme_blocks\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4146,6 +4152,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:50:57+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4161,7 +4173,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac259_three_choices_default_system_and_follow_os_without_reload\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4177,6 +4189,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:50:59+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4192,7 +4210,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac259_switch_keeps_input_selection_filter_and_layout_and_works_by_keyboard\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4208,6 +4226,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:00+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4223,7 +4247,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac259_theme_can_be_chosen_from_command_search\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4239,6 +4263,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:01+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4254,7 +4284,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac259_every_color_token_has_a_value_in_both_themes\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4270,6 +4300,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:03+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4285,7 +4321,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac261_system_font_stack_no_remote_fonts_and_type_ramp\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4301,6 +4337,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:05+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4316,7 +4358,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac261_no_external_font_requests\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4332,6 +4374,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:07+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4347,7 +4395,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac262_spacing_size_radius_tokens_are_multiples_of_grid\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4363,6 +4411,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:09+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4378,7 +4432,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac262_component_px_values_are_tokens_or_grid_multiples\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4394,6 +4448,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:11+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4409,7 +4469,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac263_elevation_levels_and_same_kind_same_value_on_all_screens\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4425,6 +4485,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:14+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4440,7 +4506,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac264_interactive_states_defined_and_selection_not_color_only\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4456,6 +4522,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:15+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4471,7 +4543,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac264_disabled_is_not_color_only\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4487,6 +4559,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:17+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4502,7 +4580,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac265_motion_uses_tokens_within_limit_and_no_endless_animation\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4518,6 +4596,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:19+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4533,7 +4617,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac266_layers_fall_back_to_opaque_with_readable_text\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4549,6 +4633,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:21+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4564,7 +4654,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac267_error_state_has_common_structure_and_keeps_input\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4580,6 +4670,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:22+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4595,7 +4691,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac267_empty_state_has_common_structure_and_text\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4611,6 +4707,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:24+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4626,7 +4728,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac267_loading_state_shows_progress_indicator\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4642,6 +4744,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:25+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4657,7 +4765,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac268_single_bundled_icon_set_allowed_sizes_and_accessible_names\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4673,6 +4781,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:26+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4688,7 +4802,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac268_dim_toggle_icons_follow_rule\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4704,6 +4818,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:28+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4719,7 +4839,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac269_token_contrast_ratios_meet_wcag_aa_and_are_reported\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4735,6 +4855,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:30+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4750,7 +4876,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac270_focus_visible_on_keyboard_not_on_mouse_and_no_bare_outline_none\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4766,6 +4892,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:32+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4781,7 +4913,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac270_focus_ring_contrast_against_background\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4797,6 +4929,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:34+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4812,7 +4950,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac271_forced_colors_defined_and_state_visible\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4828,6 +4966,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:36+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4843,7 +4987,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac272_reduced_motion_stops_animations_on_all_screens\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4859,6 +5003,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:37+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4874,7 +5024,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac272_loading_is_conveyed_without_motion\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4890,6 +5040,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:39+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4905,7 +5061,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac273_pointer_target_size_at_least_24px\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4921,6 +5077,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:40+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4936,7 +5098,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac273_reflow_and_text_zoom_without_horizontal_scroll\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4952,6 +5114,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:45+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4967,7 +5135,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac274_theme_toggle_keyboard_reachable_with_name_role_state_and_announced\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -4983,6 +5151,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:46+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -4998,7 +5172,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac274_states_not_conveyed_by_color_alone\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -5014,6 +5188,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:48+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     },
@@ -5104,7 +5284,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac276_render_p95_within_tolerance_of_baseline_and_absolute_limits\" -q",
       "canary": false,
-      "status": "blocked",
+      "status": "not_run",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -5120,6 +5300,12 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "競合: この AC の検証レベルは integration で System Test の対象外（CHK-10）。ケースは integration のオラクルとして保持。レベル変更か integration への移管を conductor が決める"
+        },
+        {
+          "at": "2026-10-17T14:51:50+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
         }
       ]
     }
