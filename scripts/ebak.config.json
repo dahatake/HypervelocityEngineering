@@ -20,6 +20,11 @@
       {
         "name": "toolkit-unit",
         "run": "python -m pytest -q tests/toolkit/test_clean_work.py"
+      },
+      {
+        "name": "studio-ui",
+        "run": "python -m pytest -q EABK-Studio/tests",
+        "slow": true
       }
     ]
   },
