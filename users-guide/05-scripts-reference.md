@@ -27,6 +27,8 @@ python scripts/rdcheck.py check [--base REF|none] [--run RUN_ID|current] [--stri
 python scripts/rdcheck.py show FR-012 AC-031 Q-007     # 指定した要求・AC・質問の節だけを表示する（全文を読まずに済む）
 python scripts/rdcheck.py list --state 承認済み --priority MUST
 python scripts/rdcheck.py list --level system          # System Test の対象になる AC
+python scripts/rdcheck.py list --area 受付              # 領域で絞る（--by-area で領域ごとにまとめる。廃止は件数に含めない）
+python scripts/rdcheck.py index FR-012 [--kind 検証] [--json]   # 種類（上位・出典・参照・実装・検証・使用）つきの関係。保存せず都度生成。ID を渡すと逆引き
 python scripts/rdcheck.py stats                        # 監査のメトリクス（JSON）
 python scripts/rdcheck.py digest AC-031                # AC のダイジェスト
 python scripts/rdcheck.py trace FR-012 [--json]        # 要求の上流（G・出典）・横（用語・状態・PARAM）・下流（AC・台帳のケース・カタログ・コード）をたどる

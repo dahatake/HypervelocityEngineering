@@ -37,10 +37,24 @@ RANGE_RE = re.compile(
     r"(?<![A-Za-z0-9\-])((?:FR|NFR-[A-Z0-9]+)-)(\d{3,})\s*[〜~～]\s*(?:(?:FR|NFR-[A-Z0-9]+)-)?(\d{3,})")
 LIST_RE = re.compile(
     r"(?<![A-Za-z0-9\-])((?:FR|NFR-[A-Z0-9]+)-)(\d{3,})((?:\s*[・,、，]\s*\d{3,}(?![0-9\-]))+)")
-KEYS = ("決定状態", "出自", "優先度", "上位", "出典", "対象エンティティ", "関係する状態", "参照パラメータ", "関連する既存資産")
-KEY_RE = re.compile(r"(?:(?<=^)|(?<=[\s　]))(" + "|".join(KEYS) + r")\s*[:：]")
+def _load_field_roles() -> "OrderedDict[str, str]":
+    """欄名 -> 役割。メタデータ定義（scripts/metadata.json, FR-1058）から読む。欄名の一覧をここに重ねて持たない。"""
+    for p in (Path(__file__).resolve().parent.parent / "scripts" / "metadata.json",):
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            roles = OrderedDict((f["name"], f["role"]) for f in data.get("requirement_fields", []) if f.get("role"))
+            if roles:
+                return roles
+        except (OSError, ValueError, KeyError):
+            continue
+    return OrderedDict()  # 定義が見つからないときは構造化欄を読まない（本文は表示される）
+
+
+FIELD_ROLES = _load_field_roles()
+KEYS = tuple(FIELD_ROLES)
+KEY_RE = re.compile(r"(?:(?<=^)|(?<=[\s　]))(" + "|".join(map(re.escape, KEYS or ("\0",))) + r")\s*[:：]")
 TOP_KEY_RE = re.compile(
-    r"^[-*]\s+(要求|" + "|".join(KEYS) + r"|受入基準(?:\s+(?:AC-(?:\d{3,}|[A-Z][A-Z0-9_-]*)))?)\s*[:：]\s*(.*)$")
+    r"^[-*]\s+(要求|" + "|".join(map(re.escape, KEYS)) + r"|受入基準(?:\s+(?:AC-(?:\d{3,}|[A-Z][A-Z0-9_-]*)))?)\s*[:：]\s*(.*)$")
 AC_BULLET_RE = re.compile(r"^[-*]\s+(?:受入基準\s*)?\**(AC-(?:\d{3,}|[A-Z][A-Z0-9_-]*))\**\s*[:：]\s*(.*)$")
 SUB_RE = re.compile(r"^\s{2,}[-*]\s+(検証レベル|BLOCKED)\s*[:：]\s*(.*)$")
 NONE_WORDS = {"", "なし", "無し", "-", "—", "–", "n/a", "N/A", "未実装", "未設定", "tbd", "TBD"}
@@ -459,27 +473,30 @@ def apply_kv(r: dict, text: str) -> None:
         end = marks[k + 1].start() if k + 1 < len(marks) else len(text)
         key, val = m.group(1), text[m.end():end].strip(" 　")
         val = strip_md(val)
-        if key == "決定状態":
+        role = FIELD_ROLES.get(key)
+        if role == "status":
             r["status"] = val
-        elif key == "出自":
+        elif role == "origin":
             r["origin"] = val
-        elif key == "優先度":
+        elif role == "priority":
             mm = re.match(r"(MUST|SHOULD|MAY|COULD|WON'T)", val, re.I)
             r["priority"] = mm.group(1).upper() if mm else val.split("（")[0]
             r["priorityNote"] = val
-        elif key == "上位":
+        elif role == "goal":
             gm = re.search(r"G-\d{3,}", val)
             r["goal"] = gm.group(0) if gm else val
-        elif key == "出典":
+        elif role == "sources":
             r["sources"] = val
-        elif key == "対象エンティティ":
+        elif role == "entities":
             r["entities"] = [e for e in split_items(val, ",、，;；・/／") if e not in NONE_WORDS]
-        elif key == "関係する状態":
+        elif role == "states":
             r["states"] = [] if val in NONE_WORDS else [val]
-        elif key == "参照パラメータ":
+        elif role == "params":
             r["params"] = re.findall(r"PARAM-\d{3,}", val)
-        elif key == "関連する既存資産":
+        elif role == "assets":
             r["assets"] = "" if val in NONE_WORDS else val
+        elif role in ("area", "updated", "version"):
+            r[role] = val
 
 
 # --------------------------------------------------------------------------- states

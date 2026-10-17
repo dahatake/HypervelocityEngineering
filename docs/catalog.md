@@ -75,9 +75,15 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1040 | 図式の各表示の 2D/3D 選択 | 承認済み | `EABK-Studio/web/js/dim.js`, `EABK-Studio/web/js/dgm3d.js`, `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/app.css`, `EABK-Studio/README.md`, `users-guide/studio/02-screens.md` | `EABK-Studio/tests/test_nav_dims_ui.py`, `tests/system/e2e/test_studio_nav_dims_integrations_system.py` | ストア、UI 部品、デザイン基盤、Three.js 同梱モジュール、2D・3D 切替 |
 | FR-1041 | ナビゲーションの MECE 化と各項目の説明 | 承認済み | `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/dim.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/index.html`, `EABK-Studio/web/app.css`, `EABK-Studio/README.md`, `users-guide/studio/02-screens.md` | `EABK-Studio/tests/test_nav_dims_ui.py`, `tests/system/e2e/test_studio_nav_dims_integrations_system.py` | ストア、UI 部品、デザイン基盤、2D・3D 切替 |
 | FR-1042 | 外部連携カタログの閲覧（Studio） | 承認済み | `EABK-Studio/web/js/integrations.js`, `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/drawer.js`, `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/js/xref.js` | `EABK-Studio/tests/test_integrations_catalog.py`, `EABK-Studio/tests/test_nav_dims_ui.py`, `tests/system/e2e/test_studio_nav_dims_integrations_system.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
-| FR-1050 | 表・連携の ID の全面リンク化と未解決 ID の明示 | 承認済み | `EABK-Studio/web/js/tables.js`, `EABK-Studio/web/js/integrations.js`, `EABK-Studio/web/js/drawer.js`, `EABK-Studio/web/js/xref.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/eabk_model.py` | `EABK-Studio/tests/test_info_design_system_ui.py`, `tests/system/e2e/test_studio_info_design_system.py` | 管理データモデル、UI 部品 |
-| FR-1051 | 「表」画面の種別のグループ化と名称の統一 | 承認済み | `EABK-Studio/web/js/tables.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/app.css` | `EABK-Studio/tests/test_info_design_system_ui.py`, `tests/system/e2e/test_studio_info_design_system.py` | UI 部品、デザイン基盤 |
-| FR-1052 | 文脈の明示と、図・一覧の行のキーボード操作 | 承認済み | `EABK-Studio/web/js/entities.js`, `EABK-Studio/web/js/dashboard.js`, `EABK-Studio/web/js/integrations.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/app.css` | `tests/system/e2e/test_studio_info_design_system.py` | UI 部品、デザイン基盤 |
+| FR-1057 | 要求の階層化（目的→領域→要求） | 承認済み | `scripts/metadata.json`、`scripts/ebaklib.py`、`scripts/rdcheck.py`、`EABK-Studio/eabk_model.py`、`tools/install.py` | `tests/toolkit/test_hierarchy.py`、`tests/system/test_data_hierarchy_system.py` | メタデータ定義と階層・関係索引 |
+| FR-1058 | 管理データのメタデータ定義と検査 | 承認済み | `scripts/metadata.json`、`scripts/ebaklib.py`、`scripts/rdcheck.py`、`EABK-Studio/eabk_model.py`、`tools/install.py` | `tests/toolkit/test_hierarchy.py`、`tests/system/test_data_hierarchy_system.py` | メタデータ定義と階層・関係索引 |
+| FR-1059 | 関係の索引（種類つきの関連付け） | 承認済み | `scripts/metadata.json`、`scripts/ebaklib.py`、`scripts/rdcheck.py`、`EABK-Studio/eabk_model.py`、`tools/install.py` | `tests/toolkit/test_hierarchy.py`、`tests/system/test_data_hierarchy_system.py` | メタデータ定義と階層・関係索引 |
+| FR-1060 | 領域の初期分類（AI提案） | 承認待ち | 未実装 | 未実装 | - |
+| NFR-UX-014 | 管理データの情報デザイン（段階的開示と一覧性） | 承認済み | `scripts/metadata.json`、`scripts/ebaklib.py`、`scripts/rdcheck.py`、`EABK-Studio/eabk_model.py`、`tools/install.py` | `tests/toolkit/test_hierarchy.py`、`tests/system/test_data_hierarchy_system.py` | メタデータ定義と階層・関係索引 |
+| FR-1050 | 表・連携の ID の全面リンク化と未解決 ID の明示 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
+| FR-1051 | 「表」画面の種別のグループ化と名称の統一 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
+| FR-1052 | 文脈の明示と、図・一覧の行のキーボード操作 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
+
 ## API・イベント
 
 | 名前 | 定義ファイル | 関連する要求 ID |
@@ -103,6 +109,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | 外部連携カタログ解析・検査 | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/next-id.py` | `docs/integrations.md` の解析（`parse_integrations`）、CHK-28 の検査（必須欄・16 観点の欄・値の形式・TBD・方向・状態・要求との対応・認証情報の値らしい文字列）、`trace INT-xxx`、`next-id.py INT` の採番と ID 台帳の同期 | FR-1035、FR-1036、FR-1037 |
 | データ層検査 | `scripts/verify.py` | `--docs-only` でデータ層の妥当性を検査する | FR-1017、FR-1018、FR-1044、FR-1046、NFR-PERF-005 |
 | データ層修復 | `scripts/rdfix.py` | 要求定義書を変更せずデータ層の不整合を自動修復し、残りを手動対応として示す | FR-1018、FR-1019、FR-1044、FR-1045、FR-1046、NFR-COMPAT-004、NFR-PERF-005、NFR-REL-002、NFR-REL-003、NFR-REL-004 |
+| メタデータ定義と階層・関係索引 | `scripts/metadata.json`、`scripts/ebaklib.py`、`scripts/rdcheck.py` | 欄名・必須/任意・許容値の定義（metadata.json）、領域の欄・一覧表・割り当て表の検査（CHK-29/30）、列名の一致（CHK-31）、節の項目数の警告（CHK-32）、`rdcheck.py list --area/--by-area`、種類つきの関係の索引（`rdcheck.py index`。保存せず都度生成） | FR-1057、FR-1058、FR-1059、NFR-UX-014 |
 | エンティティ台帳・企業カタログ照合 | `scripts/entities.py` | 用語表・状態表・対象エンティティ・カタログのテーブル表からエンティティ台帳を導出し（list）、企業データカタログ（任意設定 `enterprise_data_catalog`。読み取り専用）と照合し（check）、覆われないものを質問票形式の ToDo にする（todo）。導出関数 `derive` は Studio からも再利用する。任意欄: 要求の `エンティティの関係`、カタログの `### 列: <テーブル>` 節の表、DDL・JSON Schema の読み取り専用の補完（列・関係・クラスターも導出する） | FR-1020、FR-1021、FR-1022、FR-1023、FR-1024、FR-1025、FR-1026、FR-1030、NFR-COMPAT-003、NFR-SEC-023 |
 # EABK Studio カタログ
 
@@ -161,7 +168,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 
 ## テーブル
 
-| テーブル名 | 定義ファイル（スキーマやマイグレーション） | 正本のシステム | 関連する要求 ID |
+| テーブル名 | 定義ファイル | 正本のシステム | 関連する要求 ID |
 |---|---|---|---|
 | 要求・AC・PARAM・質問・用語・状態・ペルソナ・出典 | `docs/requirements-definition.md` | 対象リポジトリの要求定義書 | FR-001、FR-006、FR-009、NFR-OPS-004 |
 | 機能・API・テーブル・共通部品 | `docs/catalog.md` | 対象リポジトリのカタログ | FR-001、FR-007、FR-009 |
@@ -173,11 +180,11 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 
 | 部品名 | ファイル | 用途 | 使っている要求 ID |
 |---|---|---|---|
-| 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、FR-1025、FR-1026、FR-1027、FR-1028、FR-1029、FR-1034、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002、FR-1042、FR-1050 |
+| 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、FR-1025、FR-1026、FR-1027、FR-1028、FR-1029、FR-1034、FR-1042、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002 |
 | HTTP サーバー | `EABK-Studio/studio.py` | 127.0.0.1 限定の読取 API と静的配信 | FR-010、FR-013、FR-1001、NFR-OPS-003、NFR-SEC-001 |
 | ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1029、FR-1031、FR-1033、FR-1034、FR-1040、FR-1041、FR-1042 |
-| UI 部品 | `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/js/xref.js` | 表示、詳細、通知、リンク | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1028、FR-1031、FR-1033、FR-1040、FR-1041、FR-1042、FR-1050、FR-1051、FR-1052、NFR-OPS-003、NFR-UX-005、NFR-UX-007、NFR-UX-010 |
-| デザイン基盤 | `EABK-Studio/web/app.css`, `EABK-Studio/web/index.html` | Fluent 2 に寄せたテーマ変数、外枠、ナビゲーション、検索、通知、ダーク表示 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1032、FR-1040、FR-1041、FR-1042、FR-1051、FR-1052 |
+| UI 部品 | `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/js/xref.js` | 表示、詳細、通知、リンク | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1028、FR-1031、FR-1033、FR-1040、FR-1041、FR-1042、NFR-OPS-003、NFR-UX-005、NFR-UX-007、NFR-UX-010 |
+| デザイン基盤 | `EABK-Studio/web/app.css`, `EABK-Studio/web/index.html` | Fluent 2 に寄せたテーマ変数、外枠、ナビゲーション、検索、通知、ダーク表示 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1032、FR-1040、FR-1041、FR-1042 |
 | RPG 風マップ | `EABK-Studio/web/js/maprpg.js`, `EABK-Studio/web/js/rpgworld.js`, `EABK-Studio/web/js/rpgaudio.js`, `EABK-Studio/web/rpg.css` | 城（目的）と街（エンティティ）を歩いて訪ね、会話ウィンドウで内容を読む 8 ビット風の 2 次元地図。ドット絵と音楽・効果音は Canvas と Web Audio で実行時に生成（外部アセット・外部通信なし、初期ミュート）。ファミコン風のキー操作、表の代替表現、動きの軽減、描画不可なら 2D へ代替 | FR-1053、FR-1054、FR-1055、NFR-UX-012 |
 | 2D・3D 切替 | `EABK-Studio/web/js/dim.js`, `EABK-Studio/web/js/dgm3d.js` | マップと図式の 2D・3D 切替アイコン（アニメ調の顔つきの平面・立体と「2D」「3D」の語。外部取得なし）、マップの第 3 の表示「RPG」（城の絵のアイコン）、コマンド検索からの切替、図式の 3D 描画（3D 不可なら 2D と表へ代替） | FR-1040、FR-1041、FR-1053、FR-1054、FR-1055 |
 | フィンガープリント | `EABK-Studio/studio.py` | 更新検知と再読込 | FR-012、NFR-OPS-002 |
