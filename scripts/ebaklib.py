@@ -166,6 +166,37 @@ def now_iso() -> str:
     return _dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
 
+def pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
+        k32 = ctypes.windll.kernel32
+        hp = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not hp:
+            return k32.GetLastError() == 5  # access denied: the process exists
+        code = ctypes.c_ulong()
+        ok = k32.GetExitCodeProcess(hp, ctypes.byref(code))
+        k32.CloseHandle(hp)
+        return bool(ok) and code.value == 259  # STILL_ACTIVE
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    return True
+
+
+def lock_orphaned(path: Path) -> bool:
+    """True when the lock file names a PID that is no longer running (the holder crashed or was killed)."""
+    try:
+        txt = path.read_text().strip()
+    except OSError:
+        return False
+    return txt.isdigit() and not pid_alive(int(txt))
+
+
 def new_run_id() -> str:
     return _dt.datetime.now().strftime("%Y%m%d%H%M")
 

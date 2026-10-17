@@ -200,7 +200,8 @@ class LandLock:
         deadline = time.time() + self.wait
         while True:
             try:
-                if self.path.exists() and time.time() - self.path.stat().st_mtime > self.stale:
+                if self.path.exists() and (h.lock_orphaned(self.path)
+                                           or time.time() - self.path.stat().st_mtime > self.stale):
                     self.path.unlink()
             except OSError:
                 pass

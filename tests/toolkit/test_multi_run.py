@@ -164,12 +164,23 @@ def test_land_lock_serialises_runs(sample):
     patch_meta(wt, status="finished", result="全件完了")
     lock = Path(git(sample.path, "rev-parse", "--git-common-dir"))
     lock = (lock if lock.is_absolute() else sample.path / lock) / "ebak-land.lock"
-    lock.write_text("999", encoding="utf-8")
+    lock.write_text(str(os.getpid()), encoding="utf-8")
     try:
         proc = py(wt, "run-state.py", "land", "--wait", "1")
         assert "LAND-BUSY" in proc.stdout + proc.stderr
     finally:
         lock.unlink()
+
+
+def test_land_lock_orphaned_is_released(sample):
+    wt = start_in_worktree(sample)
+    commit_in(wt)
+    patch_meta(wt, status="finished", result="全件完了")
+    lock = Path(git(sample.path, "rev-parse", "--git-common-dir"))
+    lock = (lock if lock.is_absolute() else sample.path / lock) / "ebak-land.lock"
+    lock.write_text("999999999", encoding="utf-8")
+    proc = py(wt, "run-state.py", "land", "--wait", "1")
+    assert "LAND-BUSY" not in proc.stdout + proc.stderr
 
 
 def test_hook_binds_run_by_session(sample):

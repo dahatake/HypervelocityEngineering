@@ -166,7 +166,7 @@ class Lock:
 
     def __enter__(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        if self.path.exists() and time.time() - self.path.stat().st_mtime > LOCK_STALE_SEC:
+        if self.path.exists() and (h.lock_orphaned(self.path) or time.time() - self.path.stat().st_mtime > LOCK_STALE_SEC):
             self.path.unlink()
         try:
             fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
