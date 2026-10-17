@@ -60,6 +60,12 @@ conductor が自分で停止する条件:
 
 ## 2.4 マージする
 
+### 複数の run を並行して動かす
+
+主の VS Code・主の作業ツリーのまま、複数の `/build` を始めてかまいません。各 run は `<リポジトリ>-run-<run-id>` の専用 worktree（統合ブランチ `run/<run-id>`）で動き、別の VS Code を開く必要はありません。完了した run は、終わった順に `run-state.py land` で main へ取り込まれます（共通ロックで 1 本ずつ）。取り込みは git の一時 worktree で merge と verify を行ってから main を進めるので、主の作業ツリーが未コミットの変更を持っていても、別のブランチにいても動きます（未コミットの変更が取り込む変更と同じファイルに重なるときだけ、解消まで `LAND-WAIT` で待ちます）。先に取り込まれた run と競合したときは、base を run の worktree に取り込み直して再試行し（`tests/system/ledger.json` は case の id 単位で自動統合）、解消できないファイルがあるときだけ `LAND-CONFLICT` で止まります。
+
+自動マージが成功した run は、統合ブランチと worktree が清掃されます。
+
 結果が「全件完了」で最終の verify が通った run は、conductor が統合ブランチ `run/<run-id>` をローカルの main へ `--no-ff` でマージし、統合ブランチを削除します（main への push はしません）。マージが競合したり verify が失敗したりした場合、および「blocked あり」「時間予算で中止」「canary 失敗で中止」の run は、取り込まずにブランチを残します。その場合や VS Code の New Worktree・GitHub Copilot app の新しい作業ツリー（そのセッションのブランチ）では、次のように手動で取り込みます。
 
 ```bash
