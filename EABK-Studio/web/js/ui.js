@@ -59,6 +59,22 @@ export function el(tag, attrs, ...kids) {
   return e;
 }
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// 状態表示（読込中・空・エラー・古い）の共通の形（FR-1047 / NFR-A11Y-001 AC-274）: アイコン・見出し・説明・操作。
+// 色だけで示さず、アイコンの形と見出しの文言でも伝える。変更を伴う通知は role=alert / status で支援技術に伝える。
+const STATE_ICON = { loading: '', empty: '∅', error: '✕', stale: '⚠' };
+export function statePanel({ state, heading, description, action }) {
+  const icon = state === 'loading'
+    ? el('span', { 'data-part': 'icon', role: 'progressbar', 'aria-label': heading }, el('span', { class: 'spin' }))
+    : el('span', { 'data-part': 'icon', 'aria-hidden': 'true' }, STATE_ICON[state] || 'ℹ');
+  const panel = el('div', {
+    class: 'state-panel', 'data-testid': 'state-panel', 'data-state': state,
+    role: state === 'error' ? 'alert' : 'status', 'aria-live': state === 'error' ? 'assertive' : 'polite',
+    'aria-busy': state === 'loading' ? 'true' : null,
+  }, icon, el('p', { 'data-part': 'heading' }, heading), el('p', { 'data-part': 'description' }, description || ''),
+  el('div', { 'data-part': 'action' }, action || ''));
+  return panel;
+}
 export const svgEl = (tag, attrs, ...kids) => {
   const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
   for (const [k, v] of Object.entries(attrs || {})) if (v != null) e.setAttribute(k, v);
