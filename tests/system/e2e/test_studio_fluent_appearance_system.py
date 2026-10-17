@@ -368,6 +368,7 @@ def test_ac267_loading_state_shows_progress_indicator(browser, studio_url):
     expect(loading).to_be_visible()
     expect(loading.locator('[role="progressbar"],progress,[aria-busy="true"]').first).to_be_attached()
     assert loading.inner_text().strip()
+    page.unroute_all(behavior="ignoreErrors")
     page.context.close()
 
 
@@ -512,6 +513,7 @@ def test_ac272_loading_is_conveyed_without_motion(browser, studio_url):
     expect(loading).to_be_visible()
     assert loading.inner_text().strip()
     assert page.evaluate("document.getAnimations().length") == 0
+    page.unroute_all(behavior="ignoreErrors")
     ctx.close()
 
 
