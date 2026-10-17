@@ -39,6 +39,7 @@ disable-model-invocation: true
 ## 速さの原則（品質を落とさずに待ち時間を減らす）
 - 待ち時間の大半は、LLM の推論ではなく、直列の処理・同じ検査の繰り返し・進行役の文脈の肥大から生じます。次を守ります。
 - 作業役は background で起動し、完了の通知が来た順に処理します。全員の完了を待ちません（バリアを作らない）。空いた枠には、すぐ次の項目を入れます。
+- 1 つの作業役の作業が長い（目安 30 分超・AC 12 個超・要求 3 個超）と見込むとき、または独立した調査・読み取りが 2 つ以上あるときは、自分で直列に行わず、サブタスクに分けて background の作業役に並行で渡す。ただし数回のツール呼び出しで終わる作業は委譲しない。
 - 統合は `python scripts/integrate.py merge` の 1 コマンドで行い、出力（3 行程度）だけを読みます。merge・verify・System Test・台帳の commit・worktree の解放を、別々のツール呼び出しに分けません。
 - 作業役の差分・長いログ・ファイルの本文を、進行役が読み返しません。判断に要るのは、作業役の 10 行の結果、`run-state.py status`、`integrate.py` の出力だけです。
 - 作業役は `scripts/ebak.config.json` の models のモデルで呼びます（`task` の model 引数に必ず指定。空の項目は指定しない）。指定がないと hook G-7 が拒否します。
@@ -59,15 +60,15 @@ disable-model-invocation: true
 2. 独立監査（full のときだけ）→ rd-auditor に「今回変わった要求 ID と、同じ対象エンティティ・状態・PARAM・用語の既存要求 ID」を渡す（scope: 差分、runs: 1）。
    直接矛盾が確度高で残れば、その依頼文を rd-author に渡して 1 に戻す（最大 3 周）。利用者の判断が要るものは質問票・BLOCKED にして先に進む。
 3. 計画 → `python scripts/rdcheck.py list --state 承認済み` を元に queue を作る（`run-state.py queue add`）。
-   1 項目は要求 ID 1〜5 個・AC 12 個まで（超えると `queue add` が拒否する。`--allow-large` で例外）。実測では実効の並列度が 0.8〜2.5（parallel_workers 8 に対し）にとどまったため、項目は「parallel_workers 体を埋められる数」を目安に細かく切る: 独立に実装できる（`--boundary` / `--shared` が重ならない）項目が parallel_workers より少ないなら、要求 1〜2 個の項目まで分ける。まとめてよいのは、同じ画面・同じ API・同じテーブルを通り、分けると同じファイルを同時に編集してしまう要求だけ（1 項目ごとの固定の手間は統合が約 2 分で小さい）。依存は `--depends`、同じ共通部品・テーブル・境界は `--boundary` / `--shared` で表し、重なる項目は並行させない。BLOCKED だけの要求は入れない。
+   1 項目は要求 ID 1〜5 個・AC 12 個まで（超えると `queue add` が拒否する。`--allow-large` で例外）。実測では実効の並列度が 0.8〜2.5 にとどまったため、項目は `parallel_workers` 体を埋められる数を目安に細かく切る。独立に実装できる（`--boundary` / `--shared` が重ならない）項目が `parallel_workers` より少ないなら、要求 1〜2 個の項目まで分ける。まとめてよいのは、同じ画面・同じ API・同じテーブルを通り、分けると同じファイルを同時に編集してしまう要求だけ（統合は 1 項目約 2 分で、固定の手間は小さい）。依存は `--depends`、同じ共通部品・テーブル・境界は `--boundary` / `--shared` で表し、重なる項目は並行させない。BLOCKED だけの要求は入れない。
    画面を持つアプリで、カタログの共通部品に「デザイン基盤」がなければ、ui_policy のワークスペースの要求を含む項目を最初に置き、そこでデザイン基盤を作らせる（skill `implement-fr` の `ui-design.md`）。ほかの画面の項目は、その項目に `--depends` を付ける（並行して別々の見た目が作られるのを防ぐ）。
    scope が「なし」（要求定義だけの依頼）なら queue を空のまま `stage 3 --done` とし、工程 4・5 を省いて工程 6 へ進む。
    queue を作ったら `python scripts/run-state.py lane confirm`（`LANE: full` になったら、省いていた工程 2 を scope: 差分、runs: 1 で行ってから工程 4 へ）。
 4. System Test の設計 → test-designer。実装より前に行う。全ケース not_run で commit させる。
-   実測で最も長い直列区間だったため（約 5.6 時間）、AC が 15 個を超えるときは、領域（画面・API・NFR の種別）ごとに AC を 2〜4 組（1 組 15 AC 前後）に分け、test-designer を並行で起動する（依頼文の先頭に `part: n/N` と担当の AC・要求 ID を固定する）。各 test-designer は自分の担当のケースだけを書き、台帳は `ledger.py` 経由で追記する（排他ロックで衝突しない）。全部が終わったら `stage 4 --done`。
-   全部が終わったら `stage 4 --done`。工程 5 は、その項目の要求のケースを担当する part が完了した時点で始めてよい（全 part の完了を待たない）。
+   実測で最も長い直列区間だったため（約 5.6 時間）、AC が 15 個を超えるときは、領域（画面・API・NFR の種別）ごとに AC を 2〜4 組（1 組 15 AC 前後）に分け、test-designer を並行で起動する（依頼文の先頭に `part: n/N` と担当の AC・要求 ID を固定する）。各 test-designer は自分の担当のケースだけを書き、台帳は `ledger.py` 経由で追記する（排他ロックで衝突しない）。
+   工程 5 の項目は、その項目の要求のケースを担当する part が完了した時点で始めてよい（全 part の完了を待たない）。`stage 4 --done` は全 part の完了後。
    工程 3 の計画は進行役の作業なので、test-designer を background で起動してから工程 3 を行う（工程 2 が終わっていれば、要求定義書は確定している）。
-   工程 5 の最初の項目は、test-designer の完了（`stage 4 --done`）を待ってから始める。
+   工程 5 の項目は、その項目の要求のケースを書く test-designer（part）の完了を待って始める（全 part の `stage 4 --done` までは待たない）。
 5. 実装ループ → 下の「実装ループ」。
 6. 最終 → 下の「最終」。
 
