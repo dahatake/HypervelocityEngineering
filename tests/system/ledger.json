@@ -79,6 +79,15 @@
     "AC-241": "sha256:0699afdfc9c2e349",
     "AC-237": "sha256:843f6f2d5d402e43",
     "AC-238": "sha256:8a719013d3d38992",
+    "AC-286": "sha256:89a427c5c0ab5eec",
+    "AC-295": "sha256:12ef77c6f1f51d41",
+    "AC-277": "sha256:377fe370bc6ed13c",
+    "AC-278": "sha256:eda979d1a67b813f",
+    "AC-280": "sha256:2e038f8042a78fad",
+    "AC-281": "sha256:becdf6085063094f",
+    "AC-283": "sha256:da58c4870e1b04cb",
+    "AC-284": "sha256:d82b1f6154debf33",
+    "AC-285": "sha256:ef944f2578a4f90d",
     "AC-315": "sha256:6afe93012ae75bd9",
     "AC-316": "sha256:66ce4030e6d07576",
     "AC-317": "sha256:54771d3171598d41",
@@ -4074,6 +4083,356 @@
       "history": [
         {
           "at": "2026-10-16T09:09:57+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-153",
+      "requirement_ids": [
+        "FR-1053"
+      ],
+      "ac_ids": [
+        "AC-286"
+      ],
+      "title": "RPG 風: 既定は 2D・切替操作・キーボード・コマンド検索で RPG 風を選べる",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac286_default",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "48de5350",
+      "last_run_at": "2026-10-17T16:19:56+09:00",
+      "evidence": "work/runs/202610171423/logs/system-test/E2E-153-202610171618.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:47:10+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-154",
+      "requirement_ids": [
+        "FR-1053"
+      ],
+      "ac_ids": [
+        "AC-286"
+      ],
+      "title": "RPG 風: 切替で 2D・3D の内容・選択・倍率が保たれる",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac286_switching_keeps",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "48de5350",
+      "last_run_at": "2026-10-17T16:19:56+09:00",
+      "evidence": "work/runs/202610171423/logs/system-test/E2E-154-202610171619.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:47:16+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-155",
+      "requirement_ids": [
+        "FR-1053"
+      ],
+      "ac_ids": [
+        "AC-286"
+      ],
+      "title": "異常系: 切替で入力中の内容が失われない",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac286_switching_does",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "48de5350",
+      "last_run_at": "2026-10-17T16:19:56+09:00",
+      "evidence": "work/runs/202610171423/logs/system-test/E2E-155-202610171619.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:47:21+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-156",
+      "requirement_ids": [
+        "FR-1055"
+      ],
+      "ac_ids": [
+        "AC-295"
+      ],
+      "title": "RPG 風: 方向キーで 1 マス移動し、通れない地点には入れない",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac295_arrow",
+      "canary": true,
+      "status": "pass",
+      "last_commit": "48de5350",
+      "last_run_at": "2026-10-17T16:19:56+09:00",
+      "evidence": "work/runs/202610171423/logs/system-test/E2E-156-202610171531.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:47:28+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-157",
+      "requirement_ids": [
+        "FR-1055"
+      ],
+      "ac_ids": [
+        "AC-295"
+      ],
+      "title": "RPG 風: A で入る・話す、B で閉じ（位置保持）",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac295_a_button",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "48de5350",
+      "last_run_at": "2026-10-17T16:19:56+09:00",
+      "evidence": "work/runs/202610171423/logs/system-test/E2E-157-202610171619.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:47:34+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-158",
+      "requirement_ids": [
+        "FR-1055"
+      ],
+      "ac_ids": [
+        "AC-295"
+      ],
+      "title": "RPG 風: スタートでメニュー・B で戻る・セレクトで音の入切（マウス不要）",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac295_start",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "48de5350",
+      "last_run_at": "2026-10-17T16:19:56+09:00",
+      "evidence": "work/runs/202610171423/logs/system-test/E2E-158-202610171619.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:47:40+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-159",
+      "requirement_ids": [
+        "FR-1055"
+      ],
+      "ac_ids": [
+        "AC-295"
+      ],
+      "title": "異常系: 地図の端を越えず、何もない場所の A で会話は開かない",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac295_edge",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "48de5350",
+      "last_run_at": "2026-10-17T16:19:56+09:00",
+      "evidence": "work/runs/202610171423/logs/system-test/E2E-159-202610171619.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:47:49+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-112",
+      "requirement_ids": [
+        "FR-1050"
+      ],
+      "ac_ids": [
+        "AC-277"
+      ],
+      "title": "表の全種別の表セルの実在 ID はすべてリンク／実在しない ID はリンクにしない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac277\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "7b31f81d",
+      "last_run_at": "2026-10-17T16:00:03+09:00",
+      "evidence": "work/runs/202610171409/logs/system-test/E2E-112-202610171558.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:20:29+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-113",
+      "requirement_ids": [
+        "FR-1050"
+      ],
+      "ac_ids": [
+        "AC-278"
+      ],
+      "title": "外部連携の一覧・詳細の関連要求・AC・INT ID はリンク／未解決はリンクにしない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac278\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "7b31f81d",
+      "last_run_at": "2026-10-17T16:00:03+09:00",
+      "evidence": "work/runs/202610171409/logs/system-test/E2E-113-202610171559.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:20:32+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-114",
+      "requirement_ids": [
+        "FR-1051"
+      ],
+      "ac_ids": [
+        "AC-280"
+      ],
+      "title": "表の種別が 要求・設計・証跡・運用 の 4 グループ見出しの下に束ねられる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac280\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "7b31f81d",
+      "last_run_at": "2026-10-17T16:00:03+09:00",
+      "evidence": "work/runs/202610171409/logs/system-test/E2E-114-202610171559.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:20:34+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-115",
+      "requirement_ids": [
+        "FR-1051"
+      ],
+      "ac_ids": [
+        "AC-281"
+      ],
+      "title": "表の画面名が JA・EN のナビ・タイトルで一つの語に統一される",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac281\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "7b31f81d",
+      "last_run_at": "2026-10-17T16:00:03+09:00",
+      "evidence": "work/runs/202610171409/logs/system-test/E2E-115-202610171559.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:20:37+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-116",
+      "requirement_ids": [
+        "FR-1052"
+      ],
+      "ac_ids": [
+        "AC-283"
+      ],
+      "title": "エンティティ詳細にパンくず（nav・aria-current・一覧へ戻る a）がある",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac283\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "7b31f81d",
+      "last_run_at": "2026-10-17T16:00:03+09:00",
+      "evidence": "work/runs/202610171409/logs/system-test/E2E-116-202610171559.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:20:40+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-117",
+      "requirement_ids": [
+        "FR-1052"
+      ],
+      "ac_ids": [
+        "AC-284"
+      ],
+      "title": "ダッシュボードの図の区分がフォーカス可・名前と数値つき・数値ラベル常時表示",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac284\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "7b31f81d",
+      "last_run_at": "2026-10-17T16:00:03+09:00",
+      "evidence": "work/runs/202610171409/logs/system-test/E2E-117-202610171559.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:20:42+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-118",
+      "requirement_ids": [
+        "FR-1052"
+      ],
+      "ac_ids": [
+        "AC-285"
+      ],
+      "title": "外部連携の各行にキーボードで開ける「詳細」があり行クリックも維持／0 件で偽の操作なし",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_info_design_system.py -k \"ac285\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "7b31f81d",
+      "last_run_at": "2026-10-17T16:00:03+09:00",
+      "evidence": "work/runs/202610171409/logs/system-test/E2E-118-202610171559.log",
+      "history": [
+        {
+          "at": "2026-10-17T14:20:45+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"

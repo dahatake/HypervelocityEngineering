@@ -27,6 +27,12 @@ function donut(data, size = 190) {
     const len = r * (a1 - a0);
     p.style.setProperty('--len', len); p.classList.add('draw');
     p.append(svgEl('title', {}, `${d.label}: ${d.value}`));
+    // FR-1052 AC-284: keyboard focusable, named (name + value), Enter/Space opens like a click.
+    p.setAttribute('tabindex', '0'); p.setAttribute('role', 'button'); p.setAttribute('aria-label', `${d.label}: ${d.value}`);
+    p.setAttribute('data-testid', 'chart-segment');
+    p.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); focusAndGo(d.ids || [], d.label); } });
+    p.addEventListener('focus', () => (p.style.filter = 'drop-shadow(0 0 8px ' + d.color + ')'));
+    p.addEventListener('blur', () => (p.style.filter = ''));
     p.addEventListener('click', () => focusAndGo(d.ids || [], d.label));
     p.addEventListener('mouseenter', () => (p.style.filter = 'drop-shadow(0 0 8px ' + d.color + ')'));
     p.addEventListener('mouseleave', () => (p.style.filter = ''));
@@ -39,7 +45,7 @@ function donut(data, size = 190) {
 }
 
 function legend(data) {
-  return el('div', { class: 'legend', style: { flexDirection: 'column', gap: '6px' } }, data.map((d) => el('span', { style: { cursor: 'pointer' }, onclick: () => focusAndGo(d.ids || [], d.label) },
+  return el('div', { class: 'legend', style: { flexDirection: 'column', gap: '6px' } }, data.map((d) => el('span', { 'data-testid': 'chart-segment-label', style: { cursor: 'pointer' }, onclick: () => focusAndGo(d.ids || [], d.label) },
     el('i', { class: 'dot', style: { background: d.color } }), `${d.label} `, el('b', { style: { color: '#fff' } }, d.value))));
 }
 
@@ -48,8 +54,13 @@ function hbars(rows, opt = {}) {
   return el('div', { style: { display: 'grid', gap: '7px' } }, rows.map((r) => {
     const parts = r.parts || [{ value: r.value, color: r.color || '#39d0ff', ids: r.ids }];
     const wrap = el('div', { class: 'bar', style: { height: '12px', width: ((r.total ?? r.value) / max * 100) + '%', display: 'flex', background: 'rgba(140,170,255,.08)', minWidth: '6px' } },
-      parts.map((p) => el('i', { style: { width: ((p.value) / ((r.total ?? r.value) || 1) * 100) + '%', background: p.color, borderRadius: 0, cursor: 'pointer' }, title: `${p.label || ''} ${p.value}`, onclick: () => focusAndGo(p.ids || [], `${r.label} / ${p.label || ''}`) })));
-    return el('div', {}, el('div', { class: 'mini', style: { display: 'flex', justifyContent: 'space-between', marginBottom: '3px' } }, el('span', {}, r.label), el('b', { style: { color: '#fff' } }, r.right ?? (r.total ?? r.value))), wrap);
+      parts.map((p) => {
+        const go = () => focusAndGo(p.ids || [], `${r.label} / ${p.label || ''}`);
+        const name = `${r.label}${p.label ? ' / ' + p.label : ''}: ${p.value}`;
+        return el('i', { 'data-testid': 'chart-segment', tabindex: '0', role: 'button', 'aria-label': name, style: { width: ((p.value) / ((r.total ?? r.value) || 1) * 100) + '%', background: p.color, borderRadius: 0, cursor: 'pointer' }, title: `${p.label || ''} ${p.value}`, onclick: go,
+          onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } } });
+      }));
+    return el('div', {}, el('div', { class: 'mini', style: { display: 'flex', justifyContent: 'space-between', marginBottom: '3px' } }, el('span', {}, r.label), el('b', { 'data-testid': 'chart-segment-label', style: { color: '#fff' } }, r.right ?? (r.total ?? r.value))), wrap);
   }));
 }
 

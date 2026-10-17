@@ -253,3 +253,15 @@ a.xref:focus-visible{outline:2px solid var(--c1);outline-offset:2px}
 .impl-filter-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
 .impl-legend button{background:none;border:1px solid var(--line);border-radius:999px;color:inherit;padding:2px 10px;cursor:pointer}
 .impl-legend button[aria-pressed=true]{border-style:dashed;border-width:2px}
+
+/* FR-1051 grouped table kinds / FR-1050 unresolved IDs / FR-1052 breadcrumb and focus */
+.tgroups{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.tgroup{border:1px solid var(--line);border-radius:12px;padding:6px 10px;display:flex;flex-direction:column;gap:6px}
+.tgroup .gh{font-size:12px;font-weight:700;color:var(--dim);letter-spacing:.04em}
+.tgl{display:flex;flex-wrap:wrap;gap:6px}
+.xref-unresolved{border-bottom:1px dashed #ff8a5c;color:#ff8a5c}
+.xref-unresolved small{font-weight:700}
+.crumbs{margin-bottom:8px;font-size:13px}
+.crumbs [aria-current=page]{font-weight:700}
+[data-testid=chart-segment]:focus-visible{outline:2px solid #fff;outline-offset:2px}
+i[data-testid=chart-segment]{min-width:6px}

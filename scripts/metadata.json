@@ -17,6 +17,7 @@
     {"name": "領域", "role": "area", "required": false, "required_when": "area-assignment", "type": "text"},
     {"name": "更新日", "role": "updated", "required": false, "type": "date", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
     {"name": "版", "role": "version", "required": false, "type": "integer", "pattern": "^\\d+$"},
+    {"name": "関係", "required": false, "type": "text", "note": "他の要求との関係の補足（自由記述）"},
     {"name": "構造判定表", "required": false, "type": "text", "note": "現行の自由記述の補足欄"},
     {"name": "差分種別の判定規則", "required": false, "type": "text", "note": "現行の自由記述の補足欄"},
     {"name": "保守契約", "required": false, "type": "text", "note": "現行の自由記述の補足欄"},

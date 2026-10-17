@@ -47,6 +47,7 @@ import re  # noqa: E402
 import tempfile  # noqa: E402
 import time  # noqa: E402
 import traceback  # noqa: E402
+from datetime import datetime  # noqa: E402
 from pathlib import Path  # noqa: E402
 from typing import Iterable, List, Optional, Tuple  # noqa: E402
 
@@ -138,6 +139,16 @@ def deny(reason: str, gate: str) -> None:
     })
 
 
+def run_is_fresh(meta: dict, minutes: int = 10) -> bool:
+    """An unowned run is claimed only shortly after it started, so a session never takes over a long-running one."""
+    try:
+        started = datetime.fromisoformat(str(meta.get("started_at")))
+        now = datetime.now(started.tzinfo) if started.tzinfo else datetime.now()
+        return (now - started).total_seconds() <= minutes * 60
+    except (TypeError, ValueError):
+        return False
+
+
 class Ctx:
     def __init__(self, data: dict):
         self.data = data
@@ -199,6 +210,8 @@ class Ctx:
         if not (rid and meta.get("status") == "active"):
             return False
         self.croot, self.run_id, self.meta, self.run_active = tree, rid, meta, True
+        # agent/verify state belongs to the bound run's tree; sharing the primary's would mix up concurrent sessions
+        self.state_dir = h.work_dir(tree, self.cfg) / ".ebak"
         return True
 
     def rebind_primary(self) -> None:
@@ -222,12 +235,34 @@ class Ctx:
                 owned.append((meta.get("started_at", ""), p))
             elif not owner:
                 free.append((meta.get("started_at", ""), p))
-        pick = max(owned)[1] if owned else (free[0][1] if len(free) == 1 else (max(free)[1] if free and not self.sid else None))
-        if pick:
+        if owned:
+            self.bind_to(max(owned)[1])
+            return
+        if not free:
+            return
+        if not self.sid:
+            pick = free[0][1] if len(free) == 1 else max(free)[1]
             self.bind_to(pick)
-            if self.sid and self.run_active and not self.meta.get("session_id"):
-                self.meta["session_id"] = self.sid
-                h.save_meta(self.croot, self.cfg, self.run_id, self.meta)
+            return
+        # R-2: a session with no run of its own takes the newest unowned active run and records its session id
+        # (re-read the meta just before recording; if another session got there first, choose again).
+        for _, p in sorted(free, reverse=True):
+            rid = h.current_run(p, self.cfg)
+            meta = h.load_meta(p, self.cfg, rid) if rid else {}
+            if not (rid and meta.get("status") == "active"):
+                continue
+            owner = meta.get("session_id")
+            if owner and owner != self.sid:
+                continue
+            if not owner and not run_is_fresh(meta):
+                continue
+            if not owner:
+                meta["session_id"] = self.sid
+                h.save_meta(p, self.cfg, rid, meta)
+            self.bind_to(p)
+            return
+        self.log(f"UNBOUND-RUN session={self.sid} free_runs={len(free)} 束縛できる run がありません")
+
     def log(self, line: str) -> None:
         try:
             self.state_dir.mkdir(parents=True, exist_ok=True)

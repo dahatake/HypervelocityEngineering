@@ -1,6 +1,7 @@
 // FR-1031: every ID / file path / term that exists in the managed data becomes a link to its detail.
-// Unknown IDs, paths and names are left as plain text (AC-189: no dead links).
+// Unknown paths and names are left as plain text (AC-189: no dead links); unknown IDs in tables / integrations show 「未解決」 (FR-1050 AC-279).
 import { store } from './store.js';
+import { t } from './i18n.js';
 import { typeLabel } from './ui.js';
 
 export const ID_RE = /\b(?:G|FR|NFR(?:-[A-Z]+)?|AC|Q|PARAM|SRC|E2E|IT|INT)-\d+\b/g;
@@ -39,6 +40,36 @@ export function xrefLink(id, text, svg = false) {
   a.setAttribute('aria-label', `${typeLabel(n)} ${n.id}`);
   if (!svg) a.title = `${typeLabel(n)} ${n.id}${n.title ? ' — ' + String(n.title).slice(0, 80) : ''}`;
   return a;
+}
+
+// FR-1050 AC-279: an ID absent from the managed data is not a link; it carries the word 「未解決」 (not colour alone).
+export function unresolvedRef(id) {
+  const s = document.createElement('span');
+  s.className = 'xref-unresolved mono';
+  s.dataset.unresolved = '';
+  s.setAttribute('aria-label', `${id} ${t('xref.unresolved')}`);
+  s.title = t('xref.unresolved');
+  s.append(id, Object.assign(document.createElement('small'), { textContent: ' ⚠ ' + t('xref.unresolved') }));
+  return s;
+}
+
+// One ID → link when it exists, otherwise the unresolved display.
+export function idRef(id, text) {
+  return store.node(id) ? xrefLink(id, text ?? id) : unresolvedRef(id);
+}
+
+// Text → nodes: every ID-like token becomes a link (exists) or an unresolved mark (does not exist).
+export function idsToNodes(text) {
+  const s = String(text ?? '');
+  const out = [];
+  let pos = 0;
+  for (const m of s.matchAll(ID_RE)) {
+    if (m.index > pos) out.push(s.slice(pos, m.index));
+    out.push(idRef(m[0]));
+    pos = m.index + m[0].length;
+  }
+  if (pos < s.length) out.push(s.slice(pos));
+  return out;
 }
 
 function linkifyText(node) {
