@@ -222,3 +222,74 @@ def test_ac352_tier_ids_are_unique_across_renderTiers_calls_in_same_millisecond(
     }""")
     assert res["n"] == res["uniq"]
     page.context.close()
+
+
+# ---- AC-350: 全画面で上位層の名称・順序・件数が FR-1062 の導出（/api/model の hierarchy）と一致 ----
+
+def _derived_requirement_areas(page, base):
+    h = page.evaluate("async (u) => (await (await fetch(u + '/api/model')).json()).hierarchy", base)
+    return [(tuple(t["path"]), t["count"]) for t in h["tiers"] if t["path"][0] == "要求"]
+
+
+def _screen_routes(page):
+    hrefs = page.evaluate("""() => [...document.querySelectorAll('#nav a[href^="#/"]')]
+        .filter(a => !a.hasAttribute('data-no-items')).map(a => a.getAttribute('href').slice(2))""")
+    return sorted(set(hrefs))
+
+
+def _req_areas_on_screen(page):
+    return page.evaluate("""() => [...document.querySelectorAll('[data-testid="tier-group"][data-tier-level="area"]')]
+        .map(g => [JSON.parse(g.dataset.tierPath), parseInt(g.dataset.count, 10), parseInt(g.dataset.shown ?? g.dataset.count, 10), g.innerText])
+        .filter(([p]) => p[0] === '要求')""")
+
+
+# FR-1063 AC-350: ナビ全 route と マップ 3D・RPG 風で、要求の上位層（領域）の名称・順序・件数が、導出（FR-1062）と一致する。
+# 画面が項目を絞るときは、見出しの件数は導出の件数のままで、絞り込み後の件数（data-shown・「表示 n 件」）が別に示される。
+def test_ac350_every_screen_matches_the_derivation_in_names_order_and_counts(studio):
+    browser, url = studio
+    page = browser.new_context(viewport={"width": 1280, "height": 800}).new_page()
+    page.goto(f"{url}/#/map2d")
+    page.wait_for_load_state("networkidle")
+    derived = _derived_requirement_areas(page, url)
+    assert derived
+    routes = _screen_routes(page)
+    seen = 0
+    for r in routes + ["map3d"]:
+        page.goto(f"{url}/#/{r}")
+        page.wait_for_load_state("networkidle")
+        try:
+            page.wait_for_selector(GROUP, timeout=4000)
+        except sync_api.TimeoutError:
+            continue
+        areas = _req_areas_on_screen(page)
+        if not areas:
+            continue
+        seen += 1
+        got = [(tuple(p), c) for p, c, _s, _t in areas]
+        assert got == derived, f"{r}: 要求の上位層が導出と違う"
+        for p, c, s, text in areas:
+            assert s <= c
+            if s != c:                                     # 絞り込み後の件数を、導出の件数と並べて見せる
+                assert str(s) in text and str(c) in text
+    assert seen >= 4
+    # RPG 風: 会話ウィンドウの項目の上位層
+    page.goto(f"{url}/#/maprpg")
+    page.wait_for_selector('[data-testid="rpg-view"][data-ready="true"]')
+    page.evaluate("() => window.eabkView.openTierDialog()")
+    page.locator('[data-testid="rpg-dialog"]').wait_for()
+    got = [(tuple(p), c) for p, c, _s, _t in _req_areas_on_screen(page)]
+    assert got == derived
+    page.context.close()
+
+
+# FR-1063 AC-350: 絞り込みで 0 件になった層も、名称・順序・件数つきで残る（他の画面と同じ構成）
+def test_ac350_tiers_emptied_by_a_screen_filter_stay_with_derived_count(studio):
+    browser, url = studio
+    page = browser.new_context(viewport={"width": 1280, "height": 800}).new_page()
+    page.goto(f"{url}/#/implstatus")
+    page.wait_for_load_state("networkidle")
+    derived = _derived_requirement_areas(page, url)
+    areas = _req_areas_on_screen(page)
+    assert [(tuple(p), c) for p, c, _s, _t in areas] == derived
+    assert sum(s for _p, _c, s, _t in areas) <= sum(c for _p, c, _s, _t in areas)
+    page.context.close()

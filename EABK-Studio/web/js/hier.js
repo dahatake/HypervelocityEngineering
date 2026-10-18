@@ -20,7 +20,8 @@ const EN = {
 export function tierName(name, l = lang()) {
   return l === 'en' && EN[name] ? EN[name] : String(name ?? '');
 }
-export const tierLabel = (name, count, l = lang()) => `${tierName(name, l)} (${count})`;
+export const tierLabel = (name, count, l = lang(), shown = count) =>
+  `${tierName(name, l)} (${count})${shown !== count ? (l === 'en' ? `, ${shown} shown` : `、表示 ${shown} 件`) : ''}`;
 
 /** model.hierarchy.items から 種類→区分→領域 の木を作る。順序は model.hierarchy.tiers（導出側の順）に従う。 */
 export function buildTree(hier, filter) {
@@ -31,32 +32,49 @@ export function buildTree(hier, filter) {
     (byPath.get(k) || byPath.set(k, []).get(k)).push(it);
   }
   const order = (hier?.tiers || []).map((t) => JSON.stringify(t.path));
+  // FR-1063 AC-350: 件数・名称・順序の正本は FR-1062 の導出（hier.tiers）。画面が項目を絞っても、層の件数（count）は導出の件数、表示している件数は shown に分ける。
+  const derived = new Map();   // JSON(path 接頭辞) -> 導出の件数
+  const derivedKinds = new Set();
+  for (const t of hier?.tiers || []) {
+    derivedKinds.add(t.path[0]);
+    for (let n = 1; n <= t.path.length; n++) { const k = JSON.stringify(t.path.slice(0, n)); derived.set(k, (derived.get(k) || 0) + t.count); }
+  }
+  const root = { children: new Map(), count: 0, shown: 0 };
+  const touch = (path) => {
+    let cur = root;
+    path.forEach((name, i) => {
+      let ch = cur.children.get(name);
+      if (!ch) cur.children.set(name, (ch = { name, level: LEVELS[i], children: new Map(), items: [], count: 0, shown: 0 }));
+      cur = ch;
+    });
+    return cur;
+  };
+  // 画面が扱う種類（項目がある種類）では、導出の層をすべて並べる。絞り込みで 0 件になった層も、名称・順序・件数が他の画面と同じになる。
+  const kindsHere = new Set(items.map((i) => i.kind));
+  if (hier?.tiers) for (const t of hier.tiers) if (kindsHere.has(t.path[0])) touch(t.path);
   const keys = [...byPath.keys()].sort((a, b) => {
     const ia = order.indexOf(a), ib = order.indexOf(b);
     return (ia < 0 ? 1e9 : ia) - (ib < 0 ? 1e9 : ib);
   });
-  const root = { children: new Map(), count: 0 };
   // 項目が 0 件でも見出しを示したい層（hier.empty = [[種類, 区分, 領域], ...]）。件数 0 の見出しとして現れる（FR-1063: 空の画面でも層を明示）。
-  for (const [kind, division, area] of hier?.empty || []) {
-    let cur = root;
-    for (const [name, level] of [[kind, 'kind'], [division, 'division'], [area, 'area']]) {
-      let ch = cur.children.get(name);
-      if (!ch) cur.children.set(name, (ch = { name, level, children: new Map(), items: [], count: 0 }));
-      cur = ch;
-    }
-  }
+  for (const [kind, division, area] of hier?.empty || []) touch([kind, division, area]);
   for (const k of keys) {
-    const [kind, division, area] = JSON.parse(k);
+    const path = JSON.parse(k);
+    const n = byPath.get(k).length;
+    root.shown += n;
     let cur = root;
-    cur.count += byPath.get(k).length;
-    for (const [name, level] of [[kind, 'kind'], [division, 'division'], [area, 'area']]) {
-      let ch = cur.children.get(name);
-      if (!ch) cur.children.set(name, (ch = { name, level, children: new Map(), items: [], count: 0 }));
-      ch.count += byPath.get(k).length;
-      cur = ch;
-    }
+    for (let i = 0; i < 3; i++) { cur = touch(path.slice(0, i + 1)); cur.shown += n; }
     cur.items.push(...byPath.get(k));
   }
+  const fin = (node, path) => {
+    for (const ch of node.children.values()) {
+      const p = [...path, ch.name];
+      fin(ch, p);
+      ch.count = ch.children.size ? [...ch.children.values()].reduce((s, c) => s + c.count, 0) : (derived.has(JSON.stringify(p)) ? derived.get(JSON.stringify(p)) : ch.shown);
+    }
+  };
+  fin(root, []);
+  root.count = root.shown;
   return root;
 }
 
@@ -84,7 +102,7 @@ export function renderTiers(hier, opts = {}) {
     const head = el('div', { class: 'tier-head', role: 'heading', 'aria-level': String(depth + 2) }, btn);
     const g = el('div', {
       class: `tier-group tier-${node.level}${node.name === UNCLASSIFIED ? ' tier-unclassified' : ''}`, role: 'treeitem', 'aria-expanded': String(open),
-      'data-testid': 'tier-group', 'data-tier-level': node.level, 'data-tier-path': JSON.stringify(path), 'data-count': String(node.count),
+      'data-testid': 'tier-group', 'data-tier-level': node.level, 'data-tier-path': JSON.stringify(path), 'data-count': String(node.count), 'data-shown': String(node.shown ?? node.count),
     }, head, body);
     const paint = (isOpen) => {
       btn.setAttribute('aria-expanded', String(isOpen));
@@ -95,8 +113,9 @@ export function renderTiers(hier, opts = {}) {
     const label = () => {
       const name = tierName(node.name);
       text.textContent = name;
-      num.textContent = ` (${node.count})`;
-      btn.setAttribute('aria-label', tierLabel(node.name, node.count));
+      const sh = node.shown ?? node.count;
+      num.textContent = sh !== node.count ? (lang() === 'en' ? ` (${node.count}, ${sh} shown)` : ` (${node.count}、表示 ${sh} 件)`) : ` (${node.count})`;
+      btn.setAttribute('aria-label', tierLabel(node.name, node.count, lang(), sh));
     };
     label();
     relabel.push(label);
