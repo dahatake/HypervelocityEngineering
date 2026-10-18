@@ -4,6 +4,7 @@
 import { lang, onLang } from './i18n.js';
 import { store } from './store.js';
 import { el } from './ui.js';
+import { xrefLink } from './xref.js';
 import { renderTiers, tierName } from './hier.js';
 
 const opened = new Map();   // JSON(path) -> bool（利用者が開閉した状態。画面を切り替えても保つ）
@@ -74,10 +75,11 @@ const tx = (k) => (TXT[lang()] || TXT.ja)[k];
 /** 項目 1 件の表示: ID と題名のボタン。マップに点があれば、その点を選択する（なければ表示のみ）。 */
 function itemNode(it) {
   // 題名はデータ由来の文字列（試験ケースの題名など）。画面の文言と区別するため、見た目は data-title の疑似要素で出し、支援技術には aria-label で ID と題名を伝える。
-  const label = [el('span', { class: 'tier-item-id' }, it.id)];
+  // FR-1031 AC-188: 実在する ID はリンク（xrefLink）。押すとその点を選択し、詳細へ移る（リンクの移動先と同じ対象）。
   const can = !!store.node?.(it.id);
-  const b = el('button', { type: 'button', class: 'maptier-item', 'data-testid': 'tier-item', 'data-id': it.id, 'data-title': it.title ? ` ${it.title}` : null, 'aria-label': it.title ? `${it.id} ${it.title}` : null, role: 'treeitem', disabled: can ? null : true,
-    onclick: () => { if (can) store.select(it.id); } }, ...label);
+  const idEl = can ? xrefLink(it.id, it.id) : el('span', { class: 'tier-item-id' }, it.id);
+  const b = el('div', { class: 'maptier-item', 'data-testid': 'tier-item', 'data-id': it.id, 'data-title': it.title ? ` ${it.title}` : null, role: 'treeitem' }, idEl);
+  if (can) b.addEventListener('click', (e) => { if (e.target.closest('a')) { e.preventDefault(); } store.select(it.id); });
   return b;
 }
 

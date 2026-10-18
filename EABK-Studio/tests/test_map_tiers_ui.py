@@ -40,6 +40,23 @@ def test_ac345_map2d_tiers_group_items_with_name_count_and_toggle(studio):
     page.context.close()
 
 
+# FR-1063 AC-345 / FR-1031 AC-188: 上位層の項目の実在する ID はリンクで、押すとその点が選択される（退行: ボタンの中の文字になっていた）
+def test_ac345_ac188_map_tier_item_ids_are_links_and_select_the_point(studio):
+    page = _open(studio, "map2d")
+    page.wait_for_selector(GROUP)
+    item = page.locator('[data-testid="tier-item"]:visible').first
+    if item.count() == 0:
+        page.locator(f'{GROUP}[data-tier-level="area"] [data-testid="tier-toggle"]').first.click()
+        item = page.locator('[data-testid="tier-item"]:visible').first
+    link = item.locator("a")
+    assert link.count() == 1
+    ident = item.get_attribute("data-id")
+    assert link.inner_text().strip() == ident
+    link.click()
+    page.wait_for_function("(id) => location.hash.includes(id) || document.querySelector('#drawer')?.innerText.includes(id)", arg=ident)
+    page.context.close()
+
+
 # FR-1063 AC-346: 3D は 2D と同じ上位層の構成で、開閉状態は画面をまたいで保たれる
 def test_ac346_map3d_same_tiers_as_2d_and_open_state_kept(studio):
     page = _open(studio, "map2d")
