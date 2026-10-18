@@ -88,9 +88,9 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1050 | 表・連携の ID の全面リンク化と未解決 ID の明示 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
 | FR-1051 | 「表」画面の種別のグループ化と名称の統一 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
 | FR-1052 | 文脈の明示と、図・一覧の行のキーボード操作 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
-| FR-1064 | 監視コマンド watch.py（scan・reap・stuck） | 承認済み | 未実装 | 未実装 | - |
+| FR-1064 | 監視コマンド watch.py（scan・reap・stuck） | 承認済み | `scripts/watch.py` | `tests/toolkit/test_watch.py` | run 監視 |
 | FR-1065 | run の運用への組込み（統合時の回収・状態の警告・手順書の規則） | 承認済み | 未実装 | 未実装 | - |
-| NFR-OPS-008 | 監視コマンドの安全性・配布・文書・単体テスト | 承認済み | 未実装 | 未実装 | - |
+| NFR-OPS-008 | 監視コマンドの安全性・配布・文書・単体テスト | 承認済み | `scripts/watch.py` | `tests/toolkit/test_watch.py` | run 監視 |
 
 ## API・イベント
 
@@ -107,6 +107,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | 部品名 | ファイル | 用途 | 使っている要求 ID |
 |---|---|---|---|
 | run 作業資産清掃 | `scripts/clean-work.py` | 正常完了・main 統合後ゲート、所有権、保護状態にもとづく計画・清掃・診断・冪等再試行 | FR-1009、FR-1010、NFR-OPS-005、NFR-COMPAT-001 |
+| run 監視 | `scripts/watch.py` | 残留プロセスの scan・reap（名前とリポジトリのパスで限定）と queue の doing 時間超過 stuck の検出 | FR-1064、NFR-OPS-008 |
 | run 状態・完了記録 | `scripts/run-state.py` | run の完了条件、finish、run-history と current-run の状態管理 | FR-1010、FR-1015、FR-1016、NFR-OPS-005、NFR-COMPAT-001 |
 | worktree pool 管理 | `scripts/integrate.py` | pool worktree の列挙、強制削除、Git worktree 登録の prune | FR-1009、NFR-OPS-005、NFR-COMPAT-001 |
 | conductor 終了契約 | [`.github/agents/conductor.agent.md`](docs/../.github/agents/conductor.agent.md) | run 開始時・工程 6・main 統合・run-report・清掃の実行順序 | FR-1009、FR-1010、NFR-COMPAT-001 |
