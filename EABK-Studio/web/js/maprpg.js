@@ -10,6 +10,7 @@ import { view as zoomView, dataOf, thresholds, stateOf, isArch } from './semzoom
 import { buildWorld, stepOn, placeAt, DIRS, buttonOf, groupEntities } from './rpgworld.js';
 import { createAudio } from './rpgaudio.js';
 import { mount as mount2d } from './map2d.js';
+import { tierDialogBody, tierPathOf, tierShortLabel } from './maptiers.js';
 
 const INITIAL_MUTED = true;     // PARAM-041: sound is off until the user turns it on
 const MIN_FPS = 30;             // PARAM-040
@@ -23,7 +24,7 @@ const TXT = {
     castle: '城', town: '街', goal: '目的', entity: 'エンティティ', group: 'エンティティのグルーピング', townName: '{n} の街', noneName: '関係なしの街', noneText: '他のエンティティとの関係がないエンティティが集まる街。', groupText: '関係でつながるエンティティ: {list}（{n} 件）', hero: '旅人', villager: '住人', guide: '案内役',
     sound: '音', on: 'オン', off: 'オフ（ミュート）', soundBtn: '音の入切', pos: '現在位置', field: '野外', at: '{k} {n} の入口', with: '{k} {n} の位置',
     reqs: '関連する要求: {n} 件', repr: '代表: {ids}', noreq: '関連する要求はまだありません。', nodesc: '説明はまだありません。',
-    start: 'スタート', select: 'セレクト', help: '操作の割り当て', close: '閉じる', to2d: '2D で表示', to3d: '3D で表示', toRpg: 'RPG 風で表示',
+    start: 'スタート', select: 'セレクト', help: '操作の割り当て', tiers: '項目の上位層（種類→区分→領域）', tiersOpen: '上位層で辿る', tiersLine: '上位層（関連する要求）: {list}', tiersMore: '、ほか {n} 領域', close: '閉じる', to2d: '2D で表示', to3d: '3D で表示', toRpg: 'RPG 風で表示',
     keysTitle: '操作の割り当て', btn: 'ボタン', keys: 'キー', dpad: '十字キー', a: 'A（決定・話す・調べる）', b: 'B（取消・閉じる・戻る）',
     kDpad: '方向キー または W A S D', kA: 'Enter または Z', kB: 'Esc または X（Backspace も可）', kStart: 'Space（メニュー）', kSel: 'Shift だけを押す（音の入切・表示の切替）',
     legend: '十字=方向キー/WASD　A=Enter/Z　B=Esc/X　スタート=Space　セレクト=Shift　（Tab で他の部分へ）',
@@ -38,7 +39,7 @@ const TXT = {
     castle: 'Castle', town: 'Town', goal: 'Goal', entity: 'Entity', group: 'Entity group', townName: 'Town of {n}', noneName: 'Town of no relations', noneText: 'The town of entities that have no relation to other entities.', groupText: 'Entities linked by relations: {list} ({n})', hero: 'Traveler', villager: 'Villager', guide: 'Guide',
     sound: 'Sound', on: 'On', off: 'Off (muted)', soundBtn: 'Toggle sound', pos: 'Position', field: 'Open field', at: 'At the entrance of {k} {n}', with: 'At {k} {n}',
     reqs: 'Related requirements: {n}', repr: 'e.g. {ids}', noreq: 'No related requirements yet.', nodesc: 'No description yet.',
-    start: 'Start', select: 'Select', help: 'Controls', close: 'Close', to2d: 'Show in 2D', to3d: 'Show in 3D', toRpg: 'Show as RPG-style',
+    start: 'Start', select: 'Select', help: 'Controls', tiers: 'Item tiers (kind → division → area)', tiersOpen: 'Browse by tier', tiersLine: 'Tiers (related requirements): {list}', tiersMore: ', and {n} more areas', close: 'Close', to2d: 'Show in 2D', to3d: 'Show in 3D', toRpg: 'Show as RPG-style',
     keysTitle: 'Controls', btn: 'Button', keys: 'Keys', dpad: 'D-pad', a: 'A (confirm / talk / examine)', b: 'B (cancel / close / back)',
     kDpad: 'Arrow keys or W A S D', kA: 'Enter or Z', kB: 'Esc or X (Backspace also works)', kStart: 'Space (menu)', kSel: 'Press Shift alone (sound / view mode)',
     legend: 'D-pad = arrows/WASD  A = Enter/Z  B = Esc/X  Start = Space  Select = Shift  (Tab leaves the map)',
@@ -163,7 +164,7 @@ export function mount(host) {
   const npcs = [...world.places.filter((p) => p.kind === 'castle').map((p) => ({ kind: 'guide', x: p.x + 1, y: p.y, dir: 'left', place: p.id })),
     ...world.residents.map((p) => ({ kind: 'villager', x: p.x, y: p.y, dir: 'left', place: p.id }))];
   let anim = null, frame = 0, lastStep = 0, shiftPure = false;
-  const ui = { dialog: null, menu: null, help: false, msg: '' };       // dialog: {place, full, shown, done} ; menu: {kind, items, idx}
+  const ui = { dialog: null, menu: null, help: false, msg: '', tiers: false };       // dialog: {place, full, shown, done} ; menu: {kind, items, idx}
   let dead = false, raf = 0, dirty = true, W = 0, H = 0, lastDraw = 0, fpsFrames = 0, fpsT = performance.now(), fps = 60, drawMs = 0, ambient = 0, typeT = 0;
 
   // ---- DOM
@@ -191,9 +192,17 @@ export function mount(host) {
     if (p.kind === 'town') return `${tr('town')} ${p.name}（${tr('group')} ${p.id}）`;
     return `${tr('castle')} ${p.name}（${tr('goal')} ${p.id}）`;
   }
+  // FR-1063 AC-347: 街・住人・城に関連する要求を、上位層（区分 › 領域）ごとの件数で示す（城・街・住人の件数には加えない）
+  function tierLine(p) {
+    const by = new Map();
+    for (const id of p.reqIds) { const tp = tierPathOf({ id, type: 'req' }); const k = tp ? tierShortLabel(tp) : null; if (k) by.set(k, (by.get(k) || 0) + 1); }
+    if (!by.size) return '';
+    const all = [...by.entries()], list = all.slice(0, 4).map(([k, n]) => `${k} (${n})`).join('、') + (all.length > 4 ? tr('tiersMore', { n: all.length - 4 }) : '');
+    return tr('tiersLine', { list });
+  }
   function fullText(p) {
     const n = p.reqIds.length;
-    return [placeText(p), p.text || tr('nodesc'), n ? tr('reqs', { n }) + '　' + tr('repr', { ids: p.reqIds.slice(0, 3).join('、') }) : tr('noreq')].join('\n');
+    return [placeText(p), p.text || tr('nodesc'), n ? tr('reqs', { n }) + '　' + tr('repr', { ids: p.reqIds.slice(0, 3).join('、') }) : tr('noreq'), tierLine(p)].filter(Boolean).join('\n');
   }
 
   // ---- text
@@ -217,18 +226,25 @@ export function mount(host) {
       el('ul', { class: 'mini rpg-roads' }, data.roads.slice(0, 200).map((rd) => el('li', {}, `${rd.from.replace(/^ent:/, '')} → ${rd.to.replace(/^ent:/, '')}`))));
   }
   function renderDialog() {
+    if (ui.tiers) {                    // FR-1063 AC-347: 項目の上位層（城・街・住人とは別。件数は城・街・住人に加えない）
+      dialogEl.hidden = false; dialogEl.classList.add('rpg-tiers-dlg');
+      if (!dialogEl.querySelector('.rpg-tiers')) dialogEl.replaceChildren(tierDialogBody(closeTiers, ui.tiersFor ? ui.tiersFor.reqIds : null, ui.tiersFor ? `${ui.tiersFor.name}: ${tr('tiers')}` : null));
+      return;
+    }
+    dialogEl.classList.remove('rpg-tiers-dlg');
     const dlg = ui.dialog;
     dialogEl.hidden = !dlg;
     if (!dlg) { dialogEl.replaceChildren(); return; }
     const p = dlg.place, links = el('div', { class: 'rpg-links' });
     if (dlg.done) for (const id of p.reqIds.slice(0, 3)) links.append(xrefLink(id), ' ');
+    if (dlg.done && p.reqIds.length) links.append(el('button', { type: 'button', class: 'btn ghost', 'data-testid': 'rpg-tiers-open', onclick: () => openTiers(p) }, tr('tiersOpen')));
     dialogEl.replaceChildren(el('div', { class: 'rpg-text', 'aria-hidden': 'true' }, dlg.full.slice(0, dlg.shown)), links,
       el('div', { class: 'rpg-more', 'aria-hidden': 'true' }, dlg.done ? '▼ A / Enter' : ''));
   }
   const menuItems = (kind) => {
     const sound = { id: 'sound', label: () => `${audio.muted ? '🔇' : '🔊'} ${tr('soundBtn')}: ${audio.muted ? tr('off') : tr('on')}` };
     const modes = [{ id: 'to2d', label: () => tr('to2d') }, { id: 'to3d', label: () => tr('to3d') }];
-    return kind === 'start' ? [{ id: 'help', label: () => '❓ ' + tr('help') }, sound, ...modes, { id: 'close', label: () => tr('close') }] : [sound, ...modes];
+    return kind === 'start' ? [{ id: 'help', label: () => '❓ ' + tr('help') }, { id: 'tiers', label: () => '🗂 ' + tr('tiers') }, sound, ...modes, { id: 'close', label: () => tr('close') }] : [sound, ...modes];
   };
   function renderMenu() {
     for (const [kind, box] of [['start', menuEl], ['select', selectEl]]) {
@@ -258,6 +274,8 @@ export function mount(host) {
     ui.dialog = { place: p, full, shown: reduce() ? full.length : 0, done: reduce() };
     audio.play('confirm'); refresh(); say(tr('talk', { n: p.name }) + ' ' + full.replace(/\n/g, ' '));
   }
+  function openTiers(place) { ui.menu = null; ui.dialog = null; ui.tiers = true; ui.tiersFor = place && place.reqIds ? place : null; dialogEl.replaceChildren(); audio.play('confirm'); refresh(); dialogEl.querySelector('.tier-toggle')?.focus(); say(tr('tiers')); }
+  function closeTiers() { ui.tiers = false; dialogEl.replaceChildren(); audio.play('cancel'); refresh(); root.focus({ preventScroll: true }); }
   function closeDialog() { ui.dialog = null; audio.play('cancel'); refresh(); }
   function openMenu(kind) { ui.menu = { kind, items: menuItems(kind), idx: 0 }; ui.help = false; audio.play('menu'); refresh(); say(tr('menuOpen')); }
   function closeMenu() { ui.menu = null; ui.help = false; audio.play('cancel'); refresh(); say(tr('menuClosed')); }
@@ -265,6 +283,7 @@ export function mount(host) {
     const m = ui.menu; if (!m) return;
     const it = m.items[m.idx];
     if (it.id === 'help') { ui.help = !ui.help; audio.play('confirm'); refresh(); }
+    else if (it.id === 'tiers') openTiers(null);
     else if (it.id === 'sound') { toggleSound(); ui.menu = null; refresh(); }
     else if (it.id === 'close') closeMenu();
     else if (it.id === 'to2d' || it.id === 'to3d') { audio.play('confirm'); runDim(it.id === 'to2d' ? '2d' : '3d'); }
@@ -284,6 +303,7 @@ export function mount(host) {
     } else { audio.play('blocked'); dirty = true; }
   }
   function pressA() {
+    if (ui.tiers) return;
     if (ui.menu) return activateMenu();
     const dlg = ui.dialog;
     if (dlg) {
@@ -299,6 +319,7 @@ export function mount(host) {
   }
   // B: close the dialog / menu, otherwise hand the focus to the rest of the page so the map is never a keyboard trap (AC-298).
   function pressB() {
+    if (ui.tiers) return closeTiers();
     if (ui.dialog) return closeDialog();
     if (ui.menu) return closeMenu();
     leaveFocus();
@@ -311,6 +332,10 @@ export function mount(host) {
   function onKey(e) {
     const tag = e.target?.tagName || '';
     if (/INPUT|TEXTAREA|SELECT/.test(tag) || e.target?.isContentEditable) return;          // typing stays typing (AC-297)
+    if (ui.tiers && dialogEl.contains(e.target)) {                                           // 上位層の木の中では、矢印・Enter・Space は木の操作。Esc で閉じる
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeTiers(); }
+      return;
+    }
     if (e.key === 'Shift') { if (!e.repeat) shiftPure = !e.ctrlKey && !e.metaKey && !e.altKey; return; }
     if (e.key === 'Tab') { shiftPure = false; return; }                                     // Tab / Shift+Tab move the focus as usual
     shiftPure = false;
@@ -321,7 +346,7 @@ export function mount(host) {
     if (DIRS[b]) {
       e.preventDefault();
       if (ui.menu) { if (!e.repeat) { const n = ui.menu.items.length; ui.menu.idx = (ui.menu.idx + (b === 'down' || b === 'right' ? 1 : n - 1)) % n; audio.play('menu'); refresh(); } return; }
-      if (ui.dialog) return;
+      if (ui.dialog || ui.tiers) return;
       walk(b, now);
       return;
     }
@@ -329,12 +354,12 @@ export function mount(host) {
     e.preventDefault();
     if (b === 'a') pressA();
     else if (b === 'b') { e.stopPropagation(); pressB(); }
-    else if (b === 'start') { if (ui.menu?.kind === 'start') closeMenu(); else if (!ui.dialog) openMenu('start'); }
+    else if (b === 'start') { if (ui.menu?.kind === 'start') closeMenu(); else if (!ui.dialog && !ui.tiers) openMenu('start'); }
   }
   function onKeyUp(e) {
     if (e.key !== 'Shift') return;
     const pure = shiftPure; shiftPure = false;
-    if (!pure || ui.dialog) return;
+    if (!pure || ui.dialog || ui.tiers) return;
     if (ui.menu?.kind === 'select') closeMenu(); else openMenu('select');                    // Select = Shift alone
   }
   root.addEventListener('keydown', onKey);
@@ -442,13 +467,13 @@ export function mount(host) {
       residents: world.residents.map((p) => ({ id: p.id, kind: 'resident', name: p.name, town: p.town, x: p.x, y: p.y })),
       roads: data.roads.map((x) => ({ ...x })),
       characters: [{ kind: 'hero', role: tr('hero'), x: player.x, y: player.y }, ...npcs.map((n) => ({ kind: n.kind, role: tr(n.kind), x: n.x, y: n.y }))],
-      dialog: { open: !!ui.dialog, placeId: ui.dialog?.place.id ?? null, complete: !!ui.dialog?.done },
+      tiers: { open: ui.tiers }, dialog: { open: !!ui.dialog, placeId: ui.dialog?.place.id ?? null, complete: !!ui.dialog?.done },
       menu: { open: ui.menu?.kind === 'start' }, select: { open: ui.menu?.kind === 'select' },
       muted: audio.muted, audio: { started: audio.started, scene: audio.scene, requested: { ...audio.stats.requested }, scenes: [...audio.stats.scenes] },
       reducedMotion: !!reduce(), perf: { fps, drawMs: Math.round(drawMs * 10) / 10, minFps: MIN_FPS },
     },
   });
-  const viewApi = { mode: 'rpg', getState, setScale: (n) => { zoomView.scale = n; }, select: (n) => { zoomView.selected = n; } };
+  const viewApi = { mode: 'rpg', openTierDialog: (id) => openTiers(id ? placeById.get(id) : null), getState, setScale: (n) => { zoomView.scale = n; }, select: (n) => { zoomView.selected = n; } };
   window.eabkView = viewApi;
 
   return {

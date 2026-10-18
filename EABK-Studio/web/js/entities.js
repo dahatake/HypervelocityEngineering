@@ -5,6 +5,7 @@ import { store, norm } from './store.js';
 import { el, statusBadge, nodeChip, vscodeUrl, typeLabel } from './ui.js';
 import { mountShell } from './semzoom.js';
 import { create2d } from './sz2d.js';
+import { listTiers, hierarchy } from './tierlist.js';
 
 const WORDS = ['作成', '参照', '更新', '削除'];
 const SYMBOL = { 作成: 'C', 参照: 'R', 更新: 'U', 削除: 'D' };
@@ -176,6 +177,14 @@ export function mount(host) {
     }
     if (name) { page.replaceChildren(el('div', { class: 'eu-detail' })); detailView(page.firstChild, m, name); return; }
     page.append(el('p', { class: 'sub' }, t('eu.sub')));
+    // FR-1063 AC-348: エンティティ（と状態遷移）を上位層（種類→区分→領域）の見出しの下にまとめ、件数と開閉を示す。マトリクスはそのまま下に残す。
+    const tierItems = hierarchy().items.filter((i) => i.kind === 'エンティティ');
+    page.append(el('section', { class: 'eu-tiers', 'data-testid': 'entity-tiers', 'aria-label': t('eu.tiers') }, el('h2', {}, t('eu.tiers')),
+      listTiers(tierItems, {
+        openAreas: true,
+        itemNode: (it) => el('div', { class: 'tier-item', role: 'treeitem', 'data-testid': 'tier-item', 'data-id': it.id },
+          el('a', { class: 'mono', href: '#/entities?entity=' + encodeURIComponent(it.id) }, it.id)),
+      })));
     const mat = el('div');
     page.append(mat);
     matrixView(mat, m);

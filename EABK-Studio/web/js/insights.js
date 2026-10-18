@@ -3,6 +3,7 @@ import { store } from './store.js';
 import { t, lang } from './i18n.js';
 import { el, vscodeUrl } from './ui.js';
 import { xrefLink } from './xref.js';
+import { placeRows, listTiers } from './tierlist.js';
 
 export function evidenceTarget(record) {
   return record.file && record.line
@@ -183,8 +184,20 @@ function historyProgress() {
       evidence('データ種別', typeGroups)));
 }
 
+// FR-1063 AC-349: 表の行を上位層（種類→区分→領域）の見出しの下にまとめる。leaf の領域ごとに同じ見出しの表を置く。
+function tierTable(headers, placed, rowOf, emptyPath) {
+  return listTiers(placed, {
+    openAreas: true,
+    empty: placed.length ? undefined : [emptyPath],
+    extra: (node) => (node.level === 'area' && node.items.length
+      ? el('div', { class: 'tw' }, el('table', { class: 't' }, el('thead', {}, el('tr', {}, headers.map((x) => el('th', {}, x)))), el('tbody', {}, node.items.map((it) => rowOf(it.row)))))
+      : null),
+  });
+}
+
 export function mountStructure(host) {
   const analysis = store.model.analysis.structure;
+  const placed = placeRows(analysis.differences.map((d) => d), (d) => ({ kind: '要求', id: d.target }), (d) => ['構造差分', `差分種別: ${d.kind}`, `層: ${d.layer}`]);
   const page = el('div', { class: 'page' }, el('h1', {}, '全データ層の現状対理想構造'),
     el('p', { class: 'sub' }, '解析済みの現状構造 と 構造判定表から導いた理想構造を層ごとに比較'),
     el('div', { class: 'grid cols2 layer-list' }, analysis.layers.map((layer) =>
@@ -193,12 +206,11 @@ export function mountStructure(host) {
         el('p', {}, `差分: ${layer.delta}`), el('p', {}, `適用規則: ${layer.rule}`),
         el('p', {}, `判定理由: ${layer.reason}`),
         el('p', { class: 'mini mono' }, `根拠: ${layer.source}`)))),
-    el('div', { class: 'tw' }, el('table', { class: 't' },
-      el('thead', {}, el('tr', {}, ['データ層', '差分種別（delta）', '対象 ID / 位置', '現状（actual）', '理想（ideal）', '適用規則（rule）', '判定理由（reason）', '根拠（source）'].map((x) => el('th', {}, x)))),
-      el('tbody', {}, analysis.differences.map((diff) => el('tr', {},
+    tierTable(['データ層', '差分種別（delta）', '対象 ID / 位置', '現状（actual）', '理想（ideal）', '適用規則（rule）', '判定理由（reason）', '根拠（source）'], placed,
+      (diff) => el('tr', {},
         el('td', {}, diff.layer), el('td', {}, diff.kind), el('td', {}, diff.target),
         el('td', {}, diff.actual), el('td', {}, diff.ideal), el('td', {}, diff.rule),
-        el('td', {}, diff.reason), el('td', { class: 'mono' }, diff.source)))))));
+        el('td', {}, diff.reason), el('td', { class: 'mono' }, diff.source)), ['構造差分', '未分類', '未分類']));
   host.append(page);
   return { destroy() {} };
 }
@@ -212,13 +224,13 @@ export function mountConsistency(host) {
   }
   for (const c of store.model.cases) for (const id of c.requirement_ids || []) if (rows.has(id)) rows.get(id).test = true;
   const outcome = (r) => !r.req ? '参照先なし' : [r.req, r.ac, r.test, r.cat, r.file].every(Boolean) ? '正常' : '一層欠落';
+  const placed = placeRows([...rows.values()], (r) => ({ kind: '要求', id: r.id }), '要求');
   const page = el('div', { class: 'page' }, el('h1', {}, '層一貫性ビューアー'),
-    el('div', { class: 'tw' }, el('table', { class: 't' },
-      el('thead', {}, el('tr', {}, ['ID', '判定', '要求', 'AC', '試験', 'カタログ', '実装ファイル'].map((x) => el('th', {}, x)))),
-      el('tbody', {}, [...rows.values()].map((r) => el('tr', {},
+    tierTable(['ID', '判定', '要求', 'AC', '試験', 'カタログ', '実装ファイル'], placed,
+      (r) => el('tr', {},
         el('td', {}, r.id), el('td', {}, outcome(r)),
         ...[['req', '要求'], ['ac', 'AC'], ['test', '試験'], ['cat', 'カタログ'], ['file', '実装ファイル']]
-          .map(([k, label]) => el('td', {}, `${label} ${r[k] ? '✓' : '—'}`))))))));
+          .map(([k, label]) => el('td', {}, `${label} ${r[k] ? '✓' : '—'}`))), ['要求', '機能', '未分類']));
   host.append(page);
   return { destroy() {} };
 }
@@ -228,22 +240,30 @@ export function mountMaintenance(host) {
       el('h1', {}, '整合性保守 / Maintenance'),
       el('p', { class: 'sub' }, '要求正本と異なるカタログの題名・決定状態だけを、明示プレビュー後に原子的に更新します。'),
       el('div', { class: 'warnbox' }, '通常の閲覧は参照専用です。保守は選択した1行・2列だけが対象で、検査失敗時はバイト単位で戻します。'));
-    const list = el('div', { class: 'grid cols2' });
+    const list = el('div', { class: 'maintenance-list' });
     const reqs = new Map(store.model.reqs.map((r) => [r.id, r]));
     const featureCounts = store.model.catalog.features.reduce((counts, feature) => {
       counts.set(feature.req, (counts.get(feature.req) || 0) + 1);
       return counts;
     }, new Map());
+    const candidates = [];
     for (const feature of store.model.catalog.features) {
       const req = reqs.get(feature.req);
       const mismatch = !req || feature.title !== req.title || feature.status !== req.status;
       if (!mismatch) continue;
-      list.append(el('button', { class: 'maintenance-item', onclick: () => preview(feature.req) },
+      candidates.push(el('button', { class: 'maintenance-item', 'data-req': feature.req, onclick: () => preview(feature.req) },
         el('b', {}, feature.req),
         el('span', {}, req ? `${feature.title} → ${req.title}` : '未対応: 要求正本に参照先なし'),
         el('span', {}, req ? `${feature.status} → ${req.status}` : 'unsupported')));
     }
-    if (!list.children.length) list.append(el('p', { class: 'empty' }, '保守候補はありません。'));
+    // FR-1063 AC-349: 保守候補を上位層（種類→区分→領域）の見出しの下にまとめる。要求正本にない参照先は「未分類」。
+    const placed = placeRows(candidates, (b) => ({ kind: '要求', id: b.dataset.req }), '要求');
+    list.append(listTiers(placed, {
+      openAreas: true,
+      empty: placed.length ? undefined : [['要求', '機能', '未分類']],
+      itemNode: (it) => it.row,
+    }));
+    if (!candidates.length) list.append(el('p', { class: 'empty' }, '保守候補はありません。'));
     page.append(list);
     host.append(page);
 

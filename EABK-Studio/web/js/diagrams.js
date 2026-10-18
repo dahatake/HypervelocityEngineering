@@ -7,6 +7,8 @@ import { entityER } from './insights.js';
 import { runtimePlacement } from './insights.js';
 import { dimToggle, dimState, registerDim } from './dim.js';
 import { mount as mountPlacement } from './placement.js';
+import { placeRows, listTiers } from './tierlist.js';
+import { UNCLASSIFIED } from './hier.js';
 
 const KINDS = ['ctx', 'goals', 'states', 'entities', 'components', 'layers'];
 let kind = 'ctx';
@@ -443,6 +445,19 @@ export function graphOf(k, m) {
 }
 
 // ---------------------------------------------------------------- shell
+// FR-1063 AC-349: 図式の要素を上位層（種類→区分→領域）でまとめて、見出しに件数を示す（図そのものは変えない）。階層にない要素は「未分類」。
+function diagramTiers(k, m) {
+  const g = graphOf(k, m);
+  const spec = (e) => (e.type === 'req' ? { kind: '要求', id: e.id } : e.type === 'goal' ? { kind: '目的', id: e.id } : e.type === 'entity' ? { kind: 'エンティティ', id: e.label } : null);
+  const placed = placeRows(g.elements, spec, (e) => [t('dgm.' + k), e.type, UNCLASSIFIED]);
+  return el('section', { class: 'dgm-tiers', 'data-testid': 'dgm-tiers', 'aria-label': t('dgm.tiers') }, el('h2', {}, t('dgm.tiers')),
+    listTiers(placed, {
+      empty: g.elements.length ? undefined : [[t('dgm.' + k), UNCLASSIFIED, UNCLASSIFIED]],
+      itemNode: (it) => el('div', { class: 'tier-item', role: 'treeitem', 'data-testid': 'tier-item', 'data-id': it.row.id, tabindex: '-1' },
+        el('span', { class: 'mono' }, it.row.id), ' ', el('span', { class: 'tier-item-title' }, it.row.label)),
+    }));
+}
+
 export function mount(host) {
   const qs = new URLSearchParams(location.hash.split('?')[1] || '');
   const hk = qs.get('kind');
@@ -490,7 +505,7 @@ export function mount(host) {
         dim = dimState.diagrams = '2d'; render();
         body.prepend(el('div', { class: 'warnbox', role: 'alert', 'data-testid': 'dim-fallback' }, t('dim.nowebgl'), table()));
       });
-      current = el('div', {}, note, content, el('details', { class: 'sz-alt' }, el('summary', {}, t('dim.alt')), table()));
+      current = el('div', {}, note, content, el('details', { class: 'sz-alt' }, el('summary', {}, t('dim.alt')), table()), diagramTiers(kind, m));
       body.replaceChildren(current);
       return;
     }
@@ -509,7 +524,7 @@ export function mount(host) {
     }
     else { erLink = null; content = componentDiagram(m); }
     if (kind !== 'layers') erLink = null;
-    current = el('div', {}, note, content);
+    current = el('div', {}, note, content, diagramTiers(kind, m));
     body.replaceChildren(current);
     applyDim(body);
   };
