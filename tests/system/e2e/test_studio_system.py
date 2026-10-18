@@ -349,7 +349,7 @@ def test_python_runtime_starts_without_extra_installation_and_shows_default_mode
 def test_missing_data_error_offers_recovery_without_losing_current_model(page, tmp_path):
     current = page.locator("#repoBtn").inner_text()
     _pick_repo(page, tmp_path / "missing")
-    expect(page.locator("#toast")).to_contain_text("not found")
+    expect(page.locator("#toast")).to_contain_text(re.compile("not found|見つかりません|存在しません"))
     expect(page.locator("#repoBtn")).to_have_text(current)
     expect(page.get_by_role("button", name=re.compile("再試行|Retry", re.I))).to_be_visible()
     expect(page.get_by_role("button", name=re.compile("戻る|閉じる|Back|Close", re.I))).to_be_visible()
