@@ -338,7 +338,7 @@ i[data-testid=chart-segment]{min-width:var(--space-6)}
 .maptiers .tier-toggle:focus-visible,.rpg-tiers .tier-toggle:focus-visible,.maptier-item:focus-visible{outline:var(--stroke-thick) solid var(--color-focus);outline-offset:1px}
 .maptiers .tier-kind>.tier-head .tier-name,.rpg-tiers .tier-kind>.tier-head .tier-name{font-weight:700}
 .maptiers .tier-unclassified>.tier-head .tier-name,.rpg-tiers .tier-unclassified>.tier-head .tier-name{text-decoration:underline dotted}
-.maptier-item{display:block;width:100%;text-align:left;background:none;border:0;color:inherit;font:inherit;font-size:.9em;padding:2px var(--space-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.maptier-item{display:block;width:100%;text-align:left;background:none;border:0;color:inherit;font:inherit;font-size:var(--font-size-caption);padding:2px var(--space-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .maptier-item:not(:disabled){cursor:pointer}
-.maptier-item:not(:disabled):hover{background:var(--color-bg-hover,rgba(127,127,127,.18))}
+.maptier-item:not(:disabled):hover{background:var(--color-bg-hover)}
 @media (max-width:480px){.maptiers{width:calc(100% - var(--space-4));max-height:38%}}

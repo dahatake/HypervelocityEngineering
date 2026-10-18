@@ -4,7 +4,7 @@ import { store } from './store.js';
 import { xrefLink } from './xref.js';
 import { create2d } from './sz2d.js';
 import { mountShell, isArch, wantsEntityView, hasEntityStructure, setTab } from './semzoom.js';
-import { mountMapTiers } from './maptiers.js';
+import { mountMapTiers, tierState, tierPathOf, tierRank, tierKey, tierOfKey, tierShortLabel } from './maptiers.js';
 import { el, colorOf, TYPE_COLOR, STATUS_COLOR, IMPL_COLOR, token, icon, showTip, hideTip, nodeTip } from './ui.js';
 
 const COL = { goal: 0, req: 1, ac: 2, entity: 3, part: 3, api: 3, table: 3, param: 3, question: 3, file: 4, component: 4, case: 5, persona: 6, external: 6 };
@@ -59,19 +59,33 @@ function mountGraph(host) {
       return c ? s / c : null;
     };
     // Lays a column out top-to-bottom in groups and wraps it into sub-columns once it exceeds targetH.
-    const place = (list, gkey, spread, colIdx, label) => {
+    const place = (list, gkey0, spread, colIdx, label0) => {
+      // FR-1063 AC-345: 点は FR-1062 の上位層（種類→区分→領域）ごとの帯にまとめる。階層に項目がない点だけ、従来のまとまりを使う。
+      const gkey = (n) => { const p = tierPathOf(n); return p ? tierKey(p) : gkey0(n); };
+      const label = (k, ns) => { const p = tierOfKey(k); return p ? tierShortLabel(p) : label0(k, ns); };
+      list.sort((a, b) => tierRank(tierPathOf(a)) - tierRank(tierPathOf(b)));
       const gs = [];
       for (const n of list) { const g = gkey(n); if (!gs.length || gs[gs.length - 1].key !== g) gs.push({ key: g, nodes: [] }); gs[gs.length - 1].nodes.push(n); }
       let total = 0;
-      gs.forEach((g, i) => { total += (g.nodes.length - 1) * rowH + (i ? groupGap : 0); });
+      gs.forEach((g, i) => {
+        g.tier = tierOfKey(g.key); g.coll = !!g.tier && !tierState.mapOpen(g.tier);
+        total += (g.coll ? rowH : (g.nodes.length - 1) * rowH) + (i ? groupGap : 0);
+      });
       const single = total <= targetH;
       const sc = single && spread && total > 0 && total < spread ? Math.min(spread / total, 6) : 1;
       let sub = 0, yl = 0;
       gs.forEach((g, i) => {
-        const gh = (g.nodes.length - 1) * rowH * sc;
+        const gh = g.coll ? 0 : (g.nodes.length - 1) * rowH * sc;
         if (i) { if (yl > 0 && yl + groupGap * sc + gh > targetH) { sub++; yl = 0; } else yl += groupGap * sc; }
         let y0 = yl, cnt = 0;
-        const close = () => groups.push({ col: colIdx, sub, key: g.key, label: label(g.key, g.nodes), y0, y1: yl, n: cnt });
+        if (g.coll) {
+          // 畳んだ領域は、件数つきの 1 つの塊にする（点は同じ位置に集約され、関連線も塊に集まる）
+          const rec = { col: colIdx, sub, key: g.key, label: label(g.key, g.nodes), y0, y1: yl, n: g.nodes.length, total: g.nodes.length, tier: g.tier, coll: true };
+          for (const n of g.nodes) pos.set(n.id, { col: colIdx, sub, y: yl, gy: sub * targetH + yl, n, cg: rec });
+          groups.push(rec); yl += rowH * sc;
+          return;
+        }
+        const close = () => groups.push({ col: colIdx, sub, key: g.key, label: label(g.key, g.nodes), y0, y1: yl, n: cnt, total: g.nodes.length, tier: g.tier, coll: false });
         g.nodes.forEach((n, j) => {
           if (j) { yl += rowH * sc; if (yl > targetH) { close(); sub++; yl = 0; y0 = 0; cnt = 0; } }
           pos.set(n.id, { col: colIdx, sub, y: yl, gy: sub * targetH + yl, n });
@@ -133,7 +147,9 @@ function mountGraph(host) {
     for (const p of pos.values()) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x + 280); y1 = Math.max(y1, p.y); }
     if (!pos.size) { x0 = y0 = 0; x1 = y1 = 100; }
     bounds = { x0: x0 - 60, y0: y0 - 60, x1: x1 + 40, y1: y1 + 60 };
-    order = [...pos.values()];
+    order = [...pos.values()].filter((p) => !p.cg);
+    // 上位層の帯の状態（自動検査・支援技術向けの要約。キャンバスは読み上げられないため、パネルの木が同じ内容をキーボードで操作できる）
+    canvas.dataset.tiers = JSON.stringify(groups.filter((g) => g.tier).map((g) => ({ path: g.tier, count: g.total, collapsed: !!g.coll, col: g.col })));
   }
 
   // ---------- camera
@@ -201,19 +217,30 @@ function mountGraph(host) {
     const focusing = !!set;
     const vx0 = cam.x - W / 2 / k - 300, vx1 = cam.x + W / 2 / k + 300, vy0 = cam.y - H / 2 / k - 20, vy1 = cam.y + H / 2 / k + 20;
 
-    // group bands
+    // group bands（上位層の帯: 見出しに ▾/▸・名称・件数。見出しを押すと下位の点を畳む／開く）
     for (const g of groups) {
       if (g.y1 + 20 < vy0 || g.y0 - 20 > vy1) continue;
-      if (k < 0.5 && g.n < 3 && groups.length > 14) continue;
-      ctx.fillStyle = 'rgba(120,150,255,0.045)';
+      if (!g.tier && k < 0.5 && g.n < 3 && groups.length > 14) continue;
+      ctx.fillStyle = g.coll ? 'rgba(120,150,255,0.12)' : 'rgba(120,150,255,0.045)';
       round(ctx, g.x - 14, g.y0 - 16, 330, g.y1 - g.y0 + 32, 12); ctx.fill();
-      const gl = g.label + (k < 0.5 ? ` (${g.n})` : '');
+      const gl = (g.tier ? (g.coll ? '▸ ' : '▾ ') : '') + g.label + (g.tier || k < 0.5 ? ` (${g.total ?? g.n})` : '');
       ctx.font = '600 1px "Segoe UI","Yu Gothic UI",sans-serif';
       const fs = Math.max(8, Math.min(Math.min(80, Math.max(11, 15 / k)), (subW - 40) / Math.max(1, ctx.measureText(gl).width)));
       ctx.font = `600 ${fs}px "Segoe UI","Yu Gothic UI",sans-serif`;
-      ctx.fillStyle = k < 0.5 ? token('--color-fg-default') : token('--color-fg-subtle');
+      ctx.fillStyle = k < 0.5 || g.tier ? token('--color-fg-default') : token('--color-fg-subtle');
       ctx.textBaseline = 'alphabetic';
-      ctx.fillText(gl, g.x - 6, g.y0 - 20 + (k < 0.5 ? -2 : 0));
+      const ty = g.y0 - 20 + (k < 0.5 ? -2 : 0);
+      ctx.fillText(gl, g.x - 6, ty);
+      if (g.tier) g.hit = { x0: g.x - 14, x1: g.x - 6 + ctx.measureText(gl).width + 6, y0: ty - fs - 2, y1: ty + 6 };
+      if (g.coll) {
+        // 畳んだ塊: 色だけに頼らず、記号（▸）・名称・件数の文字で示す
+        const first = g.firstNode || (g.firstNode = [...pos.values()].find((p) => p.cg === g)?.n);
+        ctx.fillStyle = first ? nodeColor(first) : token('--viz-sel');
+        round(ctx, g.x - 8, g.y0 - 9, 200, 18, 6); ctx.fill();
+        ctx.fillStyle = token('--color-bg-canvas'); ctx.font = '600 12px "Segoe UI","Yu Gothic UI",sans-serif'; ctx.textBaseline = 'middle';
+        ctx.fillText(`▸ ${g.total}`, g.x - 2, g.y0);
+        g.blob = { x0: g.x - 8, x1: g.x + 192, y0: g.y0 - 9, y1: g.y0 + 9 };
+      }
     }
 
     // edges
@@ -221,10 +248,12 @@ function mountGraph(host) {
     const act = (id) => !focusing || set.has(id);
     const lw = 1 / k;
     for (let pass = 0; pass < 2; pass++) {
+      const seen = new Set();
       for (const e of store.edges) {
         if (e.rel === 'member') continue;
         const a = pos.get(e.s), b = pos.get(e.t);
         if (!a || !b) continue;
+        if (a.cg || b.cg) { const sk = `${a.x},${a.y}|${b.x},${b.y}`; if (seen.has(sk)) continue; seen.add(sk); }   // 塊に集約された関連線は 1 本にまとめる
         const hi = focusing && set.has(e.s) && set.has(e.t);
         if (e.rel === 'ref' && !hi) continue;
         if ((pass === 1) !== hi) continue;
@@ -289,6 +318,7 @@ function mountGraph(host) {
       ctx.fillText(lab, lx, p.y);
     }
     ctx.restore();
+    canvas.tierHits = groups.filter((g) => g.hit).map((g) => ({ path: g.tier, coll: !!g.coll, x: (g.hit.x0 + 10 - cam.x) * cam.k + W / 2, y: ((g.hit.y0 + g.hit.y1) / 2 - cam.y) * cam.k + H / 2 }));   // 検査用: 見出しの画面位置
     drawMini(set);
     if (cam.k < 0.07) hint.textContent = '';
   }
@@ -350,6 +380,16 @@ function mountGraph(host) {
     }
     return best;
   }
+  // FR-1063 AC-345: 上位層の見出し・畳んだ塊の判定（世界座標）。見出し／塊を押すと下位の点を畳む／開く。
+  function hitGroup(clientX, clientY) {
+    const r = canvas.getBoundingClientRect();
+    if (!r.width || !r.height || !W || !H) return null;
+    const w = toWorld((clientX - r.left) * (W / r.width), (clientY - r.top) * (H / r.height));
+    for (const g of groups) {
+      for (const h of [g.hit, g.blob]) if (h && w.x >= h.x0 && w.x <= h.x1 && w.y >= h.y0 && w.y <= h.y1) return g;
+    }
+    return null;
+  }
   // FR-1011 AC-078: press-to-release travel within CLICK_DRAG_PX is a click (no pan); beyond it is a pan.
   canvas.addEventListener('pointerdown', (e) => {
     drag = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y, cand: pick(e.clientX, e.clientY) };
@@ -363,7 +403,8 @@ function mountGraph(host) {
       return;
     }
     const p = pick(e.clientX, e.clientY);
-    canvas.style.cursor = p ? 'pointer' : 'grab';
+    const hg = !p && hitGroup(e.clientX, e.clientY);
+    canvas.style.cursor = p || hg ? 'pointer' : 'grab';
     store.setHover(p ? p.n.id : null);
     if (p) showTip(nodeTip(p.n), e.clientX, e.clientY); else hideTip();
   });
@@ -375,7 +416,12 @@ function mountGraph(host) {
     if (p) store.select(p.n.id);
   });
   canvas.addEventListener('pointerleave', () => { store.setHover(null); hideTip(); });
-  canvas.addEventListener('dblclick', () => { store.clear(); fly(camFit()); });
+  // 見出し・畳んだ塊は、ダブルクリックで畳む／開く（1 回の押下は FR-1011 の点の選択・移動に使うため、押し間違いで配置が変わらない）。キーボードはパネルの木。
+  canvas.addEventListener('dblclick', (e) => {
+    const g = hitGroup(e.clientX, e.clientY);
+    if (g?.tier) { tierState.toggle(g.tier, 'map'); return; }
+    store.clear(); fly(camFit());
+  });
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault(); stopTour(); anim = null;
     const r = canvas.getBoundingClientRect();
@@ -452,6 +498,8 @@ function mountGraph(host) {
   const offs = [
     store.on('select', (o) => {
       const id = o.id;
+      const hidden = id && pos.get(id)?.cg;      // 畳んだ領域の中の点が選ばれたら、その領域を開いて点を見せる
+      if (hidden) tierState.setOpen(hidden.tier, true, 'map');
       if (id && store.node(id) && !pos.has(id)) {
         const n = store.node(id);
         if (!prefs.layers.has(n.type) && LAYER_TYPES.includes(n.type)) { prefs.layers.add(n.type); relayout(true); }
@@ -466,6 +514,7 @@ function mountGraph(host) {
     }),
     store.on('hover', redraw),
     store.on('model', () => relayout(false)),
+    tierState.on(() => relayout(true)),
     onLang(() => { renderToolbar(); renderStatus(); layout(); redraw(); }),
   ];
   if (store.activeSet() && !document.documentElement.classList.contains('snapshot')) {

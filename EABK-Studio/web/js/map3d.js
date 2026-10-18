@@ -4,7 +4,7 @@ import { t, onLang } from './i18n.js';
 import { store } from './store.js';
 import { create3d } from './sz3d.js';
 import { mountShell, isArch, wantsEntityView, hasEntityStructure, setTab } from './semzoom.js';
-import { mountMapTiers } from './maptiers.js';
+import { mountMapTiers, tierState, tierPathOf, tierRank, tierKey, tierOfKey, tierShortLabel } from './maptiers.js';
 import { el, colorOf, TYPE_COLOR, STATUS_COLOR, IMPL_COLOR, token, icon, showTip, hideTip, nodeTip } from './ui.js';
 
 const LEVEL = { goal: 0, req: 1, ac: 2, entity: 3, part: 3, api: 3, table: 3, param: 3, question: 3, file: 4, case: 5 };
@@ -31,7 +31,7 @@ function mountGraph(host) {
 
   let W = 1, H = 1, dead = false, raf = 0;
   let nodes = [], idx = new Map(), P = null, pointsObj = null, baseLines = null, hiLines = null, parts = null;
-  let labelPool = [], labelCache = new Map(), staticLabels = [];
+  let labelPool = [], labelCache = new Map(), staticLabels = [], pinfo = [], labelHits = [];
   const cam = { target: new THREE.Vector3(), theta: 0.7, phi: 1.0, radius: 600, vt: 0, vp: 0 };
   let anim = null, tour = null, lastInput = performance.now(), drag = null, moved = false;
 
@@ -69,15 +69,18 @@ function mountGraph(host) {
     const angleOf = (id) => { const p = out.get(id); return p ? Math.atan2(p.z, p.x) : null; };
     const order = [...levels].sort((a, b) => (a === 1 ? -1 : b === 1 ? 1 : a - b));
     for (const lv of order) {
-      const L = list.filter((n) => LEVEL[n.type] === lv);
+      // FR-1063 AC-346: 2D と同じ上位層（種類→区分→領域）ごとのまとまり。階層に項目がない点だけ従来のまとまりを使う。
+      const L = list.filter((n) => LEVEL[n.type] === lv).sort((a, b) => tierRank(tierPathOf(a)) - tierRank(tierPathOf(b)));
       const gmap = new Map();
-      const gkey = (n) => (n.type === 'req' ? n.group : n.type === 'file' ? n.comp : n.type === 'ac' ? (store.node(n.req)?.group || 'ac') : n.type);
+      const gkey0 = (n) => (n.type === 'req' ? n.group : n.type === 'file' ? n.comp : n.type === 'ac' ? (store.node(n.req)?.group || 'ac') : n.type);
+      const gkey = (n) => { const p = tierPathOf(n); return p ? tierKey(p) : gkey0(n); };
       for (const n of L) { const k = gkey(n); if (!gmap.has(k)) gmap.set(k, []); gmap.get(k).push(n); }
       const cl = [...gmap.entries()].map(([key, ns], i) => {
         let sx = 0, sy = 0, c = 0;
         for (const n of ns) for (const a of store.adj.get(n.id) || []) { const an = angleOf(a.id); if (an != null) { sx += Math.cos(an); sy += Math.sin(an); c++; } }
         const angle = c ? Math.atan2(sy, sx) : (i / gmap.size) * 6.283;
-        return { key, ns, angle, r: SP * Math.sqrt(ns.length) * 0.62 + 6, x: 0, z: 0 };
+        const tier = tierOfKey(key), coll = !!tier && !tierState.mapOpen(tier);   // 畳んだ領域は件数つきの 1 つの塊にする
+        return { key, ns, angle, tier, coll, r: coll ? 9 : SP * Math.sqrt(ns.length) * 0.62 + 6, x: 0, z: 0 };
       });
       if (lv === 1) cl.forEach((c, i) => (c.angle = (i / cl.length) * 6.283));
       let R = Math.max(28, cl.reduce((s, c) => s + 2 * c.r + 8, 0) / 6.283);
@@ -93,6 +96,7 @@ function mountGraph(host) {
       let maxR = 0;
       for (const c of cl) {
         c.ns.forEach((n, i) => {
+          if (c.coll) { out.set(n.id, { x: c.x, z: c.z, y: yOf.get(lv), cg: c, first: i === 0 }); return; }
           const rr = SP * 0.62 * Math.sqrt(i + 0.5), a = i * 2.39996;
           out.set(n.id, { x: c.x + rr * Math.cos(a), z: c.z + rr * Math.sin(a), y: yOf.get(lv) + ((i % 3) - 1) * 1.6 });
         });
@@ -136,13 +140,15 @@ function mountGraph(host) {
     idx = new Map(nodes.map((n, i) => [n.id, i]));
     const { out, layers } = layout3d(nodes);
     P = new Float32Array(nodes.length * 3);
+    pinfo = []; labelHits = [];
     const colors = new Float32Array(nodes.length * 3), sizes = new Float32Array(nodes.length), alphas = new Float32Array(nodes.length).fill(1);
     const cc = new THREE.Color();
     nodes.forEach((n, i) => {
       const p = out.get(n.id);
       P.set([p.x, p.y, p.z], i * 3);
       cc.set(nodeColor(n)); colors.set([cc.r, cc.g, cc.b], i * 3);
-      sizes[i] = n.type === 'goal' ? 11 : n.type === 'req' ? 5.2 : n.type === 'file' ? 4.4 : 4.8;
+      sizes[i] = p.cg ? (p.first ? 9.5 : 0.01) : n.type === 'goal' ? 11 : n.type === 'req' ? 5.2 : n.type === 'file' ? 4.4 : 4.8;
+      pinfo[i] = p;
     });
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(P, 3));
@@ -181,11 +187,14 @@ function mountGraph(host) {
       const s = labelSprite(name, token('--viz-cluster-name'), true); s.scale.set(70, 8.75, 1); s.position.set(-L.R - 6, L.y, 0);
       world.add(s); staticLabels.push(s);
       for (const c of L.clusters) {
-        if (c.ns.length < 2 && L.clusters.length > 12) continue;
-        const lab = labelSprite(c.key.replace(/\.md$/, ''), token('--viz-cluster-name')); lab.scale.set(38, 4.75, 1); lab.position.set(c.x, L.y + 7, c.z + c.r * 0.9 + 3);
+        if (!c.tier && c.ns.length < 2 && L.clusters.length > 12) continue;
+        const text = c.tier ? `${c.coll ? '▸' : '▾'} ${tierShortLabel(c.tier).slice(0, 22)} (${c.ns.length})` : c.key.replace(/\.md$/, '');
+        const lab = labelSprite(text, token('--viz-cluster-name')); lab.scale.set(38, 4.75, 1); lab.position.set(c.x, L.y + 7, c.z + c.r * 0.9 + 3);
         world.add(lab); staticLabels.push(lab);
+        if (c.tier) labelHits.push({ tier: c.tier, count: c.ns.length, coll: c.coll, pos: lab.position.clone() });
       }
     }
+    mount3.dataset.tiers = JSON.stringify(layers.flatMap((L) => L.clusters.filter((c) => c.tier).map((c) => ({ path: c.tier, count: c.ns.length, collapsed: c.coll, level: L.lv }))));
     // travelling particles + highlight edges
     hiLines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
     hiLines.frustumCulled = false;
@@ -302,6 +311,7 @@ function mountGraph(host) {
   function pick(mx, my) {
     let best = -1, bd = 196;
     for (let i = 0; i < nodes.length; i++) {
+      if (pinfo[i]?.cg && !pinfo[i].first) continue;
       if (curSet && !curSet.has(nodes[i].id) && !store.hover) { /* still pickable */ }
       v3.set(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]).applyMatrix4(world.matrixWorld).project(camera);
       if (v3.z > 1) continue;
@@ -310,6 +320,16 @@ function mountGraph(host) {
       if (d < bd) { bd = d; best = i; }
     }
     return best;
+  }
+  // FR-1063 AC-346: 層ごとの領域ラベル（▾/▸・名称・件数）を押すと、下位の点を畳む／開く。キーボードではパネルの木が同じ状態を操作する。
+  function pickLabel(mx, my) {
+    for (const h of labelHits) {
+      v3.copy(h.pos).applyMatrix4(world.matrixWorld).project(camera);
+      if (v3.z > 1) continue;
+      const sx = (v3.x * 0.5 + 0.5) * W, sy = (-v3.y * 0.5 + 0.5) * H;
+      if (Math.abs(sx - mx) < 80 && Math.abs(sy - my) < 14) return h;
+    }
+    return null;
   }
   const cvs = renderer.domElement;
   cvs.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, pan: e.button === 2 || e.shiftKey }; moved = false; cvs.setPointerCapture(e.pointerId); stopTour(); anim = null; lastInput = performance.now(); });
@@ -327,17 +347,23 @@ function mountGraph(host) {
       hideTip(); return;
     }
     const i = pick(e.clientX - r.left, e.clientY - r.top);
-    cvs.style.cursor = i >= 0 ? 'pointer' : 'grab';
+    cvs.style.cursor = i >= 0 || pickLabel(e.clientX - r.left, e.clientY - r.top) ? 'pointer' : 'grab';
     store.setHover(i >= 0 ? nodes[i].id : null);
     if (i >= 0) showTip(nodeTip(nodes[i]), e.clientX, e.clientY); else hideTip();
   });
   cvs.addEventListener('pointerup', (e) => {
     const was = moved; drag = null; if (was) return;
     const r = cvs.getBoundingClientRect(), i = pick(e.clientX - r.left, e.clientY - r.top);
-    if (i >= 0) store.select(nodes[i].id, { fly: true }); else if (store.activeSet()) store.clear();
+    if (i >= 0) { const cg = pinfo[i]?.cg; if (cg) tierState.setOpen(cg.tier, true, 'map'); else store.select(nodes[i].id, { fly: true }); return; }
+    if (store.activeSet()) store.clear();
   });
   cvs.addEventListener('pointerleave', () => { store.setHover(null); hideTip(); });
-  cvs.addEventListener('dblclick', () => { store.clear(); bird(); });
+  // 領域のラベルはダブルクリックで畳む／開く（1 回の押下は点の選択に使う）。キーボードはパネルの木。
+  cvs.addEventListener('dblclick', (e) => {
+    const r = cvs.getBoundingClientRect(), lh = pickLabel(e.clientX - r.left, e.clientY - r.top);
+    if (lh) { tierState.toggle(lh.tier, 'map'); return; }
+    store.clear(); bird();
+  });
   cvs.addEventListener('wheel', (e) => { e.preventDefault(); stopTour(); anim = null; lastInput = performance.now(); cam.radius = Math.min(4000, Math.max(20, cam.radius * Math.exp(e.deltaY * 0.0012))); }, { passive: false });
 
   // ---------- tour
@@ -409,12 +435,15 @@ function mountGraph(host) {
     store.on('select', (o) => {
       const n = o.id && store.node(o.id);
       if (n && !idx.has(n.id) && LAYER_TYPES.includes(n.type) && !prefs.layers.has(n.type)) { prefs.layers.add(n.type); rebuild(true); }
+      const cgp = o.id && idx.has(o.id) ? pinfo[idx.get(o.id)]?.cg : null;
+      if (cgp) { tierState.setOpen(cgp.tier, true, 'map'); }      // 畳んだ領域の点が選ばれたら、領域を開く（開くと再構築される）
       applyHighlight();
       if (o.cleared) return;
       if (o.fly || o.focus) flyToActive(!!o.tour);
     }),
     store.on('hover', () => applyHighlight()),
     store.on('model', () => rebuild()),
+    tierState.on(() => rebuild(true)),
     onLang(() => { rebuild(true); }),
   ];
 
