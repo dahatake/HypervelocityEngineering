@@ -39,6 +39,7 @@ description: implementer が、conductor から渡された承認済みの要求
 ### worktree とゲート
 - 作業は渡された worktree（`work/worktrees/<run-id>-w<N>/`。項目をまたいで再利用されるプール。ブランチ `work/<run-id>/<item>`）の中だけで行います。ignore されたビルドの生成物は消さずに増分ビルドに使います。
 - ゲート: `python scripts/verify.py --quick` と、関係する System Test を `python scripts/ledger.py run --cases <ケース ID> --no-record` で実行します（台帳は conductor が統合後に更新します）。どのテストを実行するかは `python scripts/select-tests.py` で選べます。
+- AC のゲートが通ったら、無関係な不安定テストを直さず、結果に `UNRELATED-FLAKY: <テスト名と症状>` として報告して終えます。1 項目の作業は 60 分（PARAM-045）を超えません。
 - 長いログは `python scripts/summarize.py <log>` で要約してから読みます。
 - commit は `[<要求 ID>] <要約>` で、作業ブランチにだけ行います。push はしません。
 
