@@ -58,12 +58,20 @@ def _screens(page):
 
 def _requirement_area_counts(root_text):
     """独立の期待値: 要求の 領域の欄ごとの件数（FR-1062: 欄が正本）。"""
+    # AC-343: 区分は ID 接頭辞（FR＝機能、NFR-＝非機能）。領域は行内の「領域:」以降、次の欄区切り（全角空白）か行末まで
+    # （値は空白を含みうる。例「運用・run の清掃」）。区分ごと・領域ごとに合算する（同名の領域が両区分にあり得る）。
     out = {}
-    blocks = re.split(r"^#### (?=(?:FR|NFR-[A-Z]+)-\d+ )", root_text, flags=re.M)[1:]
-    for b in blocks:
-        m = re.search(r"領域: ([^\s　]+)", b)
-        out[m.group(1) if m else "未分類"] = out.get(m.group(1) if m else "未分類", 0) + 1
+    parts = re.split(r"^#### ((?:FR|NFR-[A-Z]+)-\d+) ", root_text, flags=re.M)[1:]
+    for rid, b in zip(parts[0::2], parts[1::2]):
+        division = "機能" if rid.startswith("FR-") else "非機能"
+        m = re.search(r"領域: ([^\n　]+)", b)
+        area = m.group(1).strip() if m else "未分類"
+        out[(division, area)] = out.get((division, area), 0) + 1
     return out
+
+
+_DIVISION_NAMES = {"機能": "機能", "functional": "機能", "非機能": "非機能", "non-functional": "非機能",
+                   "nonfunctional": "非機能", "non functional": "非機能"}
 
 
 def _expand_all(page):
@@ -117,10 +125,59 @@ def test_ac345_map2d_requirement_areas_match_area_fields_and_not_flat(page):
     from test_studio_system import ROOT
     expected = _requirement_area_counts(_read_root(ROOT))
     _go(page, "map2d")
-    got = {g["path"][-1]: g["count"] for g in _groups(page, "area") if g["path"][0] in ("要求", "requirements")}
+    got = {}
+    for g in _groups(page, "area"):
+        if g["path"][0] in ("要求", "requirements"):
+            key = (_DIVISION_NAMES.get(g["path"][1].strip().lower(), g["path"][1]), g["path"][-1])
+            got[key] = got.get(key, 0) + g["count"]  # 同じ（区分, 領域）が複数あれば合算
     assert len(got) >= 2, f"要求が領域ごとに区切られていない: {got}"
-    for area, n in expected.items():
-        assert got.get(area) == n, f"領域 {area}: 期待 {n} 実際 {got.get(area)}"
+    assert {k[0] for k in got} >= {"機能", "非機能"}, f"区分が機能・非機能に分かれていない: {sorted(got)}"
+    for key, n in expected.items():
+        assert got.get(key) == n, f"区分・領域 {key}: 期待 {n} 実際 {got.get(key)}"
+    assert set(got) == set(expected), f"余分／欠けた領域: {set(got) ^ set(expected)}"
+
+
+# FR-1063 AC-345: マップ本体（キャンバス）の要求の列の点が領域ごとにまとまりフラットでなく、開閉で下位の点が現れる／隠れる
+# 仮置き契約: window.eabkView.getState().map2d.points = [{id, kind, division, area, x, y, visible}]（画面座標。隅のパネルでは通らない）
+def test_ac345_map2d_body_points_cluster_by_area_and_toggle_shows_hides(page):
+    _go(page, "map2d")
+    _expand_all(page)
+    page.wait_for_timeout(500)
+    pts = page.evaluate("""() => ((window.eabkView.getState().map2d || {}).points || [])
+        .filter(p => p.kind === '要求' || p.kind === 'requirements').filter(p => p.visible)""")
+    assert len(pts) >= 4, f"マップ本体に要求の点がない（getState().map2d.points）: {len(pts)}"
+    by = {}
+    for p in pts:
+        by.setdefault((p["division"], p["area"]), []).append((p["x"], p["y"]))
+    assert len(by) >= 2, "要求の点が領域ごとにまとまっていない"
+
+    def mean_d(a, b):
+        return sum(((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5 for x1, y1 in a for x2, y2 in b) / (len(a) * len(b))
+
+    multi = [v for v in by.values() if len(v) >= 2]
+    assert multi, "2 点以上の領域がない"
+    allp = [(p["x"], p["y"]) for p in pts]
+    inner = sum(mean_d(v, v) for v in multi) / len(multi)
+    assert inner < mean_d(allp, allp), "同じ領域の点が近くにまとまっていない（フラット）"
+    assert len({round(y / 20) for _, y in allp}) > 1 and len({round(x / 20) for x, _ in allp}) > 1, "点が 1 列（直線）に並ぶ"
+    # 開閉: 領域グループを閉じるとその領域の点が本体から消え、開くと現れる
+    g = page.locator(f'{GROUP}[data-tier-level="area"]').filter(has_text=re.compile(r"^")).first
+    for cand in page.locator(f'{GROUP}[data-tier-level="area"]').all():
+        if json.loads(cand.get_attribute("data-tier-path"))[0] in ("要求", "requirements"):
+            g = cand
+            break
+    path = json.loads(g.get_attribute("data-tier-path"))
+    path = [_DIVISION_NAMES.get(path[1].strip().lower(), path[1]), path[-1]]
+    count_js = """(path) => ((window.eabkView.getState().map2d || {}).points || [])
+        .filter(p => p.visible && p.division === path[0] && p.area === path[1]).length"""
+    tg = g.locator('[data-testid="tier-toggle"]').first
+    if tg.get_attribute("aria-expanded") != "true":
+        tg.click()
+    page.wait_for_timeout(300)
+    assert page.evaluate(count_js, path) > 0, "開いても本体に下位の点が現れない"
+    tg.click()
+    page.wait_for_timeout(300)
+    assert page.evaluate(count_js, path) == 0, "閉じても本体の下位の点が隠れない"
 
 
 # ============================================================================ AC-346
