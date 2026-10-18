@@ -80,6 +80,7 @@ MANAGED = [
     "scripts/kpi.py",
     "scripts/import-speckit.py",
     "scripts/adopt.py",
+    "scripts/watch.py",
     "scripts/hooks/gate.py",
     "tools/install.py",
     "users-guide/README.md",
