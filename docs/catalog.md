@@ -88,7 +88,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1050 | 表・連携の ID の全面リンク化と未解決 ID の明示 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
 | FR-1051 | 「表」画面の種別のグループ化と名称の統一 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
 | FR-1052 | 文脈の明示と、図・一覧の行のキーボード操作 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
-| FR-1064 | 監視コマンド watch.py（scan・reap・stuck） | 承認済み | `scripts/watch.py` | `tests/toolkit/test_watch.py` | run 監視 |
+| FR-1064 | 監視コマンド watch.py（scan・reap・stuck） | 承認済み | `scripts/watch.py` | `tests/toolkit/test_watch.py`、`tests/integration/test_watch_cli.py` | run 監視 |
 | FR-1065 | run の運用への組込み（統合時の回収・状態の警告・手順書の規則） | 承認済み | 未実装 | 未実装 | - |
 | NFR-OPS-008 | 監視コマンドの安全性・配布・文書・単体テスト | 承認済み | `scripts/watch.py` | `tests/toolkit/test_watch.py` | run 監視 |
 
