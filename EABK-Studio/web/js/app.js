@@ -328,7 +328,7 @@ renderNav();
 view.replaceChildren(statePanel({ state: 'loading', heading: t('loading'), description: t('state.loading.d') }));
 initDrawer(document.getElementById('drawer'));
 installXref();
-for (const k of ['dashboard', 'implstatus', 'diagrams', 'map2d']) ROUTES[k].load().catch(() => {}); // warm the module cache (the 2D map is the default map target)
+for (const k of ['dashboard', 'implstatus', 'diagrams', 'map2d', 'map3d']) ROUTES[k].load().catch(() => {}); // warm the module cache (the 2D map is the default map target; the 3D map is one mode switch away — no empty view while its module loads)
 function showLoadError(e) {
   view.replaceChildren(statePanel({ state: 'error', heading: t('state.error.h'), description: `${t('state.error.d')} (${(e && e.message) || e})`,
     action: el('button', { type: 'button', class: 'btn', onclick: () => { view.replaceChildren(statePanel({ state: 'loading', heading: t('loading'), description: t('state.loading.d') })); loadModel().catch(showLoadError); } }, t('state.retry')) }));
