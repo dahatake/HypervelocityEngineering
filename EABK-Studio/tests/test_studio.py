@@ -470,6 +470,40 @@ def test_server_switch_repo_needs_header_and_a_data_layer(server, tmp_path_facto
     assert post({"path": str(tmp_path / "nope")}, {"X-EABK-Studio": "1"}) == 400
 
 
+def _pick(server, headers, host=None):
+    h = dict(headers)
+    if host:
+        h["Host"] = host
+    req = urllib.request.Request(server + "/api/repo/pick", data=b"{}", headers=h, method="POST")
+    try:
+        with urllib.request.urlopen(req) as r:
+            return r.status, json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read() or b"{}")
+
+
+# FR-010 AC-336: only local requests carrying the Studio header open the dialog
+def test_pick_rejects_missing_header_and_foreign_host_without_opening_dialog(server, monkeypatch):
+    def boom(_):
+        raise AssertionError("dialog must not open")
+    monkeypatch.setattr(studio, "pick_folder", boom)
+    assert _pick(server, {})[0] == 403
+    assert _pick(server, {"X-EABK-Studio": "0"})[0] == 403
+    assert _pick(server, {"X-EABK-Studio": "1"}, host="evil.example")[0] == 403
+
+
+# FR-010 AC-332 AC-334 AC-335: selected path / cancel / dialog unavailable
+def test_pick_returns_path_cancel_or_501(server, monkeypatch):
+    H = {"X-EABK-Studio": "1"}
+    monkeypatch.setenv("EABK_STUDIO_PICK_PATH", "/some/where")
+    assert _pick(server, H) == (200, {"path": "/some/where"})
+    monkeypatch.setenv("EABK_STUDIO_PICK_PATH", "")
+    assert _pick(server, H) == (200, {"path": ""})
+    monkeypatch.delenv("EABK_STUDIO_PICK_PATH")
+    monkeypatch.setattr(studio, "pick_folder", lambda _: None)
+    assert _pick(server, H) == (501, {"error": "picker-unavailable"})
+
+
 def test_check_reports_found_and_missing_files(repo, capsys):
     assert studio.main(["--repo", str(repo), "--check"]) == 0
     out = capsys.readouterr().out
