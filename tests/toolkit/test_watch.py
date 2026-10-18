@@ -92,3 +92,21 @@ def test_stdlib_only():
     src = SCRIPT.read_text(encoding="utf-8")
     mods = set(re.findall(r"^(?:import|from)\s+([a-zA-Z_]+)", src, re.M))
     assert mods <= set(sys.stdlib_module_names) | {"__future__"}
+
+
+# FR-1064 AC-359 (audit A-01): --under matches only at a path boundary
+def test_under_matches_boundary():
+    w1 = "C:\\wt\\run-w1"
+    assert watch.under_matches(w1, "node C:\\wt\\run-w1\\x.js")
+    assert watch.under_matches(w1, 'node "c:/WT/run-w1"')
+    assert watch.under_matches(w1, "node C:\\wt\\run-w1")
+    assert not watch.under_matches(w1, "node C:\\wt\\run-w10\\x.js")
+    assert not watch.under_matches(w1, "node C:\\wt\\run-w10")
+
+
+def test_classify_under_w1_keeps_w10():
+    p = proc(cmd="node C:\\wt\\run-w10\\x.js")
+    kill, _, _ = cls(p, under="C:\\wt\\run-w1")
+    assert not kill
+    kill, _, _ = cls(proc(cmd="node C:\\wt\\run-w1\\x.js"), under="C:\\wt\\run-w1")
+    assert kill

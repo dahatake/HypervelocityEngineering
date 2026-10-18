@@ -45,6 +45,22 @@ def is_root_path(path: str) -> bool:
     return p == "" or re.fullmatch(r"[a-z]:", p) is not None
 
 
+def under_matches(under: str, cmd: str) -> bool:
+    """AC-359: True if `under` appears in `cmd` ending at a path boundary
+    (separator, quote, whitespace or end of string). Case and \\ vs / are ignored."""
+    u = norm_path(under)
+    if not u:
+        return False
+    c = (cmd or "").replace("\\", "/").lower()
+    pos = c.find(u)
+    while pos != -1:
+        end = pos + len(u)
+        if end == len(c) or c[end] in "/\"' \t\r\n":
+            return True
+        pos = c.find(u, pos + 1)
+    return False
+
+
 def ancestors(pid: int, parent_of: Dict[int, int]) -> Set[int]:
     out = {pid}
     cur = pid
@@ -66,7 +82,7 @@ def classify(proc: dict, repo_paths: Iterable[str], protected: Set[int], all_pid
     if under is not None:
         if is_root_path(under):
             return False, "--under が空またはルート", ""
-        if norm_path(under) not in cmd:
+        if not under_matches(under, cmd):
             return False, "--under のパスを含まない", ""
         if proc.get("age_min", 0) <= grace:
             return False, f"起動から {grace:g} 分以内", ""
