@@ -188,7 +188,8 @@ def select_cases(c: Ctx, q: dict, it: dict, base: str) -> List[dict]:
     data = h.load_ledger(c.root, c.cfg)
     integrated: Set[str] = {r for x in q.get("items", []) if x.get("status") == "done" for r in x.get("requirement_ids", [])}
     integrated |= set(it.get("requirement_ids", []))
-    picked = ledger.select_cases(c.root, c.cfg, data, "changed", base)
+    # 既存の fail ケースは、この変更と無関係なら再実行しない（retry_failed=False。ID・command のファイル一致では選ぶ）
+    picked = ledger.select_cases(c.root, c.cfg, data, "changed", base, retry_failed=False)
     picked += [x for x in data.get("cases", []) if x.get("canary") and x.get("status") != "blocked"]
     out, seen = [], set()
     for x in picked:
