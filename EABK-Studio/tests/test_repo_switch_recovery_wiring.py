@@ -17,6 +17,17 @@ def test_switch_failure_branches_offer_retry_and_back_and_keep_model():
     assert "t('repo.nodata')" in failure and "t('repo.bad')" in failure
     assert "store.clear" not in failure
     assert "store.clear" in success
+    # FR-010 AC-333: nothing of the old repository survives a successful switch
+    assert "store.setImplFilter(null)" in success and "q.value = ''" in success
+
+
+# FR-010 AC-332 AC-335: no path-typing modal; the button calls the picker, retry reopens it
+def test_repo_button_uses_picker_not_text_modal():
+    app = js("app.js")
+    assert "chooseRepository" not in app and "repo.prompt" not in app
+    assert "/api/repo/pick" in app and "repo.nopicker" in app
+    assert 'data-testid="repo-pick"' in (WEB.parent / "index.html").read_text(encoding="utf-8")
+    assert "repo.prompt" not in js("i18n.js")
 
 
 # NFR-OPS-003 AC-028: labels exist in both languages

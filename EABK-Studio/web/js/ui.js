@@ -145,6 +145,9 @@ export function toast(msg, actions) {
   const e = document.getElementById('toast');
   clearTimeout(toastTimer);
   e.textContent = msg; e.hidden = false;
+  // A toast with recovery actions reports a failure (AC-028 / AC-335): announce it assertively.
+  e.setAttribute('role', actions && actions.length ? 'alert' : 'status');
+  e.setAttribute('aria-live', actions && actions.length ? 'assertive' : 'polite');
   if (actions && actions.length) {
     for (const a of actions) {
       const b = document.createElement('button');

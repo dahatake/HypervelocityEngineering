@@ -278,39 +278,49 @@ renderTheme(false);
 document.getElementById('lang').addEventListener('click', () => setLang(lang() === 'ja' ? 'en' : 'ja'));
 function renderLangBtn() { document.getElementById('lang').innerHTML = lang() === 'ja' ? '<b>JA</b> | EN' : 'JA | <b>EN</b>'; }
 onLang(() => { renderLangBtn(); renderNav(); renderTheme(false); if (!box.hidden) renderResults(); });
-async function chooseRepository(cur) {
-  const modal = el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' },
-    el('form', { class: 'card', onsubmit: (e) => e.preventDefault() },
-      el('h3', {}, t('repo.prompt')),
-      el('input', { type: 'text', value: cur, autofocus: true }),
-      el('div', { class: 'row', style: { justifyContent: 'flex-end', marginTop: '12px' } },
-        el('button', { type: 'button', class: 'btn ghost', onclick: () => modal.remove() }, 'Cancel'),
-        el('button', { type: 'submit', class: 'btn', onclick: () => modal.dispatchEvent(new CustomEvent('chosen', { detail: modal.querySelector('input').value })) }, 'OK'))));
-  document.body.append(modal);
-  return await new Promise((resolve) => {
-    modal.addEventListener('chosen', (e) => { const value = e.detail.trim(); modal.remove(); resolve(value); });
-  });
+// FR-010 AC-332..336: the header button opens the OS folder dialog (served by POST /api/repo/pick); no path-typing modal.
+const HDR = { 'Content-Type': 'application/json', 'X-EABK-Studio': '1' };
+function renderRepoBtnLabel() {
+  const b = document.getElementById('repoBtn');
+  b.setAttribute('aria-label', t('repo.change'));
+  b.title = store.model?.meta.repo || t('repo.change');
 }
-document.getElementById('repoBtn').addEventListener('click', async () => {
+onLang(renderRepoBtnLabel);
+async function pickAndSwitch() {
   const cur = store.model?.meta.repo || '';
-  await switchRepository(cur, await chooseRepository(cur));
-});
-// NFR-OPS-003 AC-028: on failure keep the current model, show cause + Retry / Back.
-async function switchRepository(cur, path) {
-  if (!path || path === cur) return;
-  const res = await fetch('/api/repo', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-EABK-Studio': '1' }, body: JSON.stringify({ path }) });
-  if (!res.ok) {
-    const j = await res.json().catch(() => ({}));
-    toast(j.error === 'no-data-layer' ? t('repo.nodata') : t('repo.bad'), [
-      { label: t('repo.retry'), run: async () => switchRepository(cur, await chooseRepository(path)) },
+  let res;
+  try { res = await fetch('/api/repo/pick', { method: 'POST', headers: HDR, body: '{}' }); } catch { res = null; }
+  if (!res || !res.ok) {
+    toast(res && res.status === 501 ? t('repo.nopicker') : t('repo.bad'), [
+      { label: t('repo.retry'), run: () => pickAndSwitch() },
       { label: t('repo.back'), run: () => {} },
     ]);
     return;
   }
-  store.clear();
-  await loadModel();
+  const { path } = await res.json().catch(() => ({}));
+  await switchRepository(cur, path);
 }
-window.addEventListener('hashchange', route);
+document.getElementById('repoBtn').addEventListener('click', () => { pickAndSwitch(); });
+// NFR-OPS-003 AC-028: on failure keep the current model, show cause + Retry / Back.
+async function switchRepository(cur, path) {
+  if (!path || path === cur) return; // cancelled: change nothing, show nothing
+  const res = await fetch('/api/repo', { method: 'POST', headers: HDR, body: JSON.stringify({ path }) });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    toast(j.error === 'no-data-layer' ? t('repo.nodata') : t('repo.bad'), [
+      { label: t('repo.retry'), run: () => pickAndSwitch() },
+      { label: t('repo.back'), run: () => {} },
+    ]);
+    return;
+  }
+  // AC-333: nothing of the previous repository may remain (selection, focus, filter, search, drawer, deep-link query).
+  store.clear();
+  store.setImplFilter(null);
+  q.value = ''; box.hidden = true; box.replaceChildren(); hits = []; lastResult = null;
+  const next = '#/' + routeName();
+  if (location.hash !== next) history.replaceState(null, '', next);
+  await loadModel();
+}window.addEventListener('hashchange', route);
 
 setInterval(async () => {
   if (document.hidden || !store.model || routeName() === 'maintenance') return;
