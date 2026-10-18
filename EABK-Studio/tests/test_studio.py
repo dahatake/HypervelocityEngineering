@@ -582,6 +582,42 @@ def test_impl_status_screen_is_wired_bilingually_with_keyboard_and_symbols():
         assert len(re.findall(rf"'{re.escape(key)}':", i18n)) == 2, key
     assert "ledger" not in src.lower() and "fetch(" not in src  # read-only view
 
+
+# FR-1061 AC-338 AC-342: bar start/end come from history[].at and last_run_at; unparsable values become undated
+def test_gantt_span_uses_min_history_and_max_of_last_run_and_history(tmp_path):
+    root = _status_repo(tmp_path)
+    cases = [
+        {"id": "E2E-1", "requirement_ids": ["FR-103"], "status": "pass", "last_run_at": "2026-10-12T00:00:00+09:00",
+         "history": [{"at": "2026-10-05T00:00:00+09:00"}, {"at": "2026-10-09T00:00:00+09:00"}]},
+        {"id": "E2E-2", "requirement_ids": ["FR-103", "FR-104"], "status": "pass", "last_run_at": "2026-10-07T00:00:00+09:00",
+         "history": [{"at": "2026-10-03T00:00:00+09:00"}]},
+        {"id": "E2E-3", "requirement_ids": ["FR-105"], "status": "pass", "last_run_at": "not a date", "history": [{"at": 5}, {}]},
+        {"id": "E2E-4", "requirement_ids": ["FR-102"], "status": "pass", "last_run_at": "2026-10-20T00:00:00+09:00", "history": "x"},
+    ]
+    (root / "tests" / "system" / "ledger.json").write_text(json.dumps({"version": 1, "cases": cases}), encoding="utf-8")
+    by = {i["id"]: i for i in m.build_model(root)["implStatus"]["items"]}
+    assert (by["FR-103"]["start"], by["FR-103"]["end"]) == ("2026-10-03T00:00:00+09:00", "2026-10-12T00:00:00+09:00")
+    assert (by["FR-104"]["start"], by["FR-104"]["end"]) == ("2026-10-03T00:00:00+09:00", "2026-10-07T00:00:00+09:00")
+    assert (by["FR-102"]["start"], by["FR-102"]["end"]) == ("2026-10-20T00:00:00+09:00", "2026-10-20T00:00:00+09:00")
+    assert by["FR-105"]["start"] is None and by["FR-105"]["end"] is None  # AC-342 unparsable -> undated
+    assert by["FR-101"]["start"] is None  # no case -> undated
+    assert "FR-108" not in by  # AC-338 non-approved excluded
+
+
+# FR-1061 AC-337 AC-339 AC-340 AC-341: Gantt view wiring (bilingual, keyboard, symbols, shared filter/selection, read-only)
+def test_gantt_view_is_wired_with_axis_legend_keyboard_and_shared_selection():
+    js = ROOT / "web" / "js"
+    src = (js / "implstatus.js").read_text(encoding="utf-8")
+    i18n = (js / "i18n.js").read_text(encoding="utf-8")
+    for tid in ("impl-gantt", "impl-gantt-axis", "impl-gantt-bar", "impl-gantt-group", "impl-gantt-undated", "impl-gantt-legend", "impl-gantt-table"):
+        assert f"'{tid}'" in src, tid
+    assert "'data-start'" in src and "'data-end'" in src and "'data-count': undated" in src
+    assert "store.setImplFilter" in src and "store.select" in src and "ArrowDown" in src and "keydown" in src  # AC-340 AC-341
+    assert "STATE_META[i]" in src and "impl2.stalled" in src  # AC-339 symbol + word + stalled mark
+    for key in ("gantt.title", "gantt.view", "gantt.axis", "gantt.undated", "gantt.legend", "gantt.sel", "gantt.start", "gantt.end"):
+        assert len(re.findall(rf"'{re.escape(key)}':", i18n)) == 2, key  # AC-341
+    assert "fetch(" not in src and "writeFile" not in src  # AC-342 read-only
+
 # --- FR-1021 / FR-1022 / NFR-COMPAT-003: entity matrix and detail ---------------------------------------------------
 SEP = "\u3000"
 
