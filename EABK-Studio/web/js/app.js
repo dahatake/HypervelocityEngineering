@@ -316,7 +316,7 @@ async function switchRepository(cur, path) {
   // AC-333: nothing of the previous repository may remain (selection, focus, filter, search, drawer, deep-link query).
   store.clear();
   store.setImplFilter(null);
-  q.value = ''; box.hidden = true; hits = []; lastResult = null;
+  q.value = ''; box.hidden = true; box.replaceChildren(); hits = []; lastResult = null;
   const next = '#/' + routeName();
   if (location.hash !== next) history.replaceState(null, '', next);
   await loadModel();
