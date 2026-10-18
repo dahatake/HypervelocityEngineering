@@ -61,7 +61,7 @@ def _requirement_area_counts(root_text):
     # AC-343: 区分は ID 接頭辞（FR＝機能、NFR-＝非機能）。領域は行内の「領域:」以降、次の欄区切り（全角空白）か行末まで
     # （値は空白を含みうる。例「運用・run の清掃」）。区分ごと・領域ごとに合算する（同名の領域が両区分にあり得る）。
     out = {}
-    parts = re.split(r"^#### ((?:FR|NFR-[A-Z]+)-\d+) ", root_text, flags=re.M)[1:]
+    parts = re.split(r"^#### ((?:FR|NFR-[A-Z0-9]+)-\d+) ", root_text, flags=re.M)[1:]
     for rid, b in zip(parts[0::2], parts[1::2]):
         division = "機能" if rid.startswith("FR-") else "非機能"
         m = re.search(r"領域: ([^\n　]+)", b)

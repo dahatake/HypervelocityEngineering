@@ -92,7 +92,7 @@ def test_ac316_list_by_area_and_sum_equals_non_abolished(repo):
     assert "FR-002" in b.stdout and "FR-001" not in b.stdout, b.stdout
     st = count_stats(repo)["by_state"]
     total = sum(st.get(k, 0) for k in ("承認済み", "承認待ち", "保留", "却下"))
-    per_area = sum(len(re.findall(r"^FR-\d+|^NFR-[A-Z]+-\d+", o.stdout, re.M)) for o in (a, b))
+    per_area = sum(len(re.findall(r"^FR-\d+|^NFR-[A-Z0-9]+-\d+", o.stdout, re.M)) for o in (a, b))
     assert per_area == total, f"領域の件数の合計 {per_area} != 廃止を除く要求数 {total}"
 
 
@@ -374,5 +374,5 @@ def test_ac326_renaming_area_keeps_ids(repo):
     assert "FR-001" in after and "FR-002" not in after, after
     r = check(repo)
     assert not [l for l in lines(r, "ERROR") if "CHK-30" in l], r.stdout
-    ids = lambda t: sorted(set(re.findall(r"\b(?:FR-\d+|NFR-[A-Z]+-\d+|AC-\d+)\b", t)))
+    ids = lambda t: sorted(set(re.findall(r"\b(?:FR-\d+|NFR-[A-Z0-9]+-\d+|AC-\d+)\b", t)))
     assert ids(s) == ids(txt(repo, d.RD))
