@@ -7,12 +7,14 @@ import { el } from './ui.js';
 import { renderTiers, tierName } from './hier.js';
 
 const opened = new Map();   // JSON(path) -> bool（利用者が開閉した状態。画面を切り替えても保つ）
-const defaultOpen = (path, level) => (level === 'area' ? false : true);
+const defaultOpen = () => true;   // 地図本体の既定（領域を開いて点を並べる）と同じにする
 const isOpen = (path, level) => (opened.has(JSON.stringify(path)) ? opened.get(JSON.stringify(path)) : defaultOpen(path, level));
 
 // 地図本体（2D・3D の層ごとの列・円盤）とパネルが同じ開閉状態を使う。地図は、利用者が畳むまで領域を開いて点を並べる。
 const subs = new Set();
 export const tierState = {
+  has: (path) => opened.has(JSON.stringify(path)),
+  get: (path) => opened.get(JSON.stringify(path)),
   mapOpen: (path) => (opened.has(JSON.stringify(path)) ? opened.get(JSON.stringify(path)) : true),
   setOpen(path, open, src) { opened.set(JSON.stringify(path), !!open); for (const f of [...subs]) f(path, !!open, src); },
   toggle(path, src) { this.setOpen(path, !this.mapOpen(path), src); },

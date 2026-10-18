@@ -521,7 +521,22 @@ function mountGraph(host) {
     setTimeout(() => { const c = camFor(store.activeSet(), 160); if (c) fly(c, 900); renderStatus(); }, 50);
   }
 
-  return { destroy() { dead = true; cancelAnimationFrame(raf); stopTour(); ro.disconnect(); offs.forEach((f) => f()); hideTip(); } };
+  // FR-1063 AC-345: 画面に見える状態の公開（自動検査・支援技術向け）。点ごとの上位層・画面座標・可視（畳まれた領域の点は visible=false）。
+  const viewApi = {
+    mode: 'map2d',
+    getState: () => {
+      const r = canvas.getBoundingClientRect(), sx = W ? r.width / W : 1, sy = H ? r.height / H : 1;
+      const points = [];
+      for (const p of pos.values()) {
+        const tp = tierPathOf(p.n);
+        if (!tp) continue;
+        points.push({ id: p.n.id, kind: tp[0], division: tp[1], area: tp[2], x: r.left + ((p.x - cam.x) * cam.k + W / 2) * sx, y: r.top + ((p.y - cam.y) * cam.k + H / 2) * sy, visible: !p.cg });
+      }
+      return { mode: 'map2d', map2d: { points, tiers: JSON.parse(canvas.dataset.tiers || '[]') } };
+    },
+  };
+  window.eabkView = viewApi;
+  return { destroy() { if (window.eabkView === viewApi) delete window.eabkView; dead = true; cancelAnimationFrame(raf); stopTour(); ro.disconnect(); offs.forEach((f) => f()); hideTip(); } };
 }
 
 // FR-1027..FR-1029: when the model has entity relations or columns, this route opens the entity view (semantic zoom) first;

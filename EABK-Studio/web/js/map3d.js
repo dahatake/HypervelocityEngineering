@@ -473,6 +473,20 @@ function mountGraph(host) {
     // keep static labels readable: shrink when the camera is very close
     renderer.render(scene, camera);
   }
+  // FR-1063 AC-346: 画面に見える状態の公開（2D と同じ形。x・y は画面座標）。畳まれた領域の点は visible=false。
+  const viewApi3 = {
+    mode: 'map3d',
+    getState: () => {
+      const rc = cvs.getBoundingClientRect(), pts = [], q = new THREE.Vector3();
+      nodes.forEach((n, i) => {
+        const tp = tierPathOf(n); if (!tp) return;
+        q.set(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]).applyMatrix4(world.matrixWorld).project(camera);
+        pts.push({ id: n.id, kind: tp[0], division: tp[1], area: tp[2], x: rc.left + (q.x * 0.5 + 0.5) * W, y: rc.top + (-q.y * 0.5 + 0.5) * H, visible: !pinfo[i]?.cg });
+      });
+      return { mode: 'map3d', map3d: { points: pts, tiers: JSON.parse(mount3.dataset.tiers || '[]') } };
+    },
+  };
+  window.eabkView = viewApi3;
   if (snapshot) frame(0);
   else raf = requestAnimationFrame(frame);
   if (snapshot) {
@@ -485,6 +499,7 @@ function mountGraph(host) {
 
   return {
     destroy() {
+      if (window.eabkView === viewApi3) delete window.eabkView;
       dead = true; cancelAnimationFrame(raf); stopTour(); ro.disconnect(); offs.forEach((f) => f()); hideTip();
       scene.traverse((o) => { o.geometry?.dispose?.(); o.material?.dispose?.(); });
       labelCache.forEach((tx) => tx.dispose());

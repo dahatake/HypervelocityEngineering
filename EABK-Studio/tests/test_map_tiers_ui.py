@@ -51,7 +51,7 @@ def test_ac346_map3d_same_tiers_as_2d_and_open_state_kept(studio):
     page.wait_for_selector(GROUP)
     assert _groups(page) == s2
     g = page.locator(f'{GROUP}[data-tier-level="area"]').first
-    assert g.get_attribute("data-tier-path") == opened and g.locator('[data-testid="tier-toggle"]').first.get_attribute("aria-expanded") == "true"
+    assert g.get_attribute("data-tier-path") == opened and g.locator('[data-testid="tier-toggle"]').first.get_attribute("aria-expanded") == "false"   # 2D で畳んだ状態が 3D でも保たれる
     page.context.close()
 
 
@@ -133,7 +133,7 @@ def test_ac345_map2d_collapse_and_expand_area_keeps_count_and_syncs_with_panel(g
     page.wait_for_function("() => document.querySelector('canvas.fill').dataset.tiers")
     grp = page.locator(f'{GROUP}[data-tier-level="area"][data-tier-path*="アルファ"]').first
     toggle = grp.locator('[data-testid="tier-toggle"]').first
-    toggle.click(); toggle.click()          # 既定（地図は開く・パネルの領域は閉じる）→ 開く → 畳む
+    toggle.click()                          # 既定は開く → 畳む
     page.wait_for_timeout(200)
     a = next(t for t in _tiers2d(page) if t["path"][2] == "アルファ" and t["path"][0] == "要求")
     assert a["collapsed"] and a["count"] == _req_areas(_tiers2d(page))["アルファ"]
@@ -178,7 +178,7 @@ def test_ac346_map3d_clusters_follow_same_tiers_as_2d_and_collapse(graph_studio)
     assert sorted((tuple(t["path"]), t["count"]) for t in t3 if t["path"][0] == "要求") == t2
     grp = page.locator(f'{GROUP}[data-tier-level="area"][data-tier-path*="ベータ"]').first
     toggle = grp.locator('[data-testid="tier-toggle"]').first
-    toggle.click(); toggle.click()
+    toggle.click()
     page.wait_for_timeout(300)
     t3 = json.loads(page.eval_on_selector(".map3d", "c => c.dataset.tiers"))
     assert next(t for t in t3 if t["path"][2] == "ベータ" and t["path"][0] == "要求")["collapsed"]

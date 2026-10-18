@@ -3,8 +3,8 @@
 // 開閉の状態は一覧系の画面のあいだで共有し、画面を切り替えても保たれる（NFR-UX-006）。
 import { renderTiers, UNCLASSIFIED } from './hier.js';
 import { store } from './store.js';
+import { tierState } from './maptiers.js';   // 開閉の状態は、マップ（2D・3D・RPG 風）とも共有する（NFR-UX-006）
 
-const OPEN = new Map();
 const keyOf = (path) => JSON.stringify(path);
 
 /** 現在のモデルの階層（なければ空）。 */
@@ -40,8 +40,8 @@ export function listTiers(items, opts = {}) {
   const w = renderTiers({ items, tiers: h.tiers, empty: opts.empty }, {
     itemNode: opts.itemNode || (() => document.createDocumentFragment()),
     extra: opts.extra,
-    open: (path, level) => (OPEN.has(keyOf(path)) ? OPEN.get(keyOf(path)) : (opts.openPaths && opts.openPaths.has(keyOf(path))) || level !== 'area' || !!opts.openAreas),
-    onToggle: (path, open) => OPEN.set(keyOf(path), open),
+    open: (path, level) => (tierState.has(path) ? tierState.get(path) : (opts.openPaths && opts.openPaths.has(keyOf(path))) || level !== 'area' || !!opts.openAreas),
+    onToggle: (path, open) => tierState.setOpen(path, open, 'list'),
   });
   w.classList.add('tiers-list');
   // FR-1051 の種別グループ（role=group、画面内の数を検査される）と混ざらないよう、上位層の本体は role=group にしない。
