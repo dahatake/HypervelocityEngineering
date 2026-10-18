@@ -502,6 +502,26 @@ def heal_integration_branch(root: Path, cfg: dict, rid: str, meta: dict) -> str:
     return f"WARN 統合ブランチ {old} が見つからないため、現在のブランチ {cur} を統合ブランチとして記録し直しました"
 
 
+def watch_warning(q: dict) -> str:
+    """FR-1065 AC-363: read-only WATCH: line (over-limit doing items, suspicious processes). Never raises."""
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("watch_mod", Path(__file__).resolve().parent / "watch.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        stuck = mod.stuck_items(q, dt.datetime.now().astimezone())
+    except Exception:  # noqa: BLE001
+        return ""
+    try:
+        orphans = sum(1 for r in mod._evaluate(None) if r[1])
+    except Exception:  # noqa: BLE001
+        orphans = 0
+    if not stuck and not orphans:
+        return ""
+    ids = ",".join(f"{i}({m}分)" for i, m in stuck) or "-"
+    return f"WATCH: 時間超過の項目={ids} 疑わしい（孤児）プロセス={orphans}（watch.py stuck / reap）"
+
+
 def cmd_status(args) -> int:
     root, cfg = ctx(args)
     rid = h.current_run(root, cfg)
@@ -521,6 +541,9 @@ def cmd_status(args) -> int:
     if heal:
         print(heal)
     print(f"queue: todo={c['todo']} doing={c['doing']} done={c['done']} blocked={c['blocked']}")
+    watch_line = watch_warning(q)
+    if watch_line:
+        print(watch_line)
     for it in q.get("items", []):
         if it.get("status") in ("doing", "todo"):
             print(f"  {it['id']} {it.get('status')} req={','.join(it.get('requirement_ids', []))} deps={','.join(it.get('depends_on', [])) or '-'} attempts={it.get('attempts', 0)} branch={it.get('branch') or '-'}")
