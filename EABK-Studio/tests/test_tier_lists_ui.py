@@ -60,12 +60,21 @@ def test_ac349_implstatus_breakdown_sums_to_tier_count(studio):
 
 
 # FR-1063 AC-349: ダッシュボード・図式・ソース対応・整合性保守でも上位層の見出しに件数が示される
-@pytest.mark.parametrize("route", ["dashboard", "diagrams?kind=goals", "source", "maintenance", "integrations", "entities"])
+@pytest.mark.parametrize("route", ["dashboard", "diagrams?kind=goals", "source", "maintenance", "integrations", "entities", "structure", "consistency", "placement"])
 def test_ac349_other_screens_show_tier_headings_with_counts(studio, route):
     page = _open(studio, route)
     page.wait_for_selector(GROUP)
     gs = _groups(page)
     assert gs and all(re.search(rf"\b{g['count']}\b", g["text"]) for g in gs)
+    page.context.close()
+
+
+# FR-1063 AC-349: 上位層の本体は role=group を使わず、FR-1051 の種別グループ（role=group）の数と衝突しない
+def test_ac349_tier_bodies_do_not_use_role_group(studio):
+    page = _open(studio, "tables?tab=reqs")
+    page.wait_for_selector(GROUP)
+    assert page.locator('#view .tier-body[role="group"]').count() == 0
+    assert page.locator("#view [role=group][data-group]").count() == 4
     page.context.close()
 
 

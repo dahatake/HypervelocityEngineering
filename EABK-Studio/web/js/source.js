@@ -64,7 +64,11 @@ export function mount(host) {
     // FR-1063 AC-349: ファイルを上位層（種類→区分→領域）の見出しの下にまとめる。階層の users-guide・scripts 以外は、コンポーネント名の領域で「未分類」の区分に置く。
     const kindOfPath = (p) => (p.startsWith('users-guide/') ? 'users-guide' : p.startsWith('scripts/') ? 'scripts' : null);
     const placed = placeRows(list, (f) => ({ kind: kindOfPath(f.path), id: f.path }), (f) => [t('nav.source'), UNCLASSIFIED, f.comp || UNCLASSIFIED]);
+    // FR-1033: 選択・絞り込みの対象（activeSet）を含む層は開く（旧版の「選択中の項目を含むグループだけ開く」）。
+    const openPaths = new Set();
+    if (set) for (const it of placed) if (set.has(it.row.id)) for (let n = 1; n <= 3; n++) openPaths.add(JSON.stringify([it.kind, it.division, it.area].slice(0, n)));
     return listTiers(placed, {
+      openPaths,
       empty: placed.length ? undefined : [[t('nav.source'), UNCLASSIFIED, UNCLASSIFIED]],
       itemNode: (it) => {
         const f = it.row, c = f.comp;

@@ -40,9 +40,12 @@ export function listTiers(items, opts = {}) {
   const w = renderTiers({ items, tiers: h.tiers, empty: opts.empty }, {
     itemNode: opts.itemNode || (() => document.createDocumentFragment()),
     extra: opts.extra,
-    open: (path, level) => (OPEN.has(keyOf(path)) ? OPEN.get(keyOf(path)) : level !== 'area' || !!opts.openAreas),
+    open: (path, level) => (OPEN.has(keyOf(path)) ? OPEN.get(keyOf(path)) : (opts.openPaths && opts.openPaths.has(keyOf(path))) || level !== 'area' || !!opts.openAreas),
     onToggle: (path, open) => OPEN.set(keyOf(path), open),
   });
   w.classList.add('tiers-list');
+  // FR-1051 の種別グループ（role=group、画面内の数を検査される）と混ざらないよう、上位層の本体は role=group にしない。
+  // 開閉は見出しのボタンの aria-expanded / aria-controls と、層の treeitem の aria-expanded で伝わる。
+  w.querySelectorAll('.tier-body[role="group"]').forEach((b) => b.removeAttribute('role'));
   return w;
 }
