@@ -10,7 +10,7 @@ import json
 import hashlib
 import re
 from collections import Counter, OrderedDict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 STUDIO_VERSION = "1.0.0"
@@ -574,13 +574,45 @@ def classify_impl_state(has_impl: bool, has_system_ac: bool, case_statuses: list
     return IMPL_STATES[1] if has_system_ac else IMPL_STATES[4]
 
 
+def _parse_ts(value):
+    """FR-1061 AC-342: ISO 8601 text -> aware datetime (naive = UTC); anything else -> None."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        d = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+
+def gantt_span(cases: list) -> tuple:
+    """FR-1061 AC-338: start = min(history[].at); end = max(last_run_at, history[].at). Returns (start, end) as the
+    original ISO strings, or (None, None) when no value can be interpreted."""
+    pts, ends = [], []
+    for c in cases:
+        for h in c.get("history") or []:
+            d = _parse_ts(h)
+            if d:
+                pts.append((d, h.strip()))
+        d = _parse_ts(c.get("last_run_at"))
+        if d:
+            ends.append((d, c["last_run_at"].strip()))
+    ends = pts + ends
+    pts = pts or ends
+    if not pts:
+        return None, None
+    return min(pts, key=lambda x: x[0])[1], max(ends, key=lambda x: x[0])[1]
+
+
 def build_impl_status(model: dict, root: Path) -> dict:
     """Per-requirement implementation state + counts. Read-only; uses only the data layer."""
     feats = {f["req"]: f for f in model["catalog"]["features"]}
     cases_by_req: dict = {}
+    case_objs_by_req: dict = {}
     for c in model["cases"]:
         for rid in c.get("requirement_ids") or []:
             cases_by_req.setdefault(rid, []).append(c.get("status") or "not_run")
+            case_objs_by_req.setdefault(rid, []).append(c)
     items, excluded = [], 0
     for r in model["reqs"]:
         if r["statusKind"] != "approved":
@@ -602,9 +634,10 @@ def build_impl_status(model: dict, root: Path) -> dict:
         for s in statuses:
             breakdown[s] = breakdown.get(s, 0) + 1
         stalled = bool(r["blocked"]) or any(a.get("blocked") for a in r["acs"])
+        start, end = gantt_span(case_objs_by_req.get(r["id"], []))
         items.append({"id": r["id"], "title": r["title"], "state": classify_impl_state(has_impl, has_sys, statuses),
                       "cases": breakdown, "blocked": stalled, "goal": r["goal"] or "-",
-                      "priority": r["priority"] or "-"})
+                      "priority": r["priority"] or "-", "start": start, "end": end})
     return {"states": list(IMPL_STATES), "items": items, "excluded": excluded}
 
 
@@ -978,6 +1011,7 @@ def build_model(root: Path) -> dict:
             for c in data.get("cases", []):
                 case = {k: c.get(k) for k in ("id", "requirement_ids", "ac_ids", "title", "layer", "command",
                                               "canary", "status", "last_commit", "last_run_at", "evidence")}
+                case["history"] = [h.get("at") for h in (c.get("history") or []) if isinstance(h, dict)] if isinstance(c.get("history"), list) else []
                 encoded_id = json.dumps(c.get("id"), ensure_ascii=False)
                 match = re.search(r'"id"\s*:\s*' + re.escape(encoded_id), ledger_text[search_from:])
                 if match:
