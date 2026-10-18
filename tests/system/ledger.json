@@ -6900,6 +6900,31 @@
           "reason": "AC は検証レベル integration で System Test の対象外（CHK-10）。implementer の統合テストの参考として残す"
         }
       ]
+    },
+    {
+      "id": "E2E-188",
+      "requirement_ids": [
+        "FR-1063"
+      ],
+      "ac_ids": [
+        "AC-345"
+      ],
+      "title": "マップ 2D 本体の点が領域ごとにまとまり、見出しの操作で下位の点が現れる／隠れる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac345_map2d_body_points_cluster_by_area_and_toggle_shows_hides\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T21:37:45+09:00",
+          "by": "conductor",
+          "change": "追加",
+          "reason": "AC-345 本体の点の検証を追加"
+        }
+      ]
     }
   ]
 }
