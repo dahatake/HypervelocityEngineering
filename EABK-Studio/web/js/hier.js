@@ -60,6 +60,9 @@ export function buildTree(hier, filter) {
   return root;
 }
 
+const bootId = Date.now().toString(36);
+let tierSeq = 0;
+
 /**
  * 階層を DOM にする。
  * opts: { filter, itemNode(item) -> Node, open(path, level) -> bool, extra(node, path) -> Node|null（層ごとの付加情報。実装状態の内訳など）,
@@ -70,11 +73,9 @@ export function renderTiers(hier, opts = {}) {
   const tree = buildTree(hier, opts.filter);
   const wrap = el('div', { class: 'tiers', role: 'tree', 'aria-label': lang() === 'en' ? 'Data hierarchy' : 'データの階層' });
   const relabel = [];
-  let seq = 0;
-
   const group = (node, path, depth) => {
     const open = opts.open ? !!opts.open(path, node.level) : depth === 0;
-    const bid = `tier-${Date.now().toString(36)}-${seq++}`;
+    const bid = `tier-${bootId}-${tierSeq++}`;   // モジュール全体の連番（呼び出しをまたいでも重複しない）
     const body = el('div', { class: 'tier-body', id: bid, role: 'group' });
     const text = el('span', { class: 'tier-name' });
     const num = el('span', { class: 'tier-count' });
