@@ -36,6 +36,15 @@ export function buildTree(hier, filter) {
     return (ia < 0 ? 1e9 : ia) - (ib < 0 ? 1e9 : ib);
   });
   const root = { children: new Map(), count: 0 };
+  // 項目が 0 件でも見出しを示したい層（hier.empty = [[種類, 区分, 領域], ...]）。件数 0 の見出しとして現れる（FR-1063: 空の画面でも層を明示）。
+  for (const [kind, division, area] of hier?.empty || []) {
+    let cur = root;
+    for (const [name, level] of [[kind, 'kind'], [division, 'division'], [area, 'area']]) {
+      let ch = cur.children.get(name);
+      if (!ch) cur.children.set(name, (ch = { name, level, children: new Map(), items: [], count: 0 }));
+      cur = ch;
+    }
+  }
   for (const k of keys) {
     const [kind, division, area] = JSON.parse(k);
     let cur = root;

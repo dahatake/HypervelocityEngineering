@@ -3,6 +3,7 @@ import { store } from './store.js';
 import { t, lang } from './i18n.js';
 import { el, vscodeUrl } from './ui.js';
 import { xrefLink } from './xref.js';
+import { placeRows, listTiers } from './tierlist.js';
 
 export function evidenceTarget(record) {
   return record.file && record.line
@@ -228,22 +229,30 @@ export function mountMaintenance(host) {
       el('h1', {}, '整合性保守 / Maintenance'),
       el('p', { class: 'sub' }, '要求正本と異なるカタログの題名・決定状態だけを、明示プレビュー後に原子的に更新します。'),
       el('div', { class: 'warnbox' }, '通常の閲覧は参照専用です。保守は選択した1行・2列だけが対象で、検査失敗時はバイト単位で戻します。'));
-    const list = el('div', { class: 'grid cols2' });
+    const list = el('div', { class: 'maintenance-list' });
     const reqs = new Map(store.model.reqs.map((r) => [r.id, r]));
     const featureCounts = store.model.catalog.features.reduce((counts, feature) => {
       counts.set(feature.req, (counts.get(feature.req) || 0) + 1);
       return counts;
     }, new Map());
+    const candidates = [];
     for (const feature of store.model.catalog.features) {
       const req = reqs.get(feature.req);
       const mismatch = !req || feature.title !== req.title || feature.status !== req.status;
       if (!mismatch) continue;
-      list.append(el('button', { class: 'maintenance-item', onclick: () => preview(feature.req) },
+      candidates.push(el('button', { class: 'maintenance-item', 'data-req': feature.req, onclick: () => preview(feature.req) },
         el('b', {}, feature.req),
         el('span', {}, req ? `${feature.title} → ${req.title}` : '未対応: 要求正本に参照先なし'),
         el('span', {}, req ? `${feature.status} → ${req.status}` : 'unsupported')));
     }
-    if (!list.children.length) list.append(el('p', { class: 'empty' }, '保守候補はありません。'));
+    // FR-1063 AC-349: 保守候補を上位層（種類→区分→領域）の見出しの下にまとめる。要求正本にない参照先は「未分類」。
+    const placed = placeRows(candidates, (b) => ({ kind: '要求', id: b.dataset.req }), '要求');
+    list.append(listTiers(placed, {
+      openAreas: true,
+      empty: placed.length ? undefined : [['要求', '機能', '未分類']],
+      itemNode: (it) => it.row,
+    }));
+    if (!candidates.length) list.append(el('p', { class: 'empty' }, '保守候補はありません。'));
     page.append(list);
     host.append(page);
 

@@ -3,6 +3,16 @@ import { t, onLang } from './i18n.js';
 import { store, norm } from './store.js';
 import { el, statusBadge, colorOf } from './ui.js';
 import { xrefLink, idRef, idsToNodes } from './xref.js';
+import { placeRows, listTiers } from './tierlist.js';
+
+// FR-1063 AC-348: 各表の行を FR-1062 の (種類, ID) に対応づける。階層にない行（ファイル・用語など）は表の名前の下の「未分類」に置く。
+const TIER_SPEC = {
+  goals: (r) => ({ kind: '目的', id: r.id }), reqs: (r) => ({ kind: '要求', id: r.id }), acs: (r) => ({ kind: '受入基準', id: r.id }),
+  cases: (r) => ({ kind: '試験ケース', id: r.id }), params: (r) => ({ kind: 'パラメータ', id: r.id }), questions: (r) => ({ kind: '質問', id: r.id }),
+  audits: (r) => ({ kind: '監査指摘', id: r.id }), sources: (r) => ({ kind: '出典', id: r.id }), entities: (r) => ({ kind: 'エンティティ', id: r.name }),
+  parts: (r) => ({ kind: 'カタログ', id: r.name, division: '共通部品' }), apis: (r) => ({ kind: 'カタログ', id: r.name, division: 'API・イベント' }),
+  tables: (r) => ({ kind: 'カタログ', id: r.name, division: 'テーブル' }),
+};
 
 let tab = 'reqs';
 const state = { q: '', only: false, filters: {}, sort: { reqs: { k: 'id', d: 1 }, acs: { k: 'id', d: 1 } } };
@@ -85,11 +95,11 @@ export function mount(host) {
       return el('select', { onchange: (e) => { state.filters[k] = e.target.value; fill(); } }, el('option', { value: '' }, colLabel(k) + ': ' + t('tbl.all')), vals.map((v) => el('option', { value: v, selected: state.filters[k] === v || null }, v)));
     });
     const countEl = el('span', { class: 'mini' });
-    const head = el('tr', {}, def.cols.map(([k]) => el('th', { onclick: () => { const cur = state.sort[tab]; state.sort[tab] = { k, d: cur && cur.k === k ? -cur.d : 1 }; render(); } }, colLabel(k), state.sort[tab]?.k === k ? (state.sort[tab].d > 0 ? ' ▲' : ' ▼') : '')));
-    const tbody = el('tbody');
+    const mkHead = () => el('tr', {}, def.cols.map(([k]) => el('th', { onclick: () => { const cur = state.sort[tab]; state.sort[tab] = { k, d: cur && cur.k === k ? -cur.d : 1 }; render(); } }, colLabel(k), state.sort[tab]?.k === k ? (state.sort[tab].d > 0 ? ' ▲' : ' ▼') : '')));
+    const tierHost = el('div', { class: 'tier-list-host', 'data-testid': 'table-tiers' });
     page.replaceChildren(el('h1', {}, '📋 ' + t('nav.tables')), el('p', { class: 'sub' }, t('tbl.sub')), tabBar,
       el('div', { class: 'tbar' }, input, ...selects, only, countEl, el('button', { class: 'btn ghost', onclick: () => exportCsv(def, rows, colLabel) }, '⤓ CSV')),
-      el('div', { class: 'tw' }, el('table', { class: 't' }, el('thead', {}, head), tbody)));
+      tierHost);
 
     fill = () => {
       const set = store.activeSet();
@@ -103,9 +113,10 @@ export function mount(host) {
       const s = state.sort[tab];
       if (s) list = [...list].sort((a, b) => String(cell(a[s.k])).localeCompare(String(cell(b[s.k])), undefined, { numeric: true }) * s.d);
       countEl.textContent = `${list.length} / ${rows.length}`;
-      tbody.replaceChildren(...list.slice(0, 1500).map((r) => {
+      // FR-1063 AC-348: 行を上位層（種類→区分→領域）の見出しの下にまとめる。見出しに件数、開閉は hier.js。
+      const mkRow = (r) => {
         const hl = set && r.nodeId && set.has(r.nodeId);
-        return el('tr', { class: (r.nodeId && r.nodeId === store.selected ? 'sel ' : '') + (hl && r.nodeId !== store.selected ? 'hl' : ''), onclick: () => { if (r.nodeId && store.nodes.has(r.nodeId)) store.select(r.nodeId, {}); } },
+        return el('tr', { 'data-testid': 'tier-item', 'data-id': r.nodeId || r.id || r.name || '', class: (r.nodeId && r.nodeId === store.selected ? 'sel ' : '') + (hl && r.nodeId !== store.selected ? 'hl' : ''), onclick: () => { if (r.nodeId && store.nodes.has(r.nodeId)) store.select(r.nodeId, {}); } },
           def.cols.map(([k]) => {
             const v = r[k];
             if (tab === 'reqs' && k === 'status') return el('td', {}, statusBadge(r.status, r.statusRaw));
@@ -116,8 +127,15 @@ export function mount(host) {
             if (k === 'path' && r.nodeId && store.nodes.has(r.nodeId)) return el('td', { class: 'mono' }, xrefLink(r.nodeId, String(v)));
             return el('td', { class: k === 'path' || k === 'files' ? 'mono' : '' }, el('div', { class: 'clamp' }, idsToNodes(cell(v))));
           }));
+      };
+      const placed = placeRows(list.slice(0, 1500), TIER_SPEC[tab] || (() => null), t('tab.' + tab));
+      tierHost.replaceChildren(listTiers(placed, {
+        openAreas: true,
+        extra: (node) => (node.level === 'area' && node.items.length
+          ? el('div', { class: 'tw' }, el('table', { class: 't' }, el('thead', {}, mkHead()), el('tbody', {}, node.items.map((it) => mkRow(it.row)))))
+          : null),
       }));
-      const sel = tbody.querySelector('tr.sel');
+      const sel = tierHost.querySelector('tr.sel');
       if (sel) sel.scrollIntoView({ block: 'nearest' });
     };
     fill();

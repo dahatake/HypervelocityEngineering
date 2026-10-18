@@ -2,6 +2,8 @@
 import { t, onLang } from './i18n.js';
 import { store, norm } from './store.js';
 import { el, svgEl, colorOf, nodeChip, showTip, hideTip, vscodeUrl } from './ui.js';
+import { placeRows, listTiers } from './tierlist.js';
+import { UNCLASSIFIED } from './hier.js';
 
 const ui = { q: '', tests: true };
 
@@ -58,17 +60,20 @@ export function mount(host) {
   function fileList(files) {
     const q = norm(ui.q);
     const list = files.filter((f) => !q || norm(f.path).includes(q));
-    const byComp = new Map();
-    for (const f of list) { if (!byComp.has(f.comp)) byComp.set(f.comp, []); byComp.get(f.comp).push(f); }
     const set = store.activeSet();
-    return el('div', {}, [...byComp.entries()].sort().map(([c, fs]) => el('details', { open: set ? fs.some((f) => set.has(f.id)) || null : null, style: { marginBottom: '8px' } },
-      el('summary', { style: { cursor: 'pointer', padding: '6px 0' } }, el('b', {}, c), el('span', { class: 'mini' }, ` · ${fs.length}`)),
-      fs.sort((a, b) => a.path.localeCompare(b.path)).map((f) => {
+    // FR-1063 AC-349: ファイルを上位層（種類→区分→領域）の見出しの下にまとめる。階層の users-guide・scripts 以外は、コンポーネント名の領域で「未分類」の区分に置く。
+    const kindOfPath = (p) => (p.startsWith('users-guide/') ? 'users-guide' : p.startsWith('scripts/') ? 'scripts' : null);
+    const placed = placeRows(list, (f) => ({ kind: kindOfPath(f.path), id: f.path }), (f) => [t('nav.source'), UNCLASSIFIED, f.comp || UNCLASSIFIED]);
+    return listTiers(placed, {
+      empty: placed.length ? undefined : [[t('nav.source'), UNCLASSIFIED, UNCLASSIFIED]],
+      itemNode: (it) => {
+        const f = it.row, c = f.comp;
         const reqs = store.neighbors(f.id, ['req']).length, parts = store.neighbors(f.id, ['part', 'api', 'table']);
-        return el('div', { class: 'res' + (f.id === store.selected ? ' on' : ''), style: set && !set.has(f.id) ? { opacity: 0.35 } : {}, onclick: () => store.select(f.id, { fly: true }) },
+        return el('div', { class: 'res tier-item' + (f.id === store.selected ? ' on' : ''), 'data-testid': 'tier-item', 'data-id': f.path, style: set && !set.has(f.id) ? { opacity: 0.35 } : {}, onclick: () => store.select(f.id, { fly: true }) },
           el('i', { class: 'dot', style: { background: colorOf(f) } }), el('span', { class: 't mono' }, f.path.replace(c + '/', ''), el('small', {}, `${reqs} ${t('type.req')}${parts.length ? ' · ' + parts.map((p) => store.node(p.id).label).join(', ') : ''}`)),
           el('a', { class: 'mini', href: vscodeUrl(f.path), title: 'VS Code', onclick: (e) => e.stopPropagation() }, '↗'));
-      }))));
+      },
+    });
   }
 
   function render() {
@@ -78,7 +83,7 @@ export function mount(host) {
         el('label', { class: 'row mini', style: { cursor: 'pointer' } }, el('input', { type: 'checkbox', checked: ui.tests || null, onchange: (e) => { ui.tests = e.target.checked; render(); } }), t('src.tests')),
         el('span', { class: 'mini' }, t('src.legend'))),
       files.length ? el('div', { class: 'grid', style: { gridTemplateColumns: 'minmax(0,1.6fr) minmax(300px,1fr)', alignItems: 'start' } },
-        el('div', { class: 'card', id: 'tm' }, treemap(files)), el('div', { class: 'card', id: 'fl', style: { maxHeight: '70vh', overflow: 'auto' } }, fileList(files))) : el('div', { class: 'empty' }, t('src.none')));
+        el('div', { class: 'card', id: 'tm' }, treemap(files)), el('div', { class: 'card', id: 'fl', style: { maxHeight: '70vh', overflow: 'auto' } }, fileList(files))) : el('div', {}, el('div', { class: 'empty' }, t('src.none')), el('div', { id: 'fl' }, fileList([]))));
   }
   function refresh() {
     const files = [...store.nodes.values()].filter((n) => n.type === 'file' && (ui.tests || n.role !== 'test'));

@@ -325,3 +325,14 @@ a.xref{color:var(--color-fg-link);text-decoration:underline;text-underline-offse
 .crumbs [aria-current=page]{font-weight:700}
 [data-testid=chart-segment]:focus-visible{outline:var(--stroke-focus) solid var(--color-focus);outline-offset:2px}
 i[data-testid=chart-segment]{min-width:var(--space-6)}
+/* FR-1062/FR-1063: 上位層の見出し（種類→区分→領域）。開閉は ▸/▾ の記号と aria-expanded、件数は文字で示す（色だけに頼らない）。 */
+.tiers-list .tier-group{margin:var(--space-1) 0}
+.tiers-list .tier-head{margin:0;font-size:var(--font-size-body)}
+.tiers-list .tier-toggle{display:inline-flex;gap:var(--space-2);align-items:center;max-width:100%;text-align:left;white-space:normal;overflow-wrap:anywhere}
+.tiers-list .tier-toggle:focus-visible{outline:var(--stroke-focus) solid var(--color-focus);outline-offset:2px}
+.tiers-list .tier-body{margin-left:var(--space-4);min-width:0}
+.tiers-list .tier-unclassified>.tier-head .tier-name{font-style:italic}
+.tiers-list .tier-item{padding:var(--space-1) 0;overflow-wrap:anywhere}
+.tiers-list .tier-breakdown{display:flex;flex-wrap:wrap;gap:var(--space-2) var(--space-3);margin:var(--space-1) 0}
+.tiers-list .tier-breakdown-item{white-space:normal}
+.tiers-list .tw{max-width:100%;overflow-x:auto}
