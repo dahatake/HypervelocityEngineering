@@ -470,6 +470,40 @@ def test_server_switch_repo_needs_header_and_a_data_layer(server, tmp_path_facto
     assert post({"path": str(tmp_path / "nope")}, {"X-EABK-Studio": "1"}) == 400
 
 
+def _pick(server, headers, host=None):
+    h = dict(headers)
+    if host:
+        h["Host"] = host
+    req = urllib.request.Request(server + "/api/repo/pick", data=b"{}", headers=h, method="POST")
+    try:
+        with urllib.request.urlopen(req) as r:
+            return r.status, json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read() or b"{}")
+
+
+# FR-010 AC-336: only local requests carrying the Studio header open the dialog
+def test_pick_rejects_missing_header_and_foreign_host_without_opening_dialog(server, monkeypatch):
+    def boom(_):
+        raise AssertionError("dialog must not open")
+    monkeypatch.setattr(studio, "pick_folder", boom)
+    assert _pick(server, {})[0] == 403
+    assert _pick(server, {"X-EABK-Studio": "0"})[0] == 403
+    assert _pick(server, {"X-EABK-Studio": "1"}, host="evil.example")[0] == 403
+
+
+# FR-010 AC-332 AC-334 AC-335: selected path / cancel / dialog unavailable
+def test_pick_returns_path_cancel_or_501(server, monkeypatch):
+    H = {"X-EABK-Studio": "1"}
+    monkeypatch.setenv("EABK_STUDIO_PICK_PATH", "/some/where")
+    assert _pick(server, H) == (200, {"path": "/some/where"})
+    monkeypatch.setenv("EABK_STUDIO_PICK_PATH", "")
+    assert _pick(server, H) == (200, {"path": ""})
+    monkeypatch.delenv("EABK_STUDIO_PICK_PATH")
+    monkeypatch.setattr(studio, "pick_folder", lambda _: None)
+    assert _pick(server, H) == (501, {"error": "picker-unavailable"})
+
+
 def test_check_reports_found_and_missing_files(repo, capsys):
     assert studio.main(["--repo", str(repo), "--check"]) == 0
     out = capsys.readouterr().out
@@ -581,6 +615,42 @@ def test_impl_status_screen_is_wired_bilingually_with_keyboard_and_symbols():
     for key in ("nav.implstatus", "impl2.all", "impl2.goal", "impl2.priority", "impl2.kanban", "impl2.table", "impl2.stalled", "impl2.legend"):
         assert len(re.findall(rf"'{re.escape(key)}':", i18n)) == 2, key
     assert "ledger" not in src.lower() and "fetch(" not in src  # read-only view
+
+
+# FR-1061 AC-338 AC-342: bar start/end come from history[].at and last_run_at; unparsable values become undated
+def test_gantt_span_uses_min_history_and_max_of_last_run_and_history(tmp_path):
+    root = _status_repo(tmp_path)
+    cases = [
+        {"id": "E2E-1", "requirement_ids": ["FR-103"], "status": "pass", "last_run_at": "2026-10-12T00:00:00+09:00",
+         "history": [{"at": "2026-10-05T00:00:00+09:00"}, {"at": "2026-10-09T00:00:00+09:00"}]},
+        {"id": "E2E-2", "requirement_ids": ["FR-103", "FR-104"], "status": "pass", "last_run_at": "2026-10-07T00:00:00+09:00",
+         "history": [{"at": "2026-10-03T00:00:00+09:00"}]},
+        {"id": "E2E-3", "requirement_ids": ["FR-105"], "status": "pass", "last_run_at": "not a date", "history": [{"at": 5}, {}]},
+        {"id": "E2E-4", "requirement_ids": ["FR-102"], "status": "pass", "last_run_at": "2026-10-20T00:00:00+09:00", "history": "x"},
+    ]
+    (root / "tests" / "system" / "ledger.json").write_text(json.dumps({"version": 1, "cases": cases}), encoding="utf-8")
+    by = {i["id"]: i for i in m.build_model(root)["implStatus"]["items"]}
+    assert (by["FR-103"]["start"], by["FR-103"]["end"]) == ("2026-10-03T00:00:00+09:00", "2026-10-12T00:00:00+09:00")
+    assert (by["FR-104"]["start"], by["FR-104"]["end"]) == ("2026-10-03T00:00:00+09:00", "2026-10-07T00:00:00+09:00")
+    assert (by["FR-102"]["start"], by["FR-102"]["end"]) == ("2026-10-20T00:00:00+09:00", "2026-10-20T00:00:00+09:00")
+    assert by["FR-105"]["start"] is None and by["FR-105"]["end"] is None  # AC-342 unparsable -> undated
+    assert by["FR-101"]["start"] is None  # no case -> undated
+    assert "FR-108" not in by  # AC-338 non-approved excluded
+
+
+# FR-1061 AC-337 AC-339 AC-340 AC-341: Gantt view wiring (bilingual, keyboard, symbols, shared filter/selection, read-only)
+def test_gantt_view_is_wired_with_axis_legend_keyboard_and_shared_selection():
+    js = ROOT / "web" / "js"
+    src = (js / "implstatus.js").read_text(encoding="utf-8")
+    i18n = (js / "i18n.js").read_text(encoding="utf-8")
+    for tid in ("impl-gantt", "impl-gantt-axis", "impl-gantt-bar", "impl-gantt-group", "impl-gantt-undated", "impl-gantt-legend", "impl-gantt-table"):
+        assert f"'{tid}'" in src, tid
+    assert "'data-start'" in src and "'data-end'" in src and "'data-count': undated" in src
+    assert "store.setImplFilter" in src and "store.select" in src and "ArrowDown" in src and "keydown" in src  # AC-340 AC-341
+    assert "STATE_META[i]" in src and "impl2.stalled" in src  # AC-339 symbol + word + stalled mark
+    for key in ("gantt.title", "gantt.view", "gantt.axis", "gantt.undated", "gantt.legend", "gantt.sel", "gantt.start", "gantt.end"):
+        assert len(re.findall(rf"'{re.escape(key)}':", i18n)) == 2, key  # AC-341
+    assert "fetch(" not in src and "writeFile" not in src  # AC-342 read-only
 
 # --- FR-1021 / FR-1022 / NFR-COMPAT-003: entity matrix and detail ---------------------------------------------------
 SEP = "\u3000"

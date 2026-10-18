@@ -60,6 +60,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1031 | 表示オブジェクトへのリンク | 承認済み | `EABK-Studio/web/js/xref.js`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/implstatus.js`, `EABK-Studio/web/js/insights.js`, `EABK-Studio/web/js/map2d.js`, `EABK-Studio/web/app.css` | `tests/system/e2e/test_studio_links_wrap_status_arch_system.py`, `EABK-Studio/tests/test_links_wrap_status_ui.py`, `EABK-Studio/tests/test_links_wrap_status_ui2.py` | UI 部品、ストア |
 | FR-1032 | 設計・開発履歴と進捗の項目の自動折り返し | 承認済み | `EABK-Studio/web/js/insights.js`, `EABK-Studio/web/app.css` | `tests/system/e2e/test_studio_links_wrap_status_arch_system.py`, `EABK-Studio/tests/test_links_wrap_status_ui.py`, `EABK-Studio/tests/test_links_wrap_status_ui2.py` | デザイン基盤 |
 | FR-1033 | 実装状態のグラフ区間からの画面横断の強調と絞り込み | 承認済み | `EABK-Studio/web/js/implstatus.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/app.css` | `tests/system/e2e/test_studio_links_wrap_status_arch_system.py`, `EABK-Studio/tests/test_links_wrap_status_ui.py`, `EABK-Studio/tests/test_links_wrap_status_ui2.py` | ストア、UI 部品 |
+| FR-1061 | 実装状態のガントチャート図ビュー | 承認済み | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/implstatus.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/app.css` | `tests/system/e2e/test_impl_gantt_system.py`, `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品 |
 | FR-1034 | アーキテクチャ図とエンティティモデル図（2D/3D）とデータの所在 | 承認済み | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/semzoom.js`, `EABK-Studio/web/js/sz2d.js`, `EABK-Studio/web/js/map2d.js`, `EABK-Studio/web/js/map3d.js`, `EABK-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_links_wrap_status_arch_system.py`, `EABK-Studio/tests/test_arch_diagram.py`, `EABK-Studio/tests/test_req_placement.py` | 管理データモデル、ストア、意味的ズーム |
 | NFR-PERF-004 | エンティティ表示の大規模データでの滑らかさ | 承認済み | `EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/sz2d.js`、`EABK-Studio/web/js/sz3d.js`、`scripts/entities.py` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 意味的ズーム |
 | NFR-UX-010 | エンティティ表示の代替手段・キーボード・言語 | 承認済み | `EABK-Studio/web/js/semzoom.js`、`EABK-Studio/web/js/sz2d.js`、`EABK-Studio/web/js/sz3d.js`、`EABK-Studio/web/js/i18n.js`、`EABK-Studio/web/sz.css` | `tests/system/e2e/test_semantic_zoom_system.py`、`tests/integration/test_semantic_zoom_ui.py` | 意味的ズーム、UI 部品 |
@@ -89,6 +90,9 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1050 | 表・連携の ID の全面リンク化と未解決 ID の明示 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
 | FR-1051 | 「表」画面の種別のグループ化と名称の統一 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
 | FR-1052 | 文脈の明示と、図・一覧の行のキーボード操作 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
+| FR-1064 | 監視コマンド watch.py（scan・reap・stuck） | 承認済み | `scripts/watch.py` | `tests/toolkit/test_watch.py`、`tests/integration/test_watch_cli.py` | run 監視 |
+| FR-1065 | run の運用への組込み（統合時の回収・状態の警告・手順書の規則） | 承認済み | `scripts/integrate.py`、`scripts/run-state.py`、`tools/install.py`、`.github/agents/conductor.agent.md`、`.github/skills/implement-fr/SKILL.md`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_integrate_reap.py`、`tests/system/test_watch_status_system.py`、`tests/toolkit/test_watch_docs.py` | run 監視、worktree pool 管理、run 状態・完了記録 |
+| NFR-OPS-008 | 監視コマンドの安全性・配布・文書・単体テスト | 承認済み | `scripts/watch.py`、`tools/install.py`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_watch.py`、`tests/toolkit/test_watch_docs.py` | run 監視 |
 
 ## API・イベント
 
@@ -105,8 +109,9 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | 部品名 | ファイル | 用途 | 使っている要求 ID |
 |---|---|---|---|
 | run 作業資産清掃 | `scripts/clean-work.py` | 正常完了・main 統合後ゲート、所有権、保護状態にもとづく計画・清掃・診断・冪等再試行 | FR-1009、FR-1010、NFR-OPS-005、NFR-COMPAT-001 |
-| run 状態・完了記録 | `scripts/run-state.py` | run の完了条件、finish、run-history と current-run の状態管理 | FR-1010、FR-1015、FR-1016、NFR-OPS-005、NFR-COMPAT-001 |
-| worktree pool 管理 | `scripts/integrate.py` | pool worktree の列挙、強制削除、Git worktree 登録の prune | FR-1009、NFR-OPS-005、NFR-COMPAT-001 |
+| run 監視 | `scripts/watch.py` | 残留プロセスの scan・reap（名前とリポジトリのパスで限定）と queue の doing 時間超過 stuck の検出 | FR-1064、FR-1065、NFR-OPS-008 |
+| run 状態・完了記録 | `scripts/run-state.py` | run の完了条件、finish、run-history と current-run の状態管理 | FR-1010、FR-1015、FR-1016、FR-1065、NFR-OPS-005、NFR-COMPAT-001 |
+| worktree pool 管理 | `scripts/integrate.py` | pool worktree の列挙、強制削除、Git worktree 登録の prune | FR-1009、FR-1065、NFR-OPS-005、NFR-COMPAT-001 |
 | conductor 終了契約 | [`.github/agents/conductor.agent.md`](docs/../.github/agents/conductor.agent.md) | run 開始時・工程 6・main 統合・run-report・清掃の実行順序 | FR-1009、FR-1010、NFR-COMPAT-001 |
 | run 運用ガイド | `users-guide/02-during-and-after-run.md`、`users-guide/05-scripts-reference.md`、`users-guide/07-troubleshooting.md` | 利用者向けの統合、清掃、診断、再開、トラブルシューティング契約 | FR-1010、NFR-COMPAT-001 |
 | 配布同期対象 | `tools/install.py` | conductor、清掃・状態・統合スクリプトをインストール対象へ同期する管理対象。外部連携カタログの雛形（TEMPLATES。なければ作成）と検査・チェックリスト（MANAGED）も配る | FR-1015、FR-1016、FR-1017、FR-1037、FR-1038、FR-1039、FR-1045、NFR-COMPAT-001、NFR-OPS-006、NFR-OPS-007、NFR-SEC-004 |
@@ -138,7 +143,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-007 | ソース対応 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/source.js` | `tests/system/e2e/test_studio_system.py` | ストア |
 | FR-008 | ペルソナ既定表現 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/dashboard.js` | `tests/system/e2e/test_studio_system.py` | ストア、デザイン基盤 |
 | FR-009 | 履歴・理想状態・整合性 | 承認済み（依頼 2026-10-09） | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/dashboard.js` | `EABK-Studio/tests/test_studio.py`, `tests/system/e2e/test_studio_system.py` | 管理データモデル |
-| FR-010 | リポジトリの既定と切替 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | HTTP サーバー |
+| FR-010 | リポジトリの既定と切替 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/index.html` | `EABK-Studio/tests/test_studio.py`, `EABK-Studio/tests/test_repo_switch_recovery_wiring.py`, `tests/system/e2e/test_studio_repo_pick_system.py` | HTTP サーバー |
 | FR-011 | JA/EN とリンク | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_system.py` | UI 部品、デザイン基盤 |
 | FR-012 | 鮮度検知と再読込 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | フィンガープリント |
 | FR-013 | 通常操作の参照専用データ境界 | 承認済み（包括承認 2026-10-09・approval_policy） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | HTTP サーバー |
@@ -174,6 +179,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | `GET /api/fingerprint` | `EABK-Studio/studio.py` | FR-012、NFR-OPS-002 |
 | `GET /api/repo` | `EABK-Studio/studio.py` | FR-010 |
 | `POST /api/repo` | `EABK-Studio/studio.py` | FR-010、NFR-OPS-003 |
+| `POST /api/repo/pick` | `EABK-Studio/studio.py` | FR-010 |
 | 管理データフィンガープリント変化 | `EABK-Studio/web/js/app.js` | FR-012、NFR-OPS-002 |
 
 ## テーブル
@@ -190,10 +196,10 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 
 | 部品名 | ファイル | 用途 | 使っている要求 ID |
 |---|---|---|---|
-| 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、FR-1025、FR-1026、FR-1027、FR-1028、FR-1029、FR-1034、FR-1042、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002 |
+| 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、FR-1025、FR-1026、FR-1027、FR-1028、FR-1029、FR-1034、FR-1042、FR-1061、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002 |
 | HTTP サーバー | `EABK-Studio/studio.py` | 127.0.0.1 限定の読取 API と静的配信 | FR-010、FR-013、FR-1001、NFR-OPS-003、NFR-SEC-001 |
-| ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1029、FR-1031、FR-1033、FR-1034、FR-1040、FR-1041、FR-1042 |
-| UI 部品 | `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/js/xref.js` | 表示、詳細、通知、リンク、状態表示の共通の形 `statePanel`（読込中・空・エラー・古い。`data-testid=state-panel`）、同梱のアイコン 1 セット `icon()`（16・20・24px）、系列色のトークン読み出し `token()` / `TYPE_COLOR` / `STATUS_COLOR` / `IMPL_COLOR` | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1028、FR-1031、FR-1033、FR-1040、FR-1041、NFR-OPS-003、NFR-UX-005、NFR-UX-007、NFR-UX-010、FR-1042、FR-1047、FR-1048、NFR-A11Y-001、NFR-PERF-006 |
+| ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1029、FR-1031、FR-1033、FR-1034、FR-1040、FR-1041、FR-1042、FR-1061 |
+| UI 部品 | `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/js/xref.js` | 表示、詳細、通知、リンク、状態表示の共通の形 `statePanel`（読込中・空・エラー・古い。`data-testid=state-panel`）、同梱のアイコン 1 セット `icon()`（16・20・24px）、系列色のトークン読み出し `token()` / `TYPE_COLOR` / `STATUS_COLOR` / `IMPL_COLOR` | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1028、FR-1031、FR-1033、FR-1040、FR-1041、FR-1042、FR-1047、FR-1048、FR-1061、NFR-A11Y-001、NFR-OPS-003、NFR-PERF-006、NFR-UX-005、NFR-UX-007、NFR-UX-010 |
 | デザイン基盤 | `EABK-Studio/web/tokens.css`, `EABK-Studio/web/app.css`, `EABK-Studio/web/sz.css`, `EABK-Studio/web/js/theme.js`, `EABK-Studio/web/index.html` | Fluent 2 に寄せた名前付きトークン（`--color-*`・`--font-size-*`・`--space-*`・`--radius-*`・`--shadow-*`・`--stroke-*`・`--duration-*`・`--ease-*`、部品の種類ごとの段階 `--radius-control`・`--radius-container`・`--radius-overlay`・`--radius-tooltip`・`--elevation-*`、素材 `--material-*`、系列色 `--viz-*`、3D 素材色 `--scene-*`。tokens.css の 1 か所）、ライト/ダーク/システムのテーマ（`data-theme`・`data-theme-choice`、テーマ名のみ localStorage `eabk-studio.theme` に保存・起動時に復元、不正値は system）、強制色・動きの軽減・フォーカス表示、外枠、ナビゲーション、検索、通知 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1032、FR-1040、FR-1041、FR-1042、FR-1047、FR-1048、NFR-A11Y-001、NFR-PERF-006 |
 | RPG 風マップ | `EABK-Studio/web/js/maprpg.js`, `EABK-Studio/web/js/rpgworld.js`, `EABK-Studio/web/js/rpgaudio.js`, `EABK-Studio/web/rpg.css` | 城（目的）と街（エンティティを関係の連結成分でまとめたもの。関係のないものは「関係なしの街」1 つ）を歩いて訪ね、街の住人（エンティティ 1 件）と会話ウィンドウで話して内容を読む 8 ビット風の 2 次元地図。ドット絵と音楽・効果音は Canvas と Web Audio で実行時に生成（外部アセット・外部通信なし、初期ミュート）。ファミコン風のキー操作、表の代替表現、動きの軽減、描画不可なら 2D へ代替 | FR-1053、FR-1054、FR-1055、NFR-UX-012 |
 | 2D・3D 切替 | `EABK-Studio/web/js/dim.js`, `EABK-Studio/web/js/dgm3d.js` | マップと図式の 2D・3D 切替アイコン（アニメ調の顔つきの平面・立体と「2D」「3D」の語。外部取得なし）、マップの第 3 の表示「RPG」（城の絵のアイコン）、コマンド検索からの切替、図式の 3D 描画（3D 不可なら 2D と表へ代替） | FR-1040、FR-1041、FR-1053、FR-1054、FR-1055 |

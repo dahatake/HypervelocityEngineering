@@ -19,6 +19,10 @@ const caseText = (cases) => {
   const e = Object.entries(cases || {});
   return e.length ? e.map(([k, n]) => `${k} ${n}`).join(' / ') : '-';
 };
+// FR-1061: Gantt view state survives re-rendering (model reload, language switch) and axis changes (AC-340).
+const gantt = { on: false, axis: 'all' };
+const ms = (v) => { const n = typeof v === 'string' ? Date.parse(v) : NaN; return Number.isFinite(n) ? n : null; };
+const day = (v) => (typeof v === 'string' ? v.slice(0, 10) : '-');
 
 export function mount(host) {
   const page = el('div', { class: 'page', 'data-testid': 'impl-status' });
@@ -28,7 +32,7 @@ export function mount(host) {
   let filter = store.implFilter;
   let mode = 'highlight';
   let statusEl = null;
-  const matches = (r) => !filter || (r.state === filter.state && (!filter.scope || r[filter.scope] === filter.group));
+  const matches = (r) => !filter || ((!filter.state || r.state === filter.state) && (!filter.scope || r[filter.scope] === filter.group));
   const segRef = (seg, rows) => {
     seg._rows = rows;
     const go = () => toggle({ state: seg.dataset.state, scope: seg.dataset.scope === 'all' ? null : seg.dataset.scope, group: seg.dataset.scope === 'all' ? null : seg.dataset.group });
@@ -47,22 +51,29 @@ export function mount(host) {
       node.hidden = mode === 'filter' && !ok && !node.classList.contains('impl-seg');
     };
     let hits = 0;
-    page.querySelectorAll('[data-testid="impl-kanban-card"], [data-testid="impl-table"] tbody tr').forEach((n) => {
+    page.querySelectorAll('[data-testid="impl-kanban-card"], [data-testid="impl-table"] tbody tr, [data-testid="impl-gantt-table"] tbody tr, [data-testid="impl-gantt-bar"]').forEach((n) => {
       const r = items.find((x) => x.id === n.dataset.req);
       const ok = !!r && matches(r);
       flag(n, ok);
       if (n.dataset.testid === 'impl-kanban-card' && ok) hits++;
     });
+    page.querySelectorAll('[data-testid="impl-gantt-group"]').forEach((g) => {
+      const on = !!filter && !filter.state && filter.scope === g.dataset.scope && filter.group === g.dataset.group;
+      const h = g.querySelector('.impl-gantt-head');
+      if (h) h.setAttribute('aria-pressed', on ? 'true' : 'false');
+      const w = g.querySelector('.impl-gantt-head .impl-gantt-selword');
+      if (w) w.hidden = !on;
+    });
     page.querySelectorAll('.impl-seg').forEach((s) => {
       const ok = (s._rows || []).some(matches);
       flag(s, ok);
-      s.setAttribute('aria-pressed', filter && ok && s.dataset.state === filter.state && (filter.scope ? s.dataset.scope === filter.scope && s.dataset.group === filter.group : s.dataset.scope === 'all') ? 'true' : 'false');
+      s.setAttribute('aria-pressed', filter && filter.state && ok && s.dataset.state === filter.state && (filter.scope ? s.dataset.scope === filter.scope && s.dataset.group === filter.group : s.dataset.scope === 'all') ? 'true' : 'false');
     });
-    page.querySelectorAll('[data-testid="impl-kanban-column"]').forEach((c) => { if (filter) c.setAttribute('data-match', c.dataset.state === filter.state ? 'true' : 'false'); else c.removeAttribute('data-match'); });
-    page.querySelectorAll('.impl-legend button').forEach((b) => b.setAttribute('aria-pressed', filter && !filter.scope && b.dataset.state === filter.state ? 'true' : 'false'));
+    page.querySelectorAll('[data-testid="impl-kanban-column"]').forEach((c) => { if (filter && filter.state) c.setAttribute('data-match', c.dataset.state === filter.state ? 'true' : 'false'); else c.removeAttribute('data-match'); });
+    page.querySelectorAll('.impl-legend button').forEach((b) => b.setAttribute('aria-pressed', filter && filter.state && !filter.scope && b.dataset.state === filter.state ? 'true' : 'false'));
     if (statusEl) {
       statusEl.textContent = !filter ? t('impl3.none')
-        : `${t('impl3.applied')}: ${filter.state}${filter.scope ? ` × ${filter.group}` : ''} — ${hits} ${t('impl3.count')}${hits ? '' : ` (${t('impl3.nomatch')})`}`;
+        : `${t('impl3.applied')}: ${filter.state || ''}${filter.scope ? `${filter.state ? ' × ' : ''}${filter.group}` : ''} — ${hits} ${t('impl3.count')}${hits ? '' : ` (${t('impl3.nomatch')})`}`;
       statusEl.dataset.active = filter ? 'true' : 'false';
     }
   };
@@ -136,26 +147,121 @@ export function mount(host) {
         el('span', { class: 'mono' }, xrefLink(it.id)), ' ', it.row.title, ' ',
         el('span', { class: 'tier-state' }, `${STATE_META[ja.indexOf(it.row.state)]?.sym || ''} ${stateLabel(ja.indexOf(it.row.state), ja)}`)),
     });
+    // FR-1061: Gantt chart (actual test period per requirement). Read-only; selection/filter are the shared ones (AC-340).
+    const ganttBody = el('div', { 'data-testid': 'impl-gantt-body' });
+    const barAction = (r) => {
+      if (store.selected === r.id) { store.clear(); store.setImplFilter(null); } else { select(r.id); store.setImplFilter({ state: r.state, scope: null, group: null }); }
+    };
+    const headAction = (scope, group) => toggle({ state: null, scope, group });
+    const navKeys = (act) => (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); store.clear(); store.setImplFilter(null); return; }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const all = [...ganttBody.querySelectorAll('[data-gnav]')];
+        const i = all.indexOf(e.currentTarget);
+        const nx = all[i + (e.key === 'ArrowDown' ? 1 : -1)];
+        if (nx) nx.focus();
+      }
+    };
+    const refreshGantt = () => {
+      const frs = items.filter((r) => /^FR-\d+$/.test(r.id)); // FR-1061: one row per approved FR (NFRs are not charted)
+      const dated = frs.filter((r) => ms(r.start) !== null && ms(r.end) !== null);
+      const undated = frs.length - dated.length;
+      let lo = Math.min(...dated.map((r) => ms(r.start))), hi = Math.max(...dated.map((r) => ms(r.end)));
+      if (!dated.length) { lo = 0; hi = 1; }
+      if (hi <= lo) hi = lo + 86400000;
+      const span = hi - lo;
+      const pct = (v) => ((v - lo) / span) * 100;
+      const ticks = dated.length ? [0, 1, 2, 3, 4].map((k) => ({ k, at: lo + (span * k) / 4 })) : [];
+      const axisRow = el('div', { class: 'impl-gantt-row impl-gantt-axisrow', 'aria-hidden': 'true' }, el('div', { class: 'impl-gantt-label mini' }, t('gantt.time')),
+        el('div', { class: 'impl-gantt-track' }, ticks.map((x) => el('span', { class: 'impl-gantt-tick mini', style: { left: `${(x.k / 4) * 100}%`, transform: x.k === 4 ? 'translateX(-100%)' : x.k ? 'translateX(-50%)' : 'none' } }, new Date(x.at).toISOString().slice(0, 10)))));
+      const row = (r) => {
+        const i = ja.indexOf(r.state);
+        const left = pct(ms(r.start)), width = Math.max(pct(ms(r.end)) - left, 1.2);
+        const word = `${STATE_META[i]?.sym || ''} ${stateLabel(i, ja)}`;
+        const side = left + width > 65 ? { right: `${100 - left}%` } : { left: `${left + width}%` };
+        const sel = el('b', { class: 'impl-gantt-selword', hidden: store.selected !== r.id }, '◆ ' + t('gantt.sel'));
+        const bar = el('div', { class: 'impl-gantt-bar', role: 'button', tabindex: '0', 'aria-pressed': store.selected === r.id ? 'true' : 'false', 'data-gnav': '1', 'data-testid': 'impl-gantt-bar', 'data-req': r.id,
+          'data-start': r.start, 'data-end': r.end, 'data-state': r.state, 'aria-label': `${r.id} ${r.title} ${stateLabel(i, ja)} ${day(r.start)} – ${day(r.end)}${r.blocked ? ' ' + t('impl2.stalled') : ''}`,
+          title: `${r.id} ${r.title}: ${day(r.start)} – ${day(r.end)}`, style: { left: `${left}%`, width: `${width}%`, background: STATE_META[i]?.color }, onclick: () => barAction(r), onkeydown: navKeys(() => barAction(r)) },
+        el('span', { 'aria-hidden': 'true' }, STATE_META[i]?.sym || ''));
+        return el('div', { class: 'impl-gantt-row' },
+          el('div', { class: 'impl-gantt-label', onclick: () => barAction(r) }, el('span', { class: 'mono' }, r.id), ' ', r.title, r.blocked ? el('b', { class: 'badge fail', style: { marginLeft: '6px' } }, '⏸ ' + t('impl2.stalled')) : '', ' ', sel),
+          el('div', { class: 'impl-gantt-track' }, bar, el('span', { class: 'impl-gantt-word mini', style: side }, word + (r.blocked ? ' ⏸' : ''))));
+      };
+      const groups = [];
+      if (gantt.axis === 'all') groups.push([null, dated]);
+      else {
+        const o = {};
+        for (const r of dated) (o[r[gantt.axis]] ||= []).push(r);
+        Object.entries(o).sort((a, b) => a[0].localeCompare(b[0])).forEach((g) => groups.push(g));
+      }
+      const chart = el('div', { class: 'impl-gantt', 'data-testid': 'impl-gantt', 'data-axis': gantt.axis, role: 'group', 'aria-label': t('gantt.title') }, axisRow,
+        dated.length ? groups.map(([g, rs]) => (g === null ? rs.map(row)
+          : el('div', { 'data-testid': 'impl-gantt-group', 'data-group': g, 'data-scope': gantt.axis },
+            el('div', { class: 'impl-gantt-head', role: 'button', tabindex: '0', 'aria-pressed': 'false', 'data-gnav': '1', onclick: () => headAction(gantt.axis, g), onkeydown: navKeys(() => headAction(gantt.axis, g)) },
+              el('b', {}, g), ' ', el('span', { class: 'mini' }, `(${rs.length})`), ' ', el('b', { class: 'impl-gantt-selword', hidden: true }, '◆ ' + t('gantt.sel'))),
+            rs.map(row)))).flat() : el('p', { class: 'mini' }, t('gantt.none')));
+      const lgd = el('ul', { class: 'row impl-gantt-legend', 'data-testid': 'impl-gantt-legend', 'aria-label': t('gantt.legend'), style: { listStyle: 'none', padding: 0, gap: '14px' } },
+        ja.map((s, i) => el('li', {}, el('span', { class: 'impl-gantt-swatch', 'aria-hidden': 'true', style: { background: STATE_META[i].color } }, STATE_META[i].sym), ' ', stateLabel(i, ja))),
+        el('li', {}, el('b', { class: 'badge fail' }, '⏸ ' + t('impl2.stalled'))), el('li', {}, el('b', {}, '◆ ' + t('gantt.sel'))));
+      const tbl = el('table', { class: 'tbl', 'data-testid': 'impl-gantt-table' },
+        el('thead', {}, el('tr', {}, ['col.id', 'col.title', 'col.status', 'gantt.start', 'gantt.end'].map((k) => el('th', { scope: 'col' }, t(k))))),
+        el('tbody', {}, frs.map((r) => {
+          const i = ja.indexOf(r.state);
+          const ok = ms(r.start) !== null && ms(r.end) !== null;
+          return el('tr', { tabindex: '0', 'data-req': r.id, 'data-state': r.state, onclick: () => select(r.id), onkeydown: onKey(r.id) },
+            el('td', { class: 'mono' }, r.id), el('td', {}, r.title),
+            el('td', {}, `${STATE_META[i]?.sym || ''} ${stateLabel(i, ja)}`, r.blocked ? el('b', { class: 'badge fail', style: { marginLeft: '6px' } }, '⏸ ' + t('impl2.stalled')) : ''),
+            el('td', {}, ok ? r.start : t('gantt.undated.cell')), el('td', {}, ok ? r.end : t('gantt.undated.cell')));
+        })));
+      ganttBody.replaceChildren(chart, lgd,
+        el('p', { class: 'mini', 'data-testid': 'impl-gantt-undated', 'data-count': undated }, `${t('gantt.undated')}: ${undated}`),
+        el('details', {}, el('summary', {}, t('gantt.tbl')), el('div', { style: { overflow: 'auto' } }, tbl)));
+      cardEls = [...page.querySelectorAll('[data-req]')];
+    };
+    const axisSel = el('select', { 'data-testid': 'impl-gantt-axis', 'aria-label': t('gantt.axis'), onchange: (e) => { gantt.axis = e.target.value; refreshGantt(); mark(); applyFilter(); } },
+      [['all', 'impl2.all'], ['goal', 'impl2.goal'], ['priority', 'impl2.priority']].map(([v, k]) => el('option', { value: v, selected: gantt.axis === v }, t(k))));
+    axisSel.value = gantt.axis;
+    const ganttShown = gantt.on && !!store.model.implStatus;
+    const ganttCard = ganttShown ? el('section', { class: 'card', style: { marginTop: '16px' }, 'aria-label': t('gantt.title') },
+      el('h2', {}, t('gantt.title')), el('p', { class: 'sub' }, t('gantt.sub')),
+      el('label', { class: 'mini' }, t('gantt.axis') + ': ', axisSel), ganttBody) : '';
+    const viewBtn = el('button', { type: 'button', class: 'btn', 'data-testid': 'impl-gantt-toggle', 'aria-pressed': gantt.on ? 'true' : 'false',
+      onclick: () => { gantt.on = !gantt.on; refocus = true; render(); } }, (gantt.on ? '▣ ' : '▢ ') + t('gantt.view'));
 
     page.replaceChildren(
       el('h1', {}, '🚀 ' + t('nav.implstatus')),
       el('p', { class: 'sub' }, t('impl2.sub')),
-      legend, filterBar,
+      legend, filterBar, el('div', { style: { margin: '8px 0' } }, viewBtn),
       el('section', { class: 'card impl-tiers', 'data-testid': 'impl-tiers' }, el('h2', {}, t('impl.tiers')), el('p', { class: 'mini' }, t('impl.tiers.sub')), tiers),
       el('div', { class: 'card' }, el('h2', {}, t('impl2.all')), bar('all', t('impl2.all'), items)),
       el('div', { class: 'grid cols2', style: { marginTop: '16px' } },
         el('div', { class: 'card' }, el('h2', {}, t('impl2.goal')), el('div', { style: { display: 'grid', gap: '10px' } }, groupBy('goal').map(([g, rs]) => bar('goal', g, rs)))),
         el('div', { class: 'card' }, el('h2', {}, t('impl2.priority')), el('div', { style: { display: 'grid', gap: '10px' } }, groupBy('priority').map(([g, rs]) => bar('priority', g, rs))))),
+      ganttCard,
       el('p', { class: 'mini', 'data-testid': 'impl-excluded', 'data-count': data.excluded, style: { marginTop: '12px' } }, `${t('impl2.excluded')}: ${data.excluded}`),
       el('h2', { style: { marginTop: '16px' } }, t('impl2.kanban')),
       el('div', { class: 'row', style: { alignItems: 'stretch', flexWrap: 'wrap', gap: '10px' } }, columns),
       el('h2', { style: { marginTop: '16px' } }, t('impl2.table')),
       el('div', { style: { overflow: 'auto' } }, table));
+    if (ganttShown) refreshGantt();
     cardEls = [...page.querySelectorAll('[data-req]')];
     mark();
     applyFilter();
+    if (refocus) { refocus = false; page.querySelector('[data-testid="impl-gantt-toggle"]')?.focus(); }
   };
-  const mark = () => cardEls.forEach((c) => c.classList.toggle('on', c.dataset.req === store.selected));
+  let refocus = false;
+  const mark = () => {
+    cardEls.forEach((c) => c.classList.toggle('on', c.dataset.req === store.selected));
+    page.querySelectorAll('[data-testid="impl-gantt-bar"]').forEach((b) => {
+      const on = b.dataset.req === store.selected;
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      const w = b.closest('.impl-gantt-row')?.querySelector('.impl-gantt-selword');
+      if (w) w.hidden = !on;
+    });
+  };
   render();
   const offs = [store.on('implfilter', (f) => { filter = f; applyFilter(); }), store.on('model', render), onLang(render), store.on('select', mark)];
   return { destroy() { offs.forEach((f) => f()); } };

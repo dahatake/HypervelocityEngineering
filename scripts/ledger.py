@@ -314,7 +314,8 @@ def changed_files(root: Path, base: Optional[str]) -> List[str]:
     return sorted(set(f for f in files if f))
 
 
-def select_cases(root: Path, cfg: dict, data: dict, mode: str, base: Optional[str]) -> List[dict]:
+def select_cases(root: Path, cfg: dict, data: dict, mode: str, base: Optional[str], retry_failed: bool = True) -> List[dict]:
+    """retry_failed=False: status "fail" cases are picked only by ID / command-file match (not_run is still picked)."""
     cases = data["cases"]
     if mode == "all":
         return [c for c in cases if c.get("status") != "blocked"]
@@ -333,7 +334,7 @@ def select_cases(root: Path, cfg: dict, data: dict, mode: str, base: Optional[st
     for c in cases:
         if c.get("status") == "blocked":
             continue
-        if c.get("status") in ("fail", "not_run"):
+        if c.get("status") == "not_run" or (retry_failed and c.get("status") == "fail"):
             out.append(c)
             continue
         if ids & set(c.get("requirement_ids", []) + c.get("ac_ids", [])):
@@ -348,7 +349,7 @@ def resolve_jobs(arg, cfg: dict) -> int:
     """--jobs N|auto, else system_test.jobs in the config, else 1 (cases may share ports or data; opt in)."""
     v = arg if arg not in (None, "") else (cfg.get("system_test") or {}).get("jobs", 1)
     if str(v).lower() == "auto":
-        return max(1, min(8, (os.cpu_count() or 4) // 2))
+        return max(2, min(6, (os.cpu_count() or 4) // 4))
     try:
         return max(1, int(v))
     except (TypeError, ValueError):
@@ -357,6 +358,7 @@ def resolve_jobs(arg, cfg: dict) -> int:
 
 def cmd_run(args, root, cfg) -> int:
     data = h.load_ledger(root, cfg)
+    t_start = time.time()
     if args.cases:
         want = split_ids(args.cases)
         sel = [find(data, cid) for cid in want]
@@ -397,24 +399,70 @@ def cmd_run(args, root, cfg) -> int:
 
     todo = [c for c in sel if c.get("command")]
     done: dict = {}
+    pats = [p for p in ((cfg.get("system_test") or {}).get("serial_patterns") or []) if p]
+    dur_path = h.work_dir(cerr, cfg) / ".ebak" / "durations.json"
+    try:
+        durs = json.loads(dur_path.read_text(encoding="utf-8"))
+        if not isinstance(durs, dict):
+            durs = {}
+    except (OSError, ValueError):
+        durs = {}
+    # identical commands run once; the result is applied to every case that shares the command
+    groups: dict = {}
+    for c in todo:
+        groups.setdefault(c["command"], []).append(c)
+    reps = [g[0] for g in groups.values()]
+    omitted = len(todo) - len(reps)
+
+    def is_serial(c):
+        return any(x.get("serial") or any(p in x["command"] for p in pats) for x in groups[c["command"]])
+
+    def is_canary(c):
+        return args.canary_first and any(x.get("canary") for x in groups[c["command"]])
+
+    cmd_res: dict = {}
     # canary cases run first and alone, so that a broken canary stops the run before the rest starts
-    first = [c for c in todo if args.canary_first and c.get("canary")]
-    rest = [c for c in todo if c not in first]
-    par = [c for c in rest if not c.get("serial")] if jobs > 1 else []
+    first = [c for c in reps if is_canary(c)]
+    rest = [c for c in reps if c not in first]
+    par = [c for c in rest if not is_serial(c)] if jobs > 1 else []
     seq = [c for c in rest if c not in par]
-    for c in first:
-        done[c["id"]] = execute(c)[1]
-        if c.get("canary") and done[c["id"]] and done[c["id"]][0] != 0 and args.stop_on_canary_fail:
-            stop_reason = "canary 失敗で中止"
+    # longest known duration first (LPT) so the parallel wave finishes sooner
+    par.sort(key=lambda c: -float(durs.get(c["command"], 0) or 0))
+    # inside the canary stage, non-serial cases run in parallel (jobs) and serial ones alone
+    from concurrent.futures import ThreadPoolExecutor
+    f_par = [c for c in first if not is_serial(c)] if jobs > 1 else []
+    f_seq = [c for c in first if c not in f_par]
+    f_par.sort(key=lambda c: -float(durs.get(c["command"], 0) or 0))
+    if f_par:
+        with ThreadPoolExecutor(jobs) as ex:
+            for c, r in ex.map(execute, f_par):
+                cmd_res[c["command"]] = r
+    for c in f_seq:
+        cmd_res[c["command"]] = execute(c)[1]
+        r = cmd_res[c["command"]]
+        if r and r[0] != 0 and args.stop_on_canary_fail:
             break
+    if args.stop_on_canary_fail and any(cmd_res.get(c["command"]) and cmd_res[c["command"]][0] != 0 for c in first):
+        stop_reason = "canary 失敗で中止"
     if not stop_reason:
         if par:
             from concurrent.futures import ThreadPoolExecutor
             with ThreadPoolExecutor(jobs) as ex:
                 for c, r in ex.map(execute, par):
-                    done[c["id"]] = r
+                    cmd_res[c["command"]] = r
         for c in seq:
-            done[c["id"]] = execute(c)[1]
+            cmd_res[c["command"]] = execute(c)[1]
+    for c in todo:
+        if c["command"] in cmd_res:
+            done[c["id"]] = cmd_res[c["command"]]
+    try:
+        for cmd, r in cmd_res.items():
+            if r and r[0] != 124:
+                durs[cmd] = r[1]
+        dur_path.parent.mkdir(parents=True, exist_ok=True)
+        dur_path.write_text(json.dumps(durs), encoding="utf-8")
+    except (OSError, ValueError):
+        pass
     for c in todo:
         r = done.get(c["id"])
         if r is None:
@@ -440,7 +488,8 @@ def cmd_run(args, root, cfg) -> int:
         h.save_ledger(root, cfg, data)
     print("\n".join(lines_out))
     result = stop_reason or ("全件 pass" if summary["fail"] == 0 else "fail あり")
-    print(f"ledger run: pass={summary['pass']} fail={summary['fail']} skipped={summary['skipped']} results={results_path} 結果: {result}")
+    print(f"ledger run: pass={summary['pass']} fail={summary['fail']} skipped={summary['skipped']} results={results_path} 結果: {result}"
+          f" unique_commands={len(reps)} dedup_omitted={omitted} jobs={jobs} elapsed={time.time() - t_start:.1f}s")
     return 0 if summary["fail"] == 0 and not stop_reason else 1
 
 

@@ -718,8 +718,12 @@ def test_ac275_screen_manifest_ids_unchanged_and_baseline_tests_untouched():
     now = json.loads((ROOT / name).read_text(encoding="utf-8"))
     assert [s["id"] if "id" in s else s.get("screen") for s in now["screens"]] == [s["id"] if "id" in s else s.get("screen") for s in base["screens"]]
     # 追加（A）と台帳 ledger.json の正規の更新は許す。既存テストファイルの変更・削除・改名は許さない
+    # 例外（FR-010 改訂: 旧パス入力モーダル→OS フォルダー選択 /api/repo/pick。外観刷新とは無関係の正当な変更）:
+    # 旧モーダル操作を置換した次の 2 ファイルの変更だけを許す。ほかの既存テストの変更・削除・改名は従来どおり許さない。
+    fr010_replaced = ("tests/system/e2e/test_studio_system.py", "tests/system/e2e/test_judge_capabilities.py")
     changed = [l for l in _git("diff", "--name-status", BASE, "--", "tests/system").splitlines()
-               if not l.startswith("A") and not l.rstrip().endswith("tests/system/ledger.json")]
+               if not l.startswith("A") and not l.rstrip().endswith("tests/system/ledger.json")
+               and not (l.startswith("M") and l.split()[-1] in fr010_replaced)]
     assert not changed, f"基準 commit からの既存 System Test の変更・削除: {changed}"
 
 

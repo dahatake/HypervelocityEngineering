@@ -188,7 +188,8 @@ def select_cases(c: Ctx, q: dict, it: dict, base: str) -> List[dict]:
     data = h.load_ledger(c.root, c.cfg)
     integrated: Set[str] = {r for x in q.get("items", []) if x.get("status") == "done" for r in x.get("requirement_ids", [])}
     integrated |= set(it.get("requirement_ids", []))
-    picked = ledger.select_cases(c.root, c.cfg, data, "changed", base)
+    # 既存の fail ケースは、この変更と無関係なら再実行しない（retry_failed=False。ID・command のファイル一致では選ぶ）
+    picked = ledger.select_cases(c.root, c.cfg, data, "changed", base, retry_failed=False)
     picked += [x for x in data.get("cases", []) if x.get("canary") and x.get("status") != "blocked"]
     out, seen = [], set()
     for x in picked:
@@ -209,6 +210,28 @@ def give_back(c: Ctx, item_id: str, status: str = "todo") -> None:
         detach((c.root / it["worktree"]).resolve())
         it["worktree"] = None
     c.save(q)
+
+
+def reap_under(wt: Optional[Path]) -> List[str]:
+    """FR-1065 AC-361/362: reap processes under a released worktree (AC-359 rule: processes within the PARAM-044 grace are kept). Never fails the caller."""
+    if wt is None:
+        return []
+    import contextlib
+    import io
+    buf = io.StringIO()
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("watch_mod", Path(__file__).resolve().parent / "watch.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        with contextlib.redirect_stdout(buf):
+            rc = mod.main(["reap", "--under", str(wt)])
+        lines = [l for l in buf.getvalue().splitlines() if not l.startswith("KEEP")]
+        if rc != 0:
+            lines.append(f"WARN integrate: reap が終了コード {rc} で終わりました（結果は変わりません）")
+        return lines
+    except BaseException as e:  # noqa: BLE001 - a reap failure must not change the result
+        return [f"WARN integrate: reap に失敗しました（結果は変わりません）: {e}"]
 
 
 def tail(out: str, n: int = 8) -> str:
@@ -276,9 +299,12 @@ def cmd_merge(c: Ctx, args) -> int:
                 git_ok(["commit", "-q", "-m", f"ledger: {args.item} System Test {st} [{reqs}]"], c.root)
         q = c.queue()
         it = c.item(q, args.item)
+        released = None
         if it.get("worktree"):
-            detach((c.root / it["worktree"]).resolve())
+            released = (c.root / it["worktree"]).resolve()
+            detach(released)
             it["worktree"] = None
+        reap_lines = reap_under(released)
         h.git(["branch", "-q", "-d", branch], c.root)
         c.rs.mark_status(it, "done")
         if args.summary is not None:
@@ -288,17 +314,21 @@ def cmd_merge(c: Ctx, args) -> int:
     head = h.head_commit(c.root)
     print(f"INTEGRATE: pass {args.item} HEAD={head} verify={'full' if full else 'quick'} system-test={st} ({time.time() - t0:.0f}s)")
     c.progress(f"{args.item} 統合 {head}（verify {'full' if full else 'quick'}、System Test {st}）")
+    print("\n".join(reap_lines))
     return 0
 
 
 # ---------------------------------------------------------------------- abandon / pool
 
 def cmd_abandon(c: Ctx, args) -> int:
+    wt_rel = c.item(c.queue(), args.item).get("worktree")
     give_back(c, args.item, "blocked" if args.blocked else "todo")
+    reap_lines = reap_under((c.root / wt_rel).resolve() if wt_rel else None)
     status = "blocked" if args.blocked else "todo"
     if args.reason:
         c.progress(f"{args.item} -> {status}: {args.reason}")
     print(f"{args.item}: {status}（worktree を解放。ブランチは残します）")
+    print("\n".join(reap_lines))
     return 0
 
 

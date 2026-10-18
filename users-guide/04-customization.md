@@ -169,7 +169,7 @@ run の実行中は、hook G-7 がこの表を強制します。値のある役�
 
 **検査を同時に動かします。**
 - `verify.commands` で、連続する工程に `"parallel": true` を付けると同時に実行します（例: lint・型検査・単体テスト）。build のように前の工程が必要なものには付けません。
-- System Test は、`ledger.py run --jobs N|auto`（または設定の `system_test.jobs`）で同時に実行します。既定は 1 です（ポートや DB を共有するケースがあるため）。ケースに `"serial": true` を付けると、並列の実行が終わってから単独で動きます。canary は常に先に単独で動きます。
+- System Test は、`ledger.py run --jobs N|auto`（または設定の `system_test.jobs`）で同時に実行します。既定は `auto`（CPU 数 ÷ 4、2〜6）です。ケースに `"serial": true` を付ける、または command が `system_test.serial_patterns`（既定は `default_port`）の文字列を含むと、並列の実行が終わってから単独で動きます。同じ command のケースは 1 回だけ実行し、結果を共有します。canary は常に先に単独で動きます。
 
 **Azure は、既定では使いません。** 次の条件が揃ったときだけ、利用者が選びます（実行時のオプションとしては実装していません）。
 1. 手元のマシンが小さい（コア数が 8 未満、またはメモリが 32 GB 未満）。

@@ -118,6 +118,13 @@
     "AC-275": "sha256:aa47a8147dcd4cc5",
     "AC-276": "sha256:9653cb00e77a875e",
     "AC-260": "sha256:6e0e235f528c76de",
+    "AC-337": "sha256:3c30de1fb59c86ec",
+    "AC-332": "sha256:634b76242ef6eb6c",
+    "AC-333": "sha256:7d9db0365502e562",
+    "AC-334": "sha256:539a947f850f1e6c",
+    "AC-335": "sha256:4855e8440e37a075",
+    "AC-336": "sha256:829e7eacc93f687b",
+    "AC-363": "sha256:7b8d2a2d9489cdb1",
     "AC-343": "sha256:8598d4bafb323f2f",
     "AC-344": "sha256:68f71f43831d3965",
     "AC-345": "sha256:df178fcf8ca4ab1d",
@@ -6196,6 +6203,362 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-169",
+      "requirement_ids": [
+        "FR-1061"
+      ],
+      "ac_ids": [
+        "AC-337"
+      ],
+      "title": "FR-1061 AC-337 ガント図 全体の行と開始・終了が台帳から導いた値と一致する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_impl_gantt_system.py::test_gantt_overall_axis_one_row_per_dated_fr_with_dates_from_ledger",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "77033b6f",
+      "last_run_at": "2026-10-19T01:29:30+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-169-202610190123.log",
+      "history": [
+        {
+          "at": "2026-10-18T19:07:56+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-170",
+      "requirement_ids": [
+        "FR-1061"
+      ],
+      "ac_ids": [
+        "AC-337"
+      ],
+      "title": "FR-1061 AC-337 異常系 台帳ケースなし要求は描かず日程なし件数・未承認は対象外",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_impl_gantt_system.py::test_gantt_undated_count_matches_approved_frs_without_cases_and_excludes_unapproved",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "77033b6f",
+      "last_run_at": "2026-10-19T01:29:30+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-170-202610190123.log",
+      "history": [
+        {
+          "at": "2026-10-18T19:08:01+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-171",
+      "requirement_ids": [
+        "FR-1061"
+      ],
+      "ac_ids": [
+        "AC-337"
+      ],
+      "title": "FR-1061 AC-337 縦軸の切替と目的別・優先度別の見出し行の配下",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_impl_gantt_system.py::test_gantt_axis_offers_overall_goal_priority_and_groups_have_member_rows",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "77033b6f",
+      "last_run_at": "2026-10-19T01:29:30+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-171-202610190123.log",
+      "history": [
+        {
+          "at": "2026-10-18T19:08:06+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-172",
+      "requirement_ids": [
+        "FR-1061"
+      ],
+      "ac_ids": [
+        "AC-337"
+      ],
+      "title": "FR-1061 AC-337 縦軸を切り替えてもバーの日時は同じ",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_impl_gantt_system.py::test_gantt_bar_dates_are_identical_across_axes",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "77033b6f",
+      "last_run_at": "2026-10-19T01:29:30+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-172-202610190123.log",
+      "history": [
+        {
+          "at": "2026-10-18T19:08:11+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-165",
+      "requirement_ids": [
+        "FR-010"
+      ],
+      "ac_ids": [
+        "AC-332"
+      ],
+      "title": "ヘッダーのリポジトリボタンにフォルダーアイコン、操作でフォルダー選択を開き文字入力モーダルを出さない／キーボード操作可",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_repo_pick_system.py -k ac332",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "77033b6f",
+      "last_run_at": "2026-10-19T01:29:30+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-165-202610190124.log",
+      "history": [
+        {
+          "at": "2026-10-18T18:57:40+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "FR-010 フォルダー選択の System Test を作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-166",
+      "requirement_ids": [
+        "FR-010"
+      ],
+      "ac_ids": [
+        "AC-333"
+      ],
+      "title": "別リポジトリを選ぶと全表示が切り替わり前の内容・選択・フィルターが残らない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_repo_pick_system.py -k ac333",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "77033b6f",
+      "last_run_at": "2026-10-19T01:29:30+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-166-202610190124.log",
+      "history": [
+        {
+          "at": "2026-10-18T18:57:47+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "FR-010 フォルダー選択の System Test を作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-167",
+      "requirement_ids": [
+        "FR-010"
+      ],
+      "ac_ids": [
+        "AC-334"
+      ],
+      "title": "ダイアログをキャンセルすると何も変わらずエラーも出ない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_repo_pick_system.py -k ac334",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "77033b6f",
+      "last_run_at": "2026-10-19T01:29:30+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-167-202610190124.log",
+      "history": [
+        {
+          "at": "2026-10-18T18:57:53+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "FR-010 フォルダー選択の System Test を作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-168",
+      "requirement_ids": [
+        "FR-010"
+      ],
+      "ac_ids": [
+        "AC-335"
+      ],
+      "title": "管理データなし・存在しない・ダイアログ不可で現在のモデルを保持し原因と再試行・戻る行動を表示",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_repo_pick_system.py -k ac335",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "77033b6f",
+      "last_run_at": "2026-10-19T01:29:30+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-168-202610190124.log",
+      "history": [
+        {
+          "at": "2026-10-18T18:57:57+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "FR-010 フォルダー選択の System Test を作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-048",
+      "requirement_ids": [
+        "FR-010"
+      ],
+      "ac_ids": [
+        "AC-336"
+      ],
+      "title": "フォルダー選択要求は local かつ識別ヘッダー付きのみ受理（異常: ヘッダーなし・非 local Host は 403 で切替なし）",
+      "layer": "contract",
+      "command": "python -m pytest tests/system/e2e/test_studio_repo_pick_system.py -k ac336",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T18:58:16+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "FR-010 フォルダー選択の System Test を作成"
+        },
+        {
+          "at": "2026-10-18T18:58:33+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC-336 は検証レベル integration で System Test の対象外。implementer が統合テスト（EABK-Studio/tests）で担保する。ファイルは参考として残す"
+        }
+      ]
+    },
+    {
+      "id": "E2E-189",
+      "requirement_ids": [
+        "FR-1065"
+      ],
+      "ac_ids": [
+        "AC-363"
+      ],
+      "title": "doing が PARAM-045 を超えた項目の ID を WATCH: 行に示す",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_warns_item_over_limit_ac363",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "9b1180c5",
+      "last_run_at": "2026-10-19T01:40:47+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-189-202610190139.log",
+      "history": [
+        {
+          "at": "2026-10-19T00:02:28+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "FR-1065 AC-363 の System Test を作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-190",
+      "requirement_ids": [
+        "FR-1065"
+      ],
+      "ac_ids": [
+        "AC-363"
+      ],
+      "title": "超えていない doing では WATCH: 行を出さない（異常系: 境界の内側）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_no_warning_within_limit_ac363",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "9b1180c5",
+      "last_run_at": "2026-10-19T01:40:47+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-190-202610190140.log",
+      "history": [
+        {
+          "at": "2026-10-19T00:02:32+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "FR-1065 AC-363 の System Test を作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-191",
+      "requirement_ids": [
+        "FR-1065"
+      ],
+      "ac_ids": [
+        "AC-363"
+      ],
+      "title": "doing 項目がないとき WATCH: 行を出さない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_no_warning_without_doing_ac363",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "9b1180c5",
+      "last_run_at": "2026-10-19T01:40:47+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-191-202610190140.log",
+      "history": [
+        {
+          "at": "2026-10-19T00:02:37+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "FR-1065 AC-363 の System Test を作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-192",
+      "requirement_ids": [
+        "FR-1065"
+      ],
+      "ac_ids": [
+        "AC-363"
+      ],
+      "title": "超えた項目だけを WATCH: 行に示す（異常系: 超えない項目は含めない）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_names_only_over_limit_items_ac363",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "9b1180c5",
+      "last_run_at": "2026-10-19T01:40:47+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-192-202610190140.log",
+      "history": [
+        {
+          "at": "2026-10-19T00:02:42+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "FR-1065 AC-363 の System Test を作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-193",
+      "requirement_ids": [
+        "FR-1065"
+      ],
+      "ac_ids": [
+        "AC-363"
+      ],
+      "title": "WATCH: 行で終了コードと queue が変わらない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_watch_does_not_change_exit_or_queue_ac363",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "9b1180c5",
+      "last_run_at": "2026-10-19T01:40:47+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-193-202610190140.log",
+      "history": [
+        {
+          "at": "2026-10-19T00:02:47+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "FR-1065 AC-363 の System Test を作成"
         }
       ]
     },

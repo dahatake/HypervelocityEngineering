@@ -77,6 +77,7 @@ MANAGED = [
     "scripts/next-impl.py",
     "scripts/build-request.py",
     "scripts/integrate.py",
+    "scripts/watch.py",
     "scripts/kpi.py",
     "scripts/import-speckit.py",
     "scripts/adopt.py",

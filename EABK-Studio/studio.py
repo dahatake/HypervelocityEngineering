@@ -275,6 +275,13 @@ class Handler(BaseHTTPRequestHandler):
         if not self.host_ok() or self.headers.get("X-EABK-Studio") != "1":
             return self.send_json({"error": "forbidden"}, HTTPStatus.FORBIDDEN)
         endpoint = urlparse(self.path).path
+        if endpoint == "/api/repo/pick":
+            # FR-010 AC-332..336: the OS folder dialog is opened on the server (this machine); body is unused.
+            self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 8192))
+            picked = pick_folder(str(STATE.root))
+            if picked is None:
+                return self.send_json({"error": "picker-unavailable"}, HTTPStatus.NOT_IMPLEMENTED)
+            return self.send_json({"path": picked})
         if endpoint not in ("/api/repo", "/api/maintenance/preview", "/api/maintenance/apply"):
             return self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
         try:
@@ -303,6 +310,36 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"error": "no-data-layer", "repo": str(root)}, HTTPStatus.UNPROCESSABLE_ENTITY)
         STATE.set_root(root)
         self.send_json({"repo": str(root)})
+
+
+_PICKER_SCRIPT = (
+    "import sys, tkinter\n"
+    "from tkinter import filedialog\n"
+    "r = tkinter.Tk(); r.withdraw()\n"
+    "try: r.attributes('-topmost', True)\n"
+    "except Exception: pass\n"
+    "p = filedialog.askdirectory(initialdir=sys.argv[1], mustexist=True)\n"
+    "sys.stdout.write(p or '')\n"
+)
+
+
+def pick_folder(initial: str) -> str | None:
+    """Open the OS folder dialog (tkinter in a subprocess so other requests are not blocked).
+
+    Returns the selected path, "" on cancel, or None when no dialog can be opened.
+    EABK_STUDIO_PICK_PATH (tests) replaces the dialog; an empty value means cancel.
+    """
+    forced = os.environ.get("EABK_STUDIO_PICK_PATH")
+    if forced is not None:
+        return forced.strip()
+    try:
+        done = subprocess.run([sys.executable, "-c", _PICKER_SCRIPT, initial], capture_output=True, text=True,
+                              encoding="utf-8", timeout=600)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode != 0:
+        return None
+    return done.stdout.strip()
 
 
 def format_report(report: dict) -> str:
