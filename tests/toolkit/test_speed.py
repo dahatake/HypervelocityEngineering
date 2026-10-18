@@ -198,7 +198,7 @@ def test_verify_parallel_group_runs_concurrently(sample):
 def test_ledger_run_jobs_runs_cases_concurrently_and_serial_alone(sample):
     sleep = "python -c \"import time;time.sleep(2.5)\""
     for i in range(4):
-        sample.py("ledger.py", "--by", "t", "add", "--req", "FR-001", "--ac", "AC-001", "--title", f"c{i}", "--layer", "e2e", "--command", sleep)
+        sample.py("ledger.py", "--by", "t", "add", "--req", "FR-001", "--ac", "AC-001", "--title", f"c{i}", "--layer", "e2e", "--command", sleep.replace("2.5)", f"2.5);{i}"))
     data = json.loads(sample.read("tests/system/ledger.json"))
     data["cases"][-1]["serial"] = True
     sample.write("tests/system/ledger.json", json.dumps(data))
@@ -257,3 +257,48 @@ def test_kpi_reports_flow_metrics(sample):
     md = sample.py("kpi.py", "run", check=True).stdout
     assert "実効の並列度" in md and "統合の直列時間" in md and "implementer: m1×1" in md
     assert rid in md
+
+
+def _add_cases(sample, cmds):
+    for i, cmd in enumerate(cmds):
+        sample.py("ledger.py", "--by", "t", "add", "--req", "FR-001", "--ac", "AC-001", "--title", f"d{i}", "--layer", "e2e", "--command", cmd, check=True)
+
+
+def test_ledger_run_executes_identical_command_once(sample):
+    # speed: identical commands run once and the result is applied to every case
+    cmd = "python -c \"import time;time.sleep(1)\""
+    _add_cases(sample, [cmd, cmd, cmd])
+    out = sample.py("ledger.py", "run", "--select", "all", "--jobs", "3", "--no-record").stdout
+    assert out.count("FR-001 pass ") == 3 and "unique_commands=1" in out and "dedup_omitted=2" in out
+    assert "ledger run: pass=3 fail=0" in out
+
+
+def test_ledger_run_serial_patterns_run_alone(sample):
+    cfg = json.loads(sample.read("scripts/ebak.config.json"))
+    cfg["system_test"] = {"jobs": 3, "serial_patterns": ["default_port"]}
+    sample.write("scripts/ebak.config.json", json.dumps(cfg))
+    cmds = [f"python -c \"import time;time.sleep(2);{i}\"" for i in range(3)]
+    cmds.append("python -c \"import time;time.sleep(2);'default_port'\"")
+    _add_cases(sample, cmds)
+    import time
+    t = time.time()
+    out = sample.py("ledger.py", "run", "--select", "all", "--no-record").stdout
+    el = time.time() - t
+    assert "全件 pass" in out and "jobs=3" in out
+    assert el >= 4  # 3 parallel (one wave) + the default_port case alone
+
+
+def test_select_cases_retry_failed_false_skips_unrelated_fail(sample):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("ledger_mod", sample.path / "scripts" / "ledger.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    cases = [{"id": "IT-1", "status": "fail", "command": "x", "requirement_ids": ["FR-009"], "ac_ids": []},
+             {"id": "IT-2", "status": "not_run", "command": "y", "requirement_ids": ["FR-009"], "ac_ids": []},
+             {"id": "IT-3", "status": "fail", "command": "pytest a.py", "requirement_ids": ["FR-009"], "ac_ids": []}]
+    data = {"cases": cases}
+    cfg = {}
+    mod.changed_files = lambda root, base: ["a.py"]
+    ids = lambda **kw: {c["id"] for c in mod.select_cases(sample.path, cfg, data, "changed", "HEAD", **kw)}
+    assert ids() == {"IT-1", "IT-2", "IT-3"}
+    assert ids(retry_failed=False) == {"IT-2", "IT-3"}

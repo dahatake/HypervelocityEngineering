@@ -38,6 +38,7 @@ DEFAULT_CONFIG: dict = {
     "base_branch": "main",
     "work": {"dir": "work", "retention_days": 14},
     "verify": {"commands": [], "timeout_sec": 1800},
+    "system_test": {"jobs": "auto", "serial_patterns": ["default_port"]},
     "checks": {
         "ambiguous_words": [
             "適切", "適宜", "なるべく", "できるだけ", "可能な限り", "十分な", "迅速", "高速に", "簡単",
