@@ -273,6 +273,26 @@ def test_ledger_run_executes_identical_command_once(sample):
     assert "ledger run: pass=3 fail=0" in out
 
 
+def _add_canaries(sample, cmds):
+    for i, cmd in enumerate(cmds):
+        sample.py("ledger.py", "--by", "t", "add", "--req", "FR-001", "--ac", "AC-001", "--title", f"k{i}", "--layer", "e2e", "--command", cmd, "--canary", check=True)
+
+
+def test_ledger_run_canary_stage_runs_in_parallel(sample):
+    import time
+    _add_canaries(sample, [f"python -c \"import time;time.sleep(2);{i}\"" for i in range(3)])
+    t = time.time()
+    out = sample.py("ledger.py", "run", "--select", "all", "--canary-first", "--jobs", "3", "--no-record").stdout
+    assert "全件 pass" in out and time.time() - t < 5
+
+
+def test_ledger_run_stop_on_canary_fail_skips_rest(sample):
+    _add_canaries(sample, ["python -c \"import sys;sys.exit(1)\""])
+    _add_cases(sample, ["python -c \"print('rest')\""])
+    proc = sample.py("ledger.py", "run", "--select", "all", "--canary-first", "--stop-on-canary-fail", "--jobs", "3", "--no-record")
+    assert "skipped=1" in proc.stdout and "canary 失敗で中止" in proc.stdout and proc.returncode == 1
+
+
 def test_ledger_run_serial_patterns_run_alone(sample):
     cfg = json.loads(sample.read("scripts/ebak.config.json"))
     cfg["system_test"] = {"jobs": 3, "serial_patterns": ["default_port"]}

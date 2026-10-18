@@ -428,12 +428,22 @@ def cmd_run(args, root, cfg) -> int:
     seq = [c for c in rest if c not in par]
     # longest known duration first (LPT) so the parallel wave finishes sooner
     par.sort(key=lambda c: -float(durs.get(c["command"], 0) or 0))
-    for c in first:
+    # inside the canary stage, non-serial cases run in parallel (jobs) and serial ones alone
+    from concurrent.futures import ThreadPoolExecutor
+    f_par = [c for c in first if not is_serial(c)] if jobs > 1 else []
+    f_seq = [c for c in first if c not in f_par]
+    f_par.sort(key=lambda c: -float(durs.get(c["command"], 0) or 0))
+    if f_par:
+        with ThreadPoolExecutor(jobs) as ex:
+            for c, r in ex.map(execute, f_par):
+                cmd_res[c["command"]] = r
+    for c in f_seq:
         cmd_res[c["command"]] = execute(c)[1]
         r = cmd_res[c["command"]]
         if r and r[0] != 0 and args.stop_on_canary_fail:
-            stop_reason = "canary 失敗で中止"
             break
+    if args.stop_on_canary_fail and any(cmd_res.get(c["command"]) and cmd_res[c["command"]][0] != 0 for c in first):
+        stop_reason = "canary 失敗で中止"
     if not stop_reason:
         if par:
             from concurrent.futures import ThreadPoolExecutor
