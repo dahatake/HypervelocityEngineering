@@ -140,9 +140,9 @@
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_model_can_traverse_requirement_to_catalog_file_and_test",
       "canary": true,
       "status": "pass",
-      "last_commit": "95c5cf6f",
-      "last_run_at": "2026-10-19T00:14:55+09:00",
-      "evidence": "work/runs/202610182350/logs/system-test/E2E-001-202610190013.log",
+      "last_commit": "b795ecd0",
+      "last_run_at": "2026-10-19T00:37:36+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-001-202610190035.log",
       "history": [
         {
           "at": "2026-10-09T22:10:37+09:00",
@@ -903,9 +903,9 @@
       "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_starts_only_after_ordered_success_and_pre_cleanup_report",
       "canary": true,
       "status": "pass",
-      "last_commit": "95c5cf6f",
-      "last_run_at": "2026-10-19T00:14:55+09:00",
-      "evidence": "work/runs/202610182350/logs/system-test/E2E-026-202610190013.log",
+      "last_commit": "b795ecd0",
+      "last_run_at": "2026-10-19T00:37:36+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-026-202610190035.log",
       "history": [
         {
           "at": "2026-10-10T10:41:32+09:00",
@@ -953,9 +953,9 @@
       "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_cleanup_starts_only_after_all_gates_and_main_integration",
       "canary": true,
       "status": "pass",
-      "last_commit": "95c5cf6f",
-      "last_run_at": "2026-10-19T00:14:55+09:00",
-      "evidence": "work/runs/202610182350/logs/system-test/E2E-028-202610190013.log",
+      "last_commit": "b795ecd0",
+      "last_run_at": "2026-10-19T00:37:36+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-028-202610190035.log",
       "history": [
         {
           "at": "2026-10-10T10:41:53+09:00",
@@ -4345,9 +4345,9 @@
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac275_nav_items_and_legacy_urls_identical_to_baseline_commit\" -q",
       "canary": true,
       "status": "pass",
-      "last_commit": "95c5cf6f",
-      "last_run_at": "2026-10-19T00:14:55+09:00",
-      "evidence": "work/runs/202610182350/logs/system-test/E2E-149-202610190014.log",
+      "last_commit": "b795ecd0",
+      "last_run_at": "2026-10-19T00:37:36+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-149-202610190036.log",
       "history": [
         {
           "at": "2026-10-17T14:40:58+09:00",
@@ -4532,9 +4532,9 @@
       "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac295_arrow",
       "canary": true,
       "status": "pass",
-      "last_commit": "95c5cf6f",
-      "last_run_at": "2026-10-19T00:14:55+09:00",
-      "evidence": "work/runs/202610182350/logs/system-test/E2E-156-202610190014.log",
+      "last_commit": "b795ecd0",
+      "last_run_at": "2026-10-19T00:37:36+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-156-202610190036.log",
       "history": [
         {
           "at": "2026-10-17T14:47:28+09:00",
@@ -4843,9 +4843,9 @@
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac105 -q",
       "canary": true,
       "status": "pass",
-      "last_commit": "95c5cf6f",
-      "last_run_at": "2026-10-19T00:14:55+09:00",
-      "evidence": "work/runs/202610182350/logs/system-test/IT-008-202610190014.log",
+      "last_commit": "b795ecd0",
+      "last_run_at": "2026-10-19T00:37:36+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/IT-008-202610190036.log",
       "history": [
         {
           "at": "2026-10-14T20:55:51+09:00",
@@ -5425,9 +5425,9 @@
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_automatic_only\" -q",
       "canary": true,
       "status": "pass",
-      "last_commit": "95c5cf6f",
-      "last_run_at": "2026-10-19T00:14:55+09:00",
-      "evidence": "work/runs/202610182350/logs/system-test/IT-026-202610190014.log",
+      "last_commit": "b795ecd0",
+      "last_run_at": "2026-10-19T00:37:36+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/IT-026-202610190036.log",
       "history": [
         {
           "at": "2026-10-16T09:09:24+09:00",
@@ -6439,10 +6439,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_warns_item_over_limit_ac363",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "b795ecd0",
+      "last_run_at": "2026-10-19T00:37:36+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-189-202610190036.log",
       "history": [
         {
           "at": "2026-10-19T00:02:28+09:00",
@@ -6464,10 +6464,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_no_warning_within_limit_ac363",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "b795ecd0",
+      "last_run_at": "2026-10-19T00:37:36+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-190-202610190036.log",
       "history": [
         {
           "at": "2026-10-19T00:02:32+09:00",
@@ -6489,10 +6489,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_no_warning_without_doing_ac363",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "b795ecd0",
+      "last_run_at": "2026-10-19T00:37:36+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-191-202610190037.log",
       "history": [
         {
           "at": "2026-10-19T00:02:37+09:00",
@@ -6514,10 +6514,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_names_only_over_limit_items_ac363",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "b795ecd0",
+      "last_run_at": "2026-10-19T00:37:36+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-192-202610190037.log",
       "history": [
         {
           "at": "2026-10-19T00:02:42+09:00",
@@ -6539,10 +6539,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_watch_does_not_change_exit_or_queue_ac363",
       "canary": false,
-      "status": "not_run",
-      "last_commit": null,
-      "last_run_at": null,
-      "evidence": null,
+      "status": "pass",
+      "last_commit": "b795ecd0",
+      "last_run_at": "2026-10-19T00:37:36+09:00",
+      "evidence": "work/runs/202610182350/logs/system-test/E2E-193-202610190037.log",
       "history": [
         {
           "at": "2026-10-19T00:02:47+09:00",
