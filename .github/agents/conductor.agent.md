@@ -75,6 +75,7 @@ disable-model-invocation: true
 ## 実装ループ（工程 5）
 実装ループはパイプラインです。常に最大 parallel_workers 体（`auto` は開始時に解決済みの数。`meta.json` の options を読む）の implementer が動いている状態を保ち、1 体が終わるたびに、その項目の統合と次の項目の起動を行います。
 - 項目を始める前に `python scripts/run-state.py time`。exit 3（85% 超）なら新しい項目を始めず、動いている項目の統合を終えてから工程 6 へ。
+- 枠を埋める前後に `python scripts/watch.py stuck` と `python scripts/watch.py reap` を実行する。`STUCK <項目> <分>` の項目は、その implementer に結果を返させるか、`python scripts/integrate.py abandon <item>` で todo に戻す。
 - 枠を埋める: `python scripts/run-state.py queue ready --parallel <parallel_workers>` の項目ごとに
   `python scripts/integrate.py prepare <item>`（worktree のプールから 1 つを割り当て、作業ブランチ `work/<run-id>/<item>` を作り、queue を doing・attempts +1 にする）→
   出力の `WORKTREE:` のパスを渡して implementer を **background** で起動する。
