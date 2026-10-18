@@ -33,6 +33,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+sys.dont_write_bytecode = True  # FR-1062: 検証は読み取り専用。利用者のリポジトリに __pycache__ を残さない
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ebaklib as h  # noqa: E402
 

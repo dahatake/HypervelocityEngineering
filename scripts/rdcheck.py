@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
+sys.dont_write_bytecode = True  # FR-1062 AC-343: 導出は読み取り専用。利用者のリポジトリに __pycache__ を残さない
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ebaklib as h  # noqa: E402
 import entities as ent  # noqa: E402
@@ -1406,6 +1407,27 @@ def cmd_digest(args, root, cfg) -> int:
     return 0
 
 
+def cmd_hierarchy(args, root, cfg) -> int:
+    """FR-1062: 種類→区分→領域→項目の階層。導出の実体は EABK-Studio/eabk_model.py（1 か所）。都度生成し、保存しない。"""
+    studio = Path(__file__).resolve().parent.parent / "EABK-Studio"
+    if not (studio / "eabk_model.py").is_file():
+        studio = root / "EABK-Studio"
+    sys.path.insert(0, str(studio))
+    sd = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        import eabk_model
+        hier = eabk_model.build_model(root)["hierarchy"]
+    finally:
+        sys.dont_write_bytecode = sd
+    if args.json:
+        print(json.dumps(hier, ensure_ascii=False, indent=2))
+    else:
+        for t in hier["tiers"]:
+            print(f"{' > '.join(t['path'])}\t{t['count']}")
+    return 0
+
+
 def main(argv=None) -> int:
     h.setup_io()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1438,11 +1460,13 @@ def main(argv=None) -> int:
     tr = sub.add_parser("trace")
     tr.add_argument("ids", nargs="+")
     tr.add_argument("--json", action="store_true")
+    hi = sub.add_parser("hierarchy", help="種類→区分→領域→項目の階層（FR-1062。都度生成。保存しない）")
+    hi.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     root = Path(args.root).resolve() if args.root else h.repo_root()
     cfg = h.load_config(root)
     return {"check": cmd_check, "show": cmd_show, "list": cmd_list, "stats": cmd_stats, "digest": cmd_digest,
-            "trace": cmd_trace, "index": cmd_index}[args.cmd](args, root, cfg)
+            "trace": cmd_trace, "index": cmd_index, "hierarchy": cmd_hierarchy}[args.cmd](args, root, cfg)
 
 
 if __name__ == "__main__":
