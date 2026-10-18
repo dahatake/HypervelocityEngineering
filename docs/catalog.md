@@ -132,7 +132,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-007 | ソース対応 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/source.js` | `tests/system/e2e/test_studio_system.py` | ストア |
 | FR-008 | ペルソナ既定表現 | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/dashboard.js` | `tests/system/e2e/test_studio_system.py` | ストア、デザイン基盤 |
 | FR-009 | 履歴・理想状態・整合性 | 承認済み（依頼 2026-10-09） | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/dashboard.js` | `EABK-Studio/tests/test_studio.py`, `tests/system/e2e/test_studio_system.py` | 管理データモデル |
-| FR-010 | リポジトリの既定と切替 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | HTTP サーバー |
+| FR-010 | リポジトリの既定と切替 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/index.html` | `EABK-Studio/tests/test_studio.py`, `EABK-Studio/tests/test_repo_switch_recovery_wiring.py`, `tests/system/e2e/test_studio_repo_pick_system.py` | HTTP サーバー |
 | FR-011 | JA/EN とリンク | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_system.py` | UI 部品、デザイン基盤 |
 | FR-012 | 鮮度検知と再読込 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | フィンガープリント |
 | FR-013 | 通常操作の参照専用データ境界 | 承認済み（包括承認 2026-10-09・approval_policy） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | HTTP サーバー |
@@ -168,6 +168,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | `GET /api/fingerprint` | `EABK-Studio/studio.py` | FR-012、NFR-OPS-002 |
 | `GET /api/repo` | `EABK-Studio/studio.py` | FR-010 |
 | `POST /api/repo` | `EABK-Studio/studio.py` | FR-010、NFR-OPS-003 |
+| `POST /api/repo/pick` | `EABK-Studio/studio.py` | FR-010 |
 | 管理データフィンガープリント変化 | `EABK-Studio/web/js/app.js` | FR-012、NFR-OPS-002 |
 
 ## テーブル
