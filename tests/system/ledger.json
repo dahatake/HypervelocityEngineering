@@ -123,7 +123,8 @@
     "AC-333": "sha256:7d9db0365502e562",
     "AC-334": "sha256:539a947f850f1e6c",
     "AC-335": "sha256:4855e8440e37a075",
-    "AC-336": "sha256:829e7eacc93f687b"
+    "AC-336": "sha256:829e7eacc93f687b",
+    "AC-363": "sha256:7b8d2a2d9489cdb1"
   },
   "cases": [
     {
@@ -6423,6 +6424,131 @@
           "by": "test-designer",
           "change": "blocked",
           "reason": "AC-336 は検証レベル integration で System Test の対象外。implementer が統合テスト（EABK-Studio/tests）で担保する。ファイルは参考として残す"
+        }
+      ]
+    },
+    {
+      "id": "E2E-189",
+      "requirement_ids": [
+        "FR-1065"
+      ],
+      "ac_ids": [
+        "AC-363"
+      ],
+      "title": "doing が PARAM-045 を超えた項目の ID を WATCH: 行に示す",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_warns_item_over_limit_ac363",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T00:02:28+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "FR-1065 AC-363 の System Test を作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-190",
+      "requirement_ids": [
+        "FR-1065"
+      ],
+      "ac_ids": [
+        "AC-363"
+      ],
+      "title": "超えていない doing では WATCH: 行を出さない（異常系: 境界の内側）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_no_warning_within_limit_ac363",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T00:02:32+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "FR-1065 AC-363 の System Test を作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-191",
+      "requirement_ids": [
+        "FR-1065"
+      ],
+      "ac_ids": [
+        "AC-363"
+      ],
+      "title": "doing 項目がないとき WATCH: 行を出さない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_no_warning_without_doing_ac363",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T00:02:37+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "FR-1065 AC-363 の System Test を作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-192",
+      "requirement_ids": [
+        "FR-1065"
+      ],
+      "ac_ids": [
+        "AC-363"
+      ],
+      "title": "超えた項目だけを WATCH: 行に示す（異常系: 超えない項目は含めない）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_names_only_over_limit_items_ac363",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T00:02:42+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "FR-1065 AC-363 の System Test を作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-193",
+      "requirement_ids": [
+        "FR-1065"
+      ],
+      "ac_ids": [
+        "AC-363"
+      ],
+      "title": "WATCH: 行で終了コードと queue が変わらない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_watch_does_not_change_exit_or_queue_ac363",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T00:02:47+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "FR-1065 AC-363 の System Test を作成"
         }
       ]
     }
