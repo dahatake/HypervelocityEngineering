@@ -328,7 +328,7 @@ i[data-testid=chart-segment]{min-width:var(--space-6)}
 /* FR-1062/FR-1063: 上位層の見出し（種類→区分→領域）。開閉は ▸/▾ の記号と aria-expanded、件数は文字で示す（色だけに頼らない）。 */
 .tiers-list .tier-group{margin:var(--space-1) 0}
 .tiers-list .tier-head{margin:0;font-size:var(--font-size-body)}
-.tiers-list .tier-toggle{display:inline-flex;gap:var(--space-2);align-items:center;max-width:100%;text-align:left;white-space:normal;overflow-wrap:anywhere}
+.tiers-list .tier-toggle{display:inline-flex;gap:var(--space-2);align-items:center;max-width:100%;text-align:left;white-space:normal;overflow-wrap:anywhere;background:none;border:var(--stroke-control) solid var(--color-border-strong);border-radius:var(--radius-control);color:inherit;font:inherit;padding:var(--space-1) var(--space-3);cursor:pointer}
 .tiers-list .tier-toggle:focus-visible{outline:var(--stroke-focus) solid var(--color-focus);outline-offset:2px}
 .tiers-list .tier-body{margin-left:var(--space-4);min-width:0}
 .tiers-list .tier-unclassified>.tier-head .tier-name{font-style:italic}
@@ -350,6 +350,7 @@ i[data-testid=chart-segment]{min-width:var(--space-6)}
 .maptiers .tier-kind>.tier-head .tier-name,.rpg-tiers .tier-kind>.tier-head .tier-name{font-weight:700}
 .maptiers .tier-unclassified>.tier-head .tier-name,.rpg-tiers .tier-unclassified>.tier-head .tier-name{text-decoration:underline dotted}
 .maptier-item{display:block;width:100%;text-align:left;background:none;border:0;color:inherit;font:inherit;font-size:var(--font-size-caption);padding:2px var(--space-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.maptier-item[data-title]::after{content:attr(data-title)}
 .maptier-item:not(:disabled){cursor:pointer}
 .maptier-item:not(:disabled):hover{background:var(--color-bg-hover)}
 @media (max-width:480px){.maptiers{width:calc(100% - var(--space-4));max-height:38%}}

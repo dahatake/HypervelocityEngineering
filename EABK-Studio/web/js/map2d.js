@@ -63,7 +63,7 @@ function mountGraph(host) {
       // FR-1063 AC-345: 点は FR-1062 の上位層（種類→区分→領域）ごとの帯にまとめる。階層に項目がない点だけ、従来のまとまりを使う。
       const gkey = (n) => { const p = tierPathOf(n); return p ? tierKey(p) : gkey0(n); };
       const label = (k, ns) => { const p = tierOfKey(k); return p ? tierShortLabel(p) : label0(k, ns); };
-      list.sort((a, b) => tierRank(tierPathOf(a)) - tierRank(tierPathOf(b)));
+      list.sort((a, b) => (tierPathOf(a) ? 1 : 0) - (tierPathOf(b) ? 1 : 0) || tierRank(tierPathOf(a)) - tierRank(tierPathOf(b)));
       const gs = [];
       for (const n of list) { const g = gkey(n); if (!gs.length || gs[gs.length - 1].key !== g) gs.push({ key: g, nodes: [] }); gs[gs.length - 1].nodes.push(n); }
       let total = 0;
@@ -423,7 +423,7 @@ function mountGraph(host) {
   // 見出し・畳んだ塊は、ダブルクリックで畳む／開く（1 回の押下は FR-1011 の点の選択・移動に使うため、押し間違いで配置が変わらない）。キーボードはパネルの木。
   canvas.addEventListener('dblclick', (e) => {
     const g = hitGroup(e.clientX, e.clientY);
-    if (g?.tier) { tierState.toggle(g.tier, 'map'); return; }
+    if (g?.tier) { store.clear(); tierState.toggle(g.tier, 'map'); return; }   // 選択は常に解除する（前の選択が見出しの近くの点に残らない）
     store.clear(); fly(camFit());
   });
   canvas.addEventListener('wheel', (e) => {

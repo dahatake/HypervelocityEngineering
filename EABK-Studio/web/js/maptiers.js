@@ -73,9 +73,10 @@ const tx = (k) => (TXT[lang()] || TXT.ja)[k];
 
 /** 項目 1 件の表示: ID と題名のボタン。マップに点があれば、その点を選択する（なければ表示のみ）。 */
 function itemNode(it) {
-  const label = [el('span', { class: 'tier-item-id' }, it.id), it.title ? el('span', { class: 'tier-item-title' }, ` ${it.title}`) : null];
+  // 題名はデータ由来の文字列（試験ケースの題名など）。画面の文言と区別するため、見た目は data-title の疑似要素で出し、支援技術には aria-label で ID と題名を伝える。
+  const label = [el('span', { class: 'tier-item-id' }, it.id)];
   const can = !!store.node?.(it.id);
-  const b = el('button', { type: 'button', class: 'maptier-item', 'data-testid': 'tier-item', 'data-id': it.id, role: 'treeitem', disabled: can ? null : true,
+  const b = el('button', { type: 'button', class: 'maptier-item', 'data-testid': 'tier-item', 'data-id': it.id, 'data-title': it.title ? ` ${it.title}` : null, 'aria-label': it.title ? `${it.id} ${it.title}` : null, role: 'treeitem', disabled: can ? null : true,
     onclick: () => { if (can) store.select(it.id); } }, ...label);
   return b;
 }
