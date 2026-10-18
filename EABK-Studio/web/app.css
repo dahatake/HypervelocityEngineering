@@ -353,3 +353,5 @@ i[data-testid=chart-segment]{min-width:var(--space-6)}
 .maptier-item:not(:disabled){cursor:pointer}
 .maptier-item:not(:disabled):hover{background:var(--color-bg-hover)}
 @media (max-width:480px){.maptiers{width:calc(100% - var(--space-4));max-height:38%}}
+/* FR-1063 AC-355: 高い拡大率（低い viewport）では、シェルを縦に伸ばして縦スクロールにし、地図・会話ウィンドウ・上位層のパネルが見出しに隠れず、操作できるようにする（横スクロールは強いない） */
+@media (max-height:480px){html,body{height:auto;min-height:100%;overflow-x:hidden;overflow-y:auto}main{flex:1 0 auto;min-height:420px;overflow:visible}.tw{max-height:none}}

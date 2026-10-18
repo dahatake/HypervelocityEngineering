@@ -218,6 +218,7 @@ function mountGraph(host) {
     const vx0 = cam.x - W / 2 / k - 300, vx1 = cam.x + W / 2 / k + 300, vy0 = cam.y - H / 2 / k - 20, vy1 = cam.y + H / 2 / k + 20;
 
     // group bands（上位層の帯: 見出しに ▾/▸・名称・件数。見出しを押すと下位の点を畳む／開く）
+    let minHeadPx = Infinity;   // 上位層の見出しが画面で何 px の文字になっているか（狭い幅で読めなくなる場合の代替表示の判定）
     for (const g of groups) {
       if (g.y1 + 20 < vy0 || g.y0 - 20 > vy1) continue;
       if (!g.tier && k < 0.5 && g.n < 3 && groups.length > 14) continue;
@@ -231,6 +232,7 @@ function mountGraph(host) {
       ctx.textBaseline = 'alphabetic';
       const ty = g.y0 - 20 + (k < 0.5 ? -2 : 0);
       ctx.fillText(gl, g.x - 6, ty);
+      if (g.tier) minHeadPx = Math.min(minHeadPx, fs * k);
       if (g.tier) g.hit = { x0: g.x - 14, x1: g.x - 6 + ctx.measureText(gl).width + 6, y0: ty - fs - 2, y1: ty + 6 };
       if (g.coll) {
         // 畳んだ塊: 色だけに頼らず、記号（▸）・名称・件数の文字で示す
@@ -242,6 +244,8 @@ function mountGraph(host) {
         g.blob = { x0: g.x - 8, x1: g.x + 192, y0: g.y0 - 9, y1: g.y0 + 9 };
       }
     }
+    // 画面上の見出しが小さすぎる（狭い幅・高い拡大率）ときは、同じ名称・件数を隅のパネルの木（文字）で読めることを示す（代替表示）
+    canvas.dataset.headingsAlt = Number.isFinite(minHeadPx) && minHeadPx < 10 ? 'panel' : 'canvas';
 
     // edges
     ctx.lineCap = 'round';

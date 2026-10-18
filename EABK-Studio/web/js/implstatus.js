@@ -128,7 +128,9 @@ export function mount(host) {
         const rows = collect(node);
         return el('p', { class: 'tier-breakdown mini', 'data-testid': 'tier-status-breakdown', 'aria-label': `${t('tier.breakdown')}` },
           el('span', { class: 'tier-breakdown-label' }, t('tier.breakdown') + ': '),
-          ja.map((s, i) => el('span', { class: 'tier-breakdown-item', 'data-state': s }, `${STATE_META[i].sym} ${stateLabel(i, ja)} ${rows.filter((x) => x.row.state === s).length}`)));
+          ja.map((s, i) => el('span', { class: 'tier-breakdown-item', 'data-state': s }, `${STATE_META[i].sym} ${stateLabel(i, ja)} ${rows.filter((x) => x.row.state === s).length}`)),
+          // 層の件数は FR-1062 の導出の件数。この画面に状態の登録がない要求は「状態の登録なし」として数え、内訳の合計が層の件数と一致する。
+          el('span', { class: 'tier-breakdown-item', 'data-state': '' }, `– ${t('tier.nostate')} ${Math.max(0, node.count - rows.length)}`));
       },
       itemNode: (it) => el('div', { class: 'tier-item', role: 'treeitem', 'data-testid': 'tier-item', 'data-id': it.id, 'data-state': it.row.state },
         el('span', { class: 'mono' }, xrefLink(it.id)), ' ', it.row.title, ' ',
