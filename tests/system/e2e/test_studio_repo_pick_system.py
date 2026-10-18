@@ -142,8 +142,9 @@ def test_ac332_repo_button_is_operable_by_keyboard_only(browser, make_studio, ke
 # FR-010 AC-333
 def test_ac333_picking_other_repo_switches_and_clears_selection_filter_search(browser, make_studio):
     st = make_studio("b")
-    page = _open(browser, st, "#/tables?tab=reqs&q=FR-003&select=FR-003")
+    page = _open(browser, st)
     page.locator("input[type=search]").first.fill("FR-003")
+    page.locator("#view tbody tr").filter(has_text="FR-003").first.locator("td").last.click()
     expect(page.locator("#repoBtn")).to_contain_text("std")
     expect(page.locator("#view")).to_contain_text("画面表示のみ")
     _btn(page).click()
@@ -173,9 +174,10 @@ def test_ac333_other_views_show_new_repo_content_after_switch(browser, make_stud
 # FR-010 AC-334
 def test_ac334_cancel_changes_nothing_and_shows_no_error(browser, make_studio):
     st = make_studio("cancel")
-    page = _open(browser, st, "#/tables?tab=reqs&q=FR-003&select=FR-003")
+    page = _open(browser, st)
     box = page.locator("input[type=search]").first
     box.fill("FR-003")
+    page.locator("#view tbody tr").filter(has_text="FR-003").first.locator("td").last.click()
     before_hash = page.evaluate("() => location.hash")
     before_view = page.locator("#view").inner_text()
     with page.expect_response(lambda r: r.url.endswith("/api/repo/pick")) as ri:
