@@ -269,12 +269,25 @@ def test_ac349_implstatus_shows_per_tier_state_breakdown_summing_to_count(page):
 def test_ac350_all_screens_show_identical_tier_names_order_and_counts(page):
     _go(page, "map2d")
     screens = _screens(page)
-    assert set(SCREENS) <= set(screens), f"ナビゲーションに画面が足りない: {screens}"
+    # map3d はナビにない（マップは 2D・3D・RPG のモード切替で開く）。ナビの route に、3D・RPG をモード切替で足す
+    nav_expected = [s for s in SCREENS if s != "map3d"]
+    assert set(nav_expected) <= set(screens), f"ナビゲーションに画面が足りない: {screens}"
+    targets = [(r, None) for r in screens] + [("map3d", "3d"), ("maprpg", "rpg")]
     ref = None
-    for r in screens:
-        _go(page, r)
+    for r, dim in targets:
+        _go(page, "map2d" if dim else r)
+        if dim:
+            page.locator(f'[data-testid="dim-toggle"] [data-dim="{dim}"]').click()
+            page.wait_for_load_state("networkidle")
+        if dim == "rpg":
+            page.wait_for_selector('[data-testid="rpg-view"]')
+            page.evaluate("() => window.eabkView.openTierDialog && window.eabkView.openTierDialog()")
+            page.locator('[data-testid="rpg-dialog"]').wait_for(timeout=5000)
+        else:
+            page.wait_for_selector(GROUP, state="attached", timeout=10000)
         areas = [(tuple(g["path"]), g["count"]) for g in _groups(page, "area") if g["path"][0] in ("要求", "requirements")]
         if not areas:
+            assert not dim, f"{r}（モード切替 {dim}）に要求の上位層がない"
             continue
         if ref is None:
             ref = (r, areas)
