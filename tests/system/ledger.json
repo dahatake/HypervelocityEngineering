@@ -117,7 +117,8 @@
     "AC-274": "sha256:c7d8170205aebbd7",
     "AC-275": "sha256:aa47a8147dcd4cc5",
     "AC-276": "sha256:9653cb00e77a875e",
-    "AC-260": "sha256:6e0e235f528c76de"
+    "AC-260": "sha256:6e0e235f528c76de",
+    "AC-337": "sha256:3c30de1fb59c86ec"
   },
   "cases": [
     {
@@ -6183,6 +6184,106 @@
       "history": [
         {
           "at": "2026-10-17T21:03:29+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-169",
+      "requirement_ids": [
+        "FR-1061"
+      ],
+      "ac_ids": [
+        "AC-337"
+      ],
+      "title": "FR-1061 AC-337 ガント図 全体の行と開始・終了が台帳から導いた値と一致する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_impl_gantt_system.py::test_gantt_overall_axis_one_row_per_dated_fr_with_dates_from_ledger",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:07:56+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-170",
+      "requirement_ids": [
+        "FR-1061"
+      ],
+      "ac_ids": [
+        "AC-337"
+      ],
+      "title": "FR-1061 AC-337 異常系 台帳ケースなし要求は描かず日程なし件数・未承認は対象外",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_impl_gantt_system.py::test_gantt_undated_count_matches_approved_frs_without_cases_and_excludes_unapproved",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:08:01+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-171",
+      "requirement_ids": [
+        "FR-1061"
+      ],
+      "ac_ids": [
+        "AC-337"
+      ],
+      "title": "FR-1061 AC-337 縦軸の切替と目的別・優先度別の見出し行の配下",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_impl_gantt_system.py::test_gantt_axis_offers_overall_goal_priority_and_groups_have_member_rows",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:08:06+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-172",
+      "requirement_ids": [
+        "FR-1061"
+      ],
+      "ac_ids": [
+        "AC-337"
+      ],
+      "title": "FR-1061 AC-337 縦軸を切り替えてもバーの日時は同じ",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_impl_gantt_system.py::test_gantt_bar_dates_are_identical_across_axes",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:08:11+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
