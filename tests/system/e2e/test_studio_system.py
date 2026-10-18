@@ -202,12 +202,18 @@ def test_persona_defaults_and_switching_preserve_selected_id_filter_and_time(pag
     assert page.locator("time").first.get_attribute("datetime") == selected_at
 
 
+def _pick_repo(page, path):
+    """Click the repo button; the OS folder dialog (POST /api/repo/pick) is replaced by a fixed result."""
+    page.unroute("**/api/repo/pick")
+    page.route("**/api/repo/pick", lambda route: route.fulfill(
+        status=200, content_type="application/json", body=json.dumps({"path": str(path)})))
+    page.locator("#repoBtn").click()
+
+
 # FR-010 AC-010
 def test_invalid_repository_switch_keeps_model_and_explains_failure(page, tmp_path):
     before = page.locator("#repoBtn").inner_text()
-    page.locator("#repoBtn").click()
-    page.get_by_role("dialog").get_by_role("textbox").fill(str(tmp_path))
-    page.get_by_role("dialog").get_by_role("button", name="OK").click()
+    _pick_repo(page, tmp_path)
     expect(page.locator("#toast")).to_contain_text("data")
     expect(page.locator("#repoBtn")).to_have_text(before)
 
@@ -229,9 +235,7 @@ def test_startup_switch_and_refresh_do_not_write_data_or_leave_loopback(page, st
         encoding="utf-8",
     )
     (other / "docs" / "catalog.md").write_text("# Catalog\n", encoding="utf-8")
-    page.locator("#repoBtn").click()
-    page.get_by_role("dialog").get_by_role("textbox").fill(str(other))
-    page.get_by_role("dialog").get_by_role("button", name="OK").click()
+    _pick_repo(page, other)
     expect(page.locator("#repoBtn")).to_contain_text("other")
 
     # The test is the writer here.  After the controlled update, Studio must
@@ -344,9 +348,7 @@ def test_python_runtime_starts_without_extra_installation_and_shows_default_mode
 # NFR-OPS-003 AC-028
 def test_missing_data_error_offers_recovery_without_losing_current_model(page, tmp_path):
     current = page.locator("#repoBtn").inner_text()
-    page.locator("#repoBtn").click()
-    page.get_by_role("dialog").get_by_role("textbox").fill(str(tmp_path / "missing"))
-    page.get_by_role("dialog").get_by_role("button", name="OK").click()
+    _pick_repo(page, tmp_path / "missing")
     expect(page.locator("#toast")).to_contain_text("not found")
     expect(page.locator("#repoBtn")).to_have_text(current)
     expect(page.get_by_role("button", name=re.compile("再試行|Retry", re.I))).to_be_visible()
@@ -373,13 +375,9 @@ def test_repository_switch_success_updates_model_and_failure_restores_previous(p
         "# Other\n\n- 目的 G-OTHER: Other\n- 要求 FR-OTHER: Other\n", encoding="utf-8"
     )
     (other / "docs" / "catalog.md").write_text("# Catalog\n", encoding="utf-8")
-    page.locator("#repoBtn").click()
-    page.get_by_role("dialog").get_by_role("textbox").fill(str(other))
-    page.get_by_role("dialog").get_by_role("button", name="OK").click()
+    _pick_repo(page, other)
     expect(page.locator("#repoBtn")).to_contain_text("other")
-    page.locator("#repoBtn").click()
-    page.get_by_role("dialog").get_by_role("textbox").fill(str(tmp_path / "invalid"))
-    page.get_by_role("dialog").get_by_role("button", name="OK").click()
+    _pick_repo(page, tmp_path / "invalid")
     expect(page.locator("#repoBtn")).to_contain_text("other")
 
 

@@ -123,10 +123,10 @@ def studio_page(browser):
 
 
 def _switch_repo(page, repo):
+    page.unroute("**/api/repo/pick")
+    page.route("**/api/repo/pick", lambda route: route.fulfill(
+        status=200, content_type="application/json", body=json.dumps({"path": str(repo)})))
     page.locator("#repoBtn").click()
-    dialog = page.get_by_role("dialog")
-    dialog.get_by_role("textbox").fill(str(repo))
-    dialog.get_by_role("button", name="OK").click()
     expect(page.locator("#repoBtn")).to_contain_text(repo.name)
 
 
