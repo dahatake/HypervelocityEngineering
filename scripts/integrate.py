@@ -212,7 +212,7 @@ def give_back(c: Ctx, item_id: str, status: str = "todo") -> None:
 
 
 def reap_under(wt: Optional[Path]) -> List[str]:
-    """FR-1065 AC-361/362: reap processes under a released worktree (no grace). Never fails the caller."""
+    """FR-1065 AC-361/362: reap processes under a released worktree (AC-359 rule: processes within the PARAM-044 grace are kept). Never fails the caller."""
     if wt is None:
         return []
     import contextlib
