@@ -75,7 +75,7 @@ def repo_with_backlog(installed_repo):
 def _scope_ids(out):
     m = re.search(r"scope\s*[:=]\s*\[?([^\]\n]*)\]?", out)
     assert m, out
-    return set(re.findall(r"(?:NFR-[A-Z]+|FR)-\d+", m.group(1)))
+    return set(re.findall(r"(?:NFR-[A-Z0-9]+|FR)-\d+", m.group(1)))
 
 
 # FR-1016 AC-104

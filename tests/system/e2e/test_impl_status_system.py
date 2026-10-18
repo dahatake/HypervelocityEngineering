@@ -72,7 +72,7 @@ def test_impl_status_card_selection_opens_requirement_detail_and_links_views(pag
     _open(page)
     card = page.locator('[data-testid="impl-kanban-card"]').first
     req_id = card.get_attribute("data-req")
-    assert re.match(r"(NFR-[A-Z]+-\d+|FR-\d+)$", req_id)
+    assert re.match(r"(NFR-[A-Z0-9]+-\d+|FR-\d+)$", req_id)
     card.click()
     expect(page.locator("#drawer")).to_contain_text(req_id)
     # selection is shared with other representations (map keeps the selection)
@@ -86,7 +86,7 @@ def test_impl_status_excludes_non_approved_requirements_from_cards(page):
     ids = {c.get_attribute("data-req") for c in page.locator('[data-testid="impl-kanban-card"]').all()}
     text = (ROOT / "docs" / "requirements-definition.md").read_text(encoding="utf-8")
     for block in re.split(r"(?m)^#### ", text)[1:]:
-        m = re.match(r"((?:FR|NFR-[A-Z]+)-\d+) ", block)
+        m = re.match(r"((?:FR|NFR-[A-Z0-9]+)-\d+) ", block)
         s = re.search(r"- 決定状態: (\S+)", block)
         if m and s and not s.group(1).startswith("承認済み"):
             assert m.group(1) not in ids

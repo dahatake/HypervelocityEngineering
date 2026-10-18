@@ -26,7 +26,7 @@ import pytest
 import datalayer_repo as d
 
 RDC = ["scripts/rdcheck.py"]
-REQ_BLOCK = re.compile(r"^#### ((?:FR|NFR-[A-Z]+)-\d+) ", re.M)
+REQ_BLOCK = re.compile(r"^#### ((?:FR|NFR-[A-Z0-9]+)-\d+) ", re.M)
 
 
 @pytest.fixture
@@ -62,7 +62,7 @@ def requirement_blocks(root):
 
 
 def req_items(h):
-    return [i for i in h["items"] if re.fullmatch(r"(?:FR|NFR-[A-Z]+)-\d+", i["id"])]
+    return [i for i in h["items"] if re.fullmatch(r"(?:FR|NFR-[A-Z0-9]+)-\d+", i["id"])]
 
 
 def set_area(root, rid, area):
@@ -128,7 +128,7 @@ def test_ac343_requirement_area_equals_area_field_and_matches_9_2(repo):
         if area:
             assert got.get(rid) == area, f"{rid}: 欄={area!r} 導出={got.get(rid)!r}"
     s = txt(repo, d.RD)
-    rows = re.findall(r"^\| ((?:FR|NFR-[A-Z]+)-\d+) \| ([^|]+?) \|\s*$", s, re.M)
+    rows = re.findall(r"^\| ((?:FR|NFR-[A-Z0-9]+)-\d+) \| ([^|]+?) \|\s*$", s, re.M)
     for rid, area in rows:
         if rid in got and rid in expected and expected[rid][1]:
             assert expected[rid][1] == area.strip(), f"9.2 の写しが欄と違う: {rid}"
