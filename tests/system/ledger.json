@@ -117,7 +117,17 @@
     "AC-274": "sha256:c7d8170205aebbd7",
     "AC-275": "sha256:aa47a8147dcd4cc5",
     "AC-276": "sha256:9653cb00e77a875e",
-    "AC-260": "sha256:6e0e235f528c76de"
+    "AC-260": "sha256:6e0e235f528c76de",
+    "AC-343": "sha256:724866f7ca76d6b3",
+    "AC-344": "sha256:68f71f43831d3965",
+    "AC-345": "sha256:4b58a147bb5471ee",
+    "AC-346": "sha256:b21cba3d296edc9c",
+    "AC-347": "sha256:20f41972155802e4",
+    "AC-348": "sha256:6526212c25fcb273",
+    "AC-349": "sha256:bb116d4768266c6a",
+    "AC-350": "sha256:88da5d458c490947",
+    "AC-351": "sha256:5bd32c7d15c43937",
+    "AC-352": "sha256:33a7d4c2d5fb340f"
   },
   "cases": [
     {
@@ -6186,6 +6196,708 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "IT-049",
+      "requirement_ids": [
+        "FR-1062"
+      ],
+      "ac_ids": [
+        "AC-343"
+      ],
+      "title": "全データが種類・区分・領域・項目の 4 層で導出される",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_tiers_system.py -k \"test_ac343_every_data_item_has_four_tiers\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:35:23+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-18T19:35:56+09:00",
+          "by": "test-designer",
+          "change": "canary: True -> False",
+          "reason": "canary は環境確認用のため通常ケースに戻す"
+        },
+        {
+          "at": "2026-10-18T19:38:38+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル integration で System Test の対象外（CHK-10）。implementer の統合テストの参考として残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-050",
+      "requirement_ids": [
+        "FR-1062"
+      ],
+      "ac_ids": [
+        "AC-343"
+      ],
+      "title": "要求の区分が ID 接頭辞（FR=機能、NFR-=非機能）と一致する",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_tiers_system.py -k \"test_ac343_requirement_division_matches_id_prefix\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:36:17+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-18T19:38:39+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル integration で System Test の対象外（CHK-10）。implementer の統合テストの参考として残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-051",
+      "requirement_ids": [
+        "FR-1062"
+      ],
+      "ac_ids": [
+        "AC-343"
+      ],
+      "title": "非機能の接頭辞で区分の層が増えない（異常系）",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_tiers_system.py -k \"test_ac343_nonfunctional_prefixes_do_not_add_division_layer\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:36:22+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-18T19:38:40+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル integration で System Test の対象外（CHK-10）。implementer の統合テストの参考として残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-052",
+      "requirement_ids": [
+        "FR-1062"
+      ],
+      "ac_ids": [
+        "AC-343"
+      ],
+      "title": "要求の領域が領域の欄および 9.2 の写しと一致する",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_tiers_system.py -k \"test_ac343_requirement_area_equals_area_field_and_matches_9_2\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:36:26+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-18T19:38:40+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル integration で System Test の対象外（CHK-10）。implementer の統合テストの参考として残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-053",
+      "requirement_ids": [
+        "FR-1062"
+      ],
+      "ac_ids": [
+        "AC-343"
+      ],
+      "title": "元データの変更が再導出で反映され割り当て表を新設しない（異常系）",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_tiers_system.py -k \"test_ac343_rederivation_reflects_source_change_without_new_assignment_table\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:36:30+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-18T19:38:41+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル integration で System Test の対象外（CHK-10）。implementer の統合テストの参考として残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-054",
+      "requirement_ids": [
+        "FR-1062"
+      ],
+      "ac_ids": [
+        "AC-344"
+      ],
+      "title": "領域の欄のない要求は未分類に入り欠けない",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_tiers_system.py -k \"test_ac344_requirement_without_area_goes_to_unclassified\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:36:34+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-18T19:38:42+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル integration で System Test の対象外（CHK-10）。implementer の統合テストの参考として残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-055",
+      "requirement_ids": [
+        "FR-1062"
+      ],
+      "ac_ids": [
+        "AC-344"
+      ],
+      "title": "カタログの行は既存の節名を領域にする",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_tiers_system.py -k \"test_ac344_catalog_rows_use_existing_section_name_as_area\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:36:38+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-18T19:38:42+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル integration で System Test の対象外（CHK-10）。implementer の統合テストの参考として残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-056",
+      "requirement_ids": [
+        "FR-1062"
+      ],
+      "ac_ids": [
+        "AC-344"
+      ],
+      "title": "全データが 1 回だけ属し上位層の件数の合計が全件数と一致する",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_tiers_system.py -k \"test_ac344_each_item_belongs_exactly_once_and_tier_counts_sum_to_total\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:36:42+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-18T19:38:43+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル integration で System Test の対象外（CHK-10）。implementer の統合テストの参考として残す"
+        }
+      ]
+    },
+    {
+      "id": "IT-057",
+      "requirement_ids": [
+        "FR-1062"
+      ],
+      "ac_ids": [
+        "AC-344"
+      ],
+      "title": "分類のあるデータは未分類に入らない（異常系）",
+      "layer": "data",
+      "command": "python -m pytest tests/system/test_data_tiers_system.py -k \"test_ac344_unclassified_only_for_items_without_any_classification\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:36:46+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-18T19:38:44+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル integration で System Test の対象外（CHK-10）。implementer の統合テストの参考として残す"
+        }
+      ]
+    },
+    {
+      "id": "E2E-173",
+      "requirement_ids": [
+        "FR-1063"
+      ],
+      "ac_ids": [
+        "AC-345"
+      ],
+      "title": "マップ 2D で項目が上位層ごとにまとまり名称・件数・開閉がある",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac345_map2d_items_are_grouped_by_tier_with_name_and_count_and_toggle\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:36:50+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-174",
+      "requirement_ids": [
+        "FR-1063"
+      ],
+      "ac_ids": [
+        "AC-345"
+      ],
+      "title": "マップ 2D の要求が領域の欄どおりに区切られフラットでない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac345_map2d_requirement_areas_match_area_fields_and_not_flat\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:36:54+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-175",
+      "requirement_ids": [
+        "FR-1063"
+      ],
+      "ac_ids": [
+        "AC-346"
+      ],
+      "title": "マップ 3D が 2D と同じ上位層の構成で開閉できる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac346_map3d_same_tier_structure_as_2d_and_toggles\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:36:59+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-176",
+      "requirement_ids": [
+        "FR-1063"
+      ],
+      "ac_ids": [
+        "AC-347"
+      ],
+      "title": "RPG 風で項目の上位層が名称・件数つきで示され城・街・住人の件数が変わらない",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac347_rpg_tiers_shown_with_counts_and_places_count_unchanged\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:37:03+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-177",
+      "requirement_ids": [
+        "FR-1063"
+      ],
+      "ac_ids": [
+        "AC-347"
+      ],
+      "title": "項目は城・街・住人の件数に加算されない（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac347_item_count_not_added_to_castle_town_resident_counts\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:37:08+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-178",
+      "requirement_ids": [
+        "FR-1063"
+      ],
+      "ac_ids": [
+        "AC-348"
+      ],
+      "title": "一覧・表・エンティティ・連携カタログで行が上位層の見出しの下にまとまり件数・開閉がある",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac348_list_and_table_screens_group_rows_under_headings_with_counts\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:37:13+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-179",
+      "requirement_ids": [
+        "FR-1063"
+      ],
+      "ac_ids": [
+        "AC-349"
+      ],
+      "title": "実装状態とダッシュボードで項目が上位層でまとまり件数があり開ける",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac349_status_and_dashboard_group_by_tier_with_counts\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:37:17+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-180",
+      "requirement_ids": [
+        "FR-1063"
+      ],
+      "ac_ids": [
+        "AC-349"
+      ],
+      "title": "実装状態で層ごとの状態の内訳の合計が層の件数と一致する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac349_implstatus_shows_per_tier_state_breakdown_summing_to_count\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:37:21+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-181",
+      "requirement_ids": [
+        "FR-1063"
+      ],
+      "ac_ids": [
+        "AC-350"
+      ],
+      "title": "全画面で上位層の名称・順序・件数が同一",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac350_all_screens_show_identical_tier_names_order_and_counts\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:37:26+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-18T19:38:44+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル integration で System Test の対象外（CHK-10）。implementer の統合テストの参考として残す"
+        }
+      ]
+    },
+    {
+      "id": "E2E-182",
+      "requirement_ids": [
+        "FR-1063"
+      ],
+      "ac_ids": [
+        "AC-350"
+      ],
+      "title": "画面を切り替えても開閉状態が保たれる（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac350_switching_screens_keeps_selection_filter_and_expansion\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:37:29+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-18T19:38:45+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル integration で System Test の対象外（CHK-10）。implementer の統合テストの参考として残す"
+        }
+      ]
+    },
+    {
+      "id": "E2E-183",
+      "requirement_ids": [
+        "FR-1063"
+      ],
+      "ac_ids": [
+        "AC-351"
+      ],
+      "title": "上位層の決まらないデータはどの画面でも未分類として件数つきで示される",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac351_unclassified_is_explicit_with_count_on_every_screen\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:37:33+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-18T19:38:46+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル integration で System Test の対象外（CHK-10）。implementer の統合テストの参考として残す"
+        }
+      ]
+    },
+    {
+      "id": "E2E-184",
+      "requirement_ids": [
+        "FR-1063"
+      ],
+      "ac_ids": [
+        "AC-351"
+      ],
+      "title": "未分類は他の領域に混ぜて隠されない（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac351_unclassified_not_merged_into_other_areas\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:37:37+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-18T19:38:47+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル integration で System Test の対象外（CHK-10）。implementer の統合テストの参考として残す"
+        }
+      ]
+    },
+    {
+      "id": "E2E-185",
+      "requirement_ids": [
+        "FR-1063"
+      ],
+      "ac_ids": [
+        "AC-352"
+      ],
+      "title": "キーボードだけで開閉でき名称・件数・開閉状態が支援技術に伝わる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac352_keyboard_toggle_and_accessible_name_count_state\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:37:41+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-18T19:38:47+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル integration で System Test の対象外（CHK-10）。implementer の統合テストの参考として残す"
+        }
+      ]
+    },
+    {
+      "id": "E2E-186",
+      "requirement_ids": [
+        "FR-1063"
+      ],
+      "ac_ids": [
+        "AC-352"
+      ],
+      "title": "種類を色だけで示さない（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac352_kind_not_conveyed_by_color_alone\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:37:45+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-18T19:38:48+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル integration で System Test の対象外（CHK-10）。implementer の統合テストの参考として残す"
+        }
+      ]
+    },
+    {
+      "id": "E2E-187",
+      "requirement_ids": [
+        "FR-1063"
+      ],
+      "ac_ids": [
+        "AC-352"
+      ],
+      "title": "日本語・英語の表示で上位層の名称が切り替わる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac352_tier_names_switch_with_language\" -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-18T19:37:49+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-18T19:38:49+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル integration で System Test の対象外（CHK-10）。implementer の統合テストの参考として残す"
         }
       ]
     }
