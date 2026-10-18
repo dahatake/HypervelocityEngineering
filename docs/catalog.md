@@ -84,7 +84,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1059 | 関係の索引（種類つきの関連付け） | 承認済み | `scripts/metadata.json`、`scripts/ebaklib.py`、`scripts/rdcheck.py`、`EABK-Studio/eabk_model.py`、`tools/install.py` | `tests/toolkit/test_hierarchy.py`、`tests/system/test_data_hierarchy_system.py` | メタデータ定義と階層・関係索引 |
 | FR-1060 | 領域の初期分類（AI提案） | 承認済み | 未実装 | 未実装 | - |
 | FR-1062 | 各データの上位層の定義（種類→区分→領域→項目） | 承認済み | `EABK-Studio/eabk_model.py`、`EABK-Studio/web/js/hier.js`、`scripts/rdcheck.py`、`tools/install.py` | `EABK-Studio/tests/test_tier_hierarchy.py`、`tests/system/test_data_tiers_system.py` | 階層の導出、階層の共通 JS 部品 |
-| FR-1063 | Studio の全画面での上位層の表示 | 承認済み | 未実装 | 未実装 | - |
+| FR-1063 | Studio の全画面での上位層の表示 | 承認済み | `EABK-Studio/web/js/maptiers.js`、`EABK-Studio/web/js/map2d.js`、`EABK-Studio/web/js/map3d.js`、`EABK-Studio/web/js/maprpg.js`、`EABK-Studio/web/app.css`、`EABK-Studio/web/rpg.css` | `EABK-Studio/tests/test_map_tiers_ui.py`、`tests/system/e2e/test_studio_tiers_system.py` | 階層の共通 JS 部品、マップの上位層パネル |
 | NFR-UX-014 | 管理データの情報デザイン（段階的開示と一覧性） | 承認済み | `scripts/metadata.json`、`scripts/ebaklib.py`、`scripts/rdcheck.py`、`EABK-Studio/eabk_model.py`、`tools/install.py` | `tests/toolkit/test_hierarchy.py`、`tests/system/test_data_hierarchy_system.py` | メタデータ定義と階層・関係索引 |
 | FR-1050 | 表・連携の ID の全面リンク化と未解決 ID の明示 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
 | FR-1051 | 「表」画面の種別のグループ化と名称の統一 | 承認済み | 未実装 | tests/system/e2e/test_studio_info_design_system.py | - |
@@ -117,7 +117,8 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | データ層修復 | `scripts/rdfix.py` | 要求定義書を変更せずデータ層の不整合を自動修復し、残りを手動対応として示す | FR-1018、FR-1019、FR-1044、FR-1045、FR-1046、NFR-COMPAT-004、NFR-PERF-005、NFR-REL-002、NFR-REL-003、NFR-REL-004 |
 | メタデータ定義と階層・関係索引 | `scripts/metadata.json`、`scripts/ebaklib.py`、`scripts/rdcheck.py` | 欄名・必須/任意・許容値の定義（metadata.json）、領域の欄・一覧表・割り当て表の検査（CHK-29/30）、列名の一致（CHK-31）、節の項目数の警告（CHK-32）、`rdcheck.py list --area/--by-area`、種類つきの関係の索引（`rdcheck.py index`。保存せず都度生成） | FR-1057、FR-1058、FR-1059、NFR-UX-014 |
 | 階層の導出 | `EABK-Studio/eabk_model.py`、`scripts/rdcheck.py` | 種類→区分→領域→項目の階層を `derive_hierarchy` で 1 か所から導出する（要求の区分は ID 接頭辞、領域は各要求の領域の欄、領域のないデータは既存の節・分類、定まらないものだけ「未分類」。割り当て表は持たず都度生成）。`/api/model` の `model.hierarchy`、`rdcheck.py hierarchy [--json]` | FR-1062 |
-| 階層の共通 JS 部品 | `EABK-Studio/web/js/hier.js` | 全画面で使う階層の描画（見出し・件数・開閉・未分類・JA/EN の名称・キーボード操作・aria 属性・記号で示す開閉）。`renderTiers` / `buildTree` / `tierName` | FR-1062 |
+| 階層の共通 JS 部品 | `EABK-Studio/web/js/hier.js` | 全画面で使う階層の描画（見出し・件数・開閉・未分類・JA/EN の名称・キーボード操作・aria 属性・記号で示す開閉）。`renderTiers` / `buildTree` / `tierName` | FR-1062、FR-1063 |
+| マップの上位層パネル | `EABK-Studio/web/js/maptiers.js` | マップ 2D・3D の隅のパネルと RPG 風の会話ウィンドウに、階層の共通 JS 部品で上位層（種類→区分→領域→項目）を件数つきで出し、項目の選択に接続する。開閉状態は画面をまたいで保つ。RPG 風はスタートメニュー「項目の上位層」（城・街・住人の件数には加えない） | FR-1063 |
 | エンティティ台帳・企業カタログ照合 | `scripts/entities.py` | 用語表・状態表・対象エンティティ・カタログのテーブル表からエンティティ台帳を導出し（list）、企業データカタログ（任意設定 `enterprise_data_catalog`。読み取り専用）と照合し（check）、覆われないものを質問票形式の ToDo にする（todo）。導出関数 `derive` は Studio からも再利用する。任意欄: 要求の `エンティティの関係`、カタログの `### 列: <テーブル>` 節の表、DDL・JSON Schema の読み取り専用の補完（列・関係・クラスターも導出する） | FR-1020、FR-1021、FR-1022、FR-1023、FR-1024、FR-1025、FR-1026、FR-1030、NFR-COMPAT-003、NFR-SEC-023 |
 # EABK Studio カタログ
 

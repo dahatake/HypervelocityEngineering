@@ -4,6 +4,7 @@ import { store } from './store.js';
 import { xrefLink } from './xref.js';
 import { create2d } from './sz2d.js';
 import { mountShell, isArch, wantsEntityView, hasEntityStructure, setTab } from './semzoom.js';
+import { mountMapTiers } from './maptiers.js';
 import { el, colorOf, TYPE_COLOR, STATUS_COLOR, IMPL_COLOR, token, icon, showTip, hideTip, nodeTip } from './ui.js';
 
 const COL = { goal: 0, req: 1, ac: 2, entity: 3, part: 3, api: 3, table: 3, param: 3, question: 3, file: 4, component: 4, case: 5, persona: 6, external: 6 };
@@ -477,9 +478,10 @@ function mountGraph(host) {
 // FR-1027..FR-1029: when the model has entity relations or columns, this route opens the entity view (semantic zoom) first;
 // the classic relationship graph stays one button away.  The target, level and filter are shared with the other renderer.
 export function mount(host) {
-  let inner = null;
+  let inner = null, tiers = null;
   const run = () => {
     inner?.destroy?.();
+    tiers?.destroy?.();
     host.replaceChildren();
     if (isArch() || wantsEntityView(store.model)) {
       inner = mountShell(host, { mode: 'map2d', createRenderer: create2d,
@@ -489,7 +491,8 @@ export function mount(host) {
       inner = mountGraph(host);
       if (hasEntityStructure(store.model)) host.append(el('button', { type: 'button', class: 'btn ghost sz-switch', onclick: () => { setTab('entities'); run(); } }, t('sz.entview')));
     }
+    tiers = mountMapTiers(host, 'map2d');   // FR-1063: 上位層（種類→区分→領域→項目）
   };
   run();
-  return { destroy() { inner?.destroy?.(); } };
+  return { destroy() { inner?.destroy?.(); tiers?.destroy?.(); } };
 }

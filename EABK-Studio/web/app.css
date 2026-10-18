@@ -325,3 +325,20 @@ a.xref{color:var(--color-fg-link);text-decoration:underline;text-underline-offse
 .crumbs [aria-current=page]{font-weight:700}
 [data-testid=chart-segment]:focus-visible{outline:var(--stroke-focus) solid var(--color-focus);outline-offset:2px}
 i[data-testid=chart-segment]{min-width:var(--space-6)}
+
+/* FR-1063 AC-345 AC-346 AC-347: マップの上位層パネル（マップ専用のクラス。hier-lists・hier-xcut とは別） */
+.maptiers{position:absolute;left:var(--space-3);bottom:var(--space-3);z-index:8;width:min(340px,calc(100% - var(--space-6)));max-height:46%;display:flex;flex-direction:column;background:var(--color-bg-surface);color:var(--color-fg-default);border:var(--stroke-thin) solid var(--color-border-strong);border-radius:var(--radius-md);box-shadow:var(--elevation-flyout)}
+.maptiers:not([open]){max-height:none}
+.maptiers-sum{cursor:pointer;padding:var(--space-2) var(--space-3);font-weight:600}
+.maptiers-body{overflow:auto;padding:0 var(--space-2) var(--space-2)}
+.maptiers .tier-body,.rpg-tiers .tier-body{margin-left:var(--space-3);border-left:var(--stroke-thin) solid var(--color-border-default);padding-left:var(--space-2)}
+.maptiers .tier-body[hidden],.rpg-tiers .tier-body[hidden]{display:none}
+.maptiers .tier-head,.rpg-tiers .tier-head{margin:0;font-size:inherit}
+.maptiers .tier-toggle,.rpg-tiers .tier-toggle{display:flex;gap:var(--space-1);align-items:center;width:100%;text-align:left;background:none;border:0;color:inherit;font:inherit;padding:var(--space-1) var(--space-1);cursor:pointer}
+.maptiers .tier-toggle:focus-visible,.rpg-tiers .tier-toggle:focus-visible,.maptier-item:focus-visible{outline:var(--stroke-thick) solid var(--color-focus);outline-offset:1px}
+.maptiers .tier-kind>.tier-head .tier-name,.rpg-tiers .tier-kind>.tier-head .tier-name{font-weight:700}
+.maptiers .tier-unclassified>.tier-head .tier-name,.rpg-tiers .tier-unclassified>.tier-head .tier-name{text-decoration:underline dotted}
+.maptier-item{display:block;width:100%;text-align:left;background:none;border:0;color:inherit;font:inherit;font-size:.9em;padding:2px var(--space-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.maptier-item:not(:disabled){cursor:pointer}
+.maptier-item:not(:disabled):hover{background:var(--color-bg-hover,rgba(127,127,127,.18))}
+@media (max-width:480px){.maptiers{width:calc(100% - var(--space-4));max-height:38%}}
