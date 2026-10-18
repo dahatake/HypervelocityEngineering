@@ -4,6 +4,7 @@ import { t, onLang, lang } from './i18n.js';
 import { store } from './store.js';
 import { el } from './ui.js';
 import { xrefLink } from './xref.js';
+import { placeRows, listTiers } from './tierlist.js';
 
 // Colour is never the only cue: every state also has a symbol and a word (AC-093).
 const STATE_META = [
@@ -130,6 +131,22 @@ export function mount(host) {
           el('td', {}, caseText(r.cases)));
       })));
 
+    // FR-1063 AC-349: 要求を上位層（種類→区分→領域）でまとめ、各層の状態の内訳を件数で示す（内訳の合計は層の件数と一致）。
+    const collect = (node) => [...node.items, ...[...node.children.values()].flatMap(collect)];
+    const placed = placeRows(items, (r) => ({ kind: '要求', id: r.id }), '要求');
+    const tiers = listTiers(placed, {
+      extra: (node) => {
+        const rows = collect(node);
+        return el('p', { class: 'tier-breakdown mini', 'data-testid': 'tier-status-breakdown', 'aria-label': `${t('tier.breakdown')}` },
+          el('span', { class: 'tier-breakdown-label' }, t('tier.breakdown') + ': '),
+          ja.map((s, i) => el('span', { class: 'tier-breakdown-item', 'data-state': s }, `${STATE_META[i].sym} ${stateLabel(i, ja)} ${rows.filter((x) => x.row.state === s).length}`)),
+          // 層の件数は FR-1062 の導出の件数。この画面に状態の登録がない要求は「状態の登録なし」として数え、内訳の合計が層の件数と一致する。
+          el('span', { class: 'tier-breakdown-item', 'data-state': '' }, `– ${t('tier.nostate')} ${Math.max(0, node.count - rows.length)}`));
+      },
+      itemNode: (it) => el('div', { class: 'tier-item', role: 'treeitem', 'data-testid': 'tier-item', 'data-id': it.id, 'data-state': it.row.state },
+        el('span', { class: 'mono' }, xrefLink(it.id)), ' ', it.row.title, ' ',
+        el('span', { class: 'tier-state' }, `${STATE_META[ja.indexOf(it.row.state)]?.sym || ''} ${stateLabel(ja.indexOf(it.row.state), ja)}`)),
+    });
     // FR-1061: Gantt chart (actual test period per requirement). Read-only; selection/filter are the shared ones (AC-340).
     const ganttBody = el('div', { 'data-testid': 'impl-gantt-body' });
     const barAction = (r) => {
@@ -218,6 +235,7 @@ export function mount(host) {
       el('h1', {}, '🚀 ' + t('nav.implstatus')),
       el('p', { class: 'sub' }, t('impl2.sub')),
       legend, filterBar, el('div', { style: { margin: '8px 0' } }, viewBtn),
+      el('section', { class: 'card impl-tiers', 'data-testid': 'impl-tiers' }, el('h2', {}, t('impl.tiers')), el('p', { class: 'mini' }, t('impl.tiers.sub')), tiers),
       el('div', { class: 'card' }, el('h2', {}, t('impl2.all')), bar('all', t('impl2.all'), items)),
       el('div', { class: 'grid cols2', style: { marginTop: '16px' } },
         el('div', { class: 'card' }, el('h2', {}, t('impl2.goal')), el('div', { style: { display: 'grid', gap: '10px' } }, groupBy('goal').map(([g, rs]) => bar('goal', g, rs)))),

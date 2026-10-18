@@ -804,6 +804,117 @@ def parse_integration_catalog(root: Path, files: dict, model: dict) -> None:
     model["integrationCatalog"] = items
 
 
+# FR-1062 AC-343 AC-344: 種類 → 区分 → 領域 → 項目 の階層を、元データから 1 か所で導出する。
+# 領域の割り当て表は持たない（要求の領域の欄・既存の節の見出しを直接読み、build_model のたびに作り直す）。
+UNCLASSIFIED = "未分類"
+HIER_KINDS = ("目的", "要求", "受入基準", "試験ケース", "カタログ", "エンティティ", "質問", "出典", "パラメータ", "監査指摘",
+              "外部連携", "users-guide", "scripts")
+HIER_SKIP_DIRS = {"__pycache__", ".git", "node_modules", "images"}
+
+
+def _section_area(section: str) -> str:
+    """表の節（見出しの並び）から既存の分類名を決める: 「領域: <名>」があればその名、なければ最も内側の見出し。"""
+    parts = [p.strip() for p in (section or "").split(" / ") if p.strip()]
+    for p in reversed(parts):
+        m = re.match(r"^領域\s*[:：]\s*(.+)$", p)
+        if m:
+            return m.group(1).strip()
+    return parts[-1] if parts else UNCLASSIFIED
+
+
+def _first_heading(path: Path) -> str:
+    try:
+        for ln in read_text(path).splitlines():
+            m = HEADING_RE.match(ln)
+            if m:
+                return strip_md(m.group(2)) or UNCLASSIFIED
+    except OSError:
+        pass
+    return UNCLASSIFIED
+
+
+def derive_hierarchy(model: dict, root: Path, docs: list[dict], cat_doc: dict | None) -> dict:
+    items: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add(kind: str, division: str, area: str, iid: str, **kw) -> None:
+        iid = (iid or "").strip()
+        if not iid or (kind, iid) in seen:
+            return
+        seen.add((kind, iid))
+        items.append({"kind": kind, "division": division or UNCLASSIFIED, "area": (area or "").strip() or UNCLASSIFIED,
+                      "id": iid, **{k: v for k, v in kw.items() if v not in (None, "")}})
+
+    req_area: dict[str, str] = {}
+    for r in model["reqs"]:
+        a = (r.get("area") or "").strip()
+        req_area[r["id"]] = a or UNCLASSIFIED
+        add("要求", "機能" if r["id"].startswith("FR-") else "非機能", a, r["id"], title=r.get("title"))
+        for ac in r.get("acs", []):
+            add("受入基準", ac.get("level") or UNCLASSIFIED, a, ac["id"], title=(ac.get("text") or "")[:80])
+    sect: dict[str, str] = {}
+    for d in docs:
+        for t in d["tables"]:
+            for row in t["rows"]:
+                c0 = strip_md(row["cells"][0]) if row["cells"] else ""
+                if c0:
+                    sect.setdefault(c0, _section_area(t["section"]))
+    for kind, key in (("目的", "goals"), ("質問", "questions"), ("出典", "sources"), ("パラメータ", "params"), ("監査指摘", "audits")):
+        for x in model[key]:
+            add(kind, kind, sect.get(x["id"], UNCLASSIFIED), x["id"], title=x.get("title") or x.get("question") or x.get("name") or x.get("summary"))
+    for c in model["cases"]:
+        rids = c.get("requirement_ids") or []
+        area = next((req_area[q] for q in rids if q in req_area and req_area[q] != UNCLASSIFIED), UNCLASSIFIED)
+        add("試験ケース", c.get("layer") or UNCLASSIFIED, area, c.get("id") or "", title=c.get("title"))
+    for it in model.get("integrationCatalog", []):
+        add("外部連携", "連携カタログ", UNCLASSIFIED, it["id"], title=it.get("name"))
+    for e in model.get("entities", {}).get("entities", []):
+        add("エンティティ", "エンティティ", UNCLASSIFIED, e.get("name") or "")
+    for sm in model["stateMachines"]:
+        add("エンティティ", "状態遷移", UNCLASSIFIED, sm["entity"])
+    if cat_doc:
+        for t in cat_doc["tables"]:
+            k = t["key"]
+            if "要求ID" in k and "実装ファイル" in k:
+                div = "機能"
+            elif "テーブル名" in k:
+                div = "テーブル"
+            elif "部品名" in k:
+                div = "共通部品"
+            elif "定義ファイル" in k:
+                div = "API・イベント"
+            else:
+                div = _section_area(t["section"]) if t["section"] else "その他"
+            sec = t["section"] and any(re.match(r"^領域\s*[:：]", p.strip()) for p in t["section"].split(" / "))
+            for row in t["rows"]:
+                c0 = strip_md(row["cells"][0]) if row["cells"] else ""
+                area = _section_area(t["section"]) if sec else (req_area.get(c0) if div == "機能" else None)
+                if not area:
+                    area = _section_area(t["section"]) if t["section"] and div != "機能" else UNCLASSIFIED
+                add("カタログ", div, area, c0)
+    for sub, kind in (("users-guide", "users-guide"), ("scripts", "scripts")):
+        base = root / sub
+        if not base.is_dir():
+            continue
+        exts = {".md"} if sub == "users-guide" else {".py", ".sh", ".ps1", ".json"}
+        for p in sorted(base.rglob("*")):
+            rel = p.relative_to(root).as_posix()
+            if not p.is_file() or p.suffix.lower() not in exts or set(p.relative_to(base).parts[:-1]) & HIER_SKIP_DIRS:
+                continue
+            parts = p.relative_to(base).parts
+            div = (parts[0] if len(parts) > 1 else sub)
+            area = _first_heading(p) if sub == "users-guide" else (parts[0] if len(parts) > 1 else UNCLASSIFIED)
+            add(kind, div, area, rel)
+    order = {k: i for i, k in enumerate(HIER_KINDS)}
+    counts: OrderedDict[tuple, int] = OrderedDict()
+    for it in items:
+        key = (it["kind"], it["division"], it["area"])
+        counts[key] = counts.get(key, 0) + 1
+    tiers = [{"path": list(k), "count": n} for k, n in
+             sorted(counts.items(), key=lambda kv: (order.get(kv[0][0], 99), kv[0][1] != "機能", kv[0][1], kv[0][2] == UNCLASSIFIED, kv[0][2]))]
+    return {"items": items, "tiers": tiers, "unclassified": UNCLASSIFIED, "kinds": list(HIER_KINDS)}
+
+
 def build_model(root: Path) -> dict:
     root = Path(root).resolve()
     files = load_config(root)
@@ -813,6 +924,7 @@ def build_model(root: Path) -> dict:
                  "generatedAt": generated_at(root), "files": {}, "fingerprint": fingerprint(root)},
         "goals": [], "reqs": [], "params": [], "terms": [], "stateMachines": [], "personas": [],         "integrations": [], "integrationCatalog": [],
         "questions": [], "decisions": [], "audits": [], "sources": [], "scenarios": [], "catalog": {"features": [], "apis": [], "tables": [], "parts": []},
+        "hierarchy": {"items": [], "tiers": [], "unclassified": UNCLASSIFIED, "kinds": list(HIER_KINDS)},
         "cases": [], "caseDigests": {}, "runs": [], "registry": [], "registryRecords": [],
         "analysis": {"structure": {"layers": [], "differences": []}, "runtime": {}, "history": []},
         "graph": {"nodes": [], "edges": []}, "warnings": warnings,
@@ -1058,6 +1170,7 @@ def build_model(root: Path) -> dict:
     model["implStatus"] = build_impl_status(model, root)
     build_management_analysis(model, docs, cat_doc, files, warnings)
     build_graph(model, reqs, parts)
+    model["hierarchy"] = derive_hierarchy(model, root, docs, cat_doc)
     return model
 
 

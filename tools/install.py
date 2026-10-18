@@ -113,6 +113,7 @@ MANAGED = [
     "EABK-Studio/web/js/diagrams.js",
     "EABK-Studio/web/js/drawer.js",
     "EABK-Studio/web/js/entities.js",
+    "EABK-Studio/web/js/hier.js",
     "EABK-Studio/web/js/i18n.js",
     "EABK-Studio/web/js/implstatus.js",
     "EABK-Studio/web/js/insights.js",

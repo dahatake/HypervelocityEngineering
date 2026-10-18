@@ -2,6 +2,8 @@
 import { t, onLang } from './i18n.js';
 import { store } from './store.js';
 import { el, statusText, STATUS_COLOR, TYPE_COLOR, animateNumber, businessIcon, token } from './ui.js';
+import { xrefLink } from './xref.js';
+import { listTiers, hierarchy } from './tierlist.js';
 
 const PALETTE = ['--viz-sel', '--viz-accent-2', '--viz-accent-3', '--viz-api', '--viz-goal', '--viz-entity', '--viz-external', '--viz-param'];
 let persona = 'Product Manager';
@@ -127,6 +129,11 @@ export function mount(host) {
         el('div', { class: 'card' }, cardHeading('test', t('dash.cases')),
           caseRows.length ? el('div', { class: 'row' }, caseRows.map(([k, n]) => el('span', { class: 'badge ' + (k === 'pass' ? 'pass' : k === 'fail' ? 'fail' : '') }, `${k} ${n}`))) : el('div', { class: 'empty' }, t('none')),
           el('div', { class: 'mini', style: { marginTop: '10px' } }, m.registry.length ? m.registry.map((x) => `${x.kind}:${x.state} ${x.count}`).join(' · ') : '')),
+        el('div', { class: 'card', style: { gridColumn: '1 / -1' }, 'data-testid': 'dash-tiers' }, cardHeading('req', t('dash.tiers')), el('p', { class: 'mini' }, t('dash.tiers.sub')),
+          listTiers(hierarchy().items, {
+            itemNode: (it) => el('div', { class: 'tier-item', role: 'treeitem', 'data-testid': 'tier-item', 'data-id': it.id },
+              store.nodes.has(it.id) ? xrefLink(it.id, it.id) : el('span', { class: 'mono' }, it.id), it.title ? el('span', { class: 'tier-item-title' }, ` ${it.title}`) : null),
+          })),
         el('div', { class: 'card', style: { gridColumn: '1 / -1' } }, cardHeading('progress', t('dash.runs')),
           m.runs.length ? el('div', { style: { overflow: 'auto' } }, runsTable(m.runs)) : el('div', { class: 'empty' }, t('none')))));
   };

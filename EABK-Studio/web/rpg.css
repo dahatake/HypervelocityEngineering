@@ -22,3 +22,7 @@
 .rpg-keys{margin-top:8px;font-size:12px}
 .rpg-legend{margin:0;color:var(--dim);font-size:var(--font-size-caption);padding-right:190px}
 .rpg-alt{font-size:var(--font-size-caption);max-height:30%;overflow:auto}
+
+/* FR-1063 AC-347: 会話ウィンドウ内の項目の上位層 */
+.rpg-dialog.rpg-tiers-dlg{top:12px;max-height:calc(100% - 24px);overflow:auto;box-sizing:border-box}
+.rpg-tiers .tier-toggle,.rpg-tiers .maptier-item{color:var(--scene-rpg-panel-fg)}
