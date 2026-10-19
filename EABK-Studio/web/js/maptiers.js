@@ -106,7 +106,11 @@ export function mountMapTiers(host, mode) {
   // 地図本体の見出し・塊で開閉されたら、パネルの開閉も追従する（パネルでの操作では作り直さない）
   const off = [onLang(paint), store.on('model', build), tierState.on((p, o, src) => { if (src !== 'panel') build(); })];
   host.append(box);
-  return { destroy() { off.forEach((f) => f && f()); box.remove(); } };
+  // NFR-UX-016: 地図の表示面はパネルの高さを避ける（CSS 変数 --mt-h）。パネルの開閉・幅の変化に追従する
+  const syncH = () => host.style.setProperty('--mt-h', `${Math.ceil(box.getBoundingClientRect().height)}px`);
+  const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(syncH) : null;
+  if (ro) ro.observe(box); syncH();
+  return { destroy() { off.forEach((f) => f && f()); if (ro) ro.disconnect(); host.style.removeProperty('--mt-h'); box.remove(); } };
 }
 
 /** RPG 風の会話ウィンドウ用。城・街・住人とは別に、項目の上位層だけを見せる（件数は城・街・住人に加えない）。
