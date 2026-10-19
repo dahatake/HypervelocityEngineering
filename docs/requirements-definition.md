@@ -15,6 +15,7 @@ ID（FR・NFR・AC・Q・PARAM）は `python scripts/next-id.py <種別>` でだ
 
 | 日付 | 依頼の要約 | 行き先（要求 ID・Q・不採用の理由） | 反映した回答 | 監査で直した不整合 |
 |---|---|---|---|---|
+| 2026-10-19 | 独立監査 C-1〜C-3 の解消（run 202610192052） | 変更: NFR-SEC-003・AC-025（保存対象に 3D 演出スタイル名〔文字列のみ〕を追加。承認済み要求の最小改訂で、利用者指示による）、FR-1069 適用方式（競合解消）、FR-1070 適用方式（別名表・遷移値）・AC-381（既定は data-preset=corporate、一時退避は保存値を変えない）・AC-382、AC-367・370・AC-290（data-current＝実表示、data-selected＝元の選択）。C-4〜C-9 は未反映 | なし | C-1〜C-3 |
 | 2026-10-19 | 最終監査（3 回）の文面指摘の反映（run 202610181857） | 変更: FR-1062（適用方式に層の語と要求以外の区分・領域の値の定義を追加。AC-343・344 に値の定義を反映）、FR-1063（関連資産の区切り、適用方式に RPG 風の二重計上なしの条件）、AC-345〜348（「種別・領域」→「種類・区分・領域」）、AC-347、AC-355（具体値）、AC-356（手順・合格条件）。要求の意味・AC の ID は不変。欠番: 353・354 は、監査 T-5 で AC-352 の狭い画面の検査を 355 に分けたとき、採番済みの 353・354 は用途がなくなり再利用しない方針で空けた（ID は再利用しない） | なし | 用語の揺れ、LOW 指摘 |
 | 2026-10-18 | 各データの上位層（種別→領域→項目）の定義と Studio 全画面での表示（run 202610181857） | 追加: FR-1062（AC-343・AC-344）、FR-1063（AC-345〜AC-352、AC-355・AC-356）。監査 T-1〜T-6 を反映（「種別」を AC-225 の語のまま「種類」とし、機能／非機能は「区分」。領域の正本は欄で 9.1・9.2 は集計・写し。9.1 の合計を実数 107 に訂正。未分類の条件、画面一覧・FR-1027・項目の定義を明記。AC-352 の狭い画面を AC-355 に分けて integration、manual は AC-356 のみ）。9.2 に追記。FR-1041・FR-1027・FR-1033・FR-1053 の文面は変更せず整合（競合なし）。影響: カタログの機能の表 | なし | なし |
 | 2026-10-18 | run の監視プロセスの強化（孤児プロセスの回収、doing の時間超過の検出、統合・状態表示・手順書への組込み、配布）（run 202610182350） | 目的 G-007 を追加。FR-1064（watch.py の scan・reap・stuck。AC-357〜360）、FR-1065（integrate の merge・abandon での回収、run-state status の WATCH 行、conductor と implement-fr の規則。AC-361〜364）、NFR-OPS-008（標準ライブラリのみ・対象の限定・配布と文書・単体テスト。AC-365・366）。PARAM-044〜046、SRC-035、用語・状態を追加、領域「運用・run の監視」を新設（9.1・9.2）。依頼の 5 項目は 3 件に集約（1→FR-1064、2〜4→FR-1065、5→NFR-OPS-008）。実装は後続工程。影響: FR-1009・NFR-OPS-005（回収は run 所有資産の清掃と独立。削除対象を変えない）、共通部品「worktree pool 管理」「run 状態・完了記録」「配布同期対象」 | なし | なし。競合なし |
@@ -1474,7 +1475,7 @@ EABK の要求定義書、カタログ、System Test 台帳、ID 台帳、実行
   - 検証レベル: integration
 - 受入基準 AC-289: RPG 風と同じ情報（城・街の一覧、接続、会話ウィンドウの内容）を、表またはテキストの代替表現とキーボードだけでも確認・操作でき、状態や種類を色だけで示さず、スクリーンリーダーに現在位置と会話の内容が伝わる（NFR-UX-007）。
   - 検証レベル: integration
-- 受入基準 AC-290: 目的（`goals` に宣言された G-ID と、要求の「上位」で参照されるだけの G-ID を合わせた件数）またはエンティティが 0 件の管理データ、または RPG 風を描画できない環境では、エラーにせず、RPG 風の切替アイコンのまま 2D 表示にフォールバックして理由と代替（表・テキスト）を示し、元の選択が保たれる。RPG 風の閲覧は読み取り専用で、管理データの内容・更新時刻を変えない（FR-013、NFR-SEC-002）。
+- 受入基準 AC-290: 目的（`goals` に宣言された G-ID と、要求の「上位」で参照されるだけの G-ID を合わせた件数）またはエンティティが 0 件の管理データ、または RPG 風を描画できない環境では、エラーにせず、実際の表示は 2D にフォールバックして理由と代替（表・テキスト）を示し、元の選択（RPG 風）が保たれる。ヘッダーでは `data-current`＝2d（実表示）、`data-selected`＝rpg（元の選択）とし、RPG 風の切替アイコンは選択中として示す（AC-370 と同じ規則）。RPG 風の閲覧は読み取り専用で、管理データの内容・更新時刻を変えない（FR-013、NFR-SEC-002）。
   - 検証レベル: integration
 
 #### FR-1054 RPG 風の音楽・効果音・キャラクターの生成
@@ -1508,13 +1509,13 @@ EABK の要求定義書、カタログ、System Test 台帳、ID 台帳、実行
 - 決定状態: 承認済み（依頼 2026-10-19）　出自: 依頼原文　優先度: MUST（依頼 R1。画面ごとに切替の場所が異なり、図式では画面内右、マップでは詳細ドロワーからしか切り替えられない現状を解消するため）
 - 上位: G-001、G-002　出典: 依頼原文（run 202610192052）、SRC-036、FR-1040、FR-1053　対象エンティティ: なし　関係する状態: なし　参照パラメータ: なし　関連する既存資産: FR-1040、FR-1053、FR-1027、NFR-UX-006、`EABK-Studio/web/js/dim.js`、`EABK-Studio/web/js/app.js`、`EABK-Studio/web/js/i18n.js`　領域: 図式・マップ・エンティティ表示
 - 適用方式（[ASSUMPTION]）: ヘッダーの切替は、現在の画面が対応するモードだけを有効にし、対応しないモードは無効（`disabled` と理由の表示）にして隠さない。RPG 風は FR-1053 が定めるマップだけで有効とする。選んだ表示モードは、FR-1040 と同じく画面を開いている間だけ保つ（保存しない）。切替アイコンの図柄・語の併記・読み上げは FR-1040 の AC-222 を再利用する。覆す条件: 利用者が他の画面への RPG 風の提供、またはモードの保存を求めたとき。
-- 受入基準 AC-367: ヘッダーに表示モード切替（`data-testid="header-dim-toggle"`、現在値は `data-current="2d|3d|rpg"`、各ボタンは `data-dim`）が、すべての画面（ダッシュボード・マップ・図式・エンティティ・ソース対応・表・整合性保守など）で常に存在し、画面を切り替えても消えない。画面内の既存の切替（図式の 2D|3D、マップのドロワーの「2D 地図で見る」「3D 地図で見る」）は、同じ状態を操作する（食い違う値を持たない）。
+- 受入基準 AC-367: ヘッダーに表示モード切替（`data-testid="header-dim-toggle"`、現在値は `data-current="2d|3d|rpg"`（実際の表示）、元の選択は `data-selected`（描画できる環境では同値）、各ボタンは `data-dim`）が、すべての画面（ダッシュボード・マップ・図式・エンティティ・ソース対応・表・整合性保守など）で常に存在し、画面を切り替えても消えない。画面内の既存の切替（図式の 2D|3D、マップのドロワーの「2D 地図で見る」「3D 地図で見る」）は、同じ状態を操作する（食い違う値を持たない）。
   - 検証レベル: system
 - 受入基準 AC-368: 現在の画面が対応しないモードのボタンは `disabled` で、対応しない理由が表示される。RPG 風はマップだけで有効である。対応する画面でボタンを操作すると、その画面の表示が選んだモードに切り替わり、`data-current` が更新される。
   - 検証レベル: system
 - 受入基準 AC-369: 表示モード切替は、キーボード（Tab・Enter・Space）とコマンド検索から操作でき、現在のモードと切替先が支援技術に読み上げられ、モードを色だけで示さず「2D」「3D」「RPG」の語を併記する。JA と EN の両方で成り立ち、動きの軽減の設定ではアイコンの動きが止まる（AC-222 と同じ条件）。
   - 検証レベル: integration
-- 受入基準 AC-370: 3D を描画できない環境でヘッダーから 3D を選んだとき、エラーにせず 2D を表示して理由と代替（表・テキスト）を示し、`data-current` は実際の表示に一致し、元の選択が保たれる（FR-1040 の AC-223 と同じ規則）。
+- 受入基準 AC-370: 3D を描画できない環境でヘッダーから 3D を選んだとき、エラーにせず 2D を表示して理由と代替（表・テキスト）を示し、`data-current` は実際の表示（2d）に一致し、`data-selected` は元の選択（3d）を保つ。描画できる環境では 2 つは同じ値である（FR-1040 の AC-223 と同じ規則）。
   - 検証レベル: integration
 
 #### FR-1067 表示モード切替をまたぐ意味的ズームの引継ぎ
@@ -1546,7 +1547,7 @@ EABK の要求定義書、カタログ、System Test 台帳、ID 台帳、実行
 - 要求: EABK Studio の利用者は、3D の演出を、情報工学の視点で落ち着いた「Software Engineering」と、発光・浮遊・粒子・アニメーションなどを含む「Entertainment」の 2 つのスタイルから、ヘッダー付近のコントロールで切り替えられ、選択が記憶される。既定は Software Engineering とする。
 - 決定状態: 承認済み（依頼 2026-10-19）　出自: 依頼原文　優先度: SHOULD（依頼 R2。分類・構造を読み取りたい場面と、見栄えを重視する場面を同じ 3D で両立するため）
 - 上位: G-001、G-002　出典: 依頼原文（run 202610192052）、SRC-036、FR-1068、FR-1066　対象エンティティ: なし　関係する状態: なし　参照パラメータ: なし　関連する既存資産: FR-1068、FR-1066、NFR-SEC-003、`EABK-Studio/web/js/map3d.js`、`EABK-Studio/web/js/dgm3d.js`、`EABK-Studio/web/js/theme.js`　領域: 図式・マップ・エンティティ表示
-- 適用方式（[ASSUMPTION]）: 演出スタイルの選択は、テーマ選択と同じブラウザー・端末単位の保存先に保存する（保存範囲は NFR-SEC-003 の「レイアウト設定とテーマ選択」に準じ、スタイル名だけを保存して利用者データを含めない）。保存範囲の拡張は Q-015 の回答（テーマ名だけを同じ保存先に保存する）に準ずる小さな拡張だが、NFR-SEC-003 の文面は変えず、競合として 11.3 に記録する。覆す条件: 利用者が保存しない（画面を開いている間だけ）ことを求めたとき。
+- 適用方式（[ASSUMPTION]）: 演出スタイルの選択は、テーマ選択と同じブラウザー・端末単位の保存先に保存する（保存範囲は NFR-SEC-003 の「レイアウト設定とテーマ選択」に準じ、スタイル名だけを保存して利用者データを含めない）。保存範囲の拡張は Q-015 の回答に準ずる小さな拡張で、NFR-SEC-003 と AC-025 の保存対象に「3D 演出スタイル名（文字列のみ）」を明記して解消した（決定記録 2026-10-19）。覆す条件: 利用者が保存しない（画面を開いている間だけ）ことを求めたとき。
 - 受入基準 AC-378: ヘッダー付近に演出スタイルの切替（`data-testid="style-toggle"`、現在値は `data-current="engineering|entertainment"`）があり、3D を表示する画面で操作できる。初回の既定は `engineering`（Software Engineering）である。選んだ値は 3D の画面の根要素の `data-style` に反映される。
   - 検証レベル: system
 - 受入基準 AC-379: Software Engineering では、種別または層ごとに整列して配置され、色とかたちの規則（FR-1068）に従い、関係の方向（矢じり等）が示され、凡例が種別と層を構造的に説明し、発光・粒子・自動の浮遊アニメーションを使わない。Entertainment では、発光・浮遊・粒子・アニメーションの少なくとも 2 種類が有効になる（`data-fx` に有効な演出名が列挙される）。どちらのスタイルでも、表示される要素・関係・ラベルの内容は同じである。
@@ -1558,10 +1559,10 @@ EABK の要求定義書、カタログ、System Test 台帳、ID 台帳、実行
 - 要求: EABK Studio の利用者は、3D のカメラを、カメラワークの分類にもとづくプリセットで切り替えられる。プリセットは、専門用語を避けた平易な名称（JA・EN）と短い説明（例:「ゆっくり近づく」「ぐるっと回る」）とアイコンまたはプレビューで示され、内部では Shot Size × Camera Angle × Camera Movement × Motion Character の 4 要素の組合せとして記述され、詳細表示で確認できる。
 - 決定状態: 承認済み（依頼 2026-10-19）　出自: 依頼原文　優先度: SHOULD（依頼 R3。カメラの専門知識がない利用者でも、見たい視点を選べるようにするため）
 - 上位: G-001、G-002　出典: 依頼原文（run 202610192052）、SRC-036、FR-1068、FR-1069　対象エンティティ: なし　関係する状態: なし　参照パラメータ: なし　関連する既存資産: FR-1069、`EABK-Studio/web/js/map3d.js`、`EABK-Studio/web/js/dgm3d.js`、`EABK-Studio/web/js/sz3d.js`、`EABK-Studio/web/js/i18n.js`　領域: 図式・マップ・エンティティ表示
-- 適用方式（[ASSUMPTION]）: プリセットは演出スタイル別に、落ち着き→派手さの順で Corporate/Keynote、Interview、Documentary、Cinematic、Product Launch、Commercial、Anime、Music Video、Game Trailer/FPV の 9 種とする。4 要素の語彙は、Shot Size＝EWS・WS・FS・MS・MCU・CU・ECU、Camera Angle＝Eye Level・Low・High・Bird's Eye・Worm's Eye・Dutch・Over-the-Shoulder・POV、Camera Movement＝Static・Pan・Tilt・Dolly In・Dolly Out・Truck・Pedestal・Orbit・Crane・Handheld・Gimbal・Whip Pan・Zoom・Dolly Zoom・Roll・FPV Fly-through、Motion Character＝Locked・Slow・Smooth・Floating・Natural・Energetic・Snappy・Aggressive・Hyperdynamic・Impossible とする。典型例（Corporate/Keynote＝Medium Wide＋Eye Level＋Slow Dolly In＋Smooth、Product＝Close-Up＋Low＋Slow Orbit＋Floating、Cinematic＝MCU＋Eye Level＋Slow Push In＋Natural、Documentary＝MS＋Eye Level＋Handheld Follow＋Organic、Commercial＝Macro CU＋Fast Dolly Out＋Smooth→Energetic、Music Video＝MCU＋Low＋Fast Orbit＋Aggressive、Anime＝ECU→EWS＋360° Orbit＋Hyperdynamic、Game Trailer＝Wide＋Low＋FPV Tracking＋Hyperdynamic）は初期値で、依頼にない語（Push In・Organic・Macro・Fast・360°・Tracking・Follow）は、最も近い語彙の別名として扱う。プリセットの選択は画面を開いている間だけ保つ。覆す条件: 利用者が名称・組合せの変更を求めたとき（プリセット表の変更で戻せる）。
-- 受入基準 AC-381: 3D の画面にカメラのプリセット選択（`data-testid="camera-presets"`）があり、9 種のプリセットが落ち着き→派手さの順に並び、各項目に `data-preset`（識別子）・平易な名称・短い説明・アイコンまたはプレビューが付く。既定は静止に近い落ち着いたプリセットである。選ぶと 3D のカメラがそのプリセットで動き、`data-camera-preset` が現在値を示す。
+- 適用方式（[ASSUMPTION]）: プリセットは演出スタイル別に、落ち着き→派手さの順で Corporate/Keynote、Interview、Documentary、Cinematic、Product Launch、Commercial、Anime、Music Video、Game Trailer/FPV の 9 種とする。4 要素の語彙は、Shot Size＝EWS・WS・FS・MS・MCU・CU・ECU、Camera Angle＝Eye Level・Low・High・Bird's Eye・Worm's Eye・Dutch・Over-the-Shoulder・POV、Camera Movement＝Static・Pan・Tilt・Dolly In・Dolly Out・Truck・Pedestal・Orbit・Crane・Handheld・Gimbal・Whip Pan・Zoom・Dolly Zoom・Roll・FPV Fly-through、Motion Character＝Locked・Slow・Smooth・Floating・Natural・Energetic・Snappy・Aggressive・Hyperdynamic・Impossible とする。典型例（Corporate/Keynote＝Medium Wide＋Eye Level＋Slow Dolly In＋Smooth、Product＝Close-Up＋Low＋Slow Orbit＋Floating、Cinematic＝MCU＋Eye Level＋Slow Push In＋Natural、Documentary＝MS＋Eye Level＋Handheld Follow＋Organic、Commercial＝Macro CU＋Fast Dolly Out＋Smooth→Energetic、Music Video＝MCU＋Low＋Fast Orbit＋Aggressive、Anime＝ECU→EWS＋360° Orbit＋Hyperdynamic、Game Trailer＝Wide＋Low＋FPV Tracking＋Hyperdynamic）は初期値で、依頼にない語（Push In・Organic・Macro・Fast・360°・Tracking・Follow）は、最も近い語彙の別名として扱う。語彙の拡張（別名表）: Shot Size に Medium Wide（MW）を加え、Wide＝WS、Close-Up＝CU、Medium Shot＝MS、Macro Close-Up＝ECU の別名とする。複合値（Smooth→Energetic、ECU→EWS）は、語彙の値 2 つの遷移（始点→終点）として 1 つの要素に表記してよい。プリセットの選択は画面を開いている間だけ保つ。覆す条件: 利用者が名称・組合せの変更を求めたとき（プリセット表の変更で戻せる）。
+- 受入基準 AC-381: 3D の画面にカメラのプリセット選択（`data-testid="camera-presets"`）があり、9 種のプリセットが落ち着き→派手さの順に並び、各項目に `data-preset`（識別子）・平易な名称・短い説明・アイコンまたはプレビューが付く。既定は先頭の Corporate/Keynote（`data-preset="corporate"`）である。性能不足による一時退避（AC-389）は表示だけを変え、保存された選択値を書き換えない。選ぶと 3D のカメラがそのプリセットで動き、`data-camera-preset` が現在値を示す。
   - 検証レベル: system
-- 受入基準 AC-382: 各プリセットの詳細表示（`data-testid="camera-detail"`）に、Shot Size・Camera Angle・Camera Movement・Motion Character の 4 要素が、決められた語彙の値で 1 つずつ（`data-shot`・`data-angle`・`data-movement`・`data-motion`）表示され、`window.__eabk3d.camera()` が現在のプリセットと 4 要素を返す。語彙にない値は含まれない。
+- 受入基準 AC-382: 各プリセットの詳細表示（`data-testid="camera-detail"`）に、Shot Size・Camera Angle・Camera Movement・Motion Character の 4 要素が、決められた語彙（別名表を含む）の値で 1 つずつ（遷移の複合値は「始点→終点」の 2 値までを許す。`data-shot`・`data-angle`・`data-movement`・`data-motion`）表示され、`window.__eabk3d.camera()` が現在のプリセットと 4 要素を返す。語彙にない値は含まれない。
   - 検証レベル: system
 - 受入基準 AC-383: プリセットの名称と説明は JA と EN の両方で用意され（i18n のキーで解決され未訳のキーが画面に出ない）、名称に専門用語（Dolly・Orbit・Gimbal 等）の語をそのまま主表示にせず、平易な語（例:「ゆっくり近づく」「ぐるっと回る」）で示す。専門用語は詳細表示でだけ見られる。
   - 検証レベル: integration
@@ -1807,10 +1808,10 @@ EABK の要求定義書、カタログ、System Test 台帳、ID 台帳、実行
   - 検証レベル: system
 
 #### NFR-SEC-003 権限・外部連携境界
-- 要求: 認証・認可、利用者データ（レイアウト設定・テーマ選択を含まない）、外部連携を独自に定義しない。Q-001 B 採用（2026-10-16）により、Studio はレコード単位の認可および機密区分の判定を行わず、選択中のローカルリポジトリ全体を利用者の観察可能範囲とし、判定主体はそのリポジトリを利用できる利用者またはアクセス管理者とする。外部連携は行わず（Q-002 A）、操作・表示・再読込の証跡は保存しない（Q-004 A）。保存するのはブラウザー・端末単位のレイアウト設定とテーマ選択（テーマ名だけ）だけとする（Q-003 B、Q-015 A）。Studio は認可済み・機密判定済みである旨を表示しない。
+- 要求: 認証・認可、利用者データ（レイアウト設定・テーマ選択を含まない）、外部連携を独自に定義しない。Q-001 B 採用（2026-10-16）により、Studio はレコード単位の認可および機密区分の判定を行わず、選択中のローカルリポジトリ全体を利用者の観察可能範囲とし、判定主体はそのリポジトリを利用できる利用者またはアクセス管理者とする。外部連携は行わず（Q-002 A）、操作・表示・再読込の証跡は保存しない（Q-004 A）。保存するのはブラウザー・端末単位のレイアウト設定とテーマ選択（テーマ名だけ）と 3D 演出スタイル名（FR-1069。文字列のみ）だけとする（Q-003 B、Q-015 A、FR-1069 依頼 2026-10-19）。Studio は認可済み・機密判定済みである旨を表示しない。
 - 決定状態: 承認済み（Q-001〜Q-004 2026-10-16）　出自: AI提案　優先度: SHOULD（権限・プライバシー）
 - 上位: G-003　出典: SRC-002、Q-001〜Q-004　対象エンティティ: なし　関係する状態: なし　参照パラメータ: なし　関連する既存資産: なし　領域: 実装状態・整合性の可視化
-- 受入基準 AC-025: Studio の画面・出力に、認可済み、機密判定済み、外部連携済み、証跡保存済みを示す表示が現れず、操作・表示・再読込の証跡がファイル・外部サービスに保存されない。確認方法は、操作の前後で対象リポジトリとブラウザー・端末のレイアウト設定とテーマ選択以外の保存先に差分がないこと。FR-006 の利用者の明示操作による CSV ダウンロードは証跡ではなく、本 AC の対象外とする。
+- 受入基準 AC-025: Studio の画面・出力に、認可済み、機密判定済み、外部連携済み、証跡保存済みを示す表示が現れず、操作・表示・再読込の証跡がファイル・外部サービスに保存されない。確認方法は、操作の前後で対象リポジトリとブラウザー・端末のレイアウト設定とテーマ選択と 3D 演出スタイル名（文字列のみ）以外の保存先に差分がないこと。FR-006 の利用者の明示操作による CSV ダウンロードは証跡ではなく、本 AC の対象外とする。
   - 検証レベル: manual
 - 受入基準 AC-039: （廃止 2026-10-16。Q-001 A〔外部の認可正本〕が不採用のため。IdP 等を導入する場合は別要求で再定義する）
   - 検証レベル: manual
