@@ -24,6 +24,10 @@ export const SHAPE_OF = Object.freeze({
   screen: 'display',    // 画面: ディスプレイ板
   module: 'module',     // モジュール: 十二面体
   state: 'signal',      // 状態: 信号灯
+  persona: 'person',    // ペルソナ（人）: 頭＋胴のシルエット
+  system: 'building',   // 対象システム: 建物（ボックス群）
+  external: 'cloud',    // 外部連携: プラグ付きの雲
+  integration: 'cloud',
 });
 export const DEFAULT_SHAPE = 'default';
 export const shapeOf = (kind) => SHAPE_OF[kind] || DEFAULT_SHAPE;
@@ -39,6 +43,8 @@ const G = {
   pole: new THREE.CylinderGeometry(0.16, 0.16, 2.2, 8), pillar: new THREE.BoxGeometry(0.4, 2, 0.4), lintel: new THREE.BoxGeometry(2.2, 0.4, 0.4),
   sheet: new THREE.BoxGeometry(1.5, 2, 0.18), fold: new THREE.BoxGeometry(0.5, 0.5, 0.22), roll: new THREE.CylinderGeometry(0.28, 0.28, 2, 10),
   disp: new THREE.BoxGeometry(2.3, 1.5, 0.16), stand: new THREE.CylinderGeometry(0.12, 0.12, 0.8, 8), base: new THREE.BoxGeometry(1, 0.1, 0.5),
+  torso: new THREE.CylinderGeometry(0.55, 0.85, 1.4, 12), tower: new THREE.BoxGeometry(1.0, 2.2, 1.0), wing: new THREE.BoxGeometry(0.8, 1.2, 0.9),
+  plugBody: new THREE.BoxGeometry(0.6, 0.5, 0.4), prong: new THREE.CylinderGeometry(0.05, 0.05, 0.4, 6),
   cone: new THREE.ConeGeometry(0.85, 1.4, 14), coneDown: new THREE.ConeGeometry(1, 1.3, 14), neck: new THREE.CylinderGeometry(0.28, 0.28, 0.9, 10),
 };
 const Q = (x, y, z) => new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z));
@@ -58,6 +64,10 @@ export const SHAPE_PARTS = {
   display: [part(G.disp, 0, 0.35, 0, null, 0.9), part(G.stand, 0, -0.65, 0), part(G.base, 0, -1.05, 0, null, 1.6)],
   module: [part(G.dod, 0, 0, 0, null, 1.05)],
   signal: [part(G.pole, 0, 0, 0, null, 0.9), part(G.sph, 0, 0.9, 0, null, 0.8)],
+  person: [part(G.sph, 0, 0.95, 0, null, 0.7), part(G.torso, 0, -0.35, 0, null, 1)],
+  building: [part(G.tower, 0, 0.1, 0, null, 1), part(G.wing, -1.0, -0.4, 0, null, 1), part(G.wing, 1.0, -0.4, 0, null, 1)],
+  cloud: [part(G.sph, -0.7, -0.1, 0, null, 0.8), part(G.sph, 0.1, 0.3, 0, null, 1), part(G.sph, 0.8, -0.1, 0, null, 0.75),
+    part(G.plugBody, 0, -1.0, 0, null, 1), part(G.prong, -0.15, -1.4, 0, null, 1), part(G.prong, 0.15, -1.4, 0, null, 1)],
   default: [part(G.sph, 0, 0, 0, null, 1.1)],
 };
 
@@ -79,7 +89,10 @@ const SW = {
   knob: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>', pawn: '<path d="M12 9l6 12H6z"/><circle cx="12" cy="6" r="3"/>',
   sheet: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>', flask: '<path d="M10 3h4M10 3v6l-5 11h14l-5-11V3"/>',
   display: '<rect x="3" y="4" width="18" height="12" rx="1"/><path d="M9 20h6M12 16v4"/>', module: '<path d="M12 2l9 6v8l-9 6-9-6V8z"/>',
-  signal: '<path d="M12 12v10"/><circle cx="12" cy="8" r="5"/>', default: '<circle cx="12" cy="12" r="8"/>',
+  signal: '<path d="M12 12v10"/><circle cx="12" cy="8" r="5"/>',
+  person: '<circle cx="12" cy="7" r="4"/><path d="M5 21c0-5 3-8 7-8s7 3 7 8z"/>',
+  building: '<path d="M8 21V3h8v18M3 21V11h5M16 21V11h5M3 21h18"/>',
+  cloud: '<path d="M7 16a4 4 0 010-8 5 5 0 019-1 4 4 0 011 9z"/><path d="M10 16v5M14 16v5"/>', default: '<circle cx="12" cy="12" r="8"/>',
 };
 export function shapeSwatch(shape, color = 'currentColor') {
   const w = document.createElement('span');

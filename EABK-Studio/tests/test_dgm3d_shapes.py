@@ -36,3 +36,33 @@ def test_fr1070_fr1071_camera_rig_and_reduced_motion():
 def test_existing_selection_label_pick_behaviour_kept():
     for needle in ("onPick?.(", "setSelected(id)", "labelOf(", "keydown"):
         assert needle in SRC
+
+
+# FR-1068 AC-374: every node kind the diagrams emit has its own shape (default is only for unknown kinds), with JA/EN names
+SHAPES = (WEB / "js" / "shapes3d.js").read_text(encoding="utf-8")
+I18N = (WEB / "js" / "i18n.js").read_text(encoding="utf-8")
+DIAGRAM_KINDS = ["system", "persona", "external", "integration", "goal", "req", "nfr", "ac", "entity", "state", "test", "component",
+                 "part", "api", "table", "file", "case", "param", "question", "screen", "module"]
+
+
+def _shape_of():
+    body = re.search(r"SHAPE_OF = Object\.freeze\(\{(.*?)\n\}\);", SHAPES, re.S).group(1)
+    return dict(re.findall(r"^\s*(\w+):\s*'(\w+)'", body, re.M))
+
+
+def test_fr1068_ac374_all_diagram_kinds_have_own_shape():
+    so = _shape_of()
+    for k in DIAGRAM_KINDS:
+        assert so.get(k) not in (None, "default"), k
+    assert so["persona"] == "person" and so["system"] == "building" and so["external"] == "cloud"
+    for shape in set(so.values()):
+        assert re.search(rf"^\s*{shape}: \[", SHAPES, re.M), shape  # a part list exists
+        assert f"'shape3d.{shape}'" in I18N
+        assert re.search(rf"\b{shape}: '<", SHAPES), shape  # legend swatch
+
+
+def test_fr1068_kind_names_in_ja_and_en():
+    for k in DIAGRAM_KINDS:
+        assert len(re.findall(rf"'type\.{k}':", I18N)) >= 2, k
+    for s in ("person", "building", "cloud"):
+        assert len(re.findall(rf"'shape3d\.{s}':", I18N)) == 2
