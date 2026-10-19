@@ -93,6 +93,13 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1064 | 監視コマンド watch.py（scan・reap・stuck） | 承認済み | `scripts/watch.py` | `tests/toolkit/test_watch.py`、`tests/integration/test_watch_cli.py` | run 監視 |
 | FR-1065 | run の運用への組込み（統合時の回収・状態の警告・手順書の規則） | 承認済み | `scripts/integrate.py`、`scripts/run-state.py`、`tools/install.py`、`.github/agents/conductor.agent.md`、`.github/skills/implement-fr/SKILL.md`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_integrate_reap.py`、`tests/system/test_watch_status_system.py`、`tests/toolkit/test_watch_docs.py` | run 監視、worktree pool 管理、run 状態・完了記録 |
 | NFR-OPS-008 | 監視コマンドの安全性・配布・文書・単体テスト | 承認済み | `scripts/watch.py`、`tools/install.py`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_watch.py`、`tests/toolkit/test_watch_docs.py` | run 監視 |
+| FR-1066 | ヘッダー常設の表示モード切替（2D・3D・RPG 風） | 承認済み | 未実装 | 未実装 | - |
+| FR-1067 | 表示モード切替をまたぐ意味的ズームの引継ぎ | 承認済み | 未実装 | 未実装 | - |
+| FR-1068 | 3D の種別ごとのオブジェクトと凡例 | 承認済み | 未実装 | 未実装 | - |
+| FR-1069 | 3D 演出スタイル（Software Engineering／Entertainment）の切替 | 承認済み | 未実装 | 未実装 | - |
+| FR-1070 | 3D カメラのプリセット（平易な名称・説明と 4 要素の記述） | 承認済み | 未実装 | 未実装 | - |
+| FR-1071 | カメラ動作の動きの軽減と手動操作の優先 | 承認済み | 未実装 | 未実装 | - |
+| NFR-UX-015 | 3D の種別オブジェクト・演出・カメラの性能と外部通信なし | 承認済み | 未実装 | 未実装 | - |
 
 ## API・イベント
 
