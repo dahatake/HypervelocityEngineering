@@ -385,3 +385,20 @@ i[data-testid=chart-segment]{min-width:var(--space-6)}
 .legend3d .lg-name{flex:1}
 .legend3d .lg-shape,.legend3d .lg-n{color:var(--color-fg-subtle);font-size:var(--font-size-caption)}
 .style3d button:focus-visible,.legend3d .legend-row:focus-visible{outline:2px solid var(--color-accent);outline-offset:1px}
+.cam3d{position:absolute;left:var(--space-4);bottom:calc(46% + var(--space-4));z-index:6;display:flex;flex-direction:column;gap:var(--space-1);width:260px;max-height:40%;overflow:auto;padding:var(--space-2);background:var(--color-bg-surface);border:var(--stroke-thin) solid var(--color-border-default);border-radius:var(--radius-lg);color:var(--color-fg-default)}
+.cam3d .cam-title{font-size:var(--font-size-caption);color:var(--color-fg-subtle);padding:0 var(--space-1)}
+.cam3d .cam-list{display:flex;flex-direction:column;gap:2px}
+.cam3d .cam-item{display:grid;grid-template-columns:20px 1fr 16px;column-gap:var(--space-2);align-items:center;text-align:left;background:none;border:0;border-radius:var(--radius-md);padding:var(--space-1) var(--space-2);cursor:pointer;color:inherit;font-size:var(--font-size-body)}
+.cam3d .cam-item:hover{background:var(--color-wash-hover)}
+.cam3d .cam-item.on{background:var(--color-bg-selected);font-weight:var(--font-weight-semibold)}
+.cam3d .cam-icon{grid-row:span 2;display:inline-flex}
+.cam3d .cam-desc{grid-column:2;color:var(--color-fg-subtle);font-size:var(--font-size-caption);font-weight:400}
+.cam3d .cam-mark{grid-column:3;grid-row:1}
+.cam3d .cam-detail{font-size:var(--font-size-caption)}
+.cam3d .cam-row{display:flex;justify-content:space-between;gap:var(--space-2)}
+.cam3d .cam-k{color:var(--color-fg-subtle)}
+.cam3d .cam-ctl{display:flex;gap:var(--space-2)}
+.cam3d .cam-ctl button{background:none;border:var(--stroke-thin) solid var(--color-border-default);border-radius:var(--radius-md);padding:var(--space-1) var(--space-3);cursor:pointer;color:inherit}
+.cam3d .cam-ctl button:disabled{opacity:.5;cursor:default}
+.cam3d button:focus-visible{outline:2px solid var(--color-accent);outline-offset:1px}
+.nowebgl{margin:var(--space-4)}
