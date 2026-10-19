@@ -100,6 +100,8 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1070 | 3D カメラのプリセット（平易な名称・説明と 4 要素の記述） | 承認済み | `EABK-Studio/web/js/camera3d.js`、`EABK-Studio/web/js/map3d.js`、`EABK-Studio/web/js/dgm3d.js`、`EABK-Studio/web/js/sz3d.js`、`EABK-Studio/web/js/app.js`、`EABK-Studio/web/js/i18n.js`、`EABK-Studio/web/app.css` | `EABK-Studio/tests/test_camera3d_ui.py`、`EABK-Studio/tests/test_dgm3d_shapes.py`、`tests/system/e2e/test_studio_camera_presets_system.py` | 3D カメラのプリセット、デザイン基盤 |
 | FR-1071 | カメラ動作の動きの軽減と手動操作の優先 | 承認済み | `EABK-Studio/web/js/camera3d.js`、`EABK-Studio/web/js/map3d.js`、`EABK-Studio/web/js/dgm3d.js`、`EABK-Studio/web/js/sz3d.js` | `EABK-Studio/tests/test_camera3d_ui.py`、`EABK-Studio/tests/test_dgm3d_shapes.py`、`tests/system/e2e/test_studio_camera_presets_system.py` | 3D カメラのプリセット |
 | NFR-UX-015 | 3D の種別オブジェクト・演出・カメラの性能と外部通信なし | 承認済み | `EABK-Studio/web/js/camera3d.js`、`EABK-Studio/web/js/map3d.js`、`EABK-Studio/web/js/i18n.js` | `EABK-Studio/tests/test_camera3d_ui.py`、`tests/system/e2e/test_studio_camera_presets_system.py` | 3D カメラのプリセット、Three.js 同梱モジュール |
+| FR-1072 | ヘッダー・ナビの横一列配置 | 承認済み | 未実装 | 未実装 | - |
+| NFR-UX-016 | 常設要素が重ならない | 承認済み | 未実装 | 未実装 | - |
 
 ## API・イベント
 
