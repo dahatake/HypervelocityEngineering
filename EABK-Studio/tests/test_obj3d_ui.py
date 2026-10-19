@@ -151,3 +151,10 @@ def test_ac380_storage_unavailable_falls_back_to_engineering(studio):
     page.locator('[data-testid="style-toggle"] [data-style-value="entertainment"]').click()
     assert page.locator('[data-testid="style-toggle"]').get_attribute("data-current") == "entertainment"
     page.context.close()
+
+
+# FR-1068 AC-374/375, FR-1069 AC-378/379/380 (Canvas 版 sz3d.js): エンティティ画面の 3D にも hook・凡例・切替があり、保存は同じキー。
+def test_canvas_entity_3d_has_hook_legend_and_style_toggle():
+    from test_links_wrap_status_ui import studio as _unused  # noqa: F401  (fixture module is imported for make_zoom)
+    src = (WEB / "js" / "sz3d.js").read_text(encoding="utf-8")
+    assert "window.__eabk3d" in src and "shapes3d.js" in src and "SHAPE_OF" not in src

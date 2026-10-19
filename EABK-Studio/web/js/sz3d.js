@@ -4,6 +4,7 @@
 import { el } from './ui.js';
 import { t } from './i18n.js';
 import { L, kindLabel, keyMark } from './semzoom.js';
+import { shapeOf, buildLegend, buildStyleToggle, loadStyle, saveStyle, normStyle, FX_BY_STYLE } from './shapes3d.js';
 
 const COLORS = { 外部キー: '#ff8a5c', 参照: '#4f9dff', 使用: '#8aa1b5' };
 const DASH = { 外部キー: [], 参照: [8, 5], 使用: [2, 4] };
@@ -17,6 +18,38 @@ export function create3d(ctx) {
   let hits = [], drawn = 0, dpr = 1;
   const size = () => ctx.size();
   const ZMAX = 150;
+
+  // FR-1068 / FR-1069（Canvas 版）: 種別のかたち（エンティティ＝ブロックの押し出し）・凡例・演出スタイル。表は shapes3d.js の 1 か所を使う。
+  let style = loadStyle(), uiHost = null, styleEl = null, legendEl = null, loop = 0, now = 0;
+  const calm = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const fxList = () => FX_BY_STYLE[style] || [];
+  const hasFx = (x) => fxList().includes(x);
+  const nodeList = () => d.names.map((n) => ({ id: n, kind: 'entity', shape: shapeOf('entity') }));
+  const hook = { nodes: nodeList, style: () => style, fx: () => [...fxList()] };
+  window.__eabk3d = hook;
+  function applyStyle() {
+    if (!uiHost) return;
+    uiHost.dataset.style = style; uiHost.dataset.fx = fxList().join(',') || 'none';
+    const next = buildStyleToggle(style, (v) => { style = normStyle(v); saveStyle(style); applyStyle(); startLoop(); draw(); });
+    if (styleEl) styleEl.replaceWith(next); else uiHost.append(next);
+    styleEl = next;
+  }
+  function renderLegend() {
+    const next = buildLegend([{ kind: 'entity', color: '#4f9dff', count: d.names.length }]);
+    if (legendEl) legendEl.replaceWith(next); else uiHost.append(next);
+    legendEl = next;
+  }
+  function attachUi() {
+    if (uiHost || !canvas.parentElement) return;
+    uiHost = canvas.parentElement; renderLegend(); applyStyle();
+  }
+  // 演出（Entertainment）の浮遊・粒子は、動きの軽減が有効なときは動かさない（静止した状態で発光だけ）
+  function startLoop() {
+    cancelAnimationFrame(loop); loop = 0;
+    if (style !== 'entertainment' || calm) return;
+    const tick = (ts) => { now = ts; draw(); loop = requestAnimationFrame(tick); };
+    loop = requestAnimationFrame(tick);
+  }
 
   const trig = () => ({ c: Math.cos(view.yaw), s: Math.sin(view.yaw), sp: Math.sin(view.pitch), cp: Math.cos(view.pitch) });
   function fit() {
@@ -71,6 +104,7 @@ export function create3d(ctx) {
 
   function draw() {
     const { W, H } = size(), k = ctx.k(), level = ctx.level();
+    attachUi();
     if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr) || dpr !== (window.devicePixelRatio || 1)) {
       dpr = window.devicePixelRatio || 1;
       canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
@@ -138,12 +172,15 @@ export function create3d(ctx) {
     const dim = (!!view.selected && !selected && !related) || !api.matches(n);
     const nc = e.columns.length;
     const h = level === 'detail' ? p.detH : p.midH;
-    const z = level === 'detail' ? 8 : 18 + Math.min(70, nc * 5);
+    const bob = hasFx('float') && !calm ? Math.sin(now / 700 + d.names.indexOf(n)) * 4 : 0;
+    const z = (level === 'detail' ? 8 : 18 + Math.min(70, nc * 5)) + bob;
     const quick = bbox([proj(p.x, p.y, z), proj(p.x + p.w, p.y, z), proj(p.x + p.w, p.y + h, z), proj(p.x, p.y + h, 0)]);
     if (level === 'mid' && !onScreen(quick)) return null;
     if (level === 'detail' && !onScreen({ x0: quick.x0 - p.w * k, x1: quick.x1 + p.w * k, y0: quick.y0 - h * k - 20, y1: quick.y1 })) return null;
+    if (hasFx('glow')) { g.shadowColor = '#39d0ff'; g.shadowBlur = 16; }
     const top = box(p.x, p.y, p.w, h, z, dim ? 'rgba(40,52,86,.55)' : selected ? '#24507a' : '#1f3358', dim ? 'rgba(20,28,52,.55)' : '#16233f',
       selected ? '#39d0ff' : related ? '#ffb020' : 'rgba(160,190,255,.7)', selected ? 3 : related ? 2.5 : 1.2, related && !selected ? [5, 3] : []);
+    g.shadowBlur = 0; g.shadowColor = 'transparent';
     const b = bbox(top);
     if (level === 'mid') {
       drawn++;
@@ -200,6 +237,10 @@ export function create3d(ctx) {
     g.save(); g.globalAlpha = view.selected && !hl ? 0.25 : 1;
     g.strokeStyle = COLORS[e.kind]; g.lineWidth = hl ? 3.5 : e.kind === '外部キー' ? 2.5 : 1.6; g.setLineDash(DASH[e.kind]);
     g.beginPath(); g.moveTo(pa.x, pa.y); g.lineTo(pb.x, pb.y); g.stroke(); g.setLineDash([]);
+    if (hasFx('particles')) {   // Entertainment: 辺に沿って流れる粒子
+      const f = calm ? 0.5 : (now / 1800) % 1;
+      g.fillStyle = '#ffffff'; g.beginPath(); g.arc(pa.x + (pb.x - pa.x) * f, pa.y + (pb.y - pa.y) * f, 3, 0, 6.283); g.fill();
+    }
     const ang = Math.atan2(pb.y - pa.y, pb.x - pa.x);
     g.fillStyle = COLORS[e.kind]; g.beginPath(); g.moveTo(pb.x, pb.y);
     g.lineTo(pb.x - 11 * Math.cos(ang - 0.4), pb.y - 11 * Math.sin(ang - 0.4)); g.lineTo(pb.x - 11 * Math.cos(ang + 0.4), pb.y - 11 * Math.sin(ang + 0.4)); g.fill();
@@ -212,5 +253,6 @@ export function create3d(ctx) {
     return null;
   }
 
-  return { kind: '3d', el: canvas, draw, fit, toWorld, toScreen, pick, drawnEntities: () => drawn };
+  return { kind: '3d', el: canvas, draw, fit, toWorld, toScreen, pick, drawnEntities: () => drawn,
+    destroy() { cancelAnimationFrame(loop); loop = 0; if (window.__eabk3d === hook) delete window.__eabk3d; styleEl?.remove(); legendEl?.remove(); } };
 }
