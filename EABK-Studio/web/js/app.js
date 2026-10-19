@@ -5,6 +5,7 @@ import { initDrawer } from './drawer.js';
 import { installXref } from './xref.js';
 import { decorate, mountStructure, mountConsistency, mountMaintenance } from './insights.js';
 import { dimToggle, dimState, registerDim, hasDimHandler, runDim, headerDimToggle, publishDim, onHeaderDim } from './dim.js';
+import { cameraCommands } from './camera3d.js';
 
 // FR-1066: the header's display-mode switch is always there; each screen publishes what it supports (publishDim).
 const headerDimHost = document.getElementById('headerDim');
@@ -211,6 +212,7 @@ function navCommands() {
     list.push({ cmd: true, id: 'cmd:dim', label: t('cmd.dim'), key: '2D 3D', run: () => runDim() });
     if (ROUTES[routeName()]?.dim) list.push({ cmd: true, id: 'cmd:dim:rpg', label: t('cmd.dim.rpg'), key: 'RPG', run: () => runDim('rpg') });
   }
+  list.push(...cameraCommands());   // FR-1070 AC-384: 3D のカメラのプリセットをコマンド検索から選ぶ
   return list;
 }
 // FR-1033 AC-197: command box. ">" followed by text lists commands; Enter runs one.

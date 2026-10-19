@@ -2,8 +2,9 @@
 // needed, so it also works where WebGL is blocked).  Boxes are extruded by their number of columns; the level of detail follows
 // the shared scale exactly as in 2D.  FR-1029 / NFR-PERF-004.
 import { el } from './ui.js';
-import { t } from './i18n.js';
+import { t, onLang } from './i18n.js';
 import { L, kindLabel, keyMark } from './semzoom.js';
+import { createCameraRig } from './camera3d.js';
 import { shapeOf, buildLegend, buildStyleToggle, loadStyle, saveStyle, normStyle, FX_BY_STYLE } from './shapes3d.js';
 
 const COLORS = { 外部キー: '#ff8a5c', 参照: '#4f9dff', 使用: '#8aa1b5' };
@@ -13,19 +14,19 @@ const clampN = (n, a, b) => Math.min(b, Math.max(a, n));
 
 export function create3d(ctx) {
   const { d, view, api } = ctx;
-  const canvas = el('canvas', { class: 'sz-canvas', role: 'img', 'aria-label': t('sz.title') });
+  const canvas = el('canvas', { class: 'sz-canvas', role: 'img', tabindex: '0', 'aria-label': t('sz.title') });
   const g = canvas.getContext('2d');
   let hits = [], drawn = 0, dpr = 1;
   const size = () => ctx.size();
   const ZMAX = 150;
 
   // FR-1068 / FR-1069（Canvas 版）: 種別のかたち（エンティティ＝ブロックの押し出し）・凡例・演出スタイル。表は shapes3d.js の 1 か所を使う。
-  let style = loadStyle(), uiHost = null, styleEl = null, legendEl = null, loop = 0, now = 0;
+  let style = loadStyle(), uiHost = null, styleEl = null, legendEl = null, loop = 0, now = 0, rig = null, offLang = null;
   const calm = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   const fxList = () => FX_BY_STYLE[style] || [];
   const hasFx = (x) => fxList().includes(x);
   const nodeList = () => d.names.map((n) => ({ id: n, kind: 'entity', shape: shapeOf('entity') }));
-  const hook = { nodes: nodeList, style: () => style, fx: () => [...fxList()] };
+  const hook = { nodes: nodeList, style: () => style, fx: () => [...fxList()], camera: () => (rig ? rig.camera() : null) };
   window.__eabk3d = hook;
   function applyStyle() {
     if (!uiHost) return;
@@ -42,6 +43,10 @@ export function create3d(ctx) {
   function attachUi() {
     if (uiHost || !canvas.parentElement) return;
     uiHost = canvas.parentElement; renderLegend(); applyStyle();
+    // FR-1070 / FR-1071: カメラのプリセット。Canvas 版は回転（yaw）と傾き（pitch）で動かす（ズーム・選択・絞り込みには触れない）。
+    rig = createCameraRig({ interact: uiHost, applyDelta: (dl) => { view.yaw += dl.yaw; view.pitch = clampN(view.pitch + dl.pitch, 0.35, 1.5); draw(); } });
+    uiHost.append(rig.el);
+    offLang = onLang(() => rig?.refresh());
   }
   // 演出（Entertainment）の浮遊・粒子は、動きの軽減が有効なときは動かさない（静止した状態で発光だけ）
   function startLoop() {
@@ -254,5 +259,5 @@ export function create3d(ctx) {
   }
 
   return { kind: '3d', el: canvas, draw, fit, toWorld, toScreen, pick, drawnEntities: () => drawn,
-    destroy() { cancelAnimationFrame(loop); loop = 0; if (window.__eabk3d === hook) delete window.__eabk3d; styleEl?.remove(); legendEl?.remove(); } };
+    destroy() { cancelAnimationFrame(loop); loop = 0; if (window.__eabk3d === hook) delete window.__eabk3d; styleEl?.remove(); legendEl?.remove(); rig?.destroy(); rig?.el.remove(); offLang?.(); } };
 }

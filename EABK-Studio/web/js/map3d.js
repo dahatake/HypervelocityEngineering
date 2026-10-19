@@ -5,7 +5,9 @@ import { store } from './store.js';
 import { create3d } from './sz3d.js';
 import { mountShell, isArch, wantsEntityView, hasEntityStructure, setTab } from './semzoom.js';
 import { mountMapTiers, tierState, tierPathOf, tierRank, tierKey, tierOfKey, tierShortLabel } from './maptiers.js';
-import { shapeOf, isKnownKind, buildNodeObjects, buildLegend, buildStyleToggle, addSceneLights, loadStyle, saveStyle, normStyle, FX_BY_STYLE } from './shapes3d.js';
+import { shapeOf, isKnownKind, buildNodeObjects, buildLegend, buildStyleToggle, addSceneLights, loadStyle, saveStyle, normStyle, FX_BY_STYLE, kindName, shapeName } from './shapes3d.js';
+import { createCameraRig } from './camera3d.js';
+import { publishDim } from './dim.js';
 import { el, colorOf, TYPE_COLOR, STATUS_COLOR, IMPL_COLOR, token, icon, showTip, hideTip, nodeTip } from './ui.js';
 
 const LEVEL = { goal: 0, req: 1, ac: 2, entity: 3, part: 3, api: 3, table: 3, param: 3, question: 3, file: 4, case: 5 };
@@ -36,6 +38,13 @@ function mountGraph(host) {
   let labelPool = [], labelCache = new Map(), staticLabels = [], pinfo = [], labelHits = [];
   const cam = { target: new THREE.Vector3(), theta: 0.7, phi: 1.0, radius: 600, vt: 0, vp: 0 };
   let anim = null, tour = null, lastInput = performance.now(), drag = null, moved = false;
+  // FR-1070 / FR-1071: カメラのプリセット。増分で cam を動かすので、選択・ズーム・絞り込み・手動の位置は失われない。
+  const clampN = (n, a, b) => Math.min(b, Math.max(a, n));
+  const rig = createCameraRig({ interact: mount3, applyDelta: (dl) => {
+    cam.theta += dl.yaw; cam.phi = clampN(cam.phi + dl.pitch, 0.03, 3.05); cam.radius = clampN(cam.radius * Math.exp(dl.zoom), 20, 4000);
+  } });
+  host.append(rig.el);
+  renderer.domElement.tabIndex = 0; renderer.domElement.setAttribute('aria-label', t('dim.hint'));
 
   let starsObj = null, shapeObjs = null, arrows = null, legendEl = null, styleEl = null, shapeItems = [], shapeDirty = true;
   const dotTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 32; const g = c.getContext('2d'); const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, '#fff'); gr.addColorStop(0.5, '#fff'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 32, 32); return new THREE.CanvasTexture(c); })();
@@ -435,6 +444,15 @@ function mountGraph(host) {
     store.clear(); bird();
   });
   cvs.addEventListener('wheel', (e) => { e.preventDefault(); stopTour(); anim = null; lastInput = performance.now(); cam.radius = Math.min(4000, Math.max(20, cam.radius * Math.exp(e.deltaY * 0.0012))); }, { passive: false });
+  // キーボードでのカメラ操作（矢印＝回す、+ / − ＝拡大縮小）。手動操作なので、プリセットの自動動作は止まる（camera3d.js が検知）。
+  cvs.addEventListener('keydown', (e) => {
+    const k = e.key; let used = true;
+    if (k === 'ArrowLeft') cam.theta -= 0.12; else if (k === 'ArrowRight') cam.theta += 0.12;
+    else if (k === 'ArrowUp') cam.phi = Math.max(0.03, cam.phi - 0.08); else if (k === 'ArrowDown') cam.phi = Math.min(3.05, cam.phi + 0.08);
+    else if (k === '+' || k === '=') cam.radius = Math.max(20, cam.radius * 0.89); else if (k === '-') cam.radius = Math.min(4000, cam.radius * 1.12);
+    else used = false;
+    if (used) { e.preventDefault(); stopTour(); anim = null; lastInput = performance.now(); }
+  });
 
   // ---------- tour
   function stopTour() { if (tour) { clearTimeout(tour.timer); tour = null; renderToolbar(); } }
@@ -514,7 +532,7 @@ function mountGraph(host) {
     store.on('hover', () => applyHighlight()),
     store.on('model', () => rebuild()),
     tierState.on(() => rebuild(true)),
-    onLang(() => { rebuild(true); }),
+    onLang(() => { rebuild(true); rig.refresh(); }),
   ];
 
   // ---------- loop
@@ -524,7 +542,7 @@ function mountGraph(host) {
     if (dead) return;
     stepAnim(now);
     if (!drag) { cam.theta += cam.vt; cam.vt *= 0.92; cam.phi = Math.min(3.05, Math.max(0.03, cam.phi + cam.vp)); cam.vp *= 0.92; }
-    if (prefs.auto && !anim && !drag && !tour && now - lastInput > 5000) cam.theta += 0.0016;
+    if (prefs.auto && !rig.auto() && !anim && !drag && !tour && now - lastInput > 5000) cam.theta += 0.0016;
     if (tour && !anim) cam.theta += 0.004;
     placeCamera();
     // pulse the selected node and move particles
@@ -559,7 +577,7 @@ function mountGraph(host) {
   };
   window.eabkView = viewApi3;
   // FR-1068 AC-374: テスト hook。いま描かれているノードの {id, kind, shape}。
-  const hook3 = { nodes: displayedNodes, style: () => prefs.style, fx: () => [...fxSet()] };
+  const hook3 = { nodes: displayedNodes, style: () => prefs.style, fx: () => [...fxSet()], camera: () => rig.camera() };
   window.__eabk3d = hook3;
   if (snapshot) frame(0);
   else raf = requestAnimationFrame(frame);
@@ -575,12 +593,24 @@ function mountGraph(host) {
     destroy() {
       if (window.eabkView === viewApi3) delete window.eabkView;
       if (window.__eabk3d === hook3) delete window.__eabk3d;
-      dead = true; cancelAnimationFrame(raf); stopTour(); ro.disconnect(); offs.forEach((f) => f()); hideTip();
+      dead = true; cancelAnimationFrame(raf); stopTour(); rig.destroy(); rig.el.remove(); ro.disconnect(); offs.forEach((f) => f()); hideTip();
       scene.traverse((o) => { o.geometry?.dispose?.(); o.material?.dispose?.(); });
       labelCache.forEach((tx) => tx.dispose());
       renderer.dispose(); renderer.forceContextLoss?.();
     },
   };
+}
+
+// NFR-UX-015 AC-390: 3D（WebGL）を描画できない環境の代替。理由・2D への導線・種別とかたちの表を出し、選択（store）は触らない。
+function mountNoWebgl(host) {
+  host.replaceChildren();
+  const rows = LAYER_TYPES.map((k) => el('tr', {}, el('th', { scope: 'row' }, kindName(k)), el('td', {}, shapeName(shapeOf(k)))));
+  host.append(el('section', { class: 'card nowebgl', 'data-testid': 'dim-fallback', role: 'alert' },
+    el('h2', {}, t('cam3d.nowebgl.h')), el('p', {}, t('dim.nowebgl')), el('p', { class: 'mini' }, t('cam3d.nowebgl.d')),
+    el('a', { class: 'btn', href: '#/map2d' }, t('sz.to2d')),
+    el('table', { 'data-testid': 'legend-table' }, el('thead', {}, el('tr', {}, el('th', {}, t('cam3d.nowebgl.kind')), el('th', {}, t('cam3d.nowebgl.shape')))), el('tbody', {}, rows))));
+  setTimeout(() => publishDim({ dims: ['2d', '3d', 'rpg'], current: '2d', selected: '3d' }), 0);   // 選んだのは 3D のまま（元の選択を保つ）
+  return { destroy() {} };
 }
 
 // FR-1027..FR-1029: when the model has entity relations or columns, this route opens the entity view (semantic zoom) first;
@@ -596,7 +626,8 @@ export function mount(host) {
         links: [{ id: 'sz-to-2d', label: () => t('sz.to2d'), href: '#/map2d' + (isArch() ? '?view=arch' : '') },
           isArch() ? { id: 'sz-to-entity', label: () => t('arch.toentity'), href: '#/map3d' } : { id: 'sz-to-arch', label: () => t('arch.toarch'), href: '#/=arch' }], onSwitch: () => { setTab('graph'); run(); } });
     } else {
-      inner = mountGraph(host);
+      try { inner = mountGraph(host); }
+      catch (e) { inner = mountNoWebgl(host); }   // NFR-UX-015 AC-390: WebGL が無い環境では、エラーにせず 2D と理由・表を示す
       if (hasEntityStructure(store.model)) host.append(el('button', { type: 'button', class: 'btn ghost sz-switch', onclick: () => { setTab('entities'); run(); } }, t('sz.entview')));
     }
     tiers = mountMapTiers(host, 'map3d');   // FR-1063: 上位層（種類→区分→領域→項目）
