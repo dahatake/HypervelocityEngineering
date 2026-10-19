@@ -1,7 +1,7 @@
 // FR-1040: 3D rendering of the diagrams. It draws exactly the graph that getState().diagram publishes
 // (elements and relations), so 2D and 3D show the same managed data. Render-on-demand (no animation loop),
 // which also respects "reduce motion".
-// FR-1068/1069/1070/1071: nodes are drawn as per-kind 3D shapes (shapes3d.js SHAPE_OF is the only kind→shape table; a node's type is the kind),
+// FR-1068/1069/1070/1071: nodes are drawn as per-kind 3D shapes (shapes3d.js holds the only kind→shape table; a node's type is the kind),
 // with legend, style toggle (Software Engineering / Entertainment) and camera presets shared with map3d.js.
 import * as THREE from 'three';
 import { t } from './i18n.js';
