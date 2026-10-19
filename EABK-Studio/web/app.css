@@ -65,6 +65,7 @@ input[type=checkbox],input[type=radio]{width:var(--size-icon-lg);height:var(--si
 @keyframes dim-bob{50%{transform:translateY(calc(var(--stroke-focus) * -1))}}
 .dgmtabs .dim-toggle{margin-left:auto}
 .dim-float{position:absolute;right:var(--space-4);bottom:var(--space-4);z-index:8}
+.hdr-dim-host{display:flex;align-items:center}.hdr-dim .dim-btn:disabled{opacity:.5;cursor:not-allowed}.hdr-dim-reason{max-width:16ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dgm3d{position:relative;height:min(68vh,720px);min-height:320px}
 .dgm3d-stage{position:absolute;inset:0 0 24px 0;border:var(--stroke-thin) solid var(--color-border-default);border-radius:var(--radius-md);background:var(--scene-stage-bg);touch-action:none}
 .dgm3d-hint{position:absolute;left:var(--space-1);right:var(--space-1);bottom:0}
