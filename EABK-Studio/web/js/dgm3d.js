@@ -1,9 +1,13 @@
 // FR-1040: 3D rendering of the diagrams. It draws exactly the graph that getState().diagram publishes
 // (elements and relations), so 2D and 3D show the same managed data. Render-on-demand (no animation loop),
 // which also respects "reduce motion".
+// FR-1068/1069/1070/1071: nodes are drawn as per-kind 3D shapes (shapes3d.js SHAPE_OF is the only kind→shape table; a node's type is the kind),
+// with legend, style toggle (Software Engineering / Entertainment) and camera presets shared with map3d.js.
 import * as THREE from 'three';
 import { t } from './i18n.js';
 import { el, TYPE_COLOR, token } from './ui.js';
+import { shapeOf, buildNodeObjects, buildLegend, buildStyleToggle, addSceneLights, loadStyle, saveStyle, normStyle, FX_BY_STYLE } from './shapes3d.js';
+import { createCameraRig } from './camera3d.js';
 
 const COLOR = { ...TYPE_COLOR, system: token('--viz-sel'), state: token('--viz-accent-2'), test: TYPE_COLOR.test };
 const LAYER_ORDER = ['screen', 'api', 'data', 'other'];
@@ -59,15 +63,16 @@ export function mount3d(host, g, { onPick } = {}) {
   const idx = new Map(g.elements.map((e, i) => [e.id, i]));
   const world = new THREE.Group(); scene.add(world);
 
-  const dot = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'); const gr = x.createRadialGradient(32, 32, 0, 32, 32, 30); gr.addColorStop(0, '#fff'); gr.addColorStop(0.7, '#fff'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.beginPath(); x.arc(32, 32, 30, 0, 7); x.fill(); return new THREE.CanvasTexture(c); })();
-  const sprites = g.elements.map((e, i) => {
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot, color: new THREE.Color(COLOR[e.type] || token('--viz-file')), transparent: true, depthTest: false }));
-    s.position.set(P[i].x, P[i].y, P[i].z); s.scale.set(16, 16, 1); s.renderOrder = 5; world.add(s); return s;
-  });
-  const arr = [];
+  addSceneLights(scene);
+  const prefs = { style: loadStyle(), kindFocus: null };
+  const colorOf = (e) => COLOR[e.type] || token('--viz-file');
+  const items = g.elements.map((e, i) => ({ id: e.id, kind: e.type, x: P[i].x, y: P[i].y, z: P[i].z, size: 8, hidden: false, color: new THREE.Color(colorOf(e)) }));
+  const objs = buildNodeObjects(items); world.add(objs.group);
+  let selIdx = -1, shapeDirty = true;
+  const fxSet = () => new Set(FX_BY_STYLE[prefs.style] || []);  const arr = [];
   for (const r of g.relations) { const a = idx.get(r.from), b = idx.get(r.to); if (a == null || b == null) continue; arr.push(P[a].x, P[a].y, P[a].z, P[b].x, P[b].y, P[b].z); }
   const lineGeo = new THREE.BufferGeometry(); lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3));
-  world.add(new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: 0x7f9bff, transparent: true, opacity: 0.45 })));
+  const lines = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: 0x7f9bff, transparent: true, opacity: 0.45 })); world.add(lines);
 
   const deg = new Map(); for (const r of g.relations) { deg.set(r.from, (deg.get(r.from) || 0) + 1); deg.set(r.to, (deg.get(r.to) || 0) + 1); }
   const labelIds = new Set([...g.elements].sort((a, b) => (deg.get(b.id) || 0) - (deg.get(a.id) || 0)).slice(0, 120).map((e) => e.id));
@@ -86,12 +91,38 @@ export function mount3d(host, g, { onPick } = {}) {
   const cam = { th: 0.6, ph: 1.05, r: maxR * 2.1 + 70 };
   const target = new THREE.Vector3(0, 0, 0);
   let W = 1, H = 1, dead = false, raf = 0;
-  const draw = () => {
+  const reducedMq = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+  const clampN = (n, a, b) => Math.min(b, Math.max(a, n));
+  let redraw = () => {};
+  // FR-1070/1071: camera presets move the camera incrementally, so selection, zoom and manual position are kept.
+  const rig = createCameraRig({ interact: stage, applyDelta: (dl) => {
+    cam.th += dl.yaw; cam.ph = clampN(cam.ph + dl.pitch, 0.15, Math.PI - 0.15); cam.r = clampN(cam.r * Math.exp(dl.zoom), 40, maxR * 8); redraw();
+  } });
+  host.append(rig.el);
+  const applyShapes = (now) => {
+    objs.apply({ now, fx: fxSet(), focusKind: prefs.kindFocus, selected: selIdx, grow: () => 1 });
+  };
+  let styleEl = null, legendEl = null;
+  const applyStyle = () => { stage.dataset.style = prefs.style; stage.dataset.fx = (FX_BY_STYLE[prefs.style] || []).join(',') || 'none'; shapeDirty = true; };
+  const setStyle = (v) => { prefs.style = normStyle(v); saveStyle(prefs.style); applyStyle(); renderStyleToggle(); redraw(); };
+  function renderStyleToggle() { const next = buildStyleToggle(prefs.style, setStyle); if (styleEl) styleEl.replaceWith(next); else host.append(next); styleEl = next; }
+  function renderLegend() {
+    const cnt = new Map();
+    for (const s of items) { const e = cnt.get(s.kind) || { kind: s.kind, color: '#' + s.color.getHexString(), count: 0 }; e.count++; cnt.set(s.kind, e); }
+    const next = buildLegend([...cnt.values()], { focus: prefs.kindFocus, onFocus: (k) => { const had = k || prefs.kindFocus; prefs.kindFocus = k; shapeDirty = true; renderLegend(); redraw(); legendEl.querySelector(`[data-kind="${CSS.escape(had)}"]`)?.focus(); } });
+    if (legendEl) legendEl.replaceWith(next); else host.append(next);
+    legendEl = next;
+  }
+  applyStyle(); renderStyleToggle(); renderLegend();
+  const draw = (ts) => {
     raf = 0; if (dead) return;
+    const fx = fxSet(), animate = fx.size > 0 && !reducedMq?.matches;
+    if (shapeDirty || animate) { shapeDirty = false; applyShapes(ts || performance.now()); }
+    if (animate) raf = requestAnimationFrame(draw);
     camera.position.set(target.x + cam.r * Math.sin(cam.ph) * Math.sin(cam.th), target.y + cam.r * Math.cos(cam.ph), target.z + cam.r * Math.sin(cam.ph) * Math.cos(cam.th));
     camera.lookAt(target); camera.updateMatrixWorld(); renderer.render(scene, camera);
   };
-  const redraw = () => { if (!raf && !dead) raf = requestAnimationFrame(draw); };
+  redraw = () => { if (!raf && !dead) raf = requestAnimationFrame(draw); };
   const resize = () => { const r = stage.getBoundingClientRect(); W = Math.max(1, r.width); H = Math.max(1, r.height); renderer.setSize(W, H, false); camera.aspect = W / H; camera.updateProjectionMatrix(); redraw(); };
   const ro = new ResizeObserver(resize); ro.observe(stage); resize();
 
@@ -104,7 +135,7 @@ export function mount3d(host, g, { onPick } = {}) {
     if (moved) return;
     const r = canvas.getBoundingClientRect(); let best = null, bd = 18;
     const v = new THREE.Vector3();
-    sprites.forEach((s, i) => { v.copy(s.position).project(camera); if (v.z > 1) return; const d = Math.hypot((v.x * 0.5 + 0.5) * r.width - (e.clientX - r.left), (-v.y * 0.5 + 0.5) * r.height - (e.clientY - r.top)); if (d < bd) { bd = d; best = i; } });
+    items.forEach((s, i) => { v.set(s.x, s.y, s.z).project(camera); if (v.z > 1) return; const d = Math.hypot((v.x * 0.5 + 0.5) * r.width - (e.clientX - r.left), (-v.y * 0.5 + 0.5) * r.height - (e.clientY - r.top)); if (d < bd) { bd = d; best = i; } });
     if (best != null) onPick?.(g.elements[best].id);
   });
   stage.addEventListener('wheel', (e) => { e.preventDefault(); cam.r = Math.max(40, Math.min(maxR * 8, cam.r * (e.deltaY > 0 ? 1.12 : 0.89))); redraw(); }, { passive: false });
@@ -117,17 +148,24 @@ export function mount3d(host, g, { onPick } = {}) {
     if (used) { e.preventDefault(); redraw(); }
   });
 
+  // FR-1068 AC-374: test hook — the nodes now drawn as {id, kind, shape}.
+  const hook3 = { nodes: () => items.map((s) => ({ id: s.id, kind: s.kind, shape: shapeOf(s.kind) })), style: () => prefs.style, fx: () => [...fxSet()], camera: () => rig.camera() };
+  window.__eabk3d = hook3;
+
   return {
     setSelected(id) {
-      sprites.forEach((s, i) => { const on = g.elements[i].id === id; s.scale.set(on ? 28 : 16, on ? 28 : 16, 1); s.material.color.set(on ? token('--viz-sel') : (COLOR[g.elements[i].type] || token('--viz-file'))); });
+      selIdx = idx.has(id) ? idx.get(id) : -1; shapeDirty = true;
+      items.forEach((s, i) => s.color.set(i === selIdx ? token('--viz-sel') : colorOf(g.elements[i])));
       if (selLabel) { world.remove(selLabel); selLabel.material.dispose(); selLabel = null; }
       const i = idx.get(id); if (i != null && !labelIds.has(id)) selLabel = labelOf(g.elements[i], i, token('--viz-sel'));
       redraw();
     },
     destroy() {
       dead = true; cancelAnimationFrame(raf); ro.disconnect();
-      scene.traverse((o) => { o.geometry?.dispose?.(); o.material?.dispose?.(); });
-      texs.forEach((x) => x.dispose()); dot.dispose();
+      if (window.__eabk3d === hook3) delete window.__eabk3d;
+      rig.destroy(); rig.el.remove(); styleEl?.remove(); legendEl?.remove(); objs.dispose();
+      scene.traverse((o) => { if (!o.isInstancedMesh) o.geometry?.dispose?.(); o.material?.dispose?.(); });
+      texs.forEach((x) => x.dispose());
       renderer.dispose(); renderer.forceContextLoss?.();
     },
   };

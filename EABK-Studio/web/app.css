@@ -402,3 +402,4 @@ i[data-testid=chart-segment]{min-width:var(--space-6)}
 .cam3d .cam-ctl button:disabled{opacity:.5;cursor:default}
 .cam3d button:focus-visible{outline:2px solid var(--color-accent);outline-offset:1px}
 .nowebgl{margin:var(--space-4)}
+.dgm3d .cam3d{bottom:32px;max-height:60%}
