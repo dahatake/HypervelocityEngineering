@@ -7839,7 +7839,7 @@
       ],
       "title": "Header elements on one row (center within 2px) at 1280/1024/800/600/320",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_header_row_system.py -k 'ac391'",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_row_system.py -k ac391",
       "canary": false,
       "status": "not_run",
       "last_commit": null,
@@ -7857,6 +7857,12 @@
           "by": "test-designer",
           "change": "title: 'Header elements on one row at 1280/1024/800/600' -> 'Header elements on one row (center within 2px) at 1280/1024/800/600/320'",
           "reason": "AC-391/392/395 改訂 (4bfb6ce2): 検証幅に 320px 追加、中心ずれ 2px、交差面積 0、AC-395 測定方法"
+        },
+        {
+          "at": "2026-10-20T00:10:49+09:00",
+          "by": "test-designer",
+          "change": "command: \"python -m pytest tests/system/e2e/test_studio_header_row_system.py -k 'ac391'\" -> 'python -m pytest tests/system/e2e/test_studio_header_row_system.py -k ac391'",
+          "reason": "Windows で -k の単一引用符が失敗するため引用符を除去"
         }
       ]
     },
@@ -7870,7 +7876,7 @@
       ],
       "title": "Header no overlap (area 0), reachable, no page horizontal scroll at 1280..320",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_header_row_system.py -k 'ac392'",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_row_system.py -k ac392",
       "canary": false,
       "status": "not_run",
       "last_commit": null,
@@ -7888,6 +7894,12 @@
           "by": "test-designer",
           "change": "title: 'Header no overlap, reachable, no page horizontal scroll' -> 'Header no overlap (area 0), reachable, no page horizontal scroll at 1280..320'",
           "reason": "AC-391/392/395 改訂 (4bfb6ce2): 検証幅に 320px 追加、中心ずれ 2px、交差面積 0、AC-395 測定方法"
+        },
+        {
+          "at": "2026-10-20T00:10:50+09:00",
+          "by": "test-designer",
+          "change": "command: \"python -m pytest tests/system/e2e/test_studio_header_row_system.py -k 'ac392'\" -> 'python -m pytest tests/system/e2e/test_studio_header_row_system.py -k ac392'",
+          "reason": "Windows で -k の単一引用符が失敗するため引用符を除去"
         }
       ]
     },
@@ -7901,7 +7913,7 @@
       ],
       "title": "Explanation panel does not cover the map at 1280..320; content reachable",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_header_row_system.py -k 'ac395'",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_row_system.py -k ac395",
       "canary": false,
       "status": "not_run",
       "last_commit": null,
@@ -7919,6 +7931,12 @@
           "by": "test-designer",
           "change": "title: 'Explanation panel does not cover the map at each width' -> 'Explanation panel does not cover the map at 1280..320; content reachable'",
           "reason": "AC-391/392/395 改訂 (4bfb6ce2): 検証幅に 320px 追加、中心ずれ 2px、交差面積 0、AC-395 測定方法"
+        },
+        {
+          "at": "2026-10-20T00:10:52+09:00",
+          "by": "test-designer",
+          "change": "command: \"python -m pytest tests/system/e2e/test_studio_header_row_system.py -k 'ac395'\" -> 'python -m pytest tests/system/e2e/test_studio_header_row_system.py -k ac395'",
+          "reason": "Windows で -k の単一引用符が失敗するため引用符を除去"
         }
       ]
     }
