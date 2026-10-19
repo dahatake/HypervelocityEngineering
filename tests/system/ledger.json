@@ -4395,9 +4395,9 @@
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac275_screen_manifest_ids_unchanged_and_baseline_tests_untouched\" -q",
       "canary": false,
       "status": "pass",
-      "last_commit": "6367af7b",
-      "last_run_at": "2026-10-19T03:35:11+09:00",
-      "evidence": "work/runs/adhoc-202610190327/logs/system-test/E2E-150-202610190332.log",
+      "last_commit": "e365e085",
+      "last_run_at": "2026-10-20T01:16:40+09:00",
+      "evidence": "work/runs/202610192312/logs/system-test/E2E-150-202610200116.log",
       "history": [
         {
           "at": "2026-10-17T14:41:04+09:00",
