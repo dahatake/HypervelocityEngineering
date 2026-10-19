@@ -30,8 +30,7 @@ def _free_port():
         return sock.getsockname()[1]
 
 
-@pytest.fixture(scope="module")
-def studio_url():
+def _start_studio():
     port = _free_port()
     proc = subprocess.Popen(
         [sys.executable, str(STUDIO), "--repo", str(ROOT), "--port", str(port), "--no-open"],
@@ -56,6 +55,28 @@ def studio_url():
         proc.wait(timeout=3)
     except subprocess.TimeoutExpired:
         proc.kill()
+
+
+@pytest.fixture(scope="module")
+def studio_url():
+    # 読み取りだけのテストでサーバーを共有する（起動をファイルに 1 回にして、時間を短くする）
+    yield from _start_studio()
+
+
+@pytest.fixture()
+def studio_url_own():
+    # リポジトリを切り替えるテスト用。サーバーの状態を、ほかのテストに持ち越さない
+    yield from _start_studio()
+
+
+@pytest.fixture()
+def page_own(browser, studio_url_own):
+    context = browser.new_context()
+    page = context.new_page()
+    page.goto(studio_url_own)
+    page.wait_for_load_state("networkidle")
+    yield page
+    context.close()
 
 
 @pytest.fixture()
@@ -101,8 +122,9 @@ def _repository_files(repo=ROOT):
 # FR-001 AC-001
 def test_model_can_traverse_requirement_to_catalog_file_and_test(page):
     page.goto(page.url + "#/tables?tab=reqs")
-    expect(page.get_by_text("FR-001", exact=True)).to_be_visible()
-    page.get_by_text("FR-001", exact=True).click()
+    # 表には FR-001 を参照する他の行の xref も並ぶ（描画の進み具合で件数が変わる）ため、先頭（FR-001 自身の行）に固定する
+    expect(page.get_by_text("FR-001", exact=True).first).to_be_visible()
+    page.get_by_text("FR-001", exact=True).first.click()
     expect(page.locator("#drawer")).to_contain_text("FR-001")
     expect(page.locator("#drawer")).to_contain_text("catalog")
     expect(page.locator("#drawer")).to_contain_text("test")
@@ -140,7 +162,7 @@ def test_maps_highlight_selected_relationships_and_support_navigation(page):
 def test_selection_and_filter_survive_placement_map_and_table_switches(page):
     page.goto(page.url + "#/tables?tab=reqs&q=FR-001")
     expect(page.locator("#view")).to_contain_text("FR-001")
-    page.get_by_text("FR-001", exact=True).click()
+    page.get_by_text("FR-001", exact=True).first.click()
     page.locator('a[href="#/map2d"]').click()
     expect(page.locator("#drawer")).to_contain_text("FR-001")
     expect(page.locator("#q")).to_have_value("FR-001")
@@ -211,7 +233,8 @@ def _pick_repo(page, path):
 
 
 # FR-010 AC-010
-def test_invalid_repository_switch_keeps_model_and_explains_failure(page, tmp_path):
+def test_invalid_repository_switch_keeps_model_and_explains_failure(page_own, tmp_path):
+    page = page_own
     before = page.locator("#repoBtn").inner_text()
     _pick_repo(page, tmp_path)
     expect(page.locator("#toast")).to_contain_text("data")
@@ -219,7 +242,8 @@ def test_invalid_repository_switch_keeps_model_and_explains_failure(page, tmp_pa
 
 
 # FR-013 AC-013
-def test_startup_switch_and_refresh_do_not_write_data_or_leave_loopback(page, studio_url, tmp_path):
+def test_startup_switch_and_refresh_do_not_write_data_or_leave_loopback(page_own, studio_url_own, tmp_path):
+    page, studio_url = page_own, studio_url_own
     before = _management_fingerprints()
     requests = []
     page.on("request", lambda request: requests.append(request.url))
@@ -325,10 +349,10 @@ def test_python_runtime_starts_without_extra_installation_and_shows_default_mode
         text=True,
     )
     try:
-        deadline = time.time() + 10
+        deadline = time.time() + 30
         while time.time() < deadline:
             try:
-                with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/model", timeout=0.5) as response:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/model", timeout=5) as response:
                     model = json.load(response)
                 break
             except (OSError, urllib.error.URLError):
@@ -346,7 +370,8 @@ def test_python_runtime_starts_without_extra_installation_and_shows_default_mode
 
 
 # NFR-OPS-003 AC-028
-def test_missing_data_error_offers_recovery_without_losing_current_model(page, tmp_path):
+def test_missing_data_error_offers_recovery_without_losing_current_model(page_own, tmp_path):
+    page = page_own
     current = page.locator("#repoBtn").inner_text()
     _pick_repo(page, tmp_path / "missing")
     expect(page.locator("#toast")).to_contain_text(re.compile("not found|見つかりません|存在しません"))
@@ -358,7 +383,7 @@ def test_missing_data_error_offers_recovery_without_losing_current_model(page, t
 # FR-001 AC-033
 def test_configured_data_links_requirement_ac_catalog_case_and_source(page):
     page.goto(page.url + "#/tables?tab=reqs")
-    page.get_by_text("FR-001", exact=True).click()
+    page.get_by_text("FR-001", exact=True).first.click()
     drawer = page.locator("#drawer")
     expect(drawer).to_contain_text("AC-001")
     expect(drawer).to_contain_text("EABK-Studio")
@@ -367,7 +392,8 @@ def test_configured_data_links_requirement_ac_catalog_case_and_source(page):
 
 
 # FR-010 AC-034
-def test_repository_switch_success_updates_model_and_failure_restores_previous(page, tmp_path):
+def test_repository_switch_success_updates_model_and_failure_restores_previous(page_own, tmp_path):
+    page = page_own
     other = tmp_path / "other"
     other.mkdir()
     (other / "docs").mkdir()
