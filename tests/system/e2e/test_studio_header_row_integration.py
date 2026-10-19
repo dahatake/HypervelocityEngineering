@@ -3,7 +3,7 @@
 置き場の注記: test-designer は tests/system/ 以外を変更できない（hook G-5）ため、EABK-Studio/tests/test_*_ui.py の流儀
 （test_links_wrap_status_ui.py の studio fixture / _open）をそのまま使う形でここに置く。実装者が
 EABK-Studio/tests/test_header_row_ui.py へ移してよい（移すときは sys.path の 3 行と import を元の流儀に戻す）。
-期待値は要求定義書の受入基準だけから決める。幅は PARAM-048 = 1280 / 1024 / 800 / 600 CSS px。
+期待値は要求定義書の受入基準だけから決める。幅は PARAM-048 = 1280 / 1024 / 800 / 600 / 320 CSS px（320 = PARAM-034。ヘッダー帯の横スクロール可）。
 Run: python -m pytest tests/system/e2e/test_studio_header_row_integration.py -q
 """
 import sys
@@ -14,7 +14,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "EABK-Studio" / "tests"))
 from test_links_wrap_status_ui import studio, _open, sync_api  # noqa: E402,F401
 
-WIDTHS = [1280, 1024, 800, 600]  # PARAM-048
+WIDTHS = [1280, 1024, 800, 600, 320]  # PARAM-048
 
 CTRL = {
     "nav": "header.top #nav a",
@@ -44,7 +44,9 @@ def _rects(page, sels):
 
 
 def _inter(a, b):
-    return min(a["x"] + a["w"], b["x"] + b["w"]) - max(a["x"], b["x"]) > 1 and min(a["y"] + a["h"], b["y"] + b["h"]) - max(a["y"], b["y"]) > 1
+    w = min(a["x"] + a["w"], b["x"] + b["w"]) - max(a["x"], b["x"])
+    h = min(a["y"] + a["h"], b["y"] + b["h"]) - max(a["y"], b["y"])
+    return w > 0 and h > 0 and w * h > 0.5  # 外接矩形の交差面積 0（0.5px² は丸め誤差）
 
 
 def _assert_no_overlap(page, sels=PERMANENT):
@@ -64,7 +66,7 @@ def test_ac393_shortened_labels_keep_full_name_and_no_function_is_dropped(studio
     ref = {k: wide.evaluate(JS_NAMES, sel) for k, sel in CTRL.items()}
     wide.context.close()
     assert len(ref["nav"]) == 8 and len(ref["persona"]) == 3 and len(ref["dim"]) == 3 and len(ref["lang"]) == 1 and ref["theme"]
-    for width in (1024, 800, 600):
+    for width in (1024, 800, 600, 320):
         page = _open(studio, "map2d", width=width, lang=lang)
         for k, sel in CTRL.items():
             cur = page.evaluate(JS_NAMES, sel)
@@ -81,7 +83,7 @@ def test_ac393_shortened_labels_keep_full_name_and_no_function_is_dropped(studio
 
 
 # FR-1072 AC-393 (anomaly): a visibly truncated (ellipsis) control must expose its whole text to assistive tech.
-@pytest.mark.parametrize("width", [800, 600])
+@pytest.mark.parametrize("width", [800, 600, 320])
 def test_ac393_truncated_controls_expose_full_text(studio, width):
     page = _open(studio, "map2d", width=width)
     bad = page.evaluate("""() => [...document.querySelectorAll('header.top button, header.top a, header.top #modelTime')]
@@ -124,7 +126,7 @@ def test_ac396_state_survives_width_changes(studio):
         panel.locator("summary").click()
     page.locator("#q").fill("FR-00")
     hash_before = page.evaluate("() => location.hash")
-    for width in (1024, 800, 600, 1280, 600):
+    for width in (1024, 800, 600, 320, 1280, 320):
         page.set_viewport_size({"width": width, "height": 800})
         page.wait_for_timeout(150)
         assert page.locator("#q").input_value() == "FR-00", f"search text lost at {width}px"
@@ -138,11 +140,12 @@ def test_ac396_state_survives_width_changes(studio):
 def test_ac396_state_survives_zoom_factor(studio):
     page = _open(studio, "tables", width=1280)
     page.locator("#q").fill("FR-001")
-    page.set_viewport_size({"width": 640, "height": 400})  # 拡大率 200% 相当
-    page.wait_for_timeout(150)
-    assert page.locator("#q").input_value() == "FR-001"
-    assert "tables" in page.evaluate("() => location.hash")
-    _assert_no_overlap(page, ["header.top", "#navDesc", "#view"])
+    for w in (640, 320):  # 拡大率 200% 相当 (640) と PARAM-034 相当 (320)
+        page.set_viewport_size({"width": w, "height": 400})
+        page.wait_for_timeout(150)
+        assert page.locator("#q").input_value() == "FR-001", f"typed text lost at {w}px"
+        assert "tables" in page.evaluate("() => location.hash")
+        _assert_no_overlap(page, ["header.top", "#navDesc", "#view"])
     page.set_viewport_size({"width": 1280, "height": 800})
     page.wait_for_timeout(150)
     assert page.locator("#q").input_value() == "FR-001"

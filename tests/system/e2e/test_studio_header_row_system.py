@@ -1,7 +1,7 @@
 """System tests for FR-1072 AC-391/AC-392 and NFR-UX-016 AC-395 (run 202610192312).
 
 Expected values come only from the acceptance criteria in docs/requirements-definition.md.  The implementation is NOT
-the oracle.  Widths are PARAM-048 = 1280 / 1024 / 800 / 600 CSS px.  AC-393/394/396 are integration level
+the oracle.  Widths are PARAM-048 = 1280 / 1024 / 800 / 600 / 320 CSS px (320 = PARAM-034; the header band may scroll horizontally).  AC-393/394/396 are integration level
 (EABK-Studio/tests/test_header_row_ui.py).
 
 PROVISIONAL CONTRACT (仮置き。実装者が確認し、食い違えば CONFLICT として返す。この oracle は実装に合わせて直さない):
@@ -17,7 +17,8 @@ from entity_repo import make_zoom
 from test_semantic_zoom_system import _serve
 from test_studio_system import studio_url  # noqa: F401  (fixture: 実リポジトリ)
 
-WIDTHS = [1280, 1024, 800, 600]  # PARAM-048
+WIDTHS = [1280, 1024, 800, 600, 320]  # PARAM-048
+TOL = 2  # PARAM-050: 縦位置の中心の許容差 (CSS px)
 
 ITEMS = {
     "nav": "header.top #nav a",
@@ -64,7 +65,7 @@ def _all(page):
 def _inter(a, b):
     w = min(a["x"] + a["w"], b["x"] + b["w"]) - max(a["x"], b["x"])
     h = min(a["y"] + a["h"], b["y"] + b["h"]) - max(a["y"], b["y"])
-    return w > 1 and h > 1
+    return w > 0 and h > 0 and w * h > 0.5  # 外接矩形の交差面積 0（0.5px² は丸め誤差）
 
 
 # FR-1072 AC-391: every header element sits on one horizontal row at each PARAM-048 width; nav items are not stacked.
@@ -80,21 +81,24 @@ def test_ac391_all_header_elements_are_on_one_row(browser, zurl, width):
     flat = [r for v in items.values() for r in v]
     band = page.evaluate("() => { const r = document.querySelector('header.top').getBoundingClientRect(); return {y: r.top, h: r.height}; }")
     tallest = max(r["h"] for r in flat)
-    # 縦位置の中心が同じ帯に収まる（帯の高さ内、かつ中心のばらつきが最も高い要素の高さ以内）
-    assert all(band["y"] - 1 <= r["cy"] <= band["y"] + band["h"] + 1 for r in flat)
-    assert max(r["cy"] for r in flat) - min(r["cy"] for r in flat) <= tallest, "elements wrapped onto several lines"
+    # 各要素の縦位置の中心が、帯の中心から PARAM-050 (2px) 以内（帯の中心は内側高さ clientHeight で測り、スクロールバー分を除く）
+    bcy = page.evaluate("() => { const h = document.querySelector('header.top'); return h.getBoundingClientRect().top + h.clientHeight / 2; }")
+    for r in flat:
+        assert abs(r["cy"] - bcy) <= TOL, f"{r['text']!r} center off by {abs(r['cy'] - bcy):.1f}px at {width}px"
     # ナビ項目は縦に積まれない
     navs = items["nav"]
     assert max(r["y"] for r in navs) - min(r["y"] for r in navs) <= 2
     xs = [r["x"] for r in navs]
-    assert xs == sorted(xs) and len(set(xs)) == 8
+    assert xs == sorted(xs) and len(set(xs)) == len(navs) == 8  # FR-1041 の整理後の全項目（現行 8）
     # 帯そのものが 1 行分の高さ（折り返して高さが増えない）
     assert band["h"] <= tallest * 2.5
+    # ヘッダー帯の外（ページ本体）には横スクロールが出ない
+    assert page.evaluate("() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1")
     ctx.close()
 
 
 # FR-1072 AC-391 (anomaly): the one-row layout also holds in English (longer labels) and on a screen other than the map.
-@pytest.mark.parametrize("width", [800, 600])
+@pytest.mark.parametrize("width", [800, 600, 320])
 def test_ac391_one_row_holds_in_english_on_other_screen(browser, zurl, width):
     ctx = browser.new_context(viewport={"width": width, "height": 800})
     page = ctx.new_page()
@@ -106,7 +110,8 @@ def test_ac391_one_row_holds_in_english_on_other_screen(browser, zurl, width):
     items = _all(page)
     flat = [r for v in items.values() for r in v]
     assert len(items["nav"]) == 8
-    assert max(r["cy"] for r in flat) - min(r["cy"] for r in flat) <= max(r["h"] for r in flat)
+    bcy = page.evaluate("() => { const h = document.querySelector('header.top'); return h.getBoundingClientRect().top + h.clientHeight / 2; }")
+    assert all(abs(r["cy"] - bcy) <= TOL for r in flat), "elements are not on one row (center off > PARAM-050)"
     assert max(r["y"] for r in items["nav"]) - min(r["y"] for r in items["nav"]) <= 2
     ctx.close()
 
@@ -154,7 +159,7 @@ def test_ac392_every_header_element_is_reachable_by_pointer_and_keyboard(browser
 
 
 # FR-1072 AC-392 (anomaly): Tab from the first header element walks through all of them without leaving the header early.
-@pytest.mark.parametrize("width", [800, 600])
+@pytest.mark.parametrize("width", [800, 600, 320])
 def test_ac392_tab_walks_all_header_controls(browser, zurl, width):
     ctx, page = _open(browser, zurl, width)
     page.locator("header.top #nav a").first.focus()
@@ -194,6 +199,10 @@ def test_ac395_explanation_panel_does_not_cover_the_map(browser, zurl, width):
       const r = b.getBoundingClientRect(); const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
       return !!t && (t === b || b.contains(t) || t.contains(b)); }""")
     assert hit, "map toolbar is covered"
+    # 測定: パネル内の各項目の外接矩形が親(パネル)の表示領域内にある（横に切れない）
+    inside = panel.evaluate("""(p) => [...p.querySelectorAll('[data-testid="tier-group"]')].map((g) => { const a = g.getBoundingClientRect(), b = p.getBoundingClientRect();
+      return a.left >= b.left - 1 && a.right <= b.right + 1; })""")
+    assert inside and all(inside), "panel items are clipped horizontally"
     assert page.evaluate("() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1")
     ctx.close()
 
@@ -201,13 +210,13 @@ def test_ac395_explanation_panel_does_not_cover_the_map(browser, zurl, width):
 # NFR-UX-016 AC-395 (anomaly): the panel's items are the same at every width (nothing dropped when narrow).
 def test_ac395_panel_content_is_not_dropped_when_narrow(browser, zurl):
     counts = {}
-    for width in (1280, 600):
+    for width in (1280, 600, 320):
         ctx, page = _open(browser, zurl, width, "map2d")
         panel = page.locator('[data-testid="map-tiers"]')
         panel.wait_for()
         if panel.get_attribute("open") is None:
-            panel.locator("summary").click()
+            panel.locator("summary").click()  # 折りたたみ時は開く操作で全内容に到達できる
         counts[width] = panel.locator('[data-testid="tier-group"]').count()
         ctx.close()
     assert counts[1280] > 0
-    assert counts[600] == counts[1280]
+    assert counts[600] == counts[1280] and counts[320] == counts[1280]
