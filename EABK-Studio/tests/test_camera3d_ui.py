@@ -123,8 +123,12 @@ def test_ac384_keyboard_and_screen_reader_and_not_color_only(studio):
 
 
 # FR-1071 AC-387: Esc and the stop button stop the automatic motion; selection / zoom survive start, stop and resume.
+# 負荷の高い環境では実フレームが遅くなり、AC-389 の縮退（静止）が先に働くため、この検査はフレーム時刻を 60fps に固定して行う（縮退は AC-389 の検査が別に確かめる）。
+_STEADY_FRAMES = "(() => { const f = window.requestAnimationFrame.bind(window); let t = performance.now(); window.requestAnimationFrame = (cb) => f(() => { t += 16.7; cb(t); }); })();"
+
+
 def test_ac387_stop_keeps_selection_and_zoom_and_no_keyboard_trap(studio):
-    page = _open(studio)
+    page = _open(studio, init=_STEADY_FRAMES)
     _pick(page, "product")
     assert page.evaluate("() => window.__eabk3d.camera().auto") is True
     page.keyboard.press("Escape")
