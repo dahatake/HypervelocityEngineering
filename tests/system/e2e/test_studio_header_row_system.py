@@ -30,7 +30,22 @@ ITEMS = {
     "lang": "header.top #lang",
     "theme": 'header.top [data-testid="theme-toggle"] button',
 }
-EXPECT_COUNT = {"nav": 8, "dim": 3, "persona": 3}
+MAP_SURFACE = '#view canvas, [data-testid="sz-viewport"]'  # make_zoom のデータでは #/map2d が意味ズーム表示（canvas なし）
+
+
+def _fr1041_nav_count():
+    """FR-1041 AC-225 の「①〜N」から、ナビ全項目の数を要求定義書から求める（数を直書きしない）。"""
+    import re
+    from pathlib import Path
+    doc = (Path(__file__).resolve().parents[3] / "docs" / "requirements-definition.md").read_text(encoding="utf-8")
+    sec = doc.split("#### FR-1041", 1)[1].split("\n#### ", 1)[0]
+    m = re.search(r"①〜[①-⑳](?:、[①-⑳])*", sec)  # 例「①〜⑦、⑨」→ 最大 ⑨
+    assert m, "FR-1041 のナビ項目範囲（①〜N）が読めない"
+    return max(ord(c) for c in m.group(0) if "①" <= c <= "⑳") - ord("①") + 1
+
+
+NAV_COUNT = _fr1041_nav_count()
+EXPECT_COUNT = {"nav": NAV_COUNT, "dim": 3, "persona": 3}
 
 JS_RECTS = """(sel) => [...document.querySelectorAll(sel)].map((e) => {
   const r = e.getBoundingClientRect();
@@ -89,7 +104,7 @@ def test_ac391_all_header_elements_are_on_one_row(browser, zurl, width):
     navs = items["nav"]
     assert max(r["y"] for r in navs) - min(r["y"] for r in navs) <= 2
     xs = [r["x"] for r in navs]
-    assert xs == sorted(xs) and len(set(xs)) == len(navs) == 8  # FR-1041 の整理後の全項目（現行 8）
+    assert xs == sorted(xs) and len(set(xs)) == len(navs) == NAV_COUNT  # FR-1041 のナビ全項目
     # 帯そのものが 1 行分の高さ（折り返して高さが増えない）
     assert band["h"] <= tallest * 2.5
     # ヘッダー帯の外（ページ本体）には横スクロールが出ない
@@ -109,7 +124,7 @@ def test_ac391_one_row_holds_in_english_on_other_screen(browser, zurl, width):
     page.wait_for_selector("header.top")
     items = _all(page)
     flat = [r for v in items.values() for r in v]
-    assert len(items["nav"]) == 8
+    assert len(items["nav"]) == NAV_COUNT
     bcy = page.evaluate("() => { const h = document.querySelector('header.top'); return h.getBoundingClientRect().top + h.clientHeight / 2; }")
     assert all(abs(r["cy"] - bcy) <= TOL for r in flat), "elements are not on one row (center off > PARAM-050)"
     assert max(r["y"] for r in items["nav"]) - min(r["y"] for r in items["nav"]) <= 2
@@ -172,7 +187,7 @@ def test_ac392_tab_walks_all_header_controls(browser, zurl, width):
         page.keyboard.press("Tab")
     must = {"q", "repoBtn", "lang"}
     assert must <= seen, f"not reached by Tab: {must - seen}"
-    assert len([s for s in seen if s and s.startswith("#/")]) == 8
+    assert len([s for s in seen if s and s.startswith("#/")]) == NAV_COUNT
     ctx.close()
 
 
@@ -180,15 +195,15 @@ def test_ac392_tab_walks_all_header_controls(browser, zurl, width):
 @pytest.mark.parametrize("width", WIDTHS)
 def test_ac395_explanation_panel_does_not_cover_the_map(browser, zurl, width):
     ctx, page = _open(browser, zurl, width, "map2d")
-    page.wait_for_selector("#view canvas")
+    page.wait_for_selector(MAP_SURFACE)
     panel = page.locator('[data-testid="map-tiers"]')
     panel.wait_for()
     if panel.get_attribute("open") is None:
         panel.locator("summary").click()
     assert panel.evaluate("(e) => e.open")
-    r = page.evaluate("""() => { const q = (s) => { const e = document.querySelector(s); const b = e.getBoundingClientRect();
+    r = page.evaluate("""(sel) => { const q = (s) => { const e = document.querySelector(s); const b = e.getBoundingClientRect();
         return {x: b.left, y: b.top, w: b.width, h: b.height}; };
-      return {panel: q('[data-testid="map-tiers"]'), map: q('#view canvas')}; }""")
+      return {panel: q('[data-testid="map-tiers"]'), map: q(sel)}; }""", MAP_SURFACE)
     assert r["map"]["w"] > 100 and r["map"]["h"] > 100, "map surface is hidden or collapsed"
     assert not _inter(r["panel"], r["map"]), f"panel covers map: {r}"
     if width <= 800:  # 狭い幅: 説明パネルは地図の下、または折りたたみ（地図の下端以下に位置）
