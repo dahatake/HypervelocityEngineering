@@ -16,6 +16,19 @@ from test_links_wrap_status_ui import studio, _open, sync_api  # noqa: E402,F401
 
 WIDTHS = [1280, 1024, 800, 600, 320]  # PARAM-048
 
+
+def _fr1041_nav_count():
+    """FR-1041 AC-225 の「①〜N」から、ナビ全項目の数を要求定義書から求める。"""
+    import re
+    doc = (Path(__file__).resolve().parents[3] / "docs" / "requirements-definition.md").read_text(encoding="utf-8")
+    sec = doc.split("#### FR-1041", 1)[1].split("\n#### ", 1)[0]
+    m = re.search(r"①〜([①-⑳])", sec)
+    assert m, "FR-1041 のナビ項目範囲（①〜N）が読めない"
+    return ord(m.group(1)) - ord("①") + 1
+
+
+NAV_COUNT = _fr1041_nav_count()
+
 CTRL = {
     "nav": "header.top #nav a",
     "dim": '[data-testid="header-dim-toggle"] button',
@@ -33,8 +46,9 @@ JS_NAMES = """(sel) => [...document.querySelectorAll(sel)].map((e) => {
 })"""
 
 # 常設の要素。一時的な表示（#results・#drawer・#toast・ダイアログ・ツールチップ）は対象外。
-PERMANENT = ["header.top", "#navDesc", "#view", '[data-testid="map-tiers"]', "#view canvas"]
-NESTED = {("#view", '[data-testid="map-tiers"]'), ("#view", "#view canvas")}  # 親子は交差してよい
+MAP_SURFACE = '#view canvas, [data-testid="sz-viewport"]'  # 意味ズーム表示では canvas がない
+PERMANENT = ["header.top", "#navDesc", "#view", '[data-testid="map-tiers"]', MAP_SURFACE]
+NESTED = {("#view", '[data-testid="map-tiers"]'), ("#view", MAP_SURFACE)}  # 親子は交差してよい
 
 
 def _rects(page, sels):
@@ -65,7 +79,7 @@ def test_ac393_shortened_labels_keep_full_name_and_no_function_is_dropped(studio
     wide = _open(studio, "map2d", width=1280, lang=lang)
     ref = {k: wide.evaluate(JS_NAMES, sel) for k, sel in CTRL.items()}
     wide.context.close()
-    assert len(ref["nav"]) == 8 and len(ref["persona"]) == 3 and len(ref["dim"]) == 3 and len(ref["lang"]) == 1 and ref["theme"]
+    assert len(ref["nav"]) == NAV_COUNT and len(ref["persona"]) == 3 and len(ref["dim"]) == 3 and len(ref["lang"]) == 1 and ref["theme"]
     for width in (1024, 800, 600, 320):
         page = _open(studio, "map2d", width=width, lang=lang)
         for k, sel in CTRL.items():
@@ -112,8 +126,8 @@ def test_ac394_opened_explanation_panel_does_not_intersect_the_map(studio, width
     if panel.get_attribute("open") is None:
         panel.locator("summary").click()
     _assert_no_overlap(page)
-    r = _rects(page, ['[data-testid="map-tiers"]', "#view canvas"])
-    assert r["#view canvas"] and not _inter(r['[data-testid="map-tiers"]'], r["#view canvas"])
+    r = _rects(page, ['[data-testid="map-tiers"]', MAP_SURFACE])
+    assert r[MAP_SURFACE] and not _inter(r['[data-testid="map-tiers"]'], r[MAP_SURFACE])
     page.context.close()
 
 
