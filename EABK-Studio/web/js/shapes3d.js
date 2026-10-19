@@ -96,7 +96,7 @@ const SW = {
 };
 export function shapeSwatch(shape, color = 'currentColor') {
   const w = document.createElement('span');
-  w.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="${color}" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true" data-shape="${shape}">${SW[shape] || SW.default}</svg>`;
+  w.innerHTML = `<svg class="icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="${color}" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true" data-shape="${shape}">${SW[shape] || SW.default}</svg>`;
   return w.firstChild;
 }
 export const kindName = (kind) => (isKnownKind(kind) ? tKind(kind) : t('shape3d.other'));
