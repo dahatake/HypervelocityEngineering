@@ -28,7 +28,8 @@ export const ALL_DIMS = ['2d', '3d', 'rpg'];
 export function headerDimToggle() {
   const { dims, current, selected } = headerDim;
   const reasonOf = (d) => t(d === 'rpg' ? 'hdim.reason.rpg' : 'hdim.reason.3d');
-  const live = el('span', { class: 'sr-only', role: 'status', 'aria-live': 'polite' }, t('dim.now', { d: current.toUpperCase() }));
+  // role=status は画面の結果表示（保守の実行結果など）が使う。常設ヘッダーは aria-live だけにして、画面側の role=status と重ならないようにする
+  const live = el('span', { class: 'sr-only', 'aria-live': 'polite' }, t('dim.now', { d: current.toUpperCase() }));
   const btn = (d) => {
     const on = d === current, off = !dims.includes(d);
     const label = off ? `${d.toUpperCase()}: ${reasonOf(d)}` : on ? t('dim.now', { d: d.toUpperCase() }) : t('dim.to', { d: d.toUpperCase() });

@@ -136,16 +136,17 @@ async function route() {
   renderNav();
   if (!store.model) return;
   const my = ++token;
-  current?.destroy?.();
-  current = null;
   const problem = problemPanel();
-  if (problem) { view.replaceChildren(problem); return; }
+  if (problem) { current?.destroy?.(); current = null; view.replaceChildren(problem); return; }
   const host = el('div', { class: 'fill' });
-  view.replaceChildren(host);
-  host.append(el('div', { class: 'sr-only', role: 'status' }, t('loading'))); // never leave the view empty while the module loads
+  // 画面の部品を読み込む間は、前の画面を残す（描画の空白を作らない）。最初の描画で view が空のときだけ読み込み中の表示を置く
+  if (!view.firstChild) { view.replaceChildren(host); host.append(el('div', { class: 'sr-only', role: 'status' }, t('loading'))); }
   try {
     const mod = ROUTES[name].mount ? { mount: ROUTES[name].mount } : await ROUTES[name].load();
     if (my !== token) return;
+    current?.destroy?.();
+    current = null;
+    view.replaceChildren(host);
     host.querySelector(':scope > [role=status].sr-only')?.remove();
     current = mod.mount(host);
     if (ROUTES[name].dim) mountMapDim(host, name, current);
@@ -157,6 +158,8 @@ async function route() {
     }
   } catch (e) {
     console.error(e);
+    if (my !== token) return;
+    view.replaceChildren(host);
     host.replaceChildren(el('div', { class: 'page' }, el('div', { class: 'warnbox' }, String((e && e.message) || e))));
   }
 }
