@@ -67,6 +67,7 @@ def _open(browser, url, width, route="map2d", height=800):
     p.goto(url.split("#")[0] + "#/" + route)
     p.wait_for_load_state("networkidle")
     p.wait_for_selector("header.top")
+    p.wait_for_selector("header.top #nav a")
     return ctx, p
 
 
@@ -122,6 +123,9 @@ def test_ac391_one_row_holds_in_english_on_other_screen(browser, zurl, width):
     page.reload()
     page.wait_for_load_state("networkidle")
     page.wait_for_selector("header.top")
+    # リロード直後はナビ描画が遅れるため、ナビ項目が出揃うまで待つ
+    page.wait_for_function(
+        "n => document.querySelectorAll('header.top #nav a').length >= n", arg=NAV_COUNT)
     items = _all(page)
     flat = [r for v in items.values() for r in v]
     assert len(items["nav"]) == NAV_COUNT
