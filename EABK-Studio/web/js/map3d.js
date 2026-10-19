@@ -5,11 +5,12 @@ import { store } from './store.js';
 import { create3d } from './sz3d.js';
 import { mountShell, isArch, wantsEntityView, hasEntityStructure, setTab } from './semzoom.js';
 import { mountMapTiers, tierState, tierPathOf, tierRank, tierKey, tierOfKey, tierShortLabel } from './maptiers.js';
+import { shapeOf, isKnownKind, buildNodeObjects, buildLegend, buildStyleToggle, addSceneLights, loadStyle, saveStyle, normStyle, FX_BY_STYLE } from './shapes3d.js';
 import { el, colorOf, TYPE_COLOR, STATUS_COLOR, IMPL_COLOR, token, icon, showTip, hideTip, nodeTip } from './ui.js';
 
 const LEVEL = { goal: 0, req: 1, ac: 2, entity: 3, part: 3, api: 3, table: 3, param: 3, question: 3, file: 4, case: 5 };
 const LAYER_TYPES = ['goal', 'req', 'ac', 'entity', 'part', 'api', 'table', 'param', 'question', 'file', 'case'];
-const prefs = { layers: new Set(['goal', 'req', 'entity', 'part', 'api', 'table', 'file', 'case']), color: 'type', auto: !matchMedia('(prefers-reduced-motion: reduce)').matches };
+const prefs = { layers: new Set(['goal', 'req', 'entity', 'part', 'api', 'table', 'file', 'case']), color: 'type', kindFocus: null, style: loadStyle(), auto: !matchMedia('(prefers-reduced-motion: reduce)').matches };
 const GAP = 95, SP = 6.5;
 
 function mountGraph(host) {
@@ -25,6 +26,7 @@ function mountGraph(host) {
   mount3.append(renderer.domElement);
   renderer.domElement.style.display = 'block';
   const scene = new THREE.Scene();
+  addSceneLights(scene);
   const camera = new THREE.PerspectiveCamera(50, 1, 1, 8000);
   const world = new THREE.Group();
   scene.add(world);
@@ -35,6 +37,7 @@ function mountGraph(host) {
   const cam = { target: new THREE.Vector3(), theta: 0.7, phi: 1.0, radius: 600, vt: 0, vp: 0 };
   let anim = null, tour = null, lastInput = performance.now(), drag = null, moved = false;
 
+  let starsObj = null, shapeObjs = null, arrows = null, legendEl = null, styleEl = null, shapeItems = [], shapeDirty = true;
   const dotTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 32; const g = c.getContext('2d'); const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, '#fff'); gr.addColorStop(0.5, '#fff'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 32, 32); return new THREE.CanvasTexture(c); })();
   // ---------- stars
   {
@@ -44,7 +47,8 @@ function mountGraph(host) {
       pos.set([r * Math.sin(b) * Math.cos(a), r * Math.cos(b), r * Math.sin(b) * Math.sin(a)], i * 3);
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0x9fb4ff, size: 5, map: dotTex, alphaTest: 0.05, sizeAttenuation: false, transparent: true, opacity: 0.55, depthWrite: false })));
+    starsObj = new THREE.Points(g, new THREE.PointsMaterial({ color: 0x9fb4ff, size: 5, map: dotTex, alphaTest: 0.05, sizeAttenuation: false, transparent: true, opacity: 0.55, depthWrite: false }));
+    scene.add(starsObj);
   }
 
   const nodeMat = new THREE.ShaderMaterial({
@@ -159,7 +163,9 @@ function mountGraph(host) {
     pointsObj.frustumCulled = false;
     pointsObj.userData.base = sizes.slice();
     pointsObj.renderOrder = 5;
+    pointsObj.visible = false;   // FR-1068: 点（球）ではなく、種別ごとのかたちのオブジェクトで描く。点は座標・大きさの保持にだけ使う
     world.add(pointsObj);
+    buildNodeShapes(sizes);
 
     // base edges
     const ev = [], ec = [];
@@ -176,6 +182,7 @@ function mountGraph(host) {
     baseLines = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.1, depthWrite: false }));
     baseLines.frustumCulled = false;
     world.add(baseLines);
+    buildArrows(ev);
 
     // layers (discs + labels)
     for (const L of layers) {
@@ -204,7 +211,70 @@ function mountGraph(host) {
     parts = new THREE.Points(pg, new THREE.PointsMaterial({ color: 0xffffff, size: 3.2, map: dotTex, alphaTest: 0.05, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
     parts.frustumCulled = false; parts.userData.edges = [];
     world.add(parts);
+    applyStyle();
+    renderLegend();
     applyHighlight();
+  }
+
+  // ---------- FR-1068: 種別ごとのかたち・凡例 / FR-1069: 演出スタイル（シーン構築の部品。カメラ周りとは独立）
+  function buildNodeShapes(sizes) {
+    shapeObjs?.group.removeFromParent(); shapeObjs?.dispose();
+    const cc = new THREE.Color();
+    shapeItems = nodes.map((n, i) => ({ id: n.id, kind: n.type, x: P[i * 3], y: P[i * 3 + 1], z: P[i * 3 + 2], size: Math.max(0.6, sizes[i] * 0.5), hidden: !!(pinfo[i]?.cg && !pinfo[i].first), color: new THREE.Color(nodeColor(n)) }));
+    shapeObjs = buildNodeObjects(shapeItems);
+    world.add(shapeObjs.group);
+    shapeDirty = true;
+  }
+  // 関係の方向（矢じり）: 辺の終点の手前に円錐を置く。Software Engineering で表示する（FR-1069 AC-379）。
+  function buildArrows(ev) {
+    arrows?.removeFromParent(); arrows?.geometry?.dispose?.(); arrows?.material?.dispose?.();
+    const n = Math.min(ev.length / 6, 4000);
+    arrows = new THREE.InstancedMesh(new THREE.ConeGeometry(1.1, 3.2, 8), new THREE.MeshBasicMaterial({ color: 0x9fb4ff, transparent: true, opacity: 0.55 }), n);
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), dir = new THREE.Vector3(), m = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), up = new THREE.Vector3(0, 1, 0);
+    for (let k = 0; k < n; k++) {
+      a.set(ev[k * 6], ev[k * 6 + 1], ev[k * 6 + 2]); b.set(ev[k * 6 + 3], ev[k * 6 + 4], ev[k * 6 + 5]);
+      dir.subVectors(b, a); const len = dir.length() || 1; dir.divideScalar(len);
+      q.setFromUnitVectors(up, dir);
+      m.compose(b.clone().addScaledVector(dir, -Math.min(5, len * 0.4)), q, one);
+      arrows.setMatrixAt(k, m);
+    }
+    arrows.frustumCulled = false; arrows.userData.kind = 'arrows';
+    world.add(arrows);
+  }
+  const fxSet = () => new Set(FX_BY_STYLE[prefs.style] || []);
+  function applyStyle() {
+    mount3.dataset.style = prefs.style;
+    mount3.dataset.fx = (FX_BY_STYLE[prefs.style] || []).join(',') || 'none';
+    const ent = prefs.style === 'entertainment';
+    if (starsObj) starsObj.visible = ent;
+    if (parts) parts.visible = ent;
+    if (arrows) arrows.visible = !ent;
+    shapeDirty = true;
+  }
+  function setStyle(v) {
+    prefs.style = normStyle(v); saveStyle(prefs.style);   // 保存はスタイル名だけ。再構築しないので、選択・ズーム・絞り込み・カメラは保たれる
+    applyStyle(); renderStyleToggle();
+  }
+  function renderStyleToggle() {
+    const next = buildStyleToggle(prefs.style, setStyle);
+    if (styleEl) styleEl.replaceWith(next); else host.append(next);
+    styleEl = next;
+  }
+  // 凡例の種別は、いま描かれているノード（nodes()）の種別そのもの。未知の種別は「その他」になる。
+  function displayedNodes() { return shapeItems.filter((s) => !s.hidden).map((s) => ({ id: s.id, kind: s.kind, shape: shapeOf(s.kind) })); }
+  function renderLegend() {
+    const cnt = new Map();
+    for (const s of shapeItems) { if (s.hidden) continue; const e = cnt.get(s.kind) || { kind: s.kind, color: '#' + s.color.getHexString(), count: 0 }; e.count++; cnt.set(s.kind, e); }
+    const next = buildLegend([...cnt.values()], { focus: prefs.kindFocus, onFocus: (k) => { const had = k || prefs.kindFocus; prefs.kindFocus = k; shapeDirty = true; renderLegend(); legendEl.querySelector(`[data-kind="${CSS.escape(had)}"]`)?.focus(); } });
+    if (legendEl) legendEl.replaceWith(next); else host.append(next);
+    legendEl = next;
+  }
+  function refreshShapes(now) {
+    const fx = fxSet();
+    if (!shapeObjs || !(shapeDirty || fx.size)) return;
+    shapeDirty = false;
+    shapeObjs.apply({ now, fx, focusKind: prefs.kindFocus, selected: store.selected && idx.has(store.selected) ? idx.get(store.selected) : -1,
+      dim: (i) => !!curSet && !curSet.has(nodes[i].id), grow: (i) => (curSet && curSet.has(nodes[i].id) ? 1.3 : 1) });
   }
 
   // ---------- highlight
@@ -213,7 +283,7 @@ function mountGraph(host) {
     if (!pointsObj) return;
     const hov = store.hover && idx.has(store.hover) ? store.related(store.hover, 1) : null;
     const set = hov || store.activeSet();
-    curSet = set;
+    curSet = set; shapeDirty = true;
     const al = pointsObj.geometry.attributes.alpha, sz = pointsObj.geometry.attributes.size, base = pointsObj.userData.base;
     nodes.forEach((n, i) => {
       const on = !set || set.has(n.id);
@@ -407,7 +477,7 @@ function mountGraph(host) {
       el('div', {}, n ? el('b', {}, n.label) : el('b', {}, store.focusLabel || t('focus.set')), ' · ', t('focus.count', { n: [...set].filter((id) => idx.has(id)).length })),
       el('div', { class: 'row', style: { marginTop: '6px' } }, el('button', { class: 'btn ghost', onclick: () => store.clear() }, t('focus.clear'))));
   }
-  function rebuild(keep) { build(); renderToolbar(); if (!keep) bird(); }
+  function rebuild(keep) { build(); renderToolbar(); renderStyleToggle(); if (!keep) bird(); }
 
   function resize() {
     const r = host.getBoundingClientRect();
@@ -418,7 +488,7 @@ function mountGraph(host) {
   }
   const ro = new ResizeObserver(resize); ro.observe(host);
   resize();
-  build(); renderToolbar();
+  build(); renderToolbar(); renderStyleToggle();
   const snapshot = document.documentElement.classList.contains('snapshot');
   {
     const v = viewFor(allIds(), 1.15);
@@ -471,6 +541,7 @@ function mountGraph(host) {
       parts.geometry.attributes.position.needsUpdate = true;
     }
     // keep static labels readable: shrink when the camera is very close
+    refreshShapes(now);
     renderer.render(scene, camera);
   }
   // FR-1063 AC-346: 画面に見える状態の公開（2D と同じ形。x・y は画面座標）。畳まれた領域の点は visible=false。
@@ -487,6 +558,9 @@ function mountGraph(host) {
     },
   };
   window.eabkView = viewApi3;
+  // FR-1068 AC-374: テスト hook。いま描かれているノードの {id, kind, shape}。
+  const hook3 = { nodes: displayedNodes, style: () => prefs.style, fx: () => [...fxSet()] };
+  window.__eabk3d = hook3;
   if (snapshot) frame(0);
   else raf = requestAnimationFrame(frame);
   if (snapshot) {
@@ -500,6 +574,7 @@ function mountGraph(host) {
   return {
     destroy() {
       if (window.eabkView === viewApi3) delete window.eabkView;
+      if (window.__eabk3d === hook3) delete window.__eabk3d;
       dead = true; cancelAnimationFrame(raf); stopTour(); ro.disconnect(); offs.forEach((f) => f()); hideTip();
       scene.traverse((o) => { o.geometry?.dispose?.(); o.material?.dispose?.(); });
       labelCache.forEach((tx) => tx.dispose());
