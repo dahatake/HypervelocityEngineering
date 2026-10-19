@@ -94,7 +94,7 @@ def test_ac278_integrations_related_ids_are_links(integ_page):
     p = integ_page
     for rid in ("FR-001", "AC-001", "INT-001"):
         link = p.locator("#view a", has_text=re.compile(rf"^{rid}$")).first
-        assert link.count() == 1, f"{rid} is not a link in the list"
+        expect(link, f"{rid} is not a link in the list").to_have_count(1)
     p.locator("#view a", has_text=re.compile(r"^INT-001$")).first.click()
     detail = p.locator("#drawer")
     for rid in ("FR-001", "AC-001"):
@@ -113,6 +113,7 @@ def test_ac278_missing_related_id_is_unresolved_not_link(integ_page):
 def test_ac280_kinds_are_grouped_under_four_headings(page):
     page.goto(page.url.split("#")[0] + "#/tables")
     page.wait_for_load_state("networkidle")
+    page.wait_for_selector("#view [role=group] [role=tab]")
     seen = []
     for g in GROUPS:
         grp = page.locator("#view [role=group]").filter(has_text=g)

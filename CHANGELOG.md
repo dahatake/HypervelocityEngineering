@@ -9,6 +9,10 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
   - `ledger.py run`: 同じ pytest ファイルの command を 1 プロセスにまとめて実行（失敗・未該当は単独で再実行。`--no-batch` / `system_test.batch_pytest: false` で止める）。GUI を含む 45 ケースで 320 秒 → 281 秒。
   - `ledger.py preflight`（新規）: pytest の collect-only で、構文・import の誤りと `-k`・node id の誤り（0 件）を実装の前に検出。test-designer の終了前と工程 4 の完了前に実行（統合後の System Test 失敗による手戻りを減らす）。
   - `rdcheck.py`: 走査対象ファイルの先読み（並行）と読み取りの使い回し。
+  - 手順書の読み込み量の削減: `requirement-definition`（62KB → 14KB）と `implement-fr`（37KB → 9KB）の「原本」を `original.md` / `original-fr.md` に分離（内容は変更なし）。作業役は、手順書の表の「必ず読む」節だけを行範囲で読む。表と原本のタグの位置は `tests/toolkit/test_skill_index.py` が照合する。
+  - 実装前の直列区間: 工程 2（独立監査）を background で起動し、工程 3・4 と並行して進める（工程 5 の前に完了させる）。監査で直す要求の分だけ、test-designer がケースを作り直す。
+  - `scripts/ebak.config.json` の `models`: implementer = `claude-sonnet-5.5`、rd-auditor = `gpt-6.1-sol`（hook G-7 が強制）。
+  - GUI テスト: `studio_url` を module scope にし、リポジトリを切り替えるテストは個別のサーバー（`studio_url_own`）へ。表示の待ちの競合を修正。
 
 ## [0.5.1]
 
