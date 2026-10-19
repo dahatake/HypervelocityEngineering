@@ -139,7 +139,14 @@
     "AC-382": "sha256:aaf7a015a6bc3bac",
     "AC-385": "sha256:284205320fdb9857",
     "AC-386": "sha256:bdb03394adb93269",
-    "AC-388": "sha256:7728776935bc85da"
+    "AC-388": "sha256:7728776935bc85da",
+    "AC-367": "sha256:b3fe394f923861fb",
+    "AC-368": "sha256:96d32c49ed62f5df",
+    "AC-371": "sha256:e948ded3b2f78715",
+    "AC-374": "sha256:b3ba18b98270e523",
+    "AC-375": "sha256:28cd6902163bdc30",
+    "AC-378": "sha256:b07b61041fac5559",
+    "AC-379": "sha256:879df9efc754b69f"
   },
   "cases": [
     {
@@ -7416,6 +7423,406 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-199",
+      "requirement_ids": [
+        "FR-1066"
+      ],
+      "ac_ids": [
+        "AC-367"
+      ],
+      "title": "ヘッダーの表示モード切替が全画面に常に存在する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac367_header_dim_toggle_exists_on_every_screen\" -q",
+      "canary": true,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:06:42+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-200",
+      "requirement_ids": [
+        "FR-1066"
+      ],
+      "ac_ids": [
+        "AC-367"
+      ],
+      "title": "画面を何度切り替えても切替が消えず重複しない（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac367_header_dim_toggle_never_disappears\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:06:43+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-201",
+      "requirement_ids": [
+        "FR-1066"
+      ],
+      "ac_ids": [
+        "AC-367"
+      ],
+      "title": "画面内の切替とヘッダーの切替が同じ状態を操作する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac367_in_screen_toggle\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:06:45+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-202",
+      "requirement_ids": [
+        "FR-1066"
+      ],
+      "ac_ids": [
+        "AC-368"
+      ],
+      "title": "マップ以外で RPG 風は disabled で理由が表示される（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_rpg_is_disabled_with_reason_outside_map\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:06:46+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-203",
+      "requirement_ids": [
+        "FR-1066"
+      ],
+      "ac_ids": [
+        "AC-368"
+      ],
+      "title": "マップで RPG 風が有効で操作すると表示と data-current が更新される",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_rpg_enabled_on_map\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:06:48+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-204",
+      "requirement_ids": [
+        "FR-1066"
+      ],
+      "ac_ids": [
+        "AC-368"
+      ],
+      "title": "エンティティ画面がヘッダーのモードに追従する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_entities_screen_follows_header_mode\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:06:49+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-205",
+      "requirement_ids": [
+        "FR-1067"
+      ],
+      "ac_ids": [
+        "AC-371"
+      ],
+      "title": "中・大ズームでヘッダー切替しても粒度と選択対象が保たれる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac371_header_switch_keeps_zoom_level_and_selection\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:06:51+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-206",
+      "requirement_ids": [
+        "FR-1067"
+      ],
+      "ac_ids": [
+        "AC-371"
+      ],
+      "title": "全体の粒度は切替後も全体のままで欠けない（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac371_overview_level_stays_overview\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:06:52+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-207",
+      "requirement_ids": [
+        "FR-1068"
+      ],
+      "ac_ids": [
+        "AC-374"
+      ],
+      "title": "3D ノードが種別ごとに異なるかたちを持つ",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac374_3d_nodes_expose_kind_and_distinct_shapes\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:06:54+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-208",
+      "requirement_ids": [
+        "FR-1068"
+      ],
+      "ac_ids": [
+        "AC-374"
+      ],
+      "title": "種別が違うノードが同じ球のままにならない（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac374_different_kinds_never_share\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:06:55+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-209",
+      "requirement_ids": [
+        "FR-1068"
+      ],
+      "ac_ids": [
+        "AC-375"
+      ],
+      "title": "3D の凡例の種別がノードの種別と一致する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac375_legend_kinds_match_node_kinds\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:06:56+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-210",
+      "requirement_ids": [
+        "FR-1068"
+      ],
+      "ac_ids": [
+        "AC-375"
+      ],
+      "title": "凡例に余分・欠けた種別がない（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac375_legend_has_no_extra_kinds\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:06:58+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-211",
+      "requirement_ids": [
+        "FR-1069"
+      ],
+      "ac_ids": [
+        "AC-378"
+      ],
+      "title": "演出スタイルの既定は engineering で根要素に反映される",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac378_style_toggle_defaults\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:06:59+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-212",
+      "requirement_ids": [
+        "FR-1069"
+      ],
+      "ac_ids": [
+        "AC-378"
+      ],
+      "title": "演出スタイルは 2 値だけで不正値を受け付けない（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac378_style_toggle_only_has_two_values\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:07:00+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-213",
+      "requirement_ids": [
+        "FR-1069"
+      ],
+      "ac_ids": [
+        "AC-379"
+      ],
+      "title": "engineering は演出なし・entertainment は 2 種類以上",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac379_engineering_has_no_fx\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:07:01+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-214",
+      "requirement_ids": [
+        "FR-1069"
+      ],
+      "ac_ids": [
+        "AC-379"
+      ],
+      "title": "どちらのスタイルでも要素・凡例の内容が同じ",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac379_content_is_identical\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:07:03+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
         }
       ]
     }
