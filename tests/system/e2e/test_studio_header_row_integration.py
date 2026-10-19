@@ -22,9 +22,9 @@ def _fr1041_nav_count():
     import re
     doc = (Path(__file__).resolve().parents[3] / "docs" / "requirements-definition.md").read_text(encoding="utf-8")
     sec = doc.split("#### FR-1041", 1)[1].split("\n#### ", 1)[0]
-    m = re.search(r"①〜([①-⑳])", sec)
+    m = re.search(r"①〜[①-⑳](?:、[①-⑳])*", sec)  # 例「①〜⑦、⑨」→ 最大 ⑨
     assert m, "FR-1041 のナビ項目範囲（①〜N）が読めない"
-    return ord(m.group(1)) - ord("①") + 1
+    return max(ord(c) for c in m.group(0) if "①" <= c <= "⑳") - ord("①") + 1
 
 
 NAV_COUNT = _fr1041_nav_count()
