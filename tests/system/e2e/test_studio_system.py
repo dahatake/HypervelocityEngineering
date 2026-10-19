@@ -30,7 +30,7 @@ def _free_port():
         return sock.getsockname()[1]
 
 
-@pytest.fixture()
+@pytest.fixture(scope="module")
 def studio_url():
     port = _free_port()
     proc = subprocess.Popen(

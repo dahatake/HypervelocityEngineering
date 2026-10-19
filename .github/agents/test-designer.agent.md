@@ -23,6 +23,7 @@ run-id、統合ブランチ、対象の要求 ID・AC ID（`rdcheck.py show` の
 - 新しいケースはすべて `not_run` のまま commit します。この工程ではアプリを直しません。アプリが未実装で失敗するのは正常です。
 - テスト名か直前のコメントに要求 ID と AC ID を書きます（例: `// FR-012 AC-031`）。
 - 要求定義書と食い違う・判定に必要な値がない（TBD）ときは、ケースを `ledger.py block --reason` にし、競合として返します。要求定義書は変更しません。
+- 終了前に `python scripts/ledger.py preflight`（自分が足した not_run のケースの pytest を collect-only で確認。構文・import の誤り、`-k`・node id の誤りで 0 件になるものを、実装の前に見つける）を exit 0 にします。ここで直さないと、統合後の System Test の失敗になり、実装役の手戻り（30〜60 分）になります（実測: `[ST]` の修正 commit が 69 件）。
 - 終了前に `python scripts/verify.py --docs-only --strict-ledger` を exit 0 にし、`[ST] <要約>` で commit します。
 - 利用者が設定した MCP Server・plugin のツールと skill（ブラウザー操作、Azure など）は、テストの組み込み方や対象の仕様の確認に使えます。外部のシステムの変更は、conductor から渡された external_write・deploy の範囲でだけ行います（hook G-5）。
 

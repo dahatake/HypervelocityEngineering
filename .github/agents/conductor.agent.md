@@ -66,7 +66,7 @@ disable-model-invocation: true
    queue を作ったら `python scripts/run-state.py lane confirm`（`LANE: full` になったら、省いていた工程 2 を scope: 差分、runs: 1 で行ってから工程 4 へ）。
 4. System Test の設計 → test-designer。実装より前に行う。全ケース not_run で commit させる。
    実測で最も長い直列区間だったため（約 5.6 時間）、AC が 15 個を超えるときは、領域（画面・API・NFR の種別）ごとに AC を 2〜4 組（1 組 15 AC 前後）に分け、test-designer を並行で起動する（依頼文の先頭に `part: n/N` と担当の AC・要求 ID を固定する）。各 test-designer は自分の担当のケースだけを書き、台帳は `ledger.py` 経由で追記する（排他ロックで衝突しない）。
-   工程 5 の項目は、その項目の要求のケースを担当する part が完了した時点で始めてよい（全 part の完了を待たない）。`stage 4 --done` は全 part の完了後。
+   工程 5 の項目は、その項目の要求のケースを担当する part が完了した時点で始めてよい（全 part の完了を待たない）。`stage 4 --done` は全 part の完了後。完了の前に `python scripts/ledger.py preflight` を exit 0 にする（test-designer が書いたケースの構文・`-k`・node id の誤りを、実装の前に見つける。統合後に見つかると、実装役の手戻りが 30〜60 分になる）。
    工程 3 の計画は進行役の作業なので、test-designer を background で起動してから工程 3 を行う（工程 2 が終わっていれば、要求定義書は確定している）。
    工程 5 の項目は、その項目の要求のケースを書く test-designer（part）の完了を待って始める（全 part の `stage 4 --done` までは待たない）。
 5. 実装ループ → 下の「実装ループ」。

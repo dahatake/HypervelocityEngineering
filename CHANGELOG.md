@@ -5,6 +5,11 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- 実行履歴の分析（直近の run の工程時間・実効の並列度・`[ST]` 修正 commit 69 件）に基づく速さの改善。
+  - `ledger.py run`: 同じ pytest ファイルの command を 1 プロセスにまとめて実行（失敗・未該当は単独で再実行。`--no-batch` / `system_test.batch_pytest: false` で止める）。GUI を含む 45 ケースで 320 秒 → 281 秒。
+  - `ledger.py preflight`（新規）: pytest の collect-only で、構文・import の誤りと `-k`・node id の誤り（0 件）を実装の前に検出。test-designer の終了前と工程 4 の完了前に実行（統合後の System Test 失敗による手戻りを減らす）。
+  - `rdcheck.py`: 走査対象ファイルの先読み（並行）と読み取りの使い回し。
+
 ## [0.5.1]
 
 - 全体の実行時間を短縮するため、conductor の指示を並行化の方向に直しました。実測（実効の並列度 0.78〜2.55、`parallel_workers` の 70% 未達が大半）を根拠にしています。

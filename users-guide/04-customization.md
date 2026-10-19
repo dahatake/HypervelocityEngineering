@@ -169,7 +169,7 @@ run の実行中は、hook G-7 がこの表を強制します。値のある役�
 
 **検査を同時に動かします。**
 - `verify.commands` で、連続する工程に `"parallel": true` を付けると同時に実行します（例: lint・型検査・単体テスト）。build のように前の工程が必要なものには付けません。
-- System Test は、`ledger.py run --jobs N|auto`（または設定の `system_test.jobs`）で同時に実行します。既定は `auto`（CPU 数 ÷ 4、2〜6）です。ケースに `"serial": true` を付ける、または command が `system_test.serial_patterns`（既定は `default_port`）の文字列を含むと、並列の実行が終わってから単独で動きます。同じ command のケースは 1 回だけ実行し、結果を共有します。canary は常に先に単独で動きます。
+- System Test は、`ledger.py run --jobs N|auto`（または設定の `system_test.jobs`）で同時に実行します。既定は `auto`（CPU 数 ÷ 4、2〜6）です。ケースに `"serial": true` を付ける、または command が `system_test.serial_patterns`（既定は `default_port`）の文字列を含むと、並列の実行が終わってから単独で動きます。同じ command のケースは 1 回だけ実行し、結果を共有します。さらに、同じ pytest ファイルを指す command（`python -m pytest <file>[::node] [-k 式] [-q]` の形）が 2 つ以上あるときは、1 つの pytest プロセスにまとめて実行し（`-k` は pytest と同じ文法で JUnit の結果から各ケースに振り分けます）、失敗したケースとどのテストにも当たらなかったケースだけを単独で再実行します（判定とログは従来どおり）。実測（GUI を含む 45 ケース）で 320 秒 → 281 秒でした。止めるには `ledger.py run --no-batch` か `system_test.batch_pytest: false`。canary・serial のケースはまとめません。GUI のサーバー起動をテストごとに行う fixture（function scope）を module scope にすると、さらに短くなります（テストの状態の分離を確認してから）。canary は常に先に単独で動きます。
 
 **Azure は、既定では使いません。** 次の条件が揃ったときだけ、利用者が選びます（実行時のオプションとしては実装していません）。
 1. 手元のマシンが小さい（コア数が 8 未満、またはメモリが 32 GB 未満）。

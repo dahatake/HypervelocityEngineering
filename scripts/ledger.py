@@ -9,6 +9,7 @@ Usage:
   python scripts/ledger.py set ID pass|fail|blocked|not_run [--evidence PATH] [--reason ...]
   python scripts/ledger.py digests [--update]               # ac_digests (PARAM expanded AC text)
   python scripts/ledger.py repair [--apply]                 # align with the requirements definition (rdfix.py)
+  python scripts/ledger.py preflight [--cases ID,..] [--all]  # pytest 'collect-only': syntax errors / 0 tests selected (test-designer, before implementation)
   python scripts/ledger.py run [--cases E2E-001,IT-002 | --select changed|failed|all] [--base REF]
                                [--canary-first] [--max-minutes N] [--no-record] [--results PATH]
 
@@ -21,6 +22,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -356,6 +358,143 @@ def resolve_jobs(arg, cfg: dict) -> int:
         return 1
 
 
+def parse_pytest(cmd: str):
+    """`python -m pytest <file>[::node] [-k expr] [-q|-v|-s]` -> (file, node, kexpr). Anything else (other options, shell syntax) -> None."""
+    if any(ch in cmd for ch in "\\&|;<>%^`$"):
+        return None
+    try:
+        t = shlex.split(cmd)
+    except ValueError:
+        return None
+    if t[1:3] == ["-m", "pytest"] and t[0] in ("python", "python3", "py"):
+        i = 3
+    elif t[:1] == ["pytest"]:
+        i = 1
+    else:
+        return None
+    target, k = None, None
+    while i < len(t):
+        a = t[i]
+        if a in ("-q", "-v", "-vv", "-s"):
+            pass
+        elif a == "-k" and i + 1 < len(t) and k is None:
+            k = t[i + 1]
+            i += 1
+        elif not a.startswith("-") and target is None and ".py" in a:
+            target = a
+        else:
+            return None
+        i += 1
+    if not target:
+        return None
+    f, _, node = target.partition("::")
+    if node and k:
+        return None
+    if node and not re.fullmatch(r"(\w+::)*\w+(\[[^\]\s\"']*\])?", node):
+        return None
+    return f, node, k
+
+
+def _kmatcher(names):
+    low = [n.lower() for n in names]
+    return lambda ident, **kw: any(ident.lower() in n for n in low)
+
+
+def plan_batches(reps, groups, is_serial, is_canary):
+    """Group the System Test commands that run the same pytest file into one process each (>= 2 distinct commands).
+    Every case pays for the process start, the imports and the browser tool's start-up once per command; one
+    process per file pays it once. Returns (units, batched_reps) where each unit is a virtual case with "_batch" members."""
+    try:
+        from _pytest.mark.expression import Expression  # the same -k grammar as pytest
+    except Exception:
+        return [], set()
+    by_file: dict = {}
+    for c in reps:
+        if is_serial(c) or is_canary(c):
+            continue
+        p = parse_pytest(c["command"])
+        if not p:
+            continue
+        try:
+            if p[2]:
+                Expression.compile(p[2])
+        except Exception:
+            continue
+        by_file.setdefault(p[0], []).append((c, p))
+    units, used = [], set()
+    for f, members in by_file.items():
+        if len(members) < 2:
+            continue
+        if any(not p[1] and not p[2] for _, p in members):
+            sel = ""
+        elif all(p[1] for _, p in members):
+            sel = " ".join(f'"{f}::{p[1]}"' for _, p in members)
+        else:
+            exprs = [f"({p[2]})" if p[2] else p[1].split("::")[-1].split("[")[0] for _, p in members]
+            sel = '-k "' + " or ".join(exprs) + '"'
+        target = f if (sel == "" or sel.startswith("-k")) else ""
+        units.append({"id": "BATCH:" + f, "command": f"BATCH {f} {sel}", "_batch": {"file": f, "target": target, "sel": sel,
+                                                                           "members": members}})
+        used.update(c["command"] for c, _ in members)
+    return units, used
+
+
+def run_batch(unit, root, logs_dir, timeout, execute_single):
+    """Run one merged pytest process and attribute the JUnit result to each member command.
+    A member whose tests failed (or that matched no test) is re-run alone, so a failure is always judged and logged
+    exactly as before and interference between tests cannot create a false fail. Returns {command: (rc, seconds, log)}."""
+    import xml.etree.ElementTree as ET
+    from _pytest.mark.expression import Expression
+    b = unit["_batch"]
+    stamp = h.new_run_id()
+    junit = logs_dir / f"BATCH-{re.sub(r'[^A-Za-z0-9]+', '_', b['file'])}-{stamp}.xml"
+    cmd = f'python -m pytest {b["target"]} {b["sel"]} -q --junitxml="{junit}"'
+    t0 = time.time()
+    try:
+        proc = subprocess.run(cmd, cwd=str(root), shell=True, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=timeout)
+        out = (proc.stdout or "") + (proc.stderr or "")
+    except subprocess.TimeoutExpired:
+        out = f"TIMEOUT after {timeout}s"
+    mlog = logs_dir / f"BATCH-{re.sub(r'[^A-Za-z0-9]+', '_', b['file'])}-{stamp}.log"
+    mlog.write_text(out, encoding="utf-8")
+    tcs = []
+    try:
+        for tc in ET.parse(junit).getroot().iter("testcase"):
+            bad = tc.find("failure") is not None or tc.find("error") is not None
+            cls = (tc.get("classname") or "").split(".")
+            tcs.append((tc.get("name") or "", cls, float(tc.get("time") or 0), bad))
+    except (OSError, ET.ParseError, ValueError):
+        tcs = []
+    res: dict = {}
+    rerun = []
+    for c, (f, node, k) in b["members"]:
+        if not tcs:
+            rerun.append(c)
+            continue
+        if not node and not k:
+            hit = tcs
+        elif node:
+            parts = node.split("::")
+            fn = parts[-1]
+            base = fn.split("[")[0]
+            hit = [t for t in tcs if (t[0] == fn if "[" in fn else (t[0] == base or t[0].startswith(base + "[")))
+                   and (len(parts) == 1 or parts[-2] in t[1])]
+        else:
+            ex = Expression.compile(k)
+            hit = [t for t in tcs if ex.evaluate(_kmatcher([t[0], *t[1], Path(f).name, Path(f).stem]))]
+        if not hit or any(t[3] for t in hit):
+            rerun.append(c)
+            continue
+        log = logs_dir / f"{c['id']}-{stamp}.log"
+        log.write_text(f"BATCH {b['file']}: {len(hit)} tests passed (merged run log: {mlog.name})\n"
+                       + "\n".join(f"PASSED {t[0]}" for t in hit), encoding="utf-8")
+        res[c["command"]] = (0, round(sum(t[2] for t in hit), 1), log)
+    for c in rerun:
+        res[c["command"]] = execute_single(c)[1]
+    return res
+
+
 def cmd_run(args, root, cfg) -> int:
     data = h.load_ledger(root, cfg)
     t_start = time.time()
@@ -421,13 +560,40 @@ def cmd_run(args, root, cfg) -> int:
         return args.canary_first and any(x.get("canary") for x in groups[c["command"]])
 
     cmd_res: dict = {}
+
+    def store(c, r):
+        if c.get("_batch"):
+            cmd_res.update(r)
+        else:
+            cmd_res[c["command"]] = r
+
+    def execute_unit(c):
+        if not c.get("_batch"):
+            return execute(c)
+        if deadline and time.time() > deadline:
+            return c, {m["command"]: None for m, _ in c["_batch"]["members"]}
+        return c, run_batch(c, root, logs_dir, args.case_timeout, execute)
+
     # canary cases run first and alone, so that a broken canary stops the run before the rest starts
     first = [c for c in reps if is_canary(c)]
     rest = [c for c in reps if c not in first]
+    batched = 0
+    if not args.no_batch and (cfg.get("system_test") or {}).get("batch_pytest", True):
+        units, used = plan_batches(rest, groups, is_serial, is_canary)
+        for u in units:
+            groups[u["command"]] = [x for m, _ in u["_batch"]["members"] for x in groups[m["command"]]]
+        rest = [c for c in rest if c["command"] not in used] + units
+        batched = sum(len(u["_batch"]["members"]) for u in units)
+
+    def dur_key(c):
+        if c.get("_batch"):
+            return sum(float(durs.get(m["command"], 0) or 0) for m, _ in c["_batch"]["members"])
+        return float(durs.get(c["command"], 0) or 0)
+
     par = [c for c in rest if not is_serial(c)] if jobs > 1 else []
     seq = [c for c in rest if c not in par]
     # longest known duration first (LPT) so the parallel wave finishes sooner
-    par.sort(key=lambda c: -float(durs.get(c["command"], 0) or 0))
+    par.sort(key=lambda c: -dur_key(c))
     # inside the canary stage, non-serial cases run in parallel (jobs) and serial ones alone
     from concurrent.futures import ThreadPoolExecutor
     f_par = [c for c in first if not is_serial(c)] if jobs > 1 else []
@@ -448,10 +614,10 @@ def cmd_run(args, root, cfg) -> int:
         if par:
             from concurrent.futures import ThreadPoolExecutor
             with ThreadPoolExecutor(jobs) as ex:
-                for c, r in ex.map(execute, par):
-                    cmd_res[c["command"]] = r
+                for c, r in ex.map(execute_unit, par):
+                    store(c, r)
         for c in seq:
-            cmd_res[c["command"]] = execute(c)[1]
+            store(c, execute_unit(c)[1])
     for c in todo:
         if c["command"] in cmd_res:
             done[c["id"]] = cmd_res[c["command"]]
@@ -489,8 +655,47 @@ def cmd_run(args, root, cfg) -> int:
     print("\n".join(lines_out))
     result = stop_reason or ("全件 pass" if summary["fail"] == 0 else "fail あり")
     print(f"ledger run: pass={summary['pass']} fail={summary['fail']} skipped={summary['skipped']} results={results_path} 結果: {result}"
-          f" unique_commands={len(reps)} dedup_omitted={omitted} jobs={jobs} elapsed={time.time() - t_start:.1f}s")
+          f" unique_commands={len(reps)} dedup_omitted={omitted} batched_commands={batched} jobs={jobs} elapsed={time.time() - t_start:.1f}s")
     return 0 if summary["fail"] == 0 and not stop_reason else 1
+
+
+def cmd_preflight(args, root, cfg) -> int:
+    """Collect-only check of pytest commands: catches syntax errors, bad node ids and -k typos (0 tests selected)
+    before an implementer is started, instead of as a failed System Test after the merge (a 30-60 min rework loop)."""
+    data = h.load_ledger(root, cfg)
+    if args.cases:
+        sel = [find(data, cid) for cid in split_ids(args.cases)]
+    elif args.all:
+        sel = [c for c in data["cases"] if c.get("status") != "blocked"]
+    else:
+        sel = [c for c in data["cases"] if c.get("status") in ("not_run", "fail")]
+    groups: dict = {}
+    for c in sel:
+        cmd = c.get("command") or ""
+        if re.search(r"\bpytest\b", cmd):
+            groups.setdefault(cmd, []).append(c["id"])
+    h.apply_resource_env(root, cfg)
+
+    def check(cmd):
+        try:
+            p = subprocess.run(cmd + " --collect-only -q", cwd=str(root), shell=True, capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", timeout=args.timeout)
+        except subprocess.TimeoutExpired:
+            return cmd, 124, f"TIMEOUT after {args.timeout}s"
+        return cmd, p.returncode, (p.stdout or "") + (p.stderr or "")
+
+    from concurrent.futures import ThreadPoolExecutor
+    bad = 0
+    with ThreadPoolExecutor(max(1, resolve_jobs(args.jobs, cfg))) as ex:
+        for cmd, rc, out in ex.map(check, list(groups)):
+            if rc == 0:
+                continue
+            bad += 1
+            why = "選択されたテストが 0 件（-k・node id・パスを確認）" if rc == 5 else "収集に失敗（構文・import・fixture を確認）"
+            tail = " | ".join([l.strip() for l in out.splitlines() if l.strip()][-3:])[:240]
+            print(f"PREFLIGHT fail {','.join(groups[cmd])} rc={rc} {why}: {cmd} :: {tail}")
+    print(f"PREFLIGHT: {'fail' if bad else 'pass'} commands={len(groups)} bad={bad} cases={len(sel)}")
+    return 1 if bad else 0
 
 
 def main(argv=None) -> int:
@@ -529,6 +734,11 @@ def main(argv=None) -> int:
     d.add_argument("--update", action="store_true")
     rp = sub.add_parser("repair")
     rp.add_argument("--apply", action="store_true", help="修正を書き込む（既定は確認だけ）")
+    pf = sub.add_parser("preflight")
+    pf.add_argument("--cases")
+    pf.add_argument("--all", action="store_true", help="pass 済みも含める（既定は not_run・fail のケース）")
+    pf.add_argument("--jobs", default=None)
+    pf.add_argument("--timeout", type=int, default=300)
     r = sub.add_parser("run")
     r.add_argument("--cases")
     r.add_argument("--select", default="changed", choices=("changed", "failed", "all"))
@@ -539,12 +749,14 @@ def main(argv=None) -> int:
     r.add_argument("--case-timeout", type=int, default=1800)
     r.add_argument("--jobs", default=None, help="同時に実行するケース数（N または auto。既定は system_test.jobs、なければ 1）。\"serial\": true のケースは単独で実行")
     r.add_argument("--no-record", action="store_true", help="台帳を書き換えない（作業役の worktree で使う）")
+    r.add_argument("--no-batch", action="store_true", help="同じ pytest ファイルのケースを 1 プロセスにまとめない（既定はまとめる。system_test.batch_pytest: false でも止められる）")
     r.add_argument("--results")
     args = ap.parse_args(argv)
     root = Path(args.root).resolve() if args.root else h.repo_root()
     cfg = h.load_config(root)
     fn = {"summary": cmd_summary, "add": cmd_add, "update": cmd_update, "block": cmd_block,
-          "set": cmd_set, "digests": cmd_digests, "run": cmd_run, "repair": cmd_repair}[args.cmd]
+          "set": cmd_set, "digests": cmd_digests, "run": cmd_run, "repair": cmd_repair,
+          "preflight": cmd_preflight}[args.cmd]
     if args.cmd in ("add", "update", "block", "set", "digests"):
         with ledger_lock(root, cfg):
             return fn(args, root, cfg)

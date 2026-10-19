@@ -322,3 +322,30 @@ def test_select_cases_retry_failed_false_skips_unrelated_fail(sample):
     ids = lambda **kw: {c["id"] for c in mod.select_cases(sample.path, cfg, data, "changed", "HEAD", **kw)}
     assert ids() == {"IT-1", "IT-2", "IT-3"}
     assert ids(retry_failed=False) == {"IT-2", "IT-3"}
+
+
+def test_ledger_preflight_catches_zero_selected_and_syntax_errors(sample):
+    (sample.path / "tests" / "system").mkdir(parents=True, exist_ok=True)
+    (sample.path / "tests" / "system" / "test_ok_system.py").write_text("def test_a():\n    assert True\n", encoding="utf-8")
+    (sample.path / "tests" / "system" / "test_bad_system.py").write_text("def test_b(:\n", encoding="utf-8")
+    _add_cases(sample, ["python -m pytest tests/system/test_ok_system.py -k test_a -q",
+                        "python -m pytest tests/system/test_ok_system.py -k nothing_like_this -q",
+                        "python -m pytest tests/system/test_bad_system.py -q"])
+    proc = sample.py("ledger.py", "preflight", "--jobs", "3")
+    assert proc.returncode == 1 and "bad=2" in proc.stdout and "commands=3" in proc.stdout
+    assert "0 件" in proc.stdout and "収集に失敗" in proc.stdout
+
+
+def test_ledger_run_batches_pytest_cases_of_one_file_and_reruns_failures_alone(sample):
+    d = sample.path / "tests" / "system"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "test_gui_system.py").write_text(
+        "import pytest\n\ndef test_a():\n    pass\n\ndef test_b():\n    pass\n\n"
+        "@pytest.mark.parametrize('n', [1, 2])\ndef test_c(n):\n    pass\n\ndef test_d():\n    assert False\n", encoding="utf-8")
+    f = "tests/system/test_gui_system.py"
+    _add_cases(sample, [f"python -m pytest {f} -k test_a -q", f"python -m pytest {f} -k \"test_b or test_c\" -q",
+                        f"python -m pytest {f}::test_c[2] -q", f"python -m pytest {f} -k test_d -q"])
+    proc = sample.py("ledger.py", "run", "--select", "all", "--jobs", "2", "--no-record")
+    assert "batched_commands=4" in proc.stdout and "pass=3 fail=1" in proc.stdout and proc.returncode == 1
+    off = sample.py("ledger.py", "run", "--select", "all", "--jobs", "2", "--no-record", "--no-batch")
+    assert "batched_commands=0" in off.stdout and "pass=3 fail=1" in off.stdout

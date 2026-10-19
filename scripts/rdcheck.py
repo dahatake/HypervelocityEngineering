@@ -102,16 +102,27 @@ class Checker:
         return self._files
 
     def read(self, rel: str) -> str:
+        # 同じファイルを複数の検査が読むため、1 回の実行の中では内容を使い回す
+        cache = self.__dict__.setdefault("_read_cache", {})
+        if rel in cache:
+            return cache[rel]
         p = self.root / rel
         try:
             if p.stat().st_size > 2_000_000:
-                return ""
-            data = p.read_bytes()
+                text = ""
+            else:
+                data = p.read_bytes()
+                text = "" if b"\0" in data[:4096] else data.decode("utf-8", "replace")
         except OSError:
-            return ""
-        if b"\0" in data[:4096]:
-            return ""
-        return data.decode("utf-8", "replace")
+            text = ""
+        cache[rel] = text
+        return text
+
+    def prefetch(self, files: List[str]) -> None:
+        """Windows ではファイルを開く待ちが 1 件 5〜6 ms かかるため、走査対象を並行で先読みする（結果は read のキャッシュに入る）。"""
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(16) as ex:
+            list(ex.map(self.read, files))
 
     def scan_files(self) -> List[str]:
         ex = self.cfg["checks"]["id_scan_exclude"] + [h.mf(self.cfg, "ledger")]
@@ -129,6 +140,7 @@ class Checker:
                      "要求定義書がありません（未初期化）。conductor の工程 1 で rd-author が作成します")
             self.chk23()
             return self.findings
+        self.prefetch(self.scan_files())
         for fn in (self.chk01_02, self.chk03, self.chk04, self.chk05, self.chk06_22, self.chk07_08,
                    self.chk09, self.chk10_11, self.chk12, self.chk13_14_15, self.chk16, self.chk17,
                    self.chk18, self.chk19, self.chk20, self.chk21, self.chk23, self.chk25, self.chk26,
