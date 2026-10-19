@@ -134,7 +134,19 @@
     "AC-349": "sha256:bb116d4768266c6a",
     "AC-350": "sha256:88da5d458c490947",
     "AC-351": "sha256:5bd32c7d15c43937",
-    "AC-352": "sha256:33a7d4c2d5fb340f"
+    "AC-352": "sha256:33a7d4c2d5fb340f",
+    "AC-381": "sha256:a6d18d0933b99944",
+    "AC-382": "sha256:aaf7a015a6bc3bac",
+    "AC-385": "sha256:284205320fdb9857",
+    "AC-386": "sha256:bdb03394adb93269",
+    "AC-388": "sha256:7728776935bc85da",
+    "AC-367": "sha256:b3fe394f923861fb",
+    "AC-368": "sha256:96d32c49ed62f5df",
+    "AC-371": "sha256:e948ded3b2f78715",
+    "AC-374": "sha256:b3ba18b98270e523",
+    "AC-375": "sha256:28cd6902163bdc30",
+    "AC-378": "sha256:b07b61041fac5559",
+    "AC-379": "sha256:879df9efc754b69f"
   },
   "cases": [
     {
@@ -150,9 +162,9 @@
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_model_can_traverse_requirement_to_catalog_file_and_test",
       "canary": true,
       "status": "pass",
-      "last_commit": "6367af7b",
-      "last_run_at": "2026-10-19T03:35:11+09:00",
-      "evidence": "work/runs/adhoc-202610190327/logs/system-test/E2E-001-202610190327.log",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-001-202610192228.log",
       "history": [
         {
           "at": "2026-10-09T22:10:37+09:00",
@@ -913,9 +925,9 @@
       "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_starts_only_after_ordered_success_and_pre_cleanup_report",
       "canary": true,
       "status": "pass",
-      "last_commit": "6367af7b",
-      "last_run_at": "2026-10-19T03:35:11+09:00",
-      "evidence": "work/runs/adhoc-202610190327/logs/system-test/E2E-026-202610190327.log",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-026-202610192228.log",
       "history": [
         {
           "at": "2026-10-10T10:41:32+09:00",
@@ -963,9 +975,9 @@
       "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_cleanup_starts_only_after_all_gates_and_main_integration",
       "canary": true,
       "status": "pass",
-      "last_commit": "6367af7b",
-      "last_run_at": "2026-10-19T03:35:11+09:00",
-      "evidence": "work/runs/adhoc-202610190327/logs/system-test/E2E-028-202610190327.log",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-028-202610192228.log",
       "history": [
         {
           "at": "2026-10-10T10:41:53+09:00",
@@ -4355,9 +4367,9 @@
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac275_nav_items_and_legacy_urls_identical_to_baseline_commit\" -q",
       "canary": true,
       "status": "pass",
-      "last_commit": "6367af7b",
-      "last_run_at": "2026-10-19T03:35:11+09:00",
-      "evidence": "work/runs/adhoc-202610190327/logs/system-test/E2E-149-202610190327.log",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-149-202610192228.log",
       "history": [
         {
           "at": "2026-10-17T14:40:58+09:00",
@@ -4542,9 +4554,9 @@
       "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac295_arrow",
       "canary": true,
       "status": "pass",
-      "last_commit": "6367af7b",
-      "last_run_at": "2026-10-19T03:35:11+09:00",
-      "evidence": "work/runs/adhoc-202610190327/logs/system-test/E2E-156-202610190327.log",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-156-202610192228.log",
       "history": [
         {
           "at": "2026-10-17T14:47:28+09:00",
@@ -4853,9 +4865,9 @@
       "command": "python -m pytest tests/system/test_data_layer_workflow_system.py -k ac105 -q",
       "canary": true,
       "status": "pass",
-      "last_commit": "6367af7b",
-      "last_run_at": "2026-10-19T03:35:11+09:00",
-      "evidence": "work/runs/adhoc-202610190327/logs/system-test/IT-008-202610190327.log",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/IT-008-202610192228.log",
       "history": [
         {
           "at": "2026-10-14T20:55:51+09:00",
@@ -5435,9 +5447,9 @@
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_automatic_only\" -q",
       "canary": true,
       "status": "pass",
-      "last_commit": "6367af7b",
-      "last_run_at": "2026-10-19T03:35:11+09:00",
-      "evidence": "work/runs/adhoc-202610190327/logs/system-test/IT-026-202610190327.log",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/IT-026-202610192228.log",
       "history": [
         {
           "at": "2026-10-16T09:09:24+09:00",
@@ -7286,6 +7298,531 @@
           "by": "conductor",
           "change": "追加",
           "reason": "AC-345 本体の点の検証を追加"
+        }
+      ]
+    },
+    {
+      "id": "E2E-194",
+      "requirement_ids": [
+        "FR-1070"
+      ],
+      "ac_ids": [
+        "AC-381"
+      ],
+      "title": "3D のカメラのプリセットは 9 種・既定 corporate で、選ぶとカメラが変わる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_camera_presets_system.py -k \"test_ac381\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-194-202610192228.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:05:38+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-195",
+      "requirement_ids": [
+        "FR-1070"
+      ],
+      "ac_ids": [
+        "AC-382"
+      ],
+      "title": "各プリセットの詳細に 4 要素が語彙内の値で表示され camera() と一致する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_camera_presets_system.py -k \"test_ac382\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-195-202610192228.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:05:40+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-196",
+      "requirement_ids": [
+        "FR-1071"
+      ],
+      "ac_ids": [
+        "AC-385"
+      ],
+      "title": "動きの軽減では全プリセットで Static、情報は欠けず、戻すと自動動作が有効",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_camera_presets_system.py -k \"test_ac385\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-196-202610192228.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:05:41+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-197",
+      "requirement_ids": [
+        "FR-1071"
+      ],
+      "ac_ids": [
+        "AC-386"
+      ],
+      "title": "手動操作で自動動作が止まり、同じプリセットを再選択したときだけ再開する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_camera_presets_system.py -k \"test_ac386\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-197-202610192228.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:05:42+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-198",
+      "requirement_ids": [
+        "NFR-UX-015"
+      ],
+      "ac_ids": [
+        "AC-388"
+      ],
+      "title": "3D とカメラのプリセット表示中に外部通信がなく 3D は同梱のコードだけ",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_camera_presets_system.py -k \"test_ac388\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "f2bf3335",
+      "last_run_at": "2026-10-19T22:09:36+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-198-202610192209.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:05:44+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-199",
+      "requirement_ids": [
+        "FR-1066"
+      ],
+      "ac_ids": [
+        "AC-367"
+      ],
+      "title": "ヘッダーの表示モード切替が全画面に常に存在する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac367_header_dim_toggle_exists_on_every_screen\" -q",
+      "canary": true,
+      "status": "pass",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-199-202610192228.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:06:42+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-200",
+      "requirement_ids": [
+        "FR-1066"
+      ],
+      "ac_ids": [
+        "AC-367"
+      ],
+      "title": "画面を何度切り替えても切替が消えず重複しない（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac367_header_dim_toggle_never_disappears\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "f2bf3335",
+      "last_run_at": "2026-10-19T22:09:36+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-200-202610192209.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:06:43+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-201",
+      "requirement_ids": [
+        "FR-1066"
+      ],
+      "ac_ids": [
+        "AC-367"
+      ],
+      "title": "画面内の切替とヘッダーの切替が同じ状態を操作する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac367_in_screen_toggle\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "f2bf3335",
+      "last_run_at": "2026-10-19T22:09:36+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-201-202610192209.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:06:45+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-202",
+      "requirement_ids": [
+        "FR-1066"
+      ],
+      "ac_ids": [
+        "AC-368"
+      ],
+      "title": "マップ以外で RPG 風は disabled で理由が表示される（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_rpg_is_disabled_with_reason_outside_map\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "f2bf3335",
+      "last_run_at": "2026-10-19T22:09:36+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-202-202610192209.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:06:46+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-203",
+      "requirement_ids": [
+        "FR-1066"
+      ],
+      "ac_ids": [
+        "AC-368"
+      ],
+      "title": "マップで RPG 風が有効で操作すると表示と data-current が更新される",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_rpg_enabled_on_map\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "f2bf3335",
+      "last_run_at": "2026-10-19T22:09:36+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-203-202610192209.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:06:48+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-204",
+      "requirement_ids": [
+        "FR-1066"
+      ],
+      "ac_ids": [
+        "AC-368"
+      ],
+      "title": "エンティティ画面がヘッダーのモードに追従する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_entities_screen_follows_header_mode\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "f2bf3335",
+      "last_run_at": "2026-10-19T22:09:36+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-204-202610192209.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:06:49+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-205",
+      "requirement_ids": [
+        "FR-1067"
+      ],
+      "ac_ids": [
+        "AC-371"
+      ],
+      "title": "中・大ズームでヘッダー切替しても粒度と選択対象が保たれる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac371_header_switch_keeps_zoom_level_and_selection\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "f2bf3335",
+      "last_run_at": "2026-10-19T22:09:36+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-205-202610192209.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:06:51+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-206",
+      "requirement_ids": [
+        "FR-1067"
+      ],
+      "ac_ids": [
+        "AC-371"
+      ],
+      "title": "全体の粒度は切替後も全体のままで欠けない（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac371_overview_level_stays_overview\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "f2bf3335",
+      "last_run_at": "2026-10-19T22:09:36+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-206-202610192209.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:06:52+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-207",
+      "requirement_ids": [
+        "FR-1068"
+      ],
+      "ac_ids": [
+        "AC-374"
+      ],
+      "title": "3D ノードが種別ごとに異なるかたちを持つ",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac374_3d_nodes_expose_kind_and_distinct_shapes\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-207-202610192228.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:06:54+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-208",
+      "requirement_ids": [
+        "FR-1068"
+      ],
+      "ac_ids": [
+        "AC-374"
+      ],
+      "title": "種別が違うノードが同じ球のままにならない（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac374_different_kinds_never_share\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-208-202610192228.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:06:55+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-209",
+      "requirement_ids": [
+        "FR-1068"
+      ],
+      "ac_ids": [
+        "AC-375"
+      ],
+      "title": "3D の凡例の種別がノードの種別と一致する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac375_legend_kinds_match_node_kinds\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-209-202610192228.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:06:56+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-210",
+      "requirement_ids": [
+        "FR-1068"
+      ],
+      "ac_ids": [
+        "AC-375"
+      ],
+      "title": "凡例に余分・欠けた種別がない（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac375_legend_has_no_extra_kinds\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-210-202610192228.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:06:58+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-211",
+      "requirement_ids": [
+        "FR-1069"
+      ],
+      "ac_ids": [
+        "AC-378"
+      ],
+      "title": "演出スタイルの既定は engineering で根要素に反映される",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac378_style_toggle_defaults\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-211-202610192228.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:06:59+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-212",
+      "requirement_ids": [
+        "FR-1069"
+      ],
+      "ac_ids": [
+        "AC-378"
+      ],
+      "title": "演出スタイルは 2 値だけで不正値を受け付けない（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac378_style_toggle_only_has_two_values\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-212-202610192228.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:07:00+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-213",
+      "requirement_ids": [
+        "FR-1069"
+      ],
+      "ac_ids": [
+        "AC-379"
+      ],
+      "title": "engineering は演出なし・entertainment は 2 種類以上",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac379_engineering_has_no_fx\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-213-202610192228.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:07:01+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-214",
+      "requirement_ids": [
+        "FR-1069"
+      ],
+      "ac_ids": [
+        "AC-379"
+      ],
+      "title": "どちらのスタイルでも要素・凡例の内容が同じ",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac379_content_is_identical\" -q",
+      "canary": false,
+      "status": "pass",
+      "last_commit": "39adf945",
+      "last_run_at": "2026-10-19T22:28:51+09:00",
+      "evidence": "work/runs/202610192052/logs/system-test/E2E-214-202610192228.log",
+      "history": [
+        {
+          "at": "2026-10-19T21:07:03+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "System Test ケースを作成"
         }
       ]
     }

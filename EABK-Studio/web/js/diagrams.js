@@ -5,7 +5,7 @@ import { store } from './store.js';
 import { el, svgEl, colorOf, TYPE_COLOR, STATUS_COLOR, showTip, hideTip, nodeTip, nodeChip, statusText } from './ui.js';
 import { entityER } from './insights.js';
 import { runtimePlacement } from './insights.js';
-import { dimToggle, dimState, registerDim } from './dim.js';
+import { dimToggle, dimState, registerDim, publishDim } from './dim.js';
 import { mount as mountPlacement } from './placement.js';
 import { placeRows, listTiers } from './tierlist.js';
 import { UNCLASSIFIED } from './hier.js';
@@ -473,12 +473,14 @@ export function mount(host) {
   const diagramState = () => ({ ...graphOf(kind, store.model), dim });
   const view = { mode: 'diagrams', getState: () => ({ diagram: diagramState() }), setDim: (d) => setDim(d) };
   window.eabkView = view;
-  const setDim = (d) => { if (d !== '2d' && d !== '3d') return; if (d === dim) return; dim = dimState.diagrams = d; render(); };
+  const setDim = (d) => { if (d !== '2d' && d !== '3d') return; wanted = d; if (d === dim) { publishDim({ dims: ['2d', '3d'], current: dim, selected: wanted }); return; } dim = dimState.diagrams = d; render(); };
+  let wanted = dim;   // what the user chose; differs from `dim` only when 3D could not be drawn (AC-370)
   const offDim = registerDim((d) => (d ? setDim(d) : setDim(dim === '2d' ? '3d' : '2d')));
   const render = () => {
     const m = store.model;
     three?.destroy?.(); three = null;
     const my = ++renderToken;
+    publishDim({ dims: ['2d', '3d'], current: dim, selected: wanted });
     const toggle = dimToggle({ current: dim, onPick: setDim });
     tabs.replaceChildren(...KINDS.map((k) => el('button', { class: 'tabbtn' + (k === kind ? ' on' : ''), onclick: () => { kind = k; render(); } }, t('dgm.' + k))), toggle);
     const note = el('div', { class: 'mini', style: { marginBottom: '10px', maxWidth: '900px' } }, t('dgm.' + kind + '.note'));

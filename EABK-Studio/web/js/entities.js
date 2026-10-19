@@ -5,6 +5,7 @@ import { store, norm } from './store.js';
 import { el, statusBadge, nodeChip, vscodeUrl, typeLabel } from './ui.js';
 import { mountShell } from './semzoom.js';
 import { create2d } from './sz2d.js';
+import { registerDim, publishDim } from './dim.js';
 import { listTiers, hierarchy } from './tierlist.js';
 
 const WORDS = ['作成', '参照', '更新', '削除'];
@@ -190,10 +191,28 @@ export function mount(host) {
     matrixView(mat, m);
     const zoomHost = el('div', { class: 'eu-zoom' });
     page.append(zoomHost);
-    zoom = mountShell(zoomHost, { mode: 'entities', createRenderer: create2d, height: 560,
-      links: [{ id: 'sz-to-2d', label: () => t('sz.to2d'), href: '#/map2d' }, { id: 'sz-to-3d', label: () => t('sz.to3d'), href: '#/map3d' }] });
+    zoomHost.replaceChildren();
+    const links = [{ id: 'sz-to-2d', label: () => t('sz.to2d'), href: '#/map2d' }, { id: 'sz-to-3d', label: () => t('sz.to3d'), href: '#/map3d' }];
+    const pass = ++shellToken;
+    // FR-1066/1067: the header switch swaps the renderer; the shared view state (scale, centre, selection, filter) carries over.
+    const mount2 = (createRenderer) => { zoom = mountShell(zoomHost, { mode: 'entities', createRenderer, height: 560, links }); };
+    if (wanted === '3d') {
+      import('./sz3d.js').then((mod) => {
+        if (pass !== shellToken) return;
+        try { zoom?.destroy(); zoomHost.replaceChildren(); mount2(mod.create3d); dim = '3d'; }
+        catch (e) { fallback(); }
+        publishDim({ dims: ['2d', '3d'], current: dim, selected: wanted });
+      }).catch(() => { if (pass === shellToken) { fallback(); publishDim({ dims: ['2d', '3d'], current: dim, selected: wanted }); } });
+      const fallback = () => {   // AC-370: 3D cannot be drawn -> show 2D, say why; `selected` keeps the choice
+        zoom?.destroy(); zoomHost.replaceChildren(); dim = '2d'; mount2(create2d);
+        zoomHost.prepend(el('div', { class: 'warnbox', role: 'alert', 'data-testid': 'dim-fallback' }, t('dim.nowebgl')));
+      };
+    } else { dim = '2d'; mount2(create2d); }
+    publishDim({ dims: ['2d', '3d'], current: dim, selected: wanted });
   };
+  let dim = '2d', wanted = '2d', shellToken = 0;
+  const offDim = registerDim((d) => { const n = d === '2d' || d === '3d' ? d : dim === '2d' ? '3d' : '2d'; if (n === wanted && n === dim) return; wanted = n; render(); });
   render();
-  const offs = [onLang(render), store.on('model', render)];
-  return { destroy() { offs.forEach((f) => f()); zoom?.destroy(); } };
+  const offs = [onLang(render), store.on('model', render), offDim];
+  return { destroy() { offs.forEach((f) => f()); shellToken++; zoom?.destroy(); } };
 }
