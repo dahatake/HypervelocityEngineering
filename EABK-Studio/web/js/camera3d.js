@@ -77,7 +77,7 @@ export function createCameraRig({ applyDelta, interact, minFps = FPS_MIN }) {
     items.clear();
     const list = CAMERA_PRESETS.map((p) => {
       const b = el('button', { type: 'button', class: 'cam-item', 'data-preset': p.id, 'aria-pressed': 'false', onclick: () => api.select(p.id) },
-        el('span', { class: 'cam-icon', 'data-icon': p.id, 'aria-hidden': 'true', html: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="${p.icon}"/></svg>` }),
+        el('span', { class: 'cam-icon', 'data-icon': p.id, 'aria-hidden': 'true', html: `<svg class="icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="${p.icon}"/></svg>` }),
         el('span', { class: 'cam-name' }, t(`cam3d.${p.id}.n`)),
         el('span', { class: 'cam-desc' }, t(`cam3d.${p.id}.d`)),
         el('span', { class: 'cam-mark', 'aria-hidden': 'true' }, ''));

@@ -488,13 +488,13 @@ function mountGraph(host) {
     renderToolbar(); renderStatus(); redraw();
   }
   function resize() {
-    const r = host.getBoundingClientRect();
+    const r = canvas.getBoundingClientRect();
     dpr = Math.min(2, devicePixelRatio || 1);
     W = r.width; H = r.height;
     canvas.width = W * dpr; canvas.height = H * dpr;
     redraw();
   }
-  const ro = new ResizeObserver(resize); ro.observe(host);
+  const ro = new ResizeObserver(resize); ro.observe(host); ro.observe(canvas);
   resize();
   relayout(false);
   cam = camFit();

@@ -35,7 +35,13 @@ input[type=checkbox],input[type=radio]{width:var(--size-icon-lg);height:var(--si
 .brand{display:flex;align-items:center;gap:var(--space-2);color:var(--color-fg-default);text-decoration:none;font-size:var(--font-size-subtitle);white-space:nowrap;padding:var(--space-1);border-radius:var(--radius-md)}
 .brand b{color:var(--color-fg-link)}
 .tabs{display:flex;flex-wrap:wrap;gap:var(--space-1);flex:1 1 0;min-width:0}
-@media (max-width:1560px){.tabs{order:5;flex-basis:100%}.search{margin-left:auto}}
+/* FR-1072 AC-391/392: ヘッダーは常に 1 本の横一列の帯。溢れたら帯だけが横スクロール（ページ本体は不可） */
+.top{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;max-width:100%;scrollbar-width:thin}
+.top>*{flex:0 0 auto}
+.top .row,.top .hdr-dim,.top .hdr-dim-host,.top .theme-toggle{flex-wrap:nowrap}
+.tabs{flex:0 0 auto;flex-wrap:nowrap}
+.top .search{margin-left:auto}
+.top .chip,.top #personaBar button,.top #lang{white-space:nowrap}
 .draw{animation:draw var(--duration-slow) var(--ease-decelerate) both;stroke-dasharray:var(--len)}
 @keyframes draw{from{stroke-dashoffset:var(--len)}to{stroke-dashoffset:0}}
 .tabs a{padding:var(--space-1) var(--space-3);min-height:var(--size-control);border-radius:var(--radius-md);color:var(--color-fg-muted);text-decoration:none;white-space:nowrap;transition:background var(--duration-fast),color var(--duration-fast);display:flex;gap:var(--space-2);align-items:center}
@@ -57,7 +63,7 @@ input[type=checkbox],input[type=radio]{width:var(--size-icon-lg);height:var(--si
 .navdesc:empty{display:none}
 /* FR-1040: 2D / 3D switch (anime-style icons drawn inline + the words "2D" / "3D") */
 .dim-toggle{display:inline-flex;gap:var(--space-1);padding:var(--space-1);border:var(--stroke-container) solid var(--color-border-strong);border-radius:var(--radius-container);background:var(--color-bg-raised);align-items:center}
-.dim-btn{display:inline-flex;align-items:center;gap:var(--space-2);min-height:var(--size-control);min-width:44px;padding:var(--space-1) var(--space-3) var(--space-1) var(--space-2);border-radius:var(--radius-control);background:transparent;color:var(--color-fg-muted);cursor:pointer;font-weight:var(--font-weight-semibold)}
+.dim-btn{display:inline-flex;align-items:center;gap:var(--space-2);min-height:var(--size-control);min-width:44px;padding:var(--space-1) var(--space-3) var(--space-1) var(--space-2);border:var(--stroke-thin) solid transparent;border-radius:var(--radius-control);background:transparent;color:var(--color-fg-muted);cursor:pointer;font-weight:var(--font-weight-semibold)}
 .dim-btn:hover{background:var(--color-wash-hover);color:var(--color-fg-default)}
 .dim-btn.on{background:var(--color-accent);color:var(--color-on-accent)}
 .dim-ico{flex:0 0 auto}
@@ -220,11 +226,10 @@ small{font-size:var(--font-size-caption)}
 .state-panel[data-state=stale] [data-part=icon]{color:var(--color-status-warning-icon)}
 .state-panel[data-state=empty] [data-part=icon],.state-panel[data-state=loading] [data-part=icon]{color:var(--color-status-info-icon)}
 .state-panel .spin{width:var(--size-icon-lg);height:var(--size-icon-lg);border-width:var(--stroke-thick)}
-@media (max-width:900px){.search{width:160px}.chip.repo{display:none}}
+@media (max-width:900px){.search{width:160px}.chip.repo{max-width:120px}}
 @media (max-width:700px){
   .top{padding:var(--space-2) var(--space-3)}
   .brand span{font-size:var(--font-size-subtitle)}
-  .persona{display:none}
   .page{padding:var(--space-4) var(--space-4) var(--space-8)}
   .analysis-grid{grid-template-columns:1fr}
   .runtime-flow{grid-template-columns:1fr}
@@ -352,7 +357,16 @@ i[data-testid=chart-segment]{min-width:var(--space-6)}
 .tiers-list .tw{max-width:100%;overflow-x:auto}
 
 /* FR-1063 AC-345 AC-346 AC-347: マップの上位層パネル（マップ専用のクラス。hier-lists・hier-xcut とは別） */
-.maptiers{position:absolute;left:var(--space-3);bottom:var(--space-3);z-index:8;width:min(340px,calc(100% - var(--space-6)));max-height:46%;display:flex;flex-direction:column;background:var(--color-bg-surface);color:var(--color-fg-default);border:var(--stroke-thin) solid var(--color-border-strong);border-radius:var(--radius-md);box-shadow:var(--elevation-flyout)}
+/* NFR-UX-016 AC-394/395: 説明パネルは地図の下（帯）に置き、地図の表示面（canvas）に被せない。高さは --mt-h で地図側が避ける */
+.fill:has(~ .maptiers){bottom:var(--mt-h,0px)}
+.fill:has(> .maptiers):not(:has(> .sz)){box-sizing:border-box;padding-bottom:var(--mt-h,0px)}
+/* 意味ズーム表示（エンティティのある管理データ）: パネルは地図の下に積み、全体が縦にスクロールする（被せない） */
+.fill:has(> .sz) > .maptiers{position:static;flex:0 0 auto;max-height:60vh;margin-top:var(--space-3)}
+.fill:has(> .sz):has(> .maptiers){overflow-y:auto;overflow-x:hidden}
+.fill:has(> .sz):has(> .maptiers) > :not(.maptiers){flex-shrink:0}
+.fill:has(> .sz):has(> .maptiers) > .sz{flex:0 0 auto;min-height:min(70vh,520px)}
+.maptiers~.status,.maptiers~.hint,.status:has(~ .maptiers),.hint:has(~ .maptiers){bottom:calc(var(--mt-h,0px) + var(--space-3))}
+.maptiers{position:absolute;left:0;right:0;bottom:0;z-index:8;width:auto;max-height:40%;display:flex;flex-direction:column;background:var(--color-bg-surface);color:var(--color-fg-default);border:var(--stroke-thin) solid var(--color-border-strong);border-left:0;border-right:0;border-bottom:0;border-radius:0;box-shadow:var(--elevation-flyout)}
 .maptiers:not([open]){max-height:none}
 .maptiers-sum{cursor:pointer;padding:var(--space-2) var(--space-3);font-weight:600}
 .maptiers-body{overflow:auto;padding:0 var(--space-2) var(--space-2)}
@@ -367,7 +381,7 @@ i[data-testid=chart-segment]{min-width:var(--space-6)}
 .maptier-item[data-title]::after{content:attr(data-title)}
 .maptier-item:not(:disabled){cursor:pointer}
 .maptier-item:not(:disabled):hover{background:var(--color-bg-hover)}
-@media (max-width:480px){.maptiers{width:calc(100% - var(--space-4));max-height:38%}}
+@media (max-width:480px){.maptiers{max-height:38%}}
 /* FR-1063 AC-355: 高い拡大率（低い viewport）では、シェルを縦に伸ばして縦スクロールにし、地図・会話ウィンドウ・上位層のパネルが見出しに隠れず、操作できるようにする（横スクロールは強いない） */
 @media (max-height:480px){html,body{height:auto;min-height:100%;overflow-x:hidden;overflow-y:auto}main{flex:1 0 auto;min-height:420px;overflow:visible}.tw{max-height:none}}
 

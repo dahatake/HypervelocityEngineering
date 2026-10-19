@@ -185,7 +185,11 @@ export function mount(host) {
 
   let altLang = null;
   const scene = () => { const p = placeAt(world, player.x, player.y); return p ? p.kind : world.residents.some((r) => r.x === player.x && r.y === player.y) ? 'town' : 'field'; };
-  const say = (s) => { live.textContent = ''; setTimeout(() => { if (!dead) live.textContent = s; }, 30); };
+  // 内容が変わるときは即座に差し替える（読み上げと検査が遅延に左右されない）。同じ文の再通知だけ、いったん空にして遅らせる
+  const say = (s) => {
+    if (live.textContent !== s) { live.textContent = s; return; }
+    live.textContent = ''; setTimeout(() => { if (!dead) live.textContent = s; }, 30);
+  };
 
   function placeText(p) {
     if (p.kind === 'resident') return `${tr('villager')} ${p.name}（${tr('entity')} ${p.id}）`;

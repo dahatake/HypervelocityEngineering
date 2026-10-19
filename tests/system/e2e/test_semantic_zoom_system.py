@@ -7,8 +7,12 @@ fixture notation for columns/relations, and the Studio state contract
     2D DOM [data-entity] / [data-edge][data-from][data-to][data-kind] / [data-column], routes #/entities #/map2d #/map3d.
 3D is a canvas, so it is verified only through window.eabkView.getState().
 """
+import os
 import platform
+import queue
+import re
 import socket
+import threading
 import subprocess
 import sys
 import time
@@ -26,22 +30,53 @@ ROUTES = ["entities", "map2d", "map3d"]
 ALL = {"注文", "顧客", "商品", "在庫"}
 
 
-def _serve(repo):
+def _serve_once(repo):
+    """Start Studio and return (proc, url) using the URL Studio itself prints (its real bound port)."""
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
+    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
     proc = subprocess.Popen(
-        [sys.executable, str(STUDIO), "--repo", str(repo), "--port", str(port), "--no-open"],
-        cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        [sys.executable, "-u", str(STUDIO), "--repo", str(repo), "--port", str(port), "--no-open"],
+        cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env,
     )
-    end = time.time() + 15
+    found = queue.Queue()
+
+    def _read():
+        for line in proc.stdout:
+            m = re.search(r"url\s*:\s*http://127\.0\.0\.1:(\d+)", line)
+            if m:
+                found.put(int(m.group(1)))
+                break
+        # keep draining so the pipe never fills
+        for _ in proc.stdout:
+            pass
+
+    threading.Thread(target=_read, daemon=True).start()
+    try:
+        real = found.get(timeout=15)
+    except queue.Empty:
+        proc.kill()
+        return None
+    # our own process must be alive and listening on the port it reported
+    end = time.time() + 5
     while time.time() < end:
+        if proc.poll() is not None:
+            return None
         try:
-            socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
-            return proc, f"http://127.0.0.1:{port}"
+            socket.create_connection(("127.0.0.1", real), timeout=0.2).close()
+            return proc, f"http://127.0.0.1:{real}"
         except OSError:
             time.sleep(0.1)
     proc.kill()
+    return None
+
+
+def _serve(repo):
+    for _ in range(5):
+        res = _serve_once(repo)
+        if res:
+            return res
     raise RuntimeError("EABK Studio did not start")
 
 
