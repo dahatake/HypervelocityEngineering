@@ -1,0 +1,213 @@
+"""System tests for FR-1072 AC-391/AC-392 and NFR-UX-016 AC-395 (run 202610192312).
+
+Expected values come only from the acceptance criteria in docs/requirements-definition.md.  The implementation is NOT
+the oracle.  Widths are PARAM-048 = 1280 / 1024 / 800 / 600 CSS px.  AC-393/394/396 are integration level
+(EABK-Studio/tests/test_header_row_ui.py).
+
+PROVISIONAL CONTRACT (仮置き。実装者が確認し、食い違えば CONFLICT として返す。この oracle は実装に合わせて直さない):
+  - ヘッダー帯: <header class="top">。要素: ナビ #nav a（8）、表示モード切替 [data-testid="header-dim-toggle"] button、
+    検索 #q、リポジトリ名 #repoBtn、日時 #modelTime、ロール #personaBar button（3）、言語 #lang、
+    テーマ [data-testid="theme-toggle"] button。
+  - 地図の表示面: #view canvas。説明パネル（上位層・ロールの説明）: [data-testid="map-tiers"]（<details>、開閉は summary）。
+  - 画面: #/map2d。
+"""
+import pytest
+
+from entity_repo import make_zoom
+from test_semantic_zoom_system import _serve
+from test_studio_system import studio_url  # noqa: F401  (fixture: 実リポジトリ)
+
+WIDTHS = [1280, 1024, 800, 600]  # PARAM-048
+
+ITEMS = {
+    "nav": "header.top #nav a",
+    "dim": '[data-testid="header-dim-toggle"] button',
+    "search": "header.top #q",
+    "repo": "header.top #repoBtn",
+    "time": "header.top #modelTime",
+    "persona": "header.top #personaBar button",
+    "lang": "header.top #lang",
+    "theme": 'header.top [data-testid="theme-toggle"] button',
+}
+EXPECT_COUNT = {"nav": 8, "dim": 3, "persona": 3}
+
+JS_RECTS = """(sel) => [...document.querySelectorAll(sel)].map((e) => {
+  const r = e.getBoundingClientRect();
+  return {x: r.left, y: r.top, w: r.width, h: r.height, cx: r.left + r.width / 2, cy: r.top + r.height / 2,
+          text: (e.innerText || e.value || '').trim().slice(0, 30)};
+})"""
+
+
+@pytest.fixture()
+def zurl(tmp_path):
+    proc, url = _serve(make_zoom(tmp_path / "hdrrow"))
+    yield url
+    proc.terminate()
+
+
+def _open(browser, url, width, route="map2d", height=800):
+    ctx = browser.new_context(viewport={"width": width, "height": height})
+    p = ctx.new_page()
+    p.goto(url.split("#")[0] + "#/" + route)
+    p.wait_for_load_state("networkidle")
+    p.wait_for_selector("header.top")
+    return ctx, p
+
+
+def _all(page):
+    out = {}
+    for k, sel in ITEMS.items():
+        out[k] = page.evaluate(JS_RECTS, sel)
+    return out
+
+
+def _inter(a, b):
+    w = min(a["x"] + a["w"], b["x"] + b["w"]) - max(a["x"], b["x"])
+    h = min(a["y"] + a["h"], b["y"] + b["h"]) - max(a["y"], b["y"])
+    return w > 1 and h > 1
+
+
+# FR-1072 AC-391: every header element sits on one horizontal row at each PARAM-048 width; nav items are not stacked.
+@pytest.mark.parametrize("width", WIDTHS)
+def test_ac391_all_header_elements_are_on_one_row(browser, zurl, width):
+    ctx, page = _open(browser, zurl, width)
+    items = _all(page)
+    for k, n in EXPECT_COUNT.items():
+        assert len(items[k]) == n, f"{k}: {len(items[k])} != {n}"
+    for k in ("search", "repo", "time", "lang"):
+        assert len(items[k]) == 1, k
+    assert len(items["theme"]) >= 1
+    flat = [r for v in items.values() for r in v]
+    band = page.evaluate("() => { const r = document.querySelector('header.top').getBoundingClientRect(); return {y: r.top, h: r.height}; }")
+    tallest = max(r["h"] for r in flat)
+    # 縦位置の中心が同じ帯に収まる（帯の高さ内、かつ中心のばらつきが最も高い要素の高さ以内）
+    assert all(band["y"] - 1 <= r["cy"] <= band["y"] + band["h"] + 1 for r in flat)
+    assert max(r["cy"] for r in flat) - min(r["cy"] for r in flat) <= tallest, "elements wrapped onto several lines"
+    # ナビ項目は縦に積まれない
+    navs = items["nav"]
+    assert max(r["y"] for r in navs) - min(r["y"] for r in navs) <= 2
+    xs = [r["x"] for r in navs]
+    assert xs == sorted(xs) and len(set(xs)) == 8
+    # 帯そのものが 1 行分の高さ（折り返して高さが増えない）
+    assert band["h"] <= tallest * 2.5
+    ctx.close()
+
+
+# FR-1072 AC-391 (anomaly): the one-row layout also holds in English (longer labels) and on a screen other than the map.
+@pytest.mark.parametrize("width", [800, 600])
+def test_ac391_one_row_holds_in_english_on_other_screen(browser, zurl, width):
+    ctx = browser.new_context(viewport={"width": width, "height": 800})
+    page = ctx.new_page()
+    page.goto(zurl.split("#")[0] + "#/dashboard")
+    page.evaluate("() => localStorage.setItem('eabk-studio.lang','en')")
+    page.reload()
+    page.wait_for_load_state("networkidle")
+    page.wait_for_selector("header.top")
+    items = _all(page)
+    flat = [r for v in items.values() for r in v]
+    assert len(items["nav"]) == 8
+    assert max(r["cy"] for r in flat) - min(r["cy"] for r in flat) <= max(r["h"] for r in flat)
+    assert max(r["y"] for r in items["nav"]) - min(r["y"] for r in items["nav"]) <= 2
+    ctx.close()
+
+
+# FR-1072 AC-392: header element rectangles do not intersect; the page body has no horizontal scroll.
+@pytest.mark.parametrize("width", WIDTHS)
+def test_ac392_header_elements_do_not_overlap_and_page_has_no_horizontal_scroll(browser, zurl, width):
+    ctx, page = _open(browser, zurl, width)
+    flat = [r for v in _all(page).values() for r in v]
+    for i, a in enumerate(flat):
+        for b in flat[i + 1:]:
+            assert not _inter(a, b), f"overlap: {a['text']!r} x {b['text']!r}"
+    assert page.evaluate("() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1")
+    assert page.evaluate("() => document.body.scrollWidth <= document.documentElement.clientWidth + 1")
+    ctx.close()
+
+
+# FR-1072 AC-392: when the band overflows it scrolls inside; every element can be reached and receives the click point / keyboard focus.
+@pytest.mark.parametrize("width", WIDTHS)
+def test_ac392_every_header_element_is_reachable_by_pointer_and_keyboard(browser, zurl, width):
+    ctx, page = _open(browser, zurl, width)
+    hdr = page.evaluate("""() => { const h = document.querySelector('header.top');
+      const all = [...h.querySelectorAll('*')];
+      const sc = [h, ...all].find((e) => e.scrollWidth > e.clientWidth + 1 && /(auto|scroll)/.test(getComputedStyle(e).overflowX));
+      return {overflow: [h, ...all].some((e) => e.scrollWidth > e.clientWidth + 1), scrollable: !!sc}; }""")
+    if hdr["overflow"]:
+        assert hdr["scrollable"], "band overflows but is not horizontally scrollable"
+        moved = page.evaluate("""() => { const h = document.querySelector('header.top');
+          const s = [h, ...h.querySelectorAll('*')].find((e) => e.scrollWidth > e.clientWidth + 1 && /(auto|scroll)/.test(getComputedStyle(e).overflowX));
+          s.scrollLeft = s.scrollWidth; return s.scrollLeft > 0; }""")
+        assert moved
+    for k, sel in ITEMS.items():
+        loc = page.locator(sel)
+        for i in range(loc.count()):
+            el = loc.nth(i)
+            el.scroll_into_view_if_needed()
+            hit = el.evaluate("""(e) => { const r = e.getBoundingClientRect();
+              const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+              return !!t && (t === e || e.contains(t) || t.contains(e)); }""")
+            assert hit, f"{k}[{i}] is covered / outside the viewport at {width}px"
+            el.focus()
+            assert el.evaluate("(e) => document.activeElement === e || e.contains(document.activeElement)"), f"{k}[{i}] cannot take focus"
+    assert page.evaluate("() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1")
+    ctx.close()
+
+
+# FR-1072 AC-392 (anomaly): Tab from the first header element walks through all of them without leaving the header early.
+@pytest.mark.parametrize("width", [800, 600])
+def test_ac392_tab_walks_all_header_controls(browser, zurl, width):
+    ctx, page = _open(browser, zurl, width)
+    page.locator("header.top #nav a").first.focus()
+    seen = set()
+    for _ in range(40):
+        ident = page.evaluate("() => { const a = document.activeElement; return a && a.closest('header.top') ? (a.id || a.getAttribute('href') || a.dataset.dim || a.textContent.trim()) : null; }")
+        if ident is None:
+            break
+        seen.add(ident)
+        page.keyboard.press("Tab")
+    must = {"q", "repoBtn", "lang"}
+    assert must <= seen, f"not reached by Tab: {must - seen}"
+    assert len([s for s in seen if s and s.startswith("#/")]) == 8
+    ctx.close()
+
+
+# NFR-UX-016 AC-395: opening the explanation panel on the map never covers the map surface; its content is not lost.
+@pytest.mark.parametrize("width", WIDTHS)
+def test_ac395_explanation_panel_does_not_cover_the_map(browser, zurl, width):
+    ctx, page = _open(browser, zurl, width, "map2d")
+    page.wait_for_selector("#view canvas")
+    panel = page.locator('[data-testid="map-tiers"]')
+    panel.wait_for()
+    if panel.get_attribute("open") is None:
+        panel.locator("summary").click()
+    assert panel.evaluate("(e) => e.open")
+    r = page.evaluate("""() => { const q = (s) => { const e = document.querySelector(s); const b = e.getBoundingClientRect();
+        return {x: b.left, y: b.top, w: b.width, h: b.height}; };
+      return {panel: q('[data-testid="map-tiers"]'), map: q('#view canvas')}; }""")
+    assert r["map"]["w"] > 100 and r["map"]["h"] > 100, "map surface is hidden or collapsed"
+    assert not _inter(r["panel"], r["map"]), f"panel covers map: {r}"
+    if width <= 800:  # 狭い幅: 説明パネルは地図の下、または折りたたみ（地図の下端以下に位置）
+        assert r["panel"]["y"] >= r["map"]["y"] + r["map"]["h"] - 1 or r["panel"]["x"] >= r["map"]["x"] + r["map"]["w"] - 1
+    # 内容が欠けない: パネル内の項目が切れず、地図の操作 (ツールバーの先頭ボタン) が隠れない
+    assert panel.evaluate("(e) => e.scrollWidth <= e.clientWidth + 1")
+    hit = page.evaluate("""() => { const b = document.querySelector('#view .toolbar button, #view .toolbar'); if (!b) return true;
+      const r = b.getBoundingClientRect(); const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return !!t && (t === b || b.contains(t) || t.contains(b)); }""")
+    assert hit, "map toolbar is covered"
+    assert page.evaluate("() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1")
+    ctx.close()
+
+
+# NFR-UX-016 AC-395 (anomaly): the panel's items are the same at every width (nothing dropped when narrow).
+def test_ac395_panel_content_is_not_dropped_when_narrow(browser, zurl):
+    counts = {}
+    for width in (1280, 600):
+        ctx, page = _open(browser, zurl, width, "map2d")
+        panel = page.locator('[data-testid="map-tiers"]')
+        panel.wait_for()
+        if panel.get_attribute("open") is None:
+            panel.locator("summary").click()
+        counts[width] = panel.locator('[data-testid="tier-group"]').count()
+        ctx.close()
+    assert counts[1280] > 0
+    assert counts[600] == counts[1280]

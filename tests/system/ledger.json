@@ -146,7 +146,10 @@
     "AC-374": "sha256:b3ba18b98270e523",
     "AC-375": "sha256:28cd6902163bdc30",
     "AC-378": "sha256:b07b61041fac5559",
-    "AC-379": "sha256:879df9efc754b69f"
+    "AC-379": "sha256:879df9efc754b69f",
+    "AC-391": "sha256:4ba89e734a71b60f",
+    "AC-392": "sha256:ec54022aef792577",
+    "AC-395": "sha256:9d3d67445dc20f69"
   },
   "cases": [
     {
@@ -7823,6 +7826,81 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-216",
+      "requirement_ids": [
+        "FR-1072"
+      ],
+      "ac_ids": [
+        "AC-391"
+      ],
+      "title": "Header elements on one row at 1280/1024/800/600",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_row_system.py -k 'ac391'",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T23:27:17+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-217",
+      "requirement_ids": [
+        "FR-1072"
+      ],
+      "ac_ids": [
+        "AC-392"
+      ],
+      "title": "Header no overlap, reachable, no page horizontal scroll",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_row_system.py -k 'ac392'",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T23:27:19+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-218",
+      "requirement_ids": [
+        "NFR-UX-016"
+      ],
+      "ac_ids": [
+        "AC-395"
+      ],
+      "title": "Explanation panel does not cover the map at each width",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_row_system.py -k 'ac395'",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T23:27:20+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
         }
       ]
     }
