@@ -134,7 +134,12 @@
     "AC-349": "sha256:bb116d4768266c6a",
     "AC-350": "sha256:88da5d458c490947",
     "AC-351": "sha256:5bd32c7d15c43937",
-    "AC-352": "sha256:33a7d4c2d5fb340f"
+    "AC-352": "sha256:33a7d4c2d5fb340f",
+    "AC-381": "sha256:a6d18d0933b99944",
+    "AC-382": "sha256:aaf7a015a6bc3bac",
+    "AC-385": "sha256:284205320fdb9857",
+    "AC-386": "sha256:bdb03394adb93269",
+    "AC-388": "sha256:7728776935bc85da"
   },
   "cases": [
     {
@@ -7286,6 +7291,131 @@
           "by": "conductor",
           "change": "追加",
           "reason": "AC-345 本体の点の検証を追加"
+        }
+      ]
+    },
+    {
+      "id": "E2E-194",
+      "requirement_ids": [
+        "FR-1070"
+      ],
+      "ac_ids": [
+        "AC-381"
+      ],
+      "title": "3D のカメラのプリセットは 9 種・既定 corporate で、選ぶとカメラが変わる",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_camera_presets_system.py -k \"test_ac381\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:05:38+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-195",
+      "requirement_ids": [
+        "FR-1070"
+      ],
+      "ac_ids": [
+        "AC-382"
+      ],
+      "title": "各プリセットの詳細に 4 要素が語彙内の値で表示され camera() と一致する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_camera_presets_system.py -k \"test_ac382\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:05:40+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-196",
+      "requirement_ids": [
+        "FR-1071"
+      ],
+      "ac_ids": [
+        "AC-385"
+      ],
+      "title": "動きの軽減では全プリセットで Static、情報は欠けず、戻すと自動動作が有効",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_camera_presets_system.py -k \"test_ac385\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:05:41+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-197",
+      "requirement_ids": [
+        "FR-1071"
+      ],
+      "ac_ids": [
+        "AC-386"
+      ],
+      "title": "手動操作で自動動作が止まり、同じプリセットを再選択したときだけ再開する",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_camera_presets_system.py -k \"test_ac386\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:05:42+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-198",
+      "requirement_ids": [
+        "NFR-UX-015"
+      ],
+      "ac_ids": [
+        "AC-388"
+      ],
+      "title": "3D とカメラのプリセット表示中に外部通信がなく 3D は同梱のコードだけ",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_camera_presets_system.py -k \"test_ac388\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-19T21:05:44+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
         }
       ]
     }
