@@ -498,13 +498,13 @@ function mountGraph(host) {
   function rebuild(keep) { build(); renderToolbar(); renderStyleToggle(); if (!keep) bird(); }
 
   function resize() {
-    const r = host.getBoundingClientRect();
+    const r = mount3.getBoundingClientRect();
     W = Math.max(1, r.width); H = Math.max(1, r.height);
     renderer.setSize(W, H, true);
     camera.aspect = W / H; camera.updateProjectionMatrix();
     nodeMat.uniforms.uScale.value = (H * renderer.getPixelRatio()) / (2 * Math.tan((camera.fov * Math.PI) / 360));
   }
-  const ro = new ResizeObserver(resize); ro.observe(host);
+  const ro = new ResizeObserver(resize); ro.observe(host); ro.observe(mount3);
   resize();
   build(); renderToolbar(); renderStyleToggle();
   const snapshot = document.documentElement.classList.contains('snapshot');
