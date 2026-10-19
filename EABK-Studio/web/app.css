@@ -369,3 +369,18 @@ i[data-testid=chart-segment]{min-width:var(--space-6)}
 @media (max-width:480px){.maptiers{width:calc(100% - var(--space-4));max-height:38%}}
 /* FR-1063 AC-355: 高い拡大率（低い viewport）では、シェルを縦に伸ばして縦スクロールにし、地図・会話ウィンドウ・上位層のパネルが見出しに隠れず、操作できるようにする（横スクロールは強いない） */
 @media (max-height:480px){html,body{height:auto;min-height:100%;overflow-x:hidden;overflow-y:auto}main{flex:1 0 auto;min-height:420px;overflow:visible}.tw{max-height:none}}
+
+/* FR-1068 / FR-1069: 3D の凡例（種別とかたち）と演出スタイルの切替。右上に重ねる（デザイン基盤のトークンだけを使う） */
+.style3d{position:absolute;right:var(--space-4);top:var(--space-3);z-index:6;display:flex;gap:var(--space-1);align-items:center;padding:var(--space-1);background:var(--color-bg-surface);border:var(--stroke-thin) solid var(--color-border-default);border-radius:var(--radius-lg)}
+.style3d .st-label{color:var(--color-fg-subtle);font-size:var(--font-size-caption);padding:0 var(--space-2)}
+.style3d button{background:none;border:0;border-radius:var(--radius-md);padding:var(--space-1) var(--space-3);cursor:pointer;color:var(--color-fg-muted);font-size:var(--font-size-body)}
+.style3d button:hover{background:var(--color-wash-hover);color:var(--color-fg-default)}
+.style3d button.on{background:var(--color-bg-selected);color:var(--color-fg-default);font-weight:var(--font-weight-semibold)}
+.legend3d{position:absolute;right:var(--space-4);top:calc(var(--space-3) + 48px);z-index:6;display:flex;flex-direction:column;gap:2px;max-height:55%;overflow:auto;min-width:220px;padding:var(--space-2);background:var(--color-bg-surface);border:var(--stroke-thin) solid var(--color-border-default);border-radius:var(--radius-lg);color:var(--color-fg-default)}
+.legend3d .lg-title{font-size:var(--font-size-caption);color:var(--color-fg-subtle);padding:0 var(--space-1) var(--space-1)}
+.legend3d .legend-row{display:flex;align-items:center;gap:var(--space-2);background:none;border:0;border-radius:var(--radius-md);padding:var(--space-1) var(--space-2);cursor:pointer;color:inherit;font-size:var(--font-size-body);text-align:left}
+.legend3d .legend-row:hover{background:var(--color-wash-hover)}
+.legend3d .legend-row.on{background:var(--color-bg-selected);font-weight:var(--font-weight-semibold)}
+.legend3d .lg-name{flex:1}
+.legend3d .lg-shape,.legend3d .lg-n{color:var(--color-fg-subtle);font-size:var(--font-size-caption)}
+.style3d button:focus-visible,.legend3d .legend-row:focus-visible{outline:2px solid var(--color-accent);outline-offset:1px}
