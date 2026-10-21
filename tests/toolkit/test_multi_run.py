@@ -315,3 +315,27 @@ def test_unrecorded_agent_cannot_write_into_unowned_or_foreign_run(sample, tmp_p
         for sid in ("unrecorded-agent", ""):
             res = sample.gate("pre-tool", create(run, sid))
             assert res.get("permissionDecision") == "deny" and "G-5" in res["permissionDecisionReason"], (run.name, sid, res)
+
+
+def test_rd_author_recorded_in_another_tree_still_counts_for_its_session(sample):
+    # real incident: with concurrent runs, subagentStart was recorded in a tree other than the session's run,
+    # so the session's own run saw no rd-author and refused the requirements edit with G-1.
+    a, b = start_in_worktree(sample), start_in_worktree(sample)
+    patch_meta(a, session_id="sA")
+    patch_meta(b, session_id="sB")
+    edit = {"sessionId": "sA", "cwd": str(sample.path), "toolName": "edit", "toolArgs": {
+        "path": str(a / "docs" / "requirements-definition.md"), "old_str": "a", "new_str": "b"}}
+    assert "G-1" in sample.gate("pre-tool", edit).get("permissionDecisionReason", "")
+    f = b / "work" / ".ebak" / "active-agents.json"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    import time
+    f.write_text(json.dumps([{"name": "rd-author", "t": time.time(), "session": "sA"}]), encoding="utf-8")
+    assert sample.gate("pre-tool", edit) == {}
+    # another session's rd-author does not grant anything to sA, and an untagged record never leaks across sessions
+    f.write_text(json.dumps([{"name": "rd-author", "t": time.time(), "session": "sB"},
+                             {"name": "rd-author", "t": time.time()}]), encoding="utf-8")
+    assert "G-1" in sample.gate("pre-tool", edit).get("permissionDecisionReason", "")
+    # subagentStop of the same session releases the record where it was written
+    f.write_text(json.dumps([{"name": "rd-author", "t": time.time(), "session": "sA"}]), encoding="utf-8")
+    sample.gate("subagent-stop", {"sessionId": "sA", "agentName": "rd-author", "cwd": str(sample.path)})
+    assert json.loads(f.read_text(encoding="utf-8")) == []

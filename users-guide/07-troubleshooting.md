@@ -15,10 +15,11 @@
 | `[G-7] scripts/ebak.config.json の models で <役割> のモデルは <モデル> です` | run の実行中に、conductor が `models` に値のある作業役を、`task` の `model` 引数なし、または違うモデルで呼んだ | 想定どおりの動作です。conductor が指定のモデルで呼び直します。harness の `task` が `model` を受け付けず、呼び直しても拒否が続く場合は、`gates.enforce_models` を `false` にし、agent の frontmatter の `model:` で固定します（[4.2](04-customization.md#42-モデルの割り当てmodels)） |
 | `[G-4] 終了前の検証が失敗しています` | 作業役の verify が失敗した | 作業役が自動で修正します。3 回で直らなければ `GATE G-4` 付きで conductor に返され、その項目は統合されません |
 | 作業役の書き込みが `[G-5] 作業ディレクトリ外への書き込みは禁止` で拒否され、別の run が `blocked` で終わった | subagent の `sessionId` は親ではなく agentId です（`subagentStart` は `sessionId`=親・`agentId`・`parentAgentId` を持つ）。旧 gate は agentId を「未所有の新しい run」の持ち主と見なして横取りし、束縛後は sibling run を判定できなかった | 配布元の最新 gate.py に更新します（`subagentStart` の親子記録 `work/.ebak/active-agents.json` に一致する agentId だけを親 session とみなし、他 session 所有の run への書き込みは G-5 で拒否します。記録のない id・`subagentStop` 後の id・入れ子（親が agentId）の 2 段目は許可されません）。既に G-5 で finished になった run は再開・done 化せず、必要なら新しい run で依頼し直します。再送で書き込みを通そうとせず、`gate.log` の `START`/`DENY` を確認します |
+| 並列 run で、rd-author に依頼したのに `[G-1] 要求定義書を編集できるのは rd-author だけです` が出る | 同時実行の run があると、`subagentStart` の記録（`work/.ebak/active-agents.json`）が別の run の `work/.ebak/` に書かれ、対象 run には rd-author が見えなかった | 最新 gate.py に更新します（記録に `session` を付け、同じセッションが起動した作業役は、別の run の記録でも有効と見なします。他セッションの記録・`session` のない記録は有効になりません）。ゲートの変更・迂回はしません |
 | hook がまったく動かない | Session Target が Copilot 以外、hook が無効、Python がない | Session Target で Copilot harness を選びます。`/hooks`（VS Code）や `copilot` の設定で hook が有効かを確認します。`python --version` を確認します。`work/.ebak/gate.log` が作成されるかどうかで判断できます |
 | GitHub Copilot app で hook の失敗の警告が出る（Windows で `DriveNotFoundException` など） | ローカル サンドボックスの中で PowerShell や Python を起動できなかった。Python がサンドボックスから読めない場所にある | 一時的なものは、`/restart-session` でセッションを再起動すると直ることがあります。続く場合は、プロジェクトのサンドボックス設定の **追加の読み取り専用** に Python のインストール先を追加します。ゲートが効かない間も、verify が統合の時点で同じ規則を検査します |
 
-Windows の core.autocrlf で CRLF になったファイルは、	ools/install.py が CRLF/LF を正規化して比較するため、改行だけの差では KEEP-LOCAL になりません。本物のローカル変更（内容の差）は従来どおり KEEP-LOCAL のまま保持されます（--force は使いません）。
+Windows の core.autocrlf で CRLF になったファイルは、`tools/install.py` が CRLF/LF を正規化して比較するため、改行だけの差では `KEEP-LOCAL` になりません。本物のローカル変更（内容の差）は従来どおり `KEEP-LOCAL` のまま保持されます（`--force` は使いません）。
 
 原因の切り分けのために hook を一時的に止めたい場合は、`scripts/ebak.config.json` の `gates.enabled` を `false` にします（verify の検査は残ります）。終わったら必ず元に戻してください。
 

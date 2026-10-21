@@ -335,10 +335,32 @@ class Ctx:
     def agents_path(self) -> Path:
         return self.state_dir / "active-agents.json"
 
-    def active_agents(self) -> List[dict]:
+    def own_agents(self) -> List[dict]:
         data = h.read_json(self.agents_path(), default=[]) or []
         now = time.time()
         return [a for a in data if now - a.get("t", 0) < STATE_TTL_SEC]
+
+    def other_agent_files(self) -> List[Path]:
+        """active-agents.json of the primary checkout and every run worktree except the bound one."""
+        roots = [self.root] + ([] if (self.root / ".git").is_file() else self.sibling_runs())
+        out: List[Path] = []
+        for r in roots:
+            f = h.work_dir(r, self.cfg) / ".ebak" / "active-agents.json"
+            if f != self.agents_path() and f.exists():
+                out.append(f)
+        return out
+
+    def foreign_agents(self) -> List[Tuple[Path, dict]]:
+        """Agents this session started that subagentStart recorded in another tree (a concurrent run may have been
+        bound at that moment). Only entries tagged with this session id count; never another session's agents."""
+        if not self.sid:
+            return []
+        now = time.time()
+        return [(f, a) for f in self.other_agent_files() for a in (h.read_json(f, default=[]) or [])
+                if a.get("session") == self.sid and now - a.get("t", 0) < STATE_TTL_SEC]
+
+    def active_agents(self) -> List[dict]:
+        return self.own_agents() + [a for _, a in self.foreign_agents()]
 
     def active_names(self) -> List[str]:
         return [a.get("name", "") for a in self.active_agents()]
@@ -675,8 +697,10 @@ def on_subagent_start(ctx: Ctx) -> None:
     name = agent_name(ctx)
     if not name:
         return
-    agents = ctx.active_agents()
+    agents = ctx.own_agents()
     entry = {"name": name, "t": time.time()}
+    if ctx.sid:
+        entry["session"] = ctx.sid
     aid = str(g(ctx.data, "agentId", "agent_id", default=""))
     parent = str(g(ctx.data, "parentAgentId", "parent_agent_id", default="")) or ctx.sid
     if aid and parent and aid != parent:
@@ -688,7 +712,14 @@ def on_subagent_start(ctx: Ctx) -> None:
 
 
 def release_agent(ctx: Ctx, name: str) -> None:
-    agents = ctx.active_agents()
+    agents = ctx.own_agents()
+    found = any(a.get("name") == name for a in agents)
+    if not found:
+        for f, a in ctx.foreign_agents():
+            if a.get("name") == name:
+                rest = [x for x in (h.read_json(f, default=[]) or []) if x != a]
+                h.write_json(f, rest)
+                break
     for i, a in enumerate(agents):
         if a.get("name") == name:
             if ctx.run_active and a.get("t"):
