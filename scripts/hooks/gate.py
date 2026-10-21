@@ -649,6 +649,27 @@ def on_user_prompt(ctx: Ctx) -> None:
     emit({})
 
 
+START_CMD_RX = re.compile(r"run-state\.py['\"]?\s+start\b(?!.*--help)")
+
+
+def record_start_claim(ctx: Ctx, cmd: str) -> None:
+    """The session that runs `run-state.py start` owns the run it creates. Hooks see the session id only on the
+    tool call, so remember it here and let run-state.py read it; otherwise the first other session without a run
+    claims the new run (R-2) and the real owner is then refused (G-1/G-5) in its own run."""
+    if not (ctx.sid and START_CMD_RX.search(cmd)):
+        return
+    try:
+        f = h.work_dir(ctx.root, ctx.cfg) / ".ebak" / "start-claims.json"
+        now = time.time()
+        claims = [c for c in (h.read_json(f, default=[]) or []) if now - c.get("t", 0) < 300]
+        claims.append({"session": ctx.sid, "t": now})
+        f.parent.mkdir(parents=True, exist_ok=True)
+        h.write_json(f, claims)
+        ctx.log(f"START-CLAIM session={ctx.sid}")
+    except OSError:
+        pass
+
+
 def on_pre_tool(ctx: Ctx) -> None:
     tool = str(g(ctx.data, "toolName", "tool_name", default=""))
     if template_active(ctx) and not (READ_TOOL_RX.match(tool) or normalize_tool(tool) in TEMPLATE_ALLOWED_TOOLS):
@@ -675,6 +696,8 @@ def on_pre_tool(ctx: Ctx) -> None:
         if res:
             ctx.log(f"DENY {res[0]} {tool}: {cmd[:200]}")
             deny(res[1], res[0])
+        else:
+            record_start_claim(ctx, cmd)
         return
     if READ_TOOL_RX.match(tool) or not WRITE_TOOL_RX.search(tool):
         return

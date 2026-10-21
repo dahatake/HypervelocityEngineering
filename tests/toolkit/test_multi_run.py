@@ -339,3 +339,21 @@ def test_rd_author_recorded_in_another_tree_still_counts_for_its_session(sample)
     f.write_text(json.dumps([{"name": "rd-author", "t": time.time(), "session": "sA"}]), encoding="utf-8")
     sample.gate("subagent-stop", {"sessionId": "sA", "agentName": "rd-author", "cwd": str(sample.path)})
     assert json.loads(f.read_text(encoding="utf-8")) == []
+
+
+def test_run_is_owned_by_the_session_that_started_it_not_the_first_other_session(sample):
+    # real incident: another session's first tool call claimed a freshly started run (R-2); the real owner was then
+    # refused in its own run. The hook records who runs `run-state.py start`, and start stores it in meta.
+    shell = {"sessionId": "sA", "cwd": str(sample.path), "toolName": "powershell",
+             "toolArgs": {"command": "python scripts/run-state.py start --options x"}}
+    assert sample.gate("pre-tool", shell) == {}
+    wt = start_in_worktree(sample)
+    assert patch_meta(wt)[1]["session_id"] == "sA"
+    other = {"sessionId": "sB", "cwd": str(sample.path), "toolName": "edit", "toolArgs": {
+        "path": str(wt / "docs" / "requirements-definition.md"), "old_str": "a", "new_str": "b"}}
+    sample.gate("pre-tool", other)
+    assert patch_meta(wt)[1]["session_id"] == "sA"
+    # a second concurrent start by another session gets its own run and owner (claims are consumed in order)
+    sample.gate("pre-tool", dict(shell, sessionId="sB"))
+    wt2 = start_in_worktree(sample)
+    assert patch_meta(wt2)[1]["session_id"] == "sB"

@@ -110,6 +110,30 @@ def counts(queue: dict) -> Dict[str, int]:
     return c
 
 
+def take_start_claim(root: Path, cfg: dict) -> Optional[str]:
+    """Session id the hook recorded for this `start` (the oldest unexpired claim; see gate.record_start_claim)."""
+    cands = [root]
+    rc, out = h.git(["rev-parse", "--git-common-dir"], root)
+    if rc == 0 and out.strip():
+        common = Path(out.strip())
+        common = common if common.is_absolute() else root / common
+        cands.append(common.resolve().parent)
+    seen = set()
+    for r in cands:
+        f = h.work_dir(r, cfg) / ".ebak" / "start-claims.json"
+        if f in seen or not f.exists():
+            continue
+        seen.add(f)
+        now = time.time()
+        claims = [c for c in (h.read_json(f, default=[]) or []) if now - c.get("t", 0) < 300 and c.get("session")]
+        if claims:
+            first = min(claims, key=lambda c: c.get("t", 0))
+            claims.remove(first)
+            h.write_json(f, claims)
+            return str(first["session"])
+    return None
+
+
 def require_own_worktree(root: Path, cfg: dict, args) -> Optional[int]:
     """Each run must live in its own git worktree so that several runs in one VS Code never share a tree.
 
@@ -141,6 +165,9 @@ def require_own_worktree(root: Path, cfg: dict, args) -> Optional[int]:
         return 4
     # start the run inside the new worktree right away: no second VS Code window and no re-sent request
     cmd = [sys.executable, str(path / "scripts" / "run-state.py"), "start", "--run-id", rid]
+    sid = getattr(args, "session_id", None) or take_start_claim(root, cfg)
+    if sid:
+        cmd += ["--session-id", sid]
     if getattr(args, "options_file", None):
         cmd += ["--options-file", str(Path(args.options_file).resolve())]
     elif getattr(args, "options", None):
@@ -470,7 +497,8 @@ def cmd_start(args) -> int:
         "run_id": rid, "status": "active", "started_at": h.now_iso(), "finished_at": None,
         "head_at_start": h.head_commit(root), "branch_at_start": start_branch,
         "integration_branch": branch, "options": opts, "stage": 0,
-        "stages_done": [], "ledger_strict": False, "session_id": None, "toolkit": h.TOOLKIT_VERSION,
+        "stages_done": [], "ledger_strict": False, "session_id": getattr(args, "session_id", None) or take_start_claim(root, cfg),
+        "toolkit": h.TOOLKIT_VERSION,
         "human_interventions": [{"at": h.now_iso(), "kind": "request", "note": ""}],
     }
     h.save_meta(root, cfg, rid, meta)
@@ -902,6 +930,7 @@ def main(argv=None) -> int:
     s.add_argument("--options")
     s.add_argument("--new", action="store_true")
     s.add_argument("--run-id", default=None, help="run ID を指定する（専用 worktree の名前と揃える。通常は使わない）")
+    s.add_argument("--session-id", default=None, help="run の持ち主の session ID（hook が記録した値を worktree 側の start に渡す。通常は使わない）")
     s.add_argument("--no-branch", action="store_true", help="main 上でも統合ブランチを作らない")
     s.add_argument("--allow-primary", action="store_true", help="主の作業ツリーでの開始を許す（run ごとの worktree 必須を外す。通常は使わない）")
     s.add_argument("--tail", type=int, default=8)
