@@ -23,7 +23,7 @@ disable-model-invocation: true
 任意: 資料のパス、URL
 </references>
 <run_options>
-max_hours: 24
+max_hours: 2.5
 approval_policy: 安全範囲は推奨どおり
 parallel_workers: auto
 scope: 承認済みすべて

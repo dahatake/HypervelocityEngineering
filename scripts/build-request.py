@@ -66,6 +66,7 @@ def fmt_hours(minutes: float) -> str:
 
 def build(root: Path, cfg: dict, minutes: float, label: str) -> Optional[str]:
     """Return the request text, or None when there is no candidate (message is printed)."""
+    minutes = min(minutes, h.time_limits(cfg)[1] * 60)
     nxt = h.load_script("next-impl")
     res = nxt.analyze(root, cfg)
     per = minutes_per_requirement(root, cfg)

@@ -136,7 +136,7 @@ npm test 2>&1 | python scripts/summarize.py -
 ## run-state.py（conductor の状態管理）
 
 ```bash
-python scripts/run-state.py start --options "max_hours: 24\ngit_push: しない"   # 実行中の run があれば RESUME
+python scripts/run-state.py start --options "max_hours: 2.5\ngit_push: しない"   # 実行中の run があれば RESUME
 python scripts/run-state.py status
 python scripts/run-state.py stage 4 [--done]
 python scripts/run-state.py progress "工程 2: 直接矛盾 0。Q-012 を BLOCKED"

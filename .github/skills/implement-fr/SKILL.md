@@ -39,6 +39,9 @@ description: implementer が、conductor から渡された承認済みの要求
 ### worktree とゲート
 - 作業は渡された worktree（`work/worktrees/<run-id>-w<N>/`。項目をまたいで再利用されるプール。ブランチ `work/<run-id>/<item>`）の中だけで行います。ignore されたビルドの生成物は消さずに増分ビルドに使います。
 - ゲート: `python scripts/verify.py --quick` と、関係する System Test を `python scripts/ledger.py run --cases <ケース ID> --no-record` で実行します（台帳は conductor が統合後に更新します）。どのテストを実行するかは `python scripts/select-tests.py` で選べます。
+- 依存パッケージ（`npm ci` など）: `integrate.py prepare` が `SHARED:` と出したディレクトリは主の作業ツリーと共有済みなので、導入しない（消さない・上書きしない）。`NOTE:` が出たときだけ、ロックファイルが変わった場合に限り導入する。同時に複数の `npm ci` を走らせない（並列の `npm ci` は各 45 分かかった実測がある）。
+- `verify.py --no-cache` と全件回帰は実行しない（キャッシュが効かないと 1 回で 2 時間超かかった実測がある）。1 コマンドが 20 分を超えそうなら止めて、conductor に結果を返す。
+- 基点（実装前）から落ちているテストは、自分の項目の失敗と区別し、直さずに `BASELINE-FAIL: <テスト ID>` として返す（原因調査に時間を使わない）。
 - AC のゲートが通ったら、無関係な不安定テストを直さず、結果に `UNRELATED-FLAKY: <テスト名と症状>` として報告して終えます。1 項目の作業は 60 分（PARAM-045）を超えません。
 - 長いログは `python scripts/summarize.py <log>` で要約してから読みます。
 - commit は `[<要求 ID>] <要約>` で、作業ブランチにだけ行います。push はしません。

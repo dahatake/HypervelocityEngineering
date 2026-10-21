@@ -109,6 +109,24 @@ run の実行中は、hook G-7 がこの表を強制します。値のある役�
 | `external_deploy_verbs` | 同じく、名前にこの動詞（`deploy`・`provision`・`publish`・`release`）を含むものを「デプロイ・公開」とみなし、`deploy` の値で判定します |
 | `external_tool_allow` | 外部のシステムの変更とみなさないツール名の正規表現（例: `"^mcp_myindex_update_index$"`）。名前に動詞を含むが、ローカルにしか作用しないツールを許可するときに使います |
 
+## 4.3b 時間・依存の共有・クレジットの設定（`limits` / `worktree_share` / `credits`）
+
+```json
+"limits": { "max_hours_default": 2.5, "max_hours_cap": 3, "reserve_minutes": 30 },
+"worktree_share": { "enabled": true, "dirs": ["node_modules"] },
+"credits": { "default_multiplier": 1, "model_multipliers": { "claude-sonnet-5.5": 1, "gpt-6.1-sol": 3 } }
+```
+
+| キー | 意味 |
+|---|---|
+| `limits.max_hours_default` | run_options に `max_hours` がないときの時間（時間単位） |
+| `limits.max_hours_cap` | `max_hours` の上限。これを超える指定は切り詰めます。夜間に長く回すときは、この値（と run_options の `max_hours`）を引き上げます（例: `8`）。既定は 3 時間 |
+| `limits.reserve_minutes` | 工程 6（最終）のために残す時間。残りがこれを切る（または 85% を超える）と、新しい項目を始めません |
+| `worktree_share.enabled` / `dirs` | 作業用 worktree の依存ディレクトリ（`node_modules` など）を、導入済みの主の作業ツリーの実体へのリンク（Windows は junction）にして、worktree ごとの `npm ci` をなくします。`package.json` と `package-lock.json` が共有元と同じときだけ共有します。共有元がなければ、`integrate.py prepare` が `NOTE:` を出すので、主の作業ツリーで 1 回だけ導入してください。`false` で無効にできます |
+| `credits.model_multipliers` | `run-state.py finish` が `--credits` なしのとき、作業役（task）の呼び出しをモデルの倍率で数えた「推定」を run-history の AI クレジット欄に記録します。進行役自身の呼び出しは含みません。作業役ごとの所要時間は `work/runs/<run-id>/subagents.jsonl` に記録されます |
+
+hook は、読み取り専用・記録だけのツール（`view`・`grep`・`sql`・`report_intent` など）を、設定やリポジトリを読まずに即座に許可します。
+
 ## 4.4 MCP Server・plugin・拡張機能を使う
 
 利用者が GitHub Copilot に設定した MCP Server・plugin・拡張機能のツールと skill は、追加の設定なしで、conductor とすべての作業役が使えます。例は Work IQ（社内のメール・会議・チャット・ドキュメント）、Microsoft Learn、Azure MCP Server、Copilot Studio・Microsoft 365 Agents Toolkit の plugin です。

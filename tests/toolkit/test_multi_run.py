@@ -234,3 +234,84 @@ def test_subagent_start_without_session_does_not_pick_among_several_runs(sample)
     sample.gate("subagent-start", {"agentName": "rd-author"})
     for w in (a, b):
         assert not (w / "work" / ".ebak" / "active-agents.json").exists()
+
+
+def _real_subagent_start(sample, parent, agent_id, name="rd-author"):
+    # shape of the real subagentStart hook input (events.jsonl of a VS Code session): sessionId is the parent session
+    return sample.gate("subagent-start", {"sessionId": parent, "agentId": agent_id, "agentType": name, "agentName": name,
+                                          "parentAgentId": parent, "cwd": str(sample.path)})
+
+
+def test_subagent_tool_calls_use_parent_run_not_a_free_run(sample):
+    # real incident: the subagent's preToolUse carries sessionId = agent id; it used to claim a fresh unowned run
+    a = start_in_worktree(sample)
+    patch_meta(a, session_id="sA")
+    _real_subagent_start(sample, "sA", "agent-1")
+    b = start_in_worktree(sample)  # a fresh run nobody owns yet
+    edit = {"sessionId": "agent-1", "cwd": str(sample.path), "toolName": "edit", "toolArgs": {
+        "path": str(a / "docs" / "requirements-definition.md"), "old_str": "a", "new_str": "b"}}
+    assert sample.gate("pre-tool", edit) == {}
+    assert sample.gate("pre-tool", dict(edit, toolName="create", toolArgs={
+        "path": str(a / "work" / "peek.py"), "file_text": "x"})) == {}
+    assert not json.loads(meta_path(b)[1].read_text(encoding="utf-8")).get("session_id")
+
+
+def test_other_session_cannot_write_into_owned_run(sample, tmp_path_factory, monkeypatch):
+    # the repo lives under the temp dir (which is an allowed outside location); point the hook at a different temp dir
+    other = tmp_path_factory.mktemp("elsewhere")
+    for k in ("TEMP", "TMP", "TMPDIR"):
+        monkeypatch.setenv(k, str(other))
+    a, b = start_in_worktree(sample), start_in_worktree(sample)
+    patch_meta(a, session_id="sA")
+    patch_meta(b, session_id="sB")
+    own = {"sessionId": "sA", "cwd": str(sample.path), "toolName": "create", "toolArgs": {
+        "path": str(a / "work" / "note.txt"), "file_text": "x"}}
+    assert sample.gate("pre-tool", own) == {}
+    # sA (bound to its own run) writing into sB's run, and an unrelated agent id doing the same, are both refused
+    for sid in ("sA", "unknown-agent"):
+        res = sample.gate("pre-tool", dict(own, sessionId=sid, toolArgs={"path": str(b / "work" / "note.txt"), "file_text": "x"}))
+        assert res.get("permissionDecision") == "deny" and "G-5" in res["permissionDecisionReason"], (sid, res)
+
+
+def test_subagent_record_lifecycle_and_nesting(sample, tmp_path_factory, monkeypatch):
+    # recorded child of sA: allowed in sA's run, refused in sB's run; nested agent (parent = agent id) is not
+    # trusted in sB's run; after subagent-stop the record is gone and writes into sB's run are refused again.
+    other = tmp_path_factory.mktemp("elsewhere2")
+    for k in ("TEMP", "TMP", "TMPDIR"):
+        monkeypatch.setenv(k, str(other))
+    a, b = start_in_worktree(sample), start_in_worktree(sample)
+    patch_meta(a, session_id="sA")
+    patch_meta(b, session_id="sB")
+
+    def create(run, sid):
+        return {"sessionId": sid, "cwd": str(sample.path), "toolName": "create", "toolArgs": {
+            "path": str(run / "work" / "note.txt"), "file_text": "x"}}
+
+    _real_subagent_start(sample, "sA", "agent-1")
+    assert sample.gate("pre-tool", create(a, "agent-1")) == {}
+    assert sample.gate("pre-tool", create(b, "agent-1")).get("permissionDecision") == "deny"
+    sample.gate("subagent-start", {"sessionId": "agent-1", "agentId": "agent-2", "agentType": "implementer",
+                                   "agentName": "implementer", "parentAgentId": "agent-1", "cwd": str(sample.path)})
+    assert sample.gate("pre-tool", create(b, "agent-2")).get("permissionDecision") == "deny"
+    sample.gate("subagent-stop", {"sessionId": "agent-1", "agentId": "agent-1", "agentName": "rd-author", "cwd": str(sample.path)})
+    assert sample.gate("pre-tool", create(b, "agent-1")).get("permissionDecision") == "deny"
+
+def test_unrecorded_agent_cannot_write_into_unowned_or_foreign_run(sample, tmp_path_factory, monkeypatch):
+    # fail-open hole: an agent id with no parent record (session bound to no run) must not write into a sibling run
+    # unless it owns it; this holds for an owned run with no session id, and for an unowned (stale) run.
+    other = tmp_path_factory.mktemp("elsewhere3")
+    for k in ("TEMP", "TMP", "TMPDIR"):
+        monkeypatch.setenv(k, str(other))
+    a, b = start_in_worktree(sample), start_in_worktree(sample)
+    patch_meta(a, session_id="sA")
+    patch_meta(b, started_at="2000-01-01T00:00:00+00:00")  # unowned and stale: never auto-claimed
+
+    def create(run, sid):
+        d = {"cwd": str(sample.path), "toolName": "create", "toolArgs": {"path": str(run / "work" / "note.txt"), "file_text": "x"}}
+        return dict(d, sessionId=sid) if sid else d
+
+    assert sample.gate("pre-tool", create(a, "sA")) == {}
+    for run in (a, b):
+        for sid in ("unrecorded-agent", ""):
+            res = sample.gate("pre-tool", create(run, sid))
+            assert res.get("permissionDecision") == "deny" and "G-5" in res["permissionDecisionReason"], (run.name, sid, res)

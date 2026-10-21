@@ -5,6 +5,15 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- 1 run を 3 時間以内に収める（実行ログの分析: 実装 4 項目以上の run は全件 5.5 時間以上）。
+  - `max_hours` の既定を 24 → 2.5 に変更（`limits.max_hours_default`）。上限は `limits.max_hours_cap`（既定 3。夜間実行などは設定で引き上げ可）、工程 6 のための残り時間は `limits.reserve_minutes`（既定 30 分）。`ebaklib.effective_max_hours` が `run-state.py time` / `status` / agentStop hook / `build-request.py` で共通に使われる。超過の許容は 1.25 倍 → +15 分。
+  - `worktree_share`: `integrate.py prepare` が worktree の `node_modules` を、導入済みの主の作業ツリーへの junction / symlink にする（lock が同じときだけ。`pool --prune`・`clean-work.py` はリンクだけを外す）。
+  - hook: 状態を持たないツール（`sql`・`report_intent` など）も即座に許可。作業役の所要時間を `subagents.jsonl` に記録。
+  - `credits`: `run-state.py finish` が、`--credits` なしのとき task 呼び出しとモデルの倍率から AI クレジットを推定して記録。
+  - conductor: 1 run の項目は最大 3、時間の 60% で未着手は次の run へ、基点で落ちているテストは調べず報告、reviewer・差し戻しの上限、節目の監査を 1 時間ごとに。
+  - implement-fr: `npm ci` の並列・再実行の禁止、`--no-cache`・全件回帰の禁止、`BASELINE-FAIL` の返却。
+  - `models`: rd-author・test-designer・reviewer を `claude-sonnet-5.5`、implementer-escalation を `gpt-6.1-sol` に設定。
+
 - 実行履歴の分析（直近の run の工程時間・実効の並列度・`[ST]` 修正 commit 69 件）に基づく速さの改善。
   - `ledger.py run`: 同じ pytest ファイルの command を 1 プロセスにまとめて実行（失敗・未該当は単独で再実行。`--no-batch` / `system_test.batch_pytest: false` で止める）。GUI を含む 45 ケースで 320 秒 → 281 秒。
   - `ledger.py preflight`（新規）: pytest の collect-only で、構文・import の誤りと `-k`・node id の誤り（0 件）を実装の前に検出。test-designer の終了前と工程 4 の完了前に実行（統合後の System Test 失敗による手戻りを減らす）。

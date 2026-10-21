@@ -37,6 +37,12 @@ DEFAULT_CONFIG: dict = {
     },
     "base_branch": "main",
     "work": {"dir": "work", "retention_days": 14},
+    # AI クレジットの推定（run-state.py finish が --credits なしのとき、models.jsonl の task 呼び出しから算出）
+    "credits": {"default_multiplier": 1, "model_multipliers": {}},
+    # 1 run の時間。default は max_hours 未指定時の値、cap は run_options の指定を切り詰める上限（夜間実行なら引き上げる）
+    "limits": {"max_hours_default": 2.5, "max_hours_cap": 3.0, "reserve_minutes": 30},
+    # worktree の依存ディレクトリの共有（主の作業ツリーの実体への junction / symlink）
+    "worktree_share": {"enabled": True, "dirs": ["node_modules"]},
     "verify": {"commands": [], "timeout_sec": 1800},
     "system_test": {"jobs": "auto", "serial_patterns": ["default_port"]},
     "checks": {
@@ -1282,6 +1288,113 @@ def parse_options_text(text: str) -> Dict[str, str]:
         if m:
             out[m.group(1)] = m.group(2)
     return out
+
+
+MAX_HOURS_DEFAULT = 2.5
+MAX_HOURS_CAP = 3.0
+RESERVE_MINUTES = 30
+
+
+def time_limits(cfg: Optional[dict]) -> Tuple[float, float, float]:
+    """(default hours, cap hours, reserve hours) from cfg['limits']; invalid values fall back to the built-ins."""
+    lim = (cfg or {}).get("limits") or {}
+
+    def num(key: str, fallback: float) -> float:
+        try:
+            v = float(lim.get(key))
+        except (TypeError, ValueError):
+            return fallback
+        return v if v > 0 else fallback
+
+    cap = num("max_hours_cap", MAX_HOURS_CAP)
+    return min(num("max_hours_default", MAX_HOURS_DEFAULT), cap), cap, num("reserve_minutes", RESERVE_MINUTES) / 60.0
+
+
+def effective_max_hours(options: Optional[dict], cfg: Optional[dict] = None) -> float:
+    """max_hours of a run, clamped to limits.max_hours_cap (config; default 3 h)."""
+    default, cap, _ = time_limits(cfg)
+    try:
+        v = float((options or {}).get("max_hours") or default)
+    except (TypeError, ValueError):
+        v = default
+    if v <= 0:
+        v = default
+    return min(v, cap)
+
+
+def _is_link(p: Path) -> bool:
+    if p.is_symlink():
+        return True
+    return bool(getattr(p, "is_junction", lambda: False)())
+
+
+def unshare_dirs(wt: Path, cfg: dict) -> int:
+    """Remove the share links made by share_dirs (never touches the link target). Call before deleting a worktree."""
+    n = 0
+    for rel in (cfg.get("worktree_share") or {}).get("dirs", []):
+        p = wt / rel
+        if p.exists() or p.is_symlink():
+            if _is_link(p):
+                try:
+                    p.unlink() if p.is_symlink() else os.rmdir(p)
+                    n += 1
+                except OSError:
+                    pass
+    return n
+
+
+def primary_worktree(root: Path) -> Optional[Path]:
+    rc, out = git(["worktree", "list", "--porcelain"], root)
+    if rc != 0:
+        return None
+    for line in out.splitlines():
+        if line.startswith("worktree "):
+            return Path(line.split(" ", 1)[1].strip())
+    return None
+
+
+def share_dirs(src_root: Path, wt: Path, cfg: dict) -> List[str]:
+    """Link dependency dirs (node_modules ...) of a pooled worktree to an installed copy instead of
+    installing them again (parallel `npm ci` took ~45 min each). The copy is taken from src_root, else from
+    the primary working tree. Linked only when the lock/manifest files next to the dir are identical; otherwise
+    the worktree keeps (or builds) its own copy. Returns notes."""
+    conf = cfg.get("worktree_share") or {}
+    notes: List[str] = []
+    if not conf.get("enabled", True) or src_root.resolve() == wt.resolve():
+        return notes
+    primary = primary_worktree(src_root)
+    roots = [src_root] + ([primary] if primary and primary.resolve() != src_root.resolve() else [])
+    for rel in conf.get("dirs", []):
+        dst = wt / rel
+        if _is_link(dst) or dst.exists():
+            continue  # already shared, or the worktree has its own copy
+        parent = Path(rel).parent
+        found = [r for r in roots if (r / rel).is_dir()]
+        if not found:
+            notes.append(f"NOTE: 共有元 {rel} がありません。依存の導入（npm ci など）を主の作業ツリーで 1 回だけ行ってください（worktree では行わない）")
+            continue
+        src_dir = None
+        for r in found:
+            if all(((r / parent / f).read_bytes() if (r / parent / f).exists() else b"") ==
+                   ((wt / parent / f).read_bytes() if (wt / parent / f).exists() else b"")
+                   for f in ("package.json", "package-lock.json")):
+                src_dir = r / rel
+                break
+        if src_dir is None:
+            notes.append(f"NOTE: {rel} は共有しません（package.json / package-lock.json が共有元と異なる）。この worktree の依存を導入してください")
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            if os.name == "nt":
+                rc, out = run(["cmd", "/c", "mklink", "/J", str(dst), str(src_dir.resolve())])
+                if rc != 0:
+                    raise OSError(out.strip()[:120])
+            else:
+                os.symlink(src_dir.resolve(), dst, target_is_directory=True)
+            notes.append(f"SHARED: {rel} -> {src_dir.resolve()}（導入済みの依存を共有。再導入しない）")
+        except OSError as e:
+            notes.append(f"NOTE: {rel} の共有に失敗しました: {e}")
+    return notes
 
 
 def allows(value: Optional[str]) -> bool:

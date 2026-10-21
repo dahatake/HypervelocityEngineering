@@ -119,7 +119,7 @@ def test_no_run_does_not_fail(repo):
 # FR-1016 AC-101
 def test_duration_parsing_and_errors(repo):
     setup(repo, [req("601")])
-    for arg, hours in (("60分", "1"), ("24時間", "24"), ("90m", "1.5"), ("1.5h", "1.5")):
+    for arg, hours in (("60分", "1"), ("24時間", "3"), ("90m", "1.5"), ("1.5h", "1.5")):
         out = repo.py("build-request.py", arg, check=True).stdout
         assert f"max_hours: {hours}\n" in out
     for bad in ("60", "0分", "-1h", "abc", "10x"):
@@ -143,7 +143,7 @@ def test_scope_count_template_and_run_state_acceptance(repo):
     short = repo.py("build-request.py", "10分", check=True).stdout
     assert "scope: FR-701\n" in short  # minimum 1
     big = repo.py("build-request.py", "100h", check=True).stdout
-    assert "scope: FR-701, FR-702, FR-703, FR-704, FR-705\n" in big
+    assert "scope: FR-701, FR-702, FR-703\n" in big  # capped at 3 h
     r = repo.py("run-state.py", "start", "--no-branch", "--options", opts.strip(), check=True)
     meta = json.loads((repo.path / "work" / "runs").glob("*/meta.json").__next__().read_text(encoding="utf-8"))
     assert meta["options"]["max_hours"] == "2"

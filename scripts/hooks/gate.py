@@ -29,6 +29,10 @@ FAST_READ_TOOLS = {
     "view", "read", "grep", "glob", "read_file", "list_dir", "grep_search", "list_code_usages", "read_bash",
     "read_powershell", "list_bash", "list_powershell", "read_agent", "list_agents", "web_fetch", "web_search",
     "fetch", "fetch_webpage", "search", "web",
+    # 状態を持たない・ローカルの記録だけのツール（どの gate も拒否しない）
+    "report_intent", "sql", "session_store_sql", "store_memory", "update_todo", "todo", "manage_todo_list",
+    "tool_search_tool", "ask_user", "show_file", "get_errors", "semantic_search", "file_search",
+    "list_code_usages", "get_terminal_output", "get_task_output", "memory",
 }
 _RAW: "bytes | None" = None
 if __name__ == "__main__" and sys.argv[1:2] == ["pre-tool"]:
@@ -160,6 +164,9 @@ class Ctx:
         self.croot = h.conductor_root(self.root, cfg0)
         self.cfg = h.load_config(self.croot)
         self.state_dir = h.work_dir(self.croot, self.cfg) / ".ebak"
+        self.agent_id = ""
+        self.parent_sid = ""
+        self.resolve_agent_session()
         self.run_id = h.current_run(self.croot, self.cfg)
         self.meta = h.load_meta(self.croot, self.cfg, self.run_id) if self.run_id else {}
         self.run_active = bool(self.run_id and self.meta.get("status") == "active")
@@ -173,7 +180,30 @@ class Ctx:
 
     @property
     def sid(self) -> str:
-        return str(g(self.data, "sessionId", "session_id", default=""))
+        """The owning (parent) session. A custom agent's own tool calls carry the agent id as sessionId; when
+        subagentStart recorded that agent id with its real parent session, the parent is used instead."""
+        return self.parent_sid or str(g(self.data, "sessionId", "session_id", default=""))
+
+    def resolve_agent_session(self) -> None:
+        raw = str(g(self.data, "sessionId", "session_id", default=""))
+        if self.is_subagent_event:
+            self.agent_id = str(g(self.data, "agentId", "agent_id", default=""))
+            return
+        if not raw:
+            return
+        dirs = [h.work_dir(self.root, self.cfg) / ".ebak", self.state_dir]
+        try:
+            if not (self.root / ".git").is_file():
+                dirs += [h.work_dir(p, self.cfg) / ".ebak" for p in
+                         sorted(self.root.parent.glob(f"{self.root.name}-run-*")) if (p / ".git").exists()]
+        except OSError:
+            pass
+        now = time.time()
+        for d in dirs:
+            for a in h.read_json(d / "active-agents.json", default=[]) or []:
+                if a.get("agent_id") == raw and a.get("parent") and a["parent"] != raw and now - a.get("t", 0) < STATE_TTL_SEC:
+                    self.agent_id, self.parent_sid = raw, str(a["parent"])
+                    return
 
     def pending_land(self) -> Optional[Tuple[Path, str, dict]]:
         """A finished run of this session whose integration branch is not in the base branch yet."""
@@ -202,12 +232,29 @@ class Ctx:
 
     def sibling_runs(self) -> List[Path]:
         """Run worktrees (<repo>-run-<id>) that run-state.py start created next to the primary checkout."""
-        if self.croot != self.root or (self.root / ".git").is_file():
+        # (also valid after the context was bound to a run worktree: the primary checkout stays self.root)
+        if (self.root / ".git").is_file():
             return []
         try:
             return sorted(p for p in self.root.parent.glob(f"{self.root.name}-run-*") if (p / ".git").exists())
         except OSError:
             return []
+
+    def sibling_owned_by_other(self, tree: Path) -> bool:
+        """True when `tree` holds an active run owned by a different, known session (never touch it)."""
+        rid = h.current_run(tree, self.cfg)
+        meta = h.load_meta(tree, self.cfg, rid) if rid else {}
+        owner = meta.get("session_id")
+        return bool(rid and meta.get("status") == "active" and owner and self.sid and owner != self.sid)
+
+    def sibling_authorized(self, tree: Path) -> bool:
+        """Fail-closed: an active run may be written only with evidence this session owns it (session id == run owner);
+        inactive/finished run worktrees stay writable."""
+        rid = h.current_run(tree, self.cfg)
+        meta = h.load_meta(tree, self.cfg, rid) if rid else {}
+        if not (rid and meta.get("status") == "active"):
+            return True
+        return bool(self.sid and meta.get("session_id") == self.sid)
 
     def bind_to(self, tree: Path) -> bool:
         rid = h.current_run(tree, self.cfg)
@@ -252,6 +299,8 @@ class Ctx:
         if not free:
             return
         if not self.sid:
+            if not self.is_subagent_event:
+                return  # no session evidence on an ordinary tool call: never adopt a run (fail-closed)
             pick = free[0][1] if len(free) == 1 else max(free)[1]
             self.bind_to(pick)
             return
@@ -339,8 +388,11 @@ def classify(ctx: Ctx, p: str) -> Tuple[Optional[str], bool, Path]:
     for sib in ctx.sibling_runs():
         if nap.startswith(os.path.normcase(str(sib)) + os.sep):
             in_sibling = True
-            if sib != ctx.croot and not ctx.bind_to(sib):
-                ctx.croot = sib  # an inactive run worktree of this repository is still not "outside"
+            if sib != ctx.croot:
+                if ctx.sibling_owned_by_other(sib) or not ctx.sibling_authorized(sib):
+                    return None, False, ap  # another session's (or an unproven) run is outside this session's scope (G-5)
+                if not ctx.bind_to(sib):
+                    ctx.croot = sib  # an inactive run worktree of this repository is still not "outside"
             break
     if not in_sibling and ctx.croot != ctx.root and nap.startswith(os.path.normcase(str(ctx.root)) + os.sep):
         # a sibling run was auto-bound, but this write targets the primary tree the session is in
@@ -624,7 +676,12 @@ def on_subagent_start(ctx: Ctx) -> None:
     if not name:
         return
     agents = ctx.active_agents()
-    agents.append({"name": name, "t": time.time()})
+    entry = {"name": name, "t": time.time()}
+    aid = str(g(ctx.data, "agentId", "agent_id", default=""))
+    parent = str(g(ctx.data, "parentAgentId", "parent_agent_id", default="")) or ctx.sid
+    if aid and parent and aid != parent:
+        entry.update({"agent_id": aid, "parent": parent})  # the agent's own tool calls carry sessionId = agent id
+    agents.append(entry)
     ctx.save_agents(agents)
     ctx.log(f"START {name}")
     emit({})
@@ -634,6 +691,13 @@ def release_agent(ctx: Ctx, name: str) -> None:
     agents = ctx.active_agents()
     for i, a in enumerate(agents):
         if a.get("name") == name:
+            if ctx.run_active and a.get("t"):
+                try:  # 作業役ごとの所要時間（KPI・時間の内訳用）
+                    rdir = h.run_dir(ctx.croot, ctx.cfg, ctx.run_id)
+                    with open(rdir / "subagents.jsonl", "a", encoding="utf-8") as fh:
+                        fh.write(json.dumps({"at": h.now_iso(), "agent": name, "seconds": round(time.time() - a["t"])}, ensure_ascii=False) + "\n")
+                except OSError:
+                    pass
             del agents[i]
             break
     ctx.save_agents(agents)
@@ -735,8 +799,8 @@ def on_agent_stop(ctx: Ctx) -> None:
         h.save_meta(ctx.croot, ctx.cfg, ctx.run_id, meta)
         emit({})
         return
-    mh = float(meta.get("options", {}).get("max_hours", 24) or 24)
-    over = rs.elapsed_hours(meta) > mh * 1.25
+    mh = h.effective_max_hours(meta.get("options"), ctx.cfg)
+    over = rs.elapsed_hours(meta) > mh + 0.25
     n = int(meta.get("stop_blocks", 0)) + 1
     limit = int(ctx.cfg["gates"].get("agent_stop_max_blocks", 40))
     if over or n > limit:

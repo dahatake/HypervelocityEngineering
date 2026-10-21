@@ -145,6 +145,7 @@ def cmd_prepare(c: Ctx, args) -> int:
     else:
         git_ok(["checkout", "-q", "-f", "-B", branch, c.integration], wt)
     h.git(["clean", "-q", "-fd"], wt)  # untracked leftovers only; ignored build outputs are kept on purpose
+    share_notes = h.share_dirs(c.root, wt, c.cfg)
     if it.get("status") != "doing":
         c.rs.mark_status(it, "doing")
         it["attempts"] = it.get("attempts", 0) + 1
@@ -155,6 +156,8 @@ def cmd_prepare(c: Ctx, args) -> int:
     print(f"BRANCH: {branch}  BASE: {c.integration}@{h.head_commit(c.root)}  attempts={it['attempts']}")
     if note:
         print(note)
+    for line in share_notes:
+        print(line)
     return 0
 
 
@@ -342,6 +345,7 @@ def cmd_pool(c: Ctx, args) -> int:
         rel = c.rel(p)
         owner = busy.get(rel)
         if args.prune and not owner and os.path.normcase(str(p.resolve())) in live:
+            h.unshare_dirs(p, c.cfg)
             rc, out = h.git(["worktree", "remove", "--force", str(p)], c.root)
             removed += rc == 0
             print(f"{'REMOVED' if rc == 0 else 'KEEP   '} {rel}{'' if rc == 0 else ' ' + out.strip()[:120]}")

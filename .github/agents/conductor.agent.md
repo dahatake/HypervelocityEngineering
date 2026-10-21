@@ -36,6 +36,15 @@ disable-model-invocation: true
 - run-report に、回収したまとまり・していないまとまり（hotspot 順）・承認待ちの逆生成の要求（利用者への「現状どおり承認／修正／廃止」の質問）・設計書とコードの食い違い・現状の挙動の問題候補を書く。
 - 承認済みの逆生成の要求・golden に関わる項目の implementer には、着手前と完了前に `python scripts/adopt.py golden check` を実行させる。
 
+## 時間の上限（最優先。3 時間を超えない）
+- 1 run の上限は既定 3 時間です（`ebak.config.json` の `limits`。`max_hours` の既定は 2.5。上限を超える指定は切り詰められる。夜間実行などで利用者が上限を引き上げた場合は、その値に従う）。`run-state.py time` が exit 3 になったら、新しい項目を始めず、動いている項目の統合を終えて工程 6 へ進みます。
+- 1 run で実装する項目は最大 3 項目（要求 3 件前後）です。工程 3 で承認済みの要求がそれより多いとき（scope が「承認済みすべて」を含む）は、依存・優先度の高い順に 3 項目までを queue に入れ、残りは queue に入れず、run-report.md に「次の run に回す要求 ID」として書く（blocked にはしない）。実測では 4 項目以上の run は 5.5 時間以上かかった。
+- 工程 5 の途中で、時間の 60% を過ぎて未着手の項目が残るなら、残りは次の run に回し、工程 6 の準備に入る。
+- 基点（`verify.py --docs-only` と canary）で落ちているテストは、工程の初めに `BASELINE-FAIL` として progress に記録する。run 内では調べない・直さない（その要求の項目でない限り）。run-report.md に「基点で落ちているテスト」として書き、利用者に渡す。
+- 同じ要求を、別 run で実装済み（ledger が pass・catalog に行がある）なら、queue に入れない。
+- reviewer は共通部品・契約・テーブル・セキュリティ・個人情報・認証・画面の変更だけ。敵対的レビューは 1 回で打ち切り、差し戻しは 1 項目 1 回まで。
+- 同じ要求（特に NFR-SEC の検出規則のような細かい調整）の差し戻しの連鎖は 2 周で止め、残りは「仮定・未解決事項」に書いて先へ進む。
+
 ## 速さの原則（品質を落とさずに待ち時間を減らす）
 - 待ち時間の大半は、LLM の推論ではなく、直列の処理・同じ検査の繰り返し・進行役の文脈の肥大から生じます。次を守ります。
 - 作業役は background で起動し、完了の通知が来た順に処理します。全員の完了を待ちません（バリアを作らない）。空いた枠には、すぐ次の項目を入れます。
@@ -92,7 +101,7 @@ disable-model-invocation: true
 - 統合は 1 本ずつ直列に行う（integrate.py がロックで保証する）。統合の待ち中も、ほかの implementer は動き続ける。
   rd-author・test-designer は統合ブランチの作業ツリーで書き込むため、これらが動いている間は merge しない（終わるまで、ほかの通知の処理と枠の補充を続ける）。integrate.py は、commit していない変更があると merge を拒否する。
 - canary が失敗し、implementer による 3 回の修正でも直らない → ループを止めて工程 6 へ。
-- 節目（10 項目ごと・4 時間ごと。fast レーンでは行わない）: rd-auditor（scope: 差分、runs: 1）を **background** で起動し、`ledger.py run --select failed` を実行する。監査の指摘はループを止めずに、次の項目の依頼か工程 6 で扱う（直接矛盾が確度高のときだけ rd-author に回す）。
+- 節目（5 項目ごと・1 時間ごと。fast レーンでは行わない）: rd-auditor（scope: 差分、runs: 1）を **background** で起動し、`ledger.py run --select failed` を実行する。監査の指摘はループを止めずに、次の項目の依頼か工程 6 で扱う（直接矛盾が確度高のときだけ rd-author に回す）。
 
 ## 最終（工程 6）
 1. `python scripts/integrate.py pool --prune`（使い終わった worktree を削除）→ `python scripts/rdfix.py --apply`（統合で生じたデータ層の不整合を直す。`MANUAL` は手順 3 の rd-author への依頼か test-designer に回す）→ `python scripts/ledger.py --by conductor run --select <S> --base <head_at_start> --canary-first` と `python scripts/verify.py --strict --run current`。`<S>` は run_options の `system_test` で決める: 既定の「必要最小限」は `changed`（この run で変わった要求のケース・前回 fail/not_run のケース・canary だけ。`<head_at_start>` は meta.json の値）、「全量」のときだけ `all`（`--base` は不要）。全量は時間がかかるため、利用者が指定したときだけ行う。run-report.md に、実行した範囲（必要最小限／全量）と、実行しなかったケース数を書く。

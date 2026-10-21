@@ -20,7 +20,7 @@ disable-model-invocation: true
 
 ## 雛形（既定値）
 
-許容時間だけで依頼を作るには、`python scripts/build-request.py 60分`（`24時間`・`90m`・`1.5h` も可）を実行し、出力を `/build` に貼り付けます。次に実装すべき要求を分析して `scope` と `max_hours` を埋めます（生成のみで、run は始まりません）。
+許容時間だけで依頼を作るには、`python scripts/build-request.py 60分`（`24時間`・`90m`・`1.5h` も可。ただし 1 run の上限は 3 時間で、それより長い指定は 3 時間に切り詰める）を実行し、出力を `/build` に貼り付けます。次に実装すべき要求を分析して `scope` と `max_hours` を埋めます（生成のみで、run は始まりません）。
 
 ```text
 <request>
@@ -33,7 +33,7 @@ disable-model-invocation: true
 任意: 資料のパス、URL
 </references>
 <run_options>
-max_hours: 24
+max_hours: 2.5
 approval_policy: 安全範囲は推奨どおり
 parallel_workers: auto
 scope: 承認済みすべて

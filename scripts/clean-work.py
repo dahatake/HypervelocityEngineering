@@ -323,6 +323,7 @@ def execute(
             continue
         if candidate.kind == "pool-worktree":
             if candidate.path and candidate.path.exists():
+                h.unshare_dirs(candidate.path, cfg)
                 rc, out = git_output(root, ["worktree", "remove", str(candidate.path)])
                 if rc:
                     candidate.result = "失敗"

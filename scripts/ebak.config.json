@@ -14,6 +14,22 @@
     "dir": "work",
     "retention_days": 14
   },
+  "credits": {
+    "_note": "AI クレジットの推定。run-state.py finish が --credits なしのとき、作業役（task）の呼び出し 1 回を、モデルの倍率で数えて run-history に「推定」として記録する。倍率は契約・課金表に合わせて書く（未記載のモデルは default_multiplier）。進行役自身の呼び出しは hook から見えないため含まない。",
+    "default_multiplier": 1,
+    "model_multipliers": {}
+  },
+  "limits": {
+    "_note": "1 run の時間（時間単位）。max_hours_default は run_options に max_hours がないときの値、max_hours_cap は指定値を切り詰める上限。夜間に長く回すなら max_hours_cap を引き上げる。reserve_minutes は工程 6 のために残す時間で、残りがこれを切ると新しい項目を始めない。",
+    "max_hours_default": 2.5,
+    "max_hours_cap": 3,
+    "reserve_minutes": 30
+  },
+  "worktree_share": {
+    "_note": "worktree に作らず、主の作業ツリーの実体へのリンク（Windows は junction）にするディレクトリ。npm ci の並列実行（各 45 分）を避ける。enabled を false にすると共有しない。",
+    "enabled": true,
+    "dirs": ["node_modules"]
+  },
   "verify": {
     "timeout_sec": 1800,
     "commands": [
@@ -31,12 +47,12 @@
   "models": {
     "_note": "Phase 1 で較正して決めます（users-guide/04-customization.md）。conductor は subagent を呼ぶときにこの表を参照します。空なら既定のモデルを使います。",
     "conductor": "",
-    "rd-author": "",
+    "rd-author": "claude-sonnet-5.5",
     "rd-auditor": "gpt-6.1-sol",
-    "test-designer": "",
+    "test-designer": "claude-sonnet-5.5",
     "implementer": "claude-sonnet-5.5",
-    "implementer-escalation": "",
-    "reviewer": ""
+    "implementer-escalation": "gpt-6.1-sol",
+    "reviewer": "claude-sonnet-5.5"
   },
   "gates": {
     "enabled": true,
