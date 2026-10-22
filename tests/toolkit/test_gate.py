@@ -56,6 +56,18 @@ def test_system_tests_are_immutable_for_implementer(sample):
     assert denied(edit(sample, wt + "docs/requirements-definition.md"), "G-1")
 
 
+def test_concurrent_roles_are_gated_by_the_caller_only(sample):
+    start(sample)
+    sample.gate("subagent-start", {"agentName": "implementer", "agentId": "i1", "sessionId": "S"})
+    sample.gate("subagent-start", {"agentName": "test-designer", "agentId": "t1", "sessionId": "S"})
+    cmd = "python scripts/ledger.py --by test-designer digests --update"
+    as_td = {"toolName": "bash", "toolArgs": {"command": cmd}, "agentName": "test-designer"}
+    assert sample.gate("pre-tool", as_td) == {}
+    as_impl = {"toolName": "bash", "toolArgs": {"command": cmd}, "agentName": "implementer"}
+    assert denied(sample.gate("pre-tool", as_impl), "G-2")
+    assert denied(shell(sample, cmd), "G-2")  # unidentifiable caller: fail-closed
+
+
 def test_read_only_roles_and_conductor_scope(sample):
     start(sample)
     assert denied(edit(sample, "src/app.ts"), "G-5")  # conductor itself

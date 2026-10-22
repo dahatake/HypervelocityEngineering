@@ -404,7 +404,19 @@ class Ctx:
         return self.own_agents() + [a for _, a in self.foreign_agents()]
 
     def active_names(self) -> List[str]:
-        return [a.get("name", "") for a in self.active_agents()]
+        """Roles whose gates apply to this tool call. When the caller is identifiable (agent name in the payload, or
+        its agent id recorded by subagentStart) only its own role counts, so a test-designer running next to an
+        implementer is not gated as an implementer. Unidentifiable callers stay fail-closed (all active roles)."""
+        agents = self.active_agents()
+        if self.agent_id:
+            mine = [a.get("name", "") for a in agents if a.get("agent_id") == self.agent_id]
+            if mine:
+                return mine
+        known = {a.get("name", "") for a in agents}
+        own = agent_name(self)
+        if own and own in known and not self.is_subagent_event:
+            return [own]
+        return [a.get("name", "") for a in agents]
 
     def save_agents(self, agents: List[dict]) -> None:
         self.state_dir.mkdir(parents=True, exist_ok=True)

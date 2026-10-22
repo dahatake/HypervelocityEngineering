@@ -270,18 +270,18 @@ a.xref{color:var(--color-fg-link);text-decoration:underline;text-underline-offse
 .impl-seg{cursor:pointer}
 .impl-seg[aria-pressed=true]{outline:3px dashed var(--color-focus);outline-offset:-3px}
 /* FR-1061 Gantt chart */
-.impl-gantt-row{display:grid;grid-template-columns:minmax(160px,260px) 1fr;gap:8px;align-items:center;margin:4px 0}
-.impl-gantt-label{overflow-wrap:anywhere;font-size:12px;cursor:pointer}
-.impl-gantt-track{position:relative;height:26px;background:var(--color-bg-hover);border-radius:4px}
-.impl-gantt-axisrow .impl-gantt-track{background:none;height:20px}
+.impl-gantt-row{display:grid;grid-template-columns:minmax(160px,260px) 1fr;gap:var(--space-2);align-items:center;margin:var(--space-1) 0}
+.impl-gantt-label{overflow-wrap:anywhere;font-size:var(--font-size-caption);line-height:var(--line-height-caption);cursor:pointer}
+.impl-gantt-track{position:relative;height:var(--size-control);background:var(--color-bg-hover);border-radius:var(--radius-sm)}
+.impl-gantt-axisrow .impl-gantt-track{background:none;height:var(--size-icon-md)}
 .impl-gantt-tick{position:absolute;top:0;white-space:nowrap}
-.impl-gantt-bar{position:absolute;top:3px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--color-bg-canvas);font-weight:700;font-size:12px;cursor:pointer;min-width:14px;overflow:hidden}
+.impl-gantt-bar{position:absolute;top:var(--space-1);height:var(--size-icon-lg);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;color:var(--color-bg-canvas);font-weight:var(--font-weight-bold);font-size:var(--font-size-caption);cursor:pointer;min-width:var(--size-icon-sm);overflow:hidden}
 .impl-gantt-bar[aria-pressed=true],.impl-gantt-head[aria-pressed=true]{outline:3px dashed var(--color-focus);outline-offset:1px}
 .impl-gantt-bar:focus-visible,.impl-gantt-head:focus-visible{outline:3px solid var(--color-focus);outline-offset:1px}
 .impl-gantt-bar[data-match=false]{opacity:.35}
-.impl-gantt-word{position:absolute;top:5px;white-space:nowrap;padding:0 4px}
-.impl-gantt-head{margin:10px 0 2px;padding:4px 6px;cursor:pointer;border-bottom:1px solid var(--color-bg-hover)}
-.impl-gantt-swatch{display:inline-block;min-width:18px;text-align:center;border-radius:3px;color:var(--color-bg-canvas);font-weight:700}
+.impl-gantt-word{position:absolute;top:var(--space-1);white-space:nowrap;padding:0 var(--space-1)}
+.impl-gantt-head{margin:var(--space-3) 0 var(--space-1);padding:var(--space-1) var(--space-2);cursor:pointer;border-bottom:1px solid var(--color-bg-hover)}
+.impl-gantt-swatch{display:inline-block;min-width:var(--size-icon-md);text-align:center;border-radius:var(--radius-sm);color:var(--color-bg-canvas);font-weight:var(--font-weight-bold)}
 [data-match=false]{opacity:.3}
 [data-match=true].impl-card,tr[data-match=true]{box-shadow:inset 4px 0 0 var(--color-accent)}
 .impl-filter-bar{display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;margin:var(--space-2) 0}
