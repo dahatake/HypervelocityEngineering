@@ -483,7 +483,7 @@ export function mount(host) {
   return {
     destroy() {
       dead = true; cancelAnimationFrame(raf); ro.disconnect(); offLang(); audio.destroy();
-      if (window.eabkView === viewApi) delete window.eabkView;
+      if (window.eabkView === viewApi) window.eabkView = undefined;
     },
   };
 }

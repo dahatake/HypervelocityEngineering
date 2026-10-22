@@ -167,7 +167,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-013 | 通常操作の参照専用データ境界 | 承認済み（包括承認 2026-10-09・approval_policy） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | HTTP サーバー |
 | FR-1001 | users-guide の利用開始前提条件 | 承認済み（依頼 2026-10-09） | 未実装 | AC-037 対応の E2E-015 は登録・実装済み、commit `c61ee5b` の実行結果は `fail`（合格ではない） | 起動スクリプト、HTTP サーバー |
 | NFR-UX-001 | レイアウト変更 | AI提案／承認待ち | 未実装 | 未実装 | なし |
-| NFR-UX-002 | レイアウト復元 | 承認済み | 未実装 | 未実装 | なし |
+| NFR-UX-002 | レイアウト復元 | 承認済み | `EABK-Studio/web/js/layout.js`、`EABK-Studio/web/js/app.js`、`EABK-Studio/web/index.html`、`EABK-Studio/web/app.css`、`EABK-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_layout_authz_system.py` | 画面の配置 |
 | NFR-UX-003 | 非ドラッグ操作 | 承認済み | 未実装 | 未実装 | なし |
 | NFR-UX-004 | 狭い画面と拡大 | 承認済み | 未実装 | 未実装 | なし |
 | NFR-UX-005 | 一貫した操作結果 | AI提案／承認待ち | `EABK-Studio/web/js/i18n.js` | 未実装 | UI 部品 |
@@ -222,6 +222,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | RPG 風マップ | `EABK-Studio/web/js/maprpg.js`, `EABK-Studio/web/js/rpgworld.js`, `EABK-Studio/web/js/rpgaudio.js`, `EABK-Studio/web/rpg.css` | 城（目的）と街（エンティティを関係の連結成分でまとめたもの。関係のないものは「関係なしの街」1 つ）を歩いて訪ね、街の住人（エンティティ 1 件）と会話ウィンドウで話して内容を読む 8 ビット風の 2 次元地図。ドット絵と音楽・効果音は Canvas と Web Audio で実行時に生成（外部アセット・外部通信なし、初期ミュート）。ファミコン風のキー操作、表の代替表現、動きの軽減、描画不可なら 2D へ代替 | FR-1053、FR-1054、FR-1055、NFR-UX-012 |
 | 2D・3D 切替 | `EABK-Studio/web/js/dim.js`, `EABK-Studio/web/js/dgm3d.js` | マップと図式の 2D・3D 切替アイコン（アニメ調の顔つきの平面・立体と「2D」「3D」の語。外部取得なし）、マップの第 3 の表示「RPG」（城の絵のアイコン）、コマンド検索からの切替、図式の 3D 描画（3D 不可なら 2D と表へ代替） | FR-1040、FR-1041、FR-1053、FR-1054、FR-1055、FR-1066、FR-1067 |
 | フィンガープリント | `EABK-Studio/studio.py` | 更新検知と再読込 | FR-012、NFR-OPS-002 |
+| 画面の配置 | `EABK-Studio/web/js/layout.js` | 配置（default / compact / wide）の変更・既定へ戻す。localStorage `eabk-studio.layout` に配置 ID だけを保存し、不正値は既定。`window.eabkView`（画面共通アクセサ）の `getState().layout = {id, isDefault}` を常に返す | NFR-UX-002 |
 | 起動スクリプト | `EABK-Studio/start.ps1`, `EABK-Studio/start.sh` | Windows/macOS/Linux の起動補助 | FR-1001、NFR-OPS-001 |
 | 意味的ズーム | `EABK-Studio/web/js/semzoom.js`, `EABK-Studio/web/js/sz2d.js`, `EABK-Studio/web/js/sz3d.js`, `EABK-Studio/web/sz.css` | エンティティの倍率に応じた 3 粒度（クラスター・エンティティと関係線・列の一覧）。2D（SVG）と 3D（Canvas）が 1 つの共有状態（倍率・中心・選択・絞り込み）で動き、可視範囲だけを描画し、表の代替表現・キーボード・JA/EN を備える。`window.eabkView`（setScale・getState）を公開する | FR-1027、FR-1028、FR-1029、FR-1034、FR-1053、FR-1054、FR-1055、FR-1066、FR-1067、NFR-PERF-004、NFR-UX-010 |
 | Three.js 同梱モジュール | `EABK-Studio/web/vendor/three.module.min.js` | 3D マップ・3D 図式の表示 | FR-003、FR-1040、FR-1068、FR-1069、NFR-UX-015 |
