@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from test_multi_run import meta_path, patch_meta, start_in_worktree
+from test_multi_run import hold_lock, meta_path, patch_meta, start_in_worktree
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 
@@ -124,7 +124,7 @@ def test_lock_busy_fails_without_writing_and_orphan_is_released_ac405(repo):
     assert h.CLAIM_LOCK_WAIT_SEC == 10  # PARAM-053
     cfg, f = write_claims(repo.path, [claim("sA", "x")])
     lock = f.with_name("start-claims.lock")
-    lock.write_text(str(os.getpid()), encoding="utf-8")  # a live holder
+    holder = hold_lock(lock)  # a live holder in another process
     before = f.read_text(encoding="utf-8")
     try:
         t0 = time.time()
@@ -141,8 +141,8 @@ def test_lock_busy_fails_without_writing_and_orphan_is_released_ac405(repo):
             h.CLAIM_LOCK_WAIT_SEC = saved
         assert f.read_text(encoding="utf-8") == before
     finally:
-        lock.unlink()
-    lock.write_text("999999999", encoding="utf-8")  # holder is gone
+        holder.kill()  # the holder crashes: the OS releases the lock, nothing is left behind
+        holder.wait()
     assert rs.take_start_claim(repo.path, cfg, ident="x") == "sA"
 
 

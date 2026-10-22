@@ -7,13 +7,23 @@ from pathlib import Path
 from conftest import git
 
 
-def start_in_worktree(repo):
+def start_in_worktree(repo, *args):
     env = {k: v for k, v in os.environ.items() if k != "EABK_ALLOW_PRIMARY"}
     env["PYTHONUTF8"] = "1"
-    proc = subprocess.run([sys.executable, str(repo.path / "scripts" / "run-state.py"), "start"], cwd=str(repo.path),
+    proc = subprocess.run([sys.executable, str(repo.path / "scripts" / "run-state.py"), "start", *args], cwd=str(repo.path),
                           capture_output=True, text=True, encoding="utf-8", env=env)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     return Path(proc.stdout.split("WORKTREE ", 1)[1].split("\n")[0].strip())
+
+
+def hold_lock(path):
+    """A separate process that holds the exclusive lock on `path` (a live holder); kill it to simulate a crash."""
+    code = ("import sys, time; sys.path.insert(0, sys.argv[1]); import ebaklib as h; "
+            "l = h.FileLock(sys.argv[2], 30); l.__enter__(); print('held', flush=True); time.sleep(300)")
+    scripts = str(Path(__file__).resolve().parents[2] / "scripts")
+    proc = subprocess.Popen([sys.executable, "-c", code, scripts, str(path)], stdout=subprocess.PIPE, text=True)
+    assert proc.stdout.readline().strip() == "held"
+    return proc
 
 
 def meta_path(wt):
@@ -193,12 +203,29 @@ def test_hook_binds_run_by_session(sample):
     assert sample.gate("agent-stop", {"sessionId": "sC"}) == {}
 
 
-def test_hook_session_claims_newest_free_run(sample):
+def test_hook_session_does_not_bind_among_several_free_runs(sample):
+    # FR-1075 AC-409: two unowned runs -> no run is bound and no owner is recorded
     a, b = start_in_worktree(sample), start_in_worktree(sample)
+    assert sample.gate("agent-stop", {"sessionId": "sX"}) == {}
+    owners = [json.loads(meta_path(w)[1].read_text(encoding="utf-8")).get("session_id") for w in (a, b)]
+    assert owners == [None, None]
+
+
+def test_hook_session_rescues_the_single_free_run(sample):
+    # FR-1075 AC-409: exactly one unowned run, identifiable session, no other session's claim -> bound
+    a = start_in_worktree(sample)
     res = sample.gate("agent-stop", {"sessionId": "sX"})
     assert res.get("decision") == "block"
-    owners = [json.loads(meta_path(w)[1].read_text(encoding="utf-8")).get("session_id") for w in (a, b)]
-    assert owners.count("sX") == 1
+    assert json.loads(meta_path(a)[1].read_text(encoding="utf-8")).get("session_id") == "sX"
+
+
+def test_hook_rescue_refused_while_another_session_has_an_unconsumed_claim(sample):
+    # FR-1075 AC-409: another session's start is still pending -> the free run may be its run
+    a = start_in_worktree(sample)
+    sample.gate("pre-tool", {"sessionId": "sY", "toolName": "powershell", "toolArgs": {
+        "command": 'python scripts/run-state.py start --options "max_hours: 9"'}})
+    assert sample.gate("agent-stop", {"sessionId": "sX"}) == {}
+    assert not json.loads(meta_path(a)[1].read_text(encoding="utf-8")).get("session_id")
 
 
 def test_agent_stop_blocks_until_finished_run_is_landed(sample):
@@ -347,7 +374,7 @@ def test_run_is_owned_by_the_session_that_started_it_not_the_first_other_session
     shell = {"sessionId": "sA", "cwd": str(sample.path), "toolName": "powershell",
              "toolArgs": {"command": "python scripts/run-state.py start --options x"}}
     assert sample.gate("pre-tool", shell) == {}
-    wt = start_in_worktree(sample)
+    wt = start_in_worktree(sample, "--options", "x")  # the same command line the hook saw (FR-1074 AC-406)
     assert patch_meta(wt)[1]["session_id"] == "sA"
     other = {"sessionId": "sB", "cwd": str(sample.path), "toolName": "edit", "toolArgs": {
         "path": str(wt / "docs" / "requirements-definition.md"), "old_str": "a", "new_str": "b"}}
@@ -355,5 +382,5 @@ def test_run_is_owned_by_the_session_that_started_it_not_the_first_other_session
     assert patch_meta(wt)[1]["session_id"] == "sA"
     # a second concurrent start by another session gets its own run and owner (claims are consumed in order)
     sample.gate("pre-tool", dict(shell, sessionId="sB"))
-    wt2 = start_in_worktree(sample)
+    wt2 = start_in_worktree(sample, "--options", "x")
     assert patch_meta(wt2)[1]["session_id"] == "sB"

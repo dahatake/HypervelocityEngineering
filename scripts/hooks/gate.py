@@ -20,6 +20,7 @@ except that a malformed payload for pre-tool is allowed as well, so a broken gat
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 
@@ -172,7 +173,18 @@ class Ctx:
         self.run_active = bool(self.run_id and self.meta.get("status") == "active")
         if not self.run_active and (g(data, "toolName", "tool_name", default="") or self.sid or self.is_subagent_event):
             self.bind_sibling_run()
+        self.foreign_run = self.run_of_other_session_on_primary()
+        if self.foreign_run:
+            self.run_active = False  # FR-1076: the run's gates do not apply to a chat that does not own the run
         self.land_pending: Optional[Tuple[Path, str, dict]] = None
+
+    def run_of_other_session_on_primary(self) -> bool:
+        """FR-1076: the active run lives in this (primary) tree and its owner session is a different, known session.
+        Without a session id, or for the owner, or for an unowned run, the gates stay as they are."""
+        if not (self.run_active and self.sid and not (self.croot / ".git").is_file()):
+            return False
+        owner = self.meta.get("session_id")
+        return bool(owner and owner != self.sid)
 
     @property
     def is_subagent_event(self) -> bool:
@@ -272,10 +284,12 @@ class Ctx:
         self.run_id = h.current_run(self.croot, self.cfg)
         self.meta = h.load_meta(self.croot, self.cfg, self.run_id) if self.run_id else {}
         self.run_active = bool(self.run_id and self.meta.get("status") == "active")
+        self.foreign_run = self.run_of_other_session_on_primary()
+        if self.foreign_run:
+            self.run_active = False
 
-    def bind_sibling_run(self) -> None:
-        # The session works inside its run worktree while the hook runs in the primary checkout. Pick the run that
-        # belongs to this session; never another session's run (several runs may be active at once).
+    def scan_siblings(self):
+        """Active runs in the sibling worktrees, split into (owned by this session, unowned, owned by others)."""
         owned, free, others = [], [], []
         for p in self.sibling_runs():
             rid = h.current_run(p, self.cfg)
@@ -283,12 +297,31 @@ class Ctx:
             if not (rid and meta.get("status") == "active"):
                 continue
             owner = meta.get("session_id")
+            item = (meta.get("started_at", ""), p)
             if self.sid and owner == self.sid:
-                owned.append((meta.get("started_at", ""), p))
+                owned.append(item)
             elif not owner:
-                free.append((meta.get("started_at", ""), p))
+                free.append(item)
             else:
-                others.append((meta.get("started_at", ""), p))
+                others.append(item)
+        return owned, free, others
+
+    def starts_a_run(self) -> bool:
+        args = g(self.data, "toolArgs", "tool_input", default={})
+        text = json.dumps(args, ensure_ascii=False) if not isinstance(args, str) else args
+        return bool(START_CMD_RX.search(text.replace("\\\"", '"')))
+
+    def foreign_claims(self) -> List[dict]:
+        """Unconsumed start-claims of sessions other than this one (their start may still be about to create a run)."""
+        now = time.time()
+        f = h.start_claims_file(self.root, self.cfg)
+        return [c for c in (h.read_json(f, default=[]) or [])
+                if c.get("session") and c["session"] != self.sid and now - c.get("t", 0) < h.CLAIM_TTL_SEC]
+
+    def bind_sibling_run(self) -> None:
+        # The session works inside its run worktree while the hook runs in the primary checkout. Pick the run that
+        # belongs to this session; never another session's run (several runs may be active at once).
+        owned, free, others = self.scan_siblings()
         if owned:
             self.bind_to(max(owned)[1])
             return
@@ -298,30 +331,38 @@ class Ctx:
             return
         if not free:
             return
+        if self.starts_a_run():
+            return  # this call starts its own run: it must not take over a run that is already there
         if not self.sid:
-            if not self.is_subagent_event:
-                return  # no session evidence on an ordinary tool call: never adopt a run (fail-closed)
-            pick = free[0][1] if len(free) == 1 else max(free)[1]
-            self.bind_to(pick)
-            return
-        # R-2: a session with no run of its own takes the newest unowned active run and records its session id
-        # (re-read the meta just before recording; if another session got there first, choose again).
-        for _, p in sorted(free, reverse=True):
-            rid = h.current_run(p, self.cfg)
-            meta = h.load_meta(p, self.cfg, rid) if rid else {}
-            if not (rid and meta.get("status") == "active"):
-                continue
-            owner = meta.get("session_id")
-            if owner and owner != self.sid:
-                continue
-            if not owner and not run_is_fresh(meta):
-                continue
-            if not owner:
+            if self.is_subagent_event and len(free) == 1:
+                self.bind_to(free[0][1])  # nothing is recorded in meta; one unowned run can only be meant
+            return  # no session evidence: never adopt a run (fail-closed, FR-1075 AC-410)
+        # FR-1075 AC-408/409: a run whose owner a start-claim fixed is never rebound. An unowned run is rescued only when
+        # it is the single candidate, no other session still has an unconsumed claim, and the meta is written under
+        # the same lock that start uses.
+        try:
+            with h.start_claims_lock(self.root, self.cfg):
+                owned, free, others = self.scan_siblings()
+                if owned:
+                    self.bind_to(max(owned)[1])
+                    return
+                if len(free) != 1:
+                    self.log(f"UNBOUND-RUN session={self.sid} free_runs={len(free)} 候補が一意でないので束縛しません")
+                    return
+                p = free[0][1]
+                rid = h.current_run(p, self.cfg)
+                meta = h.load_meta(p, self.cfg, rid) if rid else {}
+                if not run_is_fresh(meta):
+                    self.log(f"UNBOUND-RUN session={self.sid} free_runs=1 開始から時間が経った所有者なし run は束縛しません")
+                    return
+                if self.foreign_claims():
+                    self.log(f"UNBOUND-RUN session={self.sid} 他の session の未消費の start-claim があるので束縛しません")
+                    return
                 meta["session_id"] = self.sid
                 h.save_meta(p, self.cfg, rid, meta)
-            self.bind_to(p)
-            return
-        self.log(f"UNBOUND-RUN session={self.sid} free_runs={len(free)} 束縛できる run がありません")
+                self.bind_to(p)
+        except h.LockBusy as e:
+            self.log(f"UNBOUND-RUN session={self.sid} {e}")
 
     def log(self, line: str) -> None:
         try:
@@ -499,14 +540,43 @@ def check_write(ctx: Ctx, rel: Optional[str], in_worker: bool, ap: Path) -> Opti
     return None
 
 
+_PATH_ARG = r"""("[^"]+"|'[^']+'|[^\s"';&|]+)"""
+CD_RX = re.compile(rf"^\s*(?:cd|chdir|pushd|set-location|sl)\s+(?:/d\s+)?(?:-(?:path|literalpath)\s+)?{_PATH_ARG}\s*$", re.I)
+GIT_WRITE_RX = re.compile(rf"\bgit\s+(?:(?:-C\s+{_PATH_ARG}|-c\s+\S+|--no-pager)\s+)*(?:commit|merge|cherry-pick|am)\b")
+GIT_C_RX = re.compile(rf"\bgit\b[^;&|]*?\s-C\s+{_PATH_ARG}")
+
+
+def _resolve_dir(base: Path, raw: str) -> Optional[Path]:
+    raw = raw.strip().strip("\"'")
+    if not raw or "$" in raw or "`" in raw or "%" in raw:
+        return None  # a variable: the target cannot be known from the command line
+    p = Path(raw).expanduser()
+    return Path(os.path.normpath(str(p if p.is_absolute() else base / p)))
+
+
+def commit_target_branch(ctx: Ctx, seg: str, shell_cwd: Path) -> str:
+    """Branch a `git commit|merge...` segment acts on: the tree named by `git -C <path>`, else the tree the shell is in
+    (the hook's cwd, or the directory an earlier `cd <path>` moved to)."""
+    m = GIT_C_RX.search(seg)
+    tree = _resolve_dir(shell_cwd, m.group(1)) if m else shell_cwd
+    if tree is None:
+        tree = shell_cwd
+    return h.current_branch(h.repo_root(tree))
+
+
 def check_shell(ctx: Ctx, cmd: str) -> Optional[Tuple[str, str]]:
     c = " ".join(cmd.split())
     base = ctx.cfg.get("base_branch", "main")
     names = ctx.active_names()
     worker = is_work_branch(ctx) or bool(re.search(r"[/\\]worktrees[/\\]", c) and "cd " in c)
     wd = ctx.cfg["work"]["dir"]
+    shell_cwd = ctx.cwd
     for seg in re.split(r"&&|\|\||;|\n", cmd):
         s = " ".join(seg.split())
+        mcd = CD_RX.match(seg)
+        if mcd:
+            shell_cwd = _resolve_dir(shell_cwd, mcd.group(1)) or shell_cwd
+            continue
         if re.search(r"\bgit\b.*\bpush\b", s):
             if re.search(r"(\s--force\b|\s-f\b|--force-with-lease|--mirror|\s--delete\b|\s-d\b|\s\+\S)", s):
                 return ("G-5", "force push・ブランチの削除の push は禁止です")
@@ -517,7 +587,7 @@ def check_shell(ctx: Ctx, cmd: str) -> Optional[Tuple[str, str]]:
                 return ("G-5", "run_options の git_push が「しない」なので push しません")
         if re.search(r"\bgit\s+(filter-branch|filter-repo)\b", s):
             return ("G-5", "履歴を書き換える git 操作は禁止です")
-        if ctx.run_active and re.search(r"\bgit\s+(commit|merge|cherry-pick|am)\b", s) and h.current_branch(ctx.root) in (base, "master"):
+        if ctx.run_active and GIT_WRITE_RX.search(s) and commit_target_branch(ctx, s, shell_cwd) in (base, "master"):
             return ("G-5", f"実行中は {base} に直接 commit・merge しません。統合ブランチで作業します")
     if ctx.run_active or worker:
         for pat in ctx.cfg["gates"].get("deploy_patterns", []):
@@ -619,16 +689,23 @@ def session_id(ctx: Ctx) -> str:
 
 
 def template_path(ctx: Ctx) -> Path:
-    return ctx.state_dir / "template-request.json"
+    """FR-1077: one state file per session (an input without a session id uses the anonymous file)."""
+    sid = session_id(ctx)
+    if not sid:
+        return ctx.state_dir / "template-request.json"
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", sid)[:60]
+    return ctx.state_dir / f"template-request-{safe}-{hashlib.sha1(sid.encode('utf-8')).hexdigest()[:8]}.json"
 
 
 def template_active(ctx: Ctx) -> bool:
     """True while the current turn answers `/build template` (show the request template only)."""
-    st = h.read_json(template_path(ctx), default=None)
-    if not isinstance(st, dict) or time.time() - float(st.get("t", 0)) > TEMPLATE_TTL_SEC:
-        return False
-    sid, mine = str(st.get("session", "")), session_id(ctx)
-    return not (sid and mine and sid != mine)
+    # an input without a session id cannot tell whose turn it is: it is restricted while any session's turn is active
+    files = [template_path(ctx)] if session_id(ctx) else sorted(ctx.state_dir.glob("template-request*.json"))
+    for f in files:
+        st = h.read_json(f, default=None)
+        if isinstance(st, dict) and time.time() - float(st.get("t", 0)) <= TEMPLATE_TTL_SEC:
+            return True
+    return False
 
 
 def clear_template(ctx: Ctx) -> None:
@@ -652,22 +729,29 @@ def on_user_prompt(ctx: Ctx) -> None:
 START_CMD_RX = re.compile(r"run-state\.py['\"]?\s+start\b(?!.*--help)")
 
 
-def record_start_claim(ctx: Ctx, cmd: str) -> None:
+def record_start_claim(ctx: Ctx, cmd: str) -> Optional[str]:
     """The session that runs `run-state.py start` owns the run it creates. Hooks see the session id only on the
     tool call, so remember it here and let run-state.py read it; otherwise the first other session without a run
     claims the new run (R-2) and the real owner is then refused (G-1/G-5) in its own run."""
     if not (ctx.sid and START_CMD_RX.search(cmd)):
-        return
+        return None
+    ident = h.start_ident_from_command(cmd)
     try:
-        f = h.work_dir(ctx.root, ctx.cfg) / ".ebak" / "start-claims.json"
-        now = time.time()
-        claims = [c for c in (h.read_json(f, default=[]) or []) if now - c.get("t", 0) < 300]
-        claims.append({"session": ctx.sid, "t": now})
-        f.parent.mkdir(parents=True, exist_ok=True)
-        h.write_json(f, claims)
-        ctx.log(f"START-CLAIM session={ctx.sid}")
-    except OSError:
-        pass
+        f = h.start_claims_file(ctx.root, ctx.cfg)
+        with h.start_claims_lock(ctx.root, ctx.cfg):
+            now = time.time()
+            claims = [c for c in (h.read_json(f, default=[]) or []) if now - c.get("t", 0) < h.CLAIM_TTL_SEC]
+            claims.append({"session": ctx.sid, "t": now, "ident": ident})
+            f.parent.mkdir(parents=True, exist_ok=True)
+            h.write_json(f, claims)
+        ctx.log(f"START-CLAIM session={ctx.sid} ident={ident}")
+    except h.LockBusy as e:
+        ctx.log(f"START-CLAIM-FAILED session={ctx.sid} {e}")
+        return f"start-claim を記録できませんでした（claim・meta は書いていません）: {e}。残留ロックでなければ少し待ってもう一度実行します"
+    except OSError as e:
+        ctx.log(f"START-CLAIM-FAILED session={ctx.sid} {e}")
+        return f"start-claim を記録できませんでした（claim・meta は書いていません）: {e}"
+    return None
 
 
 def on_pre_tool(ctx: Ctx) -> None:
@@ -697,7 +781,9 @@ def on_pre_tool(ctx: Ctx) -> None:
             ctx.log(f"DENY {res[0]} {tool}: {cmd[:200]}")
             deny(res[1], res[0])
         else:
-            record_start_claim(ctx, cmd)
+            failed = record_start_claim(ctx, cmd)
+            if failed:
+                deny(failed, "G-5")
         return
     if READ_TOOL_RX.match(tool) or not WRITE_TOOL_RX.search(tool):
         return

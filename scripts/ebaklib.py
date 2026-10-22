@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
-TOOLKIT_VERSION = "0.5.1"
+TOOLKIT_VERSION = "0.5.2"
 
 
 SPECKIT_PATHS = [".specify/**", "specs/**/*.md"]
@@ -214,41 +214,71 @@ class LockBusy(RuntimeError):
 
 
 class FileLock:
-    """Exclusive lock file (O_EXCL, holder PID inside, orphaned/stale locks are removed), same scheme as LandLock."""
+    """Exclusive lock on a lock file held with an OS byte-range / flock lock (the OS releases it when the holder
+    dies, so a crashed process never leaves a lock behind and no lock file is ever deleted by a waiter). The holder's
+    PID is written into the file for diagnosis only. `stale` is accepted for compatibility and ignored."""
+
+    LOCK_OFFSET = 1 << 30  # Windows: lock a byte far beyond EOF so that the PID text stays readable by others
 
     def __init__(self, path: Path, wait: float = CLAIM_LOCK_WAIT_SEC, stale: float = 120):
         self.path, self.wait, self.stale = Path(path), wait, stale
+        self._fd: Optional[int] = None
+
+    def _try_lock(self, fd: int) -> bool:
+        try:
+            if os.name == "nt":
+                import msvcrt
+                os.lseek(fd, self.LOCK_OFFSET, 0)
+                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except OSError:
+            return False
+
+    def _unlock(self, fd: int) -> None:
+        try:
+            if os.name == "nt":
+                import msvcrt
+                os.lseek(fd, self.LOCK_OFFSET, 0)
+                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(fd, fcntl.LOCK_UN)
+        except OSError:
+            pass
 
     def __enter__(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         deadline = time.time() + self.wait
         while True:
             try:
-                if self.path.exists() and (lock_orphaned(self.path) or time.time() - self.path.stat().st_mtime > self.stale):
-                    self.path.unlink()
-            except OSError:
-                pass
-            try:
-                fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-                os.write(fd, str(os.getpid()).encode())
-                os.close(fd)
-                return self
-            except FileExistsError:
-                if time.time() >= deadline:
-                    raise LockBusy(f"{self.path.name} を {self.wait:g} 秒以内に取得できませんでした（別の start・hook が処理中）")
-                time.sleep(0.02)
+                fd = os.open(str(self.path), os.O_CREAT | os.O_RDWR)
             except OSError as e:
-                raise LockBusy(f"{self.path.name} を作れませんでした: {e}")
+                raise LockBusy(f"{self.path.name} を開けませんでした: {e}")
+            if self._try_lock(fd):
+                self._fd = fd
+                try:
+                    os.ftruncate(fd, 0)
+                    os.lseek(fd, 0, 0)
+                    os.write(fd, str(os.getpid()).encode())
+                except OSError:
+                    pass
+                return self
+            os.close(fd)
+            if time.time() >= deadline:
+                raise LockBusy(f"{self.path.name} を {self.wait:g} 秒以内に取得できませんでした（別の start・hook が処理中）")
+            time.sleep(0.02)
 
     def __exit__(self, *exc):
-        for _ in range(100):  # on Windows another waiter reading the lock can make the delete fail for a moment
+        if self._fd is not None:
+            self._unlock(self._fd)
             try:
-                self.path.unlink()
-                return
-            except FileNotFoundError:
-                return
+                os.close(self._fd)
             except OSError:
-                time.sleep(0.01)
+                pass
+            self._fd = None
 
 
 def primary_tree_of(root: Path) -> Path:
@@ -390,7 +420,14 @@ def write_text_atomic(path: Path, text: str) -> None:
     try:
         with os.fdopen(fd, "wb") as fh:
             fh.write(data)
-        os.replace(tmp, path)
+        for attempt in range(100):  # on Windows a replace fails while another process has the target open for reading
+            try:
+                os.replace(tmp, path)
+                break
+            except PermissionError:
+                if attempt == 99:
+                    raise
+                time.sleep(0.01)
     except Exception:
         try:
             os.unlink(tmp)

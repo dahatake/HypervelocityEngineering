@@ -5,6 +5,15 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+## [0.5.2]
+
+- 複数 chat で conductor を同時に動かしたときの hook の誤拒否を無くす（FR-1074〜1077、NFR-OPS-009・010）。
+  - start-claim に start コマンドの識別子（`ident`）を持たせ、追記・消費・meta への持ち主の記録を排他（`start-claims.lock` を OS のファイルロックで保持。待ちは最大 10 秒。異常終了したプロセスのロックは OS が解放する）で行う。`run-state.py start` は自分の識別子と一致する claim だけを消費する（先着順の消費をやめた）。ロックを得られなければ claim・meta を書かずに失敗の理由を表示する。
+  - 所有者なし run の救済（R-2）を厳格化: 候補の run が 1 つ・session が特定でき・他 session の未消費 claim がないときだけ束縛する。持ち主が確定した run は束縛し直さない。
+  - 主の作業ツリーに置いた run（`require_worktree:false` など）では、持ち主と別の session の chat に run のゲート（G-5 の編集範囲・deploy・external_write など）を掛けない。役割境界（G-1〜G-3、G-6、force push の禁止）は残る（`users-guide/06-quality-gates.md`）。
+  - `/build template` の状態を session ごとのファイル（`template-request-<session>.json`）に分離。
+  - 修正: 「実行中は main に直接 commit・merge しない」を、`git -C <path>`・`cd <path>` が指す tree のブランチで判定する（run の worktree での commit の誤拒否）。
+
 - 1 run を 3 時間以内に収める（実行ログの分析: 実装 4 項目以上の run は全件 5.5 時間以上）。
   - `max_hours` の既定を 24 → 2.5 に変更（`limits.max_hours_default`）。上限は `limits.max_hours_cap`（既定 3。夜間実行などは設定で引き上げ可）、工程 6 のための残り時間は `limits.reserve_minutes`（既定 30 分）。`ebaklib.effective_max_hours` が `run-state.py time` / `status` / agentStop hook / `build-request.py` で共通に使われる。超過の許容は 1.25 倍 → +15 分。
   - `worktree_share`: `integrate.py prepare` が worktree の `node_modules` を、導入済みの主の作業ツリーへの junction / symlink にする（lock が同じときだけ。`pool --prune`・`clean-work.py` はリンクだけを外す）。
