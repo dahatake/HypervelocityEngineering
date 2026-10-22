@@ -22,6 +22,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as dt
 import json
 import os
@@ -110,28 +111,53 @@ def counts(queue: dict) -> Dict[str, int]:
     return c
 
 
-def take_start_claim(root: Path, cfg: dict) -> Optional[str]:
-    """Session id the hook recorded for this `start` (the oldest unexpired claim; see gate.record_start_claim)."""
-    cands = [root]
-    rc, out = h.git(["rev-parse", "--git-common-dir"], root)
-    if rc == 0 and out.strip():
-        common = Path(out.strip())
-        common = common if common.is_absolute() else root / common
-        cands.append(common.resolve().parent)
-    seen = set()
-    for r in cands:
-        f = h.work_dir(r, cfg) / ".ebak" / "start-claims.json"
-        if f in seen or not f.exists():
+def take_start_claim(root: Path, cfg: dict, locked: bool = False, ident: Optional[str] = None) -> Optional[str]:
+    """Session id the hook recorded for THIS `start` (FR-1074 AC-405/406; see gate.record_start_claim).
+
+    The claim is matched by the identifier of the start command (hash of its arguments; a child start inherits the
+    parent's through EABK_START_IDENT). A claim of another start is never taken (no oldest-first). Only when the hook
+    could not determine an identifier (claim without ident) and that claim is the only unexpired one is it used.
+    Reading and consuming happen under an exclusive lock; if the lock cannot be taken in PARAM-053 seconds the start
+    fails without writing anything."""
+    ident = ident or start_ident()
+    files = []
+    for f in (h.start_claims_file(root, cfg), h.work_dir(root, cfg) / ".ebak" / "start-claims.json"):
+        if f not in files:
+            files.append(f)
+    for f in files:
+        if not f.exists():
             continue
-        seen.add(f)
-        now = time.time()
-        claims = [c for c in (h.read_json(f, default=[]) or []) if now - c.get("t", 0) < 300 and c.get("session")]
-        if claims:
-            first = min(claims, key=lambda c: c.get("t", 0))
-            claims.remove(first)
-            h.write_json(f, claims)
-            return str(first["session"])
+        try:
+            with (contextlib.nullcontext() if locked else h.FileLock(f.with_name("start-claims.lock"), h.CLAIM_LOCK_WAIT_SEC)):
+                now = time.time()
+                claims = [c for c in (h.read_json(f, default=[]) or [])
+                          if now - c.get("t", 0) < h.CLAIM_TTL_SEC and c.get("session")]
+                mine = [c for c in claims if c.get("ident") and c.get("ident") == ident]
+                pick = None
+                if mine:
+                    if len({c["session"] for c in mine}) == 1:
+                        pick = min(mine, key=lambda c: c.get("t", 0))
+                elif len(claims) == 1 and not claims[0].get("ident"):
+                    pick = claims[0]  # identifier unavailable on the hook side and no other start can be meant
+                if pick is None:
+                    continue
+                claims.remove(pick)
+                h.write_json(f, claims)
+                return str(pick["session"])
+        except h.LockBusy as e:
+            raise SystemExit(f"ERROR run-state: start-claim の排他を得られず、run を始めませんでした（claim・meta は書いていません）: {e}")
     return None
+
+
+def start_ident() -> str:
+    """Identifier of this start command: inherited from the parent start (env), else from its own arguments."""
+    env = os.environ.get("EABK_START_IDENT")
+    if env:
+        return env
+    argv = sys.argv[1:]
+    if "start" in argv:
+        argv = argv[argv.index("start") + 1:]
+    return h.start_ident_from_text(" ".join(argv))
 
 
 def require_own_worktree(root: Path, cfg: dict, args) -> Optional[int]:
@@ -172,7 +198,8 @@ def require_own_worktree(root: Path, cfg: dict, args) -> Optional[int]:
         cmd += ["--options-file", str(Path(args.options_file).resolve())]
     elif getattr(args, "options", None):
         cmd += ["--options", args.options]
-    proc = subprocess.run(cmd, cwd=str(path), capture_output=True, text=True, encoding="utf-8", errors="replace")
+    env = dict(os.environ, EABK_START_IDENT=start_ident())  # the child start inherits the parent's identifier
+    proc = subprocess.run(cmd, cwd=str(path), capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     if proc.returncode != 0 or not (path / "scripts" / "run-state.py").exists():
         print(f"WORKTREE-REQUIRED {path}")
         print((proc.stdout + proc.stderr).strip()[:400])
@@ -475,6 +502,17 @@ def cmd_start(args) -> int:
         opts["parallel_workers"] = str(max(1, h.auto_workers() // (others + 1)))
         auto_note = (f"parallel_workers: auto -> {opts['parallel_workers']}（CPU {os.cpu_count()} コア・メモリ {h.total_memory_gb():.0f} GB から算出"
                      f"{f'。同時に動いている別の run {others} 件と分け合う' if others else ''}）")
+    try:
+        # FR-1074 AC-405: consuming the claim and recording the owner in meta happen under one exclusive lock
+        with h.start_claims_lock(root, cfg):
+            return _start_create(args, root, cfg, opts, auto_note)
+    except h.LockBusy as e:
+        print(f"ERROR run-state: start-claim・meta の排他を {h.CLAIM_LOCK_WAIT_SEC} 秒以内に得られず、run を始めませんでした"
+              f"（claim・meta は書いていません）: {e}")
+        return 5
+
+
+def _start_create(args, root: Path, cfg: dict, opts: dict, auto_note: str) -> int:
     rid = args.run_id or h.new_run_id()
     rdir = h.run_dir(root, cfg, rid)
     n = 1
@@ -497,7 +535,7 @@ def cmd_start(args) -> int:
         "run_id": rid, "status": "active", "started_at": h.now_iso(), "finished_at": None,
         "head_at_start": h.head_commit(root), "branch_at_start": start_branch,
         "integration_branch": branch, "options": opts, "stage": 0,
-        "stages_done": [], "ledger_strict": False, "session_id": getattr(args, "session_id", None) or take_start_claim(root, cfg),
+        "stages_done": [], "ledger_strict": False, "session_id": getattr(args, "session_id", None) or take_start_claim(root, cfg, locked=True),
         "toolkit": h.TOOLKIT_VERSION,
         "human_interventions": [{"at": h.now_iso(), "kind": "request", "note": ""}],
     }
