@@ -1154,10 +1154,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_run_owned_cleanup.py::test_cleanup_preserves_unrelated_diff_and_all_final_verifiers_exit_zero",
       "canary": false,
-      "status": "fail",
-      "last_commit": "bd82e8e7",
-      "last_run_at": "2026-10-23T01:40:26+09:00",
-      "evidence": "work/runs/adhoc-202610230133/logs/system-test/E2E-035-202610230135.log",
+      "status": "pass",
+      "last_commit": "af180a13",
+      "last_run_at": "2026-10-23T05:48:31+09:00",
+      "evidence": "work/runs/202610230339/logs/system-test/E2E-035-202610230544.log",
       "history": [
         {
           "at": "2026-10-10T10:42:51+09:00",
@@ -4733,10 +4733,10 @@
       "layer": "nonfunctional",
       "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_cleanup_preserves_unrelated_git_state_and_all_post_cleanup_gates_pass",
       "canary": false,
-      "status": "fail",
-      "last_commit": "bd82e8e7",
-      "last_run_at": "2026-10-23T01:40:26+09:00",
-      "evidence": "work/runs/adhoc-202610230133/logs/system-test/IT-004-202610230136.log",
+      "status": "pass",
+      "last_commit": "af180a13",
+      "last_run_at": "2026-10-23T05:48:31+09:00",
+      "evidence": "work/runs/202610230339/logs/system-test/IT-004-202610230544.log",
       "history": [
         {
           "at": "2026-10-10T10:43:10+09:00",
