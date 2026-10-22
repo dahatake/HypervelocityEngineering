@@ -519,7 +519,8 @@ def test_check_without_data_layer_exits_1_and_points_to_the_guide(tmp_path, caps
 def test_start_without_data_layer_does_not_serve_and_explains(tmp_path, capsys):
     assert studio.main(["--repo", str(tmp_path), "--no-open"]) == 1
     err = capsys.readouterr().err
-    assert "no EABK data layer" in err and "users-guide" in err
+    # 導入先では users-guide が EABK-docs に改名されるため、実体のガイドパス（studio.GUIDE）で確認する
+    assert "no EABK data layer" in err and studio.GUIDE in err
 
 
 def test_role_sets_the_first_screen(repo, monkeypatch, capsys):

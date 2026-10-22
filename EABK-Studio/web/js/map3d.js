@@ -591,7 +591,7 @@ function mountGraph(host) {
 
   return {
     destroy() {
-      if (window.eabkView === viewApi3) delete window.eabkView;
+      if (window.eabkView === viewApi3) window.eabkView = undefined;
       if (window.__eabk3d === hook3) delete window.__eabk3d;
       dead = true; cancelAnimationFrame(raf); stopTour(); rig.destroy(); rig.el.remove(); ro.disconnect(); offs.forEach((f) => f()); hideTip();
       scene.traverse((o) => { o.geometry?.dispose?.(); o.material?.dispose?.(); });

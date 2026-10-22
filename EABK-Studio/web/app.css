@@ -42,6 +42,11 @@ input[type=checkbox],input[type=radio]{width:var(--size-icon-lg);height:var(--si
 .tabs{flex:0 0 auto;flex-wrap:nowrap}
 .top .search{margin-left:auto}
 .top .chip,.top #personaBar button,.top #lang{white-space:nowrap}
+/* NFR-UX-002: 配置の切替（data-layout は layout.js が設定。default は何も上書きしない） */
+.layout-ctl{display:inline-flex;gap:var(--space-1);flex-wrap:nowrap}
+html[data-layout=compact] #view{padding:var(--space-2)}
+html[data-layout=compact] .top{padding:var(--space-1) var(--space-2)}
+html[data-layout=wide] #view{padding-inline:var(--space-6)}
 .draw{animation:draw var(--duration-slow) var(--ease-decelerate) both;stroke-dasharray:var(--len)}
 @keyframes draw{from{stroke-dashoffset:var(--len)}to{stroke-dashoffset:0}}
 .tabs a{padding:var(--space-1) var(--space-3);min-height:var(--size-control);border-radius:var(--radius-md);color:var(--color-fg-muted);text-decoration:none;white-space:nowrap;transition:background var(--duration-fast),color var(--duration-fast);display:flex;gap:var(--space-2);align-items:center}

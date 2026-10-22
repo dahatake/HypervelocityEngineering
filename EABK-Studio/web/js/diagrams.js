@@ -535,6 +535,6 @@ export function mount(host) {
   const refresh = () => { applyDim(body); if (erLink) erLink(); three?.setSelected?.(store.selected); };
   const offs = [store.on('select', refresh), store.on('hover', refresh), store.on('model', render), onLang(render), offDim];
   body.addEventListener('click', (e) => { if (e.target === body || e.target.tagName === 'svg') store.clear(); });
-  return { destroy() { offs.forEach((f) => f()); three?.destroy?.(); embedded?.destroy?.(); hideTip(); if (window.eabkView === view) delete window.eabkView; } };
+  return { destroy() { offs.forEach((f) => f()); three?.destroy?.(); embedded?.destroy?.(); hideTip(); if (window.eabkView === view) window.eabkView = undefined; } };
 }
 

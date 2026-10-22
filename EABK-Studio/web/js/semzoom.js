@@ -540,7 +540,7 @@ export function mountShell(host, opts) {
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
       cancelAnimationFrame(raf);
-      if (window.eabkView === eabkView) delete window.eabkView;
+      if (window.eabkView === eabkView) window.eabkView = undefined;
       renderer.destroy?.();
     },
   };

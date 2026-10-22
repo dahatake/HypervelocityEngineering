@@ -540,7 +540,7 @@ function mountGraph(host) {
     },
   };
   window.eabkView = viewApi;
-  return { destroy() { if (window.eabkView === viewApi) delete window.eabkView; dead = true; cancelAnimationFrame(raf); stopTour(); ro.disconnect(); offs.forEach((f) => f()); hideTip(); } };
+  return { destroy() { if (window.eabkView === viewApi) window.eabkView = undefined; dead = true; cancelAnimationFrame(raf); stopTour(); ro.disconnect(); offs.forEach((f) => f()); hideTip(); } };
 }
 
 // FR-1027..FR-1029: when the model has entity relations or columns, this route opens the entity view (semantic zoom) first;

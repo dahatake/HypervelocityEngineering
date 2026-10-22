@@ -6,6 +6,11 @@ import { installXref } from './xref.js';
 import { decorate, mountStructure, mountConsistency, mountMaintenance } from './insights.js';
 import { dimToggle, dimState, registerDim, hasDimHandler, runDim, headerDimToggle, publishDim, onHeaderDim } from './dim.js';
 import { cameraCommands } from './camera3d.js';
+import { changeLayout, resetLayout } from './layout.js';
+
+// NFR-UX-002 AC-015/041: 配置の変更・既定へ戻す。検索語・選択・絞り込みは再描画しないので保たれる。
+document.querySelector('[data-testid="layout-change"]')?.addEventListener('click', changeLayout);
+document.querySelector('[data-testid="layout-reset"]')?.addEventListener('click', resetLayout);
 
 // FR-1066: the header's display-mode switch is always there; each screen publishes what it supports (publishDim).
 const headerDimHost = document.getElementById('headerDim');
@@ -41,6 +46,7 @@ const view = document.getElementById('view');
 const nav = document.getElementById('nav');
 const navDesc = document.getElementById('navDesc');
 let current = null, token = 0, fingerprint = null, modelError = null;
+const MODS = new Map();
 
 const personaBar = document.getElementById('personaBar');
 for (const [name, glyph] of [['Product Manager', 'goal'], ['Architect', 'structure'], ['Software Engineer', 'source']]) {
@@ -52,7 +58,9 @@ for (const [name, glyph] of [['Product Manager', 'goal'], ['Architect', 'structu
 }
 
 const routeName = () => { const r = (location.hash.replace(/^#\/?/, '') || 'dashboard').split('?')[0]; return ROUTES[r] ? r : 'dashboard'; };
-const isSnapshotLink = () => new URLSearchParams(location.hash.split('?')[1] || '').has('select');
+// 画面撮影用の固定表示（ヘッダー非表示・アニメーション停止）は、明示した `snapshot` 付きのリンクだけ。
+// `select=` だけの通常のディープリンクでは、ヘッダー（検索・配置の変更/復元）を使えるままにする（AC-015/041）。
+const isSnapshotLink = () => new URLSearchParams(location.hash.split('?')[1] || '').has('snapshot');
 
 // Deep links: #/map2d?select=FR-001 or #/tables?q=keyword (applied once per navigation).
 let linkDone = '';
@@ -142,7 +150,9 @@ async function route() {
   // 画面の部品を読み込む間は、前の画面を残す（描画の空白を作らない）。最初の描画で view が空のときだけ読み込み中の表示を置く
   if (!view.firstChild) { view.replaceChildren(host); host.append(el('div', { class: 'sr-only', role: 'status' }, t('loading'))); }
   try {
-    const mod = ROUTES[name].mount ? { mount: ROUTES[name].mount } : await ROUTES[name].load();
+    // 読み込み済みの画面部品は await せずに（同じタスクの中で）描画する。同一文書内のハッシュ移動の直後に画面が確定している
+    const mod = ROUTES[name].mount ? { mount: ROUTES[name].mount } : (MODS.get(name) || await ROUTES[name].load());
+    if (!ROUTES[name].mount) MODS.set(name, mod);
     if (my !== token) return;
     current?.destroy?.();
     current = null;
