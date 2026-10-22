@@ -14,6 +14,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -202,6 +203,108 @@ def lock_orphaned(path: Path) -> bool:
     except OSError:
         return False
     return txt.isdigit() and not pid_alive(int(txt))
+
+
+CLAIM_LOCK_WAIT_SEC = 10  # PARAM-053: upper bound for waiting on the start-claim / meta lock
+CLAIM_TTL_SEC = 300
+
+
+class LockBusy(RuntimeError):
+    """The exclusive lock could not be taken within the wait limit."""
+
+
+class FileLock:
+    """Exclusive lock file (O_EXCL, holder PID inside, orphaned/stale locks are removed), same scheme as LandLock."""
+
+    def __init__(self, path: Path, wait: float = CLAIM_LOCK_WAIT_SEC, stale: float = 120):
+        self.path, self.wait, self.stale = Path(path), wait, stale
+
+    def __enter__(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        deadline = time.time() + self.wait
+        while True:
+            try:
+                if self.path.exists() and (lock_orphaned(self.path) or time.time() - self.path.stat().st_mtime > self.stale):
+                    self.path.unlink()
+            except OSError:
+                pass
+            try:
+                fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.write(fd, str(os.getpid()).encode())
+                os.close(fd)
+                return self
+            except FileExistsError:
+                if time.time() >= deadline:
+                    raise LockBusy(f"{self.path.name} を {self.wait:g} 秒以内に取得できませんでした（別の start・hook が処理中）")
+                time.sleep(0.02)
+            except OSError as e:
+                raise LockBusy(f"{self.path.name} を作れませんでした: {e}")
+
+    def __exit__(self, *exc):
+        for _ in range(100):  # on Windows another waiter reading the lock can make the delete fail for a moment
+            try:
+                self.path.unlink()
+                return
+            except FileNotFoundError:
+                return
+            except OSError:
+                time.sleep(0.01)
+
+
+def primary_tree_of(root: Path) -> Path:
+    """The primary checkout of the repository that `root` belongs to (root itself when it is not a linked worktree)."""
+    g = root / ".git"
+    if g.is_file():
+        rc, out = git(["rev-parse", "--git-common-dir"], root)
+        if rc == 0 and out.strip():
+            common = Path(out.strip())
+            common = common if common.is_absolute() else root / common
+            return common.resolve().parent
+    return root
+
+
+def start_claims_file(root: Path, cfg: dict) -> Path:
+    return work_dir(primary_tree_of(root), cfg) / ".ebak" / "start-claims.json"
+
+
+def start_claims_lock(root: Path, cfg: dict, wait: float = CLAIM_LOCK_WAIT_SEC) -> FileLock:
+    return FileLock(start_claims_file(root, cfg).with_name("start-claims.lock"), wait)
+
+
+_QUOTES = "\"'`"
+
+
+def start_ident_from_text(args_text: str) -> str:
+    """Identifier of one `run-state.py start` command: hash of its arguments with quotes and blanks removed, so the
+    hook (which sees the command line) and start (which sees argv) compute the same value."""
+    norm = "".join(ch for ch in args_text if not ch.isspace() and ch not in _QUOTES)
+    return hashlib.sha1(norm.encode("utf-8")).hexdigest()[:16]
+
+
+def start_ident_from_command(cmd: str) -> Optional[str]:
+    """Identifier taken from a shell command line; None when it cannot be determined reliably (variables, substitution)."""
+    m = re.search(r"run-state\.py['\"]?\s+start\b", cmd)
+    if not m:
+        return None
+    rest, out, q = cmd[m.end():], [], ""
+    for ch in rest:
+        if q:
+            if ch == q:
+                q = ""
+            out.append(ch)
+        elif ch in "\"'":
+            q = ch
+            out.append(ch)
+        elif ch in "|;&<>\r\n":
+            if ch in "<>" and out and out[-1].isdigit() and (len(out) == 1 or out[-2].isspace()):
+                out.pop()  # file descriptor of a redirection such as 2>&1
+            break
+        else:
+            out.append(ch)
+    text = "".join(out)
+    if "$" in text or "`" in text:
+        return None
+    return start_ident_from_text(text)
 
 
 def new_run_id() -> str:
