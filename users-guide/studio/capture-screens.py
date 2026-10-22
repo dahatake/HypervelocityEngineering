@@ -121,7 +121,7 @@ def main():
             repo_name = page.evaluate("fetch('/api/model').then(r => r.json()).then(m => m.meta.name)")
 
             def shoot(image_id, route, query="", select="FR-001", full_page=False):
-                page.goto(f"http://127.0.0.1:{port}/#/{route}?select={select}{query}")
+                page.goto(f"http://127.0.0.1:{port}/#/{route}?select={select}{query}&snapshot=1")
                 expect(page.locator("#view")).to_contain_text(f"Snapshot ready: {route}")
                 if select:
                     expect(page.locator("#drawer")).to_be_visible()
