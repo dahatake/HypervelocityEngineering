@@ -149,7 +149,9 @@
     "AC-379": "sha256:879df9efc754b69f",
     "AC-391": "sha256:212c3fdbc5154c3f",
     "AC-392": "sha256:6d08c04873c90127",
-    "AC-395": "sha256:5f92fc2243db302d"
+    "AC-395": "sha256:5f92fc2243db302d",
+    "AC-407": "sha256:4bb43ef1566105d4",
+    "AC-413": "sha256:71ddd978fed28074"
   },
   "cases": [
     {
@@ -7937,6 +7939,81 @@
           "by": "test-designer",
           "change": "command: \"python -m pytest tests/system/e2e/test_studio_header_row_system.py -k 'ac395'\" -> 'python -m pytest tests/system/e2e/test_studio_header_row_system.py -k ac395'",
           "reason": "Windows で -k の単一引用符が失敗するため引用符を除去"
+        }
+      ]
+    },
+    {
+      "id": "E2E-219",
+      "requirement_ids": [
+        "FR-1074"
+      ],
+      "ac_ids": [
+        "AC-407"
+      ],
+      "title": "同時に開始した複数 chat が、それぞれ自分の開始した run の持ち主になり、hook で拒否されない",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/test_parallel_run_ownership_system.py::test_concurrent_chats_each_own_the_run_they_started_ac407",
+      "canary": true,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-22T22:46:57+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "AC-407 system ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-220",
+      "requirement_ids": [
+        "FR-1074"
+      ],
+      "ac_ids": [
+        "AC-407"
+      ],
+      "title": "異常系: 開始していない chat は run の持ち主を奪えない",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/test_parallel_run_ownership_system.py::test_other_chat_does_not_take_over_a_started_run_ac407",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-22T22:46:59+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "AC-407 異常系"
+        }
+      ]
+    },
+    {
+      "id": "E2E-221",
+      "requirement_ids": [
+        "FR-1076"
+      ],
+      "ac_ids": [
+        "AC-413"
+      ],
+      "title": "主ツリーの run 中、別 chat の無関係な編集は通り、持ち主の範囲外の編集は拒否される",
+      "layer": "e2e",
+      "command": "python -m pytest -q tests/system/test_parallel_run_ownership_system.py::test_primary_tree_run_does_not_gate_other_chat_edits_ac413",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-22T22:47:02+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "AC-413 system ケースを作成"
         }
       ]
     }
