@@ -84,9 +84,24 @@ def studio():
     proc.terminate()
 
 
+_OPEN_CONTEXTS = []
+
+
+@pytest.fixture(autouse=True)
+def _close_contexts():
+    # Every page opened by _open runs a WebGL rAF loop; leaked contexts starve later tests of CPU (AC-389 fps sampling).
+    yield
+    while _OPEN_CONTEXTS:
+        try:
+            _OPEN_CONTEXTS.pop().close()
+        except Exception:
+            pass
+
+
 def _open(studio, init=None, reduced=False, wait_nodes=True):
     browser, url = studio
     ctx = browser.new_context(viewport={"width": 1400, "height": 900}, reduced_motion="reduce" if reduced else "no-preference")
+    _OPEN_CONTEXTS.append(ctx)
     if init:
         ctx.add_init_script(init)
     page = ctx.new_page()
