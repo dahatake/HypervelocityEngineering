@@ -153,3 +153,81 @@ def test_execute_rechecks_each_candidate_immediately_before_delete(tmp_path, mon
     )
     assert calls and ok and protected
     assert candidate.result == "保持" and candidate.reason == "state changed"
+
+
+REPORT = """# run-report
+- result: 全件完了
+- main_integration: pass
+- cleanup_authorization: pass
+- main_commit: abc
+- complete_check: pass
+- final_verify: pass
+- target_tests: pass
+- post_integration_verify: pass
+- 清掃前版 run-report 確定: pass
+- cleanup_candidates:
+- protected_assets:
+- candidate_results: pending
+"""
+
+
+def _git(cwd, *args):
+    import subprocess
+    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout
+
+
+def _make_run_worktree(tmp_path, rid="209901010101"):
+    import json
+    primary = tmp_path / "repo"
+    primary.mkdir()
+    _git(primary, "init", "-b", "main")
+    _git(primary, "config", "user.email", "t@example.com")
+    _git(primary, "config", "user.name", "t")
+    (primary / ".gitignore").write_text("/work/\n", encoding="utf-8", newline="\n")
+    _git(primary, "add", ".")
+    _git(primary, "commit", "-m", "init")
+    wt = tmp_path / f"repo-run-{rid}"
+    _git(primary, "worktree", "add", "-b", f"run/{rid}", str(wt))
+    (wt / "feature.txt").write_text("x\n", encoding="utf-8", newline="\n")
+    _git(wt, "add", ".")
+    _git(wt, "commit", "-m", "feature")
+    _git(primary, "merge", "--ff-only", f"run/{rid}")
+    run = wt / "work" / "runs" / rid
+    run.mkdir(parents=True)
+    (run / "run-report.md").write_text(REPORT, encoding="utf-8", newline="\n")
+    (run / "meta.json").write_text(json.dumps({
+        "run_id": rid, "status": "finished", "result": "全件完了",
+        "integration_branch": f"run/{rid}",
+    }), encoding="utf-8", newline="\n")
+    (run / "queue.json").write_text(json.dumps({"run_id": rid, "items": []}),
+                                    encoding="utf-8", newline="\n")
+    return primary, wt
+
+
+# toolkit: run worktree cleanup
+def test_clean_work_removes_own_run_worktree_and_keeps_report(tmp_path, monkeypatch, capsys):
+    rid = "209901010101"
+    primary, wt = _make_run_worktree(tmp_path, rid)
+    monkeypatch.chdir(wt)
+    assert clean_work.main(["--dry-run", "--root", str(wt)]) == 0
+    assert "DELETE run-worktree" in capsys.readouterr().out
+    assert wt.exists()
+    assert clean_work.main(["--root", str(wt)]) == 0
+    assert not wt.exists()
+    assert _git(primary, "branch", "--list", f"run/{rid}").strip() == ""
+    report = (primary / "work" / "runs" / rid / "run-report.md").read_text(encoding="utf-8")
+    assert "候補別結果" in report
+    assert "run-worktree" in report and "削除済み" in report
+
+
+# toolkit: run worktree cleanup
+def test_clean_work_keeps_dirty_run_worktree(tmp_path, monkeypatch):
+    rid = "209901010101"
+    primary, wt = _make_run_worktree(tmp_path, rid)
+    (wt / "wip.txt").write_text("uncommitted\n", encoding="utf-8", newline="\n")
+    monkeypatch.chdir(wt)
+    assert clean_work.main(["--root", str(wt)]) == 1
+    assert wt.exists()
+    assert _git(primary, "branch", "--list", f"run/{rid}").strip() != ""
+    report = (wt / "work" / "runs" / rid / "run-report.md").read_text(encoding="utf-8")
+    assert "run-worktree" in report and "保持" in report

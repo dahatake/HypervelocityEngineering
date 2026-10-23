@@ -40,7 +40,7 @@ Windows の core.autocrlf で CRLF になったファイルは、`tools/install.
 | 孤児プロセス（node・ブラウザーなど）が残って重い | `python scripts/watch.py scan` で確認し、`python scripts/watch.py reap`（必要なら `--under <PATH>`）で回収します。詳細は [watch.py](05-scripts-reference.md#watchpy) |
 | 項目が 60 分を超えて `doing` のまま（`STUCK`） | `python scripts/watch.py stuck` で確認します。conductor は結果を返させるか `integrate.py abandon <item>` で todo に戻します |
 | `clean-work.py` が run を `KEEP` する | 全件完了、main 統合、統合後 verify、清掃前版 report、または所有証拠のいずれかが未達です。表示された保持理由を直してください。失敗・中止・未達 run は自動期限なく保持されます |
-| `clean-work.py` が非 0 で止まる | dirty、パス衝突、Windows のファイルロック、Git 登録の変化などで候補の削除に失敗しました。`run-report.md` の候補別結果を確認し、利用中のファイルを閉じるなど原因を除いて同じコマンドを再実行します。削除済み候補は成功済みとして扱われ、残存候補だけが再検査されます |
+| `clean-work.py` が非 0 で止まる | dirty、パス衝突、Windows のファイルロック、Git 登録の変化などで候補の削除に失敗しました。run 専用 worktree に未コミット変更があると `run-worktree` と統合ブランチは保持されます（コミットか破棄して再実行）。`run-report.md` の候補別結果を確認し、利用中のファイルを閉じるなど原因を除いて同じコマンドを再実行します。削除済み候補は成功済みとして扱われ、残存候補だけが再検査されます |
 | 前の run が残っていて、新しい依頼が RESUME になる | 前の run を終わらせるか、`work/current-run.txt` を削除してから依頼します |
 | `LAND-WAIT`（取り込みが待たされる） | 主の作業ツリーが base（main）をチェックアウト中で、その未コミットの変更が取り込む変更と同じファイルに重なっている。変更を commit か退避すると、同じ `run-state.py land` で取り込めます |
 | `LAND-CONFLICT`（競合したファイルの一覧つき） | 自動同期（base の取り込み直し）で解消できないファイルがある。run の worktree で `git merge main` して競合を解消し、`verify.py --quick` が通ってから `run-state.py land` を再実行します（`tests/system/ledger.json` だけの競合は自動で解消されます） |
