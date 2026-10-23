@@ -198,7 +198,7 @@ def test_verify_parallel_group_runs_concurrently(sample):
 def test_ledger_run_jobs_runs_cases_concurrently_and_serial_alone(sample):
     sleep = "python -c \"import time;time.sleep(2.5)\""
     for i in range(4):
-        sample.py("ledger.py", "--by", "t", "add", "--req", "FR-001", "--ac", "AC-001", "--title", f"c{i}", "--layer", "e2e", "--command", sleep.replace("2.5)", f"2.5);{i}"))
+        sample.py("ledger.py", "--by", "t", "add", "--req", "FR-001", "--ac", "AC-001", "--title", f"c{i}", "--layer", "e2e", "--command", sleep.replace("2.5)", f"2.5);{i}"), "--new-case-reason", "並列実行の検証用")
     data = json.loads(sample.read("tests/system/ledger.json"))
     data["cases"][-1]["serial"] = True
     sample.write("tests/system/ledger.json", json.dumps(data))
@@ -261,7 +261,7 @@ def test_kpi_reports_flow_metrics(sample):
 
 def _add_cases(sample, cmds):
     for i, cmd in enumerate(cmds):
-        sample.py("ledger.py", "--by", "t", "add", "--req", "FR-001", "--ac", "AC-001", "--title", f"d{i}", "--layer", "e2e", "--command", cmd, check=True)
+        sample.py("ledger.py", "--by", "t", "add", "--req", "FR-001", "--ac", "AC-001", "--title", f"d{i}", "--layer", "e2e", "--command", cmd, "--new-case-reason", "並列実行の検証用", check=True)
 
 
 def test_ledger_run_executes_identical_command_once(sample):
@@ -275,7 +275,7 @@ def test_ledger_run_executes_identical_command_once(sample):
 
 def _add_canaries(sample, cmds):
     for i, cmd in enumerate(cmds):
-        sample.py("ledger.py", "--by", "t", "add", "--req", "FR-001", "--ac", "AC-001", "--title", f"k{i}", "--layer", "e2e", "--command", cmd, "--canary", check=True)
+        sample.py("ledger.py", "--by", "t", "add", "--req", "FR-001", "--ac", "AC-001", "--title", f"k{i}", "--layer", "e2e", "--command", cmd, "--canary", "--new-case-reason", "並列実行の検証用", check=True)
 
 
 def test_ledger_run_canary_stage_runs_in_parallel(sample):

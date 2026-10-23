@@ -9,6 +9,8 @@ Usage:
   python scripts/rdcheck.py index [ID ...] [--kind 上位|出典|参照|実装|検証|使用] [--json]  # 種類つきの関係（都度生成）
   python scripts/rdcheck.py stats                   # metrics for rd-audit
   python scripts/rdcheck.py digest [AC ...]         # current AC digests (PARAM expanded)
+  python scripts/rdcheck.py similar "文章"|ID [--kind FR|AC] [--top 5] [--json]  # 新規に作る前に似た既存の項目を探す
+  python scripts/rdcheck.py similar --pairs [--min 0.35]  # 似た要求・受入基準の組（統合の候補）
 
 Exit code of `check`: 0 = no error, 1 = at least one error.
 One finding per line: "<ERROR|WARN> <CHK-ID> <location> <message>".
@@ -144,7 +146,7 @@ class Checker:
         for fn in (self.chk01_02, self.chk03, self.chk04, self.chk05, self.chk06_22, self.chk07_08,
                    self.chk09, self.chk10_11, self.chk12, self.chk13_14_15, self.chk16, self.chk17,
                    self.chk18, self.chk19, self.chk20, self.chk21, self.chk23, self.chk25, self.chk26,
-                   self.chk27, self.chk24, self.chk28, self.chk29, self.chk30, self.chk31, self.chk32):
+                   self.chk27, self.chk24, self.chk28, self.chk29, self.chk30, self.chk31, self.chk32, self.chk33):
             fn()
         return self.findings
 
@@ -1055,6 +1057,13 @@ class Checker:
                 if n > limit and re.match(r"^領域\s*[:：]", title.strip()):
                     self.warn("CHK-32", self.loc(rel, ln), f"節「{title}」の直下の項目が {n} 件で、上限 {limit} 件（PARAM-043）を超えています")
 
+    # CHK-33: System Test の重複（同じ受入基準を保証する有効なケースが複数ある）
+    def chk33(self) -> None:
+        led = h.mf(self.cfg, "ledger")
+        for a, ids in sorted(h.shared_ac_cases(self.ledger).items()):
+            self.warn("CHK-33", led, f"{a} を有効なケース {'、'.join(ids)} が重複して保証しています。1 件に統合し"
+                      f"（ledger.py update で command・ac を寄せる）、残りは ledger.py block で停止します")
+
 # ---------------------------------------------------------------------- commands
 
 def cmd_check(args, root, cfg) -> int:
@@ -1252,8 +1261,101 @@ def cmd_stats(args, root, cfg) -> int:
         "競合": len(re.findall(r"競合", alltext)),
         "open_questions": sum(1 for q in doc.questions.values() if not q["answered"]),
         "ledger": {s: sum(1 for c in ledger.get("cases", []) if c.get("status") == s) for s in ("pass", "fail", "blocked", "not_run")},
+        "similar_pairs": len(similar_pairs(doc)),
+        "ledger_shared_acs": len(h.shared_ac_cases(ledger)),
     }
     print(json.dumps(stats, ensure_ascii=False, indent=2))
+    return 0
+
+
+# ---------------------------------------------------------------------- similar (重複の予防)
+# 新しい要求・受入基準を書く前に、似た既存の項目を探す（似ていれば新規に作らず既存を変更する）。
+SIMILAR_MIN = 0.2   # similar TEXT の既定の下限
+PAIRS_MIN = 0.35    # similar --pairs / stats の重複候補の既定の下限
+_SIM_ID_RE = re.compile(r"\{?PARAM-\d+\}?|\b[A-Z]+(?:-[A-Z]+)?-\d{3,}\b")
+
+
+def _grams(text: str) -> Set[str]:
+    t = _SIM_ID_RE.sub("", h.strip_md(text or ""))
+    t = re.sub(r"[\s\W_]+", "", t.lower())
+    return {t[i:i + 2] for i in range(len(t) - 1)}
+
+
+def _sim(a: Set[str], b: Set[str]) -> float:
+    return len(a & b) / len(a | b) if a and b else 0.0
+
+
+def similar_items(doc, kind: str = "all") -> List[tuple]:
+    """(id, 種別, 題名・本文, grams) — 廃止・却下の要求と、その受入基準は除く。"""
+    out: List[tuple] = []
+    for r in doc.requirements.values():
+        if r.state in ("廃止", "却下"):
+            continue
+        if kind in ("all", "FR"):
+            text = f"{r.title} {r.fields.get('要求', '')}"
+            out.append((r.id, "REQ", r.title, _grams(text)))
+        if kind in ("all", "AC"):
+            for a in r.acs:
+                ac = doc.acs.get(a)
+                if ac:
+                    out.append((ac.id, "AC", ac.text, _grams(ac.text)))
+    return out
+
+
+def similar_pairs(doc, kind: str = "all", min_score: float = PAIRS_MIN) -> List[tuple]:
+    items = similar_items(doc, kind)
+    req_of = {a.id: a.requirement for a in doc.acs.values()}
+    pairs = []
+    for i, x in enumerate(items):
+        for y in items[i + 1:]:
+            if x[1] != y[1]:
+                continue
+            # 同じ要求の中の受入基準どうしは、正常系・異常系で似るのが普通なので候補にしない
+            if x[1] == "AC" and req_of.get(x[0]) == req_of.get(y[0]):
+                continue
+            s = _sim(x[3], y[3])
+            if s >= min_score:
+                pairs.append((round(s, 2), x, y))
+    pairs.sort(key=lambda p: -p[0])
+    return pairs
+
+
+def cmd_similar(args, root, cfg) -> int:
+    doc = h.parse_requirements(root, cfg)
+    kind = args.kind or "all"
+    if args.pairs:
+        min_score = args.min if args.min is not None else PAIRS_MIN
+        pairs = similar_pairs(doc, kind, min_score)
+        if args.json:
+            print(json.dumps([{"score": s, "a": x[0], "b": y[0], "a_text": x[2][:80], "b_text": y[2][:80]} for s, x, y in pairs],
+                             ensure_ascii=False, indent=2))
+        else:
+            for s, x, y in pairs[:args.top or None]:
+                print(f"{s:.2f}\t{x[0]}\t{y[0]}\t{x[2][:40]} | {y[2][:40]}")
+            print(f"similar: pairs={len(pairs)} min={min_score}（似た組は統合を検討し、残す方を変更・もう一方を廃止します）")
+        return 0
+    if not args.text:
+        raise SystemExit("ERROR similar: 文章か ID を指定します（全体の重複候補は --pairs）")
+    query = " ".join(args.text)
+    items = similar_items(doc, kind)
+    self_id = None
+    if re.fullmatch(r"[A-Z]+(?:-[A-Z]+)?-\d{3,}", query):
+        hit = next((it for it in items if it[0] == query), None)
+        if not hit:
+            raise SystemExit(f"ERROR similar: {query} が要求定義書にありません（廃止・却下は対象外）")
+        self_id, q = query, hit[3]
+    else:
+        q = _grams(query)
+    min_score = args.min if args.min is not None else SIMILAR_MIN
+    scored = sorted(((round(_sim(q, it[3]), 2), it) for it in items if it[0] != self_id), key=lambda p: -p[0])
+    scored = [p for p in scored if p[0] >= min_score][:args.top or 5]
+    if args.json:
+        print(json.dumps([{"score": s, "id": it[0], "kind": it[1], "text": it[2][:120]} for s, it in scored], ensure_ascii=False, indent=2))
+    else:
+        for s, it in scored:
+            print(f"{s:.2f}\t{it[0]}\t{it[2][:60]}")
+        print(f"similar: hits={len(scored)} min={min_score}"
+              + ("（似た項目があれば、新規に作らず既存の要求・受入基準を変更します）" if scored else "（似た項目はありません。新規に作成できます）"))
     return 0
 
 
@@ -1474,11 +1576,19 @@ def main(argv=None) -> int:
     tr.add_argument("--json", action="store_true")
     hi = sub.add_parser("hierarchy", help="種類→区分→領域→項目の階層（FR-1062。都度生成。保存しない）")
     hi.add_argument("--json", action="store_true")
+    si = sub.add_parser("similar", help="似た既存の要求・受入基準を探す（新規に作る前に。--pairs で全体の重複候補）")
+    si.add_argument("text", nargs="*", help="新しく書こうとする要求・受入基準の文章、または既存の ID")
+    si.add_argument("--kind", choices=["FR", "AC", "all"], help="FR は要求（NFR を含む）、AC は受入基準。既定は両方")
+    si.add_argument("--pairs", action="store_true", help="要求どうし・受入基準どうしの似た組を一覧にする")
+    si.add_argument("--min", type=float, default=None, help=f"類似度の下限（既定 {SIMILAR_MIN}、--pairs は {PAIRS_MIN}）")
+    si.add_argument("--top", type=int, default=None, help="表示する件数（既定 5、--pairs は全件）")
+    si.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     root = Path(args.root).resolve() if args.root else h.repo_root()
     cfg = h.load_config(root)
     return {"check": cmd_check, "show": cmd_show, "list": cmd_list, "stats": cmd_stats, "digest": cmd_digest,
-            "trace": cmd_trace, "index": cmd_index, "hierarchy": cmd_hierarchy}[args.cmd](args, root, cfg)
+            "trace": cmd_trace, "index": cmd_index, "hierarchy": cmd_hierarchy,
+            "similar": cmd_similar}[args.cmd](args, root, cfg)
 
 
 if __name__ == "__main__":

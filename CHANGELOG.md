@@ -5,6 +5,12 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- 要求・受入基準・System Test のケースを増やしすぎない（読む量・トークン・実行時間の削減）。
+  - `rdcheck.py similar "<文>"|ID [--kind FR|AC]`: 新規に作る前に、似た既存の要求・受入基準を類似度の高い順に表示。`similar --pairs` で統合の候補の組を一覧。`rdcheck.py stats` に `similar_pairs`・`ledger_shared_acs` を追加。
+  - `ledger.py add`: 同じ受入基準を保証する有効なケースがあれば追加を拒否し、`ledger.py update` での拡張を案内（例外は `--new-case-reason`）。
+  - CHK-33（warn）: 同じ受入基準を保証する有効なケースが複数ある。
+  - rd-author・requirement-definition（既存の項目の再利用）・test-designer・system-test-increment・rd-audit（重複の観点）・conductor（run-report に数の増減）の手順に反映。
+
 ## [0.5.2]
 
 - 複数 chat で conductor を同時に動かしたときの hook の誤拒否を無くす（FR-1074〜1077、NFR-OPS-009・010）。

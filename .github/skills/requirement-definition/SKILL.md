@@ -59,6 +59,19 @@ description: rd-author が、conductor から渡された依頼・回答・資�
 - 「関連する既存資産」に `共通部品「…」`・`API「…」`・`テーブル「…」` と書くときは、カタログに実在する名前にします（CHK-27）。
 - 要求を変更・廃止する前に `python scripts/rdcheck.py trace <ID>` で、つながる AC・台帳のケース・カタログ・コードを確かめ、影響を変更履歴と結果に書きます。エンティティ・PARAM を変えるときは `trace <名前|PARAM-xxx>` で、それを使う要求を洗い出します。
 
+### 既存の項目の再利用（新規に作る前に。数を最適に保つ）
+
+要求・受入基準が増えるほど、各役割が読む量（トークン）、System Test のケースと実行時間、監査の照合の組が増えます。依頼の内容が既存の項目と重なるときは、新規に作らず既存の項目を変更します。新しい目的・対象の要求は、ためらわず追加します。
+
+1. 採番の前に `python scripts/rdcheck.py similar "<書こうとする要求・受入基準の文>"` を実行します（要求だけなら `--kind FR`、受入基準だけなら `--kind AC`）。類似度の高い順に既存の項目が出ます。
+2. 出た項目を `rdcheck.py show <ID>` で読み、**目的（上位の G）と対象エンティティが同じ**なら、その項目を変更します。
+   - 振る舞いの追加・条件の拡張 → 既存の要求の本文を広げ、受入基準を足すか、既存の受入基準の条件・値を変えます。
+   - 閾値・期間の違い → PARAM の値を変えます（新しい要求にしません）。
+   - 同じ振る舞いの言い換え → 何も足しません（結果に「既存の ID で充足」と書きます）。
+3. 目的か対象が違うときだけ、新規に採番します。
+4. `python scripts/rdcheck.py similar --pairs` で出た似た組（既定の下限 0.35）のうち、依頼の範囲に入るものは、1 つに統合します。残す方を変更し、もう一方を「廃止（依頼 YYYY-MM-DD）」にして、変更履歴に「統合: 廃止した ID → 残した ID」と書きます。依頼の範囲外の組は、監査指摘（カテゴリ: 重複）に書くだけにします。
+5. 承認済みの要求の文面を変えるのは、依頼がその変更を含むときだけです（ほかは競合として記録する従来の規則のまま）。
+
 ### 外部連携を含む依頼（FR-1039。`integration-checklist.md`・`integration-requirements.md`）
 
 依頼が外部のアプリ・データとの連携（API・ファイル・DB・イベント）を含むときは、要求を書く前に次を行います。
@@ -85,6 +98,7 @@ description: rd-author が、conductor から渡された依頼・回答・資�
 |---|---|
 | ID の採番（手で振らない） | `python scripts/next-id.py FR`、`python scripts/next-id.py NFR-SEC`、`python scripts/next-id.py AC --count 3`、`Q`、`PARAM` |
 | 必要な節だけ読む | `python scripts/rdcheck.py show FR-012 AC-031` |
+| 新規に作る前に似た既存の項目を探す | `python scripts/rdcheck.py similar "<文>"`、`similar FR-012`、`similar --pairs`（統合の候補） |
 | つながり・影響範囲をたどる | `python scripts/rdcheck.py trace FR-012`、`trace 申請`、`trace PARAM-004` |
 | 一覧・件数 | `python scripts/rdcheck.py list --state 承認済み`、`python scripts/rdcheck.py stats` |
 | 終了前の検査（G-4） | `python scripts/verify.py --docs-only --show-warnings`（exit 0 にする） |

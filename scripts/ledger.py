@@ -4,6 +4,7 @@
 Usage:
   python scripts/ledger.py summary
   python scripts/ledger.py add --req FR-012 --ac AC-031 --title "..." --layer e2e --command "npx playwright test ..." [--canary] [--reason "..."]
+                               # 同じ AC の有効なケースがあれば拒否（update で拡張する。例外は --new-case-reason "理由"）
   python scripts/ledger.py update ID [--command ...] [--title ...] [--ac ...] [--req ...] [--canary true|false] --reason "..."
   python scripts/ledger.py block ID --reason "..."          # never delete a case; block it with a reason
   python scripts/ledger.py set ID pass|fail|blocked|not_run [--evidence PATH] [--reason ...]
@@ -77,14 +78,31 @@ def cmd_add(args, root, cfg) -> int:
         if r not in doc.requirements:
             raise SystemExit(f"ERROR ledger: {r} が要求定義書にありません")
     kind = "E2E" if args.layer == "e2e" else "IT"
-    cid = h.load_script("next-id").allocate(root, cfg, kind, 1, args.title[:40], False)[0]
     data = h.load_ledger(root, cfg)
+    # 似た System Test を増やさない: 同じ AC を保証する有効なケースがあれば、新規に作らず既存を拡張する
+    covering = {}
+    for c in data["cases"]:
+        if c.get("status") == "blocked":
+            continue
+        for a in acs:
+            if a in c.get("ac_ids", []):
+                covering.setdefault(a, []).append(c["id"])
+    if covering and not args.new_case_reason:
+        hits = "、".join(f"{a}: {'、'.join(ids)}" for a, ids in covering.items())
+        first = next(iter(covering.values()))[0]
+        raise SystemExit(
+            f"ERROR ledger: 同じ受入基準を保証する有効なケースがあります（{hits}）。新しいケースを足さず、"
+            f"`python scripts/ledger.py update {first} --command ... --ac ... --reason \"...\"` で既存のケースを拡張します。"
+            "層（e2e と api など）が違い、別のケースが本当に必要なときだけ --new-case-reason \"理由\" を付けます")
+    cid = h.load_script("next-id").allocate(root, cfg, kind, 1, args.title[:40], False)[0]
     case = {
         "id": cid, "requirement_ids": reqs, "ac_ids": acs, "title": args.title, "layer": args.layer,
         "command": args.command, "canary": bool(args.canary), "status": "not_run",
         "last_commit": None, "last_run_at": None, "evidence": None, "history": [],
     }
     history(case, "追加", args.reason or "受入基準からケースを作成", args.by)
+    if covering:
+        history(case, "同じ AC の既存ケースと別に追加", args.new_case_reason, args.by)
     data["cases"].append(case)
     for a in acs:
         data["ac_digests"][a] = h.ac_digest(doc.acs[a], doc.params)
@@ -714,6 +732,8 @@ def main(argv=None) -> int:
     a.add_argument("--command", required=True)
     a.add_argument("--canary", action="store_true")
     a.add_argument("--reason", default="")
+    a.add_argument("--new-case-reason", default="",
+                   help="同じ AC の有効なケースがあっても別のケースにする理由（既定では拒否し、update での拡張を促す）")
     u = sub.add_parser("update")
     u.add_argument("id")
     u.add_argument("--command")

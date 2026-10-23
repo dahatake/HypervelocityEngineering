@@ -241,48 +241,6 @@ def test_invalid_repository_switch_keeps_model_and_explains_failure(page_own, tm
     expect(page.locator("#repoBtn")).to_have_text(before)
 
 
-# FR-013 AC-013
-def test_startup_switch_and_refresh_do_not_write_data_or_leave_loopback(page_own, studio_url_own, tmp_path):
-    page, studio_url = page_own, studio_url_own
-    before = _management_fingerprints()
-    requests = []
-    page.on("request", lambda request: requests.append(request.url))
-    expect(page).to_have_url(studio_url + "/")
-    page.goto(page.url + "#/tables?tab=cases")
-    other = tmp_path / "other"
-    (other / "docs").mkdir(parents=True)
-    requirements = other / "docs" / "requirements-definition.md"
-    requirements.write_text(
-        "# Other\n\n#### FR-OTHER Other\n"
-        "- 要求: Other\n- 決定状態: 承認済み\n"
-        "- 受入基準 AC-OTHER: Other\n  - 検証レベル: system\n",
-        encoding="utf-8",
-    )
-    (other / "docs" / "catalog.md").write_text("# Catalog\n", encoding="utf-8")
-    _pick_repo(page, other)
-    expect(page.locator("#repoBtn")).to_contain_text("other")
-
-    # The test is the writer here.  After the controlled update, Studio must
-    # detect/reload it without changing the exact bytes or modification time.
-    requirements.write_text(
-        requirements.read_text(encoding="utf-8")
-        + "\n#### FR-REFRESH Refreshed\n"
-        "- 要求: Refreshed\n- 決定状態: 承認済み\n"
-        "- 受入基準 AC-REFRESH: Refreshed\n  - 検証レベル: system\n",
-        encoding="utf-8",
-    )
-    expected_after_update = _fingerprint(requirements)
-    other_after_update = _management_fingerprints(other)
-    page.wait_for_timeout(5000)
-    page.goto(page.url.split("#")[0] + "#/tables?tab=reqs&q=FR-REFRESH")
-    expect(page.locator("#view")).to_contain_text("FR-REFRESH")
-    assert _fingerprint(requirements) == expected_after_update
-    assert _management_fingerprints(other) == other_after_update
-    assert _management_fingerprints() == before
-    assert all(url.startswith("http://127.0.0.1:") for url in requests)
-    assert page.url.startswith("http://127.0.0.1:")
-
-
 # NFR-SEC-001 AC-023
 def test_server_binds_loopback_on_default_port_and_rejects_foreign_host():
     default = subprocess.Popen(
@@ -327,14 +285,54 @@ def test_server_binds_loopback_on_default_port_and_rejects_foreign_host():
 
 
 # NFR-SEC-002 AC-024
-def test_all_views_are_read_only_and_do_not_issue_external_requests(page):
+def test_all_views_are_read_only_and_do_not_issue_external_requests(page_own, studio_url_own, tmp_path):
+    """通常操作（起動・全画面の閲覧・検索・可視化・リポジトリ切替・更新検知）の後も、
+    管理データの内容と更新時刻が変わらず、要求はすべて 127.0.0.1 宛て（外部送信なし）。
+    リポジトリ切替は読取対象だけを変え、切替先のファイルも書き換えない。"""
+    page, studio_url = page_own, studio_url_own
     before = _management_fingerprints()
     requests = []
     page.on("request", lambda request: requests.append(request.url))
-    for route in ("dashboard", "map2d", "map3d", "diagrams", "placement", "source", "tables"):
-        page.goto(page.url.split("#")[0] + f"#/{route}")
+    expect(page).to_have_url(studio_url + "/")
+    base = page.url.split("#")[0]
+    # 全画面の閲覧・可視化・検索
+    for route in ("dashboard", "map2d", "map3d", "diagrams", "placement", "source", "tables",
+                  "tables?tab=reqs&q=FR-001", "tables?tab=cases"):
+        page.goto(base + f"#/{route}")
+    assert _management_fingerprints() == before
+
+    # リポジトリ切替
+    other = tmp_path / "other"
+    (other / "docs").mkdir(parents=True)
+    requirements = other / "docs" / "requirements-definition.md"
+    requirements.write_text(
+        "# Other\n\n#### FR-OTHER Other\n"
+        "- 要求: Other\n- 決定状態: 承認済み\n"
+        "- 受入基準 AC-OTHER: Other\n  - 検証レベル: system\n",
+        encoding="utf-8",
+    )
+    (other / "docs" / "catalog.md").write_text("# Catalog\n", encoding="utf-8")
+    _pick_repo(page, other)
+    expect(page.locator("#repoBtn")).to_contain_text("other")
+
+    # 更新検知: テストが書き手。Studio は再読込するだけで、内容も更新時刻も変えない。
+    requirements.write_text(
+        requirements.read_text(encoding="utf-8")
+        + "\n#### FR-REFRESH Refreshed\n"
+        "- 要求: Refreshed\n- 決定状態: 承認済み\n"
+        "- 受入基準 AC-REFRESH: Refreshed\n  - 検証レベル: system\n",
+        encoding="utf-8",
+    )
+    expected_after_update = _fingerprint(requirements)
+    other_after_update = _management_fingerprints(other)
+    page.wait_for_timeout(5000)
+    page.goto(page.url.split("#")[0] + "#/tables?tab=reqs&q=FR-REFRESH")
+    expect(page.locator("#view")).to_contain_text("FR-REFRESH")
+    assert _fingerprint(requirements) == expected_after_update
+    assert _management_fingerprints(other) == other_after_update
     assert _management_fingerprints() == before
     assert all(url.startswith("http://127.0.0.1:") for url in requests)
+    assert page.url.startswith("http://127.0.0.1:")
 
 
 # NFR-OPS-001 AC-026

@@ -64,7 +64,7 @@ disable-model-invocation: true
 - run-report.md の 1 行目の次に「レーン: fast|full（理由）／省いた工程」を書く。あわせて「依頼の範囲のうち要求にした割合と、要求にしなかったもの」を書く（範囲を黙って縮めない）。
 
 ## 工程（工程 1 → 2〜4 → 5 → 6。工程 2・3・4 は並行して進めてよい。開始と完了を `run-state.py stage N` / `stage N --done` で記録する）
-1. 要求定義 → rd-author に `<request>` `<answers>` `<references>` と approval_policy・run-id を渡す。
+1. 要求定義 → rd-author に `<request>` `<answers>` `<references>` と approval_policy・run-id を渡す。依頼が既存の要求と重なるときは、rd-author が新規に作らず既存の項目を変更する（skill `requirement-definition` の「既存の項目の再利用」）。結果の `CHANGED:` に統合・廃止があれば、工程 4 で test-designer にその AC のケースの統合・停止も依頼する。
    工程 1 の直後に、上の「レーンの自動判定」の `lane decide` を行う。`LANE: fast` なら工程 2 を省いて工程 3 へ（`stage 2` は記録しない）。
 2. 独立監査（full のときだけ。**background** で起動し、完了を待たずに工程 3・4 を始める。実測では要求定義・監査・System Test の設計が実装の前の直列区間で、直近の run は最初の実装 commit まで約 44 分かかった）→ rd-auditor に「今回変わった要求 ID と、同じ対象エンティティ・状態・PARAM・用語の既存要求 ID」を渡す（scope: 差分、runs: 1）。
    工程 5 を始める前に、この監査が完了していること（未完了なら、完了を待ってから最初の項目を起動する）。
@@ -121,7 +121,7 @@ run-report.md の形:
 - 実装した要求 ID、BLOCKED の要求 ID と理由
 - 包括承認した項目（影響の大きい順）
 - 未回答の質問票（重要度の高い順。次の Prompt の `<answers>` にそのまま書ける形）
-- 品質の指標: verify、AC の pass 率（`ledger.py summary`）、監査の指摘（CRITICAL・HIGH の件数）
+- 品質の指標: verify、AC の pass 率（`ledger.py summary`）、監査の指摘（CRITICAL・HIGH の件数）、数の最適化（`rdcheck.py stats` の requirements・acs・similar_pairs・ledger_shared_acs と開始時からの増減）
 - KPI: `kpi.md` の表をそのまま貼る（North Star「人の介入 1 回あたりの検証済み要求」、1 回目のゲート通過率、トレーサビリティ網羅率、工程ごとの時間・実効の並列度・統合の直列時間・実際に使ったモデルなど）。検証済みにならなかった要求は理由を添える
 - 取り込み方法: 統合ブランチ名と、`git merge` または `gh pr create` のコマンド
 - 清掃契約（全件完了時）: `正常完了`、`main 統合 commit`、`完了条件`、`最終 verify`、`対象テスト`、`main 上の統合後 verify`、`清掃許可判定`、`清掃候補`、`保護・保持する資産と理由`、`候補別結果`、`run 最終状態`。清掃前は `候補別結果: not_run` と `run 最終状態: 清掃待ち` で確定し、清掃中・清掃後に変更できるのは候補別結果と最終状態だけ。
