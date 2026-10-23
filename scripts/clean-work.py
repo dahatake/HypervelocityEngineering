@@ -62,6 +62,28 @@ def worktree_map(root: Path) -> Dict[str, Tuple[Path, str]]:
     return found
 
 
+def primary_root(root: Path) -> Path:
+    """The main working tree: the first entry of ``git worktree list``."""
+    rc, out = git_output(root, ["worktree", "list", "--porcelain"])
+    if rc == 0:
+        for line in out.splitlines():
+            if line.startswith("worktree "):
+                return Path(line[9:]).resolve()
+    return root
+
+
+def own_run_worktree(root: Path, meta: dict) -> Optional[Path]:
+    """The non-primary worktree that has this run's integration branch checked out."""
+    integration = str(meta.get("integration_branch", ""))
+    if not integration:
+        return None
+    primary = key(primary_root(root))
+    for path_key, (path, branch) in worktree_map(root).items():
+        if branch == integration and path_key != primary:
+            return path
+    return None
+
+
 def report_authorizes(report: str) -> bool:
     """Accept the two report schemas shipped during the format transition."""
     if re.search(r"(?:結果|result)\s*:\s*全件完了", report, re.I) is None:
@@ -171,6 +193,7 @@ def plan(
     meta: dict,
     queue: dict,
     previous: Optional[Dict[Tuple[str, str], str]] = None,
+    run_wt: Optional[Path] = None,
 ) -> List[Candidate]:
     previous = previous or {}
     live = worktree_map(root)
@@ -250,6 +273,22 @@ def plan(
             "temporary-assets", str(temporary), temporary,
             result="削除済み", owner=rid,
         ))
+    if run_wt is not None:
+        run_wt = Path(run_wt).resolve()
+        rkey = key(run_wt)
+        wt_candidate = Candidate("run-worktree", str(run_wt), run_wt, integration, owner=rid)
+        registered = live.get(rkey)
+        if registered is None or registered[1] not in (integration, ""):
+            wt_candidate.reason = "Git worktree 登録が統合ブランチの所有記録と一致しないため保持"
+        elif rkey == key(primary_root(root)) or rkey in protected:
+            wt_candidate.reason = "主の作業ツリーまたは設定で保護された作業ツリーのため保持"
+        elif dirty(root, run_wt):
+            wt_candidate.reason = "未コミット変更があるため保持"
+        result.append(wt_candidate)
+        if wt_candidate.reason:
+            for c in result:
+                if c.kind == "integration-branch" and not c.reason:
+                    c.reason = "統合ブランチをチェックアウト中の run worktree を保持するため保持"
     return result
 
 
@@ -288,9 +327,11 @@ def execute(
     queue: dict,
     report: str,
     candidates: List[Candidate],
+    run_wt: Optional[Path] = None,
 ) -> Tuple[bool, bool]:
     """Execute with an immediate ownership/safety recheck before every deletion."""
     operation_failed = False
+    primary = primary_root(root) if run_wt is not None else root
     protected = False
     known = recorded_results(report)
     for candidate in candidates:
@@ -305,7 +346,7 @@ def execute(
             candidate.result = "保持"
             protected = True
             continue
-        fresh = plan(root, cfg, rid, meta, queue, known)
+        fresh = plan(root, cfg, rid, meta, queue, known, run_wt)
         current = next(
             (
                 item for item in fresh
@@ -331,9 +372,44 @@ def execute(
                     operation_failed = True
                     continue
             candidate.result = "削除済み"
+        elif candidate.kind == "run-worktree":
+            wt = candidate.path
+            if wt and wt.exists():
+                try:
+                    src = h.run_dir(wt, cfg, rid)
+                    dst = h.run_dir(primary, cfg, rid)
+                    if src.is_dir() and key(src) != key(dst):
+                        shutil.copytree(src, dst, dirs_exist_ok=True)
+                    cwd = Path.cwd().resolve()
+                    if key(cwd) == key(wt) or Path(key(cwd)).is_relative_to(key(wt)):
+                        os.chdir(primary)
+                except OSError as exc:
+                    candidate.result = "失敗"
+                    candidate.reason = f"run 記録の退避に失敗: {exc}"
+                    operation_failed = True
+                    continue
+                h.unshare_dirs(wt, cfg)
+                rc, out = git_output(primary, ["worktree", "remove", str(wt)])
+                if rc:
+                    candidate.result = "失敗"
+                    candidate.reason = "使用中または削除できないため保持: " + out.strip()[:160]
+                    operation_failed = True
+                    continue
+            candidate.result = "削除済み"
         elif candidate.kind in ("work-branch", "integration-branch"):
+            if (
+                candidate.kind == "integration-branch" and run_wt is not None
+                and Path(run_wt).exists()
+                and worktree_map(primary).get(key(Path(run_wt)), (None, ""))[1] == candidate.branch
+            ):
+                rc, out = git_output(Path(run_wt), ["checkout", "--detach"])
+                if rc:
+                    candidate.result = "失敗"
+                    candidate.reason = out.strip()[:160]
+                    operation_failed = True
+                    continue
             if h.ref_exists(root, candidate.branch):
-                rc, out = git_output(root, ["branch", "-d", candidate.branch])
+                rc, out = git_output(primary, ["branch", "-d", candidate.branch])
                 if rc:
                     candidate.result = "失敗"
                     candidate.reason = out.strip()[:160]
@@ -401,7 +477,8 @@ def main(argv=None) -> int:
                 kept += 1
                 continue
             previous = recorded_results(report)
-            candidates = plan(root, cfg, rid, meta, queue, previous)
+            run_wt = own_run_worktree(root, meta)
+            candidates = plan(root, cfg, rid, meta, queue, previous, run_wt)
             for candidate in candidates:
                 action = "PROTECT" if candidate.reason else "DELETE"
                 suffix = f" ({candidate.reason})" if candidate.reason else ""
@@ -409,8 +486,11 @@ def main(argv=None) -> int:
             if args.dry_run:
                 deleted += 1
                 continue
-            ok, protected = execute(root, cfg, rid, meta, queue, report, candidates)
+            ok, protected = execute(root, cfg, rid, meta, queue, report, candidates, run_wt)
             final_state = "清掃済み" if ok and not protected else "保持"
+            if any(c.kind == "run-worktree" and c.result == "削除済み" for c in candidates):
+                # the run worktree (and its work/) is gone; the report was copied to the primary
+                report_path = h.run_dir(primary_root(Path.cwd()), cfg, rid) / "run-report.md"
             update_report(report_path, candidates, final_state, meta)
             if ok:
                 if protected:

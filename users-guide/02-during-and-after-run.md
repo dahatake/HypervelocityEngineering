@@ -113,5 +113,6 @@ Q-003: B
 
 ```bash
 python scripts/clean-work.py --dry-run   # 候補・保護理由・実行予定を確認（変更なし）
-python scripts/clean-work.py             # 削除直前に所有権と状態を再検査
 ```
+
+統合ブランチ `run/<run-id>` をチェックアウトしている run 専用の worktree（主の作業ツリー以外。例 `<repo>-run-<run-id>`）も、未コミット変更がなければ最後に自動で削除します（統合ブランチは先に detach してから削除）。`work/` は worktree ごとにあるため、`work/runs/<run-id>` を主の `work/runs/<run-id>` へ退避してから削除し、候補別結果は主側の `run-report.md` に追記します。未コミット変更があれば worktree と統合ブランチを保持します。

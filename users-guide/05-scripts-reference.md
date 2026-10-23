@@ -213,7 +213,7 @@ python scripts/adopt.py golden record|check|list [NAME] [--update]
 python scripts/clean-work.py [--days 14] [--dry-run]
 ```
 
-全件完了 run を main に統合し、統合後 verify と清掃前版 run-report の確定まで成功した場合だけ、run 所有の pool worktree、作業ブランチ、統合ブランチ、一時資産を清掃します。`--dry-run` は候補・保護理由・予定操作を表示します。`--days` は互換性のため受け付けますが、失敗・中止・未達 run は自動期限なく保持されます。削除直前に run 記録、Git 登録、正規化した実体パス、dirty/lock/保護状態を再検査します。部分失敗は診断を report に残して非 0 となり、再実行時は削除済みを成功済みとして残存候補だけを扱います。
+全件完了 run を main に統合し、統合後 verify と清掃前版 run-report の確定まで成功した場合だけ、run 所有の pool worktree、作業ブランチ、統合ブランチ、一時資産、および統合ブランチをチェックアウトしている run 専用 worktree（`run-worktree`。未コミット変更があれば保持。`work/runs/<id>` は主へ退避）を清掃します。`--dry-run` は候補・保護理由・予定操作を表示します。`--days` は互換性のため受け付けますが、失敗・中止・未達 run は自動期限なく保持されます。削除直前に run 記録、Git 登録、正規化した実体パス、dirty/lock/保護状態を再検査します。部分失敗は診断を report に残して非 0 となり、再実行時は削除済みを成功済みとして残存候補だけを扱います。
 
 ## watch.py（run の監視。残留プロセスと項目の時間超過）
 
