@@ -1029,7 +1029,7 @@
       "layer": "e2e",
       "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_failed_or_incomplete_run_is_retained_without_expiry",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-030-202610230651.log",
@@ -1039,6 +1039,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:49+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-027 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1079,7 +1085,7 @@
       "layer": "e2e",
       "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_report_is_frozen_before_cleanup_then_finalized_before_completion",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-032-202610230651.log",
@@ -1089,6 +1095,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:49+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-029 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1205,7 +1217,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_model_can_traverse_requirement_to_catalog_file_and_test",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-001-202610230651.log",
@@ -1215,6 +1227,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:38+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-001 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1230,7 +1248,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_dashboard_shows_aggregates_and_selectable_breakdowns",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-002-202610230656.log",
@@ -1240,6 +1258,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:39+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-002 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1255,7 +1279,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_maps_highlight_selected_relationships_and_support_navigation",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-003-202610230656.log",
@@ -1265,6 +1289,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:40+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-003 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1280,7 +1310,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_selection_and_filter_survive_placement_map_and_table_switches",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-004-202610230656.log",
@@ -1290,6 +1320,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:40+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-004 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1305,7 +1341,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_search_shortcuts_limit_results_and_export_table_csv",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-005-202610230656.log",
@@ -1315,6 +1351,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:41+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-005 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1330,7 +1372,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_persona_defaults_and_switching_preserve_selected_id_filter_and_time",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-006-202610230656.log",
@@ -1340,6 +1382,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:41+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-006 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1355,7 +1403,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_invalid_repository_switch_keeps_model_and_explains_failure",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-007-202610230656.log",
@@ -1365,6 +1413,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:42+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-007 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1380,7 +1434,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_repository_precedence_is_explicit_then_cwd_then_studio_placement",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-025-202610230657.log",
@@ -1390,6 +1444,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:43+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-025 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1405,7 +1465,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_startup_switch_and_refresh_do_not_write_data_or_leave_loopback",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-008-202610230656.log",
@@ -1415,6 +1475,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:43+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-008 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1430,7 +1496,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_first_steps_consolidates_startup_prerequisites_and_unknowns",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-015-202610230656.log",
@@ -1440,6 +1506,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:44+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-015 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1455,7 +1527,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_every_page_has_page_specific_analysis_for_all_three_personas",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-016-202610230657.log",
@@ -1465,6 +1537,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:44+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-016 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1480,7 +1558,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_current_and_ideal_structure_explain_every_layer_and_difference_type",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-017-202610230657.log",
@@ -1490,6 +1568,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:45+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-017 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1505,7 +1589,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_explicit_maintenance_previews_and_applies_only_two_catalog_columns",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-018-202610230657.log",
@@ -1515,6 +1599,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:45+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-018 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1530,7 +1620,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_maintenance_failures_roll_back_every_byte_and_offer_retry_or_cancel",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-019-202610230657.log",
@@ -1540,6 +1630,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:46+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-019 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1555,7 +1651,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_runtime_and_data_placement_show_local_none_and_defined_cloud_boundaries",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-020-202610230657.log",
@@ -1565,6 +1661,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:46+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-020 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1580,7 +1682,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_layer_consistency_traces_normal_missing_layer_and_dangling_reference_by_id",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-021-202610230657.log",
@@ -1590,6 +1692,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:47+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-021 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1605,7 +1713,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_entity_er_uses_requirement_evidence_and_never_invents_missing_relations",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-022-202610230657.log",
@@ -1615,6 +1723,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:47+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-022 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1630,7 +1744,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_history_progress_and_infographics_drill_to_evidence_without_counting_not_run_as_pass",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-023-202610230657.log",
@@ -1640,6 +1754,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:48+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-023 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1655,7 +1775,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_judge_capabilities.py::test_screen_manifest_has_reproducible_same_commit_real_screenshots_for_all_views",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-024-202610230657.log",
@@ -1665,6 +1785,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:48+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-024 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1680,7 +1806,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_server_binds_loopback_on_default_port_and_rejects_foreign_host",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-009-202610230707.log",
@@ -1690,6 +1816,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:58+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-009 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1705,7 +1837,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_all_views_are_read_only_and_do_not_issue_external_requests",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-010-202610230656.log",
@@ -1715,6 +1847,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:59+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-010 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1730,7 +1868,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_python_runtime_starts_without_extra_installation_and_shows_default_model",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-011-202610230656.log",
@@ -1740,6 +1878,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:55+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-011 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1755,7 +1899,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_missing_data_error_offers_recovery_without_losing_current_model",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-012-202610230656.log",
@@ -1765,6 +1909,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:55+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-012 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1780,7 +1930,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_configured_data_links_requirement_ac_catalog_case_and_source",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-013-202610230656.log",
@@ -1790,6 +1940,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:39+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-013 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1805,7 +1961,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_system.py::test_repository_switch_success_updates_model_and_failure_restores_previous",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-014-202610230656.log",
@@ -1815,6 +1971,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:42+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-014 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1855,7 +2017,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_map2d_click_outside_radius_keeps_selection -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-063-202610230658.log",
@@ -1865,6 +2027,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:50+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-062 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1905,7 +2073,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_placement_diagram_does_not_invent -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-065-202610230658.log",
@@ -1915,6 +2083,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:51+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-064 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1955,7 +2129,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_map_placement_system.py -k test_placement_selectable_by_keyboard -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-067-202610230658.log",
@@ -1965,6 +2139,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:52+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-066 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -1980,7 +2160,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_map_placement_system.py -k fr1011 -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-068-202610230658.log",
@@ -1990,6 +2170,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:50+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-062 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2005,7 +2191,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_map_placement_system.py -k fr1012_ac080 -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-069-202610230658.log",
@@ -2015,6 +2201,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:51+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-064 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2030,7 +2222,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_map_placement_system.py -k fr1012_ac081 -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-070-202610230658.log",
@@ -2040,6 +2232,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:52+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-066 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2080,7 +2278,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_impl_status_system.py -k equal_kanban_columns -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-072-202610230659.log",
@@ -2090,6 +2288,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:53+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-071 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2105,7 +2309,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_impl_status_system.py -k card_selection -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-073-202610230659.log",
@@ -2115,6 +2319,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:53+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-071 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2130,7 +2340,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_impl_status_system.py -k excludes_non_approved -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-074-202610230659.log",
@@ -2140,6 +2350,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:54+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-071 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2180,7 +2396,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_build_request_system.py -k no_candidates -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-076-202610230659.log",
@@ -2190,6 +2406,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:54+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-075 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2205,7 +2427,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_build_request_system.py -k invalid_duration -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-077-202610230659.log",
@@ -2215,6 +2437,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:55+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-075 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2330,7 +2558,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_semantic_zoom_system.py -k \"ac174_levels\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-082-202610230700.log",
@@ -2340,6 +2568,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:55+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-081 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2355,7 +2589,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_semantic_zoom_system.py -k \"ac174_below\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-083-202610230700.log",
@@ -2365,6 +2599,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:56+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-081 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2405,7 +2645,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_semantic_zoom_system.py -k \"ac177_2d_usage\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-085-202610230700.log",
@@ -2415,6 +2655,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:56+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-084 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2455,7 +2701,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_semantic_zoom_system.py -k \"ac179_3d_no_invented\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-087-202610230700.log",
@@ -2465,6 +2711,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:33:57+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-086 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2505,7 +2757,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_semantic_zoom_system.py -k \"ac183_large_data\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-089-202610230700.log",
@@ -2515,6 +2767,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:56+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-088 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2711,7 +2969,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/test_integration_catalog_install_system.py -k \"never_overwritten or missing_template\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-097-202610230701.log",
@@ -2721,6 +2979,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test を追加"
+        },
+        {
+          "at": "2026-10-23T10:33:58+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-096 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2736,7 +3000,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/test_integration_catalog_install_system.py -k \"managed_files_follow\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-098-202610230701.log",
@@ -2746,6 +3010,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test を追加"
+        },
+        {
+          "at": "2026-10-23T10:33:58+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-096 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2786,7 +3056,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"ac220_invalid\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-100-202610230701.log",
@@ -2796,6 +3066,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test を追加"
+        },
+        {
+          "at": "2026-10-23T10:33:59+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-099 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2836,7 +3112,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"old_placement_url\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-102-202610230701.log",
@@ -2846,6 +3122,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test を追加"
+        },
+        {
+          "at": "2026-10-23T10:33:59+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-101 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2861,7 +3143,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"unknown_select\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-103-202610230701.log",
@@ -2871,6 +3153,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test を追加"
+        },
+        {
+          "at": "2026-10-23T10:34:00+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-101 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2886,7 +3174,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"legacy_screen_ids\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-104-202610230701.log",
@@ -2896,6 +3184,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test を追加"
+        },
+        {
+          "at": "2026-10-23T10:34:00+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-101 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2911,7 +3205,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"nav_item_is_reachable\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-105-202610230701.log",
@@ -2921,6 +3215,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test を追加"
+        },
+        {
+          "at": "2026-10-23T10:34:01+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-101 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2961,7 +3261,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"sort_filter_and_csv\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-107-202610230701.log",
@@ -2971,6 +3271,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test を追加"
+        },
+        {
+          "at": "2026-10-23T10:34:01+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-106 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -2986,7 +3292,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_nav_dims_integrations_system.py -k \"no_match_shows_zero\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-108-202610230701.log",
@@ -2996,6 +3302,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test を追加"
+        },
+        {
+          "at": "2026-10-23T10:34:02+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-106 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -3298,7 +3610,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac258_color_tokens_only_in_root_and_theme_blocks\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-120-202610230651.log",
@@ -3320,6 +3632,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-10-23T10:34:11+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-119 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -3372,7 +3690,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac259_switch_keeps_input_selection_filter_and_layout_and_works_by_keyboard\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-122-202610230651.log",
@@ -3394,6 +3712,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-10-23T10:34:12+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-121 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -3409,7 +3733,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac259_theme_can_be_chosen_from_command_search\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-123-202610230651.log",
@@ -3431,6 +3755,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-10-23T10:34:12+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-121 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -3446,7 +3776,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac259_every_color_token_has_a_value_in_both_themes\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-124-202610230651.log",
@@ -3468,6 +3798,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-10-23T10:34:13+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-121 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -3520,7 +3856,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac261_no_external_font_requests\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-126-202610230651.log",
@@ -3542,6 +3878,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-10-23T10:34:16+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-125 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -3594,7 +3936,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac262_component_px_values_are_tokens_or_grid_multiples\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-128-202610230651.log",
@@ -3616,6 +3958,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-10-23T10:34:17+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-127 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -3705,7 +4053,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac264_disabled_is_not_color_only\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-131-202610230651.log",
@@ -3727,6 +4075,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-10-23T10:34:17+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-130 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -3853,7 +4207,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac267_empty_state_has_common_structure_and_text\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-135-202610230651.log",
@@ -3875,6 +4229,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-10-23T10:34:18+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-134 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -3890,7 +4250,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac267_loading_state_shows_progress_indicator\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-136-202610230651.log",
@@ -3912,6 +4272,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-10-23T10:34:19+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-134 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -3964,7 +4330,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac268_dim_toggle_icons_follow_rule\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-138-202610230651.log",
@@ -3986,6 +4352,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-10-23T10:34:19+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-137 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -4075,7 +4447,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac270_focus_ring_contrast_against_background\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-141-202610230651.log",
@@ -4097,6 +4469,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-10-23T10:34:49+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-140 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -4186,7 +4564,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac272_loading_is_conveyed_without_motion\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-144-202610230651.log",
@@ -4208,6 +4586,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-10-23T10:34:50+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-143 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -4260,7 +4644,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac273_reflow_and_text_zoom_without_horizontal_scroll\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-146-202610230651.log",
@@ -4282,6 +4666,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-10-23T10:34:51+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-145 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -4334,7 +4724,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac274_states_not_conveyed_by_color_alone\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-148-202610230651.log",
@@ -4356,6 +4746,12 @@
           "by": "test-designer",
           "change": "status -> not_run",
           "reason": "AC-258..276 の検証レベルが system に変更(dd0cef13)"
+        },
+        {
+          "at": "2026-10-23T10:34:52+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-147 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -4396,7 +4792,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac275_screen_manifest_ids_unchanged_and_baseline_tests_untouched\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-150-202610230651.log",
@@ -4406,6 +4802,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:57+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-149 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -4421,7 +4823,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac275_no_console_errors_no_external_requests_and_repo_untouched\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-151-202610230651.log",
@@ -4431,6 +4833,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:57+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-149 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -4508,7 +4916,7 @@
       "layer": "e2e",
       "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac286_switching_keeps",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-154-202610230702.log",
@@ -4518,6 +4926,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:25+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-153 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -4533,7 +4947,7 @@
       "layer": "e2e",
       "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac286_switching_does",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-155-202610230702.log",
@@ -4543,6 +4957,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:28+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-153 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -4583,7 +5003,7 @@
       "layer": "e2e",
       "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac295_a_button",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-157-202610230702.log",
@@ -4593,6 +5013,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:30+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-156 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -4608,7 +5034,7 @@
       "layer": "e2e",
       "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac295_start",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-158-202610230702.log",
@@ -4618,6 +5044,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:31+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-156 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -4633,7 +5065,7 @@
       "layer": "e2e",
       "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac295_edge",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-159-202610230702.log",
@@ -4643,6 +5075,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:32+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-156 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -4658,7 +5096,7 @@
       "layer": "nonfunctional",
       "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_mixed_assets_delete_only_safe_owned_candidates",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\IT-001-202610230651.log",
@@ -4668,6 +5106,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:56+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-031 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -4683,7 +5127,7 @@
       "layer": "nonfunctional",
       "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_windows_alias_collision_spaces_and_locked_candidate_are_protected",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\IT-002-202610230651.log",
@@ -4693,6 +5137,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:52+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-033 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -4708,7 +5158,7 @@
       "layer": "contract",
       "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_distribution_catalog_conductor_and_guides_publish_one_cleanup_contract",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\IT-003-202610230651.log",
@@ -4718,6 +5168,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:53+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-034 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -4733,7 +5189,7 @@
       "layer": "nonfunctional",
       "command": "python -m pytest -q tests/system/test_run_cleanup_system.py::test_cleanup_preserves_unrelated_git_state_and_all_post_cleanup_gates_pass",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\IT-004-202610230651.log",
@@ -4743,6 +5199,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:53+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-035 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -5326,7 +5788,7 @@
       "layer": "contract",
       "command": "python -m pytest tests/system/test_entities_system.py -k ac168 -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\IT-021-202610230702.log",
@@ -5336,6 +5798,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:54+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-080 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -5401,7 +5869,7 @@
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac240_check_inconsistent\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\IT-024-202610230702.log",
@@ -5411,6 +5879,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:05+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を IT-023 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -5426,7 +5900,7 @@
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac240_check_with_only_automatic\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\IT-025-202610230702.log",
@@ -5436,6 +5910,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:06+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を IT-023 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -5476,7 +5956,7 @@
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_with_manual_left\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\IT-027-202610230702.log",
@@ -5486,6 +5966,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:06+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を IT-026 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -5501,7 +5987,7 @@
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_on_worker_branch\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\IT-028-202610230702.log",
@@ -5511,6 +5997,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:09+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を IT-026 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -5526,7 +6018,7 @@
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_cancelled_on_write_failure\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\IT-029-202610230702.log",
@@ -5536,6 +6028,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:09+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を IT-026 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -5551,7 +6049,7 @@
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac241_apply_on_clean\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\IT-030-202610230702.log",
@@ -5561,6 +6059,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:10+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を IT-026 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -5601,7 +6105,7 @@
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac237_update_install_repairs\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\IT-032-202610230702.log",
@@ -5611,6 +6115,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:03+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を IT-031 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -5626,7 +6136,7 @@
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac237_update_install_automatic_only\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\IT-033-202610230702.log",
@@ -5636,6 +6146,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:03+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を IT-031 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -5676,7 +6192,7 @@
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac238_skip_verify\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\IT-035-202610230702.log",
@@ -5686,6 +6202,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:04+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を IT-034 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -5701,7 +6223,7 @@
       "layer": "data",
       "command": "python -m pytest tests/system/test_data_layer_repair_system.py -k \"ac238_non_install_modes\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\IT-036-202610230702.log",
@@ -5711,6 +6233,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:04+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を IT-034 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -6135,7 +6663,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac260_only_theme_name_is_written_to_local_storage\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-161-202610230651.log",
@@ -6145,6 +6673,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:14+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-160 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -6160,7 +6694,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac260_choosing_theme_writes_nothing_to_repository_or_outside\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-162-202610230651.log",
@@ -6170,6 +6704,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:14+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-160 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -6185,7 +6725,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac260_choice_not_carried_to_another_context_which_follows_os\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-163-202610230651.log",
@@ -6195,6 +6735,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:15+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-160 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -6210,7 +6756,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac260_invalid_stored_value_falls_back_to_system\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-164-202610230651.log",
@@ -6220,6 +6766,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:16+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-160 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -6260,7 +6812,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_impl_gantt_system.py::test_gantt_undated_count_matches_approved_frs_without_cases_and_excludes_unapproved",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-170-202610230702.log",
@@ -6270,6 +6822,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:33+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-169 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -6285,7 +6843,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_impl_gantt_system.py::test_gantt_axis_offers_overall_goal_priority_and_groups_have_member_rows",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-171-202610230702.log",
@@ -6295,6 +6853,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:35+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-169 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -6310,7 +6874,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_impl_gantt_system.py::test_gantt_bar_dates_are_identical_across_axes",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-172-202610230702.log",
@@ -6320,6 +6884,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:36+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-169 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -6491,7 +7061,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_no_warning_within_limit_ac363",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-190-202610230703.log",
@@ -6501,6 +7071,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "FR-1065 AC-363 の System Test を作成"
+        },
+        {
+          "at": "2026-10-23T10:34:39+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-189 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -6516,7 +7092,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_no_warning_without_doing_ac363",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-191-202610230703.log",
@@ -6526,6 +7102,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "FR-1065 AC-363 の System Test を作成"
+        },
+        {
+          "at": "2026-10-23T10:34:40+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-189 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -6541,7 +7123,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_names_only_over_limit_items_ac363",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-192-202610230703.log",
@@ -6551,6 +7133,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "FR-1065 AC-363 の System Test を作成"
+        },
+        {
+          "at": "2026-10-23T10:34:41+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-189 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -6566,7 +7154,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/test_watch_status_system.py -k test_status_watch_does_not_change_exit_or_queue_ac363",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-193-202610230703.log",
@@ -6576,6 +7164,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "FR-1065 AC-363 の System Test を作成"
+        },
+        {
+          "at": "2026-10-23T10:34:41+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-189 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -6901,7 +7495,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac345_map2d_requirement_areas_match_area_fields_and_not_flat\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-174-202610230704.log",
@@ -6911,6 +7505,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:37+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-173 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -6976,7 +7576,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac347_item_count_not_added_to_castle_town_resident_counts\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-177-202610230704.log",
@@ -6986,6 +7586,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:38+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-176 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -7051,7 +7657,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac349_implstatus_shows_per_tier_state_breakdown_summing_to_count\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-180-202610230704.log",
@@ -7061,6 +7667,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:39+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-179 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -7293,7 +7905,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac345_map2d_body_points_cluster_by_area_and_toggle_shows_hides\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-188-202610230704.log",
@@ -7303,6 +7915,12 @@
           "by": "conductor",
           "change": "追加",
           "reason": "AC-345 本体の点の検証を追加"
+        },
+        {
+          "at": "2026-10-23T10:34:37+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-173 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -7468,7 +8086,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac367_header_dim_toggle_never_disappears\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-200-202610230704.log",
@@ -7478,6 +8096,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test ケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:42+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-199 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -7493,7 +8117,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac367_in_screen_toggle\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-201-202610230704.log",
@@ -7503,6 +8127,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test ケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:44+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-199 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -7543,7 +8173,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_rpg_enabled_on_map\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-203-202610230704.log",
@@ -7553,6 +8183,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test ケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:44+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-202 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -7568,7 +8204,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_entities_screen_follows_header_mode\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-204-202610230704.log",
@@ -7578,6 +8214,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test ケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:45+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-202 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -7618,7 +8260,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac371_overview_level_stays_overview\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-206-202610230704.log",
@@ -7628,6 +8270,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test ケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:45+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-205 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -7668,7 +8316,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac374_different_kinds_never_share\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-208-202610230704.log",
@@ -7678,6 +8326,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test ケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:46+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-207 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -7718,7 +8372,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac375_legend_has_no_extra_kinds\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-210-202610230704.log",
@@ -7728,6 +8382,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test ケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:47+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-209 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -7768,7 +8428,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac378_style_toggle_only_has_two_values\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-212-202610230704.log",
@@ -7778,6 +8438,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test ケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:47+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-211 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -7818,7 +8484,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac379_content_is_identical\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-214-202610230704.log",
@@ -7828,6 +8494,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test ケースを作成"
+        },
+        {
+          "at": "2026-10-23T10:34:48+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-213 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },
@@ -7979,7 +8651,7 @@
       "layer": "e2e",
       "command": "python -m pytest -q tests/system/test_parallel_run_ownership_system.py::test_other_chat_does_not_take_over_a_started_run_ac407",
       "canary": false,
-      "status": "pass",
+      "status": "blocked",
       "last_commit": "b8717ca4",
       "last_run_at": "2026-10-23T07:07:19+09:00",
       "evidence": "work\\runs\\202610230610\\logs\\system-test\\E2E-220-202610230706.log",
@@ -7989,6 +8661,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "AC-407 異常系"
+        },
+        {
+          "at": "2026-10-23T10:34:48+09:00",
+          "by": "conductor",
+          "change": "blocked",
+          "reason": "System Test 統合: 同一の要求・AC を E2E-219 が保証するため重複を停止（実行時間の削減）"
         }
       ]
     },

@@ -20,6 +20,7 @@ run-id、統合ブランチ、対象の要求 ID・AC ID（`rdcheck.py show` の
 - 例外（skill `adopt-existing`。既存アプリの導入）: 出自が「逆生成」の要求は、期待値を AC と**記録した現状**（`python scripts/adopt.py golden add／record`）から決めます。ケースのタイトルに「特性化:」を付け、`golden check` を実行する 1 ケースとして台帳に追加します。未変更のコードで pass しない記録は誤りです。
 - 対象は `python scripts/rdcheck.py list --level system --state 承認済み` のうち BLOCKED でない受入基準です。各 AC に少なくとも 1 ケース。異常系を必ず含めます。
 - 変更してよいのは `tests/system/` だけです。台帳は直接編集せず、`python scripts/ledger.py --by test-designer add|update|block|digests --update` で更新します（ID は ledger.py が next-id.py で採番します）。
+- ケースは最小限にします（実行時間の削減）。同じ要求・同じ AC を保証するケースを重複して作らず、1 つのケースで関連する複数の AC（正常系＋主な異常系）をまとめて検証します。台帳に同じ AC の既存ケースがあれば追加せず `ledger.py update` で拡張します。
 - 新しいケースはすべて `not_run` のまま commit します。この工程ではアプリを直しません。アプリが未実装で失敗するのは正常です。
 - テスト名か直前のコメントに要求 ID と AC ID を書きます（例: `// FR-012 AC-031`）。
 - 要求定義書と食い違う・判定に必要な値がない（TBD）ときは、ケースを `ledger.py block --reason` にし、競合として返します。要求定義書は変更しません。
