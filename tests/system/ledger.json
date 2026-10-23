@@ -4854,10 +4854,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac276_render_p95_within_tolerance_of_baseline_and_absolute_limits\" -q",
       "canary": false,
-      "status": "fail",
-      "last_commit": "1f31e282",
-      "last_run_at": "2026-10-23T10:39:40+09:00",
-      "evidence": "work/runs/adhoc-202610231035/logs/system-test/E2E-152-202610231038.log",
+      "status": "pass",
+      "last_commit": "8a11446a",
+      "last_run_at": "2026-10-23T10:49:22+09:00",
+      "evidence": "work/runs/adhoc-202610231048/logs/system-test/E2E-152-202610231048.log",
       "history": [
         {
           "at": "2026-10-17T14:41:15+09:00",
