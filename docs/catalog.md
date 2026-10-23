@@ -165,7 +165,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-010 | リポジトリの既定と切替 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/js/i18n.js`, `EABK-Studio/web/index.html` | `EABK-Studio/tests/test_studio.py`, `EABK-Studio/tests/test_repo_switch_recovery_wiring.py`, `tests/system/e2e/test_studio_repo_pick_system.py` | HTTP サーバー |
 | FR-011 | JA/EN とリンク | 承認済み（依頼 2026-10-09） | `EABK-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_system.py` | UI 部品、デザイン基盤 |
 | FR-012 | 鮮度検知と再読込 | 承認済み（依頼 2026-10-09） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | フィンガープリント |
-| FR-013 | 通常操作の参照専用データ境界 | 承認済み（包括承認 2026-10-09・approval_policy） | `EABK-Studio/studio.py` | `EABK-Studio/tests/test_studio.py` | HTTP サーバー |
+| FR-013 | 通常操作の参照専用データ境界 | 廃止 | 未実装 | 未実装 | なし |
 | FR-1001 | users-guide の利用開始前提条件 | 承認済み（依頼 2026-10-09） | 未実装 | AC-037 対応の E2E-015 は登録・実装済み、commit `c61ee5b` の実行結果は `fail`（合格ではない） | 起動スクリプト、HTTP サーバー |
 | NFR-UX-001 | レイアウト変更 | AI提案／承認待ち | 未実装 | 未実装 | なし |
 | NFR-UX-002 | レイアウト復元 | 承認済み | `EABK-Studio/web/js/layout.js`、`EABK-Studio/web/js/app.js`、`EABK-Studio/web/index.html`、`EABK-Studio/web/app.css`、`EABK-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_layout_authz_system.py` | 画面の配置 |
@@ -216,7 +216,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | 部品名 | ファイル | 用途 | 使っている要求 ID |
 |---|---|---|---|
 | 管理データモデル | `EABK-Studio/eabk_model.py` | 正本ファイルを読み、ノードと関係を構築 | FR-001、FR-009、FR-1003、FR-1005、FR-1006、FR-1013、FR-1014、FR-1021、FR-1022、FR-1025、FR-1026、FR-1027、FR-1028、FR-1029、FR-1034、FR-1042、FR-1061、NFR-COMPAT-003、NFR-OPS-004、NFR-SEC-002 |
-| HTTP サーバー | `EABK-Studio/studio.py` | 127.0.0.1 限定の読取 API と静的配信 | FR-010、FR-013、FR-1001、NFR-OPS-003、NFR-SEC-001、NFR-SEC-002 |
+| HTTP サーバー | `EABK-Studio/studio.py` | 127.0.0.1 限定の読取 API と静的配信 | FR-010、FR-1001、NFR-OPS-003、NFR-SEC-001、NFR-SEC-002 |
 | ストア | `EABK-Studio/web/js/store.js` | モデル、選択、関連、表現間の状態を共有 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-007、FR-008、FR-1002、FR-1003、FR-1005、FR-1006、FR-1011、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1029、FR-1031、FR-1033、FR-1034、FR-1040、FR-1041、FR-1042、FR-1061 |
 | UI 部品 | `EABK-Studio/web/js/ui.js`, `EABK-Studio/web/js/xref.js` | 表示、詳細、通知、リンク、状態表示の共通の形 `statePanel`（読込中・空・エラー・古い。`data-testid=state-panel`）、同梱のアイコン 1 セット `icon()`（16・20・24px）、系列色のトークン読み出し `token()` / `TYPE_COLOR` / `STATUS_COLOR` / `IMPL_COLOR` | FR-006、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1027、FR-1028、FR-1031、FR-1033、FR-1040、FR-1041、FR-1042、FR-1047、FR-1048、FR-1061、NFR-A11Y-001、NFR-OPS-003、NFR-PERF-006、NFR-UX-005、NFR-UX-007、NFR-UX-010 |
 | デザイン基盤 | `EABK-Studio/web/tokens.css`, `EABK-Studio/web/app.css`, `EABK-Studio/web/sz.css`, `EABK-Studio/web/js/theme.js`, `EABK-Studio/web/index.html` | Fluent 2 に寄せた名前付きトークン（`--color-*`・`--font-size-*`・`--space-*`・`--radius-*`・`--shadow-*`・`--stroke-*`・`--duration-*`・`--ease-*`、部品の種類ごとの段階 `--radius-control`・`--radius-container`・`--radius-overlay`・`--radius-tooltip`・`--elevation-*`、素材 `--material-*`、系列色 `--viz-*`、3D 素材色 `--scene-*`。tokens.css の 1 か所）、ライト/ダーク/システムのテーマ（`data-theme`・`data-theme-choice`、テーマ名のみ localStorage `eabk-studio.theme` に保存・起動時に復元、不正値は system）、強制色・動きの軽減・フォーカス表示、外枠、ナビゲーション、検索、通知 | FR-002、FR-003、FR-004、FR-005、FR-006、FR-008、FR-011、FR-1002、FR-1003、FR-1005、FR-1006、FR-1012、FR-1013、FR-1014、FR-1021、FR-1022、FR-1032、FR-1040、FR-1041、FR-1042、FR-1047、FR-1048、FR-1068、FR-1069、FR-1070、FR-1072、NFR-A11Y-001、NFR-PERF-006、NFR-UX-016 |
