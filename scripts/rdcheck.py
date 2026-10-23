@@ -9,7 +9,7 @@ Usage:
   python scripts/rdcheck.py index [ID ...] [--kind 上位|出典|参照|実装|検証|使用] [--json]  # 種類つきの関係（都度生成）
   python scripts/rdcheck.py stats                   # metrics for rd-audit
   python scripts/rdcheck.py digest [AC ...]         # current AC digests (PARAM expanded)
-  python scripts/rdcheck.py similar "文章"|ID [--kind FR|AC] [--top 5] [--json]  # 新規に作る前に似た既存の項目を探す
+  python scripts/rdcheck.py similar "文章"|ID [--kind FR|AC|CASE|CAT] [--top 5] [--json]  # 新規に作る前に似た既存の項目を探す
   python scripts/rdcheck.py similar --pairs [--min 0.35]  # 似た要求・受入基準の組（統合の候補）
 
 Exit code of `check`: 0 = no error, 1 = at least one error.
@@ -1285,25 +1285,70 @@ def _sim(a: Set[str], b: Set[str]) -> float:
     return len(a & b) / len(a | b) if a and b else 0.0
 
 
-def similar_items(doc, kind: str = "all") -> List[tuple]:
-    """(id, 種別, 題名・本文, grams) — 廃止・却下の要求と、その受入基準は除く。"""
+def _case_items(root, cfg) -> List[tuple]:
+    """System Test 台帳の有効なケース（blocked は除く）。meta は紐づく要求 ID の集合。"""
     out: List[tuple] = []
+    for c in h.load_ledger(root, cfg).get("cases", []):
+        if c.get("status") == "blocked" or not c.get("id"):
+            continue
+        steps = c.get("steps")
+        steps = " ".join(map(str, steps)) if isinstance(steps, list) else str(steps or "")
+        text = " ".join(p for p in (str(c.get("title", "")), steps, str(c.get("description", ""))) if p)
+        out.append((c["id"], "CASE", c.get("title", ""), _grams(text), set(c.get("requirement_ids", []))))
+    return out
+
+
+def _cat_items(root, cfg) -> List[tuple]:
+    """docs/catalog.md の行。機能は要求 ID と題名、共通部品・API・テーブルは名前と説明列。廃止・却下の機能行は除く。
+    meta は表の種類（同じ種類の表の行どうしだけを比べる）。"""
+    out: List[tuple] = []
+    for kind, t in h.parse_catalog_tables(root, cfg):
+        if not kind:
+            continue
+        key_i = t.col("要求 ID", "要求ID") if kind == "feature" else t.col("部品名", "テーブル名", "名前")
+        if key_i is None:
+            continue
+        state_i = t.col("決定状態")
+        text_cols = [i for i, name in enumerate(t.header)
+                     if re.search(r"題名|名前|部品名|テーブル名|説明|役割|用途|内容", name) and i != key_i]
+        for _ln, cells in t.rows:
+            if key_i >= len(cells):
+                continue
+            if state_i is not None and state_i < len(cells) and re.match(r"\s*(廃止|却下)", h.strip_md(cells[state_i])):
+                continue
+            key = h.strip_md(cells[key_i]).strip()
+            text = " ".join(h.strip_md(cells[i]) for i in text_cols if i < len(cells))
+            if key and text:
+                out.append((key, "CAT", text, _grams(text), {kind}))
+    return out
+
+
+def similar_items(doc, kind: str = "all", ctx=None) -> List[tuple]:
+    """(id, 種別, 題名・本文, grams, meta) — 廃止・却下の要求と、その受入基準は除く。
+    ctx=(root, cfg) を渡すと CASE（台帳）と CAT（カタログ）も対象にする。"""
+    out: List[tuple] = []
+    if ctx and kind in ("all", "CASE"):
+        out += _case_items(*ctx)
+    if ctx and kind in ("all", "CAT"):
+        out += _cat_items(*ctx)
+    if kind in ("CASE", "CAT"):
+        return out
     for r in doc.requirements.values():
         if r.state in ("廃止", "却下"):
             continue
         if kind in ("all", "FR"):
             text = f"{r.title} {r.fields.get('要求', '')}"
-            out.append((r.id, "REQ", r.title, _grams(text)))
+            out.append((r.id, "REQ", r.title, _grams(text), set()))
         if kind in ("all", "AC"):
             for a in r.acs:
                 ac = doc.acs.get(a)
                 if ac:
-                    out.append((ac.id, "AC", ac.text, _grams(ac.text)))
+                    out.append((ac.id, "AC", ac.text, _grams(ac.text), set()))
     return out
 
 
-def similar_pairs(doc, kind: str = "all", min_score: float = PAIRS_MIN) -> List[tuple]:
-    items = similar_items(doc, kind)
+def similar_pairs(doc, kind: str = "all", min_score: float = PAIRS_MIN, ctx=None) -> List[tuple]:
+    items = similar_items(doc, kind, ctx)
     req_of = {a.id: a.requirement for a in doc.acs.values()}
     pairs = []
     for i, x in enumerate(items):
@@ -1312,6 +1357,12 @@ def similar_pairs(doc, kind: str = "all", min_score: float = PAIRS_MIN) -> List[
                 continue
             # 同じ要求の中の受入基準どうしは、正常系・異常系で似るのが普通なので候補にしない
             if x[1] == "AC" and req_of.get(x[0]) == req_of.get(y[0]):
+                continue
+            # 同じ要求に紐づくケースどうしは、観点の違いで似るので候補にしない
+            if x[1] == "CASE" and (x[4] & y[4]):
+                continue
+            # カタログは同じ種類の表の行どうしだけを比べる
+            if x[1] == "CAT" and x[4] != y[4]:
                 continue
             s = _sim(x[3], y[3])
             if s >= min_score:
@@ -1325,19 +1376,20 @@ def cmd_similar(args, root, cfg) -> int:
     kind = args.kind or "all"
     if args.pairs:
         min_score = args.min if args.min is not None else PAIRS_MIN
-        pairs = similar_pairs(doc, kind, min_score)
+        pairs = similar_pairs(doc, kind, min_score, (root, cfg))
         if args.json:
-            print(json.dumps([{"score": s, "a": x[0], "b": y[0], "a_text": x[2][:80], "b_text": y[2][:80]} for s, x, y in pairs],
+            print(json.dumps([{"score": s, "kind": x[1], "a": x[0], "b": y[0], "a_text": x[2][:80], "b_text": y[2][:80]} for s, x, y in pairs],
                              ensure_ascii=False, indent=2))
         else:
             for s, x, y in pairs[:args.top or None]:
-                print(f"{s:.2f}\t{x[0]}\t{y[0]}\t{x[2][:40]} | {y[2][:40]}")
-            print(f"similar: pairs={len(pairs)} min={min_score}（似た組は統合を検討し、残す方を変更・もう一方を廃止します）")
+                print(f"{s:.2f}\t{x[1]}\t{x[0]}\t{y[0]}\t{x[2][:40]} | {y[2][:40]}")
+            print(f"similar: pairs={len(pairs)} min={min_score}（似た組は統合を検討します。REQ・AC は rd-author が残す方を変更しもう一方を廃止、"
+                  "CASE は test-designer が残す方に AC を寄せてもう一方を停止（ledger.py block）、CAT は統合した要求・部品に合わせて行を整理します）")
         return 0
     if not args.text:
         raise SystemExit("ERROR similar: 文章か ID を指定します（全体の重複候補は --pairs）")
     query = " ".join(args.text)
-    items = similar_items(doc, kind)
+    items = similar_items(doc, kind, (root, cfg))
     self_id = None
     if re.fullmatch(r"[A-Z]+(?:-[A-Z]+)?-\d{3,}", query):
         hit = next((it for it in items if it[0] == query), None)
@@ -1578,7 +1630,7 @@ def main(argv=None) -> int:
     hi.add_argument("--json", action="store_true")
     si = sub.add_parser("similar", help="似た既存の要求・受入基準を探す（新規に作る前に。--pairs で全体の重複候補）")
     si.add_argument("text", nargs="*", help="新しく書こうとする要求・受入基準の文章、または既存の ID")
-    si.add_argument("--kind", choices=["FR", "AC", "all"], help="FR は要求（NFR を含む）、AC は受入基準。既定は両方")
+    si.add_argument("--kind", choices=["FR", "AC", "CASE", "CAT", "all"], help="FR は要求（NFR を含む）、AC は受入基準、CASE は台帳のケース、CAT はカタログの行。既定は all")
     si.add_argument("--pairs", action="store_true", help="要求どうし・受入基準どうしの似た組を一覧にする")
     si.add_argument("--min", type=float, default=None, help=f"類似度の下限（既定 {SIMILAR_MIN}、--pairs は {PAIRS_MIN}）")
     si.add_argument("--top", type=int, default=None, help="表示する件数（既定 5、--pairs は全件）")
