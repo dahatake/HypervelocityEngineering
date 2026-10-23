@@ -30,9 +30,9 @@ python scripts/rdcheck.py list --level system          # System Test の対象�
 python scripts/rdcheck.py list --area 受付              # 領域で絞る（--by-area で領域ごとにまとめる。廃止は件数に含めない）
 python scripts/rdcheck.py index FR-012 [--kind 検証] [--json]   # 種類（上位・出典・参照・実装・検証・使用）つきの関係。保存せず都度生成。ID を渡すと逆引き
 python scripts/rdcheck.py stats                        # 監査のメトリクス（JSON。similar_pairs = 似た要求・AC の組、ledger_shared_acs = 同じ AC の重複ケース）
-python scripts/rdcheck.py similar "入力を中断して再開できる"   # 新規に作る前に、似た既存の要求・AC を類似度の高い順に表示（--kind FR|AC、--top N、--min 0.2）
+python scripts/rdcheck.py similar "入力を中断して再開できる"   # 新規に作る前に、似た既存の要求・AC を類似度の高い順に表示（--kind FR|AC|CASE|CAT、--top N、--min 0.2）
 python scripts/rdcheck.py similar FR-012               # 既存の項目に似た項目
-python scripts/rdcheck.py similar --pairs [--min 0.35] # 似た要求どうし・AC どうしの組（統合の候補。同じ要求の中の AC どうしは除く）
+python scripts/rdcheck.py similar --pairs [--min 0.35] [--kind CASE] [--json] # 似た要求・AC・System Test のケース・カタログの行の組（統合の候補。同じ要求の中の AC どうし、同じ要求に紐づくケースどうしは除く）。統合は `/dedupe` で行う
 python scripts/rdcheck.py digest AC-031                # AC のダイジェスト
 python scripts/rdcheck.py trace FR-012 [--json]        # 要求の上流（G・出典）・横（用語・状態・PARAM）・下流（AC・台帳のケース・カタログ・コード）をたどる
 python scripts/rdcheck.py trace G-002 申請 PARAM-004 下書き保存   # 目的・エンティティ・PARAM・共通部品から、関係する要求を逆にたどる（影響分析）

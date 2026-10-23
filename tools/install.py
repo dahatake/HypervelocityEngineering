@@ -59,6 +59,7 @@ MANAGED = [
     ".github/skills/adopt-existing/SKILL.md",
     ".github/skills/build/SKILL.md",
     ".github/skills/build-template/SKILL.md",
+    ".github/skills/dedupe/SKILL.md",
     ".github/hooks/quality-gates.json",
     ".github/workflows/ebak-verify.yml",
     ".github/workflows/ebak-data-layer.yml",

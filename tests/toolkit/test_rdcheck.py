@@ -146,3 +146,49 @@ def test_trace_follows_links_both_ways(sample):
     text = sample.py("rdcheck.py", "trace", "FR-001", check=True).stdout
     assert "G-001" in text and "AC-001 [system]" in text
     assert sample.py("rdcheck.py", "trace", "FR-999").returncode == 1
+
+
+def _write_cases(sample, cases):
+    p = sample.path / "tests/system/ledger.json"
+    data = json.loads(sample.read("tests/system/ledger.json")) if p.exists() else {"version": 1, "ac_digests": {}}
+    data["cases"] = cases
+    sample.write("tests/system/ledger.json", json.dumps(data, ensure_ascii=False))
+
+
+def test_similar_pairs_detects_cases_and_skips_same_requirement(sample):
+    base = "入力の途中で中断した後に同じ画面から再開できることを確認する"
+    _write_cases(sample, [
+        {"id": "E2E-101", "requirement_ids": ["FR-001"], "ac_ids": ["AC-001"], "title": base, "status": "pass"},
+        {"id": "E2E-102", "requirement_ids": ["FR-002"], "ac_ids": ["AC-002"], "title": base + "。", "status": "pass"},
+        {"id": "E2E-103", "requirement_ids": ["FR-002"], "ac_ids": ["AC-002"], "title": base + "こと", "status": "pass"},
+        {"id": "E2E-104", "requirement_ids": ["FR-009"], "ac_ids": [], "title": base, "status": "blocked"},
+    ])
+    out = json.loads(sample.py("rdcheck.py", "similar", "--pairs", "--kind", "CASE", "--json", check=True).stdout)
+    pairs = {(p["a"], p["b"]) for p in out}
+    assert ("E2E-101", "E2E-102") in pairs and ("E2E-101", "E2E-103") in pairs
+    assert ("E2E-102", "E2E-103") not in pairs            # 同じ要求のケースどうし
+    assert not any("E2E-104" in p for p in pairs)         # 停止済み
+    assert all(p["kind"] == "CASE" for p in out)
+    assert "ledger.py block" in sample.py("rdcheck.py", "similar", "--pairs", "--kind", "CASE", check=True).stdout
+    assert "E2E-101" in sample.py("rdcheck.py", "similar", "--pairs", "--json", check=True).stdout  # all に含む
+
+
+def test_similar_pairs_detects_catalog_rows(sample):
+    sample.write("docs/catalog.md", """# カタログ
+
+## 機能
+
+| 要求 ID | 題名 | 決定状態 | 実装ファイル | テスト | 使っている共通部品 |
+|---|---|---|---|---|---|
+| FR-001 | 入力の中断と再開 | 承認済み | 未実装 | 未実装 | なし |
+
+## 共通部品
+
+| 部品名 | 役割 | 使っている要求 ID |
+|---|---|---|
+| 入力保存 | 入力の途中経過を保存して再開に使う | FR-001 |
+| 入力の保存 | 入力の途中経過を保存し再開に使う | FR-001 |
+| 通知送信 | 完了をメールで知らせる | FR-001 |
+""")
+    out = json.loads(sample.py("rdcheck.py", "similar", "--pairs", "--kind", "CAT", "--json", check=True).stdout)
+    assert [(p["a"], p["b"]) for p in out] == [("入力保存", "入力の保存")]

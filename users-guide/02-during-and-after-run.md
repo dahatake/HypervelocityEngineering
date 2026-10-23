@@ -101,6 +101,10 @@ Q-003: B
 </answers>
 ```
 
+## 2.5b 似た項目を統合する（/dedupe）
+
+要求・受入基準・System Test のケース・カタログの行に重複が溜まったときは、`/dedupe`（Agent は conductor。範囲を絞るなら続けて書く）で単独に統合できます。候補は `python scripts/rdcheck.py similar --pairs`（`--kind FR|AC|CASE|CAT`）で確認できます。rd-author が残す要求を変更してもう一方を廃止し、test-designer が対応するケースを `ledger.py` 経由で統合・停止し、`verify.py --docs-only` が exit 0 になるまで直します。新機能は実装しません。
+
 ## 2.6 /work のクリーンアップ
 
 清掃は保持期間ではなく、正常完了の証拠で許可されます。結果が「全件完了」で、完了条件、最終 verify、対象テスト、main への統合、main 上の統合後 verify が順に成功し、清掃前版 `run-report.md` が確定した run だけを清掃します。それ以外（blocked、中止、失敗、未達、report 不足）は再開できるよう自動期限なく保持します。
