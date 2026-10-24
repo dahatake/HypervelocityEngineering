@@ -139,8 +139,8 @@
     "AC-385": "sha256:284205320fdb9857",
     "AC-386": "sha256:bdb03394adb93269",
     "AC-388": "sha256:7728776935bc85da",
-    "AC-367": "sha256:b3fe394f923861fb",
-    "AC-368": "sha256:96d32c49ed62f5df",
+    "AC-367": "sha256:d237cc7a52b78825",
+    "AC-368": "sha256:5bfbd3b5aa0a7deb",
     "AC-371": "sha256:e948ded3b2f78715",
     "AC-374": "sha256:b3ba18b98270e523",
     "AC-375": "sha256:28cd6902163bdc30",
@@ -150,7 +150,8 @@
     "AC-392": "sha256:6d08c04873c90127",
     "AC-395": "sha256:5f92fc2243db302d",
     "AC-407": "sha256:4bb43ef1566105d4",
-    "AC-413": "sha256:71ddd978fed28074"
+    "AC-413": "sha256:71ddd978fed28074",
+    "AC-425": "sha256:07d5ef2a93019645"
   },
   "cases": [
     {
@@ -8128,11 +8129,11 @@
       "ac_ids": [
         "AC-367"
       ],
-      "title": "ヘッダーの表示モード切替が全画面に常に存在する",
+      "title": "ヘッダーの表示モード切替（2D・3D・RPG・Graph）が全画面に常に存在する",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac367_header_dim_toggle_exists_on_every_screen\" -q",
       "canary": true,
-      "status": "pass",
+      "status": "not_run",
       "last_commit": "1f31e282",
       "last_run_at": "2026-10-23T10:39:40+09:00",
       "evidence": "work/runs/adhoc-202610231035/logs/system-test/E2E-199-202610231038.log",
@@ -8142,6 +8143,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test ケースを作成"
+        },
+        {
+          "at": "2026-10-25T08:56:25+09:00",
+          "by": "test-designer",
+          "change": "title: 'ヘッダーの表示モード切替が全画面に常に存在する' -> 'ヘッダーの表示モード切替（2D・3D・RPG・Graph）が全画面に常に存在する'",
+          "reason": "FR-1066 変更: 切替が 2D・3D・RPG・Graph の 4 つ（data-dim に graph を含む）"
         }
       ]
     },
@@ -8215,11 +8222,11 @@
       "ac_ids": [
         "AC-368"
       ],
-      "title": "マップ以外で RPG 風は disabled で理由が表示される（異常系）",
+      "title": "マップ以外で RPG 風、Graph 画面以外で Graph は disabled で理由が表示される（異常系）",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_rpg_is_disabled_with_reason_outside_map\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_rpg_is_disabled_with_reason_outside_map or test_ac368_graph_is_disabled_with_reason_outside_graph_screens\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "not_run",
       "last_commit": "1f31e282",
       "last_run_at": "2026-10-23T10:39:40+09:00",
       "evidence": "work/runs/adhoc-202610231035/logs/system-test/E2E-202-202610231038.log",
@@ -8229,6 +8236,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "System Test ケースを作成"
+        },
+        {
+          "at": "2026-10-25T08:56:26+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_rpg_is_disabled_with_reason_outside_map\" -q' -> 'python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_rpg_is_disabled_with_reason_outside_map or test_ac368_graph_is_disabled_with_reason_outside_graph_screens\" -q'; title: 'マップ以外で RPG 風は disabled で理由が表示される（異常系）' -> 'マップ以外で RPG 風、Graph 画面以外で Graph は disabled で理由が表示される（異常系）'",
+          "reason": "AC-368 変更: Graph も FR-1079 の画面以外で disabled+理由"
         }
       ]
     },
@@ -8763,6 +8776,31 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "AC-413 system ケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-222",
+      "requirement_ids": [
+        "FR-1079"
+      ],
+      "ac_ids": [
+        "AC-425"
+      ],
+      "title": "Graph: 対応画面でグラフ描画・data-current=graph、layers/ctx では disabled+理由（異常系）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac425\" -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-25T08:56:27+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
         }
       ]
     }
