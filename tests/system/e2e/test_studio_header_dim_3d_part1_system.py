@@ -5,7 +5,7 @@ PARAM-018=8).  The implementation is NOT the oracle.  Integration-level ACs (AC-
 are out of scope for System Test.
 
 PROVISIONAL CONTRACT (仮置き。実装者が確認し、食い違えば CONFLICT として返す。この oracle は実装に合わせて直さない):
-  - ヘッダーの切替: [data-testid="header-dim-toggle"]（data-current=2d|3d|rpg, data-selected）。ボタンは [data-dim].
+  - ヘッダーの切替: [data-testid="header-dim-toggle"]（data-current=2d|3d|rpg|graph, data-selected）。ボタンは [data-dim].
     非対応のボタンは disabled。理由は、ボタンの title / aria-description / data-reason、または
     [data-testid="header-dim-reason"] の本文のどれかに空でない文字で出る。
   - 画面: #/dashboard #/map2d #/map3d #/entities #/tables #/integrations #/implstatus（#nav a[href^="#/"] が正本）。
@@ -19,7 +19,7 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from entity_repo import make_zoom
+from entity_repo import make_zoom, make_zoom_states
 from test_semantic_zoom_system import _serve, T_MID, T_DETAIL
 from test_studio_system import studio_url  # noqa: F401  (fixture: 実リポジトリ。種別が複数ある)
 
@@ -84,10 +84,10 @@ def test_ac367_header_dim_toggle_exists_on_every_screen_with_2d_3d_rpg_buttons(p
     for route in SCREENS:
         _go(pg, route)
         expect(pg.locator(HDR)).to_be_visible()
-        assert _cur(pg) in ("2d", "3d", "rpg"), (route, _cur(pg))
-        assert pg.locator(HDR).get_attribute("data-selected") in ("2d", "3d", "rpg")
+        assert _cur(pg) in ("2d", "3d", "rpg", "graph"), (route, _cur(pg))
+        assert pg.locator(HDR).get_attribute("data-selected") in ("2d", "3d", "rpg", "graph")
         dims = pg.locator(f"{HDR} [data-dim]").evaluate_all("els => els.map(e => e.dataset.dim).sort()")
-        assert dims == ["2d", "3d", "rpg"], (route, dims)
+        assert dims == ["2d", "3d", "graph", "rpg"], (route, dims)
 
 
 # FR-1066 AC-367 (異常系): 画面を何度切り替えても切替が消えず、1 つだけである
@@ -308,3 +308,69 @@ def test_ac379_content_is_identical_in_both_styles(pg3):
     assert a == b and a[0], "スタイルで要素・凡例の内容が変わった"
     pg3.locator('[data-testid="legend-3d"]').wait_for()
     assert pg3.locator('[data-testid="legend-3d"]').is_visible()
+
+
+# ============================================================================ FR-1079 AC-425 / FR-1066 AC-368 (Graph)
+GRAPH = '[data-testid="graph-view"]'
+GRAPH_ROUTES = ["map2d", "diagrams?kind=goals", "diagrams?kind=states", "diagrams?kind=entities",
+                "diagrams?kind=components", "entities"]
+NO_GRAPH_ROUTES = ["diagrams?kind=layers", "diagrams?kind=ctx"]
+
+
+# FR-1079 AC-425 / FR-1066 AC-368: Graph を提供する画面でヘッダーの Graph を選ぶとグラフが描画され data-current=graph になる
+@pytest.mark.parametrize("route", GRAPH_ROUTES)
+def test_ac425_graph_renders_nodes_and_directed_edges_on_supported_screens(pg, route, tmp_path):
+    if route.endswith("states"):  # make_zoom には状態遷移がなく states は正当に空。状態表つきの別データで検証する
+        proc, url = _serve(make_zoom_states(tmp_path / "hdr-states"))
+        try:
+            pg.goto(url)
+            pg.wait_for_selector(HDR)
+            _check_graph(pg, route)
+        finally:
+            proc.terminate()
+        return
+    _check_graph(pg, route)
+
+
+def _check_graph(pg, route):
+    _go(pg, route)
+    btn = pg.locator(f'{HDR} [data-dim="graph"]')
+    assert btn.is_enabled(), f"{route} で Graph が無効"
+    btn.click()
+    expect(pg.locator(HDR)).to_have_attribute("data-current", "graph")
+    expect(pg.locator(HDR)).to_have_attribute("data-selected", "graph")
+    g = pg.locator(GRAPH).first
+    expect(g).to_be_visible()
+    assert g.locator('[data-node-id], [data-testid="graph-node"]').count() >= 1, "ノードがない"
+    # 向きを矢印で示す辺: marker-end の矢印か data-testid=graph-edge を持つ辺が 1 つ以上
+    edges = g.locator('[data-testid="graph-edge"], path[marker-end], line[marker-end]')
+    assert edges.count() >= 1, "向きのある辺がない"
+    # 2D に戻せる
+    pg.locator(f'{HDR} [data-dim="2d"]').click()
+    expect(pg.locator(HDR)).to_have_attribute("data-current", "2d")
+    assert pg.locator(f"{GRAPH}:visible").count() == 0
+
+
+# FR-1079 AC-425 / FR-1066 AC-368 (異常系): layers・ctx では Graph が disabled で理由が表示され、押しても 2D に影響しない
+@pytest.mark.parametrize("route", NO_GRAPH_ROUTES)
+def test_ac425_graph_disabled_with_reason_on_layers_and_ctx_and_2d_unaffected(pg, route):
+    _go(pg, route)
+    btn = pg.locator(f'{HDR} [data-dim="graph"]')
+    assert btn.is_disabled(), f"{route} で Graph が有効"
+    assert _reason(pg, btn), f"{route} で Graph が使えない理由が表示されない"
+    before = _cur(pg)
+    btn.click(force=True)
+    assert _cur(pg) == before != "graph"
+    assert pg.locator(f"{GRAPH}:visible").count() == 0
+    assert pg.locator(f'{HDR} [data-dim="2d"]').is_enabled()
+
+
+# FR-1066 AC-368 (異常系): Graph は FR-1079 の画面以外（ダッシュボード・表など）で disabled で理由が表示される
+@pytest.mark.parametrize("route", ["dashboard", "tables", "integrations", "implstatus"])
+def test_ac368_graph_is_disabled_with_reason_outside_graph_screens(pg, route):
+    _go(pg, route)
+    btn = pg.locator(f'{HDR} [data-dim="graph"]')
+    assert btn.is_disabled(), f"{route} で Graph が有効"
+    assert _reason(pg, btn), f"{route} で Graph が使えない理由が表示されない"
+    btn.click(force=True)
+    assert _cur(pg) != "graph"

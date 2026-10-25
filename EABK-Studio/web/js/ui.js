@@ -55,6 +55,11 @@ const ICON_PATHS = {
   info: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 11v6M12 7.5v.5',
   rpg: 'M4 20V9h3V6h2v3h2V6h2v3h2V6h2v3h3v11zM10 20v-5h4v5',
   search: 'M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13M15.5 16l5 5',
+  // FR-1079: Graph の切替アイコンと、ノードの種類の図柄（同じ様式の線画）
+  graph: 'M6 4a2 2 0 1 0 0 4a2 2 0 1 0 0-4M6 16a2 2 0 1 0 0 4a2 2 0 1 0 0-4M18 10a2 2 0 1 0 0 4a2 2 0 1 0 0-4M6 8v8M8 7l8 4M8 17l8-4',
+  ac: 'M4 6l2 2 3-3M4 14l2 2 3-3M12 7h8M12 15h8',
+  state: 'M7 5a3 3 0 1 0 0 6a3 3 0 1 0 0-6M17 13a3 3 0 1 0 0 6a3 3 0 1 0 0-6M9.5 11l5 2',
+  component: 'M4 4h7v7H4zM13 13h7v7h-7zM13 4h7v4h-7zM4 15h4v5H4z',
 };
 export const BUSINESS_ICON = {
   dashboard: 'Dashboard', map2d: '2D relationship map', map3d: '3D relationship map', diagrams: 'Diagrams', placement: 'Data placement',
