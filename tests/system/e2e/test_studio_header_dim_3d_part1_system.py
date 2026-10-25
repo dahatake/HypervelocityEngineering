@@ -19,7 +19,7 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from entity_repo import make_zoom
+from entity_repo import make_zoom, make_zoom_states
 from test_semantic_zoom_system import _serve, T_MID, T_DETAIL
 from test_studio_system import studio_url  # noqa: F401  (fixture: 実リポジトリ。種別が複数ある)
 
@@ -319,7 +319,20 @@ NO_GRAPH_ROUTES = ["diagrams?kind=layers", "diagrams?kind=ctx"]
 
 # FR-1079 AC-425 / FR-1066 AC-368: Graph を提供する画面でヘッダーの Graph を選ぶとグラフが描画され data-current=graph になる
 @pytest.mark.parametrize("route", GRAPH_ROUTES)
-def test_ac425_graph_renders_nodes_and_directed_edges_on_supported_screens(pg, route):
+def test_ac425_graph_renders_nodes_and_directed_edges_on_supported_screens(pg, route, tmp_path):
+    if route.endswith("states"):  # make_zoom には状態遷移がなく states は正当に空。状態表つきの別データで検証する
+        proc, url = _serve(make_zoom_states(tmp_path / "hdr-states"))
+        try:
+            pg.goto(url)
+            pg.wait_for_selector(HDR)
+            _check_graph(pg, route)
+        finally:
+            proc.terminate()
+        return
+    _check_graph(pg, route)
+
+
+def _check_graph(pg, route):
     _go(pg, route)
     btn = pg.locator(f'{HDR} [data-dim="graph"]')
     assert btn.is_enabled(), f"{route} で Graph が無効"

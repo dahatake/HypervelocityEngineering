@@ -190,6 +190,23 @@ def make_zoom(root: Path) -> Path:
     return root
 
 
+ZOOM_STATES = [("注文", "作成済み", "注文が登録されたとき"), ("注文", "確定", "支払いが完了したとき"),
+               ("注文", "出荷済み", "倉庫から出荷されたとき")]
+
+
+def make_zoom_states(root: Path) -> Path:
+    """make_zoom + 要求定義書 3.4 の状態表（注文: 作成済み→確定→出荷済み）。行順で遷移が 2 本できる。"""
+    make_zoom(root)
+    p = root / DOC
+    doc = build_doc(ZOOM_ENTITIES, ZOOM_STATES, [])
+    st = doc.split("### 3.4 状態", 1)[1].split("## 5.", 1)[0]
+    txt = p.read_text(encoding="utf-8")
+    head, rest = txt.split("### 3.4 状態", 1)
+    _, tail = rest.split("## 5.", 1)
+    p.write_text(head + "### 3.4 状態" + st + "## 5." + tail, encoding="utf-8")
+    return root
+
+
 def make_large(root: Path, entities: int = 300, columns: int = 5000) -> Path:
     """PARAM-019 / PARAM-020 scale synthetic data: chain-linked clusters of 10 entities, columns spread evenly."""
     root.mkdir(parents=True, exist_ok=True)
