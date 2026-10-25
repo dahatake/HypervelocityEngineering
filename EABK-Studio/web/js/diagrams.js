@@ -6,11 +6,14 @@ import { el, svgEl, colorOf, TYPE_COLOR, STATUS_COLOR, showTip, hideTip, nodeTip
 import { entityER } from './insights.js';
 import { runtimePlacement } from './insights.js';
 import { dimToggle, dimState, registerDim, publishDim } from './dim.js';
+import { graphView } from './graph.js';
 import { mount as mountPlacement } from './placement.js';
 import { placeRows, listTiers } from './tierlist.js';
 import { UNCLASSIFIED } from './hier.js';
 
 const KINDS = ['ctx', 'goals', 'states', 'entities', 'components', 'layers'];
+// FR-1079: Graph is offered for the relation-centred kinds only (goals / states: layered, entities / components: force). layers (matrix) and ctx are not.
+const GRAPH_KINDS = { goals: 'layered', states: 'layered', entities: 'force', components: 'force' };
 let kind = 'ctx';
 let entThreshold = 0;
 let goalColor = 'impl';
@@ -368,6 +371,21 @@ function componentData() {
   return { comps, list, links };
 }
 
+// FR-1079: the Graph of the components shows what each component holds and serves — component → requirement it implements (the reference direction),
+// component → module it contains — so that a component with no shared requirement still shows its structure. (The shared-requirement co-use stays in the 2D / 3D view.)
+const MOD_CAP_PER_COMP = 6;
+function componentRelationGraph() {
+  const { list } = componentData();
+  const nodes = [], edges = [], seen = new Set();
+  const add = (id, label, type) => { if (!seen.has(id)) { seen.add(id); nodes.push({ id, label, type }); } };
+  for (const e of list) {
+    add(e.c.id, e.c.label, e.c.kind === 'test' ? 'test' : 'component');
+    for (const r of e.reqs) { add(r, r, 'req'); edges.push({ from: e.c.id, to: r }); }
+    [...e.mods.keys()].slice(0, MOD_CAP_PER_COMP).forEach((mod) => { const id = `mod:${e.c.id}:${mod}`; add(id, mod.replace(e.c.path, '') || '/', 'file'); edges.push({ from: e.c.id, to: id }); });
+  }
+  return { nodes, edges };
+}
+
 function componentDiagram(m) {
   const { comps, list, links } = componentData();
   if (!comps.length) return el('div', { class: 'empty' }, t('none'));
@@ -464,27 +482,38 @@ export function mount(host) {
   if (KINDS.includes(hk)) kind = hk;
   const viewOpt = qs.get('view');   // 'runtime' | 'matrix' (旧「配置」の見方。FR-1041 AC-226)
   const dm = dimState.diagrams;
-  dimState.diagrams = qs.has('dim') ? (qs.get('dim') === '3d' ? '3d' : '2d') : dm;
+  dimState.diagrams = qs.has('dim') ? (['3d', 'graph'].includes(qs.get('dim')) ? qs.get('dim') : '2d') : dm;
   let dim = dimState.diagrams;
   const tabs = el('div', { class: 'dgmtabs' });
   const body = el('div', { class: 'dgm' });
   host.append(tabs, body);
-  let current = null, erLink = null, three = null, renderToken = 0;
+  let current = null, erLink = null, three = null, gv = null, renderToken = 0;
   const diagramState = () => ({ ...graphOf(kind, store.model), dim });
   const view = { mode: 'diagrams', getState: () => ({ diagram: diagramState() }), setDim: (d) => setDim(d) };
   window.eabkView = view;
-  const setDim = (d) => { if (d !== '2d' && d !== '3d') return; wanted = d; if (d === dim) { publishDim({ dims: ['2d', '3d'], current: dim, selected: wanted }); return; } dim = dimState.diagrams = d; render(); };
+  const dimsFor = () => (kind in GRAPH_KINDS ? ['2d', '3d', 'graph'] : ['2d', '3d']);
+  const setDim = (d) => { if (!dimsFor().includes(d)) return; wanted = d; if (d === dim) { publishDim({ dims: dimsFor(), current: dim, selected: wanted }); return; } dim = dimState.diagrams = d; render(); };
   let wanted = dim;   // what the user chose; differs from `dim` only when 3D could not be drawn (AC-370)
   const offDim = registerDim((d) => (d ? setDim(d) : setDim(dim === '2d' ? '3d' : '2d')));
   const render = () => {
     const m = store.model;
-    three?.destroy?.(); three = null;
+    three?.destroy?.(); three = null; gv?.destroy(); gv = null;
+    if (dim === 'graph' && !(kind in GRAPH_KINDS)) dim = wanted = dimState.diagrams = '2d';   // layers / ctx have no Graph (the button is disabled with its reason)
     const my = ++renderToken;
-    publishDim({ dims: ['2d', '3d'], current: dim, selected: wanted });
-    const toggle = dimToggle({ current: dim, onPick: setDim });
+    publishDim({ dims: dimsFor(), current: dim, selected: wanted });
+    const toggle = dimToggle({ current: dim, onPick: setDim, dims: dimsFor() });
     tabs.replaceChildren(...KINDS.map((k) => el('button', { class: 'tabbtn' + (k === kind ? ' on' : ''), onclick: () => { kind = k; render(); } }, t('dgm.' + k))), toggle);
     const note = el('div', { class: 'mini', style: { marginBottom: '10px', maxWidth: '900px' } }, t('dgm.' + kind + '.note'));
     let content;
+    if (dim === 'graph') {   // FR-1079: relations as nodes and directed edges
+      const g = graphOf(kind, m);
+      const data = kind === 'components' ? componentRelationGraph()
+        : { nodes: g.elements.map((e) => ({ id: e.id, label: e.label, type: e.type })), edges: g.relations.map((r) => ({ from: r.from, to: r.to, label: r.label })) };
+      gv = graphView({ name: 'dgm-' + kind, layout: GRAPH_KINDS[kind], note: t('graph.note.' + GRAPH_KINDS[kind]), nodes: data.nodes, edges: data.edges });
+      current = el('div', {}, note, gv.el);
+      body.replaceChildren(current);
+      return;
+    }
     if (dim === '3d') {
       const g = graphOf(kind, m);
       const stage = el('div', { class: 'dgm3d', 'data-testid': 'dgm-3d' });
@@ -535,6 +564,6 @@ export function mount(host) {
   const refresh = () => { applyDim(body); if (erLink) erLink(); three?.setSelected?.(store.selected); };
   const offs = [store.on('select', refresh), store.on('hover', refresh), store.on('model', render), onLang(render), offDim];
   body.addEventListener('click', (e) => { if (e.target === body || e.target.tagName === 'svg') store.clear(); });
-  return { destroy() { offs.forEach((f) => f()); three?.destroy?.(); embedded?.destroy?.(); hideTip(); if (window.eabkView === view) window.eabkView = undefined; } };
+  return { destroy() { offs.forEach((f) => f()); three?.destroy?.(); gv?.destroy(); embedded?.destroy?.(); hideTip(); if (window.eabkView === view) window.eabkView = undefined; } };
 }
 
