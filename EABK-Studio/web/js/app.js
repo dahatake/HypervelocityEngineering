@@ -4,7 +4,7 @@ import { el, esc, colorOf, typeLabel, toast, businessIcon, statePanel, icon } fr
 import { initDrawer } from './drawer.js';
 import { installXref } from './xref.js';
 import { decorate, mountStructure, mountConsistency, mountMaintenance } from './insights.js';
-import { dimToggle, dimState, registerDim, hasDimHandler, runDim, headerDimToggle, publishDim, onHeaderDim } from './dim.js';
+import { dimToggle, dimState, registerDim, hasDimHandler, runDim, headerDimToggle, publishDim, onHeaderDim, headerDim } from './dim.js';
 import { cameraCommands } from './camera3d.js';
 import { changeLayout, resetLayout } from './layout.js';
 
@@ -27,6 +27,7 @@ const ROUTES = {
   map2d: { navKey: 'map', icon: 'map2d', dim: '2d', load: () => import('./map2d.js') },
   map3d: { navKey: 'map', icon: 'map3d', dim: '3d', load: () => import('./map3d.js') },
   maprpg: { navKey: 'map', icon: 'map2d', dim: 'rpg', load: () => import('./maprpg.js') },
+  mapgraph: { navKey: 'map', icon: 'map2d', dim: 'graph', load: () => import('./mapgraph.js') },
   diagrams: { icon: 'diagrams', load: () => import('./diagrams.js') },
   placement: { navKey: 'diagrams', alias: 'diagrams', load: () => import('./diagrams.js') },
   entities: { icon: 'entities', load: () => import('./entities.js') },
@@ -39,7 +40,7 @@ const ROUTES = {
 };
 // nav items in display order: key → route it opens (the map opens in the dimension chosen last)
 const NAV = ['dashboard', 'implstatus', 'map', 'diagrams', 'entities', 'integrations', 'source', 'tables', 'maintenance'];
-const MAP_ROUTE = { '2d': 'map2d', '3d': 'map3d', rpg: 'maprpg' };
+const MAP_ROUTE = { '2d': 'map2d', '3d': 'map3d', rpg: 'maprpg', graph: 'mapgraph' };
 const navTarget = (k) => (k === 'map' ? MAP_ROUTE[dimState.map] || 'map2d' : k);
 const navKeyOf = (route) => ROUTES[route]?.navKey || route;
 const view = document.getElementById('view');
@@ -176,7 +177,7 @@ async function route() {
 
 // The map is one item: 2D (map2d), 3D (map3d) and RPG-style (maprpg) are three displays of it, switched here (FR-1040, FR-1053).
 // Selection, filter and the search box live in the store / shared view state, so they survive the switch (AC-221).
-const MAP_DIMS = ['2d', '3d', 'rpg'];
+const MAP_DIMS = ['2d', '3d', 'rpg', 'graph'];
 function mountMapDim(host, name, inner) {
   const go = (d) => {
     const q = location.hash.includes('?') ? '?' + location.hash.split('?')[1] : '';
@@ -224,6 +225,7 @@ function navCommands() {
   if (hasDimHandler()) {
     list.push({ cmd: true, id: 'cmd:dim', label: t('cmd.dim'), key: '2D 3D', run: () => runDim() });
     if (ROUTES[routeName()]?.dim) list.push({ cmd: true, id: 'cmd:dim:rpg', label: t('cmd.dim.rpg'), key: 'RPG', run: () => runDim('rpg') });
+    if (headerDim.dims.includes('graph')) list.push({ cmd: true, id: 'cmd:dim:graph', label: t('cmd.dim.graph'), key: 'Graph', run: () => runDim('graph') });
   }
   list.push(...cameraCommands());   // FR-1070 AC-384: 3D のカメラのプリセットをコマンド検索から選ぶ
   return list;

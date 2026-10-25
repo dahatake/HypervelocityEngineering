@@ -6,6 +6,7 @@ import { el, statusBadge, nodeChip, vscodeUrl, typeLabel } from './ui.js';
 import { mountShell } from './semzoom.js';
 import { create2d } from './sz2d.js';
 import { registerDim, publishDim } from './dim.js';
+import { graphView } from './graph.js';
 import { listTiers, hierarchy } from './tierlist.js';
 
 const WORDS = ['作成', '参照', '更新', '削除'];
@@ -164,9 +165,9 @@ function detailView(host, m, name) {
 export function mount(host) {
   const page = el('div', { class: 'page eu' });
   host.append(page);
-  let zoom = null;   // FR-1027: semantic zoom of the relations and columns, below the matrix (the matrix keeps its place)
+  let zoom = null, gv = null;   // FR-1027: semantic zoom of the relations and columns, below the matrix (the matrix keeps its place)
   const render = () => {
-    zoom?.destroy(); zoom = null;
+    zoom?.destroy(); zoom = null; gv?.destroy(); gv = null;
     const m = store.model;
     const name = new URLSearchParams(location.hash.split('?')[1] || '').get('entity');
     const body = el('div');
@@ -196,23 +197,36 @@ export function mount(host) {
     const pass = ++shellToken;
     // FR-1066/1067: the header switch swaps the renderer; the shared view state (scale, centre, selection, filter) carries over.
     const mount2 = (createRenderer) => { zoom = mountShell(zoomHost, { mode: 'entities', createRenderer, height: 560, links }); };
+    if (wanted === 'graph') {   // FR-1079: the entity ↔ requirement relations as nodes and directed edges (requirement → entity), force layout
+      dim = 'graph';
+      const nodes = [], edges = [], seen = new Set();
+      const add = (id, label, type, title) => { if (!seen.has(id)) { seen.add(id); nodes.push({ id, label, type, title }); } };
+      for (const e of m.entities.entities) {
+        add('ent:' + e.name, e.name, 'entity', e.name);
+        for (const u of e.usecases) { add(u.requirement, u.requirement, 'req', u.title || ''); edges.push({ from: u.requirement, to: 'ent:' + e.name, label: usageText(WORDS.filter((w) => u.usages.includes(w))) }); }
+      }
+      gv = graphView({ name: 'entities', nodes, edges, layout: 'force', note: t('graph.note.force') });
+      zoomHost.replaceChildren(gv.el);
+      publishDim({ dims: ['2d', '3d', 'graph'], current: dim, selected: wanted });
+      return;
+    }
     if (wanted === '3d') {
       import('./sz3d.js').then((mod) => {
         if (pass !== shellToken) return;
         try { zoom?.destroy(); zoomHost.replaceChildren(); mount2(mod.create3d); dim = '3d'; }
         catch (e) { fallback(); }
-        publishDim({ dims: ['2d', '3d'], current: dim, selected: wanted });
-      }).catch(() => { if (pass === shellToken) { fallback(); publishDim({ dims: ['2d', '3d'], current: dim, selected: wanted }); } });
+        publishDim({ dims: ['2d', '3d', 'graph'], current: dim, selected: wanted });
+      }).catch(() => { if (pass === shellToken) { fallback(); publishDim({ dims: ['2d', '3d', 'graph'], current: dim, selected: wanted }); } });
       const fallback = () => {   // AC-370: 3D cannot be drawn -> show 2D, say why; `selected` keeps the choice
         zoom?.destroy(); zoomHost.replaceChildren(); dim = '2d'; mount2(create2d);
         zoomHost.prepend(el('div', { class: 'warnbox', role: 'alert', 'data-testid': 'dim-fallback' }, t('dim.nowebgl')));
       };
     } else { dim = '2d'; mount2(create2d); }
-    publishDim({ dims: ['2d', '3d'], current: dim, selected: wanted });
+    publishDim({ dims: ['2d', '3d', 'graph'], current: dim, selected: wanted });
   };
   let dim = '2d', wanted = '2d', shellToken = 0;
-  const offDim = registerDim((d) => { const n = d === '2d' || d === '3d' ? d : dim === '2d' ? '3d' : '2d'; if (n === wanted && n === dim) return; wanted = n; render(); });
+  const offDim = registerDim((d) => { const n = d === '2d' || d === '3d' || d === 'graph' ? d : dim === '2d' ? '3d' : '2d'; if (n === wanted && n === dim) return; wanted = n; render(); });
   render();
   const offs = [onLang(render), store.on('model', render), offDim];
-  return { destroy() { offs.forEach((f) => f()); shellToken++; zoom?.destroy(); } };
+  return { destroy() { offs.forEach((f) => f()); shellToken++; zoom?.destroy(); gv?.destroy(); } };
 }

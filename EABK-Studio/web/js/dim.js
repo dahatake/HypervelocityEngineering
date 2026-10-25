@@ -23,11 +23,11 @@ export function publishDim(p) {
   Object.assign(headerDim, next);
   for (const f of [...headerListeners]) f(headerDim);
 }
-export const ALL_DIMS = ['2d', '3d', 'rpg'];
+export const ALL_DIMS = ['2d', '3d', 'rpg', 'graph'];
 // The header switch (FR-1066): all three buttons always exist; the ones this screen does not support are disabled with a reason.
 export function headerDimToggle() {
   const { dims, current, selected } = headerDim;
-  const reasonOf = (d) => t(d === 'rpg' ? 'hdim.reason.rpg' : 'hdim.reason.3d');
+  const reasonOf = (d) => t(d === 'rpg' ? 'hdim.reason.rpg' : d === 'graph' ? 'hdim.reason.graph' : 'hdim.reason.3d');
   // role=status は画面の結果表示（保守の実行結果など）が使う。常設ヘッダーは aria-live だけにして、画面側の role=status と重ならないようにする
   const live = el('span', { class: 'sr-only', 'aria-live': 'polite' }, t('dim.now', { d: current.toUpperCase() }));
   const btn = (d) => {
@@ -44,7 +44,7 @@ export function headerDimToggle() {
 
 // 切替アイコンは同梱の 1 セット（ui.js の icon）の線画で、20px・currentColor（FR-1048 AC-268）。2D は面（平らな表）、3D は立方体。
 export function dimIcon(dim) {
-  const svg = icon(dim === 'rpg' ? 'rpg' : dim === '2d' ? 'tables' : 'map3d', { size: 20 });
+  const svg = icon(dim === 'rpg' ? 'rpg' : dim === 'graph' ? 'graph' : dim === '2d' ? 'tables' : 'map3d', { size: 20 });
   svg.setAttribute('class', 'icon dim-ico dim-ico-' + dim);
   return svg;
 }
