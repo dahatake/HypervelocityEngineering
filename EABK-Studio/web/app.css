@@ -76,6 +76,32 @@ html[data-layout=wide] #view{padding-inline:var(--space-6)}
 @keyframes dim-bob{50%{transform:translateY(calc(var(--stroke-focus) * -1))}}
 .dgmtabs .dim-toggle{margin-left:auto}
 .dim-float{position:absolute;right:var(--space-4);bottom:var(--space-4);z-index:8}
+/* FR-1079: Graph 表示。色はトークンだけ。種類は図柄と語でも示し、選択は太い枠で示す。動きは使わない（動きの軽減の設定にも自動で従う）。 */
+.gv{display:flex;flex-direction:column;gap:var(--space-3)}
+.gv-scroll{overflow:auto;max-height:calc(100vh - 280px);min-height:240px;border:var(--stroke-container) solid var(--color-border-default);border-radius:var(--radius-container);background:var(--color-bg-surface)}
+.gv-svg{display:block}
+.gv-edge{stroke:var(--color-border-strong);stroke-width:1.5}
+.gv-edge.hi{stroke:var(--color-accent);stroke-width:3}
+.gv-arrowhead{fill:var(--color-border-strong)}
+.gv-node{cursor:pointer}
+.gv-box{fill:var(--color-bg-raised);stroke:var(--color-border-strong);stroke-width:1}
+.gv-bar{fill:currentColor}
+.gv-ico{color:inherit;stroke:currentColor}
+.gv-id{fill:var(--color-fg-default);font:600 11px var(--font-mono)}
+.gv-title{fill:var(--color-fg-muted);font-size:11px}
+.gv-node:hover .gv-box{fill:var(--color-bg-hover)}
+.gv-node.sel .gv-box{fill:var(--color-bg-selected);stroke:var(--color-accent);stroke-width:3}
+.gv-node.sel .gv-title{fill:var(--color-fg-default);font-weight:600}
+.gv-node:focus{outline:none}
+.gv-node:focus-visible .gv-box{stroke:var(--color-focus);stroke-width:3;stroke-dasharray:6 3}
+.gv-legend{display:flex;flex-wrap:wrap;gap:var(--space-3);margin:0;padding:0;list-style:none;font-size:12px;color:var(--color-fg-muted)}
+.gv-legend li{display:inline-flex;align-items:center;gap:var(--space-1)}
+.gv-key{display:inline-flex}.gv-key .icon{stroke:currentColor}
+.gv-filter{padding:var(--space-3);border:var(--stroke-container) solid var(--color-border-default);border-radius:var(--radius-container);background:var(--color-bg-raised)}
+.gv-filter p{margin:0 0 var(--space-2)}
+.gv-chips{display:flex;flex-wrap:wrap;gap:var(--space-2)}
+.gv-chips .btn.on{background:var(--color-accent);color:var(--color-on-accent)}
+.gv-page{display:flex;flex-direction:column;gap:var(--space-3)}
 .hdr-dim-host{display:flex;align-items:center}.hdr-dim .dim-btn:disabled{opacity:.5;cursor:not-allowed}.hdr-dim-reason{max-width:16ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dgm3d{position:relative;height:min(68vh,720px);min-height:320px}
 .dgm3d-stage{position:absolute;inset:0 0 24px 0;border:var(--stroke-thin) solid var(--color-border-default);border-radius:var(--radius-md);background:var(--scene-stage-bg);touch-action:none}

@@ -609,7 +609,7 @@ function mountNoWebgl(host) {
     el('h2', {}, t('cam3d.nowebgl.h')), el('p', {}, t('dim.nowebgl')), el('p', { class: 'mini' }, t('cam3d.nowebgl.d')),
     el('a', { class: 'btn', href: '#/map2d' }, t('sz.to2d')),
     el('table', { 'data-testid': 'legend-table' }, el('thead', {}, el('tr', {}, el('th', {}, t('cam3d.nowebgl.kind')), el('th', {}, t('cam3d.nowebgl.shape')))), el('tbody', {}, rows))));
-  setTimeout(() => publishDim({ dims: ['2d', '3d', 'rpg'], current: '2d', selected: '3d' }), 0);   // 選んだのは 3D のまま（元の選択を保つ）
+  setTimeout(() => publishDim({ dims: ['2d', '3d', 'rpg', 'graph'], current: '2d', selected: '3d' }), 0);   // 選んだのは 3D のまま（元の選択を保つ）
   return { destroy() {} };
 }
 
