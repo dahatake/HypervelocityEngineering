@@ -27,7 +27,7 @@ ITEMS = {
     "repo": "header.top #repoBtn",
     "time": "header.top #modelTime",
     "persona": "header.top #personaBar button",
-    "lang": "header.top #lang",
+    "lang": "header.top #lang button",
     "theme": 'header.top [data-testid="theme-toggle"] button',
 }
 MAP_SURFACE = '#view canvas, [data-testid="sz-viewport"]'  # make_zoom のデータでは #/map2d が意味ズーム表示（canvas なし）
@@ -45,7 +45,7 @@ def _fr1041_nav_count():
 
 
 NAV_COUNT = _fr1041_nav_count()
-EXPECT_COUNT = {"nav": NAV_COUNT, "dim": 3, "persona": 3}
+EXPECT_COUNT = {"nav": NAV_COUNT, "dim": 4, "persona": 3}
 
 JS_RECTS = """(sel) => [...document.querySelectorAll(sel)].map((e) => {
   const r = e.getBoundingClientRect();
@@ -91,7 +91,8 @@ def test_ac391_all_header_elements_are_on_one_row(browser, zurl, width):
     items = _all(page)
     for k, n in EXPECT_COUNT.items():
         assert len(items[k]) == n, f"{k}: {len(items[k])} != {n}"
-    for k in ("search", "repo", "time", "lang"):
+    assert len(items["lang"]) == 2, "lang"  # FR-011 AC-430: JA/EN の 2 button
+    for k in ("search", "repo", "time"):
         assert len(items[k]) == 1, k
     assert len(items["theme"]) >= 1
     flat = [r for v in items.values() for r in v]
@@ -184,7 +185,7 @@ def test_ac392_tab_walks_all_header_controls(browser, zurl, width):
     page.locator("header.top #nav a").first.focus()
     seen = set()
     for _ in range(40):
-        ident = page.evaluate("() => { const a = document.activeElement; return a && a.closest('header.top') ? (a.id || a.getAttribute('href') || a.dataset.dim || a.textContent.trim()) : null; }")
+        ident = page.evaluate("() => { const a = document.activeElement; return a && a.closest('header.top') ? (a.closest('#lang') ? 'lang' : a.id || a.getAttribute('href') || a.dataset.dim || a.textContent.trim()) : null; }")
         if ident is None:
             break
         seen.add(ident)

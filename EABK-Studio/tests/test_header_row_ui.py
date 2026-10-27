@@ -19,7 +19,7 @@ CTRL = {
     "nav": "header.top #nav a",
     "dim": '[data-testid="header-dim-toggle"] button',
     "persona": "header.top #personaBar button",
-    "lang": "header.top #lang",
+    "lang": "header.top #lang button",
     "theme": 'header.top [data-testid="theme-toggle"] button',
 }
 
@@ -66,7 +66,7 @@ def test_ac393_shortened_labels_keep_full_name_and_no_function_is_dropped(studio
     wide = _open(studio, "map2d", width=1280, lang=lang)
     ref = {k: wide.evaluate(JS_NAMES, sel) for k, sel in CTRL.items()}
     wide.context.close()
-    assert len(ref["nav"]) == 9 and len(ref["persona"]) == 3 and len(ref["dim"]) == 4 and len(ref["lang"]) == 1 and ref["theme"]
+    assert len(ref["nav"]) == 9 and len(ref["persona"]) == 3 and len(ref["dim"]) == 4 and len(ref["lang"]) == 2 and ref["theme"]
     for width in (1024, 800, 600, 320):
         page = _open(studio, "map2d", width=width, lang=lang)
         for k, sel in CTRL.items():
