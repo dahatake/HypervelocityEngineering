@@ -39,7 +39,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1011 | 2D マップのノード選択と強調 | 承認済み | `EABK-Studio/web/js/map2d.js` | `tests/system/e2e/test_studio_map_placement_system.py`, `EABK-Studio/tests/test_studio.py` | ストア |
 | FR-1012 | 実装配置図（画面・API・データの 3 層） | 承認済み | `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_map_placement_system.py`, `EABK-Studio/tests/test_studio.py` | ストア、UI 部品、デザイン基盤 |
 | FR-1013 | データの ER 図表示 | 承認済み | `EABK-Studio/web/js/insights.js`, `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/i18n.js` | `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
-| NFR-PERF-003 | EABK toolkit の git 子プロセス起動の削減 | 承認済み | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/rdfix.py` | `tests/toolkit/test_git_perf.py` | git ls-files 並行取得 |
+| NFR-PERF-003 | EABK toolkit の子プロセス・ブラウザー起動の削減 | 承認済み | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/rdfix.py` | `tests/toolkit/test_git_perf.py` | git ls-files 並行取得 |
 | NFR-COMPAT-002 | 性能改善による挙動の不変 | 承認済み | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/rdfix.py` | `tests/toolkit/test_git_perf.py` | git ls-files 並行取得 |
 | FR-1014 | 要求の実装状態ビュー（実装の登録と試験 pass の区別） | 承認済み | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/implstatus.js`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/i18n.js`, `users-guide/studio/08-data-reference.md` | `tests/system/e2e/test_impl_status_system.py`, `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
 | FR-1015 | 次に実装すべき要求の分析コマンド | 承認済み | `scripts/next-impl.py`、`tools/install.py`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_next_impl.py` | 次実装候補の分析、run 状態・完了記録、配布同期対象 |
