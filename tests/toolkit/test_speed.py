@@ -378,6 +378,31 @@ def test_plan_batches_merges_across_files_and_keeps_unparsable_alone():
     assert units == [] and used == set()
 
 
+def test_plan_batches_splits_into_at_most_jobs_balanced_units():
+    # NFR-PERF-003 AC-433: jobs==1 -> one process; jobs>1 -> at most N processes, balanced, files kept together
+    L = _load_ledger_module()
+    cs = [{"id": f"E2E-{i}", "command": f"python -m pytest tests/{f}/test_{f}.py::test_{i} -q"}
+          for i, f in enumerate("aabbbc", 1)]
+    no = lambda c: False  # noqa: E731
+    units, used = L.plan_batches(cs, {}, no, no, 1)
+    assert len(units) == 1 and len(used) == 6
+    units, _ = L.plan_batches(cs, {}, no, no, 2)
+    sizes = sorted(len(u["_batch"]["members"]) for u in units)
+    assert sizes == [3, 3] and len({u["command"] for u in units}) == 2
+    units, _ = L.plan_batches(cs, {}, no, no, 10)  # never more processes than cases
+    assert len(units) == 6
+    # known durations: the long case gets its own process, the rest share the other
+    durs = {c["command"]: d for c, d in zip(cs[:3], (100, 10, 10))}
+    units, _ = L.plan_batches(cs[:3], {}, no, no, 2, durs)
+    assert sorted(len(u["_batch"]["members"]) for u in units) == [1, 2]
+    # same-file cases stay together when there are enough files
+    units, _ = L.plan_batches(cs[:5], {}, no, no, 2)
+    for u in units:
+        fs = {p[0] for _, p in u["_batch"]["members"]}
+        assert fs in ({"tests/a/test_a.py"}, {"tests/b/test_b.py"}, {"tests/a/test_a.py", "tests/b/test_b.py"})
+        assert len(fs) >= 1
+
+
 def test_run_shell_timeout_kills_child_processes(tmp_path):
     # NFR-PERF-003 AC-435: after a timeout no child process is left, and the timeout is reported as rc 124
     import sys
