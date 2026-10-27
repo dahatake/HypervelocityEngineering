@@ -128,6 +128,7 @@ main{flex:1;min-height:0;position:relative;z-index:0;overflow:hidden}
 .page h1{margin:0 0 var(--space-1);font-size:var(--font-size-title);line-height:var(--line-height-title)}
 .page .sub{color:var(--color-fg-muted);margin:0 0 var(--space-5)}
 .fill{position:absolute;inset:0}
+canvas.fill{width:100%;height:100%}
 .grid{display:grid;gap:var(--space-4)}
 .card{background:var(--color-bg-surface);border:var(--stroke-container) solid var(--color-border-default);border-radius:var(--radius-container);padding:var(--space-4);box-shadow:var(--elevation-card)}
 .card h3{margin:0 0 var(--space-3);font-size:var(--font-size-body);color:var(--color-fg-muted);font-weight:var(--font-weight-semibold);text-transform:uppercase}
