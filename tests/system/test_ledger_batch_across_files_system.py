@@ -26,7 +26,7 @@ LOG = os.environ["FAKE_BROWSER_LOG"]
 
 
 def _log(line):
-    with open(LOG, "a", encoding="utf-8") as f:
+    with open("%s.%d" % (LOG, os.getpid()), "a", encoding="utf-8") as f:
         f.write(line + "\\n")
 
 
@@ -107,12 +107,20 @@ COMMANDS = [
 
 def _ledger_run(repo: Path, log: Path, *extra: str):
     env = dict(os.environ, PYTHONUTF8="1", EABK_ALLOW_PRIMARY="1", FAKE_BROWSER_LOG=str(log))
-    if log.exists():
-        log.unlink()
-    return subprocess.run(
+    for old in [log, *log.parent.glob(log.name + ".*")]:
+        if old.exists():
+            old.unlink()
+    res = subprocess.run(
         [sys.executable, "scripts/ledger.py", "--by", "test-designer", "run", "--select", "all", "--jobs", "1", *extra],
         cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=300,
     )
+    # each process writes its own per-PID file (no concurrent appends); aggregate here
+    parts = sorted(log.parent.glob(log.name + ".*"))
+    if parts:
+        log.write_text("".join(p.read_text(encoding="utf-8") for p in parts), encoding="utf-8")
+        for p in parts:
+            p.unlink()
+    return res
 
 
 def _events(log: Path, kind: str):
