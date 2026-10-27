@@ -1,7 +1,7 @@
 """System tests for FR-1072 AC-391/AC-392 and NFR-UX-016 AC-395 (run 202610192312).
 
 Expected values come only from the acceptance criteria in docs/requirements-definition.md.  The implementation is NOT
-the oracle.  Widths are PARAM-048 = 1280 / 1024 / 800 / 600 / 320 CSS px (320 = PARAM-034; the header band may scroll horizontally).  AC-393/394/396 are integration level
+the oracle.  Widths are PARAM-048 = 1280 / 1024 / 800 / 600 / 320 CSS px (320 = PARAM-034; 改訂 2026-10-27: 複数段に折り返し、帯の横スクロールなし).  AC-393/394/396 are integration level
 (EABK-Studio/tests/test_header_row_ui.py).
 
 PROVISIONAL CONTRACT (仮置き。実装者が確認し、食い違えば CONFLICT として返す。この oracle は実装に合わせて直さない):
@@ -84,9 +84,31 @@ def _inter(a, b):
     return w > 0 and h > 0 and w * h > 0.5  # 外接矩形の交差面積 0（0.5px² は丸め誤差）
 
 
-# FR-1072 AC-391: every header element sits on one horizontal row at each PARAM-048 width; nav items are not stacked.
+JS_HDR = """() => { const h = document.querySelector('header.top'); const r = h.getBoundingClientRect();
+  return {top: r.top, bottom: r.bottom, h: r.height, sw: h.scrollWidth, cw: h.clientWidth}; }"""
+
+
+def _in_viewport(page, items, width):
+    for k, v in items.items():
+        for r in v:
+            assert r["x"] >= -0.5 and r["x"] + r["w"] <= width + 0.5, f"{k} {r['text']!r} outside viewport at {width}px: {r}"
+            assert r["w"] > 0 and r["h"] > 0, f"{k} {r['text']!r} hidden at {width}px"
+
+
+def _rows(items):
+    """要素の上端 y を 2px 単位でまとめた段の数。"""
+    ys = sorted(r["y"] for v in items.values() for r in v)
+    rows = []
+    for y in ys:
+        if not rows or y - rows[-1] > 2:
+            rows.append(y)
+    return len(rows)
+
+
+# FR-1072 AC-391: every header element is inside the viewport at each PARAM-048 width; narrow widths wrap into several rows
+# and the header height grows automatically.
 @pytest.mark.parametrize("width", WIDTHS)
-def test_ac391_all_header_elements_are_on_one_row(browser, zurl, width):
+def test_ac391_all_header_elements_are_inside_viewport_and_wrap(browser, zurl, width):
     ctx, page = _open(browser, zurl, width)
     items = _all(page)
     for k, n in EXPECT_COUNT.items():
@@ -95,28 +117,26 @@ def test_ac391_all_header_elements_are_on_one_row(browser, zurl, width):
     for k in ("search", "repo", "time"):
         assert len(items[k]) == 1, k
     assert len(items["theme"]) >= 1
-    flat = [r for v in items.values() for r in v]
-    band = page.evaluate("() => { const r = document.querySelector('header.top').getBoundingClientRect(); return {y: r.top, h: r.height}; }")
-    tallest = max(r["h"] for r in flat)
-    # 各要素の縦位置の中心が、帯の中心から PARAM-050 (2px) 以内（帯の中心は内側高さ clientHeight で測り、スクロールバー分を除く）
-    bcy = page.evaluate("() => { const h = document.querySelector('header.top'); return h.getBoundingClientRect().top + h.clientHeight / 2; }")
-    for r in flat:
-        assert abs(r["cy"] - bcy) <= TOL, f"{r['text']!r} center off by {abs(r['cy'] - bcy):.1f}px at {width}px"
-    # ナビ項目は縦に積まれない
-    navs = items["nav"]
-    assert max(r["y"] for r in navs) - min(r["y"] for r in navs) <= 2
-    xs = [r["x"] for r in navs]
-    assert xs == sorted(xs) and len(set(xs)) == len(navs) == NAV_COUNT  # FR-1041 のナビ全項目
-    # 帯そのものが 1 行分の高さ（折り返して高さが増えない）
-    assert band["h"] <= tallest * 2.5
-    # ヘッダー帯の外（ページ本体）には横スクロールが出ない
+    _in_viewport(page, items, width)
+    hdr = page.evaluate(JS_HDR)
+    tallest = max(r["h"] for v in items.values() for r in v)
+    rows = _rows(items)
+    if width <= 600:  # 幅が足りない狭い幅: 複数段に折り返し、高さが伸びる
+        assert rows >= 2, f"not wrapped at {width}px (rows={rows})"
+        assert hdr["h"] > tallest * 1.5, f"header height did not grow at {width}px: {hdr['h']}"
+    if width == 320:
+        assert rows >= 3, f"320px should wrap into several rows (rows={rows})"
+    # ヘッダーの高さは要素を内包する（切り取りなし）
+    assert max(r["y"] + r["h"] for v in items.values() for r in v) <= hdr["bottom"] + 1
+    xs = [r["x"] for r in items["nav"]]
+    assert len(items["nav"]) == NAV_COUNT  # FR-1041 のナビ全項目
     assert page.evaluate("() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1")
     ctx.close()
 
 
-# FR-1072 AC-391 (anomaly): the one-row layout also holds in English (longer labels) and on a screen other than the map.
+# FR-1072 AC-391 (anomaly): the full-visibility holds in English (longer labels) and on a screen other than the map.
 @pytest.mark.parametrize("width", [800, 600, 320])
-def test_ac391_one_row_holds_in_english_on_other_screen(browser, zurl, width):
+def test_ac391_all_visible_in_english_on_other_screen(browser, zurl, width):
     ctx = browser.new_context(viewport={"width": width, "height": 800})
     page = ctx.new_page()
     page.goto(zurl.split("#")[0] + "#/dashboard")
@@ -124,17 +144,14 @@ def test_ac391_one_row_holds_in_english_on_other_screen(browser, zurl, width):
     page.reload()
     page.wait_for_load_state("networkidle")
     page.wait_for_selector("header.top")
-    # リロード直後はナビ描画が遅れるため、ナビ項目が出揃うまで待つ
     page.wait_for_function(
         "n => document.querySelectorAll('header.top #nav a').length >= n", arg=NAV_COUNT)
     items = _all(page)
-    flat = [r for v in items.values() for r in v]
     assert len(items["nav"]) == NAV_COUNT
-    bcy = page.evaluate("() => { const h = document.querySelector('header.top'); return h.getBoundingClientRect().top + h.clientHeight / 2; }")
-    assert all(abs(r["cy"] - bcy) <= TOL for r in flat), "elements are not on one row (center off > PARAM-050)"
-    assert max(r["y"] for r in items["nav"]) - min(r["y"] for r in items["nav"]) <= 2
+    _in_viewport(page, items, width)
+    if width <= 600:
+        assert _rows(items) >= 2
     ctx.close()
-
 
 # FR-1072 AC-392: header element rectangles do not intersect; the page body has no horizontal scroll.
 @pytest.mark.parametrize("width", WIDTHS)
@@ -149,26 +166,23 @@ def test_ac392_header_elements_do_not_overlap_and_page_has_no_horizontal_scroll(
     ctx.close()
 
 
-# FR-1072 AC-392: when the band overflows it scrolls inside; every element can be reached and receives the click point / keyboard focus.
+# FR-1072 AC-392: every element is reachable without scrolling (no horizontal scroll in header/page), not covered, and focusable;
+# the body below the header is not overlapped by the (possibly taller) header.
 @pytest.mark.parametrize("width", WIDTHS)
-def test_ac392_every_header_element_is_reachable_by_pointer_and_keyboard(browser, zurl, width):
+def test_ac392_every_header_element_is_reachable_without_scrolling(browser, zurl, width):
     ctx, page = _open(browser, zurl, width)
-    hdr = page.evaluate("""() => { const h = document.querySelector('header.top');
-      const all = [...h.querySelectorAll('*')];
-      const sc = [h, ...all].find((e) => e.scrollWidth > e.clientWidth + 1 && /(auto|scroll)/.test(getComputedStyle(e).overflowX));
-      return {overflow: [h, ...all].some((e) => e.scrollWidth > e.clientWidth + 1), scrollable: !!sc}; }""")
-    if hdr["overflow"]:
-        assert hdr["scrollable"], "band overflows but is not horizontally scrollable"
-        moved = page.evaluate("""() => { const h = document.querySelector('header.top');
-          const s = [h, ...h.querySelectorAll('*')].find((e) => e.scrollWidth > e.clientWidth + 1 && /(auto|scroll)/.test(getComputedStyle(e).overflowX));
-          s.scrollLeft = s.scrollWidth; return s.scrollLeft > 0; }""")
-        assert moved
+    hdr = page.evaluate(JS_HDR)
+    assert hdr["sw"] <= hdr["cw"], f"header scrollWidth {hdr['sw']} > clientWidth {hdr['cw']} at {width}px"
+    assert page.evaluate("""() => { const h = document.querySelector('header.top');
+      return [h, ...h.querySelectorAll('*')].every((e) => !(e.scrollWidth > e.clientWidth + 1 && /(auto|scroll)/.test(getComputedStyle(e).overflowX) && e !== document.scrollingElement)); }"""), "header has an inner horizontal scroll area"
+    body = page.evaluate("() => { const v = document.querySelector('#view'); const b = v.getBoundingClientRect(); return {top: b.top}; }")
+    assert body["top"] >= hdr["bottom"] - 1, f"body overlaps header: body top {body['top']} < header bottom {hdr['bottom']}"
     for k, sel in ITEMS.items():
         loc = page.locator(sel)
         for i in range(loc.count()):
-            el = loc.nth(i)
-            el.scroll_into_view_if_needed()
+            el = loc.nth(i)  # スクロール操作なしで到達できる（scroll_into_view は使わない）
             hit = el.evaluate("""(e) => { const r = e.getBoundingClientRect();
+              if (r.left < 0 || r.right > innerWidth) return false;
               const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
               return !!t && (t === e || e.contains(t) || t.contains(e)); }""")
             assert hit, f"{k}[{i}] is covered / outside the viewport at {width}px"
@@ -176,7 +190,6 @@ def test_ac392_every_header_element_is_reachable_by_pointer_and_keyboard(browser
             assert el.evaluate("(e) => document.activeElement === e || e.contains(document.activeElement)"), f"{k}[{i}] cannot take focus"
     assert page.evaluate("() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1")
     ctx.close()
-
 
 # FR-1072 AC-392 (anomaly): Tab from the first header element walks through all of them without leaving the header early.
 @pytest.mark.parametrize("width", [800, 600, 320])
@@ -240,3 +253,4 @@ def test_ac395_panel_content_is_not_dropped_when_narrow(browser, zurl):
         ctx.close()
     assert counts[1280] > 0
     assert counts[600] == counts[1280] and counts[320] == counts[1280]
+

@@ -3,7 +3,7 @@
 置き場の注記: test-designer は tests/system/ 以外を変更できない（hook G-5）ため、EABK-Studio/tests/test_*_ui.py の流儀
 （test_links_wrap_status_ui.py の studio fixture / _open）をそのまま使う形でここに置く。実装者が
 EABK-Studio/tests/test_header_row_ui.py へ移してよい（移すときは sys.path の 3 行と import を元の流儀に戻す）。
-期待値は要求定義書の受入基準だけから決める。幅は PARAM-048 = 1280 / 1024 / 800 / 600 / 320 CSS px（320 = PARAM-034。ヘッダー帯の横スクロール可）。
+期待値は要求定義書の受入基準だけから決める。幅は PARAM-048 = 1280 / 1024 / 800 / 600 / 320 CSS px（320 = PARAM-034。改訂 2026-10-27: ヘッダーは複数段に折り返し、帯の横スクロールなし。AC-393 は折り返しても全要素が非表示にされないことを確認）。
 Run: python -m pytest tests/system/e2e/test_studio_header_row_integration.py -q
 """
 import sys
@@ -165,3 +165,4 @@ def test_ac396_state_survives_zoom_factor(studio):
     assert page.locator("#q").input_value() == "FR-001"
     _assert_no_overlap(page, ["header.top", "#navDesc", "#view"])
     page.context.close()
+

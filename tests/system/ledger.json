@@ -146,13 +146,14 @@
     "AC-375": "sha256:28cd6902163bdc30",
     "AC-378": "sha256:b07b61041fac5559",
     "AC-379": "sha256:879df9efc754b69f",
-    "AC-391": "sha256:212c3fdbc5154c3f",
-    "AC-392": "sha256:6d08c04873c90127",
+    "AC-391": "sha256:d379f711fdf119aa",
+    "AC-392": "sha256:47157ae0b96a7fbe",
     "AC-395": "sha256:5f92fc2243db302d",
     "AC-407": "sha256:4bb43ef1566105d4",
     "AC-413": "sha256:71ddd978fed28074",
     "AC-425": "sha256:07d5ef2a93019645",
-    "AC-430": "sha256:3229866e83bfd71e"
+    "AC-430": "sha256:3229866e83bfd71e",
+    "AC-393": "sha256:b2d0e8c16323a6c0"
   },
   "cases": [
     {
@@ -8596,11 +8597,11 @@
       "ac_ids": [
         "AC-391"
       ],
-      "title": "Header elements on one row (center within 2px) at 1280/1024/800/600/320",
+      "title": "Header elements all inside viewport, wrap into several rows at narrow widths (1280..320)",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_row_system.py -k ac391",
       "canary": false,
-      "status": "pass",
+      "status": "not_run",
       "last_commit": "6cfebfd6",
       "last_run_at": "2026-10-27T15:55:29+09:00",
       "evidence": "work/runs/202610271534/logs/system-test/E2E-216-202610271551.log",
@@ -8622,6 +8623,12 @@
           "by": "test-designer",
           "change": "command: \"python -m pytest tests/system/e2e/test_studio_header_row_system.py -k 'ac391'\" -> 'python -m pytest tests/system/e2e/test_studio_header_row_system.py -k ac391'",
           "reason": "Windows で -k の単一引用符が失敗するため引用符を除去"
+        },
+        {
+          "at": "2026-10-27T22:54:43+09:00",
+          "by": "test-designer",
+          "change": "title: 'Header elements on one row (center within 2px) at 1280/1024/800/600/320' -> 'Header elements all inside viewport, wrap into several rows at narrow widths (1280..320)'",
+          "reason": "FR-1072 改訂 (2026-10-27): 一列・帯スクロール許容 → 複数段折り返し・全要素ビューポート内・横スクロールなし"
         }
       ]
     },
@@ -8633,11 +8640,11 @@
       "ac_ids": [
         "AC-392"
       ],
-      "title": "Header no overlap (area 0), reachable, no page horizontal scroll at 1280..320",
+      "title": "Header no overlap incl. body, reachable without scrolling, no header/page horizontal scroll at 1280..320",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_row_system.py -k ac392",
       "canary": false,
-      "status": "pass",
+      "status": "not_run",
       "last_commit": "6cfebfd6",
       "last_run_at": "2026-10-27T15:55:29+09:00",
       "evidence": "work/runs/202610271534/logs/system-test/E2E-217-202610271551.log",
@@ -8659,6 +8666,12 @@
           "by": "test-designer",
           "change": "command: \"python -m pytest tests/system/e2e/test_studio_header_row_system.py -k 'ac392'\" -> 'python -m pytest tests/system/e2e/test_studio_header_row_system.py -k ac392'",
           "reason": "Windows で -k の単一引用符が失敗するため引用符を除去"
+        },
+        {
+          "at": "2026-10-27T22:54:44+09:00",
+          "by": "test-designer",
+          "change": "title: 'Header no overlap (area 0), reachable, no page horizontal scroll at 1280..320' -> 'Header no overlap incl. body, reachable without scrolling, no header/page horizontal scroll at 1280..320'",
+          "reason": "FR-1072 改訂 (2026-10-27): 一列・帯スクロール許容 → 複数段折り返し・全要素ビューポート内・横スクロールなし"
         }
       ]
     },
@@ -8824,6 +8837,31 @@
       "history": [
         {
           "at": "2026-10-27T13:44:14+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-224",
+      "requirement_ids": [
+        "FR-1072"
+      ],
+      "ac_ids": [
+        "AC-393"
+      ],
+      "title": "Wrapped header keeps full names/tooltips, no function dropped or hidden (1280..320)",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_row_integration.py -k ac393",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-27T22:55:20+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
