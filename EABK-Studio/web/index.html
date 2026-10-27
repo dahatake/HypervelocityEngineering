@@ -14,7 +14,7 @@
 <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
 </head>
 <body>
-<a class="skip-link" href="#view">メインコンテンツへ移動 / Skip to content</a>
+<a class="skip-link" href="#view" data-i18n="skip.main">Skip to content</a>
 <div class="bg" aria-hidden="true"><i></i><i></i><i></i></div>
 <header class="top">
   <a class="brand" href="#/dashboard" title="EABK Studio">
@@ -23,21 +23,24 @@
   </a>
   <nav id="nav" class="tabs"></nav>
   <div id="headerDim" class="hdr-dim-host"></div>
-  <div class="search" role="search" aria-label="Search project data">
+  <div class="search" role="search" data-i18n-aria="search.aria">
     <svg class="icon" data-icon="search" aria-hidden="true" viewBox="0 0 24 24" width="16" height="16"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m16 16 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-    <input id="q" type="search" aria-label="Search project data" autocomplete="off" spellcheck="false" data-testid="command-search" data-i18n-ph="search.ph">
+    <input id="q" type="search" data-i18n-aria="search.aria" autocomplete="off" spellcheck="false" data-testid="command-search" data-i18n-ph="search.ph">
     <kbd>/</kbd>
     <div id="results" class="results" hidden></div>
   </div>
   <button id="repoBtn" type="button" class="chip repo" data-testid="repo-pick" data-i18n-title="repo.change"></button>
-  <time id="modelTime" class="mini" tabindex="0" aria-label="model timestamp"></time>
-  <div id="personaBar" class="row" aria-label="persona"></div>
-  <button id="lang" class="chip" title="Language / 言語">JA | EN</button>
+  <time id="modelTime" class="mini" tabindex="0" data-i18n-aria="model.time"></time>
+  <div id="personaBar" class="row" data-i18n-aria="persona.group"></div>
+  <div id="lang" class="theme-toggle lang-toggle" role="group" data-i18n-aria="lang.group" data-i18n-title="lang.group">
+    <button type="button" data-lang="ja" aria-pressed="false" lang="ja">JA</button>
+    <button type="button" data-lang="en" aria-pressed="false" lang="en">EN</button>
+  </div>
   <div class="layout-ctl" role="group" data-i18n-title="layout.group">
     <button type="button" class="chip" data-testid="layout-change" data-i18n="layout.change" data-i18n-title="layout.change.tip"></button>
     <button type="button" class="chip" data-testid="layout-reset" data-i18n="layout.reset" data-i18n-title="layout.reset.tip"></button>
   </div>
-  <div class="theme-toggle" data-testid="theme-toggle" role="group" aria-label="テーマ / Theme">
+  <div class="theme-toggle" data-testid="theme-toggle" role="group" data-i18n-aria="theme.group">
     <button type="button" data-theme-choice="light" aria-pressed="false" data-i18n="theme.light">ライト</button>
     <button type="button" data-theme-choice="dark" aria-pressed="false" data-i18n="theme.dark">ダーク</button>
     <button type="button" data-theme-choice="system" aria-pressed="true" data-i18n="theme.system">システム</button>

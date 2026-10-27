@@ -6,13 +6,14 @@ import { xrefLink, idRef, idsToNodes } from './xref.js';
 import { placeRows, listTiers } from './tierlist.js';
 
 // FR-1063 AC-348: 各表の行を FR-1062 の (種類, ID) に対応づける。階層にない行（ファイル・用語など）は表の名前の下の「未分類」に置く。
+// i18n-data-begin: the kind names of the hierarchy are managed-data values
 const TIER_SPEC = {
   goals: (r) => ({ kind: '目的', id: r.id }), reqs: (r) => ({ kind: '要求', id: r.id }), acs: (r) => ({ kind: '受入基準', id: r.id }),
   cases: (r) => ({ kind: '試験ケース', id: r.id }), params: (r) => ({ kind: 'パラメータ', id: r.id }), questions: (r) => ({ kind: '質問', id: r.id }),
   audits: (r) => ({ kind: '監査指摘', id: r.id }), sources: (r) => ({ kind: '出典', id: r.id }), entities: (r) => ({ kind: 'エンティティ', id: r.name }),
   parts: (r) => ({ kind: 'カタログ', id: r.name, division: '共通部品' }), apis: (r) => ({ kind: 'カタログ', id: r.name, division: 'API・イベント' }),
   tables: (r) => ({ kind: 'カタログ', id: r.name, division: 'テーブル' }),
-};
+};   // i18n-data-end
 
 let tab = 'reqs';
 const state = { q: '', only: false, filters: {}, sort: { reqs: { k: 'id', d: 1 }, acs: { k: 'id', d: 1 } } };

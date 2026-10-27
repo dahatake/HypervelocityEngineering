@@ -466,6 +466,7 @@ export function graphOf(k, m) {
 // FR-1063 AC-349: 図式の要素を上位層（種類→区分→領域）でまとめて、見出しに件数を示す（図そのものは変えない）。階層にない要素は「未分類」。
 function diagramTiers(k, m) {
   const g = graphOf(k, m);
+  // i18n-data: the kind name of a hierarchy item is a managed-data value
   const spec = (e) => (e.type === 'req' ? { kind: '要求', id: e.id } : e.type === 'goal' ? { kind: '目的', id: e.id } : e.type === 'entity' ? { kind: 'エンティティ', id: e.label } : null);
   const placed = placeRows(g.elements, spec, (e) => [t('dgm.' + k), e.type, UNCLASSIFIED]);
   return el('section', { class: 'dgm-tiers', 'data-testid': 'dgm-tiers', 'aria-label': t('dgm.tiers') }, el('h2', {}, t('dgm.tiers')),

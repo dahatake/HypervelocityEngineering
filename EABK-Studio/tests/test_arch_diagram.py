@@ -118,7 +118,7 @@ def test_text_list_and_keyboard_zoom_in_both_languages(studio, lang, word):
     assert word in body.inner_text()
     assert page.locator("[data-alt-location]").count() == 4
     assert "Azure SQL" in page.locator('[data-alt-location="Azure|Azure SQL"]').inner_text()
-    assert "なし" in page.locator('[data-alt-storage="在庫"]').inner_text()
+    assert ("なし" if lang is None else "None") in page.locator('[data-alt-storage="在庫"]').inner_text()   # FR-011: the word follows the UI language
     before = page.evaluate("() => window.eabkView.getState().scale")
     page.locator('[data-testid="semantic-zoom"] [tabindex="0"]').first.focus()
     page.keyboard.press("+")

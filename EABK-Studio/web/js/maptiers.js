@@ -1,7 +1,7 @@
 // FR-1063 AC-345 AC-346 AC-347: マップ（2D・3D・RPG 風）に出す上位層（種類→区分→領域→項目）の表示。
 // 導出は model.hierarchy（FR-1062）で、描画は hier.js の renderTiers を使う。ここは地図用の置き場（パネル・会話ウィンドウ内）と、項目の選択への接続だけを持つ。
 // 開閉状態は画面（2D・3D・RPG 風）をまたいで保つ（NFR-UX-006）。
-import { lang, onLang } from './i18n.js';
+import { t, onLang } from './i18n.js';
 import { store } from './store.js';
 import { el } from './ui.js';
 import { xrefLink } from './xref.js';
@@ -24,6 +24,7 @@ export const tierState = {
 
 // 地図の点（ノード）→ 階層の項目（FR-1062 の導出。ここでは割り当てを持たない）
 const idx = new WeakMap();
+// i18n-data: the keys of this table are managed-data values (the kind names of the hierarchy)
 const KIND_OF_TYPE = { req: '要求', ac: '受入基準', case: '試験ケース', goal: '目的', param: 'パラメータ', question: '質問', entity: 'エンティティ' };
 function indexOf(hier) {
   let m = idx.get(hier);
@@ -66,11 +67,7 @@ export function tierShortLabel(path) {
   return [division !== kind ? division : null, area].filter(Boolean).map((x) => tierName(x)).join(' › ');
 }
 
-const TXT = {
-  ja: { title: '上位層（種類→区分→領域）', items: '項目', none: '上位層のデータがありません。', close: '閉じる', dlg: '項目の上位層（種類→区分→領域→項目）' },
-  en: { title: 'Tiers (kind → division → area)', items: 'items', none: 'No tier data.', close: 'Close', dlg: 'Item tiers (kind → division → area → item)' },
-};
-const tx = (k) => (TXT[lang()] || TXT.ja)[k];
+const tx = (k) => t('maptier.' + k);   // titles of the tier panel: dictionary keys maptier.title / items / none / close / dlg
 
 /** 項目 1 件の表示: ID と題名のボタン。マップに点があれば、その点を選択する（なければ表示のみ）。 */
 function itemNode(it) {

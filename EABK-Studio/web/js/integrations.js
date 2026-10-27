@@ -14,7 +14,8 @@ function rowsOf(m) {
   return (m.integrationCatalog || []).map((c) => ({
     nodeId: c.id, id: c.id, name: c.name, partner: c.partner, direction: c.direction, method: c.method, dataClass: c.dataClass,
     pii: c.pii, status: c.status, reqs: c.refs || c.reqs, gaps: `${t('int.missing')} ${c.missing} / ${t('int.tbd')} ${c.tbd}`, flag: c.flag,
-    flags: [c.pii.trim() && c.pii.trim() !== 'なし' ? t('int.flag.pii') : '', /^TBD/i.test(c.authz.trim()) ? t('int.flag.auth') : ''].filter(Boolean),
+        // i18n-data: "なし" is the managed-data value meaning "none"
+  flags: [c.pii.trim() && c.pii.trim() !== 'なし' ? t('int.flag.pii') : '', /^TBD/i.test(c.authz.trim()) ? t('int.flag.auth') : ''].filter(Boolean),
   }));
 }
 
@@ -28,7 +29,8 @@ export function mount(host) {
     if (!rows.length) {
       page.replaceChildren(el('h1', {}, '🔌 ' + t('nav.integrations')), el('p', { class: 'sub' }, t('navd.integrations')),
         el('div', { class: 'empty', 'data-testid': 'integrations-none' }, t('int.none')),
-        listTiers([], { empty: [['外部連携', '連携カタログ', '未分類']], openAreas: true }));
+        // i18n-data: the names of the hierarchy are managed-data values
+  listTiers([], { empty: [['外部連携', '連携カタログ', '未分類']], openAreas: true }));
       fill = () => {};
       return;
     }
@@ -60,7 +62,8 @@ export function mount(host) {
         if (k === 'gaps') return el('td', {}, el('span', {}, r.gaps), ...r.flags.map((f) => el('span', { class: 'badge bad', style: { marginLeft: '6px' } }, '⚑ ' + f)));
         return el('td', {}, el('div', { class: 'clamp' }, String(cell(r[k])).slice(0, 400)));
       }).concat([el('td', {}, el('button', { class: 'btn ghost', type: 'button', 'aria-label': `${t('int.detail')} ${r.id}`, onclick: (e) => { e.stopPropagation(); store.select(r.id, {}); } }, t('int.detail')))]));
-      const placed = placeRows(list, (r) => ({ kind: '外部連携', id: r.id }), t('nav.integrations'));
+      // i18n-data: the kind name of a hierarchy item is a managed-data value
+  const placed = placeRows(list, (r) => ({ kind: '外部連携', id: r.id }), t('nav.integrations'));
       tierHost.replaceChildren(listTiers(placed, {
         openAreas: true,
         extra: (node) => (node.level === 'area' && node.items.length
