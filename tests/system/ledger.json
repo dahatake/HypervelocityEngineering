@@ -151,7 +151,8 @@
     "AC-395": "sha256:5f92fc2243db302d",
     "AC-407": "sha256:4bb43ef1566105d4",
     "AC-413": "sha256:71ddd978fed28074",
-    "AC-425": "sha256:07d5ef2a93019645"
+    "AC-425": "sha256:07d5ef2a93019645",
+    "AC-430": "sha256:3229866e83bfd71e"
   },
   "cases": [
     {
@@ -8798,6 +8799,31 @@
       "history": [
         {
           "at": "2026-10-25T08:56:27+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-223",
+      "requirement_ids": [
+        "FR-011"
+      ],
+      "ac_ids": [
+        "AC-430"
+      ],
+      "title": "言語トグル: 状態表示・キーボード・全文言の切替・再読込後の保持",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_lang_toggle_system.py -k ac430",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-27T13:44:14+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
