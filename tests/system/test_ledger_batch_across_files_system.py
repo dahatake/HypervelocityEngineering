@@ -165,6 +165,28 @@ def test_ac433_cross_file_ui_cases_share_one_pytest_process_and_one_browser_laun
     assert all(st[i][0] == "pass" and st[i][1] for i in ids), st
     assert len({st[i][1] for i in ids}) == 4, "evidence (log) must be recorded per case"
 
+    # --- 並列度 2（4 ケース）: 最大 2 プロセスに分割し各プロセスの起動 1 回、従来(--no-batch --jobs 2)より起動が少ない ---
+    # AC-433（N>1 は均等分割で 2 プロセス）。実装が jobs>1 でも 1 プロセスのうちは fail でよい。
+    _write_ledger(repo, COMMANDS)
+    par = _ledger_run(repo, log, "--jobs", "2")
+    assert par.returncode == 0 and "ledger run: pass=4 fail=0" in par.stdout, par.stdout + par.stderr
+    procs = _events(log, "proc")
+    launches = _events(log, "launch")
+    assert len(procs) == 2, "jobs=2 must split into 2 pytest processes\n" + log.read_text()
+    assert sorted(launches) == sorted(procs) and len(set(launches)) == len(launches), "each process launches the browser once\n" + log.read_text()
+    par_ran = sorted(n.split("[", 1)[0] for n in _events(log, "test"))
+    assert par_ran == ran, par_ran
+    par_ctxs = [ln.rsplit(" ", 1)[1] for ln in log.read_text().splitlines() if ln.startswith("ctx ")]
+    assert len(par_ctxs) == 4 and len(set(par_ctxs)) == 4, par_ctxs
+    st = _statuses(repo)
+    assert all(st[i][0] == "pass" and st[i][1] for i in ids), st
+    assert len({st[i][1] for i in ids}) == 4
+    par_launch_count = len(launches)
+    _write_ledger(repo, COMMANDS)
+    legacy2 = _ledger_run(repo, log, "--no-batch", "--jobs", "2")
+    assert legacy2.returncode == 0 and "ledger run: pass=4 fail=0" in legacy2.stdout, legacy2.stdout
+    assert par_launch_count < len(_events(log, "launch")) == 4
+
     # --- オプトアウト（--no-batch）: 従来実行（ケースごとに 1 プロセス）で合否が同じ ---
     _write_ledger(repo, COMMANDS)
     legacy = _ledger_run(repo, log, "--no-batch")
