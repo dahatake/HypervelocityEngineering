@@ -152,7 +152,8 @@
     "AC-407": "sha256:4bb43ef1566105d4",
     "AC-413": "sha256:71ddd978fed28074",
     "AC-425": "sha256:07d5ef2a93019645",
-    "AC-430": "sha256:3229866e83bfd71e"
+    "AC-430": "sha256:3229866e83bfd71e",
+    "AC-433": "sha256:34421a612c124aef"
   },
   "cases": [
     {
@@ -8824,6 +8825,31 @@
       "history": [
         {
           "at": "2026-10-27T13:44:14+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-225",
+      "requirement_ids": [
+        "NFR-PERF-003"
+      ],
+      "ac_ids": [
+        "AC-433"
+      ],
+      "title": "ledger run: 異なるファイルの互換 UI ケースを 1 プロセス・ブラウザー起動 1 回にまとめる（選択・台帳記録・context 分離・オプトアウト）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/test_ledger_batch_across_files_system.py -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-27T23:24:56+09:00",
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
