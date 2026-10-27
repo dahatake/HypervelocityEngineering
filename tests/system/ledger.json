@@ -8855,7 +8855,7 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_row_integration.py -k ac393",
       "canary": false,
-      "status": "not_run",
+      "status": "blocked",
       "last_commit": null,
       "last_run_at": null,
       "evidence": null,
@@ -8865,6 +8865,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-27T22:55:44+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC-393 は検証レベル=integration で System Test の対象外。テストは test_studio_header_row_integration.py に更新済み（実装者が EABK-Studio/tests へ移す）"
         }
       ]
     }
