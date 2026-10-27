@@ -349,3 +349,48 @@ def test_ledger_run_batches_pytest_cases_of_one_file_and_reruns_failures_alone(s
     assert "batched_commands=4" in proc.stdout and "pass=3 fail=1" in proc.stdout and proc.returncode == 1
     off = sample.py("ledger.py", "run", "--select", "all", "--jobs", "2", "--no-record", "--no-batch")
     assert "batched_commands=0" in off.stdout and "pass=3 fail=1" in off.stdout
+
+
+def _load_ledger_module():
+    import importlib.util
+    import sys
+    scripts = Path(__file__).resolve().parents[2] / "scripts"
+    sys.path.insert(0, str(scripts))
+    spec = importlib.util.spec_from_file_location("ledger_mod", scripts / "ledger.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_plan_batches_merges_across_files_and_keeps_unparsable_alone():
+    # NFR-PERF-003 AC-434: canary/serial/unparsable commands are not merged
+    L = _load_ledger_module()
+    cs = [{"id": "E2E-1", "command": "python -m pytest tests/a/test_a.py::test_x -q"},
+          {"id": "E2E-2", "command": "python -m pytest tests/b/test_b.py -k foo -q"},
+          {"id": "E2E-3", "command": "python -m pytest tests/c/test_c.py::test_y -q"},
+          {"id": "E2E-4", "command": "python -m pytest tests/c/test_c.py --maxfail=1"},
+          {"id": "E2E-5", "command": "python run.py && echo x"}]
+    units, used = L.plan_batches(cs, {}, lambda c: False, lambda c: c["id"] == "E2E-3")
+    assert len(units) == 1 and used == {cs[0]["command"], cs[1]["command"]}
+    b = units[0]["_batch"]
+    assert "tests/a/test_a.py" in b["target"] and "tests/b/test_b.py" in b["target"] and "foo" in b["sel"]
+    units, used = L.plan_batches(cs[:1], {}, lambda c: False, lambda c: False)
+    assert units == [] and used == set()
+
+
+def test_run_shell_timeout_kills_child_processes(tmp_path):
+    # NFR-PERF-003 AC-435: after a timeout no child process is left, and the timeout is reported as rc 124
+    import sys
+    import time
+    L = _load_ledger_module()
+    marker = tmp_path / "alive.txt"
+    child = tmp_path / "child.py"
+    child.write_text("import time\nwhile True:\n    open(%r,'w').write(str(time.time()))\n    time.sleep(0.2)\n" % str(marker), encoding="utf-8")
+    parent = tmp_path / "parent.py"
+    parent.write_text("import subprocess,sys,time\nsubprocess.Popen([sys.executable,%r])\ntime.sleep(60)\n" % str(child), encoding="utf-8")
+    rc, out = L.run_shell(f'"{sys.executable}" "{parent}"', str(tmp_path), 3)
+    assert rc == 124 and "TIMEOUT" in out
+    time.sleep(1)
+    t1 = marker.read_text() if marker.exists() else ""
+    time.sleep(1)
+    assert (marker.read_text() if marker.exists() else "") == t1, "child process still running after timeout"
