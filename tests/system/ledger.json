@@ -146,13 +146,14 @@
     "AC-375": "sha256:28cd6902163bdc30",
     "AC-378": "sha256:b07b61041fac5559",
     "AC-379": "sha256:879df9efc754b69f",
-    "AC-391": "sha256:212c3fdbc5154c3f",
-    "AC-392": "sha256:6d08c04873c90127",
+    "AC-391": "sha256:d379f711fdf119aa",
+    "AC-392": "sha256:47157ae0b96a7fbe",
     "AC-395": "sha256:5f92fc2243db302d",
     "AC-407": "sha256:4bb43ef1566105d4",
     "AC-413": "sha256:71ddd978fed28074",
     "AC-425": "sha256:07d5ef2a93019645",
     "AC-430": "sha256:3229866e83bfd71e",
+    "AC-393": "sha256:b2d0e8c16323a6c0",
     "AC-433": "sha256:68e775f8da56da69"
   },
   "cases": [
@@ -4928,10 +4929,10 @@
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_fluent_appearance_system.py -k \"test_ac276_render_p95_within_tolerance_of_baseline_and_absolute_limits\" -q",
       "canary": false,
-      "status": "fail",
-      "last_commit": "0841187a",
-      "last_run_at": "2026-10-27T23:44:02+09:00",
-      "evidence": "work\\runs\\202610272315\\logs\\system-test\\E2E-152-202610272343.log",
+      "status": "pass",
+      "last_commit": "cca993ca",
+      "last_run_at": "2026-10-27T23:51:51+09:00",
+      "evidence": "work/runs/202610272343/logs/system-test/E2E-152-202610272351.log",
       "history": [
         {
           "at": "2026-10-17T14:41:15+09:00",
@@ -8828,6 +8829,37 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-224",
+      "requirement_ids": [
+        "FR-1072"
+      ],
+      "ac_ids": [
+        "AC-393"
+      ],
+      "title": "Wrapped header keeps full names/tooltips, no function dropped or hidden (1280..320)",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_row_integration.py -k ac393",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-27T22:55:20+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-27T22:55:44+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC-393 は検証レベル=integration で System Test の対象外。テストは test_studio_header_row_integration.py に更新済み（実装者が EABK-Studio/tests へ移す）"
         }
       ]
     },

@@ -149,5 +149,5 @@ def test_managed_files_and_guides_match_the_new_behaviour_ac420():
     for word in ("start-claims.lock", "識別子", "候補が 1 つ", "を掛けません", "template-request-<session>.json"):
         assert word in trouble, word
     gates = (SOURCE / "users-guide" / "06-quality-gates.md").read_text(encoding="utf-8")
-    for gid in ("G-1", "G-2", "G-3", "G-5", "G-6", "G-7"):
+    for gid in ("G-1", "G-2", "G-3", "G-5", "G-6"):
         assert gid in gates.split("### 6.1.1", 1)[1].split("**エージェントの識別方法**", 1)[0], gid

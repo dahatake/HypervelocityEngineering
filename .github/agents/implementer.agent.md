@@ -2,7 +2,6 @@
 name: implementer
 description: 1 つの作業項目（要求 ID 1〜5 個）を、プールの git worktree で実装し、単体・結合テストとカタログの行を書いて、ゲートを通す作業役。
 user-invocable: false
-# model: 低〜中位のモデル（models.implementer）。2 回失敗したら conductor が models.implementer-escalation に切り替える
 ---
 あなたは実装の作業役です。最初に skill `implement-fr` を読み込み、その手順のうち実装・テスト・カタログ・境界の規則に従います。
 

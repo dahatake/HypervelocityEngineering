@@ -210,25 +210,13 @@ def test_ledger_run_jobs_runs_cases_concurrently_and_serial_alone(sample):
     assert el < 4 * 2.5 + 1 and el >= 2 * 2.5  # 3 parallel + 1 serial: two waves, not four
 
 
-def test_gate_enforces_model_table(sample):
-    cfg = json.loads(sample.read("scripts/ebak.config.json"))
-    cfg["models"].update({"implementer": "m-small", "implementer-escalation": "m-big", "reviewer": ""})
-    sample.write("scripts/ebak.config.json", json.dumps(cfg))
-    sample.commit("models")
+def test_gate_logs_but_never_denies_task_models(sample):
     task = lambda **a: sample.gate("pre-tool", {"toolName": "task", "toolArgs": a})  # noqa: E731
-    assert task(agent_type="implementer") == {}  # no run: not enforced
     rid = start_run(sample)
-    res = task(agent_type="implementer", prompt="x")
-    assert "[G-7]" in res.get("permissionDecisionReason", "") and "m-small" in res["permissionDecisionReason"]
+    assert task(agent_type="implementer", prompt="x") == {}
     assert task(agent_type="implementer", model="m-small") == {}
-    assert task(agent_type="implementer", model="m-big") == {}
-    assert task(agent_type="reviewer") == {}  # empty entry: default model
     lines = [json.loads(l) for l in sample.read(f"work/runs/{rid}/models.jsonl").splitlines()]
-    assert [(e["agent"], e["model"]) for e in lines] == [
-        ("implementer", "(既定)"), ("implementer", "m-small"), ("implementer", "m-big"), ("reviewer", "(既定)")]
-    cfg["gates"]["enforce_models"] = False
-    sample.write("scripts/ebak.config.json", json.dumps(cfg))
-    assert task(agent_type="implementer") == {}
+    assert [(e["agent"], e["model"]) for e in lines] == [("implementer", "(既定)"), ("implementer", "m-small")]
 
 
 def test_gate_fast_path_for_read_tools(sample):

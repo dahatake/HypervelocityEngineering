@@ -80,7 +80,7 @@ Enterprise App Build Kit は、次の 4 つの手段でこれらを防ぎます�
                  requirement-definition / implement-fr / system-test-increment / rd-audit / adopt-existing
                  build … 利用者が /build で呼ぶ依頼の入口（手動呼び出し専用）
                  build-template … /build-template で依頼の雛形を表示する（run は開始しない）
-  hooks/         quality-gates.json … 全エージェント共通の強制ゲート（G-1〜G-7）
+  hooks/         quality-gates.json … 全エージェント共通の強制ゲート（G-1〜G-6）
   workflows/     ebak-verify.yml … GitHub Actions で verify を再実行（外部での再確認）
                  ebak-data-layer.yml … データ層の検査と自動修復（下の「データ層ワークフロー（ebak-data-layer）」）
 scripts/         決定的スクリプト（Python 3.9 以上。標準ライブラリだけを使用）
@@ -190,7 +190,6 @@ verify が見つけたデータ層のファイル間の不整合（カタログ�
 | 工程ごとに新しいコンテキストから再開する | `run-state.py status` と progress.md |
 | テストは影響範囲だけを実行し、全量は節目と最終工程だけ | `select-tests.py`、`ledger.py run --select changed` |
 | 多数決の監査は最終工程だけ | 節目は runs: 1、最終は runs: 3 |
-| 作業役のモデルを難易度で振り分け、失敗したときだけ上位モデルに切り替える | `scripts/ebak.config.json` の `models`（[設定とカスタマイズ](users-guide/04-customization.md)） |
 
 ---
 
@@ -400,7 +399,7 @@ GitHub Copilot には、agents・skills・hooks をまとめて配布する標�
    |---|---|---|
    | 実行場所 | **新しい作業ツリー**（推奨） | セッションごとに専用のブランチと worktree（例: `<リポジトリの親>/copilot-worktrees/<リポジトリ名>/<ブランチ名>`）で動くので、元の作業ツリーを汚しません。**ローカル リポジトリ**を選ぶと、Copilot CLI と同じく今のチェックアウトで動きます |
    | セッション モード | **Autopilot** | 入力を待たずに最後まで進みます。早すぎる完了は agentStop の hook が差し戻します |
-   | モデル | 推論の強いモデル | conductor のモデルです。作業役のモデルは `scripts/ebak.config.json` の `models` で指定します |
+   | モデル | 推論の強いモデル | Copilot Fusion など、Copilot の自動選択に任せられます |
    | Agent | **conductor** | エージェント ピッカー、またはプロンプト欄の `/agent` で選びます |
 
 4. ローカル サンドボックスを有効にします（アプリの設定 → プロジェクト → **サンドボックス** の **サンドボックスの新しいセッション**、またはセッション中に `/sandbox on`）。既定のポリシーで、worktree の読み書き、パッケージのインストール、ローカルの開発サーバーへの接続ができます。hook もサンドボックスの中で動きます。
@@ -662,7 +661,7 @@ Spec Kit は独自の番号（`FR-001`、`SC-001` など）を使います。too
 | 3 | [管理データの書式](users-guide/03-requirements-format.md) | 要求定義書・カタログ・ID 台帳・System Test の台帳のフォーマットを知りたい |
 | 4 | [設定とカスタマイズ](users-guide/04-customization.md) | ビルド・テストのコマンド、モデルの割り当て、ゲートを調整したい。MCP Server・plugin（Work IQ・Azure など）を使いたい |
 | 5 | [スクリプトリファレンス](users-guide/05-scripts-reference.md) | `scripts/` の各コマンドの使い方を知りたい |
-| 6 | [品質ゲートと検査項目](users-guide/06-quality-gates.md) | hook（G-1〜G-7）と verify（CHK-01〜27）の意味と直し方を知りたい |
+| 6 | [品質ゲートと検査項目](users-guide/06-quality-gates.md) | hook（G-1〜G-6）と verify（CHK-01〜27）の意味と直し方を知りたい |
 | 7 | [トラブルシューティング](users-guide/07-troubleshooting.md) | 止まった・拒否された・失敗した |
 | 8 | [導入ロードマップと KPI](users-guide/08-roadmap.md) | 診断から本番運用までの段取りと、効果の測り方を知りたい |
 | 9 | [バージョンアップの手順](users-guide/09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者） |
@@ -683,7 +682,7 @@ GitHub Spec Kit との比較計測（同じ課題・隠し受入テスト・Nort
 | run | conductor の 1 回の実行。`run-id`（開始日時。例: `202610080900`）で識別します。 |
 | 工程（stage） | run の段階。工程 0（初期化）から工程 6（最終）まであります（[1 回の run の流れ](#1-回の-run-の流れ)）。 |
 | `/work` | 一時ファイルの置き場所（git の管理対象外。14 日で削除）。作業キュー、進捗、ログ、証跡、報告を置きます。 |
-| ゲート | モデルの判断に関係なく規則を強制する仕組み。hook（G-1〜G-7）と決定的検査 verify（CHK-01〜27）の 2 層です。 |
+| ゲート | モデルの判断に関係なく規則を強制する仕組み。hook（G-1〜G-6）と決定的検査 verify（CHK-01〜27）の 2 層です。 |
 | 包括承認 | run_options の `approval_policy` で、「この範囲の AI 提案は推奨案どおりでよい」と事前に決めておくこと。 |
 
 ## リポジトリの構成

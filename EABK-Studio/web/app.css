@@ -35,12 +35,12 @@ input[type=checkbox],input[type=radio]{width:var(--size-icon-lg);height:var(--si
 .brand{display:flex;align-items:center;gap:var(--space-2);color:var(--color-fg-default);text-decoration:none;font-size:var(--font-size-subtitle);white-space:nowrap;padding:var(--space-1);border-radius:var(--radius-md)}
 .brand b{color:var(--color-fg-link)}
 .tabs{display:flex;flex-wrap:wrap;gap:var(--space-1);flex:1 1 0;min-width:0}
-/* FR-1072 AC-391/392: ヘッダーは常に 1 本の横一列の帯。溢れたら帯だけが横スクロール（ページ本体は不可） */
-.top{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;max-width:100%;scrollbar-width:thin}
-.top>*{flex:0 0 auto}
-.top .row,.top .hdr-dim,.top .hdr-dim-host,.top .theme-toggle{flex-wrap:nowrap}
-.tabs{flex:0 0 auto;flex-wrap:nowrap}
-.top .search{margin-left:auto}
+/* FR-1072 AC-391/392: ヘッダーは幅に応じて複数段に自動で折り返し、高さは自動で伸びる（横スクロール・切り取りなし） */
+.top{flex-wrap:wrap;overflow:visible;max-width:100%;box-sizing:border-box}
+.top>*{flex:0 0 auto;max-width:100%}
+.top .row,.top .hdr-dim,.top .hdr-dim-host,.top .theme-toggle{flex-wrap:wrap}
+.tabs{flex:1 1 auto;flex-wrap:wrap;min-width:0}
+.top .search{margin-left:auto;max-width:100%}
 .top .chip,.top #personaBar button,.top #lang{white-space:nowrap}
 /* NFR-UX-002: 配置の切替（data-layout は layout.js が設定。default は何も上書きしない） */
 .layout-ctl{display:inline-flex;gap:var(--space-1);flex-wrap:nowrap}
@@ -128,6 +128,7 @@ main{flex:1;min-height:0;position:relative;z-index:0;overflow:hidden}
 .page h1{margin:0 0 var(--space-1);font-size:var(--font-size-title);line-height:var(--line-height-title)}
 .page .sub{color:var(--color-fg-muted);margin:0 0 var(--space-5)}
 .fill{position:absolute;inset:0}
+canvas.fill{width:100%;height:100%}
 .grid{display:grid;gap:var(--space-4)}
 .card{background:var(--color-bg-surface);border:var(--stroke-container) solid var(--color-border-default);border-radius:var(--radius-container);padding:var(--space-4);box-shadow:var(--elevation-card)}
 .card h3{margin:0 0 var(--space-3);font-size:var(--font-size-body);color:var(--color-fg-muted);font-weight:var(--font-weight-semibold);text-transform:uppercase}

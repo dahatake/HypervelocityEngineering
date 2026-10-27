@@ -13,7 +13,7 @@ Integration / unit ACs are covered by the implementer gate and verify, so they a
 
 Flow (speed) metrics come from the timestamps written by run-state.py / integrate.py: stage durations,
 effective parallelism of the implementation loop (sum of item work time / wall time of stage 5),
-serial integration time, and the models actually used by `task` calls (work/runs/<run-id>/models.jsonl, G-7).
+serial integration time, and the models actually used by `task` calls (work/runs/<run-id>/models.jsonl).
 """
 from __future__ import annotations
 
@@ -259,7 +259,7 @@ def flow_rows(f: dict) -> List[Tuple[str, str, str, str, str]]:
          "queue.json の work_sec（doing の間の時間）"),
         ("統合の直列時間", "-" if f["integrate_minutes"] is None else f"{f['integrate_minutes']} 分（ループの {pct(f['integrate_share'])}）",
          "ループの 20% 以下", "-" if f["integrate_share"] is None else judge(f["integrate_share"], 0.2, False), "integrate.py merge の所要時間の合計"),
-        ("実際に使ったモデル", models, "ebak.config.json の models と一致", "-", "models.jsonl（G-7）"),
+        ("実際に使ったモデル", models, "-", "-", "models.jsonl"),
     ]
 
 

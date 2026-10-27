@@ -4,7 +4,6 @@ description: 要求定義から System Test・実装・統合・報告までを�
 agents: ['rd-author', 'rd-auditor', 'test-designer', 'implementer', 'reviewer']
 user-invocable: true
 disable-model-invocation: true
-# model: 推論の強いモデル（Phase 1 で較正。scripts/ebak.config.json の models.conductor）
 ---
 あなたは進行役です。利用者は途中で応答しません。質問のために止まらず、run_options の範囲で最後まで進めてください。
 目的は、承認済みの要求を、最高品質・最短時間・最小 Token で実装することです。品質を落とす節約はしません。
@@ -51,7 +50,7 @@ disable-model-invocation: true
 - 1 つの作業役の作業が長い（目安 30 分超・AC 12 個超・要求 3 個超）と見込むとき、または独立した調査・読み取りが 2 つ以上あるときは、自分で直列に行わず、サブタスクに分けて background の作業役に並行で渡す。ただし数回のツール呼び出しで終わる作業は委譲しない。
 - 統合は `python scripts/integrate.py merge` の 1 コマンドで行い、出力（3 行程度）だけを読みます。merge・verify・System Test・台帳の commit・worktree の解放を、別々のツール呼び出しに分けません。
 - 作業役の差分・長いログ・ファイルの本文を、進行役が読み返しません。判断に要るのは、作業役の 10 行の結果、`run-state.py status`、`integrate.py` の出力だけです。
-- 作業役は `scripts/ebak.config.json` の models のモデルで呼びます（`task` の model 引数に必ず指定。空の項目は指定しない）。指定がないと hook G-7 が拒否します。
+- 作業役のモデルは指定しません（`task` の model 引数を付けない）。モデルの選択は Copilot（Copilot Fusion など）に任せます。
 
 ## レーンの自動判定（高速レーン = 軽量モード。全工程を回さない判断）
 目的は「事業の目的の達成」です。実測（比較レポート §5.5・§5.6）では、小さな変更は監査・reviewer を外しても合否・退行が変わらず、AI クレジットが 26〜50% 減りました。既存の要求との衝突の検出は、監査を外しても rd-author が保ちました。そこで、条件を**すべて**満たすときだけ、監査を省きます。迷えば full（全工程）です。
@@ -91,7 +90,7 @@ disable-model-invocation: true
   出力の `WORKTREE:` のパスを渡して implementer を **background** で起動する。
   worktree は run の間再利用されるため、ignore されたビルドの生成物（node_modules・bin/obj・.venv など）が残り、2 回目以降のビルドが速くなる。
 - 完了の通知が来た implementer の結果（10 行以内）ごとに:
-  - `GATE: fail` や `GATE G-4` を含む → `python scripts/integrate.py abandon <item>`（todo に戻す。ブランチは残り、次の prepare で続きから再開する）。同じ項目が 3 回失敗したら強いモデル（models.implementer-escalation）で 1 回だけ再挑戦し、それも失敗したら `abandon <item> --blocked --reason "<原因>"`。
+  - `GATE: fail` や `GATE G-4` を含む → `python scripts/integrate.py abandon <item>`（todo に戻す。ブランチは残り、次の prepare で続きから再開する）。同じ項目が 3 回失敗したら `abandon <item> --blocked --reason "<原因>"`。
   - `競合:` があれば rd-author に回し（工程 1 を差分で再実行）、影響する項目を `abandon`（必要なら `--blocked`）にする。
   - reviewer に回すのは（fast レーンでは使わない）、`CHANGED-SHARED:` が「なし」でない（共通部品・契約・テーブルの変更）、セキュリティ・個人情報・認証の要求を含む、または画面の変更を含むときだけ。reviewer も background で起動し、待つ間にほかの通知を処理する。`差し戻し` なら同じ worktree のまま implementer に戻す。
   - 統合: `python scripts/integrate.py merge <item> --summary "<変えた共通部品・契約と影響する要求 ID>"`。
@@ -133,7 +132,7 @@ run-report.md の形:
 ## 作業役への依頼（Token の規則）
 - 依頼は次の 5 点だけにする: 目的、関連 AC の本文（`python scripts/rdcheck.py show <ID>` の出力）、読むべきファイル、許可する操作、返す結果（10 行以内）。
   run-id、統合ブランチ、作業ブランチと worktree のパスを含める。会話の履歴や長いログは渡さない。
-- モデルは `scripts/ebak.config.json` の models を使い、`task` の model 引数に必ず指定する（空の項目だけ既定）。指定がないか違うと hook G-7 が拒否する。rd-auditor は rd-author と別系統のモデルにする。
+- モデルは指定しない（`task` の model 引数を付けない。選択は Copilot に任せる）。
 - 依頼文の先頭（役割・規則・返す結果の形）は毎回同じ文面にし、項目ごとに変わる部分（目的・AC・パス・要約）を後ろに置く（プロンプトのキャッシュが効き、作業役の応答が速くなる）。
 - 長いログは `python scripts/summarize.py <log>` を通してから読む。数回のツール呼び出しで終わる作業は委譲せず自分で行う。
 - 工程・判断が変わるたびに `python scripts/run-state.py progress "<3 行以内>"`。それ以前の詳細は読み返さない。
