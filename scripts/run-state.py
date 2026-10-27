@@ -550,10 +550,6 @@ def _start_create(args, root: Path, cfg: dict, opts: dict, auto_note: str) -> in
     print("options: " + ", ".join(f"{k}={v}" for k, v in opts.items()))
     if auto_note:
         print(auto_note)
-    models = cfg.get("models") or {}
-    if not any(v for k, v in models.items() if not k.startswith("_") and isinstance(v, str)):
-        print("HINT models: 全役割が空（既定のモデル）です。実測では conductor・implementer の選択が所要時間と Token を最も左右しました。"
-              "較正の手順は EABK-docs/04-customization.md 4.2 を参照してください")
     return 0
 
 
@@ -884,7 +880,7 @@ def cmd_human(args) -> int:
 
 def credit_estimate(root: Path, cfg: dict, rid: str) -> str:
     """Estimated AI credits when --credits is not given: the sum of the model multipliers (config credits.model_multipliers,
-    default credits.default_multiplier) over the `task` calls logged by hook G-7 (models.jsonl). Estimate only: the main
+    default credits.default_multiplier) over the `task` calls logged by the hook (models.jsonl). Estimate only: the main
     session's own calls are not visible to hooks."""
     mp = h.run_dir(root, cfg, rid) / "models.jsonl"
     if not mp.exists():

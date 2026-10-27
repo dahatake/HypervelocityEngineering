@@ -42,40 +42,9 @@
 
 ログの全文は `/work/runs/<run-id>/logs/`（run がないときは `/work/logs/`）に保存され、コンソールには失敗の要約だけが出力されます。
 
-## 4.2 モデルの割り当て（`models`）
+## 4.2 モデルの選択
 
-```json
-"models": {
-  "conductor": "",
-  "rd-author": "",
-  "rd-auditor": "",
-  "test-designer": "",
-  "implementer": "",
-  "implementer-escalation": "",
-  "reviewer": ""
-}
-```
-
-conductor は subagent を呼び出すとき、この表のモデルを指定します。空なら既定のモデルを使います。
-run の実行中は、hook G-7 がこの表を強制します。値のある役割を、`task` の `model` 引数なしで呼ぶか、違うモデルで呼ぶと拒否します。`implementer` には `implementer-escalation` のモデルも使えます。実際に使ったモデルは `work/runs/<run-id>/models.jsonl` に記録され、`kpi.py run` の「実際に使ったモデル」に出ます。以前は、表に書いても守られないことがありました（15 回中 10 回）。そのため、値を入れた表は G-7 で必ず効くようになっています。各 `.github/agents/*.agent.md` の frontmatter に `model:` を書いて固定することもできます（推奨値はコメントに書いてあります）。
-
-割り当ての方針（Phase 1 で調整します）:
-
-| 役割 | 方針 |
-|---|---|
-| conductor、rd-author | 推論能力の高いモデル |
-| rd-auditor | rd-author とは**別系統**のモデル（同じバイアスを共有しないため） |
-| test-designer、reviewer | 中位のモデル |
-| implementer | 低〜中位のモデル（仕様が明確なため） |
-| implementer-escalation | 同じ項目で失敗が続いたときに 1 回だけ使う上位モデル |
-
-**較正の手順（実測に基づく）**: 全役割が空のまま run すると、`run-state.py start` が HINT を出します。次の順で 1 つずつ変えて比べます（一度に変えると、どれが効いたか分かりません）。
-1. 基準: 全部既定で、要求 3〜5 件の小さい run を 1 回。`kpi.py run` の「項目 1 件あたりの作業時間」「1 回目のゲート通過率」「統合の直列時間」を控える。
-2. conductor だけを 1 段安いモデルにする（conductor は 300 ターン級の文脈で、Token の約 4 割を使った実績がある）。通過率と AC pass 率が基準を下回らなければ採用。
-3. implementer を 1 段安いモデルにし、`implementer-escalation` に基準のモデルを入れる。1 回目の通過率が 10 ポイント以上落ちたら戻す。
-4. 採用した表を `scripts/ebak.config.json` に固定し、`docs/run-history.md` に理由を残す。
-
-調整の方法: 代表的な作業（要求 3 件分）を、モデルの組み合わせ 2〜3 通り × 2 回ずつ実行します。`docs/run-history.md` の AC pass 率・1 回目のゲート通過率・経過時間と、使用量の表示（AI クレジット）を比較して決めます。**最も安いモデルが、最も安い結果になるとは限りません**（手戻りでコストが逆転します）。
+EABK はモデルを指定しません。conductor も作業役も、	ask の `model` 引数を付けずに呼び、選択は Copilot（Copilot Fusion など）に任せます。実際に使ったモデルは `work/runs/<run-id>/models.jsonl` に記録され、`kpi.py run` の「実際に使ったモデル」に出ます。特定のモデルに固定したいときは、各 `.github/agents/*.agent.md` の frontmatter に `model:` を書きます。
 
 **項目の粒度**: `queue add` は、1 項目の AC が 12 個を超えると拒否します（`--allow-large` で例外）。実測では、作業時間が 200 分を超えた項目に手戻りが集中しました。
 
@@ -91,8 +60,7 @@ run の実行中は、hook G-7 がこの表を強制します。値のある役�
   },
   "subagent_verify_max_blocks": 3,
   "agent_stop_max_blocks": 40,
-  "enforce_conductor_edit_scope": true,
-  "enforce_models": true
+  "enforce_conductor_edit_scope": true
 }
 ```
 
@@ -103,7 +71,6 @@ run の実行中は、hook G-7 がこの表を強制します。値のある役�
 | `subagent_verify_max_blocks` | 同じ作業役を差し戻す回数の上限。超えると結果に `GATE G-4` を付けて返し、conductor はその結果を統合しません |
 | `agent_stop_max_blocks` | 完了条件を満たしていない conductor の終了を差し戻す回数の上限 |
 | `enforce_conductor_edit_scope` | conductor が `work/` と `docs/run-history.md` 以外を編集するのを拒否します。harness で subagent の検出が動かない場合（[07-troubleshooting.md](07-troubleshooting.md)）だけ `false` にします |
-| `enforce_models` | run の実行中、`models` に値のある役割の `task` 呼び出しに、そのモデルの指定を求めます（G-7）。harness の `task` が `model` 引数を受け付けない場合だけ `false` にします |
 | `deploy_patterns` | デプロイとみなすコマンドの正規表現。指定すると既定値（`scripts/ebaklib.py` の `DEFAULT_CONFIG`）を**置き換える**ので、既定値をコピーしてから追加します |
 | `external_write_verbs` | MCP Server・plugin・拡張機能のツールのうち、名前にこの動詞（`create`・`update`・`delete`・`send`・`do_action` など）を含むものを「外部のシステムの変更」とみなします（G-5。[4.4](#44-mcp-serverplugin拡張機能を使う)）。指定すると既定値を**置き換えます** |
 | `external_deploy_verbs` | 同じく、名前にこの動詞（`deploy`・`provision`・`publish`・`release`）を含むものを「デプロイ・公開」とみなし、`deploy` の値で判定します |

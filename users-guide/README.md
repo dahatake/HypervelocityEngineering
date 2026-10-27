@@ -16,9 +16,9 @@ EABK（Enterprise App Build Kit）と **EABK Studio** は、1 つのアプリケ
 | 1 | [依頼の書き方（/build と run_options）](01-writing-requests.md) | よい依頼・回答の書き方や、承認ポリシーを知りたい |
 | 2 | [実行中と終了後](02-during-and-after-run.md) | 進捗の確認、再開、報告の読み方、マージの方法を知りたい |
 | 3 | [管理データの書式](03-requirements-format.md) | 要求定義書・カタログ・ID 台帳・System Test の台帳のフォーマットを知りたい |
-| 4 | [設定とカスタマイズ](04-customization.md) | ビルド・テストのコマンド、モデルの割り当て、ゲートを調整したい。MCP Server・plugin（Work IQ・Azure など）を使いたい |
+| 4 | [設定とカスタマイズ](04-customization.md) | ビルド・テストのコマンド、ゲートを調整したい。MCP Server・plugin（Work IQ・Azure など）を使いたい |
 | 5 | [スクリプトリファレンス](05-scripts-reference.md) | `scripts/` の各コマンドの使い方を知りたい |
-| 6 | [品質ゲートと検査項目](06-quality-gates.md) | hook（G-1〜G-7）と verify（CHK-01〜27）の意味と直し方を知りたい |
+| 6 | [品質ゲートと検査項目](06-quality-gates.md) | hook（G-1〜G-6）と verify（CHK-01〜27）の意味と直し方を知りたい |
 | 7 | [トラブルシューティング](07-troubleshooting.md) | 止まった・拒否された・失敗した |
 | 8 | [導入ロードマップと KPI](08-roadmap.md) | 診断から本番運用までの段取りと、効果の測り方を知りたい |
 | 9 | [バージョンアップの手順](09-versioning.md) | 版を上げる（配布元）、導入済みのリポジトリを更新する（利用者） |

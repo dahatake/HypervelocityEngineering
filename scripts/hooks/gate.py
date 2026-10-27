@@ -10,8 +10,7 @@ Events (first argument):
   subagent-stop   G-4: run scripts/verify before implementer / test-designer / rd-author may finish
   agent-stop      do not let the conductor end its turn before the completion conditions hold
   user-prompt     detect `/build template`: deny tools other than reads and let the turn end after printing it
-Also in pre-tool (G-7): while a run is active, a `task` call for a custom agent whose model is fixed in
-scripts/ebak.config.json -> models must pass that model; every call is logged to work/runs/<run-id>/models.jsonl.
+Also in pre-tool: while a run is active, every `task` call is logged to work/runs/<run-id>/models.jsonl (never denied).
 Speed: pre-tool for built-in read-only tools (view, grep, glob, ...) answers before importing anything else,
 because it runs thousands of times per run and none of the gates applies to them.
 Reads the hook payload (camelCase or snake_case) from stdin; writes one JSON decision to stdout.
@@ -662,14 +661,14 @@ def check_external(ctx: Ctx, tool: str) -> Optional[Tuple[str, str]]:
     return None
 
 
-# ---------------------------------------------------------------------- G-7 models
+# ---------------------------------------------------------------------- model log (no enforcement)
 
 SUBAGENT_TOOLS = {"task"}
 AGENT_KEYS = ("agent_type", "agentType", "subagent_type", "agentName", "agent_name")
 
 
 def check_model(ctx: Ctx, tool: str, args) -> Optional[Tuple[str, str]]:
-    """G-7: the model table in ebak.config.json is enforced on `task` calls (it was ignored in 10 of 15 runs)."""
+    """Log `task` calls to models.jsonl. The model is chosen by the harness (e.g. Copilot Fusion); never denied."""
     if normalize_tool(tool) not in SUBAGENT_TOOLS or not ctx.run_active or not isinstance(args, dict):
         return None
     agent = str(g(args, *AGENT_KEYS, default="")).strip()
@@ -680,18 +679,7 @@ def check_model(ctx: Ctx, tool: str, args) -> Optional[Tuple[str, str]]:
             fh.write(json.dumps({"at": h.now_iso(), "agent": agent, "model": got or "(既定)"}, ensure_ascii=False) + "\n")
     except OSError:
         pass
-    if not agent or not ctx.cfg["gates"].get("enforce_models", True):
-        return None
-    models = {k: str(v).strip() for k, v in (ctx.cfg.get("models") or {}).items() if not k.startswith("_") and isinstance(v, str)}
-    want = models.get(agent, "")
-    if not want:
-        return None
-    allowed = {want} | {v for k, v in models.items() if k.startswith(agent + "-") and v}
-    if got in allowed:
-        return None
-    return ("G-7", f"scripts/ebak.config.json の models で {agent} のモデルは {want} です"
-                   f"{'（ほかに ' + ', '.join(sorted(allowed - {want})) + ' も可）' if len(allowed) > 1 else ''}。"
-                   f"task の model に \"{want}\" を指定して呼び直してください（現在: {got or '未指定'}）")
+    return None
 
 
 # ---------------------------------------------------------------------- /build template
