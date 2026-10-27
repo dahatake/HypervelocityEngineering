@@ -1,6 +1,6 @@
 // UI language (Japanese / English). Data from the repository is shown as written.
 const STORE_KEY = 'eabk-studio.lang';
-let current = localStorage.getItem(STORE_KEY) || ((navigator.language || 'ja').toLowerCase().startsWith('ja') ? 'ja' : 'en');
+let current = (() => { let s = null; try { s = localStorage.getItem(STORE_KEY); } catch { /* not readable: use the browser language */ } return s === 'ja' || s === 'en' ? s : ((navigator.language || 'ja').toLowerCase().startsWith('ja') ? 'ja' : 'en'); })();
 const listeners = new Set();
 
 const D = {
@@ -107,7 +107,54 @@ const D = {
         'sz.nothing': '絞り込みに合うエンティティがありません', 'sz.alt': '表で見る（代替表現）', 'sz.alt.clusters': 'クラスター', 'sz.alt.edges': '関係', 'sz.alt.cols': '列',
         'sz.from': '元', 'sz.to': '先', 'sz.kind': '種別', 'sz.src': '出典', 'sz.sel': '選択中', 'sz.none': '選択なし', 'sz.hint': 'ホイール／＋−キーで拡大縮小、ドラッグ／矢印キーで移動、0 で全体、Enter で選択、Esc で解除',
         'sz.to2d': '2D で見る', 'arch.storage': '保存先', 'arch.locations': '実行場所', 'arch.kind': '種別', 'arch.place': '場所', 'arch.apps': 'アプリ', 'arch.data': 'データ', 'arch.links': '通信（方向）', 'arch.toentity': 'エンティティ図へ', 'arch.toarch': 'アーキテクチャ図へ', 'sz.to3d': '3D で見る', 'sz.graph': '関係グラフ（従来）', 'sz.entview': 'エンティティ表示', 'sz.rot': '回転', 'sz.mismatch': '補完と食い違い', 'sz.supp': '補完（DDL・スキーマ）',
-        'sz.goto': '参照先へ移動', 'sz.badge.selected': '選択', 'sz.badge.related': '関係先', 'sz.use': '使用', 'sz.nowebgl': '',
+        'sz.goto': '参照先へ移動', 'sz.badge.selected': '選択', 'sz.badge.related': '関係先', 'sz.use': '使用', 'sz.nowebgl': 'この環境では 3D を描画できないため、2D で表示しています。',
+        'app.title': 'EABK Studio', 'skip.main': 'メインコンテンツへ移動', 'search.aria': 'プロジェクトのデータを検索', 'model.time': 'モデルの測定時刻', 'persona.group': '役割', 'persona.pm': 'Product Manager', 'persona.arch': 'Architect', 'persona.swe': 'Software Engineer', 'persona.view': '{name} の見方', 'persona.suffix': 'の見方',
+        'lang.group': '言語', 'search.hits': '{n} 件', 'search.hlall': 'すべて図で強調', 'cmd.implsel': '実装状態の区間を選択: ', 'cmd.implclear': '実装状態の絞り込みを解除',
+                'cam3d.keys': 'camera カメラ', 'cam3d.keys.stop': '停止', 'tier.shown': '表示 {n} 件', 'tier.tree': 'データの階層',
+                'tier.n.unclassified': '未分類', 'tier.n.goals': '目的', 'tier.n.reqs': '要求', 'tier.n.acs': '受入基準', 'tier.n.cases': '試験ケース', 'tier.n.catalog': 'カタログ', 'tier.n.entities': 'エンティティ', 'tier.n.questions': '質問', 'tier.n.sources': '出典', 'tier.n.params': 'パラメータ', 'tier.n.audit': '監査指摘', 'tier.n.integrations': '外部連携',
+                'tier.n.functional': '機能', 'tier.n.nonfunctional': '非機能', 'tier.n.apis': 'API・イベント', 'tier.n.tables': 'テーブル', 'tier.n.shared': '共通部品', 'tier.n.intcat': '連携カタログ', 'tier.n.states': '状態遷移', 'tier.n.other': 'その他',
+                'common.none': 'なし', 'common.paren': '（{v}）', 'map3d.layers': '3D レイヤー構成', 'map3d.chain': '目的 → 要求 → Entity / API / Table → 実装ファイル → System Test',
+        'maptier.title': '上位層（種類→区分→領域）', 'maptier.items': '項目', 'maptier.none': '上位層のデータがありません。', 'maptier.close': '閉じる', 'maptier.dlg': '項目の上位層（種類→区分→領域→項目）',
+        'rpg.title': 'RPG 風マップ', 'rpg.area': 'RPG 風の地図。方向キーで歩き、城や街の入口で決定キーを押すと話せます。Tab で他の部分へ移れます。',
+        'rpg.castle': '城', 'rpg.town': '街', 'rpg.goal': '目的', 'rpg.entity': 'エンティティ', 'rpg.group': 'エンティティのグルーピング', 'rpg.townName': '{n} の街', 'rpg.noneName': '関係なしの街', 'rpg.noneText': '他のエンティティとの関係がないエンティティが集まる街。', 'rpg.groupText': '関係でつながるエンティティ: {list}（{n} 件）', 'rpg.hero': '旅人', 'rpg.villager': '住人', 'rpg.guide': '案内役',
+        'rpg.sound': '音', 'rpg.on': 'オン', 'rpg.off': 'オフ（ミュート）', 'rpg.soundBtn': '音の入切', 'rpg.pos': '現在位置', 'rpg.field': '野外', 'rpg.at': '{k} {n} の入口', 'rpg.with': '{k} {n} の位置',
+        'rpg.reqs': '関連する要求: {n} 件', 'rpg.repr': '代表: {ids}', 'rpg.noreq': '関連する要求はまだありません。', 'rpg.nodesc': '説明はまだありません。',
+        'rpg.start': 'スタート', 'rpg.select': 'セレクト', 'rpg.help': '操作の割り当て', 'rpg.tiers': '項目の上位層（種類→区分→領域）', 'rpg.tiersOpen': '上位層で辿る', 'rpg.tiersLine': '上位層（関連する要求）: {list}', 'rpg.tiersMore': '、ほか {n} 領域', 'rpg.close': '閉じる', 'rpg.to2d': '2D で表示', 'rpg.to3d': '3D で表示', 'rpg.toRpg': 'RPG 風で表示',
+        'rpg.keysTitle': '操作の割り当て', 'rpg.btn': 'ボタン', 'rpg.keys': 'キー', 'rpg.dpad': '十字キー', 'rpg.a': 'A（決定・話す・調べる）', 'rpg.b': 'B（取消・閉じる・戻る）',
+        'rpg.kDpad': '方向キー または W A S D', 'rpg.kA': 'Enter または Z', 'rpg.kB': 'Esc または X（Backspace も可）', 'rpg.kStart': 'Space（メニュー）', 'rpg.kSel': 'Shift だけを押す（音の入切・表示の切替）',
+        'rpg.legend': '十字=方向キー/WASD　A=Enter/Z　B=Esc/X　スタート=Space　セレクト=Shift　（Tab で他の部分へ）',
+        'rpg.alt': '同じ内容を表で見る', 'rpg.cols': '名前 / ID', 'rpg.kind': '種別', 'rpg.where': '位置', 'rpg.rel': '関連する要求', 'rpg.roads': '道（つながり）',
+        'rpg.fbNone': 'この管理データには、{what}がないため、RPG 風の地図を作れません。2D で表示しています。同じ内容は表でも確認できます。',
+        'rpg.fbGoal': '目的（城）', 'rpg.fbEnt': 'エンティティ（街）', 'rpg.fbCtx': 'この環境では RPG 風を描画できないため、2D で表示しています。同じ内容は表でも確認できます。',
+        'rpg.blockedMsg': '通れない', 'rpg.menuOpen': 'メニューを開きました', 'rpg.menuClosed': 'メニューを閉じました', 'rpg.talk': '{n} と話しています。',
+        'rpg.undef': '（名称未定義の目的）',
+        'ins.noloc': '根拠位置なし', 'ins.sep': '、', 'ins.close': '閉じる', 'ins.analysis': '{name} 分析', 'ins.roleread': '役割別の読み方', 'ins.l.info': '表示情報: ', 'ins.l.persp': '分析観点: ', 'ins.l.decide': '判断: ',
+        'ins.page.dashboard.n': 'ダッシュボード', 'ins.page.dashboard.i': '目的・進捗・要求', 'ins.page.dashboard.p': '優先順位と未完了の影響', 'ins.page.dashboard.d': '次に投資する対象',
+        'ins.page.map2d.n': '2D マップ', 'ins.page.map2d.i': 'ノード・関係・詳細', 'ins.page.map2d.p': '層をまたぐ依存と孤立', 'ins.page.map2d.d': '変更影響と構造上の欠落',
+        'ins.page.map3d.n': '3D マップ', 'ins.page.map3d.i': 'ノード・関係・視点', 'ins.page.map3d.p': '複雑な関係の集中と距離', 'ins.page.map3d.d': '俯瞰すべき依存クラスター',
+        'ins.page.diagrams.n': '図式', 'ins.page.diagrams.i': '図・関係・根拠', 'ins.page.diagrams.p': '目的に適した構造と証拠', 'ins.page.diagrams.d': '設計判断を裏づける関係',
+        'ins.page.placement.n': '配置', 'ins.page.placement.i': 'ファイル・配置・詳細', 'ins.page.placement.p': '実行境界と責務分担', 'ins.page.placement.d': 'コードとデータを置く場所',
+        'ins.page.source.n': 'ソース対応', 'ins.page.source.i': '管理データ・実装・詳細', 'ins.page.source.p': '要求から実装への追跡', 'ins.page.source.d': '修正対象と根拠の所在',
+        'ins.page.tables.n': '表', 'ins.page.tables.i': '種別・絞り込み・行', 'ins.page.tables.p': '正本レコードの比較と監査', 'ins.page.tables.d': '不足・重複・状態差分',
+        'ins.role.info': '{v}を表示情報として確認', 'ins.role.pm.p': '{v}を価値・優先度から分析', 'ins.role.pm.d': '{v}を判断', 'ins.role.arch.p': '{v}を境界・整合性から分析', 'ins.role.arch.d': '{v}の設計妥当性を判断', 'ins.role.swe.p': '{v}を実装・試験から分析', 'ins.role.swe.d': '{v}の実装作業を判断',
+        'ins.runsAt': '実行場所: {v}', 'ins.dataAt': 'データの所在: {v}', 'ins.access': '読取・書込方向: {v}', 'ins.source': '根拠: {v}', 'ins.rt.title': 'アプリ構成とデータ位置づけ', 'ins.rt.sub': '解析した管理データと実装登録に基づく実行環境・コード・格納位置・明示境界',
+        'ins.from': '送信元', 'ins.to': '送信先', 'ins.dir': '方向', 'ins.data': '対象データ', 'ins.ev': '根拠', 'ins.boundary': '外部／クラウド境界', 'ins.bline': ' / 方式: {method} / 方向: {dir} / 正本: {owner} / 外部送信', 'ins.unwritten': '未記載',
+        'ins.rtfoot': '書込: なし　外部送信: {v}', 'ins.defined': '定義あり',
+        'ins.ev.open': '{cat} {status} の根拠を VS Code で開く', 'ins.ev.title': '{title}の根拠レコード', 'ins.ev.date': ' — 時点: {v}', 'ins.ev.nodate': ' — 時点: 記録なし', 'ins.ev.state': ' — 状態: {v}', 'ins.ev.src': ' — 根拠: ', 'ins.ev.none': '該当レコードなし', 'ins.ev.btn': '{groups} 集計 / {count} 件 — 根拠レコードを表示',
+        'ins.hist.title': '設計・開発履歴と進捗', 'ins.hist.asof': '測定時点: {v} · 時系列 / 状態別', 'ins.hist.pass': 'System Test 合格 ', 'ins.hist.of': ' / {n}（not_run は合格に含めない）', 'ins.hist.types': 'データ種別',
+        'ins.st.title': '全データ層の現状対理想構造', 'ins.st.sub': '解析済みの現状構造 と 構造判定表から導いた理想構造を層ごとに比較', 'ins.st.actual': '現状: {v}', 'ins.st.ideal': '理想: {v}', 'ins.st.delta': '差分: {v}', 'ins.st.rule': '適用規則: {v}', 'ins.st.reason': '判定理由: {v}',
+        'ins.st.diff': '構造差分', 'ins.st.kind': '差分種別: {v}', 'ins.st.layer': '層: {v}',
+        'ins.st.h1': 'データ層', 'ins.st.h2': '差分種別（delta）', 'ins.st.h3': '対象 ID / 位置', 'ins.st.h4': '現状（actual）', 'ins.st.h5': '理想（ideal）', 'ins.st.h6': '適用規則（rule）', 'ins.st.h7': '判定理由（reason）', 'ins.st.h8': '根拠（source）',
+        'ins.co.title': '層一貫性ビューアー', 'ins.co.noref': '参照先なし', 'ins.co.ok': '正常', 'ins.co.missing': '一層欠落', 'ins.co.h.verdict': '判定', 'ins.co.req': '要求', 'ins.co.test': '試験', 'ins.co.cat': 'カタログ', 'ins.co.file': '実装ファイル',
+        'ins.mt.sub': '要求正本と異なるカタログの題名・決定状態だけを、明示プレビュー後に原子的に更新します。', 'ins.mt.warn': '通常の閲覧は参照専用です。保守は選択した1行・2列だけが対象で、検査失敗時はバイト単位で戻します。',
+        'ins.mt.noref': '未対応: 要求正本に参照先なし', 'ins.mt.empty': '保守候補はありません。', 'ins.mt.err': '保守エラー', 'ins.mt.restored': '変更はバイト単位で元に戻しました', 'ins.mt.retry': '再試行', 'ins.mt.cancel': '中止',
+        'ins.mt.e.unsupported': '未対応', 'ins.mt.e.invalid': '入力条件が一意ではありません', 'ins.mt.e.conflict': 'プレビュー後の競合', 'ins.mt.e.write': '書込みに失敗', 'ins.mt.e.outside': 'preview 外の同一ファイルを検出', 'ins.mt.e.verify': '検査に失敗',
+        'ins.mt.d.req': '未対応の要求です', 'ins.mt.d.input': '入力条件が一意ではありません', 'ins.mt.pv': '保守プレビュー', 'ins.mt.loading': '{id}: 読み込み中', 'ins.mt.apply': '確認して実行',
+        'impl.st.0': '未着手', 'impl.st.1': '実装登録済み・試験未登録', 'impl.st.2': '実装登録済み・試験未合格', 'impl.st.3': '試験 pass 済み', 'impl.st.4': '実装登録済み・System Test 対象外',
+        'bizicon.dashboard': 'ダッシュボード', 'bizicon.map2d': '2D 関係マップ', 'bizicon.map3d': '3D 関係マップ', 'bizicon.diagrams': '図式', 'bizicon.placement': 'データの配置', 'bizicon.entities': 'エンティティ × ユースケース', 'bizicon.integrations': '外部連携', 'bizicon.source': 'ソース', 'bizicon.tables': 'データの表', 'bizicon.maintenance': '整合性保守',
+        'bizicon.structure': 'データ層の構造', 'bizicon.consistency': '一貫性ビューアー', 'bizicon.goal': '業務目的', 'bizicon.req': '要求', 'bizicon.entity': 'エンティティ', 'bizicon.api': 'API', 'bizicon.test': '試験', 'bizicon.progress': '進捗', 'bizicon.history': '履歴', 'bizicon.risk': 'リスク',
+        'd.blocked': 'BLOCKED', 'd.f.command': 'コマンド', 'd.f.lastrun': '最終実行', 'd.f.commit': 'コミット', 'd.f.evidence': '証跡', 'd.f.catalog': 'カタログ',
+        // @@ja6
       },
   en: {
     'nav.implstatus': 'Impl. status', 'impl2.sub': 'Where each approved requirement stands: not started, implementation registered, or test passed. Registration and test results are judged separately.', 'impl2.legend': 'State legend', 'impl2.all': 'Overall', 'impl2.goal': 'By goal', 'impl2.priority': 'By priority', 'impl2.kanban': 'Kanban', 'impl2.table': 'Table', 'impl2.cases': 'Test case breakdown', 'impl2.stalled': 'Stalled', 'impl3.none': 'No filter (click a segment to highlight)', 'impl3.applied': 'Applied', 'impl3.count': 'items', 'impl3.nomatch': 'No match', 'impl3.clear': 'Clear', 'impl3.mode.hl': 'Highlight', 'impl3.mode.fl': 'Filter', 'impl2.excluded': 'Excluded (pending, on hold, rejected, retired) requirements', 'gantt.title': 'Gantt chart', 'gantt.sub': 'The period in which tests actually ran, derived from the linked test cases (history and last run).', 'gantt.view': 'Gantt chart', 'gantt.axis': 'Vertical axis', 'gantt.time': 'Time (date)', 'gantt.sel': 'Selected', 'gantt.none': 'No requirement has a schedule', 'gantt.legend': 'Gantt chart legend', 'gantt.undated': 'Undated requirements (no test case or no timestamp)', 'gantt.undated.cell': 'Undated', 'gantt.tbl': 'Same content as a table', 'gantt.start': 'Start', 'gantt.end': 'End',
@@ -212,26 +259,84 @@ const D = {
         'sz.nothing': 'No entity matches the filter', 'sz.alt': 'Table view (alternative)', 'sz.alt.clusters': 'Clusters', 'sz.alt.edges': 'Relations', 'sz.alt.cols': 'Columns',
         'sz.from': 'From', 'sz.to': 'To', 'sz.kind': 'Kind', 'sz.src': 'Source', 'sz.sel': 'Selected', 'sz.none': 'Nothing selected', 'sz.hint': 'Wheel / + - keys zoom, drag / arrow keys pan, 0 fits, Enter selects, Esc clears',
         'sz.to2d': 'View in 2D', 'arch.storage': 'Stored at', 'arch.locations': 'Execution locations', 'arch.kind': 'Kind', 'arch.place': 'Place', 'arch.apps': 'Apps', 'arch.data': 'Data', 'arch.links': 'Links (direction)', 'arch.toentity': 'To entity model', 'arch.toarch': 'To architecture', 'sz.to3d': 'View in 3D', 'sz.graph': 'Relation graph (classic)', 'sz.entview': 'Entity view', 'sz.rot': 'Rotate', 'sz.mismatch': 'differs from the DDL / schema', 'sz.supp': 'Supplement (DDL / schema)',
-        'sz.goto': 'Go to referenced column', 'sz.badge.selected': 'selected', 'sz.badge.related': 'related', 'sz.use': 'uses', 'sz.nowebgl': '',
+        'sz.goto': 'Go to referenced column', 'sz.badge.selected': 'selected', 'sz.badge.related': 'related', 'sz.use': 'uses', 'sz.nowebgl': '3D cannot be drawn in this environment, so 2D is shown.',
+        'app.title': 'EABK Studio', 'skip.main': 'Skip to main content', 'search.aria': 'Search project data', 'model.time': 'Model timestamp', 'persona.group': 'Role', 'persona.pm': 'Product Manager', 'persona.arch': 'Architect', 'persona.swe': 'Software Engineer', 'persona.view': '{name} view', 'persona.suffix': 'view',
+        'lang.group': 'Language', 'search.hits': '{n} hits', 'search.hlall': 'Highlight all', 'cmd.implsel': 'Select impl-status segment: ', 'cmd.implclear': 'Clear impl-status filter',
+                'cam3d.keys': 'camera', 'cam3d.keys.stop': 'stop', 'tier.shown': '{n} shown', 'tier.tree': 'Data hierarchy',
+                'tier.n.unclassified': 'Unclassified', 'tier.n.goals': 'Goals', 'tier.n.reqs': 'Requirements', 'tier.n.acs': 'Acceptance criteria', 'tier.n.cases': 'Test cases', 'tier.n.catalog': 'Catalog', 'tier.n.entities': 'Entities', 'tier.n.questions': 'Questions', 'tier.n.sources': 'Sources', 'tier.n.params': 'Parameters', 'tier.n.audit': 'Audit findings', 'tier.n.integrations': 'External integrations',
+                'tier.n.functional': 'Functional', 'tier.n.nonfunctional': 'Non-functional', 'tier.n.apis': 'APIs and events', 'tier.n.tables': 'Tables', 'tier.n.shared': 'Shared parts', 'tier.n.intcat': 'Integration catalog', 'tier.n.states': 'State machines', 'tier.n.other': 'Other',
+                'common.none': 'None', 'common.paren': ' ({v})', 'map3d.layers': '3D layer structure', 'map3d.chain': 'Goal → Requirement → Entity / API / Table → Implementation file → System Test',
+        'maptier.title': 'Tiers (kind → division → area)', 'maptier.items': 'items', 'maptier.none': 'No tier data.', 'maptier.close': 'Close', 'maptier.dlg': 'Item tiers (kind → division → area → item)',
+        'rpg.title': 'RPG-style map', 'rpg.area': 'RPG-style map. Walk with the arrow keys and press the confirm key at a castle or town entrance to talk. Tab moves to other parts of the page.',
+        'rpg.castle': 'Castle', 'rpg.town': 'Town', 'rpg.goal': 'Goal', 'rpg.entity': 'Entity', 'rpg.group': 'Entity group', 'rpg.townName': 'Town of {n}', 'rpg.noneName': 'Town of no relations', 'rpg.noneText': 'The town of entities that have no relation to other entities.', 'rpg.groupText': 'Entities linked by relations: {list} ({n})', 'rpg.hero': 'Traveler', 'rpg.villager': 'Villager', 'rpg.guide': 'Guide',
+        'rpg.sound': 'Sound', 'rpg.on': 'On', 'rpg.off': 'Off (muted)', 'rpg.soundBtn': 'Toggle sound', 'rpg.pos': 'Position', 'rpg.field': 'Open field', 'rpg.at': 'At the entrance of {k} {n}', 'rpg.with': 'At {k} {n}',
+        'rpg.reqs': 'Related requirements: {n}', 'rpg.repr': 'e.g. {ids}', 'rpg.noreq': 'No related requirements yet.', 'rpg.nodesc': 'No description yet.',
+        'rpg.start': 'Start', 'rpg.select': 'Select', 'rpg.help': 'Controls', 'rpg.tiers': 'Item tiers (kind → division → area)', 'rpg.tiersOpen': 'Browse by tier', 'rpg.tiersLine': 'Tiers (related requirements): {list}', 'rpg.tiersMore': ', and {n} more areas', 'rpg.close': 'Close', 'rpg.to2d': 'Show in 2D', 'rpg.to3d': 'Show in 3D', 'rpg.toRpg': 'Show as RPG-style',
+        'rpg.keysTitle': 'Controls', 'rpg.btn': 'Button', 'rpg.keys': 'Keys', 'rpg.dpad': 'D-pad', 'rpg.a': 'A (confirm / talk / examine)', 'rpg.b': 'B (cancel / close / back)',
+        'rpg.kDpad': 'Arrow keys or W A S D', 'rpg.kA': 'Enter or Z', 'rpg.kB': 'Esc or X (Backspace also works)', 'rpg.kStart': 'Space (menu)', 'rpg.kSel': 'Press Shift alone (sound / view mode)',
+        'rpg.legend': 'D-pad = arrows/WASD  A = Enter/Z  B = Esc/X  Start = Space  Select = Shift  (Tab leaves the map)',
+        'rpg.alt': 'See the same content as a table', 'rpg.cols': 'Name / ID', 'rpg.kind': 'Kind', 'rpg.where': 'Position', 'rpg.rel': 'Related requirements', 'rpg.roads': 'Roads (links)',
+        'rpg.fbNone': 'This data has no {what}, so the RPG-style map cannot be built. 2D is shown. The table has the same content.',
+        'rpg.fbGoal': 'goals (castles)', 'rpg.fbEnt': 'entities (towns)', 'rpg.fbCtx': 'RPG-style cannot be drawn in this environment, so 2D is shown. The table has the same content.',
+        'rpg.blockedMsg': 'Blocked', 'rpg.menuOpen': 'Menu opened', 'rpg.menuClosed': 'Menu closed', 'rpg.talk': 'Talking at {n}.',
+        'rpg.undef': '(goal without a name)',
+        'ins.noloc': 'No evidence location', 'ins.sep': ', ', 'ins.close': 'Close', 'ins.analysis': '{name} analysis', 'ins.roleread': 'How each role reads this', 'ins.l.info': 'Displayed information: ', 'ins.l.persp': 'Perspective: ', 'ins.l.decide': 'Decision: ',
+        'ins.page.dashboard.n': 'Dashboard', 'ins.page.dashboard.i': 'goals, progress, requirements', 'ins.page.dashboard.p': 'priorities and the impact of unfinished work', 'ins.page.dashboard.d': 'what to invest in next',
+        'ins.page.map2d.n': '2D map', 'ins.page.map2d.i': 'nodes, relations, details', 'ins.page.map2d.p': 'dependencies across layers and isolated items', 'ins.page.map2d.d': 'change impact and structural gaps',
+        'ins.page.map3d.n': '3D map', 'ins.page.map3d.i': 'nodes, relations, viewpoint', 'ins.page.map3d.p': 'concentration and distance of complex relations', 'ins.page.map3d.d': 'dependency clusters to view from above',
+        'ins.page.diagrams.n': 'Diagrams', 'ins.page.diagrams.i': 'diagrams, relations, evidence', 'ins.page.diagrams.p': 'structure and evidence that fit the purpose', 'ins.page.diagrams.d': 'relations that back design decisions',
+        'ins.page.placement.n': 'Placement', 'ins.page.placement.i': 'files, placement, details', 'ins.page.placement.p': 'execution boundaries and division of responsibility', 'ins.page.placement.d': 'where to put code and data',
+        'ins.page.source.n': 'Source mapping', 'ins.page.source.i': 'managed data, implementation, details', 'ins.page.source.p': 'tracing from requirement to implementation', 'ins.page.source.d': 'what to fix and where the evidence is',
+        'ins.page.tables.n': 'Tables', 'ins.page.tables.i': 'kinds, filters, rows', 'ins.page.tables.p': 'comparing and auditing the source records', 'ins.page.tables.d': 'gaps, duplicates and status differences',
+        'ins.role.info': 'Check {v} as the displayed information', 'ins.role.pm.p': 'Analyze {v} by value and priority', 'ins.role.pm.d': 'Decide on {v}', 'ins.role.arch.p': 'Analyze {v} by boundaries and consistency', 'ins.role.arch.d': 'Judge the design validity of {v}', 'ins.role.swe.p': 'Analyze {v} by implementation and tests', 'ins.role.swe.d': 'Decide the implementation work for {v}',
+        'ins.runsAt': 'Runs at: {v}', 'ins.dataAt': 'Where the data lives: {v}', 'ins.access': 'Read / write direction: {v}', 'ins.source': 'Evidence: {v}', 'ins.rt.title': 'App structure and data placement', 'ins.rt.sub': 'Execution environment, code, storage locations and explicit boundaries, based on the analyzed managed data and registered implementation',
+        'ins.from': 'From', 'ins.to': 'To', 'ins.dir': 'Direction', 'ins.data': 'Data', 'ins.ev': 'Evidence', 'ins.boundary': 'External / cloud boundary', 'ins.bline': ' / Method: {method} / Direction: {dir} / Source of truth: {owner} / Sent externally', 'ins.unwritten': 'Not stated',
+        'ins.rtfoot': 'Writes: none  Sent externally: {v}', 'ins.defined': 'Defined',
+        'ins.ev.open': 'Open the evidence for {cat} {status} in VS Code', 'ins.ev.title': 'Evidence records for {title}', 'ins.ev.date': ' — As of: {v}', 'ins.ev.nodate': ' — As of: not recorded', 'ins.ev.state': ' — Status: {v}', 'ins.ev.src': ' — Evidence: ', 'ins.ev.none': 'No matching records', 'ins.ev.btn': '{groups} groups / {count} records — show evidence records',
+        'ins.hist.title': 'Design and development history and progress', 'ins.hist.asof': 'Measured at: {v} · by time / by status', 'ins.hist.pass': 'System Test passed ', 'ins.hist.of': ' / {n} (not_run is not counted as passed)', 'ins.hist.types': 'Data types',
+        'ins.st.title': 'Current vs. ideal structure of all data layers', 'ins.st.sub': 'Compares, layer by layer, the analyzed current structure with the ideal structure derived from the structure judgement table', 'ins.st.actual': 'Current: {v}', 'ins.st.ideal': 'Ideal: {v}', 'ins.st.delta': 'Difference: {v}', 'ins.st.rule': 'Applied rule: {v}', 'ins.st.reason': 'Reason: {v}',
+        'ins.st.diff': 'Structural differences', 'ins.st.kind': 'Difference kind: {v}', 'ins.st.layer': 'Layer: {v}',
+        'ins.st.h1': 'Data layer', 'ins.st.h2': 'Difference kind (delta)', 'ins.st.h3': 'Target ID / location', 'ins.st.h4': 'Current (actual)', 'ins.st.h5': 'Ideal (ideal)', 'ins.st.h6': 'Applied rule (rule)', 'ins.st.h7': 'Reason (reason)', 'ins.st.h8': 'Evidence (source)',
+        'ins.co.title': 'Layer consistency viewer', 'ins.co.noref': 'No referent', 'ins.co.ok': 'OK', 'ins.co.missing': 'A layer is missing', 'ins.co.h.verdict': 'Verdict', 'ins.co.req': 'Requirement', 'ins.co.test': 'Test', 'ins.co.cat': 'Catalog', 'ins.co.file': 'Implementation file',
+        'ins.mt.sub': 'Only catalog titles and decision states that differ from the requirements source are updated atomically, after an explicit preview.', 'ins.mt.warn': 'Normal viewing is read-only. Maintenance targets only the one selected row and two columns, and is restored byte for byte if verification fails.',
+        'ins.mt.noref': 'Unsupported: no referent in the requirements source', 'ins.mt.empty': 'There are no maintenance candidates.', 'ins.mt.err': 'Maintenance error', 'ins.mt.restored': 'Changes were restored byte for byte', 'ins.mt.retry': 'Retry', 'ins.mt.cancel': 'Cancel',
+        'ins.mt.e.unsupported': 'Unsupported', 'ins.mt.e.invalid': 'Input condition is not unique', 'ins.mt.e.conflict': 'Conflict after the preview', 'ins.mt.e.write': 'Write failed', 'ins.mt.e.outside': 'Same file found outside the preview', 'ins.mt.e.verify': 'Verification failed',
+        'ins.mt.d.req': 'Unsupported requirement', 'ins.mt.d.input': 'Input condition is not unique', 'ins.mt.pv': 'Maintenance preview', 'ins.mt.loading': '{id}: Loading', 'ins.mt.apply': 'Confirm and apply',
+        'impl.st.0': 'Not started', 'impl.st.1': 'Registered · no test registered', 'impl.st.2': 'Registered · test not passing', 'impl.st.3': 'Test passed', 'impl.st.4': 'Registered · outside system test',
+        'bizicon.dashboard': 'Dashboard', 'bizicon.map2d': '2D relationship map', 'bizicon.map3d': '3D relationship map', 'bizicon.diagrams': 'Diagrams', 'bizicon.placement': 'Data placement', 'bizicon.entities': 'Entity × use case', 'bizicon.integrations': 'External integrations', 'bizicon.source': 'Source', 'bizicon.tables': 'Data tables', 'bizicon.maintenance': 'Integrity maintenance',
+        'bizicon.structure': 'Data-layer structure', 'bizicon.consistency': 'Consistency viewer', 'bizicon.goal': 'Business goal', 'bizicon.req': 'Requirement', 'bizicon.entity': 'Entity', 'bizicon.api': 'API', 'bizicon.test': 'Test', 'bizicon.progress': 'Progress', 'bizicon.history': 'History', 'bizicon.risk': 'Risk',
+        'd.blocked': 'BLOCKED', 'd.f.command': 'Command', 'd.f.lastrun': 'Last run', 'd.f.commit': 'Commit', 'd.f.evidence': 'Evidence', 'd.f.catalog': 'Catalog',
+        // @@en6
       },
 };
 
+export const DICT = D;   // AC-431: the dictionary is read by the static completeness test
 export const lang = () => current;
 export function t(key, vars) {
   let s = D[current][key] ?? D.en[key] ?? key.split('.').pop();
-  if (vars) for (const [k, v] of Object.entries(vars)) s = s.replace(`{${k}}`, v);
+  if (vars) for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(v);
   return s;
 }
 export function onLang(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 export function setLang(l) {
-  current = l; localStorage.setItem(STORE_KEY, l);
+  if (l !== 'ja' && l !== 'en') return;   // only the language code is stored
+  current = l;
+  try { localStorage.setItem(STORE_KEY, l); } catch { /* the display still changes when it cannot be saved */ }
   document.documentElement.lang = l;
+  document.title = docTitle();
   applyI18n(document);
   for (const fn of [...listeners]) { try { fn(l); } catch (e) { console.error(e); } }
 }
+let docName = '';
+const docTitle = () => (docName ? `${t('app.title')} · ${docName}` : t('app.title'));
+/** The document title is "EABK Studio · <project name>"; the project name is managed data and is never translated. */
+export function setDocName(name) { docName = name || ''; document.title = docTitle(); }
 export function applyI18n(root) {
   root.querySelectorAll('[data-i18n-ph]').forEach((e) => (e.placeholder = t(e.dataset.i18nPh)));
   root.querySelectorAll('[data-i18n-title]').forEach((e) => (e.title = t(e.dataset.i18nTitle)));
+  root.querySelectorAll('[data-i18n-aria]').forEach((e) => e.setAttribute('aria-label', t(e.dataset.i18nAria)));
   root.querySelectorAll('[data-i18n]').forEach((e) => (e.textContent = t(e.dataset.i18n)));
+  const pressed = root.querySelectorAll('[data-lang]');   // the language toggle: the current language is aria-pressed
+  pressed.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === current)));
 }
 document.documentElement.lang = current;

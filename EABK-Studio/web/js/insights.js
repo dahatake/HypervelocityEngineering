@@ -1,45 +1,49 @@
 // FR-1002/1003/1005/1006: decision-oriented views derived only from the loaded model.
 import { store } from './store.js';
-import { t, lang } from './i18n.js';
+import { t, onLang } from './i18n.js';
 import { el, vscodeUrl } from './ui.js';
 import { xrefLink } from './xref.js';
 import { placeRows, listTiers } from './tierlist.js';
 
+// A block built from the dictionary is rebuilt in place when the language changes (the screen is not reloaded).
+function live(build) {
+  let node = build();
+  const off = onLang(() => {
+    if (!node.isConnected) { off(); return; }
+    const next = build();
+    node.replaceWith(next);
+    node = next;
+  });
+  return node;
+}
+
 export function evidenceTarget(record) {
   return record.file && record.line
     ? { label: `${record.file}:${record.line}`, href: vscodeUrl(record.file, record.line) }
-    : { label: '根拠位置なし', href: '' };
+    : { label: t('ins.noloc'), href: '' };
 }
 
-const PAGE = {
-  dashboard: ['ダッシュボード', '目的・進捗・要求', '優先順位と未完了の影響', '次に投資する対象'],
-  map2d: ['2D マップ', 'ノード・関係・詳細', '層をまたぐ依存と孤立', '変更影響と構造上の欠落'],
-  map3d: ['3D マップ', 'ノード・関係・視点', '複雑な関係の集中と距離', '俯瞰すべき依存クラスター'],
-  diagrams: ['図式', '図・関係・根拠', '目的に適した構造と証拠', '設計判断を裏づける関係'],
-  placement: ['配置', 'ファイル・配置・詳細', '実行境界と責務分担', 'コードとデータを置く場所'],
-  source: ['ソース対応', '管理データ・実装・詳細', '要求から実装への追跡', '修正対象と根拠の所在'],
-  tables: ['表', '種別・絞り込み・行', '正本レコードの比較と監査', '不足・重複・状態差分'],
-};
+// The screens that carry a role-by-role analysis; their words are the dictionary keys ins.page.<route>.n / i / p / d.
+const PAGE = { dashboard: 1, map2d: 1, map3d: 1, diagrams: 1, placement: 1, source: 1, tables: 1 };
 
 export function analysis(route) {
-  const [name, info, perspective, decision] = PAGE[route];
-  const roles = [
-    ['Product Manager', `${info}を表示情報として確認`, `${perspective}を価値・優先度から分析`, `${decision}を判断`],
-    ['Architect', `${info}を表示情報として確認`, `${perspective}を境界・整合性から分析`, `${decision}の設計妥当性を判断`],
-    ['Software Engineer', `${info}を表示情報として確認`, `${perspective}を実装・試験から分析`, `${decision}の実装作業を判断`],
-  ];
-  return el('section', { class: 'analysis card', role: 'region', 'aria-label': `${name} 分析` },
-    el('div', { class: 'analysis-title' }, el('b', {}, `${name} 分析`), el('span', {}, '役割別の読み方')),
-    el('div', { class: 'analysis-grid' }, roles.map(([role, a, b, c]) =>
-      el('article', {}, el('h2', {}, role),
-        el('p', {}, el('b', {}, '表示情報: '), a),
-        el('p', {}, el('b', {}, '分析観点: '), b),
-        el('p', {}, el('b', {}, '判断: '), c)))));
+  return live(() => {
+    const name = t(`ins.page.${route}.n`), info = t(`ins.page.${route}.i`);
+    const perspective = t(`ins.page.${route}.p`), decision = t(`ins.page.${route}.d`);
+    const roles = ['pm', 'arch', 'swe'].map((id) => [t('persona.' + id), t('ins.role.info', { v: info }), t(`ins.role.${id}.p`, { v: perspective }), t(`ins.role.${id}.d`, { v: decision })]);
+    return el('section', { class: 'analysis card', role: 'region', 'aria-label': t('ins.analysis', { name }) },
+      el('div', { class: 'analysis-title' }, el('b', {}, t('ins.analysis', { name })), el('span', {}, t('ins.roleread'))),
+      el('div', { class: 'analysis-grid' }, roles.map(([role, a, b, c]) =>
+        el('article', {}, el('h2', {}, role),
+          el('p', {}, el('b', {}, t('ins.l.info')), a),
+          el('p', {}, el('b', {}, t('ins.l.persp')), b),
+          el('p', {}, el('b', {}, t('ins.l.decide')), c)))));
+  });
 }
 
 export function decorate(route, host) {
   const page = host.querySelector('.page');
-  if (PAGE[route]) (page || host).prepend(analysis(route));
+  if (route in PAGE) (page || host).prepend(analysis(route));
   if (route === 'dashboard' && page) page.append(historyProgress());
   if (route === 'placement' && new URLSearchParams(location.hash.split('?')[1] || '').get('kind') === 'runtime') {
     host.replaceChildren(el('div', { class: 'page' }, analysis('placement'), runtimePlacement()));
@@ -50,33 +54,38 @@ export function decorate(route, host) {
 }
 
 export function runtimePlacement() {
-  const runtime = store.model.analysis.runtime;
-  const box = (item) => el('article', { class: 'runtime-node card' },
-    el('h3', {}, item.name), el('p', {}, `実行場所: ${item.runsAt}`),
-    el('p', {}, `データの所在: ${item.data}`),
-    item.access ? el('p', {}, `読取・書込方向: ${item.access}`) : null,
-    el('p', { class: 'mini mono' }, `根拠: ${item.source}`));
-  return el('section', { class: 'visual-section' }, el('h1', {}, 'アプリ構成とデータ位置づけ'),
-    el('p', { class: 'sub' }, '解析した管理データと実装登録に基づく実行環境・コード・格納位置・明示境界'),
-    el('div', { class: 'runtime-flow' }, runtime.components.map(box)),
-    el('div', { class: 'tw' }, el('table', { class: 't' },
-      el('thead', {}, el('tr', {}, ['送信元', '送信先', '方向', '対象データ', '根拠'].map((x) => el('th', {}, x)))),
-      el('tbody', {}, runtime.flows.map((flow) => el('tr', {},
-        el('td', {}, flow.from), el('td', {}, flow.to), el('td', {}, flow.direction),
-        el('td', {}, flow.data), el('td', { class: 'mono' }, flow.source)))))),
-    el('div', { class: 'card boundary' }, el('h3', {}, '外部／クラウド境界'),
-      runtime.boundaries.length
-        ? runtime.boundaries.map((x) => el('p', {},
-          el('b', {}, x.name), ` / 方式: ${x.method || '未記載'} / 方向: ${x.direction || '未記載'} / 正本: ${x.owner || '未記載'} / 外部送信`,
-          el('span', { class: 'mono' }, ` / 根拠: ${x.source}`)))
-        : el('p', {}, 'なし'),
-      el('p', {}, `書込: なし　外部送信: ${runtime.externalSend.length ? '定義あり' : 'なし'}`)));
+  return live(() => {
+    const runtime = store.model.analysis.runtime;
+    const box = (item) => el('article', { class: 'runtime-node card' },
+      el('h3', {}, item.name), el('p', {}, t('ins.runsAt', { v: item.runsAt })),
+      el('p', {}, t('ins.dataAt', { v: item.data })),
+      item.access ? el('p', {}, t('ins.access', { v: item.access })) : null,
+      el('p', { class: 'mini mono' }, t('ins.source', { v: item.source })));
+    const miss = t('ins.unwritten');
+    return el('section', { class: 'visual-section' }, el('h1', {}, t('ins.rt.title')),
+      el('p', { class: 'sub' }, t('ins.rt.sub')),
+      el('div', { class: 'runtime-flow' }, runtime.components.map(box)),
+      el('div', { class: 'tw' }, el('table', { class: 't' },
+        el('thead', {}, el('tr', {}, [t('ins.from'), t('ins.to'), t('ins.dir'), t('ins.data'), t('ins.ev')].map((x) => el('th', {}, x)))),
+        el('tbody', {}, runtime.flows.map((flow) => el('tr', {},
+          el('td', {}, flow.from), el('td', {}, flow.to), el('td', {}, flow.direction),
+          el('td', {}, flow.data), el('td', { class: 'mono' }, flow.source)))))),
+      el('div', { class: 'card boundary' }, el('h3', {}, t('ins.boundary')),
+        runtime.boundaries.length
+          ? runtime.boundaries.map((x) => el('p', {},
+            el('b', {}, x.name), t('ins.bline', { method: x.method || miss, dir: x.direction || miss, owner: x.owner || miss }),
+            el('span', { class: 'mono' }, ' / ' + t('ins.source', { v: x.source }))))
+          : el('p', {}, t('common.none')),
+        el('p', {}, t('ins.rtfoot', { v: runtime.externalSend.length ? t('ins.defined') : t('common.none') }))));
+  });
 }
 
 // FR-1006 AC-050 / FR-1013 AC-084 AC-085: one ER view shared by the ER page and the diagrams "data relation" tab.
 // Entities and their related tables (tables sharing a requirement) carry data-id = model node id.
 export function entityER() {
-  const ja = lang() === 'ja';
+  return live(buildEntityER);
+}
+function buildEntityER() {
   const reqs = store.model.reqs.filter((r) => r.entities.length);
   const related = reqs.filter((r) => r.relation);
   const entities = [...new Set(reqs.flatMap((r) => r.entities))];
@@ -95,13 +104,16 @@ export function entityER() {
     return el('div', { class: 'entity-box', ...attrs }, head,
       el('div', { class: 'mini' }, t('er.tables') + ': ', tbls.size ? [...tbls.entries()].map(([id, rs]) => el('span', { class: 'chip', 'data-id': id, tabindex: 0, role: 'button', title: `${t('er.evidence')}: ${rs.join(', ')}`, onclick: (e) => { e.stopPropagation(); pick(id)(); }, onkeydown: (e) => { e.stopPropagation(); key(id)(e); } }, `▦ ${store.node(id)?.label || id} (${rs.join(', ')}) `)) : t('er.notable')));
   };
-  return el('section', { class: 'visual-section' }, el('h1', {}, ja ? 'Entity 向け ER 図' : t('er.title')),
+  return el('section', { class: 'visual-section' }, el('h1', {}, t('er.title')),
     entities.length ? el('div', { class: 'er-grid' }, entities.map(box)) : el('div', { class: 'empty' }, t('er.noent')),
     related.map((r) => el('div', { class: 'relation-row' }, el('b', {}, r.id), ` ${t('er.evidence')}: ${r.relation}`)),
-    reqs.filter((r) => !r.relation).map((r) => el('div', { class: 'warnbox' }, `${r.entities.join(ja ? '、' : ', ')}: ${t('er.norelwarn', { id: r.id })} [${t('er.norel')}]`)));
+    reqs.filter((r) => !r.relation).map((r) => el('div', { class: 'warnbox' }, `${r.entities.join(t('ins.sep'))}: ${t('er.norelwarn', { id: r.id })} [${t('er.norel')}]`)));
 }
 
 function historyProgress() {
+  return live(buildHistory);
+}
+function buildHistory() {
   const m = store.model;
   const pass = m.cases.filter((c) => c.status === 'pass').length;
   const recordLabel = (record) => record.id || record['run-id'] || record.target || record.name || record.label || 'record';
@@ -111,7 +123,7 @@ function historyProgress() {
     ? el('a', {
       class: 'mono',
       href: target.href,
-      title: `${record.category} ${record.status} の根拠を VS Code で開く`,
+      title: t('ins.ev.open', { cat: record.category, status: record.status }),
     }, target.label)
     : el('span', { class: 'mono' }, target.label);
   };
@@ -123,28 +135,28 @@ function historyProgress() {
       drawer.style.left = '8px';
       drawer.style.right = 'auto';
       drawer.style.width = 'min(440px, 35vw)';
-      drawer.replaceChildren(el('h2', {}, `${title}の根拠レコード`),
+      drawer.replaceChildren(el('h2', {}, t('ins.ev.title', { title })),
         ...groups.map((group) => el('section', {},
           el('h3', {}, `${group.label} (${group.records.length})`),
           group.records.length
             ? el('ul', {}, group.records.map((record) => el('li', {},
               el('b', {}, recordLabel(record)),
-              record.date ? ` — 時点: ${record.date}` : ' — 時点: 記録なし',
-              record.status ? ` — 状態: ${record.status}` : '',
-              ' — 根拠: ', sourceLink(record))))
-            : el('p', { class: 'empty' }, '該当レコードなし'))),
-        el('button', { class: 'btn', onclick: () => (drawer.hidden = true) }, '閉じる'));
+              record.date ? t('ins.ev.date', { v: record.date }) : t('ins.ev.nodate'),
+              record.status ? t('ins.ev.state', { v: record.status }) : '',
+              t('ins.ev.src'), sourceLink(record))))
+            : el('p', { class: 'empty' }, t('ins.ev.none')))),
+        el('button', { class: 'btn', onclick: () => (drawer.hidden = true) }, t('ins.close')));
       drawer.hidden = false;
     };
     return el('figure', { class: 'card evidence-chart', 'aria-label': title },
       el('figcaption', {}, title),
       el('button', { role: 'button', class: 'chart-button', onclick: open },
-        `${groups.length} 集計 / ${count} 件 — 根拠レコードを表示`),
+        t('ins.ev.btn', { groups: groups.length, count })),
       el('div', { class: 'dimension-list' }, groups.map((group) =>
         el('span', { class: 'badge' }, `${group.label}: ${group.records.length}`))));
   };
   const by = (records, key) => Object.entries(records.reduce((out, record) => {
-    const label = key(record) || '未分類';
+    const label = key(record) || t('tier.n.unclassified');
     (out[label] ||= []).push(record);
     return out;
   }, {})).map(([label, records]) => ({ label, records }));
@@ -158,6 +170,7 @@ function historyProgress() {
     groups: Object.entries(states).map(([status, records]) => ({ label: status, records })),
   }));
   // FR-1032 / FR-1031: record chips wrap inside their box; each chip's ID is a link.
+  // i18n-data: the category names of the history records are managed-data values (shown as written)
   const KIND = { 決定記録: 'decision', 実行履歴: 'run', 要求状態: 'requirement', 実装登録: 'impl' };
   const chipBoxes = Object.entries(KIND).map(([label, kind]) => {
     const records = (m.analysis.history || []).filter((r) => r.category === label);
@@ -172,16 +185,16 @@ function historyProgress() {
       records.length ? el('div', { class: 'hchips' }, records.map(chip))
         : el('p', { class: 'empty', 'data-testid': 'history-empty' }, t('none')));
   });
-  return el('section', { class: 'visual-section' }, el('h2', {}, '設計・開発履歴と進捗'),
-    el('p', { class: 'sub' }, `測定時点: ${m.meta.generatedAt} · 時系列 / 状態別`),
-    el('div', { class: 'progress-summary' }, el('span', {}, 'System Test 合格 '),
+  return el('section', { class: 'visual-section' }, el('h2', {}, t('ins.hist.title')),
+    el('p', { class: 'sub' }, t('ins.hist.asof', { v: m.meta.generatedAt })),
+    el('div', { class: 'progress-summary' }, el('span', {}, t('ins.hist.pass')),
       el('strong', { 'data-testid': 'system-test-pass-count' }, String(pass)),
-      el('span', {}, ` / ${m.cases.length}（not_run は合格に含めない）`)),
+      el('span', {}, t('ins.hist.of', { n: m.cases.length }))),
     el('div', { class: 'grid cols2 history-grid' }, ...chipBoxes),
     el('div', { class: 'grid cols2 history-grid' },
       ...historyGroups.map((category) => evidence(category.label, category.groups)),
-      evidence('目的', goalGroups),
-      evidence('データ種別', typeGroups)));
+      evidence(t('tier.n.goals'), goalGroups),
+      evidence(t('ins.hist.types'), typeGroups)));
 }
 
 // FR-1063 AC-349: 表の行を上位層（種類→区分→領域）の見出しの下にまとめる。leaf の領域ごとに同じ見出しの表を置く。
@@ -195,57 +208,68 @@ function tierTable(headers, placed, rowOf, emptyPath) {
   });
 }
 
+// i18n-data: the names of the hierarchy (kind, division, area) are managed-data values; they are translated by hier.js (tierName)
+const EMPTY_REQ_PATH = ['要求', '機能', '未分類'];
+
 export function mountStructure(host) {
-  const analysis = store.model.analysis.structure;
-  const placed = placeRows(analysis.differences.map((d) => d), (d) => ({ kind: '要求', id: d.target }), (d) => ['構造差分', `差分種別: ${d.kind}`, `層: ${d.layer}`]);
-  const page = el('div', { class: 'page' }, el('h1', {}, '全データ層の現状対理想構造'),
-    el('p', { class: 'sub' }, '解析済みの現状構造 と 構造判定表から導いた理想構造を層ごとに比較'),
-    el('div', { class: 'grid cols2 layer-list' }, analysis.layers.map((layer) =>
-      el('article', { class: 'card' }, el('h2', {}, layer.name),
-        el('p', {}, `現状: ${layer.actual}`), el('p', {}, `理想: ${layer.ideal}`),
-        el('p', {}, `差分: ${layer.delta}`), el('p', {}, `適用規則: ${layer.rule}`),
-        el('p', {}, `判定理由: ${layer.reason}`),
-        el('p', { class: 'mini mono' }, `根拠: ${layer.source}`)))),
-    tierTable(['データ層', '差分種別（delta）', '対象 ID / 位置', '現状（actual）', '理想（ideal）', '適用規則（rule）', '判定理由（reason）', '根拠（source）'], placed,
-      (diff) => el('tr', {},
-        el('td', {}, diff.layer), el('td', {}, diff.kind), el('td', {}, diff.target),
-        el('td', {}, diff.actual), el('td', {}, diff.ideal), el('td', {}, diff.rule),
-        el('td', {}, diff.reason), el('td', { class: 'mono' }, diff.source)), ['構造差分', '未分類', '未分類']));
+  const page = live(() => {
+    const analysis = store.model.analysis.structure;
+    // i18n-data: the kind name of a hierarchy item is a managed-data value
+    const placed = placeRows(analysis.differences.map((d) => d), (d) => ({ kind: '要求', id: d.target }), (d) => [t('ins.st.diff'), t('ins.st.kind', { v: d.kind }), t('ins.st.layer', { v: d.layer })]);
+    return el('div', { class: 'page' }, el('h1', {}, t('ins.st.title')),
+      el('p', { class: 'sub' }, t('ins.st.sub')),
+      el('div', { class: 'grid cols2 layer-list' }, analysis.layers.map((layer) =>
+        el('article', { class: 'card' }, el('h2', {}, layer.name),
+          el('p', {}, t('ins.st.actual', { v: layer.actual })), el('p', {}, t('ins.st.ideal', { v: layer.ideal })),
+          el('p', {}, t('ins.st.delta', { v: layer.delta })), el('p', {}, t('ins.st.rule', { v: layer.rule })),
+          el('p', {}, t('ins.st.reason', { v: layer.reason })),
+          el('p', { class: 'mini mono' }, t('ins.source', { v: layer.source }))))),
+      tierTable(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8'].map((k) => t('ins.st.' + k)), placed,
+        (diff) => el('tr', {},
+          el('td', {}, diff.layer), el('td', {}, diff.kind), el('td', {}, diff.target),
+          el('td', {}, diff.actual), el('td', {}, diff.ideal), el('td', {}, diff.rule),
+          el('td', {}, diff.reason), el('td', { class: 'mono' }, diff.source)), [t('ins.st.diff'), t('tier.n.unclassified'), t('tier.n.unclassified')]));
+  });
   host.append(page);
   return { destroy() {} };
 }
 
 export function mountConsistency(host) {
-  const rows = new Map();
-  for (const r of store.model.reqs) rows.set(r.id, { id: r.id, req: true, ac: r.acs.length > 0, test: false, cat: false, file: false });
-  for (const f of store.model.catalog.features) {
-    const row = rows.get(f.req) || { id: f.req, req: false, ac: false, test: false, cat: false, file: false };
-    row.cat = true; row.file = (f.impl || []).length > 0; rows.set(f.req, row);
-  }
-  for (const c of store.model.cases) for (const id of c.requirement_ids || []) if (rows.has(id)) rows.get(id).test = true;
-  const outcome = (r) => !r.req ? '参照先なし' : [r.req, r.ac, r.test, r.cat, r.file].every(Boolean) ? '正常' : '一層欠落';
-  const placed = placeRows([...rows.values()], (r) => ({ kind: '要求', id: r.id }), '要求');
-  const page = el('div', { class: 'page' }, el('h1', {}, '層一貫性ビューアー'),
-    tierTable(['ID', '判定', '要求', 'AC', '試験', 'カタログ', '実装ファイル'], placed,
-      (r) => el('tr', {},
-        el('td', {}, r.id), el('td', {}, outcome(r)),
-        ...[['req', '要求'], ['ac', 'AC'], ['test', '試験'], ['cat', 'カタログ'], ['file', '実装ファイル']]
-          .map(([k, label]) => el('td', {}, `${label} ${r[k] ? '✓' : '—'}`))), ['要求', '機能', '未分類']));
+  const page = live(() => {
+    const rows = new Map();
+    for (const r of store.model.reqs) rows.set(r.id, { id: r.id, req: true, ac: r.acs.length > 0, test: false, cat: false, file: false });
+    for (const f of store.model.catalog.features) {
+      const row = rows.get(f.req) || { id: f.req, req: false, ac: false, test: false, cat: false, file: false };
+      row.cat = true; row.file = (f.impl || []).length > 0; rows.set(f.req, row);
+    }
+    for (const c of store.model.cases) for (const id of c.requirement_ids || []) if (rows.has(id)) rows.get(id).test = true;
+    const outcome = (r) => !r.req ? t('ins.co.noref') : [r.req, r.ac, r.test, r.cat, r.file].every(Boolean) ? t('ins.co.ok') : t('ins.co.missing');
+    // i18n-data: the kind name of a hierarchy item is a managed-data value
+    const placed = placeRows([...rows.values()], (r) => ({ kind: '要求', id: r.id }), '要求');
+    return el('div', { class: 'page' }, el('h1', {}, t('ins.co.title')),
+      tierTable(['ID', t('ins.co.h.verdict'), t('ins.co.req'), 'AC', t('ins.co.test'), t('ins.co.cat'), t('ins.co.file')], placed,
+        (r) => el('tr', {},
+          el('td', {}, r.id), el('td', {}, outcome(r)),
+          ...[['req', t('ins.co.req')], ['ac', 'AC'], ['test', t('ins.co.test')], ['cat', t('ins.co.cat')], ['file', t('ins.co.file')]]
+            .map(([k, label]) => el('td', {}, `${label} ${r[k] ? '✓' : '—'}`))), EMPTY_REQ_PATH));
+  });
   host.append(page);
   return { destroy() {} };
 }
 
 export function mountMaintenance(host) {
-    const page = el('div', { class: 'page' },
-      el('h1', {}, '整合性保守 / Maintenance'),
-      el('p', { class: 'sub' }, '要求正本と異なるカタログの題名・決定状態だけを、明示プレビュー後に原子的に更新します。'),
-      el('div', { class: 'warnbox' }, '通常の閲覧は参照専用です。保守は選択した1行・2列だけが対象で、検査失敗時はバイト単位で戻します。'));
-    const list = el('div', { class: 'maintenance-list' });
     const reqs = new Map(store.model.reqs.map((r) => [r.id, r]));
     const featureCounts = store.model.catalog.features.reduce((counts, feature) => {
       counts.set(feature.req, (counts.get(feature.req) || 0) + 1);
       return counts;
     }, new Map());
+    let page;
+    const build = () => {
+    const pg = el('div', { class: 'page' },
+      el('h1', {}, t('nav.maintenance')),
+      el('p', { class: 'sub' }, t('ins.mt.sub')),
+      el('div', { class: 'warnbox' }, t('ins.mt.warn')));
+    const list = el('div', { class: 'maintenance-list' });
     const candidates = [];
     for (const feature of store.model.catalog.features) {
       const req = reqs.get(feature.req);
@@ -253,28 +277,28 @@ export function mountMaintenance(host) {
       if (!mismatch) continue;
       candidates.push(el('button', { class: 'maintenance-item', 'data-req': feature.req, onclick: () => preview(feature.req) },
         el('b', {}, feature.req),
-        el('span', {}, req ? `${feature.title} → ${req.title}` : '未対応: 要求正本に参照先なし'),
-        el('span', {}, req ? `${feature.status} → ${req.status}` : 'unsupported')));
+        el('span', {}, req ? `${feature.title} → ${req.title}` : t('ins.mt.noref')),
+        el('span', {}, req ? `${feature.status} → ${req.status}` : t('ins.mt.e.unsupported'))));
     }
     // FR-1063 AC-349: 保守候補を上位層（種類→区分→領域）の見出しの下にまとめる。要求正本にない参照先は「未分類」。
+    // i18n-data: the kind name of a hierarchy item is a managed-data value
     const placed = placeRows(candidates, (b) => ({ kind: '要求', id: b.dataset.req }), '要求');
     list.append(listTiers(placed, {
       openAreas: true,
-      empty: placed.length ? undefined : [['要求', '機能', '未分類']],
+      empty: placed.length ? undefined : [EMPTY_REQ_PATH],
       itemNode: (it) => it.row,
     }));
-    if (!candidates.length) list.append(el('p', { class: 'empty' }, '保守候補はありません。'));
-    page.append(list);
-    host.append(page);
-
-    const errorText = {
-      unsupported: '未対応 / unsupported',
-      'invalid-input': '入力条件が一意ではありません / invalid input condition',
-      'preview-conflict': 'プレビュー後の競合 / preview conflict',
-      'write-error': '書込みに失敗 / write error',
-      'outside-preview': 'preview 外の同一ファイルを検出 / outside preview',
-      'verify-failure': '検査に失敗 / verify failure',
+    if (!candidates.length) list.append(el('p', { class: 'empty' }, t('ins.mt.empty')));
+    pg.append(list);
+    return pg;
     };
+    page = build();
+    host.append(page);
+    // the language changes: the page is rebuilt in place (an open preview is closed; nothing has been applied yet)
+    const offLang = onLang(() => { document.querySelector('.maintenance-modal')?.remove(); const next = build(); page.replaceWith(next); page = next; });
+
+    const ERR_KEY = { unsupported: 'unsupported', 'invalid-input': 'invalid', 'preview-conflict': 'conflict', 'write-error': 'write', 'outside-preview': 'outside', 'verify-failure': 'verify' };
+    const errorText = (code) => (ERR_KEY[code] ? t('ins.mt.e.' + ERR_KEY[code]) : '');
     const request = async (path, body) => {
       const response = await fetch(path, {
         method: 'POST',
@@ -288,33 +312,33 @@ export function mountMaintenance(host) {
     const showError = (failure, retry) => {
       document.querySelector('.maintenance-modal')?.remove();
       const alert = el('div', { class: 'card maintenance-result', role: 'alert' },
-        el('b', {}, errorText[failure.error] || failure.error || 'maintenance error'),
+        el('b', {}, errorText(failure.error) || failure.error || t('ins.mt.err')),
         el('p', {}, failure.detail || ''),
-        el('p', {}, '変更はバイト単位で元に戻しました / byte-for-byte restored'),
+        el('p', {}, t('ins.mt.restored')),
         el('div', { class: 'row' },
-          el('button', { class: 'btn', onclick: retry }, '再試行 / Retry'),
-          el('button', { class: 'btn ghost', onclick: () => alert.remove() }, '中止 / Cancel')));
+          el('button', { class: 'btn', onclick: retry }, t('ins.mt.retry')),
+          el('button', { class: 'btn ghost', onclick: () => alert.remove() }, t('ins.mt.cancel'))));
       page.prepend(alert);
     };
     const preview = async (id) => {
       if (!reqs.has(id)) {
-        showError({ error: 'unsupported', detail: 'unsupported requirement' }, () => preview(id));
+        showError({ error: 'unsupported', detail: t('ins.mt.d.req') }, () => preview(id));
         return;
       }
       if (featureCounts.get(id) !== 1) {
-        showError({ error: 'invalid-input', detail: 'input condition is not unique' }, () => preview(id));
+        showError({ error: 'invalid-input', detail: t('ins.mt.d.input') }, () => preview(id));
         return;
       }
       const card = el('div', { class: 'card' },
-        el('h2', {}, '保守プレビュー / Maintenance preview'),
-        el('p', {}, `${id}: 読み込み中 / Loading`),
-        el('button', { class: 'btn ghost', onclick: () => modal.remove() }, '中止 / Cancel'));
-      const modal = el('div', { class: 'modal maintenance-modal', role: 'dialog', 'aria-label': '保守プレビュー / Maintenance preview' }, card);
+        el('h2', {}, t('ins.mt.pv')),
+        el('p', {}, t('ins.mt.loading', { id })),
+        el('button', { class: 'btn ghost', onclick: () => modal.remove() }, t('ins.mt.cancel')));
+      const modal = el('div', { class: 'modal maintenance-modal', role: 'dialog', 'aria-label': t('ins.mt.pv') }, card);
       document.body.append(modal);
       try {
         const data = await request('/api/maintenance/preview', { id });
         card.replaceChildren(
-            el('h2', {}, '保守プレビュー / Maintenance preview'),
+            el('h2', {}, t('ins.mt.pv')),
             el('p', {}, `${data.path} — ${data.id}`),
             ...data.changes.map((change) => el('p', {}, `${change.column}: ${change.before} → ${change.after}`)),
             el('p', { class: 'mono' }, data.verify),
@@ -329,11 +353,11 @@ export function mountMaintenance(host) {
                 } catch (failure) {
                   showError(failure, () => preview(id));
                 }
-              } }, '確認して実行 / Confirm and apply'),
-              el('button', { class: 'btn ghost', onclick: () => modal.remove() }, '中止 / Cancel')));
+              } }, t('ins.mt.apply')),
+              el('button', { class: 'btn ghost', onclick: () => modal.remove() }, t('ins.mt.cancel'))));
       } catch (failure) {
         showError(failure, () => preview(id));
       }
     };
-  return { destroy() { document.querySelector('.maintenance-modal')?.remove(); } };
+  return { destroy() { offLang(); document.querySelector('.maintenance-modal')?.remove(); } };
 }

@@ -7,9 +7,11 @@ import { L, kindLabel, keyMark } from './semzoom.js';
 import { createCameraRig } from './camera3d.js';
 import { shapeOf, buildLegend, buildStyleToggle, loadStyle, saveStyle, normStyle, FX_BY_STYLE } from './shapes3d.js';
 
+// i18n-data-begin: the relation kinds are managed-data values
 const COLORS = { 外部キー: '#ff8a5c', 参照: '#4f9dff', 使用: '#8aa1b5' };
 const DASH = { 外部キー: [], 参照: [8, 5], 使用: [2, 4] };
 const MARK = { 外部キー: '◆', 参照: '◇', 使用: '▫' };
+// i18n-data-end
 const clampN = (n, a, b) => Math.min(b, Math.max(a, n));
 
 export function create3d(ctx) {
@@ -225,6 +227,7 @@ export function create3d(ctx) {
       const y0 = by + L.HEAD_H * k + i * rowPx;
       if (selected && view.column === c.name) { g.fillStyle = 'rgba(57,208,255,.25)'; g.fillRect(bx + 2, y0, bw - 4, rowPx); }
       const mk = keyMark(c.key);
+      // i18n-data: "補完" is the managed-data origin value
       const line = `${mk ? mk + ' ' : '   '}${c.name}${c.type ? ': ' + c.type : ''}${c.ref ? ' → ' + c.ref : ''}${c.origin === '補完' ? ' ＋' : ''}${c.mismatch && c.mismatch.length ? ' ≠' : ''}`;
       text(line, bx + 8 * k, y0 + rowPx / 2, f2, c.ref ? '#ffd166' : '#dfe7fb', 'left', mk ? '700' : '400');
       hits.push({ type: 'column', entity: n, name: c.name, x0: bx, y0, x1: bx + bw, y1: y0 + rowPx });
@@ -240,6 +243,7 @@ export function create3d(ctx) {
     if (!onScreen(bbox([pa, pb]))) return;
     const hl = view.selected && (e.from === view.selected || e.to === view.selected);
     g.save(); g.globalAlpha = view.selected && !hl ? 0.25 : 1;
+    // i18n-data: the relation kinds are managed-data values
     g.strokeStyle = COLORS[e.kind]; g.lineWidth = hl ? 3.5 : e.kind === '外部キー' ? 2.5 : 1.6; g.setLineDash(DASH[e.kind]);
     g.beginPath(); g.moveTo(pa.x, pa.y); g.lineTo(pb.x, pb.y); g.stroke(); g.setLineDash([]);
     if (hasFx('particles')) {   // Entertainment: 辺に沿って流れる粒子

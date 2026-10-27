@@ -1,7 +1,7 @@
 // FR-1053 / FR-1054 / FR-1055 / NFR-UX-012: the map shown as an 8-bit style 2D role-playing field.
 // Castles = business goals (G-ID), towns = groups of entities (FR-1026 connected components), residents = one entity each. Walk with the keyboard, talk at an entrance to read the content.
 // Everything (pixel art, sound) is generated here; nothing is fetched from outside (AC-291, AC-292, AC-299).
-import { lang, onLang } from './i18n.js';
+import { t, lang, onLang } from './i18n.js';
 import { store } from './store.js';
 import { el } from './ui.js';
 import { xrefLink } from './xref.js';
@@ -18,39 +18,8 @@ const TILE = 32;
 const STEP_MS = 130;            // walking pace; also the minimum interval between held-key steps (AC-296)
 const TYPE_MS = 35;             // typewriter pace of the dialog
 
-const TXT = {
-  ja: {
-    title: 'RPG 風マップ', area: 'RPG 風の地図。方向キーで歩き、城や街の入口で決定キーを押すと話せます。Tab で他の部分へ移れます。',
-    castle: '城', town: '街', goal: '目的', entity: 'エンティティ', group: 'エンティティのグルーピング', townName: '{n} の街', noneName: '関係なしの街', noneText: '他のエンティティとの関係がないエンティティが集まる街。', groupText: '関係でつながるエンティティ: {list}（{n} 件）', hero: '旅人', villager: '住人', guide: '案内役',
-    sound: '音', on: 'オン', off: 'オフ（ミュート）', soundBtn: '音の入切', pos: '現在位置', field: '野外', at: '{k} {n} の入口', with: '{k} {n} の位置',
-    reqs: '関連する要求: {n} 件', repr: '代表: {ids}', noreq: '関連する要求はまだありません。', nodesc: '説明はまだありません。',
-    start: 'スタート', select: 'セレクト', help: '操作の割り当て', tiers: '項目の上位層（種類→区分→領域）', tiersOpen: '上位層で辿る', tiersLine: '上位層（関連する要求）: {list}', tiersMore: '、ほか {n} 領域', close: '閉じる', to2d: '2D で表示', to3d: '3D で表示', toRpg: 'RPG 風で表示',
-    keysTitle: '操作の割り当て', btn: 'ボタン', keys: 'キー', dpad: '十字キー', a: 'A（決定・話す・調べる）', b: 'B（取消・閉じる・戻る）',
-    kDpad: '方向キー または W A S D', kA: 'Enter または Z', kB: 'Esc または X（Backspace も可）', kStart: 'Space（メニュー）', kSel: 'Shift だけを押す（音の入切・表示の切替）',
-    legend: '十字=方向キー/WASD　A=Enter/Z　B=Esc/X　スタート=Space　セレクト=Shift　（Tab で他の部分へ）',
-    alt: '同じ内容を表で見る', cols: '名前 / ID', kind: '種別', where: '位置', rel: '関連する要求', roads: '道（つながり）',
-    fbNone: 'この管理データには、{what}がないため、RPG 風の地図を作れません。2D で表示しています。同じ内容は表でも確認できます。',
-    fbGoal: '目的（城）', fbEnt: 'エンティティ（街）', fbCtx: 'この環境では RPG 風を描画できないため、2D で表示しています。同じ内容は表でも確認できます。',
-    itemsStart: '', blockedMsg: '通れない', menuOpen: 'メニューを開きました', menuClosed: 'メニューを閉じました', talk: '{n} と話しています。',
-    undef: '（名称未定義の目的）',
-  },
-  en: {
-    title: 'RPG-style map', area: 'RPG-style map. Walk with the arrow keys and press the confirm key at a castle or town entrance to talk. Tab moves to other parts of the page.',
-    castle: 'Castle', town: 'Town', goal: 'Goal', entity: 'Entity', group: 'Entity group', townName: 'Town of {n}', noneName: 'Town of no relations', noneText: 'The town of entities that have no relation to other entities.', groupText: 'Entities linked by relations: {list} ({n})', hero: 'Traveler', villager: 'Villager', guide: 'Guide',
-    sound: 'Sound', on: 'On', off: 'Off (muted)', soundBtn: 'Toggle sound', pos: 'Position', field: 'Open field', at: 'At the entrance of {k} {n}', with: 'At {k} {n}',
-    reqs: 'Related requirements: {n}', repr: 'e.g. {ids}', noreq: 'No related requirements yet.', nodesc: 'No description yet.',
-    start: 'Start', select: 'Select', help: 'Controls', tiers: 'Item tiers (kind → division → area)', tiersOpen: 'Browse by tier', tiersLine: 'Tiers (related requirements): {list}', tiersMore: ', and {n} more areas', close: 'Close', to2d: 'Show in 2D', to3d: 'Show in 3D', toRpg: 'Show as RPG-style',
-    keysTitle: 'Controls', btn: 'Button', keys: 'Keys', dpad: 'D-pad', a: 'A (confirm / talk / examine)', b: 'B (cancel / close / back)',
-    kDpad: 'Arrow keys or W A S D', kA: 'Enter or Z', kB: 'Esc or X (Backspace also works)', kStart: 'Space (menu)', kSel: 'Press Shift alone (sound / view mode)',
-    legend: 'D-pad = arrows/WASD  A = Enter/Z  B = Esc/X  Start = Space  Select = Shift  (Tab leaves the map)',
-    alt: 'See the same content as a table', cols: 'Name / ID', kind: 'Kind', where: 'Position', rel: 'Related requirements', roads: 'Roads (links)',
-    fbNone: 'This data has no {what}, so the RPG-style map cannot be built. 2D is shown. The table has the same content.',
-    fbGoal: 'goals (castles)', fbEnt: 'entities (towns)', fbCtx: 'RPG-style cannot be drawn in this environment, so 2D is shown. The table has the same content.',
-    itemsStart: '', blockedMsg: 'Blocked', menuOpen: 'Menu opened', menuClosed: 'Menu closed', talk: 'Talking at {n}.',
-    undef: '(goal without a name)',
-  },
-};
-const tr = (k, v) => { let s = (TXT[lang()] || TXT.ja)[k] ?? TXT.ja[k] ?? k; for (const [a, b] of Object.entries(v || {})) s = s.replace('{' + a + '}', b); return s; };
+const par = (v) => t('common.paren', { v });   // "（…）" in Japanese, " (…)" in English
+const tr = (k, v) => t('rpg.' + k, v);   // the RPG-style map's words live in the dictionary under rpg.*
 
 // ---------------------------------------------------------------- data (castles = goals, towns = entities)
 export function collect(model) {
@@ -192,9 +161,9 @@ export function mount(host) {
   };
 
   function placeText(p) {
-    if (p.kind === 'resident') return `${tr('villager')} ${p.name}（${tr('entity')} ${p.id}）`;
-    if (p.kind === 'town') return `${tr('town')} ${p.name}（${tr('group')} ${p.id}）`;
-    return `${tr('castle')} ${p.name}（${tr('goal')} ${p.id}）`;
+    if (p.kind === 'resident') return `${tr('villager')} ${p.name}${par(`${tr('entity')} ${p.id}`)}`;
+    if (p.kind === 'town') return `${tr('town')} ${p.name}${par(`${tr('group')} ${p.id}`)}`;
+    return `${tr('castle')} ${p.name}${par(`${tr('goal')} ${p.id}`)}`;
   }
   // FR-1063 AC-347: 街・住人・城に関連する要求を、上位層（区分 › 領域）ごとの件数で示す（城・街・住人の件数には加えない）
   function tierLine(p) {

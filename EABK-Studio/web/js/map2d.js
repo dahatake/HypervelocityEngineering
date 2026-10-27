@@ -16,7 +16,7 @@ const PICK_RADIUS = 12;    // PARAM-009: node pick radius, screen px
 const CLICK_DRAG_PX = 6;   // PARAM-010: click/pan drag threshold, screen px
 
 function mountGraph(host) {
-  host.append(el('h1', { class: 'sr-only' }, '2D マップ'));
+  host.append(el('h1', { class: 'sr-only' }, t('nav.map2d')));
   const canvas = el('canvas', { class: 'fill' });
   const mini = el('canvas', { class: 'minimap', width: 380, height: 240 });
   const toolbar = el('div', { class: 'toolbar' });

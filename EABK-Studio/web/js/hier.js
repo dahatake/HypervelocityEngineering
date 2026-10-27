@@ -2,26 +2,29 @@
 // 階層の導出は eabk_model.py（model.hierarchy）が 1 か所で行い、ここは描画だけを受け持つ（割り当て表を持たない）。
 // 層の識別: data-tier-level = kind|division|area、data-tier-path = JSON 配列（その層までの名前）、data-count = その層の項目件数。
 // 色だけに頼らない: 開閉は ▸ / ▾ の記号と aria-expanded、件数は文字で示す。
-import { lang, onLang } from './i18n.js';
+import { lang, onLang, t } from './i18n.js';
 import { el } from './ui.js';
 
 export const LEVELS = ['kind', 'division', 'area'];
+// i18n-data: the managed-data value for "not classified"
 export const UNCLASSIFIED = '未分類';
 
-// データ上の名称は日本語（正本）。英語表示では、ここにある名称だけを訳し、ほかはデータに書かれたまま表示する。
-const EN = {
-  '未分類': 'Unclassified',
-  '目的': 'Goals', '要求': 'Requirements', '受入基準': 'Acceptance criteria', '試験ケース': 'Test cases', 'カタログ': 'Catalog',
-  'エンティティ': 'Entities', '質問': 'Questions', '出典': 'Sources', 'パラメータ': 'Parameters', '監査指摘': 'Audit findings',
-  '外部連携': 'External integrations', 'users-guide': 'users-guide', 'scripts': 'scripts',
-  '機能': 'Functional', '非機能': 'Non-functional', 'API・イベント': 'APIs and events', 'テーブル': 'Tables', '共通部品': 'Shared parts',
-  '連携カタログ': 'Integration catalog', '状態遷移': 'State machines', 'その他': 'Other',
-};
+// データ上の名称は日本語（正本）。表示する名称は辞書（tier.n.*）を通す。ここにない名称は、データに書かれたまま表示する。
+// i18n-data-begin: the keys of this table are managed-data values (the names of the hierarchy), not display text
+const TIER_KEY = {
+  '未分類': 'unclassified',
+  '目的': 'goals', '要求': 'reqs', '受入基準': 'acs', '試験ケース': 'cases', 'カタログ': 'catalog',
+  'エンティティ': 'entities', '質問': 'questions', '出典': 'sources', 'パラメータ': 'params', '監査指摘': 'audit',
+  '外部連携': 'integrations',
+  '機能': 'functional', '非機能': 'nonfunctional', 'API・イベント': 'apis', 'テーブル': 'tables', '共通部品': 'shared',
+  '連携カタログ': 'intcat', '状態遷移': 'states', 'その他': 'other',
+};   // i18n-data-end
 export function tierName(name, l = lang()) {
-  return l === 'en' && EN[name] ? EN[name] : String(name ?? '');
+  const k = TIER_KEY[name];
+  return k && l === lang() ? t('tier.n.' + k) : String(name ?? '');
 }
 export const tierLabel = (name, count, l = lang(), shown = count) =>
-  `${tierName(name, l)} (${count})${shown !== count ? (l === 'en' ? `, ${shown} shown` : `、表示 ${shown} 件`) : ''}`;
+  `${tierName(name, l)} (${count})${shown !== count ? ', ' + t('tier.shown', { n: shown }) : ''}`;
 
 /** model.hierarchy.items から 種類→区分→領域 の木を作る。順序は model.hierarchy.tiers（導出側の順）に従う。 */
 export function buildTree(hier, filter) {
@@ -89,7 +92,7 @@ let tierSeq = 0;
  */
 export function renderTiers(hier, opts = {}) {
   const tree = buildTree(hier, opts.filter);
-  const wrap = el('div', { class: 'tiers', role: 'tree', 'aria-label': lang() === 'en' ? 'Data hierarchy' : 'データの階層' });
+  const wrap = el('div', { class: 'tiers', role: 'tree', 'aria-label': t('tier.tree') });
   const relabel = [];
   const group = (node, path, depth) => {
     const open = opts.open ? !!opts.open(path, node.level) : depth === 0;
@@ -114,7 +117,7 @@ export function renderTiers(hier, opts = {}) {
       const name = tierName(node.name);
       text.textContent = name;
       const sh = node.shown ?? node.count;
-      num.textContent = sh !== node.count ? (lang() === 'en' ? ` (${node.count}, ${sh} shown)` : ` (${node.count}、表示 ${sh} 件)`) : ` (${node.count})`;
+      num.textContent = sh !== node.count ? ` (${node.count}, ${t('tier.shown', { n: sh })})` : ` (${node.count})`;
       btn.setAttribute('aria-label', tierLabel(node.name, node.count, lang(), sh));
     };
     label();
@@ -136,7 +139,7 @@ export function renderTiers(hier, opts = {}) {
   wrap.addEventListener('keydown', (e) => onKey(e, wrap));
   const off = onLang(() => {
     if (!wrap.isConnected) { off(); return; }
-    wrap.setAttribute('aria-label', lang() === 'en' ? 'Data hierarchy' : 'データの階層');
+    wrap.setAttribute('aria-label', t('tier.tree'));
     relabel.forEach((f) => f());
   });
   wrap.dataset.total = String(tree.count);

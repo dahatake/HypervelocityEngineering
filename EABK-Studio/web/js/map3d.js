@@ -583,8 +583,8 @@ function mountGraph(host) {
   else raf = requestAnimationFrame(frame);
   if (snapshot) {
     host.append(el('section', { class: 'snapshot-3d card' },
-      el('h2', {}, '3D レイヤー構成'),
-      el('p', {}, '目的 → 要求 → Entity / API / Table → 実装ファイル → System Test'),
+      el('h2', {}, t('map3d.layers')),
+            el('p', {}, t('map3d.chain')),
       el('div', { class: 'chips' }, [...store.nodes.values()].slice(0, 36).map((node) =>
         el('span', { class: 'badge' }, `${node.id}: ${node.label}`)))));
   }
