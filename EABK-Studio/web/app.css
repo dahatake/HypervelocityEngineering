@@ -94,7 +94,7 @@ html[data-layout=wide] #view{padding-inline:var(--space-6)}
 .gv-node.sel .gv-title{fill:var(--color-fg-default);font-weight:600}
 .gv-node:focus{outline:none}
 .gv-node:focus-visible .gv-box{stroke:var(--color-focus);stroke-width:3;stroke-dasharray:6 3}
-.gv-legend{display:flex;flex-wrap:wrap;gap:var(--space-3);margin:0;padding:0;list-style:none;font-size:12px;color:var(--color-fg-muted)}
+.gv-legend{display:flex;flex-wrap:wrap;gap:var(--space-3);margin:0;padding:0;list-style:none;font-size:var(--font-size-caption);color:var(--color-fg-muted)}
 .gv-legend li{display:inline-flex;align-items:center;gap:var(--space-1)}
 .gv-key{display:inline-flex}.gv-key .icon{stroke:currentColor}
 .gv-filter{padding:var(--space-3);border:var(--stroke-container) solid var(--color-border-default);border-radius:var(--radius-container);background:var(--color-bg-raised)}
