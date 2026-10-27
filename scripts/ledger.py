@@ -418,7 +418,7 @@ def _kmatcher(names):
     return lambda ident, **kw: any(ident.lower() in n for n in low)
 
 
-def plan_batches(reps, groups, is_serial, is_canary):
+def plan_batches(reps, groups, is_serial, is_canary, jobs=1, durs=None):
     """Group the System Test commands that run the same pytest file into one process each (>= 2 distinct commands).
     Every case pays for the process start, the imports and the browser tool's start-up once per command; one
     process per file pays it once. Returns (units, batched_reps) where each unit is a virtual case with "_batch" members."""
@@ -441,6 +441,45 @@ def plan_batches(reps, groups, is_serial, is_canary):
         members.append((c, (re.sub(r"^\./", "", p[0]), p[1], p[2])))
     if len(members) < 2:
         return [], set()
+    used = {c["command"] for c, _ in members}
+    parts = split_members(members, jobs, durs)
+    units = [_make_unit(ms, i if len(parts) > 1 else None) for i, ms in enumerate(parts)]
+    return units, used
+
+
+def split_members(members, jobs=1, durs=None):
+    """Split compatible members into at most `jobs` balanced parts (jobs <= 1: one part). Known durations (longest
+    first) balance the parts, else the case count does; members of one file stay together as far as possible."""
+    n = min(max(1, int(jobs or 1)), len(members))
+    if n <= 1:
+        return [list(members)]
+    durs = durs or {}
+    known = all(float(durs.get(c["command"], 0) or 0) > 0 for c, _ in members)
+    w = (lambda m: float(durs[m[0]["command"]])) if known else (lambda m: 1.0)
+    byfile: dict = {}
+    for m in members:
+        byfile.setdefault(m[1][0], []).append(m)
+    items = list(byfile.values())
+    while len(items) < n:  # fewer files than processes: split the heaviest multi-case file
+        cand = [it for it in items if len(it) > 1]
+        if not cand:
+            break
+        big = max(cand, key=lambda it: sum(w(m) for m in it))
+        items.remove(big)
+        big = sorted(big, key=lambda m: -w(m))
+        half = [big[i] for i in range(0, len(big), 2)], [big[i] for i in range(1, len(big), 2)]
+        items += [list(half[0]), list(half[1])]
+    items.sort(key=lambda it: -sum(w(m) for m in it))
+    bins = [[] for _ in range(min(n, len(items)))]
+    load = [0.0] * len(bins)
+    for it in items:
+        i = load.index(min(load))
+        bins[i].extend(it)
+        load[i] += sum(w(m) for m in it)
+    return [b for b in bins if b]
+
+
+def _make_unit(members, idx=None):
     # One process for the compatible cases of any test files (no project-specific path is assumed).
     files = list(dict.fromkeys(p[0] for _, p in members))
     if not any(p[2] for _, p in members):
@@ -456,9 +495,9 @@ def plan_batches(reps, groups, is_serial, is_canary):
                 exprs.append(e)
         target, sel = " ".join(f'"{f}"' for f in files), '-k "' + " or ".join(exprs) + '"'
     label = files[0] if len(files) == 1 else f"{files[0]}+{len(files) - 1}files"
-    unit = {"id": "BATCH:" + label, "command": f"BATCH {label} {sel}",
-            "_batch": {"file": label, "target": target, "sel": sel, "members": members}}
-    return [unit], {c["command"] for c, _ in members}
+    sfx = "" if idx is None else f"#{idx + 1}"
+    return {"id": "BATCH:" + label + sfx, "command": f"BATCH {label}{sfx} {sel}",
+            "_batch": {"file": label + sfx, "target": target, "sel": sel, "members": members}}
 
 
 def kill_tree(proc):
@@ -630,7 +669,7 @@ def cmd_run(args, root, cfg) -> int:
     rest = [c for c in reps if c not in first]
     batched = 0
     if not args.no_batch and (cfg.get("system_test") or {}).get("batch_pytest", True):
-        units, used = plan_batches(rest, groups, is_serial, is_canary)
+        units, used = plan_batches(rest, groups, is_serial, is_canary, jobs, durs)
         for u in units:
             groups[u["command"]] = [x for m, _ in u["_batch"]["members"] for x in groups[m["command"]]]
         rest = [c for c in rest if c["command"] not in used] + units
