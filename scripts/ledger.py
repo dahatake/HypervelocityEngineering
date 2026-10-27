@@ -418,7 +418,7 @@ def _kmatcher(names):
     return lambda ident, **kw: any(ident.lower() in n for n in low)
 
 
-def plan_batches(reps, groups, is_serial, is_canary):
+def plan_batches(reps, groups, is_serial, is_canary, jobs=1, durs=None):
     """Group the System Test commands that run the same pytest file into one process each (>= 2 distinct commands).
     Every case pays for the process start, the imports and the browser tool's start-up once per command; one
     process per file pays it once. Returns (units, batched_reps) where each unit is a virtual case with "_batch" members."""
@@ -426,7 +426,7 @@ def plan_batches(reps, groups, is_serial, is_canary):
         from _pytest.mark.expression import Expression  # the same -k grammar as pytest
     except Exception:
         return [], set()
-    by_file: dict = {}
+    members = []
     for c in reps:
         if is_serial(c) or is_canary(c):
             continue
@@ -438,23 +438,102 @@ def plan_batches(reps, groups, is_serial, is_canary):
                 Expression.compile(p[2])
         except Exception:
             continue
-        by_file.setdefault(p[0], []).append((c, p))
-    units, used = [], set()
-    for f, members in by_file.items():
-        if len(members) < 2:
-            continue
-        if any(not p[1] and not p[2] for _, p in members):
-            sel = ""
-        elif all(p[1] for _, p in members):
-            sel = " ".join(f'"{f}::{p[1]}"' for _, p in members)
-        else:
-            exprs = [f"({p[2]})" if p[2] else p[1].split("::")[-1].split("[")[0] for _, p in members]
-            sel = '-k "' + " or ".join(exprs) + '"'
-        target = f if (sel == "" or sel.startswith("-k")) else ""
-        units.append({"id": "BATCH:" + f, "command": f"BATCH {f} {sel}", "_batch": {"file": f, "target": target, "sel": sel,
-                                                                           "members": members}})
-        used.update(c["command"] for c, _ in members)
+        members.append((c, (re.sub(r"^\./", "", p[0]), p[1], p[2])))
+    if len(members) < 2:
+        return [], set()
+    used = {c["command"] for c, _ in members}
+    parts = split_members(members, jobs, durs)
+    units = [_make_unit(ms, i if len(parts) > 1 else None) for i, ms in enumerate(parts)]
     return units, used
+
+
+def split_members(members, jobs=1, durs=None):
+    """Split compatible members into at most `jobs` balanced parts (jobs <= 1: one part). Known durations (longest
+    first) balance the parts, else the case count does; members of one file stay together as far as possible."""
+    n = min(max(1, int(jobs or 1)), len(members))
+    if n <= 1:
+        return [list(members)]
+    durs = durs or {}
+    known = all(float(durs.get(c["command"], 0) or 0) > 0 for c, _ in members)
+    w = (lambda m: float(durs[m[0]["command"]])) if known else (lambda m: 1.0)
+    byfile: dict = {}
+    for m in members:
+        byfile.setdefault(m[1][0], []).append(m)
+    items = list(byfile.values())
+    while len(items) < n:  # fewer files than processes: split the heaviest multi-case file
+        cand = [it for it in items if len(it) > 1]
+        if not cand:
+            break
+        big = max(cand, key=lambda it: sum(w(m) for m in it))
+        items.remove(big)
+        big = sorted(big, key=lambda m: -w(m))
+        half = [big[i] for i in range(0, len(big), 2)], [big[i] for i in range(1, len(big), 2)]
+        items += [list(half[0]), list(half[1])]
+    items.sort(key=lambda it: -sum(w(m) for m in it))
+    bins = [[] for _ in range(min(n, len(items)))]
+    load = [0.0] * len(bins)
+    for it in items:
+        i = load.index(min(load))
+        bins[i].extend(it)
+        load[i] += sum(w(m) for m in it)
+    return [b for b in bins if b]
+
+
+def _make_unit(members, idx=None):
+    # One process for the compatible cases of any test files (no project-specific path is assumed).
+    files = list(dict.fromkeys(p[0] for _, p in members))
+    if not any(p[2] for _, p in members):
+        whole = {p[0] for _, p in members if not p[1]}
+        tg = [f for f in files if f in whole]
+        tg += list(dict.fromkeys(f"{p[0]}::{p[1]}" for _, p in members if p[1] and p[0] not in whole))
+        target, sel = " ".join(f'"{t}"' for t in tg), ""
+    else:
+        exprs = []
+        for _, p in members:
+            e = f"({p[2]})" if p[2] else (p[1].split("::")[-1].split("[")[0] if p[1] else Path(p[0]).stem)
+            if e not in exprs:
+                exprs.append(e)
+        target, sel = " ".join(f'"{f}"' for f in files), '-k "' + " or ".join(exprs) + '"'
+    label = files[0] if len(files) == 1 else f"{files[0]}+{len(files) - 1}files"
+    sfx = "" if idx is None else f"#{idx + 1}"
+    return {"id": "BATCH:" + label + sfx, "command": f"BATCH {label}{sfx} {sel}",
+            "_batch": {"file": label + sfx, "target": target, "sel": sel, "members": members}}
+
+
+def kill_tree(proc):
+    """Kill a process and every descendant (Popen.kill() alone leaves browser/pytest children behind)."""
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)
+        else:
+            import signal
+            os.killpg(proc.pid, signal.SIGKILL)
+    except Exception:
+        pass
+    try:
+        proc.kill()
+    except Exception:
+        pass
+
+
+def run_shell(cmd, cwd, timeout):
+    """Run a shell command; on timeout, error or interrupt the whole process tree is killed. Returns (rc, output); rc 124 = timeout."""
+    kw = {"start_new_session": True} if os.name != "nt" else {}
+    proc = subprocess.Popen(cmd, cwd=cwd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                            encoding="utf-8", errors="replace", **kw)
+    try:
+        out, _ = proc.communicate(timeout=timeout)
+        return proc.returncode, out or ""
+    except subprocess.TimeoutExpired:
+        kill_tree(proc)
+        try:
+            proc.communicate(timeout=10)
+        except Exception:
+            pass
+        return 124, f"TIMEOUT after {timeout}s"
+    except BaseException:
+        kill_tree(proc)
+        raise
 
 
 def run_batch(unit, root, logs_dir, timeout, execute_single):
@@ -468,12 +547,8 @@ def run_batch(unit, root, logs_dir, timeout, execute_single):
     junit = logs_dir / f"BATCH-{re.sub(r'[^A-Za-z0-9]+', '_', b['file'])}-{stamp}.xml"
     cmd = f'python -m pytest {b["target"]} {b["sel"]} -q --junitxml="{junit}"'
     t0 = time.time()
-    try:
-        proc = subprocess.run(cmd, cwd=str(root), shell=True, capture_output=True, text=True,
-                              encoding="utf-8", errors="replace", timeout=timeout)
-        out = (proc.stdout or "") + (proc.stderr or "")
-    except subprocess.TimeoutExpired:
-        out = f"TIMEOUT after {timeout}s"
+    # the merged run's timeout scales with the number of cases it carries
+    _rc, out = run_shell(cmd, str(root), timeout * max(1, len(b["members"])) if timeout else timeout)
     mlog = logs_dir / f"BATCH-{re.sub(r'[^A-Za-z0-9]+', '_', b['file'])}-{stamp}.log"
     mlog.write_text(out, encoding="utf-8")
     tcs = []
@@ -490,17 +565,19 @@ def run_batch(unit, root, logs_dir, timeout, execute_single):
         if not tcs:
             rerun.append(c)
             continue
+        mod = re.sub(r"\.py$", "", f).replace("/", ".")
+        ftcs = [t for t in tcs if ".".join(t[1]) == mod or ".".join(t[1]).startswith(mod + ".")]
         if not node and not k:
-            hit = tcs
+            hit = ftcs
         elif node:
             parts = node.split("::")
             fn = parts[-1]
             base = fn.split("[")[0]
-            hit = [t for t in tcs if (t[0] == fn if "[" in fn else (t[0] == base or t[0].startswith(base + "[")))
+            hit = [t for t in ftcs if (t[0] == fn if "[" in fn else (t[0] == base or t[0].startswith(base + "[")))
                    and (len(parts) == 1 or parts[-2] in t[1])]
         else:
             ex = Expression.compile(k)
-            hit = [t for t in tcs if ex.evaluate(_kmatcher([t[0], *t[1], Path(f).name, Path(f).stem]))]
+            hit = [t for t in ftcs if ex.evaluate(_kmatcher([t[0], *t[1], Path(f).name, Path(f).stem]))]
         if not hit or any(t[3] for t in hit):
             rerun.append(c)
             continue
@@ -544,12 +621,7 @@ def cmd_run(args, root, cfg) -> int:
             return c, None
         t0 = time.time()
         log = logs_dir / f"{c['id']}-{h.new_run_id()}.log"
-        try:
-            proc = subprocess.run(c["command"], cwd=str(root), shell=True, capture_output=True, text=True,
-                                  encoding="utf-8", errors="replace", timeout=args.case_timeout)
-            rc, out = proc.returncode, (proc.stdout or "") + (proc.stderr or "")
-        except subprocess.TimeoutExpired:
-            rc, out = 124, f"TIMEOUT after {args.case_timeout}s"
+        rc, out = run_shell(c["command"], str(root), args.case_timeout)
         dur = round(time.time() - t0, 1)
         log.write_text(out, encoding="utf-8")
         return c, (rc, dur, log)
@@ -597,7 +669,7 @@ def cmd_run(args, root, cfg) -> int:
     rest = [c for c in reps if c not in first]
     batched = 0
     if not args.no_batch and (cfg.get("system_test") or {}).get("batch_pytest", True):
-        units, used = plan_batches(rest, groups, is_serial, is_canary)
+        units, used = plan_batches(rest, groups, is_serial, is_canary, jobs, durs)
         for u in units:
             groups[u["command"]] = [x for m, _ in u["_batch"]["members"] for x in groups[m["command"]]]
         rest = [c for c in rest if c["command"] not in used] + units
