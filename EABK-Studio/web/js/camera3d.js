@@ -56,8 +56,8 @@ let activeRig = null;
 export function cameraCommands() {
   if (!activeRig) return [];
   const r = activeRig;
-  return [...CAMERA_PRESETS.map((p) => ({ cmd: true, id: 'cmd:camera:' + p.id, label: t('cam3d.cmd') + t(`cam3d.${p.id}.n`), key: 'camera カメラ ' + p.id, run: () => r.select(p.id) })),
-    { cmd: true, id: 'cmd:camera:stop', label: t('cam3d.cmd') + t('cam3d.stop'), key: 'camera カメラ stop 停止', run: () => r.stop() }];
+  return [...CAMERA_PRESETS.map((p) => ({ cmd: true, id: 'cmd:camera:' + p.id, label: t('cam3d.cmd') + t(`cam3d.${p.id}.n`),   key: t('cam3d.keys') + ' ' + p.id, run: () => r.select(p.id) })),
+      { cmd: true, id: 'cmd:camera:stop', label: t('cam3d.cmd') + t('cam3d.stop'), key: t('cam3d.keys') + ' stop ' + t('cam3d.keys.stop'), run: () => r.stop() }];
 }
 let sessionPreset = DEFAULT_PRESET;
 

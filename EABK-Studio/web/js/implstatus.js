@@ -8,13 +8,14 @@ import { placeRows, listTiers } from './tierlist.js';
 
 // Colour is never the only cue: every state also has a symbol and a word (AC-093).
 const STATE_META = [
-  { sym: '○', color: 'var(--color-status-neutral-icon)', en: 'Not started' },
-  { sym: '◔', color: 'var(--color-status-warning-icon)', en: 'Registered · no test registered' },
-  { sym: '✖', color: 'var(--color-status-danger-icon)', en: 'Registered · test not passing' },
-  { sym: '✔', color: 'var(--color-status-success-icon)', en: 'Test passed' },
-  { sym: '◇', color: 'var(--color-status-info-icon)', en: 'Registered · outside system test' },
+  { sym: '○', color: 'var(--color-status-neutral-icon)' },
+  { sym: '◔', color: 'var(--color-status-warning-icon)' },
+  { sym: '✖', color: 'var(--color-status-danger-icon)' },
+  { sym: '✔', color: 'var(--color-status-success-icon)' },
+  { sym: '◇', color: 'var(--color-status-info-icon)' },
 ];
-const stateLabel = (i, ja) => (lang() === 'ja' ? ja[i] : STATE_META[i].en);
+// Japanese: the state names come from the model (managed data); English: the dictionary (impl.st.<n>).
+const stateLabel = (i, ja) => (lang() === 'ja' ? ja[i] : t('impl.st.' + i));
 const caseText = (cases) => {
   const e = Object.entries(cases || {});
   return e.length ? e.map(([k, n]) => `${k} ${n}`).join(' / ') : '-';
@@ -133,6 +134,7 @@ export function mount(host) {
 
     // FR-1063 AC-349: 要求を上位層（種類→区分→領域）でまとめ、各層の状態の内訳を件数で示す（内訳の合計は層の件数と一致）。
     const collect = (node) => [...node.items, ...[...node.children.values()].flatMap(collect)];
+    // i18n-data: the kind name of a hierarchy item is a managed-data value
     const placed = placeRows(items, (r) => ({ kind: '要求', id: r.id }), '要求');
     const tiers = listTiers(placed, {
       extra: (node) => {

@@ -3,8 +3,10 @@ import { svgEl } from './ui.js';
 import { t } from './i18n.js';
 import { L, KINDS, kindLabel, keyMark, parseRef } from './semzoom.js';
 
+// i18n-data-begin: the relation kinds are managed-data values
 const KCLASS = { 外部キー: 'k-fk', 参照: 'k-ref', 使用: 'k-use' };
 const MARK = { 外部キー: '◆', 参照: '◇', 使用: '▫' };   // a mark and a word in addition to line style and colour (NFR-UX-010 AC-186)
+// i18n-data-end
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const clampN = (n, a, b) => Math.min(b, Math.max(a, n));
 
@@ -103,8 +105,10 @@ export function create2d(ctx) {
       const shown = uses.slice(0, L.MAX_USES);
       const ug = svgEl('g', { 'pointer-events': 'none' });
       shown.forEach((u, i) => {
+        // i18n-data-begin: "使用" is the managed-data relation kind
         const ge = svgEl('g', { class: 'sz-edge k-use sz-chip', 'data-edge': '', 'data-from': u.from, 'data-to': u.to, 'data-kind': '使用' });
         ge.append(svgEl('text', { x: r.x + 10, y: r.y + L.HEAD_H + L.USE_ROW * i + 12, 'font-size': 11.5 }, `${MARK['使用']} ${n} → ${u.to} · ${kindLabel('使用')}`));
+        // i18n-data-end
         ug.append(ge);
       });
       if (uses.length > shown.length) ug.append(svgEl('text', { x: r.x + 10, y: r.y + L.HEAD_H + L.USE_ROW * shown.length + 12, 'font-size': 11.5 }, t('sz.moreuses', { n: uses.length - shown.length })));
@@ -129,6 +133,7 @@ export function create2d(ctx) {
     const tx = svgEl('text', { x: 8, y: i * L.ROW_H + L.ROW_H - 4, 'font-size': 12 });
     tx.append(svgEl('tspan', { class: 'sz-key' }, mark ? mark.padEnd(3, ' ') : '   '), svgEl('tspan', { class: 'sz-cname' }, `${c.name}`),
       svgEl('tspan', { class: 'sz-ctype', dx: 6 }, c.type ? `: ${c.type}` : ''));
+    // i18n-data: "補完" is the managed-data origin value
     if (c.origin === '補完') tx.append(svgEl('tspan', { class: 'sz-ctype', dx: 4 }, '＋'));
     if (c.mismatch && c.mismatch.length) tx.append(svgEl('tspan', { class: 'sz-warn', dx: 4 }, '≠'));
     if (c.ref) tx.append(svgEl('tspan', { class: ref && d.byName.has(ref.entity) ? 'sz-ref' : 'sz-ctype', dx: 6, 'data-goto': ref && d.byName.has(ref.entity) ? c.ref : null }, `→ ${c.ref}`));

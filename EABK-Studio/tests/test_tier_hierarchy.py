@@ -83,6 +83,8 @@ def test_ac344_exactly_once_and_counts_sum(tmp_path):
 # FR-1062: 共通 JS 部品が存在し、開閉・aria・キーボード・JA/EN の名称を持つ
 def test_hier_js_component_contract():
     s = (ROOT / "web" / "js" / "hier.js").read_text(encoding="utf-8")
-    for needle in ("export function renderTiers", "aria-expanded", "data-tier-path", "ArrowDown", "Unclassified", "tier-toggle"):
+    for needle in ("export function renderTiers", "aria-expanded", "data-tier-path", "ArrowDown", "tier-toggle"):
         assert needle in s
+    # FR-011 AC-432: the English tier names live in the dictionary (web/js/i18n.js)
+    assert "'tier.n.unclassified': 'Unclassified'" in (ROOT / "web" / "js" / "i18n.js").read_text(encoding="utf-8")
     assert not re.search(r"fetch\(", s)

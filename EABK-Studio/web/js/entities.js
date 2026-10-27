@@ -9,7 +9,9 @@ import { registerDim, publishDim } from './dim.js';
 import { graphView } from './graph.js';
 import { listTiers, hierarchy } from './tierlist.js';
 
+// i18n-data: the CRUD words are the managed-data values of the use-case table; they are matched and shown as written
 const WORDS = ['作成', '参照', '更新', '削除'];
+// i18n-data
 const SYMBOL = { 作成: 'C', 参照: 'R', 更新: 'U', 削除: 'D' };
 const state = { rowq: '', colq: '', sort: 'name', col: null, text: false };
 
@@ -180,6 +182,7 @@ export function mount(host) {
     if (name) { page.replaceChildren(el('div', { class: 'eu-detail' })); detailView(page.firstChild, m, name); return; }
     page.append(el('p', { class: 'sub' }, t('eu.sub')));
     // FR-1063 AC-348: エンティティ（と状態遷移）を上位層（種類→区分→領域）の見出しの下にまとめ、件数と開閉を示す。マトリクスはそのまま下に残す。
+    // i18n-data: the kind name of a hierarchy item is a managed-data value
     const tierItems = hierarchy().items.filter((i) => i.kind === 'エンティティ');
     page.append(el('section', { class: 'eu-tiers', 'data-testid': 'entity-tiers', 'aria-label': t('eu.tiers') }, el('h2', {}, t('eu.tiers')),
       listTiers(tierItems, {
