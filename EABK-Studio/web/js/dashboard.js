@@ -4,6 +4,7 @@ import { store } from './store.js';
 import { el, statusText, STATUS_COLOR, TYPE_COLOR, animateNumber, businessIcon, token } from './ui.js';
 import { xrefLink } from './xref.js';
 import { listTiers, hierarchy } from './tierlist.js';
+import { region } from './viz.js';
 
 const PALETTE = ['--viz-sel', '--viz-accent-2', '--viz-accent-3', '--viz-api', '--viz-goal', '--viz-entity', '--viz-external', '--viz-param'];
 let persona = 'Product Manager';
@@ -31,17 +32,17 @@ function donut(data) {
   el('div', { class: 'donut-hole' }, el('b', {}, total), el('span', {}, t('dash.total'))));
   return ring;
 }
-function legend(data) {
+function legend(data, ns) {
   // FR-1052 AC-284: 凡例の各項目がキーボードで届く区分（名前＋数値の読み上げ名）。Enter/Space でクリックと同じ動作。
   return el('div', { class: 'legend', style: { flexDirection: 'column', gap: 'var(--space-2)' } }, data.map((d) => {
     const go = () => focusAndGo(d.ids || [], d.label);
-    return el('span', { 'data-testid': 'chart-segment', tabindex: '0', role: 'button', 'aria-label': `${d.label}: ${d.value}`, style: { cursor: 'pointer' }, onclick: go,
+    return el('span', { 'data-testid': 'chart-segment', 'data-viz-key': `${ns}:${d.label}`, tabindex: '0', role: 'button', 'aria-label': `${d.label}: ${d.value}`, style: { cursor: 'pointer' }, onclick: go,
       onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } } },
     el('i', { class: 'dot', style: { background: d.color } }), `${d.label} `, el('b', { 'data-testid': 'chart-segment-label', style: { color: 'var(--color-fg-default)' } }, d.value));
   }));
 }
 
-function hbars(rows, opt = {}) {
+function hbars(rows, ns) {
   const max = Math.max(1, ...rows.map((r) => r.total ?? r.value));
   return el('div', { style: { display: 'grid', gap: '7px' } }, rows.map((r) => {
     const parts = r.parts || [{ value: r.value, color: r.color || token('--viz-sel'), ids: r.ids }];
@@ -49,7 +50,7 @@ function hbars(rows, opt = {}) {
       parts.map((p) => {
         const go = () => focusAndGo(p.ids || [], `${r.label} / ${p.label || ''}`);
         const name = `${r.label}${p.label ? ' / ' + p.label : ''}: ${p.value}`;
-        return el('i', { 'data-testid': 'chart-segment', tabindex: '0', role: 'button', 'aria-label': name, style: { width: ((p.value) / ((r.total ?? r.value) || 1) * 100) + '%', background: p.color, borderRadius: 0, cursor: 'pointer' }, title: `${p.label || ''} ${p.value}`, onclick: go,
+        return el('i', { 'data-testid': 'chart-segment', 'data-viz-key': `${ns}:${r.label}/${p.label || ''}`, tabindex: '0', role: 'button', 'aria-label': name, style: { width: ((p.value) / ((r.total ?? r.value) || 1) * 100) + '%', background: p.color, borderRadius: 0, cursor: 'pointer' }, title: `${p.label || ''} ${p.value}`, onclick: go,
           onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } } });
       }));
     return el('div', {}, el('div', { class: 'mini', style: { display: 'flex', justifyContent: 'space-between', marginBottom: '3px' } }, el('span', {}, r.label), el('b', { 'data-testid': 'chart-segment-label', style: { color: 'var(--color-fg-default)' } }, r.right ?? (r.total ?? r.value))), wrap);
@@ -59,7 +60,9 @@ function hbars(rows, opt = {}) {
 export function mount(host) {
   const page = el('div', { class: 'page' });
   host.append(page);
+  const viz = region(page, 'dashboard');
   const render = () => {
+    viz.snap();
     const m = store.model;
     const reqs = m.reqs;
     const by = (fn) => { const o = {}; for (const r of reqs) { const k = fn(r); (o[k] ||= []).push(r.id); } return o; };
@@ -77,7 +80,7 @@ export function mount(host) {
 
     const kpi = (v, label, ids, sfx = '') => {
       const vEl = el('div', { class: 'v' }, '0');
-      const card = el('div', { class: 'card kpi', style: { cursor: ids ? 'pointer' : 'default' }, onclick: () => ids && focusAndGo(ids, label) }, vEl, el('div', { class: 'l' }, label));
+      const card = el('div', { class: 'card kpi', 'data-viz-key': 'kpi:' + label, style: { cursor: ids ? 'pointer' : 'default' }, onclick: () => ids && focusAndGo(ids, label) }, vEl, el('div', { class: 'l' }, label));
       animateNumber(vEl, v);
       if (sfx) {
         if (document.documentElement.classList.contains('snapshot')) vEl.textContent = v + sfx;
@@ -118,14 +121,14 @@ export function mount(host) {
         kpi(blocked.length, t('dash.blocked'), blocked.map((r) => r.id)),
         kpi(files.length, t('dash.files') + ` / ${comps.length} ` + t('dash.comps'), files.map((f) => f.id))),
       el('div', { class: 'grid cols2', style: { marginTop: '16px' } },
-        el('div', { class: 'card' }, cardHeading('req', t('dash.status')), el('div', { class: 'row', style: { gap: '24px', flexWrap: 'nowrap' } }, donut(statusData), legend(statusData))),
-        el('div', { class: 'card' }, cardHeading('req', t('dash.priority')), el('div', { class: 'row', style: { gap: '24px', flexWrap: 'nowrap' } }, donut(prioData), legend(prioData))),
+        el('div', { class: 'card' }, cardHeading('req', t('dash.status')), el('div', { class: 'row', style: { gap: '24px', flexWrap: 'nowrap' } }, donut(statusData), legend(statusData, 'status'))),
+        el('div', { class: 'card' }, cardHeading('req', t('dash.priority')), el('div', { class: 'row', style: { gap: '24px', flexWrap: 'nowrap' } }, donut(prioData), legend(prioData, 'prio'))),
         el('div', { class: 'card' }, cardHeading('goal', t('dash.goals')),
-          el('div', { style: { display: 'grid', gap: '12px' } }, goalRows.map(({ g, rs, d, pct }) => el('div', { style: { cursor: 'pointer' }, onclick: () => { store.setFocus(rs.map((r) => r.id), g.id); location.hash = '#/map2d'; } },
+          el('div', { style: { display: 'grid', gap: '12px' } }, goalRows.map(({ g, rs, d, pct }) => el('div', { 'data-viz-key': 'goal:' + g.id, style: { cursor: 'pointer' }, onclick: () => { store.setFocus(rs.map((r) => r.id), g.id); location.hash = '#/map2d'; } },
             el('div', { class: 'mini', style: { display: 'flex', justifyContent: 'space-between' } }, el('span', {}, el('span', { class: 'mono' }, g.id), ' ', (g.title || '').slice(0, 56)), el('b', { style: { color: 'var(--color-fg-default)' } }, `${d.length}/${rs.length}`)),
             el('div', { class: 'bar' }, el('i', { style: { width: pct + '%' } })))))),
-        el('div', { class: 'card' }, cardHeading('entity', t('dash.groups')), hbars(groupRows)),
-        el('div', { class: 'card' }, cardHeading('test', t('dash.levels')), hbars(levelRows)),
+        el('div', { class: 'card' }, cardHeading('entity', t('dash.groups')), hbars(groupRows, 'groups')),
+        el('div', { class: 'card' }, cardHeading('test', t('dash.levels')), hbars(levelRows, 'levels')),
         el('div', { class: 'card' }, cardHeading('test', t('dash.cases')),
           caseRows.length ? el('div', { class: 'row' }, caseRows.map(([k, n]) => el('span', { class: 'badge ' + (k === 'pass' ? 'pass' : k === 'fail' ? 'fail' : '') }, `${k} ${n}`))) : el('div', { class: 'empty' }, t('none')),
           el('div', { class: 'mini', style: { marginTop: '10px' } }, m.registry.length ? m.registry.map((x) => `${x.kind}:${x.state} ${x.count}`).join(' · ') : '')),
@@ -136,10 +139,11 @@ export function mount(host) {
           })),
         el('div', { class: 'card', style: { gridColumn: '1 / -1' } }, cardHeading('progress', t('dash.runs')),
           m.runs.length ? el('div', { style: { overflow: 'auto' } }, runsTable(m.runs)) : el('div', { class: 'empty' }, t('none')))));
+    viz.sync();
   };
   render();
   const offs = [store.on('model', render), onLang(render)];
-  return { destroy() { offs.forEach((f) => f()); } };
+  return { destroy() { offs.forEach((f) => f()); viz.destroy(); } };
 }
 
 function cardHeading(kind, label) {
