@@ -449,3 +449,10 @@ i[data-testid=chart-segment]{min-width:var(--space-6)}
 .cam3d button:focus-visible{outline:2px solid var(--color-accent);outline-offset:1px}
 .nowebgl{margin:var(--space-4)}
 .dgm3d .cam3d{bottom:32px;max-height:60%}
+/* 動的な可視化（FR-1080）: ホバー・フォーカスの強調、ほかの減光、ツールチップ（js/viz.js）。動きの軽減では即時（--duration-instant）。 */
+[data-viz] [data-dim="true"]{opacity:.45}
+[data-viz] [data-hover="true"]{outline:2px solid var(--color-accent);outline-offset:1px}
+[data-viz] [data-viz-key]{transition:opacity var(--duration-fast)}
+.viz-tooltip{position:fixed;z-index:90;pointer-events:none;transform:translate(-50%,-100%);background:var(--color-bg-surface);color:var(--color-fg-default);border:var(--stroke-overlay) solid var(--color-border-strong);border-radius:var(--radius-tooltip);padding:var(--space-1) var(--space-3);max-width:360px;font-size:var(--font-size-caption);line-height:var(--line-height-caption);box-shadow:var(--elevation-flyout)}
+.viz-tooltip[hidden]{display:none}
+@media (prefers-reduced-motion: reduce){[data-viz] [data-viz-key]{transition-duration:var(--duration-instant)}}

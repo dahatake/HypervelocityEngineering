@@ -2,11 +2,15 @@
 //  - layered layout (directed / hierarchical relations: trace, goals, states): layers → barycentre ordering → left to right.
 //  - force layout (Fruchterman–Reingold, fixed iteration count, so the same input always gives the same picture):
 //    undirected only in the computation; the arrow still follows the original direction of the relation.
-// Nothing is animated, so prefers-reduced-motion needs no special case (AC-428). Icons come from the bundled set (ui.js), never fetched.
+// FR-1080: the layouts below give the anchors; the view moves the nodes with a force-like simulation (repulsion, attraction, pull to the centre,
+// a spring to the anchor) and ends exactly on the layered / force picture. Nodes are joined by key (data-viz-key, viz.js); wheel zoom / drag pan / reset.
+// prefers-reduced-motion: no simulation, the final picture at once (AC-444). Icons come from the bundled set (ui.js), never fetched.
 import { t } from './i18n.js';
 import { store } from './store.js';
 import { el, svgEl, icon } from './ui.js';
+import { region, on as vizOn, zoomPan, reduced } from './viz.js';
 
+const ALPHA_MIN = 0.04;                 // FR-1080: below this the force-like motion is settled
 export const GRAPH_CAP = 150;           // PARAM-056: more nodes than this are narrowed down (AC-429)
 export const NODE_W = 208, NODE_H = 48; // 4px grid
 const GAP_X = 72, GAP_Y = 24, PAD = 24;
@@ -186,17 +190,167 @@ const cutTitle = (s, n) => (String(s).length > n ? String(s).slice(0, n - 1) + '
 
 // nodes: [{id, label, title?, type, word?}], edges: [{from, to, label?}], layout: 'layered' | 'force'
 export function graphView({ name = 'graph', nodes, edges, layout = 'layered', cap = GRAPH_CAP, note }) {
-  const root = el('section', { class: 'gv', 'data-testid': 'graph-view', 'data-current': 'graph', 'data-layout': layout, 'data-graph': name, 'data-total': String(nodes.length) });
+  // FR-1080: data-layout="force" = the force-like dynamics are on (repulsion, attraction, pull to the centre, spring to the layer anchor).
+  // The final picture is still the layout of FR-1079 (layered: left to right), because the anchors are the layout's coordinates.
+  const root = el('section', { class: 'gv', 'data-testid': 'graph-view', 'data-current': 'graph', 'data-layout': reduced() ? layout : 'force', 'data-layout-final': layout, 'data-graph': name, 'data-total': String(nodes.length) });
   const ids = new Set(nodes.map((n) => n.id));
   const fs = filterState.get(name) || {};
   filterState.set(name, fs);
+  fs.view ||= { z: 1, x: 0, y: 0 };
   let sel = ids.has(store.selected) ? store.selected : null;
   const arrow = 'gv-arrow-' + ++uid;
   let focusId = null;
+  const sim = { cur: new Map(), vel: new Map(), anchor: new Map(), alpha: 0, raf: 0, t0: 0, cap: 600, drag: null, edges: [], world: null, svg: null, moved: false, center: [0, 0] };
+  const v = region(root, 'graph', { items: '[data-testid="graph-node"]', keyOf: (n) => n.getAttribute('data-node-id'), hold: () => sim.alpha > ALPHA_MIN || !!sim.drag });
+  let zp = null;
 
+  // ---- force-like dynamics (FR-1080 AC-443): positions are the top-left of a node box, as in the layouts.
+  const edgeD = (a, b) => {
+    if (layout !== 'force' && b.x > a.x + NODE_W) {
+      const sx = a.x + NODE_W, sy = a.y + NODE_H / 2, tx = b.x, ty = b.y + NODE_H / 2, c = Math.max(24, (tx - sx) / 2);
+      return `M${sx} ${sy}C${sx + c} ${sy} ${tx - c} ${ty} ${tx} ${ty}`;
+    }
+    const [sx, sy] = clip(a, b), [tx, ty] = clip(b, a);
+    return `M${Math.round(sx)} ${Math.round(sy)}L${Math.round(tx)} ${Math.round(ty)}`;
+  };
+  const publishAlpha = () => {
+    root.dataset.vizAlpha = sim.alpha.toFixed(3);
+    if (sim.alpha > ALPHA_MIN || sim.drag) root.dataset.vizTransition = 'running';
+  };
+  const paintPos = () => {
+    // the transform attribute always holds the layout (anchor) position; the motion is the CSS translate on top of it, so the layout stays readable at any moment
+    for (const g of root.querySelectorAll('[data-testid="graph-node"]')) {
+      const p = sim.cur.get(g.dataset.nodeId), a = sim.anchor.get(g.dataset.nodeId);
+      if (!p || !a) continue;
+      const dx = Math.round((p.x - a.x) * 10) / 10, dy = Math.round((p.y - a.y) * 10) / 10;
+      g.style.translate = dx || dy ? `${dx}px ${dy}px` : '';
+    }
+    for (const e of sim.edges) {
+      const a = sim.cur.get(e.from), b = sim.cur.get(e.to);
+      if (a && b) e.path.setAttribute('d', edgeD(a, b));
+    }
+  };
+  const step = () => {
+    const ks = [...sim.cur.keys()];
+    const al = sim.alpha;
+    const F = new Map(ks.map((k) => [k, [0, 0]]));
+    for (let i = 0; i < ks.length; i++) for (let j = i + 1; j < ks.length; j++) {   // repulsion
+      const a = sim.cur.get(ks[i]), b = sim.cur.get(ks[j]);
+      let ex = a.x - b.x, ey = a.y - b.y, d = Math.hypot(ex, ey);
+      if (d > 360) continue;
+      if (d < 1) { ex = (i % 2 ? 1 : -1); ey = 1; d = 1.4; }
+      const f = Math.min(40, 6000 / d) * al / d;
+      F.get(ks[i])[0] += ex * f; F.get(ks[i])[1] += ey * f; F.get(ks[j])[0] -= ex * f; F.get(ks[j])[1] -= ey * f;
+    }
+    const L = NODE_W + GAP_X;
+    for (const e of sim.edges) {   // attraction along the relations
+      const a = sim.cur.get(e.from), b = sim.cur.get(e.to);
+      if (!a || !b) continue;
+      const ex = b.x - a.x, ey = b.y - a.y, d = Math.max(Math.hypot(ex, ey), 1), f = 0.03 * al * (d - L) / d;
+      F.get(e.from)[0] += ex * f; F.get(e.from)[1] += ey * f; F.get(e.to)[0] -= ex * f; F.get(e.to)[1] -= ey * f;
+    }
+    for (const k of ks) {
+      const p = sim.cur.get(k), f = F.get(k), an = sim.anchor.get(k) || p, vel = sim.vel.get(k);
+      f[0] += 0.03 * al * (sim.center[0] - p.x) + 0.14 * (an.x - p.x);   // pull to the centre, spring to the layout anchor
+      f[1] += 0.03 * al * (sim.center[1] - p.y) + 0.14 * (an.y - p.y);
+      if (sim.drag && sim.drag.id === k) { vel[0] = vel[1] = 0; continue; }
+      vel[0] = (vel[0] + f[0]) * 0.55; vel[1] = (vel[1] + f[1]) * 0.55;
+      p.x += vel[0]; p.y += vel[1];
+    }
+    sim.alpha = sim.drag ? Math.max(sim.alpha * 0.93, 0.3) : sim.alpha * 0.93;
+  };
+  const settleSim = () => {
+    cancelAnimationFrame(sim.raf); sim.raf = 0;
+    sim.alpha = 0; sim.drag = null;
+    for (const [k, a] of sim.anchor) { const p = sim.cur.get(k); if (p) { p.x = a.x; p.y = a.y; } }   // final = the layout, exactly
+    paintPos();
+    root.dataset.vizAlpha = '0.000';
+    v.settle();
+  };
+  const tick = (now) => {
+    sim.raf = 0;
+    step();
+    paintPos();
+    publishAlpha();
+    if (sim.drag || (sim.alpha > ALPHA_MIN && now - sim.t0 < sim.cap)) sim.raf = requestAnimationFrame(tick);
+    else settleSim();
+  };
+  const heat = (alpha, cap) => {
+    if (reduced()) return settleSim();
+    sim.alpha = Math.max(sim.alpha, alpha);
+    sim.t0 = performance.now(); sim.cap = cap;
+    publishAlpha();
+    if (!sim.raf) sim.raf = requestAnimationFrame(tick);
+  };
+  const toWorld = (ev) => {
+    const m = sim.world?.getScreenCTM?.();
+    if (!m) return { x: ev.clientX, y: ev.clientY };
+    const pt = sim.svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+    const q = pt.matrixTransform(m.inverse());
+    return { x: q.x, y: q.y };
+  };
+  const dragNode = (g, id) => {
+    let st = null;
+    vizOn(g, 'pointerdown', (ev) => {
+      if (ev.button !== 0) return;
+      ev.stopPropagation();
+      const w = toWorld(ev), p = sim.cur.get(id) || { x: 0, y: 0 };
+      st = { x: ev.clientX, y: ev.clientY, ox: w.x - p.x, oy: w.y - p.y, pid: ev.pointerId, on: false };
+    });
+    vizOn(g, 'pointermove', (ev) => {
+      if (!st || ev.pointerId !== st.pid) return;
+      if (!st.on) {
+        if (Math.hypot(ev.clientX - st.x, ev.clientY - st.y) < 4) return;
+        st.on = true; sim.moved = true;
+        try { g.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
+        sim.drag = { id }; heat(0.3, 600);
+      }
+      const w = toWorld(ev), p = sim.cur.get(id);
+      if (p) { p.x = w.x - st.ox; p.y = w.y - st.oy; }
+      sim.alpha = Math.max(sim.alpha, 0.3);
+      paintPos(); publishAlpha();
+    });
+    const up = () => {
+      if (st?.on) { sim.drag = null; sim.t0 = performance.now(); sim.cap = 600; setTimeout(() => { sim.moved = false; }, 0); if (!sim.raf) sim.raf = requestAnimationFrame(tick); }
+      st = null;
+    };
+    vizOn(g, 'pointerup', up);
+    vizOn(g, 'pointercancel', up);
+  };
   const draw = () => {
-    const view = narrow(nodes, edges, { selected: sel, mode: fs.mode, type: fs.type, cap });
+    v.snap();
+    cancelAnimationFrame(sim.raf); sim.raf = 0;
+    let view = narrow(nodes, edges, { selected: sel, mode: fs.mode, type: fs.type, cap });
+    const allTypes = [...new Set(nodes.map((x) => x.type))];
+    const small = nodes.length <= cap;
+    if (small && fs.only && allTypes.includes(fs.only)) {   // FR-1080 AC-441: the user's own type filter, also under the cap
+      const keep = new Set(nodes.filter((x) => x.type === fs.only).map((x) => x.id));
+      if (sel && ids.has(sel)) keep.add(sel);
+      view = { nodes: nodes.filter((x) => keep.has(x.id)), edges: edges.filter((e) => keep.has(e.from) && keep.has(e.to)), mode: 'type', type: fs.only, user: true };
+    }
     const lay = layout === 'force' ? forceLayout(view.nodes, view.edges) : layeredLayout(view.nodes, view.edges);
+    // dynamics state: keep the positions of the nodes that stay (update), start the new ones near a neighbour (enter)
+    const first = sim.cur.size === 0;
+    const prev = sim.cur;
+    sim.cur = new Map(); sim.anchor = new Map();
+    sim.center = [lay.width / 2 - NODE_W / 2, lay.height / 2 - NODE_H / 2];
+    let i = 0;
+    for (const n of view.nodes) {
+      const a = lay.pos.get(n.id);
+      sim.anchor.set(n.id, { x: a.x, y: a.y });
+      let p = prev.get(n.id);
+      if (!p) {
+        const nb = view.edges.map((e) => (e.from === n.id ? e.to : e.to === n.id ? e.from : null)).find((x) => x && prev.has(x));
+        const s = nb ? prev.get(nb) : null;
+        const ang = i * 2.399963229728653, r = first ? 12 * Math.sqrt(i + 1) : 28;
+        p = { x: (s ? s.x : sim.center[0]) + r * Math.cos(ang), y: (s ? s.y : sim.center[1]) + r * Math.sin(ang) };
+      }
+      sim.cur.set(n.id, { x: p.x, y: p.y });
+      if (!sim.vel.has(n.id)) sim.vel.set(n.id, [0, 0]);
+      i++;
+    }
+    for (const k of [...sim.vel.keys()]) if (!sim.cur.has(k)) sim.vel.delete(k);
+    sim.edges = [];
     // reading order (= Tab order): left to right by layer / row for the layered layout, top to bottom then left to right for the force layout
     const ordered = [...view.nodes].sort((a, b) => {
       const pa = lay.pos.get(a.id), pb = lay.pos.get(b.id);
@@ -210,25 +364,18 @@ export function graphView({ name = 'graph', nodes, edges, layout = 'layered', ca
     for (const e of view.edges) {
       const a = lay.pos.get(e.from), b = lay.pos.get(e.to);
       if (!a || !b || e.from === e.to) continue;
-      let d;
-      if (layout !== 'force' && b.x > a.x + NODE_W) {
-        const sx = a.x + NODE_W, sy = a.y + NODE_H / 2, tx = b.x, ty = b.y + NODE_H / 2, c = Math.max(24, (tx - sx) / 2);
-        d = `M${sx} ${sy}C${sx + c} ${sy} ${tx - c} ${ty} ${tx} ${ty}`;
-      } else {
-        const [sx, sy] = clip(a, b), [tx, ty] = clip(b, a);
-        d = `M${Math.round(sx)} ${Math.round(sy)}L${Math.round(tx)} ${Math.round(ty)}`;
-      }
-      const p = svgEl('path', { d, class: 'gv-edge', 'data-testid': 'graph-edge', 'data-from': e.from, 'data-to': e.to, 'marker-end': `url(#${arrow})`, fill: 'none' });
+      const p = svgEl('path', { d: edgeD(a, b), class: 'gv-edge', 'data-testid': 'graph-edge', 'data-from': e.from, 'data-to': e.to, 'marker-end': `url(#${arrow})`, fill: 'none' });
       if (e.label) p.append(svgEl('title', {}, `${e.from} → ${e.to}: ${e.label}`));
       else p.append(svgEl('title', {}, `${e.from} → ${e.to}`));
       eg.append(p);
+      sim.edges.push({ from: e.from, to: e.to, path: p });
     }
     const ng = svgEl('g', { class: 'gv-nodes' });
     for (const n of ordered) {
       const p = lay.pos.get(n.id);
       const word = n.word || typeWord(n.type);
       const title = n.title && n.title !== n.id ? n.title : (n.label && n.label !== n.id ? n.label : '');
-      const g = svgEl('g', { class: 'gv-node' + (n.id === sel ? ' sel' : ''), transform: `translate(${p.x} ${p.y})`, tabindex: '0', role: 'button', 'data-testid': 'graph-node', 'data-node-id': n.id,
+      const g = svgEl('g', { class: 'gv-node' + (n.id === sel ? ' sel' : ''), transform: `translate(${p.x} ${p.y})`, tabindex: '0', role: 'button', 'data-testid': 'graph-node', 'data-node-id': n.id, 'data-viz-key': n.id,
         'data-type': n.type, 'aria-pressed': n.id === sel ? 'true' : 'false', 'aria-label': `${word} ${n.id}${title ? ' ' + title : ''}`,
         style: `color:var(${VAR_OF[n.type] || '--viz-file'})` });
       g.append(svgEl('title', {}, `${word} · ${n.id}${title ? ' · ' + title : ''}`),
@@ -240,15 +387,24 @@ export function graphView({ name = 'graph', nodes, edges, layout = 'layered', ca
         svgEl('text', { class: 'gv-id', x: 40, y: 20 }, cutTitle(n.id, 22)),
         svgEl('text', { class: 'gv-title', x: 40, y: 37 }, cutTitle(title || word, 20)));
       const pick = () => { focusId = n.id; sel = n.id; if (store.nodes.has(n.id)) store.select(n.id); paintSel(); };
-      g.addEventListener('click', (ev) => { ev.stopPropagation(); pick(); });
-      g.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pick(); } });
-      g.addEventListener('focus', () => { focusId = n.id; });
+      vizOn(g, 'click', (ev) => { ev.stopPropagation(); if (sim.moved) return; pick(); });
+      vizOn(g, 'keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pick(); } });
+      vizOn(g, 'focus', () => { focusId = n.id; });
+      dragNode(g, n.id);
       ng.append(g);
     }
-    svg.append(eg, ng);
-
+    const world = svgEl('g', { class: 'gv-world' }, eg, ng);
+    svg.append(world);
+    sim.svg = svg; sim.world = world;
     const parts = [];
-    if (view.mode) {   // AC-429: say why and how many there are in all; the chips change the narrowing, the selection stays
+    if (small) {   // under the cap: a plain type filter (chips + "all"), so the user can narrow and restore with motion (FR-1080 AC-441)
+      parts.push(el('div', { class: 'gv-filter', 'data-testid': 'graph-filter', 'data-mode': view.mode ? 'user' : 'all', role: 'group', 'aria-label': t('graph.filter.by') },
+        el('div', { class: 'gv-chips' },
+          allTypes.map((ty) => el('button', { type: 'button', class: 'btn ghost' + (fs.only === ty ? ' on' : ''), 'data-filter-type': ty, 'aria-pressed': fs.only === ty ? 'true' : 'false',
+            onclick: () => { fs.only = ty; redraw(); } }, `${typeWord(ty)} (${nodes.filter((x) => x.type === ty).length})`),
+          ),
+          el('button', { type: 'button', class: 'btn ghost' + (fs.only ? '' : ' on'), 'data-filter-type-all': '', 'aria-pressed': fs.only ? 'false' : 'true', onclick: () => { fs.only = null; redraw(); } }, t('viz.all')))));
+    } else if (view.mode) {   // AC-429: say why and how many there are in all; the chips change the narrowing, the selection stays
       const why = view.mode === 'near' ? t('graph.filter.near') : t('graph.filter.type', { type: typeWord(view.type) });
       parts.push(el('div', { class: 'gv-filter', 'data-testid': 'graph-filter', 'data-mode': view.mode, role: 'status' },
         el('p', {}, t('graph.filter.note', { total: nodes.length, cap, n: view.nodes.length, why })),
@@ -263,9 +419,13 @@ export function graphView({ name = 'graph', nodes, edges, layout = 'layered', ca
     root.setAttribute('data-filtered', view.mode ? 'true' : 'false');
     const legend = el('ul', { class: 'gv-legend', 'aria-label': t('graph.legend') },
       [...new Set(view.nodes.map((x) => x.type))].map((ty) => el('li', {}, el('span', { class: 'gv-key', style: `color:var(${VAR_OF[ty] || '--viz-file'})` }, icon(ICON_OF[ty] || 'info', { size: 16 })), typeWord(ty))));
-    const body = el('div', { class: 'gv-scroll', tabindex: '-1' }, svg);
-    root.replaceChildren(...(note ? [el('p', { class: 'mini gv-note' }, note)] : []), ...parts, legend, body,
+    const body = el('div', { class: 'gv-scroll', tabindex: '-1', style: 'touch-action:none' }, svg);
+    const reset = el('button', { type: 'button', class: 'btn ghost', 'data-testid': 'viz-reset', 'data-action': 'reset-view', onclick: () => zp?.reset() }, t('viz.reset'));
+    root.replaceChildren(...(note ? [el('p', { class: 'mini gv-note' }, note)] : []), ...parts, el('div', { class: 'row', style: 'gap:8px;align-items:center' }, legend, reset), body,
       view.nodes.length ? '' : el('p', { class: 'empty' }, t('graph.empty')));
+    zp = zoomPan(body, (z, x, y) => world.setAttribute('transform', `translate(${x} ${y}) scale(${z})`), fs.view, { skip: '[data-testid="graph-node"]' });
+    v.sync();
+    if (reduced()) settleSim(); else { paintPos(); heat(first ? 1 : 0.5, first ? 1200 : 600); }
     if (focusId) root.querySelector(`[data-node-id="${CSS.escape(focusId)}"]`)?.focus({ preventScroll: true });
   };
   const redraw = () => draw();
@@ -281,5 +441,5 @@ export function graphView({ name = 'graph', nodes, edges, layout = 'layered', ca
     if (root.dataset.filtered === 'true') redraw();    // the neighbourhood moves with the selection; the narrowing itself is kept
     paintSel();
   });
-  return { el: root, destroy: () => off() };
+  return { el: root, destroy: () => { off(); cancelAnimationFrame(sim.raf); v.destroy(); } };
 }
