@@ -93,7 +93,7 @@ export function el(tag, attrs, ...kids) {
     if (k === 'class') e.className = v;
     else if (k === 'html') e.innerHTML = v;
     else if (k === 'style' && typeof v === 'object') Object.assign(e.style, v);
-    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (k.startsWith('on')) { e.addEventListener(k.slice(2), v); (e._on ||= []).push([k.slice(2), v, undefined]); } // _on: 動的可視化（viz.js）が要素を再利用するときの付け替え用
     else e.setAttribute(k, v === true ? '' : v);
   }
   for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(c));

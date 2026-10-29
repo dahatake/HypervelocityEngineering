@@ -4,6 +4,7 @@ import { store, norm } from './store.js';
 import { el, statusBadge, colorOf } from './ui.js';
 import { xrefLink, idRef, idsToNodes } from './xref.js';
 import { placeRows, listTiers } from './tierlist.js';
+import { region } from './viz.js';
 
 // FR-1063 AC-348: 各表の行を FR-1062 の (種類, ID) に対応づける。階層にない行（ファイル・用語など）は表の名前の下の「未分類」に置く。
 // i18n-data-begin: the kind names of the hierarchy are managed-data values
@@ -76,6 +77,7 @@ export function mount(host) {
   if (hk) tab = hk;
   const page = el('div', { class: 'page' });
   host.append(page);
+  const viz = region(page, 'tables', { dim: false, items: 'tr[data-testid="tier-item"]', keyOf: (n) => (n.dataset.id ? 'row:' + n.dataset.id : null) });
   let fill = () => {};
 
   const render = () => {
@@ -130,12 +132,14 @@ export function mount(host) {
           }));
       };
       const placed = placeRows(list.slice(0, 1500), TIER_SPEC[tab] || (() => null), t('tab.' + tab));
+      viz.snap();
       tierHost.replaceChildren(listTiers(placed, {
         openAreas: true,
         extra: (node) => (node.level === 'area' && node.items.length
           ? el('div', { class: 'tw' }, el('table', { class: 't' }, el('thead', {}, mkHead()), el('tbody', {}, node.items.map((it) => mkRow(it.row)))))
           : null),
       }));
+      viz.sync();
       const sel = tierHost.querySelector('tr.sel');
       if (sel) sel.scrollIntoView({ block: 'nearest' });
     };
@@ -143,7 +147,7 @@ export function mount(host) {
   };
   render();
   const offs = [store.on('model', render), onLang(render), store.on('select', () => fill())];
-  return { destroy() { offs.forEach((f) => f()); } };
+  return { destroy() { offs.forEach((f) => f()); viz.destroy(); } };
 }
 
 function exportCsv(def, rows, colLabel) {

@@ -4,14 +4,21 @@ import { t, onLang } from './i18n.js';
 import { el, vscodeUrl } from './ui.js';
 import { xrefLink } from './xref.js';
 import { placeRows, listTiers } from './tierlist.js';
+import { region } from './viz.js';
 
 // A block built from the dictionary is rebuilt in place when the language changes (the screen is not reloaded).
-function live(build) {
+// FR-1080: each block is a viz region (js/viz.js) that exposes data-viz / data-viz-state / data-viz-count and joins items by key.
+const INS = { items: '[data-ins-key]', keyOf: (n) => n.getAttribute('data-ins-key') };
+const named = (name, build) => live(build, name);
+function live(build, name) {
   let node = build();
+  let reg = name ? region(node, name, INS) : null;
   const off = onLang(() => {
-    if (!node.isConnected) { off(); return; }
+    if (!node.isConnected) { off(); reg?.destroy(); return; }
+    reg?.snap();
     const next = build();
     node.replaceWith(next);
+    if (reg) { const r2 = region(next, name, INS); r2.takeFrom(reg); reg.destroy(); r2.sync(); reg = r2; }
     node = next;
   });
   return node;
@@ -54,9 +61,9 @@ export function decorate(route, host) {
 }
 
 export function runtimePlacement() {
-  return live(() => {
+  return named('insights-runtime', () => {
     const runtime = store.model.analysis.runtime;
-    const box = (item) => el('article', { class: 'runtime-node card' },
+    const box = (item) => el('article', { class: 'runtime-node card', 'data-ins-key': 'rt:' + item.name },
       el('h3', {}, item.name), el('p', {}, t('ins.runsAt', { v: item.runsAt })),
       el('p', {}, t('ins.dataAt', { v: item.data })),
       item.access ? el('p', {}, t('ins.access', { v: item.access })) : null,
@@ -83,7 +90,7 @@ export function runtimePlacement() {
 // FR-1006 AC-050 / FR-1013 AC-084 AC-085: one ER view shared by the ER page and the diagrams "data relation" tab.
 // Entities and their related tables (tables sharing a requirement) carry data-id = model node id.
 export function entityER() {
-  return live(buildEntityER);
+  return live(buildEntityER, 'insights-er');
 }
 function buildEntityER() {
   const reqs = store.model.reqs.filter((r) => r.entities.length);
@@ -101,7 +108,7 @@ function buildEntityER() {
     const n = entNode(name), tbls = tablesOf(name);
     const head = el('b', {}, name);
     const attrs = n ? { 'data-id': n.id, tabindex: 0, role: 'button', onclick: pick(n.id), onkeydown: key(n.id) } : {};
-    return el('div', { class: 'entity-box', ...attrs }, head,
+    return el('div', { class: 'entity-box', 'data-ins-key': 'ent:' + name, ...attrs }, head,
       el('div', { class: 'mini' }, t('er.tables') + ': ', tbls.size ? [...tbls.entries()].map(([id, rs]) => el('span', { class: 'chip', 'data-id': id, tabindex: 0, role: 'button', title: `${t('er.evidence')}: ${rs.join(', ')}`, onclick: (e) => { e.stopPropagation(); pick(id)(); }, onkeydown: (e) => { e.stopPropagation(); key(id)(e); } }, `▦ ${store.node(id)?.label || id} (${rs.join(', ')}) `)) : t('er.notable')));
   };
   return el('section', { class: 'visual-section' }, el('h1', {}, t('er.title')),
@@ -111,7 +118,7 @@ function buildEntityER() {
 }
 
 function historyProgress() {
-  return live(buildHistory);
+  return live(buildHistory, 'insights-history');
 }
 function buildHistory() {
   const m = store.model;
@@ -148,7 +155,7 @@ function buildHistory() {
         el('button', { class: 'btn', onclick: () => (drawer.hidden = true) }, t('ins.close')));
       drawer.hidden = false;
     };
-    return el('figure', { class: 'card evidence-chart', 'aria-label': title },
+    return el('figure', { class: 'card evidence-chart', 'aria-label': title, 'data-ins-key': 'ev:' + title },
       el('figcaption', {}, title),
       el('button', { role: 'button', class: 'chart-button', onclick: open },
         t('ins.ev.btn', { groups: groups.length, count })),
@@ -178,7 +185,7 @@ function buildHistory() {
       const id = String(r.id || '');
       const link = store.nodes.has(id) ? xrefLink(id)
         : (() => { const tg = evidenceTarget(r); return tg.href ? el('a', { class: 'mono xref', href: tg.href, title: `${label} ${id}` }, id || tg.label) : el('span', { class: 'mono' }, id || '-'); })();
-      return el('span', { class: 'hchip', 'data-testid': 'history-chip', 'data-kind': kind }, link, r.status ? el('span', { class: 'hstatus' }, ` ${r.status}`) : '');
+      return el('span', { class: 'hchip', 'data-testid': 'history-chip', 'data-kind': kind, 'data-ins-key': 'chip:' + kind + ':' + id }, link, r.status ? el('span', { class: 'hstatus' }, ` ${r.status}`) : '');
     };
     return el('section', { class: 'card history-box', 'data-testid': 'history-box', 'data-kind': kind, 'aria-label': `${label} ${records.length}` },
       el('h3', {}, `${label} (${records.length})`),
@@ -212,20 +219,20 @@ function tierTable(headers, placed, rowOf, emptyPath) {
 const EMPTY_REQ_PATH = ['要求', '機能', '未分類'];
 
 export function mountStructure(host) {
-  const page = live(() => {
+  const page = named('insights-structure', () => {
     const analysis = store.model.analysis.structure;
     // i18n-data: the kind name of a hierarchy item is a managed-data value
     const placed = placeRows(analysis.differences.map((d) => d), (d) => ({ kind: '要求', id: d.target }), (d) => [t('ins.st.diff'), t('ins.st.kind', { v: d.kind }), t('ins.st.layer', { v: d.layer })]);
     return el('div', { class: 'page' }, el('h1', {}, t('ins.st.title')),
       el('p', { class: 'sub' }, t('ins.st.sub')),
       el('div', { class: 'grid cols2 layer-list' }, analysis.layers.map((layer) =>
-        el('article', { class: 'card' }, el('h2', {}, layer.name),
+        el('article', { class: 'card', 'data-ins-key': 'layer:' + layer.name }, el('h2', {}, layer.name),
           el('p', {}, t('ins.st.actual', { v: layer.actual })), el('p', {}, t('ins.st.ideal', { v: layer.ideal })),
           el('p', {}, t('ins.st.delta', { v: layer.delta })), el('p', {}, t('ins.st.rule', { v: layer.rule })),
           el('p', {}, t('ins.st.reason', { v: layer.reason })),
           el('p', { class: 'mini mono' }, t('ins.source', { v: layer.source }))))),
       tierTable(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7', 'h8'].map((k) => t('ins.st.' + k)), placed,
-        (diff) => el('tr', {},
+        (diff) => el('tr', { 'data-ins-key': 'diff:' + diff.layer + '|' + diff.kind + '|' + diff.target },
           el('td', {}, diff.layer), el('td', {}, diff.kind), el('td', {}, diff.target),
           el('td', {}, diff.actual), el('td', {}, diff.ideal), el('td', {}, diff.rule),
           el('td', {}, diff.reason), el('td', { class: 'mono' }, diff.source)), [t('ins.st.diff'), t('tier.n.unclassified'), t('tier.n.unclassified')]));
@@ -235,7 +242,7 @@ export function mountStructure(host) {
 }
 
 export function mountConsistency(host) {
-  const page = live(() => {
+  const page = named('insights-consistency', () => {
     const rows = new Map();
     for (const r of store.model.reqs) rows.set(r.id, { id: r.id, req: true, ac: r.acs.length > 0, test: false, cat: false, file: false });
     for (const f of store.model.catalog.features) {
@@ -248,7 +255,7 @@ export function mountConsistency(host) {
     const placed = placeRows([...rows.values()], (r) => ({ kind: '要求', id: r.id }), '要求');
     return el('div', { class: 'page' }, el('h1', {}, t('ins.co.title')),
       tierTable(['ID', t('ins.co.h.verdict'), t('ins.co.req'), 'AC', t('ins.co.test'), t('ins.co.cat'), t('ins.co.file')], placed,
-        (r) => el('tr', {},
+        (r) => el('tr', { 'data-ins-key': 'co:' + r.id },
           el('td', {}, r.id), el('td', {}, outcome(r)),
           ...[['req', t('ins.co.req')], ['ac', 'AC'], ['test', t('ins.co.test')], ['cat', t('ins.co.cat')], ['file', t('ins.co.file')]]
             .map(([k, label]) => el('td', {}, `${label} ${r[k] ? '✓' : '—'}`))), EMPTY_REQ_PATH));
