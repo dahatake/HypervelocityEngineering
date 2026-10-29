@@ -1,3 +1,5 @@
+**日本語** | [English](03-requirements-format.en.md)
+
 # 3. 管理データの書式
 
 管理データは人が読むドキュメントですが、`scripts/verify.py` が機械的に検査できるフォーマットで書きます。通常は rd-author・test-designer・implementer が書くので、利用者が手で書く必要はありません。このページは、手で修正するときや、既存のドキュメントを移行するときのリファレンスです。

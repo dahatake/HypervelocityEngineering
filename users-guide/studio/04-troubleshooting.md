@@ -1,3 +1,5 @@
+**日本語** | [English](04-troubleshooting.en.md)
+
 # S4 うまく動かないとき・用語集
 
 ## うまく動かないとき

@@ -1,3 +1,5 @@
+**日本語** | [English](rpg-originality.en.md)
+
 # RPG 風マップの独自性の一覧（FR-1054 AC-293）
 
 RPG 風の表示モード（`EABK-Studio/web/js/maprpg.js`、`rpgaudio.js`、`rpgworld.js`）が、既存の著作物（ドラゴンクエストをはじめとする既存のゲームの楽曲・キャラクター・固有名・画像）を複製していないことを確かめる一覧です。確かめる手順は `docs/manual-tests.md` の「FR-1054 AC-293」です。

@@ -1,3 +1,5 @@
+**日本語** | [English](02-during-and-after-run.en.md)
+
 # 2. 実行中と終了後
 
 ## 2.1 進捗を確認する

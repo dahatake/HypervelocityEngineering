@@ -1,3 +1,5 @@
+**日本語** | [English](04-customization.en.md)
+
 # 4. 設定とカスタマイズ
 
 設定は `scripts/ebak.config.json` に集約しています。インストール・更新時には、利用者が設定した値は保持され、新しいキーだけが追加されます。

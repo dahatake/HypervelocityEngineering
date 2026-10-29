@@ -1,3 +1,5 @@
+**日本語** | [English](README.en.md)
+
 # conductor と Spec Kit の比較ベンチマーク
 
 同じ課題を、conductor と GitHub Spec Kit（v1.1.1）に解かせて、結果を比べます。

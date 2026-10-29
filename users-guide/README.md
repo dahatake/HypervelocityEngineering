@@ -1,3 +1,5 @@
+**日本語** | [English](README.en.md)
+
 # EABK ユーザーガイド
 
 EABK（Enterprise App Build Kit）と **EABK Studio** は、1 つのアプリケーションです。このフォルダー `users-guide/` が、その唯一のユーザーガイドです。概要・インストール・Quickstart・用語は、リポジトリ直下の [README.md](../README.md) を先に読んでください。

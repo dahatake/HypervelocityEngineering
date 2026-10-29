@@ -1,3 +1,5 @@
+**日本語** | [English](01-writing-requests.en.md)
+
 # 1. 依頼の書き方（/build と run_options）
 
 ## 1.1 雛形

@@ -1,3 +1,5 @@
+**日本語** | [English](07-troubleshooting.en.md)
+
 # 7. トラブルシューティング
 
 ## 7.1 拒否・差し戻し

@@ -1,3 +1,5 @@
+**日本語** | [English](README.en.md)
+
 # HypervelocityEngineering — Enterprise App Build Kit
 
 GitHub Copilot（VS Code の Agents ウィンドウ / Copilot CLI / GitHub Copilot app）用のマルチエージェント開発 toolkit です。要求定義書・カタログ・System Test の整合性を保ったまま、アプリケーションを**最高品質・最短時間・最小 Token** で実装することを目指します。
