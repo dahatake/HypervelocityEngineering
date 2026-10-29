@@ -486,11 +486,13 @@ def main(argv=None) -> int:
             if args.dry_run:
                 deleted += 1
                 continue
+            # resolve before execute: the cwd/worktree may be deleted, which breaks later git lookups
+            primary = primary_root(root)
             ok, protected = execute(root, cfg, rid, meta, queue, report, candidates, run_wt)
             final_state = "清掃済み" if ok and not protected else "保持"
             if any(c.kind == "run-worktree" and c.result == "削除済み" for c in candidates):
                 # the run worktree (and its work/) is gone; the report was copied to the primary
-                report_path = h.run_dir(primary_root(Path.cwd()), cfg, rid) / "run-report.md"
+                report_path = h.run_dir(primary, cfg, rid) / "run-report.md"
             update_report(report_path, candidates, final_state, meta)
             if ok:
                 if protected:
