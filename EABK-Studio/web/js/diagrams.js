@@ -501,15 +501,17 @@ export function mount(host) {
   const setDim = (d) => { if (!dimsFor().includes(d)) return; wanted = d; if (d === dim) { publishDim({ dims: dimsFor(), current: dim, selected: wanted }); return; } dim = dimState.diagrams = d; render(); };
   let wanted = dim;   // what the user chose; differs from `dim` only when 3D could not be drawn (AC-370)
   const offDim = registerDim((d) => (d ? setDim(d) : setDim(dim === '2d' ? '3d' : '2d')));
+  let freshKind = false;
   const render = () => {
     const m = store.model;
     vz.snap();
+    if (freshKind) { vz.old = new Map(); freshKind = false; }   // 図の種類の切替は別の図: 前の図の要素を enter/exit の補間に持ち込まない
     three?.destroy?.(); three = null; gv?.destroy(); gv = null;
     if (dim === 'graph' && !(kind in GRAPH_KINDS)) dim = wanted = dimState.diagrams = '2d';   // layers / ctx have no Graph (the button is disabled with its reason)
     const my = ++renderToken;
     publishDim({ dims: dimsFor(), current: dim, selected: wanted });
     const toggle = dimToggle({ current: dim, onPick: setDim, dims: dimsFor() });
-    tabs.replaceChildren(...KINDS.map((k) => el('button', { class: 'tabbtn' + (k === kind ? ' on' : ''), onclick: () => { kind = k; render(); } }, t('dgm.' + k))), toggle);
+    tabs.replaceChildren(...KINDS.map((k) => el('button', { class: 'tabbtn' + (k === kind ? ' on' : ''), onclick: () => { kind = k; freshKind = true; render(); } }, t('dgm.' + k))), toggle);
     const note = el('div', { class: 'mini', style: { marginBottom: '10px', maxWidth: '900px' } }, t('dgm.' + kind + '.note'));
     let content;
     if (dim === 'graph') {   // FR-1079: relations as nodes and directed edges
