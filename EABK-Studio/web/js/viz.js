@@ -48,7 +48,7 @@ function tip() {
   return tipEl;
 }
 function hideAll() {
-  if (tipEl) tipEl.hidden = true;
+  if (tipEl) { tipEl.hidden = true; tipEl.textContent = ''; }   // 隠したツールチップに古い文言を残さない
   for (const r of regions) {
     r.root.querySelectorAll('[data-hover="true"]').forEach((n) => { n.removeAttribute('data-hover'); n.removeAttribute('aria-describedby'); });
     r.root.querySelectorAll('[data-dim="true"]').forEach((n) => n.removeAttribute('data-dim'));
