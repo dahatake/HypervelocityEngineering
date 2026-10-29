@@ -154,7 +154,16 @@
     "AC-425": "sha256:07d5ef2a93019645",
     "AC-430": "sha256:3229866e83bfd71e",
     "AC-393": "sha256:b2d0e8c16323a6c0",
-    "AC-433": "sha256:68e775f8da56da69"
+    "AC-433": "sha256:68e775f8da56da69",
+    "AC-438": "sha256:e04dfe3fef343602",
+    "AC-441": "sha256:13401c90879f24c9",
+    "AC-439": "sha256:01413f04c02a4e99",
+    "AC-440": "sha256:1506c2c97f3143c7",
+    "AC-442": "sha256:4900ea1b7b109d53",
+    "AC-443": "sha256:56844dcc502cae93",
+    "AC-444": "sha256:7a0a7b59545d11ae",
+    "AC-445": "sha256:88a99ff531685d5b",
+    "AC-447": "sha256:db504baf302c3c5c"
   },
   "cases": [
     {
@@ -8885,6 +8894,219 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-226",
+      "requirement_ids": [
+        "FR-1080"
+      ],
+      "ac_ids": [
+        "AC-438",
+        "AC-441"
+      ],
+      "title": "動的可視化: data-viz 公開・キー結合の enter/update/exit・絞り込みと data-viz-count・戻す",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_dynamic_viz_system.py -k ac438 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-30T04:28:52+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-227",
+      "requirement_ids": [
+        "FR-1080"
+      ],
+      "ac_ids": [
+        "AC-439"
+      ],
+      "title": "動的可視化: PARAM-058 以内の running→settled と最終状態の同一性",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_dynamic_viz_system.py -k ac439 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-30T04:28:54+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-228",
+      "requirement_ids": [
+        "FR-1080"
+      ],
+      "ac_ids": [
+        "AC-440"
+      ],
+      "title": "動的可視化: ホバー・フォーカスの強調とツールチップ（離れる・Esc で消える）",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_dynamic_viz_system.py -k ac440 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-30T04:28:55+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-229",
+      "requirement_ids": [
+        "FR-1080"
+      ],
+      "ac_ids": [
+        "AC-442"
+      ],
+      "title": "動的可視化: ホイールズーム・ドラッグパン・リセット・選択/絞り込みの保持",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_dynamic_viz_system.py -k ac442 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-30T04:28:57+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-230",
+      "requirement_ids": [
+        "FR-1080"
+      ],
+      "ac_ids": [
+        "AC-443"
+      ],
+      "title": "動的可視化: Graph の force 風レイアウト・再加熱・収束",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_dynamic_viz_system.py -k ac443 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-30T04:28:58+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-231",
+      "requirement_ids": [
+        "FR-1080"
+      ],
+      "ac_ids": [
+        "AC-444"
+      ],
+      "title": "動的可視化: 動きの軽減時の即時切替と情報の同一性",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_dynamic_viz_system.py -k ac444 -q",
+      "canary": false,
+      "status": "not_run",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-30T04:28:59+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        }
+      ]
+    },
+    {
+      "id": "E2E-232",
+      "requirement_ids": [
+        "NFR-UX-018"
+      ],
+      "ac_ids": [
+        "AC-445"
+      ],
+      "title": "動的可視化: d3 なし・依存追加なし・外部通信 0 件",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_dynamic_viz_system.py -k ac445 -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-30T04:29:01+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-30T04:29:21+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル=integration で System Test 対象外。テストは test_studio_dynamic_viz_system.py に下書き済み（実装者が EABK-Studio/tests へ移す）"
+        }
+      ]
+    },
+    {
+      "id": "E2E-233",
+      "requirement_ids": [
+        "NFR-UX-018"
+      ],
+      "ac_ids": [
+        "AC-447"
+      ],
+      "title": "動的可視化: 連続変更でも最新へ収束し重複・取り残し・例外なし",
+      "layer": "e2e",
+      "command": "python -m pytest tests/system/e2e/test_studio_dynamic_viz_system.py -k ac447 -q",
+      "canary": false,
+      "status": "blocked",
+      "last_commit": null,
+      "last_run_at": null,
+      "evidence": null,
+      "history": [
+        {
+          "at": "2026-10-30T04:29:02+09:00",
+          "by": "test-designer",
+          "change": "追加",
+          "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-10-30T04:29:21+09:00",
+          "by": "test-designer",
+          "change": "blocked",
+          "reason": "AC は検証レベル=integration で System Test 対象外。テストは test_studio_dynamic_viz_system.py に下書き済み（実装者が EABK-Studio/tests へ移す）"
         }
       ]
     }
