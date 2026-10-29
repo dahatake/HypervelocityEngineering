@@ -57,6 +57,49 @@ function hideAll() {
 }
 if (typeof document !== 'undefined') document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && tipEl && !tipEl.hidden) hideAll(); });
 
+/**
+ * ホイールで拡大・縮小、ドラッグで移動（AC-442）。host が data-zoom / data-pan を公開する。
+ * apply(z, x, y): 内容の変換を適用する（CSS transform など）。opt.skip: ドラッグを始めない要素のセレクター、opt.origin(): 内容の座標系の基準要素。
+ * 状態 st（{z,x,y}）は呼び出し側が持つので、再描画をまたいで保たれる。
+ */
+export function zoomPan(host, apply, st = { z: 1, x: 0, y: 0 }, opt = {}) {
+  const publish = () => {
+    host.dataset.zoom = String(+st.z.toFixed(3));
+    host.dataset.pan = `${Math.round(st.x)},${Math.round(st.y)}`;
+    apply(st.z, st.x, st.y);
+  };
+  publish();
+  on(host, 'wheel', (e) => {
+    e.preventDefault();
+    const b = (opt.origin ? opt.origin() : host).getBoundingClientRect();
+    const mx = e.clientX - b.left, my = e.clientY - b.top; // 基準要素（変換されない外枠）の中での位置
+    const z2 = Math.max(opt.min ?? 0.3, Math.min(opt.max ?? 5, st.z * Math.exp(-e.deltaY * 0.0015)));
+    const k = z2 / st.z;
+    st.x = mx - (mx - st.x) * k; st.y = my - (my - st.y) * k; // カーソルの下の点を保つ
+    st.z = z2;
+    publish();
+  }, { passive: false });
+  let drag = null;
+  on(host, 'pointerdown', (e) => {
+    if (e.button !== 0 || e.target.closest?.(opt.skip || '[data-viz-nodrag]')) return;
+    drag = { x: e.clientX, y: e.clientY, sx: st.x, sy: st.y, id: e.pointerId };
+  });
+  on(host, 'pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.on && Math.hypot(dx, dy) < 3) return;
+    if (!drag.on) { drag.on = true; try { host.setPointerCapture(e.pointerId); } catch { /* ignore */ } }
+    st.x = drag.sx + dx; st.y = drag.sy + dy;
+    publish();
+  });
+  const end = () => { drag = null; };
+  on(host, 'pointerup', end);
+  on(host, 'pointercancel', end);
+  on(host, 'click', (e) => { if (drag?.on || host._justDragged) { e.stopPropagation(); e.preventDefault(); } }, true);
+  on(host, 'pointerup', () => { if (drag?.on) { host._justDragged = true; setTimeout(() => { host._justDragged = false; }, 0); } }, true);
+  return { st, publish, reset() { Object.assign(st, { z: 1, x: 0, y: 0 }); publish(); } };
+}
+
 export function nameOf(n) {
   return (n.getAttribute('aria-label') || n.getAttribute('title') || n.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 200);
 }
@@ -85,7 +128,7 @@ export function region(root, name, opt = {}) {
     for (const g of r.ghosts) g.remove();
     r.ghosts = [];
     root.dataset.vizState = 'idle';
-    root.dataset.vizTransition = 'settled';
+    root.dataset.vizTransition = opt.hold?.() ? 'running' : 'settled'; // hold: force 風の動きが続いている間は running のまま
     count();
   };
   const settleNow = () => {
@@ -98,6 +141,8 @@ export function region(root, name, opt = {}) {
     root.dataset.vizState = 'idle';
     root.dataset.vizTransition = 'settled';
   };
+
+  r.settle = settleNow; // 動きを確定して settled にする（force 風の動きの終了時）
 
   // 描画の前: 進行中の動きを確定し、現在の項目（要素・見た目・位置の隣）を記録する。
   r.snap = () => {

@@ -3,6 +3,7 @@ import { t, onLang } from './i18n.js';
 import { store } from './store.js';
 import { xrefLink } from './xref.js';
 import { create2d } from './sz2d.js';
+import { reduced } from './viz.js';
 import { mountShell, isArch, wantsEntityView, hasEntityStructure, setTab } from './semzoom.js';
 import { mountMapTiers, tierState, tierPathOf, tierRank, tierKey, tierOfKey, tierShortLabel } from './maptiers.js';
 import { el, colorOf, TYPE_COLOR, STATUS_COLOR, IMPL_COLOR, token, icon, showTip, hideTip, nodeTip } from './ui.js';
@@ -156,6 +157,7 @@ function mountGraph(host) {
   const ease = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
   function fly(to, ms = 1100) {
     if (!isFinite(to.x + to.y + to.k)) return;
+    if (reduced()) ms = 1;   // FR-1080 AC-444: prefers-reduced-motion = an immediate switch
     const from = { ...cam };
     const dist = Math.hypot((to.x - from.x) * from.k, (to.y - from.y) * from.k);
     const dip = Math.min(0.7, dist / 3000);
@@ -364,7 +366,19 @@ function mountGraph(host) {
     if (dead) return;
     stepAnim(now);
     if (dirty || anim) draw(now);
+    pubViz();
     if (dirty || anim) schedule();
+  }
+  // FR-1080: the canvas is a viz root (data-viz) that publishes its zoom / pan relative to the fitted view, and whether the camera is moving.
+  function pubViz() {
+    const f = W && bounds.x1 > bounds.x0 ? camFit() : null;
+    canvas.dataset.viz = 'map2d';
+    canvas.dataset.vizState = 'idle';
+    canvas.dataset.vizTransition = anim ? 'running' : 'settled';
+    canvas.dataset.reducedMotion = String(reduced());
+    canvas.dataset.vizCount = String(order.length);
+    canvas.dataset.zoom = f ? String(+(cam.k / f.k).toFixed(3)) : '1';
+    canvas.dataset.pan = f ? `${Math.round((cam.x - f.x) * cam.k)},${Math.round((cam.y - f.y) * cam.k)}` : '0,0';
   }
   const redraw = () => { dirty = true; schedule(); };
 
@@ -465,6 +479,7 @@ function mountGraph(host) {
     toolbar.replaceChildren(
       el('div', { class: 'grp' },
         el('button', { onclick: () => { store.clear(); fly(camFit(), 1200); } }, '🛰 ' + t('map.bird')),
+        el('button', { 'data-testid': 'viz-reset', onclick: () => fly(camFit(), 600) }, t('viz.reset')),
         el('button', { onclick: () => flyToActive() }, icon('goal', { size: 16 }), ' ' + t('map.zoomsel')),
         el('button', { class: tour ? 'on' : '', onclick: startTour }, (tour ? '■ ' : '▶ ') + t('map.tour'))),
       el('details', { class: 'grp pop' }, el('summary', {}, '◧ ' + t('map.layers')), el('div', {}, LAYER_TYPES.map((ty) => el('label', { title: t('type.' + ty) },

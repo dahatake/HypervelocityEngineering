@@ -8,6 +8,7 @@
 import { t, lang, onLang } from './i18n.js';
 import { store, norm } from './store.js';
 import { el } from './ui.js';
+import { region } from './viz.js';
 
 export const MIN_SCALE = 0.1;
 export const MAX_SCALE = 64;
@@ -213,6 +214,14 @@ export function mountShell(host, opts) {
   }
   for (const lk of opts.links || []) bar.append(el('a', { class: 'btn ghost sz-btn', href: lk.href, 'data-testid': lk.id || null }, lk.label()));
   if (opts.onSwitch) bar.append(btn(t('sz.graph'), t('sz.graph'), opts.onSwitch));
+  const vizReg = region(root, 'semzoom-' + opts.mode, { items: '[data-viz-key]' });   // FR-1080: data-viz / data-reduced-motion for the semantic zoom
+  const pubZP = () => {   // FR-1080 AC-442: the current zoom (scale) and pan (px from the centred view)
+    const c = worldCenter(d), k = ctx.k() || 1;
+    viewport.dataset.zoom = String(+view.scale.toFixed(3));
+    viewport.dataset.pan = view.cx == null ? '0,0' : `${Math.round((view.cx - c.x) * k)},${Math.round((view.cy - c.y) * k)}`;
+  };
+  const resetBtn = btn(t('viz.reset'), t('viz.reset'), () => setScale(1), { 'data-testid': 'viz-reset' });
+  bar.append(resetBtn);
   const main = el('div', { class: 'sz-main' }, viewport, side);
   root.append(bar, main, note, hint, altBox, live);
   host.append(root);
@@ -228,6 +237,8 @@ export function mountShell(host, opts) {
   function sync() {
     const lv = levelNow();
     root.dataset.scale = String(view.scale);
+    root.dataset.vizCount = String(d.clusters.flatMap((c) => c.entities).filter((n) => matches(n, d)).length);
+    pubZP();
     root.dataset.level = lv;
     root.dataset.selected = view.selected || '';
     root.setAttribute('aria-label', label());
@@ -451,6 +462,7 @@ export function mountShell(host, opts) {
     else if (view.scale > 1.0001) {
       const a = renderer.toWorld(p.x - dx, p.y - dy), b = renderer.toWorld(p.x, p.y);
       view.cx += a.x - b.x; view.cy += a.y - b.y;
+      pubZP();
     }
     schedule();
   }
