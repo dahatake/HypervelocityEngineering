@@ -110,6 +110,8 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1072 | ヘッダー・ナビの複数段への自動折り返し配置 | 承認済み | `EABK-Studio/web/app.css`、`EABK-Studio/web/index.html` | `EABK-Studio/tests/test_header_row_ui.py`、`tests/system/e2e/test_studio_header_row_system.py` | デザイン基盤 |
 | NFR-UX-016 | 常設要素が重ならない | 承認済み | `EABK-Studio/web/app.css`、`EABK-Studio/web/js/maptiers.js`、`EABK-Studio/web/js/map2d.js`、`EABK-Studio/web/js/map3d.js` | `EABK-Studio/tests/test_header_row_ui.py`、`tests/system/e2e/test_studio_header_row_system.py` | デザイン基盤 |
 | FR-1079 | Graph 表示モード（関係をノードと辺で見る） | 承認済み | `EABK-Studio/web/js/graph.js`、`EABK-Studio/web/js/mapgraph.js`、`EABK-Studio/web/js/dim.js`、`EABK-Studio/web/js/app.js`、`EABK-Studio/web/js/diagrams.js`、`EABK-Studio/web/js/entities.js`、`EABK-Studio/web/js/ui.js`、`EABK-Studio/web/js/i18n.js`、`EABK-Studio/web/app.css` | `EABK-Studio/tests/test_graph_mode_ui.py`、`tests/system/e2e/test_studio_header_dim_3d_part1_system.py` | Graph 描画部品、2D・3D 切替、UI 部品、デザイン基盤 |
+| FR-1080 | Studio の全可視化要素の動的なデータ表現（データ結合・トランジション・ホバー・ズーム・force 風レイアウト） | 承認済み | 未実装 | 未実装 | - |
+| NFR-UX-018 | 動的な可視化の性能・外部依存なし・安全な更新 | 承認済み | 未実装 | 未実装 | - |
 
 ## API・イベント
 
