@@ -93,12 +93,13 @@ def test_ac451_no_id_in_changed_lines_widens_but_command_file_does_not(tmp_path)
 
 
 # NFR-PERF-003 / AC-451: unparsable diff (bad base) widens
-def test_ac451_unparsable_diff_widens(tmp_path):
+def test_ac451_unparsable_diff_widens(tmp_path, monkeypatch):
     _repo(tmp_path)
     (tmp_path / "docs" / "new.md").write_text("AC-003\n", encoding="utf-8")
     mod = _ledger()
-    mod.changed_files = lambda root, base: ["docs/new.md"]
-    mod.h.git = lambda args, root: (1, "") if args and args[0] == "diff" else (0, "")
+    monkeypatch.setattr(mod, "changed_files", lambda root, base: ["docs/new.md"])
+    # h (ebaklib) is shared across modules: restore it after the test
+    monkeypatch.setattr(mod.h, "git", lambda args, root: (1, "") if args and args[0] == "diff" else (0, ""))
     why = {}
     sel = mod.select_cases(tmp_path, {}, _data(), "changed", "nope", reasons=why)
     legacy = {c["id"] for c in mod._select_legacy(tmp_path, {}, _data(), "changed", "nope")}

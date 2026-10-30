@@ -166,7 +166,7 @@ python scripts/run-state.py land [--wait 1800]    # 全件完了の run を main
 ## integrate.py（worktree のプールと統合。実装ループ）
 
 ```bash
-python scripts/integrate.py prepare I-01                       # プールの worktree を割り当て、work/<run-id>/I-01 を作り、doing にする
+python scripts/integrate.py prepare I-01                       # プールの worktree を割り当て、work/<run-id>/I-01 を作り、doing にする（主の性能基準証跡は commit・sha256 が一致するときだけ配置）
 python scripts/integrate.py merge I-01 --summary "…"           # 統合: merge → verify --quick → System Test → 台帳の commit → 解放 → done
 python scripts/integrate.py merge I-01 --full                  # verify の slow なコマンドも実行する（5 項目ごとに自動）
 python scripts/integrate.py abandon I-01 [--blocked] [--reason "…"]   # todo（または blocked）に戻し、worktree を解放する
