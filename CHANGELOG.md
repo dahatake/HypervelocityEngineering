@@ -5,6 +5,10 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- hook G-5 の誤拒否を減らす。
+  - 並列の作業役（同じ名前の implementer など）が止まったとき、agent id で自分の記録だけを消す。以前は「同じ名前の最初の 1 件」を消し、動いている別の作業役の編集が不明な session として G-5 で拒否されていた。
+  - `gates.allow_hook_edit`（既定 `false`）: `true` にすると、run 中も作業役が `scripts/hooks/`・`.github/hooks/` を編集できる。hooks 自体を保守するリポジトリー向け。他のゲート（G-1〜G-3・G-6、conductor の編集範囲）は変わらない。
+
 - `clean-work.py`: 統合ブランチをチェックアウトしている run 専用 worktree（`run-worktree`）も自動削除する。統合ブランチは detach してから削除し、`work/runs/<id>` は主へ退避して候補別結果を主側の run-report に追記する。未コミット変更があれば worktree と統合ブランチを保持。conductor・users-guide を更新。
 
 - 要求・受入基準・System Test のケースを増やしすぎない（読む量・トークン・実行時間の削減）。

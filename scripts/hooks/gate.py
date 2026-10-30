@@ -518,8 +518,9 @@ def check_write(ctx: Ctx, rel: Optional[str], in_worker: bool, ap: Path) -> Opti
     if rel.startswith(wd + "/") and not in_worker:
         return None
     if rel.startswith(".github/hooks/") or rel.startswith("scripts/hooks/"):
-        if ctx.run_active or worker:
-            return ("G-5", "実行中はゲート（hooks）を変更できません")
+        if (ctx.run_active or worker) and not ctx.cfg["gates"].get("allow_hook_edit", False):
+            return ("G-5", "実行中はゲート（hooks）を変更できません（hooks 自体を保守するリポジトリーは "
+                           "scripts/ebak.config.json の gates.allow_hook_edit を true にします）")
     if rel == h.mf(ctx.cfg, "id_registry"):
         return ("G-3", "ID 台帳は直接編集しません。ID は `python scripts/next-id.py <種別>` で採番します")
     if rel == req_file or rel.startswith(req_dir):
@@ -820,17 +821,25 @@ def on_subagent_start(ctx: Ctx) -> None:
     emit({})
 
 
-def release_agent(ctx: Ctx, name: str) -> None:
+def release_agent(ctx: Ctx, name: str, agent_id: str = "") -> None:
+    """Remove the stopping agent's own record. Parallel agents share a name (implementer ×N), so the agent id
+    decides; releasing "the first one with this name" dropped another running agent's session mapping, which made
+    its edits look like writes from an unknown session (spurious G-5)."""
+    def mine(a: dict) -> bool:
+        if agent_id and any(x.get("agent_id") == agent_id for x in (agents + [y for _, y in ctx.foreign_agents()])):
+            return a.get("agent_id") == agent_id
+        return a.get("name") == name
+
     agents = ctx.own_agents()
-    found = any(a.get("name") == name for a in agents)
+    found = any(mine(a) for a in agents)
     if not found:
         for f, a in ctx.foreign_agents():
-            if a.get("name") == name:
+            if mine(a):
                 rest = [x for x in (h.read_json(f, default=[]) or []) if x != a]
                 h.write_json(f, rest)
                 break
     for i, a in enumerate(agents):
-        if a.get("name") == name:
+        if mine(a):
             if ctx.run_active and a.get("t"):
                 try:  # 作業役ごとの所要時間（KPI・時間の内訳用）
                     rdir = h.run_dir(ctx.croot, ctx.cfg, ctx.run_id)
@@ -848,7 +857,7 @@ def on_subagent_stop(ctx: Ctx) -> None:
     gates = ctx.cfg["gates"]
     verify_map = gates.get("subagent_verify", {})
     if name not in verify_map:
-        release_agent(ctx, name)
+        release_agent(ctx, name, ctx.agent_id)
         ctx.log(f"STOP {name}")
         emit({})
         return
@@ -864,7 +873,7 @@ def on_subagent_stop(ctx: Ctx) -> None:
     rc, out = h.run([sys.executable, str(target / "scripts" / "verify.py"), *verify_map[name]], cwd=target, timeout=840)
     tail = "\n".join(l for l in out.splitlines() if l.startswith(("FAIL", "  ", "verify:")))[:3000]
     if rc == 0:
-        release_agent(ctx, name)
+        release_agent(ctx, name, ctx.agent_id)
         ctx.log(f"STOP {name} verify=PASS")
         emit({})
         return
@@ -881,7 +890,7 @@ def on_subagent_stop(ctx: Ctx) -> None:
             f"[G-4] 終了前の検証（scripts/verify {' '.join(verify_map[name])}）が失敗しています（{n}/{limit} 回目）。"
             f"原因を直して再実行し、exit 0 にしてから終了してください。テストの削除・弱体化・スキップは禁止です。\n{tail}")})
         return
-    release_agent(ctx, name)
+    release_agent(ctx, name, ctx.agent_id)
     ctx.log(f"GIVEUP G-4 {name}")
     emit({"modifiedResponse": f"GATE G-4: verify が失敗したまま終了しました（{limit} 回差し戻し済み）。conductor はこの結果を統合しません。\n{tail}\n\n{response}"})
 

@@ -73,6 +73,7 @@ EABK はモデルを指定しません。conductor も作業役も、	ask の `m
 | `subagent_verify_max_blocks` | 同じ作業役を差し戻す回数の上限。超えると結果に `GATE G-4` を付けて返し、conductor はその結果を統合しません |
 | `agent_stop_max_blocks` | 完了条件を満たしていない conductor の終了を差し戻す回数の上限 |
 | `enforce_conductor_edit_scope` | conductor が `work/` と `docs/run-history.md` 以外を編集するのを拒否します。harness で subagent の検出が動かない場合（[07-troubleshooting.md](07-troubleshooting.md)）だけ `false` にします |
+| `allow_hook_edit` | 既定 `false`。run 中に作業役が `scripts/hooks/`・`.github/hooks/`（ゲート自身）を編集するのを拒否します（G-5）。hooks を保守するリポジトリーだけ `true` にします。ほかのゲートは変わりません |
 | `deploy_patterns` | デプロイとみなすコマンドの正規表現。指定すると既定値（`scripts/ebaklib.py` の `DEFAULT_CONFIG`）を**置き換える**ので、既定値をコピーしてから追加します |
 | `external_write_verbs` | MCP Server・plugin・拡張機能のツールのうち、名前にこの動詞（`create`・`update`・`delete`・`send`・`do_action` など）を含むものを「外部のシステムの変更」とみなします（G-5。[4.4](#44-mcp-serverplugin拡張機能を使う)）。指定すると既定値を**置き換えます** |
 | `external_deploy_verbs` | 同じく、名前にこの動詞（`deploy`・`provision`・`publish`・`release`）を含むものを「デプロイ・公開」とみなし、`deploy` の値で判定します |
