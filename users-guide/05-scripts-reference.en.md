@@ -110,6 +110,8 @@ python scripts/ledger.py --by conductor run --select changed|failed|all [--canar
 python scripts/ledger.py run --cases E2E-001,IT-002 --no-record   # In a worker's worktree, only run without updating the ledger
 ```
 
+`--select changed` prefers cases whose requirement/AC IDs appear in the added/changed lines of the git diff and prints `select <case id>: <reason>` per case. Shared-code changes, an unparsable diff, or changed lines without IDs widen the selection as before (reason "広げた"); the widened set always includes the previous selection.
+
 The output of `run` is in the report format defined by the original Prompt (`<id> <requirement_ids> <pass|fail> <seconds> <evidence>` and `結果: …` (result)). Details of the results are in `work/runs/<run-id>/results.json`.
 
 ## select-tests.py (test selection by impact scope)

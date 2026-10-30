@@ -39,7 +39,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | FR-1011 | 2D マップのノード選択と強調 | 承認済み | `EABK-Studio/web/js/map2d.js` | `tests/system/e2e/test_studio_map_placement_system.py`, `EABK-Studio/tests/test_studio.py` | ストア |
 | FR-1012 | 実装配置図（画面・API・データの 3 層） | 承認済み | `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/i18n.js` | `tests/system/e2e/test_studio_map_placement_system.py`, `EABK-Studio/tests/test_studio.py` | ストア、UI 部品、デザイン基盤 |
 | FR-1013 | データの ER 図表示 | 承認済み | `EABK-Studio/web/js/insights.js`, `EABK-Studio/web/js/diagrams.js`, `EABK-Studio/web/js/i18n.js` | `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
-| NFR-PERF-003 | EABK toolkit の子プロセス・ブラウザー起動の削減 | 承認済み | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/rdfix.py`、`scripts/ledger.py`、`scripts/integrate.py` | `tests/toolkit/test_git_perf.py`、`tests/toolkit/test_speed.py`、`tests/toolkit/test_perf_baseline_sync.py` | git ls-files 並行取得、worktree pool 管理 |
+| NFR-PERF-003 | EABK toolkit の子プロセス・ブラウザー起動の削減 | 承認済み | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/rdfix.py`、`scripts/ledger.py`、`scripts/integrate.py` | `tests/toolkit/test_git_perf.py`、`tests/toolkit/test_speed.py`、`tests/toolkit/test_select_changed.py`、`tests/toolkit/test_perf_baseline_sync.py` | git ls-files 並行取得、System Test の選択、worktree pool 管理 |
 | NFR-COMPAT-002 | 性能改善による挙動の不変 | 承認済み | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/rdfix.py` | `tests/toolkit/test_git_perf.py` | git ls-files 並行取得 |
 | FR-1014 | 要求の実装状態ビュー（実装の登録と試験 pass の区別） | 承認済み | `EABK-Studio/eabk_model.py`, `EABK-Studio/web/js/implstatus.js`, `EABK-Studio/web/js/app.js`, `EABK-Studio/web/js/i18n.js`, `users-guide/studio/08-data-reference.md` | `tests/system/e2e/test_impl_status_system.py`, `EABK-Studio/tests/test_studio.py` | 管理データモデル、ストア、UI 部品、デザイン基盤 |
 | FR-1015 | 次に実装すべき要求の分析コマンド | 承認済み | `scripts/next-impl.py`、`tools/install.py`、`users-guide/05-scripts-reference.md` | `tests/toolkit/test_next_impl.py` | 次実装候補の分析、run 状態・完了記録、配布同期対象 |
@@ -138,6 +138,7 @@ run 清掃は結果が全件完了で main へ統合後、その main 上の ver
 | run 運用ガイド | `users-guide/02-during-and-after-run.md`、`users-guide/05-scripts-reference.md`、`users-guide/07-troubleshooting.md` | 利用者向けの統合、清掃、診断、再開、トラブルシューティング契約 | FR-1010、NFR-COMPAT-001 |
 | 配布同期対象 | `tools/install.py` | conductor、清掃・状態・統合スクリプトをインストール対象へ同期する管理対象。外部連携カタログの雛形（TEMPLATES。なければ作成）と検査・チェックリスト（MANAGED）も配る | FR-1015、FR-1016、FR-1017、FR-1037、FR-1038、FR-1039、FR-1045、FR-1078、NFR-COMPAT-001、NFR-OPS-006、NFR-OPS-007、NFR-OPS-010、NFR-SEC-004 |
 | git ls-files 並行取得 | `scripts/ebaklib.py` | `tracked_files` で tracked・untracked 一覧を ThreadPoolExecutor で並行取得し、rdcheck/rdfix は同一引数の呼び出しを 1 回にする | NFR-PERF-003、NFR-COMPAT-002 |
+| System Test の選択 | `scripts/ledger.py` | `select_cases` が `--select changed` で git diff の追加・変更行の要求 ID・AC ID を優先してケースを選び、ケースごとに理由を出力する。共通コード・解析不能・ID なしは広げる（従来の選択を含む） | NFR-PERF-003 |
 | 次実装候補の分析 | `scripts/next-impl.py` | 承認済み・未完了の要求を優先度・依存・実装状態で順位付けし、除外の理由と scope 用 ID 一覧を出す（読み取り専用） | FR-1015、FR-1016 |
 | 外部連携カタログ解析・検査 | `scripts/ebaklib.py`、`scripts/rdcheck.py`、`scripts/next-id.py` | `docs/integrations.md` の解析（`parse_integrations`）、CHK-28 の検査（必須欄・16 観点の欄・値の形式・TBD・方向・状態・要求との対応・認証情報の値らしい文字列）、`trace INT-xxx`、`next-id.py INT` の採番と ID 台帳の同期 | FR-1035、FR-1036、FR-1037 |
 | データ層検査 | `scripts/verify.py` | `--docs-only` でデータ層の妥当性を検査する | FR-1017、FR-1018、FR-1044、FR-1046、FR-1078、NFR-PERF-005 |
