@@ -912,6 +912,20 @@ def on_session_start(ctx: Ctx) -> None:
         emit({})
 
 
+def land_fingerprint(ctx: Ctx, tree: Path, meta: dict) -> str:
+    """State that decides whether `run-state.py land` can make progress: the base and integration branch commits and
+    the dirty files of the primary checkout (read-only git calls; nothing is committed, stashed or changed)."""
+    base = ctx.cfg.get("base_branch", "main")
+    try:
+        primary = h.load_script("run-state").primary_tree(ctx.root)
+    except Exception:
+        primary = ctx.root
+    parts = [h.git(["rev-parse", base], primary)[1].strip(),
+             h.git(["rev-parse", str(meta.get("integration_branch") or "HEAD")], tree)[1].strip(),
+             h.git(["status", "--porcelain"], primary)[1]]
+    return hashlib.sha1("\n".join(parts).encode("utf-8", "replace")).hexdigest()
+
+
 def on_agent_stop(ctx: Ctx) -> None:
     if template_active(ctx):
         clear_template(ctx)
@@ -922,6 +936,22 @@ def on_agent_stop(ctx: Ctx) -> None:
         pend = ctx.pending_land()
         if pend:
             tree, rid, pmeta = pend
+            fp = land_fingerprint(ctx, tree, pmeta)
+            if pmeta.get("land_fp") == fp:
+                # same blocker, nothing changed since the last stop: do not repeat the same push-back (AC-448)
+                first = not pmeta.get("land_notified")
+                pmeta["land_notified"] = True
+                h.save_meta(tree, ctx.cfg, rid, pmeta)
+                ctx.log(f"AGENT-STOP allowed (land {rid} waiting, same blocker)")
+                if first:
+                    emit({"systemMessage": (
+                        f"run {rid} は全件完了ですが main への取り込みが止まっています（取り込み待ち）。run・統合ブランチ・worktree は保持しています。"
+                        f"主の作業ツリーの未コミット変更を利用者が commit か退避したあと、`{tree}` を cwd にして "
+                        "`python scripts/run-state.py land` を実行してください。")})
+                else:
+                    emit({})
+                return
+            pmeta["land_fp"], pmeta["land_notified"] = fp, False
             n = int(pmeta.get("land_blocks", 0)) + 1
             pmeta["land_blocks"] = n
             h.save_meta(tree, ctx.cfg, rid, pmeta)

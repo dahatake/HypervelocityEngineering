@@ -6,6 +6,7 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 ## [Unreleased]
 
 - hook G-5 の誤拒否を減らす。
+  - 取り込み待ち（`run-state.py land` が主の作業ツリーの未コミット変更で止まる等）で、状態が変わらないのに agent-stop が同じ差し戻しを最大 40 回繰り返さない。blocker の指紋（base と統合ブランチの commit・主の作業ツリーの status のハッシュ）が前回と同じなら、2 回目以降は差し戻さず終了を許し、「取り込み待ち」と次の手順を 1 回だけ示す。指紋が変われば再び差し戻す。無関係な変更の commit・stash はしない（FR-1010 AC-448・449）。
   - 並列の作業役（同じ名前の implementer など）が止まったとき、agent id で自分の記録だけを消す。以前は「同じ名前の最初の 1 件」を消し、動いている別の作業役の編集が不明な session として G-5 で拒否されていた。
   - `gates.allow_hook_edit`（既定 `false`）: `true` にすると、run 中も作業役が `scripts/hooks/`・`.github/hooks/` を編集できる。hooks 自体を保守するリポジトリー向け。他のゲート（G-1〜G-3・G-6、conductor の編集範囲）は変わらない。
 
