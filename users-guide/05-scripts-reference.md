@@ -110,6 +110,8 @@ python scripts/ledger.py --by conductor run --select changed|failed|all [--canar
 python scripts/ledger.py run --cases E2E-001,IT-002 --no-record   # 作業役の worktree で、台帳を更新せずに実行だけする
 ```
 
+`--select changed` は git diff の追加・変更行に現れる要求 ID・AC ID に対応するケースを優先して選び、ケースごとに `select <ケース ID>: <理由>` を出力します。共通コードの変更・diff を解析できない・変更行に ID がない場合は従来どおり広げ、理由に「広げた」と出します（広げた集合は従来の選択を必ず含みます）。
+
 `run` の出力は、元の Prompt が定める報告形式（`<id> <requirement_ids> <pass|fail> <秒> <証跡>` と `結果: …`）です。結果の詳細は `work/runs/<run-id>/results.json` にあります。
 
 ## select-tests.py（影響範囲のテスト選択）

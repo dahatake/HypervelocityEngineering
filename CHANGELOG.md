@@ -5,6 +5,8 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- `ledger.py run --select changed`: git diff の追加・変更行に現れる要求 ID・AC ID を優先してケースを選び、ケースごとの選択理由を出力する（NFR-PERF-003 AC-450）。共通コードの変更・diff を解析できない・変更行に ID がない場合は従来どおり広げ、「広げた」理由を出す（広げた集合は従来の選択を含む。AC-451）。
+
 - `clean-work.py`: 統合ブランチをチェックアウトしている run 専用 worktree（`run-worktree`）も自動削除する。統合ブランチは detach してから削除し、`work/runs/<id>` は主へ退避して候補別結果を主側の run-report に追記する。未コミット変更があれば worktree と統合ブランチを保持。conductor・users-guide を更新。
 
 - 要求・受入基準・System Test のケースを増やしすぎない（読む量・トークン・実行時間の削減）。

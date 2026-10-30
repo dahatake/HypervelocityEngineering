@@ -334,8 +334,107 @@ def changed_files(root: Path, base: Optional[str]) -> List[str]:
     return sorted(set(f for f in files if f))
 
 
-def select_cases(root: Path, cfg: dict, data: dict, mode: str, base: Optional[str], retry_failed: bool = True) -> List[dict]:
-    """retry_failed=False: status "fail" cases are picked only by ID / command-file match (not_run is still picked)."""
+# Shared (execution-base) code: a change here can affect any case, so the selection is widened (AC-451).
+# A file that appears in a case's command is not treated as shared (it is matched by command as before).
+SHARED_CODE_RE = re.compile(
+    r"^(scripts/[^/]+\.(py|ps1|sh|cmd|json)|tools/install\.py|\.github/.+|(.*/)?conftest\.py|"
+    r"(.*/)?(package(-lock)?\.json|pyproject\.toml|requirements[^/]*\.txt|pytest\.ini|tox\.ini))$")
+
+
+def added_lines_by_file(root: Path, base: Optional[str], files: List[str]) -> Optional[Dict[str, str]]:
+    """Text of the added/changed lines per file (git diff -U0 vs base; untracked files count fully). None = cannot analyse."""
+    res: Dict[str, List[str]] = {}
+    if base:
+        rc, out = h.git(["diff", "-U0", "--no-color", "--no-renames", base], root)
+        if rc != 0:
+            return None
+        cur = None
+        for line in out.splitlines():
+            if line.startswith("+++ "):
+                cur = line[4:].strip()
+                cur = cur[2:] if cur.startswith("b/") else (None if cur == "/dev/null" else cur)
+                if cur is not None:
+                    res.setdefault(cur, [])
+            elif line.startswith("+") and cur is not None:
+                res[cur].append(line[1:])
+    for f in files:
+        if f in res:
+            continue
+        p = root / f
+        if p.is_file() and p.stat().st_size < 2_000_000:
+            try:
+                tracked = h.git(["ls-files", "--error-unmatch", f], root)[0] == 0
+            except Exception:
+                return None
+            if not tracked:
+                res[f] = p.read_text(encoding="utf-8", errors="replace").splitlines()
+    return {k: "\n".join(v) for k, v in res.items()}
+
+
+def select_cases(root: Path, cfg: dict, data: dict, mode: str, base: Optional[str], retry_failed: bool = True,
+                 reasons: Optional[Dict[str, str]] = None) -> List[dict]:
+    """retry_failed=False: status "fail" cases are picked only by ID / command-file match (not_run is still picked).
+    reasons (optional dict) receives {case id: why it was selected}. For `changed`, IDs are taken from the changed lines
+    only; when that is not safe (shared code, unparsable diff, a changed file without IDs) the legacy selection is used
+    ("広げた"), which always includes the narrow one."""
+    legacy = _select_legacy(root, cfg, data, mode, base, retry_failed)
+    if mode != "changed":
+        if reasons is not None:
+            for c in legacy:
+                reasons[c["id"]] = f"--select {mode}"
+        return legacy
+    files = changed_files(root, base)
+    if not files:
+        if reasons is not None:
+            for c in legacy:
+                reasons[c["id"]] = "ledger status (not_run/fail)" if c.get("status") in ("not_run", "fail") else "従来の選択"
+        return legacy
+    cases = data["cases"]
+    cmds = [c.get("command") or "" for c in cases]
+    in_cmd = {f: any(f in cm for cm in cmds) for f in files}
+    shared = [f for f in files if SHARED_CODE_RE.match(f) and not in_cmd[f]]
+    added = added_lines_by_file(root, base, files)
+    why_wide = ""
+    ids_by_file: Dict[str, set] = {}
+    if added is not None:
+        for f in files:
+            ids_by_file[f] = set(h.CODE_ID_RE.findall(added.get(f, "")))
+    if shared:
+        why_wide = "共通コードの変更: " + ", ".join(shared[:3]) + (" ほか" if len(shared) > 3 else "")
+    elif added is None:
+        why_wide = "diff を解析できない"
+    else:
+        bare = [f for f in files if not ids_by_file[f] and not in_cmd[f]]
+        if bare:
+            why_wide = "変更行に ID がない: " + ", ".join(bare[:3]) + (" ほか" if len(bare) > 3 else "")
+    ids = set().union(*ids_by_file.values()) if ids_by_file else set()
+    narrow: Dict[str, str] = {}
+    for c in cases:
+        if c.get("status") == "blocked":
+            continue
+        hit = sorted(ids & set(c.get("requirement_ids", []) + c.get("ac_ids", [])))
+        if c.get("status") == "not_run" or (retry_failed and c.get("status") == "fail"):
+            narrow[c["id"]] = f"ledger status {c.get('status')}"
+        elif hit:
+            narrow[c["id"]] = "変更行の ID: " + ",".join(hit[:5])
+        else:
+            fm = [f for f in files if f and f in (c.get("command") or "")]
+            if fm:
+                narrow[c["id"]] = "command に変更ファイル: " + fm[0]
+    if not why_wide:
+        out = [c for c in cases if c["id"] in narrow]
+        if reasons is not None:
+            reasons.update(narrow)
+        return out
+    out = []
+    for c in legacy:
+        out.append(c)
+        if reasons is not None:
+            reasons[c["id"]] = narrow.get(c["id"]) or f"広げた（{why_wide}）"
+    return out
+
+
+def _select_legacy(root: Path, cfg: dict, data: dict, mode: str, base: Optional[str], retry_failed: bool = True) -> List[dict]:
     cases = data["cases"]
     if mode == "all":
         return [c for c in cases if c.get("status") != "blocked"]
@@ -598,7 +697,12 @@ def cmd_run(args, root, cfg) -> int:
         sel = [find(data, cid) for cid in want]
     else:
         base = args.base or h.default_base(root, cfg)
-        sel = select_cases(root, cfg, data, args.select, base)
+        why = {}
+        sel = select_cases(root, cfg, data, args.select, base, reasons=why)
+        for c in sel:
+            print(f"select {c['id']}: {why.get(c['id'], '')}")
+        if args.select == "changed":
+            print(f"select: {len(sel)}/{len(data['cases'])} cases")
     sel = [c for c in sel if c.get("status") != "blocked" or args.cases]
     if args.canary_first:
         sel.sort(key=lambda c: not c.get("canary"))
