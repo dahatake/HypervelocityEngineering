@@ -110,6 +110,8 @@ python scripts/ledger.py --by conductor run --select changed|failed|all [--canar
 python scripts/ledger.py run --cases E2E-001,IT-002 --no-record   # 作業役の worktree で、台帳を更新せずに実行だけする
 ```
 
+`--select changed` は git diff の追加・変更行に現れる要求 ID・AC ID に対応するケースを優先して選び、ケースごとに `select <ケース ID>: <理由>` を出力します。共通コードの変更・diff を解析できない・変更行に ID がない場合は従来どおり広げ、理由に「広げた」と出します（広げた集合は従来の選択を必ず含みます）。
+
 `run` の出力は、元の Prompt が定める報告形式（`<id> <requirement_ids> <pass|fail> <秒> <証跡>` と `結果: …`）です。結果の詳細は `work/runs/<run-id>/results.json` にあります。
 
 ## select-tests.py（影響範囲のテスト選択）
@@ -164,7 +166,7 @@ python scripts/run-state.py land [--wait 1800]    # 全件完了の run を main
 ## integrate.py（worktree のプールと統合。実装ループ）
 
 ```bash
-python scripts/integrate.py prepare I-01                       # プールの worktree を割り当て、work/<run-id>/I-01 を作り、doing にする
+python scripts/integrate.py prepare I-01                       # プールの worktree を割り当て、work/<run-id>/I-01 を作り、doing にする（主の性能基準証跡は commit・sha256 が一致するときだけ配置）
 python scripts/integrate.py merge I-01 --summary "…"           # 統合: merge → verify --quick → System Test → 台帳の commit → 解放 → done
 python scripts/integrate.py merge I-01 --full                  # verify の slow なコマンドも実行する（5 項目ごとに自動）
 python scripts/integrate.py abandon I-01 [--blocked] [--reason "…"]   # todo（または blocked）に戻し、worktree を解放する
