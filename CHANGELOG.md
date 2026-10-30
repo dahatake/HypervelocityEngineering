@@ -5,6 +5,8 @@ Enterprise App Build Kit の変更履歴です。版は [Semantic Versioning](ht
 
 ## [Unreleased]
 
+- `integrate.py prepare`: 主の作業ツリーにだけある性能基準証跡（`work/**/evidence/perf-baseline-<commit>.json`）を、commit（ファイル名＝内容の `env.commit`、リポジトリに存在）と内容 sha256（隣の `*.sha256`）が一致するときだけ run worktree に配置する。不一致・別 commit・hash 欠落は配置せず理由を出力（NFR-PERF-003 AC-452）。
+
 - `clean-work.py`: 統合ブランチをチェックアウトしている run 専用 worktree（`run-worktree`）も自動削除する。統合ブランチは detach してから削除し、`work/runs/<id>` は主へ退避して候補別結果を主側の run-report に追記する。未コミット変更があれば worktree と統合ブランチを保持。conductor・users-guide を更新。
 
 - 要求・受入基準・System Test のケースを増やしすぎない（読む量・トークン・実行時間の削減）。

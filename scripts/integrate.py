@@ -128,6 +128,70 @@ def pick_slot(c: Ctx, q: dict, current: Optional[str]) -> Path:
         n += 1
 
 
+PERF_RE = re.compile(r"^perf-baseline-([0-9a-f]{7,40})\.json$")
+
+
+def sync_perf_baseline(main_root: Path, wt: Path) -> List[str]:
+    """NFR-PERF-003 AC-452: place the perf baseline evidence of the main tree into the run worktree.
+
+    Only when the commit (file name == env.commit, resolvable in git) and the sha256 (sidecar
+    `<file>.sha256`) both match. Otherwise nothing is copied and the reason is returned."""
+    import hashlib
+    import json
+    import shutil
+    out: List[str] = []
+    try:
+        main_root, wt = main_root.resolve(), wt.resolve()
+        if main_root == wt or not (main_root / "work").is_dir():
+            return out
+        have = {p.name for p in (wt / "work").glob("**/evidence/perf-baseline-*.json")} if (wt / "work").is_dir() else set()
+        for src in sorted((main_root / "work").glob("**/evidence/perf-baseline-*.json")):
+            m = PERF_RE.match(src.name)
+            if not m or src.name in have or "worktrees" in src.relative_to(main_root).parts:
+                continue
+            commit = m.group(1)
+            skip = lambda why: out.append(f"NOTE integrate: 性能基準証跡 {src.name} は配置しません（{why}）")  # noqa: E731
+            data = src.read_bytes()
+            try:
+                env_commit = str((json.loads(data.decode("utf-8")).get("env") or {}).get("commit", ""))
+            except (ValueError, AttributeError):
+                skip("JSON を読めません")
+                continue
+            if env_commit != commit:
+                skip(f"commit 不一致: ファイル名 {commit} / 内容 {env_commit or '記載なし'}")
+                continue
+            rc, _ = h.git(["rev-parse", "--verify", "-q", f"{commit}^{{commit}}"], wt)
+            if rc != 0:
+                skip(f"commit {commit} がこのリポジトリにありません（別 commit）")
+                continue
+            side = src.with_name(src.name + ".sha256")
+            if not side.is_file():
+                skip(f"hash 欠落: {side.name} がありません")
+                continue
+            toks = side.read_text(encoding="utf-8", errors="replace").split()
+            expect = toks[0].lower() if toks else ""
+            actual = hashlib.sha256(data).hexdigest()
+            if expect != actual:
+                skip("内容 hash 不一致" if expect else "hash 欠落: sidecar が空です")
+                continue
+            dst = wt / src.relative_to(main_root)
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, dst)
+            shutil.copyfile(side, dst.with_name(dst.name + ".sha256"))
+            have.add(src.name)
+            out.append(f"NOTE integrate: 性能基準証跡 {src.name} を配置しました（commit・hash 一致）")
+    except OSError as e:
+        out.append(f"WARN integrate: 性能基準証跡の配置に失敗: {e}")
+    return out
+
+
+def main_tree_of(wt: Path) -> Optional[Path]:
+    rc, out = h.git(["rev-parse", "--path-format=absolute", "--git-common-dir"], wt)
+    if rc != 0 or not out.strip():
+        return None
+    return Path(out.strip().splitlines()[0]).parent
+
+
 def cmd_prepare(c: Ctx, args) -> int:
     q = c.queue()
     it = c.item(q, args.item)
@@ -146,6 +210,9 @@ def cmd_prepare(c: Ctx, args) -> int:
         git_ok(["checkout", "-q", "-f", "-B", branch, c.integration], wt)
     h.git(["clean", "-q", "-fd"], wt)  # untracked leftovers only; ignored build outputs are kept on purpose
     share_notes = h.share_dirs(c.root, wt, c.cfg)
+    mt = main_tree_of(wt)
+    if mt:
+        share_notes += sync_perf_baseline(mt, wt)
     if it.get("status") != "doing":
         c.rs.mark_status(it, "doing")
         it["attempts"] = it.get("attempts", 0) + 1
