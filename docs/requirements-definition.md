@@ -214,7 +214,6 @@ G-008（並列 run の持ち主）の PARAM は次のとおり。
 - 要求の拡張（依頼 2026-10-30）: main への取り込みが、未コミット変更との重なりなどの同じ理由（blocker）で止まり、状態が変わらないとき、agent-stop の hook は同じ差し戻しを繰り返さない。blocker の指紋（理由の種別・対象のパス・main と統合ブランチの commit・作業ツリーの変更集合から作る）が前回の差し戻しと同じなら、2 回目以降は差し戻さず「取り込み待ち」として終了を許し、run・統合ブランチ・worktree・report を保持し、利用者向けの次の手順（重なる変更の扱いを利用者が決めて取り込みを再実行する）を 1 回だけ示す。指紋が変われば再び差し戻す。無関係な変更を commit・stash・破棄しない。
 - 受入基準 AC-448: main 取り込みが同じ blocker で止まり指紋が変わらないとき、1 回目の agent-stop は差し戻し、2 回目以降は差し戻さず終了を許し、「取り込み待ち」と利用者向けの次の手順を 1 回だけ表示する。run・統合ブランチ・worktree・report は残り、清掃は行われない。
   - 検証レベル: integration
-  - BLOCKED: 競合（hook G-5 により run 中は gate.py を変更できず未実装。11.3 の競合・[ASSUMPTION] run 202610300952）
 - 受入基準 AC-449: 取り込み待ちの後に blocker の指紋が変わった（重なりの解消・別の blocker・commit の変化）とき、agent-stop は再び差し戻す。どの場合も、無関係な未コミット変更・stash・他 run の資産は変更されない。
   - 検証レベル: integration
 
@@ -2214,7 +2213,7 @@ EABK の要求定義書、カタログ、System Test 台帳、ID 台帳、実行
 
 ### 11.3 [ASSUMPTION]・TBD・競合
 
-- 競合・[ASSUMPTION]（run 202610300952・次の run に回す）: FR-1010 の AC-448・449（agent-stop hook の blocker 指紋比較）は、hook（`scripts/hooks/gate.py`）が run 中は hook G-5 で変更できないため未実装（blocked）で、決定状態は承認済みのまま変えない。実装は run の外（手動の保守）で `gate.py` の `on_agent_stop` に land の blocker 指紋比較を追加する。設計案: `run-state.py` に `land_fingerprint`（base・統合ブランチの commit・主の作業ツリー status のハッシュ）を足し、`cmd_land` が exit 3 のとき `meta.land_wait` に保存し、`on_agent_stop` が比較して 2 回目以降は許可、初回のみ案内する。保守の後、次の run で実装・テスト・カタログ追記を行い AC-448・449 の BLOCKED を解除する。
+- 解消済み（2026-10-30。旧: 競合・[ASSUMPTION] run 202610300952）: FR-1010 の AC-448・449（agent-stop hook の blocker 指紋比較）は、hook G-5 により run 中は変更できなかったため、run の外の保守で `scripts/hooks/gate.py` の `on_agent_stop` と `land_fingerprint` に実装した。指紋（base・統合ブランチの commit・主の作業ツリー status のハッシュ）は hook 内で計算し、`run-state.py` は変更せず `meta.land_wait` も使っていない（当初の設計案から変更）。テストは `tests/toolkit/test_gate_parallel_agents.py`。AC-448・449 の BLOCKED は解除済み（決定状態は承認済みのまま）。
 
 - [ASSUMPTION]（run 202610222228）: R9（`parallel_workers: auto` が開始時点の他 run 数でだけ計算され、後から増えた run に再配分されない）は性能（タイムアウト）だけの影響で、依頼でも「記録のみで可」のため要求にしない。覆す条件: 利用者が再配分を要求にしたとき（低優先の要求として追加する）。R5（1 chat = 1 run は仕様）・R7（取り込みの直列。待ちで失敗ではない）・R8（session の識別子がないときは gate が効かない安全側）も要求にしない。start-claim の結びつけに使う識別子（run-id・一意トークン・`--options` の識別子）の具体は実装工程が選ぶ。競合: なし（既存の要求に run の持ち主・hook のゲート範囲を定めたものはない）。
 
@@ -2336,7 +2335,7 @@ EABK の要求定義書、カタログ、System Test 台帳、ID 台帳、実行
 | AUD-057 | 2026-10-23 | 重複 | MEDIUM | FR-013／AC-013、NFR-SEC-002／AC-024（similar --pairs 0.39） | 目的 G-003・対象（Studio の通常操作）・振る舞い（書込みなし・外部送信なし、例外は FR-1004 の整合性保守）が同じ。統合方針: NFR-SEC-002 を残し（参照 8 件）、優先度を MUST、AC-024 に待受 {PARAM-002} とモデル取得・README・テスト・設定の不変を足し、FR-013 を「廃止（依頼 2026-10-23）」にする。廃止すると有効なケース E2E-008 が CHK-10 のエラーになるため、test-designer が E2E-008 を E2E-010 へ統合して停止した後に rd-author が廃止を反映する（run adhoc-202610231419） | 対応済み（2026-10-23。FR-013・AC-013 を「廃止（依頼 2026-10-23）」にし NFR-SEC-002／AC-024 へ統合。台帳 E2E-010 は AC-024 だけ、E2E-008・E2E-045 は AC-024 に付け替えて blocked） |
 | AUD-058 | 2026-10-23 | 重複（判定） | 情報 | AC-152／AC-170（0.42）、AC-152／AC-172（0.37） | 省略可能な任意欄の検査という文型が同じだけで、対象（要求の エンティティの使い方・利用シナリオ／カタログの列の定義／エンティティの関係）と許容値・エラー条件が違うため統合しない。AC-223／AC-390（0.43）は、AC-390 を種別の凡例の確認だけに絞り、2D への縮退は AC-223 に一本化した（run adhoc-202610231419） | 解決 |
 
-| AUD-059 | 2026-10-30 | 不足（実装未達） | MEDIUM | FR-1010 AC-448・449 ↔ `scripts/hooks/gate.py` | run 202610301031-run1 A-1（確度高）。agent-stop hook の指紋判定は hook G-5 により run 中に変更できず未実装で、カタログの FR-1010 行に対応する資産・テストがない。台帳は integration のため verify は検出しない。AC-448・449 は競合として BLOCKED にした | 未解決・次の run（手動の保守後）で実装・テスト・カタログ追記（11.3 の [ASSUMPTION]・競合 run 202610300952） |
+| AUD-059 | 2026-10-30 | 不足（実装未達） | MEDIUM | FR-1010 AC-448・449 ↔ `scripts/hooks/gate.py` | run 202610301031-run1 A-1（確度高）。agent-stop hook の指紋判定は hook G-5 により run 中に変更できず未実装で、カタログの FR-1010 行に対応する資産・テストがない。台帳は integration のため verify は検出しない。AC-448・449 は競合として BLOCKED にした | 是正済み（2026-10-30。run の外の保守で `gate.py` に実装、`tests/toolkit/test_gate_parallel_agents.py` を追加、BLOCKED 解除・カタログ追記） |
 | AUD-060 | 2026-10-30 | 曖昧 | MEDIUM | NFR-PERF-003 AC-452 | run 202610301031-run1 A-2（確度高）。「commit 一致」「古い証跡」の定義がなかった | 是正済み（AC-452 に、commit は証跡名と内容の commit が一致しリポジトリに存在することを明記。統合ブランチの祖先関係は見ない） |
 | AUD-061 | 2026-10-30 | 不足 | MEDIUM | NFR-PERF-003 AC-452 | run 202610301031-run1 A-3（確度高）。期待 hash の出所が要求になかった | 是正済み（AC-452 に、hash は隣の `<file>.sha256` の sha256 との一致と明記。対象の命名の一般化は未対応） |
 
