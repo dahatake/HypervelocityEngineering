@@ -689,6 +689,34 @@ def run_batch(unit, root, logs_dir, timeout, execute_single):
     return res
 
 
+def tree_is_clean(root: Path) -> bool:
+    """True when nothing but work/ (logs, run data) differs from HEAD, so "same commit" means "same code"."""
+    rc, out = h.git(["status", "--porcelain", "--untracked-files=normal"], root)
+    if rc != 0:
+        return False
+    cfg = h.load_config(root)
+    ignore = (cfg["work"]["dir"] + "/", str((cfg.get("management_files") or {}).get("ledger", "tests/system/ledger.json")))
+    # the ledger itself changes with every run (status, last_commit) and is not test code
+    return not [l for l in out.splitlines() if l.strip() and not l[3:].strip('"').startswith(ignore)]
+
+
+def split_repeat_failures(todo, runs, head, clean):
+    """(to run, [(case, previous failed run)]). A case is held back when `runs` (results.json of this run) has a
+    fail at `head` that was not a timeout (rc 124: load dependent, worth another try) and the tree is clean."""
+    if not clean:
+        return todo, []
+    prev = {}
+    for r in runs:
+        if r.get("commit") == head and r.get("status") == "fail" and r.get("exit_code") != 124:
+            prev[r.get("case")] = r
+        elif r.get("commit") == head and r.get("status") == "pass":
+            prev.pop(r.get("case"), None)
+    keep, held = [], []
+    for c in todo:
+        (held if c["id"] in prev else keep).append((c, prev[c["id"]]) if c["id"] in prev else c)
+    return keep, held
+
+
 def cmd_run(args, root, cfg) -> int:
     data = h.load_ledger(root, cfg)
     t_start = time.time()
@@ -731,6 +759,12 @@ def cmd_run(args, root, cfg) -> int:
         return c, (rc, dur, log)
 
     todo = [c for c in sel if c.get("command")]
+    # a case that already failed (not timed out) at this same clean commit in this run fails again: do not pay for it twice
+    repeat_fail: list = []
+    if not args.cases and not args.rerun_failed and head:
+        todo, repeat_fail = split_repeat_failures(todo, results.get("runs", []), head, tree_is_clean(root))
+        for c, prev in repeat_fail:
+            print(f"skip {c['id']}: 同じ commit {head[:7]} で fail 済み（{prev.get('at', '')}, {prev.get('log', '')}）。直して commit してから、または --rerun-failed で再実行")
     done: dict = {}
     pats = [p for p in ((cfg.get("system_test") or {}).get("serial_patterns") or []) if p]
     dur_path = h.work_dir(cerr, cfg) / ".ebak" / "durations.json"
@@ -847,10 +881,10 @@ def cmd_run(args, root, cfg) -> int:
     if not args.no_record:
         h.save_ledger(root, cfg, data)
     print("\n".join(lines_out))
-    result = stop_reason or ("全件 pass" if summary["fail"] == 0 else "fail あり")
-    print(f"ledger run: pass={summary['pass']} fail={summary['fail']} skipped={summary['skipped']} results={results_path} 結果: {result}"
+    result = stop_reason or ("全件 pass" if summary["fail"] == 0 and not repeat_fail else "fail あり")
+    print(f"ledger run: pass={summary['pass']} fail={summary['fail']} skipped={summary['skipped']} repeat_fail_skipped={len(repeat_fail)} results={results_path} 結果: {result}"
           f" unique_commands={len(reps)} dedup_omitted={omitted} batched_commands={batched} jobs={jobs} elapsed={time.time() - t_start:.1f}s")
-    return 0 if summary["fail"] == 0 and not stop_reason else 1
+    return 0 if summary["fail"] == 0 and not stop_reason and not repeat_fail else 1
 
 
 def cmd_preflight(args, root, cfg) -> int:
@@ -947,6 +981,7 @@ def main(argv=None) -> int:
     r.add_argument("--no-record", action="store_true", help="台帳を書き換えない（作業役の worktree で使う）")
     r.add_argument("--no-batch", action="store_true", help="同じ pytest ファイルのケースを 1 プロセスにまとめない（既定はまとめる。system_test.batch_pytest: false でも止められる）")
     r.add_argument("--results")
+    r.add_argument("--rerun-failed", action="store_true", help="この run で同じ commit ですでに fail したケースも再実行する（既定は省く）")
     args = ap.parse_args(argv)
     root = Path(args.root).resolve() if args.root else h.repo_root()
     cfg = h.load_config(root)

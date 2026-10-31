@@ -114,6 +114,8 @@ python scripts/ledger.py run --cases E2E-001,IT-002 --no-record   # 作業役の
 
 `run` の出力は、元の Prompt が定める報告形式（`<id> <requirement_ids> <pass|fail> <秒> <証跡>` と `結果: …`）です。結果の詳細は `work/runs/<run-id>/results.json` にあります。
 
+`--cases` なしの `run` は、この run の `results.json` に「同じ commit・作業ツリーがきれい（`work/` と台帳以外に差分なし）で、タイムアウト（exit 124）以外の理由で fail した」記録があるケースを再実行せず、`skip <ケース ID>: …` と出力して fail のまま数えます（exit 1。末尾の `repeat_fail_skipped=N`）。コードを直して commit すれば再び実行されます。強制するときは `--rerun-failed` を付けます。1 ケース 2〜5 分の E2E を、直さないまま何度も走らせる時間を省くための挙動です。
+
 ## select-tests.py（影響範囲のテスト選択）
 
 ```bash
@@ -177,6 +179,17 @@ python scripts/integrate.py pool [--prune]                     # プールの一
 - `merge` は、統合ブランチの上で、1 回の呼び出しで直列の統合をすべて行い、数行だけを出力します。System Test は、merge 直前の commit からの差分に関係するケースと canary だけを実行します。まだ統合していない要求のケースは、通らないことが分かっているので除きます。
 - 競合（exit 2）、verify・System Test の失敗（exit 1）のときは、統合を取り消して（`git reset --hard`）項目を todo に戻します。統合ブランチは常に緑に保たれます。
 - 統合はロック（`work/.ebak/integrate.lock`）で 1 本ずつに制限されます。
+
+## perf-report.py（実行時間の分析）
+
+```powershell
+python scripts/perf-report.py --glob 'C:/GitHub/*'   # 複数リポジトリの work/runs を横断して表示
+python scripts/perf-report.py --format json --out work/perf.json
+```
+
+run ごとに、実時間・作業時間・System Test の重複と失敗の時間・verify の所要時間・サブエージェント別の時間・無活動の区間（idle_gaps）を出します。
+
+スリープやホストアプリの停止で空いた時間は、hook が心拍（`work/runs/<run-id>/.heartbeat`）で検出し、`meta.json` の `idle_sec` に積みます。`limits.idle_gap_minutes`（既定 45、0 で無効）以上の空きが対象で、`max_hours` の経過時間から差し引きます。
 
 ## kpi.py（KPI の集計）
 

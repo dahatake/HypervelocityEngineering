@@ -101,7 +101,9 @@ def elapsed_hours(meta: dict) -> float:
         start = parse_ts(meta["started_at"])
     except Exception:
         return 0.0
-    return (dt.datetime.now().astimezone() - start).total_seconds() / 3600
+    wall = (dt.datetime.now().astimezone() - start).total_seconds()
+    # time the machine slept / the host was suspended (hooks record it in meta.idle_sec) is not work time
+    return max(0.0, wall - float(meta.get("idle_sec", 0) or 0)) / 3600
 
 
 def counts(queue: dict) -> Dict[str, int]:

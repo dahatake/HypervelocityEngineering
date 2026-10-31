@@ -90,3 +90,36 @@ def test_summarize():
     out = subprocess.run([sys.executable, str(SOURCE / "scripts" / "summarize.py"), "-"], input=log, capture_output=True,
                          text=True, encoding="utf-8").stdout
     assert "1 failed, 10 passed" in out and "AssertionError" in out and len(out.splitlines()) <= 15
+
+
+def test_split_repeat_failures_unit():
+    import importlib.util
+    from conftest import SOURCE
+    spec = importlib.util.spec_from_file_location("ledger_mod", SOURCE / "scripts" / "ledger.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    todo = [{"id": "A"}, {"id": "B"}, {"id": "C"}, {"id": "D"}]
+    runs = [{"case": "A", "status": "fail", "exit_code": 1, "commit": "h1"},
+            {"case": "B", "status": "fail", "exit_code": 124, "commit": "h1"},  # timeout: retry
+            {"case": "C", "status": "fail", "exit_code": 1, "commit": "h0"},  # other commit
+            {"case": "D", "status": "fail", "exit_code": 1, "commit": "h1"},
+            {"case": "D", "status": "pass", "exit_code": 0, "commit": "h1"}]
+    keep, held = mod.split_repeat_failures(todo, runs, "h1", True)
+    assert [c["id"] for c in keep] == ["B", "C", "D"] and [c["id"] for c, _ in held] == ["A"]
+    assert mod.split_repeat_failures(todo, runs, "h1", False) == (todo, [])  # dirty tree: code may differ
+
+
+def test_ledger_run_skips_repeat_failure(sample):
+    sample.py("ledger.py", "add", "--req", "FR-001", "--ac", "AC-001", "--title", "t", "--layer", "api",
+              "--command", "python -c \"raise SystemExit(3)\"", check=True)
+    res = str(sample.path / "work" / "r.json")
+    first = sample.py("ledger.py", "run", "--select", "all", "--results", res)
+    assert first.returncode == 1 and "IT-001 FR-001 fail" in first.stdout
+    git(sample.path, "add", "-A")
+    git(sample.path, "commit", "-qm", "ledger")
+    sample.py("ledger.py", "run", "--select", "all", "--results", res)
+    again = sample.py("ledger.py", "run", "--select", "all", "--results", res)
+    assert again.returncode == 1 and "repeat_fail_skipped=1" in again.stdout and "skip IT-001" in again.stdout
+    forced = sample.py("ledger.py", "run", "--select", "all", "--results", res, "--rerun-failed")
+    assert "IT-001 FR-001 fail" in forced.stdout and "repeat_fail_skipped=0" in forced.stdout
+

@@ -82,6 +82,7 @@ MANAGED = [
     "scripts/integrate.py",
     "scripts/watch.py",
     "scripts/kpi.py",
+    "scripts/perf-report.py",
     "scripts/import-speckit.py",
     "scripts/adopt.py",
     "scripts/hooks/gate.py",

@@ -756,6 +756,8 @@ def record_start_claim(ctx: Ctx, cmd: str) -> Optional[str]:
 
 
 def on_pre_tool(ctx: Ctx) -> None:
+    if ctx.run_active:
+        h.touch_heartbeat(ctx.croot, ctx.cfg, ctx.run_id)
     tool = str(g(ctx.data, "toolName", "tool_name", default=""))
     if template_active(ctx) and not (READ_TOOL_RX.match(tool) or normalize_tool(tool) in TEMPLATE_ALLOWED_TOOLS):
         ctx.log(f"DENY TEMPLATE {tool}")

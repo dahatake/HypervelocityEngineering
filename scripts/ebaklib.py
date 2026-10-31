@@ -1416,6 +1416,50 @@ def save_meta(root: Path, cfg: dict, run_id: str, meta: dict) -> None:
     write_json(run_dir(root, cfg, run_id) / "meta.json", meta)
 
 
+IDLE_GAP_MINUTES = 45.0
+
+
+def idle_gap_seconds(cfg: Optional[dict]) -> float:
+    try:
+        v = float(((cfg or {}).get("limits") or {}).get("idle_gap_minutes", IDLE_GAP_MINUTES))
+    except (TypeError, ValueError):
+        v = IDLE_GAP_MINUTES
+    return v * 60 if v > 0 else 0.0
+
+
+def touch_heartbeat(root: Path, cfg: dict, run_id: str, now: Optional[float] = None) -> float:
+    """Mark the run as alive (called by the hooks on every tool call; only a utime on one file). When the previous
+    mark is older than limits.idle_gap_minutes (default 45; 0 = off) the machine was asleep or the host app suspended
+    (or nobody was working), so the gap is added to meta.idle_sec and elapsed_hours() does not count it against
+    max_hours. Returns the seconds added."""
+    now = time.time() if now is None else now
+    p = run_dir(root, cfg, run_id) / ".heartbeat"
+    try:
+        prev = p.stat().st_mtime
+    except OSError:
+        prev = None
+    try:
+        if prev is None:
+            p.write_text("", encoding="utf-8")
+        os.utime(p, (now, now))
+    except OSError:
+        return 0.0
+    thr = idle_gap_seconds(cfg)
+    if prev is None or not thr or now - prev < thr:
+        return 0.0
+    meta = load_meta(root, cfg, run_id)
+    if not meta or meta.get("status") != "active":
+        return 0.0
+    gap = round(now - prev)
+    meta["idle_sec"] = int(meta.get("idle_sec", 0) or 0) + gap
+    gaps = meta.setdefault("idle_gaps", [])
+    if len(gaps) < 50:
+        fmt = lambda t: _dt.datetime.fromtimestamp(t).astimezone().isoformat(timespec="seconds")
+        gaps.append({"from": fmt(prev), "to": fmt(now), "sec": gap})
+    save_meta(root, cfg, run_id, meta)
+    return float(gap)
+
+
 def load_queue(root: Path, cfg: dict, run_id: str) -> dict:
     q = read_json(run_dir(root, cfg, run_id) / "queue.json", default=None)
     return q or {"run_id": run_id, "items": []}

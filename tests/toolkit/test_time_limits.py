@@ -68,3 +68,30 @@ def test_credit_estimate(tmp_path):
     out = rs.credit_estimate(tmp_path, cfg, "r1")
     assert out.startswith("推定 7") and "big×2" in out
     assert rs.credit_estimate(tmp_path, cfg, "none") == ""
+
+
+BASE = 1_800_000_000.0
+
+
+def test_heartbeat_idle_gap_is_not_counted(tmp_path):
+    rs = load_run_state()
+    cfg = {"work": {"dir": "work"}, "limits": {"idle_gap_minutes": 45}}
+    rdir = h.run_dir(tmp_path, cfg, "r1")
+    rdir.mkdir(parents=True)
+    h.save_meta(tmp_path, cfg, "r1", {"status": "active", "started_at": h.now_iso()})
+    assert h.touch_heartbeat(tmp_path, cfg, "r1", now=BASE) == 0.0  # first mark
+    assert h.touch_heartbeat(tmp_path, cfg, "r1", now=BASE + 600) == 0.0  # short gap
+    assert h.touch_heartbeat(tmp_path, cfg, "r1", now=BASE + 600 + 3 * 3600) == 3 * 3600
+    meta = h.load_meta(tmp_path, cfg, "r1")
+    assert meta["idle_sec"] == 3 * 3600 and len(meta["idle_gaps"]) == 1
+    wall = {"started_at": (rs.dt.datetime.now().astimezone() - rs.dt.timedelta(hours=4)).isoformat(), "idle_sec": 3 * 3600}
+    assert 0.9 < rs.elapsed_hours(wall) < 1.1
+
+
+def test_heartbeat_off_when_zero(tmp_path):
+    cfg = {"work": {"dir": "work"}, "limits": {"idle_gap_minutes": 0}}
+    h.run_dir(tmp_path, cfg, "r1").mkdir(parents=True)
+    h.save_meta(tmp_path, cfg, "r1", {"status": "active"})
+    h.touch_heartbeat(tmp_path, cfg, "r1", now=BASE)
+    assert h.touch_heartbeat(tmp_path, cfg, "r1", now=BASE + 10 * 3600) == 0.0
+
