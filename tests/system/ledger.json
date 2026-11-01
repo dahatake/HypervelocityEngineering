@@ -75,8 +75,8 @@
     "AC-241": "sha256:0699afdfc9c2e349",
     "AC-237": "sha256:843f6f2d5d402e43",
     "AC-238": "sha256:8a719013d3d38992",
-    "AC-286": "sha256:89a427c5c0ab5eec",
-    "AC-295": "sha256:12ef77c6f1f51d41",
+    "AC-286": "sha256:a5a38b1ba92367a1",
+    "AC-295": "sha256:fc4a4d44c8028ddf",
     "AC-277": "sha256:377fe370bc6ed13c",
     "AC-278": "sha256:eda979d1a67b813f",
     "AC-280": "sha256:2e038f8042a78fad",
@@ -111,7 +111,7 @@
     "AC-363": "sha256:7b8d2a2d9489cdb1",
     "AC-345": "sha256:df178fcf8ca4ab1d",
     "AC-346": "sha256:4b7fce12dd66ae47",
-    "AC-347": "sha256:9d255a1d6ead79df",
+    "AC-347": "sha256:dbe1c4067ad6e46e",
     "AC-348": "sha256:fd5b0127bf5a188d",
     "AC-349": "sha256:bb116d4768266c6a",
     "AC-381": "sha256:a6d18d0933b99944",
@@ -119,8 +119,8 @@
     "AC-385": "sha256:284205320fdb9857",
     "AC-386": "sha256:bdb03394adb93269",
     "AC-388": "sha256:7728776935bc85da",
-    "AC-367": "sha256:d237cc7a52b78825",
-    "AC-368": "sha256:5bfbd3b5aa0a7deb",
+    "AC-367": "sha256:a0b919e2a103d7e4",
+    "AC-368": "sha256:eb8470201c75fd66",
     "AC-371": "sha256:e948ded3b2f78715",
     "AC-374": "sha256:b3ba18b98270e523",
     "AC-375": "sha256:28cd6902163bdc30",
@@ -2537,16 +2537,16 @@
     {
       "id": "E2E-153",
       "requirement_ids": [
-        "FR-1053"
+        "FR-1066"
       ],
       "ac_ids": [
         "AC-286"
       ],
-      "title": "RPG 風: 既定は 2D・切替操作・キーボード・コマンド検索で RPG 風を選べる",
+      "title": "RPG を選択できず、旧画面の再読込でも 2D を維持する",
       "layer": "e2e",
-      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac286_default",
+      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k test_ac286_rpg_cannot_be_selected_and_legacy_reload_uses_2d",
       "canary": false,
-      "status": "pass",
+      "status": "not_run",
       "last_commit": "5f8f301f",
       "last_run_at": "2026-10-30T10:23:16+09:00",
       "evidence": "work/runs/202610300952/logs/system-test/E2E-153-202610301017.log",
@@ -2556,22 +2556,28 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-01T22:16:08+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac286_default' -> 'python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k test_ac286_rpg_cannot_be_selected_and_legacy_reload_uses_2d'; title: 'RPG 風: 既定は 2D・切替操作・キーボード・コマンド検索で RPG 風を選べる' -> 'RPG を選択できず、旧画面の再読込でも 2D を維持する'; requirement_ids: ['FR-1053'] -> ['FR-1066']",
+          "reason": "AC-286 が RPG の追加から RPG の除外へ変更され、FR-1066 に移管されたため、現行の否定条件・旧 URL 再読込・コマンド検索での非選択を検証する"
         }
       ]
     },
     {
       "id": "E2E-156",
       "requirement_ids": [
-        "FR-1055"
+        "FR-1066"
       ],
       "ac_ids": [
         "AC-295"
       ],
-      "title": "RPG 風: 方向キーで 1 マス移動し、通れない地点には入れない",
+      "title": "RPG 専用キーは起動せず、検索・フォーカス・残るモード操作は使える",
       "layer": "e2e",
-      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac295_arrow",
+      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k test_ac295_rpg_keys_do_not_start_rpg_and_keep_search_focus_and_mode_keyboard",
       "canary": true,
-      "status": "pass",
+      "status": "not_run",
       "last_commit": "5f8f301f",
       "last_run_at": "2026-10-30T10:23:16+09:00",
       "evidence": "work/runs/202610300952/logs/system-test/E2E-156-202610301017.log",
@@ -2581,6 +2587,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-01T22:16:08+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac295_arrow' -> 'python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k test_ac295_rpg_keys_do_not_start_rpg_and_keep_search_focus_and_mode_keyboard'; title: 'RPG 風: 方向キーで 1 マス移動し、通れない地点には入れない' -> 'RPG 専用キーは起動せず、検索・フォーカス・残るモード操作は使える'; requirement_ids: ['FR-1055'] -> ['FR-1066']",
+          "reason": "AC-295 が RPG 専用操作の提供から不提供へ変更され、FR-1066 に移管されたため、旧キーの無作用と検索・フォーカス・残る表示モードの操作を検証する"
         }
       ]
     },
@@ -3399,11 +3411,11 @@
       "ac_ids": [
         "AC-347"
       ],
-      "title": "RPG 風で項目の上位層が名称・件数つきで示され城・街・住人の件数が変わらない",
+      "title": "RPG 専用分類を除外し、2D・3Dの階層・管理データ・詳細参照を維持する",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac347_rpg_tiers_shown_with_counts_and_places_count_unchanged\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k test_ac347_rpg_removed_and_map2d_map3d_keep_fr1062_hierarchy_data_and_references -q",
       "canary": false,
-      "status": "pass",
+      "status": "not_run",
       "last_commit": "5f8f301f",
       "last_run_at": "2026-10-30T10:23:16+09:00",
       "evidence": "work/runs/202610300952/logs/system-test/E2E-176-202610301019.log",
@@ -3413,6 +3425,12 @@
           "by": "test-designer",
           "change": "追加",
           "reason": "受入基準からケースを作成"
+        },
+        {
+          "at": "2026-11-01T22:16:08+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac347_rpg_tiers_shown_with_counts_and_places_count_unchanged\" -q' -> 'python -m pytest tests/system/e2e/test_studio_tiers_system.py -k test_ac347_rpg_removed_and_map2d_map3d_keep_fr1062_hierarchy_data_and_references -q'; title: 'RPG 風で項目の上位層が名称・件数つきで示され城・街・住人の件数が変わらない' -> 'RPG 専用分類を除外し、2D・3Dの階層・管理データ・詳細参照を維持する'",
+          "reason": "AC-347 が RPG 会話窓での分類表示から RPG 専用要素の除外と残る 2D・3D の FR-1062 導出結果維持へ変更されたため"
         }
       ]
     },
@@ -3599,11 +3617,11 @@
       "ac_ids": [
         "AC-367"
       ],
-      "title": "ヘッダーの表示モード切替（2D・3D・RPG・Graph）が全画面に常に存在する",
+      "title": "全画面の2D・3D・Graph切替は常設され画面内切替と同期しRPGの入口がない",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac367_header_dim_toggle_exists_on_every_screen\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac367_header_dim_toggle_exists_on_every_screen or test_ac367_header_dim_toggle_never_disappears_or_duplicates_when_switching_screens or test_ac367_in_screen_toggle_and_header_toggle_share_one_state\" -q",
       "canary": true,
-      "status": "pass",
+      "status": "not_run",
       "last_commit": "5f8f301f",
       "last_run_at": "2026-10-30T10:23:16+09:00",
       "evidence": "work/runs/202610300952/logs/system-test/E2E-199-202610301017.log",
@@ -3619,6 +3637,18 @@
           "by": "test-designer",
           "change": "title: 'ヘッダーの表示モード切替が全画面に常に存在する' -> 'ヘッダーの表示モード切替（2D・3D・RPG・Graph）が全画面に常に存在する'",
           "reason": "FR-1066 変更: 切替が 2D・3D・RPG・Graph の 4 つ（data-dim に graph を含む）"
+        },
+        {
+          "at": "2026-11-01T22:16:09+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac367_header_dim_toggle_exists_on_every_screen\" -q' -> 'python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k test_ac367_header_dim_toggle_exists_on_every_screen -q'; title: 'ヘッダーの表示モード切替（2D・3D・RPG・Graph）が全画面に常に存在する' -> 'ヘッダーに2D・3D・Graph切替が常設されRPGの入口がない'",
+          "reason": "AC-367 変更: 全画面の切替から RPG を除き、2D・3D・Graph の存在・状態と画面網羅を検証する"
+        },
+        {
+          "at": "2026-11-01T22:16:56+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k test_ac367_header_dim_toggle_exists_on_every_screen -q' -> 'python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac367_header_dim_toggle_exists_on_every_screen or test_ac367_header_dim_toggle_never_disappears_or_duplicates_when_switching_screens or test_ac367_in_screen_toggle_and_header_toggle_share_one_state\" -q'; title: 'ヘッダーに2D・3D・Graph切替が常設されRPGの入口がない' -> '全画面の2D・3D・Graph切替は常設され画面内切替と同期しRPGの入口がない'",
+          "reason": "AC-367 変更: 全画面の切替から RPG を除き、2D・3D・Graphの存在・状態、画面遷移時の常設、画面内切替との同期を検証する"
         }
       ]
     },
@@ -3630,11 +3660,11 @@
       "ac_ids": [
         "AC-368"
       ],
-      "title": "マップ以外で RPG 風、Graph 画面以外で Graph は disabled で理由が表示される（異常系）",
+      "title": "Graph非対応画面では理由付きdisabled、対応画面では2D・3D・Graphへ切替できる",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_rpg_is_disabled_with_reason_outside_map or test_ac368_graph_is_disabled_with_reason_outside_graph_screens\" -q",
+      "command": "python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_entities_screen_follows_header_mode or test_ac425_graph_renders_nodes_and_directed_edges_on_supported_screens or test_ac368_graph_is_disabled_with_reason_outside_graph_screens or test_ac425_graph_disabled_with_reason_on_layers_and_ctx_and_2d_unaffected\" -q",
       "canary": false,
-      "status": "pass",
+      "status": "not_run",
       "last_commit": "5f8f301f",
       "last_run_at": "2026-10-30T10:23:16+09:00",
       "evidence": "work/runs/202610300952/logs/system-test/E2E-202-202610301019.log",
@@ -3650,6 +3680,12 @@
           "by": "test-designer",
           "change": "command: 'python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_rpg_is_disabled_with_reason_outside_map\" -q' -> 'python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_rpg_is_disabled_with_reason_outside_map or test_ac368_graph_is_disabled_with_reason_outside_graph_screens\" -q'; title: 'マップ以外で RPG 風は disabled で理由が表示される（異常系）' -> 'マップ以外で RPG 風、Graph 画面以外で Graph は disabled で理由が表示される（異常系）'",
           "reason": "AC-368 変更: Graph も FR-1079 の画面以外で disabled+理由"
+        },
+        {
+          "at": "2026-11-01T22:16:09+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_rpg_is_disabled_with_reason_outside_map or test_ac368_graph_is_disabled_with_reason_outside_graph_screens\" -q' -> 'python -m pytest tests/system/e2e/test_studio_header_dim_3d_part1_system.py -k \"test_ac368_entities_screen_follows_header_mode or test_ac425_graph_renders_nodes_and_directed_edges_on_supported_screens or test_ac368_graph_is_disabled_with_reason_outside_graph_screens or test_ac425_graph_disabled_with_reason_on_layers_and_ctx_and_2d_unaffected\" -q'; title: 'マップ以外で RPG 風、Graph 画面以外で Graph は disabled で理由が表示される（異常系）' -> 'Graph非対応画面では理由付きdisabled、対応画面では2D・3D・Graphへ切替できる'",
+          "reason": "AC-368 変更: RPG の対応範囲を除き、残る 2D・3D・Graph の対応画面での切替と、Graph 非対応画面での理由付き無効状態を検証する"
         }
       ]
     },
