@@ -88,23 +88,6 @@ def test_ac355_map_corner_panel_fits_at_320px(studio, route, w, h):
     page.context.close()
 
 
-# FR-1063 AC-355: RPG 風の会話ウィンドウの上位層が 320px 幅でも欠けず、画面内に収まる
-@pytest.mark.parametrize("w,h", VIEWPORTS)
-def test_ac355_rpg_dialog_tiers_fit_at_320px(studio, w, h):
-    page = _page(studio, "maprpg", w, h)
-    page.wait_for_selector('[data-testid="rpg-view"][data-ready="true"]')
-    page.get_by_test_id("rpg-view").focus()
-    page.keyboard.press("Space")
-    page.get_by_text("項目の上位層").first.click()
-    dlg = page.locator('[data-testid="rpg-dialog"]')
-    dlg.wait_for()
-    assert _no_hscroll(page)
-    assert _clipped(page, '[data-testid="rpg-tiers"]') == []
-    box = dlg.bounding_box()
-    assert box["x"] >= -1 and box["x"] + box["width"] <= w + 1
-    page.context.close()
-
-
 # FR-1063 AC-355: マップキャンバス上の上位層の見出しは、狭い幅で文字が小さくなって読めないとき、同じ名称・件数を隅のパネルの木（文字）で読める（代替表示）
 @pytest.mark.parametrize("w,h", VIEWPORTS)
 def test_ac355_canvas_tier_headings_have_text_alternative_at_320px(graph_studio, w, h):
@@ -243,7 +226,7 @@ def _req_areas_on_screen(page):
         .filter(([p]) => p[0] === '要求')""")
 
 
-# FR-1063 AC-350: ナビ全 route と マップ 3D・RPG 風で、要求の上位層（領域）の名称・順序・件数が、導出（FR-1062）と一致する。
+# FR-1063 AC-350: ナビ全 route と マップ 3D で、要求の上位層（領域）の名称・順序・件数が、導出（FR-1062）と一致する。
 # 画面が項目を絞るときは、見出しの件数は導出の件数のままで、絞り込み後の件数（data-shown・「表示 n 件」）が別に示される。
 def test_ac350_every_screen_matches_the_derivation_in_names_order_and_counts(studio):
     browser, url = studio
@@ -272,14 +255,7 @@ def test_ac350_every_screen_matches_the_derivation_in_names_order_and_counts(stu
             if s != c:                                     # 絞り込み後の件数を、導出の件数と並べて見せる
                 assert str(s) in text and str(c) in text
     assert seen >= 4
-    # RPG 風: 会話ウィンドウの項目の上位層
-    page.goto(f"{url}/#/maprpg")
-    page.wait_for_selector('[data-testid="rpg-view"][data-ready="true"]')
-    page.evaluate("() => window.eabkView.openTierDialog()")
-    page.locator('[data-testid="rpg-dialog"]').wait_for()
-    got = [(tuple(p), c) for p, c, _s, _t in _req_areas_on_screen(page)]
-    assert got == derived
-    page.context.close()
+
 
 
 # FR-1063 AC-350: 絞り込みで 0 件になった層も、名称・順序・件数つきで残る（他の画面と同じ構成）

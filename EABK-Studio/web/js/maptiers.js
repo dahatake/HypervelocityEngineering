@@ -1,6 +1,6 @@
-// FR-1063 AC-345 AC-346 AC-347: マップ（2D・3D・RPG 風）に出す上位層（種類→区分→領域→項目）の表示。
+// FR-1063 AC-345 AC-346 AC-347: 2D・3D マップの上位層（種類→区分→領域→項目）の表示。
 // 導出は model.hierarchy（FR-1062）で、描画は hier.js の renderTiers を使う。ここは地図用の置き場（パネル・会話ウィンドウ内）と、項目の選択への接続だけを持つ。
-// 開閉状態は画面（2D・3D・RPG 風）をまたいで保つ（NFR-UX-006）。
+// 開閉状態は 2D・3D マップをまたいで保つ（NFR-UX-006）。
 import { t, onLang } from './i18n.js';
 import { store } from './store.js';
 import { el } from './ui.js';
@@ -67,15 +67,17 @@ export function tierShortLabel(path) {
   return [division !== kind ? division : null, area].filter(Boolean).map((x) => tierName(x)).join(' › ');
 }
 
-const tx = (k) => t('maptier.' + k);   // titles of the tier panel: dictionary keys maptier.title / items / none / close / dlg
+const tx = (k) => t('maptier.' + k);   // tier panel titles: dictionary keys maptier.title / items / none
 
 /** 項目 1 件の表示: ID と題名のボタン。マップに点があれば、その点を選択する（なければ表示のみ）。 */
 function itemNode(it) {
   // 題名はデータ由来の文字列（試験ケースの題名など）。画面の文言と区別するため、見た目は data-title の疑似要素で出し、支援技術には aria-label で ID と題名を伝える。
   // FR-1031 AC-188: 実在する ID はリンク（xrefLink）。押すとその点を選択し、詳細へ移る（リンクの移動先と同じ対象）。
-  const can = !!store.node?.(it.id);
+  const node = store.node?.(it.id);
+  const can = !!node;
+  const title = it.title || node?.title || node?.label || '';
   const idEl = can ? xrefLink(it.id, it.id) : el('span', { class: 'tier-item-id' }, it.id);
-  const b = el('div', { class: 'maptier-item', 'data-testid': 'tier-item', 'data-id': it.id, 'data-title': it.title ? ` ${it.title}` : null, role: 'treeitem' }, idEl);
+  const b = el('div', { class: 'maptier-item', 'data-testid': 'tier-item', 'data-id': it.id, 'data-title': title ? ` ${title}` : null, 'aria-label': title ? `${it.id} ${title}` : it.id, role: 'treeitem' }, idEl);
   if (can) b.addEventListener('click', (e) => { if (e.target.closest('a')) { e.preventDefault(); } store.select(it.id); });
   return b;
 }
@@ -110,16 +112,5 @@ export function mountMapTiers(host, mode) {
   return { destroy() { off.forEach((f) => f && f()); if (ro) ro.disconnect(); host.style.removeProperty('--mt-h'); box.remove(); } };
 }
 
-/** RPG 風の会話ウィンドウ用。城・街・住人とは別に、項目の上位層だけを見せる（件数は城・街・住人に加えない）。
- *  ids を渡すと、その項目（街・住人・城に関連する要求など）だけの上位層にする。 */
-export function tierDialogBody(onClose, ids, title) {
-  const head = el('div', { class: 'rpg-name' }, title || tx('dlg'));
-  const set = ids ? new Set(ids) : null;
-  const tree = mapTiers(set ? (it) => set.has(it.id) : null) || el('p', { class: 'mini' }, tx('none'));
-  const close = el('button', { type: 'button', class: 'btn ghost', 'data-testid': 'rpg-tiers-close', onclick: onClose }, tx('close'));
-  const box = el('div', { class: 'rpg-tiers', 'data-testid': 'rpg-tiers' }, head, tree, close);
-  const off = onLang(() => { if (!box.isConnected) { off(); return; } head.textContent = title || tx('dlg'); close.textContent = tx('close'); });
-  return box;
-}
 
 export { tierName };

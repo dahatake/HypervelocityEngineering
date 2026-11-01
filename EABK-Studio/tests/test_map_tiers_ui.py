@@ -1,4 +1,4 @@
-"""Integration tests for FR-1063 AC-345 / AC-346 / AC-347 (マップ 2D・3D・RPG 風の上位層の表示).
+"""Integration tests for FR-1063 AC-345 / AC-346 / AC-347 (2D・3D マップの上位層の表示).
 Run: python -m pytest EABK-Studio/tests/test_map_tiers_ui.py -q"""
 import json
 import re
@@ -72,21 +72,31 @@ def test_ac346_map3d_same_tiers_as_2d_and_open_state_kept(studio):
     page.context.close()
 
 
-# FR-1063 AC-347: RPG 風はスタートメニューから項目の上位層を会話ウィンドウに出し、城・街・住人の件数は変わらない
-def test_ac347_rpg_tier_dialog_keeps_place_counts_and_closes_with_escape(studio):
-    page = _open(studio, "maprpg")
-    page.wait_for_selector('[data-testid="rpg-view"][data-ready="true"]')
-    page.get_by_test_id("rpg-view").focus()
-    before = page.evaluate("() => { const r = window.eabkView.getState().rpg; return [r.places.length, r.residents.length]; }")
-    page.keyboard.press("Space")
-    page.get_by_text("項目の上位層").first.click()
-    dlg = page.locator('[data-testid="rpg-dialog"]')
-    dlg.wait_for()
-    assert dlg.locator(GROUP).count() > 0 and dlg.locator('[data-testid="tier-toggle"]').first.get_attribute("aria-label")
-    page.keyboard.press("ArrowDown")                                       # 木の中の矢印は木の操作（歩かない）
-    assert page.evaluate("() => { const r = window.eabkView.getState().rpg; return [r.places.length, r.residents.length]; }") == before
-    page.keyboard.press("Escape")
-    assert dlg.is_hidden()
+# FR-1063 AC-347: both remaining map modes render exactly the canonical FR-1062 tiers without special RPG classes/counts.
+@pytest.mark.parametrize("route", ["map2d", "map3d"])
+def test_ac347_map_modes_match_fr1062_tiers_without_rpg_only_display(studio, route):
+    page = _open(studio, route)
+    page.wait_for_selector(GROUP + '[data-tier-level="area"]')
+    expected, expected_items = page.evaluate("""async () => {
+        const model = await (await fetch('/api/model')).json();
+        return [model.hierarchy.tiers.map(({path, count}) => [path, count]),
+            model.reqs.map(({id, title}) => [id, title])];
+    }""")
+    actual, items = page.evaluate("""() => [
+        [...document.querySelectorAll('[data-testid="tier-group"][data-tier-level="area"]')]
+            .map(g => [JSON.parse(g.dataset.tierPath), Number(g.dataset.count)]),
+        [...document.querySelectorAll('[data-testid="tier-item"]')].map(item => ({
+            id: item.dataset.id, title: item.dataset.title || '', text: item.innerText,
+            select: item.querySelector('a[href]') && new URLSearchParams(new URL(item.querySelector('a[href]').href).hash.split('?')[1] || '').get('select')
+        }))
+    ]""")
+    assert [(tuple(path), count) for path, count in actual] == [(tuple(path), count) for path, count in expected]
+    for item_id, title in expected_items:
+        candidates = [item for item in items if item['id'] == item_id]
+        assert any(title in (item['title'] or item['text']) for item in candidates)
+        assert any(item['select'] == item_id for item in candidates)
+    assert page.locator('[data-testid^="rpg-"], .rpg').count() == 0
+    assert page.locator('[data-testid="header-dim-toggle"] [data-dim="rpg"]').count() == 0
     page.context.close()
 
 
@@ -199,19 +209,4 @@ def test_ac346_map3d_clusters_follow_same_tiers_as_2d_and_collapse(graph_studio)
     page.wait_for_timeout(300)
     t3 = json.loads(page.eval_on_selector(".map3d", "c => c.dataset.tiers"))
     assert next(t for t in t3 if t["path"][2] == "ベータ" and t["path"][0] == "要求")["collapsed"]
-    page.context.close()
-
-
-# FR-1063 AC-347: RPG 風の城・街・住人の会話から、その関連する要求の上位層（名称・件数）を辿れる。城・街・住人の件数は変わらない
-def test_ac347_rpg_place_tier_dialog_lists_tiers_of_related_requirements(studio):
-    page = _open(studio, "maprpg")
-    page.wait_for_selector('[data-testid="rpg-view"][data-ready="true"]')
-    before = page.evaluate("() => { const r = window.eabkView.getState().rpg; return [r.places.length, r.residents.length]; }")
-    page.evaluate("() => window.eabkView.openTierDialog('G-001')")
-    dlg = page.locator('[data-testid="rpg-dialog"]')
-    dlg.wait_for()
-    assert "G-001" in dlg.inner_text()
-    assert dlg.locator(GROUP).count() > 0
-    assert all(re.search(r"\d", t) for t in dlg.locator(f'{GROUP}[data-tier-level="kind"]').all_inner_texts())
-    assert page.evaluate("() => { const r = window.eabkView.getState().rpg; return [r.places.length, r.residents.length]; }") == before
     page.context.close()
