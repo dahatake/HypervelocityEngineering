@@ -4,12 +4,12 @@ Expected values come only from the acceptance criteria in docs/requirements-defi
 the oracle.  Widths are PARAM-048 = 1280 / 1024 / 800 / 600 / 320 CSS px (320 = PARAM-034; 改訂 2026-10-27: 複数段に折り返し、帯の横スクロールなし).  AC-393/394/396 are integration level
 (EABK-Studio/tests/test_header_row_ui.py).
 
-PROVISIONAL CONTRACT (仮置き。実装者が確認し、食い違えば CONFLICT として返す。この oracle は実装に合わせて直さない):
-  - ヘッダー帯: <header class="top">。要素: ナビ #nav a（8）、表示モード切替 [data-testid="header-dim-toggle"] button、
+CONTRACT (受入基準から独立に定義。実装に合わせて oracle を変更しない):
+  - ヘッダー帯: <header class="top">。要素: ナビ #nav a（8）、表示モード切替 [data-testid="header-dim-toggle"] button（2D・3D・Graph。RPG は対象外）、
     検索 #q、リポジトリ名 #repoBtn、日時 #modelTime、ロール #personaBar button（3）、言語 #lang、
     テーマ [data-testid="theme-toggle"] button。
   - 地図の表示面: #view canvas。説明パネル（上位層・ロールの説明）: [data-testid="map-tiers"]（<details>、開閉は summary）。
-  - 画面: #/map2d。
+  - 画面: #/map2d。AC-393 の RPG 非対象・残る 3 モード条件も適用。
 """
 import pytest
 
@@ -45,7 +45,7 @@ def _fr1041_nav_count():
 
 
 NAV_COUNT = _fr1041_nav_count()
-EXPECT_COUNT = {"nav": NAV_COUNT, "dim": 4, "persona": 3}
+EXPECT_COUNT = {"nav": NAV_COUNT, "dim": 3, "persona": 3}
 
 JS_RECTS = """(sel) => [...document.querySelectorAll(sel)].map((e) => {
   const r = e.getBoundingClientRect();
@@ -76,6 +76,13 @@ def _all(page):
     for k, sel in ITEMS.items():
         out[k] = page.evaluate(JS_RECTS, sel)
     return out
+
+
+def _assert_remaining_modes(page):
+    modes = page.locator(ITEMS["dim"]).evaluate_all(
+        "(els) => els.map((el) => el.getAttribute('data-dim'))")
+    assert len(modes) == 3 and set(modes) == {"2d", "3d", "graph"}, f"unexpected header modes: {modes}"
+    assert page.locator('header.top [data-testid="header-dim-toggle"] [data-dim="rpg"]').count() == 0
 
 
 def _inter(a, b):
@@ -113,6 +120,7 @@ def test_ac391_all_header_elements_are_inside_viewport_and_wrap(browser, zurl, w
     items = _all(page)
     for k, n in EXPECT_COUNT.items():
         assert len(items[k]) == n, f"{k}: {len(items[k])} != {n}"
+    _assert_remaining_modes(page)
     assert len(items["lang"]) == 2, "lang"  # FR-011 AC-430: JA/EN の 2 button
     for k in ("search", "repo", "time"):
         assert len(items[k]) == 1, k
@@ -148,6 +156,7 @@ def test_ac391_all_visible_in_english_on_other_screen(browser, zurl, width):
         "n => document.querySelectorAll('header.top #nav a').length >= n", arg=NAV_COUNT)
     items = _all(page)
     assert len(items["nav"]) == NAV_COUNT
+    _assert_remaining_modes(page)
     _in_viewport(page, items, width)
     if width <= 600:
         assert _rows(items) >= 2
@@ -253,4 +262,3 @@ def test_ac395_panel_content_is_not_dropped_when_narrow(browser, zurl):
         ctx.close()
     assert counts[1280] > 0
     assert counts[600] == counts[1280] and counts[320] == counts[1280]
-

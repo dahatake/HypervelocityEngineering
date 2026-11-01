@@ -126,7 +126,7 @@
     "AC-375": "sha256:28cd6902163bdc30",
     "AC-378": "sha256:b07b61041fac5559",
     "AC-379": "sha256:879df9efc754b69f",
-    "AC-391": "sha256:d379f711fdf119aa",
+    "AC-391": "sha256:15d9bb78bb413331",
     "AC-392": "sha256:47157ae0b96a7fbe",
     "AC-395": "sha256:5f92fc2243db302d",
     "AC-407": "sha256:4bb43ef1566105d4",
@@ -3822,11 +3822,11 @@
       "ac_ids": [
         "AC-391"
       ],
-      "title": "Header elements on one row (center within 2px) at 1280/1024/800/600/320",
+      "title": "ヘッダーの折返し・320px含む全幅内表示と残存2D/3D/Graph 3モード（RPG非表示）",
       "layer": "e2e",
       "command": "python -m pytest tests/system/e2e/test_studio_header_row_system.py -k ac391",
       "canary": false,
-      "status": "pass",
+      "status": "not_run",
       "last_commit": "5f8f301f",
       "last_run_at": "2026-10-30T10:23:16+09:00",
       "evidence": "work/runs/202610300952/logs/system-test/E2E-216-202610301019.log",
@@ -3848,6 +3848,18 @@
           "by": "test-designer",
           "change": "command: \"python -m pytest tests/system/e2e/test_studio_header_row_system.py -k 'ac391'\" -> 'python -m pytest tests/system/e2e/test_studio_header_row_system.py -k ac391'",
           "reason": "Windows で -k の単一引用符が失敗するため引用符を除去"
+        },
+        {
+          "at": "2026-11-02T05:21:57+09:00",
+          "by": "test-designer",
+          "change": "title: 'Header elements on one row (center within 2px) at 1280/1024/800/600/320' -> 'ヘッダーの折返し・320px含む全幅内表示と残存2D/3D/Graph 3モード（RPG非表示）'",
+          "reason": "AC-391/AC-393の契約に合わせ、狭幅での折返しと残る3モード（RPG対象外）を明示"
+        },
+        {
+          "at": "2026-11-02T05:21:57+09:00",
+          "by": "test-designer",
+          "change": "status -> not_run",
+          "reason": "AC-391の期待値とテストを更新したため再実行待ち"
         }
       ]
     },
