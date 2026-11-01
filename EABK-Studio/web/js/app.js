@@ -26,7 +26,6 @@ const ROUTES = {
   implstatus: { icon: 'progress', load: () => import('./implstatus.js') },
   map2d: { navKey: 'map', icon: 'map2d', dim: '2d', load: () => import('./map2d.js') },
   map3d: { navKey: 'map', icon: 'map3d', dim: '3d', load: () => import('./map3d.js') },
-  maprpg: { navKey: 'map', icon: 'map2d', dim: 'rpg', load: () => import('./maprpg.js') },
   mapgraph: { navKey: 'map', icon: 'map2d', dim: 'graph', load: () => import('./mapgraph.js') },
   diagrams: { icon: 'diagrams', load: () => import('./diagrams.js') },
   placement: { navKey: 'diagrams', alias: 'diagrams', load: () => import('./diagrams.js') },
@@ -40,7 +39,7 @@ const ROUTES = {
 };
 // nav items in display order: key → route it opens (the map opens in the dimension chosen last)
 const NAV = ['dashboard', 'implstatus', 'map', 'diagrams', 'entities', 'integrations', 'source', 'tables', 'maintenance'];
-const MAP_ROUTE = { '2d': 'map2d', '3d': 'map3d', rpg: 'maprpg', graph: 'mapgraph' };
+const MAP_ROUTE = { '2d': 'map2d', '3d': 'map3d', graph: 'mapgraph' };
 const navTarget = (k) => (k === 'map' ? MAP_ROUTE[dimState.map] || 'map2d' : k);
 const navKeyOf = (route) => ROUTES[route]?.navKey || route;
 const view = document.getElementById('view');
@@ -64,7 +63,7 @@ function renderPersonas() {
 renderPersonas();
 onLang(renderPersonas);
 
-const routeName = () => { const r = (location.hash.replace(/^#\/?/, '') || 'dashboard').split('?')[0]; return ROUTES[r] ? r : 'dashboard'; };
+const routeName = () => { const r = (location.hash.replace(/^#\/?/, '') || 'dashboard').split('?')[0]; return r === 'maprpg' ? 'map2d' : ROUTES[r] ? r : 'dashboard'; };
 // 画面撮影用の固定表示（ヘッダー非表示・アニメーション停止）は、明示した `snapshot` 付きのリンクだけ。
 // `select=` だけの通常のディープリンクでは、ヘッダー（検索・配置の変更/復元）を使えるままにする（AC-015/041）。
 const isSnapshotLink = () => new URLSearchParams(location.hash.split('?')[1] || '').has('snapshot');
@@ -96,7 +95,7 @@ function renderNav() {
 
 // Old URLs move to the item that holds the view now, keeping the kind / dimension / ?select / ?q (FR-1041 AC-226).
 function legacyRedirect(name) {
-  if (ROUTES[name]?.dim && !ROUTES[name].mount) {     // #/map2d?dim=rpg (and 2d / 3d) opens the map in that dimension, keeping the rest of the query
+  if (ROUTES[name]?.dim && !ROUTES[name].mount) {     // #/map2d?dim=2d|3d opens the map in that dimension, keeping the rest of the query
     const p = new URLSearchParams(location.hash.split('?')[1] || '');
     const target = MAP_ROUTE[p.get('dim')];
     if (target && target !== name) { p.delete('dim'); const s = p.toString(); location.replace('#/' + target + (s ? '?' + s : '')); return true; }
@@ -181,9 +180,9 @@ async function route() {
   }
 }
 
-// The map is one item: 2D (map2d), 3D (map3d) and RPG-style (maprpg) are three displays of it, switched here (FR-1040, FR-1053).
+// The map is one item with 2D, 3D and Graph display modes (FR-1040, FR-1079).
 // Selection, filter and the search box live in the store / shared view state, so they survive the switch (AC-221).
-const MAP_DIMS = ['2d', '3d', 'rpg', 'graph'];
+const MAP_DIMS = ['2d', '3d', 'graph'];
 function mountMapDim(host, name, inner) {
   const go = (d) => {
     const q = location.hash.includes('?') ? '?' + location.hash.split('?')[1] : '';
@@ -230,7 +229,6 @@ function navCommands() {
   for (const c of window.eabkTheme.choices) list.push({ cmd: true, id: 'cmd:theme:' + c, label: t('theme.cmd') + t('theme.' + c), key: t('theme.keys') + ' ' + t('theme.' + c), run: () => window.eabkTheme.set(c) });
   if (hasDimHandler()) {
     list.push({ cmd: true, id: 'cmd:dim', label: t('cmd.dim'), key: '2D 3D', run: () => runDim() });
-    if (ROUTES[routeName()]?.dim) list.push({ cmd: true, id: 'cmd:dim:rpg', label: t('cmd.dim.rpg'), key: 'RPG', run: () => runDim('rpg') });
     if (headerDim.dims.includes('graph')) list.push({ cmd: true, id: 'cmd:dim:graph', label: t('cmd.dim.graph'), key: 'Graph', run: () => runDim('graph') });
   }
   list.push(...cameraCommands());   // FR-1070 AC-384: 3D のカメラのプリセットをコマンド検索から選ぶ

@@ -3,7 +3,7 @@
 // 開閉の状態は一覧系の画面のあいだで共有し、画面を切り替えても保たれる（NFR-UX-006）。
 import { renderTiers, UNCLASSIFIED } from './hier.js';
 import { store } from './store.js';
-import { tierState } from './maptiers.js';   // 開閉の状態は、マップ（2D・3D・RPG 風）とも共有する（NFR-UX-006）
+import { tierState } from './maptiers.js';   // 開閉の状態は、2D・3D マップとも共有する（NFR-UX-006）
 
 const keyOf = (path) => JSON.stringify(path);
 
