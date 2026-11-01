@@ -28,7 +28,7 @@ def _open_map(browser, url):
     context = browser.new_context(viewport={"width": 1400, "height": 900})
     page = context.new_page()
     page.add_init_script(
-        """() => {
+        """(() => {
           window.__systemAudioStarts = 0;
           for (const name of ["AudioBufferSourceNode", "OscillatorNode"]) {
             const start = window[name]?.prototype?.start;
@@ -42,7 +42,7 @@ def _open_map(browser, url):
             window.__systemAudioStarts++;
             return play.apply(this, args);
           };
-        }"""
+        })();"""
     )
     page.goto(f"{url}/#/map2d")
     page.wait_for_selector(HDR)
@@ -85,6 +85,7 @@ def test_ac286_rpg_cannot_be_selected_and_legacy_reload_uses_2d(browser, mode_ur
 def test_ac295_rpg_keys_do_not_start_rpg_and_keep_search_focus_and_mode_keyboard(browser, mode_url):
     page = _open_map(browser, mode_url)
     _assert_rpg_absent(page)
+    assert page.evaluate("() => window.__systemAudioStarts") == 0, "音声監視が初期化されていない、または音声が起動した"
 
     # RPG 専用操作をマップ上で行っても、移動・会話・メニュー・音の切替は起動しない。
     for key in ("ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",

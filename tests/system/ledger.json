@@ -2575,7 +2575,7 @@
       ],
       "title": "RPG 専用キーは起動せず、検索・フォーカス・残るモード操作は使える",
       "layer": "e2e",
-      "command": "python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k test_ac295_rpg_keys_do_not_start_rpg_and_keep_search_focus_and_mode_keyboard",
+      "command": "python -m pytest tests/system/e2e/test_studio_rpg_system.py -k test_ac295_rpg_keys_do_not_start_rpg_and_keep_search_focus_and_mode_keyboard -q",
       "canary": true,
       "status": "not_run",
       "last_commit": "5f8f301f",
@@ -2593,6 +2593,12 @@
           "by": "test-designer",
           "change": "command: 'python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k ac295_arrow' -> 'python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k test_ac295_rpg_keys_do_not_start_rpg_and_keep_search_focus_and_mode_keyboard'; title: 'RPG 風: 方向キーで 1 マス移動し、通れない地点には入れない' -> 'RPG 専用キーは起動せず、検索・フォーカス・残るモード操作は使える'; requirement_ids: ['FR-1055'] -> ['FR-1066']",
           "reason": "AC-295 が RPG 専用操作の提供から不提供へ変更され、FR-1066 に移管されたため、旧キーの無作用と検索・フォーカス・残る表示モードの操作を検証する"
+        },
+        {
+          "at": "2026-11-02T05:30:34+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest -q tests/system/e2e/test_studio_rpg_system.py -k test_ac295_rpg_keys_do_not_start_rpg_and_keep_search_focus_and_mode_keyboard' -> 'python -m pytest tests/system/e2e/test_studio_rpg_system.py -k test_ac295_rpg_keys_do_not_start_rpg_and_keep_search_focus_and_mode_keyboard -q'",
+          "reason": "AC-295 の期待値は維持。add_init_script を即時実行式に修正し、音声監視の初期化と旧RPGキー操作後の音楽・効果音起動0件を実検証する"
         }
       ]
     },
@@ -3413,7 +3419,7 @@
       ],
       "title": "RPG 専用分類を除外し、2D・3Dの階層・管理データ・詳細参照を維持する",
       "layer": "e2e",
-      "command": "python -m pytest tests/system/e2e/test_studio_tiers_system.py -k test_ac347_rpg_removed_and_map2d_map3d_keep_fr1062_hierarchy_data_and_references -q",
+      "command": "python -m pytest -q tests/system/e2e/test_studio_tiers_system.py -k test_ac347_rpg_removed_and_map2d_map3d_keep_fr1062_hierarchy_data_and_references",
       "canary": false,
       "status": "not_run",
       "last_commit": "5f8f301f",
@@ -3431,6 +3437,12 @@
           "by": "test-designer",
           "change": "command: 'python -m pytest tests/system/e2e/test_studio_tiers_system.py -k \"test_ac347_rpg_tiers_shown_with_counts_and_places_count_unchanged\" -q' -> 'python -m pytest tests/system/e2e/test_studio_tiers_system.py -k test_ac347_rpg_removed_and_map2d_map3d_keep_fr1062_hierarchy_data_and_references -q'; title: 'RPG 風で項目の上位層が名称・件数つきで示され城・街・住人の件数が変わらない' -> 'RPG 専用分類を除外し、2D・3Dの階層・管理データ・詳細参照を維持する'",
           "reason": "AC-347 が RPG 会話窓での分類表示から RPG 専用要素の除外と残る 2D・3D の FR-1062 導出結果維持へ変更されたため"
+        },
+        {
+          "at": "2026-11-02T05:30:34+09:00",
+          "by": "test-designer",
+          "change": "command: 'python -m pytest tests/system/e2e/test_studio_tiers_system.py -k test_ac347_rpg_removed_and_map2d_map3d_keep_fr1062_hierarchy_data_and_references -q' -> 'python -m pytest -q tests/system/e2e/test_studio_tiers_system.py -k test_ac347_rpg_removed_and_map2d_map3d_keep_fr1062_hierarchy_data_and_references'",
+          "reason": "AC-347 の期待値は維持。SPAハッシュ内のqueryからselectを解析し、2D・3Dの全要求の参照ID、実際の詳細表示と管理データ保持を検証する"
         }
       ]
     },
